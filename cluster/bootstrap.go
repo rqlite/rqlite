@@ -1,6 +1,7 @@
 package cluster
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"log"
@@ -17,6 +18,10 @@ var (
 	// ErrBootTimeout is returned when a boot operation does not
 	// complete within the timeout.
 	ErrBootTimeout = errors.New("boot timeout")
+
+	// ErrBootCanceled is returned when a boot operation is
+	// canceled.
+	ErrBootCanceled = errors.New("boot canceled")
 )
 
 // BootStatus is the reason the boot process completed.
@@ -34,6 +39,9 @@ const (
 
 	// BootTimeout means the boot process timed out.
 	BootTimeout
+
+	// BootCanceled means the boot process was canceled.
+	BootCanceled
 )
 
 // Suffrage is the type of suffrage -- voting or non-voting -- a node has.
@@ -148,7 +156,7 @@ func (b *Bootstrapper) SetCredentials(creds *proto.Credentials) {
 //
 // id and raftAddr are those of the node calling Boot. suf is whether this node
 // is a Voter or NonVoter.
-func (b *Bootstrapper) Boot(id, raftAddr string, suf Suffrage, done func() bool, timeout time.Duration) error {
+func (b *Bootstrapper) Boot(ctx context.Context, id, raftAddr string, suf Suffrage, done func() bool, timeout time.Duration) error {
 	timeoutT := time.NewTimer(timeout)
 	defer timeoutT.Stop()
 	tickerT := time.NewTimer(random.Jitter(time.Millisecond))
@@ -158,6 +166,10 @@ func (b *Bootstrapper) Boot(id, raftAddr string, suf Suffrage, done func() bool,
 	joiner.SetCredentials(b.creds)
 	for {
 		select {
+		case <-ctx.Done():
+			b.setBootStatus(BootCanceled)
+			return ErrBootCanceled
+
 		case <-timeoutT.C:
 			b.setBootStatus(BootTimeout)
 			return ErrBootTimeout
@@ -180,7 +192,7 @@ func (b *Bootstrapper) Boot(id, raftAddr string, suf Suffrage, done func() bool,
 
 			// Try an explicit join first. Joining an existing cluster is always given priority
 			// over trying to form a new cluster.
-			if j, err := joiner.Do(targets, id, raftAddr, suf); err == nil {
+			if j, err := joiner.Do(ctx, targets, id, raftAddr, suf); err == nil {
 				b.logger.Printf("succeeded directly joining cluster via node at %s as %s", j, suf)
 				b.setBootStatus(BootJoin)
 				return nil

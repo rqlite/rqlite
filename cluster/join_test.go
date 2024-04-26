@@ -1,6 +1,7 @@
 package cluster
 
 import (
+	"context"
 	"net"
 	"testing"
 	"time"
@@ -50,7 +51,7 @@ func Test_SingleJoinOK(t *testing.T) {
 
 	c := NewClient(&simpleDialer{}, 0)
 	joiner := NewJoiner(c, numAttempts, attemptInterval)
-	addr, err := joiner.Do([]string{srv.Addr()}, "id0", "1.2.3.4", Voter)
+	addr, err := joiner.Do(context.Background(), []string{srv.Addr()}, "id0", "1.2.3.4", Voter)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -69,7 +70,7 @@ func Test_SingleJoinZeroAttempts(t *testing.T) {
 
 	c := NewClient(&simpleDialer{}, 0)
 	joiner := NewJoiner(c, 0, attemptInterval)
-	_, err := joiner.Do([]string{srv.Addr()}, "id0", "1.2.3.4", Voter)
+	_, err := joiner.Do(context.Background(), []string{srv.Addr()}, "id0", "1.2.3.4", Voter)
 	if err != ErrJoinFailed {
 		t.Fatalf("Incorrect error returned when zero attempts specified")
 	}
@@ -100,9 +101,47 @@ func Test_SingleJoinFail(t *testing.T) {
 
 	c := NewClient(&simpleDialer{}, 0)
 	joiner := NewJoiner(c, numAttempts, attemptInterval)
-	_, err := joiner.Do([]string{srv.Addr()}, "id0", "1.2.3.4", Voter)
+	_, err := joiner.Do(context.Background(), []string{srv.Addr()}, "id0", "1.2.3.4", Voter)
 	if err == nil {
 		t.Fatalf("expected error when joining bad node")
+	}
+}
+
+func Test_SingleJoinCancel(t *testing.T) {
+	srv := servicetest.NewService()
+	srv.Handler = func(conn net.Conn) {
+		var p []byte
+		var err error
+		c := readCommand(conn)
+		if c == nil {
+			// Error on connection, so give up, as normal
+			// test exit can cause that too.
+			return
+		}
+		resp := &proto.CommandJoinResponse{
+			Error: "bad request",
+		}
+		p, err = pb.Marshal(resp)
+		if err != nil {
+			conn.Close()
+		}
+		writeBytesWithLength(conn, p)
+	}
+	srv.Start()
+	defer srv.Close()
+
+	// Cancel the join in a few seconds time.
+	ctx, cancel := context.WithCancel(context.Background())
+	go func() {
+		time.Sleep(3 * time.Second)
+		cancel()
+	}()
+
+	c := NewClient(&simpleDialer{}, 0)
+	joiner := NewJoiner(c, 10, attemptInterval)
+	_, err := joiner.Do(ctx, []string{srv.Addr()}, "id0", "1.2.3.4", Voter)
+	if err != context.Canceled {
+		t.Fatalf("incorrect error returned when canceling: %s", err)
 	}
 }
 
@@ -154,7 +193,7 @@ func Test_DoubleJoinOKSecondNode(t *testing.T) {
 
 	c := NewClient(&simpleDialer{}, 0)
 	joiner := NewJoiner(c, numAttempts, attemptInterval)
-	addr, err := joiner.Do([]string{srv1.Addr(), srv2.Addr()}, "id0", "1.2.3.4", Voter)
+	addr, err := joiner.Do(context.Background(), []string{srv1.Addr(), srv2.Addr()}, "id0", "1.2.3.4", Voter)
 	if err != nil {
 		t.Fatal(err)
 	}
