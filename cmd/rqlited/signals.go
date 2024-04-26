@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"log"
 	"os"
 	"os/signal"
@@ -23,4 +24,15 @@ func HandleSignals(sigs ...os.Signal) <-chan os.Signal {
 		}
 	}()
 	return ch
+}
+
+// CreateContext creates a context which is canceled if signals are received
+// on the given channel.
+func CreateContext(ch <-chan os.Signal) (context.Context, context.CancelFunc) {
+	ctx, cancel := context.WithCancel(context.Background())
+	go func() {
+		<-ch
+		cancel()
+	}()
+	return ctx, cancel
 }

@@ -18,6 +18,9 @@ var (
 	// ErrJoinFailed is returned when a node fails to join a cluster
 	ErrJoinFailed = errors.New("failed to join cluster")
 
+	// ErrJoinCanceled is returned when a join operation is canceled
+	ErrJoinCanceled = errors.New("join operation canceled")
+
 	// ErrNotifyFailed is returned when a node fails to notify another node
 	ErrNotifyFailed = errors.New("failed to notify node")
 )
@@ -60,7 +63,7 @@ func (j *Joiner) Do(ctx context.Context, targetAddrs []string, id, addr string, 
 		for _, ta := range targetAddrs {
 			select {
 			case <-ctx.Done():
-				return "", ctx.Err() // Return the cancellation error
+				return "", ErrJoinCanceled
 			default:
 				joinee, err = j.join(ta, id, addr, suf)
 				if err == nil {
@@ -74,7 +77,7 @@ func (j *Joiner) Do(ctx context.Context, targetAddrs []string, id, addr string, 
 			j.logger.Printf("failed to join cluster at %s, sleeping %s before retry", targetAddrs, j.attemptInterval)
 			select {
 			case <-ctx.Done():
-				return "", ctx.Err() // Check cancellation again before sleeping
+				return "", ErrJoinCanceled
 			case <-time.After(j.attemptInterval):
 				continue // Proceed with the next attempt
 			}
