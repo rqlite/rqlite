@@ -140,7 +140,7 @@ func Test_SingleJoinCancel(t *testing.T) {
 	c := NewClient(&simpleDialer{}, 0)
 	joiner := NewJoiner(c, 10, attemptInterval)
 	_, err := joiner.Do(ctx, []string{srv.Addr()}, "id0", "1.2.3.4", Voter)
-	if err != context.Canceled {
+	if err != ErrJoinCanceled {
 		t.Fatalf("incorrect error returned when canceling: %s", err)
 	}
 }
