@@ -84,9 +84,10 @@ func (s Suffrage) IsNonVoter() bool {
 }
 
 const (
-	requestTimeout  = 5 * time.Second
-	numJoinAttempts = 1
-	bootInterval    = 2 * time.Second
+	requestTimeout    = 5 * time.Second
+	numJoinAttempts   = 1
+	bootInterval      = 2 * time.Second
+	bootCheckInterval = 10 * time.Millisecond
 )
 
 // String returns a string representation of the BootStatus.
@@ -123,15 +124,21 @@ type Bootstrapper struct {
 
 	bootStatusMu sync.RWMutex
 	bootStatus   BootStatus
+
+	checkInterval time.Duration
+
+	// White-box testing only
+	nBootCanceled int
 }
 
 // NewBootstrapper returns an instance of a Bootstrapper.
 func NewBootstrapper(p AddressProvider, client *Client) *Bootstrapper {
 	bs := &Bootstrapper{
-		provider: p,
-		client:   client,
-		logger:   log.New(os.Stderr, "[cluster-bootstrap] ", log.LstdFlags),
-		Interval: bootInterval,
+		provider:      p,
+		client:        client,
+		logger:        log.New(os.Stderr, "[cluster-bootstrap] ", log.LstdFlags),
+		Interval:      bootInterval,
+		checkInterval: bootCheckInterval,
 	}
 	return bs
 }
@@ -161,7 +168,7 @@ func (b *Bootstrapper) SetCredentials(creds *proto.Credentials) {
 func (b *Bootstrapper) Boot(ctx context.Context, id, raftAddr string, suf Suffrage, done func() bool, timeout time.Duration) error {
 	timeoutT := time.NewTimer(timeout)
 	defer timeoutT.Stop()
-	tickerT := time.NewTimer(random.Jitter(time.Millisecond))
+	tickerT := time.NewTimer(random.Jitter(b.checkInterval))
 	defer tickerT.Stop()
 
 	joiner := NewJoiner(b.client, numJoinAttempts, requestTimeout)
@@ -169,6 +176,7 @@ func (b *Bootstrapper) Boot(ctx context.Context, id, raftAddr string, suf Suffra
 	for {
 		select {
 		case <-ctx.Done():
+			b.nBootCanceled++
 			if done() {
 				b.logger.Printf("boot operation marked done")
 				b.setBootStatus(BootDone)

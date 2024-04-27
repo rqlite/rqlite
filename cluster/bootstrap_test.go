@@ -135,6 +135,9 @@ func Test_BootstrapperBootCanceledDone(t *testing.T) {
 	if err != nil {
 		t.Fatalf("error returned from canceled boot even though it's done: %s", err)
 	}
+	if bs.nBootCanceled == 0 {
+		t.Fatalf("boot not actually canceled")
+	}
 }
 
 func Test_BootstrapperBootSingleJoin(t *testing.T) {
