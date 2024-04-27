@@ -152,7 +152,9 @@ func (b *Bootstrapper) SetCredentials(creds *proto.Credentials) {
 // Returns nil if the boot operation was successful, or if done() ever returns
 // true. done() is periodically polled by the boot process. Returns an error
 // the boot process encounters an unrecoverable error, or booting does not
-// occur within the given timeout.
+// occur within the given timeout. If booting was canceled, ErrBootCanceled is
+// returned unless done() returns true at the time of cancelation, in which case
+// no error is returned.
 //
 // id and raftAddr are those of the node calling Boot. suf is whether this node
 // is a Voter or NonVoter.
@@ -167,6 +169,11 @@ func (b *Bootstrapper) Boot(ctx context.Context, id, raftAddr string, suf Suffra
 	for {
 		select {
 		case <-ctx.Done():
+			if done() {
+				b.logger.Printf("boot operation marked done")
+				b.setBootStatus(BootDone)
+				return nil
+			}
 			b.setBootStatus(BootCanceled)
 			return ErrBootCanceled
 

@@ -112,6 +112,31 @@ func Test_BootstrapperBootCanceled(t *testing.T) {
 	}
 }
 
+// Test_BootstrapperBootCanceledDone tests that a boot that is canceled
+// but is done does not return an error.
+func Test_BootstrapperBootCanceledDone(t *testing.T) {
+	srv := servicetest.NewService()
+	srv.Handler = func(conn net.Conn) {
+	}
+	srv.Start()
+	defer srv.Close()
+
+	done := func() bool {
+		return true
+	}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+
+	p := NewAddressProviderString([]string{srv.Addr()})
+	bs := NewBootstrapper(p, NewClient(&simpleDialer{}, 0))
+	bs.Interval = time.Second
+	err := bs.Boot(ctx, "node1", "192.168.1.1:1234", Voter, done, 5*time.Second)
+	if err != nil {
+		t.Fatalf("error returned from canceled boot even though it's done: %s", err)
+	}
+}
+
 func Test_BootstrapperBootSingleJoin(t *testing.T) {
 	srv := servicetest.NewService()
 	srv.Handler = func(conn net.Conn) {
