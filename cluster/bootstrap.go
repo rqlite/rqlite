@@ -86,8 +86,7 @@ func (s Suffrage) IsNonVoter() bool {
 const (
 	requestTimeout    = 5 * time.Second
 	numJoinAttempts   = 1
-	bootInterval      = 2 * time.Second
-	bootCheckInterval = 10 * time.Millisecond
+	bootCheckInterval = 1 * time.Second
 )
 
 // String returns a string representation of the BootStatus.
@@ -125,8 +124,6 @@ type Bootstrapper struct {
 	bootStatusMu sync.RWMutex
 	bootStatus   BootStatus
 
-	checkInterval time.Duration
-
 	// White-box testing only
 	nBootCanceled int
 }
@@ -134,11 +131,10 @@ type Bootstrapper struct {
 // NewBootstrapper returns an instance of a Bootstrapper.
 func NewBootstrapper(p AddressProvider, client *Client) *Bootstrapper {
 	bs := &Bootstrapper{
-		provider:      p,
-		client:        client,
-		logger:        log.New(os.Stderr, "[cluster-bootstrap] ", log.LstdFlags),
-		Interval:      bootInterval,
-		checkInterval: bootCheckInterval,
+		provider: p,
+		client:   client,
+		logger:   log.New(os.Stderr, "[cluster-bootstrap] ", log.LstdFlags),
+		Interval: bootCheckInterval,
 	}
 	return bs
 }
@@ -168,7 +164,7 @@ func (b *Bootstrapper) SetCredentials(creds *proto.Credentials) {
 func (b *Bootstrapper) Boot(ctx context.Context, id, raftAddr string, suf Suffrage, done func() bool, timeout time.Duration) error {
 	timeoutT := time.NewTimer(timeout)
 	defer timeoutT.Stop()
-	tickerT := time.NewTimer(random.Jitter(b.checkInterval))
+	tickerT := time.NewTimer(random.Jitter(time.Millisecond)) // Check fast, just once at the start.
 	defer tickerT.Stop()
 
 	joiner := NewJoiner(b.client, numJoinAttempts, requestTimeout)
