@@ -1,4 +1,4 @@
-## 8.23.4 (unreleased)
+## 8.23.4 (April 26th 2024)
 ### Implementation changes and bug fixes
 - [PR #1760](https://github.com/rqlite/rqlite/pull/1760): More use of `atomic` integers.
 - [PR #1762](https://github.com/rqlite/rqlite/pull/1762): Boot and Join should be cancelable. Fixes issue [#1746](https://github.com/rqlite/rqlite/issues/1746).
