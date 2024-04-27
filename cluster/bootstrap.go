@@ -1,6 +1,7 @@
 package cluster
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"log"
@@ -17,6 +18,10 @@ var (
 	// ErrBootTimeout is returned when a boot operation does not
 	// complete within the timeout.
 	ErrBootTimeout = errors.New("boot timeout")
+
+	// ErrBootCanceled is returned when a boot operation is
+	// canceled.
+	ErrBootCanceled = errors.New("boot canceled")
 )
 
 // BootStatus is the reason the boot process completed.
@@ -34,6 +39,9 @@ const (
 
 	// BootTimeout means the boot process timed out.
 	BootTimeout
+
+	// BootCanceled means the boot process was canceled.
+	BootCanceled
 )
 
 // Suffrage is the type of suffrage -- voting or non-voting -- a node has.
@@ -76,9 +84,9 @@ func (s Suffrage) IsNonVoter() bool {
 }
 
 const (
-	requestTimeout  = 5 * time.Second
-	numJoinAttempts = 1
-	bootInterval    = 2 * time.Second
+	requestTimeout    = 5 * time.Second
+	numJoinAttempts   = 1
+	bootCheckInterval = 1 * time.Second
 )
 
 // String returns a string representation of the BootStatus.
@@ -115,6 +123,9 @@ type Bootstrapper struct {
 
 	bootStatusMu sync.RWMutex
 	bootStatus   BootStatus
+
+	// White-box testing only
+	nBootCanceled int
 }
 
 // NewBootstrapper returns an instance of a Bootstrapper.
@@ -123,7 +134,7 @@ func NewBootstrapper(p AddressProvider, client *Client) *Bootstrapper {
 		provider: p,
 		client:   client,
 		logger:   log.New(os.Stderr, "[cluster-bootstrap] ", log.LstdFlags),
-		Interval: bootInterval,
+		Interval: bootCheckInterval,
 	}
 	return bs
 }
@@ -144,20 +155,32 @@ func (b *Bootstrapper) SetCredentials(creds *proto.Credentials) {
 // Returns nil if the boot operation was successful, or if done() ever returns
 // true. done() is periodically polled by the boot process. Returns an error
 // the boot process encounters an unrecoverable error, or booting does not
-// occur within the given timeout.
+// occur within the given timeout. If booting was canceled, ErrBootCanceled is
+// returned unless done() returns true at the time of cancelation, in which case
+// no error is returned.
 //
 // id and raftAddr are those of the node calling Boot. suf is whether this node
 // is a Voter or NonVoter.
-func (b *Bootstrapper) Boot(id, raftAddr string, suf Suffrage, done func() bool, timeout time.Duration) error {
+func (b *Bootstrapper) Boot(ctx context.Context, id, raftAddr string, suf Suffrage, done func() bool, timeout time.Duration) error {
 	timeoutT := time.NewTimer(timeout)
 	defer timeoutT.Stop()
-	tickerT := time.NewTimer(random.Jitter(time.Millisecond))
+	tickerT := time.NewTimer(random.Jitter(time.Millisecond)) // Check fast, just once at the start.
 	defer tickerT.Stop()
 
 	joiner := NewJoiner(b.client, numJoinAttempts, requestTimeout)
 	joiner.SetCredentials(b.creds)
 	for {
 		select {
+		case <-ctx.Done():
+			b.nBootCanceled++
+			if done() {
+				b.logger.Printf("boot operation marked done")
+				b.setBootStatus(BootDone)
+				return nil
+			}
+			b.setBootStatus(BootCanceled)
+			return ErrBootCanceled
+
 		case <-timeoutT.C:
 			b.setBootStatus(BootTimeout)
 			return ErrBootTimeout
@@ -180,7 +203,7 @@ func (b *Bootstrapper) Boot(id, raftAddr string, suf Suffrage, done func() bool,
 
 			// Try an explicit join first. Joining an existing cluster is always given priority
 			// over trying to form a new cluster.
-			if j, err := joiner.Do(targets, id, raftAddr, suf); err == nil {
+			if j, err := joiner.Do(ctx, targets, id, raftAddr, suf); err == nil {
 				b.logger.Printf("succeeded directly joining cluster via node at %s as %s", j, suf)
 				b.setBootStatus(BootJoin)
 				return nil

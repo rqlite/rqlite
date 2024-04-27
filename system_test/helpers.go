@@ -2,6 +2,7 @@ package system
 
 import (
 	"bytes"
+	"context"
 	"crypto/tls"
 	"crypto/x509"
 	"encoding/json"
@@ -259,14 +260,14 @@ func (n *Node) EnableTLSClient() {
 // Join instructs this node to join the leader.
 func (n *Node) Join(leader *Node) error {
 	joiner := cluster.NewJoiner(n.Client, 3, 1*time.Second)
-	_, err := joiner.Do([]string{leader.RaftAddr}, n.Store.ID(), n.RaftAddr, cluster.Voter)
+	_, err := joiner.Do(context.Background(), []string{leader.RaftAddr}, n.Store.ID(), n.RaftAddr, cluster.Voter)
 	return err
 }
 
 // JoinAsNonVoter instructs this node to join the leader, but as a non-voting node.
 func (n *Node) JoinAsNonVoter(leader *Node) error {
 	joiner := cluster.NewJoiner(n.Client, 3, 1*time.Second)
-	_, err := joiner.Do([]string{leader.RaftAddr}, n.Store.ID(), n.RaftAddr, cluster.NonVoter)
+	_, err := joiner.Do(context.Background(), []string{leader.RaftAddr}, n.Store.ID(), n.RaftAddr, cluster.NonVoter)
 	return err
 }
 

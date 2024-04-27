@@ -58,6 +58,7 @@ func init() {
 func main() {
 	// Handle signals first, so signal handling is established before anything else.
 	sigCh := HandleSignals(syscall.SIGINT, syscall.SIGTERM, os.Interrupt)
+	mainCtx, _ := CreateContext(sigCh)
 
 	cfg, err := ParseFlags(name, desc, &BuildInfo{
 		Version:       cmd.Version,
@@ -69,9 +70,6 @@ func main() {
 		log.Fatalf("failed to parse command-line flags: %s", err.Error())
 	}
 	fmt.Print(logo)
-
-	mainCtx, mainCancel := context.WithCancel(context.Background())
-	defer mainCancel()
 
 	// Configure logging and pump out initial message.
 	log.Printf("%s starting, version %s, SQLite %s, commit %s, branch %s, compiler %s", name, cmd.Version,
@@ -180,7 +178,7 @@ func main() {
 	if err != nil {
 		log.Fatalf("failed to get nodes %s", err.Error())
 	}
-	if err := createCluster(cfg, len(nodes) > 0, clstrClient, str, httpServ, credStr); err != nil {
+	if err := createCluster(mainCtx, cfg, len(nodes) > 0, clstrClient, str, httpServ, credStr); err != nil {
 		log.Fatalf("clustering failure: %s", err.Error())
 	}
 
@@ -190,8 +188,7 @@ func main() {
 	log.Printf("connect using the command-line tool via 'rqlite -H %s -p %s'", h, p)
 
 	// Start any requested auto-backups
-	backupSrvStx, backupSrvCancel := context.WithCancel(mainCtx)
-	backupSrv, err := startAutoBackups(backupSrvStx, cfg, str)
+	backupSrv, err := startAutoBackups(mainCtx, cfg, str)
 	if err != nil {
 		log.Fatalf("failed to start auto-backups: %s", err.Error())
 	}
@@ -199,8 +196,8 @@ func main() {
 		httpServ.RegisterStatus("auto_backups", backupSrv)
 	}
 
-	// Block until signalled.
-	<-sigCh
+	// Block until done.
+	<-mainCtx.Done()
 
 	// Stop the HTTP server first, so clients get notification as soon as
 	// possible that the node is going away.
@@ -225,7 +222,6 @@ func main() {
 		str.Stepdown(true)
 	}
 
-	backupSrvCancel()
 	if err := str.Close(true); err != nil {
 		log.Printf("failed to close store: %s", err.Error())
 	}
@@ -425,7 +421,8 @@ func createClusterClient(cfg *Config, clstr *cluster.Service) (*cluster.Client, 
 	return clstrClient, nil
 }
 
-func createCluster(cfg *Config, hasPeers bool, client *cluster.Client, str *store.Store, httpServ *httpd.Service, credStr *auth.CredentialsStore) error {
+func createCluster(ctx context.Context, cfg *Config, hasPeers bool, client *cluster.Client, str *store.Store,
+	httpServ *httpd.Service, credStr *auth.CredentialsStore) error {
 	joins := cfg.JoinAddresses()
 	if err := networkCheckJoinAddrs(joins); err != nil {
 		return err
@@ -454,7 +451,7 @@ func createCluster(cfg *Config, hasPeers bool, client *cluster.Client, str *stor
 	joiner.SetCredentials(cluster.CredentialsFor(credStr, cfg.JoinAs))
 	if joins != nil && cfg.BootstrapExpect == 0 {
 		// Explicit join operation requested, so do it.
-		j, err := joiner.Do(joins, str.ID(), cfg.RaftAdv, clusterSuf)
+		j, err := joiner.Do(ctx, joins, str.ID(), cfg.RaftAdv, clusterSuf)
 		if err != nil {
 			return fmt.Errorf("failed to join cluster: %s", err.Error())
 		}
@@ -466,7 +463,7 @@ func createCluster(cfg *Config, hasPeers bool, client *cluster.Client, str *stor
 		// Bootstrap with explicit join addresses requests.
 		bs := cluster.NewBootstrapper(cluster.NewAddressProviderString(joins), client)
 		bs.SetCredentials(cluster.CredentialsFor(credStr, cfg.JoinAs))
-		return bs.Boot(str.ID(), cfg.RaftAdv, clusterSuf, bootDoneFn, cfg.BootstrapExpectTimeout)
+		return bs.Boot(ctx, str.ID(), cfg.RaftAdv, clusterSuf, bootDoneFn, cfg.BootstrapExpectTimeout)
 	}
 
 	if cfg.DiscoMode == "" {
@@ -510,7 +507,7 @@ func createCluster(cfg *Config, hasPeers bool, client *cluster.Client, str *stor
 		bs := cluster.NewBootstrapper(provider, client)
 		bs.SetCredentials(cluster.CredentialsFor(credStr, cfg.JoinAs))
 		httpServ.RegisterStatus("disco", provider)
-		return bs.Boot(str.ID(), cfg.RaftAdv, clusterSuf, bootDoneFn, cfg.BootstrapExpectTimeout)
+		return bs.Boot(ctx, str.ID(), cfg.RaftAdv, clusterSuf, bootDoneFn, cfg.BootstrapExpectTimeout)
 
 	case DiscoModeEtcdKV, DiscoModeConsulKV:
 		discoService, err := createDiscoService(cfg, str)
@@ -540,7 +537,7 @@ func createCluster(cfg *Config, hasPeers bool, client *cluster.Client, str *stor
 		} else {
 			for {
 				log.Printf("discovery service returned %s as join address", addr)
-				if j, err := joiner.Do([]string{addr}, str.ID(), cfg.RaftAdv, clusterSuf); err != nil {
+				if j, err := joiner.Do(ctx, []string{addr}, str.ID(), cfg.RaftAdv, clusterSuf); err != nil {
 					log.Printf("failed to join cluster at %s: %s", addr, err.Error())
 
 					time.Sleep(time.Second)

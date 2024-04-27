@@ -1,6 +1,7 @@
 package system
 
 import (
+	"context"
 	"fmt"
 	"net"
 	"os"
@@ -331,7 +332,7 @@ func Test_MultiNodeClusterBootstrap(t *testing.T) {
 			addr, _ := node1.Store.LeaderAddr()
 			return addr != ""
 		}
-		node1Bs.Boot(node1.ID, node1.RaftAddr, cluster.Voter, done, 10*time.Second)
+		node1Bs.Boot(context.Background(), node1.ID, node1.RaftAddr, cluster.Voter, done, 10*time.Second)
 		wg.Done()
 	}()
 	go func() {
@@ -339,7 +340,7 @@ func Test_MultiNodeClusterBootstrap(t *testing.T) {
 			addr, _ := node2.Store.LeaderAddr()
 			return addr != ""
 		}
-		node2Bs.Boot(node2.ID, node2.RaftAddr, cluster.Voter, done, 10*time.Second)
+		node2Bs.Boot(context.Background(), node2.ID, node2.RaftAddr, cluster.Voter, done, 10*time.Second)
 		wg.Done()
 	}()
 	go func() {
@@ -347,7 +348,7 @@ func Test_MultiNodeClusterBootstrap(t *testing.T) {
 			addr, _ := node3.Store.LeaderAddr()
 			return addr != ""
 		}
-		node3Bs.Boot(node3.ID, node3.RaftAddr, cluster.Voter, done, 10*time.Second)
+		node3Bs.Boot(context.Background(), node3.ID, node3.RaftAddr, cluster.Voter, done, 10*time.Second)
 		wg.Done()
 	}()
 	wg.Wait()
@@ -499,7 +500,7 @@ func Test_MultiNodeClusterBootstrapLaterJoin(t *testing.T) {
 			addr, _ := node1.Store.LeaderAddr()
 			return addr != ""
 		}
-		node1Bs.Boot(node1.ID, node1.RaftAddr, cluster.Voter, done, 10*time.Second)
+		node1Bs.Boot(context.Background(), node1.ID, node1.RaftAddr, cluster.Voter, done, 10*time.Second)
 		wg.Done()
 	}()
 	go func() {
@@ -507,7 +508,7 @@ func Test_MultiNodeClusterBootstrapLaterJoin(t *testing.T) {
 			addr, _ := node2.Store.LeaderAddr()
 			return addr != ""
 		}
-		node2Bs.Boot(node2.ID, node2.RaftAddr, cluster.Voter, done, 10*time.Second)
+		node2Bs.Boot(context.Background(), node2.ID, node2.RaftAddr, cluster.Voter, done, 10*time.Second)
 		wg.Done()
 	}()
 	go func() {
@@ -515,7 +516,7 @@ func Test_MultiNodeClusterBootstrapLaterJoin(t *testing.T) {
 			addr, _ := node3.Store.LeaderAddr()
 			return addr != ""
 		}
-		node3Bs.Boot(node3.ID, node3.RaftAddr, cluster.Voter, done, 10*time.Second)
+		node3Bs.Boot(context.Background(), node3.ID, node3.RaftAddr, cluster.Voter, done, 10*time.Second)
 		wg.Done()
 	}()
 	wg.Wait()
@@ -552,7 +553,7 @@ func Test_MultiNodeClusterBootstrapLaterJoin(t *testing.T) {
 		addr, _ := node4.Store.LeaderAddr()
 		return addr != ""
 	}
-	if err := node4Bs.Boot(node4.ID, node4.RaftAddr, cluster.Voter, done, 10*time.Second); err != nil {
+	if err := node4Bs.Boot(context.Background(), node4.ID, node4.RaftAddr, cluster.Voter, done, 10*time.Second); err != nil {
 		t.Fatalf("node 4 failed to boot")
 	}
 	node4Leader, err := node4.WaitForLeader()
@@ -600,7 +601,7 @@ func Test_MultiNodeClusterBootstrapLaterJoinTLS(t *testing.T) {
 			addr, _ := node1.Store.LeaderAddr()
 			return addr != ""
 		}
-		node1Bs.Boot(node1.ID, node1.RaftAddr, cluster.Voter, done, 10*time.Second)
+		node1Bs.Boot(context.Background(), node1.ID, node1.RaftAddr, cluster.Voter, done, 10*time.Second)
 		wg.Done()
 	}()
 	go func() {
@@ -608,7 +609,7 @@ func Test_MultiNodeClusterBootstrapLaterJoinTLS(t *testing.T) {
 			addr, _ := node2.Store.LeaderAddr()
 			return addr != ""
 		}
-		node2Bs.Boot(node2.ID, node2.RaftAddr, cluster.Voter, done, 10*time.Second)
+		node2Bs.Boot(context.Background(), node2.ID, node2.RaftAddr, cluster.Voter, done, 10*time.Second)
 		wg.Done()
 	}()
 	go func() {
@@ -616,7 +617,7 @@ func Test_MultiNodeClusterBootstrapLaterJoinTLS(t *testing.T) {
 			addr, _ := node3.Store.LeaderAddr()
 			return addr != ""
 		}
-		node3Bs.Boot(node3.ID, node3.RaftAddr, cluster.Voter, done, 10*time.Second)
+		node3Bs.Boot(context.Background(), node3.ID, node3.RaftAddr, cluster.Voter, done, 10*time.Second)
 		wg.Done()
 	}()
 	wg.Wait()
@@ -654,7 +655,7 @@ func Test_MultiNodeClusterBootstrapLaterJoinTLS(t *testing.T) {
 		addr, _ := node4.Store.LeaderAddr()
 		return addr != ""
 	}
-	if err := node4Bs.Boot(node4.ID, node4.RaftAddr, cluster.Voter, done, 10*time.Second); err != nil {
+	if err := node4Bs.Boot(context.Background(), node4.ID, node4.RaftAddr, cluster.Voter, done, 10*time.Second); err != nil {
 		t.Fatalf("node 4 failed to boot")
 	}
 	node4Leader, err := node4.WaitForLeader()
