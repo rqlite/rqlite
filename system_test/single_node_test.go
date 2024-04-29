@@ -1275,7 +1275,7 @@ func Test_SingleNodeReopen(t *testing.T) {
 	node.Deprovision()
 }
 
-// Test_SingleNodeReopen tests that a node can be re-opened OK, with
+// Test_SingleNodeNoopReopen tests that a node can be re-opened OK, with
 // a non-database command in the log.
 func Test_SingleNodeNoopReopen(t *testing.T) {
 	dir := mustTempDir("node1")
@@ -1356,7 +1356,7 @@ func Test_SingleNodeNoopReopen(t *testing.T) {
 	node.Deprovision()
 }
 
-// Test_SingleNodeReopen tests that a node can be re-opened OK, with
+// Test_SingleNodeNoopSnapReopen tests that a node can be re-opened OK, with
 // a snapshot present which was triggered by non-database commands.
 // This tests that the code can handle a snapshot that doesn't
 // contain database data. This shouldn't happen in real systems
