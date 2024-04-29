@@ -1141,7 +1141,7 @@ func Test_SingleNodeFK(t *testing.T) {
 	}
 }
 
-// Test_SingleNodeExecuteQueryLevels test that various read-consistency
+// Test_SingleNodeOnDiskFileExecuteQuery test that various read-consistency
 // levels work as expected.
 func Test_SingleNodeOnDiskFileExecuteQuery(t *testing.T) {
 	s, ln := mustNewStore(t)
