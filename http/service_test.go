@@ -149,7 +149,7 @@ func Test_HasAllowOriginHeader(t *testing.T) {
 		t.Fatalf("incorrect allow-origin present in HTTP response header")
 	}
 
-	s.AllowOrigin = "https://www.philipotoole.com"
+	s.SetAllowOrigin("https://www.philipotoole.com")
 	resp, err = client.Get(url)
 	if err != nil {
 		t.Fatalf("failed to make request")

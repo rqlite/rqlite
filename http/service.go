@@ -328,7 +328,8 @@ type Service struct {
 	ClientVerify bool   // Whether client certificates should verified.
 	tlsConfig    *tls.Config
 
-	AllowOrigin string // Value to set for Access-Control-Allow-Origin
+	aoMu        sync.RWMutex
+	allowOrigin string // Value to set for Access-Control-Allow-Origin
 
 	DefaultQueueCap     int
 	DefaultQueueBatchSz int
@@ -440,6 +441,20 @@ func (s *Service) Close() {
 // HTTPS returns whether this service is using HTTPS.
 func (s *Service) HTTPS() bool {
 	return s.CertFile != "" && s.KeyFile != ""
+}
+
+// SetAllowOrigin sets the value for the Access-Control-Allow-Origin header.
+func (s *Service) SetAllowOrigin(origin string) {
+	s.aoMu.Lock()
+	defer s.aoMu.Unlock()
+	s.allowOrigin = origin
+}
+
+// AllowOrigin returns the value for the Access-Control-Allow-Origin header.
+func (s *Service) AllowOrigin() string {
+	s.aoMu.RLock()
+	defer s.aoMu.RUnlock()
+	return s.allowOrigin
 }
 
 // ServeHTTP allows Service to serve HTTP requests.
@@ -844,6 +859,10 @@ func (s *Service) handleStatus(w http.ResponseWriter, r *http.Request, qp QueryP
 		"cluster":   clusterStatus,
 		"queue":     queueStats,
 		"tls":       s.tlsStats(),
+	}
+	ao := s.AllowOrigin()
+	if ao != "" {
+		httpStatus["allow_origin"] = ao
 	}
 
 	nodeStatus := map[string]interface{}{
@@ -1594,8 +1613,9 @@ func (s *Service) addBuildVersion(w http.ResponseWriter) {
 // addAllowHeaders adds the Access-Control-Allow-Origin, Access-Control-Allow-Methods,
 // and Access-Control-Allow-Headers headers to the HTTP response.
 func (s *Service) addAllowHeaders(w http.ResponseWriter) {
-	if s.AllowOrigin != "" {
-		w.Header().Add(AllowOriginHeader, s.AllowOrigin)
+	ao := s.AllowOrigin()
+	if ao != "" {
+		w.Header().Add(AllowOriginHeader, ao)
 	}
 	w.Header().Add(AllowMethodsHeader, "OPTIONS, GET, POST")
 	if s.credentialStore == nil {
