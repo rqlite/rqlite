@@ -1335,9 +1335,9 @@ func (s *Store) Backup(br *proto.BackupRequest, dst io.Writer) (retErr error) {
 					return fmt.Errorf("pre-backup snapshot failed: %s", err.Error())
 				}
 			}
-			// Block any snapshotting and which will allow us to read the SQLite
-			// file without it changing underneath us. Any incoming writes will be
-			// sent to the WAL.
+			// Block any snapshotting which will allow us to read the SQLite file without
+			// it changing underneath us. Any incoming writes will be sent to the WAL, so
+			// write traffic is not blocked during the backup process.
 			if err := s.snapshotCAS.Begin(); err != nil {
 				return err
 			}
