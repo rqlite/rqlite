@@ -14,6 +14,10 @@ import (
 	"github.com/aws/aws-sdk-go/service/s3/s3manager"
 )
 
+const (
+	NoTimestamp = false
+)
+
 func Test_NewS3Client(t *testing.T) {
 	c, err := NewS3Client("endpoint1", "region1", "access", "secret", "bucket2", "key3", true)
 	if err != nil {
@@ -121,7 +125,7 @@ func TestS3ClientUploadOK(t *testing.T) {
 	}
 
 	reader := strings.NewReader("test data")
-	err := client.Upload(context.Background(), reader, "some-id")
+	err := client.Upload(context.Background(), reader, NoTimestamp, "some-id")
 	if err != nil {
 		t.Fatalf("Unexpected error: %v", err)
 	}
@@ -153,7 +157,7 @@ func TestS3ClientUploadFail(t *testing.T) {
 	}
 
 	reader := strings.NewReader("test data")
-	err := client.Upload(context.Background(), reader, "")
+	err := client.Upload(context.Background(), reader, NoTimestamp, "")
 	if err == nil {
 		t.Fatal("Expected error, got nil")
 	}

@@ -6,6 +6,7 @@ import (
 	"io"
 	"net/http"
 	"strings"
+	"time"
 
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/credentials"
@@ -99,10 +100,14 @@ func (s *S3Client) String() string {
 }
 
 // Upload uploads data to S3.
-func (s *S3Client) Upload(ctx context.Context, reader io.Reader, id string) error {
+func (s *S3Client) Upload(ctx context.Context, reader io.Reader, timestamp bool, id string) error {
+	key := s.key
+	if timestamp {
+		key = fmt.Sprintf("%d-%s", time.Now().UnixMilli(), key)
+	}
 	input := &s3manager.UploadInput{
 		Bucket: aws.String(s.bucket),
-		Key:    aws.String(s.key),
+		Key:    aws.String(key),
 		Body:   reader,
 	}
 

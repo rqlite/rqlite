@@ -16,7 +16,7 @@ func Test_NewUploader(t *testing.T) {
 	storageClient := &mockStorageClient{}
 	dataProvider := &mockDataProvider{}
 	interval := time.Second
-	uploader := NewUploader(storageClient, dataProvider, interval, UploadNoCompress)
+	uploader := NewUploader(storageClient, dataProvider, interval, UploadNoTimestamp, UploadNoCompress)
 	if uploader.storageClient != storageClient {
 		t.Errorf("expected storageClient to be %v, got %v", storageClient, uploader.storageClient)
 	}
@@ -36,14 +36,14 @@ func Test_UploaderSingleUpload(t *testing.T) {
 	var wg sync.WaitGroup
 	wg.Add(1)
 	sc := &mockStorageClient{
-		uploadFn: func(ctx context.Context, reader io.Reader, id string) error {
+		uploadFn: func(ctx context.Context, reader io.Reader, timestamp bool, id string) error {
 			defer wg.Done()
 			uploadedData, err = io.ReadAll(reader)
 			return err
 		},
 	}
 	dp := &mockDataProvider{data: "my upload data"}
-	uploader := NewUploader(sc, dp, 100*time.Millisecond, UploadNoCompress)
+	uploader := NewUploader(sc, dp, 100*time.Millisecond, UploadNoTimestamp, UploadNoCompress)
 	ctx, cancel := context.WithCancel(context.Background())
 
 	done := uploader.Start(ctx, nil)
@@ -79,7 +79,7 @@ func Test_UploaderSingleUpload_ID(t *testing.T) {
 	}
 	dp := &mockDataProvider{data: "my upload data"}
 	dp.lastIndexFn = func() (uint64, error) { return 1234, nil }
-	uploader := NewUploader(sc, dp, 100*time.Millisecond, UploadNoCompress)
+	uploader := NewUploader(sc, dp, 100*time.Millisecond, UploadNoTimestamp, UploadNoCompress)
 	ctx, cancel := context.WithCancel(context.Background())
 
 	done := uploader.Start(ctx, nil)
@@ -99,7 +99,7 @@ func Test_UploaderDoubleUpload(t *testing.T) {
 	var wg sync.WaitGroup
 	wg.Add(2)
 	sc := &mockStorageClient{
-		uploadFn: func(ctx context.Context, reader io.Reader, id string) error {
+		uploadFn: func(ctx context.Context, reader io.Reader, timestamp bool, id string) error {
 			defer wg.Done()
 			uploadedData = nil // Wipe out any previous state.
 			uploadedData, err = io.ReadAll(reader)
@@ -115,7 +115,7 @@ func Test_UploaderDoubleUpload(t *testing.T) {
 		lastIndexCalled = true
 		return 1, nil
 	}
-	uploader := NewUploader(sc, dp, 100*time.Millisecond, UploadNoCompress)
+	uploader := NewUploader(sc, dp, 100*time.Millisecond, UploadNoTimestamp, UploadNoCompress)
 	ctx, cancel := context.WithCancel(context.Background())
 
 	done := uploader.Start(ctx, nil)
@@ -136,7 +136,7 @@ func Test_UploaderFailThenOK(t *testing.T) {
 	var wg sync.WaitGroup
 	wg.Add(2)
 	sc := &mockStorageClient{
-		uploadFn: func(ctx context.Context, reader io.Reader, id string) error {
+		uploadFn: func(ctx context.Context, reader io.Reader, timestamp bool, id string) error {
 			if uploadCount == 2 {
 				// uploadFn can be called a third time before the cancel kicks in.
 				// This would push waitGroup into negative numbers and panic.
@@ -161,7 +161,7 @@ func Test_UploaderFailThenOK(t *testing.T) {
 		lastIndexCalled = true
 		return 1, nil
 	}
-	uploader := NewUploader(sc, dp, 100*time.Millisecond, UploadNoCompress)
+	uploader := NewUploader(sc, dp, 100*time.Millisecond, UploadNoTimestamp, UploadNoCompress)
 	ctx, cancel := context.WithCancel(context.Background())
 
 	done := uploader.Start(ctx, nil)
@@ -182,7 +182,7 @@ func Test_UploaderOKThenFail(t *testing.T) {
 	var wg sync.WaitGroup
 	wg.Add(2)
 	sc := &mockStorageClient{
-		uploadFn: func(ctx context.Context, reader io.Reader, id string) error {
+		uploadFn: func(ctx context.Context, reader io.Reader, timestamp bool, id string) error {
 			if uploadCount == 2 {
 				// uploadFn can be called a third time before the cancel kicks in.
 				// This would push waitGroup into negative numbers and panic.
@@ -208,7 +208,7 @@ func Test_UploaderOKThenFail(t *testing.T) {
 		lastIndexCalled = true
 		return 1, nil
 	}
-	uploader := NewUploader(sc, dp, 100*time.Millisecond, UploadNoCompress)
+	uploader := NewUploader(sc, dp, 100*time.Millisecond, UploadNoTimestamp, UploadNoCompress)
 	ctx, cancel := context.WithCancel(context.Background())
 
 	done := uploader.Start(ctx, nil)
@@ -225,13 +225,13 @@ func Test_UploaderContextCancellation(t *testing.T) {
 	var uploadCount int32
 
 	sc := &mockStorageClient{
-		uploadFn: func(ctx context.Context, reader io.Reader, id string) error {
+		uploadFn: func(ctx context.Context, reader io.Reader, timestamp bool, id string) error {
 			atomic.AddInt32(&uploadCount, 1)
 			return nil
 		},
 	}
 	dp := &mockDataProvider{data: "my upload data"}
-	uploader := NewUploader(sc, dp, 100*time.Millisecond, UploadNoCompress)
+	uploader := NewUploader(sc, dp, 100*time.Millisecond, UploadNoTimestamp, UploadNoCompress)
 	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Millisecond)
 
 	done := uploader.Start(ctx, nil)
@@ -246,7 +246,7 @@ func Test_UploaderEnabledFalse(t *testing.T) {
 	ResetStats()
 	sc := &mockStorageClient{}
 	dp := &mockDataProvider{data: "my upload data"}
-	uploader := NewUploader(sc, dp, 100*time.Millisecond, false)
+	uploader := NewUploader(sc, dp, 100*time.Millisecond, UploadNoTimestamp, UploadNoCompress)
 	ctx, cancel := context.WithCancel(context.Background())
 
 	done := uploader.Start(ctx, func() bool { return false })
@@ -267,14 +267,14 @@ func Test_UploaderEnabledTrue(t *testing.T) {
 	var wg sync.WaitGroup
 	wg.Add(1)
 	sc := &mockStorageClient{
-		uploadFn: func(ctx context.Context, reader io.Reader, id string) error {
+		uploadFn: func(ctx context.Context, reader io.Reader, timestamp bool, id string) error {
 			defer wg.Done()
 			uploadedData, err = io.ReadAll(reader)
 			return err
 		},
 	}
 	dp := &mockDataProvider{data: "my upload data"}
-	uploader := NewUploader(sc, dp, time.Second, UploadNoCompress)
+	uploader := NewUploader(sc, dp, time.Second, UploadNoTimestamp, UploadNoCompress)
 	ctx, cancel := context.WithCancel(context.Background())
 
 	done := uploader.Start(ctx, func() bool { return true })
@@ -291,7 +291,7 @@ func Test_UploaderStats(t *testing.T) {
 	sc := &mockStorageClient{}
 	dp := &mockDataProvider{data: "my upload data"}
 	interval := 100 * time.Millisecond
-	uploader := NewUploader(sc, dp, interval, UploadNoCompress)
+	uploader := NewUploader(sc, dp, interval, UploadNoTimestamp, UploadNoCompress)
 
 	stats, err := uploader.Stats()
 	if err != nil {
@@ -310,13 +310,13 @@ func Test_UploaderStats(t *testing.T) {
 // mockStorageClient implements StorageClient and in its default configuration
 // always returns an error for CurrentSum.
 type mockStorageClient struct {
-	uploadFn    func(ctx context.Context, reader io.Reader, id string) error
+	uploadFn    func(ctx context.Context, reader io.Reader, timestamp bool, id string) error
 	currentIDFn func(ctx context.Context) (string, error)
 }
 
-func (mc *mockStorageClient) Upload(ctx context.Context, reader io.Reader, id string) error {
+func (mc *mockStorageClient) Upload(ctx context.Context, reader io.Reader, timestamp bool, id string) error {
 	if mc.uploadFn != nil {
-		return mc.uploadFn(ctx, reader, id)
+		return mc.uploadFn(ctx, reader, timestamp, id)
 	}
 	return nil
 }

@@ -251,7 +251,7 @@ func startAutoBackups(ctx context.Context, cfg *Config, str *store.Store) (*back
 	if err != nil {
 		return nil, fmt.Errorf("failed to create aws S3 client: %s", err.Error())
 	}
-	u := backup.NewUploader(sc, provider, time.Duration(uCfg.Interval), !uCfg.NoCompress)
+	u := backup.NewUploader(sc, provider, time.Duration(uCfg.Interval), uCfg.Timestamp, !uCfg.NoCompress)
 	u.Start(ctx, str.IsLeader)
 	return u, nil
 }

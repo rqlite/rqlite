@@ -1,4 +1,6 @@
-## 8.23.5 (unreleased)
+## 8.24.0 (unreleased)
+- [PR #1767](https://github.com/rqlite/rqlite/pull/1767): Support adding timestamps to auto-uploaded backup filenames.
+
 ### Implementation changes and bug fixes
 - [PR #1765](https://github.com/rqlite/rqlite/pull/1765): Synchronize accesses to HTTP Server's AllowOrigin value. Fixes issue [#1764](https://github.com/rqlite/rqlite/issues/1764).
 

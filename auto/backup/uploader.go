@@ -19,7 +19,7 @@ type StorageClient interface {
 	// Upload uploads the data from the given reader to the storage service.
 	// id is a identifier for the data, and will be stored along with
 	// the data in the storage service.
-	Upload(ctx context.Context, reader io.Reader, id string) error
+	Upload(ctx context.Context, reader io.Reader, timestamp bool, id string) error
 
 	// CurrentID returns the ID of the data in the Storage service.
 	// It is always read from the Storage service, and a cached
@@ -53,8 +53,10 @@ const (
 	totalUploadBytes    = "total_upload_bytes"
 	lastUploadBytes     = "last_upload_bytes"
 
-	UploadCompress   = true
-	UploadNoCompress = false
+	UploadCompress    = true
+	UploadNoCompress  = false
+	UploadTimestamp   = true
+	UploadNoTimestamp = false
 )
 
 func init() {
@@ -80,6 +82,7 @@ type Uploader struct {
 	dataProvider  DataProvider
 	interval      time.Duration
 	compress      bool
+	timestamp     bool
 
 	logger             *log.Logger
 	lastUploadTime     time.Time
@@ -89,12 +92,13 @@ type Uploader struct {
 }
 
 // NewUploader creates a new Uploader service.
-func NewUploader(storageClient StorageClient, dataProvider DataProvider, interval time.Duration, compress bool) *Uploader {
+func NewUploader(storageClient StorageClient, dataProvider DataProvider, interval time.Duration, compress, timestamp bool) *Uploader {
 	return &Uploader{
 		storageClient: storageClient,
 		dataProvider:  dataProvider,
 		interval:      interval,
 		compress:      compress,
+		timestamp:     timestamp,
 		logger:        log.New(os.Stderr, "[uploader] ", log.LstdFlags),
 	}
 }
@@ -135,6 +139,7 @@ func (u *Uploader) Stats() (map[string]interface{}, error) {
 		"upload_destination":   u.storageClient.String(),
 		"upload_interval":      u.interval.String(),
 		"compress":             u.compress,
+		"timestamp":            u.timestamp,
 		"last_upload_time":     u.lastUploadTime.Format(time.RFC3339),
 		"last_upload_duration": u.lastUploadDuration.String(),
 		"last_index":           strconv.FormatUint(u.lastIndex, 10),
@@ -185,7 +190,7 @@ func (u *Uploader) upload(ctx context.Context) error {
 	}
 	cr := progress.NewCountingReader(fd)
 	startTime := time.Now()
-	err = u.storageClient.Upload(ctx, cr, strconv.FormatUint(li, 10))
+	err = u.storageClient.Upload(ctx, cr, u.timestamp, strconv.FormatUint(li, 10))
 	if err != nil {
 		stats.Add(numUploadsFail, 1)
 		return err
