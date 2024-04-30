@@ -1295,7 +1295,9 @@ func (s *Store) Backup(br *proto.BackupRequest, dst io.Writer) (retErr error) {
 	defer func() {
 		if retErr == nil {
 			stats.Add(numBackups, 1)
-			s.logger.Printf("database backed up in %s", time.Since(startT))
+			if s.logBackup() {
+				s.logger.Printf("database backed up in %s", time.Since(startT))
+			}
 		}
 	}()
 
@@ -2295,6 +2297,10 @@ func (s *Store) hcLogLevel() hclog.Level {
 }
 
 func (s *Store) logIncremental() bool {
+	return s.hcLogLevel() < hclog.Warn
+}
+
+func (s *Store) logBackup() bool {
 	return s.hcLogLevel() < hclog.Warn
 }
 
