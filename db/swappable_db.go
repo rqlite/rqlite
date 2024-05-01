@@ -157,3 +157,10 @@ func (s *SwappableDB) WALEnabled() bool {
 	defer s.dbMu.RUnlock()
 	return s.db.WALEnabled()
 }
+
+// FileSize calls FileSize on the underlying database.
+func (s *SwappableDB) FileSize() (int64, error) {
+	s.dbMu.RLock()
+	defer s.dbMu.RUnlock()
+	return s.db.FileSize()
+}
