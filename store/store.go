@@ -1295,7 +1295,11 @@ func (s *Store) Backup(br *proto.BackupRequest, dst io.Writer) (retErr error) {
 	defer func() {
 		if retErr == nil {
 			stats.Add(numBackups, 1)
-			s.logger.Printf("database backed up in %s", time.Since(startT))
+			if s.logBackup() {
+				dbFileSz, _ := s.db.FileSize()
+				s.logger.Printf("%s database file backed up in %s",
+					friendlyBytes(uint64(dbFileSz)), time.Since(startT))
+			}
 		}
 	}()
 
@@ -1331,9 +1335,9 @@ func (s *Store) Backup(br *proto.BackupRequest, dst io.Writer) (retErr error) {
 					return fmt.Errorf("pre-backup snapshot failed: %s", err.Error())
 				}
 			}
-			// Pause any snapshotting and which will allow us to read the SQLite
-			// file without it changing underneath us. Any new writes will be
-			// sent to the WAL.
+			// Block any snapshotting which will allow us to read the SQLite file without
+			// it changing underneath us. Any incoming writes will be sent to the WAL, so
+			// write traffic is not blocked during the backup process.
 			if err := s.snapshotCAS.Begin(); err != nil {
 				return err
 			}
@@ -2295,6 +2299,10 @@ func (s *Store) hcLogLevel() hclog.Level {
 }
 
 func (s *Store) logIncremental() bool {
+	return s.hcLogLevel() < hclog.Warn
+}
+
+func (s *Store) logBackup() bool {
 	return s.hcLogLevel() < hclog.Warn
 }
 

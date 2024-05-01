@@ -43,6 +43,9 @@ const (
 	numETx                    = "execute_transactions"
 	numQTx                    = "query_transactions"
 	numRTx                    = "request_transactions"
+	numBackupStepErrors       = "backup_step_errors"
+	numBackupStepDones        = "backup_step_dones"
+	numBackupSleeps           = "backup_sleeps"
 )
 
 var (
@@ -104,6 +107,9 @@ func ResetStats() {
 	stats.Add(numETx, 0)
 	stats.Add(numQTx, 0)
 	stats.Add(numRTx, 0)
+	stats.Add(numBackupStepErrors, 0)
+	stats.Add(numBackupStepDones, 0)
+	stats.Add(numBackupSleeps, 0)
 }
 
 // DB is the SQL database.
@@ -1340,12 +1346,15 @@ func copyDatabaseConnection(dst, src *sqlite3.SQLiteConn) error {
 	for {
 		done, err := bk.Step(-1)
 		if err != nil {
+			stats.Add(numBackupStepErrors, 1)
 			bk.Finish()
 			return err
 		}
 		if done {
+			stats.Add(numBackupStepDones, 1)
 			break
 		}
+		stats.Add(numBackupSleeps, 1)
 		time.Sleep(bkDelay * time.Millisecond)
 	}
 	return bk.Finish()
