@@ -1297,7 +1297,7 @@ func (s *Store) Backup(br *proto.BackupRequest, dst io.Writer) (retErr error) {
 			stats.Add(numBackups, 1)
 			if s.logBackup() {
 				dbFileSz, _ := s.db.FileSize()
-				s.logger.Printf("%s database backed up in %s",
+				s.logger.Printf("%s database file backed up in %s",
 					friendlyBytes(uint64(dbFileSz)), time.Since(startT))
 			}
 		}
