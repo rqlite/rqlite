@@ -226,6 +226,7 @@ class Node(object):
       command += ['-disco-mode', disco_mode, '-disco-key', dk]
       if disco_config is not None:
         command += ['-disco-config', disco_config]
+    command += ['-raft-log-level', 'INFO']
     command.append(self.dir)
 
     self.process = subprocess.Popen(command, stdout=self.stdout_fd, stderr=self.stderr_fd)
