@@ -1291,14 +1291,14 @@ func (s *Store) Backup(br *proto.BackupRequest, dst io.Writer) (retErr error) {
 		return ErrInvalidBackupFormat
 	}
 
-	var countingR *progress.CountingReader
 	startT := time.Now()
 	defer func() {
 		if retErr == nil {
 			stats.Add(numBackups, 1)
 			if s.logBackup() {
+				dbFileSz, _ := s.db.FileSize()
 				s.logger.Printf("%s database backed up in %s",
-					friendlyBytes(uint64(countingR.Count())), time.Since(startT))
+					friendlyBytes(uint64(dbFileSz)), time.Since(startT))
 			}
 		}
 	}()
@@ -1350,7 +1350,6 @@ func (s *Store) Backup(br *proto.BackupRequest, dst io.Writer) (retErr error) {
 			}
 			defer srcFD.Close()
 		}
-		countingR = progress.NewCountingReader(srcFD)
 
 		if br.Compress {
 			var dstGz *gzip.Writer
@@ -1359,9 +1358,9 @@ func (s *Store) Backup(br *proto.BackupRequest, dst io.Writer) (retErr error) {
 				return err
 			}
 			defer dstGz.Close()
-			_, err = io.Copy(dstGz, countingR)
+			_, err = io.Copy(dstGz, srcFD)
 		} else {
-			_, err = io.Copy(dst, countingR)
+			_, err = io.Copy(dst, srcFD)
 		}
 		return err
 	} else if br.Format == proto.BackupRequest_BACKUP_REQUEST_FORMAT_SQL {
