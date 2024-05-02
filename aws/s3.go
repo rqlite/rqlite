@@ -5,10 +5,13 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"regexp"
+	"sort"
 	"strings"
 
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/credentials"
+	"github.com/aws/aws-sdk-go/aws/request"
 	"github.com/aws/aws-sdk-go/aws/session"
 	"github.com/aws/aws-sdk-go/service/s3"
 	"github.com/aws/aws-sdk-go/service/s3/s3manager"
@@ -45,6 +48,7 @@ type S3Client struct {
 	// These fields are used for testing via dependency injection.
 	uploader   uploader
 	downloader downloader
+	lister     lister
 }
 
 // NewS3Client returns an instance of an S3Client.
@@ -115,7 +119,6 @@ func (s *S3Client) Upload(ctx context.Context, reader io.Reader, id string) erro
 	if err != nil {
 		return fmt.Errorf("failed to upload to %v: %w", s, err)
 	}
-
 	return nil
 }
 
@@ -140,14 +143,48 @@ func (s *S3Client) CurrentID(ctx context.Context) (string, error) {
 
 // Download downloads data from S3.
 func (s *S3Client) Download(ctx context.Context, writer io.WriterAt) error {
-	_, err := s.downloader.DownloadWithContext(ctx, writer, &s3.GetObjectInput{
-		Bucket: aws.String(s.bucket),
-		Key:    aws.String(s.key),
-	})
+	// Compile regex pattern from s.key
+	pattern, err := regexp.Compile(s.key)
 	if err != nil {
-		return fmt.Errorf("failed to download from %v: %w", s, err)
+		return fmt.Errorf("invalid regex pattern: %w", err)
 	}
 
+	// List all objects in the bucket
+	input := &s3.ListObjectsV2Input{
+		Bucket: aws.String(s.bucket),
+	}
+	var objects []*s3.Object
+	err = s.lister.ListObjectsV2PagesWithContext(ctx, input,
+		func(page *s3.ListObjectsV2Output, lastPage bool) bool {
+			for _, obj := range page.Contents {
+				if pattern.MatchString(*obj.Key) {
+					objects = append(objects, obj)
+				}
+			}
+			return !lastPage
+		})
+	if err != nil {
+		return fmt.Errorf("failed to list objects: %w", err)
+	}
+
+	if len(objects) == 0 {
+		return fmt.Errorf("no objects match the pattern")
+	}
+
+	// Sort objects by LastModified date to get the most recently created object
+	sort.Slice(objects, func(i, j int) bool {
+		return objects[i].LastModified.After(*objects[j].LastModified)
+	})
+	mostRecent := objects[0]
+
+	// Download the most recent object
+	_, err = s.downloader.DownloadWithContext(ctx, writer, &s3.GetObjectInput{
+		Bucket: aws.String(s.bucket),
+		Key:    mostRecent.Key,
+	})
+	if err != nil {
+		return fmt.Errorf("failed to download %s: %w", *mostRecent.Key, err)
+	}
 	return nil
 }
 
@@ -157,4 +194,8 @@ type uploader interface {
 
 type downloader interface {
 	DownloadWithContext(ctx aws.Context, w io.WriterAt, input *s3.GetObjectInput, opts ...func(*s3manager.Downloader)) (n int64, err error)
+}
+
+type lister interface {
+	ListObjectsV2PagesWithContext(ctx aws.Context, input *s3.ListObjectsV2Input, fn func(*s3.ListObjectsV2Output, bool) bool, opts ...request.Option) error
 }

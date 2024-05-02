@@ -8,8 +8,10 @@ import (
 	"net/http"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/aws/aws-sdk-go/aws"
+	"github.com/aws/aws-sdk-go/aws/request"
 	"github.com/aws/aws-sdk-go/service/s3"
 	"github.com/aws/aws-sdk-go/service/s3/s3manager"
 )
@@ -167,8 +169,24 @@ func TestS3ClientDownloadOK(t *testing.T) {
 	accessKey := "your-access-key"
 	secretKey := "your-secret-key"
 	bucket := "your-bucket"
-	key := "your/key/path"
+	key := "your/key/path" // Exact key match simulates no regex complexity.
 	expectedData := "test data"
+
+	// Mock lister to simulate listing objects and finding the exact key
+	mockLister := &mockLister{
+		listFn: func(ctx aws.Context, input *s3.ListObjectsV2Input, fn func(*s3.ListObjectsV2Output, bool) bool, opts ...request.Option) error {
+			// Simulating the output that only contains the exact key
+			fn(&s3.ListObjectsV2Output{
+				Contents: []*s3.Object{
+					{
+						Key:          aws.String(key),
+						LastModified: aws.Time(time.Now()), // Most recent
+					},
+				},
+			}, true)
+			return nil
+		},
+	}
 
 	mockDownloader := &mockDownloader{
 		downloadFn: func(ctx aws.Context, w io.WriterAt, input *s3.GetObjectInput, opts ...func(*s3manager.Downloader)) (int64, error) {
@@ -193,6 +211,7 @@ func TestS3ClientDownloadOK(t *testing.T) {
 		bucket:     bucket,
 		key:        key,
 		downloader: mockDownloader,
+		lister:     mockLister,
 	}
 
 	writer := aws.NewWriteAtBuffer(make([]byte, len(expectedData)))
@@ -205,6 +224,123 @@ func TestS3ClientDownloadOK(t *testing.T) {
 	}
 }
 
+func TestS3ClientDownloadOK_MultipleMatchMultiplePage(t *testing.T) {
+	region := "us-west-2"
+	accessKey := "your-access-key"
+	secretKey := "your-secret-key"
+	bucket := "your-bucket"
+	// The regex pattern here is simplified to match keys ending with 'match'
+	key := ".*match$"
+	expectedData := "test data"
+	expectedKey := "correctmatch" // This is the key that should match the regex and be the most recent
+
+	// Mock lister to simulate listing objects with multiple matches and non-matches
+	listCalled := false
+	mockLister := &mockLister{
+		listFn: func(ctx aws.Context, input *s3.ListObjectsV2Input, fn func(*s3.ListObjectsV2Output, bool) bool, opts ...request.Option) error {
+			var objects []*s3.Object
+			for {
+				if !listCalled {
+					objects = []*s3.Object{
+						{Key: aws.String("nomatch1"), LastModified: aws.Time(time.Now().Add(-24 * time.Hour))}, // older, non-match
+						{Key: aws.String("oldmatch"), LastModified: aws.Time(time.Now().Add(-48 * time.Hour))}, // older, match
+					}
+					callAgain := fn(&s3.ListObjectsV2Output{
+						Contents: objects,
+					}, false)
+					listCalled = true
+					if !callAgain {
+						t.Fatal("expected callAgain to be true")
+					}
+				} else {
+					callAgain := fn(&s3.ListObjectsV2Output{
+						Contents: []*s3.Object{
+							{Key: aws.String("correctmatch"), LastModified: aws.Time(time.Now())},
+							{Key: aws.String("almostmatch"), LastModified: aws.Time(time.Now().Add(-2 * time.Hour))}, // newer but non-match
+						},
+					}, true)
+					if callAgain {
+						t.Fatal("expected callAgain to be false")
+					}
+					break
+				}
+			}
+			return nil
+		},
+	}
+
+	// Mock downloader to simulate downloading the expected object
+	mockDownloader := &mockDownloader{
+		downloadFn: func(ctx aws.Context, w io.WriterAt, input *s3.GetObjectInput, opts ...func(*s3manager.Downloader)) (int64, error) {
+			if *input.Bucket != bucket {
+				t.Errorf("expected bucket to be %q, got %q", bucket, *input.Bucket)
+			}
+			if *input.Key != expectedKey {
+				t.Errorf("expected key to be %q, got %q", expectedKey, *input.Key)
+			}
+			n, err := w.WriteAt([]byte(expectedData), 0)
+			if err != nil {
+				return 0, err
+			}
+			return int64(n), nil
+		},
+	}
+
+	client := &S3Client{
+		region:     region,
+		accessKey:  accessKey,
+		secretKey:  secretKey,
+		bucket:     bucket,
+		key:        key,
+		downloader: mockDownloader,
+		lister:     mockLister,
+	}
+
+	writer := aws.NewWriteAtBuffer(make([]byte, len(expectedData)))
+	err := client.Download(context.Background(), writer)
+	if err != nil {
+		t.Fatalf("Unexpected error: %v", err)
+	}
+	if string(writer.Bytes()) != expectedData {
+		t.Errorf("expected downloaded data to be %q, got %q", expectedData, writer.Bytes())
+	}
+}
+
+func TestS3ClientDownload_NoObjects(t *testing.T) {
+	region := "us-west-2"
+	accessKey := "your-access-key"
+	secretKey := "your-secret-key"
+	bucket := "your-bucket"
+	key := "your/key/path" // Exact key match simulates no regex complexity.
+	expectedData := "test data"
+
+	// Mock lister to simulate listing objects and finding the exact key
+	mockLister := &mockLister{
+		listFn: func(ctx aws.Context, input *s3.ListObjectsV2Input, fn func(*s3.ListObjectsV2Output, bool) bool, opts ...request.Option) error {
+			// Simulating the output that only contains the exact key
+			fn(&s3.ListObjectsV2Output{
+				Contents: []*s3.Object{},
+			}, true)
+			return nil
+		},
+	}
+
+	client := &S3Client{
+		region:    region,
+		accessKey: accessKey,
+		secretKey: secretKey,
+		bucket:    bucket,
+		key:       key,
+		lister:    mockLister,
+	}
+
+	writer := aws.NewWriteAtBuffer(make([]byte, len(expectedData)))
+	err := client.Download(context.Background(), writer)
+	if err == nil {
+		t.Fatalf("Expected error, got nil")
+	}
+}
+
 func TestS3ClientDownloadFail(t *testing.T) {
 	endpoint := "https://my-custom-s3-endpoint.com"
 	region := "us-west-2"
@@ -212,6 +348,22 @@ func TestS3ClientDownloadFail(t *testing.T) {
 	secretKey := "your-secret-key"
 	bucket := "your-bucket"
 	key := "your/key/path"
+
+	// Mock lister to simulate listing objects and finding the exact key
+	mockLister := &mockLister{
+		listFn: func(ctx aws.Context, input *s3.ListObjectsV2Input, fn func(*s3.ListObjectsV2Output, bool) bool, opts ...request.Option) error {
+			// Simulating the output that only contains the exact key
+			fn(&s3.ListObjectsV2Output{
+				Contents: []*s3.Object{
+					{
+						Key:          aws.String(key),
+						LastModified: aws.Time(time.Now()), // Most recent
+					},
+				},
+			}, true)
+			return nil
+		},
+	}
 
 	mockDownloader := &mockDownloader{
 		downloadFn: func(ctx aws.Context, w io.WriterAt, input *s3.GetObjectInput, opts ...func(*s3manager.Downloader)) (n int64, err error) {
@@ -227,6 +379,7 @@ func TestS3ClientDownloadFail(t *testing.T) {
 		bucket:     bucket,
 		key:        key,
 		downloader: mockDownloader,
+		lister:     mockLister,
 	}
 
 	writer := aws.NewWriteAtBuffer(nil)
@@ -259,4 +412,15 @@ func (m *mockUploader) UploadWithContext(ctx aws.Context, input *s3manager.Uploa
 		return m.uploadFn(ctx, input, opts...)
 	}
 	return &s3manager.UploadOutput{}, nil
+}
+
+type mockLister struct {
+	listFn func(ctx aws.Context, input *s3.ListObjectsV2Input, fn func(*s3.ListObjectsV2Output, bool) bool, opts ...request.Option) error
+}
+
+func (m *mockLister) ListObjectsV2PagesWithContext(ctx aws.Context, input *s3.ListObjectsV2Input, fn func(*s3.ListObjectsV2Output, bool) bool, opts ...request.Option) error {
+	if m.listFn != nil {
+		return m.listFn(ctx, input, fn, opts...)
+	}
+	return nil
 }
