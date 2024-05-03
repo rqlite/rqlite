@@ -10,6 +10,7 @@ import (
 	"path/filepath"
 	"runtime"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/hashicorp/raft"
@@ -56,16 +57,39 @@ func ResetStats() {
 type LockingSink struct {
 	raft.SnapshotSink
 	str *Store
+
+	mu     sync.Mutex
+	closed bool
+}
+
+// NewLockingSink retunrs a new LockingSink.
+func NewLockingSink(sink raft.SnapshotSink, str *Store) *LockingSink {
+	return &LockingSink{
+		SnapshotSink: sink,
+		str:          str,
+	}
 }
 
 // Close closes the sink, unlocking the Store for creation of a new sink.
 func (s *LockingSink) Close() error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.closed {
+		return nil
+	}
+	s.closed = true
 	defer s.str.cas.End()
 	return s.SnapshotSink.Close()
 }
 
 // Cancel cancels the sink, unlocking the Store for creation of a new sink.
 func (s *LockingSink) Cancel() error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.closed {
+		return nil
+	}
+	s.closed = true
 	defer s.str.cas.End()
 	return s.SnapshotSink.Cancel()
 }
@@ -74,10 +98,27 @@ func (s *LockingSink) Cancel() error {
 type LockingSnapshot struct {
 	*os.File
 	str *Store
+
+	mu     sync.Mutex
+	closed bool
+}
+
+// NewLockingSink retunrs a new LockingSink.
+func NewLockingSnapshot(fd *os.File, str *Store) *LockingSnapshot {
+	return &LockingSnapshot{
+		File: fd,
+		str:  str,
+	}
 }
 
 // Close closes the Snapshot and releases the Snapshot Store lock.
 func (l *LockingSnapshot) Close() error {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	if l.closed {
+		return nil
+	}
+	l.closed = true
 	l.str.cas.End()
 	return l.File.Close()
 }
@@ -141,7 +182,7 @@ func (s *Store) Create(version raft.SnapshotVersion, index, term uint64, configu
 	if err := sink.Open(); err != nil {
 		return nil, err
 	}
-	return &LockingSink{sink, s}, nil
+	return NewLockingSink(sink, s), nil
 }
 
 // List returns a list of all the snapshots in the Store. In practice, this will at most be
@@ -183,7 +224,7 @@ func (s *Store) Open(id string) (_ *raft.SnapshotMeta, _ io.ReadCloser, retErr e
 	if err != nil {
 		return nil, nil, err
 	}
-	return meta, &LockingSnapshot{fd, s}, nil
+	return meta, NewLockingSnapshot(fd, s), nil
 }
 
 // FullNeeded returns true if a full snapshot is needed.
