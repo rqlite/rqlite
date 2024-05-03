@@ -60,22 +60,40 @@ type LockingSink struct {
 
 // Close closes the sink, unlocking the Store for creation of a new sink.
 func (s *LockingSink) Close() error {
-	defer s.str.sinkMu.Unlock()
+	defer s.str.mu.Unlock()
 	return s.SnapshotSink.Close()
 }
 
 // Cancel cancels the sink, unlocking the Store for creation of a new sink.
 func (s *LockingSink) Cancel() error {
-	defer s.str.sinkMu.Unlock()
+	defer s.str.mu.Unlock()
 	return s.SnapshotSink.Cancel()
+}
+
+// LockingSnapshot is a snapshot which holds the Snapshot Store lock while open.
+type LockingSnapshot struct {
+	*os.File
+	str    *Store
+	closed bool
+}
+
+// Close closes the Snapshot and releases the Snapshot Store lock.
+func (l *LockingSnapshot) Close() error {
+	if l.closed {
+		return nil
+	}
+	l.closed = true
+	l.str.mu.Unlock()
+	return l.File.Close()
 }
 
 // Store stores Snapshots.
 type Store struct {
 	dir            string
 	fullNeededPath string
-	sinkMu         sync.Mutex
 	logger         *log.Logger
+
+	mu sync.Mutex
 
 	LogReaping   bool
 	reapDisabled bool // For testing purposes
@@ -106,10 +124,10 @@ func NewStore(dir string) (*Store, error) {
 // be a problem, since snapshots are taken infrequently in one at a time.
 func (s *Store) Create(version raft.SnapshotVersion, index, term uint64, configuration raft.Configuration,
 	configurationIndex uint64, trans raft.Transport) (retSink raft.SnapshotSink, retErr error) {
-	s.sinkMu.Lock()
+	s.mu.Lock()
 	defer func() {
 		if retErr != nil {
-			s.sinkMu.Unlock()
+			s.mu.Unlock()
 		}
 	}()
 
@@ -149,7 +167,13 @@ func (s *Store) List() ([]*raft.SnapshotMeta, error) {
 }
 
 // Open opens the snapshot with the given ID.
-func (s *Store) Open(id string) (*raft.SnapshotMeta, io.ReadCloser, error) {
+func (s *Store) Open(id string) (_ *raft.SnapshotMeta, _ io.ReadCloser, retErr error) {
+	s.mu.Lock()
+	defer func() {
+		if retErr != nil {
+			s.mu.Unlock()
+		}
+	}()
 	meta, err := readMeta(filepath.Join(s.dir, id))
 	if err != nil {
 		return nil, nil, err
@@ -158,7 +182,7 @@ func (s *Store) Open(id string) (*raft.SnapshotMeta, io.ReadCloser, error) {
 	if err != nil {
 		return nil, nil, err
 	}
-	return meta, fd, nil
+	return meta, &LockingSnapshot{fd, s, false}, nil
 }
 
 // FullNeeded returns true if a full snapshot is needed.
