@@ -1,6 +1,6 @@
 ## 8.24.1 (unreleased)
 ### Implementation changes and bug fixes
-- [PR #1775](https://github.com/rqlite/rqlite/pull/1775): Synchronize opening Snapshot Store and Snapshotting.
+- [PR #1775](https://github.com/rqlite/rqlite/pull/1775): Synchronize opening Snapshot Store and Snapshotting. Fixes issue [#1774](https://github.com/rqlite/rqlite/issues/1774).
 
 ## 8.24.0 (May 3rd 2024)
 This release supports optionally adding a timestamp to the name of any auto-uploaded backup. This allows you to automatically upload point-in-time backups.
