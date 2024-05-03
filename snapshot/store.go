@@ -62,7 +62,7 @@ type LockingSink struct {
 	closed bool
 }
 
-// NewLockingSink retunrs a new LockingSink.
+// NewLockingSink returns a new LockingSink.
 func NewLockingSink(sink raft.SnapshotSink, str *Store) *LockingSink {
 	return &LockingSink{
 		SnapshotSink: sink,
