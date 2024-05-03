@@ -52,9 +52,6 @@ const (
 	numSumGetFail       = "num_sum_get_fail"
 	totalUploadBytes    = "total_upload_bytes"
 	lastUploadBytes     = "last_upload_bytes"
-
-	UploadCompress   = true
-	UploadNoCompress = false
 )
 
 func init() {
@@ -79,7 +76,6 @@ type Uploader struct {
 	storageClient StorageClient
 	dataProvider  DataProvider
 	interval      time.Duration
-	compress      bool
 
 	logger             *log.Logger
 	lastUploadTime     time.Time
@@ -89,12 +85,11 @@ type Uploader struct {
 }
 
 // NewUploader creates a new Uploader service.
-func NewUploader(storageClient StorageClient, dataProvider DataProvider, interval time.Duration, compress bool) *Uploader {
+func NewUploader(storageClient StorageClient, dataProvider DataProvider, interval time.Duration) *Uploader {
 	return &Uploader{
 		storageClient: storageClient,
 		dataProvider:  dataProvider,
 		interval:      interval,
-		compress:      compress,
 		logger:        log.New(os.Stderr, "[uploader] ", log.LstdFlags),
 	}
 }
@@ -134,7 +129,6 @@ func (u *Uploader) Stats() (map[string]interface{}, error) {
 	status := map[string]interface{}{
 		"upload_destination":   u.storageClient.String(),
 		"upload_interval":      u.interval.String(),
-		"compress":             u.compress,
 		"last_upload_time":     u.lastUploadTime.Format(time.RFC3339),
 		"last_upload_duration": u.lastUploadDuration.String(),
 		"last_index":           strconv.FormatUint(u.lastIndex, 10),
