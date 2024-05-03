@@ -123,6 +123,7 @@ func TestUnmarshal(t *testing.T) {
 				"version": 1,
 				"type": "s3",
 				"no_compress": true,
+				"timestamp": true,
 				"interval": "24h",
 				"sub": {
 					"access_key_id": "test_id",
@@ -138,6 +139,7 @@ func TestUnmarshal(t *testing.T) {
 				Version:    1,
 				Type:       "s3",
 				NoCompress: true,
+				Timestamp:  true,
 				Vacuum:     true,
 				Interval:   24 * auto.Duration(time.Hour),
 			},
@@ -171,6 +173,7 @@ func TestUnmarshal(t *testing.T) {
 				Version:    1,
 				Type:       "s3",
 				NoCompress: false,
+				Timestamp:  false,
 				Interval:   24 * auto.Duration(time.Hour),
 				Vacuum:     false,
 			},

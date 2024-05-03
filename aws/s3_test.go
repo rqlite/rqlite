@@ -131,6 +131,67 @@ func Test_S3ClientUploadOK(t *testing.T) {
 	}
 }
 
+func Test_S3ClientUploadOK_Timestamped(t *testing.T) {
+	endpoint := "https://my-custom-s3-endpoint.com"
+	region := "us-west-2"
+	accessKey := "your-access-key"
+	secretKey := "your-secret-key"
+	bucket := "your-bucket"
+	key := "your/key/path"
+	timestampedKey := "your/key/20210701150405_path"
+	expectedData := "test data"
+	uploadedData := new(bytes.Buffer)
+
+	mockUploader := &mockUploader{
+		uploadFn: func(ctx aws.Context, input *s3manager.UploadInput, opts ...func(*s3manager.Uploader)) (*s3manager.UploadOutput, error) {
+			if *input.Bucket != bucket {
+				t.Errorf("expected bucket to be %q, got %q", bucket, *input.Bucket)
+			}
+			if *input.Key != timestampedKey {
+				t.Errorf("expected key to be %q, got %q", key, *input.Key)
+			}
+			if input.Body == nil {
+				t.Errorf("expected body to be non-nil")
+			}
+			_, err := uploadedData.ReadFrom(input.Body)
+			if err != nil {
+				t.Errorf("error reading from input body: %v", err)
+			}
+			if input.Metadata == nil {
+				t.Errorf("expected metadata to be non-nil")
+			}
+			exp, got := "some-id", *input.Metadata[http.CanonicalHeaderKey(AWSS3IDKey)]
+			if exp != got {
+				t.Errorf("expected metadata to contain %q, got %q", exp, got)
+			}
+			return &s3manager.UploadOutput{}, nil
+		},
+	}
+
+	client := &S3Client{
+		endpoint:  endpoint,
+		region:    region,
+		accessKey: accessKey,
+		secretKey: secretKey,
+		bucket:    bucket,
+		key:       key,
+		timestamp: true,
+		uploader:  mockUploader,
+		now: func() time.Time {
+			return time.Date(2021, time.July, 1, 15, 4, 5, 0, time.UTC) // Controls timestampedKey
+		},
+	}
+
+	reader := strings.NewReader("test data")
+	err := client.Upload(context.Background(), reader, "some-id")
+	if err != nil {
+		t.Fatalf("Unexpected error: %v", err)
+	}
+	if uploadedData.String() != expectedData {
+		t.Errorf("expected uploaded data to be %q, got %q", expectedData, uploadedData.String())
+	}
+}
+
 func Test_S3ClientUploadFail(t *testing.T) {
 	region := "us-west-2"
 	accessKey := "your-access-key"

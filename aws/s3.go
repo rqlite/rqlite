@@ -47,6 +47,7 @@ type S3Client struct {
 	// These fields are used for testing via dependency injection.
 	uploader   uploader
 	downloader downloader
+	now        func() time.Time
 }
 
 // S3ClientOpts are options for creating an S3Client.
@@ -116,7 +117,10 @@ func (s *S3Client) String() string {
 func (s *S3Client) Upload(ctx context.Context, reader io.Reader, id string) error {
 	key := s.key
 	if s.timestamp {
-		key = TimestampedPath(key, time.Now())
+		if s.now == nil {
+			s.now = time.Now
+		}
+		key = TimestampedPath(key, s.now())
 	}
 	input := &s3manager.UploadInput{
 		Bucket: aws.String(s.bucket),
