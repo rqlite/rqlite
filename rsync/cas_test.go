@@ -1,4 +1,4 @@
-package store
+package rsync
 
 import "testing"
 

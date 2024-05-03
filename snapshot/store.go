@@ -10,11 +10,11 @@ import (
 	"path/filepath"
 	"runtime"
 	"strings"
-	"sync"
 	"time"
 
 	"github.com/hashicorp/raft"
 	"github.com/rqlite/rqlite/v8/db"
+	"github.com/rqlite/rqlite/v8/rsync"
 )
 
 const (
@@ -60,30 +60,25 @@ type LockingSink struct {
 
 // Close closes the sink, unlocking the Store for creation of a new sink.
 func (s *LockingSink) Close() error {
-	defer s.str.mu.Unlock()
+	defer s.str.cas.End()
 	return s.SnapshotSink.Close()
 }
 
 // Cancel cancels the sink, unlocking the Store for creation of a new sink.
 func (s *LockingSink) Cancel() error {
-	defer s.str.mu.Unlock()
+	defer s.str.cas.End()
 	return s.SnapshotSink.Cancel()
 }
 
 // LockingSnapshot is a snapshot which holds the Snapshot Store lock while open.
 type LockingSnapshot struct {
 	*os.File
-	str    *Store
-	closed bool
+	str *Store
 }
 
 // Close closes the Snapshot and releases the Snapshot Store lock.
 func (l *LockingSnapshot) Close() error {
-	if l.closed {
-		return nil
-	}
-	l.closed = true
-	l.str.mu.Unlock()
+	l.str.cas.End()
 	return l.File.Close()
 }
 
@@ -93,7 +88,7 @@ type Store struct {
 	fullNeededPath string
 	logger         *log.Logger
 
-	mu sync.Mutex
+	cas *rsync.CheckAndSet
 
 	LogReaping   bool
 	reapDisabled bool // For testing purposes
@@ -109,6 +104,7 @@ func NewStore(dir string) (*Store, error) {
 		dir:            dir,
 		fullNeededPath: filepath.Join(dir, fullNeededFile),
 		logger:         log.New(os.Stderr, "[snapshot-store] ", log.LstdFlags),
+		cas:            rsync.NewCheckAndSet(),
 	}
 	str.logger.Printf("store initialized using %s", dir)
 
@@ -124,10 +120,12 @@ func NewStore(dir string) (*Store, error) {
 // be a problem, since snapshots are taken infrequently in one at a time.
 func (s *Store) Create(version raft.SnapshotVersion, index, term uint64, configuration raft.Configuration,
 	configurationIndex uint64, trans raft.Transport) (retSink raft.SnapshotSink, retErr error) {
-	s.mu.Lock()
+	if err := s.cas.Begin(); err != nil {
+		return nil, err
+	}
 	defer func() {
 		if retErr != nil {
-			s.mu.Unlock()
+			s.cas.End()
 		}
 	}()
 
@@ -169,10 +167,12 @@ func (s *Store) List() ([]*raft.SnapshotMeta, error) {
 // Open opens the snapshot with the given ID. Close() must be called on the snapshot
 // when finished with it.
 func (s *Store) Open(id string) (_ *raft.SnapshotMeta, _ io.ReadCloser, retErr error) {
-	s.mu.Lock()
+	if err := s.cas.Begin(); err != nil {
+		return nil, nil, err
+	}
 	defer func() {
 		if retErr != nil {
-			s.mu.Unlock()
+			s.cas.End()
 		}
 	}()
 	meta, err := readMeta(filepath.Join(s.dir, id))
@@ -183,7 +183,7 @@ func (s *Store) Open(id string) (_ *raft.SnapshotMeta, _ io.ReadCloser, retErr e
 	if err != nil {
 		return nil, nil, err
 	}
-	return meta, &LockingSnapshot{fd, s, false}, nil
+	return meta, &LockingSnapshot{fd, s}, nil
 }
 
 // FullNeeded returns true if a full snapshot is needed.
