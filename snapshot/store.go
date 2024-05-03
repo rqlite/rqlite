@@ -52,8 +52,8 @@ func ResetStats() {
 	stats.Add(snapshotsReapedFail, 0)
 }
 
-// LockingSink is a wrapper around a SnapshotSink that ensures that the
-// Store has handed out only 1 sink at a time.
+// LockingSink is a wrapper around a SnapshotSink holds the CAS lock
+// while the Sink is in use.
 type LockingSink struct {
 	raft.SnapshotSink
 	str *Store
@@ -94,7 +94,7 @@ func (s *LockingSink) Cancel() error {
 	return s.SnapshotSink.Cancel()
 }
 
-// LockingSnapshot is a snapshot which holds the Snapshot Store lock while open.
+// LockingSnapshot is a snapshot which holds the Snapshot Store CAS while open.
 type LockingSnapshot struct {
 	*os.File
 	str *Store
