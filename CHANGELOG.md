@@ -1,4 +1,5 @@
 ## 8.24.0 (May 3rd 2024)
+This release supports optionally adding a timestamp to the name of any auto-uploaded backup. This allows you to automatically upload point-in-time backups.
 ### New features
 - [PR #1773](https://github.com/rqlite/rqlite/pull/1773): Support timestamp auto-uploaded backups. Fixes issue [#1771](https://github.com/rqlite/rqlite/issues/1771).
 
