@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"github.com/hashicorp/raft"
+	"github.com/rqlite/rqlite/v8/rsync"
 )
 
 func Test_SnapshotMetaSort(t *testing.T) {
@@ -112,6 +113,37 @@ func Test_StoreCreateCancel(t *testing.T) {
 		t.Fatalf("Failed to write to sink: %v", err)
 	} else if n != 5 {
 		t.Errorf("Expected 5 bytes written, got %d", n)
+	}
+
+	// Test canceling the sink
+	if err := sink.Cancel(); err != nil {
+		t.Fatalf("Failed to cancel sink: %v", err)
+	}
+
+	// Should not be a tmp directory with the name of the sink ID
+	if pathExists(dir + "/" + sink.ID() + tmpSuffix) {
+		t.Errorf("Expected directory with name %s to not exist, but it does", sink.ID())
+	}
+}
+
+func Test_StoreCreate_CAS(t *testing.T) {
+	dir := t.TempDir()
+	store, err := NewStore(dir)
+	if err != nil {
+		t.Fatalf("Failed to create new store: %v", err)
+	}
+
+	sink, err := store.Create(1, 2, 3, makeTestConfiguration("1", "localhost:1"), 1, nil)
+	if err != nil {
+		t.Fatalf("Failed to create sink: %v", err)
+	}
+	if sink.ID() == "" {
+		t.Errorf("Expected sink ID to not be empty, got empty string")
+	}
+
+	// Opening a snapshot should fail due to CAS
+	if _, _, err := store.Open(sink.ID()); err != rsync.ErrCASConflict {
+		t.Fatalf("wrong error returned: %v", err)
 	}
 
 	// Test canceling the sink
