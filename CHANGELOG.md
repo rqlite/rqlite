@@ -1,4 +1,7 @@
-## 8.23.5 (unreleased)
+## 8.24.0 (unreleased)
+### New features
+- [PR #1773](https://github.com/rqlite/rqlite/pull/1773): Support timestamp auto-uploaded backups. Fixes issue [#1771](https://github.com/rqlite/rqlite/issues/1771).
+
 ### Implementation changes and bug fixes
 - [PR #1765](https://github.com/rqlite/rqlite/pull/1765): Synchronize accesses to HTTP Server's AllowOrigin value. Fixes issue [#1764](https://github.com/rqlite/rqlite/issues/1764).
 - [PR #1768](https://github.com/rqlite/rqlite/pull/1768): Improve backup-related instrumentation.

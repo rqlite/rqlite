@@ -6,6 +6,7 @@ import (
 	"io"
 	"net/http"
 	"strings"
+	"time"
 
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/credentials"
@@ -38,6 +39,7 @@ type S3Client struct {
 	bucket         string
 	key            string
 	forcePathStyle bool
+	timestamp      bool
 
 	session *session.Session
 	s3      *s3.S3
@@ -45,14 +47,23 @@ type S3Client struct {
 	// These fields are used for testing via dependency injection.
 	uploader   uploader
 	downloader downloader
+	now        func() time.Time
 }
 
-// NewS3Client returns an instance of an S3Client.
-func NewS3Client(endpoint, region, accessKey, secretKey, bucket, key string, forcePathStyle bool) (*S3Client, error) {
+// S3ClientOpts are options for creating an S3Client.
+type S3ClientOpts struct {
+	ForcePathStyle bool
+	Timestamp      bool
+}
+
+// NewS3Client returns an instance of an S3Client. opts can be nil.
+func NewS3Client(endpoint, region, accessKey, secretKey, bucket, key string, opts *S3ClientOpts) (*S3Client, error) {
 	cfg := aws.Config{
-		Endpoint:         aws.String(endpoint),
-		Region:           aws.String(region),
-		S3ForcePathStyle: aws.Bool(forcePathStyle),
+		Endpoint: aws.String(endpoint),
+		Region:   aws.String(region),
+	}
+	if opts != nil {
+		cfg.S3ForcePathStyle = aws.Bool(opts.ForcePathStyle)
 	}
 	// If credentials aren't provided by the user, the AWS SDK will use the default
 	// credential provider chain, which supports environment variables, shared credentials
@@ -67,21 +78,25 @@ func NewS3Client(endpoint, region, accessKey, secretKey, bucket, key string, for
 
 	s3 := s3.New(sess)
 
-	return &S3Client{
-		endpoint:       endpoint,
-		region:         region,
-		accessKey:      accessKey,
-		secretKey:      secretKey,
-		bucket:         bucket,
-		key:            key,
-		forcePathStyle: forcePathStyle,
+	client := &S3Client{
+		endpoint:  endpoint,
+		region:    region,
+		accessKey: accessKey,
+		secretKey: secretKey,
+		bucket:    bucket,
+		key:       key,
 
 		session: sess,
 		s3:      s3,
 
 		uploader:   s3manager.NewUploaderWithClient(s3),
 		downloader: s3manager.NewDownloaderWithClient(s3),
-	}, nil
+	}
+	if opts != nil {
+		client.forcePathStyle = opts.ForcePathStyle
+		client.timestamp = opts.Timestamp
+	}
+	return client, nil
 }
 
 // String returns a string representation of the S3Client.
@@ -100,9 +115,16 @@ func (s *S3Client) String() string {
 
 // Upload uploads data to S3.
 func (s *S3Client) Upload(ctx context.Context, reader io.Reader, id string) error {
+	key := s.key
+	if s.timestamp {
+		if s.now == nil {
+			s.now = time.Now().UTC
+		}
+		key = TimestampedPath(key, s.now())
+	}
 	input := &s3manager.UploadInput{
 		Bucket: aws.String(s.bucket),
-		Key:    aws.String(s.key),
+		Key:    aws.String(key),
 		Body:   reader,
 	}
 
@@ -149,6 +171,14 @@ func (s *S3Client) Download(ctx context.Context, writer io.WriterAt) error {
 	}
 
 	return nil
+}
+
+// TimestampedPath returns a new path with the given timestamp prepended.
+// If path contains /, the timestamp is prepended to the last segment.
+func TimestampedPath(path string, t time.Time) string {
+	parts := strings.Split(path, "/")
+	parts[len(parts)-1] = fmt.Sprintf("%s_%s", t.Format("20060102150405"), parts[len(parts)-1])
+	return strings.Join(parts, "/")
 }
 
 type uploader interface {

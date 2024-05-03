@@ -64,8 +64,11 @@ func DownloadFile(ctx context.Context, cfgPath string) (path string, errOK bool,
 	if err != nil {
 		return "", false, fmt.Errorf("failed to parse auto-restore file: %s", err.Error())
 	}
+	clientOpts := &aws.S3ClientOpts{
+		ForcePathStyle: s3cfg.ForcePathStyle,
+	}
 	sc, err := aws.NewS3Client(s3cfg.Endpoint, s3cfg.Region, s3cfg.AccessKeyID, s3cfg.SecretAccessKey,
-		s3cfg.Bucket, s3cfg.Path, s3cfg.ForcePathStyle)
+		s3cfg.Bucket, s3cfg.Path, clientOpts)
 	if err != nil {
 		return "", false, fmt.Errorf("failed to create aws S3 client: %s", err.Error())
 	}
