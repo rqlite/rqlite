@@ -3,6 +3,7 @@
 - [PR #1765](https://github.com/rqlite/rqlite/pull/1765): Synchronize accesses to HTTP Server's AllowOrigin value. Fixes issue [#1764](https://github.com/rqlite/rqlite/issues/1764).
 - [PR #1768](https://github.com/rqlite/rqlite/pull/1768): Improve backup-related instrumentation.
 - [PR #1769](https://github.com/rqlite/rqlite/pull/1769): Run end-to-end testing with INFO-level logging.
+- [PR #1772](https://github.com/rqlite/rqlite/pull/1772): Remove unused `compress` flag in auto-upload code.
 
 ## 8.23.4 (April 26th 2024)
 ### Implementation changes and bug fixes
