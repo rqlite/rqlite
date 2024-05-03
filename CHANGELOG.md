@@ -1,4 +1,4 @@
-## 8.24.0 (unreleased)
+## 8.24.0 (May 3rd 2024)
 ### New features
 - [PR #1773](https://github.com/rqlite/rqlite/pull/1773): Support timestamp auto-uploaded backups. Fixes issue [#1771](https://github.com/rqlite/rqlite/issues/1771).
 
