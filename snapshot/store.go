@@ -19,12 +19,14 @@ import (
 )
 
 const (
-	persistSize         = "latest_persist_size"
-	persistDuration     = "latest_persist_duration"
-	upgradeOk           = "upgrade_ok"
-	upgradeFail         = "upgrade_fail"
-	snapshotsReaped     = "snapshots_reaped"
-	snapshotsReapedFail = "snapshots_reaped_failed"
+	persistSize           = "latest_persist_size"
+	persistDuration       = "latest_persist_duration"
+	upgradeOk             = "upgrade_ok"
+	upgradeFail           = "upgrade_fail"
+	snapshotsReaped       = "snapshots_reaped"
+	snapshotsReapedFail   = "snapshots_reaped_failed"
+	snapshotCreateCASFail = "snapshot_create_cas_fail"
+	snapshotOpenCASFail   = "snapshot_open_cas_fail"
 )
 
 const (
@@ -50,6 +52,8 @@ func ResetStats() {
 	stats.Add(upgradeFail, 0)
 	stats.Add(snapshotsReaped, 0)
 	stats.Add(snapshotsReapedFail, 0)
+	stats.Add(snapshotCreateCASFail, 0)
+	stats.Add(snapshotOpenCASFail, 0)
 }
 
 // LockingSink is a wrapper around a SnapshotSink holds the CAS lock
@@ -162,6 +166,7 @@ func NewStore(dir string) (*Store, error) {
 func (s *Store) Create(version raft.SnapshotVersion, index, term uint64, configuration raft.Configuration,
 	configurationIndex uint64, trans raft.Transport) (retSink raft.SnapshotSink, retErr error) {
 	if err := s.cas.Begin(); err != nil {
+		stats.Add(snapshotCreateCASFail, 1)
 		return nil, err
 	}
 	defer func() {
@@ -209,6 +214,7 @@ func (s *Store) List() ([]*raft.SnapshotMeta, error) {
 // when finished with it.
 func (s *Store) Open(id string) (_ *raft.SnapshotMeta, _ io.ReadCloser, retErr error) {
 	if err := s.cas.Begin(); err != nil {
+		stats.Add(snapshotOpenCASFail, 1)
 		return nil, nil, err
 	}
 	defer func() {
@@ -273,7 +279,9 @@ func (s *Store) Stats() (map[string]interface{}, error) {
 }
 
 // Reap reaps all snapshots, except the most recent one. Returns the number of
-// snapshots reaped.
+// snapshots reaped. This function does not take the Store CAS lock, and so
+// it is up to the caller to ensure no other operations are happening on the
+// Store.
 func (s *Store) Reap() (retN int, retErr error) {
 	defer func() {
 		if retErr != nil {
