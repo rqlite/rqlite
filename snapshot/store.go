@@ -166,7 +166,8 @@ func (s *Store) List() ([]*raft.SnapshotMeta, error) {
 	return snapMeta, nil
 }
 
-// Open opens the snapshot with the given ID.
+// Open opens the snapshot with the given ID. Close() must be called on the snapshot
+// when finished with it.
 func (s *Store) Open(id string) (_ *raft.SnapshotMeta, _ io.ReadCloser, retErr error) {
 	s.mu.Lock()
 	defer func() {
