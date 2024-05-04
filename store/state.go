@@ -1,6 +1,7 @@
 package store
 
 import (
+	"context"
 	"fmt"
 	"log"
 	"net"
@@ -69,7 +70,7 @@ func HasData(dir string) (bool, error) {
 	if !dirExists(dir) {
 		return false, nil
 	}
-	sstr, err := snapshot.NewStore(filepath.Join(dir, snapshotsDirName))
+	sstr, err := snapshot.NewStore(context.Background(), filepath.Join(dir, snapshotsDirName))
 	if err != nil {
 		return false, err
 	}

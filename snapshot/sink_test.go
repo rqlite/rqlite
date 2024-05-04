@@ -2,6 +2,7 @@ package snapshot
 
 import (
 	"bytes"
+	"context"
 	"fmt"
 	"io"
 	"os"
@@ -11,7 +12,6 @@ import (
 	"github.com/hashicorp/raft"
 	"github.com/rqlite/rqlite/v8/command/encoding"
 	"github.com/rqlite/rqlite/v8/db"
-	"github.com/rqlite/rqlite/v8/rsync"
 )
 
 func Test_NewSinkCancel(t *testing.T) {
@@ -113,12 +113,12 @@ func Test_SinkFullSnapshot(t *testing.T) {
 		t.Fatalf("Snapshot data does not match")
 	}
 
-	// Opening the snapshot a second time should fail due to CAS.
-	_, _, errCASFail := store.Open("snap-1234")
-	if errCASFail != rsync.ErrCASConflict {
-		t.Fatalf("Expected CAS error opening snapshot a second time, got: %v", errCASFail)
+	// Opening the snapshot for reading should be fine.
+	_, fd2Read, err := store.Open("snap-1234")
+	if err != nil {
+		t.Fatalf("Failed to open snapshot for reading: %v", err)
 	}
-	fd.Close()
+	fd2Read.Close()
 
 	if fn, err := store.FullNeeded(); err != nil {
 		t.Fatalf("Failed to check if full snapshot needed: %v", err)
@@ -377,7 +377,7 @@ func compareReaderToReader(t *testing.T, r1, r2 io.Reader) bool {
 
 func mustStore(t *testing.T) *Store {
 	t.Helper()
-	str, err := NewStore(t.TempDir())
+	str, err := NewStore(context.Background(), t.TempDir())
 	if err != nil {
 		t.Fatalf("Failed to create store: %v", err)
 	}

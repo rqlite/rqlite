@@ -6,6 +6,7 @@ package store
 import (
 	"bytes"
 	"compress/gzip"
+	"context"
 	"encoding/binary"
 	"errors"
 	"expvar"
@@ -463,7 +464,7 @@ func (s *Store) Open() (retErr error) {
 	}
 
 	// Create store for the Snapshots.
-	snapshotStore, err := snapshot.NewStore(filepath.Join(s.snapshotDir))
+	snapshotStore, err := snapshot.NewStore(context.Background(), filepath.Join(s.snapshotDir))
 	if err != nil {
 		return fmt.Errorf("failed to create snapshot store: %s", err)
 	}

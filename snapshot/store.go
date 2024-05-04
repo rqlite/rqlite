@@ -1,6 +1,7 @@
 package snapshot
 
 import (
+	"context"
 	"encoding/json"
 	"expvar"
 	"fmt"
@@ -19,14 +20,14 @@ import (
 )
 
 const (
-	persistSize           = "latest_persist_size"
-	persistDuration       = "latest_persist_duration"
-	upgradeOk             = "upgrade_ok"
-	upgradeFail           = "upgrade_fail"
-	snapshotsReaped       = "snapshots_reaped"
-	snapshotsReapedFail   = "snapshots_reaped_failed"
-	snapshotCreateCASFail = "snapshot_create_cas_fail"
-	snapshotOpenCASFail   = "snapshot_open_cas_fail"
+	persistSize            = "latest_persist_size"
+	persistDuration        = "latest_persist_duration"
+	upgradeOk              = "upgrade_ok"
+	upgradeFail            = "upgrade_fail"
+	snapshotsReaped        = "snapshots_reaped"
+	snapshotsReapedFail    = "snapshots_reaped_failed"
+	snapshotCreateMRSWFail = "snapshot_create_mrsw_fail"
+	snapshotOpenMRSWFail   = "snapshot_open_mrsw_fail"
 )
 
 const (
@@ -52,8 +53,8 @@ func ResetStats() {
 	stats.Add(upgradeFail, 0)
 	stats.Add(snapshotsReaped, 0)
 	stats.Add(snapshotsReapedFail, 0)
-	stats.Add(snapshotCreateCASFail, 0)
-	stats.Add(snapshotOpenCASFail, 0)
+	stats.Add(snapshotCreateMRSWFail, 0)
+	stats.Add(snapshotOpenMRSWFail, 0)
 }
 
 // LockingSink is a wrapper around a SnapshotSink holds the CAS lock
@@ -82,7 +83,7 @@ func (s *LockingSink) Close() error {
 		return nil
 	}
 	s.closed = true
-	defer s.str.cas.End()
+	defer s.str.mrsw.EndWrite()
 	return s.SnapshotSink.Close()
 }
 
@@ -94,7 +95,7 @@ func (s *LockingSink) Cancel() error {
 		return nil
 	}
 	s.closed = true
-	defer s.str.cas.End()
+	defer s.str.mrsw.EndWrite()
 	return s.SnapshotSink.Cancel()
 }
 
@@ -123,33 +124,35 @@ func (l *LockingSnapshot) Close() error {
 		return nil
 	}
 	l.closed = true
-	l.str.cas.End()
+	defer l.str.mrsw.EndRead()
 	return l.File.Close()
 }
 
 // Store stores Snapshots.
 type Store struct {
+	ctx            context.Context
 	dir            string
 	fullNeededPath string
 	logger         *log.Logger
 
-	cas *rsync.CheckAndSet
+	mrsw *rsync.MultiRSW
 
 	LogReaping   bool
 	reapDisabled bool // For testing purposes
 }
 
 // NewStore returns a new Snapshot Store.
-func NewStore(dir string) (*Store, error) {
+func NewStore(ctx context.Context, dir string) (*Store, error) {
 	if err := os.MkdirAll(dir, 0755); err != nil {
 		return nil, err
 	}
 
 	str := &Store{
+		ctx:            ctx,
 		dir:            dir,
 		fullNeededPath: filepath.Join(dir, fullNeededFile),
 		logger:         log.New(os.Stderr, "[snapshot-store] ", log.LstdFlags),
-		cas:            rsync.NewCheckAndSet(),
+		mrsw:           rsync.NewMultiRSW(ctx),
 	}
 	str.logger.Printf("store initialized using %s", dir)
 
@@ -165,13 +168,13 @@ func NewStore(dir string) (*Store, error) {
 // be a problem, since snapshots are taken infrequently in one at a time.
 func (s *Store) Create(version raft.SnapshotVersion, index, term uint64, configuration raft.Configuration,
 	configurationIndex uint64, trans raft.Transport) (retSink raft.SnapshotSink, retErr error) {
-	if err := s.cas.Begin(); err != nil {
-		stats.Add(snapshotCreateCASFail, 1)
+	if err := s.mrsw.BeginWrite(); err != nil {
+		stats.Add(snapshotCreateMRSWFail, 1)
 		return nil, err
 	}
 	defer func() {
 		if retErr != nil {
-			s.cas.End()
+			s.mrsw.EndWrite()
 		}
 	}()
 
@@ -213,13 +216,13 @@ func (s *Store) List() ([]*raft.SnapshotMeta, error) {
 // Open opens the snapshot with the given ID. Close() must be called on the snapshot
 // when finished with it.
 func (s *Store) Open(id string) (_ *raft.SnapshotMeta, _ io.ReadCloser, retErr error) {
-	if err := s.cas.Begin(); err != nil {
-		stats.Add(snapshotOpenCASFail, 1)
+	if err := s.mrsw.BeginRead(); err != nil {
+		stats.Add(snapshotOpenMRSWFail, 1)
 		return nil, nil, err
 	}
 	defer func() {
 		if retErr != nil {
-			s.cas.End()
+			s.mrsw.EndRead()
 		}
 	}()
 	meta, err := readMeta(filepath.Join(s.dir, id))

@@ -1,6 +1,7 @@
 package snapshot
 
 import (
+	"context"
 	"io"
 	"os"
 	"sort"
@@ -42,7 +43,7 @@ func Test_SnapshotMetaSort(t *testing.T) {
 
 func Test_NewStore(t *testing.T) {
 	dir := t.TempDir()
-	store, err := NewStore(dir)
+	store, err := NewStore(context.Background(), dir)
 	if err != nil {
 		t.Fatalf("Failed to create new store: %v", err)
 	}
@@ -54,7 +55,7 @@ func Test_NewStore(t *testing.T) {
 
 func Test_StoreEmpty(t *testing.T) {
 	dir := t.TempDir()
-	store, _ := NewStore(dir)
+	store, _ := NewStore(context.Background(), dir)
 
 	snaps, err := store.List()
 	if err != nil {
@@ -90,7 +91,7 @@ func Test_StoreEmpty(t *testing.T) {
 
 func Test_StoreCreateCancel(t *testing.T) {
 	dir := t.TempDir()
-	store, err := NewStore(dir)
+	store, err := NewStore(context.Background(), dir)
 	if err != nil {
 		t.Fatalf("Failed to create new store: %v", err)
 	}
@@ -128,7 +129,7 @@ func Test_StoreCreateCancel(t *testing.T) {
 
 func Test_StoreCreate_CAS(t *testing.T) {
 	dir := t.TempDir()
-	store, err := NewStore(dir)
+	store, err := NewStore(context.Background(), dir)
 	if err != nil {
 		t.Fatalf("Failed to create new store: %v", err)
 	}
@@ -141,8 +142,8 @@ func Test_StoreCreate_CAS(t *testing.T) {
 		t.Errorf("Expected sink ID to not be empty, got empty string")
 	}
 
-	// Opening a snapshot should fail due to CAS
-	if _, _, err := store.Open(sink.ID()); err != rsync.ErrCASConflict {
+	// Opening a snapshot should fail due to MRSW
+	if _, _, err := store.Open(sink.ID()); err != rsync.ErrMRSWConflict {
 		t.Fatalf("wrong error returned: %v", err)
 	}
 
@@ -159,7 +160,7 @@ func Test_StoreCreate_CAS(t *testing.T) {
 
 func Test_StoreList(t *testing.T) {
 	dir := t.TempDir()
-	store, err := NewStore(dir)
+	store, err := NewStore(context.Background(), dir)
 	if err != nil {
 		t.Fatalf("Failed to create new store: %v", err)
 	}
@@ -212,14 +213,14 @@ func Test_StoreList(t *testing.T) {
 	}
 
 	// Open a snapshot and then attempt to create a Sink. It should fail due
-	// to CAS.
+	// to MRSW.
 	_, rc, err := store.Open("2-1131-1704807720976")
 	if err != nil {
 		t.Fatalf("Failed to open snapshot: %v", err)
 	}
 	_, err = store.Create(1, 2, 3, makeTestConfiguration("1", "localhost:1"), 1, nil)
-	if err != rsync.ErrCASConflict {
-		t.Fatalf("Expected CAS conflict, got %v", err)
+	if err != rsync.ErrMRSWConflict {
+		t.Fatalf("Expected MRSW conflict, got %v", err)
 	}
 	rc.Close()
 

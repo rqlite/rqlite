@@ -5,6 +5,11 @@ import (
 	"errors"
 )
 
+var (
+	// ErrMRSWConflict is returned when a MultiRSW operation fails.
+	ErrMRSWConflict = errors.New("MRSW conflict")
+)
+
 type MultiRSW struct {
 	readReq   chan bool
 	writeReq  chan bool
@@ -64,7 +69,7 @@ func (r *MultiRSW) manage() {
 func (r *MultiRSW) BeginRead() error {
 	r.readReq <- true
 	if !<-r.readReq {
-		return errors.New("read blocked by active writer")
+		return ErrMRSWConflict
 	}
 	return nil
 }
@@ -76,7 +81,7 @@ func (r *MultiRSW) EndRead() {
 func (r *MultiRSW) BeginWrite() error {
 	r.writeReq <- true
 	if !<-r.writeReq {
-		return errors.New("write blocked by readers or active writer")
+		return ErrMRSWConflict
 	}
 	return nil
 }

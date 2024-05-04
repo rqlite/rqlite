@@ -1,6 +1,7 @@
 package snapshot
 
 import (
+	"context"
 	"fmt"
 	"io"
 	"io/fs"
@@ -40,7 +41,7 @@ func Test_Upgrade_OK(t *testing.T) {
 
 	// Create new SnapshotStore from the upgraded directory, to verify its
 	// contents.
-	store, err := NewStore(newTemp)
+	store, err := NewStore(context.Background(), newTemp)
 	if err != nil {
 		t.Fatalf("failed to create new snapshot store: %s", err)
 	}
