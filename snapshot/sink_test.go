@@ -2,7 +2,6 @@ package snapshot
 
 import (
 	"bytes"
-	"context"
 	"fmt"
 	"io"
 	"os"
@@ -377,7 +376,7 @@ func compareReaderToReader(t *testing.T, r1, r2 io.Reader) bool {
 
 func mustStore(t *testing.T) *Store {
 	t.Helper()
-	str, err := NewStore(context.Background(), t.TempDir())
+	str, err := NewStore(t.TempDir())
 	if err != nil {
 		t.Fatalf("Failed to create store: %v", err)
 	}

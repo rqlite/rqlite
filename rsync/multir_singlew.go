@@ -1,8 +1,8 @@
 package rsync
 
 import (
-	"context"
 	"errors"
+	"sync"
 )
 
 var (
@@ -17,20 +17,29 @@ type MultiRSW struct {
 	writeReq  chan bool
 	readDone  chan bool
 	writeDone chan bool
-	ctx       context.Context
+
+	wg   sync.WaitGroup
+	done chan struct{}
 }
 
 // NewMultiRSW creates a new MultiRSW instance.
-func NewMultiRSW(ctx context.Context) *MultiRSW {
+func NewMultiRSW() *MultiRSW {
 	r := &MultiRSW{
 		readReq:   make(chan bool),
 		writeReq:  make(chan bool),
 		readDone:  make(chan bool),
 		writeDone: make(chan bool),
-		ctx:       ctx,
+		done:      make(chan struct{}),
 	}
+	r.wg.Add(1)
 	go r.manage()
 	return r
+}
+
+// Close shuts down the MultiRSW instance.
+func (r *MultiRSW) Close() {
+	close(r.done)
+	r.wg.Wait()
 }
 
 // BeginRead attempts to enter the critical section as a reader.
@@ -64,6 +73,7 @@ func (r *MultiRSW) EndWrite() {
 func (r *MultiRSW) manage() {
 	var readerCount int
 	writerActive := false
+	defer r.wg.Done()
 
 	for {
 		select {
@@ -91,7 +101,7 @@ func (r *MultiRSW) manage() {
 				panic("write done received but no write is active")
 			}
 			writerActive = false
-		case <-r.ctx.Done():
+		case <-r.done:
 			return
 		}
 	}

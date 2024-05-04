@@ -1,7 +1,6 @@
 package snapshot
 
 import (
-	"context"
 	"encoding/json"
 	"expvar"
 	"fmt"
@@ -130,7 +129,6 @@ func (l *LockingSnapshot) Close() error {
 
 // Store stores Snapshots.
 type Store struct {
-	ctx            context.Context
 	dir            string
 	fullNeededPath string
 	logger         *log.Logger
@@ -142,17 +140,16 @@ type Store struct {
 }
 
 // NewStore returns a new Snapshot Store.
-func NewStore(ctx context.Context, dir string) (*Store, error) {
+func NewStore(dir string) (*Store, error) {
 	if err := os.MkdirAll(dir, 0755); err != nil {
 		return nil, err
 	}
 
 	str := &Store{
-		ctx:            ctx,
 		dir:            dir,
 		fullNeededPath: filepath.Join(dir, fullNeededFile),
 		logger:         log.New(os.Stderr, "[snapshot-store] ", log.LstdFlags),
-		mrsw:           rsync.NewMultiRSW(ctx),
+		mrsw:           rsync.NewMultiRSW(),
 	}
 	str.logger.Printf("store initialized using %s", dir)
 
@@ -321,6 +318,12 @@ func (s *Store) Reap() (retN int, retErr error) {
 // Dir returns the directory where the snapshots are stored.
 func (s *Store) Dir() string {
 	return s.dir
+}
+
+// Close closes the Store.
+func (s *Store) Close() error {
+	s.mrsw.Close()
+	return nil
 }
 
 // check checks the Store for any inconsistencies, and repairs

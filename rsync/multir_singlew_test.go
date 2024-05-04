@@ -1,14 +1,11 @@
 package rsync
 
 import (
-	"context"
 	"testing"
 )
 
 func Test_MultiRSW(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-	r := NewMultiRSW(ctx)
+	r := NewMultiRSW()
 
 	// Test successful read lock
 	if err := r.BeginRead(); err != nil {
@@ -55,4 +52,7 @@ func Test_MultiRSW(t *testing.T) {
 	}
 	r.EndRead()
 	r.EndRead()
+
+	// Make sure Close doesn't block
+	r.Close()
 }

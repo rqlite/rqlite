@@ -1,7 +1,6 @@
 package snapshot
 
 import (
-	"context"
 	"io"
 	"os"
 	"sort"
@@ -43,7 +42,7 @@ func Test_SnapshotMetaSort(t *testing.T) {
 
 func Test_NewStore(t *testing.T) {
 	dir := t.TempDir()
-	store, err := NewStore(context.Background(), dir)
+	store, err := NewStore(dir)
 	if err != nil {
 		t.Fatalf("Failed to create new store: %v", err)
 	}
@@ -51,11 +50,15 @@ func Test_NewStore(t *testing.T) {
 	if store.Dir() != dir {
 		t.Errorf("Expected store directory to be %s, got %s", dir, store.Dir())
 	}
+
+	if err := store.Close(); err != nil {
+		t.Fatalf("Failed to close store: %v", err)
+	}
 }
 
 func Test_StoreEmpty(t *testing.T) {
 	dir := t.TempDir()
-	store, _ := NewStore(context.Background(), dir)
+	store, _ := NewStore(dir)
 
 	snaps, err := store.List()
 	if err != nil {
@@ -87,11 +90,15 @@ func Test_StoreEmpty(t *testing.T) {
 	if _, err := store.Stats(); err != nil {
 		t.Fatalf("Failed to get stats from empty store: %v", err)
 	}
+
+	if err := store.Close(); err != nil {
+		t.Fatalf("Failed to close store: %v", err)
+	}
 }
 
 func Test_StoreCreateCancel(t *testing.T) {
 	dir := t.TempDir()
-	store, err := NewStore(context.Background(), dir)
+	store, err := NewStore(dir)
 	if err != nil {
 		t.Fatalf("Failed to create new store: %v", err)
 	}
@@ -125,11 +132,15 @@ func Test_StoreCreateCancel(t *testing.T) {
 	if pathExists(dir + "/" + sink.ID() + tmpSuffix) {
 		t.Errorf("Expected directory with name %s to not exist, but it does", sink.ID())
 	}
+
+	if err := store.Close(); err != nil {
+		t.Fatalf("Failed to close store: %v", err)
+	}
 }
 
 func Test_StoreCreate_CAS(t *testing.T) {
 	dir := t.TempDir()
-	store, err := NewStore(context.Background(), dir)
+	store, err := NewStore(dir)
 	if err != nil {
 		t.Fatalf("Failed to create new store: %v", err)
 	}
@@ -156,11 +167,15 @@ func Test_StoreCreate_CAS(t *testing.T) {
 	if pathExists(dir + "/" + sink.ID() + tmpSuffix) {
 		t.Errorf("Expected directory with name %s to not exist, but it does", sink.ID())
 	}
+
+	if err := store.Close(); err != nil {
+		t.Fatalf("Failed to close store: %v", err)
+	}
 }
 
 func Test_StoreList(t *testing.T) {
 	dir := t.TempDir()
-	store, err := NewStore(context.Background(), dir)
+	store, err := NewStore(dir)
 	if err != nil {
 		t.Fatalf("Failed to create new store: %v", err)
 	}
@@ -232,6 +247,10 @@ func Test_StoreList(t *testing.T) {
 	}
 	if err := sink.Cancel(); err != nil {
 		t.Fatalf("Failed to cancel sink: %v", err)
+	}
+
+	if err := store.Close(); err != nil {
+		t.Fatalf("Failed to close store: %v", err)
 	}
 }
 
