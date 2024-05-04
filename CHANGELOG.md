@@ -1,4 +1,4 @@
-## 8.24.2 (unreleased)
+## 8.24.2 (May 4th 2024)
 ### Implementation changes and bug fixes
 - [PR #1776](https://github.com/rqlite/rqlite/pull/1776): Allow multiple Snapshots to be read concurrently from the Snapshot Store.
 
