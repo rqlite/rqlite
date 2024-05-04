@@ -141,8 +141,8 @@ func Test_StoreCreate_CAS(t *testing.T) {
 		t.Errorf("Expected sink ID to not be empty, got empty string")
 	}
 
-	// Opening a snapshot should fail due to CAS
-	if _, _, err := store.Open(sink.ID()); err != rsync.ErrCASConflict {
+	// Opening a snapshot should fail due to MRSW
+	if _, _, err := store.Open(sink.ID()); err != rsync.ErrMRSWConflict {
 		t.Fatalf("wrong error returned: %v", err)
 	}
 
@@ -211,15 +211,15 @@ func Test_StoreList(t *testing.T) {
 		t.Errorf("Expected snapshot ID to be 2-1131-1704807720976, got %s", snaps[0].ID)
 	}
 
-	// Open a snapshot and then attempt to create a Sink. It should fail due
-	// to CAS.
+	// Open a snapshot for reading and then attempt to create a Sink. It should fail due
+	// to MRSW.
 	_, rc, err := store.Open("2-1131-1704807720976")
 	if err != nil {
 		t.Fatalf("Failed to open snapshot: %v", err)
 	}
 	_, err = store.Create(1, 2, 3, makeTestConfiguration("1", "localhost:1"), 1, nil)
-	if err != rsync.ErrCASConflict {
-		t.Fatalf("Expected CAS conflict, got %v", err)
+	if err != rsync.ErrMRSWConflict {
+		t.Fatalf("Expected MRSW conflict, got %v", err)
 	}
 	rc.Close()
 
