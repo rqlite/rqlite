@@ -10,6 +10,8 @@ var (
 	ErrMRSWConflict = errors.New("MRSW conflict")
 )
 
+// MultiRSW is a simple concurrency control mechanism that allows
+// multiple readers or a single writer to execute a critical section at a time.
 type MultiRSW struct {
 	readReq   chan bool
 	writeReq  chan bool
@@ -18,6 +20,7 @@ type MultiRSW struct {
 	ctx       context.Context
 }
 
+// NewMultiRSW creates a new MultiRSW instance.
 func NewMultiRSW(ctx context.Context) *MultiRSW {
 	r := &MultiRSW{
 		readReq:   make(chan bool),
@@ -28,6 +31,34 @@ func NewMultiRSW(ctx context.Context) *MultiRSW {
 	}
 	go r.manage()
 	return r
+}
+
+// BeginRead attempts to enter the critical section as a reader.
+func (r *MultiRSW) BeginRead() error {
+	r.readReq <- true
+	if !<-r.readReq {
+		return ErrMRSWConflict
+	}
+	return nil
+}
+
+// EndRead exits the critical section as a reader.
+func (r *MultiRSW) EndRead() {
+	r.readDone <- true
+}
+
+// BeginWrite attempts to enter the critical section as a writer.
+func (r *MultiRSW) BeginWrite() error {
+	r.writeReq <- true
+	if !<-r.writeReq {
+		return ErrMRSWConflict
+	}
+	return nil
+}
+
+// EndWrite exits the critical section as a writer.
+func (r *MultiRSW) EndWrite() {
+	r.writeDone <- true
 }
 
 func (r *MultiRSW) manage() {
@@ -64,28 +95,4 @@ func (r *MultiRSW) manage() {
 			return
 		}
 	}
-}
-
-func (r *MultiRSW) BeginRead() error {
-	r.readReq <- true
-	if !<-r.readReq {
-		return ErrMRSWConflict
-	}
-	return nil
-}
-
-func (r *MultiRSW) EndRead() {
-	r.readDone <- true
-}
-
-func (r *MultiRSW) BeginWrite() error {
-	r.writeReq <- true
-	if !<-r.writeReq {
-		return ErrMRSWConflict
-	}
-	return nil
-}
-
-func (r *MultiRSW) EndWrite() {
-	r.writeDone <- true
 }
