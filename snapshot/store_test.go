@@ -227,7 +227,7 @@ func Test_StoreList(t *testing.T) {
 		t.Errorf("Expected snapshot ID to be 2-1131-1704807720976, got %s", snaps[0].ID)
 	}
 
-	// Open a snapshot and then attempt to create a Sink. It should fail due
+	// Open a snapshot for reading and then attempt to create a Sink. It should fail due
 	// to MRSW.
 	_, rc, err := store.Open("2-1131-1704807720976")
 	if err != nil {
