@@ -52,7 +52,4 @@ func Test_MultiRSW(t *testing.T) {
 	}
 	r.EndRead()
 	r.EndRead()
-
-	// Make sure Close doesn't block
-	r.Close()
 }

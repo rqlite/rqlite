@@ -223,9 +223,6 @@ type SnapshotStore interface {
 
 	// Stats returns stats about the Snapshot Store.
 	Stats() (map[string]interface{}, error)
-
-	// Close closes the Snapshot Store.
-	Close() error
 }
 
 // ClusterState defines the possible Raft states the current node can be in
@@ -657,10 +654,6 @@ func (s *Store) Close(wait bool) (retErr error) {
 
 	close(s.snapshotWClose)
 	<-s.snapshotWDone
-
-	if err := s.snapshotStore.Close(); err != nil {
-		return fmt.Errorf("failed to close snapshot store: %s", err)
-	}
 
 	f := s.raft.Shutdown()
 	if wait {

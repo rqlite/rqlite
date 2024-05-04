@@ -50,10 +50,6 @@ func Test_NewStore(t *testing.T) {
 	if store.Dir() != dir {
 		t.Errorf("Expected store directory to be %s, got %s", dir, store.Dir())
 	}
-
-	if err := store.Close(); err != nil {
-		t.Fatalf("Failed to close store: %v", err)
-	}
 }
 
 func Test_StoreEmpty(t *testing.T) {
@@ -89,10 +85,6 @@ func Test_StoreEmpty(t *testing.T) {
 
 	if _, err := store.Stats(); err != nil {
 		t.Fatalf("Failed to get stats from empty store: %v", err)
-	}
-
-	if err := store.Close(); err != nil {
-		t.Fatalf("Failed to close store: %v", err)
 	}
 }
 
@@ -132,10 +124,6 @@ func Test_StoreCreateCancel(t *testing.T) {
 	if pathExists(dir + "/" + sink.ID() + tmpSuffix) {
 		t.Errorf("Expected directory with name %s to not exist, but it does", sink.ID())
 	}
-
-	if err := store.Close(); err != nil {
-		t.Fatalf("Failed to close store: %v", err)
-	}
 }
 
 func Test_StoreCreate_CAS(t *testing.T) {
@@ -166,10 +154,6 @@ func Test_StoreCreate_CAS(t *testing.T) {
 	// Should not be a tmp directory with the name of the sink ID
 	if pathExists(dir + "/" + sink.ID() + tmpSuffix) {
 		t.Errorf("Expected directory with name %s to not exist, but it does", sink.ID())
-	}
-
-	if err := store.Close(); err != nil {
-		t.Fatalf("Failed to close store: %v", err)
 	}
 }
 
@@ -247,10 +231,6 @@ func Test_StoreList(t *testing.T) {
 	}
 	if err := sink.Cancel(); err != nil {
 		t.Fatalf("Failed to cancel sink: %v", err)
-	}
-
-	if err := store.Close(); err != nil {
-		t.Fatalf("Failed to close store: %v", err)
 	}
 }
 

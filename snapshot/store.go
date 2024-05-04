@@ -320,12 +320,6 @@ func (s *Store) Dir() string {
 	return s.dir
 }
 
-// Close closes the Store.
-func (s *Store) Close() error {
-	s.mrsw.Close()
-	return nil
-}
-
 // check checks the Store for any inconsistencies, and repairs
 // any inconsistencies it finds. Inconsistencies can happen
 // if the system crashes during snapshotting.
