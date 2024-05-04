@@ -33,6 +33,7 @@ import (
 	rlog "github.com/rqlite/rqlite/v8/log"
 	"github.com/rqlite/rqlite/v8/progress"
 	"github.com/rqlite/rqlite/v8/random"
+	"github.com/rqlite/rqlite/v8/rsync"
 	"github.com/rqlite/rqlite/v8/snapshot"
 )
 
@@ -238,7 +239,7 @@ const (
 
 // Store is a SQLite database, where all changes are made via Raft consensus.
 type Store struct {
-	open          *AtomicBool
+	open          *rsync.AtomicBool
 	raftDir       string
 	snapshotDir   string
 	peersPath     string
@@ -271,16 +272,16 @@ type Store struct {
 
 	// Snapshotting synchronization
 	queryTxMu   sync.RWMutex
-	snapshotCAS *CheckAndSet
+	snapshotCAS *rsync.CheckAndSet
 
 	// Latest log entry index actually reflected by the FSM. Due to Raft code
 	// this value is not updated after a Snapshot-restore.
 	fsmIdx        *atomic.Uint64
-	fsmUpdateTime *AtomicTime // This is node-local time.
+	fsmUpdateTime *rsync.AtomicTime // This is node-local time.
 
 	// appendedAtTime is the Leader's clock time when that Leader appended the log entry.
 	// The Leader that actually appended the log entry is not necessarily the current Leader.
-	appendedAtTime *AtomicTime
+	appendedAtTime *rsync.AtomicTime
 
 	// Latest log entry index which actually changed the database.
 	dbAppliedIdx *atomic.Uint64
@@ -356,7 +357,7 @@ func New(ly Layer, c *Config) *Store {
 	}
 
 	return &Store{
-		open:            NewAtomicBool(),
+		open:            rsync.NewAtomicBool(),
 		ly:              ly,
 		raftDir:         c.Dir,
 		snapshotDir:     filepath.Join(c.Dir, snapshotsDirName),
@@ -373,10 +374,10 @@ func New(ly Layer, c *Config) *Store {
 		logger:          logger,
 		notifyingNodes:  make(map[string]*Server),
 		ApplyTimeout:    applyTimeout,
-		snapshotCAS:     NewCheckAndSet(),
+		snapshotCAS:     rsync.NewCheckAndSet(),
 		fsmIdx:          &atomic.Uint64{},
-		fsmUpdateTime:   NewAtomicTime(),
-		appendedAtTime:  NewAtomicTime(),
+		fsmUpdateTime:   rsync.NewAtomicTime(),
+		appendedAtTime:  rsync.NewAtomicTime(),
 		dbAppliedIdx:    &atomic.Uint64{},
 		numNoops:        &atomic.Uint64{},
 		numSnapshots:    &atomic.Uint64{},

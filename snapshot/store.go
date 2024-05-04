@@ -15,15 +15,18 @@ import (
 
 	"github.com/hashicorp/raft"
 	"github.com/rqlite/rqlite/v8/db"
+	"github.com/rqlite/rqlite/v8/rsync"
 )
 
 const (
-	persistSize         = "latest_persist_size"
-	persistDuration     = "latest_persist_duration"
-	upgradeOk           = "upgrade_ok"
-	upgradeFail         = "upgrade_fail"
-	snapshotsReaped     = "snapshots_reaped"
-	snapshotsReapedFail = "snapshots_reaped_failed"
+	persistSize           = "latest_persist_size"
+	persistDuration       = "latest_persist_duration"
+	upgradeOk             = "upgrade_ok"
+	upgradeFail           = "upgrade_fail"
+	snapshotsReaped       = "snapshots_reaped"
+	snapshotsReapedFail   = "snapshots_reaped_failed"
+	snapshotCreateCASFail = "snapshot_create_cas_fail"
+	snapshotOpenCASFail   = "snapshot_open_cas_fail"
 )
 
 const (
@@ -49,33 +52,88 @@ func ResetStats() {
 	stats.Add(upgradeFail, 0)
 	stats.Add(snapshotsReaped, 0)
 	stats.Add(snapshotsReapedFail, 0)
+	stats.Add(snapshotCreateCASFail, 0)
+	stats.Add(snapshotOpenCASFail, 0)
 }
 
-// LockingSink is a wrapper around a SnapshotSink that ensures that the
-// Store has handed out only 1 sink at a time.
+// LockingSink is a wrapper around a SnapshotSink holds the CAS lock
+// while the Sink is in use.
 type LockingSink struct {
 	raft.SnapshotSink
 	str *Store
+
+	mu     sync.Mutex
+	closed bool
+}
+
+// NewLockingSink returns a new LockingSink.
+func NewLockingSink(sink raft.SnapshotSink, str *Store) *LockingSink {
+	return &LockingSink{
+		SnapshotSink: sink,
+		str:          str,
+	}
 }
 
 // Close closes the sink, unlocking the Store for creation of a new sink.
 func (s *LockingSink) Close() error {
-	defer s.str.sinkMu.Unlock()
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.closed {
+		return nil
+	}
+	s.closed = true
+	defer s.str.cas.End()
 	return s.SnapshotSink.Close()
 }
 
 // Cancel cancels the sink, unlocking the Store for creation of a new sink.
 func (s *LockingSink) Cancel() error {
-	defer s.str.sinkMu.Unlock()
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.closed {
+		return nil
+	}
+	s.closed = true
+	defer s.str.cas.End()
 	return s.SnapshotSink.Cancel()
+}
+
+// LockingSnapshot is a snapshot which holds the Snapshot Store CAS while open.
+type LockingSnapshot struct {
+	*os.File
+	str *Store
+
+	mu     sync.Mutex
+	closed bool
+}
+
+// NewLockingSink returns a new LockingSink.
+func NewLockingSnapshot(fd *os.File, str *Store) *LockingSnapshot {
+	return &LockingSnapshot{
+		File: fd,
+		str:  str,
+	}
+}
+
+// Close closes the Snapshot and releases the Snapshot Store lock.
+func (l *LockingSnapshot) Close() error {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	if l.closed {
+		return nil
+	}
+	l.closed = true
+	l.str.cas.End()
+	return l.File.Close()
 }
 
 // Store stores Snapshots.
 type Store struct {
 	dir            string
 	fullNeededPath string
-	sinkMu         sync.Mutex
 	logger         *log.Logger
+
+	cas *rsync.CheckAndSet
 
 	LogReaping   bool
 	reapDisabled bool // For testing purposes
@@ -91,6 +149,7 @@ func NewStore(dir string) (*Store, error) {
 		dir:            dir,
 		fullNeededPath: filepath.Join(dir, fullNeededFile),
 		logger:         log.New(os.Stderr, "[snapshot-store] ", log.LstdFlags),
+		cas:            rsync.NewCheckAndSet(),
 	}
 	str.logger.Printf("store initialized using %s", dir)
 
@@ -106,10 +165,13 @@ func NewStore(dir string) (*Store, error) {
 // be a problem, since snapshots are taken infrequently in one at a time.
 func (s *Store) Create(version raft.SnapshotVersion, index, term uint64, configuration raft.Configuration,
 	configurationIndex uint64, trans raft.Transport) (retSink raft.SnapshotSink, retErr error) {
-	s.sinkMu.Lock()
+	if err := s.cas.Begin(); err != nil {
+		stats.Add(snapshotCreateCASFail, 1)
+		return nil, err
+	}
 	defer func() {
 		if retErr != nil {
-			s.sinkMu.Unlock()
+			s.cas.End()
 		}
 	}()
 
@@ -125,7 +187,7 @@ func (s *Store) Create(version raft.SnapshotVersion, index, term uint64, configu
 	if err := sink.Open(); err != nil {
 		return nil, err
 	}
-	return &LockingSink{sink, s}, nil
+	return NewLockingSink(sink, s), nil
 }
 
 // List returns a list of all the snapshots in the Store. In practice, this will at most be
@@ -148,8 +210,18 @@ func (s *Store) List() ([]*raft.SnapshotMeta, error) {
 	return snapMeta, nil
 }
 
-// Open opens the snapshot with the given ID.
-func (s *Store) Open(id string) (*raft.SnapshotMeta, io.ReadCloser, error) {
+// Open opens the snapshot with the given ID. Close() must be called on the snapshot
+// when finished with it.
+func (s *Store) Open(id string) (_ *raft.SnapshotMeta, _ io.ReadCloser, retErr error) {
+	if err := s.cas.Begin(); err != nil {
+		stats.Add(snapshotOpenCASFail, 1)
+		return nil, nil, err
+	}
+	defer func() {
+		if retErr != nil {
+			s.cas.End()
+		}
+	}()
 	meta, err := readMeta(filepath.Join(s.dir, id))
 	if err != nil {
 		return nil, nil, err
@@ -158,7 +230,7 @@ func (s *Store) Open(id string) (*raft.SnapshotMeta, io.ReadCloser, error) {
 	if err != nil {
 		return nil, nil, err
 	}
-	return meta, fd, nil
+	return meta, NewLockingSnapshot(fd, s), nil
 }
 
 // FullNeeded returns true if a full snapshot is needed.
@@ -207,7 +279,9 @@ func (s *Store) Stats() (map[string]interface{}, error) {
 }
 
 // Reap reaps all snapshots, except the most recent one. Returns the number of
-// snapshots reaped.
+// snapshots reaped. This function does not take the Store CAS lock, and so
+// it is up to the caller to ensure no other operations are happening on the
+// Store.
 func (s *Store) Reap() (retN int, retErr error) {
 	defer func() {
 		if retErr != nil {

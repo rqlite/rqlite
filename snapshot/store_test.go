@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"github.com/hashicorp/raft"
+	"github.com/rqlite/rqlite/v8/rsync"
 )
 
 func Test_SnapshotMetaSort(t *testing.T) {
@@ -125,6 +126,37 @@ func Test_StoreCreateCancel(t *testing.T) {
 	}
 }
 
+func Test_StoreCreate_CAS(t *testing.T) {
+	dir := t.TempDir()
+	store, err := NewStore(dir)
+	if err != nil {
+		t.Fatalf("Failed to create new store: %v", err)
+	}
+
+	sink, err := store.Create(1, 2, 3, makeTestConfiguration("1", "localhost:1"), 1, nil)
+	if err != nil {
+		t.Fatalf("Failed to create sink: %v", err)
+	}
+	if sink.ID() == "" {
+		t.Errorf("Expected sink ID to not be empty, got empty string")
+	}
+
+	// Opening a snapshot should fail due to CAS
+	if _, _, err := store.Open(sink.ID()); err != rsync.ErrCASConflict {
+		t.Fatalf("wrong error returned: %v", err)
+	}
+
+	// Test canceling the sink
+	if err := sink.Cancel(); err != nil {
+		t.Fatalf("Failed to cancel sink: %v", err)
+	}
+
+	// Should not be a tmp directory with the name of the sink ID
+	if pathExists(dir + "/" + sink.ID() + tmpSuffix) {
+		t.Errorf("Expected directory with name %s to not exist, but it does", sink.ID())
+	}
+}
+
 func Test_StoreList(t *testing.T) {
 	dir := t.TempDir()
 	store, err := NewStore(dir)
@@ -177,6 +209,28 @@ func Test_StoreList(t *testing.T) {
 	}
 	if snaps[0].ID != "2-1131-1704807720976" {
 		t.Errorf("Expected snapshot ID to be 2-1131-1704807720976, got %s", snaps[0].ID)
+	}
+
+	// Open a snapshot and then attempt to create a Sink. It should fail due
+	// to CAS.
+	_, rc, err := store.Open("2-1131-1704807720976")
+	if err != nil {
+		t.Fatalf("Failed to open snapshot: %v", err)
+	}
+	_, err = store.Create(1, 2, 3, makeTestConfiguration("1", "localhost:1"), 1, nil)
+	if err != rsync.ErrCASConflict {
+		t.Fatalf("Expected CAS conflict, got %v", err)
+	}
+	rc.Close()
+
+	// Should be able to create a new snapshot sink now that the Snapshot from
+	// Open is closed.
+	sink, err := store.Create(1, 2, 3, makeTestConfiguration("1", "localhost:1"), 1, nil)
+	if err != nil {
+		t.Fatalf("Failed to create sink: %v", err)
+	}
+	if err := sink.Cancel(); err != nil {
+		t.Fatalf("Failed to cancel sink: %v", err)
 	}
 }
 

@@ -11,6 +11,7 @@ import (
 	"github.com/hashicorp/raft"
 	"github.com/rqlite/rqlite/v8/command/encoding"
 	"github.com/rqlite/rqlite/v8/db"
+	"github.com/rqlite/rqlite/v8/rsync"
 )
 
 func Test_NewSinkCancel(t *testing.T) {
@@ -110,6 +111,12 @@ func Test_SinkFullSnapshot(t *testing.T) {
 	compareMetas(t, expMeta, meta)
 	if !compareReaderToFile(t, fd, "testdata/db-and-wals/backup.db") {
 		t.Fatalf("Snapshot data does not match")
+	}
+
+	// Opening the snapshot a second time should fail due to CAS.
+	_, _, errCASFail := store.Open("snap-1234")
+	if errCASFail != rsync.ErrCASConflict {
+		t.Fatalf("Expected CAS error opening snapshot a second time, got: %v", errCASFail)
 	}
 	fd.Close()
 
