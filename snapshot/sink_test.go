@@ -106,10 +106,12 @@ func Test_SinkFullSnapshot(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to open snapshot: %v", err)
 	}
-	defer fd.Close()
 	compareMetas(t, expMeta, meta)
 	if !compareReaderToFile(t, fd, "testdata/db-and-wals/backup.db") {
 		t.Fatalf("Snapshot data does not match")
+	}
+	if err := fd.Close(); err != nil {
+		t.Fatalf("Failed to close snapshot: %v", err)
 	}
 
 	// Opening the snapshot for reading should be fine.
@@ -117,7 +119,9 @@ func Test_SinkFullSnapshot(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to open snapshot for reading: %v", err)
 	}
-	fd2Read.Close()
+	if err := fd2Read.Close(); err != nil {
+		t.Fatalf("Failed to close snapshot for reading: %v", err)
+	}
 
 	if fn, err := store.FullNeeded(); err != nil {
 		t.Fatalf("Failed to check if full snapshot needed: %v", err)
