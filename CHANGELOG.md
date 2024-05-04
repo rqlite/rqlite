@@ -1,4 +1,4 @@
-## 8.24.1 (unreleased)
+## 8.24.1 (May 3rd 2024)
 ### Implementation changes and bug fixes
 - [PR #1775](https://github.com/rqlite/rqlite/pull/1775): Synchronize opening Snapshot Store and Snapshotting. Fixes issue [#1774](https://github.com/rqlite/rqlite/issues/1774).
 
