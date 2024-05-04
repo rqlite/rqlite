@@ -114,7 +114,7 @@ func Test_SinkFullSnapshot(t *testing.T) {
 		t.Fatalf("Failed to close snapshot: %v", err)
 	}
 
-	// Opening the snapshot for reading should be fine.
+	// Opening the snapshot for reading a second time should be fine.
 	_, fd2Read, err := store.Open("snap-1234")
 	if err != nil {
 		t.Fatalf("Failed to open snapshot for reading: %v", err)
