@@ -1,0 +1,57 @@
+name: Build Release Binaries
+
+on:
+  release:
+    types:
+      - created
+
+jobs:
+  build:
+    name: Build Release Assets
+    runs-on: ubuntu-latest
+    steps:
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: 1.22
+
+      - name: Display the version of go that we have installed
+        run: go version
+
+      - name: Checkout code
+        uses: actions/checkout@v2
+
+      - name: Download Go modules
+        run: go get ./...
+
+      - name: Update apt repo
+        run: sudo apt-get update
+
+      - name: Install compilers
+        run: sudo apt-get install gcc musl-dev musl-tools gcc-arm-linux-gnueabi gcc-aarch64-linux-gnu gcc-riscv64-linux-gnu gcc-powerpc64le-linux-gnu gcc-mips-linux-gnu gcc-mipsel-linux-gnu gcc-mips64-linux-gnuabi64 gcc-mips64el-linux-gnuabi64
+
+      - name: Display working directory
+        run: pwd
+
+      - name: Show files in working directory
+        run: ls
+
+      - name: Display the release tag
+        run: echo ${{ github.event.release.tag_name }}
+
+      - name: Build the release binaries
+        run: ./build.sh ${{ github.event.release.tag_name }}
+
+      - name: List the tarballs
+        run: ls -l *.tar.gz
+
+      - name: Upload Release Assets
+        run: |
+          for tarball in *.tar.gz; do
+            curl \
+              -X POST \
+              -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
+              -H "Content-type: application/octet-stream" \
+              --data-binary @$tarball \
+              "https://uploads.github.com/repos/rqlite/rqlite/releases/${{ github.event.release.id }}/assets?name=$tarball"
+          done
