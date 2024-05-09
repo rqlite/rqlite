@@ -30,6 +30,9 @@ jobs:
       - name: Install compilers
         run: sudo apt-get install gcc musl-dev musl-tools gcc-arm-linux-gnueabi gcc-aarch64-linux-gnu gcc-riscv64-linux-gnu gcc-powerpc64le-linux-gnu gcc-mips-linux-gnu gcc-mipsel-linux-gnu gcc-mips64-linux-gnuabi64 gcc-mips64el-linux-gnuabi64
 
+      - name: Install libc
+        run: sudo apt-get libc6-dev-armel-cross libc6-dev-arm64-cross libc6-dev-riscv64-cross libc6-dev-ppc64el-cross libc6-dev-mips-cross libc6-dev-mipsel-cross libc6-dev-mips64-cross libc6-dev-mips64el-cross
+
       - name: Display working directory
         run: pwd
 
