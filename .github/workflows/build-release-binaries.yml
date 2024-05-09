@@ -40,7 +40,7 @@ jobs:
         run: echo ${{ github.event.release.tag_name }}
 
       - name: Build the release binaries
-        run: ./build.sh ${{ github.event.release.tag_name }}
+        run: .github/workflows/build.sh ${{ github.event.release.tag_name }}
 
       - name: List the tarballs
         run: ls -l *.tar.gz
