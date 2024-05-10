@@ -59,7 +59,13 @@ for arch in "${!archs[@]}"; do
   for compiler in $compilers; do
     echo "Building for $arch using $compiler..."
 
-    CGO_ENABLED=1 GOARCH=$arch CC=$compiler go install -a -tags sqlite_omit_load_extension -ldflags="$LDFLAGS" ./...
+    # Statically link for amd64, since we can.
+    if [ "$arch" == "amd64" ]; then
+      STATIC="-extldflags=-static"
+    else
+      STATIC=""
+    fi
+    CGO_ENABLED=1 GOARCH=$arch CC=$compiler go install -a -tags sqlite_omit_load_extension -ldflags="$LDFLAGS $STATIC" ./...
 
     # Special case for musl-gcc, keep legacy naming.
     if [ "$compiler" == "musl-gcc" ]; then
