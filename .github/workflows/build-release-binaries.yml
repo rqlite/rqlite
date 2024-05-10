@@ -8,7 +8,7 @@ on:
 jobs:
   build:
     name: Build Release Assets
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-20.04
     steps:
       - name: Set up Go
         uses: actions/setup-go@v5
