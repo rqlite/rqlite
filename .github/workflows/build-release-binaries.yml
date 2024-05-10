@@ -18,9 +18,6 @@ jobs:
       - name: Display the version of go that we have installed
         run: go version
 
-      - name: Check python
-        run: python --version
-
       - name: Checkout code
         uses: actions/checkout@v2
 
