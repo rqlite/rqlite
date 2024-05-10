@@ -29,21 +29,9 @@ jobs:
 
       - name: Install compilers
         run: sudo apt-get install gcc musl-dev musl-tools gcc-arm-linux-gnueabi gcc-aarch64-linux-gnu gcc-riscv64-linux-gnu gcc-powerpc64le-linux-gnu gcc-mips-linux-gnu gcc-mipsel-linux-gnu gcc-mips64-linux-gnuabi64 gcc-mips64el-linux-gnuabi64
-
-      - name: Install python requests
-        run: sudo apt-get install python3-requests
-
-      - name: Display working directory
-        run: pwd
-
-      - name: Display the release tag
-        run: echo ${{ github.event.release.tag_name }}
-
+        
       - name: Build the release binaries
         run: .github/workflows/build.sh ${{ github.event.release.tag_name }}
-
-      - name: List the tarballs
-        run: ls -l *.tar.gz
 
       - name: Upload Release Assets
         run: |
