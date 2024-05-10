@@ -1,5 +1,5 @@
 ## 8.24.3 (May 10th 2024)
-There are no changes in this release relative to 8.24.2. This release simply moves to a GitHub-actions build-and-release process.
+There are no changes in this release relative to 8.24.2. This release simply moves rqlite to a GitHub-actions build-and-release process.
 
 ## 8.24.2 (May 4th 2024)
 ### Implementation changes and bug fixes
