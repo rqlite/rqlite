@@ -33,9 +33,6 @@ jobs:
       - name: Display working directory
         run: pwd
 
-      - name: Show files in working directory
-        run: ls
-
       - name: Display the release tag
         run: echo ${{ github.event.release.tag_name }}
 
