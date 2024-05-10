@@ -38,7 +38,6 @@ buildtime=`date +%Y-%m-%dT%T%z`
 # Prepare linker flags
 STRIP_SYMBOLS="-w -s"
 LINKER_PKG_PATH=github.com/rqlite/rqlite/v8/cmd
-LDFLAGS="$STATIC $STRIP_SYMBOLS -X $LINKER_PKG_PATH.Version=$VERSION -X $LINKER_PKG_PATH.Branch=$branch -X $LINKER_PKG_PATH.Commit=$commit -X $LINKER_PKG_PATH.Buildtime=$buildtime"
 
 declare -A archs
 archs=(
@@ -59,6 +58,7 @@ for arch in "${!archs[@]}"; do
   for compiler in $compilers; do
     echo "Building for $arch using $compiler..."
 
+    LDFLAGS="$STRIP_SYMBOLS -X $LINKER_PKG_PATH.CompilerCommand=$compiler -X $LINKER_PKG_PATH.Version=$VERSION -X $LINKER_PKG_PATH.Branch=$branch -X $LINKER_PKG_PATH.Commit=$commit -X $LINKER_PKG_PATH.Buildtime=$buildtime"
     # Statically link for amd64, since we can.
     if [ "$arch" == "amd64" ]; then
       STATIC="-extldflags=-static"

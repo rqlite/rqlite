@@ -72,8 +72,8 @@ func main() {
 	fmt.Print(logo)
 
 	// Configure logging and pump out initial message.
-	log.Printf("%s starting, version %s, SQLite %s, commit %s, branch %s, compiler %s", name, cmd.Version,
-		db.DBVersion, cmd.Commit, cmd.Branch, runtime.Compiler)
+	log.Printf("%s starting, version %s, SQLite %s, commit %s, branch %s, compiler (toolchain) %s, compiler (command) %s",
+		name, cmd.Version, db.DBVersion, cmd.Commit, cmd.Branch, runtime.Compiler, cmd.CompilerCommand)
 	log.Printf("%s, target architecture is %s, operating system target is %s", runtime.Version(),
 		runtime.GOARCH, runtime.GOOS)
 	log.Printf("launch command: %s", strings.Join(os.Args, " "))
@@ -346,11 +346,12 @@ func startHTTPService(cfg *Config, str *store.Store, cltr *cluster.Client, credS
 	s.DefaultQueueTimeout = cfg.WriteQueueTimeout
 	s.DefaultQueueTx = cfg.WriteQueueTx
 	s.BuildInfo = map[string]interface{}{
-		"commit":     cmd.Commit,
-		"branch":     cmd.Branch,
-		"version":    cmd.Version,
-		"compiler":   runtime.Compiler,
-		"build_time": cmd.Buildtime,
+		"commit":             cmd.Commit,
+		"branch":             cmd.Branch,
+		"version":            cmd.Version,
+		"compiler_toolchain": runtime.Compiler,
+		"compiler_command":   cmd.CompilerCommand,
+		"build_time":         cmd.Buildtime,
 	}
 	s.SetAllowOrigin(cfg.HTTPAllowOrigin)
 	return s, s.Start()
