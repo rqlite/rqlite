@@ -1,3 +1,6 @@
+## 8.24.7 (May 10th 2024)
+Build release assets on ubuntu-20.04.
+
 ## 8.24.6 (May 10th 2024)
 Reinstates static linking for amd64 builds on Linux during the official release process.
 
