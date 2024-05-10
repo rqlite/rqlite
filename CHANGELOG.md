@@ -1,3 +1,6 @@
+## 8.24.5 (May 10th 2024)
+There are no changes in this release relative to 8.24.2. However this release remove static linking for all architecture types, since it can be problematic in the long run.
+
 ## 8.24.4 (May 10th 2024)
 ### Implementation changes and bug fixes
 - [PR #1778](https://github.com/rqlite/rqlite/pull/1778): `go mod` updates.
