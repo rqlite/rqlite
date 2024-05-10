@@ -38,6 +38,7 @@ cd rqlite-{release}-linux-amd64
 
 ### macOS
 Install via [Homebrew](https://formulae.brew.sh/formula/rqlite).
+
 ```brew install rqlite```
 
 ### Windows
