@@ -14,4 +14,7 @@ var (
 
 	// Buildtime is the timestamp when the build took place.
 	Buildtime = "unknown"
+
+	// CompilerCommand is the compiler used to build the binary.
+	CompilerCommand = "unknown"
 )
