@@ -119,9 +119,9 @@ func New[T any](maxSize, batchSize int, t time.Duration) *Queue[T] {
 }
 
 // Write queues a request, and returns a monotonically incrementing
-// sequence number associated with the slice of objects. If one
-// slice has a larger sequence number than a number, the former slice
-// will always be committed to Raft before the latter slice.
+// sequence number associated with the slice of objects. A slice with
+// a lower sequence number than second slice will always be transmitted
+// on the C channel before the second slice.
 //
 // c is an optional channel. If non-nil, it will be closed when the Request
 // containing these statements is closed.
