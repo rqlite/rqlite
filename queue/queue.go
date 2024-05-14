@@ -111,7 +111,6 @@ func New[T any](maxSize, batchSize int, t time.Duration) *Queue[T] {
 		seqNum:    new(atomic.Int64),
 	}
 	q.seqNum.Store(time.Now().UnixNano())
-
 	q.C = q.sendCh
 	go q.run()
 	return q
