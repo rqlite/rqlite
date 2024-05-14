@@ -3,7 +3,7 @@ package queue
 import (
 	"errors"
 	"expvar"
-	"sync"
+	"sync/atomic"
 	"time"
 )
 
@@ -91,8 +91,7 @@ type Queue[T any] struct {
 	closed chan struct{}
 	flush  chan struct{}
 
-	seqMu  sync.Mutex
-	seqNum int64
+	seqNum *atomic.Int64
 
 	// Whitebox unit-testing
 	numTimeouts int
@@ -109,8 +108,9 @@ func New[T any](maxSize, batchSize int, t time.Duration) *Queue[T] {
 		done:      make(chan struct{}),
 		closed:    make(chan struct{}),
 		flush:     make(chan struct{}),
-		seqNum:    time.Now().UnixNano(),
+		seqNum:    new(atomic.Int64),
 	}
+	q.seqNum.Store(time.Now().UnixNano())
 
 	q.C = q.sendCh
 	go q.run()
@@ -131,17 +131,13 @@ func (q *Queue[T]) Write(objects []T, c FlushChannel) (int64, error) {
 	default:
 	}
 
-	q.seqMu.Lock()
-	defer q.seqMu.Unlock()
-	q.seqNum++
-
 	q.batchCh <- &queuedObjects[T]{
-		SequenceNumber: q.seqNum,
+		SequenceNumber: q.seqNum.Add(1),
 		Objects:        objects,
 		flushChan:      c,
 	}
 	stats.Add(numObjectsRx, int64(len(objects)))
-	return q.seqNum, nil
+	return q.seqNum.Load(), nil
 }
 
 // Flush flushes the queue
@@ -181,15 +177,19 @@ func (q *Queue[T]) run() {
 	queuedStmts := make([]*queuedObjects[T], 0)
 	// Create an initial timer, in the stopped state.
 	timer := time.NewTimer(0)
-	<-timer.C
+	if !timer.Stop() {
+		<-timer.C
+	}
 
 	writeFn := func() {
 		// mergeQueued returns a new object, ownership will pass
 		// implicitly to the other side of sendCh.
 		req := mergeQueued(queuedStmts)
-		q.sendCh <- req
-		stats.Add(numObjectsTx, int64(len(req.Objects)))
-		queuedStmts = queuedStmts[:0] // Better on the GC than setting to nil.
+		if req != nil {
+			q.sendCh <- req
+			stats.Add(numObjectsTx, int64(len(req.Objects)))
+			queuedStmts = queuedStmts[:0]
+		}
 	}
 
 	for {
@@ -197,12 +197,10 @@ func (q *Queue[T]) run() {
 		case s := <-q.batchCh:
 			queuedStmts = append(queuedStmts, s)
 			if len(queuedStmts) == 1 {
-				// First item in queue, start the timer so that if
-				// we don't get in a batch, we'll still write.
 				timer.Reset(q.timeout)
 			}
 			if len(queuedStmts) == q.batchSize {
-				if !timer.Stop() {
+				if !timer.Stop() && len(timer.C) > 0 {
 					<-timer.C
 				}
 				writeFn()
@@ -213,12 +211,14 @@ func (q *Queue[T]) run() {
 			writeFn()
 		case <-q.flush:
 			stats.Add(numFlush, 1)
-			if !timer.Stop() {
+			if !timer.Stop() && len(timer.C) > 0 {
 				<-timer.C
 			}
 			writeFn()
 		case <-q.done:
-			timer.Stop()
+			if !timer.Stop() && len(timer.C) > 0 {
+				<-timer.C
+			}
 			return
 		}
 	}

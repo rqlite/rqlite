@@ -1,3 +1,7 @@
+## 8.24.8 (unreleased)
+### Implementation changes and bug fixes
+- [PR #1780](https://github.com/rqlite/rqlite/pull/1780): Minor improvements to Queue module.
+
 ## 8.24.7 (May 10th 2024)
 Build release assets on ubuntu-20.04.
 
