@@ -3,6 +3,7 @@ package queue
 import (
 	"errors"
 	"expvar"
+	"sync"
 	"sync/atomic"
 	"time"
 )
@@ -82,7 +83,8 @@ type Queue[T any] struct {
 	batchSize int
 	timeout   time.Duration
 
-	batchCh chan *queuedObjects[T]
+	batchChMu sync.Mutex
+	batchCh   chan *queuedObjects[T]
 
 	sendCh chan *Request[T]
 	C      <-chan *Request[T]
@@ -130,13 +132,21 @@ func (q *Queue[T]) Write(objects []T, c FlushChannel) (int64, error) {
 	default:
 	}
 
-	q.batchCh <- &queuedObjects[T]{
-		SequenceNumber: q.seqNum.Add(1),
-		Objects:        objects,
-		flushChan:      c,
-	}
+	// Ensure that a given batch with a sequence number is sent to the channel
+	// in the order of the generated sequence number.
+	var seqN int64
+	func() {
+		q.batchChMu.Lock()
+		defer q.batchChMu.Unlock()
+		seqN = q.seqNum.Add(1)
+		q.batchCh <- &queuedObjects[T]{
+			SequenceNumber: seqN,
+			Objects:        objects,
+			flushChan:      c,
+		}
+	}()
 	stats.Add(numObjectsRx, int64(len(objects)))
-	return q.seqNum.Load(), nil
+	return seqN, nil
 }
 
 // Flush flushes the queue
