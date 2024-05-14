@@ -220,12 +220,12 @@ func (q *Queue[T]) run() {
 			writeFn()
 		case <-q.flush:
 			stats.Add(numFlush, 1)
-			if !timer.Stop() && len(timer.C) > 0 {
+			if !timer.Stop() {
 				<-timer.C
 			}
 			writeFn()
 		case <-q.done:
-			if !timer.Stop() && len(timer.C) > 0 {
+			if !timer.Stop() {
 				<-timer.C
 			}
 			return
