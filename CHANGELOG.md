@@ -1,5 +1,5 @@
 ## 8.24.7 (May 10th 2024)
-Build release assets on ubuntu-20.04.
+Build release assets on [ubuntu-20.04](https://github.com/rqlite/rqlite/commit/0c7fd1c8cb7deae4055102233ff3e9c0bb3369fd).
 
 ## 8.24.6 (May 10th 2024)
 Reinstates static linking for amd64 builds on Linux during the official release process.
