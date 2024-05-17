@@ -207,9 +207,7 @@ func (q *Queue[T]) run() {
 				timer.Reset(q.timeout)
 			}
 			if len(queuedStmts) == q.batchSize {
-				if !timer.Stop() {
-					<-timer.C
-				}
+				stopTimer(timer)
 				writeFn()
 			}
 		case <-timer.C:
@@ -218,13 +216,17 @@ func (q *Queue[T]) run() {
 			writeFn()
 		case <-q.flush:
 			stats.Add(numFlush, 1)
-			if !timer.Stop() {
-				<-timer.C
-			}
+			stopTimer(timer)
 			writeFn()
 		case <-q.done:
-			timer.Stop()
+			stopTimer(timer)
 			return
 		}
+	}
+}
+
+func stopTimer(timer *time.Timer) {
+	if !timer.Stop() && len(timer.C) > 0 {
+		<-timer.C
 	}
 }
