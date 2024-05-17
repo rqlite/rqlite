@@ -19,7 +19,7 @@ If you wish to build rqlite from source, check out [this documentation](https://
 Run a single node as follows:
 ```
 docker pull rqlite/rqlite
-docker run -p4001:4001 rqlite/rqlite
+docker run -d -p 4001:4001 -v data:/rqlite rqlite/rqlite
 ```
 
 Check out the [rqlite Docker page](https://hub.docker.com/r/rqlite/rqlite/) for more details on running nodes via Docker.
