@@ -634,6 +634,13 @@ func (s *Store) Committed(timeout time.Duration) (uint64, error) {
 	return lci, s.WaitForCommitIndex(max(1, lci), timeout)
 }
 
+func max(i int, lci uint64) uint64 {
+	if i > int(lci) {
+		return uint64(i)
+	}
+	return lci
+}
+
 // Close closes the store. If wait is true, waits for a graceful shutdown.
 func (s *Store) Close(wait bool) (retErr error) {
 	defer func() {
