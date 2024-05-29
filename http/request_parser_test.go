@@ -1,6 +1,7 @@
 package http
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
 	"reflect"
@@ -17,7 +18,7 @@ func Test_NilRequest(t *testing.T) {
 
 func Test_EmptyRequests_Simple(t *testing.T) {
 	b := []byte(`[]`)
-	_, err := ParseRequest(b)
+	_, err := ParseRequest(bytes.NewReader(b))
 	if err != ErrNoStatements {
 		t.Fatalf("empty simple request did not result in correct error")
 	}
@@ -25,7 +26,7 @@ func Test_EmptyRequests_Simple(t *testing.T) {
 
 func Test_EmptyRequests_Parameterized(t *testing.T) {
 	b := []byte(`[[]]`)
-	_, err := ParseRequest(b)
+	_, err := ParseRequest(bytes.NewReader(b))
 	if err != ErrInvalidRequest {
 		t.Fatalf("empty parameterized request did not result in correct error: %s", err)
 	}
@@ -35,7 +36,7 @@ func Test_SingleSimpleRequest(t *testing.T) {
 	s := "SELECT * FROM FOO"
 	b := []byte(fmt.Sprintf(`["%s"]`, s))
 
-	stmts, err := ParseRequest(b)
+	stmts, err := ParseRequest(bytes.NewReader(b))
 	if err != nil {
 		t.Fatalf("failed to parse request: %s", err.Error())
 	}
@@ -55,7 +56,7 @@ func Test_SingleSimpleInvalidRequest(t *testing.T) {
 	s := "SELECT * FROM FOO"
 	b := []byte(fmt.Sprintf(`["%s"`, s))
 
-	_, err := ParseRequest(b)
+	_, err := ParseRequest(bytes.NewReader(b))
 	if err != ErrInvalidJSON {
 		t.Fatal("got unexpected error for invalid request")
 	}
@@ -66,7 +67,7 @@ func Test_DoubleSimpleRequest(t *testing.T) {
 	s1 := "SELECT * FROM BAR"
 	b := []byte(fmt.Sprintf(`["%s", "%s"]`, s0, s1))
 
-	stmts, err := ParseRequest(b)
+	stmts, err := ParseRequest(bytes.NewReader(b))
 	if err != nil {
 		t.Fatalf("failed to parse request: %s", err.Error())
 	}
@@ -94,7 +95,7 @@ func Test_SingleParameterizedRequest(t *testing.T) {
 	p1 := 1
 	b := []byte(fmt.Sprintf(`[["%s", "%s", %d]]`, s, p0, p1))
 
-	stmts, err := ParseRequest(b)
+	stmts, err := ParseRequest(bytes.NewReader(b))
 	if err != nil {
 		t.Fatalf("failed to parse request: %s", err.Error())
 	}
@@ -123,7 +124,7 @@ func Test_SingleParameterizedRequestLargeNumber(t *testing.T) {
 	p1 := int64(1676555296046783000)
 	b := []byte(fmt.Sprintf(`[["%s", "%s", %d]]`, s, p0, p1))
 
-	stmts, err := ParseRequest(b)
+	stmts, err := ParseRequest(bytes.NewReader(b))
 	if err != nil {
 		t.Fatalf("failed to parse request: %s", err.Error())
 	}
@@ -151,7 +152,7 @@ func Test_SingleParameterizedRequestNull(t *testing.T) {
 	p0 := "fiona"
 	b := []byte(fmt.Sprintf(`[["%s", "%s", null]]`, s, p0))
 
-	stmts, err := ParseRequest(b)
+	stmts, err := ParseRequest(bytes.NewReader(b))
 	if err != nil {
 		t.Fatalf("failed to parse request: %s", err.Error())
 	}
@@ -184,7 +185,7 @@ func Test_SingleNamedParameterizedRequest(t *testing.T) {
 	s := "SELECT * FROM foo WHERE bar=:bar AND qux=:qux"
 	b := []byte(fmt.Sprintf(`[["%s", %s]]`, s, mustJSONMarshal(map[string]interface{}{"bar": 3, "qux": "some string", "baz": 3.1457})))
 
-	stmts, err := ParseRequest(b)
+	stmts, err := ParseRequest(bytes.NewReader(b))
 	if err != nil {
 		t.Fatalf("failed to parse request: %s", err.Error())
 	}
@@ -229,7 +230,7 @@ func Test_SingleNamedParameterizedRequestNils(t *testing.T) {
 	s := "SELECT * FROM foo WHERE bar=:bar AND qux=:qux"
 	b := []byte(fmt.Sprintf(`[["%s", %s]]`, s, mustJSONMarshal(map[string]interface{}{"bar": 666, "qux": "some string", "baz": nil})))
 
-	stmts, err := ParseRequest(b)
+	stmts, err := ParseRequest(bytes.NewReader(b))
 	if err != nil {
 		t.Fatalf("failed to parse request: %s", err.Error())
 	}
@@ -274,7 +275,7 @@ func Test_SingleParameterizedRequestNoParams(t *testing.T) {
 	s := "SELECT * FROM foo"
 	b := []byte(fmt.Sprintf(`[["%s"]]`, s))
 
-	stmts, err := ParseRequest(b)
+	stmts, err := ParseRequest(bytes.NewReader(b))
 	if err != nil {
 		t.Fatalf("failed to parse request: %s", err.Error())
 	}
@@ -297,7 +298,7 @@ func Test_SingleParameterizedRequestNoParamsMixed(t *testing.T) {
 	p2 := "bar"
 	b := []byte(fmt.Sprintf(`[["%s"], ["%s", "%s"]]`, s1, s2, p2))
 
-	stmts, err := ParseRequest(b)
+	stmts, err := ParseRequest(bytes.NewReader(b))
 	if err != nil {
 		t.Fatalf("failed to parse request: %s", err.Error())
 	}
@@ -327,7 +328,7 @@ func Test_SingleSimpleParameterizedRequest(t *testing.T) {
 	s := "SELECT * FROM ? ?"
 	b := []byte(fmt.Sprintf(`[["%s"]]`, s))
 
-	stmts, err := ParseRequest(b)
+	stmts, err := ParseRequest(bytes.NewReader(b))
 	if err != nil {
 		t.Fatalf("failed to parse request: %s", err.Error())
 	}
@@ -350,7 +351,7 @@ func Test_SingleInvalidParameterizedRequest(t *testing.T) {
 	p1 := 1
 	b := []byte(fmt.Sprintf(`[["%s", "%s", %d]`, s, p0, p1))
 
-	_, err := ParseRequest(b)
+	_, err := ParseRequest(bytes.NewReader(b))
 	if err != ErrInvalidJSON {
 		t.Fatal("got unexpected error for invalid request")
 	}
@@ -359,24 +360,27 @@ func Test_SingleInvalidParameterizedRequest(t *testing.T) {
 func Test_MixedInvalidRequest(t *testing.T) {
 	b := []byte(`[["SELECT * FROM foo"], "SELECT * FROM bar"]`)
 
-	_, err := ParseRequest(b)
+	_, err := ParseRequest(bytes.NewReader(b))
 	if err != nil {
 		t.Fatalf("failed to parse request: %s", err.Error())
 	}
 }
 
 func Test_SingleInvalidTypeRequests(t *testing.T) {
-	_, err := ParseRequest([]byte(`[1]`))
+	b := []byte(`[1]`)
+	_, err := ParseRequest(bytes.NewReader(b))
 	if err != ErrInvalidRequest {
 		t.Fatalf("got unexpected error for invalid request: %s", err)
 	}
 
-	_, err = ParseRequest([]byte(`[[1]]`))
+	b = []byte(`[[1]]`)
+	_, err = ParseRequest(bytes.NewReader(b))
 	if err != ErrInvalidRequest {
 		t.Fatal("got unexpected error for invalid request")
 	}
 
-	_, err = ParseRequest([]byte(`[[1, "x", 2]]`))
+	b = []byte(`[[1, "x", 2]]`)
+	_, err = ParseRequest(bytes.NewReader(b))
 	if err != ErrInvalidRequest {
 		t.Fatal("got unexpected error for invalid request")
 	}
