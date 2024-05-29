@@ -1073,7 +1073,6 @@ func (s *Service) queuedExecute(w http.ResponseWriter, r *http.Request, qp Query
 	}
 
 	stmts, err := ParseRequest(r.Body)
-	defer r.Body.Close()
 	if err != nil {
 		if errors.Is(err, ErrNoStatements) && !qp.Wait() {
 			http.Error(w, err.Error(), http.StatusBadRequest)
@@ -1117,7 +1116,6 @@ func (s *Service) queuedExecute(w http.ResponseWriter, r *http.Request, qp Query
 func (s *Service) execute(w http.ResponseWriter, r *http.Request, qp QueryParams) {
 	resp := NewResponse()
 	stmts, err := ParseRequest(r.Body)
-	defer r.Body.Close()
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
@@ -1293,7 +1291,6 @@ func (s *Service) handleRequest(w http.ResponseWriter, r *http.Request, qp Query
 	}
 
 	stmts, err := ParseRequest(r.Body)
-	defer r.Body.Close()
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
@@ -1663,7 +1660,6 @@ func requestQueries(r *http.Request, qp QueryParams) ([]*proto.Statement, error)
 			},
 		}, nil
 	}
-	defer r.Body.Close()
 	return ParseRequest(r.Body)
 }
 
