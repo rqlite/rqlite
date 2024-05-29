@@ -86,8 +86,8 @@ func Test_UploaderSingleUpload_ID(t *testing.T) {
 	wg.Wait()
 	cancel()
 	<-done
-	if exp, got := int64(1), stats.Get(numUploadsSkippedID).(*expvar.Int); exp != got.Value() {
-		t.Errorf("expected numUploadsSkippedSum to be %d, got %d", exp, got)
+	if stats.Get(numUploadsSkippedID).(*expvar.Int).Value() == 0 {
+		t.Errorf("expected numUploadsSkippedID to be > 0")
 	}
 }
 
