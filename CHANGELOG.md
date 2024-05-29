@@ -1,4 +1,5 @@
 ## 8.24.8 (unreleased)
+This releases improves memory usage during HTTP request processing by decoding any JSON requests bodies using streaming reads, as opposed to reading the entire request into memory first.
 ### Implementation changes and bug fixes
 - [PR #1783](https://github.com/rqlite/rqlite/pull/1783): Minor improvements to Queue handling.
 - [PR #1786](https://github.com/rqlite/rqlite/pull/1786): Streaming JSON decoding during request parsing.
