@@ -1,6 +1,7 @@
 ## 8.24.8 (unreleased)
 ### Implementation changes and bug fixes
 - [PR #1783](https://github.com/rqlite/rqlite/pull/1783): Minor improvements to Queue handling.
+- [PR #1786](https://github.com/rqlite/rqlite/pull/1786): Streaming JSON decoding during request parsing.
 
 ## 8.24.7 (May 10th 2024)
 Build release assets on [ubuntu-20.04](https://github.com/rqlite/rqlite/commit/0c7fd1c8cb7deae4055102233ff3e9c0bb3369fd).

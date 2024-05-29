@@ -15,17 +15,19 @@ func Test_NilRequest(t *testing.T) {
 	}
 }
 
-func Test_EmptyRequests(t *testing.T) {
+func Test_EmptyRequests_Simple(t *testing.T) {
 	b := []byte(`[]`)
 	_, err := ParseRequest(b)
 	if err != ErrNoStatements {
 		t.Fatalf("empty simple request did not result in correct error")
 	}
+}
 
-	b = []byte(`[[]]`)
-	_, err = ParseRequest(b)
-	if err != ErrNoStatements {
-		t.Fatalf("empty parameterized request did not result in correct error")
+func Test_EmptyRequests_Parameterized(t *testing.T) {
+	b := []byte(`[[]]`)
+	_, err := ParseRequest(b)
+	if err != ErrInvalidRequest {
+		t.Fatalf("empty parameterized request did not result in correct error: %s", err)
 	}
 }
 
@@ -104,8 +106,8 @@ func Test_SingleParameterizedRequest(t *testing.T) {
 		t.Fatalf("incorrect statement parsed, exp %s, got %s", s, stmts[0].Sql)
 	}
 
-	if len(stmts[0].Parameters) != 2 {
-		t.Fatalf("incorrect number of parameters returned: %d", len(stmts[0].Parameters))
+	if got, exp := len(stmts[0].Parameters), 2; got != exp {
+		t.Fatalf("incorrect number of parameters returned, exp %d, got %d", exp, got)
 	}
 	if stmts[0].Parameters[0].GetS() != p0 {
 		t.Fatalf("incorrect parameter, exp %s, got %s", p0, stmts[0].Parameters[0])
@@ -358,15 +360,15 @@ func Test_MixedInvalidRequest(t *testing.T) {
 	b := []byte(`[["SELECT * FROM foo"], "SELECT * FROM bar"]`)
 
 	_, err := ParseRequest(b)
-	if err != ErrInvalidJSON {
-		t.Fatal("got unexpected error for invalid request")
+	if err != nil {
+		t.Fatalf("failed to parse request: %s", err.Error())
 	}
 }
 
 func Test_SingleInvalidTypeRequests(t *testing.T) {
 	_, err := ParseRequest([]byte(`[1]`))
-	if err != ErrInvalidJSON {
-		t.Fatal("got unexpected error for invalid request")
+	if err != ErrInvalidRequest {
+		t.Fatalf("got unexpected error for invalid request: %s", err)
 	}
 
 	_, err = ParseRequest([]byte(`[[1]]`))

@@ -28,72 +28,103 @@ func ParseRequest(b []byte) ([]*command.Statement, error) {
 	if len(b) == 0 {
 		return nil, ErrNoStatements
 	}
+	stream := bytes.NewReader(b)
 
-	var simple []string               // Represents a set of unparameterized queries
-	var parameterized [][]interface{} // Represents a set of parameterized queries
-
-	// Try simple form first.
-	err := json.Unmarshal(b, &simple)
-	if err == nil {
-		if len(simple) == 0 {
-			return nil, ErrNoStatements
-		}
-
-		stmts := make([]*command.Statement, len(simple))
-		for i := range simple {
-			stmts[i] = &command.Statement{
-				Sql: simple[i],
-			}
-		}
-		return stmts, nil
-	}
-
-	// Next try parameterized form.
-	dec := json.NewDecoder(bytes.NewReader(b))
+	dec := json.NewDecoder(stream)
 	dec.UseNumber()
-	if err := dec.Decode(&parameterized); err != nil {
+	t, err := dec.Token()
+	if err != nil {
 		return nil, ErrInvalidJSON
 	}
-	stmts := make([]*command.Statement, len(parameterized))
+	if t != json.Delim('[') {
+		return nil, ErrInvalidRequest
+	}
 
-	for i := range parameterized {
-		if len(parameterized[i]) == 0 {
-			return nil, ErrNoStatements
-		}
-
-		sql, ok := parameterized[i][0].(string)
-		if !ok {
-			return nil, ErrInvalidRequest
-		}
-		stmts[i] = &command.Statement{
-			Sql:        sql,
-			Parameters: nil,
-		}
-		if len(parameterized[i]) == 1 {
-			// No actual parameters after the SQL string
-			continue
+	// OK, we have confirmed we've got an array of statements. Next we need
+	// to determine if the statements are simple strings, or parameterized
+	// statements.
+	var stmts []*command.Statement
+	for dec.More() {
+		t, err := dec.Token()
+		if err != nil {
+			return nil, ErrInvalidJSON
 		}
 
-		stmts[i].Parameters = make([]*command.Parameter, 0)
-		for j := range parameterized[i][1:] {
-			m, ok := parameterized[i][j+1].(map[string]interface{})
-			if ok {
-				for k, v := range m {
-					p, err := makeParameter(k, v)
+		s, ok := t.(string)
+		if ok {
+			// Simple string statement.
+			stmts = append(stmts, &command.Statement{Sql: s})
+		} else if t == json.Delim('[') {
+			// It's parameterized. We need to parse the array of objects, the
+			// first of which is the SQL string, and the rest are the parameters.
+			var items []interface{}
+			for dec.More() {
+				var item interface{}
+				if err := dec.Decode(&item); err != nil {
+					return nil, ErrInvalidJSON
+				}
+				items = append(items, item)
+			}
+			// Consume the closing bracket.
+			t, err := dec.Token()
+			if err != nil {
+				return nil, ErrInvalidJSON
+			}
+			if t != json.Delim(']') {
+				return nil, ErrInvalidRequest
+			}
+
+			// The first item should be the SQL string.
+			if len(items) == 0 {
+				return nil, ErrInvalidRequest
+			}
+
+			sql, ok := items[0].(string)
+			if !ok {
+				return nil, ErrInvalidRequest
+			}
+
+			stmt := &command.Statement{Sql: sql}
+			if len(items) == 1 {
+				stmts = append(stmts, stmt)
+				continue
+			}
+
+			// The rest of the items should be the parameters.
+			for i := range items[1:] {
+				m, ok := items[i+1].(map[string]interface{})
+				if ok {
+					for k, v := range m {
+						p, err := makeParameter(k, v)
+						if err != nil {
+							return nil, err
+						}
+						stmt.Parameters = append(stmt.Parameters, p)
+					}
+				} else {
+					p, err := makeParameter("", items[i+1])
 					if err != nil {
 						return nil, err
 					}
-					stmts[i].Parameters = append(stmts[i].Parameters, p)
+					stmt.Parameters = append(stmt.Parameters, p)
 				}
-			} else {
-				p, err := makeParameter("", parameterized[i][j+1])
-				if err != nil {
-					return nil, err
-				}
-				stmts[i].Parameters = append(stmts[i].Parameters, p)
 			}
+			stmts = append(stmts, stmt)
+		} else {
+			return nil, ErrInvalidRequest
 		}
 	}
+
+	// Check that the array of statements is closed.
+	_, err = dec.Token()
+	if err != nil {
+		return nil, ErrInvalidJSON
+	}
+
+	if len(stmts) == 0 {
+		return nil, ErrNoStatements
+	}
+
 	return stmts, nil
 }
 
