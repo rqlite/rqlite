@@ -1072,14 +1072,8 @@ func (s *Service) queuedExecute(w http.ResponseWriter, r *http.Request, qp Query
 		}
 	}
 
-	b, err := io.ReadAll(r.Body)
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
-		return
-	}
-	r.Body.Close()
-
-	stmts, err := ParseRequest(b)
+	stmts, err := ParseRequest(r.Body)
+	defer r.Body.Close()
 	if err != nil {
 		if errors.Is(err, ErrNoStatements) && !qp.Wait() {
 			http.Error(w, err.Error(), http.StatusBadRequest)
@@ -1122,14 +1116,8 @@ func (s *Service) queuedExecute(w http.ResponseWriter, r *http.Request, qp Query
 // execute handles queries that modify the database.
 func (s *Service) execute(w http.ResponseWriter, r *http.Request, qp QueryParams) {
 	resp := NewResponse()
-	b, err := io.ReadAll(r.Body)
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
-		return
-	}
-	r.Body.Close()
-
-	stmts, err := ParseRequest(b)
+	stmts, err := ParseRequest(r.Body)
+	defer r.Body.Close()
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
@@ -1304,14 +1292,8 @@ func (s *Service) handleRequest(w http.ResponseWriter, r *http.Request, qp Query
 		return
 	}
 
-	b, err := io.ReadAll(r.Body)
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
-		return
-	}
-	r.Body.Close()
-
-	stmts, err := ParseRequest(b)
+	stmts, err := ParseRequest(r.Body)
+	defer r.Body.Close()
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
@@ -1681,14 +1663,8 @@ func requestQueries(r *http.Request, qp QueryParams) ([]*proto.Statement, error)
 			},
 		}, nil
 	}
-
-	b, err := io.ReadAll(r.Body)
-	if err != nil {
-		return nil, errors.New("bad query POST request")
-	}
-	r.Body.Close()
-
-	return ParseRequest(b)
+	defer r.Body.Close()
+	return ParseRequest(r.Body)
 }
 
 func getSubJSON(jsonBlob []byte, keyString string) (json.RawMessage, error) {

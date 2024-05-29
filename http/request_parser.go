@@ -1,10 +1,10 @@
 package http
 
 import (
-	"bytes"
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 
 	command "github.com/rqlite/rqlite/v8/command/proto"
 )
@@ -23,14 +23,14 @@ var (
 	ErrUnsupportedType = errors.New("unsupported type")
 )
 
-// ParseRequest generates a set of Statements for a given byte slice.
-func ParseRequest(b []byte) ([]*command.Statement, error) {
-	if len(b) == 0 {
+// ParseRequest generates a set of Statements by decoding the data read
+// from the given io.Reader.
+func ParseRequest(r io.Reader) ([]*command.Statement, error) {
+	if r == nil {
 		return nil, ErrNoStatements
 	}
-	stream := bytes.NewReader(b)
 
-	dec := json.NewDecoder(stream)
+	dec := json.NewDecoder(r)
 	dec.UseNumber()
 	t, err := dec.Token()
 	if err != nil {
