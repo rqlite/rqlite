@@ -62,7 +62,7 @@ func stopProfile() {
 	}
 	if prof.trace != nil {
 		trace.Stop()
-		prof.mem.Close()
+		prof.trace.Close()
 		log.Println("trace profiling stopped")
 	}
 }
