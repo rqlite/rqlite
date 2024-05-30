@@ -1,3 +1,7 @@
+## 8.24.9 (unreleased)
+### Implementation changes and bug fixes
+- [PR #1788](https://github.com/rqlite/rqlite/pull/1788): Add support for Trace profiling.
+
 ## 8.24.8 (May 28th 2024)
 This releases improves memory usage during HTTP request processing by decoding any JSON requests bodies using streaming reads, as opposed to reading the entire request into memory first.
 ### Implementation changes and bug fixes

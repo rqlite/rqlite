@@ -79,7 +79,7 @@ func main() {
 	log.Printf("launch command: %s", strings.Join(os.Args, " "))
 
 	// Start requested profiling.
-	startProfile(cfg.CPUProfile, cfg.MemProfile)
+	startProfile(cfg.CPUProfile, cfg.MemProfile, cfg.TraceProfile)
 
 	// Create internode network mux and configure.
 	muxLn, err := net.Listen("tcp", cfg.RaftAddr)

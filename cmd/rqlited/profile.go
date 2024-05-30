@@ -5,16 +5,18 @@ import (
 	"os"
 	"runtime"
 	"runtime/pprof"
+	"runtime/trace"
 )
 
 // prof stores the file locations of active profiles.
 var prof struct {
-	cpu *os.File
-	mem *os.File
+	cpu   *os.File
+	mem   *os.File
+	trace *os.File
 }
 
-// startProfile initializes the CPU and memory profile, if specified.
-func startProfile(cpuprofile, memprofile string) {
+// startProfile starts any requested profiling.
+func startProfile(cpuprofile, memprofile, traceprofile string) {
 	if cpuprofile != "" {
 		f, err := os.Create(cpuprofile)
 		if err != nil {
@@ -34,9 +36,19 @@ func startProfile(cpuprofile, memprofile string) {
 		prof.mem = f
 		runtime.MemProfileRate = 4096
 	}
+
+	if traceprofile != "" {
+		f, err := os.Create(traceprofile)
+		if err != nil {
+			log.Fatalf("failed to create trace profile file at %s: %s", cpuprofile, err.Error())
+		}
+		prof.trace = f
+		log.Printf("writing trace profile to: %s\n", traceprofile)
+		trace.Start(prof.trace)
+	}
 }
 
-// stopProfile closes the CPU and memory profiles if they are running.
+// stopProfile stops any active profiling.
 func stopProfile() {
 	if prof.cpu != nil {
 		pprof.StopCPUProfile()
@@ -47,5 +59,10 @@ func stopProfile() {
 		pprof.Lookup("heap").WriteTo(prof.mem, 0)
 		prof.mem.Close()
 		log.Println("memory profiling stopped")
+	}
+	if prof.trace != nil {
+		trace.Stop()
+		prof.trace.Close()
+		log.Println("trace profiling stopped")
 	}
 }
