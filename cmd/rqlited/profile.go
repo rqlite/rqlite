@@ -15,7 +15,7 @@ var prof struct {
 	trace *os.File
 }
 
-// startProfile initializes the CPU, memory, and trace profiling, if specified.
+// startProfile starts any requested profiling.
 func startProfile(cpuprofile, memprofile, traceprofile string) {
 	if cpuprofile != "" {
 		f, err := os.Create(cpuprofile)
@@ -48,7 +48,7 @@ func startProfile(cpuprofile, memprofile, traceprofile string) {
 	}
 }
 
-// stopProfile closes the CPU and memory profiles if they are running.
+// stopProfile stops any active profiling.
 func stopProfile() {
 	if prof.cpu != nil {
 		pprof.StopCPUProfile()
