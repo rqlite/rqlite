@@ -11,7 +11,7 @@ COPY . /app
 
 WORKDIR /app
 
-RUN CGO_ENABLED=1 go build -a -tags sqlite_omit_load_extension -ldflags="-w -s -X $LINKER_PKG_PATH.CompilerCommand=musl-gcc -X $LINKER_PKG_PATH.Version=${VERSION} -X $LINKER_PKG_PATH.Branch=${BRANCH} -X $LINKER_PKG_PATH.Commit=${COMMIT} -X $LINKER_PKG_PATH.Buildtime=${DATE}" ./cmd/rqlited/.
+RUN CGO_ENABLED=1 go build -a -tags sqlite_omit_load_extension -ldflags="-w -s -X github.com/rqlite/rqlite/v8/cmd.CompilerCommand=musl-gcc -X github.com/rqlite/rqlite/v8/cmd.Version=${VERSION} -X github.com/rqlite/rqlite/v8/cmd.Branch=${BRANCH} -X github.com/rqlite/rqlite/v8/cmd.Commit=${COMMIT} -X github.com/rqlite/rqlite/v8/cmd.Buildtime=${DATE}" ./cmd/rqlited/.
 RUN CGO_ENABLED=1 go build -a -tags sqlite_omit_load_extension -ldflags="-w -s" ./cmd/rqlite/.
 
 FROM alpine:latest
