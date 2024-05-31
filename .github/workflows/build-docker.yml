@@ -9,6 +9,13 @@ jobs:
       id: get-date
       run: echo "::set-output name=date::$(date +'%Y-%m-%dT%T%z')"
 
+    - name: Get and strip version tag
+      id: strip-v
+      run: |
+          VERSION=${{ github.event.release.tag_name }}
+          STRIPPED_VERSION=${VERSION#v}
+          echo "::set-output name=version::$STRIPPED_VERSION"
+
     - name: Checkout repository
       uses: actions/checkout@v4
 
@@ -28,7 +35,7 @@ jobs:
       uses: docker/build-push-action@v5
       with:
         context: .
-        platforms: linux/386,linux/amd64,linux/arm64
+        platforms: linux/386,linux/amd64,linux/arm64,linux/arm/v6,linux/arm/v7
         build-args: VERSION=${{ github.event.release.tag_name }},COMMIT=${{ github.sha }},BRANCH=master,DATE=${{ steps.get-date.outputs.date }}
         push: true
         tags: |
