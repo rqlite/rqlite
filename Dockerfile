@@ -1,15 +1,16 @@
+FROM golang:alpine as builder
+
+COPY . /app
+
+WORKDIR /app
+
+RUN CGO_ENABLED=1 CC=musl-gcc go build -a -tags sqlite_omit_load_extension -ldflags="-w -s" ./cmd/rqlited/.
+RUN CGO_ENABLED=1 CC=musl-gcc go build -a -tags sqlite_omit_load_extension -ldflags="-w -s" ./cmd/rqlite/.
+
 FROM alpine:latest
 
-RUN apk update && \
-    apk --no-cache add curl tar && \
-    curl -L https://github.com/rqlite/rqlite/releases/download/v8.24.8/rqlite-v8.24.8-linux-amd64-musl.tar.gz -o rqlite-v8.24.8-linux-amd64-musl.tar.gz && \
-    tar xvfz rqlite-v8.24.8-linux-amd64-musl.tar.gz && \
-    cp rqlite-v8.24.8-linux-amd64-musl/rqlited /bin && \
-    cp rqlite-v8.24.8-linux-amd64-musl/rqlite /bin && \
-    rm -fr rqlite-v8.24.8-linux-amd64-musl rqlite-v8.24.8-linux-amd64-musl.tar.gz && \
-    apk del curl tar
-
-COPY docker-entrypoint.sh /bin
+COPY --from=builder /app/docker-entrypoint.sh /bin
+COPY --from=builder /app/rqlited /bin
 
 RUN mkdir -p /rqlite/file
 VOLUME /rqlite/file
