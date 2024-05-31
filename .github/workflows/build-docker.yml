@@ -32,5 +32,4 @@ jobs:
         build-args: VERSION=${{ github.event.release.tag_name }},COMMIT=${{ github.sha }},BRANCH=master,DATE=${{ steps.get-date.outputs.date }}
         push: true
         tags: |
-          rqlite/rqlite:latest
-          rqlite/rqlite:${{ github.event.release.tag_name }}
+          rqlite/rqlite:dev
