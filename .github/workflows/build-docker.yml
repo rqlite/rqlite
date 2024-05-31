@@ -5,6 +5,10 @@ jobs:
   docker:
     runs-on: ubuntu-latest
     steps:
+    - name: Get current date
+      id: get-date
+      run: echo "::set-output name=date::$(date +%Y-%m-%dT%T%z')"
+
     - name: Checkout repository
       uses: actions/checkout@v4
 
@@ -25,7 +29,8 @@ jobs:
       with:
         context: .
         platforms: linux/386,linux/amd64,linux/arm64
-        build-args: VERSION=dev,COMMIT=${{ github.sha }},BRANCH=master,DATE=1234
+        build-args: VERSION=${{ github.event.release.tag_name }},COMMIT=${{ github.sha }},BRANCH=master,DATE=${{ steps.get-date.outputs.date }}
         push: true
         tags: |
-          rqlite/rqlite:dev
+          rqlite/rqlite:latest
+          rqlite/rqlite:${{ github.event.release.tag_name }}

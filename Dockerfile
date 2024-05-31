@@ -1,12 +1,17 @@
 FROM golang:alpine as builder
 
+ARG VERSION
+ARG COMMIT
+ARG BRANCH
+ARG DATE
+
 RUN apk add --no-cache gcc musl-dev
 
 COPY . /app
 
 WORKDIR /app
 
-RUN CGO_ENABLED=1 go build -a -tags sqlite_omit_load_extension -ldflags="-w -s -X $LINKER_PKG_PATH.CompilerCommand=musl-gcc -X $LINKER_PKG_PATH.Version=$VERSION -X $LINKER_PKG_PATH.Branch=$BRANCH -X $LINKER_PKG_PATH.Commit=$COMMIT -X $LINKER_PKG_PATH.Buildtime=$DATE" ./cmd/rqlited/.
+RUN CGO_ENABLED=1 go build -a -tags sqlite_omit_load_extension -ldflags="-w -s -X $LINKER_PKG_PATH.CompilerCommand=musl-gcc -X $LINKER_PKG_PATH.Version=${VERSION} -X $LINKER_PKG_PATH.Branch=${BRANCH} -X $LINKER_PKG_PATH.Commit=${COMMIT} -X $LINKER_PKG_PATH.Buildtime=${DATE}" ./cmd/rqlited/.
 RUN CGO_ENABLED=1 go build -a -tags sqlite_omit_load_extension -ldflags="-w -s" ./cmd/rqlite/.
 
 FROM alpine:latest
