@@ -1,4 +1,5 @@
-## 8.24.9 (unreleased)
+## 8.24.9 (May 31st 2024)
+This is the first release for which there are [multi-platform Docker images](https://hub.docker.com/r/rqlite/rqlite) available.
 ### Implementation changes and bug fixes
 - [PR #1788](https://github.com/rqlite/rqlite/pull/1788): Add support for Trace profiling.
 
