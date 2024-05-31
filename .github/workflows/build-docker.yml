@@ -50,7 +50,7 @@ jobs:
             BRANCH=master
             DATE=${{ needs.get-info.outputs.date }}
           push: false # We will push all platforms in the final job
-          tags: rqlite/rqlite:${{ needs.get-info.outputs.version }}-temp-${{ matrix.platform }}
+          tags: rqlite/rqlite:${{ needs.get-info.outputs.version }}-${{ matrix.platform }}
 
   push-multi-platform:
     runs-on: ubuntu-latest
@@ -68,5 +68,6 @@ jobs:
       - name: Create and push multi-platform manifest
         run: |
           docker buildx imagetools create \
-            --tag rqlite/rqlite:dev \
-            $(for platform in linux/386 linux/amd64 linux/arm64 linux/arm/v6 linux/arm/v7; do echo "rqlite/rqlite:${{ needs.get-info.outputs.version }}-temp-$platform "; done)
+            --tag rqlite/rqlite:latest \
+            --tag rqlite/rqlite:${{ needs.get-info.outputs.version }} \
+            $(for platform in linux/386 linux/amd64 linux/arm64 linux/arm/v6 linux/arm/v7; do echo "rqlite/rqlite:${{ needs.get-info.outputs.version }}-$platform "; done)
