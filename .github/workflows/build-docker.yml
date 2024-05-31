@@ -7,7 +7,7 @@ jobs:
     steps:
     - name: Get current date
       id: get-date
-      run: echo "::set-output name=date::$(date +%Y-%m-%dT%T%z')"
+      run: echo "::set-output name=date::$(date +'%Y-%m-%dT%T%z')"
 
     - name: Checkout repository
       uses: actions/checkout@v4
