@@ -25,8 +25,7 @@ jobs:
       with:
         context: .
         platforms: linux/386,linux/amd64,linux/arm64
-        build-args: |
-          "VERSION=test"
+        build-args: VERSION=dev,COMMIT=${{ github.sha }},BRANCH=master
         push: true
         tags: |
           rqlite/rqlite:dev
