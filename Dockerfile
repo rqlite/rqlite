@@ -4,8 +4,8 @@ COPY . /app
 
 WORKDIR /app
 
-RUN CGO_ENABLED=1 go build -a -tags sqlite_omit_load_extension -ldflags="-w -s" ./cmd/rqlited/.
-RUN CGO_ENABLED=1 go build -a -tags sqlite_omit_load_extension -ldflags="-w -s" ./cmd/rqlite/.
+RUN CGO_ENABLED=1 CC=musl-gcc go build -a -tags sqlite_omit_load_extension -ldflags="-w -s" ./cmd/rqlited/.
+RUN CGO_ENABLED=1 CC=musl-gcc go build -a -tags sqlite_omit_load_extension -ldflags="-w -s" ./cmd/rqlite/.
 
 FROM alpine:latest
 
