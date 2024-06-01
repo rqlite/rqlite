@@ -12,6 +12,7 @@
 
 - [Website](https://www.rqlite.io)
 - [Developer guide](https://www.rqlite.io/docs/api)
+- Get up and running quickly with our [_Quick Start_ guide](https://rqlite.io/docs/quick-start/).
 
 _Check out the [rqlite FAQ](https://rqlite.io/docs/faq)_.
 
@@ -31,9 +32,6 @@ You can use rqlite to store your important data reliably, ensuring it's always a
 - **Scalable Reads**: [Read-only nodes](https://rqlite.io/docs/clustering/read-only-nodes/) for enhanced scalability.
 - **Transactions**: Supports a form of transactions.
 - **Easy Backups**: Hot [backups](https://rqlite.io/docs/guides/backup/), including [automatic backups to AWS S3 and MinIO](https://rqlite.io/docs/guides/backup/#automatic-backups), as well as [restore directly from SQLite](https://rqlite.io/docs/guides/backup/#restoring-from-sqlite).
-
-## Quick Start
-Get up and running quickly with our [_Quick Start_ guide](https://rqlite.io/docs/quick-start/).
 
 ## Pronunciation
 Common pronunciations of rqlite include "R Q lite" and "ree-qwell-lite".
