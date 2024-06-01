@@ -183,7 +183,6 @@ func Test_NewServiceTestExecuteQueryAuthNoCredentials(t *testing.T) {
 	// Test that for a cluster with no credential store configured
 	// all users are authed for both operations
 	var c CredentialStore = nil
-	c = nil
 	s := New(ml, db, clstr, c)
 	if s == nil {
 		t.Fatalf("failed to create cluster service")

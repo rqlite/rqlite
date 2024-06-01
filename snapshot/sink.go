@@ -123,7 +123,10 @@ func (s *Sink) Close() error {
 func (s *Sink) processSnapshotData() (retErr error) {
 	defer func() {
 		if retErr != nil {
-			RemoveAllTmpSnapshotData(s.str.Dir())
+			err := RemoveAllTmpSnapshotData(s.str.Dir())
+			if err != nil {
+				s.str.logger.Printf("failed to remove temporary snapshot data: %s", err.Error())
+			}
 		}
 	}()
 

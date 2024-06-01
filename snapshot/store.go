@@ -504,12 +504,6 @@ func metaPath(dir string) string {
 	return filepath.Join(dir, metaFileName)
 }
 
-// metaExists returns true if the meta file exists in the given directory.
-func metaExists(dir string) bool {
-	_, err := os.Stat(metaPath(dir))
-	return !os.IsNotExist(err)
-}
-
 // readMeta is used to read the meta data in a given snapshot directory.
 func readMeta(dir string) (*raft.SnapshotMeta, error) {
 	fh, err := os.Open(metaPath(dir))
