@@ -18,11 +18,8 @@ jobs:
     - name: Install C Compiler
       run: choco install mingw
 
-    - name: Add MinGW to PATH
-      run: echo "::add-path::C:\\tools\\mingw64\\bin"
-
     - name: Verify GCC Installation
-      run: gcc --version
+      run: C:\\tools\\mingw64\\bin\gcc --version
 
     - name: Build Go Program
       run: go build -v ./...
