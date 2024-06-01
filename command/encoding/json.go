@@ -220,7 +220,9 @@ func (e *Encoder) JSONMarshalIndent(i interface{}, prefix, indent string) ([]byt
 			return nil, err
 		}
 		var out bytes.Buffer
-		json.Indent(&out, b, prefix, indent)
+		if err := json.Indent(&out, b, prefix, indent); err != nil {
+			return nil, err
+		}
 		return out.Bytes(), nil
 	}
 	return jsonMarshal(i, f, e.Associative, e.BlobsAsByteArrays)

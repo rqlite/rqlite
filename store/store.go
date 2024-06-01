@@ -1820,11 +1820,6 @@ func (s *Store) isStaleRead(freshness int64, strict bool) bool {
 		strict)
 }
 
-type fsmExecuteResponse struct {
-	results []*proto.ExecuteResult
-	error   error
-}
-
 type fsmQueryResponse struct {
 	rows  []*proto.QueryRows
 	error error

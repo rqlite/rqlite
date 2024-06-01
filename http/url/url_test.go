@@ -100,7 +100,7 @@ func Test_AddBasicAuth(t *testing.T) {
 		t.Fatalf("wrong URL created, exp %s, got %s", exp, got)
 	}
 
-	u, err = AddBasicAuth("http://user1:pass1@example.com", "user2", "pass2")
+	_, err = AddBasicAuth("http://user1:pass1@example.com", "user2", "pass2")
 	if err == nil {
 		t.Fatalf("failed to get expected error when UserInfo exists")
 	}

@@ -1,3 +1,7 @@
+## 8.24.10 (unreleased)
+### Implementation changes and bug fixes
+- [PR #1789](https://github.com/rqlite/rqlite/pull/1789): `go mod` updates.
+
 ## 8.24.9 (May 31st 2024)
 This is the first release for which there are [multi-platform Docker images](https://hub.docker.com/r/rqlite/rqlite) available.
 ### Implementation changes and bug fixes
