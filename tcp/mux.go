@@ -169,15 +169,20 @@ func (mux *Mux) Serve() error {
 }
 
 // Stats returns status of the mux.
-func (mux *Mux) Stats() (interface{}, error) {
+func (mux *Mux) Stats() (map[string]interface{}, error) {
 	e := "disabled"
 	if mux.tlsConfig != nil {
 		e = "enabled"
 	}
-	return map[string]string{
-		"addr":    mux.addr.String(),
-		"timeout": mux.Timeout.String(),
-		"tls":     e,
+	handlers := []byte{}
+	for k := range mux.m {
+		handlers = append(handlers, k)
+	}
+	return map[string]interface{}{
+		"addr":     mux.addr.String(),
+		"timeout":  mux.Timeout.String(),
+		"tls":      e,
+		"handlers": string(handlers),
 	}, nil
 }
 

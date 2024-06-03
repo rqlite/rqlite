@@ -1,3 +1,7 @@
+## 8.24.11 (unreleased)
+### Implementation changes and bug fixes
+- [PR #1790](https://github.com/rqlite/rqlite/pull/1790): Register Mux Stats.
+
 ## 8.24.10 (June 1st 2024)
 ### Implementation changes and bug fixes
 - [PR #1789](https://github.com/rqlite/rqlite/pull/1789): `go mod` updates.

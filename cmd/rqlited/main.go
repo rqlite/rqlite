@@ -93,7 +93,6 @@ func main() {
 
 	// Raft internode layer
 	raftLn := mux.Listen(cluster.MuxRaftHeader)
-	log.Printf("Raft TCP mux Listener registered with byte header %d", cluster.MuxRaftHeader)
 	raftDialer, err := cluster.CreateRaftDialer(cfg.NodeX509Cert, cfg.NodeX509Key, cfg.NodeX509CACert,
 		cfg.NodeVerifyServerName, cfg.NoNodeVerify)
 	if err != nil {
@@ -148,7 +147,6 @@ func main() {
 	if err != nil {
 		log.Fatalf("failed to create cluster service: %s", err.Error())
 	}
-	log.Printf("cluster TCP mux Listener registered with byte header %d", cluster.MuxClusterHeader)
 
 	// Create the HTTP service.
 	//
@@ -172,6 +170,7 @@ func main() {
 	// Register remaining status providers.
 	httpServ.RegisterStatus("cluster", clstrServ)
 	httpServ.RegisterStatus("network", tcp.NetworkReporter{})
+	httpServ.RegisterStatus("mux", mux)
 
 	// Create the cluster!
 	nodes, err := str.Nodes()
