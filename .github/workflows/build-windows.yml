@@ -21,5 +21,11 @@ jobs:
     - name: Verify GCC Installation
       run: gcc --version
 
-    - name: Build Go Program
-      run:  set CGO_ENABLED=1 && set CC=gcc && go build -a -tags sqlite_omit_load_extension -ldflags="-w -s" ./...
+    - name: Build server
+      run:  set CGO_ENABLED=1 && set CC=gcc && go build -a -tags sqlite_omit_load_extension -ldflags="-w -s" ./cmd/rqlited
+
+    - name: Build shell
+      run:  set CGO_ENABLED=1 && set CC=gcc && go build -a -tags sqlite_omit_load_extension -ldflags="-w -s" ./cmd/rqlite
+
+    - name: Zip up the binaries
+      run:  7z.exe a rqlite.zip rqlited.exe rqlite.exe
