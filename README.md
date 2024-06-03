@@ -35,7 +35,7 @@ You can use rqlite to store your important data reliably, ensuring it's always a
 - **Easy Backups**: Hot [backups](https://rqlite.io/docs/guides/backup/), including [automatic backups to AWS S3 and MinIO](https://rqlite.io/docs/guides/backup/#automatic-backups), as well as [restore directly from SQLite](https://rqlite.io/docs/guides/backup/#restoring-from-sqlite).
 
 ## More questions?
-- [Join the rqlite Slack channel](https://rqlite.io/join-rqlite-slack)
+- [Join the rqlite Slack channel](https://rqlite.io/join-slack)
 - [Sign up for Office Hours](https://rqlite.io/office-hours)
 
 
