@@ -171,6 +171,7 @@ func main() {
 	// Register remaining status providers.
 	httpServ.RegisterStatus("cluster", clstrServ)
 	httpServ.RegisterStatus("network", tcp.NetworkReporter{})
+	httpServ.RegisterStatus("mux", mux)
 
 	// Create the cluster!
 	nodes, err := str.Nodes()
