@@ -5,7 +5,7 @@
 [![Go Report Card](https://goreportcard.com/badge/github.com/rqlite/rqlite)](https://goreportcard.com/report/github.com/rqlite/rqlite/v8)
 [![Release](https://img.shields.io/github/release/rqlite/rqlite.svg)](https://github.com/rqlite/rqlite/releases)
 [![Docker](https://img.shields.io/docker/pulls/rqlite/rqlite?style=plastic)](https://hub.docker.com/r/rqlite/rqlite/)
-[![Slack](https://img.shields.io/badge/Slack--purple.svg)](https://www.philipotoole.com/join-rqlite-slack)
+[![Slack](https://img.shields.io/badge/Slack--purple.svg)](https://www.rqlite.io/join-slack)
 [![Google Group](https://img.shields.io/badge/Google%20Group--blue.svg)](https://groups.google.com/group/rqlite)
 
 *rqlite* is a relational database which combines SQLite's simplicity with the power of a robust, fault-tolerant, distributed system. It's designed for easy deployment and lightweight operation, offering a developer-friendly and operator-centric solution for [Linux, macOS, and Windows, as well as various CPU platforms](https://github.com/rqlite/rqlite/releases).
