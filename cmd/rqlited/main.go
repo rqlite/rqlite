@@ -93,7 +93,6 @@ func main() {
 
 	// Raft internode layer
 	raftLn := mux.Listen(cluster.MuxRaftHeader)
-	log.Printf("Raft TCP mux Listener registered with byte header %d", cluster.MuxRaftHeader)
 	raftDialer, err := cluster.CreateRaftDialer(cfg.NodeX509Cert, cfg.NodeX509Key, cfg.NodeX509CACert,
 		cfg.NodeVerifyServerName, cfg.NoNodeVerify)
 	if err != nil {
