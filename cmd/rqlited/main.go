@@ -147,7 +147,6 @@ func main() {
 	if err != nil {
 		log.Fatalf("failed to create cluster service: %s", err.Error())
 	}
-	log.Printf("cluster TCP mux Listener registered with byte header %d", cluster.MuxClusterHeader)
 
 	// Create the HTTP service.
 	//
