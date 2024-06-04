@@ -26,11 +26,10 @@ func TestClient_QueryWhenAllAvailable(t *testing.T) {
 	res, err := client.Query(url.URL{
 		Path: "/",
 	})
-	defer res.Body.Close()
-
 	if err != nil {
 		t.Errorf("unexpected error: %v", err)
 	}
+	defer res.Body.Close()
 
 	if client.currentHost != 0 {
 		t.Errorf("expected to only forward requests to the first host")
@@ -62,11 +61,10 @@ func TestClient_QueryWhenSomeAreAvailable(t *testing.T) {
 	res, err := client.Query(url.URL{
 		Path: "/",
 	})
-	defer res.Body.Close()
-
 	// If the request succeeds after changing hosts, it should be reflected in the returned error
 	// as HostChangedError
 	if err == nil {
+		defer res.Body.Close() // No error, might have a body to close
 		t.Errorf("expected HostChangedError got nil instead")
 	}
 
