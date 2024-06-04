@@ -168,9 +168,15 @@ func main() {
 	}
 
 	// Register remaining status providers.
-	httpServ.RegisterStatus("cluster", clstrServ)
-	httpServ.RegisterStatus("network", tcp.NetworkReporter{})
-	httpServ.RegisterStatus("mux", mux)
+	if err := httpServ.RegisterStatus("cluster", clstrServ); err != nil {
+		log.Fatalf("failed to register cluster status provider: %s", err.Error())
+	}
+	if err := httpServ.RegisterStatus("network", tcp.NetworkReporter{}); err != nil {
+		log.Fatalf("failed to register network status provider: %s", err.Error())
+	}
+	if err := httpServ.RegisterStatus("mux", mux); err != nil {
+		log.Fatalf("failed to register mux status provider: %s", err.Error())
+	}
 
 	// Create the cluster!
 	nodes, err := str.Nodes()

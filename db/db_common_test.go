@@ -184,7 +184,7 @@ func testNotNULLField(t *testing.T, db *DB) {
 	if err != nil {
 		t.Fatalf("failed to get PRAGMA table_info: %s", err.Error())
 	}
-	if exp, got := `[{"columns":["cid","name","type","notnull","dflt_value","pk"],"types":["integer","text","text","integer","",""],"values":[[0,"id","INTEGER",1,null,1],[1,"name","TEXT",0,null,0]]}]`, asJSON(r); exp != got {
+	if exp, got := `[{"columns":["cid","name","type","notnull","dflt_value","pk"],"types":["integer","text","text","integer","","integer"],"values":[[0,"id","INTEGER",1,null,1],[1,"name","TEXT",0,null,0]]}]`, asJSON(r); exp != got {
 		t.Fatalf("unexpected results for query, expected %s, got %s", exp, got)
 	}
 }
@@ -800,7 +800,7 @@ func testSimplePragmaTableInfo(t *testing.T, db *DB) {
 	if err != nil {
 		t.Fatalf("failed to query a common table expression: %s", err.Error())
 	}
-	if exp, got := `[{"columns":["cid","name","type","notnull","dflt_value","pk"],"types":["integer","text","text","integer","",""],"values":[[0,"id","INTEGER",1,null,1],[1,"name","TEXT",0,null,0]]}]`, asJSON(res); exp != got {
+	if exp, got := `[{"columns":["cid","name","type","notnull","dflt_value","pk"],"types":["integer","text","text","integer","","integer"],"values":[[0,"id","INTEGER",1,null,1],[1,"name","TEXT",0,null,0]]}]`, asJSON(res); exp != got {
 		t.Fatalf("unexpected results for query\nexp: %s\ngot: %s", exp, got)
 	}
 }
