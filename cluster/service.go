@@ -298,7 +298,9 @@ func (s *Service) handleConn(conn net.Conn) {
 			if err != nil {
 				conn.Close()
 			}
-			writeBytesWithLength(conn, p)
+			if err := writeBytesWithLength(conn, p); err != nil {
+				return
+			}
 			stats.Add(numGetNodeAPIResponse, 1)
 
 		case proto.Command_COMMAND_TYPE_EXECUTE:
@@ -319,7 +321,9 @@ func (s *Service) handleConn(conn net.Conn) {
 					copy(resp.Response, res)
 				}
 			}
-			marshalAndWrite(conn, resp)
+			if err := marshalAndWrite(conn, resp); err != nil {
+				return
+			}
 
 		case proto.Command_COMMAND_TYPE_QUERY:
 			stats.Add(numQueryRequest, 1)
@@ -339,7 +343,9 @@ func (s *Service) handleConn(conn net.Conn) {
 					copy(resp.Rows, res)
 				}
 			}
-			marshalAndWrite(conn, resp)
+			if err := marshalAndWrite(conn, resp); err != nil {
+				return
+			}
 
 		case proto.Command_COMMAND_TYPE_REQUEST:
 			stats.Add(numRequestRequest, 1)
@@ -359,7 +365,9 @@ func (s *Service) handleConn(conn net.Conn) {
 					copy(resp.Response, res)
 				}
 			}
-			marshalAndWrite(conn, resp)
+			if err := marshalAndWrite(conn, resp); err != nil {
+				return
+			}
 
 		case proto.Command_COMMAND_TYPE_BACKUP:
 			stats.Add(numBackupRequest, 1)
@@ -390,7 +398,9 @@ func (s *Service) handleConn(conn net.Conn) {
 				conn.Close()
 				return
 			}
-			writeBytesWithLength(conn, p)
+			if err := writeBytesWithLength(conn, p); err != nil {
+				return
+			}
 
 		case proto.Command_COMMAND_TYPE_BACKUP_STREAM:
 			stats.Add(numBackupRequest, 1)
@@ -407,7 +417,9 @@ func (s *Service) handleConn(conn net.Conn) {
 				conn.Close()
 				return
 			}
-			writeBytesWithLength(conn, p)
+			if err := writeBytesWithLength(conn, p); err != nil {
+				return
+			}
 
 			// Now, start streaming the backup. Enable compressed mode
 			// regardless of whether the client requested it, so the client
@@ -433,13 +445,18 @@ func (s *Service) handleConn(conn net.Conn) {
 					resp.Error = fmt.Sprintf("remote node failed to load: %s", err.Error())
 				}
 			}
-			marshalAndWrite(conn, resp)
+			if err := marshalAndWrite(conn, resp); err != nil {
+				conn.Close()
+				return
+			}
 
 		case proto.Command_COMMAND_TYPE_LOAD_CHUNK:
 			resp := &proto.CommandLoadChunkResponse{
 				Error: "unsupported",
 			}
-			marshalAndWrite(conn, resp)
+			if err := marshalAndWrite(conn, resp); err != nil {
+				return
+			}
 
 		case proto.Command_COMMAND_TYPE_REMOVE_NODE:
 			stats.Add(numRemoveNodeRequest, 1)
@@ -455,7 +472,9 @@ func (s *Service) handleConn(conn net.Conn) {
 					resp.Error = err.Error()
 				}
 			}
-			marshalAndWrite(conn, resp)
+			if err := marshalAndWrite(conn, resp); err != nil {
+				return
+			}
 
 		case proto.Command_COMMAND_TYPE_NOTIFY:
 			stats.Add(numNotifyRequest, 1)
@@ -471,7 +490,9 @@ func (s *Service) handleConn(conn net.Conn) {
 					resp.Error = err.Error()
 				}
 			}
-			marshalAndWrite(conn, resp)
+			if err := marshalAndWrite(conn, resp); err != nil {
+				return
+			}
 
 		case proto.Command_COMMAND_TYPE_JOIN:
 			stats.Add(numJoinRequest, 1)
@@ -498,24 +519,31 @@ func (s *Service) handleConn(conn net.Conn) {
 					resp.Error = "unauthorized"
 				}
 			}
-			marshalAndWrite(conn, resp)
+			if err := marshalAndWrite(conn, resp); err != nil {
+				return
+			}
 		}
 	}
 }
 
-func marshalAndWrite(conn net.Conn, m pb.Message) {
+func marshalAndWrite(conn net.Conn, m pb.Message) error {
 	p, err := pb.Marshal(m)
 	if err != nil {
 		conn.Close()
+		return err
 	}
-	writeBytesWithLength(conn, p)
+	return writeBytesWithLength(conn, p)
 }
 
-func writeBytesWithLength(conn net.Conn, p []byte) {
+func writeBytesWithLength(conn net.Conn, p []byte) error {
 	b := make([]byte, protoBufferLengthSize)
 	binary.LittleEndian.PutUint64(b[0:], uint64(len(p)))
-	conn.Write(b)
-	conn.Write(p)
+	_, err := conn.Write(b)
+	if err != nil {
+		return err
+	}
+	_, err = conn.Write(p)
+	return err
 }
 
 // gzCompress compresses the given byte slice.

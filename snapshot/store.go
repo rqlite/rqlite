@@ -325,7 +325,9 @@ func (s *Store) Dir() string {
 // if the system crashes during snapshotting.
 func (s *Store) check() (retError error) {
 	defer func() {
-		syncDirMaybe(s.dir)
+		if err := syncDirMaybe(s.dir); err != nil && retError == nil {
+			retError = err
+		}
 		s.logger.Printf("check complete")
 	}()
 	s.logger.Printf("checking consistency of snapshot store at %s", s.dir)

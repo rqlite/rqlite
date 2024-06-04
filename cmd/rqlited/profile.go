@@ -24,7 +24,9 @@ func startProfile(cpuprofile, memprofile, traceprofile string) {
 		}
 		log.Printf("writing CPU profile to: %s\n", cpuprofile)
 		prof.cpu = f
-		pprof.StartCPUProfile(prof.cpu)
+		if err := pprof.StartCPUProfile(prof.cpu); err != nil {
+			log.Fatalf("failed to start CPU profiling: %s", err.Error())
+		}
 	}
 
 	if memprofile != "" {
@@ -44,7 +46,9 @@ func startProfile(cpuprofile, memprofile, traceprofile string) {
 		}
 		prof.trace = f
 		log.Printf("writing trace profile to: %s\n", traceprofile)
-		trace.Start(prof.trace)
+		if err := trace.Start(prof.trace); err != nil {
+			log.Fatalf("failed to start trace profiling: %s", err.Error())
+		}
 	}
 }
 
@@ -52,17 +56,25 @@ func startProfile(cpuprofile, memprofile, traceprofile string) {
 func stopProfile() {
 	if prof.cpu != nil {
 		pprof.StopCPUProfile()
-		prof.cpu.Close()
+		if err := prof.cpu.Close(); err != nil {
+			log.Fatalf("failed to close CPU profile file: %s", err.Error())
+		}
 		log.Println("CPU profiling stopped")
 	}
 	if prof.mem != nil {
-		pprof.Lookup("heap").WriteTo(prof.mem, 0)
-		prof.mem.Close()
+		if err := pprof.Lookup("heap").WriteTo(prof.mem, 0); err != nil {
+			log.Fatalf("failed to write memory profile: %s", err.Error())
+		}
+		if err := prof.mem.Close(); err != nil {
+			log.Fatalf("failed to close memory profile file: %s", err.Error())
+		}
 		log.Println("memory profiling stopped")
 	}
 	if prof.trace != nil {
 		trace.Stop()
-		prof.trace.Close()
+		if err := prof.trace.Close(); err != nil {
+			log.Fatalf("failed to close trace profile file: %s", err.Error())
+		}
 		log.Println("trace profiling stopped")
 	}
 }

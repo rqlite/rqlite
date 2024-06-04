@@ -914,7 +914,9 @@ func (db *DB) queryStmtWithConn(ctx context.Context, stmt *command.Statement, xT
 		// One-time population of any empty types. Best effort, ignore
 		// error.
 		if needsQueryTypes {
-			populateEmptyTypes(xTypes, params)
+			if err := populateEmptyTypes(xTypes, params); err != nil {
+				return nil, err
+			}
 			needsQueryTypes = false
 		}
 	}
@@ -1347,7 +1349,7 @@ func copyDatabaseConnection(dst, src *sqlite3.SQLiteConn) error {
 		done, err := bk.Step(-1)
 		if err != nil {
 			stats.Add(numBackupStepErrors, 1)
-			bk.Finish()
+			_ = bk.Finish() // Return the outer error
 			return err
 		}
 		if done {
@@ -1382,7 +1384,7 @@ func parametersToValues(parameters []*command.Parameter) ([]interface{}, error) 
 		case nil:
 			values[i] = sql.Named(parameters[i].GetName(), nil)
 		default:
-			return nil, fmt.Errorf("unsupported type: %T", w)
+			return nil, fmt.Errorf("unsupported type %T for parameter named: %s", w, parameters[i].GetName())
 		}
 	}
 	return values, nil
@@ -1406,6 +1408,8 @@ func populateEmptyTypes(types []string, params []*command.Parameter) error {
 				types[i] = "blob"
 			case *command.Parameter_S:
 				types[i] = "text"
+			case nil:
+				types[i] = ""
 			default:
 				return fmt.Errorf("unsupported type: %T", params[i].GetValue())
 			}
