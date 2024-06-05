@@ -29,6 +29,9 @@ commands: # a reusable command with parameters
       goos:
         default: ""
         type: string
+      tests:
+        default: ""
+        type string
     steps:
       - run: go version
       - run:
@@ -39,6 +42,18 @@ commands: # a reusable command with parameters
             GOARCH: <<parameters.goarch>>
             GOOS: <<parameters.goos>>
             CC: <<parameters.cc>>
+      - run:
+          name: "Run tests"
+          command: |
+            if [ "${TESTS}" = "true" ]; then
+              go test ./...
+            fi
+          environment:
+            CGO_ENABLED: 1
+            GOARCH: <<parameters.goarch>>
+            GOOS: <<parameters.goos>>
+            CC: <<parameters.cc>>
+            TESTS: <<parameters.tests>>
 
 jobs:
   lint:
