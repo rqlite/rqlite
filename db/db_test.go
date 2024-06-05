@@ -1155,7 +1155,7 @@ func mustSetupDBForTimeoutTests(t *testing.T, n int) (*DB, string) {
 }
 
 func Test_ExecShouldTimeout(t *testing.T) {
-	db, path := mustSetupDBForTimeoutTests(t, 5000)
+	db, path := mustSetupDBForTimeoutTests(t, 10000)
 	defer db.Close()
 	defer os.Remove(path)
 
@@ -1179,7 +1179,7 @@ FROM test_table t1 LEFT OUTER JOIN test_table t2`
 }
 
 func Test_QueryShouldTimeout(t *testing.T) {
-	db, path := mustSetupDBForTimeoutTests(t, 5000)
+	db, path := mustSetupDBForTimeoutTests(t, 10000)
 	defer db.Close()
 	defer os.Remove(path)
 
@@ -1219,7 +1219,7 @@ func Test_QueryShouldTimeout(t *testing.T) {
 }
 
 func Test_RequestShouldTimeout(t *testing.T) {
-	db, path := mustSetupDBForTimeoutTests(t, 5000)
+	db, path := mustSetupDBForTimeoutTests(t, 10000)
 	defer db.Close()
 	defer os.Remove(path)
 
