@@ -52,8 +52,8 @@ jobs:
       - run:
           name: Add MinGW to PATH
           command: |
-            setx PATH "%PATH%;C:\Program Files\mingw-w64\mingw64\bin"
-            set PATH=%PATH%;C:\Program Files\mingw-w64\mingw64\bin
+            cmd.exe /c "setx PATH \"%PATH%;C:\Program Files\mingw-w64\mingw64\bin\""
+            cmd.exe /c "set PATH=%PATH%;C:\Program Files\mingw-w64\mingw64\bin"
       - run: go version
       - run: gcc --version
       - run:
