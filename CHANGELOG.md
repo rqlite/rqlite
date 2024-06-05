@@ -1,4 +1,4 @@
-## 8.24.11 (unreleased)
+## 8.24.11 (June 5th 2024)
 ### Implementation changes and bug fixes
 - [PR #1790](https://github.com/rqlite/rqlite/pull/1790): Register Mux Stats.
 - [PR #1792](https://github.com/rqlite/rqlite/pull/1792): Check some unchecked errors, fixing a small bug in the process.
