@@ -49,13 +49,13 @@ jobs:
       # Commands are run in a Windows virtual machine environment
       - checkout
       - run: choco install -y mingw
-      - run: gcc --version
+      - run: C:\ProgramData\mingw64\mingw64\bin\gcc --version
       - run: go version
       - run:
           command: go test -failfast ./...
           environment:
             CGO_ENABLED: 1
-            CC: gcc
+            CC: C:\ProgramData\mingw64\mingw64\bin\gcc
               
   lint:
     docker:
