@@ -1155,7 +1155,7 @@ func mustSetupDBForTimeoutTests(t *testing.T, n int) (*DB, string) {
 }
 
 func Test_ExecShouldTimeout(t *testing.T) {
-	db, path := mustSetupDBForTimeoutTests(t, 5000)
+	db, path := mustSetupDBForTimeoutTests(t, 7500)
 	defer db.Close()
 	defer os.Remove(path)
 
