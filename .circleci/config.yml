@@ -49,13 +49,18 @@ jobs:
       # Commands are run in a Windows virtual machine environment
       - checkout
       - run: choco install -y mingw
-      - run: C:\ProgramData\mingw64\mingw64\bin\gcc --version
+      - run:
+          name: Add MinGW to PATH
+          command: |
+            setx PATH "%PATH%;C:\Program Files\mingw-w64\mingw64\bin"
+            set PATH=%PATH%;C:\Program Files\mingw-w64\mingw64\bin
       - run: go version
+      - run: gcc --version
       - run:
           command: go test -failfast ./...
           environment:
             CGO_ENABLED: 1
-            CC: C:\ProgramData\mingw64\mingw64\bin\gcc
+            CC: gcc
               
   lint:
     docker:
