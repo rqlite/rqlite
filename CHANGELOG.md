@@ -1,4 +1,5 @@
 ## 8.25.0 (June 8th 2024)
+### New features
 - [PR #1796](https://github.com/rqlite/rqlite/pull/1796): Add new read-consistency level "auto".
 
 ## 8.24.11 (June 5th 2024)
