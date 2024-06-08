@@ -1502,7 +1502,8 @@ func Test_MultiNodeClusterWithNonVoter(t *testing.T) {
 	}
 }
 
-// Test_MultiNodeCluster_DisconnectedNonVoter tests
+// Test_MultiNodeCluster_DisconnectedNonVoter tests that "auto" read consistency works
+// as expected when a non-voter is disconnected from the cluster.
 func Test_MultiNodeCluster_DisconnectedNonVoter(t *testing.T) {
 	leader := mustNewLeaderNode("leader")
 	defer leader.Deprovision()
@@ -1587,12 +1588,12 @@ func Test_MultiNodeCluster_DisconnectedNonVoter(t *testing.T) {
 		t.Fatalf("incorrect count, got %s, exp %s", got, exp)
 	}
 
-	// Kill the leader leaving the node without quorum, and the non-voting node
+	// Kill the leader leaving the cluster without a leader (no quorum), and the non-voting node
 	// effectively disconnected.
 	leader.Deprovision()
-	time.Sleep(3 * time.Second)
+	time.Sleep(3 * time.Second) // Wait for the leader to terminate.
 
-	// Follower node should attempt to forward to leader, but fail.
+	// Follower node should attempt to forward to leader, but will fail.
 	_, err = node2.Query(`SELECT * FROM foo`)
 	if err == nil {
 		t.Fatalf("expected error querying follower node after Leader deprovision, got nil")
@@ -1600,6 +1601,10 @@ func Test_MultiNodeCluster_DisconnectedNonVoter(t *testing.T) {
 	_, err = node2.QueryAutoConsistency(`SELECT * FROM foo`)
 	if err == nil {
 		t.Fatalf("expected error querying follower node after Leader deprovision, got nil")
+	}
+	_, err = node2.QueryNoneConsistency(`SELECT * FROM foo`)
+	if err != nil {
+		t.Fatalf("error querying follower node after Leader deprovision with None consistency: %s", err.Error())
 	}
 
 	// Non-voting node with None and Auto should work fine.
