@@ -1502,6 +1502,134 @@ func Test_MultiNodeClusterWithNonVoter(t *testing.T) {
 	}
 }
 
+// Test_MultiNodeCluster_DisconnectedNonVoter tests that "auto" read consistency works
+// as expected when a non-voter is disconnected from the cluster.
+func Test_MultiNodeCluster_DisconnectedNonVoter(t *testing.T) {
+	leader := mustNewLeaderNode("leader")
+	defer leader.Deprovision()
+
+	node2 := mustNewNode("node2", false)
+	defer node2.Deprovision()
+	if err := node2.Join(leader); err != nil {
+		t.Fatalf("node failed to join leader: %s", err.Error())
+	}
+	_, err := node2.WaitForLeader()
+	if err != nil {
+		t.Fatalf("failed waiting for leader: %s", err.Error())
+	}
+
+	nonVoter := mustNewNode("nonvoter", false)
+	defer nonVoter.Deprovision()
+	if err := nonVoter.JoinAsNonVoter(leader); err != nil {
+		t.Fatalf("non-voting node failed to join leader: %s", err.Error())
+	}
+	_, err = nonVoter.WaitForLeader()
+	if err != nil {
+		t.Fatalf("failed waiting for leader: %s", err.Error())
+	}
+
+	// Run queries against cluster.
+	tests := []struct {
+		stmt     string
+		expected string
+		execute  bool
+	}{
+		{
+			stmt:     `CREATE TABLE foo (id integer not null primary key, name text)`,
+			expected: `{"results":[{}]}`,
+			execute:  true,
+		},
+		{
+			stmt:     `INSERT INTO foo(name) VALUES("fiona")`,
+			expected: `{"results":[{"last_insert_id":1,"rows_affected":1}]}`,
+			execute:  true,
+		},
+		{
+			stmt:     `SELECT * FROM foo`,
+			expected: `{"results":[{"columns":["id","name"],"types":["integer","text"],"values":[[1,"fiona"]]}]}`,
+			execute:  false,
+		},
+	}
+
+	for i, tt := range tests {
+		var r string
+		var err error
+		if tt.execute {
+			r, err = leader.Execute(tt.stmt)
+		} else {
+			r, err = leader.Query(tt.stmt)
+		}
+		if err != nil {
+			t.Fatalf(`test %d failed "%s": %s`, i, tt.stmt, err.Error())
+		}
+		if r != tt.expected {
+			t.Fatalf(`test %d received wrong result "%s" got: %s exp: %s`, i, tt.stmt, r, tt.expected)
+		}
+	}
+
+	// Send a few Noops through to ensure SQLite database has been updated on each node.
+	for i := 0; i < 3; i++ {
+		leader.Noop("some_id")
+	}
+
+	// Confirm querying through the follower works fine.
+	r, err := node2.Query(`SELECT * FROM foo`)
+	if err != nil {
+		t.Fatalf("failed to query follower node: %s", err.Error())
+	}
+	if exp, got := `{"results":[{"columns":["id","name"],"types":["integer","text"],"values":[[1,"fiona"]]}]}`, r; exp != got {
+		t.Fatalf("incorrect count, got %s, exp %s", got, exp)
+	}
+	r, err = node2.QueryNoneConsistency(`SELECT * FROM foo`)
+	if err != nil {
+		t.Fatalf("failed to query follower node: %s", err.Error())
+	}
+	if exp, got := `{"results":[{"columns":["id","name"],"types":["integer","text"],"values":[[1,"fiona"]]}]}`, r; exp != got {
+		t.Fatalf("incorrect count, got %s, exp %s", got, exp)
+	}
+
+	// Kill the leader leaving the cluster without a leader (no quorum), and the non-voting node
+	// effectively disconnected.
+	leader.Deprovision()
+	time.Sleep(3 * time.Second) // Wait for the leader to terminate.
+
+	// Follower node should attempt to forward to leader, but will fail.
+	_, err = node2.Query(`SELECT * FROM foo`)
+	if err == nil {
+		t.Fatalf("expected error querying follower node after Leader deprovision, got nil")
+	}
+	_, err = node2.QueryAutoConsistency(`SELECT * FROM foo`)
+	if err == nil {
+		t.Fatalf("expected error querying follower node after Leader deprovision, got nil")
+	}
+	_, err = node2.QueryNoneConsistency(`SELECT * FROM foo`)
+	if err != nil {
+		t.Fatalf("error querying follower node after Leader deprovision with None consistency: %s", err.Error())
+	}
+
+	// Non-voting node with None and Auto should work fine.
+	testPoll(t, func() (bool, error) {
+		r, err := nonVoter.QueryNoneConsistency(`SELECT * FROM foo`)
+		if err != nil {
+			return false, err
+		}
+		return r == tests[2].expected, nil
+	}, 50*time.Millisecond, 5*time.Second)
+	testPoll(t, func() (bool, error) {
+		r, err := nonVoter.QueryAutoConsistency(`SELECT * FROM foo`)
+		if err != nil {
+			return false, err
+		}
+		return r == tests[2].expected, nil
+	}, 50*time.Millisecond, 5*time.Second)
+
+	// Default query level -- which is weak -- should fail.
+	_, err = nonVoter.Query(`SELECT * FROM foo`)
+	if err == nil {
+		t.Fatalf("expected error querying non-voter node with Weak, got nil")
+	}
+}
+
 // Test_MultiNodeClusterRecoverSingle tests recovery of a single node from a 3-node cluster,
 // which no longer has quorum.
 func Test_MultiNodeClusterRecoverSingle(t *testing.T) {

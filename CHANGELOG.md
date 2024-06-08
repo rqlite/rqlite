@@ -1,3 +1,6 @@
+## 8.25.0 (unreleased)
+- [PR #1796](https://github.com/rqlite/rqlite/pull/1796): Add new read-consistency level "auto".
+
 ## 8.24.11 (June 5th 2024)
 ### Implementation changes and bug fixes
 - [PR #1790](https://github.com/rqlite/rqlite/pull/1790): Register Mux Stats.

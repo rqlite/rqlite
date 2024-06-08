@@ -1147,6 +1147,18 @@ func (s *Store) Query(qr *proto.QueryRequest) ([]*proto.QueryRows, error) {
 		return nil, ErrNotOpen
 	}
 
+	if qr.Level == proto.QueryRequest_QUERY_REQUEST_LEVEL_AUTO {
+		isVoter, err := s.IsVoter()
+		if err != nil {
+			return nil, err
+		}
+		if isVoter {
+			qr.Level = proto.QueryRequest_QUERY_REQUEST_LEVEL_WEAK
+		} else {
+			qr.Level = proto.QueryRequest_QUERY_REQUEST_LEVEL_NONE
+		}
+	}
+
 	if qr.Level == proto.QueryRequest_QUERY_REQUEST_LEVEL_STRONG {
 		if s.raft.State() != raft.Leader {
 			return nil, ErrNotLeader
