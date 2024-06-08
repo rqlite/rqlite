@@ -1357,7 +1357,8 @@ func Test_MultiNodeCluster_Backup(t *testing.T) {
 }
 
 // Test_MultiNodeClusterWithNonVoter tests formation of a 4-node cluster, one of which is
-// a non-voter
+// a non-voter. This test also checks that if the Leader changes the non-voter is still in
+// the cluster and gets updates from the new leader.
 func Test_MultiNodeClusterWithNonVoter(t *testing.T) {
 	node1 := mustNewLeaderNode("leader1")
 	defer node1.Deprovision()
@@ -1454,7 +1455,8 @@ func Test_MultiNodeClusterWithNonVoter(t *testing.T) {
 		t.Fatalf("failed to find new cluster leader after killing leader: %s", err.Error())
 	}
 
-	// Run queries against the now 3-node cluster.
+	// Run queries against the now 3-node cluster, ensuring the non-voter is still in the cluster
+	// and getting updates from the new leader.
 	tests = []struct {
 		stmt     string
 		expected string
@@ -1482,14 +1484,20 @@ func Test_MultiNodeClusterWithNonVoter(t *testing.T) {
 		var err error
 		if tt.execute {
 			r, err = leader.Execute(tt.stmt)
+			if err != nil {
+				t.Fatalf(`test %d failed "%s": %s`, i, tt.stmt, err.Error())
+			}
 		} else {
-			r, err = leader.Query(tt.stmt)
-		}
-		if err != nil {
-			t.Fatalf(`test %d failed "%s": %s`, i, tt.stmt, err.Error())
-		}
-		if r != tt.expected {
-			t.Fatalf(`test %d received wrong result "%s" got: %s exp: %s`, i, tt.stmt, r, tt.expected)
+			// Ensure leader and non-voter both have latest writes.
+			for _, node := range []*Node{leader, nonVoter} {
+				testPoll(t, func() (bool, error) {
+					r, err = node.QueryNoneConsistency(`SELECT * FROM foo`)
+					if err != nil {
+						return false, err
+					}
+					return r == tt.expected, nil
+				}, 50*time.Millisecond, 5*time.Second)
+			}
 		}
 	}
 }
