@@ -31,6 +31,7 @@ func Test_NewQueryParams(t *testing.T) {
 		{"No Value", "key=", QueryParams{"key": ""}, false},
 		{"Complex Query", "a=1&b=two&c=&d=true&e=123.456", QueryParams{"a": "1", "b": "two", "c": "", "d": "true", "e": "123.456"}, false},
 		{"Invalid URL Encoding", "invalid=%ZZ", nil, true},
+		{"auto", "&level=auto&freshness=1s", QueryParams{"level": "auto", "freshness": "1s"}, false},
 		{"freshness_strict", "&freshness=5s&freshness_strict", QueryParams{"freshness_strict": "", "freshness": "5s"}, false},
 		{"freshness_strict requires freshness", "freshness_strict", nil, true},
 		{"Disable SQL parsing", "noparse", QueryParams{"noparse": ""}, false},

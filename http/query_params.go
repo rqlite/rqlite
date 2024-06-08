@@ -158,6 +158,8 @@ func (qp QueryParams) Level() command.QueryRequest_Level {
 		return command.QueryRequest_QUERY_REQUEST_LEVEL_WEAK
 	case "strong":
 		return command.QueryRequest_QUERY_REQUEST_LEVEL_STRONG
+	case "auto":
+		return command.QueryRequest_QUERY_REQUEST_LEVEL_AUTO
 	default:
 		return command.QueryRequest_QUERY_REQUEST_LEVEL_WEAK
 	}

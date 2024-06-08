@@ -34,6 +34,7 @@ message QueryRequest {
 		QUERY_REQUEST_LEVEL_NONE = 0;
 		QUERY_REQUEST_LEVEL_WEAK = 1;
 		QUERY_REQUEST_LEVEL_STRONG = 2;
+		QUERY_REQUEST_LEVEL_AUTO = 3;
 	}
 	Level level = 3;
 	int64 freshness = 4;
