@@ -132,6 +132,7 @@ const (
 	numLoads                          = "num_loads"
 	numRestores                       = "num_restores"
 	numRestoresFailed                 = "num_restores_failed"
+	numRestoresSkippedOnStart         = "num_restores_skipped_on_start"
 	numAutoRestores                   = "num_auto_restores"
 	numAutoRestoresSkipped            = "num_auto_restores_skipped"
 	numAutoRestoresFailed             = "num_auto_restores_failed"
@@ -187,6 +188,7 @@ func ResetStats() {
 	stats.Add(numLoads, 0)
 	stats.Add(numRestores, 0)
 	stats.Add(numRestoresFailed, 0)
+	stats.Add(numRestoresSkippedOnStart, 0)
 	stats.Add(numRecoveries, 0)
 	stats.Add(numProviderChecks, 0)
 	stats.Add(numProviderProvides, 0)
@@ -513,6 +515,7 @@ func (s *Store) Open() (retErr error) {
 		return fmt.Errorf("failed to create on-disk database: %s", err)
 	}
 	if dbReused {
+		stats.Add(numRestoresSkippedOnStart, 1)
 		s.logger.Printf("reusing existing database at %s, skipping copy from Snapshot store", s.dbPath)
 	}
 	config.NoSnapshotRestoreOnStart = dbReused
