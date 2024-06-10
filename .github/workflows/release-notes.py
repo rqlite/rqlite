@@ -42,7 +42,7 @@ Install via [Homebrew](https://formulae.brew.sh/formula/rqlite).
 ```brew install rqlite```
 
 ### Windows
-rqlite can be built for Windows, and Windows compatibility is ensured via [AppVeyor](https://www.appveyor.com/). You can download a pre-built release for Windows in two ways:
+rqlite can be built for Windows, and Windows compatibility is ensured via [AppVeyor](https://www.appveyor.com/). You can download a pre-built release for Windows in one of two ways:
 - The top-of-tree build [is available for download](https://ci.appveyor.com/api/projects/otoolep/rqlite/artifacts/rqlite-latest-win64.zip?branch=master) from AppVeyor. Check out the [CI build for Windows](https://ci.appveyor.com/project/otoolep/rqlite) for more details.
 - Download the Windows build artifact attached to this release. This build is currently considered experimental.
 """
