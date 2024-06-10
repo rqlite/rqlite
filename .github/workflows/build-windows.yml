@@ -39,7 +39,7 @@ jobs:
         $filePath = "rqlite-${{ github.event.release.tag_name }}-win64.zip"
         $endpoint = "https://uploads.github.com/repos/rqlite/rqlite/releases/${{ github.event.release.id }}/assets?name=rqlite-${{ github.event.release.tag_name }}-win64.zip"
         $headers = @{
-          "Authorization" = "token ${{ secrets.API_TOKEN }}"
+          "Authorization" = "token ${{ secrets.GITHUB_TOKEN }}"
           "Content-Type"  = "application/zip"
         }
         Invoke-RestMethod -Uri $endpoint -Method Post -Headers $headers -InFile $filePath -ContentType "application/octet-stream"
