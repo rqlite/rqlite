@@ -6,7 +6,9 @@ package store
 import (
 	"bytes"
 	"compress/gzip"
+	"crypto/sha256"
 	"encoding/binary"
+	"encoding/hex"
 	"errors"
 	"expvar"
 	"fmt"
@@ -248,15 +250,16 @@ type Store struct {
 	restorePath   string
 	restoreDoneCh chan struct{}
 
-	raft    *raft.Raft // The consensus mechanism.
-	ly      Layer
-	raftTn  *NodeTransport
-	raftID  string           // Node ID.
-	dbConf  *DBConfig        // SQLite database config.
-	dbPath  string           // Path to underlying SQLite file.
-	walPath string           // Path to WAL file.
-	dbDir   string           // Path to directory containing SQLite file.
-	db      *sql.SwappableDB // The underlying SQLite store.
+	raft      *raft.Raft // The consensus mechanism.
+	ly        Layer
+	raftTn    *NodeTransport
+	raftID    string           // Node ID.
+	dbConf    *DBConfig        // SQLite database config.
+	dbPath    string           // Path to underlying SQLite file.
+	dbSumPath string           // Path to file containing the SHA-256 sum of the SQLite file.
+	walPath   string           // Path to WAL file.
+	dbDir     string           // Path to directory containing SQLite file.
+	db        *sql.SwappableDB // The underlying SQLite store.
 
 	dechunkManager *chunking.DechunkerManager
 	cmdProc        *CommandProcessor
@@ -367,6 +370,7 @@ func New(ly Layer, c *Config) *Store {
 		raftID:          c.ID,
 		dbConf:          c.DBConf,
 		dbPath:          dbPath,
+		dbSumPath:       dbPath + ".sha256",
 		walPath:         sql.WALPath(dbPath),
 		dbDir:           filepath.Dir(dbPath),
 		leaderObservers: make([]chan<- struct{}, 0),
@@ -503,10 +507,15 @@ func (s *Store) Open() (retErr error) {
 		stats.Add(numRecoveries, 1)
 	}
 
-	s.db, err = createOnDisk(s.dbPath, s.dbConf.FKConstraints, true)
+	var dbReused bool
+	s.db, dbReused, err = createOnDisk(s.dbPath, s.dbConf.FKConstraints, true)
 	if err != nil {
 		return fmt.Errorf("failed to create on-disk database: %s", err)
 	}
+	if dbReused {
+		s.logger.Printf("reusing existing database at %s, skipping copy from Snapshot store", s.dbPath)
+	}
+	config.NoSnapshotRestoreOnStart = dbReused
 
 	// Clean up any files from aborted operations. This tries to catch the case where scratch files
 	// were created in the Raft directory, not cleaned up, and then the node was restarted with an
@@ -1993,6 +2002,13 @@ func (s *Store) fsmSnapshot() (fSnap raft.FSMSnapshot, retErr error) {
 	stats.Get(snapshotCreateDuration).(*expvar.Int).Set(dur.Milliseconds())
 	fs := FSMSnapshot{
 		FSMSnapshot: fsmSnapshot,
+		persistFinalizer: func() error {
+			sum, err := computeSHA256(s.dbPath)
+			if err != nil {
+				return err
+			}
+			return writeChecksumToFile(s.dbSumPath, sum)
+		},
 	}
 	if fullNeeded || s.logIncremental() {
 		s.logger.Printf("%s snapshot created in %s on node ID %s", fPLog, dur, s.raftID)
@@ -2034,6 +2050,16 @@ func (s *Store) fsmRestore(rc io.ReadCloser) (retErr error) {
 		return fmt.Errorf("error swapping database file: %v", err)
 	}
 	s.logger.Printf("successfully opened database at %s due to restore", s.db.Path())
+
+	// Calculate the updated checksum so we can avoid a copy from the Snapshot store
+	// on a restart.
+	sum, err := computeSHA256(s.dbPath)
+	if err != nil {
+		return err
+	}
+	if err := writeChecksumToFile(s.dbSumPath, sum); err != nil {
+		return err
+	}
 
 	// Take conservative approach and assume that everything has changed, so update
 	// the indexes. It is possible that dbAppliedIdx is now ahead of some other nodes'
@@ -2316,11 +2342,19 @@ func (s *Store) logBackup() bool {
 
 // createOnDisk opens an on-disk database file at the configured path. Any
 // preexisting file will be removed before the database is opened.
-func createOnDisk(path string, fkConstraints, wal bool) (*sql.SwappableDB, error) {
-	if err := sql.RemoveFiles(path); err != nil {
-		return nil, err
+func createOnDisk(path string, fkConstraints, wal bool) (*sql.SwappableDB, bool, error) {
+	var err error
+	v := verifyChecksum(path, path+".sha256")
+	if v {
+		err = sql.RemoveWALFiles(path)
+	} else {
+		err = sql.RemoveFiles(path)
 	}
-	return sql.OpenSwappable(path, fkConstraints, wal)
+	if err != nil {
+		return nil, false, err
+	}
+	db, err := sql.OpenSwappable(path, fkConstraints, wal)
+	return db, v, err
 }
 
 func createTemp(dir, pattern string) (*os.File, error) {
@@ -2431,4 +2465,52 @@ func resolvableAddress(addr string) (string, error) {
 
 func friendlyBytes(n uint64) string {
 	return humanize.Bytes(n)
+}
+
+func computeSHA256(filePath string) (string, error) {
+	file, err := os.Open(filePath)
+	if err != nil {
+		return "", fmt.Errorf("failed to open file: %v", err)
+	}
+	defer file.Close()
+
+	hash := sha256.New()
+	if _, err := io.Copy(hash, file); err != nil {
+		return "", fmt.Errorf("failed to compute hash: %v", err)
+	}
+	checksum := hex.EncodeToString(hash.Sum(nil))
+	return checksum, nil
+}
+
+func writeChecksumToFile(filePath, checksum string) error {
+	file, err := os.Create(filePath)
+	if err != nil {
+		return fmt.Errorf("failed to create checksum file: %v", err)
+	}
+	defer file.Close()
+	_, err = file.WriteString(checksum)
+	if err != nil {
+		return fmt.Errorf("failed to write checksum to file: %v", err)
+	}
+	return nil
+}
+
+func readChecksum(checksumFilePath string) (string, error) {
+	data, err := os.ReadFile(checksumFilePath)
+	if err != nil {
+		return "", fmt.Errorf("failed to read checksum file: %v", err)
+	}
+	return string(data), nil
+}
+
+func verifyChecksum(filePath, checksumFilePath string) bool {
+	computedChecksum, err := computeSHA256(filePath)
+	if err != nil {
+		return false
+	}
+	expectedChecksum, err := readChecksum(checksumFilePath)
+	if err != nil {
+		return false
+	}
+	return computedChecksum == expectedChecksum
 }
