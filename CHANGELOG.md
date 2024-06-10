@@ -1,3 +1,7 @@
+## 8.25.1 (June 10th 2024)
+### Implementation changes and bug fixes
+- [PR #1797](https://github.com/rqlite/rqlite/pull/1797): Upgrade Hashicorp Raft to v1.7.0.
+
 ## 8.25.0 (June 8th 2024)
 ### New features
 - [PR #1796](https://github.com/rqlite/rqlite/pull/1796): Add new read-consistency level "auto".
