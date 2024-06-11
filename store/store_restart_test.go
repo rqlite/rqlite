@@ -127,8 +127,8 @@ func Test_OpenStoreCloseStartupSingleNode(t *testing.T) {
 
 	// Should have been a snapshot, should have been a checksum file, so we should
 	// have skipped the restore on startup.
-	if s.numRestoreSkipStart.Load() != 1 {
-		t.Fatalf("expected 1 restore skips, got %d", s.numRestoreSkipStart.Load())
+	if exp, got := uint64(3), s.numRestoreSkipStart.Load(); exp != got {
+		t.Fatalf("expected %d restore skips, got %d", exp, got)
 	}
 
 	// Set snapshot threshold high to effectively disable, reopen store, write
@@ -156,8 +156,8 @@ func Test_OpenStoreCloseStartupSingleNode(t *testing.T) {
 
 	// Should have been a snapshot, should have been a checksum file, so we should
 	// have skipped the restore on startup.
-	if s.numRestoreSkipStart.Load() != 2 {
-		t.Fatalf("expected 1 restore skips, got %d", s.numRestoreSkipStart.Load())
+	if exp, got := uint64(4), s.numRestoreSkipStart.Load(); exp != got {
+		t.Fatalf("expected %d restore skips, got %d", exp, got)
 	}
 
 	if err := s.Close(true); err != nil {
@@ -183,8 +183,8 @@ func Test_OpenStoreCloseStartupSingleNode(t *testing.T) {
 	// Should have been a snapshot, should have been a checksum file, but
 	// the SQLite file's checksum should not match, so we should have
 	// not skipped the restore on startup.
-	if s.numRestoreSkipStart.Load() != 2 {
-		t.Fatalf("expected 2 restore skips, got %d", s.numRestoreSkipStart.Load())
+	if exp, got := uint64(4), s.numRestoreSkipStart.Load(); exp != got {
+		t.Fatalf("expected %d restore skips, got %d", exp, got)
 	}
 
 	// Data should be OK.
@@ -198,7 +198,7 @@ func Test_OpenStoreCloseStartupSingleNode(t *testing.T) {
 
 func test_SnapshotStress(t *testing.T, s *Store) {
 	s.SnapshotInterval = 100 * time.Millisecond
-	s.SnapshotThreshold = 4
+	s.SnapshotThreshold = 13
 
 	if err := s.Open(); err != nil {
 		t.Fatalf("failed to open single-node store: %s", err.Error())
@@ -238,6 +238,11 @@ func test_SnapshotStress(t *testing.T, s *Store) {
 	defer s.Close(true)
 	if _, err := s.WaitForLeader(10 * time.Second); err != nil {
 		t.Fatalf("Error waiting for leader: %s", err)
+	}
+
+	// Now, the restore-on-startup should have been skipped.
+	if s.numRestoreSkipStart.Load() != 1 {
+		t.Fatalf("expected 1 restore skips, got %d", s.numRestoreSkipStart.Load())
 	}
 
 	qr := queryRequestFromString("SELECT COUNT(*) FROM foo", false, false)

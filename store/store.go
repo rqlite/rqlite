@@ -670,6 +670,13 @@ func (s *Store) Close(wait bool) (retErr error) {
 	close(s.snapshotWClose)
 	<-s.snapshotWDone
 
+	// Attempt to perform one final snapshot so that restarts can be fast. If the Snapshot
+	// succeeds the SQLite database file reflects what in the Snapshot store and we won't
+	// have to copy whats in the Snapshot store back into here on startup.
+	if err := s.Snapshot(0); err != nil {
+		s.logger.Printf("failed to perform final snapshot on close: %s", err)
+	}
+
 	f := s.raft.Shutdown()
 	if wait {
 		if f.Error() != nil {
