@@ -2517,11 +2517,11 @@ func readChecksum(checksumFilePath string) (string, error) {
 }
 
 func verifyChecksum(filePath, checksumFilePath string) bool {
-	computedChecksum, err := computeSHA256(filePath)
+	expectedChecksum, err := readChecksum(checksumFilePath)
 	if err != nil {
 		return false
 	}
-	expectedChecksum, err := readChecksum(checksumFilePath)
+	computedChecksum, err := computeSHA256(filePath)
 	if err != nil {
 		return false
 	}
