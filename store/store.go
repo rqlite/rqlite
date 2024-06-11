@@ -502,7 +502,7 @@ func (s *Store) Open() (retErr error) {
 			return fmt.Errorf("failed to read peers file: %s", err.Error())
 		}
 		// Recovering a node invalidates the assumption that the database file reflects
-		// the logical data in the latest snapshot. So, remove it.
+		// the logical data in the latest snapshot. So remove it.
 		if err := sql.RemoveFiles(s.dbPath); err != nil {
 			return fmt.Errorf("failed to remove existing database before recovering node: %s", err.Error())
 		}
