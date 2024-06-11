@@ -501,6 +501,11 @@ func (s *Store) Open() (retErr error) {
 		if err != nil {
 			return fmt.Errorf("failed to read peers file: %s", err.Error())
 		}
+		// Recovering a node invalidates the assumption that the database file reflects
+		// the logical data in the latest snapshot. So, remove it.
+		if err := sql.RemoveFiles(s.dbPath); err != nil {
+			return fmt.Errorf("failed to remove existing database before recovering node: %s", err.Error())
+		}
 		if err = RecoverNode(s.raftDir, s.logger, s.raftLog, s.boltStore, s.snapshotStore, s.raftTn, config); err != nil {
 			return fmt.Errorf("failed to recover node: %s", err.Error())
 		}
