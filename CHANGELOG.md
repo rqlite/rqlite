@@ -1,3 +1,7 @@
+## 8.25.2 (unreleased)
+### Implementation changes and bug fixes
+- [PR #1800](https://github.com/rqlite/rqlite/pull/1800): Close network resources before closing the Store.
+
 ## 8.25.1 (June 10th 2024)
 ### Implementation changes and bug fixes
 - [PR #1797](https://github.com/rqlite/rqlite/pull/1797): Upgrade Hashicorp Raft to v1.7.0.
