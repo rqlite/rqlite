@@ -272,8 +272,10 @@ class TestEndToEndSnapshotRestoreSingle(unittest.TestCase):
     j = self.n0.query('SELECT count(*) FROM foo', level='none')
     self.assertEqual(j, d_("{'results': [{'values': [[200]], 'types': ['integer'], 'columns': ['count(*)']}]}"))
 
-    # Restart node, and make sure it comes back with the correct state
-    self.n0.stop()
+    # Restart node, and make sure it comes back with the correct state. The copy from the Snapshot store will
+    # be skipped since the shutdown is graceful and the SQLite database left over is logically what would
+    # be restored from the snapshot.
+    self.n0.stop(graceful=True)
     self.n0.start()
     self.n0.wait_for_leader()
     self.n0.wait_for_all_applied()
