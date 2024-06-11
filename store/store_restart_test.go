@@ -1,7 +1,9 @@
 package store
 
 import (
+	"crypto/rand"
 	"fmt"
+	"os"
 	"path/filepath"
 	"testing"
 	"time"
@@ -30,6 +32,12 @@ func Test_OpenStoreCloseStartupSingleNode(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to execute on single node: %s", err.Error())
 	}
+
+	// No snapshots, so no checksum file, so no skips.
+	if s.numRestoreSkipStart.Load() != 0 {
+		t.Fatalf("expected no restore skips, got %d", s.numRestoreSkipStart.Load())
+	}
+
 	if err := s.Close(true); err != nil {
 		t.Fatalf("failed to close single-node store: %s", err.Error())
 	}
@@ -117,6 +125,12 @@ func Test_OpenStoreCloseStartupSingleNode(t *testing.T) {
 		t.Fatalf("failed to close single-node store: %s", err.Error())
 	}
 
+	// Should have been a snapshot, should have been a checksum file, so we should
+	// have skipped the restore on startup.
+	if s.numRestoreSkipStart.Load() != 1 {
+		t.Fatalf("expected 1 restore skips, got %d", s.numRestoreSkipStart.Load())
+	}
+
 	// Set snapshot threshold high to effectively disable, reopen store, write
 	// one more record, and then reopen again, ensure all data is there.
 	s.SnapshotThreshold = 8192
@@ -140,9 +154,24 @@ func Test_OpenStoreCloseStartupSingleNode(t *testing.T) {
 		return err == nil && asJSON(r) == `[{"columns":["COUNT(*)"],"types":["integer"],"values":[[11]]}]`
 	}, 100*time.Millisecond, 5*time.Second)
 
+	// Should have been a snapshot, should have been a checksum file, so we should
+	// have skipped the restore on startup.
+	if s.numRestoreSkipStart.Load() != 2 {
+		t.Fatalf("expected 1 restore skips, got %d", s.numRestoreSkipStart.Load())
+	}
+
 	if err := s.Close(true); err != nil {
 		t.Fatalf("failed to close single-node store: %s", err.Error())
 	}
+
+	// Now, corrupt the underlying database file, and ensure the SQLite file is restored
+	// from the snapshot.
+
+	// Open the file as s.dbPath and write 16 random bytes to it.
+	if err := corruptFile(s.dbPath, 16); err != nil {
+		t.Fatalf("failed to corrupt file: %s", err.Error())
+	}
+
 	if err := s.Open(); err != nil {
 		t.Fatalf("failed to open single-node store: %s", err.Error())
 	}
@@ -150,6 +179,21 @@ func Test_OpenStoreCloseStartupSingleNode(t *testing.T) {
 	if _, err := s.WaitForLeader(10 * time.Second); err != nil {
 		t.Fatalf("Error waiting for leader: %s", err)
 	}
+
+	// Should have been a snapshot, should have been a checksum file, but
+	// the SQLite file's checksum should not match, so we should have
+	// not skipped the restore on startup.
+	if s.numRestoreSkipStart.Load() != 2 {
+		t.Fatalf("expected 2 restore skips, got %d", s.numRestoreSkipStart.Load())
+	}
+
+	// Data should be OK.
+	testPoll(t, func() bool {
+		qr := queryRequestFromString("SELECT COUNT(*) FROM foo", false, false)
+		qr.Level = command.QueryRequest_QUERY_REQUEST_LEVEL_NONE
+		r, err := s.Query(qr)
+		return err == nil && asJSON(r) == `[{"columns":["COUNT(*)"],"types":["integer"],"values":[[11]]}]`
+	}, 100*time.Millisecond, 5*time.Second)
 }
 
 func test_SnapshotStress(t *testing.T, s *Store) {
@@ -299,4 +343,26 @@ func Test_OpenStoreCloseUserSnapshot(t *testing.T) {
 	if exp, got := `[{"columns":["id","name"],"types":["integer","text"],"values":[[1,"fiona"]]}]`, asJSON(r); exp != got {
 		t.Fatalf("unexpected results for query\nexp: %s\ngot: %s", exp, got)
 	}
+}
+
+// corruptFile takes a file and writes n random bytes to the first n bytes
+func corruptFile(path string, n int) error {
+	file, err := os.OpenFile(path, os.O_RDWR|os.O_CREATE, 0666)
+	if err != nil {
+		return fmt.Errorf("failed to open file: %w", err)
+	}
+	defer file.Close()
+
+	randomBytes := make([]byte, n)
+	_, err = rand.Read(randomBytes)
+	if err != nil {
+		return fmt.Errorf("failed to generate random bytes: %w", err)
+	}
+
+	// Write the random bytes to the beginning of the file
+	_, err = file.WriteAt(randomBytes, 0)
+	if err != nil {
+		return fmt.Errorf("failed to write to file: %w", err)
+	}
+	return nil
 }

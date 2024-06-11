@@ -334,10 +334,11 @@ type Store struct {
 	numTrailingLogs uint64
 
 	// For whitebox testing
-	numAutoVacuums  int
-	numIgnoredJoins int
-	numNoops        *atomic.Uint64
-	numSnapshots    *atomic.Uint64
+	numAutoVacuums      int
+	numIgnoredJoins     int
+	numNoops            *atomic.Uint64
+	numSnapshots        *atomic.Uint64
+	numRestoreSkipStart *atomic.Uint64
 }
 
 // Config represents the configuration of the underlying Store.
@@ -362,31 +363,32 @@ func New(ly Layer, c *Config) *Store {
 	}
 
 	return &Store{
-		open:            rsync.NewAtomicBool(),
-		ly:              ly,
-		raftDir:         c.Dir,
-		snapshotDir:     filepath.Join(c.Dir, snapshotsDirName),
-		peersPath:       filepath.Join(c.Dir, peersPath),
-		peersInfoPath:   filepath.Join(c.Dir, peersInfoPath),
-		restoreDoneCh:   make(chan struct{}),
-		raftID:          c.ID,
-		dbConf:          c.DBConf,
-		dbPath:          dbPath,
-		dbSumPath:       dbPath + ".sha256",
-		walPath:         sql.WALPath(dbPath),
-		dbDir:           filepath.Dir(dbPath),
-		leaderObservers: make([]chan<- struct{}, 0),
-		reqMarshaller:   command.NewRequestMarshaler(),
-		logger:          logger,
-		notifyingNodes:  make(map[string]*Server),
-		ApplyTimeout:    applyTimeout,
-		snapshotCAS:     rsync.NewCheckAndSet(),
-		fsmIdx:          &atomic.Uint64{},
-		fsmUpdateTime:   rsync.NewAtomicTime(),
-		appendedAtTime:  rsync.NewAtomicTime(),
-		dbAppliedIdx:    &atomic.Uint64{},
-		numNoops:        &atomic.Uint64{},
-		numSnapshots:    &atomic.Uint64{},
+		open:                rsync.NewAtomicBool(),
+		ly:                  ly,
+		raftDir:             c.Dir,
+		snapshotDir:         filepath.Join(c.Dir, snapshotsDirName),
+		peersPath:           filepath.Join(c.Dir, peersPath),
+		peersInfoPath:       filepath.Join(c.Dir, peersInfoPath),
+		restoreDoneCh:       make(chan struct{}),
+		raftID:              c.ID,
+		dbConf:              c.DBConf,
+		dbPath:              dbPath,
+		dbSumPath:           dbPath + ".sha256",
+		walPath:             sql.WALPath(dbPath),
+		dbDir:               filepath.Dir(dbPath),
+		leaderObservers:     make([]chan<- struct{}, 0),
+		reqMarshaller:       command.NewRequestMarshaler(),
+		logger:              logger,
+		notifyingNodes:      make(map[string]*Server),
+		ApplyTimeout:        applyTimeout,
+		snapshotCAS:         rsync.NewCheckAndSet(),
+		fsmIdx:              &atomic.Uint64{},
+		fsmUpdateTime:       rsync.NewAtomicTime(),
+		appendedAtTime:      rsync.NewAtomicTime(),
+		dbAppliedIdx:        &atomic.Uint64{},
+		numNoops:            &atomic.Uint64{},
+		numSnapshots:        &atomic.Uint64{},
+		numRestoreSkipStart: &atomic.Uint64{},
 	}
 }
 
@@ -516,6 +518,7 @@ func (s *Store) Open() (retErr error) {
 	}
 	if dbReused {
 		stats.Add(numRestoresSkippedOnStart, 1)
+		s.numRestoreSkipStart.Add(1)
 		s.logger.Printf("reusing existing database at %s, skipping copy from Snapshot store", s.dbPath)
 	}
 	config.NoSnapshotRestoreOnStart = dbReused
