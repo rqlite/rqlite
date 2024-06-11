@@ -1,6 +1,7 @@
 ## 8.25.2 (unreleased)
 ### Implementation changes and bug fixes
 - [PR #1799](https://github.com/rqlite/rqlite/pull/1799): Re-use SQLite database instead of restoring from Snapshot
+- [PR #1800](https://github.com/rqlite/rqlite/pull/1800): Close network resources before closing the Store.
 
 ## 8.25.1 (June 10th 2024)
 ### Implementation changes and bug fixes

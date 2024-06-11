@@ -204,9 +204,10 @@ func main() {
 	// Block until done.
 	<-mainCtx.Done()
 
-	// Stop the HTTP server first, so clients get notification as soon as
+	// Stop the HTTP server and other network access first so clients get notification as soon as
 	// possible that the node is going away.
 	httpServ.Close()
+	clstrServ.Close()
 
 	if cfg.RaftClusterRemoveOnShutdown {
 		remover := cluster.NewRemover(clstrClient, 5*time.Second, str)
@@ -226,12 +227,11 @@ func main() {
 		// Perform a stepdown, ignore any errors.
 		str.Stepdown(true)
 	}
+	muxLn.Close()
 
 	if err := str.Close(true); err != nil {
 		log.Printf("failed to close store: %s", err.Error())
 	}
-	clstrServ.Close()
-	muxLn.Close()
 	stopProfile()
 	log.Println("rqlite server stopped")
 }
