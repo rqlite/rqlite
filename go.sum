@@ -192,6 +192,8 @@ github.com/prometheus/procfs v0.0.2/go.mod h1:TjEm7ze935MbeOT/UhFTIMYKhuLP4wbCsT
 github.com/prometheus/procfs v0.0.8/go.mod h1:7Qr8sr6344vo1JqZ6HhLceV9o3AJ1Ff+GxbHq6oeK9A=
 github.com/rqlite/go-sqlite3 v1.32.1 h1:e8RuJGqvLgIdxuT4Ui0hnbLAz/N68W+l9nJhdewRGTY=
 github.com/rqlite/go-sqlite3 v1.32.1/go.mod h1:R9H7CatgYBt3c+fSV/5yo2vLh4ZjCB0aMHdkv69fP4A=
+github.com/rqlite/go-sqlite3 v1.33.0 h1:uUEl5jzZ4aIz5lamPbtXX29KkRx/p5T/lCPZRUH1PjU=
+github.com/rqlite/go-sqlite3 v1.33.0/go.mod h1:R9H7CatgYBt3c+fSV/5yo2vLh4ZjCB0aMHdkv69fP4A=
 github.com/rqlite/raft-boltdb/v2 v2.0.0-20230523104317-c08e70f4de48 h1:NZ62M+kT0JqhyFUMc8I4SMmfmD4NGJxhb2ePJQXjryc=
 github.com/rqlite/raft-boltdb/v2 v2.0.0-20230523104317-c08e70f4de48/go.mod h1:CRnsxgy5G8fAf5J+AM0yrsSdxXHKkIYOaq2sm+Q4DYc=
 github.com/rqlite/rqlite-disco-clients v0.0.0-20231230135307-118e35426347 h1:01eOG4AXjYsrsLRITgBFHaDPXys1NfeY2idx25ZJFF8=

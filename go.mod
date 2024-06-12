@@ -9,7 +9,7 @@ require (
 	github.com/hashicorp/raft v1.7.0
 	github.com/mkideal/cli v0.2.7
 	github.com/mkideal/pkg v0.1.3
-	github.com/rqlite/go-sqlite3 v1.32.1
+	github.com/rqlite/go-sqlite3 v1.33.0
 	github.com/rqlite/raft-boltdb/v2 v2.0.0-20230523104317-c08e70f4de48
 	github.com/rqlite/rqlite-disco-clients v0.0.0-20231230135307-118e35426347
 	github.com/rqlite/sql v0.0.0-20240312185922-ffac88a740bd
