@@ -30,35 +30,6 @@ func Test_OpenNonExistentDatabase(t *testing.T) {
 	}
 }
 
-func Test_WALRemovedOnClose(t *testing.T) {
-	path := mustTempPath()
-	defer os.Remove(path)
-	db, err := Open(path, false, true)
-	if err != nil {
-		t.Fatalf("error opening nonexistent database")
-	}
-	defer db.Close()
-	if !db.WALEnabled() {
-		t.Fatalf("WAL mode not enabled")
-	}
-
-	_, err = db.ExecuteStringStmt("CREATE TABLE foo (id INTEGER NOT NULL PRIMARY KEY, name TEXT)")
-	if err != nil {
-		t.Fatalf("failed to create table: %s", err.Error())
-	}
-	walPath := db.WALPath()
-	if !fileExists(walPath) {
-		t.Fatalf("WAL file does not exist after creating a table")
-	}
-	if err := db.Close(); err != nil {
-		t.Fatalf("error closing database: %s", err.Error())
-	}
-
-	if fileExists(db.WALPath()) {
-		t.Fatalf("WAL file not removed after closing the database")
-	}
-}
-
 func Test_RemoveFiles(t *testing.T) {
 	d := t.TempDir()
 	mustCreateClosedFile(fmt.Sprintf("%s/foo", d))
@@ -710,7 +681,7 @@ func Test_CheckIntegrityOnDisk(t *testing.T) {
 	defer os.Remove(path)
 
 	dsn := fmt.Sprintf("file:%s", path)
-	db, err := sql.Open("sqlite3", dsn)
+	db, err := sql.Open("rqlite3", dsn)
 	if err != nil {
 		t.Fatalf("failed to create SQLite database: %s", err.Error())
 	}
@@ -866,41 +837,6 @@ func Test_DELETEDatabaseCreatedOKFromWAL(t *testing.T) {
 	}
 	if exp, got := `[{"columns":["id","name"],"types":["integer","text"],"values":[[1,"fiona"]]}]`, asJSON(rows); exp != got {
 		t.Fatalf("unexpected results for query, expected %s, got %s", exp, got)
-	}
-}
-
-func Test_WALDisableCheckpointing(t *testing.T) {
-	path := mustTempFile()
-	defer os.Remove(path)
-
-	db, err := Open(path, false, true)
-	if err != nil {
-		t.Fatalf("failed to open database in WAL mode: %s", err.Error())
-	}
-	defer db.Close()
-	if !db.WALEnabled() {
-		t.Fatalf("WAL mode not enabled")
-	}
-
-	// Test that databases open with checkpoint disabled by default.
-	// This is critical.
-	n, err := db.GetCheckpointing()
-	if err != nil {
-		t.Fatalf("failed to get checkpoint value: %s", err.Error())
-	}
-	if exp, got := 0, n; exp != got {
-		t.Fatalf("unexpected checkpoint value, expected %d, got %d", exp, got)
-	}
-
-	if err := db.EnableCheckpointing(); err != nil {
-		t.Fatalf("failed to disable checkpointing: %s", err.Error())
-	}
-	n, err = db.GetCheckpointing()
-	if err != nil {
-		t.Fatalf("failed to get checkpoint value: %s", err.Error())
-	}
-	if exp, got := 1000, n; exp != got {
-		t.Fatalf("unexpected checkpoint value, expected %d, got %d", exp, got)
 	}
 }
 

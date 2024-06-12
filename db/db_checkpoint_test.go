@@ -10,6 +10,70 @@ import (
 	"github.com/rqlite/rqlite/v8/db/wal"
 )
 
+func Test_WALDisableCheckpointing(t *testing.T) {
+	path := mustTempFile()
+	defer os.Remove(path)
+
+	db, err := Open(path, false, true)
+	if err != nil {
+		t.Fatalf("failed to open database in WAL mode: %s", err.Error())
+	}
+	defer db.Close()
+	if !db.WALEnabled() {
+		t.Fatalf("WAL mode not enabled")
+	}
+
+	// Test that databases open with checkpointing disabled by default.
+	// This is critical.
+	n, err := db.GetCheckpointing()
+	if err != nil {
+		t.Fatalf("failed to get checkpoint value: %s", err.Error())
+	}
+	if exp, got := 0, n; exp != got {
+		t.Fatalf("unexpected checkpoint value, expected %d, got %d", exp, got)
+	}
+
+	if err := db.EnableCheckpointing(); err != nil {
+		t.Fatalf("failed to disable checkpointing: %s", err.Error())
+	}
+	n, err = db.GetCheckpointing()
+	if err != nil {
+		t.Fatalf("failed to get checkpoint value: %s", err.Error())
+	}
+	if exp, got := 1000, n; exp != got {
+		t.Fatalf("unexpected checkpoint value, expected %d, got %d", exp, got)
+	}
+}
+
+// Test_NoCheckpointGracefulClose tests that a checkpoint does not automatically
+// happen when a database is closed.
+func Test_NoCheckpointGracefulClose(t *testing.T) {
+	path := mustTempFile()
+	defer os.Remove(path)
+
+	db, err := Open(path, false, true)
+	if err != nil {
+		t.Fatalf("failed to open database in WAL mode: %s", err.Error())
+	}
+	defer db.Close()
+
+	_, err = db.ExecuteStringStmt(`CREATE TABLE foo (id INTEGER NOT NULL PRIMARY KEY, name TEXT)`)
+	if err != nil {
+		t.Fatalf("failed to execute on single node: %s", err.Error())
+	}
+	if !fileExists(db.WALPath()) {
+		t.Fatalf("WAL file does not exists after first write")
+	}
+
+	// Now close the database, and confirm that the WAL file is deleted.
+	if err := db.Close(); err != nil {
+		t.Fatalf("failed to close database: %s", err.Error())
+	}
+	if !fileExists(db.WALPath()) {
+		t.Fatalf("WAL file does not exist after database close")
+	}
+}
+
 // Test_WALDatabaseCheckpointOKNoWAL tests that a checkpoint succeeds
 // even when no WAL file exists.
 func Test_WALDatabaseCheckpointOKNoWAL(t *testing.T) {
