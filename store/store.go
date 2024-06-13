@@ -93,6 +93,7 @@ const (
 	backupScatchPattern        = "rqlite-backup-*"
 	vacuumScatchPattern        = "rqlite-vacuum-*"
 	raftDBPath                 = "raft.db" // Changing this will break backwards compatibility.
+	srcDBSumName               = "srcdb.sum"
 	peersPath                  = "raft/peers.json"
 	peersInfoPath              = "raft/peers.info"
 	retainSnapshotCount        = 1
@@ -229,6 +230,10 @@ type SnapshotStore interface {
 	Stats() (map[string]interface{}, error)
 }
 
+type KeySink interface {
+	WriteKey(key string, value []byte) error
+}
+
 // ClusterState defines the possible Raft states the current node can be in
 type ClusterState int
 
@@ -252,16 +257,15 @@ type Store struct {
 	restorePath   string
 	restoreDoneCh chan struct{}
 
-	raft      *raft.Raft // The consensus mechanism.
-	ly        Layer
-	raftTn    *NodeTransport
-	raftID    string           // Node ID.
-	dbConf    *DBConfig        // SQLite database config.
-	dbPath    string           // Path to underlying SQLite file.
-	dbSumPath string           // Path to file containing the SHA-256 sum of the SQLite file.
-	walPath   string           // Path to WAL file.
-	dbDir     string           // Path to directory containing SQLite file.
-	db        *sql.SwappableDB // The underlying SQLite store.
+	raft    *raft.Raft // The consensus mechanism.
+	ly      Layer
+	raftTn  *NodeTransport
+	raftID  string           // Node ID.
+	dbConf  *DBConfig        // SQLite database config.
+	dbPath  string           // Path to underlying SQLite file.
+	walPath string           // Path to WAL file.
+	dbDir   string           // Path to directory containing SQLite file.
+	db      *sql.SwappableDB // The underlying SQLite store.
 
 	dechunkManager *chunking.DechunkerManager
 	cmdProc        *CommandProcessor
@@ -373,7 +377,6 @@ func New(ly Layer, c *Config) *Store {
 		raftID:              c.ID,
 		dbConf:              c.DBConf,
 		dbPath:              dbPath,
-		dbSumPath:           dbPath + ".sha256",
 		walPath:             sql.WALPath(dbPath),
 		dbDir:               filepath.Dir(dbPath),
 		leaderObservers:     make([]chan<- struct{}, 0),
@@ -2020,12 +2023,19 @@ func (s *Store) fsmSnapshot() (fSnap raft.FSMSnapshot, retErr error) {
 	stats.Get(snapshotCreateDuration).(*expvar.Int).Set(dur.Milliseconds())
 	fs := FSMSnapshot{
 		FSMSnapshot: fsmSnapshot,
-		persistFinalizer: func() error {
+		persistFinalizer: func(sink raft.SnapshotSink) error {
 			sum, err := computeSHA256(s.dbPath)
 			if err != nil {
 				return err
 			}
-			return writeChecksumToFile(s.dbSumPath, sum)
+			keySink, ok := sink.(KeySink)
+			if !ok {
+				return fmt.Errorf("snapshot sink is not a KeySink")
+			}
+			fmt.Println(">>>>> we got a key sink!", s.raftDir, s.ID())
+			err = keySink.WriteKey(srcDBSumName, []byte(sum))
+			time.Sleep(60 * time.Second)
+			return err
 		},
 	}
 	if fullNeeded || s.logIncremental() {
@@ -2069,15 +2079,9 @@ func (s *Store) fsmRestore(rc io.ReadCloser) (retErr error) {
 	}
 	s.logger.Printf("successfully opened database at %s due to restore", s.db.Path())
 
-	// Calculate the updated checksum so we can avoid a copy from the Snapshot store
-	// on a restart.
-	sum, err := computeSHA256(s.dbPath)
-	if err != nil {
-		return err
-	}
-	if err := writeChecksumToFile(s.dbSumPath, sum); err != nil {
-		return err
-	}
+	// XXXX nneed to rewrite the checksum! If I don't a restart immediately
+	// after a restore will cause another restore. Need the Snapshot ID from where this
+	// snapshot came.
 
 	// Take conservative approach and assume that everything has changed, so update
 	// the indexes. It is possible that dbAppliedIdx is now ahead of some other nodes'
@@ -2498,19 +2502,6 @@ func computeSHA256(filePath string) (string, error) {
 	}
 	checksum := hex.EncodeToString(hash.Sum(nil))
 	return checksum, nil
-}
-
-func writeChecksumToFile(filePath, checksum string) error {
-	file, err := os.Create(filePath)
-	if err != nil {
-		return fmt.Errorf("failed to create checksum file: %v", err)
-	}
-	defer file.Close()
-	_, err = file.WriteString(checksum)
-	if err != nil {
-		return fmt.Errorf("failed to write checksum to file: %v", err)
-	}
-	return nil
 }
 
 func readChecksum(checksumFilePath string) (string, error) {

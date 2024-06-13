@@ -38,7 +38,7 @@ func (f *FSM) Restore(rc io.ReadCloser) error {
 // logging.
 type FSMSnapshot struct {
 	raft.FSMSnapshot
-	persistFinalizer func() error
+	persistFinalizer func(sink raft.SnapshotSink) error
 	logger           *log.Logger
 }
 
@@ -58,7 +58,7 @@ func (f *FSMSnapshot) Persist(sink raft.SnapshotSink) (retError error) {
 		return err
 	}
 	if f.persistFinalizer != nil {
-		return f.persistFinalizer()
+		return f.persistFinalizer(sink)
 	}
 	return nil
 }

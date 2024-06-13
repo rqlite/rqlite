@@ -126,6 +126,43 @@ func Test_StoreCreateCancel(t *testing.T) {
 	}
 }
 
+// func Test_Store_SetGetKey(t *testing.T) {
+// 	dir := t.TempDir()
+// 	store, err := NewStore(dir)
+// 	if err != nil {
+// 		t.Fatalf("Failed to create new store: %v", err)
+// 	}
+
+// 	// Setting and getting a key in a non-existent snapshot should fail
+// 	if err := store.SetKey("non-exist", "foo", "bar"); err == nil {
+// 		t.Fatalf("Expected error setting key in non-existent snapshot, got nil")
+// 	}
+// 	if _, err := store.GetKey("non-exist", "foo"); err == nil {
+// 		t.Fatalf("Expected error getting key in non-existent snapshot, got nil")
+// 	}
+
+// 	// Now, create a snapshot which we can set and get keys in
+// 	sink, err := store.Create(1, 2, 3, makeTestConfiguration("1", "localhost:1"), 1, nil)
+// 	if err != nil {
+// 		t.Fatalf("Failed to create sink: %v", err)
+// 	}
+// 	if sink.ID() == "" {
+// 		t.Errorf("Expected sink ID to not be empty, got empty string")
+// 	}
+// 	id := sink.ID()
+
+// 	if err := store.SetKey(id, "foo", "bar"); err != nil {
+// 		t.Fatalf("Error setting key in snapshot: %v", err)
+// 	}
+// 	v, err := store.GetKey(id, "foo")
+// 	if err != nil {
+// 		t.Fatalf("Error getting key in snapshot: %v", err)
+// 	}
+// 	if v != "bar" {
+// 		t.Errorf("Expected value to be bar, got %s", v)
+// 	}
+// }
+
 func Test_StoreCreate_CAS(t *testing.T) {
 	dir := t.TempDir()
 	store, err := NewStore(dir)
