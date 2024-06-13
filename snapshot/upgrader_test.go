@@ -12,13 +12,13 @@ import (
 
 func Test_Upgrade_NothingToDo(t *testing.T) {
 	logger := log.New(os.Stderr, "[snapshot-store-upgrader] ", 0)
-	if err := Upgrade("/does/not/exist", "/does/not/exist/either", logger); err != nil {
+	if err := Upgrade7To8("/does/not/exist", "/does/not/exist/either", logger); err != nil {
 		t.Fatalf("failed to upgrade nonexistent directories: %s", err)
 	}
 
 	oldEmpty := t.TempDir()
 	newEmpty := t.TempDir()
-	if err := Upgrade(oldEmpty, newEmpty, logger); err != nil {
+	if err := Upgrade7To8(oldEmpty, newEmpty, logger); err != nil {
 		t.Fatalf("failed to upgrade empty directories: %s", err)
 	}
 }
@@ -34,7 +34,7 @@ func Test_Upgrade_OK(t *testing.T) {
 	copyDir(v7Snapshot, oldTemp)
 
 	// Upgrade it.
-	if err := Upgrade(oldTemp, newTemp, logger); err != nil {
+	if err := Upgrade7To8(oldTemp, newTemp, logger); err != nil {
 		t.Fatalf("failed to upgrade empty directories: %s", err)
 	}
 

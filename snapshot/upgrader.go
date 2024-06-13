@@ -19,9 +19,9 @@ const (
 )
 
 // Upgrade writes a copy of the 7.x-format Snapshot directory at 'old' to a
-// new Snapshot directory at 'new'. If the upgrade is successful, the
-// 'old' directory is removed before the function returns.
-func Upgrade(old, new string, logger *log.Logger) (retErr error) {
+// 8.x-format new Snapshot directory at 'new'. If the upgrade is successful,
+// the 'old' directory is removed before the function returns.
+func Upgrade7To8(old, new string, logger *log.Logger) (retErr error) {
 	defer func() {
 		if retErr != nil {
 			stats.Add(upgradeFail, 1)

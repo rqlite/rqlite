@@ -458,7 +458,7 @@ func (s *Store) Open() (retErr error) {
 
 	// Upgrade any preexisting snapshots.
 	oldSnapshotDir := filepath.Join(s.raftDir, "snapshots")
-	if err := snapshot.Upgrade(oldSnapshotDir, s.snapshotDir, s.logger); err != nil {
+	if err := snapshot.Upgrade7To8(oldSnapshotDir, s.snapshotDir, s.logger); err != nil {
 		return fmt.Errorf("failed to upgrade snapshots: %s", err)
 	}
 
