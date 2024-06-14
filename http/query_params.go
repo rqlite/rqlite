@@ -40,7 +40,7 @@ func NewQueryParams(r *http.Request) (QueryParams, error) {
 			}
 		}
 	}
-	for _, k := range []string{"retries"} {
+	for _, k := range []string{"retries", "trailing_logs"} {
 		r, ok := qp[k]
 		if ok {
 			_, err := strconv.Atoi(r)
@@ -211,6 +211,17 @@ func (qp QueryParams) Timeout(def time.Duration) time.Duration {
 // Retries returns the requested number of retries.
 func (qp QueryParams) Retries(def int) int {
 	i, ok := qp["retries"]
+	if !ok {
+		return def
+	}
+	r, _ := strconv.Atoi(i)
+	return r
+}
+
+// TrailingLogs returns the requested number of trailing logs
+// post Snapshot.
+func (qp QueryParams) TrailingLogs(def int) int {
+	i, ok := qp["trailing_logs"]
 	if !ok {
 		return def
 	}

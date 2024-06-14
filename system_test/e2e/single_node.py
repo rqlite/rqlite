@@ -169,7 +169,7 @@ class TestSingleNode(unittest.TestCase):
     self.assertEqual(j, d_("{'results': [{'types': {'age': 'integer', 'id': 'integer', 'name': 'text'}, 'rows': [{'age': 20, 'id': 1, 'name': 'fiona'}, {'age': 25, 'id': 2, 'name': 'sinead'}]}]}"))
 
   def test_snapshot(self):
-    ''' Test that a node performs at least 1 snapshot'''
+    ''' Test that a node performs at least 1 snapshot automatically'''
     n = self.cluster.wait_for_leader()
     j = n.execute('CREATE TABLE foo (id INTEGER NOT NULL PRIMARY KEY, name TEXT)')
     self.assertEqual(j, d_("{'results': [{}]}"))
@@ -189,6 +189,18 @@ class TestSingleNode(unittest.TestCase):
         raise Exception('timeout', nSnaps)
       time.sleep(1)
       t+=1
+
+class TestSingleNode_SnapshotRequest(unittest.TestCase):
+  def test_snapshot_request(self):
+    ''' Test that a node performs a snapshot when requested'''
+    n = Node(RQLITED_PATH, '0')
+    n.start()
+    n.wait_for_leader()
+    j = n.execute('CREATE TABLE bar (id INTEGER NOT NULL PRIMARY KEY, name TEXT)')
+    self.assertEqual(j, d_("{'results': [{}]}"))
+
+    n.snapshot()
+    self.assertEqual(n.expvar()['http']['user_snapshots'], 1)
 
 class TestSingleNodeLoadRestart(unittest.TestCase):
   ''' Test that a node can load a SQLite data set in binary format'''

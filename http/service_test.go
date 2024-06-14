@@ -10,6 +10,7 @@ import (
 	"net/url"
 	"os"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -288,6 +289,7 @@ func Test_405Routes(t *testing.T) {
 		{method: "GET", path: "/db/load"},
 		{method: "GET", path: "/remove"},
 		{method: "POST", path: "/remove"},
+		{method: "GET", path: "/snapshot"},
 		{method: "POST", path: "/db/backup"},
 		{method: "POST", path: "/status"},
 		{method: "POST", path: "/nodes"},
@@ -451,6 +453,7 @@ func Test_401Routes_BasicAuthBadPerm(t *testing.T) {
 		"/db/request",
 		"/db/load",
 		"/boot",
+		"/snapshot",
 		"/status",
 		"/nodes",
 		"/readyz",
@@ -531,6 +534,39 @@ func Test_BackupVacuumOK(t *testing.T) {
 	}
 	if resp.StatusCode != http.StatusOK {
 		t.Fatalf("failed to get expected StatusOK for backup, got %d", resp.StatusCode)
+	}
+}
+
+func Test_SnapshotOK(t *testing.T) {
+	m := &MockStore{}
+	c := &mockClusterService{}
+	s := New("127.0.0.1:0", m, c, nil)
+	if err := s.Start(); err != nil {
+		t.Fatalf("failed to start service")
+	}
+	defer s.Close()
+
+	// Set the snapshot function to return OK
+	var wg sync.WaitGroup
+	wg.Add(1)
+	m.snapshotFn = func(n uint64) error {
+		defer wg.Done()
+		if exp, got := uint64(100), n; exp != got {
+			t.Fatalf("expected trailing logs to be %d, got %d", exp, got)
+		}
+		return nil
+	}
+
+	client := &http.Client{}
+	host := fmt.Sprintf("http://%s", s.Addr().String())
+	resp, err := client.Post(host+"/snapshot?trailing_logs=100", "", nil)
+	if err != nil {
+		t.Fatalf("failed to make Snapshot request")
+	}
+
+	wg.Wait()
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("failed to get expected StatusOK for Snapshot, got %d", resp.StatusCode)
 	}
 }
 
@@ -1432,6 +1468,7 @@ type MockStore struct {
 	requestFn   func(eqr *command.ExecuteQueryRequest) ([]*command.ExecuteQueryResponse, error)
 	backupFn    func(br *command.BackupRequest, dst io.Writer) error
 	loadFn      func(lr *command.LoadRequest) error
+	snapshotFn  func(n uint64) error
 	readFromFn  func(r io.Reader) (int64, error)
 	committedFn func(timeout time.Duration) (uint64, error)
 	leaderAddr  string
@@ -1504,6 +1541,13 @@ func (m *MockStore) Backup(br *command.BackupRequest, w io.Writer) error {
 func (m *MockStore) Load(lr *command.LoadRequest) error {
 	if m.loadFn != nil {
 		return m.loadFn(lr)
+	}
+	return nil
+}
+
+func (m *MockStore) Snapshot(n uint64) error {
+	if m.snapshotFn != nil {
+		return m.snapshotFn(n)
 	}
 	return nil
 }

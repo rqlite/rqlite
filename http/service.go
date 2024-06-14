@@ -90,6 +90,9 @@ type Store interface {
 	// Backup writes backup of the node state to dst
 	Backup(br *command.BackupRequest, dst io.Writer) error
 
+	// Snapshot triggers a Raft Snapshot and Log Truncation.
+	Snapshot(n uint64) error
+
 	// ReadFrom reads and loads a SQLite database into the node, initially bypassing
 	// the Raft system. It then triggers a Raft snapshot, which will then make
 	// Raft aware of the new data.
@@ -230,6 +233,7 @@ const (
 	numLoad                           = "loads"
 	numLoadAborted                    = "loads_aborted"
 	numBoot                           = "boot"
+	numSnapshots                      = "user_snapshots"
 	numAuthOK                         = "authOK"
 	numAuthFail                       = "authFail"
 
@@ -297,6 +301,7 @@ func ResetStats() {
 	stats.Add(numLoad, 0)
 	stats.Add(numLoadAborted, 0)
 	stats.Add(numBoot, 0)
+	stats.Add(numSnapshots, 0)
 	stats.Add(numAuthOK, 0)
 	stats.Add(numAuthFail, 0)
 }
@@ -495,6 +500,9 @@ func (s *Service) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	case r.URL.Path == "/boot":
 		stats.Add(numBoot, 1)
 		s.handleBoot(w, r)
+	case r.URL.Path == "/snapshot":
+		stats.Add(numSnapshots, 1)
+		s.handleSnapshot(w, r, params)
 	case strings.HasPrefix(r.URL.Path, "/remove"):
 		s.handleRemove(w, r, params)
 	case strings.HasPrefix(r.URL.Path, "/status"):
@@ -789,6 +797,25 @@ func (s *Service) handleBoot(w http.ResponseWriter, r *http.Request) {
 	_, err = s.store.ReadFrom(bufReader)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusServiceUnavailable)
+		return
+	}
+}
+
+// handleSnapshot handles a snapshot request.
+func (s *Service) handleSnapshot(w http.ResponseWriter, r *http.Request, qp QueryParams) {
+	if !s.CheckRequestPerm(r, auth.PermSnapshot) {
+		w.WriteHeader(http.StatusUnauthorized)
+		return
+	}
+
+	if r.Method != "POST" {
+		w.WriteHeader(http.StatusMethodNotAllowed)
+		return
+	}
+
+	err := s.store.Snapshot(uint64(qp.TrailingLogs(0)))
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
 }

@@ -33,6 +33,8 @@ const (
 	PermBackup = "backup"
 	// PermLoad means user can load a SQLite dump into a node.
 	PermLoad = "load"
+	// PermSnapshot means user can request a snapshot.
+	PermSnapshot = "snapshot"
 )
 
 // BasicAuther is the interface an object must support to return basic auth information.
