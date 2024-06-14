@@ -233,7 +233,7 @@ const (
 	numLoad                           = "loads"
 	numLoadAborted                    = "loads_aborted"
 	numBoot                           = "boot"
-	numSnapshots                      = "snapshots"
+	numSnapshots                      = "user_snapshots"
 	numAuthOK                         = "authOK"
 	numAuthFail                       = "authFail"
 
