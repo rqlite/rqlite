@@ -218,6 +218,17 @@ func (qp QueryParams) Retries(def int) int {
 	return r
 }
 
+// TrailingLogs returns the requested number of trailing logs
+// post Snapshot.
+func (qp QueryParams) TrailingLogs(def int) int {
+	i, ok := qp["trailing_logs"]
+	if !ok {
+		return def
+	}
+	r, _ := strconv.Atoi(i)
+	return r
+}
+
 // Version returns the requested version.
 func (qp QueryParams) Version() string {
 	return qp["ver"]

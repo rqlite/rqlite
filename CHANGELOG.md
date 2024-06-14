@@ -1,4 +1,7 @@
-## 8.25.2 (unreleased)
+## 8.26.0 (unreleased)
+### New features
+- [PR #1804](https://github.com/rqlite/rqlite/pull/1804): Raft snapshots can now be triggered via a HTTP API request.
+
 ### Implementation changes and bug fixes
 - [PR #1800](https://github.com/rqlite/rqlite/pull/1800): Close network resources before closing the Store.
 - [PR #1801](https://github.com/rqlite/rqlite/pull/1801): Upgrade to rqlite/go-sqlite3 v1.33.0.
