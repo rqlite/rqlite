@@ -40,7 +40,7 @@ func NewQueryParams(r *http.Request) (QueryParams, error) {
 			}
 		}
 	}
-	for _, k := range []string{"retries"} {
+	for _, k := range []string{"retries", "trailing_logs"} {
 		r, ok := qp[k]
 		if ok {
 			_, err := strconv.Atoi(r)
