@@ -1,9 +1,13 @@
 Refential Snapshots
 =============
-Raft Log Truncation allows a Raft-based system to truncate its log by request the system using Raft -- rqlite in this case -- to supply the full state of its system at a point in time. Today rqlite does this by maintaining a second copy of the SQLite database that the main rqlite program is managing (called the "primary"). _Referential Snapshotting_ aims to eliminate this copy and instead have a Snapshot store a pointer to the primary SQLite database.
+Raft Log Truncation allows a Raft-based system to truncate its log by requesting that the system using Raft -- rqlite in this case -- to supply the full state of its system at a point in time. This full state is known as a "Snapshot". Today rqlite does this by generating a second copy of the SQLite database that rqlite is managing (known as the "primary" database -- the database that actually serves read and write requests). _Referential Snapshotting_ aims to eliminate this second copy as much as possible, and instead have the Snapshot store a pointer to the primary SQLite database.
 
-At a high level _Referential Snapshotting_ will work as follows:
-- At startup rqlite will create an instance of a new type called RefentialSnapshotStore. This type will be supplied a directory path for storage, and a file to the primary SQLite database file. RefentialSnapshotStore must implement the following interface:
+This will work because rqlite operarates SQLite in WAL mode, meaning that the primary database file doesn't change between Snapshotting, and all writes are actually stored in the WAL.
+
+Detailed Design
+=============
+
+At a high level _Referential Snapshotting_ will work as follows: at startup rqlite will create an instance of a new type called RefentialSnapshotStore. This type will be supplied a directory path for storage, and a "handle" to the primary SQLite database file ("handle" be precisely defined later). As per the Hashicorp Raft GoDocs RefentialSnapshotStore must implement the following interface:
 
 // SnapshotStore interface is used to allow for flexible implementations
 // of snapshot storage and retrieval. For example, a client could implement
@@ -25,13 +29,24 @@ type SnapshotStore interface {
 	Open(id string) (*SnapshotMeta, io.ReadCloser, error)
 }
 
-- When the Raft system requests that a snapshot of the SQLite dataase be created, a directory will be created in the Raft Snapshot store as usual. The directory name will be of the format XX-YY-ZZ where XX is the Raft term, YY is the Raft log index, and ZZ is a timestamp.
-- The snapshotting process will create a file in the Snapshot directory, and, when the Snapshot is completed, that file will contain information about the primary SQLite file including:
+- When the Raft system requests that a snapshot of the SQLite dataase be created, a directory will be created in the storage directory of RefentialSnapshotStore. The new directory name will be of the format XX-YY-ZZ where XX is the Raft term, YY is the Raft log index, and ZZ is a timestamp, all corresponding to when the Snapshot is triggered.
+- The snapshotting process will create a file in the Snapshot directory, called the "proof" file and, when the Snapshot is completed, that file will contain information about the primary SQLite file including:
   - the timestamp and size (in bytes) of the SQLite.
   - a CRC32 of the primary SQLite database.
-- The Snapshot-create process will return a new object called Sink to the Raft system, abstracing away some of the newly-created Snapshot object (which remains in a temporary mode until the Sink is "closed")
+  - a boolean flag indicating whether this Snapshot contains an actual copy of SQLite data, or if that data should come from the primary database. While most Snapshots will set this flag to true, occassionally it will be false (see later) and a Snapshot will also contain an actual copy of SQLite data.
 
-The Sink will implement the following interface:
+This Proto defining the Proof file is as follows:
+
+message Proof {
+    bool referential = 1;
+    uint64 size_bytes = 2;
+    uint64 unix_millis = 3;
+    fixed32 CRC32 = 4;
+}
+
+- The Snapshot-create process will return a new object called Sink to the Raft system, abstracing away some of the newly-created Snapshot object (which remains in a temporary mode, with the snapshot directory named suffixed with ".tmp", until the Sink is "closed")
+
+The Sink will implement the following interface, as required by the Hashicorp Raft specification:
 
 // SnapshotSink is returned by StartSnapshot. The FSM will Write state
 // to the sink and call Close on completion. On error, Cancel will be invoked.
@@ -41,18 +56,35 @@ type SnapshotSink interface {
 	Cancel() error
 }
 
-- rqlite will then do the following:
-  - It's critical to know that rqlite runs the primary SQLite database in WAL mode, with auto-checkpoint disabled, via the SQLite command PRAGMA wal_autocheckpoint=0.
+
+Sink design
+=============
+Let's talk about the implementation of the Sink. When Sink is created it must know the Snapshot directory, to it knows where to write the information it receives. RefentialSnapshotStore creates Sinks at RefentialSnapshotStore.Open() so will supply that information then.
+
+Secifically the implementation of the Write() method.
+
+Sink.Write() must do the following:
+- read the first 8 bytes, so it can determine the length of the Proof protobuf
+- interpret those 8 bytes as a little-endian encoded uint64. Call then length N.
+- next, read N bytes.
+- Using those N bytes, unmarshal a new Proof Protobuf instance.
+- Write the Proof to the Snapshot directory.
+- Now, the next thing that happens depends on whether Proof.referential is true or not. If false, then Sink.Write() is done, and no more data should be expected. This will be the case when a node is doing its own snapshotting, as part of normal Raft Log Truncastion.
+- If referential is false, then the Write should expect more data -- the SQLite data, which should be stored alongside the Proof file. This is the case when a snapshot is being streamed from another node, so that the receiving node can catch up with that other node. That SQLite data may be stored in compressed form, and decompressed as needed later when it's installed into rqlite.
+
+rqlite snapshotting
+=================
+- On rqlite side during snapshotting rqlite will then do the following:
+  - As mentioned earlier, it's critical to know that rqlite runs the primary SQLite database in WAL mode, with auto-checkpoint disabled, via the SQLite command PRAGMA wal_autocheckpoint=0.
   - At snapshot time rqlite will checkpoint the WAL, using TRUNCATE mode, so that the WAL's contents are checkpointed into the SQLite database file, and then the WAL file is truncated to zero bytes in length.
-  - Create an instance of a new Protobuf type (called StateMeta) which contains the timestamp and size of the primary SQLite file, as well CRC32 of the primary SQLite file.
-  - Set a flag in the Protobuf flagging that the actual data for the primary SQLite database will not be sent.
+  - Create an instance of a new Protobuf type (the Proof) which contains the timestamp and size of the primary SQLite file, as well CRC32 of the primary SQLite file. It also contains the refential flag, which is set to true.
   - Calculate the size of the marhshaled version of the Protobuf instance.
   - Write the length of the marshalled data as a little-endian 8-byte value
   - Then write the protobuf instance
   - Close the Sink.
-  - Writes to rqlite can take place once the WAL is checkpointed, as all writes will go the WAL, but only the SQLite file itself is used in the snapshotting process, and it's not changed. 
+  - Writes to rqlite can take commence once the WAL is checkpointed, as all writes will go the WAL, but only the SQLite file itself is used in the snapshotting process, and it's not changed. 
 
-  rqlite will do this by implementing the FSM interface:
+  rqlite will need to implement the following interface, as specified by the Hashicorp Raft specification:
 
   type FSM interface {
 	// Apply is called once a log entry is committed by a majority of the cluster.
@@ -94,7 +126,12 @@ type FSMSnapshot interface {
 	Release()
 }
 
-Once the Snapshotting process is complete we have a directory in the RefentialSnapshotStore named after the snapshot which contains the StateMeta. The RefentialSnapshotStore also has the path to the primary SQLite file, which acts as the actual data that has been snapshot. In this way the primary SQLite database file acts as both the database that can serve reads and writes (along with the WAL file) as well as the "state" that the Raft Snapshot store needs.
+FSMSnapshot.Persist() will be implemented such that when it is writing to the Sink it will know whether Refential is true or not, allowing it to know whether it should write the SQLite data to the Sink. This can be done in FSM.Snapshot(). By definition when this function is called, it's for the purposes of creating a Snapshot for the purposes of truncation, and the node will know to generate a refential snapshot i.e. don't write the data containined in the primary SQLite file to the sink.
+
+Once the Snapshotting process is complete we have a directory in the RefentialSnapshotStore named after the snapshot which contains the Proof. The RefentialSnapshotStore has a 
+"handle" to the primary SQLite file, allowing it to generate and stream the full Snapshot to any node that requests it. In this way the primary SQLite database file acts as both the database that can serve reads and writes (along with the WAL file) as well as the "data" that the Raft Snapshot store needs for its Snapshot.
+
+When a Snapshot is created, any older Snapshots are deleted. This is called "reaping". At anytime only one Snapshot will be valid on a given node in the cluster, and the valid Snapshot is always the most recently-created snapshot.
 
 Now, say a Snapshot is opened. This can happen if a second node requires a Snapshot from the Leader so that the second node can catch up. This is where RefentialSnapshotStore's implementation of Open(id string) (*SnapshotMeta, io.ReadCloser, error) comes in. In this case Open will return an io.ReadCloser object than returns the following data when read:
 - an 8-byte value, which is the little-endian encoded length of a StateMeta Protobuf
