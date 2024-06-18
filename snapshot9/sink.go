@@ -1,11 +1,16 @@
 package snapshot9
 
 import (
+	"bytes"
+	"encoding/binary"
+	"io"
 	"os"
 	"path/filepath"
 	"sync"
 
 	"github.com/hashicorp/raft"
+	"github.com/rqlite/rqlite/v8/snapshot9/proto"
+	pb "google.golang.org/protobuf/proto"
 )
 
 // LockingSink is a wrapper around a SnapshotSink holds the CAS lock
@@ -57,7 +62,13 @@ type Sink struct {
 
 	snapDirPath    string
 	snapTmpDirPath string
+	dataFD         *os.File
 	opened         bool
+
+	proofLengthRead      bool
+	proofLength          uint64
+	proofBuffer          []byte
+	proofBytesReadLength uint64
 }
 
 // NewSink creates a new Sink object.
@@ -81,13 +92,74 @@ func (s *Sink) Open() error {
 	if err := os.MkdirAll(s.snapTmpDirPath, 0755); err != nil {
 		return err
 	}
+
+	dataPath := filepath.Join(s.snapTmpDirPath, dataFileName)
+	dataFD, err := os.Create(dataPath)
+	if err != nil {
+		return err
+	}
+	s.dataFD = dataFD
+
 	return nil
 }
 
 // Write writes snapshot data to the sink. The snapshot is not in place
 // until Close is called.
 func (s *Sink) Write(p []byte) (n int, err error) {
-	return 0, nil
+	totalWritten := 0
+
+	if !s.proofLengthRead {
+		// Read the first proto.ProtobufLength bytes to get the length of the Proof protobuf
+		remainingLengthBytes := proto.ProtobufLength - len(s.proofBuffer)
+		toCopy := min(remainingLengthBytes, len(p))
+		s.proofBuffer = append(s.proofBuffer, p[:toCopy]...)
+		p = p[toCopy:]
+		totalWritten += toCopy
+
+		if len(s.proofBuffer) < proto.ProtobufLength {
+			// We need more, return so that Write() can be called again.
+			return totalWritten, nil
+		}
+
+		// We have the proto length!
+		s.proofLength = binary.LittleEndian.Uint64(s.proofBuffer)
+		s.proofLengthRead = true
+		s.proofBuffer = make([]byte, 0, s.proofLength)
+	}
+
+	if s.proofLengthRead && s.proofBytesReadLength < s.proofLength {
+		// Read the Proof protobuf
+		remainingProofBytes := s.proofLength - s.proofBytesReadLength
+		toCopy := min(remainingProofBytes, uint64(len(p)))
+		s.proofBuffer = append(s.proofBuffer, p[:toCopy]...)
+		p = p[toCopy:]
+		s.proofBytesReadLength += toCopy
+		totalWritten += int(toCopy)
+
+		if len(s.proofBuffer) < int(s.proofLength) {
+			// We need more, return so that Write() can be called again.
+			return totalWritten, nil
+		}
+
+		// We have enough data to decode the proto!
+		var proof proto.Proof
+		if err := pb.Unmarshal(s.proofBuffer, &proof); err != nil {
+			return totalWritten, err
+		}
+		if err := s.writeProof(s.snapTmpDirPath, &proof); err != nil {
+			return totalWritten, err
+		}
+	}
+
+	if s.proofBytesReadLength == s.proofLength {
+		n, err := io.Copy(s.dataFD, bytes.NewReader(p))
+		if err != nil {
+			return totalWritten, err
+		}
+		totalWritten += int(n)
+	}
+
+	return totalWritten, nil
 }
 
 // ID returns the ID of the snapshot being written.
@@ -102,7 +174,11 @@ func (s *Sink) Cancel() error {
 		return nil
 	}
 	s.opened = false
-	return nil
+
+	if err := s.dataFD.Close(); err != nil {
+		return err
+	}
+	return RemoveAllTmpSnapshotData(s.str.Dir())
 }
 
 // Close closes the sink, and finalizes creation of the snapshot. It is critical
@@ -114,5 +190,28 @@ func (s *Sink) Close() error {
 		return nil
 	}
 	s.opened = false
+
+	// Write meta data
+	if err := s.writeMeta(s.snapTmpDirPath); err != nil {
+		return err
+	}
+
+	if err := s.dataFD.Close(); err != nil {
+		return err
+	}
+	if err := removeIfEmpty(s.dataFD.Name()); err != nil {
+		return err
+	}
+
+	// Get size of SQLite file and set in meta.
+
 	return nil
+}
+
+func (s *Sink) writeMeta(dir string) error {
+	return writeMeta(dir, s.meta)
+}
+
+func (s *Sink) writeProof(dir string, proof *proto.Proof) error {
+	return writeProof(dir, proof)
 }

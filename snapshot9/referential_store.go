@@ -8,6 +8,7 @@ import (
 	"log"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 
 	"github.com/hashicorp/raft"
@@ -23,6 +24,7 @@ const (
 const (
 	tmpSuffix    = ".tmp"
 	metaFileName = "meta.json"
+	dataFileName = "data.bin"
 )
 
 // stats captures stats for the Store.
@@ -128,6 +130,11 @@ func metaPath(dir string) string {
 	return filepath.Join(dir, metaFileName)
 }
 
+// proofPath returns the path to the proof file in the given directory.
+func proofPath(dir string) string {
+	return filepath.Join(dir, "proof")
+}
+
 // readMeta is used to read the meta data in a given snapshot directory.
 func readMeta(dir string) (*raft.SnapshotMeta, error) {
 	fh, err := os.Open(metaPath(dir))
@@ -174,6 +181,40 @@ func updateMetaSize(dir string, sz int64) error {
 	return writeMeta(dir, meta)
 }
 
+func writeProof(dir string, proof *proto.Proof) error {
+	fh, err := os.Create(proofPath(dir))
+	if err != nil {
+		return fmt.Errorf("error creating proof file: %v", err)
+	}
+	defer fh.Close()
+
+	// Write out as JSON for human readability
+	enc := json.NewEncoder(fh)
+	if err = enc.Encode(proof); err != nil {
+		return fmt.Errorf("failed to encode proof: %v", err)
+	}
+
+	if err := fh.Sync(); err != nil {
+		return err
+	}
+	return fh.Close()
+}
+
+func readProof(dir string) (*proto.Proof, error) {
+	fh, err := os.Open(proofPath(dir))
+	if err != nil {
+		return nil, err
+	}
+	defer fh.Close()
+
+	proof := &proto.Proof{}
+	dec := json.NewDecoder(fh)
+	if err := dec.Decode(proof); err != nil {
+		return nil, err
+	}
+	return proof, nil
+}
+
 // snapshotName generates a name for the snapshot.
 func snapshotName(term, index uint64) string {
 	now := time.Now()
@@ -183,4 +224,23 @@ func snapshotName(term, index uint64) string {
 
 func tmpName(path string) string {
 	return path + tmpSuffix
+}
+
+func nonTmpName(path string) string {
+	return strings.TrimSuffix(path, tmpSuffix)
+}
+
+func isTmpName(name string) bool {
+	return filepath.Ext(name) == tmpSuffix
+}
+
+func removeIfEmpty(path string) error {
+	fi, err := os.Stat(path)
+	if err != nil {
+		return err
+	}
+	if fi.Size() == 0 {
+		return os.Remove(path)
+	}
+	return nil
 }

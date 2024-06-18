@@ -5,8 +5,7 @@ package snapshot9;
 option go_package = "github.com/rqlite/rqlite/v8/snapshot9/proto";
 
 message Proof {
-    bool referential = 1;
-    uint64 size_bytes = 2;
-    uint64 unix_millis = 3;
-    fixed32 CRC32 = 4;
+    uint64 size_bytes = 1;
+    uint64 unix_millis = 2;
+    fixed32 CRC32 = 3;
 }
