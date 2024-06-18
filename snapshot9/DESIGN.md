@@ -153,3 +153,13 @@ Some benefits of this approach:
 Downsides:
 - The primary copy of the SQLite database cannot be lost. Today the copy in the Snapshot cannot be lost, so we're not introducing any new real risks. Database operators must be careful with their systems and manage them well.
 
+Managing inconsistent states
+=================
+The processes outlined above can be interrupted due to crashes, power loss, and so on. RefentialSnapshotStore will need to peform a check at start-up time to check for this, and repair itself as needed, which could include discarding incomplete snapshots. This is why Snapshot directories are created with a .tmp suffix. The .tmp suffix is not removed until the Snapshot is 100% complete.
+
+
+Upgrade paths
+=================
+
+Upgrade from earlier versions will be seamless. RefentialSnapshotStore will automatically upgrade any existing Snapshots it finds during initialization time. Also, as long as the nodes running earlier versions are all up, and caught up with the leader, a rolling upgrade will be supported. However operators will be instructed to make this upgrade quickly, so that any cluster is running a mix of releases for the shortest time possible.
+
