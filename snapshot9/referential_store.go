@@ -1,6 +1,7 @@
 package snapshot9
 
 import (
+	"encoding/binary"
 	"encoding/json"
 	"expvar"
 	"fmt"
@@ -14,7 +15,6 @@ import (
 
 	"github.com/hashicorp/raft"
 	"github.com/rqlite/rqlite/v8/rsync"
-	"github.com/rqlite/rqlite/v8/snapshot9/proto"
 )
 
 const (
@@ -23,9 +23,12 @@ const (
 )
 
 const (
-	tmpSuffix    = ".tmp"
-	metaFileName = "meta.json"
-	dataFileName = "data.bin"
+	tmpSuffix     = ".tmp"
+	metaFileName  = "meta.json"
+	dataFileName  = "data.bin"
+	proofFileName = "proof.json"
+
+	proofSizeLength = 8
 )
 
 // stats captures stats for the Store.
@@ -43,8 +46,33 @@ func ResetStats() {
 	stats.Add(snapshotOpenMRSWFail, 0)
 }
 
+type Proof struct {
+	SizeBytes int64  `json:"size_bytes"`
+	UnixMilli int64  `json:"unix_milli"`
+	CRC32     uint32 `json:"crc"`
+}
+
+func NewProof(size, unixMilli int64, crc uint32) *Proof {
+	return &Proof{
+		SizeBytes: size,
+		UnixMilli: unixMilli,
+		CRC32:     crc,
+	}
+}
+
+func (p *Proof) Write(w io.Writer) (int, error) {
+	b, err := json.Marshal(p)
+	if err != nil {
+		return 0, err
+	}
+	if err := binary.Write(w, binary.LittleEndian, int64(len(b))); err != nil {
+		return 0, err
+	}
+	return w.Write(b)
+}
+
 type StateProvider interface {
-	Open() (*proto.Proof, io.ReadCloser, error)
+	Open() (*Proof, io.ReadCloser, error)
 }
 
 type ReferentialStore struct {
@@ -179,10 +207,10 @@ func updateMetaSize(dir string, sz int64) error {
 
 // proofPath returns the path to the proof file in the given directory.
 func proofPath(dir string) string {
-	return filepath.Join(dir, "proof")
+	return filepath.Join(dir, proofFileName)
 }
 
-func writeProof(dir string, proof *proto.Proof) error {
+func writeProof(dir string, proof *Proof) error {
 	fh, err := os.Create(proofPath(dir))
 	if err != nil {
 		return fmt.Errorf("error creating proof file: %v", err)
@@ -201,14 +229,14 @@ func writeProof(dir string, proof *proto.Proof) error {
 	return fh.Close()
 }
 
-func readProof(dir string) (*proto.Proof, error) {
+func readProof(dir string) (*Proof, error) {
 	fh, err := os.Open(proofPath(dir))
 	if err != nil {
 		return nil, err
 	}
 	defer fh.Close()
 
-	proof := &proto.Proof{}
+	proof := &Proof{}
 	dec := json.NewDecoder(fh)
 	if err := dec.Decode(proof); err != nil {
 		return nil, err
@@ -238,6 +266,14 @@ func isTmpName(name string) bool {
 func fileExists(path string) bool {
 	_, err := os.Stat(path)
 	return !os.IsNotExist(err)
+}
+
+func fileSize(path string) (int64, error) {
+	fi, err := os.Stat(path)
+	if err != nil {
+		return 0, err
+	}
+	return fi.Size(), nil
 }
 
 func removeIfEmpty(path string) error {

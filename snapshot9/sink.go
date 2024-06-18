@@ -3,6 +3,7 @@ package snapshot9
 import (
 	"bytes"
 	"encoding/binary"
+	"encoding/json"
 	"fmt"
 	"io"
 	"os"
@@ -10,8 +11,6 @@ import (
 	"sync"
 
 	"github.com/hashicorp/raft"
-	"github.com/rqlite/rqlite/v8/snapshot9/proto"
-	pb "google.golang.org/protobuf/proto"
 )
 
 // LockingSink is a wrapper around a SnapshotSink holds the CAS lock
@@ -111,13 +110,13 @@ func (s *Sink) Write(p []byte) (n int, err error) {
 
 	if !s.proofLengthRead {
 		// Read the first proto.ProtobufLength bytes to get the length of the Proof protobuf
-		remainingLengthBytes := proto.ProtobufLength - len(s.proofBuffer)
+		remainingLengthBytes := proofSizeLength - len(s.proofBuffer)
 		toCopy := min(remainingLengthBytes, len(p))
 		s.proofBuffer = append(s.proofBuffer, p[:toCopy]...)
 		p = p[toCopy:]
 		totalWritten += toCopy
 
-		if len(s.proofBuffer) < proto.ProtobufLength {
+		if len(s.proofBuffer) < proofSizeLength {
 			// We need more data, return so that Write() can be called again.
 			return totalWritten, nil
 		}
@@ -143,8 +142,8 @@ func (s *Sink) Write(p []byte) (n int, err error) {
 		}
 
 		// We have enough data to decode the proto!
-		var proof proto.Proof
-		if err := pb.Unmarshal(s.proofBuffer, &proof); err != nil {
+		var proof Proof
+		if err := json.Unmarshal(s.proofBuffer, &proof); err != nil {
 			return totalWritten, err
 		}
 		if err := s.writeProof(s.snapTmpDirPath, &proof); err != nil {
@@ -200,16 +199,24 @@ func (s *Sink) Close() error {
 	if err != nil {
 		return err
 	}
-	// XXX Need to decide what is the size of a snapshot. Size of Proof on disk as JSON? Or marshalled as pure bytes?
-	if err := updateMetaSize(s.snapTmpDirPath, int64(proto.ProtobufLength+proof.SizeBytes)); err != nil {
-		return fmt.Errorf("failed to update snapshot meta size: %s", err.Error())
-	}
 
 	if err := s.dataFD.Close(); err != nil {
 		return err
 	}
 	if err := removeIfEmpty(s.dataFD.Name()); err != nil {
 		return err
+	}
+
+	// Now, calculate the total size of the snapshot and set it in the meta. Total size
+	// is defined as the number of bytes that would be sent over the network when transferring
+	// a snapshot.
+	proofSize, err := fileSize(proofPath(s.snapTmpDirPath))
+	if err != nil {
+		return err
+	}
+	totalSz := int64(proofSizeLength) + proofSize + int64(proof.SizeBytes)
+	if err := updateMetaSize(s.snapTmpDirPath, totalSz); err != nil {
+		return fmt.Errorf("failed to update snapshot meta size: %s", err.Error())
 	}
 
 	// Indicate snapshot data been successfully persisted to disk by renaming
@@ -228,6 +235,6 @@ func (s *Sink) writeMeta(dir string) error {
 	return writeMeta(dir, s.meta)
 }
 
-func (s *Sink) writeProof(dir string, proof *proto.Proof) error {
+func (s *Sink) writeProof(dir string, proof *Proof) error {
 	return writeProof(dir, proof)
 }
