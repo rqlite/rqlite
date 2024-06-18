@@ -8,6 +8,7 @@ import (
 	"log"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"time"
 
@@ -130,11 +131,6 @@ func metaPath(dir string) string {
 	return filepath.Join(dir, metaFileName)
 }
 
-// proofPath returns the path to the proof file in the given directory.
-func proofPath(dir string) string {
-	return filepath.Join(dir, "proof")
-}
-
 // readMeta is used to read the meta data in a given snapshot directory.
 func readMeta(dir string) (*raft.SnapshotMeta, error) {
 	fh, err := os.Open(metaPath(dir))
@@ -179,6 +175,11 @@ func updateMetaSize(dir string, sz int64) error {
 
 	meta.Size = sz
 	return writeMeta(dir, meta)
+}
+
+// proofPath returns the path to the proof file in the given directory.
+func proofPath(dir string) string {
+	return filepath.Join(dir, "proof")
 }
 
 func writeProof(dir string, proof *proto.Proof) error {
@@ -234,6 +235,11 @@ func isTmpName(name string) bool {
 	return filepath.Ext(name) == tmpSuffix
 }
 
+func fileExists(path string) bool {
+	_, err := os.Stat(path)
+	return !os.IsNotExist(err)
+}
+
 func removeIfEmpty(path string) error {
 	fi, err := os.Stat(path)
 	if err != nil {
@@ -243,4 +249,21 @@ func removeIfEmpty(path string) error {
 		return os.Remove(path)
 	}
 	return nil
+}
+
+func syncDir(dir string) error {
+	fh, err := os.Open(dir)
+	if err != nil {
+		return err
+	}
+	defer fh.Close()
+	return fh.Sync()
+}
+
+// syncDirMaybe syncs the given directory, but only on non-Windows platforms.
+func syncDirMaybe(dir string) error {
+	if runtime.GOOS == "windows" {
+		return nil
+	}
+	return syncDir(dir)
 }

@@ -3,6 +3,7 @@ package snapshot9
 import (
 	"bytes"
 	"encoding/binary"
+	"fmt"
 	"io"
 	"os"
 	"path/filepath"
@@ -117,7 +118,7 @@ func (s *Sink) Write(p []byte) (n int, err error) {
 		totalWritten += toCopy
 
 		if len(s.proofBuffer) < proto.ProtobufLength {
-			// We need more, return so that Write() can be called again.
+			// We need more data, return so that Write() can be called again.
 			return totalWritten, nil
 		}
 
@@ -137,7 +138,7 @@ func (s *Sink) Write(p []byte) (n int, err error) {
 		totalWritten += int(toCopy)
 
 		if len(s.proofBuffer) < int(s.proofLength) {
-			// We need more, return so that Write() can be called again.
+			// We need more data, return so that Write() can be called again.
 			return totalWritten, nil
 		}
 
@@ -191,9 +192,17 @@ func (s *Sink) Close() error {
 	}
 	s.opened = false
 
-	// Write meta data
+	// Write meta data, setting the total size of the Snapshot.
 	if err := s.writeMeta(s.snapTmpDirPath); err != nil {
 		return err
+	}
+	proof, err := readProof(s.snapTmpDirPath)
+	if err != nil {
+		return err
+	}
+	// XXX Need to decide what is the size of a snapshot. Size of Proof on disk as JSON? Or marshalled as pure bytes?
+	if err := updateMetaSize(s.snapTmpDirPath, int64(proto.ProtobufLength+proof.SizeBytes)); err != nil {
+		return fmt.Errorf("failed to update snapshot meta size: %s", err.Error())
 	}
 
 	if err := s.dataFD.Close(); err != nil {
@@ -203,7 +212,14 @@ func (s *Sink) Close() error {
 		return err
 	}
 
-	// Get size of SQLite file and set in meta.
+	// Indicate snapshot data been successfully persisted to disk by renaming
+	// the temp directory to a non-temporary name.
+	if err := os.Rename(s.snapTmpDirPath, s.snapDirPath); err != nil {
+		return err
+	}
+	if err := syncDirMaybe(s.str.Dir()); err != nil {
+		return err
+	}
 
 	return nil
 }
