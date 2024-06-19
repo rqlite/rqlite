@@ -225,7 +225,6 @@ func Test_RefentialStore_FullCycle(t *testing.T) {
 	dir := t.TempDir()
 	sp := &mockStateProvider{}
 	store := NewReferentialStore(dir, sp)
-	store.LogReaping = true
 
 	//////////////////////////////////////////////////////////////////////////
 	// Create a referential Snapshot.
@@ -285,6 +284,18 @@ func Test_RefentialStore_FullCycle(t *testing.T) {
 		t.Fatalf("Failed to close snapshot: %v", err)
 	}
 
+	// There should be only one snapshot returned by List(), and it should be the latest one.
+	snaps, err := store.List()
+	if err != nil {
+		t.Fatalf("Failed to list snapshots: %v", err)
+	}
+	if len(snaps) != 1 {
+		t.Fatalf("Expected 1 snapshot, got %d", len(snaps))
+	}
+	if snaps[0].ID != sink.ID() {
+		t.Fatalf("Unexpected snapshot ID: %s", snaps[0].ID)
+	}
+
 	//////////////////////////////////////////////////////////////////////////
 	// Create a snapshot using actual SQLite data.
 	sink, err = store.Create(1, 6, 7, makeTestConfiguration("1", "localhost:1"), 8, nil)
@@ -327,6 +338,18 @@ func Test_RefentialStore_FullCycle(t *testing.T) {
 
 	if err := rc.Close(); err != nil {
 		t.Fatalf("Failed to close snapshot: %v", err)
+	}
+
+	// There should still be only one snapshot returned by List().
+	snaps, err = store.List()
+	if err != nil {
+		t.Fatalf("Failed to list snapshots: %v", err)
+	}
+	if len(snaps) != 1 {
+		t.Fatalf("Expected 1 snapshot, got %d", len(snaps))
+	}
+	if snaps[0].ID != sink.ID() {
+		t.Fatalf("Unexpected snapshot ID: %s", snaps[0].ID)
 	}
 }
 
