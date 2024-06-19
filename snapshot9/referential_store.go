@@ -1,7 +1,6 @@
 package snapshot9
 
 import (
-	"encoding/binary"
 	"encoding/json"
 	"expvar"
 	"fmt"
@@ -14,10 +13,13 @@ import (
 	"time"
 
 	"github.com/hashicorp/raft"
+	"github.com/rqlite/rqlite/v8/db"
 	"github.com/rqlite/rqlite/v8/rsync"
 )
 
 const (
+	snapshotsReaped        = "snapshots_reaped"
+	snapshotsReapedFail    = "snapshots_reaped_failed"
 	snapshotCreateMRSWFail = "snapshot_create_mrsw_fail"
 	snapshotOpenMRSWFail   = "snapshot_open_mrsw_fail"
 )
@@ -25,10 +27,7 @@ const (
 const (
 	tmpSuffix     = ".tmp"
 	metaFileName  = "meta.json"
-	dataFileName  = "data.bin"
-	proofFileName = "proof.json"
-
-	proofSizeLength = 8
+	stateFileName = "state.bin"
 )
 
 // stats captures stats for the Store.
@@ -42,33 +41,10 @@ func init() {
 // ResetStats resets the expvar stats for this module. Mostly for test purposes.
 func ResetStats() {
 	stats.Init()
+	stats.Add(snapshotsReaped, 0)
+	stats.Add(snapshotsReapedFail, 0)
 	stats.Add(snapshotCreateMRSWFail, 0)
 	stats.Add(snapshotOpenMRSWFail, 0)
-}
-
-type Proof struct {
-	SizeBytes int64  `json:"size_bytes"`
-	UnixMilli int64  `json:"unix_milli"`
-	CRC32     uint32 `json:"crc"`
-}
-
-func NewProof(size, unixMilli int64, crc uint32) *Proof {
-	return &Proof{
-		SizeBytes: size,
-		UnixMilli: unixMilli,
-		CRC32:     crc,
-	}
-}
-
-func (p *Proof) Write(w io.Writer) (int, error) {
-	b, err := json.Marshal(p)
-	if err != nil {
-		return 0, err
-	}
-	if err := binary.Write(w, binary.LittleEndian, int64(len(b))); err != nil {
-		return 0, err
-	}
-	return w.Write(b)
 }
 
 type StateProvider interface {
@@ -81,6 +57,9 @@ type ReferentialStore struct {
 
 	mrsw   *rsync.MultiRSW
 	logger *log.Logger
+
+	LogReaping   bool
+	reapDisabled bool
 }
 
 func NewReferentialStore(dir string, sp StateProvider) *ReferentialStore {
@@ -134,17 +113,50 @@ func (s *ReferentialStore) Open(id string) (_ *raft.SnapshotMeta, _ io.ReadClose
 			s.mrsw.EndRead()
 		}
 	}()
+
 	meta, err := readMeta(filepath.Join(s.dir, id))
 	if err != nil {
 		return nil, nil, err
 	}
-	proof, rc, err := s.sp.Open()
-	if err != nil {
-		return nil, nil, err
-	}
 
-	// Compare the proof with the snapshot proof
-	_ = proof
+	var rc io.ReadCloser
+	// Check if state file is a valid SQLite file. If so, just hand that out.
+	statePath := filepath.Join(s.dir, id, stateFileName)
+	if db.IsValidSQLiteFile(statePath) {
+		fd, err := os.Open(statePath)
+		if err != nil {
+			return nil, nil, err
+		}
+
+		sz, err := fileSize(statePath)
+		if err != nil {
+			return nil, nil, err
+		}
+		meta.Size = sz
+		rc = fd
+	} else {
+		// Otherwise we must have a Proof file. Check if the source it references
+		// is available from the Provider.
+		b, err := os.ReadFile(statePath)
+		if err != nil {
+			return nil, nil, err
+		}
+		proof, err := UnmarshalProof(b)
+		if err != nil {
+			return nil, nil, err
+		}
+
+		srcProof, src, err := s.sp.Open()
+		if err != nil {
+			return nil, nil, err
+		}
+
+		if !proof.Equals(srcProof) {
+			return nil, nil, fmt.Errorf("proofs do not match: %v != %v", proof, srcProof)
+		}
+		meta.Size = proof.SizeBytes
+		rc = src
+	}
 
 	return meta, NewLockingSnapshot(rc, s), nil
 }
@@ -152,6 +164,49 @@ func (s *ReferentialStore) Open(id string) (_ *raft.SnapshotMeta, _ io.ReadClose
 // Dir returns the directory where the snapshots are stored.
 func (s *ReferentialStore) Dir() string {
 	return s.dir
+}
+
+// Reap reaps all snapshots, except the most recent one. Returns the number of
+// snapshots reaped. This function does not take the Store CAS lock, and so
+// it is up to the caller to ensure no other operations are happening on the
+// Store.
+func (s *ReferentialStore) Reap() (retN int, retErr error) {
+	defer func() {
+		if retErr != nil {
+			stats.Add(snapshotsReapedFail, 1)
+		} else {
+			stats.Add(snapshotsReaped, int64(retN))
+		}
+	}()
+	if s.reapDisabled {
+		return 0, nil
+	}
+
+	snapshots, err := s.getSnapshots()
+	if err != nil {
+		return 0, err
+	}
+	if len(snapshots) <= 1 {
+		return 0, nil
+	}
+	// Remove all snapshots, and all associated data, except the newest one.
+	n := 0
+	for _, snap := range snapshots[:len(snapshots)-1] {
+		if err := removeAllPrefix(s.dir, snap.ID); err != nil {
+			return n, err
+		}
+		if s.LogReaping {
+			s.logger.Printf("reaped snapshot %s", snap.ID)
+		}
+		n++
+	}
+	return n, nil
+}
+
+// getSnapshots returns a list of all snapshots in the store, sorted
+// from oldest to newest.
+func (s *ReferentialStore) getSnapshots() ([]*raft.SnapshotMeta, error) {
+	return getSnapshots(s.dir)
 }
 
 // metaPath returns the path to the meta file in the given directory.
@@ -195,55 +250,6 @@ func writeMeta(dir string, meta *raft.SnapshotMeta) error {
 	return fh.Close()
 }
 
-func updateMetaSize(dir string, sz int64) error {
-	meta, err := readMeta(dir)
-	if err != nil {
-		return err
-	}
-
-	meta.Size = sz
-	return writeMeta(dir, meta)
-}
-
-// proofPath returns the path to the proof file in the given directory.
-func proofPath(dir string) string {
-	return filepath.Join(dir, proofFileName)
-}
-
-func writeProof(dir string, proof *Proof) error {
-	fh, err := os.Create(proofPath(dir))
-	if err != nil {
-		return fmt.Errorf("error creating proof file: %v", err)
-	}
-	defer fh.Close()
-
-	// Write out as JSON for human readability
-	enc := json.NewEncoder(fh)
-	if err = enc.Encode(proof); err != nil {
-		return fmt.Errorf("failed to encode proof: %v", err)
-	}
-
-	if err := fh.Sync(); err != nil {
-		return err
-	}
-	return fh.Close()
-}
-
-func readProof(dir string) (*Proof, error) {
-	fh, err := os.Open(proofPath(dir))
-	if err != nil {
-		return nil, err
-	}
-	defer fh.Close()
-
-	proof := &Proof{}
-	dec := json.NewDecoder(fh)
-	if err := dec.Decode(proof); err != nil {
-		return nil, err
-	}
-	return proof, nil
-}
-
 // snapshotName generates a name for the snapshot.
 func snapshotName(term, index uint64) string {
 	now := time.Now()
@@ -263,28 +269,12 @@ func isTmpName(name string) bool {
 	return filepath.Ext(name) == tmpSuffix
 }
 
-func fileExists(path string) bool {
-	_, err := os.Stat(path)
-	return !os.IsNotExist(err)
-}
-
 func fileSize(path string) (int64, error) {
 	fi, err := os.Stat(path)
 	if err != nil {
 		return 0, err
 	}
 	return fi.Size(), nil
-}
-
-func removeIfEmpty(path string) error {
-	fi, err := os.Stat(path)
-	if err != nil {
-		return err
-	}
-	if fi.Size() == 0 {
-		return os.Remove(path)
-	}
-	return nil
 }
 
 func syncDir(dir string) error {
@@ -302,4 +292,18 @@ func syncDirMaybe(dir string) error {
 		return nil
 	}
 	return syncDir(dir)
+}
+
+// removeAllPrefix removes all files in the given directory that have the given prefix.
+func removeAllPrefix(path, prefix string) error {
+	files, err := filepath.Glob(filepath.Join(path, prefix) + "*")
+	if err != nil {
+		return err
+	}
+	for _, f := range files {
+		if err := os.RemoveAll(f); err != nil {
+			return err
+		}
+	}
+	return nil
 }

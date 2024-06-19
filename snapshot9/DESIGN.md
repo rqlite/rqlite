@@ -163,3 +163,57 @@ Upgrade paths
 
 Upgrade from earlier versions will be seamless. RefentialSnapshotStore will automatically upgrade any existing Snapshots it finds during initialization time. Also, as long as the nodes running earlier versions are all up, and caught up with the leader, a rolling upgrade will be supported. However operators will be instructed to make this upgrade quickly, so that any cluster is running a mix of releases for the shortest time possible.
 
+
+
+Design v2
+===================
+"just write the file, sink should be simple".
+
+Let's do a scenario-based approach, outline each interface implementation:
+
+SnapshotStore.Open():
+- examines "state.bin" in Snapshot directory
+- if it's a SQLite file, then wrap io.ReadCloser around it, and hand it back.
+- if it's a Proof file, then wrap SnapshotSink around the "primary" database. How to get at it? Pass in "Provider" interface at SnapshotStore init time. Confirm that the "Proof" returned by "Provider" matches Proof in Snapshot directory. Exit if no match?
+- either way the io.ReadCloser wraps a SQLite database.
+- SnapShotMeta is created on the fly, just store in the Snapshot directory only what needed (term, index, cfg, cfg index). Size can be figured out.
+
+SnapshotStore.Create():
+- create snapshot directory
+- create a SnapshotSink which simply writes whatever it receives to "state.bin"
+- write necesssary meta (don't worry about size in meta)
+
+SnapshotStore.List():
+- easy, same as today.
+
+FSM.Snapshot()
+- switch to synchronous=FULL
+- perform WAL checkpoints
+- switch back to synchronous=OFF (which should be done at startup too)
+- Create Proof object (size, time), encapsulate in FSMSnapshot
+
+FSM.Restore()
+- Called in two situations -- receiving a snapshot from another node, and at start-up.
+- At rqlited start, check if the latest Snapshot has a Proof matching the Proof of the primary SQLite database. If so, set NoSnapshotRestoreOnStart=true. If doesn't match, exit with error.
+- So only situation is streaming. Assume io.ReadCloser() passed to Restore wraps a SQLite file (verify!) and do a normal restore. Basically same as today.
+
+FSMSnapshot.Persist()
+- Calculate CRC32 at this point, add to Proof object encapsulated in FSMSnapshot object
+- Write encapsulated Proof to Sink.
+
+rqlited shutdown (graceful)
+- do a snapshot at shutdown to checkpoint WAL.
+
+rqlited startup
+- If no snapshots present at all, delete any primary SQLite files.
+- Confirm that primary SQLite database Proof matches any in Snapshot store. If no match, exit with error.
+- If there are any WAL files, delete them. Sign of hard crash.
+
+Open questions:
+- should the SQLite database, if stored in the Snapshot store, be compressed? If so, when does compression and decompression happen?
+- when do I add/drop CRC32? For large databases it will be slow. Still check modified-time and size. 
+
+Open tasks:
+- upgrade from v8 snapshot stores
+- disable checkpoints on close-of-last-SQLite-connection
+- if snapshotting is interrrupted, must be detectable and fixable.

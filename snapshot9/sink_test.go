@@ -1,11 +1,11 @@
 package snapshot9
 
 import (
-	"encoding/binary"
-	"encoding/json"
+	"bytes"
 	"os"
 	"path/filepath"
 	"testing"
+	"time"
 
 	"github.com/hashicorp/raft"
 )
@@ -49,21 +49,8 @@ func Test_NewSinkOpenCancel(t *testing.T) {
 	}
 }
 
-// func Test_NewSinkOpenCloseFail(t *testing.T) {
-// 	sink := NewSink(mustStore(t), makeRaftMeta("snap-1234", 3, 2, 1))
-// 	if sink == nil {
-// 		t.Fatalf("Failed to create new sink")
-// 	}
-// 	if err := sink.Open(); err != nil {
-// 		t.Fatalf("Failed to open sink: %v", err)
-// 	}
-// 	if err := sink.Close(); err == nil {
-// 		t.Fatalf("Expected error closing opened sink without data")
-// 	}
-// }
-
 // Test_SinkWriteReferentialSnapshot tests that writing a referential snapshot
-// -- a snapshot without any accompanying SQLite data -- works as expected. Since
+// -- writing a Proof object instead of an actual SQLite object -- works. Since
 // Snapshotting is a critical operation, this test does more than just test the
 // behaviour, it looks inside the sink.
 func Test_SinkWriteReferentialSnapshot(t *testing.T) {
@@ -76,82 +63,43 @@ func Test_SinkWriteReferentialSnapshot(t *testing.T) {
 		t.Fatalf("Failed to open sink: %v", err)
 	}
 
-	proof := NewProof(100, 1000, 1234)
-	_, err := proof.Write(sink)
-	if err != nil {
-		t.Fatalf("Failed to write proof: %v", err)
-	}
-
-	if err := sink.Close(); err != nil {
-		t.Fatalf("Failed to close sink: %v", err)
-	}
-
-	// Test that the Proof file was written correctly.
-	proof2, err := readProof(filepath.Join(sink.str.Dir(), "snap-1234"))
-	if err != nil {
-		t.Fatalf("Failed to read proof: %v", err)
-	}
-	if proof.SizeBytes != proof2.SizeBytes || proof.UnixMilli != proof2.UnixMilli || proof.CRC32 != proof2.CRC32 {
-		t.Fatalf("Proofs do not match: %v != %v", proof, proof2)
-	}
-
-	// There should be no data file since we wrote a Referential snapshot.
-	if fileExists(filepath.Join(sink.str.Dir(), "snap-1234", dataFileName)) {
-		t.Fatalf("Unexpected data file")
-	}
-}
-
-// Test_SinkWriteReferentialSnapshot_Incremental writes a referential snapshot
-// in bits and pieces, to check the partial read logic inside the Sink.
-func Test_SinkWriteReferentialSnapshot_Incremental(t *testing.T) {
-	sink := NewSink(mustStore(t), makeRaftMeta("snap-1234", 3, 2, 1))
-	if sink == nil {
-		t.Fatalf("Failed to create new sink")
-	}
-
-	if err := sink.Open(); err != nil {
-		t.Fatalf("Failed to open sink: %v", err)
-	}
-
-	proof := NewProof(100, 1000, 1234)
-	pb, err := json.Marshal(proof)
+	now := time.Now()
+	proof := NewProof(100, now, 1234)
+	pb, err := proof.Marshal()
 	if err != nil {
 		t.Fatalf("Failed to marshal proof: %v", err)
 	}
-	if err := binary.Write(sink, binary.LittleEndian, uint64(len(pb))); err != nil {
-		t.Fatalf("Failed to write proof length: %v", err)
-	}
-	if _, err := sink.Write(pb[:2]); err != nil {
+	if _, err := sink.Write(pb); err != nil {
 		t.Fatalf("Failed to write proof: %v", err)
 	}
-	if _, err := sink.Write(pb[2:]); err != nil {
-		t.Fatalf("Failed to write proof: %v", err)
-	}
-
 	if err := sink.Close(); err != nil {
 		t.Fatalf("Failed to close sink: %v", err)
 	}
 
 	// Test that the Proof file was written correctly.
-	proof2, err := readProof(filepath.Join(sink.str.Dir(), "snap-1234"))
+	pb = mustReadFile(t, filepath.Join(sink.str.Dir(), "snap-1234", stateFileName))
+	proof2, err := UnmarshalProof(pb)
 	if err != nil {
-		t.Fatalf("Failed to read proof: %v", err)
+		t.Fatalf("Failed to unmarshal proof: %v", err)
 	}
-	if proof.SizeBytes != proof2.SizeBytes || proof.UnixMilli != proof2.UnixMilli || proof.CRC32 != proof2.CRC32 {
+	if !proof.Equals(proof2) {
 		t.Fatalf("Proofs do not match: %v != %v", proof, proof2)
 	}
 
-	// There should be no data file since we wrote a Referential snapshot.
-	if fileExists(filepath.Join(sink.str.Dir(), "snap-1234", dataFileName)) {
-		t.Fatalf("Unexpected data file")
+	// Validate the meta file.
+	meta, err := readMeta(filepath.Join(sink.str.Dir(), "snap-1234"))
+	if err != nil {
+		t.Fatalf("Failed to read meta: %v", err)
+	}
+	if meta.ID != "snap-1234" || meta.Index != 3 || meta.Term != 2 || meta.ConfigurationIndex != 1 {
+		t.Fatalf("Meta does not match: %v", meta)
 	}
 }
 
-// Test_SinkWriteFullSnapshot tests that writing a full snapshot
-// -- a snapshot with any accompanying SQLite data -- works as expected. Since
-// Snapshotting is a critical operation, this test does more than just test the
-// behaviour, it looks inside the sink.
-func Test_SinkWriteFullSnapshot(t *testing.T) {
+// Test_SinkWriteDataSnapshot tests that writing a Snapshot that is just data
+// (and not an actual Proof) works fine. In practise this covers the case where
+// a SQLite file is written to the sink.
+func Test_SinkWriteDataSnapshot(t *testing.T) {
 	sink := NewSink(mustStore(t), makeRaftMeta("snap-1234", 3, 2, 1))
 	if sink == nil {
 		t.Fatalf("Failed to create new sink")
@@ -161,91 +109,18 @@ func Test_SinkWriteFullSnapshot(t *testing.T) {
 		t.Fatalf("Failed to open sink: %v", err)
 	}
 
-	proof := NewProof(100, 1000, 1234)
-	_, err := proof.Write(sink)
-	if err != nil {
-		t.Fatalf("Failed to write proof: %v", err)
-	}
-
-	// Write some data to the sink, ensure it is stored correct.
+	// Write some data to the sink, ensure it is stored correctly.
 	data := []byte("Hello, world!")
 	if _, err := sink.Write(data); err != nil {
 		t.Fatalf("Failed to write data: %v", err)
 	}
-
 	if err := sink.Close(); err != nil {
 		t.Fatalf("Failed to close sink: %v", err)
 	}
 
-	// Test that the Proof file was written correctly.
-	proof2, err := readProof(filepath.Join(sink.str.Dir(), "snap-1234"))
-	if err != nil {
-		t.Fatalf("Failed to read proof: %v", err)
-	}
-	if proof.SizeBytes != proof2.SizeBytes || proof.UnixMilli != proof2.UnixMilli || proof.CRC32 != proof2.CRC32 {
-		t.Fatalf("Proofs do not match: %v != %v", proof, proof2)
-	}
-
 	// There should be a data file since we wrote a Full snapshot.
-	data2 := mustReadFile(t, filepath.Join(sink.str.Dir(), "snap-1234", dataFileName))
-	if string(data) != string(data2) {
-		t.Fatalf("Data does not match: %s != %s", data, data2)
-	}
-}
-
-func Test_SinkWriteFullSnapshot_Incremental(t *testing.T) {
-	sink := NewSink(mustStore(t), makeRaftMeta("snap-1234", 3, 2, 1))
-	if sink == nil {
-		t.Fatalf("Failed to create new sink")
-	}
-
-	if err := sink.Open(); err != nil {
-		t.Fatalf("Failed to open sink: %v", err)
-	}
-
-	proof := NewProof(100, 1000, 1234)
-	pb, err := json.Marshal(proof)
-	if err != nil {
-		t.Fatalf("Failed to marshal proof: %v", err)
-	}
-	if err := binary.Write(sink, binary.LittleEndian, uint64(len(pb))); err != nil {
-		t.Fatalf("Failed to write proof length: %v", err)
-	}
-	if _, err := sink.Write(pb[:2]); err != nil {
-		t.Fatalf("Failed to write proof: %v", err)
-	}
-	if _, err := sink.Write(pb[2:]); err != nil {
-		t.Fatalf("Failed to write proof: %v", err)
-	}
-
-	// Write some data to the sink in bits and pieces, ensure it is stored correctly.
-	data := []byte("Hello, world!")
-	if _, err := sink.Write(data[:1]); err != nil {
-		t.Fatalf("Failed to write data: %v", err)
-	}
-	if _, err := sink.Write(data[1:4]); err != nil {
-		t.Fatalf("Failed to write data: %v", err)
-	}
-	if _, err := sink.Write(data[4:]); err != nil {
-		t.Fatalf("Failed to write data: %v", err)
-	}
-
-	if err := sink.Close(); err != nil {
-		t.Fatalf("Failed to close sink: %v", err)
-	}
-
-	// Test that the Proof file was written correctly.
-	proof2, err := readProof(filepath.Join(sink.str.Dir(), "snap-1234"))
-	if err != nil {
-		t.Fatalf("Failed to read proof: %v", err)
-	}
-	if proof.SizeBytes != proof2.SizeBytes || proof.UnixMilli != proof2.UnixMilli || proof.CRC32 != proof2.CRC32 {
-		t.Fatalf("Proofs do not match: %v != %v", proof, proof2)
-	}
-
-	// There should be a data file since we wrote a Full snapshot.
-	data2 := mustReadFile(t, filepath.Join(sink.str.Dir(), "snap-1234", dataFileName))
-	if string(data) != string(data2) {
+	data2 := mustReadFile(t, filepath.Join(sink.str.Dir(), "snap-1234", stateFileName))
+	if !bytes.Equal(data, data2) {
 		t.Fatalf("Data does not match: %s != %s", data, data2)
 	}
 }
@@ -273,4 +148,13 @@ func mustReadFile(t *testing.T, path string) []byte {
 		t.Fatalf("Failed to read file: %v", err)
 	}
 	return data
+}
+
+func mustFileSize(t *testing.T, path string) int64 {
+	t.Helper()
+	fi, err := os.Stat(path)
+	if err != nil {
+		t.Fatalf("Failed to stat file: %v", err)
+	}
+	return fi.Size()
 }

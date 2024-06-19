@@ -1,8 +1,12 @@
 package snapshot9
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
+	"sort"
+
+	"github.com/hashicorp/raft"
 )
 
 // RemoveAllTmpSnapshotData removes all temporary Snapshot data from the directory.
@@ -39,4 +43,68 @@ func RemoveAllTmpSnapshotData(dir string) error {
 		}
 	}
 	return nil
+}
+
+func getSnapshots(dir string) ([]*raft.SnapshotMeta, error) {
+	// Get the eligible snapshots
+	snapshots, err := os.ReadDir(dir)
+	if err != nil {
+		return nil, err
+	}
+
+	// Populate the metadata
+	var snapMeta []*raft.SnapshotMeta
+	for _, snap := range snapshots {
+		// Ignore any files
+		if !snap.IsDir() {
+			continue
+		}
+
+		// Ignore any temporary snapshots
+		dirName := snap.Name()
+		if isTmpName(dirName) {
+			continue
+		}
+
+		// Try to read the meta data
+		meta, err := readMeta(filepath.Join(dir, dirName))
+		if err != nil {
+			return nil, fmt.Errorf("failed to read meta for snapshot %s: %s", dirName, err)
+		}
+
+		// Append, but only return up to the retain count
+		snapMeta = append(snapMeta, meta)
+	}
+
+	sort.Sort(snapMetaSlice(snapMeta))
+	return snapMeta, nil
+}
+
+type cmpSnapshotMeta raft.SnapshotMeta
+
+func (c *cmpSnapshotMeta) Less(other *cmpSnapshotMeta) bool {
+	if c.Term != other.Term {
+		return c.Term < other.Term
+	}
+	if c.Index != other.Index {
+		return c.Index < other.Index
+	}
+	return c.ID < other.ID
+}
+
+type snapMetaSlice []*raft.SnapshotMeta
+
+// Implement the sort interface for []*fileSnapshotMeta.
+func (s snapMetaSlice) Len() int {
+	return len(s)
+}
+
+func (s snapMetaSlice) Less(i, j int) bool {
+	si := (*cmpSnapshotMeta)(s[i])
+	sj := (*cmpSnapshotMeta)(s[j])
+	return si.Less(sj)
+}
+
+func (s snapMetaSlice) Swap(i, j int) {
+	s[i], s[j] = s[j], s[i]
 }
