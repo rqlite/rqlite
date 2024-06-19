@@ -30,6 +30,14 @@ const (
 	stateFileName = "state.bin"
 )
 
+var (
+	// ErrSnapshotNotFound is returned when a snapshot is not found.
+	ErrSnapshotNotFound = fmt.Errorf("snapshot not found")
+
+	// ErrSnapshotProofMismatch is returned when a snapshot proof does not match the source.
+	ErrSnapshotProofMismatch = fmt.Errorf("snapshot proof mismatch")
+)
+
 // stats captures stats for the Store.
 var stats *expvar.Map
 
@@ -66,6 +74,7 @@ func NewReferentialStore(dir string, sp StateProvider) *ReferentialStore {
 	return &ReferentialStore{
 		dir:    dir,
 		sp:     sp,
+		mrsw:   rsync.NewMultiRSW(),
 		logger: log.New(os.Stderr, "[snapshot-store] ", log.LstdFlags),
 	}
 }
@@ -114,6 +123,10 @@ func (s *ReferentialStore) Open(id string) (_ *raft.SnapshotMeta, _ io.ReadClose
 		}
 	}()
 
+	if !dirExists(filepath.Join(s.dir, id)) {
+		return nil, nil, ErrSnapshotNotFound
+	}
+
 	meta, err := readMeta(filepath.Join(s.dir, id))
 	if err != nil {
 		return nil, nil, err
@@ -143,7 +156,7 @@ func (s *ReferentialStore) Open(id string) (_ *raft.SnapshotMeta, _ io.ReadClose
 		}
 		proof, err := UnmarshalProof(b)
 		if err != nil {
-			return nil, nil, err
+			return nil, nil, fmt.Errorf("failed to unmarshal proof: %w", err)
 		}
 
 		srcProof, src, err := s.sp.Open()
@@ -152,13 +165,33 @@ func (s *ReferentialStore) Open(id string) (_ *raft.SnapshotMeta, _ io.ReadClose
 		}
 
 		if !proof.Equals(srcProof) {
-			return nil, nil, fmt.Errorf("proofs do not match: %v != %v", proof, srcProof)
+			return nil, nil, ErrSnapshotProofMismatch
 		}
 		meta.Size = proof.SizeBytes
 		rc = src
 	}
 
 	return meta, NewLockingSnapshot(rc, s), nil
+}
+
+// List returns a list of all the snapshots in the Store. In practice, this will at most be
+// a list of 1, and that will be the newest snapshot available.
+func (s *ReferentialStore) List() ([]*raft.SnapshotMeta, error) {
+	snapshots, err := s.getSnapshots()
+	if err != nil {
+		return nil, err
+	}
+
+	var snapMeta []*raft.SnapshotMeta
+	if len(snapshots) > 0 {
+		snapshotDir := filepath.Join(s.dir, snapshots[len(snapshots)-1].ID)
+		meta, err := readMeta(snapshotDir)
+		if err != nil {
+			return nil, err
+		}
+		snapMeta = append(snapMeta, meta) // Insert it.
+	}
+	return snapMeta, nil
 }
 
 // Dir returns the directory where the snapshots are stored.
@@ -201,6 +234,24 @@ func (s *ReferentialStore) Reap() (retN int, retErr error) {
 		n++
 	}
 	return n, nil
+}
+
+// Stats returns stats about the Snapshot Store. This function may return
+// an error if the Store is in an inconsistent state. In that case the stats
+// returned may be incomplete or invalid.
+func (s *ReferentialStore) Stats() (map[string]interface{}, error) {
+	snapshots, err := s.getSnapshots()
+	if err != nil {
+		return nil, err
+	}
+	snapsAsIDs := make([]string, len(snapshots))
+	for i, snap := range snapshots {
+		snapsAsIDs[i] = snap.ID
+	}
+	return map[string]interface{}{
+		"dir":       s.dir,
+		"snapshots": snapsAsIDs,
+	}, nil
 }
 
 // getSnapshots returns a list of all snapshots in the store, sorted
@@ -275,6 +326,14 @@ func fileSize(path string) (int64, error) {
 		return 0, err
 	}
 	return fi.Size(), nil
+}
+
+func dirExists(path string) bool {
+	fi, err := os.Stat(path)
+	if err != nil {
+		return false
+	}
+	return fi.IsDir()
 }
 
 func syncDir(dir string) error {
