@@ -57,6 +57,12 @@ func (s *Sink) Write(p []byte) (n int, err error) {
 	return s.dataFD.Write(p)
 }
 
+// WriteKey writes a key/value pair to the snapshot via the Sink.
+func (s *Sink) WriteKey(key string, value []byte) error {
+	path := filepath.Join(s.snapTmpDirPath, key)
+	return os.WriteFile(path, value, 0644)
+}
+
 // ID returns the ID of the snapshot being written.
 func (s *Sink) ID() string {
 	return s.meta.ID

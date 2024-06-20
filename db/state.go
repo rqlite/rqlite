@@ -157,6 +157,11 @@ func RemoveFiles(path string) error {
 	if err := os.Remove(path); err != nil && !os.IsNotExist(err) {
 		return err
 	}
+	return RemoveWALFiles(path)
+}
+
+// RemoveWALFiles any WAL and SHM files associated with the path but not the database file itself.
+func RemoveWALFiles(path string) error {
 	if err := os.Remove(path + "-wal"); err != nil && !os.IsNotExist(err) {
 		return err
 	}

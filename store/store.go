@@ -6,7 +6,9 @@ package store
 import (
 	"bytes"
 	"compress/gzip"
+	"crypto/sha256"
 	"encoding/binary"
+	"encoding/hex"
 	"errors"
 	"expvar"
 	"fmt"
@@ -91,6 +93,7 @@ const (
 	backupScatchPattern        = "rqlite-backup-*"
 	vacuumScatchPattern        = "rqlite-vacuum-*"
 	raftDBPath                 = "raft.db" // Changing this will break backwards compatibility.
+	srcDBSumName               = "srcdb.sum"
 	peersPath                  = "raft/peers.json"
 	peersInfoPath              = "raft/peers.info"
 	retainSnapshotCount        = 1
@@ -130,6 +133,7 @@ const (
 	numLoads                          = "num_loads"
 	numRestores                       = "num_restores"
 	numRestoresFailed                 = "num_restores_failed"
+	numRestoresSkippedOnStart         = "num_restores_skipped_on_start"
 	numAutoRestores                   = "num_auto_restores"
 	numAutoRestoresSkipped            = "num_auto_restores_skipped"
 	numAutoRestoresFailed             = "num_auto_restores_failed"
@@ -185,6 +189,7 @@ func ResetStats() {
 	stats.Add(numLoads, 0)
 	stats.Add(numRestores, 0)
 	stats.Add(numRestoresFailed, 0)
+	stats.Add(numRestoresSkippedOnStart, 0)
 	stats.Add(numRecoveries, 0)
 	stats.Add(numProviderChecks, 0)
 	stats.Add(numProviderProvides, 0)
@@ -223,6 +228,10 @@ type SnapshotStore interface {
 
 	// Stats returns stats about the Snapshot Store.
 	Stats() (map[string]interface{}, error)
+}
+
+type KeySink interface {
+	WriteKey(key string, value []byte) error
 }
 
 // ClusterState defines the possible Raft states the current node can be in
@@ -329,10 +338,11 @@ type Store struct {
 	numTrailingLogs uint64
 
 	// For whitebox testing
-	numAutoVacuums  int
-	numIgnoredJoins int
-	numNoops        *atomic.Uint64
-	numSnapshots    *atomic.Uint64
+	numAutoVacuums      int
+	numIgnoredJoins     int
+	numNoops            *atomic.Uint64
+	numSnapshots        *atomic.Uint64
+	numRestoreSkipStart *atomic.Uint64
 }
 
 // Config represents the configuration of the underlying Store.
@@ -357,30 +367,31 @@ func New(ly Layer, c *Config) *Store {
 	}
 
 	return &Store{
-		open:            rsync.NewAtomicBool(),
-		ly:              ly,
-		raftDir:         c.Dir,
-		snapshotDir:     filepath.Join(c.Dir, snapshotsDirName),
-		peersPath:       filepath.Join(c.Dir, peersPath),
-		peersInfoPath:   filepath.Join(c.Dir, peersInfoPath),
-		restoreDoneCh:   make(chan struct{}),
-		raftID:          c.ID,
-		dbConf:          c.DBConf,
-		dbPath:          dbPath,
-		walPath:         sql.WALPath(dbPath),
-		dbDir:           filepath.Dir(dbPath),
-		leaderObservers: make([]chan<- struct{}, 0),
-		reqMarshaller:   command.NewRequestMarshaler(),
-		logger:          logger,
-		notifyingNodes:  make(map[string]*Server),
-		ApplyTimeout:    applyTimeout,
-		snapshotCAS:     rsync.NewCheckAndSet(),
-		fsmIdx:          &atomic.Uint64{},
-		fsmUpdateTime:   rsync.NewAtomicTime(),
-		appendedAtTime:  rsync.NewAtomicTime(),
-		dbAppliedIdx:    &atomic.Uint64{},
-		numNoops:        &atomic.Uint64{},
-		numSnapshots:    &atomic.Uint64{},
+		open:                rsync.NewAtomicBool(),
+		ly:                  ly,
+		raftDir:             c.Dir,
+		snapshotDir:         filepath.Join(c.Dir, snapshotsDirName),
+		peersPath:           filepath.Join(c.Dir, peersPath),
+		peersInfoPath:       filepath.Join(c.Dir, peersInfoPath),
+		restoreDoneCh:       make(chan struct{}),
+		raftID:              c.ID,
+		dbConf:              c.DBConf,
+		dbPath:              dbPath,
+		walPath:             sql.WALPath(dbPath),
+		dbDir:               filepath.Dir(dbPath),
+		leaderObservers:     make([]chan<- struct{}, 0),
+		reqMarshaller:       command.NewRequestMarshaler(),
+		logger:              logger,
+		notifyingNodes:      make(map[string]*Server),
+		ApplyTimeout:        applyTimeout,
+		snapshotCAS:         rsync.NewCheckAndSet(),
+		fsmIdx:              &atomic.Uint64{},
+		fsmUpdateTime:       rsync.NewAtomicTime(),
+		appendedAtTime:      rsync.NewAtomicTime(),
+		dbAppliedIdx:        &atomic.Uint64{},
+		numNoops:            &atomic.Uint64{},
+		numSnapshots:        &atomic.Uint64{},
+		numRestoreSkipStart: &atomic.Uint64{},
 	}
 }
 
@@ -493,6 +504,11 @@ func (s *Store) Open() (retErr error) {
 		if err != nil {
 			return fmt.Errorf("failed to read peers file: %s", err.Error())
 		}
+		// Recovering a node invalidates the assumption that the database file reflects
+		// the logical data in the latest snapshot. So remove it.
+		if err := sql.RemoveFiles(s.dbPath); err != nil {
+			return fmt.Errorf("failed to remove existing database before recovering node: %s", err.Error())
+		}
 		if err = RecoverNode(s.raftDir, s.logger, s.raftLog, s.boltStore, s.snapshotStore, s.raftTn, config); err != nil {
 			return fmt.Errorf("failed to recover node: %s", err.Error())
 		}
@@ -503,10 +519,17 @@ func (s *Store) Open() (retErr error) {
 		stats.Add(numRecoveries, 1)
 	}
 
-	s.db, err = createOnDisk(s.dbPath, s.dbConf.FKConstraints, true)
+	var dbReused bool
+	s.db, dbReused, err = createOnDisk(s.dbPath, s.dbConf.FKConstraints, true)
 	if err != nil {
 		return fmt.Errorf("failed to create on-disk database: %s", err)
 	}
+	if dbReused {
+		stats.Add(numRestoresSkippedOnStart, 1)
+		s.numRestoreSkipStart.Add(1)
+		s.logger.Printf("reusing existing database at %s, skipping copy from Snapshot store", s.dbPath)
+	}
+	config.NoSnapshotRestoreOnStart = dbReused
 
 	// Clean up any files from aborted operations. This tries to catch the case where scratch files
 	// were created in the Raft directory, not cleaned up, and then the node was restarted with an
@@ -654,6 +677,13 @@ func (s *Store) Close(wait bool) (retErr error) {
 
 	close(s.snapshotWClose)
 	<-s.snapshotWDone
+
+	// Attempt to perform one final snapshot so that restarts can be fast. If the Snapshot
+	// succeeds the SQLite database file reflects what in the Snapshot store and we won't
+	// have to copy whats in the Snapshot store back into here on startup.
+	if err := s.Snapshot(0); err != nil {
+		s.logger.Printf("failed to perform final snapshot on close: %s", err)
+	}
 
 	f := s.raft.Shutdown()
 	if wait {
@@ -1994,6 +2024,20 @@ func (s *Store) fsmSnapshot() (fSnap raft.FSMSnapshot, retErr error) {
 	stats.Get(snapshotCreateDuration).(*expvar.Int).Set(dur.Milliseconds())
 	fs := FSMSnapshot{
 		FSMSnapshot: fsmSnapshot,
+		persistFinalizer: func(sink raft.SnapshotSink) error {
+			sum, err := computeSHA256(s.dbPath)
+			if err != nil {
+				return err
+			}
+			keySink, ok := sink.(KeySink)
+			if !ok {
+				return fmt.Errorf("snapshot sink is not a KeySink")
+			}
+			fmt.Println(">>>>> we got a key sink!", s.raftDir, s.ID())
+			err = keySink.WriteKey(srcDBSumName, []byte(sum))
+			time.Sleep(60 * time.Second)
+			return err
+		},
 	}
 	if fullNeeded || s.logIncremental() {
 		s.logger.Printf("%s snapshot created in %s on node ID %s", fPLog, dur, s.raftID)
@@ -2035,6 +2079,10 @@ func (s *Store) fsmRestore(rc io.ReadCloser) (retErr error) {
 		return fmt.Errorf("error swapping database file: %v", err)
 	}
 	s.logger.Printf("successfully opened database at %s due to restore", s.db.Path())
+
+	// XXXX nneed to rewrite the checksum! If I don't a restart immediately
+	// after a restore will cause another restore. Need the Snapshot ID from where this
+	// snapshot came.
 
 	// Take conservative approach and assume that everything has changed, so update
 	// the indexes. It is possible that dbAppliedIdx is now ahead of some other nodes'
@@ -2317,11 +2365,19 @@ func (s *Store) logBackup() bool {
 
 // createOnDisk opens an on-disk database file at the configured path. Any
 // preexisting file will be removed before the database is opened.
-func createOnDisk(path string, fkConstraints, wal bool) (*sql.SwappableDB, error) {
-	if err := sql.RemoveFiles(path); err != nil {
-		return nil, err
+func createOnDisk(path string, fkConstraints, wal bool) (*sql.SwappableDB, bool, error) {
+	var err error
+	v := verifyChecksum(path, path+".sha256")
+	if v {
+		err = sql.RemoveWALFiles(path)
+	} else {
+		err = sql.RemoveFiles(path)
 	}
-	return sql.OpenSwappable(path, fkConstraints, wal)
+	if err != nil {
+		return nil, false, err
+	}
+	db, err := sql.OpenSwappable(path, fkConstraints, wal)
+	return db, v, err
 }
 
 func createTemp(dir, pattern string) (*os.File, error) {
@@ -2432,4 +2488,39 @@ func resolvableAddress(addr string) (string, error) {
 
 func friendlyBytes(n uint64) string {
 	return humanize.Bytes(n)
+}
+
+func computeSHA256(filePath string) (string, error) {
+	file, err := os.Open(filePath)
+	if err != nil {
+		return "", fmt.Errorf("failed to open file: %v", err)
+	}
+	defer file.Close()
+
+	hash := sha256.New()
+	if _, err := io.Copy(hash, file); err != nil {
+		return "", fmt.Errorf("failed to compute hash: %v", err)
+	}
+	checksum := hex.EncodeToString(hash.Sum(nil))
+	return checksum, nil
+}
+
+func readChecksum(checksumFilePath string) (string, error) {
+	data, err := os.ReadFile(checksumFilePath)
+	if err != nil {
+		return "", fmt.Errorf("failed to read checksum file: %v", err)
+	}
+	return string(data), nil
+}
+
+func verifyChecksum(filePath, checksumFilePath string) bool {
+	expectedChecksum, err := readChecksum(checksumFilePath)
+	if err != nil {
+		return false
+	}
+	computedChecksum, err := computeSHA256(filePath)
+	if err != nil {
+		return false
+	}
+	return computedChecksum == expectedChecksum
 }

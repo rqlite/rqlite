@@ -59,19 +59,34 @@ func ResetStats() {
 // LockingSink is a wrapper around a SnapshotSink holds the CAS lock
 // while the Sink is in use.
 type LockingSink struct {
-	raft.SnapshotSink
-	str *Store
+	sink *Sink
+	str  *Store
 
 	mu     sync.Mutex
 	closed bool
 }
 
 // NewLockingSink returns a new LockingSink.
-func NewLockingSink(sink raft.SnapshotSink, str *Store) *LockingSink {
+func NewLockingSink(sink *Sink, str *Store) *LockingSink {
 	return &LockingSink{
-		SnapshotSink: sink,
-		str:          str,
+		sink: sink,
+		str:  str,
 	}
+}
+
+// ID returns the ID for the sink.
+func (s *LockingSink) ID() string {
+	return s.sink.ID()
+}
+
+// Write writes data to the sink.
+func (s *LockingSink) Write(p []byte) (n int, err error) {
+	return s.sink.Write(p)
+}
+
+// WriteKey writes a key/value pair to the sink.
+func (s *LockingSink) WriteKey(key string, value []byte) error {
+	return s.sink.WriteKey(key, value)
 }
 
 // Close closes the sink, unlocking the Store for creation of a new sink.
@@ -83,7 +98,7 @@ func (s *LockingSink) Close() error {
 	}
 	s.closed = true
 	defer s.str.mrsw.EndWrite()
-	return s.SnapshotSink.Close()
+	return s.sink.Close()
 }
 
 // Cancel cancels the sink, unlocking the Store for creation of a new sink.
@@ -95,7 +110,7 @@ func (s *LockingSink) Cancel() error {
 	}
 	s.closed = true
 	defer s.str.mrsw.EndWrite()
-	return s.SnapshotSink.Cancel()
+	return s.sink.Cancel()
 }
 
 // LockingSnapshot is a snapshot which holds the Snapshot Store CAS while open.
@@ -253,6 +268,15 @@ func (s *Store) SetFullNeeded() error {
 		return err
 	}
 	return f.Close()
+}
+
+// GetKey retrieves a key from the Snapshot identified by id.
+func (s *Store) GetKey(id, key string) ([]byte, error) {
+	v, err := os.ReadFile(filepath.Join(s.dir, id, key))
+	if err != nil {
+		return nil, err
+	}
+	return v, nil
 }
 
 // Stats returns stats about the Snapshot Store. This function may return
