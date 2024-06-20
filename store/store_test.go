@@ -1865,7 +1865,7 @@ func Test_SingleNodeUserSnapshot_CAS(t *testing.T) {
 		t.Fatalf("failed to snapshot single-node store: %s", err.Error())
 	}
 
-	if err := s.snapshotCAS.Begin(); err != nil {
+	if err := s.snapshotCAS.Begin("snapshot-test"); err != nil {
 		t.Fatalf("failed to begin snapshot CAS: %s", err.Error())
 	}
 	mustNoop(s, "2")
