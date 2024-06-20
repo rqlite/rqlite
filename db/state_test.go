@@ -52,7 +52,7 @@ func Test_IsValidSQLiteOnDisk(t *testing.T) {
 	defer os.Remove(path)
 
 	dsn := fmt.Sprintf("file:%s", path)
-	db, err := sql.Open("sqlite3", dsn)
+	db, err := sql.Open(dbRegisterName, dsn)
 	if err != nil {
 		t.Fatalf("failed to create SQLite database: %s", err.Error())
 	}
@@ -82,7 +82,7 @@ func Test_IsWALModeEnabledOnDiskDELETE(t *testing.T) {
 	defer os.Remove(path)
 
 	dsn := fmt.Sprintf("file:%s", path)
-	db, err := sql.Open("sqlite3", dsn)
+	db, err := sql.Open(dbRegisterName, dsn)
 	if err != nil {
 		t.Fatalf("failed to create SQLite database: %s", err.Error())
 	}
@@ -118,7 +118,7 @@ func Test_IsWALModeEnabledOnDiskWAL(t *testing.T) {
 	defer os.Remove(path)
 
 	dsn := fmt.Sprintf("file:%s", path)
-	db, err := sql.Open("sqlite3", dsn)
+	db, err := sql.Open(dbRegisterName, dsn)
 	if err != nil {
 		t.Fatalf("failed to create SQLite database: %s", err.Error())
 	}
@@ -186,7 +186,6 @@ func Test_EnsureDelete(t *testing.T) {
 
 // Test_WALReplayOK tests that WAL files are replayed as expected.
 func Test_WALReplayOK(t *testing.T) {
-	t.Skip() // XXXX NEED TO THINK ABOUT WHAT SHOULD HAPPEN HERE NOW.
 	testFunc := func(t *testing.T, replayIntoDelete bool) {
 		dbPath := mustTempFile()
 		defer os.Remove(dbPath)

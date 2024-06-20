@@ -143,12 +143,27 @@ func EnsureDeleteMode(path string) error {
 		return nil
 	}
 	rwDSN := fmt.Sprintf("file:%s", path)
-	conn, err := sql.Open("sqlite3", rwDSN)
+	conn, err := sql.Open(dbRegisterName, rwDSN)
 	if err != nil {
 		return fmt.Errorf("open: %s", err.Error())
 	}
 	defer conn.Close()
 	_, err = conn.Exec("PRAGMA journal_mode=DELETE")
+	return err
+}
+
+// EnsureWALMode ensures the database at the given path is in WAL mode.
+func EnsureWALMode(path string) error {
+	if IsWALModeEnabledSQLiteFile(path) {
+		return nil
+	}
+	rwDSN := fmt.Sprintf("file:%s", path)
+	conn, err := sql.Open(dbRegisterName, rwDSN)
+	if err != nil {
+		return fmt.Errorf("open: %s", err.Error())
+	}
+	defer conn.Close()
+	_, err = conn.Exec("PRAGMA journal_mode=WAL")
 	return err
 }
 
@@ -208,8 +223,8 @@ func ReplayWAL(path string, wals []string, deleteMode bool) error {
 		}
 	}
 
-	if !IsValidSQLiteFile(path) {
-		return fmt.Errorf("invalid database file %s", path)
+	if !IsWALModeEnabledSQLiteFile(path) {
+		return fmt.Errorf("database file %s is not a SQLite database in WAL mode", path)
 	}
 
 	for _, wal := range wals {
@@ -227,19 +242,19 @@ func ReplayWAL(path string, wals []string, deleteMode bool) error {
 			return fmt.Errorf("checkpoint WAL %s: %s", wal, err.Error())
 		}
 
-		// Closing the database will remove the WAL file which was just
-		// checkpointed into the database file.
 		if err := db.Close(); err != nil {
 			return err
 		}
 	}
 
-	if deleteMode {
-		db, err := Open(path, false, false)
-		if err != nil {
-			return err
-		}
-		if err := db.Close(); err != nil {
+	// Remove any WAL files by ensuring DELETE mode.
+	if err := EnsureDeleteMode(path); err != nil {
+		return err
+	}
+
+	// Might need to switch back to WAL mode to keep the contract.
+	if !deleteMode {
+		if err := EnsureWALMode(path); err != nil {
 			return err
 		}
 	}
