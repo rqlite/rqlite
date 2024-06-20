@@ -1,11 +1,14 @@
 package snapshot9
 
 import (
+	"expvar"
 	"io"
 	"log"
 	"sync"
+	"time"
 
 	"github.com/hashicorp/raft"
+	"github.com/rqlite/rqlite/v8/progress"
 )
 
 // LockingSnapshot is a snapshot which holds the Snapshot Store CAS while open.
@@ -58,7 +61,25 @@ func NewSnapshot(rc io.ReadCloser) *Snapshot {
 
 // Persist writes the snapshot to the given sink.
 func (s *Snapshot) Persist(sink raft.SnapshotSink) error {
-	return nil
+	defer s.rc.Close()
+	startT := time.Now()
+
+	cw := progress.NewCountingWriter(sink)
+	cm := progress.StartCountingMonitor(func(n int64) {
+		s.logger.Printf("persisted %d bytes", n)
+	}, cw)
+	n, err := func() (int64, error) {
+		defer cm.StopAndWait()
+		return io.Copy(cw, s.rc)
+	}()
+	if err != nil {
+		return err
+	}
+
+	dur := time.Since(startT)
+	stats.Get(persistSize).(*expvar.Int).Set(n)
+	stats.Get(persistDuration).(*expvar.Int).Set(dur.Milliseconds())
+	return err
 }
 
 // Release releases the snapshot.
