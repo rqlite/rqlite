@@ -1,6 +1,7 @@
-## 8.26.2 (unreleased)
+## 8.26.2 (June 20th 2024)
 ### Implementation changes and bug fixes
 - [PR #1809](https://github.com/rqlite/rqlite/pull/1809): rqlite shell supports triggering Raft snapshots.
+- [PR #1811](https://github.com/rqlite/rqlite/pull/1811): Log failed user-requested snapshots.
 
 ## 8.26.1 (June 19th 2024)
 ### Implementation changes and bug fixes
