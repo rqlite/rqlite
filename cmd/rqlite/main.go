@@ -69,6 +69,7 @@ func init() {
 		`.restore FILE                       Load using SQLite file or SQL dump contained in FILE`,
 		`.nodes [all]                        Show connection status of voting nodes. 'all' to show all nodes`,
 		`.schema                             Show CREATE statements for all tables`,
+		`.snapshot                           Request a Raft snapshot and log trunction on connected node`,
 		`.status                             Show status and diagnostic information for connected node`,
 		`.sysdump FILE                       Dump system diagnostics to FILE`,
 		`.tables                             List names of tables`,
@@ -230,6 +231,8 @@ func main() {
 				err = help(ctx, cmd, line, argv)
 			case ".QUIT", "QUIT", "EXIT", ".EXIT":
 				break FOR_READ
+			case ".SNAPSHOT":
+				err = snapshot(client, argv)
 			case "SELECT", "PRAGMA":
 				err = queryWithClient(ctx, client, timer, blobArray, consistency, line)
 			default:
@@ -341,6 +344,31 @@ func nodes(ctx *cli.Context, cmd, line string, argv *argT, all bool) error {
 func expvar(ctx *cli.Context, cmd, line string, argv *argT) error {
 	url := fmt.Sprintf("%s://%s/debug/vars", argv.Protocol, address6(argv))
 	return cliJSON(ctx, cmd, line, url, argv)
+}
+
+func snapshot(client *httpcl.Client, argv *argT) error {
+	url := fmt.Sprintf("%s://%s/snapshot", argv.Protocol, address6(argv))
+	req, err := http.NewRequest("POST", url, nil)
+	if err != nil {
+		return err
+	}
+	if argv.Credentials != "" {
+		creds := strings.Split(argv.Credentials, ":")
+		if len(creds) != 2 {
+			return fmt.Errorf("invalid Basic Auth credentials format")
+		}
+		req.SetBasicAuth(creds[0], creds[1])
+	}
+
+	resp, err := client.Do(req)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		return fmt.Errorf("server responded with %s", resp.Status)
+	}
+	return nil
 }
 
 func sysdump(ctx *cli.Context, client *http.Client, filename string, argv *argT) error {

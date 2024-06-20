@@ -1,3 +1,7 @@
+## 8.26.2 (unreleased)
+### Implementation changes and bug fixes
+- [PR #1809](https://github.com/rqlite/rqlite/pull/1809): rqlite shell supports triggering Raft snapshots.
+
 ## 8.26.1 (June 19th 2024)
 ### Implementation changes and bug fixes
 - [PR #1808](https://github.com/rqlite/rqlite/pull/1808): Associate "owners" with Check-and-Sets. See issue [#1807](https://github.com/rqlite/rqlite/issues/1807).
