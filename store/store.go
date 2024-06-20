@@ -1061,6 +1061,7 @@ func (s *Store) Stats() (map[string]interface{}, error) {
 		"election_timeout":       s.ElectionTimeout.String(),
 		"snapshot_threshold":     s.SnapshotThreshold,
 		"snapshot_interval":      s.SnapshotInterval.String(),
+		"snapshot_cas":           s.snapshotCAS.Stats(),
 		"reap_timeout":           s.ReapTimeout.String(),
 		"reap_read_only_timeout": s.ReapReadOnlyTimeout.String(),
 		"no_freelist_sync":       s.NoFreeListSync,
@@ -1351,7 +1352,7 @@ func (s *Store) Backup(br *proto.BackupRequest, dst io.Writer) (retErr error) {
 			// Block any snapshotting which will allow us to read the SQLite file without
 			// it changing underneath us. Any incoming writes will be sent to the WAL, so
 			// write traffic is not blocked during the backup process.
-			if err := s.snapshotCAS.Begin(); err != nil {
+			if err := s.snapshotCAS.Begin("backup"); err != nil {
 				return err
 			}
 			defer s.snapshotCAS.End()
@@ -1891,7 +1892,7 @@ func (s *Store) fsmSnapshot() (fSnap raft.FSMSnapshot, retErr error) {
 	s.queryTxMu.Lock()
 	defer s.queryTxMu.Unlock()
 
-	if err := s.snapshotCAS.Begin(); err != nil {
+	if err := s.snapshotCAS.Begin("snapshot"); err != nil {
 		return nil, err
 	}
 	defer s.snapshotCAS.End()
