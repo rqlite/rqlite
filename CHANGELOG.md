@@ -1,3 +1,11 @@
+## 8.26.2 (unreleased)
+### Implementation changes and bug fixes
+- [PR #1809](https://github.com/rqlite/rqlite/pull/1809): rqlite shell supports triggering Raft snapshots.
+
+## 8.26.1 (June 19th 2024)
+### Implementation changes and bug fixes
+- [PR #1808](https://github.com/rqlite/rqlite/pull/1808): Associate "owners" with Check-and-Sets. See issue [#1807](https://github.com/rqlite/rqlite/issues/1807).
+
 ## 8.26.0 (June 14th 2024)
 This release sees the addition of a new API, which allows users to trigger a Raft snapshot and Log Truncation (see the [Raft paper](https://raft.github.io/raft.pdf) for an explanation). This is mostly useful for test purposes, but may have operational value occassionally.
 

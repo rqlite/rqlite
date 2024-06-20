@@ -69,3 +69,28 @@ func (b *AtomicBool) Unset() {
 func (b *AtomicBool) Is() bool {
 	return atomic.LoadInt32(&b.state) == 1
 }
+
+// AtomicString is a string with atomic operations.
+type AtomicString struct {
+	s  string
+	mu sync.RWMutex
+}
+
+// NewAtomicString returns a new AtomicString.
+func NewAtomicString() *AtomicString {
+	return &AtomicString{}
+}
+
+// Store stores a new string.
+func (s *AtomicString) Store(newString string) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.s = newString
+}
+
+// Load returns the stored string.
+func (s *AtomicString) Load() string {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return s.s
+}
