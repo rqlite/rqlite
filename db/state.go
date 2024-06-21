@@ -2,8 +2,10 @@ package db
 
 import (
 	"bytes"
+	"compress/gzip"
 	"database/sql"
 	"fmt"
+	"io"
 	"net/url"
 	"os"
 	"path/filepath"
@@ -50,7 +52,30 @@ func IsValidSQLiteFile(path string) bool {
 	if _, err := f.Read(b); err != nil {
 		return false
 	}
+	return IsValidSQLiteData(b)
+}
 
+// IsValidSQLiteFileCompressed checks that the supplied path looks like a
+// compressed SQLite file. A nonexistent file, invalid Gzip archive, or
+// gzip archive that does not contain a valid SQLite file is considered
+// invalid.
+func IsValidSQLiteFileCompressed(path string) bool {
+	f, err := os.Open(path)
+	if err != nil {
+		return false
+	}
+	defer f.Close()
+	gz, err := gzip.NewReader(f)
+	if err != nil {
+		return false
+	}
+	defer gz.Close()
+
+	b := make([]byte, 16)
+	_, err = io.ReadFull(gz, b)
+	if err != nil {
+		return false
+	}
 	return IsValidSQLiteData(b)
 }
 

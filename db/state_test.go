@@ -1,8 +1,10 @@
 package db
 
 import (
+	"compress/gzip"
 	"database/sql"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"testing"
@@ -74,6 +76,52 @@ func Test_IsValidSQLiteOnDisk(t *testing.T) {
 	}
 	if !IsValidSQLiteData(data) {
 		t.Fatalf("good SQLite data marked as invalid")
+	}
+}
+
+func Test_IsValidSQLiteCompressedOnDisk(t *testing.T) {
+	path := mustTempFile()
+	defer os.Remove(path)
+
+	dsn := fmt.Sprintf("file:%s", path)
+	db, err := sql.Open(dbRegisterName, dsn)
+	if err != nil {
+		t.Fatalf("failed to create SQLite database: %s", err.Error())
+	}
+	_, err = db.Exec("CREATE TABLE foo (name TEXT)")
+	if err != nil {
+		t.Fatalf("failed to create table: %s", err.Error())
+	}
+	if err := db.Close(); err != nil {
+		t.Fatalf("failed to close database: %s", err.Error())
+	}
+
+	// Compress the SQLite file to a second a path.
+	compressedPath := mustTempFile()
+	defer os.Remove(compressedPath)
+	mustGzip(compressedPath, path)
+	if !IsValidSQLiteFileCompressed(compressedPath) {
+		t.Fatalf("good compressed SQLite file marked as invalid")
+	}
+
+	// Ensure non-existent file is marked as invalid.
+	if IsValidSQLiteFileCompressed("non-existent") {
+		t.Fatalf("non-existent compressed SQLite file marked as valid")
+	}
+
+	// Ensure that non-compressed SQLite files are marked as invalid.
+	if IsValidSQLiteFileCompressed(path) {
+		t.Fatalf("non-compressed SQLite file marked as valid")
+	}
+
+	// Compress the already compressed file, and check that it is marked
+	// as invalid. This is to check that an valid Gzip archive, but one
+	// that is not a valid SQLite file, is marked as invalid.
+	compressedCompressedPath := mustTempFile()
+	defer os.Remove(compressedCompressedPath)
+	mustGzip(compressedCompressedPath, compressedPath)
+	if IsValidSQLiteFileCompressed(compressedCompressedPath) {
+		t.Fatalf("Gzip archive of non-SQLite file marked as valid")
 	}
 }
 
@@ -463,5 +511,39 @@ func Test_WALReplayFailures(t *testing.T) {
 	err := ReplayWAL(filepath.Join(dbDir, "foo.db"), []string{filepath.Join(walDir, "foo.db-wal")}, false)
 	if err != ErrWALReplayDirectoryMismatch {
 		t.Fatalf("expected %s, got %s", ErrWALReplayDirectoryMismatch, err.Error())
+	}
+}
+
+func mustGzip(dst, src string) {
+	dstF, err := os.Create(dst)
+	if err != nil {
+		panic(err)
+	}
+	defer dstF.Close()
+
+	gw := gzip.NewWriter(dstF)
+	defer gw.Close()
+
+	srcF, err := os.Open(src)
+	if err != nil {
+		panic(err)
+	}
+	defer srcF.Close()
+
+	_, err = io.Copy(gw, srcF)
+	if err != nil {
+		panic(err)
+	}
+
+	if err := gw.Close(); err != nil {
+		panic(err)
+	}
+
+	if err := dstF.Close(); err != nil {
+		panic(err)
+	}
+
+	if err := srcF.Close(); err != nil {
+		panic(err)
 	}
 }
