@@ -2,6 +2,7 @@ package snapshot9
 
 import (
 	"bytes"
+	"io"
 	"os"
 	"path/filepath"
 	"testing"
@@ -100,7 +101,8 @@ func Test_SinkWriteReferentialSnapshot(t *testing.T) {
 // (and not an actual Proof) works fine. In practise this covers the case where
 // a SQLite file is written to the sink.
 func Test_SinkWriteDataSnapshot(t *testing.T) {
-	sink := NewSink(mustStore(t), makeRaftMeta("snap-1234", 3, 2, 1))
+	store := mustStore(t)
+	sink := NewSink(store, makeRaftMeta("snap-1234", 3, 2, 1))
 	if sink == nil {
 		t.Fatalf("Failed to create new sink")
 	}
@@ -110,7 +112,7 @@ func Test_SinkWriteDataSnapshot(t *testing.T) {
 	}
 
 	// Write some data to the sink, ensure it is stored correctly.
-	data := []byte("Hello, world!")
+	data := mustReadFile(t, "testdata/full12k.db")
 	if _, err := sink.Write(data); err != nil {
 		t.Fatalf("Failed to write data: %v", err)
 	}
@@ -118,10 +120,18 @@ func Test_SinkWriteDataSnapshot(t *testing.T) {
 		t.Fatalf("Failed to close sink: %v", err)
 	}
 
-	// There should be a data file since we wrote a Full snapshot.
-	data2 := mustReadFile(t, filepath.Join(sink.str.Dir(), "snap-1234", stateFileName))
+	_, snapshot, err := store.Open("snap-1234")
+	if err != nil {
+		t.Fatalf("Failed to open snapshot: %v", err)
+	}
+	defer snapshot.Close()
+
+	data2, err := io.ReadAll(snapshot)
+	if err != nil {
+		t.Fatalf("Failed to read snapshot: %v", err)
+	}
 	if !bytes.Equal(data, data2) {
-		t.Fatalf("Data does not match: %s != %s", data, data2)
+		t.Fatalf("Data does not match")
 	}
 }
 
@@ -148,13 +158,4 @@ func mustReadFile(t *testing.T, path string) []byte {
 		t.Fatalf("Failed to read file: %v", err)
 	}
 	return data
-}
-
-func mustFileSize(t *testing.T, path string) int64 {
-	t.Helper()
-	fi, err := os.Stat(path)
-	if err != nil {
-		t.Fatalf("Failed to stat file: %v", err)
-	}
-	return fi.Size()
 }
