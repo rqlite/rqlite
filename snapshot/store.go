@@ -357,8 +357,8 @@ func (s *Store) check() (retError error) {
 		snapDB := filepath.Join(s.dir, snap.ID+".db")
 		snapDir := filepath.Join(s.dir, snap.ID)
 		if db.IsValidSQLiteFile(snapDB) {
-			// Open and close it, which will replay any WAL file into it.
-			return openCloseDB(snapDB)
+			// Ensure any WAL files are checkpointed and removed.
+			return checkpointRemove(snapDB)
 		}
 		// We better have a SQLite file for the previous snapshot.
 		snapPrev := snapshots[len(snapshots)-2]
@@ -370,7 +370,8 @@ func (s *Store) check() (retError error) {
 		if err := os.Rename(snapPrevDB, snapDB); err != nil {
 			return err
 		}
-		if err := openCloseDB(snapDB); err != nil {
+
+		if err := checkpointRemove(snapDB); err != nil {
 			return err
 		}
 
@@ -552,12 +553,11 @@ func updateMetaSize(dir string, sz int64) error {
 	return writeMeta(dir, meta)
 }
 
-func openCloseDB(path string) error {
-	d, err := db.Open(path, false, true)
-	if err != nil {
+func checkpointRemove(path string) error {
+	if err := db.EnsureDeleteMode(path); err != nil {
 		return err
 	}
-	return d.Close()
+	return db.EnsureWALMode(path)
 }
 
 type cmpSnapshotMeta raft.SnapshotMeta

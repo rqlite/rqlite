@@ -127,7 +127,7 @@ func Upgrade7To8(old, new string, logger *log.Logger) (retErr error) {
 		}
 
 		// Convert to WAL mode.
-		if err := openCloseDB(newSqlitePath); err != nil {
+		if err := checkpointRemove(newSqlitePath); err != nil {
 			return fmt.Errorf("failed to convert migrated SQLite file %s to WAL mode: %s", newSqlitePath, err)
 		}
 		return nil
