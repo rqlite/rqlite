@@ -10,6 +10,7 @@ import (
 	"os"
 	"path/filepath"
 	"strconv"
+	"strings"
 )
 
 const (
@@ -18,6 +19,64 @@ const (
 	// ModeReadWrite is the mode to open a database in read-write mode.
 	ModeReadWrite = false
 )
+
+// SynchronousMode is SQLite synchronous mode.
+type SynchronousMode int
+
+const (
+	SynchronousOff SynchronousMode = iota
+	SynchronousNormal
+	SynchronousFull
+	SynchronousExtra
+)
+
+// String returns the string representation of the synchronous mode.
+func (s SynchronousMode) String() string {
+	switch s {
+	case SynchronousOff:
+		return "OFF"
+	case SynchronousNormal:
+		return "NORMAL"
+	case SynchronousFull:
+		return "FULL"
+	case SynchronousExtra:
+		return "EXTRA"
+	default:
+		panic("unknown synchronous mode")
+	}
+}
+
+// SynchronousModeFromString returns the synchronous mode from the given string.
+func SynchronousModeFromString(s string) (SynchronousMode, error) {
+	switch strings.ToUpper(s) {
+	case "OFF":
+		return SynchronousOff, nil
+	case "NORMAL":
+		return SynchronousNormal, nil
+	case "FULL":
+		return SynchronousFull, nil
+	case "EXTRA":
+		return SynchronousExtra, nil
+	default:
+		return 0, fmt.Errorf("unknown synchronous mode %s", s)
+	}
+}
+
+// SynchronousModeFromInt returns the synchronous mode from the given integer.
+func SynchronousModeFromInt(i int) (SynchronousMode, error) {
+	switch i {
+	case 0:
+		return SynchronousOff, nil
+	case 1:
+		return SynchronousNormal, nil
+	case 2:
+		return SynchronousFull, nil
+	case 3:
+		return SynchronousExtra, nil
+	default:
+		return 0, fmt.Errorf("unknown synchronous mode %d", i)
+	}
+}
 
 // MakeDSN returns a SQLite DSN for the given path, with the given options.
 func MakeDSN(path string, readOnly, fkEnabled, walEnabled bool) string {

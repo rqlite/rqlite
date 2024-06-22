@@ -275,8 +275,9 @@ type Store struct {
 	snapshotCAS *rsync.CheckAndSet
 
 	// Latest log entry index actually reflected by the FSM. Due to Raft code
-	// this value is not updated after a Snapshot-restore.
+	// these values are not updated automatically after a Snapshot-restore.
 	fsmIdx        *atomic.Uint64
+	fsmTerm       *atomic.Uint64
 	fsmUpdateTime *rsync.AtomicTime // This is node-local time.
 
 	// appendedAtTime is the Leader's clock time when that Leader appended the log entry.
@@ -376,6 +377,7 @@ func New(ly Layer, c *Config) *Store {
 		ApplyTimeout:    applyTimeout,
 		snapshotCAS:     rsync.NewCheckAndSet(),
 		fsmIdx:          &atomic.Uint64{},
+		fsmTerm:         &atomic.Uint64{},
 		fsmUpdateTime:   rsync.NewAtomicTime(),
 		appendedAtTime:  rsync.NewAtomicTime(),
 		dbAppliedIdx:    &atomic.Uint64{},
@@ -1043,6 +1045,7 @@ func (s *Store) Stats() (map[string]interface{}, error) {
 		"node_id":          s.raftID,
 		"raft":             raftStats,
 		"fsm_index":        s.fsmIdx.Load(),
+		"fsm_term":         s.fsmTerm.Load(),
 		"fsm_update_time":  s.fsmUpdateTime.Load(),
 		"db_applied_index": s.dbAppliedIdx.Load(),
 		"addr":             s.Addr(),
@@ -1851,6 +1854,7 @@ type fsmGenericResponse struct {
 func (s *Store) fsmApply(l *raft.Log) (e interface{}) {
 	defer func() {
 		s.fsmIdx.Store(l.Index)
+		s.fsmTerm.Store(l.Term)
 		s.fsmUpdateTime.Store(time.Now())
 		s.appendedAtTime.Store(l.AppendedAt)
 	}()
@@ -2041,11 +2045,12 @@ func (s *Store) fsmRestore(rc io.ReadCloser) (retErr error) {
 	// same value, since the last index is not necessarily a database-changing index,
 	// but that is OK. Worse that can happen is that anything paying attention to the
 	// index might consider the database to be changed when it is not, *logically* speaking.
-	li, err := snapshot.LatestIndex(s.snapshotDir)
+	li, tm, err := snapshot.LatestIndexTerm(s.snapshotDir)
 	if err != nil {
 		return fmt.Errorf("failed to get latest snapshot index post restore: %s", err)
 	}
 	s.fsmIdx.Store(li)
+	s.fsmTerm.Store(tm)
 	s.dbAppliedIdx.Store(li)
 
 	stats.Add(numRestores, 1)

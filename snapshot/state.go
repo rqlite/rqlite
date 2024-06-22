@@ -45,16 +45,16 @@ func RemoveAllTmpSnapshotData(dir string) error {
 	return nil
 }
 
-// LatestIndex returns the index of the latest snapshot in the given directory.
-func LatestIndex(dir string) (uint64, error) {
+// LatestIndexTerm returns the index and term of the latest snapshot in the given directory.
+func LatestIndexTerm(dir string) (uint64, uint64, error) {
 	meta, err := getSnapshots(dir)
 	if err != nil {
-		return 0, err
+		return 0, 0, err
 	}
 	if len(meta) == 0 {
-		return 0, nil
+		return 0, 0, nil
 	}
-	return meta[len(meta)-1].Index, nil
+	return meta[len(meta)-1].Index, meta[len(meta)-1].Term, nil
 }
 
 func getSnapshots(dir string) ([]*raft.SnapshotMeta, error) {
