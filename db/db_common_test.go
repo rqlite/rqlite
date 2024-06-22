@@ -38,13 +38,13 @@ func testCompileOptions(t *testing.T, db *DB) {
 }
 
 func testSetSynchronousMode(t *testing.T, db *DB) {
-	modes := map[string]int{
-		"OFF":    0,
-		"NORMAL": 1,
-		"FULL":   2,
-		"EXTRA":  3,
+	modes := []SynchronousMode{
+		SynchronousOff,
+		SynchronousNormal,
+		SynchronousFull,
+		SynchronousExtra,
 	}
-	for m, i := range modes {
+	for _, m := range modes {
 		if db.SetSynchronousMode(m) != nil {
 			t.Fatalf("failed to set synchronous mode to %s", m)
 		}
@@ -52,7 +52,7 @@ func testSetSynchronousMode(t *testing.T, db *DB) {
 		if err != nil {
 			t.Fatalf("failed to get synchronous mode: %s", err.Error())
 		}
-		if mm != i {
+		if mm != m {
 			t.Fatalf("synchronous mode not set to %s", m)
 		}
 	}
