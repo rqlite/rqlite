@@ -460,7 +460,7 @@ func (s *Store) Open() (retErr error) {
 	// }
 
 	// Create store for the Snapshots.
-	snapshotStore, err := snapshot.NewReferentialStore(s.snapshotDir, nil)
+	snapshotStore, err := snapshot.NewReferentialStore(s.snapshotDir, s.createStateProvider())
 	if err != nil {
 		return fmt.Errorf("failed to create Snapshot Store: %s", err)
 	}
@@ -2280,12 +2280,28 @@ func (s *Store) autoVacNeeded(t time.Time) (bool, error) {
 	return t.Sub(bt) > s.AutoVacInterval, nil
 }
 
-func (s *Store) hcLogLevel() hclog.Level {
-	return hclog.LevelFromString(s.RaftLogLevel)
+type stateProvider struct {
+	str *Store
 }
 
-func (s *Store) logIncremental() bool {
-	return s.hcLogLevel() < hclog.Warn
+func (sp *stateProvider) Open() (*snapshot.Proof, io.ReadCloser, error) {
+	proof, err := snapshot.NewProofFromFile(sp.str.db.Path())
+	if err != nil {
+		return nil, nil, err
+	}
+	fd, err := os.Open(sp.str.db.Path())
+	if err != nil {
+		return nil, nil, err
+	}
+	return proof, fd, nil
+}
+
+func (s *Store) createStateProvider() snapshot.StateProvider {
+	return &stateProvider{s}
+}
+
+func (s *Store) hcLogLevel() hclog.Level {
+	return hclog.LevelFromString(s.RaftLogLevel)
 }
 
 func (s *Store) logBackup() bool {
