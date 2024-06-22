@@ -8,7 +8,7 @@ import (
 	"time"
 )
 
-func TestNewProof(t *testing.T) {
+func Test_NewProof(t *testing.T) {
 	size := int64(1024)
 	lastModifiedTime := time.Now()
 	crc := uint32(12345678)
@@ -28,7 +28,7 @@ func TestNewProof(t *testing.T) {
 	}
 }
 
-func TestNewProofFromFile(t *testing.T) {
+func Test_NewProofFromFile(t *testing.T) {
 	content := []byte("test data")
 	tmpfile, err := os.CreateTemp("", "testfile")
 	if err != nil {
@@ -65,7 +65,7 @@ func TestNewProofFromFile(t *testing.T) {
 	}
 }
 
-func TestProofEquals(t *testing.T) {
+func Test_ProofEquals(t *testing.T) {
 	size := int64(1024)
 	lastModifiedTime := time.Now()
 	crc := uint32(12345678)
@@ -83,7 +83,7 @@ func TestProofEquals(t *testing.T) {
 	}
 }
 
-func TestProofMarshal(t *testing.T) {
+func Test_ProofMarshal(t *testing.T) {
 	size := int64(1024)
 	lastModifiedTime := time.Now()
 	crc := uint32(12345678)
@@ -105,7 +105,7 @@ func TestProofMarshal(t *testing.T) {
 	}
 }
 
-func TestUnmarshalProof(t *testing.T) {
+func Test_UnmarshalProof(t *testing.T) {
 	size := int64(1024)
 	lastModifiedTime := time.Now()
 	crc := uint32(12345678)
