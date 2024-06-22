@@ -29,12 +29,12 @@ import (
 	"github.com/rqlite/rqlite/v8/command/proto"
 	sql "github.com/rqlite/rqlite/v8/db"
 	"github.com/rqlite/rqlite/v8/db/humanize"
-	wal "github.com/rqlite/rqlite/v8/db/wal"
 	rlog "github.com/rqlite/rqlite/v8/log"
 	"github.com/rqlite/rqlite/v8/progress"
 	"github.com/rqlite/rqlite/v8/random"
 	"github.com/rqlite/rqlite/v8/rsync"
 	"github.com/rqlite/rqlite/v8/snapshot"
+	"github.com/rqlite/rqlite/v8/snapshot9"
 )
 
 var (
@@ -1892,7 +1892,7 @@ func (s *Store) fsmApply(l *raft.Log) (e interface{}) {
 //
 // http://sqlite.org/howtocorrupt.html states it is safe to copy or serialize the
 // database as long as no writes to the database are in progress.
-func (s *Store) fsmSnapshot() (fSnap raft.FSMSnapshot, retErr error) {
+func (s *Store) fsmSnapshot() (_ raft.FSMSnapshot, retErr error) {
 	s.queryTxMu.Lock()
 	defer s.queryTxMu.Unlock()
 
@@ -1901,15 +1901,17 @@ func (s *Store) fsmSnapshot() (fSnap raft.FSMSnapshot, retErr error) {
 	}
 	defer s.snapshotCAS.End()
 
-	startT := time.Now()
+	//startT := time.Now()
 	defer func() {
 		if retErr != nil {
 			stats.Add(numSnapshotsFailed, 1)
 		}
 	}()
 
+	// XXX create snapshot_init_XX_YY How will I get this info at snapshot time?
+
 	// Automatic VACUUM needed? This is deliberately done in the context of a Snapshot
-	// as it guarantees that the database is not being written to.
+	// as it guarantees that the database is not being written to. XXXXX CAN THIS BE DONE HERE?
 	if avn, err := s.autoVacNeeded(time.Now()); err != nil {
 		return nil, err
 	} else if avn {
@@ -1927,83 +1929,37 @@ func (s *Store) fsmSnapshot() (fSnap raft.FSMSnapshot, retErr error) {
 		}
 	}
 
-	fullNeeded, err := s.snapshotStore.FullNeeded()
+	if err := s.db.SetSynchronousMode("FULL"); err != nil {
+		return nil, err
+	}
+
+	if err := s.db.Checkpoint(sql.CheckpointTruncate); err != nil {
+		stats.Add(numFullCheckpointFailed, 1)
+		return nil, err
+	}
+
+	if err := s.db.SetSynchronousMode("OFF"); err != nil {
+		return nil, err
+	}
+
+	proof, err := snapshot9.NewProofFromFile(s.db.Path())
 	if err != nil {
 		return nil, err
 	}
-	fPLog := fullPretty(fullNeeded)
-	defer func() {
-		s.numSnapshots.Add(1)
-	}()
-
-	var fsmSnapshot raft.FSMSnapshot
-	if fullNeeded {
-		chkStartTime := time.Now()
-		if err := s.db.Checkpoint(sql.CheckpointTruncate); err != nil {
-			stats.Add(numFullCheckpointFailed, 1)
-			return nil, err
-		}
-		stats.Get(snapshotCreateChkTruncateDuration).(*expvar.Int).Set(time.Since(chkStartTime).Milliseconds())
-		dbFD, err := os.Open(s.db.Path())
-		if err != nil {
-			return nil, err
-		}
-		fsmSnapshot = snapshot.NewSnapshot(dbFD)
-		stats.Add(numSnapshotsFull, 1)
-	} else {
-		compactedBuf := bytes.NewBuffer(nil)
-		if pathExistsWithData(s.walPath) {
-			compactStartTime := time.Now()
-			// Read a compacted version of the WAL into memory, and write it
-			// to the Snapshot store.
-			walFD, err := os.Open(s.walPath)
-			if err != nil {
-				return nil, err
-			}
-			defer walFD.Close()
-			scanner, err := wal.NewFastCompactingScanner(walFD)
-			if err != nil {
-				return nil, err
-			}
-			compactedBytes, err := scanner.Bytes()
-			if err != nil {
-				return nil, err
-			}
-			stats.Get(snapshotCreateWALCompactDuration).(*expvar.Int).Set(time.Since(compactStartTime).Milliseconds())
-			compactedBuf = bytes.NewBuffer(compactedBytes)
-
-			// Now that we're written a (compacted) copy of the WAL to the Snapshot,
-			// we can truncate the WAL. We use truncate mode so that the next WAL
-			// contains just changes since the this snapshot.
-			walSz, err := fileSize(s.walPath)
-			if err != nil {
-				return nil, err
-			}
-			chkTStartTime := time.Now()
-			if err := s.db.Checkpoint(sql.CheckpointTruncate); err != nil {
-				stats.Add(numWALCheckpointTruncateFailed, 1)
-				return nil, fmt.Errorf("snapshot can't complete due to WAL checkpoint failure (will retry): %s",
-					err.Error())
-			}
-			stats.Get(snapshotCreateChkTruncateDuration).(*expvar.Int).Set(time.Since(chkTStartTime).Milliseconds())
-			stats.Get(snapshotWALSize).(*expvar.Int).Set(int64(compactedBuf.Len()))
-			stats.Get(snapshotPrecompactWALSize).(*expvar.Int).Set(walSz)
-		}
-		fsmSnapshot = snapshot.NewSnapshot(io.NopCloser(compactedBuf))
-		stats.Add(numSnapshotsIncremental, 1)
+	pb, err := proof.Marshal()
+	if err != nil {
+		return nil, err
 	}
-
+	buf := io.NopCloser(bytes.NewReader(pb))
 	stats.Add(numSnapshots, 1)
-	dur := time.Since(startT)
-	stats.Get(snapshotCreateDuration).(*expvar.Int).Set(dur.Milliseconds())
-	fs := FSMSnapshot{
-		FSMSnapshot: fsmSnapshot,
-	}
-	if fullNeeded || s.logIncremental() {
-		s.logger.Printf("%s snapshot created in %s on node ID %s", fPLog, dur, s.raftID)
-		fs.logger = s.logger
-	}
-	return &fs, nil
+	return snapshot9.NewSnapshot(buf), nil
+
+	// dur := time.Since(startT)
+	// if s.logIncremental() {
+	// 	s.logger.Printf("%s snapshot created in %s on node ID %s", fPLog, dur, s.raftID)
+	// 	fs.logger = s.logger
+	// }
+	// return &fs, nil
 }
 
 // fsmRestore restores the node to a previous state. The Hashicorp docs state this
