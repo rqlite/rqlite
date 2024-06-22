@@ -130,6 +130,13 @@ func (s *SwappableDB) Checkpoint(mode CheckpointMode) error {
 	return s.db.Checkpoint(mode)
 }
 
+// SetSynchronousMode calls SetSynchronousMode on the underlying database.
+func (s *SwappableDB) SetSynchronousMode(mode SynchronousMode) error {
+	s.dbMu.RLock()
+	defer s.dbMu.RUnlock()
+	return s.db.SetSynchronousMode(mode)
+}
+
 // Path calls Path on the underlying database.
 func (s *SwappableDB) Path() string {
 	s.dbMu.RLock()
