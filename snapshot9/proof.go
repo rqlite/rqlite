@@ -5,6 +5,7 @@ import (
 	"hash/crc32"
 	"io"
 	"os"
+	"strconv"
 	"time"
 )
 
@@ -37,6 +38,14 @@ func NewProofFromFile(path string) (*Proof, error) {
 		return nil, err
 	}
 	return NewProof(fi.Size(), fi.ModTime(), sum), nil
+}
+
+// String returns a string representation of the Proof.
+func (p *Proof) String() string {
+	return "Proof{SizeBytes: " + strconv.FormatInt(p.SizeBytes, 10) +
+		", LastModifiedTime: " +
+		p.LastModifiedTime.String() + ", CRC32: " +
+		strconv.FormatUint(uint64(p.CRC32), 10) + "}"
 }
 
 // Equals returns true if the two Proofs are equal.

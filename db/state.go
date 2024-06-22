@@ -251,15 +251,24 @@ func EnsureWALMode(path string) error {
 	return err
 }
 
-// RemoveFiles removes the SQLite database file, and any associated WAL and SHM files.
-func RemoveFiles(path string) error {
-	if err := os.Remove(path); err != nil && !os.IsNotExist(err) {
-		return err
-	}
+// RemoveWALFiles removes the WAL and SHM files associated with the given path,
+// leaving the database file untouched.
+func RemoveWALFiles(path string) error {
 	if err := os.Remove(path + "-wal"); err != nil && !os.IsNotExist(err) {
 		return err
 	}
 	if err := os.Remove(path + "-shm"); err != nil && !os.IsNotExist(err) {
+		return err
+	}
+	return nil
+}
+
+// RemoveFiles removes the SQLite database file, and any associated WAL and SHM files.
+func RemoveFiles(path string) error {
+	if err := RemoveWALFiles(path); err != nil {
+		return err
+	}
+	if err := os.Remove(path); err != nil && !os.IsNotExist(err) {
 		return err
 	}
 	return nil

@@ -137,7 +137,11 @@ func Test_SinkWriteDataSnapshot(t *testing.T) {
 
 func mustStore(t *testing.T) *ReferentialStore {
 	t.Helper()
-	return NewReferentialStore(t.TempDir(), nil)
+	str, err := NewReferentialStore(t.TempDir(), nil)
+	if err != nil {
+		t.Fatalf("Failed to create store: %v", err)
+	}
+	return str
 }
 
 func makeRaftMeta(id string, index, term, cfgIndex uint64) *raft.SnapshotMeta {

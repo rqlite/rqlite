@@ -46,7 +46,10 @@ func Test_SnapshotMetaSort(t *testing.T) {
 func Test_NewReferentialStore(t *testing.T) {
 	dir := t.TempDir()
 	sp := &mockStateProvider{}
-	str := NewReferentialStore(dir, sp)
+	str, err := NewReferentialStore(dir, sp)
+	if err != nil {
+		t.Fatalf("Failed to create new ReferentialStore: %v", err)
+	}
 	if str == nil {
 		t.Fatalf("Failed to create new ReferentialStore")
 	}
@@ -55,7 +58,10 @@ func Test_NewReferentialStore(t *testing.T) {
 func Test_RefentialStoreEmpty(t *testing.T) {
 	dir := t.TempDir()
 	sp := &mockStateProvider{}
-	store := NewReferentialStore(dir, sp)
+	store, err := NewReferentialStore(dir, sp)
+	if err != nil {
+		t.Fatalf("Failed to create new ReferentialStore: %v", err)
+	}
 
 	snaps, err := store.List()
 	if err != nil {
@@ -86,7 +92,10 @@ func Test_RefentialStoreEmpty(t *testing.T) {
 func Test_ReferentialStore_CreateCancel(t *testing.T) {
 	dir := t.TempDir()
 	sp := &mockStateProvider{}
-	str := NewReferentialStore(dir, sp)
+	str, err := NewReferentialStore(dir, sp)
+	if err != nil {
+		t.Fatalf("Failed to create new ReferentialStore: %v", err)
+	}
 
 	// Create a snapshot
 	sink, err := str.Create(1, 2, 3, makeTestConfiguration("1", "localhost:1"), 1, nil)
@@ -123,7 +132,10 @@ func Test_ReferentialStore_CreateCancel(t *testing.T) {
 func Test_RefentialStoreCreate_CAS(t *testing.T) {
 	dir := t.TempDir()
 	sp := &mockStateProvider{}
-	store := NewReferentialStore(dir, sp)
+	store, err := NewReferentialStore(dir, sp)
+	if err != nil {
+		t.Fatalf("Failed to create new ReferentialStore: %v", err)
+	}
 
 	sink, err := store.Create(1, 2, 3, makeTestConfiguration("1", "localhost:1"), 1, nil)
 	if err != nil {
@@ -152,7 +164,10 @@ func Test_RefentialStoreCreate_CAS(t *testing.T) {
 func Test_RefentialStoreList(t *testing.T) {
 	dir := t.TempDir()
 	sp := &mockStateProvider{}
-	store := NewReferentialStore(dir, sp)
+	store, err := NewReferentialStore(dir, sp)
+	if err != nil {
+		t.Fatalf("Failed to create new ReferentialStore: %v", err)
+	}
 	store.reapDisabled = true
 
 	snaps, err := store.List()
@@ -224,7 +239,10 @@ func Test_RefentialStoreList(t *testing.T) {
 func Test_RefentialStore_FullCycle(t *testing.T) {
 	dir := t.TempDir()
 	sp := &mockStateProvider{}
-	store := NewReferentialStore(dir, sp)
+	store, err := NewReferentialStore(dir, sp)
+	if err != nil {
+		t.Fatalf("Failed to create new ReferentialStore: %v", err)
+	}
 
 	//////////////////////////////////////////////////////////////////////////
 	// Create a referential Snapshot.

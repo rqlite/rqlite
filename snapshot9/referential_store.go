@@ -44,7 +44,7 @@ var (
 var stats *expvar.Map
 
 func init() {
-	stats = expvar.NewMap("snapshot")
+	stats = expvar.NewMap("snapshot9")
 	ResetStats()
 }
 
@@ -74,13 +74,17 @@ type ReferentialStore struct {
 	reapDisabled bool
 }
 
-func NewReferentialStore(dir string, sp StateProvider) *ReferentialStore {
+func NewReferentialStore(dir string, sp StateProvider) (*ReferentialStore, error) {
+	if err := os.MkdirAll(dir, 0755); err != nil {
+		return nil, err
+	}
+
 	return &ReferentialStore{
 		dir:    dir,
 		sp:     sp,
 		mrsw:   rsync.NewMultiRSW(),
 		logger: log.New(os.Stderr, "[snapshot-store] ", log.LstdFlags),
-	}
+	}, nil
 }
 
 // Create creates a new Sink object, ready for writing a snapshot. Sinks make certain assumptions about
@@ -201,6 +205,29 @@ func (s *ReferentialStore) List() ([]*raft.SnapshotMeta, error) {
 // Dir returns the directory where the snapshots are stored.
 func (s *ReferentialStore) Dir() string {
 	return s.dir
+}
+
+// Proof returns the Proof object for the most recent snapshot, if any exists.
+func (s *ReferentialStore) Proof() (*Proof, error) {
+	snapshots, err := s.getSnapshots()
+	if err != nil {
+		return nil, err
+	}
+
+	if len(snapshots) == 0 {
+		return nil, ErrSnapshotNotFound
+	}
+	snap := snapshots[len(snapshots)-1]
+	// XXX the snapshot could actually be a SQLite file. Handle this.
+	b, err := os.ReadFile(filepath.Join(s.dir, snap.ID, stateFileName))
+	if err != nil {
+		return nil, err
+	}
+	proof, err := UnmarshalProof(b)
+	if err != nil {
+		return nil, err
+	}
+	return proof, nil
 }
 
 // Reap reaps all snapshots, except the most recent one. Returns the number of
