@@ -210,11 +210,11 @@ rqlited startup
 - If there are any WAL files, delete them. Sign of hard crash.
 
 Open questions:
-- should the SQLite database, if stored in the Snapshot store, be compressed? If so, when does compression and decompression happen?
+- should the SQLite database, if stored in the Snapshot store, be compressed? If so, when does compression and decompression happen? Use a single byte to flag type!
 - when do I add/drop CRC32? For large databases it will be slow. Still check modified-time and size. 
 - implications of Vacuum and Auto-vacuum?
 
 Open tasks:
 - upgrade from v8 snapshot stores
-- disable checkpoints on close-of-last-SQLite-connection
 - if snapshotting is interrrupted, must be detectable and fixable.
+- remove option to explicitly set SQLite path. Too dangerous now.
