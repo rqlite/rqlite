@@ -1,157 +1,221 @@
-Snapshot()
+Refential Snapshots
+=============
+Raft Log Truncation allows a Raft-based system to truncate its log by requesting that the system using Raft -- rqlite in this case -- to supply the full state of its system at a point in time. This full state is known as a "Snapshot". Today rqlite does this by generating a second copy of the SQLite database that rqlite is managing (known as the "primary" database -- the database that actually serves read and write requests). _Referential Snapshotting_ aims to eliminate this second copy as much as possible, and instead have the Snapshot store a pointer to the primary SQLite database.
 
-If the Snapshot Store (SS) needs a full snapshot, then:
-- checkpoint the WAL
-- set the path to the SQLite file in the FSMSnapshot object
+This will work because rqlite operarates SQLite in WAL mode, meaning that the primary database file doesn't change between Snapshotting, and all writes are actually stored in the WAL.
 
-If the SS needs an incremental snapshot
- - If WAL is larger than SQLite file: (OR compact WAL -- will be the minimum changes required to copy)
-  - copy WAL bytes to snapshot (using memory for storage)
-  - checkpoint WAL into SQLite file.
+Detailed Design
+=============
 
-Persist()
- - create <snap>.tmp directory in SS (already created by Sink Open())
-- check type of snapshot
-- if full:
- - move SQLite file to SS root, named as <snap>.db
- - delete <snap-1>.db, if it exists, and any earlier snap directories too.
-- else:
- - move WAL file to beside existing SQLite file. Name it <snap>.db-wal. Sync everything.
- - rename <snap>.tmp to <snap>
- - rename  <snap-1>.db to <snap>.db
- - checkpoint <snap>.db-wal <snap>.db
- - open and close <snap>.db to remove any WAL file
-- delete any older snapshot directories <snap-1....-n>
+At a high level _Referential Snapshotting_ will work as follows: at startup rqlite will create an instance of a new type called RefentialSnapshotStore. This type will be supplied a directory path for storage, and a "handle" to the primary SQLite database file ("handle" be precisely defined later). As per the Hashicorp Raft GoDocs RefentialSnapshotStore must implement the following interface:
 
-Recover()
- - if there is a directory ending with .tmp:
-  - call it <snap-tmp>
-  - indicates an incomplete snapshotting process
-  - delete all files and directories that contain the string <snap-tmp>
- - get the newest snapshot, if any
-  - call this <snap>
-  - there should be a DB file named <snap>.db. If not rename <snap-1>.db to <snap>.db. If there is no .db file, panic?
-  - if there is a WAL file called <snap>.db-wal checkpoint it into <snap>.db.
- - open and close <snap>.db to remove any WAL file
- - delete any older snapshot directories <snap-1....-n>, including any <snap-1......-n>.db
+// SnapshotStore interface is used to allow for flexible implementations
+// of snapshot storage and retrieval. For example, a client could implement
+// a shared state store such as S3, allowing new nodes to restore snapshots
+// without streaming from the leader.
+type SnapshotStore interface {
+	// Create is used to begin a snapshot at a given index and term, and with
+	// the given committed configuration. The version parameter controls
+	// which snapshot version to create.
+	Create(version SnapshotVersion, index, term uint64, configuration Configuration,
+		configurationIndex uint64, trans Transport) (SnapshotSink, error)
 
- Misc:
- - need to lock between Open()/Close() and a Sink existing, until Persist/Release is called.
+	// List is used to list the available snapshots in the store.
+	// It should return then in descending order, with the highest index first.
+	List() ([]*SnapshotMeta, error)
 
-
- COMPACTION:
-
- Let's discuss the SQLite WAL file. When I say "compact the WAL file", what do you think I mean?
-ChatGPT
-
-When you refer to "compacting the SQLite WAL (Write-Ahead Logging) file," I interpret this as the process of reducing the size of the existing WAL file by eliminating redundant or unnecessary frames. Specifically, if multiple frames in the WAL file pertain to the same database page, these could be reduced to a single frame that contains the most recent state of that page. This operation would result in a new WAL file that is more space-efficient while still ensuring that all changes represented in the original WAL are retained. This is in line with the typical purpose of file compaction in various storage systems, which is to improve space utilization and potentially read/write performance.
-User
-Give me a step by step process for compacting a WAL file.
-ChatGPT
-
-Certainly. Here is a step-by-step procedure to compact a SQLite Write-Ahead Log (WAL) file:
-
-    Initialize: Create a new, empty WAL file to store the compacted frames.
-
-    Read Header: Read the header of the existing WAL file to identify its format, version, and other essential metadata. Copy this header information to the new WAL file.
-
-    Create Frame Map: Initialize an empty map to keep track of the most recent frame for each page number in the existing WAL file. The map's keys will be the page numbers, and the values will be the corresponding most recent frames.
-
-    Iterate Through Existing WAL: Read the existing WAL file frame by frame. For each frame:
-        Extract the page number from the frame header.
-        Check the frame map to see if this page number already exists.
-        If it does, replace the existing frame in the map with the current frame.
-        If it doesn't, add the current frame to the map.
-
-    Write to New WAL: Iterate through the frame map and write each frame to the new WAL file. This should be done in the same order the frames appear in the original WAL file to maintain any implied dependencies between the frames.
-
-    Update Checksums: Compute and update the checksum for each frame in the new WAL file. This is crucial for maintaining the integrity of the data.
-
-    Finalize New WAL: Once all frames have been written and checksums updated, close the new WAL file.
-
-    Validation: Optionally, you may wish to validate the new, compacted WAL file by applying it to a test database and ensuring it brings the database to the expected state.
-
-    Swap Files: Once you're sure the new WAL file is accurate, you can replace the existing WAL file with the new one. This step should be done with caution, considering the implications on database consistency.
-
-    Checkpoint: After the swap, perform a SQLite checkpoint operation to ensure that the changes from the new WAL are applied to the database.
-
-By following these steps, you should have a compacted WAL file that maintains the integrity and semantics of the original one.
-User
-Let's talk about step 5. Imagine I have a WAL file with these pages. The digit in the page is the page number, the letter is the version. Version, say, b, is newer than version a. Here is the sequence:
-1a,1b,2a,4a,5a,1,c,6,7,6a,8,9
-List the pages, in sequence, as they will appear in the new WAL.
-ChatGPT
-
-In the compacted WAL, the goal is to retain only the most recent frame for each page. The sequence in the existing WAL is as follows:
-
-1a, 1b, 2a, 4a, 5a, 1c, 6, 7, 6a, 8, 9
-
-For page 1, the most recent frame is "1c".
-For page 2, the most recent frame is "2a".
-For page 4, the most recent frame is "4a".
-For page 5, the most recent frame is "5a".
-For page 6, the most recent frame is "6a".
-For page 7, the most recent frame is "7".
-For page 8, the most recent frame is "8".
-For page 9, the most recent frame is "9".
-
-In the new, compacted WAL, the sequence of frames would be:
-
-1c, 2a, 4a, 5a, 6a, 7, 8, 9
-
-It should be noted that the order in which these frames appear in the new WAL depends on the sequence in the original WAL, which is important for maintaining any implied dependencies between the frames.
-User
-Page 2a, for example, comes after page 1a and 1b in the original WAL file. However it will come after page 1c in the rewritten WAL file. Will this be an issue?
-ChatGPT
-
-The sequence of frames within a WAL is significant because the purpose of the WAL is to record changes to a database in the order they occurred. This ensures that the database can be correctly reconstructed from a snapshot and the subsequent changes logged in the WAL. If the sequence of frames is altered during the compaction of the WAL, it may disrupt this order, potentially causing issues when SQLite attempts to replay the WAL to bring the database to a consistent state.
-
-Therefore, if a compacted WAL is to be used in place of the original, it is critical to maintain the original sequence of the most recent frames for each page. In your example, the sequence "1c, 2a" in the compacted WAL correctly reflects that changes to page 1 should be applied before changes to page 2, just as "1a, 1b, 2a" did in the original WAL. This ensures that dependencies between frames are preserved.
-
-Thus, while compacting a WAL can remove redundant frames, altering the sequence of remaining frames is generally not advisable due to the potential for disrupting the order in which changes should be applied.
-User
-Right, but before changes are applied to page 2, those changes will also include changes from page 1c. Is this going to be an issue?
-ChatGPT
-
-In a typical Write-Ahead Logging (WAL) implementation, each frame represents a change made to a particular page at a specific point in time. The frames are applied in sequence to ensure that the database reaches a consistent state that reflects all changes made.
-
-If frame "1c" is more recent than "2a" and both frames are applied during the same WAL replay, then "1c" should be applied before "2a" to achieve the most recent and consistent database state. This is in line with the original sequence of changes as they were made to the database.
-
-If, however, there are dependencies between pages—such as constraints, triggers, or transactional consistency requirements—that require changes to page 1 to be applied in a certain relation to changes to page 2, then the sequence could matter. In such cases, disrupting the sequence could result in a database state that violates these dependencies.
-
-For the SQLite WAL specifically, SQLite should be able to properly apply the changes as long as the WAL frames are sequentially correct for each page. SQLite performs atomic commits by applying all changes in a WAL file as a single transaction during a checkpoint. Therefore, as long as the integrity of individual transactions is maintained within the compacted WAL, applying frame "1c" before "2a" should not be an issue.
-
-In summary, it will not be an issue if frame "1c" is applied before frame "2a" as long as there are no explicit dependencies between these pages that rely on a different order of operations.
-User
-So from your step-by-step instructions above, it sounds like I also need, say, as slice to keep track of the order of the pages I read from the WAL. Keys in a map do no guarantee any order.
-ChatGPT
-
-Indeed, the order of keys in a Go map is not guaranteed to be consistent. Therefore, using a slice to keep track of the order of pages as you read them from the original WAL is advisable. This ensures that, when you write frames to the new, compacted WAL, you maintain the original sequence of page changes.
-
-In summary, a slice can serve as an ordered log of page numbers you encounter, ensuring that the frames in the compacted WAL file are written in an order consistent with their original sequence. This is particularly important for preserving the integrity of transactions and any other dependencies between the pages.
-User
-Is there any other way you would suggest? Any other Go type?
-ChatGPT
-
-Another Go type to consider for maintaining the order of pages is a slice of structs, where each struct contains the page number and associated metadata, such as the version or offset in the original WAL. This would allow you to keep additional contextual information alongside the sequence, which might be beneficial depending on your specific requirements.
-
-For instance, you might define the struct as follows:
-
-go
-
-type PageMeta struct {
-    PageNumber int
-    Version    string
-    // any other metadata fields
+	// Open takes a snapshot ID and provides a ReadCloser. Once close is
+	// called it is assumed the snapshot is no longer needed.
+	Open(id string) (*SnapshotMeta, io.ReadCloser, error)
 }
 
-You could then use a slice of these structs to maintain order and metadata:
+- When the Raft system requests that a snapshot of the SQLite dataase be created, a directory will be created in the storage directory of RefentialSnapshotStore. The new directory name will be of the format XX-YY-ZZ where XX is the Raft term, YY is the Raft log index, and ZZ is a timestamp, all corresponding to when the Snapshot is triggered.
+- The snapshotting process will create a file in the Snapshot directory, called the "proof" file and, when the Snapshot is completed, that file will contain information about the primary SQLite file including:
+  - the timestamp and size (in bytes) of the SQLite.
+  - a CRC32 of the primary SQLite database.
+  - a boolean flag indicating whether this Snapshot contains an actual copy of SQLite data, or if that data should come from the primary database. While most Snapshots will set this flag to true, occassionally it will be false (see later) and a Snapshot will also contain an actual copy of SQLite data.
 
-go
+This Proto defining the Proof file is as follows:
 
-var orderedPages []PageMeta
+message Proof {
+    bool referential = 1;
+    uint64 size_bytes = 2;
+    uint64 unix_millis = 3;
+    fixed32 CRC32 = 4;
+}
 
-This approach allows you to both maintain the order of pages and keep any additional information that might be important for the compaction process or for debugging.
+- The Snapshot-create process will return a new object called Sink to the Raft system, abstracing away some of the newly-created Snapshot object (which remains in a temporary mode, with the snapshot directory named suffixed with ".tmp", until the Sink is "closed")
 
-It's a slight expansion upon the basic slice of integers approach but offers more flexibility.
+The Sink will implement the following interface, as required by the Hashicorp Raft specification:
 
+// SnapshotSink is returned by StartSnapshot. The FSM will Write state
+// to the sink and call Close on completion. On error, Cancel will be invoked.
+type SnapshotSink interface {
+	io.WriteCloser
+	ID() string
+	Cancel() error
+}
+
+
+Sink design
+=============
+Let's talk about the implementation of the Sink. When Sink is created it must know the Snapshot directory, to it knows where to write the information it receives. RefentialSnapshotStore creates Sinks at RefentialSnapshotStore.Open() so will supply that information then.
+
+Secifically the implementation of the Write() method.
+
+Sink.Write() must do the following:
+- read the first 8 bytes, so it can determine the length of the Proof protobuf
+- interpret those 8 bytes as a little-endian encoded uint64. Call then length N.
+- next, read N bytes.
+- Using those N bytes, unmarshal a new Proof Protobuf instance.
+- Write the Proof to the Snapshot directory.
+- Now, the next thing that happens depends on whether Proof.referential is true or not. If false, then Sink.Write() is done, and no more data should be expected. This will be the case when a node is doing its own snapshotting, as part of normal Raft Log Truncastion.
+- If referential is false, then the Write should expect more data -- the SQLite data, which should be stored alongside the Proof file. This is the case when a snapshot is being streamed from another node, so that the receiving node can catch up with that other node. That SQLite data may be stored in compressed form, and decompressed as needed later when it's installed into rqlite.
+
+rqlite snapshotting
+=================
+- On rqlite side during snapshotting rqlite will then do the following:
+  - As mentioned earlier, it's critical to know that rqlite runs the primary SQLite database in WAL mode, with auto-checkpoint disabled, via the SQLite command PRAGMA wal_autocheckpoint=0.
+  - At snapshot time rqlite will checkpoint the WAL, using TRUNCATE mode, so that the WAL's contents are checkpointed into the SQLite database file, and then the WAL file is truncated to zero bytes in length.
+  - Create an instance of a new Protobuf type (the Proof) which contains the timestamp and size of the primary SQLite file, as well CRC32 of the primary SQLite file. It also contains the refential flag, which is set to true.
+  - Calculate the size of the marhshaled version of the Protobuf instance.
+  - Write the length of the marshalled data as a little-endian 8-byte value
+  - Then write the protobuf instance
+  - Close the Sink.
+  - Writes to rqlite can take commence once the WAL is checkpointed, as all writes will go the WAL, but only the SQLite file itself is used in the snapshotting process, and it's not changed. 
+
+  rqlite will need to implement the following interface, as specified by the Hashicorp Raft specification:
+
+  type FSM interface {
+	// Apply is called once a log entry is committed by a majority of the cluster.
+	//
+	// Apply should apply the log to the FSM. Apply must be deterministic and
+	// produce the same result on all peers in the cluster.
+	//
+	// The returned value is returned to the client as the ApplyFuture.Response.
+	Apply(*Log) interface{}
+
+	// Snapshot returns an FSMSnapshot used to: support log compaction, to
+	// restore the FSM to a previous state, or to bring out-of-date followers up
+	// to a recent log index.
+	//
+	// The Snapshot implementation should return quickly, because Apply can not
+	// be called while Snapshot is running. Generally this means Snapshot should
+	// only capture a pointer to the state, and any expensive IO should happen
+	// as part of FSMSnapshot.Persist.
+	//
+	// Apply and Snapshot are always called from the same thread, but Apply will
+	// be called concurrently with FSMSnapshot.Persist. This means the FSM should
+	// be implemented to allow for concurrent updates while a snapshot is happening.
+	Snapshot() (FSMSnapshot, error)
+
+	// Restore is used to restore an FSM from a snapshot. It is not called
+	// concurrently with any other command. The FSM must discard all previous
+	// state before restoring the snapshot.
+	Restore(snapshot io.ReadCloser) error
+}
+
+and FSMSnapshot interface:
+
+type FSMSnapshot interface {
+	// Persist should dump all necessary state to the WriteCloser 'sink',
+	// and call sink.Close() when finished or call sink.Cancel() on error.
+	Persist(sink SnapshotSink) error
+
+	// Release is invoked when we are finished with the snapshot.
+	Release()
+}
+
+FSMSnapshot.Persist() will be implemented such that when it is writing to the Sink it will know whether Refential is true or not, allowing it to know whether it should write the SQLite data to the Sink. This can be done in FSM.Snapshot(). By definition when this function is called, it's for the purposes of creating a Snapshot for the purposes of truncation, and the node will know to generate a refential snapshot i.e. don't write the data containined in the primary SQLite file to the sink.
+
+Once the Snapshotting process is complete we have a directory in the RefentialSnapshotStore named after the snapshot which contains the Proof. The RefentialSnapshotStore has a 
+"handle" to the primary SQLite file, allowing it to generate and stream the full Snapshot to any node that requests it. In this way the primary SQLite database file acts as both the database that can serve reads and writes (along with the WAL file) as well as the "data" that the Raft Snapshot store needs for its Snapshot.
+
+When a Snapshot is created, any older Snapshots are deleted. This is called "reaping". At anytime only one Snapshot will be valid on a given node in the cluster, and the valid Snapshot is always the most recently-created snapshot.
+
+Now, say a Snapshot is opened. This can happen if a second node requires a Snapshot from the Leader so that the second node can catch up. This is where RefentialSnapshotStore's implementation of Open(id string) (*SnapshotMeta, io.ReadCloser, error) comes in. In this case Open will return an io.ReadCloser object than returns the following data when read:
+- an 8-byte value, which is the little-endian encoded length of a StateMeta Protobuf
+- a marshalled value of the StateMeta Protobuf. In this case however a flag will be set to indicate that the SQLite data follows the marshalled protobuf data
+- then the SQLite database file will be returned via subsequent Read() calls to the Snapshot object.
+
+An important thing to note is that RefentialSnapshotStore will have locking on it, such that the following invariants are true:
+- 0, 1, or more Snapshots may be open at any time. The same Snapshot may be open more than once.
+- While the number of open snapshots is greater than 0, snapshots cannot be created.
+- While a snapshot is being created (Create was called, but the returned Sink has not been closed yet), no Snapshot may be open.
+- So, in a way,  RefentialSnapshotStore supports multiple concurrent readers, or a single writer.
+
+Some benefits of this approach:
+- 50% reduction in disk usage (at least)
+- Much simpler snapshotting process.
+- Much faster snapshotting process -- it will be as fast as SQLite WAL checkpoint is (which is very fast)
+- Snapshotting, since it's fast, can take place more often, allowing us to work with smaller Raft logs, which means more disk savings.
+
+Downsides:
+- The primary copy of the SQLite database cannot be lost. Today the copy in the Snapshot cannot be lost, so we're not introducing any new real risks. Database operators must be careful with their systems and manage them well.
+
+Managing inconsistent states
+=================
+The processes outlined above can be interrupted due to crashes, power loss, and so on. RefentialSnapshotStore will need to peform a check at start-up time to check for this, and repair itself as needed, which could include discarding incomplete snapshots. This is why Snapshot directories are created with a .tmp suffix. The .tmp suffix is not removed until the Snapshot is 100% complete.
+
+
+Upgrade paths
+=================
+
+Upgrade from earlier versions will be seamless. RefentialSnapshotStore will automatically upgrade any existing Snapshots it finds during initialization time. Also, as long as the nodes running earlier versions are all up, and caught up with the leader, a rolling upgrade will be supported. However operators will be instructed to make this upgrade quickly, so that any cluster is running a mix of releases for the shortest time possible.
+
+
+
+Design v2
+===================
+"just write the file, sink should be simple".
+
+Let's do a scenario-based approach, outline each interface implementation:
+
+SnapshotStore.Open():
+- examines "state.bin" in Snapshot directory
+- if it's a SQLite file, then wrap io.ReadCloser around it, and hand it back.
+- if it's a Proof file, then wrap SnapshotSink around the "primary" database. How to get at it? Pass in "Provider" interface at SnapshotStore init time. Confirm that the "Proof" returned by "Provider" matches Proof in Snapshot directory. Exit if no match?
+- either way the io.ReadCloser wraps a SQLite database.
+- SnapShotMeta is created on the fly, just store in the Snapshot directory only what needed (term, index, cfg, cfg index). Size can be figured out.
+
+SnapshotStore.Create():
+- create snapshot directory
+- create a SnapshotSink which simply writes whatever it receives to "state.bin"
+- write necesssary meta (don't worry about size in meta)
+
+SnapshotStore.List():
+- easy, same as today.
+
+FSM.Snapshot()
+- switch to synchronous=FULL
+- perform WAL checkpoints
+- switch back to synchronous=OFF (which should be done at startup too)
+- Create Proof object (size, time), encapsulate in FSMSnapshot
+
+FSM.Restore()
+- Called in two situations -- receiving a snapshot from another node, and at start-up.
+- At rqlited start, check if the latest Snapshot has a Proof matching the Proof of the primary SQLite database. If so, set NoSnapshotRestoreOnStart=true. If doesn't match, exit with error.
+- So only situation is streaming. Assume io.ReadCloser() passed to Restore wraps a SQLite file (verify!) and do a normal restore. Basically same as today.
+
+FSMSnapshot.Persist()
+- Calculate CRC32 at this point, add to Proof object encapsulated in FSMSnapshot object
+- Write encapsulated Proof to Sink.
+
+rqlited shutdown (graceful)
+- do a snapshot at shutdown to checkpoint WAL.
+
+rqlited startup
+- If no snapshots present at all, delete any primary SQLite files.
+- Confirm that primary SQLite database Proof matches any in Snapshot store. If no match, exit with error.
+- If there are any WAL files, delete them. Sign of hard crash.
+
+Open questions:
+- should the SQLite database, if stored in the Snapshot store, be compressed? If so, when does compression and decompression happen? Use a single byte to flag type!
+- when do I add/drop CRC32? For large databases it will be slow. Still check modified-time and size. 
+- implications of Vacuum and Auto-vacuum?
+
+Open tasks:
+- rename snapshot9 to snapshot, and snapshot to snapshot8
+- upgrade from v8 snapshot stores
+- if snapshotting is interrrupted, must be detectable and fixable.
+- remove option to explicitly set SQLite path. Too dangerous now.
