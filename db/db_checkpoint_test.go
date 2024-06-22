@@ -261,14 +261,6 @@ func Test_WALDatabaseCheckpoint_TruncateTimeout(t *testing.T) {
 	}
 }
 
-func mustReadBytes(path string) []byte {
-	b, err := os.ReadFile(path)
-	if err != nil {
-		panic(err)
-	}
-	return b
-}
-
 func mustGetWALHeader(path string) []byte {
 	fd, err := os.Open(path)
 	if err != nil {

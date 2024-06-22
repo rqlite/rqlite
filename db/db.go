@@ -22,6 +22,7 @@ import (
 )
 
 const (
+	dbRegisterName   = "rqlite-sqlite3"
 	SQLiteHeaderSize = 32
 	bkDelay          = 250
 	durToOpenLog     = 2 * time.Second
@@ -84,6 +85,14 @@ var DBVersion string
 var stats *expvar.Map
 
 func init() {
+	sql.Register(dbRegisterName, &sqlite3.SQLiteDriver{
+		ConnectHook: func(conn *sqlite3.SQLiteConn) error {
+			if err := conn.DBConfigNoCkptOnClose(); err != nil {
+				return fmt.Errorf("cannot disable checkpoint on close: %w", err)
+			}
+			return nil
+		},
+	})
 	DBVersion, _, _ = sqlite3.Version()
 	stats = expvar.NewMap("db")
 	ResetStats()
@@ -159,12 +168,13 @@ func Open(dbPath string, fkEnabled, wal bool) (retDB *DB, retErr error) {
 	/////////////////////////////////////////////////////////////////////////
 	// Main RW connection
 	rwDSN := MakeDSN(dbPath, ModeReadWrite, fkEnabled, wal)
-	rwDB, err := sql.Open("sqlite3", rwDSN)
+	rwDB, err := sql.Open(dbRegisterName, rwDSN)
 	if err != nil {
 		return nil, fmt.Errorf("open: %s", err.Error())
 	}
 
-	// Critical that rqlite has full control over the checkpointing process.
+	// Critical that rqlite has full control over the checkpointing process. This is
+	// why we also disable checkpointing on close in the ConnectHook.
 	if _, err := rwDB.Exec("PRAGMA wal_autocheckpoint=0"); err != nil {
 		return nil, fmt.Errorf("disable autocheckpointing: %s", err.Error())
 	}
@@ -172,7 +182,7 @@ func Open(dbPath string, fkEnabled, wal bool) (retDB *DB, retErr error) {
 	/////////////////////////////////////////////////////////////////////////
 	// Read-only connection
 	roDSN := MakeDSN(dbPath, ModeReadOnly, fkEnabled, wal)
-	roDB, err := sql.Open("sqlite3", roDSN)
+	roDB, err := sql.Open(dbRegisterName, roDSN)
 	if err != nil {
 		return nil, err
 	}
