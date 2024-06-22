@@ -35,7 +35,6 @@ import (
 	"github.com/rqlite/rqlite/v8/random"
 	"github.com/rqlite/rqlite/v8/rsync"
 	"github.com/rqlite/rqlite/v8/snapshot"
-	"github.com/rqlite/rqlite/v8/snapshot9"
 )
 
 var (
@@ -461,7 +460,7 @@ func (s *Store) Open() (retErr error) {
 	// }
 
 	// Create store for the Snapshots.
-	snapshotStore, err := snapshot9.NewReferentialStore(s.snapshotDir, nil)
+	snapshotStore, err := snapshot.NewReferentialStore(s.snapshotDir, nil)
 	if err != nil {
 		return fmt.Errorf("failed to create Snapshot Store: %s", err)
 	}
@@ -478,7 +477,7 @@ func (s *Store) Open() (retErr error) {
 			return fmt.Errorf("failed to get proof from snapshot store: %s", err)
 		}
 		// There is a proof in the Snapshot store. Is our SQLite file good?
-		dbProof, err := snapshot9.NewProofFromFile(s.dbPath)
+		dbProof, err := snapshot.NewProofFromFile(s.dbPath)
 		if err != nil {
 			return fmt.Errorf("failed to generate proof from SQLite file: %s", err)
 		}
@@ -1962,7 +1961,7 @@ func (s *Store) fsmSnapshot() (_ raft.FSMSnapshot, retErr error) {
 		return nil, err
 	}
 
-	proof, err := snapshot9.NewProofFromFile(s.db.Path())
+	proof, err := snapshot.NewProofFromFile(s.db.Path())
 	if err != nil {
 		return nil, err
 	}
@@ -1975,7 +1974,7 @@ func (s *Store) fsmSnapshot() (_ raft.FSMSnapshot, retErr error) {
 	dur := time.Since(startT)
 	stats.Add(numSnapshots, 1)
 	s.logger.Printf("snapshot created in %s on node ID %s", dur, s.raftID)
-	return snapshot9.NewSnapshot(buf), nil
+	return snapshot.NewSnapshot(buf), nil
 }
 
 // fsmRestore restores the node to a previous state. The Hashicorp docs state this
