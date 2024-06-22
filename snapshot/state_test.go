@@ -69,17 +69,22 @@ func Test_RemoveAllTmpSnapshotData(t *testing.T) {
 	}
 }
 
-func Test_LatestIndex(t *testing.T) {
+func Test_LatestIndexTerm(t *testing.T) {
 	store := mustStore(t)
-	li, err := LatestIndex(store.dir)
+	li, tm, err := LatestIndexTerm(store.dir)
 	if err != nil {
 		t.Fatalf("Failed to get latest index: %v", err)
 	}
 	if li != 0 {
 		t.Fatalf("Expected latest index to be 0, got %d", li)
 	}
+	if tm != 0 {
+		t.Fatalf("Expected latest term to be 0, got %d", tm)
+	}
 
-	sink := NewSink(store, makeRaftMeta("snap-1234", 3, 2, 1))
+	expLi := uint64(3)
+	expTm := uint64(2)
+	sink := NewSink(store, makeRaftMeta("snap-1234", expLi, expTm, 1))
 	if sink == nil {
 		t.Fatalf("Failed to create new sink")
 	}
@@ -101,11 +106,14 @@ func Test_LatestIndex(t *testing.T) {
 		t.Fatalf("Failed to close sink: %v", err)
 	}
 
-	li, err = LatestIndex(store.dir)
+	li, tm, err = LatestIndexTerm(store.dir)
 	if err != nil {
 		t.Fatalf("Failed to get latest index: %v", err)
 	}
-	if li != 3 {
-		t.Fatalf("Expected latest index to be 3, got %d", li)
+	if li != expLi {
+		t.Fatalf("Expected latest index to be %d, got %d", expLi, li)
+	}
+	if tm != expTm {
+		t.Fatalf("Expected latest term to be %d, got %d", expTm, tm)
 	}
 }
