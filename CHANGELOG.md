@@ -2,6 +2,7 @@
 ### Implementation changes and bug fixes
 - [PR #1814](https://github.com/rqlite/rqlite/pull/1814): Use enum for SQLite synchronous mode.
 - [PR #1815](https://github.com/rqlite/rqlite/pull/1815): Track latest Raft Term in FSM.
+- [PR #1816](https://github.com/rqlite/rqlite/pull/1816): Support `SetSynchronousMode` on `SwappableDB`.
 
 ## 8.26.2 (June 20th 2024)
 ### Implementation changes and bug fixes
