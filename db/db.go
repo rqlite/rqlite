@@ -462,10 +462,7 @@ func (db *DB) IntegrityCheck(full bool) ([]*command.QueryRows, error) {
 }
 
 // SetSynchronousMode sets the synchronous mode of the database.
-func (db *DB) SetSynchronousMode(mode string) error {
-	if mode != "OFF" && mode != "NORMAL" && mode != "FULL" && mode != "EXTRA" {
-		return fmt.Errorf("invalid synchronous mode %s", mode)
-	}
+func (db *DB) SetSynchronousMode(mode SynchronousMode) error {
 	if _, err := db.rwDB.Exec(fmt.Sprintf("PRAGMA synchronous=%s", mode)); err != nil {
 		return fmt.Errorf("failed to set synchronous mode to %s: %s", mode, err.Error())
 	}
@@ -473,13 +470,13 @@ func (db *DB) SetSynchronousMode(mode string) error {
 }
 
 // GetSynchronousMode returns the current synchronous mode.
-func (db *DB) GetSynchronousMode() (int, error) {
+func (db *DB) GetSynchronousMode() (SynchronousMode, error) {
 	var rwN int
 	err := db.rwDB.QueryRow("PRAGMA synchronous").Scan(&rwN)
 	if err != nil {
 		return 0, err
 	}
-	return rwN, err
+	return SynchronousModeFromInt(rwN)
 }
 
 // FKEnabled returns whether Foreign Key constraints are enabled.
