@@ -213,6 +213,47 @@ func testBLOB(t *testing.T, db *DB) {
 	}
 }
 
+func testBLOBByteInsert(t *testing.T, db *DB) {
+	_, err := db.ExecuteStringStmt("CREATE TABLE foo (name TEXT, data BLOB)")
+	if err != nil {
+		t.Fatalf("failed to create table: %s", err.Error())
+	}
+
+	req := &command.Request{
+		Statements: []*command.Statement{
+			{
+				Sql: "INSERT INTO foo(name, data) VALUES(?, ?)",
+				Parameters: []*command.Parameter{
+					{
+						Value: &command.Parameter_S{
+							S: "fiona",
+						},
+					},
+					{
+						Value: &command.Parameter_Y{
+							Y: []byte{0x12, 0x34, 0x56, 0x78},
+						},
+					},
+				},
+			},
+		},
+	}
+	res, err := db.Execute(req, false)
+	if err != nil {
+		t.Fatalf("failed to insert record: %s", err.Error())
+	}
+	if exp, got := `[{"last_insert_id":1,"rows_affected":1}]`, asJSON(res); exp != got {
+		t.Fatalf("unexpected results for query\nexp: %s\ngot: %s", exp, got)
+	}
+	r, err := db.QueryStringStmt(`SELECT * FROM foo`)
+	if err != nil {
+		t.Fatalf("failed to query table: %s", err.Error())
+	}
+	if exp, got := `[{"columns":["name","data"],"types":["text","blob"],"values":[["fiona","EjRWeA=="]]}]`, asJSON(r); exp != got {
+		t.Fatalf("unexpected results for query\nexp: %s\ngot: %s", exp, got)
+	}
+}
+
 func testHexQuery(t *testing.T, db *DB) {
 	_, err := db.ExecuteStringStmt("CREATE TABLE foo(blob_column BLOB)")
 	if err != nil {
@@ -1723,6 +1764,7 @@ func Test_DatabaseCommonOperations(t *testing.T) {
 		{"NotNULLField", testNotNULLField},
 		{"RandomBlob", testSQLiteRandomBlob},
 		{"BasicBLOB", testBLOB},
+		{"BLOBByteInsert", testBLOBByteInsert},
 		{"HexQuery", testHexQuery},
 		{"Strict", testSTRICT},
 		{"EmptyStatements", testEmptyStatements},
