@@ -1,4 +1,4 @@
-## 8.26.3 (unreleased)
+## 8.26.3 (July 1st 2024)
 ### Implementation changes and bug fixes
 - [PR #1814](https://github.com/rqlite/rqlite/pull/1814): Use enum for SQLite synchronous mode.
 - [PR #1815](https://github.com/rqlite/rqlite/pull/1815): Track latest Raft Term in FSM.
