@@ -4,6 +4,7 @@
 - [PR #1815](https://github.com/rqlite/rqlite/pull/1815): Track latest Raft Term in FSM.
 - [PR #1816](https://github.com/rqlite/rqlite/pull/1816): Support `SetSynchronousMode` on `SwappableDB`.
 - [PR #1824](https://github.com/rqlite/rqlite/pull/1824): More CAS logging.
+- [PR #1825](https://github.com/rqlite/rqlite/pull/1825): `go mod` updates.
 
 ## 8.26.2 (June 20th 2024)
 ### Implementation changes and bug fixes
