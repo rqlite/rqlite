@@ -2,6 +2,8 @@ package rsync
 
 import (
 	"errors"
+	"fmt"
+	"sync"
 	"sync/atomic"
 )
 
@@ -15,6 +17,7 @@ var (
 type CheckAndSet struct {
 	state atomic.Int32
 	owner AtomicString
+	mu    sync.Mutex
 }
 
 // NewCheckAndSet creates a new CheckAndSet instance.
@@ -25,15 +28,19 @@ func NewCheckAndSet() *CheckAndSet {
 // Begin attempts to enter the critical section. If another goroutine
 // is already in the critical section, Begin returns an error.
 func (c *CheckAndSet) Begin(owner string) error {
+	c.mu.Lock()
+	defer c.mu.Unlock()
 	if c.state.CompareAndSwap(0, 1) {
 		c.owner.Store(owner)
 		return nil
 	}
-	return ErrCASConflict
+	return fmt.Errorf("%w: currently held by owner %s", ErrCASConflict, c.owner.Load())
 }
 
 // End exits the critical section.
 func (c *CheckAndSet) End() {
+	c.mu.Lock()
+	defer c.mu.Unlock()
 	c.owner.Store("")
 	c.state.Store(0)
 }
