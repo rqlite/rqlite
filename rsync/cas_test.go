@@ -1,11 +1,14 @@
 package rsync
 
-import "testing"
+import (
+	"errors"
+	"testing"
+)
 
 func Test_NewCAS(t *testing.T) {
 	cas := NewCheckAndSet()
-	if exp, got := int32(0), cas.state.Load(); exp != got {
-		t.Fatalf("expected %d, got %d", exp, got)
+	if exp, got := false, cas.state; exp != got {
+		t.Fatalf("expected %T, got %T", exp, got)
 	}
 }
 
@@ -19,7 +22,7 @@ func Test_CASBeginEnd(t *testing.T) {
 	}
 
 	// Begin again, should fail
-	if err := cas.Begin("bar"); err != ErrCASConflict {
+	if err := cas.Begin("bar"); !errors.Is(err, ErrCASConflict) {
 		t.Fatalf("expected %v, got %v", ErrCASConflict, err)
 	}
 	if cas.Owner() != "foo" {

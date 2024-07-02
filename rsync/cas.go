@@ -2,7 +2,9 @@ package rsync
 
 import (
 	"errors"
-	"sync/atomic"
+	"fmt"
+	"sync"
+	"time"
 )
 
 var (
@@ -13,8 +15,10 @@ var (
 // CheckAndSet is a simple concurrency control mechanism that allows
 // only one goroutine to execute a critical section at a time.
 type CheckAndSet struct {
-	state atomic.Int32
-	owner AtomicString
+	state  bool
+	owner  string
+	startT time.Time
+	mu     sync.Mutex
 }
 
 // NewCheckAndSet creates a new CheckAndSet instance.
@@ -23,30 +27,47 @@ func NewCheckAndSet() *CheckAndSet {
 }
 
 // Begin attempts to enter the critical section. If another goroutine
-// is already in the critical section, Begin returns an error.
+// is already in the critical section, Begin returns an error of type
+// ErrCASConflict.
 func (c *CheckAndSet) Begin(owner string) error {
-	if c.state.CompareAndSwap(0, 1) {
-		c.owner.Store(owner)
-		return nil
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if c.state {
+		return fmt.Errorf(`%w: currently held by owner "%s" for %s`, ErrCASConflict, c.owner, time.Since(c.startT))
 	}
-	return ErrCASConflict
+	c.owner = owner
+	c.state = true
+	c.startT = time.Now()
+	return nil
 }
 
 // End exits the critical section.
 func (c *CheckAndSet) End() {
-	c.owner.Store("")
-	c.state.Store(0)
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.owner = ""
+	c.state = false
+	c.startT = time.Time{}
 }
 
 // Owner returns the current owner of the critical section.
 func (c *CheckAndSet) Owner() string {
-	return c.owner.Load()
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return c.owner
 }
 
 // Stats returns diagnostic information about the current state of the
 // CheckAndSet instance.
 func (c *CheckAndSet) Stats() map[string]interface{} {
-	return map[string]interface{}{
-		"owner": c.owner.Load(),
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	stats := map[string]interface{}{
+		"owner": nil,
 	}
+	if c.state {
+		stats["owner"] = c.owner
+		stats["duration"] = time.Since(c.startT)
+	}
+	return stats
 }

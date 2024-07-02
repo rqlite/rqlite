@@ -2104,7 +2104,11 @@ func (s *Store) observe() (closeCh, doneCh chan struct{}) {
 					if signal.LeaderID == raft.ServerID(s.raftID) {
 						s.logger.Printf("this node (ID=%s) is now Leader", s.raftID)
 					} else {
-						s.logger.Printf("node %s is now Leader", signal.LeaderID)
+						if signal.LeaderID == "" {
+							s.logger.Printf("Leader is now unknown")
+						} else {
+							s.logger.Printf("node %s is now Leader", signal.LeaderID)
+						}
 					}
 				}
 
