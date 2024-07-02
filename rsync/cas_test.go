@@ -7,8 +7,8 @@ import (
 
 func Test_NewCAS(t *testing.T) {
 	cas := NewCheckAndSet()
-	if exp, got := int32(0), cas.state.Load(); exp != got {
-		t.Fatalf("expected %d, got %d", exp, got)
+	if exp, got := false, cas.state; exp != got {
+		t.Fatalf("expected %T, got %T", exp, got)
 	}
 }
 
