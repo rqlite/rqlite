@@ -113,7 +113,7 @@ func Upgrade7To8(old, new string, logger *log.Logger) (retErr error) {
 		}
 		gzipReader, err := gzip.NewReader(stateFd)
 		if err != nil {
-			return fmt.Errorf("failed to create gzip reader for new SQLite file %s: %s", newSqlitePath, err)
+			return fmt.Errorf("failed to create gzip reader from old SQLite data at %s: %s", oldStatePath, err)
 		}
 		defer gzipReader.Close()
 		if _, err := io.Copy(newSqliteFd, gzipReader); err != nil {
