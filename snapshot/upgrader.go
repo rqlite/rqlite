@@ -32,10 +32,10 @@ func Upgrade7To8(old, new string, logger *log.Logger) (retErr error) {
 	// If a temporary version of the new snapshot exists, remove it. This implies a
 	// previous upgrade attempt was interrupted. We will need to start over.
 	if dirExists(newTmpDir) {
+		logger.Printf("detected temporary upgraded snapshot directory at %s, removing it", newTmpDir)
 		if err := os.RemoveAll(newTmpDir); err != nil {
 			return fmt.Errorf("failed to remove temporary upgraded snapshot directory %s: %s", newTmpDir, err)
 		}
-		logger.Println("detected temporary upgraded snapshot directory, removing")
 	}
 
 	if dirExists(old) {
