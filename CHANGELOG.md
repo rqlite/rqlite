@@ -1,6 +1,7 @@
 ## 8.26.4 (unreleased)
 ### Implementation changes and bug fixes
 - [PR #1826](https://github.com/rqlite/rqlite/pull/1826): Simplify CAS implementation.
+- [PR #1827](https://github.com/rqlite/rqlite/pull/1826): Add more 7-to-8 logging.
 
 ## 8.26.3 (July 1st 2024)
 ### Implementation changes and bug fixes
