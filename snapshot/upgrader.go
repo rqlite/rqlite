@@ -106,6 +106,11 @@ func Upgrade7To8(old, new string, logger *log.Logger) (retErr error) {
 			return fmt.Errorf("failed to open old state file %s: %s", oldStatePath, err)
 		}
 		defer stateFd.Close()
+		sz, err := fileSize(oldStatePath)
+		if err != nil {
+			return fmt.Errorf("failed to get size of old state file %s: %s", oldStatePath, err)
+		}
+		logger.Printf("successfully opened old state file at %s (%d bytes in size)", oldStatePath, sz)
 
 		// Skip past the header and length of the old state file.
 		if _, err := stateFd.Seek(16, 0); err != nil {
