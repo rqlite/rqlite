@@ -1,7 +1,8 @@
 ## 8.26.4 (July 3rd 2024)
 ### Implementation changes and bug fixes
 - [PR #1826](https://github.com/rqlite/rqlite/pull/1826): Simplify CAS implementation.
-- [PR #1827](https://github.com/rqlite/rqlite/pull/1826): Add more 7-to-8 logging.
+- [PR #1827](https://github.com/rqlite/rqlite/pull/1826): Add more 7.x-to-8.x upgrade logging.
+- [PR #1828](https://github.com/rqlite/rqlite/pull/1828): Perform more cleanup if upgrade from 7.x fails.
 
 ## 8.26.3 (July 1st 2024)
 ### Implementation changes and bug fixes
