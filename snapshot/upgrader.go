@@ -28,6 +28,14 @@ func Upgrade7To8(old, new string, logger *log.Logger) (retErr error) {
 		}
 	}()
 	newTmpDir := tmpName(new)
+	defer func() {
+		if retErr != nil {
+			if err := os.RemoveAll(newTmpDir); err != nil && !os.IsNotExist(err) {
+				logger.Printf("failed to remove temporary upgraded snapshot directory at %s due to outer error (%s) cleanup: %s",
+					newTmpDir, retErr, err)
+			}
+		}
+	}()
 
 	// If a temporary version of the new snapshot exists, remove it. This implies a
 	// previous upgrade attempt was interrupted. We will need to start over.
