@@ -32,10 +32,10 @@ func Upgrade7To8(old, new string, logger *log.Logger) (retErr error) {
 	// If a temporary version of the new snapshot exists, remove it. This implies a
 	// previous upgrade attempt was interrupted. We will need to start over.
 	if dirExists(newTmpDir) {
+		logger.Printf("detected temporary upgraded snapshot directory at %s, removing it", newTmpDir)
 		if err := os.RemoveAll(newTmpDir); err != nil {
 			return fmt.Errorf("failed to remove temporary upgraded snapshot directory %s: %s", newTmpDir, err)
 		}
-		logger.Println("detected temporary upgraded snapshot directory, removing")
 	}
 
 	if dirExists(old) {
@@ -106,6 +106,11 @@ func Upgrade7To8(old, new string, logger *log.Logger) (retErr error) {
 			return fmt.Errorf("failed to open old state file %s: %s", oldStatePath, err)
 		}
 		defer stateFd.Close()
+		sz, err := fileSize(oldStatePath)
+		if err != nil {
+			return fmt.Errorf("failed to get size of old state file %s: %s", oldStatePath, err)
+		}
+		logger.Printf("successfully opened old state file at %s (%d bytes in size)", oldStatePath, sz)
 
 		// Skip past the header and length of the old state file.
 		if _, err := stateFd.Seek(16, 0); err != nil {
@@ -113,7 +118,7 @@ func Upgrade7To8(old, new string, logger *log.Logger) (retErr error) {
 		}
 		gzipReader, err := gzip.NewReader(stateFd)
 		if err != nil {
-			return fmt.Errorf("failed to create gzip reader for new SQLite file %s: %s", newSqlitePath, err)
+			return fmt.Errorf("failed to create gzip reader from old SQLite data at %s: %s", oldStatePath, err)
 		}
 		defer gzipReader.Close()
 		if _, err := io.Copy(newSqliteFd, gzipReader); err != nil {
