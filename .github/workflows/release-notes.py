@@ -27,12 +27,13 @@ Check out the [rqlite Docker page](https://hub.docker.com/r/rqlite/rqlite/) for 
 ### Linux
 _Builds for a variety of CPU architectures are available. See the Assets section below._
 
-To download and start rqlite, execute the following in a shell.
+You need to choose the correct build for your CPU and Linux distribution. For most systems the `amd64` build is the one to use, but distributions such as Alpine may need to run the `musl` release.
 
+To download and start rqlite for `amd64`, execute the following in a shell. 
 ```
-curl -L https://github.com/rqlite/rqlite/releases/download/{release}/rqlite-{release}-linux-amd64.tar.gz -o rqlite-{release}-linux-amd64.tar.gz
-tar xvfz rqlite-{release}-linux-amd64.tar.gz
-cd rqlite-{release}-linux-amd64
+curl -L https://github.com/rqlite/rqlite/releases/download/v8.26.6/rqlite-v8.26.6-linux-amd64.tar.gz -o rqlite-v8.26.6-linux-amd64.tar.gz
+tar xvfz rqlite-v8.26.6-linux-amd64.tar.gz
+cd rqlite-v8.26.6-linux-amd64
 ./rqlited ~/node.1
 ```
 
