@@ -1,4 +1,4 @@
-## v8.26.7 (July 4th 2024)
+## v8.26.6 (July 4th 2024)
 ### Implementation changes and bug fixes
 - [PR #1830](https://github.com/rqlite/rqlite/pull/1830): Support upgrading 7.x snapshots which contain no data.
 
