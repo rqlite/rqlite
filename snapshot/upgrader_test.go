@@ -66,6 +66,49 @@ func Test_Upgrade_OK(t *testing.T) {
 	}
 }
 
+func Test_Upgrade_EmptyOK(t *testing.T) {
+	logger := log.New(os.Stderr, "[snapshot-store-upgrader] ", 0)
+	v7Snapshot := "testdata/upgrade/v7.20.3-empty-snapshots"
+	v7SnapshotID := "2-18-1686659761026"
+	oldTemp := filepath.Join(t.TempDir(), "snapshots")
+	newTemp := filepath.Join(t.TempDir(), "rsnapshots")
+
+	// Copy directory because successful test runs will delete it.
+	copyDir(v7Snapshot, oldTemp)
+
+	// Upgrade it.
+	if err := Upgrade7To8(oldTemp, newTemp, logger); err != nil {
+		t.Fatalf("failed to upgrade empty directories: %s", err)
+	}
+
+	// Create new SnapshotStore from the upgraded directory, to verify its
+	// contents.
+	store, err := NewStore(newTemp)
+	if err != nil {
+		t.Fatalf("failed to create new snapshot store: %s", err)
+	}
+
+	snapshots, err := store.List()
+	if err != nil {
+		t.Fatalf("failed to list snapshots: %s", err)
+	}
+	if len(snapshots) != 1 {
+		t.Fatalf("expected 1 snapshot, got %d", len(snapshots))
+	}
+	if got, exp := snapshots[0].ID, v7SnapshotID; got != exp {
+		t.Fatalf("expected snapshot ID %s, got %s", exp, got)
+	}
+
+	meta, rc, err := store.Open(snapshots[0].ID)
+	if err != nil {
+		t.Fatalf("failed to open snapshot: %s", err)
+	}
+	rc.Close() // Removing test resources, when running on Windows, will fail otherwise.
+	if exp, got := v7SnapshotID, meta.ID; exp != got {
+		t.Fatalf("expected meta ID %s, got %s", exp, got)
+	}
+}
+
 /* MIT License
  *
  * Copyright (c) 2017 Roland Singer [roland.singer@desertbit.com]

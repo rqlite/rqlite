@@ -1,3 +1,7 @@
+## v8.26.6 (unreleased)
+### Implementation changes and bug fixes
+- [PR #1830](https://github.com/rqlite/rqlite/pull/1830): Support upgrading 7.x snapshots which contain no data.
+
 ## v8.26.5 (July 4th 2024)
 There are no changes in this release relative to v8.26.4, but now the [Linux release binaries dynamically link](https://github.com/rqlite/rqlite/commit/2c56d16791e2729673c36dce19e1de3de6df572e) [glibc](https://www.gnu.org/software/libc/).
 

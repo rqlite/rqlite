@@ -120,26 +120,31 @@ func Upgrade7To8(old, new string, logger *log.Logger) (retErr error) {
 		}
 		logger.Printf("successfully opened old state file at %s (%d bytes in size)", oldStatePath, sz)
 
-		// Skip past the header and length of the old state file.
-		if _, err := stateFd.Seek(16, 0); err != nil {
-			return fmt.Errorf("failed to seek to beginning of old SQLite data %s: %s", oldStatePath, err)
-		}
-		gzipReader, err := gzip.NewReader(stateFd)
-		if err != nil {
-			return fmt.Errorf("failed to create gzip reader from old SQLite data at %s: %s", oldStatePath, err)
-		}
-		defer gzipReader.Close()
-		if _, err := io.Copy(newSqliteFd, gzipReader); err != nil {
-			return fmt.Errorf("failed to copy old SQLite file %s to new SQLite file %s: %s", oldStatePath,
-				newSqlitePath, err)
+		headerLength := int64(16)
+		if sz < headerLength {
+			return fmt.Errorf("old state file %s is too small to be valid", oldStatePath)
+		} else if sz == headerLength {
+			logger.Printf("old state file %s contains no database data, no data to upgrade", oldStatePath)
+		} else {
+			// Skip past the header and length of the old state file.
+			if _, err := stateFd.Seek(headerLength, 0); err != nil {
+				return fmt.Errorf("failed to seek to beginning of old SQLite data %s: %s", oldStatePath, err)
+			}
+			gzipReader, err := gzip.NewReader(stateFd)
+			if err != nil {
+				return fmt.Errorf("failed to create gzip reader from old SQLite data at %s: %s", oldStatePath, err)
+			}
+			defer gzipReader.Close()
+			if _, err := io.Copy(newSqliteFd, gzipReader); err != nil {
+				return fmt.Errorf("failed to copy old SQLite file %s to new SQLite file %s: %s", oldStatePath,
+					newSqlitePath, err)
+			}
+			if !db.IsValidSQLiteFile(newSqlitePath) {
+				return fmt.Errorf("migrated SQLite file %s is not valid", newSqlitePath)
+			}
 		}
 
-		// Sanity-check the SQLite data.
-		if !db.IsValidSQLiteFile(newSqlitePath) {
-			return fmt.Errorf("migrated SQLite file %s is not valid", newSqlitePath)
-		}
-
-		// Convert to WAL mode.
+		// Ensure database file exists and convert to WAL mode.
 		if err := openCloseDB(newSqlitePath); err != nil {
 			return fmt.Errorf("failed to convert migrated SQLite file %s to WAL mode: %s", newSqlitePath, err)
 		}
