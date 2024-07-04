@@ -1,3 +1,6 @@
+## 8.26.5 (July 4th 2024)
+There are no changes in this release relative to 8.26.4, but now the [Linux release binaries dynamically link](https://github.com/rqlite/rqlite/commit/2c56d16791e2729673c36dce19e1de3de6df572e) [glibc](https://www.gnu.org/software/libc/).
+
 ## 8.26.4 (July 3rd 2024)
 ### Implementation changes and bug fixes
 - [PR #1826](https://github.com/rqlite/rqlite/pull/1826): Simplify CAS implementation.
