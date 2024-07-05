@@ -69,7 +69,7 @@ func Upgrade7To8(old, new string, logger *log.Logger) (retErr error) {
 			return nil
 		}
 	} else {
-		logger.Printf("old snapshot directory %s does not exist, nothing to upgrade", old)
+		logger.Printf("old v7 snapshot directory does not exist at %s, nothing to upgrade", old)
 		return nil
 	}
 
