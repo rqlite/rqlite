@@ -28,14 +28,22 @@ func Upgrade7To8(old, new string, logger *log.Logger) (retErr error) {
 		}
 	}()
 	newTmpDir := tmpName(new)
+	defer func() {
+		if retErr != nil {
+			if err := os.RemoveAll(newTmpDir); err != nil && !os.IsNotExist(err) {
+				logger.Printf("failed to remove temporary upgraded snapshot directory at %s due to outer error (%s) cleanup: %s",
+					newTmpDir, retErr, err)
+			}
+		}
+	}()
 
 	// If a temporary version of the new snapshot exists, remove it. This implies a
 	// previous upgrade attempt was interrupted. We will need to start over.
 	if dirExists(newTmpDir) {
+		logger.Printf("detected temporary upgraded snapshot directory at %s, removing it", newTmpDir)
 		if err := os.RemoveAll(newTmpDir); err != nil {
 			return fmt.Errorf("failed to remove temporary upgraded snapshot directory %s: %s", newTmpDir, err)
 		}
-		logger.Println("detected temporary upgraded snapshot directory, removing")
 	}
 
 	if dirExists(old) {
@@ -61,7 +69,7 @@ func Upgrade7To8(old, new string, logger *log.Logger) (retErr error) {
 			return nil
 		}
 	} else {
-		logger.Printf("old snapshot directory %s does not exist, nothing to upgrade", old)
+		logger.Printf("old v7 snapshot directory does not exist at %s, nothing to upgrade", old)
 		return nil
 	}
 
@@ -106,24 +114,34 @@ func Upgrade7To8(old, new string, logger *log.Logger) (retErr error) {
 			return fmt.Errorf("failed to open old state file %s: %s", oldStatePath, err)
 		}
 		defer stateFd.Close()
-
-		// Skip past the header and length of the old state file.
-		if _, err := stateFd.Seek(16, 0); err != nil {
-			return fmt.Errorf("failed to seek to beginning of old SQLite data %s: %s", oldStatePath, err)
-		}
-		gzipReader, err := gzip.NewReader(stateFd)
+		sz, err := fileSize(oldStatePath)
 		if err != nil {
-			return fmt.Errorf("failed to create gzip reader for new SQLite file %s: %s", newSqlitePath, err)
+			return fmt.Errorf("failed to get size of old state file %s: %s", oldStatePath, err)
 		}
-		defer gzipReader.Close()
-		if _, err := io.Copy(newSqliteFd, gzipReader); err != nil {
-			return fmt.Errorf("failed to copy old SQLite file %s to new SQLite file %s: %s", oldStatePath,
-				newSqlitePath, err)
-		}
+		logger.Printf("successfully opened old state file at %s (%d bytes in size)", oldStatePath, sz)
 
-		// Sanity-check the SQLite data.
-		if !db.IsValidSQLiteFile(newSqlitePath) {
-			return fmt.Errorf("migrated SQLite file %s is not valid", newSqlitePath)
+		headerLength := int64(16)
+		if sz < headerLength {
+			return fmt.Errorf("old state file %s is too small to be valid", oldStatePath)
+		} else if sz == headerLength {
+			logger.Printf("old state file %s contains no database data, no data to upgrade", oldStatePath)
+		} else {
+			// Skip past the header and length of the old state file.
+			if _, err := stateFd.Seek(headerLength, 0); err != nil {
+				return fmt.Errorf("failed to seek to beginning of old SQLite data %s: %s", oldStatePath, err)
+			}
+			gzipReader, err := gzip.NewReader(stateFd)
+			if err != nil {
+				return fmt.Errorf("failed to create gzip reader from old SQLite data at %s: %s", oldStatePath, err)
+			}
+			defer gzipReader.Close()
+			if _, err := io.Copy(newSqliteFd, gzipReader); err != nil {
+				return fmt.Errorf("failed to copy old SQLite file %s to new SQLite file %s: %s", oldStatePath,
+					newSqlitePath, err)
+			}
+			if !db.IsValidSQLiteFile(newSqlitePath) {
+				return fmt.Errorf("migrated SQLite file %s is not valid", newSqlitePath)
+			}
 		}
 
 		// Ensure WAL files are checkpointed and removed.

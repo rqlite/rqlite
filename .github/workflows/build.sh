@@ -59,13 +59,7 @@ for arch in "${!archs[@]}"; do
     echo "Building for $arch using $compiler..."
 
     LDFLAGS="$STRIP_SYMBOLS -X $LINKER_PKG_PATH.CompilerCommand=$compiler -X $LINKER_PKG_PATH.Version=$VERSION -X $LINKER_PKG_PATH.Branch=$branch -X $LINKER_PKG_PATH.Commit=$commit -X $LINKER_PKG_PATH.Buildtime=$buildtime"
-    # Statically link for amd64, since we can.
-    if [ "$arch" == "amd64" ]; then
-      STATIC="-extldflags=-static"
-    else
-      STATIC=""
-    fi
-    CGO_ENABLED=1 GOARCH=$arch CC=$compiler go install -a -tags sqlite_omit_load_extension -ldflags="$LDFLAGS $STATIC" ./...
+    CGO_ENABLED=1 GOARCH=$arch CC=$compiler go install -a -tags sqlite_omit_load_extension -ldflags="$LDFLAGS" ./...
 
     # Special case for musl-gcc, keep legacy naming.
     if [ "$compiler" == "musl-gcc" ]; then
