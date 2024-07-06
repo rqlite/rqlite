@@ -443,6 +443,12 @@ func (s *Store) Open() (retErr error) {
 		}
 	}
 
+	// Prep the SQLite database
+	s.db, err = prepOnDisk(s.dbPath, s.dbConf.FKConstraints, true)
+	if err != nil {
+		return fmt.Errorf("failed to prep on-disk database: %s", err)
+	}
+
 	// Create Raft-compatible network layer.
 	nt := raft.NewNetworkTransport(NewTransport(s.ly), connectionPoolCount, connectionTimeout, nil)
 	s.raftTn = NewNodeTransport(nt)
@@ -453,14 +459,14 @@ func (s *Store) Open() (retErr error) {
 	config := s.raftConfig()
 	config.LocalID = raft.ServerID(s.raftID)
 
-	// Upgrade any preexisting snapshots.
+	// Upgrade any preexisting snapshots. XXX
 	// oldSnapshotDir := filepath.Join(s.raftDir, "snapshots")
 	// if err := snapshot.Upgrade7To8(oldSnapshotDir, s.snapshotDir, s.logger); err != nil {
 	// 	return fmt.Errorf("failed to upgrade snapshots: %s", err)
 	// }
 
 	// Create store for the Snapshots.
-	snapshotStore, err := snapshot.NewReferentialStore(s.snapshotDir, s.createStateProvider())
+	snapshotStore, err := snapshot.NewReferentialStore(s.snapshotDir, createSnapshotSource(s.db))
 	if err != nil {
 		return fmt.Errorf("failed to create Snapshot Store: %s", err)
 	}
@@ -519,11 +525,6 @@ func (s *Store) Open() (retErr error) {
 		}
 		s.logger.Printf("node recovered successfully using %s", s.peersPath)
 		stats.Add(numRecoveries, 1)
-	}
-
-	s.db, err = prepOnDisk(s.dbPath, s.dbConf.FKConstraints, true)
-	if err != nil {
-		return fmt.Errorf("failed to prep on-disk database: %s", err)
 	}
 
 	// Clean up any files from aborted operations. This tries to catch the case where scratch files
@@ -2284,32 +2285,35 @@ func (s *Store) autoVacNeeded(t time.Time) (bool, error) {
 	return t.Sub(bt) > s.AutoVacInterval, nil
 }
 
-type stateProvider struct {
-	str *Store
-}
-
-func (sp *stateProvider) Open() (*snapshot.Proof, io.ReadCloser, error) {
-	proof, err := snapshot.NewProofFromFile(sp.str.db.Path())
-	if err != nil {
-		return nil, nil, err
-	}
-	fd, err := os.Open(sp.str.db.Path())
-	if err != nil {
-		return nil, nil, err
-	}
-	return proof, fd, nil
-}
-
-func (s *Store) createStateProvider() snapshot.StateProvider {
-	return &stateProvider{s}
-}
-
 func (s *Store) hcLogLevel() hclog.Level {
 	return hclog.LevelFromString(s.RaftLogLevel)
 }
 
 func (s *Store) logBackup() bool {
 	return s.hcLogLevel() < hclog.Warn
+}
+
+type snapshotSource struct {
+	db *sql.SwappableDB
+}
+
+func (sp *snapshotSource) Open() (*snapshot.Proof, io.ReadCloser, error) {
+	proof, err := snapshot.NewProofFromFile(sp.db.Path())
+	if err != nil {
+		return nil, nil, err
+	}
+	fd, err := os.Open(sp.db.Path())
+	if err != nil {
+		return nil, nil, err
+	}
+	return proof, fd, nil
+}
+
+func createSnapshotSource(db *sql.SwappableDB) snapshot.Source {
+	if db == nil {
+		panic("nil database passed to createSnapshotSource")
+	}
+	return &snapshotSource{db}
 }
 
 // prepOnDisk opens an on-disk database file at the configured path. Any

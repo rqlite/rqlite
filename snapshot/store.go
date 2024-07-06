@@ -59,13 +59,13 @@ func ResetStats() {
 	stats.Add(snapshotOpenMRSWFail, 0)
 }
 
-type StateProvider interface {
+type Source interface {
 	Open() (*Proof, io.ReadCloser, error)
 }
 
 type ReferentialStore struct {
 	dir string
-	sp  StateProvider
+	src Source
 
 	mrsw   *rsync.MultiRSW
 	logger *log.Logger
@@ -74,14 +74,14 @@ type ReferentialStore struct {
 	reapDisabled bool
 }
 
-func NewReferentialStore(dir string, sp StateProvider) (*ReferentialStore, error) {
+func NewReferentialStore(dir string, src Source) (*ReferentialStore, error) {
 	if err := os.MkdirAll(dir, 0755); err != nil {
 		return nil, err
 	}
 
 	return &ReferentialStore{
 		dir:    dir,
-		sp:     sp,
+		src:    src,
 		mrsw:   rsync.NewMultiRSW(),
 		logger: log.New(os.Stderr, "[snapshot-store] ", log.LstdFlags),
 	}, nil
@@ -167,7 +167,7 @@ func (s *ReferentialStore) Open(id string) (_ *raft.SnapshotMeta, _ io.ReadClose
 			return nil, nil, fmt.Errorf("failed to unmarshal proof: %w", err)
 		}
 
-		srcProof, src, err := s.sp.Open()
+		srcProof, src, err := s.src.Open()
 		if err != nil {
 			return nil, nil, err
 		}
