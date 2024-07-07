@@ -1,8 +1,6 @@
 package store
 
 import (
-	"compress/gzip"
-	"io"
 	"os"
 	"testing"
 	"time"
@@ -223,28 +221,4 @@ func Test_SingleNodeProvideLastIndex(t *testing.T) {
 	if newLI <= lm {
 		t.Fatalf("last index should have changed")
 	}
-}
-
-func gunzip(file string) (string, error) {
-	f, err := os.Open(file)
-	if err != nil {
-		return "", err
-	}
-	defer f.Close()
-
-	gz, err := gzip.NewReader(f)
-	if err != nil {
-		return "", err
-	}
-	defer gz.Close()
-
-	tmpFd := mustCreateTempFD()
-	defer tmpFd.Close()
-
-	_, err = io.Copy(tmpFd, gz)
-	if err != nil {
-		return "", err
-	}
-
-	return tmpFd.Name(), nil
 }

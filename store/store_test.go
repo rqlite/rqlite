@@ -19,6 +19,7 @@ import (
 	"github.com/rqlite/rqlite/v8/command/proto"
 	"github.com/rqlite/rqlite/v8/db"
 	"github.com/rqlite/rqlite/v8/random"
+	"github.com/rqlite/rqlite/v8/snapshot"
 	"github.com/rqlite/rqlite/v8/testdata/chinook"
 )
 
@@ -408,10 +409,11 @@ COMMIT;
 	checkDB(guzf.Name())
 }
 
-// Test_SingleNodeSnapshot tests that the Store correctly takes a snapshot
-// and recovers from it. It performs this testing via the FSM interface.
+// Test_SingleNodeSnapshot_ProofCheck tests that the Store correctly takes a snapshot
+// and the at Proof match passes afterwards. It performs this testing via the FSM
+// interface.
 
-func Test_SingleNodeSnapshot(t *testing.T) {
+func Test_SingleNodeSnapshot_ProofCheck(t *testing.T) {
 	s, ln := mustNewStore(t)
 	defer ln.Close()
 
@@ -439,7 +441,8 @@ func Test_SingleNodeSnapshot(t *testing.T) {
 		t.Fatalf("failed to query single node: %s", err.Error())
 	}
 
-	// Snap the node and write to disk.
+	// Snap the node and write to disk. This should result in a Proof
+	// file being written to the Snapshot file.
 	fsm := NewFSM(s)
 	f, err := fsm.Snapshot()
 	if err != nil {
@@ -457,26 +460,20 @@ func Test_SingleNodeSnapshot(t *testing.T) {
 		t.Fatalf("failed to persist snapshot to disk: %s", err.Error())
 	}
 
-	// Check restoration.
-	snapFile, err = os.Open(filepath.Join(snapDir, "snapshot"))
+	// Now confirm that the Proof in the Snapshot directory indicates
+	// that Store's SQLite file is consistent with the Proof.
+	buf := mustReadFile(snapFile.Name())
+	proofSnap, err := snapshot.UnmarshalProof(buf)
 	if err != nil {
-		t.Fatalf("failed to open snapshot file: %s", err.Error())
+		t.Fatalf("failed to unmarshal proof: %s", err.Error())
 	}
-	defer snapFile.Close()
-	if err := fsm.Restore(snapFile); err != nil {
-		t.Fatalf("failed to restore snapshot from disk: %s", err.Error())
+	proofSrc, err := snapshot.NewProofFromFile(s.dbPath)
+	if err != nil {
+		t.Fatalf("failed to read proof from source file: %s", err.Error())
 	}
 
-	// Ensure database is back in the correct state.
-	r, err := s.Query(queryRequestFromString("SELECT * FROM foo", false, false))
-	if err != nil {
-		t.Fatalf("failed to query single node: %s", err.Error())
-	}
-	if exp, got := `["id","name"]`, asJSON(r[0].Columns); exp != got {
-		t.Fatalf("unexpected results for query\nexp: %s\ngot: %s", exp, got)
-	}
-	if exp, got := `[[1,"fiona"]]`, asJSON(r[0].Values); exp != got {
-		t.Fatalf("unexpected results for query\nexp: %s\ngot: %s", exp, got)
+	if !proofSnap.Equals(proofSrc) {
+		t.Fatalf("proofs do not match, snap: %s, src: %s", proofSnap, proofSrc)
 	}
 }
 
@@ -2794,6 +2791,14 @@ func mustReadFile(path string) []byte {
 	return b
 }
 
+func mustReadAll(r io.Reader) []byte {
+	b, err := io.ReadAll(r)
+	if err != nil {
+		panic("failed to read all from reader")
+	}
+	return b
+}
+
 func mustReadRandom(b []byte) {
 	_, err := rand.Read(b)
 	if err != nil {
@@ -2927,6 +2932,29 @@ func removeNodeRequest(id string) *proto.RemoveNodeRequest {
 	return &proto.RemoveNodeRequest{
 		Id: id,
 	}
+}
+
+func gunzip(file string) (string, error) {
+	f, err := os.Open(file)
+	if err != nil {
+		return "", err
+	}
+	defer f.Close()
+
+	gz, err := gzip.NewReader(f)
+	if err != nil {
+		return "", err
+	}
+	defer gz.Close()
+
+	tmpFd := mustCreateTempFD()
+	defer tmpFd.Close()
+
+	_, err = io.Copy(tmpFd, gz)
+	if err != nil {
+		return "", err
+	}
+	return tmpFd.Name(), nil
 }
 
 func gunzipFile(dst, src *os.File) error {
