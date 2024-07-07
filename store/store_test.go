@@ -76,6 +76,11 @@ func Test_OpenStoreSingleNode(t *testing.T) {
 		t.Fatalf("failed to bootstrap single-node store: %s", err.Error())
 	}
 
+	// Ensure the SQLite file exists.
+	if !pathExists(s.dbPath) {
+		t.Fatalf("SQLite file does not exist at %s after opening Store", s.dbPath)
+	}
+
 	_, err := s.WaitForLeader(10 * time.Second)
 	if err != nil {
 		t.Fatalf("Error waiting for leader: %s", err)

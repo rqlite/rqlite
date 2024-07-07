@@ -443,8 +443,13 @@ func (s *Store) Open() (retErr error) {
 		}
 	}
 
-	// Prep the SQLite database
-	s.db, err = prepOnDisk(s.dbPath, s.dbConf.FKConstraints, true)
+	// If there are any WAL files present it implies that the system was not shut
+	// down gracefully. The changes captured in the WAL files are actually available
+	// in the Raft log and will be reapplied using that data.
+	if err := sql.RemoveWALFiles(s.dbPath); err != nil {
+		return err
+	}
+	s.db, err = sql.OpenSwappable(s.dbPath, s.dbConf.FKConstraints, true)
 	if err != nil {
 		return fmt.Errorf("failed to prep on-disk database: %s", err)
 	}
@@ -466,7 +471,7 @@ func (s *Store) Open() (retErr error) {
 	// }
 
 	// Create store for the Snapshots.
-	snapshotStore, err := snapshot.NewReferentialStore(s.snapshotDir, createSnapshotSource(s.db))
+	snapshotStore, err := snapshot.NewReferentialStore(s.snapshotDir, NewSnapshotSource(s.db))
 	if err != nil {
 		return fmt.Errorf("failed to create Snapshot Store: %s", err)
 	}
@@ -493,9 +498,17 @@ func (s *Store) Open() (retErr error) {
 		s.logger.Printf("using pre-existing SQLite file at %s", s.dbPath)
 		config.NoSnapshotRestoreOnStart = true
 	} else {
-		// No snapshots, so the SQLite file should be completely rebuilt from the Raft log.
+		// No snapshots, so the SQLite file should be *completely* rebuilt from the Raft log.
+		// Close the existing database handle, delete the files, and create a new database.
+		if err := s.db.Close(); err != nil {
+			return fmt.Errorf("failed to close SQLite database: %s", err)
+		}
 		if err := sql.RemoveFiles(s.dbPath); err != nil {
-			return fmt.Errorf("failed to remove SQLite files: %s", err)
+			return fmt.Errorf("failed to remove SQLite file: %s", err)
+		}
+		s.db, err = sql.OpenSwappable(s.dbPath, s.dbConf.FKConstraints, true)
+		if err != nil {
+			return fmt.Errorf("failed to prep on-disk database: %s", err)
 		}
 	}
 
@@ -1964,7 +1977,7 @@ func (s *Store) fsmSnapshot() (_ raft.FSMSnapshot, retErr error) {
 
 	proof, err := snapshot.NewProofFromFile(s.db.Path())
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to create proof: %s", err)
 	}
 	pb, err := proof.Marshal()
 	if err != nil {
@@ -1991,6 +2004,8 @@ func (s *Store) fsmRestore(rc io.ReadCloser) (retErr error) {
 	startT := time.Now()
 
 	// Create a scatch file to write the restore data to it.
+	// XXX for large files this would consume even more disk space. Delete
+	// any pre-existing database file first?
 	tmpFile, err := createTemp(s.dbDir, restoreScratchPattern)
 	if err != nil {
 		return fmt.Errorf("error creating temporary file for restore operation: %v", err)
@@ -2291,39 +2306,6 @@ func (s *Store) hcLogLevel() hclog.Level {
 
 func (s *Store) logBackup() bool {
 	return s.hcLogLevel() < hclog.Warn
-}
-
-type snapshotSource struct {
-	db *sql.SwappableDB
-}
-
-func (sp *snapshotSource) Open() (*snapshot.Proof, io.ReadCloser, error) {
-	proof, err := snapshot.NewProofFromFile(sp.db.Path())
-	if err != nil {
-		return nil, nil, err
-	}
-	fd, err := os.Open(sp.db.Path())
-	if err != nil {
-		return nil, nil, err
-	}
-	return proof, fd, nil
-}
-
-func createSnapshotSource(db *sql.SwappableDB) snapshot.Source {
-	if db == nil {
-		panic("nil database passed to createSnapshotSource")
-	}
-	return &snapshotSource{db}
-}
-
-// prepOnDisk opens an on-disk database file at the configured path. Any
-// preexisting WAL files are removed because this indicates a non-graceful
-// shutdown.
-func prepOnDisk(path string, fkConstraints, wal bool) (*sql.SwappableDB, error) {
-	if err := sql.RemoveWALFiles(path); err != nil {
-		return nil, err
-	}
-	return sql.OpenSwappable(path, fkConstraints, wal)
 }
 
 func createTemp(dir, pattern string) (*os.File, error) {

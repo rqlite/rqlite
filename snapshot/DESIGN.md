@@ -218,3 +218,4 @@ Open tasks:
 - upgrade from v8 snapshot stores
 - if snapshotting is interrrupted, must be detectable and fixable.
 - remove option to explicitly set SQLite path. Too dangerous now.
+- stop using compressing transport if necessary.

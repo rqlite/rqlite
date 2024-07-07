@@ -128,8 +128,6 @@ func Test_SingleNodeProvideLastIndex(t *testing.T) {
 		t.Fatalf("Error waiting for leader: %s", err)
 	}
 
-	tmpFile := mustCreateTempFile()
-	defer os.Remove(tmpFile)
 	provider := NewProvider(s, false, false)
 
 	lm, err := provider.LastIndex()
