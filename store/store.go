@@ -495,7 +495,7 @@ func (s *Store) Open() (retErr error) {
 		if !dbProof.Equals(sProof) {
 			return fmt.Errorf("proofs do not match: %v != %v", dbProof, sProof)
 		}
-		s.logger.Printf("using pre-existing SQLite file at %s", s.dbPath)
+		s.logger.Println("proofs match so skipping restore-on-start")
 		config.NoSnapshotRestoreOnStart = true
 	} else {
 		// No snapshots, so the SQLite file should be *completely* rebuilt from the Raft log.
