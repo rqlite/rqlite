@@ -348,10 +348,6 @@ func New(ly Layer, c *Config) *Store {
 	}
 
 	dbPath := filepath.Join(c.Dir, sqliteFile)
-	if c.DBConf.OnDiskPath != "" {
-		dbPath = c.DBConf.OnDiskPath
-	}
-
 	return &Store{
 		open:            rsync.NewAtomicBool(),
 		ly:              ly,

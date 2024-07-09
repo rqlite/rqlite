@@ -2680,11 +2680,9 @@ func Test_State(t *testing.T) {
 	}
 }
 
-func mustNewStoreAtPathsLn(id, dataPath, sqlitePath string, fk bool) (*Store, net.Listener) {
+func mustNewStoreLn(id, dataPath string, fk bool) (*Store, net.Listener) {
 	cfg := NewDBConfig()
 	cfg.FKConstraints = fk
-	cfg.OnDiskPath = sqlitePath
-
 	ly := mustMockLayer("localhost:0")
 	s := New(ly, &Config{
 		DBConf: cfg,
@@ -2698,18 +2696,18 @@ func mustNewStoreAtPathsLn(id, dataPath, sqlitePath string, fk bool) (*Store, ne
 }
 
 func mustNewStore(t *testing.T) (*Store, net.Listener) {
-	return mustNewStoreAtPathsLn(random.String(), t.TempDir(), "", false)
+	return mustNewStoreLn(random.String(), t.TempDir(), false)
 }
 
 func mustNewStoreFK(t *testing.T) (*Store, net.Listener) {
-	return mustNewStoreAtPathsLn(random.String(), t.TempDir(), "", true)
+	return mustNewStoreLn(random.String(), t.TempDir(), true)
 }
 
 func mustNewStoreSQLitePath(t *testing.T) (*Store, net.Listener, string) {
 	dataDir := t.TempDir()
 	sqliteDir := t.TempDir()
 	sqlitePath := filepath.Join(sqliteDir, "explicit-path.db")
-	s, ln := mustNewStoreAtPathsLn(random.String(), dataDir, sqlitePath, true)
+	s, ln := mustNewStoreLn(random.String(), dataDir, true)
 	return s, ln, sqlitePath
 }
 
