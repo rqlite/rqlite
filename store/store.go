@@ -440,8 +440,8 @@ func (s *Store) Open() (retErr error) {
 	}
 
 	// If there are any WAL files present it implies that the system was not shut
-	// down gracefully. The changes captured in the WAL files are actually available
-	// in the Raft log and will be reapplied using that data.
+	// down gracefully. The changes stores in the WAL files are not authoritative
+	// and it's the Raft log that is authoritative. So, remove the WAL files.
 	if err := sql.RemoveWALFiles(s.dbPath); err != nil {
 		return err
 	}
@@ -479,7 +479,9 @@ func (s *Store) Open() (retErr error) {
 	}
 	s.logger.Printf("%d preexisting snapshots present", len(snaps))
 	if len(snaps) > 0 {
-		sProof, err := snapshotStore.Proof()
+		sProof, err := snapshotStore.Proof() // XXX The issue here is that this assumes the Proof is for a locally-generated Snapshot. What if it's generating
+		// one of a snapshot that was installed? Proof() semantics need definition. Does a Proof only exist if the Snapshot was generated locally? I think so
+		// since there is only a single state.bin file in the snapshot store.
 		if err != nil {
 			return fmt.Errorf("failed to get proof from snapshot store: %s", err)
 		}
@@ -534,6 +536,7 @@ func (s *Store) Open() (retErr error) {
 		}
 		s.logger.Printf("node recovered successfully using %s", s.peersPath)
 		stats.Add(numRecoveries, 1)
+		// XXXX s.db needs to be set to new file
 	}
 
 	// Clean up any files from aborted operations. This tries to catch the case where scratch files

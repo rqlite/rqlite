@@ -119,7 +119,8 @@ func (s *ReferentialStore) Create(version raft.SnapshotVersion, index, term uint
 }
 
 // Open opens the snapshot with the given ID. Close() must be called on the snapshot
-// when finished with it.
+// when finished with it. This function always returns a SQLite database, regardless
+// of whether a SQLite file or a Proof file was used to create the snapshot.
 func (s *ReferentialStore) Open(id string) (_ *raft.SnapshotMeta, _ io.ReadCloser, retErr error) {
 	if err := s.mrsw.BeginRead(); err != nil {
 		stats.Add(snapshotOpenMRSWFail, 1)
