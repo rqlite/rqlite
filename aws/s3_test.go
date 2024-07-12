@@ -148,7 +148,7 @@ func Test_S3ClientUploadOK_Timestamped(t *testing.T) {
 				t.Errorf("expected bucket to be %q, got %q", bucket, *input.Bucket)
 			}
 			if *input.Key != timestampedKey {
-				t.Errorf("expected key to be %q, got %q", key, *input.Key)
+				t.Errorf("expected key to be %q, got %q", timestampedKey, *input.Key)
 			}
 			if input.Body == nil {
 				t.Errorf("expected body to be non-nil")
