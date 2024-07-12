@@ -118,7 +118,9 @@ func (s *S3Client) Upload(ctx context.Context, reader io.Reader, id string) erro
 	key := s.key
 	if s.timestamp {
 		if s.now == nil {
-			s.now = time.Now().UTC
+			s.now = func() time.Time {
+				return time.Now().UTC()
+			}
 		}
 		key = TimestampedPath(key, s.now())
 	}

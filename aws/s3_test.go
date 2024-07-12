@@ -192,6 +192,54 @@ func Test_S3ClientUploadOK_Timestamped(t *testing.T) {
 	}
 }
 
+// Test_S3ClientUploadOK_Timestamped_Changes tests that the key actually changes between uploads
+// when timestamped uploads are enabled.
+func Test_S3ClientUploadOK_Timestamped_Changes(t *testing.T) {
+	endpoint := "https://my-custom-s3-endpoint.com"
+	region := "us-west-2"
+	accessKey := "your-access-key"
+	secretKey := "your-secret-key"
+	bucket := "your-bucket"
+	key := "your/key/path"
+
+	timestampedKey1 := ""
+	mockUploader := &mockUploader{
+		uploadFn: func(ctx aws.Context, input *s3manager.UploadInput, opts ...func(*s3manager.Uploader)) (*s3manager.UploadOutput, error) {
+			if timestampedKey1 == "" {
+				timestampedKey1 = *input.Key
+			} else {
+				if *input.Key == timestampedKey1 {
+					t.Errorf("expected key for second upload to be different from %q, got %q", timestampedKey1, *input.Key)
+				}
+			}
+			return &s3manager.UploadOutput{}, nil
+		},
+	}
+
+	client := &S3Client{
+		endpoint:  endpoint,
+		region:    region,
+		accessKey: accessKey,
+		secretKey: secretKey,
+		bucket:    bucket,
+		key:       key,
+		timestamp: true,
+		uploader:  mockUploader,
+	}
+
+	u := func(id string) {
+		reader := strings.NewReader("test data")
+		err := client.Upload(context.Background(), reader, id)
+		if err != nil {
+			t.Fatalf("Unexpected error: %v", err)
+		}
+	}
+
+	u("some-id1")
+	time.Sleep(2 * time.Second)
+	u("some-id2")
+}
+
 func Test_S3ClientUploadFail(t *testing.T) {
 	region := "us-west-2"
 	accessKey := "your-access-key"
@@ -318,6 +366,15 @@ func Test_TimestampedPath(t *testing.T) {
 	}
 	if exp, got := "aaa/bbb/20210701150405_ccc", TimestampedPath("aaa/bbb/ccc", ts); exp != got {
 		t.Fatalf("wrong timestamped path\nexp %s\ngot %s", exp, got)
+	}
+}
+
+func Test_TimestampedPath_Changes(t *testing.T) {
+	path1 := TimestampedPath("xxx", time.Now().UTC())
+	time.Sleep(1 * time.Second)
+	path2 := TimestampedPath("xxx", time.Now().UTC())
+	if path1 == path2 {
+		t.Fatalf("expected different paths, got %q", path1)
 	}
 }
 

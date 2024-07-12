@@ -3,6 +3,17 @@
 import boto3
 import os
 
+def list_s3_objects(access_key_id, secret_access_key_id, bucket_name):
+    """
+    List objects in an S3 bucket.
+    """
+    os.environ['AWS_ACCESS_KEY_ID'] = access_key_id
+    os.environ['AWS_SECRET_ACCESS_KEY'] = secret_access_key_id
+
+    s3_client = boto3.client('s3')
+    response = s3_client.list_objects_v2(Bucket=bucket_name)
+    return response['Contents']
+
 def delete_s3_object(access_key_id, secret_access_key_id, bucket_name, object_key):
     """
     Delete an object from an S3 bucket.
