@@ -236,7 +236,55 @@ func Test_S3ClientUploadOK_Timestamped_Changes(t *testing.T) {
 	}
 
 	u("some-id1")
-	time.Sleep(2 * time.Second)
+	time.Sleep(1 * time.Second)
+	u("some-id2")
+}
+
+// Test_S3ClientUploadOK_Timestamped_NoChanges tests that the key does not change between
+// uploads when timestamped uploads are disabled.
+func Test_S3ClientUploadOK_Timestamped_NoChanges(t *testing.T) {
+	endpoint := "https://my-custom-s3-endpoint.com"
+	region := "us-west-2"
+	accessKey := "your-access-key"
+	secretKey := "your-secret-key"
+	bucket := "your-bucket"
+	key := "your/key/path"
+
+	timestampedKey1 := ""
+	mockUploader := &mockUploader{
+		uploadFn: func(ctx aws.Context, input *s3manager.UploadInput, opts ...func(*s3manager.Uploader)) (*s3manager.UploadOutput, error) {
+			if timestampedKey1 == "" {
+				timestampedKey1 = *input.Key
+			} else {
+				if *input.Key != timestampedKey1 {
+					t.Errorf("expected key for second upload to be same as %q, got %q", timestampedKey1, *input.Key)
+				}
+			}
+			return &s3manager.UploadOutput{}, nil
+		},
+	}
+
+	client := &S3Client{
+		endpoint:  endpoint,
+		region:    region,
+		accessKey: accessKey,
+		secretKey: secretKey,
+		bucket:    bucket,
+		key:       key,
+		timestamp: false,
+		uploader:  mockUploader,
+	}
+
+	u := func(id string) {
+		reader := strings.NewReader("test data")
+		err := client.Upload(context.Background(), reader, id)
+		if err != nil {
+			t.Fatalf("Unexpected error: %v", err)
+		}
+	}
+
+	u("some-id1")
+	time.Sleep(1 * time.Second)
 	u("some-id2")
 }
 
