@@ -1,4 +1,4 @@
-package snapshot
+package snapshot8
 
 import (
 	"fmt"

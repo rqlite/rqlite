@@ -129,9 +129,6 @@ type Config struct {
 	// DiscoConfig sets the path to any discovery configuration file. May not be set.
 	DiscoConfig string
 
-	// OnDiskPath sets the path to the SQLite file. May not be set.
-	OnDiskPath string
-
 	// FKConstraints enables SQLite foreign key constraints.
 	FKConstraints bool
 
@@ -465,7 +462,6 @@ func ParseFlags(name, desc string, build *BuildInfo) (*Config, error) {
 	fs.StringVar(&config.DiscoMode, "disco-mode", "", "Choose clustering discovery mode. If not set, no node discovery is performed")
 	fs.StringVar(&config.DiscoKey, "disco-key", "rqlite", "Key prefix for cluster discovery service")
 	fs.StringVar(&config.DiscoConfig, "disco-config", "", "Set discovery config, or path to cluster discovery config file")
-	fs.StringVar(&config.OnDiskPath, "on-disk-path", "", "Path for SQLite on-disk database file. If not set, use a file in data directory")
 	fs.BoolVar(&config.FKConstraints, "fk", false, "Enable SQLite foreign key constraints")
 	fs.BoolVar(&showVersion, "version", false, "Show version information and exit")
 	fs.DurationVar(&config.AutoVacInterval, "auto-vacuum-int", 0, "Period between automatic VACUUMs. It not set, not enabled")

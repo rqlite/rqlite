@@ -2,15 +2,13 @@ package snapshot
 
 import (
 	"bytes"
-	"fmt"
 	"io"
 	"os"
 	"path/filepath"
 	"testing"
+	"time"
 
 	"github.com/hashicorp/raft"
-	"github.com/rqlite/rqlite/v8/command/encoding"
-	"github.com/rqlite/rqlite/v8/db"
 )
 
 func Test_NewSinkCancel(t *testing.T) {
@@ -52,335 +50,94 @@ func Test_NewSinkOpenCancel(t *testing.T) {
 	}
 }
 
-func Test_NewSinkOpenCloseFail(t *testing.T) {
+// Test_SinkWriteReferentialSnapshot tests that writing a referential snapshot
+// -- writing a Proof object instead of an actual SQLite object -- works. Since
+// Snapshotting is a critical operation, this test does more than just test the
+// behaviour, it looks inside the sink.
+func Test_SinkWriteReferentialSnapshot(t *testing.T) {
 	sink := NewSink(mustStore(t), makeRaftMeta("snap-1234", 3, 2, 1))
 	if sink == nil {
 		t.Fatalf("Failed to create new sink")
 	}
-	if err := sink.Open(); err != nil {
-		t.Fatalf("Failed to open sink: %v", err)
-	}
-	if err := sink.Close(); err == nil {
-		t.Fatalf("Expected error closing opened sink without data")
-	}
-}
 
-// Test_SinkFullSnapshot tests that multiple full snapshots are
-// written to the Store correctly. The closing of files is awkward
-// on Windows, so this test is a little more involved.
-func Test_SinkFullSnapshot(t *testing.T) {
-	store := mustStore(t)
-	sink := NewSink(store, makeRaftMeta("snap-1234", 3, 2, 1))
-	if sink == nil {
-		t.Fatalf("Failed to create new sink")
-	}
 	if err := sink.Open(); err != nil {
 		t.Fatalf("Failed to open sink: %v", err)
 	}
 
-	sqliteFile := mustOpenFile(t, "testdata/db-and-wals/backup.db")
-	defer sqliteFile.Close()
-	n, err := io.Copy(sink, sqliteFile)
+	now := time.Now()
+	proof := NewProof(100, now, 1234)
+	pb, err := proof.Marshal()
 	if err != nil {
-		t.Fatalf("Failed to copy SQLite file: %v", err)
+		t.Fatalf("Failed to marshal proof: %v", err)
 	}
-	sqliteFile.Close() // Reaping will fail on Windows if file is not closed.
-	if n != mustGetFileSize(t, "testdata/db-and-wals/backup.db") {
-		t.Fatalf("Unexpected number of bytes copied: %d", n)
+	if _, err := sink.Write(pb); err != nil {
+		t.Fatalf("Failed to write proof: %v", err)
 	}
 	if err := sink.Close(); err != nil {
 		t.Fatalf("Failed to close sink: %v", err)
 	}
 
-	// Check snapshot is available and correct.
-	expMeta := makeRaftMeta("snap-1234", 3, 2, 1)
-	metas, err := store.List()
+	// Test that the Proof file was written correctly.
+	pb = mustReadFile(t, filepath.Join(sink.str.Dir(), "snap-1234", stateFileName))
+	proof2, err := UnmarshalProof(pb)
 	if err != nil {
-		t.Fatalf("Failed to list snapshots: %v", err)
+		t.Fatalf("Failed to unmarshal proof: %v", err)
 	}
-	if len(metas) != 1 {
-		t.Fatalf("Expected 1 snapshot, got %d", len(metas))
+	if !proof.Equals(proof2) {
+		t.Fatalf("Proofs do not match: %v != %v", proof, proof2)
 	}
-	compareMetas(t, expMeta, metas[0])
-	meta, fd, err := store.Open("snap-1234")
+
+	// Validate the meta file.
+	meta, err := readMeta(filepath.Join(sink.str.Dir(), "snap-1234"))
+	if err != nil {
+		t.Fatalf("Failed to read meta: %v", err)
+	}
+	if meta.ID != "snap-1234" || meta.Index != 3 || meta.Term != 2 || meta.ConfigurationIndex != 1 {
+		t.Fatalf("Meta does not match: %v", meta)
+	}
+}
+
+// Test_SinkWriteDataSnapshot tests that writing a Snapshot that is just data
+// (and not an actual Proof) works fine. In practise this covers the case where
+// a SQLite file is written to the sink.
+func Test_SinkWriteDataSnapshot(t *testing.T) {
+	store := mustStore(t)
+	sink := NewSink(store, makeRaftMeta("snap-1234", 3, 2, 1))
+	if sink == nil {
+		t.Fatalf("Failed to create new sink")
+	}
+
+	if err := sink.Open(); err != nil {
+		t.Fatalf("Failed to open sink: %v", err)
+	}
+
+	// Write some data to the sink, ensure it is stored correctly.
+	data := mustReadFile(t, "testdata/full12k.db")
+	if _, err := sink.Write(data); err != nil {
+		t.Fatalf("Failed to write data: %v", err)
+	}
+	if err := sink.Close(); err != nil {
+		t.Fatalf("Failed to close sink: %v", err)
+	}
+
+	_, snapshot, err := store.Open("snap-1234")
 	if err != nil {
 		t.Fatalf("Failed to open snapshot: %v", err)
 	}
-	compareMetas(t, expMeta, meta)
-	if !compareReaderToFile(t, fd, "testdata/db-and-wals/backup.db") {
-		t.Fatalf("Snapshot data does not match")
-	}
-	if err := fd.Close(); err != nil {
-		t.Fatalf("Failed to close snapshot: %v", err)
-	}
+	defer snapshot.Close()
 
-	// Opening the snapshot for reading a second time should be fine.
-	_, fd2Read, err := store.Open("snap-1234")
+	data2, err := io.ReadAll(snapshot)
 	if err != nil {
-		t.Fatalf("Failed to open snapshot for reading: %v", err)
+		t.Fatalf("Failed to read snapshot: %v", err)
 	}
-	if err := fd2Read.Close(); err != nil {
-		t.Fatalf("Failed to close snapshot for reading: %v", err)
-	}
-
-	if fn, err := store.FullNeeded(); err != nil {
-		t.Fatalf("Failed to check if full snapshot needed: %v", err)
-	} else if fn {
-		t.Errorf("Expected full snapshot not to be needed, but it is")
-	}
-
-	// Write a second full snapshot, it should be installed without issue.
-	sink = NewSink(store, makeRaftMeta("snap-5678", 4, 3, 2))
-	if sink == nil {
-		t.Fatalf("Failed to create new sink")
-	}
-	if err := sink.Open(); err != nil {
-		t.Fatalf("Failed to open sink: %v", err)
-	}
-	sqliteFile2 := mustOpenFile(t, "testdata/db-and-wals/full2.db")
-	defer sqliteFile2.Close()
-	n, err = io.Copy(sink, sqliteFile2)
-	if err != nil {
-		t.Fatalf("Failed to copy second SQLite file: %v", err)
-	}
-	sqliteFile2.Close()
-	if n != mustGetFileSize(t, "testdata/db-and-wals/full2.db") {
-		t.Fatalf("Unexpected number of bytes copied: %d", n)
-	}
-	if err := sink.Close(); err != nil {
-		t.Fatalf("Failed to close sink: %v", err)
-	}
-
-	// Check second snapshot is available and correct.
-	expMeta2 := makeRaftMeta("snap-5678", 4, 3, 2)
-	metas2, err := store.List()
-	if err != nil {
-		t.Fatalf("Failed to list snapshots: %v", err)
-	}
-	if len(metas2) != 1 {
-		t.Fatalf("Expected 1 snapshot, got %d", len(metas))
-	}
-	compareMetas(t, expMeta2, metas2[0])
-	meta2, fd2, err := store.Open("snap-5678")
-	if err != nil {
-		t.Fatalf("Failed to open second snapshot: %v", err)
-	}
-	defer fd2.Close()
-	compareMetas(t, expMeta2, meta2)
-	if !compareReaderToFile(t, fd2, "testdata/db-and-wals/full2.db") {
-		t.Fatalf("second full snapshot data does not match")
-	}
-	fd2.Close()
-
-	// Check that setting FullNeeded flag works.
-	if fn, err := store.FullNeeded(); err != nil {
-		t.Fatalf("Failed to check if full snapshot needed: %v", err)
-	} else if fn {
-		t.Errorf("Expected full snapshot not to be needed, but it is")
-	}
-
-	if err := store.SetFullNeeded(); err != nil {
-		t.Fatalf("Failed to set full needed: %v", err)
-	}
-	if fn, err := store.FullNeeded(); err != nil {
-		t.Fatalf("Failed to check if full snapshot needed: %v", err)
-	} else if !fn {
-		t.Errorf("Expected full snapshot to be needed, but it is not")
-	}
-
-	// Write a third full snapshot, it should be installed without issue
-	// and unset the FullNeeded flag.
-	sink = NewSink(store, makeRaftMeta("snap-91011", 5, 4, 3))
-	if sink == nil {
-		t.Fatalf("Failed to create new sink")
-	}
-	if err := sink.Open(); err != nil {
-		t.Fatalf("Failed to open sink: %v", err)
-	}
-	sqliteFile3 := mustOpenFile(t, "testdata/db-and-wals/full2.db")
-	defer sqliteFile3.Close()
-	_, err = io.Copy(sink, sqliteFile3)
-	if err != nil {
-		t.Fatalf("Failed to copy second SQLite file: %v", err)
-	}
-	sqliteFile3.Close()
-	if err := sink.Close(); err != nil {
-		t.Fatalf("Failed to close sink: %v", err)
-	}
-	if fn, err := store.FullNeeded(); err != nil {
-		t.Fatalf("Failed to check if full snapshot needed: %v", err)
-	} else if fn {
-		t.Errorf("Expected full snapshot not to be needed, but it is")
-	}
-
-	// Make sure Store returns correct snapshot.
-	expMeta3 := makeRaftMeta("snap-91011", 5, 4, 3)
-	metas3, err := store.List()
-	if err != nil {
-		t.Fatalf("Failed to list snapshots: %v", err)
-	}
-	if len(metas3) != 1 {
-		t.Fatalf("Expected 1 snapshot, got %d", len(metas))
-	}
-	compareMetas(t, expMeta3, metas3[0])
-
-	// Look inside store, make sure everything was reaped correctly.
-	files, err := os.ReadDir(store.Dir())
-	if err != nil {
-		t.Fatalf("Failed to read dir: %v", err)
-	}
-	if len(files) != 2 {
-		t.Fatalf("Expected 2 files, got %d, %s", len(files), files)
-	}
-	if !fileExists(filepath.Join(store.Dir(), "snap-91011.db")) {
-		t.Fatalf("Latest snapshot SQLite file does not exist")
-	}
-	if !dirExists(filepath.Join(store.Dir(), "snap-91011")) {
-		t.Fatalf("Latest snapshot directory does not exist")
-	}
-
-}
-
-// Test_SinkWALSnapshotEmptyStoreFail ensures that if a WAL file is
-// written to empty store, an error is returned.
-func Test_SinkWALSnapshotEmptyStoreFail(t *testing.T) {
-	store := mustStore(t)
-	sink := NewSink(store, makeRaftMeta("snap-1234", 3, 2, 1))
-	if sink == nil {
-		t.Fatalf("Failed to create new sink")
-	}
-	if err := sink.Open(); err != nil {
-		t.Fatalf("Failed to open sink: %v", err)
-	}
-
-	sqliteFile := mustOpenFile(t, "testdata/db-and-wals/wal-00")
-	defer sqliteFile.Close()
-	n, err := io.Copy(sink, sqliteFile)
-	if err != nil {
-		t.Fatalf("Failed to copy SQLite file: %v", err)
-	}
-	if n != mustGetFileSize(t, "testdata/db-and-wals/wal-00") {
-		t.Fatalf("Unexpected number of bytes copied: %d", n)
-	}
-	if err := sink.Close(); err == nil {
-		t.Fatalf("unexpected success closing sink after writing WAL data")
-	}
-
-	// Peek inside the Store, there should be zero data inside.
-	files, err := os.ReadDir(store.Dir())
-	if err != nil {
-		t.Fatalf("Failed to read dir: %v", err)
-	}
-	if len(files) != 0 {
-		t.Fatalf("Expected 0 files inside Store, got %d", len(files))
+	if !bytes.Equal(data, data2) {
+		t.Fatalf("Data does not match")
 	}
 }
 
-// Test_SinkCreateFullThenWALSnapshots performs detailed testing of the
-// snapshot creation process. It is critical that snapshots are created
-// correctly, so this test is thorough.
-func Test_SinkCreateFullThenWALSnapshots(t *testing.T) {
-	store := mustStore(t)
-	createSnapshot := func(id string, index, term, cfgIndex uint64, file string) {
-		sink := NewSink(store, makeRaftMeta(id, index, term, cfgIndex))
-		if sink == nil {
-			t.Fatalf("Failed to create new sink")
-		}
-		if err := sink.Open(); err != nil {
-			t.Fatalf("Failed to open sink: %v", err)
-		}
-		wal := mustOpenFile(t, file)
-		defer wal.Close()
-		_, err := io.Copy(sink, wal)
-		if err != nil {
-			t.Fatalf("Failed to copy WAL file: %v", err)
-		}
-		if err := sink.Close(); err != nil {
-			t.Fatalf("Failed to close sink: %v", err)
-		}
-
-		if fn, err := store.FullNeeded(); err != nil {
-			t.Fatalf("Failed to check if full snapshot needed: %v", err)
-		} else if fn {
-			t.Errorf("Expected full snapshot not to be needed, but it is")
-		}
-	}
-	if fn, err := store.FullNeeded(); err != nil {
-		t.Fatalf("Failed to check if full snapshot needed: %v", err)
-	} else if !fn {
-		t.Errorf("Expected full snapshot to be needed, but it is not")
-	}
-	createSnapshot("snap-1234", 3, 2, 1, "testdata/db-and-wals/backup.db")
-	createSnapshot("snap-2345", 4, 3, 2, "testdata/db-and-wals/wal-00")
-	createSnapshot("snap-3456", 5, 4, 3, "testdata/db-and-wals/wal-01")
-	createSnapshot("snap-4567", 6, 5, 4, "testdata/db-and-wals/wal-02")
-	createSnapshot("snap-5678", 7, 6, 5, "testdata/db-and-wals/wal-03")
-	createSnapshot("snap-9abc", 8, 7, 6, "testdata/db-and-wals/empty-file")
-
-	// Check the database state inside the Store.
-	dbPath, err := store.getDBPath()
-	if err != nil {
-		t.Fatalf("Failed to get DB path: %v", err)
-	}
-	if filepath.Base(dbPath) != "snap-9abc.db" {
-		t.Fatalf("Unexpected DB file name: %s", dbPath)
-	}
-	checkDB, err := db.Open(dbPath, false, true)
-	if err != nil {
-		t.Fatalf("failed to open database at %s: %s", dbPath, err)
-	}
-	defer checkDB.Close()
-	rows, err := checkDB.QueryStringStmt("SELECT COUNT(*) FROM foo")
-	if err != nil {
-		t.Fatalf("failed to query database: %s", err)
-	}
-	if exp, got := `[{"columns":["COUNT(*)"],"types":["integer"],"values":[[4]]}]`, asJSON(rows); exp != got {
-		t.Fatalf("unexpected results for query exp: %s got: %s", exp, got)
-	}
-}
-
-func compareMetas(t *testing.T, m1, m2 *raft.SnapshotMeta) {
+func mustStore(t *testing.T) *ReferentialStore {
 	t.Helper()
-	if m1.ID != m2.ID {
-		t.Fatalf("Unexpected snapshot ID: %s", m1.ID)
-	}
-	if m1.Index != m2.Index {
-		t.Fatalf("Unexpected snapshot index: %d", m1.Index)
-	}
-	if m1.Term != m2.Term {
-		t.Fatalf("Unexpected snapshot term: %d", m1.Term)
-	}
-	if m1.ConfigurationIndex != m2.ConfigurationIndex {
-		t.Fatalf("Unexpected snapshot configuration index: %d", m1.ConfigurationIndex)
-	}
-	if m1.Version != m2.Version {
-		t.Fatalf("Unexpected snapshot version: %d", m1.Version)
-	}
-}
-
-func compareReaderToFile(t *testing.T, r io.Reader, path string) bool {
-	t.Helper()
-	fd := mustOpenFile(t, path)
-	defer fd.Close()
-	return compareReaderToReader(t, r, fd)
-}
-
-func compareReaderToReader(t *testing.T, r1, r2 io.Reader) bool {
-	t.Helper()
-	buf1, err := io.ReadAll(r1)
-	if err != nil {
-		t.Fatalf("Failed to read from reader 1: %v", err)
-	}
-	buf2, err := io.ReadAll(r2)
-	if err != nil {
-		t.Fatalf("Failed to read from reader 2: %v", err)
-	}
-	return bytes.Equal(buf1, buf2)
-}
-
-func mustStore(t *testing.T) *Store {
-	t.Helper()
-	str, err := NewStore(t.TempDir())
+	str, err := NewReferentialStore(t.TempDir(), nil)
 	if err != nil {
 		t.Fatalf("Failed to create store: %v", err)
 	}
@@ -398,28 +155,11 @@ func makeRaftMeta(id string, index, term, cfgIndex uint64) *raft.SnapshotMeta {
 	}
 }
 
-func mustOpenFile(t *testing.T, path string) *os.File {
+func mustReadFile(t *testing.T, path string) []byte {
 	t.Helper()
-	fd, err := os.Open(path)
+	data, err := os.ReadFile(path)
 	if err != nil {
-		t.Fatalf("Failed to open file: %v", err)
+		t.Fatalf("Failed to read file: %v", err)
 	}
-	return fd
-}
-
-func mustGetFileSize(t *testing.T, path string) int64 {
-	stat, err := os.Stat(path)
-	if err != nil {
-		t.Fatalf("Failed to stat file: %v", err)
-	}
-	return stat.Size()
-}
-
-func asJSON(v interface{}) string {
-	enc := encoding.Encoder{}
-	b, err := enc.JSONMarshal(v)
-	if err != nil {
-		panic(fmt.Sprintf("failed to JSON marshal value: %s", err.Error()))
-	}
-	return string(b)
+	return data
 }

@@ -1,10 +1,13 @@
 package snapshot
 
 import (
+	"bytes"
 	"io"
 	"os"
 	"sort"
+	"strings"
 	"testing"
+	"time"
 
 	"github.com/hashicorp/raft"
 	"github.com/rqlite/rqlite/v8/rsync"
@@ -40,21 +43,25 @@ func Test_SnapshotMetaSort(t *testing.T) {
 	}
 }
 
-func Test_NewStore(t *testing.T) {
+func Test_NewReferentialStore(t *testing.T) {
 	dir := t.TempDir()
-	store, err := NewStore(dir)
+	sp := &mockStateProvider{}
+	str, err := NewReferentialStore(dir, sp)
 	if err != nil {
-		t.Fatalf("Failed to create new store: %v", err)
+		t.Fatalf("Failed to create new ReferentialStore: %v", err)
 	}
-
-	if store.Dir() != dir {
-		t.Errorf("Expected store directory to be %s, got %s", dir, store.Dir())
+	if str == nil {
+		t.Fatalf("Failed to create new ReferentialStore")
 	}
 }
 
-func Test_StoreEmpty(t *testing.T) {
+func Test_RefentialStoreEmpty(t *testing.T) {
 	dir := t.TempDir()
-	store, _ := NewStore(dir)
+	sp := &mockStateProvider{}
+	store, err := NewReferentialStore(dir, sp)
+	if err != nil {
+		t.Fatalf("Failed to create new ReferentialStore: %v", err)
+	}
 
 	snaps, err := store.List()
 	if err != nil {
@@ -64,15 +71,9 @@ func Test_StoreEmpty(t *testing.T) {
 		t.Errorf("Expected no snapshots, got %d", len(snaps))
 	}
 
-	if fn, err := store.FullNeeded(); err != nil {
-		t.Fatalf("Failed to check if full snapshot needed: %v", err)
-	} else if !fn {
-		t.Errorf("Expected full snapshot needed, but it is not")
-	}
-
 	_, _, err = store.Open("nonexistent")
-	if err == nil {
-		t.Fatalf("Expected error opening nonexistent snapshot, got nil")
+	if err != ErrSnapshotNotFound {
+		t.Fatalf("Expected ErrSnapshotNotFound opening nonexistent snapshot, got %v", err)
 	}
 
 	n, err := store.Reap()
@@ -88,14 +89,16 @@ func Test_StoreEmpty(t *testing.T) {
 	}
 }
 
-func Test_StoreCreateCancel(t *testing.T) {
+func Test_ReferentialStore_CreateCancel(t *testing.T) {
 	dir := t.TempDir()
-	store, err := NewStore(dir)
+	sp := &mockStateProvider{}
+	str, err := NewReferentialStore(dir, sp)
 	if err != nil {
-		t.Fatalf("Failed to create new store: %v", err)
+		t.Fatalf("Failed to create new ReferentialStore: %v", err)
 	}
 
-	sink, err := store.Create(1, 2, 3, makeTestConfiguration("1", "localhost:1"), 1, nil)
+	// Create a snapshot
+	sink, err := str.Create(1, 2, 3, makeTestConfiguration("1", "localhost:1"), 1, nil)
 	if err != nil {
 		t.Fatalf("Failed to create sink: %v", err)
 	}
@@ -126,11 +129,12 @@ func Test_StoreCreateCancel(t *testing.T) {
 	}
 }
 
-func Test_StoreCreate_CAS(t *testing.T) {
+func Test_RefentialStoreCreate_CAS(t *testing.T) {
 	dir := t.TempDir()
-	store, err := NewStore(dir)
+	sp := &mockStateProvider{}
+	store, err := NewReferentialStore(dir, sp)
 	if err != nil {
-		t.Fatalf("Failed to create new store: %v", err)
+		t.Fatalf("Failed to create new ReferentialStore: %v", err)
 	}
 
 	sink, err := store.Create(1, 2, 3, makeTestConfiguration("1", "localhost:1"), 1, nil)
@@ -157,11 +161,12 @@ func Test_StoreCreate_CAS(t *testing.T) {
 	}
 }
 
-func Test_StoreList(t *testing.T) {
+func Test_RefentialStoreList(t *testing.T) {
 	dir := t.TempDir()
-	store, err := NewStore(dir)
+	sp := &mockStateProvider{}
+	store, err := NewReferentialStore(dir, sp)
 	if err != nil {
-		t.Fatalf("Failed to create new store: %v", err)
+		t.Fatalf("Failed to create new ReferentialStore: %v", err)
 	}
 	store.reapDisabled = true
 
@@ -173,7 +178,7 @@ func Test_StoreList(t *testing.T) {
 		t.Errorf("Expected 0 snapshots, got %d", len(snaps))
 	}
 
-	createSnapshot := func(id string, index, term, cfgIndex uint64, file string) {
+	createSnapshot := func(id string, index, term, cfgIndex uint64, data []byte) {
 		sink := NewSink(store, makeRaftMeta(id, index, term, cfgIndex))
 		if sink == nil {
 			t.Fatalf("Failed to create new sink")
@@ -181,25 +186,20 @@ func Test_StoreList(t *testing.T) {
 		if err := sink.Open(); err != nil {
 			t.Fatalf("Failed to open sink: %v", err)
 		}
-		wal := mustOpenFile(t, file)
-		defer wal.Close()
-		_, err := io.Copy(sink, wal)
+
+		_, err := sink.Write(data)
 		if err != nil {
-			t.Fatalf("Failed to copy WAL file: %v", err)
+			t.Fatalf("Failed to write to sink: %v", err)
 		}
 		if err := sink.Close(); err != nil {
 			t.Fatalf("Failed to close sink: %v", err)
 		}
-
-		if fn, err := store.FullNeeded(); err != nil {
-			t.Fatalf("Failed to check if full snapshot needed: %v", err)
-		} else if fn {
-			t.Errorf("Expected full snapshot not to be needed, but it is")
-		}
 	}
 
-	createSnapshot("2-1017-1704807719996", 1017, 2, 1, "testdata/db-and-wals/backup.db")
-	createSnapshot("2-1131-1704807720976", 1131, 2, 1, "testdata/db-and-wals/wal-00")
+	proof1 := NewProof(100, time.Now(), 1)
+	proof2 := NewProof(150, time.Now(), 2)
+	createSnapshot("2-1017-1704807719996", 1017, 2, 1, mustMarshalProof(t, proof1))
+	createSnapshot("2-1131-1704807720976", 1131, 2, 1, mustMarshalProof(t, proof2))
 	snaps, err = store.List()
 	if err != nil {
 		t.Fatalf("Failed to list snapshots: %v", err)
@@ -211,8 +211,10 @@ func Test_StoreList(t *testing.T) {
 		t.Errorf("Expected snapshot ID to be 2-1131-1704807720976, got %s", snaps[0].ID)
 	}
 
-	// Open a snapshot for reading and then attempt to create a Sink. It should fail due
-	// to MRSW.
+	// Open a snapshot for reading and then attempt to create a Sink. Creating the Sink
+	// should fail due to MRSW.
+	sp.proof = proof2
+	sp.rc = io.NopCloser(nil)
 	_, rc, err := store.Open("2-1131-1704807720976")
 	if err != nil {
 		t.Fatalf("Failed to open snapshot: %v", err)
@@ -234,27 +236,139 @@ func Test_StoreList(t *testing.T) {
 	}
 }
 
-func mustTouchFile(t *testing.T, path string) {
-	t.Helper()
-	fd, err := os.Create(path)
+func Test_RefentialStore_FullCycle(t *testing.T) {
+	dir := t.TempDir()
+	sp := &mockStateProvider{}
+	store, err := NewReferentialStore(dir, sp)
 	if err != nil {
-		t.Fatalf("Failed to create file: %v", err)
+		t.Fatalf("Failed to create new ReferentialStore: %v", err)
 	}
-	if err := fd.Close(); err != nil {
-		t.Fatalf("Failed to close file: %v", err)
-	}
-}
 
-func mustTouchDir(t *testing.T, path string) {
-	t.Helper()
-	if err := os.Mkdir(path, 0700); err != nil {
-		t.Fatalf("Failed to create directory: %v", err)
+	//////////////////////////////////////////////////////////////////////////
+	// Create a referential Snapshot.
+	sink, err := store.Create(1, 2, 3, makeTestConfiguration("1", "localhost:1"), 1, nil)
+	if err != nil {
+		t.Fatalf("Failed to create sink: %v", err)
 	}
-}
+	proof := NewProof(100, time.Now(), 1234)
+	pb := mustMarshalProof(t, proof)
+	if _, err := sink.Write(pb); err != nil {
+		t.Fatalf("Failed to write proof: %v", err)
+	}
+	if err := sink.Close(); err != nil {
+		t.Fatalf("Failed to close sink: %v", err)
+	}
 
-func pathExists(path string) bool {
-	_, err := os.Stat(path)
-	return err == nil
+	// Check that if the Provider Proof doesn't match the snapshot, we get an error.
+	sp.proof = NewProof(100, time.Now(), 1235)
+	_, _, err = store.Open(sink.ID())
+	if err != ErrSnapshotProofMismatch {
+		t.Fatalf("Expected ErrSnapshotProofMismatch opening snapshot with mismatched Provider Proof")
+	}
+
+	// Now open the snapshot with matching Provider Proof, and ensure we get the expected data.
+	sp.proof = proof
+	sp.rc = io.NopCloser(strings.NewReader("hello world"))
+	meta, rc, err := store.Open(sink.ID())
+	if err != nil {
+		t.Fatalf("Failed to open snapshot: %v", err)
+	}
+	if meta.ID != sink.ID() {
+		t.Fatalf("Unexpected snapshot ID: %s", meta.ID)
+	}
+	if meta.Index != 2 {
+		t.Fatalf("Unexpected snapshot index: %d", meta.Index)
+	}
+	if meta.Term != 3 {
+		t.Fatalf("Unexpected snapshot term: %d", meta.Term)
+	}
+	if meta.ConfigurationIndex != 1 {
+		t.Fatalf("Unexpected snapshot configuration index: %d", meta.ConfigurationIndex)
+	}
+	if meta.Version != 1 {
+		t.Fatalf("Unexpected snapshot version: %d", meta.Version)
+	}
+
+	b, err := io.ReadAll(rc)
+	if err != nil {
+		t.Fatalf("Failed to read snapshot data: %v", err)
+	}
+
+	if string(b) != "hello world" {
+		t.Fatalf("Unexpected snapshot data: %s", b)
+	}
+
+	if err := rc.Close(); err != nil {
+		t.Fatalf("Failed to close snapshot: %v", err)
+	}
+
+	// There should be only one snapshot returned by List(), and it should be the latest one.
+	snaps, err := store.List()
+	if err != nil {
+		t.Fatalf("Failed to list snapshots: %v", err)
+	}
+	if len(snaps) != 1 {
+		t.Fatalf("Expected 1 snapshot, got %d", len(snaps))
+	}
+	if snaps[0].ID != sink.ID() {
+		t.Fatalf("Unexpected snapshot ID: %s", snaps[0].ID)
+	}
+
+	//////////////////////////////////////////////////////////////////////////
+	// Create a snapshot using actual SQLite data.
+	sink, err = store.Create(1, 6, 7, makeTestConfiguration("1", "localhost:1"), 8, nil)
+	if err != nil {
+		t.Fatalf("Failed to create sink: %v", err)
+	}
+
+	sqliteData := mustReadFile(t, "testdata/full12k.db")
+	if _, err := sink.Write(sqliteData); err != nil {
+		t.Fatalf("Failed to write proof: %v", err)
+	}
+	if err := sink.Close(); err != nil {
+		t.Fatalf("Failed to close sink: %v", err)
+	}
+
+	// Now open the snapshot, and ensure we get the expected data.
+	meta, rc, err = store.Open(sink.ID())
+	if err != nil {
+		t.Fatalf("Failed to open snapshot: %v", err)
+	}
+	if meta.ID != sink.ID() {
+		t.Fatalf("Unexpected snapshot ID: %s", meta.ID)
+	}
+	if meta.Index != 6 {
+		t.Fatalf("Unexpected snapshot index: %d", meta.Index)
+	}
+	if meta.Term != 7 {
+		t.Fatalf("Unexpected snapshot term: %d", meta.Term)
+	}
+	if meta.ConfigurationIndex != 8 {
+		t.Fatalf("Unexpected snapshot configuration index: %d", meta.ConfigurationIndex)
+	}
+	if meta.Version != 1 {
+		t.Fatalf("Unexpected snapshot version: %d", meta.Version)
+	}
+
+	if !compareReaderToFile(t, rc, "testdata/full12k.db") {
+		t.Fatalf("Snapshot data does not match")
+	}
+
+	if err := rc.Close(); err != nil {
+		t.Fatalf("Failed to close snapshot: %v", err)
+	}
+
+	// There should still be only one snapshot returned by List().
+	snaps, err = store.List()
+	if err != nil {
+		t.Fatalf("Failed to list snapshots: %v", err)
+	}
+	if len(snaps) != 1 {
+		t.Fatalf("Expected 1 snapshot, got %d", len(snaps))
+	}
+	if snaps[0].ID != sink.ID() {
+		t.Fatalf("Unexpected snapshot ID: %s", snaps[0].ID)
+	}
 }
 
 func makeTestConfiguration(i, a string) raft.Configuration {
@@ -266,4 +380,56 @@ func makeTestConfiguration(i, a string) raft.Configuration {
 			},
 		},
 	}
+}
+
+type mockStateProvider struct {
+	proof *Proof
+	rc    io.ReadCloser
+}
+
+func (m *mockStateProvider) Open() (*Proof, io.ReadCloser, error) {
+	return m.proof, m.rc, nil
+}
+
+func pathExists(path string) bool {
+	_, err := os.Stat(path)
+	return err == nil
+}
+
+func mustMarshalProof(t *testing.T, p *Proof) []byte {
+	t.Helper()
+	b, err := p.Marshal()
+	if err != nil {
+		t.Fatalf("Failed to marshal proof: %v", err)
+	}
+	return b
+}
+
+func mustOpenFile(t *testing.T, path string) *os.File {
+	t.Helper()
+	fd, err := os.Open(path)
+	if err != nil {
+		t.Fatalf("Failed to open file: %v", err)
+	}
+	return fd
+}
+
+func compareReaderToFile(t *testing.T, r io.Reader, path string) bool {
+	t.Helper()
+	fd := mustOpenFile(t, path)
+	defer fd.Close()
+	return compareReaderToReader(t, r, fd)
+}
+
+func compareReaderToReader(t *testing.T, r1, r2 io.Reader) bool {
+	t.Helper()
+	buf1, err := io.ReadAll(r1)
+	if err != nil {
+		t.Fatalf("Failed to read from reader 1: %v", err)
+	}
+	buf2, err := io.ReadAll(r2)
+	if err != nil {
+		t.Fatalf("Failed to read from reader 2: %v", err)
+	}
+	return bytes.Equal(buf1, buf2)
 }

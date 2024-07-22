@@ -267,7 +267,6 @@ func startAutoBackups(ctx context.Context, cfg *Config, str *store.Store) (*back
 
 func createStore(cfg *Config, ln *tcp.Layer) (*store.Store, error) {
 	dbConf := store.NewDBConfig()
-	dbConf.OnDiskPath = cfg.OnDiskPath
 	dbConf.FKConstraints = cfg.FKConstraints
 
 	str := store.New(ln, &store.Config{
