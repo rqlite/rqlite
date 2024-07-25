@@ -236,7 +236,7 @@ func Test_S3ClientUploadOK_Timestamped_Changes(t *testing.T) {
 	}
 
 	u("some-id1")
-	time.Sleep(1 * time.Second)
+	time.Sleep(time.Second)
 	u("some-id2")
 }
 
@@ -284,7 +284,7 @@ func Test_S3ClientUploadOK_Timestamped_NoChanges(t *testing.T) {
 	}
 
 	u("some-id1")
-	time.Sleep(1 * time.Second)
+	time.Sleep(time.Second)
 	u("some-id2")
 }
 
