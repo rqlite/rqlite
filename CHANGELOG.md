@@ -1,3 +1,7 @@
+## v8.26.8 (unreleased)
+### Implementation changes and bug fixes
+- [PR #1836](https://github.com/rqlite/rqlite/pull/1836): Don't perform a consistency check of empty Snapshot stores.
+
 ## v8.26.7 (July 12th 2024)
 ### Implementation changes and bug fixes
 - [PR #1834](https://github.com/rqlite/rqlite/pull/1834): Fix timestamped uploads so they actually use current timestamp. Fixes issue [#1833](https://github.com/rqlite/rqlite/issues/1833). Thanks @alexgreendesign
