@@ -1155,6 +1155,10 @@ func mustSetupDBForTimeoutTests(t *testing.T, n int) (*DB, string) {
 }
 
 func Test_ExecShouldTimeout(t *testing.T) {
+	if isAppveyor() {
+		// https://ci.appveyor.com/project/otoolep/rqlite/builds/50289450
+		t.Skip("skipping test on Appveyor")
+	}
 	db, path := mustSetupDBForTimeoutTests(t, 7500)
 	defer db.Close()
 	defer os.Remove(path)
@@ -1366,4 +1370,8 @@ func mustStat(path string) os.FileInfo {
 func mustFileSize(path string) int64 {
 	fi := mustStat(path)
 	return fi.Size()
+}
+
+func isAppveyor() bool {
+	return os.Getenv("APPVEYOR") != ""
 }
