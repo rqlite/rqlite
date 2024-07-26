@@ -153,8 +153,14 @@ func NewStore(dir string) (*Store, error) {
 	}
 	str.logger.Printf("store initialized using %s", dir)
 
-	if err := str.check(); err != nil {
-		return nil, fmt.Errorf("check failed: %s", err)
+	emp, err := dirIsEmpty(dir)
+	if err != nil {
+		return nil, err
+	}
+	if !emp {
+		if err := str.check(); err != nil {
+			return nil, fmt.Errorf("check failed: %s", err)
+		}
 	}
 	return str, nil
 }
