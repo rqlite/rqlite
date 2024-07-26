@@ -75,7 +75,6 @@ func NewS3Client(endpoint, region, accessKey, secretKey, bucket, key string, opt
 	if err != nil {
 		return nil, err
 	}
-
 	s3 := s3.New(sess)
 
 	client := &S3Client{
@@ -107,10 +106,9 @@ func (s *S3Client) String() string {
 	} else if !s.forcePathStyle {
 		// Endpoint specified but not using path style (e.g. Wasabi)
 		return fmt.Sprintf("s3://%s.%s/%s", s.bucket, s.endpoint, s.key)
-	} else {
-		// Endpoint specified and using path style (e.g. MinIO)
-		return fmt.Sprintf("s3://%s/%s/%s", s.endpoint, s.bucket, s.key)
 	}
+	// Endpoint specified and using path style (e.g. MinIO)
+	return fmt.Sprintf("s3://%s/%s/%s", s.endpoint, s.bucket, s.key)
 }
 
 // Upload uploads data to S3.
@@ -139,7 +137,6 @@ func (s *S3Client) Upload(ctx context.Context, reader io.Reader, id string) erro
 	if err != nil {
 		return fmt.Errorf("failed to upload to %v: %w", s, err)
 	}
-
 	return nil
 }
 
@@ -171,7 +168,6 @@ func (s *S3Client) Download(ctx context.Context, writer io.WriterAt) error {
 	if err != nil {
 		return fmt.Errorf("failed to download from %v: %w", s, err)
 	}
-
 	return nil
 }
 
