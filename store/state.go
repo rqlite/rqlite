@@ -19,14 +19,14 @@ import (
 )
 
 // PragmaCheckRequest is a type that wraps a proto.Request and checks
-// whether a request contains any breaking pragmas.
+// whether a request contains any disallowed pragmas.
 type PragmaCheckRequest proto.Request
 
-// Check checks whether a request contains any breaking pragmas.
+// Check checks whether a request contains any disallowed pragmas.
 func (p *PragmaCheckRequest) Check() error {
 	for _, stmt := range p.Statements {
 		if db.IsBreakingPragma(stmt.Sql) {
-			return fmt.Errorf("breaking pragma: %s", stmt)
+			return fmt.Errorf("disallowed pragma")
 
 		}
 	}

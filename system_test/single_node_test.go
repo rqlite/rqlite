@@ -162,6 +162,49 @@ func Test_SingleNode(t *testing.T) {
 	}
 }
 
+func Test_SingleNode_DisallowedPragmas(t *testing.T) {
+	node := mustNewLeaderNode("node1")
+	defer node.Deprovision()
+
+	tests := []struct {
+		stmt     string
+		expected string
+		execute  bool
+	}{
+		{
+			stmt:     `PRAGMA JOURNAL_MODE=DELETE`,
+			expected: `{"results":[],"error":"disallowed pragma"}`,
+			execute:  true,
+		},
+		{
+			stmt:     `PRAGMA wal_autocheckpoint = 1000`,
+			expected: `{"results":[],"error":"disallowed pragma"}`,
+			execute:  true,
+		},
+		{
+			stmt:     `PRAGMA synchronous = NORMAL`,
+			expected: `{"results":[],"error":"disallowed pragma"}`,
+			execute:  true,
+		},
+	}
+
+	for i, tt := range tests {
+		var r string
+		var err error
+		if tt.execute {
+			r, err = node.Execute(tt.stmt)
+		} else {
+			r, err = node.Query(tt.stmt)
+		}
+		if err != nil {
+			t.Fatalf(`test %d failed "%s": %s`, i, tt.stmt, err.Error())
+		}
+		if r != tt.expected {
+			t.Fatalf(`test %d received wrong result "%s" got: %s exp: %s`, i, tt.stmt, r, tt.expected)
+		}
+	}
+}
+
 func Test_SingleNodeRequest(t *testing.T) {
 	node := mustNewLeaderNode("leader1")
 	defer node.Deprovision()

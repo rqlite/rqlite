@@ -30,17 +30,17 @@ func Test_PragmaCheckRequest_Check(t *testing.T) {
 			ExpErr: false,
 		},
 		{
-			Name:   "Single breaking pragma",
+			Name:   "Single disallowed pragma",
 			Stmts:  []string{"PRAGMA wal_checkpoint(TRUNCATE)"},
 			ExpErr: true,
 		},
 		{
-			Name:   "Multiple statements including a trailing breaking pragma",
+			Name:   "Multiple statements including a trailing disallowed pragma",
 			Stmts:  []string{"SELECT * FROM foo", "PRAGMA wal_checkpoint(TRUNCATE)"},
 			ExpErr: true,
 		},
 		{
-			Name:   "Multiple statements including a leading breaking pragma",
+			Name:   "Multiple statements including a leading disallowed pragma",
 			Stmts:  []string{"PRAGMA SYNCHRONOUS=NORMAL", "SELECT * FROM foo"},
 			ExpErr: true,
 		},

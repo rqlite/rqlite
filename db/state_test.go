@@ -24,10 +24,8 @@ func Test_IsDisallowedPragmas(t *testing.T) {
 		"PRAGMA wal_autocheckpoint = 1000",
 		"PRAGMA  wal_autocheckpoint=",
 
-		"PRAGMA wal_checkpoint=",
-		"PRAGMA wal_checkpoint = ",
-		"PRAGMA wal_checkpoint  =",
 		"PRAGMA  wal_checkpoint(OFF)",
+		"PRAGMA  wal_checkpoint (FULL)",
 		"PRAGMA main.wal_checkpoint(TRUNCATE)",
 
 		"PRAGMA synchronous=",
