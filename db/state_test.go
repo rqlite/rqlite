@@ -8,6 +8,42 @@ import (
 	"testing"
 )
 
+func Test_IsDisallowedPragmas(t *testing.T) {
+	tests := []string{
+		"PRAGMA JOURNAL_MODE=",
+		"pragma journal_mode=",
+		"PRAGMA journal_mode=",
+		"PRAGMA journal_mode = ",
+		"PRAGMA journal_mode  =",
+		"PRAGMA journal_mode=WAL",
+		"PRAGMA  journal_mode=",
+		"PRAGMA schema.journal_mode=",
+		"PRAGMA main.journal_mode=",
+
+		"PRAGMA wal_autocheckpoint=1",
+		"PRAGMA wal_autocheckpoint = 1000",
+		"PRAGMA  wal_autocheckpoint=",
+
+		"PRAGMA wal_checkpoint=",
+		"PRAGMA wal_checkpoint = ",
+		"PRAGMA wal_checkpoint  =",
+		"PRAGMA  wal_checkpoint(OFF)",
+		"PRAGMA main.wal_checkpoint(TRUNCATE)",
+
+		"PRAGMA synchronous=",
+		"PRAGMA synchronous = ",
+		"PRAGMA synchronous  =",
+		"PRAGMA  synchronous=OFF",
+		"PRAGMA main.synchronous=OFF",
+	}
+
+	for _, s := range tests {
+		if !IsBreakingPragma(s) {
+			t.Fatalf(`"%s" is marked as non-breaking`, s)
+		}
+	}
+}
+
 func Test_MakeDSN(t *testing.T) {
 	tests := []struct {
 		path       string

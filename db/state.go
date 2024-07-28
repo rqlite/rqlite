@@ -7,6 +7,7 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strconv"
 	"strings"
 )
@@ -74,6 +75,24 @@ func SynchronousModeFromInt(i int) (SynchronousMode, error) {
 	default:
 		return 0, fmt.Errorf("unknown synchronous mode %d", i)
 	}
+}
+
+// BreakingPragmas are PRAGMAs that, if executed, would break the database layer.
+var BreakingPragmas = map[string]*regexp.Regexp{
+	"PRAGMA journal_mode":       regexp.MustCompile(`(?i)PRAGMA\s+(\w+\.)?journal_mode\s*=\s*`),
+	"PRAGMA wal_autocheckpoint": regexp.MustCompile(`(?i)PRAGMA\s+wal_autocheckpoint\s*=\s*`),
+	"PRAGMA wal_checkpoint":     regexp.MustCompile(`(?i)PRAGMA\s+(\w+\.)?wal_checkpoint`),
+	"PRAGMA synchronous":        regexp.MustCompile(`(?i)PRAGMA\s+(\w+\.)?synchronous\s*=\s*`),
+}
+
+// IsBreakingPragma returns true if the given statement is a breaking PRAGMA.
+func IsBreakingPragma(stmt string) bool {
+	for _, re := range BreakingPragmas {
+		if re.MatchString(stmt) {
+			return true
+		}
+	}
+	return false
 }
 
 // MakeDSN returns a SQLite DSN for the given path, with the given options.
