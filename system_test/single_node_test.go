@@ -182,6 +182,11 @@ func Test_SingleNode_DisallowedPragmas(t *testing.T) {
 			execute:  true,
 		},
 		{
+			stmt:     `PRAGMA wal_autocheckpoint = 1000`,
+			expected: `{"results":[],"error":"disallowed pragma"}`,
+			execute:  false,
+		},
+		{
 			stmt:     `PRAGMA synchronous = NORMAL`,
 			expected: `{"results":[],"error":"disallowed pragma"}`,
 			execute:  true,
