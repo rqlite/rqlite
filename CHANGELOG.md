@@ -1,6 +1,7 @@
 ## v8.26.8 (unreleased)
 ### Implementation changes and bug fixes
 - [PR #1836](https://github.com/rqlite/rqlite/pull/1836): Don't perform a consistency check of empty Snapshot stores.
+- [PR #1838](https://github.com/rqlite/rqlite/pull/1838): Prevent execution of PRAGMAs which will break rqlite.
 
 ## v8.26.7 (July 12th 2024)
 ### Implementation changes and bug fixes
