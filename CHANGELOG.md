@@ -1,4 +1,5 @@
-## v8.26.8 (unreleased)
+## v8.26.8 (July 28th 2024)
+This release attempts to block `PRAGMA` statements which will break rqlite.
 ### Implementation changes and bug fixes
 - [PR #1836](https://github.com/rqlite/rqlite/pull/1836): Don't perform a consistency check of empty Snapshot stores.
 - [PR #1838](https://github.com/rqlite/rqlite/pull/1838): Prevent execution of PRAGMAs which will break rqlite.

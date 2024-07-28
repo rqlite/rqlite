@@ -10,7 +10,9 @@ import (
 
 func Test_IsDisallowedPragmas(t *testing.T) {
 	tests := []string{
+		"   PRAGMA JOURNAL_MODE=",
 		"PRAGMA JOURNAL_MODE=",
+
 		"pragma journal_mode=",
 		"PRAGMA journal_mode=",
 		"PRAGMA journal_mode = ",
@@ -38,6 +40,22 @@ func Test_IsDisallowedPragmas(t *testing.T) {
 	for _, s := range tests {
 		if !IsBreakingPragma(s) {
 			t.Fatalf(`"%s" is marked as non-breaking`, s)
+		}
+	}
+}
+
+func Test_AllowedPragmas(t *testing.T) {
+	tests := []string{
+		"X   PRAGMA JOURNAL_MODE=",
+		"FOREIGN KEYS",
+		"foreign keys",
+		"optimize",
+		"FOO PRAGMA main.synchronous=OFF",
+	}
+
+	for _, s := range tests {
+		if IsBreakingPragma(s) {
+			t.Fatalf(`"%s" is marked as breaking`, s)
 		}
 	}
 }
