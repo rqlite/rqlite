@@ -24,6 +24,9 @@ type PragmaCheckRequest proto.Request
 
 // Check checks whether a request contains any disallowed pragmas.
 func (p *PragmaCheckRequest) Check() error {
+	if p == nil {
+		return nil
+	}
 	for _, stmt := range p.Statements {
 		if db.IsBreakingPragma(stmt.Sql) {
 			return fmt.Errorf("disallowed pragma")

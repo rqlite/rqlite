@@ -10,6 +10,11 @@ import (
 )
 
 func Test_PragmaCheckRequest_Check(t *testing.T) {
+	var p *PragmaCheckRequest
+	if err := p.Check(); err != nil {
+		t.Fatalf("expected nil error for nil PragmaCheckRequest")
+	}
+
 	tests := []struct {
 		Name   string
 		Stmts  []string

@@ -516,10 +516,10 @@ func Test_StoreSingleNodeNotOpen(t *testing.T) {
 		t.Fatalf("wrong error received for non-open store: %s", err)
 	}
 
-	if _, err := s.Execute(nil); err != ErrNotOpen {
+	if _, err := s.Execute(&proto.ExecuteRequest{}); err != ErrNotOpen {
 		t.Fatalf("wrong error received for non-open store: %s", err)
 	}
-	if _, err := s.Query(nil); err != ErrNotOpen {
+	if _, err := s.Query(&proto.QueryRequest{}); err != ErrNotOpen {
 		t.Fatalf("wrong error received for non-open store: %s", err)
 	}
 	if err := s.Load(nil); err != ErrNotOpen {
