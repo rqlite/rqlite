@@ -1104,6 +1104,11 @@ func (s *Store) Stats() (map[string]interface{}, error) {
 
 // Execute executes queries that return no rows, but do modify the database.
 func (s *Store) Execute(ex *proto.ExecuteRequest) ([]*proto.ExecuteQueryResponse, error) {
+	p := (*PragmaCheckRequest)(ex.Request)
+	if err := p.Check(); err != nil {
+		return nil, err
+	}
+
 	if !s.open.Is() {
 		return nil, ErrNotOpen
 	}
@@ -1147,6 +1152,11 @@ func (s *Store) execute(ex *proto.ExecuteRequest) ([]*proto.ExecuteQueryResponse
 
 // Query executes queries that return rows, and do not modify the database.
 func (s *Store) Query(qr *proto.QueryRequest) ([]*proto.QueryRows, error) {
+	p := (*PragmaCheckRequest)(qr.Request)
+	if err := p.Check(); err != nil {
+		return nil, err
+	}
+
 	if !s.open.Is() {
 		return nil, ErrNotOpen
 	}
@@ -1218,6 +1228,11 @@ func (s *Store) Query(qr *proto.QueryRequest) ([]*proto.QueryRows, error) {
 
 // Request processes a request that may contain both Executes and Queries.
 func (s *Store) Request(eqr *proto.ExecuteQueryRequest) ([]*proto.ExecuteQueryResponse, error) {
+	p := (*PragmaCheckRequest)(eqr.Request)
+	if err := p.Check(); err != nil {
+		return nil, err
+	}
+
 	if !s.open.Is() {
 		return nil, ErrNotOpen
 	}
