@@ -9,6 +9,68 @@ import (
 	"github.com/rqlite/rqlite/v8/command/proto"
 )
 
+func Test_PragmaCheckRequest_Check(t *testing.T) {
+	var p *PragmaCheckRequest
+	if err := p.Check(); err != nil {
+		t.Fatalf("expected nil error for nil PragmaCheckRequest")
+	}
+
+	tests := []struct {
+		Name   string
+		Stmts  []string
+		ExpErr bool
+	}{
+		{
+			Name:   "no statements",
+			ExpErr: false,
+		},
+		{
+			Name:   "SELECT",
+			Stmts:  []string{"SELECT * FROM foo"},
+			ExpErr: false,
+		},
+		{
+			Name:   "non-breaking pragma and a SELECT",
+			Stmts:  []string{"PRAGMA foo", "SELECT * FROM foo"},
+			ExpErr: false,
+		},
+		{
+			Name:   "Single disallowed pragma",
+			Stmts:  []string{"PRAGMA wal_checkpoint(TRUNCATE)"},
+			ExpErr: true,
+		},
+		{
+			Name:   "Multiple statements including a trailing disallowed pragma",
+			Stmts:  []string{"SELECT * FROM foo", "PRAGMA wal_checkpoint(TRUNCATE)"},
+			ExpErr: true,
+		},
+		{
+			Name:   "Multiple statements including a leading disallowed pragma",
+			Stmts:  []string{"PRAGMA SYNCHRONOUS=NORMAL", "SELECT * FROM foo"},
+			ExpErr: true,
+		},
+	}
+
+	for i, tt := range tests {
+		stmts := make([]*proto.Statement, len(tt.Stmts))
+		for i, s := range tt.Stmts {
+			stmts[i] = &proto.Statement{Sql: s}
+		}
+		p := &PragmaCheckRequest{Statements: stmts}
+
+		err := p.Check()
+		if tt.ExpErr {
+			if err == nil {
+				t.Fatalf("expected error for PragmaCheckRequest test #%d, %s", i+1, tt.Name)
+			}
+		} else {
+			if err != nil {
+				t.Fatalf("unexpected error for PragmaCheckRequest test #%d, %s: %s", i+1, tt.Name, err.Error())
+			}
+		}
+	}
+}
+
 func Test_IsStaleRead(t *testing.T) {
 	tests := []struct {
 		Name               string

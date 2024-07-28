@@ -11,10 +11,30 @@ import (
 
 	"github.com/hashicorp/raft"
 	"github.com/rqlite/rqlite/v8/command/chunking"
+	"github.com/rqlite/rqlite/v8/command/proto"
+	"github.com/rqlite/rqlite/v8/db"
 	sql "github.com/rqlite/rqlite/v8/db"
 	rlog "github.com/rqlite/rqlite/v8/log"
 	"github.com/rqlite/rqlite/v8/snapshot"
 )
+
+// PragmaCheckRequest is a type that wraps a proto.Request and checks
+// whether a request contains any disallowed pragmas.
+type PragmaCheckRequest proto.Request
+
+// Check checks whether a request contains any disallowed pragmas.
+func (p *PragmaCheckRequest) Check() error {
+	if p == nil {
+		return nil
+	}
+	for _, stmt := range p.Statements {
+		if db.IsBreakingPragma(stmt.Sql) {
+			return fmt.Errorf("disallowed pragma")
+
+		}
+	}
+	return nil
+}
 
 // IsStaleRead returns whether a read is stale.
 func IsStaleRead(
