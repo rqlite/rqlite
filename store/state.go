@@ -30,7 +30,6 @@ func (p *PragmaCheckRequest) Check() error {
 	for _, stmt := range p.Statements {
 		if db.IsBreakingPragma(stmt.Sql) {
 			return fmt.Errorf("disallowed pragma")
-
 		}
 	}
 	return nil
