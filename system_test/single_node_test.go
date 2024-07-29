@@ -169,38 +169,54 @@ func Test_SingleNode_DisallowedPragmas(t *testing.T) {
 	tests := []struct {
 		stmt     string
 		expected string
-		execute  bool
 	}{
 		{
 			stmt:     `PRAGMA JOURNAL_MODE=DELETE`,
 			expected: `{"results":[],"error":"disallowed pragma"}`,
-			execute:  true,
 		},
 		{
 			stmt:     `PRAGMA wal_autocheckpoint = 1000`,
 			expected: `{"results":[],"error":"disallowed pragma"}`,
-			execute:  true,
 		},
 		{
 			stmt:     `PRAGMA wal_autocheckpoint = 1000`,
 			expected: `{"results":[],"error":"disallowed pragma"}`,
-			execute:  false,
 		},
 		{
 			stmt:     `PRAGMA synchronous = NORMAL`,
 			expected: `{"results":[],"error":"disallowed pragma"}`,
-			execute:  true,
+		},
+		{
+			stmt:     `  PRAGMA synchronous = NORMAL`,
+			expected: `{"results":[],"error":"disallowed pragma"}`,
+		},
+		{
+			stmt:     `PRAGMA      synchronous = NORMAL`,
+			expected: `{"results":[],"error":"disallowed pragma"}`,
 		},
 	}
 
 	for i, tt := range tests {
 		var r string
 		var err error
-		if tt.execute {
-			r, err = node.Execute(tt.stmt)
-		} else {
-			r, err = node.Query(tt.stmt)
+
+		r, err = node.Execute(tt.stmt)
+		if err != nil {
+			t.Fatalf(`test %d failed "%s": %s`, i, tt.stmt, err.Error())
 		}
+		if r != tt.expected {
+			t.Fatalf(`test %d received wrong result "%s" got: %s exp: %s`, i, tt.stmt, r, tt.expected)
+		}
+
+		r, err = node.Query(tt.stmt)
+		if err != nil {
+			t.Fatalf(`test %d failed "%s": %s`, i, tt.stmt, err.Error())
+		}
+		if r != tt.expected {
+			t.Fatalf(`test %d received wrong result "%s" got: %s exp: %s`, i, tt.stmt, r, tt.expected)
+		}
+
+		r, err = node.Request(tt.stmt)
 		if err != nil {
 			t.Fatalf(`test %d failed "%s": %s`, i, tt.stmt, err.Error())
 		}
