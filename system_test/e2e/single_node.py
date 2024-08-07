@@ -54,10 +54,29 @@ class TestSingleNode(unittest.TestCase):
     # Ensure raw response from API is as expected.
     j = n.query('SELECT * from bar', text=True)
     self.assertEqual(str(j), '{"results":[{"columns":["id","name"],"types":["integer","text"],"values":[[1,"fiona"],[2,"declan"]]}]}')
+    j = n.query('SELECT * from bar where name="non-existent"', text=True)
+    self.assertEqual(str(j), '{"results":[{"columns":["id","name"],"types":["integer","text"]}]}')
 
     # Ensure raw associative response from API is as expected.
     j = n.query('SELECT * from bar', text=True, associative=True)
     self.assertEqual(str(j), '{"results":[{"types":{"id":"integer","name":"text"},"rows":[{"id":1,"name":"fiona"},{"id":2,"name":"declan"}]}]}')
+
+
+  def test_simple_raw_queries_unicode(self):
+    '''Test simple queries with unicode work'''
+    n = self.cluster.wait_for_leader()
+    j = n.execute('CREATE TABLE foo (id INTEGER PRIMARY KEY, name TEXT NOT NULL)')
+    self.assertEqual(j, d_("{'results': [{}]}"))
+
+    j = n.execute('INSERT INTO foo(name) VALUES ("こんにちは")')
+    applied = n.wait_for_all_applied()
+    self.assertEqual(j, d_("{'results': [{'last_insert_id': 1, 'rows_affected': 1}]}"))
+    j = n.query('SELECT * from foo')
+    self.assertEqual(j, d_("{'results': [{'values': [[1, 'こんにちは']], 'types': ['integer', 'text'], 'columns': ['id', 'name']}]}"))
+    j = n.query('SELECT * from foo where name="こんにちは"')
+    self.assertEqual(j, d_("{'results': [{'values': [[1, 'こんにちは']], 'types': ['integer', 'text'], 'columns': ['id', 'name']}]}"))
+    j = n.query('SELECT * from foo where name="こん1にちは"')
+    self.assertEqual(j, d_("{'results': [{'types': ['integer', 'text'], 'columns': ['id', 'name']}]}"))
 
   def test_simple_raw_queries_pretty(self):
     '''Test simple queries, requesting pretty output, work as expected'''
