@@ -1,6 +1,7 @@
-## v8.26.9 (unreleased)
+## v8.26.9 (August 7th 2024)
 ### Implementation changes and bug fixes
 - [PR #1842](https://github.com/rqlite/rqlite/pull/1842): Move to "named" registration of the SQLite3 driver.
+- [PR #1843](https://github.com/rqlite/rqlite/pull/1843): `go mod` updates.
 
 ## v8.26.8 (July 28th 2024)
 This release blocks execution of `PRAGMA` statements which will break rqlite.
