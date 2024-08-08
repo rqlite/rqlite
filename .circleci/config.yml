@@ -273,7 +273,13 @@ jobs:
       - restore_and_save_cache
       - run: go install -tags osusergo,netgo
           -ldflags="-extldflags=-static" ./...
-      - run: gcc -g -fPIC -shared db/testdata/rot13.c -o rot13.so
+      - run: mkdir /home/circleci/extensions
+      - run: gcc -g -fPIC -shared db/testdata/rot13.c -o /home/circleci/extensions/rot13.so
+      - run:
+          command: python3 system_test/e2e/extensions.py
+          environment:
+            RQLITED_PATH: /home/circleci/go/bin/rqlited
+            EXTENSIONS_DIR: /home/circleci/extensions
     resource_class: large
 
 workflows:

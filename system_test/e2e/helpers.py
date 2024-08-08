@@ -91,11 +91,9 @@ def raise_for_status(r):
     raise e
 
 class Node(object):
-  def __init__(self, exe_path, node_id,
-               api_addr=None, api_adv=None,
-               bootstrap_expect=0,
-               raft_addr=None, raft_adv=None,
-               raft_voter=True,
+  def __init__(self, exe_path, node_id, extensions_dir=None,
+               api_addr=None, api_adv=None, bootstrap_expect=0,
+               raft_addr=None, raft_adv=None, raft_voter=True,
                raft_snap_threshold=8192, raft_snap_int="1s",
                raft_cluster_remove_shutdown=False,
                http_cert=None, http_key=None, http_no_verify=False,
@@ -118,6 +116,7 @@ class Node(object):
     self.exe_path = exe_path
     self.peers_path = os.path.join(self.dir, "raft/peers.json")
     self.node_id = node_id
+    self.extensions_dir = extensions_dir
     self.api_addr = api_addr
     self.api_adv = api_adv
     self.bootstrap_expect = bootstrap_expect
@@ -189,6 +188,8 @@ class Node(object):
                '-raft-snap-int', self.raft_snap_int,
                '-raft-cluster-remove-shutdown=%s' % str(self.raft_cluster_remove_shutdown).lower(),
                '-raft-non-voter=%s' % str(not self.raft_voter).lower()]
+    if self.extensions_dir is not None:
+      command += ['-extensions-dir', self.extensions_dir]
     if self.api_adv is not None:
       command += ['-http-adv-addr', self.api_adv]
     if self.raft_adv is not None:
