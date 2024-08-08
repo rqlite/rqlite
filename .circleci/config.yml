@@ -33,7 +33,7 @@ commands: # a reusable command with parameters
       - run: go version
       - run:
           name: "Cross compile using <<parameters.cc>>"
-          command: go install -a -tags sqlite_omit_load_extension ./...
+          command: go install -a ./...
           environment:
             CGO_ENABLED: 1
             GOARCH: <<parameters.goarch>>
@@ -169,7 +169,7 @@ jobs:
       - checkout
       - restore_and_save_cache
       - run: go version
-      - run: go install -tags osusergo,netgo,sqlite_omit_load_extension
+      - run: go install -tags osusergo,netgo
           -ldflags="-extldflags=-static" ./...
       - run:
           command: python3 system_test/e2e/single_node.py
@@ -183,7 +183,7 @@ jobs:
     steps:
       - checkout
       - restore_and_save_cache
-      - run: go install -tags osusergo,netgo,sqlite_omit_load_extension
+      - run: go install -tags osusergo,netgo
           -ldflags="-extldflags=-static" ./...
       - run:
           command: |
@@ -199,7 +199,7 @@ jobs:
     steps:
       - checkout
       - restore_and_save_cache
-      - run: go install -tags osusergo,netgo,sqlite_omit_load_extension
+      - run: go install -tags osusergo,netgo
           -ldflags="-extldflags=-static" ./...
       - run:
           command: python3 system_test/e2e/joining.py
@@ -213,7 +213,7 @@ jobs:
     steps:
       - checkout
       - restore_and_save_cache
-      - run: go install -tags osusergo,netgo,sqlite_omit_load_extension
+      - run: go install -tags osusergo,netgo
           -ldflags="-extldflags=-static" ./...
       - run:
           command: python3 system_test/e2e/multi_node.py
@@ -227,7 +227,7 @@ jobs:
     steps:
       - checkout
       - restore_and_save_cache
-      - run: go install -tags osusergo,netgo,sqlite_omit_load_extension
+      - run: go install -tags osusergo,netgo
           -ldflags="-extldflags=-static" ./...
       - run:
           command: python3 system_test/e2e/multi_node_adv.py
@@ -243,7 +243,7 @@ jobs:
     steps:
       - checkout
       - restore_and_save_cache
-      - run: go install -tags osusergo,netgo,sqlite_omit_load_extension
+      - run: go install -tags osusergo,netgo
           -ldflags="-extldflags=-static" ./...
       - run:
           command: python3 system_test/e2e/auto_clustering.py
@@ -257,7 +257,7 @@ jobs:
     steps:
       - checkout
       - restore_and_save_cache
-      - run: go install -tags osusergo,netgo,sqlite_omit_load_extension
+      - run: go install -tags osusergo,netgo
           -ldflags="-extldflags=-static" ./...
       - run:
           command: python3 system_test/e2e/auto_state.py
