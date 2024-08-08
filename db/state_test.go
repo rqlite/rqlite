@@ -104,7 +104,7 @@ func Test_IsValidSQLiteOnDisk(t *testing.T) {
 	defer os.Remove(path)
 
 	dsn := fmt.Sprintf("file:%s", path)
-	db, err := sql.Open(dbRegisterName, dsn)
+	db, err := sql.Open(defaultDriverName, dsn)
 	if err != nil {
 		t.Fatalf("failed to create SQLite database: %s", err.Error())
 	}
@@ -134,7 +134,7 @@ func Test_IsWALModeEnabledOnDiskDELETE(t *testing.T) {
 	defer os.Remove(path)
 
 	dsn := fmt.Sprintf("file:%s", path)
-	db, err := sql.Open(dbRegisterName, dsn)
+	db, err := sql.Open(defaultDriverName, dsn)
 	if err != nil {
 		t.Fatalf("failed to create SQLite database: %s", err.Error())
 	}
@@ -170,7 +170,7 @@ func Test_IsWALModeEnabledOnDiskWAL(t *testing.T) {
 	defer os.Remove(path)
 
 	dsn := fmt.Sprintf("file:%s", path)
-	db, err := sql.Open(dbRegisterName, dsn)
+	db, err := sql.Open(defaultDriverName, dsn)
 	if err != nil {
 		t.Fatalf("failed to create SQLite database: %s", err.Error())
 	}

@@ -221,7 +221,7 @@ func EnsureDeleteMode(path string) error {
 		return nil
 	}
 	rwDSN := fmt.Sprintf("file:%s", path)
-	conn, err := sql.Open(dbRegisterName, rwDSN)
+	conn, err := sql.Open(defaultDriverName, rwDSN)
 	if err != nil {
 		return fmt.Errorf("open: %s", err.Error())
 	}
