@@ -7,6 +7,9 @@ type DBConfig struct {
 
 	// Enforce Foreign Key constraints
 	FKConstraints bool `json:"fk_constraints"`
+
+	// SQLite Extensions to be loaded
+	Extensions []string `json:"extensions,omitempty"`
 }
 
 // NewDBConfig returns a new DB config instance.
