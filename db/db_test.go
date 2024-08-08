@@ -140,6 +140,20 @@ func Test_TableCreation(t *testing.T) {
 	testQ()
 }
 
+func Test_LoadExtension(t *testing.T) {
+	db, path := mustCreateOnDiskDatabaseWAL()
+	defer db.Close()
+	defer os.Remove(path)
+
+	r, err := db.ExecuteStringStmt(`load_extension("foo")`)
+	if err != nil {
+		t.Fatalf("error executing insertion into table: %s", err.Error())
+	}
+	if exp, got := `[{"error":"near \"load_extension\": syntax error"}]`, asJSON(r); exp != got {
+		t.Fatalf("unexpected results for query, expected %s, got %s", exp, got)
+	}
+}
+
 func Test_DBSums(t *testing.T) {
 	db, path := mustCreateOnDiskDatabaseWAL()
 	defer db.Close()
