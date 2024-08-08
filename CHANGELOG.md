@@ -1,7 +1,10 @@
 ## v8.27.0 (unreleased)
 This release adds support for loading SQLite extensions when rqlite launches.
 ### New features
-- [PR #1844](https://github.com/rqlite/rqlite/pull/1844): Support loading SQLite extensions.
+- [PR #1844](https://github.com/rqlite/rqlite/pull/1844): Support loading SQLite extensions at launch time.
+
+### Implementation changes and bug fixes
+- [PR #1845](https://github.com/rqlite/rqlite/pull/1845): Don't disable SQLite extension loading in the build.
 
 ## v8.26.9 (August 7th 2024)
 ### Implementation changes and bug fixes
