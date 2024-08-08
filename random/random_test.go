@@ -51,6 +51,19 @@ func Test_IntnUniqueness(t *testing.T) {
 	}
 }
 
+func Test_BytesUniqueness(t *testing.T) {
+	const numByteSlices = 100
+	bytes := make(map[string]bool, numByteSlices)
+
+	for i := 0; i < numByteSlices; i++ {
+		b := Bytes(20)
+		if bytes[string(b)] {
+			t.Errorf("Bytes() returned a non-unique byte slice: %v", b)
+		}
+		bytes[string(b)] = true
+	}
+}
+
 func Test_Jitter(t *testing.T) {
 	for n := 0; n < 100; n++ {
 		dur := 100 * time.Millisecond

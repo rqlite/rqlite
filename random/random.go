@@ -41,6 +41,15 @@ func Intn(n int) int {
 	return r.Intn(n)
 }
 
+// Bytes returns a random slice of bytes, n bytes long.
+func Bytes(n int) []byte {
+	mu.Lock()
+	defer mu.Unlock()
+	b := make([]byte, n)
+	r.Read(b)
+	return b
+}
+
 // Jitter returns a randomly-chosen duration between d and 2d.
 func Jitter(d time.Duration) time.Duration {
 	mu.Lock()

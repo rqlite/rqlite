@@ -6,6 +6,8 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+
+	"github.com/rqlite/rqlite/v8/random"
 )
 
 func Test_IsDisallowedPragmas(t *testing.T) {
@@ -57,6 +59,18 @@ func Test_AllowedPragmas(t *testing.T) {
 		if IsBreakingPragma(s) {
 			t.Fatalf(`"%s" is marked as breaking`, s)
 		}
+	}
+}
+
+func Test_ValidateExtension(t *testing.T) {
+	temp := mustTempPath()
+	defer os.Remove(temp)
+	if err := os.WriteFile(temp, random.Bytes(100), 0644); err != nil {
+		t.Fatalf("failed to write random bytes to temp: %s", err.Error())
+	}
+	err := ValidateExtension(temp)
+	if err == nil {
+		t.Fatalf("invalid extension passed validation")
 	}
 }
 
