@@ -13,6 +13,7 @@ import (
 	"io"
 	"log"
 	"os"
+	"path/filepath"
 	"strings"
 	"time"
 
@@ -114,6 +115,7 @@ func ResetStats() {
 
 // DB is the SQL database.
 type DB struct {
+	drv       *Driver
 	path      string // Path to database file.
 	walPath   string // Path to WAL file.
 	fkEnabled bool   // Foreign key constraints enabled
@@ -194,6 +196,7 @@ func OpenWithDriver(drv *Driver, dbPath string, fkEnabled, wal bool) (retDB *DB,
 	roDB.SetConnMaxLifetime(0)
 
 	return &DB{
+		drv:       drv,
 		path:      dbPath,
 		walPath:   dbPath + "-wal",
 		fkEnabled: fkEnabled,
@@ -274,6 +277,7 @@ func (db *DB) Stats() (map[string]interface{}, error) {
 		return nil, err
 	}
 	stats := map[string]interface{}{
+		"extensions":       db.ExtensionNames(),
 		"version":          DBVersion,
 		"compile_options":  copts,
 		"mem_stats":        memStats,
@@ -333,6 +337,15 @@ func (db *DB) WALSize() (int64, error) {
 		return sz, nil
 	}
 	return 0, err
+}
+
+// ExtensionNames returns the names of the SQLite extensions loaded into the database.
+func (db *DB) ExtensionNames() []string {
+	names := make([]string, 0, len(db.drv.extensions))
+	for _, ext := range db.drv.extensions {
+		names = append(names, filepath.Base(ext))
+	}
+	return names
 }
 
 // SetBusyTimeout sets the busy timeout for the database. If a timeout is
