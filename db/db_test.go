@@ -140,7 +140,9 @@ func Test_TableCreation(t *testing.T) {
 	testQ()
 }
 
-func Test_LoadExtension(t *testing.T) {
+// Test_LoadExtensionDisabled tests that loading extensions is disabled
+// by default.
+func Test_LoadExtensionDisabled(t *testing.T) {
 	db, path := mustCreateOnDiskDatabaseWAL()
 	defer db.Close()
 	defer os.Remove(path)
