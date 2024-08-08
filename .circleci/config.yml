@@ -265,6 +265,17 @@ jobs:
             RQLITED_PATH: /home/circleci/go/bin/rqlited
     resource_class: large
 
+  end_to_end_extensions:
+    docker:
+      - image: << pipeline.parameters.primary_image >>
+    steps:
+      - checkout
+      - restore_and_save_cache
+      - run: go install -tags osusergo,netgo
+          -ldflags="-extldflags=-static" ./...
+      - run: gcc -g -fPIC -shared db/testdata/rot13.c -o rot13.so
+    resource_class: large
+
 workflows:
   version: 2
   build_and_test:
@@ -286,3 +297,4 @@ workflows:
       - end_to_end_autoclustering
       - end_to_end_auto_state
       - end_to_end_upgrade
+      - end_to_end_extensions
