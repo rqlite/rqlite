@@ -27,6 +27,7 @@ import (
 	"github.com/rqlite/rqlite/v8/command"
 	"github.com/rqlite/rqlite/v8/command/chunking"
 	"github.com/rqlite/rqlite/v8/command/proto"
+	"github.com/rqlite/rqlite/v8/db"
 	sql "github.com/rqlite/rqlite/v8/db"
 	"github.com/rqlite/rqlite/v8/db/humanize"
 	wal "github.com/rqlite/rqlite/v8/db/wal"
@@ -505,7 +506,7 @@ func (s *Store) Open() (retErr error) {
 		stats.Add(numRecoveries, 1)
 	}
 
-	s.db, err = createOnDisk(s.dbPath, s.dbConf.FKConstraints, true)
+	s.db, err = createOnDisk(s.dbPath, s.dbConf.FKConstraints, true, s.dbConf.Extensions)
 	if err != nil {
 		return fmt.Errorf("failed to create on-disk database: %s", err)
 	}
@@ -2342,11 +2343,15 @@ func (s *Store) logBackup() bool {
 
 // createOnDisk opens an on-disk database file at the configured path. Any
 // preexisting file will be removed before the database is opened.
-func createOnDisk(path string, fkConstraints, wal bool) (*sql.SwappableDB, error) {
+func createOnDisk(path string, fkConstraints, wal bool, extensions []string) (*sql.SwappableDB, error) {
 	if err := sql.RemoveFiles(path); err != nil {
 		return nil, err
 	}
-	return sql.OpenSwappable(path, fkConstraints, wal)
+	drv := db.DefaultDriver()
+	if len(extensions) > 0 {
+		drv = db.NewDriver("rqlite-sqlite3-extended", extensions)
+	}
+	return sql.OpenSwappableWithDriver(drv, path, fkConstraints, wal)
 }
 
 func createTemp(dir, pattern string) (*os.File, error) {

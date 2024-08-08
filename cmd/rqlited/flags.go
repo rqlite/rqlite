@@ -40,6 +40,9 @@ type Config struct {
 	// DataPath is path to node data. Always set.
 	DataPath string
 
+	// ExtensionsDir is the path to the directory containing SQLite extensions.
+	ExtensionsDir string `dirpath:"true"`
+
 	// HTTPAddr is the bind network address for the HTTP Server.
 	// It never includes a trailing HTTP or HTTPS.
 	HTTPAddr string
@@ -223,6 +226,11 @@ func (c *Config) Validate() error {
 	c.DataPath = dataPath
 
 	err = c.CheckFilePaths()
+	if err != nil {
+		return err
+	}
+
+	err = c.CheckDirPaths()
 	if err != nil {
 		return err
 	}
@@ -419,6 +427,37 @@ func (c *Config) CheckFilePaths() error {
 	return nil
 }
 
+// CheckDirPaths checks that all directory paths in the config exist and are directories.
+// Empty directory paths are ignored.
+func (c *Config) CheckDirPaths() error {
+	v := reflect.ValueOf(c).Elem()
+
+	// Iterate through the fields of the struct
+	for i := 0; i < v.NumField(); i++ {
+		field := v.Type().Field(i)
+		fieldValue := v.Field(i)
+
+		if fieldValue.Kind() != reflect.String {
+			continue
+		}
+
+		if tagValue, ok := field.Tag.Lookup("dirpath"); ok && tagValue == "true" {
+			dirPath := fieldValue.String()
+			if dirPath == "" {
+				continue
+			}
+			stat, err := os.Stat(dirPath)
+			if os.IsNotExist(err) {
+				return fmt.Errorf("%s does not exist", dirPath)
+			}
+			if !stat.IsDir() {
+				return fmt.Errorf("%s is not a directory", dirPath)
+			}
+		}
+	}
+	return nil
+}
+
 // BuildInfo is build information for display at command line.
 type BuildInfo struct {
 	Version       string
@@ -438,6 +477,7 @@ func ParseFlags(name, desc string, build *BuildInfo) (*Config, error) {
 	fs := flag.NewFlagSet(name, flag.ExitOnError)
 
 	fs.StringVar(&config.NodeID, "node-id", "", "Unique ID for node. If not set, set to advertised Raft address")
+	fs.StringVar(&config.ExtensionsDir, "extensions-dir", "", "Path to directory containing SQLite extensions which are to be loaded")
 	fs.StringVar(&config.HTTPAddr, HTTPAddrFlag, "localhost:4001", "HTTP server bind address. To enable HTTPS, set X.509 certificate and key")
 	fs.StringVar(&config.HTTPAdv, HTTPAdvAddrFlag, "", "Advertised HTTP address. If not set, same as HTTP server bind address")
 	fs.StringVar(&config.HTTPAllowOrigin, "http-allow-origin", "", "Value to set for Access-Control-Allow-Origin HTTP header")

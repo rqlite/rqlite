@@ -13,6 +13,7 @@ import (
 	"io"
 	"log"
 	"os"
+	"path/filepath"
 	"strings"
 	"time"
 
@@ -22,7 +23,6 @@ import (
 )
 
 const (
-	dbRegisterName   = "rqlite-sqlite3"
 	SQLiteHeaderSize = 32
 	bkDelay          = 250
 	durToOpenLog     = 2 * time.Second
@@ -85,7 +85,6 @@ var DBVersion string
 var stats *expvar.Map
 
 func init() {
-	sql.Register(dbRegisterName, &sqlite3.SQLiteDriver{})
 	DBVersion, _, _ = sqlite3.Version()
 	stats = expvar.NewMap("db")
 	ResetStats()
@@ -116,6 +115,7 @@ func ResetStats() {
 
 // DB is the SQL database.
 type DB struct {
+	drv       *Driver
 	path      string // Path to database file.
 	walPath   string // Path to WAL file.
 	fkEnabled bool   // Foreign key constraints enabled
@@ -143,9 +143,14 @@ type PoolStats struct {
 	MaxLifetimeClosed  int64         `json:"max_lifetime_closed"`
 }
 
-// Open opens a file-based database, creating it if it does not exist. After this
-// function returns, an actual SQLite file will always exist.
+// Open opens a file-based database using the default driver.
 func Open(dbPath string, fkEnabled, wal bool) (retDB *DB, retErr error) {
+	return OpenWithDriver(DefaultDriver(), dbPath, fkEnabled, wal)
+}
+
+// OpenWithDriver opens a file-based database, creating it if it does not exist.
+// After this function returns, an actual SQLite file will always exist.
+func OpenWithDriver(drv *Driver, dbPath string, fkEnabled, wal bool) (retDB *DB, retErr error) {
 	logger := log.New(log.Writer(), "[db] ", log.LstdFlags)
 	startTime := time.Now()
 	defer func() {
@@ -161,7 +166,7 @@ func Open(dbPath string, fkEnabled, wal bool) (retDB *DB, retErr error) {
 	/////////////////////////////////////////////////////////////////////////
 	// Main RW connection
 	rwDSN := MakeDSN(dbPath, ModeReadWrite, fkEnabled, wal)
-	rwDB, err := sql.Open(dbRegisterName, rwDSN)
+	rwDB, err := sql.Open(drv.name, rwDSN)
 	if err != nil {
 		return nil, fmt.Errorf("open: %s", err.Error())
 	}
@@ -174,7 +179,7 @@ func Open(dbPath string, fkEnabled, wal bool) (retDB *DB, retErr error) {
 	/////////////////////////////////////////////////////////////////////////
 	// Read-only connection
 	roDSN := MakeDSN(dbPath, ModeReadOnly, fkEnabled, wal)
-	roDB, err := sql.Open(dbRegisterName, roDSN)
+	roDB, err := sql.Open(drv.name, roDSN)
 	if err != nil {
 		return nil, err
 	}
@@ -191,6 +196,7 @@ func Open(dbPath string, fkEnabled, wal bool) (retDB *DB, retErr error) {
 	roDB.SetConnMaxLifetime(0)
 
 	return &DB{
+		drv:       drv,
 		path:      dbPath,
 		walPath:   dbPath + "-wal",
 		fkEnabled: fkEnabled,
@@ -271,6 +277,7 @@ func (db *DB) Stats() (map[string]interface{}, error) {
 		return nil, err
 	}
 	stats := map[string]interface{}{
+		"extensions":       db.ExtensionNames(),
 		"version":          DBVersion,
 		"compile_options":  copts,
 		"mem_stats":        memStats,
@@ -330,6 +337,15 @@ func (db *DB) WALSize() (int64, error) {
 		return sz, nil
 	}
 	return 0, err
+}
+
+// ExtensionNames returns the names of the SQLite extensions loaded into the database.
+func (db *DB) ExtensionNames() []string {
+	names := make([]string, 0, len(db.drv.extensions))
+	for _, ext := range db.drv.extensions {
+		names = append(names, filepath.Base(ext))
+	}
+	return names
 }
 
 // SetBusyTimeout sets the busy timeout for the database. If a timeout is

@@ -6,6 +6,8 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+
+	"github.com/rqlite/rqlite/v8/random"
 )
 
 func Test_IsDisallowedPragmas(t *testing.T) {
@@ -60,6 +62,18 @@ func Test_AllowedPragmas(t *testing.T) {
 	}
 }
 
+func Test_ValidateExtension(t *testing.T) {
+	temp := mustTempPath()
+	defer os.Remove(temp)
+	if err := os.WriteFile(temp, random.Bytes(100), 0644); err != nil {
+		t.Fatalf("failed to write random bytes to temp: %s", err.Error())
+	}
+	err := ValidateExtension(temp)
+	if err == nil {
+		t.Fatalf("invalid extension passed validation")
+	}
+}
+
 func Test_MakeDSN(t *testing.T) {
 	tests := []struct {
 		path       string
@@ -104,7 +118,7 @@ func Test_IsValidSQLiteOnDisk(t *testing.T) {
 	defer os.Remove(path)
 
 	dsn := fmt.Sprintf("file:%s", path)
-	db, err := sql.Open(dbRegisterName, dsn)
+	db, err := sql.Open(defaultDriverName, dsn)
 	if err != nil {
 		t.Fatalf("failed to create SQLite database: %s", err.Error())
 	}
@@ -134,7 +148,7 @@ func Test_IsWALModeEnabledOnDiskDELETE(t *testing.T) {
 	defer os.Remove(path)
 
 	dsn := fmt.Sprintf("file:%s", path)
-	db, err := sql.Open(dbRegisterName, dsn)
+	db, err := sql.Open(defaultDriverName, dsn)
 	if err != nil {
 		t.Fatalf("failed to create SQLite database: %s", err.Error())
 	}
@@ -170,7 +184,7 @@ func Test_IsWALModeEnabledOnDiskWAL(t *testing.T) {
 	defer os.Remove(path)
 
 	dsn := fmt.Sprintf("file:%s", path)
-	db, err := sql.Open(dbRegisterName, dsn)
+	db, err := sql.Open(defaultDriverName, dsn)
 	if err != nil {
 		t.Fatalf("failed to create SQLite database: %s", err.Error())
 	}

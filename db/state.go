@@ -2,6 +2,7 @@ package db
 
 import (
 	"bytes"
+	"context"
 	"database/sql"
 	"fmt"
 	"net/url"
@@ -10,6 +11,9 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
+
+	"github.com/rqlite/go-sqlite3"
+	"github.com/rqlite/rqlite/v8/random"
 )
 
 const (
@@ -93,6 +97,31 @@ func IsBreakingPragma(stmt string) bool {
 		}
 	}
 	return false
+}
+
+// ValidateExtension validates the given extension path can be loaded into a SQLite database.
+func ValidateExtension(path string) error {
+	name := random.String()
+	sql.Register(name, &sqlite3.SQLiteDriver{})
+	db, err := sql.Open(name, ":memory:")
+	if err != nil {
+		return err
+	}
+	defer db.Close()
+
+	f := func(driverConn interface{}) error {
+		c := driverConn.(*sqlite3.SQLiteConn)
+		return c.LoadExtension(path, "")
+	}
+
+	conn, err := db.Conn(context.Background())
+	if err != nil {
+		return err
+	}
+	if err := conn.Raw(f); err != nil {
+		return err
+	}
+	return nil
 }
 
 // MakeDSN returns a SQLite DSN for the given path, with the given options.
@@ -221,7 +250,7 @@ func EnsureDeleteMode(path string) error {
 		return nil
 	}
 	rwDSN := fmt.Sprintf("file:%s", path)
-	conn, err := sql.Open(dbRegisterName, rwDSN)
+	conn, err := sql.Open(defaultDriverName, rwDSN)
 	if err != nil {
 		return fmt.Errorf("open: %s", err.Error())
 	}

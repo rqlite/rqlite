@@ -16,6 +16,16 @@ type SwappableDB struct {
 	dbMu sync.RWMutex
 }
 
+// OpenSwappableWithDriver returns a new SwappableDB instance using the given driver,
+// which opens the database at the given path.
+func OpenSwappableWithDriver(drv *Driver, dbPath string, fkEnabled, wal bool) (*SwappableDB, error) {
+	db, err := OpenWithDriver(drv, dbPath, fkEnabled, wal)
+	if err != nil {
+		return nil, err
+	}
+	return &SwappableDB{db: db}, nil
+}
+
 // OpenSwappable returns a new SwappableDB instance, which opens the database at the given path.
 func OpenSwappable(dbPath string, fkEnabled, wal bool) (*SwappableDB, error) {
 	db, err := Open(dbPath, fkEnabled, wal)
