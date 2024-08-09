@@ -24,7 +24,7 @@ You can use rqlite to store your important data reliably, ensuring it's always a
 ### Key features
 - **Easy Deployment**: Up and running in seconds, with no separate SQLite installation.
 - **Developer-Friendly**: Straightforward [HTTP API](https://rqlite.io/docs/api/), [CLI](https://rqlite.io/docs/cli/), and [client libraries](https://rqlite.io/docs/api/client-libraries/).
-- **Fully Replicated**: SQL database with [full-text search](https://www.sqlite.org/fts5.html) and [JSON support](https://www.sqlite.org/json1.html).
+- **Fully Replicated**: SQL database with [full-text search](https://www.sqlite.org/fts5.html), [JSON support](https://www.sqlite.org/json1.html), and [SQLite extensions support](https://www.sqlite.org/loadext.html).
 - **Large data set support**: rqlite works well, even when managing multi-GB data sets.
 - **Dynamic Clustering**: Integrates with [Kubernetes](https://rqlite.io/docs/guides/kubernetes/), Consul, etcd, and DNS for [automatic clustering](https://rqlite.io/docs/clustering/automatic-clustering/).
 - **Robust Security**: [Extensive encryption and TLS support](https://rqlite.io/docs/guides/security/).
