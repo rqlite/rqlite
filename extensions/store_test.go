@@ -38,6 +38,14 @@ func Test_EmptyStore(t *testing.T) {
 	if len(files) != 0 {
 		t.Fatalf("List() returned %d files, expected 0", len(files))
 	}
+
+	ok, _, err := s.Check()
+	if err != nil {
+		t.Fatalf("Check() error: %s", err)
+	}
+	if !ok {
+		t.Fatalf("Check() returned false, expected true")
+	}
 }
 
 func Test_InstallFromDir(t *testing.T) {

@@ -107,6 +107,11 @@ func main() {
 	if err != nil {
 		log.Fatalf("failed to create extensions store: %s", err.Error())
 	}
+	if ok, ext, err := extensionsStore.Check(); err != nil {
+		log.Fatalf("failed to check extensions store: %s", err.Error())
+	} else if !ok {
+		log.Fatalf("invalid extension %s", ext)
+	}
 	extensionsPaths, err := extensionsStore.List()
 	if err != nil {
 		log.Fatalf("failed to list extensions: %s", err.Error())

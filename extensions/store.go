@@ -8,6 +8,7 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/rqlite/rqlite/v8/db"
 	"github.com/rqlite/rqlite/v8/rarchive"
 )
 
@@ -97,6 +98,21 @@ func (s *Store) Stats() (map[string]interface{}, error) {
 	}
 	stats["names"] = names
 	return stats, nil
+}
+
+// Check validates that all installed extensions are valid.
+func (s *Store) Check() (bool, string, error) {
+	paths, err := listFiles(s.dir)
+	if err != nil {
+		return false, "", err
+	}
+	for _, p := range paths {
+		err := db.ValidateExtension(filepath.Base(p))
+		if err != nil {
+			return false, p, nil
+		}
+	}
+	return true, "", nil
 }
 
 func listFiles(dir string) ([]string, error) {
