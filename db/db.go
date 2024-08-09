@@ -195,6 +195,12 @@ func OpenWithDriver(drv *Driver, dbPath string, fkEnabled, wal bool) (retDB *DB,
 	roDB.SetConnMaxIdleTime(30 * time.Second)
 	roDB.SetConnMaxLifetime(0)
 
+	// Make it clear which extensions have been loaded, if any.
+	extensions := drv.ExtensionNames()
+	if len(extensions) > 0 {
+		logger.Printf("loaded extensions: %s", strings.Join(extensions, ", "))
+	}
+
 	return &DB{
 		drv:       drv,
 		path:      dbPath,

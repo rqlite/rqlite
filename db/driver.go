@@ -2,6 +2,7 @@ package db
 
 import (
 	"database/sql"
+	"path/filepath"
 	"sync"
 
 	"github.com/rqlite/go-sqlite3"
@@ -49,7 +50,16 @@ func (d *Driver) Name() string {
 	return d.name
 }
 
-// Extensions returns the driver extensions.
+// Extensions returns the paths of the loaded driver extensions.
 func (d *Driver) Extensions() []string {
 	return d.extensions
+}
+
+// ExtensionNames returns the names of the loaded driver extensions.
+func (d *Driver) ExtensionNames() []string {
+	names := make([]string, 0)
+	for _, ext := range d.extensions {
+		names = append(names, filepath.Base(ext))
+	}
+	return names
 }
