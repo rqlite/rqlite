@@ -279,7 +279,7 @@ jobs:
           command: python3 system_test/e2e/extensions.py
           environment:
             RQLITED_PATH: /home/circleci/go/bin/rqlited
-            EXTENSIONS_DIR: /home/circleci/extensions
+            EXTENSIONS_PATH: /home/circleci/extensions
     resource_class: large
 
 workflows:

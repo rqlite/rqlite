@@ -12,11 +12,11 @@ import unittest
 from helpers import Node, Cluster, d_
 
 RQLITED_PATH = os.environ['RQLITED_PATH']
-EXTENSIONS_DIR = os.environ['EXTENSIONS_DIR']
+EXTENSIONS_PATH = os.environ['EXTENSIONS_PATH']
 
 class TestExtensions(unittest.TestCase):
   def setUp(self):
-    n0 = Node(RQLITED_PATH, '0', extensions_dir=EXTENSIONS_DIR)
+    n0 = Node(RQLITED_PATH, '0', extensions_path=EXTENSIONS_PATH)
     n0.start()
     n0.wait_for_leader()
     self.cluster = Cluster([n0])
