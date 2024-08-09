@@ -275,7 +275,7 @@ jobs:
           -ldflags="-extldflags=-static" ./...
       - run: mkdir /home/circleci/extensions
       - run: gcc -g -fPIC -shared db/testdata/rot13.c -o /home/circleci/extensions/rot13.so
-      - run: zip rot13.zip /home/circleci/extensions/rot13.so
+      - run: zip /home/circleci/rot13.zip /home/circleci/extensions/rot13.so
       - run:
           command: python3 system_test/e2e/extensions.py
           environment:
