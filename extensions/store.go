@@ -4,6 +4,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 
 	"github.com/rqlite/rqlite/v8/rarchive"
@@ -29,9 +30,19 @@ func NewStore(dir string) (*Store, error) {
 	}, nil
 }
 
+// Dir returns the directory of the store.
+func (s *Store) Dir() string {
+	return s.dir
+}
+
 // List returns a list of all file paths to extensions in the store.
 func (s *Store) List() ([]string, error) {
-	return listFiles(s.dir)
+	files, err := listFiles(s.dir)
+	if err != nil {
+		return nil, err
+	}
+	sort.Strings(files)
+	return files, nil
 }
 
 // Names returns a list of all extension names in the store.
@@ -44,6 +55,7 @@ func (s *Store) Names() ([]string, error) {
 	for _, file := range files {
 		names = append(names, filepath.Base(file))
 	}
+	sort.Strings(names)
 	return names, nil
 }
 
