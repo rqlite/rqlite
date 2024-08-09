@@ -3,6 +3,7 @@ package db
 import (
 	"database/sql"
 	"path/filepath"
+	"sort"
 	"sync"
 
 	"github.com/rqlite/go-sqlite3"
@@ -61,5 +62,6 @@ func (d *Driver) ExtensionNames() []string {
 	for _, ext := range d.extensions {
 		names = append(names, filepath.Base(ext))
 	}
+	sort.Strings(names)
 	return names
 }
