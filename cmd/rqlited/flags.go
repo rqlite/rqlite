@@ -241,8 +241,12 @@ func (c *Config) Validate() error {
 		if !fileExists(c.ExtensionsPath) {
 			return fmt.Errorf("extensions path does not exist: %s", c.ExtensionsPath)
 		}
-		if !isDir(c.ExtensionsPath) && !rarchive.IsZipFile(c.ExtensionsPath) {
-			return fmt.Errorf("extensions path is not a valid zip file: %s", c.ExtensionsPath)
+		if isDir(c.ExtensionsPath) ||
+			rarchive.IsTarGzipFile(c.ExtensionsPath) ||
+			rarchive.IsZipFile(c.ExtensionsPath) {
+			// OK
+		} else {
+			return fmt.Errorf("extensions path is neither a directory nor valid archive: %s", c.ExtensionsPath)
 		}
 	}
 
