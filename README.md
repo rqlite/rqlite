@@ -30,7 +30,7 @@ You can use rqlite to store your important data reliably, ensuring it's always a
 - **Robust Security**: [Extensive encryption and TLS support](https://rqlite.io/docs/guides/security/).
 - **Flexible Consistency**: Customize [read/write performance](https://rqlite.io/docs/api/read-consistency/) and [durability](https://rqlite.io/docs/api/queued-writes/).
 - **Scalable Reads**: [Read-only nodes](https://rqlite.io/docs/clustering/read-only-nodes/) for enhanced scalability.
-- **Transactions**: Supports a form of transactions.
+- **Transactions**: Supports a **form** of transactions.
 - **Easy Backups**: Hot [backups](https://rqlite.io/docs/guides/backup/), including [automatic backups to AWS S3 and MinIO](https://rqlite.io/docs/guides/backup/#automatic-backups), as well as [restore directly from SQLite](https://rqlite.io/docs/guides/backup/#restoring-from-sqlite).
 
 ## More questions?
