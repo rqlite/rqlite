@@ -9,6 +9,7 @@ import (
 	"github.com/rqlite/rqlite/v8/rarchive"
 )
 
+// Store is a collection of extensions.
 type Store struct {
 	dir string
 }
