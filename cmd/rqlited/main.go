@@ -26,6 +26,7 @@ import (
 	"github.com/rqlite/rqlite/v8/cmd"
 	"github.com/rqlite/rqlite/v8/db"
 	"github.com/rqlite/rqlite/v8/disco"
+	"github.com/rqlite/rqlite/v8/extensions"
 	httpd "github.com/rqlite/rqlite/v8/http"
 	"github.com/rqlite/rqlite/v8/rtls"
 	"github.com/rqlite/rqlite/v8/store"
@@ -101,8 +102,18 @@ func main() {
 	}
 	raftTn := tcp.NewLayer(raftLn, raftDialer)
 
+	// Create extension store.
+	extensionsStore, err := createExtensionsStore(cfg)
+	if err != nil {
+		log.Fatalf("failed to create extensions store: %s", err.Error())
+	}
+	extensionsPaths, err := extensionsStore.List()
+	if err != nil {
+		log.Fatalf("failed to list extensions: %s", err.Error())
+	}
+
 	// Create the store.
-	str, err := createStore(cfg, raftTn)
+	str, err := createStore(cfg, raftTn, extensionsPaths)
 	if err != nil {
 		log.Fatalf("failed to create store: %s", err.Error())
 	}
@@ -266,27 +277,30 @@ func startAutoBackups(ctx context.Context, cfg *Config, str *store.Store) (*back
 	return u, nil
 }
 
-func createStore(cfg *Config, ln *tcp.Layer) (*store.Store, error) {
+func createExtensionsStore(cfg *Config) (*extensions.Store, error) {
+	str, err := extensions.NewStore(filepath.Join(cfg.DataPath, "extensions"))
+	if err != nil {
+		log.Fatalf("failed to create extension store: %s", err.Error())
+	}
+	if cfg.ExtensionsPath != "" {
+		if cfg.ExtensionsAreDir() {
+			if err := str.InstallFromDir(cfg.ExtensionsPath); err != nil {
+				log.Fatalf("failed to install extensions from directory: %s", err.Error())
+			}
+		} else if cfg.ExtensionsAreZip() {
+			if err := str.InstallFromZip(cfg.ExtensionsPath); err != nil {
+				log.Fatalf("failed to install extensions from zip file: %s", err.Error())
+			}
+		}
+	}
+	return str, nil
+}
+
+func createStore(cfg *Config, ln *tcp.Layer, extensions []string) (*store.Store, error) {
 	dbConf := store.NewDBConfig()
 	dbConf.OnDiskPath = cfg.OnDiskPath
 	dbConf.FKConstraints = cfg.FKConstraints
-
-	// Any SQLite Extensions to load?
-	if cfg.ExtensionsPath != "" {
-		files, err := os.ReadDir(cfg.ExtensionsPath)
-		if err != nil {
-			return nil, fmt.Errorf("failed to list files in Extensions directory: %s", err.Error())
-		}
-		for _, f := range files {
-			if !f.IsDir() && !strings.HasPrefix(f.Name(), ".") {
-				path := filepath.Join(cfg.ExtensionsPath, f.Name())
-				dbConf.Extensions = append(dbConf.Extensions, path)
-			}
-		}
-		if dbConf.Extensions != nil {
-			log.Printf("loading SQLite extensions: %v", dbConf.ExtensionNames())
-		}
-	}
+	dbConf.Extensions = extensions
 
 	str := store.New(ln, &store.Config{
 		DBConf: dbConf,

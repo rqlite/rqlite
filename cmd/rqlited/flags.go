@@ -467,6 +467,16 @@ func (c *Config) CheckDirPaths() error {
 	return nil
 }
 
+// ExtensionsAreDir returns true if the extensions are stored in a directory.
+func (c *Config) ExtensionsAreDir() bool {
+	return isDir(c.ExtensionsPath)
+}
+
+// ExtensionsAreZip returns true if the extensions are stored in a zipfile.
+func (c *Config) ExtensionsAreZip() bool {
+	return rarchive.IsZipFile(c.ExtensionsPath)
+}
+
 // BuildInfo is build information for display at command line.
 type BuildInfo struct {
 	Version       string
