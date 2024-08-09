@@ -107,7 +107,7 @@ type LockingSnapshot struct {
 	closed bool
 }
 
-// NewLockingSink returns a new LockingSink.
+// NewLockingSnapshot returns a new LockingSnapshot.
 func NewLockingSnapshot(fd *os.File, str *Store) *LockingSnapshot {
 	return &LockingSnapshot{
 		File: fd,
