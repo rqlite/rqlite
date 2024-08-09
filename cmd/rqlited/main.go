@@ -294,6 +294,10 @@ func createExtensionsStore(cfg *Config) (*extensions.Store, error) {
 			if err := str.InstallFromZip(cfg.ExtensionsPath); err != nil {
 				log.Fatalf("failed to install extensions from zip file: %s", err.Error())
 			}
+		} else if cfg.ExtensionsAreTarGzip() {
+			if err := str.InstallFromTarGzip(cfg.ExtensionsPath); err != nil {
+				log.Fatalf("failed to install extensions from tar.gz file: %s", err.Error())
+			}
 		} else {
 			return nil, fmt.Errorf("extensions path %s is not a directory or zip file", cfg.ExtensionsPath)
 		}

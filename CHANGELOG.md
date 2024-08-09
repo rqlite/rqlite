@@ -2,6 +2,7 @@
 This release adds support for loading SQLite extensions when rqlite launches.
 ### New features
 - [PR #1844](https://github.com/rqlite/rqlite/pull/1844), [PR #1848](https://github.com/rqlite/rqlite/pull/1848), [PR #1849](https://github.com/rqlite/rqlite/pull/1849): Support loading SQLite extensions at launch time.
+- [PR #1852](https://github.com/rqlite/rqlite/pull/1852): Support loading SQLite extensions as Gzipped tarballs.
 
 ### Implementation changes and bug fixes
 - [PR #1845](https://github.com/rqlite/rqlite/pull/1845): Don't disable SQLite extension loading in the build.

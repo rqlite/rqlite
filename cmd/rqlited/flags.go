@@ -241,8 +241,12 @@ func (c *Config) Validate() error {
 		if !fileExists(c.ExtensionsPath) {
 			return fmt.Errorf("extensions path does not exist: %s", c.ExtensionsPath)
 		}
-		if !isDir(c.ExtensionsPath) && !rarchive.IsZipFile(c.ExtensionsPath) {
-			return fmt.Errorf("extensions path is not a valid zip file: %s", c.ExtensionsPath)
+		if isDir(c.ExtensionsPath) ||
+			rarchive.IsTarGzipFile(c.ExtensionsPath) ||
+			rarchive.IsZipFile(c.ExtensionsPath) {
+			// OK
+		} else {
+			return fmt.Errorf("extensions path is neither a directory nor valid archive: %s", c.ExtensionsPath)
 		}
 	}
 
@@ -475,6 +479,11 @@ func (c *Config) ExtensionsAreDir() bool {
 // ExtensionsAreZip returns true if the extensions are stored in a zipfile.
 func (c *Config) ExtensionsAreZip() bool {
 	return rarchive.IsZipFile(c.ExtensionsPath)
+}
+
+// ExtensionsAreTarGzip returns true if the extensions are stored in a tar.gz file.
+func (c *Config) ExtensionsAreTarGzip() bool {
+	return rarchive.IsTarGzipFile(c.ExtensionsPath)
 }
 
 // BuildInfo is build information for display at command line.

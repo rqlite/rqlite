@@ -87,6 +87,17 @@ func (s *Store) InstallFromZip(zipfile string) error {
 	return rarchive.UnzipToDir(zipfile, s.dir)
 }
 
+func (s *Store) InstallFromTarGzip(targzfile string) error {
+	h, err := rarchive.TarGzipHasSubdirectories(targzfile)
+	if err != nil {
+		return err
+	}
+	if h {
+		return fmt.Errorf("tar.gz file contains subdirectories")
+	}
+	return rarchive.UntarGzipToDir(targzfile, s.dir)
+}
+
 // Stats returns status and diagnostics for the Extension store.
 func (s *Store) Stats() (map[string]interface{}, error) {
 	stats := make(map[string]interface{})
