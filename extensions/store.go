@@ -79,6 +79,18 @@ func (s *Store) InstallFromZip(zipfile string) error {
 	return rarchive.UnzipToDir(zipfile, s.dir)
 }
 
+// Stats returns status and diagnostics for the Extension store.
+func (s *Store) Stats() (map[string]interface{}, error) {
+	stats := make(map[string]interface{})
+	stats["dir"] = s.dir
+	names, err := s.Names()
+	if err != nil {
+		return nil, err
+	}
+	stats["names"] = names
+	return stats, nil
+}
+
 func listFiles(dir string) ([]string, error) {
 	paths := make([]string, 0)
 	files, err := os.ReadDir(dir)

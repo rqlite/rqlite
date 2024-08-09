@@ -189,6 +189,9 @@ func main() {
 	if err := httpServ.RegisterStatus("mux", mux); err != nil {
 		log.Fatalf("failed to register mux status provider: %s", err.Error())
 	}
+	if err := httpServ.RegisterStatus("extensions", extensionsStore); err != nil {
+		log.Fatalf("failed to register extensions status provider: %s", err.Error())
+	}
 
 	// Create the cluster!
 	nodes, err := str.Nodes()
