@@ -30,6 +30,27 @@ func IsZipFile(path string) bool {
 	return bytes.Equal(buf, []byte("PK\x03\x04"))
 }
 
+// ZipHasSubdirectories checks if the ZIP file contains any entries that
+// represent subdirectories or files within subdirectories.
+func ZipHasSubdirectories(path string) (bool, error) {
+	// Open the ZIP file
+	r, err := zip.OpenReader(path)
+	if err != nil {
+		return false, err
+	}
+	defer r.Close()
+
+	// Iterate through each file in the ZIP archive
+	for _, f := range r.File {
+		if f.FileInfo().IsDir() ||
+			len(f.Name) > 0 && (f.Name[len(f.Name)-1] == '/' ||
+				len(f.Name) > 0 && f.Name != filepath.Base(f.Name)) {
+			return true, nil
+		}
+	}
+	return false, nil
+}
+
 // UnzipToDir decompresses the ZIP file at the given path into the specified directory.
 func UnzipToDir(path, dir string) error {
 	// Open the ZIP file

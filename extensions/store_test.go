@@ -87,6 +87,10 @@ func Test_InstallFromZipfile(t *testing.T) {
 		t.Fatalf("NewStore() error: %s", err)
 	}
 
+	if err := s.InstallFromZip("testdata/files-with-dir.zip"); err == nil {
+		t.Fatalf("no error when installing a ZIP file with subdirectories")
+	}
+
 	if err := s.InstallFromZip("testdata/files.zip"); err != nil {
 		t.Fatalf("InstallFromZip() error: %s", err)
 	}

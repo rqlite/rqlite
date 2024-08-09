@@ -1,6 +1,7 @@
 package extensions
 
 import (
+	"fmt"
 	"io"
 	"os"
 	"path/filepath"
@@ -76,6 +77,13 @@ func (s *Store) InstallFromDir(dir string) error {
 
 // InstallFromZip installs all extensions in the given zip file into the store.
 func (s *Store) InstallFromZip(zipfile string) error {
+	h, err := rarchive.ZipHasSubdirectories(zipfile)
+	if err != nil {
+		return err
+	}
+	if h {
+		return fmt.Errorf("zip file contains subdirectories")
+	}
 	return rarchive.UnzipToDir(zipfile, s.dir)
 }
 
