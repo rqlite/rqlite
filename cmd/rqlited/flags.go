@@ -477,6 +477,11 @@ func (c *Config) ExtensionsAreZip() bool {
 	return rarchive.IsZipFile(c.ExtensionsPath)
 }
 
+// ExtensionsAreTarGzip returns true if the extensions are stored in a tar.gz file.
+func (c *Config) ExtensionsAreTarGzip() bool {
+	return rarchive.IsTarGzipFile(c.ExtensionsPath)
+}
+
 // BuildInfo is build information for display at command line.
 type BuildInfo struct {
 	Version       string
