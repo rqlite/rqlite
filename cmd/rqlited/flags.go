@@ -14,6 +14,8 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/rqlite/rqlite/v8/rarchive"
 )
 
 const (
@@ -40,8 +42,8 @@ type Config struct {
 	// DataPath is path to node data. Always set.
 	DataPath string
 
-	// ExtensionsPath is the path to the directory containing SQLite extensions.
-	ExtensionsPath string `dirpath:"true"`
+	// ExtensionsPath is the path to the directory or Zipfile containing SQLite extensions.
+	ExtensionsPath string
 
 	// HTTPAddr is the bind network address for the HTTP Server.
 	// It never includes a trailing HTTP or HTTPS.
@@ -235,6 +237,15 @@ func (c *Config) Validate() error {
 		return err
 	}
 
+	if c.ExtensionsPath != "" {
+		if !fileExists(c.ExtensionsPath) {
+			return fmt.Errorf("extensions path does not exist: %s", c.ExtensionsPath)
+		}
+		if !isDir(c.ExtensionsPath) && !rarchive.IsZipFile(c.ExtensionsPath) {
+			return fmt.Errorf("extensions path is not a valid zip file: %s", c.ExtensionsPath)
+		}
+	}
+
 	if !bothUnsetSet(c.HTTPx509Cert, c.HTTPx509Key) {
 		return fmt.Errorf("either both -%s and -%s must be set, or neither", HTTPx509CertFlag, HTTPx509KeyFlag)
 	}
@@ -418,8 +429,7 @@ func (c *Config) CheckFilePaths() error {
 			if filePath == "" {
 				continue
 			}
-			_, err := os.Stat(filePath)
-			if os.IsNotExist(err) {
+			if !fileExists(filePath) {
 				return fmt.Errorf("%s does not exist", filePath)
 			}
 		}
@@ -446,11 +456,10 @@ func (c *Config) CheckDirPaths() error {
 			if dirPath == "" {
 				continue
 			}
-			stat, err := os.Stat(dirPath)
-			if os.IsNotExist(err) {
+			if !fileExists(dirPath) {
 				return fmt.Errorf("%s does not exist", dirPath)
 			}
-			if !stat.IsDir() {
+			if !isDir(dirPath) {
 				return fmt.Errorf("%s is not a directory", dirPath)
 			}
 		}
@@ -588,4 +597,17 @@ func errorExit(code int, msg string) {
 // bothUnsetSet returns true if both a and b are unset, or both are set.
 func bothUnsetSet(a, b string) bool {
 	return (a == "" && b == "") || (a != "" && b != "")
+}
+
+func fileExists(path string) bool {
+	_, err := os.Stat(path)
+	return err == nil
+}
+
+func isDir(path string) bool {
+	fi, err := os.Stat(path)
+	if err != nil {
+		return false
+	}
+	return fi.IsDir()
 }
