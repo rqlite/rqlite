@@ -272,14 +272,14 @@ func createStore(cfg *Config, ln *tcp.Layer) (*store.Store, error) {
 	dbConf.FKConstraints = cfg.FKConstraints
 
 	// Any SQLite Extensions to load?
-	if cfg.ExtensionsDir != "" {
-		files, err := os.ReadDir(cfg.ExtensionsDir)
+	if cfg.ExtensionsPath != "" {
+		files, err := os.ReadDir(cfg.ExtensionsPath)
 		if err != nil {
 			return nil, fmt.Errorf("failed to list files in Extensions directory: %s", err.Error())
 		}
 		for _, f := range files {
 			if !f.IsDir() && !strings.HasPrefix(f.Name(), ".") {
-				path := filepath.Join(cfg.ExtensionsDir, f.Name())
+				path := filepath.Join(cfg.ExtensionsPath, f.Name())
 				dbConf.Extensions = append(dbConf.Extensions, path)
 			}
 		}
