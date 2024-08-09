@@ -1193,7 +1193,7 @@ func testSimpleRequest(t *testing.T, db *DB) {
 	}
 }
 
-// Test_SimpleRequestTx tests that a transaction is rolled back when an error occurs, and that
+// testSimpleRequestTx tests that a transaction is rolled back when an error occurs, and that
 // subsequent statements after the failed statement are not processed. This also checks that
 // the code which checks if the statement is a query or not works when holding a transaction.
 func testSimpleRequestTx(t *testing.T, db *DB) {
