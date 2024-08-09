@@ -64,6 +64,7 @@ class TestExtensions_sqlean(unittest.TestCase):
     n0 = Node(RQLITED_PATH, '0', extensions_path=extensions_file)
     n0.start()
     n0.wait_for_leader()
+    self.assertEqual(14, len(n0.loaded_extensions()))
     self.cluster = Cluster([n0])
 
 class TestExtensions_NotLoaded(unittest.TestCase):

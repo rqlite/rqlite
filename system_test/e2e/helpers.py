@@ -598,6 +598,11 @@ class Node(object):
     f.write(json.dumps(peers))
     f.close()
 
+  def loaded_extensions(self):
+    r = requests.get(self._status_url())
+    raise_for_status(r)
+    return r.json()['extensions']['names']
+
   def dump_log(self, msg):
     print(msg)
     self.stderr_fd.close()
