@@ -60,6 +60,12 @@ func (s *Store) Names() ([]string, error) {
 	return names, nil
 }
 
+// InstallFromFile installs a single extension at the given file path into the store.
+func (s *Store) InstallFromFile(file string) error {
+	dst := filepath.Join(s.dir, filepath.Base(file))
+	return copyFile(file, dst)
+}
+
 // InstallFromDir installs all extensions in the given directory into the store.
 func (s *Store) InstallFromDir(dir string) error {
 	srcfiles, err := listFiles(dir)

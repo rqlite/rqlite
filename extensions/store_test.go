@@ -40,6 +40,45 @@ func Test_EmptyStore(t *testing.T) {
 	}
 }
 
+func Test_InstallFromFile(t *testing.T) {
+	src := mustTempFile()
+	defer os.Remove(src)
+	if err := os.WriteFile(src, []byte("test"), 0644); err != nil {
+		t.Fatalf("WriteFile() error: %s", err)
+	}
+
+	s, err := NewStore(t.TempDir())
+	if err != nil {
+		t.Fatalf("NewStore() error: %s", err)
+	}
+
+	if err := s.InstallFromFile(src); err != nil {
+		t.Fatalf("InstallFromFile() error: %s", err)
+	}
+
+	names, err := s.Names()
+	if err != nil {
+		t.Fatalf("Names() error: %s", err)
+	}
+	if len(names) != 1 {
+		t.Fatalf("Names() returned %d names, expected 1", len(names))
+	}
+	if names[0] != filepath.Base(src) {
+		t.Fatalf("Names() returned %s, expected %s", names[0], filepath.Base(src))
+	}
+
+	paths, err := s.List()
+	if err != nil {
+		t.Fatalf("List() error: %s", err)
+	}
+	if len(paths) != 1 {
+		t.Fatalf("List() returned %d files, expected 1", len(paths))
+	}
+	if exp, got := s.Dir(), filepath.Dir(paths[0]); exp != got {
+		t.Fatalf("List() returned unexpected path %s, expected %s", got, exp)
+	}
+}
+
 func Test_InstallFromDir(t *testing.T) {
 	dir := t.TempDir()
 	files := []string{"a", "b", "c", "d"}
@@ -163,4 +202,13 @@ func stringSliceEqual(a, b []string) bool {
 		}
 	}
 	return true
+}
+
+func mustTempFile() string {
+	f, err := os.CreateTemp("", "")
+	if err != nil {
+		panic(err)
+	}
+	f.Close()
+	return f.Name()
 }
