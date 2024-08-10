@@ -237,17 +237,8 @@ func (c *Config) Validate() error {
 		return err
 	}
 
-	if c.ExtensionsPath != "" {
-		if !fileExists(c.ExtensionsPath) {
-			return fmt.Errorf("extensions path does not exist: %s", c.ExtensionsPath)
-		}
-		if isDir(c.ExtensionsPath) ||
-			rarchive.IsTarGzipFile(c.ExtensionsPath) ||
-			rarchive.IsZipFile(c.ExtensionsPath) {
-			// OK
-		} else {
-			return fmt.Errorf("extensions path is neither a directory nor valid archive: %s", c.ExtensionsPath)
-		}
+	if c.ExtensionsPath != "" && !fileExists(c.ExtensionsPath) {
+		return fmt.Errorf("extensions path does not exist: %s", c.ExtensionsPath)
 	}
 
 	if !bothUnsetSet(c.HTTPx509Cert, c.HTTPx509Key) {

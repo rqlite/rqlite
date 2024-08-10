@@ -281,7 +281,8 @@ jobs:
           command: python3 system_test/e2e/extensions.py
           environment:
             RQLITED_PATH: /home/circleci/go/bin/rqlited
-            EXTENSIONS_PATH: /home/circleci/extensions
+            EXTENSIONS_PATH: /home/circleci/extensions/rot13.so
+            EXTENSIONS_PATH_DIR: /home/circleci/extensions
             EXTENSIONS_PATH_ZIP: /home/circleci/rot13.zip
             EXTENSIONS_PATH_TAR_GZIP: /home/circleci/rot13.tar.gz
     resource_class: large
