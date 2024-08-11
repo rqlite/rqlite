@@ -8,6 +8,8 @@
 
 import os
 import unittest
+import tempfile
+import shutil
 
 from helpers import Node, Cluster, d_
 
@@ -90,6 +92,26 @@ class TestExtensions_NotLoaded(unittest.TestCase):
 
   def tearDown(self):
     self.cluster.deprovision()
+
+  def test_rot13(self):
+    n = self.cluster.wait_for_leader()
+    j = n.query('SELECT rot13("hello")')
+    expected = d_('{"results": [{"error": "no such function: rot13"}]}')
+    self.assertEqual(j, expected)
+
+class TestExtensions_NotLoaded_EmptyDir(unittest.TestCase):
+  '''Test that an empty extensions directory does not rqlited to fail to start'''
+  def setUp(self):
+    self.test_dir = tempfile.mkdtemp()
+    n0 = Node(RQLITED_PATH, '0', extensions_path=self.test_dir)
+    n0.start()
+    n0.wait_for_leader()
+    self.cluster = Cluster([n0])
+
+  def tearDown(self):
+    self.cluster.deprovision()
+    if os.path.exists(self.test_dir):
+            shutil.rmtree(self.test_dir)
 
   def test_rot13(self):
     n = self.cluster.wait_for_leader()

@@ -287,20 +287,20 @@ func createExtensionsStore(cfg *Config) (*extensions.Store, error) {
 	}
 	if cfg.ExtensionsPath != "" {
 		if cfg.ExtensionsAreDir() {
-			if err := str.InstallFromDir(cfg.ExtensionsPath); err != nil {
-				log.Fatalf("failed to install extensions from directory: %s", err.Error())
+			if err := str.LoadFromDir(cfg.ExtensionsPath); err != nil {
+				log.Fatalf("failed to load extensions from directory: %s", err.Error())
 			}
 		} else if cfg.ExtensionsAreZip() {
-			if err := str.InstallFromZip(cfg.ExtensionsPath); err != nil {
-				log.Fatalf("failed to install extensions from zip file: %s", err.Error())
+			if err := str.LoadFromZip(cfg.ExtensionsPath); err != nil {
+				log.Fatalf("failed to load extensions from zip file: %s", err.Error())
 			}
 		} else if cfg.ExtensionsAreTarGzip() {
-			if err := str.InstallFromTarGzip(cfg.ExtensionsPath); err != nil {
-				log.Fatalf("failed to install extensions from tar.gz file: %s", err.Error())
+			if err := str.LoadFromTarGzip(cfg.ExtensionsPath); err != nil {
+				log.Fatalf("failed to load extensions from tar.gz file: %s", err.Error())
 			}
 		} else {
-			if err := str.InstallFromFile(cfg.ExtensionsPath); err != nil {
-				log.Fatalf("failed to install extension from file: %s", err.Error())
+			if err := str.LoadFromFile(cfg.ExtensionsPath); err != nil {
+				log.Fatalf("failed to load extension from file: %s", err.Error())
 			}
 		}
 	}

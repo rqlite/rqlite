@@ -40,7 +40,7 @@ func Test_EmptyStore(t *testing.T) {
 	}
 }
 
-func Test_InstallFromFile(t *testing.T) {
+func Test_LoadFromFile(t *testing.T) {
 	src := mustTempFile()
 	defer os.Remove(src)
 	if err := os.WriteFile(src, []byte("test"), 0644); err != nil {
@@ -52,8 +52,8 @@ func Test_InstallFromFile(t *testing.T) {
 		t.Fatalf("NewStore() error: %s", err)
 	}
 
-	if err := s.InstallFromFile(src); err != nil {
-		t.Fatalf("InstallFromFile() error: %s", err)
+	if err := s.LoadFromFile(src); err != nil {
+		t.Fatalf("LoadFromFile() error: %s", err)
 	}
 
 	names, err := s.Names()
@@ -79,7 +79,7 @@ func Test_InstallFromFile(t *testing.T) {
 	}
 }
 
-func Test_InstallFromDir(t *testing.T) {
+func Test_LoadFromDir(t *testing.T) {
 	dir := t.TempDir()
 	files := []string{"a", "b", "c", "d"}
 	for _, f := range files {
@@ -94,8 +94,8 @@ func Test_InstallFromDir(t *testing.T) {
 		t.Fatalf("NewStore() error: %s", err)
 	}
 
-	if err := s.InstallFromDir(dir); err != nil {
-		t.Fatalf("InstallFromDir() error: %s", err)
+	if err := s.LoadFromDir(dir); err != nil {
+		t.Fatalf("LoadFromDir() error: %s", err)
 	}
 
 	names, err := s.Names()
@@ -120,18 +120,46 @@ func Test_InstallFromDir(t *testing.T) {
 	}
 }
 
-func Test_InstallFromZipfile(t *testing.T) {
+func Test_LoadFromEmptyDir(t *testing.T) {
+	dir := t.TempDir()
+
 	s, err := NewStore(t.TempDir())
 	if err != nil {
 		t.Fatalf("NewStore() error: %s", err)
 	}
 
-	if err := s.InstallFromZip("testdata/files-with-dir.zip"); err == nil {
+	if err := s.LoadFromDir(dir); err != nil {
+		t.Fatalf("LoadFromDir() error: %s", err)
+	}
+
+	names, err := s.Names()
+	if err != nil {
+		t.Fatalf("Names() error: %s", err)
+	}
+	if len(names) != 0 {
+		t.Fatalf("Names() returned %d names, expected 0", len(names))
+	}
+	paths, err := s.List()
+	if err != nil {
+		t.Fatalf("List() error: %s", err)
+	}
+	if len(paths) != 0 {
+		t.Fatalf("List() returned %d files, expected 0", len(paths))
+	}
+}
+
+func Test_LoadFromZipfile(t *testing.T) {
+	s, err := NewStore(t.TempDir())
+	if err != nil {
+		t.Fatalf("NewStore() error: %s", err)
+	}
+
+	if err := s.LoadFromZip("testdata/files-with-dir.zip"); err == nil {
 		t.Fatalf("no error when installing a ZIP file with subdirectories")
 	}
 
-	if err := s.InstallFromZip("testdata/files.zip"); err != nil {
-		t.Fatalf("InstallFromZip() error: %s", err)
+	if err := s.LoadFromZip("testdata/files.zip"); err != nil {
+		t.Fatalf("LoadFromZip() error: %s", err)
 	}
 
 	names, err := s.Names()
@@ -156,18 +184,18 @@ func Test_InstallFromZipfile(t *testing.T) {
 	}
 }
 
-func Test_InstallFromTarGzip(t *testing.T) {
+func Test_LoadFromTarGzip(t *testing.T) {
 	s, err := NewStore(t.TempDir())
 	if err != nil {
 		t.Fatalf("NewStore() error: %s", err)
 	}
 
-	if err := s.InstallFromTarGzip("testdata/files-with-dir.tar.gz"); err == nil {
+	if err := s.LoadFromTarGzip("testdata/files-with-dir.tar.gz"); err == nil {
 		t.Fatalf("no error when installing a ZIP file with subdirectories")
 	}
 
-	if err := s.InstallFromTarGzip("testdata/files.tar.gz"); err != nil {
-		t.Fatalf("InstallFromZip() error: %s", err)
+	if err := s.LoadFromTarGzip("testdata/files.tar.gz"); err != nil {
+		t.Fatalf("LoadFromZip() error: %s", err)
 	}
 
 	names, err := s.Names()
