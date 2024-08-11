@@ -60,14 +60,14 @@ func (s *Store) Names() ([]string, error) {
 	return names, nil
 }
 
-// InstallFromFile installs a single extension at the given file path into the store.
-func (s *Store) InstallFromFile(file string) error {
+// LoadFromFile installs a single extension at the given file path into the store.
+func (s *Store) LoadFromFile(file string) error {
 	dst := filepath.Join(s.dir, filepath.Base(file))
 	return copyFile(file, dst)
 }
 
-// InstallFromDir installs all extensions in the given directory into the store.
-func (s *Store) InstallFromDir(dir string) error {
+// LoadFromDir installs all extensions in the given directory into the store.
+func (s *Store) LoadFromDir(dir string) error {
 	srcfiles, err := listFiles(dir)
 	if err != nil {
 		return err
@@ -81,8 +81,8 @@ func (s *Store) InstallFromDir(dir string) error {
 	return nil
 }
 
-// InstallFromZip installs all extensions in the given zip file into the store.
-func (s *Store) InstallFromZip(zipfile string) error {
+// LoadFromZip installs all extensions in the given zip file into the store.
+func (s *Store) LoadFromZip(zipfile string) error {
 	h, err := rarchive.ZipHasSubdirectories(zipfile)
 	if err != nil {
 		return err
@@ -93,7 +93,7 @@ func (s *Store) InstallFromZip(zipfile string) error {
 	return rarchive.UnzipToDir(zipfile, s.dir)
 }
 
-func (s *Store) InstallFromTarGzip(targzfile string) error {
+func (s *Store) LoadFromTarGzip(targzfile string) error {
 	h, err := rarchive.TarGzipHasSubdirectories(targzfile)
 	if err != nil {
 		return err
