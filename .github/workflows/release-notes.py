@@ -4,7 +4,7 @@ import sys
 import requests
 
 release_template = """
-_rqlite_ is a lightweight, distributed relational database, which uses [SQLite](https://www.sqlite.org/) as its storage engine. rqlite provides an easy-to-use, fault-tolerant store for your most important relational data. You can learn a lot more about rqlite at [rqlite.io](https://www.rqlite.io).
+_rqlite_ is a lightweight, user-friendly, distributed relational database, which uses [SQLite](https://www.sqlite.org/) as its storage engine. rqlite provides an easy-to-use, fault-tolerant and highly-available store for your most important relational data. You can learn a lot more about rqlite at [rqlite.io](https://www.rqlite.io).
 
 See the [CHANGELOG](https://github.com/rqlite/rqlite/blob/master/CHANGELOG.md) for full details on {release}, and check out the _Assets_ section below for prebuilt binaries.
 
