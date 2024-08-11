@@ -1,3 +1,7 @@
+## v8.28.1 (unreleased)
+### Implementation changes and bug fixes
+- [PR #1854](https://github.com/rqlite/rqlite/pull/1854): More test coverage of SQLite Extensions support.
+
 ## v8.28.0 (August 10th 2024)
 ### New features
 - [PR #1853](https://github.com/rqlite/rqlite/pull/1853): Support loading a single SQLite extension from a file.
