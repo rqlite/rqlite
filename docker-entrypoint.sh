@@ -68,7 +68,7 @@ fi
 # actually means getting to "ready" is quicker.
 #
 # This is kind of a hack. If anyone knows a better way file
-# a GitHub issue at https://github.com/rqlite/rqlite-docker.
+# a GitHub issue at https://github.com/rqlite/rqlite.
 if [ -n "$KUBERNETES_SERVICE_HOST" ]; then
       if [ -z "$START_DELAY" ]; then
             START_DELAY=5
