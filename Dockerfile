@@ -9,8 +9,8 @@ RUN apk add --no-cache gcc musl-dev curl make
 
 COPY . /app
 WORKDIR /app
-RUN CGO_ENABLED=1 go build -a -tags -ldflags="-w -s -X github.com/rqlite/rqlite/v8/cmd.CompilerCommand=musl-gcc -X github.com/rqlite/rqlite/v8/cmd.Version=${VERSION} -X github.com/rqlite/rqlite/v8/cmd.Branch=${BRANCH} -X github.com/rqlite/rqlite/v8/cmd.Commit=${COMMIT} -X github.com/rqlite/rqlite/v8/cmd.Buildtime=${DATE}" ./cmd/rqlited/.
-RUN CGO_ENABLED=1 go build -a -tags -ldflags="-w -s" ./cmd/rqlite/.
+RUN CGO_ENABLED=1 go build -a -ldflags="-w -s -X github.com/rqlite/rqlite/v8/cmd.CompilerCommand=musl-gcc -X github.com/rqlite/rqlite/v8/cmd.Version=${VERSION} -X github.com/rqlite/rqlite/v8/cmd.Branch=${BRANCH} -X github.com/rqlite/rqlite/v8/cmd.Commit=${COMMIT} -X github.com/rqlite/rqlite/v8/cmd.Buildtime=${DATE}" ./cmd/rqlited/.
+RUN CGO_ENABLED=1 go build -a -ldflags="-w -s" ./cmd/rqlite/.
 
 RUN mkdir -p /extensions/sqlean
 WORKDIR /extensions
