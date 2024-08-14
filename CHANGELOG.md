@@ -1,4 +1,5 @@
-## v8.28.1 (unreleased)
+## v8.28.1 (August 13th 2024)
+This release builds the Docker image so that it can load SQLite extensions. It also places precompiled [SQLean extensions](https://github.com/nalgeon/sqlean) in `/opt/extensions` ready for loading.
 ### Implementation changes and bug fixes
 - [PR #1854](https://github.com/rqlite/rqlite/pull/1854): More test coverage of SQLite Extensions support.
 - [PR #1855](https://github.com/rqlite/rqlite/pull/1855): Generate protobuf code using latest protoc
