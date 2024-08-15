@@ -1,4 +1,4 @@
-## v8.28.3 (unreleased)
+## v8.28.3 (August 15th 2024)
 ### Implementation changes and bug fixes
 - [PR #1857](https://github.com/rqlite/rqlite/pull/1857): rqlite shell supports listing loaded SQLite extensions.
 
