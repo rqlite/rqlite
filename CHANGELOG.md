@@ -1,3 +1,8 @@
+## v8.28.2 (August 14th 2024)
+This release adds the [Sqlean](https://github.com/nalgeon/sqlean) and [sqlite-vec](https://github.com/asg017/sqlite-vec/tree/main) SQLite extensions to the Docker image, allowing them to be loaded at launch-time.
+### Implementation changes and bug fixes
+- [PR #1856](https://github.com/rqlite/rqlite/pull/1856): Add Sqlean and sqlite-vec to the Docker image.
+
 ## v8.28.1 (August 13th 2024)
 This release builds the Docker image so that it can load SQLite extensions. It also places precompiled [SQLean extensions](https://github.com/nalgeon/sqlean) in `/opt/extensions` ready for loading.
 ### Implementation changes and bug fixes
