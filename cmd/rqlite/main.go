@@ -61,6 +61,7 @@ func init() {
 		`.dump FILE                          Dump the database in SQL text format to FILE`,
 		`.exit                               Exit this program`,
 		`.expvar                             Show expvar (Go runtime) information for connected node`,
+		`.extensions                         Show loaded SQLite extensions`,
 		`.help                               Show this message`,
 		`.indexes                            Show names of all indexes`,
 		`.quit                               Exit this program`,
@@ -173,6 +174,8 @@ func main() {
 					break
 				}
 				err = setConsistency(line[index+1:], &consistency)
+			case ".EXTENSIONS":
+				err = extensions(ctx, cmd, argv)
 			case ".TABLES":
 				err = queryWithClient(ctx, client, timer, blobArray, consistency, `SELECT name FROM sqlite_master WHERE type="table"`)
 			case ".INDEXES":
@@ -573,6 +576,59 @@ func parseResponse(response *[]byte, ret interface{}) error {
 	decoder := json.NewDecoder(strings.NewReader(string(*response)))
 	decoder.UseNumber()
 	return decoder.Decode(ret)
+}
+
+func extensions(ctx *cli.Context, cmd string, argv *argT) error {
+	client := http.Client{Transport: &http.Transport{
+		TLSClientConfig: &tls.Config{InsecureSkipVerify: argv.Insecure},
+		Proxy:           http.ProxyFromEnvironment,
+	}}
+
+	req, err := http.NewRequest("GET", fmt.Sprintf("%s://%s/status?key=extensions", argv.Protocol, address6(argv)), nil)
+	if err != nil {
+		return err
+	}
+	if argv.Credentials != "" {
+		creds := strings.Split(argv.Credentials, ":")
+		if len(creds) != 2 {
+			return fmt.Errorf("invalid Basic Auth credentials format")
+		}
+		req.SetBasicAuth(creds[0], creds[1])
+	}
+
+	resp, err := client.Do(req)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode == http.StatusUnauthorized {
+		return fmt.Errorf("unauthorized")
+	} else if resp.StatusCode == http.StatusNotFound {
+		return nil
+	}
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return err
+	}
+
+	ret := make(map[string]interface{})
+	decoder := json.NewDecoder(strings.NewReader(string(body)))
+	decoder.UseNumber()
+	if err := decoder.Decode(&ret); err != nil {
+		return err
+	}
+
+	exts, ok := ret["names"]
+	if !ok {
+		return nil
+	}
+	for _, ext := range exts.([]interface{}) {
+		ctx.String("%s\n", ext.(string))
+	}
+
+	return nil
 }
 
 // cliJSON fetches JSON from a URL, and displays it at the CLI. If line contains more

@@ -1,3 +1,7 @@
+## v8.28.3 (unreleased)
+### Implementation changes and bug fixes
+- [PR #1857](https://github.com/rqlite/rqlite/pull/1857): rqlite shell supports listing loaded SQLite extensions.
+
 ## v8.28.2 (August 14th 2024)
 This release adds the [Sqlean](https://github.com/nalgeon/sqlean) and [sqlite-vec](https://github.com/asg017/sqlite-vec/tree/main) SQLite extensions to the Docker image, allowing them to be loaded at launch-time.
 ### Implementation changes and bug fixes
