@@ -59,6 +59,14 @@ if [ -z "$DATA_DIR" ]; then
 	DATA_DIR="/rqlite/file/data"
 fi
 
+if [ -n "$SQLITE_EXTENSIONS" ]; then
+	ext_dir=`mktemp -d`
+	for ext in $SQLITE_EXTENSIONS; do
+		cp /opt/extensions/$ext/* $ext_dir
+	done
+	extensions_path="-extensions-path $ext_dir"
+fi
+
 # When running on Kubernetes, delay a small time so DNS records
 # are configured across the cluster when this rqlited comes up. Because
 # rqlite does node-discovery using a headless service, it must have
@@ -79,7 +87,7 @@ if [ -n "$START_DELAY" ]; then
 fi
 
 RQLITED=/bin/rqlited
-rqlited_commands="$RQLITED $node_id $http_addr $http_adv_addr $raft_addr $raft_adv_addr"
+rqlited_commands="$RQLITED $node_id $http_addr $http_adv_addr $raft_addr $raft_adv_addr $extensions_path"
 data_dir="$DATA_DIR"
 
 if [ "$1" = "rqlite" ]; then
