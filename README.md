@@ -24,8 +24,9 @@ rqlite is your solution for a [rock-solid](https://www.sqlite.org/testing.html),
 ### Key features
 - **Easy Deployment**: Up and running in seconds, with no separate SQLite installation.
 - **Developer-Friendly**: Straightforward [HTTP API](https://rqlite.io/docs/api/), [CLI](https://rqlite.io/docs/cli/), and [client libraries](https://rqlite.io/docs/api/client-libraries/).
-- **Fully Replicated**: SQL database with [full-text search](https://www.sqlite.org/fts5.html), [JSON support](https://www.sqlite.org/json1.html), and [SQLite extensions support](https://rqlite.io/docs/guides/extensions/).
+- **Rich feature set**: [Full-text search](https://www.sqlite.org/fts5.html), [JSON support](https://www.sqlite.org/json1.html), and [SQLite extensions support](https://rqlite.io/docs/guides/extensions/) including [Vector Search](https://github.com/asg017/sqlite-vec) and [Crypto](https://github.com/nalgeon/sqlean).
 - **Large data set support**: rqlite works well, even when managing multi-GB data sets.
+- **Reliable**: Fully replicated SQL database gives you fault-tolerance and high-availability.
 - **Dynamic Clustering**: Integrates with [Kubernetes](https://rqlite.io/docs/guides/kubernetes/), Consul, etcd, and DNS for [automatic clustering](https://rqlite.io/docs/clustering/automatic-clustering/).
 - **Robust Security**: [Extensive encryption and TLS support](https://rqlite.io/docs/guides/security/).
 - **Flexible Consistency**: Customize [read/write performance](https://rqlite.io/docs/api/read-consistency/) and [durability](https://rqlite.io/docs/api/queued-writes/).
