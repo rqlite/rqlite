@@ -1,3 +1,8 @@
+## v8.28.4 (August 16th 2024)
+There are no functional changes in this release to rqlite itself.
+### Implementation changes and bug fixes
+- Add the [SQLite ICU extension](https://sqlite.org/src/dir/ext/icu) to the Docker image.
+
 ## v8.28.3 (August 15th 2024)
 ### Implementation changes and bug fixes
 - [PR #1857](https://github.com/rqlite/rqlite/pull/1857): rqlite shell supports listing loaded SQLite extensions.
