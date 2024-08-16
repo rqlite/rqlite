@@ -25,7 +25,7 @@ RUN tar xvfz sqlite-vec.tar.gz
 RUN cd asg017* && sh scripts/vendor.sh && echo "#include <sys/types.h>" | cat - sqlite-vec.c > temp && mv temp sqlite-vec.c && make loadable && cp dist/* /extensions/sqlite-vec/
 
 RUN mkdir -p /extensions/icu
-RUN gcc -fPIC -shared extensions/src/icu/icu.c -I extensions/src/ `pkg-config --libs --cflags icu-uc icu-io` -o /extenions/icu/icu.so
+RUN gcc -fPIC -shared extensions/src/icu/icu.c -I extensions/src/ `pkg-config --libs --cflags icu-uc icu-io` -o icu.so && mv icu.so /extensions/icu
 
 FROM alpine:latest
 
