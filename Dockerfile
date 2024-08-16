@@ -32,6 +32,8 @@ RUN cd asg017* && sh scripts/vendor.sh && echo "#include <sys/types.h>" | cat - 
 
 FROM alpine:latest
 
+RUN apk add --no-cache icu-libs
+
 COPY --from=builder /app/docker-entrypoint.sh /bin
 COPY --from=builder /app/rqlited /bin
 COPY --from=builder /app/rqlite /bin
