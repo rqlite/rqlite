@@ -24,6 +24,9 @@ RUN curl -L `curl -s https://api.github.com/repos/asg017/sqlite-vec/releases/lat
 RUN tar xvfz sqlite-vec.tar.gz
 RUN cd asg017* && sh scripts/vendor.sh && echo "#include <sys/types.h>" | cat - sqlite-vec.c > temp && mv temp sqlite-vec.c && make loadable && cp dist/* /extensions/sqlite-vec/
 
+RUN mkdir -p /extensions/icu
+RUN gcc -fPIC -shared extensions/src/icu/icu.c -I extensions/src/ `pkg-config --libs --cflags icu-uc icu-io` -o /extenions/icu/icu.so
+
 FROM alpine:latest
 
 COPY --from=builder /app/docker-entrypoint.sh /bin
@@ -34,6 +37,8 @@ RUN mkdir -p /opt/extensions/sqlean
 COPY --from=builder /extensions/sqlean/* /opt/extensions/sqlean
 RUN mkdir -p /opt/extensions/sqlite-vec
 COPY --from=builder /extensions/sqlite-vec/* /opt/extensions/sqlite-vec
+RUN mkdir -p /opt/extensions/icu
+COPY --from=builder /extensions/icu/* /opt/extensions/icu
 
 RUN mkdir -p /rqlite/file
 VOLUME /rqlite/file
