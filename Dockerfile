@@ -5,7 +5,7 @@ ARG COMMIT
 ARG BRANCH
 ARG DATE
 
-RUN apk add --no-cache gcc musl-dev curl make git gettext
+RUN apk add --no-cache gcc musl-dev curl make git gettext pkgconf vim icu-dev
 
 COPY . /app
 WORKDIR /app
