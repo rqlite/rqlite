@@ -169,8 +169,7 @@ jobs:
       - checkout
       - restore_and_save_cache
       - run: go version
-      - run: go install -tags osusergo,netgo
-          -ldflags="-extldflags=-static" ./...
+      - run: go install ./...
       - run:
           command: python3 system_test/e2e/single_node.py
           environment:
@@ -183,8 +182,7 @@ jobs:
     steps:
       - checkout
       - restore_and_save_cache
-      - run: go install -tags osusergo,netgo
-          -ldflags="-extldflags=-static" ./...
+      - run: go install ./...
       - run:
           command: |
             cd system_test/e2e
@@ -199,8 +197,7 @@ jobs:
     steps:
       - checkout
       - restore_and_save_cache
-      - run: go install -tags osusergo,netgo
-          -ldflags="-extldflags=-static" ./...
+      - run: go install ./...
       - run:
           command: python3 system_test/e2e/joining.py
           environment:
@@ -213,8 +210,7 @@ jobs:
     steps:
       - checkout
       - restore_and_save_cache
-      - run: go install -tags osusergo,netgo
-          -ldflags="-extldflags=-static" ./...
+      - run: go install ./...
       - run:
           command: python3 system_test/e2e/multi_node.py
           environment:
@@ -227,8 +223,7 @@ jobs:
     steps:
       - checkout
       - restore_and_save_cache
-      - run: go install -tags osusergo,netgo
-          -ldflags="-extldflags=-static" ./...
+      - run: go install ./...
       - run:
           command: python3 system_test/e2e/multi_node_adv.py
           environment:
@@ -243,8 +238,7 @@ jobs:
     steps:
       - checkout
       - restore_and_save_cache
-      - run: go install -tags osusergo,netgo
-          -ldflags="-extldflags=-static" ./...
+      - run: go install ./...
       - run:
           command: python3 system_test/e2e/auto_clustering.py
           environment:
@@ -257,8 +251,7 @@ jobs:
     steps:
       - checkout
       - restore_and_save_cache
-      - run: go install -tags osusergo,netgo
-          -ldflags="-extldflags=-static" ./...
+      - run: go install ./...
       - run:
           command: python3 system_test/e2e/auto_state.py
           environment:
@@ -271,8 +264,7 @@ jobs:
     steps:
       - checkout
       - restore_and_save_cache
-      - run: go install -tags osusergo,netgo
-          -ldflags="-extldflags=-static" ./...
+      - run: go install ./...
       - run: mkdir /home/circleci/extensions
       - run: gcc -g -fPIC -shared db/testdata/rot13.c -o /home/circleci/extensions/rot13.so
       - run: gcc -g -fPIC -shared db/testdata/carray.c -o /home/circleci/extensions/carray.so
