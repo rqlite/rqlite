@@ -59,28 +59,16 @@ if [ -z "$DATA_DIR" ]; then
 	DATA_DIR="/rqlite/file/data"
 fi
 
-contains "-extensions_path" "$@"
-if [ $? -eq 0 ]; then
-	extensions_path=""
-	if [ -n "$SQLITE_EXTENSIONS" ]; then
-		for ext in $SQLITE_EXTENSIONS; do
-			if [ -z "$extensions_path" ]; then
-				extensions_path="/opt/extensions/$ext"
-			else
-				extensions_path="${extensions_path},/opt/extensions/$ext"
-			fi
-		done
-	fi
-	if [ -n "$CUSTOM_SQLITE_EXTENSION_PATHS" ]; then
+
+extensions_path=""
+if [ -n "$SQLITE_EXTENSIONS" ]; then
+	for ext in $SQLITE_EXTENSIONS; do
 		if [ -z "$extensions_path" ]; then
-			extensions_path=$CUSTOM_SQLITE_EXTENSION_PATHS
+			extensions_path="/opt/extensions/$ext"
 		else
-			extensions_path="${extensions_path},$CUSTOM_SQLITE_EXTENSION_PATHS"
+			extensions_path="${extensions_path},/opt/extensions/$ext"
 		fi
-	fi
-	if [ -n "$extensions_path" ]; then
-		extensions_path_flag="-extensions-path=$extensions_path"
-	fi
+	done
 fi
 
 # When running on Kubernetes, delay a small time so DNS records
