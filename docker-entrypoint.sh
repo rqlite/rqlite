@@ -71,6 +71,10 @@ if [ -n "$SQLITE_EXTENSIONS" ]; then
 	done
 fi
 
+if [ -n "$extensions_path" ]; then
+	extensions_path_flag="-extensions-path=$extensions_path"
+fi
+
 # When running on Kubernetes, delay a small time so DNS records
 # are configured across the cluster when this rqlited comes up. Because
 # rqlite does node-discovery using a headless service, it must have
