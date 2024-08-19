@@ -293,7 +293,7 @@ class Node(object):
     return r.json()
 
   def extensions(self):
-    r = requests.get(self.status())
+    r = requests.get(self._status_url())
     raise_for_status(r)
     return r.json()['extensions']['names']
 
