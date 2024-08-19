@@ -1,6 +1,6 @@
 ## v8.29.0 (unreleased)
 ### New features
-- [PR #1859](https://github.com/rqlite/rqlite/pull/1859): `-extensions-path` supports multiple comma-delimited paths.
+- [PR #1859](https://github.com/rqlite/rqlite/pull/1859), [PR #1860](https://github.com/rqlite/rqlite/pull/1860): `-extensions-path` supports multiple comma-delimited paths.
 
 ## v8.28.4 (August 16th 2024)
 There are no functional changes in this release to rqlite itself.

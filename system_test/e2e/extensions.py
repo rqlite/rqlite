@@ -18,6 +18,7 @@ EXTENSIONS_PATH = os.environ['EXTENSIONS_PATH']
 EXTENSIONS_PATH_DIR = os.environ['EXTENSIONS_PATH_DIR']
 EXTENSIONS_PATH_ZIP = os.environ['EXTENSIONS_PATH_ZIP']
 EXTENSIONS_PATH_TAR_GZIP = os.environ['EXTENSIONS_PATH_TAR_GZIP']
+EXTENSIONS_PATH_MULTIPLE = os.environ['EXTENSIONS_PATH_MULTIPLE']
 
 class TestExtensions_File(unittest.TestCase):
   def setUp(self):
@@ -82,6 +83,24 @@ class TestExtensions_TarGzipped(unittest.TestCase):
     j = n.query('SELECT rot13("hello")')
     expected = d_('{"results": [{"columns": ["rot13(\\"hello\\")"], "types": ["text"], "values": [["uryyb"]]}]}')
     self.assertEqual(j, expected)
+
+class TestExtensions_Multiple(unittest.TestCase):
+  def setUp(self):
+    n0 = Node(RQLITED_PATH, '0', extensions_path=EXTENSIONS_PATH_MULTIPLE)
+    n0.start()
+    n0.wait_for_leader()
+    self.cluster = Cluster([n0])
+
+  def tearDown(self):
+    self.cluster.deprovision()
+
+  def test(self):
+    n = self.cluster.wait_for_leader()
+    loaded = n.extensions()
+    if 'rot13.so' not in loaded:
+      self.fail('rot13 not loaded')
+    if 'carray.so' not in loaded:
+      self.fail('carray not loaded')
 
 class TestExtensions_NotLoaded(unittest.TestCase):
   def setUp(self):
