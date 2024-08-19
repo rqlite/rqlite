@@ -5,7 +5,7 @@ ARG COMMIT
 ARG BRANCH
 ARG DATE
 
-RUN apk add --no-cache gcc musl-dev curl make git gettext pkgconf vim icu-dev zlib-dev
+RUN apk add --no-cache gcc musl-dev curl make git gettext pkgconf vim icu-dev
 
 COPY . /app
 
@@ -41,8 +41,14 @@ COPY --from=builder /app/docker-entrypoint.sh /bin
 COPY --from=builder /app/rqlited /bin
 COPY --from=builder /app/rqlite /bin
 
-RUN mkdir -p /opt/extensions
-COPY --from=builder /extensions/* /opt/extensions
+RUN mkdir -p /opt/extensions/icu
+COPY --from=builder /extensions/icu/* /opt/extensions/icu
+RUN mkdir -p /opt/extensions/sqlean
+COPY --from=builder /extensions/sqlean/* /opt/extensions/sqlean
+RUN mkdir -p /opt/extensions/sqlite-vec
+COPY --from=builder /extensions/sqlite-vec/* /opt/extensions/sqlite-vec
+RUN mkdir -p /opt/extensions/misc
+COPY --from=builder /extensions/misc/* /opt/extensions/misc
 
 RUN mkdir -p /rqlite/file
 VOLUME /rqlite/file
