@@ -59,12 +59,20 @@ if [ -z "$DATA_DIR" ]; then
 	DATA_DIR="/rqlite/file/data"
 fi
 
+
+extensions_path=""
 if [ -n "$SQLITE_EXTENSIONS" ]; then
-	ext_dir=`mktemp -d`
 	for ext in $SQLITE_EXTENSIONS; do
-		cp /opt/extensions/$ext/* $ext_dir
+		if [ -z "$extensions_path" ]; then
+			extensions_path="/opt/extensions/$ext"
+		else
+			extensions_path="${extensions_path},/opt/extensions/$ext"
+		fi
 	done
-	extensions_path="-extensions-path $ext_dir"
+fi
+
+if [ -n "$extensions_path" ]; then
+	extensions_path_flag="-extensions-path=$extensions_path"
 fi
 
 # When running on Kubernetes, delay a small time so DNS records
@@ -87,7 +95,7 @@ if [ -n "$START_DELAY" ]; then
 fi
 
 RQLITED=/bin/rqlited
-rqlited_commands="$RQLITED $node_id $http_addr $http_adv_addr $raft_addr $raft_adv_addr $extensions_path"
+rqlited_commands="$RQLITED $node_id $http_addr $http_adv_addr $raft_addr $raft_adv_addr $extensions_path_flag"
 data_dir="$DATA_DIR"
 
 if [ "$1" = "rqlite" ]; then

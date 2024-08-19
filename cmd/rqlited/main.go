@@ -28,6 +28,7 @@ import (
 	"github.com/rqlite/rqlite/v8/disco"
 	"github.com/rqlite/rqlite/v8/extensions"
 	httpd "github.com/rqlite/rqlite/v8/http"
+	"github.com/rqlite/rqlite/v8/rarchive"
 	"github.com/rqlite/rqlite/v8/rtls"
 	"github.com/rqlite/rqlite/v8/store"
 	"github.com/rqlite/rqlite/v8/tcp"
@@ -285,25 +286,29 @@ func createExtensionsStore(cfg *Config) (*extensions.Store, error) {
 	if err != nil {
 		log.Fatalf("failed to create extension store: %s", err.Error())
 	}
-	if cfg.ExtensionsPath != "" {
-		if cfg.ExtensionsAreDir() {
-			if err := str.LoadFromDir(cfg.ExtensionsPath); err != nil {
-				log.Fatalf("failed to load extensions from directory: %s", err.Error())
-			}
-		} else if cfg.ExtensionsAreZip() {
-			if err := str.LoadFromZip(cfg.ExtensionsPath); err != nil {
-				log.Fatalf("failed to load extensions from zip file: %s", err.Error())
-			}
-		} else if cfg.ExtensionsAreTarGzip() {
-			if err := str.LoadFromTarGzip(cfg.ExtensionsPath); err != nil {
-				log.Fatalf("failed to load extensions from tar.gz file: %s", err.Error())
-			}
-		} else {
-			if err := str.LoadFromFile(cfg.ExtensionsPath); err != nil {
-				log.Fatalf("failed to load extension from file: %s", err.Error())
+
+	if len(cfg.ExtensionPaths) > 0 {
+		for _, path := range cfg.ExtensionPaths {
+			if isDir(path) {
+				if err := str.LoadFromDir(path); err != nil {
+					log.Fatalf("failed to load extensions from directory: %s", err.Error())
+				}
+			} else if rarchive.IsZipFile(path) {
+				if err := str.LoadFromZip(path); err != nil {
+					log.Fatalf("failed to load extensions from zip file: %s", err.Error())
+				}
+			} else if rarchive.IsTarGzipFile(path) {
+				if err := str.LoadFromTarGzip(path); err != nil {
+					log.Fatalf("failed to load extensions from tar.gz file: %s", err.Error())
+				}
+			} else {
+				if err := str.LoadFromFile(path); err != nil {
+					log.Fatalf("failed to load extension from file: %s", err.Error())
+				}
 			}
 		}
 	}
+
 	return str, nil
 }
 

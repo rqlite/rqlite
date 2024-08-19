@@ -14,8 +14,6 @@ import (
 	"strconv"
 	"strings"
 	"time"
-
-	"github.com/rqlite/rqlite/v8/rarchive"
 )
 
 const (
@@ -36,14 +34,29 @@ const (
 	NodeX509KeyFlag  = "node-key"
 )
 
+// StringSlice is a slice of strings which implments the flag.Value interface.
+type StringSliceValue []string
+
+// String returns a string representation of the slice.
+func (s *StringSliceValue) String() string {
+	return fmt.Sprintf("%v", *s)
+}
+
+// Set sets the value of the slice.
+func (s *StringSliceValue) Set(value string) error {
+	*s = strings.Split(value, ",")
+	return nil
+}
+
 // Config represents the configuration as set by command-line flags.
 // All variables will be set, unless explicit noted.
 type Config struct {
 	// DataPath is path to node data. Always set.
 	DataPath string
 
-	// ExtensionsPath is the path to the directory or Zipfile containing SQLite extensions.
-	ExtensionsPath string
+	// ExtensionPaths is a comma-delimited list of path to SQLite extensions to be loaded.
+	// Each element may be a directory path, zipfile, or tar.gz file. May not be set.
+	ExtensionPaths StringSliceValue
 
 	// HTTPAddr is the bind network address for the HTTP Server.
 	// It never includes a trailing HTTP or HTTPS.
@@ -237,8 +250,12 @@ func (c *Config) Validate() error {
 		return err
 	}
 
-	if c.ExtensionsPath != "" && !fileExists(c.ExtensionsPath) {
-		return fmt.Errorf("extensions path does not exist: %s", c.ExtensionsPath)
+	if len(c.ExtensionPaths) > 0 {
+		for _, p := range c.ExtensionPaths {
+			if !fileExists(p) {
+				return fmt.Errorf("extension path does not exist: %s", p)
+			}
+		}
 	}
 
 	if !bothUnsetSet(c.HTTPx509Cert, c.HTTPx509Key) {
@@ -462,21 +479,6 @@ func (c *Config) CheckDirPaths() error {
 	return nil
 }
 
-// ExtensionsAreDir returns true if the extensions are stored in a directory.
-func (c *Config) ExtensionsAreDir() bool {
-	return isDir(c.ExtensionsPath)
-}
-
-// ExtensionsAreZip returns true if the extensions are stored in a zipfile.
-func (c *Config) ExtensionsAreZip() bool {
-	return rarchive.IsZipFile(c.ExtensionsPath)
-}
-
-// ExtensionsAreTarGzip returns true if the extensions are stored in a tar.gz file.
-func (c *Config) ExtensionsAreTarGzip() bool {
-	return rarchive.IsTarGzipFile(c.ExtensionsPath)
-}
-
 // BuildInfo is build information for display at command line.
 type BuildInfo struct {
 	Version       string
@@ -490,13 +492,15 @@ func ParseFlags(name, desc string, build *BuildInfo) (*Config, error) {
 	if flag.Parsed() {
 		return nil, fmt.Errorf("command-line flags already parsed")
 	}
-	config := &Config{}
+	config := &Config{
+		ExtensionPaths: StringSliceValue{},
+	}
 	showVersion := false
 
 	fs := flag.NewFlagSet(name, flag.ExitOnError)
 
 	fs.StringVar(&config.NodeID, "node-id", "", "Unique ID for node. If not set, set to advertised Raft address")
-	fs.StringVar(&config.ExtensionsPath, "extensions-path", "", "Path to directory or zipfile containing SQLite extensions to be loaded")
+	fs.Var(&config.ExtensionPaths, "extensions-path", "Comma-delimited list of paths to directories, zipfiles, or tar.gz files containing SQLite extensions")
 	fs.StringVar(&config.HTTPAddr, HTTPAddrFlag, "localhost:4001", "HTTP server bind address. To enable HTTPS, set X.509 certificate and key")
 	fs.StringVar(&config.HTTPAdv, HTTPAdvAddrFlag, "", "Advertised HTTP address. If not set, same as HTTP server bind address")
 	fs.StringVar(&config.HTTPAllowOrigin, "http-allow-origin", "", "Value to set for Access-Control-Allow-Origin HTTP header")
