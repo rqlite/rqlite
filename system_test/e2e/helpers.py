@@ -292,6 +292,11 @@ class Node(object):
     raise_for_status(r)
     return r.json()
 
+  def extensions(self):
+    r = requests.get(self._status_url())
+    raise_for_status(r)
+    return r.json()['extensions']['names']
+
   def is_leader(self):
     '''
     is_leader returns whether this node is the cluster leader
