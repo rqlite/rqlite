@@ -220,6 +220,58 @@ func Test_LoadFromTarGzip(t *testing.T) {
 	}
 }
 
+func Test_LoadFromMulti(t *testing.T) {
+	// Load with a tarball.
+	s, err := NewStore(t.TempDir())
+	if err != nil {
+		t.Fatalf("NewStore() error: %s", err)
+	}
+
+	if err := s.LoadFromTarGzip("testdata/files-with-dir.tar.gz"); err == nil {
+		t.Fatalf("no error when installing a ZIP file with subdirectories")
+	}
+
+	if err := s.LoadFromTarGzip("testdata/files.tar.gz"); err != nil {
+		t.Fatalf("LoadFromZip() error: %s", err)
+	}
+
+	// Load with a directory.
+	dir := t.TempDir()
+	files := []string{"1", "2", "3", "4"}
+	for _, f := range files {
+		fpath := dir + "/" + f
+		if err := os.WriteFile(fpath, []byte("test"), 0644); err != nil {
+			t.Fatalf("WriteFile() error: %s", err)
+		}
+	}
+
+	if err := s.LoadFromDir(dir); err != nil {
+		t.Fatalf("LoadFromDir() error: %s", err)
+	}
+
+	// Check Store that the combined extensions are loaded.
+	names, err := s.Names()
+	if err != nil {
+		t.Fatalf("Names() error: %s", err)
+	}
+	exp := []string{"1", "2", "3", "4", "a", "b", "c", "d"}
+	if !stringSliceEqual(names, exp) {
+		t.Fatalf("Names() returned %v, expected %v", names, exp)
+	}
+	paths, err := s.List()
+	if err != nil {
+		t.Fatalf("List() error: %s", err)
+	}
+	if len(paths) != len(exp) {
+		t.Fatalf("List() returned %d files, expected %d", len(paths), len(exp))
+	}
+	for _, p := range paths {
+		if exp, got := s.Dir(), filepath.Dir(p); exp != got {
+			t.Fatalf("List() returned unexpected path %s, expected %s", got, exp)
+		}
+	}
+}
+
 func stringSliceEqual(a, b []string) bool {
 	if len(a) != len(b) {
 		return false
