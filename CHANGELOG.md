@@ -4,6 +4,7 @@
 
 ### Implementation changes and bug fixes
 - [PR #1861](https://github.com/rqlite/rqlite/pull/1861): Align CircleCI and release build `go install` flags.
+- [PR #1862](https://github.com/rqlite/rqlite/pull/1862): `go mod` updates.
 
 ## v8.28.4 (August 16th 2024)
 There are no functional changes in this release to rqlite itself.
