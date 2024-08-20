@@ -1,9 +1,9 @@
 ## v8.29.0 (unreleased)
 ### New features
-- [PR #1863](https://github.com/rqlite/rqlite/pull/1863), [PR #1865](https://github.com/rqlite/rqlite/pull/1865), [PR #1867](https://github.com/rqlite/rqlite/pull/1867): Add miscellaneous extensions from SQLite source.
 - [PR #1859](https://github.com/rqlite/rqlite/pull/1859), [PR #1860](https://github.com/rqlite/rqlite/pull/1864), [PR #1860](https://github.com/rqlite/rqlite/pull/1864): `-extensions-path` supports multiple comma-delimited paths.
 
 ### Implementation changes and bug fixes
+- [PR #1863](https://github.com/rqlite/rqlite/pull/1863), [PR #1865](https://github.com/rqlite/rqlite/pull/1865), [PR #1867](https://github.com/rqlite/rqlite/pull/1867): Add miscellaneous extensions from SQLite source to Docker image.
 - [PR #1861](https://github.com/rqlite/rqlite/pull/1861): Remove differences between CircleCI and release build `go install` flags.
 - [PR #1862](https://github.com/rqlite/rqlite/pull/1862): `go mod` updates.
 
