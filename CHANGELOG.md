@@ -1,5 +1,6 @@
 ## v8.29.0 (unreleased)
 ### New features
+- [PR #1863](https://github.com/rqlite/rqlite/pull/1863): Add miscellaneous extensions from SQLite source.
 - [PR #1859](https://github.com/rqlite/rqlite/pull/1859), [PR #1860](https://github.com/rqlite/rqlite/pull/1864), [PR #1860](https://github.com/rqlite/rqlite/pull/1864): `-extensions-path` supports multiple comma-delimited paths.
 
 ### Implementation changes and bug fixes

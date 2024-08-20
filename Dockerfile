@@ -5,7 +5,7 @@ ARG COMMIT
 ARG BRANCH
 ARG DATE
 
-RUN apk add --no-cache gcc musl-dev curl make git gettext pkgconf vim icu-dev
+RUN apk add --no-cache gcc musl-dev curl make git gettext pkgconf vim icu-dev zlib-dev
 
 COPY . /app
 
@@ -29,6 +29,9 @@ RUN curl -L `curl -s https://api.github.com/repos/asg017/sqlite-vec/releases/lat
 RUN tar xvfz sqlite-vec.tar.gz
 RUN cd asg017* && sh scripts/vendor.sh && echo "#include <sys/types.h>" | cat - sqlite-vec.c > temp && mv temp sqlite-vec.c && make loadable && cp dist/* /extensions/sqlite-vec/
 
+WORKDIR /app
+RUN mkdir -p /extensions/misc
+RUN cd extensions/src/misc/ && make && cp *.so /extensions/misc
 
 FROM alpine:latest
 
@@ -44,6 +47,8 @@ RUN mkdir -p /opt/extensions/sqlean
 COPY --from=builder /extensions/sqlean/* /opt/extensions/sqlean
 RUN mkdir -p /opt/extensions/sqlite-vec
 COPY --from=builder /extensions/sqlite-vec/* /opt/extensions/sqlite-vec
+RUN mkdir -p /opt/extensions/misc
+COPY --from=builder /extensions/misc/* /opt/extensions/misc
 
 RUN mkdir -p /rqlite/file
 VOLUME /rqlite/file
