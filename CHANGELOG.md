@@ -1,6 +1,6 @@
 ## v8.29.0 (unreleased)
 ### New features
-- [PR #1859](https://github.com/rqlite/rqlite/pull/1859), [PR #1860](https://github.com/rqlite/rqlite/pull/1860): `-extensions-path` supports multiple comma-delimited paths.
+- [PR #1859](https://github.com/rqlite/rqlite/pull/1859), [PR #1860](https://github.com/rqlite/rqlite/pull/1864), [PR #1860](https://github.com/rqlite/rqlite/pull/1864): `-extensions-path` supports multiple comma-delimited paths.
 
 ### Implementation changes and bug fixes
 - [PR #1861](https://github.com/rqlite/rqlite/pull/1861): Align CircleCI and release build `go install` flags.

@@ -45,6 +45,13 @@ func (s *StringSliceValue) String() string {
 // Set sets the value of the slice.
 func (s *StringSliceValue) Set(value string) error {
 	*s = strings.Split(value, ",")
+	var r []string
+	for _, v := range *s {
+		if v != "" {
+			r = append(r, v)
+		}
+	}
+	*s = r
 	return nil
 }
 
