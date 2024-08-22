@@ -62,7 +62,14 @@ fi
 
 extensions_path=""
 if [ -n "$SQLITE_EXTENSIONS" ]; then
-	for ext in $SQLITE_EXTENSIONS; do
+	extensions=""
+	if [[ "$SQLITE_EXTENSIONS" == *","* ]]; then
+		IFS=","
+	fi
+	read -ra extensions <<< "$SQLITE_EXTENSIONS"
+	IFS=" "
+
+	for ext in $extensions; do
 		if [ -z "$extensions_path" ]; then
 			extensions_path="/opt/extensions/$ext"
 		else
@@ -73,6 +80,14 @@ fi
 
 if [ -n "$extensions_path" ]; then
 	extensions_path_flag="-extensions-path=$extensions_path"
+fi
+
+if [ -n "$CUSTOM_SQLITE_EXTENSIONS_PATH" ]; then
+	if [ -n "$extensions_path_flag" ]; then
+		extensions_path_flag="$extensions_path_flag,$CUSTOM_SQLITE_EXTENSIONS_PATH"
+	else
+		extensions_path_flag="-extensions-path=$CUSTOM_SQLITE_EXTENSIONS_PATH"
+	fi
 fi
 
 # When running on Kubernetes, delay a small time so DNS records
