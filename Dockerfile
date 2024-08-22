@@ -21,7 +21,7 @@ WORKDIR /extensions
 RUN mkdir -p /extensions/sqlean
 RUN curl -L `curl -s https://api.github.com/repos/nalgeon/sqlean/releases/latest | grep "tarball_url" | cut -d '"' -f 4` -o sqlean.tar.gz
 RUN tar xvfz sqlean.tar.gz
-RUN cd nalgeon* && make prepare-dist download-sqlite download-external compile-linux && cp dist/* /extensions/sqlean
+RUN cd nalgeon* && make prepare-dist download-sqlite download-external compile-linux && cp dist/sqlean.so /extensions/sqlean
 
 WORKDIR /extensions
 RUN mkdir -p /extensions/sqlite-vec
