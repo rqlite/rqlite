@@ -59,9 +59,14 @@ if [ -z "$DATA_DIR" ]; then
 	DATA_DIR="/rqlite/file/data"
 fi
 
-
 extensions_path=""
 if [ -n "$SQLITE_EXTENSIONS" ]; then
+	contains "-extensions-path" "$@"
+	if [ $? -eq 1 ]; then
+		echo "Setting both -extensions-path and SQLITE_EXTENSIONS is not allowed"
+  		exit 1
+	fi
+
 	if [[ "$SQLITE_EXTENSIONS" == *","* ]]; then
 		IFS=","
 	fi
@@ -82,6 +87,12 @@ if [ -n "$extensions_path" ]; then
 fi
 
 if [ -n "$CUSTOM_SQLITE_EXTENSIONS_PATH" ]; then
+	contains "-extensions-path" "$@"
+	if [ $? -eq 1 ]; then
+		echo "Setting both -extensions-path and CUSTOM_SQLITE_EXTENSIONS_PATH is not allowed"
+  		exit 1
+	fi
+
 	if [ -n "$extensions_path_flag" ]; then
 		extensions_path_flag="$extensions_path_flag,$CUSTOM_SQLITE_EXTENSIONS_PATH"
 	else
