@@ -7,6 +7,7 @@
 - [PR #1863](https://github.com/rqlite/rqlite/pull/1863), [PR #1865](https://github.com/rqlite/rqlite/pull/1865), [PR #1867](https://github.com/rqlite/rqlite/pull/1867): Add miscellaneous extensions from SQLite source to Docker image.
 - [PR #1861](https://github.com/rqlite/rqlite/pull/1861): Remove differences between CircleCI and release build `go install` flags.
 - [PR #1862](https://github.com/rqlite/rqlite/pull/1862): `go mod` updates.
+- [7f36802](https://github.com/rqlite/rqlite/commit/7f368026afcfac4ae09a505206de9c1759d7dbaa): Docker image actually only needs the single-file SQLean bundle.
 
 ## v8.28.4 (August 16th 2024)
 There are no functional changes in this release to rqlite itself.
