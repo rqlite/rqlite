@@ -69,7 +69,7 @@ if [ -n "$SQLITE_EXTENSIONS" ]; then
 	read -ra extensions <<< "$SQLITE_EXTENSIONS"
 	IFS=" "
 
-	for ext in $extensions; do
+	for ext in "${extensions[@]}"; do
 		if [ -z "$extensions_path" ]; then
 			extensions_path="/opt/extensions/$ext"
 		else
