@@ -62,14 +62,13 @@ fi
 
 extensions_path=""
 if [ -n "$SQLITE_EXTENSIONS" ]; then
-	extensions=""
 	if [[ "$SQLITE_EXTENSIONS" == *","* ]]; then
 		IFS=","
 	fi
-	read -ra extensions <<< "$SQLITE_EXTENSIONS"
+	set -- "$SQLITE_EXTENSIONS"
 	IFS=" "
 
-	for ext in "${extensions[@]}"; do
+	for ext in "$@"; do
 		if [ -z "$extensions_path" ]; then
 			extensions_path="/opt/extensions/$ext"
 		else
