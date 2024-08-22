@@ -123,7 +123,7 @@ RQLITED=/bin/rqlited
 rqlited_commands="$RQLITED $node_id $http_addr $http_adv_addr $raft_addr $raft_adv_addr $extensions_path_flag"
 data_dir="$DATA_DIR"
 
-if [ "$1" = "rqlite" ]; then
+if [ "$1" = "run" ]; then
         set -- $rqlited_commands $data_dir
 elif [ "${1:0:1}" = '-' ]; then
         # User is passing some options, so merge them.
