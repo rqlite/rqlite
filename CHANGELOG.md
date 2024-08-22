@@ -1,6 +1,7 @@
 ## v8.29.0 (unreleased)
 ### New features
 - [PR #1859](https://github.com/rqlite/rqlite/pull/1859), [PR #1860](https://github.com/rqlite/rqlite/pull/1864), [PR #1860](https://github.com/rqlite/rqlite/pull/1864): `-extensions-path` supports multiple comma-delimited paths.
+- [PR #1868](https://github.com/rqlite/rqlite/pull/1868): Support `CUSTOM_SQLITE_EXTENSIONS_PATH`.
 
 ### Implementation changes and bug fixes
 - [PR #1863](https://github.com/rqlite/rqlite/pull/1863), [PR #1865](https://github.com/rqlite/rqlite/pull/1865), [PR #1867](https://github.com/rqlite/rqlite/pull/1867): Add miscellaneous extensions from SQLite source to Docker image.
