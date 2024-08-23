@@ -61,10 +61,15 @@ if [ -n "$SQLITE_EXTENSIONS" ]; then
 			;;
 	esac
 	for ext in $SQLITE_EXTENSIONS; do
+		path="/opt/extensions/$ext"
+		if [ ! -d "$path" ]; then
+			printf "SQLite extension %s does not exist\n" "$ext"
+			exit 1
+		fi
 		if [ -z "$extensions_path" ]; then
-			extensions_path="/opt/extensions/$ext"
+			extensions_path="$path"
 		else
-			extensions_path="${extensions_path},/opt/extensions/$ext"
+			extensions_path="${extensions_path},$path"
 		fi
 	done
 	unset IFS
@@ -108,8 +113,11 @@ rqlited_commands="$RQLITED $node_id $http_addr $http_adv_addr $raft_addr $raft_a
 
 data_dir="${DATA_DIR:-/rqlite/file/data}"
 
+# Check for two specific invocation commands. If neither is found, just run
+# the command exactly as passed.
 case "$CMD" in
     run)
+		# Default from Dockerfile
         set -- $rqlited_commands "$data_dir"
         ;;
     -*)
