@@ -1,6 +1,6 @@
 ## v8.29.1 (August 23rd 2024)
 ### Implementation changes and bug fixes
-- [PR #1869](https://github.com/rqlite/rqlite/pull/1869): Remove `vfsstat.c` from misc extensions as it's causing a panic.
+- [PR #1869](https://github.com/rqlite/rqlite/pull/1869): Remove `vfsstat.c` from _misc_ extensions as it's causing a panic.
 - [PR #1870](https://github.com/rqlite/rqlite/pull/1870): End-to-end node test with misc. extensions loaded.
 
 ## v8.29.0 (August 23rd 2024)
