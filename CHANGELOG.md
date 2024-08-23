@@ -1,4 +1,4 @@
-## v8.29.0 (unreleased)
+## v8.29.0 (August 23rd 2024)
 This release adds more extensions to the Docker image, as well as improving management of those extensions.
 ### New features
 - [PR #1859](https://github.com/rqlite/rqlite/pull/1859), [PR #1860](https://github.com/rqlite/rqlite/pull/1864), [PR #1860](https://github.com/rqlite/rqlite/pull/1864): `-extensions-path` supports multiple comma-delimited paths.
