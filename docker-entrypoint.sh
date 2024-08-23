@@ -125,7 +125,7 @@ if [ -z "$DATA_DIR" ]; then
 fi
 data_dir="$DATA_DIR"
 
-if [ "$CMD" = "rqlited" ]; then
+if [ "$CMD" = "run" ]; then
         set -- $rqlited_commands $data_dir
 elif [ "$(expr substr "$CMD" 1 1)" = "-" ]; then
         # User is passing some options, so merge them.

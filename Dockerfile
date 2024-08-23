@@ -57,4 +57,4 @@ EXPOSE 4001 4001
 
 ENTRYPOINT ["docker-entrypoint.sh"]
 
-CMD ["rqlited"]
+CMD ["run"]
