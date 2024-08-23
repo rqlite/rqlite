@@ -3,11 +3,10 @@
 contains() {
 	key=$1
 	shift
-	for i in "$@"
-	do
-		if [[ $i == $key* ]]; then
-			return 1
-		fi
+	for a in "$@"; do
+		case "$a" in
+			"$key"*) return 1 ;;
+		esac
 	done
 	return 0
 }
@@ -15,7 +14,10 @@ contains() {
 DEFAULT_NODE_ID=`hostname`
 DEFAULT_ADV_ADDRESS=`hostname -f`
 
-contains "-http-addr" "$@"
+CMD=$1
+ARGS="$@"
+
+contains "-http-addr" $ARGS
 if [ $? -eq 0 ]; then
 	if [ -z "$HTTP_ADDR" ]; then
 		HTTP_ADDR="0.0.0.0:4001"
@@ -23,7 +25,7 @@ if [ $? -eq 0 ]; then
 	http_addr="-http-addr $HTTP_ADDR"
 fi
 
-contains "-http-adv-addr" "$@"
+contains "-http-adv-addr" $ARGS
 if [ $? -eq 0 ]; then
 	if [ -z "$HTTP_ADV_ADDR" ]; then
 		HTTP_ADV_ADDR=$DEFAULT_ADV_ADDRESS:4001
@@ -31,7 +33,7 @@ if [ $? -eq 0 ]; then
 	http_adv_addr="-http-adv-addr $HTTP_ADV_ADDR"
 fi
 
-contains "-raft-adv" "$@"
+contains "-raft-adv" $ARGS
 if [ $? -eq 0 ]; then
 	if [ -z "$RAFT_ADDR" ]; then
 		RAFT_ADDR="0.0.0.0:4002"
@@ -39,7 +41,7 @@ if [ $? -eq 0 ]; then
 	raft_addr="-raft-addr $RAFT_ADDR"
 fi
 
-contains "-raft-adv-addr" "$@"
+contains "-raft-adv-addr" $ARGS
 if [ $? -eq 0 ]; then
 	if [ -z "$RAFT_ADV_ADDR" ]; then
 		RAFT_ADV_ADDR=$DEFAULT_ADV_ADDRESS:4002
@@ -47,7 +49,7 @@ if [ $? -eq 0 ]; then
 	raft_adv_addr="-raft-adv-addr $RAFT_ADV_ADDR"
 fi
 
-contains "-node-id" "$@"
+contains "-node-id" $ARGS
 if [ $? -eq 0 ]; then
 	if [ -z "$NODE_ID" ]; then
 		NODE_ID="$DEFAULT_NODE_ID"
@@ -55,31 +57,27 @@ if [ $? -eq 0 ]; then
 	node_id="-node-id $NODE_ID"
 fi
 
-if [ -z "$DATA_DIR" ]; then
-	DATA_DIR="/rqlite/file/data"
-fi
-
 extensions_path=""
 if [ -n "$SQLITE_EXTENSIONS" ]; then
-	contains "-extensions-path" "$@"
+	contains "-extensions-path" $ARGS
 	if [ $? -eq 1 ]; then
 		echo "Setting both -extensions-path and SQLITE_EXTENSIONS is not allowed"
   		exit 1
 	fi
 
-	if [[ "$SQLITE_EXTENSIONS" == *","* ]]; then
-		IFS=","
-	fi
-	set -- "$SQLITE_EXTENSIONS"
-	IFS=" "
-
-	for ext in "$@"; do
+	case "$SQLITE_EXTENSIONS" in
+		*,*)
+			IFS=","
+			;;
+	esac
+	for ext in $SQLITE_EXTENSIONS; do
 		if [ -z "$extensions_path" ]; then
 			extensions_path="/opt/extensions/$ext"
 		else
 			extensions_path="${extensions_path},/opt/extensions/$ext"
 		fi
 	done
+	unset IFS
 fi
 
 if [ -n "$extensions_path" ]; then
@@ -87,7 +85,7 @@ if [ -n "$extensions_path" ]; then
 fi
 
 if [ -n "$CUSTOM_SQLITE_EXTENSIONS_PATH" ]; then
-	contains "-extensions-path" "$@"
+	contains "-extensions-path" $ARGS
 	if [ $? -eq 1 ]; then
 		echo "Setting both -extensions-path and CUSTOM_SQLITE_EXTENSIONS_PATH is not allowed"
   		exit 1
@@ -121,13 +119,17 @@ fi
 
 RQLITED=/bin/rqlited
 rqlited_commands="$RQLITED $node_id $http_addr $http_adv_addr $raft_addr $raft_adv_addr $extensions_path_flag"
+
+if [ -z "$DATA_DIR" ]; then
+	DATA_DIR="/rqlite/file/data"
+fi
 data_dir="$DATA_DIR"
 
-if [ "$1" = "run" ]; then
+if [ "$CMD" = "rqlited" ]; then
         set -- $rqlited_commands $data_dir
-elif [ "${1:0:1}" = '-' ]; then
+elif [ "$(expr substr "$CMD" 1 1)" = "-" ]; then
         # User is passing some options, so merge them.
         set -- $rqlited_commands $@ $data_dir
 fi
 
-exec "$@"
+echo exec "$@"
