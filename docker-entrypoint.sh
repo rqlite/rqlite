@@ -132,4 +132,4 @@ elif [ "$(expr substr "$CMD" 1 1)" = "-" ]; then
         set -- $rqlited_commands $@ $data_dir
 fi
 
-echo exec "$@"
+exec "$@"
