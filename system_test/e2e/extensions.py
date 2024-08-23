@@ -19,6 +19,7 @@ EXTENSIONS_PATH_DIR = os.environ['EXTENSIONS_PATH_DIR']
 EXTENSIONS_PATH_ZIP = os.environ['EXTENSIONS_PATH_ZIP']
 EXTENSIONS_PATH_TAR_GZIP = os.environ['EXTENSIONS_PATH_TAR_GZIP']
 EXTENSIONS_PATH_MULTIPLE = os.environ['EXTENSIONS_PATH_MULTIPLE']
+EXTENSIONS_PATH_MISC = os.environ['EXTENSIONS_PATH_MISC']
 
 class TestExtensions_File(unittest.TestCase):
   def setUp(self):
@@ -101,6 +102,52 @@ class TestExtensions_Multiple(unittest.TestCase):
       self.fail('rot13 not loaded')
     if 'carray.so' not in loaded:
       self.fail('carray not loaded')
+
+class TestExtensions_MiscExtensions(unittest.TestCase):
+  def setUp(self):
+    n0 = Node(RQLITED_PATH, '0', extensions_path=EXTENSIONS_PATH_MISC)
+    n0.start()
+    n0.wait_for_leader()
+    self.cluster = Cluster([n0])
+
+  def tearDown(self):
+    self.cluster.deprovision()
+
+  def test(self):
+    '''Test simple queries work as expected, that the presence of misc extensions does not break the core functionality'''
+    n = self.cluster.wait_for_leader()
+    loaded = n.extensions()
+    if 'rot13.so' not in loaded:
+      self.fail('rot13 not loaded')
+    if 'carray.so' not in loaded:
+      self.fail('carray not loaded')
+
+    n = self.cluster.wait_for_leader()
+    n.status()
+    j = n.execute('CREATE TABLE bar (id INTEGER NOT NULL PRIMARY KEY, name TEXT)')
+    self.assertEqual(j, d_("{'results': [{}]}"))
+
+    j = n.execute('INSERT INTO bar(name) VALUES("fiona")')
+    applied = n.wait_for_all_applied()
+    self.assertEqual(j, d_("{'results': [{'last_insert_id': 1, 'rows_affected': 1}]}"))
+    j = n.query('SELECT * from bar')
+    self.assertEqual(j, d_("{'results': [{'values': [[1, 'fiona']], 'types': ['integer', 'text'], 'columns': ['id', 'name']}]}"))
+
+    j = n.execute('INSERT INTO bar(name) VALUES("declan")')
+    applied = n.wait_for_all_applied()
+    self.assertEqual(j, d_("{'results': [{'last_insert_id': 2, 'rows_affected': 1}]}"))
+    j = n.query('SELECT * from bar where id=2')
+    self.assertEqual(j, d_("{'results': [{'values': [[2, 'declan']], 'types': ['integer', 'text'], 'columns': ['id', 'name']}]}"))
+
+    # Ensure raw response from API is as expected.
+    j = n.query('SELECT * from bar', text=True)
+    self.assertEqual(str(j), '{"results":[{"columns":["id","name"],"types":["integer","text"],"values":[[1,"fiona"],[2,"declan"]]}]}')
+    j = n.query('SELECT * from bar where name="non-existent"', text=True)
+    self.assertEqual(str(j), '{"results":[{"columns":["id","name"],"types":["integer","text"]}]}')
+
+    # Ensure raw associative response from API is as expected.
+    j = n.query('SELECT * from bar', text=True, associative=True)
+    self.assertEqual(str(j), '{"results":[{"types":{"id":"integer","name":"text"},"rows":[{"id":1,"name":"fiona"},{"id":2,"name":"declan"}]}]}')
 
 class TestExtensions_NotLoaded(unittest.TestCase):
   def setUp(self):
