@@ -266,10 +266,12 @@ jobs:
       - restore_and_save_cache
       - run: go install ./...
       - run: mkdir /home/circleci/extensions
+      - run: mkdir /home/circleci/extensions-misc
       - run: gcc -g -fPIC -shared db/testdata/rot13.c -o /home/circleci/extensions/rot13.so
       - run: gcc -g -fPIC -shared db/testdata/carray.c -o /home/circleci/extensions/carray.so
       - run: zip -j /home/circleci/rot13.zip /home/circleci/extensions/rot13.so
       - run: tar -czf /home/circleci/rot13.tar.gz --strip-components=1 -C /home/circleci/extensions rot13.so
+      - run: cd extensions/src/misc && make && cp *.so /home/circleci/extensions-misc
       - run:
           command: python3 system_test/e2e/extensions.py
           environment:
@@ -279,6 +281,7 @@ jobs:
             EXTENSIONS_PATH_ZIP: /home/circleci/rot13.zip
             EXTENSIONS_PATH_TAR_GZIP: /home/circleci/rot13.tar.gz
             EXTENSIONS_PATH_MULTIPLE: /home/circleci/rot13.zip,/home/circleci/extensions/carray.so
+            EXTENSIONS_PATH_MISC: /home/circleci/extensions-misc
     resource_class: large
 
 workflows:
