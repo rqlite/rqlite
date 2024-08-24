@@ -50,19 +50,13 @@ COPY --from=builder /app/docker-entrypoint.sh /bin
 COPY --from=builder /app/rqlited /bin
 COPY --from=builder /app/rqlite /bin
 
-# Make all required directories.
-RUN mkdir -p /opt/extensions/icu && \
-    mkdir -p /opt/extensions/sqlean && \
-    mkdir -p /opt/extensions/sqlite-vec && \
-    mkdir -p /opt/extensions/misc && \
-    mkdir -p /rqlite/file
-
 # Bake in the extensions.
-COPY --from=builder /extensions/icu/* /opt/extensions/icu
-COPY --from=builder /extensions/sqlean/* /opt/extensions/sqlean
-COPY --from=builder /extensions/sqlite-vec/* /opt/extensions/sqlite-vec
-COPY --from=builder /extensions/misc/* /opt/extensions/misc
+COPY --from=builder /extensions/icu/* /opt/extensions/icu/
+COPY --from=builder /extensions/sqlean/* /opt/extensions/sqlean/
+COPY --from=builder /extensions/sqlite-vec/* /opt/extensions/sqlite-vec/
+COPY --from=builder /extensions/misc/* /opt/extensions/misc/
 
+RUN mkdir -p /rqlite/file
 VOLUME /rqlite/file
 EXPOSE 4001 4001
 
