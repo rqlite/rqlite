@@ -5,39 +5,47 @@ ARG COMMIT="unknown"
 ARG BRANCH="unknown"
 ARG DATE="unknown"
 
-RUN apk add --no-cache zip gcc musl-dev curl make git gettext pkgconf vim icu-dev zlib-dev
+RUN apk add --no-cache \
+    curl \
+    gcc \
+    gettext \
+    git \
+    icu-dev \
+    make \
+    musl-dev \
+    pkgconf \
+    zlib-dev \
+    zip
 
 COPY . /app
 
 # Build rqlite.
 WORKDIR /app
-RUN CGO_ENABLED=1 go build -ldflags="-w -s -X github.com/rqlite/rqlite/v8/cmd.CompilerCommand=musl-gcc -X github.com/rqlite/rqlite/v8/cmd.Version=${VERSION} -X github.com/rqlite/rqlite/v8/cmd.Branch=${BRANCH} -X github.com/rqlite/rqlite/v8/cmd.Commit=${COMMIT} -X github.com/rqlite/rqlite/v8/cmd.Buildtime=${DATE}" ./cmd/rqlited/.
-RUN CGO_ENABLED=1 go build -ldflags="-w -s" ./cmd/rqlite/.
+ENV CGO_ENABLED=1
+RUN go build -ldflags=" \
+    -w -s -X github.com/rqlite/rqlite/v8/cmd.CompilerCommand=musl-gcc \
+    -X github.com/rqlite/rqlite/v8/cmd.Version=${VERSION} \
+    -X github.com/rqlite/rqlite/v8/cmd.Branch=${BRANCH} \
+    -X github.com/rqlite/rqlite/v8/cmd.Commit=${COMMIT} \
+    -X github.com/rqlite/rqlite/v8/cmd.Buildtime=${DATE}" ./cmd/rqlited/. && \
+    go build -ldflags="-w -s" ./cmd/rqlite/.
 
-# Build the extensions.
-WORKDIR /app
-RUN mkdir -p /extensions/icu && \
-    gcc -fPIC -shared extensions/src/icu/icu.c -I extensions/src/ `pkg-config --libs --cflags icu-uc icu-io` -o /extensions/icu/icu.so && \
-    cd /extensions/icu && zip icu.zip icu.so && rm icu.so
-
+# Build the extensions, start by creating the extensions directory.
 WORKDIR /extensions
-RUN mkdir -p /extensions/sqlean && \
-    curl -L `curl -s https://api.github.com/repos/nalgeon/sqlean/releases/latest | grep "tarball_url" | cut -d '"' -f 4` -o sqlean.tar.gz && \
+WORKDIR /app
+
+RUN gcc -fPIC -shared extensions/src/icu/icu.c -I extensions/src/ `pkg-config --libs --cflags icu-uc icu-io` -o icu.so && \
+    zip /extensions/icu.zip icu.so
+
+RUN curl -L `curl -s https://api.github.com/repos/nalgeon/sqlean/releases/latest | grep "tarball_url" | cut -d '"' -f 4` -o sqlean.tar.gz && \
     tar xvfz sqlean.tar.gz && \
-    cd nalgeon* && make prepare-dist download-sqlite download-external compile-linux && cp dist/sqlean.so /extensions/sqlean && \
-    cd /extensions/sqlean && zip sqlean.zip sqlean.so && rm sqlean.so
+    cd nalgeon* && make prepare-dist download-sqlite download-external compile-linux && zip -j /extensions/sqlean.zip dist/sqlean.so
 
-WORKDIR /extensions
-RUN mkdir -p /extensions/sqlite-vec && \
-    curl -L `curl -s https://api.github.com/repos/asg017/sqlite-vec/releases/latest | grep "tarball_url" | cut -d '"' -f 4` -o sqlite-vec.tar.gz && \
+RUN curl -L `curl -s https://api.github.com/repos/asg017/sqlite-vec/releases/latest | grep "tarball_url" | cut -d '"' -f 4` -o sqlite-vec.tar.gz && \
     tar xvfz sqlite-vec.tar.gz && \
-    cd asg017* && sh scripts/vendor.sh && echo "#include <sys/types.h>" | cat - sqlite-vec.c > temp && mv temp sqlite-vec.c && make loadable && cp dist/* /extensions/sqlite-vec/ && \
-    cd /extensions/sqlite-vec && zip sqlite-vec.zip *.so && rm *.so
+    cd asg017* && sh scripts/vendor.sh && echo "#include <sys/types.h>" | cat - sqlite-vec.c > temp && mv temp sqlite-vec.c && make loadable && zip -j /extensions/sqlite-vec.zip dist/vec0.so
 
-WORKDIR /app
-RUN mkdir -p /extensions/misc && \
-    cd extensions/src/misc/ && make && cp *.so /extensions/misc && \
-    cd /extensions/misc && zip misc.zip *.so && rm *.so
+RUN cd extensions/src/misc/ && make && zip /extensions/misc.zip *.so
 
 #######################################################################
 # Phase 2: Create the final image.
@@ -51,10 +59,7 @@ COPY --from=builder /app/rqlited /bin
 COPY --from=builder /app/rqlite /bin
 
 # Bake in the extensions.
-COPY --from=builder /extensions/icu/* /opt/extensions/icu/
-COPY --from=builder /extensions/sqlean/* /opt/extensions/sqlean/
-COPY --from=builder /extensions/sqlite-vec/* /opt/extensions/sqlite-vec/
-COPY --from=builder /extensions/misc/* /opt/extensions/misc/
+COPY --from=builder /extensions /opt/extensions/
 
 RUN mkdir -p /rqlite/file
 VOLUME /rqlite/file

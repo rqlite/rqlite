@@ -61,7 +61,7 @@ if [ -n "$SQLITE_EXTENSIONS" ]; then
 			;;
 	esac
 	for ext in $SQLITE_EXTENSIONS; do
-		path="/opt/extensions/$ext/$ext.zip"
+		path="/opt/extensions/$ext.zip"
 		if [ ! -e "$path" ]; then
 			printf "SQLite extension %s does not exist\n" "$ext"
 			exit 1

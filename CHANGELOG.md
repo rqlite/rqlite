@@ -1,6 +1,7 @@
 ## v8.29.2 (unreleased)
 ### Implementation changes and bug fixes
 - Store SQLite extensions as Zip archives in rqlite Docker image.
+- Simplify Docker build and scripts.
 
 ## v8.29.1 (August 23rd 2024)
 ### Implementation changes and bug fixes
