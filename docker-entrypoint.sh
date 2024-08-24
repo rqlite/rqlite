@@ -117,11 +117,11 @@ data_dir="${DATA_DIR:-/rqlite/file/data}"
 # the command exactly as passed.
 case "$CMD" in
     run)
-		# Default from Dockerfile
+	# Default from Dockerfile
         set -- $rqlited_commands "$data_dir"
         ;;
     -*)
-		 # User is passing some options, so merge them.
+	# User is passing some options, so merge them.
         set -- $rqlited_commands "$@" "$data_dir"
         ;;
 esac
