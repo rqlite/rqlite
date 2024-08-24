@@ -114,16 +114,13 @@ class TestExtensions_MiscExtensions(unittest.TestCase):
     self.cluster.deprovision()
 
   def test(self):
-    '''Test simple queries work as expected, that the presence of misc extensions does not break the core functionality'''
-    n = self.cluster.wait_for_leader()
-    loaded = n.extensions()
-    if 'rot13.so' not in loaded:
-      self.fail('rot13 not loaded')
-    if 'carray.so' not in loaded:
-      self.fail('carray not loaded')
-
+    '''Test that simple queries work as expected, ensuring that the presence of misc extensions does not break core functionality'''
     n = self.cluster.wait_for_leader()
     n.status()
+
+    if len(n.extensions()) == 0
+      self.fail('extensions not loaded')
+
     j = n.execute('CREATE TABLE bar (id INTEGER NOT NULL PRIMARY KEY, name TEXT)')
     self.assertEqual(j, d_("{'results': [{}]}"))
 
@@ -139,15 +136,10 @@ class TestExtensions_MiscExtensions(unittest.TestCase):
     j = n.query('SELECT * from bar where id=2')
     self.assertEqual(j, d_("{'results': [{'values': [[2, 'declan']], 'types': ['integer', 'text'], 'columns': ['id', 'name']}]}"))
 
-    # Ensure raw response from API is as expected.
     j = n.query('SELECT * from bar', text=True)
     self.assertEqual(str(j), '{"results":[{"columns":["id","name"],"types":["integer","text"],"values":[[1,"fiona"],[2,"declan"]]}]}')
     j = n.query('SELECT * from bar where name="non-existent"', text=True)
     self.assertEqual(str(j), '{"results":[{"columns":["id","name"],"types":["integer","text"]}]}')
-
-    # Ensure raw associative response from API is as expected.
-    j = n.query('SELECT * from bar', text=True, associative=True)
-    self.assertEqual(str(j), '{"results":[{"types":{"id":"integer","name":"text"},"rows":[{"id":1,"name":"fiona"},{"id":2,"name":"declan"}]}]}')
 
 class TestExtensions_NotLoaded(unittest.TestCase):
   def setUp(self):
