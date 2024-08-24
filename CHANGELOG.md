@@ -1,3 +1,7 @@
+## v8.29.2 (unreleased)
+### Implementation changes and bug fixes
+- Store SQLite extensions as Zip archives in rqlite Docker image.
+
 ## v8.29.1 (August 23rd 2024)
 ### Implementation changes and bug fixes
 - [PR #1869](https://github.com/rqlite/rqlite/pull/1869): Remove `vfsstat.c` from misc extensions as it's causing a panic.
