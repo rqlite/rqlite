@@ -118,7 +118,7 @@ class TestExtensions_MiscExtensions(unittest.TestCase):
     n = self.cluster.wait_for_leader()
     n.status()
 
-    if len(n.extensions()) == 0
+    if len(n.extensions()) == 0:
       self.fail('extensions not loaded')
 
     j = n.execute('CREATE TABLE bar (id INTEGER NOT NULL PRIMARY KEY, name TEXT)')
