@@ -21,7 +21,7 @@ Run a single node as follows:
 docker run -p4001:4001 rqlite/rqlite
 ```
 
-Check out the [rqlite Docker page](https://hub.docker.com/r/rqlite/rqlite/) for more details on running nodes via Docker.
+Check out the [rqlite Docker page](https://hub.docker.com/r/rqlite/rqlite/) for more details on running clusters via Docker.
 
 ### Linux
 _Builds for a variety of CPU architectures are available. See the Assets section below._
