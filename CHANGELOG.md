@@ -1,3 +1,7 @@
+## v8.29.3 (unreleased)
+### Implementation changes and bug fixes
+- [PR #1872](https://github.com/rqlite/rqlite/pull/1872): Upgrade Hashicorp Raft to v1.7.1.
+
 ## v8.29.2 (August 26th 2024)
 There are no functional changes to rqlite in this release, but it does improve the rqlite Docker images.
 ### Implementation changes and bug fixes
