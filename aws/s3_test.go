@@ -3,16 +3,19 @@ package aws
 import (
 	"bytes"
 	"context"
+	"errors"
 	"fmt"
 	"io"
-	"net/http"
+	"os"
 	"strings"
 	"testing"
 	"time"
 
-	"github.com/aws/aws-sdk-go/aws"
-	"github.com/aws/aws-sdk-go/service/s3"
-	"github.com/aws/aws-sdk-go/service/s3/s3manager"
+	"github.com/aws/aws-sdk-go-v2/aws"
+	"github.com/aws/aws-sdk-go-v2/feature/s3/manager"
+	"github.com/aws/aws-sdk-go-v2/service/s3"
+	"github.com/aws/aws-sdk-go-v2/service/s3/types"
+	"github.com/rqlite/rqlite/v8/random"
 )
 
 func Test_NewS3Client(t *testing.T) {
@@ -35,8 +38,8 @@ func Test_NewS3Client(t *testing.T) {
 	if c.key != "key3" {
 		t.Fatalf("expected key to be %q, got %q", "key3", c.key)
 	}
-	if c.forcePathStyle != true {
-		t.Fatalf("expected forcePathStyle to be %v, got %v", true, c.forcePathStyle)
+	if c.s3.Options().UsePathStyle != true {
+		t.Fatalf("expected forcePathStyle to be %v, got %v", true, c.s3.Options().UsePathStyle)
 	}
 }
 
@@ -86,7 +89,7 @@ func Test_S3ClientUploadOK(t *testing.T) {
 	uploadedData := new(bytes.Buffer)
 
 	mockUploader := &mockUploader{
-		uploadFn: func(ctx aws.Context, input *s3manager.UploadInput, opts ...func(*s3manager.Uploader)) (*s3manager.UploadOutput, error) {
+		uploadFn: func(ctx context.Context, input *s3.PutObjectInput, opts ...func(*manager.Uploader)) (*manager.UploadOutput, error) {
 			if *input.Bucket != bucket {
 				t.Errorf("expected bucket to be %q, got %q", bucket, *input.Bucket)
 			}
@@ -103,11 +106,11 @@ func Test_S3ClientUploadOK(t *testing.T) {
 			if input.Metadata == nil {
 				t.Errorf("expected metadata to be non-nil")
 			}
-			exp, got := "some-id", *input.Metadata[http.CanonicalHeaderKey(AWSS3IDKey)]
+			exp, got := "some-id", input.Metadata[AWSS3IDKey]
 			if exp != got {
 				t.Errorf("expected metadata to contain %q, got %q", exp, got)
 			}
-			return &s3manager.UploadOutput{}, nil
+			return &manager.UploadOutput{}, nil
 		},
 	}
 
@@ -141,9 +144,8 @@ func Test_S3ClientUploadOK_Timestamped(t *testing.T) {
 	timestampedKey := "your/key/20210701150405_path"
 	expectedData := "test data"
 	uploadedData := new(bytes.Buffer)
-
 	mockUploader := &mockUploader{
-		uploadFn: func(ctx aws.Context, input *s3manager.UploadInput, opts ...func(*s3manager.Uploader)) (*s3manager.UploadOutput, error) {
+		uploadFn: func(ctx context.Context, input *s3.PutObjectInput, opts ...func(*manager.Uploader)) (*manager.UploadOutput, error) {
 			if *input.Bucket != bucket {
 				t.Errorf("expected bucket to be %q, got %q", bucket, *input.Bucket)
 			}
@@ -160,11 +162,11 @@ func Test_S3ClientUploadOK_Timestamped(t *testing.T) {
 			if input.Metadata == nil {
 				t.Errorf("expected metadata to be non-nil")
 			}
-			exp, got := "some-id", *input.Metadata[http.CanonicalHeaderKey(AWSS3IDKey)]
+			exp, got := "some-id", input.Metadata[AWSS3IDKey]
 			if exp != got {
 				t.Errorf("expected metadata to contain %q, got %q", exp, got)
 			}
-			return &s3manager.UploadOutput{}, nil
+			return &manager.UploadOutput{}, nil
 		},
 	}
 
@@ -204,7 +206,7 @@ func Test_S3ClientUploadOK_Timestamped_Changes(t *testing.T) {
 
 	timestampedKey1 := ""
 	mockUploader := &mockUploader{
-		uploadFn: func(ctx aws.Context, input *s3manager.UploadInput, opts ...func(*s3manager.Uploader)) (*s3manager.UploadOutput, error) {
+		uploadFn: func(ctx context.Context, input *s3.PutObjectInput, opts ...func(*manager.Uploader)) (*manager.UploadOutput, error) {
 			if timestampedKey1 == "" {
 				timestampedKey1 = *input.Key
 			} else {
@@ -212,7 +214,7 @@ func Test_S3ClientUploadOK_Timestamped_Changes(t *testing.T) {
 					t.Errorf("expected key for second upload to be different from %q, got %q", timestampedKey1, *input.Key)
 				}
 			}
-			return &s3manager.UploadOutput{}, nil
+			return &manager.UploadOutput{}, nil
 		},
 	}
 
@@ -252,7 +254,7 @@ func Test_S3ClientUploadOK_Timestamped_NoChanges(t *testing.T) {
 
 	timestampedKey1 := ""
 	mockUploader := &mockUploader{
-		uploadFn: func(ctx aws.Context, input *s3manager.UploadInput, opts ...func(*s3manager.Uploader)) (*s3manager.UploadOutput, error) {
+		uploadFn: func(ctx context.Context, input *s3.PutObjectInput, opts ...func(*manager.Uploader)) (*manager.UploadOutput, error) {
 			if timestampedKey1 == "" {
 				timestampedKey1 = *input.Key
 			} else {
@@ -260,7 +262,7 @@ func Test_S3ClientUploadOK_Timestamped_NoChanges(t *testing.T) {
 					t.Errorf("expected key for second upload to be same as %q, got %q", timestampedKey1, *input.Key)
 				}
 			}
-			return &s3manager.UploadOutput{}, nil
+			return &manager.UploadOutput{}, nil
 		},
 	}
 
@@ -296,8 +298,8 @@ func Test_S3ClientUploadFail(t *testing.T) {
 	key := "your/key/path"
 
 	mockUploader := &mockUploader{
-		uploadFn: func(ctx aws.Context, input *s3manager.UploadInput, opts ...func(*s3manager.Uploader)) (*s3manager.UploadOutput, error) {
-			return &s3manager.UploadOutput{}, fmt.Errorf("some error related to S3")
+		uploadFn: func(ctx context.Context, input *s3.PutObjectInput, opts ...func(*manager.Uploader)) (*manager.UploadOutput, error) {
+			return &manager.UploadOutput{}, fmt.Errorf("some error related to S3")
 		},
 	}
 
@@ -329,7 +331,7 @@ func Test_S3ClientDownloadOK(t *testing.T) {
 	expectedData := "test data"
 
 	mockDownloader := &mockDownloader{
-		downloadFn: func(ctx aws.Context, w io.WriterAt, input *s3.GetObjectInput, opts ...func(*s3manager.Downloader)) (int64, error) {
+		downloadFn: func(ctx context.Context, w io.WriterAt, input *s3.GetObjectInput, opts ...func(*manager.Downloader)) (int64, error) {
 			if *input.Bucket != bucket {
 				t.Errorf("expected bucket to be %q, got %q", bucket, *input.Bucket)
 			}
@@ -353,7 +355,7 @@ func Test_S3ClientDownloadOK(t *testing.T) {
 		downloader: mockDownloader,
 	}
 
-	writer := aws.NewWriteAtBuffer(make([]byte, len(expectedData)))
+	writer := manager.NewWriteAtBuffer(make([]byte, 0, len(expectedData)))
 	err := client.Download(context.Background(), writer)
 	if err != nil {
 		t.Fatalf("Unexpected error: %v", err)
@@ -372,7 +374,7 @@ func Test_S3ClientDownloadFail(t *testing.T) {
 	key := "your/key/path"
 
 	mockDownloader := &mockDownloader{
-		downloadFn: func(ctx aws.Context, w io.WriterAt, input *s3.GetObjectInput, opts ...func(*s3manager.Downloader)) (n int64, err error) {
+		downloadFn: func(ctx context.Context, w io.WriterAt, input *s3.GetObjectInput, opts ...func(*manager.Downloader)) (n int64, err error) {
 			return 0, fmt.Errorf("some error related to S3")
 		},
 	}
@@ -387,13 +389,92 @@ func Test_S3ClientDownloadFail(t *testing.T) {
 		downloader: mockDownloader,
 	}
 
-	writer := aws.NewWriteAtBuffer(nil)
+	writer := manager.NewWriteAtBuffer(nil)
 	err := client.Download(context.Background(), writer)
 	if err == nil {
 		t.Fatal("Expected error, got nil")
 	}
 	if !strings.Contains(err.Error(), "some error related to S3") {
 		t.Fatalf("Expected error to contain %q, got %q", "some error related to S3", err.Error())
+	}
+}
+
+func Test_CreateDeleteOK(t *testing.T) {
+	exists := func(client *s3.Client, bucket, key string) bool {
+		t.Helper()
+		input := &s3.HeadObjectInput{
+			Bucket: aws.String(bucket),
+			Key:    aws.String(key),
+		}
+		_, err := client.HeadObject(context.TODO(), input)
+		if err != nil {
+			var notFound *types.NotFound
+			if errors.As(err, &notFound) {
+				return false
+			}
+			t.Fatalf("error checking if object exists: %v", err)
+		}
+		return true
+	}
+
+	accesskey, ok := os.LookupEnv("RQLITE_S3_ACCESS_KEY")
+	if !ok {
+		t.Skip("RQLITE_S3_ACCESS_KEY is not set")
+	}
+	secretKey, ok := os.LookupEnv("RQLITE_S3_SECRET_ACCESS_KEY")
+	if !ok {
+		t.Skip("RQLITE_S3_SECRET_ACCESS_KEY is not set")
+	}
+
+	path := random.String()
+	client, err := NewS3Client("s3.amazonaws.com", "us-west-2", accesskey, secretKey, "rqlite-testing-circleci", path, nil)
+	if err != nil {
+		t.Fatalf("error creating S3 client: %v", err)
+	}
+	if err := client.Upload(context.Background(), strings.NewReader("test data"), "the-id"); err != nil {
+		t.Fatalf("error uploading to S3: %v", err)
+	}
+	if !exists(client.s3, client.bucket, client.key) {
+		t.Fatalf("expected object to exist")
+	}
+
+	if err := client.Delete(context.Background()); err != nil {
+		t.Fatalf("error deleting from S3: %v", err)
+	}
+	if exists(client.s3, client.bucket, client.key) {
+		t.Fatalf("expected object to not exist")
+	}
+}
+
+func Test_MetadataSet(t *testing.T) {
+	accesskey, ok := os.LookupEnv("RQLITE_S3_ACCESS_KEY")
+	if !ok {
+		t.Skip("RQLITE_S3_ACCESS_KEY is not set")
+	}
+	secretKey, ok := os.LookupEnv("RQLITE_S3_SECRET_ACCESS_KEY")
+	if !ok {
+		t.Skip("RQLITE_S3_SECRET_ACCESS_KEY is not set")
+	}
+
+	path := random.String()
+	client, err := NewS3Client("s3.amazonaws.com", "us-west-2", accesskey, secretKey, "rqlite-testing-circleci", path, nil)
+	if err != nil {
+		t.Fatalf("error creating S3 client: %v", err)
+	}
+	if err := client.Upload(context.Background(), strings.NewReader("test data"), "the-id"); err != nil {
+		t.Fatalf("error uploading to S3: %v", err)
+	}
+	defer func() {
+		client.Delete(context.Background())
+	}()
+
+	// Now check that the metadata is set
+	id, err := client.CurrentID(context.Background())
+	if err != nil {
+		t.Fatalf("error getting current ID: %v", err)
+	}
+	if id != "the-id" {
+		t.Fatalf("expected ID to be %q, got %q", "the-id", id)
 	}
 }
 
@@ -427,10 +508,10 @@ func Test_TimestampedPath_Changes(t *testing.T) {
 }
 
 type mockDownloader struct {
-	downloadFn func(ctx aws.Context, w io.WriterAt, input *s3.GetObjectInput, opts ...func(*s3manager.Downloader)) (n int64, err error)
+	downloadFn func(ctx context.Context, w io.WriterAt, input *s3.GetObjectInput, opts ...func(*manager.Downloader)) (n int64, err error)
 }
 
-func (m *mockDownloader) DownloadWithContext(ctx aws.Context, w io.WriterAt, input *s3.GetObjectInput, opts ...func(*s3manager.Downloader)) (n int64, err error) {
+func (m *mockDownloader) Download(ctx context.Context, w io.WriterAt, input *s3.GetObjectInput, opts ...func(*manager.Downloader)) (n int64, err error) {
 	if m.downloadFn != nil {
 		return m.downloadFn(ctx, w, input, opts...)
 	}
@@ -438,14 +519,14 @@ func (m *mockDownloader) DownloadWithContext(ctx aws.Context, w io.WriterAt, inp
 }
 
 type mockUploader struct {
-	uploadFn func(ctx aws.Context, input *s3manager.UploadInput, opts ...func(*s3manager.Uploader)) (*s3manager.UploadOutput, error)
+	uploadFn func(ctx context.Context, input *s3.PutObjectInput, opts ...func(*manager.Uploader)) (*manager.UploadOutput, error)
 }
 
-func (m *mockUploader) UploadWithContext(ctx aws.Context, input *s3manager.UploadInput, opts ...func(*s3manager.Uploader)) (*s3manager.UploadOutput, error) {
+func (m *mockUploader) Upload(ctx context.Context, input *s3.PutObjectInput, opts ...func(*manager.Uploader)) (*manager.UploadOutput, error) {
 	if m.uploadFn != nil {
 		return m.uploadFn(ctx, input, opts...)
 	}
-	return &s3manager.UploadOutput{}, nil
+	return &manager.UploadOutput{}, nil
 }
 
 func forcePathStyleOptions() *S3ClientOpts {
