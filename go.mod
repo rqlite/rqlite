@@ -6,7 +6,7 @@ require (
 	github.com/Bowery/prompt v0.0.0-20190916142128-fa8279994f75
 	github.com/aws/aws-sdk-go v1.55.5
 	github.com/hashicorp/go-hclog v1.6.3
-	github.com/hashicorp/raft v1.7.0
+	github.com/hashicorp/raft v1.7.1
 	github.com/mkideal/cli v0.2.7
 	github.com/mkideal/pkg v0.1.3
 	github.com/rqlite/go-sqlite3 v1.34.0
