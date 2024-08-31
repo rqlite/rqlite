@@ -102,12 +102,7 @@ jobs:
           username: ${{ secrets.DOCKER_USERNAME }}
           password: ${{ secrets.DOCKER_ACCESS_TOKEN }}
       
-      - name: Create manifest list and push dev
+      - name: Create manifest list and push
         working-directory: /tmp/digests
         run: |
-          docker buildx imagetools create -t rqlite/rqlite:dev $(printf '${{ env.REGISTRY_IMAGE }}@sha256:%s ' *)
-
-      - name: Create manifest list and push master
-        working-directory: /tmp/digests
-        run: |
-          docker buildx imagetools create -t rqlite/rqlite:master $(printf '${{ env.REGISTRY_IMAGE }}@sha256:%s ' *)
+          docker buildx imagetools create -t rqlite/rqlite:dev -t rqlite/rqlite:master $(printf '${{ env.REGISTRY_IMAGE }}@sha256:%s ' *)
