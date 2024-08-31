@@ -105,5 +105,5 @@ jobs:
       - name: Create manifest list and push
         working-directory: /tmp/digests
         run: |
-          docker buildx imagetools create -t rqlite/rqlite:dev \
+          docker buildx imagetools create -t rqlite/rqlite:dev rqlite/rqlite:master \
             $(printf '${{ env.REGISTRY_IMAGE }}@sha256:%s ' *)
