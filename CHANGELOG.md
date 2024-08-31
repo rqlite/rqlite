@@ -1,3 +1,7 @@
+## v8.29.4 (August 31st 2024)
+### Implementation changes and bug fixes
+- Correct parallel multi-platform Docker release process.
+
 ## v8.29.3 (August 31st 2024)
 ### Implementation changes and bug fixes
 - [PR #1872](https://github.com/rqlite/rqlite/pull/1872): Upgrade Hashicorp Raft to v1.7.1.
