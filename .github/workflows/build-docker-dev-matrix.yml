@@ -6,7 +6,7 @@ on:
       - 'master'
 
 env:
-  REGISTRY_IMAGE: user/app
+  REGISTRY_IMAGE: rqlite/rqlite
 
 jobs:
   build:
@@ -60,6 +60,7 @@ jobs:
             COMMIT=${{ github.sha }}
             BRANCH=master
             DATE=${{ steps.get-date.outputs.date }}
+          tags: rqlite/rqlite:dev
       
       - name: Export digest
         run: |
