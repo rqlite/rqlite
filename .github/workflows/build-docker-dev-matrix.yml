@@ -60,7 +60,6 @@ jobs:
             COMMIT=${{ github.sha }}
             BRANCH=master
             DATE=${{ steps.get-date.outputs.date }}
-          tags: rqlite/rqlite:dev
       
       - name: Export digest
         run: |
