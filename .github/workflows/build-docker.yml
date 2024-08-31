@@ -21,10 +21,6 @@ jobs:
           - linux/arm/v6
           - linux/arm/v7
     steps:
-      - name: Get current date
-        id: get-date
-        run: echo "::set-output name=date::$(date +'%Y-%m-%dT%T%z')"
-
       - name: Prepare
         run: |
           platform=${{ matrix.platform }}
@@ -59,7 +55,7 @@ jobs:
             VERSION=${{ github.event.release.tag_name }}
             COMMIT=${{ github.sha }}
             BRANCH=master
-            DATE=${{ steps.get-date.outputs.date }}
+            DATE=${{ github.event.created_at }}
       
       - name: Export digest
         run: |
@@ -81,11 +77,9 @@ jobs:
       - build
     steps:
       - name: Get and strip version tag
-        id: strip-v
         run: |
             VERSION=${{ github.event.release.tag_name }}
-            STRIPPED_VERSION=${VERSION#v}
-            echo "::set-output name=version::$STRIPPED_VERSION"
+            echo "STRIPPED_VERSION=${VERSION#v}" >> $GITHUB_ENV
 
       - name: Download digests
         uses: actions/download-artifact@v4
@@ -112,5 +106,5 @@ jobs:
       - name: Create manifest list and push
         working-directory: /tmp/digests
         run: |
-          docker buildx imagetools create -t rqlite/rqlite:latest -t rqlite/rqlite:${{ steps.strip-v.outputs.version }} \
+          docker buildx imagetools create -t rqlite/rqlite:latest -t rqlite/rqlite:${{ env.STRIPPED_VERSION }} \
             $(printf '${{ env.REGISTRY_IMAGE }}@sha256:%s ' *)
