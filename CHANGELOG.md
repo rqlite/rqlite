@@ -1,4 +1,4 @@
-## v8.29.3 (unreleased)
+## v8.29.3 (August 31st 2024)
 ### Implementation changes and bug fixes
 - [PR #1872](https://github.com/rqlite/rqlite/pull/1872): Upgrade Hashicorp Raft to v1.7.1.
 - [PR #1873](https://github.com/rqlite/rqlite/pull/1873): Upgrade to AWS SDK v2. Fixes issue [#1655](https://github.com/rqlite/rqlite/issues/1655).
