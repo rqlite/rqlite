@@ -25,13 +25,6 @@ jobs:
         id: get-date
         run: echo "::set-output name=date::$(date +'%Y-%m-%dT%T%z')"
 
-      - name: Get and strip version tag
-        id: strip-v
-        run: |
-            VERSION=${{ github.event.release.tag_name }}
-            STRIPPED_VERSION=${VERSION#v}
-            echo "::set-output name=version::$STRIPPED_VERSION"
-
       - name: Prepare
         run: |
           platform=${{ matrix.platform }}
@@ -87,6 +80,13 @@ jobs:
     needs:
       - build
     steps:
+      - name: Get and strip version tag
+        id: strip-v
+        run: |
+            VERSION=${{ github.event.release.tag_name }}
+            STRIPPED_VERSION=${VERSION#v}
+            echo "::set-output name=version::$STRIPPED_VERSION"
+
       - name: Download digests
         uses: actions/download-artifact@v4
         with:
