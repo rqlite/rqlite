@@ -449,7 +449,7 @@ class Node(object):
       return self.num_auto_backups()
 
     n = self.num_auto_backups()
-    raise Exception('rqlite node failed to idle backups within %d seconds (%s)' % n)
+    raise Exception('rqlite node failed to idle backups within %d seconds (%s)' % (timeout, n))
 
   def wait_for_fsm_index(self, index, timeout=TIMEOUT):
     '''

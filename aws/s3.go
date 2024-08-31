@@ -4,19 +4,18 @@ import (
 	"context"
 	"fmt"
 	"io"
-	"net/http"
 	"strings"
 	"time"
 
-	"github.com/aws/aws-sdk-go/aws"
-	"github.com/aws/aws-sdk-go/aws/credentials"
-	"github.com/aws/aws-sdk-go/aws/session"
-	"github.com/aws/aws-sdk-go/service/s3"
-	"github.com/aws/aws-sdk-go/service/s3/s3manager"
+	"github.com/aws/aws-sdk-go-v2/aws"
+	"github.com/aws/aws-sdk-go-v2/config"
+	"github.com/aws/aws-sdk-go-v2/credentials"
+	"github.com/aws/aws-sdk-go-v2/feature/s3/manager"
+	"github.com/aws/aws-sdk-go-v2/service/s3"
 )
 
 var (
-	AWSS3IDKey = http.CanonicalHeaderKey("x-rqlite-auto-backup-id")
+	AWSS3IDKey = "x-rqlite-auto-backup-id"
 )
 
 // S3Config is the subconfig for the S3 storage type
@@ -32,17 +31,15 @@ type S3Config struct {
 
 // S3Client is a client for uploading data to S3.
 type S3Client struct {
-	endpoint       string
-	region         string
-	accessKey      string
-	secretKey      string
-	bucket         string
-	key            string
-	forcePathStyle bool
-	timestamp      bool
+	endpoint  string
+	region    string
+	accessKey string
+	secretKey string
+	bucket    string
+	key       string
+	timestamp bool
 
-	session *session.Session
-	s3      *s3.S3
+	s3 *s3.Client
 
 	// These fields are used for testing via dependency injection.
 	uploader   uploader
@@ -58,24 +55,28 @@ type S3ClientOpts struct {
 
 // NewS3Client returns an instance of an S3Client. opts can be nil.
 func NewS3Client(endpoint, region, accessKey, secretKey, bucket, key string, opts *S3ClientOpts) (*S3Client, error) {
-	cfg := aws.Config{
-		Endpoint: aws.String(endpoint),
-		Region:   aws.String(region),
-	}
-	if opts != nil {
-		cfg.S3ForcePathStyle = aws.Bool(opts.ForcePathStyle)
-	}
-	// If credentials aren't provided by the user, the AWS SDK will use the default
-	// credential provider chain, which supports environment variables, shared credentials
-	// file, and EC2 instance roles.
-	if accessKey != "" && secretKey != "" {
-		cfg.Credentials = credentials.NewStaticCredentials(accessKey, secretKey, "")
-	}
-	sess, err := session.NewSession(&cfg)
+	// Load the default config
+	cfg, err := config.LoadDefaultConfig(context.Background(),
+		config.WithRegion(region),
+	)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("unable to load SDK config, %v", err)
 	}
-	s3 := s3.New(sess)
+
+	// If credentials are provided, set them
+	if accessKey != "" && secretKey != "" {
+		cfg.Credentials = aws.NewCredentialsCache(credentials.NewStaticCredentialsProvider(accessKey, secretKey, ""))
+	}
+
+	// If an endpoint is provided, set it and the path style
+	s3 := s3.NewFromConfig(cfg, func(o *s3.Options) {
+		if opts != nil {
+			if endpoint != "" {
+				o.BaseEndpoint = aws.String(endpoint)
+			}
+			o.UsePathStyle = opts.ForcePathStyle
+		}
+	})
 
 	client := &S3Client{
 		endpoint:  endpoint,
@@ -85,14 +86,11 @@ func NewS3Client(endpoint, region, accessKey, secretKey, bucket, key string, opt
 		bucket:    bucket,
 		key:       key,
 
-		session: sess,
-		s3:      s3,
-
-		uploader:   s3manager.NewUploaderWithClient(s3),
-		downloader: s3manager.NewDownloaderWithClient(s3),
+		s3:         s3,
+		uploader:   manager.NewUploader(s3),
+		downloader: manager.NewDownloader(s3),
 	}
 	if opts != nil {
-		client.forcePathStyle = opts.ForcePathStyle
 		client.timestamp = opts.Timestamp
 	}
 	return client, nil
@@ -103,7 +101,7 @@ func (s *S3Client) String() string {
 	if s.endpoint == "" || strings.HasSuffix(s.endpoint, "amazonaws.com") {
 		// Native Amazon S3, use AWS's S3 URL format
 		return fmt.Sprintf("s3://%s/%s", s.bucket, s.key)
-	} else if !s.forcePathStyle {
+	} else if !s.s3.Options().UsePathStyle {
 		// Endpoint specified but not using path style (e.g. Wasabi)
 		return fmt.Sprintf("s3://%s.%s/%s", s.bucket, s.endpoint, s.key)
 	}
@@ -122,18 +120,18 @@ func (s *S3Client) Upload(ctx context.Context, reader io.Reader, id string) erro
 		}
 		key = TimestampedPath(key, s.now())
 	}
-	input := &s3manager.UploadInput{
+	input := &s3.PutObjectInput{
 		Bucket: aws.String(s.bucket),
 		Key:    aws.String(key),
 		Body:   reader,
 	}
 
 	if id != "" {
-		input.Metadata = map[string]*string{
-			AWSS3IDKey: aws.String(id),
+		input.Metadata = map[string]string{
+			AWSS3IDKey: id,
 		}
 	}
-	_, err := s.uploader.UploadWithContext(ctx, input)
+	_, err := s.uploader.Upload(ctx, input)
 	if err != nil {
 		return fmt.Errorf("failed to upload to %v: %w", s, err)
 	}
@@ -147,7 +145,7 @@ func (s *S3Client) CurrentID(ctx context.Context) (string, error) {
 		Key:    aws.String(s.key),
 	}
 
-	result, err := s.s3.HeadObjectWithContext(ctx, input)
+	result, err := s.s3.HeadObject(ctx, input)
 	if err != nil {
 		return "", fmt.Errorf("failed to get object head for %v: %w", s, err)
 	}
@@ -156,17 +154,29 @@ func (s *S3Client) CurrentID(ctx context.Context) (string, error) {
 	if !ok {
 		return "", fmt.Errorf("sum metadata not found for %v", s)
 	}
-	return *id, nil
+	return id, nil
 }
 
 // Download downloads data from S3.
 func (s *S3Client) Download(ctx context.Context, writer io.WriterAt) error {
-	_, err := s.downloader.DownloadWithContext(ctx, writer, &s3.GetObjectInput{
+	_, err := s.downloader.Download(ctx, writer, &s3.GetObjectInput{
 		Bucket: aws.String(s.bucket),
 		Key:    aws.String(s.key),
 	})
 	if err != nil {
 		return fmt.Errorf("failed to download from %v: %w", s, err)
+	}
+	return nil
+}
+
+// Delete deletes object from S3.
+func (s *S3Client) Delete(ctx context.Context) error {
+	_, err := s.s3.DeleteObject(ctx, &s3.DeleteObjectInput{
+		Bucket: aws.String(s.bucket),
+		Key:    aws.String(s.key),
+	})
+	if err != nil {
+		return fmt.Errorf("failed to delete %v: %w", s, err)
 	}
 	return nil
 }
@@ -180,9 +190,9 @@ func TimestampedPath(path string, t time.Time) string {
 }
 
 type uploader interface {
-	UploadWithContext(ctx aws.Context, input *s3manager.UploadInput, opts ...func(*s3manager.Uploader)) (*s3manager.UploadOutput, error)
+	Upload(ctx context.Context, input *s3.PutObjectInput, opts ...func(*manager.Uploader)) (*manager.UploadOutput, error)
 }
 
 type downloader interface {
-	DownloadWithContext(ctx aws.Context, w io.WriterAt, input *s3.GetObjectInput, opts ...func(*s3manager.Downloader)) (n int64, err error)
+	Download(ctx context.Context, w io.WriterAt, input *s3.GetObjectInput, opts ...func(*manager.Downloader)) (n int64, err error)
 }
