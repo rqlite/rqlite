@@ -519,6 +519,37 @@ func testSimpleExpressionStatements(t *testing.T, db *DB) {
 	}
 }
 
+func testUpsertStatements(t *testing.T, db *DB) {
+	_, err := db.ExecuteStringStmt("CREATE TABLE vocabulary(word TEXT PRIMARY KEY, count INT DEFAULT 1)")
+	if err != nil {
+		t.Fatalf("failed to create table: %s", err.Error())
+	}
+
+	_, err = db.ExecuteStringStmt("INSERT INTO vocabulary(word) VALUES('jovial') ON CONFLICT(word) DO UPDATE SET count=count+1")
+	if err != nil {
+		t.Fatalf("failed to UPSERT first record: %s", err.Error())
+	}
+	r, err := db.QueryStringStmt("SELECT * FROM vocabulary")
+	if err != nil {
+		t.Fatalf("failed to query: %s", err.Error())
+	}
+	if exp, got := `[{"columns":["word","count"],"types":["text","int"],"values":[["jovial",1]]}]`, asJSON(r); exp != got {
+		t.Fatalf("unexpected results for query, expected %s, got %s", exp, got)
+	}
+
+	_, err = db.ExecuteStringStmt("INSERT INTO vocabulary(word) VALUES('jovial') ON CONFLICT(word) DO UPDATE SET count=count+1")
+	if err != nil {
+		t.Fatalf("failed to UPSERT first record: %s", err.Error())
+	}
+	r, err = db.QueryStringStmt("SELECT * FROM vocabulary")
+	if err != nil {
+		t.Fatalf("failed to query: %s", err.Error())
+	}
+	if exp, got := `[{"columns":["word","count"],"types":["text","int"],"values":[["jovial",2]]}]`, asJSON(r); exp != got {
+		t.Fatalf("unexpected results for query, expected %s, got %s", exp, got)
+	}
+}
+
 func testSimpleSingleJSONStatements(t *testing.T, db *DB) {
 	_, err := db.ExecuteStringStmt("CREATE TABLE foo (c0 VARCHAR(36), c1 JSON, c2 NCHAR, c3 NVARCHAR, c4 CLOB)")
 	if err != nil {
@@ -1731,6 +1762,7 @@ func Test_DatabaseCommonOperations(t *testing.T) {
 		{"SimpleStatementsNumeric", testSimpleStatementsNumeric},
 		{"SimpleStatementsCollate", testSimpleStatementsCollate},
 		{"SimpleExpressionStatements", testSimpleExpressionStatements},
+		{"SimpleUpsertStatements", testUpsertStatements},
 		{"SimpleSingleJSONStatements", testSimpleSingleJSONStatements},
 		{"SimpleSingleJSONBStatements", testSimpleSingleJSONBStatements},
 		{"SimpleJoinStatements", testSimpleJoinStatements},

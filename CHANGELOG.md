@@ -1,3 +1,7 @@
+## v8.29.5 (unreleased)
+### Implementation changes and bug fixes
+- [PR #1875](https://github.com/rqlite/rqlite/pull/1875): Add `UPSERT` unit test.
+
 ## v8.29.4 (August 31st 2024)
 ### Implementation changes and bug fixes
 - Correct parallel multi-platform Docker release process.
