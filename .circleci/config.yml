@@ -271,7 +271,7 @@ jobs:
       - run: gcc -g -fPIC -shared db/testdata/carray.c -o /home/circleci/extensions/carray.so
       - run: zip -j /home/circleci/rot13.zip /home/circleci/extensions/rot13.so
       - run: tar -czf /home/circleci/rot13.tar.gz --strip-components=1 -C /home/circleci/extensions rot13.so
-      - run: cd extensions/src/misc && make && cp *.so /home/circleci/extensions-misc
+      - run: git clone https://github.com/rqlite/rqlite-sqlite-ext.git && cd rqlite-sqlite-ext/misc && make && cp *.so /home/circleci/extensions-misc
       - run:
           command: python3 system_test/e2e/extensions.py
           environment:
