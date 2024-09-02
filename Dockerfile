@@ -34,9 +34,6 @@ RUN go build -ldflags=" \
 WORKDIR /extensions
 WORKDIR /app
 
-RUN gcc -fPIC -shared extensions/src/icu/icu.c -I extensions/src/ `pkg-config --libs --cflags icu-uc icu-io` -o icu.so && \
-    zip /extensions/icu.zip icu.so
-
 RUN curl -L `curl -s https://api.github.com/repos/nalgeon/sqlean/releases/latest | grep "tarball_url" | cut -d '"' -f 4` -o sqlean.tar.gz && \
     tar xvfz sqlean.tar.gz && \
     cd nalgeon* && make prepare-dist download-sqlite download-external compile-linux && zip -j /extensions/sqlean.zip dist/sqlean.so
@@ -45,7 +42,9 @@ RUN curl -L `curl -s https://api.github.com/repos/asg017/sqlite-vec/releases/lat
     tar xvfz sqlite-vec.tar.gz && \
     cd asg017* && sh scripts/vendor.sh && echo "#include <sys/types.h>" | cat - sqlite-vec.c > temp && mv temp sqlite-vec.c && make loadable && zip -j /extensions/sqlite-vec.zip dist/vec0.so
 
-RUN cd extensions/src/misc/ && make && zip /extensions/misc.zip *.so
+RUN git clone https://github.com/rqlite/rqlite-sqlite-ext.git
+RUN cd rqlite-sqlite-ext/misc && make && zip /extensions/misc.zip *.so
+RUN cd rqlite-sqlite-ext/icu && gcc -fPIC -shared icu.c -I .. `pkg-config --libs --cflags icu-uc icu-io` -o icu.so && zip /extensions/icu.zip icu.so
 
 #######################################################################
 # Phase 2: Create the final image.
