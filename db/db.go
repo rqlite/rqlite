@@ -26,6 +26,8 @@ const (
 	SQLiteHeaderSize = 32
 	bkDelay          = 250
 	durToOpenLog     = 2 * time.Second
+	OptimizeDefault  = 0xFFFE
+	OptimizeAtOpen   = 0x10002
 )
 
 const (
@@ -460,6 +462,12 @@ func (db *DB) GetCheckpointing() (int, error) {
 		return 0, err
 	}
 	return rwN, err
+}
+
+// Optimize runs a PRAGMA OPTIMIZE on the database, using the given mask.
+func (db *DB) Optimize(mask int) error {
+	_, err := db.rwDB.Exec(fmt.Sprintf("PRAGMA optimize=0x%x", mask))
+	return err
 }
 
 // Vacuum runs a VACUUM on the database.
