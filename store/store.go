@@ -511,7 +511,7 @@ func (s *Store) Open() (retErr error) {
 		return fmt.Errorf("failed to create on-disk database: %s", err)
 	}
 	if err := s.db.Optimize(db.OptimizeAtOpen); err != nil {
-		return fmt.Errorf("failed to optimize database at eopn: %s", err)
+		return fmt.Errorf("failed to optimize database at open: %s", err)
 	}
 
 	// Clean up any files from aborted operations. This tries to catch the case where scratch files
