@@ -464,8 +464,13 @@ func (db *DB) GetCheckpointing() (int, error) {
 	return rwN, err
 }
 
-// Optimize runs a PRAGMA OPTIMIZE on the database, using the given mask.
+// Optimize runs a default PRAGMA OPTIMIZE on the database.
 func (db *DB) Optimize(mask int) error {
+	return db.OptimizeWithMask(OptimizeDefault)
+}
+
+// OptimizeWithMask runs a PRAGMA OPTIMIZE on the database, using the given mask.
+func (db *DB) OptimizeWithMask(mask int) error {
 	_, err := db.rwDB.Exec(fmt.Sprintf("PRAGMA optimize=0x%x", mask))
 	return err
 }
