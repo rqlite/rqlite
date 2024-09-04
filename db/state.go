@@ -2,9 +2,11 @@ package db
 
 import (
 	"bytes"
+	"compress/gzip"
 	"context"
 	"database/sql"
 	"fmt"
+	"io"
 	"net/url"
 	"os"
 	"path/filepath"
@@ -167,6 +169,30 @@ func IsValidSQLiteData(b []byte) bool {
 	return len(b) > 13 && string(b[0:13]) == "SQLite format"
 }
 
+// IsValidSQLiteFileCompressed checks that the supplied path looks like a
+// compressed SQLite file. A nonexistent file, invalid Gzip archive, or
+// gzip archive that does not contain a valid SQLite file is considered
+// invalid.
+func IsValidSQLiteFileCompressed(path string) bool {
+	f, err := os.Open(path)
+	if err != nil {
+		return false
+	}
+	defer f.Close()
+	gz, err := gzip.NewReader(f)
+	if err != nil {
+		return false
+	}
+	defer gz.Close()
+
+	b := make([]byte, 16)
+	_, err = io.ReadFull(gz, b)
+	if err != nil {
+		return false
+	}
+	return IsValidSQLiteData(b)
+}
+
 // IsValidSQLiteWALFile checks that the supplied path looks like a SQLite
 // WAL file. See https://www.sqlite.org/fileformat2.html#walformat. A
 // nonexistent file is considered invalid.
@@ -259,15 +285,48 @@ func EnsureDeleteMode(path string) error {
 	return err
 }
 
+// EnsureWALMode ensures the database at the given path is in WAL mode.
+func EnsureWALMode(path string) error {
+	if IsWALModeEnabledSQLiteFile(path) {
+		return nil
+	}
+	rwDSN := fmt.Sprintf("file:%s", path)
+	conn, err := sql.Open(defaultDriverName, rwDSN)
+	if err != nil {
+		return fmt.Errorf("open: %s", err.Error())
+	}
+	defer conn.Close()
+	_, err = conn.Exec("PRAGMA journal_mode=WAL")
+	return err
+}
+
+// CheckpointRemove checkpoints any WAL files into the database file at the given
+// given path. The database will be in WAL mode after the operation.
+func CheckpointRemove(path string) error {
+	if err := EnsureDeleteMode(path); err != nil {
+		return err
+	}
+	return EnsureWALMode(path)
+}
+
+// RemoveWALFiles removes the WAL and SHM files associated with the given path,
+// leaving the database file untouched.
+func RemoveWALFiles(path string) error {
+	if err := os.Remove(path + "-wal"); err != nil && !os.IsNotExist(err) {
+		return err
+	}
+	if err := os.Remove(path + "-shm"); err != nil && !os.IsNotExist(err) {
+		return err
+	}
+	return nil
+}
+
 // RemoveFiles removes the SQLite database file, and any associated WAL and SHM files.
 func RemoveFiles(path string) error {
 	if err := os.Remove(path); err != nil && !os.IsNotExist(err) {
 		return err
 	}
-	if err := os.Remove(path + "-wal"); err != nil && !os.IsNotExist(err) {
-		return err
-	}
-	if err := os.Remove(path + "-shm"); err != nil && !os.IsNotExist(err) {
+	if err := RemoveWALFiles(path); err != nil {
 		return err
 	}
 	return nil
@@ -306,8 +365,7 @@ func CheckIntegrity(path string, full bool) (bool, error) {
 // in the order given by the slice. The supplied WAL files must be in the same
 // directory as the database file and are deleted as a result of the replay operation.
 // If deleteMode is true, the database file will be in DELETE mode after the replay
-// operation, otherwise it will be in WAL mode. Finally, regardless of deleteMode,
-// there will be no "true" WAL file after the replay operation.
+// operation, otherwise it will be in WAL mode.
 func ReplayWAL(path string, wals []string, deleteMode bool) error {
 	for _, wal := range wals {
 		if filepath.Dir(wal) != filepath.Dir(path) {
@@ -333,9 +391,6 @@ func ReplayWAL(path string, wals []string, deleteMode bool) error {
 		if err := db.Checkpoint(CheckpointTruncate); err != nil {
 			return fmt.Errorf("checkpoint WAL %s: %s", wal, err.Error())
 		}
-
-		// Closing the database will remove the WAL file which was just
-		// checkpointed into the database file.
 		if err := db.Close(); err != nil {
 			return err
 		}

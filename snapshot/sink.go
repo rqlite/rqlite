@@ -212,8 +212,8 @@ func (s *Sink) processSnapshotData() (retErr error) {
 			if err := os.Rename(snapPrevDB, snapNewDB); err != nil {
 				return err
 			}
-			// An open-close cycle checkpoints and removes any WAL file.
-			if err := openCloseDB(snapNewDB); err != nil {
+			// Ensure any WAL files are processed and removed.
+			if err := db.CheckpointRemove(snapNewDB); err != nil {
 				return err
 			}
 		}

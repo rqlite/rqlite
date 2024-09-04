@@ -2,6 +2,7 @@ package db
 
 import (
 	"database/sql"
+	"fmt"
 	"path/filepath"
 	"sort"
 	"sync"
@@ -13,20 +14,29 @@ const (
 	defaultDriverName = "rqlite-sqlite3"
 )
 
+var registerOnce sync.Once
+
+var connectHookFn = func(conn *sqlite3.SQLiteConn) error {
+	if err := conn.DBConfigNoCkptOnClose(); err != nil {
+		return fmt.Errorf("cannot disable checkpoint on close: %w", err)
+	}
+	return nil
+}
+
 // Driver is a Database driver.
 type Driver struct {
 	name       string
 	extensions []string
 }
 
-var registerOnce sync.Once
-
 // DefaultDriver returns the default driver. It registers the SQLite3 driver
 // with the default driver name. It can be called multiple times, but only
 // registers the SQLite3 driver once.
 func DefaultDriver() *Driver {
 	registerOnce.Do(func() {
-		sql.Register(defaultDriverName, &sqlite3.SQLiteDriver{})
+		sql.Register(defaultDriverName, &sqlite3.SQLiteDriver{
+			ConnectHook: connectHookFn,
+		})
 	})
 	return &Driver{
 		name: defaultDriverName,
@@ -38,7 +48,8 @@ func DefaultDriver() *Driver {
 // given name already exists, a panic will occur.
 func NewDriver(name string, extensions []string) *Driver {
 	sql.Register(name, &sqlite3.SQLiteDriver{
-		Extensions: extensions,
+		Extensions:  extensions,
+		ConnectHook: connectHookFn,
 	})
 	return &Driver{
 		name:       name,
