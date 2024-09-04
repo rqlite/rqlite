@@ -1,4 +1,4 @@
-## v8.29.5 (unreleased)
+## v8.29.5 (September 4th 2024)
 ### Implementation changes and bug fixes
 - [PR #1878](https://github.com/rqlite/rqlite/pull/1878): Upgrade SQLite to 3.46.1.
 - [PR #1875](https://github.com/rqlite/rqlite/pull/1875): Add `UPSERT` unit test.
