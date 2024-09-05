@@ -1,6 +1,7 @@
 package db
 
 import (
+	"bytes"
 	"database/sql"
 	"fmt"
 	"io"
@@ -412,6 +413,75 @@ func Test_DBVacuumInto(t *testing.T) {
 	_, err = Open(existPath, false, false)
 	if err == nil {
 		t.Fatalf("expected error opening database")
+	}
+}
+
+func Test_DBOptimize(t *testing.T) {
+	db, path := mustCreateOnDiskDatabaseWAL()
+	defer db.Close()
+	defer os.Remove(path)
+
+	// Create the table, index, and write a bunch of records.
+	r, err := db.ExecuteStringStmt("CREATE TABLE foo (id INTEGER NOT NULL PRIMARY KEY, name TEXT)")
+	if err != nil {
+		t.Fatalf("failed to create table: %s", err.Error())
+	}
+	if exp, got := `[{}]`, asJSON(r); exp != got {
+		t.Fatalf("unexpected results for query, expected %s, got %s", exp, got)
+	}
+	r, err = db.ExecuteStringStmt("CREATE INDEX idx_name ON foo(name)")
+	if err != nil {
+		t.Fatalf("failed to create index: %s", err.Error())
+	}
+	if exp, got := `[{}]`, asJSON(r); exp != got {
+		t.Fatalf("unexpected results for query, expected %s, got %s", exp, got)
+	}
+	for i := 0; i < 1000; i++ {
+		_, err = db.ExecuteStringStmt(`INSERT INTO foo(name) VALUES("fiona")`)
+		if err != nil {
+			t.Fatalf("error executing insertion into table: %s", err.Error())
+		}
+	}
+	q, err := db.QueryStringStmt("SELECT COUNT(*) FROM foo")
+	if err != nil {
+		t.Fatalf("failed to query empty table: %s", err.Error())
+	}
+	if exp, got := `[{"columns":["COUNT(*)"],"types":["integer"],"values":[[1000]]}]`, asJSON(q); exp != got {
+		t.Fatalf("unexpected results for query, expected %s, got %s", exp, got)
+	}
+
+	// Stats shouldn't exist before an optimize.
+	q, err = db.QueryStringStmt("SELECT * FROM sqlite_stat1")
+	if err != nil {
+		t.Fatalf("failed to query empty table: %s", err.Error())
+	}
+	if exp, got := `[{"error":"no such table: sqlite_stat1"}]`, asJSON(q); exp != got {
+		t.Fatalf("unexpected results for query, expected %s, got %s", exp, got)
+	}
+
+	// Get file contents before an optimize.
+	preDBBytes := mustReadBytes(db.Path())
+	preWALBytes := mustReadBytes(db.WALPath())
+
+	// Optimize and then confirm stats table is created.
+	if err := db.Optimize(); err != nil {
+		t.Fatalf("failed to optimize database: %s", err.Error())
+	}
+	q, err = db.QueryStringStmt("SELECT * FROM sqlite_stat1")
+	if err != nil {
+		t.Fatalf("failed to query empty table: %s", err.Error())
+	}
+	if exp, got := `[{"columns":["tbl","idx","stat"],"types":["text","text","text"],"values":[["foo","idx_name","1000 1000"]]}]`, asJSON(q); exp != got {
+		t.Fatalf("unexpected results for query, expected %s, got %s", exp, got)
+	}
+
+	// Confirm the database file is unchanged, but the WAL file is i.e. that
+	// stats are stored in the WAL like any other write operation.
+	if !bytes.Equal(preDBBytes, mustReadBytes(db.Path())) {
+		t.Fatalf("db file should be unchanged after optimize")
+	}
+	if bytes.Equal(preWALBytes, mustReadBytes(db.WALPath())) {
+		t.Fatalf("wal file should be changed after optimize")
 	}
 }
 
