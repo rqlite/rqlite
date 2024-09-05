@@ -20,6 +20,7 @@ import (
 	"github.com/rqlite/go-sqlite3"
 	command "github.com/rqlite/rqlite/v8/command/proto"
 	"github.com/rqlite/rqlite/v8/db/humanize"
+	"github.com/rqlite/rqlite/v8/rsync"
 )
 
 const (
@@ -27,7 +28,7 @@ const (
 	bkDelay          = 250
 	durToOpenLog     = 2 * time.Second
 	OptimizeDefault  = 0xFFFE
-	OptimizeAtOpen   = 0x10002
+	OptimizeAll      = 0x10002
 )
 
 const (
@@ -128,6 +129,8 @@ type DB struct {
 
 	rwDSN string // DSN used for read-write connection
 	roDSN string // DSN used for read-only connections
+
+	allOptimized rsync.AtomicBool // Whether all tables have been optimized once.
 
 	logger *log.Logger
 }
@@ -464,9 +467,15 @@ func (db *DB) GetCheckpointing() (int, error) {
 	return rwN, err
 }
 
-// Optimize runs a default PRAGMA OPTIMIZE on the database.
+// Optimize runs a default PRAGMA OPTIMIZE on the database. If it's the first
+// time this function is called on this database, it will run a full optimization.
 func (db *DB) Optimize() error {
-	return db.OptimizeWithMask(OptimizeDefault)
+	mask := OptimizeDefault
+	if !db.allOptimized.Is() {
+		mask = OptimizeAll
+		db.allOptimized.Set()
+	}
+	return db.OptimizeWithMask(mask)
 }
 
 // OptimizeWithMask runs a PRAGMA OPTIMIZE on the database, using the given mask.
