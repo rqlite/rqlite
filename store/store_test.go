@@ -1968,6 +1968,8 @@ func Test_OpenStoreSingleNode_VacuumTimes(t *testing.T) {
 	if err := s1.Open(); err != nil {
 		t.Fatalf("failed to open single-node store: %s", err.Error())
 	}
+
+	time.Sleep(100 * time.Millisecond)
 	now := time.Now()
 	_, err = s1.LastVacuumTime()
 	if err == nil {
@@ -2355,6 +2357,130 @@ func Test_SingleNode_SnapshotWithAutoVac_Stress(t *testing.T) {
 		defer wg.Done()
 		for i := 0; i < 500; i++ {
 			_, err := s.Execute(executeRequestFromString(`INSERT INTO foo(name) VALUES("fiona")`, false, false))
+			if err != nil {
+				t.Errorf("failed to execute INSERT on single node: %s", err.Error())
+			}
+		}
+	}
+	for i := 0; i < 5; i++ {
+		go insertFn()
+	}
+	wg.Wait()
+	if s.WaitForAllApplied(5*time.Second) != nil {
+		t.Fatalf("failed to wait for all data to be applied")
+	}
+
+	// Query the data, make sure it looks good after all this.
+	qr := queryRequestFromString("SELECT COUNT(*) FROM foo", false, true)
+	qr.Level = proto.QueryRequest_QUERY_REQUEST_LEVEL_STRONG
+	r, err := s.Query(qr)
+	if err != nil {
+		t.Fatalf("failed to query single node: %s", err.Error())
+	}
+	if exp, got := `[{"columns":["COUNT(*)"],"types":["integer"],"values":[[2500]]}]`, asJSON(r); exp != got {
+		t.Fatalf("unexpected results for query\nexp: %s\ngot: %s", exp, got)
+	}
+
+	// Restart the Store, make sure it still works.
+	if err := s.Close(true); err != nil {
+		t.Fatalf("failed to close store: %s", err.Error())
+	}
+	if err := s.Open(); err != nil {
+		t.Fatalf("failed to open store: %s", err.Error())
+	}
+	defer s.Close(true)
+	if _, err := s.WaitForLeader(10 * time.Second); err != nil {
+		t.Fatalf("Error waiting for leader: %s", err)
+	}
+	r, err = s.Query(qr)
+	if err != nil {
+		t.Fatalf("failed to query single node: %s", err.Error())
+	}
+	if exp, got := `[{"columns":["COUNT(*)"],"types":["integer"],"values":[[2500]]}]`, asJSON(r); exp != got {
+		t.Fatalf("unexpected results for query\nexp: %s\ngot: %s", exp, got)
+	}
+}
+
+func Test_OpenStoreSingleNode_OptimizeTimes(t *testing.T) {
+	s0, ln0 := mustNewStore(t)
+	defer s0.Close(true)
+	defer ln0.Close()
+	if err := s0.Open(); err != nil {
+		t.Fatalf("failed to open single-node store: %s", err.Error())
+	}
+	_, err := s0.LastOptimizeTime()
+	if err == nil {
+		t.Fatal("expected error getting last optimize time")
+	}
+	_, err = s0.getKeyTime(baseOptimizeTimeKey)
+	if err == nil {
+		t.Fatal("expected error getting base time")
+	}
+
+	s1, ln1 := mustNewStore(t)
+	s1.AutoOptimizeInterval = time.Hour
+	defer s1.Close(true)
+	defer ln1.Close()
+	if err := s1.Open(); err != nil {
+		t.Fatalf("failed to open single-node store: %s", err.Error())
+	}
+
+	time.Sleep(100 * time.Millisecond)
+	now := time.Now()
+	_, err = s1.LastOptimizeTime()
+	if err == nil {
+		t.Fatal("expected error getting last vacuum time")
+	}
+	bt, err := s1.getKeyTime(baseOptimizeTimeKey)
+	if err != nil {
+		t.Fatalf("error getting base time: %s", err.Error())
+	}
+
+	if !bt.Before(now) {
+		t.Fatal("expected last base time to be before now")
+	}
+}
+
+func Test_SingleNode_SnapshotWithAutoOptimize_Stress(t *testing.T) {
+	s, ln := mustNewStore(t)
+	defer ln.Close()
+	s.SnapshotThreshold = 50
+	s.SnapshotInterval = 100 * time.Millisecond
+	s.AutoOptimizeInterval = 500 * time.Millisecond
+
+	if err := s.Open(); err != nil {
+		t.Fatalf("failed to open single-node store: %s", err.Error())
+	}
+	defer s.Close(true)
+	if err := s.Bootstrap(NewServer(s.ID(), s.Addr(), true)); err != nil {
+		t.Fatalf("failed to bootstrap single-node store: %s", err.Error())
+	}
+	if _, err := s.WaitForLeader(10 * time.Second); err != nil {
+		t.Fatalf("Error waiting for leader: %s", err)
+	}
+
+	// Create a table
+	er := executeRequestFromString(`CREATE TABLE foo (id INTEGER NOT NULL PRIMARY KEY, name TEXT)`,
+		false, false)
+	_, err := s.Execute(er)
+	if err != nil {
+		t.Fatalf("failed to execute on single node: %s", err.Error())
+	}
+
+	// Create an index on name
+	er = executeRequestFromString(`CREATE INDEX foo_name ON foo(name)`, false, false)
+	_, err = s.Execute(er)
+	if err != nil {
+		t.Fatalf("failed to execute on single node: %s", err.Error())
+	}
+
+	// Insert a bunch of data concurrently, putting some load on the Store.
+	var wg sync.WaitGroup
+	wg.Add(5)
+	insertFn := func() {
+		defer wg.Done()
+		for i := 0; i < 500; i++ {
+			_, err := s.Execute(executeRequestFromString(fmt.Sprintf(`INSERT INTO foo(name) VALUES("%s")`, random.String()), false, false))
 			if err != nil {
 				t.Errorf("failed to execute INSERT on single node: %s", err.Error())
 			}
