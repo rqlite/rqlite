@@ -1968,6 +1968,8 @@ func Test_OpenStoreSingleNode_VacuumTimes(t *testing.T) {
 	if err := s1.Open(); err != nil {
 		t.Fatalf("failed to open single-node store: %s", err.Error())
 	}
+
+	time.Sleep(100 * time.Millisecond)
 	now := time.Now()
 	_, err = s1.LastVacuumTime()
 	if err == nil {
@@ -2422,6 +2424,8 @@ func Test_OpenStoreSingleNode_OptimizeTimes(t *testing.T) {
 	if err := s1.Open(); err != nil {
 		t.Fatalf("failed to open single-node store: %s", err.Error())
 	}
+
+	time.Sleep(100 * time.Millisecond)
 	now := time.Now()
 	_, err = s1.LastOptimizeTime()
 	if err == nil {
