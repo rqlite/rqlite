@@ -567,6 +567,9 @@ func (s *Store) Open() (retErr error) {
 	if err := s.initVacuumTime(); err != nil {
 		return fmt.Errorf("failed to initialize auto-vacuum times: %s", err.Error())
 	}
+	if err := s.initOptimizeTime(); err != nil {
+		return fmt.Errorf("failed to initialize auto-optimize times: %s", err.Error())
+	}
 	return nil
 }
 
@@ -1803,7 +1806,7 @@ func (s *Store) initVacuumTime() error {
 }
 
 func (s *Store) initOptimizeTime() error {
-	if s.AutoVacInterval == 0 {
+	if s.AutoOptimizeInterval == 0 {
 		if err := s.clearKeyTime(baseOptimizeTimeKey); err != nil {
 			return fmt.Errorf("failed to clear base vacuum time: %s", err)
 		}
