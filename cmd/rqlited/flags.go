@@ -542,7 +542,7 @@ func ParseFlags(name, desc string, build *BuildInfo) (*Config, error) {
 	fs.BoolVar(&config.FKConstraints, "fk", false, "Enable SQLite foreign key constraints")
 	fs.BoolVar(&showVersion, "version", false, "Show version information and exit")
 	fs.DurationVar(&config.AutoVacInterval, "auto-vacuum-int", 0, "Period between automatic VACUUMs. It not set, not enabled")
-	fs.DurationVar(&config.AutoOptimizeInterval, "auto-optimize-int", mustParseDuration("24h"), "Period between automatic optimizations. Set to 0h to disable")
+	fs.DurationVar(&config.AutoOptimizeInterval, "auto-optimize-int", mustParseDuration("24h"), `Period between automatic 'PRAGMA optimize'. Set to 0h to disable`)
 	fs.BoolVar(&config.RaftNonVoter, "raft-non-voter", false, "Configure as non-voting node")
 	fs.DurationVar(&config.RaftHeartbeatTimeout, "raft-timeout", time.Second, "Raft heartbeat timeout")
 	fs.DurationVar(&config.RaftElectionTimeout, "raft-election-timeout", time.Second, "Raft election timeout")
