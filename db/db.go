@@ -130,7 +130,7 @@ type DB struct {
 	rwDSN string // DSN used for read-write connection
 	roDSN string // DSN used for read-only connections
 
-	allOptimized rsync.AtomicBool // Whether all tables have been optimized once.
+	allOptimized *rsync.AtomicBool // Whether all tables have been optimized once.
 
 	logger *log.Logger
 }
@@ -207,16 +207,17 @@ func OpenWithDriver(drv *Driver, dbPath string, fkEnabled, wal bool) (retDB *DB,
 	}
 
 	return &DB{
-		drv:       drv,
-		path:      dbPath,
-		walPath:   dbPath + "-wal",
-		fkEnabled: fkEnabled,
-		wal:       wal,
-		rwDB:      rwDB,
-		roDB:      roDB,
-		rwDSN:     rwDSN,
-		roDSN:     roDSN,
-		logger:    logger,
+		drv:          drv,
+		path:         dbPath,
+		walPath:      dbPath + "-wal",
+		fkEnabled:    fkEnabled,
+		wal:          wal,
+		rwDB:         rwDB,
+		roDB:         roDB,
+		rwDSN:        rwDSN,
+		roDSN:        roDSN,
+		allOptimized: rsync.NewAtomicBool(),
+		logger:       logger,
 	}, nil
 }
 
