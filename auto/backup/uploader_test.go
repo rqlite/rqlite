@@ -55,7 +55,8 @@ func Test_UploaderSingleUpload(t *testing.T) {
 	}
 
 	time.Sleep(time.Second)
-	if exp, got := int64(0), stats.Get(numUploadsSkipped).(*expvar.Int); exp < got.Value() {
+	nus := stats.Get(numUploadsSkipped).(*expvar.Int).Value()
+	if exp, got := int64(0), nus; exp < got {
 		t.Errorf("expected numUploadsSkipped to be > %d, got %d", exp, got)
 	}
 }
