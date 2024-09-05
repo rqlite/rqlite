@@ -422,22 +422,22 @@ func Test_DBOptimize(t *testing.T) {
 	defer os.Remove(path)
 
 	// Create the table, index, and write a bunch of records.
-	r, err := db.ExecuteStringStmt("CREATE TABLE foo (id INTEGER NOT NULL PRIMARY KEY, name TEXT)")
+	r, err := db.ExecuteStringStmt("CREATE TABLE foo (id INTEGER NOT NULL PRIMARY KEY, first TEXT, last TEXT)")
 	if err != nil {
 		t.Fatalf("failed to create table: %s", err.Error())
 	}
 	if exp, got := `[{}]`, asJSON(r); exp != got {
 		t.Fatalf("unexpected results for query, expected %s, got %s", exp, got)
 	}
-	r, err = db.ExecuteStringStmt("CREATE INDEX idx_name ON foo(name)")
+	r, err = db.ExecuteStringStmt("CREATE INDEX idx_first ON foo(first)")
 	if err != nil {
 		t.Fatalf("failed to create index: %s", err.Error())
 	}
 	if exp, got := `[{}]`, asJSON(r); exp != got {
 		t.Fatalf("unexpected results for query, expected %s, got %s", exp, got)
 	}
-	for i := 0; i < 1000; i++ {
-		_, err = db.ExecuteStringStmt(`INSERT INTO foo(name) VALUES("fiona")`)
+	for i := 0; i < 100; i++ {
+		_, err = db.ExecuteStringStmt(`INSERT INTO foo(first) VALUES("alice")`)
 		if err != nil {
 			t.Fatalf("error executing insertion into table: %s", err.Error())
 		}
@@ -446,7 +446,7 @@ func Test_DBOptimize(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to query empty table: %s", err.Error())
 	}
-	if exp, got := `[{"columns":["COUNT(*)"],"types":["integer"],"values":[[1000]]}]`, asJSON(q); exp != got {
+	if exp, got := `[{"columns":["COUNT(*)"],"types":["integer"],"values":[[100]]}]`, asJSON(q); exp != got {
 		t.Fatalf("unexpected results for query, expected %s, got %s", exp, got)
 	}
 
@@ -471,7 +471,7 @@ func Test_DBOptimize(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to query empty table: %s", err.Error())
 	}
-	if exp, got := `[{"columns":["tbl","idx","stat"],"types":["text","text","text"],"values":[["foo","idx_name","1000 1000"]]}]`, asJSON(q); exp != got {
+	if exp, got := `[{"columns":["tbl","idx","stat"],"types":["text","text","text"],"values":[["foo","idx_first","100 100"]]}]`, asJSON(q); exp != got {
 		t.Fatalf("unexpected results for query, expected %s, got %s", exp, got)
 	}
 
@@ -482,6 +482,38 @@ func Test_DBOptimize(t *testing.T) {
 	}
 	if bytes.Equal(preWALBytes, mustReadBytes(db.WALPath())) {
 		t.Fatalf("wal file should be changed after optimize")
+	}
+
+	// Do another optimize since the function operates differently on subsequent calls.
+	r, err = db.ExecuteStringStmt("CREATE INDEX idx_last ON foo(last)")
+	if err != nil {
+		t.Fatalf("failed to create index: %s", err.Error())
+	}
+	if exp, got := `[{"last_insert_id":100,"rows_affected":1}]`, asJSON(r); exp != got { // 100 because of the 100 records already in the table.
+		t.Fatalf("unexpected results for query, expected %s, got %s", exp, got)
+	}
+	for i := 0; i < 100; i++ {
+		_, err = db.ExecuteStringStmt(`INSERT INTO foo(last) VALUES("bob")`)
+		if err != nil {
+			t.Fatalf("error executing insertion into table: %s", err.Error())
+		}
+	}
+	q, err = db.QueryStringStmt("SELECT COUNT(*) FROM foo")
+	if err != nil {
+		t.Fatalf("failed to query empty table: %s", err.Error())
+	}
+	if exp, got := `[{"columns":["COUNT(*)"],"types":["integer"],"values":[[200]]}]`, asJSON(q); exp != got {
+		t.Fatalf("unexpected results for query, expected %s, got %s", exp, got)
+	}
+	if err := db.Optimize(); err != nil {
+		t.Fatalf("failed to optimize database: %s", err.Error())
+	}
+	q, err = db.QueryStringStmt("SELECT * FROM sqlite_stat1")
+	if err != nil {
+		t.Fatalf("failed to query empty table: %s", err.Error())
+	}
+	if exp, got := `[{"columns":["tbl","idx","stat"],"types":["text","text","text"],"values":[["foo","idx_last","200 100"],["foo","idx_first","200 100"]]}]`, asJSON(q); exp != got {
+		t.Fatalf("unexpected results for query, expected %s, got %s", exp, got)
 	}
 }
 

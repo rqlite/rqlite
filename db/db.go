@@ -15,12 +15,12 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/rqlite/go-sqlite3"
 	command "github.com/rqlite/rqlite/v8/command/proto"
 	"github.com/rqlite/rqlite/v8/db/humanize"
-	"github.com/rqlite/rqlite/v8/rsync"
 )
 
 const (
@@ -130,7 +130,8 @@ type DB struct {
 	rwDSN string // DSN used for read-write connection
 	roDSN string // DSN used for read-only connections
 
-	allOptimized *rsync.AtomicBool // Whether all tables have been optimized once.
+	allOptimized   bool
+	allOptimizedMu sync.Mutex
 
 	logger *log.Logger
 }
@@ -207,17 +208,16 @@ func OpenWithDriver(drv *Driver, dbPath string, fkEnabled, wal bool) (retDB *DB,
 	}
 
 	return &DB{
-		drv:          drv,
-		path:         dbPath,
-		walPath:      dbPath + "-wal",
-		fkEnabled:    fkEnabled,
-		wal:          wal,
-		rwDB:         rwDB,
-		roDB:         roDB,
-		rwDSN:        rwDSN,
-		roDSN:        roDSN,
-		allOptimized: rsync.NewAtomicBool(),
-		logger:       logger,
+		drv:       drv,
+		path:      dbPath,
+		walPath:   dbPath + "-wal",
+		fkEnabled: fkEnabled,
+		wal:       wal,
+		rwDB:      rwDB,
+		roDB:      roDB,
+		rwDSN:     rwDSN,
+		roDSN:     roDSN,
+		logger:    logger,
 	}, nil
 }
 
@@ -471,12 +471,13 @@ func (db *DB) GetCheckpointing() (int, error) {
 // Optimize runs a default PRAGMA OPTIMIZE on the database. If it's the first
 // time this function is called on this database, it will run a full optimization.
 func (db *DB) Optimize() error {
-	mask := OptimizeDefault
-	if !db.allOptimized.Is() {
-		mask = OptimizeAll
-		db.allOptimized.Set()
+	db.allOptimizedMu.Lock()
+	defer db.allOptimizedMu.Unlock()
+	if !db.allOptimized {
+		db.allOptimized = true
+		return db.OptimizeWithMask(OptimizeAll)
 	}
-	return db.OptimizeWithMask(mask)
+	return db.OptimizeWithMask(OptimizeDefault)
 }
 
 // OptimizeWithMask runs a PRAGMA OPTIMIZE on the database, using the given mask.
