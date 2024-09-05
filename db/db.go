@@ -465,7 +465,7 @@ func (db *DB) GetCheckpointing() (int, error) {
 }
 
 // Optimize runs a default PRAGMA OPTIMIZE on the database.
-func (db *DB) Optimize(mask int) error {
+func (db *DB) Optimize() error {
 	return db.OptimizeWithMask(OptimizeDefault)
 }
 

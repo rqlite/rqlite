@@ -108,8 +108,10 @@ const (
 	trailingScale              = 1.25
 	observerChanLen            = 50
 
-	baseVacuumTimeKey = "rqlite_base_vacuum"
-	lastVacuumTimeKey = "rqlite_last_vacuum"
+	baseVacuumTimeKey   = "rqlite_base_vacuum"
+	lastVacuumTimeKey   = "rqlite_last_vacuum"
+	baseOptimizeTimeKey = "rqlite_base_optimize"
+	lastOptimizeTimeKey = "rqlite_last_optimize"
 )
 
 const (
@@ -126,6 +128,9 @@ const (
 	numAutoVacuums                    = "num_auto_vacuums"
 	numAutoVacuumsFailed              = "num_auto_vacuums_failed"
 	autoVacuumDuration                = "auto_vacuum_duration"
+	numAutoOptimizes                  = "num_auto_optimizes"
+	numAutoOptimizesFailed            = "num_auto_optimizes_failed"
+	autoOptimizeDuration              = "auto_optimize_duration"
 	numBoots                          = "num_boots"
 	numBackups                        = "num_backups"
 	numLoads                          = "num_loads"
@@ -181,6 +186,9 @@ func ResetStats() {
 	stats.Add(numAutoVacuums, 0)
 	stats.Add(numAutoVacuumsFailed, 0)
 	stats.Add(autoVacuumDuration, 0)
+	stats.Add(numAutoOptimizes, 0)
+	stats.Add(numAutoOptimizesFailed, 0)
+	stats.Add(autoOptimizeDuration, 0)
 	stats.Add(numBoots, 0)
 	stats.Add(numBackups, 0)
 	stats.Add(numLoads, 0)
@@ -323,6 +331,7 @@ type Store struct {
 	RaftLogLevel             string
 	NoFreeListSync           bool
 	AutoVacInterval          time.Duration
+	AutoOptimizeInterval     time.Duration
 
 	// Node-reaping configuration
 	ReapTimeout         time.Duration
@@ -331,10 +340,11 @@ type Store struct {
 	numTrailingLogs uint64
 
 	// For whitebox testing
-	numAutoVacuums  int
-	numIgnoredJoins int
-	numNoops        *atomic.Uint64
-	numSnapshots    *atomic.Uint64
+	numAutoVacuums   int
+	numAutoOptimizes int
+	numIgnoredJoins  int
+	numNoops         *atomic.Uint64
+	numSnapshots     *atomic.Uint64
 }
 
 // Config represents the configuration of the underlying Store.
@@ -509,9 +519,6 @@ func (s *Store) Open() (retErr error) {
 	s.db, err = createOnDisk(s.dbPath, s.dbConf.FKConstraints, true, s.dbConf.Extensions)
 	if err != nil {
 		return fmt.Errorf("failed to create on-disk database: %s", err)
-	}
-	if err := s.db.Optimize(db.OptimizeAtOpen); err != nil {
-		return fmt.Errorf("failed to optimize database at open: %s", err)
 	}
 
 	// Clean up any files from aborted operations. This tries to catch the case where scratch files
@@ -810,6 +817,11 @@ func (s *Store) State() ClusterState {
 // LastVacuumTime returns the time of the last automatic VACUUM.
 func (s *Store) LastVacuumTime() (time.Time, error) {
 	return s.getKeyTime(lastVacuumTimeKey)
+}
+
+// LastOptimizeTime returns the time of the last automatic OPTIMIZE.
+func (s *Store) LastOptimizeTime() (time.Time, error) {
+	return s.getKeyTime(lastOptimizeTimeKey)
 }
 
 // Path returns the path to the store's storage directory.
@@ -1790,6 +1802,22 @@ func (s *Store) initVacuumTime() error {
 	return nil
 }
 
+func (s *Store) initOptimizeTime() error {
+	if s.AutoVacInterval == 0 {
+		if err := s.clearKeyTime(baseOptimizeTimeKey); err != nil {
+			return fmt.Errorf("failed to clear base vacuum time: %s", err)
+		}
+		if err := s.clearKeyTime(lastOptimizeTimeKey); err != nil {
+			return fmt.Errorf("failed to clear last vacuum time: %s", err)
+		}
+		return nil
+	}
+	if _, err := s.LastOptimizeTime(); err != nil {
+		return s.setKeyTime(baseOptimizeTimeKey, time.Now())
+	}
+	return nil
+}
+
 func (s *Store) setKeyTime(key string, t time.Time) error {
 	buf := bytes.NewBuffer(make([]byte, 0, 8))
 	if err := binary.Write(buf, binary.LittleEndian, t.UnixNano()); err != nil {
@@ -1942,6 +1970,24 @@ func (s *Store) fsmSnapshot() (fSnap raft.FSMSnapshot, retErr error) {
 		stats.Add(numAutoVacuums, 1)
 		s.numAutoVacuums++
 		if err := s.setKeyTime(lastVacuumTimeKey, time.Now()); err != nil {
+			return nil, err
+		}
+	}
+
+	// Automatic OPTIMIZE needed?
+	if aon, err := s.autoOptimizeNeeded(time.Now()); err != nil {
+		return nil, err
+	} else if aon {
+		optStart := time.Now()
+		if err := s.db.Optimize(); err != nil {
+			stats.Add(numAutoOptimizesFailed, 1)
+			return nil, err
+		}
+		s.logger.Printf("database optimized in %s", time.Since(optStart))
+		stats.Get(autoOptimizeDuration).(*expvar.Int).Set(time.Since(optStart).Milliseconds())
+		stats.Add(numAutoOptimizes, 1)
+		s.numAutoOptimizes++
+		if err := s.setKeyTime(lastOptimizeTimeKey, time.Now()); err != nil {
 			return nil, err
 		}
 	}
@@ -2330,6 +2376,22 @@ func (s *Store) autoVacNeeded(t time.Time) (bool, error) {
 		return false, err
 	}
 	return t.Sub(bt) > s.AutoVacInterval, nil
+}
+
+func (s *Store) autoOptimizeNeeded(t time.Time) (bool, error) {
+	if s.AutoOptimizeInterval == 0 {
+		return false, nil
+	}
+	ot, err := s.LastOptimizeTime()
+	if err == nil {
+		return t.Sub(ot) > s.AutoOptimizeInterval, nil
+	}
+	// OK, check if we have a base time from which we can start.
+	bt, err := s.getKeyTime(baseOptimizeTimeKey)
+	if err != nil {
+		return false, err
+	}
+	return t.Sub(bt) > s.AutoOptimizeInterval, nil
 }
 
 func (s *Store) hcLogLevel() hclog.Level {
