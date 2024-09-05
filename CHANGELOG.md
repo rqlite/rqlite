@@ -1,6 +1,6 @@
 ## v8.30.0 (unreleased)
 ### New features
-- [PR #1879](https://github.com/rqlite/rqlite/pull/1879): Add support for automatic [optimization](https://www.sqlite.org/pragma.html#pragma_optimize) of the SQLite database.
+- [PR #1879](https://github.com/rqlite/rqlite/pull/1879): Add support for automatic [`PRAGMA optimize`](https://www.sqlite.org/pragma.html#pragma_optimize) of the SQLite database. Fixes issue [#1831](https://github.com/rqlite/rqlite/issues/1831).
 
 ## v8.29.5 (September 4th 2024)
 ### Implementation changes and bug fixes
