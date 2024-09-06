@@ -23,7 +23,7 @@ func Test_DefaultDriver(t *testing.T) {
 func Test_NewDriver(t *testing.T) {
 	name := "test-driver"
 	extensions := []string{"test1", "test2"}
-	d := NewDriver(name, extensions)
+	d := NewDriver(name, extensions, CnkOnCloseModeEnabled)
 	if d == nil {
 		t.Fatalf("NewDriver returned nil")
 	}

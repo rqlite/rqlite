@@ -12,16 +12,16 @@ import (
 
 const (
 	defaultDriverName = "rqlite-sqlite3"
+	chkDriverName     = "rqlite-sqlite3-chk"
 )
 
-var registerOnce sync.Once
+// CnkOnCloseMode represents the checkpoint on close mode.
+type CnkOnCloseMode int
 
-var connectHookFn = func(conn *sqlite3.SQLiteConn) error {
-	if err := conn.DBConfigNoCkptOnClose(); err != nil {
-		return fmt.Errorf("cannot disable checkpoint on close: %w", err)
-	}
-	return nil
-}
+const (
+	CnkOnCloseModeEnabled CnkOnCloseMode = iota
+	CnkOnCloseModeDisabled
+)
 
 // Driver is a Database driver.
 type Driver struct {
@@ -29,13 +29,16 @@ type Driver struct {
 	extensions []string
 }
 
+var defRegisterOnce sync.Once
+
 // DefaultDriver returns the default driver. It registers the SQLite3 driver
 // with the default driver name. It can be called multiple times, but only
-// registers the SQLite3 driver once.
+// registers the SQLite3 driver once. This driver disables checkpoint on close
+// for any database in WAL mode.
 func DefaultDriver() *Driver {
-	registerOnce.Do(func() {
+	defRegisterOnce.Do(func() {
 		sql.Register(defaultDriverName, &sqlite3.SQLiteDriver{
-			ConnectHook: connectHookFn,
+			ConnectHook: makeConnectHookFn(CnkOnCloseModeDisabled),
 		})
 	})
 	return &Driver{
@@ -43,13 +46,33 @@ func DefaultDriver() *Driver {
 	}
 }
 
+var chkRegisterOnce sync.Once
+
+// CheckpointDriver returns the checkpoint driver. It registers the SQLite3
+// driver with the checkpoint driver name. It can be called multiple times,
+// but only registers the SQLite3 driver once. This driver enables checkpoint
+// on close for any database in WAL mode.
+func CheckpointDriver() *Driver {
+	chkRegisterOnce.Do(func() {
+		sql.Register(chkDriverName, &sqlite3.SQLiteDriver{
+			ConnectHook: makeConnectHookFn(CnkOnCloseModeEnabled),
+		})
+	})
+	return &Driver{
+		name: chkDriverName,
+	}
+}
+
 // NewDriver returns a new driver with the given name and extensions. It
-// registers the SQLite3 driver with the given name. If a driver with the
-// given name already exists, a panic will occur.
-func NewDriver(name string, extensions []string) *Driver {
+// registers the SQLite3 driver with the given name. extensions is a list of
+// paths to SQLite3 extension shared objects. chkpt is the checkpoint-on-close
+// mode the Driver will use.
+//
+// If a driver with the given name already exists, a panic will occur.
+func NewDriver(name string, extensions []string, chkpt CnkOnCloseMode) *Driver {
 	sql.Register(name, &sqlite3.SQLiteDriver{
 		Extensions:  extensions,
-		ConnectHook: connectHookFn,
+		ConnectHook: makeConnectHookFn(chkpt),
 	})
 	return &Driver{
 		name:       name,
@@ -75,4 +98,15 @@ func (d *Driver) ExtensionNames() []string {
 	}
 	sort.Strings(names)
 	return names
+}
+
+func makeConnectHookFn(chkpt CnkOnCloseMode) func(conn *sqlite3.SQLiteConn) error {
+	return func(conn *sqlite3.SQLiteConn) error {
+		if chkpt == CnkOnCloseModeDisabled {
+			if err := conn.DBConfigNoCkptOnClose(); err != nil {
+				return fmt.Errorf("cannot disable checkpoint on close: %w", err)
+			}
+		}
+		return nil
+	}
 }

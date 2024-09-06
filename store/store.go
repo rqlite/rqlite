@@ -2417,7 +2417,7 @@ func createOnDisk(path string, fkConstraints, wal bool, extensions []string) (*s
 	}
 	drv := db.DefaultDriver()
 	if len(extensions) > 0 {
-		drv = db.NewDriver("rqlite-sqlite3-extended", extensions)
+		drv = db.NewDriver("rqlite-sqlite3-extended", extensions, db.CnkOnCloseModeDisabled)
 	}
 	return sql.OpenSwappableWithDriver(drv, path, fkConstraints, wal)
 }
