@@ -279,8 +279,7 @@ func EnsureDeleteMode(path string) error {
 	if err != nil {
 		return err
 	}
-	defer db.Close()
-	return nil
+	return db.Close()
 }
 
 // EnsureWALMode ensures the database at the given path is in WAL mode.
@@ -292,12 +291,12 @@ func EnsureWALMode(path string) error {
 	if err != nil {
 		return err
 	}
-	defer db.Close()
-	return nil
+	return db.Close()
 }
 
 // CheckpointRemove checkpoints any WAL files into the database file at the given
-// given path. The database will be in WAL mode after the operation.
+// given path. The database will be in WAL mode after the operation, and all WAL-related
+// files will have been removed.
 func CheckpointRemove(path string) error {
 	if err := EnsureDeleteMode(path); err != nil {
 		return err
