@@ -1658,7 +1658,11 @@ func testCopy(t *testing.T, db *DB) {
 		t.Fatalf("failed to copy database: %s", err.Error())
 	}
 
-	if !IsDELETEModeEnabledSQLiteFile(dstFile) {
+	d, err := IsDELETEModeEnabledSQLiteFile(dstFile)
+	if err != nil {
+		t.Fatalf("failed to check if destination file is in DELETE mode: %s", err.Error())
+	}
+	if !d {
 		t.Fatalf("Destination file not marked in DELETE mode")
 	}
 
@@ -1711,7 +1715,11 @@ func testBackup(t *testing.T, db *DB) {
 		if err != nil {
 			t.Fatalf("failed to backup database: %s", err.Error())
 		}
-		if !IsDELETEModeEnabledSQLiteFile(dstDB) {
+		d, err := IsDELETEModeEnabledSQLiteFile(dstDB)
+		if err != nil {
+			t.Fatalf("failed to check if backup file is in DELETE mode: %s", err.Error())
+		}
+		if !d {
 			t.Fatalf("Backup file not marked in DELETE mode")
 		}
 

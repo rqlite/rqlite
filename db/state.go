@@ -204,10 +204,9 @@ func IsValidSQLiteWALFile(path string) bool {
 	defer f.Close()
 
 	b := make([]byte, 4)
-	if _, err := f.Read(b); err != nil {
+	if _, err := io.ReadFull(f, b); err != nil {
 		return false
 	}
-
 	return IsValidSQLiteWALData(b)
 }
 
@@ -226,19 +225,18 @@ func IsValidSQLiteWALData(b []byte) bool {
 
 // IsWALModeEnabledSQLiteFile checks that the supplied path looks like a SQLite
 // with WAL mode enabled.
-func IsWALModeEnabledSQLiteFile(path string) bool {
+func IsWALModeEnabledSQLiteFile(path string) (bool, error) {
 	f, err := os.Open(path)
 	if err != nil {
-		return false
+		return false, err
 	}
 	defer f.Close()
 
 	b := make([]byte, 20)
-	if _, err := f.Read(b); err != nil {
-		return false
+	if _, err := io.ReadFull(f, b); err != nil {
+		return false, err
 	}
-
-	return IsWALModeEnabled(b)
+	return IsWALModeEnabled(b), nil
 }
 
 // IsWALModeEnabled checks that the supplied data looks like a SQLite data
@@ -249,19 +247,18 @@ func IsWALModeEnabled(b []byte) bool {
 
 // IsDELETEModeEnabledSQLiteFile checks that the supplied path looks like a SQLite
 // with DELETE mode enabled.
-func IsDELETEModeEnabledSQLiteFile(path string) bool {
+func IsDELETEModeEnabledSQLiteFile(path string) (bool, error) {
 	f, err := os.Open(path)
 	if err != nil {
-		return false
+		return false, err
 	}
 	defer f.Close()
 
 	b := make([]byte, 20)
-	if _, err := f.Read(b); err != nil {
-		return false
+	if _, err := io.ReadFull(f, b); err != nil {
+		return false, err
 	}
-
-	return IsDELETEModeEnabled(b)
+	return IsDELETEModeEnabled(b), nil
 }
 
 // IsDELETEModeEnabled checks that the supplied data looks like a SQLite file
@@ -272,7 +269,11 @@ func IsDELETEModeEnabled(b []byte) bool {
 
 // EnsureDeleteMode ensures the database at the given path is in DELETE mode.
 func EnsureDeleteMode(path string) error {
-	if IsDELETEModeEnabledSQLiteFile(path) {
+	d, err := IsDELETEModeEnabledSQLiteFile(path)
+	if err != nil {
+		return err
+	}
+	if d {
 		return nil
 	}
 	db, err := Open(path, false, false)
@@ -284,7 +285,11 @@ func EnsureDeleteMode(path string) error {
 
 // EnsureWALMode ensures the database at the given path is in WAL mode.
 func EnsureWALMode(path string) error {
-	if IsWALModeEnabledSQLiteFile(path) {
+	w, err := IsWALModeEnabledSQLiteFile(path)
+	if err != nil {
+		return err
+	}
+	if w {
 		return nil
 	}
 	db, err := Open(path, false, true)
@@ -298,7 +303,11 @@ func EnsureWALMode(path string) error {
 // given path. The database will be in WAL mode after the operation but no WAL-related
 // files will be present. Checkpointing a database in DELETE mode is an error.
 func CheckpointRemove(path string) error {
-	if IsDELETEModeEnabledSQLiteFile(path) {
+	d, err := IsDELETEModeEnabledSQLiteFile(path)
+	if err != nil {
+		return err
+	}
+	if d {
 		return fmt.Errorf("cannot checkpoint database in DELETE mode")
 	}
 	if err := EnsureDeleteMode(path); err != nil {

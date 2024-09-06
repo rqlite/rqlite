@@ -9,6 +9,7 @@ import (
 	"path/filepath"
 	"testing"
 
+	"github.com/rqlite/go-sqlite3"
 	"github.com/rqlite/rqlite/v8/random"
 )
 
@@ -119,8 +120,10 @@ func Test_IsValidSQLiteOnDisk(t *testing.T) {
 	path := mustTempFile()
 	defer os.Remove(path)
 
+	drvName := random.String()
+	sql.Register(drvName, &sqlite3.SQLiteDriver{})
 	dsn := fmt.Sprintf("file:%s", path)
-	db, err := sql.Open(defaultDriverName, dsn)
+	db, err := sql.Open(drvName, dsn)
 	if err != nil {
 		t.Fatalf("failed to create SQLite database: %s", err.Error())
 	}
@@ -195,8 +198,10 @@ func Test_IsWALModeEnabledOnDiskDELETE(t *testing.T) {
 	path := mustTempFile()
 	defer os.Remove(path)
 
+	drvName := random.String()
+	sql.Register(drvName, &sqlite3.SQLiteDriver{})
 	dsn := fmt.Sprintf("file:%s", path)
-	db, err := sql.Open(defaultDriverName, dsn)
+	db, err := sql.Open(drvName, dsn)
 	if err != nil {
 		t.Fatalf("failed to create SQLite database: %s", err.Error())
 	}
@@ -208,10 +213,18 @@ func Test_IsWALModeEnabledOnDiskDELETE(t *testing.T) {
 		t.Fatalf("failed to close database: %s", err.Error())
 	}
 
-	if !IsDELETEModeEnabledSQLiteFile(path) {
+	d, err := IsDELETEModeEnabledSQLiteFile(path)
+	if err != nil {
+		t.Fatalf("failed to check DELETE mode: %s", err.Error())
+	}
+	if !d {
 		t.Fatalf("DELETE file marked as non-DELETE")
 	}
-	if IsWALModeEnabledSQLiteFile(path) {
+	w, err := IsWALModeEnabledSQLiteFile(path)
+	if err != nil {
+		t.Fatalf("failed to check WAL mode: %s", err.Error())
+	}
+	if w {
 		t.Fatalf("non WAL file marked as WAL")
 	}
 
@@ -231,8 +244,10 @@ func Test_IsWALModeEnabledOnDiskWAL(t *testing.T) {
 	path := mustTempFile()
 	defer os.Remove(path)
 
+	drvName := random.String()
+	sql.Register(drvName, &sqlite3.SQLiteDriver{})
 	dsn := fmt.Sprintf("file:%s", path)
-	db, err := sql.Open(defaultDriverName, dsn)
+	db, err := sql.Open(drvName, dsn)
 	if err != nil {
 		t.Fatalf("failed to create SQLite database: %s", err.Error())
 	}
@@ -258,10 +273,18 @@ func Test_IsWALModeEnabledOnDiskWAL(t *testing.T) {
 		t.Fatalf("failed to close database: %s", err.Error())
 	}
 
-	if !IsWALModeEnabledSQLiteFile(path) {
+	w, err := IsWALModeEnabledSQLiteFile(path)
+	if err != nil {
+		t.Fatalf("failed to check WAL mode: %s", err.Error())
+	}
+	if !w {
 		t.Fatalf("WAL file marked as non-WAL")
 	}
-	if IsDELETEModeEnabledSQLiteFile(path) {
+	d, err := IsDELETEModeEnabledSQLiteFile(path)
+	if err != nil {
+		t.Fatalf("failed to check DELETE mode: %s", err.Error())
+	}
+	if d {
 		t.Fatalf("WAL file marked as DELETE")
 	}
 
@@ -286,14 +309,22 @@ func Test_EnsureDeleteMode(t *testing.T) {
 		t.Fatalf("failed to open database in WAL mode: %s", err.Error())
 	}
 	defer db.Close()
-	if !IsWALModeEnabledSQLiteFile(path) {
+	w, err := IsWALModeEnabledSQLiteFile(path)
+	if err != nil {
+		t.Fatalf("failed to check WAL mode: %s", err.Error())
+	}
+	if !w {
 		t.Fatalf("WAL file marked as non-WAL")
 	}
 
 	if err := EnsureDeleteMode(path); err != nil {
 		t.Fatalf("failed to ensure DELETE mode: %s", err.Error())
 	}
-	if !IsDELETEModeEnabledSQLiteFile(path) {
+	d, err := IsDELETEModeEnabledSQLiteFile(path)
+	if err != nil {
+		t.Fatalf("failed to check DELETE mode: %s", err.Error())
+	}
+	if !d {
 		t.Fatalf("database not marked as DELETE mode")
 	}
 }
@@ -463,11 +494,19 @@ func Test_WALReplayOK(t *testing.T) {
 		}
 
 		if replayIntoDelete {
-			if !IsDELETEModeEnabledSQLiteFile(replayDBPath) {
+			d, err := IsDELETEModeEnabledSQLiteFile(replayDBPath)
+			if err != nil {
+				t.Fatalf("failed to check DELETE mode: %s", err.Error())
+			}
+			if !d {
 				t.Fatal("replayed database not marked as DELETE mode")
 			}
 		} else {
-			if !IsWALModeEnabledSQLiteFile(replayDBPath) {
+			w, err := IsWALModeEnabledSQLiteFile(replayDBPath)
+			if err != nil {
+				t.Fatalf("failed to check WAL mode: %s", err.Error())
+			}
+			if !w {
 				t.Fatal("replayed database not marked as WAL mode")
 			}
 		}
