@@ -214,7 +214,7 @@ func (s *Sink) processSnapshotData() (retErr error) {
 			}
 			// Ensure any WAL files are processed and removed.
 			if err := db.CheckpointRemove(snapNewDB); err != nil {
-				return err
+				return fmt.Errorf("failed to checkpoint WAL file: %s", err.Error())
 			}
 		}
 	}

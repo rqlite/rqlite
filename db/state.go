@@ -275,14 +275,12 @@ func EnsureDeleteMode(path string) error {
 	if IsDELETEModeEnabledSQLiteFile(path) {
 		return nil
 	}
-	rwDSN := fmt.Sprintf("file:%s", path)
-	conn, err := sql.Open(defaultDriverName, rwDSN)
+	db, err := Open(path, false, false)
 	if err != nil {
-		return fmt.Errorf("open: %s", err.Error())
+		return err
 	}
-	defer conn.Close()
-	_, err = conn.Exec("PRAGMA journal_mode=DELETE")
-	return err
+	defer db.Close()
+	return nil
 }
 
 // EnsureWALMode ensures the database at the given path is in WAL mode.
@@ -290,14 +288,12 @@ func EnsureWALMode(path string) error {
 	if IsWALModeEnabledSQLiteFile(path) {
 		return nil
 	}
-	rwDSN := fmt.Sprintf("file:%s", path)
-	conn, err := sql.Open(defaultDriverName, rwDSN)
+	db, err := Open(path, false, true)
 	if err != nil {
-		return fmt.Errorf("open: %s", err.Error())
+		return err
 	}
-	defer conn.Close()
-	_, err = conn.Exec("PRAGMA journal_mode=WAL")
-	return err
+	defer db.Close()
+	return nil
 }
 
 // CheckpointRemove checkpoints any WAL files into the database file at the given

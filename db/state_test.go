@@ -277,7 +277,7 @@ func Test_IsWALModeEnabledOnDiskWAL(t *testing.T) {
 	}
 }
 
-func Test_EnsureDelete(t *testing.T) {
+func Test_EnsureDeleteMode(t *testing.T) {
 	path := mustTempFile()
 	defer os.Remove(path)
 
@@ -295,6 +295,27 @@ func Test_EnsureDelete(t *testing.T) {
 	}
 	if !IsDELETEModeEnabledSQLiteFile(path) {
 		t.Fatalf("database not marked as DELETE mode")
+	}
+}
+
+func Test_EnsureWALMode(t *testing.T) {
+	path := mustTempFile()
+	defer os.Remove(path)
+
+	db, err := Open(path, false, false)
+	if err != nil {
+		t.Fatalf("failed to open database in WAL mode: %s", err.Error())
+	}
+	defer db.Close()
+	if IsWALModeEnabledSQLiteFile(path) {
+		t.Fatalf("WAL file marked as WAL")
+	}
+
+	if err := EnsureWALMode(path); err != nil {
+		t.Fatalf("failed to ensure WAL mode: %s", err.Error())
+	}
+	if !IsWALModeEnabledSQLiteFile(path) {
+		t.Fatalf("database not marked as WAL mode")
 	}
 }
 
