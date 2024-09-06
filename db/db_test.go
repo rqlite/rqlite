@@ -1011,10 +1011,10 @@ func Test_DELETEDatabaseCreatedOKFromWAL(t *testing.T) {
 	defer deleteDB.Close()
 	d, err := IsDELETEModeEnabledSQLiteFile(walPath)
 	if err != nil {
-		t.Fatalf("SQLite file not marked as DELETE")
+		t.Fatalf("Failed to check DELETE mode: %s", err.Error())
 	}
-	if d {
-		t.Fatalf("SQLite file not marked as WAL")
+	if !d {
+		t.Fatalf("SQLite file not marked as DELETE")
 	}
 	rows, err := deleteDB.QueryStringStmt("SELECT * FROM foo")
 	if err != nil {
