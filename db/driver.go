@@ -19,7 +19,10 @@ const (
 type CnkOnCloseMode int
 
 const (
+	// CnkOnCloseModeEnabled enables checkpoint on close.
 	CnkOnCloseModeEnabled CnkOnCloseMode = iota
+
+	// CnkOnCloseModeDisabled disables checkpoint on close.
 	CnkOnCloseModeDisabled
 )
 
@@ -27,6 +30,7 @@ const (
 type Driver struct {
 	name       string
 	extensions []string
+	chkOnClose CnkOnCloseMode
 }
 
 var defRegisterOnce sync.Once
@@ -42,7 +46,8 @@ func DefaultDriver() *Driver {
 		})
 	})
 	return &Driver{
-		name: defaultDriverName,
+		name:       defaultDriverName,
+		chkOnClose: CnkOnCloseModeDisabled,
 	}
 }
 
@@ -59,7 +64,8 @@ func CheckpointDriver() *Driver {
 		})
 	})
 	return &Driver{
-		name: chkDriverName,
+		name:       chkDriverName,
+		chkOnClose: CnkOnCloseModeEnabled,
 	}
 }
 
@@ -98,6 +104,11 @@ func (d *Driver) ExtensionNames() []string {
 	}
 	sort.Strings(names)
 	return names
+}
+
+// CheckpointOnCloseMode returns the checkpoint on close mode.
+func (d *Driver) CheckpointOnCloseMode() CnkOnCloseMode {
+	return d.chkOnClose
 }
 
 func makeConnectHookFn(chkpt CnkOnCloseMode) func(conn *sqlite3.SQLiteConn) error {
