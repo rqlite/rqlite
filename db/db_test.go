@@ -968,7 +968,7 @@ func Test_WALDatabaseCreatedOKFromDELETE(t *testing.T) {
 	defer walDB.Close()
 	w, err := IsWALModeEnabledSQLiteFile(deletePath)
 	if err != nil {
-		t.Fatalf("SQLite file not marked as WAL")
+		t.Fatalf("failed to check WAL mode: %s", err.Error())
 	}
 	if !w {
 		t.Fatalf("SQLite file not marked as WAL")
