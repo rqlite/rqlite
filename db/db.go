@@ -15,6 +15,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/rqlite/go-sqlite3"
@@ -26,6 +27,8 @@ const (
 	SQLiteHeaderSize = 32
 	bkDelay          = 250
 	durToOpenLog     = 2 * time.Second
+	OptimizeDefault  = 0xFFFE
+	OptimizeAll      = 0x10002
 )
 
 const (
@@ -126,6 +129,9 @@ type DB struct {
 
 	rwDSN string // DSN used for read-write connection
 	roDSN string // DSN used for read-only connections
+
+	allOptimized   bool
+	allOptimizedMu sync.Mutex
 
 	logger *log.Logger
 }
@@ -460,6 +466,24 @@ func (db *DB) GetCheckpointing() (int, error) {
 		return 0, err
 	}
 	return rwN, err
+}
+
+// Optimize runs a default PRAGMA OPTIMIZE on the database. If it's the first
+// time this function is called on this database, it will run a full optimization.
+func (db *DB) Optimize() error {
+	db.allOptimizedMu.Lock()
+	defer db.allOptimizedMu.Unlock()
+	if !db.allOptimized {
+		db.allOptimized = true
+		return db.OptimizeWithMask(OptimizeAll)
+	}
+	return db.OptimizeWithMask(OptimizeDefault)
+}
+
+// OptimizeWithMask runs a PRAGMA OPTIMIZE on the database, using the given mask.
+func (db *DB) OptimizeWithMask(mask int) error {
+	_, err := db.rwDB.Exec(fmt.Sprintf("PRAGMA optimize=0x%x", mask))
+	return err
 }
 
 // Vacuum runs a VACUUM on the database.

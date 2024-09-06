@@ -163,6 +163,9 @@ type Config struct {
 	// AutoVacInterval sets the automatic VACUUM interval. Use 0s to disable.
 	AutoVacInterval time.Duration
 
+	// AutoOptimizeInterval sets the automatic optimization interval. Use 0s to disable.
+	AutoOptimizeInterval time.Duration
+
 	// RaftLogLevel sets the minimum logging level for the Raft subsystem.
 	RaftLogLevel string
 
@@ -539,6 +542,7 @@ func ParseFlags(name, desc string, build *BuildInfo) (*Config, error) {
 	fs.BoolVar(&config.FKConstraints, "fk", false, "Enable SQLite foreign key constraints")
 	fs.BoolVar(&showVersion, "version", false, "Show version information and exit")
 	fs.DurationVar(&config.AutoVacInterval, "auto-vacuum-int", 0, "Period between automatic VACUUMs. It not set, not enabled")
+	fs.DurationVar(&config.AutoOptimizeInterval, "auto-optimize-int", mustParseDuration("24h"), `Period between automatic 'PRAGMA optimize'. Set to 0h to disable`)
 	fs.BoolVar(&config.RaftNonVoter, "raft-non-voter", false, "Configure as non-voting node")
 	fs.DurationVar(&config.RaftHeartbeatTimeout, "raft-timeout", time.Second, "Raft heartbeat timeout")
 	fs.DurationVar(&config.RaftElectionTimeout, "raft-election-timeout", time.Second, "Raft election timeout")
@@ -631,4 +635,12 @@ func isDir(path string) bool {
 		return false
 	}
 	return fi.IsDir()
+}
+
+func mustParseDuration(d string) time.Duration {
+	td, err := time.ParseDuration(d)
+	if err != nil {
+		panic(err)
+	}
+	return td
 }

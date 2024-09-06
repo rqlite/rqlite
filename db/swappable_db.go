@@ -140,6 +140,13 @@ func (s *SwappableDB) Checkpoint(mode CheckpointMode) error {
 	return s.db.Checkpoint(mode)
 }
 
+// Optimize calls Optimize on the underlying database.
+func (s *SwappableDB) Optimize() error {
+	s.dbMu.RLock()
+	defer s.dbMu.RUnlock()
+	return s.db.Optimize()
+}
+
 // SetSynchronousMode calls SetSynchronousMode on the underlying database.
 func (s *SwappableDB) SetSynchronousMode(mode SynchronousMode) error {
 	s.dbMu.RLock()

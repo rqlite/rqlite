@@ -500,6 +500,107 @@ func Test_DBVacuumInto(t *testing.T) {
 	}
 }
 
+func Test_DBOptimize(t *testing.T) {
+	db, path := mustCreateOnDiskDatabaseWAL()
+	defer db.Close()
+	defer os.Remove(path)
+
+	// Create the table, index, and write a bunch of records.
+	r, err := db.ExecuteStringStmt("CREATE TABLE foo (id INTEGER NOT NULL PRIMARY KEY, first TEXT, last TEXT)")
+	if err != nil {
+		t.Fatalf("failed to create table: %s", err.Error())
+	}
+	if exp, got := `[{}]`, asJSON(r); exp != got {
+		t.Fatalf("unexpected results for query, expected %s, got %s", exp, got)
+	}
+	r, err = db.ExecuteStringStmt("CREATE INDEX idx_first ON foo(first)")
+	if err != nil {
+		t.Fatalf("failed to create index: %s", err.Error())
+	}
+	if exp, got := `[{}]`, asJSON(r); exp != got {
+		t.Fatalf("unexpected results for query, expected %s, got %s", exp, got)
+	}
+	for i := 0; i < 100; i++ {
+		_, err = db.ExecuteStringStmt(`INSERT INTO foo(first) VALUES("alice")`)
+		if err != nil {
+			t.Fatalf("error executing insertion into table: %s", err.Error())
+		}
+	}
+	q, err := db.QueryStringStmt("SELECT COUNT(*) FROM foo")
+	if err != nil {
+		t.Fatalf("failed to query empty table: %s", err.Error())
+	}
+	if exp, got := `[{"columns":["COUNT(*)"],"types":["integer"],"values":[[100]]}]`, asJSON(q); exp != got {
+		t.Fatalf("unexpected results for query, expected %s, got %s", exp, got)
+	}
+
+	// Stats shouldn't exist before an optimize.
+	q, err = db.QueryStringStmt("SELECT * FROM sqlite_stat1")
+	if err != nil {
+		t.Fatalf("failed to query empty table: %s", err.Error())
+	}
+	if exp, got := `[{"error":"no such table: sqlite_stat1"}]`, asJSON(q); exp != got {
+		t.Fatalf("unexpected results for query, expected %s, got %s", exp, got)
+	}
+
+	// Get file contents before an optimize.
+	preDBBytes := mustReadBytes(db.Path())
+	preWALBytes := mustReadBytes(db.WALPath())
+
+	// Optimize and then confirm stats table is created.
+	if err := db.Optimize(); err != nil {
+		t.Fatalf("failed to optimize database: %s", err.Error())
+	}
+	q, err = db.QueryStringStmt("SELECT * FROM sqlite_stat1")
+	if err != nil {
+		t.Fatalf("failed to query empty table: %s", err.Error())
+	}
+	if exp, got := `[{"columns":["tbl","idx","stat"],"types":["text","text","text"],"values":[["foo","idx_first","100 100"]]}]`, asJSON(q); exp != got {
+		t.Fatalf("unexpected results for query, expected %s, got %s", exp, got)
+	}
+
+	// Confirm the database file is unchanged, but the WAL file is i.e. that
+	// stats are stored in the WAL like any other write operation.
+	if !bytes.Equal(preDBBytes, mustReadBytes(db.Path())) {
+		t.Fatalf("db file should be unchanged after optimize")
+	}
+	if bytes.Equal(preWALBytes, mustReadBytes(db.WALPath())) {
+		t.Fatalf("wal file should be changed after optimize")
+	}
+
+	// Do another optimize since the function operates differently on subsequent calls.
+	r, err = db.ExecuteStringStmt("CREATE INDEX idx_last ON foo(last)")
+	if err != nil {
+		t.Fatalf("failed to create index: %s", err.Error())
+	}
+	if exp, got := `[{"last_insert_id":100,"rows_affected":1}]`, asJSON(r); exp != got { // 100 because of the 100 records already in the table.
+		t.Fatalf("unexpected results for query, expected %s, got %s", exp, got)
+	}
+	for i := 0; i < 100; i++ {
+		_, err = db.ExecuteStringStmt(`INSERT INTO foo(last) VALUES("bob")`)
+		if err != nil {
+			t.Fatalf("error executing insertion into table: %s", err.Error())
+		}
+	}
+	q, err = db.QueryStringStmt("SELECT COUNT(*) FROM foo")
+	if err != nil {
+		t.Fatalf("failed to query empty table: %s", err.Error())
+	}
+	if exp, got := `[{"columns":["COUNT(*)"],"types":["integer"],"values":[[200]]}]`, asJSON(q); exp != got {
+		t.Fatalf("unexpected results for query, expected %s, got %s", exp, got)
+	}
+	if err := db.Optimize(); err != nil {
+		t.Fatalf("failed to optimize database: %s", err.Error())
+	}
+	q, err = db.QueryStringStmt("SELECT * FROM sqlite_stat1")
+	if err != nil {
+		t.Fatalf("failed to query empty table: %s", err.Error())
+	}
+	if exp, got := `[{"columns":["tbl","idx","stat"],"types":["text","text","text"],"values":[["foo","idx_last","200 100"],["foo","idx_first","200 100"]]}]`, asJSON(q); exp != got {
+		t.Fatalf("unexpected results for query, expected %s, got %s", exp, got)
+	}
+}
+
 // Test_TableCreationFK ensures foreign key constraints work
 func Test_TableCreationFK(t *testing.T) {
 	createTableFoo := "CREATE TABLE foo (id INTEGER NOT NULL PRIMARY KEY, name TEXT)"
