@@ -338,14 +338,23 @@ func Test_EnsureWALMode(t *testing.T) {
 		t.Fatalf("failed to open database in WAL mode: %s", err.Error())
 	}
 	defer db.Close()
-	if IsWALModeEnabledSQLiteFile(path) {
-		t.Fatalf("WAL file marked as WAL")
+
+	w, err := IsWALModeEnabledSQLiteFile(path)
+	if err != nil {
+		t.Fatalf("failed to check WAL mode: %s", err.Error())
+	}
+	if w {
+		t.Fatalf("DELETE mode file not marked as DELETE")
 	}
 
 	if err := EnsureWALMode(path); err != nil {
 		t.Fatalf("failed to ensure WAL mode: %s", err.Error())
 	}
-	if !IsWALModeEnabledSQLiteFile(path) {
+	w, err = IsWALModeEnabledSQLiteFile(path)
+	if err != nil {
+		t.Fatalf("failed to check WAL mode: %s", err.Error())
+	}
+	if !w {
 		t.Fatalf("database not marked as WAL mode")
 	}
 }
@@ -397,7 +406,11 @@ func Test_CheckpointRemove(t *testing.T) {
 	if err := CheckpointRemove(path); err != nil {
 		t.Fatalf("failed to checkpoint database in WAL mode: %s", err.Error())
 	}
-	if !IsWALModeEnabledSQLiteFile(path) {
+	w, err := IsWALModeEnabledSQLiteFile(path)
+	if err != nil {
+		t.Fatalf("failed to check WAL mode: %s", err.Error())
+	}
+	if !w {
 		t.Fatalf("database not marked as WAL mode")
 	}
 	if fileExists(path + "-wal") {
