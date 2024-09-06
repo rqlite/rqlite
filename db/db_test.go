@@ -31,6 +31,32 @@ func Test_OpenNonExistentDatabase(t *testing.T) {
 	}
 }
 
+func Test_OpenEmptyInDELETEMode(t *testing.T) {
+	path := mustTempPath()
+	defer os.Remove(path)
+	db, err := Open(path, false, false)
+	if err != nil {
+		t.Fatalf("error opening database")
+	}
+	defer db.Close()
+	if db.WALEnabled() {
+		t.Fatalf("WAL mode enabled")
+	}
+}
+
+func Test_OpenEmptyInWALMode(t *testing.T) {
+	path := mustTempPath()
+	defer os.Remove(path)
+	db, err := Open(path, false, true)
+	if err != nil {
+		t.Fatalf("error opening database")
+	}
+	defer db.Close()
+	if !db.WALEnabled() {
+		t.Fatalf("WAL mode enabled")
+	}
+}
+
 func Test_WALRemovedOnClose(t *testing.T) {
 	path := mustTempPath()
 	defer os.Remove(path)
