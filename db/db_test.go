@@ -31,6 +31,32 @@ func Test_OpenNonExistentDatabase(t *testing.T) {
 	}
 }
 
+func Test_OpenEmptyInDELETEMode(t *testing.T) {
+	path := mustTempPath()
+	defer os.Remove(path)
+	db, err := Open(path, false, false)
+	if err != nil {
+		t.Fatalf("error opening database")
+	}
+	defer db.Close()
+	if db.WALEnabled() {
+		t.Fatalf("WAL mode enabled")
+	}
+}
+
+func Test_OpenEmptyInWALMode(t *testing.T) {
+	path := mustTempPath()
+	defer os.Remove(path)
+	db, err := Open(path, false, true)
+	if err != nil {
+		t.Fatalf("error opening database")
+	}
+	defer db.Close()
+	if !db.WALEnabled() {
+		t.Fatalf("WAL mode enabled")
+	}
+}
+
 func Test_WALRemovedOnClose(t *testing.T) {
 	path := mustTempPath()
 	defer os.Remove(path)
@@ -889,7 +915,11 @@ func Test_WALDatabaseCreatedOK(t *testing.T) {
 		t.Fatalf("failed to create table: %s", err.Error())
 	}
 
-	if !IsWALModeEnabledSQLiteFile(path) {
+	w, err := IsWALModeEnabledSQLiteFile(path)
+	if err != nil {
+		t.Fatalf("failed to check WAL mode: %s", err.Error())
+	}
+	if !w {
 		t.Fatalf("SQLite file not marked as WAL")
 	}
 
@@ -936,7 +966,11 @@ func Test_WALDatabaseCreatedOKFromDELETE(t *testing.T) {
 		t.Fatalf("failed to open database in WAL mode: %s", err.Error())
 	}
 	defer walDB.Close()
-	if !IsWALModeEnabledSQLiteFile(deletePath) {
+	w, err := IsWALModeEnabledSQLiteFile(deletePath)
+	if err != nil {
+		t.Fatalf("failed to check WAL mode: %s", err.Error())
+	}
+	if !w {
 		t.Fatalf("SQLite file not marked as WAL")
 	}
 	rows, err := walDB.QueryStringStmt("SELECT * FROM foo")
@@ -975,8 +1009,12 @@ func Test_DELETEDatabaseCreatedOKFromWAL(t *testing.T) {
 		t.Fatalf("failed to open database in DELETE mode: %s", err2.Error())
 	}
 	defer deleteDB.Close()
-	if !IsDELETEModeEnabledSQLiteFile(walPath) {
-		t.Fatalf("SQLite file not marked as WAL")
+	d, err := IsDELETEModeEnabledSQLiteFile(walPath)
+	if err != nil {
+		t.Fatalf("Failed to check DELETE mode: %s", err.Error())
+	}
+	if !d {
+		t.Fatalf("SQLite file not marked as DELETE")
 	}
 	rows, err := deleteDB.QueryStringStmt("SELECT * FROM foo")
 	if err != nil {
