@@ -339,18 +339,15 @@ func Test_EnsureWALMode(t *testing.T) {
 	}
 	defer db.Close()
 
-	w, err := IsWALModeEnabledSQLiteFile(path)
-	if err != nil {
-		t.Fatalf("failed to check WAL mode: %s", err.Error())
-	}
-	if w {
-		t.Fatalf("DELETE mode file not marked as DELETE")
+	_, err = IsWALModeEnabledSQLiteFile(path)
+	if err == nil {
+		t.Fatalf("expect error when checking WAL mode on zero-length file")
 	}
 
 	if err := EnsureWALMode(path); err != nil {
 		t.Fatalf("failed to ensure WAL mode: %s", err.Error())
 	}
-	w, err = IsWALModeEnabledSQLiteFile(path)
+	w, err := IsWALModeEnabledSQLiteFile(path)
 	if err != nil {
 		t.Fatalf("failed to check WAL mode: %s", err.Error())
 	}

@@ -269,13 +269,6 @@ func IsDELETEModeEnabled(b []byte) bool {
 
 // EnsureDeleteMode ensures the database at the given path is in DELETE mode.
 func EnsureDeleteMode(path string) error {
-	d, err := IsDELETEModeEnabledSQLiteFile(path)
-	if err != nil {
-		return err
-	}
-	if d {
-		return nil
-	}
 	db, err := Open(path, false, false)
 	if err != nil {
 		return err
@@ -285,13 +278,6 @@ func EnsureDeleteMode(path string) error {
 
 // EnsureWALMode ensures the database at the given path is in WAL mode.
 func EnsureWALMode(path string) error {
-	w, err := IsWALModeEnabledSQLiteFile(path)
-	if err != nil {
-		return err
-	}
-	if w {
-		return nil
-	}
 	db, err := Open(path, false, true)
 	if err != nil {
 		return err
