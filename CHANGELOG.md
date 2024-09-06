@@ -1,3 +1,7 @@
+## v8.30.1 (unreleased)
+### Implementation changes and bug fixes
+- [PR #1877](https://github.com/rqlite/rqlite/pull/1875): Move to no-checkpoint-on-database-close.
+
 ## v8.30.0 (September 5th 2024)
 ### New features
 - [PR #1879](https://github.com/rqlite/rqlite/pull/1879): Add support for automatic [`PRAGMA optimize`](https://www.sqlite.org/pragma.html#pragma_optimize) of the SQLite database. Fixes issue [#1831](https://github.com/rqlite/rqlite/issues/1831).
@@ -6,7 +10,6 @@
 ### Implementation changes and bug fixes
 - [PR #1878](https://github.com/rqlite/rqlite/pull/1878): Upgrade SQLite to 3.46.1.
 - [PR #1875](https://github.com/rqlite/rqlite/pull/1875): Add `UPSERT` unit test.
-- [PR #1877](https://github.com/rqlite/rqlite/pull/1875): Move to no-checkpoint-on-database-close.
 
 ## v8.29.4 (August 31st 2024)
 ### Implementation changes and bug fixes
