@@ -295,9 +295,12 @@ func EnsureWALMode(path string) error {
 }
 
 // CheckpointRemove checkpoints any WAL files into the database file at the given
-// given path. The database will be in WAL mode after the operation, and all WAL-related
-// files will have been removed.
+// given path. The database will be in WAL mode after the operation but no WAL-related
+// files will be present. Checkpointing a database in DELETE mode is an error.
 func CheckpointRemove(path string) error {
+	if IsDELETEModeEnabledSQLiteFile(path) {
+		return fmt.Errorf("cannot checkpoint database in DELETE mode")
+	}
 	if err := EnsureDeleteMode(path); err != nil {
 		return err
 	}
@@ -360,7 +363,8 @@ func CheckIntegrity(path string, full bool) (bool, error) {
 // in the order given by the slice. The supplied WAL files must be in the same
 // directory as the database file and are deleted as a result of the replay operation.
 // If deleteMode is true, the database file will be in DELETE mode after the replay
-// operation, otherwise it will be in WAL mode.
+// operation, otherwise it will be in WAL mode. In either case no WAL-related files
+// will be present.
 func ReplayWAL(path string, wals []string, deleteMode bool) error {
 	for _, wal := range wals {
 		if filepath.Dir(wal) != filepath.Dir(path) {
@@ -379,15 +383,9 @@ func ReplayWAL(path string, wals []string, deleteMode bool) error {
 		if err := os.Rename(wal, path+"-wal"); err != nil {
 			return fmt.Errorf("rename WAL %s: %s", wal, err.Error())
 		}
-		db, err := Open(path, false, true)
-		if err != nil {
-			return err
-		}
-		if err := db.Checkpoint(CheckpointTruncate); err != nil {
+
+		if err := CheckpointRemove(path); err != nil {
 			return fmt.Errorf("checkpoint WAL %s: %s", wal, err.Error())
-		}
-		if err := db.Close(); err != nil {
-			return err
 		}
 	}
 

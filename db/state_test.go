@@ -319,6 +319,73 @@ func Test_EnsureWALMode(t *testing.T) {
 	}
 }
 
+func Test_CheckpointRemove(t *testing.T) {
+	// Non-WAL-mode database.
+	deleteModePath := mustTempFile()
+	defer os.Remove(deleteModePath)
+	dbDeleteMode, err := Open(deleteModePath, false, false)
+	if err != nil {
+		t.Fatalf("failed to open database in DELETE mode: %s", err.Error())
+	}
+	dbDeleteMode.Close()
+	if err := CheckpointRemove(deleteModePath); err == nil {
+		t.Fatalf("checkpointing non-WAL-mode database should fail")
+	}
+
+	// Empty WAL-mode database.
+	emptyPath := mustTempFile()
+	defer os.Remove(emptyPath)
+	dbEmpty, err := Open(emptyPath, false, true)
+	if err != nil {
+		t.Fatalf("failed to open database in WAL mode: %s", err.Error())
+	}
+	dbEmpty.Close()
+	if err := CheckpointRemove(emptyPath); err != nil {
+		t.Fatalf("failed to checkpoint empty database in WAL mode: %s", err.Error())
+	}
+
+	// WAL-mode database with WAL files.
+	path := mustTempFile()
+	defer os.Remove(path)
+	db, err := Open(path, false, true)
+	if err != nil {
+		t.Fatalf("failed to open database in WAL mode: %s", err.Error())
+	}
+	defer db.Close()
+	_, err = db.ExecuteStringStmt("CREATE TABLE foo (name TEXT)")
+	if err != nil {
+		t.Fatalf("failed to create table: %s", err.Error())
+	}
+	_, err = db.ExecuteStringStmt(`INSERT INTO foo(name) VALUES("fiona")`)
+	if err != nil {
+		t.Fatalf("error inserting record into table: %s", err.Error())
+	}
+	if err := db.Close(); err != nil {
+		t.Fatalf("failed to close database: %s", err.Error())
+	}
+	if err := CheckpointRemove(path); err != nil {
+		t.Fatalf("failed to checkpoint database in WAL mode: %s", err.Error())
+	}
+	if !IsWALModeEnabledSQLiteFile(path) {
+		t.Fatalf("database not marked as WAL mode")
+	}
+	if fileExists(path + "-wal") {
+		t.Fatalf("WAL file still present")
+	}
+	db, err = Open(path, false, true)
+	if err != nil {
+		t.Fatalf("failed to open database in WAL mode: %s", err.Error())
+	}
+	defer db.Close()
+	rows, err := db.QueryStringStmt("SELECT * FROM foo")
+	if err != nil {
+		t.Fatalf("failed to query table: %s", err.Error())
+	}
+	if exp, got := `[{"columns":["name"],"types":["text"],"values":[["fiona"]]}]`, asJSON(rows); exp != got {
+		t.Fatalf("unexpected results for query, expected %s, got %s", exp, got)
+	}
+}
+
 // Test_WALReplayOK tests that WAL files are replayed as expected.
 func Test_WALReplayOK(t *testing.T) {
 	testFunc := func(t *testing.T, replayIntoDelete bool) {
