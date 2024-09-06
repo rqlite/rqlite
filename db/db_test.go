@@ -915,7 +915,11 @@ func Test_WALDatabaseCreatedOK(t *testing.T) {
 		t.Fatalf("failed to create table: %s", err.Error())
 	}
 
-	if !IsWALModeEnabledSQLiteFile(path) {
+	w, err := IsWALModeEnabledSQLiteFile(path)
+	if err != nil {
+		t.Fatalf("failed to check WAL mode: %s", err.Error())
+	}
+	if !w {
 		t.Fatalf("SQLite file not marked as WAL")
 	}
 
@@ -962,7 +966,11 @@ func Test_WALDatabaseCreatedOKFromDELETE(t *testing.T) {
 		t.Fatalf("failed to open database in WAL mode: %s", err.Error())
 	}
 	defer walDB.Close()
-	if !IsWALModeEnabledSQLiteFile(deletePath) {
+	w, err := IsWALModeEnabledSQLiteFile(deletePath)
+	if err != nil {
+		t.Fatalf("SQLite file not marked as WAL")
+	}
+	if !w {
 		t.Fatalf("SQLite file not marked as WAL")
 	}
 	rows, err := walDB.QueryStringStmt("SELECT * FROM foo")
@@ -1001,7 +1009,11 @@ func Test_DELETEDatabaseCreatedOKFromWAL(t *testing.T) {
 		t.Fatalf("failed to open database in DELETE mode: %s", err2.Error())
 	}
 	defer deleteDB.Close()
-	if !IsDELETEModeEnabledSQLiteFile(walPath) {
+	d, err := IsDELETEModeEnabledSQLiteFile(walPath)
+	if err != nil {
+		t.Fatalf("SQLite file not marked as DELETE")
+	}
+	if d {
 		t.Fatalf("SQLite file not marked as WAL")
 	}
 	rows, err := deleteDB.QueryStringStmt("SELECT * FROM foo")
