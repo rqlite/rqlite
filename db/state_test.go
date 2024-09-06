@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"testing"
 
+	"github.com/rqlite/go-sqlite3"
 	"github.com/rqlite/rqlite/v8/random"
 )
 
@@ -117,8 +118,10 @@ func Test_IsValidSQLiteOnDisk(t *testing.T) {
 	path := mustTempFile()
 	defer os.Remove(path)
 
+	drvName := random.String()
+	sql.Register(drvName, &sqlite3.SQLiteDriver{})
 	dsn := fmt.Sprintf("file:%s", path)
-	db, err := sql.Open(defaultDriverName, dsn)
+	db, err := sql.Open(drvName, dsn)
 	if err != nil {
 		t.Fatalf("failed to create SQLite database: %s", err.Error())
 	}
@@ -147,8 +150,10 @@ func Test_IsWALModeEnabledOnDiskDELETE(t *testing.T) {
 	path := mustTempFile()
 	defer os.Remove(path)
 
+	drvName := random.String()
+	sql.Register(drvName, &sqlite3.SQLiteDriver{})
 	dsn := fmt.Sprintf("file:%s", path)
-	db, err := sql.Open(defaultDriverName, dsn)
+	db, err := sql.Open(drvName, dsn)
 	if err != nil {
 		t.Fatalf("failed to create SQLite database: %s", err.Error())
 	}
@@ -183,8 +188,10 @@ func Test_IsWALModeEnabledOnDiskWAL(t *testing.T) {
 	path := mustTempFile()
 	defer os.Remove(path)
 
+	drvName := random.String()
+	sql.Register(drvName, &sqlite3.SQLiteDriver{})
 	dsn := fmt.Sprintf("file:%s", path)
-	db, err := sql.Open(defaultDriverName, dsn)
+	db, err := sql.Open(drvName, dsn)
 	if err != nil {
 		t.Fatalf("failed to create SQLite database: %s", err.Error())
 	}

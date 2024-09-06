@@ -5,6 +5,7 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"io"
 	"net/url"
 	"os"
 	"path/filepath"
@@ -178,10 +179,9 @@ func IsValidSQLiteWALFile(path string) bool {
 	defer f.Close()
 
 	b := make([]byte, 4)
-	if _, err := f.Read(b); err != nil {
+	if _, err := io.ReadFull(f, b); err != nil {
 		return false
 	}
-
 	return IsValidSQLiteWALData(b)
 }
 
@@ -199,7 +199,8 @@ func IsValidSQLiteWALData(b []byte) bool {
 }
 
 // IsWALModeEnabledSQLiteFile checks that the supplied path looks like a SQLite
-// with WAL mode enabled.
+// with WAL mode enabled. It's important to check that the file is a valid SQLite
+// file before calling this function.
 func IsWALModeEnabledSQLiteFile(path string) bool {
 	f, err := os.Open(path)
 	if err != nil {
@@ -208,10 +209,9 @@ func IsWALModeEnabledSQLiteFile(path string) bool {
 	defer f.Close()
 
 	b := make([]byte, 20)
-	if _, err := f.Read(b); err != nil {
+	if _, err := io.ReadFull(f, b); err != nil {
 		return false
 	}
-
 	return IsWALModeEnabled(b)
 }
 
@@ -222,7 +222,8 @@ func IsWALModeEnabled(b []byte) bool {
 }
 
 // IsDELETEModeEnabledSQLiteFile checks that the supplied path looks like a SQLite
-// with DELETE mode enabled.
+// with DELETE mode enabled. It's important to check that the file is a valid SQLite
+// file before calling this function.
 func IsDELETEModeEnabledSQLiteFile(path string) bool {
 	f, err := os.Open(path)
 	if err != nil {
@@ -231,10 +232,9 @@ func IsDELETEModeEnabledSQLiteFile(path string) bool {
 	defer f.Close()
 
 	b := make([]byte, 20)
-	if _, err := f.Read(b); err != nil {
+	if _, err := io.ReadFull(f, b); err != nil {
 		return false
 	}
-
 	return IsDELETEModeEnabled(b)
 }
 
