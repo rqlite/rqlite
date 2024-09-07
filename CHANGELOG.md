@@ -1,6 +1,6 @@
 ## v8.30.1 (unreleased)
 ### Implementation changes and bug fixes
-- [PR #1877](https://github.com/rqlite/rqlite/pull/1875): Move to no-checkpoint-on-database-close.
+- [PR #1877](https://github.com/rqlite/rqlite/pull/1877): Move to no-checkpoint-on-database-close.
 - [PR #1880](https://github.com/rqlite/rqlite/pull/1880): Improve DB mode checks.
 - [PR #1881](https://github.com/rqlite/rqlite/pull/1881): Add GZIP-related utils.
 
