@@ -81,8 +81,92 @@ func Test_WALRemovedOnClose(t *testing.T) {
 		t.Fatalf("error closing database: %s", err.Error())
 	}
 
-	if fileExists(db.WALPath()) {
-		t.Fatalf("WAL file not removed after closing the database")
+	if !fileExists(db.WALPath()) {
+		t.Fatalf("WAL file removed after closing the database")
+	}
+}
+
+// Test_WALNotCheckpointedOnClose tests that a) the database isn't checkpointed
+// on close, and that removing the WAL file doesn't affect the main database --
+// and that it can be opened. This is about testing that we can handle a hard
+// crash, where WAL files are left behind and we want to discard them.
+func Test_WALNotCheckpointedOnClose(t *testing.T) {
+	path := mustTempPath()
+	defer os.Remove(path)
+	db, err := Open(path, false, true)
+	if err != nil {
+		t.Fatalf("error opening nonexistent database")
+	}
+	defer db.Close()
+	if !db.WALEnabled() {
+		t.Fatalf("WAL mode not enabled")
+	}
+
+	_, err = db.ExecuteStringStmt("CREATE TABLE foo (id INTEGER NOT NULL PRIMARY KEY, name TEXT)")
+	if err != nil {
+		t.Fatalf("failed to create table: %s", err.Error())
+	}
+	walPath := db.WALPath()
+	if !fileExists(walPath) {
+		t.Fatalf("WAL file does not exist after creating a table")
+	}
+
+	// Checkpoint to table exists in main database file.
+	if err := db.Checkpoint(CheckpointTruncate); err != nil {
+		t.Fatalf("failed to checkpoint database: %s", err.Error())
+	}
+
+	// Now, insert a record to bring back a non-zero-length WAL.
+	_, err = db.ExecuteStringStmt(`INSERT INTO foo(name) VALUES("fiona")`)
+	if err != nil {
+		t.Fatalf("error executing insertion into table: %s", err.Error())
+	}
+	if mustFileSize(walPath) == 0 {
+		t.Fatalf("WAL file size is zero after insertion")
+	}
+
+	// Ensure that the main SQLite file is not changed at close-time.
+	bytesPre := mustReadBytes(path)
+	if err := db.Close(); err != nil {
+		t.Fatalf("error closing database: %s", err.Error())
+	}
+	bytesPost := mustReadBytes(path)
+	if !bytes.Equal(bytesPre, bytesPost) {
+		t.Fatalf("database changed after closing")
+	}
+
+	if !fileExists(db.WALPath()) {
+		t.Fatalf("WAL file removed after closing the database")
+	}
+
+	// Remove the WAL file, and confirm we now have an empty table in
+	// the database.
+	if err := os.Remove(walPath); err != nil {
+		t.Fatalf("failed to remove WAL file: %s", err.Error())
+	}
+
+	db, err = Open(path, false, true)
+	if err != nil {
+		t.Fatalf("error opening database post WAL deletion")
+	}
+	defer db.Close()
+
+	// Query the count in the table, should be zero.
+	q, err := db.QueryStringStmt("SELECT COUNT(*) FROM foo")
+	if err != nil {
+		t.Fatalf("failed to query empty table: %s", err.Error())
+	}
+	if exp, got := `[{"columns":["COUNT(*)"],"types":["integer"],"values":[[0]]}]`, asJSON(q); exp != got {
+		t.Fatalf("unexpected results for query, expected %s, got %s", exp, got)
+	}
+
+	// Finally, run an integrity check on the database.
+	r, err := db.IntegrityCheck(true)
+	if err != nil {
+		t.Fatalf("failed to run integrity check on database: %s", err.Error())
+	}
+	if exp, got := `[{"columns":["integrity_check"],"types":["text"],"values":[["ok"]]}]`, asJSON(r); exp != got {
+		t.Fatalf("unexpected results for integrity check of dst, expected %s, got %s", exp, got)
 	}
 }
 

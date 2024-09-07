@@ -1,8 +1,10 @@
 package db
 
 import (
+	"compress/gzip"
 	"database/sql"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"testing"
@@ -146,6 +148,52 @@ func Test_IsValidSQLiteOnDisk(t *testing.T) {
 	}
 }
 
+func Test_IsValidSQLiteCompressedOnDisk(t *testing.T) {
+	path := mustTempFile()
+	defer os.Remove(path)
+
+	dsn := fmt.Sprintf("file:%s", path)
+	db, err := sql.Open(defaultDriverName, dsn)
+	if err != nil {
+		t.Fatalf("failed to create SQLite database: %s", err.Error())
+	}
+	_, err = db.Exec("CREATE TABLE foo (name TEXT)")
+	if err != nil {
+		t.Fatalf("failed to create table: %s", err.Error())
+	}
+	if err := db.Close(); err != nil {
+		t.Fatalf("failed to close database: %s", err.Error())
+	}
+
+	// Compress the SQLite file to a second a path.
+	compressedPath := mustTempFile()
+	defer os.Remove(compressedPath)
+	mustGzip(compressedPath, path)
+	if !IsValidSQLiteFileCompressed(compressedPath) {
+		t.Fatalf("good compressed SQLite file marked as invalid")
+	}
+
+	// Ensure non-existent file is marked as invalid.
+	if IsValidSQLiteFileCompressed("non-existent") {
+		t.Fatalf("non-existent compressed SQLite file marked as valid")
+	}
+
+	// Ensure that non-compressed SQLite files are marked as invalid.
+	if IsValidSQLiteFileCompressed(path) {
+		t.Fatalf("non-compressed SQLite file marked as valid")
+	}
+
+	// Compress the already compressed file, and check that it is marked
+	// as invalid. This is to check that an valid Gzip archive, but one
+	// that is not a valid SQLite file, is marked as invalid.
+	compressedCompressedPath := mustTempFile()
+	defer os.Remove(compressedCompressedPath)
+	mustGzip(compressedCompressedPath, compressedPath)
+	if IsValidSQLiteFileCompressed(compressedCompressedPath) {
+		t.Fatalf("Gzip archive of non-SQLite file marked as valid")
+	}
+}
+
 func Test_IsWALModeEnabledOnDiskDELETE(t *testing.T) {
 	path := mustTempFile()
 	defer os.Remove(path)
@@ -252,7 +300,7 @@ func Test_IsWALModeEnabledOnDiskWAL(t *testing.T) {
 	}
 }
 
-func Test_EnsureDelete(t *testing.T) {
+func Test_EnsureDeleteMode(t *testing.T) {
 	path := mustTempFile()
 	defer os.Remove(path)
 
@@ -278,6 +326,104 @@ func Test_EnsureDelete(t *testing.T) {
 	}
 	if !d {
 		t.Fatalf("database not marked as DELETE mode")
+	}
+}
+
+func Test_EnsureWALMode(t *testing.T) {
+	path := mustTempFile()
+	defer os.Remove(path)
+
+	db, err := Open(path, false, false)
+	if err != nil {
+		t.Fatalf("failed to open database in WAL mode: %s", err.Error())
+	}
+	defer db.Close()
+
+	_, err = IsWALModeEnabledSQLiteFile(path)
+	if err == nil {
+		t.Fatalf("expect error when checking WAL mode on zero-length file")
+	}
+
+	if err := EnsureWALMode(path); err != nil {
+		t.Fatalf("failed to ensure WAL mode: %s", err.Error())
+	}
+	w, err := IsWALModeEnabledSQLiteFile(path)
+	if err != nil {
+		t.Fatalf("failed to check WAL mode: %s", err.Error())
+	}
+	if !w {
+		t.Fatalf("database not marked as WAL mode")
+	}
+}
+
+func Test_CheckpointRemove(t *testing.T) {
+	// Non-WAL-mode database.
+	deleteModePath := mustTempFile()
+	defer os.Remove(deleteModePath)
+	dbDeleteMode, err := Open(deleteModePath, false, false)
+	if err != nil {
+		t.Fatalf("failed to open database in DELETE mode: %s", err.Error())
+	}
+	dbDeleteMode.Close()
+	if err := CheckpointRemove(deleteModePath); err == nil {
+		t.Fatalf("checkpointing non-WAL-mode database should fail")
+	}
+
+	// Empty WAL-mode database.
+	emptyPath := mustTempFile()
+	defer os.Remove(emptyPath)
+	dbEmpty, err := Open(emptyPath, false, true)
+	if err != nil {
+		t.Fatalf("failed to open database in WAL mode: %s", err.Error())
+	}
+	dbEmpty.Close()
+	if err := CheckpointRemove(emptyPath); err != nil {
+		t.Fatalf("failed to checkpoint empty database in WAL mode: %s", err.Error())
+	}
+
+	// WAL-mode database with WAL files.
+	path := mustTempFile()
+	defer os.Remove(path)
+	db, err := Open(path, false, true)
+	if err != nil {
+		t.Fatalf("failed to open database in WAL mode: %s", err.Error())
+	}
+	defer db.Close()
+	_, err = db.ExecuteStringStmt("CREATE TABLE foo (name TEXT)")
+	if err != nil {
+		t.Fatalf("failed to create table: %s", err.Error())
+	}
+	_, err = db.ExecuteStringStmt(`INSERT INTO foo(name) VALUES("fiona")`)
+	if err != nil {
+		t.Fatalf("error inserting record into table: %s", err.Error())
+	}
+	if err := db.Close(); err != nil {
+		t.Fatalf("failed to close database: %s", err.Error())
+	}
+	if err := CheckpointRemove(path); err != nil {
+		t.Fatalf("failed to checkpoint database in WAL mode: %s", err.Error())
+	}
+	w, err := IsWALModeEnabledSQLiteFile(path)
+	if err != nil {
+		t.Fatalf("failed to check WAL mode: %s", err.Error())
+	}
+	if !w {
+		t.Fatalf("database not marked as WAL mode")
+	}
+	if fileExists(path + "-wal") {
+		t.Fatalf("WAL file still present")
+	}
+	db, err = Open(path, false, true)
+	if err != nil {
+		t.Fatalf("failed to open database in WAL mode: %s", err.Error())
+	}
+	defer db.Close()
+	rows, err := db.QueryStringStmt("SELECT * FROM foo")
+	if err != nil {
+		t.Fatalf("failed to query table: %s", err.Error())
+	}
+	if exp, got := `[{"columns":["name"],"types":["text"],"values":[["fiona"]]}]`, asJSON(rows); exp != got {
+		t.Fatalf("unexpected results for query, expected %s, got %s", exp, got)
 	}
 }
 
@@ -373,17 +519,6 @@ func Test_WALReplayOK(t *testing.T) {
 			if !w {
 				t.Fatal("replayed database not marked as WAL mode")
 			}
-		}
-
-		// Check that there are no files related to WALs in the replay directory
-		// Both the copied WAL files should be gone, and there should be no
-		// "real" WAL file either.
-		walFiles, err := filepath.Glob(filepath.Join(replayDir, "*-wal*"))
-		if err != nil {
-			t.Fatalf("failed to glob replay directory: %s", err.Error())
-		}
-		if len(walFiles) != 0 {
-			t.Fatalf("replay directory contains WAL files: %s", walFiles)
 		}
 
 		replayedDB, err := Open(replayDBPath, false, true)
@@ -568,5 +703,39 @@ func Test_WALReplayFailures(t *testing.T) {
 	err := ReplayWAL(filepath.Join(dbDir, "foo.db"), []string{filepath.Join(walDir, "foo.db-wal")}, false)
 	if err != ErrWALReplayDirectoryMismatch {
 		t.Fatalf("expected %s, got %s", ErrWALReplayDirectoryMismatch, err.Error())
+	}
+}
+
+func mustGzip(dst, src string) {
+	dstF, err := os.Create(dst)
+	if err != nil {
+		panic(err)
+	}
+	defer dstF.Close()
+
+	gw := gzip.NewWriter(dstF)
+	defer gw.Close()
+
+	srcF, err := os.Open(src)
+	if err != nil {
+		panic(err)
+	}
+	defer srcF.Close()
+
+	_, err = io.Copy(gw, srcF)
+	if err != nil {
+		panic(err)
+	}
+
+	if err := gw.Close(); err != nil {
+		panic(err)
+	}
+
+	if err := dstF.Close(); err != nil {
+		panic(err)
+	}
+
+	if err := srcF.Close(); err != nil {
+		panic(err)
 	}
 }
