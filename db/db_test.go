@@ -55,9 +55,17 @@ func Test_OpenEmptyInWALMode(t *testing.T) {
 	if !db.WALEnabled() {
 		t.Fatalf("WAL mode enabled")
 	}
+
+	// Ensure the -wal and -shm files are created.
+	if !fileExists(db.WALPath()) {
+		t.Fatalf("WAL file not created at %s", db.WALPath())
+	}
+	if !fileExists(db.Path() + "-shm") {
+		t.Fatalf("WAL shm file not created at %s", db.WALPath()+"-shm")
+	}
 }
 
-func Test_WALRemovedOnClose(t *testing.T) {
+func Test_WALNotRemovedOnClose(t *testing.T) {
 	path := mustTempPath()
 	defer os.Remove(path)
 	db, err := Open(path, false, true)

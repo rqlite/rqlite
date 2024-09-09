@@ -308,7 +308,9 @@ func Test_EnsureDeleteMode(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to open database in WAL mode: %s", err.Error())
 	}
-	defer db.Close()
+	if err := db.Close(); err != nil {
+		t.Fatalf("failed to close database: %s", err.Error())
+	}
 	w, err := IsWALModeEnabledSQLiteFile(path)
 	if err != nil {
 		t.Fatalf("failed to check WAL mode: %s", err.Error())
@@ -337,7 +339,9 @@ func Test_EnsureWALMode(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to open database in WAL mode: %s", err.Error())
 	}
-	defer db.Close()
+	if err := db.Close(); err != nil {
+		t.Fatalf("failed to close database: %s", err.Error())
+	}
 
 	_, err = IsWALModeEnabledSQLiteFile(path)
 	if err == nil {
