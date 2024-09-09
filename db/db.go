@@ -155,7 +155,9 @@ func Open(dbPath string, fkEnabled, wal bool) (retDB *DB, retErr error) {
 }
 
 // OpenWithDriver opens a file-based database, creating it if it does not exist.
-// After this function returns, an actual SQLite file will always exist.
+// After this function returns, an actual SQLite file will always exist. If the
+// database is opened in WAL mode, the WAL files will also be created if they
+// do not exist.
 func OpenWithDriver(drv *Driver, dbPath string, fkEnabled, wal bool) (retDB *DB, retErr error) {
 	logger := log.New(log.Writer(), "[db] ", log.LstdFlags)
 	startTime := time.Now()
@@ -182,17 +184,34 @@ func OpenWithDriver(drv *Driver, dbPath string, fkEnabled, wal bool) (retDB *DB,
 		return nil, fmt.Errorf("disable autocheckpointing: %s", err.Error())
 	}
 
+	if err := rwDB.Ping(); err != nil {
+		return nil, fmt.Errorf("failed to ping on-disk database: %s", err.Error())
+	}
+	if wal && !fileExists(dbPath+"-wal") {
+		// Force creation of the WAL files so any external read-only connections
+		// can read the database. See https://www.sqlite.org/draft/wal.html, section 5.
+		if _, err := rwDB.Exec("BEGIN IMMEDIATE"); err != nil {
+			return nil, err
+		}
+		if _, err := rwDB.Exec("ROLLBACK"); err != nil {
+			return nil, err
+		}
+		ok, pages, moved, err := checkpointDB(rwDB, CheckpointTruncate)
+		if err != nil {
+			return nil, err
+		}
+		if ok != 0 {
+			return nil, fmt.Errorf("failed to completely checkpoint WAL at open (%d ok, %d pages, %d moved)",
+				ok, pages, moved)
+		}
+	}
+
 	/////////////////////////////////////////////////////////////////////////
 	// Read-only connection
 	roDSN := MakeDSN(dbPath, ModeReadOnly, fkEnabled, wal)
 	roDB, err := sql.Open(drv.name, roDSN)
 	if err != nil {
 		return nil, err
-	}
-
-	// Force creation of database file.
-	if err := rwDB.Ping(); err != nil {
-		return nil, fmt.Errorf("failed to ping on-disk database: %s", err.Error())
 	}
 
 	// Set connection pool behaviour.
@@ -428,10 +447,8 @@ func (db *DB) CheckpointWithTimeout(mode CheckpointMode, dur time.Duration) (err
 		}()
 	}
 
-	var ok int
-	var nPages int
-	var nMoved int
-	if err := db.rwDB.QueryRow(checkpointPRAGMAs[mode]).Scan(&ok, &nPages, &nMoved); err != nil {
+	ok, nPages, nMoved, err := checkpointDB(db.rwDB, mode)
+	if err != nil {
 		return fmt.Errorf("error checkpointing WAL: %s", err.Error())
 	}
 	stats.Add(numCheckpointedPages, int64(nPages))
@@ -1340,6 +1357,11 @@ func (db *DB) memStats() (map[string]int64, error) {
 		ms[p] = res[0].Values[0].Parameters[0].GetI()
 	}
 	return ms, nil
+}
+
+func checkpointDB(rwDB *sql.DB, mode CheckpointMode) (ok, pages, moved int, err error) {
+	err = rwDB.QueryRow(checkpointPRAGMAs[mode]).Scan(&ok, &pages, &moved)
+	return
 }
 
 func createEQQueryResponse(rows *command.QueryRows, err error) *command.ExecuteQueryResponse {

@@ -3,6 +3,7 @@
 - [PR #1877](https://github.com/rqlite/rqlite/pull/1877): Move to no-checkpoint-on-database-close.
 - [PR #1880](https://github.com/rqlite/rqlite/pull/1880): Improve DB mode checks.
 - [PR #1881](https://github.com/rqlite/rqlite/pull/1881): Add GZIP-related utils.
+- [PR #1882](https://github.com/rqlite/rqlite/pull/1882): Force creation of WAL-related files when the database is opened.
 
 ## v8.30.0 (September 5th 2024)
 ### New features

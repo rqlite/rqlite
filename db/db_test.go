@@ -55,9 +55,17 @@ func Test_OpenEmptyInWALMode(t *testing.T) {
 	if !db.WALEnabled() {
 		t.Fatalf("WAL mode enabled")
 	}
+
+	// Ensure the -wal and -shm files are created.
+	if !fileExists(db.WALPath()) {
+		t.Fatalf("WAL file not created at %s", db.WALPath())
+	}
+	if !fileExists(db.Path() + "-shm") {
+		t.Fatalf("WAL shm file not created at %s", db.WALPath()+"-shm")
+	}
 }
 
-func Test_WALRemovedOnClose(t *testing.T) {
+func Test_WALNotRemovedOnClose(t *testing.T) {
 	path := mustTempPath()
 	defer os.Remove(path)
 	db, err := Open(path, false, true)
@@ -83,6 +91,53 @@ func Test_WALRemovedOnClose(t *testing.T) {
 
 	if !fileExists(db.WALPath()) {
 		t.Fatalf("WAL file removed after closing the database")
+	}
+}
+
+// Test_WALNotCheckpointedOnClose tests that when a database with an existing
+// file is opened, that the files are not modified in anyway.
+func Test_WALNotChangedOnReopen(t *testing.T) {
+	path := mustTempPath()
+	defer os.Remove(path)
+	db, err := Open(path, false, true)
+	if err != nil {
+		t.Fatalf("error opening nonexistent database")
+	}
+	defer db.Close()
+	if !db.WALEnabled() {
+		t.Fatalf("WAL mode not enabled")
+	}
+
+	_, err = db.ExecuteStringStmt("CREATE TABLE foo (id INTEGER NOT NULL PRIMARY KEY, name TEXT)")
+	if err != nil {
+		t.Fatalf("failed to create table: %s", err.Error())
+	}
+	walPath := db.WALPath()
+	if !fileExists(walPath) {
+		t.Fatalf("WAL file does not exist after creating a table")
+	}
+	if err := db.Close(); err != nil {
+		t.Fatalf("error closing database: %s", err.Error())
+	}
+
+	if !fileExists(db.WALPath()) {
+		t.Fatalf("WAL file removed after closing the database")
+	}
+
+	mainBytes := mustReadBytes(path)
+	walBytes := mustReadBytes(walPath)
+
+	// Reopen the database, and check the existing files are not modified.
+	dbR, err := Open(path, false, true)
+	if err != nil {
+		t.Fatalf("error opening database post WAL deletion")
+	}
+	defer dbR.Close()
+	if !bytes.Equal(mainBytes, mustReadBytes(path)) {
+		t.Fatalf("database file changed after reopening")
+	}
+	if !bytes.Equal(walBytes, mustReadBytes(walPath)) {
+		t.Fatalf("WAL file changed after reopening")
 	}
 }
 
