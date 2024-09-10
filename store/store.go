@@ -2475,13 +2475,6 @@ func dirSize(path string) (int64, error) {
 	return size, err
 }
 
-func fullPretty(full bool) string {
-	if full {
-		return "full"
-	}
-	return "incremental"
-}
-
 func resolvableAddress(addr string) (string, error) {
 	h, _, err := net.SplitHostPort(addr)
 	if err != nil {
