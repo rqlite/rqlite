@@ -18,7 +18,7 @@ func Test_SnapshotSource(t *testing.T) {
 	}
 	defer db.Close()
 
-	ss := NewSnapshotSource(db)
+	ss := NewSnapshotSource(db.Path())
 	if ss == nil {
 		t.Fatalf("failed to create snapshot source")
 	}

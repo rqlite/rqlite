@@ -473,7 +473,7 @@ func (s *Store) Open() (retErr error) {
 	}
 
 	// Create store for the Snapshots.
-	snapshotStore, err := snapshot9.NewStore(filepath.Join(s.snapshotDir), NewSnapshotSource(s.db))
+	snapshotStore, err := snapshot9.NewStore(filepath.Join(s.snapshotDir), NewSnapshotSource(s.dbPath))
 	if err != nil {
 		return fmt.Errorf("failed to create snapshot store: %s", err)
 	}
@@ -504,16 +504,9 @@ func (s *Store) Open() (retErr error) {
 		}
 	} else {
 		// No snapshots, so the SQLite file should be *completely* rebuilt from the Raft log.
-		// Close the existing database handle, delete the files, and create a new database.
-		if err := s.db.Close(); err != nil {
-			return fmt.Errorf("failed to close SQLite database: %s", err)
-		}
+		// Delete any existing database files.
 		if err := sql.RemoveFiles(s.dbPath); err != nil {
 			return fmt.Errorf("failed to remove SQLite file: %s", err)
-		}
-		s.db, err = sql.OpenSwappable(s.dbPath, s.dbConf.FKConstraints, true)
-		if err != nil {
-			return fmt.Errorf("failed to prep on-disk database: %s", err)
 		}
 	}
 
@@ -545,7 +538,7 @@ func (s *Store) Open() (retErr error) {
 		stats.Add(numRecoveries, 1)
 	}
 
-	s.db, err = createOnDisk(s.dbPath, s.dbConf.FKConstraints, true, s.dbConf.Extensions)
+	s.db, err = openOnDisk(s.dbPath, s.dbConf.FKConstraints, s.dbConf.Extensions)
 	if err != nil {
 		return fmt.Errorf("failed to create on-disk database: %s", err)
 	}
@@ -2373,17 +2366,13 @@ func (s *Store) logBackup() bool {
 	return s.hcLogLevel() < hclog.Warn
 }
 
-// createOnDisk opens an on-disk database file at the configured path. Any
-// preexisting file will be removed before the database is opened.
-func createOnDisk(path string, fkConstraints, wal bool, extensions []string) (*sql.SwappableDB, error) {
-	if err := sql.RemoveFiles(path); err != nil {
-		return nil, err
-	}
+// openOnDisk opens an on-disk database file at the configured path.
+func openOnDisk(path string, fkConstraints bool, extensions []string) (*sql.SwappableDB, error) {
 	drv := db.DefaultDriver()
 	if len(extensions) > 0 {
 		drv = db.NewDriver("rqlite-sqlite3-extended", extensions, db.CnkOnCloseModeDisabled)
 	}
-	return sql.OpenSwappableWithDriver(drv, path, fkConstraints, wal)
+	return sql.OpenSwappableWithDriver(drv, path, fkConstraints, true)
 }
 
 func createTemp(dir, pattern string) (*os.File, error) {
