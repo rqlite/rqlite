@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"io"
 	"net"
+	"os"
 	"sync"
 	"time"
 
@@ -533,6 +534,9 @@ func writeCommand(conn net.Conn, c *proto.Command, timeout time.Duration) error 
 	binary.LittleEndian.PutUint64(b[0:], uint64(len(p)))
 	_, err = conn.Write(b)
 	if err != nil {
+		if errors.Is(err, os.ErrDeadlineExceeded) {
+			stats.Add(numClientWriteTimeouts, 1)
+		}
 		return fmt.Errorf("write length: %w", err)
 	}
 	// Write actual protobuf.
@@ -541,6 +545,9 @@ func writeCommand(conn net.Conn, c *proto.Command, timeout time.Duration) error 
 	}
 	_, err = conn.Write(p)
 	if err != nil {
+		if errors.Is(err, os.ErrDeadlineExceeded) {
+			stats.Add(numClientWriteTimeouts, 1)
+		}
 		return fmt.Errorf("write protobuf bytes: %w", err)
 	}
 	return nil
@@ -562,6 +569,9 @@ func readResponse(conn net.Conn, timeout time.Duration) (buf []byte, retErr erro
 	b := make([]byte, protoBufferLengthSize)
 	_, err := io.ReadFull(conn, b)
 	if err != nil {
+		if errors.Is(err, os.ErrDeadlineExceeded) {
+			stats.Add(numClientReadTimeouts, 1)
+		}
 		return nil, fmt.Errorf("read protobuf length: %w", err)
 	}
 	sz := binary.LittleEndian.Uint64(b[0:])
@@ -573,6 +583,9 @@ func readResponse(conn net.Conn, timeout time.Duration) (buf []byte, retErr erro
 	}
 	_, err = io.ReadFull(conn, p)
 	if err != nil {
+		if errors.Is(err, os.ErrDeadlineExceeded) {
+			stats.Add(numClientReadTimeouts, 1)
+		}
 		return nil, fmt.Errorf("read protobuf bytes: %w", err)
 	}
 	return p, nil
