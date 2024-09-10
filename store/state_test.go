@@ -405,6 +405,7 @@ func Test_SingleNodeRecoverNetworkChangeSnapshot(t *testing.T) {
 	}
 
 	queryTest := func(s *Store, c int) {
+		t.Helper()
 		qr := queryRequestFromString("SELECT COUNT(*) FROM foo", false, false)
 		qr.Level = proto.QueryRequest_QUERY_REQUEST_LEVEL_NONE
 		r, err := s.Query(qr)
