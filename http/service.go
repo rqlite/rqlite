@@ -1131,7 +1131,7 @@ func (s *Service) queuedExecute(w http.ResponseWriter, r *http.Request, qp Query
 		case <-fc:
 			break
 		case <-time.NewTimer(qp.Timeout(defaultTimeout)).C:
-			http.Error(w, "timeout", http.StatusRequestTimeout)
+			http.Error(w, "queue wait timeout", http.StatusRequestTimeout)
 			return
 		}
 	}
