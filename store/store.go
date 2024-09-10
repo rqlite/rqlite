@@ -342,6 +342,7 @@ type Store struct {
 	numIgnoredJoins  int
 	numNoops         *atomic.Uint64
 	numSnapshots     *atomic.Uint64
+	noRestoreOnStart *rsync.AtomicBool
 }
 
 // Config represents the configuration of the underlying Store.
@@ -366,31 +367,32 @@ func New(ly Layer, c *Config) *Store {
 	}
 
 	return &Store{
-		open:            rsync.NewAtomicBool(),
-		ly:              ly,
-		raftDir:         c.Dir,
-		snapshotDir:     filepath.Join(c.Dir, snapshotsDirName),
-		peersPath:       filepath.Join(c.Dir, peersPath),
-		peersInfoPath:   filepath.Join(c.Dir, peersInfoPath),
-		restoreDoneCh:   make(chan struct{}),
-		raftID:          c.ID,
-		dbConf:          c.DBConf,
-		dbPath:          dbPath,
-		walPath:         sql.WALPath(dbPath),
-		dbDir:           filepath.Dir(dbPath),
-		leaderObservers: make([]chan<- struct{}, 0),
-		reqMarshaller:   command.NewRequestMarshaler(),
-		logger:          logger,
-		notifyingNodes:  make(map[string]*Server),
-		ApplyTimeout:    applyTimeout,
-		snapshotCAS:     rsync.NewCheckAndSet(),
-		fsmIdx:          &atomic.Uint64{},
-		fsmTerm:         &atomic.Uint64{},
-		fsmUpdateTime:   rsync.NewAtomicTime(),
-		appendedAtTime:  rsync.NewAtomicTime(),
-		dbAppliedIdx:    &atomic.Uint64{},
-		numNoops:        &atomic.Uint64{},
-		numSnapshots:    &atomic.Uint64{},
+		open:             rsync.NewAtomicBool(),
+		ly:               ly,
+		raftDir:          c.Dir,
+		snapshotDir:      filepath.Join(c.Dir, snapshotsDirName),
+		peersPath:        filepath.Join(c.Dir, peersPath),
+		peersInfoPath:    filepath.Join(c.Dir, peersInfoPath),
+		restoreDoneCh:    make(chan struct{}),
+		raftID:           c.ID,
+		dbConf:           c.DBConf,
+		dbPath:           dbPath,
+		walPath:          sql.WALPath(dbPath),
+		dbDir:            filepath.Dir(dbPath),
+		leaderObservers:  make([]chan<- struct{}, 0),
+		reqMarshaller:    command.NewRequestMarshaler(),
+		logger:           logger,
+		notifyingNodes:   make(map[string]*Server),
+		ApplyTimeout:     applyTimeout,
+		snapshotCAS:      rsync.NewCheckAndSet(),
+		fsmIdx:           &atomic.Uint64{},
+		fsmTerm:          &atomic.Uint64{},
+		fsmUpdateTime:    rsync.NewAtomicTime(),
+		appendedAtTime:   rsync.NewAtomicTime(),
+		dbAppliedIdx:     &atomic.Uint64{},
+		numNoops:         &atomic.Uint64{},
+		numSnapshots:     &atomic.Uint64{},
+		noRestoreOnStart: &rsync.AtomicBool{},
 	}
 }
 
@@ -500,6 +502,7 @@ func (s *Store) Open() (retErr error) {
 				return fmt.Errorf("proofs do not match: %v != %v", dbProof, sProof)
 			}
 			s.logger.Println("proofs match so skipping restore-on-start")
+			s.noRestoreOnStart.Set()
 			config.NoSnapshotRestoreOnStart = true
 		}
 	} else {
