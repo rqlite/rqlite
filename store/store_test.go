@@ -1575,15 +1575,6 @@ COMMIT;
 		t.Fatalf("failed to load SQLite file: %s", err.Error())
 	}
 
-	// Loading a database should mark that the snapshot store needs a Full Snapshot
-	fn, err := s.snapshotStore.FullNeeded()
-	if err != nil {
-		t.Fatalf("failed to check if snapshot store needs a full snapshot: %s", err.Error())
-	}
-	if !fn {
-		t.Fatalf("expected snapshot store to need a full snapshot")
-	}
-
 	// Check that data were loaded correctly.
 	qr = queryRequestFromString("SELECT * FROM foo WHERE id=2", false, true)
 	qr.Level = proto.QueryRequest_QUERY_REQUEST_LEVEL_STRONG
@@ -2014,18 +2005,8 @@ func Test_OpenStoreSingleNode_VacuumFullNeeded(t *testing.T) {
 	if err := s.Snapshot(0); err != nil {
 		t.Fatalf("failed to snapshot store: %s", err.Error())
 	}
-	if fn, err := s.snapshotStore.FullNeeded(); err != nil {
-		t.Fatalf("failed to determine full snapshot needed: %s", err.Error())
-	} else if fn {
-		t.Fatalf("full snapshot marked as needed")
-	}
 	if err := s.Vacuum(); err != nil {
 		t.Fatalf("failed to vacuum database: %s", err.Error())
-	}
-	if fn, err := s.snapshotStore.FullNeeded(); err != nil {
-		t.Fatalf("failed to determine full snapshot needed: %s", err.Error())
-	} else if !fn {
-		t.Fatalf("full snapshot not marked as needed")
 	}
 }
 
@@ -2090,11 +2071,6 @@ func Test_SingleNodeExplicitVacuumOK(t *testing.T) {
 	// VACUUM, and then query the data, make sure it looks good.
 	doVacuum()
 	doQuery()
-	if fn, err := s.snapshotStore.FullNeeded(); err != nil {
-		t.Fatalf("failed to check if snapshot store needs a full snapshot: %s", err.Error())
-	} else if fn {
-		t.Fatalf("expected snapshot store to not need a full snapshot post explicit VACUUM")
-	}
 
 	// The next snapshot will be incremental.
 	if err := s.Snapshot(0); err != nil {
@@ -2237,14 +2213,9 @@ func Test_SingleNode_SnapshotWithAutoVac(t *testing.T) {
 		}
 	}
 
-	// Force an initial snapshot, shouldn't need a full snapshot afterwards
+	// Force an initial snapshot.
 	if err := s.Snapshot(0); err != nil {
 		t.Fatalf("failed to snapshot single-node store: %s", err.Error())
-	}
-	if fn, err := s.snapshotStore.FullNeeded(); err != nil {
-		t.Fatalf("failed to check if snapshot store needs a full snapshot: %s", err.Error())
-	} else if fn {
-		t.Fatalf("expected snapshot store to not need a full snapshot")
 	}
 
 	// Enable auto-vacuuming. Need to go under the covers to init the vacuum times.

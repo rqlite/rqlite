@@ -30,12 +30,12 @@ import (
 	"github.com/rqlite/rqlite/v8/db"
 	sql "github.com/rqlite/rqlite/v8/db"
 	"github.com/rqlite/rqlite/v8/db/humanize"
-	wal "github.com/rqlite/rqlite/v8/db/wal"
 	rlog "github.com/rqlite/rqlite/v8/log"
 	"github.com/rqlite/rqlite/v8/progress"
 	"github.com/rqlite/rqlite/v8/random"
 	"github.com/rqlite/rqlite/v8/rsync"
 	"github.com/rqlite/rqlite/v8/snapshot"
+	"github.com/rqlite/rqlite/v8/snapshot9"
 )
 
 var (
@@ -86,7 +86,7 @@ var (
 )
 
 const (
-	snapshotsDirName           = "rsnapshots"
+	snapshotsDirName           = "csnapshots"
 	restoreScratchPattern      = "rqlite-restore-*"
 	bootScatchPattern          = "rqlite-boot-*"
 	backupScatchPattern        = "rqlite-backup-*"
@@ -224,11 +224,8 @@ func ResetStats() {
 type SnapshotStore interface {
 	raft.SnapshotStore
 
-	// FullNeeded returns true if a full snapshot is needed.
-	FullNeeded() (bool, error)
-
-	// SetFullNeeded explicitly sets that a full snapshot is needed.
-	SetFullNeeded() error
+	// Proof returns the proof of the latest snapshot.
+	Proof() (bool, *snapshot9.Proof, error)
 
 	// Stats returns stats about the Snapshot Store.
 	Stats() (map[string]interface{}, error)
@@ -476,7 +473,7 @@ func (s *Store) Open() (retErr error) {
 	}
 
 	// Create store for the Snapshots.
-	snapshotStore, err := snapshot.NewStore(filepath.Join(s.snapshotDir))
+	snapshotStore, err := snapshot9.NewStore(filepath.Join(s.snapshotDir), NewSnapshotSource(s.db))
 	if err != nil {
 		return fmt.Errorf("failed to create snapshot store: %s", err)
 	}
@@ -487,6 +484,38 @@ func (s *Store) Open() (retErr error) {
 		return fmt.Errorf("list snapshots: %s", err)
 	}
 	s.logger.Printf("%d preexisting snapshots present", len(snaps))
+
+	if len(snaps) > 0 {
+		exists, sProof, err := snapshotStore.Proof()
+		if err != nil {
+			return fmt.Errorf("failed to get proof from snapshot store: %s", err)
+		}
+		if exists {
+			// There is a proof in the Snapshot store. Is our SQLite file good?
+			dbProof, err := snapshot9.NewProofFromFile(s.dbPath)
+			if err != nil {
+				return fmt.Errorf("failed to generate proof from SQLite file: %s", err)
+			}
+			if !dbProof.Equals(sProof) {
+				return fmt.Errorf("proofs do not match: %v != %v", dbProof, sProof)
+			}
+			s.logger.Println("proofs match so skipping restore-on-start")
+			config.NoSnapshotRestoreOnStart = true
+		}
+	} else {
+		// No snapshots, so the SQLite file should be *completely* rebuilt from the Raft log.
+		// Close the existing database handle, delete the files, and create a new database.
+		if err := s.db.Close(); err != nil {
+			return fmt.Errorf("failed to close SQLite database: %s", err)
+		}
+		if err := sql.RemoveFiles(s.dbPath); err != nil {
+			return fmt.Errorf("failed to remove SQLite file: %s", err)
+		}
+		s.db, err = sql.OpenSwappable(s.dbPath, s.dbConf.FKConstraints, true)
+		if err != nil {
+			return fmt.Errorf("failed to prep on-disk database: %s", err)
+		}
+	}
 
 	// Create the Raft log store and stable store.
 	s.boltStore, err = rlog.New(filepath.Join(s.raftDir, raftDBPath), s.NoFreeListSync)
@@ -1526,10 +1555,6 @@ func (s *Store) ReadFrom(r io.Reader) (int64, error) {
 		return n, fmt.Errorf("error swapping database file: %v", err)
 	}
 
-	// Snapshot, so we load the new database into the Raft system.
-	if err := s.snapshotStore.SetFullNeeded(); err != nil {
-		return n, err
-	}
 	if err := s.Snapshot(1); err != nil {
 		return n, err
 	}
@@ -1562,10 +1587,6 @@ func (s *Store) Vacuum() error {
 	// Swap in new database file.
 	if err := s.db.Swap(fd.Name(), s.dbConf.FKConstraints, true); err != nil {
 		return fmt.Errorf("error swapping database file: %v", err)
-	}
-
-	if err := s.snapshotStore.SetFullNeeded(); err != nil {
-		return err
 	}
 	return nil
 }
@@ -1920,14 +1941,6 @@ func (s *Store) fsmApply(l *raft.Log) (e interface{}) {
 	}
 	if cmd.Type == proto.Command_COMMAND_TYPE_NOOP {
 		s.numNoops.Add(1)
-	} else if cmd.Type == proto.Command_COMMAND_TYPE_LOAD {
-		// Swapping in a new database invalidates any existing snapshot.
-		err := s.snapshotStore.SetFullNeeded()
-		if err != nil {
-			return &fsmGenericResponse{
-				error: fmt.Errorf("failed to set full snapshot needed: %s", err.Error()),
-			}
-		}
 	}
 	return r
 }
@@ -1995,83 +2008,34 @@ func (s *Store) fsmSnapshot() (fSnap raft.FSMSnapshot, retErr error) {
 		}
 	}
 
-	fullNeeded, err := s.snapshotStore.FullNeeded()
+	// Create a referential snapshot.
+	if err := s.db.SetSynchronousMode(db.SynchronousFull); err != nil {
+		return nil, err
+	}
+
+	if err := s.db.Checkpoint(sql.CheckpointTruncate); err != nil {
+		stats.Add(numFullCheckpointFailed, 1)
+		return nil, err
+	}
+
+	if err := s.db.SetSynchronousMode(db.SynchronousOff); err != nil {
+		return nil, err
+	}
+
+	proof, err := snapshot9.NewProofFromFile(s.db.Path())
+	if err != nil {
+		return nil, fmt.Errorf("failed to create proof: %s", err)
+	}
+	pb, err := proof.Marshal()
 	if err != nil {
 		return nil, err
 	}
-	fPLog := fullPretty(fullNeeded)
-	defer func() {
-		s.numSnapshots.Add(1)
-	}()
+	buf := io.NopCloser(bytes.NewReader(pb))
 
-	var fsmSnapshot raft.FSMSnapshot
-	if fullNeeded {
-		chkStartTime := time.Now()
-		if err := s.db.Checkpoint(sql.CheckpointTruncate); err != nil {
-			stats.Add(numFullCheckpointFailed, 1)
-			return nil, err
-		}
-		stats.Get(snapshotCreateChkTruncateDuration).(*expvar.Int).Set(time.Since(chkStartTime).Milliseconds())
-		dbFD, err := os.Open(s.db.Path())
-		if err != nil {
-			return nil, err
-		}
-		fsmSnapshot = snapshot.NewSnapshot(dbFD)
-		stats.Add(numSnapshotsFull, 1)
-	} else {
-		compactedBuf := bytes.NewBuffer(nil)
-		if pathExistsWithData(s.walPath) {
-			compactStartTime := time.Now()
-			// Read a compacted version of the WAL into memory, and write it
-			// to the Snapshot store.
-			walFD, err := os.Open(s.walPath)
-			if err != nil {
-				return nil, err
-			}
-			defer walFD.Close()
-			scanner, err := wal.NewFastCompactingScanner(walFD)
-			if err != nil {
-				return nil, err
-			}
-			compactedBytes, err := scanner.Bytes()
-			if err != nil {
-				return nil, err
-			}
-			stats.Get(snapshotCreateWALCompactDuration).(*expvar.Int).Set(time.Since(compactStartTime).Milliseconds())
-			compactedBuf = bytes.NewBuffer(compactedBytes)
-
-			// Now that we're written a (compacted) copy of the WAL to the Snapshot,
-			// we can truncate the WAL. We use truncate mode so that the next WAL
-			// contains just changes since the this snapshot.
-			walSz, err := fileSize(s.walPath)
-			if err != nil {
-				return nil, err
-			}
-			chkTStartTime := time.Now()
-			if err := s.db.Checkpoint(sql.CheckpointTruncate); err != nil {
-				stats.Add(numWALCheckpointTruncateFailed, 1)
-				return nil, fmt.Errorf("snapshot can't complete due to WAL checkpoint failure (will retry): %s",
-					err.Error())
-			}
-			stats.Get(snapshotCreateChkTruncateDuration).(*expvar.Int).Set(time.Since(chkTStartTime).Milliseconds())
-			stats.Get(snapshotWALSize).(*expvar.Int).Set(int64(compactedBuf.Len()))
-			stats.Get(snapshotPrecompactWALSize).(*expvar.Int).Set(walSz)
-		}
-		fsmSnapshot = snapshot.NewSnapshot(io.NopCloser(compactedBuf))
-		stats.Add(numSnapshotsIncremental, 1)
-	}
-
-	stats.Add(numSnapshots, 1)
 	dur := time.Since(startT)
-	stats.Get(snapshotCreateDuration).(*expvar.Int).Set(dur.Milliseconds())
-	fs := FSMSnapshot{
-		FSMSnapshot: fsmSnapshot,
-	}
-	if fullNeeded || s.logIncremental() {
-		s.logger.Printf("%s snapshot created in %s on node ID %s", fPLog, dur, s.raftID)
-		fs.logger = s.logger
-	}
-	return &fs, nil
+	stats.Add(numSnapshots, 1)
+	s.logger.Printf("snapshot created in %s on node ID %s", dur, s.raftID)
+	return snapshot.NewSnapshot(buf), nil
 }
 
 // fsmRestore restores the node to a previous state. The Hashicorp docs state this
