@@ -63,7 +63,6 @@ func Test_OpenStoreCloseStartupSingleNode(t *testing.T) {
 		t.Fatalf("failed to take user-requested snapshot: %s", err.Error())
 	}
 
-	// Insert new records to trigger a snapshot.
 	queryTest := func(s *Store, c int) {
 		qr := queryRequestFromString("SELECT COUNT(*) FROM foo", false, false)
 		qr.Level = command.QueryRequest_QUERY_REQUEST_LEVEL_STRONG
@@ -85,6 +84,23 @@ func Test_OpenStoreCloseStartupSingleNode(t *testing.T) {
 		if _, err := s.Execute(er); err != nil {
 			t.Fatalf("failed to execute on single node: %s", err.Error())
 		}
+	}
+	queryTest(s, 10)
+
+	// This next block tests an important code path -- that a is taken, and then
+	// the snapshot proof which is in the Snapshot store represents just the
+	// database file. So we want to hang onto the database file, but delete
+	// the WAL file that will be left around. Otherwise we'd have the main
+	// database file and a WAL file, and the Raft log entries would be replayed
+	// giving us a extra records.
+	if err := s.Close(true); err != nil {
+		t.Fatalf("failed to close single-node store: %s", err.Error())
+	}
+	if err := s.Open(); err != nil {
+		t.Fatalf("failed to open single-node store: %s", err.Error())
+	}
+	if _, err := s.WaitForLeader(10 * time.Second); err != nil {
+		t.Fatalf("Error waiting for leader: %s", err)
 	}
 	queryTest(s, 10)
 
@@ -167,6 +183,7 @@ func test_SnapshotStress(t *testing.T, s *Store) {
 		t.Fatalf("failed to execute on single node: %s", err.Error())
 	}
 
+	// Write a bunch of rows, ensure they are all there.
 	for i := 0; i < 1000; i++ {
 		er := executeRequestFromString(
 			fmt.Sprintf(`INSERT INTO foo(name) VALUES("fiona-%d")`, i),
@@ -175,6 +192,15 @@ func test_SnapshotStress(t *testing.T, s *Store) {
 		if err != nil {
 			t.Fatalf("failed to execute on single node: %s", err.Error())
 		}
+	}
+	qr := queryRequestFromString("SELECT COUNT(*) FROM foo", false, false)
+	qr.Level = command.QueryRequest_QUERY_REQUEST_LEVEL_STRONG
+	r, err := s.Query(qr)
+	if err != nil {
+		t.Fatalf("failed to query single node: %s", err.Error())
+	}
+	if exp, got := `[{"columns":["COUNT(*)"],"types":["integer"],"values":[[1000]]}]`, asJSON(r); exp != got {
+		t.Fatalf("unexpected results for query\nexp: %s\ngot: %s", exp, got)
 	}
 
 	// Close and re-open to make sure all data is there recovering from snapshot.
@@ -189,9 +215,9 @@ func test_SnapshotStress(t *testing.T, s *Store) {
 		t.Fatalf("Error waiting for leader: %s", err)
 	}
 
-	qr := queryRequestFromString("SELECT COUNT(*) FROM foo", false, false)
+	qr = queryRequestFromString("SELECT COUNT(*) FROM foo", false, false)
 	qr.Level = command.QueryRequest_QUERY_REQUEST_LEVEL_STRONG
-	r, err := s.Query(qr)
+	r, err = s.Query(qr)
 	if err != nil {
 		t.Fatalf("failed to query single node: %s", err.Error())
 	}
