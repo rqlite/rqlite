@@ -214,6 +214,7 @@ const (
 	numQueuedExecutionsUnknownError   = "queued_executions_unknown_error"
 	numQueuedExecutionsFailed         = "queued_executions_failed"
 	numQueuedExecutionsWait           = "queued_executions_wait"
+	numQueuedExecutionsWaitTimeout    = "queued_executions_wait_timeout"
 	numQueries                        = "queries"
 	numQueryStmtsRx                   = "query_stmts_rx"
 	numRequests                       = "requests"
@@ -282,6 +283,7 @@ func ResetStats() {
 	stats.Add(numQueuedExecutionsUnknownError, 0)
 	stats.Add(numQueuedExecutionsFailed, 0)
 	stats.Add(numQueuedExecutionsWait, 0)
+	stats.Add(numQueuedExecutionsWaitTimeout, 0)
 	stats.Add(numQueries, 0)
 	stats.Add(numQueryStmtsRx, 0)
 	stats.Add(numRequests, 0)
@@ -1131,7 +1133,8 @@ func (s *Service) queuedExecute(w http.ResponseWriter, r *http.Request, qp Query
 		case <-fc:
 			break
 		case <-time.NewTimer(qp.Timeout(defaultTimeout)).C:
-			http.Error(w, "timeout", http.StatusRequestTimeout)
+			stats.Add(numQueuedExecutionsWaitTimeout, 1)
+			http.Error(w, "queue wait timeout", http.StatusRequestTimeout)
 			return
 		}
 	}
