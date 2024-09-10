@@ -2039,7 +2039,7 @@ func (s *Store) fsmSnapshot() (fSnap raft.FSMSnapshot, retErr error) {
 	stats.Get(snapshotCreateDuration).(*expvar.Int).Set(dur.Milliseconds())
 	stats.Add(numSnapshots, 1)
 	s.logger.Printf("snapshot created in %s on node ID %s", dur, s.raftID)
-	return snapshot.NewSnapshot(buf), nil
+	return snapshot9.NewSnapshot(buf), nil
 }
 
 // fsmRestore restores the node to a previous state. The Hashicorp docs state this
@@ -2081,7 +2081,7 @@ func (s *Store) fsmRestore(rc io.ReadCloser) (retErr error) {
 	// same value, since the last index is not necessarily a database-changing index,
 	// but that is OK. Worse that can happen is that anything paying attention to the
 	// index might consider the database to be changed when it is not, *logically* speaking.
-	li, tm, err := snapshot.LatestIndexTerm(s.snapshotDir)
+	li, tm, err := snapshot9.LatestIndexTerm(s.snapshotDir)
 	if err != nil {
 		return fmt.Errorf("failed to get latest snapshot index post restore: %s", err)
 	}

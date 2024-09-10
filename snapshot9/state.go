@@ -9,6 +9,19 @@ import (
 	"github.com/hashicorp/raft"
 )
 
+// LatestIndexTerm returns the index and term of the latest snapshot in the given directory.
+func LatestIndexTerm(dir string) (uint64, uint64, error) {
+	meta, err := getSnapshots(dir)
+	if err != nil {
+		return 0, 0, err
+	}
+	if len(meta) == 0 {
+		return 0, 0, nil
+	}
+	return meta[len(meta)-1].Index, meta[len(meta)-1].Term, nil
+}
+
+// RemoveAllTmpSnapshotData removes all temporary Snapshot data from the directory.
 func RemoveAllTmpSnapshotData(dir string) error {
 	files, err := os.ReadDir(dir)
 	if err != nil {

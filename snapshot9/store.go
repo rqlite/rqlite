@@ -23,6 +23,8 @@ const (
 )
 
 const (
+	persistSize         = "latest_persist_size"
+	persistDuration     = "latest_persist_duration"
 	snapshotsReaped     = "snapshots_reaped"
 	snapshotsReapedFail = "snapshots_reaped_failed"
 )
@@ -46,6 +48,8 @@ func init() {
 // ResetStats resets the expvar stats for this module. Mostly for test purposes.
 func ResetStats() {
 	stats.Init()
+	stats.Add(persistSize, 0)
+	stats.Add(persistDuration, 0)
 	stats.Add(snapshotsReaped, 0)
 	stats.Add(snapshotsReapedFail, 0)
 }
