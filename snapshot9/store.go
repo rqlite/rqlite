@@ -254,6 +254,24 @@ func (s *Store) Reap() (retN int, retErr error) {
 	return n, nil
 }
 
+// Stats returns stats about the Snapshot Store. This function may return
+// an error if the Store is in an inconsistent state. In that case the stats
+// returned may be incomplete or invalid.
+func (s *Store) Stats() (map[string]interface{}, error) {
+	snapshots, err := s.getSnapshots()
+	if err != nil {
+		return nil, err
+	}
+	snapsAsIDs := make([]string, len(snapshots))
+	for i, snap := range snapshots {
+		snapsAsIDs[i] = snap.ID
+	}
+	return map[string]interface{}{
+		"dir":       s.dir,
+		"snapshots": snapsAsIDs,
+	}, nil
+}
+
 // getSnapshots returns a list of all snapshots in the store, sorted
 // from oldest to newest.
 func (s *Store) getSnapshots() ([]*raft.SnapshotMeta, error) {
