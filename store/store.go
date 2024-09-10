@@ -1962,6 +1962,7 @@ func (s *Store) fsmSnapshot() (fSnap raft.FSMSnapshot, retErr error) {
 		if retErr != nil {
 			stats.Add(numSnapshotsFailed, 1)
 		}
+		s.numSnapshots.Add(1)
 	}()
 
 	// Automatic VACUUM needed? This is deliberately done in the context of a Snapshot
@@ -2026,6 +2027,7 @@ func (s *Store) fsmSnapshot() (fSnap raft.FSMSnapshot, retErr error) {
 	buf := io.NopCloser(bytes.NewReader(pb))
 
 	dur := time.Since(startT)
+	stats.Get(snapshotCreateDuration).(*expvar.Int).Set(dur.Milliseconds())
 	stats.Add(numSnapshots, 1)
 	s.logger.Printf("snapshot created in %s on node ID %s", dur, s.raftID)
 	return snapshot.NewSnapshot(buf), nil
