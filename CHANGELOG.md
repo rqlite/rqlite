@@ -1,3 +1,7 @@
+## v8.30.2 (unreleased)
+### Implementation changes and bug fixes
+- [PR #1884](https://github.com/rqlite/rqlite/pull/1884): Refactor code to further use common utilities.
+
 ## v8.30.1 (September 9th 2024)
 ### Implementation changes and bug fixes
 - [PR #1877](https://github.com/rqlite/rqlite/pull/1877): Move to no-checkpoint-on-database-close.

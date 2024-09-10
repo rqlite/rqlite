@@ -2,9 +2,59 @@ package rarchive
 
 import (
 	"compress/gzip"
+	"io"
 	"os"
 	"testing"
 )
+
+// Test_GzipFileNotFound tests the case where the input file does not exist.
+func Test_GzipFileNotFound(t *testing.T) {
+	_, err := Gzip("nonexistentfile.txt")
+	if err == nil {
+		t.Error("Expected an error for non-existent file, got none")
+	}
+}
+
+func Test_GzipSuccess(t *testing.T) {
+	testContent := "This is a test content"
+	tmpFile, err := os.CreateTemp("", "content")
+	if err != nil {
+		t.Fatalf("Failed to create temp file: %v", err)
+	}
+	defer os.Remove(tmpFile.Name()) // Clean up the file afterward
+	if _, err := tmpFile.WriteString(testContent); err != nil {
+		t.Fatalf("Failed to write to temp file: %v", err)
+	}
+	tmpFile.Close()
+
+	gzFile, err := Gzip(tmpFile.Name())
+	if err != nil {
+		t.Fatalf("Gzip failed: %v", err)
+	}
+	defer os.Remove(gzFile) // Clean up the gzipped file
+
+	// Open the file, and then read from it using a gzip reader
+	f, err := os.Open(gzFile)
+	if err != nil {
+		t.Fatalf("Failed to open gzipped file: %v", err)
+	}
+	defer f.Close()
+
+	gz, err := gzip.NewReader(f)
+	if err != nil {
+		t.Fatalf("Failed to create gzip reader: %v", err)
+	}
+
+	// Read the content from the gzip reader
+	decompressedData, err := io.ReadAll(gz)
+	if err != nil {
+		t.Fatalf("Failed to read decompressed data: %v", err)
+	}
+
+	if string(decompressedData) != testContent {
+		t.Errorf("Decompressed data mismatch. Expected %q, got %q", testContent, decompressedData)
+	}
+}
 
 // Test_Gunzip_ValidFile tests if Gunzip successfully decompresses a valid GZIP file.
 func Test_Gunzip_ValidFile(t *testing.T) {
