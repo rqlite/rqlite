@@ -4,6 +4,7 @@
 - [PR #1880](https://github.com/rqlite/rqlite/pull/1880): Improve DB mode checks.
 - [PR #1881](https://github.com/rqlite/rqlite/pull/1881): Add GZIP-related utils.
 - [PR #1882](https://github.com/rqlite/rqlite/pull/1882): Force creation of WAL-related files when the database is opened.
+- [PR #1883](https://github.com/rqlite/rqlite/pull/1883): Upgrade to rqlite SQLite v1.36.0, bringing in [Geopoly](https://www.sqlite.org/geopoly.html) support.
 
 ## v8.30.0 (September 5th 2024)
 ### New features
