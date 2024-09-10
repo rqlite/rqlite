@@ -265,6 +265,28 @@ func testEmptyStatements(t *testing.T, db *DB) {
 	}
 }
 
+func testGeopoly(t *testing.T, db *DB) {
+	_, err := db.ExecuteStringStmt("CREATE VIRTUAL TABLE polygons USING geopoly(a, b, c)")
+	if err != nil {
+		t.Fatalf("failed to create table: %s", err.Error())
+	}
+	_, err = db.ExecuteStringStmt(`INSERT INTO polygons(_shape) VALUES('[[0,0],[2,0],[1,2],[0,0]]')`)
+	if err != nil {
+		t.Fatalf("failed to insert record: %s", err.Error())
+	}
+	_, err = db.ExecuteStringStmt(`INSERT INTO polygons(_shape) VALUES('[[1,1],[3,1],[3,3],[1,3],[1,1]]')`)
+	if err != nil {
+		t.Fatalf("failed to insert record: %s", err.Error())
+	}
+	rows, err := db.QueryStringStmt(`SELECT _shape FROM polygons WHERE geopoly_overlap(_shape, '[[0,0],[4,0],[4,4],[0,4],[0,0]]')`)
+	if err != nil {
+		t.Fatalf("failed to query table: %s", err.Error())
+	}
+	if exp, got := `[{"columns":["_shape"],"types":["text"],"values":[["\u0001\u0000\u0000\u0003\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000@\u0000\u0000\u0000\u0000\u0000\u0000\ufffd?\u0000\u0000\u0000@"],["\u0001\u0000\u0000\u0004\u0000\u0000\ufffd?\u0000\u0000\ufffd?\u0000\u0000@@\u0000\u0000\ufffd?\u0000\u0000@@\u0000\u0000@@\u0000\u0000\ufffd?\u0000\u0000@@"]]}]`, asJSON(rows); exp != got {
+		t.Fatalf("unexpected results for query\nexp: %s\ngot: %s", exp, got)
+	}
+}
+
 func testReadOnlyStatements(t *testing.T, db *DB) {
 	_, err := db.ExecuteStringStmt("CREATE TABLE foo (id INTEGER NOT NULL PRIMARY KEY, name TEXT)")
 	if err != nil {
@@ -1765,6 +1787,7 @@ func Test_DatabaseCommonOperations(t *testing.T) {
 		{"HexQuery", testHexQuery},
 		{"Strict", testSTRICT},
 		{"EmptyStatements", testEmptyStatements},
+		{"GeopolyStatements", testGeopoly},
 		{"ReadOnlyStatements", testReadOnlyStatements},
 		{"SimpleSingleStatements", testSimpleSingleStatements},
 		{"SimpleStatementsNumeric", testSimpleStatementsNumeric},
