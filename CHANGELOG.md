@@ -2,6 +2,7 @@
 ### Implementation changes and bug fixes
 - [PR #1884](https://github.com/rqlite/rqlite/pull/1884): Refactor code to further use common utilities.
 - [PR #1887](https://github.com/rqlite/rqlite/pull/1887): Improve stats and error message for Queued Wait timeouts.
+- [PR #1888](https://github.com/rqlite/rqlite/pull/1888): Count cluster client read and write timeouts
 
 ## v8.30.1 (September 9th 2024)
 ### Implementation changes and bug fixes
