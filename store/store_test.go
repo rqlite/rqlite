@@ -19,6 +19,7 @@ import (
 	"github.com/rqlite/rqlite/v8/command/proto"
 	"github.com/rqlite/rqlite/v8/db"
 	"github.com/rqlite/rqlite/v8/random"
+	"github.com/rqlite/rqlite/v8/snapshot9"
 	"github.com/rqlite/rqlite/v8/testdata/chinook"
 )
 
@@ -404,7 +405,8 @@ COMMIT;
 }
 
 // Test_SingleNodeSnapshot tests that the Store correctly takes a snapshot
-// and recovers from it.
+// and recovers from it. Because Snapshotting is so important to get
+// right, this test internal implementation details.
 func Test_SingleNodeSnapshot(t *testing.T) {
 	s, ln := mustNewStore(t)
 	defer ln.Close()
@@ -451,25 +453,61 @@ func Test_SingleNodeSnapshot(t *testing.T) {
 		t.Fatalf("failed to persist snapshot to disk: %s", err.Error())
 	}
 
-	// Check restoration.
+	// Check that a proof file was written.
 	snapFile, err = os.Open(filepath.Join(snapDir, "snapshot"))
 	if err != nil {
 		t.Fatalf("failed to open snapshot file: %s", err.Error())
 	}
 	defer snapFile.Close()
-	if err := fsm.Restore(snapFile); err != nil {
+
+	b, err := io.ReadAll(snapFile)
+	if err != nil {
+		t.Fatalf("failed to read proof file: %s", err.Error())
+	}
+	p1, err := snapshot9.UnmarshalProof(b)
+	if err != nil {
+		t.Fatalf("failed to unmarshal proof: %s", err.Error())
+	}
+	p2, err := snapshot9.NewProofFromFile(s.dbPath)
+	if err != nil {
+		t.Fatalf("failed to create proof from file: %s", err.Error())
+	}
+
+	if !p1.Equals(p2) {
+		t.Fatalf("proofs not equal")
+	}
+}
+
+func Test_SingleNodeFSMRestore(t *testing.T) {
+	s, ln := mustNewStore(t)
+	defer ln.Close()
+
+	if err := s.Open(); err != nil {
+		t.Fatalf("failed to open single-node store: %s", err.Error())
+	}
+	defer s.Close(true)
+	if err := s.Bootstrap(NewServer(s.ID(), s.Addr(), true)); err != nil {
+		t.Fatalf("failed to bootstrap single-node store: %s", err.Error())
+	}
+	if _, err := s.WaitForLeader(10 * time.Second); err != nil {
+		t.Fatalf("Error waiting for leader: %s", err)
+	}
+
+	fd, err := os.Open("testdata/load.sqlite")
+	if err != nil {
+		t.Fatalf("failed to open test database: %s", err.Error())
+	}
+	defer fd.Close()
+	fsm := NewFSM(s)
+	if err := fsm.Restore(fd); err != nil {
 		t.Fatalf("failed to restore snapshot from disk: %s", err.Error())
 	}
 
-	// Ensure database is back in the correct state.
-	r, err := s.Query(queryRequestFromString("SELECT * FROM foo", false, false))
+	rows, err := s.Query(queryRequestFromString("SELECT COUNT(*) FROM foo", false, false))
 	if err != nil {
 		t.Fatalf("failed to query single node: %s", err.Error())
 	}
-	if exp, got := `["id","name"]`, asJSON(r[0].Columns); exp != got {
-		t.Fatalf("unexpected results for query\nexp: %s\ngot: %s", exp, got)
-	}
-	if exp, got := `[[1,"fiona"]]`, asJSON(r[0].Values); exp != got {
+	if exp, got := `[{"columns":["COUNT(*)"],"types":["integer"],"values":[[3]]}]`, asJSON(rows); exp != got {
 		t.Fatalf("unexpected results for query\nexp: %s\ngot: %s", exp, got)
 	}
 }
