@@ -1,4 +1,4 @@
-## v8.30.2 (unreleased)
+## v8.30.2 (September 10th 2024)
 ### Implementation changes and bug fixes
 - [PR #1884](https://github.com/rqlite/rqlite/pull/1884): Refactor code to further use common utilities.
 - [PR #1887](https://github.com/rqlite/rqlite/pull/1887): Improve stats and error message for Queued Wait timeouts.
