@@ -469,9 +469,13 @@ func (s *Store) Open() (retErr error) {
 	config.LocalID = raft.ServerID(s.raftID)
 
 	// Upgrade any preexisting snapshots.
-	oldSnapshotDir := filepath.Join(s.raftDir, "snapshots")
-	if err := snapshot.Upgrade7To8(oldSnapshotDir, s.snapshotDir, s.logger); err != nil {
-		return fmt.Errorf("failed to upgrade snapshots: %s", err)
+	oldSnapshotDir7 := filepath.Join(s.raftDir, "snapshots")
+	oldSnapshotDir8 := filepath.Join(s.raftDir, "rsnapshots")
+	if err := snapshot.Upgrade7To8(oldSnapshotDir7, oldSnapshotDir8, s.logger); err != nil {
+		return fmt.Errorf("failed to upgrade snapshots from version 7 to 8: %s", err)
+	}
+	if err := snapshot9.Upgrade8To9(oldSnapshotDir8, s.snapshotDir, s.logger); err != nil {
+		return fmt.Errorf("failed to upgrade snapshots from version 8 to 9: %s", err)
 	}
 
 	// Create store for the Snapshots.
