@@ -1,9 +1,11 @@
 package snapshot9
 
 import (
+	"bytes"
 	"io"
 	"os"
 	"sort"
+	"strings"
 	"testing"
 	"time"
 
@@ -187,6 +189,141 @@ func Test_StoreList(t *testing.T) {
 	}
 }
 
+func Test_Store_FullCycle(t *testing.T) {
+	dir := t.TempDir()
+	sp := &mockStateProvider{}
+	store, err := NewStore(dir, sp)
+	if err != nil {
+		t.Fatalf("Failed to create new ReferentialStore: %v", err)
+	}
+
+	//////////////////////////////////////////////////////////////////////////
+	// Create a referential Snapshot.
+	sink, err := store.Create(1, 2, 3, makeTestConfiguration("1", "localhost:1"), 1, nil)
+	if err != nil {
+		t.Fatalf("Failed to create sink: %v", err)
+	}
+	proof := NewProof(100, time.Now())
+	pb := mustMarshalProof(t, proof)
+	if _, err := sink.Write(pb); err != nil {
+		t.Fatalf("Failed to write proof: %v", err)
+	}
+	if err := sink.Close(); err != nil {
+		t.Fatalf("Failed to close sink: %v", err)
+	}
+
+	// Check that if the Provider Proof doesn't match the snapshot, we get an error.
+	sp.proof = NewProof(100, time.Now())
+	_, _, err = store.Open(sink.ID())
+	if err != ErrSnapshotProofMismatch {
+		t.Fatalf("Expected ErrSnapshotProofMismatch opening snapshot with mismatched Provider Proof")
+	}
+
+	// Now open the snapshot with matching Provider Proof, and ensure we get the expected data.
+	sp.proof = proof
+	sp.rc = io.NopCloser(strings.NewReader("hello world"))
+	meta, rc, err := store.Open(sink.ID())
+	if err != nil {
+		t.Fatalf("Failed to open snapshot: %v", err)
+	}
+	if meta.ID != sink.ID() {
+		t.Fatalf("Unexpected snapshot ID: %s", meta.ID)
+	}
+	if meta.Index != 2 {
+		t.Fatalf("Unexpected snapshot index: %d", meta.Index)
+	}
+	if meta.Term != 3 {
+		t.Fatalf("Unexpected snapshot term: %d", meta.Term)
+	}
+	if meta.ConfigurationIndex != 1 {
+		t.Fatalf("Unexpected snapshot configuration index: %d", meta.ConfigurationIndex)
+	}
+	if meta.Version != 1 {
+		t.Fatalf("Unexpected snapshot version: %d", meta.Version)
+	}
+
+	b, err := io.ReadAll(rc)
+	if err != nil {
+		t.Fatalf("Failed to read snapshot data: %v", err)
+	}
+
+	if string(b) != "hello world" {
+		t.Fatalf("Unexpected snapshot data: %s", b)
+	}
+
+	if err := rc.Close(); err != nil {
+		t.Fatalf("Failed to close snapshot: %v", err)
+	}
+
+	// There should be only one snapshot returned by List(), and it should be the latest one.
+	snaps, err := store.List()
+	if err != nil {
+		t.Fatalf("Failed to list snapshots: %v", err)
+	}
+	if len(snaps) != 1 {
+		t.Fatalf("Expected 1 snapshot, got %d", len(snaps))
+	}
+	if snaps[0].ID != sink.ID() {
+		t.Fatalf("Unexpected snapshot ID: %s", snaps[0].ID)
+	}
+
+	//////////////////////////////////////////////////////////////////////////
+	// Create a snapshot using actual SQLite data.
+	sink, err = store.Create(1, 6, 7, makeTestConfiguration("1", "localhost:1"), 8, nil)
+	if err != nil {
+		t.Fatalf("Failed to create sink: %v", err)
+	}
+
+	sqliteData := mustReadFile(t, "testdata/full12k.db")
+	if _, err := sink.Write(sqliteData); err != nil {
+		t.Fatalf("Failed to write proof: %v", err)
+	}
+	if err := sink.Close(); err != nil {
+		t.Fatalf("Failed to close sink: %v", err)
+	}
+
+	// Now open the snapshot, and ensure we get the expected data.
+	meta, rc, err = store.Open(sink.ID())
+	if err != nil {
+		t.Fatalf("Failed to open snapshot: %v", err)
+	}
+	if meta.ID != sink.ID() {
+		t.Fatalf("Unexpected snapshot ID: %s", meta.ID)
+	}
+	if meta.Index != 6 {
+		t.Fatalf("Unexpected snapshot index: %d", meta.Index)
+	}
+	if meta.Term != 7 {
+		t.Fatalf("Unexpected snapshot term: %d", meta.Term)
+	}
+	if meta.ConfigurationIndex != 8 {
+		t.Fatalf("Unexpected snapshot configuration index: %d", meta.ConfigurationIndex)
+	}
+	if meta.Version != 1 {
+		t.Fatalf("Unexpected snapshot version: %d", meta.Version)
+	}
+
+	if !compareReaderToFile(t, rc, "testdata/full12k.db") {
+		t.Fatalf("Snapshot data does not match")
+	}
+
+	if err := rc.Close(); err != nil {
+		t.Fatalf("Failed to close snapshot: %v", err)
+	}
+
+	// There should still be only one snapshot returned by List().
+	snaps, err = store.List()
+	if err != nil {
+		t.Fatalf("Failed to list snapshots: %v", err)
+	}
+	if len(snaps) != 1 {
+		t.Fatalf("Expected 1 snapshot, got %d", len(snaps))
+	}
+	if snaps[0].ID != sink.ID() {
+		t.Fatalf("Unexpected snapshot ID: %s", snaps[0].ID)
+	}
+}
+
 func makeTestConfiguration(i, a string) raft.Configuration {
 	return raft.Configuration{
 		Servers: []raft.Server{
@@ -219,4 +356,33 @@ func mustMarshalProof(t *testing.T, p *Proof) []byte {
 		t.Fatalf("Failed to marshal proof: %v", err)
 	}
 	return b
+}
+
+func mustOpenFile(t *testing.T, path string) *os.File {
+	t.Helper()
+	fd, err := os.Open(path)
+	if err != nil {
+		t.Fatalf("Failed to open file: %v", err)
+	}
+	return fd
+}
+
+func compareReaderToFile(t *testing.T, r io.Reader, path string) bool {
+	t.Helper()
+	fd := mustOpenFile(t, path)
+	defer fd.Close()
+	return compareReaderToReader(t, r, fd)
+}
+
+func compareReaderToReader(t *testing.T, r1, r2 io.Reader) bool {
+	t.Helper()
+	buf1, err := io.ReadAll(r1)
+	if err != nil {
+		t.Fatalf("Failed to read from reader 1: %v", err)
+	}
+	buf2, err := io.ReadAll(r2)
+	if err != nil {
+		t.Fatalf("Failed to read from reader 2: %v", err)
+	}
+	return bytes.Equal(buf1, buf2)
 }
