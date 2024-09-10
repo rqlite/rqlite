@@ -34,7 +34,7 @@ func Test_NewSinkClose(t *testing.T) {
 		t.Fatalf("Unexpected ID: %s", sink.ID())
 	}
 	if err := sink.Close(); err != nil {
-		t.Fatalf("Failed to cancel unopened sink: %v", err)
+		t.Fatalf("Failed to close unopened sink: %v", err)
 	}
 }
 
