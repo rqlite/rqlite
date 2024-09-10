@@ -3,7 +3,6 @@ package chunking
 import (
 	"bytes"
 	"compress/gzip"
-	"crypto/rand"
 	"errors"
 	"fmt"
 	"io"
@@ -11,6 +10,7 @@ import (
 
 	"github.com/rqlite/rqlite/v8/command/proto"
 	"github.com/rqlite/rqlite/v8/progress"
+	"github.com/rqlite/rqlite/v8/random"
 )
 
 const (
@@ -60,11 +60,7 @@ func NewChunker(r io.Reader, chunkSize int64) *Chunker {
 }
 
 func generateStreamID() string {
-	b := make([]byte, 16)
-	_, err := io.ReadFull(rand.Reader, b)
-	if err != nil {
-		return ""
-	}
+	b := random.Bytes(16)
 	// Convert the random bytes into the format of a UUID.
 	return fmt.Sprintf("%x-%x-%x-%x-%x",
 		b[0:4], b[4:6], b[6:8], b[8:10], b[10:])

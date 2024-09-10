@@ -4,9 +4,7 @@ package db
 
 import (
 	"context"
-	"crypto/md5"
 	"database/sql"
-	"encoding/hex"
 	"errors"
 	"expvar"
 	"fmt"
@@ -21,6 +19,7 @@ import (
 	"github.com/rqlite/go-sqlite3"
 	command "github.com/rqlite/rqlite/v8/command/proto"
 	"github.com/rqlite/rqlite/v8/db/humanize"
+	"github.com/rqlite/rqlite/v8/rsum"
 )
 
 const (
@@ -264,7 +263,7 @@ func (db *DB) DBLastModified() (time.Time, error) {
 
 // DBSum returns the MD5 checksum of the database file.
 func (db *DB) DBSum() (string, error) {
-	return md5sum(db.path)
+	return rsum.MD5(db.path)
 }
 
 // WALLastModified returns the last modified time of the WAL file.
@@ -274,7 +273,7 @@ func (db *DB) WALLastModified() (time.Time, error) {
 
 // WALSum returns the MD5 checksum of the WAL file.
 func (db *DB) WALSum() (string, error) {
-	return md5sum(db.walPath)
+	return rsum.MD5(db.walPath)
 }
 
 // Close closes the underlying database connection.
@@ -1593,21 +1592,6 @@ func fileSize(path string) (int64, error) {
 		return 0, fmt.Errorf("not a file")
 	}
 	return stat.Size(), nil
-}
-
-func md5sum(path string) (string, error) {
-	file, err := os.Open(path)
-	if err != nil {
-		return "", err
-	}
-	defer file.Close()
-
-	hash := md5.New()
-	if _, err := io.Copy(hash, file); err != nil {
-		return "", err
-	}
-
-	return hex.EncodeToString(hash.Sum(nil)), nil
 }
 
 func lastModified(path string) (t time.Time, retError error) {
