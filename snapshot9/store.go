@@ -362,6 +362,10 @@ func snapshotName(term, index uint64) string {
 	return fmt.Sprintf("%d-%d-%d", term, index, msec)
 }
 
+func parentDir(dir string) string {
+	return filepath.Dir(dir)
+}
+
 func tmpName(path string) string {
 	return path + tmpSuffix
 }
@@ -381,6 +385,22 @@ func syncDir(dir string) error {
 	}
 	defer fh.Close()
 	return fh.Sync()
+}
+
+func removeDirSync(dir string) error {
+	if err := os.RemoveAll(dir); err != nil {
+		return err
+	}
+	return syncDirParentMaybe(dir)
+}
+
+// syncDirParentMaybe syncs the parent directory of the given
+// directory, but only on non-Windows platforms.
+func syncDirParentMaybe(dir string) error {
+	if runtime.GOOS == "windows" {
+		return nil
+	}
+	return syncDir(parentDir(dir))
 }
 
 // syncDirMaybe syncs the given directory, but only on non-Windows platforms.

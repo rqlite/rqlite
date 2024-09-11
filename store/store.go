@@ -474,7 +474,7 @@ func (s *Store) Open() (retErr error) {
 	if err := snapshot.Upgrade7To8(oldSnapshotDir7, oldSnapshotDir8, s.logger); err != nil {
 		return fmt.Errorf("failed to upgrade snapshots from version 7 to 8: %s", err)
 	}
-	if err := snapshot9.Upgrade8To9(oldSnapshotDir8, s.snapshotDir, s.logger); err != nil {
+	if err := snapshot9.Upgrade8To9(oldSnapshotDir8, s.snapshotDir, s.dbPath, s.logger); err != nil {
 		return fmt.Errorf("failed to upgrade snapshots from version 8 to 9: %s", err)
 	}
 
