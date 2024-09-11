@@ -247,7 +247,7 @@ func (s *Store) Reap() (retN int, retErr error) {
 	// Remove all snapshots, and all associated data, except the newest one.
 	n := 0
 	for _, snap := range snapshots[:len(snapshots)-1] {
-		if err := removeAllPrefix(s.dir, snap.ID); err != nil {
+		if err := removeDirSync(filepath.Join(s.dir, snap.ID)); err != nil {
 			return n, err
 		}
 		if s.LogReaping {
@@ -409,18 +409,4 @@ func syncDirMaybe(dir string) error {
 		return nil
 	}
 	return syncDir(dir)
-}
-
-// removeAllPrefix removes all files in the given directory that have the given prefix.
-func removeAllPrefix(path, prefix string) error {
-	files, err := filepath.Glob(filepath.Join(path, prefix) + "*")
-	if err != nil {
-		return err
-	}
-	for _, f := range files {
-		if err := os.RemoveAll(f); err != nil {
-			return err
-		}
-	}
-	return nil
 }
