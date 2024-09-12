@@ -1,4 +1,4 @@
-package store
+package snapshot9
 
 import (
 	"bytes"
@@ -28,7 +28,7 @@ func Test_SnapshotSource(t *testing.T) {
 	}
 	defer rc.Close()
 
-	srcBuf := mustReadFile(path)
+	srcBuf := mustReadFile(t, path)
 	dstBuf := mustReadAll(rc)
 	if !bytes.Equal(srcBuf, dstBuf) {
 		t.Fatalf("snapshot source data does not match original data")
@@ -41,4 +41,24 @@ func mustReadAll(r io.Reader) []byte {
 		panic("failed to read all from reader")
 	}
 	return b
+}
+
+func createTemp(dir, pattern string) (*os.File, error) {
+	fd, err := os.CreateTemp(dir, pattern)
+	if err != nil {
+		return nil, err
+	}
+	if err := os.Chmod(fd.Name(), 0644); err != nil {
+		return nil, err
+	}
+	return fd, nil
+}
+
+func mustCreateTempFile() string {
+	f, err := createTemp("", "rqlite-temp")
+	if err != nil {
+		panic("failed to create temporary file")
+	}
+	f.Close()
+	return f.Name()
 }

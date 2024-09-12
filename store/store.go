@@ -479,7 +479,7 @@ func (s *Store) Open() (retErr error) {
 	}
 
 	// Create store for the Snapshots.
-	snapshotStore, err := snapshot9.NewStore(filepath.Join(s.snapshotDir), NewSnapshotSource(s.dbPath))
+	snapshotStore, err := snapshot9.NewStore(filepath.Join(s.snapshotDir), snapshot9.NewSnapshotSource(s.dbPath))
 	if err != nil {
 		return fmt.Errorf("failed to create snapshot store: %s", err)
 	}
