@@ -95,13 +95,6 @@ func Upgrade8To9(old, new, newDB string, logger *log.Logger) (retErr error) {
 	} else if !w {
 		return fmt.Errorf("old snapshot database %s does not have WAL mode enabled", oldDBPath)
 	}
-	ok, err := db.CheckIntegrity(oldDBPath, false)
-	if err != nil {
-		return fmt.Errorf("failed to check integrity of old snapshot database %s: %s", oldDBPath, err)
-	}
-	if !ok {
-		return fmt.Errorf("old snapshot database %s failed integrity check", oldDBPath)
-	}
 
 	// Install a proof for it.
 	proof, err := NewProofFromFile(oldDBPath)
