@@ -392,8 +392,6 @@ func Test_SingleNodeRecoverNetworkChange(t *testing.T) {
 func Test_SingleNodeRecoverNetworkChangeSnapshot(t *testing.T) {
 	s0, ln0 := mustNewStore(t)
 	defer ln0.Close()
-	s0.SnapshotThreshold = 4
-	s0.SnapshotInterval = 100 * time.Millisecond
 	if err := s0.Open(); err != nil {
 		t.Fatalf("failed to open single-node store: %s", err.Error())
 	}
@@ -405,8 +403,9 @@ func Test_SingleNodeRecoverNetworkChangeSnapshot(t *testing.T) {
 	}
 
 	queryTest := func(s *Store, c int) {
+		t.Helper()
 		qr := queryRequestFromString("SELECT COUNT(*) FROM foo", false, false)
-		qr.Level = proto.QueryRequest_QUERY_REQUEST_LEVEL_NONE
+		qr.Level = proto.QueryRequest_QUERY_REQUEST_LEVEL_STRONG
 		r, err := s.Query(qr)
 		if err != nil {
 			t.Fatalf("failed to query single node: %s", err.Error())
@@ -439,13 +438,9 @@ func Test_SingleNodeRecoverNetworkChangeSnapshot(t *testing.T) {
 	}
 	queryTest(s0, 10)
 
-	// Wait for a snapshot to take place.
-	for {
-		time.Sleep(100 * time.Millisecond)
-		ns := s0.numSnapshots.Load()
-		if ns > 0 {
-			break
-		}
+	// Trigger a snapshot.
+	if err := s0.Snapshot(0); err != nil {
+		t.Fatalf("failed to snapshot single-node store: %s", err.Error())
 	}
 
 	id := s0.ID()
