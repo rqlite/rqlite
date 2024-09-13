@@ -391,6 +391,9 @@ class Node(object):
   def num_snapshots(self):
     return int(self.expvar()['store']['num_snapshots'])
 
+  def num_available_snapshots(self):
+    return len(self.status()['store']['snapshot_store']['snapshots'])
+
   def num_restores(self):
     return int(self.expvar()['store']['num_restores'])
 
