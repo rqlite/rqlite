@@ -516,7 +516,7 @@ func (s *Store) Open() (retErr error) {
 		stats.Add(numRecoveries, 1)
 	}
 
-	s.db, err = createOnDisk(s.dbPath, s.dbConf.FKConstraints, true, s.dbConf.Extensions)
+	s.db, err = openOnDisk(s.dbPath, s.dbConf.FKConstraints, s.dbConf.Extensions)
 	if err != nil {
 		return fmt.Errorf("failed to create on-disk database: %s", err)
 	}
@@ -2409,9 +2409,8 @@ func (s *Store) logBackup() bool {
 	return s.hcLogLevel() < hclog.Warn
 }
 
-// createOnDisk opens an on-disk database file at the configured path. Any
-// preexisting file will be removed before the database is opened.
-func createOnDisk(path string, fkConstraints, wal bool, extensions []string) (*sql.SwappableDB, error) {
+// openOnDisk opens an on-disk database file at the configured path.
+func openOnDisk(path string, fkConstraints bool, extensions []string) (*sql.SwappableDB, error) {
 	if err := sql.RemoveFiles(path); err != nil {
 		return nil, err
 	}
@@ -2419,7 +2418,7 @@ func createOnDisk(path string, fkConstraints, wal bool, extensions []string) (*s
 	if len(extensions) > 0 {
 		drv = db.NewDriver("rqlite-sqlite3-extended", extensions, db.CnkOnCloseModeDisabled)
 	}
-	return sql.OpenSwappableWithDriver(drv, path, fkConstraints, wal)
+	return sql.OpenSwappableWithDriver(drv, path, fkConstraints, true)
 }
 
 func createTemp(dir, pattern string) (*os.File, error) {
