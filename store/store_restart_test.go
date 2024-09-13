@@ -62,6 +62,7 @@ func Test_OpenStoreCloseStartupSingleNode(t *testing.T) {
 	if err := s.Snapshot(0); err != nil {
 		t.Fatalf("failed to take user-requested snapshot: %s", err.Error())
 	}
+	// Insert new records so we have something to snapshot.
 	queryTest := func(s *Store, c int) {
 		qr := queryRequestFromString("SELECT COUNT(*) FROM foo", false, false)
 		qr.Level = command.QueryRequest_QUERY_REQUEST_LEVEL_STRONG
