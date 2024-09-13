@@ -52,9 +52,6 @@ func Test_OpenStoreCloseStartupSingleNode(t *testing.T) {
 		t.Fatalf("failed to close single-node store: %s", err.Error())
 	}
 
-	// Tweak snapshot params to force a snap to take place.
-	s.SnapshotThreshold = 4
-	s.SnapshotInterval = 100 * time.Millisecond
 	if err := s.Open(); err != nil {
 		t.Fatalf("failed to open single-node store: %s", err.Error())
 	}
@@ -62,7 +59,7 @@ func Test_OpenStoreCloseStartupSingleNode(t *testing.T) {
 		t.Fatalf("Error waiting for leader: %s", err)
 	}
 
-	// Insert new records to trigger a snapshot.
+	// Insert new records so we have something to snapshot.
 	queryTest := func(s *Store, c int) {
 		qr := queryRequestFromString("SELECT COUNT(*) FROM foo", false, false)
 		qr.Level = command.QueryRequest_QUERY_REQUEST_LEVEL_STRONG
@@ -87,13 +84,23 @@ func Test_OpenStoreCloseStartupSingleNode(t *testing.T) {
 	}
 	queryTest(s, 10)
 
-	// Wait for a snapshot to take place.
-	for {
-		time.Sleep(100 * time.Millisecond)
-		ns := s.numSnapshots.Load()
-		if ns > 0 {
-			break
-		}
+	// This next block tests that everything works when there is a combination
+	// of snapshot data and some entries in the log that need to be replayed
+	// af start-up.
+	if err := s.Close(true); err != nil {
+		t.Fatalf("failed to close single-node store: %s", err.Error())
+	}
+	if err := s.Open(); err != nil {
+		t.Fatalf("failed to open single-node store: %s", err.Error())
+	}
+	if _, err := s.WaitForLeader(10 * time.Second); err != nil {
+		t.Fatalf("Error waiting for leader: %s", err)
+	}
+	queryTest(s, 10)
+
+	// Trigger another snapshot.
+	if err := s.Snapshot(0); err != nil {
+		t.Fatalf("failed to take user-requested snapshot: %s", err.Error())
 	}
 
 	// Close and re-open to make sure all data is there after starting up
@@ -117,11 +124,7 @@ func Test_OpenStoreCloseStartupSingleNode(t *testing.T) {
 		t.Fatalf("failed to close single-node store: %s", err.Error())
 	}
 
-	// Set snapshot threshold high to effectively disable, reopen store, write
-	// one more record, and then reopen again, ensure all data is there.
-	s.SnapshotThreshold = 8192
-	s.SnapshotInterval = 100 * time.Second
-
+	// Write one more record, and then reopen again, ensure all data is there.
 	if err := s.Open(); err != nil {
 		t.Fatalf("failed to open single-node store: %s", err.Error())
 	}
@@ -174,6 +177,7 @@ func test_SnapshotStress(t *testing.T, s *Store) {
 		t.Fatalf("failed to execute on single node: %s", err.Error())
 	}
 
+	// Write a bunch of rows, ensure they are all there.
 	for i := 0; i < 1000; i++ {
 		er := executeRequestFromString(
 			fmt.Sprintf(`INSERT INTO foo(name) VALUES("fiona-%d")`, i),
@@ -182,6 +186,15 @@ func test_SnapshotStress(t *testing.T, s *Store) {
 		if err != nil {
 			t.Fatalf("failed to execute on single node: %s", err.Error())
 		}
+	}
+	qr := queryRequestFromString("SELECT COUNT(*) FROM foo", false, false)
+	qr.Level = command.QueryRequest_QUERY_REQUEST_LEVEL_STRONG
+	r, err := s.Query(qr)
+	if err != nil {
+		t.Fatalf("failed to query single node: %s", err.Error())
+	}
+	if exp, got := `[{"columns":["COUNT(*)"],"types":["integer"],"values":[[1000]]}]`, asJSON(r); exp != got {
+		t.Fatalf("unexpected results for query\nexp: %s\ngot: %s", exp, got)
 	}
 
 	// Close and re-open to make sure all data is there recovering from snapshot.
@@ -196,9 +209,9 @@ func test_SnapshotStress(t *testing.T, s *Store) {
 		t.Fatalf("Error waiting for leader: %s", err)
 	}
 
-	qr := queryRequestFromString("SELECT COUNT(*) FROM foo", false, false)
+	qr = queryRequestFromString("SELECT COUNT(*) FROM foo", false, false)
 	qr.Level = command.QueryRequest_QUERY_REQUEST_LEVEL_STRONG
-	r, err := s.Query(qr)
+	r, err = s.Query(qr)
 	if err != nil {
 		t.Fatalf("failed to query single node: %s", err.Error())
 	}

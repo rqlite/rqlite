@@ -1,3 +1,7 @@
+## v8.30.3 (unreleased)
+### Implementation changes and bug fixes
+- [PR #1889](https://github.com/rqlite/rqlite/pull/1889): Miscellaneous improvements to testing.
+
 ## v8.30.2 (September 10th 2024)
 ### Implementation changes and bug fixes
 - [PR #1884](https://github.com/rqlite/rqlite/pull/1884): Refactor code to further use common utilities.

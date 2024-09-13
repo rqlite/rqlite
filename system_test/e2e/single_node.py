@@ -308,8 +308,9 @@ class TestEndToEndSnapshotRestoreSingle(unittest.TestCase):
     self.n0.start()
     self.n0.wait_for_leader()
     self.n0.wait_for_all_applied()
-    self.assertEqual(self.n0.expvar()['store']['num_restores'], 1)
 
+    self.assertEqual(self.n0.num_available_snapshots(), 1)
+    self.assertEqual(self.n0.expvar()['store']['num_restores'], 1)
     j = self.n0.query('SELECT count(*) FROM foo', level='none')
     self.assertEqual(j, d_("{'results': [{'values': [[200]], 'types': ['integer'], 'columns': ['count(*)']}]}"))
 

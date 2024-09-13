@@ -360,6 +360,33 @@ func Test_EnsureWALMode(t *testing.T) {
 	}
 }
 
+func Test_IsValidSQLiteWALFile(t *testing.T) {
+	path := mustTempFile()
+	defer os.Remove(path)
+
+	drvName := random.String()
+	sql.Register(drvName, &sqlite3.SQLiteDriver{})
+	dsn := fmt.Sprintf("file:%s", path)
+	db, err := sql.Open(drvName, dsn)
+	if err != nil {
+		t.Fatalf("failed to create SQLite database: %s", err.Error())
+	}
+	_, err = db.Exec("PRAGMA journal_mode=WAL")
+	if err != nil {
+		t.Fatalf("failed to enable WAL mode: %s", err.Error())
+	}
+	_, err = db.Exec("CREATE TABLE foo (name TEXT)")
+	if err != nil {
+		t.Fatalf("failed to create table: %s", err.Error())
+	}
+	if !IsValidSQLiteWALFile(path + "-wal") {
+		t.Fatalf("WAL file marked as invalid")
+	}
+	if err := db.Close(); err != nil {
+		t.Fatalf("failed to close database: %s", err.Error())
+	}
+}
+
 func Test_CheckpointRemove(t *testing.T) {
 	// Non-WAL-mode database.
 	deleteModePath := mustTempFile()
