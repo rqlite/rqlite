@@ -271,7 +271,9 @@ type Store struct {
 	cmdProc        *CommandProcessor
 
 	// Channels that must be closed for the Store to be considered ready.
-	readyWg sync.WaitGroup
+	readyChans             []<-chan struct{}
+	numClosedReadyChannels int
+	readyChansMu           sync.Mutex
 
 	// Channels for WAL-size triggered snapshotting
 	snapshotWClose chan struct{}
@@ -604,11 +606,14 @@ func (s *Store) Stepdown(wait bool) error {
 // RegisterReadyChannel registers a channel that must be closed before the
 // store is considered "ready" to serve requests.
 func (s *Store) RegisterReadyChannel(ch <-chan struct{}) {
-	s.readyWg.Add(1)
-
+	s.readyChansMu.Lock()
+	defer s.readyChansMu.Unlock()
+	s.readyChans = append(s.readyChans, ch)
 	go func() {
 		<-ch
-		s.readyWg.Done()
+		s.readyChansMu.Lock()
+		s.numClosedReadyChannels++
+		s.readyChansMu.Unlock()
 	}()
 }
 
@@ -621,18 +626,16 @@ func (s *Store) Ready() bool {
 		return false
 	}
 
-	done := make(chan struct{})
-	go func() {
-		s.readyWg.Wait()
-		close(done)
-	}()
-
-	select {
-	case <-done:
+	return func() bool {
+		s.readyChansMu.Lock()
+		defer s.readyChansMu.Unlock()
+		if s.numClosedReadyChannels != len(s.readyChans) {
+			return false
+		}
+		s.readyChans = nil
+		s.numClosedReadyChannels = 0
 		return true
-	default:
-		return false
-	}
+	}()
 }
 
 // Committed blocks until the local commit index is greater than or
