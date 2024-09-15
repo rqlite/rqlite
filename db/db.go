@@ -1600,7 +1600,7 @@ func lastModified(path string) (t time.Time, retError error) {
 			retError = nil
 		}
 	}()
-	fd, err := os.OpenFile(path, os.O_WRONLY, 0644)
+	fd, err := os.OpenFile(path, os.O_RDONLY, 0644)
 	if err != nil {
 		return time.Time{}, err
 	}
