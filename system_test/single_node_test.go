@@ -1445,9 +1445,6 @@ func Test_SingleNodeNoopSnapReopen(t *testing.T) {
 	if err := node.Store.Open(); err != nil {
 		t.Fatalf("failed to re-open store: %s", err)
 	}
-	if err := node.Store.Bootstrap(store.NewServer(node.Store.ID(), node.Store.Addr(), true)); err != nil {
-		t.Fatalf("failed to bootstrap single-node store: %s", err.Error())
-	}
 	if err := node.Service.Start(); err != nil {
 		t.Fatalf("failed to restart service: %s", err)
 	}
