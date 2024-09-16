@@ -1600,14 +1600,6 @@ func lastModified(path string) (t time.Time, retError error) {
 			retError = nil
 		}
 	}()
-	fd, err := os.OpenFile(path, os.O_RDONLY, 0644)
-	if err != nil {
-		return time.Time{}, err
-	}
-	defer fd.Close()
-	if err := fd.Sync(); err != nil {
-		return time.Time{}, err
-	}
 	info, err := os.Stat(path)
 	if err != nil {
 		return time.Time{}, err
