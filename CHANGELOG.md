@@ -2,6 +2,7 @@
 ### Implementation changes and bug fixes
 - [PR #1889](https://github.com/rqlite/rqlite/pull/1889): Miscellaneous improvements to testing.
 - [PR #1890](https://github.com/rqlite/rqlite/pull/1890): Rename and tweak internal Store-level function.
+- [PR #1891](https://github.com/rqlite/rqlite/pull/1891): Minor improvements to code.
 
 ## v8.30.2 (September 10th 2024)
 ### Implementation changes and bug fixes
