@@ -1691,7 +1691,7 @@ func Test_MultiNodeClusterRecoverSingle(t *testing.T) {
 	// quorum can't be met. This isn't quite right since the Raft address is also
 	// changing, but it generally proves it doesn't come up.
 	mux0, ln0 := mustNewOpenMux("127.0.0.1:10000")
-	failedSingle := mustNodeEncrypted(node1.Store.ID(), node1.Dir, true, false, mux0, raftDialer, clstrDialer)
+	failedSingle := mustNodeEncrypted(node1.Store.ID(), node1.Dir, false, false, mux0, raftDialer, clstrDialer)
 	_, err = failedSingle.WaitForLeader()
 	if err == nil {
 		t.Fatalf("no error waiting for leader")
@@ -1704,7 +1704,7 @@ func Test_MultiNodeClusterRecoverSingle(t *testing.T) {
 	peers := fmt.Sprintf(`[{"id": "%s","address": "%s"}]`, node1.Store.ID(), "127.0.0.1:10001")
 	mustWriteFile(node1.PeersPath, peers)
 
-	okSingle := mustNodeEncrypted(node1.Store.ID(), node1.Dir, true, false, mux1, raftDialer, clstrDialer)
+	okSingle := mustNodeEncrypted(node1.Store.ID(), node1.Dir, false, false, mux1, raftDialer, clstrDialer)
 	_, err = okSingle.WaitForLeader()
 	if err != nil {
 		t.Fatalf("failed waiting for leader: %s", err.Error())
