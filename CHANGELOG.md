@@ -1,4 +1,4 @@
-## v8.30.3 (unreleased)
+## v8.30.3 (September 16th 2024)
 ### Implementation changes and bug fixes
 - [PR #1889](https://github.com/rqlite/rqlite/pull/1889): Miscellaneous improvements to testing.
 - [PR #1890](https://github.com/rqlite/rqlite/pull/1890): Rename and tweak internal Store-level function.
