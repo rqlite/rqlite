@@ -3,7 +3,7 @@
 - [PR #1889](https://github.com/rqlite/rqlite/pull/1889): Miscellaneous improvements to testing.
 - [PR #1890](https://github.com/rqlite/rqlite/pull/1890): Rename and tweak internal Store-level function.
 - [PR #1891](https://github.com/rqlite/rqlite/pull/1891): Minor improvements to code.
-- [PR #1892](https://github.com/rqlite/rqlite/pull/1892): Don't ignore any error from BootstrapCluster.
+- [PR #1892](https://github.com/rqlite/rqlite/pull/1892): Don't ignore any error from `BootstrapCluster`.
 - [PR #1893](https://github.com/rqlite/rqlite/pull/1893): `go mod` updates.
 
 ## v8.30.2 (September 10th 2024)
