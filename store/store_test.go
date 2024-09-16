@@ -216,7 +216,7 @@ func Test_SingleNodeTempFileCleanup(t *testing.T) {
 	// Create temporary files in the Store directory.
 	for _, pattern := range []string{
 		restoreScratchPattern,
-		backupScatchPattern,
+		backupScratchPattern,
 		bootScatchPattern,
 	} {
 		f, err := createTemp(s.dbDir, pattern)
@@ -235,7 +235,7 @@ func Test_SingleNodeTempFileCleanup(t *testing.T) {
 	// Confirm temporary files have been cleaned up.
 	for _, pattern := range []string{
 		restoreScratchPattern,
-		backupScatchPattern,
+		backupScratchPattern,
 		bootScatchPattern,
 	} {
 		matches, err := filepath.Glob(filepath.Join(s.dbDir, pattern))

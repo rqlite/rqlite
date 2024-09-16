@@ -59,6 +59,7 @@ func Test_OpenStoreCloseStartupSingleNode(t *testing.T) {
 		t.Fatalf("Error waiting for leader: %s", err)
 	}
 
+	mustNoop(s, "1234") // Ensures there is something to snapshot.
 	if err := s.Snapshot(0); err != nil {
 		t.Fatalf("failed to take user-requested snapshot: %s", err.Error())
 	}

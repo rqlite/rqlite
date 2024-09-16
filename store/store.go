@@ -89,8 +89,8 @@ const (
 	snapshotsDirName           = "csnapshots"
 	restoreScratchPattern      = "rqlite-restore-*"
 	bootScatchPattern          = "rqlite-boot-*"
-	backupScatchPattern        = "rqlite-backup-*"
-	vacuumScatchPattern        = "rqlite-vacuum-*"
+	backupScratchPattern       = "rqlite-backup-*"
+	vacuumScratchPattern       = "rqlite-vacuum-*"
 	raftDBPath                 = "raft.db" // Changing this will break backwards compatibility.
 	peersPath                  = "raft/peers.json"
 	peersInfoPath              = "raft/peers.info"
@@ -562,8 +562,8 @@ func (s *Store) Open() (retErr error) {
 	for _, pattern := range []string{
 		restoreScratchPattern,
 		bootScatchPattern,
-		backupScatchPattern,
-		vacuumScatchPattern} {
+		backupScratchPattern,
+		vacuumScratchPattern} {
 		for _, dir := range []string{s.raftDir, s.dbDir} {
 			files, err := filepath.Glob(filepath.Join(dir, pattern))
 			if err != nil {
@@ -618,10 +618,10 @@ func (s *Store) Bootstrap(servers ...*Server) error {
 			Address: raft.ServerAddress(servers[i].Addr),
 		}
 	}
-	s.raft.BootstrapCluster(raft.Configuration{
+	fut := s.raft.BootstrapCluster(raft.Configuration{
 		Servers: raftServers,
 	})
-	return nil
+	return fut.Error()
 }
 
 // Stepdown forces this node to relinquish leadership to another node in
@@ -1404,7 +1404,7 @@ func (s *Store) Backup(br *proto.BackupRequest, dst io.Writer) (retErr error) {
 				}
 			}
 
-			srcFD, err = createTemp(s.dbDir, backupScatchPattern)
+			srcFD, err = createTemp(s.dbDir, backupScratchPattern)
 			if err != nil {
 				return err
 			}
@@ -1573,7 +1573,7 @@ func (s *Store) ReadFrom(r io.Reader) (int64, error) {
 // the temporary file with the existing database file. The database is then
 // re-opened.
 func (s *Store) Vacuum() error {
-	fd, err := createTemp(s.dbDir, vacuumScatchPattern)
+	fd, err := createTemp(s.dbDir, vacuumScratchPattern)
 	if err != nil {
 		return err
 	}
