@@ -1135,7 +1135,7 @@ func Test_SingleNodeUpgrades_Snapshots(t *testing.T) {
 		defer ln.Close()
 		raftDialer := tcp.NewDialer(cluster.MuxRaftHeader, nil)
 		clstrDialer := tcp.NewDialer(cluster.MuxClusterHeader, nil)
-		node := mustNodeEncrypted("node1", destdir, true, false, mux, raftDialer, clstrDialer)
+		node := mustNodeEncrypted("node1", destdir, false, false, mux, raftDialer, clstrDialer)
 		defer node.Deprovision()
 		if _, err := node.WaitForLeader(); err != nil {
 			t.Fatalf("node never became leader with %s data:", dir)
@@ -1325,13 +1325,9 @@ func Test_SingleNodeReopen(t *testing.T) {
 	if err := node.Store.Open(); err != nil {
 		t.Fatalf("failed to re-open store: %s", err)
 	}
-	if err := node.Store.Bootstrap(store.NewServer(node.Store.ID(), node.Store.Addr(), true)); err != nil {
-		t.Fatalf("failed to bootstrap single-node store: %s", err.Error())
-	}
 	if err := node.Service.Start(); err != nil {
 		t.Fatalf("failed to restart service: %s", err)
 	}
-
 	if _, err := node.WaitForLeader(); err != nil {
 		t.Fatalf("node never became leader")
 	}
