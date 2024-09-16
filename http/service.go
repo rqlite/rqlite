@@ -442,8 +442,6 @@ func (s *Service) Close() {
 		close(s.closeCh)
 	}
 	<-s.queueDone
-
-	s.ln.Close()
 }
 
 // HTTPS returns whether this service is using HTTPS.
