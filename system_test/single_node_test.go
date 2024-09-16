@@ -1075,7 +1075,7 @@ func Test_SingleNodeUpgrades_NoSnapshots(t *testing.T) {
 		defer ln.Close()
 		raftDialer := tcp.NewDialer(cluster.MuxRaftHeader, nil)
 		clstrDialer := tcp.NewDialer(cluster.MuxClusterHeader, nil)
-		node := mustNodeEncrypted("node1", destdir, true, false, mux, raftDialer, clstrDialer)
+		node := mustNodeEncrypted("node1", destdir, false, false, mux, raftDialer, clstrDialer)
 		defer node.Deprovision()
 		if _, err := node.WaitForLeader(); err != nil {
 			t.Fatalf("node never became leader with %s data:", dir)
