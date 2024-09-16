@@ -1594,12 +1594,7 @@ func fileSize(path string) (int64, error) {
 	return stat.Size(), nil
 }
 
-func lastModified(path string) (t time.Time, retError error) {
-	defer func() {
-		if os.IsNotExist(retError) {
-			retError = nil
-		}
-	}()
+func lastModified(path string) (time.Time, error) {
 	info, err := os.Stat(path)
 	if err != nil {
 		return time.Time{}, err
