@@ -583,10 +583,10 @@ func (s *Store) Bootstrap(servers ...*Server) error {
 			Address: raft.ServerAddress(servers[i].Addr),
 		}
 	}
-	fut := s.raft.BootstrapCluster(raft.Configuration{
+	s.raft.BootstrapCluster(raft.Configuration{
 		Servers: raftServers,
 	})
-	return fut.Error()
+	return nil
 }
 
 // Stepdown forces this node to relinquish leadership to another node in
