@@ -1,13 +1,12 @@
 package store
 
 import (
-	"compress/gzip"
-	"io"
 	"os"
 	"testing"
 	"time"
 
 	command "github.com/rqlite/rqlite/v8/command/proto"
+	"github.com/rqlite/rqlite/v8/rarchive"
 )
 
 func test_SingleNodeProvide(t *testing.T, vacuum, compress bool) {
@@ -71,7 +70,7 @@ func test_SingleNodeProvide(t *testing.T, vacuum, compress bool) {
 
 	s1file := tmpFd.Name()
 	if compress {
-		unCompressedFile, err := gunzip(tmpFd.Name())
+		unCompressedFile, err := rarchive.Gunzip(tmpFd.Name())
 		if err != nil {
 			t.Fatalf("failed to gunzip provided SQLite data: %s", err.Error())
 		}
@@ -225,28 +224,4 @@ func Test_SingleNodeProvideLastIndex(t *testing.T) {
 	if newLI <= lm {
 		t.Fatalf("last index should have changed")
 	}
-}
-
-func gunzip(file string) (string, error) {
-	f, err := os.Open(file)
-	if err != nil {
-		return "", err
-	}
-	defer f.Close()
-
-	gz, err := gzip.NewReader(f)
-	if err != nil {
-		return "", err
-	}
-	defer gz.Close()
-
-	tmpFd := mustCreateTempFD()
-	defer tmpFd.Close()
-
-	_, err = io.Copy(tmpFd, gz)
-	if err != nil {
-		return "", err
-	}
-
-	return tmpFd.Name(), nil
 }

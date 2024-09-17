@@ -2,11 +2,9 @@ package store
 
 import (
 	"bytes"
-	"compress/gzip"
 	"crypto/rand"
 	"errors"
 	"fmt"
-	"io"
 	"net"
 	"os"
 	"path/filepath"
@@ -20,6 +18,7 @@ import (
 	"github.com/rqlite/rqlite/v8/db"
 	"github.com/rqlite/rqlite/v8/random"
 	"github.com/rqlite/rqlite/v8/snapshot9"
+	"github.com/rqlite/rqlite/v8/rarchive"
 	"github.com/rqlite/rqlite/v8/testdata/chinook"
 )
 
@@ -304,16 +303,11 @@ COMMIT;
 	}
 
 	// Gzip decompress file to a new temp file
-	guzf, err := os.CreateTemp("", "rqlite-baktest-")
+	guzf, err := rarchive.Gunzip(gzf.Name())
 	if err != nil {
-		t.Fatalf("Backup Failed: unable to create temp file, %s", err.Error())
-	}
-	defer os.Remove(guzf.Name())
-	defer guzf.Close()
-	if err := gunzipFile(guzf, gzf); err != nil {
 		t.Fatalf("Failed to gunzip backup file %s", err.Error())
 	}
-	if !filesIdentical(guzf.Name(), s.dbPath) {
+	if !filesIdentical(guzf, s.dbPath) {
 		t.Fatalf("backup file not identical to database file")
 	}
 }
@@ -392,16 +386,12 @@ COMMIT;
 	}
 
 	// Gzip decompress file to a new temp file
-	guzf, err := os.CreateTemp("", "rqlite-baktest-")
+	guzf, err := rarchive.Gunzip(gzf.Name())
 	if err != nil {
 		t.Fatalf("Backup Failed: unable to create temp file, %s", err.Error())
 	}
-	defer os.Remove(guzf.Name())
-	defer guzf.Close()
-	if err := gunzipFile(guzf, gzf); err != nil {
-		t.Fatalf("Failed to gunzip backup file %s", err.Error())
-	}
-	checkDB(guzf.Name())
+	defer os.Remove(guzf)
+	checkDB(guzf)
 }
 
 // Test_SingleNodeSnapshot tests that the Store correctly takes a snapshot
@@ -3052,21 +3042,6 @@ func removeNodeRequest(id string) *proto.RemoveNodeRequest {
 	return &proto.RemoveNodeRequest{
 		Id: id,
 	}
-}
-
-func gunzipFile(dst, src *os.File) error {
-	r, err := os.Open(src.Name())
-	if err != nil {
-		return err
-	}
-	defer r.Close()
-	gzr, err := gzip.NewReader(r)
-	if err != nil {
-		return err
-	}
-	defer gzr.Close()
-	_, err = io.Copy(dst, gzr)
-	return err
 }
 
 func filesIdentical(path1, path2 string) bool {
