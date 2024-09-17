@@ -514,6 +514,7 @@ func (s *Store) Open() (retErr error) {
 			}
 			s.logger.Println("proofs match so skipping restore-on-start")
 			s.noRestoreOnStart.Set()
+			s.dbAppliedIdx.Store(snaps[0].Index)
 			config.NoSnapshotRestoreOnStart = true
 
 			// We now need to delete the WAL files because those writes are in
@@ -521,6 +522,8 @@ func (s *Store) Open() (retErr error) {
 			if err := sql.RemoveWALFiles(s.dbPath); err != nil {
 				return fmt.Errorf("failed to remove WAL files: %s", err)
 			}
+		} else {
+			s.logger.Println("no proof in snapshot store so restoring-on-start")
 		}
 	} else {
 		// No snapshots, so the SQLite file should be *completely* rebuilt from the Raft log.
