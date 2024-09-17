@@ -35,6 +35,7 @@ func Upgrade8To9(old, new, newDB string, logger *log.Logger) (retErr error) {
 	}
 
 	if dirExists(old) {
+		logger.Printf("old snapshot directory exists at %s", old)
 		oldIsEmpty, err := dirIsEmpty(old)
 		if err != nil {
 			return fmt.Errorf("failed to check if old snapshot directory %s is empty: %s", old, err)
@@ -75,6 +76,7 @@ func Upgrade8To9(old, new, newDB string, logger *log.Logger) (retErr error) {
 		// directory earlier.
 		return fmt.Errorf("no snapshot to upgrade in old snapshots directory %s", old)
 	}
+	logger.Printf("upgrading snapshot %s", oldMeta.ID)
 
 	// Write out the new meta file in the new snapshot directory.
 	newSnapshotDir := filepath.Join(newTmpDir, oldMeta.ID)
@@ -127,6 +129,7 @@ func Upgrade8To9(old, new, newDB string, logger *log.Logger) (retErr error) {
 	if err := removeDirSync(old); err != nil {
 		return fmt.Errorf("failed to remove old snapshot directory %s: %s", old, err)
 	}
+	logger.Println("upgraded snapshot successfully")
 	return nil
 }
 
