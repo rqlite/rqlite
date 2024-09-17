@@ -1,3 +1,7 @@
+## v8.30.4 (unreleased)
+### Implementation changes and bug fixes
+- [PR #1894](https://github.com/rqlite/rqlite/pull/1894): More use of common gzip utils.
+
 ## v8.30.3 (September 16th 2024)
 ### Implementation changes and bug fixes
 - [PR #1889](https://github.com/rqlite/rqlite/pull/1889): Miscellaneous improvements to testing.
