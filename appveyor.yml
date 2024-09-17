@@ -2,7 +2,7 @@ os: Visual Studio 2019
 
 stack: go 1.22
 
-version: 8.{build}
+version: 9.{build}
 
 platform: x64
 
