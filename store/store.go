@@ -430,6 +430,13 @@ func (s *Store) Open() (retErr error) {
 		return ErrOpen
 	}
 
+	s.fsmIdx.Store(0)
+	s.fsmTerm.Store(0)
+	s.fsmUpdateTime.Store(time.Time{})
+	s.appendedAtTime.Store(time.Time{})
+	s.dbAppliedIdx.Store(0)
+	s.numNoops.Store(0)
+	s.numSnapshots.Store(0)
 	s.openT = time.Now()
 	s.logger.Printf("opening store with node ID %s, listening on %s", s.raftID, s.ly.Addr().String())
 
