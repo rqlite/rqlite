@@ -223,7 +223,7 @@ func Test_SingleNodeDBAppliedIndex(t *testing.T) {
 	}
 
 	// Restart the node, and ensure DBAppliedIndex is set to the correct value.
-	// It can take a second or two for the apply loop to run.
+	// It can take a second or two for the apply loop to run, so we test poll.
 	if err := s.Close(true); err != nil {
 		t.Fatalf("failed to close single-node store: %s", err.Error())
 	}
