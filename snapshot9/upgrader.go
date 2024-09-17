@@ -18,6 +18,7 @@ func Upgrade8To9(old, new, newDB string, logger *log.Logger) (retErr error) {
 	newTmpDir := tmpName(new)
 	defer func() {
 		if retErr != nil {
+			stats.Add(upgradeFail, 1)
 			if err := os.RemoveAll(newTmpDir); err != nil && !os.IsNotExist(err) {
 				logger.Printf("failed to remove temporary upgraded snapshot directory at %s due to outer error (%s) cleanup: %s",
 					newTmpDir, retErr, err)
@@ -129,7 +130,8 @@ func Upgrade8To9(old, new, newDB string, logger *log.Logger) (retErr error) {
 	if err := removeDirSync(old); err != nil {
 		return fmt.Errorf("failed to remove old snapshot directory %s: %s", old, err)
 	}
-	logger.Println("upgraded snapshot successfully")
+	logger.Printf("upgraded snapshot directory %s to %s", old, new)
+	stats.Add(upgradeOk, 1)
 	return nil
 }
 

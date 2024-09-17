@@ -27,6 +27,8 @@ const (
 	persistDuration     = "latest_persist_duration"
 	snapshotsReaped     = "snapshots_reaped"
 	snapshotsReapedFail = "snapshots_reaped_failed"
+	upgradeOk           = "upgrade_ok"
+	upgradeFail         = "upgrade_fail"
 )
 
 var (
@@ -52,6 +54,8 @@ func ResetStats() {
 	stats.Add(persistDuration, 0)
 	stats.Add(snapshotsReaped, 0)
 	stats.Add(snapshotsReapedFail, 0)
+	stats.Add(upgradeOk, 0)
+	stats.Add(upgradeFail, 0)
 }
 
 type Source interface {
