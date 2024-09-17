@@ -174,7 +174,7 @@ func Test_SingleNodeDBAppliedIndex(t *testing.T) {
 	if _, err := s.WaitForLeader(10 * time.Second); err != nil {
 		t.Fatalf("Error waiting for leader: %s", err)
 	}
-	if exp, got := s.DBAppliedIndex(), uint64(0); exp != got {
+	if got, exp := s.DBAppliedIndex(), uint64(0); exp != got {
 		t.Fatalf("wrong DB applied index, got: %d, exp %d", got, exp)
 	}
 
@@ -186,7 +186,7 @@ func Test_SingleNodeDBAppliedIndex(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to execute on single node: %s", err.Error())
 	}
-	if exp, got := s.DBAppliedIndex(), uint64(3); exp != got {
+	if got, exp := s.DBAppliedIndex(), uint64(3); exp != got {
 		t.Fatalf("wrong DB applied index, got: %d, exp %d", got, exp)
 	}
 	er = executeRequestFromStrings([]string{
@@ -196,7 +196,7 @@ func Test_SingleNodeDBAppliedIndex(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to execute on single node: %s", err.Error())
 	}
-	if exp, got := s.DBAppliedIndex(), uint64(4); exp != got {
+	if got, exp := s.DBAppliedIndex(), uint64(4); exp != got {
 		t.Fatalf("wrong DB applied index, got: %d, exp %d", got, exp)
 	}
 
@@ -207,7 +207,7 @@ func Test_SingleNodeDBAppliedIndex(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to query single node: %s", err.Error())
 	}
-	if exp, got := s.DBAppliedIndex(), uint64(4); exp != got {
+	if got, exp := s.DBAppliedIndex(), uint64(4); exp != got {
 		t.Fatalf("wrong DB applied index, got: %d, exp %d", got, exp)
 	}
 
@@ -218,11 +218,12 @@ func Test_SingleNodeDBAppliedIndex(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to query single node: %s", err.Error())
 	}
-	if exp, got := s.DBAppliedIndex(), uint64(4); exp != got {
+	if got, exp := s.DBAppliedIndex(), uint64(4); exp != got {
 		t.Fatalf("wrong DB applied index, got: %d, exp %d", got, exp)
 	}
 
 	// Restart the node, and ensure DBAppliedIndex is set to the correct value.
+	// It can take a second or two for the apply loop to run.
 	if err := s.Close(true); err != nil {
 		t.Fatalf("failed to close single-node store: %s", err.Error())
 	}
@@ -233,9 +234,9 @@ func Test_SingleNodeDBAppliedIndex(t *testing.T) {
 	if _, err := s.WaitForLeader(10 * time.Second); err != nil {
 		t.Fatalf("Error waiting for leader: %s", err)
 	}
-	if exp, got := s.DBAppliedIndex(), uint64(4); exp != got {
-		t.Fatalf("wrong DB applied index, got: %d, exp %d", got, exp)
-	}
+	testPoll(t, func() bool {
+		return s.DBAppliedIndex() == uint64(4)
+	}, 100*time.Millisecond, 5*time.Second)
 }
 
 func Test_SingleNodeDBAppliedIndex_SnapshotRestart(t *testing.T) {
@@ -253,7 +254,7 @@ func Test_SingleNodeDBAppliedIndex_SnapshotRestart(t *testing.T) {
 	if _, err := s.WaitForLeader(10 * time.Second); err != nil {
 		t.Fatalf("Error waiting for leader: %s", err)
 	}
-	if exp, got := s.DBAppliedIndex(), uint64(0); exp != got {
+	if got, exp := s.DBAppliedIndex(), uint64(0); exp != got {
 		t.Fatalf("wrong DB applied index, got: %d, exp %d", got, exp)
 	}
 
@@ -265,7 +266,7 @@ func Test_SingleNodeDBAppliedIndex_SnapshotRestart(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to execute on single node: %s", err.Error())
 	}
-	if exp, got := s.DBAppliedIndex(), uint64(3); exp != got {
+	if got, exp := s.DBAppliedIndex(), uint64(3); exp != got {
 		t.Fatalf("wrong DB applied index, got: %d, exp %d", got, exp)
 	}
 
@@ -286,7 +287,7 @@ func Test_SingleNodeDBAppliedIndex_SnapshotRestart(t *testing.T) {
 	if _, err := s.WaitForLeader(10 * time.Second); err != nil {
 		t.Fatalf("Error waiting for leader: %s", err)
 	}
-	if exp, got := s.DBAppliedIndex(), uint64(3); exp != got {
+	if got, exp := s.DBAppliedIndex(), uint64(3); exp != got {
 		t.Fatalf("wrong DB applied index after restart, got: %d, exp %d", got, exp)
 	}
 }
