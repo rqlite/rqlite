@@ -236,6 +236,59 @@ func Test_SingleNodeDBAppliedIndex(t *testing.T) {
 	}
 }
 
+func Test_SingleNodeDBAppliedIndex_SnapshotRestart(t *testing.T) {
+	s, ln, _ := mustNewStoreSQLitePath(t)
+	defer ln.Close()
+
+	// Open the store, ensure DBAppliedIndex is at initial value.
+	if err := s.Open(); err != nil {
+		t.Fatalf("failed to open single-node store: %s", err.Error())
+	}
+	defer s.Close(true)
+	if err := s.Bootstrap(NewServer(s.ID(), s.Addr(), true)); err != nil {
+		t.Fatalf("failed to bootstrap single-node store: %s", err.Error())
+	}
+	if _, err := s.WaitForLeader(10 * time.Second); err != nil {
+		t.Fatalf("Error waiting for leader: %s", err)
+	}
+	if exp, got := s.DBAppliedIndex(), uint64(0); exp != got {
+		t.Fatalf("wrong DB applied index, got: %d, exp %d", got, exp)
+	}
+
+	// Execute a command, and ensure DBAppliedIndex is updated.
+	er := executeRequestFromStrings([]string{
+		`CREATE TABLE foo (id INTEGER NOT NULL PRIMARY KEY, name TEXT)`,
+	}, false, false)
+	_, err := s.Execute(er)
+	if err != nil {
+		t.Fatalf("failed to execute on single node: %s", err.Error())
+	}
+	if exp, got := s.DBAppliedIndex(), uint64(3); exp != got {
+		t.Fatalf("wrong DB applied index, got: %d, exp %d", got, exp)
+	}
+
+	// Snapshot the Store.
+	if err := s.Snapshot(0); err != nil {
+		t.Fatalf("failed to snapshot store: %s", err.Error())
+	}
+
+	// Restart the node, and ensure DBAppliedIndex is set to the correct value even
+	// with a snapshot in place, and no log entries need to be replayed.
+	if err := s.Close(true); err != nil {
+		t.Fatalf("failed to close single-node store: %s", err.Error())
+	}
+	if err := s.Open(); err != nil {
+		t.Fatalf("failed to open single-node store: %s", err.Error())
+	}
+	defer s.Close(true)
+	if _, err := s.WaitForLeader(10 * time.Second); err != nil {
+		t.Fatalf("Error waiting for leader: %s", err)
+	}
+	if exp, got := s.DBAppliedIndex(), uint64(3); exp != got {
+		t.Fatalf("wrong DB applied index after restart, got: %d, exp %d", got, exp)
+	}
+}
+
 func Test_SingleNodeTempFileCleanup(t *testing.T) {
 	s, ln := mustNewStore(t)
 	defer ln.Close()
