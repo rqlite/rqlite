@@ -161,6 +161,7 @@ func Test_SingleNodeDBAppliedIndex(t *testing.T) {
 	s, ln, _ := mustNewStoreSQLitePath(t)
 	defer ln.Close()
 
+	// Open the store, ensure DBAppliedIndex is at initial value.
 	if err := s.Open(); err != nil {
 		t.Fatalf("failed to open single-node store: %s", err.Error())
 	}
@@ -175,6 +176,7 @@ func Test_SingleNodeDBAppliedIndex(t *testing.T) {
 		t.Fatalf("wrong DB applied index, got: %d, exp %d", got, exp)
 	}
 
+	// Execute a command, and ensure DBAppliedIndex is updated.
 	er := executeRequestFromStrings([]string{
 		`CREATE TABLE foo (id INTEGER NOT NULL PRIMARY KEY, name TEXT)`,
 	}, false, false)
@@ -195,6 +197,8 @@ func Test_SingleNodeDBAppliedIndex(t *testing.T) {
 	if exp, got := s.DBAppliedIndex(), uint64(4); exp != got {
 		t.Fatalf("wrong DB applied index, got: %d, exp %d", got, exp)
 	}
+
+	// Do a strong query, and ensure DBAppliedIndex is updated.
 	qr := queryRequestFromString("SELECT * FROM foo", false, false)
 	qr.Level = proto.QueryRequest_QUERY_REQUEST_LEVEL_STRONG
 	_, err = s.Query(qr)
@@ -205,6 +209,30 @@ func Test_SingleNodeDBAppliedIndex(t *testing.T) {
 		t.Fatalf("wrong DB applied index, got: %d, exp %d", got, exp)
 	}
 
+	// Do a weak query, and ensure DBAppliedIndex is not updated.
+	qr = queryRequestFromString("SELECT * FROM foo", false, false)
+	qr.Level = proto.QueryRequest_QUERY_REQUEST_LEVEL_WEAK
+	_, err = s.Query(qr)
+	if err != nil {
+		t.Fatalf("failed to query single node: %s", err.Error())
+	}
+	if exp, got := s.DBAppliedIndex(), uint64(4); exp != got {
+		t.Fatalf("wrong DB applied index, got: %d, exp %d", got, exp)
+	}
+
+	// Restart the node, and ensure DBAppliedIndex is set to the correct value.
+	if err := s.Close(true); err != nil {
+		t.Fatalf("failed to close single-node store: %s", err.Error())
+	}
+	if err := s.Open(); err != nil {
+		t.Fatalf("failed to open single-node store: %s", err.Error())
+	}
+	if _, err := s.WaitForLeader(10 * time.Second); err != nil {
+		t.Fatalf("Error waiting for leader: %s", err)
+	}
+	if exp, got := s.DBAppliedIndex(), uint64(4); exp != got {
+		t.Fatalf("wrong DB applied index, got: %d, exp %d", got, exp)
+	}
 }
 
 func Test_SingleNodeTempFileCleanup(t *testing.T) {
