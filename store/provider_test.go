@@ -225,3 +225,60 @@ func Test_SingleNodeProvideLastIndex(t *testing.T) {
 		t.Fatalf("last index should have changed")
 	}
 }
+
+// Test_SingleNodeProvideLastIndex_Restart tests that the Provider correctly implements
+// the LastIndex method after a Store restart.
+func Test_SingleNodeProvideLastIndex_Restart(t *testing.T) {
+	s, ln := mustNewStore(t)
+	defer ln.Close()
+
+	if err := s.Open(); err != nil {
+		t.Fatalf("failed to open single-node store: %s", err.Error())
+	}
+	if err := s.Bootstrap(NewServer(s.ID(), s.Addr(), true)); err != nil {
+		t.Fatalf("failed to bootstrap single-node store: %s", err.Error())
+	}
+	defer s.Close(true)
+	if _, err := s.WaitForLeader(10 * time.Second); err != nil {
+		t.Fatalf("Error waiting for leader: %s", err)
+	}
+
+	tmpFile := mustCreateTempFile()
+	defer os.Remove(tmpFile)
+	provider := NewProvider(s, false, false)
+	er := executeRequestFromStrings([]string{
+		`CREATE TABLE foo (id INTEGER NOT NULL PRIMARY KEY, name TEXT)`,
+		`INSERT INTO foo(id, name) VALUES(1, "fiona")`,
+	}, false, false)
+	if _, err := s.Execute(er); err != nil {
+		t.Fatalf("failed to execute on single node: %s", err.Error())
+	}
+	if _, err := s.WaitForAppliedFSM(2 * time.Second); err != nil {
+		t.Fatalf("failed to wait for FSM to apply")
+	}
+
+	lm, err := provider.LastIndex()
+	if err != nil {
+		t.Fatalf("failed to get last modified: %s", err.Error())
+	}
+	if err := s.Close(true); err != nil {
+		t.Fatalf("failed to close store: %s", err.Error())
+	}
+
+	// Restart the store and check the last index is the same.
+	if err := s.Open(); err != nil {
+		t.Fatalf("failed to open single-node store: %s", err.Error())
+	}
+	defer s.Close(true)
+	if _, err := s.WaitForLeader(10 * time.Second); err != nil {
+		t.Fatalf("Error waiting for leader: %s", err)
+	}
+	provider = NewProvider(s, false, false)
+	newLI, err := provider.LastIndex()
+	if err != nil {
+		t.Fatalf("failed to get last modified: %s", err.Error())
+	}
+	if exp, got := lm, newLI; exp != got {
+		t.Fatalf("last index should be the same after restart\nexp: %d\ngot: %d", exp, got)
+	}
+}
