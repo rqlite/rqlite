@@ -1,28 +1,24 @@
-v7 cluster created using these commands.
+v8 cluster created using these commands.
 
 ./rqlited -raft-snap=16 -raft-snap-int=1s -node-id 1 data.1
 ./rqlited -raft-snap=16 -raft-snap-int=1s -http-addr localhost:4003 -raft-addr localhost:4004 -join http://localhost:4001 -node-id 2 data.2
 ./rqlited -raft-snap=16 -raft-snap-int=1s -http-addr localhost:4005 -raft-addr localhost:4006 -join http://localhost:4001 -node-id 3 data.3
 
--raft-snap=16 -raft-snap-int=1s
-
-Query:
-
-~/r7/rqlite-v7.21.4-linux-amd64 $ ./rqlite
-Welcome to the rqlite CLI. Enter ".help" for usage hints.
-Version v7.21.4, commit 971921f1352bdc73e4e66a1ec43be8c1028ff18b, branch master
-Connected to rqlited version v7.21.4
+~ $ rqlite
+Welcome to the rqlite CLI.
+Enter ".help" for usage hints.
+Connected to http://127.0.0.1:4001 running version v8.30.3
 127.0.0.1:4001> .schema
-+----------------------------------------------------------------------------+
-| sql                                                                        |
-+----------------------------------------------------------------------------+
-| CREATE TABLE foo (id INTEGER NOT NULL PRIMARY KEY, name TEXT, age INTEGER) |
-+----------------------------------------------------------------------------+
-127.0.0.1:4001> select count(*) from foo;
++---------------------------------------------------------------+
+| sql                                                           |
++---------------------------------------------------------------+
+| CREATE TABLE foo (id INTEGER NOT NULL PRIMARY KEY, name TEXT) |
++---------------------------------------------------------------+
+127.0.0.1:4001> SELECT COUNT(*) FROM foo;
 +----------+
-| count(*) |
+| COUNT(*) |
 +----------+
-| 28       |
+| 19       |
 +----------+
 127.0.0.1:4001> 
 
