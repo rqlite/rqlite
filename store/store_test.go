@@ -5,6 +5,7 @@ import (
 	"crypto/rand"
 	"errors"
 	"fmt"
+	"io"
 	"net"
 	"os"
 	"path/filepath"
@@ -17,8 +18,8 @@ import (
 	"github.com/rqlite/rqlite/v8/command/proto"
 	"github.com/rqlite/rqlite/v8/db"
 	"github.com/rqlite/rqlite/v8/random"
-	"github.com/rqlite/rqlite/v8/snapshot9"
 	"github.com/rqlite/rqlite/v8/rarchive"
+	"github.com/rqlite/rqlite/v8/snapshot9"
 	"github.com/rqlite/rqlite/v8/testdata/chinook"
 )
 
