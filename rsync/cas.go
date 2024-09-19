@@ -52,21 +52,14 @@ func (c *CheckAndSet) BeginWithRetry(owner string, timeout, retryInterval time.D
 	for {
 		err := c.Begin(owner)
 		if err == nil {
-			// Successfully acquired the lock
 			return nil
 		}
-
-		// If the error is not a CAS conflict, return it
 		if !errors.Is(err, ErrCASConflict) {
 			return err
 		}
-
-		// Check if timeout has been reached
 		if time.Now().After(deadline) {
 			return ErrCASConflictTimeout
 		}
-
-		// Sleep for the retry interval before trying again
 		time.Sleep(retryInterval)
 	}
 }
