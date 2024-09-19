@@ -672,6 +672,7 @@ func (s *Store) Close(wait bool) (retErr error) {
 	if err := s.snapshotCAS.BeginWithRetry("close", 10*time.Millisecond, 10*time.Second); err != nil {
 		return err
 	}
+	defer s.snapshotCAS.End()
 
 	s.dechunkManager.Close()
 
