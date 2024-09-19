@@ -3,6 +3,7 @@
 - [PR #1894](https://github.com/rqlite/rqlite/pull/1894): More use of common gzip utils.
 - [PR #1896](https://github.com/rqlite/rqlite/pull/1896): Reset Store state on open.
 - [PR #1897](https://github.com/rqlite/rqlite/pull/1897): Deflake DBAppliedIdx unit tests.
+- [PR #1899](https://github.com/rqlite/rqlite/pull/1899): Synchronize closing a Store and performing a Snapshot.
 
 ## v8.30.3 (September 16th 2024)
 ### Implementation changes and bug fixes
