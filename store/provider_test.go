@@ -274,11 +274,11 @@ func Test_SingleNodeProvideLastIndex_Restart(t *testing.T) {
 		t.Fatalf("Error waiting for leader: %s", err)
 	}
 	provider = NewProvider(s, false, false)
-	newLI, err := provider.LastIndex()
-	if err != nil {
-		t.Fatalf("failed to get last modified: %s", err.Error())
-	}
-	if exp, got := lm, newLI; exp != got {
-		t.Fatalf("last index should be the same after restart\nexp: %d\ngot: %d", exp, got)
-	}
+	testPoll(t, func() bool {
+		newLI, err := provider.LastIndex()
+		if err != nil {
+			t.Fatalf("failed to get last modified: %s", err.Error())
+		}
+		return lm == newLI
+	}, 100*time.Millisecond, 5*time.Second)
 }
