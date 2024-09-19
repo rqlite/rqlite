@@ -367,6 +367,15 @@ func mustOpenFile(t *testing.T, path string) *os.File {
 	return fd
 }
 
+func mustTouchFile(t *testing.T, path string) {
+	t.Helper()
+	fd, err := os.Create(path)
+	if err != nil {
+		t.Fatalf("Failed to touch file: %v", err)
+	}
+	fd.Close()
+}
+
 func compareReaderToFile(t *testing.T, r io.Reader, path string) bool {
 	t.Helper()
 	fd := mustOpenFile(t, path)

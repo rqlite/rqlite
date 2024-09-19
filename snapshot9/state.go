@@ -21,31 +21,16 @@ func LatestIndexTerm(dir string) (uint64, uint64, error) {
 	return meta[len(meta)-1].Index, meta[len(meta)-1].Term, nil
 }
 
-// RemoveAllTmpSnapshotData removes all temporary Snapshot data from the directory.
+// RemoveAllTmpSnapshotData removes all temporary Snapshot directories from the given
+// directory.
 func RemoveAllTmpSnapshotData(dir string) error {
 	files, err := os.ReadDir(dir)
 	if err != nil {
-		return nil
+		return err
 	}
 	for _, d := range files {
-		// If the directory is a temporary directory, remove it.
 		if d.IsDir() && isTmpName(d.Name()) {
-			matches, err := filepath.Glob(filepath.Join(dir, nonTmpName(d.Name())) + "*")
-			if err != nil {
-				return err
-			}
-
-			fullTmpDirPath := filepath.Join(dir, d.Name())
-			for _, f := range matches {
-				if f == fullTmpDirPath {
-					// Delete the directory last as a sign the deletion is complete.
-					continue
-				}
-				if err := os.Remove(f); err != nil {
-					return err
-				}
-			}
-			if err := os.RemoveAll(fullTmpDirPath); err != nil {
+			if err := os.RemoveAll(filepath.Join(dir, d.Name())); err != nil {
 				return err
 			}
 		}

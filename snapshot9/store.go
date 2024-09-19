@@ -9,7 +9,6 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
-	"strings"
 	"time"
 
 	"github.com/hashicorp/raft"
@@ -291,6 +290,9 @@ func (s *Store) getSnapshots() ([]*raft.SnapshotMeta, error) {
 // will return nil. If it finds issues it cannot repair, or encounters an
 // error it can't handle, it will return an error.
 func (s *Store) check() error {
+	if err := RemoveAllTmpSnapshotData(s.dir); err != nil {
+		return err
+	}
 	return nil
 }
 
@@ -372,10 +374,6 @@ func parentDir(dir string) string {
 
 func tmpName(path string) string {
 	return path + tmpSuffix
-}
-
-func nonTmpName(path string) string {
-	return strings.TrimSuffix(path, tmpSuffix)
 }
 
 func isTmpName(name string) bool {
