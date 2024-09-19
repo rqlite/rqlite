@@ -2024,13 +2024,14 @@ func (s *Store) fsmSnapshot() (fSnap raft.FSMSnapshot, retErr error) {
 	if err := s.db.SetSynchronousMode(db.SynchronousFull); err != nil {
 		return nil, err
 	}
+	defer func() {
+		if err := s.db.SetSynchronousMode(db.SynchronousOff); err != nil {
+			s.logger.Printf("failed to reset synchronous mode to %v: %v", db.SynchronousOff, err)
+		}
+	}()
 
 	if err := s.db.Checkpoint(sql.CheckpointTruncate); err != nil {
 		stats.Add(numFullCheckpointFailed, 1)
-		return nil, err
-	}
-
-	if err := s.db.SetSynchronousMode(db.SynchronousOff); err != nil {
 		return nil, err
 	}
 
