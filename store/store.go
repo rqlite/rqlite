@@ -1946,11 +1946,7 @@ func (s *Store) fsmApply(l *raft.Log) (e interface{}) {
 // The system must ensure that no transaction is taking place during this call.
 // Hashicorp Raft guarantees that this function will not be called concurrently
 // with Apply, as it states Apply() and Snapshot() are always called from the same
-// thread. This means there is no need to synchronize this function with Execute().
-// However, queries that involve a transaction must be blocked.
-//
-// http://sqlite.org/howtocorrupt.html states it is safe to copy or serialize the
-// database as long as no writes to the database are in progress.
+// thread.
 func (s *Store) fsmSnapshot() (fSnap raft.FSMSnapshot, retErr error) {
 	if err := s.snapshotCAS.Begin("snapshot"); err != nil {
 		return nil, err
