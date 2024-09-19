@@ -276,7 +276,6 @@ type Store struct {
 	snapshotWDone  chan struct{}
 
 	// Snapshotting synchronization
-	queryTxMu   sync.RWMutex
 	snapshotCAS *rsync.CheckAndSet
 
 	// Latest log entry index actually reflected by the FSM. Due to Raft code
@@ -1274,14 +1273,6 @@ func (s *Store) Query(qr *proto.QueryRequest) ([]*proto.QueryRows, error) {
 	if qr.Level == proto.QueryRequest_QUERY_REQUEST_LEVEL_NONE && s.isStaleRead(qr.Freshness, qr.FreshnessStrict) {
 		return nil, ErrStaleRead
 	}
-
-	if qr.Request.Transaction {
-		// Transaction requested during query, but not going through consensus. This means
-		// we need to block any database serialization during the query.
-		s.queryTxMu.RLock()
-		defer s.queryTxMu.RUnlock()
-	}
-
 	return s.db.Query(qr.Request, qr.Timings)
 }
 
@@ -1301,12 +1292,6 @@ func (s *Store) Request(eqr *proto.ExecuteQueryRequest) ([]*proto.ExecuteQueryRe
 	if nRW == 0 && eqr.Level != proto.QueryRequest_QUERY_REQUEST_LEVEL_STRONG {
 		// It's a little faster just to do a Query of the DB if we know there is no need
 		// for consensus.
-		if eqr.Request.Transaction {
-			// Transaction requested during query, but not going through consensus. This means
-			// we need to block any database serialization during the query.
-			s.queryTxMu.RLock()
-			defer s.queryTxMu.RUnlock()
-		}
 		convertFn := func(qr []*proto.QueryRows) []*proto.ExecuteQueryResponse {
 			resp := make([]*proto.ExecuteQueryResponse, len(qr))
 			for i := range qr {
@@ -1967,9 +1952,6 @@ func (s *Store) fsmApply(l *raft.Log) (e interface{}) {
 // http://sqlite.org/howtocorrupt.html states it is safe to copy or serialize the
 // database as long as no writes to the database are in progress.
 func (s *Store) fsmSnapshot() (fSnap raft.FSMSnapshot, retErr error) {
-	s.queryTxMu.Lock()
-	defer s.queryTxMu.Unlock()
-
 	if err := s.snapshotCAS.Begin("snapshot"); err != nil {
 		return nil, err
 	}
