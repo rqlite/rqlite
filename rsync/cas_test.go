@@ -3,6 +3,7 @@ package rsync
 import (
 	"errors"
 	"testing"
+	"time"
 )
 
 func Test_NewCAS(t *testing.T) {
@@ -29,6 +30,11 @@ func Test_CASBeginEnd(t *testing.T) {
 		t.Fatalf("expected foo, got %s", cas.Owner())
 	}
 
+	// Retrying should also fail.
+	if err := cas.BeginWithRetry("bar", 100*time.Millisecond, 500*time.Millisecond); !errors.Is(err, ErrCASConflictTimeout) {
+		t.Fatalf("expected %v, got %v", ErrCASConflict, err)
+	}
+
 	// End, check owner, and another begin should succeed
 	cas.End()
 	if cas.Owner() != "" {
@@ -36,5 +42,11 @@ func Test_CASBeginEnd(t *testing.T) {
 	}
 	if err := cas.Begin("qux"); err != nil {
 		t.Fatalf("expected nil, got %v", err)
+	}
+
+	// Unlock and check retry.
+	cas.End()
+	if err := cas.BeginWithRetry("bar", 100*time.Millisecond, 500*time.Millisecond); err != nil {
+		t.Fatalf("expected %v, got %v", ErrCASConflict, err)
 	}
 }

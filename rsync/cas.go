@@ -10,6 +10,10 @@ import (
 var (
 	// ErrCASConflict is returned when a CAS operation fails.
 	ErrCASConflict = errors.New("CAS conflict")
+
+	// ErrCASConflictTimeout is returned when a CAS operation fails
+	// even after retrying.
+	ErrCASConflictTimeout = errors.New("CAS conflict timeout")
 )
 
 // CheckAndSet is a simple concurrency control mechanism that allows
@@ -39,6 +43,32 @@ func (c *CheckAndSet) Begin(owner string) error {
 	c.state = true
 	c.startT = time.Now()
 	return nil
+}
+
+// BeginWithRetry will attempt to enter the critical section, retrying
+// if necessary.
+func (c *CheckAndSet) BeginWithRetry(owner string, timeout, retryInterval time.Duration) error {
+	deadline := time.Now().Add(timeout)
+	for {
+		err := c.Begin(owner)
+		if err == nil {
+			// Successfully acquired the lock
+			return nil
+		}
+
+		// If the error is not a CAS conflict, return it
+		if !errors.Is(err, ErrCASConflict) {
+			return err
+		}
+
+		// Check if timeout has been reached
+		if time.Now().After(deadline) {
+			return ErrCASConflictTimeout
+		}
+
+		// Sleep for the retry interval before trying again
+		time.Sleep(retryInterval)
+	}
 }
 
 // End exits the critical section.

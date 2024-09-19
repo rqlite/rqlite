@@ -701,6 +701,10 @@ func (s *Store) Close(wait bool) (retErr error) {
 		// Protect against closing already-closed resource, such as channels.
 		return nil
 	}
+	if err := s.snapshotCAS.BeginWithRetry("close", 10*time.Millisecond, 10*time.Second); err != nil {
+		return err
+	}
+	defer s.snapshotCAS.End()
 
 	s.dechunkManager.Close()
 
@@ -1948,6 +1952,9 @@ func (s *Store) fsmApply(l *raft.Log) (e interface{}) {
 // with Apply, as it states Apply() and Snapshot() are always called from the same
 // thread.
 func (s *Store) fsmSnapshot() (fSnap raft.FSMSnapshot, retErr error) {
+	if !s.open.Is() {
+		return nil, ErrNotOpen
+	}
 	if err := s.snapshotCAS.Begin("snapshot"); err != nil {
 		return nil, err
 	}
