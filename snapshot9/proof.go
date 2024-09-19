@@ -34,11 +34,14 @@ func NewProofFromFile(path string) (*Proof, error) {
 // String returns a string representation of the Proof.
 func (p *Proof) String() string {
 	return "Proof{SizeBytes: " + strconv.FormatInt(p.SizeBytes, 10) +
-		", LastModifiedTime: " + p.LastModifiedTime.String()
+		", LastModifiedTime: " + p.LastModifiedTime.String() + "}"
 }
 
 // Equals returns true if the two Proofs are equal.
 func (p *Proof) Equals(o *Proof) bool {
+	if o == nil {
+		return false
+	}
 	return p.SizeBytes == o.SizeBytes && p.LastModifiedTime.Equal(o.LastModifiedTime)
 }
 

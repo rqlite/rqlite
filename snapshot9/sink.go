@@ -36,7 +36,7 @@ func (s *Sink) Open() error {
 	// Make temp snapshot directory
 	s.snapDirPath = filepath.Join(s.str.Dir(), s.meta.ID)
 	s.snapTmpDirPath = tmpName(s.snapDirPath)
-	if err := os.MkdirAll(s.snapTmpDirPath, 0755); err != nil {
+	if err := os.MkdirAll(s.snapTmpDirPath, 0700); err != nil {
 		return err
 	}
 

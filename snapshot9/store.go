@@ -76,7 +76,7 @@ type Store struct {
 
 // NewStore returns a new Snapshot Store.
 func NewStore(dir string, src Source) (*Store, error) {
-	if err := os.MkdirAll(dir, 0755); err != nil {
+	if err := os.MkdirAll(dir, 0700); err != nil {
 		return nil, err
 	}
 

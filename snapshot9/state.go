@@ -30,13 +30,13 @@ func RemoveAllTmpSnapshotData(dir string) error {
 	for _, d := range files {
 		// If the directory is a temporary directory, remove it.
 		if d.IsDir() && isTmpName(d.Name()) {
-			files, err := filepath.Glob(filepath.Join(dir, nonTmpName(d.Name())) + "*")
+			matches, err := filepath.Glob(filepath.Join(dir, nonTmpName(d.Name())) + "*")
 			if err != nil {
 				return err
 			}
 
 			fullTmpDirPath := filepath.Join(dir, d.Name())
-			for _, f := range files {
+			for _, f := range matches {
 				if f == fullTmpDirPath {
 					// Delete the directory last as a sign the deletion is complete.
 					continue
@@ -79,8 +79,6 @@ func getSnapshots(dir string) ([]*raft.SnapshotMeta, error) {
 		if err != nil {
 			return nil, fmt.Errorf("failed to read meta for snapshot %s: %s", dirName, err)
 		}
-
-		// Append, but only return up to the retain count
 		snapMeta = append(snapMeta, meta)
 	}
 
