@@ -292,12 +292,12 @@ type Store struct {
 	// Latest log entry index which actually changed the database.
 	dbAppliedIdx *atomic.Uint64
 
-	reqMarshaller *command.RequestMarshaler // Request marshaler for writing to log.
-	raftLog       raft.LogStore             // Persistent log store.
-	raftStable    raft.StableStore          // Persistent k-v store.
-	boltStore     *rlog.Log                 // Physical store.
-	snapshotStore SnapshotStore             // Snapshot store.
-	snapshotFlags *flags.SnapshotFlags      // Snapshot flags.
+	reqMarshaller   *command.RequestMarshaler // Request marshaler for writing to log.
+	raftLog         raft.LogStore             // Persistent log store.
+	raftStable      raft.StableStore          // Persistent k-v store.
+	boltStore       *rlog.Log                 // Physical store.
+	snapshotStore   SnapshotStore             // Snapshot store.
+	snapshotMarkers *marker.Snapshot          // Snapshot markers.
 
 	// Raft changes observer
 	leaderObserversMu sync.RWMutex
@@ -385,7 +385,7 @@ func New(ly Layer, c *Config) *Store {
 		notifyingNodes:   make(map[string]*Server),
 		ApplyTimeout:     applyTimeout,
 		snapshotCAS:      rsync.NewCheckAndSet(),
-		snapshotFlags:    marker.NewSnapshot(c.Dir),
+		snapshotMarkers:  marker.NewSnapshot(c.Dir),
 		fsmIdx:           &atomic.Uint64{},
 		fsmTerm:          &atomic.Uint64{},
 		fsmUpdateTime:    rsync.NewAtomicTime(),
@@ -1971,7 +1971,7 @@ func (s *Store) fsmSnapshot() (fSnap raft.FSMSnapshot, retErr error) {
 		s.numSnapshots.Add(1)
 	}()
 
-	if err := s.snapshotFlags.MarkStarted(s.fsmTerm.Load(), s.dbAppliedIdx.Load()); err != nil {
+	if err := s.snapshotMarkers.MarkStarted(s.fsmTerm.Load(), s.dbAppliedIdx.Load()); err != nil {
 		return nil, err
 	}
 
@@ -2027,7 +2027,7 @@ func (s *Store) fsmSnapshot() (fSnap raft.FSMSnapshot, retErr error) {
 		return nil, err
 	}
 
-	if err := s.snapshotFlags.MarkCheckpointed(s.fsmTerm.Load(), s.dbAppliedIdx.Load()); err != nil {
+	if err := s.snapshotMarkers.MarkCheckpointed(s.fsmTerm.Load(), s.dbAppliedIdx.Load()); err != nil {
 		return nil, err
 	}
 
