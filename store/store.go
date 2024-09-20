@@ -1842,23 +1842,23 @@ func (s *Store) check() error {
 			return fmt.Errorf("snapshot markers are inconsistent: started=(%d,%d), checkpointed=(%d,%d)",
 				sTerm, sIndex, cTerm, cIndex)
 		}
+
 		meta, err := snapshot9.GetLatestSnapshotMeta(s.snapshotDir)
 		if err != nil {
 			return err
 		}
-		if meta.Term == cTerm && meta.Index == cIndex {
+		if meta != nil && (meta.Term == cTerm && meta.Index == cIndex) {
 			// We exited after the snapshot was successfully written to the Snapshot store
 			// but before we could clean up the markers. So do so now.
 			if err := s.snapshotMarkers.ClearStarted(); err != nil {
 				return err
 			}
 			return s.snapshotMarkers.ClearCheckpointed()
-		} else {
-			// We exited after we checkpointed the WAL, but before we successfully created the
-			// snapshot in the store. We need to create the snapshot in the store using just the
-			// database file as writes may be now in the WAL which should not be part of the
-			// snapshot.
 		}
+		// We exited after we checkpointed the WAL, but before we successfully created the
+		// snapshot in the store. We need to create the snapshot in the store using just the
+		// database file as writes may be now in the WAL which should not be part of the
+		// snapshot.
 	}
 
 	// If there is a STARTED marker, but no CHECKPOINTED marker, then we exited while checkpointing
