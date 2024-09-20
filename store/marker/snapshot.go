@@ -44,6 +44,17 @@ func (sf *Snapshot) MarkStarted(term, index uint64) error {
 	return syncFile(path)
 }
 
+// ClearStarted removes the started marker.
+func (sf *Snapshot) ClearStarted() error {
+	sf.mu.Lock()
+	defer sf.mu.Unlock()
+
+	if err := removeMatchingFiles(sf.dir, "SNAPSHOT_MARK_STARTED_*"); err != nil {
+		return err
+	}
+	return syncDir(sf.dir)
+}
+
 // IsStarted returns true if the snapshot is marked as started.
 func (sf *Snapshot) IsStarted() (ok bool, term, index uint64, retErr error) {
 	sf.mu.Lock()
@@ -87,6 +98,17 @@ func (sf *Snapshot) MarkCheckpointed(term, index uint64) error {
 		return err
 	}
 	return syncFile(path)
+}
+
+// ClearCheckpointed removes the checkpointed marker.
+func (sf *Snapshot) ClearCheckpointed() error {
+	sf.mu.Lock()
+	defer sf.mu.Unlock()
+
+	if err := removeMatchingFiles(sf.dir, "SNAPSHOT_MARK_CHECKPOINTED_*"); err != nil {
+		return err
+	}
+	return syncDir(sf.dir)
 }
 
 // IsCheckpointed returns true if the snapshot is marked as checkpointed.

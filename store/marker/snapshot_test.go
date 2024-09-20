@@ -17,6 +17,7 @@ func Test_Snapshot_Dir(t *testing.T) {
 }
 
 // Test_Snapshot_MarkStartedAndIsStarted tests marking a snapshot as started and verifying it.
+// Then test clearing it.
 func Test_Snapshot_MarkStartedAndIsStarted(t *testing.T) {
 	tempDir := t.TempDir()
 	sf := NewSnapshot(tempDir)
@@ -47,9 +48,24 @@ func Test_Snapshot_MarkStartedAndIsStarted(t *testing.T) {
 	if term != testTerm || index != testIndex {
 		t.Errorf("IsStarted() = (%d, %d); want (%d, %d)", term, index, testTerm, testIndex)
 	}
+
+	// Clear the started marker.
+	if err := sf.ClearStarted(); err != nil {
+		t.Fatalf("ClearStarted() returned error: %v", err)
+	}
+
+	// Now, IsStarted should return false.
+	ok, _, _, err = sf.IsStarted()
+	if err != nil {
+		t.Fatalf("IsStarted() after ClearStarted returned error: %v", err)
+	}
+	if ok {
+		t.Fatalf("IsStarted() after ClearStarted = true; want false")
+	}
 }
 
-// Test_Snapshot_MarkCheckpointedAndIsCheckpointed tests marking a snapshot as checkpointed and verifying it.
+// Test_Snapshot_MarkCheckpointedAndIsCheckpointed tests marking a snapshot as checkpointed
+// and verifying it. Then test clearing it.
 func Test_Snapshot_MarkCheckpointedAndIsCheckpointed(t *testing.T) {
 	tempDir := t.TempDir()
 	sf := NewSnapshot(tempDir)
@@ -79,6 +95,20 @@ func Test_Snapshot_MarkCheckpointedAndIsCheckpointed(t *testing.T) {
 	}
 	if term != testTerm || index != testIndex {
 		t.Errorf("IsCheckpointed() = (%d, %d); want (%d, %d)", term, index, testTerm, testIndex)
+	}
+
+	// Clear the checkpointed marker.
+	if err := sf.ClearCheckpointed(); err != nil {
+		t.Fatalf("ClearCheckpointed() returned error: %v", err)
+	}
+
+	// Now, IsCheckpointed should return false.
+	ok, _, _, err = sf.IsCheckpointed()
+	if err != nil {
+		t.Fatalf("IsCheckpointed() after ClearCheckpointed returned error: %v", err)
+	}
+	if ok {
+		t.Fatalf("IsCheckpointed() after ClearCheckpointed = true; want false")
 	}
 }
 
