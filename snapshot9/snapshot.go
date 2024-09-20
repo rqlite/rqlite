@@ -35,7 +35,11 @@ func (s *Snapshot) Persist(sink raft.SnapshotSink) error {
 	}, cw)
 	n, err := func() (int64, error) {
 		defer cm.StopAndWait()
-		return io.Copy(cw, s.rc)
+		_, err := io.Copy(cw, s.rc)
+		if err != nil {
+			return cw.Count(), sink.Cancel()
+		}
+		return cw.Count(), sink.Close()
 	}()
 	if err != nil {
 		return err
