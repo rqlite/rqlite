@@ -669,6 +669,10 @@ func (s *Store) Close(wait bool) (retErr error) {
 		// Protect against closing already-closed resource, such as channels.
 		return nil
 	}
+	if err := s.snapshotCAS.BeginWithRetry("close", 10*time.Millisecond, 10*time.Second); err != nil {
+		return err
+	}
+	defer s.snapshotCAS.End()
 
 	s.dechunkManager.Close()
 
@@ -1950,6 +1954,10 @@ func (s *Store) fsmApply(l *raft.Log) (e interface{}) {
 // http://sqlite.org/howtocorrupt.html states it is safe to copy or serialize the
 // database as long as no writes to the database are in progress.
 func (s *Store) fsmSnapshot() (fSnap raft.FSMSnapshot, retErr error) {
+	if !s.open.Is() {
+		return nil, ErrNotOpen
+	}
+
 	s.queryTxMu.Lock()
 	defer s.queryTxMu.Unlock()
 
