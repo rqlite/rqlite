@@ -267,6 +267,21 @@ func Test_Store_FullCycle(t *testing.T) {
 		t.Fatalf("Unexpected snapshot ID: %s", snaps[0].ID)
 	}
 
+	// Check a State-level function here, for convenience.
+	latestMeta, err := GetLatestSnapshotMeta(dir)
+	if err != nil {
+		t.Fatalf("Failed to get latest snapshot meta: %v", err)
+	}
+	if latestMeta.ID != sink.ID() {
+		t.Fatalf("Unexpected snapshot ID: %s", latestMeta.ID)
+	}
+	if latestMeta.Index != 2 {
+		t.Fatalf("Unexpected snapshot index: %d", latestMeta.Index)
+	}
+	if latestMeta.Term != 3 {
+		t.Fatalf("Unexpected snapshot term: %d", latestMeta.Term)
+	}
+
 	//////////////////////////////////////////////////////////////////////////
 	// Create a snapshot using actual SQLite data.
 	sink, err = store.Create(1, 6, 7, makeTestConfiguration("1", "localhost:1"), 8, nil)
