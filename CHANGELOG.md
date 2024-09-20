@@ -1,4 +1,4 @@
-## v8.30.4 (unreleased)
+## v8.30.4 (September 20th 2024)
 ### Implementation changes and bug fixes
 - [PR #1894](https://github.com/rqlite/rqlite/pull/1894): More use of common gzip utils.
 - [PR #1896](https://github.com/rqlite/rqlite/pull/1896): Reset Store state on open.
