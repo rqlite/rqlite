@@ -1233,6 +1233,7 @@ func Test_MultiNodeClusterSnapshot(t *testing.T) {
 
 	expResults := `{"results":[{"columns":["COUNT(*)"],"types":["integer"],"values":[[500]]}]}`
 	testerFn := func(n *Node) {
+		t.Helper()
 		c := 0
 		for {
 			r, err := n.QueryNoneConsistency(`SELECT COUNT(*) FROM foo`)
