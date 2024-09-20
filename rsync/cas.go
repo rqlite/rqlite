@@ -54,6 +54,7 @@ func (c *CheckAndSet) BeginWithRetry(owner string, timeout, retryInterval time.D
 		if err == nil {
 			return nil
 		}
+
 		if !errors.Is(err, ErrCASConflict) {
 			return err
 		}
