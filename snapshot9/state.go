@@ -38,6 +38,18 @@ func RemoveAllTmpSnapshotData(dir string) error {
 	return nil
 }
 
+// GetLatestSnapshotMeta returns the metadata of the latest snapshot in the given directory.
+func GetLatestSnapshotMeta(dir string) (*raft.SnapshotMeta, error) {
+	meta, err := getSnapshots(dir)
+	if err != nil {
+		return nil, err
+	}
+	if len(meta) == 0 {
+		return nil, nil
+	}
+	return meta[len(meta)-1], nil
+}
+
 func getSnapshots(dir string) ([]*raft.SnapshotMeta, error) {
 	// Get the eligible snapshots
 	snapshots, err := os.ReadDir(dir)

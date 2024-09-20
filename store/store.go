@@ -465,6 +465,11 @@ func (s *Store) Open() (retErr error) {
 		}
 	}
 
+	// Check for inconsistent state due any previous crash.
+	if err := s.check(); err != nil {
+		return err
+	}
+
 	// Create Raft-compatible network layer.
 	nt := raft.NewNetworkTransport(NewTransport(s.ly), connectionPoolCount, connectionTimeout, nil)
 	s.raftTn = NewNodeTransport(nt)
@@ -1806,6 +1811,60 @@ func (s *Store) remove(id string) error {
 		return ErrNotLeader
 	}
 	return f.Error()
+}
+
+func (s *Store) check() error {
+	isStarted, sTerm, sIndex, err := s.snapshotMarkers.IsStarted()
+	if err != nil {
+		return err
+	}
+	isCheckpointed, cTerm, cIndex, err := s.snapshotMarkers.IsCheckpointed()
+	if err != nil {
+		return err
+	}
+
+	// If there are no markers, then there is nothing to do.
+	if !isStarted && !isCheckpointed {
+		return nil
+	}
+
+	// If there is a CHECKPOINTED marker, but no STARTED marker, then we exited
+	// during cleanup of markers. There isn't much to do here, just finish the
+	// cleanup.
+	if isCheckpointed && !isStarted {
+		return s.snapshotMarkers.ClearCheckpointed()
+	}
+
+	// If there are both CHECKPOINTED and STARTED markers, then a couple of different things
+	// might have happened.
+	if isCheckpointed && isStarted {
+		if sTerm != cTerm || sIndex != cIndex {
+			return fmt.Errorf("snapshot markers are inconsistent: started=(%d,%d), checkpointed=(%d,%d)",
+				sTerm, sIndex, cTerm, cIndex)
+		}
+		meta, err := snapshot9.GetLatestSnapshotMeta(s.snapshotDir)
+		if err != nil {
+			return err
+		}
+		if meta.Term == cTerm && meta.Index == cIndex {
+			// We exited after the snapshot was successfully written to the Snapshot store
+			// but before we could clean up the markers. So do so now.
+			if err := s.snapshotMarkers.ClearStarted(); err != nil {
+				return err
+			}
+			return s.snapshotMarkers.ClearCheckpointed()
+		} else {
+			// We exited after we checkpointed the WAL, but before we successfully created the
+			// snapshot in the store. We need to create the snapshot in the store using just the
+			// database file as writes may be now in the WAL which should not be part of the
+			// snapshot.
+		}
+	}
+
+	// If there is a STARTED marker, but no CHECKPOINTED marker, then we exited while checkpointing
+	// the WAL. The database file could be in an inconsistent state, so we need to complete the
+	// snapshotting process by redoing the checkpoint and then creating the snapshot.
+	return nil
 }
 
 // initVacuumTime initializes the last vacuum times in the Config store.
