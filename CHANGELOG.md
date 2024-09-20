@@ -4,6 +4,7 @@
 - [PR #1896](https://github.com/rqlite/rqlite/pull/1896): Reset Store state on open.
 - [PR #1897](https://github.com/rqlite/rqlite/pull/1897): Deflake DBAppliedIdx unit tests.
 - [PR #1899](https://github.com/rqlite/rqlite/pull/1899): Synchronize closing a Store and performing a Snapshot.
+- [PR #1900](https://github.com/rqlite/rqlite/pull/1900): Add a finalizer to the FSM Snapshot in the Store.
 
 ## v8.30.3 (September 16th 2024)
 ### Implementation changes and bug fixes
