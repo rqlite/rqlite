@@ -27,7 +27,6 @@ import (
 	"github.com/rqlite/rqlite/v8/command"
 	"github.com/rqlite/rqlite/v8/command/chunking"
 	"github.com/rqlite/rqlite/v8/command/proto"
-	"github.com/rqlite/rqlite/v8/db"
 	sql "github.com/rqlite/rqlite/v8/db"
 	"github.com/rqlite/rqlite/v8/db/humanize"
 	rlog "github.com/rqlite/rqlite/v8/log"
@@ -2013,12 +2012,12 @@ func (s *Store) fsmSnapshot() (fSnap raft.FSMSnapshot, retErr error) {
 	}
 
 	// Create a referential snapshot.
-	if err := s.db.SetSynchronousMode(db.SynchronousFull); err != nil {
+	if err := s.db.SetSynchronousMode(sql.SynchronousFull); err != nil {
 		return nil, err
 	}
 	defer func() {
-		if err := s.db.SetSynchronousMode(db.SynchronousOff); err != nil {
-			s.logger.Printf("failed to reset synchronous mode to %v: %v", db.SynchronousOff, err)
+		if err := s.db.SetSynchronousMode(sql.SynchronousOff); err != nil {
+			s.logger.Printf("failed to reset synchronous mode to %v: %v", sql.SynchronousOff, err)
 		}
 	}()
 
@@ -2388,9 +2387,9 @@ func (s *Store) logBackup() bool {
 
 // openOnDisk opens an on-disk database file at the configured path.
 func openOnDisk(path string, fkConstraints bool, extensions []string) (*sql.SwappableDB, error) {
-	drv := db.DefaultDriver()
+	drv := sql.DefaultDriver()
 	if len(extensions) > 0 {
-		drv = db.NewDriver("rqlite-sqlite3-extended", extensions, db.CnkOnCloseModeDisabled)
+		drv = sql.NewDriver("rqlite-sqlite3-extended", extensions, sql.CnkOnCloseModeDisabled)
 	}
 	return sql.OpenSwappableWithDriver(drv, path, fkConstraints, true)
 }

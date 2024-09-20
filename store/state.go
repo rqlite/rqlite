@@ -12,7 +12,6 @@ import (
 	"github.com/hashicorp/raft"
 	"github.com/rqlite/rqlite/v8/command/chunking"
 	"github.com/rqlite/rqlite/v8/command/proto"
-	"github.com/rqlite/rqlite/v8/db"
 	sql "github.com/rqlite/rqlite/v8/db"
 	rlog "github.com/rqlite/rqlite/v8/log"
 	"github.com/rqlite/rqlite/v8/snapshot"
@@ -28,7 +27,7 @@ func (p *PragmaCheckRequest) Check() error {
 		return nil
 	}
 	for _, stmt := range p.Statements {
-		if db.IsBreakingPragma(stmt.Sql) {
+		if sql.IsBreakingPragma(stmt.Sql) {
 			return fmt.Errorf("disallowed pragma")
 		}
 	}
