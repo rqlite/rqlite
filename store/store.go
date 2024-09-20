@@ -35,6 +35,7 @@ import (
 	"github.com/rqlite/rqlite/v8/random"
 	"github.com/rqlite/rqlite/v8/rsync"
 	"github.com/rqlite/rqlite/v8/snapshot9"
+	"github.com/rqlite/rqlite/v8/store/marker"
 )
 
 var (
@@ -296,6 +297,7 @@ type Store struct {
 	raftStable    raft.StableStore          // Persistent k-v store.
 	boltStore     *rlog.Log                 // Physical store.
 	snapshotStore SnapshotStore             // Snapshot store.
+	snapshotFlags *flags.SnapshotFlags      // Snapshot flags.
 
 	// Raft changes observer
 	leaderObserversMu sync.RWMutex
@@ -383,6 +385,7 @@ func New(ly Layer, c *Config) *Store {
 		notifyingNodes:   make(map[string]*Server),
 		ApplyTimeout:     applyTimeout,
 		snapshotCAS:      rsync.NewCheckAndSet(),
+		snapshotFlags:    marker.NewSnapshot(c.Dir),
 		fsmIdx:           &atomic.Uint64{},
 		fsmTerm:          &atomic.Uint64{},
 		fsmUpdateTime:    rsync.NewAtomicTime(),
@@ -1968,6 +1971,10 @@ func (s *Store) fsmSnapshot() (fSnap raft.FSMSnapshot, retErr error) {
 		s.numSnapshots.Add(1)
 	}()
 
+	if err := s.snapshotFlags.MarkStarted(s.fsmTerm.Load(), s.dbAppliedIdx.Load()); err != nil {
+		return nil, err
+	}
+
 	// Automatic VACUUM needed? This is deliberately done in the context of a Snapshot
 	// as it guarantees that the database is not being written to.
 	if avn, err := s.autoVacNeeded(time.Now()); err != nil {
@@ -2017,6 +2024,10 @@ func (s *Store) fsmSnapshot() (fSnap raft.FSMSnapshot, retErr error) {
 
 	if err := s.db.Checkpoint(sql.CheckpointTruncate); err != nil {
 		stats.Add(numFullCheckpointFailed, 1)
+		return nil, err
+	}
+
+	if err := s.snapshotFlags.MarkCheckpointed(s.fsmTerm.Load(), s.dbAppliedIdx.Load()); err != nil {
 		return nil, err
 	}
 
@@ -2364,10 +2375,6 @@ func (s *Store) hcLogLevel() hclog.Level {
 	return hclog.LevelFromString(s.RaftLogLevel)
 }
 
-func (s *Store) logIncremental() bool {
-	return s.hcLogLevel() < hclog.Warn
-}
-
 func (s *Store) logBackup() bool {
 	return s.hcLogLevel() < hclog.Warn
 }
@@ -2412,17 +2419,6 @@ func prettyVoter(v bool) string {
 // pathExists returns true if the given path exists.
 func pathExists(p string) bool {
 	if _, err := os.Lstat(p); err != nil && os.IsNotExist(err) {
-		return false
-	}
-	return true
-}
-
-// pathExistsWithData returns true if the given path exists and has data.
-func pathExistsWithData(p string) bool {
-	if !pathExists(p) {
-		return false
-	}
-	if size, err := fileSize(p); err != nil || size == 0 {
 		return false
 	}
 	return true
