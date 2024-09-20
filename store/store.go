@@ -1949,7 +1949,6 @@ func (s *Store) fsmApply(l *raft.Log) (e interface{}) {
 
 // fsmSnapshot returns a snapshot of the database.
 //
-// The system must ensure that no transaction is taking place during this call.
 // Hashicorp Raft guarantees that this function will not be called concurrently
 // with Apply, as it states Apply() and Snapshot() are always called from the same
 // thread.
