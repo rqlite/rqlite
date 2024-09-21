@@ -1390,11 +1390,15 @@ func (s *Store) Backup(br *proto.BackupRequest, dst io.Writer) (retErr error) {
 				return err
 			}
 		} else {
-			// If there are unapplied logs, then we need to snapshot the database to ensure
-			// the backup is up-to-date. Doing this check is an optimization, it's not
-			// crticial that it is 100% correct as we still check for the "nothing new to
-			// snapshot" error anyway.
-			if s.raft.CommitIndex() > s.dbAppliedIdx.Load() {
+			// If there is data in the WAL we need to do a snapshot to ensure that the
+			// backup we take of the main database file is up-to-date. Doing this check
+			// is an optimization, it's not crticial that it is 100% correct as we still
+			// check for the "nothing new to snapshot" error anyway.
+			sz, err := s.db.WALSize()
+			if err != nil {
+				return err
+			}
+			if sz > 0 {
 				if err := s.Snapshot(0); err != nil {
 					if err != raft.ErrNothingNewToSnapshot &&
 						!strings.Contains(err.Error(), "wait until the configuration entry at") {
