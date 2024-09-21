@@ -2011,6 +2011,8 @@ func (s *Store) fsmApply(l *raft.Log) (e interface{}) {
 // Hashicorp Raft guarantees that this function will not be called concurrently
 // with Apply, as it states Apply() and Snapshot() are always called from the same
 // thread.
+//
+// XXX IF THIS FUNCTION FAILS AT ANY POINT AFTER THE DB IS CHANGED, THE PROCESS PROBABLY NEEDS TO EXIT
 func (s *Store) fsmSnapshot() (fSnap raft.FSMSnapshot, retErr error) {
 	if !s.open.Is() {
 		return nil, ErrNotOpen
@@ -2032,6 +2034,24 @@ func (s *Store) fsmSnapshot() (fSnap raft.FSMSnapshot, retErr error) {
 		return nil, err
 	}
 
+	// Automatic OPTIMIZE needed?
+	if aon, err := s.autoOptimizeNeeded(time.Now()); err != nil {
+		return nil, err
+	} else if aon {
+		optStart := time.Now()
+		if err := s.db.Optimize(); err != nil {
+			stats.Add(numAutoOptimizesFailed, 1)
+			return nil, err
+		}
+		s.logger.Printf("database optimized in %s", time.Since(optStart))
+		stats.Get(autoOptimizeDuration).(*expvar.Int).Set(time.Since(optStart).Milliseconds())
+		stats.Add(numAutoOptimizes, 1)
+		s.numAutoOptimizes++
+		if err := s.setKeyTime(lastOptimizeTimeKey, time.Now()); err != nil {
+			return nil, err
+		}
+	}
+
 	// Automatic VACUUM needed? This is deliberately done in the context of a Snapshot
 	// as it guarantees that the database is not being written to.
 	if avn, err := s.autoVacNeeded(time.Now()); err != nil {
@@ -2047,24 +2067,6 @@ func (s *Store) fsmSnapshot() (fSnap raft.FSMSnapshot, retErr error) {
 		stats.Add(numAutoVacuums, 1)
 		s.numAutoVacuums++
 		if err := s.setKeyTime(lastVacuumTimeKey, time.Now()); err != nil {
-			return nil, err
-		}
-	}
-
-	// Automatic OPTIMIZE needed?
-	if aon, err := s.autoOptimizeNeeded(time.Now()); err != nil {
-		return nil, err
-	} else if aon {
-		optStart := time.Now()
-		if err := s.db.Optimize(); err != nil {
-			stats.Add(numAutoOptimizesFailed, 1)
-			return nil, err
-		}
-		s.logger.Printf("database optimized in %s", time.Since(optStart))
-		stats.Get(autoOptimizeDuration).(*expvar.Int).Set(time.Since(optStart).Milliseconds())
-		stats.Add(numAutoOptimizes, 1)
-		s.numAutoOptimizes++
-		if err := s.setKeyTime(lastOptimizeTimeKey, time.Now()); err != nil {
 			return nil, err
 		}
 	}
