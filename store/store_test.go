@@ -329,6 +329,37 @@ func Test_SingleNodeTempFileCleanup(t *testing.T) {
 	}
 }
 
+// Test_SingleNodeBackupBinary_NoLogs tests that a Store correctly responds to backup
+// request even when no data has been written to the database.
+func Test_SingleNodeBackupBinary_NoLogs(t *testing.T) {
+	s, ln := mustNewStore(t)
+	defer ln.Close()
+
+	if err := s.Open(); err != nil {
+		t.Fatalf("failed to open single-node store: %s", err.Error())
+	}
+	if err := s.Bootstrap(NewServer(s.ID(), s.Addr(), true)); err != nil {
+		t.Fatalf("failed to bootstrap single-node store: %s", err.Error())
+	}
+	defer s.Close(true)
+	if _, err := s.WaitForLeader(10 * time.Second); err != nil {
+		t.Fatalf("Error waiting for leader: %s", err)
+	}
+
+	f, err := os.CreateTemp("", "rqlite-baktest-")
+	if err != nil {
+		t.Fatalf("Backup Failed: unable to create temp file, %s", err.Error())
+	}
+	defer os.Remove(f.Name())
+	defer f.Close()
+	if err := s.Backup(backupRequestBinary(true, false, false), f); err != nil {
+		t.Fatalf("Backup failed %s", err.Error())
+	}
+	if !filesIdentical(f.Name(), s.dbPath) {
+		t.Fatalf("backup file not identical to database file")
+	}
+}
+
 // Test_SingleNodeBackupBinary tests that requesting a binary-formatted
 // backup works as expected.
 func Test_SingleNodeBackupBinary(t *testing.T) {

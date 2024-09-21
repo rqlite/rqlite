@@ -1,3 +1,7 @@
+## v8.30.5 (unreleased)
+### Implementation changes and bug fixes
+- [PR #1903](https://github.com/rqlite/rqlite/pull/1903): Don't take unnecessary snapshots before backups.
+
 ## v8.30.4 (September 20th 2024)
 ### Implementation changes and bug fixes
 - [PR #1894](https://github.com/rqlite/rqlite/pull/1894): More use of common gzip utils.

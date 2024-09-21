@@ -188,3 +188,10 @@ func (s *SwappableDB) FileSize() (int64, error) {
 	defer s.dbMu.RUnlock()
 	return s.db.FileSize()
 }
+
+// WALSize calls WALSize on the underlying database.
+func (s *SwappableDB) WALSize() (int64, error) {
+	s.dbMu.RLock()
+	defer s.dbMu.RUnlock()
+	return s.db.WALSize()
+}

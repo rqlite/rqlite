@@ -1390,11 +1390,20 @@ func (s *Store) Backup(br *proto.BackupRequest, dst io.Writer) (retErr error) {
 				return err
 			}
 		} else {
-			// Snapshot to ensure the main SQLite file has all the latest data.
-			if err := s.Snapshot(0); err != nil {
-				if err != raft.ErrNothingNewToSnapshot &&
-					!strings.Contains(err.Error(), "wait until the configuration entry at") {
-					return fmt.Errorf("pre-backup snapshot failed: %s", err.Error())
+			// If there is data in the WAL we need to do a snapshot to ensure that the
+			// backup we take of the main database file is up-to-date. Doing this check
+			// is an optimization, it's not crticial that it is 100% correct as we still
+			// check for the "nothing new to snapshot" error anyway.
+			sz, err := s.db.WALSize()
+			if err != nil {
+				return err
+			}
+			if sz > 0 {
+				if err := s.Snapshot(0); err != nil {
+					if err != raft.ErrNothingNewToSnapshot &&
+						!strings.Contains(err.Error(), "wait until the configuration entry at") {
+						return fmt.Errorf("pre-backup snapshot failed: %s", err.Error())
+					}
 				}
 			}
 			// Block any snapshotting which will allow us to read the SQLite file without
