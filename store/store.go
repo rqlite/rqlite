@@ -1391,7 +1391,7 @@ func (s *Store) Backup(br *proto.BackupRequest, dst io.Writer) (retErr error) {
 			}
 		} else {
 			// If there are unapplied logs, then we need to snapshot the database to ensure
-			// the backup is consistent. Doing this check is an optimization, it's not
+			// the backup is up-to-date. Doing this check is an optimization, it's not
 			// crticial that it is 100% correct as we still check for the "nothing new to
 			// snapshot" error anyway.
 			if s.raft.CommitIndex() > s.dbAppliedIdx.Load() {
