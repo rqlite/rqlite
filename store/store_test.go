@@ -329,7 +329,7 @@ func Test_SingleNodeTempFileCleanup(t *testing.T) {
 	}
 }
 
-// Test_SingleNodeExecuteQuery tests that a Store correctly responds to backup
+// Test_SingleNodeBackupBinary_NoLogs tests that a Store correctly responds to backup
 // request even when no data has been written to the database.
 func Test_SingleNodeBackupBinary_NoLogs(t *testing.T) {
 	s, ln := mustNewStore(t)
