@@ -49,6 +49,7 @@ func (s *Snapshot) Persist(sink raft.SnapshotSink) error {
 
 // Release releases the snapshot.
 func (s *Snapshot) Release() {
-	// Necessary in case Persist() is never called.
+	// Ensure that the source data for the snapshot is closed regardless of
+	// whether the snapshot is persisted or not.
 	s.rc.Close()
 }
