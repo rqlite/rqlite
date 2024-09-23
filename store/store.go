@@ -234,6 +234,9 @@ type SnapshotStore interface {
 	// SetFullNeeded explicitly sets that a full snapshot is needed.
 	SetFullNeeded() error
 
+	// SetReady marks the snapshot store as ready.
+	SetReady(r bool)
+
 	// Stats returns stats about the Snapshot Store.
 	Stats() (map[string]interface{}, error)
 }
@@ -270,6 +273,8 @@ type Store struct {
 	walPath string           // Path to WAL file.
 	dbDir   string           // Path to directory containing SQLite file.
 	db      *sql.SwappableDB // The underlying SQLite store.
+
+	snapMarkPath string // Path to marker file for move-from-snapshot optimization.
 
 	dechunkManager *chunking.DechunkerManager
 	cmdProc        *CommandProcessor
@@ -385,6 +390,7 @@ func New(ly Layer, c *Config) *Store {
 		dbPath:          dbPath,
 		walPath:         sql.WALPath(dbPath),
 		dbDir:           filepath.Dir(dbPath),
+		snapMarkPath:    filepath.Join(c.Dir, "snapmark"),
 		leaderObservers: make([]chan<- struct{}, 0),
 		reqMarshaller:   command.NewRequestMarshaler(),
 		logger:          logger,
@@ -470,6 +476,26 @@ func (s *Store) Open() (retErr error) {
 		}
 	}
 
+	// Were we interrupted peforming the move-from-snapshot optimization at startup?
+	// If so, fix it up.
+	if pathExists(s.snapMarkPath) {
+		if pathExists(s.dbPath) {
+			b, err := os.ReadFile(s.snapMarkPath)
+			if err != nil {
+				return fmt.Errorf("failed to read snapshot marker: %s", err)
+			}
+			if err := CopyFile(s.dbPath, filepath.Join(s.snapshotDir, string(b))); err != nil {
+				return fmt.Errorf("failed to copy snapshot file back: %s", err)
+			}
+		}
+		if err := os.Remove(s.snapMarkPath); err != nil {
+			return fmt.Errorf("failed to remove snapshot marker: %s", err)
+		}
+	}
+	if err := sql.RemoveFiles(s.dbPath); err != nil {
+		return fmt.Errorf("failed to remove SQLite files: %s", err)
+	}
+
 	// Create Raft-compatible network layer.
 	nt := raft.NewNetworkTransport(NewTransport(s.ly), connectionPoolCount, connectionTimeout, nil)
 	s.raftTn = NewNodeTransport(nt)
@@ -525,6 +551,40 @@ func (s *Store) Open() (retErr error) {
 		}
 		s.logger.Printf("node recovered successfully using %s", s.peersPath)
 		stats.Add(numRecoveries, 1)
+	}
+
+	if len(snaps) > 0 {
+		s.snapshotStore.SetReady(false)
+		tmpSnapMarkPath := s.snapMarkPath + ".tmp"
+		dbFiles, err := filepath.Glob(filepath.Join(s.snapshotDir, "*.db"))
+		if err != nil {
+			return fmt.Errorf("failed to list snapshot files: %s", err)
+		}
+		if len(dbFiles) != 1 {
+			return fmt.Errorf("expected exactly one database file in Snapshot Store, found %d", len(dbFiles))
+		}
+		if err := os.WriteFile(tmpSnapMarkPath, []byte(filepath.Base(dbFiles[0])), 0644); err != nil {
+			return fmt.Errorf("failed to write to snapshot marker: %s", err)
+		}
+		if err := os.Rename(tmpSnapMarkPath, s.snapMarkPath); err != nil {
+			return fmt.Errorf("failed to rename temporary snapshot marker: %s", err)
+		}
+		if err := os.Rename(dbFiles[0], s.dbPath); err != nil {
+			return fmt.Errorf("failed to rename snapshot file %s to %s: %s", dbFiles[0], s.dbPath, err)
+		}
+
+		config.NoSnapshotRestoreOnStart = true
+
+		// kick off goroutine to copy snapshot data back....
+		go func() {
+			s.logger.Printf("copying %s to %s", s.dbPath, dbFiles[0])
+			CopyFile(s.dbPath, dbFiles[0])
+			s.logger.Printf("copied %s to %s", s.dbPath, dbFiles[0])
+			if err := os.Remove(filepath.Join(s.raftDir, "marker")); err != nil {
+				s.logger.Fatalf("failed to remove snapshot marker file: %s", err)
+			}
+			s.snapshotStore.SetReady(true)
+		}()
 	}
 
 	s.db, err = openOnDisk(s.dbPath, s.dbConf.FKConstraints, s.dbConf.Extensions)
@@ -2444,9 +2504,6 @@ func (s *Store) logBackup() bool {
 
 // openOnDisk opens an on-disk database file at the configured path.
 func openOnDisk(path string, fkConstraints bool, extensions []string) (*sql.SwappableDB, error) {
-	if err := sql.RemoveFiles(path); err != nil {
-		return nil, err
-	}
 	drv := db.DefaultDriver()
 	if len(extensions) > 0 {
 		drv = db.NewDriver("rqlite-sqlite3-extended", extensions, db.CnkOnCloseModeDisabled)

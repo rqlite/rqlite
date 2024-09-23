@@ -133,6 +133,9 @@ type Store struct {
 	fullNeededPath string
 	logger         *log.Logger
 
+	readyMu sync.Mutex
+	ready   bool
+
 	mrsw *rsync.MultiRSW
 
 	LogReaping   bool
@@ -149,6 +152,7 @@ func NewStore(dir string) (*Store, error) {
 		dir:            dir,
 		fullNeededPath: filepath.Join(dir, fullNeededFile),
 		logger:         log.New(os.Stderr, "[snapshot-store] ", log.LstdFlags),
+		ready:          true,
 		mrsw:           rsync.NewMultiRSW(),
 	}
 	str.logger.Printf("store initialized using %s", dir)
@@ -171,6 +175,10 @@ func NewStore(dir string) (*Store, error) {
 // be a problem, since snapshots are taken infrequently in one at a time.
 func (s *Store) Create(version raft.SnapshotVersion, index, term uint64, configuration raft.Configuration,
 	configurationIndex uint64, trans raft.Transport) (retSink raft.SnapshotSink, retErr error) {
+	if !s.IsReady() {
+		return nil, fmt.Errorf("store is not ready")
+	}
+
 	if err := s.mrsw.BeginWrite(); err != nil {
 		stats.Add(snapshotCreateMRSWFail, 1)
 		return nil, err
@@ -199,6 +207,10 @@ func (s *Store) Create(version raft.SnapshotVersion, index, term uint64, configu
 // List returns a list of all the snapshots in the Store. In practice, this will at most be
 // a list of 1, and that will be the newest snapshot available.
 func (s *Store) List() ([]*raft.SnapshotMeta, error) {
+	if !s.IsReady() {
+		return nil, fmt.Errorf("store is not ready")
+	}
+
 	snapshots, err := s.getSnapshots()
 	if err != nil {
 		return nil, err
@@ -219,6 +231,10 @@ func (s *Store) List() ([]*raft.SnapshotMeta, error) {
 // Open opens the snapshot with the given ID. Close() must be called on the snapshot
 // when finished with it.
 func (s *Store) Open(id string) (_ *raft.SnapshotMeta, _ io.ReadCloser, retErr error) {
+	if !s.IsReady() {
+		return nil, nil, fmt.Errorf("store is not ready")
+	}
+
 	if err := s.mrsw.BeginRead(); err != nil {
 		stats.Add(snapshotOpenMRSWFail, 1)
 		return nil, nil, err
@@ -241,6 +257,10 @@ func (s *Store) Open(id string) (_ *raft.SnapshotMeta, _ io.ReadCloser, retErr e
 
 // FullNeeded returns true if a full snapshot is needed.
 func (s *Store) FullNeeded() (bool, error) {
+	if !s.IsReady() {
+		return false, fmt.Errorf("store is not ready")
+	}
+
 	if fileExists(s.fullNeededPath) {
 		return true, nil
 	}
@@ -254,6 +274,10 @@ func (s *Store) FullNeeded() (bool, error) {
 // SetFullNeeded sets the flag that indicates a full snapshot is needed.
 // This flag will be cleared when a snapshot is successfully persisted.
 func (s *Store) SetFullNeeded() error {
+	if !s.IsReady() {
+		return fmt.Errorf("store is not ready")
+	}
+
 	f, err := os.Create(s.fullNeededPath)
 	if err != nil {
 		return err
@@ -281,6 +305,7 @@ func (s *Store) Stats() (map[string]interface{}, error) {
 		"dir":       s.dir,
 		"snapshots": snapsAsIDs,
 		"db_path":   dbPath,
+		"ready":     s.IsReady(),
 	}, nil
 }
 
@@ -289,6 +314,10 @@ func (s *Store) Stats() (map[string]interface{}, error) {
 // it is up to the caller to ensure no other operations are happening on the
 // Store.
 func (s *Store) Reap() (retN int, retErr error) {
+	if !s.IsReady() {
+		return 0, fmt.Errorf("store is not ready")
+	}
+
 	defer func() {
 		if retErr != nil {
 			stats.Add(snapshotsReapedFail, 1)
@@ -390,6 +419,20 @@ func (s *Store) check() (retError error) {
 		}
 	}
 	return nil
+}
+
+// SetReady sets the ready state of the Store.
+func (s *Store) SetReady(ready bool) {
+	s.readyMu.Lock()
+	defer s.readyMu.Unlock()
+	s.ready = ready
+}
+
+// IsReady returns the ready state of the Store.
+func (s *Store) IsReady() bool {
+	s.readyMu.Lock()
+	defer s.readyMu.Unlock()
+	return s.ready
 }
 
 // getSnapshots returns a list of all snapshots in the store, sorted
