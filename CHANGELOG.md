@@ -1,4 +1,5 @@
 ## v8.30.5 (September 23rd 2024)
+This release addresses [a highly unlikely failure case](https://github.com/rqlite/rqlite/pull/1905) which may result in an inconsistent cluter or data loss. This issue has never been reported in production, **but all users of the 8.x series should upgrade to this release** to eliminate any risk of hitting the issue.
 ### Implementation changes and bug fixes
 - [PR #1903](https://github.com/rqlite/rqlite/pull/1903): Don't take unnecessary snapshots before backups.
 - [PR #1905](https://github.com/rqlite/rqlite/pull/1905): If persisting a Snapshot fails, then we need a full snapshot next time.
