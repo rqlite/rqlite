@@ -480,6 +480,7 @@ func (s *Store) Open() (retErr error) {
 	// If so, fix it up.
 	if pathExists(s.snapMarkPath) {
 		if pathExists(s.dbPath) {
+			s.logger.Println("snapshot marker present, attempting repair of Snapshot Store")
 			b, err := os.ReadFile(s.snapMarkPath)
 			if err != nil {
 				return fmt.Errorf("failed to read snapshot marker: %s", err)
@@ -580,7 +581,7 @@ func (s *Store) Open() (retErr error) {
 			s.logger.Printf("copying %s to %s", s.dbPath, dbFiles[0])
 			CopyFile(s.dbPath, dbFiles[0])
 			s.logger.Printf("copied %s to %s", s.dbPath, dbFiles[0])
-			if err := os.Remove(filepath.Join(s.raftDir, "marker")); err != nil {
+			if err := os.Remove(s.snapMarkPath); err != nil {
 				s.logger.Fatalf("failed to remove snapshot marker file: %s", err)
 			}
 			s.snapshotStore.SetReady(true)

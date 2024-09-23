@@ -207,10 +207,6 @@ func (s *Store) Create(version raft.SnapshotVersion, index, term uint64, configu
 // List returns a list of all the snapshots in the Store. In practice, this will at most be
 // a list of 1, and that will be the newest snapshot available.
 func (s *Store) List() ([]*raft.SnapshotMeta, error) {
-	if !s.IsReady() {
-		return nil, fmt.Errorf("store is not ready")
-	}
-
 	snapshots, err := s.getSnapshots()
 	if err != nil {
 		return nil, err
