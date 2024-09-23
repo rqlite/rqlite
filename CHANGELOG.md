@@ -1,4 +1,4 @@
-## v8.30.5 (unreleased)
+## v8.30.5 (September 23rd 2024)
 ### Implementation changes and bug fixes
 - [PR #1903](https://github.com/rqlite/rqlite/pull/1903): Don't take unnecessary snapshots before backups.
 - [PR #1905](https://github.com/rqlite/rqlite/pull/1905): If persisting a Snapshot fails, then we need a full snapshot next time.
