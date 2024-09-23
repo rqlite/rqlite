@@ -152,6 +152,8 @@ const (
 	snapshotCreateDuration            = "snapshot_create_duration"
 	snapshotCreateChkTruncateDuration = "snapshot_create_chk_truncate_duration"
 	snapshotCreateWALCompactDuration  = "snapshot_create_wal_compact_duration"
+	numSnapshotPersists               = "num_snapshot_persists"
+	numSnapshotPersistsFailed         = "num_snapshot_persists_failed"
 	snapshotPersistDuration           = "snapshot_persist_duration"
 	snapshotPrecompactWALSize         = "snapshot_precompact_wal_size"
 	snapshotWALSize                   = "snapshot_wal_size"
@@ -210,6 +212,8 @@ func ResetStats() {
 	stats.Add(snapshotCreateDuration, 0)
 	stats.Add(snapshotCreateChkTruncateDuration, 0)
 	stats.Add(snapshotCreateWALCompactDuration, 0)
+	stats.Add(numSnapshotPersists, 0)
+	stats.Add(numSnapshotPersistsFailed, 0)
 	stats.Add(snapshotPersistDuration, 0)
 	stats.Add(snapshotPrecompactWALSize, 0)
 	stats.Add(snapshotWALSize, 0)
@@ -1548,7 +1552,7 @@ func (s *Store) ReadFrom(r io.Reader) (int64, error) {
 
 	// Snapshot, so we load the new database into the Raft system.
 	if err := s.snapshotStore.SetFullNeeded(); err != nil {
-		return n, err
+		s.logger.Fatalf("failed to set full snapshot needed: %s", err)
 	}
 	if err := s.Snapshot(1); err != nil {
 		return n, err
@@ -1585,7 +1589,7 @@ func (s *Store) Vacuum() error {
 	}
 
 	if err := s.snapshotStore.SetFullNeeded(); err != nil {
-		return err
+		s.logger.Fatalf("failed to set full snapshot needed: %s", err)
 	}
 	return nil
 }
@@ -1942,11 +1946,9 @@ func (s *Store) fsmApply(l *raft.Log) (e interface{}) {
 		s.numNoops.Add(1)
 	} else if cmd.Type == proto.Command_COMMAND_TYPE_LOAD {
 		// Swapping in a new database invalidates any existing snapshot.
-		err := s.snapshotStore.SetFullNeeded()
-		if err != nil {
-			return &fsmGenericResponse{
-				error: fmt.Errorf("failed to set full snapshot needed: %s", err.Error()),
-			}
+		if err := s.snapshotStore.SetFullNeeded(); err != nil {
+			s.logger.Fatalf("failed to set full snapshot needed: %s", err)
+
 		}
 	}
 	return r
