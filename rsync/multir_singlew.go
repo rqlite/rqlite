@@ -64,3 +64,20 @@ func (r *MultiRSW) EndWrite() {
 	}
 	r.writerActive = false
 }
+
+// UpgradeToWriter attempts to upgrade a read lock to a write lock. The
+// client must be the only reader in order to upgrade, and must already
+// be in a read lock.
+func (r *MultiRSW) UpgradeToWriter() error {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if r.writerActive || r.numReaders > 1 {
+		return ErrMRSWConflict
+	}
+	if r.numReaders == 0 {
+		panic("upgrade attempted with no readers")
+	}
+	r.writerActive = true
+	r.numReaders = 0
+	return nil
+}
