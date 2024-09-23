@@ -152,6 +152,8 @@ const (
 	snapshotCreateDuration            = "snapshot_create_duration"
 	snapshotCreateChkTruncateDuration = "snapshot_create_chk_truncate_duration"
 	snapshotCreateWALCompactDuration  = "snapshot_create_wal_compact_duration"
+	numSnapshotPersists               = "num_snapshot_persists"
+	numSnapshotPersistsFailed         = "num_snapshot_persists_failed"
 	snapshotPersistDuration           = "snapshot_persist_duration"
 	snapshotPrecompactWALSize         = "snapshot_precompact_wal_size"
 	snapshotWALSize                   = "snapshot_wal_size"
@@ -210,6 +212,8 @@ func ResetStats() {
 	stats.Add(snapshotCreateDuration, 0)
 	stats.Add(snapshotCreateChkTruncateDuration, 0)
 	stats.Add(snapshotCreateWALCompactDuration, 0)
+	stats.Add(numSnapshotPersists, 0)
+	stats.Add(numSnapshotPersistsFailed, 0)
 	stats.Add(snapshotPersistDuration, 0)
 	stats.Add(snapshotPrecompactWALSize, 0)
 	stats.Add(snapshotWALSize, 0)
