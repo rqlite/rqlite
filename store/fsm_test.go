@@ -25,6 +25,40 @@ func Test_FSMSnapshot_Finalizer(t *testing.T) {
 	}
 }
 
+func Test_FSMSnapshot_OnFailure_NotCalled(t *testing.T) {
+	onFailureCalled := false
+	f := FSMSnapshot{
+		OnFailure: func() {
+			onFailureCalled = true
+		},
+		FSMSnapshot: &mockRaftSnapshot{},
+		logger:      nil,
+	}
+
+	if err := f.Persist(&mockSink{}); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	f.Release()
+	if onFailureCalled {
+		t.Fatalf("OnFailure was called")
+	}
+}
+
+func Test_FSMSnapshot_OnFailure_Called(t *testing.T) {
+	onFailureCalled := false
+	f := FSMSnapshot{
+		OnFailure: func() {
+			onFailureCalled = true
+		},
+		FSMSnapshot: &mockRaftSnapshot{},
+		logger:      nil,
+	}
+	f.Release()
+	if !onFailureCalled {
+		t.Fatalf("OnFailure was not called")
+	}
+}
+
 type mockSink struct {
 }
 
