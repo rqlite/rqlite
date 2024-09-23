@@ -1,3 +1,7 @@
+## v8.30.6 (unreleased)
+### Implementation changes and bug fixes
+- [PR #1906](https://github.com/rqlite/rqlite/pull/1906): Exit if _Full Needed_ flag cannot be set.
+
 ## v8.30.5 (September 23rd 2024)
 This release addresses [a highly unlikely failure case](https://github.com/rqlite/rqlite/pull/1905) which may result in data loss. This issue has never been reported in production, **but all users of the 8.x series should upgrade to this release** to eliminate any risk of hitting the issue.
 ### Implementation changes and bug fixes
