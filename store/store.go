@@ -2090,6 +2090,13 @@ func (s *Store) fsmSnapshot() (fSnap raft.FSMSnapshot, retErr error) {
 	stats.Get(snapshotCreateDuration).(*expvar.Int).Set(dur.Milliseconds())
 	fs := FSMSnapshot{
 		FSMSnapshot: fsmSnapshot,
+		OnFailure: func() {
+			s.logger.Printf("Persisting snapshot did not succeed, full snapshot needed")
+			if err := s.snapshotStore.SetFullNeeded(); err != nil {
+				// If this happens, only recourse is to shut down the node.
+				s.logger.Fatalf("failed to set full snapshot needed: %s", err)
+			}
+		},
 	}
 	if fullNeeded || s.logIncremental() {
 		s.logger.Printf("%s snapshot created in %s on node ID %s", fPLog, dur, s.raftID)
