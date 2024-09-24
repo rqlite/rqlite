@@ -304,7 +304,7 @@ type Store struct {
 	raftLog       raft.LogStore             // Persistent log store.
 	raftStable    raft.StableStore          // Persistent k-v store.
 	boltStore     *rlog.Log                 // Physical store.
-	snapshotStore SnapshotStore             // Snapshot store.
+	snapshotStore *snapshot.Store           // Snapshot store.
 
 	// Raft changes observer
 	leaderObserversMu sync.RWMutex

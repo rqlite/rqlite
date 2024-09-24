@@ -239,6 +239,98 @@ func (s *Store) Open(id string) (_ *raft.SnapshotMeta, _ io.ReadCloser, retErr e
 	return meta, NewLockingSnapshot(fd, s), nil
 }
 
+// InstallAndCopyBack does the following:
+// - puts the Store in a mode where it can respond to reads requests, but not writes yet.
+// - renames its snapshot file to the location at path
+// - creates a symlink from its own snapshot file path to the location at path
+// - starts a goroutine to copy the snapshot file back to the Store's snapshot file path
+// - atomically replace the symlink with the snapshot file data it copied back'
+// - take the Store out of read-only mode
+//
+// This function would create markers files as needed beside path so it can resume the copy back operation
+// if it was interrupted.
+func (s *Store) InstallAndCopyBack(path string) (done <-chan struct{}, retErr error) {
+	if err := s.mrsw.BeginRead(); err != nil {
+		stats.Add(snapshotOpenMRSWFail, 1)
+		return nil, err
+	}
+	defer func() {
+		if retErr != nil {
+			s.mrsw.EndRead()
+		}
+	}()
+
+	dbPath, err := s.getDBPath()
+	if err != nil {
+		return nil, err
+	}
+	if os.Rename(dbPath, path) != nil {
+		return nil, err
+	}
+	defer func() {
+		if retErr != nil {
+			if os.Rename(path, dbPath) != nil {
+				s.logger.Printf("failed to rollback snapshot file rename")
+			}
+		}
+	}()
+
+	// Create a symlink to the new snapshot file.
+	if os.Symlink(path, dbPath) != nil {
+		return nil, err
+	}
+
+	ch := make(chan struct{})
+	// Copy the file back via a goroutine.
+	go func() {
+		defer s.mrsw.EndRead()
+		srcFd, err := os.Open(path)
+		if err != nil {
+			s.logger.Printf("failed to open snapshot file: %s", err)
+			return
+		}
+		defer srcFd.Close()
+		dstFd, err := os.Create(dbPath + ".tmp")
+		if err != nil {
+			s.logger.Printf("failed to create snapshot file: %s", err)
+			return
+		}
+		defer dstFd.Close()
+		if _, err := io.Copy(dstFd, srcFd); err != nil {
+			s.logger.Printf("failed to copy snapshot file: %s", err)
+			return
+		}
+		if err := dstFd.Sync(); err != nil {
+			s.logger.Printf("failed to sync snapshot file: %s", err)
+			return
+		}
+		if err := dstFd.Close(); err != nil {
+			s.logger.Printf("failed to close snapshot file: %s", err)
+			return
+		}
+
+		// Now we need to replace the symlink with the actual snapshot file.
+		// We must block every Create call until we do this.
+
+		go func() {
+			for {
+				defer s.mrsw.EndWrite()
+				close(ch)
+				if err := s.mrsw.BeginWrite(); err != nil {
+					time.Sleep(100 * time.Millisecond)
+					continue
+				}
+				if err := os.Rename(dbPath+".tmp", dbPath); err != nil {
+					s.logger.Printf("failed to rename snapshot file: %s", err)
+					return
+				}
+			}
+		}()
+	}()
+
+	return ch, nil
+}
+
 // FullNeeded returns true if a full snapshot is needed.
 func (s *Store) FullNeeded() (bool, error) {
 	if fileExists(s.fullNeededPath) {
