@@ -1,4 +1,4 @@
-## v8.31.0 (unreleased)
+## v8.31.0 (September 24th 2024)
 ### New features
 - [PR #1910](https://github.com/rqlite/rqlite/pull/1910): Support for byte arays and hex-encoded values as Parameterized values.
 
