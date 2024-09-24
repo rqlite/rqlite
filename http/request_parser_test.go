@@ -147,6 +147,107 @@ func Test_SingleParameterizedRequestLargeNumber(t *testing.T) {
 	}
 }
 
+func Test_SingleParameterizedRequestHexValue(t *testing.T) {
+	s := "SELECT * FROM ? WHERE bar=?"
+	p0 := "FOO"
+	p1 := []byte{0x01, 0x02, 0x03}
+	b := []byte(fmt.Sprintf(`[["%s", "%s", "x'010203'"]]`, s, p0))
+
+	stmts, err := ParseRequest(bytes.NewReader(b))
+	if err != nil {
+		t.Fatalf("failed to parse request: %s", err.Error())
+	}
+
+	if len(stmts) != 1 {
+		t.Fatalf("incorrect number of statements returned: %d", len(stmts))
+	}
+	if stmts[0].Sql != s {
+		t.Fatalf("incorrect statement parsed, exp %s, got %s", s, stmts[0].Sql)
+	}
+
+	if len(stmts[0].Parameters) != 2 {
+		t.Fatalf("incorrect number of parameters returned: %d", len(stmts[0].Parameters))
+	}
+	if stmts[0].Parameters[0].GetS() != p0 {
+		t.Fatalf("incorrect parameter, exp %s, got %s", p0, stmts[0].Parameters[0])
+	}
+	if !bytes.Equal(stmts[0].Parameters[1].GetY(), p1) {
+		t.Fatalf("incorrect parameter, exp %s, got %s", p1, stmts[0].Parameters[1].GetY())
+	}
+}
+
+func Test_SingleParameterizedRequestHexValue_Falback(t *testing.T) {
+	s := "SELECT * FROM ? WHERE bar=?"
+	p0 := "FOO"
+	p1 := "x'010203"
+	b := []byte(fmt.Sprintf(`[["%s", "%s", "%s"]]`, s, p0, p1))
+
+	stmts, err := ParseRequest(bytes.NewReader(b))
+	if err != nil {
+		t.Fatalf("failed to parse request: %s", err.Error())
+	}
+
+	if len(stmts) != 1 {
+		t.Fatalf("incorrect number of statements returned: %d", len(stmts))
+	}
+	if stmts[0].Sql != s {
+		t.Fatalf("incorrect statement parsed, exp %s, got %s", s, stmts[0].Sql)
+	}
+
+	if len(stmts[0].Parameters) != 2 {
+		t.Fatalf("incorrect number of parameters returned: %d", len(stmts[0].Parameters))
+	}
+	if stmts[0].Parameters[0].GetS() != p0 {
+		t.Fatalf("incorrect parameter, exp %s, got %s", p0, stmts[0].Parameters[0])
+	}
+	if stmts[0].Parameters[1].GetS() != p1 {
+		t.Fatalf("incorrect parameter, exp %s, got %s", p1, stmts[0].Parameters[1].GetS())
+	}
+}
+
+func Test_SingleParameterizedRequestByteArray(t *testing.T) {
+	s := "SELECT * FROM ? WHERE bar=?"
+	p0 := "FOO"
+	p1 := []byte{0x01, 0x02, 0x03}
+	b := []byte(fmt.Sprintf(`[["%s", "%s", %s]]`, s, p0, byteSliceToStringArray(p1)))
+
+	stmts, err := ParseRequest(bytes.NewReader(b))
+	if err != nil {
+		t.Fatalf("failed to parse request: %s", err.Error())
+	}
+
+	if len(stmts) != 1 {
+		t.Fatalf("incorrect number of statements returned: %d", len(stmts))
+	}
+	if stmts[0].Sql != s {
+		t.Fatalf("incorrect statement parsed, exp %s, got %s", s, stmts[0].Sql)
+	}
+
+	if len(stmts[0].Parameters) != 2 {
+		t.Fatalf("incorrect number of parameters returned: %d", len(stmts[0].Parameters))
+	}
+	if stmts[0].Parameters[0].GetS() != p0 {
+		t.Fatalf("incorrect parameter, exp %s, got %s", p0, stmts[0].Parameters[0])
+	}
+	if !bytes.Equal(stmts[0].Parameters[1].GetY(), p1) {
+		t.Fatalf("incorrect parameter, exp %s, got %s", p1, stmts[0].Parameters[1].GetY())
+	}
+}
+
+func Test_SingleParameterizedRequestByteArray_Invalid(t *testing.T) {
+	s := "SELECT * FROM ? WHERE bar=?"
+	p0 := "FOO"
+
+	b := []byte(fmt.Sprintf(`[["%s", "%s", [7889,2,3]]]`, s, p0))
+	if _, err := ParseRequest(bytes.NewReader(b)); err == nil {
+		t.Fatalf("expected error for invalid byte array")
+	}
+	b = []byte(fmt.Sprintf(`[["%s", "%s", [-4,2,3]]]`, s, p0))
+	if _, err := ParseRequest(bytes.NewReader(b)); err == nil {
+		t.Fatalf("expected error for invalid byte array")
+	}
+}
+
 func Test_SingleParameterizedRequestNull(t *testing.T) {
 	s := "INSERT INTO test(name, value) VALUES(?, ?)"
 	p0 := "fiona"
@@ -384,6 +485,19 @@ func Test_SingleInvalidTypeRequests(t *testing.T) {
 	if err != ErrInvalidRequest {
 		t.Fatal("got unexpected error for invalid request")
 	}
+}
+
+func byteSliceToStringArray(b []byte) string {
+	var buffer bytes.Buffer
+	buffer.WriteString("[")
+	for i, v := range b {
+		if i > 0 {
+			buffer.WriteString(",")
+		}
+		buffer.WriteString(fmt.Sprintf("%d", v))
+	}
+	buffer.WriteString("]")
+	return buffer.String()
 }
 
 func mustJSONMarshal(v interface{}) []byte {
