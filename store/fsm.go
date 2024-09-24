@@ -38,8 +38,21 @@ func (f *FSM) Restore(rc io.ReadCloser) error {
 // Finalizer, instrumentation, and logging.
 type FSMSnapshot struct {
 	Finalizer func() error
+	OnFailure func()
+
 	raft.FSMSnapshot
-	logger *log.Logger
+	persistSucceeded bool
+	logger           *log.Logger
+}
+
+// NewFSMSnapshot returns a new FSMSnapshot.
+func NewFSMSnapshot(f func() error, o func(), snap raft.FSMSnapshot, logger *log.Logger) *FSMSnapshot {
+	return &FSMSnapshot{
+		Finalizer:   f,
+		OnFailure:   o,
+		FSMSnapshot: snap,
+		logger:      logger,
+	}
 }
 
 // Persist writes the snapshot to the given sink.
@@ -47,10 +60,17 @@ func (f *FSMSnapshot) Persist(sink raft.SnapshotSink) (retError error) {
 	startT := time.Now()
 	defer func() {
 		if retError == nil {
+			f.persistSucceeded = true
 			dur := time.Since(startT)
+			stats.Add(numSnapshotPersists, 1)
 			stats.Get(snapshotPersistDuration).(*expvar.Int).Set(dur.Milliseconds())
 			if f.logger != nil {
 				f.logger.Printf("persisted snapshot %s in %s", sink.ID(), dur)
+			}
+		} else {
+			stats.Add(numSnapshotPersistsFailed, 1)
+			if f.logger != nil {
+				f.logger.Printf("failed to persist snapshot %s: %v", sink.ID(), retError)
 			}
 		}
 	}()
@@ -66,4 +86,7 @@ func (f *FSMSnapshot) Persist(sink raft.SnapshotSink) (retError error) {
 // Release performs any final cleanup once the Snapshot has been persisted.
 func (f *FSMSnapshot) Release() {
 	f.FSMSnapshot.Release()
+	if !f.persistSucceeded && f.OnFailure != nil {
+		f.OnFailure()
+	}
 }

@@ -1,4 +1,19 @@
-## v8.30.4 (unreleased)
+## v8.31.0 (September 24th 2024)
+### New features
+- [PR #1910](https://github.com/rqlite/rqlite/pull/1910): Support for byte arays and hex-encoded values as Parameterized values.
+
+### Implementation changes and bug fixes
+- [PR #1906](https://github.com/rqlite/rqlite/pull/1906): Exit if _Full Needed_ flag cannot be set.
+- [PR #1906](https://github.com/rqlite/rqlite/pull/1906): Count Snapshot-Persist operations.
+- [PR #1908](https://github.com/rqlite/rqlite/pull/1908): Allow read-locks to be upgraded to write locks.
+
+## v8.30.5 (September 23rd 2024)
+This release addresses [a highly unlikely failure case](https://github.com/rqlite/rqlite/pull/1905) which may result in data loss. This issue has never been reported in production, **but all users of the 8.x series should upgrade to this release** to eliminate any risk of hitting the issue.
+### Implementation changes and bug fixes
+- [PR #1903](https://github.com/rqlite/rqlite/pull/1903): Don't take unnecessary snapshots before backups.
+- [PR #1905](https://github.com/rqlite/rqlite/pull/1905): If persisting a Snapshot fails, then a _full_ snapshot is needed next snapshot cycle.
+
+## v8.30.4 (September 20th 2024)
 ### Implementation changes and bug fixes
 - [PR #1894](https://github.com/rqlite/rqlite/pull/1894): More use of common gzip utils.
 - [PR #1896](https://github.com/rqlite/rqlite/pull/1896): Reset Store state on open.

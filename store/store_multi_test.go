@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/rqlite/rqlite/v8/command/proto"
+	"github.com/rqlite/rqlite/v8/db"
 )
 
 // Test_MultiNodeSimple tests that a the core operation of a multi-node
@@ -275,6 +276,115 @@ func Test_MultiNodeSnapshot_ErrorMessage(t *testing.T) {
 	}
 	if !strings.Contains(err.Error(), "wait until the configuration entry at") {
 		t.Fatalf("expected error to contain 'wait until the configuration entry at', got %s", err.Error())
+	}
+}
+
+// Test_MultiNodeSnapshot_BlockedSnapshot ensures that if a Snapshot is blocked by the
+// Raft subsystem, the Store will revert to FullNeeded. If it didn't do this a WAL file
+// could be missed, and the Snapshot Store be placed in an invalid state.
+// XXX This will probably fail with new approach -- BIG DESIGN ISSUE.
+func Test_MultiNodeSnapshot_BlockedSnapshot(t *testing.T) {
+	// Fire up first node and write one record.
+	s0, ln := mustNewStore(t)
+	defer ln.Close()
+	if err := s0.Open(); err != nil {
+		t.Fatalf("failed to open single-node store: %s", err.Error())
+	}
+	defer s0.Close(true)
+	if err := s0.Bootstrap(NewServer(s0.ID(), s0.Addr(), true)); err != nil {
+		t.Fatalf("failed to bootstrap single-node store: %s", err.Error())
+	}
+	if _, err := s0.WaitForLeader(10 * time.Second); err != nil {
+		t.Fatalf("Error waiting for leader: %s", err)
+	}
+	er := executeRequestFromString(`CREATE TABLE foo (id INTEGER NOT NULL PRIMARY KEY, name TEXT)`, false, false)
+	_, err := s0.Execute(er)
+	if err != nil {
+		t.Fatalf("failed to execute on single node: %s", err.Error())
+	}
+
+	// Create a convenience function to insert a record.
+	insertRecord := func(s *Store, n int) {
+		t.Helper()
+		stmts := make([]string, 0, n)
+		for i := 0; i < n; i++ {
+			stmts = append(stmts, `INSERT INTO foo(name) VALUES("fiona")`)
+		}
+		er = executeRequestFromStrings(stmts, false, false)
+		_, err = s.Execute(er)
+		if err != nil {
+			t.Fatalf("failed to execute on single node: %s", err.Error())
+		}
+	}
+
+	// Snapshot first node, then insert records.
+	if err := s0.Snapshot(0); err != nil {
+		t.Fatalf("failed to snapshot single-node store: %s", err.Error())
+	}
+	insertRecord(s0, 1000) // Need a larger number to ensure multiple pages are modified and brings out issue.
+
+	// Fire up second node.
+	s1, ln1 := mustNewStore(t)
+	defer ln1.Close()
+	if err := s1.Open(); err != nil {
+		t.Fatalf("failed to open single-node store: %s", err.Error())
+	}
+	defer s1.Close(true)
+	if err := s0.Join(joinRequest(s1.ID(), s1.Addr(), true)); err != nil {
+		t.Fatalf("failed to join single-node store: %s", err.Error())
+	}
+	if _, err := s1.WaitForLeader(10 * time.Second); err != nil {
+		t.Fatalf("Error waiting for leader: %s", err)
+	}
+
+	// Snapshotting should fail due to the config-change record at the head of the log.
+	err = s0.Snapshot(0)
+	if err == nil {
+		t.Fatalf("expected error when snapshotting multi-node store immediately after joining")
+	}
+	if !strings.Contains(err.Error(), "wait until the configuration entry at") {
+		t.Fatalf("expected error to contain 'wait until the configuration entry at', got %s", err.Error())
+	}
+
+	// Insert another record into the cluster.
+	insertRecord(s0, 1)
+
+	// Should be two records in database.
+	qr := queryRequestFromString("SELECT COUNT(*) FROM foo", false, false)
+	qr.Level = proto.QueryRequest_QUERY_REQUEST_LEVEL_STRONG
+	r, err := s0.Query(qr)
+	if err != nil {
+		t.Fatalf("failed to query single node: %s", err.Error())
+	}
+	if exp, got := `[{"columns":["COUNT(*)"],"types":["integer"],"values":[[1001]]}]`, asJSON(r); exp != got {
+		t.Fatalf("unexpected results for query\nexp: %s\ngot: %s", exp, got)
+	}
+
+	// Snapshotting should work now.
+	if err := s0.Snapshot(0); err != nil {
+		t.Fatalf("failed to snapshot single-node store: %s", err.Error())
+	}
+
+	// Look inside the latest snapshot store and ensure it has the right data.
+	files, err := filepath.Glob(filepath.Join(s0.snapshotDir, "*.db"))
+	if err != nil {
+		t.Fatalf("failed to list snapshot files: %s", err.Error())
+	}
+	if len(files) != 1 {
+		t.Fatalf("expected one snapshot file, got %d", len(files))
+	}
+	db, err := db.Open(files[0], false, true)
+	if err != nil {
+		t.Fatalf("failed to open snapshot database: %s", err.Error())
+	}
+	defer db.Close()
+	qr = queryRequestFromString("SELECT COUNT(*) FROM foo", false, false)
+	rows, err := db.Query(qr.Request, false)
+	if err != nil {
+		t.Fatalf("failed to query snapshot database: %s", err.Error())
+	}
+	if exp, got := `[{"columns":["COUNT(*)"],"types":["integer"],"values":[[1001]]}]`, asJSON(rows); exp != got {
+		t.Fatalf("unexpected results for query\nexp: %s\ngot: %s", exp, got)
 	}
 }
 

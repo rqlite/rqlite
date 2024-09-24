@@ -151,6 +151,8 @@ const (
 	snapshotCreateDuration            = "snapshot_create_duration"
 	snapshotCreateChkTruncateDuration = "snapshot_create_chk_truncate_duration"
 	snapshotCreateWALCompactDuration  = "snapshot_create_wal_compact_duration"
+	numSnapshotPersists               = "num_snapshot_persists"
+	numSnapshotPersistsFailed         = "num_snapshot_persists_failed"
 	snapshotPersistDuration           = "snapshot_persist_duration"
 	snapshotPrecompactWALSize         = "snapshot_precompact_wal_size"
 	snapshotWALSize                   = "snapshot_wal_size"
@@ -209,6 +211,8 @@ func ResetStats() {
 	stats.Add(snapshotCreateDuration, 0)
 	stats.Add(snapshotCreateChkTruncateDuration, 0)
 	stats.Add(snapshotCreateWALCompactDuration, 0)
+	stats.Add(numSnapshotPersists, 0)
+	stats.Add(numSnapshotPersistsFailed, 0)
 	stats.Add(snapshotPersistDuration, 0)
 	stats.Add(snapshotPrecompactWALSize, 0)
 	stats.Add(snapshotWALSize, 0)
@@ -1415,11 +1419,20 @@ func (s *Store) Backup(br *proto.BackupRequest, dst io.Writer) (retErr error) {
 				return err
 			}
 		} else {
-			// Snapshot to ensure the main SQLite file has all the latest data.
-			if err := s.Snapshot(0); err != nil {
-				if err != raft.ErrNothingNewToSnapshot &&
-					!strings.Contains(err.Error(), "wait until the configuration entry at") {
-					return fmt.Errorf("pre-backup snapshot failed: %s", err.Error())
+			// If there is data in the WAL we need to do a snapshot to ensure that the
+			// backup we take of the main database file is up-to-date. Doing this check
+			// is an optimization, it's not crticial that it is 100% correct as we still
+			// check for the "nothing new to snapshot" error anyway.
+			sz, err := s.db.WALSize()
+			if err != nil {
+				return err
+			}
+			if sz > 0 {
+				if err := s.Snapshot(0); err != nil {
+					if err != raft.ErrNothingNewToSnapshot &&
+						!strings.Contains(err.Error(), "wait until the configuration entry at") {
+						return fmt.Errorf("pre-backup snapshot failed: %s", err.Error())
+					}
 				}
 			}
 			// Block any snapshotting which will allow us to read the SQLite file without
@@ -2111,7 +2124,7 @@ func (s *Store) fsmSnapshot() (fSnap raft.FSMSnapshot, retErr error) {
 		}
 		return s.snapshotMarkers.ClearCheckpointed()
 	}
-	return &FSMSnapshot{finalizeFn, snapshot9.NewSnapshot(buf), s.logger}, nil
+	return NewFSMSnapshot(finalizeFn, nil, snapshot9.NewSnapshot(buf), s.logger), nil
 }
 
 // fsmRestore restores the node to a previous state. The Hashicorp docs state this
