@@ -88,9 +88,12 @@ func Test_OpenStoreCloseStartupSingleNode(t *testing.T) {
 	}
 	queryTest(s, 10)
 
-	// This next block tests that everything works when there is a combination
-	// of snapshot data and some entries in the log that need to be replayed
-	// af start-up.
+	// This next block tests an important code path -- that a is taken, and then
+	// the snapshot proof which is in the Snapshot store represents just the
+	// database file. So we want to hang onto the database file, but delete
+	// the WAL file that will be left around. Otherwise we'd have the main
+	// database file and a WAL file, and the Raft log entries would be replayed
+	// giving us a extra records.
 	if err := s.Close(true); err != nil {
 		t.Fatalf("failed to close single-node store: %s", err.Error())
 	}

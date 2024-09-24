@@ -45,6 +45,16 @@ type FSMSnapshot struct {
 	logger           *log.Logger
 }
 
+// NewFSMSnapshot returns a new FSMSnapshot.
+func NewFSMSnapshot(f func() error, o func(), snap raft.FSMSnapshot, logger *log.Logger) *FSMSnapshot {
+	return &FSMSnapshot{
+		Finalizer:   f,
+		OnFailure:   o,
+		FSMSnapshot: snap,
+		logger:      logger,
+	}
+}
+
 // Persist writes the snapshot to the given sink.
 func (f *FSMSnapshot) Persist(sink raft.SnapshotSink) (retError error) {
 	startT := time.Now()

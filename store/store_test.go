@@ -5,6 +5,7 @@ import (
 	"crypto/rand"
 	"errors"
 	"fmt"
+	"io"
 	"net"
 	"os"
 	"path/filepath"
@@ -18,6 +19,7 @@ import (
 	"github.com/rqlite/rqlite/v8/db"
 	"github.com/rqlite/rqlite/v8/random"
 	"github.com/rqlite/rqlite/v8/rarchive"
+	"github.com/rqlite/rqlite/v8/snapshot9"
 	"github.com/rqlite/rqlite/v8/testdata/chinook"
 )
 
@@ -221,7 +223,7 @@ func Test_SingleNodeDBAppliedIndex(t *testing.T) {
 	}
 
 	// Restart the node, and ensure DBAppliedIndex is set to the correct value.
-	// It can take a second or two for the apply loop to run.
+	// It can take a second or two for the apply loop to run, so we test poll.
 	if err := s.Close(true); err != nil {
 		t.Fatalf("failed to close single-node store: %s", err.Error())
 	}
@@ -508,7 +510,8 @@ COMMIT;
 }
 
 // Test_SingleNodeSnapshot tests that the Store correctly takes a snapshot
-// and recovers from it.
+// and recovers from it. Because Snapshotting is so important to get
+// right, this test internal implementation details.
 func Test_SingleNodeSnapshot(t *testing.T) {
 	s, ln := mustNewStore(t)
 	defer ln.Close()
@@ -555,25 +558,61 @@ func Test_SingleNodeSnapshot(t *testing.T) {
 		t.Fatalf("failed to persist snapshot to disk: %s", err.Error())
 	}
 
-	// Check restoration.
+	// Check that a proof file was written.
 	snapFile, err = os.Open(filepath.Join(snapDir, "snapshot"))
 	if err != nil {
 		t.Fatalf("failed to open snapshot file: %s", err.Error())
 	}
 	defer snapFile.Close()
-	if err := fsm.Restore(snapFile); err != nil {
+
+	b, err := io.ReadAll(snapFile)
+	if err != nil {
+		t.Fatalf("failed to read proof file: %s", err.Error())
+	}
+	p1, err := snapshot9.UnmarshalProof(b)
+	if err != nil {
+		t.Fatalf("failed to unmarshal proof: %s", err.Error())
+	}
+	p2, err := snapshot9.NewProofFromFile(s.dbPath)
+	if err != nil {
+		t.Fatalf("failed to create proof from file: %s", err.Error())
+	}
+
+	if !p1.Equals(p2) {
+		t.Fatalf("proofs not equal")
+	}
+}
+
+func Test_SingleNodeFSMRestore(t *testing.T) {
+	s, ln := mustNewStore(t)
+	defer ln.Close()
+
+	if err := s.Open(); err != nil {
+		t.Fatalf("failed to open single-node store: %s", err.Error())
+	}
+	defer s.Close(true)
+	if err := s.Bootstrap(NewServer(s.ID(), s.Addr(), true)); err != nil {
+		t.Fatalf("failed to bootstrap single-node store: %s", err.Error())
+	}
+	if _, err := s.WaitForLeader(10 * time.Second); err != nil {
+		t.Fatalf("Error waiting for leader: %s", err)
+	}
+
+	fd, err := os.Open("testdata/load.sqlite")
+	if err != nil {
+		t.Fatalf("failed to open test database: %s", err.Error())
+	}
+	defer fd.Close()
+	fsm := NewFSM(s)
+	if err := fsm.Restore(fd); err != nil {
 		t.Fatalf("failed to restore snapshot from disk: %s", err.Error())
 	}
 
-	// Ensure database is back in the correct state.
-	r, err := s.Query(queryRequestFromString("SELECT * FROM foo", false, false))
+	rows, err := s.Query(queryRequestFromString("SELECT COUNT(*) FROM foo", false, false))
 	if err != nil {
 		t.Fatalf("failed to query single node: %s", err.Error())
 	}
-	if exp, got := `["id","name"]`, asJSON(r[0].Columns); exp != got {
-		t.Fatalf("unexpected results for query\nexp: %s\ngot: %s", exp, got)
-	}
-	if exp, got := `[[1,"fiona"]]`, asJSON(r[0].Values); exp != got {
+	if exp, got := `[{"columns":["COUNT(*)"],"types":["integer"],"values":[[3]]}]`, asJSON(rows); exp != got {
 		t.Fatalf("unexpected results for query\nexp: %s\ngot: %s", exp, got)
 	}
 }
@@ -1679,15 +1718,6 @@ COMMIT;
 		t.Fatalf("failed to load SQLite file: %s", err.Error())
 	}
 
-	// Loading a database should mark that the snapshot store needs a Full Snapshot
-	fn, err := s.snapshotStore.FullNeeded()
-	if err != nil {
-		t.Fatalf("failed to check if snapshot store needs a full snapshot: %s", err.Error())
-	}
-	if !fn {
-		t.Fatalf("expected snapshot store to need a full snapshot")
-	}
-
 	// Check that data were loaded correctly.
 	qr = queryRequestFromString("SELECT * FROM foo WHERE id=2", false, true)
 	qr.Level = proto.QueryRequest_QUERY_REQUEST_LEVEL_STRONG
@@ -2021,12 +2051,11 @@ func Test_SingleNode_WALTriggeredSnapshot(t *testing.T) {
 	}
 	testPoll(t, f, 100*time.Millisecond, 2*time.Second)
 
-	// Sanity-check the contents of the Store. There should be two
-	// files -- a SQLite database file, and a directory named after
-	// the most recent snapshot. This basically checks that reaping
-	// is working, as it can be tricky on Windows due to stricter
-	// file deletion rules.
-	time.Sleep(5 * time.Second) // Tricky to know when all snapshots are done. Just wait.
+	// Sanity-check the contents of the Store. There should be one
+	// files-- a directory named after the most recent snapshot.
+	// This basically checks that reaping is working, as it can be
+	// tricky on Windows due to stricter file deletion rules.
+	time.Sleep(3 * time.Second) // Tricky to know when all snapshots are done. Just wait.
 	snaps, err := s.snapshotStore.List()
 	if err != nil {
 		t.Fatalf("failed to list snapshots: %s", err.Error())
@@ -2039,13 +2068,11 @@ func Test_SingleNode_WALTriggeredSnapshot(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to read snapshot store dir: %s", err.Error())
 	}
-	if len(files) != 2 {
+	if len(files) != 1 {
 		t.Fatalf("wrong number of snapshot store files: %d", len(files))
 	}
-	for _, f := range files {
-		if !strings.Contains(f.Name(), snaps[0].ID) {
-			t.Fatalf("wrong snapshot store file: %s", f.Name())
-		}
+	if !strings.Contains(files[0].Name(), snaps[0].ID) {
+		t.Fatalf("wrong snapshot store filename: %s", files[0].Name())
 	}
 }
 
@@ -2118,18 +2145,8 @@ func Test_OpenStoreSingleNode_VacuumFullNeeded(t *testing.T) {
 	if err := s.Snapshot(0); err != nil {
 		t.Fatalf("failed to snapshot store: %s", err.Error())
 	}
-	if fn, err := s.snapshotStore.FullNeeded(); err != nil {
-		t.Fatalf("failed to determine full snapshot needed: %s", err.Error())
-	} else if fn {
-		t.Fatalf("full snapshot marked as needed")
-	}
 	if err := s.Vacuum(); err != nil {
 		t.Fatalf("failed to vacuum database: %s", err.Error())
-	}
-	if fn, err := s.snapshotStore.FullNeeded(); err != nil {
-		t.Fatalf("failed to determine full snapshot needed: %s", err.Error())
-	} else if !fn {
-		t.Fatalf("full snapshot not marked as needed")
 	}
 }
 
@@ -2194,11 +2211,6 @@ func Test_SingleNodeExplicitVacuumOK(t *testing.T) {
 	// VACUUM, and then query the data, make sure it looks good.
 	doVacuum()
 	doQuery()
-	if fn, err := s.snapshotStore.FullNeeded(); err != nil {
-		t.Fatalf("failed to check if snapshot store needs a full snapshot: %s", err.Error())
-	} else if fn {
-		t.Fatalf("expected snapshot store to not need a full snapshot post explicit VACUUM")
-	}
 
 	// The next snapshot will be incremental.
 	if err := s.Snapshot(0); err != nil {
@@ -2341,14 +2353,9 @@ func Test_SingleNode_SnapshotWithAutoVac(t *testing.T) {
 		}
 	}
 
-	// Force an initial snapshot, shouldn't need a full snapshot afterwards
+	// Force an initial snapshot.
 	if err := s.Snapshot(0); err != nil {
 		t.Fatalf("failed to snapshot single-node store: %s", err.Error())
-	}
-	if fn, err := s.snapshotStore.FullNeeded(); err != nil {
-		t.Fatalf("failed to check if snapshot store needs a full snapshot: %s", err.Error())
-	} else if fn {
-		t.Fatalf("expected snapshot store to not need a full snapshot")
 	}
 
 	// Enable auto-vacuuming. Need to go under the covers to init the vacuum times.

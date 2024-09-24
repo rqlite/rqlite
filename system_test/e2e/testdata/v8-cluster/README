@@ -1,0 +1,24 @@
+v8 cluster created using these commands.
+
+./rqlited -raft-snap=16 -raft-snap-int=1s -node-id 1 data.1
+./rqlited -raft-snap=16 -raft-snap-int=1s -http-addr localhost:4003 -raft-addr localhost:4004 -join http://localhost:4001 -node-id 2 data.2
+./rqlited -raft-snap=16 -raft-snap-int=1s -http-addr localhost:4005 -raft-addr localhost:4006 -join http://localhost:4001 -node-id 3 data.3
+
+~ $ rqlite
+Welcome to the rqlite CLI.
+Enter ".help" for usage hints.
+Connected to http://127.0.0.1:4001 running version v8.30.3
+127.0.0.1:4001> .schema
++---------------------------------------------------------------+
+| sql                                                           |
++---------------------------------------------------------------+
+| CREATE TABLE foo (id INTEGER NOT NULL PRIMARY KEY, name TEXT) |
++---------------------------------------------------------------+
+127.0.0.1:4001> SELECT COUNT(*) FROM foo;
++----------+
+| COUNT(*) |
++----------+
+| 19       |
++----------+
+127.0.0.1:4001> 
+

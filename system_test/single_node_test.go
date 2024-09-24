@@ -1104,8 +1104,7 @@ func Test_SingleNodeNoSQLInjection(t *testing.T) {
 // do not have snapshots.
 func Test_SingleNodeUpgrades_NoSnapshots(t *testing.T) {
 	versions := []string{
-		"v7.0.0-data",
-		"v7.9.2-data",
+		"v8.30.3-data",
 	}
 
 	upgradeFrom := func(dir string) {
@@ -1146,7 +1145,7 @@ func Test_SingleNodeUpgrades_NoSnapshots(t *testing.T) {
 				if err != nil {
 					t.Fatalf("query failed with %s data: %s", dir, err)
 				}
-				expected := `{"results":[{"columns":["COUNT(*)"],"types":["integer"],"values":[[20]]}]}`
+				expected := `{"results":[{"columns":["COUNT(*)"],"types":["integer"],"values":[[12]]}]}`
 				if r == expected {
 					close(testSuccess)
 				}
@@ -1165,7 +1164,7 @@ func Test_SingleNodeUpgrades_NoSnapshots(t *testing.T) {
 // do have snapshots.
 func Test_SingleNodeUpgrades_Snapshots(t *testing.T) {
 	versions := []string{
-		"v7.20.3-data-with-snapshots",
+		"v8.30.3-data-with-snapshots",
 	}
 
 	upgradeFrom := func(dir string) {
@@ -1206,7 +1205,7 @@ func Test_SingleNodeUpgrades_Snapshots(t *testing.T) {
 				if err != nil {
 					t.Fatalf("query failed with %s data: %s", dir, err)
 				}
-				expected := `{"results":[{"columns":["COUNT(*)"],"types":["integer"],"values":[[20]]}]}`
+				expected := `{"results":[{"columns":["COUNT(*)"],"types":["integer"],"values":[[9]]}]}`
 				if r == expected {
 					close(testSuccess)
 				}
