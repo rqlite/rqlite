@@ -1,4 +1,7 @@
-## v8.30.6 (unreleased)
+## v8.31.0 (unreleased)
+### New features
+- [PR #1910](https://github.com/rqlite/rqlite/pull/1910): Support for byte arays and hex-encoded values as Parameterized values.
+
 ### Implementation changes and bug fixes
 - [PR #1906](https://github.com/rqlite/rqlite/pull/1906): Exit if _Full Needed_ flag cannot be set.
 - [PR #1906](https://github.com/rqlite/rqlite/pull/1906): Count Snapshot-Persist operations.
