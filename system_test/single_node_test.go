@@ -478,6 +478,54 @@ func Test_SingleNodeParameterized(t *testing.T) {
 	}
 }
 
+func Test_SingleNodeBlob_Parameterized(t *testing.T) {
+	node := mustNewLeaderNode("leader1")
+	defer node.Deprovision()
+
+	tests := []struct {
+		stmt     []interface{}
+		expected string
+		execute  bool
+	}{
+		{
+			stmt:     []interface{}{"CREATE TABLE foo (id integer not null primary key, data blob) STRICT"},
+			expected: `{"results":[{}]}`,
+			execute:  true,
+		},
+		{
+			stmt:     []interface{}{"INSERT INTO foo(id, data) VALUES(?, ?)", 1, `x'deadbeef'`},
+			expected: `{"results":[{"last_insert_id":1,"rows_affected":1}]}`,
+			execute:  true,
+		},
+		{
+			stmt:     []interface{}{"INSERT INTO foo(id, data) VALUES(?, ?)", 2, []int{222, 173, 190, 239}},
+			expected: `{"results":[{"last_insert_id":2,"rows_affected":1}]}`,
+			execute:  true,
+		},
+		{
+			stmt:     []interface{}{"SELECT * FROM foo"},
+			expected: `{"results":[{"columns":["id","data"],"types":["integer","blob"],"values":[[1,"3q2+7w=="],[2,"3q2+7w=="]]}]}`,
+			execute:  false,
+		},
+	}
+
+	for i, tt := range tests {
+		var r string
+		var err error
+		if tt.execute {
+			r, err = node.ExecuteParameterized(tt.stmt)
+		} else {
+			r, err = node.QueryParameterized(tt.stmt)
+		}
+		if err != nil {
+			t.Fatalf(`test %d failed "%s": %s`, i, tt.stmt, err.Error())
+		}
+		if r != tt.expected {
+			t.Fatalf(`test %d received wrong result "%s" got: %s exp: %s`, i, tt.stmt, r, tt.expected)
+		}
+	}
+}
+
 func Test_SingleNodeRequestParameterized(t *testing.T) {
 	node := mustNewLeaderNode("leader1")
 	defer node.Deprovision()
