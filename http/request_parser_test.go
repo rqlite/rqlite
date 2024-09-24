@@ -3,6 +3,7 @@ package http
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"reflect"
 	"strconv"
@@ -239,12 +240,12 @@ func Test_SingleParameterizedRequestByteArray_Invalid(t *testing.T) {
 	p0 := "FOO"
 
 	b := []byte(fmt.Sprintf(`[["%s", "%s", [7889,2,3]]]`, s, p0))
-	if _, err := ParseRequest(bytes.NewReader(b)); err == nil {
-		t.Fatalf("expected error for invalid byte array")
+	if _, err := ParseRequest(bytes.NewReader(b)); !errors.Is(err, ErrUnsupportedType) {
+		t.Fatalf("unexpected error for invalid byte array")
 	}
 	b = []byte(fmt.Sprintf(`[["%s", "%s", [-4,2,3]]]`, s, p0))
-	if _, err := ParseRequest(bytes.NewReader(b)); err == nil {
-		t.Fatalf("expected error for invalid byte array")
+	if _, err := ParseRequest(bytes.NewReader(b)); !errors.Is(err, ErrUnsupportedType) {
+		t.Fatalf("unexpected error for invalid byte array")
 	}
 }
 

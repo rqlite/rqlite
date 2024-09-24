@@ -202,14 +202,14 @@ func makeParameter(name string, i interface{}) (*command.Parameter, error) {
 		for i, e := range v {
 			vv, ok := e.(json.Number)
 			if !ok {
-				return nil, fmt.Errorf("unsupported array type %T", e)
+				return nil, fmt.Errorf("%w %T", ErrUnsupportedType, e)
 			}
 			i64, err := vv.Int64()
 			if err != nil {
-				return nil, fmt.Errorf("unsupported array value %s", vv)
+				return nil, fmt.Errorf("%w %s", ErrUnsupportedType, vv)
 			}
 			if uint64(i64) > 255 {
-				return nil, fmt.Errorf("unsupported byte value %s", vv)
+				return nil, fmt.Errorf("%w %s", ErrUnsupportedType, vv)
 			}
 			b[i] = byte(i64)
 		}
@@ -224,6 +224,7 @@ func makeParameter(name string, i interface{}) (*command.Parameter, error) {
 			Value: nil,
 			Name:  name,
 		}, nil
+	default:
+		return nil, fmt.Errorf("%w %T", ErrUnsupportedType, i)
 	}
-	return nil, ErrUnsupportedType
 }
