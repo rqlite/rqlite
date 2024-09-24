@@ -7,6 +7,7 @@ import (
 	"io"
 
 	command "github.com/rqlite/rqlite/v8/command/proto"
+	"github.com/rqlite/rqlite/v8/db"
 )
 
 var (
@@ -181,9 +182,40 @@ func makeParameter(name string, i interface{}) (*command.Parameter, error) {
 			Name: name,
 		}, nil
 	case string:
+		b, err := db.ParseHex(v)
+		if err != nil {
+			return &command.Parameter{
+				Value: &command.Parameter_S{
+					S: v,
+				},
+				Name: name,
+			}, nil
+		}
 		return &command.Parameter{
-			Value: &command.Parameter_S{
-				S: v,
+			Value: &command.Parameter_Y{
+				Y: b,
+			},
+			Name: name,
+		}, nil
+	case []interface{}:
+		b := make([]byte, len(v))
+		for i, e := range v {
+			vv, ok := e.(json.Number)
+			if !ok {
+				return nil, fmt.Errorf("%w %T", ErrUnsupportedType, e)
+			}
+			i64, err := vv.Int64()
+			if err != nil {
+				return nil, fmt.Errorf("%w %s", ErrUnsupportedType, vv)
+			}
+			if uint64(i64) > 255 {
+				return nil, fmt.Errorf("%w %s", ErrUnsupportedType, vv)
+			}
+			b[i] = byte(i64)
+		}
+		return &command.Parameter{
+			Value: &command.Parameter_Y{
+				Y: b,
 			},
 			Name: name,
 		}, nil
@@ -192,6 +224,7 @@ func makeParameter(name string, i interface{}) (*command.Parameter, error) {
 			Value: nil,
 			Name:  name,
 		}, nil
+	default:
+		return nil, fmt.Errorf("%w %T", ErrUnsupportedType, i)
 	}
-	return nil, ErrUnsupportedType
 }

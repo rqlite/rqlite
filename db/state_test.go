@@ -1,6 +1,7 @@
 package db
 
 import (
+	"bytes"
 	"compress/gzip"
 	"database/sql"
 	"fmt"
@@ -61,6 +62,117 @@ func Test_AllowedPragmas(t *testing.T) {
 	for _, s := range tests {
 		if IsBreakingPragma(s) {
 			t.Fatalf(`"%s" is marked as breaking`, s)
+		}
+	}
+}
+
+func Test_ParseHex(t *testing.T) {
+	tests := []struct {
+		name string
+		hex  string
+		want []byte
+		err  bool
+	}{
+		{
+			name: "empty",
+			hex:  ``,
+			err:  true,
+		},
+		{
+			name: "just x",
+			hex:  `X`,
+			err:  true,
+		},
+		{
+			name: "just small x",
+			hex:  `x`,
+			err:  true,
+		},
+		{
+			name: "no leading X",
+			hex:  `DEADBEEF`,
+			err:  true,
+		},
+		{
+			name: "no leading quote",
+			hex:  `XDEADBEEF'`,
+			err:  true,
+		},
+		{
+			name: "no trailing quote",
+			hex:  `X'DEADBEEF`,
+			err:  true,
+		},
+		{
+			name: "no value",
+			hex:  `X''`,
+			want: []byte{},
+		},
+		{
+			name: "odd length hex string",
+			hex:  `X'1'`,
+			err:  true,
+		},
+		{
+			name: "double quotes",
+			hex:  `X"FF"`,
+			err:  true,
+		},
+		{
+			name: "simple value",
+			hex:  `X'FF'`,
+			want: []byte{0xFF},
+		},
+		{
+			name: "long value",
+			hex:  `X'DEADBEEFABCDEF1234'`,
+			want: []byte{0xDE, 0xAD, 0xBE, 0xEF, 0xAB, 0xCD, 0xEF, 0x12, 0x34},
+		},
+		{
+			name: "long value small hex characters",
+			hex:  `X'deadbeefabcdef1234'`,
+			want: []byte{0xDE, 0xAD, 0xBE, 0xEF, 0xAB, 0xCD, 0xEF, 0x12, 0x34},
+		},
+		{
+			name: "long value invalid hex character",
+			hex:  `X'deadVeefabcdef1234'`,
+			err:  true,
+		},
+		{
+			name: "long value with gaps",
+			hex:  `X'DE ADBEEFABCDEF1234'`,
+			err:  true,
+		},
+		{
+			name: "long value with small leading x",
+			hex:  `x'DEADBEEFABCDEF1234'`,
+			want: []byte{0xDE, 0xAD, 0xBE, 0xEF, 0xAB, 0xCD, 0xEF, 0x12, 0x34},
+		},
+		{
+			name: "long value with small leading x and whitespace",
+			hex:  ` x'DEADBEEFABCDEF1234'  `,
+			want: []byte{0xDE, 0xAD, 0xBE, 0xEF, 0xAB, 0xCD, 0xEF, 0x12, 0x34},
+		},
+		{
+			name: "long value with small leading x bad whitespace",
+			hex:  ` x 'DEADBEEFABCDEF1234'  `,
+			err:  true,
+		},
+	}
+
+	for _, test := range tests {
+		got, err := ParseHex(test.hex)
+		if test.err {
+			if err == nil {
+				t.Fatalf("expected error for test %s, got nil", test.name)
+			}
+			continue
+		}
+		if err != nil {
+			t.Fatalf("unexpected error for test %s: %s", test.name, err.Error())
+		}
+		if !bytes.Equal(test.want, got) {
+			t.Fatalf("test %s failed, expected %s, got %s", test.name, string(test.want), string(got))
 		}
 	}
 }

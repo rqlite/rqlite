@@ -5,6 +5,7 @@ import (
 	"compress/gzip"
 	"context"
 	"database/sql"
+	"encoding/hex"
 	"fmt"
 	"io"
 	"net/url"
@@ -99,6 +100,28 @@ func IsBreakingPragma(stmt string) bool {
 		}
 	}
 	return false
+}
+
+// ParseHex parses the given string into a byte slice as per the SQLite specification:
+//
+//	BLOB literals are string literals containing hexadecimal data and preceded by a single
+//	"x" or "X" character. Example: X'53514C697465'
+func ParseHex(s string) ([]byte, error) {
+	t := strings.TrimSpace(s)
+	if len(t) < 3 || t[0] != 'X' && t[0] != 'x' {
+		return nil, fmt.Errorf("invalid hex string %s", t)
+	}
+	t = t[1:]
+
+	if t[0] != '\'' || t[len(t)-1] != '\'' {
+		return nil, fmt.Errorf("invalid hex string %s", t)
+	}
+
+	b, err := hex.DecodeString(t[1 : len(t)-1])
+	if err != nil {
+		return nil, fmt.Errorf("invalid hex string %s: %s", t, err)
+	}
+	return b, nil
 }
 
 // ValidateExtension validates the given extension path can be loaded into a SQLite database.
