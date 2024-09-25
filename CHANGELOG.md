@@ -1,3 +1,7 @@
+## v8.31.1 (unreleased)
+### Implementation changes and bug fixes
+- [PR #1911](https://github.com/rqlite/rqlite/pull/1911): Factor out `ReadyChans` so it can be more widely used.
+
 ## v8.31.0 (September 24th 2024)
 ### New features
 - [PR #1910](https://github.com/rqlite/rqlite/pull/1910): Support for byte arays and hex-encoded values as Parameterized values.
