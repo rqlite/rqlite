@@ -57,6 +57,9 @@ func Test_NonOpenStore(t *testing.T) {
 	if addr, id := s.LeaderWithID(); addr != "" || id != "" {
 		t.Fatalf("wrong leader address and ID returned for non-open store: %s", id)
 	}
+	if s.HasLeaderID() {
+		t.Fatalf("store incorrectly marked as having leader ID")
+	}
 	if _, err := s.Nodes(); err != ErrNotOpen {
 		t.Fatalf("wrong error received for non-open store: %s", err)
 	}
@@ -78,6 +81,9 @@ func Test_OpenStoreSingleNode(t *testing.T) {
 	_, err := s.WaitForLeader(10 * time.Second)
 	if err != nil {
 		t.Fatalf("Error waiting for leader: %s", err)
+	}
+	if !s.HasLeaderID() {
+		t.Fatalf("store not marked as having leader ID")
 	}
 	_, err = s.LeaderAddr()
 	if err != nil {
@@ -750,6 +756,10 @@ func Test_StoreReady(t *testing.T) {
 	s, ln := mustNewStore(t)
 	defer s.Close(true)
 	defer ln.Close()
+
+	if s.Ready() {
+		t.Fatalf("store marked as ready, even store is not open")
+	}
 
 	if err := s.Open(); err != nil {
 		t.Fatalf("failed to open single-node store: %s", err.Error())

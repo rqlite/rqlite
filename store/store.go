@@ -619,15 +619,13 @@ func (s *Store) RegisterReadyChannel(ch <-chan struct{}) {
 	s.readyChans.Register(ch)
 }
 
-// Ready returns true if the store is ready to serve requests. Ready is
-// defined as having no open channels registered via RegisterReadyChannel
-// and having a Leader.
+// Ready returns true if the Store is ready to serve requests. Ready is
+// defined as:
+// - the Store is open
+// - all registered channels are closed
+// - the Store has a Leader
 func (s *Store) Ready() bool {
-	l, err := s.LeaderAddr()
-	if err != nil || l == "" {
-		return false
-	}
-	return s.readyChans.Ready()
+	return s.open.Is() && s.readyChans.Ready() && s.HasLeader()
 }
 
 // Committed blocks until the local commit index is greater than or
@@ -869,6 +867,15 @@ func (s *Store) LeaderWithID() (string, string) {
 	}
 	addr, id := s.raft.LeaderWithID()
 	return string(addr), string(id)
+}
+
+// HasLeaderID returns true if the cluster has a leader ID, false otherwise.
+func (s *Store) HasLeaderID() bool {
+	if !s.open.Is() {
+		return false
+	}
+	_, id := s.raft.LeaderWithID()
+	return id != ""
 }
 
 // CommitIndex returns the Raft commit index.
