@@ -275,9 +275,7 @@ type Store struct {
 	cmdProc        *CommandProcessor
 
 	// Channels that must be closed for the Store to be considered ready.
-	readyChans             []<-chan struct{}
-	numClosedReadyChannels int
-	readyChansMu           sync.Mutex
+	readyChans *rsync.ReadyChannels
 
 	// Channels for WAL-size triggered snapshotting
 	snapshotWClose chan struct{}
@@ -385,6 +383,7 @@ func New(ly Layer, c *Config) *Store {
 		dbPath:          dbPath,
 		walPath:         sql.WALPath(dbPath),
 		dbDir:           filepath.Dir(dbPath),
+		readyChans:      rsync.NewReadyChannels(),
 		leaderObservers: make([]chan<- struct{}, 0),
 		reqMarshaller:   command.NewRequestMarshaler(),
 		logger:          logger,
@@ -617,15 +616,7 @@ func (s *Store) Stepdown(wait bool) error {
 // RegisterReadyChannel registers a channel that must be closed before the
 // store is considered "ready" to serve requests.
 func (s *Store) RegisterReadyChannel(ch <-chan struct{}) {
-	s.readyChansMu.Lock()
-	defer s.readyChansMu.Unlock()
-	s.readyChans = append(s.readyChans, ch)
-	go func() {
-		<-ch
-		s.readyChansMu.Lock()
-		s.numClosedReadyChannels++
-		s.readyChansMu.Unlock()
-	}()
+	s.readyChans.Register(ch)
 }
 
 // Ready returns true if the store is ready to serve requests. Ready is
@@ -636,17 +627,7 @@ func (s *Store) Ready() bool {
 	if err != nil || l == "" {
 		return false
 	}
-
-	return func() bool {
-		s.readyChansMu.Lock()
-		defer s.readyChansMu.Unlock()
-		if s.numClosedReadyChannels != len(s.readyChans) {
-			return false
-		}
-		s.readyChans = nil
-		s.numClosedReadyChannels = 0
-		return true
-	}()
+	return s.readyChans.Ready()
 }
 
 // Committed blocks until the local commit index is greater than or
