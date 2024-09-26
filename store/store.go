@@ -295,6 +295,8 @@ type Store struct {
 	// The Leader that actually appended the log entry is not necessarily the current Leader.
 	appendedAtTime *rsync.AtomicTime
 
+	dbModifiedTime *rsync.AtomicTime // Last time the database file was modified.
+
 	// Latest log entry index which actually changed the database.
 	dbAppliedIdx *atomic.Uint64
 
@@ -342,6 +344,7 @@ type Store struct {
 	numTrailingLogs uint64
 
 	// For whitebox testing
+	numFullSnapshots int
 	numAutoVacuums   int
 	numAutoOptimizes int
 	numIgnoredJoins  int
@@ -394,6 +397,7 @@ func New(ly Layer, c *Config) *Store {
 		fsmTerm:         &atomic.Uint64{},
 		fsmUpdateTime:   rsync.NewAtomicTime(),
 		appendedAtTime:  rsync.NewAtomicTime(),
+		dbModifiedTime:  rsync.NewAtomicTime(),
 		dbAppliedIdx:    &atomic.Uint64{},
 		numNoops:        &atomic.Uint64{},
 		numSnapshots:    &atomic.Uint64{},
@@ -1970,6 +1974,13 @@ func (s *Store) fsmSnapshot() (fSnap raft.FSMSnapshot, retErr error) {
 		if retErr != nil {
 			stats.Add(numSnapshotsFailed, 1)
 		}
+		lt, err := s.db.DBLastModified()
+		if err != nil {
+			s.logger.Printf("failed to get last modified time: %s", err)
+			s.snapshotStore.SetFullNeeded()
+		} else {
+			s.dbModifiedTime.Store(lt)
+		}
 	}()
 
 	// Automatic VACUUM needed? This is deliberately done in the context of a Snapshot
@@ -2019,7 +2030,11 @@ func (s *Store) fsmSnapshot() (fSnap raft.FSMSnapshot, retErr error) {
 	}()
 
 	var fsmSnapshot raft.FSMSnapshot
-	if fullNeeded {
+	if fullNeeded || s.dbModified() {
+		// A full checkpoint is explicitly needed, or the underlying database has been
+		// modified externally since the last snapshot. We need to take a full snapshot
+		// of the database because any WAL file would not be valid with respect to what
+		// is in the Snapshot Store.
 		chkStartTime := time.Now()
 		if err := s.db.Checkpoint(sql.CheckpointTruncate); err != nil {
 			stats.Add(numFullCheckpointFailed, 1)
@@ -2032,6 +2047,7 @@ func (s *Store) fsmSnapshot() (fSnap raft.FSMSnapshot, retErr error) {
 		}
 		fsmSnapshot = snapshot.NewSnapshot(dbFD)
 		stats.Add(numSnapshotsFull, 1)
+		s.numFullSnapshots++
 	} else {
 		compactedBuf := bytes.NewBuffer(nil)
 		if pathExistsWithData(s.walPath) {
@@ -2416,6 +2432,11 @@ func (s *Store) autoOptimizeNeeded(t time.Time) (bool, error) {
 		return false, err
 	}
 	return t.Sub(bt) > s.AutoOptimizeInterval, nil
+}
+
+func (s *Store) dbModified() bool {
+	lt, err := s.db.DBLastModified()
+	return err != nil || (!s.dbModifiedTime.IsZero() && lt.After(s.dbModifiedTime.Load()))
 }
 
 func (s *Store) hcLogLevel() hclog.Level {

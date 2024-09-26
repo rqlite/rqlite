@@ -45,6 +45,13 @@ func (t *AtomicTime) Sub(tt *AtomicTime) time.Duration {
 	return t.t.Sub(tt.t)
 }
 
+// IsZero returns true if the stored time is zero, false otherwise.
+func (t *AtomicTime) IsZero() bool {
+	t.mu.RLock()
+	defer t.mu.RUnlock()
+	return t.t.IsZero()
+}
+
 // AtomicBool is a boolean with atomic operations.
 type AtomicBool struct {
 	state int32 // 1 for true, 0 for false
