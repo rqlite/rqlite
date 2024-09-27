@@ -80,3 +80,41 @@ func (f *FSMSnapshot) Release() {
 		f.OnFailure()
 	}
 }
+
+// StringReadCloser is a type that implements io.ReadCloser.
+// It reads from an internal string and signals EOF when done.
+type StringReadCloser struct {
+	data string // The string to read from
+	pos  int    // Current read position
+}
+
+// NewStringReadCloser constructs a new StringReadCloser with the provided string.
+func NewStringReadCloser(s string) io.ReadCloser {
+	return &StringReadCloser{
+		data: s,
+		pos:  0,
+	}
+}
+
+// Read reads up to len(p) bytes into p from the internal string.
+// It returns the number of bytes read and an error, if any.
+// When the end of the string is reached, it returns io.EOF.
+func (src *StringReadCloser) Read(p []byte) (int, error) {
+	if src.pos >= len(src.data) {
+		return 0, io.EOF // No more data to read
+	}
+
+	// Calculate the number of bytes to read
+	n := copy(p, src.data[src.pos:])
+
+	// Update the current position
+	src.pos += n
+
+	return n, nil
+}
+
+// Close is a no-op for StringReadCloser as there are no resources to release.
+// It simply returns nil.
+func (src *StringReadCloser) Close() error {
+	return nil
+}

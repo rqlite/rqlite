@@ -91,6 +91,7 @@ const (
 	bootScatchPattern          = "rqlite-boot-*"
 	backupScratchPattern       = "rqlite-backup-*"
 	vacuumScratchPattern       = "rqlite-vacuum-*"
+	walSnapshotScratchPattern  = "rqlite-wal-snapshot-*"
 	raftDBPath                 = "raft.db" // Changing this will break backwards compatibility.
 	peersPath                  = "raft/peers.json"
 	peersInfoPath              = "raft/peers.info"
@@ -542,7 +543,8 @@ func (s *Store) Open() (retErr error) {
 		restoreScratchPattern,
 		bootScatchPattern,
 		backupScratchPattern,
-		vacuumScratchPattern} {
+		vacuumScratchPattern,
+		walSnapshotScratchPattern} {
 		for _, dir := range []string{s.raftDir, s.dbDir} {
 			files, err := filepath.Glob(filepath.Join(dir, pattern))
 			if err != nil {
@@ -2046,11 +2048,9 @@ func (s *Store) fsmSnapshot() (fSnap raft.FSMSnapshot, retErr error) {
 		stats.Add(numSnapshotsFull, 1)
 		s.numFullSnapshots++
 	} else {
-		compactedBuf := bytes.NewBuffer(nil)
+		var walTmpFD *os.File
 		if pathExistsWithData(s.walPath) {
 			compactStartTime := time.Now()
-			// Read a compacted version of the WAL into memory, and write it
-			// to the Snapshot store.
 			walFD, err := os.Open(s.walPath)
 			if err != nil {
 				return nil, err
@@ -2060,17 +2060,34 @@ func (s *Store) fsmSnapshot() (fSnap raft.FSMSnapshot, retErr error) {
 			if err != nil {
 				return nil, err
 			}
-			compactedBytes, err := scanner.Bytes()
+
+			// Write the compacted WAL to a temp file.
+			walTmpFD, err = createTemp(s.dbDir, walSnapshotScratchPattern)
 			if err != nil {
 				return nil, err
 			}
+			defer walTmpFD.Close()
+			walWriter, err := wal.NewWriter(scanner)
+			if err != nil {
+				walTmpFD.Close()
+				os.Remove(walTmpFD.Name())
+				return nil, err
+			}
+			if _, err := walWriter.WriteTo(walTmpFD); err != nil {
+				walTmpFD.Close()
+				os.Remove(walTmpFD.Name())
+				return nil, err
+			}
 			stats.Get(snapshotCreateWALCompactDuration).(*expvar.Int).Set(time.Since(compactStartTime).Milliseconds())
-			compactedBuf = bytes.NewBuffer(compactedBytes)
 
-			// Now that we're written a (compacted) copy of the WAL to the Snapshot,
-			// we can truncate the WAL. We use truncate mode so that the next WAL
-			// contains just changes since the this snapshot.
-			walSz, err := fileSize(s.walPath)
+			// Now that we're got a (compacted) copy of the WAL we can truncate it.
+			// We use TRUNCATE mode so that the next WAL contains just changes since
+			// this snapshot.
+			walSzPre, err := fileSize(s.walPath)
+			if err != nil {
+				return nil, err
+			}
+			walSzPost, err := fileSize(walTmpFD.Name())
 			if err != nil {
 				return nil, err
 			}
@@ -2081,10 +2098,14 @@ func (s *Store) fsmSnapshot() (fSnap raft.FSMSnapshot, retErr error) {
 					err.Error())
 			}
 			stats.Get(snapshotCreateChkTruncateDuration).(*expvar.Int).Set(time.Since(chkTStartTime).Milliseconds())
-			stats.Get(snapshotWALSize).(*expvar.Int).Set(int64(compactedBuf.Len()))
-			stats.Get(snapshotPrecompactWALSize).(*expvar.Int).Set(walSz)
+			stats.Get(snapshotPrecompactWALSize).(*expvar.Int).Set(walSzPre)
+			stats.Get(snapshotWALSize).(*expvar.Int).Set(walSzPost)
 		}
-		fsmSnapshot = snapshot.NewSnapshot(io.NopCloser(compactedBuf))
+		name := ""
+		if walTmpFD != nil {
+			name = walTmpFD.Name()
+		}
+		fsmSnapshot = snapshot.NewSnapshot(NewStringReadCloser(name))
 		stats.Add(numSnapshotsIncremental, 1)
 	}
 
