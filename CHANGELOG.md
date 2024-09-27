@@ -2,7 +2,7 @@
 ### Implementation changes and bug fixes
 - [PR #1911](https://github.com/rqlite/rqlite/pull/1911): Factor out `ReadyChans` so it can be more widely used.
 - [PR #1912](https://github.com/rqlite/rqlite/pull/1912): Simplify Store _Ready_ check.
-- [PR #1913](https://github.com/rqlite/rqlite/pull/1913): Trigger full snapshot if database file is modified externally. Fixes issue [#1613](https://github.com/rqlite/rqlite/issues/1613).
+- [PR #1913](https://github.com/rqlite/rqlite/pull/1913), [3063925](https://github.com/rqlite/rqlite/commit/30639258e122b24194b10058bf56dae53d428d03): Trigger full snapshot if database file is modified externally. Fixes issue [#1613](https://github.com/rqlite/rqlite/issues/1613).
 
 ## v8.31.0 (September 24th 2024)
 ### New features
