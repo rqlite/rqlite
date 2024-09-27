@@ -1,3 +1,7 @@
+## v8.31.2 (unreleased)
+### Implementation changes and bug fixes
+- [PR #1915](https://github.com/rqlite/rqlite/pull/1915): Move VACUUM-related testing to its own files.
+
 ## v8.31.1 (September 27th 2024)
 ### Implementation changes and bug fixes
 - [PR #1911](https://github.com/rqlite/rqlite/pull/1911): Factor out `ReadyChans` so it can be more widely used.
