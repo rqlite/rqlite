@@ -2673,14 +2673,25 @@ func Test_SingleNode_DatabaseFileModified(t *testing.T) {
 		t.Fatalf("expected 1 full snapshot, got %d", s.numFullSnapshots)
 	}
 
+	insertSnap := func() {
+		t.Helper()
+		_, err := s.Execute(executeRequestFromString(`INSERT INTO foo(name) VALUES("fiona")`, false, false))
+		if err != nil {
+			t.Fatalf("failed to execute INSERT on single node: %s", err.Error())
+		}
+		if err := s.Snapshot(0); err != nil {
+			t.Fatalf("failed to snapshot single-node store: %s", err.Error())
+		}
+	}
+
+	// Insert a record, trigger a snapshot. It shoudl be an incremental snapshot.
+	insertSnap()
+	if s.numFullSnapshots != 1 {
+		t.Fatalf("expected 1 full snapshot, got %d", s.numFullSnapshots)
+	}
+
 	// Insert a record, trigger a snapshot. It shouldn't be a full snapshot.
-	_, err = s.Execute(executeRequestFromString(`INSERT INTO foo(name) VALUES("fiona")`, false, false))
-	if err != nil {
-		t.Fatalf("failed to execute INSERT on single node: %s", err.Error())
-	}
-	if err := s.Snapshot(0); err != nil {
-		t.Fatalf("failed to snapshot single-node store: %s", err.Error())
-	}
+	insertSnap()
 	if s.numFullSnapshots != 1 {
 		t.Fatalf("expected 1 full snapshot, got %d", s.numFullSnapshots)
 	}
@@ -2692,28 +2703,16 @@ func Test_SingleNode_DatabaseFileModified(t *testing.T) {
 
 	// Touch the database file to make it newer than Store's record of last
 	// modified time and then trigger a snapshot. It should be a full snapshot.
-	_, err = s.Execute(executeRequestFromString(`INSERT INTO foo(name) VALUES("fiona")`, false, false))
-	if err != nil {
-		t.Fatalf("failed to execute INSERT on single node: %s", err.Error())
-	}
 	if err := os.Chtimes(s.dbPath, time.Time{}, lt.Add(time.Second)); err != nil {
 		t.Fatalf("failed to change database file times: %s", err.Error())
 	}
-	if err := s.Snapshot(0); err != nil {
-		t.Fatalf("failed to snapshot single-node store: %s", err.Error())
-	}
+	insertSnap()
 	if s.numFullSnapshots != 2 {
 		t.Fatalf("expected 2 full snapshots, got %d", s.numFullSnapshots)
 	}
 
 	// Insert a record, trigger a snapshot. We should be back to incremental snapshots.
-	_, err = s.Execute(executeRequestFromString(`INSERT INTO foo(name) VALUES("fiona")`, false, false))
-	if err != nil {
-		t.Fatalf("failed to execute INSERT on single node: %s", err.Error())
-	}
-	if err := s.Snapshot(0); err != nil {
-		t.Fatalf("failed to snapshot single-node store: %s", err.Error())
-	}
+	insertSnap()
 	if s.numFullSnapshots != 2 {
 		t.Fatalf("expected 2 full snapshots, got %d", s.numFullSnapshots)
 	}
@@ -2724,23 +2723,17 @@ func Test_SingleNode_DatabaseFileModified(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to get last modified time of database: %s", err.Error())
 	}
-	_, err = s.Execute(executeRequestFromString(`INSERT INTO foo(name) VALUES("fiona")`, false, false))
-	if err != nil {
-		t.Fatalf("failed to execute INSERT on single node: %s", err.Error())
-	}
 	if err := os.Chtimes(s.dbPath, lt.Add(time.Second), time.Time{}); err != nil {
 		t.Fatalf("failed to change database file times: %s", err.Error())
 	}
-	if err := s.Snapshot(0); err != nil {
-		t.Fatalf("failed to snapshot single-node store: %s", err.Error())
-	}
+	insertSnap()
 	if s.numFullSnapshots != 2 {
 		t.Fatalf("expected 2 full snapshots, got %d", s.numFullSnapshots)
 	}
 
 	// Just a final check...
-	if s.numSnapshots.Load() != 5 {
-		t.Fatalf("expected 4 snapshots in total, got %d", s.numSnapshots.Load())
+	if s.numSnapshots.Load() != 6 {
+		t.Fatalf("expected 6 snapshots in total, got %d", s.numSnapshots.Load())
 	}
 }
 
