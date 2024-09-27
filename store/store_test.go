@@ -2697,9 +2697,21 @@ func Test_SingleNode_DatabaseFileModified(t *testing.T) {
 		t.Fatalf("expected 2 full snapshots, got %d", s.numFullSnapshots)
 	}
 
+	// Insert a record, trigger a snapshot. We should be back to incremental snapshots.
+	_, err = s.Execute(executeRequestFromString(`INSERT INTO foo(name) VALUES("fiona")`, false, false))
+	if err != nil {
+		t.Fatalf("failed to execute INSERT on single node: %s", err.Error())
+	}
+	if err := s.Snapshot(0); err != nil {
+		t.Fatalf("failed to snapshot single-node store: %s", err.Error())
+	}
+	if s.numFullSnapshots != 2 {
+		t.Fatalf("expected 2 full snapshots, got %d", s.numFullSnapshots)
+	}
+
 	// Just a final check...
-	if s.numSnapshots.Load() != 3 {
-		t.Fatalf("expected 3 snapshots in total, got %d", s.numSnapshots)
+	if s.numSnapshots.Load() != 4 {
+		t.Fatalf("expected 4 snapshots in total, got %d", s.numSnapshots)
 	}
 }
 
