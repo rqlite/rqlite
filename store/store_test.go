@@ -2685,9 +2685,18 @@ func Test_SingleNode_DatabaseFileModified(t *testing.T) {
 		t.Fatalf("expected 1 full snapshot, got %d", s.numFullSnapshots)
 	}
 
+	lt, err := s.db.DBLastModified()
+	if err != nil {
+		t.Fatalf("failed to get last modified time of database: %s", err.Error())
+	}
+
 	// Touch the database file to make it newer than Store's record of last
 	// modified time and then trigger a snapshot. It should be a full snapshot.
-	if err := os.Chtimes(s.dbPath, time.Now(), time.Now()); err != nil {
+	_, err = s.Execute(executeRequestFromString(`INSERT INTO foo(name) VALUES("fiona")`, false, false))
+	if err != nil {
+		t.Fatalf("failed to execute INSERT on single node: %s", err.Error())
+	}
+	if err := os.Chtimes(s.dbPath, time.Time{}, lt.Add(time.Second)); err != nil {
 		t.Fatalf("failed to change database file times: %s", err.Error())
 	}
 	if err := s.Snapshot(0); err != nil {
@@ -2709,9 +2718,29 @@ func Test_SingleNode_DatabaseFileModified(t *testing.T) {
 		t.Fatalf("expected 2 full snapshots, got %d", s.numFullSnapshots)
 	}
 
+	// Modify just the access time, and trigger a snapshot. It should still be
+	// an incremental snapshot.
+	lt, err = s.db.DBLastModified()
+	if err != nil {
+		t.Fatalf("failed to get last modified time of database: %s", err.Error())
+	}
+	_, err = s.Execute(executeRequestFromString(`INSERT INTO foo(name) VALUES("fiona")`, false, false))
+	if err != nil {
+		t.Fatalf("failed to execute INSERT on single node: %s", err.Error())
+	}
+	if err := os.Chtimes(s.dbPath, lt.Add(time.Second), time.Time{}); err != nil {
+		t.Fatalf("failed to change database file times: %s", err.Error())
+	}
+	if err := s.Snapshot(0); err != nil {
+		t.Fatalf("failed to snapshot single-node store: %s", err.Error())
+	}
+	if s.numFullSnapshots != 2 {
+		t.Fatalf("expected 2 full snapshots, got %d", s.numFullSnapshots)
+	}
+
 	// Just a final check...
-	if s.numSnapshots.Load() != 4 {
-		t.Fatalf("expected 4 snapshots in total, got %d", s.numSnapshots)
+	if s.numSnapshots.Load() != 5 {
+		t.Fatalf("expected 4 snapshots in total, got %d", s.numSnapshots.Load())
 	}
 }
 
