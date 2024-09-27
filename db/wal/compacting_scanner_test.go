@@ -210,6 +210,93 @@ func Test_CompactingScanner_Bytes_FullCycle(t *testing.T) {
 	}
 }
 
+func Test_CompactingScanner_Writer_FullCycle(t *testing.T) {
+	// First, make a copy of the test data.
+	tmpDir := t.TempDir()
+	if err := os.Remove(tmpDir); err != nil {
+		t.Fatalf("failed to remove tmp dir: %s", err)
+	}
+	err := copyDir("testdata/compacting-scanner/full-cycle", tmpDir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer os.RemoveAll(tmpDir)
+
+	// Compact the WAL file.
+	walPath := filepath.Join(tmpDir, "fc.db-wal")
+	walFD, err := os.OpenFile(walPath, os.O_RDWR, 0666)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer walFD.Close()
+	s, err := NewCompactingScanner(walFD, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Create WAL writer.
+	walWriter, err := NewWriter(s)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	tmpWALPath := filepath.Join(tmpDir, "fc.db-wal-tmp")
+	tmpWALFD, err := os.Create(tmpWALPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Write the compacted WAL file back to disk, effectively replacing the old WAL file.
+	func() {
+		defer tmpWALFD.Close()
+		_, err = walWriter.WriteTo(tmpWALFD)
+		if err != nil {
+			t.Fatal(err)
+		}
+	}()
+
+	// Remove the old WAL file.
+	if err := walFD.Close(); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Remove(walPath); err != nil {
+		t.Fatal(err)
+	}
+
+	// Put the compacted WAL file in place.
+	if err := os.Rename(tmpWALPath, walPath); err != nil {
+		t.Fatal(err)
+	}
+
+	// Now, open the database and check the number of rows.
+	dbPath := filepath.Join(tmpDir, "fc.db")
+	db, err := sql.Open("sqlite3", dbPath)
+	if err != nil {
+		t.Fatalf("failed to open db: %s", err)
+	}
+	defer db.Close()
+
+	rows, err := db.Query("SELECT COUNT(*) FROM foo")
+	if err != nil {
+		t.Fatalf("failed to query db: %s", err)
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var c int
+		err = rows.Scan(&c)
+		if err != nil {
+			t.Fatalf("failed to scan row: %s", err)
+		}
+		if c != 1900 {
+			t.Fatalf("expected 1900 rows, got %d", c)
+		}
+	}
+	err = rows.Err()
+	if err != nil {
+		t.Fatalf("failed to iterate rows: %s", err)
+	}
+}
+
 /* MIT License
  *
  * Copyright (c) 2017 Roland Singer [roland.singer@desertbit.com]
