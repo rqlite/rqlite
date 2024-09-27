@@ -2090,13 +2090,7 @@ func (s *Store) fsmSnapshot() (fSnap raft.FSMSnapshot, retErr error) {
 			}
 			chkTStartTime := time.Now()
 			if err := s.db.Checkpoint(sql.CheckpointTruncate); err != nil {
-				// This is bad. Count it, and then set the snapshot store to "full needed"
-				// because we can't be sure of the state of the SQLite database.
 				stats.Add(numWALCheckpointTruncateFailed, 1)
-				if err := s.snapshotStore.SetFullNeeded(); err != nil {
-					// If this happens, only recourse is to shut down the node.
-					s.logger.Fatalf("failed to set full snapshot needed after checkpoint failure: %s", err)
-				}
 				return nil, fmt.Errorf("snapshot can't complete due to WAL checkpoint failure (will retry): %s",
 					err.Error())
 			}
