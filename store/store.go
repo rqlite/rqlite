@@ -2073,7 +2073,8 @@ func (s *Store) fsmSnapshot() (fSnap raft.FSMSnapshot, retErr error) {
 				os.Remove(walTmpFD.Name())
 				return nil, err
 			}
-			if _, err := walWriter.WriteTo(walTmpFD); err != nil {
+			walSzPost, err := walWriter.WriteTo(walTmpFD)
+			if err != nil {
 				walTmpFD.Close()
 				os.Remove(walTmpFD.Name())
 				return nil, err
@@ -2084,10 +2085,6 @@ func (s *Store) fsmSnapshot() (fSnap raft.FSMSnapshot, retErr error) {
 			// We use TRUNCATE mode so that the next WAL contains just changes since
 			// this snapshot.
 			walSzPre, err := fileSize(s.walPath)
-			if err != nil {
-				return nil, err
-			}
-			walSzPost, err := fileSize(walTmpFD.Name())
 			if err != nil {
 				return nil, err
 			}
