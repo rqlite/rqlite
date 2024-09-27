@@ -2641,9 +2641,9 @@ func Test_SingleNode_SnapshotWithAutoOptimize_Stress(t *testing.T) {
 
 // Test_SingleNode_DatabaseFileModified tests that a full snapshot is taken
 // when the underlying database file is modified by some process external
-// to the Store. Such changes are unsupported, but if the Store detects
-// such a change, it will take a full snapshot to ensure the Snapshot remains
-// consistent.
+// to the Store. Such changes are officially unsupported, but if the Store
+// detects such a change, it will take a full snapshot to ensure the Snapshot
+// remains consistent.
 func Test_SingleNode_DatabaseFileModified(t *testing.T) {
 	s, ln := mustNewStore(t)
 	defer ln.Close()
@@ -2685,8 +2685,8 @@ func Test_SingleNode_DatabaseFileModified(t *testing.T) {
 		t.Fatalf("expected 1 full snapshot, got %d", s.numFullSnapshots)
 	}
 
-	// Touch the database file to make it newer than the snapshot, and then
-	// trigger a snapshot. It should be a full snapshot.
+	// Touch the database file to make it newer than Store's record of last
+	// modified time and then trigger a snapshot. It should be a full snapshot.
 	if err := os.Chtimes(s.dbPath, time.Now(), time.Now()); err != nil {
 		t.Fatalf("failed to change database file times: %s", err.Error())
 	}
