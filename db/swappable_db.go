@@ -5,6 +5,7 @@ import (
 	"io"
 	"os"
 	"sync"
+	"time"
 
 	command "github.com/rqlite/rqlite/v8/command/proto"
 )
@@ -180,6 +181,13 @@ func (s *SwappableDB) WALEnabled() bool {
 	s.dbMu.RLock()
 	defer s.dbMu.RUnlock()
 	return s.db.WALEnabled()
+}
+
+// DBLastModified calls DBLastModified on the underlying database.
+func (s *SwappableDB) DBLastModified() (time.Time, error) {
+	s.dbMu.RLock()
+	defer s.dbMu.RUnlock()
+	return s.db.DBLastModified()
 }
 
 // FileSize calls FileSize on the underlying database.

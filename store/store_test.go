@@ -2639,6 +2639,70 @@ func Test_SingleNode_SnapshotWithAutoOptimize_Stress(t *testing.T) {
 	}
 }
 
+// Test_SingleNode_DatabaseFileModified tests that a full snapshot is taken
+// when the underlying database file is modified by some process external
+// to the Store. Such changes are officially unsupported, but if the Store
+// detects such a change, it will take a full snapshot to ensure the Snapshot
+// remains consistent.
+func Test_SingleNode_DatabaseFileModified(t *testing.T) {
+	s, ln := mustNewStore(t)
+	defer ln.Close()
+	if err := s.Open(); err != nil {
+		t.Fatalf("failed to open single-node store: %s", err.Error())
+	}
+	defer s.Close(true)
+
+	if err := s.Bootstrap(NewServer(s.ID(), s.Addr(), true)); err != nil {
+		t.Fatalf("failed to bootstrap single-node store: %s", err.Error())
+	}
+	if _, err := s.WaitForLeader(10 * time.Second); err != nil {
+		t.Fatalf("Error waiting for leader: %s", err)
+	}
+
+	// Insert a record and trigger a snapshot to get a full snapshot.
+	er := executeRequestFromString(`CREATE TABLE foo (id INTEGER NOT NULL PRIMARY KEY, name TEXT)`,
+		false, false)
+	_, err := s.Execute(er)
+	if err != nil {
+		t.Fatalf("failed to execute on single node: %s", err.Error())
+	}
+	if err := s.Snapshot(0); err != nil {
+		t.Fatalf("failed to snapshot single-node store: %s", err.Error())
+	}
+	if s.numFullSnapshots != 1 {
+		t.Fatalf("expected 1 full snapshot, got %d", s.numFullSnapshots)
+	}
+
+	// Insert a record, trigger a snapshot. It shouldn't be a full snapshot.
+	_, err = s.Execute(executeRequestFromString(`INSERT INTO foo(name) VALUES("fiona")`, false, false))
+	if err != nil {
+		t.Fatalf("failed to execute INSERT on single node: %s", err.Error())
+	}
+	if err := s.Snapshot(0); err != nil {
+		t.Fatalf("failed to snapshot single-node store: %s", err.Error())
+	}
+	if s.numFullSnapshots != 1 {
+		t.Fatalf("expected 1 full snapshot, got %d", s.numFullSnapshots)
+	}
+
+	// Touch the database file to make it newer than Store's record of last
+	// modified time and then trigger a snapshot. It should be a full snapshot.
+	if err := os.Chtimes(s.dbPath, time.Now(), time.Now()); err != nil {
+		t.Fatalf("failed to change database file times: %s", err.Error())
+	}
+	if err := s.Snapshot(0); err != nil {
+		t.Fatalf("failed to snapshot single-node store: %s", err.Error())
+	}
+	if s.numFullSnapshots != 2 {
+		t.Fatalf("expected 2 full snapshots, got %d", s.numFullSnapshots)
+	}
+
+	// Just a final check...
+	if s.numSnapshots.Load() != 3 {
+		t.Fatalf("expected 3 snapshots in total, got %d", s.numSnapshots)
+	}
+}
+
 func Test_SingleNodeSelfJoinNoChangeOK(t *testing.T) {
 	s0, ln0 := mustNewStore(t)
 	defer ln0.Close()
