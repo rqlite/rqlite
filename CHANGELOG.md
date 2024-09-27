@@ -1,4 +1,4 @@
-## v8.31.1 (unreleased)
+## v8.31.1 (September 27th 2024)
 ### Implementation changes and bug fixes
 - [PR #1911](https://github.com/rqlite/rqlite/pull/1911): Factor out `ReadyChans` so it can be more widely used.
 - [PR #1912](https://github.com/rqlite/rqlite/pull/1912): Simplify Store _Ready_ check.
