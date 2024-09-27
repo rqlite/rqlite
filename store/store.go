@@ -2154,6 +2154,11 @@ func (s *Store) fsmRestore(rc io.ReadCloser) (retErr error) {
 	s.fsmIdx.Store(li)
 	s.fsmTerm.Store(tm)
 	s.dbAppliedIdx.Store(li)
+	lt, err := s.db.DBLastModified()
+	if err != nil {
+		return fmt.Errorf("failed to get last modified time: %s", err)
+	}
+	s.dbModifiedTime.Store(lt)
 
 	stats.Add(numRestores, 1)
 	s.logger.Printf("node restored in %s", time.Since(startT))
