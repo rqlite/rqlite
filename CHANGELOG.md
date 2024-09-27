@@ -2,6 +2,7 @@
 ### Implementation changes and bug fixes
 - [PR #1915](https://github.com/rqlite/rqlite/pull/1915): Move VACUUM-related testing to its own files.
 - [PR #1916](https://github.com/rqlite/rqlite/pull/1916): Add a "full cycle" compacting WAL scanner unit test.
+- [https://github.com/rqlite/rqlite/pull/1917]: Update "DB last modified time" on Restore.
 
 ## v8.31.1 (September 27th 2024)
 ### Implementation changes and bug fixes
