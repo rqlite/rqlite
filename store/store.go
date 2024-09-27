@@ -2024,17 +2024,14 @@ func (s *Store) fsmSnapshot() (fSnap raft.FSMSnapshot, retErr error) {
 	if err != nil {
 		return nil, err
 	}
+	fullNeeded = fullNeeded || s.dbModified()
 	fPLog := fullPretty(fullNeeded)
 	defer func() {
 		s.numSnapshots.Add(1)
 	}()
 
 	var fsmSnapshot raft.FSMSnapshot
-	if fullNeeded || s.dbModified() {
-		// A full checkpoint is explicitly needed, or the underlying database has been
-		// modified externally since the last snapshot. We need to take a full snapshot
-		// of the database because any WAL file would not be valid with respect to what
-		// is in the Snapshot Store.
+	if fullNeeded {
 		chkStartTime := time.Now()
 		if err := s.db.Checkpoint(sql.CheckpointTruncate); err != nil {
 			stats.Add(numFullCheckpointFailed, 1)
