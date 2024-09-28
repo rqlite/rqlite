@@ -94,7 +94,7 @@ COMMIT;
 }
 
 // Test_OpenStoreSingleNode_VacuumFullNeeded tests that running a VACUUM
-// means that a full snapshot is needed.
+// does not mean a full snapshot is needed.
 func Test_OpenStoreSingleNode_VacuumFullNeeded(t *testing.T) {
 	s, ln := mustNewStore(t)
 	defer s.Close(true)
@@ -132,8 +132,8 @@ func Test_OpenStoreSingleNode_VacuumFullNeeded(t *testing.T) {
 	}
 	if fn, err := s.snapshotStore.FullNeeded(); err != nil {
 		t.Fatalf("failed to determine full snapshot needed: %s", err.Error())
-	} else if !fn {
-		t.Fatalf("full snapshot not marked as needed")
+	} else if fn {
+		t.Fatalf("full snapshot marked as needed")
 	}
 }
 
@@ -250,7 +250,7 @@ func Test_SingleNodeExplicitVacuumOK(t *testing.T) {
 	}
 	doQuery()
 
-	// Restart test
+	// Restart node
 	if err := s.Close(true); err != nil {
 		t.Fatalf("failed to close store: %s", err.Error())
 	}

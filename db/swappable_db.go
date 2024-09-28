@@ -169,6 +169,13 @@ func (s *SwappableDB) Dump(w io.Writer) error {
 	return s.db.Dump(w)
 }
 
+// Vacuum calls Vacuum on the underlying database.
+func (s *SwappableDB) Vacuum() error {
+	s.dbMu.RLock()
+	defer s.dbMu.RUnlock()
+	return s.db.Vacuum()
+}
+
 // FKEnabled calls FKEnabled on the underlying database.
 func (s *SwappableDB) FKEnabled() bool {
 	s.dbMu.RLock()

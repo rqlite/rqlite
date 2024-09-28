@@ -90,7 +90,6 @@ const (
 	restoreScratchPattern      = "rqlite-restore-*"
 	bootScatchPattern          = "rqlite-boot-*"
 	backupScratchPattern       = "rqlite-backup-*"
-	vacuumScratchPattern       = "rqlite-vacuum-*"
 	walSnapshotScratchPattern  = "rqlite-wal-snapshot-*"
 	raftDBPath                 = "raft.db" // Changing this will break backwards compatibility.
 	peersPath                  = "raft/peers.json"
@@ -543,7 +542,6 @@ func (s *Store) Open() (retErr error) {
 		restoreScratchPattern,
 		bootScatchPattern,
 		backupScratchPattern,
-		vacuumScratchPattern,
 		walSnapshotScratchPattern} {
 		for _, dir := range []string{s.raftDir, s.dbDir} {
 			files, err := filepath.Glob(filepath.Join(dir, pattern))
@@ -1555,37 +1553,9 @@ func (s *Store) ReadFrom(r io.Reader) (int64, error) {
 	return n, nil
 }
 
-// Vacuum performs a VACUUM operation on the underlying database. It does
-// this by performing a VACUUM INTO a temporary file, and then swapping
-// the temporary file with the existing database file. The database is then
-// re-opened.
+// Vacuum performs a VACUUM operation on the underlying database.
 func (s *Store) Vacuum() error {
-	fd, err := createTemp(s.dbDir, vacuumScratchPattern)
-	if err != nil {
-		return err
-	}
-	if err := fd.Close(); err != nil {
-		return err
-	}
-	defer os.Remove(fd.Name())
-	if err := s.db.VacuumInto(fd.Name()); err != nil {
-		return err
-	}
-
-	// Verify that the VACUUMed database is valid.
-	if !sql.IsValidSQLiteFile(fd.Name()) {
-		return fmt.Errorf("invalid SQLite file post VACUUM")
-	}
-
-	// Swap in new database file.
-	if err := s.db.Swap(fd.Name(), s.dbConf.FKConstraints, true); err != nil {
-		return fmt.Errorf("error swapping database file: %v", err)
-	}
-
-	if err := s.snapshotStore.SetFullNeeded(); err != nil {
-		s.logger.Fatalf("failed to set full snapshot needed: %s", err)
-	}
-	return nil
+	return s.db.Vacuum()
 }
 
 // Database returns a copy of the underlying database. The caller MUST
