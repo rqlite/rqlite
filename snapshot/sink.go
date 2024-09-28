@@ -9,6 +9,10 @@ import (
 	"github.com/rqlite/rqlite/v8/db"
 )
 
+const (
+	maxFilenameLen = 255
+)
+
 // Sink is a sink for writing snapshot data to a Snapshot store.
 type Sink struct {
 	str  *Store
@@ -163,22 +167,35 @@ func (s *Sink) processSnapshotData() (retErr error) {
 	// which would trigger a Raft snapshot, but those entries didn't actually change
 	// the database. Otherwise, the data must be a valid SQLite file or WAL file.
 	if dataSz != 0 {
-		if db.IsValidSQLiteFile(s.dataFD.Name()) {
-			if err := os.Rename(s.dataFD.Name(), filepath.Join(s.str.Dir(), s.meta.ID+".db")); err != nil {
+		fdName := s.dataFD.Name()
+		if dataSz <= maxFilenameLen {
+			// It might contain the path of a file that we're to move here.
+			b, err := os.ReadFile(fdName)
+			if err != nil {
 				return err
 			}
-		} else if db.IsValidSQLiteWALFile(s.dataFD.Name()) {
+			if fileExists(string(b)) {
+				if err := os.Rename(string(b), fdName); err != nil {
+					return err
+				}
+			}
+		}
+		if db.IsValidSQLiteFile(fdName) {
+			if err := os.Rename(fdName, filepath.Join(s.str.Dir(), s.meta.ID+".db")); err != nil {
+				return err
+			}
+		} else if db.IsValidSQLiteWALFile(fdName) {
 			// With WAL data incoming, then we must have a valid SQLite file from the previous snapshot.
 			snapPrev := snapshots[len(snapshots)-1]
 			snapPrevDB := filepath.Join(s.str.Dir(), snapPrev.ID+".db")
 			if !db.IsValidSQLiteFile(snapPrevDB) {
 				return fmt.Errorf("previous snapshot data is not a SQLite file: %s", snapPrevDB)
 			}
-			if err := os.Rename(s.dataFD.Name(), filepath.Join(s.str.Dir(), s.meta.ID+".db-wal")); err != nil {
+			if err := os.Rename(fdName, filepath.Join(s.str.Dir(), s.meta.ID+".db-wal")); err != nil {
 				return err
 			}
 		} else {
-			return fmt.Errorf("invalid snapshot data file: %s", s.dataFD.Name())
+			return fmt.Errorf("invalid snapshot data file: %s", fdName)
 		}
 	}
 
