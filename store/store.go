@@ -282,7 +282,6 @@ type Store struct {
 	snapshotWDone  chan struct{}
 
 	// Snapshotting synchronization
-	queryTxMu   sync.RWMutex
 	snapshotCAS *rsync.CheckAndSet
 
 	// Latest log entry index actually reflected by the FSM. Due to Raft code
@@ -1237,18 +1236,9 @@ func (s *Store) Query(qr *proto.QueryRequest) ([]*proto.QueryRows, error) {
 	if qr.Level == proto.QueryRequest_QUERY_REQUEST_LEVEL_WEAK && s.raft.State() != raft.Leader {
 		return nil, ErrNotLeader
 	}
-
 	if qr.Level == proto.QueryRequest_QUERY_REQUEST_LEVEL_NONE && s.isStaleRead(qr.Freshness, qr.FreshnessStrict) {
 		return nil, ErrStaleRead
 	}
-
-	if qr.Request.Transaction {
-		// Transaction requested during query, but not going through consensus. This means
-		// we need to block any database serialization during the query.
-		s.queryTxMu.RLock()
-		defer s.queryTxMu.RUnlock()
-	}
-
 	return s.db.Query(qr.Request, qr.Timings)
 }
 
@@ -1268,12 +1258,6 @@ func (s *Store) Request(eqr *proto.ExecuteQueryRequest) ([]*proto.ExecuteQueryRe
 	if nRW == 0 && eqr.Level != proto.QueryRequest_QUERY_REQUEST_LEVEL_STRONG {
 		// It's a little faster just to do a Query of the DB if we know there is no need
 		// for consensus.
-		if eqr.Request.Transaction {
-			// Transaction requested during query, but not going through consensus. This means
-			// we need to block any database serialization during the query.
-			s.queryTxMu.RLock()
-			defer s.queryTxMu.RUnlock()
-		}
 		convertFn := func(qr []*proto.QueryRows) []*proto.ExecuteQueryResponse {
 			resp := make([]*proto.ExecuteQueryResponse, len(qr))
 			for i := range qr {
@@ -1912,7 +1896,6 @@ func (s *Store) fsmApply(l *raft.Log) (e interface{}) {
 		// Swapping in a new database invalidates any existing snapshot.
 		if err := s.snapshotStore.SetFullNeeded(); err != nil {
 			s.logger.Fatalf("failed to set full snapshot needed: %s", err)
-
 		}
 	}
 	return r
@@ -1920,21 +1903,13 @@ func (s *Store) fsmApply(l *raft.Log) (e interface{}) {
 
 // fsmSnapshot returns a snapshot of the database.
 //
-// The system must ensure that no transaction is taking place during this call.
 // Hashicorp Raft guarantees that this function will not be called concurrently
 // with Apply, as it states Apply() and Snapshot() are always called from the same
-// thread. This means there is no need to synchronize this function with Execute().
-// However, queries that involve a transaction must be blocked.
-//
-// http://sqlite.org/howtocorrupt.html states it is safe to copy or serialize the
-// database as long as no writes to the database are in progress.
+// thread.
 func (s *Store) fsmSnapshot() (fSnap raft.FSMSnapshot, retErr error) {
 	if !s.open.Is() {
 		return nil, ErrNotOpen
 	}
-
-	s.queryTxMu.Lock()
-	defer s.queryTxMu.Unlock()
 
 	if err := s.snapshotCAS.Begin("snapshot"); err != nil {
 		return nil, err
@@ -2020,13 +1995,13 @@ func (s *Store) fsmSnapshot() (fSnap raft.FSMSnapshot, retErr error) {
 	} else {
 		var walTmpFD *os.File
 		if pathExistsWithData(s.walPath) {
-			// This whole process is about protecting against large WAL files, even
+			// Using files is about protecting against large WAL files, even
 			// post-compaction. Large files, if processed entirely in memory, could
 			// cause excessive memory usage. Here we compact the WAL to a new file,
 			// and then tell the Store where it is. The Snapshot Store then moves it
 			// from here to itself. Compacting the WAL isn't strictly necessary, but
-			// usually reduces the size of the WAL which will be moved to the Snapshot
-			// Store.
+			// usually reduces the size of the WAL which will be moved to, and processed
+			// by, the Snapshot Store.
 			compactStartTime := time.Now()
 			walFD, err := os.Open(s.walPath)
 			if err != nil {
@@ -2115,7 +2090,7 @@ func (s *Store) fsmRestore(rc io.ReadCloser) (retErr error) {
 	s.logger.Printf("initiating node restore on node ID %s", s.raftID)
 	startT := time.Now()
 
-	// Create a scatch file to write the restore data to it.
+	// Create a scatch file to write the restore data to.
 	tmpFile, err := createTemp(s.dbDir, restoreScratchPattern)
 	if err != nil {
 		return fmt.Errorf("error creating temporary file for restore operation: %v", err)
@@ -2431,6 +2406,8 @@ func (s *Store) autoOptimizeNeeded(t time.Time) (bool, error) {
 	return t.Sub(bt) > s.AutoOptimizeInterval, nil
 }
 
+// dbModified returns true if the database appears to have been modified
+// outside of the control of the Store.
 func (s *Store) dbModified() bool {
 	lt, err := s.db.DBLastModified()
 	return err != nil || (!s.dbModifiedTime.IsZero() && lt.After(s.dbModifiedTime.Load()))
