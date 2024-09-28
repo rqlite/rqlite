@@ -4,7 +4,7 @@
 - [PR #1916](https://github.com/rqlite/rqlite/pull/1916): Add a "full cycle" compacting WAL scanner unit test.
 - [PR #1917](https://github.com/rqlite/rqlite/pull/1917): Update "DB last modified time" on Restore.
 - [PR #1918](https://github.com/rqlite/rqlite/pull/1918): Store snapshotted WAL data in a file, not in memory.
-- [PR #1920](https://github.com/rqlite/rqlite/pull/1920): _AutoVac_ should just `VACUUM`, not `VACUUM INTO`.
+- [PR #1920](https://github.com/rqlite/rqlite/pull/1920): _AutoVac_ should just `VACUUM`, not `VACUUM INTO`. Fixes issue [#1914](https://github.com/rqlite/rqlite/issues/1914).
 
 ## v8.31.1 (September 27th 2024)
 ### Implementation changes and bug fixes
