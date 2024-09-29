@@ -57,6 +57,42 @@ func Test_ClientGetNodeAPIAddr(t *testing.T) {
 	}
 }
 
+func Test_ClientGetCommitIndex(t *testing.T) {
+	srv := servicetest.NewService()
+	srv.Handler = func(conn net.Conn) {
+		var p []byte
+		var err error
+		c := readCommand(conn)
+		if c == nil {
+			// Error on connection, so give up, as normal
+			// test exit can cause that too.
+			return
+		}
+		if c.Type != proto.Command_COMMAND_TYPE_GET_NODE_API_URL {
+			t.Fatalf("unexpected command type: %d", c.Type)
+		}
+		p, err = pb.Marshal(&proto.NodeMeta{
+			CommitIndex: 5678,
+		})
+		if err != nil {
+			conn.Close()
+		}
+		writeBytesWithLength(conn, p)
+	}
+	srv.Start()
+	defer srv.Close()
+
+	c := NewClient(&simpleDialer{}, 0)
+	idx, err := c.GetCommitIndex(srv.Addr(), noRetries, time.Second)
+	if err != nil {
+		t.Fatal(err)
+	}
+	exp, got := uint64(5678), idx
+	if exp != got {
+		t.Fatalf("unexpected addr, got %d, exp: %d", got, exp)
+	}
+}
+
 func Test_ClientExecute(t *testing.T) {
 	srv := servicetest.NewService()
 	srv.Handler = func(conn net.Conn) {

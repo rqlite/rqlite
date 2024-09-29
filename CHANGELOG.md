@@ -1,3 +1,7 @@
+## v8.31.3 (unreleased)
+### Implementation changes and bug fixes
+- [PR #1923](https://github.com/rqlite/rqlite/pull/1923): Node can retrieve commit index of other node.
+
 ## v8.31.2 (September 28th 2024)
 ### Implementation changes and bug fixes
 - [PR #1915](https://github.com/rqlite/rqlite/pull/1915): Move VACUUM-related testing to its own files.
