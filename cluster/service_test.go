@@ -175,6 +175,35 @@ func Test_NewServiceSetGetNodeAPIAddrTLS(t *testing.T) {
 	}
 }
 
+func Test_NewServiceGetCommitIndex(t *testing.T) {
+	ml := mustNewMockTransport()
+	mgr := mustNewMockManager()
+	s := New(ml, mustNewMockDatabase(), mgr, mustNewMockCredentialStore())
+	if s == nil {
+		t.Fatalf("failed to create cluster service")
+	}
+
+	if err := s.Open(); err != nil {
+		t.Fatalf("failed to open cluster service")
+	}
+	s.EnableHTTPS(true)
+
+	// Test fetch via network.
+	mgr.commitIndex = 1234
+	c := NewClient(ml, 30*time.Second)
+	idx, err := c.GetCommitIndex(s.Addr(), noRetries, 5*time.Second)
+	if err != nil {
+		t.Fatalf("failed to get node API address: %s", err)
+	}
+	if idx != 1234 {
+		t.Fatalf("failed to get correct node commit index, exp %d, got %d", 1234, idx)
+	}
+
+	if err := s.Close(); err != nil {
+		t.Fatalf("failed to close cluster service")
+	}
+}
+
 func Test_NewServiceTestExecuteQueryAuthNoCredentials(t *testing.T) {
 	ml := mustNewMockTransport()
 	db := mustNewMockDatabase()

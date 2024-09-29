@@ -125,6 +125,26 @@ func (c *Client) GetNodeAPIAddr(nodeAddr string, retries int, timeout time.Durat
 	return a.Url, nil
 }
 
+// GetCommitIndex retrieves the commit index for the node at nodeAddr
+func (c *Client) GetCommitIndex(nodeAddr string, retries int, timeout time.Duration) (uint64, error) {
+	command := &proto.Command{
+		Type: proto.Command_COMMAND_TYPE_GET_NODE_API_URL,
+	}
+	p, nr, err := c.retry(command, nodeAddr, timeout, retries)
+	stats.Add(numGetNodeAPIRequestRetries, int64(nr))
+	if err != nil {
+		return 0, err
+	}
+
+	a := &proto.NodeMeta{}
+	err = pb.Unmarshal(p, a)
+	if err != nil {
+		return 0, fmt.Errorf("protobuf unmarshal: %w", err)
+	}
+
+	return a.CommitIndex, nil
+}
+
 // Execute performs an Execute on a remote node. If username is an empty string
 // no credential information will be included in the Execute request to the
 // remote node.
