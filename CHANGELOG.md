@@ -2,6 +2,7 @@
 ### Implementation changes and bug fixes
 - [PR #1923](https://github.com/rqlite/rqlite/pull/1923): Node can retrieve commit index of other node.
 - [PR #1924](https://github.com/rqlite/rqlite/pull/1924): Add ReadyTarget synchronization primitive.
+- [PR #1925](https://github.com/rqlite/rqlite/pull/1925): Use ReadyTarget primitive to avoid timer-based polling.
 
 ## v8.31.2 (September 28th 2024)
 ### Implementation changes and bug fixes

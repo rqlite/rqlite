@@ -287,6 +287,7 @@ type Store struct {
 	// Latest log entry index actually reflected by the FSM. Due to Raft code
 	// these values are not updated automatically after a Snapshot-restore.
 	fsmIdx        *atomic.Uint64
+	fsmTarget     *rsync.ReadyTarget[uint64]
 	fsmTerm       *atomic.Uint64
 	fsmUpdateTime *rsync.AtomicTime // This is node-local time.
 
@@ -297,7 +298,8 @@ type Store struct {
 	dbModifiedTime *rsync.AtomicTime // Last time the database file was modified.
 
 	// Latest log entry index which actually changed the database.
-	dbAppliedIdx *atomic.Uint64
+	dbAppliedIdx  *atomic.Uint64
+	appliedTarget *rsync.ReadyTarget[uint64]
 
 	reqMarshaller *command.RequestMarshaler // Request marshaler for writing to log.
 	raftLog       raft.LogStore             // Persistent log store.
@@ -393,11 +395,13 @@ func New(ly Layer, c *Config) *Store {
 		ApplyTimeout:    applyTimeout,
 		snapshotCAS:     rsync.NewCheckAndSet(),
 		fsmIdx:          &atomic.Uint64{},
+		fsmTarget:       rsync.NewReadyTarget[uint64](),
 		fsmTerm:         &atomic.Uint64{},
 		fsmUpdateTime:   rsync.NewAtomicTime(),
 		appendedAtTime:  rsync.NewAtomicTime(),
 		dbModifiedTime:  rsync.NewAtomicTime(),
 		dbAppliedIdx:    &atomic.Uint64{},
+		appliedTarget:   rsync.NewReadyTarget[uint64](),
 		numNoops:        &atomic.Uint64{},
 		numSnapshots:    &atomic.Uint64{},
 	}
@@ -709,20 +713,12 @@ func (s *Store) WaitForAllApplied(timeout time.Duration) error {
 // WaitForAppliedIndex blocks until a given log index has been applied,
 // or the timeout expires.
 func (s *Store) WaitForAppliedIndex(idx uint64, timeout time.Duration) error {
-	tck := time.NewTicker(appliedWaitDelay)
-	defer tck.Stop()
-	tmr := time.NewTimer(timeout)
-	defer tmr.Stop()
-
-	for {
-		select {
-		case <-tck.C:
-			if s.raft.AppliedIndex() >= idx {
-				return nil
-			}
-		case <-tmr.C:
-			return fmt.Errorf("timeout expired")
-		}
+	ch := s.appliedTarget.Subscribe(idx)
+	select {
+	case <-ch:
+		return nil
+	case <-time.After(timeout):
+		return fmt.Errorf("timeout waiting for index %d to be applied", idx)
 	}
 }
 
@@ -1004,19 +1000,12 @@ func (s *Store) SetRequestCompression(batch, size int) {
 // WaitForFSMIndex blocks until a given log index has been applied to our
 // state machine or the timeout expires.
 func (s *Store) WaitForFSMIndex(idx uint64, timeout time.Duration) (uint64, error) {
-	tck := time.NewTicker(appliedWaitDelay)
-	defer tck.Stop()
-	tmr := time.NewTimer(timeout)
-	defer tmr.Stop()
-	for {
-		select {
-		case <-tck.C:
-			if fsmIdx := s.fsmIdx.Load(); fsmIdx >= idx {
-				return fsmIdx, nil
-			}
-		case <-tmr.C:
-			return 0, fmt.Errorf("timeout expired")
-		}
+	ch := s.fsmTarget.Subscribe(idx)
+	select {
+	case <-ch:
+		return s.fsmIdx.Load(), nil
+	case <-time.After(timeout):
+		return 0, fmt.Errorf("timeout waiting for index %d to be applied", idx)
 	}
 }
 
@@ -1876,6 +1865,7 @@ type fsmGenericResponse struct {
 func (s *Store) fsmApply(l *raft.Log) (e interface{}) {
 	defer func() {
 		s.fsmIdx.Store(l.Index)
+		s.fsmTarget.Signal(l.Index)
 		s.fsmTerm.Store(l.Term)
 		s.fsmUpdateTime.Store(time.Now())
 		s.appendedAtTime.Store(l.AppendedAt)
@@ -1889,6 +1879,7 @@ func (s *Store) fsmApply(l *raft.Log) (e interface{}) {
 	cmd, mutated, r := s.cmdProc.Process(l.Data, s.db)
 	if mutated {
 		s.dbAppliedIdx.Store(l.Index)
+		s.appliedTarget.Signal(l.Index)
 	}
 	if cmd.Type == proto.Command_COMMAND_TYPE_NOOP {
 		s.numNoops.Add(1)

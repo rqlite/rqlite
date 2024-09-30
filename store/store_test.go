@@ -295,6 +295,102 @@ func Test_SingleNodeDBAppliedIndex_SnapshotRestart(t *testing.T) {
 	}
 }
 
+func Test_SingleNode_WaitForCommitIndex(t *testing.T) {
+	s, ln := mustNewStore(t)
+	defer ln.Close()
+
+	if err := s.Open(); err != nil {
+		t.Fatalf("failed to open single-node store: %s", err.Error())
+	}
+	defer s.Close(true)
+	if err := s.Bootstrap(NewServer(s.ID(), s.Addr(), true)); err != nil {
+		t.Fatalf("failed to bootstrap single-node store: %s", err.Error())
+	}
+	if _, err := s.WaitForLeader(10 * time.Second); err != nil {
+		t.Fatalf("Error waiting for leader: %s", err)
+	}
+	er := executeRequestFromStrings([]string{
+		`CREATE TABLE foo (id INTEGER NOT NULL PRIMARY KEY, name TEXT)`,
+	}, false, false)
+	_, err := s.Execute(er)
+	if err != nil {
+		t.Fatalf("failed to execute on single node: %s", err.Error())
+	}
+
+	// There should be at least 1 entry in the log.
+	if err := s.WaitForCommitIndex(1, 100*time.Second); err != nil {
+		t.Fatalf("failed to wait for commit index: %s", err.Error())
+	}
+	// It should timeout waiting for the commit index to be way larger.
+	if err := s.WaitForCommitIndex(1000, 100*time.Millisecond); err == nil {
+		t.Fatalf("should have timed out waiting for commit index")
+	}
+}
+
+func Test_SingleNode_WaitForAppliedIndex(t *testing.T) {
+	s, ln := mustNewStore(t)
+	defer ln.Close()
+
+	if err := s.Open(); err != nil {
+		t.Fatalf("failed to open single-node store: %s", err.Error())
+	}
+	defer s.Close(true)
+	if err := s.Bootstrap(NewServer(s.ID(), s.Addr(), true)); err != nil {
+		t.Fatalf("failed to bootstrap single-node store: %s", err.Error())
+	}
+	if _, err := s.WaitForLeader(10 * time.Second); err != nil {
+		t.Fatalf("Error waiting for leader: %s", err)
+	}
+	er := executeRequestFromStrings([]string{
+		`CREATE TABLE foo (id INTEGER NOT NULL PRIMARY KEY, name TEXT)`,
+	}, false, false)
+	_, err := s.Execute(er)
+	if err != nil {
+		t.Fatalf("failed to execute on single node: %s", err.Error())
+	}
+
+	// There should be at least 1 entry applied to the FSM
+	if err := s.WaitForAppliedIndex(1, 100*time.Second); err != nil {
+		t.Fatalf("failed to wait for commit index: %s", err.Error())
+	}
+	// It should timeout waiting for the commit index to be way larger.
+	if err := s.WaitForAppliedIndex(1000, 100*time.Millisecond); err == nil {
+		t.Fatalf("should have timed out waiting for commit index")
+	}
+}
+
+func Test_SingleNode_WaitForFSMIndex(t *testing.T) {
+	s, ln := mustNewStore(t)
+	defer ln.Close()
+
+	if err := s.Open(); err != nil {
+		t.Fatalf("failed to open single-node store: %s", err.Error())
+	}
+	defer s.Close(true)
+	if err := s.Bootstrap(NewServer(s.ID(), s.Addr(), true)); err != nil {
+		t.Fatalf("failed to bootstrap single-node store: %s", err.Error())
+	}
+	if _, err := s.WaitForLeader(10 * time.Second); err != nil {
+		t.Fatalf("Error waiting for leader: %s", err)
+	}
+	er := executeRequestFromStrings([]string{
+		`CREATE TABLE foo (id INTEGER NOT NULL PRIMARY KEY, name TEXT)`,
+	}, false, false)
+	_, err := s.Execute(er)
+	if err != nil {
+		t.Fatalf("failed to execute on single node: %s", err.Error())
+	}
+
+	// There should be at least 1 entry applied to the FSM
+	if _, err := s.WaitForFSMIndex(1, 100*time.Second); err != nil {
+		t.Fatalf("failed to wait for commit index: %s", err.Error())
+	}
+	// It should timeout waiting for the commit index to be way larger.
+	if _, err := s.WaitForFSMIndex(1000, 100*time.Millisecond); err == nil {
+		t.Fatalf("should have timed out waiting for commit index")
+	}
+}
+
 func Test_SingleNodeTempFileCleanup(t *testing.T) {
 	s, ln := mustNewStore(t)
 	defer ln.Close()
