@@ -15,6 +15,10 @@ func Test_NewReadyTarget(t *testing.T) {
 	if rt.Len() != 0 {
 		t.Fatalf("ReadyTarget has non-zero length: %d", rt.Len())
 	}
+
+	// Ensure reset doesn't panic.
+	rt.Reset()
+	rt.Reset()
 }
 
 // Test_ReadyTargetSignal_NoSubscribers tests the ReadyTarget.Signal method
@@ -26,6 +30,19 @@ func Test_ReadyTargetSignal_NoSubscribers(t *testing.T) {
 	rt.Signal(1)
 	rt.Signal(0)
 	rt.Signal(2)
+}
+
+func Test_ReadyTargetSignal_SubscribeReset(t *testing.T) {
+	t.Parallel()
+	rt := NewReadyTarget[uint64]()
+	rt.Subscribe(1)
+	if rt.Len() != 1 {
+		t.Fatalf("ReadyTarget has non-zero length: %d", rt.Len())
+	}
+	rt.Reset()
+	if rt.Len() != 0 {
+		t.Fatalf("ReadyTarget has non-zero length: %d", rt.Len())
+	}
 }
 
 func Test_ReadyTargetSignal_SubscribeSignalled(t *testing.T) {
