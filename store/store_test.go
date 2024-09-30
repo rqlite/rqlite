@@ -698,8 +698,7 @@ func Test_OpenStoreCloseSingleNode(t *testing.T) {
 		t.Fatalf("Error waiting for leader: %s", err)
 	}
 
-	// Wait until the log entries have been applied to the voting follower,
-	// and then query.
+	// Wait until the log entries have been re-applied after start-up.
 	if _, err := s.WaitForFSMIndex(fsmIdx, 5*time.Second); err != nil {
 		t.Fatalf("error waiting for follower to apply index: %s:", err.Error())
 	}
