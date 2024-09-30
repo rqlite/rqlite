@@ -36,12 +36,12 @@ func Test_ReadyTargetSignal_SubscribeReset(t *testing.T) {
 	t.Parallel()
 	rt := NewReadyTarget[uint64]()
 	rt.Subscribe(1)
-	if rt.Len() != 1 {
-		t.Fatalf("ReadyTarget has non-zero length: %d", rt.Len())
+	if exp, got := 1, rt.Len(); exp != got {
+		t.Fatalf("Expected %d, got %d", exp, got)
 	}
 	rt.Reset()
-	if rt.Len() != 0 {
-		t.Fatalf("ReadyTarget has non-zero length: %d", rt.Len())
+	if exp, got := 0, rt.Len(); exp != got {
+		t.Fatalf("Expected %d, got %d", exp, got)
 	}
 }
 
