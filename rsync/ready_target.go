@@ -81,6 +81,16 @@ func (r *ReadyTarget[T]) Signal(index T) {
 	r.subscribers = remainingSubscribers
 }
 
+// Reset resets the ReadyTarget back to the initial state, removing
+// any subscribers.
+func (r *ReadyTarget[T]) Reset() {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	var t T
+	r.currentTarget = t
+	r.subscribers = make([]*Subscriber[T], 0)
+}
+
 // Len returns the number of subscribers.
 func (r *ReadyTarget[T]) Len() int {
 	r.mu.RLock()

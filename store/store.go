@@ -442,10 +442,12 @@ func (s *Store) Open() (retErr error) {
 	}
 
 	s.fsmIdx.Store(0)
+	s.fsmTarget.Reset()
 	s.fsmTerm.Store(0)
 	s.fsmUpdateTime.Store(time.Time{})
 	s.appendedAtTime.Store(time.Time{})
 	s.dbAppliedIdx.Store(0)
+	s.appliedTarget.Reset()
 	s.numNoops.Store(0)
 	s.numSnapshots.Store(0)
 	s.openT = time.Now()
