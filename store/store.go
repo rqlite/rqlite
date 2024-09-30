@@ -2113,8 +2113,10 @@ func (s *Store) fsmRestore(rc io.ReadCloser) (retErr error) {
 		return fmt.Errorf("failed to get latest snapshot index post restore: %s", err)
 	}
 	s.fsmIdx.Store(li)
+	s.fsmTarget.Signal(li)
 	s.fsmTerm.Store(tm)
 	s.dbAppliedIdx.Store(li)
+	s.appliedTarget.Signal(li)
 	lt, err := s.db.DBLastModified()
 	if err != nil {
 		return fmt.Errorf("failed to get last modified time: %s", err)
