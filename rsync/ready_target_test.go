@@ -7,7 +7,7 @@ import (
 )
 
 func Test_NewReadyTarget(t *testing.T) {
-	rt := NewReadyTarget()
+	rt := NewReadyTarget[uint64]()
 	if rt == nil {
 		t.Fatal("NewReadyTarget returned nil")
 	}
@@ -19,7 +19,7 @@ func Test_NewReadyTarget(t *testing.T) {
 // Test_ReadyTargetSignal_NoSubscribers tests the ReadyTarget.Signal method
 // when there are no subscribers. Basically, it should do nothing.
 func Test_ReadyTargetSignal_NoSubscribers(t *testing.T) {
-	rt := NewReadyTarget()
+	rt := NewReadyTarget[uint64]()
 	rt.Signal(1)
 	rt.Signal(1)
 	rt.Signal(0)
@@ -27,7 +27,7 @@ func Test_ReadyTargetSignal_NoSubscribers(t *testing.T) {
 }
 
 func Test_ReadyTargetSignal_SubscribeSignalled(t *testing.T) {
-	rt := NewReadyTarget()
+	rt := NewReadyTarget[uint64]()
 
 	ch1 := rt.Subscribe(1)
 	var wg sync.WaitGroup
@@ -42,7 +42,7 @@ func Test_ReadyTargetSignal_SubscribeSignalled(t *testing.T) {
 }
 
 func Test_ReadyTargetSignal_SubscribeSignalled_Double(t *testing.T) {
-	rt := NewReadyTarget()
+	rt := NewReadyTarget[uint64]()
 
 	ch1 := rt.Subscribe(1)
 	ch2 := rt.Subscribe(2)
@@ -59,7 +59,7 @@ func Test_ReadyTargetSignal_SubscribeSignalled_Double(t *testing.T) {
 }
 
 func Test_ReadyTargetSignal_SubscribeNotSignalled(t *testing.T) {
-	rt := NewReadyTarget()
+	rt := NewReadyTarget[uint64]()
 
 	ch1 := rt.Subscribe(2)
 	called := false
@@ -76,7 +76,7 @@ func Test_ReadyTargetSignal_SubscribeNotSignalled(t *testing.T) {
 }
 
 func Test_ReadyTargetSignal_SubscribeNotSignalled_Unsubscribed(t *testing.T) {
-	rt := NewReadyTarget()
+	rt := NewReadyTarget[uint64]()
 
 	ch1 := rt.Subscribe(1)
 	rt.Unsubscribe(ch1)
@@ -97,7 +97,7 @@ func Test_ReadyTargetSignal_SubscribeNotSignalled_Unsubscribed(t *testing.T) {
 }
 
 func Test_ReadyTargetSignal_Subscribe_DoubleNotSignalled(t *testing.T) {
-	rt := NewReadyTarget()
+	rt := NewReadyTarget[uint64]()
 
 	ch1 := rt.Subscribe(1)
 	called1 := false
@@ -130,7 +130,7 @@ func Test_ReadyTargetSignal_Subscribe_DoubleNotSignalled(t *testing.T) {
 }
 
 func Test_ReadyTargetSignal_SubscribeSignalled_Earlier(t *testing.T) {
-	rt := NewReadyTarget()
+	rt := NewReadyTarget[uint64]()
 	rt.Signal(2)
 
 	ch1 := rt.Subscribe(1)
