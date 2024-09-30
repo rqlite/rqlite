@@ -107,33 +107,31 @@ func Test_ReadyTargetSignal_Subscribe_DoubleNotSignalled(t *testing.T) {
 	rt := NewReadyTarget[uint64]()
 
 	ch1 := rt.Subscribe(1)
-	called1 := false
+	var wg1 sync.WaitGroup
+	wg1.Add(1)
 	go func() {
+		defer wg1.Done()
 		<-ch1
-		called1 = true
 	}()
 
 	ch2 := rt.Subscribe(3)
+	var wg2 sync.WaitGroup
+	wg2.Add(1)
 	called2 := false
 	go func() {
+		defer wg2.Done()
 		<-ch2
 		called2 = true
 	}()
 
 	rt.Signal(2)
-	time.Sleep(200 * time.Millisecond)
-	if !called1 {
-		t.Fatal("Subscriber 1 was not signalled")
-	}
+	wg1.Wait()
 	if called2 {
 		t.Fatal("Subscriber 2 was signalled when it should not have been")
 	}
 
 	rt.Signal(3)
-	time.Sleep(200 * time.Millisecond)
-	if !called2 {
-		t.Fatal("Subscriber 2 was not signalled")
-	}
+	wg2.Wait()
 }
 
 func Test_ReadyTargetSignal_SubscribeSignalled_Earlier(t *testing.T) {
