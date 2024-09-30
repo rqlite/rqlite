@@ -7,6 +7,7 @@ import (
 )
 
 func Test_NewReadyTarget(t *testing.T) {
+	t.Parallel()
 	rt := NewReadyTarget[uint64]()
 	if rt == nil {
 		t.Fatal("NewReadyTarget returned nil")
@@ -19,6 +20,7 @@ func Test_NewReadyTarget(t *testing.T) {
 // Test_ReadyTargetSignal_NoSubscribers tests the ReadyTarget.Signal method
 // when there are no subscribers. Basically, it should do nothing.
 func Test_ReadyTargetSignal_NoSubscribers(t *testing.T) {
+	t.Parallel()
 	rt := NewReadyTarget[uint64]()
 	rt.Signal(1)
 	rt.Signal(1)
@@ -27,6 +29,7 @@ func Test_ReadyTargetSignal_NoSubscribers(t *testing.T) {
 }
 
 func Test_ReadyTargetSignal_SubscribeSignalled(t *testing.T) {
+	t.Parallel()
 	rt := NewReadyTarget[uint64]()
 
 	ch1 := rt.Subscribe(1)
@@ -42,6 +45,7 @@ func Test_ReadyTargetSignal_SubscribeSignalled(t *testing.T) {
 }
 
 func Test_ReadyTargetSignal_SubscribeSignalled_Double(t *testing.T) {
+	t.Parallel()
 	rt := NewReadyTarget[uint64]()
 
 	ch1 := rt.Subscribe(1)
@@ -59,6 +63,7 @@ func Test_ReadyTargetSignal_SubscribeSignalled_Double(t *testing.T) {
 }
 
 func Test_ReadyTargetSignal_SubscribeNotSignalled(t *testing.T) {
+	t.Parallel()
 	rt := NewReadyTarget[uint64]()
 
 	ch1 := rt.Subscribe(2)
@@ -69,13 +74,14 @@ func Test_ReadyTargetSignal_SubscribeNotSignalled(t *testing.T) {
 	}()
 
 	rt.Signal(1)
-	time.Sleep(100 * time.Millisecond)
+	time.Sleep(200 * time.Millisecond)
 	if called {
 		t.Fatal("Subscriber was signalled when it should not have been")
 	}
 }
 
 func Test_ReadyTargetSignal_SubscribeNotSignalled_Unsubscribed(t *testing.T) {
+	t.Parallel()
 	rt := NewReadyTarget[uint64]()
 
 	ch1 := rt.Subscribe(1)
@@ -90,13 +96,14 @@ func Test_ReadyTargetSignal_SubscribeNotSignalled_Unsubscribed(t *testing.T) {
 	}()
 
 	rt.Signal(2)
-	time.Sleep(100 * time.Millisecond)
+	time.Sleep(200 * time.Millisecond)
 	if called {
 		t.Fatal("Subscriber was signalled when it should not have been")
 	}
 }
 
 func Test_ReadyTargetSignal_Subscribe_DoubleNotSignalled(t *testing.T) {
+	t.Parallel()
 	rt := NewReadyTarget[uint64]()
 
 	ch1 := rt.Subscribe(1)
@@ -114,7 +121,7 @@ func Test_ReadyTargetSignal_Subscribe_DoubleNotSignalled(t *testing.T) {
 	}()
 
 	rt.Signal(2)
-	time.Sleep(100 * time.Millisecond)
+	time.Sleep(200 * time.Millisecond)
 	if !called1 {
 		t.Fatal("Subscriber 1 was not signalled")
 	}
@@ -123,13 +130,14 @@ func Test_ReadyTargetSignal_Subscribe_DoubleNotSignalled(t *testing.T) {
 	}
 
 	rt.Signal(3)
-	time.Sleep(100 * time.Millisecond)
+	time.Sleep(200 * time.Millisecond)
 	if !called2 {
 		t.Fatal("Subscriber 2 was not signalled")
 	}
 }
 
 func Test_ReadyTargetSignal_SubscribeSignalled_Earlier(t *testing.T) {
+	t.Parallel()
 	rt := NewReadyTarget[uint64]()
 	rt.Signal(2)
 
