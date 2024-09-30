@@ -701,6 +701,18 @@ func (s *Store) WaitForAppliedFSM(timeout time.Duration) (uint64, error) {
 	return s.WaitForFSMIndex(s.raft.AppliedIndex(), timeout)
 }
 
+// WaitForFSMIndex blocks until a given log index has been applied to our
+// state machine or the timeout expires.
+func (s *Store) WaitForFSMIndex(idx uint64, timeout time.Duration) (uint64, error) {
+	ch := s.fsmTarget.Subscribe(idx)
+	select {
+	case <-ch:
+		return s.fsmIdx.Load(), nil
+	case <-time.After(timeout):
+		return 0, fmt.Errorf("timeout waiting for index %d to be applied", idx)
+	}
+}
+
 // WaitForAllApplied waits for all Raft log entries to be applied to the
 // underlying database.
 func (s *Store) WaitForAllApplied(timeout time.Duration) error {
@@ -995,18 +1007,6 @@ func (s *Store) WaitForLeader(timeout time.Duration) (string, error) {
 func (s *Store) SetRequestCompression(batch, size int) {
 	s.reqMarshaller.BatchThreshold = batch
 	s.reqMarshaller.SizeThreshold = size
-}
-
-// WaitForFSMIndex blocks until a given log index has been applied to our
-// state machine or the timeout expires.
-func (s *Store) WaitForFSMIndex(idx uint64, timeout time.Duration) (uint64, error) {
-	ch := s.fsmTarget.Subscribe(idx)
-	select {
-	case <-ch:
-		return s.fsmIdx.Load(), nil
-	case <-time.After(timeout):
-		return 0, fmt.Errorf("timeout waiting for index %d to be applied", idx)
-	}
 }
 
 // Stats returns stats for the store.
