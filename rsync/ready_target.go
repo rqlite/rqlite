@@ -2,7 +2,7 @@ package rsync
 
 import "sync"
 
-// ReadyTarget is a mechanism where by a target can be signalled as reached.
+// ReadyTarget is a mechanism whereby a target can be signalled as reached.
 type ReadyTarget struct {
 	mu            sync.RWMutex
 	currentTarget uint64
@@ -16,7 +16,7 @@ func NewReadyTarget() *ReadyTarget {
 	}
 }
 
-// Subscriber is a subscription to a target.
+// Subscriber is a subscription to notifications for a target being reached.
 type Subscriber struct {
 	target uint64
 	ch     chan struct{}

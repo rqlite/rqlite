@@ -80,6 +80,9 @@ func Test_ReadyTargetSignal_SubscribeNotSignalled_Unsubscribed(t *testing.T) {
 
 	ch1 := rt.Subscribe(1)
 	rt.Unsubscribe(ch1)
+	if rt.Len() != 0 {
+		t.Fatalf("ReadyTarget has non-zero length: %d", rt.Len())
+	}
 	called := false
 	go func() {
 		<-ch1
