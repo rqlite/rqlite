@@ -5,6 +5,7 @@
 - [PR #1925](https://github.com/rqlite/rqlite/pull/1925), [6695c7d](https://github.com/rqlite/rqlite/commit/6695c7d91fd0468fc21799e5657d58a517fce11b): Use ReadyTarget primitive to avoid timer-based polling.
 - [PR #1926](https://github.com/rqlite/rqlite/pull/1926): Support reset of ReadyTargets.
 - [PR #1927](https://github.com/rqlite/rqlite/pull/1927): Unit test reset of ReadyTargets.
+- [PR #1928](https://github.com/rqlite/rqlite/pull/1928): Use new PollTrue primitive in Store.
 
 ## v8.31.2 (September 28th 2024)
 ### Implementation changes and bug fixes
