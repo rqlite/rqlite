@@ -739,28 +739,10 @@ func (s *Store) WaitForAppliedIndex(idx uint64, timeout time.Duration) error {
 // WaitForCommitIndex blocks until the local Raft commit index is equal to
 // or greater the given index, or the timeout expires.
 func (s *Store) WaitForCommitIndex(idx uint64, timeout time.Duration) error {
-	tck := time.NewTicker(commitEquivalenceDelay)
-	defer tck.Stop()
-	tmr := time.NewTimer(timeout)
-	defer tmr.Stop()
-	checkFn := func() bool {
+	check := func() bool {
 		return s.raft.CommitIndex() >= idx
 	}
-
-	// Try the fast path.
-	if checkFn() {
-		return nil
-	}
-	for {
-		select {
-		case <-tck.C:
-			if checkFn() {
-				return nil
-			}
-		case <-tmr.C:
-			return fmt.Errorf("timeout expired")
-		}
-	}
+	return rsync.NewPollTrue(check, commitEquivalenceDelay, timeout).Run("commit index")
 }
 
 // DBAppliedIndex returns the index of the last Raft log that changed the
@@ -942,66 +924,28 @@ func (s *Store) Nodes() ([]*Server, error) {
 func (s *Store) WaitForRemoval(id string, timeout time.Duration) error {
 	check := func() bool {
 		nodes, err := s.Nodes()
-		if err == nil && !Servers(nodes).Contains(id) {
-			return true
-		}
-		return false
+		return err == nil && !Servers(nodes).Contains(id)
 	}
-
-	// try the fast path
-	if check() {
-		return nil
+	err := rsync.NewPollTrue(check, appliedWaitDelay, timeout).Run("removal")
+	if err != nil {
+		return ErrWaitForRemovalTimeout
 	}
-	tck := time.NewTicker(appliedWaitDelay)
-	defer tck.Stop()
-	tmr := time.NewTimer(timeout)
-	defer tmr.Stop()
-	for {
-		select {
-		case <-tck.C:
-			if check() {
-				return nil
-			}
-		case <-tmr.C:
-			return ErrWaitForRemovalTimeout
-		}
-	}
+	return nil
 }
 
 // WaitForLeader blocks until a leader is detected, or the timeout expires.
 func (s *Store) WaitForLeader(timeout time.Duration) (string, error) {
-	var err error
 	var leaderAddr string
-
 	check := func() bool {
-		leaderAddr, err = s.LeaderAddr()
-		if err == nil && leaderAddr != "" {
-			return true
-		}
-		return false
+		var chkErr error
+		leaderAddr, chkErr = s.LeaderAddr()
+		return chkErr == nil && leaderAddr != ""
 	}
-
-	// try the fast path
-	if check() {
-		return leaderAddr, nil
+	err := rsync.NewPollTrue(check, leaderWaitDelay, timeout).Run("leader")
+	if err != nil {
+		return "", ErrWaitForLeaderTimeout
 	}
-	tck := time.NewTicker(leaderWaitDelay)
-	defer tck.Stop()
-	tmr := time.NewTimer(timeout)
-	defer tmr.Stop()
-	for {
-		select {
-		case <-tck.C:
-			if check() {
-				return leaderAddr, nil
-			}
-		case <-tmr.C:
-			if err != nil {
-				s.logger.Printf("timed out waiting for leader, last error: %s", err.Error())
-			}
-			return "", ErrWaitForLeaderTimeout
-		}
-	}
+	return leaderAddr, err
 }
 
 // SetRequestCompression allows low-level control over the compression threshold
