@@ -936,15 +936,16 @@ func (s *Store) WaitForRemoval(id string, timeout time.Duration) error {
 // WaitForLeader blocks until a leader is detected, or the timeout expires.
 func (s *Store) WaitForLeader(timeout time.Duration) (string, error) {
 	var leaderAddr string
+	var err error
 	check := func() bool {
-		leaderAddr, err := s.LeaderAddr()
+		leaderAddr, err = s.LeaderAddr()
 		return err == nil && leaderAddr != ""
 	}
-	err := rsync.NewPollTrue(check, leaderWaitDelay, timeout).Run("leader")
+	err = rsync.NewPollTrue(check, leaderWaitDelay, timeout).Run("leader")
 	if err != nil {
 		return "", ErrWaitForLeaderTimeout
 	}
-	return leaderAddr, nil
+	return leaderAddr, err
 }
 
 // SetRequestCompression allows low-level control over the compression threshold
