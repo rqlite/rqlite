@@ -926,7 +926,7 @@ func (s *Store) WaitForRemoval(id string, timeout time.Duration) error {
 		nodes, err := s.Nodes()
 		return err == nil && !Servers(nodes).Contains(id)
 	}
-	err := rsync.NewPollTrue(check, leaderWaitDelay, timeout).Run("removal")
+	err := rsync.NewPollTrue(check, appliedWaitDelay, timeout).Run("removal")
 	if err != nil {
 		return ErrWaitForRemovalTimeout
 	}
