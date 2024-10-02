@@ -853,6 +853,48 @@ func Test_SingleNodeExecuteQuery(t *testing.T) {
 	}
 }
 
+// Test_SingleNodeExecuteQuery_LeaderReadOpt tests that a Store correctly responds to a simple
+// Execute and Query request with the LeaderReadOpt flag set.
+func Test_SingleNodeExecuteQuery_LeaderReadOpt(t *testing.T) {
+	s, ln := mustNewStore(t)
+	defer ln.Close()
+
+	if err := s.Open(); err != nil {
+		t.Fatalf("failed to open single-node store: %s", err.Error())
+	}
+	if err := s.Bootstrap(NewServer(s.ID(), s.Addr(), true)); err != nil {
+		t.Fatalf("failed to bootstrap single-node store: %s", err.Error())
+	}
+	defer s.Close(true)
+	if _, err := s.WaitForLeader(10 * time.Second); err != nil {
+		t.Fatalf("Error waiting for leader: %s", err)
+	}
+
+	er := executeRequestFromStrings([]string{
+		`CREATE TABLE foo (id INTEGER NOT NULL PRIMARY KEY, name TEXT)`,
+		`INSERT INTO foo(id, name) VALUES(1, "fiona")`,
+	}, false, false)
+	_, err := s.Execute(er)
+	if err != nil {
+		t.Fatalf("failed to execute on single node: %s", err.Error())
+	}
+
+	qr := queryRequestFromString("SELECT * FROM foo", false, false)
+	qr.Level = proto.QueryRequest_QUERY_REQUEST_LEVEL_STRONG
+	qr.LeaderReadOpt = true
+	r, err := s.Query(qr)
+	if err != nil {
+		t.Fatalf("failed to perform strong query on single node: %s", err.Error())
+	}
+
+	if exp, got := `["id","name"]`, asJSON(r[0].Columns); exp != got {
+		t.Fatalf("unexpected results for query\nexp: %s\ngot: %s", exp, got)
+	}
+	if exp, got := `[[1,"fiona"]]`, asJSON(r[0].Values); exp != got {
+		t.Fatalf("unexpected results for query\nexp: %s\ngot: %s", exp, got)
+	}
+}
+
 func Test_SingleNodeExecuteQuery_RETURNING(t *testing.T) {
 	s, ln := mustNewStore(t)
 	defer ln.Close()
