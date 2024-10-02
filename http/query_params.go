@@ -133,6 +133,15 @@ func (qp QueryParams) Compress() bool {
 	return qp.HasKey("compress")
 }
 
+// Indexed returns true if the query parameters request indexed results.
+func (qp QueryParams) Indexed() bool {
+	return qp.HasKey("indexed")
+}
+
+func (qp QueryParams) TrustLeaderLease() bool {
+	return qp.HasKey("trust_leader_lease")
+}
+
 // Key returns the value of the key named "key".
 func (qp QueryParams) Key() string {
 	return qp["key"]

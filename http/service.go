@@ -97,6 +97,10 @@ type Store interface {
 	// the Raft system. It then triggers a Raft snapshot, which will then make
 	// Raft aware of the new data.
 	ReadFrom(r io.Reader) (int64, error)
+
+	// WaitForFSMIndex blocks until the local FSM index is greater than or
+	// equal to the given index.
+	WaitForFSMIndex(idx uint64, timeout time.Duration) (uint64, error)
 }
 
 // GetAddresser is the interface that wraps the GetNodeAPIAddr method.
@@ -108,6 +112,9 @@ type GetAddresser interface {
 // Cluster is the interface node API services must provide
 type Cluster interface {
 	GetAddresser
+
+	// GetLeaderCommitIndex returns the leader commit index for the given node.
+	GetLeaderCommitIndex(nodeAddr string, retries int, trustLeaderLease bool, timeout time.Duration) (uint64, error)
 
 	// Execute performs an Execute Request on a remote node.
 	Execute(er *command.ExecuteRequest, nodeAddr string, creds *clstrPB.Credentials, timeout time.Duration, retries int) ([]*command.ExecuteQueryResponse, error)
@@ -1263,7 +1270,44 @@ func (s *Service) handleQuery(w http.ResponseWriter, r *http.Request, qp QueryPa
 	}
 
 	results, resultsErr := s.store.Query(qr)
-	if resultsErr != nil && resultsErr == store.ErrNotLeader {
+	if resultsErr != nil && resultsErr == store.ErrNotLeader && qp.Level() == command.QueryRequest_QUERY_REQUEST_LEVEL_STRONG && qp.Indexed() {
+		qr.IndexedRequest = &command.StrongIndexRequest{
+			TrustLeaderLease: qp.TrustLeaderLease(),
+			Timeout:          int64(qp.Timeout(defaultTimeout)),
+		}
+
+		addr, err := s.store.LeaderAddr()
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		if addr == "" {
+			stats.Add(numLeaderNotFound, 1)
+			http.Error(w, ErrLeaderNotFound.Error(), http.StatusServiceUnavailable)
+			return
+		}
+
+		w.Header().Add(ServedByHTTPHeader, addr)
+		leaderCommitIndex, err := s.cluster.GetLeaderCommitIndex(addr, qp.Retries(0), qp.TrustLeaderLease(), qp.Timeout(defaultTimeout))
+		if err != nil {
+			stats.Add(numRemoteQueriesFailed, 1)
+			resultsErr = fmt.Errorf("node failed to process GetLeaderCommitIndex on remote node at %s: %s",
+				addr, resultsErr.Error())
+		}
+		stats.Add(numRemoteQueries, 1)
+
+		_, err = s.store.WaitForFSMIndex(leaderCommitIndex, qp.Timeout(defaultTimeout))
+		if err != nil {
+			resultsErr = fmt.Errorf("node failed to process WaitForFSMIndex on local node: %s",
+				err.Error())
+		}
+
+		// cancel freshness and set level to none to read from local store
+		qr.Level = command.QueryRequest_QUERY_REQUEST_LEVEL_NONE
+		qr.Freshness = 0
+		qr.FreshnessStrict = false
+		results, resultsErr = s.store.Query(qr)
+	} else if resultsErr != nil && resultsErr == store.ErrNotLeader {
 		if s.DoRedirect(w, r, qp) {
 			return
 		}
