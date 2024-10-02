@@ -1157,7 +1157,7 @@ func (s *Store) Query(qr *proto.QueryRequest) ([]*proto.QueryRows, error) {
 			return nil, err
 		}
 
-		if qr.EnableLeaderReadOptimization {
+		if qr.LeaderReadOpt {
 			return s.leaderRead(qr)
 		}
 		af := s.raft.Apply(b, s.ApplyTimeout)
