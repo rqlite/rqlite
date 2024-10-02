@@ -27,6 +27,11 @@ message Request {
 	int64 dbTimeout = 3;
 }
 
+message StrongIndexRequest {
+	bool trust_leader_lease = 1;
+	int64 timeout = 2;
+}
+
 message QueryRequest {
 	Request request = 1;
 	bool timings = 2;
@@ -37,8 +42,9 @@ message QueryRequest {
 		QUERY_REQUEST_LEVEL_AUTO = 3;
 	}
 	Level level = 3;
-	int64 freshness = 4;
-	bool freshness_strict = 5;
+	StrongIndexRequest indexed_request = 4;
+	int64 freshness = 5;
+	bool freshness_strict = 6;
 }
 
 message Values {
