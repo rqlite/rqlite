@@ -1301,13 +1301,9 @@ func Test_MultiNodeExecuteQuery_LeaderReadOpt_AllUp(t *testing.T) {
 		t.Fatalf("failed to join to node at %s: %s", s0.Addr(), err.Error())
 	}
 
-	// Join the third node to the first as a non-voting node.
-	if err := s0.Join(joinRequest(s2.ID(), s2.Addr(), false)); err != nil {
+	// Join the third node to the first as a voting node.
+	if err := s0.Join(joinRequest(s2.ID(), s2.Addr(), true)); err != nil {
 		t.Fatalf("failed to join to node at %s: %s", s0.Addr(), err.Error())
-	}
-
-	if _, err := s0.WaitForLeader(10 * time.Second); err != nil {
-		t.Fatalf("Error waiting for leader: %s", err)
 	}
 
 	// Execute some data on the leader
@@ -1390,13 +1386,9 @@ func Test_MultiNodeExecuteQuery_LeaderReadOpt_Quorum(t *testing.T) {
 		t.Fatalf("failed to join to node at %s: %s", s0.Addr(), err.Error())
 	}
 
-	// Join the third node to the first as a non-voting node.
-	if err := s0.Join(joinRequest(s2.ID(), s2.Addr(), false)); err != nil {
+	// Join the third node to the first as a voting node.
+	if err := s0.Join(joinRequest(s2.ID(), s2.Addr(), true)); err != nil {
 		t.Fatalf("failed to join to node at %s: %s", s0.Addr(), err.Error())
-	}
-
-	if _, err := s0.WaitForLeader(10 * time.Second); err != nil {
-		t.Fatalf("Error waiting for leader: %s", err)
 	}
 
 	// Execute some data on the leader
@@ -1410,11 +1402,8 @@ func Test_MultiNodeExecuteQuery_LeaderReadOpt_Quorum(t *testing.T) {
 	}
 
 	// Kill one follower, still quorum
-	s2.Close(true)
-
-	// Wait for the leader to be elected again
-	if _, err := s0.WaitForLeader(10 * time.Second); err != nil {
-		t.Fatalf("Error waiting for leader: %s", err)
+	if err := s2.Close(true); err != nil {
+		t.Fatalf("failed to close node: %s", err.Error())
 	}
 
 	// Perform a strong read consistency query with leader read optimization on the remaining nodes
@@ -1487,13 +1476,9 @@ func Test_MultiNodeExecuteQuery_LeaderReadOpt_NoQuorum(t *testing.T) {
 		t.Fatalf("failed to join to node at %s: %s", s0.Addr(), err.Error())
 	}
 
-	// Join the third node to the first as a non-voting node.
-	if err := s0.Join(joinRequest(s2.ID(), s2.Addr(), false)); err != nil {
+	// Join the third node to the first as a voting node.
+	if err := s0.Join(joinRequest(s2.ID(), s2.Addr(), true)); err != nil {
 		t.Fatalf("failed to join to node at %s: %s", s0.Addr(), err.Error())
-	}
-
-	if _, err := s0.WaitForLeader(10 * time.Second); err != nil {
-		t.Fatalf("Error waiting for leader: %s", err)
 	}
 
 	// Execute some data on the leader
