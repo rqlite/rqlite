@@ -882,15 +882,7 @@ func (s *Store) CommitIndex() (uint64, error) {
 }
 
 // SafeLeaderCommitIndex returns the current Raft commit index if this node is the leader.
-// If verifyLeader is true, it first verifies that this node is still the leader before
-// returning the commit index. This function provides a safe way to get the leader's
-// commit index, ensuring that the node is actually the leader at the time of the call.
-//
-// rqlite's underlying Raft implementation uses leader leases, which, with proper
-// leader lease timeout configuration, ensures that two leaders cannot exist simultaneously.
-// However, clock skew may still occur. The verifyLeader option allows re-verification
-// of leadership status by querying a majority of Raft peers, providing an additional
-// safeguard against potential inconsistencies due to clock skew.
+// If verifyLeader is true, it first checks itself as leader before returning the commit index.
 func (s *Store) SafeLeaderCommitIndex(verifyLeader bool) (uint64, error) {
 	if !s.open.Is() {
 		return 0, ErrNotOpen

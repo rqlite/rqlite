@@ -145,6 +145,35 @@ func (c *Client) GetCommitIndex(nodeAddr string, retries int, timeout time.Durat
 	return a.CommitIndex, nil
 }
 
+func (c *Client) GetLeaderCommitIndex(nodeAddr string, retries int, timeout time.Duration) (uint64, error) {
+	command := &proto.Command{
+		Type: proto.Command_COMMAND_TYPE_GET_LEADER_COMMIT_INDEX,
+		Request: &proto.Command_StrongIndexRequest{
+			StrongIndexRequest: &command.StrongIndexRequest{
+				TrustLeaderLease: true,
+				Timeout:          int64(timeout),
+			},
+		},
+	}
+	p, nr, err := c.retry(command, nodeAddr, timeout, retries)
+	stats.Add(numGetNodeAPIRequestRetries, int64(nr))
+	if err != nil {
+		return 0, err
+	}
+
+	a := &proto.CommandGetLeaderCommitIndexResponse{}
+	err = pb.Unmarshal(p, a)
+	if err != nil {
+		return 0, err
+	}
+
+	if a.Error != "" {
+		return 0, errors.New(a.Error)
+	}
+
+	return a.CommitIndex, nil
+}
+
 // Execute performs an Execute on a remote node. If username is an empty string
 // no credential information will be included in the Execute request to the
 // remote node.
