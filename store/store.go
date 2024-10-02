@@ -1185,8 +1185,10 @@ func (s *Store) leaderRead(qr *proto.QueryRequest) ([]*proto.QueryRows, error) {
 	if err := future.Error(); err != nil {
 		if err == raft.ErrNotLeader {
 			return nil, ErrNotLeader
+		} else if err == raft.ErrLeadershipLost {
+			return nil, ErrNotLeader
 		}
-		return nil, err
+		return nil, fmt.Errorf("failed to verify leader: %s", err.Error())
 	}
 
 	return s.db.Query(qr.Request, qr.Timings)
