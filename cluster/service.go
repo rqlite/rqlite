@@ -331,7 +331,7 @@ func (s *Service) handleConn(conn net.Conn) {
 			if ir == nil {
 				resp.Error = "StrongIndexRequest is nil"
 			} else {
-				ci, err := s.mgr.SafeLeaderCommitIndex(ir.TrustLeaderLease)
+				ci, err := s.mgr.SafeLeaderCommitIndex(!ir.TrustLeaderLease)
 				if err != nil {
 					resp.Error = err.Error()
 				} else {

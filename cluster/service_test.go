@@ -544,6 +544,10 @@ func (m *MockManager) LeaderAddr() (string, error) {
 	return m.leaderAddrFn()
 }
 
+func (m *MockManager) SafeLeaderCommitIndex(verifyLeader bool) (uint64, error) {
+	return m.commitIndex, nil
+}
+
 func (m *MockManager) CommitIndex() (uint64, error) {
 	return m.commitIndex, nil
 }

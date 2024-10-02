@@ -145,12 +145,12 @@ func (c *Client) GetCommitIndex(nodeAddr string, retries int, timeout time.Durat
 	return a.CommitIndex, nil
 }
 
-func (c *Client) GetLeaderCommitIndex(nodeAddr string, retries int, timeout time.Duration) (uint64, error) {
+func (c *Client) GetLeaderCommitIndex(nodeAddr string, retries int, trustLeaderLease bool, timeout time.Duration) (uint64, error) {
 	command := &proto.Command{
 		Type: proto.Command_COMMAND_TYPE_GET_LEADER_COMMIT_INDEX,
 		Request: &proto.Command_StrongIndexRequest{
 			StrongIndexRequest: &command.StrongIndexRequest{
-				TrustLeaderLease: true,
+				TrustLeaderLease: trustLeaderLease,
 				Timeout:          int64(timeout),
 			},
 		},
