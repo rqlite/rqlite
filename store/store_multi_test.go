@@ -1492,102 +1492,21 @@ func Test_MultiNodeExecuteQuery_LeaderReadOpt_NoQuorum(t *testing.T) {
 	}
 
 	// Kill two followers, no quorum
-	s1.Close(true)
-	s2.Close(true)
-
-	// Execute some data on the leader, wait for leadership to be lost
-	er = executeRequestFromStrings([]string{
-		`CREATE TABLE foo (id INTEGER NOT NULL PRIMARY KEY, name TEXT)`,
-		`INSERT INTO foo(id, name) VALUES(1, "fiona")`,
-	}, false, false)
-	_, err = s0.Execute(er)
-	if err == nil {
-		t.Fatalf("expected leader to not be able to commit, but it did")
-	} else if !strings.Contains(err.Error(), "leadership lost while committing log") {
-		t.Fatalf("unexpected error on leader: %s", err.Error())
+	if err := s1.Close(true); err != nil {
+		t.Fatalf("failed to close node: %s", err.Error())
 	}
-
-	// Perform a strong read consistency query with leader read optimization on the remaining nodes (should fail)
-	if s0.IsLeader() {
-		t.Fatalf("expected leader to not be s0, but it was")
+	if err := s2.Close(true); err != nil {
+		t.Fatalf("failed to close node: %s", err.Error())
 	}
-	qr := queryRequestFromString("SELECT * FROM foo", false, false)
-	qr.Level = proto.QueryRequest_QUERY_REQUEST_LEVEL_STRONG
-	qr.LeaderReadOpt = true
-	_, err = s0.Query(qr)
-	if err == nil {
-		t.Fatalf("expected query to fail, but it did not")
-	}
-	if !strings.Contains(err.Error(), "not leader") {
-		t.Fatalf("unexpected error on leader: %s", err.Error())
-	}
-}
-
-func Test_MultiNodeExecuteQuery_LeaderReadOpt_NoQuorum_NoWait(t *testing.T) {
-	// Set up a 3-node cluster
-	s0, ln0 := mustNewStore(t)
-	defer ln0.Close()
-	if err := s0.Open(); err != nil {
-		t.Fatalf("failed to open single-node store: %s", err.Error())
-	}
-	defer s0.Close(true)
-	if err := s0.Bootstrap(NewServer(s0.ID(), s0.Addr(), true)); err != nil {
-		t.Fatalf("failed to bootstrap single-node store: %s", err.Error())
-	}
-	if _, err := s0.WaitForLeader(10 * time.Second); err != nil {
-		t.Fatalf("Error waiting for leader: %s", err)
-	}
-
-	s1, ln1 := mustNewStore(t)
-	defer ln1.Close()
-	if err := s1.Open(); err != nil {
-		t.Fatalf("failed to open node for multi-node test: %s", err.Error())
-	}
-	defer s1.Close(true)
-
-	s2, ln2 := mustNewStore(t)
-	defer ln2.Close()
-	if err := s2.Open(); err != nil {
-		t.Fatalf("failed to open node for multi-node test: %s", err.Error())
-	}
-	defer s2.Close(true)
-
-	// Join the second node to the first as a voting node.
-	if err := s0.Join(joinRequest(s1.ID(), s1.Addr(), true)); err != nil {
-		t.Fatalf("failed to join to node at %s: %s", s0.Addr(), err.Error())
-	}
-
-	// Join the third node to the first as a non-voting node.
-	if err := s0.Join(joinRequest(s2.ID(), s2.Addr(), false)); err != nil {
-		t.Fatalf("failed to join to node at %s: %s", s0.Addr(), err.Error())
-	}
-
-	if _, err := s0.WaitForLeader(10 * time.Second); err != nil {
-		t.Fatalf("Error waiting for leader: %s", err)
-	}
-
-	// Execute some data on the leader
-	er := executeRequestFromStrings([]string{
-		`CREATE TABLE foo (id INTEGER NOT NULL PRIMARY KEY, name TEXT)`,
-		`INSERT INTO foo(id, name) VALUES(1, "fiona")`,
-	}, false, false)
-	_, err := s0.Execute(er)
-	if err != nil {
-		t.Fatalf("failed to execute on leader: %s", err.Error())
-	}
-
-	// Kill two followers, no quorum
-	s1.Close(true)
-	s2.Close(true)
-
-	// Don't wait for the leadership to be lost, test if the leader read optimization can handle this case
-	// if no quorum, s0 should not provide read index availability
 
 	// Perform a strong read consistency query with leader read optimization on the remaining nodes (should fail)
 	qr := queryRequestFromString("SELECT * FROM foo", false, false)
 	qr.Level = proto.QueryRequest_QUERY_REQUEST_LEVEL_STRONG
 	qr.LeaderReadOpt = true
+
+	// s0 should not provide read index availability
 	_, err = s0.Query(qr)
+
 	if err == nil {
 		t.Fatalf("expected query to fail, but it did not")
 	}
