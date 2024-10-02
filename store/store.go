@@ -1175,25 +1175,26 @@ func (s *Store) Query(qr *proto.QueryRequest) ([]*proto.QueryRows, error) {
 		return nil, ErrStaleRead
 	}
 
-	if qr.LeaderReadOpt {
-		return s.leaderRead(qr)
+	if qr.Level == proto.QueryRequest_QUERY_REQUEST_LEVEL_STRONG && qr.LeaderReadOpt {
+		if err := s.VerifyLeader(); err != nil {
+			return nil, err
+		}
 	}
 
 	return s.db.Query(qr.Request, qr.Timings)
 }
 
-func (s *Store) leaderRead(qr *proto.QueryRequest) ([]*proto.QueryRows, error) {
+func (s *Store) VerifyLeader() error {
 	future := s.raft.VerifyLeader()
 	if err := future.Error(); err != nil {
 		if err == raft.ErrNotLeader {
-			return nil, ErrNotLeader
+			return ErrNotLeader
 		} else if err == raft.ErrLeadershipLost {
-			return nil, ErrNotLeader
+			return ErrNotLeader
 		}
-		return nil, fmt.Errorf("failed to verify leader: %s", err.Error())
+		return fmt.Errorf("failed to verify leader: %s", err.Error())
 	}
-
-	return s.db.Query(qr.Request, qr.Timings)
+	return nil
 }
 
 // Request processes a request that may contain both Executes and Queries.
