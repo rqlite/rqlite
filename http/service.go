@@ -1256,10 +1256,11 @@ func (s *Service) handleQuery(w http.ResponseWriter, r *http.Request, qp QueryPa
 			DbTimeout:   int64(qp.DBTimeout(0)),
 			Statements:  queries,
 		},
-		Timings:         qp.Timings(),
-		Level:           qp.Level(),
-		Freshness:       qp.Freshness().Nanoseconds(),
-		FreshnessStrict: qp.FreshnessStrict(),
+		Timings:                      qp.Timings(),
+		Level:                        qp.Level(),
+		Freshness:                    qp.Freshness().Nanoseconds(),
+		FreshnessStrict:              qp.FreshnessStrict(),
+		EnableLeaderReadOptimization: qp.EnableLeaderReadOptimization(),
 	}
 
 	results, resultsErr := s.store.Query(qr)

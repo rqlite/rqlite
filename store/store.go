@@ -1157,6 +1157,9 @@ func (s *Store) Query(qr *proto.QueryRequest) ([]*proto.QueryRows, error) {
 			return nil, err
 		}
 
+		if qr.EnableLeaderReadOptimization {
+			return s.leaderRead(qr)
+		}
 		af := s.raft.Apply(b, s.ApplyTimeout)
 		if af.Error() != nil {
 			if af.Error() == raft.ErrNotLeader {
@@ -1174,6 +1177,18 @@ func (s *Store) Query(qr *proto.QueryRequest) ([]*proto.QueryRows, error) {
 	if qr.Level == proto.QueryRequest_QUERY_REQUEST_LEVEL_NONE && s.isStaleRead(qr.Freshness, qr.FreshnessStrict) {
 		return nil, ErrStaleRead
 	}
+	return s.db.Query(qr.Request, qr.Timings)
+}
+
+func (s *Store) leaderRead(qr *proto.QueryRequest) ([]*proto.QueryRows, error) {
+	future := s.raft.VerifyLeader()
+	if err := future.Error(); err != nil {
+		if err == raft.ErrNotLeader {
+			return nil, ErrNotLeader
+		}
+		return nil, err
+	}
+
 	return s.db.Query(qr.Request, qr.Timings)
 }
 
