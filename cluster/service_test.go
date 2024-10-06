@@ -191,7 +191,7 @@ func Test_NewServiceGetCommitIndex(t *testing.T) {
 	// Test fetch via network.
 	mgr.commitIndex = 1234
 	c := NewClient(ml, 30*time.Second)
-	idx, err := c.GetCommitIndex(s.Addr(), noRetries, 5*time.Second)
+	idx, err := c.GetCommitIndex(s.Addr(), noRetries, false, 5*time.Second)
 	if err != nil {
 		t.Fatalf("failed to get node API address: %s", err)
 	}
@@ -548,7 +548,7 @@ func (m *MockManager) SafeLeaderCommitIndex(verifyLeader bool) (uint64, error) {
 	return m.commitIndex, nil
 }
 
-func (m *MockManager) CommitIndex() (uint64, error) {
+func (m *MockManager) CommitIndex(verifyLeader bool) (uint64, error) {
 	return m.commitIndex, nil
 }
 

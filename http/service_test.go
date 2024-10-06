@@ -1475,6 +1475,11 @@ type MockStore struct {
 	notReady    bool // Default value is true, easier to test.
 }
 
+// WaitForFSMIndex implements Store.
+func (m *MockStore) WaitForFSMIndex(idx uint64, timeout time.Duration) (uint64, error) {
+	panic("unimplemented")
+}
+
 func (m *MockStore) Execute(er *command.ExecuteRequest) ([]*command.ExecuteQueryResponse, error) {
 	if m.executeFn != nil {
 		return m.executeFn(er)
@@ -1567,6 +1572,11 @@ type mockClusterService struct {
 	backupFn     func(br *command.BackupRequest, addr string, t time.Duration, w io.Writer) error
 	loadFn       func(lr *command.LoadRequest, addr string, t time.Duration) error
 	removeNodeFn func(rn *command.RemoveNodeRequest, nodeAddr string, t time.Duration) error
+}
+
+// GetCommitIndex implements Cluster.
+func (m *mockClusterService) GetCommitIndex(nodeAddr string, retries int, verifyLeader bool, timeout time.Duration) (uint64, error) {
+	panic("unimplemented")
 }
 
 func (m *mockClusterService) GetNodeAPIAddr(a string, r int, t time.Duration) (string, error) {

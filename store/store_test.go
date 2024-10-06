@@ -41,7 +41,7 @@ func Test_NonOpenStore(t *testing.T) {
 	if s.State() != Unknown {
 		t.Fatalf("wrong cluster state returned for non-open store")
 	}
-	if _, err := s.CommitIndex(); err != ErrNotOpen {
+	if _, err := s.CommitIndex(false); err != ErrNotOpen {
 		t.Fatalf("wrong error received for non-open store: %s", err)
 	}
 	if _, err := s.LeaderCommitIndex(); err != ErrNotOpen {
@@ -115,7 +115,7 @@ func Test_SingleNodeOnDiskSQLitePath(t *testing.T) {
 		t.Fatalf("Error waiting for leader: %s", err)
 	}
 	testPoll(t, func() bool {
-		ci, err := s.CommitIndex()
+		ci, err := s.CommitIndex(false)
 		return err == nil && ci == uint64(2)
 	}, 50*time.Millisecond, 2*time.Second)
 
@@ -128,7 +128,7 @@ func Test_SingleNodeOnDiskSQLitePath(t *testing.T) {
 		t.Fatalf("failed to execute on single node: %s", err.Error())
 	}
 
-	ci, err := s.CommitIndex()
+	ci, err := s.CommitIndex(false)
 	if err != nil {
 		t.Fatalf("failed to retrieve commit index: %s", err.Error())
 	}
