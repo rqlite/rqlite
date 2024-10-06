@@ -27,8 +27,8 @@ message Request {
 	int64 dbTimeout = 3;
 }
 
-message StrongIndexRequest {
-	bool trust_leader_lease = 1;
+message GetNodeAPIURLRequest {
+	bool verify_leader = 1;
 	int64 timeout = 2;
 }
 
@@ -42,7 +42,7 @@ message QueryRequest {
 		QUERY_REQUEST_LEVEL_AUTO = 3;
 	}
 	Level level = 3;
-	StrongIndexRequest indexed_request = 4;
+	GetNodeAPIURLRequest get_node_api_url_request = 4;
 	int64 freshness = 5;
 	bool freshness_strict = 6;
 }

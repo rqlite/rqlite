@@ -24,18 +24,16 @@ import (
 var stats *expvar.Map
 
 const (
-	numGetNodeAPIRequest            = "num_get_node_api_req"
-	numGetNodeAPIResponse           = "num_get_node_api_resp"
-	numGetLeaderCommitIndexRequest  = "num_get_leader_commit_index_req"
-	numGetLeaderCommitIndexResponse = "num_get_leader_commit_index_resp"
-	numExecuteRequest               = "num_execute_req"
-	numQueryRequest                 = "num_query_req"
-	numRequestRequest               = "num_request_req"
-	numBackupRequest                = "num_backup_req"
-	numLoadRequest                  = "num_load_req"
-	numRemoveNodeRequest            = "num_remove_node_req"
-	numNotifyRequest                = "num_notify_req"
-	numJoinRequest                  = "num_join_req"
+	numGetNodeAPIRequest  = "num_get_node_api_req"
+	numGetNodeAPIResponse = "num_get_node_api_resp"
+	numExecuteRequest     = "num_execute_req"
+	numQueryRequest       = "num_query_req"
+	numRequestRequest     = "num_request_req"
+	numBackupRequest      = "num_backup_req"
+	numLoadRequest        = "num_load_req"
+	numRemoveNodeRequest  = "num_remove_node_req"
+	numNotifyRequest      = "num_notify_req"
+	numJoinRequest        = "num_join_req"
 
 	numClientRetries            = "num_client_retries"
 	numGetNodeAPIRequestRetries = "num_get_node_api_req_retries"
@@ -62,8 +60,6 @@ func init() {
 	stats = expvar.NewMap("cluster")
 	stats.Add(numGetNodeAPIRequest, 0)
 	stats.Add(numGetNodeAPIResponse, 0)
-	stats.Add(numGetLeaderCommitIndexRequest, 0)
-	stats.Add(numGetLeaderCommitIndexResponse, 0)
 	stats.Add(numExecuteRequest, 0)
 	stats.Add(numQueryRequest, 0)
 	stats.Add(numRequestRequest, 0)
@@ -114,19 +110,8 @@ type Manager interface {
 	LeaderAddr() (string, error)
 
 	// CommitIndex returns the Raft commit index of the cluster.
-	CommitIndex() (uint64, error)
-
-	// SafeLeaderCommitIndex returns the current Raft commit index if this node is the leader.
-	// If verifyLeader is true, it first verifies that this node is still the leader before
-	// returning the commit index. This function provides a safe way to get the leader's
-	// commit index, ensuring that the node is actually the leader at the time of the call.
-	//
-	// rqlite's underlying Raft implementation uses leader leases, which, with proper
-	// leader lease timeout configuration, ensures that two leaders cannot exist simultaneously.
-	// However, clock skew may still occur. The verifyLeader option allows re-verification
-	// of leadership status by querying a majority of Raft peers, providing an additional
-	// safeguard against potential inconsistencies due to clock skew.
-	SafeLeaderCommitIndex(verifyLeader bool) (uint64, error)
+	// If verifyLeader is true, it verifies that this node is still the leader
+	CommitIndex(verifyLeader bool) (uint64, error)
 
 	// Remove removes the node, given by id, from the cluster
 	Remove(rn *command.RemoveNodeRequest) error
@@ -306,42 +291,31 @@ func (s *Service) handleConn(conn net.Conn) {
 		switch c.Type {
 		case proto.Command_COMMAND_TYPE_GET_NODE_API_URL:
 			stats.Add(numGetNodeAPIRequest, 1)
-			ci, err := s.mgr.CommitIndex()
+			resp := &proto.NodeMeta{}
+
+			verifyLeader := false
+			ir := c.GetGetNodeApiUrlRequest()
+			if ir != nil {
+				verifyLeader = ir.VerifyLeader
+			}
+
+			ci, err := s.mgr.CommitIndex(verifyLeader)
+			if err != nil {
+				resp.Error = err.Error()
+			}
+
+			resp.Url = s.GetNodeAPIURL()
+			resp.CommitIndex = ci
+
+			p, err = pb.Marshal(resp)
 			if err != nil {
 				conn.Close()
 				return
-			}
-			p, err = pb.Marshal(&proto.NodeMeta{
-				Url:         s.GetNodeAPIURL(),
-				CommitIndex: ci,
-			})
-			if err != nil {
-				conn.Close()
 			}
 			if err := writeBytesWithLength(conn, p); err != nil {
 				return
 			}
 			stats.Add(numGetNodeAPIResponse, 1)
-
-		case proto.Command_COMMAND_TYPE_GET_LEADER_COMMIT_INDEX:
-			stats.Add(numGetLeaderCommitIndexRequest, 1)
-
-			resp := &proto.CommandGetLeaderCommitIndexResponse{}
-			ir := c.GetStrongIndexRequest()
-			if ir == nil {
-				resp.Error = "StrongIndexRequest is nil"
-			} else {
-				ci, err := s.mgr.SafeLeaderCommitIndex(!ir.TrustLeaderLease)
-				if err != nil {
-					resp.Error = err.Error()
-				} else {
-					resp.CommitIndex = ci
-				}
-			}
-			if err := marshalAndWrite(conn, resp); err != nil {
-				return
-			}
-			stats.Add(numGetLeaderCommitIndexResponse, 1)
 
 		case proto.Command_COMMAND_TYPE_EXECUTE:
 			stats.Add(numExecuteRequest, 1)

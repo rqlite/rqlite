@@ -13,30 +13,30 @@ message Credentials {
 message NodeMeta {
     string url = 1;
     uint64 commit_index = 2;
+    string error = 3;
 }
 
 message Command {
     enum Type {
         COMMAND_TYPE_UNKNOWN = 0;
         COMMAND_TYPE_GET_NODE_API_URL = 1;
-        COMMAND_TYPE_GET_LEADER_COMMIT_INDEX = 2;
-        COMMAND_TYPE_EXECUTE = 3;
-        COMMAND_TYPE_QUERY = 4;
-        COMMAND_TYPE_BACKUP = 5;
-        COMMAND_TYPE_LOAD = 6;
-        COMMAND_TYPE_REMOVE_NODE = 7;
-        COMMAND_TYPE_NOTIFY = 8;
-        COMMAND_TYPE_JOIN = 9;
-        COMMAND_TYPE_REQUEST = 10;
-        COMMAND_TYPE_LOAD_CHUNK = 11;
-        COMMAND_TYPE_BACKUP_STREAM = 12;
+        COMMAND_TYPE_EXECUTE = 2;
+        COMMAND_TYPE_QUERY = 3;
+        COMMAND_TYPE_BACKUP = 4;
+        COMMAND_TYPE_LOAD = 5;
+        COMMAND_TYPE_REMOVE_NODE = 6;
+        COMMAND_TYPE_NOTIFY = 7;
+        COMMAND_TYPE_JOIN = 8;
+        COMMAND_TYPE_REQUEST = 9;
+        COMMAND_TYPE_LOAD_CHUNK = 10;
+        COMMAND_TYPE_BACKUP_STREAM = 11;
     }
     Type type = 1;
 
     oneof request {
         command.ExecuteRequest execute_request = 2;
         command.QueryRequest query_request = 3;
-        command.StrongIndexRequest strong_index_request = 4;
+        command.GetNodeAPIURLRequest get_node_api_url_request = 4;
         command.BackupRequest backup_request = 5;
         command.LoadRequest load_request = 6;
         command.RemoveNodeRequest remove_node_request = 7;
@@ -47,11 +47,6 @@ message Command {
     }
 
     Credentials credentials = 12;
-}
-
-message CommandGetLeaderCommitIndexResponse {
-    string error = 1;
-    uint64 commit_index = 2;
 }
 
 message CommandExecuteResponse {

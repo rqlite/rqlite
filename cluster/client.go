@@ -126,9 +126,15 @@ func (c *Client) GetNodeAPIAddr(nodeAddr string, retries int, timeout time.Durat
 }
 
 // GetCommitIndex retrieves the commit index for the node at nodeAddr
-func (c *Client) GetCommitIndex(nodeAddr string, retries int, timeout time.Duration) (uint64, error) {
+func (c *Client) GetCommitIndex(nodeAddr string, retries int, verifyLeader bool, timeout time.Duration) (uint64, error) {
 	command := &proto.Command{
 		Type: proto.Command_COMMAND_TYPE_GET_NODE_API_URL,
+		Request: &proto.Command_GetNodeApiUrlRequest{
+			GetNodeApiUrlRequest: &command.GetNodeAPIURLRequest{
+				VerifyLeader: verifyLeader,
+				Timeout:      int64(timeout),
+			},
+		},
 	}
 	p, nr, err := c.retry(command, nodeAddr, timeout, retries)
 	stats.Add(numGetNodeAPIRequestRetries, int64(nr))
@@ -140,31 +146,6 @@ func (c *Client) GetCommitIndex(nodeAddr string, retries int, timeout time.Durat
 	err = pb.Unmarshal(p, a)
 	if err != nil {
 		return 0, fmt.Errorf("protobuf unmarshal: %w", err)
-	}
-
-	return a.CommitIndex, nil
-}
-
-func (c *Client) GetLeaderCommitIndex(nodeAddr string, retries int, trustLeaderLease bool, timeout time.Duration) (uint64, error) {
-	command := &proto.Command{
-		Type: proto.Command_COMMAND_TYPE_GET_LEADER_COMMIT_INDEX,
-		Request: &proto.Command_StrongIndexRequest{
-			StrongIndexRequest: &command.StrongIndexRequest{
-				TrustLeaderLease: trustLeaderLease,
-				Timeout:          int64(timeout),
-			},
-		},
-	}
-	p, nr, err := c.retry(command, nodeAddr, timeout, retries)
-	stats.Add(numGetNodeAPIRequestRetries, int64(nr))
-	if err != nil {
-		return 0, err
-	}
-
-	a := &proto.CommandGetLeaderCommitIndexResponse{}
-	err = pb.Unmarshal(p, a)
-	if err != nil {
-		return 0, err
 	}
 
 	if a.Error != "" {

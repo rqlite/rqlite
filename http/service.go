@@ -113,8 +113,8 @@ type GetAddresser interface {
 type Cluster interface {
 	GetAddresser
 
-	// GetLeaderCommitIndex returns the leader commit index for the given node.
-	GetLeaderCommitIndex(nodeAddr string, retries int, trustLeaderLease bool, timeout time.Duration) (uint64, error)
+	// GetCommitIndex returns the commit index for the given node.
+	GetCommitIndex(nodeAddr string, retries int, verifyLeader bool, timeout time.Duration) (uint64, error)
 
 	// Execute performs an Execute Request on a remote node.
 	Execute(er *command.ExecuteRequest, nodeAddr string, creds *clstrPB.Credentials, timeout time.Duration, retries int) ([]*command.ExecuteQueryResponse, error)
@@ -1271,9 +1271,9 @@ func (s *Service) handleQuery(w http.ResponseWriter, r *http.Request, qp QueryPa
 
 	results, resultsErr := s.store.Query(qr)
 	if resultsErr != nil && resultsErr == store.ErrNotLeader && qp.Level() == command.QueryRequest_QUERY_REQUEST_LEVEL_STRONG && qp.Indexed() {
-		qr.IndexedRequest = &command.StrongIndexRequest{
-			TrustLeaderLease: qp.TrustLeaderLease(),
-			Timeout:          int64(qp.Timeout(defaultTimeout)),
+		qr.GetNodeApiUrlRequest = &command.GetNodeAPIURLRequest{
+			VerifyLeader: qp.VerifyLeader(),
+			Timeout:      int64(qp.Timeout(defaultTimeout)),
 		}
 
 		addr, err := s.store.LeaderAddr()
@@ -1288,7 +1288,7 @@ func (s *Service) handleQuery(w http.ResponseWriter, r *http.Request, qp QueryPa
 		}
 
 		w.Header().Add(ServedByHTTPHeader, addr)
-		leaderCommitIndex, err := s.cluster.GetLeaderCommitIndex(addr, qp.Retries(0), qp.TrustLeaderLease(), qp.Timeout(defaultTimeout))
+		leaderCommitIndex, err := s.cluster.GetCommitIndex(addr, qp.Retries(0), qp.VerifyLeader(), qp.Timeout(defaultTimeout))
 		if err != nil {
 			stats.Add(numRemoteQueriesFailed, 1)
 			resultsErr = fmt.Errorf("node failed to process GetLeaderCommitIndex on remote node at %s: %s",

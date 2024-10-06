@@ -138,8 +138,19 @@ func (qp QueryParams) Indexed() bool {
 	return qp.HasKey("indexed")
 }
 
-func (qp QueryParams) TrustLeaderLease() bool {
-	return qp.HasKey("trust_leader_lease")
+// VerifyLeader returns true if the query parameters request leader verification. (default true)
+func (qp QueryParams) VerifyLeader() bool {
+	v := qp["verify_leader"]
+	switch strings.ToLower(v) {
+	case "": // default is true
+		return true
+	case "true":
+		return true
+	case "false":
+		return false
+	default:
+		return true
+	}
 }
 
 // Key returns the value of the key named "key".

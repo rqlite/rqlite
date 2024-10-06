@@ -874,16 +874,8 @@ func (s *Store) HasLeaderID() bool {
 }
 
 // CommitIndex returns the Raft commit index.
-func (s *Store) CommitIndex() (uint64, error) {
-	if !s.open.Is() {
-		return 0, ErrNotOpen
-	}
-	return s.raft.CommitIndex(), nil
-}
-
-// SafeLeaderCommitIndex returns the current Raft commit index if this node is the leader.
-// If verifyLeader is true, it first checks itself as leader before returning the commit index.
-func (s *Store) SafeLeaderCommitIndex(verifyLeader bool) (uint64, error) {
+// TODO: Add timeout to wait for store to be ready, ref: https://github.com/hashicorp/consul/blob/a6898939910b175db7495f02131918c0cc73027c/agent/consul/rpc.go#L1061-L1100
+func (s *Store) CommitIndex(verifyLeader bool) (uint64, error) {
 	if !s.open.Is() {
 		return 0, ErrNotOpen
 	}
