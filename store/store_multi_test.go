@@ -62,7 +62,7 @@ func Test_MultiNodeSimple(t *testing.T) {
 		return s0.DBAppliedIndex() == s1.DBAppliedIndex()
 	}, 250*time.Millisecond, 3*time.Second)
 
-	ci, err := s0.CommitIndex()
+	ci, err := s0.CommitIndex(false, false)
 	if err != nil {
 		t.Fatalf("failed to retrieve commit index: %s", err.Error())
 	}
@@ -101,7 +101,7 @@ func Test_MultiNodeSimple(t *testing.T) {
 	testFn1(t, s0)
 	testFn1(t, s1)
 
-	ci, err = s1.CommitIndex()
+	ci, err = s1.CommitIndex(false, false)
 	if err != nil {
 		t.Fatalf("failed to retrieve commit index: %s", err.Error())
 	}

@@ -83,7 +83,7 @@ func Test_ClientGetCommitIndex(t *testing.T) {
 	defer srv.Close()
 
 	c := NewClient(&simpleDialer{}, 0)
-	idx, err := c.GetCommitIndex(srv.Addr(), noRetries, time.Second)
+	idx, err := c.GetCommitIndex(srv.Addr(), noRetries, false, time.Second)
 	if err != nil {
 		t.Fatal(err)
 	}

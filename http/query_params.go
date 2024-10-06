@@ -133,6 +133,26 @@ func (qp QueryParams) Compress() bool {
 	return qp.HasKey("compress")
 }
 
+// Indexed returns true if the query parameters request indexed results.
+func (qp QueryParams) Indexed() bool {
+	return qp.HasKey("indexed")
+}
+
+// VerifyLeader returns true if the query parameters request leader verification. (default true)
+func (qp QueryParams) VerifyLeader() bool {
+	v := qp["verify_leader"]
+	switch strings.ToLower(v) {
+	case "": // default is true
+		return true
+	case "true":
+		return true
+	case "false":
+		return false
+	default:
+		return true
+	}
+}
+
 // Key returns the value of the key named "key".
 func (qp QueryParams) Key() string {
 	return qp["key"]

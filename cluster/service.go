@@ -110,7 +110,8 @@ type Manager interface {
 	LeaderAddr() (string, error)
 
 	// CommitIndex returns the Raft commit index of the cluster.
-	CommitIndex() (uint64, error)
+	// If verifyLeader is true, it verifies that this node is still the leader
+	CommitIndex(enforceLeader bool, verifyLeader bool) (uint64, error)
 
 	// Remove removes the node, given by id, from the cluster
 	Remove(rn *command.RemoveNodeRequest) error
@@ -290,17 +291,27 @@ func (s *Service) handleConn(conn net.Conn) {
 		switch c.Type {
 		case proto.Command_COMMAND_TYPE_GET_NODE_API_URL:
 			stats.Add(numGetNodeAPIRequest, 1)
-			ci, err := s.mgr.CommitIndex()
+			resp := &proto.NodeMeta{}
+
+			enforceLeader, verifyLeader := false, false
+			ir := c.GetGetNodeApiUrlRequest()
+			if ir != nil {
+				enforceLeader = true
+				verifyLeader = ir.VerifyLeader
+			}
+
+			ci, err := s.mgr.CommitIndex(enforceLeader, verifyLeader)
+			if err != nil {
+				resp.Error = err.Error()
+			}
+
+			resp.Url = s.GetNodeAPIURL()
+			resp.CommitIndex = ci
+
+			p, err = pb.Marshal(resp)
 			if err != nil {
 				conn.Close()
 				return
-			}
-			p, err = pb.Marshal(&proto.NodeMeta{
-				Url:         s.GetNodeAPIURL(),
-				CommitIndex: ci,
-			})
-			if err != nil {
-				conn.Close()
 			}
 			if err := writeBytesWithLength(conn, p); err != nil {
 				return

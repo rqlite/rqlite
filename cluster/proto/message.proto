@@ -13,6 +13,7 @@ message Credentials {
 message NodeMeta {
     string url = 1;
     uint64 commit_index = 2;
+    string error = 3;
 }
 
 message Command {
@@ -35,6 +36,7 @@ message Command {
     oneof request {
         command.ExecuteRequest execute_request = 2;
         command.QueryRequest query_request = 3;
+        command.GetNodeAPIURLRequest get_node_api_url_request = 4;
         command.BackupRequest backup_request = 5;
         command.LoadRequest load_request = 6;
         command.RemoveNodeRequest remove_node_request = 7;
@@ -44,7 +46,7 @@ message Command {
         command.LoadChunkRequest load_chunk_request = 11;
     }
 
-    Credentials credentials = 4;
+    Credentials credentials = 12;
 }
 
 message CommandExecuteResponse {
