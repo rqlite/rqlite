@@ -548,7 +548,7 @@ func (m *MockManager) SafeLeaderCommitIndex(verifyLeader bool) (uint64, error) {
 	return m.commitIndex, nil
 }
 
-func (m *MockManager) CommitIndex(verifyLeader bool) (uint64, error) {
+func (m *MockManager) CommitIndex(enforceLeader bool, verifyLeader bool) (uint64, error) {
 	return m.commitIndex, nil
 }
 

@@ -1477,7 +1477,7 @@ type MockStore struct {
 
 // WaitForFSMIndex implements Store.
 func (m *MockStore) WaitForFSMIndex(idx uint64, timeout time.Duration) (uint64, error) {
-	panic("unimplemented")
+	return 0, nil
 }
 
 func (m *MockStore) Execute(er *command.ExecuteRequest) ([]*command.ExecuteQueryResponse, error) {

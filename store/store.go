@@ -874,25 +874,34 @@ func (s *Store) HasLeaderID() bool {
 }
 
 // CommitIndex returns the Raft commit index.
+//
+// enforceLeader is used to enforce that the node is the leader, otherwise returns ErrNotLeader.
+//
+// verifyLeader is used to verify that the leader is the leader.
 // TODO: Add timeout to wait for store to be ready, ref: https://github.com/hashicorp/consul/blob/a6898939910b175db7495f02131918c0cc73027c/agent/consul/rpc.go#L1061-L1100
-func (s *Store) CommitIndex(verifyLeader bool) (uint64, error) {
+func (s *Store) CommitIndex(enforceLeader bool, verifyLeader bool) (uint64, error) {
 	if !s.open.Is() {
 		return 0, ErrNotOpen
 	}
-	if s.raft.State() == raft.Leader {
-		if verifyLeader {
-			fu := s.raft.VerifyLeader()
-			if fu.Error() != nil {
-				if fu.Error() == raft.ErrNotLeader {
-					return 0, ErrNotLeader
-				}
-				return 0, fu.Error() // raft.ErrRaftShutdown
-			}
-		}
+
+	if !enforceLeader {
 		return s.raft.CommitIndex(), nil
-	} else {
+	}
+
+	if s.raft.State() != raft.Leader {
 		return 0, ErrNotLeader
 	}
+
+	if verifyLeader {
+		fu := s.raft.VerifyLeader()
+		if fu.Error() != nil {
+			if fu.Error() == raft.ErrNotLeader {
+				return 0, ErrNotLeader
+			}
+			return 0, fu.Error() // raft.ErrRaftShutdown
+		}
+	}
+	return s.raft.CommitIndex(), nil
 }
 
 // LeaderCommitIndex returns the Raft leader commit index, as indicated

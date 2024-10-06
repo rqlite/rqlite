@@ -111,7 +111,7 @@ type Manager interface {
 
 	// CommitIndex returns the Raft commit index of the cluster.
 	// If verifyLeader is true, it verifies that this node is still the leader
-	CommitIndex(verifyLeader bool) (uint64, error)
+	CommitIndex(enforceLeader bool, verifyLeader bool) (uint64, error)
 
 	// Remove removes the node, given by id, from the cluster
 	Remove(rn *command.RemoveNodeRequest) error
@@ -293,13 +293,14 @@ func (s *Service) handleConn(conn net.Conn) {
 			stats.Add(numGetNodeAPIRequest, 1)
 			resp := &proto.NodeMeta{}
 
-			verifyLeader := false
+			enforceLeader, verifyLeader := false, false
 			ir := c.GetGetNodeApiUrlRequest()
 			if ir != nil {
+				enforceLeader = true
 				verifyLeader = ir.VerifyLeader
 			}
 
-			ci, err := s.mgr.CommitIndex(verifyLeader)
+			ci, err := s.mgr.CommitIndex(enforceLeader, verifyLeader)
 			if err != nil {
 				resp.Error = err.Error()
 			}
