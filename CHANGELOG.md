@@ -6,6 +6,7 @@
 - [PR #1926](https://github.com/rqlite/rqlite/pull/1926): Support reset of ReadyTargets.
 - [PR #1927](https://github.com/rqlite/rqlite/pull/1927): Unit test reset of ReadyTargets.
 - [PR #1928](https://github.com/rqlite/rqlite/pull/1928): Use new PollTrue primitive in Store.
+- [PR #1931](https://github.com/rqlite/rqlite/pull/1931): `go mod` updates.
 
 ## v8.31.2 (September 28th 2024)
 ### Implementation changes and bug fixes
