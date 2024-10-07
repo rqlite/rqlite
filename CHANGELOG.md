@@ -1,4 +1,4 @@
-## v8.31.3 (unreleased)
+## v8.31.3 (October 7th 2024)
 ### Implementation changes and bug fixes
 - [PR #1923](https://github.com/rqlite/rqlite/pull/1923): Node can retrieve commit index of other node.
 - [PR #1924](https://github.com/rqlite/rqlite/pull/1924): Add ReadyTarget synchronization primitive.
