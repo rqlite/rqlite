@@ -853,9 +853,9 @@ func Test_SingleNodeExecuteQuery(t *testing.T) {
 	}
 }
 
-// Test_SingleNodeExecuteQuery_LeaderReadOpt tests that a Store correctly responds to a simple
-// Execute and Query request with the LeaderReadOpt flag set.
-func Test_SingleNodeExecuteQuery_LeaderReadOpt(t *testing.T) {
+// Test_SingleNodeExecuteQuery_Linearizable tests that a Store correctly responds to a
+// simple Query request with Linearizable consistency level.
+func Test_SingleNodeExecuteQuery_Linearizable(t *testing.T) {
 	s, ln := mustNewStore(t)
 	defer ln.Close()
 
@@ -880,8 +880,7 @@ func Test_SingleNodeExecuteQuery_LeaderReadOpt(t *testing.T) {
 	}
 
 	qr := queryRequestFromString("SELECT * FROM foo", false, false)
-	qr.Level = proto.QueryRequest_QUERY_REQUEST_LEVEL_STRONG
-	qr.LeaderReadOpt = true
+	qr.Level = proto.QueryRequest_QUERY_REQUEST_LEVEL_LINEARIZABLE
 	r, err := s.Query(qr)
 	if err != nil {
 		t.Fatalf("failed to perform strong query on single node: %s", err.Error())
@@ -2501,6 +2500,33 @@ func Test_IsVoter(t *testing.T) {
 	}
 	if !v {
 		t.Fatalf("single node is not a voter!")
+	}
+}
+
+func Test_VerifyLeader(t *testing.T) {
+	s, ln := mustNewStore(t)
+	defer ln.Close()
+
+	if err := s.VerifyLeader(); err != ErrNotOpen {
+		t.Fatalf("expected error verifying leader on closed store")
+	}
+
+	if err := s.Open(); err != nil {
+		t.Fatalf("failed to open single-node store: %s", err.Error())
+	}
+	defer s.Close(true)
+	if err := s.VerifyLeader(); err == nil {
+		t.Fatalf("expected error verifying leader on non-bootstrapped store")
+	}
+
+	if err := s.Bootstrap(NewServer(s.ID(), s.Addr(), true)); err != nil {
+		t.Fatalf("failed to bootstrap single-node store: %s", err.Error())
+	}
+	if _, err := s.WaitForLeader(10 * time.Second); err != nil {
+		t.Fatalf("Error waiting for leader: %s", err)
+	}
+	if err := s.VerifyLeader(); err != nil {
+		t.Fatalf("failed to verify leader with boostrapped store: %s", err.Error())
 	}
 }
 

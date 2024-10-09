@@ -1111,7 +1111,7 @@ func (s *Store) execute(ex *proto.ExecuteRequest) ([]*proto.ExecuteQueryResponse
 }
 
 // Query executes queries that return rows, and do not modify the database.
-func (s *Store) Query(qr *proto.QueryRequest) ([]*proto.QueryRows, error) {
+func (s *Store) Query(qr *proto.QueryRequest) (rows []*proto.QueryRows, retErr error) {
 	p := (*PragmaCheckRequest)(qr.Request)
 	if err := p.Check(); err != nil {
 		return nil, err
@@ -1120,6 +1120,23 @@ func (s *Store) Query(qr *proto.QueryRequest) ([]*proto.QueryRows, error) {
 	if !s.open.Is() {
 		return nil, ErrNotOpen
 	}
+
+	// If linearizable consistency is requested, we will need to check the
+	// term when query processing completes -- assuming query processing
+	// proceeded without error.
+	//
+	// See https://groups.google.com/g/raft-dev/c/4QlyV0aptEQ/m/1JxcmSgRAwAJ
+	// for an extensive discussion of this logic.
+	initTerm := s.fsmTerm.Load()
+	defer func() {
+		if retErr == nil && qr.Level == proto.QueryRequest_QUERY_REQUEST_LEVEL_LINEARIZABLE {
+			if err := s.VerifyLeader(); err != nil {
+				retErr = err
+			} else if s.fsmTerm.Load() != initTerm {
+				retErr = ErrStaleRead
+			}
+		}
+	}()
 
 	if qr.Level == proto.QueryRequest_QUERY_REQUEST_LEVEL_AUTO {
 		qr.Level = proto.QueryRequest_QUERY_REQUEST_LEVEL_WEAK
@@ -1132,7 +1149,16 @@ func (s *Store) Query(qr *proto.QueryRequest) ([]*proto.QueryRows, error) {
 		}
 	}
 
-	if qr.Level == proto.QueryRequest_QUERY_REQUEST_LEVEL_STRONG && !qr.LeaderReadOpt {
+	if qr.Level == proto.QueryRequest_QUERY_REQUEST_LEVEL_LINEARIZABLE {
+		if s.raft.State() != raft.Leader {
+			return nil, ErrNotLeader
+		}
+		if !s.Ready() {
+			return nil, ErrNotReady
+		}
+	}
+
+	if qr.Level == proto.QueryRequest_QUERY_REQUEST_LEVEL_STRONG {
 		if s.raft.State() != raft.Leader {
 			return nil, ErrNotLeader
 		}
@@ -1174,21 +1200,17 @@ func (s *Store) Query(qr *proto.QueryRequest) ([]*proto.QueryRows, error) {
 		return nil, ErrStaleRead
 	}
 
-	if qr.Level == proto.QueryRequest_QUERY_REQUEST_LEVEL_STRONG && qr.LeaderReadOpt {
-		if err := s.VerifyLeader(); err != nil {
-			return nil, err
-		}
-	}
-
 	return s.db.Query(qr.Request, qr.Timings)
 }
 
+// VerifyLeader checks that the current node is the Raft leader.
 func (s *Store) VerifyLeader() error {
+	if !s.open.Is() {
+		return ErrNotOpen
+	}
 	future := s.raft.VerifyLeader()
 	if err := future.Error(); err != nil {
-		if err == raft.ErrNotLeader {
-			return ErrNotLeader
-		} else if err == raft.ErrLeadershipLost {
+		if err == raft.ErrNotLeader || err == raft.ErrLeadershipLost {
 			return ErrNotLeader
 		}
 		return fmt.Errorf("failed to verify leader: %s", err.Error())

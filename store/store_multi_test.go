@@ -13,6 +13,50 @@ import (
 	"github.com/rqlite/rqlite/v8/db"
 )
 
+func Test_MultiNode_VerifyLeader(t *testing.T) {
+	s0, ln0 := mustNewStore(t)
+	defer ln0.Close()
+	if err := s0.Open(); err != nil {
+		t.Fatalf("failed to open single-node store: %s", err.Error())
+	}
+	defer s0.Close(true)
+	if err := s0.Bootstrap(NewServer(s0.ID(), s0.Addr(), true)); err != nil {
+		t.Fatalf("failed to bootstrap single-node store: %s", err.Error())
+	}
+	if _, err := s0.WaitForLeader(10 * time.Second); err != nil {
+		t.Fatalf("Error waiting for leader: %s", err)
+	}
+	if err := s0.VerifyLeader(); err != nil {
+		t.Fatalf("failed to verify leader on single node: %s", err.Error())
+	}
+
+	s1, ln1 := mustNewStore(t)
+	defer ln1.Close()
+	if err := s1.Open(); err != nil {
+		t.Fatalf("failed to open single-node store: %s", err.Error())
+	}
+	defer s1.Close(true)
+	if err := s0.Join(joinRequest(s1.ID(), s1.Addr(), true)); err != nil {
+		t.Fatalf("failed to join single-node store: %s", err.Error())
+	}
+	if _, err := s1.WaitForLeader(10 * time.Second); err != nil {
+		t.Fatalf("Error waiting for leader: %s", err)
+	}
+
+	if err := s0.VerifyLeader(); err != nil {
+		t.Fatalf("failed to verify leader on leader: %s", err.Error())
+	}
+	if err := s1.VerifyLeader(); err == nil {
+		t.Fatalf("expected error verifying leader on follower")
+	}
+	if err := s1.Close(true); err != nil {
+		t.Fatalf("failed to close follower: %s", err.Error())
+	}
+	if err := s0.VerifyLeader(); err == nil {
+		t.Fatalf("expected error verifying leader due to lack of quorum")
+	}
+}
+
 // Test_MultiNodeSimple tests that a the core operation of a multi-node
 // cluster works as expected. That is, with a two node cluster, writes
 // actually replicate, and reads are consistent.
@@ -1267,8 +1311,7 @@ func Test_MultiNodeStoreLogTruncation(t *testing.T) {
 	}
 }
 
-func Test_MultiNodeExecuteQuery_LeaderReadOpt_AllUp(t *testing.T) {
-	// Set up a 3-node cluster
+func Test_MultiNodeExecuteQuery_Linearizable_AllUp(t *testing.T) {
 	s0, ln0 := mustNewStore(t)
 	defer ln0.Close()
 	if err := s0.Open(); err != nil {
@@ -1316,15 +1359,14 @@ func Test_MultiNodeExecuteQuery_LeaderReadOpt_AllUp(t *testing.T) {
 		t.Fatalf("failed to execute on leader: %s", err.Error())
 	}
 
-	// Perform a strong read consistency query with leader read optimization on all nodes
+	// Perform a query with Linearizable optimization on all nodes
 	var leaderCount int
 	for _, s := range []*Store{s0, s1, s2} {
 		if s.IsLeader() {
 			leaderCount++
 		}
 		qr := queryRequestFromString("SELECT * FROM foo", false, false)
-		qr.Level = proto.QueryRequest_QUERY_REQUEST_LEVEL_STRONG
-		qr.LeaderReadOpt = true
+		qr.Level = proto.QueryRequest_QUERY_REQUEST_LEVEL_LINEARIZABLE
 		r, err := s.Query(qr)
 		if err != nil {
 			// if this node is not the leader, it will return an error
@@ -1352,8 +1394,7 @@ func Test_MultiNodeExecuteQuery_LeaderReadOpt_AllUp(t *testing.T) {
 	}
 }
 
-func Test_MultiNodeExecuteQuery_LeaderReadOpt_Quorum(t *testing.T) {
-	// Set up a 3-node cluster
+func Test_MultiNodeExecuteQuery_Linearizable_Quorum(t *testing.T) {
 	s0, ln0 := mustNewStore(t)
 	defer ln0.Close()
 	if err := s0.Open(); err != nil {
@@ -1406,15 +1447,14 @@ func Test_MultiNodeExecuteQuery_LeaderReadOpt_Quorum(t *testing.T) {
 		t.Fatalf("failed to close node: %s", err.Error())
 	}
 
-	// Perform a strong read consistency query with leader read optimization on the remaining nodes
+	// Perform a query with Linearizable consistency on the remaining nodes
 	var leaderCount int
 	for _, s := range []*Store{s0, s1} {
 		if s.IsLeader() {
 			leaderCount++
 		}
 		qr := queryRequestFromString("SELECT * FROM foo", false, false)
-		qr.Level = proto.QueryRequest_QUERY_REQUEST_LEVEL_STRONG
-		qr.LeaderReadOpt = true
+		qr.Level = proto.QueryRequest_QUERY_REQUEST_LEVEL_LINEARIZABLE
 		r, err := s.Query(qr)
 		if err != nil {
 			// if this node is not the leader, it will return an error
@@ -1425,7 +1465,7 @@ func Test_MultiNodeExecuteQuery_LeaderReadOpt_Quorum(t *testing.T) {
 				}
 				continue
 			} else {
-				t.Fatalf("failed to perform query with leader read optimization on quorum: %s", err.Error())
+				t.Fatalf("failed to perform query with Linearizable consistency on quorum: %s", err.Error())
 			}
 		}
 
@@ -1442,8 +1482,7 @@ func Test_MultiNodeExecuteQuery_LeaderReadOpt_Quorum(t *testing.T) {
 	}
 }
 
-func Test_MultiNodeExecuteQuery_LeaderReadOpt_NoQuorum(t *testing.T) {
-	// Set up a 3-node cluster
+func Test_MultiNodeExecuteQuery_Linearizable_NoQuorum(t *testing.T) {
 	s0, ln0 := mustNewStore(t)
 	defer ln0.Close()
 	if err := s0.Open(); err != nil {
@@ -1499,14 +1538,12 @@ func Test_MultiNodeExecuteQuery_LeaderReadOpt_NoQuorum(t *testing.T) {
 		t.Fatalf("failed to close node: %s", err.Error())
 	}
 
-	// Perform a strong read consistency query with leader read optimization on the remaining nodes (should fail)
+	// Perform a query with Linearizable consistency on the remaining nodes
+	// which should fail.
 	qr := queryRequestFromString("SELECT * FROM foo", false, false)
-	qr.Level = proto.QueryRequest_QUERY_REQUEST_LEVEL_STRONG
-	qr.LeaderReadOpt = true
+	qr.Level = proto.QueryRequest_QUERY_REQUEST_LEVEL_LINEARIZABLE
 
-	// s0 should not provide read index availability
 	_, err = s0.Query(qr)
-
 	if err == nil {
 		t.Fatalf("expected query to fail, but it did not")
 	}

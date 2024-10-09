@@ -1260,7 +1260,6 @@ func (s *Service) handleQuery(w http.ResponseWriter, r *http.Request, qp QueryPa
 		Level:           qp.Level(),
 		Freshness:       qp.Freshness().Nanoseconds(),
 		FreshnessStrict: qp.FreshnessStrict(),
-		LeaderReadOpt:   qp.LeaderReadOpt(),
 	}
 
 	results, resultsErr := s.store.Query(qr)
