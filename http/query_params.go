@@ -133,11 +133,6 @@ func (qp QueryParams) Compress() bool {
 	return qp.HasKey("compress")
 }
 
-// EnableLeaderReadOptimization returns true if the query parameters request leader read optimizations.
-func (qp QueryParams) LeaderReadOpt() bool {
-	return qp.HasKey("leader_read_opt")
-}
-
 // Key returns the value of the key named "key".
 func (qp QueryParams) Key() string {
 	return qp["key"]
@@ -165,6 +160,8 @@ func (qp QueryParams) Level() command.QueryRequest_Level {
 		return command.QueryRequest_QUERY_REQUEST_LEVEL_STRONG
 	case "auto":
 		return command.QueryRequest_QUERY_REQUEST_LEVEL_AUTO
+	case "linearizable":
+		return command.QueryRequest_QUERY_REQUEST_LEVEL_LINEARIZABLE
 	default:
 		return command.QueryRequest_QUERY_REQUEST_LEVEL_WEAK
 	}
