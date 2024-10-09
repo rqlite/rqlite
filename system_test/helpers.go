@@ -158,6 +158,12 @@ func (n *Node) QueryAutoConsistency(stmt string) (string, error) {
 	return n.query(stmt, "auto", false, NoQueryTimeout)
 }
 
+// QueryLinearizableConsistency runs a single query against the node, with Linearizable
+// read consistency.
+func (n *Node) QueryLinearizableConsistency(stmt string) (string, error) {
+	return n.query(stmt, "linearizable", false, NoQueryTimeout)
+}
+
 // QueryStrongConsistency runs a single query against the node, with Strong read consistency.
 func (n *Node) QueryStrongConsistency(stmt string) (string, error) {
 	return n.query(stmt, "strong", false, NoQueryTimeout)
