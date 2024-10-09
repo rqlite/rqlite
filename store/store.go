@@ -1124,6 +1124,9 @@ func (s *Store) Query(qr *proto.QueryRequest) (rows []*proto.QueryRows, retErr e
 	// If linearizable consistency is requested, we will need to check the
 	// term when query processing completes -- assuming query processing
 	// proceeded without error.
+	//
+	// See https://groups.google.com/g/raft-dev/c/4QlyV0aptEQ/m/1JxcmSgRAwAJ
+	// for an extensive discussion of this logic.
 	initTerm := s.fsmTerm.Load()
 	defer func() {
 		if retErr == nil && qr.Level == proto.QueryRequest_QUERY_REQUEST_LEVEL_LINEARIZABLE {
