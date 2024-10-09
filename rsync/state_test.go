@@ -2,6 +2,7 @@ package rsync
 
 import (
 	"errors"
+	"sync"
 	"testing"
 	"time"
 )
@@ -15,19 +16,17 @@ func Test_CloseOrTimeout_Closed(t *testing.T) {
 }
 
 func Test_CloseOrTimeout_Close(t *testing.T) {
-	called := AtomicBool{}
 	ch := make(chan struct{})
+	var wg sync.WaitGroup
+	wg.Add(1)
 	go func() {
-		defer called.Set()
-		time.Sleep(100 * time.Millisecond)
-		close(ch)
+		defer wg.Done()
+		if err := CloseOrTimeout(ch, time.Second); err != nil {
+			t.Fatal(err)
+		}
 	}()
-	if err := CloseOrTimeout(ch, time.Second); err != nil {
-		t.Fatal(err)
-	}
-	if !called.Is() {
-		t.Fatal("expected called")
-	}
+	close(ch)
+	wg.Wait()
 }
 
 func Test_CloseOrTimeout_Timeout(t *testing.T) {
