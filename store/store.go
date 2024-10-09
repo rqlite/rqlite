@@ -1153,6 +1153,9 @@ func (s *Store) Query(qr *proto.QueryRequest) (rows []*proto.QueryRows, retErr e
 		if s.raft.State() != raft.Leader {
 			return nil, ErrNotLeader
 		}
+		if !s.Ready() {
+			return nil, ErrNotReady
+		}
 	}
 
 	if qr.Level == proto.QueryRequest_QUERY_REQUEST_LEVEL_STRONG {
