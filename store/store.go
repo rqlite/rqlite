@@ -1127,12 +1127,12 @@ func (s *Store) Query(qr *proto.QueryRequest) (rows []*proto.QueryRows, retErr e
 	//
 	// See https://groups.google.com/g/raft-dev/c/4QlyV0aptEQ/m/1JxcmSgRAwAJ
 	// for an extensive discussion of this logic.
-	initTerm := s.fsmTerm.Load()
+	initTerm := s.getCurrentTerm()
 	defer func() {
 		if retErr == nil && qr.Level == proto.QueryRequest_QUERY_REQUEST_LEVEL_LINEARIZABLE {
 			if err := s.VerifyLeader(); err != nil {
 				retErr = err
-			} else if s.fsmTerm.Load() != initTerm {
+			} else if s.getCurrentTerm() != initTerm {
 				retErr = ErrStaleRead
 			}
 		}
@@ -2403,6 +2403,19 @@ func (s *Store) logIncremental() bool {
 
 func (s *Store) logBackup() bool {
 	return s.hcLogLevel() < hclog.Warn
+}
+
+func (s *Store) getCurrentTerm() uint64 {
+	stats := s.raft.Stats()
+	termStr, ok := stats["term"]
+	if !ok {
+		return 0
+	}
+	term, err := strconv.ParseUint(termStr, 10, 64)
+	if err != nil {
+		return 0
+	}
+	return term
 }
 
 // openOnDisk opens an on-disk database file at the configured path.
