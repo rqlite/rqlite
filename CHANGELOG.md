@@ -1,4 +1,8 @@
-## v8.31.3 (unreleased)
+## v8.31.4 (unreleased)
+### Implementation changes and bug fixes
+- [PR #1933](https://github.com/rqlite/rqlite/pull/1933), [PR #1934](https://github.com/rqlite/rqlite/pull/1934): Add `CloseOrTimeout` utility to rsync module.
+
+## v8.31.3 (October 7th 2024)
 ### Implementation changes and bug fixes
 - [PR #1923](https://github.com/rqlite/rqlite/pull/1923): Node can retrieve commit index of other node.
 - [PR #1924](https://github.com/rqlite/rqlite/pull/1924): Add ReadyTarget synchronization primitive.
@@ -6,6 +10,8 @@
 - [PR #1926](https://github.com/rqlite/rqlite/pull/1926): Support reset of ReadyTargets.
 - [PR #1927](https://github.com/rqlite/rqlite/pull/1927): Unit test reset of ReadyTargets.
 - [PR #1928](https://github.com/rqlite/rqlite/pull/1928): Use new PollTrue primitive in Store.
+- [PR #1931](https://github.com/rqlite/rqlite/pull/1931): `go mod` updates.
+- [PR #1932](https://github.com/rqlite/rqlite/pull/1932): Trivial refactor of Auto read consistency logic.
 
 ## v8.31.2 (September 28th 2024)
 ### Implementation changes and bug fixes
