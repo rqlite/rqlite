@@ -22,7 +22,7 @@ func Test_CloseOrTimeout_Close(t *testing.T) {
 	go func() {
 		defer wg.Done()
 		if err := CloseOrTimeout(ch, time.Second); err != nil {
-			t.Fatal(err)
+			t.Error(err)
 		}
 	}()
 	close(ch)
