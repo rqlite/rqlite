@@ -270,6 +270,48 @@ class TestClusterRecovery(unittest.TestCase):
     for n in self.nodes:
       deprovision_node(n)
 
+class TestRequestConsensus(unittest.TestCase):
+  '''Test that queries that require consensus work correctly'''
+
+  def setUp(self):
+    n0 = Node(RQLITED_PATH, '0')
+    n0.start()
+    n0.wait_for_leader()
+
+    n1 = Node(RQLITED_PATH, '1')
+    n1.start(join=n0.RaftAddr())
+    n1.wait_for_leader()
+
+    self.cluster = Cluster([n0, n1])
+
+  def tearDown(self):
+    self.cluster.deprovision()
+
+  def test_query_ok(self):
+      l = self.cluster.wait_for_leader()
+      j = l.execute('CREATE TABLE foo (id INTEGER NOT NULL PRIMARY KEY, name TEXT)')
+      self.assertEqual(j, d_("{'results': [{}]}"))
+
+      j = l.execute('INSERT INTO foo(name) VALUES("fiona")')
+      self.assertEqual(j, d_("{'results': [{'last_insert_id': 1, 'rows_affected': 1}]}"))
+      j = l.query('SELECT * FROM foo', level="strong")
+      self.assertEqual(j, d_("{'results': [{'values': [[1, 'fiona']], 'types': ['integer', 'text'], 'columns': ['id', 'name']}]}"))
+      j = l.query('SELECT * FROM foo', level="linearizable")
+      self.assertEqual(j, d_("{'results': [{'values': [[1, 'fiona']], 'types': ['integer', 'text'], 'columns': ['id', 'name']}]}"))
+
+  def test_query_fail(self):
+      l = self.cluster.wait_for_leader()
+      j = l.execute('CREATE TABLE foo (id INTEGER NOT NULL PRIMARY KEY, name TEXT)')
+      self.assertEqual(j, d_("{'results': [{}]}"))
+      j = l.execute('INSERT INTO foo(name) VALUES("fiona")')
+      self.assertEqual(j, d_("{'results': [{'last_insert_id': 1, 'rows_affected': 1}]}"))
+
+      f = self.cluster.followers()[0]
+      f.stop()
+      self.assertTrue(l.expect_leader_fail())
+      self.assertRaises(Exception, l.query, 'SELECT * FROM foo', level="linearizable")
+      self.assertRaises(Exception, l.query, 'SELECT * FROM foo', level="strong")
+
 class TestRequestForwarding(unittest.TestCase):
   '''Test that followers transparently forward requests to leaders'''
 
@@ -303,6 +345,8 @@ class TestRequestForwarding(unittest.TestCase):
       self.assertEqual(j, d_("{'results': [{'values': [[1, 'fiona']], 'types': ['integer', 'text'], 'columns': ['id', 'name']}]}"))
       self.assertEqual(j, d_("{'results': [{'values': [[1, 'fiona']], 'types': ['integer', 'text'], 'columns': ['id', 'name']}]}"))
       j = f.query('SELECT * FROM foo', level="strong")
+      self.assertEqual(j, d_("{'results': [{'values': [[1, 'fiona']], 'types': ['integer', 'text'], 'columns': ['id', 'name']}]}"))
+      j = f.query('SELECT * FROM foo', level="linearizable")
       self.assertEqual(j, d_("{'results': [{'values': [[1, 'fiona']], 'types': ['integer', 'text'], 'columns': ['id', 'name']}]}"))
 
   def test_execute_queued_forward(self):
