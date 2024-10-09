@@ -13,6 +13,50 @@ import (
 	"github.com/rqlite/rqlite/v8/db"
 )
 
+func Test_MultiNode_VerifyLeader(t *testing.T) {
+	s0, ln0 := mustNewStore(t)
+	defer ln0.Close()
+	if err := s0.Open(); err != nil {
+		t.Fatalf("failed to open single-node store: %s", err.Error())
+	}
+	defer s0.Close(true)
+	if err := s0.Bootstrap(NewServer(s0.ID(), s0.Addr(), true)); err != nil {
+		t.Fatalf("failed to bootstrap single-node store: %s", err.Error())
+	}
+	if _, err := s0.WaitForLeader(10 * time.Second); err != nil {
+		t.Fatalf("Error waiting for leader: %s", err)
+	}
+	if err := s0.VerifyLeader(); err != nil {
+		t.Fatalf("failed to verify leader on single node: %s", err.Error())
+	}
+
+	s1, ln1 := mustNewStore(t)
+	defer ln1.Close()
+	if err := s1.Open(); err != nil {
+		t.Fatalf("failed to open single-node store: %s", err.Error())
+	}
+	defer s1.Close(true)
+	if err := s0.Join(joinRequest(s1.ID(), s1.Addr(), true)); err != nil {
+		t.Fatalf("failed to join single-node store: %s", err.Error())
+	}
+	if _, err := s1.WaitForLeader(10 * time.Second); err != nil {
+		t.Fatalf("Error waiting for leader: %s", err)
+	}
+
+	if err := s0.VerifyLeader(); err != nil {
+		t.Fatalf("failed to verify leader on leader: %s", err.Error())
+	}
+	if err := s1.VerifyLeader(); err == nil {
+		t.Fatalf("expected error verifying leader on follower")
+	}
+	if err := s1.Close(true); err != nil {
+		t.Fatalf("failed to close follower: %s", err.Error())
+	}
+	if err := s0.VerifyLeader(); err == nil {
+		t.Fatalf("expected error verifying leader due to lack of quorum")
+	}
+}
+
 // Test_MultiNodeSimple tests that a the core operation of a multi-node
 // cluster works as expected. That is, with a two node cluster, writes
 // actually replicate, and reads are consistent.
