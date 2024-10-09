@@ -1199,6 +1199,9 @@ func (s *Store) Query(qr *proto.QueryRequest) (rows []*proto.QueryRows, retErr e
 
 // VerifyLeader checks that the current node is the Raft leader.
 func (s *Store) VerifyLeader() error {
+	if !s.open.Is() {
+		return ErrNotOpen
+	}
 	future := s.raft.VerifyLeader()
 	if err := future.Error(); err != nil {
 		if err == raft.ErrNotLeader || err == raft.ErrLeadershipLost {

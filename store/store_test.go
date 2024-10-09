@@ -2503,6 +2503,33 @@ func Test_IsVoter(t *testing.T) {
 	}
 }
 
+func Test_VerifyLeader(t *testing.T) {
+	s, ln := mustNewStore(t)
+	defer ln.Close()
+
+	if err := s.VerifyLeader(); err != ErrNotOpen {
+		t.Fatalf("expected error verifying leader on closed store")
+	}
+
+	if err := s.Open(); err != nil {
+		t.Fatalf("failed to open single-node store: %s", err.Error())
+	}
+	defer s.Close(true)
+	if err := s.VerifyLeader(); err == nil {
+		t.Fatalf("expected error verifying leader on non-bootstrapped store")
+	}
+
+	if err := s.Bootstrap(NewServer(s.ID(), s.Addr(), true)); err != nil {
+		t.Fatalf("failed to bootstrap single-node store: %s", err.Error())
+	}
+	if _, err := s.WaitForLeader(10 * time.Second); err != nil {
+		t.Fatalf("Error waiting for leader: %s", err)
+	}
+	if err := s.VerifyLeader(); err != nil {
+		t.Fatalf("failed to verify leader with boostrapped store: %s", err.Error())
+	}
+}
+
 func Test_RWROCount(t *testing.T) {
 	s, ln := mustNewStore(t)
 	defer ln.Close()
