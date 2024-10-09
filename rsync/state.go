@@ -6,6 +6,7 @@ import (
 	"time"
 )
 
+// ErrTimeout is returned when a timeout occurs.
 var ErrTimeout = errors.New("timeout")
 
 // CloseOrTimeout waits for a channel to be closed or a timeout expires.
