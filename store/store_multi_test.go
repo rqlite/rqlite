@@ -1266,3 +1266,251 @@ func Test_MultiNodeStoreLogTruncation(t *testing.T) {
 		t.Fatalf("unexpected results for query\nexp: %s\ngot: %s", exp, got)
 	}
 }
+
+func Test_MultiNodeExecuteQuery_LeaderReadOpt_AllUp(t *testing.T) {
+	// Set up a 3-node cluster
+	s0, ln0 := mustNewStore(t)
+	defer ln0.Close()
+	if err := s0.Open(); err != nil {
+		t.Fatalf("failed to open single-node store: %s", err.Error())
+	}
+	defer s0.Close(true)
+	if err := s0.Bootstrap(NewServer(s0.ID(), s0.Addr(), true)); err != nil {
+		t.Fatalf("failed to bootstrap single-node store: %s", err.Error())
+	}
+	if _, err := s0.WaitForLeader(10 * time.Second); err != nil {
+		t.Fatalf("Error waiting for leader: %s", err)
+	}
+
+	s1, ln1 := mustNewStore(t)
+	defer ln1.Close()
+	if err := s1.Open(); err != nil {
+		t.Fatalf("failed to open node for multi-node test: %s", err.Error())
+	}
+	defer s1.Close(true)
+
+	s2, ln2 := mustNewStore(t)
+	defer ln2.Close()
+	if err := s2.Open(); err != nil {
+		t.Fatalf("failed to open node for multi-node test: %s", err.Error())
+	}
+	defer s2.Close(true)
+
+	// Join the second node to the first as a voting node.
+	if err := s0.Join(joinRequest(s1.ID(), s1.Addr(), true)); err != nil {
+		t.Fatalf("failed to join to node at %s: %s", s0.Addr(), err.Error())
+	}
+
+	// Join the third node to the first as a voting node.
+	if err := s0.Join(joinRequest(s2.ID(), s2.Addr(), true)); err != nil {
+		t.Fatalf("failed to join to node at %s: %s", s0.Addr(), err.Error())
+	}
+
+	// Execute some data on the leader
+	er := executeRequestFromStrings([]string{
+		`CREATE TABLE foo (id INTEGER NOT NULL PRIMARY KEY, name TEXT)`,
+		`INSERT INTO foo(id, name) VALUES(1, "fiona")`,
+	}, false, false)
+	_, err := s0.Execute(er)
+	if err != nil {
+		t.Fatalf("failed to execute on leader: %s", err.Error())
+	}
+
+	// Perform a strong read consistency query with leader read optimization on all nodes
+	var leaderCount int
+	for _, s := range []*Store{s0, s1, s2} {
+		if s.IsLeader() {
+			leaderCount++
+		}
+		qr := queryRequestFromString("SELECT * FROM foo", false, false)
+		qr.Level = proto.QueryRequest_QUERY_REQUEST_LEVEL_STRONG
+		qr.LeaderReadOpt = true
+		r, err := s.Query(qr)
+		if err != nil {
+			// if this node is not the leader, it will return an error
+			if !s.IsLeader() {
+				// follower nodes should return ErrNotLeader
+				if !strings.Contains(err.Error(), "not leader") {
+					t.Fatalf("unexpected error on follower node %s: %s", s.ID(), err.Error())
+				}
+				continue
+			} else {
+				t.Fatalf("failed to perform query with leader read optimization on a healthy cluster: %s", err.Error())
+			}
+		}
+
+		// Check the results
+		if exp, got := `["id","name"]`, asJSON(r[0].Columns); exp != got {
+			t.Fatalf("unexpected results for query\nexp: %s\ngot: %s", exp, got)
+		}
+		if exp, got := `[[1,"fiona"]]`, asJSON(r[0].Values); exp != got {
+			t.Fatalf("unexpected results for query\nexp: %s\ngot: %s", exp, got)
+		}
+	}
+	if leaderCount != 1 {
+		t.Fatalf("expected 1 leader, got %d", leaderCount)
+	}
+}
+
+func Test_MultiNodeExecuteQuery_LeaderReadOpt_Quorum(t *testing.T) {
+	// Set up a 3-node cluster
+	s0, ln0 := mustNewStore(t)
+	defer ln0.Close()
+	if err := s0.Open(); err != nil {
+		t.Fatalf("failed to open single-node store: %s", err.Error())
+	}
+	defer s0.Close(true)
+	if err := s0.Bootstrap(NewServer(s0.ID(), s0.Addr(), true)); err != nil {
+		t.Fatalf("failed to bootstrap single-node store: %s", err.Error())
+	}
+	if _, err := s0.WaitForLeader(10 * time.Second); err != nil {
+		t.Fatalf("Error waiting for leader: %s", err)
+	}
+
+	s1, ln1 := mustNewStore(t)
+	defer ln1.Close()
+	if err := s1.Open(); err != nil {
+		t.Fatalf("failed to open node for multi-node test: %s", err.Error())
+	}
+	defer s1.Close(true)
+
+	s2, ln2 := mustNewStore(t)
+	defer ln2.Close()
+	if err := s2.Open(); err != nil {
+		t.Fatalf("failed to open node for multi-node test: %s", err.Error())
+	}
+	defer s2.Close(true)
+
+	// Join the second node to the first as a voting node.
+	if err := s0.Join(joinRequest(s1.ID(), s1.Addr(), true)); err != nil {
+		t.Fatalf("failed to join to node at %s: %s", s0.Addr(), err.Error())
+	}
+
+	// Join the third node to the first as a voting node.
+	if err := s0.Join(joinRequest(s2.ID(), s2.Addr(), true)); err != nil {
+		t.Fatalf("failed to join to node at %s: %s", s0.Addr(), err.Error())
+	}
+
+	// Execute some data on the leader
+	er := executeRequestFromStrings([]string{
+		`CREATE TABLE foo (id INTEGER NOT NULL PRIMARY KEY, name TEXT)`,
+		`INSERT INTO foo(id, name) VALUES(1, "fiona")`,
+	}, false, false)
+	_, err := s0.Execute(er)
+	if err != nil {
+		t.Fatalf("failed to execute on leader: %s", err.Error())
+	}
+
+	// Kill one follower, still quorum
+	if err := s2.Close(true); err != nil {
+		t.Fatalf("failed to close node: %s", err.Error())
+	}
+
+	// Perform a strong read consistency query with leader read optimization on the remaining nodes
+	var leaderCount int
+	for _, s := range []*Store{s0, s1} {
+		if s.IsLeader() {
+			leaderCount++
+		}
+		qr := queryRequestFromString("SELECT * FROM foo", false, false)
+		qr.Level = proto.QueryRequest_QUERY_REQUEST_LEVEL_STRONG
+		qr.LeaderReadOpt = true
+		r, err := s.Query(qr)
+		if err != nil {
+			// if this node is not the leader, it will return an error
+			if !s.IsLeader() {
+				// follower nodes should return ErrNotLeader
+				if !strings.Contains(err.Error(), "not leader") {
+					t.Fatalf("unexpected error on follower node %s: %s", s.ID(), err.Error())
+				}
+				continue
+			} else {
+				t.Fatalf("failed to perform query with leader read optimization on quorum: %s", err.Error())
+			}
+		}
+
+		// Check the results
+		if exp, got := `["id","name"]`, asJSON(r[0].Columns); exp != got {
+			t.Fatalf("unexpected results for query\nexp: %s\ngot: %s", exp, got)
+		}
+		if exp, got := `[[1,"fiona"]]`, asJSON(r[0].Values); exp != got {
+			t.Fatalf("unexpected results for query\nexp: %s\ngot: %s", exp, got)
+		}
+	}
+	if leaderCount != 1 {
+		t.Fatalf("expected 1 leader, got %d", leaderCount)
+	}
+}
+
+func Test_MultiNodeExecuteQuery_LeaderReadOpt_NoQuorum(t *testing.T) {
+	// Set up a 3-node cluster
+	s0, ln0 := mustNewStore(t)
+	defer ln0.Close()
+	if err := s0.Open(); err != nil {
+		t.Fatalf("failed to open single-node store: %s", err.Error())
+	}
+	defer s0.Close(true)
+	if err := s0.Bootstrap(NewServer(s0.ID(), s0.Addr(), true)); err != nil {
+		t.Fatalf("failed to bootstrap single-node store: %s", err.Error())
+	}
+	if _, err := s0.WaitForLeader(10 * time.Second); err != nil {
+		t.Fatalf("Error waiting for leader: %s", err)
+	}
+
+	s1, ln1 := mustNewStore(t)
+	defer ln1.Close()
+	if err := s1.Open(); err != nil {
+		t.Fatalf("failed to open node for multi-node test: %s", err.Error())
+	}
+	defer s1.Close(true)
+
+	s2, ln2 := mustNewStore(t)
+	defer ln2.Close()
+	if err := s2.Open(); err != nil {
+		t.Fatalf("failed to open node for multi-node test: %s", err.Error())
+	}
+	defer s2.Close(true)
+
+	// Join the second node to the first as a voting node.
+	if err := s0.Join(joinRequest(s1.ID(), s1.Addr(), true)); err != nil {
+		t.Fatalf("failed to join to node at %s: %s", s0.Addr(), err.Error())
+	}
+
+	// Join the third node to the first as a voting node.
+	if err := s0.Join(joinRequest(s2.ID(), s2.Addr(), true)); err != nil {
+		t.Fatalf("failed to join to node at %s: %s", s0.Addr(), err.Error())
+	}
+
+	// Execute some data on the leader
+	er := executeRequestFromStrings([]string{
+		`CREATE TABLE foo (id INTEGER NOT NULL PRIMARY KEY, name TEXT)`,
+		`INSERT INTO foo(id, name) VALUES(1, "fiona")`,
+	}, false, false)
+	_, err := s0.Execute(er)
+	if err != nil {
+		t.Fatalf("failed to execute on leader: %s", err.Error())
+	}
+
+	// Kill two followers, no quorum
+	if err := s1.Close(true); err != nil {
+		t.Fatalf("failed to close node: %s", err.Error())
+	}
+	if err := s2.Close(true); err != nil {
+		t.Fatalf("failed to close node: %s", err.Error())
+	}
+
+	// Perform a strong read consistency query with leader read optimization on the remaining nodes (should fail)
+	qr := queryRequestFromString("SELECT * FROM foo", false, false)
+	qr.Level = proto.QueryRequest_QUERY_REQUEST_LEVEL_STRONG
+	qr.LeaderReadOpt = true
+
+	// s0 should not provide read index availability
+	_, err = s0.Query(qr)
+
+	if err == nil {
+		t.Fatalf("expected query to fail, but it did not")
+	}
+	if !strings.Contains(err.Error(), "not leader") {
+		t.Fatalf("unexpected error on leader: %s", err.Error())
+	}
+}

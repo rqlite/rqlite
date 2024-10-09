@@ -39,6 +39,7 @@ message QueryRequest {
 	Level level = 3;
 	int64 freshness = 4;
 	bool freshness_strict = 5;
+	bool leader_read_opt = 6;
 }
 
 message Values {
