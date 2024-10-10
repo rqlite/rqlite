@@ -149,6 +149,9 @@ const (
 	numIgnoredJoins                   = "num_ignored_joins"
 	numRemovedBeforeJoins             = "num_removed_before_joins"
 	numDBStatsErrors                  = "num_db_stats_errors"
+	numVerifyLeader                   = "num_verify_leader"
+	numVerifyLeaderFailed             = "num_verify_leader_failed"
+	verifyLeaderDuration              = "verify_leader_duration"
 	snapshotCreateDuration            = "snapshot_create_duration"
 	snapshotCreateChkTruncateDuration = "snapshot_create_chk_truncate_duration"
 	snapshotCreateWALCompactDuration  = "snapshot_create_wal_compact_duration"
@@ -209,6 +212,9 @@ func ResetStats() {
 	stats.Add(numIgnoredJoins, 0)
 	stats.Add(numRemovedBeforeJoins, 0)
 	stats.Add(numDBStatsErrors, 0)
+	stats.Add(numVerifyLeader, 0)
+	stats.Add(numVerifyLeaderFailed, 0)
+	stats.Add(verifyLeaderDuration, 0)
 	stats.Add(snapshotCreateDuration, 0)
 	stats.Add(snapshotCreateChkTruncateDuration, 0)
 	stats.Add(snapshotCreateWALCompactDuration, 0)
@@ -1204,10 +1210,19 @@ func (s *Store) Query(qr *proto.QueryRequest) (rows []*proto.QueryRows, retErr e
 }
 
 // VerifyLeader checks that the current node is the Raft leader.
-func (s *Store) VerifyLeader() error {
+func (s *Store) VerifyLeader() (retErr error) {
 	if !s.open.Is() {
 		return ErrNotOpen
 	}
+	startT := time.Now()
+	defer func() {
+		if retErr == nil {
+			stats.Add(numVerifyLeader, 1)
+			stats.Get(verifyLeaderDuration).(*expvar.Int).Set(time.Since(startT).Milliseconds())
+		} else {
+			stats.Add(numVerifyLeaderFailed, 1)
+		}
+	}()
 	future := s.raft.VerifyLeader()
 	if err := future.Error(); err != nil {
 		if err == raft.ErrNotLeader || err == raft.ErrLeadershipLost {
