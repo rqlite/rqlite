@@ -15,6 +15,9 @@ import (
 // Test_IsServingHTTP_HTTPServer tests only HTTP server running.
 func Test_IsServingHTTP_HTTPServer(t *testing.T) {
 	httpServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != isServingTestPath {
+			t.Fatalf("Expected %s, got %s", isServingTestPath, r.URL.Path)
+		}
 		w.WriteHeader(http.StatusOK)
 	}))
 	defer httpServer.Close()
@@ -31,6 +34,9 @@ func Test_IsServingHTTP_HTTPServer(t *testing.T) {
 // Test_IsServingHTTP_HTTPSServer tests only HTTPS server running.
 func Test_IsServingHTTP_HTTPSServer(t *testing.T) {
 	httpsServer := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != isServingTestPath {
+			t.Fatalf("Expected %s, got %s", isServingTestPath, r.URL.Path)
+		}
 		w.WriteHeader(http.StatusOK)
 	}))
 	defer httpsServer.Close()
@@ -85,6 +91,9 @@ func Test_IsServingHTTP_HTTPErrorStatusCode(t *testing.T) {
 // Test_IsServingHTTP_HTTPSSuccessStatusCode tests HTTPS server running with success status code.
 func Test_IsServingHTTP_HTTPSSuccessStatusCode(t *testing.T) {
 	httpsServer := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != isServingTestPath {
+			t.Fatalf("Expected %s, got %s", isServingTestPath, r.URL.Path)
+		}
 		w.WriteHeader(http.StatusOK)
 	}))
 	defer httpsServer.Close()
