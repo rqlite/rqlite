@@ -513,10 +513,30 @@ func (s *Store) Open() (retErr error) {
 	}
 	s.logger.Printf("%d preexisting snapshots present", len(snaps))
 
-	// Create the Raft log store and stable store.
-	s.boltStore, err = rlog.New(filepath.Join(s.raftDir, raftDBPath), s.NoFreeListSync)
+	// Create the Raft log store and verify it.
+	raftDBPath := filepath.Join(s.raftDir, raftDBPath)
+	raftDBSize, err := fileSize(raftDBPath)
+	if err != nil {
+		return fmt.Errorf("failed to determine size of Raft log: %s", err)
+	}
+	s.boltStore, err = rlog.New(raftDBPath, s.NoFreeListSync)
 	if err != nil {
 		return fmt.Errorf("new log store: %s", err)
+	}
+	fi, li, err := s.boltStore.Indexes()
+	if err != nil {
+		return fmt.Errorf("failed to retrieve log store indexes: %s", err)
+	}
+	s.logger.Printf("raft log is %d bytes at open, indexes are: first %d, last %d", raftDBSize, fi, li)
+	if fi != 0 && li != 0 {
+		err = s.boltStore.GetLog(fi, &raft.Log{})
+		if err != nil {
+			return fmt.Errorf("failed to retrieve first log entry at index %d: %s", fi, err)
+		}
+		err = s.boltStore.GetLog(li, &raft.Log{})
+		if err != nil {
+			return fmt.Errorf("failed to retrieve last log entry at index %d: %s", li, err)
+		}
 	}
 	s.raftStable = s.boltStore
 	s.raftLog, err = raft.NewLogCache(raftLogCacheSize, s.boltStore)
