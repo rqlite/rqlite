@@ -1011,7 +1011,7 @@ func (s *Store) Stats() (map[string]interface{}, error) {
 			raftStats[k] = s
 		}
 	}
-	raftStats["log_size"], err = s.logSize()
+	raftStats["log_size"], err = fileSizeExists(s.raftDBPath)
 	if err != nil {
 		return nil, err
 	}
@@ -2360,15 +2360,6 @@ func (s *Store) installRestore() error {
 		Data: b,
 	}
 	return s.load(lr)
-}
-
-// logSize returns the size of the Raft log on disk.
-func (s *Store) logSize() (int64, error) {
-	fi, err := os.Stat(s.raftDBPath)
-	if err != nil {
-		return 0, err
-	}
-	return fi.Size(), nil
 }
 
 // tryCompress attempts to compress the given command. If the command is
