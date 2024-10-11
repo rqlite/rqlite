@@ -72,19 +72,24 @@ func Test_IsServingHTTP_InvalidAddress(t *testing.T) {
 	}
 }
 
-// Test_IsServingHTTP_HTTPErrorStatusCode tests HTTP server returning error status code.
+// Test_IsServingHTTP_HTTPErrorStatusCode tests the HTTP server check
+// even when it receives various HTTP error status codes.
 func Test_IsServingHTTP_HTTPErrorStatusCode(t *testing.T) {
-	httpServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(http.StatusInternalServerError)
-	}))
-	defer httpServer.Close()
+	for _, code := range []int{http.StatusNotFound, http.StatusForbidden, http.StatusUnauthorized} {
+		func() {
+			httpServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				w.WriteHeader(code)
+			}))
+			defer httpServer.Close()
 
-	addr := httpServer.Listener.Addr().String()
-	if !IsServingHTTP(addr) {
-		t.Error("Expected true for HTTP server running, even with error status code")
-	}
-	if a, ok := AnyServingHTTP([]string{addr}); !ok || a != addr {
-		t.Fatalf("Expected %s for AnyServingHTTP, even with error status code", addr)
+			addr := httpServer.Listener.Addr().String()
+			if !IsServingHTTP(addr) {
+				t.Error("Expected true for HTTP server running, even with error status code")
+			}
+			if a, ok := AnyServingHTTP([]string{addr}); !ok || a != addr {
+				t.Fatalf("Expected %s for AnyServingHTTP, even with error status code", addr)
+			}
+		}()
 	}
 }
 
