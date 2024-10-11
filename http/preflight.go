@@ -6,6 +6,10 @@ import (
 	"time"
 )
 
+const (
+	isServingTestPath = "/status"
+)
+
 // AnyServingHTTP returns the first address in the list that appears to be
 // serving HTTP or HTTPS, or false if none of them are.
 func AnyServingHTTP(addrs []string) (string, bool) {
@@ -20,10 +24,11 @@ func AnyServingHTTP(addrs []string) (string, bool) {
 // IsServingHTTP returns true if there appears to be a HTTP or HTTPS server
 // running on the given address.
 func IsServingHTTP(addr string) bool {
+	urlStr := addr + isServingTestPath
 	client := http.Client{
 		Timeout: 2 * time.Second,
 	}
-	resp, err := client.Get("http://" + addr)
+	resp, err := client.Get("http://" + urlStr)
 	if err == nil {
 		resp.Body.Close()
 		return true
@@ -39,7 +44,7 @@ func IsServingHTTP(addr string) bool {
 		Transport: tr,
 		Timeout:   2 * time.Second,
 	}
-	resp, err = client.Get("https://" + addr + "/status")
+	resp, err = client.Get("https://" + urlStr)
 	if err == nil {
 		resp.Body.Close()
 		return true
