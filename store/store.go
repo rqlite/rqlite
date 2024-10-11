@@ -260,6 +260,7 @@ const (
 type Store struct {
 	open          *rsync.AtomicBool
 	raftDir       string
+	raftDBPath    string
 	snapshotDir   string
 	peersPath     string
 	peersInfoPath string
@@ -384,6 +385,7 @@ func New(ly Layer, c *Config) *Store {
 		open:            rsync.NewAtomicBool(),
 		ly:              ly,
 		raftDir:         c.Dir,
+		raftDBPath:      filepath.Join(c.Dir, raftDBPath),
 		snapshotDir:     filepath.Join(c.Dir, snapshotsDirName),
 		peersPath:       filepath.Join(c.Dir, peersPath),
 		peersInfoPath:   filepath.Join(c.Dir, peersInfoPath),
@@ -514,12 +516,11 @@ func (s *Store) Open() (retErr error) {
 	s.logger.Printf("%d preexisting snapshots present", len(snaps))
 
 	// Create the Raft log store and verify it.
-	raftDBPath := filepath.Join(s.raftDir, raftDBPath)
-	raftDBSize, err := fileSizeExists(raftDBPath)
+	raftDBSize, err := fileSizeExists(s.raftDBPath)
 	if err != nil {
 		return fmt.Errorf("failed to determine size of Raft log: %s", err)
 	}
-	s.boltStore, err = rlog.New(raftDBPath, s.NoFreeListSync)
+	s.boltStore, err = rlog.New(s.raftDBPath, s.NoFreeListSync)
 	if err != nil {
 		return fmt.Errorf("new log store: %s", err)
 	}
@@ -2363,7 +2364,7 @@ func (s *Store) installRestore() error {
 
 // logSize returns the size of the Raft log on disk.
 func (s *Store) logSize() (int64, error) {
-	fi, err := os.Stat(filepath.Join(s.raftDir, raftDBPath))
+	fi, err := os.Stat(s.raftDBPath)
 	if err != nil {
 		return 0, err
 	}
