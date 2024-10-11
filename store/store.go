@@ -515,7 +515,7 @@ func (s *Store) Open() (retErr error) {
 
 	// Create the Raft log store and verify it.
 	raftDBPath := filepath.Join(s.raftDir, raftDBPath)
-	raftDBSize, err := fileSize(raftDBPath)
+	raftDBSize, err := fileSizeExists(raftDBPath)
 	if err != nil {
 		return fmt.Errorf("failed to determine size of Raft log: %s", err)
 	}
