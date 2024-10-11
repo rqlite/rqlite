@@ -5,6 +5,7 @@
 ### Implementation changes and bug fixes
 - [PR #1933](https://github.com/rqlite/rqlite/pull/1933), [PR #1934](https://github.com/rqlite/rqlite/pull/1934): Add `CloseOrTimeout` utility to rsync module.
 - [PR #1940](https://github.com/rqlite/rqlite/pull/1940): Tighten up IsServing HTTP checker.
+- [PR #1941](https://github.com/rqlite/rqlite/pull/1941): Validate Raft log at start-up.
 
 ## v8.31.3 (October 7th 2024)
 ### Implementation changes and bug fixes
