@@ -8,6 +8,7 @@ import (
 
 const (
 	isServingTestPath = "/status"
+	isServingTimeout  = 2 * time.Second
 )
 
 // AnyServingHTTP returns the first address in the list that appears to be
@@ -25,29 +26,26 @@ func AnyServingHTTP(addrs []string) (string, bool) {
 // running on the given address.
 func IsServingHTTP(addr string) bool {
 	urlStr := addr + isServingTestPath
-	client := http.Client{
-		Timeout: 2 * time.Second,
-	}
-	resp, err := client.Get("http://" + urlStr)
-	if err == nil {
-		resp.Body.Close()
-		return true
-	}
 
-	// Check for a HTTPS server listening on the same address, using the same URL.
-	// Don't check the certificate, as we're only interested in whether there's
-	// a server running.
+	// Set up the HTTP(S) client, ignoring certificate errors since we're only
+	// interested in whether there's a server running.
 	tr := &http.Transport{
 		TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
 	}
-	client = http.Client{
+	client := http.Client{
 		Transport: tr,
-		Timeout:   2 * time.Second,
+		Timeout:   isServingTimeout,
 	}
-	resp, err = client.Get("https://" + urlStr)
-	if err == nil {
-		resp.Body.Close()
-		return true
+
+	for _, u := range []string{
+		"http://" + urlStr,
+		"https://" + urlStr,
+	} {
+		resp, err := client.Get(u)
+		if err == nil {
+			resp.Body.Close()
+			return true
+		}
 	}
 	return false
 }
