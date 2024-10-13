@@ -1,4 +1,4 @@
-## v8.32.1 (September 27th 2024)
+## v8.32.1 (October 13th 2024)
 ### Implementation changes and bug fixes
 - [PR #1943](https://github.com/rqlite/rqlite/pull/1943): rqlite shell supports enabling Linearizable reads.
 
