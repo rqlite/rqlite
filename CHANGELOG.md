@@ -1,4 +1,4 @@
-## v8.32.0 (unreleased)
+## v8.32.0 (October 13th 2024)
 ### New features
 - [PR #1930](https://github.com/rqlite/rqlite/pull/1930), [PR #1935](https://github.com/rqlite/rqlite/pull/1935), [PR #1936](https://github.com/rqlite/rqlite/pull/1936), [PR #1937](https://github.com/rqlite/rqlite/pull/1937), [PR #1938](https://github.com/rqlite/rqlite/pull/1938): Add Linearizable reads. Thanks @lalalalatt, @peterxcli
 
