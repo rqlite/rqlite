@@ -40,6 +40,7 @@ message QueryRequest {
 	Level level = 3;
 	int64 freshness = 4;
 	bool freshness_strict = 5;
+	int64 linearizable_timeout = 6;
 }
 
 message Values {
