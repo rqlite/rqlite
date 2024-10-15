@@ -1173,7 +1173,7 @@ func (s *Store) Query(qr *proto.QueryRequest) (rows []*proto.QueryRows, retErr e
 		if err := s.VerifyLeader(); err != nil {
 			return nil, err
 		}
-		if _, err := s.WaitForFSMIndex(readIndex, 30*time.Second); err != nil {
+		if _, err := s.WaitForFSMIndex(readIndex, time.Duration(qr.LinearizableTimeout)); err != nil {
 			return nil, ErrNotReady
 		}
 	}
