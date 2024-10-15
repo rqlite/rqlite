@@ -1,3 +1,7 @@
+## v8.32.3 (unreleased)
+### Implementation changes and bug fixes
+- [PR #1947](https://github.com/rqlite/rqlite/pull/1947): Add atomic monotonic Uint64 to rsync module.
+
 ## v8.32.2 (October 15th 2024)
 This release corrects the implementation of Linearizable reads so they implement exactly the process described in section 6.4 of the [Raft dissertation](https://raw.githubusercontent.com/ongardie/dissertation/refs/heads/master/online.pdf) by Diego Ongaro.
 ### Implementation changes and bug fixes
