@@ -1168,8 +1168,8 @@ func (s *Store) Query(qr *proto.QueryRequest) (rows []*proto.QueryRows, retErr e
 		}
 
 		// If linearizable consistency is requested, we will need to check the
-		// term when query processing completes -- assuming query processing
-		// proceeded without error.
+		// term when heartbeat processing completes to ensure the Leader didn't
+		// change.
 		//
 		// See https://groups.google.com/g/raft-dev/c/4QlyV0aptEQ/m/1JxcmSgRAwAJ
 		// for an extensive discussion of this logic.
@@ -1181,7 +1181,7 @@ func (s *Store) Query(qr *proto.QueryRequest) (rows []*proto.QueryRows, retErr e
 		if err := s.VerifyLeader(); err != nil {
 			return nil, err
 		}
-		if s.getCurrentTerm() != initTerm {
+		if s.getCurrentTerm() != readTerm {
 			return nil, ErrStaleRead
 		}
 		if _, err := s.WaitForFSMIndex(readIndex, 30*time.Second); err != nil {
