@@ -31,7 +31,7 @@ func NewQueryParams(r *http.Request) (QueryParams, error) {
 			return nil, fmt.Errorf("freshness_strict requires freshness")
 		}
 	}
-	for _, k := range []string{"timeout", "freshness", "db_timeout"} {
+	for _, k := range []string{"timeout", "freshness", "db_timeout", "linearizable_timeout"} {
 		t, ok := qp[k]
 		if ok {
 			_, err := time.ParseDuration(t)
@@ -141,6 +141,16 @@ func (qp QueryParams) Key() string {
 // DBTimeout returns the value of the key named "db_timeout".
 func (qp QueryParams) DBTimeout(def time.Duration) time.Duration {
 	t, ok := qp["db_timeout"]
+	if !ok {
+		return def
+	}
+	d, _ := time.ParseDuration(t)
+	return d
+}
+
+// LinearizableTimeout returns the value of the key named "linearizable_timeout".
+func (qp QueryParams) LinearizableTimeout(def time.Duration) time.Duration {
+	t, ok := qp["linearizable_timeout"]
 	if !ok {
 		return def
 	}

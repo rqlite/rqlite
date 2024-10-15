@@ -241,6 +241,9 @@ const (
 	// Default timeout for cluster communications.
 	defaultTimeout = 30 * time.Second
 
+	// Default timeout for linearizable reads.
+	defaultLinearTimeout = 10 * time.Second
+
 	// VersionHTTPHeader is the HTTP header key for the version.
 	VersionHTTPHeader = "X-RQLITE-VERSION"
 
@@ -1253,13 +1256,14 @@ func (s *Service) handleQuery(w http.ResponseWriter, r *http.Request, qp QueryPa
 	qr := &command.QueryRequest{
 		Request: &command.Request{
 			Transaction: qp.Tx(),
-			DbTimeout:   int64(qp.DBTimeout(0)),
+			DbTimeout:   qp.DBTimeout(0).Nanoseconds(),
 			Statements:  queries,
 		},
-		Timings:         qp.Timings(),
-		Level:           qp.Level(),
-		Freshness:       qp.Freshness().Nanoseconds(),
-		FreshnessStrict: qp.FreshnessStrict(),
+		Timings:             qp.Timings(),
+		Level:               qp.Level(),
+		Freshness:           qp.Freshness().Nanoseconds(),
+		FreshnessStrict:     qp.FreshnessStrict(),
+		LinearizableTimeout: qp.LinearizableTimeout(defaultLinearTimeout).Nanoseconds(),
 	}
 
 	results, resultsErr := s.store.Query(qr)
