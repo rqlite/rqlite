@@ -1,4 +1,5 @@
-## v8.32.2 (unreleased)
+## v8.32.2 (October 15th 2024)
+This release corrects the implementation of Linearizable reads so they implement exactly the process described in section 6.4 of the [Raft dissertation](https://raw.githubusercontent.com/ongardie/dissertation/refs/heads/master/online.pdf) by Diego Ongaro.
 ### Implementation changes and bug fixes
 - [PR #1944](https://github.com/rqlite/rqlite/pull/1944): Correct implementation of linearizable reads.
 - [PR #1945](https://github.com/rqlite/rqlite/pull/1945): Convert DB timeout to nanoseconds correctly.
