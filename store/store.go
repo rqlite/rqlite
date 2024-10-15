@@ -1148,6 +1148,21 @@ func (s *Store) Query(qr *proto.QueryRequest) (rows []*proto.QueryRows, retErr e
 		return nil, ErrNotOpen
 	}
 
+	// If linearizable consistency is requested, we will need to check the
+	// term when query processing completes -- assuming query processing
+	// proceeded without error.
+	//
+	// See https://groups.google.com/g/raft-dev/c/4QlyV0aptEQ/m/1JxcmSgRAwAJ
+	// for an extensive discussion of this logic.
+	initTerm := s.getCurrentTerm()
+	defer func() {
+		if retErr == nil &&
+			qr.Level == proto.QueryRequest_QUERY_REQUEST_LEVEL_LINEARIZABLE &&
+			s.getCurrentTerm() != initTerm {
+			retErr = ErrStaleRead
+		}
+	}()
+
 	if qr.Level == proto.QueryRequest_QUERY_REQUEST_LEVEL_AUTO {
 		qr.Level = proto.QueryRequest_QUERY_REQUEST_LEVEL_WEAK
 		isVoter, err := s.IsVoter()
