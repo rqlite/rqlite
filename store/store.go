@@ -1167,7 +1167,7 @@ func (s *Store) Query(qr *proto.QueryRequest) (rows []*proto.QueryRows, retErr e
 			return nil, ErrNotReady
 		}
 
-		// Implement the the technique from the Raft dissertation, section
+		// Implement the technique from the Raft dissertation, section
 		// 6.4 "Processing read-only queries more efficiently".
 		readIndex := s.raft.CommitIndex()
 		if err := s.VerifyLeader(); err != nil {
