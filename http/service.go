@@ -1253,7 +1253,7 @@ func (s *Service) handleQuery(w http.ResponseWriter, r *http.Request, qp QueryPa
 	qr := &command.QueryRequest{
 		Request: &command.Request{
 			Transaction: qp.Tx(),
-			DbTimeout:   int64(qp.DBTimeout(0)),
+			DbTimeout:   qp.DBTimeout(0).Nanoseconds(),
 			Statements:  queries,
 		},
 		Timings:         qp.Timings(),
