@@ -6,7 +6,8 @@ import (
 	"time"
 )
 
-// AtomicMonotonicUint64 is a uint64 with atomic operations that only increase the value.
+// AtomicMonotonicUint64 is a uint64 with atomic operations which will
+// only store the maximum value.
 type AtomicMonotonicUint64 struct {
 	value uint64
 	mu    sync.Mutex
@@ -31,6 +32,13 @@ func (a *AtomicMonotonicUint64) Store(v uint64) {
 	if v > a.value {
 		a.value = v
 	}
+}
+
+// Reset resets the stored value to 0.
+func (a *AtomicMonotonicUint64) Reset() {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	a.value = 0
 }
 
 // AtomicTime is a time.Time with atomic operations.
