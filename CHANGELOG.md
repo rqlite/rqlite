@@ -2,6 +2,7 @@
 ### Implementation changes and bug fixes
 - [PR #1947](https://github.com/rqlite/rqlite/pull/1947): Add atomic monotonic Uint64 to rsync module.
 - [PR #1949](https://github.com/rqlite/rqlite/pull/1949): Store uses timeout for linearizable read.
+- [PR #1950](https://github.com/rqlite/rqlite/pull/1950): Linearizable reads VerifyLeader must happen in same term.
 
 ## v8.32.2 (October 15th 2024)
 This release corrects the implementation of Linearizable reads so they implement exactly the process described in section 6.4 of the [Raft dissertation](https://raw.githubusercontent.com/ongardie/dissertation/refs/heads/master/online.pdf) by Diego Ongaro.
