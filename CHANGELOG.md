@@ -1,6 +1,7 @@
 ## v8.32.2 (unreleased)
 ### Implementation changes and bug fixes
 - [PR #1944](https://github.com/rqlite/rqlite/pull/1944): Correct implementation of linearizable reads.
+- [PR #1945](https://github.com/rqlite/rqlite/pull/1945): Convert DB timeout to nanoseconds correctly.
 
 ## v8.32.1 (October 13th 2024)
 ### Implementation changes and bug fixes
