@@ -883,7 +883,7 @@ func Test_SingleNodeExecuteQuery_Linearizable(t *testing.T) {
 	qr.Level = proto.QueryRequest_QUERY_REQUEST_LEVEL_LINEARIZABLE
 	r, err := s.Query(qr)
 	if err != nil {
-		t.Fatalf("failed to perform strong query on single node: %s", err.Error())
+		t.Fatalf("failed to perform linearizable query on single node: %s", err.Error())
 	}
 
 	if exp, got := `["id","name"]`, asJSON(r[0].Columns); exp != got {
