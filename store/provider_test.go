@@ -176,7 +176,7 @@ func Test_SingleNodeProvideLastIndex(t *testing.T) {
 	}
 	lm = newLI
 
-	if af, err := s.Noop("don't care"); err != nil || af.Error() != nil {
+	if _, _, err := s.Noop("don't care"); err != nil {
 		t.Fatalf("failed to execute Noop")
 	}
 	newLI, err = provider.LastIndex()

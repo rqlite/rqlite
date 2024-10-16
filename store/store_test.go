@@ -2444,12 +2444,9 @@ func Test_SingleNodeNoop(t *testing.T) {
 		t.Fatalf("Error waiting for leader: %s", err)
 	}
 
-	af, err := s.Noop("1")
+	_, _, err := s.Noop("1")
 	if err != nil {
 		t.Fatalf("failed to write noop command: %s", err.Error())
-	}
-	if af.Error() != nil {
-		t.Fatalf("expected nil apply future error")
 	}
 	if s.numNoops.Load() != 1 {
 		t.Fatalf("noop count is wrong, got: %d", s.numNoops.Load())
@@ -2708,12 +2705,9 @@ func (m *mockLayer) Close() error { return m.ln.Close() }
 func (m *mockLayer) Addr() net.Addr { return m.ln.Addr() }
 
 func mustNoop(s *Store, id string) {
-	af, err := s.Noop(id)
+	_, _, err := s.Noop(id)
 	if err != nil {
 		panic("failed to write noop command")
-	}
-	if af.Error() != nil {
-		panic("expected nil apply future error")
 	}
 }
 
