@@ -1530,6 +1530,17 @@ func Test_MultiNodeExecuteQuery_Linearizable_NoQuorum(t *testing.T) {
 		t.Fatalf("failed to execute on leader: %s", err.Error())
 	}
 
+	// Confirm data is OK.
+	qr := queryRequestFromString("SELECT * FROM foo", false, false)
+	qr.Level = proto.QueryRequest_QUERY_REQUEST_LEVEL_LINEARIZABLE
+	rows, err := s0.Query(qr)
+	if err != nil {
+		t.Fatalf("query failed: %s", err)
+	}
+	if exp, got := `[{"columns":["id","name"],"types":["integer","text"],"values":[[1,"fiona"]]}]`, asJSON(rows); exp != got {
+		t.Fatalf("unexpected results for query\nexp: %s\ngot: %s", exp, got)
+	}
+
 	// Kill two followers, no quorum
 	if err := s1.Close(true); err != nil {
 		t.Fatalf("failed to close node: %s", err.Error())
@@ -1540,9 +1551,8 @@ func Test_MultiNodeExecuteQuery_Linearizable_NoQuorum(t *testing.T) {
 
 	// Perform a query with Linearizable consistency on the remaining nodes
 	// which should fail.
-	qr := queryRequestFromString("SELECT * FROM foo", false, false)
+	qr = queryRequestFromString("SELECT * FROM foo", false, false)
 	qr.Level = proto.QueryRequest_QUERY_REQUEST_LEVEL_LINEARIZABLE
-
 	_, err = s0.Query(qr)
 	if err == nil {
 		t.Fatalf("expected query to fail, but it did not")
