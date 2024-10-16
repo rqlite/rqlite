@@ -253,11 +253,8 @@ func (n *Node) Boot(filename string) (string, error) {
 
 // Noop inserts a noop command into the Store's Raft log.
 func (n *Node) Noop(id string) error {
-	af, err := n.Store.Noop(id)
-	if err != nil {
-		return err
-	}
-	return af.Error()
+	_, _, err := n.Store.Noop(id)
+	return err
 }
 
 // EnableTLSClient enables TLS support for the node's cluster client.

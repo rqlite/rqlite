@@ -60,6 +60,10 @@ var (
 	// requested freshness.
 	ErrStaleRead = errors.New("stale read")
 
+	// ErrStaleReadTermMismatch is returned if while executing a linearizable read
+	// the term changed unexpectedly.
+	ErrStaleReadTermMismatch = errors.New("stale read term mismatch")
+
 	// ErrOpenTimeout is returned when the Store does not apply its initial
 	// logs within the specified time.
 	ErrOpenTimeout = errors.New("timeout waiting for initial logs application")
@@ -293,10 +297,11 @@ type Store struct {
 
 	// Latest log entry index actually reflected by the FSM. Due to Raft code
 	// these values are not updated automatically after a Snapshot-restore.
-	fsmIdx        *atomic.Uint64
-	fsmTarget     *rsync.ReadyTarget[uint64]
-	fsmTerm       *atomic.Uint64
-	fsmUpdateTime *rsync.AtomicTime // This is node-local time.
+	fsmIdx             *atomic.Uint64
+	fsmTarget          *rsync.ReadyTarget[uint64]
+	fsmTerm            *atomic.Uint64
+	termLeaderAsserted *atomic.Uint64
+	fsmUpdateTime      *rsync.AtomicTime // This is node-local time.
 
 	// appendedAtTime is the Leader's clock time when that Leader appended the log entry.
 	// The Leader that actually appended the log entry is not necessarily the current Leader.
@@ -382,36 +387,37 @@ func New(ly Layer, c *Config) *Store {
 	}
 
 	return &Store{
-		open:            rsync.NewAtomicBool(),
-		ly:              ly,
-		raftDir:         c.Dir,
-		raftDBPath:      filepath.Join(c.Dir, raftDBPath),
-		snapshotDir:     filepath.Join(c.Dir, snapshotsDirName),
-		peersPath:       filepath.Join(c.Dir, peersPath),
-		peersInfoPath:   filepath.Join(c.Dir, peersInfoPath),
-		restoreDoneCh:   make(chan struct{}),
-		raftID:          c.ID,
-		dbConf:          c.DBConf,
-		dbPath:          dbPath,
-		walPath:         sql.WALPath(dbPath),
-		dbDir:           filepath.Dir(dbPath),
-		readyChans:      rsync.NewReadyChannels(),
-		leaderObservers: make([]chan<- struct{}, 0),
-		reqMarshaller:   command.NewRequestMarshaler(),
-		logger:          logger,
-		notifyingNodes:  make(map[string]*Server),
-		ApplyTimeout:    applyTimeout,
-		snapshotCAS:     rsync.NewCheckAndSet(),
-		fsmIdx:          &atomic.Uint64{},
-		fsmTarget:       rsync.NewReadyTarget[uint64](),
-		fsmTerm:         &atomic.Uint64{},
-		fsmUpdateTime:   rsync.NewAtomicTime(),
-		appendedAtTime:  rsync.NewAtomicTime(),
-		dbModifiedTime:  rsync.NewAtomicTime(),
-		dbAppliedIdx:    &atomic.Uint64{},
-		appliedTarget:   rsync.NewReadyTarget[uint64](),
-		numNoops:        &atomic.Uint64{},
-		numSnapshots:    &atomic.Uint64{},
+		open:               rsync.NewAtomicBool(),
+		ly:                 ly,
+		raftDir:            c.Dir,
+		raftDBPath:         filepath.Join(c.Dir, raftDBPath),
+		snapshotDir:        filepath.Join(c.Dir, snapshotsDirName),
+		peersPath:          filepath.Join(c.Dir, peersPath),
+		peersInfoPath:      filepath.Join(c.Dir, peersInfoPath),
+		restoreDoneCh:      make(chan struct{}),
+		raftID:             c.ID,
+		dbConf:             c.DBConf,
+		dbPath:             dbPath,
+		walPath:            sql.WALPath(dbPath),
+		dbDir:              filepath.Dir(dbPath),
+		readyChans:         rsync.NewReadyChannels(),
+		leaderObservers:    make([]chan<- struct{}, 0),
+		reqMarshaller:      command.NewRequestMarshaler(),
+		logger:             logger,
+		notifyingNodes:     make(map[string]*Server),
+		ApplyTimeout:       applyTimeout,
+		snapshotCAS:        rsync.NewCheckAndSet(),
+		fsmIdx:             &atomic.Uint64{},
+		fsmTarget:          rsync.NewReadyTarget[uint64](),
+		fsmTerm:            &atomic.Uint64{},
+		termLeaderAsserted: &atomic.Uint64{},
+		fsmUpdateTime:      rsync.NewAtomicTime(),
+		appendedAtTime:     rsync.NewAtomicTime(),
+		dbModifiedTime:     rsync.NewAtomicTime(),
+		dbAppliedIdx:       &atomic.Uint64{},
+		appliedTarget:      rsync.NewReadyTarget[uint64](),
+		numNoops:           &atomic.Uint64{},
+		numSnapshots:       &atomic.Uint64{},
 	}
 }
 
@@ -452,6 +458,7 @@ func (s *Store) Open() (retErr error) {
 	s.fsmIdx.Store(0)
 	s.fsmTarget.Reset()
 	s.fsmTerm.Store(0)
+	s.termLeaderAsserted.Store(0)
 	s.fsmUpdateTime.Store(time.Time{})
 	s.appendedAtTime.Store(time.Time{})
 	s.dbAppliedIdx.Store(0)
@@ -1159,6 +1166,14 @@ func (s *Store) Query(qr *proto.QueryRequest) (rows []*proto.QueryRows, retErr e
 		}
 	}
 
+	// Check some error conditions first, specific to certain consistency levels.
+	if qr.Level == proto.QueryRequest_QUERY_REQUEST_LEVEL_WEAK && s.raft.State() != raft.Leader {
+		return nil, ErrNotLeader
+	}
+	if qr.Level == proto.QueryRequest_QUERY_REQUEST_LEVEL_NONE && s.isStaleRead(qr.Freshness, qr.FreshnessStrict) {
+		return nil, ErrStaleRead
+	}
+
 	if qr.Level == proto.QueryRequest_QUERY_REQUEST_LEVEL_LINEARIZABLE {
 		if s.raft.State() != raft.Leader {
 			return nil, ErrNotLeader
@@ -1175,6 +1190,19 @@ func (s *Store) Query(qr *proto.QueryRequest) (rows []*proto.QueryRows, retErr e
 		// for an extensive discussion of this logic.
 		readTerm := s.getCurrentTerm()
 
+		// Fetching the commit index is not valid unless a log entry has actually been committed in this term.
+		// Ensure this has happened once before processing the first linearizable read for this term.
+		if s.termLeaderAsserted.Load() != readTerm {
+			_, term, err := s.Noop("leadership-assertion")
+			if err != nil {
+				return nil, fmt.Errorf("failed to confirm leadership assertion via Noop: %s", err)
+			}
+			if term != readTerm {
+				return nil, ErrStaleReadTermMismatch
+			}
+			s.termLeaderAsserted.Store(readTerm)
+		}
+
 		// Implement the technique from the Raft dissertation, section
 		// 6.4 "Processing read-only queries more efficiently".
 		readIndex := s.raft.CommitIndex()
@@ -1187,9 +1215,7 @@ func (s *Store) Query(qr *proto.QueryRequest) (rows []*proto.QueryRows, retErr e
 		if _, err := s.WaitForFSMIndex(readIndex, time.Duration(qr.LinearizableTimeout)); err != nil {
 			return nil, ErrNotReady
 		}
-	}
-
-	if qr.Level == proto.QueryRequest_QUERY_REQUEST_LEVEL_STRONG {
+	} else if qr.Level == proto.QueryRequest_QUERY_REQUEST_LEVEL_STRONG {
 		if s.raft.State() != raft.Leader {
 			return nil, ErrNotLeader
 		}
@@ -1222,13 +1248,6 @@ func (s *Store) Query(qr *proto.QueryRequest) (rows []*proto.QueryRows, retErr e
 		}
 		r := af.Response().(*fsmQueryResponse)
 		return r.rows, r.error
-	}
-
-	if qr.Level == proto.QueryRequest_QUERY_REQUEST_LEVEL_WEAK && s.raft.State() != raft.Leader {
-		return nil, ErrNotLeader
-	}
-	if qr.Level == proto.QueryRequest_QUERY_REQUEST_LEVEL_NONE && s.isStaleRead(qr.Freshness, qr.FreshnessStrict) {
-		return nil, ErrStaleRead
 	}
 
 	return s.db.Query(qr.Request, qr.Timings)
@@ -1531,9 +1550,7 @@ func (s *Store) ReadFrom(r io.Reader) (int64, error) {
 
 	// Raft won't snapshot unless there is at least one unsnapshotted log entry,
 	// so prep that now before we do anything destructive.
-	if af, err := s.Noop("boot"); err != nil {
-		return n, err
-	} else if err := af.Error(); err != nil {
+	if _, _, err := s.Noop("boot"); err != nil {
 		return n, err
 	}
 
@@ -1724,14 +1741,15 @@ func (s *Store) Remove(rn *proto.RemoveNodeRequest) error {
 
 // Noop writes a noop command to the Raft log. A noop command simply
 // consumes a slot in the Raft log, but has no other effect on the
-// system.
-func (s *Store) Noop(id string) (raft.ApplyFuture, error) {
+// system. On success it returns the index and term of the applied
+// noop command.
+func (s *Store) Noop(id string) (index, term uint64, retErr error) {
 	n := &proto.Noop{
 		Id: id,
 	}
 	b, err := command.MarshalNoop(n)
 	if err != nil {
-		return nil, err
+		return 0, 0, err
 	}
 
 	c := &proto.Command{
@@ -1740,10 +1758,20 @@ func (s *Store) Noop(id string) (raft.ApplyFuture, error) {
 	}
 	bc, err := command.Marshal(c)
 	if err != nil {
-		return nil, err
+		return 0, 0, err
 	}
 
-	return s.raft.Apply(bc, s.ApplyTimeout), nil
+	fut := s.raft.Apply(bc, s.ApplyTimeout)
+	if fut.Error() != nil {
+		return 0, 0, fut.Error()
+	}
+
+	log := raft.Log{}
+	err = s.boltStore.GetLog(fut.Index(), &log)
+	if err != nil {
+		return 0, 0, err
+	}
+	return log.Index, log.Term, nil
 }
 
 // RORWCount returns the number of read-only and read-write statements in the

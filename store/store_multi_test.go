@@ -510,7 +510,7 @@ func Test_MultiNodeDBAppliedIndex(t *testing.T) {
 	}, 250*time.Millisecond, 3*time.Second)
 
 	// Noop, then snapshot, truncating all logs. Then have another node join the cluster.
-	if af, err := s0.Noop("don't care"); err != nil || af.Error() != nil {
+	if _, _, err := s0.Noop("don't care"); err != nil {
 		t.Fatalf("failed to noop on single node: %s", err.Error())
 	}
 	if err := s0.Snapshot(1); err != nil {
