@@ -1,4 +1,4 @@
-## v8.32.3 (unreleased)
+## v8.32.3 (October 17th 2024)
 ### Implementation changes and bug fixes
 - [PR #1947](https://github.com/rqlite/rqlite/pull/1947): Add atomic monotonic Uint64 to rsync module.
 - [PR #1949](https://github.com/rqlite/rqlite/pull/1949): Store uses timeout for linearizable read.
