@@ -101,10 +101,13 @@ jobs:
     steps:
       - checkout
       - restore_and_save_cache
-      - cross_compile:
-          cc: x86_64-w64-mingw32-gcc
-          goarch: amd64
-          goos: windows
+      - run:
+          command: go test -failfast -timeout 20m ./...
+          environment:
+            CGO_ENABLED: 1
+            GOARCH: amd64
+            GOOS: windows
+            CC: x86_64-w64-mingw32-gcc
     resource_class: large
   cross_compile:
     docker:
