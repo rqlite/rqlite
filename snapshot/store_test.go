@@ -6,7 +6,7 @@ import (
 	"sort"
 	"testing"
 
-	"github.com/hashicorp/raft"
+	"github.com/rqlite/raft"
 	"github.com/rqlite/rqlite/v8/rsync"
 )
 
