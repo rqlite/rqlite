@@ -1,6 +1,6 @@
 ## v8.32.4 (unreleased)
 ### Implementation changes and bug fixes
-- [PR #1955](https://github.com/rqlite/rqlite/pull/1955): Keep track of Term of most recent Strong Read.
+- [PR #1955](https://github.com/rqlite/rqlite/pull/1956), [PR #1956](https://github.com/rqlite/rqlite/pull/1956): Keep track of Term of most recent Strong Read.
 
 ## v8.32.3 (October 17th 2024)
 ### Implementation changes and bug fixes
