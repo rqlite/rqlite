@@ -1,3 +1,7 @@
+## v8.32.4 (unreleased)
+### Implementation changes and bug fixes
+- [PR #1955](https://github.com/rqlite/rqlite/pull/1955): Keep track of Term of most recent Strong Read.
+
 ## v8.32.3 (October 17th 2024)
 ### Implementation changes and bug fixes
 - [PR #1947](https://github.com/rqlite/rqlite/pull/1947): Add atomic monotonic Uint64 to rsync module.
