@@ -1232,6 +1232,8 @@ func (s *Store) Query(qr *proto.QueryRequest) (rows []*proto.QueryRows, retErr e
 		if af.Error() != nil {
 			if af.Error() == raft.ErrNotLeader {
 				return nil, ErrNotLeader
+			} else if af.Error() == raft.ErrLeadershipLost {
+				return nil, ErrNotLeader
 			}
 			return nil, af.Error()
 		}

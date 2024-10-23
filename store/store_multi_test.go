@@ -1547,7 +1547,7 @@ func Test_MultiNodeExecuteQuery_Linearizable_NoQuorum(t *testing.T) {
 	if err == nil {
 		t.Fatalf("expected query to fail, but it did not")
 	}
-	if !errors.Is(err, ErrNotLeader) && !strings.Contains(err.Error(), "leadership lost while committing log") {
+	if !errors.Is(err, ErrNotLeader) {
 		t.Fatalf("unexpected error on leader: %s", err.Error())
 	}
 }
