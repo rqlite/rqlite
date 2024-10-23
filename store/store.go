@@ -293,15 +293,16 @@ type Store struct {
 
 	// Latest log entry index actually reflected by the FSM. Due to Raft code
 	// these values are not updated automatically after a Snapshot-restore.
-	fsmIdx            *atomic.Uint64
-	fsmTarget         *rsync.ReadyTarget[uint64]
-	fsmTerm           *atomic.Uint64
-	fsmTermStrongRead *atomic.Uint64    // Term of most recent Strong Read
-	fsmUpdateTime     *rsync.AtomicTime // This is node-local time.
+	fsmIdx        *atomic.Uint64
+	fsmTarget     *rsync.ReadyTarget[uint64]
+	fsmTerm       *atomic.Uint64
+	fsmUpdateTime *rsync.AtomicTime // This is node-local time.
 
 	// appendedAtTime is the Leader's clock time when that Leader appended the log entry.
 	// The Leader that actually appended the log entry is not necessarily the current Leader.
 	appendedAtTime *rsync.AtomicTime
+
+	strongReadTerm *atomic.Uint64 // Term of most recent Strong Read
 
 	dbModifiedTime *rsync.AtomicTime // Last time the database file was modified.
 
@@ -383,37 +384,37 @@ func New(ly Layer, c *Config) *Store {
 	}
 
 	return &Store{
-		open:              rsync.NewAtomicBool(),
-		ly:                ly,
-		raftDir:           c.Dir,
-		raftDBPath:        filepath.Join(c.Dir, raftDBPath),
-		snapshotDir:       filepath.Join(c.Dir, snapshotsDirName),
-		peersPath:         filepath.Join(c.Dir, peersPath),
-		peersInfoPath:     filepath.Join(c.Dir, peersInfoPath),
-		restoreDoneCh:     make(chan struct{}),
-		raftID:            c.ID,
-		dbConf:            c.DBConf,
-		dbPath:            dbPath,
-		walPath:           sql.WALPath(dbPath),
-		dbDir:             filepath.Dir(dbPath),
-		readyChans:        rsync.NewReadyChannels(),
-		leaderObservers:   make([]chan<- struct{}, 0),
-		reqMarshaller:     command.NewRequestMarshaler(),
-		logger:            logger,
-		notifyingNodes:    make(map[string]*Server),
-		ApplyTimeout:      applyTimeout,
-		snapshotCAS:       rsync.NewCheckAndSet(),
-		fsmIdx:            &atomic.Uint64{},
-		fsmTarget:         rsync.NewReadyTarget[uint64](),
-		fsmTerm:           &atomic.Uint64{},
-		fsmTermStrongRead: &atomic.Uint64{},
-		fsmUpdateTime:     rsync.NewAtomicTime(),
-		appendedAtTime:    rsync.NewAtomicTime(),
-		dbModifiedTime:    rsync.NewAtomicTime(),
-		dbAppliedIdx:      &atomic.Uint64{},
-		appliedTarget:     rsync.NewReadyTarget[uint64](),
-		numNoops:          &atomic.Uint64{},
-		numSnapshots:      &atomic.Uint64{},
+		open:            rsync.NewAtomicBool(),
+		ly:              ly,
+		raftDir:         c.Dir,
+		raftDBPath:      filepath.Join(c.Dir, raftDBPath),
+		snapshotDir:     filepath.Join(c.Dir, snapshotsDirName),
+		peersPath:       filepath.Join(c.Dir, peersPath),
+		peersInfoPath:   filepath.Join(c.Dir, peersInfoPath),
+		restoreDoneCh:   make(chan struct{}),
+		raftID:          c.ID,
+		dbConf:          c.DBConf,
+		dbPath:          dbPath,
+		walPath:         sql.WALPath(dbPath),
+		dbDir:           filepath.Dir(dbPath),
+		readyChans:      rsync.NewReadyChannels(),
+		leaderObservers: make([]chan<- struct{}, 0),
+		reqMarshaller:   command.NewRequestMarshaler(),
+		logger:          logger,
+		notifyingNodes:  make(map[string]*Server),
+		ApplyTimeout:    applyTimeout,
+		snapshotCAS:     rsync.NewCheckAndSet(),
+		fsmIdx:          &atomic.Uint64{},
+		fsmTarget:       rsync.NewReadyTarget[uint64](),
+		fsmTerm:         &atomic.Uint64{},
+		fsmUpdateTime:   rsync.NewAtomicTime(),
+		appendedAtTime:  rsync.NewAtomicTime(),
+		strongReadTerm:  &atomic.Uint64{},
+		dbModifiedTime:  rsync.NewAtomicTime(),
+		dbAppliedIdx:    &atomic.Uint64{},
+		appliedTarget:   rsync.NewReadyTarget[uint64](),
+		numNoops:        &atomic.Uint64{},
+		numSnapshots:    &atomic.Uint64{},
 	}
 }
 
@@ -454,9 +455,9 @@ func (s *Store) Open() (retErr error) {
 	s.fsmIdx.Store(0)
 	s.fsmTarget.Reset()
 	s.fsmTerm.Store(0)
-	s.fsmTermStrongRead.Store(0)
 	s.fsmUpdateTime.Store(time.Time{})
 	s.appendedAtTime.Store(time.Time{})
+	s.strongReadTerm.Store(0)
 	s.dbAppliedIdx.Store(0)
 	s.appliedTarget.Reset()
 	s.numNoops.Store(0)
@@ -1031,15 +1032,15 @@ func (s *Store) Stats() (map[string]interface{}, error) {
 	}
 
 	status := map[string]interface{}{
-		"open":                 s.open,
-		"node_id":              s.raftID,
-		"raft":                 raftStats,
-		"fsm_index":            s.fsmIdx.Load(),
-		"fsm_term":             s.fsmTerm.Load(),
-		"fsm_term_strong_read": s.fsmTermStrongRead.Load(),
-		"fsm_update_time":      s.fsmUpdateTime.Load(),
-		"db_applied_index":     s.dbAppliedIdx.Load(),
-		"addr":                 s.Addr(),
+		"open":             s.open,
+		"node_id":          s.raftID,
+		"raft":             raftStats,
+		"fsm_index":        s.fsmIdx.Load(),
+		"fsm_term":         s.fsmTerm.Load(),
+		"fsm_update_time":  s.fsmUpdateTime.Load(),
+		"strong_read_term": s.strongReadTerm.Load(),
+		"db_applied_index": s.dbAppliedIdx.Load(),
+		"addr":             s.Addr(),
 		"leader": map[string]string{
 			"node_id": leaderID,
 			"addr":    leaderAddr,
@@ -1224,6 +1225,7 @@ func (s *Store) Query(qr *proto.QueryRequest) (rows []*proto.QueryRows, retErr e
 			}
 			return nil, af.Error()
 		}
+		s.strongReadTerm.Store(af.Index())
 		r := af.Response().(*fsmQueryResponse)
 		return r.rows, r.error
 	}
@@ -1919,8 +1921,6 @@ func (s *Store) fsmApply(l *raft.Log) (e interface{}) {
 		if err := s.snapshotStore.SetFullNeeded(); err != nil {
 			s.logger.Fatalf("failed to set full snapshot needed: %s", err)
 		}
-	} else if cmd.Type == proto.Command_COMMAND_TYPE_QUERY {
-		s.fsmTermStrongRead.Store(l.Term)
 	}
 	return r
 }
