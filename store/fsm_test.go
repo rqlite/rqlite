@@ -3,7 +3,7 @@ package store
 import (
 	"testing"
 
-	"github.com/hashicorp/raft"
+	"github.com/rqlite/raft"
 )
 
 func Test_FSMSnapshot_Finalizer(t *testing.T) {

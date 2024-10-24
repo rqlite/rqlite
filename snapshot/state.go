@@ -6,7 +6,7 @@ import (
 	"path/filepath"
 	"sort"
 
-	"github.com/hashicorp/raft"
+	"github.com/rqlite/raft"
 )
 
 // RemoveAllTmpSnapshotData removes all temporary Snapshot data from the directory.

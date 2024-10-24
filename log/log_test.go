@@ -4,7 +4,7 @@ import (
 	"os"
 	"testing"
 
-	"github.com/hashicorp/raft"
+	"github.com/rqlite/raft"
 	raftboltdb "github.com/rqlite/raft-boltdb/v2"
 )
 

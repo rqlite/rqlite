@@ -23,7 +23,7 @@ import (
 	"time"
 
 	"github.com/hashicorp/go-hclog"
-	"github.com/hashicorp/raft"
+	"github.com/rqlite/raft"
 	"github.com/rqlite/rqlite/v8/command"
 	"github.com/rqlite/rqlite/v8/command/chunking"
 	"github.com/rqlite/rqlite/v8/command/proto"

@@ -9,7 +9,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/hashicorp/raft"
+	"github.com/rqlite/raft"
 	"github.com/rqlite/rqlite/v8/command/chunking"
 	"github.com/rqlite/rqlite/v8/command/proto"
 	sql "github.com/rqlite/rqlite/v8/db"

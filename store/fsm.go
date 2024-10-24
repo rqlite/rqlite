@@ -6,7 +6,7 @@ import (
 	"log"
 	"time"
 
-	"github.com/hashicorp/raft"
+	"github.com/rqlite/raft"
 )
 
 // FSM is a wrapper around the Store which implements raft.FSM.
