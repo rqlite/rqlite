@@ -879,18 +879,36 @@ func Test_SingleNodeExecuteQuery_Linearizable(t *testing.T) {
 		t.Fatalf("failed to execute on single node: %s", err.Error())
 	}
 
+	// Perform the first linearizable query, which should be upgraded to a strong query.
 	qr := queryRequestFromString("SELECT * FROM foo", false, false)
 	qr.Level = proto.QueryRequest_QUERY_REQUEST_LEVEL_LINEARIZABLE
 	r, err := s.Query(qr)
 	if err != nil {
 		t.Fatalf("failed to perform linearizable query on single node: %s", err.Error())
 	}
-
 	if exp, got := `["id","name"]`, asJSON(r[0].Columns); exp != got {
 		t.Fatalf("unexpected results for query\nexp: %s\ngot: %s", exp, got)
 	}
 	if exp, got := `[[1,"fiona"]]`, asJSON(r[0].Values); exp != got {
 		t.Fatalf("unexpected results for query\nexp: %s\ngot: %s", exp, got)
+	}
+	if s.numLinearizableUpgraded != 1 {
+		t.Fatalf("expected 1 linearizable upgrade, got %d", s.numLinearizableUpgraded)
+	}
+
+	// Perform the first linearizable query, which should not be upgraded to a strong query.
+	r, err = s.Query(qr)
+	if err != nil {
+		t.Fatalf("failed to perform linearizable query on single node: %s", err.Error())
+	}
+	if exp, got := `["id","name"]`, asJSON(r[0].Columns); exp != got {
+		t.Fatalf("unexpected results for query\nexp: %s\ngot: %s", exp, got)
+	}
+	if exp, got := `[[1,"fiona"]]`, asJSON(r[0].Values); exp != got {
+		t.Fatalf("unexpected results for query\nexp: %s\ngot: %s", exp, got)
+	}
+	if s.numLinearizableUpgraded != 1 {
+		t.Fatalf("expected 1 linearizable upgrade, got %d", s.numLinearizableUpgraded)
 	}
 }
 

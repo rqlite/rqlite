@@ -354,12 +354,13 @@ type Store struct {
 	numTrailingLogs uint64
 
 	// For whitebox testing
-	numFullSnapshots int
-	numAutoVacuums   int
-	numAutoOptimizes int
-	numIgnoredJoins  int
-	numNoops         *atomic.Uint64
-	numSnapshots     *atomic.Uint64
+	numLinearizableUpgraded int
+	numFullSnapshots        int
+	numAutoVacuums          int
+	numAutoOptimizes        int
+	numIgnoredJoins         int
+	numNoops                *atomic.Uint64
+	numSnapshots            *atomic.Uint64
 }
 
 // Config represents the configuration of the underlying Store.
@@ -1180,6 +1181,7 @@ func (s *Store) Query(qr *proto.QueryRequest) (rows []*proto.QueryRows, retErr e
 	if qr.Level == proto.QueryRequest_QUERY_REQUEST_LEVEL_LINEARIZABLE &&
 		readTerm != s.strongReadTerm.Load() {
 		qr.Level = proto.QueryRequest_QUERY_REQUEST_LEVEL_STRONG
+		s.numLinearizableUpgraded++
 	}
 
 	if qr.Level == proto.QueryRequest_QUERY_REQUEST_LEVEL_LINEARIZABLE {
