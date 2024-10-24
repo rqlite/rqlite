@@ -354,13 +354,13 @@ type Store struct {
 	numTrailingLogs uint64
 
 	// For whitebox testing
-	numLRUpgraded *atomic.Uint64
-	numFullSnapshots        int
-	numAutoVacuums          int
-	numAutoOptimizes        int
-	numIgnoredJoins         int
-	numNoops                *atomic.Uint64
-	numSnapshots            *atomic.Uint64
+	numLRUpgraded    *atomic.Uint64
+	numFullSnapshots int
+	numAutoVacuums   int
+	numAutoOptimizes int
+	numIgnoredJoins  int
+	numNoops         *atomic.Uint64
+	numSnapshots     *atomic.Uint64
 }
 
 // Config represents the configuration of the underlying Store.
@@ -414,7 +414,7 @@ func New(ly Layer, c *Config) *Store {
 		dbModifiedTime:  rsync.NewAtomicTime(),
 		dbAppliedIdx:    &atomic.Uint64{},
 		appliedTarget:   rsync.NewReadyTarget[uint64](),
-		numLRUpgraded: &atomic.Uint64{},
+		numLRUpgraded:   &atomic.Uint64{},
 		numNoops:        &atomic.Uint64{},
 		numSnapshots:    &atomic.Uint64{},
 	}
