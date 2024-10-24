@@ -48,16 +48,20 @@ func Test_UploaderSingleUpload(t *testing.T) {
 
 	done := uploader.Start(ctx, nil)
 	wg.Wait()
-	cancel()
-	<-done
 	if exp, got := "my upload data", string(uploadedData); exp != got {
 		t.Errorf("expected uploadedData to be %s, got %s", exp, got)
 	}
 
-	time.Sleep(2 * time.Second)
-	nus := stats.Get(numUploadsSkipped).(*expvar.Int).Value()
-	if exp, got := int64(0), nus; exp < got {
-		t.Errorf("expected numUploadsSkipped to be > %d, got %d", exp, got)
+	// Should now go into skipping-uploads mode.
+	testPoll(t, func() bool {
+		numSkipped := stats.Get(numUploadsSkipped).(*expvar.Int).Value()
+		return numSkipped > 0
+	}, 50*time.Millisecond, 1*time.Second)
+	cancel()
+	<-done
+
+	if got, exp := stats.Get(numUploadsOK).(*expvar.Int).Value(), int64(1); got != exp {
+		t.Fatalf("expected numUploadsOK to be %d, got %d", exp, got)
 	}
 }
 
@@ -358,4 +362,23 @@ func (mp *mockDataProvider) Provide(w io.Writer) error {
 		return err
 	}
 	return nil
+}
+
+func testPoll(t *testing.T, f func() bool, checkPeriod time.Duration, timeout time.Duration) {
+	t.Helper()
+	tck := time.NewTicker(checkPeriod)
+	defer tck.Stop()
+	tmr := time.NewTimer(timeout)
+	defer tmr.Stop()
+
+	for {
+		select {
+		case <-tck.C:
+			if f() {
+				return
+			}
+		case <-tmr.C:
+			t.Fatalf("timeout expired: %s", t.Name())
+		}
+	}
 }
