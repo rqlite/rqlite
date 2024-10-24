@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -1549,5 +1550,84 @@ func Test_MultiNodeExecuteQuery_Linearizable_NoQuorum(t *testing.T) {
 	}
 	if !errors.Is(err, ErrNotLeader) {
 		t.Fatalf("unexpected error on leader: %s", err.Error())
+	}
+}
+
+func Test_MultiNodeExecuteQuery_Linearizable_Concurrent(t *testing.T) {
+	s0, ln0 := mustNewStore(t)
+	defer ln0.Close()
+	if err := s0.Open(); err != nil {
+		t.Fatalf("failed to open single-node store: %s", err.Error())
+	}
+	defer s0.Close(true)
+	if err := s0.Bootstrap(NewServer(s0.ID(), s0.Addr(), true)); err != nil {
+		t.Fatalf("failed to bootstrap single-node store: %s", err.Error())
+	}
+	if _, err := s0.WaitForLeader(10 * time.Second); err != nil {
+		t.Fatalf("Error waiting for leader: %s", err)
+	}
+
+	s1, ln1 := mustNewStore(t)
+	defer ln1.Close()
+	if err := s1.Open(); err != nil {
+		t.Fatalf("failed to open node for multi-node test: %s", err.Error())
+	}
+	defer s1.Close(true)
+
+	s2, ln2 := mustNewStore(t)
+	defer ln2.Close()
+	if err := s2.Open(); err != nil {
+		t.Fatalf("failed to open node for multi-node test: %s", err.Error())
+	}
+	defer s2.Close(true)
+
+	// Join the second node to the first as a voting node.
+	if err := s0.Join(joinRequest(s1.ID(), s1.Addr(), true)); err != nil {
+		t.Fatalf("failed to join to node at %s: %s", s0.Addr(), err.Error())
+	}
+	if _, err := s1.WaitForLeader(10 * time.Second); err != nil {
+		t.Fatalf("Error waiting for leader: %s", err)
+	}
+
+	// Join the third node to the first as a voting node.
+	if err := s0.Join(joinRequest(s2.ID(), s2.Addr(), true)); err != nil {
+		t.Fatalf("failed to join to node at %s: %s", s0.Addr(), err.Error())
+	}
+	if _, err := s2.WaitForLeader(10 * time.Second); err != nil {
+		t.Fatalf("Error waiting for leader: %s", err)
+	}
+
+	// Execute some data on the leader
+	er := executeRequestFromStrings([]string{
+		`CREATE TABLE foo (id INTEGER NOT NULL PRIMARY KEY, name TEXT)`,
+		`INSERT INTO foo(id, name) VALUES(1, "fiona")`,
+	}, false, false)
+	_, err := s0.Execute(er)
+	if err != nil {
+		t.Fatalf("failed to execute on leader: %s", err.Error())
+	}
+
+	// Perform a bunch of linearizable queries concurrently, to stress test
+	// the system. Must be done on Leader.
+	qr := queryRequestFromString("SELECT * FROM foo", false, false)
+	qr.Level = proto.QueryRequest_QUERY_REQUEST_LEVEL_LINEARIZABLE
+	count := 100
+	var wg sync.WaitGroup
+	wg.Add(count)
+	for i := 0; i < count; i++ {
+		go func() {
+			defer wg.Done()
+			r, err := s0.Query(qr)
+			if err != nil {
+				t.Errorf("expected query to succeed, but it did not: %s", err.Error())
+			}
+			if exp, got := `[{"columns":["id","name"],"types":["integer","text"],"values":[[1,"fiona"]]}]`, asJSON(r); exp != got {
+				t.Errorf("unexpected results for query\nexp: %s\ngot: %s", exp, got)
+			}
+		}()
+	}
+	wg.Wait()
+	if s0.numLinearizableUpgraded <= 0 {
+		t.Fatalf("expected at least one linearizable query to be upgraded")
 	}
 }
