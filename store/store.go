@@ -462,7 +462,7 @@ func (s *Store) Open() (retErr error) {
 	s.strongReadTerm.Store(0)
 	s.dbAppliedIdx.Store(0)
 	s.appliedTarget.Reset()
-	s.numLR.Store(0)
+	s.numLRUpgraded.Store(0)
 	s.numNoops.Store(0)
 	s.numSnapshots.Store(0)
 	s.openT = time.Now()
