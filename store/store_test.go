@@ -892,8 +892,8 @@ func Test_SingleNodeExecuteQuery_Linearizable(t *testing.T) {
 	if exp, got := `[[1,"fiona"]]`, asJSON(r[0].Values); exp != got {
 		t.Fatalf("unexpected results for query\nexp: %s\ngot: %s", exp, got)
 	}
-	if s.numLinearizableUpgraded != 1 {
-		t.Fatalf("expected 1 linearizable upgrade, got %d", s.numLinearizableUpgraded)
+	if s.numLRUpgraded.Load() != 1 {
+		t.Fatalf("expected 1 linearizable upgrade, got %d", s.numLRUpgraded.Load())
 	}
 
 	// Perform the first linearizable query, which should not be upgraded to a strong query.
@@ -907,8 +907,8 @@ func Test_SingleNodeExecuteQuery_Linearizable(t *testing.T) {
 	if exp, got := `[[1,"fiona"]]`, asJSON(r[0].Values); exp != got {
 		t.Fatalf("unexpected results for query\nexp: %s\ngot: %s", exp, got)
 	}
-	if s.numLinearizableUpgraded != 1 {
-		t.Fatalf("expected 1 linearizable upgrade, got %d", s.numLinearizableUpgraded)
+	if s.numLRUpgraded.Load() != 1 {
+		t.Fatalf("expected 1 linearizable upgrade, got %d", s.numLRUpgraded.Load())
 	}
 }
 
