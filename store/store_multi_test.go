@@ -1628,7 +1628,7 @@ func Test_MultiNodeExecuteQuery_Linearizable_Concurrent(t *testing.T) {
 		}()
 	}
 	wg.Wait()
-	if s0.numLinearizableUpgraded <= 0 {
+	if s0.numLRUpgraded.Load() <= 0 {
 		t.Fatalf("expected at least one linearizable query to be upgraded")
 	}
 }
