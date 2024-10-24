@@ -354,13 +354,13 @@ type Store struct {
 	numTrailingLogs uint64
 
 	// For whitebox testing
-	numLinearizableUpgraded int
-	numFullSnapshots        int
-	numAutoVacuums          int
-	numAutoOptimizes        int
-	numIgnoredJoins         int
-	numNoops                *atomic.Uint64
-	numSnapshots            *atomic.Uint64
+	numLRUpgraded    *atomic.Uint64
+	numFullSnapshots int
+	numAutoVacuums   int
+	numAutoOptimizes int
+	numIgnoredJoins  int
+	numNoops         *atomic.Uint64
+	numSnapshots     *atomic.Uint64
 }
 
 // Config represents the configuration of the underlying Store.
@@ -414,6 +414,7 @@ func New(ly Layer, c *Config) *Store {
 		dbModifiedTime:  rsync.NewAtomicTime(),
 		dbAppliedIdx:    &atomic.Uint64{},
 		appliedTarget:   rsync.NewReadyTarget[uint64](),
+		numLRUpgraded:   &atomic.Uint64{},
 		numNoops:        &atomic.Uint64{},
 		numSnapshots:    &atomic.Uint64{},
 	}
@@ -461,6 +462,7 @@ func (s *Store) Open() (retErr error) {
 	s.strongReadTerm.Store(0)
 	s.dbAppliedIdx.Store(0)
 	s.appliedTarget.Reset()
+	s.numLRUpgraded.Store(0)
 	s.numNoops.Store(0)
 	s.numSnapshots.Store(0)
 	s.openT = time.Now()
@@ -1184,7 +1186,7 @@ func (s *Store) Query(qr *proto.QueryRequest) (rows []*proto.QueryRows, retErr e
 	if qr.Level == proto.QueryRequest_QUERY_REQUEST_LEVEL_LINEARIZABLE &&
 		readTerm != s.strongReadTerm.Load() {
 		qr.Level = proto.QueryRequest_QUERY_REQUEST_LEVEL_STRONG
-		s.numLinearizableUpgraded++
+		s.numLRUpgraded.Add(1)
 	}
 
 	if qr.Level == proto.QueryRequest_QUERY_REQUEST_LEVEL_LINEARIZABLE {
