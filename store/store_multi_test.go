@@ -1609,14 +1609,15 @@ func Test_MultiNodeExecuteQuery_Linearizable_Concurrent(t *testing.T) {
 
 	// Perform a bunch of linearizable queries concurrently, to stress test
 	// the system. Must be done on Leader.
-	qr := queryRequestFromString("SELECT * FROM foo", false, false)
-	qr.Level = proto.QueryRequest_QUERY_REQUEST_LEVEL_LINEARIZABLE
+
 	count := 100
 	var wg sync.WaitGroup
 	wg.Add(count)
 	for i := 0; i < count; i++ {
 		go func() {
 			defer wg.Done()
+			qr := queryRequestFromString("SELECT * FROM foo", false, false)
+			qr.Level = proto.QueryRequest_QUERY_REQUEST_LEVEL_LINEARIZABLE
 			r, err := s0.Query(qr)
 			if err != nil {
 				t.Errorf("expected query to succeed, but it did not: %s", err.Error())

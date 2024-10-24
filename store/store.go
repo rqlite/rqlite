@@ -1144,6 +1144,9 @@ func (s *Store) execute(ex *proto.ExecuteRequest) ([]*proto.ExecuteQueryResponse
 }
 
 // Query executes queries that return rows, and do not modify the database.
+// If the request read consistency level is LINEARIZABLE, that level may be
+// upgraded to STRONG if the Store determines that is necessary to guarantee
+// a linearizable read.
 func (s *Store) Query(qr *proto.QueryRequest) (rows []*proto.QueryRows, retErr error) {
 	p := (*PragmaCheckRequest)(qr.Request)
 	if err := p.Check(); err != nil {
