@@ -354,12 +354,13 @@ type Store struct {
 	numTrailingLogs uint64
 
 	// For whitebox testing
-	numFullSnapshots int
-	numAutoVacuums   int
-	numAutoOptimizes int
-	numIgnoredJoins  int
-	numNoops         *atomic.Uint64
-	numSnapshots     *atomic.Uint64
+	numLinearizableUpgraded int
+	numFullSnapshots        int
+	numAutoVacuums          int
+	numAutoOptimizes        int
+	numIgnoredJoins         int
+	numNoops                *atomic.Uint64
+	numSnapshots            *atomic.Uint64
 }
 
 // Config represents the configuration of the underlying Store.
@@ -1164,6 +1165,25 @@ func (s *Store) Query(qr *proto.QueryRequest) (rows []*proto.QueryRows, retErr e
 		}
 	}
 
+	// If linearizable consistency is requested, we will need to check the
+	// term when heartbeat processing completes to ensure the Leader didn't
+	// change during the processing of a Linearizable read. We also need to
+	// be sure that this node -- if Leader -- has actually committed a log
+	// in *this* term. Currently the Raft library doesn't help us do this,
+	// so we have to do it ourselves, by checking  if at least one Strong
+	// Read has gone through the Raft log in this term. If it hasn't then
+	// we convert the first Linearizable read into a strong read. Subsequent
+	// Linearizable reads will then be able to operate normally in this term.
+	//
+	// See https://groups.google.com/g/raft-dev/c/4QlyV0aptEQ/m/1JxcmSgRAwAJ
+	// for an extensive discussion of this logic.
+	readTerm := s.getCurrentTerm()
+	if qr.Level == proto.QueryRequest_QUERY_REQUEST_LEVEL_LINEARIZABLE &&
+		readTerm != s.strongReadTerm.Load() {
+		qr.Level = proto.QueryRequest_QUERY_REQUEST_LEVEL_STRONG
+		s.numLinearizableUpgraded++
+	}
+
 	if qr.Level == proto.QueryRequest_QUERY_REQUEST_LEVEL_LINEARIZABLE {
 		if s.raft.State() != raft.Leader {
 			return nil, ErrNotLeader
@@ -1171,14 +1191,6 @@ func (s *Store) Query(qr *proto.QueryRequest) (rows []*proto.QueryRows, retErr e
 		if !s.Ready() {
 			return nil, ErrNotReady
 		}
-
-		// If linearizable consistency is requested, we will need to check the
-		// term when heartbeat processing completes to ensure the Leader didn't
-		// change.
-		//
-		// See https://groups.google.com/g/raft-dev/c/4QlyV0aptEQ/m/1JxcmSgRAwAJ
-		// for an extensive discussion of this logic.
-		readTerm := s.getCurrentTerm()
 
 		// Implement the technique from the Raft dissertation, section
 		// 6.4 "Processing read-only queries more efficiently".
@@ -1220,7 +1232,7 @@ func (s *Store) Query(qr *proto.QueryRequest) (rows []*proto.QueryRows, retErr e
 
 		af := s.raft.Apply(b, s.ApplyTimeout)
 		if af.Error() != nil {
-			if af.Error() == raft.ErrNotLeader {
+			if af.Error() == raft.ErrNotLeader || af.Error() == raft.ErrLeadershipLost {
 				return nil, ErrNotLeader
 			}
 			return nil, af.Error()
