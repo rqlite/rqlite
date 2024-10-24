@@ -1,4 +1,8 @@
-## v8.32.4 (unreleased)
+## v8.32.5 (unreleased)
+### Implementation changes and bug fixes
+- [PR #1958](https://github.com/rqlite/rqlite/pull/1958): Improve testing of concurrent Linearizable reads.
+
+## v8.32.4 (October 23rd 2024)
 ### Implementation changes and bug fixes
 - [PR #1957](https://github.com/rqlite/rqlite/pull/1957): Convert Linearizable Read to Strong Read if necessary.
 - [PR #1955](https://github.com/rqlite/rqlite/pull/1955), [PR #1956](https://github.com/rqlite/rqlite/pull/1956): Keep track of Term of most recent Strong Read.
