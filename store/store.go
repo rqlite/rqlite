@@ -72,6 +72,10 @@ var (
 	// within the specified time.
 	ErrWaitForLeaderTimeout = errors.New("timeout waiting for leader")
 
+	// ErrWaitForFSMTimeout is returned when the FSM does not apply a given commit
+	// index within the specified time.
+	ErrWaitForFSMTimeout = errors.New("timeout waiting for fsm")
+
 	// ErrInvalidBackupFormat is returned when the requested backup format
 	// is not valid.
 	ErrInvalidBackupFormat = errors.New("invalid backup format")
@@ -745,7 +749,7 @@ func (s *Store) WaitForFSMIndex(idx uint64, timeout time.Duration) (uint64, erro
 	case <-ch:
 		return s.fsmIdx.Load(), nil
 	case <-time.After(timeout):
-		return 0, fmt.Errorf("timeout waiting for index %d to be applied", idx)
+		return 0, fmt.Errorf("timeout waiting for index %d to be applied %v", idx, ErrWaitForFSMTimeout)
 	}
 }
 
@@ -1207,7 +1211,7 @@ func (s *Store) Query(qr *proto.QueryRequest) (rows []*proto.QueryRows, retErr e
 			return nil, ErrStaleRead
 		}
 		if _, err := s.WaitForFSMIndex(readIndex, time.Duration(qr.LinearizableTimeout)); err != nil {
-			return nil, ErrNotReady
+			return nil, err
 		}
 	}
 
