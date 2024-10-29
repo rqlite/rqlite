@@ -1,6 +1,7 @@
 ## v8.32.5 (unreleased)
 ### Implementation changes and bug fixes
 - [PR #1958](https://github.com/rqlite/rqlite/pull/1958): Improve testing of concurrent Linearizable reads.
+- [PR #1959](https://github.com/rqlite/rqlite/pull/1959): Return error specific to FSM timeouts.
 
 ## v8.32.4 (October 23rd 2024)
 ### Implementation changes and bug fixes
