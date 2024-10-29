@@ -749,7 +749,7 @@ func (s *Store) WaitForFSMIndex(idx uint64, timeout time.Duration) (uint64, erro
 	case <-ch:
 		return s.fsmIdx.Load(), nil
 	case <-time.After(timeout):
-		return 0, fmt.Errorf("timeout waiting for index %d to be applied %v", idx, ErrWaitForFSMTimeout)
+		return 0, fmt.Errorf("index %d: %w", idx, ErrWaitForFSMTimeout)
 	}
 }
 
