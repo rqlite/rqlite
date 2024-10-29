@@ -896,7 +896,7 @@ func Test_SingleNodeExecuteQuery_Linearizable(t *testing.T) {
 		t.Fatalf("expected 1 linearizable upgrade, got %d", s.numLRUpgraded.Load())
 	}
 
-	// Perform the first linearizable query, which should not be upgraded to a strong query.
+	// Perform the second linearizable query, which should not be upgraded to a strong query.
 	r, err = s.Query(qr)
 	if err != nil {
 		t.Fatalf("failed to perform linearizable query on single node: %s", err.Error())
