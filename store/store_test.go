@@ -2299,7 +2299,7 @@ func Test_SingleNode_DatabaseFileModified(t *testing.T) {
 		}
 	}
 
-	// Insert a record, trigger a snapshot. It shoudl be an incremental snapshot.
+	// Insert a record, trigger a snapshot. It should be an incremental snapshot.
 	insertSnap()
 	if s.numFullSnapshots != 1 {
 		t.Fatalf("expected 1 full snapshot, got %d", s.numFullSnapshots)
