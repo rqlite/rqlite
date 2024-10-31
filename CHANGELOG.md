@@ -1,6 +1,8 @@
 ## v8.32.6 (unreleased)
 ### Implementation changes and bug fixes
+<<<<<<< HEAD
 - [PR #1965](https://github.com/rqlite/rqlite/pull/1965): Prep S3-relatedt testing with Minio.
+- [PR #1965](https://github.com/rqlite/rqlite/pull/1965): Prep S3-related testing with Minio.
 - [PR #1966](https://github.com/rqlite/rqlite/pull/1966): Explicitly close Raft network streams on shutdown.
 
 ## v8.32.5 (October 31st 2024)
@@ -10,7 +12,6 @@
 - [PR #1962](https://github.com/rqlite/rqlite/pull/1962): End-to-end auto-backup and auto-restore test.
 - [PR #1963](https://github.com/rqlite/rqlite/pull/1963): Upgrade dependencies.
 - [PR #1964](https://github.com/rqlite/rqlite/pull/1964): Return HTTP 204 if there is nothing to snapshot.
-- [PR #1965](https://github.com/rqlite/rqlite/pull/1965): Prep S3-relatedt testing with Minio.
 
 ## v8.32.4 (October 23rd 2024)
 ### Implementation changes and bug fixes
