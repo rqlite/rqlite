@@ -92,6 +92,7 @@ func (n *NodeTransport) Close() error {
 	if n.NetworkTransport == nil {
 		return nil
 	}
+	n.NetworkTransport.CloseStreams()
 	return n.NetworkTransport.Close()
 }
 
