@@ -109,6 +109,17 @@ func (s *S3Client) String() string {
 	return fmt.Sprintf("s3://%s/%s/%s", s.endpoint, s.bucket, s.key)
 }
 
+// EnsureBucket ensures the bucket actually exists in S3.
+func (s *S3Client) EnsureBucket(ctx context.Context) error {
+	_, err := s.s3.CreateBucket(ctx, &s3.CreateBucketInput{
+		Bucket: aws.String(s.bucket),
+	})
+	if err != nil {
+		return fmt.Errorf("failed to create bucket %v: %w", s.bucket, err)
+	}
+	return nil
+}
+
 // Upload uploads data to S3.
 func (s *S3Client) Upload(ctx context.Context, reader io.Reader, id string) error {
 	key := s.key
