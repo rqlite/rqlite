@@ -818,6 +818,10 @@ func (s *Service) handleSnapshot(w http.ResponseWriter, r *http.Request, qp Quer
 
 	err := s.store.Snapshot(uint64(qp.TrailingLogs(0)))
 	if err != nil {
+		if err == store.ErrNothingNewToSnapshot {
+			w.WriteHeader(http.StatusNoContent)
+			return
+		}
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}

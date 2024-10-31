@@ -368,7 +368,7 @@ func snapshot(client *httpcl.Client, argv *argT) error {
 		return err
 	}
 	defer resp.Body.Close()
-	if resp.StatusCode != http.StatusOK {
+	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusNoContent {
 		return fmt.Errorf("server responded with %s", resp.Status)
 	}
 	return nil
