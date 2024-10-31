@@ -2,6 +2,7 @@
 ### Implementation changes and bug fixes
 - [PR #1958](https://github.com/rqlite/rqlite/pull/1958): Improve testing of concurrent Linearizable reads.
 - [PR #1959](https://github.com/rqlite/rqlite/pull/1959): Return error specific to FSM timeouts.
+- [PR #1962](https://github.com/rqlite/rqlite/pull/1962): End-to-end auto-backup and auto-restore test.
 
 ## v8.32.4 (October 23rd 2024)
 ### Implementation changes and bug fixes
