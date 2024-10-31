@@ -87,6 +87,10 @@ var (
 	// ErrLoadInProgress is returned when a load is already in progress and the
 	// requested operation cannot be performed.
 	ErrLoadInProgress = errors.New("load in progress")
+
+	// ErrNothingNewToSnapshot is returned when a snapshot is requested but there
+	// are no new log entries to snapshot.
+	ErrNothingNewToSnapshot = errors.New("nothing new to snapshot")
 )
 
 const (
@@ -2280,7 +2284,7 @@ func (s *Store) observe() (closeCh, doneCh chan struct{}) {
 // is reset to the value set at Store creation.
 func (s *Store) Snapshot(n uint64) (retError error) {
 	defer func() {
-		if retError != nil {
+		if retError != nil && retError != ErrNothingNewToSnapshot {
 			stats.Add(numUserSnapshotsFailed, 1)
 			s.logger.Printf("failed to generate user-requested snapshot: %s", retError.Error())
 		}
@@ -2302,6 +2306,8 @@ func (s *Store) Snapshot(n uint64) (retError error) {
 	if err := s.raft.Snapshot().Error(); err != nil {
 		if strings.Contains(err.Error(), ErrLoadInProgress.Error()) {
 			return ErrLoadInProgress
+		} else if err == raft.ErrNothingNewToSnapshot {
+			return ErrNothingNewToSnapshot
 		}
 		return err
 	}
