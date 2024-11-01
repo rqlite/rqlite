@@ -249,7 +249,7 @@ jobs:
     docker:
       - image: << pipeline.parameters.primary_image >>
       - image: minio/minio
-          command: server /data
+        command: server /data
     steps:
       - checkout
       - restore_and_save_cache
