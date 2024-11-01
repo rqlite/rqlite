@@ -17,9 +17,8 @@ RQLITED_PATH = os.environ['RQLITED_PATH']
 class TestAutoBackupRestore(unittest.TestCase):
   @unittest.skipUnless(env_present('RQLITE_S3_ACCESS_KEY'), "S3 credentials not available")
   def test(self):
-    '''Test that an automatic backups and restore works back-to-back'''
+    '''Test that an automatic backup and restore works back-to-back'''
     node = None
-    cfg = None
     path = None
 
     access_key_id = os.environ['RQLITE_S3_ACCESS_KEY']
@@ -30,7 +29,7 @@ class TestAutoBackupRestore(unittest.TestCase):
     auto_backup_cfg = {
       "version": 1,
       "type": "s3",
-      "interval": "100ms",
+      "interval": "1s",
       "no_compress": True,
       "sub" : {
          "access_key_id": access_key_id,
@@ -76,6 +75,73 @@ class TestAutoBackupRestore(unittest.TestCase):
     os.remove(auto_backup_cfg_file)
     os.remove(auto_restore_cfg_file)
     delete_s3_object(access_key_id, secret_access_key_id, S3_BUCKET, path)
+
+class TestAutoBackupRestore_Minio(unittest.TestCase):
+  @unittest.skipUnless(env_present('MINIO_ENDPOINT'), "Minio not available")
+  def test(self):
+    '''Test that an automatic backup and restore works back-to-back with Minio'''
+    node = None
+    path = None
+
+    endpoint = os.environ['MINIO_ENDPOINT']
+    access_key_id = os.environ['MINIO_ROOT_USER']
+    secret_access_key_id = os.environ['MINIO_ROOT_PASSWORD']
+    bucket = os.environ['MINIO_BUCKET']
+
+    # Create the auto-backup config file
+    path = random_string(32)
+    auto_backup_cfg = {
+      "version": 1,
+      "type": "s3",
+      "interval": "1s",
+      "no_compress": True,
+      "sub" : {
+         "endpoint": endpoint,
+         "access_key_id": access_key_id,
+         "secret_access_key": secret_access_key_id,
+         "region": "region1",
+         "bucket": bucket,
+         "path": path,
+         "force_path_style": True
+      }
+    }
+    auto_backup_cfg_file = write_random_file(json.dumps(auto_backup_cfg))
+
+    # Create a node, enable automatic backups, and start it. Then
+    # create a table and insert a row.
+    node = Node(RQLITED_PATH, '0', auto_backup=auto_backup_cfg_file)
+    node.start()
+    node.wait_for_leader()
+    node.execute('CREATE TABLE foo (id INTEGER NOT NULL PRIMARY KEY, name TEXT)')
+    node.execute('INSERT INTO foo(name) VALUES("fiona")')
+    node.wait_for_upload(1)
+    node.wait_until_uploads_idle()
+
+    # Create a second node, with auto-restore enabled.
+    auto_restore_cfg = {
+      "version": 1,
+      "type": "s3",
+      "sub" : {
+         "endpoint": endpoint,
+         "access_key_id": access_key_id,
+         "secret_access_key": secret_access_key_id,
+         "region": "region1",
+         "bucket": bucket,
+         "path": path,
+         "force_path_style": True
+      }
+    }
+    auto_restore_cfg_file = write_random_file(json.dumps(auto_restore_cfg))
+    nodeR = Node(RQLITED_PATH, '0', auto_restore=auto_restore_cfg_file)
+    nodeR.start()
+    nodeR.wait_for_ready()
+    j = nodeR.query('SELECT * FROM foo')
+    self.assertEqual(j, d_("{'results': [{'values': [[1, 'fiona']], 'types': ['integer', 'text'], 'columns': ['id', 'name']}]}"))
+
+    deprovision_node(node)
+    deprovision_node(nodeR)
+    os.remove(auto_backup_cfg_file)
+    os.remove(auto_restore_cfg_file)
 
 class TestAutoRestoreS3(unittest.TestCase):
   def create_sqlite_file(self):
@@ -251,7 +317,7 @@ class TestAutoBackupS3(unittest.TestCase):
     auto_backup_cfg = {
       "version": 1,
       "type": "s3",
-      "interval": "100ms",
+      "interval": "1s",
       "no_compress": True,
       "sub" : {
          "access_key_id": access_key_id,
@@ -314,7 +380,7 @@ class TestAutoBackupS3(unittest.TestCase):
     auto_backup_cfg = {
       "version": 1,
       "type": "s3",
-      "interval": "100ms",
+      "interval": "1s",
       "no_compress": True,
       "vacuum": True,
       "sub" : {
@@ -373,7 +439,7 @@ class TestAutoBackupS3(unittest.TestCase):
     auto_backup_cfg = {
       "version": 1,
       "type": "s3",
-      "interval": "100ms",
+      "interval": "1s",
       "sub" : {
          "access_key_id": access_key_id,
          "secret_access_key": secret_access_key_id,
@@ -439,7 +505,7 @@ class TestAutoBackupS3(unittest.TestCase):
     auto_backup_cfg = {
       "version": 1,
       "type": "s3",
-      "interval": "100ms",
+      "interval": "1s",
       "no_compress": True,
       "sub" : {
          "access_key_id": access_key_id,
@@ -488,7 +554,7 @@ class TestAutoBackupS3(unittest.TestCase):
     auto_backup_cfg = {
       "version": 1,
       "type": "s3",
-      "interval": "100ms",
+      "interval": "1s",
       "no_compress": True,
       "sub" : {
         "access_key_id": access_key_id,
@@ -540,7 +606,7 @@ class TestAutoBackupS3(unittest.TestCase):
     auto_backup_cfg = {
       "version": 1,
       "type": "s3",
-      "interval": "100ms",
+      "interval": "1s",
       "no_compress": True,
       "sub" : {
         "access_key_id": access_key_id,
