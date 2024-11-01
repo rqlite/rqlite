@@ -259,6 +259,7 @@ jobs:
           command: python3 system_test/e2e/auto_state.py
           environment:
             RQLITED_PATH: /home/circleci/go/bin/rqlited
+            MINIO_ENDPOINT: http://minio:9000
             MINIO_ROOT_USER: minioadmin
             MINIO_ROOT_PASSWORD: minioadmin
     resource_class: large
