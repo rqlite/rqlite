@@ -119,8 +119,31 @@ class TestAutoBackupRestore_Minio(unittest.TestCase):
     node.wait_for_upload(1)
     node.wait_until_uploads_idle()
 
+    # Create a second node, with auto-restore enabled.
+    auto_restore_cfg = {
+      "version": 1,
+      "type": "s3",
+      "sub" : {
+         "endpoint": endpoint,
+         "access_key_id": access_key_id,
+         "secret_access_key": secret_access_key_id,
+         "region": "region1",
+         "bucket": bucket,
+         "path": path,
+         "force_path_style": True
+      }
+    }
+    auto_restore_cfg_file = write_random_file(json.dumps(auto_restore_cfg))
+    nodeR = Node(RQLITED_PATH, '0', auto_restore=auto_restore_cfg_file)
+    nodeR.start()
+    nodeR.wait_for_ready()
+    j = nodeR.query('SELECT * FROM foo')
+    self.assertEqual(j, d_("{'results': [{'values': [[1, 'fiona']], 'types': ['integer', 'text'], 'columns': ['id', 'name']}]}"))
+
     deprovision_node(node)
+    deprovision_node(nodeR)
     os.remove(auto_backup_cfg_file)
+    os.remove(auto_restore_cfg_file)
 
 class TestAutoRestoreS3(unittest.TestCase):
   def create_sqlite_file(self):
