@@ -29,7 +29,7 @@ class TestAutoBackupRestore(unittest.TestCase):
     auto_backup_cfg = {
       "version": 1,
       "type": "s3",
-      "interval": "100ms",
+      "interval": "1s",
       "no_compress": True,
       "sub" : {
          "access_key_id": access_key_id,
@@ -93,7 +93,7 @@ class TestAutoBackupRestore_Minio(unittest.TestCase):
     auto_backup_cfg = {
       "version": 1,
       "type": "s3",
-      "interval": "100ms",
+      "interval": "1s",
       "no_compress": True,
       "sub" : {
          "endpoint": endpoint,
@@ -317,7 +317,7 @@ class TestAutoBackupS3(unittest.TestCase):
     auto_backup_cfg = {
       "version": 1,
       "type": "s3",
-      "interval": "100ms",
+      "interval": "1s",
       "no_compress": True,
       "sub" : {
          "access_key_id": access_key_id,
@@ -380,7 +380,7 @@ class TestAutoBackupS3(unittest.TestCase):
     auto_backup_cfg = {
       "version": 1,
       "type": "s3",
-      "interval": "100ms",
+      "interval": "1s",
       "no_compress": True,
       "vacuum": True,
       "sub" : {
@@ -439,7 +439,7 @@ class TestAutoBackupS3(unittest.TestCase):
     auto_backup_cfg = {
       "version": 1,
       "type": "s3",
-      "interval": "100ms",
+      "interval": "1s",
       "sub" : {
          "access_key_id": access_key_id,
          "secret_access_key": secret_access_key_id,
@@ -505,7 +505,7 @@ class TestAutoBackupS3(unittest.TestCase):
     auto_backup_cfg = {
       "version": 1,
       "type": "s3",
-      "interval": "100ms",
+      "interval": "1s",
       "no_compress": True,
       "sub" : {
          "access_key_id": access_key_id,
@@ -554,7 +554,7 @@ class TestAutoBackupS3(unittest.TestCase):
     auto_backup_cfg = {
       "version": 1,
       "type": "s3",
-      "interval": "100ms",
+      "interval": "1s",
       "no_compress": True,
       "sub" : {
         "access_key_id": access_key_id,
@@ -606,7 +606,7 @@ class TestAutoBackupS3(unittest.TestCase):
     auto_backup_cfg = {
       "version": 1,
       "type": "s3",
-      "interval": "100ms",
+      "interval": "1s",
       "no_compress": True,
       "sub" : {
         "access_key_id": access_key_id,
