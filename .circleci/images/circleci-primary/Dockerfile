@@ -1,5 +1,6 @@
 FROM cimg/go:1.22.2
 
+RUN sudo curl https://dl.min.io/client/mc/release/linux-amd64/mc -o /usr/bin/mc && sudo chmod +x /usr/bin/mc
 RUN sudo apt-get update
 RUN sudo apt-get install musl-dev musl-tools
 RUN sudo apt-get install gcc-mingw-w64-x86-64-posix
