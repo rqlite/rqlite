@@ -118,6 +118,9 @@ class TestAutoBackupRestore_Minio(unittest.TestCase):
     node.wait_for_upload(1)
     node.wait_until_uploads_idle()
 
+    deprovision_node(node)
+    os.remove(auto_backup_cfg_file)
+
 class TestAutoRestoreS3(unittest.TestCase):
   def create_sqlite_file(self):
     tmp_file = temp_file()
