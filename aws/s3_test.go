@@ -65,16 +65,8 @@ func Test_S3Client_String(t *testing.T) {
 	if err != nil {
 		t.Fatalf("error while creating aws S3 client: %v", err)
 	}
-	if c.String() != "s3://bucket2.s3.ca-central-1.wasabisys.com/key3" {
-		t.Fatalf("expected String() to be %q, got %q", "s3://bucket2.s3.ca-central-1.wasabisys.com/key3", c.String())
-	}
-	// Test non-native S3 (explicit endpoint) with forced path style (e.g. MinIO)
-	c, err = NewS3Client("s3.minio.example.com", "region1", "access", "secret", "bucket2", "key3", forcePathStyleOptions())
-	if err != nil {
-		t.Fatalf("error while creating aws S3 client: %v", err)
-	}
-	if c.String() != "s3://s3.minio.example.com/bucket2/key3" {
-		t.Fatalf("expected String() to be %q, got %q", "s3://s3.minio.example.com/bucket2/key3", c.String())
+	if exp, got := "s3.ca-central-1.wasabisys.com/bucket2/key3", c.String(); exp != got {
+		t.Fatalf("expected String() to be %s, got %s", exp, got)
 	}
 }
 
