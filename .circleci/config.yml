@@ -255,6 +255,8 @@ jobs:
       - checkout
       - restore_and_save_cache
       - run: go install ./...
+      - run: mc alias set myminio http://minio:9000 minioadmin minioadmin
+      - run: mc mb myminio/minio-bucket
       - run:
           command: python3 system_test/e2e/auto_state.py
           environment:
@@ -262,6 +264,7 @@ jobs:
             MINIO_ENDPOINT: http://minio:9000
             MINIO_ROOT_USER: minioadmin
             MINIO_ROOT_PASSWORD: minioadmin
+            MINIO_BUCKET: minio-bucket
     resource_class: large
 
   end_to_end_extensions:

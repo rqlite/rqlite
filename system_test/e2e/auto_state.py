@@ -88,6 +88,7 @@ class TestAutoBackupRestore_Minio(unittest.TestCase):
     endpoint = os.environ['MINIO_ENDPOINT']
     access_key_id = os.environ['MINIO_ROOT_USER']
     secret_access_key_id = os.environ['MINIO_ROOT_PASSWORD']
+    bucket = os.environ['MINIO_BUCKET']
 
     # Create the auto-backup config file
     path = random_string(32)
@@ -100,8 +101,8 @@ class TestAutoBackupRestore_Minio(unittest.TestCase):
          "endpoint": endpoint,
          "access_key_id": access_key_id,
          "secret_access_key": secret_access_key_id,
-         "region": S3_BUCKET_REGION,
-         "bucket": S3_BUCKET,
+         "region": "region1",
+         "bucket": bucket,
          "path": path,
          "force_path_style": True
       }
