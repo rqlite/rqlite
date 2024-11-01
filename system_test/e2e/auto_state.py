@@ -17,9 +17,8 @@ RQLITED_PATH = os.environ['RQLITED_PATH']
 class TestAutoBackupRestore(unittest.TestCase):
   @unittest.skipUnless(env_present('RQLITE_S3_ACCESS_KEY'), "S3 credentials not available")
   def test(self):
-    '''Test that an automatic backups and restore works back-to-back'''
+    '''Test that an automatic backup and restore works back-to-back'''
     node = None
-    cfg = None
     path = None
 
     access_key_id = os.environ['RQLITE_S3_ACCESS_KEY']
@@ -82,7 +81,6 @@ class TestAutoBackupRestore_Minio(unittest.TestCase):
   def test(self):
     '''Test that an automatic backup and restore works back-to-back with Minio'''
     node = None
-    cfg = None
     path = None
 
     endpoint = os.environ['MINIO_ENDPOINT']
