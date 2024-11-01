@@ -77,6 +77,47 @@ class TestAutoBackupRestore(unittest.TestCase):
     os.remove(auto_restore_cfg_file)
     delete_s3_object(access_key_id, secret_access_key_id, S3_BUCKET, path)
 
+class TestAutoBackupRestore_Minio(unittest.TestCase):
+  @unittest.skipUnless(env_present('MINIO_ENDPOINT'), "Minio not available")
+  def test(self):
+    '''Test that an automatic backup and restore works back-to-back with Minio'''
+    node = None
+    cfg = None
+    path = None
+
+    endpoint = os.environ['MINIO_ENDPOINT']
+    access_key_id = os.environ['MINIO_ROOT_USER']
+    secret_access_key_id = os.environ['MINIO_ROOT_PASSWORD']
+
+    # Create the auto-backup config file
+    path = random_string(32)
+    auto_backup_cfg = {
+      "version": 1,
+      "type": "s3",
+      "interval": "100ms",
+      "no_compress": True,
+      "sub" : {
+         "endpoint": endpoint,
+         "access_key_id": access_key_id,
+         "secret_access_key": secret_access_key_id,
+         "region": S3_BUCKET_REGION,
+         "bucket": S3_BUCKET,
+         "path": path,
+         "force_path_style": True
+      }
+    }
+    auto_backup_cfg_file = write_random_file(json.dumps(auto_backup_cfg))
+
+    # Create a node, enable automatic backups, and start it. Then
+    # create a table and insert a row.
+    node = Node(RQLITED_PATH, '0', auto_backup=auto_backup_cfg_file)
+    node.start()
+    node.wait_for_leader()
+    node.execute('CREATE TABLE foo (id INTEGER NOT NULL PRIMARY KEY, name TEXT)')
+    node.execute('INSERT INTO foo(name) VALUES("fiona")')
+    node.wait_for_upload(1)
+    node.wait_until_uploads_idle()
+
 class TestAutoRestoreS3(unittest.TestCase):
   def create_sqlite_file(self):
     tmp_file = temp_file()
