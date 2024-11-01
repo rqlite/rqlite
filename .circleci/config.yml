@@ -250,6 +250,8 @@ jobs:
       - image: << pipeline.parameters.primary_image >>
       - image: minio/minio
         command: server /data
+        ports:
+          - 9000:9000
     steps:
       - checkout
       - restore_and_save_cache
