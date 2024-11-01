@@ -248,6 +248,11 @@ jobs:
   end_to_end_auto_state:
     docker:
       - image: << pipeline.parameters.primary_image >>
+      - image: minio/minio
+        name: minio
+        command: server /data
+        ports:
+          - 9000:9000
     steps:
       - checkout
       - restore_and_save_cache
@@ -256,6 +261,8 @@ jobs:
           command: python3 system_test/e2e/auto_state.py
           environment:
             RQLITED_PATH: /home/circleci/go/bin/rqlited
+            MINIO_ROOT_USER: minioadmin
+            MINIO_ROOT_PASSWORD: minioadmin
     resource_class: large
 
   end_to_end_extensions:
