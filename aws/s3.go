@@ -101,12 +101,8 @@ func (s *S3Client) String() string {
 	if s.endpoint == "" || strings.HasSuffix(s.endpoint, "amazonaws.com") {
 		// Native Amazon S3, use AWS's S3 URL format
 		return fmt.Sprintf("s3://%s/%s", s.bucket, s.key)
-	} else if !s.s3.Options().UsePathStyle {
-		// Endpoint specified but not using path style (e.g. Wasabi)
-		return fmt.Sprintf("s3://%s.%s/%s", s.bucket, s.endpoint, s.key)
 	}
-	// Endpoint specified and using path style (e.g. MinIO)
-	return fmt.Sprintf("s3://%s/%s/%s", s.endpoint, s.bucket, s.key)
+	return fmt.Sprintf("%s/%s/%s", s.endpoint, s.bucket, s.key)
 }
 
 // EnsureBucket ensures the bucket actually exists in S3.
