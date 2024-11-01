@@ -2,7 +2,7 @@
 ### Implementation changes and bug fixes
 - [PR #1965](https://github.com/rqlite/rqlite/pull/1965): Prep S3-related testing with Minio.
 - [PR #1966](https://github.com/rqlite/rqlite/pull/1966): Explicitly close Raft network streams on shutdown.
-- [PR #1968](https://github.com/rqlite/rqlite/pull/1968): End-to-end testing with Minio.
+- [PR #1967](https://github.com/rqlite/rqlite/pull/1967): End-to-end testing with Minio.
 
 ## v8.32.5 (October 31st 2024)
 ### Implementation changes and bug fixes
