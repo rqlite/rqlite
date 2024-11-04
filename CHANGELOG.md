@@ -1,3 +1,7 @@
+## v8.32.7 (unreleased)
+### Implementation changes and bug fixes
+- [PR #1973](https://github.com/rqlite/rqlite/pull/1973): Include any failure message in `/status` output.
+
 ## v8.32.6 (November 4th 2024)
 ### Implementation changes and bug fixes
 - [PR #1965](https://github.com/rqlite/rqlite/pull/1965): Prep S3-related testing with Minio.
