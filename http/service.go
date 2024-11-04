@@ -928,9 +928,8 @@ func (s *Service) handleStatus(w http.ResponseWriter, r *http.Request, qp QueryP
 		for k, v := range s.statuses {
 			stat, err := v.Stats()
 			if err != nil {
-				http.Error(w, fmt.Sprintf("registered stats: %s", err.Error()),
-					http.StatusInternalServerError)
-				return
+				s.logger.Printf("failed to retrieve stats for registered reporter %s: %s", k, err.Error())
+				continue
 			}
 			status[k] = stat
 		}
