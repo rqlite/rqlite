@@ -18,7 +18,7 @@ require (
 	github.com/rqlite/go-sqlite3 v1.36.0
 	github.com/rqlite/raft-boltdb/v2 v2.0.0-20230523104317-c08e70f4de48
 	github.com/rqlite/rqlite-disco-clients v0.0.0-20231230135307-118e35426347
-	github.com/rqlite/sql v0.0.0-20241029220113-152a320b02f7
+	github.com/rqlite/sql v0.0.0-20241104141219-0ce58e44a5e6
 	go.etcd.io/bbolt v1.3.11
 	golang.org/x/net v0.30.0
 	google.golang.org/protobuf v1.35.1
@@ -71,8 +71,8 @@ require (
 	golang.org/x/sys v0.26.0 // indirect
 	golang.org/x/term v0.25.0 // indirect
 	golang.org/x/text v0.19.0 // indirect
-	google.golang.org/genproto/googleapis/api v0.0.0-20241021214115-324edc3d5d38 // indirect
-	google.golang.org/genproto/googleapis/rpc v0.0.0-20241021214115-324edc3d5d38 // indirect
+	google.golang.org/genproto/googleapis/api v0.0.0-20241104194629-dd2ea8efbc28 // indirect
+	google.golang.org/genproto/googleapis/rpc v0.0.0-20241104194629-dd2ea8efbc28 // indirect
 	google.golang.org/grpc v1.67.1 // indirect
 )
 
