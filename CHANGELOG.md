@@ -1,3 +1,7 @@
+## v8.32.6 (November 5th 2024)
+### Implementation changes and bug fixes
+- [PR #1974](https://github.com/rqlite/rqlite/pull/1974): Upgrade dependencies including latest SQL parser.
+
 ## v8.32.6 (November 4th 2024)
 ### Implementation changes and bug fixes
 - [PR #1965](https://github.com/rqlite/rqlite/pull/1965): Prep S3-related testing with Minio.
