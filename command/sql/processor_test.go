@@ -194,3 +194,27 @@ func Test_Both(t *testing.T) {
 		t.Fatalf("ForceQuery is not set")
 	}
 }
+
+func Test_Complex(t *testing.T) {
+	sql := `
+	SELECT
+    datetime('now', '+' || CAST(ABS(RANDOM() % 1000) AS TEXT) || ' seconds') AS random_future_time,
+    date('now', '-' || CAST((RANDOM() % 30) AS TEXT) || ' days') AS random_past_date,
+    time('now', '+' || CAST((RANDOM() % 3600) AS TEXT) || ' seconds') AS random_future_time_of_day,
+    julianday('now') - julianday(date('now', '-' || CAST((RANDOM() % 365) AS TEXT) || ' days')) AS random_days_ago,
+    strftime('%Y-%m-%d %H:%M:%f', 'now', '+' || CAST(RANDOM() % 10000 AS TEXT) || ' seconds') AS precise_future_timestamp,
+    RANDOM() % 100 AS random_integer,
+    ROUND(RANDOM() / 1000000000.0, 2) AS random_decimal,
+    CASE
+        WHEN RANDOM() % 2 = 0 THEN 'Even'
+        ELSE 'Odd'
+    END AS random_parity
+	`
+	stmt := &proto.Statement{
+		Sql: sql,
+	}
+
+	if err := Process([]*proto.Statement{stmt}, true, true); err != nil {
+		t.Fatalf("failed to rewrite complex statement: %s", err)
+	}
+}
