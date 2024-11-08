@@ -1,6 +1,6 @@
 ## v8.33.0 (November 7th 2024)
 ### New features
-- [PR #1976](https://github.com/rqlite/rqlite/pull/1976): Rewrite time and date functions so they are deterministic.
+- [PR #1976](https://github.com/rqlite/rqlite/pull/1976): Rewrite time and date functions so they are deterministic. Fixes issue [#536](https://github.com/rqlite/rqlite/issues/536).
 
 ### Implementation changes and bug fixes
 - [PR #1975](https://github.com/rqlite/rqlite/pull/1975): Upgrade to latest SQL parser.
