@@ -1,7 +1,12 @@
 package sql
 
 import (
+	"fmt"
+	"math"
+	"math/rand"
+	"strconv"
 	"strings"
+	"time"
 
 	"github.com/rqlite/rqlite/v8/command/proto"
 	"github.com/rqlite/sql"
@@ -23,9 +28,8 @@ func Process(stmts []*proto.Statement, rw bool) error {
 		if err != nil {
 			continue
 		}
-		rewriter := &Rewriter{
-			RewriteRand: rw,
-		}
+		rewriter := NewRewriter()
+		rewriter.RewriteRand = rw
 		rwStmt, rewritten, ret, err := rewriter.Do(stmt)
 		if err != nil {
 			continue
@@ -43,48 +47,137 @@ func containsReturning(stmt *proto.Statement) bool {
 	return strings.Contains(strings.ToLower(stmt.Sql), "returning")
 }
 
-// Rewriter rewrites SQL statements to replace calls to the RANDOM() function
-// with an actual random value, if requested. It also checks for the presence of
-// a RETURNING clause.
+// Rewriter rewrites SQL statements.
 type Rewriter struct {
 	RewriteRand bool
+	RewriteTime bool
 
-	randRewritten bool
-	returning     bool
+	randFn func() int64
+	nowFn  func() time.Time
+
+	orderedBy bool
+	modified  bool
+	returning bool
 }
 
-// Do rewrites the given statement, if necessary. It returns the rewritten
-// statement, a flag indicating whether the statement was rewritten, a flag
-// indicating when a RETURNING clause was found, and an error.
+// NewRewriter returns a new Rewriter. This object is not thread
+// safe, and should not be shared between goroutines.
+func NewRewriter() *Rewriter {
+	return &Rewriter{
+		RewriteRand: true,
+		RewriteTime: true,
+
+		randFn: func() int64 {
+			return rand.Int63()
+		},
+		nowFn: time.Now,
+	}
+}
+
+// Do rewrites the provided statement. If the statement is rewritten, the second return value is true.
 func (rw *Rewriter) Do(stmt sql.Statement) (sql.Statement, bool, bool, error) {
-	err := sql.Walk(rw, stmt)
+	rw.modified = false
+	node, err := sql.Walk(rw, stmt)
 	if err != nil {
 		return nil, false, false, err
 	}
-	return stmt, rw.randRewritten, rw.returning, nil
+	return node.(sql.Statement), rw.modified, rw.returning, nil
 }
 
-// Visit implements the sql.Visitor interface.
-func (rw *Rewriter) Visit(node sql.Node) (w sql.Visitor, err error) {
-	switch n := node.(type) {
+func (rw *Rewriter) Visit(node sql.Node) (w sql.Visitor, n sql.Node, err error) {
+	retNode := node
+
+	switch n := retNode.(type) {
 	case *sql.ReturningClause:
 		rw.returning = true
 	case *sql.OrderingTerm:
-		// Don't rewrite any further down this branch, as ordering by RANDOM
-		// should be left to SQLite itself.
-		return nil, nil
+		// NO random() rewriting past this point.
+		rw.orderedBy = true
+		return rw, node, nil
 	case *sql.Call:
-		if rw.RewriteRand {
-			rw.randRewritten =
-				rw.randRewritten || strings.ToUpper(n.Name.Name) == "RANDOM"
-			n.Eval = rw.randRewritten
+		// If used, ensure the value is same for the duration of the statement
+		jd := julianDayAsNumberLit(rw.nowFn())
+
+		if rw.RewriteTime && len(n.Args) > 0 &&
+			(strings.EqualFold(n.Name.Name, "date") ||
+				strings.EqualFold(n.Name.Name, "time") ||
+				strings.EqualFold(n.Name.Name, "datetime") ||
+				strings.EqualFold(n.Name.Name, "julianday") ||
+				strings.EqualFold(n.Name.Name, "unixepoch")) {
+			if isNow(n.Args[0]) {
+				n.Args[0] = jd
+			}
+			rw.modified = true
+		} else if rw.RewriteTime && len(n.Args) > 1 &&
+			strings.EqualFold(n.Name.Name, "strftime") {
+			if isNow(n.Args[1]) {
+				n.Args[1] = jd
+			}
+			rw.modified = true
+		} else if rw.RewriteTime && len(n.Args) > 1 &&
+			strings.EqualFold(n.Name.Name, "timediff") {
+			if isNow(n.Args[0]) {
+				n.Args[0] = jd
+			}
+			if isNow(n.Args[1]) {
+				n.Args[1] = jd
+			}
+			rw.modified = true
+		} else if !rw.orderedBy && rw.RewriteRand && strings.EqualFold(n.Name.Name, "random") {
+			retNode = &sql.NumberLit{Value: strconv.Itoa(int(rw.randFn()))}
+			rw.modified = true
 		}
-		return rw, nil
 	}
-	return rw, nil
+	return rw, retNode, nil
 }
 
-// VisitEnd implements the sql.Visitor interface.
-func (rw *Rewriter) VisitEnd(node sql.Node) error {
-	return nil
+func (rw *Rewriter) VisitEnd(node sql.Node) (sql.Node, error) {
+	switch node.(type) {
+	case *sql.OrderingTerm:
+		rw.orderedBy = false
+	}
+	return node, nil
+}
+
+func isNow(e sql.Expr) bool {
+	if e, ok := e.(*sql.StringLit); ok {
+		return strings.EqualFold(e.Value, "now")
+	}
+	return false
+}
+
+func julianDayAsNumberLit(t time.Time) *sql.NumberLit {
+	return &sql.NumberLit{Value: fmt.Sprintf("%f", julianDay(t))}
+}
+
+func julianDay(t time.Time) float64 {
+	year := t.Year()
+	month := int(t.Month())
+	day := t.Day()
+	hour := t.Hour()
+	minute := t.Minute()
+	second := t.Second()
+	nanosecond := t.Nanosecond()
+
+	// Adjust for months January and February
+	if month <= 2 {
+		year--
+		month += 12
+	}
+
+	// Calculate the Julian Day Number
+	A := year / 100
+	B := 2 - A + A/4
+
+	// Convert time to fractional day
+	fractionalDay := (float64(hour) +
+		float64(minute)/60 +
+		(float64(second)+float64(nanosecond)/1e9)/3600) / 24.0
+
+	// Use math.Floor to correctly handle the integer parts
+	jd := math.Floor(365.25*float64(year+4716)) +
+		math.Floor(30.6001*float64(month+1)) +
+		float64(day) + float64(B) - 1524.5 + fractionalDay
+
+	return jd
 }

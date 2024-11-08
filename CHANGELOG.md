@@ -1,3 +1,7 @@
+## v8.32.8 (unreleased)
+### Implementation changes and bug fixes
+- [PR #1975](https://github.com/rqlite/rqlite/pull/1975): Upgrade to latest SQL parser.
+
 ## v8.32.7 (November 5th 2024)
 ### Implementation changes and bug fixes
 - [PR #1973](https://github.com/rqlite/rqlite/pull/1973): Include any failure message in `/status` output.

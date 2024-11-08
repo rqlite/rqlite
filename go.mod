@@ -18,7 +18,7 @@ require (
 	github.com/rqlite/go-sqlite3 v1.36.0
 	github.com/rqlite/raft-boltdb/v2 v2.0.0-20230523104317-c08e70f4de48
 	github.com/rqlite/rqlite-disco-clients v0.0.0-20231230135307-118e35426347
-	github.com/rqlite/sql v0.0.0-20241104141219-0ce58e44a5e6
+	github.com/rqlite/sql v0.0.0-20241107233317-fc1969567eb8
 	go.etcd.io/bbolt v1.3.11
 	golang.org/x/net v0.30.0
 	google.golang.org/protobuf v1.35.1
