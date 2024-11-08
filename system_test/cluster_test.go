@@ -228,6 +228,58 @@ func Test_MultiNodeClusterRANDOM(t *testing.T) {
 	trueOrTimeout(tFn, 10*time.Second)
 }
 
+// Test_MultiNodeCluster_TimeDate tests operation of time and date SQL rewriting.
+// It checks that a rewritten statement is sent to follower.
+func Test_MultiNodeCluster_TimeDate(t *testing.T) {
+	node1 := mustNewLeaderNode("leader1")
+	defer node1.Deprovision()
+
+	_, err := node1.Execute("CREATE TABLE foo (date text)")
+	if err != nil {
+		t.Fatalf("failed to create table: %s", err.Error())
+	}
+	_, err = node1.Execute(`INSERT INTO foo(date) VALUES(time("now"))`)
+	if err != nil {
+		t.Fatalf("failed to INSERT record: %s", err.Error())
+	}
+	r, err := node1.QueryStrongConsistency("SELECT COUNT(*) FROM foo")
+	if err != nil {
+		t.Fatalf("failed to query for count: %s", err.Error())
+	}
+	if got, exp := r, `{"results":[{"columns":["COUNT(*)"],"types":["integer"],"values":[[1]]}]}`; got != exp {
+		t.Fatalf("wrong query results, exp %s, got %s", exp, got)
+	}
+
+	// Wait a little bit, to ensure time has moved on. This ensures that if rewriting failed
+	// then actual different times would be written on each node.
+	time.Sleep(2 * time.Second)
+
+	// Join the second node to the first node, so that it picks up the log entries.
+	node2 := mustNewNode("node2", false)
+	defer node2.Deprovision()
+	if err := node2.Join(node1); err != nil {
+		t.Fatalf("node failed to join leader: %s", err.Error())
+	}
+	_, err = node2.WaitForLeader()
+	if err != nil {
+		t.Fatalf("failed waiting for leader: %s", err.Error())
+	}
+
+	// Check that row is *exactly* the same on each node. This could only happen if time() was
+	// rewritten by the Leader before committing to the Raft log.
+	r1, err := node1.QueryNoneConsistency("SELECT * FROM foo")
+	if err != nil {
+		t.Fatalf("failed to query node 1: %s", err.Error())
+	}
+	r2, err := node2.QueryNoneConsistency("SELECT * FROM foo")
+	if err != nil {
+		t.Fatalf("failed to query node 2: %s", err.Error())
+	}
+	if r1 != r2 {
+		t.Fatalf("rows are different on nodes")
+	}
+}
+
 // Test_MultiNodeClusterRETURNING tests operation of the RETURNING keyword.
 func Test_MultiNodeClusterRETURNING(t *testing.T) {
 	node1 := mustNewLeaderNode("leader1")

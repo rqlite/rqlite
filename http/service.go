@@ -1113,7 +1113,7 @@ func (s *Service) queuedExecute(w http.ResponseWriter, r *http.Request, qp Query
 			return
 		}
 	}
-	if err := sql.Process(stmts, !qp.NoRewriteRandom()); err != nil {
+	if err := sql.Process(stmts, !qp.NoRewriteRandom(), !qp.NoRewriteTime()); err != nil {
 		http.Error(w, fmt.Sprintf("SQL rewrite: %s", err.Error()), http.StatusInternalServerError)
 		return
 	}
@@ -1157,7 +1157,7 @@ func (s *Service) execute(w http.ResponseWriter, r *http.Request, qp QueryParams
 	}
 	stats.Add(numExecuteStmtsRx, int64(len(stmts)))
 	if !qp.NoParse() {
-		if err := sql.Process(stmts, !qp.NoRewriteRandom()); err != nil {
+		if err := sql.Process(stmts, !qp.NoRewriteRandom(), !qp.NoRewriteTime()); err != nil {
 			http.Error(w, fmt.Sprintf("SQL rewrite: %s", err.Error()), http.StatusInternalServerError)
 			return
 		}
@@ -1245,7 +1245,7 @@ func (s *Service) handleQuery(w http.ResponseWriter, r *http.Request, qp QueryPa
 	// will never be replayed from the log anyway.
 	if qp.Level() == command.QueryRequest_QUERY_REQUEST_LEVEL_STRONG {
 		if !qp.NoParse() {
-			if err := sql.Process(queries, qp.NoRewriteRandom()); err != nil {
+			if err := sql.Process(queries, qp.NoRewriteRandom(), !qp.NoRewriteTime()); err != nil {
 				http.Error(w, fmt.Sprintf("SQL rewrite: %s", err.Error()), http.StatusInternalServerError)
 				return
 			}
@@ -1334,7 +1334,7 @@ func (s *Service) handleRequest(w http.ResponseWriter, r *http.Request, qp Query
 	stats.Add(numRequestStmtsRx, int64(len(stmts)))
 
 	if !qp.NoParse() {
-		if err := sql.Process(stmts, qp.NoRewriteRandom()); err != nil {
+		if err := sql.Process(stmts, qp.NoRewriteRandom(), !qp.NoRewriteTime()); err != nil {
 			http.Error(w, fmt.Sprintf("SQL rewrite: %s", err.Error()), http.StatusInternalServerError)
 			return
 		}
