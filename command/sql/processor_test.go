@@ -20,7 +20,7 @@ func Test_RANDOM_NoRewrites(t *testing.T) {
 				Sql: str,
 			},
 		}
-		if err := Process(stmts, false); err != nil {
+		if err := Process(stmts, false, false); err != nil {
 			t.Fatalf("failed to not rewrite: %s", err)
 		}
 		if stmts[0].Sql != str {
@@ -41,7 +41,7 @@ func Test_RANDOM_NoRewritesMulti(t *testing.T) {
 			Sql: `SELECT title FROM albums ORDER BY RANDOM()`,
 		},
 	}
-	if err := Process(stmts, false); err != nil {
+	if err := Process(stmts, false, false); err != nil {
 		t.Fatalf("failed to not rewrite: %s", err)
 	}
 	if len(stmts) != 3 {
@@ -72,7 +72,7 @@ func Test_RANDOM_Rewrites(t *testing.T) {
 				Sql: testSQLs[i],
 			},
 		}
-		if err := Process(stmts, true); err != nil {
+		if err := Process(stmts, true, false); err != nil {
 			t.Fatalf("failed to not rewrite: %s", err)
 		}
 
@@ -96,7 +96,7 @@ func Test_RETURNING_None(t *testing.T) {
 				Sql: str,
 			},
 		}
-		if err := Process(stmts, false); err != nil {
+		if err := Process(stmts, false, false); err != nil {
 			t.Fatalf("failed to not rewrite: %s", err)
 		}
 		if stmts[0].ForceQuery {
@@ -119,7 +119,7 @@ func Test_RETURNING_Some(t *testing.T) {
 				Sql: sql,
 			},
 		}
-		if err := Process(stmts, false); err != nil {
+		if err := Process(stmts, false, false); err != nil {
 			t.Fatalf("failed to not rewrite: %s", err)
 		}
 		if exp, got := b, stmts[0].ForceQuery; exp != got {
@@ -137,7 +137,7 @@ func Test_RETURNING_SomeMulti(t *testing.T) {
 			Sql: `INSERT INTO "names" VALUES (1, 'bob', 'RETURNING')`,
 		},
 	}
-	if err := Process(stmts, false); err != nil {
+	if err := Process(stmts, false, false); err != nil {
 		t.Fatalf("failed to not rewrite: %s", err)
 	}
 
@@ -154,7 +154,7 @@ func Test_Both(t *testing.T) {
 		Sql: `INSERT INTO "names" VALUES (RANDOM(), 'bob', '123-45-678') RETURNING *`,
 	}
 
-	if err := Process([]*proto.Statement{stmt}, true); err != nil {
+	if err := Process([]*proto.Statement{stmt}, true, false); err != nil {
 		t.Fatalf("failed to not rewrite: %s", err)
 	}
 	match := regexp.MustCompile(`INSERT INTO "names" VALUES \(-?[0-9]+, 'bob', '123-45-678'\)`)

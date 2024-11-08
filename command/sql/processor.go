@@ -17,9 +17,9 @@ import (
 // an actual random value. If a statement contains a RETURNING clause, the
 // statement is marked as a query, so that the result set can be returned to the
 // client.
-func Process(stmts []*proto.Statement, rw bool) error {
+func Process(stmts []*proto.Statement, rwrand, rwtime bool) error {
 	for i := range stmts {
-		if !rw && !containsReturning(stmts[i]) {
+		if !rwrand && !rwtime && !containsReturning(stmts[i]) {
 			// random-rewriting is disabled, and the statement can't contain a
 			// RETURNING clause, so there's nothing to do.
 			continue
@@ -29,7 +29,8 @@ func Process(stmts []*proto.Statement, rw bool) error {
 			continue
 		}
 		rewriter := NewRewriter()
-		rewriter.RewriteRand = rw
+		rewriter.RewriteRand = rwrand
+		rewriter.RewriteTime = rwtime
 		rwStmt, rewritten, ret, err := rewriter.Do(stmt)
 		if err != nil {
 			continue

@@ -108,6 +108,11 @@ func (qp QueryParams) NoRewriteRandom() bool {
 	return qp.HasKey("norwrandom")
 }
 
+// NoRewriteTime returns true if the query parameters request no rewriting of time functions.
+func (qp QueryParams) NoRewriteTime() bool {
+	return qp.HasKey("norwtime")
+}
+
 // NonVoters returns true if the query parameters request non-voters to be included in results.
 func (qp QueryParams) NonVoters() bool {
 	return qp.HasKey("nonvoters")
