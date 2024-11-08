@@ -1,4 +1,7 @@
-## v8.32.8 (unreleased)
+## v8.33.0 (unreleased)
+### New features
+- [PR #1976](https://github.com/rqlite/rqlite/pull/1976): Rewrite time and date functions so they are deterministic.
+
 ### Implementation changes and bug fixes
 - [PR #1975](https://github.com/rqlite/rqlite/pull/1975): Upgrade to latest SQL parser.
 
