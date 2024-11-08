@@ -141,8 +141,10 @@ func (rw *Rewriter) VisitEnd(node sql.Node) (sql.Node, error) {
 }
 
 func isNow(e sql.Expr) bool {
-	if e, ok := e.(*sql.StringLit); ok {
-		return strings.EqualFold(e.Value, "now")
+	if i, ok := e.(*sql.Ident); ok {
+		return strings.EqualFold(i.Name, "now")
+	} else if s, ok := e.(*sql.StringLit); ok {
+		return strings.EqualFold(s.Value, "now")
 	}
 	return false
 }
