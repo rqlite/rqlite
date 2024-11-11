@@ -85,10 +85,12 @@ func Test_RANDOM_Rewrites(t *testing.T) {
 
 func Test_RANDOMBLOB_Rewrites(t *testing.T) {
 	testSQLs := []string{
-		`INSERT INTO "names" VALUES (randomblob(0))`, `INSERT INTO "names" VALUES \(x'[0-9a-f]{2}'\)`,
-		`INSERT INTO "names" VALUES (randomblob(4))`, `INSERT INTO "names" VALUES \(x'[0-9a-f]{8}'\)`,
-		`INSERT INTO "names" VALUES (randomblob(16))`, `INSERT INTO "names" VALUES \(x'[0-9a-f]{32}'\)`,
-		`INSERT INTO "names" VALUES (RANDOMBLOB(16))`, `INSERT INTO "names" VALUES \(x'[0-9a-f]{32}'\)`,
+		`INSERT INTO "names" VALUES (randomblob(0))`, `INSERT INTO "names" VALUES \(x'[0-9A-F]{2}'\)`,
+		`INSERT INTO "names" VALUES (randomblob(4))`, `INSERT INTO "names" VALUES \(x'[0-9A-F]{8}'\)`,
+		`INSERT INTO "names" VALUES (randomblob(16))`, `INSERT INTO "names" VALUES \(x'[0-9A-F]{32}'\)`,
+		`INSERT INTO "names" VALUES (RANDOMBLOB(16))`, `INSERT INTO "names" VALUES \(x'[0-9A-F]{32}'\)`,
+		`INSERT INTO "names" VALUES (RANDOMBLOB(16))`, `INSERT INTO "names" VALUES \(x'[0-9A-F]{32}'\)`,
+		`INSERT INTO "names" VALUES hex(RANDOMBLOB(16))`, `INSERT INTO "names" VALUES hex\(\(x'[0-9A-F]{32}'\)\)`,
 	}
 	for i := 0; i < len(testSQLs)-1; i += 2 {
 		stmts := []*proto.Statement{

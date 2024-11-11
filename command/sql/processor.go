@@ -138,7 +138,7 @@ func (rw *Rewriter) Visit(node sql.Node) (w sql.Visitor, n sql.Node, err error) 
 				if err != nil {
 					break
 				}
-				retNode = &sql.BlobLit{Value: fmt.Sprintf(`%x`, random.Bytes(max(n, 1)))}
+				retNode = &sql.BlobLit{Value: fmt.Sprintf(`%X`, random.Bytes(max(n, 1)))}
 				rw.modified = true
 			}
 		}
