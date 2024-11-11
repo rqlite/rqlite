@@ -90,7 +90,8 @@ func Test_RANDOMBLOB_Rewrites(t *testing.T) {
 		`INSERT INTO "names" VALUES (randomblob(16))`, `INSERT INTO "names" VALUES \(x'[0-9A-F]{32}'\)`,
 		`INSERT INTO "names" VALUES (RANDOMBLOB(16))`, `INSERT INTO "names" VALUES \(x'[0-9A-F]{32}'\)`,
 		`INSERT INTO "names" VALUES (RANDOMBLOB(16))`, `INSERT INTO "names" VALUES \(x'[0-9A-F]{32}'\)`,
-		`INSERT INTO "names" VALUES hex(RANDOMBLOB(16))`, `INSERT INTO "names" VALUES hex\(\(x'[0-9A-F]{32}'\)\)`,
+		`INSERT INTO "names" VALUES (hex(RANDOMBLOB(16)))`, `INSERT INTO "names" VALUES \(hex\(x'[0-9A-F]{32}'\)\)`,
+		`INSERT INTO "names" VALUES (lower(hex(RANDOMBLOB(16))))`, `INSERT INTO "names" VALUES \(lower\(hex\(x'[0-9A-F]{32}'\)\)\)`,
 	}
 	for i := 0; i < len(testSQLs)-1; i += 2 {
 		stmts := []*proto.Statement{
@@ -104,7 +105,7 @@ func Test_RANDOMBLOB_Rewrites(t *testing.T) {
 
 		match := regexp.MustCompile(testSQLs[i+1])
 		if !match.MatchString(stmts[0].Sql) {
-			t.Fatalf("test %d failed, %s (rewritten as %s) does not regex-match with %s", i, testSQLs[i], stmts[0].Sql, testSQLs[i+1])
+			t.Fatalf("test %d failed, %s (rewritten as %s ) does not regex-match with %s", i, testSQLs[i], stmts[0].Sql, testSQLs[i+1])
 		}
 	}
 }

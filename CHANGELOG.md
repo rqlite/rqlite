@@ -1,6 +1,6 @@
 ## v8.34.0 (unreleased)
 ### New features
-- [PR #1977](https://github.com/rqlite/rqlite/pull/1977): Rewrite `randomblob(N)`.
+- [PR #1977](https://github.com/rqlite/rqlite/pull/1977): Support `randomblob(N)` by rewriting the statement.
 
 ## v8.33.0 (November 7th 2024)
 ### New features
