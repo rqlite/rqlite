@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/rqlite/rqlite/v8/command/proto"
+	"github.com/rqlite/rqlite/v8/random"
 	"github.com/rqlite/sql"
 )
 
@@ -127,6 +128,19 @@ func (rw *Rewriter) Visit(node sql.Node) (w sql.Visitor, n sql.Node, err error) 
 		} else if !rw.orderedBy && rw.RewriteRand && strings.EqualFold(n.Name.Name, "random") {
 			retNode = &sql.NumberLit{Value: strconv.Itoa(int(rw.randFn()))}
 			rw.modified = true
+		} else if !rw.orderedBy && rw.RewriteRand && strings.EqualFold(n.Name.Name, "randomblob") {
+			if len(n.Args) == 1 {
+				lit, ok := n.Args[0].(*sql.NumberLit)
+				if !ok {
+					break
+				}
+				n, err := strconv.Atoi(lit.Value)
+				if err != nil {
+					break
+				}
+				retNode = &sql.BlobLit{Value: fmt.Sprintf(`%X`, random.Bytes(max(n, 1)))}
+				rw.modified = true
+			}
 		}
 	}
 	return rw, retNode, nil

@@ -1,3 +1,7 @@
+## v8.34.0 (unreleased)
+### New features
+- [PR #1977](https://github.com/rqlite/rqlite/pull/1977): Support `randomblob(N)` by rewriting the statement.
+
 ## v8.33.0 (November 7th 2024)
 ### New features
 - [PR #1976](https://github.com/rqlite/rqlite/pull/1976): Rewrite time and date functions so they are deterministic. Fixes issue [#536](https://github.com/rqlite/rqlite/issues/536).
