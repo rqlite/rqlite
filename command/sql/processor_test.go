@@ -83,6 +83,29 @@ func Test_RANDOM_Rewrites(t *testing.T) {
 	}
 }
 
+func Test_RANDOMBLOB_Rewrites(t *testing.T) {
+	testSQLs := []string{
+		`INSERT INTO "names" VALUES (randomblob(0))`, `INSERT INTO "names" VALUES \(x'[0-9a-f]{2}'\)`,
+		`INSERT INTO "names" VALUES (randomblob(4))`, `INSERT INTO "names" VALUES \(x'[0-9a-f]{8}'\)`,
+		`INSERT INTO "names" VALUES (randomblob(16))`, `INSERT INTO "names" VALUES \(x'[0-9a-f]{32}'\)`,
+	}
+	for i := 0; i < len(testSQLs)-1; i += 2 {
+		stmts := []*proto.Statement{
+			{
+				Sql: testSQLs[i],
+			},
+		}
+		if err := Process(stmts, true, false); err != nil {
+			t.Fatalf("failed to not rewrite: %s", err)
+		}
+
+		match := regexp.MustCompile(testSQLs[i+1])
+		if !match.MatchString(stmts[0].Sql) {
+			t.Fatalf("test %d failed, %s (rewritten as %s) does not regex-match with %s", i, testSQLs[i], stmts[0].Sql, testSQLs[i+1])
+		}
+	}
+}
+
 func Test_Time_Rewrites(t *testing.T) {
 	testSQLs := []string{
 		`SELECT date('now','start of month')`, `SELECT date\([0-9]+\.[0-9]+, 'start of month'\)`,
