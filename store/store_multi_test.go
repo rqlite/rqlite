@@ -53,6 +53,10 @@ func Test_MultiNode_VerifyLeader(t *testing.T) {
 	if err := s1.Close(true); err != nil {
 		t.Fatalf("failed to close follower: %s", err.Error())
 	}
+
+	// Be sure the follower is shutdown. It seems that still-open network
+	// connections to the follower can cause VerifyLeader to return nil.
+	time.Sleep(time.Second)
 	if err := s0.VerifyLeader(); err == nil {
 		t.Fatalf("expected error verifying leader due to lack of quorum")
 	}
