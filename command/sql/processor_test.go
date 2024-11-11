@@ -63,7 +63,7 @@ func Test_RANDOM_Rewrites(t *testing.T) {
 		`INSERT INTO "names" VALUES (1, 'bob', '123-45-678')`, `INSERT INTO "names" VALUES \(1, 'bob', '123-45-678'\)`,
 		`INSERT INTO "names" VALUES (RANDOM(), 'bob', '123-45-678')`, `INSERT INTO "names" VALUES \(-?[0-9]+, 'bob', '123-45-678'\)`,
 		`SELECT title FROM albums ORDER BY RANDOM()`, `SELECT title FROM albums ORDER BY RANDOM\(\)`,
-		`SELECT RANDOM()`, `SELECT -?[0-9]+`,
+		`SELECT random()`, `SELECT -?[0-9]+`,
 		`CREATE TABLE tbl (col1 TEXT, ts DATETIME DEFAULT CURRENT_TIMESTAMP)`, `CREATE TABLE tbl \(col1 TEXT, ts DATETIME DEFAULT CURRENT_TIMESTAMP\)`,
 	}
 	for i := 0; i < len(testSQLs)-1; i += 2 {
@@ -88,6 +88,7 @@ func Test_RANDOMBLOB_Rewrites(t *testing.T) {
 		`INSERT INTO "names" VALUES (randomblob(0))`, `INSERT INTO "names" VALUES \(x'[0-9a-f]{2}'\)`,
 		`INSERT INTO "names" VALUES (randomblob(4))`, `INSERT INTO "names" VALUES \(x'[0-9a-f]{8}'\)`,
 		`INSERT INTO "names" VALUES (randomblob(16))`, `INSERT INTO "names" VALUES \(x'[0-9a-f]{32}'\)`,
+		`INSERT INTO "names" VALUES (RANDOMBLOB(16))`, `INSERT INTO "names" VALUES \(x'[0-9a-f]{32}'\)`,
 	}
 	for i := 0; i < len(testSQLs)-1; i += 2 {
 		stmts := []*proto.Statement{
@@ -111,9 +112,9 @@ func Test_Time_Rewrites(t *testing.T) {
 		`SELECT date('now','start of month')`, `SELECT date\([0-9]+\.[0-9]+, 'start of month'\)`,
 		`INSERT INTO "values" VALUES (time("2020-07-01 14:23"))`, `INSERT INTO "values" VALUES \(time\("2020-07-01 14:23"\)\)`,
 		`INSERT INTO "values" VALUES (time('now'))`, `INSERT INTO "values" VALUES \(time\([0-9]+\.[0-9]+\)\)`,
-		`INSERT INTO "values" VALUES (time("now"))`, `INSERT INTO "values" VALUES \(time\([0-9]+\.[0-9]+\)\)`,
+		`INSERT INTO "values" VALUES (TIME("now"))`, `INSERT INTO "values" VALUES \(TIME\([0-9]+\.[0-9]+\)\)`,
 		`INSERT INTO "values" VALUES (datetime("now"))`, `INSERT INTO "values" VALUES \(datetime\([0-9]+\.[0-9]+\)\)`,
-		`INSERT INTO "values" VALUES (date("now"))`, `INSERT INTO "values" VALUES \(date\([0-9]+\.[0-9]+\)\)`,
+		`INSERT INTO "values" VALUES (DATE("now"))`, `INSERT INTO "values" VALUES \(DATE\([0-9]+\.[0-9]+\)\)`,
 		`INSERT INTO "values" VALUES (julianday("now"))`, `INSERT INTO "values" VALUES \(julianday\([0-9]+\.[0-9]+\)\)`,
 		`INSERT INTO "values" VALUES (unixepoch("now"))`, `INSERT INTO "values" VALUES \(unixepoch\([0-9]+\.[0-9]+\)\)`,
 		`INSERT INTO "values" VALUES (strftime("%F", "now"))`, `INSERT INTO "values" VALUES \(strftime\("%F", [0-9]+\.[0-9]+\)\)`,
