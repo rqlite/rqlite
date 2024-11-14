@@ -1,4 +1,4 @@
-## v8.34.1 (unreleased)
+## v8.34.1 (November 14th 2024)
 ### Implementation changes and bug fixes
 - [PR #1979](https://github.com/rqlite/rqlite/pull/1979): Preserve backward compatibility for S3 backup endpoint.
 
