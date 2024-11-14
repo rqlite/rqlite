@@ -1,3 +1,7 @@
+## v8.34.1 (unreleased)
+### Implementation changes and bug fixes
+- [PR #1979](https://github.com/rqlite/rqlite/pull/1979): Preserve backward compatibility for S3 backup endpoint.
+
 ## v8.34.0 (November 11th 2024)
 ### New features
 - [PR #1977](https://github.com/rqlite/rqlite/pull/1977): Support `randomblob(N)` by rewriting the statement.

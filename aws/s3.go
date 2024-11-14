@@ -72,6 +72,9 @@ func NewS3Client(endpoint, region, accessKey, secretKey, bucket, key string, opt
 	s3 := s3.NewFromConfig(cfg, func(o *s3.Options) {
 		if opts != nil {
 			if endpoint != "" {
+				if !hasProtocol(endpoint) {
+					endpoint = fmt.Sprintf("https://%s", endpoint)
+				}
 				o.BaseEndpoint = aws.String(endpoint)
 			}
 			o.UsePathStyle = opts.ForcePathStyle
@@ -98,7 +101,7 @@ func NewS3Client(endpoint, region, accessKey, secretKey, bucket, key string, opt
 
 // String returns a string representation of the S3Client.
 func (s *S3Client) String() string {
-	if s.endpoint == "" || strings.HasSuffix(s.endpoint, "amazonaws.com") {
+	if s.endpoint == "" || isAWSEndpoint(s.endpoint) {
 		// Native Amazon S3, use AWS's S3 URL format
 		return fmt.Sprintf("s3://%s/%s", s.bucket, s.key)
 	}
@@ -194,6 +197,14 @@ func TimestampedPath(path string, t time.Time) string {
 	parts := strings.Split(path, "/")
 	parts[len(parts)-1] = fmt.Sprintf("%s_%s", t.Format("20060102150405"), parts[len(parts)-1])
 	return strings.Join(parts, "/")
+}
+
+func isAWSEndpoint(s string) bool {
+	return strings.HasSuffix(s, "amazonaws.com")
+}
+
+func hasProtocol(s string) bool {
+	return strings.Contains(s, "://")
 }
 
 type uploader interface {

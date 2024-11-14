@@ -61,11 +61,21 @@ func Test_S3Client_String(t *testing.T) {
 		t.Fatalf("expected String() to be %q, got %q", "s3://bucket2/key3", c.String())
 	}
 	// Test non-native S3 (explicit endpoint) with non-path style (e.g. Wasabi)
+	// without any protocol specified. This should default to https.
 	c, err = NewS3Client("s3.ca-central-1.wasabisys.com", "region1", "access", "secret", "bucket2", "key3", noForcePathStyleOptions())
 	if err != nil {
 		t.Fatalf("error while creating aws S3 client: %v", err)
 	}
-	if exp, got := "s3.ca-central-1.wasabisys.com/bucket2/key3", c.String(); exp != got {
+	if exp, got := "https://s3.ca-central-1.wasabisys.com/bucket2/key3", c.String(); exp != got {
+		t.Fatalf("expected String() to be %s, got %s", exp, got)
+	}
+	// Test non-native S3 (explicit endpoint) with non-path style (e.g. Wasabi)
+	// with a protocol specified. This should use the specified protocol.
+	c, err = NewS3Client("xyz://s3.ca-central-1.wasabisys.com", "region1", "access", "secret", "bucket2", "key3", noForcePathStyleOptions())
+	if err != nil {
+		t.Fatalf("error while creating aws S3 client: %v", err)
+	}
+	if exp, got := "xyz://s3.ca-central-1.wasabisys.com/bucket2/key3", c.String(); exp != got {
 		t.Fatalf("expected String() to be %s, got %s", exp, got)
 	}
 }
