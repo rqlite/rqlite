@@ -1,4 +1,4 @@
-FROM cimg/go:1.22.2
+FROM cimg/go:1.23.3
 
 RUN sudo curl https://dl.min.io/client/mc/release/linux-amd64/mc -o /usr/bin/mc && sudo chmod +x /usr/bin/mc
 RUN sudo apt-get update
