@@ -343,10 +343,12 @@ func (db *DB) Size() (int64, error) {
 	if err != nil {
 		return 0, err
 	}
+	if len(rows) < 1 {
+		return 0, fmt.Errorf("no rows returned")
+	}
 	if rows[0].Error != "" {
 		return 0, fmt.Errorf(rows[0].Error)
 	}
-
 	return rows[0].Values[0].Parameters[0].GetI(), nil
 }
 
@@ -478,9 +480,6 @@ func (db *DB) EnableCheckpointing() error {
 func (db *DB) GetCheckpointing() (int, error) {
 	var rwN int
 	err := db.rwDB.QueryRow("PRAGMA wal_autocheckpoint").Scan(&rwN)
-	if err != nil {
-		return 0, err
-	}
 	return rwN, err
 }
 
@@ -519,10 +518,11 @@ func (db *DB) VacuumInto(path string) error {
 // a quick check. It returns after hitting the first integrity
 // failure, if any.
 func (db *DB) IntegrityCheck(full bool) ([]*command.QueryRows, error) {
+	stmt := `PRAGMA quick_check(1)`
 	if full {
-		return db.QueryStringStmt("PRAGMA integrity_check(1)")
+		stmt = `PRAGMA integrity_check(1)`
 	}
-	return db.QueryStringStmt("PRAGMA quick_check(1)")
+	return db.QueryStringStmt(stmt)
 }
 
 // SetSynchronousMode sets the synchronous mode of the database.
@@ -605,7 +605,6 @@ func (db *DB) ConnectionPoolStats(sqlDB *sql.DB) *PoolStats {
 		MaxIdleTimeClosed:  s.MaxIdleTimeClosed,
 		MaxLifetimeClosed:  s.MaxLifetimeClosed,
 	}
-
 }
 
 // ExecuteStringStmtWithTimeout executes a single query that modifies the database.
@@ -661,7 +660,7 @@ type execerQueryer interface {
 func (db *DB) executeWithConn(ctx context.Context, req *command.Request, xTime bool, conn *sql.Conn) ([]*command.ExecuteQueryResponse, error) {
 	var err error
 
-	var eqer execerQueryer
+	eqer := execerQueryer(conn)
 	var tx *sql.Tx
 	if req.Transaction {
 		stats.Add(numETx, 1)
@@ -675,8 +674,6 @@ func (db *DB) executeWithConn(ctx context.Context, req *command.Request, xTime b
 			}
 		}()
 		eqer = tx
-	} else {
-		eqer = conn
 	}
 
 	var allResults []*command.ExecuteQueryResponse
@@ -855,7 +852,7 @@ type queryer interface {
 func (db *DB) queryWithConn(ctx context.Context, req *command.Request, xTime bool, conn *sql.Conn) ([]*command.QueryRows, error) {
 	var err error
 
-	var queryer queryer
+	queryer := queryer(conn)
 	var tx *sql.Tx
 	if req.Transaction {
 		stats.Add(numQTx, 1)
@@ -865,8 +862,6 @@ func (db *DB) queryWithConn(ctx context.Context, req *command.Request, xTime boo
 		}
 		defer tx.Rollback() // Will be ignored if tx is committed
 		queryer = tx
-	} else {
-		queryer = conn
 	}
 
 	var allRows []*command.QueryRows
@@ -1036,7 +1031,7 @@ func (db *DB) Request(req *command.Request, xTime bool) ([]*command.ExecuteQuery
 		defer cancel()
 	}
 
-	var eq execerQueryer
+	eq := execerQueryer(conn)
 	var tx *sql.Tx
 	if req.Transaction {
 		stats.Add(numRTx, 1)
@@ -1046,8 +1041,6 @@ func (db *DB) Request(req *command.Request, xTime bool) ([]*command.ExecuteQuery
 		}
 		defer tx.Rollback() // Will be ignored if tx is committed
 		eq = tx
-	} else {
-		eq = conn
 	}
 
 	// abortOnError indicates whether the caller should continue
@@ -1124,7 +1117,6 @@ func (db *DB) Backup(path string, vacuum bool) error {
 			return err
 		}
 	}
-
 	return dstDB.Close()
 }
 
@@ -1170,7 +1162,6 @@ func (db *DB) Serialize() ([]byte, error) {
 		return nil, err
 	}
 	return b, nil
-
 }
 
 // Dump writes a consistent snapshot of the database in SQL text format.
@@ -1266,11 +1257,8 @@ func (db *DB) Dump(w io.Writer) error {
 		}
 	}
 
-	if _, err := w.Write([]byte("COMMIT;\n")); err != nil {
-		return err
-	}
-
-	return nil
+	_, err = w.Write([]byte("COMMIT;\n"))
+	return err
 }
 
 // StmtReadOnly returns whether the given SQL statement is read-only.
@@ -1331,7 +1319,6 @@ func (db *DB) pragmas() (map[string]interface{}, error) {
 		}
 		connsMap[k] = pragmasMap
 	}
-
 	return connsMap, nil
 }
 
