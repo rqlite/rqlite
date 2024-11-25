@@ -1,4 +1,4 @@
-## v8.34.2 (unreleased)
+## v8.34.2 (November 25th 2024)
 ### Implementation changes and bug fixes
 - [PR #1981](https://github.com/rqlite/rqlite/pull/1981): Upgrade dependencies.
 - [PR #1982](https://github.com/rqlite/rqlite/pull/1982): Minor DB-layer improvements.
