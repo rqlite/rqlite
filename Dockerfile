@@ -1,4 +1,4 @@
-FROM golang:alpine as builder
+FROM golang:alpine AS builder
 
 ARG VERSION="unknown"
 ARG COMMIT="unknown"
