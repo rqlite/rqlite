@@ -28,6 +28,7 @@ import (
 	"github.com/rqlite/rqlite/v8/disco"
 	"github.com/rqlite/rqlite/v8/extensions"
 	httpd "github.com/rqlite/rqlite/v8/http"
+	"github.com/rqlite/rqlite/v8/otel"
 	"github.com/rqlite/rqlite/v8/rarchive"
 	"github.com/rqlite/rqlite/v8/rtls"
 	"github.com/rqlite/rqlite/v8/store"
@@ -80,6 +81,19 @@ func main() {
 	log.Printf("%s, target architecture is %s, operating system target is %s", runtime.Version(),
 		runtime.GOARCH, runtime.GOOS)
 	log.Printf("launch command: %s", strings.Join(os.Args, " "))
+
+	// Start OpenTelemetry support, configuring Span support
+	if cfg.OTLPAddr != "" {
+		cleanup, err := otel.Setup(mainCtx, cfg.OTLPAddr)
+		if err != nil {
+			log.Printf("%v", err)
+		}
+		defer func() {
+			if err := cleanup(); err != nil {
+				log.Printf("%v", err)
+			}
+		}()
+	}
 
 	// Start requested profiling.
 	startProfile(cfg.CPUProfile, cfg.MemProfile, cfg.TraceProfile)

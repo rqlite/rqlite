@@ -237,6 +237,9 @@ type Config struct {
 
 	// TraceProfile enables trace profiling.
 	TraceProfile string
+
+	// OTLPAddr sets the OTLP endpoint
+	OTLPAddr string
 }
 
 // Validate checks the configuration for internal consistency, and activates
@@ -565,6 +568,7 @@ func ParseFlags(name, desc string, build *BuildInfo) (*Config, error) {
 	fs.StringVar(&config.CPUProfile, "cpu-profile", "", "Path to file for CPU profiling information")
 	fs.StringVar(&config.MemProfile, "mem-profile", "", "Path to file for memory profiling information")
 	fs.StringVar(&config.TraceProfile, "trace-profile", "", "Path to file for trace profiling information")
+	fs.StringVar(&config.OTLPAddr, "otlp-addr", "", "OTLP endpoint in host:port format. If not set no OTLP exporter is used")
 	fs.Usage = func() {
 		fmt.Fprintf(os.Stderr, "\n%s\n\n", desc)
 		fmt.Fprintf(os.Stderr, "Usage: %s [flags] <data directory>\n", name)
