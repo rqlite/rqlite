@@ -1,3 +1,7 @@
+## v8.34.3 (November 27th 2024)
+### Implementation changes and bug fixes
+- [PR #1986](https://github.com/rqlite/rqlite/pull/1986): Improve logging a little bit, making operation clearer and easier.
+
 ## v8.34.2 (November 25th 2024)
 ### Implementation changes and bug fixes
 - [PR #1981](https://github.com/rqlite/rqlite/pull/1981): Upgrade dependencies.
