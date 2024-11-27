@@ -69,7 +69,11 @@ func (j *Joiner) Do(ctx context.Context, targetAddrs []string, id, addr string, 
 				if err == nil {
 					return joinee, nil
 				}
-				j.logger.Printf("failed to join via node at %s: %s", ta, err)
+				helpMsg := ""
+				if j.creds == nil {
+					helpMsg = " (did you forget to set -join-as?)"
+				}
+				j.logger.Printf("failed to join via node at %s: %s%s", ta, err, helpMsg)
 			}
 		}
 		if i+1 < j.numAttempts {
