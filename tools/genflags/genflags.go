@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"flag"
 	"log"
 	"os"
 	"text/template"
@@ -15,9 +16,33 @@ const flagTemplate = `
 package main
 
 import (
+	"fmt"
 	"flag"
 	"os"
+	"strings"
+	"time"
 )
+
+// StringSlice is a slice of strings which implments the flag.Value interface.
+type StringSliceValue []string
+
+// String returns a string representation of the slice.
+func (s *StringSliceValue) String() string {
+	return fmt.Sprintf("%v", *s)
+}
+
+// Set sets the value of the slice.
+func (s *StringSliceValue) Set(value string) error {
+	*s = strings.Split(value, ",")
+	var r []string
+	for _, v := range *s {
+		if v != "" {
+			r = append(r, v)
+		}
+	}
+	*s = r
+	return nil
+}
 
 // Config represents all configuration options.
 type Config struct {
@@ -33,27 +58,36 @@ func ParseFlags() *Config {
 	fs := flag.NewFlagSet("rqlite", flag.ExitOnError)
 {{- range .Flags }}
 	{{- if eq .Type "string" }}
-	fs.StringVar(&config.{{ .Name }}, "{{ .CLI }}", "", "{{ .ShortHelp }}")
+	fs.StringVar(&config.{{ .Name }}, "{{ .CLI }}", "{{ .Default }}", "{{ .ShortHelp }}")
 	{{- else if eq .Type "bool" }}
-	fs.BoolVar(&config.{{ .Name }}, "{{ .CLI }}", false, "{{ .ShortHelp }}")
+	fs.BoolVar(&config.{{ .Name }}, "{{ .CLI }}", {{ .Default }}, "{{ .ShortHelp }}")
 	{{- else if eq .Type "int" }}
-	fs.IntVar(&config.{{ .Name }}, "{{ .CLI }}", 0, "{{ .ShortHelp }}")
+	fs.IntVar(&config.{{ .Name }}, "{{ .CLI }}",{{ .Default }}, "{{ .ShortHelp }}")
 	{{- else if eq .Type "duration" }}
-	fs.DurationVar(&config.{{ .Name }}, "{{ .CLI }}", 0, "{{ .ShortHelp }}")
+	fs.DurationVar(&config.{{ .Name }}, "{{ .CLI }}", mustParseDuration("{{ .Default }}"), "{{ .ShortHelp }}")
 	{{- end }}
 {{- end }}
 	fs.Parse(os.Args[1:])
 	return config
 }
+
+func mustParseDuration(d string) time.Duration {
+	td, err := time.ParseDuration(d)
+	if err != nil {
+		panic(err)
+	}
+	return td
+}
 `
 
 // Flag represents a single flag configuration.
 type Flag struct {
-	Name      string `mapstructure:"name"`
-	CLI       string `mapstructure:"cli"`
-	Type      string `mapstructure:"type"`
-	ShortHelp string `mapstructure:"short_help"`
-	LongHelp  string `mapstructure:"long_help"`
+	Name      string      `mapstructure:"name"`
+	CLI       string      `mapstructure:"cli"`
+	Type      string      `mapstructure:"type"`
+	Default   interface{} `mapstructure:"default"`
+	ShortHelp string      `mapstructure:"short_help"`
+	LongHelp  string      `mapstructure:"long_help"`
 }
 
 // Convert the flag type to Go type.
@@ -61,6 +95,8 @@ func (f Flag) GoType() string {
 	switch f.Type {
 	case "string":
 		return "string"
+	case "stringslivevalue":
+		return "StringSliceValue"
 	case "bool":
 		return "bool"
 	case "int":
@@ -72,7 +108,7 @@ func (f Flag) GoType() string {
 	}
 }
 
-func generateFlagsFile(flags []Flag) {
+func generateFlagsFile(flags []Flag, out string) {
 	// Parse the template.
 	tmpl, err := template.New("flags").Funcs(template.FuncMap{
 		"GoType": Flag.GoType,
@@ -90,13 +126,20 @@ func generateFlagsFile(flags []Flag) {
 	}
 
 	// Write the output to flags.go.
-	if err := os.WriteFile("flags.go", output.Bytes(), 0644); err != nil {
+	if err := os.WriteFile(out, output.Bytes(), 0644); err != nil {
 		log.Fatalf("Error writing flags.go: %v", err)
 	}
 }
 
 func main() {
-	viper.SetConfigFile("../../flags/flags.toml")
+	flag.Parse()
+	if flag.NArg() != 2 {
+		log.Fatalf("Usage: %s <input> <output>", os.Args[0])
+	}
+	inPath := flag.Arg(0)
+	outPath := flag.Arg(1)
+
+	viper.SetConfigFile(inPath)
 	if err := viper.ReadInConfig(); err != nil {
 		log.Fatalf("Error reading config file: %v", err)
 	}
@@ -107,5 +150,5 @@ func main() {
 	}
 
 	// Generate flags.go
-	generateFlagsFile(flags)
+	generateFlagsFile(flags, outPath)
 }
