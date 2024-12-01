@@ -11,6 +11,10 @@ rqbench
 **/rqbench
 !**/rqbench/
 
+genflags
+**/genflags
+!**/genflags/
+
 walr
 **/walr
 
