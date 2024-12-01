@@ -2,9 +2,8 @@
 name = "ExtensionPaths"
 cli = "--extensions-path"
 type = "stringslicesalue"
-short_help = "Comma-delimited list of paths to SQLite extensions to be loaded"
+short_help = "Comma-delimited list of paths to directories, zipfiles, or tar.gz files containing SQLite extensions"
 long_help = """
-Each element may be a directory path, zipfile, or tar.gz file. May not be set.
 """
 default = ""
 
@@ -12,9 +11,9 @@ default = ""
 name = "HTTPAddr"
 cli = "--http-addr"
 type = "string"
-short_help = "Bind network address for the HTTP Server"
+short_help = "HTTP server bind address. To enable HTTPS, set X.509 certificate and key"
 long_help = """
-It never includes a trailing HTTP or HTTPS.
+This is the interace rqlited will listen on for API requests. 0.0.0.0 is an acceptable address and will mean that rqlited will listen on all interfaces.
 """
 default = "localhost:4001"
 
