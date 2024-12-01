@@ -166,11 +166,16 @@ func escapeMarkdown(text string) string {
 
 func main() {
 	// Define the markdown flag.
-	var markdown = flag.Bool("markdown", false, "Generate markdown table instead of flags.go")
+	var markdown = flag.Bool("markdown", false, "Generate markdown table instead of Flags Go source file")
+	flag.Usage = func() {
+		fmt.Fprintf(os.Stderr, "Usage: %s [--markdown] <input> <output>\n", os.Args[0])
+		flag.PrintDefaults()
+	}
 	flag.Parse()
 
 	if flag.NArg() != 2 {
-		log.Fatalf("Usage: %s [--markdown] <input> <output>", os.Args[0])
+		fmt.Fprintf(os.Stderr, "Usage: %s [--markdown] <input> <output>\n", os.Args[0])
+		os.Exit(1)
 	}
 	inPath := flag.Arg(0)
 	outPath := flag.Arg(1)
