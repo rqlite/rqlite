@@ -1,0 +1,17 @@
+[[flags]]
+name = "NodeID"
+cli = "--node-id"
+type = "string"
+short_help = "NodeID is the Raft ID for the node"
+long_help = """
+A unique identifier for the node.
+"""
+
+[[flags]]
+name = "EnableTLS"
+cli = "--enable-tls"
+type = "bool"
+short_help = "Enable TLS for client-server communication."
+long_help = """
+Enables Transport Layer Security (TLS) for secure communication.
+"""
