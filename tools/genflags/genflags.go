@@ -106,7 +106,7 @@ func (f Flag) GoType() string {
 	case "duration":
 		return "time.Duration"
 	default:
-		return "string" // Default to string
+		panic(fmt.Sprintf("unknown type: %s", f.Type))
 	}
 }
 
