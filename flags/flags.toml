@@ -21,9 +21,9 @@ default = "localhost:4001"
 name = "HTTPAdv"
 cli = "--http-adv-addr"
 type = "string"
-short_help = "Advertised HTTP server network address"
+short_help = "Advertised HTTP server network address If not set, same as HTTP server bind address"
 long_help = """
-If not set, same as HTTP server bind address.
+This is the HTTP API address an rqlited node will advertise to other nodes (and clients) as needed. This will need to be set if your rqlited node binds to all network addresses via 0.0.0.0, or if it binds to a private network address behind a firewall."
 """
 default = ""
 
@@ -33,6 +33,7 @@ cli = "--http-allow-origin"
 type = "string"
 short_help = "Value to set for Access-Control-Allow-Origin HTTP header"
 long_help = """
+You usually need to set this if if you're using a browser-based application to interfact with rqlite. You should set it to the the website that is serving the browser-based application.
 """
 default = ""
 
@@ -40,9 +41,8 @@ default = ""
 name = "AuthFile"
 cli = "--auth"
 type = "string"
-short_help = "Path to the authentication file"
+short_help = "Path to the authentication file. If not set, authentication is not enabled"
 long_help = """
-If not set, authentication is not enabled.
 """
 default = ""
 
@@ -50,9 +50,8 @@ default = ""
 name = "AutoBackupFile"
 cli = "--auto-backup"
 type = "string"
-short_help = "Path to the auto-backup file"
+short_help = "Path to the auto-backup file. If not set, automatic backup is not enabled"
 long_help = """
-If not set, automatic backup is not enabled.
 """
 default = ""
 
@@ -60,9 +59,8 @@ default = ""
 name = "AutoRestoreFile"
 cli = "--auto-restore"
 type = "string"
-short_help = "Path to the auto-restore file"
+short_help = "Path to the auto-restore file. If not set, automatic restore is not enabled"
 long_help = """
-If not set, automatic restore is not enabled.
 """
 default = ""
 
@@ -72,7 +70,7 @@ cli = "--http-ca-cert"
 type = "string"
 short_help = "Path to the CA certificate file for HTTPS communications"
 long_help = """
-May not be set.
+If this value is set rqlited will use this CA certificate to validate any other HTTPS certficate presented to it, if the node needs to contact another node's HTTP API. It also uses this CA to verify any X509 certificates presented to it by clients connecting to its HTTPS API.
 """
 default = ""
 
@@ -80,9 +78,9 @@ default = ""
 name = "HTTPx509Cert"
 cli = "--http-cert"
 type = "string"
-short_help = "Path to the X509 certificate for the HTTP server"
+short_help = "Path to the X509 certificate for the HTTP server. If not set HTTPS is not enabled"
 long_help = """
-May not be set.
+This is the certificate rqlited will present to any client connecting to it via HTTPS.
 """
 default = ""
 
@@ -90,9 +88,9 @@ default = ""
 name = "HTTPx509Key"
 cli = "--http-key"
 type = "string"
-short_help = "Path to the private key for the HTTP server"
+short_help = "Path to the private key for the HTTPS server."
 long_help = """
-May not be set.
+This is the private key corresponding to the X590 certificate.
 """
 default = ""
 
