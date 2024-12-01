@@ -3,8 +3,10 @@ package main
 import (
 	"bytes"
 	"flag"
+	"fmt"
 	"log"
 	"os"
+	"strings"
 	"text/template"
 
 	"github.com/spf13/viper"
@@ -23,7 +25,7 @@ import (
 	"time"
 )
 
-// StringSlice is a slice of strings which implments the flag.Value interface.
+// StringSlice is a slice of strings which implements the flag.Value interface.
 type StringSliceValue []string
 
 // String returns a string representation of the slice.
@@ -62,7 +64,7 @@ func ParseFlags() *Config {
 	{{- else if eq .Type "bool" }}
 	fs.BoolVar(&config.{{ .Name }}, "{{ .CLI }}", {{ .Default }}, "{{ .ShortHelp }}")
 	{{- else if eq .Type "int" }}
-	fs.IntVar(&config.{{ .Name }}, "{{ .CLI }}",{{ .Default }}, "{{ .ShortHelp }}")
+	fs.IntVar(&config.{{ .Name }}, "{{ .CLI }}", {{ .Default }}, "{{ .ShortHelp }}")
 	{{- else if eq .Type "duration" }}
 	fs.DurationVar(&config.{{ .Name }}, "{{ .CLI }}", mustParseDuration("{{ .Default }}"), "{{ .ShortHelp }}")
 	{{- end }}
@@ -90,12 +92,12 @@ type Flag struct {
 	LongHelp  string      `mapstructure:"long_help"`
 }
 
-// Convert the flag type to Go type.
+// GoType converts the flag type to Go type.
 func (f Flag) GoType() string {
 	switch f.Type {
 	case "string":
 		return "string"
-	case "stringslivevalue":
+	case "stringslicevalue":
 		return "StringSliceValue"
 	case "bool":
 		return "bool"
@@ -131,10 +133,44 @@ func generateFlagsFile(flags []Flag, out string) {
 	}
 }
 
+func generateMarkdownTable(flags []Flag, out string) {
+	var output bytes.Buffer
+
+	// Write the markdown table header.
+	output.WriteString("| Flag |  Purpose   | Usage notes | Default |\n")
+	output.WriteString("|------|------------|-------------|---------|\n")
+
+	// Write each flag as a row in the table.
+	for _, flag := range flags {
+		cli := escapeMarkdown(flag.CLI)
+		shortHelp := escapeMarkdown(flag.ShortHelp)
+		longHelp := escapeMarkdown(flag.LongHelp)
+		defaultVal := fmt.Sprintf("%v", flag.Default)
+		defaultVal = escapeMarkdown(defaultVal)
+
+		output.WriteString(fmt.Sprintf("| %s | %s | %s | %s |\n", cli, shortHelp, longHelp, defaultVal))
+	}
+
+	// Write the output to the specified file.
+	if err := os.WriteFile(out, output.Bytes(), 0644); err != nil {
+		log.Fatalf("Error writing markdown file: %v", err)
+	}
+}
+
+// escapeMarkdown escapes markdown special characters.
+func escapeMarkdown(text string) string {
+	text = strings.ReplaceAll(text, "|", "\\|")
+	text = strings.ReplaceAll(text, "\n", "<br>")
+	return text
+}
+
 func main() {
+	// Define the markdown flag.
+	var markdown = flag.Bool("markdown", false, "Generate markdown table instead of flags.go")
 	flag.Parse()
+
 	if flag.NArg() != 2 {
-		log.Fatalf("Usage: %s <input> <output>", os.Args[0])
+		log.Fatalf("Usage: %s [--markdown] <input> <output>", os.Args[0])
 	}
 	inPath := flag.Arg(0)
 	outPath := flag.Arg(1)
@@ -149,6 +185,11 @@ func main() {
 		log.Fatalf("Error unmarshaling config: %v", err)
 	}
 
-	// Generate flags.go
-	generateFlagsFile(flags, outPath)
+	if *markdown {
+		// Generate markdown table.
+		generateMarkdownTable(flags, outPath)
+	} else {
+		// Generate flags.go.
+		generateFlagsFile(flags, outPath)
+	}
 }
