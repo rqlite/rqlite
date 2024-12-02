@@ -238,6 +238,7 @@ cli = "--bootstrap-expect"
 type = "int"
 short_help = "Minimum number of nodes required for a bootstrap"
 long_help = """
+This flag provides the number of expected nodes in the cluster. Either this value should not be provided or the value must agree with other nodes in the cluster. When provided, rqlite waits until the specified number of servers are available and then bootstraps the cluster. This allows an initial leader to be elected automatically.
 """
 default = 0
 
@@ -247,6 +248,7 @@ cli = "--bootstrap-expect-timeout"
 type = "duration"
 short_help = "Maximum time a bootstrap operation can take"
 long_help = """
+If a bootstrap operation does not succeed with this time, cluster formation will abort.
 """
 default = "120s"
 

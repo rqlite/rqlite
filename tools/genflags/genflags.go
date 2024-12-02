@@ -137,8 +137,8 @@ func generateMarkdownTable(flags []Flag, out string) {
 	var output bytes.Buffer
 
 	// Write the markdown table header.
-	output.WriteString("| Flag |  Purpose   | Usage notes | Default |\n")
-	output.WriteString("|------|------------|-------------|---------|\n")
+	output.WriteString("| Flag | Default | Purpose | Usage notes |\n")
+	output.WriteString("|------|---------|---------|-------------|\n")
 
 	// Write each flag as a row in the table.
 	for _, flag := range flags {
@@ -147,8 +147,7 @@ func generateMarkdownTable(flags []Flag, out string) {
 		longHelp := escapeMarkdown(flag.LongHelp)
 		defaultVal := fmt.Sprintf("%v", flag.Default)
 		defaultVal = escapeMarkdown(defaultVal)
-
-		output.WriteString(fmt.Sprintf("| %s | %s | %s | %s |\n", cli, shortHelp, longHelp, defaultVal))
+		output.WriteString(fmt.Sprintf("| `%s` | %s | %s | %s |\n", cli, defaultVal, shortHelp, longHelp))
 	}
 
 	// Write the output to the specified file.
