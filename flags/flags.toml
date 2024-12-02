@@ -296,6 +296,7 @@ cli = "--fk"
 type = "bool"
 short_help = "Enable SQLite foreign key constraints"
 long_help = """
+SQLite doesn't enable foreign key constraints by default. If you'd like rqlite to automatically do so then set this flag. This flag must be set on every node in your cluster.
 """
 default = false
 
@@ -305,7 +306,7 @@ cli = "--auto-vacuum-int"
 type = "duration"
 short_help = "Automatic VACUUM interval. Use 0s to disable. If not set, automatic VACUUM is not enabled"
 long_help = """
-
+If set to a non-zero interval rqlite will execute 'VACUUM' on the specified interval. This can help reduce SQLite disk usage, but writes are blocked while a VACUUM takes place. See https://www.sqlite.org/lang_vacuum.html for more information.
 """
 default = "0s"
 
@@ -335,7 +336,7 @@ cli = "--raft-non-voter"
 type = "bool"
 short_help = "Configure as a non-voting node"
 long_help = """
-Adding non-voting (also known as read-only) nodes can help increase query performance. Read-only nodes don't particpate in the Raft consensus system.....
+Adding non-voting (also known as read-only) nodes can help scale out query performance. Read-only nodes don't particpate in the Raft consensus system, but do receive the same stream of updates from the Leader as voting nodes do.
 """
 default = false
 
@@ -345,6 +346,7 @@ cli = "--raft-snap"
 type = "uint64"
 short_help = "Number of outstanding log entries that trigger a snapshot"
 long_help = """
+Snapshotting is a critical part of the Raft subsystem, which involves storing a copy of the SQLite database and then truncating the Raft log. Writes are blocked during the Snapshot process, but more regular snapshotting can mean faster start-up times, as there will generally be fewer logs to apply when a node restarts.
 """
 default = 8192
 
@@ -352,9 +354,9 @@ default = 8192
 name = "RaftSnapThresholdWALSize"
 cli = "--raft-snap-wal-size"
 type = "uint64"
-short_help = "Size of a SQLite WAL file which triggers a snapshot"
+short_help = "Size of a SQLite WAL file which triggers a snapshot.Set to 0 to disable"
 long_help = """
-Set to 0 to disable.
+rqlite, by default, will also trigger a snapshot if the WAL gets larger than 4MB. Large SQLite WAL files can decrease query performance, and since snapshotting involves checkpointing the WAL file, snapshotting is an effective way to limit WAL size. However writes are blocked during the snapshotting process, so it's trade-off.
 """
 default = 4194304
 
@@ -364,6 +366,7 @@ cli = "--raft-snap-int"
 type = "duration"
 short_help = "Snapshot threshold check interval"
 long_help = """
+This controls how often the Raft subsystem will check if snapshotting is required, either due to the number of oustanding log entries, or due to WAL size.
 """
 default = "10s"
 
@@ -371,9 +374,8 @@ default = "10s"
 name = "RaftLeaderLeaseTimeout"
 cli = "--raft-leader-lease-timeout"
 type = "duration"
-short_help = "Leader lease timeout"
+short_help = "Leader lease timeout. Use 0s for Raft default"
 long_help = """
-Use 0s for Raft default.
 """
 default = "0s"
 
@@ -383,7 +385,7 @@ cli = "--raft-timeout"
 type = "duration"
 short_help = "Heartbeat timeout for Raft consensus"
 long_help = """
-Specifies the time in follower state without contact from a Leader before the node attempts an election.
+Specifies the time a Follower will wait without contact from a Leader before the Follower initiates an election.
 """
 default = "1s"
 
@@ -393,7 +395,7 @@ cli = "--raft-election-timeout"
 type = "duration"
 short_help = "Election timeout for Raft consensus"
 long_help = """
-Specifies the time in candidate state without contact from a Leader before the node attempts an election.
+Specifies the time a Candidate will wait without contact from a Leader before the Candidate initiates a new election.
 """
 default = "1s"
 
