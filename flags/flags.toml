@@ -256,9 +256,8 @@ default = "120s"
 name = "DiscoMode"
 cli = "--disco-mode"
 type = "string"
-short_help = "Discovery mode"
+short_help = "Discovery mode. If not set, no node discovery is performed"
 long_help = """
-If not set, no node discovery is performed.
 """
 default = ""
 
@@ -378,6 +377,7 @@ cli = "--raft-leader-lease-timeout"
 type = "duration"
 short_help = "Leader lease timeout. Use 0s for Raft default"
 long_help = """
+This is used to control how long the "lease" lasts for being the leader without being able to contact a quorum If a Leader reaches this interval without contact, it will step down as Leader.
 """
 default = "0s"
 
@@ -432,9 +432,9 @@ default = false
 name = "RaftStepdownOnShutdown"
 cli = "--raft-shutdown-stepdown"
 type = "bool"
-short_help = "Relinquish leadership on shutdown"
+short_help = "Relinquish leadership on shutdown. Enabled by default"
 long_help = """
-Enabled by default.
+If a node is being shutdown, and it's the Leader, this helps minimize the time the cluster is without a Leader. The leader will stop accepting client requests, make sure the target server is up to date and starts the transfer with a _TimeoutNow_ message. This message has the same effect as if the election timeout on the target server fires.
 """
 default = true
 
@@ -442,9 +442,9 @@ default = true
 name = "RaftReapNodeTimeout"
 cli = "--raft-reap-node-timeout"
 type = "duration"
-short_help = "Duration after which a non-reachable voting node is reaped"
+short_help = "Duration after which a non-reachable voting node is reaped. If not set, no reaping takes place"
 long_help = """
-If not set, no reaping takes place.
+Use this feature with caution, otherwise you may reap a node which has simply become unreachable.
 """
 default = "0h"
 
@@ -452,9 +452,9 @@ default = "0h"
 name = "RaftReapReadOnlyNodeTimeout"
 cli = "--raft-reap-read-only-node-timeout"
 type = "duration"
-short_help = "Duration after which a non-reachable non-voting node is reaped"
+short_help = "Duration after which a non-reachable non-voting node is reaped. If not set, no reaping takes place"
 long_help = """
-If not set, no reaping takes place.
+This can be useful if you have a deployment where non-voting nodes tend to come and go, and you want to avoid explicitly removing those nodes.
 """
 default = "0h"
 
@@ -473,6 +473,7 @@ cli = "--write-queue-capacity"
 type = "int"
 short_help = "Default capacity of execute queues"
 long_help = """
+The larger this queue the more _Queued Write_ requests can be queued up internally by the node. This queue is asynchronously drained, as requests are transmitted through the Raft log. Anytime the queue is full further Queued Write requests are blocked.
 """
 default = 1024
 
@@ -482,6 +483,7 @@ cli = "--write-queue-batch-size"
 type = "int"
 short_help = "Default batch size for execute queues"
 long_help = """
+The larger the batch size the more statements will be contained in a single Raft log entry. However larger batches will consume more memory, and may introduce latency.
 """
 default = 128
 
