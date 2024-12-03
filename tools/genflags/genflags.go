@@ -103,6 +103,8 @@ func (f Flag) GoType() string {
 		return "bool"
 	case "int":
 		return "int"
+	case "uint64":
+		return "uint64"
 	case "duration":
 		return "time.Duration"
 	default:
@@ -163,17 +165,86 @@ func escapeMarkdown(text string) string {
 	return text
 }
 
+func generateHTMLTable(flags []Flag, out string) {
+	// Define the HTML template with precise control over column widths.
+	const htmlTemplate = `
+<!DOCTYPE html>
+<html>
+<head>
+<style>
+table {
+	width: 100%;
+	border-collapse: collapse;
+}
+th, td {
+	border: 1px solid #ddd;
+	padding: 8px;
+}
+th {
+	background-color: #f2f2f2;
+	text-align: left;
+}
+.col-cli { width: 30%; }
+.col-usage { width: 70%; }
+</style>
+</head>
+<body>
+
+<table>
+	<tr>
+		<th class="col-cli">Flag</th>
+		<th class="col-usage">Usage</th>
+	</tr>
+	{{- range .Flags }}
+	<tr>
+		<td><code>{{ .CLI | html }}</code></td>
+		<td>{{ .ShortHelp | html }}.
+		{{- if .LongHelp }}
+		    <br><br>{{ .LongHelp | html }}
+		{{- end }}</td>
+	</tr>
+	{{- end }}
+</table>
+
+</body>
+</html>
+`
+
+	// Parse the template.
+	tmpl, err := template.New("htmlTable").Funcs(template.FuncMap{
+		"html": func(s string) string {
+			return template.HTMLEscapeString(s)
+		},
+	}).Parse(htmlTemplate)
+	if err != nil {
+		log.Fatalf("Error parsing HTML template: %v", err)
+	}
+
+	// Execute the template with the flags data.
+	var output bytes.Buffer
+	if err := tmpl.Execute(&output, struct {
+		Flags []Flag
+	}{Flags: flags}); err != nil {
+		log.Fatalf("Error executing HTML template: %v", err)
+	}
+
+	// Write the output to the specified file.
+	if err := os.WriteFile(out, output.Bytes(), 0644); err != nil {
+		log.Fatalf("Error writing HTML file: %v", err)
+	}
+}
+
 func main() {
 	// Define the markdown flag.
-	var markdown = flag.Bool("markdown", false, "Generate markdown table instead of Flags Go source file")
+	var format = flag.String("format", "go", "Output format (go, markdown, html)")
 	flag.Usage = func() {
-		fmt.Fprintf(os.Stderr, "Usage: %s [--markdown] <input> <output>\n", os.Args[0])
+		fmt.Fprintf(os.Stderr, "Usage: %s [--format] <input> <output>\n", os.Args[0])
 		flag.PrintDefaults()
 	}
 	flag.Parse()
 
 	if flag.NArg() != 2 {
-		fmt.Fprintf(os.Stderr, "Usage: %s [--markdown] <input> <output>\n", os.Args[0])
+		fmt.Fprintf(os.Stderr, "Usage: %s [--format] <input> <output>\n", os.Args[0])
 		os.Exit(1)
 	}
 	inPath := flag.Arg(0)
@@ -189,11 +260,14 @@ func main() {
 		log.Fatalf("Error unmarshaling config: %v", err)
 	}
 
-	if *markdown {
-		// Generate markdown table.
-		generateMarkdownTable(flags, outPath)
-	} else {
-		// Generate flags.go.
+	switch *format {
+	case "go":
 		generateFlagsFile(flags, outPath)
+	case "markdown":
+		generateMarkdownTable(flags, outPath)
+	case "html":
+		generateHTMLTable(flags, outPath)
+	default:
+		log.Fatalf("Unknown format: %s", *format)
 	}
 }

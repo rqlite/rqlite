@@ -1,7 +1,7 @@
 [[flags]]
 name = "ExtensionPaths"
 cli = "--extensions-path"
-type = "stringslicesalue"
+type = "stringslicevalue"
 short_help = "Comma-delimited list of paths to directories, zipfiles, or tar.gz files containing SQLite extensions"
 long_help = """
 """
@@ -13,7 +13,7 @@ cli = "--http-addr"
 type = "string"
 short_help = "HTTP server bind address. To enable HTTPS, set X.509 certificate and key"
 long_help = """
-This is the interace rqlited will listen on for API requests. 0.0.0.0 is an acceptable address and will mean that rqlited will listen on all interfaces.
+This is the interface rqlited will listen on for API requests. 0.0.0.0 is an acceptable address and will mean that rqlited will listen on all interfaces.
 """
 default = "localhost:4001"
 
@@ -23,7 +23,7 @@ cli = "--http-adv-addr"
 type = "string"
 short_help = "Advertised HTTP server network address If not set, same as HTTP server bind address"
 long_help = """
-This is the HTTP API address an rqlited node will advertise to other nodes (and clients) as needed. This will need to be set if your rqlited node binds to all network addresses via 0.0.0.0, or if it binds to a private network address behind a firewall."
+This is the HTTP API address an rqlited node will advertise to other nodes (and clients) as needed. This will need to be set if your rqlited node binds to all network addresses via 0.0.0.0, or if it binds to a private network address behind a firewall.
 """
 default = ""
 
@@ -33,7 +33,7 @@ cli = "--http-allow-origin"
 type = "string"
 short_help = "Value to set for Access-Control-Allow-Origin HTTP header"
 long_help = """
-You usually need to set this if if you're using a browser-based application to interfact with rqlite. You should set it to the the website that is serving the browser-based application.
+You usually need to set this if if you're using a browser-based application to interfact with rqlite. You should set it to the the website that is serving the browser-based application e.g. `--http-allow-origin="https://example.com"`.
 """
 default = ""
 
@@ -70,7 +70,7 @@ cli = "--http-ca-cert"
 type = "string"
 short_help = "Path to the CA certificate file for HTTPS communications"
 long_help = """
-If this value is set rqlited will use this CA certificate to validate any other HTTPS certficate presented to it, if the node needs to contact another node's HTTP API. It also uses this CA to verify any X509 certificates presented to it by clients connecting to its HTTPS API.
+If this value is set rqlite will use this CA certificate to validate any other X509 certficate presented to it, if the node needs to contact another node's HTTP API. It also uses this CA to verify any X509 certificates presented to it by clients connecting to its HTTPS API.
 """
 default = ""
 
@@ -78,9 +78,9 @@ default = ""
 name = "HTTPx509Cert"
 cli = "--http-cert"
 type = "string"
-short_help = "Path to the X509 certificate for the HTTP server. If not set HTTPS is not enabled"
+short_help = "Path to the X509 certificate for the HTTPS server. If not set HTTPS is not enabled"
 long_help = """
-This is the certificate rqlited will present to any client connecting to it via HTTPS.
+This is the certificate rqlite will present to any client connecting to it via HTTPS.
 """
 default = ""
 
@@ -88,9 +88,9 @@ default = ""
 name = "HTTPx509Key"
 cli = "--http-key"
 type = "string"
-short_help = "Path to the private key for the HTTPS server."
+short_help = "Path to the private key for the HTTPS server"
 long_help = """
-This is the private key corresponding to the x.509 certificate.
+This is the private key corresponding to the X509 certificate.
 """
 default = ""
 
@@ -98,9 +98,9 @@ default = ""
 name = "HTTPVerifyClient"
 cli = "--http-verify-client"
 type = "bool"
-short_help = "Whether the HTTP server should verify client x509 certificates"
+short_help = "Whether the HTTP server should verify client X509 certificates"
 long_help = """
-This allows you to control which clients can connect to the HTTPS API, as only clients presenting certificates that have been signed by the CA will be able to connect with rqlited.
+This allows you to control which clients can connect to the HTTPS API, as only clients presenting certificates that have been signed by the CA will be able to connect to the node.
 """
 default = false
 
@@ -110,7 +110,7 @@ cli = "--node-ca-cert"
 type = "string"
 short_help = "Path to the CA certificate file for inter-node communications. May not be set"
 long_help = """
-If this path is set, and nodes enable TLS inter-node communications i.e. over the Raft TCP port, then the certificates presented by a node must be signed by the Certificate Authority.
+If this path is set, and nodes enable TLS inter-node communications i.e. over the Raft TCP port, then the certificates presented by a node must be signed by this Certificate Authority.
 """
 default = ""
 
@@ -118,9 +118,9 @@ default = ""
 name = "NodeX509Cert"
 cli = "--node-cert"
 type = "string"
-short_help = "Path to the x509 certificate for inter-node communications"
+short_help = "Path to the X509 certificate for inter-node communications"
 long_help = """
-Setting this path enables TLS-encrypted inter-node when this node communicates with other nodes. Specifically this is the certificate presented by this node when another node connects to it using TLS. If not set the node does not enable TLS."
+Setting this path enables TLS-encrypted inter-node communications. Specifically this is the certificate presented by this node when another node connects to it. If not set the node does not enable TLS."
 """
 default = ""
 
@@ -130,7 +130,7 @@ cli = "--node-key"
 type = "string"
 short_help = "Path to the X509 key for inter-node communications"
 long_help = """
-This is the private key corresponding to the node's x509 certificate, which it uses for inter-node communications.
+This is the private key corresponding to the node's X509 certificate, which it uses for inter-node communications.
 """
 default = ""
 
@@ -138,7 +138,7 @@ default = ""
 name = "NoNodeVerify"
 cli = "--node-no-verify"
 type = "bool"
-short_help = "Disables checking other nodes' X509 certificates for validity"
+short_help = "Disables checking other nodes' X509 certificates for validity. Checking is enabled by default"
 long_help = """
 Validity is defined as signed by an acceptable CA, that the hostname in the certificate matches the hostname of the connecting node, and that the presented certificates are not expired.
 """
@@ -148,9 +148,9 @@ default = false
 name = "NodeVerifyClient"
 cli = "--node-verify-client"
 type = "bool"
-short_help = "Enable mutual TLS for node-to-node communication"
+short_help = "Enable mutual TLS for node-to-node communication. Disabled by default"
 long_help = """
-This allows a node to control which other nodes can connect to it. Unless those other nodes present a certificate signed by an acceptable CA, the connection will be refused.
+This allows a node to control which other nodes can connect to it. If a node attempting to connect to this node does not present a certificate signed by an acceptable CA, the connection will be refused.
 """
 default = false
 
@@ -168,9 +168,9 @@ default = ""
 name = "NodeID"
 cli = "--node-id"
 type = "string"
-short_help = "Unique Raft ID for the node.If not set, defaults to the advertised Raft address."
+short_help = "Unique Raft ID for the node. If not set, defaults to the advertised Raft address"
 long_help = """
-While not required, providing an explicit ID to a node makes cluster management simpler. Once set a node's ID cannot change.
+While not required, providing an explicit ID to a node makes cluster management simpler. Once set a node's ID cannot change. If you do change it your cluster will not operate correctly.
 """
 default = ""
 
@@ -180,7 +180,7 @@ cli = "--raft-addr"
 type = "string"
 short_help = "Bind network address for the Raft server in the form address:port"
 long_help = """
-This is the interace rqlited will listen on for connections from other node. 0.0.0.0 is an acceptable address and will mean that rqlited will listen on all interfaces.
+This is the interace `rqlited` will listen on for connections from other node, as part of managing Raft consensus. 0.0.0.0 is an acceptable address and will mean that `rqlited` will listen on all interfaces.
 """
 default = "localhost:4002"
 
@@ -190,7 +190,7 @@ cli = "--raft-adv-addr"
 type = "string"
 short_help = "Advertised Raft server address. If not set, same as Raft server bind address"
 long_help = """
-This is the Raft address an rqlited node will advertise to other nodes. This will need to be set if your rqlited node binds to all network addresses via 0.0.0.0, or if it binds to a private network address behind a firewall."
+This is the Raft address an `rqlited` node will advertise to other nodes, as part of managing Raft consensus. This will need to be set if your node binds to all network addresses via 0.0.0.0, or if it binds to a private network address behind a firewall.
 """
 default = ""
 
@@ -267,7 +267,7 @@ cli = "--disco-key"
 type = "string"
 short_help = "Discovery prefix key"
 long_help = """
-This allows you to use the same Discovery infrastructure e.g. Consul with multiple different rqlite clusters. Each rqlite cluster can use a different prefix key to share Discovery information.
+This allows you to use the same Discovery infrastructure e.g. Consul with multiple different rqlite clusters. Each rqlite cluster can use a different prefix key to separate its Discovery information from other clusters using the same infrastructure.
 """
 default = "rqlite"
 
@@ -275,9 +275,8 @@ default = "rqlite"
 name = "DiscoConfig"
 cli = "--disco-config"
 type = "string"
-short_help = "Path to discovery configuration file"
+short_help = "Path to Discovery configuration file. May not be set."
 long_help = """
-May not be set.
 """
 default = ""
 
@@ -285,7 +284,7 @@ default = ""
 name = "OnDiskPath"
 cli = "--on-disk-path"
 type = "string"
-short_help = "Path to the SQLite on-disk database file.If not set, uses a file in the data directory."
+short_help = "Path to the SQLite on-disk database file. If not set, uses a file in the data directory."
 long_help = """
 Generally speaking you shouldn't need to set this. Your system is easiest to manage if you let rqlite manage the SQLite database. However this can be useful under certain performance-sensitive scenarious.
 """
@@ -307,7 +306,7 @@ cli = "--auto-vacuum-int"
 type = "duration"
 short_help = "Automatic VACUUM interval. Use 0s to disable. If not set, automatic VACUUM is not enabled"
 long_help = """
-If set to a non-zero interval rqlite will execute 'VACUUM' on the specified interval. This can help reduce SQLite disk usage, but writes are blocked while a VACUUM takes place. See https://www.sqlite.org/lang_vacuum.html for more information.
+If set to a non-zero interval rqlite will execute 'VACUUM' on the specified interval. This can help reduce SQLite disk usage, but writes are blocked while a VACUUM takes place. See the <a href="https://www.sqlite.org/lang_vacuum.html">SQLite documentation</a> for more information.
 """
 default = "0s"
 
@@ -317,7 +316,7 @@ cli = "--auto-optimize-int"
 type = "duration"
 short_help = "Automatic optimization interval. Use 0h to disable"
 long_help = """
-If set to a non-zero interval rqlite will execute 'PRAGMA OPTIMIZE' on the specified interval. This can help SQLite query performance. See https://www.sqlite.org/pragma.html#pragma_optimize for more information.
+If set to a non-zero interval rqlite will execute 'PRAGMA OPTIMIZE' on the specified interval. This can help SQLite query performance. See the <a href="https://www.sqlite.org/pragma.html#pragma_optimize">SQLite documentation</a> for more information.
 """
 default = "24h"
 
@@ -327,7 +326,7 @@ cli = "--raft-log-level"
 type = "string"
 short_help = "Minimum logging level for the Raft subsystem"
 long_help = """
-Acceptble log levels are ERROR, WARN, INFO and DEBUG.
+Acceptble log levels are `ERROR`, `WARN`, `INFO` and `DEBUG`.
 """
 default = "WARN"
 
@@ -377,7 +376,7 @@ cli = "--raft-leader-lease-timeout"
 type = "duration"
 short_help = "Leader lease timeout. Use 0s for Raft default"
 long_help = """
-This is used to control how long the "lease" lasts for being the leader without being able to contact a quorum If a Leader reaches this interval without contact, it will step down as Leader.
+This is used to control how long the "lease" lasts for being the Leader without being able to contact a quorum If a Leader reaches this interval without contact, it will step down as Leader.
 """
 default = "0s"
 
@@ -416,6 +415,7 @@ cli = "--raft-remove-shutdown"
 type = "bool"
 short_help = "Shutdown Raft if the node is removed from the cluster"
 long_help = """
+This ensures a node doesn't self-elect itself as Leader if it finds itself as the sole node in a single-node cluster.
 """
 default = false
 
@@ -425,6 +425,7 @@ cli = "--raft-cluster-remove-shutdown"
 type = "bool"
 short_help = "Node removes itself from the cluster on shutdown"
 long_help = """
+If enabled a node will attempt to remove itself from the cluster just before it shuts down. This is a best effort operation, and only occurs if the node is shut down gracefully.
 """
 default = false
 
@@ -432,9 +433,9 @@ default = false
 name = "RaftStepdownOnShutdown"
 cli = "--raft-shutdown-stepdown"
 type = "bool"
-short_help = "Relinquish leadership on shutdown. Enabled by default"
+short_help = "Relinquish leadership on shutdown."
 long_help = """
-If a node is being shutdown, and it's the Leader, this helps minimize the time the cluster is without a Leader. The leader will stop accepting client requests, make sure the target server is up to date and starts the transfer with a _TimeoutNow_ message. This message has the same effect as if the election timeout on the target server fires.
+If a node is being shutdown, and it's the Leader, this helps minimize the time the cluster is without a Leader. The leader will stop accepting client requests, make sure a target node is up to date and starts the transfer with a _TimeoutNow_ message. This message has the same effect as if the election timeout on the target server fires.
 """
 default = true
 
@@ -464,6 +465,7 @@ cli = "--cluster-connect-timeout"
 type = "duration"
 short_help = "Timeout when connecting to another node in the cluster"
 long_help = """
+This sets the maximum time a node will wait when attempting to connect to another node over the inter-node network connection.
 """
 default = "30s"
 
@@ -473,7 +475,7 @@ cli = "--write-queue-capacity"
 type = "int"
 short_help = "Default capacity of execute queues"
 long_help = """
-The larger this queue the more _Queued Write_ requests can be queued up internally by the node. This queue is asynchronously drained, as requests are transmitted through the Raft log. Anytime the queue is full further Queued Write requests are blocked.
+The larger this value the more _Queued Write_ requests can be queued up internally by the node. This queue is asynchronously drained, as requests are transmitted through the Raft log. Any time the queue is full _Queued Write_ requests are blocked.
 """
 default = 1024
 
@@ -483,7 +485,7 @@ cli = "--write-queue-batch-size"
 type = "int"
 short_help = "Default batch size for execute queues"
 long_help = """
-The larger the batch size the more statements will be contained in a single Raft log entry. However larger batches will consume more memory, and may introduce latency.
+The larger the batch size the more _Queued Write_ statements will be batched from the internal queue and stored in a single Raft log entry. However, larger batches will consume more memory, and may increase latency.
 """
 default = 128
 
@@ -491,7 +493,7 @@ default = 128
 name = "WriteQueueTimeout"
 cli = "--write-queue-timeout"
 type = "duration"
-short_help = "Time after which data will be sent on execute queues if batch size isn't reached"
+short_help = "Time after which internally queued _Queued Writes_ will be sent on if the batch size isn't reached."
 long_help = """
 """
 default = "50ms"
@@ -500,7 +502,7 @@ default = "50ms"
 name = "WriteQueueTx"
 cli = "--write-queue-tx"
 type = "bool"
-short_help = "Use a transaction when processing a queued write"
+short_help = "Use a transaction when executing a _Queued Write_ batch"
 long_help = """
 """
 default = false
@@ -509,9 +511,8 @@ default = false
 name = "CPUProfile"
 cli = "--cpu-profile"
 type = "string"
-short_help = "Enable CPU profiling"
+short_help = "Write CPU profie information to a file at this path."
 long_help = """
-Path to file for CPU profiling information.
 """
 default = ""
 
@@ -519,9 +520,8 @@ default = ""
 name = "MemProfile"
 cli = "--mem-profile"
 type = "string"
-short_help = "Enable memory profiling"
+short_help = "Write memory profie information to a file at this path."
 long_help = """
-Path to file for memory profiling information.
 """
 default = ""
 
@@ -529,8 +529,7 @@ default = ""
 name = "TraceProfile"
 cli = "--trace-profile"
 type = "string"
-short_help = "Enable trace profiling"
+short_help = "Write trace profie information to a file at this path."
 long_help = """
-Path to file for trace profiling information.
 """
 default = ""
