@@ -1,6 +1,7 @@
 ## v8.34.4 (unreleased)
 ### Implementation changes and bug fixes
 - [PR #1988](https://github.com/rqlite/rqlite/pull/1988): Automatically generate flags and associated documentation.
+- [PR #1988](https://github.com/rqlite/rqlite/pull/1988): Upgrade dependencies.
 
 ## v8.34.3 (November 27th 2024)
 ### Implementation changes and bug fixes
