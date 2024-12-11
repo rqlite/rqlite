@@ -1,4 +1,7 @@
-## v8.34.4 (unreleased)
+## v8.35.0 (unreleased)
+### New features
+- [PR #1991](https://github.com/rqlite/rqlite/pull/1991): Support queries as raw POST bodies.
+
 ### Implementation changes and bug fixes
 - [PR #1988](https://github.com/rqlite/rqlite/pull/1988): Automatically generate flags and associated documentation.
 - [PR #1989](https://github.com/rqlite/rqlite/pull/1989): Rename flags package to rflags.
