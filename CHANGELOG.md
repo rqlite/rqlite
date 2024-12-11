@@ -1,4 +1,4 @@
-## v8.35.0 (unreleased)
+## v8.35.0 (December 11th 2024)
 ### New features
 - [PR #1991](https://github.com/rqlite/rqlite/pull/1991): Support queries as raw POST bodies.
 
