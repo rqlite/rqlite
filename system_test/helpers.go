@@ -138,6 +138,12 @@ func (n *Node) Query(stmt string) (string, error) {
 	return n.query(stmt, "weak", false, NoQueryTimeout)
 }
 
+// QueryRaw runs a single query against the node, sending the query
+// as a plain text string in the body of the request.
+func (n *Node) QueryRaw(stmt string) (string, error) {
+	return n.postQuery(stmt, "text/plain")
+}
+
 // QueryWithBlobArray runs a single query against the node, with BLOB byte array support.
 func (n *Node) QueryWithBlobArray(stmt string) (string, error) {
 	return n.query(stmt, "weak", true, NoQueryTimeout)
@@ -175,7 +181,7 @@ func (n *Node) QueryMulti(stmts []string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	return n.postQuery(string(j))
+	return n.postQuery(string(j), "application/json")
 }
 
 // QueryParameterized run a single parameterized query against the node
@@ -187,7 +193,7 @@ func (n *Node) QueryParameterized(stmt []interface{}) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	return n.postQuery(string(j))
+	return n.postQuery(string(j), "application/json")
 }
 
 // Request runs a single request against the node.
@@ -495,8 +501,8 @@ func (n *Node) query(stmt, consistency string, ba bool, timeout time.Duration) (
 	return string(body), nil
 }
 
-func (n *Node) postQuery(stmt string) (string, error) {
-	resp, err := http.Post("http://"+n.APIAddr+"/db/query", "application/json", strings.NewReader(stmt))
+func (n *Node) postQuery(stmt string, contentType string) (string, error) {
+	resp, err := http.Post("http://"+n.APIAddr+"/db/query", contentType, strings.NewReader(stmt))
 	if err != nil {
 		return "", err
 	}

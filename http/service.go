@@ -1233,11 +1233,26 @@ func (s *Service) handleQuery(w http.ResponseWriter, r *http.Request, qp QueryPa
 		return
 	}
 
-	// Get the query statement(s), and do tx if necessary.
-	queries, err := requestQueries(r, qp)
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
-		return
+	var queries []*command.Statement
+	var err error
+	if strings.HasPrefix(r.Header.Get("Content-Type"), "text/plain") && r.Method == "POST" {
+		sql, err := io.ReadAll(r.Body)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+		queries = []*command.Statement{
+			{
+				Sql: string(sql),
+			},
+		}
+	} else {
+		// Get the query statement(s), and do tx if necessary.
+		queries, err = requestQueries(r, qp)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
 	}
 	stats.Add(numQueryStmtsRx, int64(len(queries)))
 
