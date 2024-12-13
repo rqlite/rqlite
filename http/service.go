@@ -1150,10 +1150,26 @@ func (s *Service) queuedExecute(w http.ResponseWriter, r *http.Request, qp Query
 // execute handles queries that modify the database.
 func (s *Service) execute(w http.ResponseWriter, r *http.Request, qp QueryParams) {
 	resp := NewResponse()
-	stmts, err := ParseRequest(r.Body)
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
-		return
+
+	var stmts []*command.Statement
+	var err error
+	if strings.HasPrefix(r.Header.Get("Content-Type"), "text/plain") {
+		sql, err := io.ReadAll(r.Body)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+		stmts = []*command.Statement{
+			{
+				Sql: string(sql),
+			},
+		}
+	} else {
+		stmts, err = ParseRequest(r.Body)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
 	}
 	stats.Add(numExecuteStmtsRx, int64(len(stmts)))
 	if !qp.NoParse() {

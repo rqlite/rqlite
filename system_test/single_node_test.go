@@ -162,7 +162,7 @@ func Test_SingleNode(t *testing.T) {
 	}
 }
 
-func Test_SingleNode_QueryRaw(t *testing.T) {
+func Test_SingleNode_ExecuteQueryRaw(t *testing.T) {
 	node := mustNewLeaderNode("node1")
 	defer node.Deprovision()
 
@@ -207,7 +207,7 @@ func Test_SingleNode_QueryRaw(t *testing.T) {
 		var r string
 		var err error
 		if tt.execute {
-			r, err = node.Execute(tt.stmt)
+			r, err = node.ExecuteRaw(tt.stmt)
 		} else {
 			r, err = node.QueryRaw(tt.stmt)
 		}

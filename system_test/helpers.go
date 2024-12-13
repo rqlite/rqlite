@@ -98,13 +98,19 @@ func (n *Node) Execute(stmt string) (string, error) {
 	return n.ExecuteMulti([]string{stmt})
 }
 
+// ExecuteRaw runs a single statement against the node, sending the statement
+// as a plain text string in the body of the request.
+func (n *Node) ExecuteRaw(stmt string) (string, error) {
+	return n.postExecute(stmt, "text/plain")
+}
+
 // ExecuteMulti executes multiple statements against the node.
 func (n *Node) ExecuteMulti(stmts []string) (string, error) {
 	j, err := json.Marshal(stmts)
 	if err != nil {
 		return "", err
 	}
-	return n.postExecute(string(j))
+	return n.postExecute(string(j), "application/json")
 }
 
 // ExecuteParameterized executes a single parameterized query against the node
@@ -116,7 +122,7 @@ func (n *Node) ExecuteParameterized(stmt []interface{}) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	return n.postExecute(string(j))
+	return n.postExecute(string(j), "application/json")
 }
 
 // ExecuteQueued sends a single statement to the node's Execute queue
@@ -437,8 +443,8 @@ func (n *Node) ConfirmRedirect(host string) bool {
 	return true
 }
 
-func (n *Node) postExecute(stmt string) (string, error) {
-	resp, err := http.Post("http://"+n.APIAddr+"/db/execute", "application/json", strings.NewReader(stmt))
+func (n *Node) postExecute(stmt, contentType string) (string, error) {
+	resp, err := http.Post("http://"+n.APIAddr+"/db/execute", contentType, strings.NewReader(stmt))
 	if err != nil {
 		return "", err
 	}
