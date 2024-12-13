@@ -2,6 +2,9 @@
 ### New features
 - [PR #1992](https://github.com/rqlite/rqlite/pull/1992): Support executes as raw POST bodies.
 
+### Implementation changes and bug fixes
+- [PR #1993](https://github.com/rqlite/rqlite/pull/1993): `go mod` updates.
+
 ## v8.35.0 (December 11th 2024)
 ### New features
 - [PR #1991](https://github.com/rqlite/rqlite/pull/1991): Support queries as raw POST bodies.
