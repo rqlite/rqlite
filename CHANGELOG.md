@@ -1,3 +1,7 @@
+## v8.36.1 (unreleased)
+### Implementation changes and bug fixes
+- [PR #1994](https://github.com/rqlite/rqlite/pull/1994): Bump golang.org/x/crypto from 0.30.0 to 0.31.0.
+
 ## v8.36.0 (December 12th 2024)
 ### New features
 - [PR #1992](https://github.com/rqlite/rqlite/pull/1992): Support executes as raw POST bodies.
