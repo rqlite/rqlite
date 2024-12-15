@@ -1,3 +1,7 @@
+[Go]
+package = "main"
+flag_set_name = "rqlited"
+
 [[arguments]]
 name = "DataPath"
 type = "string"
