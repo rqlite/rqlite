@@ -10,7 +10,6 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
-	"runtime"
 	"strconv"
 	"strings"
 	"time"
@@ -294,85 +293,17 @@ type BuildInfo struct {
 
 // ParseFlags parses the command line, and returns the configuration.
 func ParseFlags(name, desc string, build *BuildInfo) (*Config, error) {
-	if flag.Parsed() {
-		return nil, fmt.Errorf("command-line flags already parsed")
+	fs, config, err := Forge(os.Args[1:])
+	if err != nil {
+		return nil, err
 	}
-	config := &Config{
-		ExtensionPaths: StringSliceValue{},
-	}
-	showVersion := false
 
-	fs := flag.NewFlagSet(name, flag.ExitOnError)
-
-	fs.StringVar(&config.NodeID, "node-id", "", "Unique ID for node. If not set, set to advertised Raft address")
-	fs.Var(&config.ExtensionPaths, "extensions-path", "Comma-delimited list of paths to directories, zipfiles, or tar.gz files containing SQLite extensions")
-	fs.StringVar(&config.HTTPAddr, HTTPAddrFlag, "localhost:4001", "HTTP server bind address. To enable HTTPS, set X.509 certificate and key")
-	fs.StringVar(&config.HTTPAdv, HTTPAdvAddrFlag, "", "Advertised HTTP address. If not set, same as HTTP server bind address")
-	fs.StringVar(&config.HTTPAllowOrigin, "http-allow-origin", "", "Value to set for Access-Control-Allow-Origin HTTP header")
-	fs.StringVar(&config.HTTPx509CACert, "http-ca-cert", "", "Path to X.509 CA certificate for HTTPS")
-	fs.StringVar(&config.HTTPx509Cert, HTTPx509CertFlag, "", "Path to HTTPS X.509 certificate")
-	fs.StringVar(&config.HTTPx509Key, HTTPx509KeyFlag, "", "Path to HTTPS X.509 private key")
-	fs.BoolVar(&config.HTTPVerifyClient, "http-verify-client", false, "Enable mutual TLS for HTTPS")
-	fs.StringVar(&config.NodeX509CACert, "node-ca-cert", "", "Path to X.509 CA certificate for node-to-node encryption")
-	fs.StringVar(&config.NodeX509Cert, NodeX509CertFlag, "", "Path to X.509 certificate for node-to-node mutual authentication and encryption")
-	fs.StringVar(&config.NodeX509Key, NodeX509KeyFlag, "", "Path to X.509 private key for node-to-node mutual authentication and encryption")
-	fs.BoolVar(&config.NoNodeVerify, "node-no-verify", false, "Skip verification of any node-node certificate")
-	fs.BoolVar(&config.NodeVerifyClient, "node-verify-client", false, "Enable mutual TLS for node-to-node communication")
-	fs.StringVar(&config.NodeVerifyServerName, "node-verify-server-name", "", "Hostname to verify on certificate returned by a node")
-	fs.StringVar(&config.AuthFile, "auth", "", "Path to authentication and authorization file. If not set, not enabled")
-	fs.StringVar(&config.AutoBackupFile, "auto-backup", "", "Path to automatic backup configuration file. If not set, not enabled")
-	fs.StringVar(&config.AutoRestoreFile, "auto-restore", "", "Path to automatic restore configuration file. If not set, not enabled")
-	fs.StringVar(&config.RaftAddr, RaftAddrFlag, "localhost:4002", "Raft communication bind address")
-	fs.StringVar(&config.RaftAdv, RaftAdvAddrFlag, "", "Advertised Raft communication address. If not set, same as Raft bind address")
-	fs.StringVar(&config.JoinAddrs, "join", "", "Comma-delimited list of nodes, in host:port form, through which a cluster can be joined")
-	fs.IntVar(&config.JoinAttempts, "join-attempts", 5, "Number of join attempts to make")
-	fs.DurationVar(&config.JoinInterval, "join-interval", 3*time.Second, "Period between join attempts")
-	fs.StringVar(&config.JoinAs, "join-as", "", "Username in authentication file to join as. If not set, joins anonymously")
-	fs.IntVar(&config.BootstrapExpect, "bootstrap-expect", 0, "Minimum number of nodes required for a bootstrap")
-	fs.DurationVar(&config.BootstrapExpectTimeout, "bootstrap-expect-timeout", 120*time.Second, "Maximum time for bootstrap process")
-	fs.StringVar(&config.DiscoMode, "disco-mode", "", "Choose clustering discovery mode. If not set, no node discovery is performed")
-	fs.StringVar(&config.DiscoKey, "disco-key", "rqlite", "Key prefix for cluster discovery service")
-	fs.StringVar(&config.DiscoConfig, "disco-config", "", "Set discovery config, or path to cluster discovery config file")
-	fs.StringVar(&config.OnDiskPath, "on-disk-path", "", "Path for SQLite on-disk database file. If not set, use a file in data directory")
-	fs.BoolVar(&config.FKConstraints, "fk", false, "Enable SQLite foreign key constraints")
-	fs.BoolVar(&showVersion, "version", false, "Show version information and exit")
-	fs.DurationVar(&config.AutoVacInterval, "auto-vacuum-int", 0, "Period between automatic VACUUMs. It not set, not enabled")
-	fs.DurationVar(&config.AutoOptimizeInterval, "auto-optimize-int", mustParseDuration("24h"), `Period between automatic 'PRAGMA optimize'. Set to 0h to disable`)
-	fs.BoolVar(&config.RaftNonVoter, "raft-non-voter", false, "Configure as non-voting node")
-	fs.DurationVar(&config.RaftHeartbeatTimeout, "raft-timeout", time.Second, "Raft heartbeat timeout")
-	fs.DurationVar(&config.RaftElectionTimeout, "raft-election-timeout", time.Second, "Raft election timeout")
-	fs.DurationVar(&config.RaftApplyTimeout, "raft-apply-timeout", 10*time.Second, "Raft apply timeout")
-	fs.Uint64Var(&config.RaftSnapThreshold, "raft-snap", 8192, "Number of outstanding log entries which triggers Raft snapshot")
-	fs.Uint64Var(&config.RaftSnapThresholdWALSize, "raft-snap-wal-size", 4*1024*1024, "SQLite WAL file size in bytes which triggers Raft snapshot. Set to 0 to disable")
-	fs.DurationVar(&config.RaftSnapInterval, "raft-snap-int", 10*time.Second, "Snapshot threshold check interval")
-	fs.DurationVar(&config.RaftLeaderLeaseTimeout, "raft-leader-lease-timeout", 0, "Raft leader lease timeout. Use 0s for Raft default")
-	fs.BoolVar(&config.RaftStepdownOnShutdown, "raft-shutdown-stepdown", true, "If leader, stepdown before shutting down. Enabled by default")
-	fs.BoolVar(&config.RaftShutdownOnRemove, "raft-remove-shutdown", false, "Shutdown Raft if node removed from cluster")
-	fs.BoolVar(&config.RaftClusterRemoveOnShutdown, "raft-cluster-remove-shutdown", false, "Node removes itself from cluster on graceful shutdown")
-	fs.StringVar(&config.RaftLogLevel, "raft-log-level", "WARN", "Minimum log level for Raft module")
-	fs.DurationVar(&config.RaftReapNodeTimeout, "raft-reap-node-timeout", 0*time.Hour, "Time after which a non-reachable voting node will be reaped. If not set, no reaping takes place")
-	fs.DurationVar(&config.RaftReapReadOnlyNodeTimeout, "raft-reap-read-only-node-timeout", 0*time.Hour, "Time after which a non-reachable non-voting node will be reaped. If not set, no reaping takes place")
-	fs.DurationVar(&config.ClusterConnectTimeout, "cluster-connect-timeout", 30*time.Second, "Timeout for initial connection to other nodes")
-	fs.IntVar(&config.WriteQueueCap, "write-queue-capacity", 1024, "QueuedWrites queue capacity")
-	fs.IntVar(&config.WriteQueueBatchSz, "write-queue-batch-size", 128, "QueuedWrites queue batch size")
-	fs.DurationVar(&config.WriteQueueTimeout, "write-queue-timeout", 50*time.Millisecond, "QueuedWrites queue timeout")
-	fs.BoolVar(&config.WriteQueueTx, "write-queue-tx", false, "Use a transaction when processing a queued write")
-	fs.StringVar(&config.CPUProfile, "cpu-profile", "", "Path to file for CPU profiling information")
-	fs.StringVar(&config.MemProfile, "mem-profile", "", "Path to file for memory profiling information")
-	fs.StringVar(&config.TraceProfile, "trace-profile", "", "Path to file for trace profiling information")
-	fs.Usage = func() {
-		fmt.Fprintf(os.Stderr, "\n%s\n\n", desc)
-		fmt.Fprintf(os.Stderr, "Usage: %s [flags] <data directory>\n", name)
-		fs.PrintDefaults()
-	}
-	fs.Parse(os.Args[1:])
-
-	if showVersion {
-		msg := fmt.Sprintf("%s %s %s %s %s sqlite%s (commit %s, branch %s, compiler %s)",
-			name, build.Version, runtime.GOOS, runtime.GOARCH, runtime.Version(), build.SQLiteVersion,
-			build.Commit, build.Branch, runtime.Compiler)
-		errorExit(0, msg)
-	}
+	// if showVersion {
+	// 	msg := fmt.Sprintf("%s %s %s %s %s sqlite%s (commit %s, branch %s, compiler %s)",
+	// 		name, build.Version, runtime.GOOS, runtime.GOARCH, runtime.Version(), build.SQLiteVersion,
+	// 		build.Commit, build.Branch, runtime.Compiler)
+	// 	errorExit(0, msg)
+	// }
 
 	// Ensure, if set explicitly, that reap times are not too low.
 	fs.Visit(func(f *flag.Flag) {
@@ -386,12 +317,6 @@ func ParseFlags(name, desc string, build *BuildInfo) (*Config, error) {
 			}
 		}
 	})
-
-	// Ensure the data path is set.
-	if fs.NArg() < 1 {
-		errorExit(1, "no data directory set")
-	}
-	config.DataPath = fs.Arg(0)
 
 	// Ensure no args come after the data directory.
 	if fs.NArg() > 1 {
