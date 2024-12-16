@@ -9,7 +9,7 @@ short_help = "DataPath is path to node data. Always set"
 
 [[flags]]
 name = "ExtensionPaths"
-cli = "--extensions-path"
+cli = "extensions-path"
 type = "[]string"
 short_help = "Comma-delimited list of paths to directories, zipfiles, or tar.gz files containing SQLite extensions"
 long_help = """
@@ -18,7 +18,7 @@ default = ""
 
 [[flags]]
 name = "HTTPAddr"
-cli = "--http-addr"
+cli = "http-addr"
 type = "string"
 short_help = "HTTP server bind address. To enable HTTPS, set X.509 certificate and key"
 long_help = """
@@ -28,7 +28,7 @@ default = "localhost:4001"
 
 [[flags]]
 name = "HTTPAdv"
-cli = "--http-adv-addr"
+cli = "http-adv-addr"
 type = "string"
 short_help = "Advertised HTTP server network address If not set, same as HTTP server bind address"
 long_help = """
@@ -38,17 +38,17 @@ default = ""
 
 [[flags]]
 name = "HTTPAllowOrigin"
-cli = "--http-allow-origin"
+cli = "http-allow-origin"
 type = "string"
 short_help = "Value to set for Access-Control-Allow-Origin HTTP header"
 long_help = """
-You usually need to set this if if you're using a browser-based application to interfact with rqlite. You should set it to the the website that is serving the browser-based application e.g. --http-allow-origin="https://example.com".
+You usually need to set this if if you're using a browser-based application to interfact with rqlite. You should set it to the the website that is serving the browser-based application e.g. http-allow-origin="https://example.com".
 """
 default = ""
 
 [[flags]]
 name = "AuthFile"
-cli = "--auth"
+cli = "auth"
 type = "string"
 short_help = "Path to the authentication file. If not set, authentication is not enabled"
 long_help = """
@@ -57,7 +57,7 @@ default = ""
 
 [[flags]]
 name = "AutoBackupFile"
-cli = "--auto-backup"
+cli = "auto-backup"
 type = "string"
 short_help = "Path to the auto-backup file. If not set, automatic backup is not enabled"
 long_help = """
@@ -66,7 +66,7 @@ default = ""
 
 [[flags]]
 name = "AutoRestoreFile"
-cli = "--auto-restore"
+cli = "auto-restore"
 type = "string"
 short_help = "Path to the auto-restore file. If not set, automatic restore is not enabled"
 long_help = """
@@ -75,7 +75,7 @@ default = ""
 
 [[flags]]
 name = "HTTPx509CACert"
-cli = "--http-ca-cert"
+cli = "http-ca-cert"
 type = "string"
 short_help = "Path to the CA certificate file for HTTPS communications"
 long_help = """
@@ -85,7 +85,7 @@ default = ""
 
 [[flags]]
 name = "HTTPx509Cert"
-cli = "--http-cert"
+cli = "http-cert"
 type = "string"
 short_help = "Path to the X509 certificate for the HTTPS server. If not set HTTPS is not enabled"
 long_help = """
@@ -95,7 +95,7 @@ default = ""
 
 [[flags]]
 name = "HTTPx509Key"
-cli = "--http-key"
+cli = "http-key"
 type = "string"
 short_help = "Path to the private key for the HTTPS server"
 long_help = """
@@ -105,7 +105,7 @@ default = ""
 
 [[flags]]
 name = "HTTPVerifyClient"
-cli = "--http-verify-client"
+cli = "http-verify-client"
 type = "bool"
 short_help = "Whether the HTTP server should verify client X509 certificates"
 long_help = """
@@ -115,7 +115,7 @@ default = false
 
 [[flags]]
 name = "NodeX509CACert"
-cli = "--node-ca-cert"
+cli = "node-ca-cert"
 type = "string"
 short_help = "Path to the CA certificate file for inter-node communications. May not be set"
 long_help = """
@@ -125,7 +125,7 @@ default = ""
 
 [[flags]]
 name = "NodeX509Cert"
-cli = "--node-cert"
+cli = "node-cert"
 type = "string"
 short_help = "Path to the X509 certificate for inter-node communications"
 long_help = """
@@ -135,7 +135,7 @@ default = ""
 
 [[flags]]
 name = "NodeX509Key"
-cli = "--node-key"
+cli = "node-key"
 type = "string"
 short_help = "Path to the X509 key for inter-node communications"
 long_help = """
@@ -145,7 +145,7 @@ default = ""
 
 [[flags]]
 name = "NoNodeVerify"
-cli = "--node-no-verify"
+cli = "node-no-verify"
 type = "bool"
 short_help = "Disables checking other nodes' X509 certificates for validity. Checking is enabled by default"
 long_help = """
@@ -155,7 +155,7 @@ default = false
 
 [[flags]]
 name = "NodeVerifyClient"
-cli = "--node-verify-client"
+cli = "node-verify-client"
 type = "bool"
 short_help = "Enable mutual TLS for node-to-node communication. Disabled by default"
 long_help = """
@@ -165,7 +165,7 @@ default = false
 
 [[flags]]
 name = "NodeVerifyServerName"
-cli = "--node-verify-server-name"
+cli = "node-verify-server-name"
 type = "string"
 short_help = "Hostname to verify on certificates returned by nodes"
 long_help = """
@@ -175,7 +175,7 @@ default = ""
 
 [[flags]]
 name = "NodeID"
-cli = "--node-id"
+cli = "node-id"
 type = "string"
 short_help = "Unique Raft ID for the node. If not set, defaults to the advertised Raft address"
 long_help = """
@@ -185,7 +185,7 @@ default = ""
 
 [[flags]]
 name = "RaftAddr"
-cli = "--raft-addr"
+cli = "raft-addr"
 type = "string"
 short_help = "Bind network address for the Raft server in the form address:port"
 long_help = """
@@ -195,7 +195,7 @@ default = "localhost:4002"
 
 [[flags]]
 name = "RaftAdv"
-cli = "--raft-adv-addr"
+cli = "raft-adv-addr"
 type = "string"
 short_help = "Advertised Raft server address. If not set, same as Raft server bind address"
 long_help = """
@@ -205,7 +205,7 @@ default = ""
 
 [[flags]]
 name = "JoinAddrs"
-cli = "--join"
+cli = "join"
 type = "string"
 short_help = "List of Raft addresses to use for a join attempt. Comma-delimited list of nodes in host:port format"
 long_help = """
@@ -215,7 +215,7 @@ default = ""
 
 [[flags]]
 name = "JoinAttempts"
-cli = "--join-attempts"
+cli = "join-attempts"
 type = "int"
 short_help = "Number of times a node should attempt to join a cluster using a given address"
 long_help = """
@@ -224,7 +224,7 @@ default = 5
 
 [[flags]]
 name = "JoinInterval"
-cli = "--join-interval"
+cli = "join-interval"
 type = "time.Duration"
 short_help = "Time between retrying failed join operations"
 long_help = """
@@ -233,7 +233,7 @@ default = "3s"
 
 [[flags]]
 name = "JoinAs"
-cli = "--join-as"
+cli = "join-as"
 type = "string"
 short_help = "User to perform join attempts as. If not set, joins anonymously"
 long_help = """
@@ -243,7 +243,7 @@ default = ""
 
 [[flags]]
 name = "BootstrapExpect"
-cli = "--bootstrap-expect"
+cli = "bootstrap-expect"
 type = "int"
 short_help = "Minimum number of nodes required for a bootstrap"
 long_help = """
@@ -253,7 +253,7 @@ default = 0
 
 [[flags]]
 name = "BootstrapExpectTimeout"
-cli = "--bootstrap-expect-timeout"
+cli = "bootstrap-expect-timeout"
 type = "time.Duration"
 short_help = "Maximum time a bootstrap operation can take"
 long_help = """
@@ -263,7 +263,7 @@ default = "120s"
 
 [[flags]]
 name = "DiscoMode"
-cli = "--disco-mode"
+cli = "disco-mode"
 type = "string"
 short_help = "Discovery mode. If not set, no node discovery is performed"
 long_help = """
@@ -272,7 +272,7 @@ default = ""
 
 [[flags]]
 name = "DiscoKey"
-cli = "--disco-key"
+cli = "disco-key"
 type = "string"
 short_help = "Discovery prefix key"
 long_help = """
@@ -282,7 +282,7 @@ default = "rqlite"
 
 [[flags]]
 name = "DiscoConfig"
-cli = "--disco-config"
+cli = "disco-config"
 type = "string"
 short_help = "Path to Discovery configuration file. May not be set."
 long_help = """
@@ -291,7 +291,7 @@ default = ""
 
 [[flags]]
 name = "OnDiskPath"
-cli = "--on-disk-path"
+cli = "on-disk-path"
 type = "string"
 short_help = "Path to the SQLite on-disk database file. If not set, uses a file in the data directory."
 long_help = """
@@ -301,7 +301,7 @@ default = ""
 
 [[flags]]
 name = "FKConstraints"
-cli = "--fk"
+cli = "fk"
 type = "bool"
 short_help = "Enable SQLite foreign key constraints"
 long_help = """
@@ -311,7 +311,7 @@ default = false
 
 [[flags]]
 name = "AutoVacInterval"
-cli = "--auto-vacuum-int"
+cli = "auto-vacuum-int"
 type = "time.Duration"
 short_help = "Automatic VACUUM interval. Use 0s to disable. If not set, automatic VACUUM is not enabled"
 long_help = """
@@ -321,7 +321,7 @@ default = "0s"
 
 [[flags]]
 name = "AutoOptimizeInterval"
-cli = "--auto-optimize-int"
+cli = "auto-optimize-int"
 type = "time.Duration"
 short_help = "Automatic optimization interval. Use 0h to disable"
 long_help = """
@@ -331,7 +331,7 @@ default = "24h"
 
 [[flags]]
 name = "RaftLogLevel"
-cli = "--raft-log-level"
+cli = "raft-log-level"
 type = "string"
 short_help = "Minimum logging level for the Raft subsystem"
 long_help = """
@@ -341,7 +341,7 @@ default = "WARN"
 
 [[flags]]
 name = "RaftNonVoter"
-cli = "--raft-non-voter"
+cli = "raft-non-voter"
 type = "bool"
 short_help = "Configure as a non-voting node"
 long_help = """
@@ -351,7 +351,7 @@ default = false
 
 [[flags]]
 name = "RaftSnapThreshold"
-cli = "--raft-snap"
+cli = "raft-snap"
 type = "uint64"
 short_help = "Number of outstanding log entries that trigger a snapshot"
 long_help = """
@@ -361,7 +361,7 @@ default = 8192
 
 [[flags]]
 name = "RaftSnapThresholdWALSize"
-cli = "--raft-snap-wal-size"
+cli = "raft-snap-wal-size"
 type = "uint64"
 short_help = "Size of a SQLite WAL file which triggers a snapshot.Set to 0 to disable"
 long_help = """
@@ -371,7 +371,7 @@ default = 4194304
 
 [[flags]]
 name = "RaftSnapInterval"
-cli = "--raft-snap-int"
+cli = "raft-snap-int"
 type = "time.Duration"
 short_help = "Snapshot threshold check interval"
 long_help = """
@@ -381,7 +381,7 @@ default = "10s"
 
 [[flags]]
 name = "RaftLeaderLeaseTimeout"
-cli = "--raft-leader-lease-timeout"
+cli = "raft-leader-lease-timeout"
 type = "time.Duration"
 short_help = "Leader lease timeout. Use 0s for Raft default"
 long_help = """
@@ -391,7 +391,7 @@ default = "0s"
 
 [[flags]]
 name = "RaftHeartbeatTimeout"
-cli = "--raft-timeout"
+cli = "raft-timeout"
 type = "time.Duration"
 short_help = "Heartbeat timeout for Raft consensus"
 long_help = """
@@ -401,7 +401,7 @@ default = "1s"
 
 [[flags]]
 name = "RaftElectionTimeout"
-cli = "--raft-election-timeout"
+cli = "raft-election-timeout"
 type = "time.Duration"
 short_help = "Election timeout for Raft consensus"
 long_help = """
@@ -411,7 +411,7 @@ default = "1s"
 
 [[flags]]
 name = "RaftApplyTimeout"
-cli = "--raft-apply-timeout"
+cli = "raft-apply-timeout"
 type = "time.Duration"
 short_help = "Log-apply timeout"
 long_help = """
@@ -420,7 +420,7 @@ default = "10s"
 
 [[flags]]
 name = "RaftShutdownOnRemove"
-cli = "--raft-remove-shutdown"
+cli = "raft-remove-shutdown"
 type = "bool"
 short_help = "Shutdown Raft if the node is removed from the cluster"
 long_help = """
@@ -430,7 +430,7 @@ default = false
 
 [[flags]]
 name = "RaftClusterRemoveOnShutdown"
-cli = "--raft-cluster-remove-shutdown"
+cli = "raft-cluster-remove-shutdown"
 type = "bool"
 short_help = "Node removes itself from the cluster on shutdown"
 long_help = """
@@ -440,7 +440,7 @@ default = false
 
 [[flags]]
 name = "RaftStepdownOnShutdown"
-cli = "--raft-shutdown-stepdown"
+cli = "raft-shutdown-stepdown"
 type = "bool"
 short_help = "Relinquish leadership on shutdown"
 long_help = """
@@ -450,7 +450,7 @@ default = true
 
 [[flags]]
 name = "RaftReapNodeTimeout"
-cli = "--raft-reap-node-timeout"
+cli = "raft-reap-node-timeout"
 type = "time.Duration"
 short_help = "Duration after which a non-reachable voting node is reaped. If not set, no reaping takes place"
 long_help = """
@@ -460,7 +460,7 @@ default = "0h"
 
 [[flags]]
 name = "RaftReapReadOnlyNodeTimeout"
-cli = "--raft-reap-read-only-node-timeout"
+cli = "raft-reap-read-only-node-timeout"
 type = "time.Duration"
 short_help = "Duration after which a non-reachable non-voting node is reaped. If not set, no reaping takes place"
 long_help = """
@@ -470,7 +470,7 @@ default = "0h"
 
 [[flags]]
 name = "ClusterConnectTimeout"
-cli = "--cluster-connect-timeout"
+cli = "cluster-connect-timeout"
 type = "time.Duration"
 short_help = "Timeout when connecting to another node in the cluster"
 long_help = """
@@ -480,7 +480,7 @@ default = "30s"
 
 [[flags]]
 name = "WriteQueueCap"
-cli = "--write-queue-capacity"
+cli = "write-queue-capacity"
 type = "int"
 short_help = "Default capacity of execute queues"
 long_help = """
@@ -490,7 +490,7 @@ default = 1024
 
 [[flags]]
 name = "WriteQueueBatchSz"
-cli = "--write-queue-batch-size"
+cli = "write-queue-batch-size"
 type = "int"
 short_help = "Default batch size for execute queues"
 long_help = """
@@ -500,7 +500,7 @@ default = 128
 
 [[flags]]
 name = "WriteQueueTimeout"
-cli = "--write-queue-timeout"
+cli = "write-queue-timeout"
 type = "time.Duration"
 short_help = "Time after which internally queued Queued Writes will be sent on if the batch size isn't reached"
 long_help = """
@@ -509,7 +509,7 @@ default = "50ms"
 
 [[flags]]
 name = "WriteQueueTx"
-cli = "--write-queue-tx"
+cli = "write-queue-tx"
 type = "bool"
 short_help = "Use a transaction when executing a Queued Write batch"
 long_help = """
@@ -518,7 +518,7 @@ default = false
 
 [[flags]]
 name = "CPUProfile"
-cli = "--cpu-profile"
+cli = "cpu-profile"
 type = "string"
 short_help = "Write CPU profie information to a file at this path"
 long_help = """
@@ -527,7 +527,7 @@ default = ""
 
 [[flags]]
 name = "MemProfile"
-cli = "--mem-profile"
+cli = "mem-profile"
 type = "string"
 short_help = "Write memory profie information to a file at this path"
 long_help = """
@@ -536,7 +536,7 @@ default = ""
 
 [[flags]]
 name = "TraceProfile"
-cli = "--trace-profile"
+cli = "trace-profile"
 type = "string"
 short_help = "Write trace profie information to a file at this path"
 long_help = """
