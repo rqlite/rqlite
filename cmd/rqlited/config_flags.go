@@ -10,22 +10,22 @@ import (
 
 // StringSlice wraps a string slice and implements the flag.Value interface.
 type StringSliceValue struct {
-	ss *[]string
+	ss []string
 }
 
-func NewStringSliceValue(ss *[]string) *StringSliceValue {
+func NewStringSliceValue(ss []string) *StringSliceValue {
 	return &StringSliceValue{ss}
 }
 
 // String returns a string representation of the StringSliceValue.
 func (s *StringSliceValue) String() string {
-	return fmt.Sprintf("%v", *s.ss)
+	return fmt.Sprintf("%v", s.ss)
 }
 
 // Set sets the value of the StringSliceValue.
 func (s *StringSliceValue) Set(value string) error {
 	ss := strings.Split(value, ",")
-	*s.ss = ss
+	s.ss = ss
 	return nil
 }
 
@@ -41,11 +41,11 @@ type Config struct {
 	HTTPAdv string
 	// Value to set for Access-Control-Allow-Origin HTTP header
 	HTTPAllowOrigin string
-	// Path to the authentication file. If not set, authentication is not enabled
+	// Path to authentication and authorization file. If not set, not enabled
 	AuthFile string
-	// Path to the auto-backup file. If not set, automatic backup is not enabled
+	// Path to automatic backup configuration file. If not set, not enabled
 	AutoBackupFile string
-	// Path to the auto-restore file. If not set, automatic restore is not enabled
+	// Path to automatic restore configuration file. If not set, not enabled
 	AutoRestoreFile string
 	// Path to the CA certificate file for HTTPS communications
 	HTTPx509CACert string
@@ -53,7 +53,7 @@ type Config struct {
 	HTTPx509Cert string
 	// Path to the private key for the HTTPS server
 	HTTPx509Key string
-	// Whether the HTTP server should verify client X509 certificates
+	// Enable mutual TLS for HTTPS
 	HTTPVerifyClient bool
 	// Path to the CA certificate file for inter-node communications. May not be set
 	NodeX509CACert string
@@ -71,7 +71,7 @@ type Config struct {
 	NodeID string
 	// Bind network address for the Raft server in the form address:port
 	RaftAddr string
-	// Advertised Raft server address. If not set, same as Raft server bind address
+	// Advertised Raft communication address. If not set, same as Raft bind address
 	RaftAdv string
 	// List of Raft addresses to use for a join attempt. Comma-delimited list of nodes in host:port format
 	JoinAddrs string
@@ -101,7 +101,7 @@ type Config struct {
 	AutoOptimizeInterval time.Duration
 	// Minimum logging level for the Raft subsystem
 	RaftLogLevel string
-	// Configure as a non-voting node
+	// Configure as non-voting node
 	RaftNonVoter bool
 	// Number of outstanding log entries that trigger a snapshot
 	RaftSnapThreshold uint64
@@ -109,7 +109,7 @@ type Config struct {
 	RaftSnapThresholdWALSize uint64
 	// Snapshot threshold check interval
 	RaftSnapInterval time.Duration
-	// Leader lease timeout. Use 0s for Raft default
+	// Raft leader lease timeout. Use 0s for Raft default
 	RaftLeaderLeaseTimeout time.Duration
 	// Heartbeat timeout for Raft consensus
 	RaftHeartbeatTimeout time.Duration
@@ -135,13 +135,13 @@ type Config struct {
 	WriteQueueBatchSz int
 	// Time after which internally queued Queued Writes will be sent on if the batch size isn't reached
 	WriteQueueTimeout time.Duration
-	// Use a transaction when executing a Queued Write batch
+	// Use a transaction when processing a queued write
 	WriteQueueTx bool
 	// Write CPU profie information to a file at this path
 	CPUProfile string
 	// Write memory profie information to a file at this path
 	MemProfile string
-	// Write trace profie information to a file at this path
+	// Path to file for trace profiling information
 	TraceProfile string
 }
 
@@ -157,13 +157,13 @@ func Forge(arguments []string) (*flag.FlagSet, *Config, error) {
 	fs.StringVar(&config.HTTPAddr, "http-addr", "localhost:4001", "HTTP server bind address. To enable HTTPS, set X.509 certificate and key")
 	fs.StringVar(&config.HTTPAdv, "http-adv-addr", "", "Advertised HTTP server network address If not set, same as HTTP server bind address")
 	fs.StringVar(&config.HTTPAllowOrigin, "http-allow-origin", "", "Value to set for Access-Control-Allow-Origin HTTP header")
-	fs.StringVar(&config.AuthFile, "auth", "", "Path to the authentication file. If not set, authentication is not enabled")
-	fs.StringVar(&config.AutoBackupFile, "auto-backup", "", "Path to the auto-backup file. If not set, automatic backup is not enabled")
-	fs.StringVar(&config.AutoRestoreFile, "auto-restore", "", "Path to the auto-restore file. If not set, automatic restore is not enabled")
+	fs.StringVar(&config.AuthFile, "auth", "", "Path to authentication and authorization file. If not set, not enabled")
+	fs.StringVar(&config.AutoBackupFile, "auto-backup", "", "Path to automatic backup configuration file. If not set, not enabled")
+	fs.StringVar(&config.AutoRestoreFile, "auto-restore", "", "Path to automatic restore configuration file. If not set, not enabled")
 	fs.StringVar(&config.HTTPx509CACert, "http-ca-cert", "", "Path to the CA certificate file for HTTPS communications")
 	fs.StringVar(&config.HTTPx509Cert, "http-cert", "", "Path to the X509 certificate for the HTTPS server. If not set HTTPS is not enabled")
 	fs.StringVar(&config.HTTPx509Key, "http-key", "", "Path to the private key for the HTTPS server")
-	fs.BoolVar(&config.HTTPVerifyClient, "http-verify-client", false, "Whether the HTTP server should verify client X509 certificates")
+	fs.BoolVar(&config.HTTPVerifyClient, "http-verify-client", false, "Enable mutual TLS for HTTPS")
 	fs.StringVar(&config.NodeX509CACert, "node-ca-cert", "", "Path to the CA certificate file for inter-node communications. May not be set")
 	fs.StringVar(&config.NodeX509Cert, "node-cert", "", "Path to the X509 certificate for inter-node communications")
 	fs.StringVar(&config.NodeX509Key, "node-key", "", "Path to the X509 key for inter-node communications")
@@ -172,7 +172,7 @@ func Forge(arguments []string) (*flag.FlagSet, *Config, error) {
 	fs.StringVar(&config.NodeVerifyServerName, "node-verify-server-name", "", "Hostname to verify on certificates returned by nodes")
 	fs.StringVar(&config.NodeID, "node-id", "", "Unique Raft ID for the node. If not set, defaults to the advertised Raft address")
 	fs.StringVar(&config.RaftAddr, "raft-addr", "localhost:4002", "Bind network address for the Raft server in the form address:port")
-	fs.StringVar(&config.RaftAdv, "raft-adv-addr", "", "Advertised Raft server address. If not set, same as Raft server bind address")
+	fs.StringVar(&config.RaftAdv, "raft-adv-addr", "", "Advertised Raft communication address. If not set, same as Raft bind address")
 	fs.StringVar(&config.JoinAddrs, "join", "", "List of Raft addresses to use for a join attempt. Comma-delimited list of nodes in host:port format")
 	fs.IntVar(&config.JoinAttempts, "join-attempts", 5, "Number of times a node should attempt to join a cluster using a given address")
 	fs.DurationVar(&config.JoinInterval, "join-interval", mustParseDuration("3s"), "Time between retrying failed join operations")
@@ -187,9 +187,9 @@ func Forge(arguments []string) (*flag.FlagSet, *Config, error) {
 	fs.DurationVar(&config.AutoVacInterval, "auto-vacuum-int", mustParseDuration("0s"), "Automatic VACUUM interval. Use 0s to disable. If not set, automatic VACUUM is not enabled")
 	fs.DurationVar(&config.AutoOptimizeInterval, "auto-optimize-int", mustParseDuration("24h"), "Automatic optimization interval. Use 0h to disable")
 	fs.StringVar(&config.RaftLogLevel, "raft-log-level", "WARN", "Minimum logging level for the Raft subsystem")
-	fs.BoolVar(&config.RaftNonVoter, "raft-non-voter", false, "Configure as a non-voting node")
+	fs.BoolVar(&config.RaftNonVoter, "raft-non-voter", false, "Configure as non-voting node")
 	fs.DurationVar(&config.RaftSnapInterval, "raft-snap-int", mustParseDuration("10s"), "Snapshot threshold check interval")
-	fs.DurationVar(&config.RaftLeaderLeaseTimeout, "raft-leader-lease-timeout", mustParseDuration("0s"), "Leader lease timeout. Use 0s for Raft default")
+	fs.DurationVar(&config.RaftLeaderLeaseTimeout, "raft-leader-lease-timeout", mustParseDuration("0s"), "Raft leader lease timeout. Use 0s for Raft default")
 	fs.DurationVar(&config.RaftHeartbeatTimeout, "raft-timeout", mustParseDuration("1s"), "Heartbeat timeout for Raft consensus")
 	fs.DurationVar(&config.RaftElectionTimeout, "raft-election-timeout", mustParseDuration("1s"), "Election timeout for Raft consensus")
 	fs.DurationVar(&config.RaftApplyTimeout, "raft-apply-timeout", mustParseDuration("10s"), "Log-apply timeout")
@@ -202,10 +202,10 @@ func Forge(arguments []string) (*flag.FlagSet, *Config, error) {
 	fs.IntVar(&config.WriteQueueCap, "write-queue-capacity", 1024, "Default capacity of execute queues")
 	fs.IntVar(&config.WriteQueueBatchSz, "write-queue-batch-size", 128, "Default batch size for execute queues")
 	fs.DurationVar(&config.WriteQueueTimeout, "write-queue-timeout", mustParseDuration("50ms"), "Time after which internally queued Queued Writes will be sent on if the batch size isn't reached")
-	fs.BoolVar(&config.WriteQueueTx, "write-queue-tx", false, "Use a transaction when executing a Queued Write batch")
+	fs.BoolVar(&config.WriteQueueTx, "write-queue-tx", false, "Use a transaction when processing a queued write")
 	fs.StringVar(&config.CPUProfile, "cpu-profile", "", "Write CPU profie information to a file at this path")
 	fs.StringVar(&config.MemProfile, "mem-profile", "", "Write memory profie information to a file at this path")
-	fs.StringVar(&config.TraceProfile, "trace-profile", "", "Write trace profie information to a file at this path")
+	fs.StringVar(&config.TraceProfile, "trace-profile", "", "Path to file for trace profiling information")
 	if err := fs.Parse(arguments); err != nil {
 		return nil, nil, err
 	}
