@@ -10,6 +10,7 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"runtime"
 	"strconv"
 	"strings"
 	"time"
@@ -298,12 +299,12 @@ func ParseFlags(name, desc string, build *BuildInfo) (*Config, error) {
 		return nil, err
 	}
 
-	// if showVersion {
-	// 	msg := fmt.Sprintf("%s %s %s %s %s sqlite%s (commit %s, branch %s, compiler %s)",
-	// 		name, build.Version, runtime.GOOS, runtime.GOARCH, runtime.Version(), build.SQLiteVersion,
-	// 		build.Commit, build.Branch, runtime.Compiler)
-	// 	errorExit(0, msg)
-	// }
+	if config.ShowVersion {
+		msg := fmt.Sprintf("%s %s %s %s %s sqlite%s (commit %s, branch %s, compiler %s)",
+			name, build.Version, runtime.GOOS, runtime.GOARCH, runtime.Version(), build.SQLiteVersion,
+			build.Commit, build.Branch, runtime.Compiler)
+		errorExit(0, msg)
+	}
 
 	// Ensure, if set explicitly, that reap times are not too low.
 	fs.Visit(func(f *flag.Flag) {

@@ -37,6 +37,8 @@ func (s *StringSliceValue) Set(value string) error {
 type Config struct {
 	// DataPath is path to node data. Always set
 	DataPath string
+	// Show version information and exit
+	ShowVersion bool
 	// Comma-delimited list of paths to directories, zipfiles, or tar.gz files containing SQLite extensions
 	ExtensionPaths []string
 	// HTTP server bind address. To enable HTTPS, set X.509 certificate and key
@@ -157,6 +159,7 @@ func Forge(arguments []string) (*flag.FlagSet, *Config, error) {
 		return nil, nil, fmt.Errorf("missing required argument: DataPath")
 	}
 	config.DataPath = arguments[0]
+	fs.BoolVar(&config.ShowVersion, "version", false, "Show version information and exit")
 	fs.Var(NewStringSliceValue(&config.ExtensionPaths), "extensions-path", "Comma-delimited list of paths to directories, zipfiles, or tar.gz files containing SQLite extensions")
 	fs.StringVar(&config.HTTPAddr, "http-addr", "localhost:4001", "HTTP server bind address. To enable HTTPS, set X.509 certificate and key")
 	fs.StringVar(&config.HTTPAdv, "http-adv-addr", "", "Advertised HTTP address. If not set, same as HTTP server bind address")

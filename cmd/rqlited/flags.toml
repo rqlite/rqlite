@@ -9,6 +9,13 @@ type = "string"
 short_help = "DataPath is path to node data. Always set"
 
 [[flags]]
+name = "ShowVersion"
+cli = "version"
+type = "bool"
+short_help = "Show version information and exit"
+default = false
+
+[[flags]]
 name = "ExtensionPaths"
 cli = "extensions-path"
 type = "[]string"
