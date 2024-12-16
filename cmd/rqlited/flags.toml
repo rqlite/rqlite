@@ -1,6 +1,7 @@
 [Go]
 package = "main"
 flag_set_name = "rqlited"
+flag_set_usage = "\nrqlite is a lightweight, distributed relational database, which uses SQLite as its\nstorage engine. It provides an easy-to-use, fault-tolerant store for relational data.\n\nVisit https://www.rqlite.io to learn more.\n\nUsage: rqlited [flags] <data directory>"
 
 [[arguments]]
 name = "DataPath"
