@@ -195,6 +195,8 @@ func Forge(arguments []string) (*flag.FlagSet, *Config, error) {
 	fs.DurationVar(&config.AutoOptimizeInterval, "auto-optimize-int", mustParseDuration("24h"), "Period between automatic 'PRAGMA optimize'. Set to 0h to disable")
 	fs.StringVar(&config.RaftLogLevel, "raft-log-level", "WARN", "Minimum logging level for the Raft subsystem")
 	fs.BoolVar(&config.RaftNonVoter, "raft-non-voter", false, "Configure as non-voting node")
+	fs.Uint64Var(&config.RaftSnapThreshold, "raft-snap", 8192, "Number of outstanding log entries that trigger a snapshot")
+	fs.Uint64Var(&config.RaftSnapThresholdWALSize, "raft-snap-wal-size", 4194304, "Size of a SQLite WAL file which triggers a snapshot.Set to 0 to disable")
 	fs.DurationVar(&config.RaftSnapInterval, "raft-snap-int", mustParseDuration("10s"), "Snapshot threshold check interval")
 	fs.DurationVar(&config.RaftLeaderLeaseTimeout, "raft-leader-lease-timeout", mustParseDuration("0s"), "Raft leader lease timeout. Use 0s for Raft default")
 	fs.DurationVar(&config.RaftHeartbeatTimeout, "raft-timeout", mustParseDuration("1s"), "Heartbeat timeout for Raft consensus")
