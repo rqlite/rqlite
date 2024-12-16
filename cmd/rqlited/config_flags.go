@@ -41,7 +41,7 @@ type Config struct {
 	ExtensionPaths []string
 	// HTTP server bind address. To enable HTTPS, set X.509 certificate and key
 	HTTPAddr string
-	// dvertised HTTP address. If not set, same as HTTP server bind address
+	// Advertised HTTP address. If not set, same as HTTP server bind address
 	HTTPAdv string
 	// Value to set for Access-Control-Allow-Origin HTTP header
 	HTTPAllowOrigin string
@@ -159,7 +159,7 @@ func Forge(arguments []string) (*flag.FlagSet, *Config, error) {
 	config.DataPath = arguments[0]
 	fs.Var(NewStringSliceValue(&config.ExtensionPaths), "extensions-path", "Comma-delimited list of paths to directories, zipfiles, or tar.gz files containing SQLite extensions")
 	fs.StringVar(&config.HTTPAddr, "http-addr", "localhost:4001", "HTTP server bind address. To enable HTTPS, set X.509 certificate and key")
-	fs.StringVar(&config.HTTPAdv, "http-adv-addr", "", "dvertised HTTP address. If not set, same as HTTP server bind address")
+	fs.StringVar(&config.HTTPAdv, "http-adv-addr", "", "Advertised HTTP address. If not set, same as HTTP server bind address")
 	fs.StringVar(&config.HTTPAllowOrigin, "http-allow-origin", "", "Value to set for Access-Control-Allow-Origin HTTP header")
 	fs.StringVar(&config.AuthFile, "auth", "", "Path to authentication and authorization file. If not set, not enabled")
 	fs.StringVar(&config.AutoBackupFile, "auto-backup", "", "Path to automatic backup configuration file. If not set, not enabled")

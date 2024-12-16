@@ -31,7 +31,7 @@ default = "localhost:4001"
 name = "HTTPAdv"
 cli = "http-adv-addr"
 type = "string"
-short_help = "dvertised HTTP address. If not set, same as HTTP server bind address"
+short_help = "Advertised HTTP address. If not set, same as HTTP server bind address"
 long_help = """
 This is the HTTP API address an rqlite node will advertise to other nodes (and clients) as needed. This will need to be set if your rqlite node binds to all network addresses via 0.0.0.0, or if it binds to a private network address behind a firewall.
 """
