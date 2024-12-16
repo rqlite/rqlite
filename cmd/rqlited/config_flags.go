@@ -37,7 +37,7 @@ type Config struct {
 	ExtensionPaths []string
 	// HTTP server bind address. To enable HTTPS, set X.509 certificate and key
 	HTTPAddr string
-	// Advertised HTTP server network address If not set, same as HTTP server bind address
+	// dvertised HTTP address. If not set, same as HTTP server bind address
 	HTTPAdv string
 	// Value to set for Access-Control-Allow-Origin HTTP header
 	HTTPAllowOrigin string
@@ -49,9 +49,9 @@ type Config struct {
 	AutoRestoreFile string
 	// Path to the CA certificate file for HTTPS communications
 	HTTPx509CACert string
-	// Path to the X509 certificate for the HTTPS server. If not set HTTPS is not enabled
+	// Path to X.509 CA certificate for HTTPS
 	HTTPx509Cert string
-	// Path to the private key for the HTTPS server
+	// Path to HTTPS X.509 private key
 	HTTPx509Key string
 	// Enable mutual TLS for HTTPS
 	HTTPVerifyClient bool
@@ -83,21 +83,21 @@ type Config struct {
 	JoinAs string
 	// Minimum number of nodes required for a bootstrap
 	BootstrapExpect int
-	// Maximum time a bootstrap operation can take
+	// Maximum time for bootstrap process
 	BootstrapExpectTimeout time.Duration
-	// Discovery mode. If not set, no node discovery is performed
+	// Choose clustering discovery mode. If not set, no node discovery is performed
 	DiscoMode string
-	// Discovery prefix key
+	// Key prefix for cluster discovery service
 	DiscoKey string
-	// Path to Discovery configuration file. May not be set.
+	// Set discovery config, or path to cluster discovery config file
 	DiscoConfig string
 	// Path to the SQLite on-disk database file. If not set, uses a file in the data directory.
 	OnDiskPath string
 	// Enable SQLite foreign key constraints
 	FKConstraints bool
-	// Automatic VACUUM interval. Use 0s to disable. If not set, automatic VACUUM is not enabled
+	// Period between automatic VACUUMs. It not set, not enabled
 	AutoVacInterval time.Duration
-	// Automatic optimization interval. Use 0h to disable
+	// Period between automatic 'PRAGMA optimize'. Set to 0h to disable
 	AutoOptimizeInterval time.Duration
 	// Minimum logging level for the Raft subsystem
 	RaftLogLevel string
@@ -137,7 +137,7 @@ type Config struct {
 	WriteQueueTimeout time.Duration
 	// Use a transaction when processing a queued write
 	WriteQueueTx bool
-	// Write CPU profie information to a file at this path
+	// Path to file for CPU profiling information
 	CPUProfile string
 	// Write memory profie information to a file at this path
 	MemProfile string
@@ -155,14 +155,14 @@ func Forge(arguments []string) (*flag.FlagSet, *Config, error) {
 	config.DataPath = arguments[0]
 	fs.Var(NewStringSliceValue(config.ExtensionPaths), "extensions-path", "Comma-delimited list of paths to directories, zipfiles, or tar.gz files containing SQLite extensions")
 	fs.StringVar(&config.HTTPAddr, "http-addr", "localhost:4001", "HTTP server bind address. To enable HTTPS, set X.509 certificate and key")
-	fs.StringVar(&config.HTTPAdv, "http-adv-addr", "", "Advertised HTTP server network address If not set, same as HTTP server bind address")
+	fs.StringVar(&config.HTTPAdv, "http-adv-addr", "", "dvertised HTTP address. If not set, same as HTTP server bind address")
 	fs.StringVar(&config.HTTPAllowOrigin, "http-allow-origin", "", "Value to set for Access-Control-Allow-Origin HTTP header")
 	fs.StringVar(&config.AuthFile, "auth", "", "Path to authentication and authorization file. If not set, not enabled")
 	fs.StringVar(&config.AutoBackupFile, "auto-backup", "", "Path to automatic backup configuration file. If not set, not enabled")
 	fs.StringVar(&config.AutoRestoreFile, "auto-restore", "", "Path to automatic restore configuration file. If not set, not enabled")
 	fs.StringVar(&config.HTTPx509CACert, "http-ca-cert", "", "Path to the CA certificate file for HTTPS communications")
-	fs.StringVar(&config.HTTPx509Cert, "http-cert", "", "Path to the X509 certificate for the HTTPS server. If not set HTTPS is not enabled")
-	fs.StringVar(&config.HTTPx509Key, "http-key", "", "Path to the private key for the HTTPS server")
+	fs.StringVar(&config.HTTPx509Cert, "http-cert", "", "Path to X.509 CA certificate for HTTPS")
+	fs.StringVar(&config.HTTPx509Key, "http-key", "", "Path to HTTPS X.509 private key")
 	fs.BoolVar(&config.HTTPVerifyClient, "http-verify-client", false, "Enable mutual TLS for HTTPS")
 	fs.StringVar(&config.NodeX509CACert, "node-ca-cert", "", "Path to the CA certificate file for inter-node communications. May not be set")
 	fs.StringVar(&config.NodeX509Cert, "node-cert", "", "Path to the X509 certificate for inter-node communications")
@@ -178,14 +178,14 @@ func Forge(arguments []string) (*flag.FlagSet, *Config, error) {
 	fs.DurationVar(&config.JoinInterval, "join-interval", mustParseDuration("3s"), "Time between retrying failed join operations")
 	fs.StringVar(&config.JoinAs, "join-as", "", "User to perform join attempts as. If not set, joins anonymously")
 	fs.IntVar(&config.BootstrapExpect, "bootstrap-expect", 0, "Minimum number of nodes required for a bootstrap")
-	fs.DurationVar(&config.BootstrapExpectTimeout, "bootstrap-expect-timeout", mustParseDuration("120s"), "Maximum time a bootstrap operation can take")
-	fs.StringVar(&config.DiscoMode, "disco-mode", "", "Discovery mode. If not set, no node discovery is performed")
-	fs.StringVar(&config.DiscoKey, "disco-key", "rqlite", "Discovery prefix key")
-	fs.StringVar(&config.DiscoConfig, "disco-config", "", "Path to Discovery configuration file. May not be set.")
+	fs.DurationVar(&config.BootstrapExpectTimeout, "bootstrap-expect-timeout", mustParseDuration("120s"), "Maximum time for bootstrap process")
+	fs.StringVar(&config.DiscoMode, "disco-mode", "", "Choose clustering discovery mode. If not set, no node discovery is performed")
+	fs.StringVar(&config.DiscoKey, "disco-key", "rqlite", "Key prefix for cluster discovery service")
+	fs.StringVar(&config.DiscoConfig, "disco-config", "", "Set discovery config, or path to cluster discovery config file")
 	fs.StringVar(&config.OnDiskPath, "on-disk-path", "", "Path to the SQLite on-disk database file. If not set, uses a file in the data directory.")
 	fs.BoolVar(&config.FKConstraints, "fk", false, "Enable SQLite foreign key constraints")
-	fs.DurationVar(&config.AutoVacInterval, "auto-vacuum-int", mustParseDuration("0s"), "Automatic VACUUM interval. Use 0s to disable. If not set, automatic VACUUM is not enabled")
-	fs.DurationVar(&config.AutoOptimizeInterval, "auto-optimize-int", mustParseDuration("24h"), "Automatic optimization interval. Use 0h to disable")
+	fs.DurationVar(&config.AutoVacInterval, "auto-vacuum-int", mustParseDuration("0s"), "Period between automatic VACUUMs. It not set, not enabled")
+	fs.DurationVar(&config.AutoOptimizeInterval, "auto-optimize-int", mustParseDuration("24h"), "Period between automatic 'PRAGMA optimize'. Set to 0h to disable")
 	fs.StringVar(&config.RaftLogLevel, "raft-log-level", "WARN", "Minimum logging level for the Raft subsystem")
 	fs.BoolVar(&config.RaftNonVoter, "raft-non-voter", false, "Configure as non-voting node")
 	fs.DurationVar(&config.RaftSnapInterval, "raft-snap-int", mustParseDuration("10s"), "Snapshot threshold check interval")
@@ -203,7 +203,7 @@ func Forge(arguments []string) (*flag.FlagSet, *Config, error) {
 	fs.IntVar(&config.WriteQueueBatchSz, "write-queue-batch-size", 128, "Default batch size for execute queues")
 	fs.DurationVar(&config.WriteQueueTimeout, "write-queue-timeout", mustParseDuration("50ms"), "Time after which internally queued Queued Writes will be sent on if the batch size isn't reached")
 	fs.BoolVar(&config.WriteQueueTx, "write-queue-tx", false, "Use a transaction when processing a queued write")
-	fs.StringVar(&config.CPUProfile, "cpu-profile", "", "Write CPU profie information to a file at this path")
+	fs.StringVar(&config.CPUProfile, "cpu-profile", "", "Path to file for CPU profiling information")
 	fs.StringVar(&config.MemProfile, "mem-profile", "", "Write memory profie information to a file at this path")
 	fs.StringVar(&config.TraceProfile, "trace-profile", "", "Path to file for trace profiling information")
 	if err := fs.Parse(arguments); err != nil {
