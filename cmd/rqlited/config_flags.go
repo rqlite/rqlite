@@ -4,6 +4,7 @@ package main
 import (
 	"flag"
 	"fmt"
+	"os"
 	"strings"
 	"time"
 )
@@ -149,7 +150,7 @@ type Config struct {
 func Forge(arguments []string) (*flag.FlagSet, *Config, error) {
 	config := &Config{}
 	fs := flag.NewFlagSet("rqlited", flag.ExitOnError)
-	if len(arguments) < 0 {
+	if len(arguments) <= 0 {
 		return nil, nil, fmt.Errorf("missing required argument: DataPath")
 	}
 	config.DataPath = arguments[0]
@@ -206,6 +207,10 @@ func Forge(arguments []string) (*flag.FlagSet, *Config, error) {
 	fs.StringVar(&config.CPUProfile, "cpu-profile", "", "Path to file for CPU profiling information")
 	fs.StringVar(&config.MemProfile, "mem-profile", "", "Write memory profie information to a file at this path")
 	fs.StringVar(&config.TraceProfile, "trace-profile", "", "Path to file for trace profiling information")
+	fs.Usage = func() {
+		fmt.Fprintf(os.Stderr, "\nrqlite is a lightweight, distributed relational database, which uses SQLite as its\nstorage engine. It provides an easy-to-use, fault-tolerant store for relational data.\n\nVisit https://www.rqlite.io to learn more.\n\nUsage: rqlited [flags] <data directory>")
+		fs.PrintDefaults()
+	}
 	if err := fs.Parse(arguments); err != nil {
 		return nil, nil, err
 	}
