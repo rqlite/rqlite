@@ -1,4 +1,4 @@
-## v8.36.1 (unreleased)
+## v8.36.1 (December 17th 2024)
 ### Implementation changes and bug fixes
 - [PR #1994](https://github.com/rqlite/rqlite/pull/1994): Bump golang.org/x/crypto from 0.30.0 to 0.31.0.
 
