@@ -1,3 +1,7 @@
+## v8.36.2 (unreleased)
+### Implementation changes and bug fixes
+- [PR #1995](https://github.com/rqlite/rqlite/pull/1995): Use [flagforge](https://github.com/rqlite/flagforge) to generate command-line flags.
+
 ## v8.36.1 (December 17th 2024)
 ### Implementation changes and bug fixes
 - [PR #1994](https://github.com/rqlite/rqlite/pull/1994): Bump golang.org/x/crypto from 0.30.0 to 0.31.0.
