@@ -1,6 +1,6 @@
 ## v8.36.2 (unreleased)
 ### Implementation changes and bug fixes
-- [PR #1995](https://github.com/rqlite/rqlite/pull/1995): Use [flagforge](https://github.com/rqlite/flagforge) to generate command-line flags.
+- [PR #1995](https://github.com/rqlite/rqlite/pull/1995), [PR #1997](https://github.com/rqlite/rqlite/pull/1997): Use [flagforge](https://github.com/rqlite/flagforge) to generate command-line flags.
 
 ## v8.36.1 (December 17th 2024)
 ### Implementation changes and bug fixes
