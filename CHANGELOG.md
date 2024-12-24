@@ -1,4 +1,4 @@
-## v8.36.2 (unreleased)
+## v8.36.2 (December 24th 2024)
 ### Implementation changes and bug fixes
 - [PR #1999](https://github.com/rqlite/rqlite/pull/1999): `go mod` updates.
 - [PR #1995](https://github.com/rqlite/rqlite/pull/1995), [PR #1997](https://github.com/rqlite/rqlite/pull/1997), [PR #1998](https://github.com/rqlite/rqlite/pull/1998): Use [flagforge](https://github.com/rqlite/flagforge) to generate command-line flags.
