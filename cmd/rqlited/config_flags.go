@@ -9,30 +9,6 @@ import (
 	"time"
 )
 
-// StringSlice wraps a string slice and implements the flag.Value interface.
-type StringSliceValue struct {
-	ss *[]string
-}
-
-// NewStringSliceValue returns an initialized StringSliceValue.
-func NewStringSliceValue(ss *[]string) *StringSliceValue {
-	return &StringSliceValue{ss}
-}
-
-// String returns a string representation of the StringSliceValue.
-func (s *StringSliceValue) String() string {
-	if s.ss == nil {
-		return ""
-	}
-	return fmt.Sprintf("%v", *s.ss)
-}
-
-// Set sets the value of the StringSliceValue.
-func (s *StringSliceValue) Set(value string) error {
-	*s.ss = strings.Split(value, ",")
-	return nil
-}
-
 // Config represents all configuration options.
 type Config struct {
 	// DataPath is path to node data. Always set
@@ -156,10 +132,11 @@ func Forge(arguments []string) (*flag.FlagSet, *Config, error) {
 	config := &Config{}
 	fs := flag.NewFlagSet("rqlited", flag.ExitOnError)
 	if len(arguments) <= 0 {
-		return nil, nil, fmt.Errorf("missing required argument: DataPath")
+		return nil, nil, fmtError("missing required argument: DataPath")
 	}
 	fs.BoolVar(&config.ShowVersion, "version", false, "Show version information and exit")
-	fs.Var(NewStringSliceValue(&config.ExtensionPaths), "extensions-path", "Comma-delimited list of paths to directories, zipfiles, or tar.gz files containing SQLite extensions")
+	var tmpExtensionPaths string
+	fs.StringVar(&tmpExtensionPaths, "extensions-path", "", "Comma-delimited list of paths to directories, zipfiles, or tar.gz files containing SQLite extensions")
 	fs.StringVar(&config.HTTPAddr, "http-addr", "localhost:4001", "HTTP server bind address. To enable HTTPS, set X.509 certificate and key")
 	fs.StringVar(&config.HTTPAdv, "http-adv-addr", "", "Advertised HTTP address. If not set, same as HTTP server bind address")
 	fs.StringVar(&config.HTTPAllowOrigin, "http-allow-origin", "", "Value to set for Access-Control-Allow-Origin HTTP header")
@@ -215,13 +192,14 @@ func Forge(arguments []string) (*flag.FlagSet, *Config, error) {
 	fs.StringVar(&config.MemProfile, "mem-profile", "", "Path to file for memory profiling information")
 	fs.StringVar(&config.TraceProfile, "trace-profile", "", "Path to file for trace profiling information")
 	fs.Usage = func() {
-		fmt.Fprintf(os.Stderr, "\nrqlite is a lightweight, distributed relational database, which uses SQLite as its\nstorage engine. It provides an easy-to-use, fault-tolerant store for relational data.\n\nVisit https://www.rqlite.io to learn more.\n\nUsage: rqlited [flags] <data directory>\n")
+		usage("\nrqlite is a lightweight, distributed relational database, which uses SQLite as its\nstorage engine. It provides an easy-to-use, fault-tolerant store for relational data.\n\nVisit https://www.rqlite.io to learn more.\n\nUsage: rqlited [flags] <data directory>\n")
 		fs.PrintDefaults()
 	}
 	if err := fs.Parse(arguments); err != nil {
 		return nil, nil, err
 	}
 	config.DataPath = fs.Arg(0)
+	config.ExtensionPaths = splitString(tmpExtensionPaths, ",")
 	return fs, config, nil
 }
 
@@ -231,4 +209,19 @@ func mustParseDuration(d string) time.Duration {
 		panic(err)
 	}
 	return td
+}
+
+func splitString(s, sep string) []string {
+	if s == "" {
+		return nil
+	}
+	return strings.Split(s, sep)
+}
+
+func fmtError(msg string) error {
+	return fmt.Errorf(msg)
+}
+
+func usage(msg string) {
+	fmt.Fprintf(os.Stderr, msg)
 }
