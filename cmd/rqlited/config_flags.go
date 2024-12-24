@@ -212,6 +212,9 @@ func mustParseDuration(d string) time.Duration {
 }
 
 func splitString(s, sep string) []string {
+	if s == "" {
+		return nil
+	}
 	return strings.Split(s, sep)
 }
 
