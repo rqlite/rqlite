@@ -1,3 +1,7 @@
+## v8.36.3 (unreleased)
+### Implementation changes and bug fixes
+- [PR #2000](https://github.com/rqlite/rqlite/pull/2000): Reduce memory allocations in `queryStmtWithConn`. Thanks @arturmelanchyk
+
 ## v8.36.2 (December 24th 2024)
 ### Implementation changes and bug fixes
 - [PR #1999](https://github.com/rqlite/rqlite/pull/1999): `go mod` updates.
