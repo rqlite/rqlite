@@ -950,9 +950,11 @@ func (db *DB) queryStmtWithConn(ctx context.Context, stmt *command.Statement, xT
 	}
 	needsQueryTypes := containsEmptyType(xTypes)
 
+	dest := make([]interface{}, len(columns))
+	ptrs := make([]interface{}, len(dest))
 	for rs.Next() {
-		dest := make([]interface{}, len(columns))
-		ptrs := make([]interface{}, len(dest))
+		dest := dest[:]
+		ptrs := ptrs[:]
 		for i := range ptrs {
 			ptrs[i] = &dest[i]
 		}
