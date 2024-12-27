@@ -192,7 +192,7 @@ func Test_NodeRespEncodeLegacy(t *testing.T) {
 }
 
 func Test_NodesRespDecoder_Decode_ValidJSON(t *testing.T) {
-	jsonInput := `{"nodes":[{"id":"1","addr":"192.168.1.1","voter":true},{"id":"2","addr":"192.168.1.2","voter":false}]}`
+	jsonInput := `{"nodes":[{"id":"1","addr":"192.168.1.1","voter":true, "version": "1.2.3"},{"id":"2","addr":"192.168.1.2","voter":false}]}`
 	reader := strings.NewReader(jsonInput)
 	decoder := NewNodesRespDecoder(reader)
 
