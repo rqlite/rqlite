@@ -8,6 +8,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/rqlite/rqlite/v8/cluster/proto"
 	"github.com/rqlite/rqlite/v8/store"
 )
 
@@ -239,11 +240,18 @@ func newMockGetAddresser(apiAddr string, err error) *mockGetAddresser {
 }
 
 // GetNodeMeta is the mock implementation of the GetNodeMeta method.
-func (m *mockGetAddresser) GetNodeMeta(addr string, retries int, timeout time.Duration) (string, error) {
+func (m *mockGetAddresser) GetNodeMeta(addr string, retries int, timeout time.Duration) (*proto.NodeMeta, error) {
+	a := m.apiAddr
 	if m.getAddrFn != nil {
-		return m.getAddrFn(addr, retries, timeout)
+		var err error
+		a, err = m.getAddrFn(addr, retries, timeout)
+		if err != nil {
+			return nil, err
+		}
 	}
-	return m.apiAddr, m.err
+	return &proto.NodeMeta{
+		Url: a,
+	}, nil
 }
 
 func mockNodes() Nodes {

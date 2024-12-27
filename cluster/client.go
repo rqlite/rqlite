@@ -67,6 +67,7 @@ type Client struct {
 	localMu       sync.RWMutex
 	localNodeAddr string
 	localServ     *Service
+	localVersion  string
 
 	poolMu sync.RWMutex
 	pools  map[string]pool.Pool
@@ -97,14 +98,34 @@ func (c *Client) SetLocal(nodeAddr string, serv *Service) error {
 	return nil
 }
 
+// SetLocalVersion informs the client instance of the version of the software
+// running on this node. This is used so the client can serve this information
+// quickly.
+func (c *Client) SetLocalVersion(version string) error {
+	c.localMu.Lock()
+	defer c.localMu.Unlock()
+	c.localVersion = version
+	return nil
+}
+
+// GetLocalNodeAddr retrieves the version of software of the software
+// running on this node.
+func (c *Client) GetLocalVersion() string {
+	c.localMu.RLock()
+	defer c.localMu.RUnlock()
+	return c.localVersion
+}
+
 // GetNodeAPIAddr retrieves metadata for the node at nodeAddr
-func (c *Client) GetNodeMeta(nodeAddr string, retries int, timeout time.Duration) (string, error) {
+func (c *Client) GetNodeMeta(nodeAddr string, retries int, timeout time.Duration) (*proto.NodeMeta, error) {
 	c.localMu.RLock()
 	defer c.localMu.RUnlock()
 	if c.localNodeAddr == nodeAddr && c.localServ != nil {
 		// Serve it locally!
 		stats.Add(numGetNodeAPIRequestLocal, 1)
-		return c.localServ.GetNodeAPIURL(), nil
+		return &proto.NodeMeta{
+			Url: c.localServ.GetNodeAPIURL(),
+		}, nil
 	}
 
 	command := &proto.Command{
@@ -113,16 +134,16 @@ func (c *Client) GetNodeMeta(nodeAddr string, retries int, timeout time.Duration
 	p, nr, err := c.retry(command, nodeAddr, timeout, retries)
 	stats.Add(numGetNodeAPIRequestRetries, int64(nr))
 	if err != nil {
-		return "", err
+		return nil, err
 	}
 
 	a := &proto.NodeMeta{}
 	err = pb.Unmarshal(p, a)
 	if err != nil {
-		return "", fmt.Errorf("protobuf unmarshal: %w", err)
+		return nil, fmt.Errorf("protobuf unmarshal: %w", err)
 	}
 
-	return a.Url, nil
+	return a, nil
 }
 
 // GetCommitIndex retrieves the commit index for the node at nodeAddr
