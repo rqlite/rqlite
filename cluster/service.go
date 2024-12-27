@@ -142,6 +142,7 @@ type Service struct {
 	mu      sync.RWMutex
 	https   bool   // Serving HTTPS?
 	apiAddr string // host:port this node serves the HTTP API.
+	version string // Version of software this node is running.
 
 	logger *log.Logger
 }
@@ -195,6 +196,20 @@ func (s *Service) GetAPIAddr() string {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 	return s.apiAddr
+}
+
+// SetVersion sets the version of the software this node is running.
+func (s *Service) SetVersion(v string) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.version = v
+}
+
+// GetVersion returns the version of the software this node is running.
+func (s *Service) GetVersion() string {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return s.version
 }
 
 // GetNodeAPIURL returns fully-specified HTTP(S) API URL for the
@@ -298,6 +313,7 @@ func (s *Service) handleConn(conn net.Conn) {
 			p, err = pb.Marshal(&proto.NodeMeta{
 				Url:         s.GetNodeAPIURL(),
 				CommitIndex: ci,
+				Version:     s.GetVersion(),
 			})
 			if err != nil {
 				conn.Close()

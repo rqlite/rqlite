@@ -455,6 +455,7 @@ func credentialStore(cfg *Config) (*auth.CredentialsStore, error) {
 func clusterService(cfg *Config, ln net.Listener, db cluster.Database, mgr cluster.Manager, credStr *auth.CredentialsStore) (*cluster.Service, error) {
 	c := cluster.New(ln, db, mgr, credStr)
 	c.SetAPIAddr(cfg.HTTPAdv)
+	c.SetVersion(cmd.Version)
 	c.EnableHTTPS(cfg.HTTPx509Cert != "" && cfg.HTTPx509Key != "") // Conditions met for an HTTPS API
 	if err := c.Open(); err != nil {
 		return nil, err
@@ -476,6 +477,9 @@ func createClusterClient(cfg *Config, clstr *cluster.Service) (*cluster.Client, 
 	clstrClient := cluster.NewClient(clstrDialer, cfg.ClusterConnectTimeout)
 	if err := clstrClient.SetLocal(cfg.RaftAdv, clstr); err != nil {
 		return nil, fmt.Errorf("failed to set cluster client local parameters: %s", err.Error())
+	}
+	if err := clstrClient.SetLocalVersion(cmd.Version); err != nil {
+		return nil, fmt.Errorf("failed to set cluster client local version: %s", err.Error())
 	}
 	return clstrClient, nil
 }

@@ -13,6 +13,7 @@ message Credentials {
 message NodeMeta {
     string url = 1;
     uint64 commit_index = 2;
+    string version = 3;
 }
 
 message Command {
