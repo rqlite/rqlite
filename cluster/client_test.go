@@ -32,7 +32,7 @@ func Test_ClientGetNodeAPIAddr(t *testing.T) {
 			// test exit can cause that too.
 			return
 		}
-		if c.Type != proto.Command_COMMAND_TYPE_GET_NODE_API_URL {
+		if c.Type != proto.Command_COMMAND_TYPE_GET_NODE_META {
 			t.Fatalf("unexpected command type: %d", c.Type)
 		}
 		p, err = pb.Marshal(&proto.NodeMeta{
@@ -68,7 +68,7 @@ func Test_ClientGetCommitIndex(t *testing.T) {
 			// test exit can cause that too.
 			return
 		}
-		if c.Type != proto.Command_COMMAND_TYPE_GET_NODE_API_URL {
+		if c.Type != proto.Command_COMMAND_TYPE_GET_NODE_META {
 			t.Fatalf("unexpected command type: %d", c.Type)
 		}
 		p, err = pb.Marshal(&proto.NodeMeta{

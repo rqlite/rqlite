@@ -1,6 +1,7 @@
 ## v8.36.3 (unreleased)
 ### Implementation changes and bug fixes
 - [PR #2000](https://github.com/rqlite/rqlite/pull/2000): Reduce memory allocations in `queryStmtWithConn`. Thanks @arturmelanchyk
+- [PR #2002](https://github.com/rqlite/rqlite/pull/2002): Rename `COMMAND_TYPE_GET_NODE_API_URL` to `COMMAND_TYPE_GET_NODE_META`.
 
 ## v8.36.2 (December 24th 2024)
 ### Implementation changes and bug fixes

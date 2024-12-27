@@ -108,7 +108,7 @@ func (c *Client) GetNodeAPIAddr(nodeAddr string, retries int, timeout time.Durat
 	}
 
 	command := &proto.Command{
-		Type: proto.Command_COMMAND_TYPE_GET_NODE_API_URL,
+		Type: proto.Command_COMMAND_TYPE_GET_NODE_META,
 	}
 	p, nr, err := c.retry(command, nodeAddr, timeout, retries)
 	stats.Add(numGetNodeAPIRequestRetries, int64(nr))
@@ -128,7 +128,7 @@ func (c *Client) GetNodeAPIAddr(nodeAddr string, retries int, timeout time.Durat
 // GetCommitIndex retrieves the commit index for the node at nodeAddr
 func (c *Client) GetCommitIndex(nodeAddr string, retries int, timeout time.Duration) (uint64, error) {
 	command := &proto.Command{
-		Type: proto.Command_COMMAND_TYPE_GET_NODE_API_URL,
+		Type: proto.Command_COMMAND_TYPE_GET_NODE_META,
 	}
 	p, nr, err := c.retry(command, nodeAddr, timeout, retries)
 	stats.Add(numGetNodeAPIRequestRetries, int64(nr))
