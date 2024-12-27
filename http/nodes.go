@@ -40,7 +40,7 @@ func NewNodeFromServer(s *store.Server) *Node {
 
 // Test tests the node's reachability and leadership status. If an error
 // occurs, the Error field will be populated.
-func (n *Node) Test(ga GetAddresser, leaderAddr string, retries int, timeout time.Duration) {
+func (n *Node) Test(gm GetNodeMetaer, leaderAddr string, retries int, timeout time.Duration) {
 	start := time.Now()
 	n.Time = time.Since(start).Seconds()
 	n.TimeS = time.Since(start).String()
@@ -52,7 +52,7 @@ func (n *Node) Test(ga GetAddresser, leaderAddr string, retries int, timeout tim
 	done := make(chan struct{})
 	go func() {
 		defer close(done)
-		meta, err := ga.GetNodeMeta(n.Addr, retries, timeout)
+		meta, err := gm.GetNodeMeta(n.Addr, retries, timeout)
 		if err != nil {
 			n.SetError(err.Error())
 			return
@@ -138,13 +138,13 @@ func (n Nodes) GetNode(id string) *Node {
 
 // Test tests the reachability and leadership status of all nodes. It does this
 // in parallel, and blocks until all nodes have been tested.
-func (n Nodes) Test(ga GetAddresser, leaderAddr string, retries int, timeout time.Duration) {
+func (n Nodes) Test(gm GetNodeMetaer, leaderAddr string, retries int, timeout time.Duration) {
 	var wg sync.WaitGroup
 	for _, nn := range n {
 		wg.Add(1)
 		go func(nnn *Node) {
 			defer wg.Done()
-			nnn.Test(ga, leaderAddr, retries, timeout)
+			nnn.Test(gm, leaderAddr, retries, timeout)
 		}(nn)
 	}
 	wg.Wait()

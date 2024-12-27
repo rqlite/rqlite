@@ -99,15 +99,15 @@ type Store interface {
 	ReadFrom(r io.Reader) (int64, error)
 }
 
-// GetAddresser is the interface that wraps the GetNodeMeta method.
+// GetNodeMetaer is the interface that wraps the GetNodeMeta method.
 // GetNodeMeta returns the HTTP API URL for the node at the given Raft address.
-type GetAddresser interface {
+type GetNodeMetaer interface {
 	GetNodeMeta(addr string, retries int, timeout time.Duration) (*clstrPB.NodeMeta, error)
 }
 
 // Cluster is the interface node API services must provide
 type Cluster interface {
-	GetAddresser
+	GetNodeMetaer
 
 	// Execute performs an Execute Request on a remote node.
 	Execute(er *command.ExecuteRequest, nodeAddr string, creds *clstrPB.Credentials, timeout time.Duration, retries int) ([]*command.ExecuteQueryResponse, error)
