@@ -4,6 +4,7 @@
 - [PR #2002](https://github.com/rqlite/rqlite/pull/2002): Rename `COMMAND_TYPE_GET_NODE_API_URL` to `COMMAND_TYPE_GET_NODE_META`.
 - [PR #2003](https://github.com/rqlite/rqlite/pull/2003): Pass around `NodeMeta` objects instead of strings.
 - [PR #2004](https://github.com/rqlite/rqlite/pull/2004): Hook up node version within `NodeMeta`.
+- [PR #2005](https://github.com/rqlite/rqlite/pull/2005): Rename `GetAddresser` interface.
 
 ## v8.36.2 (December 24th 2024)
 ### Implementation changes and bug fixes
