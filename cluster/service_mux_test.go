@@ -31,11 +31,11 @@ func Test_NewServiceSetGetNodeAPIAddrMuxed(t *testing.T) {
 
 	c := NewClient(mustNewDialer(1, false, false), 30*time.Second)
 
-	addr, err := c.GetNodeMeta(s.Addr(), noRetries, 5*time.Second)
+	meta, err := c.GetNodeMeta(s.Addr(), noRetries, 5*time.Second)
 	if err != nil {
 		t.Fatalf("failed to get node API address: %s", err)
 	}
-	if addr != "http://foo" {
+	if meta.Url != "http://foo" {
 		t.Fatalf("failed to get correct node API address")
 	}
 
@@ -65,11 +65,11 @@ func Test_NewServiceSetGetNodeAPIAddrMuxedTLS(t *testing.T) {
 
 	c := NewClient(mustNewDialer(1, true, true), 30*time.Second)
 
-	addr, err := c.GetNodeMeta(s.Addr(), noRetries, 5*time.Second)
+	meta, err := c.GetNodeMeta(s.Addr(), noRetries, 5*time.Second)
 	if err != nil {
 		t.Fatalf("failed to get node API address: %s", err)
 	}
-	if addr != "http://foo" {
+	if meta.Url != "http://foo" {
 		t.Fatalf("failed to get correct node API address")
 	}
 

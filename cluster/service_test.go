@@ -70,27 +70,27 @@ func Test_NewServiceSetGetNodeMeta(t *testing.T) {
 
 	// Test by connecting to itself.
 	c := NewClient(ml, 30*time.Second)
-	addr, err := c.GetNodeMeta(s.Addr(), noRetries, 5*time.Second)
+	meta, err := c.GetNodeMeta(s.Addr(), noRetries, 5*time.Second)
 	if err != nil {
 		t.Fatalf("failed to get node API address: %s", err)
 	}
-	if addr != "http://foo" {
-		t.Fatalf("failed to get correct node API address, exp %s, got %s", "http://foo", addr)
+	if meta.Url != "http://foo" {
+		t.Fatalf("failed to get correct node API address, exp %s, got %s", "http://foo", meta.Url)
 	}
 
 	s.EnableHTTPS(true)
 
 	// Test fetch via network.
-	addr, err = c.GetNodeMeta(s.Addr(), noRetries, 5*time.Second)
+	meta, err = c.GetNodeMeta(s.Addr(), noRetries, 5*time.Second)
 	if err != nil {
 		t.Fatalf("failed to get node API address: %s", err)
 	}
-	if addr != "https://foo" {
-		t.Fatalf("failed to get correct node API address, exp %s, got %s", "https://foo", addr)
+	if meta.Url != "https://foo" {
+		t.Fatalf("failed to get correct node API address, exp %s, got %s", "https://foo", meta.Url)
 	}
 
 	// Test fetch via local call.
-	addr = s.GetNodeAPIURL()
+	addr := s.GetNodeAPIURL()
 	if addr != "https://foo" {
 		t.Fatalf("failed to get correct node API address, exp %s, got %s", "https://foo", addr)
 	}
@@ -123,12 +123,12 @@ func Test_NewServiceSetGetNodeMetaLocal(t *testing.T) {
 	if err := c.SetLocal(s.Addr(), s); err != nil {
 		t.Fatalf("failed to set cluster client local parameters: %s", err)
 	}
-	addr, err := c.GetNodeMeta(s.Addr(), noRetries, 5*time.Second)
+	meta, err := c.GetNodeMeta(s.Addr(), noRetries, 5*time.Second)
 	if err != nil {
 		t.Fatalf("failed to get node API address locally: %s", err)
 	}
-	if addr != "http://foo" {
-		t.Fatalf("failed to get correct node API address locally, exp %s, got %s", "http://foo", addr)
+	if meta.Url != "http://foo" {
+		t.Fatalf("failed to get correct node API address locally, exp %s, got %s", "http://foo", meta.Url)
 	}
 
 	// Check stats to confirm local response.
@@ -152,22 +152,22 @@ func Test_NewServiceSetGetNodeMetaTLS(t *testing.T) {
 
 	// Test by connecting to itself.
 	c := NewClient(ml, 30*time.Second)
-	addr, err := c.GetNodeMeta(s.Addr(), noRetries, 5*time.Second)
+	meta, err := c.GetNodeMeta(s.Addr(), noRetries, 5*time.Second)
 	if err != nil {
 		t.Fatalf("failed to get node API address: %s", err)
 	}
 	exp := "http://foo"
-	if addr != exp {
-		t.Fatalf("failed to get correct node API address, exp %s, got %s", exp, addr)
+	if meta.Url != exp {
+		t.Fatalf("failed to get correct node API address, exp %s, got %s", exp, meta.Url)
 	}
 
 	s.EnableHTTPS(true)
-	addr, err = c.GetNodeMeta(s.Addr(), noRetries, 5*time.Second)
+	meta, err = c.GetNodeMeta(s.Addr(), noRetries, 5*time.Second)
 	if err != nil {
 		t.Fatalf("failed to get node API address: %s", err)
 	}
-	if addr != "https://foo" {
-		t.Fatalf("failed to get correct node API address, exp %s, got %s", "https://foo", addr)
+	if meta.Url != "https://foo" {
+		t.Fatalf("failed to get correct node API address, exp %s, got %s", "https://foo", meta.Url)
 	}
 
 	if err := s.Close(); err != nil {
