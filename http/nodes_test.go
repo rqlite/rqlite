@@ -233,13 +233,13 @@ type mockGetAddresser struct {
 }
 
 // newMockGetAddresser creates a new instance of mockGetAddresser.
-// You can customize the return values for GetNodeAPIAddr by setting apiAddr and err.
+// You can customize the return values for GetNodeMeta by setting apiAddr and err.
 func newMockGetAddresser(apiAddr string, err error) *mockGetAddresser {
 	return &mockGetAddresser{apiAddr: apiAddr, err: err}
 }
 
-// GetNodeAPIAddr is the mock implementation of the GetNodeAPIAddr method.
-func (m *mockGetAddresser) GetNodeAPIAddr(addr string, retries int, timeout time.Duration) (string, error) {
+// GetNodeMeta is the mock implementation of the GetNodeMeta method.
+func (m *mockGetAddresser) GetNodeMeta(addr string, retries int, timeout time.Duration) (string, error) {
 	if m.getAddrFn != nil {
 		return m.getAddrFn(addr, retries, timeout)
 	}

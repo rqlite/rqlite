@@ -288,7 +288,7 @@ func (s *Service) handleConn(conn net.Conn) {
 		}
 
 		switch c.Type {
-		case proto.Command_COMMAND_TYPE_GET_NODE_API_URL:
+		case proto.Command_COMMAND_TYPE_GET_NODE_META:
 			stats.Add(numGetNodeAPIRequest, 1)
 			ci, err := s.mgr.CommitIndex()
 			if err != nil {
