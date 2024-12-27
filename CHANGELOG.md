@@ -5,6 +5,7 @@
 - [PR #2003](https://github.com/rqlite/rqlite/pull/2003): Pass around `NodeMeta` objects instead of strings.
 - [PR #2004](https://github.com/rqlite/rqlite/pull/2004): Hook up node version within `NodeMeta`.
 - [PR #2005](https://github.com/rqlite/rqlite/pull/2005): Rename `GetAddresser` interface.
+- [PR #2006](https://github.com/rqlite/rqlite/pull/2006): Add version information to `/nodes` output. Fixes issue [#2001](https://github.com/rqlite/rqlite/issues/2001).
 
 ## v8.36.2 (December 24th 2024)
 ### Implementation changes and bug fixes

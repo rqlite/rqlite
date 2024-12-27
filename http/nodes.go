@@ -19,6 +19,7 @@ type Node struct {
 	ID        string  `json:"id,omitempty"`
 	APIAddr   string  `json:"api_addr,omitempty"`
 	Addr      string  `json:"addr,omitempty"`
+	Version   string  `json:"version"`
 	Voter     bool    `json:"voter"`
 	Reachable bool    `json:"reachable"`
 	Leader    bool    `json:"leader"`
@@ -58,6 +59,10 @@ func (n *Node) Test(gm GetNodeMetaer, leaderAddr string, retries int, timeout ti
 			return
 		}
 		n.APIAddr = meta.Url
+		n.Version = meta.Version
+		if n.Version == "" {
+			n.Version = "unknown"
+		}
 		n.Reachable = true
 		n.Leader = n.Addr == leaderAddr
 	}()

@@ -52,21 +52,27 @@ func Test_NodesVoters(t *testing.T) {
 
 func Test_NodeTestLeader(t *testing.T) {
 	node := &Node{ID: "1", Addr: "leader-raft-addr", APIAddr: "leader-api-addr"}
-	mockGA := newMockGetAddresser("leader-api-addr", nil)
+	mockGA := newMockGetAddresser("leader-api-addr", "1.0.0", nil)
 
 	node.Test(mockGA, "leader-raft-addr", 0, 10*time.Second)
 	if !node.Reachable || !node.Leader {
 		t.Fatalf("Test method did not correctly update node status %s", asJSON(node))
 	}
+	if node.Version != "1.0.0" {
+		t.Fatalf("Test method did not correctly update node version %s", asJSON(node))
+	}
 }
 
 func Test_NodeTestNotLeader(t *testing.T) {
 	node := &Node{ID: "1", Addr: "follower-raft-addr", APIAddr: "follower-api-addr"}
-	mockGA := newMockGetAddresser("follower-api-addr", nil)
+	mockGA := newMockGetAddresser("follower-api-addr", "2.0.0", nil)
 
 	node.Test(mockGA, "leader-raft-addr", 0, 10*time.Second)
 	if !node.Reachable || node.Leader {
 		t.Fatalf("Test method did not correctly update node status %s", asJSON(node))
+	}
+	if node.Version != "2.0.0" {
+		t.Fatalf("Test method did not correctly update node version %s", asJSON(node))
 	}
 }
 
@@ -74,16 +80,19 @@ func Test_NodeTestDouble(t *testing.T) {
 	node1 := &Node{ID: "1", Addr: "leader-raft-addr", APIAddr: "leader-api-addr"}
 	node2 := &Node{ID: "2", Addr: "follower-raft-addr", APIAddr: "follower-api-addr"}
 	mockGA := &mockGetAddresser{}
-	mockGA.getAddrFn = func(addr string, retries int, timeout time.Duration) (string, error) {
+	mockGA.getMetaFn = func(addr string, retries int, timeout time.Duration) (*proto.NodeMeta, error) {
 		if addr == "leader-raft-addr" {
-			return "leader-api-addr", nil
+			return &proto.NodeMeta{
+				Url:     "leader-api-addr",
+				Version: "1.0.0",
+			}, nil
 		}
-		return "", fmt.Errorf("not reachable")
+		return nil, fmt.Errorf("not reachable")
 	}
 
 	nodes := Nodes{node1, node2}
 	nodes.Test(mockGA, "leader-raft-addr", 0, 10*time.Second)
-	if !node1.Reachable || !node1.Leader || node2.Reachable || node2.Leader || node2.Error != "not reachable" {
+	if !node1.Reachable || !node1.Leader || node1.Version != "1.0.0" || node2.Reachable || node2.Leader || node2.Error != "not reachable" {
 		t.Fatalf("Test method did not correctly update node status %s", asJSON(nodes))
 	}
 
@@ -99,17 +108,17 @@ func Test_NodeTestDouble_Timeout(t *testing.T) {
 	node1 := &Node{ID: "1", Addr: "leader-raft-addr", APIAddr: "leader-api-addr"}
 	node2 := &Node{ID: "2", Addr: "follower-raft-addr", APIAddr: "follower-api-addr"}
 	mockGA := &mockGetAddresser{}
-	mockGA.getAddrFn = func(addr string, retries int, timeout time.Duration) (string, error) {
+	mockGA.getMetaFn = func(addr string, retries int, timeout time.Duration) (*proto.NodeMeta, error) {
 		if addr == "leader-raft-addr" {
-			return "leader-api-addr", nil
+			return &proto.NodeMeta{Url: "leader-api-addr", Version: "3.0.0"}, nil
 		}
 		time.Sleep(10 * time.Second) // Simulate a node just hanging when contacted.
-		return "", nil
+		return nil, fmt.Errorf("not reachable")
 	}
 
 	nodes := Nodes{node1, node2}
 	nodes.Test(mockGA, "leader-raft-addr", 0, 1*time.Second)
-	if !node1.Reachable || !node1.Leader || node2.Reachable || node2.Leader || node2.Error != "timeout waiting for node to respond" {
+	if !node1.Reachable || !node1.Leader || node1.Version != "3.0.0" || node2.Reachable || node2.Leader || node2.Error != "timeout waiting for node to respond" {
 		t.Fatalf("Test method did not correctly update node status %s", asJSON(nodes))
 	}
 
@@ -183,7 +192,7 @@ func Test_NodeRespEncodeLegacy(t *testing.T) {
 }
 
 func Test_NodesRespDecoder_Decode_ValidJSON(t *testing.T) {
-	jsonInput := `{"nodes":[{"id":"1","addr":"192.168.1.1","voter":true},{"id":"2","addr":"192.168.1.2","voter":false}]}`
+	jsonInput := `{"nodes":[{"id":"1","addr":"192.168.1.1","voter":true, "version": "1.2.3"},{"id":"2","addr":"192.168.1.2","voter":false}]}`
 	reader := strings.NewReader(jsonInput)
 	decoder := NewNodesRespDecoder(reader)
 
@@ -226,32 +235,34 @@ func Test_NodesRespDecoder_Decode_EmptyJSON(t *testing.T) {
 	}
 }
 
-// mockGetAddresser is a mock implementation of the GetAddresser interface.
+// mockGetMetaer is a mock implementation of the GetMetaer interface.
 type mockGetAddresser struct {
 	apiAddr   string
+	version   string
 	err       error
-	getAddrFn func(addr string, retries int, timeout time.Duration) (string, error)
+	getMetaFn func(addr string, retries int, timeout time.Duration) (*proto.NodeMeta, error)
 }
 
 // newMockGetAddresser creates a new instance of mockGetAddresser.
-// You can customize the return values for GetNodeMeta by setting apiAddr and err.
-func newMockGetAddresser(apiAddr string, err error) *mockGetAddresser {
-	return &mockGetAddresser{apiAddr: apiAddr, err: err}
+// You can customize the return values for GetNodeMeta by setting apiAddr, version, and err.
+func newMockGetAddresser(apiAddr, version string, err error) *mockGetAddresser {
+	return &mockGetAddresser{apiAddr: apiAddr, version: version, err: err}
 }
 
 // GetNodeMeta is the mock implementation of the GetNodeMeta method.
 func (m *mockGetAddresser) GetNodeMeta(addr string, retries int, timeout time.Duration) (*proto.NodeMeta, error) {
-	a := m.apiAddr
-	if m.getAddrFn != nil {
+	md := &proto.NodeMeta{
+		Url:     m.apiAddr,
+		Version: m.version,
+	}
+	if m.getMetaFn != nil {
 		var err error
-		a, err = m.getAddrFn(addr, retries, timeout)
+		md, err = m.getMetaFn(addr, retries, timeout)
 		if err != nil {
 			return nil, err
 		}
 	}
-	return &proto.NodeMeta{
-		Url: a,
-	}, nil
+	return md, nil
 }
 
 func mockNodes() Nodes {
