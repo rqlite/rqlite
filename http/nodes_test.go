@@ -113,7 +113,7 @@ func Test_NodeTestDouble_Timeout(t *testing.T) {
 			return &proto.NodeMeta{Url: "leader-api-addr", Version: "3.0.0"}, nil
 		}
 		time.Sleep(10 * time.Second) // Simulate a node just hanging when contacted.
-		return nil, nil
+		return nil, fmt.Errorf("not reachable")
 	}
 
 	nodes := Nodes{node1, node2}
