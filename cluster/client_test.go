@@ -36,7 +36,8 @@ func Test_ClientGetNodeMeta(t *testing.T) {
 			t.Fatalf("unexpected command type: %d", c.Type)
 		}
 		p, err = pb.Marshal(&proto.NodeMeta{
-			Url: "http://localhost:1234",
+			Url:     "http://localhost:1234",
+			Version: "1.0.0",
 		})
 		if err != nil {
 			conn.Close()
@@ -54,6 +55,9 @@ func Test_ClientGetNodeMeta(t *testing.T) {
 	}
 	if exp, got := "http://localhost:1234", meta.Url; exp != got {
 		t.Fatalf("unexpected addr, got %s, exp: %s", got, exp)
+	}
+	if exp, got := "1.0.0", meta.Version; exp != got {
+		t.Fatalf("unexpected version, got %s, exp: %s", got, exp)
 	}
 }
 

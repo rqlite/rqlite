@@ -124,7 +124,8 @@ func (c *Client) GetNodeMeta(nodeAddr string, retries int, timeout time.Duration
 		// Serve it locally!
 		stats.Add(numGetNodeAPIRequestLocal, 1)
 		return &proto.NodeMeta{
-			Url: c.localServ.GetNodeAPIURL(),
+			Url:     c.localServ.GetNodeAPIURL(),
+			Version: c.GetLocalVersion(),
 		}, nil
 	}
 
@@ -142,7 +143,10 @@ func (c *Client) GetNodeMeta(nodeAddr string, retries int, timeout time.Duration
 	if err != nil {
 		return nil, fmt.Errorf("protobuf unmarshal: %w", err)
 	}
-
+	if a.Version == "" {
+		// Handle nodes running older code.
+		a.Version = "unknown"
+	}
 	return a, nil
 }
 
@@ -162,7 +166,6 @@ func (c *Client) GetCommitIndex(nodeAddr string, retries int, timeout time.Durat
 	if err != nil {
 		return 0, fmt.Errorf("protobuf unmarshal: %w", err)
 	}
-
 	return a.CommitIndex, nil
 }
 

@@ -67,9 +67,11 @@ func Test_NewServiceSetGetNodeMeta(t *testing.T) {
 	}
 
 	s.SetAPIAddr("foo")
+	s.SetVersion("1.0.0")
 
 	// Test by connecting to itself.
 	c := NewClient(ml, 30*time.Second)
+	c.SetLocalVersion("1.0.0")
 	meta, err := c.GetNodeMeta(s.Addr(), noRetries, 5*time.Second)
 	if err != nil {
 		t.Fatalf("failed to get node API address: %s", err)
@@ -88,11 +90,18 @@ func Test_NewServiceSetGetNodeMeta(t *testing.T) {
 	if meta.Url != "https://foo" {
 		t.Fatalf("failed to get correct node API address, exp %s, got %s", "https://foo", meta.Url)
 	}
+	if meta.Version != "1.0.0" {
+		t.Fatalf("failed to get correct node version, exp %s, got %s", "1.0.0", meta.Version)
+	}
 
 	// Test fetch via local call.
 	addr := s.GetNodeAPIURL()
 	if addr != "https://foo" {
 		t.Fatalf("failed to get correct node API address, exp %s, got %s", "https://foo", addr)
+	}
+	ver := s.GetVersion()
+	if ver != "1.0.0" {
+		t.Fatalf("failed to get correct node version, exp %s, got %s", "1.0.0", ver)
 	}
 
 	if err := s.Close(); err != nil {
