@@ -3,7 +3,7 @@ package gzip
 import (
 	"bytes"
 	"compress/gzip"
-	"crypto/md5"
+	"crypto/sha256"
 	"encoding/hex"
 	"fmt"
 	"io"
@@ -204,7 +204,7 @@ func Test_Compressor_CompressLargeFile(t *testing.T) {
 	}
 
 	// Compare the files.
-	compareFileMD5(t, srcFD.Name(), dstUncompressedFD.Name())
+	compareFileSha256(t, srcFD.Name(), dstUncompressedFD.Name())
 }
 
 func mustOpenTempFile(t *testing.T) *os.File {
@@ -251,25 +251,25 @@ func compareFiles(t *testing.T, srcFD, dstFD *os.File) {
 	}
 }
 
-func compareFileMD5(t *testing.T, srcPath, dstPath string) {
+func compareFileSha256(t *testing.T, srcPath, dstPath string) {
 	t.Helper()
 
-	srcMD5, err := md5sum(srcPath)
+	srcSha256, err := sha256sum(srcPath)
 	if err != nil {
-		t.Fatalf("Failed to calculate md5sum of source file: %v", err)
+		t.Fatalf("Failed to calculate sha256sum of source file: %v", err)
 	}
-	dstMD5, err := md5sum(dstPath)
+	dstSha256, err := sha256sum(dstPath)
 	if err != nil {
-		t.Fatalf("Failed to calculate md5sum of destination file: %v", err)
+		t.Fatalf("Failed to calculate sha256sum of destination file: %v", err)
 	}
 
-	// compare md5sums
-	if srcMD5 != dstMD5 {
-		t.Fatal("Source file md5sum does not match destination file md5sum")
+	// compare sha256sums
+	if srcSha256 != dstSha256 {
+		t.Fatal("Source file sha256sum does not match destination file sha256sum")
 	}
 }
 
-func md5sum(path string) (string, error) {
+func sha256sum(path string) (string, error) {
 	// open file
 	f, err := os.Open(path)
 	if err != nil {
@@ -278,7 +278,7 @@ func md5sum(path string) (string, error) {
 	defer f.Close()
 
 	// create new hash
-	h := md5.New()
+	h := sha256.New()
 
 	// copy file to hash
 	if _, err := io.Copy(h, f); err != nil {
