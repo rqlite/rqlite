@@ -261,9 +261,9 @@ func (db *DB) DBLastModified() (time.Time, error) {
 	return lastModified(db.path)
 }
 
-// DBSum returns the MD5 checksum of the database file.
+// DBSum returns the SHA256 checksum of the database file.
 func (db *DB) DBSum() (string, error) {
-	return rsum.MD5(db.path)
+	return rsum.SHA256(db.path)
 }
 
 // WALLastModified returns the last modified time of the WAL file.
@@ -271,9 +271,9 @@ func (db *DB) WALLastModified() (time.Time, error) {
 	return lastModified(db.walPath)
 }
 
-// WALSum returns the MD5 checksum of the WAL file.
+// WALSum returns the SHA256 checksum of the WAL file.
 func (db *DB) WALSum() (string, error) {
-	return rsum.MD5(db.walPath)
+	return rsum.SHA256(db.walPath)
 }
 
 // Close closes the underlying database connection.
