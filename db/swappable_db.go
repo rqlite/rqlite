@@ -18,13 +18,12 @@ type SwappableDB struct {
 	dbMu sync.RWMutex
 }
 
-// OpenSwappable returns a new SwappableDB instance, which opens the database at the given path.
-// If extensions are provided, the extensions are loaded into the database. If fkEnabled is true,
+// OpenSwappable returns a new SwappableDB instance, which opens the database at the given path,
+// using the given driver. If drv is nil then the default driver is used. If fkEnabled is true,
 // foreign key constraints are enabled. If wal is true, the WAL journal mode is enabled.
-func OpenSwappable(dbPath string, extensions []string, fkEnabled, wal bool) (*SwappableDB, error) {
-	drv := DefaultDriver()
-	if len(extensions) > 0 {
-		drv = NewDriver("rqlite-sqlite3-extended", extensions, CnkOnCloseModeDisabled)
+func OpenSwappable(dbPath string, drv *Driver, fkEnabled, wal bool) (*SwappableDB, error) {
+	if drv == nil {
+		drv = DefaultDriver()
 	}
 	db, err := OpenWithDriver(drv, dbPath, fkEnabled, wal)
 	if err != nil {

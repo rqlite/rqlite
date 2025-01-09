@@ -2491,7 +2491,7 @@ func openOnDisk(path string, fkConstraints bool, extensions []string) (*sql.Swap
 	if len(extensions) > 0 {
 		drv = db.NewDriver("rqlite-sqlite3-extended", extensions, db.CnkOnCloseModeDisabled)
 	}
-	return sql.OpenSwappableWithDriver(drv, path, fkConstraints, true)
+	return sql.OpenSwappable(path, drv, fkConstraints, true)
 }
 
 func createTemp(dir, pattern string) (*os.File, error) {
