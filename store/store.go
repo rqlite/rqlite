@@ -569,7 +569,8 @@ func (s *Store) Open() (retErr error) {
 		if err != nil {
 			return fmt.Errorf("failed to read peers file: %s", err.Error())
 		}
-		if err = RecoverNode(s.raftDir, s.logger, s.raftLog, s.boltStore, s.snapshotStore, s.raftTn, config); err != nil {
+		if err = RecoverNode(s.raftDir, s.dbConf.Extensions, s.logger, s.raftLog,
+			s.boltStore, s.snapshotStore, s.raftTn, config); err != nil {
 			return fmt.Errorf("failed to recover node: %s", err.Error())
 		}
 		if err := os.Rename(s.peersPath, s.peersInfoPath); err != nil {
