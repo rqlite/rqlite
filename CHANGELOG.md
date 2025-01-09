@@ -1,3 +1,7 @@
+## v8.36.4 (unreleased)
+### Implementation changes and bug fixes
+- [PR #2012](https://github.com/rqlite/rqlite/pull/2012): Reload SQLite extensions after swapping in a new database.
+
 ## v8.36.3 (December 27th 2024)
 ### Implementation changes and bug fixes
 - [PR #2000](https://github.com/rqlite/rqlite/pull/2000): Reduce memory allocations in `queryStmtWithConn`. Thanks @arturmelanchyk
