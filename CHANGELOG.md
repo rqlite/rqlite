@@ -1,4 +1,5 @@
 ## v8.36.4 (January 9th 2024)
+This change fixes an issue whereby SQLite extensions were not loaded under certain restore-from-backup scenarios. All users of SQLite extensions should upgrade to this release.
 ### Implementation changes and bug fixes
 - [PR #2012](https://github.com/rqlite/rqlite/pull/2012), [PR #2013](https://github.com/rqlite/rqlite/pull/2013), [PR #2014](https://github.com/rqlite/rqlite/pull/2014), [PR #2015](https://github.com/rqlite/rqlite/pull/2015), [PR #2016](https://github.com/rqlite/rqlite/pull/2016): Reload SQLite extensions after swapping in a new database. Fixes issue [#2011](https://github.com/rqlite/rqlite/issues/2011).
 
