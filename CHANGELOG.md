@@ -1,6 +1,6 @@
 ## v8.36.4 (unreleased)
 ### Implementation changes and bug fixes
-- [PR #2012](https://github.com/rqlite/rqlite/pull/2012): Reload SQLite extensions after swapping in a new database.
+- [PR #2012](https://github.com/rqlite/rqlite/pull/2012), [PR #2013](https://github.com/rqlite/rqlite/pull/2013): Reload SQLite extensions after swapping in a new database.
 
 ## v8.36.3 (December 27th 2024)
 ### Implementation changes and bug fixes
