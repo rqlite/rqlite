@@ -10,6 +10,10 @@ import (
 var r *rand.Rand
 var mu sync.Mutex
 
+const (
+	srcChars = "abcdedfghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ"
+)
+
 func init() {
 	r = rand.New(rand.NewSource(time.Now().UnixNano()))
 }
@@ -19,10 +23,26 @@ func String() string {
 	mu.Lock()
 	defer mu.Unlock()
 	var output strings.Builder
-	chars := "abcdedfghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ"
 	for i := 0; i < 20; i++ {
-		random := r.Intn(len(chars))
-		output.WriteString(string(chars[random]))
+		random := r.Intn(len(srcChars))
+		output.WriteString(string(srcChars[random]))
+	}
+	return output.String()
+}
+
+// StringPattern returns a random string, with all occurrences of 'X' or 'x'
+// replaced with a random character.
+func StringPattern(s string) string {
+	mu.Lock()
+	defer mu.Unlock()
+	var output strings.Builder
+	for _, c := range s {
+		if c == 'X' || c == 'x' {
+			random := r.Intn(len(srcChars))
+			output.WriteString(string(srcChars[random]))
+		} else {
+			output.WriteString(string(c))
+		}
 	}
 	return output.String()
 }

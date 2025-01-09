@@ -1,6 +1,7 @@
 package random
 
 import (
+	"strings"
 	"testing"
 	"time"
 )
@@ -20,6 +21,22 @@ func Test_StringUniqueness(t *testing.T) {
 		str := String()
 		if strs[str] {
 			t.Errorf("String() returned a non-unique string: %s", str)
+		}
+		strs[str] = true
+	}
+}
+
+func Test_StringPatternUniqueness(t *testing.T) {
+	const numStrings = 100
+	strs := make(map[string]bool, numStrings)
+
+	for i := 0; i < numStrings; i++ {
+		str := StringPattern("tmp-XXXX-XXXX-XXXX")
+		if !strings.HasPrefix(str, "tmp-") {
+			t.Errorf("StringPattern() returned a string that does not start with 'tmp-': %s", str)
+		}
+		if strs[str] {
+			t.Errorf("StringPattern() returned a non-unique string: %s", str)
 		}
 		strs[str] = true
 	}
