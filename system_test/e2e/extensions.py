@@ -37,6 +37,38 @@ class TestExtensions_File(unittest.TestCase):
     expected = d_('{"results": [{"columns": ["rot13(\\"hello\\")"], "types": ["text"], "values": [["uryyb"]]}]}')
     self.assertEqual(j, expected)
 
+class TestExtensions_File_Reload(unittest.TestCase):
+  def setUp(self):
+    n0 = Node(RQLITED_PATH, '0', extensions_path=EXTENSIONS_PATH)
+    n0.start()
+    n0.wait_for_leader()
+    self.cluster = Cluster([n0])
+
+  def tearDown(self):
+    self.cluster.deprovision()
+
+  def test_rot13(self):
+    n = self.cluster.wait_for_leader()
+    j = n.query('SELECT rot13("hello")')
+    expected = d_('{"results": [{"columns": ["rot13(\\"hello\\")"], "types": ["text"], "values": [["uryyb"]]}]}')
+    self.assertEqual(j, expected)
+
+    # Now, get a backup from the database so we can check that various restores always
+    # reload the extension.
+    fd, db_file = tempfile.mkstemp()
+    os.close(fd)
+    n.backup(db_file)
+
+    n.boot(db_file)
+    j = n.query('SELECT rot13("hello")')
+    expected = d_('{"results": [{"columns": ["rot13(\\"hello\\")"], "types": ["text"], "values": [["uryyb"]]}]}')
+    self.assertEqual(j, expected)
+
+    n.restore(db_file)
+    j = n.query('SELECT rot13("hello")')
+    expected = d_('{"results": [{"columns": ["rot13(\\"hello\\")"], "types": ["text"], "values": [["uryyb"]]}]}')
+    self.assertEqual(j, expected)
+
 class TestExtensions_Dir(unittest.TestCase):
   def setUp(self):
     n0 = Node(RQLITED_PATH, '0', extensions_path=EXTENSIONS_PATH_DIR)
