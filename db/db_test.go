@@ -1400,6 +1400,16 @@ func mustExecute(db *DB, stmt string) {
 	}
 }
 
+// mustQuery executes a query, and panics on failure. Used for queries that should
+// never fail, even taking into account test setup.
+func mustQuery(db *DB, stmt string) []*command.QueryRows {
+	r, err := db.QueryStringStmt(stmt)
+	if err != nil {
+		panic(fmt.Sprintf("failed to query: %s", err.Error()))
+	}
+	return r
+}
+
 func asJSON(v interface{}) string {
 	enc := encoding.Encoder{}
 	b, err := enc.JSONMarshal(v)

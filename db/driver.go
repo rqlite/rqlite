@@ -69,6 +69,24 @@ func CheckpointDriver() *Driver {
 	}
 }
 
+// ForeignKeyDriver returns a driver that enables foreign key support
+// on every connection.
+func ForeignKeyDriver() *Driver {
+	sql.Register("rqlite-sqlite3-foreignkey", &sqlite3.SQLiteDriver{
+		ConnectHook: func(conn *sqlite3.SQLiteConn) error {
+			// Enable foreign key support via the SQLite PRAGMA
+			if _, err := conn.Exec("PRAGMA foreign_keys = ON", nil); err != nil {
+				return fmt.Errorf("cannot enable foreign keys: %w", err)
+			}
+			return nil
+		},
+	})
+	return &Driver{
+		name:       "rqlite-sqlite3-foreignkey",
+		chkOnClose: CnkOnCloseModeDisabled,
+	}
+}
+
 // NewDriver returns a new driver with the given name and extensions. It
 // registers the SQLite3 driver with the given name. extensions is a list of
 // paths to SQLite3 extension shared objects. chkpt is the checkpoint-on-close
