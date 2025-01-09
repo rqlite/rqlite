@@ -160,7 +160,7 @@ func RecoverNode(dataDir string, logger *log.Logger, logs raft.LogStore, stable 
 	}
 
 	// Now, open the database so we can replay any outstanding Raft log entries.
-	db, err := sql.OpenSwappable(tmpDBPath, false, true)
+	db, err := sql.OpenSwappable(tmpDBPath, nil, false, true)
 	if err != nil {
 		return fmt.Errorf("failed to open temporary database: %s", err)
 	}

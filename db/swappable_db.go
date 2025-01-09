@@ -14,26 +14,25 @@ import (
 // in a thread-safe manner.
 type SwappableDB struct {
 	db   *DB
+	drv  *Driver
 	dbMu sync.RWMutex
 }
 
-// OpenSwappableWithDriver returns a new SwappableDB instance using the given driver,
-// which opens the database at the given path.
-func OpenSwappableWithDriver(drv *Driver, dbPath string, fkEnabled, wal bool) (*SwappableDB, error) {
+// OpenSwappable returns a new SwappableDB instance, which opens the database at the given path,
+// using the given driver. If drv is nil then the default driver is used. If fkEnabled is true,
+// foreign key constraints are enabled. If wal is true, the WAL journal mode is enabled.
+func OpenSwappable(dbPath string, drv *Driver, fkEnabled, wal bool) (*SwappableDB, error) {
+	if drv == nil {
+		drv = DefaultDriver()
+	}
 	db, err := OpenWithDriver(drv, dbPath, fkEnabled, wal)
 	if err != nil {
 		return nil, err
 	}
-	return &SwappableDB{db: db}, nil
-}
-
-// OpenSwappable returns a new SwappableDB instance, which opens the database at the given path.
-func OpenSwappable(dbPath string, fkEnabled, wal bool) (*SwappableDB, error) {
-	db, err := Open(dbPath, fkEnabled, wal)
-	if err != nil {
-		return nil, err
-	}
-	return &SwappableDB{db: db}, nil
+	return &SwappableDB{
+		db:  db,
+		drv: drv,
+	}, nil
 }
 
 // Swap swaps the underlying database with that at the given path. The Swap operation
