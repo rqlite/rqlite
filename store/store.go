@@ -27,7 +27,6 @@ import (
 	"github.com/rqlite/rqlite/v8/command"
 	"github.com/rqlite/rqlite/v8/command/chunking"
 	"github.com/rqlite/rqlite/v8/command/proto"
-	"github.com/rqlite/rqlite/v8/db"
 	sql "github.com/rqlite/rqlite/v8/db"
 	"github.com/rqlite/rqlite/v8/db/humanize"
 	wal "github.com/rqlite/rqlite/v8/db/wal"
@@ -279,12 +278,14 @@ type Store struct {
 	raft    *raft.Raft // The consensus mechanism.
 	ly      Layer
 	raftTn  *NodeTransport
-	raftID  string           // Node ID.
-	dbConf  *DBConfig        // SQLite database config.
-	dbPath  string           // Path to underlying SQLite file.
-	walPath string           // Path to WAL file.
-	dbDir   string           // Path to directory containing SQLite file.
-	db      *sql.SwappableDB // The underlying SQLite store.
+	raftID  string    // Node ID.
+	dbConf  *DBConfig // SQLite database config.
+	dbPath  string    // Path to underlying SQLite file.
+	walPath string    // Path to WAL file.
+	dbDir   string    // Path to directory containing SQLite file.
+
+	dbDrv *sql.Driver      // The SQLite database driver.
+	db    *sql.SwappableDB // The underlying SQLite store.
 
 	dechunkManager *chunking.DechunkerManager
 	cmdProc        *CommandProcessor
@@ -406,6 +407,7 @@ func New(ly Layer, c *Config) *Store {
 		dbPath:          dbPath,
 		walPath:         sql.WALPath(dbPath),
 		dbDir:           filepath.Dir(dbPath),
+		dbDrv:           sql.DefaultDriver(),
 		readyChans:      rsync.NewReadyChannels(),
 		leaderObservers: make([]chan<- struct{}, 0),
 		reqMarshaller:   command.NewRequestMarshaler(),
@@ -577,7 +579,13 @@ func (s *Store) Open() (retErr error) {
 		stats.Add(numRecoveries, 1)
 	}
 
-	s.db, err = openOnDisk(s.dbPath, s.dbConf.FKConstraints, s.dbConf.Extensions)
+	// If SQLite extensions are specified, we need a custom driver.
+	if len(s.dbConf.Extensions) > 0 {
+		s.dbDrv = sql.NewDriver(random.StringPattern("rqlite-extended-xxxx-xxxx-xxxx"),
+			s.dbConf.Extensions, sql.CnkOnCloseModeDisabled)
+	}
+
+	s.db, err = openOnDisk(s.dbPath, s.dbDrv, s.dbConf.FKConstraints)
 	if err != nil {
 		return fmt.Errorf("failed to create on-disk database: %s", err)
 	}
@@ -2483,13 +2491,9 @@ func (s *Store) getCurrentTerm() uint64 {
 }
 
 // openOnDisk opens an on-disk database file at the configured path.
-func openOnDisk(path string, fkConstraints bool, extensions []string) (*sql.SwappableDB, error) {
+func openOnDisk(path string, drv *sql.Driver, fkConstraints bool) (*sql.SwappableDB, error) {
 	if err := sql.RemoveFiles(path); err != nil {
 		return nil, err
-	}
-	drv := db.DefaultDriver()
-	if len(extensions) > 0 {
-		drv = db.NewDriver("rqlite-sqlite3-extended", extensions, db.CnkOnCloseModeDisabled)
 	}
 	return sql.OpenSwappable(path, drv, fkConstraints, true)
 }
