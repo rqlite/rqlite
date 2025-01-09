@@ -92,6 +92,48 @@ func Test_SwapSuccess(t *testing.T) {
 	}
 }
 
+func Test_SwapSuccess_Driver(t *testing.T) {
+	// Create a new database and confirm foreign key support is enabled
+	srcPath := mustTempPath()
+	defer os.Remove(srcPath)
+	srcDB, err := Open(srcPath, false, false)
+	if err != nil {
+		t.Fatalf("failed to open source database: %s", err)
+	}
+	defer srcDB.Close()
+	mustExecute(srcDB, "CREATE TABLE foo (id INTEGER NOT NULL PRIMARY KEY, name TEXT)")
+	rows := mustQuery(srcDB, "PRAGMA foreign_keys")
+	if exp, got := `[{"columns":["foreign_keys"],"types":["integer"],"values":[[0]]}]`, asJSON(rows); exp != got {
+		t.Fatalf("expected foreign key support to be disabled, got %s", got)
+	}
+
+	// Create a SwappableDB with an empty database
+	swappablePath := mustTempPath()
+	defer os.Remove(swappablePath)
+	swappableDB, err := OpenSwappable(swappablePath, ForeignKeyDriver(), false, false)
+	if err != nil {
+		t.Fatalf("failed to open swappable database: %s", err)
+	}
+	defer swappableDB.Close()
+
+	// Perform the swap
+	if err := srcDB.Close(); err != nil {
+		t.Fatalf("failed to close source database pre-swap: %s", err)
+	}
+	if err := swappableDB.Swap(srcPath, false, false); err != nil {
+		t.Fatalf("failed to swap database: %s", err)
+	}
+
+	// Confirm the SwappableDB still has the right FK setting, checking that it's using the right driver.
+	rows, err = swappableDB.QueryStringStmt("PRAGMA foreign_keys")
+	if err != nil {
+		t.Fatalf("failed to query swapped database: %s", err)
+	}
+	if exp, got := `[{"columns":["foreign_keys"],"types":["integer"],"values":[[1]]}]`, asJSON(rows); exp != got {
+		t.Fatalf("expected foreign key support to be enabled, got %s", got)
+	}
+}
+
 // Test_SwapInvalidSQLiteFile tests that the Swap function returns an error when provided
 // with an invalid SQLite file.
 func Test_SwapInvalidSQLiteFile(t *testing.T) {
