@@ -11,7 +11,7 @@ import unittest
 import tempfile
 import shutil
 
-from helpers import Node, Cluster, d_
+from helpers import Node, Cluster, d_, deprovision_node
 
 RQLITED_PATH = os.environ['RQLITED_PATH']
 EXTENSIONS_PATH = os.environ['EXTENSIONS_PATH']
@@ -68,6 +68,33 @@ class TestExtensions_File_Reload(unittest.TestCase):
     j = n.query('SELECT rot13("hello")')
     expected = d_('{"results": [{"columns": ["rot13(\\"hello\\")"], "types": ["text"], "values": [["uryyb"]]}]}')
     self.assertEqual(j, expected)
+
+class TestExtensions_File_SnapshotRestore(unittest.TestCase):
+  '''Test that a node restored from a snapshot reloads the extension'''
+
+  def test(self):
+    n0 = Node(RQLITED_PATH, '0', extensions_path=EXTENSIONS_PATH)
+    n0.start()
+    n0.wait_for_leader()
+    n0.execute('CREATE TABLE foo (id INTEGER NOT NULL PRIMARY KEY, name TEXT)')
+    n0.execute('CREATE TABLE bar (id INTEGER NOT NULL PRIMARY KEY, name TEXT)')
+    n0.execute('CREATE TABLE baz (id INTEGER NOT NULL PRIMARY KEY, name TEXT)')
+    j = n0.query('SELECT rot13("hello")')
+    expected = d_('{"results": [{"columns": ["rot13(\\"hello\\")"], "types": ["text"], "values": [["uryyb"]]}]}')
+    self.assertEqual(j, expected)
+
+    n0.snapshot(trailing_logs=1) # Ensure the log doesn't contain all the data, so a snapshot xfer is needed
+
+    n1 = Node(RQLITED_PATH, '1', extensions_path=EXTENSIONS_PATH)
+    n1.start(join=n0.RaftAddr())
+    n1.wait_for_leader()
+    n1.wait_for_restores(1)
+    j = n1.query('SELECT rot13("hello")')
+    expected = d_('{"results": [{"columns": ["rot13(\\"hello\\")"], "types": ["text"], "values": [["uryyb"]]}]}')
+    self.assertEqual(j, expected)
+
+    deprovision_node(n0)
+    deprovision_node(n1)
 
 class TestExtensions_Dir(unittest.TestCase):
   def setUp(self):
