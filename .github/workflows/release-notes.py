@@ -43,7 +43,7 @@ Install via [Homebrew](https://formulae.brew.sh/formula/rqlite).
 ### Windows
 You can download a pre-built release for Windows in one of two ways:
 - The top-of-tree build [is available for download](https://ci.appveyor.com/api/projects/otoolep/rqlite/artifacts/rqlite-latest-win64.zip?branch=master) from AppVeyor. Check out the [CI build for Windows](https://ci.appveyor.com/project/otoolep/rqlite) for more details.
-- Download the Win64 [build artifact attached to this release](https://github.com/rqlite/rqlite/releases/download/{release}/rqlite-{release}-win64.zip). This build is currently considered experimental.
+- Download the Win64 [build artifact attached to this release](https://github.com/rqlite/rqlite/releases/download/{release}/rqlite-{release}-win64.zip).
 """
 
 def set_release_notes(token, release_id, notes):
