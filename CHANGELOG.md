@@ -1,3 +1,7 @@
+## v8.36.5 (unreleased)
+### Implementation changes and bug fixes
+- [PR #2017](https://github.com/rqlite/rqlite/pull/2017): Upgrade to rqlite/go-sqlite3 v1.37.0
+
 ## v8.36.4 (January 9th 2025)
 This change fixes an issue whereby SQLite extensions were not loaded under certain restore-from-backup scenarios. All users of SQLite extensions should upgrade to this release.
 ### Implementation changes and bug fixes
