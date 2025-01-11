@@ -1,4 +1,4 @@
-## v8.36.5 (unreleased)
+## v8.36.5 (January 11th 2025)
 ### Implementation changes and bug fixes
 - [PR #2018](https://github.com/rqlite/rqlite/pull/2018): Upgrade `go mod` dependencies.
 - [PR #2017](https://github.com/rqlite/rqlite/pull/2017): Upgrade to rqlite/go-sqlite3 v1.37.0.
