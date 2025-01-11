@@ -1199,7 +1199,7 @@ func (s *Store) Query(qr *proto.QueryRequest) (rows []*proto.QueryRows, retErr e
 	//
 	// See https://groups.google.com/g/raft-dev/c/4QlyV0aptEQ/m/1JxcmSgRAwAJ
 	// for an extensive discussion of this logic.
-	readTerm := s.getCurrentTerm()
+	readTerm := s.raft.CurrentTerm()
 	if qr.Level == proto.QueryRequest_QUERY_REQUEST_LEVEL_LINEARIZABLE &&
 		readTerm != s.strongReadTerm.Load() {
 		qr.Level = proto.QueryRequest_QUERY_REQUEST_LEVEL_STRONG
@@ -1220,7 +1220,7 @@ func (s *Store) Query(qr *proto.QueryRequest) (rows []*proto.QueryRows, retErr e
 		if err := s.VerifyLeader(); err != nil {
 			return nil, err
 		}
-		if s.getCurrentTerm() != readTerm {
+		if s.raft.CurrentTerm() != readTerm {
 			return nil, ErrStaleRead
 		}
 		if _, err := s.WaitForFSMIndex(readIndex, time.Duration(qr.LinearizableTimeout)); err != nil {
@@ -2476,19 +2476,6 @@ func (s *Store) logIncremental() bool {
 
 func (s *Store) logBackup() bool {
 	return s.hcLogLevel() < hclog.Warn
-}
-
-func (s *Store) getCurrentTerm() uint64 {
-	stats := s.raft.Stats()
-	termStr, ok := stats["term"]
-	if !ok {
-		return 0
-	}
-	term, err := strconv.ParseUint(termStr, 10, 64)
-	if err != nil {
-		return 0
-	}
-	return term
 }
 
 // openOnDisk opens an on-disk database file at the configured path.
