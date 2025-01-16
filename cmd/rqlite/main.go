@@ -18,6 +18,7 @@ import (
 
 	"github.com/Bowery/prompt"
 	"github.com/mkideal/cli"
+    "github.com/prometheus/client_golang/prometheus/promhttp"
 	clix "github.com/mkideal/cli/ext"
 	"github.com/rqlite/rqlite/v8/cmd"
 	"github.com/rqlite/rqlite/v8/cmd/rqlite/history"
@@ -80,6 +81,12 @@ func init() {
 }
 
 func main() {
+    // Expose the default metrics for Go applications via http://localhost:9090/metrics
+    http.Handle("/metrics", promhttp.Handler())
+
+    // Start the HTTP server on port 9090
+    http.ListenAndServe(":9090", nil)
+
 	cli.SetUsageStyle(cli.ManualStyle)
 	cli.Run(new(argT), func(ctx *cli.Context) error {
 		argv := ctx.Argv().(*argT)
