@@ -18,7 +18,7 @@ import (
 
 	"github.com/Bowery/prompt"
 	"github.com/mkideal/cli"
-    "github.com/prometheus/client_golang/prometheus/promhttp"
+	"github.com/prometheus/client_golang/prometheus/promhttp"
 	clix "github.com/mkideal/cli/ext"
 	"github.com/rqlite/rqlite/v8/cmd"
 	"github.com/rqlite/rqlite/v8/cmd/rqlite/history"
