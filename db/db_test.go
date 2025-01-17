@@ -1444,14 +1444,6 @@ func mustTempFile() string {
 	return tmpfile.Name()
 }
 
-func mustTempDir() string {
-	tmpdir, err := os.MkdirTemp("", "rqlite-db-test")
-	if err != nil {
-		panic(err.Error())
-	}
-	return tmpdir
-}
-
 // function which copies a src file to a dst file, panics if any error
 func mustCopyFile(dst, src string) {
 	srcFile, err := os.Open(src)

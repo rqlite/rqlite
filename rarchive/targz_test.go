@@ -73,8 +73,7 @@ func TestUntarGzipToDir(t *testing.T) {
 	defer os.Remove(tarGzipFile)
 
 	// Create a directory to extract to
-	extractDir := "extracted_files"
-	defer os.RemoveAll(extractDir)
+	extractDir := t.TempDir()
 
 	err := UntarGzipToDir(tarGzipFile, extractDir)
 	if err != nil {

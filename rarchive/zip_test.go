@@ -58,11 +58,7 @@ func Test_UnzipToDir(t *testing.T) {
 	mustWriteBytesToFile(zipFileName, zipData)
 
 	// Create a temporary directory for unzipping
-	outputDir, err := os.MkdirTemp("", "unzip_test")
-	if err != nil {
-		t.Fatalf("Failed to create temporary directory: %v", err)
-	}
-	defer os.RemoveAll(outputDir)
+	outputDir := t.TempDir()
 
 	// Unzip the file to the directory
 	err = UnzipToDir(zipFileName, outputDir)
@@ -85,14 +81,10 @@ func Test_UnzipToDir(t *testing.T) {
 
 func Test_UnzipToDir_InvalidZip(t *testing.T) {
 	// Create a temporary directory for unzipping
-	outputDir, err := os.MkdirTemp("", "unzip_test")
-	if err != nil {
-		t.Fatalf("Failed to create temporary directory: %v", err)
-	}
-	defer os.RemoveAll(outputDir)
+	outputDir := t.TempDir()
 
 	// Try to unzip a non-zip file
-	err = UnzipToDir("non_existent.zip", outputDir)
+	err := UnzipToDir("non_existent.zip", outputDir)
 	if err == nil {
 		t.Fatalf("Expected error when unzipping a non-existent file, got nil")
 	}
