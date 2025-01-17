@@ -1,4 +1,7 @@
-<img src="DOC/logo-text.png" height=100></img>
+<picture>
+ <source media="(prefers-color-scheme: light)" srcset="DOC/logo-text.png">
+ <img alt="rqlite logo" src="DOC/logo-text.png" height=100>
+</picture>
 
 [![Circle CI](https://circleci.com/gh/rqlite/rqlite/tree/master.svg?style=svg)](https://circleci.com/gh/rqlite/rqlite/tree/master)
 [![AppVeyor](https://ci.appveyor.com/api/projects/status/github/rqlite/rqlite?branch=master&svg=true)](https://ci.appveyor.com/project/otoolep/rqlite)
