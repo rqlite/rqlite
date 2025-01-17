@@ -1,3 +1,7 @@
+# If you modify this file you must regenerate the corresponding Go code. See
+# https://rqlite.io/docs/install-rqlite/building-from-source/#code-generation
+# for more details.
+
 [Go]
 package = "main"
 flag_set_name = "rqlited"
