@@ -1,5 +1,6 @@
 <picture>
  <source media="(prefers-color-scheme: light)" srcset="DOC/logo-text.png">
+  <source media="(prefers-color-scheme: dark)" srcset="DOC/logo-text-dark.png">
  <img alt="rqlite logo" src="DOC/logo-text.png" height=100>
 </picture>
 
