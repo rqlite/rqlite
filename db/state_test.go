@@ -667,6 +667,7 @@ func Test_WALReplayOK(t *testing.T) {
 		if err != nil {
 			t.Fatalf("failed to open replayed database: %s", err.Error())
 		}
+		defer replayedDB.Close()
 		rows, err := replayedDB.QueryStringStmt("SELECT * FROM foo")
 		if err != nil {
 			t.Fatalf("failed to query WAL table: %s", err.Error())

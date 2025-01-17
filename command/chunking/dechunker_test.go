@@ -169,6 +169,7 @@ func Test_UnexpectedStreamID(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to create Dechunker: %v", err)
 	}
+	defer dechunker.Close()
 
 	_, err = dechunker.WriteChunk(chunk1)
 	if err != nil {
@@ -207,6 +208,7 @@ func Test_ChunksOutOfOrder(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to create Dechunker: %v", err)
 	}
+	defer dechunker.Close()
 
 	// Write the first chunk to the Dechunker.
 	_, err = dechunker.WriteChunk(chunk1)
