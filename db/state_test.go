@@ -593,8 +593,7 @@ func Test_WALReplayOK(t *testing.T) {
 		walPath := dbPath + "-wal"
 		walFile := filepath.Base(walPath)
 
-		replayDir := mustTempDir()
-		defer os.RemoveAll(replayDir)
+		replayDir := t.TempDir()
 		replayDBPath := filepath.Join(replayDir, dbFile)
 
 		// Create and copy the SQLite file and WAL #1
@@ -838,10 +837,8 @@ func Test_WALReplayOK_Complex(t *testing.T) {
 }
 
 func Test_WALReplayFailures(t *testing.T) {
-	dbDir := mustTempDir()
-	defer os.RemoveAll(dbDir)
-	walDir := mustTempDir()
-	defer os.RemoveAll(walDir)
+	dbDir := t.TempDir()
+	walDir := t.TempDir()
 
 	err := ReplayWAL(filepath.Join(dbDir, "foo.db"), []string{filepath.Join(walDir, "foo.db-wal")}, false)
 	if err != ErrWALReplayDirectoryMismatch {

@@ -21,13 +21,7 @@ func Test_SingleChunk(t *testing.T) {
 		Data:        mustCompressData(data),
 	}
 
-	dir, err := os.MkdirTemp("", "dechunker-test")
-	if err != nil {
-		t.Fatalf("failed to create temp dir: %v", err)
-	}
-	defer os.RemoveAll(dir)
-
-	dechunker, err := NewDechunker(dir)
+	dechunker, err := NewDechunker(t.TempDir())
 	if err != nil {
 		t.Fatalf("failed to create Dechunker: %v", err)
 	}
@@ -71,13 +65,7 @@ func Test_MultiChunk(t *testing.T) {
 		Data:        mustCompressData(data2),
 	}
 
-	dir, err := os.MkdirTemp("", "dechunker-test")
-	if err != nil {
-		t.Fatalf("failed to create temp dir: %v", err)
-	}
-	defer os.RemoveAll(dir)
-
-	dechunker, err := NewDechunker(dir)
+	dechunker, err := NewDechunker(t.TempDir())
 	if err != nil {
 		t.Fatalf("failed to create Dechunker: %v", err)
 	}
@@ -129,13 +117,7 @@ func Test_MultiChunkNilData(t *testing.T) {
 		Data:        nil,
 	}
 
-	dir, err := os.MkdirTemp("", "dechunker-test")
-	if err != nil {
-		t.Fatalf("failed to create temp dir: %v", err)
-	}
-	defer os.RemoveAll(dir)
-
-	dechunker, err := NewDechunker(dir)
+	dechunker, err := NewDechunker(t.TempDir())
 	if err != nil {
 		t.Fatalf("failed to create Dechunker: %v", err)
 	}
@@ -183,13 +165,7 @@ func Test_UnexpectedStreamID(t *testing.T) {
 		Data:        compressedData,
 	}
 
-	dir, err := os.MkdirTemp("", "dechunker-test")
-	if err != nil {
-		t.Fatalf("failed to create temp dir: %v", err)
-	}
-	defer os.RemoveAll(dir)
-
-	dechunker, err := NewDechunker(dir)
+	dechunker, err := NewDechunker(t.TempDir())
 	if err != nil {
 		t.Fatalf("failed to create Dechunker: %v", err)
 	}
@@ -227,13 +203,7 @@ func Test_ChunksOutOfOrder(t *testing.T) {
 		Data:        compressedData,
 	}
 
-	dir, err := os.MkdirTemp("", "dechunker-test")
-	if err != nil {
-		t.Fatalf("failed to create temp dir: %v", err)
-	}
-	defer os.RemoveAll(dir)
-
-	dechunker, err := NewDechunker(dir)
+	dechunker, err := NewDechunker(t.TempDir())
 	if err != nil {
 		t.Fatalf("failed to create Dechunker: %v", err)
 	}
@@ -255,16 +225,10 @@ func Test_ChunksOutOfOrder(t *testing.T) {
 }
 
 func Test_ReassemblyOfLargeData(t *testing.T) {
-	dir, err := os.MkdirTemp("", "test-*")
-	if err != nil {
-		t.Fatalf("failed to create temp dir: %v", err)
-	}
-
-	d, err := NewDechunker(dir)
+	d, err := NewDechunker(t.TempDir())
 	if err != nil {
 		t.Fatalf("failed to create Dechunker: %v", err)
 	}
-	defer os.Remove(dir)
 
 	// Create a large random dataset.
 	largeData := make([]byte, 2*1024*1024) // 2 MB of data.

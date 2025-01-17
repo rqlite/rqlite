@@ -15,13 +15,7 @@ func Test_ChunkingRoundTrip(t *testing.T) {
 
 	chunker := NewChunker(bytes.NewReader(data), 1024)
 
-	dir, err := os.MkdirTemp("", "test-*")
-	if err != nil {
-		t.Fatalf("failed to create temp dir: %v", err)
-	}
-	defer os.Remove(dir)
-
-	dechunker, err := NewDechunker(dir)
+	dechunker, err := NewDechunker(t.TempDir())
 	if err != nil {
 		t.Fatalf("failed to create Dechunker: %v", err)
 	}
