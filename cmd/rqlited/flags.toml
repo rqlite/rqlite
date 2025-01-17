@@ -50,7 +50,7 @@ cli = "http-allow-origin"
 type = "string"
 short_help = "Value to set for Access-Control-Allow-Origin HTTP header"
 long_help = """
-You usually need to set this if if you're using a browser-based application to interfact with rqlite. You should set it to the the website that is serving the browser-based application e.g. http-allow-origin="https://example.com".
+You usually need to set this if if you're using a browser-based application to interact with rqlite. You should set it to the the website that is serving the browser-based application e.g. http-allow-origin="https://example.com".
 """
 default = ""
 
@@ -87,7 +87,7 @@ cli = "http-ca-cert"
 type = "string"
 short_help = "Path to X.509 CA certificate for HTTPS"
 long_help = """
-If this value is set rqlite will use this CA certificate to validate any other X509 certficate presented to it, if the node needs to contact another node's HTTP API. It also uses this CA to verify any X509 certificates presented to it by clients connecting to its HTTPS API.
+If this value is set rqlite will use this CA certificate to validate any other X509 certificate presented to it, if the node needs to contact another node's HTTP API. It also uses this CA to verify any X509 certificates presented to it by clients connecting to its HTTPS API.
 """
 default = ""
 
@@ -197,7 +197,7 @@ cli = "raft-addr"
 type = "string"
 short_help = "Raft communication bind address"
 long_help = """
-This is the interace rqlite will listen on for connections from other node, as part of managing Raft consensus. 0.0.0.0 is an acceptable address and will mean that `rqlite` will listen on all interfaces.
+This is the interface rqlite will listen on for connections from other node, as part of managing Raft consensus. 0.0.0.0 is an acceptable address and will mean that `rqlite` will listen on all interfaces.
 """
 default = "localhost:4002"
 
@@ -217,7 +217,7 @@ cli = "join"
 type = "string"
 short_help = "Comma-delimited list of nodes, in host:port form, through which a cluster can be joined"
 long_help = """
-The node will try each join addresss, one after the other, until one succeeds or the join-attempt limit is reached.
+The node will try each join address, one after the other, until one succeeds or the join-attempt limit is reached.
 """
 default = ""
 
@@ -384,7 +384,7 @@ cli = "raft-snap-int"
 type = "time.Duration"
 short_help = "Snapshot threshold check interval"
 long_help = """
-This controls how often the Raft subsystem will check if snapshotting is required, either due to the number of oustanding log entries, or due to WAL size.
+This controls how often the Raft subsystem will check if snapshotting is required, either due to the number of outstanding log entries, or due to WAL size.
 """
 default = "10s"
 
