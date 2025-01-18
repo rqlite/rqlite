@@ -1654,6 +1654,8 @@ func (s *Store) Notify(nr *proto.NotifyRequest) error {
 	if len(s.notifyingNodes) < s.BootstrapExpect {
 		return nil
 	}
+	s.logger.Printf("reached expected bootstrap count of %d, starting cluster bootstrap",
+		s.BootstrapExpect)
 
 	raftServers := make([]raft.Server, 0, len(s.notifyingNodes))
 	for _, n := range s.notifyingNodes {
@@ -1662,9 +1664,6 @@ func (s *Store) Notify(nr *proto.NotifyRequest) error {
 			Address: raft.ServerAddress(n.Addr),
 		})
 	}
-
-	s.logger.Printf("reached expected bootstrap count of %d, starting cluster bootstrap",
-		s.BootstrapExpect)
 	bf := s.raft.BootstrapCluster(raft.Configuration{
 		Servers: raftServers,
 	})
