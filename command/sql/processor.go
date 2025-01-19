@@ -11,6 +11,7 @@ import (
 	"github.com/rqlite/rqlite/v8/command/proto"
 	"github.com/rqlite/rqlite/v8/random"
 	"github.com/rqlite/sql"
+	rsql "github.com/rqlite/sql"
 )
 
 // Process processes the given SQL statements, rewriting them if necessary. If
@@ -18,7 +19,12 @@ import (
 // an actual random value. If a statement contains a RETURNING clause, the
 // statement is marked as a query, so that the result set can be returned to the
 // client.
-func Process(stmts []*proto.Statement, rwrand, rwtime bool) error {
+func Process(stmts []*proto.Statement, rwrand, rwtime bool) (retErr error) {
+	defer func() {
+		if r := recover(); r != nil {
+			retErr = fmt.Errorf("panic during SQL processing: %v", r)
+		}
+	}()
 	for i := range stmts {
 		lowered := strings.ToLower(stmts[i].Sql)
 		if (!rwtime || !ContainsTime(lowered)) &&
@@ -26,7 +32,7 @@ func Process(stmts []*proto.Statement, rwrand, rwtime bool) error {
 			!ContainsReturning(lowered) {
 			continue
 		}
-		parsed, err := sql.NewParser(strings.NewReader(stmts[i].Sql)).ParseStatement()
+		parsed, err := rsql.NewParser(strings.NewReader(stmts[i].Sql)).ParseStatement()
 		if err != nil {
 			continue
 		}
