@@ -7,6 +7,210 @@ import (
 	"github.com/rqlite/rqlite/v8/command/proto"
 )
 
+func Test_ContainsTime(t *testing.T) {
+	tests := []struct {
+		name     string
+		stmt     string
+		expected bool
+	}{
+		// Test cases where a time-related function is present
+		{
+			name:     "Contains time function - time()",
+			stmt:     "select time('now')",
+			expected: true,
+		},
+		{
+			name:     "Contains time function - date()",
+			stmt:     "select date('now')",
+			expected: true,
+		},
+		{
+			name:     "Contains time function - datetime()",
+			stmt:     "select datetime('now')",
+			expected: true,
+		},
+		{
+			name:     "Contains time function - julianday()",
+			stmt:     "select julianday('now')",
+			expected: true,
+		},
+		{
+			name:     "Contains time function - unixepoch(",
+			stmt:     "select unixepoch(",
+			expected: true,
+		},
+		{
+			name:     "Contains time function - timediff()",
+			stmt:     "select timediff('2023-01-01', '2022-01-01')",
+			expected: true,
+		},
+		{
+			name:     "Contains strftime function - strftime()",
+			stmt:     "select strftime('2023-01-01', '2022-01-01')",
+			expected: true,
+		},
+
+		// Test cases where no time-related function is present
+		{
+			name:     "No time function - unrelated function",
+			stmt:     "select length('string')",
+			expected: false,
+		},
+		{
+			name:     "No time function - empty statement",
+			stmt:     "",
+			expected: false,
+		},
+		{
+			name:     "No time function - similar but not exact match",
+			stmt:     "select someotherfunction()",
+			expected: false,
+		},
+
+		// Test cases where input may be unexpected
+		{
+			name:     "Edge case - case sensitivity",
+			stmt:     "select Time('now')",
+			expected: false, // Function expects input to be lower-case
+		},
+		{
+			name:     "Edge case - substring match",
+			stmt:     "select sometimedata from table", // Contains "time" as part of a word
+			expected: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := ContainsTime(tt.stmt)
+			if result != tt.expected {
+				t.Errorf("ContainsTime(%q) = %v; want %v", tt.stmt, result, tt.expected)
+			}
+		})
+	}
+}
+
+func Test_ContainsRandom(t *testing.T) {
+	tests := []struct {
+		name     string
+		stmt     string
+		expected bool
+	}{
+		// Test cases where a random-related function is present
+		{
+			name:     "Contains random function - random()",
+			stmt:     "select random()",
+			expected: true,
+		},
+		{
+			name:     "Contains random function - randomblob()",
+			stmt:     "select randomblob(16)",
+			expected: true,
+		},
+
+		// Test cases where no random-related function is present
+		{
+			name:     "No random function - unrelated function",
+			stmt:     "select length('string')",
+			expected: false,
+		},
+		{
+			name:     "No random function - empty statement",
+			stmt:     "",
+			expected: false,
+		},
+		{
+			name:     "No random function - similar but not exact match",
+			stmt:     "select some_random_function()",
+			expected: false,
+		},
+
+		// Test cases where input may be unexpected
+		{
+			name:     "Edge case - case sensitivity",
+			stmt:     "select Random()",
+			expected: false, // Function expects input to be lower-case
+		},
+		{
+			name:     "Edge case - substring match",
+			stmt:     "select somerandomdata from table", // Contains "random" as part of a word
+			expected: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := ContainsRandom(tt.stmt)
+			if result != tt.expected {
+				t.Errorf("ContainsRandom(%q) = %v; want %v", tt.stmt, result, tt.expected)
+			}
+		})
+	}
+}
+
+func Test_ContainsReturning(t *testing.T) {
+	tests := []struct {
+		name     string
+		stmt     string
+		expected bool
+	}{
+		// Test cases where a RETURNING clause is present
+		{
+			name:     "Contains RETURNING clause - simple case",
+			stmt:     "insert into table (col1) values (1) returning col1",
+			expected: true,
+		},
+		{
+			name:     "Contains RETURNING clause - middle of statement",
+			stmt:     "update table set col1 = 2 returning col1, col2",
+			expected: true,
+		},
+		{
+			name:     "Contains RETURNING clause - at the end",
+			stmt:     "delete from table returning *",
+			expected: true,
+		},
+
+		// Test cases where no RETURNING clause is present
+		{
+			name:     "No RETURNING clause - unrelated statement",
+			stmt:     "select * from table",
+			expected: false,
+		},
+		{
+			name:     "No RETURNING clause - empty statement",
+			stmt:     "",
+			expected: false,
+		},
+		{
+			name:     "No RETURNING clause - substring but not clause",
+			stmt:     "select something from table where returning_value = 1",
+			expected: false,
+		},
+
+		// Test cases where input may be unexpected
+		{
+			name:     "Edge case - case sensitivity",
+			stmt:     "insert into table Returning Col1",
+			expected: false, // Function assumes lower-case input
+		},
+		{
+			name:     "Edge case - no trailing space",
+			stmt:     "some text containing returninglike",
+			expected: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := ContainsReturning(tt.stmt)
+			if result != tt.expected {
+				t.Errorf("ContainsReturning(%q) = %v; want %v", tt.stmt, result, tt.expected)
+			}
+		})
+	}
+}
+
 func Test_RANDOM_NoRewrites(t *testing.T) {
 	for _, str := range []string{
 		`INSERT INTO "names" VALUES (1, 'bob', '123-45-678')`,
@@ -60,7 +264,7 @@ func Test_RANDOM_NoRewritesMulti(t *testing.T) {
 
 func Test_RANDOM_Rewrites(t *testing.T) {
 	testSQLs := []string{
-		`INSERT INTO "names" VALUES (1, 'bob', '123-45-678')`, `INSERT INTO "names" VALUES \(1, 'bob', '123-45-678'\)`,
+		`INSERT INTO "names" VALUES (1, 'ann', '123-45-678')`, `INSERT INTO "names" VALUES \(1, 'ann', '123-45-678'\)`,
 		`INSERT INTO "names" VALUES (RANDOM(), 'bob', '123-45-678')`, `INSERT INTO "names" VALUES \(-?[0-9]+, 'bob', '123-45-678'\)`,
 		`SELECT title FROM albums ORDER BY RANDOM()`, `SELECT title FROM albums ORDER BY RANDOM\(\)`,
 		`SELECT random()`, `SELECT -?[0-9]+`,
