@@ -21,9 +21,9 @@ import (
 func Process(stmts []*proto.Statement, rwrand, rwtime bool) error {
 	for i := range stmts {
 		lowered := strings.ToLower(stmts[i].Sql)
-		if (!rwtime || !containsTime(lowered)) &&
-			(!rwrand || !containsRandom(lowered)) &&
-			!containsReturning(lowered) {
+		if (!rwtime || !ContainsTime(lowered)) &&
+			(!rwrand || !ContainsRandom(lowered)) &&
+			!ContainsReturning(lowered) {
 			continue
 		}
 		parsed, err := sql.NewParser(strings.NewReader(stmts[i].Sql)).ParseStatement()
@@ -46,7 +46,10 @@ func Process(stmts []*proto.Statement, rwrand, rwtime bool) error {
 	return nil
 }
 
-func containsTime(stmt string) bool {
+// ContainsTime returns true if the statement contains a time-related function.
+// The function performs a lower-case comparison so it is up to the caller to
+// ensure the statement is lower-cased.
+func ContainsTime(stmt string) bool {
 	targets := []string{"time(", "date(", "julianday(", "unixepoch(", "timediff("}
 	for _, target := range targets {
 		if strings.Contains(stmt, target) {
@@ -56,7 +59,10 @@ func containsTime(stmt string) bool {
 	return false
 }
 
-func containsRandom(stmt string) bool {
+// ContainsRandom returns true if the statement contains a random-related function.
+// The function performs a lower-case comparison so it is up to the caller to
+// ensure the statement is lower-cased.
+func ContainsRandom(stmt string) bool {
 	targets := []string{"random(", "randomblob("}
 	for _, target := range targets {
 		if strings.Contains(stmt, target) {
@@ -66,8 +72,11 @@ func containsRandom(stmt string) bool {
 	return false
 }
 
-func containsReturning(stmt string) bool {
-	return strings.Contains(stmt, "returning")
+// ContainsReturning returns true if the statement contains a RETURNING clause.
+// The function performs a lower-case comparison so it is up to the caller to
+// ensure the statement is lower-cased.
+func ContainsReturning(stmt string) bool {
+	return strings.Contains(stmt, "returning ")
 }
 
 // Rewriter rewrites SQL statements.
