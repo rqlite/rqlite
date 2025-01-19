@@ -16,7 +16,8 @@ import (
 )
 
 const (
-	numParserPanics = "num_parser_panics"
+	numRewrittenStmts = "num_rewritten_stmts"
+	numParserPanics   = "num_parser_panics"
 )
 
 // stats captures stats for the SQL processor.
@@ -30,6 +31,7 @@ func init() {
 // ResetStats resets the expvar stats for this module. Mostly for test purposes.
 func ResetStats() {
 	stats.Init()
+	stats.Add(numRewrittenStmts, 0)
 	stats.Add(numParserPanics, 0)
 }
 
@@ -65,6 +67,7 @@ func Process(stmts []*proto.Statement, rwrand, rwtime bool) (retErr error) {
 		}
 
 		if rewritten {
+			stats.Add(numRewrittenStmts, 1)
 			stmts[i].Sql = rwStmt.String()
 		}
 		stmts[i].ForceQuery = ret
