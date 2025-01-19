@@ -1,6 +1,7 @@
 ## v8.36.6 (unreleased)
 ### Implementation changes and bug fixes
 - [PR #2022](https://github.com/rqlite/rqlite/pull/2022): Simplify some testing by using `t.TempDir()`. Thanks @alexandear.
+- [PR #2021](https://github.com/rqlite/rqlite/pull/2021): Fix typos in Help strings. Thanks @alexandear.
 
 ## v8.36.5 (January 11th 2025)
 ### Implementation changes and bug fixes
