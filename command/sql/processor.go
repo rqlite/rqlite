@@ -25,14 +25,14 @@ func Process(stmts []*proto.Statement, rwrand, rwtime bool) error {
 			// RETURNING clause, so there's nothing to do.
 			continue
 		}
-		stmt, err := sql.NewParser(strings.NewReader(stmts[i].Sql)).ParseStatement()
+		parsed, err := sql.NewParser(strings.NewReader(stmts[i].Sql)).ParseStatement()
 		if err != nil {
 			continue
 		}
 		rewriter := NewRewriter()
 		rewriter.RewriteRand = rwrand
 		rewriter.RewriteTime = rwtime
-		rwStmt, rewritten, ret, err := rewriter.Do(stmt)
+		rwStmt, rewritten, ret, err := rewriter.Do(parsed)
 		if err != nil {
 			continue
 		}
