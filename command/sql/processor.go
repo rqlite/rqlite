@@ -1,6 +1,7 @@
 package sql
 
 import (
+	"expvar"
 	"fmt"
 	"math"
 	"math/rand"
@@ -14,6 +15,24 @@ import (
 	rsql "github.com/rqlite/sql"
 )
 
+const (
+	numParserPanics = "num_parser_panics"
+)
+
+// stats captures stats for the SQL processor.
+var stats *expvar.Map
+
+func init() {
+	stats = expvar.NewMap("sql-processor")
+	ResetStats()
+}
+
+// ResetStats resets the expvar stats for this module. Mostly for test purposes.
+func ResetStats() {
+	stats.Init()
+	stats.Add(numParserPanics, 0)
+}
+
 // Process processes the given SQL statements, rewriting them if necessary. If
 // random-rewriting is enabled, calls to the RANDOM() function are replaced with
 // an actual random value. If a statement contains a RETURNING clause, the
@@ -22,6 +41,7 @@ import (
 func Process(stmts []*proto.Statement, rwrand, rwtime bool) (retErr error) {
 	defer func() {
 		if r := recover(); r != nil {
+			stats.Add(numParserPanics, 1)
 			retErr = fmt.Errorf("panic during SQL processing: %v", r)
 		}
 	}()
