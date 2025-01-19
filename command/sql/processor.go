@@ -1,6 +1,7 @@
 package sql
 
 import (
+	"expvar"
 	"fmt"
 	"math"
 	"math/rand"
@@ -11,14 +12,41 @@ import (
 	"github.com/rqlite/rqlite/v8/command/proto"
 	"github.com/rqlite/rqlite/v8/random"
 	"github.com/rqlite/sql"
+	rsql "github.com/rqlite/sql"
 )
+
+const (
+	numRewrittenStmts = "num_rewritten_stmts"
+	numParserPanics   = "num_parser_panics"
+)
+
+// stats captures stats for the SQL processor.
+var stats *expvar.Map
+
+func init() {
+	stats = expvar.NewMap("sql-processor")
+	ResetStats()
+}
+
+// ResetStats resets the expvar stats for this module. Mostly for test purposes.
+func ResetStats() {
+	stats.Init()
+	stats.Add(numRewrittenStmts, 0)
+	stats.Add(numParserPanics, 0)
+}
 
 // Process processes the given SQL statements, rewriting them if necessary. If
 // random-rewriting is enabled, calls to the RANDOM() function are replaced with
 // an actual random value. If a statement contains a RETURNING clause, the
 // statement is marked as a query, so that the result set can be returned to the
 // client.
-func Process(stmts []*proto.Statement, rwrand, rwtime bool) error {
+func Process(stmts []*proto.Statement, rwrand, rwtime bool) (retErr error) {
+	defer func() {
+		if r := recover(); r != nil {
+			stats.Add(numParserPanics, 1)
+			retErr = fmt.Errorf("panic during SQL processing: %v", r)
+		}
+	}()
 	for i := range stmts {
 		lowered := strings.ToLower(stmts[i].Sql)
 		if (!rwtime || !ContainsTime(lowered)) &&
@@ -26,7 +54,7 @@ func Process(stmts []*proto.Statement, rwrand, rwtime bool) error {
 			!ContainsReturning(lowered) {
 			continue
 		}
-		parsed, err := sql.NewParser(strings.NewReader(stmts[i].Sql)).ParseStatement()
+		parsed, err := rsql.NewParser(strings.NewReader(stmts[i].Sql)).ParseStatement()
 		if err != nil {
 			continue
 		}
@@ -39,6 +67,7 @@ func Process(stmts []*proto.Statement, rwrand, rwtime bool) error {
 		}
 
 		if rewritten {
+			stats.Add(numRewrittenStmts, 1)
 			stmts[i].Sql = rwStmt.String()
 		}
 		stmts[i].ForceQuery = ret
