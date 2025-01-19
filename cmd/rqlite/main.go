@@ -70,7 +70,7 @@ func init() {
 		`.restore FILE                                 Load using SQLite file or SQL dump contained in FILE`,
 		`.nodes [all]                                  Show connection status of voting nodes. 'all' to show all nodes`,
 		`.schema                                       Show CREATE statements for all tables`,
-		`.snapshot                                     Request a Raft snapshot and log trunction on connected node`,
+		`.snapshot                                     Request a Raft snapshot and log truncation on connected node`,
 		`.status                                       Show status and diagnostic information for connected node`,
 		`.sysdump FILE                                 Dump system diagnostics to FILE`,
 		`.tables                                       List names of tables`,
