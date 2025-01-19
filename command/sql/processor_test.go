@@ -60,7 +60,7 @@ func Test_RANDOM_NoRewritesMulti(t *testing.T) {
 
 func Test_RANDOM_Rewrites(t *testing.T) {
 	testSQLs := []string{
-		`INSERT INTO "names" VALUES (1, 'bob', '123-45-678')`, `INSERT INTO "names" VALUES \(1, 'bob', '123-45-678'\)`,
+		`INSERT INTO "names" VALUES (1, 'ann', '123-45-678')`, `INSERT INTO "names" VALUES \(1, 'ann', '123-45-678'\)`,
 		`INSERT INTO "names" VALUES (RANDOM(), 'bob', '123-45-678')`, `INSERT INTO "names" VALUES \(-?[0-9]+, 'bob', '123-45-678'\)`,
 		`SELECT title FROM albums ORDER BY RANDOM()`, `SELECT title FROM albums ORDER BY RANDOM\(\)`,
 		`SELECT random()`, `SELECT -?[0-9]+`,
