@@ -2,6 +2,7 @@ package db
 
 import (
 	"os"
+	"reflect"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -66,6 +67,12 @@ func Test_Preupdate_Basic(t *testing.T) {
 		t.Fatalf("expected count %d, got %d", exp, got)
 	}
 	mustExecute(db, "DELETE FROM foo")
+	if count.Load() != 13 {
+		t.Fatalf("expected count 13, got %d", count.Load())
+	}
+
+	// Create table shouldn't trigger the hook.
+	mustExecute(db, "CREATE TABLE bar (id INTEGER PRIMARY KEY, name TEXT)")
 	if count.Load() != 13 {
 		t.Fatalf("expected count 13, got %d", count.Load())
 	}
@@ -232,35 +239,26 @@ func Test_Preupdate_Data(t *testing.T) {
 	defer db.Close()
 	mustExecute(db, "CREATE TABLE foo (id INTEGER PRIMARY KEY, name TEXT UNIQUE, age float)")
 
+	/////////////////////////////////////////////////////////////////
 	// Insert a row, with an explicit ID.
 	var wg sync.WaitGroup
-	hook := func(ev *command.CDCEvent) error {
+	hook := func(got *command.CDCEvent) error {
 		defer wg.Done()
-		if ev.Table != "foo" {
-			t.Fatalf("expected table foo, got %s", ev.Table)
+		exp := &command.CDCEvent{
+			Table:    "foo",
+			Op:       command.CDCEvent_INSERT,
+			OldRowId: 5,
+			NewRowId: 5,
+			OldRow:   nil,
+			NewRow: &command.CDCRow{
+				Values: []*command.CDCValue{
+					{Value: &command.CDCValue_I{I: 5}},
+					{Value: &command.CDCValue_S{S: "fiona"}},
+					{Value: &command.CDCValue_D{D: 2.4}},
+				},
+			},
 		}
-		if ev.Op != command.CDCEvent_INSERT {
-			t.Fatalf("expected operation insert, got %s", ev.Op)
-		}
-
-		if ev.OldRow != nil {
-			t.Fatalf("expected no old row")
-		}
-		if ev.NewRow == nil {
-			t.Fatalf("expected new row")
-		}
-		if len(ev.NewRow.Values) != 3 {
-			t.Fatalf("expected 3 values, got %d", len(ev.NewRow.Values))
-		}
-		if exp, got := int64(5), ev.NewRow.Values[0].GetI(); exp != got {
-			t.Fatalf("expected id %d, got %d", exp, got)
-		}
-		if exp, got := "fiona", ev.NewRow.Values[1].GetS(); exp != got {
-			t.Fatalf("expected name %s, got %s", exp, got)
-		}
-		if exp, got := 2.4, ev.NewRow.Values[2].GetD(); exp != got {
-			t.Fatalf("expected age %f, got %f", exp, got)
-		}
+		compareEvents(t, exp, got)
 		return nil
 	}
 	if err := db.RegisterPreUpdateHook(hook, false); err != nil {
@@ -270,34 +268,25 @@ func Test_Preupdate_Data(t *testing.T) {
 	mustExecute(db, "INSERT INTO foo(id, name, age) VALUES(5, 'fiona', 2.4)")
 	wg.Wait()
 
+	/////////////////////////////////////////////////////////////////
 	// Insert a row, adding subset of columns
-	hook = func(ev *command.CDCEvent) error {
+	hook = func(got *command.CDCEvent) error {
 		defer wg.Done()
-		if ev.Table != "foo" {
-			t.Fatalf("expected table foo, got %s", ev.Table)
+		exp := &command.CDCEvent{
+			Table:    "foo",
+			Op:       command.CDCEvent_INSERT,
+			OldRowId: 6,
+			NewRowId: 6,
+			OldRow:   nil,
+			NewRow: &command.CDCRow{
+				Values: []*command.CDCValue{
+					{Value: &command.CDCValue_I{I: 6}},
+					nil,
+					{Value: &command.CDCValue_D{D: 3.7}},
+				},
+			},
 		}
-		if ev.Op != command.CDCEvent_INSERT {
-			t.Fatalf("expected operation insert, got %s", ev.Op)
-		}
-
-		if ev.OldRow != nil {
-			t.Fatalf("expected no old row")
-		}
-		if ev.NewRow == nil {
-			t.Fatalf("expected new row")
-		}
-		if len(ev.NewRow.Values) != 3 {
-			t.Fatalf("expected 3 values, got %d", len(ev.NewRow.Values))
-		}
-		if exp, got := int64(6), ev.NewRow.Values[0].GetI(); exp != got {
-			t.Fatalf("expected id %d, got %d", exp, got)
-		}
-		if exp, got := "", ev.NewRow.Values[1].GetS(); exp != got {
-			t.Fatalf("expected name %s, got %s", exp, got)
-		}
-		if exp, got := 3.7, ev.NewRow.Values[2].GetD(); exp != got {
-			t.Fatalf("expected age %f, got %f", exp, got)
-		}
+		compareEvents(t, exp, got)
 		return nil
 	}
 	if err := db.RegisterPreUpdateHook(hook, false); err != nil {
@@ -307,47 +296,31 @@ func Test_Preupdate_Data(t *testing.T) {
 	mustExecute(db, "INSERT INTO foo(id, age) VALUES(6, 3.7)")
 	wg.Wait()
 
+	/////////////////////////////////////////////////////////////////
 	// Update a row.
-	hook = func(ev *command.CDCEvent) error {
+	hook = func(got *command.CDCEvent) error {
 		defer wg.Done()
-		if ev.Table != "foo" {
-			t.Fatalf("expected table foo, got %s", ev.Table)
+		exp := &command.CDCEvent{
+			Table:    "foo",
+			Op:       command.CDCEvent_UPDATE,
+			OldRowId: 5,
+			NewRowId: 5,
+			OldRow: &command.CDCRow{
+				Values: []*command.CDCValue{
+					{Value: &command.CDCValue_I{I: 5}},
+					{Value: &command.CDCValue_S{S: "fiona"}},
+					{Value: &command.CDCValue_D{D: 2.4}},
+				},
+			},
+			NewRow: &command.CDCRow{
+				Values: []*command.CDCValue{
+					{Value: &command.CDCValue_I{I: 5}},
+					{Value: &command.CDCValue_S{S: "fiona2"}},
+					{Value: &command.CDCValue_D{D: 2.4}},
+				},
+			},
 		}
-		if ev.Op != command.CDCEvent_UPDATE {
-			t.Fatalf("expected operation update, got %s", ev.Op)
-		}
-
-		if ev.OldRow == nil {
-			t.Fatalf("expected old row")
-		}
-		if len(ev.OldRow.Values) != 3 {
-			t.Fatalf("expected 3 values, got %d", len(ev.OldRow.Values))
-		}
-		if exp, got := int64(5), ev.OldRow.Values[0].GetI(); exp != got {
-			t.Fatalf("expected id %d, got %d", exp, got)
-		}
-		if exp, got := "fiona", ev.OldRow.Values[1].GetS(); exp != got {
-			t.Fatalf("expected name %s, got %s", exp, got)
-		}
-		if exp, got := 2.4, ev.OldRow.Values[2].GetD(); exp != got {
-			t.Fatalf("expected age %f, got %f", exp, got)
-		}
-
-		if ev.NewRow == nil {
-			t.Fatalf("expected new row")
-		}
-		if len(ev.NewRow.Values) != 3 {
-			t.Fatalf("expected 3 values, got %d", len(ev.NewRow.Values))
-		}
-		if exp, got := int64(5), ev.NewRow.Values[0].GetI(); exp != got {
-			t.Fatalf("expected id %d, got %d", exp, got)
-		}
-		if exp, got := "fiona2", ev.NewRow.Values[1].GetS(); exp != got {
-			t.Fatalf("expected name %s, got %s", exp, got)
-		}
-		if exp, got := 2.4, ev.NewRow.Values[2].GetD(); exp != got {
-			t.Fatalf("expected age %f, got %f", exp, got)
-		}
+		compareEvents(t, exp, got)
 		return nil
 	}
 	if err := db.RegisterPreUpdateHook(hook, false); err != nil {
@@ -358,33 +331,23 @@ func Test_Preupdate_Data(t *testing.T) {
 	wg.Wait()
 
 	// Delete a row.
-	hook = func(ev *command.CDCEvent) error {
+	hook = func(got *command.CDCEvent) error {
 		defer wg.Done()
-		if ev.Table != "foo" {
-			t.Fatalf("expected table foo, got %s", ev.Table)
+		exp := &command.CDCEvent{
+			Table:    "foo",
+			Op:       command.CDCEvent_DELETE,
+			OldRowId: 5,
+			NewRowId: 5,
+			OldRow: &command.CDCRow{
+				Values: []*command.CDCValue{
+					{Value: &command.CDCValue_I{I: 5}},
+					{Value: &command.CDCValue_S{S: "fiona2"}},
+					{Value: &command.CDCValue_D{D: 2.4}},
+				},
+			},
+			NewRow: nil,
 		}
-		if ev.Op != command.CDCEvent_DELETE {
-			t.Fatalf("expected operation delete, got %s", ev.Op)
-		}
-
-		if ev.OldRow == nil {
-			t.Fatalf("expected old row")
-		}
-		if len(ev.OldRow.Values) != 3 {
-			t.Fatalf("expected 3 values, got %d", len(ev.OldRow.Values))
-		}
-		if exp, got := int64(5), ev.OldRow.Values[0].GetI(); exp != got {
-			t.Fatalf("expected id %d, got %d", exp, got)
-		}
-		if exp, got := "fiona2", ev.OldRow.Values[1].GetS(); exp != got {
-			t.Fatalf("expected name %s, got %s", exp, got)
-		}
-		if exp, got := 2.4, ev.OldRow.Values[2].GetD(); exp != got {
-			t.Fatalf("expected age %f, got %f", exp, got)
-		}
-		if ev.NewRow != nil {
-			t.Fatalf("expected no new row")
-		}
+		compareEvents(t, exp, got)
 		return nil
 	}
 	if err := db.RegisterPreUpdateHook(hook, false); err != nil {
@@ -393,4 +356,59 @@ func Test_Preupdate_Data(t *testing.T) {
 	wg.Add(1)
 	mustExecute(db, "DELETE FROM foo WHERE id=5")
 	wg.Wait()
+}
+
+func compareEvents(t *testing.T, exp, got *command.CDCEvent) {
+	t.Helper()
+	if exp, got := exp.Table, got.Table; exp != got {
+		t.Fatalf("expected table %s, got %s", exp, got)
+	}
+	if exp, got := exp.Op, got.Op; exp != got {
+		t.Fatalf("expected operation %s, got %s", exp, got)
+	}
+
+	if exp, got := exp.OldRowId, got.OldRowId; exp != got {
+		t.Fatalf("expected old Row ID %d, got %d", exp, got)
+	}
+	if exp, got := exp.NewRowId, got.NewRowId; exp != got {
+		t.Fatalf("expected new Row ID %d, got %d", exp, got)
+	}
+
+	if exp.OldRow == nil && got.OldRow != nil {
+		t.Fatalf("exp old row is nil, but got non-nil old row")
+	}
+	if exp.NewRow == nil && got.NewRow != nil {
+		t.Fatalf("exp new row is nil, but got non-nil new row")
+	}
+
+	if exp.OldRow != nil && got.OldRow == nil {
+		t.Fatalf("exp old row is not nil, but got nil old row")
+	}
+	if exp.NewRow != nil && got.NewRow == nil {
+		t.Fatalf("exp new row is not nil, but got nil new row")
+	}
+
+	if exp.OldRow != nil {
+		if exp, got := len(exp.OldRow.Values), len(got.OldRow.Values); exp != got {
+			t.Fatalf("exp %d old values, got %d values", exp, got)
+		}
+		for i := range exp.OldRow.Values {
+			if !reflect.DeepEqual(exp.OldRow.Values[i], got.OldRow.Values[i]) {
+				t.Fatalf("exp old value at index %d (%v) does not equal got old value at index %d (%v)",
+					i, exp.OldRow.Values[i], i, got.OldRow.Values[i])
+			}
+		}
+	}
+	if exp.NewRow != nil {
+		if exp, got := len(exp.NewRow.Values), len(got.NewRow.Values); exp != got {
+			t.Fatalf("exp %d new values, got %d values", exp, got)
+		}
+		for i := range exp.NewRow.Values {
+			if !reflect.DeepEqual(exp.NewRow.Values[i], got.NewRow.Values[i]) {
+				t.Fatalf("exp new value at index %d (%v) does not equal got new value at index %d (%v)",
+					i, exp.NewRow.Values[i], i, got.NewRow.Values[i])
+			}
+		}
+	}
+
 }
