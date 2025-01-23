@@ -239,6 +239,53 @@ func OpenWithDriver(drv *Driver, dbPath string, fkEnabled, wal bool) (retDB *DB,
 	}, nil
 }
 
+// PreUpdateHookCallback is a callback function that is called before a row is modified
+// in the database.
+type PreUpdateHookCallback func(pb *command.CDCEvent) error
+
+// RegisterPreUpdateHook registers a callback that is called before a row is modified
+// in the database. If rowIDOnly is true, only the row ID details are passed to the
+// callback. If a callback is already registered, it is replaced. If hook is nil, the
+// callback is removed.
+func (db *DB) RegisterPreUpdateHook(hook PreUpdateHookCallback, rowIDOnly bool) error {
+	var cb func(d sqlite3.SQLitePreUpdateData)
+	if hook != nil {
+		cb = func(d sqlite3.SQLitePreUpdateData) {
+			pb := &command.CDCEvent{
+				Table:    d.TableName,
+				OldRowId: d.OldRowID,
+				NewRowId: d.NewRowID,
+			}
+			switch d.Op {
+			case sqlite3.SQLITE_INSERT:
+				pb.Op = command.CDCEvent_INSERT
+			case sqlite3.SQLITE_UPDATE:
+				pb.Op = command.CDCEvent_UPDATE
+			case sqlite3.SQLITE_DELETE:
+				pb.Op = command.CDCEvent_DELETE
+			default:
+				panic(fmt.Sprintf("unknown preupate hook operation %d", d.Op))
+			}
+			hook(pb)
+		}
+	}
+	f := func(driverConn interface{}) error {
+		conn := driverConn.(*sqlite3.SQLiteConn)
+		conn.RegisterPreUpdateHook(cb)
+		return nil
+	}
+
+	conn, err := db.rwDB.Conn(context.Background())
+	if err != nil {
+		return err
+	}
+	defer conn.Close()
+	if err := conn.Raw(f); err != nil {
+		return err
+	}
+	return nil
+}
+
 // LastModified returns the last modified time of the database file, or the WAL file,
 // whichever is most recent.
 func (db *DB) LastModified() (time.Time, error) {

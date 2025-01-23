@@ -141,3 +141,32 @@ message Command {
     bytes sub_command = 2;
     bool compressed = 3;
 }
+
+message CDCValue {
+	oneof value {
+		sint64 i = 1;
+		double d = 2;
+		bool b = 3;
+		bytes y = 4;
+		string s = 5;
+	}
+}
+
+message CDCRow {
+	repeated CDCValue fields = 1;
+}
+
+message CDCEvent {
+	enum Operation {
+		UNKNOWN = 0;
+		INSERT = 1;
+		UPDATE = 2;
+		DELETE = 3;
+	}
+	Operation op = 1;
+	string table = 2;
+	int64 old_row_id = 3;
+	int64 new_row_id = 4;
+	CDCRow old_raw = 5;
+	CDCRow new_row = 6;
+}
