@@ -4,6 +4,7 @@
 - [PR #2030](https://github.com/rqlite/rqlite/pull/2030), [PR #2031](https://github.com/rqlite/rqlite/pull/2031): Improve preupdate hook stats and error handling.
 - [PR #2032](https://github.com/rqlite/rqlite/pull/2032): Support preupdate hook for row ID values only.
 - [PR #2033](https://github.com/rqlite/rqlite/pull/2033): Preupdate hook complex data testing.
+- [PR #2034](https://github.com/rqlite/rqlite/pull/2034): Fix CLI panic when no hosts are available.
 
 ## v8.36.6 (January 19th 2025)
 ### Implementation changes and bug fixes
