@@ -59,12 +59,22 @@ func Test_Preupdate_Basic(t *testing.T) {
 		t.Fatalf("expected count 8, got %d", count.Load())
 	}
 
+	// Delete all rows, make sure the hook is triggered 5 times.
+	r := mustQuery(db, "SELECT COUNT(*) FROM foo")
+	if exp, got := int64(5), r[0].Values[0].Parameters[0].GetI(); exp != got {
+		t.Fatalf("expected count %d, got %d", exp, got)
+	}
+	mustExecute(db, "DELETE FROM foo")
+	if count.Load() != 13 {
+		t.Fatalf("expected count 13, got %d", count.Load())
+	}
+
 	// Unregister the hook, insert a row, and make sure the hook is not triggered.
 	if err := db.RegisterPreUpdateHook(nil); err != nil {
 		t.Fatalf("error unregistering preupdate hook")
 	}
 	mustExecute(db, "INSERT INTO foo(name) VALUES('fiona')")
-	if count.Load() != 8 {
+	if count.Load() != 13 {
 		t.Fatalf("expected count 8, got %d", count.Load())
 	}
 }
