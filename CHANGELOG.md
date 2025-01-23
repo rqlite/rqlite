@@ -1,4 +1,4 @@
-### v8.36.7 (unreleased)
+## v8.36.7 (unreleased)
 ### Implementation changes and bug fixes
 - [PR #2029](https://github.com/rqlite/rqlite/pull/2029): Add basic preupdate hook support at database level.
 - [PR #2030](https://github.com/rqlite/rqlite/pull/2030): Improve preupdate hook stats and error handling.
