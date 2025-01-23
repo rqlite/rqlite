@@ -269,6 +269,34 @@ func Test_Preupdate_Data(t *testing.T) {
 	wg.Wait()
 
 	/////////////////////////////////////////////////////////////////
+	// Insert a row with more complex data
+	hook = func(got *command.CDCEvent) error {
+		defer wg.Done()
+		exp := &command.CDCEvent{
+			Table:    "foo",
+			Op:       command.CDCEvent_INSERT,
+			OldRowId: 20,
+			NewRowId: 20,
+			OldRow:   nil,
+			NewRow: &command.CDCRow{
+				Values: []*command.CDCValue{
+					{Value: &command.CDCValue_I{I: 20}},
+					{Value: &command.CDCValue_S{S: "😃💁 People 大鹿"}},
+					{Value: &command.CDCValue_D{D: 1.23}},
+				},
+			},
+		}
+		compareEvents(t, exp, got)
+		return nil
+	}
+	if err := db.RegisterPreUpdateHook(hook, false); err != nil {
+		t.Fatalf("error registering preupdate hook")
+	}
+	wg.Add(1)
+	mustExecute(db, "INSERT INTO foo(id, name, age) VALUES(20, '😃💁 People 大鹿', 1.23)")
+	wg.Wait()
+
+	/////////////////////////////////////////////////////////////////
 	// Insert a row, adding subset of columns
 	hook = func(got *command.CDCEvent) error {
 		defer wg.Done()
