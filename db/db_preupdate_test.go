@@ -128,6 +128,13 @@ func Test_Preupdate_Data(t *testing.T) {
 	var wg sync.WaitGroup
 	hook := func(ev *command.CDCEvent) {
 		defer wg.Done()
+		if ev.Table != "foo" {
+			t.Fatalf("expected table foo, got %s", ev.Table)
+		}
+		if ev.Op != command.CDCEvent_INSERT {
+			t.Fatalf("expected operation insert, got %s", ev.Op)
+		}
+
 		if ev.OldRow != nil {
 			t.Fatalf("expected no old row")
 		}
@@ -157,6 +164,13 @@ func Test_Preupdate_Data(t *testing.T) {
 	// Update a row.
 	hook = func(ev *command.CDCEvent) {
 		defer wg.Done()
+		if ev.Table != "foo" {
+			t.Fatalf("expected table foo, got %s", ev.Table)
+		}
+		if ev.Op != command.CDCEvent_UPDATE {
+			t.Fatalf("expected operation update, got %s", ev.Op)
+		}
+
 		if ev.OldRow == nil {
 			t.Fatalf("expected old row")
 		}
@@ -199,6 +213,13 @@ func Test_Preupdate_Data(t *testing.T) {
 	// Delete a row.
 	hook = func(ev *command.CDCEvent) {
 		defer wg.Done()
+		if ev.Table != "foo" {
+			t.Fatalf("expected table foo, got %s", ev.Table)
+		}
+		if ev.Op != command.CDCEvent_DELETE {
+			t.Fatalf("expected operation delete, got %s", ev.Op)
+		}
+
 		if ev.OldRow == nil {
 			t.Fatalf("expected old row")
 		}
