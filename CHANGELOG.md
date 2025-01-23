@@ -1,5 +1,5 @@
 ## v8.36.8 (January 23rd 2025)
-There are no changes in this release relative to v8.36.7, but the release process now pins the version of operating system which builds the release. The latest Ubuntu image is [failing to compile](https://github.com/rqlite/rqlite/actions/runs/12931997973/job/36074588013) some required C code.
+There are no changes in this release relative to v8.36.7, but the release process now pins the version of operating system which builds the release. [`gcc` is crashing during compilation](https://github.com/rqlite/rqlite/actions/runs/12931997973/job/36074588013#step:7:836) on the latest Ubuntu image.
 
 ## v8.36.7 (January 23rd 2025)
 ### Implementation changes and bug fixes
