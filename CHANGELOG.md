@@ -1,3 +1,7 @@
+### v8.36.7 (unreleased)
+### Implementation changes and bug fixes
+- [PR #2029](https://github.com/rqlite/rqlite/pull/2029): Add basic preupdate hook support at database level.
+
 ## v8.36.6 (January 19th 2025)
 ### Implementation changes and bug fixes
 - [PR #2022](https://github.com/rqlite/rqlite/pull/2022): Simplify some testing by using `t.TempDir()`. Thanks @alexandear.
