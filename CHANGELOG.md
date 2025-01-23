@@ -3,6 +3,7 @@
 - [PR #2029](https://github.com/rqlite/rqlite/pull/2029): Add basic preupdate hook support at database level.
 - [PR #2030](https://github.com/rqlite/rqlite/pull/2030), [PR #2031](https://github.com/rqlite/rqlite/pull/2031): Improve preupdate hook stats and error handling.
 - [PR #2032](https://github.com/rqlite/rqlite/pull/2032): Support preupdate hook for row ID values only.
+- [PR #2033](https://github.com/rqlite/rqlite/pull/2033): Preupdate hook complex data testing.
 
 ## v8.36.6 (January 19th 2025)
 ### Implementation changes and bug fixes
