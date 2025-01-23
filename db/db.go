@@ -239,6 +239,78 @@ func OpenWithDriver(drv *Driver, dbPath string, fkEnabled, wal bool) (retDB *DB,
 	}, nil
 }
 
+// PreUpdateHookCallback is a callback function that is called before a row is modified
+// in the database.
+type PreUpdateHookCallback func(ev *command.CDCEvent)
+
+// RegisterPreUpdateHook registers a callback that is called before a row is modified
+// in the database. If rowIDOnly is true, only the row ID details are passed to the
+// callback. If a callback is already registered, it is replaced. If hook is nil, the
+// callback is removed.
+func (db *DB) RegisterPreUpdateHook(hook PreUpdateHookCallback) error {
+	var cb func(d sqlite3.SQLitePreUpdateData)
+	if hook != nil {
+		cb = func(d sqlite3.SQLitePreUpdateData) {
+			pb := &command.CDCEvent{
+				Table:    d.TableName,
+				OldRowId: d.OldRowID,
+				NewRowId: d.NewRowID,
+			}
+			switch d.Op {
+			case sqlite3.SQLITE_INSERT:
+				pb.Op = command.CDCEvent_INSERT
+			case sqlite3.SQLITE_UPDATE:
+				pb.Op = command.CDCEvent_UPDATE
+			case sqlite3.SQLITE_DELETE:
+				pb.Op = command.CDCEvent_DELETE
+			default:
+				pb.Error = fmt.Sprintf("unknown preupdate hook operation %d", d.Op)
+			}
+			c := d.Count()
+
+			oldRow := make([]any, c)
+			if d.Op != sqlite3.SQLITE_INSERT {
+				err := d.Old(oldRow...)
+				if err != nil {
+					pb.Error = fmt.Sprintf("failed to get old row data: %s", err.Error())
+				}
+				pb.OldRow, err = normalizeCDCValues(oldRow)
+				if err != nil {
+					pb.Error = fmt.Sprintf("failed to normalize old row data: %s", err.Error())
+				}
+			}
+
+			newRow := make([]any, c)
+			if d.Op != sqlite3.SQLITE_DELETE {
+				err := d.New(newRow...)
+				if err != nil {
+					pb.Error = fmt.Sprintf("failed to get new row data: %s", err.Error())
+				}
+				pb.NewRow, err = normalizeCDCValues(newRow)
+				if err != nil {
+					pb.Error = fmt.Sprintf("failed to normalize new row data: %s", err.Error())
+				}
+			}
+			hook(pb)
+		}
+	}
+	f := func(driverConn interface{}) error {
+		conn := driverConn.(*sqlite3.SQLiteConn)
+		conn.RegisterPreUpdateHook(cb)
+		return nil
+	}
+
+	conn, err := db.rwDB.Conn(context.Background())
+	if err != nil {
+		return err
+	}
+	defer conn.Close()
+	if err := conn.Raw(f); err != nil {
+		return err
+	}
+	return nil
+}
+
 // LastModified returns the last modified time of the database file, or the WAL file,
 // whichever is most recent.
 func (db *DB) LastModified() (time.Time, error) {
@@ -1542,6 +1614,74 @@ func normalizeRowParameters(row []interface{}, types []string) ([]*command.Param
 		}
 	}
 	return values, nil
+}
+
+func normalizeCDCValues(row []any) (*command.CDCRow, error) {
+	cdcRow := &command.CDCRow{
+		Values: make([]*command.CDCValue, len(row)),
+	}
+	for i, v := range row {
+		switch val := v.(type) {
+		case int:
+			cdcRow.Values[i] = &command.CDCValue{
+				Value: &command.CDCValue_I{
+					I: int64(val)},
+			}
+		case int64:
+			cdcRow.Values[i] = &command.CDCValue{
+				Value: &command.CDCValue_I{
+					I: val,
+				},
+			}
+		case float64:
+			cdcRow.Values[i] = &command.CDCValue{
+				Value: &command.CDCValue_D{
+					D: val,
+				},
+			}
+		case bool:
+			cdcRow.Values[i] = &command.CDCValue{
+				Value: &command.CDCValue_B{
+					B: val,
+				},
+			}
+		case string:
+			cdcRow.Values[i] = &command.CDCValue{
+				Value: &command.CDCValue_S{
+					S: val,
+				},
+			}
+		case []byte:
+			if true {
+				cdcRow.Values[i] = &command.CDCValue{
+					Value: &command.CDCValue_S{
+						S: string(val),
+					},
+				}
+			} else {
+				cdcRow.Values[i] = &command.CDCValue{
+					Value: &command.CDCValue_Y{
+						Y: val,
+					},
+				}
+			}
+		case time.Time:
+			rfc3339, err := val.MarshalText()
+			if err != nil {
+				return nil, err
+			}
+			cdcRow.Values[i] = &command.CDCValue{
+				Value: &command.CDCValue_S{
+					S: string(rfc3339),
+				},
+			}
+		case nil:
+			continue
+		default:
+			return nil, fmt.Errorf("unhandled column type: %T %v", val, val)
+		}
+	}
+	return cdcRow, nil
 }
 
 // isTextType returns whether the given type has a SQLite text affinity.
