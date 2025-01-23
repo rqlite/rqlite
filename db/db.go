@@ -961,7 +961,7 @@ func (db *DB) queryStmtWithConn(ctx context.Context, stmt *command.Statement, xT
 		if err := rs.Scan(ptrs...); err != nil {
 			return nil, err
 		}
-		params, err := normalizeRowValues(dest, xTypes)
+		params, err := normalizeRowParameters(dest, xTypes)
 		if err != nil {
 			return nil, err
 		}
@@ -1473,11 +1473,11 @@ func populateEmptyTypes(types []string, params []*command.Parameter) error {
 	return nil
 }
 
-// normalizeRowValues performs some normalization of values in the returned rows.
+// normalizeRowParameters performs some normalization of values in the returned rows.
 // Text values come over (from sqlite-go) as []byte instead of strings
 // for some reason, so we have explicitly converted (but only when type
 // is "text" so we don't affect BLOB types)
-func normalizeRowValues(row []interface{}, types []string) ([]*command.Parameter, error) {
+func normalizeRowParameters(row []interface{}, types []string) ([]*command.Parameter, error) {
 	values := make([]*command.Parameter, len(types))
 	for i, v := range row {
 		switch val := v.(type) {
