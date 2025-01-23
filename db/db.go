@@ -49,6 +49,8 @@ const (
 	numBackupStepErrors       = "backup_step_errors"
 	numBackupStepDones        = "backup_step_dones"
 	numBackupSleeps           = "backup_sleeps"
+	numPreupdates             = "preupdates"
+	numPreupdatesErrors       = "preupdates_errors"
 )
 
 var (
@@ -113,6 +115,8 @@ func ResetStats() {
 	stats.Add(numBackupStepErrors, 0)
 	stats.Add(numBackupStepDones, 0)
 	stats.Add(numBackupSleeps, 0)
+	stats.Add(numPreupdates, 0)
+	stats.Add(numPreupdatesErrors, 0)
 }
 
 // DB is the SQL database.
@@ -241,7 +245,7 @@ func OpenWithDriver(drv *Driver, dbPath string, fkEnabled, wal bool) (retDB *DB,
 
 // PreUpdateHookCallback is a callback function that is called before a row is modified
 // in the database.
-type PreUpdateHookCallback func(ev *command.CDCEvent)
+type PreUpdateHookCallback func(ev *command.CDCEvent) error
 
 // RegisterPreUpdateHook registers a callback that is called before a row is modified
 // in the database. If rowIDOnly is true, only the row ID details are passed to the
@@ -251,47 +255,58 @@ func (db *DB) RegisterPreUpdateHook(hook PreUpdateHookCallback) error {
 	var cb func(d sqlite3.SQLitePreUpdateData)
 	if hook != nil {
 		cb = func(d sqlite3.SQLitePreUpdateData) {
-			pb := &command.CDCEvent{
-				Table:    d.TableName,
-				OldRowId: d.OldRowID,
-				NewRowId: d.NewRowID,
-			}
-			switch d.Op {
-			case sqlite3.SQLITE_INSERT:
-				pb.Op = command.CDCEvent_INSERT
-			case sqlite3.SQLITE_UPDATE:
-				pb.Op = command.CDCEvent_UPDATE
-			case sqlite3.SQLITE_DELETE:
-				pb.Op = command.CDCEvent_DELETE
-			default:
-				pb.Error = fmt.Sprintf("unknown preupdate hook operation %d", d.Op)
-			}
-			c := d.Count()
+			stats.Add(numPreupdates, 1)
+			func() (retError error) {
+				pb := &command.CDCEvent{
+					Table:    d.TableName,
+					OldRowId: d.OldRowID,
+					NewRowId: d.NewRowID,
+				}
+				defer func() {
+					if retError != nil {
+						stats.Add(numPreupdatesErrors, 1)
+						pb.Error = retError.Error()
+					}
+					hook(pb)
+				}()
 
-			oldRow := make([]any, c)
-			if d.Op != sqlite3.SQLITE_INSERT {
-				err := d.Old(oldRow...)
-				if err != nil {
-					pb.Error = fmt.Sprintf("failed to get old row data: %s", err.Error())
+				switch d.Op {
+				case sqlite3.SQLITE_INSERT:
+					pb.Op = command.CDCEvent_INSERT
+				case sqlite3.SQLITE_UPDATE:
+					pb.Op = command.CDCEvent_UPDATE
+				case sqlite3.SQLITE_DELETE:
+					pb.Op = command.CDCEvent_DELETE
+				default:
+					return fmt.Errorf("unknown preupdate hook operation %d", d.Op)
 				}
-				pb.OldRow, err = normalizeCDCValues(oldRow)
-				if err != nil {
-					pb.Error = fmt.Sprintf("failed to normalize old row data: %s", err.Error())
-				}
-			}
+				c := d.Count()
 
-			newRow := make([]any, c)
-			if d.Op != sqlite3.SQLITE_DELETE {
-				err := d.New(newRow...)
-				if err != nil {
-					pb.Error = fmt.Sprintf("failed to get new row data: %s", err.Error())
+				oldRow := make([]any, c)
+				if d.Op != sqlite3.SQLITE_INSERT {
+					err := d.Old(oldRow...)
+					if err != nil && pb.Error == "" {
+						return fmt.Errorf("failed to get old row data: %w", err)
+					}
+					pb.OldRow, err = normalizeCDCValues(oldRow)
+					if err != nil && pb.Error == "" {
+						return fmt.Errorf("failed to normalize old row data: %w", err)
+					}
 				}
-				pb.NewRow, err = normalizeCDCValues(newRow)
-				if err != nil {
-					pb.Error = fmt.Sprintf("failed to normalize new row data: %s", err.Error())
+
+				newRow := make([]any, c)
+				if d.Op != sqlite3.SQLITE_DELETE {
+					err := d.New(newRow...)
+					if err != nil && pb.Error == "" {
+						return fmt.Errorf("failed to get new row data: %w", err)
+					}
+					pb.NewRow, err = normalizeCDCValues(newRow)
+					if err != nil && pb.Error == "" {
+						return fmt.Errorf("failed to normalize new row data: %w", err)
+					}
 				}
-			}
-			hook(pb)
+				return nil
+			}()
 		}
 	}
 	f := func(driverConn interface{}) error {
