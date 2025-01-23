@@ -153,7 +153,7 @@ message CDCValue {
 }
 
 message CDCRow {
-	repeated CDCValue fields = 1;
+	repeated CDCValue values = 1;
 }
 
 message CDCEvent {
@@ -168,6 +168,6 @@ message CDCEvent {
 	string table = 3;
 	int64 old_row_id = 4;
 	int64 new_row_id = 5;
-	CDCRow old_raw = 6;
+	CDCRow old_row = 6;
 	CDCRow new_row = 7;
 }

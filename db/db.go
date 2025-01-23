@@ -273,6 +273,10 @@ func (db *DB) RegisterPreUpdateHook(hook PreUpdateHookCallback, rowIDOnly bool) 
 					if err != nil {
 						pb.Error = fmt.Sprintf("failed to get old row data: %s", err.Error())
 					}
+					pb.OldRow, err = normalizeCDCValues(oldRow)
+					if err != nil {
+						pb.Error = fmt.Sprintf("failed to normalize old row data: %s", err.Error())
+					}
 				}
 
 				newRow := []any{}
@@ -280,6 +284,10 @@ func (db *DB) RegisterPreUpdateHook(hook PreUpdateHookCallback, rowIDOnly bool) 
 					err := d.New(newRow...)
 					if err != nil {
 						pb.Error = fmt.Sprintf("failed to get new row data: %s", err.Error())
+					}
+					pb.NewRow, err = normalizeCDCValues(newRow)
+					if err != nil {
+						pb.Error = fmt.Sprintf("failed to normalize new row data: %s", err.Error())
 					}
 				}
 			}
@@ -1606,6 +1614,66 @@ func normalizeRowParameters(row []interface{}, types []string) ([]*command.Param
 		}
 	}
 	return values, nil
+}
+
+func normalizeCDCValues(row []any) (*command.CDCRow, error) {
+	cdcRow := &command.CDCRow{
+		Values: make([]*command.CDCValue, len(row)),
+	}
+	for i, v := range row {
+		switch val := v.(type) {
+		case int:
+			cdcRow.Values[i] = &command.CDCValue{
+				Value: &command.CDCValue_I{
+					I: int64(val)},
+			}
+		case int64:
+			cdcRow.Values[i] = &command.CDCValue{
+				Value: &command.CDCValue_I{
+					I: val,
+				},
+			}
+		case float64:
+			cdcRow.Values[i] = &command.CDCValue{
+				Value: &command.CDCValue_D{
+					D: val,
+				},
+			}
+		case bool:
+			cdcRow.Values[i] = &command.CDCValue{
+				Value: &command.CDCValue_B{
+					B: val,
+				},
+			}
+		case string:
+			cdcRow.Values[i] = &command.CDCValue{
+				Value: &command.CDCValue_S{
+					S: val,
+				},
+			}
+		case []byte:
+			cdcRow.Values[i] = &command.CDCValue{
+				Value: &command.CDCValue_Y{
+					Y: val,
+				},
+			}
+		case time.Time:
+			rfc3339, err := val.MarshalText()
+			if err != nil {
+				return nil, err
+			}
+			cdcRow.Values[i] = &command.CDCValue{
+				Value: &command.CDCValue_S{
+					S: string(rfc3339),
+				},
+			}
+		case nil:
+			continue
+		default:
+			return nil, fmt.Errorf("unhandled column type: %T %v", val, val)
+		}
+	}
+	return cdcRow, nil
 }
 
 // isTextType returns whether the given type has a SQLite text affinity.
