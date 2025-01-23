@@ -27,7 +27,7 @@ func Test_Preupdate_Basic(t *testing.T) {
 		count.Add(1)
 		return nil
 	}
-	if err := db.RegisterPreUpdateHook(hook); err != nil {
+	if err := db.RegisterPreUpdateHook(hook, true); err != nil {
 		t.Fatalf("error registering preupdate hook")
 	}
 
@@ -71,7 +71,7 @@ func Test_Preupdate_Basic(t *testing.T) {
 	}
 
 	// Unregister the hook, insert a row, and make sure the hook is not triggered.
-	if err := db.RegisterPreUpdateHook(nil); err != nil {
+	if err := db.RegisterPreUpdateHook(nil, true); err != nil {
 		t.Fatalf("error unregistering preupdate hook")
 	}
 	mustExecute(db, "INSERT INTO foo(name) VALUES('fiona')")
@@ -97,7 +97,7 @@ func Test_Preupdate_Constraint(t *testing.T) {
 		count.Add(1)
 		return nil
 	}
-	if err := db.RegisterPreUpdateHook(hook); err != nil {
+	if err := db.RegisterPreUpdateHook(hook, true); err != nil {
 		t.Fatalf("error registering preupdate hook")
 	}
 
@@ -124,6 +124,102 @@ func Test_Preupdate_Constraint(t *testing.T) {
 	if count.Load() != 1 {
 		t.Fatalf("expected count 1, got %d", count.Load())
 	}
+}
+
+func Test_Preupdate_RowIDs(t *testing.T) {
+	path := mustTempPath()
+	defer os.Remove(path)
+	db, err := Open(path, false, false)
+	if err != nil {
+		t.Fatalf("error opening database")
+	}
+	defer db.Close()
+	mustExecute(db, "CREATE TABLE foo (id INTEGER PRIMARY KEY, name TEXT UNIQUE, age float)")
+
+	// Insert a row, with an explicit ID.
+	var wg sync.WaitGroup
+	hook := func(ev *command.CDCEvent) error {
+		defer wg.Done()
+		if ev.Table != "foo" {
+			t.Fatalf("expected table foo, got %s", ev.Table)
+		}
+		if ev.Op != command.CDCEvent_INSERT {
+			t.Fatalf("expected operation insert, got %s", ev.Op)
+		}
+		if exp, got := int64(5), ev.OldRowId; exp != got {
+			t.Fatalf("expected old row id %d, got %d", exp, ev.OldRowId)
+		}
+		if exp, got := int64(5), ev.NewRowId; exp != got {
+			t.Fatalf("expected new row id %d, got %d", exp, ev.OldRowId)
+		}
+
+		if ev.OldRow != nil || ev.NewRow != nil {
+			t.Fatalf("expected no old row and new row data")
+		}
+		return nil
+	}
+	if err := db.RegisterPreUpdateHook(hook, true); err != nil {
+		t.Fatalf("error registering preupdate hook")
+	}
+	wg.Add(1)
+	mustExecute(db, "INSERT INTO foo(id, name, age) VALUES(5, 'fiona', 2.4)")
+	wg.Wait()
+
+	// Update a row.
+	hook = func(ev *command.CDCEvent) error {
+		defer wg.Done()
+		if ev.Table != "foo" {
+			t.Fatalf("expected table foo, got %s", ev.Table)
+		}
+		if ev.Op != command.CDCEvent_UPDATE {
+			t.Fatalf("expected operation update, got %s", ev.Op)
+		}
+		if exp, got := int64(5), ev.OldRowId; exp != got {
+			t.Fatalf("expected old row id %d, got %d", exp, ev.OldRowId)
+		}
+		if exp, got := int64(5), ev.NewRowId; exp != got {
+			t.Fatalf("expected new row id %d, got %d", exp, ev.OldRowId)
+		}
+
+		if ev.OldRow != nil || ev.NewRow != nil {
+			t.Fatalf("expected no old row and new row data")
+		}
+		return nil
+	}
+	if err := db.RegisterPreUpdateHook(hook, true); err != nil {
+		t.Fatalf("error registering preupdate hook")
+	}
+	wg.Add(1)
+	mustExecute(db, "UPDATE foo SET name='fiona2' WHERE id=5")
+	wg.Wait()
+
+	// Delete a row.
+	hook = func(ev *command.CDCEvent) error {
+		defer wg.Done()
+		if ev.Table != "foo" {
+			t.Fatalf("expected table foo, got %s", ev.Table)
+		}
+		if ev.Op != command.CDCEvent_DELETE {
+			t.Fatalf("expected operation delete, got %s", ev.Op)
+		}
+		if exp, got := int64(5), ev.OldRowId; exp != got {
+			t.Fatalf("expected old row id %d, got %d", exp, ev.OldRowId)
+		}
+		if exp, got := int64(5), ev.NewRowId; exp != got {
+			t.Fatalf("expected new row id %d, got %d", exp, ev.OldRowId)
+		}
+
+		if ev.OldRow != nil || ev.NewRow != nil {
+			t.Fatalf("expected no old row and new row data")
+		}
+		return nil
+	}
+	if err := db.RegisterPreUpdateHook(hook, true); err != nil {
+		t.Fatalf("error registering preupdate hook")
+	}
+	wg.Add(1)
+	mustExecute(db, "DELETE FROM foo WHERE id=5")
+	wg.Wait()
 }
 
 func Test_Preupdate_Data(t *testing.T) {
@@ -167,11 +263,48 @@ func Test_Preupdate_Data(t *testing.T) {
 		}
 		return nil
 	}
-	if err := db.RegisterPreUpdateHook(hook); err != nil {
+	if err := db.RegisterPreUpdateHook(hook, false); err != nil {
 		t.Fatalf("error registering preupdate hook")
 	}
 	wg.Add(1)
 	mustExecute(db, "INSERT INTO foo(id, name, age) VALUES(5, 'fiona', 2.4)")
+	wg.Wait()
+
+	// Insert a row, adding subset of columns
+	hook = func(ev *command.CDCEvent) error {
+		defer wg.Done()
+		if ev.Table != "foo" {
+			t.Fatalf("expected table foo, got %s", ev.Table)
+		}
+		if ev.Op != command.CDCEvent_INSERT {
+			t.Fatalf("expected operation insert, got %s", ev.Op)
+		}
+
+		if ev.OldRow != nil {
+			t.Fatalf("expected no old row")
+		}
+		if ev.NewRow == nil {
+			t.Fatalf("expected new row")
+		}
+		if len(ev.NewRow.Values) != 3 {
+			t.Fatalf("expected 3 values, got %d", len(ev.NewRow.Values))
+		}
+		if exp, got := int64(6), ev.NewRow.Values[0].GetI(); exp != got {
+			t.Fatalf("expected id %d, got %d", exp, got)
+		}
+		if exp, got := "", ev.NewRow.Values[1].GetS(); exp != got {
+			t.Fatalf("expected name %s, got %s", exp, got)
+		}
+		if exp, got := 3.7, ev.NewRow.Values[2].GetD(); exp != got {
+			t.Fatalf("expected age %f, got %f", exp, got)
+		}
+		return nil
+	}
+	if err := db.RegisterPreUpdateHook(hook, false); err != nil {
+		t.Fatalf("error registering preupdate hook")
+	}
+	wg.Add(1)
+	mustExecute(db, "INSERT INTO foo(id, age) VALUES(6, 3.7)")
 	wg.Wait()
 
 	// Update a row.
@@ -217,7 +350,7 @@ func Test_Preupdate_Data(t *testing.T) {
 		}
 		return nil
 	}
-	if err := db.RegisterPreUpdateHook(hook); err != nil {
+	if err := db.RegisterPreUpdateHook(hook, false); err != nil {
 		t.Fatalf("error registering preupdate hook")
 	}
 	wg.Add(1)
@@ -254,7 +387,7 @@ func Test_Preupdate_Data(t *testing.T) {
 		}
 		return nil
 	}
-	if err := db.RegisterPreUpdateHook(hook); err != nil {
+	if err := db.RegisterPreUpdateHook(hook, false); err != nil {
 		t.Fatalf("error registering preupdate hook")
 	}
 	wg.Add(1)
