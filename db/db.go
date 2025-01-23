@@ -241,7 +241,7 @@ func OpenWithDriver(drv *Driver, dbPath string, fkEnabled, wal bool) (retDB *DB,
 
 // PreUpdateHookCallback is a callback function that is called before a row is modified
 // in the database.
-type PreUpdateHookCallback func(pb *command.CDCEvent) error
+type PreUpdateHookCallback func(ev *command.CDCEvent)
 
 // RegisterPreUpdateHook registers a callback that is called before a row is modified
 // in the database. If rowIDOnly is true, only the row ID details are passed to the
