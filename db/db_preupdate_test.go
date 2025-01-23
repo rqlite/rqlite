@@ -23,8 +23,9 @@ func Test_Preupdate_Basic(t *testing.T) {
 	mustExecute(db, "CREATE TABLE foo (id INTEGER PRIMARY KEY, name TEXT)")
 
 	count := &atomic.Int32{}
-	hook := func(ev *command.CDCEvent) {
+	hook := func(ev *command.CDCEvent) error {
 		count.Add(1)
+		return nil
 	}
 	if err := db.RegisterPreUpdateHook(hook); err != nil {
 		t.Fatalf("error registering preupdate hook")
@@ -92,8 +93,9 @@ func Test_Preupdate_Constraint(t *testing.T) {
 	mustExecute(db, "CREATE TABLE foo (id INTEGER PRIMARY KEY, name TEXT UNIQUE)")
 
 	count := &atomic.Int32{}
-	hook := func(ev *command.CDCEvent) {
+	hook := func(ev *command.CDCEvent) error {
 		count.Add(1)
+		return nil
 	}
 	if err := db.RegisterPreUpdateHook(hook); err != nil {
 		t.Fatalf("error registering preupdate hook")
@@ -136,7 +138,7 @@ func Test_Preupdate_Data(t *testing.T) {
 
 	// Insert a row, with an explicit ID.
 	var wg sync.WaitGroup
-	hook := func(ev *command.CDCEvent) {
+	hook := func(ev *command.CDCEvent) error {
 		defer wg.Done()
 		if ev.Table != "foo" {
 			t.Fatalf("expected table foo, got %s", ev.Table)
@@ -163,6 +165,7 @@ func Test_Preupdate_Data(t *testing.T) {
 		if exp, got := 2.4, ev.NewRow.Values[2].GetD(); exp != got {
 			t.Fatalf("expected age %f, got %f", exp, got)
 		}
+		return nil
 	}
 	if err := db.RegisterPreUpdateHook(hook); err != nil {
 		t.Fatalf("error registering preupdate hook")
@@ -172,7 +175,7 @@ func Test_Preupdate_Data(t *testing.T) {
 	wg.Wait()
 
 	// Update a row.
-	hook = func(ev *command.CDCEvent) {
+	hook = func(ev *command.CDCEvent) error {
 		defer wg.Done()
 		if ev.Table != "foo" {
 			t.Fatalf("expected table foo, got %s", ev.Table)
@@ -212,6 +215,7 @@ func Test_Preupdate_Data(t *testing.T) {
 		if exp, got := 2.4, ev.NewRow.Values[2].GetD(); exp != got {
 			t.Fatalf("expected age %f, got %f", exp, got)
 		}
+		return nil
 	}
 	if err := db.RegisterPreUpdateHook(hook); err != nil {
 		t.Fatalf("error registering preupdate hook")
@@ -221,7 +225,7 @@ func Test_Preupdate_Data(t *testing.T) {
 	wg.Wait()
 
 	// Delete a row.
-	hook = func(ev *command.CDCEvent) {
+	hook = func(ev *command.CDCEvent) error {
 		defer wg.Done()
 		if ev.Table != "foo" {
 			t.Fatalf("expected table foo, got %s", ev.Table)
@@ -248,6 +252,7 @@ func Test_Preupdate_Data(t *testing.T) {
 		if ev.NewRow != nil {
 			t.Fatalf("expected no new row")
 		}
+		return nil
 	}
 	if err := db.RegisterPreUpdateHook(hook); err != nil {
 		t.Fatalf("error registering preupdate hook")
