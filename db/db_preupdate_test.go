@@ -2,6 +2,7 @@ package db
 
 import (
 	"os"
+	"sync"
 	"sync/atomic"
 	"testing"
 
@@ -25,7 +26,7 @@ func Test_Preupdate_Basic(t *testing.T) {
 	hook := func(ev *command.CDCEvent) {
 		count.Add(1)
 	}
-	if err := db.RegisterPreUpdateHook(hook, true); err != nil {
+	if err := db.RegisterPreUpdateHook(hook); err != nil {
 		t.Fatalf("error registering preupdate hook")
 	}
 
@@ -59,7 +60,7 @@ func Test_Preupdate_Basic(t *testing.T) {
 	}
 
 	// Unregister the hook, insert a row, and make sure the hook is not triggered.
-	if err := db.RegisterPreUpdateHook(nil, false); err != nil {
+	if err := db.RegisterPreUpdateHook(nil); err != nil {
 		t.Fatalf("error unregistering preupdate hook")
 	}
 	mustExecute(db, "INSERT INTO foo(name) VALUES('fiona')")
@@ -84,7 +85,7 @@ func Test_Preupdate_Constraint(t *testing.T) {
 	hook := func(ev *command.CDCEvent) {
 		count.Add(1)
 	}
-	if err := db.RegisterPreUpdateHook(hook, true); err != nil {
+	if err := db.RegisterPreUpdateHook(hook); err != nil {
 		t.Fatalf("error registering preupdate hook")
 	}
 
@@ -111,4 +112,116 @@ func Test_Preupdate_Constraint(t *testing.T) {
 	if count.Load() != 1 {
 		t.Fatalf("expected count 1, got %d", count.Load())
 	}
+}
+
+func Test_Preupdate_Data(t *testing.T) {
+	path := mustTempPath()
+	defer os.Remove(path)
+	db, err := Open(path, false, false)
+	if err != nil {
+		t.Fatalf("error opening database")
+	}
+	defer db.Close()
+	mustExecute(db, "CREATE TABLE foo (id INTEGER PRIMARY KEY, name TEXT UNIQUE, age float)")
+
+	// Insert a row, with an explicit ID.
+	var wg sync.WaitGroup
+	hook := func(ev *command.CDCEvent) {
+		defer wg.Done()
+		if ev.OldRow != nil {
+			t.Fatalf("expected no old row")
+		}
+		if ev.NewRow == nil {
+			t.Fatalf("expected new row")
+		}
+		if len(ev.NewRow.Values) != 3 {
+			t.Fatalf("expected 3 values, got %d", len(ev.NewRow.Values))
+		}
+		if exp, got := int64(5), ev.NewRow.Values[0].GetI(); exp != got {
+			t.Fatalf("expected id %d, got %d", exp, got)
+		}
+		if exp, got := "fiona", ev.NewRow.Values[1].GetS(); exp != got {
+			t.Fatalf("expected name %s, got %s", exp, got)
+		}
+		if exp, got := 2.4, ev.NewRow.Values[2].GetD(); exp != got {
+			t.Fatalf("expected age %f, got %f", exp, got)
+		}
+	}
+	if err := db.RegisterPreUpdateHook(hook); err != nil {
+		t.Fatalf("error registering preupdate hook")
+	}
+	wg.Add(1)
+	mustExecute(db, "INSERT INTO foo(id, name, age) VALUES(5, 'fiona', 2.4)")
+	wg.Wait()
+
+	// Update a row.
+	hook = func(ev *command.CDCEvent) {
+		defer wg.Done()
+		if ev.OldRow == nil {
+			t.Fatalf("expected old row")
+		}
+		if len(ev.OldRow.Values) != 3 {
+			t.Fatalf("expected 3 values, got %d", len(ev.OldRow.Values))
+		}
+		if exp, got := int64(5), ev.OldRow.Values[0].GetI(); exp != got {
+			t.Fatalf("expected id %d, got %d", exp, got)
+		}
+		if exp, got := "fiona", ev.OldRow.Values[1].GetS(); exp != got {
+			t.Fatalf("expected name %s, got %s", exp, got)
+		}
+		if exp, got := 2.4, ev.OldRow.Values[2].GetD(); exp != got {
+			t.Fatalf("expected age %f, got %f", exp, got)
+		}
+
+		if ev.NewRow == nil {
+			t.Fatalf("expected new row")
+		}
+		if len(ev.NewRow.Values) != 3 {
+			t.Fatalf("expected 3 values, got %d", len(ev.NewRow.Values))
+		}
+		if exp, got := int64(5), ev.NewRow.Values[0].GetI(); exp != got {
+			t.Fatalf("expected id %d, got %d", exp, got)
+		}
+		if exp, got := "fiona2", ev.NewRow.Values[1].GetS(); exp != got {
+			t.Fatalf("expected name %s, got %s", exp, got)
+		}
+		if exp, got := 2.4, ev.NewRow.Values[2].GetD(); exp != got {
+			t.Fatalf("expected age %f, got %f", exp, got)
+		}
+	}
+	if err := db.RegisterPreUpdateHook(hook); err != nil {
+		t.Fatalf("error registering preupdate hook")
+	}
+	wg.Add(1)
+	mustExecute(db, "UPDATE foo SET name='fiona2' WHERE id=5")
+	wg.Wait()
+
+	// Delete a row.
+	hook = func(ev *command.CDCEvent) {
+		defer wg.Done()
+		if ev.OldRow == nil {
+			t.Fatalf("expected old row")
+		}
+		if len(ev.OldRow.Values) != 3 {
+			t.Fatalf("expected 3 values, got %d", len(ev.OldRow.Values))
+		}
+		if exp, got := int64(5), ev.OldRow.Values[0].GetI(); exp != got {
+			t.Fatalf("expected id %d, got %d", exp, got)
+		}
+		if exp, got := "fiona2", ev.OldRow.Values[1].GetS(); exp != got {
+			t.Fatalf("expected name %s, got %s", exp, got)
+		}
+		if exp, got := 2.4, ev.OldRow.Values[2].GetD(); exp != got {
+			t.Fatalf("expected age %f, got %f", exp, got)
+		}
+		if ev.NewRow != nil {
+			t.Fatalf("expected no new row")
+		}
+	}
+	if err := db.RegisterPreUpdateHook(hook); err != nil {
+		t.Fatalf("error registering preupdate hook")
+	}
+	wg.Add(1)
+	mustExecute(db, "DELETE FROM foo WHERE id=5")
+	wg.Wait()
 }

@@ -247,7 +247,7 @@ type PreUpdateHookCallback func(ev *command.CDCEvent)
 // in the database. If rowIDOnly is true, only the row ID details are passed to the
 // callback. If a callback is already registered, it is replaced. If hook is nil, the
 // callback is removed.
-func (db *DB) RegisterPreUpdateHook(hook PreUpdateHookCallback, rowIDOnly bool) error {
+func (db *DB) RegisterPreUpdateHook(hook PreUpdateHookCallback) error {
 	var cb func(d sqlite3.SQLitePreUpdateData)
 	if hook != nil {
 		cb = func(d sqlite3.SQLitePreUpdateData) {
@@ -266,29 +266,29 @@ func (db *DB) RegisterPreUpdateHook(hook PreUpdateHookCallback, rowIDOnly bool) 
 			default:
 				pb.Error = fmt.Sprintf("unknown preupdate hook operation %d", d.Op)
 			}
-			if !rowIDOnly {
-				oldRow := []any{}
-				if d.Op != sqlite3.SQLITE_INSERT {
-					err := d.Old(oldRow...)
-					if err != nil {
-						pb.Error = fmt.Sprintf("failed to get old row data: %s", err.Error())
-					}
-					pb.OldRow, err = normalizeCDCValues(oldRow)
-					if err != nil {
-						pb.Error = fmt.Sprintf("failed to normalize old row data: %s", err.Error())
-					}
-				}
+			c := d.Count()
 
-				newRow := []any{}
-				if d.Op != sqlite3.SQLITE_DELETE {
-					err := d.New(newRow...)
-					if err != nil {
-						pb.Error = fmt.Sprintf("failed to get new row data: %s", err.Error())
-					}
-					pb.NewRow, err = normalizeCDCValues(newRow)
-					if err != nil {
-						pb.Error = fmt.Sprintf("failed to normalize new row data: %s", err.Error())
-					}
+			oldRow := make([]any, c)
+			if d.Op != sqlite3.SQLITE_INSERT {
+				err := d.Old(oldRow...)
+				if err != nil {
+					pb.Error = fmt.Sprintf("failed to get old row data: %s", err.Error())
+				}
+				pb.OldRow, err = normalizeCDCValues(oldRow)
+				if err != nil {
+					pb.Error = fmt.Sprintf("failed to normalize old row data: %s", err.Error())
+				}
+			}
+
+			newRow := make([]any, c)
+			if d.Op != sqlite3.SQLITE_DELETE {
+				err := d.New(newRow...)
+				if err != nil {
+					pb.Error = fmt.Sprintf("failed to get new row data: %s", err.Error())
+				}
+				pb.NewRow, err = normalizeCDCValues(newRow)
+				if err != nil {
+					pb.Error = fmt.Sprintf("failed to normalize new row data: %s", err.Error())
 				}
 			}
 			hook(pb)
@@ -1652,10 +1652,18 @@ func normalizeCDCValues(row []any) (*command.CDCRow, error) {
 				},
 			}
 		case []byte:
-			cdcRow.Values[i] = &command.CDCValue{
-				Value: &command.CDCValue_Y{
-					Y: val,
-				},
+			if true {
+				cdcRow.Values[i] = &command.CDCValue{
+					Value: &command.CDCValue_S{
+						S: string(val),
+					},
+				}
+			} else {
+				cdcRow.Values[i] = &command.CDCValue{
+					Value: &command.CDCValue_Y{
+						Y: val,
+					},
+				}
 			}
 		case time.Time:
 			rfc3339, err := val.MarshalText()
