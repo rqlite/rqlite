@@ -163,10 +163,11 @@ message CDCEvent {
 		UPDATE = 2;
 		DELETE = 3;
 	}
-	Operation op = 1;
-	string table = 2;
-	int64 old_row_id = 3;
-	int64 new_row_id = 4;
-	CDCRow old_raw = 5;
-	CDCRow new_row = 6;
+	string error = 1;
+	Operation op = 2;
+	string table = 3;
+	int64 old_row_id = 4;
+	int64 new_row_id = 5;
+	CDCRow old_raw = 6;
+	CDCRow new_row = 7;
 }

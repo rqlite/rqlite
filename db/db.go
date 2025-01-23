@@ -264,7 +264,24 @@ func (db *DB) RegisterPreUpdateHook(hook PreUpdateHookCallback, rowIDOnly bool) 
 			case sqlite3.SQLITE_DELETE:
 				pb.Op = command.CDCEvent_DELETE
 			default:
-				panic(fmt.Sprintf("unknown preupate hook operation %d", d.Op))
+				pb.Error = fmt.Sprintf("unknown preupdate hook operation %d", d.Op)
+			}
+			if !rowIDOnly {
+				oldRow := []any{}
+				if d.Op != sqlite3.SQLITE_INSERT {
+					err := d.Old(oldRow...)
+					if err != nil {
+						pb.Error = fmt.Sprintf("failed to get old row data: %s", err.Error())
+					}
+				}
+
+				newRow := []any{}
+				if d.Op != sqlite3.SQLITE_DELETE {
+					err := d.New(newRow...)
+					if err != nil {
+						pb.Error = fmt.Sprintf("failed to get new row data: %s", err.Error())
+					}
+				}
 			}
 			hook(pb)
 		}
