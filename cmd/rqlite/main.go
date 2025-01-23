@@ -241,14 +241,14 @@ func main() {
 			default:
 				err = executeWithClient(ctx, client, timer, line)
 			}
-			if err != nil {
-				// if a previous request was executed on a different host, make that change
+			if hcerr, ok := err.(*httpcl.HostChangedError); ok {
+				// If a previous request was executed on a different host, make that change
 				// visible to the user.
-				if hcerr, ok := err.(*httpcl.HostChangedError); ok {
+				if hcerr != nil {
 					prefix = fmt.Sprintf("%s>", hcerr.NewHost)
-				} else {
-					ctx.String("%s %v\n", ctx.Color().Red("ERR!"), err)
 				}
+			} else if err != nil {
+				ctx.String("%s %v\n", ctx.Color().Red("ERR!"), err)
 			}
 		}
 
