@@ -116,7 +116,7 @@ func (d *Driver) Extensions() []string {
 
 // ExtensionNames returns the names of the loaded driver extensions.
 func (d *Driver) ExtensionNames() []string {
-	names := make([]string, 0)
+	names := make([]string, 0, len(d.extensions))
 	for _, ext := range d.extensions {
 		names = append(names, filepath.Base(ext))
 	}
