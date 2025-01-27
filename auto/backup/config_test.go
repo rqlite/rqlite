@@ -45,10 +45,7 @@ func Test_ReadConfigFile(t *testing.T) {
 
 	t.Run("file with environment variables", func(t *testing.T) {
 		// Set an environment variable
-		if err := os.Setenv("TEST_VAR", "test_value"); err != nil {
-			t.Fatal(err)
-		}
-		defer os.Unsetenv("TEST_VAR")
+		t.Setenv("TEST_VAR", "test_value")
 
 		// Create a temporary config file with an environment variable
 		tempFile, err := os.CreateTemp("", "upload_config")
@@ -75,10 +72,7 @@ func Test_ReadConfigFile(t *testing.T) {
 
 	t.Run("longer file with environment variables", func(t *testing.T) {
 		// Set an environment variable
-		if err := os.Setenv("TEST_VAR1", "test_value"); err != nil {
-			t.Fatal(err)
-		}
-		defer os.Unsetenv("TEST_VAR1")
+		t.Setenv("TEST_VAR1", "test_value")
 
 		// Create a temporary config file with an environment variable
 		tempFile, err := os.CreateTemp("", "upload_config")
