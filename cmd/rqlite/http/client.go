@@ -102,6 +102,15 @@ func WithBasicAuth(creds string) ConfigFunc {
 	}
 }
 
+// Get sends GET requests to one of the hosts known to the client.
+func (c *Client) Get(u string) (resp *http.Response, err error) {
+	up, err := url.Parse(u)
+	if err != nil {
+		return nil, err
+	}
+	return c.execRequest(http.MethodGet, *up, nil)
+}
+
 // Query sends GET requests to one of the hosts known to the client.
 func (c *Client) Query(url url.URL) (*http.Response, error) {
 	return c.execRequest(http.MethodGet, url, nil)
