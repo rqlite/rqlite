@@ -3,7 +3,6 @@ package main
 
 import (
 	"bytes"
-	"crypto/tls"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -175,7 +174,7 @@ func main() {
 				}
 				err = setConsistency(line[index+1:], &consistency)
 			case ".EXTENSIONS":
-				err = extensions(ctx, cmd, argv)
+				err = extensions(ctx, client, cmd, argv)
 			case ".TABLES":
 				err = queryWithClient(ctx, client, timer, blobArray, consistency, `SELECT name FROM sqlite_master WHERE type="table"`)
 			case ".INDEXES":
@@ -187,17 +186,17 @@ func main() {
 			case ".BLOBARRAY":
 				err = toggleFlag(line[index+1:], &blobArray)
 			case ".STATUS":
-				err = status(ctx, cmd, line, argv)
+				err = status(ctx, client, cmd, line, argv)
 			case ".READY":
 				err = ready(ctx, httpClient, argv)
 			case ".NODES":
 				if index == -1 || index == len(line)-1 {
-					err = nodes(ctx, cmd, line, argv, false)
+					err = nodes(ctx, client, cmd, line, argv, false)
 					break
 				}
-				err = nodes(ctx, cmd, line, argv, true)
+				err = nodes(ctx, client, cmd, line, argv, true)
 			case ".EXPVAR":
-				err = expvar(ctx, cmd, line, argv)
+				err = expvar(ctx, client, cmd, line, argv)
 			case ".REMOVE":
 				err = removeNode(httpClient, line[index+1:], argv, timer)
 			case ".BACKUP":
@@ -295,9 +294,9 @@ func help(ctx *cli.Context, cmd, line string, argv *argT) error {
 	return nil
 }
 
-func status(ctx *cli.Context, cmd, line string, argv *argT) error {
+func status(ctx *cli.Context, client *httpcl.Client, cmd, line string, argv *argT) error {
 	url := fmt.Sprintf("%s://%s/status", argv.Protocol, address6(argv))
-	return cliJSON(ctx, cmd, line, url, argv)
+	return cliJSON(ctx, client, cmd, line, url, argv)
 }
 
 func ready(ctx *cli.Context, client *http.Client, argv *argT) error {
@@ -335,18 +334,18 @@ func ready(ctx *cli.Context, client *http.Client, argv *argT) error {
 
 // nodes returns the status of nodes in the cluster. If all is true, then
 // non-voting nodes are included in the response.
-func nodes(ctx *cli.Context, cmd, line string, argv *argT, all bool) error {
+func nodes(ctx *cli.Context, client *httpcl.Client, cmd, line string, argv *argT, all bool) error {
 	path := "nodes"
 	if all {
 		path = "nodes?nonvoters"
 	}
 	url := fmt.Sprintf("%s://%s/%s", argv.Protocol, address6(argv), path)
-	return cliJSON(ctx, cmd, "", url, argv)
+	return cliJSON(ctx, client, cmd, "", url, argv)
 }
 
-func expvar(ctx *cli.Context, cmd, line string, argv *argT) error {
+func expvar(ctx *cli.Context, client *httpcl.Client, cmd, line string, argv *argT) error {
 	url := fmt.Sprintf("%s://%s/debug/vars", argv.Protocol, address6(argv))
-	return cliJSON(ctx, cmd, line, url, argv)
+	return cliJSON(ctx, client, cmd, line, url, argv)
 }
 
 func snapshot(client *httpcl.Client, argv *argT) error {
@@ -578,25 +577,9 @@ func parseResponse(response *[]byte, ret interface{}) error {
 	return decoder.Decode(ret)
 }
 
-func extensions(ctx *cli.Context, cmd string, argv *argT) error {
-	client := http.Client{Transport: &http.Transport{
-		TLSClientConfig: &tls.Config{InsecureSkipVerify: argv.Insecure},
-		Proxy:           http.ProxyFromEnvironment,
-	}}
-
-	req, err := http.NewRequest("GET", fmt.Sprintf("%s://%s/status?key=extensions", argv.Protocol, address6(argv)), nil)
-	if err != nil {
-		return err
-	}
-	if argv.Credentials != "" {
-		creds := strings.Split(argv.Credentials, ":")
-		if len(creds) != 2 {
-			return fmt.Errorf("invalid Basic Auth credentials format")
-		}
-		req.SetBasicAuth(creds[0], creds[1])
-	}
-
-	resp, err := client.Do(req)
+func extensions(ctx *cli.Context, client *httpcl.Client, cmd string, argv *argT) error {
+	url := fmt.Sprintf("%s://%s/status?key=extensions", argv.Protocol, address6(argv))
+	resp, err := client.Get(url)
 	if err != nil {
 		return err
 	}
@@ -634,7 +617,7 @@ func extensions(ctx *cli.Context, cmd string, argv *argT) error {
 // cliJSON fetches JSON from a URL, and displays it at the CLI. If line contains more
 // than one word, then the JSON is filtered to only show the key specified in the
 // second word.
-func cliJSON(ctx *cli.Context, cmd, line, url string, argv *argT) error {
+func cliJSON(ctx *cli.Context, client *httpcl.Client, cmd, line, url string, argv *argT) error {
 	// Recursive JSON printer.
 	var pprint func(indent int, m map[string]interface{})
 	pprint = func(indent int, m map[string]interface{}) {
@@ -659,24 +642,7 @@ func cliJSON(ctx *cli.Context, cmd, line, url string, argv *argT) error {
 		}
 	}
 
-	client := http.Client{Transport: &http.Transport{
-		TLSClientConfig: &tls.Config{InsecureSkipVerify: argv.Insecure},
-		Proxy:           http.ProxyFromEnvironment,
-	}}
-
-	req, err := http.NewRequest("GET", url, nil)
-	if err != nil {
-		return err
-	}
-	if argv.Credentials != "" {
-		creds := strings.Split(argv.Credentials, ":")
-		if len(creds) != 2 {
-			return fmt.Errorf("invalid Basic Auth credentials format")
-		}
-		req.SetBasicAuth(creds[0], creds[1])
-	}
-
-	resp, err := client.Do(req)
+	resp, err := client.Get(url)
 	if err != nil {
 		return err
 	}
