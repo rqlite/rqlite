@@ -198,7 +198,7 @@ func main() {
 			case ".EXPVAR":
 				err = expvar(ctx, client, cmd, line, argv)
 			case ".REMOVE":
-				err = removeNode(httpClient, line[index+1:], argv)
+				err = removeNode(client, line[index+1:], argv)
 			case ".BACKUP":
 				if index == -1 || index == len(line)-1 {
 					err = fmt.Errorf("please specify an output file for the backup")

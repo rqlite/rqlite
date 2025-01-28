@@ -117,7 +117,7 @@ func (c *Client) Delete(u string, body io.Reader) (resp *http.Response, err erro
 	if err != nil {
 		return nil, err
 	}
-	return c.doRequest(http.MethodDelete, up, nil)
+	return c.doRequest(http.MethodDelete, up, body)
 }
 
 // Query sends GET requests to one of the hosts known to the client.
