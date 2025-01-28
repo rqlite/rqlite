@@ -186,9 +186,9 @@ func main() {
 			case ".BLOBARRAY":
 				err = toggleFlag(line[index+1:], &blobArray)
 			case ".STATUS":
-				err = status(ctx, client, cmd, line, argv)
+				err = status(ctx, client, cmd, argv)
 			case ".READY":
-				err = ready(ctx, httpClient, argv)
+				err = ready(ctx, client, argv)
 			case ".NODES":
 				if index == -1 || index == len(line)-1 {
 					err = nodes(ctx, client, cmd, line, argv, false)
@@ -198,7 +198,7 @@ func main() {
 			case ".EXPVAR":
 				err = expvar(ctx, client, cmd, line, argv)
 			case ".REMOVE":
-				err = removeNode(httpClient, line[index+1:], argv, timer)
+				err = removeNode(client, line[index+1:], argv)
 			case ".BACKUP":
 				if index == -1 || index == len(line)-1 {
 					err = fmt.Errorf("please specify an output file for the backup")
@@ -230,7 +230,7 @@ func main() {
 				}
 				err = dump(ctx, line[index+1:], argv)
 			case ".HELP":
-				err = help(ctx, cmd, line, argv)
+				ctx.String("%s", strings.Join(cliHelp, "\n"))
 			case ".QUIT", "QUIT", "EXIT", ".EXIT":
 				break FOR_READ
 			case ".SNAPSHOT":
@@ -289,17 +289,12 @@ func makeJSONBody(line string) string {
 	return string(data)
 }
 
-func help(ctx *cli.Context, cmd, line string, argv *argT) error {
-	fmt.Println(strings.Join(cliHelp, "\n"))
-	return nil
-}
-
-func status(ctx *cli.Context, client *httpcl.Client, cmd, line string, argv *argT) error {
+func status(ctx *cli.Context, client *httpcl.Client, line string, argv *argT) error {
 	url := fmt.Sprintf("%s://%s/status", argv.Protocol, address6(argv))
-	return cliJSON(ctx, client, cmd, line, url, argv)
+	return cliJSON(ctx, client, line, url)
 }
 
-func ready(ctx *cli.Context, client *http.Client, argv *argT) error {
+func ready(ctx *cli.Context, client *httpcl.Client, argv *argT) error {
 	u := url.URL{
 		Scheme: argv.Protocol,
 		Host:   address6(argv),
@@ -307,19 +302,7 @@ func ready(ctx *cli.Context, client *http.Client, argv *argT) error {
 	}
 	urlStr := u.String()
 
-	req, err := http.NewRequest("GET", urlStr, nil)
-	if err != nil {
-		return err
-	}
-	if argv.Credentials != "" {
-		creds := strings.Split(argv.Credentials, ":")
-		if len(creds) != 2 {
-			return fmt.Errorf("invalid Basic Auth credentials format")
-		}
-		req.SetBasicAuth(creds[0], creds[1])
-	}
-
-	resp, err := client.Do(req)
+	resp, err := client.Get(urlStr)
 	if err != nil {
 		return err
 	}
@@ -340,12 +323,12 @@ func nodes(ctx *cli.Context, client *httpcl.Client, cmd, line string, argv *argT
 		path = "nodes?nonvoters"
 	}
 	url := fmt.Sprintf("%s://%s/%s", argv.Protocol, address6(argv), path)
-	return cliJSON(ctx, client, cmd, "", url, argv)
+	return cliJSON(ctx, client, "", url)
 }
 
 func expvar(ctx *cli.Context, client *httpcl.Client, cmd, line string, argv *argT) error {
 	url := fmt.Sprintf("%s://%s/debug/vars", argv.Protocol, address6(argv))
-	return cliJSON(ctx, client, cmd, line, url, argv)
+	return cliJSON(ctx, client, line, url)
 }
 
 func snapshot(client *httpcl.Client, argv *argT) error {
@@ -374,6 +357,7 @@ func snapshot(client *httpcl.Client, argv *argT) error {
 }
 
 func sysdump(ctx *cli.Context, client *http.Client, filename string, argv *argT) error {
+	_ = ctx
 	nodes, err := getNodes(client, argv)
 	if err != nil {
 		return err
@@ -508,6 +492,7 @@ func sendRequest(ctx *cli.Context, makeNewRequest func(string) (*http.Request, e
 }
 
 func sendRequestW(ctx *cli.Context, makeNewRequest func(string) (*http.Request, error), urlStr string, argv *argT, w io.Writer) (int64, error) {
+	_ = ctx
 	url := urlStr
 	tlsConfig, err := rtls.CreateClientConfig(argv.ClientCert, argv.ClientKey, argv.CACert, rtls.NoServerName, argv.Insecure)
 	if err != nil {
@@ -578,6 +563,7 @@ func parseResponse(response *[]byte, ret interface{}) error {
 }
 
 func extensions(ctx *cli.Context, client *httpcl.Client, cmd string, argv *argT) error {
+	_ = cmd
 	url := fmt.Sprintf("%s://%s/status?key=extensions", argv.Protocol, address6(argv))
 	resp, err := client.Get(url)
 	if err != nil {
@@ -617,7 +603,8 @@ func extensions(ctx *cli.Context, client *httpcl.Client, cmd string, argv *argT)
 // cliJSON fetches JSON from a URL, and displays it at the CLI. If line contains more
 // than one word, then the JSON is filtered to only show the key specified in the
 // second word.
-func cliJSON(ctx *cli.Context, client *httpcl.Client, cmd, line, url string, argv *argT) error {
+func cliJSON(ctx *cli.Context, client *httpcl.Client, line, url string) error {
+	_ = ctx
 	// Recursive JSON printer.
 	var pprint func(indent int, m map[string]interface{})
 	pprint = func(indent int, m map[string]interface{}) {
