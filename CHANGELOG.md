@@ -1,3 +1,7 @@
+## v8.36.10 (unreleased)
+### Implementation changes and bug fixes
+- [PR #2038](https://github.com/rqlite/rqlite/pull/2038): Further consistent use of HTTP client in rqlite shell.
+
 ## v8.36.9 (January 27th 2025)
 ### Implementation changes and bug fixes
 - [PR #2036](https://github.com/rqlite/rqlite/pull/2036): Use configured HTTP client consistently in rqlite shell.
