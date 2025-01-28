@@ -188,7 +188,7 @@ func main() {
 			case ".STATUS":
 				err = status(ctx, client, cmd, argv)
 			case ".READY":
-				err = ready(ctx, httpClient, argv)
+				err = ready(ctx, client, argv)
 			case ".NODES":
 				if index == -1 || index == len(line)-1 {
 					err = nodes(ctx, client, cmd, line, argv, false)
@@ -294,7 +294,7 @@ func status(ctx *cli.Context, client *httpcl.Client, line string, argv *argT) er
 	return cliJSON(ctx, client, line, url)
 }
 
-func ready(ctx *cli.Context, client *http.Client, argv *argT) error {
+func ready(ctx *cli.Context, client *httpcl.Client, argv *argT) error {
 	u := url.URL{
 		Scheme: argv.Protocol,
 		Host:   address6(argv),
@@ -302,19 +302,7 @@ func ready(ctx *cli.Context, client *http.Client, argv *argT) error {
 	}
 	urlStr := u.String()
 
-	req, err := http.NewRequest("GET", urlStr, nil)
-	if err != nil {
-		return err
-	}
-	if argv.Credentials != "" {
-		creds := strings.Split(argv.Credentials, ":")
-		if len(creds) != 2 {
-			return fmt.Errorf("invalid Basic Auth credentials format")
-		}
-		req.SetBasicAuth(creds[0], creds[1])
-	}
-
-	resp, err := client.Do(req)
+	resp, err := client.Get(urlStr)
 	if err != nil {
 		return err
 	}
