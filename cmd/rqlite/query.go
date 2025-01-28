@@ -1,6 +1,7 @@
 package main
 
 import (
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -54,7 +55,7 @@ func (r *Rows) Get(i, j int) string {
 
 func (r *Rows) validate() error {
 	if r.Error != "" {
-		return fmt.Errorf(r.Error)
+		return errors.New(r.Error)
 	}
 	return nil
 }
@@ -90,7 +91,7 @@ func queryWithClient(ctx *cli.Context, client *cl.Client, timer, blobArray bool,
 	if blobArray {
 		queryStr.Set("blob_array", "")
 	}
-	u := url.URL{
+	u := &url.URL{
 		Path:     fmt.Sprintf("%sdb/query", client.Prefix),
 		RawQuery: queryStr.Encode(),
 	}
@@ -124,7 +125,7 @@ func queryWithClient(ctx *cli.Context, client *cl.Client, timer, blobArray bool,
 		return err
 	}
 	if ret.Error != "" {
-		return fmt.Errorf(ret.Error)
+		return errors.New(ret.Error)
 	}
 	if len(ret.Results) != 1 {
 		return fmt.Errorf("unexpected results length: %d", len(ret.Results))

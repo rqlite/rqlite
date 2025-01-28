@@ -9,7 +9,7 @@ import (
 	"strings"
 )
 
-func removeNode(client *http.Client, id string, argv *argT, timer bool) error {
+func removeNode(client *http.Client, id string, argv *argT) error {
 	u := url.URL{
 		Scheme: argv.Protocol,
 		Host:   address6(argv),

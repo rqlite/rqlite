@@ -108,20 +108,29 @@ func (c *Client) Get(u string) (resp *http.Response, err error) {
 	if err != nil {
 		return nil, err
 	}
-	return c.execRequest(http.MethodGet, *up, nil)
+	return c.doRequest(http.MethodGet, up, nil)
+}
+
+// Delete sends DELETE requests to one of the hosts known to the client.
+func (c *Client) Delete(u string, body io.Reader) (resp *http.Response, err error) {
+	up, err := url.Parse(u)
+	if err != nil {
+		return nil, err
+	}
+	return c.doRequest(http.MethodDelete, up, nil)
 }
 
 // Query sends GET requests to one of the hosts known to the client.
-func (c *Client) Query(url url.URL) (*http.Response, error) {
-	return c.execRequest(http.MethodGet, url, nil)
+func (c *Client) Query(url *url.URL) (*http.Response, error) {
+	return c.doRequest(http.MethodGet, url, nil)
 }
 
 // Execute sends POST requests to one of the hosts known to the client
-func (c *Client) Execute(url url.URL, body io.Reader) (*http.Response, error) {
-	return c.execRequest(http.MethodPost, url, body)
+func (c *Client) Execute(url *url.URL, body io.Reader) (*http.Response, error) {
+	return c.doRequest(http.MethodPost, url, body)
 }
 
-func (c *Client) execRequest(method string, url url.URL, body io.Reader) (*http.Response, error) {
+func (c *Client) doRequest(method string, url *url.URL, body io.Reader) (*http.Response, error) {
 	triedHosts := 0
 	for triedHosts < len(c.hosts) {
 		host := c.hosts[c.currentHost]

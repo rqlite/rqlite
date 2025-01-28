@@ -3,6 +3,7 @@ package main
 import (
 	"bytes"
 	"crypto/tls"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -221,7 +222,7 @@ func boot(ctx *cli.Context, filename string, argv *argT) error {
 		if len(body) > 0 {
 			errMsg += fmt.Sprintf(", %s", string(body))
 		}
-		return fmt.Errorf(errMsg)
+		return errors.New(errMsg)
 	}
 
 	ctx.String("Node booted successfully.\n")
@@ -229,6 +230,7 @@ func boot(ctx *cli.Context, filename string, argv *argT) error {
 }
 
 func checkStatus(ctx *cli.Context, argv *argT) (*statusResponse, error) {
+	_ = ctx
 	statusURL := fmt.Sprintf("%s://%s/status", argv.Protocol, address6(argv))
 	client := http.Client{Transport: &http.Transport{
 		Proxy:           http.ProxyFromEnvironment,

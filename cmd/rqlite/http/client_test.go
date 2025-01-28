@@ -23,7 +23,7 @@ func TestClient_QueryWhenAllAvailable(t *testing.T) {
 	u1, _ := url.Parse(node1.URL)
 	u2, _ := url.Parse(node2.URL)
 	client := NewClient(httpClient, []string{u1.Host, u2.Host})
-	res, err := client.Query(url.URL{
+	res, err := client.Query(&url.URL{
 		Path: "/",
 	})
 	if err != nil {
@@ -58,7 +58,7 @@ func TestClient_QueryWhenSomeAreAvailable(t *testing.T) {
 	u1, _ := url.Parse(node1.URL)
 	u2, _ := url.Parse(node2.URL)
 	client := NewClient(httpClient, []string{u1.Host, u2.Host})
-	res, err := client.Query(url.URL{
+	res, err := client.Query(&url.URL{
 		Path: "/",
 	})
 	// If the request succeeds after changing hosts, it should be reflected in the returned error
@@ -105,7 +105,7 @@ func TestClient_QueryWhenAllUnavailable(t *testing.T) {
 	node1.Close()
 	node2.Close()
 	client := NewClient(httpClient, []string{u1.Host, u2.Host})
-	_, err := client.Query(url.URL{
+	_, err := client.Query(&url.URL{
 		Path: "/",
 	})
 
@@ -148,7 +148,7 @@ func TestClient_BasicAuthIsForwarded(t *testing.T) {
 	u2, _ := url.Parse(node2.URL)
 	client := NewClient(httpClient, []string{u1.Host, u2.Host}, WithBasicAuth("john:wrongpassword"))
 
-	res, err := client.Query(url.URL{
+	res, err := client.Query(&url.URL{
 		Path: "/",
 	})
 

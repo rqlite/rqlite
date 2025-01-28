@@ -1,6 +1,7 @@
 package main
 
 import (
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -67,7 +68,7 @@ func executeWithClient(ctx *cli.Context, client *cl.Client, timer bool, stmt str
 	if timer {
 		queryStr.Set("timings", "")
 	}
-	u := url.URL{
+	u := &url.URL{
 		Path: fmt.Sprintf("%sdb/execute", client.Prefix),
 	}
 
@@ -107,7 +108,7 @@ func executeWithClient(ctx *cli.Context, client *cl.Client, timer bool, stmt str
 		return err
 	}
 	if ret.Error != "" {
-		return fmt.Errorf(ret.Error)
+		return errors.New(ret.Error)
 	}
 	if len(ret.Results) != 1 {
 		return fmt.Errorf("unexpected results length: %d", len(ret.Results))
