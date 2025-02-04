@@ -1695,7 +1695,7 @@ func (s *Store) Join(jr *proto.JoinRequest) error {
 	// to incomplete DNS records across the underlying infrastructure. If it can't
 	// then don't consider this join attempt successful -- so the joining node
 	// will presumably try again.
-	if addr, err := resolvableAddress(addr); err != nil {
+	if _, err := resolvableAddress(addr); err != nil {
 		return fmt.Errorf("failed to resolve %s: %w", addr, err)
 	}
 

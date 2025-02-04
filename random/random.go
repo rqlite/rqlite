@@ -11,7 +11,7 @@ var r *rand.Rand
 var mu sync.Mutex
 
 const (
-	srcChars = "abcdedfghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ"
+	srcChars = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ"
 )
 
 func init() {
