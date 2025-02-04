@@ -1,3 +1,7 @@
+## v8.36.11 (unreleased)
+### Implementation changes and bug fixes
+- [PR #2039](https://github.com/rqlite/rqlite/pull/2039): Some small fixes.
+
 ## v8.36.10 (January 27th 2025)
 ### Implementation changes and bug fixes
 - [PR #2038](https://github.com/rqlite/rqlite/pull/2038): Further consistent use of HTTP client in rqlite shell.
