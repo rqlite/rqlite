@@ -13,6 +13,7 @@ import (
 	"github.com/rqlite/rqlite/v8/cluster/proto"
 	command "github.com/rqlite/rqlite/v8/command/proto"
 	"github.com/rqlite/rqlite/v8/random"
+	"github.com/rqlite/rqlite/v8/rsync"
 )
 
 var (
@@ -115,7 +116,7 @@ type AddressProvider interface {
 // Bootstrapper performs a bootstrap of this node.
 type Bootstrapper struct {
 	provider     AddressProvider
-	lastProvided []string
+	lastProvided *rsync.AtomicStringSlice
 
 	client *Client
 	creds  *proto.Credentials
@@ -133,10 +134,11 @@ type Bootstrapper struct {
 // NewBootstrapper returns an instance of a Bootstrapper.
 func NewBootstrapper(p AddressProvider, client *Client) *Bootstrapper {
 	bs := &Bootstrapper{
-		provider: p,
-		client:   client,
-		logger:   log.New(os.Stderr, "[cluster-bootstrap] ", log.LstdFlags),
-		Interval: bootCheckInterval,
+		provider:     p,
+		lastProvided: rsync.NewAtomicStringSlice(),
+		client:       client,
+		logger:       log.New(os.Stderr, "[cluster-bootstrap] ", log.LstdFlags),
+		Interval:     bootCheckInterval,
 	}
 	return bs
 }
@@ -203,9 +205,9 @@ func (b *Bootstrapper) Boot(ctx context.Context, id, raftAddr string, suf Suffra
 				continue
 			}
 			slices.Sort(targets)
-			if !slices.Equal(b.lastProvided, targets) {
+			if !b.lastProvided.Equals(targets) {
 				b.logger.Printf("address provider returned %s", targets)
-				b.lastProvided = targets
+				b.lastProvided.Store(targets)
 			}
 
 			// Try an explicit join first. Joining an existing cluster is always given priority

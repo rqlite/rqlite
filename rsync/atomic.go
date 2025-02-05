@@ -1,6 +1,7 @@
 package rsync
 
 import (
+	"slices"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -135,4 +136,37 @@ func (s *AtomicString) Load() string {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 	return s.s
+}
+
+// AtomicStringSlice is a slice of strings with atomic operations.
+type AtomicStringSlice struct {
+	s  []string
+	mu sync.RWMutex
+}
+
+// NewAtomicStringSlice returns a new AtomicStringSlice.
+func NewAtomicStringSlice() *AtomicStringSlice {
+	return &AtomicStringSlice{}
+}
+
+// Store stores a new slice of strings.
+func (s *AtomicStringSlice) Store(o []string) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.s = o
+}
+
+// Load returns the stored slice of strings.
+func (s *AtomicStringSlice) Load() []string {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return s.s
+}
+
+// Equals returns true if the stored slice of strings is equal to the
+// given slice of strings, false otherwise.
+func (s *AtomicStringSlice) Equals(other []string) bool {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return slices.Equal(s.s, other)
 }
