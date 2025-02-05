@@ -1,7 +1,7 @@
 ## v8.36.11 (February 4th 2025)
 ### Implementation changes and bug fixes
 - [PR #2039](https://github.com/rqlite/rqlite/pull/2039): Some small fixes.
-- [PR #2039](https://github.com/rqlite/rqlite/pull/2039): Upgrade dependencies, including DNS disco client code.
+- [PR #2043](https://github.com/rqlite/rqlite/pull/2043): Upgrade dependencies, including DNS disco client code.
 
 ## v8.36.10 (January 27th 2025)
 ### Implementation changes and bug fixes
