@@ -1,6 +1,7 @@
 ## v8.36.11 (unreleased)
 ### Implementation changes and bug fixes
 - [PR #2039](https://github.com/rqlite/rqlite/pull/2039): Some small fixes.
+- [PR #2042](https://github.com/rqlite/rqlite/pull/2042): Log the addresses provided during Bootstrapping.
 
 ## v8.36.10 (January 27th 2025)
 ### Implementation changes and bug fixes

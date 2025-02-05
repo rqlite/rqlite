@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"slices"
 	"sync"
 	"time"
 
@@ -113,7 +114,8 @@ type AddressProvider interface {
 
 // Bootstrapper performs a bootstrap of this node.
 type Bootstrapper struct {
-	provider AddressProvider
+	provider     AddressProvider
+	lastProvided []string
 
 	client *Client
 	creds  *proto.Credentials
@@ -194,11 +196,16 @@ func (b *Bootstrapper) Boot(ctx context.Context, id, raftAddr string, suf Suffra
 			tickerT.Reset(random.Jitter(b.Interval)) // Move to longer-period polling
 
 			targets, err := b.provider.Lookup()
+			slices.Sort(targets)
 			if err != nil {
 				b.logger.Printf("provider lookup failed %s", err.Error())
 			}
 			if len(targets) == 0 {
 				continue
+			}
+			if !slices.Equal(b.lastProvided, targets) {
+				b.logger.Printf("address provider returned %s", targets)
+				b.lastProvided = targets
 			}
 
 			// Try an explicit join first. Joining an existing cluster is always given priority

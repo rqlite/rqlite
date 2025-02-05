@@ -5,6 +5,7 @@ import (
 	"errors"
 	"net"
 	"reflect"
+	"slices"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -14,6 +15,17 @@ import (
 	command "github.com/rqlite/rqlite/v8/command/proto"
 	pb "google.golang.org/protobuf/proto"
 )
+
+func Test_StringSliceEqual(t *testing.T) {
+	a := []string{"a", "b", "c"}
+	b := []string{"a", "b", "c"}
+	if !slices.Equal(a, b) {
+		t.Fatalf("slices should be equal")
+	}
+	if slices.Equal(nil, a) {
+		t.Fatalf("nil slice should not be equal")
+	}
+}
 
 func Test_AddressProviderString(t *testing.T) {
 	a := []string{"a", "b", "c"}
