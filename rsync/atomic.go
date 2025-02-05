@@ -149,18 +149,19 @@ func NewAtomicStringSlice() *AtomicStringSlice {
 	return &AtomicStringSlice{}
 }
 
-// Store stores a new slice of strings.
+// Store stores a new slice of strings. It makes a copy of the given
+// slice of strings.
 func (s *AtomicStringSlice) Store(o []string) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	s.s = o
+	s.s = append([]string(nil), o...)
 }
 
-// Load returns the stored slice of strings.
+// Load returns a copy of the stored slice of strings.
 func (s *AtomicStringSlice) Load() []string {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
-	return s.s
+	return append([]string(nil), s.s...)
 }
 
 // Equals returns true if the stored slice of strings is equal to the
