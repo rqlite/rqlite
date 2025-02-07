@@ -6,6 +6,26 @@ import (
 	"time"
 )
 
+func Test_StringNLength(t *testing.T) {
+	str := StringN(10)
+	if exp, got := 10, len(str); exp != got {
+		t.Errorf("String() returned a string of length %d; want %d", got, exp)
+	}
+}
+
+func Test_StringNUniqueness(t *testing.T) {
+	const numStrings = 100
+	strs := make(map[string]bool, numStrings)
+
+	for i := 0; i < numStrings; i++ {
+		str := StringN(50)
+		if strs[str] {
+			t.Errorf("StringN() returned a non-unique string: %s", str)
+		}
+		strs[str] = true
+	}
+}
+
 func Test_StringLength(t *testing.T) {
 	str := String()
 	if exp, got := 20, len(str); exp != got {
@@ -26,6 +46,19 @@ func Test_StringUniqueness(t *testing.T) {
 	}
 }
 
+func Test_StringPatternReplacement(t *testing.T) {
+	str := StringPattern("xxx-⌘-XXX-⌘")
+	if strings.Contains(str, "xxx-") {
+		t.Errorf("StringPattern() did not replace the lowercased 'x' with a random character: %q", str)
+	}
+	if strings.Contains(str, "-XXX-") {
+		t.Errorf("StringPattern() did not replace the uppercased 'XXX' with a random character: %q", str)
+	}
+	if strings.Count(str, "-⌘") != 2 {
+		t.Errorf("StringPattern() didn't work with runes: %q", str)
+	}
+}
+
 func Test_StringPatternUniqueness(t *testing.T) {
 	const numStrings = 100
 	strs := make(map[string]bool, numStrings)
@@ -42,29 +75,15 @@ func Test_StringPatternUniqueness(t *testing.T) {
 	}
 }
 
-func Test_Float64Uniqueness(t *testing.T) {
-	const numFloat64s = 100
-	floats := make(map[float64]bool, numFloat64s)
-
-	for i := 0; i < numFloat64s; i++ {
-		f := Float64()
-		if floats[f] {
-			t.Errorf("Float64() returned a non-unique float64: %f", f)
-		}
-		floats[f] = true
+func Test_BytesLength(t *testing.T) {
+	bytes := Bytes(0)
+	if exp := len(bytes); exp != 0 {
+		t.Errorf("Bytes() returned a byte slice of non-zero length %q", bytes)
 	}
-}
 
-func Test_IntnUniqueness(t *testing.T) {
-	const numIntns = 100
-	intns := make(map[int]bool, numIntns)
-
-	for i := 0; i < numIntns; i++ {
-		n := Intn(1000000000)
-		if intns[n] {
-			t.Errorf("Intn() returned a non-unique int: %d", n)
-		}
-		intns[n] = true
+	bytes = Bytes(10)
+	if exp, got := 10, len(bytes); exp != got {
+		t.Errorf("Bytes() returned a byte slice of length %q; want %d", bytes, exp)
 	}
 }
 

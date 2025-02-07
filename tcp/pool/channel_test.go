@@ -2,12 +2,11 @@ package pool
 
 import (
 	"log"
+	"math/rand/v2"
 	"net"
 	"sync"
 	"testing"
 	"time"
-
-	"github.com/rqlite/rqlite/v8/random"
 )
 
 var (
@@ -204,7 +203,7 @@ func TestPoolConcurrent2(t *testing.T) {
 		for i := 0; i < 10; i++ {
 			go func(i int) {
 				conn, _ := p.Get()
-				time.Sleep(time.Millisecond * time.Duration(random.Intn(100)))
+				time.Sleep(rand.N(100 * time.Millisecond))
 				conn.Close()
 				wg.Done()
 			}(i)
@@ -215,7 +214,7 @@ func TestPoolConcurrent2(t *testing.T) {
 		wg.Add(1)
 		go func(i int) {
 			conn, _ := p.Get()
-			time.Sleep(time.Millisecond * time.Duration(random.Intn(100)))
+			time.Sleep(rand.N(100 * time.Millisecond))
 			conn.Close()
 			wg.Done()
 		}(i)
