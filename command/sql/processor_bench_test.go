@@ -5,31 +5,19 @@
 package sql
 
 import (
-	"math/rand"
 	"regexp"
 	"strings"
 	"testing"
-	"time"
-)
 
-// Generate a random 100-character string
-func generateRandomString(length int) string {
-	const charset = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
-	seed := rand.NewSource(time.Now().UnixNano())
-	r := rand.New(seed)
-	result := make([]byte, length)
-	for i := range result {
-		result[i] = charset[r.Intn(len(charset))]
-	}
-	return string(result)
-}
+	"github.com/rqlite/rqlite/v8/random"
+)
 
 // Benchmark using strings.Contains
 func BenchmarkContains(b *testing.B) {
 	// The set of strings to search for
 	keywords := []string{"date", "time", "julianday", "unixepoch", "random", "returning"}
 	// Generate a random string
-	text := generateRandomString(100)
+	text := random.StringN(100)
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
@@ -46,7 +34,7 @@ func BenchmarkRegex(b *testing.B) {
 	pattern := `(?i)date|time|julianday|unixepoch|random|returning`
 	regex := regexp.MustCompile(pattern)
 	// Generate a random string
-	text := generateRandomString(100)
+	text := random.StringN(100)
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {

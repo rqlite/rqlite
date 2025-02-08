@@ -2,18 +2,18 @@ package db
 
 import (
 	"errors"
+	"math/rand/v2"
 	"os"
 	"strings"
 	"testing"
 
 	command "github.com/rqlite/rqlite/v8/command/proto"
-	"github.com/rqlite/rqlite/v8/random"
 	"github.com/rqlite/rqlite/v8/testdata/chinook"
 )
 
 func testBusyTimeout(t *testing.T, db *DB) {
-	wantRw := random.Intn(10000)
-	wantRo := random.Intn(10000)
+	wantRw := rand.N(10000)
+	wantRo := rand.N(10000)
 
 	err := db.SetBusyTimeout(wantRw, wantRo)
 	if err != nil {

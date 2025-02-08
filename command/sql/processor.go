@@ -4,7 +4,7 @@ import (
 	"expvar"
 	"fmt"
 	"math"
-	"math/rand"
+	"math/rand/v2"
 	"strconv"
 	"strings"
 	"time"
@@ -128,10 +128,8 @@ func NewRewriter() *Rewriter {
 		RewriteRand: true,
 		RewriteTime: true,
 
-		randFn: func() int64 {
-			return rand.Int63()
-		},
-		nowFn: time.Now,
+		randFn: rand.Int64,
+		nowFn:  time.Now,
 	}
 }
 
