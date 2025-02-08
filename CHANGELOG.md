@@ -1,3 +1,7 @@
+## v8.36.12 (unreleased)
+### Implementation changes and bug fixes
+- [PR #2044](https://github.com/rqlite/rqlite/pull/2044): Simplify random package with math/rand/v2. Thanks @alexandear.
+ 
 ## v8.36.11 (February 4th 2025)
 ### Implementation changes and bug fixes
 - [PR #2039](https://github.com/rqlite/rqlite/pull/2039): Some small fixes.
