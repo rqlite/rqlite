@@ -1137,7 +1137,7 @@ func Test_SingleNodeNoSQLInjection(t *testing.T) {
 		},
 		{
 			stmt:     []interface{}{`DELETE FROM foo WHERE name=?`, `"qux";DROP TABLE FOO`},
-			expected: `{"results":[{"columns":["id","name"],"types":["integer","text"]}]}`,
+			expected: `{"results":[{}]}`,
 			execute:  true,
 		},
 		{
