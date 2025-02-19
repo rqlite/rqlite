@@ -1109,7 +1109,8 @@ func Test_SingleNodeSQLInjection(t *testing.T) {
 }
 
 // Test_SingleNodeNoSQLInjection demonstrates that using the parameterized API protects
-// against SQL injection attacks.
+// against SQL injection attacks. After the attempted injection the table 'foo' should
+// remain in place.
 func Test_SingleNodeNoSQLInjection(t *testing.T) {
 	node := mustNewLeaderNode("leader1")
 	defer node.Deprovision()
@@ -1133,6 +1134,11 @@ func Test_SingleNodeNoSQLInjection(t *testing.T) {
 			stmt:     []interface{}{`SELECT * FROM foo WHERE name=?`, `"baz";DROP TABLE FOO`},
 			expected: `{"results":[{"columns":["id","name"],"types":["integer","text"]}]}`,
 			execute:  false,
+		},
+		{
+			stmt:     []interface{}{`DELETE FROM foo WHERE name=?`, `"qux";DROP TABLE FOO`},
+			expected: `{"results":[{}]}`,
+			execute:  true,
 		},
 		{
 			stmt:     []interface{}{`SELECT * FROM foo`},
