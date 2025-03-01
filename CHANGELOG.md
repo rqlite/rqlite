@@ -1,6 +1,7 @@
 ## v8.36.12 (unreleased)
 ### Implementation changes and bug fixes
 - [PR #2044](https://github.com/rqlite/rqlite/pull/2044): Simplify random package with math/rand/v2. Thanks @alexandear.
+- [PR #2048](https://github.com/rqlite/rqlite/pull/2048): Upgrade `go mod` dependencies.
  
 ## v8.36.11 (February 4th 2025)
 ### Implementation changes and bug fixes
