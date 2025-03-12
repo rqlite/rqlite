@@ -1424,7 +1424,7 @@ func Test_MultiNodeCluster_Backup_SQL(t *testing.T) {
 	}
 
 	// Create a table and write a record
-	if _, err := node1.Execute(`CREATE TABLE foo (id integer not null primary key, name text)`); err != nil {
+	if _, err := node1.Execute(`CREATE TABLE foo (name text)`); err != nil {
 		t.Fatalf("failed to create table: %s", err.Error())
 	}
 
@@ -1439,6 +1439,20 @@ func Test_MultiNodeCluster_Backup_SQL(t *testing.T) {
 	defer os.Remove(backupFile)
 	if err := followers[0].Backup(backupFile, false, "sql"); err != nil {
 		t.Fatalf("failed to get backup from follower: %s", err.Error())
+	}
+
+	// Check the backup contents
+	sql, err := os.ReadFile(backupFile)
+	if err != nil {
+		t.Fatalf(`reading backup file failed: %s`, err.Error())
+	}
+	schema := `PRAGMA foreign_keys=OFF;
+BEGIN TRANSACTION;
+CREATE TABLE foo (name text);
+COMMIT;
+`
+	if exp, got := schema, string(sql); exp != got {
+		t.Fatalf(`contents of backup file are incorrect exp: %s, got %s`, exp, got)
 	}
 }
 
