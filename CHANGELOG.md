@@ -1,6 +1,6 @@
 ## v8.36.13 (unreleased)
 ### Implementation changes and bug fixes
-- [PR #2051](https://github.com/rqlite/rqlite/pull/2051): Unit test SQL format backups.
+- [PR #2051](https://github.com/rqlite/rqlite/pull/2051): System-level test of SQL format backups.
 
 ## v8.36.12 (February 28th 2025)
 ### Implementation changes and bug fixes
