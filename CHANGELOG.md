@@ -1,4 +1,4 @@
-## v8.36.13 (unreleased)
+## v8.36.13 (March 11th 2025)
 ### Implementation changes and bug fixes
 - [PR #2051](https://github.com/rqlite/rqlite/pull/2051): System-level test of SQL format backups.
 - [PR #2052](https://github.com/rqlite/rqlite/pull/2052): Compress SQL-format backups during transmission. Fixes issue [#2050](https://github.com/rqlite/rqlite/issues/2050).
