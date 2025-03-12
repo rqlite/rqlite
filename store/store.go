@@ -1471,7 +1471,16 @@ func (s *Store) Backup(br *proto.BackupRequest, dst io.Writer) (retErr error) {
 		}
 		return err
 	} else if br.Format == proto.BackupRequest_BACKUP_REQUEST_FORMAT_SQL {
-		return s.db.Dump(dst)
+		ww := dst
+		if br.Compress {
+			dstGz, err := gzip.NewWriterLevel(dst, gzip.BestSpeed)
+			if err != nil {
+				return err
+			}
+			defer dstGz.Close()
+			ww = dstGz
+		}
+		return s.db.Dump(ww)
 	}
 	return ErrInvalidBackupFormat
 }

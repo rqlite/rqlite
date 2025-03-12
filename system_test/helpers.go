@@ -250,10 +250,14 @@ func (n *Node) Backup(filename string, compress bool, format string) error {
 	if err != nil {
 		return err
 	}
-	if resp.StatusCode != 200 {
-		return fmt.Errorf("backup returned: %s", resp.Status)
-	}
 	defer resp.Body.Close()
+	if resp.StatusCode != 200 {
+		b, err := io.ReadAll(resp.Body)
+		if err != nil {
+			return fmt.Errorf("failed to read error response body: %s", err)
+		}
+		return fmt.Errorf("backup returned: %s, %s", resp.Status, string(b))
+	}
 	f, err := os.Create(filename)
 	if err != nil {
 		return err

@@ -1409,6 +1409,53 @@ func Test_MultiNodeCluster_Backup(t *testing.T) {
 	}
 }
 
+func Test_MultiNodeCluster_Backup_SQL(t *testing.T) {
+	node1 := mustNewLeaderNode("leader1")
+	defer node1.Deprovision()
+
+	node2 := mustNewNode("node2", false)
+	defer node2.Deprovision()
+	if err := node2.Join(node1); err != nil {
+		t.Fatalf("node failed to join leader: %s", err.Error())
+	}
+	_, err := node2.WaitForLeader()
+	if err != nil {
+		t.Fatalf("failed waiting for leader: %s", err.Error())
+	}
+
+	// Create a table and write a record
+	if _, err := node1.Execute(`CREATE TABLE foo (name text)`); err != nil {
+		t.Fatalf("failed to create table: %s", err.Error())
+	}
+
+	// Get a backup from the leader via the follower.
+	c := Cluster{node1, node2}
+	followers, err := c.Followers()
+	if err != nil {
+		t.Fatalf("failed to get followers: %s", err.Error())
+	}
+
+	backupFile := mustTempFile()
+	defer os.Remove(backupFile)
+	if err := followers[0].Backup(backupFile, false, "sql"); err != nil {
+		t.Fatalf("failed to get backup from follower: %s", err.Error())
+	}
+
+	// Check the backup contents
+	sql, err := os.ReadFile(backupFile)
+	if err != nil {
+		t.Fatalf(`reading backup file failed: %s`, err.Error())
+	}
+	schema := `PRAGMA foreign_keys=OFF;
+BEGIN TRANSACTION;
+CREATE TABLE foo (name text);
+COMMIT;
+`
+	if exp, got := schema, string(sql); exp != got {
+		t.Fatalf(`contents of backup file are incorrect exp: %s, got %s`, exp, got)
+	}
+}
+
 // Test_MultiNodeClusterWithNonVoter tests formation of a 4-node cluster, one of which is
 // a non-voter. This test also checks that if the Leader changes the non-voter is still in
 // the cluster and gets updates from the new leader.
