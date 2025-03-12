@@ -1285,7 +1285,7 @@ func Test_SingleNodeUpgrades_Snapshots(t *testing.T) {
 	}
 }
 
-func Test_SingleNodeBackup(t *testing.T) {
+func Test_SingleNodeBackup_Binary(t *testing.T) {
 	node := mustNewLeaderNode("leader1")
 	defer node.Deprovision()
 
@@ -1301,7 +1301,7 @@ func Test_SingleNodeBackup(t *testing.T) {
 
 	backup := mustTempFile()
 	defer os.Remove(backup)
-	if err := node.Backup(backup, false); err != nil {
+	if err := node.Backup(backup, false, ""); err != nil {
 		t.Fatalf(`backup failed: %s`, err.Error())
 	}
 
@@ -1321,7 +1321,7 @@ func Test_SingleNodeBackup(t *testing.T) {
 	}
 
 	// Get a compressed backup, test it again.
-	if err := node.Backup(backup, true); err != nil {
+	if err := node.Backup(backup, true, ""); err != nil {
 		t.Fatalf(`backup failed: %s`, err.Error())
 	}
 
@@ -1362,6 +1362,38 @@ func Test_SingleNodeBackup(t *testing.T) {
 	if r != `{"results":[{"columns":["id","name"],"types":["integer","text"],"values":[[1,"fiona"]]}]}` {
 		t.Fatalf("test received wrong result got %s", r)
 	}
+}
+
+func Test_SingleNodeBackup_SQL(t *testing.T) {
+	node := mustNewLeaderNode("leader1")
+	defer node.Deprovision()
+
+	// create a table and insert a row
+	_, err := node.Execute(`CREATE TABLE foo (name text)`)
+	if err != nil {
+		t.Fatalf(`CREATE TABLE failed: %s`, err.Error())
+	}
+
+	backup := mustTempFile()
+	defer os.Remove(backup)
+	if err := node.Backup(backup, false, "sql"); err != nil {
+		t.Fatalf(`backup failed: %s`, err.Error())
+	}
+
+	// Check the backup contents
+	sql, err := os.ReadFile(backup)
+	if err != nil {
+		t.Fatalf(`reading backup file failed: %s`, err.Error())
+	}
+	schema := `PRAGMA foreign_keys=OFF;
+BEGIN TRANSACTION;
+CREATE TABLE foo (name text);
+COMMIT;
+`
+	if exp, got := schema, string(sql); exp != got {
+		t.Fatalf(`contents of backup file are incorrect exp: %s, got %s`, exp, got)
+	}
+
 }
 
 func Test_SingleNodeNodes(t *testing.T) {

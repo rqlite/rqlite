@@ -234,11 +234,16 @@ func (n *Node) Load(filename string) (string, error) {
 }
 
 // Backup backs up the node's database to the given file.
-func (n *Node) Backup(filename string, compress bool) error {
+func (n *Node) Backup(filename string, compress bool, format string) error {
 	v, _ := url.Parse("http://" + n.APIAddr + "/db/backup")
 	if compress {
 		q := v.Query()
 		q.Set("compress", "true")
+		v.RawQuery = q.Encode()
+	}
+	if format != "" {
+		q := v.Query()
+		q.Set("fmt", format)
 		v.RawQuery = q.Encode()
 	}
 	resp, err := http.Get(v.String())
