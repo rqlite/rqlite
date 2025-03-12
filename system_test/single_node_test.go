@@ -1393,7 +1393,6 @@ COMMIT;
 	if exp, got := schema, string(sql); exp != got {
 		t.Fatalf(`contents of backup file are incorrect exp: %s, got %s`, exp, got)
 	}
-
 }
 
 func Test_SingleNodeNodes(t *testing.T) {
