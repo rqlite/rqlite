@@ -1386,7 +1386,7 @@ func Test_MultiNodeCluster_Backup(t *testing.T) {
 
 	backupFile := mustTempFile()
 	defer os.Remove(backupFile)
-	if err := followers[0].Backup(backupFile, false); err != nil {
+	if err := followers[0].Backup(backupFile, false, ""); err != nil {
 		t.Fatalf("failed to get backup from follower: %s", err.Error())
 	}
 
