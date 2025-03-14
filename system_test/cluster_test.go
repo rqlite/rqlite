@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net"
 	"os"
+	"path/filepath"
 	"sync"
 	"testing"
 	"time"
@@ -1453,6 +1454,39 @@ COMMIT;
 `
 	if exp, got := schema, string(sql); exp != got {
 		t.Fatalf(`contents of backup file are incorrect exp: %s, got %s`, exp, got)
+	}
+}
+
+func Test_MultiNodeCluster_FollowerLoad_SQL(t *testing.T) {
+	node1 := mustNewLeaderNode("leader1")
+	defer node1.Deprovision()
+
+	node2 := mustNewNode("node2", false)
+	defer node2.Deprovision()
+	if err := node2.Join(node1); err != nil {
+		t.Fatalf("node failed to join leader: %s", err.Error())
+	}
+	_, err := node2.WaitForLeader()
+	if err != nil {
+		t.Fatalf("failed waiting for leader: %s", err.Error())
+	}
+
+	// Get a follower, make sure Load works via it.
+	c := Cluster{node1, node2}
+	followers, err := c.Followers()
+	if err != nil {
+		t.Fatalf("failed to get followers: %s", err.Error())
+	}
+	if _, err := followers[0].Load(filepath.Join("testdata", "auto-restore.sql")); err != nil {
+		t.Fatalf("failed to load via follower: %s", err.Error())
+	}
+
+	r, err := node1.QueryStrongConsistency("SELECT * FROM foo WHERE id=2")
+	if err != nil {
+		t.Fatalf("failed to execute query: %s", err.Error())
+	}
+	if r != `{"results":[{"columns":["id","name"],"types":["integer","text"],"values":[[2,"fiona"]]}]}` {
+		t.Fatalf("test received wrong result got %s", r)
 	}
 }
 

@@ -736,7 +736,6 @@ func (s *Service) handleLoad(w http.ResponseWriter, r *http.Request, qp QueryPar
 			if !ok {
 				username = ""
 			}
-
 			w.Header().Add(ServedByHTTPHeader, addr)
 			loadErr := s.cluster.Load(lr, addr, makeCredentials(username, password),
 				qp.Timeout(defaultTimeout), qp.Retries(0))
@@ -758,16 +757,46 @@ func (s *Service) handleLoad(w http.ResponseWriter, r *http.Request, qp QueryPar
 		er := executeRequestFromStrings(queries, qp.Timings(), false)
 
 		response, err := s.store.Execute(er)
-		if err != nil {
-			if err == store.ErrNotLeader {
-				if s.DoRedirect(w, r, qp) {
-					return
-				}
+		if err != nil && err == store.ErrNotLeader {
+			if s.DoRedirect(w, r, qp) {
+				return
 			}
-			resp.Error = err.Error()
-		} else {
+
+			addr, addrErr := s.store.LeaderAddr()
+			if addrErr != nil {
+				http.Error(w, fmt.Sprintf("leader address: %s", addrErr.Error()),
+					http.StatusInternalServerError)
+				return
+			}
+			if addr == "" {
+				stats.Add(numLeaderNotFound, 1)
+				http.Error(w, ErrLeaderNotFound.Error(), http.StatusServiceUnavailable)
+				return
+			}
+
+			username, password, ok := r.BasicAuth()
+			if !ok {
+				username = ""
+			}
+			w.Header().Add(ServedByHTTPHeader, addr)
+			response, err = s.cluster.Execute(er, addr, makeCredentials(username, password),
+				qp.Timeout(defaultTimeout), qp.Retries(0))
+			if err != nil {
+				if err.Error() == "unauthorized" {
+					http.Error(w, "remote load not authorized", http.StatusUnauthorized)
+				} else {
+					http.Error(w, err.Error(), http.StatusInternalServerError)
+				}
+				return
+			}
 			resp.Results.ExecuteQueryResponse = response
+			stats.Add(numRemoteLoads, 1)
+			// Allow this if block to exit, so response remains as before request
+			// forwarding was put in place.
+		} else {
+			resp.Error = err.Error()
 		}
+		resp.Results.ExecuteQueryResponse = response
 		resp.end = time.Now()
 	}
 	s.writeResponse(w, qp, resp)
