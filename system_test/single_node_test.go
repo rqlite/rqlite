@@ -1823,3 +1823,21 @@ func Test_SingleNodeBoot_FailNotLeader(t *testing.T) {
 		t.Fatalf("expected error loading data")
 	}
 }
+
+func Test_SingleNodeLoad_OK(t *testing.T) {
+	node := mustNewLeaderNode("leader1")
+	defer node.Deprovision()
+
+	_, err := node.Load(filepath.Join("testdata", "auto-restore.sql"))
+	if err != nil {
+		t.Fatalf("failed to load data: %s", err.Error())
+	}
+
+	r, err := node.Query("SELECT * FROM foo WHERE id=2")
+	if err != nil {
+		t.Fatalf("failed to execute query: %s", err.Error())
+	}
+	if r != `{"results":[{"columns":["id","name"],"types":["integer","text"],"values":[[2,"fiona"]]}]}` {
+		t.Fatalf("test received wrong result got %s", r)
+	}
+}
