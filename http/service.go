@@ -734,7 +734,7 @@ func (s *Service) handleLoad(w http.ResponseWriter, r *http.Request, qp QueryPar
 			w.Header().Add(ServedByHTTPHeader, ldrAddr)
 			loadErr := s.cluster.Load(lr, ldrAddr, makeCredentials(r), qp.Timeout(defaultTimeout), qp.Retries(0))
 			if loadErr != nil {
-				handleRemoteErr(err)
+				handleRemoteErr(loadErr)
 				return
 			}
 			stats.Add(numRemoteLoads, 1)
@@ -742,31 +742,36 @@ func (s *Service) handleLoad(w http.ResponseWriter, r *http.Request, qp QueryPar
 			// forwarding was put in place.
 		}
 	} else {
-		// No JSON structure expected for this API.
+		// No JSON structure expected for this API, just a bunch of SQL statements.
 		queries := []string{string(b)}
 		er := executeRequestFromStrings(queries, qp.Timings(), false)
 
 		response, err := s.store.Execute(er)
-		if err != nil && err == store.ErrNotLeader {
-			if s.DoRedirect(w, r, qp) {
-				return
-			}
+		if err != nil {
+			if err == store.ErrNotLeader {
+				if s.DoRedirect(w, r, qp) {
+					return
+				}
 
-			w.Header().Add(ServedByHTTPHeader, ldrAddr)
-			response, err = s.cluster.Execute(er, ldrAddr, makeCredentials(r),
-				qp.Timeout(defaultTimeout), qp.Retries(0))
-			if err != nil {
-				handleRemoteErr(err)
-				return
+				w.Header().Add(ServedByHTTPHeader, ldrAddr)
+				var exErr error
+				response, exErr = s.cluster.Execute(er, ldrAddr, makeCredentials(r),
+					qp.Timeout(defaultTimeout), qp.Retries(0))
+				if err != nil {
+					handleRemoteErr(exErr)
+					return
+				}
+				resp.Results.ExecuteQueryResponse = response
+				stats.Add(numRemoteLoads, 1)
+			} else {
+				// Local execute failed for some reason other than not
+				// being the leader. Nothing we can do here.
+				resp.Error = err.Error()
 			}
-			resp.Results.ExecuteQueryResponse = response
-			stats.Add(numRemoteLoads, 1)
-			// Allow this if block to exit, so response remains as before request
-			// forwarding was put in place.
 		} else {
-			resp.Error = err.Error()
+			// Successful local execute.
+			resp.Results.ExecuteQueryResponse = response
 		}
-		resp.Results.ExecuteQueryResponse = response
 		resp.end = time.Now()
 	}
 	s.writeResponse(w, qp, resp)
