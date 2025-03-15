@@ -2,6 +2,7 @@
 ### Implementation changes and bug fixes
 - [PR #2056](https://github.com/rqlite/rqlite/pull/2056): Minor refactoring of HTTP credentials handling.
 - [PR #2054](https://github.com/rqlite/rqlite/pull/2054): Bump golang.org/x/net from 0.35.0 to 0.36.0.
+- [PR #2055](https://github.com/rqlite/rqlite/pull/2055): Support SQL-format loading via Follower. Fixes issue [#2053](https://github.com/rqlite/rqlite/issues/2053).
 
 ## v8.36.13 (March 11th 2025)
 ### Implementation changes and bug fixes
