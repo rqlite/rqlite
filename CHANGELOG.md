@@ -1,4 +1,9 @@
-## v8.36.13 (unreleased)
+## v8.36.14 (unreleased)
+### Implementation changes and bug fixes
+- [PR #2056](https://github.com/rqlite/rqlite/pull/2056): Minor refactoring of HTTP credentials handling.
+- [PR #2054](https://github.com/rqlite/rqlite/pull/2054): Bump golang.org/x/net from 0.35.0 to 0.36.0.
+
+## v8.36.13 (March 11th 2025)
 ### Implementation changes and bug fixes
 - [PR #2051](https://github.com/rqlite/rqlite/pull/2051): System-level test of SQL format backups.
 - [PR #2052](https://github.com/rqlite/rqlite/pull/2052): Compress SQL-format backups during transmission. Fixes issue [#2050](https://github.com/rqlite/rqlite/issues/2050).

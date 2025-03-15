@@ -250,14 +250,7 @@ func (s *Service) checkCommandPerm(c *proto.Command, perm string) bool {
 	if s.credentialStore == nil {
 		return true
 	}
-
-	username := ""
-	password := ""
-	if c.Credentials != nil {
-		username = c.Credentials.GetUsername()
-		password = c.Credentials.GetPassword()
-	}
-	return s.credentialStore.AA(username, password, perm)
+	return s.credentialStore.AA(c.Credentials.GetUsername(), c.Credentials.GetPassword(), perm)
 }
 
 func (s *Service) checkCommandPermAll(c *proto.Command, perms ...string) bool {
@@ -265,14 +258,8 @@ func (s *Service) checkCommandPermAll(c *proto.Command, perms ...string) bool {
 		return true
 	}
 
-	username := ""
-	password := ""
-	if c.Credentials != nil {
-		username = c.Credentials.GetUsername()
-		password = c.Credentials.GetPassword()
-	}
 	for _, perm := range perms {
-		if !s.credentialStore.AA(username, password, perm) {
+		if !s.credentialStore.AA(c.Credentials.GetUsername(), c.Credentials.GetPassword(), perm) {
 			return false
 		}
 	}

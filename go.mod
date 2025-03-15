@@ -20,7 +20,7 @@ require (
 	github.com/rqlite/rqlite-disco-clients v0.0.0-20250205044118-8ada2b350099
 	github.com/rqlite/sql v0.0.0-20241111133259-a4122fabb196
 	go.etcd.io/bbolt v1.4.0
-	golang.org/x/net v0.35.0
+	golang.org/x/net v0.36.0
 	google.golang.org/protobuf v1.36.5
 )
 

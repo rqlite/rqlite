@@ -595,13 +595,8 @@ func (s *Service) handleRemove(w http.ResponseWriter, r *http.Request, qp QueryP
 				return
 			}
 
-			username, password, ok := r.BasicAuth()
-			if !ok {
-				username = ""
-			}
-
 			w.Header().Add(ServedByHTTPHeader, addr)
-			removeErr := s.cluster.RemoveNode(rn, addr, makeCredentials(username, password), qp.Timeout(defaultTimeout))
+			removeErr := s.cluster.RemoveNode(rn, addr, makeCredentials(r), qp.Timeout(defaultTimeout))
 			if removeErr != nil {
 				if removeErr.Error() == "unauthorized" {
 					http.Error(w, "remote remove node not authorized", http.StatusUnauthorized)
@@ -657,13 +652,8 @@ func (s *Service) handleBackup(w http.ResponseWriter, r *http.Request, qp QueryP
 				return
 			}
 
-			username, password, ok := r.BasicAuth()
-			if !ok {
-				username = ""
-			}
-
 			w.Header().Add(ServedByHTTPHeader, addr)
-			backupErr := s.cluster.Backup(br, addr, makeCredentials(username, password), qp.Timeout(defaultTimeout), w)
+			backupErr := s.cluster.Backup(br, addr, makeCredentials(r), qp.Timeout(defaultTimeout), w)
 			if backupErr != nil {
 				if backupErr.Error() == "unauthorized" {
 					http.Error(w, "remote backup not authorized", http.StatusUnauthorized)
@@ -698,10 +688,6 @@ func (s *Service) handleLoad(w http.ResponseWriter, r *http.Request, qp QueryPar
 	}
 
 	// Determine some perhaps-needed details.
-	username, password, ok := r.BasicAuth()
-	if !ok {
-		username = ""
-	}
 	ldrAddr, err := s.store.LeaderAddr()
 	if err != nil {
 		http.Error(w, fmt.Sprintf("leader address: %s", err.Error()),
@@ -746,8 +732,7 @@ func (s *Service) handleLoad(w http.ResponseWriter, r *http.Request, qp QueryPar
 			}
 
 			w.Header().Add(ServedByHTTPHeader, ldrAddr)
-			loadErr := s.cluster.Load(lr, ldrAddr, makeCredentials(username, password),
-				qp.Timeout(defaultTimeout), qp.Retries(0))
+			loadErr := s.cluster.Load(lr, ldrAddr, makeCredentials(r), qp.Timeout(defaultTimeout), qp.Retries(0))
 			if loadErr != nil {
 				handleRemoteErr(err)
 				return
@@ -768,7 +753,7 @@ func (s *Service) handleLoad(w http.ResponseWriter, r *http.Request, qp QueryPar
 			}
 
 			w.Header().Add(ServedByHTTPHeader, ldrAddr)
-			response, err = s.cluster.Execute(er, ldrAddr, makeCredentials(username, password),
+			response, err = s.cluster.Execute(er, ldrAddr, makeCredentials(r),
 				qp.Timeout(defaultTimeout), qp.Retries(0))
 			if err != nil {
 				handleRemoteErr(err)
@@ -1220,13 +1205,8 @@ func (s *Service) execute(w http.ResponseWriter, r *http.Request, qp QueryParams
 			return
 		}
 
-		username, password, ok := r.BasicAuth()
-		if !ok {
-			username = ""
-		}
-
 		w.Header().Add(ServedByHTTPHeader, addr)
-		results, resultsErr = s.cluster.Execute(er, addr, makeCredentials(username, password),
+		results, resultsErr = s.cluster.Execute(er, addr, makeCredentials(r),
 			qp.Timeout(defaultTimeout), qp.Retries(0))
 		if resultsErr != nil {
 			stats.Add(numRemoteExecutionsFailed, 1)
@@ -1330,13 +1310,9 @@ func (s *Service) handleQuery(w http.ResponseWriter, r *http.Request, qp QueryPa
 			http.Error(w, ErrLeaderNotFound.Error(), http.StatusServiceUnavailable)
 			return
 		}
-		username, password, ok := r.BasicAuth()
-		if !ok {
-			username = ""
-		}
 
 		w.Header().Add(ServedByHTTPHeader, addr)
-		results, resultsErr = s.cluster.Query(qr, addr, makeCredentials(username, password), qp.Timeout(defaultTimeout))
+		results, resultsErr = s.cluster.Query(qr, addr, makeCredentials(r), qp.Timeout(defaultTimeout))
 		if resultsErr != nil {
 			stats.Add(numRemoteQueriesFailed, 1)
 			if resultsErr.Error() == "unauthorized" {
@@ -1417,13 +1393,9 @@ func (s *Service) handleRequest(w http.ResponseWriter, r *http.Request, qp Query
 			http.Error(w, ErrLeaderNotFound.Error(), http.StatusServiceUnavailable)
 			return
 		}
-		username, password, ok := r.BasicAuth()
-		if !ok {
-			username = ""
-		}
 
 		w.Header().Add(ServedByHTTPHeader, addr)
-		results, resultsErr = s.cluster.Request(eqr, addr, makeCredentials(username, password),
+		results, resultsErr = s.cluster.Request(eqr, addr, makeCredentials(r),
 			qp.Timeout(defaultTimeout), qp.Retries(0))
 		if resultsErr != nil {
 			stats.Add(numRemoteRequestsFailed, 1)
@@ -1807,7 +1779,11 @@ func executeRequestFromStrings(s []string, timings, tx bool) *command.ExecuteReq
 	}
 }
 
-func makeCredentials(username, password string) *clstrPB.Credentials {
+func makeCredentials(r *http.Request) *clstrPB.Credentials {
+	username, password, ok := r.BasicAuth()
+	if !ok {
+		return nil
+	}
 	return &clstrPB.Credentials{
 		Username: username,
 		Password: password,
