@@ -1,4 +1,4 @@
-## v8.36.14 (unreleased)
+## v8.36.14 (March 15th 2025)
 ### Implementation changes and bug fixes
 - [PR #2056](https://github.com/rqlite/rqlite/pull/2056): Minor refactoring of HTTP credentials handling.
 - [PR #2054](https://github.com/rqlite/rqlite/pull/2054): Bump golang.org/x/net from 0.35.0 to 0.36.0.
