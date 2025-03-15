@@ -687,6 +687,27 @@ func (s *Service) handleLoad(w http.ResponseWriter, r *http.Request, qp QueryPar
 		return
 	}
 
+	// Determine some perhaps-needed details.
+	ldrAddr, err := s.store.LeaderAddr()
+	if err != nil {
+		http.Error(w, fmt.Sprintf("leader address: %s", err.Error()),
+			http.StatusInternalServerError)
+		return
+	}
+	if ldrAddr == "" {
+		stats.Add(numLeaderNotFound, 1)
+		http.Error(w, ErrLeaderNotFound.Error(), http.StatusServiceUnavailable)
+		return
+	}
+
+	handleRemoteErr := func(err error) {
+		if err.Error() == "unauthorized" {
+			http.Error(w, "remote load not authorized", http.StatusUnauthorized)
+		} else {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+		}
+	}
+
 	resp := NewResponse()
 	b, err := io.ReadAll(r.Body)
 	if err != nil {
@@ -710,27 +731,10 @@ func (s *Service) handleLoad(w http.ResponseWriter, r *http.Request, qp QueryPar
 				return
 			}
 
-			addr, err := s.store.LeaderAddr()
-			if err != nil {
-				http.Error(w, fmt.Sprintf("leader address: %s", err.Error()),
-					http.StatusInternalServerError)
-				return
-			}
-			if addr == "" {
-				stats.Add(numLeaderNotFound, 1)
-				http.Error(w, ErrLeaderNotFound.Error(), http.StatusServiceUnavailable)
-				return
-			}
-
-			w.Header().Add(ServedByHTTPHeader, addr)
-			loadErr := s.cluster.Load(lr, addr, makeCredentials(r),
-				qp.Timeout(defaultTimeout), qp.Retries(0))
+			w.Header().Add(ServedByHTTPHeader, ldrAddr)
+			loadErr := s.cluster.Load(lr, ldrAddr, makeCredentials(r), qp.Timeout(defaultTimeout), qp.Retries(0))
 			if loadErr != nil {
-				if loadErr.Error() == "unauthorized" {
-					http.Error(w, "remote load not authorized", http.StatusUnauthorized)
-				} else {
-					http.Error(w, loadErr.Error(), http.StatusInternalServerError)
-				}
+				handleRemoteErr(loadErr)
 				return
 			}
 			stats.Add(numRemoteLoads, 1)
@@ -738,7 +742,7 @@ func (s *Service) handleLoad(w http.ResponseWriter, r *http.Request, qp QueryPar
 			// forwarding was put in place.
 		}
 	} else {
-		// No JSON structure expected for this API.
+		// No JSON structure expected for this API, just a bunch of SQL statements.
 		queries := []string{string(b)}
 		er := executeRequestFromStrings(queries, qp.Timings(), false)
 
@@ -748,9 +752,24 @@ func (s *Service) handleLoad(w http.ResponseWriter, r *http.Request, qp QueryPar
 				if s.DoRedirect(w, r, qp) {
 					return
 				}
+
+				w.Header().Add(ServedByHTTPHeader, ldrAddr)
+				var exErr error
+				response, exErr = s.cluster.Execute(er, ldrAddr, makeCredentials(r),
+					qp.Timeout(defaultTimeout), qp.Retries(0))
+				if exErr != nil {
+					handleRemoteErr(exErr)
+					return
+				}
+				resp.Results.ExecuteQueryResponse = response
+				stats.Add(numRemoteLoads, 1)
+			} else {
+				// Local execute failed for some reason other than not
+				// being the leader. Nothing we can do here.
+				resp.Error = err.Error()
 			}
-			resp.Error = err.Error()
 		} else {
+			// Successful local execute.
 			resp.Results.ExecuteQueryResponse = response
 		}
 		resp.end = time.Now()

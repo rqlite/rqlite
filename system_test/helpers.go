@@ -267,7 +267,7 @@ func (n *Node) Backup(filename string, compress bool, format string) error {
 	return err
 }
 
-// Load loads a SQLite database file into the node.
+// Boot boots a node using a SQLite database file.
 func (n *Node) Boot(filename string) (string, error) {
 	return n.postFile("/boot", filename)
 }

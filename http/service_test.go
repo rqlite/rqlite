@@ -709,7 +709,9 @@ func Test_BackupFlagsInvalid(t *testing.T) {
 }
 
 func Test_LoadOK(t *testing.T) {
-	m := &MockStore{}
+	m := &MockStore{
+		leaderAddr: "foo:1234",
+	}
 	c := &mockClusterService{}
 	s := New("127.0.0.1:0", m, c, nil)
 	if err := s.Start(); err != nil {
@@ -725,7 +727,7 @@ func Test_LoadOK(t *testing.T) {
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusOK {
-		t.Fatalf("failed to get expected StatusOK for load, got %d", resp.StatusCode)
+		t.Fatalf("failed to get expected StatusOK for load, got %d, %s", resp.StatusCode, mustReadBody(t, resp))
 	}
 	if exp, got := `{"results":[]}`, mustReadBody(t, resp); exp != got {
 		t.Fatalf("incorrect response body, exp: %s, got %s", exp, got)
