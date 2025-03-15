@@ -169,7 +169,7 @@ func (c *Client) GetCommitIndex(nodeAddr string, retries int, timeout time.Durat
 	return a.CommitIndex, nil
 }
 
-// Execute performs an Execute on a remote node. If username is an empty string
+// Execute performs an Execute on a remote node. If creds is nil, then
 // no credential information will be included in the Execute request to the
 // remote node.
 func (c *Client) Execute(er *command.ExecuteRequest, nodeAddr string, creds *proto.Credentials, timeout time.Duration, retries int) ([]*command.ExecuteQueryResponse, error) {
@@ -198,7 +198,9 @@ func (c *Client) Execute(er *command.ExecuteRequest, nodeAddr string, creds *pro
 	return a.Response, nil
 }
 
-// Query performs a Query on a remote node.
+// Query performs a Query on a remote node. If creds is nil, then
+// no credential information will be included in the Query request to the
+// remote node.
 func (c *Client) Query(qr *command.QueryRequest, nodeAddr string, creds *proto.Credentials, timeout time.Duration) ([]*command.QueryRows, error) {
 	command := &proto.Command{
 		Type: proto.Command_COMMAND_TYPE_QUERY,
@@ -225,7 +227,9 @@ func (c *Client) Query(qr *command.QueryRequest, nodeAddr string, creds *proto.C
 	return a.Rows, nil
 }
 
-// Request performs an ExecuteQuery on a remote node.
+// Request performs an ExecuteQuery on a remote node. If creds is nil, then
+// no credential information will be included in the ExecuteQuery request to the
+// remote node.
 func (c *Client) Request(r *command.ExecuteQueryRequest, nodeAddr string, creds *proto.Credentials, timeout time.Duration, retries int) ([]*command.ExecuteQueryResponse, error) {
 	command := &proto.Command{
 		Type: proto.Command_COMMAND_TYPE_REQUEST,
@@ -252,7 +256,9 @@ func (c *Client) Request(r *command.ExecuteQueryRequest, nodeAddr string, creds 
 	return a.Response, nil
 }
 
-// Backup retrieves a backup from a remote node and writes to the io.Writer
+// Backup retrieves a backup from a remote node and writes to the io.Writer.
+// If creds is nil, then no credential information will be included in the
+// Backup request to the remote node.
 func (c *Client) Backup(br *command.BackupRequest, nodeAddr string, creds *proto.Credentials, timeout time.Duration, w io.Writer) error {
 	conn, err := c.dial(nodeAddr)
 	if err != nil {
@@ -305,7 +311,8 @@ func (c *Client) Backup(br *command.BackupRequest, nodeAddr string, creds *proto
 	return err
 }
 
-// Load loads a SQLite file into the database.
+// Load loads a SQLite file into the database. If creds is nil, then no
+// credential information will be included in the Load request to the remote node.
 func (c *Client) Load(lr *command.LoadRequest, nodeAddr string, creds *proto.Credentials, timeout time.Duration, retries int) error {
 	command := &proto.Command{
 		Type: proto.Command_COMMAND_TYPE_LOAD,
@@ -332,7 +339,9 @@ func (c *Client) Load(lr *command.LoadRequest, nodeAddr string, creds *proto.Cre
 	return nil
 }
 
-// RemoveNode removes a node from the cluster
+// RemoveNode removes a node from the cluster. If creds is nil, then no
+// credential information will be included in the RemoveNode request to the
+// remote node.
 func (c *Client) RemoveNode(rn *command.RemoveNodeRequest, nodeAddr string, creds *proto.Credentials, timeout time.Duration) error {
 	conn, err := c.dial(nodeAddr)
 	if err != nil {
@@ -372,6 +381,8 @@ func (c *Client) RemoveNode(rn *command.RemoveNodeRequest, nodeAddr string, cred
 }
 
 // Notify notifies a remote node that this node is ready to bootstrap.
+// If creds is nil, then no credential information will be included in
+// // the Notify request to the remote node.
 func (c *Client) Notify(nr *command.NotifyRequest, nodeAddr string, creds *proto.Credentials, timeout time.Duration) error {
 	conn, err := c.dial(nodeAddr)
 	if err != nil {
@@ -411,6 +422,8 @@ func (c *Client) Notify(nr *command.NotifyRequest, nodeAddr string, creds *proto
 }
 
 // Join joins this node to a cluster at the remote address nodeAddr.
+// If creds is nil, then no credential information will be included in
+// the Join request to the remote node.
 func (c *Client) Join(jr *command.JoinRequest, nodeAddr string, creds *proto.Credentials, timeout time.Duration) error {
 	for {
 		conn, err := c.dial(nodeAddr)
