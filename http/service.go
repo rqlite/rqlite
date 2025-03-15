@@ -757,7 +757,7 @@ func (s *Service) handleLoad(w http.ResponseWriter, r *http.Request, qp QueryPar
 				var exErr error
 				response, exErr = s.cluster.Execute(er, ldrAddr, makeCredentials(r),
 					qp.Timeout(defaultTimeout), qp.Retries(0))
-				if err != nil {
+				if exErr != nil {
 					handleRemoteErr(exErr)
 					return
 				}
