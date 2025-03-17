@@ -1,3 +1,7 @@
+## v8.36.15 (unreleased)
+### Implementation changes and bug fixes
+- [PR #2057](https://github.com/rqlite/rqlite/pull/2057): Minor refactoring of HTTP Leader checks.
+
 ## v8.36.14 (March 15th 2025)
 ### Implementation changes and bug fixes
 - [PR #2056](https://github.com/rqlite/rqlite/pull/2056): Minor refactoring of HTTP credentials handling.

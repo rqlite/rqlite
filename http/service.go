@@ -407,7 +407,6 @@ func (s *Service) Start() error {
 		} else {
 			b.WriteString(", mutual TLS disabled")
 		}
-		// print the message
 		s.logger.Println(b.String())
 	}
 	s.ln = ln
@@ -534,7 +533,6 @@ func (s *Service) RegisterStatus(key string, stat StatusReporter) error {
 		return fmt.Errorf("status already registered with key %s", key)
 	}
 	s.statuses[key] = stat
-
 	return nil
 }
 
@@ -583,15 +581,14 @@ func (s *Service) handleRemove(w http.ResponseWriter, r *http.Request, qp QueryP
 				return
 			}
 
-			addr, err := s.store.LeaderAddr()
+			addr, err := s.LeaderAddr()
 			if err != nil {
-				http.Error(w, fmt.Sprintf("leader address: %s", err.Error()),
-					http.StatusInternalServerError)
-				return
-			}
-			if addr == "" {
-				stats.Add(numLeaderNotFound, 1)
-				http.Error(w, ErrLeaderNotFound.Error(), http.StatusServiceUnavailable)
+				if errors.Is(err, ErrLeaderNotFound) {
+					stats.Add(numLeaderNotFound, 1)
+					http.Error(w, ErrLeaderNotFound.Error(), http.StatusServiceUnavailable)
+					return
+				}
+				http.Error(w, fmt.Sprintf("leader address: %s", err.Error()), http.StatusInternalServerError)
 				return
 			}
 
@@ -640,15 +637,14 @@ func (s *Service) handleBackup(w http.ResponseWriter, r *http.Request, qp QueryP
 				return
 			}
 
-			addr, err := s.store.LeaderAddr()
+			addr, err := s.LeaderAddr()
 			if err != nil {
-				http.Error(w, fmt.Sprintf("leader address: %s", err.Error()),
-					http.StatusInternalServerError)
-				return
-			}
-			if addr == "" {
-				stats.Add(numLeaderNotFound, 1)
-				http.Error(w, ErrLeaderNotFound.Error(), http.StatusServiceUnavailable)
+				if errors.Is(err, ErrLeaderNotFound) {
+					stats.Add(numLeaderNotFound, 1)
+					http.Error(w, ErrLeaderNotFound.Error(), http.StatusServiceUnavailable)
+					return
+				}
+				http.Error(w, fmt.Sprintf("leader address: %s", err.Error()), http.StatusInternalServerError)
 				return
 			}
 
@@ -688,15 +684,14 @@ func (s *Service) handleLoad(w http.ResponseWriter, r *http.Request, qp QueryPar
 	}
 
 	// Determine some perhaps-needed details.
-	ldrAddr, err := s.store.LeaderAddr()
+	ldrAddr, err := s.LeaderAddr()
 	if err != nil {
-		http.Error(w, fmt.Sprintf("leader address: %s", err.Error()),
-			http.StatusInternalServerError)
-		return
-	}
-	if ldrAddr == "" {
-		stats.Add(numLeaderNotFound, 1)
-		http.Error(w, ErrLeaderNotFound.Error(), http.StatusServiceUnavailable)
+		if errors.Is(err, ErrLeaderNotFound) {
+			stats.Add(numLeaderNotFound, 1)
+			http.Error(w, ErrLeaderNotFound.Error(), http.StatusServiceUnavailable)
+			return
+		}
+		http.Error(w, fmt.Sprintf("leader address: %s", err.Error()), http.StatusInternalServerError)
 		return
 	}
 
@@ -1035,16 +1030,14 @@ func (s *Service) handleReadyz(w http.ResponseWriter, r *http.Request, qp QueryP
 		return
 	}
 
-	lAddr, err := s.store.LeaderAddr()
+	lAddr, err := s.LeaderAddr()
 	if err != nil {
-		http.Error(w, fmt.Sprintf("leader address: %s", err.Error()),
-			http.StatusInternalServerError)
-		return
-	}
-
-	if lAddr == "" {
-		w.WriteHeader(http.StatusServiceUnavailable)
-		w.Write([]byte("[+]node ok\n[+]leader does not exist"))
+		if errors.Is(err, ErrLeaderNotFound) {
+			w.WriteHeader(http.StatusServiceUnavailable)
+			w.Write([]byte("[+]node ok\n[+]leader does not exist"))
+			return
+		}
+		http.Error(w, fmt.Sprintf("leader address: %s", err.Error()), http.StatusInternalServerError)
 		return
 	}
 
@@ -1102,10 +1095,14 @@ func (s *Service) queuedExecute(w http.ResponseWriter, r *http.Request, qp Query
 	// Perform a leader check, unless disabled. This prevents generating queued writes on
 	// a node that does not appear to be connected to a cluster (even a single-node cluster).
 	if !qp.NoLeader() {
-		addr, err := s.store.LeaderAddr()
-		if err != nil || addr == "" {
-			stats.Add(numLeaderNotFound, 1)
-			http.Error(w, ErrLeaderNotFound.Error(), http.StatusServiceUnavailable)
+		_, err := s.LeaderAddr()
+		if err != nil {
+			if errors.Is(err, ErrLeaderNotFound) {
+				stats.Add(numLeaderNotFound, 1)
+				http.Error(w, ErrLeaderNotFound.Error(), http.StatusServiceUnavailable)
+				return
+			}
+			http.Error(w, fmt.Sprintf("leader address: %s", err.Error()), http.StatusInternalServerError)
 			return
 		}
 	}
@@ -1198,15 +1195,14 @@ func (s *Service) execute(w http.ResponseWriter, r *http.Request, qp QueryParams
 			return
 		}
 
-		addr, err := s.store.LeaderAddr()
+		addr, err := s.LeaderAddr()
 		if err != nil {
-			http.Error(w, fmt.Sprintf("leader address: %s", err.Error()),
-				http.StatusInternalServerError)
-			return
-		}
-		if addr == "" {
-			stats.Add(numLeaderNotFound, 1)
-			http.Error(w, ErrLeaderNotFound.Error(), http.StatusServiceUnavailable)
+			if errors.Is(err, ErrLeaderNotFound) {
+				stats.Add(numLeaderNotFound, 1)
+				http.Error(w, ErrLeaderNotFound.Error(), http.StatusServiceUnavailable)
+				return
+			}
+			http.Error(w, fmt.Sprintf("leader address: %s", err.Error()), http.StatusInternalServerError)
 			return
 		}
 
@@ -1305,14 +1301,14 @@ func (s *Service) handleQuery(w http.ResponseWriter, r *http.Request, qp QueryPa
 			return
 		}
 
-		addr, err := s.store.LeaderAddr()
+		addr, err := s.LeaderAddr()
 		if err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
-			return
-		}
-		if addr == "" {
-			stats.Add(numLeaderNotFound, 1)
-			http.Error(w, ErrLeaderNotFound.Error(), http.StatusServiceUnavailable)
+			if errors.Is(err, ErrLeaderNotFound) {
+				stats.Add(numLeaderNotFound, 1)
+				http.Error(w, ErrLeaderNotFound.Error(), http.StatusServiceUnavailable)
+				return
+			}
+			http.Error(w, fmt.Sprintf("leader address: %s", err.Error()), http.StatusInternalServerError)
 			return
 		}
 
@@ -1388,14 +1384,14 @@ func (s *Service) handleRequest(w http.ResponseWriter, r *http.Request, qp Query
 			return
 		}
 
-		addr, err := s.store.LeaderAddr()
+		addr, err := s.LeaderAddr()
 		if err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
-			return
-		}
-		if addr == "" {
-			stats.Add(numLeaderNotFound, 1)
-			http.Error(w, ErrLeaderNotFound.Error(), http.StatusServiceUnavailable)
+			if errors.Is(err, ErrLeaderNotFound) {
+				stats.Add(numLeaderNotFound, 1)
+				http.Error(w, ErrLeaderNotFound.Error(), http.StatusServiceUnavailable)
+				return
+			}
+			http.Error(w, fmt.Sprintf("leader address: %s", err.Error()), http.StatusInternalServerError)
 			return
 		}
 
@@ -1555,7 +1551,19 @@ func (s *Service) CheckRequestPermAll(r *http.Request, perms ...string) (b bool)
 	return true
 }
 
-// LeaderAPIAddr returns the API address of the leader, as known by this node.
+// LeaderAddr returns the Raft address of the leader, as known by this node.
+func (s *Service) LeaderAddr() (string, error) {
+	addr, err := s.store.LeaderAddr()
+	if err != nil {
+		return "", err
+	}
+	if addr == "" {
+		return "", ErrLeaderNotFound
+	}
+	return addr, nil
+}
+
+// LeaderAPIAddr returns the HTTP API address of the leader, as known by this node.
 func (s *Service) LeaderAPIAddr() string {
 	nodeAddr, err := s.store.LeaderAddr()
 	if err != nil {
@@ -1639,7 +1647,6 @@ func (s *Service) runQueue() {
 
 // addBuildVersion adds the build version to the HTTP response.
 func (s *Service) addBuildVersion(w http.ResponseWriter) {
-	// Add version header to every response, if available.
 	version := "unknown"
 	if v, ok := s.BuildInfo["version"].(string); ok {
 		version = v
