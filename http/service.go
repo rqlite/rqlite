@@ -407,7 +407,6 @@ func (s *Service) Start() error {
 		} else {
 			b.WriteString(", mutual TLS disabled")
 		}
-		// print the message
 		s.logger.Println(b.String())
 	}
 	s.ln = ln
@@ -534,7 +533,6 @@ func (s *Service) RegisterStatus(key string, stat StatusReporter) error {
 		return fmt.Errorf("status already registered with key %s", key)
 	}
 	s.statuses[key] = stat
-
 	return nil
 }
 
@@ -1649,7 +1647,6 @@ func (s *Service) runQueue() {
 
 // addBuildVersion adds the build version to the HTTP response.
 func (s *Service) addBuildVersion(w http.ResponseWriter) {
-	// Add version header to every response, if available.
 	version := "unknown"
 	if v, ok := s.BuildInfo["version"].(string); ok {
 		version = v
