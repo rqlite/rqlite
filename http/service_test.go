@@ -248,6 +248,48 @@ func Test_HasVersionHeaderUnknown(t *testing.T) {
 	}
 }
 
+func Test_LeaderAddrsOK(t *testing.T) {
+	m := &MockStore{
+		leaderAddr: "foo:1234",
+	}
+	c := &mockClusterService{
+		apiAddr: "http://bar:5678",
+	}
+	s := New("127.0.0.1:0", m, c, nil)
+	if err := s.Start(); err != nil {
+		t.Fatalf("failed to start service")
+	}
+	defer s.Close()
+
+	addr, err := s.LeaderAddr()
+	if err != nil {
+		t.Fatalf("failed to get leader address")
+	}
+	if addr != "foo:1234" {
+		t.Fatalf("incorrect leader address, got: %s", addr)
+	}
+
+	addr = s.LeaderAPIAddr()
+	if addr != "http://bar:5678" {
+		t.Fatalf("incorrect leader API address, got: %s", addr)
+	}
+}
+
+func Test_LeaderAddrsFail(t *testing.T) {
+	m := &MockStore{}
+	c := &mockClusterService{}
+	s := New("127.0.0.1:0", m, c, nil)
+	if err := s.Start(); err != nil {
+		t.Fatalf("failed to start service")
+	}
+	defer s.Close()
+
+	_, err := s.LeaderAddr()
+	if err != ErrLeaderNotFound {
+		t.Fatalf("failed to get expected ErrLeaderNotFound")
+	}
+}
+
 func Test_404Routes(t *testing.T) {
 	m := &MockStore{}
 	c := &mockClusterService{}
