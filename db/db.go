@@ -400,6 +400,10 @@ func (db *DB) Stats() (map[string]interface{}, error) {
 	if err != nil {
 		return nil, err
 	}
+	txStatus, err := db.txStatus()
+	if err != nil {
+		return nil, err
+	}
 	stats := map[string]interface{}{
 		"extensions":       db.ExtensionNames(),
 		"version":          DBVersion,
@@ -411,6 +415,7 @@ func (db *DB) Stats() (map[string]interface{}, error) {
 		"ro_dsn":           db.roDSN,
 		"conn_pool_stats":  connPoolStats,
 		"pragmas":          pragmas,
+		"transaction":      txStatus,
 	}
 
 	lm, err := db.LastModified()
@@ -1416,6 +1421,36 @@ func (db *DB) pragmas() (map[string]interface{}, error) {
 		connsMap[k] = pragmasMap
 	}
 	return connsMap, nil
+}
+
+// txStatus returns whether there is an active transaction on each database
+// connection.
+func (db *DB) txStatus() (map[string]interface{}, error) {
+	conns := map[string]*sql.DB{
+		"rw": db.rwDB,
+		"ro": db.roDB,
+	}
+
+	t := false
+	f := func(driverConn any) error {
+		conn := driverConn.(*sqlite3.SQLiteConn)
+		t = conn.AutoCommit()
+		return nil
+	}
+
+	txStatusMap := make(map[string]interface{})
+	for k, v := range conns {
+		conn, err := v.Conn(context.Background())
+		if err != nil {
+			return nil, err
+		}
+		defer conn.Close()
+		if err := conn.Raw(f); err != nil {
+			return nil, err
+		}
+		txStatusMap[k] = !t
+	}
+	return txStatusMap, nil
 }
 
 func (db *DB) memStats() (map[string]int64, error) {
