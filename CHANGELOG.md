@@ -2,6 +2,7 @@
 ### Implementation changes and bug fixes
 - [PR #2057](https://github.com/rqlite/rqlite/pull/2057): Minor refactoring of HTTP Leader checks.
 - [PR #2058](https://github.com/rqlite/rqlite/pull/2058): Add transaction status for each connection to DB stats.
+- [PR #2059](https://github.com/rqlite/rqlite/pull/2059): Upgrade dependencies.
 
 ## v8.36.14 (March 15th 2025)
 ### Implementation changes and bug fixes
