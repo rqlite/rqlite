@@ -123,7 +123,10 @@ func New[T any](maxSize, batchSize int, t time.Duration) *Queue[T] {
 // on the Queue's C object before the second slice.
 //
 // c is an optional channel. If non-nil, it will be closed when the Request
-// containing these statements is closed.
+// containing these objects is closed. Normally this close operation should
+// be called by whatever is processing the objects read from the queue, to
+// indicate that the objects have been processed. The canoncial use of this
+// is to allow the caller to block until the objects are processed, if desired.
 func (q *Queue[T]) Write(objects []T, c FlushChannel) (int64, error) {
 	select {
 	case <-q.done:
