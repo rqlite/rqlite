@@ -386,6 +386,33 @@ func Test_Preupdate_Data(t *testing.T) {
 	wg.Wait()
 }
 
+// Test_Preupdate_Multi tests that the preupdate hook is called for multiple
+// deletes.
+func Test_Preupdate_Multi(t *testing.T) {
+	path := mustTempPath()
+	defer os.Remove(path)
+	db, err := Open(path, false, false)
+	if err != nil {
+		t.Fatalf("error opening database")
+	}
+	defer db.Close()
+	mustExecute(db, "CREATE TABLE foo (id INTEGER PRIMARY KEY, name TEXT)")
+	mustExecute(db, "INSERT INTO foo(id, name) VALUES(1, 'fiona')")
+	mustExecute(db, "INSERT INTO foo(id, name) VALUES(2, 'fiona')")
+
+	var wg sync.WaitGroup
+	hook := func(got *command.CDCEvent) error {
+		defer wg.Done()
+		return nil
+	}
+	if err := db.RegisterPreUpdateHook(hook, false); err != nil {
+		t.Fatalf("error registering preupdate hook")
+	}
+	wg.Add(2)
+	mustExecute(db, "DELETE FROM foo")
+	wg.Wait()
+}
+
 func compareEvents(t *testing.T, exp, got *command.CDCEvent) {
 	t.Helper()
 	if exp, got := exp.Table, got.Table; exp != got {
