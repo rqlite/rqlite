@@ -1,3 +1,7 @@
+## v8.36.16 (April 32rd 2025)
+### Implementation changes and bug fixes
+- [64f7ef7](https://github.com/rqlite/rqlite/commit/64f7ef7f738c9973770c3620a65692b538a49a3a): Docker image supports enabling Foreign Key constraints via an Environment variable.
+
 ## v8.36.15 (March 31st 2025)
 ### Implementation changes and bug fixes
 - [PR #2057](https://github.com/rqlite/rqlite/pull/2057): Minor refactoring of HTTP Leader checks.
