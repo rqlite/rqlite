@@ -241,6 +241,58 @@ func (CDCEvent_Operation) EnumDescriptor() ([]byte, []int) {
 	return file_command_proto_rawDescGZIP(), []int{20, 0}
 }
 
+type HookEvent_Operation int32
+
+const (
+	HookEvent_UNKNOWN HookEvent_Operation = 0
+	HookEvent_INSERT  HookEvent_Operation = 1
+	HookEvent_UPDATE  HookEvent_Operation = 2
+	HookEvent_DELETE  HookEvent_Operation = 3
+)
+
+// Enum value maps for HookEvent_Operation.
+var (
+	HookEvent_Operation_name = map[int32]string{
+		0: "UNKNOWN",
+		1: "INSERT",
+		2: "UPDATE",
+		3: "DELETE",
+	}
+	HookEvent_Operation_value = map[string]int32{
+		"UNKNOWN": 0,
+		"INSERT":  1,
+		"UPDATE":  2,
+		"DELETE":  3,
+	}
+)
+
+func (x HookEvent_Operation) Enum() *HookEvent_Operation {
+	p := new(HookEvent_Operation)
+	*p = x
+	return p
+}
+
+func (x HookEvent_Operation) String() string {
+	return protoimpl.X.EnumStringOf(x.Descriptor(), protoreflect.EnumNumber(x))
+}
+
+func (HookEvent_Operation) Descriptor() protoreflect.EnumDescriptor {
+	return file_command_proto_enumTypes[4].Descriptor()
+}
+
+func (HookEvent_Operation) Type() protoreflect.EnumType {
+	return &file_command_proto_enumTypes[4]
+}
+
+func (x HookEvent_Operation) Number() protoreflect.EnumNumber {
+	return protoreflect.EnumNumber(x)
+}
+
+// Deprecated: Use HookEvent_Operation.Descriptor instead.
+func (HookEvent_Operation) EnumDescriptor() ([]byte, []int) {
+	return file_command_proto_rawDescGZIP(), []int{21, 0}
+}
+
 type Parameter struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
 	// Types that are valid to be assigned to Value:
@@ -1711,6 +1763,74 @@ func (x *CDCEvent) GetNewRow() *CDCRow {
 	return nil
 }
 
+type HookEvent struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Error         string                 `protobuf:"bytes,1,opt,name=error,proto3" json:"error,omitempty"`
+	Op            HookEvent_Operation    `protobuf:"varint,2,opt,name=op,proto3,enum=command.HookEvent_Operation" json:"op,omitempty"`
+	Table         string                 `protobuf:"bytes,3,opt,name=table,proto3" json:"table,omitempty"`
+	RowId         int64                  `protobuf:"varint,4,opt,name=row_id,json=rowId,proto3" json:"row_id,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *HookEvent) Reset() {
+	*x = HookEvent{}
+	mi := &file_command_proto_msgTypes[21]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *HookEvent) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*HookEvent) ProtoMessage() {}
+
+func (x *HookEvent) ProtoReflect() protoreflect.Message {
+	mi := &file_command_proto_msgTypes[21]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use HookEvent.ProtoReflect.Descriptor instead.
+func (*HookEvent) Descriptor() ([]byte, []int) {
+	return file_command_proto_rawDescGZIP(), []int{21}
+}
+
+func (x *HookEvent) GetError() string {
+	if x != nil {
+		return x.Error
+	}
+	return ""
+}
+
+func (x *HookEvent) GetOp() HookEvent_Operation {
+	if x != nil {
+		return x.Op
+	}
+	return HookEvent_UNKNOWN
+}
+
+func (x *HookEvent) GetTable() string {
+	if x != nil {
+		return x.Table
+	}
+	return ""
+}
+
+func (x *HookEvent) GetRowId() int64 {
+	if x != nil {
+		return x.RowId
+	}
+	return 0
+}
+
 var File_command_proto protoreflect.FileDescriptor
 
 const file_command_proto_rawDesc = "" +
@@ -1850,6 +1970,19 @@ const file_command_proto_rawDesc = "" +
 	"\n" +
 	"\x06UPDATE\x10\x02\x12\n" +
 	"\n" +
+	"\x06DELETE\x10\x03\"\xba\x01\n" +
+	"\tHookEvent\x12\x14\n" +
+	"\x05error\x18\x01 \x01(\tR\x05error\x12,\n" +
+	"\x02op\x18\x02 \x01(\x0e2\x1c.command.HookEvent.OperationR\x02op\x12\x14\n" +
+	"\x05table\x18\x03 \x01(\tR\x05table\x12\x15\n" +
+	"\x06row_id\x18\x04 \x01(\x03R\x05rowId\"<\n" +
+	"\tOperation\x12\v\n" +
+	"\aUNKNOWN\x10\x00\x12\n" +
+	"\n" +
+	"\x06INSERT\x10\x01\x12\n" +
+	"\n" +
+	"\x06UPDATE\x10\x02\x12\n" +
+	"\n" +
 	"\x06DELETE\x10\x03B+Z)github.com/rqlite/rqlite/v8/command/protob\x06proto3"
 
 var (
@@ -1864,58 +1997,61 @@ func file_command_proto_rawDescGZIP() []byte {
 	return file_command_proto_rawDescData
 }
 
-var file_command_proto_enumTypes = make([]protoimpl.EnumInfo, 4)
-var file_command_proto_msgTypes = make([]protoimpl.MessageInfo, 21)
+var file_command_proto_enumTypes = make([]protoimpl.EnumInfo, 5)
+var file_command_proto_msgTypes = make([]protoimpl.MessageInfo, 22)
 var file_command_proto_goTypes = []any{
 	(QueryRequest_Level)(0),      // 0: command.QueryRequest.Level
 	(BackupRequest_Format)(0),    // 1: command.BackupRequest.Format
 	(Command_Type)(0),            // 2: command.Command.Type
 	(CDCEvent_Operation)(0),      // 3: command.CDCEvent.Operation
-	(*Parameter)(nil),            // 4: command.Parameter
-	(*Statement)(nil),            // 5: command.Statement
-	(*Request)(nil),              // 6: command.Request
-	(*QueryRequest)(nil),         // 7: command.QueryRequest
-	(*Values)(nil),               // 8: command.Values
-	(*QueryRows)(nil),            // 9: command.QueryRows
-	(*ExecuteRequest)(nil),       // 10: command.ExecuteRequest
-	(*ExecuteResult)(nil),        // 11: command.ExecuteResult
-	(*ExecuteQueryRequest)(nil),  // 12: command.ExecuteQueryRequest
-	(*ExecuteQueryResponse)(nil), // 13: command.ExecuteQueryResponse
-	(*BackupRequest)(nil),        // 14: command.BackupRequest
-	(*LoadRequest)(nil),          // 15: command.LoadRequest
-	(*LoadChunkRequest)(nil),     // 16: command.LoadChunkRequest
-	(*JoinRequest)(nil),          // 17: command.JoinRequest
-	(*NotifyRequest)(nil),        // 18: command.NotifyRequest
-	(*RemoveNodeRequest)(nil),    // 19: command.RemoveNodeRequest
-	(*Noop)(nil),                 // 20: command.Noop
-	(*Command)(nil),              // 21: command.Command
-	(*CDCValue)(nil),             // 22: command.CDCValue
-	(*CDCRow)(nil),               // 23: command.CDCRow
-	(*CDCEvent)(nil),             // 24: command.CDCEvent
+	(HookEvent_Operation)(0),     // 4: command.HookEvent.Operation
+	(*Parameter)(nil),            // 5: command.Parameter
+	(*Statement)(nil),            // 6: command.Statement
+	(*Request)(nil),              // 7: command.Request
+	(*QueryRequest)(nil),         // 8: command.QueryRequest
+	(*Values)(nil),               // 9: command.Values
+	(*QueryRows)(nil),            // 10: command.QueryRows
+	(*ExecuteRequest)(nil),       // 11: command.ExecuteRequest
+	(*ExecuteResult)(nil),        // 12: command.ExecuteResult
+	(*ExecuteQueryRequest)(nil),  // 13: command.ExecuteQueryRequest
+	(*ExecuteQueryResponse)(nil), // 14: command.ExecuteQueryResponse
+	(*BackupRequest)(nil),        // 15: command.BackupRequest
+	(*LoadRequest)(nil),          // 16: command.LoadRequest
+	(*LoadChunkRequest)(nil),     // 17: command.LoadChunkRequest
+	(*JoinRequest)(nil),          // 18: command.JoinRequest
+	(*NotifyRequest)(nil),        // 19: command.NotifyRequest
+	(*RemoveNodeRequest)(nil),    // 20: command.RemoveNodeRequest
+	(*Noop)(nil),                 // 21: command.Noop
+	(*Command)(nil),              // 22: command.Command
+	(*CDCValue)(nil),             // 23: command.CDCValue
+	(*CDCRow)(nil),               // 24: command.CDCRow
+	(*CDCEvent)(nil),             // 25: command.CDCEvent
+	(*HookEvent)(nil),            // 26: command.HookEvent
 }
 var file_command_proto_depIdxs = []int32{
-	4,  // 0: command.Statement.parameters:type_name -> command.Parameter
-	5,  // 1: command.Request.statements:type_name -> command.Statement
-	6,  // 2: command.QueryRequest.request:type_name -> command.Request
+	5,  // 0: command.Statement.parameters:type_name -> command.Parameter
+	6,  // 1: command.Request.statements:type_name -> command.Statement
+	7,  // 2: command.QueryRequest.request:type_name -> command.Request
 	0,  // 3: command.QueryRequest.level:type_name -> command.QueryRequest.Level
-	4,  // 4: command.Values.parameters:type_name -> command.Parameter
-	8,  // 5: command.QueryRows.values:type_name -> command.Values
-	6,  // 6: command.ExecuteRequest.request:type_name -> command.Request
-	6,  // 7: command.ExecuteQueryRequest.request:type_name -> command.Request
+	5,  // 4: command.Values.parameters:type_name -> command.Parameter
+	9,  // 5: command.QueryRows.values:type_name -> command.Values
+	7,  // 6: command.ExecuteRequest.request:type_name -> command.Request
+	7,  // 7: command.ExecuteQueryRequest.request:type_name -> command.Request
 	0,  // 8: command.ExecuteQueryRequest.level:type_name -> command.QueryRequest.Level
-	9,  // 9: command.ExecuteQueryResponse.q:type_name -> command.QueryRows
-	11, // 10: command.ExecuteQueryResponse.e:type_name -> command.ExecuteResult
+	10, // 9: command.ExecuteQueryResponse.q:type_name -> command.QueryRows
+	12, // 10: command.ExecuteQueryResponse.e:type_name -> command.ExecuteResult
 	1,  // 11: command.BackupRequest.format:type_name -> command.BackupRequest.Format
 	2,  // 12: command.Command.type:type_name -> command.Command.Type
-	22, // 13: command.CDCRow.values:type_name -> command.CDCValue
+	23, // 13: command.CDCRow.values:type_name -> command.CDCValue
 	3,  // 14: command.CDCEvent.op:type_name -> command.CDCEvent.Operation
-	23, // 15: command.CDCEvent.old_row:type_name -> command.CDCRow
-	23, // 16: command.CDCEvent.new_row:type_name -> command.CDCRow
-	17, // [17:17] is the sub-list for method output_type
-	17, // [17:17] is the sub-list for method input_type
-	17, // [17:17] is the sub-list for extension type_name
-	17, // [17:17] is the sub-list for extension extendee
-	0,  // [0:17] is the sub-list for field type_name
+	24, // 15: command.CDCEvent.old_row:type_name -> command.CDCRow
+	24, // 16: command.CDCEvent.new_row:type_name -> command.CDCRow
+	4,  // 17: command.HookEvent.op:type_name -> command.HookEvent.Operation
+	18, // [18:18] is the sub-list for method output_type
+	18, // [18:18] is the sub-list for method input_type
+	18, // [18:18] is the sub-list for extension type_name
+	18, // [18:18] is the sub-list for extension extendee
+	0,  // [0:18] is the sub-list for field type_name
 }
 
 func init() { file_command_proto_init() }
@@ -1947,8 +2083,8 @@ func file_command_proto_init() {
 		File: protoimpl.DescBuilder{
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_command_proto_rawDesc), len(file_command_proto_rawDesc)),
-			NumEnums:      4,
-			NumMessages:   21,
+			NumEnums:      5,
+			NumMessages:   22,
 			NumExtensions: 0,
 			NumServices:   0,
 		},
