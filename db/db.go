@@ -52,6 +52,9 @@ const (
 	numPreupdates             = "preupdates"
 	numPreupdatesErrors       = "preupdates_errors"
 	numPreupdatesCBErrors     = "preupdates_callback_errors"
+	numUpdateHooks            = "update_hooks"
+	numUpdateHooksCBErrors    = "update_hooks_callback_errors"
+	numUpdateHooksErrors      = "update_hooks_errors"
 )
 
 var (
@@ -316,9 +319,69 @@ func (db *DB) RegisterPreUpdateHook(hook PreUpdateHookCallback, rowIDsOnly bool)
 			}
 		}
 	}
-	f := func(driverConn interface{}) error {
+	f := func(driverConn any) error {
 		conn := driverConn.(*sqlite3.SQLiteConn)
 		conn.RegisterPreUpdateHook(cb)
+		return nil
+	}
+
+	conn, err := db.rwDB.Conn(context.Background())
+	if err != nil {
+		return err
+	}
+	defer conn.Close()
+	if err := conn.Raw(f); err != nil {
+		return err
+	}
+	return nil
+}
+
+// UpdateHookCallback is a callback function that is called before a row is modified
+// in the database.
+type UpdateHookCallback func(ev *command.HookEvent) error
+
+// RegisterUpdateHook registers a callback that is called when a row is modified
+// in the database. If a callback is already registered, it is replaced. If hook is nil,
+// the callback is removed.
+func (db *DB) RegisterUpdateHook(hook UpdateHookCallback) error {
+	// Convert from SQLite hook data to rqlite hook data.
+	convertFn := func(op int, _, table string, rowID int64) (*command.HookEvent, error) {
+		he := &command.HookEvent{
+			Table: table,
+			RowId: rowID,
+		}
+
+		switch op {
+		case sqlite3.SQLITE_INSERT:
+			he.Op = command.HookEvent_INSERT
+		case sqlite3.SQLITE_UPDATE:
+			he.Op = command.HookEvent_UPDATE
+		case sqlite3.SQLITE_DELETE:
+			he.Op = command.HookEvent_DELETE
+		default:
+			return nil, fmt.Errorf("unknown update hook operation %d", op)
+		}
+		return he, nil
+	}
+
+	// Register the callback with the SQLite connection.
+	var cb func(int, string, string, int64)
+	if hook != nil {
+		cb = func(op int, dbName, tblName string, rowID int64) {
+			stats.Add(numUpdateHooks, 1)
+			ev, err := convertFn(op, dbName, tblName, rowID)
+			if err != nil {
+				stats.Add(numPreupdatesErrors, 1)
+				ev.Error = err.Error()
+			}
+			if err := hook(ev); err != nil {
+				stats.Add(numUpdateHooksCBErrors, 1)
+			}
+		}
+	}
+	f := func(driverConn any) error {
+		conn := driverConn.(*sqlite3.SQLiteConn)
+		conn.RegisterUpdateHook(cb)
 		return nil
 	}
 

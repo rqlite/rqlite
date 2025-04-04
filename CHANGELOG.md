@@ -1,3 +1,7 @@
+## v8.36.17 (unreleased)
+### Implementation changes and bug fixes
+- [PR #2061](https://github.com/rqlite/rqlite/pull/2061): Support registering Update Hooks at the database level.
+
 ## v8.36.16 (April 32rd 2025)
 ### Implementation changes and bug fixes
 - [64f7ef7](https://github.com/rqlite/rqlite/commit/64f7ef7f738c9973770c3620a65692b538a49a3a): Docker image supports enabling Foreign Key constraints via an Environment variable.

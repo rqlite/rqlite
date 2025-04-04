@@ -171,3 +171,16 @@ message CDCEvent {
 	CDCRow old_row = 6;
 	CDCRow new_row = 7;
 }
+
+message HookEvent {
+	enum Operation {
+		UNKNOWN = 0;
+		INSERT = 1;
+		UPDATE = 2;
+		DELETE = 3;
+	}
+	string error = 1;
+	Operation op = 2;
+	string table = 3;
+	int64 row_id = 4;
+}
