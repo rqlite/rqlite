@@ -55,6 +55,7 @@ const (
 	numUpdateHooks            = "update_hooks"
 	numUpdateHooksCBErrors    = "update_hooks_callback_errors"
 	numUpdateHooksErrors      = "update_hooks_errors"
+	numCommitHooks            = "commit_hooks"
 )
 
 var (
@@ -122,6 +123,10 @@ func ResetStats() {
 	stats.Add(numPreupdates, 0)
 	stats.Add(numPreupdatesErrors, 0)
 	stats.Add(numPreupdatesCBErrors, 0)
+	stats.Add(numUpdateHooks, 0)
+	stats.Add(numUpdateHooksCBErrors, 0)
+	stats.Add(numUpdateHooksErrors, 0)
+	stats.Add(numCommitHooks, 0)
 }
 
 // DB is the SQL database.
@@ -338,26 +343,26 @@ func (db *DB) RegisterPreUpdateHook(hook PreUpdateHookCallback, rowIDsOnly bool)
 
 // UpdateHookCallback is a callback function that is called before a row is modified
 // in the database.
-type UpdateHookCallback func(ev *command.HookEvent) error
+type UpdateHookCallback func(ev *command.UpdateHookEvent) error
 
 // RegisterUpdateHook registers a callback that is called when a row is modified
 // in the database. If a callback is already registered, it is replaced. If hook is nil,
 // the callback is removed.
 func (db *DB) RegisterUpdateHook(hook UpdateHookCallback) error {
 	// Convert from SQLite hook data to rqlite hook data.
-	convertFn := func(op int, _, table string, rowID int64) (*command.HookEvent, error) {
-		he := &command.HookEvent{
+	convertFn := func(op int, _, table string, rowID int64) (*command.UpdateHookEvent, error) {
+		he := &command.UpdateHookEvent{
 			Table: table,
 			RowId: rowID,
 		}
 
 		switch op {
 		case sqlite3.SQLITE_INSERT:
-			he.Op = command.HookEvent_INSERT
+			he.Op = command.UpdateHookEvent_INSERT
 		case sqlite3.SQLITE_UPDATE:
-			he.Op = command.HookEvent_UPDATE
+			he.Op = command.UpdateHookEvent_UPDATE
 		case sqlite3.SQLITE_DELETE:
-			he.Op = command.HookEvent_DELETE
+			he.Op = command.UpdateHookEvent_DELETE
 		default:
 			return nil, fmt.Errorf("unknown update hook operation %d", op)
 		}
@@ -382,6 +387,42 @@ func (db *DB) RegisterUpdateHook(hook UpdateHookCallback) error {
 	f := func(driverConn any) error {
 		conn := driverConn.(*sqlite3.SQLiteConn)
 		conn.RegisterUpdateHook(cb)
+		return nil
+	}
+
+	conn, err := db.rwDB.Conn(context.Background())
+	if err != nil {
+		return err
+	}
+	defer conn.Close()
+	if err := conn.Raw(f); err != nil {
+		return err
+	}
+	return nil
+}
+
+// CommitHookCallback is a callback function that is called whenever a transaction
+// is committed to the database. If the callback returns true the transaction
+// is committed, otherwise it is rolled back.
+type CommitHookCallback func() bool
+
+// RegisterCommitHook registers a callback that is called whenever a transaction
+// is committed to the database. If a callback is already registered, it is replaced.
+// If hook is nil, the callback is removed.
+func (db *DB) RegisterCommitHook(hook CommitHookCallback) error {
+	var cb func() int
+	if hook != nil {
+		cb = func() int {
+			stats.Add(numCommitHooks, 1)
+			if hook() {
+				return 0
+			}
+			return 1
+		}
+	}
+	f := func(driverConn any) error {
+		conn := driverConn.(*sqlite3.SQLiteConn)
+		conn.RegisterCommitHook(cb)
 		return nil
 	}
 
