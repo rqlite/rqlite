@@ -2,6 +2,7 @@ package db
 
 import (
 	"os"
+	"sync"
 	"sync/atomic"
 	"testing"
 
@@ -22,7 +23,7 @@ func Test_UpdateHook_Basic(t *testing.T) {
 	mustExecute(db, "CREATE TABLE foo (id INTEGER PRIMARY KEY, name TEXT)")
 
 	count := &atomic.Int32{}
-	hook := func(ev *command.HookEvent) error {
+	hook := func(ev *command.UpdateHookEvent) error {
 		count.Add(1)
 		return nil
 	}
@@ -85,4 +86,31 @@ func Test_UpdateHook_Basic(t *testing.T) {
 	if count.Load() != 13 {
 		t.Fatalf("expected count 8, got %d", count.Load())
 	}
+}
+
+// Test_UpdateHook_Tx demostrates that the Update hook is called for a
+// transaction which is rolled back.
+func Test_UpdateHook_Tx(t *testing.T) {
+	path := mustTempPath()
+	defer os.Remove(path)
+	db, err := Open(path, false, false)
+	if err != nil {
+		t.Fatalf("error opening database")
+	}
+	defer db.Close()
+	mustExecute(db, "CREATE TABLE foo (id INTEGER PRIMARY KEY, name TEXT)")
+
+	var wg sync.WaitGroup
+	hook := func(got *command.UpdateHookEvent) error {
+		defer wg.Done()
+		return nil
+	}
+	if err := db.RegisterUpdateHook(hook); err != nil {
+		t.Fatalf("error registering update hook")
+	}
+	wg.Add(1)
+	mustExecute(db, "BEGIN")
+	mustExecute(db, "INSERT INTO foo(id, name) VALUES(1, 'fiona')")
+	mustExecute(db, "ROLLBACK")
+	wg.Wait()
 }

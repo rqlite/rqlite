@@ -172,7 +172,7 @@ message CDCEvent {
 	CDCRow new_row = 7;
 }
 
-message HookEvent {
+message UpdateHookEvent {
 	enum Operation {
 		UNKNOWN = 0;
 		INSERT = 1;

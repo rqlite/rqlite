@@ -414,7 +414,7 @@ func Test_Preupdate_Multi(t *testing.T) {
 }
 
 // Test_Preupdate_Tx demostrates that the preupdate hook is called for
-// transactions which is rolled back.
+// a transaction which is rolled back.
 func Test_Preupdate_Tx(t *testing.T) {
 	path := mustTempPath()
 	defer os.Remove(path)
