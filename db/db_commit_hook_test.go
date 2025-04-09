@@ -22,7 +22,7 @@ func Test_CommitHook(t *testing.T) {
 		return true
 	}
 	if err := db.RegisterCommitHook(hook); err != nil {
-		t.Fatalf("error registering preupdate hook")
+		t.Fatalf("error registering commit hook")
 	}
 
 	// A select should not trigger the hook and a basic insert should trigger the hook.
@@ -93,7 +93,7 @@ func Test_CommitHook_Tx(t *testing.T) {
 		return true
 	}
 	if err := db.RegisterCommitHook(hook); err != nil {
-		t.Fatalf("error registering preupdate hook")
+		t.Fatalf("error registering commit hook")
 	}
 	mustExecute(db, "BEGIN")
 	mustExecute(db, "INSERT INTO foo(id, name) VALUES(1, 'fiona')")
