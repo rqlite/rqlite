@@ -1961,6 +1961,10 @@ func (s *Store) fsmApply(l *raft.Log) (e interface{}) {
 		s.logger.Printf("first log applied since node start, log at index %d", l.Index)
 	}
 
+	if s.cdc != nil {
+		s.cdc.Reset(l.Index)
+	}
+
 	cmd, mutated, r := s.cmdProc.Process(l.Data, s.db)
 	if mutated {
 		s.dbAppliedIdx.Store(l.Index)
@@ -1974,6 +1978,9 @@ func (s *Store) fsmApply(l *raft.Log) (e interface{}) {
 			s.logger.Fatalf("failed to set full snapshot needed: %s", err)
 		}
 	}
+
+	// Need to block until CDC is drained? Until Commit has been called?
+	// It should be called -- and have returned -- by the time we get here.
 	return r
 }
 
