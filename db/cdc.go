@@ -23,7 +23,9 @@ func NewCDCStreamer(out chan<- *command.CDCEvents) *CDCStreamer {
 	}
 }
 
-// Reset resets the CDCStreamer.
+// Reset resets the CDCStreamer. The K value is set to the
+// current K value, and all pending events are cleared. This is used
+// to reset the CDCStreamer before a new transaction is started.
 func (s *CDCStreamer) Reset(k uint64) {
 	s.pending.K = k
 	s.pending = &command.CDCEvents{
@@ -38,10 +40,17 @@ func (s *CDCStreamer) PreupdateHook(ev *command.CDCEvent) error {
 	return nil
 }
 
-// CommitHook is called after the update is applied. It sends the
-// pending events to the out channel.
+// CommitHook is called after the transaction is committed. It sends the
+// pending events to the out channel and clears the pending events.
 func (s *CDCStreamer) CommitHook() bool {
-	s.out <- s.pending
+	select {
+	case s.out <- s.pending:
+	default:
+		stats.Add(cdcDroppedEvents, 1)
+	}
+	s.pending = &command.CDCEvents{
+		Events: make([]*command.CDCEvent, 0),
+	}
 	return true
 }
 

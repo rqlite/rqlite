@@ -56,6 +56,7 @@ const (
 	numUpdateHooksCBErrors    = "update_hooks_callback_errors"
 	numUpdateHooksErrors      = "update_hooks_errors"
 	numCommitHooks            = "commit_hooks"
+	cdcDroppedEvents          = "dropped_cdc_events"
 )
 
 var (
@@ -127,6 +128,7 @@ func ResetStats() {
 	stats.Add(numUpdateHooksCBErrors, 0)
 	stats.Add(numUpdateHooksErrors, 0)
 	stats.Add(numCommitHooks, 0)
+	stats.Add(cdcDroppedEvents, 0)
 }
 
 // DB is the SQL database.
