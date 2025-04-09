@@ -286,6 +286,7 @@ type Store struct {
 
 	dbDrv *sql.Driver      // The SQLite database driver.
 	db    *sql.SwappableDB // The underlying SQLite store.
+	cdc   *sql.CDCStreamer // The CDC streamer.
 
 	dechunkManager *chunking.DechunkerManager
 	cmdProc        *CommandProcessor
@@ -408,6 +409,7 @@ func New(ly Layer, c *Config) *Store {
 		walPath:         sql.WALPath(dbPath),
 		dbDir:           filepath.Dir(dbPath),
 		dbDrv:           sql.DefaultDriver(),
+		cdc:             sql.NewCDCStreamer(nil),
 		readyChans:      rsync.NewReadyChannels(),
 		leaderObservers: make([]chan<- struct{}, 0),
 		reqMarshaller:   command.NewRequestMarshaler(),
@@ -589,6 +591,14 @@ func (s *Store) Open() (retErr error) {
 	s.db, err = openOnDisk(s.dbPath, s.dbDrv, s.dbConf.FKConstraints)
 	if err != nil {
 		return fmt.Errorf("failed to create on-disk database: %s", err)
+	}
+
+	// XXX Check if CDC actually enabled
+	if err := s.db.RegisterPreUpdateHook(s.cdc.PreupdateHook, false); err != nil {
+		return fmt.Errorf("failed to register pre-update hook: %s", err)
+	}
+	if err := s.db.RegisterCommitHook(s.cdc.CommitHook); err != nil {
+		return fmt.Errorf("failed to register commit hook: %s", err)
 	}
 
 	// Clean up any files from aborted operations. This tries to catch the case where scratch files
