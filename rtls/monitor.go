@@ -49,10 +49,11 @@ func NewCertMonitor(certFile, keyFile string, dur time.Duration) (*CertMonitor, 
 }
 
 // GetCertificate returns the current TLS certificate.
-func (cm *CertMonitor) GetCertificate() (*tls.Certificate, error) {
+func (cm *CertMonitor) GetCertificate() (*tls.Certificate) {
 	cm.mu.Lock()
 	defer cm.mu.Unlock()
-	return cm.certificate, nil
+	return cm.certificate
+}
 }
 
 // Start starts the certificate monitor.
