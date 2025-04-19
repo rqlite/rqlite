@@ -2,6 +2,7 @@
 ### Implementation changes and bug fixes
 - [PR #2061](https://github.com/rqlite/rqlite/pull/2061): Support registering Update Hooks at the database level.
 - [PR #2062](https://github.com/rqlite/rqlite/pull/2062): Support registering Commit Hooks at the database level.
+- [PR #2065](https://github.com/rqlite/rqlite/pull/2065): Update dependencies.
 
 ## v8.36.16 (April 3rd 2025)
 There are no functional changes to rqlite in this release. The only changes are improvements to the Docker image.
