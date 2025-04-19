@@ -1,7 +1,7 @@
 ## v8.36.18 (April 19th 2025)
 There are no functional changes to rqlite in this release. The only changes are fixes for Docker image creation.
 ### Implementation changes and bug fixes
-- [96f603d](https://github.com/rqlite/rqlite/commit/96f603d74c4d0f94949fbc596244606baaf557d9): Docker image supports enabling Foreign Key constraints via an Environment variable.
+- [96f603d](https://github.com/rqlite/rqlite/commit/96f603d74c4d0f94949fbc596244606baaf557d9): Enable `curl` redirects when building _sqlite-vec_ to address [Docker build failures](https://github.com/rqlite/rqlite/actions/runs/14545179069).
 
 ## v8.36.17 (April 18th 2025)
 ### Implementation changes and bug fixes
