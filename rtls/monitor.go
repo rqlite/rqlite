@@ -35,8 +35,7 @@ func NewCertMonitor(certFile, keyFile string) (*CertMonitor, error) {
 	return NewCertMonitorWithDuration(certFile, keyFile, time.Second)
 }
 
-// NewCertMonitorWithDuration creates a new CertMonitor instance. If duration is less than one second
-// it will be set to one second. The certificate and key files are loaded and monitored for changes.
+// NewCertMonitorWithDuration creates a new CertMonitor instance.
 func NewCertMonitorWithDuration(certFile, keyFile string, dur time.Duration) (*CertMonitor, error) {
 	parsedCert, err := tls.LoadX509KeyPair(certFile, keyFile)
 	if err != nil {
@@ -46,10 +45,6 @@ func NewCertMonitorWithDuration(certFile, keyFile string, dur time.Duration) (*C
 	modTime, err := getModTime(certFile)
 	if err != nil {
 		return nil, err
-	}
-
-	if dur <= time.Second {
-		dur = time.Second
 	}
 
 	return &CertMonitor{
