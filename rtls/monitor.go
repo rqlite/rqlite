@@ -8,8 +8,12 @@ import (
 	"time"
 )
 
-// CertMonitor monitors a TLS certificate and key file for changes.
-// If a change is detected, it reloads the certificate and key
+// CertMonitor monitors a TLS certificate and key file for changes. If a change
+// is detected, it reloads the certificate and key. The minimum duration
+// for checking changes is one second.
+//
+// CertMonitor is based on checking the modification time of the certificate file.
+// Changes that occur less than one second apart may not be detected.
 type CertMonitor struct {
 	certFile string
 	keyFile  string
