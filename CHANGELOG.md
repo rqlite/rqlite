@@ -1,7 +1,9 @@
-## v8.36.19 (unreleased)
+## v8.37.00 (unreleased)
+### New features
+- [PR #2069](https://github.com/rqlite/rqlite/pull/2069): Add TLS certificate monitoring and automatic reload to HTTP server.
+
 ### Implementation changes and bug fixes
 - [PR #2064](https://github.com/rqlite/rqlite/pull/2064), [PR #2068](https://github.com/rqlite/rqlite/pull/2068): Add polling-based certificate file monitor.
-- [PR #2069](https://github.com/rqlite/rqlite/pull/2069): Add TLS cert monitoring to HTTP server.
 
 ## v8.36.18 (April 19th 2025)
 There are no functional changes to rqlite in this release. The only changes are fixes for Docker image creation.
