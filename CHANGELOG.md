@@ -1,4 +1,4 @@
-## v8.37.00 (unreleased)
+## v8.37.0 (unreleased)
 ### New features
 - [PR #2069](https://github.com/rqlite/rqlite/pull/2069): Add TLS certificate monitoring and automatic reload to HTTP server.
 
