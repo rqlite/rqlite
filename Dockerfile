@@ -40,6 +40,7 @@ RUN curl -L `curl -s https://api.github.com/repos/nalgeon/sqlean/releases/latest
 
 RUN curl -L `curl -s https://api.github.com/repos/asg017/sqlite-vec/releases/latest | grep "tarball_url" | cut -d '"' -f 4` -o sqlite-vec.tar.gz && \
     tar xvfz sqlite-vec.tar.gz && \
+    echo location >> ~/.curlrc && \
     cd asg017* && sh scripts/vendor.sh && echo "#include <sys/types.h>" | cat - sqlite-vec.c > temp && mv temp sqlite-vec.c && make loadable && zip -j /extensions/sqlite-vec.zip dist/vec0.so
 
 RUN git clone https://github.com/rqlite/rqlite-sqlite-ext.git
