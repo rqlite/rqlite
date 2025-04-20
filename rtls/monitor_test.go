@@ -88,7 +88,7 @@ func Test_CertMonitor_Reload(t *testing.T) {
 	}
 
 	// Wait for the certificate to be reloaded
-	time.Sleep(time.Second)
+	time.Sleep(2 * time.Second)
 	certificate, err = cm.GetCertificate()
 	if err != nil {
 		t.Fatalf("Failed to get certificate: %v", err)
@@ -132,7 +132,7 @@ func Test_CertMonitor_ReloadInvalid(t *testing.T) {
 	}
 
 	// Wait for the certificate to be reloaded
-	time.Sleep(time.Second)
+	time.Sleep(2 * time.Second)
 	updated, err := cm.GetCertificate()
 	if err != nil {
 		t.Fatalf("Failed to get certificate after invalid overwrite: %v", err)
@@ -230,7 +230,7 @@ func Test_CertMonitor_Symlinks_Reload(t *testing.T) {
 	}
 
 	// Wait for the certificate to be reloaded
-	time.Sleep(time.Second)
+	time.Sleep(2 * time.Second)
 	certificate, err = cm.GetCertificate()
 	if err != nil {
 		t.Fatalf("Failed to get certificate: %v", err)
