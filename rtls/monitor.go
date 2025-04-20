@@ -25,8 +25,15 @@ type CertMonitor struct {
 	logger *log.Logger
 }
 
-// NewCertMonitor creates a new CertMonitor instance.
-func NewCertMonitor(certFile, keyFile string, dur time.Duration) (*CertMonitor, error) {
+// NewCertMonitor creates a new CertMonitor instance. The certificate and key files are loaded
+// and monitored for changes once a second.
+func NewCertMonitor(certFile, keyFile string) (*CertMonitor, error) {
+	return NewCertMonitorWithDuration(certFile, keyFile, time.Second)
+}
+
+// NewCertMonitorWithDuration creates a new CertMonitor instance. If duration is less than one second
+// it will be set to one second. The certificate and key files are loaded and monitored for changes.
+func NewCertMonitorWithDuration(certFile, keyFile string, dur time.Duration) (*CertMonitor, error) {
 	parsedCert, err := tls.LoadX509KeyPair(certFile, keyFile)
 	if err != nil {
 		return nil, err
@@ -35,6 +42,10 @@ func NewCertMonitor(certFile, keyFile string, dur time.Duration) (*CertMonitor, 
 	modTime, err := getModTime(certFile)
 	if err != nil {
 		return nil, err
+	}
+
+	if dur <= time.Second {
+		dur = time.Second
 	}
 
 	return &CertMonitor{
