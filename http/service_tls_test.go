@@ -69,6 +69,37 @@ func Test_TLSServiceInsecure(t *testing.T) {
 	if v := resp.Header.Get("X-RQLITE-VERSION"); v != "the version" {
 		t.Fatalf("incorrect build version present in HTTP/2 response header, got: %s", v)
 	}
+	if resp.TLS.PeerCertificates[0].Subject.CommonName != "rqlite" {
+		t.Fatalf("incorrect common name in server certificate, got: %s", resp.TLS.PeerCertificates[0].Subject.CommonName)
+	}
+
+	// Check cert reloading by changing the cert and key files, waiting, creating a new
+	// client, and making a new request.
+	cert2, key2, err := rtls.GenerateSelfSignedCert(pkix.Name{CommonName: "rqlite2"}, time.Hour, 2048)
+	if err != nil {
+		t.Fatalf("failed to generate self-signed cert: %s", err)
+	}
+	cert2Path := mustWriteTempFile(t, cert2)
+	key2Path := mustWriteTempFile(t, key2)
+	mustRename(key2Path, s.KeyFile)
+	mustRename(cert2Path, s.CertFile)
+	time.Sleep(2 * time.Second) // Wait for the cert to be reloaded.
+
+	client = &http.Client{
+		Transport: &http2.Transport{
+			TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
+		},
+	}
+	resp, err = client.Get(url)
+	if err != nil {
+		t.Fatalf("failed to make HTTP/2 request: %s", err)
+	}
+	if v := resp.Header.Get("X-RQLITE-VERSION"); v != "the version" {
+		t.Fatalf("incorrect build version present in HTTP/2 response header, got: %s", v)
+	}
+	if resp.TLS.PeerCertificates[0].Subject.CommonName != "rqlite2" {
+		t.Fatalf("incorrect common name in server certificate after reload, got: %s", resp.TLS.PeerCertificates[0].Subject.CommonName)
+	}
 }
 
 func Test_TLSServiceSecure(t *testing.T) {
@@ -241,4 +272,10 @@ func mustWriteTempFile(t *testing.T, b []byte) string {
 		panic("failed to write to temp file")
 	}
 	return f.Name()
+}
+
+func mustRename(new, old string) {
+	if err := os.Rename(new, old); err != nil {
+		panic(fmt.Sprintf("failed to rename %s to %s: %s", new, old, err))
+	}
 }

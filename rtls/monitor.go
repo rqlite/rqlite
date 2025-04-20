@@ -6,6 +6,8 @@ import (
 	"os"
 	"sync"
 	"time"
+
+	"github.com/rqlite/rqlite/v8/rsync"
 )
 
 // CertMonitor monitors a TLS certificate and key file for changes. If a change
@@ -25,7 +27,8 @@ type CertMonitor struct {
 	mu          sync.Mutex
 	certificate *tls.Certificate
 
-	logger *log.Logger
+	started rsync.AtomicBool
+	logger  *log.Logger
 }
 
 // NewCertMonitor creates a new CertMonitor instance. The certificate and key files are loaded
@@ -64,14 +67,22 @@ func (cm *CertMonitor) GetCertificate() (*tls.Certificate, error) {
 	return cm.certificate, nil
 }
 
-// Start starts the certificate monitor.
+// Start starts the certificate monitor. Starting a started monitor will panic.
 func (cm *CertMonitor) Start() {
+	if cm.started.Is() {
+		panic("cert monitor already started")
+	}
+	cm.started.Set()
 	cm.wg.Add(1)
 	go cm.do()
 }
 
-// Stop stops the certificate monitor.
+// Stop stops the certificate monitor. Stopping a stopped monitor is a no-op.
 func (cm *CertMonitor) Stop() {
+	if !cm.started.Is() {
+		return
+	}
+	cm.started.Unset()
 	close(cm.done)
 	cm.wg.Wait()
 }
