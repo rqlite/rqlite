@@ -46,7 +46,7 @@ func Test_CertMonitor_Reload(t *testing.T) {
 	certFile := mustWriteTempFile(t, certPEM)
 	keyFile := mustWriteTempFile(t, keyPEM)
 
-	cm, err := NewCertMonitor(certFile, keyFile)
+	cm, err := NewCertMonitorWithDuration(certFile, keyFile, 10*time.Millisecond)
 	if err != nil {
 		t.Fatalf("Failed to create CertMonitor: %v", err)
 	}
@@ -79,16 +79,17 @@ func Test_CertMonitor_Reload(t *testing.T) {
 	keyFile2 := mustWriteTempFile(t, keyPEM2)
 
 	// Rename files for atomic update
-	time.Sleep(time.Second)
 	if err := os.Rename(keyFile2, keyFile); err != nil {
 		t.Fatalf("failed to rename key file: %v", err)
 	}
 	if err := os.Rename(certFile2, certFile); err != nil {
 		t.Fatalf("failed to rename cert file: %v", err)
 	}
+	mustAdvanceFileOneSec(certFile)
+	mustAdvanceFileOneSec(keyFile)
 
 	// Wait for the certificate to be reloaded
-	time.Sleep(2 * time.Second)
+	time.Sleep(100 * time.Millisecond)
 	certificate, err = cm.GetCertificate()
 	if err != nil {
 		t.Fatalf("Failed to get certificate: %v", err)
@@ -112,7 +113,7 @@ func Test_CertMonitor_ReloadInvalid(t *testing.T) {
 	certFile := mustWriteTempFile(t, certPEM)
 	keyFile := mustWriteTempFile(t, keyPEM)
 
-	cm, err := NewCertMonitor(certFile, keyFile)
+	cm, err := NewCertMonitorWithDuration(certFile, keyFile, 10*time.Millisecond)
 	if err != nil {
 		t.Fatalf("Failed to create CertMonitor: %v", err)
 	}
@@ -126,13 +127,13 @@ func Test_CertMonitor_ReloadInvalid(t *testing.T) {
 	}
 
 	// Overwrite the certificate file with invalid data
-	time.Sleep(time.Second)
 	if err := os.WriteFile(certFile, []byte("INVALID DATA"), 0644); err != nil {
 		t.Fatalf("failed to overwrite cert file: %v", err)
 	}
+	mustAdvanceFileOneSec(certFile)
 
 	// Wait for the certificate to be reloaded
-	time.Sleep(2 * time.Second)
+	time.Sleep(100 * time.Millisecond)
 	updated, err := cm.GetCertificate()
 	if err != nil {
 		t.Fatalf("Failed to get certificate after invalid overwrite: %v", err)
@@ -159,7 +160,7 @@ func Test_CertMonitor_Symlinks(t *testing.T) {
 		t.Fatalf("failed to create key symlink: %v", err)
 	}
 
-	cm, err := NewCertMonitor(certLink, keyLink)
+	cm, err := NewCertMonitorWithDuration(certLink, keyLink, 10*time.Millisecond)
 	if err != nil {
 		t.Fatalf("Failed to create CertMonitor with symlinks: %v", err)
 	}
@@ -199,7 +200,7 @@ func Test_CertMonitor_Symlinks_Reload(t *testing.T) {
 	}
 
 	// Monitor the symlinks
-	cm, err := NewCertMonitor(certLink, keyLink)
+	cm, err := NewCertMonitorWithDuration(certLink, keyLink, 10*time.Millisecond)
 	if err != nil {
 		t.Fatalf("Failed to create CertMonitor with symlinks: %v", err)
 	}
@@ -221,21 +222,32 @@ func Test_CertMonitor_Symlinks_Reload(t *testing.T) {
 	if err := os.Remove(keyLink); err != nil {
 		t.Fatalf("failed to remove key symlink: %v", err)
 	}
-	time.Sleep(2 * time.Second)
 	if err := os.Symlink(certFileReal2, certLink); err != nil {
 		t.Fatalf("failed to create cert symlink: %v", err)
 	}
 	if err := os.Symlink(keyFileReal2, keyLink); err != nil {
 		t.Fatalf("failed to create key symlink: %v", err)
 	}
+	mustAdvanceFileOneSec(certLink)
+	mustAdvanceFileOneSec(keyLink)
 
 	// Wait for the certificate to be reloaded
-	time.Sleep(2 * time.Second)
+	time.Sleep(100 * time.Millisecond)
 	certificate, err = cm.GetCertificate()
 	if err != nil {
 		t.Fatalf("Failed to get certificate: %v", err)
 	}
 	if certificate.Leaf.Subject.CommonName != "symlink2" {
 		t.Fatalf("Expected CommonName to be 'symlink2', got '%s'", certificate.Leaf.Subject.CommonName)
+	}
+}
+
+func mustAdvanceFileOneSec(file string) {
+	lm, err := getModTime(file)
+	if err != nil {
+		panic("failed to get file time")
+	}
+	if os.Chtimes(file, lm.Add(1*time.Second), lm.Add(1*time.Second)) != nil {
+		panic("failed to set file time")
 	}
 }
