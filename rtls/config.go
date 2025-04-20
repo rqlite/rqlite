@@ -84,6 +84,31 @@ func CreateServerConfig(certFile, keyFile, caCertFile string, mtls MTLSState) (*
 	return config, nil
 }
 
+// CreateServerConfigWithFunc creates a new tls.Config for use by a server. The certFunc
+// parameter is a function that returns the server's certificate and key. The caCertFile
+// parameter is the path to the CA certificate file, which the server will use to verify
+// any certificate presented by the client. If mtls is MTLSStateEnabled, the server will
+// require the client to present a valid certificate.
+func CreateServerConfigWithFunc(certFunc func() (*tls.Certificate, error), caCertFile string, mtls MTLSState) (*tls.Config, error) {
+	config := createBaseTLSConfig(NoServerName, false)
+	config.GetCertificate = func(hello *tls.ClientHelloInfo) (*tls.Certificate, error) {
+		return certFunc()
+	}
+	if caCertFile != "" {
+		asn1Data, err := os.ReadFile(caCertFile)
+		if err != nil {
+			return nil, err
+		}
+		config.ClientCAs = x509.NewCertPool()
+		ok := config.ClientCAs.AppendCertsFromPEM(asn1Data)
+		if !ok {
+			return nil, fmt.Errorf("failed to load CA certificate(s) for client verification in %q", caCertFile)
+		}
+	}
+	config.ClientAuth = tls.ClientAuthType(mtls)
+	return config, nil
+}
+
 func createBaseTLSConfig(serverName string, noverify bool) *tls.Config {
 	return &tls.Config{
 		ServerName:         serverName,
