@@ -244,6 +244,7 @@ func main() {
 		str.Stepdown(true)
 	}
 	muxLn.Close()
+	defer mux.Close()
 
 	if err := str.Close(true); err != nil {
 		log.Printf("failed to close store: %s", err.Error())

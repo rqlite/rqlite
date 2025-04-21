@@ -25,6 +25,7 @@ var (
 
 func Test_ServiceExecute(t *testing.T) {
 	ln, mux := mustNewMux()
+	defer mux.Close()
 	go mux.Serve()
 	tn := mux.Listen(1) // Could be any byte value.
 	db := mustNewMockDatabase()
@@ -120,6 +121,7 @@ func Test_ServiceExecute(t *testing.T) {
 
 func Test_ServiceQuery(t *testing.T) {
 	ln, mux := mustNewMux()
+	defer mux.Close()
 	go mux.Serve()
 	tn := mux.Listen(1) // Could be any byte value.
 	db := mustNewMockDatabase()
@@ -211,6 +213,7 @@ func Test_ServiceQuery(t *testing.T) {
 // encoded and decoded correctly.
 func Test_ServiceQueryLarge(t *testing.T) {
 	ln, mux := mustNewMux()
+	defer mux.Close()
 	go mux.Serve()
 	tn := mux.Listen(1) // Could be any byte value.
 	db := mustNewMockDatabase()
@@ -272,6 +275,7 @@ func Test_ServiceQueryLarge(t *testing.T) {
 
 func Test_ServiceBackup(t *testing.T) {
 	ln, mux := mustNewMux()
+	defer mux.Close()
 	go mux.Serve()
 	tn := mux.Listen(1) // Could be any byte value.
 	db := mustNewMockDatabase()
@@ -319,6 +323,7 @@ func Test_ServiceBackup(t *testing.T) {
 
 func Test_ServiceLoad(t *testing.T) {
 	ln, mux := mustNewMux()
+	defer mux.Close()
 	go mux.Serve()
 	tn := mux.Listen(1) // Could be any byte value.
 	db := mustNewMockDatabase()
@@ -366,6 +371,7 @@ func Test_ServiceLoad(t *testing.T) {
 
 func Test_ServiceRemoveNode(t *testing.T) {
 	ln, mux := mustNewMux()
+	defer mux.Close()
 	go mux.Serve()
 	tn := mux.Listen(1) // Could be any byte value.
 	db := mustNewMockDatabase()
@@ -412,6 +418,7 @@ func Test_ServiceRemoveNode(t *testing.T) {
 
 func Test_ServiceJoinNode(t *testing.T) {
 	ln, mux := mustNewMux()
+	defer mux.Close()
 	go mux.Serve()
 	tn := mux.Listen(1) // Could be any byte value.
 	db := mustNewMockDatabase()
@@ -469,6 +476,7 @@ func Test_ServiceJoinNodeForwarded(t *testing.T) {
 
 	// Create the Leader service.
 	lnL, muxL := mustNewMux()
+	defer muxL.Close()
 	go muxL.Serve()
 	tnL := muxL.Listen(headerByte)
 	dbL := mustNewMockDatabase()
@@ -487,6 +495,7 @@ func Test_ServiceJoinNodeForwarded(t *testing.T) {
 
 	// Create the Follower service.
 	lnF, muxF := mustNewMux()
+	defer muxF.Close()
 	go muxF.Serve()
 	tnF := muxF.Listen(headerByte)
 	dbF := mustNewMockDatabase()
