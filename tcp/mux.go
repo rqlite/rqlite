@@ -213,7 +213,9 @@ func (mux *Mux) Listen(header byte) net.Listener {
 // does it close the listener it was passed at creation time. It cleans up
 // other resources however.
 func (mux *Mux) Close() error {
-	mux.certMonitor.Stop()
+	if mux.certMonitor != nil {
+		mux.certMonitor.Stop()
+	}
 	return nil
 }
 
