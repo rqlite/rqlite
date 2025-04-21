@@ -82,7 +82,8 @@ type Mux struct {
 	// Out-of-band error logger
 	Logger *log.Logger
 
-	tlsConfig *tls.Config
+	certMonitor *rtls.CertMonitor
+	tlsConfig   *tls.Config
 }
 
 // NewMux returns a new instance of Mux for ln. If adv is nil,
@@ -126,7 +127,12 @@ func newTLSMux(ln net.Listener, adv net.Addr, cert, key, caCert string, mutual b
 	if mutual {
 		mtlsState = rtls.MTLSStateEnabled
 	}
-	mux.tlsConfig, err = rtls.CreateServerConfig(cert, key, caCert, mtlsState)
+	mux.certMonitor, err = rtls.NewCertMonitor(cert, key)
+	if err != nil {
+		return nil, fmt.Errorf("cannot create cert monitor: %s", err)
+	}
+	mux.certMonitor.Start()
+	mux.tlsConfig, err = rtls.CreateServerConfigWithFunc(mux.certMonitor.GetCertificate, caCert, mtlsState)
 	if err != nil {
 		return nil, fmt.Errorf("cannot create TLS config: %s", err)
 	}
@@ -207,6 +213,9 @@ func (mux *Mux) Listen(header byte) net.Listener {
 // does it close the listener it was passed at creation time. It cleans up
 // other resources however.
 func (mux *Mux) Close() error {
+	if mux.certMonitor != nil {
+		mux.certMonitor.Stop()
+	}
 	return nil
 }
 

@@ -198,6 +198,36 @@ func TestTLSMux(t *testing.T) {
 	if !state.HandshakeComplete {
 		t.Fatal("connection handshake failed to complete")
 	}
+	if state.PeerCertificates[0].Subject.CommonName != "example.com" {
+		t.Fatalf("unexpected common name: %s", state.PeerCertificates[0].Subject.CommonName)
+	}
+
+	// Next swap in a new cert and key, and verify that the new cert is used.
+	cert2 := x509.CertExample2DotComFile("")
+	defer os.Remove(cert2)
+	key2 := x509.KeyExample2DotComFile("")
+	defer os.Remove(key2)
+	mustRename(key, key2)
+	mustRename(cert, cert2)
+
+	// Wait for the cert to be reloaded.
+	time.Sleep(2 * time.Second)
+
+	// Verify that the listener is still secured.
+	conn, err = tls.Dial("tcp", tcpListener.Addr().String(), &tls.Config{
+		InsecureSkipVerify: true,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	state = conn.ConnectionState()
+	if !state.HandshakeComplete {
+		t.Fatal("connection handshake failed to complete")
+	}
+	if state.PeerCertificates[0].Subject.CommonName != "example2.com" {
+		t.Fatalf("unexpected common name: %s", state.PeerCertificates[0].Subject.CommonName)
+	}
 }
 
 func TestTLSMux_Fail(t *testing.T) {
@@ -229,4 +259,10 @@ func mustTCPListener(bind string) net.Listener {
 		panic(err)
 	}
 	return l
+}
+
+func mustRename(new, old string) {
+	if err := os.Rename(old, new); err != nil {
+		panic(err)
+	}
 }
