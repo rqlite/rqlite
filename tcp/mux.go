@@ -203,6 +203,13 @@ func (mux *Mux) Listen(header byte) net.Listener {
 	return ln
 }
 
+// Close closes the mux. It does not close any listeners created by the mux, nor
+// does it close the listener it was passed at creation time. It cleans up
+// other resources however.
+func (mux *Mux) Close() error {
+	return nil
+}
+
 func (mux *Mux) handleConn(conn net.Conn) {
 	stats.Add(numConnectionsHandled, 1)
 

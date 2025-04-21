@@ -15,6 +15,7 @@ import (
 
 func Test_NewServiceSetGetNodeAPIAddrMuxed(t *testing.T) {
 	ln, mux := mustNewMux()
+	defer mux.Close()
 	go mux.Serve()
 	tn := mux.Listen(1) // Could be any byte value.
 
@@ -49,6 +50,7 @@ func Test_NewServiceSetGetNodeAPIAddrMuxed(t *testing.T) {
 
 func Test_NewServiceSetGetNodeAPIAddrMuxedTLS(t *testing.T) {
 	ln, mux := mustNewTLSMux()
+	defer mux.Close()
 	go mux.Serve()
 	tn := mux.Listen(1) // Could be any byte value.
 

@@ -38,6 +38,7 @@ func TestMux(t *testing.T) {
 		if err != nil {
 			t.Fatalf("failed to create mux: %s", err.Error())
 		}
+		defer mux.Close()
 		mux.Timeout = 200 * time.Millisecond
 		if !testing.Verbose() {
 			mux.Logger = log.New(io.Discard, "", 0)
@@ -137,6 +138,7 @@ func TestMux_Advertise(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to create mux: %s", err.Error())
 	}
+	defer mux.Close()
 	mux.Timeout = 200 * time.Millisecond
 	if !testing.Verbose() {
 		mux.Logger = log.New(io.Discard, "", 0)
@@ -163,6 +165,7 @@ func TestMux_Listen_ErrAlreadyRegistered(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to create mux: %s", err.Error())
 	}
+	defer mux.Close()
 	mux.Listen(5)
 	mux.Listen(5)
 }
@@ -180,6 +183,7 @@ func TestTLSMux(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to create mux: %s", err.Error())
 	}
+	defer mux.Close()
 	go mux.Serve()
 
 	// Verify that the listener is secured.
