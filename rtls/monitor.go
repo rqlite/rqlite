@@ -102,12 +102,12 @@ func (cm *CertMonitor) do() {
 
 			if modTime.After(cm.lastModified) {
 				cm.logger.Printf("reloading certificate %s as it has been modified", cm.certFile)
-				cm.lastModified = modTime
 				parsedCert, err := tls.LoadX509KeyPair(cm.certFile, cm.keyFile)
 				if err != nil {
 					cm.logger.Printf("failed to load certificate %s: %s", cm.certFile, err)
 					continue
 				}
+				cm.lastModified = modTime
 				cm.mu.Lock()
 				cm.certificate = &parsedCert
 				cm.mu.Unlock()
