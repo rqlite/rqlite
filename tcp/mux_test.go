@@ -198,6 +198,9 @@ func TestTLSMux(t *testing.T) {
 	if !state.HandshakeComplete {
 		t.Fatal("connection handshake failed to complete")
 	}
+	if state.PeerCertificates[0].Subject.CommonName != "example.com" {
+		t.Fatalf("unexpected common name: %s", state.PeerCertificates[0].Subject.CommonName)
+	}
 }
 
 func TestTLSMux_Fail(t *testing.T) {
