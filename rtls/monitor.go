@@ -96,7 +96,7 @@ func (cm *CertMonitor) do() {
 		case <-ticker.C:
 			modTime, err := getModTime(cm.certFile, cm.keyFile)
 			if err != nil {
-				cm.logger.Printf("failed to get modification time for %s or %s: %v", cm.certFile, cm.keyFile, err)
+				cm.logger.Printf("failed to load certificate-key pair %s and %s: %s", cm.certFile, cm.keyFile, err)
 				continue
 			}
 
