@@ -55,6 +55,41 @@ func Test_CreateServerConfig(t *testing.T) {
 	}
 }
 
+func Test_CreateServerConfig_CA(t *testing.T) {
+	// generate a cert and key pair, and write both to a temporary file
+	certPEM, keyPEM, err := GenerateCert(pkix.Name{CommonName: "rqlite"}, 365*24*time.Hour, 2048, nil, nil)
+	if err != nil {
+		t.Fatalf("failed to generate cert: %v", err)
+	}
+	certFile := mustWriteTempFile(t, certPEM)
+	keyFile := mustWriteTempFile(t, keyPEM)
+
+	// generate CA cert
+	caCertPEM, _, err := GenerateCert(pkix.Name{CommonName: "rqlite"}, 365*24*time.Hour, 2048, nil, nil)
+	if err != nil {
+		t.Fatalf("failed to generate CA cert: %v", err)
+	}
+	caCertFile := mustWriteTempFile(t, caCertPEM)
+
+	config, err := CreateServerConfig(certFile, keyFile, caCertFile, MTLSStateDisabled)
+	if err != nil {
+		t.Fatalf("failed to create server config: %v", err)
+	}
+	// Check that CA cert has been loaded
+	if config.ClientCAs == nil {
+		t.Fatalf("expected root CA, got nil")
+	}
+
+	configF, err := CreateServerConfigWithFunc(nil, caCertFile, MTLSStateDisabled)
+	if err != nil {
+		t.Fatalf("failed to create server config: %v", err)
+	}
+	// Check that CA cert has been loaded
+	if configF.ClientCAs == nil {
+		t.Fatalf("expected root CA, got nil")
+	}
+}
+
 func Test_CreateClientConfig(t *testing.T) {
 	// generate a cert and key pair, and write both to a temporary file
 	certPEM, keyPEM, err := GenerateCert(pkix.Name{CommonName: "rqlite"}, 365*24*time.Hour, 2048, nil, nil)
@@ -107,6 +142,44 @@ func Test_CreateClientConfig(t *testing.T) {
 	}
 	if config.ServerName != "expected" {
 		t.Fatalf("expected ServerName to be 'expected', got %s", config.ServerName)
+	}
+}
+
+func Test_CreateClientConfig_CA(t *testing.T) {
+	// generate a cert and key pair, and write both to a temporary file
+	certPEM, keyPEM, err := GenerateCert(pkix.Name{CommonName: "rqlite"}, 365*24*time.Hour, 2048, nil, nil)
+	if err != nil {
+		t.Fatalf("failed to generate cert: %v", err)
+	}
+	certFile := mustWriteTempFile(t, certPEM)
+	keyFile := mustWriteTempFile(t, keyPEM)
+
+	// generate CA cert
+	caCertPEM, _, err := GenerateCert(pkix.Name{CommonName: "rqlite"}, 365*24*time.Hour, 2048, nil, nil)
+	if err != nil {
+		t.Fatalf("failed to generate CA cert: %v", err)
+	}
+	caCertFile := mustWriteTempFile(t, caCertPEM)
+
+	// create a client config
+	config, err := CreateClientConfig(certFile, keyFile, caCertFile, NoServerName, true)
+	if err != nil {
+		t.Fatalf("failed to create client config: %v", err)
+	}
+
+	// Check that root CA is loaded
+	if config.RootCAs == nil {
+		t.Fatalf("expected root CA, got nil")
+	}
+
+	configF, err := CreateClientConfigWithFunc(nil, caCertFile, NoServerName, true)
+	if err != nil {
+		t.Fatalf("failed to create client config: %v", err)
+	}
+
+	// Check that root CA is loaded
+	if configF.RootCAs == nil {
+		t.Fatalf("expected root CA, got nil")
 	}
 }
 
