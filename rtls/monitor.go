@@ -120,10 +120,10 @@ func (cm *CertMonitor) do() {
 
 // getModTime returns the latest modification time of the given files.
 func getModTime(file ...string) (time.Time, error) {
-	latest := time.Time{}
 	if len(file) == 0 {
-		return latest, os.ErrNotExist
+		return time.Time{}, os.ErrNotExist
 	}
+	latest := time.Time{}
 	for _, f := range file {
 		info, err := os.Stat(f)
 		if err != nil {
