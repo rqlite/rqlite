@@ -4,7 +4,7 @@
 - [PR #2071](https://github.com/rqlite/rqlite/pull/2071): Add server TLS certificate monitoring and automatic reload to inter-node communications.
 
 ### Implementation changes and bug fixes
-- [PR #2064](https://github.com/rqlite/rqlite/pull/2064), [PR #2068](https://github.com/rqlite/rqlite/pull/2068), [PR #2072](https://github.com/rqlite/rqlite/pull/2072): Add polling-based certificate file monitor.
+- [PR #2064](https://github.com/rqlite/rqlite/pull/2064), [PR #2068](https://github.com/rqlite/rqlite/pull/2068), [PR #2072](https://github.com/rqlite/rqlite/pull/2072), [PR #2073](https://github.com/rqlite/rqlite/pull/2073): Add polling-based certificate file monitor.
 - [PR #2070](https://github.com/rqlite/rqlite/pull/2070): Add a `Close` method to the `tcp.Mux` type.
 
 ## v8.36.18 (April 19th 2025)

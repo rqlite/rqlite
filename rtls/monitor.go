@@ -94,14 +94,14 @@ func (cm *CertMonitor) do() {
 	for {
 		select {
 		case <-ticker.C:
-			modTime, err := getModTime(cm.certFile)
+			modTime, err := getModTime(cm.certFile, cm.keyFile)
 			if err != nil {
-				cm.logger.Printf("failed to get modification time for %s: %v", cm.certFile, err)
+				cm.logger.Printf("failed to get modification time for %s or %s: %v", cm.certFile, cm.keyFile, err)
 				continue
 			}
 
 			if modTime.After(cm.lastModified) {
-				cm.logger.Printf("reloading certificate %s as it has been modified", cm.certFile)
+				cm.logger.Printf("reloading certificate-key pair %s as it has been modified", cm.certFile)
 				parsedCert, err := tls.LoadX509KeyPair(cm.certFile, cm.keyFile)
 				if err != nil {
 					cm.logger.Printf("failed to load certificate %s: %s", cm.certFile, err)
@@ -118,10 +118,20 @@ func (cm *CertMonitor) do() {
 	}
 }
 
-func getModTime(file string) (time.Time, error) {
-	info, err := os.Stat(file)
-	if err != nil {
-		return time.Time{}, err
+// getModTime returns the latest modification time of the given files.
+func getModTime(file ...string) (time.Time, error) {
+	latest := time.Time{}
+	if len(file) == 0 {
+		return latest, os.ErrNotExist
 	}
-	return info.ModTime(), nil
+	for _, f := range file {
+		info, err := os.Stat(f)
+		if err != nil {
+			return time.Time{}, err
+		}
+		if info.ModTime().After(latest) {
+			latest = info.ModTime()
+		}
+	}
+	return latest, nil
 }
