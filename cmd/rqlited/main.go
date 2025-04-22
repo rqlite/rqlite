@@ -181,17 +181,15 @@ func main() {
 	}
 
 	// Register remaining status providers.
-	if err := httpServ.RegisterStatus("cluster", clstrServ); err != nil {
-		log.Fatalf("failed to register cluster status provider: %s", err.Error())
-	}
-	if err := httpServ.RegisterStatus("network", tcp.NetworkReporter{}); err != nil {
-		log.Fatalf("failed to register network status provider: %s", err.Error())
-	}
-	if err := httpServ.RegisterStatus("mux", mux); err != nil {
-		log.Fatalf("failed to register mux status provider: %s", err.Error())
-	}
-	if err := httpServ.RegisterStatus("extensions", extensionsStore); err != nil {
-		log.Fatalf("failed to register extensions status provider: %s", err.Error())
+	for n, r := range map[string]httpd.StatusReporter{
+		"cluster":    clstrServ,
+		"network":    tcp.NetworkReporter{},
+		"mux":        mux,
+		"extensions": extensionsStore,
+	} {
+		if err := httpServ.RegisterStatus(n, r); err != nil {
+			log.Fatalf("failed to register %s status provider: %s", n, err.Error())
+		}
 	}
 
 	// Create the cluster!
