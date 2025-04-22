@@ -41,14 +41,29 @@ func CreateClientConfig(certFile, keyFile, caCertFile, serverName string, noveri
 		}
 	}
 	if caCertFile != "" {
-		asn1Data, err := os.ReadFile(caCertFile)
-		if err != nil {
+		if err := setCertPool(caCertFile, &config.RootCAs); err != nil {
 			return nil, err
 		}
-		config.RootCAs = x509.NewCertPool()
-		ok := config.RootCAs.AppendCertsFromPEM(asn1Data)
-		if !ok {
-			return nil, fmt.Errorf("failed to load CA certificate(s) for server verification in %q", caCertFile)
+	}
+	return config, nil
+}
+
+// CreateClientConfigWithFunc creates a new tls.Config for use by a client. The certFunc
+// parameter is a function that returns the client's certificate and key. The caCertFile
+// parameter is the path to the CA certificate file, which the client will use to verify
+// any certificate presented by the server. serverName can also be set, informing the client
+// which hostname should appear in the returned certificate. If noverify is true, the client
+// will not verify the server's certificate.
+func CreateClientConfigWithFunc(certFunc func() (*tls.Certificate, error), caCertFile, serverName string, noverify bool) (*tls.Config, error) {
+	config := createBaseTLSConfig(serverName, noverify)
+	if certFunc != nil {
+		config.GetClientCertificate = func(hello *tls.CertificateRequestInfo) (*tls.Certificate, error) {
+			return certFunc()
+		}
+	}
+	if caCertFile != "" {
+		if err := setCertPool(caCertFile, &config.RootCAs); err != nil {
+			return nil, err
 		}
 	}
 	return config, nil
@@ -70,14 +85,8 @@ func CreateServerConfig(certFile, keyFile, caCertFile string, mtls MTLSState) (*
 		return nil, err
 	}
 	if caCertFile != "" {
-		asn1Data, err := os.ReadFile(caCertFile)
-		if err != nil {
+		if err := setCertPool(caCertFile, &config.ClientCAs); err != nil {
 			return nil, err
-		}
-		config.ClientCAs = x509.NewCertPool()
-		ok := config.ClientCAs.AppendCertsFromPEM(asn1Data)
-		if !ok {
-			return nil, fmt.Errorf("failed to load CA certificate(s) for client verification in %q", caCertFile)
 		}
 	}
 	config.ClientAuth = tls.ClientAuthType(mtls)
@@ -95,14 +104,8 @@ func CreateServerConfigWithFunc(certFunc func() (*tls.Certificate, error), caCer
 		return certFunc()
 	}
 	if caCertFile != "" {
-		asn1Data, err := os.ReadFile(caCertFile)
-		if err != nil {
+		if err := setCertPool(caCertFile, &config.ClientCAs); err != nil {
 			return nil, err
-		}
-		config.ClientCAs = x509.NewCertPool()
-		ok := config.ClientCAs.AppendCertsFromPEM(asn1Data)
-		if !ok {
-			return nil, fmt.Errorf("failed to load CA certificate(s) for client verification in %q", caCertFile)
 		}
 	}
 	config.ClientAuth = tls.ClientAuthType(mtls)
@@ -116,4 +119,20 @@ func createBaseTLSConfig(serverName string, noverify bool) *tls.Config {
 		NextProtos:         []string{"h2", "http/1.1"},
 		MinVersion:         uint16(tls.VersionTLS12),
 	}
+}
+
+// setCertPool sets the CA certificate pool for the given file. It reads the file and
+// appends the certificates to the pool. If the file cannot be read or the certificates
+// cannot be appended, it returns an error.
+func setCertPool(caCertFile string, pool **x509.CertPool) error {
+	asn1Data, err := os.ReadFile(caCertFile)
+	if err != nil {
+		return err
+	}
+	*pool = x509.NewCertPool()
+	ok := (*pool).AppendCertsFromPEM(asn1Data)
+	if !ok {
+		return fmt.Errorf("failed to load CA certificate(s) for verification in %q", caCertFile)
+	}
+	return nil
 }
