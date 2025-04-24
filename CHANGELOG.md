@@ -2,6 +2,7 @@
 ### New features
 - [PR #2069](https://github.com/rqlite/rqlite/pull/2069): Add TLS certificate monitoring and automatic reload to HTTP server.
 - [PR #2071](https://github.com/rqlite/rqlite/pull/2071): Add server TLS certificate monitoring and automatic reload to inter-node communications.
+- [PR #2076](https://github.com/rqlite/rqlite/pull/2076): Add client TLS certificate monitoring and automatic reload to inter-node communications.
 
 ### Implementation changes and bug fixes
 - [PR #2064](https://github.com/rqlite/rqlite/pull/2064), [PR #2068](https://github.com/rqlite/rqlite/pull/2068), [PR #2072](https://github.com/rqlite/rqlite/pull/2072), [PR #2073](https://github.com/rqlite/rqlite/pull/2073): Add polling-based certificate file monitor.

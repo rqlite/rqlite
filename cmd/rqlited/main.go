@@ -96,10 +96,13 @@ func main() {
 
 	// Raft internode layer
 	raftLn := mux.Listen(cluster.MuxRaftHeader)
-	raftDialer, err := cluster.CreateRaftDialer(cfg.NodeX509Cert, cfg.NodeX509Key, cfg.NodeX509CACert,
+	raftDialer, cm, err := cluster.CreateRaftDialer(cfg.NodeX509Cert, cfg.NodeX509Key, cfg.NodeX509CACert,
 		cfg.NodeVerifyServerName, cfg.NoNodeVerify)
 	if err != nil {
 		log.Fatalf("failed to create Raft dialer: %s", err.Error())
+	}
+	if cm != nil {
+		defer cm.Stop()
 	}
 	raftTn := tcp.NewLayer(raftLn, raftDialer)
 
@@ -166,9 +169,12 @@ func main() {
 	// We want to start the HTTP server as soon as possible, so the node is responsive and external
 	// systems can see that it's running. We still have to open the Store though, so the node won't
 	// be able to do much until that happens however.
-	clstrClient, err := createClusterClient(cfg, clstrServ)
+	clstrClient, cm, err := createClusterClient(cfg, clstrServ)
 	if err != nil {
 		log.Fatalf("failed to create cluster client: %s", err.Error())
+	}
+	if cm != nil {
+		defer cm.Stop()
 	}
 	httpServ, err := startHTTPService(cfg, str, clstrClient, credStr)
 	if err != nil {
@@ -462,25 +468,31 @@ func clusterService(cfg *Config, ln net.Listener, db cluster.Database, mgr clust
 	return c, nil
 }
 
-func createClusterClient(cfg *Config, clstr *cluster.Service) (*cluster.Client, error) {
+func createClusterClient(cfg *Config, clstr *cluster.Service) (*cluster.Client, *rtls.CertMonitor, error) {
 	var dialerTLSConfig *tls.Config
 	var err error
+	var cm *rtls.CertMonitor
 	if cfg.NodeX509Cert != "" || cfg.NodeX509CACert != "" {
-		dialerTLSConfig, err = rtls.CreateClientConfig(cfg.NodeX509Cert, cfg.NodeX509Key,
+		cm, err = rtls.NewCertMonitor(cfg.NodeX509Cert, cfg.NodeX509Key)
+		if err != nil {
+			return nil, nil, fmt.Errorf("failed to create certificate monitor: %s", err.Error())
+		}
+		cm.Start()
+		dialerTLSConfig, err = rtls.CreateClientConfigWithFunc(cm.GetCertificate,
 			cfg.NodeX509CACert, cfg.NodeVerifyServerName, cfg.NoNodeVerify)
 		if err != nil {
-			return nil, fmt.Errorf("failed to create TLS config for cluster dialer: %s", err.Error())
+			return nil, nil, fmt.Errorf("failed to create TLS config for cluster dialer: %s", err.Error())
 		}
 	}
 	clstrDialer := tcp.NewDialer(cluster.MuxClusterHeader, dialerTLSConfig)
 	clstrClient := cluster.NewClient(clstrDialer, cfg.ClusterConnectTimeout)
-	if err := clstrClient.SetLocal(cfg.RaftAdv, clstr); err != nil {
-		return nil, fmt.Errorf("failed to set cluster client local parameters: %s", err.Error())
+	if err = clstrClient.SetLocal(cfg.RaftAdv, clstr); err != nil {
+		return nil, nil, fmt.Errorf("failed to set cluster client local parameters: %s", err.Error())
 	}
-	if err := clstrClient.SetLocalVersion(cmd.Version); err != nil {
-		return nil, fmt.Errorf("failed to set cluster client local version: %s", err.Error())
+	if err = clstrClient.SetLocalVersion(cmd.Version); err != nil {
+		return nil, nil, fmt.Errorf("failed to set cluster client local version: %s", err.Error())
 	}
-	return clstrClient, nil
+	return clstrClient, cm, nil
 }
 
 func createCluster(ctx context.Context, cfg *Config, hasPeers bool, client *cluster.Client, str *store.Store,
