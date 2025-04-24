@@ -38,6 +38,30 @@ func Test_NewCertMonitor(t *testing.T) {
 	}
 }
 
+// Test_NewCertMonitor_InvalidCertKeyPair tests the case where the certificate and key do not match.
+// It should return an error. The standard library code checks for this, so make sure it never
+// changes. This is important because the CertMonitor is a little racy in the sense that it could
+// detect that the cert has changed, trigger a reload of both the cert and key, but the key may
+// not have also been changed (yet). So we want to be sure if this happens an error occurs and the
+// CertMonitor will retry the reload until both files are changed.
+func Test_NewCertMonitor_Mismatch(t *testing.T) {
+	certPEM1, _, err := GenerateCert(pkix.Name{CommonName: "rqlite1"}, 365*24*time.Hour, 2048, nil, nil)
+	if err != nil {
+		t.Fatalf("failed to generate cert: %v", err)
+	}
+	certFile1 := mustWriteTempFile(t, certPEM1)
+	_, keyPEM2, err := GenerateCert(pkix.Name{CommonName: "rqlite2"}, 365*24*time.Hour, 2048, nil, nil)
+	if err != nil {
+		t.Fatalf("failed to generate cert: %v", err)
+	}
+	keyFile2 := mustWriteTempFile(t, keyPEM2)
+
+	_, err = NewCertMonitor(certFile1, keyFile2)
+	if err == nil {
+		t.Fatalf("Expected error when loading mismatch cert-key pair, got nil")
+	}
+}
+
 func Test_CertMonitor_Reload(t *testing.T) {
 	certPEM, keyPEM, err := GenerateCert(pkix.Name{CommonName: "rqlite"}, 365*24*time.Hour, 2048, nil, nil)
 	if err != nil {
