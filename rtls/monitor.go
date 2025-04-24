@@ -31,8 +31,8 @@ type CertMonitor struct {
 	logger  *log.Logger
 }
 
-// NewCertMonitor creates a new CertMonitor instance. The certificate and key files are loaded
-// and monitored for changes once a second.
+// NewCertMonitor creates a new CertMonitor instance. The certificate and key files are monitored
+// for changes once a second.
 func NewCertMonitor(certFile, keyFile string) (*CertMonitor, error) {
 	return NewCertMonitorWithDuration(certFile, keyFile, time.Second)
 }
