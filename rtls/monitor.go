@@ -39,7 +39,7 @@ func NewCertMonitor(certFile, keyFile string) (*CertMonitor, error) {
 
 // NewCertMonitorWithDuration creates a new CertMonitor instance.
 func NewCertMonitorWithDuration(certFile, keyFile string, dur time.Duration) (*CertMonitor, error) {
-	parsedCert, err := tls.LoadX509KeyPair(certFile, keyFile)
+	parsedCert, err := loadKeyPair(certFile, keyFile)
 	if err != nil {
 		return nil, err
 	}
@@ -102,7 +102,7 @@ func (cm *CertMonitor) do() {
 
 			if modTime.After(cm.lastModified) {
 				cm.logger.Printf("reloading certificate-key pair %s as it has been modified", cm.certFile)
-				parsedCert, err := tls.LoadX509KeyPair(cm.certFile, cm.keyFile)
+				parsedCert, err := loadKeyPair(cm.certFile, cm.keyFile)
 				if err != nil {
 					cm.logger.Printf("failed to load certificate %s: %s", cm.certFile, err)
 					continue
@@ -116,6 +116,13 @@ func (cm *CertMonitor) do() {
 			return
 		}
 	}
+}
+
+// loadKeyPair loads a TLS certificate and key pair from the given files.
+// It simply wraps tls.LoadX509KeyPair, ensuring that the rest of the code
+// uses the same function to load the key pair.
+func loadKeyPair(certFile, keyFile string) (tls.Certificate, error) {
+	return tls.LoadX509KeyPair(certFile, keyFile)
 }
 
 // getModTime returns the latest modification time of the given files.
