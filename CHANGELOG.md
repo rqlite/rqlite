@@ -8,6 +8,7 @@
 - [PR #2064](https://github.com/rqlite/rqlite/pull/2064), [PR #2068](https://github.com/rqlite/rqlite/pull/2068), [PR #2072](https://github.com/rqlite/rqlite/pull/2072), [PR #2073](https://github.com/rqlite/rqlite/pull/2073): Add polling-based certificate file monitor.
 - [PR #2070](https://github.com/rqlite/rqlite/pull/2070): Add a `Close` method to the `tcp.Mux` type.
 - [PR #2074](https://github.com/rqlite/rqlite/pull/2074): Support setting TLS client config GetCertificate function.
+- [PR #2075](https://github.com/rqlite/rqlite/pull/2075): Add copyright years to logo.
 
 ## v8.36.18 (April 19th 2025)
 There are no functional changes to rqlite in this release. The only changes are fixes for Docker image creation.

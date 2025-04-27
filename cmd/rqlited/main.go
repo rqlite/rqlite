@@ -41,8 +41,8 @@ const logo = `
  | '__/ _  | | | __/ _ \   The lightweight, distributed
  | | | (_| | | | ||  __/   relational database.
  |_|  \__, |_|_|\__\___|
-         | |               www.rqlite.io
-         |_|
+         | |                 www.rqlite.io
+         |_|              Copyright 2014-%s
 
 `
 
@@ -72,7 +72,7 @@ func main() {
 	if err != nil {
 		log.Fatalf("failed to parse command-line flags: %s", err.Error())
 	}
-	fmt.Print(logo)
+	fmt.Printf(logo, cmd.BuildyearOrNow())
 
 	// Configure logging and pump out initial message.
 	log.Printf("%s starting, version %s, SQLite %s, commit %s, branch %s, compiler (toolchain) %s, compiler (command) %s",
