@@ -85,10 +85,10 @@ func (c *CheckAndSet) Owner() string {
 
 // Stats returns diagnostic information about the current state of the
 // CheckAndSet instance.
-func (c *CheckAndSet) Stats() map[string]interface{} {
+func (c *CheckAndSet) Stats() map[string]any {
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	stats := map[string]interface{}{
+	stats := map[string]any{
 		"owner": nil,
 	}
 	if c.state {

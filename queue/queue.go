@@ -173,8 +173,8 @@ func (q *Queue[T]) Depth() int {
 }
 
 // Stats returns stats on this queue.
-func (q *Queue[T]) Stats() (map[string]interface{}, error) {
-	return map[string]interface{}{
+func (q *Queue[T]) Stats() (map[string]any, error) {
+	return map[string]any{
 		"max_size":   q.maxSize,
 		"batch_size": q.batchSize,
 		"timeout":    q.timeout.String(),

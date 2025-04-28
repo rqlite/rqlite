@@ -140,7 +140,7 @@ func Test_NodesRespEncodeStandard(t *testing.T) {
 		t.Errorf("Encode failed: %v", err)
 	}
 
-	m := make(map[string]interface{})
+	m := make(map[string]any)
 	if err := json.Unmarshal(buffer.Bytes(), &m); err != nil {
 		t.Errorf("Encode failed: %v", err)
 	}
@@ -150,14 +150,14 @@ func Test_NodesRespEncodeStandard(t *testing.T) {
 	if _, ok := m["nodes"]; !ok {
 		t.Errorf("nodes key missing")
 	}
-	nodesArray, ok := m["nodes"].([]interface{})
+	nodesArray, ok := m["nodes"].([]any)
 	if !ok {
 		t.Errorf("nodes key is not an array")
 	}
 	if len(nodesArray) != 1 {
 		t.Errorf("unexpected number of nodes")
 	}
-	node, ok := nodesArray[0].(map[string]interface{})
+	node, ok := nodesArray[0].(map[string]any)
 	if !ok {
 		t.Errorf("node is not a map")
 	}
@@ -174,7 +174,7 @@ func Test_NodeRespEncodeLegacy(t *testing.T) {
 		t.Errorf("Encode failed: %v", err)
 	}
 
-	m := make(map[string]interface{})
+	m := make(map[string]any)
 	if err := json.Unmarshal(buffer.Bytes(), &m); err != nil {
 		t.Errorf("Encode failed: %v", err)
 	}
@@ -184,7 +184,7 @@ func Test_NodeRespEncodeLegacy(t *testing.T) {
 	if _, ok := m["1"]; !ok {
 		t.Errorf("node key missing")
 	}
-	node, ok := m["1"].(map[string]interface{})
+	node, ok := m["1"].(map[string]any)
 	if !ok {
 		t.Errorf("nodes key is not an map")
 	}
@@ -271,7 +271,7 @@ func mockNodes() Nodes {
 	}
 }
 
-func checkNode(t *testing.T, node map[string]interface{}) {
+func checkNode(t *testing.T, node map[string]any) {
 	t.Helper()
 	if _, ok := node["id"]; !ok {
 		t.Errorf("node is missing id")
@@ -305,7 +305,7 @@ func checkNode(t *testing.T, node map[string]interface{}) {
 	}
 }
 
-func asJSON(v interface{}) string {
+func asJSON(v any) string {
 	b, err := json.Marshal(v)
 	if err != nil {
 		panic(fmt.Sprintf("failed to JSON marshal value: %s", err.Error()))

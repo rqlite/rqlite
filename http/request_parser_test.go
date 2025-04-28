@@ -285,7 +285,7 @@ func Test_SingleNamedParameterizedRequest(t *testing.T) {
 	}
 
 	s := "SELECT * FROM foo WHERE bar=:bar AND qux=:qux"
-	b := []byte(fmt.Sprintf(`[["%s", %s]]`, s, mustJSONMarshal(map[string]interface{}{"bar": 3, "qux": "some string", "baz": 3.1457})))
+	b := []byte(fmt.Sprintf(`[["%s", %s]]`, s, mustJSONMarshal(map[string]any{"bar": 3, "qux": "some string", "baz": 3.1457})))
 
 	stmts, err := ParseRequest(bytes.NewReader(b))
 	if err != nil {
@@ -304,7 +304,7 @@ func Test_SingleNamedParameterizedRequest(t *testing.T) {
 	}
 
 	// build a map of the parameters for easier comparison
-	params := make(map[string]interface{})
+	params := make(map[string]any)
 	for _, p := range stmts[0].Parameters {
 		if p.GetName() == "bar" {
 			params[p.GetName()] = p.GetI()
@@ -317,7 +317,7 @@ func Test_SingleNamedParameterizedRequest(t *testing.T) {
 		}
 	}
 
-	exp := map[string]interface{}{
+	exp := map[string]any{
 		"bar": int64(3),
 		"qux": "some string",
 		"baz": 3.1457,
@@ -330,7 +330,7 @@ func Test_SingleNamedParameterizedRequest(t *testing.T) {
 
 func Test_SingleNamedParameterizedRequestNils(t *testing.T) {
 	s := "SELECT * FROM foo WHERE bar=:bar AND qux=:qux"
-	b := []byte(fmt.Sprintf(`[["%s", %s]]`, s, mustJSONMarshal(map[string]interface{}{"bar": 666, "qux": "some string", "baz": nil})))
+	b := []byte(fmt.Sprintf(`[["%s", %s]]`, s, mustJSONMarshal(map[string]any{"bar": 666, "qux": "some string", "baz": nil})))
 
 	stmts, err := ParseRequest(bytes.NewReader(b))
 	if err != nil {
@@ -349,7 +349,7 @@ func Test_SingleNamedParameterizedRequestNils(t *testing.T) {
 	}
 
 	// build a map of the parameters for easier comparison
-	params := make(map[string]interface{})
+	params := make(map[string]any)
 	for _, p := range stmts[0].Parameters {
 		if p.GetName() == "bar" {
 			params[p.GetName()] = p.GetI()
@@ -362,7 +362,7 @@ func Test_SingleNamedParameterizedRequestNils(t *testing.T) {
 		}
 	}
 
-	exp := map[string]interface{}{
+	exp := map[string]any{
 		"bar": int64(666),
 		"qux": "some string",
 		"baz": nil,
@@ -501,7 +501,7 @@ func byteSliceToStringArray(b []byte) string {
 	return buffer.String()
 }
 
-func mustJSONMarshal(v interface{}) []byte {
+func mustJSONMarshal(v any) []byte {
 	b, err := json.Marshal(v)
 	if err != nil {
 		panic("failed to JSON marshal value")

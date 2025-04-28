@@ -16,13 +16,13 @@ import (
 // Result represents execute result. It is possible that an execute result
 // returns Rows (for example, if RETURNING clause is used in an INSERT statement).
 type Result struct {
-	LastInsertID int             `json:"last_insert_id,omitempty"`
-	RowsAffected int             `json:"rows_affected,omitempty"`
-	Columns      []string        `json:"columns,omitempty"`
-	Types        []string        `json:"types,omitempty"`
-	Values       [][]interface{} `json:"values,omitempty"`
-	Time         float64         `json:"time,omitempty"`
-	Error        string          `json:"error,omitempty"`
+	LastInsertID int      `json:"last_insert_id,omitempty"`
+	RowsAffected int      `json:"rows_affected,omitempty"`
+	Columns      []string `json:"columns,omitempty"`
+	Types        []string `json:"types,omitempty"`
+	Values       [][]any  `json:"values,omitempty"`
+	Time         float64  `json:"time,omitempty"`
+	Error        string   `json:"error,omitempty"`
 }
 
 // RowCount implements textutil.Table interface

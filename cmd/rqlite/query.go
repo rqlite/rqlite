@@ -14,11 +14,11 @@ import (
 
 // Rows represents query result
 type Rows struct {
-	Columns []string        `json:"columns"`
-	Types   []string        `json:"types"`
-	Values  [][]interface{} `json:"values"`
-	Time    float64         `json:"time"`
-	Error   string          `json:"error,omitempty"`
+	Columns []string `json:"columns"`
+	Types   []string `json:"types"`
+	Values  [][]any  `json:"values"`
+	Time    float64  `json:"time"`
+	Error   string   `json:"error,omitempty"`
 }
 
 // RowCount implements textutil.Table interface

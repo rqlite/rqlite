@@ -498,22 +498,22 @@ func Test_SingleNodeParameterized(t *testing.T) {
 	defer node.Deprovision()
 
 	tests := []struct {
-		stmt     []interface{}
+		stmt     []any
 		expected string
 		execute  bool
 	}{
 		{
-			stmt:     []interface{}{"CREATE TABLE foo (id integer not null primary key, name text, age integer)"},
+			stmt:     []any{"CREATE TABLE foo (id integer not null primary key, name text, age integer)"},
 			expected: `{"results":[{}]}`,
 			execute:  true,
 		},
 		{
-			stmt:     []interface{}{"INSERT INTO foo(name, age) VALUES(?, ?)", "fiona", 20},
+			stmt:     []any{"INSERT INTO foo(name, age) VALUES(?, ?)", "fiona", 20},
 			expected: `{"results":[{"last_insert_id":1,"rows_affected":1}]}`,
 			execute:  true,
 		},
 		{
-			stmt:     []interface{}{"SELECT * FROM foo WHERE NAME=?", "fiona"},
+			stmt:     []any{"SELECT * FROM foo WHERE NAME=?", "fiona"},
 			expected: `{"results":[{"columns":["id","name","age"],"types":["integer","text","integer"],"values":[[1,"fiona",20]]}]}`,
 			execute:  false,
 		},
@@ -541,27 +541,27 @@ func Test_SingleNodeBlob_Parameterized(t *testing.T) {
 	defer node.Deprovision()
 
 	tests := []struct {
-		stmt     []interface{}
+		stmt     []any
 		expected string
 		execute  bool
 	}{
 		{
-			stmt:     []interface{}{"CREATE TABLE foo (id integer not null primary key, data blob) STRICT"},
+			stmt:     []any{"CREATE TABLE foo (id integer not null primary key, data blob) STRICT"},
 			expected: `{"results":[{}]}`,
 			execute:  true,
 		},
 		{
-			stmt:     []interface{}{"INSERT INTO foo(id, data) VALUES(?, ?)", 1, `x'deadbeef'`},
+			stmt:     []any{"INSERT INTO foo(id, data) VALUES(?, ?)", 1, `x'deadbeef'`},
 			expected: `{"results":[{"last_insert_id":1,"rows_affected":1}]}`,
 			execute:  true,
 		},
 		{
-			stmt:     []interface{}{"INSERT INTO foo(id, data) VALUES(?, ?)", 2, []int{222, 173, 190, 239}},
+			stmt:     []any{"INSERT INTO foo(id, data) VALUES(?, ?)", 2, []int{222, 173, 190, 239}},
 			expected: `{"results":[{"last_insert_id":2,"rows_affected":1}]}`,
 			execute:  true,
 		},
 		{
-			stmt:     []interface{}{"SELECT * FROM foo"},
+			stmt:     []any{"SELECT * FROM foo"},
 			expected: `{"results":[{"columns":["id","data"],"types":["integer","blob"],"values":[[1,"3q2+7w=="],[2,"3q2+7w=="]]}]}`,
 			execute:  false,
 		},
@@ -589,19 +589,19 @@ func Test_SingleNodeRequestParameterized(t *testing.T) {
 	defer node.Deprovision()
 
 	tests := []struct {
-		stmt     []interface{}
+		stmt     []any
 		expected string
 	}{
 		{
-			stmt:     []interface{}{"CREATE TABLE foo (id integer not null primary key, name text, age integer)"},
+			stmt:     []any{"CREATE TABLE foo (id integer not null primary key, name text, age integer)"},
 			expected: `{"results":[{}]}`,
 		},
 		{
-			stmt:     []interface{}{"INSERT INTO foo(name, age) VALUES(?, ?)", "fiona", 20},
+			stmt:     []any{"INSERT INTO foo(name, age) VALUES(?, ?)", "fiona", 20},
 			expected: `{"results":[{"last_insert_id":1,"rows_affected":1}]}`,
 		},
 		{
-			stmt:     []interface{}{"SELECT * FROM foo WHERE NAME=?", "fiona"},
+			stmt:     []any{"SELECT * FROM foo WHERE NAME=?", "fiona"},
 			expected: `{"results":[{"columns":["id","name","age"],"types":["integer","text","integer"],"values":[[1,"fiona",20]]}]}`,
 		},
 	}
@@ -622,22 +622,22 @@ func Test_SingleNodeParameterizedNull(t *testing.T) {
 	defer node.Deprovision()
 
 	tests := []struct {
-		stmt     []interface{}
+		stmt     []any
 		expected string
 		execute  bool
 	}{
 		{
-			stmt:     []interface{}{"CREATE TABLE foo (id integer not null primary key, name text, age integer)"},
+			stmt:     []any{"CREATE TABLE foo (id integer not null primary key, name text, age integer)"},
 			expected: `{"results":[{}]}`,
 			execute:  true,
 		},
 		{
-			stmt:     []interface{}{"INSERT INTO foo(name, age) VALUES(?, ?)", "declan", nil},
+			stmt:     []any{"INSERT INTO foo(name, age) VALUES(?, ?)", "declan", nil},
 			expected: `{"results":[{"last_insert_id":1,"rows_affected":1}]}`,
 			execute:  true,
 		},
 		{
-			stmt:     []interface{}{"SELECT * FROM foo WHERE NAME=?", "declan"},
+			stmt:     []any{"SELECT * FROM foo WHERE NAME=?", "declan"},
 			expected: `{"results":[{"columns":["id","name","age"],"types":["integer","text","integer"],"values":[[1,"declan",null]]}]}`,
 			execute:  false,
 		},
@@ -665,22 +665,22 @@ func Test_SingleNodeParameterizedNamed(t *testing.T) {
 	defer node.Deprovision()
 
 	tests := []struct {
-		stmt     []interface{}
+		stmt     []any
 		expected string
 		execute  bool
 	}{
 		{
-			stmt:     []interface{}{"CREATE TABLE foo (id integer not null primary key, name text, age integer)"},
+			stmt:     []any{"CREATE TABLE foo (id integer not null primary key, name text, age integer)"},
 			expected: `{"results":[{}]}`,
 			execute:  true,
 		},
 		{
-			stmt:     []interface{}{"INSERT INTO foo(name, age) VALUES(?, ?)", "fiona", 20},
+			stmt:     []any{"INSERT INTO foo(name, age) VALUES(?, ?)", "fiona", 20},
 			expected: `{"results":[{"last_insert_id":1,"rows_affected":1}]}`,
 			execute:  true,
 		},
 		{
-			stmt:     []interface{}{"SELECT * FROM foo WHERE NAME=:name", map[string]interface{}{"name": "fiona"}},
+			stmt:     []any{"SELECT * FROM foo WHERE NAME=:name", map[string]any{"name": "fiona"}},
 			expected: `{"results":[{"columns":["id","name","age"],"types":["integer","text","integer"],"values":[[1,"fiona",20]]}]}`,
 			execute:  false,
 		},
@@ -709,13 +709,13 @@ func Test_SingleNodeParameterizedNamedConstraints(t *testing.T) {
 	node := mustNewLeaderNode("leader1")
 	defer node.Deprovision()
 
-	_, err := node.ExecuteParameterized([]interface{}{"CREATE TABLE [TestTable] ([Id] int primary key, [Col1] int not null, [Col2] varchar(500), [Col3] int not null, [Col4] varchar(500))"})
+	_, err := node.ExecuteParameterized([]any{"CREATE TABLE [TestTable] ([Id] int primary key, [Col1] int not null, [Col2] varchar(500), [Col3] int not null, [Col4] varchar(500))"})
 	if err != nil {
 		t.Fatalf("failed to create table: %s", err.Error())
 	}
 
 	for i := 0; i < 100; i++ {
-		r, err := node.ExecuteParameterized([]interface{}{"INSERT into TestTable (Col1, Col2, Col3, Col4) values (:Val1, :Val2, :Val3, :Val4)", map[string]interface{}{"Val1": 1, "Val2": "foo", "Val3": 2, "Val4": nil}})
+		r, err := node.ExecuteParameterized([]any{"INSERT into TestTable (Col1, Col2, Col3, Col4) values (:Val1, :Val2, :Val3, :Val4)", map[string]any{"Val1": 1, "Val2": "foo", "Val3": 2, "Val4": nil}})
 		if err != nil {
 			t.Fatalf("failed to insert record on loop %d: %s", i, err.Error())
 		}
@@ -1116,32 +1116,32 @@ func Test_SingleNodeNoSQLInjection(t *testing.T) {
 	defer node.Deprovision()
 
 	tests := []struct {
-		stmt     []interface{}
+		stmt     []any
 		expected string
 		execute  bool
 	}{
 		{
-			stmt:     []interface{}{"CREATE TABLE foo (id integer not null primary key, name text)"},
+			stmt:     []any{"CREATE TABLE foo (id integer not null primary key, name text)"},
 			expected: `{"results":[{}]}`,
 			execute:  true,
 		},
 		{
-			stmt:     []interface{}{`SELECT * FROM foo WHERE name="baz"`},
+			stmt:     []any{`SELECT * FROM foo WHERE name="baz"`},
 			expected: `{"results":[{"columns":["id","name"],"types":["integer","text"]}]}`,
 			execute:  false,
 		},
 		{
-			stmt:     []interface{}{`SELECT * FROM foo WHERE name=?`, `"baz";DROP TABLE FOO`},
+			stmt:     []any{`SELECT * FROM foo WHERE name=?`, `"baz";DROP TABLE FOO`},
 			expected: `{"results":[{"columns":["id","name"],"types":["integer","text"]}]}`,
 			execute:  false,
 		},
 		{
-			stmt:     []interface{}{`DELETE FROM foo WHERE name=?`, `"qux";DROP TABLE FOO`},
+			stmt:     []any{`DELETE FROM foo WHERE name=?`, `"qux";DROP TABLE FOO`},
 			expected: `{"results":[{}]}`,
 			execute:  true,
 		},
 		{
-			stmt:     []interface{}{`SELECT * FROM foo`},
+			stmt:     []any{`SELECT * FROM foo`},
 			expected: `{"results":[{"columns":["id","name"],"types":["integer","text"]}]}`,
 			execute:  false,
 		},
@@ -1516,22 +1516,22 @@ func Test_SingleNodeNoopReopen(t *testing.T) {
 
 	// Ensure node is fully functional after restart.
 	tests := []struct {
-		stmt     []interface{}
+		stmt     []any
 		expected string
 		execute  bool
 	}{
 		{
-			stmt:     []interface{}{"CREATE TABLE foo (id integer not null primary key, name text, age integer)"},
+			stmt:     []any{"CREATE TABLE foo (id integer not null primary key, name text, age integer)"},
 			expected: `{"results":[{}]}`,
 			execute:  true,
 		},
 		{
-			stmt:     []interface{}{"INSERT INTO foo(name, age) VALUES(?, ?)", "fiona", 20},
+			stmt:     []any{"INSERT INTO foo(name, age) VALUES(?, ?)", "fiona", 20},
 			expected: `{"results":[{"last_insert_id":1,"rows_affected":1}]}`,
 			execute:  true,
 		},
 		{
-			stmt:     []interface{}{"SELECT * FROM foo WHERE NAME=?", "fiona"},
+			stmt:     []any{"SELECT * FROM foo WHERE NAME=?", "fiona"},
 			expected: `{"results":[{"columns":["id","name","age"],"types":["integer","text","integer"],"values":[[1,"fiona",20]]}]}`,
 			execute:  false,
 		},
@@ -1601,22 +1601,22 @@ func Test_SingleNodeNoopSnapReopen(t *testing.T) {
 
 	// Ensure node is fully functional after restart.
 	tests := []struct {
-		stmt     []interface{}
+		stmt     []any
 		expected string
 		execute  bool
 	}{
 		{
-			stmt:     []interface{}{"CREATE TABLE foo (id integer not null primary key, name text, age integer)"},
+			stmt:     []any{"CREATE TABLE foo (id integer not null primary key, name text, age integer)"},
 			expected: `{"results":[{}]}`,
 			execute:  true,
 		},
 		{
-			stmt:     []interface{}{"INSERT INTO foo(name, age) VALUES(?, ?)", "fiona", 20},
+			stmt:     []any{"INSERT INTO foo(name, age) VALUES(?, ?)", "fiona", 20},
 			expected: `{"results":[{"last_insert_id":1,"rows_affected":1}]}`,
 			execute:  true,
 		},
 		{
-			stmt:     []interface{}{"SELECT * FROM foo WHERE NAME=?", "fiona"},
+			stmt:     []any{"SELECT * FROM foo WHERE NAME=?", "fiona"},
 			expected: `{"results":[{"columns":["id","name","age"],"types":["integer","text","integer"],"values":[[1,"fiona",20]]}]}`,
 			execute:  false,
 		},
@@ -1691,22 +1691,22 @@ func Test_SingleNodeNoopSnapLogsReopen(t *testing.T) {
 
 	// Ensure node is fully functional after restart.
 	tests := []struct {
-		stmt     []interface{}
+		stmt     []any
 		expected string
 		execute  bool
 	}{
 		{
-			stmt:     []interface{}{"CREATE TABLE foo (id integer not null primary key, name text, age integer)"},
+			stmt:     []any{"CREATE TABLE foo (id integer not null primary key, name text, age integer)"},
 			expected: `{"results":[{}]}`,
 			execute:  true,
 		},
 		{
-			stmt:     []interface{}{"INSERT INTO foo(name, age) VALUES(?, ?)", "fiona", 20},
+			stmt:     []any{"INSERT INTO foo(name, age) VALUES(?, ?)", "fiona", 20},
 			expected: `{"results":[{"last_insert_id":1,"rows_affected":1}]}`,
 			execute:  true,
 		},
 		{
-			stmt:     []interface{}{"SELECT * FROM foo WHERE NAME=?", "fiona"},
+			stmt:     []any{"SELECT * FROM foo WHERE NAME=?", "fiona"},
 			expected: `{"results":[{"columns":["id","name","age"],"types":["integer","text","integer"],"values":[[1,"fiona",20]]}]}`,
 			execute:  false,
 		},

@@ -49,7 +49,7 @@ func GenerateCACert(subject pkix.Name, validFor time.Duration, keySize int) ([]b
 // take in a parent certificate and key. If a parent certificate and key are provided, the new
 // certificate should be signed by the parent. If no parent certificate and key are provided,
 // the new certificate should be self-signed.
-func GenerateCert(subject pkix.Name, validFor time.Duration, keySize int, parent *x509.Certificate, parentKey interface{}) ([]byte, []byte, error) {
+func GenerateCert(subject pkix.Name, validFor time.Duration, keySize int, parent *x509.Certificate, parentKey any) ([]byte, []byte, error) {
 	// generate a new private key
 	key, err := rsa.GenerateKey(rand.Reader, keySize)
 	if err != nil {
@@ -84,7 +84,7 @@ func GenerateCert(subject pkix.Name, validFor time.Duration, keySize int, parent
 	return certPEM, keyPEM, nil
 }
 
-func GenerateCertIPSAN(subject pkix.Name, validFor time.Duration, keySize int, parent *x509.Certificate, parentKey interface{}, san net.IP) ([]byte, []byte, error) {
+func GenerateCertIPSAN(subject pkix.Name, validFor time.Duration, keySize int, parent *x509.Certificate, parentKey any, san net.IP) ([]byte, []byte, error) {
 	// generate a new private key
 	key, err := rsa.GenerateKey(rand.Reader, keySize)
 	if err != nil {

@@ -139,8 +139,8 @@ func (n *NodeTransport) Consumer() <-chan raft.RPC {
 }
 
 // Stats returns the current stats of the transport.
-func (n *NodeTransport) Stats() map[string]interface{} {
-	return map[string]interface{}{
+func (n *NodeTransport) Stats() map[string]any {
+	return map[string]any{
 		"command_commit_index": n.CommandCommitIndex(),
 		"leader_commit_index":  n.LeaderCommitIndex(),
 	}

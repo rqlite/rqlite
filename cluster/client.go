@@ -483,11 +483,11 @@ func (c *Client) Join(jr *command.JoinRequest, nodeAddr string, creds *proto.Cre
 }
 
 // Stats returns stats on the Client instance
-func (c *Client) Stats() (map[string]interface{}, error) {
+func (c *Client) Stats() (map[string]any, error) {
 	c.poolMu.RLock()
 	defer c.poolMu.RUnlock()
 
-	stats := map[string]interface{}{
+	stats := map[string]any{
 		"timeout":         c.timeout.String(),
 		"local_node_addr": c.localNodeAddr,
 	}
@@ -496,7 +496,7 @@ func (c *Client) Stats() (map[string]interface{}, error) {
 		return stats, nil
 	}
 
-	poolStats := make(map[string]interface{}, len(c.pools))
+	poolStats := make(map[string]any, len(c.pools))
 	for k, v := range c.pools {
 		s, err := v.Stats()
 		if err != nil {

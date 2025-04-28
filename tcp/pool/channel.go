@@ -90,9 +90,9 @@ func (c *channelPool) Len() int {
 }
 
 // Stats returns stats for the pool.
-func (c *channelPool) Stats() (map[string]interface{}, error) {
+func (c *channelPool) Stats() (map[string]any, error) {
 	conns, _ := c.getConnsAndFactory()
-	return map[string]interface{}{
+	return map[string]any{
 		"idle":                 len(conns),
 		"open_connections":     c.nOpenConns,
 		"max_open_connections": cap(conns),

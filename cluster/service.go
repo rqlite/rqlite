@@ -225,8 +225,8 @@ func (s *Service) GetNodeAPIURL() string {
 }
 
 // Stats returns status of the Service.
-func (s *Service) Stats() (map[string]interface{}, error) {
-	st := map[string]interface{}{
+func (s *Service) Stats() (map[string]any, error) {
+	st := map[string]any{
 		"addr":     s.addr.String(),
 		"https":    strconv.FormatBool(s.https),
 		"api_addr": s.apiAddr,

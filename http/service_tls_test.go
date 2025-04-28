@@ -28,7 +28,7 @@ func Test_TLSServiceInsecure(t *testing.T) {
 	s.CertFile = mustWriteTempFile(t, cert)
 	s.KeyFile = mustWriteTempFile(t, key)
 
-	s.BuildInfo = map[string]interface{}{
+	s.BuildInfo = map[string]any{
 		"version": "the version",
 	}
 	if err := s.Start(); err != nil {
@@ -114,7 +114,7 @@ func Test_TLSServiceSecure(t *testing.T) {
 	s.CertFile = mustWriteTempFile(t, cert)
 	s.KeyFile = mustWriteTempFile(t, key)
 
-	s.BuildInfo = map[string]interface{}{
+	s.BuildInfo = map[string]any{
 		"version": "the version",
 	}
 	if err := s.Start(); err != nil {
@@ -210,7 +210,7 @@ func Test_TLSServiceSecureMutual(t *testing.T) {
 	s.CertFile = mustWriteTempFile(t, certServer)
 	s.KeyFile = mustWriteTempFile(t, keyServer)
 	s.CACertFile = mustWriteTempFile(t, caCertPEM) // Enables client verification by HTTP server
-	s.BuildInfo = map[string]interface{}{
+	s.BuildInfo = map[string]any{
 		"version": "the version",
 	}
 	s.ClientVerify = true

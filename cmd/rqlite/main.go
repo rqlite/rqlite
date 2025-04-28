@@ -556,7 +556,7 @@ func sendRequestW(ctx *cli.Context, makeNewRequest func(string) (*http.Request, 
 	}
 }
 
-func parseResponse(response *[]byte, ret interface{}) error {
+func parseResponse(response *[]byte, ret any) error {
 	decoder := json.NewDecoder(strings.NewReader(string(*response)))
 	decoder.UseNumber()
 	return decoder.Decode(ret)
@@ -582,7 +582,7 @@ func extensions(ctx *cli.Context, client *httpcl.Client, cmd string, argv *argT)
 		return err
 	}
 
-	ret := make(map[string]interface{})
+	ret := make(map[string]any)
 	decoder := json.NewDecoder(strings.NewReader(string(body)))
 	decoder.UseNumber()
 	if err := decoder.Decode(&ret); err != nil {
@@ -593,7 +593,7 @@ func extensions(ctx *cli.Context, client *httpcl.Client, cmd string, argv *argT)
 	if !ok {
 		return nil
 	}
-	for _, ext := range exts.([]interface{}) {
+	for _, ext := range exts.([]any) {
 		ctx.String("%s\n", ext.(string))
 	}
 
@@ -606,15 +606,15 @@ func extensions(ctx *cli.Context, client *httpcl.Client, cmd string, argv *argT)
 func cliJSON(ctx *cli.Context, client *httpcl.Client, line, url string) error {
 	_ = ctx
 	// Recursive JSON printer.
-	var pprint func(indent int, m map[string]interface{})
-	pprint = func(indent int, m map[string]interface{}) {
+	var pprint func(indent int, m map[string]any)
+	pprint = func(indent int, m map[string]any) {
 		indentation := "  "
 		for k, v := range m {
 			if v == nil {
 				continue
 			}
 			switch w := v.(type) {
-			case map[string]interface{}:
+			case map[string]any:
 				for i := 0; i < indent; i++ {
 					fmt.Print(indentation)
 				}
@@ -644,7 +644,7 @@ func cliJSON(ctx *cli.Context, client *httpcl.Client, line, url string) error {
 		return err
 	}
 
-	ret := make(map[string]interface{})
+	ret := make(map[string]any)
 	decoder := json.NewDecoder(strings.NewReader(string(body)))
 	decoder.UseNumber()
 	if err := decoder.Decode(&ret); err != nil {
@@ -654,7 +654,7 @@ func cliJSON(ctx *cli.Context, client *httpcl.Client, line, url string) error {
 	// Specific key requested?
 	parts := strings.Split(line, " ")
 	if len(parts) >= 2 {
-		ret = map[string]interface{}{parts[1]: ret[parts[1]]}
+		ret = map[string]any{parts[1]: ret[parts[1]]}
 	}
 	pprint(0, ret)
 
