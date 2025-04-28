@@ -1410,7 +1410,7 @@ func mustQuery(db *DB, stmt string) []*command.QueryRows {
 	return r
 }
 
-func asJSON(v interface{}) string {
+func asJSON(v any) string {
 	enc := encoding.Encoder{}
 	b, err := enc.JSONMarshal(v)
 	if err != nil {

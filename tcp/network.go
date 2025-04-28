@@ -23,13 +23,13 @@ type InterfaceDetail struct {
 type InterfaceStats map[string]InterfaceDetail
 
 // Stats returns network interface details
-func (n NetworkReporter) Stats() (map[string]interface{}, error) {
+func (n NetworkReporter) Stats() (map[string]any, error) {
 	interfaces, err := net.Interfaces()
 	if err != nil {
 		return nil, err
 	}
 
-	stats := make(map[string]interface{})
+	stats := make(map[string]any)
 	for _, i := range interfaces {
 		var addresses []Address
 
@@ -49,7 +49,7 @@ func (n NetworkReporter) Stats() (map[string]interface{}, error) {
 		}
 	}
 
-	return map[string]interface{}{
+	return map[string]any{
 		"interfaces": stats,
 	}, nil
 }

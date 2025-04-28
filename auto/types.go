@@ -29,7 +29,7 @@ func (d Duration) MarshalJSON() ([]byte, error) {
 
 // UnmarshalJSON unmarshals the duration from a string or a float64
 func (d *Duration) UnmarshalJSON(b []byte) error {
-	var v interface{}
+	var v any
 	if err := json.Unmarshal(b, &v); err != nil {
 		return err
 	}
@@ -54,7 +54,7 @@ type StorageType string
 
 // UnmarshalJSON unmarshals the storage type from a string and validates it
 func (s *StorageType) UnmarshalJSON(b []byte) error {
-	var v interface{}
+	var v any
 	if err := json.Unmarshal(b, &v); err != nil {
 		return err
 	}

@@ -114,8 +114,8 @@ func (n *Node) ExecuteMulti(stmts []string) (string, error) {
 }
 
 // ExecuteParameterized executes a single parameterized query against the node
-func (n *Node) ExecuteParameterized(stmt []interface{}) (string, error) {
-	m := make([][]interface{}, 1)
+func (n *Node) ExecuteParameterized(stmt []any) (string, error) {
+	m := make([][]any, 1)
 	m[0] = stmt
 
 	j, err := json.Marshal(m)
@@ -191,8 +191,8 @@ func (n *Node) QueryMulti(stmts []string) (string, error) {
 }
 
 // QueryParameterized run a single parameterized query against the node
-func (n *Node) QueryParameterized(stmt []interface{}) (string, error) {
-	m := make([][]interface{}, 1)
+func (n *Node) QueryParameterized(stmt []any) (string, error) {
+	m := make([][]any, 1)
 	m[0] = stmt
 
 	j, err := json.Marshal(m)
@@ -217,8 +217,8 @@ func (n *Node) RequestMulti(stmts []string) (string, error) {
 }
 
 // RequestMultiParameterized runs a single parameterized request against the node
-func (n *Node) RequestMultiParameterized(stmt []interface{}) (string, error) {
-	m := make([][]interface{}, 1)
+func (n *Node) RequestMultiParameterized(stmt []any) (string, error) {
+	m := make([][]any, 1)
 	m[0] = stmt
 
 	j, err := json.Marshal(m)
@@ -365,17 +365,17 @@ func (n *Node) IsVoter() (bool, error) {
 		return false, err
 	}
 	// Marshal the status into a JSON object
-	var status map[string]interface{}
+	var status map[string]any
 	err = json.Unmarshal([]byte(statusJSON), &status)
 	if err != nil {
 		return false, err
 	}
 
-	strStatus, ok := status["store"].(map[string]interface{})
+	strStatus, ok := status["store"].(map[string]any)
 	if !ok {
 		return false, fmt.Errorf("store status not found")
 	}
-	raftStatus, ok := strStatus["raft"].(map[string]interface{})
+	raftStatus, ok := strStatus["raft"].(map[string]any)
 	if !ok {
 		return false, fmt.Errorf("raft status not found")
 	}
@@ -734,8 +734,7 @@ func mustNodeEncrypted(id, dir string, enableSingle, httpEncrypt bool, mux *tcp.
 		NodeKeyPath:  nodeKeyPath,
 		HTTPCertPath: httpCertPath,
 		HTTPKeyPath:  httpKeyPath,
-		//TLSConfig:    mustCreateTLSConfig(nodeCertPath, nodeKeyPath, ""),
-		PeersPath: filepath.Join(dir, "raft/peers.json"),
+		PeersPath:    filepath.Join(dir, "raft/peers.json"),
 	}
 
 	dbConf := store.NewDBConfig()
@@ -894,7 +893,7 @@ func mustParseDuration(d string) time.Duration {
 	}
 }
 
-func asJSON(v interface{}) string {
+func asJSON(v any) string {
 	enc := encoding.Encoder{}
 	b, err := enc.JSONMarshal(v)
 	if err != nil {
@@ -904,7 +903,7 @@ func asJSON(v interface{}) string {
 }
 
 func isJSON(s string) bool {
-	var js map[string]interface{}
+	var js map[string]any
 	return json.Unmarshal([]byte(s), &js) == nil
 }
 

@@ -42,7 +42,7 @@ func NewCommandProcessor(logger *log.Logger, dm *chunking.DechunkerManager) *Com
 }
 
 // Process processes the given command against the given database.
-func (c *CommandProcessor) Process(data []byte, db *sql.SwappableDB) (*proto.Command, bool, interface{}) {
+func (c *CommandProcessor) Process(data []byte, db *sql.SwappableDB) (*proto.Command, bool, any) {
 	cmd := &proto.Command{}
 	if err := command.Unmarshal(data, cmd); err != nil {
 		panic(fmt.Sprintf("failed to unmarshal cluster command: %s", err.Error()))

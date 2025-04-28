@@ -646,7 +646,7 @@ func mustGZIPCompress(b []byte) []byte {
 	return buf.Bytes()
 }
 
-func asJSON(v interface{}) string {
+func asJSON(v any) string {
 	enc := encoding.Encoder{}
 	b, err := enc.JSONMarshal(v)
 	if err != nil {

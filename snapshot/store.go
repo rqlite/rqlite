@@ -264,7 +264,7 @@ func (s *Store) SetFullNeeded() error {
 // Stats returns stats about the Snapshot Store. This function may return
 // an error if the Store is in an inconsistent state. In that case the stats
 // returned may be incomplete or invalid.
-func (s *Store) Stats() (map[string]interface{}, error) {
+func (s *Store) Stats() (map[string]any, error) {
 	snapshots, err := s.getSnapshots()
 	if err != nil {
 		return nil, err
@@ -277,7 +277,7 @@ func (s *Store) Stats() (map[string]interface{}, error) {
 	if err != nil {
 		return nil, err
 	}
-	return map[string]interface{}{
+	return map[string]any{
 		"dir":       s.dir,
 		"snapshots": snapsAsIDs,
 		"db_path":   dbPath,

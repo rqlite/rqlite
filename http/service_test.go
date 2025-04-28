@@ -115,7 +115,7 @@ func Test_HasVersionHeader(t *testing.T) {
 		t.Fatalf("failed to start service")
 	}
 	defer s.Close()
-	s.BuildInfo = map[string]interface{}{
+	s.BuildInfo = map[string]any{
 		"version": "the version",
 	}
 	url := fmt.Sprintf("http://%s", s.Addr().String())
@@ -1567,7 +1567,7 @@ func (m *MockStore) Committed(timeout time.Duration) (uint64, error) {
 	return 0, nil
 }
 
-func (m *MockStore) Stats() (map[string]interface{}, error) {
+func (m *MockStore) Stats() (map[string]any, error) {
 	return nil, nil
 }
 
@@ -1677,14 +1677,14 @@ func (m *mockCredentialStore) AA(username, password, perm string) bool {
 	return m.HasPermOK
 }
 
-func (m *mockClusterService) Stats() (map[string]interface{}, error) {
+func (m *mockClusterService) Stats() (map[string]any, error) {
 	return nil, nil
 }
 
 type mockStatusReporter struct {
 }
 
-func (m *mockStatusReporter) Stats() (map[string]interface{}, error) {
+func (m *mockStatusReporter) Stats() (map[string]any, error) {
 	return nil, nil
 }
 

@@ -82,7 +82,7 @@ type Store interface {
 	Committed(timeout time.Duration) (uint64, error)
 
 	// Stats returns stats on the Store.
-	Stats() (map[string]interface{}, error)
+	Stats() (map[string]any, error)
 
 	// Nodes returns the slice of store.Servers in the cluster
 	Nodes() ([]*store.Server, error)
@@ -128,7 +128,7 @@ type Cluster interface {
 	RemoveNode(rn *command.RemoveNodeRequest, nodeAddr string, creds *clstrPB.Credentials, timeout time.Duration) error
 
 	// Stats returns stats on the Cluster.
-	Stats() (map[string]interface{}, error)
+	Stats() (map[string]any, error)
 }
 
 // CredentialStore is the interface credential stores must support.
@@ -139,7 +139,7 @@ type CredentialStore interface {
 
 // StatusReporter is the interface status providers must implement.
 type StatusReporter interface {
-	Stats() (map[string]interface{}, error)
+	Stats() (map[string]any, error)
 }
 
 // DBResults stores either an Execute result, a Query result, or
@@ -169,7 +169,7 @@ func (d *DBResults) MarshalJSON() ([]byte, error) {
 	} else if d.ExecuteQueryResponse != nil {
 		return enc.JSONMarshal(d.ExecuteQueryResponse)
 	}
-	return json.Marshal(make([]interface{}, 0))
+	return json.Marshal(make([]any, 0))
 }
 
 // Response represents a response from the HTTP service.
@@ -350,7 +350,7 @@ type Service struct {
 
 	credentialStore CredentialStore
 
-	BuildInfo map[string]interface{}
+	BuildInfo map[string]any
 
 	logger *log.Logger
 }
@@ -864,7 +864,7 @@ func (s *Service) handleStatus(w http.ResponseWriter, r *http.Request, qp QueryP
 		return
 	}
 
-	rt := map[string]interface{}{
+	rt := map[string]any{
 		"GOARCH":        runtime.GOARCH,
 		"GOOS":          runtime.GOOS,
 		"GOMAXPROCS":    runtime.GOMAXPROCS(0),
@@ -873,7 +873,7 @@ func (s *Service) handleStatus(w http.ResponseWriter, r *http.Request, qp QueryP
 		"version":       runtime.Version(),
 	}
 
-	oss := map[string]interface{}{
+	oss := map[string]any{
 		"pid":       os.Getpid(),
 		"ppid":      os.Getppid(),
 		"page_size": os.Getpagesize(),
@@ -894,10 +894,10 @@ func (s *Service) handleStatus(w http.ResponseWriter, r *http.Request, qp QueryP
 		return
 	}
 	qs["sequence_number"] = atomic.LoadInt64(&s.seqNum)
-	queueStats := map[string]interface{}{
+	queueStats := map[string]any{
 		"_default": qs,
 	}
-	httpStatus := map[string]interface{}{
+	httpStatus := map[string]any{
 		"bind_addr": s.Addr().String(),
 		"auth":      prettyEnabled(s.credentialStore != nil),
 		"cluster":   clusterStatus,
@@ -909,14 +909,14 @@ func (s *Service) handleStatus(w http.ResponseWriter, r *http.Request, qp QueryP
 		httpStatus["allow_origin"] = ao
 	}
 
-	nodeStatus := map[string]interface{}{
+	nodeStatus := map[string]any{
 		"start_time":   s.start,
 		"current_time": time.Now(),
 		"uptime":       time.Since(s.start).String(),
 	}
 
 	// Build the status response.
-	status := map[string]interface{}{
+	status := map[string]any{
 		"os":      oss,
 		"runtime": rt,
 		"store":   storeStatus,
@@ -938,7 +938,7 @@ func (s *Service) handleStatus(w http.ResponseWriter, r *http.Request, qp QueryP
 			stat, err := v.Stats()
 			if err != nil {
 				s.logger.Printf("failed to retrieve stats for registered reporter %s: %s", k, err.Error())
-				stat = map[string]interface{}{"error": err.Error()}
+				stat = map[string]any{"error": err.Error()}
 			}
 			status[k] = stat
 		}
@@ -1689,8 +1689,8 @@ func addBackupFormatHeader(w http.ResponseWriter, qp QueryParams) {
 }
 
 // tlsStats returns the TLS stats for the service.
-func (s *Service) tlsStats() map[string]interface{} {
-	m := map[string]interface{}{
+func (s *Service) tlsStats() map[string]any {
+	m := map[string]any{
 		"enabled": fmt.Sprintf("%t", s.tlsConfig != nil),
 	}
 	if s.tlsConfig != nil {
@@ -1744,14 +1744,14 @@ func getSubJSON(jsonBlob []byte, keyString string) (json.RawMessage, error) {
 	}
 
 	keys := strings.Split(keyString, ".")
-	var obj interface{}
+	var obj any
 	if err := json.Unmarshal(jsonBlob, &obj); err != nil {
 		return nil, fmt.Errorf("failed to unmarshal json: %w", err)
 	}
 
 	for _, key := range keys {
 		switch val := obj.(type) {
-		case map[string]interface{}:
+		case map[string]any:
 			if value, ok := val[key]; ok {
 				obj = value
 			} else {

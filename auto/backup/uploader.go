@@ -125,8 +125,8 @@ func (u *Uploader) Start(ctx context.Context, isUploadEnabled func() bool) chan 
 }
 
 // Stats returns the stats for the Uploader service.
-func (u *Uploader) Stats() (map[string]interface{}, error) {
-	status := map[string]interface{}{
+func (u *Uploader) Stats() (map[string]any, error) {
+	status := map[string]any{
 		"upload_destination":   u.storageClient.String(),
 		"upload_interval":      u.interval.String(),
 		"last_upload_time":     u.lastUploadTime.Format(time.RFC3339),

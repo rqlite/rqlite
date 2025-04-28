@@ -2939,7 +2939,7 @@ func waitForLeaderID(s *Store, timeout time.Duration) (string, error) {
 	}
 }
 
-func asJSON(v interface{}) string {
+func asJSON(v any) string {
 	enc := encoding.Encoder{}
 	b, err := enc.JSONMarshal(v)
 	if err != nil {
@@ -2948,7 +2948,7 @@ func asJSON(v interface{}) string {
 	return string(b)
 }
 
-func asJSONAssociative(v interface{}) string {
+func asJSONAssociative(v any) string {
 	enc := encoding.Encoder{
 		Associative: true,
 	}

@@ -106,8 +106,8 @@ func (s *Store) LoadFromTarGzip(targzfile string) error {
 }
 
 // Stats returns status and diagnostics for the Extension store.
-func (s *Store) Stats() (map[string]interface{}, error) {
-	stats := make(map[string]interface{})
+func (s *Store) Stats() (map[string]any, error) {
+	stats := make(map[string]any)
 	stats["dir"] = s.dir
 	names, err := s.Names()
 	if err != nil {

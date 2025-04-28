@@ -248,7 +248,7 @@ type SnapshotStore interface {
 	SetFullNeeded() error
 
 	// Stats returns stats about the Snapshot Store.
-	Stats() (map[string]interface{}, error)
+	Stats() (map[string]any, error)
 }
 
 // ClusterState defines the possible Raft states the current node can be in
@@ -1007,9 +1007,9 @@ func (s *Store) SetRequestCompression(batch, size int) {
 }
 
 // Stats returns stats for the store.
-func (s *Store) Stats() (map[string]interface{}, error) {
+func (s *Store) Stats() (map[string]any, error) {
 	if !s.open.Is() {
-		return map[string]interface{}{
+		return map[string]any{
 			"open": false,
 		}, nil
 	}
@@ -1027,7 +1027,7 @@ func (s *Store) Stats() (map[string]interface{}, error) {
 	leaderAddr, leaderID := s.LeaderWithID()
 
 	// Perform type-conversion to actual numbers where possible.
-	raftStats := make(map[string]interface{})
+	raftStats := make(map[string]any)
 	for k, v := range s.raft.Stats() {
 		if s, err := strconv.ParseInt(v, 10, 64); err != nil {
 			raftStats[k] = v
@@ -1051,7 +1051,7 @@ func (s *Store) Stats() (map[string]interface{}, error) {
 		return nil, err
 	}
 
-	status := map[string]interface{}{
+	status := map[string]any{
 		"open":             s.open,
 		"node_id":          s.raftID,
 		"raft":             raftStats,
@@ -1096,7 +1096,7 @@ func (s *Store) Stats() (map[string]interface{}, error) {
 			return nil, err
 		}
 
-		avm := map[string]interface{}{}
+		avm := map[string]any{}
 		if lvt, err := s.LastVacuumTime(); err == nil {
 			avm["last_vacuum"] = lvt
 			bt = lvt
@@ -1937,7 +1937,7 @@ type fsmGenericResponse struct {
 }
 
 // fsmApply applies a Raft log entry to the database.
-func (s *Store) fsmApply(l *raft.Log) (e interface{}) {
+func (s *Store) fsmApply(l *raft.Log) (e any) {
 	defer func() {
 		s.fsmIdx.Store(l.Index)
 		s.fsmTarget.Signal(l.Index)

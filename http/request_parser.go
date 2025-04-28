@@ -58,9 +58,9 @@ func ParseRequest(r io.Reader) ([]*command.Statement, error) {
 		} else if t == json.Delim('[') {
 			// It's parameterized. We need to parse the array of objects, the
 			// first of which is the SQL string, and the rest are the parameters.
-			var items []interface{}
+			var items []any
 			for dec.More() {
-				var item interface{}
+				var item any
 				if err := dec.Decode(&item); err != nil {
 					return nil, ErrInvalidJSON
 				}
@@ -93,7 +93,7 @@ func ParseRequest(r io.Reader) ([]*command.Statement, error) {
 
 			// The rest of the items should be the parameters.
 			for i := range items[1:] {
-				m, ok := items[i+1].(map[string]interface{})
+				m, ok := items[i+1].(map[string]any)
 				if ok {
 					for k, v := range m {
 						p, err := makeParameter(k, v)
@@ -129,7 +129,7 @@ func ParseRequest(r io.Reader) ([]*command.Statement, error) {
 	return stmts, nil
 }
 
-func makeParameter(name string, i interface{}) (*command.Parameter, error) {
+func makeParameter(name string, i any) (*command.Parameter, error) {
 	// Check if the value is a JSON number, and if so, convert it to an int64 or float64.
 	// Then let the switch statement below handle it.
 	if num, ok := i.(json.Number); ok {
@@ -197,7 +197,7 @@ func makeParameter(name string, i interface{}) (*command.Parameter, error) {
 			},
 			Name: name,
 		}, nil
-	case []interface{}:
+	case []any:
 		b := make([]byte, len(v))
 		for i, e := range v {
 			vv, ok := e.(json.Number)

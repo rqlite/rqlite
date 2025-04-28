@@ -160,11 +160,11 @@ func (s *Service) StartReporting(id, apiAddr, addr string) chan struct{} {
 }
 
 // Stats returns diagnostic information on the disco service.
-func (s *Service) Stats() (map[string]interface{}, error) {
+func (s *Service) Stats() (map[string]any, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	return map[string]interface{}{
+	return map[string]any{
 		"mode":              s.c.String(),
 		"register_interval": s.RegisterInterval,
 		"report_interval":   s.ReportInterval,

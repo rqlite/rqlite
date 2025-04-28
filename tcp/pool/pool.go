@@ -27,5 +27,5 @@ type Pool interface {
 	Len() int
 
 	// Stats returns stats about the pool.
-	Stats() (map[string]interface{}, error)
+	Stats() (map[string]any, error)
 }

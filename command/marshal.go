@@ -116,8 +116,8 @@ func (m *RequestMarshaler) Marshal(r Requester) ([]byte, bool, error) {
 
 // Stats returns status and diagnostic information about
 // the RequestMarshaler.
-func (m *RequestMarshaler) Stats() map[string]interface{} {
-	return map[string]interface{}{
+func (m *RequestMarshaler) Stats() map[string]any {
+	return map[string]any{
 		"compression_size":  m.SizeThreshold,
 		"compression_batch": m.BatchThreshold,
 		"force_compression": m.ForceCompression,

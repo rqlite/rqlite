@@ -483,7 +483,7 @@ func (db *DB) Close() error {
 }
 
 // Stats returns status and diagnostics for the database.
-func (db *DB) Stats() (map[string]interface{}, error) {
+func (db *DB) Stats() (map[string]any, error) {
 	copts, err := db.CompileOptions()
 	if err != nil {
 		return nil, err
@@ -492,7 +492,7 @@ func (db *DB) Stats() (map[string]interface{}, error) {
 	if err != nil {
 		return nil, err
 	}
-	connPoolStats := map[string]interface{}{
+	connPoolStats := map[string]any{
 		"ro": db.ConnectionPoolStats(db.roDB),
 		"rw": db.ConnectionPoolStats(db.rwDB),
 	}
@@ -508,7 +508,7 @@ func (db *DB) Stats() (map[string]interface{}, error) {
 	if err != nil {
 		return nil, err
 	}
-	stats := map[string]interface{}{
+	stats := map[string]any{
 		"extensions":       db.ExtensionNames(),
 		"version":          DBVersion,
 		"compile_options":  copts,
@@ -1049,7 +1049,7 @@ func (db *DB) Query(req *command.Request, xTime bool) ([]*command.QueryRows, err
 }
 
 type queryer interface {
-	QueryContext(ctx context.Context, query string, args ...interface{}) (*sql.Rows, error)
+	QueryContext(ctx context.Context, query string, args ...any) (*sql.Rows, error)
 }
 
 func (db *DB) queryWithConn(ctx context.Context, req *command.Request, xTime bool, conn *sql.Conn) ([]*command.QueryRows, error) {
@@ -1153,8 +1153,8 @@ func (db *DB) queryStmtWithConn(ctx context.Context, stmt *command.Statement, xT
 	}
 	needsQueryTypes := containsEmptyType(xTypes)
 
-	dest := make([]interface{}, len(columns))
-	ptrs := make([]interface{}, len(dest))
+	dest := make([]any, len(columns))
+	ptrs := make([]any, len(dest))
 	for rs.Next() {
 		dest := dest[:]
 		ptrs := ptrs[:]
@@ -1482,7 +1482,7 @@ func (db *DB) StmtReadOnly(sql string) (bool, error) {
 // the given connection.
 func (db *DB) StmtReadOnlyWithConn(sql string, conn *sql.Conn) (bool, error) {
 	var readOnly bool
-	f := func(driverConn interface{}) error {
+	f := func(driverConn any) error {
 		c := driverConn.(*sqlite3.SQLiteConn)
 		drvStmt, err := c.Prepare(sql)
 		if err != nil {
@@ -1500,13 +1500,13 @@ func (db *DB) StmtReadOnlyWithConn(sql string, conn *sql.Conn) (bool, error) {
 	return readOnly, nil
 }
 
-func (db *DB) pragmas() (map[string]interface{}, error) {
+func (db *DB) pragmas() (map[string]any, error) {
 	conns := map[string]*sql.DB{
 		"rw": db.rwDB,
 		"ro": db.roDB,
 	}
 
-	connsMap := make(map[string]interface{})
+	connsMap := make(map[string]any)
 	for k, v := range conns {
 		pragmasMap := make(map[string]string)
 		for _, p := range []string{
@@ -1529,7 +1529,7 @@ func (db *DB) pragmas() (map[string]interface{}, error) {
 
 // txStatus returns whether there is an active transaction on each database
 // connection.
-func (db *DB) txStatus() (map[string]interface{}, error) {
+func (db *DB) txStatus() (map[string]any, error) {
 	conns := map[string]*sql.DB{
 		"rw": db.rwDB,
 		"ro": db.roDB,
@@ -1542,7 +1542,7 @@ func (db *DB) txStatus() (map[string]interface{}, error) {
 		return nil
 	}
 
-	txStatusMap := make(map[string]interface{})
+	txStatusMap := make(map[string]any)
 	for k, v := range conns {
 		conn, err := v.Conn(context.Background())
 		if err != nil {
@@ -1616,12 +1616,12 @@ func copyDatabase(dst *DB, src *DB) error {
 
 	var dstSQLiteConn *sqlite3.SQLiteConn
 
-	bf := func(driverConn interface{}) error {
+	bf := func(driverConn any) error {
 		srcSQLiteConn := driverConn.(*sqlite3.SQLiteConn)
 		return copyDatabaseConnection(dstSQLiteConn, srcSQLiteConn)
 	}
 	return dstConn.Raw(
-		func(driverConn interface{}) error {
+		func(driverConn any) error {
 			dstSQLiteConn = driverConn.(*sqlite3.SQLiteConn)
 			return srcConn.Raw(bf)
 		})
@@ -1651,12 +1651,12 @@ func copyDatabaseConnection(dst, src *sqlite3.SQLiteConn) error {
 }
 
 // parametersToValues maps values in the proto params to SQL driver values.
-func parametersToValues(parameters []*command.Parameter) ([]interface{}, error) {
+func parametersToValues(parameters []*command.Parameter) ([]any, error) {
 	if parameters == nil {
 		return nil, nil
 	}
 
-	values := make([]interface{}, len(parameters))
+	values := make([]any, len(parameters))
 	for i := range parameters {
 		switch w := parameters[i].GetValue().(type) {
 		case *command.Parameter_I:
@@ -1710,7 +1710,7 @@ func populateEmptyTypes(types []string, params []*command.Parameter) error {
 // Text values come over (from sqlite-go) as []byte instead of strings
 // for some reason, so we have explicitly converted (but only when type
 // is "text" so we don't affect BLOB types)
-func normalizeRowParameters(row []interface{}, types []string) ([]*command.Parameter, error) {
+func normalizeRowParameters(row []any, types []string) ([]*command.Parameter, error) {
 	values := make([]*command.Parameter, len(types))
 	for i, v := range row {
 		switch val := v.(type) {

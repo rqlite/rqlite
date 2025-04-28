@@ -71,7 +71,7 @@ func (s *SwappableDB) Close() error {
 }
 
 // Stats returns the underlying database's stats.
-func (s *SwappableDB) Stats() (map[string]interface{}, error) {
+func (s *SwappableDB) Stats() (map[string]any, error) {
 	s.dbMu.RLock()
 	defer s.dbMu.RUnlock()
 	return s.db.Stats()

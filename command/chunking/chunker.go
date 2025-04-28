@@ -19,14 +19,14 @@ const (
 
 // Define a sync.Pool to pool the buffers.
 var bufferPool = sync.Pool{
-	New: func() interface{} {
+	New: func() any {
 		return bytes.NewBuffer(nil)
 	},
 }
 
 // Define a sync.Pool to pool the gzip writers.
 var gzipWriterPool = sync.Pool{
-	New: func() interface{} {
+	New: func() any {
 		gw, err := gzip.NewWriterLevel(nil, gzip.BestSpeed)
 		if err != nil {
 			panic(fmt.Sprintf("failed to create gzip writer: %s", err.Error()))

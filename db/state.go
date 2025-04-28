@@ -134,7 +134,7 @@ func ValidateExtension(path string) error {
 	}
 	defer db.Close()
 
-	f := func(driverConn interface{}) error {
+	f := func(driverConn any) error {
 		c := driverConn.(*sqlite3.SQLiteConn)
 		return c.LoadExtension(path, "")
 	}

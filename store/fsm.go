@@ -20,7 +20,7 @@ func NewFSM(s *Store) *FSM {
 }
 
 // Apply applies a Raft log entry to the Store.
-func (f *FSM) Apply(l *raft.Log) interface{} {
+func (f *FSM) Apply(l *raft.Log) any {
 	return f.s.fsmApply(l)
 }
 
