@@ -283,7 +283,7 @@ func (n *Node) Noop(id string) error {
 
 // EnableTLSClient enables TLS support for the node's cluster client.
 func (n *Node) EnableTLSClient() {
-	tlsConfig := mustCreateTLSConfig(n.NodeCertPath, n.NodeKeyPath, "")
+	tlsConfig := mustCreateClientTLSConfig(n.NodeCertPath, n.NodeKeyPath, "")
 	clusterDialer := tcp.NewDialer(cluster.MuxClusterHeader, tlsConfig)
 	clusterClient := cluster.NewClient(clusterDialer, 30*time.Second)
 	n.Client = clusterClient
@@ -711,8 +711,8 @@ func mustNewNodeEncrypted(id string, enableSingle, httpEncrypt, nodeEncrypt bool
 	var clstrDialer *tcp.Dialer
 	if nodeEncrypt {
 		mux = mustNewOpenTLSMux(rX509.CertExampleDotComFile(dir), rX509.KeyExampleDotComFile(dir), "")
-		raftDialer = tcp.NewDialer(cluster.MuxRaftHeader, mustCreateTLSConfig(rX509.CertExampleDotComFile(dir), rX509.KeyExampleDotComFile(dir), ""))
-		clstrDialer = tcp.NewDialer(cluster.MuxClusterHeader, mustCreateTLSConfig(rX509.CertExampleDotComFile(dir), rX509.KeyExampleDotComFile(dir), ""))
+		raftDialer = tcp.NewDialer(cluster.MuxRaftHeader, mustCreateClientTLSConfig(rX509.CertExampleDotComFile(dir), rX509.KeyExampleDotComFile(dir), ""))
+		clstrDialer = tcp.NewDialer(cluster.MuxClusterHeader, mustCreateClientTLSConfig(rX509.CertExampleDotComFile(dir), rX509.KeyExampleDotComFile(dir), ""))
 	} else {
 		mux, _ = mustNewOpenMux("")
 		raftDialer = tcp.NewDialer(cluster.MuxRaftHeader, nil)
@@ -914,9 +914,9 @@ func mustWriteFile(path, contents string) {
 	}
 }
 
-// mustCreateTLSConfig returns a TLS config from the given cert, key and optionally
+// mustCreateClientTLSConfig returns a TLS config from the given cert, key and optionally
 // Certificate Authority cert. Config doesn't verify certs.
-func mustCreateTLSConfig(certFile, keyFile, caCertFile string) *tls.Config {
+func mustCreateClientTLSConfig(certFile, keyFile, caCertFile string) *tls.Config {
 	var err error
 	config := &tls.Config{
 		InsecureSkipVerify: true,
