@@ -63,6 +63,7 @@ type Node struct {
 	Service      *httpd.Service
 	Cluster      *cluster.Service
 	Client       *cluster.Client
+	Mux          *tcp.Mux
 }
 
 // SameAs returns true if this node is the same as node o.
@@ -85,6 +86,7 @@ func (n *Node) Deprovision() {
 	n.Service.Close()
 	n.Store.Close(true)
 	n.Cluster.Close()
+	n.Mux.Close()
 	os.RemoveAll(n.Dir)
 }
 
@@ -735,6 +737,7 @@ func mustNodeEncrypted(id, dir string, enableSingle, httpEncrypt bool, mux *tcp.
 		HTTPCertPath: httpCertPath,
 		HTTPKeyPath:  httpKeyPath,
 		PeersPath:    filepath.Join(dir, "raft/peers.json"),
+		Mux:          mux,
 	}
 
 	dbConf := store.NewDBConfig()

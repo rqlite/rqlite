@@ -1739,10 +1739,10 @@ func Test_SingleNodeAutoRestore(t *testing.T) {
 	}
 	defer node.Deprovision()
 
-	mux, _ := mustNewOpenMux("")
-	go mux.Serve()
+	node.Mux, _ = mustNewOpenMux("")
+	go node.Mux.Serve()
 
-	raftLn := mux.Listen(cluster.MuxRaftHeader)
+	raftLn := node.Mux.Listen(cluster.MuxRaftHeader)
 	raftTn := tcp.NewLayer(raftLn, tcp.NewDialer(cluster.MuxRaftHeader, nil))
 	node.Store = store.New(raftTn, &store.Config{
 		DBConf: store.NewDBConfig(),
@@ -1765,7 +1765,7 @@ func Test_SingleNodeAutoRestore(t *testing.T) {
 	node.RaftAddr = node.Store.Addr()
 	node.ID = node.Store.ID()
 
-	clstr := cluster.New(mux.Listen(cluster.MuxClusterHeader), node.Store, node.Store, mustNewMockCredentialStore())
+	clstr := cluster.New(node.Mux.Listen(cluster.MuxClusterHeader), node.Store, node.Store, mustNewMockCredentialStore())
 	if err := clstr.Open(); err != nil {
 		t.Fatalf("failed to open Cluster service: %s", err.Error())
 	}
