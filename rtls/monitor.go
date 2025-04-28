@@ -1,7 +1,7 @@
 package rtls
 
 import (
-    "context"
+	"context"
 	"crypto/tls"
 	"fmt"
 	"io"
@@ -10,8 +10,6 @@ import (
 	"sync"
 	"time"
 )
-
-type Ctx = context.Context // Alias for convenience
 
 // DefaultMonitorInterval is the default interval for checking file modifications.
 const DefaultMonitorInterval = time.Second
@@ -31,8 +29,8 @@ type monitoredCert struct {
 // each identified by a unique key string.
 type CertMonitor struct {
 	certs    map[string]*monitoredCert
-	certsMu  sync.RWMutex // Protects the certs map
-	stopOnce sync.Once    // Ensures global Stop logic runs only once
+	certsMu  sync.RWMutex   // Protects the certs map
+	stopOnce sync.Once      // Ensures global Stop logic runs only once
 	wg       sync.WaitGroup // Tracks all active monitoring goroutines
 	done     chan struct{}  // Signals global shutdown
 
@@ -110,9 +108,9 @@ func (cm *CertMonitor) Monitor(key, certFile, keyFile string) error {
 	// Check if monitor for this key already exists and stop it
 	if existing, ok := cm.certs[key]; ok {
 		cm.logger.Printf("Replacing existing monitor for key: %s", key)
-		existing.cancel()    // Signal the existing goroutine to stop
-		existing.wg.Wait()   // Wait for it to fully stop
-		cm.wg.Done()         // Decrement global waitgroup count for the old goroutine
+		existing.cancel()     // Signal the existing goroutine to stop
+		existing.wg.Wait()    // Wait for it to fully stop
+		cm.wg.Done()          // Decrement global waitgroup count for the old goroutine
 		delete(cm.certs, key) // Remove from map (though it will be replaced)
 	}
 
@@ -142,23 +140,22 @@ func (cm *CertMonitor) Monitor(key, certFile, keyFile string) error {
 // newContextWithCancel creates a new context that is cancelled
 // when the provided cancel function is called OR when the global
 // done channel is closed.
-func (cm *CertMonitor) newContextWithCancel() (ctx Ctx, cancel func()) {
+func (cm *CertMonitor) newContextWithCancel() (ctx context.Context, cancel func()) {
 	// Create a child context that can be cancelled independently
-    parentCtx, cancelFunc := context.WithCancel(context.Background())
+	parentCtx, cancelFunc := context.WithCancel(context.Background())
 
 	// Goroutine to link global shutdown with this specific context's cancel
 	go func() {
 		select {
 		case <-parentCtx.Done(): // If cancelled locally
 			// Do nothing, already handled
-		case <-cm.done:         // If global shutdown happens
+		case <-cm.done: // If global shutdown happens
 			cancelFunc() // Trigger this context's cancellation
 		}
 	}()
 
 	return parentCtx, cancelFunc
 }
-
 
 // GetCertificateFunc returns a function suitable for `tls.Config.GetCertificate`.
 // The returned function, when invoked, provides the currently loaded certificate
@@ -192,13 +189,13 @@ func (cm *CertMonitor) Stop() {
 	cm.stopOnce.Do(func() {
 		cm.logger.Printf("Stopping all certificate monitors...")
 		cm.certsMu.Lock() // Lock the map while initiating stop for all
-		close(cm.done)   // Signal global shutdown
+		close(cm.done)    // Signal global shutdown
 
 		// Explicitly cancel each individual monitor's context.
 		// While closing cm.done *should* trigger cancellation via newContextWithCancel,
 		// being explicit ensures cancellation happens even if that goroutine hasn't run yet.
 		for key, mc := range cm.certs {
-            cm.logger.Printf("Signalling stop for monitor key: %s", key)
+			cm.logger.Printf("Signalling stop for monitor key: %s", key)
 			mc.cancel()
 		}
 		cm.certsMu.Unlock() // Unlock map before waiting
@@ -212,8 +209,8 @@ func (cm *CertMonitor) Stop() {
 // runMonitor is the goroutine responsible for monitoring a single cert pair.
 // It takes a context for cancellation.
 func (cm *CertMonitor) runMonitor(ctx context.Context, key string, mc *monitoredCert) {
-	defer cm.wg.Done()    // Decrement global counter when exiting
-	defer mc.wg.Done()   // Decrement specific cert counter when exiting
+	defer cm.wg.Done()                                                   // Decrement global counter when exiting
+	defer mc.wg.Done()                                                   // Decrement specific cert counter when exiting
 	defer cm.logger.Printf("Monitor routine for key '%s' stopped.", key) // Log exit
 
 	ticker := time.NewTicker(cm.interval)

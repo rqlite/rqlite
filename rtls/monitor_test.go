@@ -2,22 +2,12 @@ package rtls
 
 import (
 	"bytes" // For comparing certificate data
-	"context"
-	"crypto"
-	"crypto/rand"
-	"crypto/rsa"
-	"crypto/tls"
 	"crypto/x509"
 	"crypto/x509/pkix"
-	"encoding/pem"
-	"fmt"
 	"io"
 	"log"
-	"math/big"
 	"os"
-	"path/filepath"
-	"reflect" // For comparing complex structs if needed, though CN check is simpler
-	"sync"
+	"path/filepath" // For comparing complex structs if needed, though CN check is simpler
 	"testing"
 	"time"
 )
@@ -89,14 +79,14 @@ func Test_CertMonitor_Monitor_InitialLoadFailure(t *testing.T) {
 	cm := NewCertMonitor(WithLogger(testLogger(t)), WithInterval(testMonitorInterval))
 	defer cm.Stop()
 
-	// 1. Non-existent file
+	// Non-existent file
 	err := cm.Monitor(testKey1, "non-existent-cert", "non-existent-key")
 	if err == nil {
 		t.Fatal("Expected error for non-existent files, got nil")
 	}
 	t.Logf("Got expected error for non-existent files: %v", err)
 
-	// 2. Mismatched pair
+	// Mismatched pair
 	certFile1, _ := mustGenerateAndWriteCert(t, "mismatch-cn1", nil)
 	_, keyFile2 := mustGenerateAndWriteCert(t, "mismatch-cn2", nil)
 	err = cm.Monitor(testKey1, certFile1, keyFile2)
@@ -554,13 +544,11 @@ func Test_CertMonitor_Symlinks(t *testing.T) {
 	}
 }
 
-// --- Helper Functions ---
-
 // mustGenerateAndWriteCert generates a cert/key pair and writes them to temporary files.
 // It returns the paths to the cert and key files.
 func mustGenerateAndWriteCert(t *testing.T, cn string, parentCert *x509.Certificate) (certFilePath, keyFilePath string) {
 	t.Helper()
-	certPEM, keyPEM, err := generateCert(pkix.Name{CommonName: cn}, time.Hour, 2048, parentCert, nil) // Short validity for tests
+	certPEM, keyPEM, err := GenerateCert(pkix.Name{CommonName: cn}, time.Hour, 2048, parentCert, nil) // Short validity for tests
 	if err != nil {
 		t.Fatalf("failed to generate cert with CN %s: %v", cn, err)
 	}
@@ -569,27 +557,6 @@ func mustGenerateAndWriteCert(t *testing.T, cn string, parentCert *x509.Certific
 	keyFile := mustWriteTempFile(t, keyPEM, "testkey-*.pem")
 
 	return certFile, keyFile
-}
-
-// mustWriteTempFile writes data to a temporary file and returns its path.
-func mustWriteTempFile(t *testing.T, data []byte, pattern string) string {
-	t.Helper()
-	f, err := os.CreateTemp(t.TempDir(), pattern)
-	if err != nil {
-		t.Fatalf("failed to create temp file with pattern %s: %v", pattern, err)
-	}
-	defer func() {
-		if cerr := f.Close(); cerr != nil {
-			// Log closing error but don't fail test here as write might have succeeded
-			t.Logf("Warning: failed to close temp file %s: %v", f.Name(), cerr)
-		}
-	}()
-	_, err = f.Write(data)
-	if err != nil {
-		t.Fatalf("failed to write to temp file %s: %v", f.Name(), err)
-	}
-	// Close happens in defer, get name before it might be invalid
-	return f.Name()
 }
 
 // mustAdvanceFileOneSec updates the modification time of a file by one second.
@@ -626,55 +593,3 @@ func mustAdvanceFileOneSec(t *testing.T, file string) {
 	// 	 }
 	// }
 }
-
-
-// generateCert generates a new x509 certificate. (Adapted from original test helpers)
-func generateCert(subject pkix.Name, validFor time.Duration, keySize int, parent *x509.Certificate, parentKey crypto.PrivateKey) ([]byte, []byte, error) {
-	key, err := rsa.GenerateKey(rand.Reader, keySize)
-	if err != nil {
-		return nil, nil, fmt.Errorf("failed to generate private key: %w", err)
-	}
-
-	serialNumberLimit := new(big.Int).Lsh(big.NewInt(1), 128)
-	serialNumber, err := rand.Int(rand.Reader, serialNumberLimit)
-	if err != nil {
-		return nil, nil, fmt.Errorf("failed to generate serial number: %w", err)
-	}
-
-	notBefore := time.Now().Add(-2 * time.Minute) // Give 2 mins leeway for clock skew
-	notAfter := notBefore.Add(validFor)
-
-	template := x509.Certificate{
-		SerialNumber: serialNumber,
-		Subject:      subject,
-		NotBefore:    notBefore,
-		NotAfter:     notAfter,
-		KeyUsage:     x509.KeyUsageKeyEncipherment | x509.KeyUsageDigitalSignature,
-		ExtKeyUsage:  []x509.ExtKeyUsage{x509.ExtKeyUsageServerAuth, x509.ExtKeyUsageClientAuth},
-		BasicConstraintsValid: true,
-	}
-
-	var signerCert *x509.Certificate
-	var signerKey crypto.PrivateKey
-	if parent == nil {
-		// Self-signed
-		template.IsCA = true
-		template.KeyUsage |= x509.KeyUsageCertSign
-		signerCert = &template
-		signerKey = key
-	} else {
-		signerCert = parent
-		signerKey = parentKey
-		if signerKey == nil { // If parent cert provided but not key, assume self-signing parent needed key
-			// This case shouldn't happen with current test usage, but defensively handle
-             return nil, nil, fmt.Errorf("parent certificate provided but parent key is nil")
-		}
-	}
-
-
-	certBytes, err := x509.CreateCertificate(rand.Reader, &template, signerCert, &key.PublicKey, signerKey)
-	if err != nil {
-		return nil, nil, fmt.Errorf("failed to create certificate: %w", err)
-	}
-
-	certPEM := pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: certBytes})
