@@ -55,6 +55,29 @@ func Test_CreateServerConfig(t *testing.T) {
 	}
 }
 
+func Test_CreateServerConfigWithFunc(t *testing.T) {
+	// generate a cert and key pair, and write both to a temporary file
+	certPEM, keyPEM, err := GenerateCert(pkix.Name{CommonName: "rqlite"}, 365*24*time.Hour, 2048, nil, nil)
+	if err != nil {
+		t.Fatalf("failed to generate cert: %v", err)
+	}
+	certFile := mustWriteTempFile(t, certPEM)
+	keyFile := mustWriteTempFile(t, keyPEM)
+
+	config, err := CreateServerConfigWithFunc(mustCreateGetCertFunc(t, certFile, keyFile), NoCACert, MTLSStateDisabled)
+	if err != nil {
+		t.Fatalf("failed to create server config: %v", err)
+	}
+
+	cert, err := config.GetCertificate(nil)
+	if err != nil {
+		t.Fatalf("failed to parse certificate: %v", err)
+	}
+	if cert.Leaf.Subject.CommonName != "rqlite" {
+		t.Fatalf("expected certificate subject to be 'rqlite', got %s", cert.Leaf.Subject.CommonName)
+	}
+}
+
 func Test_CreateServerConfig_CA(t *testing.T) {
 	// generate a cert and key pair, and write both to a temporary file
 	certPEM, keyPEM, err := GenerateCert(pkix.Name{CommonName: "rqlite"}, 365*24*time.Hour, 2048, nil, nil)
@@ -145,6 +168,29 @@ func Test_CreateClientConfig(t *testing.T) {
 	}
 }
 
+func Test_CreateClientConfigWithFunc(t *testing.T) {
+	// generate a cert and key pair, and write both to a temporary file
+	certPEM, keyPEM, err := GenerateCert(pkix.Name{CommonName: "rqlite"}, 365*24*time.Hour, 2048, nil, nil)
+	if err != nil {
+		t.Fatalf("failed to generate cert: %v", err)
+	}
+	certFile := mustWriteTempFile(t, certPEM)
+	keyFile := mustWriteTempFile(t, keyPEM)
+
+	config, err := CreateClientConfigWithFunc(mustCreateGetCertFunc(t, certFile, keyFile), NoCACert, NoServerName, true)
+	if err != nil {
+		t.Fatalf("failed to create server config: %v", err)
+	}
+
+	cert, err := config.GetClientCertificate(nil)
+	if err != nil {
+		t.Fatalf("failed to parse certificate: %v", err)
+	}
+	if cert.Leaf.Subject.CommonName != "rqlite" {
+		t.Fatalf("expected certificate subject to be 'rqlite', got %s", cert.Leaf.Subject.CommonName)
+	}
+}
+
 func Test_CreateClientConfig_CA(t *testing.T) {
 	// generate a cert and key pair, and write both to a temporary file
 	certPEM, keyPEM, err := GenerateCert(pkix.Name{CommonName: "rqlite"}, 365*24*time.Hour, 2048, nil, nil)
@@ -196,4 +242,14 @@ func mustWriteTempFile(t *testing.T, b []byte) string {
 		panic("failed to write to temp file")
 	}
 	return f.Name()
+}
+
+func mustCreateGetCertFunc(t *testing.T, certFile, keyFile string) func() (*tls.Certificate, error) {
+	cert, err := tls.LoadX509KeyPair(certFile, keyFile)
+	if err != nil {
+		t.Fatalf("failed to load cert: %v", err)
+	}
+	return func() (*tls.Certificate, error) {
+		return &cert, nil
+	}
 }
