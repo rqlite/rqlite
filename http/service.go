@@ -390,7 +390,7 @@ func (s *Service) Start() error {
 		if s.ClientVerify {
 			mTLSState = rtls.MTLSStateEnabled
 		}
-		s.certReloader, err = rtls.NewReloader(s.CertFile, s.KeyFile)
+		s.certReloader, err = rtls.NewCertReloader(s.CertFile, s.KeyFile)
 		if err != nil {
 			return err
 		}

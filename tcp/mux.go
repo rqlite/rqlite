@@ -127,7 +127,7 @@ func newTLSMux(ln net.Listener, adv net.Addr, cert, key, caCert string, mutual b
 	if mutual {
 		mtlsState = rtls.MTLSStateEnabled
 	}
-	mux.certReloader, err = rtls.NewReloader(cert, key)
+	mux.certReloader, err = rtls.NewCertReloader(cert, key)
 	if err != nil {
 		return nil, fmt.Errorf("cannot create cert monitor: %s", err)
 	}

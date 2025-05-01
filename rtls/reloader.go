@@ -18,8 +18,8 @@ type CertReloader struct {
 	logger            *log.Logger
 }
 
-// NewReloader creates a new CertReloader instance.
-func NewReloader(cert, key string) (*CertReloader, error) {
+// NewCertReloader creates a new CertReloader instance.
+func NewCertReloader(cert, key string) (*CertReloader, error) {
 	cr := &CertReloader{
 		certPath: cert,
 		keyPath:  key,

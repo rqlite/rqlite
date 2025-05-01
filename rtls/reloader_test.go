@@ -7,7 +7,7 @@ import (
 	"time"
 )
 
-func Test_NewReloader(t *testing.T) {
+func Test_NewCertReloader(t *testing.T) {
 	certPEM, keyPEM, err := GenerateCert(pkix.Name{CommonName: "rqlite"}, 365*24*time.Hour, 2048, nil, nil)
 	if err != nil {
 		t.Fatalf("failed to generate cert: %v", err)
@@ -15,9 +15,9 @@ func Test_NewReloader(t *testing.T) {
 	certPath := mustWriteTempFile(t, certPEM)
 	keyPath := mustWriteTempFile(t, keyPEM)
 
-	cr, err := NewReloader(certPath, keyPath)
+	cr, err := NewCertReloader(certPath, keyPath)
 	if err != nil {
-		t.Fatalf("NewReloader returned error: %v", err)
+		t.Fatalf("NewCertReloader returned error: %v", err)
 	}
 
 	c, err := cr.GetCertificate()
@@ -29,19 +29,19 @@ func Test_NewReloader(t *testing.T) {
 	}
 }
 
-func Test_NewReloaderNoFiles(t *testing.T) {
-	_, err := NewReloader("xxx", "yyyy")
+func Test_NewCertReloaderNoFiles(t *testing.T) {
+	_, err := NewCertReloader("xxx", "yyyy")
 	if err == nil {
-		t.Fatalf("NewReloader should have returned error")
+		t.Fatalf("NewCertReloader should have returned error")
 	}
 }
 
-func Test_NewReloaderBadFiles(t *testing.T) {
+func Test_NewCertReloaderBadFiles(t *testing.T) {
 	certPath := mustWriteTempFile(t, []byte("bad cert"))
 	keyPath := mustWriteTempFile(t, []byte("bad key"))
-	_, err := NewReloader(certPath, keyPath)
+	_, err := NewCertReloader(certPath, keyPath)
 	if err == nil {
-		t.Fatalf("NewReloader should have returned error")
+		t.Fatalf("NewCertReloader should have returned error")
 	}
 }
 
@@ -53,9 +53,9 @@ func Test_NoReloadWhenUnchanged(t *testing.T) {
 	certPath := mustWriteTempFile(t, certPEM)
 	keyPath := mustWriteTempFile(t, keyPEM)
 
-	cr, err := NewReloader(certPath, keyPath)
+	cr, err := NewCertReloader(certPath, keyPath)
 	if err != nil {
-		t.Fatalf("NewReloader error: %v", err)
+		t.Fatalf("NewCertReloader error: %v", err)
 	}
 
 	c1, _ := cr.GetCertificate()
@@ -81,9 +81,9 @@ func Test_ReloadOnFileChange(t *testing.T) {
 	certPath2 := mustWriteTempFile(t, certPEM2)
 	keyPath2 := mustWriteTempFile(t, keyPEM2)
 
-	cr, err := NewReloader(certPath1, keyPath1)
+	cr, err := NewCertReloader(certPath1, keyPath1)
 	if err != nil {
-		t.Fatalf("NewReloader error: %v", err)
+		t.Fatalf("NewCertReloader error: %v", err)
 	}
 	c, err := cr.GetCertificate()
 	if err != nil {
@@ -125,9 +125,9 @@ func Test_NoReloadOnMismatch(t *testing.T) {
 	}
 	keyPath2 := mustWriteTempFile(t, keyPEM2)
 
-	cr, err := NewReloader(certPath1, keyPath1)
+	cr, err := NewCertReloader(certPath1, keyPath1)
 	if err != nil {
-		t.Fatalf("NewReloader error: %v", err)
+		t.Fatalf("NewCertReloader error: %v", err)
 	}
 	c, err := cr.GetCertificate()
 	if err != nil {

@@ -467,7 +467,7 @@ func createClusterClient(cfg *Config, clstr *cluster.Service) (*cluster.Client, 
 	var err error
 	var cr *rtls.CertReloader
 	if cfg.NodeX509Cert != "" || cfg.NodeX509CACert != "" {
-		cr, err = rtls.NewReloader(cfg.NodeX509Cert, cfg.NodeX509Key)
+		cr, err = rtls.NewCertReloader(cfg.NodeX509Cert, cfg.NodeX509Key)
 		if err != nil {
 			return nil, fmt.Errorf("failed to create certificate monitor: %s", err.Error())
 		}

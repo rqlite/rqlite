@@ -40,7 +40,7 @@ func CreateRaftDialer(cert, key, caCert, serverName string, Insecure bool) (*tcp
 	var err error
 	var cr *rtls.CertReloader
 	if cert != "" || key != "" {
-		cr, err = rtls.NewReloader(cert, key)
+		cr, err = rtls.NewCertReloader(cert, key)
 		if err != nil {
 			return nil, fmt.Errorf("failed to create TLS config for Raft dialer: %s", err.Error())
 		}
