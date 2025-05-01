@@ -1,4 +1,4 @@
-## v8.37.0 (unreleased)
+## v8.37.0 (May 1st 2025)
 ### New features
 - [PR #2080](https://github.com/rqlite/rqlite/pull/2080), [PR #2081](https://github.com/rqlite/rqlite/pull/2081), [PR #2082](https://github.com/rqlite/rqlite/pull/2082), [PR #2084](https://github.com/rqlite/rqlite/pull/2084): Support x.509 cert reloading via simpler lazy load.
 - [PR #2069](https://github.com/rqlite/rqlite/pull/2069): Add TLS certificate monitoring and automatic reload to HTTP server.
