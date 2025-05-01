@@ -54,6 +54,18 @@ func (cr *CertReloader) GetCertificate() (*tls.Certificate, error) {
 	cr.mu.RUnlock()
 	cr.mu.Lock()
 	defer cr.mu.Unlock()
+
+	// Now that we have the write lock, we check again if the certificate has actually
+	// been updated by another concurrent call to this function.
+	lm, ok, err = newerThan(cr.modTime, cr.certPath, cr.keyPath)
+	if err != nil || !ok {
+		defer cr.mu.RUnlock()
+		if err != nil {
+			cr.logger.Printf("failed to check modification times(%s), returning prior cert", err)
+		}
+		return cr.cert, nil
+	}
+
 	pair, err := loadKeyPair(cr.certPath, cr.keyPath)
 	if err != nil {
 		cr.logger.Printf("failed to reload certificate (%s), returning prior cert", err)
