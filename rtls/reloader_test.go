@@ -58,22 +58,20 @@ func Test_NoReloadWhenUnchanged(t *testing.T) {
 	keyPath := mustWriteTempFile(t, keyPEM)
 
 	for range 100 {
-		t.Run("no reload when unchanged", func(t *testing.T) {
-			mustAdvanceFileOneSec(certPath)
-			mustAdvanceFileTime(keyPath, 100*time.Millisecond)
+		mustAdvanceFileOneSec(certPath)
+		mustAdvanceFileTime(keyPath, 100*time.Millisecond)
 
-			cr, err := NewCertReloader(certPath, keyPath)
-			if err != nil {
-				t.Fatalf("NewCertReloader error: %v", err)
-			}
+		cr, err := NewCertReloader(certPath, keyPath)
+		if err != nil {
+			t.Fatalf("NewCertReloader error: %v", err)
+		}
 
-			c1, _ := cr.GetCertificate()
-			c2, _ := cr.GetCertificate()
+		c1, _ := cr.GetCertificate()
+		c2, _ := cr.GetCertificate()
 
-			if c1 != c2 {
-				t.Fatalf("expected same *tls.Certificate pointer when files unchanged")
-			}
-		})
+		if c1 != c2 {
+			t.Fatalf("expected same *tls.Certificate pointer when files unchanged")
+		}
 	}
 }
 
