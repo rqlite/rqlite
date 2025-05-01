@@ -59,7 +59,6 @@ func (cr *CertReloader) GetCertificate() (*tls.Certificate, error) {
 	// been updated by another concurrent call to this function.
 	lm, ok, err := newerThan(cr.modTime, cr.certPath, cr.keyPath)
 	if err != nil || !ok {
-		defer cr.mu.RUnlock()
 		if err != nil {
 			cr.logger.Printf("failed to check modification times(%s), returning prior cert", err)
 		}
