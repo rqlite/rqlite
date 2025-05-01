@@ -73,7 +73,7 @@ func Test_TLSServiceInsecure(t *testing.T) {
 		t.Fatalf("incorrect common name in server certificate, got: %s", resp.TLS.PeerCertificates[0].Subject.CommonName)
 	}
 
-	// Check cert reloading by changing the cert and key files, waiting, creating a new
+	// Check cert reloading by changing the cert and key files, creating a new
 	// client, and making a new request.
 	cert2, key2, err := rtls.GenerateSelfSignedCert(pkix.Name{CommonName: "rqlite2"}, time.Hour, 2048)
 	if err != nil {
