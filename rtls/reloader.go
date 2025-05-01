@@ -16,7 +16,7 @@ type CertReloader struct {
 	modTime           time.Time
 	logger            *log.Logger
 
-	mu   sync.Mutex
+	mu   sync.RWMutex
 	cert *tls.Certificate
 }
 
@@ -27,38 +27,41 @@ func NewCertReloader(cert, key string) (*CertReloader, error) {
 		keyPath:  key,
 		logger:   log.New(os.Stderr, "[cert-reloader] ", log.LstdFlags),
 	}
-	if err := cr.reload(); err != nil {
+	_, err := loadKeyPair(cr.certPath, cr.keyPath)
+	if err != nil {
 		return nil, err
 	}
 	return cr, nil
 }
 
 // GetCertificate returns the current certificate. It reloads the certificate
-// if it has been modified since the last load.
+// if it has been modified since the last load. GetCertificate is thread-safe
+// and if the cert has not changed this function will execute concurrently with
+// other GetCertificate calls.
 func (cr *CertReloader) GetCertificate() (*tls.Certificate, error) {
+	cr.mu.RLock()
+	lm, ok, err := newerThan(cr.modTime, cr.certPath, cr.keyPath)
+	if err != nil || !ok {
+		defer cr.mu.RUnlock()
+		if err != nil {
+			cr.logger.Printf("failed to check modification times(%s), returning prior cert", err)
+		}
+		return cr.cert, nil
+	}
+
+	// The certificate or key file has changed, we need to reload. First we release
+	// the read lock, then we acquire a write lock to reload the certificate.
+	cr.mu.RUnlock()
 	cr.mu.Lock()
 	defer cr.mu.Unlock()
-	err := cr.reload()
-	if err != nil {
-		cr.logger.Printf("failed to reload certificate (%s), returning prior cert", err)
-	}
-	return cr.cert, nil
-}
-
-func (cr *CertReloader) reload() error {
-	lm, ok, err := newerThan(cr.modTime, cr.certPath, cr.keyPath)
-	if err != nil {
-		return err
-	} else if !ok {
-		return nil
-	}
 	pair, err := loadKeyPair(cr.certPath, cr.keyPath)
 	if err != nil {
-		return err
+		cr.logger.Printf("failed to reload certificate (%s), returning prior cert", err)
+		return cr.cert, nil
 	}
 	cr.cert = &pair
 	cr.modTime = lm
-	return nil
+	return cr.cert, nil
 }
 
 // loadKeyPair loads a TLS certificate and key pair from the given files.
