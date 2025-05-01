@@ -4,7 +4,7 @@ import (
 	"crypto/tls"
 	"log"
 	"os"
-	"sync/atomic"
+	"sync"
 	"time"
 )
 
@@ -14,8 +14,10 @@ import (
 type CertReloader struct {
 	certPath, keyPath string
 	modTime           time.Time
-	current           atomic.Value
 	logger            *log.Logger
+
+	mu   sync.Mutex
+	cert *tls.Certificate
 }
 
 // NewCertReloader creates a new CertReloader instance.
@@ -31,6 +33,18 @@ func NewCertReloader(cert, key string) (*CertReloader, error) {
 	return cr, nil
 }
 
+// GetCertificate returns the current certificate. It reloads the certificate
+// if it has been modified since the last load.
+func (cr *CertReloader) GetCertificate() (*tls.Certificate, error) {
+	cr.mu.Lock()
+	defer cr.mu.Unlock()
+	err := cr.reload()
+	if err != nil {
+		cr.logger.Printf("failed to reload certificate (%s), returning prior cert", err)
+	}
+	return cr.cert, nil
+}
+
 func (cr *CertReloader) reload() error {
 	lm, ok, err := newerThan(cr.modTime, cr.certPath, cr.keyPath)
 	if err != nil {
@@ -42,19 +56,9 @@ func (cr *CertReloader) reload() error {
 	if err != nil {
 		return err
 	}
-	cr.current.Store(&pair)
+	cr.cert = &pair
 	cr.modTime = lm
 	return nil
-}
-
-// GetCertificate returns the current certificate. It reloads the certificate
-// if it has been modified since the last load.
-func (cr *CertReloader) GetCertificate() (*tls.Certificate, error) {
-	err := cr.reload()
-	if err != nil {
-		cr.logger.Printf("failed to reload certificate (%s), returning prior cert", err)
-	}
-	return cr.current.Load().(*tls.Certificate), nil
 }
 
 // loadKeyPair loads a TLS certificate and key pair from the given files.
