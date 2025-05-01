@@ -35,22 +35,21 @@ const (
 // for stopping the CertMonitor when the Dialer is no longer needed. The serverName argument is used
 // to validate the server certificate. If Insecure is true, then the dialer will not validate the
 // server certificate.
-func CreateRaftDialer(cert, key, caCert, serverName string, Insecure bool) (*tcp.Dialer, *rtls.CertMonitor, error) {
+func CreateRaftDialer(cert, key, caCert, serverName string, Insecure bool) (*tcp.Dialer, error) {
 	var dialerTLSConfig *tls.Config
 	var err error
-	var cm *rtls.CertMonitor
+	var cr *rtls.CertReloader
 	if cert != "" || key != "" {
-		cm, err = rtls.NewCertMonitor(cert, key)
+		cr, err = rtls.NewReloader(cert, key)
 		if err != nil {
-			return nil, nil, fmt.Errorf("failed to create TLS config for Raft dialer: %s", err.Error())
+			return nil, fmt.Errorf("failed to create TLS config for Raft dialer: %s", err.Error())
 		}
-		dialerTLSConfig, err = rtls.CreateClientConfigWithFunc(cm.GetCertificate, caCert, serverName, Insecure)
+		dialerTLSConfig, err = rtls.CreateClientConfigWithFunc(cr.GetCertificate, caCert, serverName, Insecure)
 		if err != nil {
-			return nil, nil, fmt.Errorf("failed to create TLS config for Raft dialer: %s", err.Error())
+			return nil, fmt.Errorf("failed to create TLS config for Raft dialer: %s", err.Error())
 		}
-		cm.Start()
 	}
-	return tcp.NewDialer(MuxRaftHeader, dialerTLSConfig), cm, nil
+	return tcp.NewDialer(MuxRaftHeader, dialerTLSConfig), nil
 }
 
 // CredentialsFor returns a Credentials instance for the given username, or nil if

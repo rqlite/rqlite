@@ -152,3 +152,13 @@ func Test_NoReloadOnMismatch(t *testing.T) {
 		t.Fatalf("Expected CommonName to be 'rqlite1', got '%s'", c.Leaf.Subject.CommonName)
 	}
 }
+
+func mustAdvanceFileOneSec(file string) {
+	lm, err := getModTime(file)
+	if err != nil {
+		panic("failed to get file time")
+	}
+	if os.Chtimes(file, lm.Add(1*time.Second), lm.Add(1*time.Second)) != nil {
+		panic("failed to set file time")
+	}
+}
