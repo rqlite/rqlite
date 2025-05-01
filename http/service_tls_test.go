@@ -83,7 +83,6 @@ func Test_TLSServiceInsecure(t *testing.T) {
 	key2Path := mustWriteTempFile(t, key2)
 	mustRename(key2Path, s.KeyFile)
 	mustRename(cert2Path, s.CertFile)
-	time.Sleep(2 * time.Second) // Wait for the cert to be reloaded.
 
 	client = &http.Client{
 		Transport: &http2.Transport{
