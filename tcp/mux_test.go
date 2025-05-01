@@ -210,9 +210,6 @@ func TestTLSMux(t *testing.T) {
 	mustRename(key, key2)
 	mustRename(cert, cert2)
 
-	// Wait for the cert to be reloaded.
-	time.Sleep(2 * time.Second)
-
 	// Verify that the listener is still secured.
 	conn, err = tls.Dial("tcp", tcpListener.Addr().String(), &tls.Config{
 		InsecureSkipVerify: true,
