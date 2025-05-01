@@ -2,6 +2,7 @@ package rtls
 
 import (
 	"crypto/tls"
+	"log"
 	"os"
 	"sync/atomic"
 	"time"
@@ -12,13 +13,18 @@ import (
 // modified since the last load.
 type CertReloader struct {
 	certPath, keyPath string
-	modTime           time.Time    // last successful load
-	current           atomic.Value // *tls.Certificate
+	modTime           time.Time
+	current           atomic.Value
+	logger            *log.Logger
 }
 
 // NewReloader creates a new CertReloader instance.
 func NewReloader(cert, key string) (*CertReloader, error) {
-	cr := &CertReloader{certPath: cert, keyPath: key}
+	cr := &CertReloader{
+		certPath: cert,
+		keyPath:  key,
+		logger:   log.New(os.Stderr, "[cert-reloader] ", log.LstdFlags),
+	}
 	if err := cr.reload(); err != nil {
 		return nil, err
 	}
@@ -44,7 +50,10 @@ func (cr *CertReloader) reload() error {
 // GetCertificate returns the current certificate. It reloads the certificate
 // if it has been modified since the last load.
 func (cr *CertReloader) GetCertificate() (*tls.Certificate, error) {
-	_ = cr.reload() // ignore error, fall back to last cert
+	err := cr.reload()
+	if err != nil {
+		cr.logger.Printf("failed to reload certificate (%s), returning prior cert", err)
+	}
 	return cr.current.Load().(*tls.Certificate), nil
 }
 
