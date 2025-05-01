@@ -27,10 +27,11 @@ func NewCertReloader(cert, key string) (*CertReloader, error) {
 		keyPath:  key,
 		logger:   log.New(os.Stderr, "[cert-reloader] ", log.LstdFlags),
 	}
-	_, err := loadKeyPair(cr.certPath, cr.keyPath)
+	pair, err := loadKeyPair(cr.certPath, cr.keyPath)
 	if err != nil {
 		return nil, err
 	}
+	cr.cert = &pair
 	latestTime, err := latestModTime(cr.certPath, cr.keyPath)
 	if err != nil {
 		return nil, err
