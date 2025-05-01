@@ -48,7 +48,7 @@ func (cr *CertReloader) GetCertificate() (*tls.Certificate, error) {
 	cr.mu.RLock()
 	latestTime, err := latestModTime(cr.certPath, cr.keyPath)
 	if err != nil || !latestTime.After(cr.modTime) {
-		cr.mu.RUnlock()
+		defer cr.mu.RUnlock()
 		if err != nil {
 			cr.logger.Printf("failed to get latest modification time (%s), returning prior cert", err)
 		}
