@@ -26,12 +26,14 @@ var stats *expvar.Map
 const (
 	numConnectionsHandled   = "num_connections_handled"
 	numUnregisteredHandlers = "num_unregistered_handlers"
+	numTLSCertFetched       = "num_tls_cert_fetched"
 )
 
 func init() {
 	stats = expvar.NewMap("mux")
 	stats.Add(numConnectionsHandled, 0)
 	stats.Add(numUnregisteredHandlers, 0)
+	stats.Add(numTLSCertFetched, 0)
 }
 
 // Layer represents the connection between nodes. It can be both used to
@@ -131,7 +133,13 @@ func newTLSMux(ln net.Listener, adv net.Addr, cert, key, caCert string, mutual b
 	if err != nil {
 		return nil, fmt.Errorf("cannot create cert monitor: %s", err)
 	}
-	mux.tlsConfig, err = rtls.CreateServerConfigWithFunc(mux.certReloader.GetCertificate, caCert, mtlsState)
+
+	// Wrap the GetCertificate function so we update the stats.
+	getCertFunc := func() (*tls.Certificate, error) {
+		stats.Add(numTLSCertFetched, 1)
+		return mux.certReloader.GetCertificate()
+	}
+	mux.tlsConfig, err = rtls.CreateServerConfigWithFunc(getCertFunc, caCert, mtlsState)
 	if err != nil {
 		return nil, fmt.Errorf("cannot create TLS config: %s", err)
 	}

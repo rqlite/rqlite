@@ -235,8 +235,9 @@ const (
 	numLoadAborted                    = "loads_aborted"
 	numBoot                           = "boot"
 	numSnapshots                      = "user_snapshots"
-	numAuthOK                         = "authOK"
-	numAuthFail                       = "authFail"
+	numAuthOK                         = "auth_ok"
+	numAuthFail                       = "auth_fail"
+	numTLSCertFetched                 = "tls_cert_fetched"
 
 	// Default timeout for cluster communications.
 	defaultTimeout = 30 * time.Second
@@ -309,6 +310,7 @@ func ResetStats() {
 	stats.Add(numSnapshots, 0)
 	stats.Add(numAuthOK, 0)
 	stats.Add(numAuthFail, 0)
+	stats.Add(numTLSCertFetched, 0)
 }
 
 // Service provides HTTP service.
@@ -395,7 +397,13 @@ func (s *Service) Start() error {
 			return err
 		}
 
-		s.tlsConfig, err = rtls.CreateServerConfigWithFunc(s.certReloader.GetCertificate, s.CACertFile, mTLSState)
+		// Wrap the GetCertificate function so we update the stats.
+		getCertFunc := func() (*tls.Certificate, error) {
+			stats.Add(numTLSCertFetched, 1)
+			return s.certReloader.GetCertificate()
+		}
+
+		s.tlsConfig, err = rtls.CreateServerConfigWithFunc(getCertFunc, s.CACertFile, mTLSState)
 		if err != nil {
 			return err
 		}
