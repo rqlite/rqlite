@@ -26,11 +26,10 @@ func NewReloader(cert, key string) (*CertReloader, error) {
 }
 
 func (cr *CertReloader) reload() error {
-	lm, err := getModTime(cr.certPath, cr.keyPath)
+	lm, ok, err := newerThan(cr.modTime, cr.certPath, cr.keyPath)
 	if err != nil {
 		return err
-	}
-	if !lm.After(cr.modTime) {
+	} else if !ok {
 		return nil
 	}
 	pair, err := loadKeyPair(cr.certPath, cr.keyPath)
@@ -56,20 +55,18 @@ func loadKeyPair(certFile, keyFile string) (tls.Certificate, error) {
 	return tls.LoadX509KeyPair(certFile, keyFile)
 }
 
-// getModTime returns the latest modification time of the given files.
-func getModTime(file ...string) (time.Time, error) {
+func newerThan(lm time.Time, file ...string) (time.Time, bool, error) {
 	if len(file) == 0 {
-		return time.Time{}, os.ErrNotExist
+		return time.Time{}, false, os.ErrNotExist
 	}
-	latest := time.Time{}
 	for _, f := range file {
 		info, err := os.Stat(f)
 		if err != nil {
-			return time.Time{}, err
+			return time.Time{}, false, err
 		}
-		if info.ModTime().After(latest) {
-			latest = info.ModTime()
+		if info.ModTime().After(lm) {
+			return info.ModTime(), true, nil
 		}
 	}
-	return latest, nil
+	return time.Time{}, false, nil
 }

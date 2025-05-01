@@ -153,6 +153,24 @@ func Test_NoReloadOnMismatch(t *testing.T) {
 	}
 }
 
+// getModTime returns the latest modification time of the given files.
+func getModTime(file ...string) (time.Time, error) {
+	if len(file) == 0 {
+		return time.Time{}, os.ErrNotExist
+	}
+	latest := time.Time{}
+	for _, f := range file {
+		info, err := os.Stat(f)
+		if err != nil {
+			return time.Time{}, err
+		}
+		if info.ModTime().After(latest) {
+			latest = info.ModTime()
+		}
+	}
+	return latest, nil
+}
+
 func mustAdvanceFileOneSec(file string) {
 	lm, err := getModTime(file)
 	if err != nil {
