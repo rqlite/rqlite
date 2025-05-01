@@ -82,6 +82,11 @@ func loadKeyPair(certFile, keyFile string) (tls.Certificate, error) {
 	return tls.LoadX509KeyPair(certFile, keyFile)
 }
 
+// newerThan checks if any of the given files are newer than the given time.
+// It returns the modification time of the first file that is newer than
+// the given time, a boolean indicating if any file was newer, and an error
+// if any of the files could not be accessed. If no files are given, it returns
+// os.ErrNotExist.
 func newerThan(lm time.Time, file ...string) (time.Time, bool, error) {
 	if len(file) == 0 {
 		return time.Time{}, false, os.ErrNotExist
