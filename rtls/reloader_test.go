@@ -20,7 +20,7 @@ func Test_NewReloader(t *testing.T) {
 		t.Fatalf("NewReloader returned error: %v", err)
 	}
 
-	c, err := cr.GetCertificate(nil)
+	c, err := cr.GetCertificate()
 	if err != nil {
 		t.Fatalf("GetCertificate error: %v", err)
 	}
@@ -58,8 +58,8 @@ func Test_NoReloadWhenUnchanged(t *testing.T) {
 		t.Fatalf("NewReloader error: %v", err)
 	}
 
-	c1, _ := cr.GetCertificate(nil)
-	c2, _ := cr.GetCertificate(nil)
+	c1, _ := cr.GetCertificate()
+	c2, _ := cr.GetCertificate()
 
 	if c1 != c2 {
 		t.Fatalf("expected same *tls.Certificate pointer when files unchanged")
@@ -85,7 +85,7 @@ func Test_ReloadOnFileChange(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewReloader error: %v", err)
 	}
-	c, err := cr.GetCertificate(nil)
+	c, err := cr.GetCertificate()
 	if err != nil {
 		t.Fatalf("GetCertificate error: %v", err)
 	}
@@ -102,7 +102,7 @@ func Test_ReloadOnFileChange(t *testing.T) {
 	mustAdvanceFileOneSec(certPath1)
 	mustAdvanceFileOneSec(keyPath1)
 
-	c, err = cr.GetCertificate(nil)
+	c, err = cr.GetCertificate()
 	if err != nil {
 		t.Fatalf("GetCertificate error: %v", err)
 	}
@@ -129,7 +129,7 @@ func Test_NoReloadOnMismatch(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewReloader error: %v", err)
 	}
-	c, err := cr.GetCertificate(nil)
+	c, err := cr.GetCertificate()
 	if err != nil {
 		t.Fatalf("GetCertificate error: %v", err)
 	}
@@ -144,7 +144,7 @@ func Test_NoReloadOnMismatch(t *testing.T) {
 	mustAdvanceFileOneSec(certPath1)
 	mustAdvanceFileOneSec(keyPath1)
 
-	c, err = cr.GetCertificate(nil)
+	c, err = cr.GetCertificate()
 	if err != nil {
 		t.Fatalf("GetCertificate error: %v", err)
 	}

@@ -2,6 +2,7 @@ package rtls
 
 import (
 	"crypto/tls"
+	"os"
 	"sync/atomic"
 	"time"
 )
@@ -42,10 +43,33 @@ func (cr *CertReloader) reload() error {
 }
 
 // GetCertificate returns the current certificate. It reloads the certificate
-// if it has been modified since the last load. It is deliberately the same
-// signature as the tls.Config.GetCertificate method, which allows this
-// to be used as a GetCertificate function in a tls.Config.
-func (cr *CertReloader) GetCertificate(*tls.ClientHelloInfo) (*tls.Certificate, error) {
+// if it has been modified since the last load.
+func (cr *CertReloader) GetCertificate() (*tls.Certificate, error) {
 	_ = cr.reload() // ignore error, fall back to last cert
 	return cr.current.Load().(*tls.Certificate), nil
+}
+
+// loadKeyPair loads a TLS certificate and key pair from the given files.
+// It simply wraps tls.LoadX509KeyPair, ensuring that the rest of the code
+// uses the same function to load the key pair.
+func loadKeyPair(certFile, keyFile string) (tls.Certificate, error) {
+	return tls.LoadX509KeyPair(certFile, keyFile)
+}
+
+// getModTime returns the latest modification time of the given files.
+func getModTime(file ...string) (time.Time, error) {
+	if len(file) == 0 {
+		return time.Time{}, os.ErrNotExist
+	}
+	latest := time.Time{}
+	for _, f := range file {
+		info, err := os.Stat(f)
+		if err != nil {
+			return time.Time{}, err
+		}
+		if info.ModTime().After(latest) {
+			latest = info.ModTime()
+		}
+	}
+	return latest, nil
 }

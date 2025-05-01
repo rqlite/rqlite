@@ -117,28 +117,3 @@ func (cm *CertMonitor) do() {
 		}
 	}
 }
-
-// loadKeyPair loads a TLS certificate and key pair from the given files.
-// It simply wraps tls.LoadX509KeyPair, ensuring that the rest of the code
-// uses the same function to load the key pair.
-func loadKeyPair(certFile, keyFile string) (tls.Certificate, error) {
-	return tls.LoadX509KeyPair(certFile, keyFile)
-}
-
-// getModTime returns the latest modification time of the given files.
-func getModTime(file ...string) (time.Time, error) {
-	if len(file) == 0 {
-		return time.Time{}, os.ErrNotExist
-	}
-	latest := time.Time{}
-	for _, f := range file {
-		info, err := os.Stat(f)
-		if err != nil {
-			return time.Time{}, err
-		}
-		if info.ModTime().After(latest) {
-			latest = info.ModTime()
-		}
-	}
-	return latest, nil
-}

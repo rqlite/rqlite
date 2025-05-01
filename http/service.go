@@ -335,7 +335,7 @@ type Service struct {
 	CertFile     string // Path to server's own x509 certificate.
 	KeyFile      string // Path to server's own x509 private key.
 	ClientVerify bool   // Whether client certificates should verified.
-	certMonitor  *rtls.CertMonitor
+	certReloader *rtls.CertReloader
 	tlsConfig    *tls.Config
 
 	aoMu        sync.RWMutex
@@ -390,13 +390,12 @@ func (s *Service) Start() error {
 		if s.ClientVerify {
 			mTLSState = rtls.MTLSStateEnabled
 		}
-		s.certMonitor, err = rtls.NewCertMonitor(s.CertFile, s.KeyFile)
+		s.certReloader, err = rtls.NewReloader(s.CertFile, s.KeyFile)
 		if err != nil {
 			return err
 		}
-		s.certMonitor.Start()
 
-		s.tlsConfig, err = rtls.CreateServerConfigWithFunc(s.certMonitor.GetCertificate, s.CACertFile, mTLSState)
+		s.tlsConfig, err = rtls.CreateServerConfigWithFunc(s.certReloader.GetCertificate, s.CACertFile, mTLSState)
 		if err != nil {
 			return err
 		}
@@ -444,9 +443,6 @@ func (s *Service) Close() {
 		s.logger.Println("HTTP service shutdown error:", err.Error())
 	}
 
-	if s.certMonitor != nil {
-		s.certMonitor.Stop()
-	}
 	s.stmtQueue.Close()
 	select {
 	case <-s.queueDone:
