@@ -64,8 +64,10 @@ func (cr *CertReloader) GetCertificate() (*tls.Certificate, error) {
 	// Now that we have the write lock, we check again if the certificate has actually
 	// been updated by another concurrent call to this function.
 	latestTime, err = latestModTime(cr.certPath, cr.keyPath)
-	if err != nil {
-		cr.logger.Printf("failed to get latest modification time (%s), returning prior cert", err)
+	if err != nil || !latestTime.After(cr.modTime) {
+		if err != nil {
+			cr.logger.Printf("failed to get latest modification time (%s), returning prior cert", err)
+		}
 		return cr.cert, nil
 	}
 
