@@ -45,6 +45,10 @@ func Test_NewCertReloaderBadFiles(t *testing.T) {
 	}
 }
 
+// Test_NoReloadWhenUnchanged tests that the certificate reloader does not reload the
+// certificate if the files have not changed, for a given pair of file mod times.
+// The implementation was initially racy, so this test was added to catch any
+// regressions.
 func Test_NoReloadWhenUnchanged(t *testing.T) {
 	certPEM, keyPEM, err := GenerateCert(pkix.Name{CommonName: "rqlite"}, 365*24*time.Hour, 2048, nil, nil)
 	if err != nil {
@@ -53,16 +57,23 @@ func Test_NoReloadWhenUnchanged(t *testing.T) {
 	certPath := mustWriteTempFile(t, certPEM)
 	keyPath := mustWriteTempFile(t, keyPEM)
 
-	cr, err := NewCertReloader(certPath, keyPath)
-	if err != nil {
-		t.Fatalf("NewCertReloader error: %v", err)
-	}
+	for range 100 {
+		t.Run("no reload when unchanged", func(t *testing.T) {
+			mustAdvanceFileOneSec(certPath)
+			mustAdvanceFileTime(keyPath, 100*time.Millisecond)
 
-	c1, _ := cr.GetCertificate()
-	c2, _ := cr.GetCertificate()
+			cr, err := NewCertReloader(certPath, keyPath)
+			if err != nil {
+				t.Fatalf("NewCertReloader error: %v", err)
+			}
 
-	if c1 != c2 {
-		t.Fatalf("expected same *tls.Certificate pointer when files unchanged")
+			c1, _ := cr.GetCertificate()
+			c2, _ := cr.GetCertificate()
+
+			if c1 != c2 {
+				t.Fatalf("expected same *tls.Certificate pointer when files unchanged")
+			}
+		})
 	}
 }
 
@@ -171,12 +182,16 @@ func getModTime(file ...string) (time.Time, error) {
 	return latest, nil
 }
 
-func mustAdvanceFileOneSec(file string) {
+func mustAdvanceFileTime(file string, dur time.Duration) {
 	lm, err := getModTime(file)
 	if err != nil {
 		panic("failed to get file time")
 	}
-	if os.Chtimes(file, lm.Add(1*time.Second), lm.Add(1*time.Second)) != nil {
+	if os.Chtimes(file, lm.Add(dur), lm.Add(1*time.Second)) != nil {
 		panic("failed to set file time")
 	}
+}
+
+func mustAdvanceFileOneSec(file string) {
+	mustAdvanceFileTime(file, 1*time.Second)
 }
