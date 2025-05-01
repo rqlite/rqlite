@@ -4,7 +4,6 @@ import (
 	"crypto/tls"
 	"fmt"
 	"net"
-	"os"
 	"testing"
 	"time"
 
@@ -49,7 +48,7 @@ func Test_NewServiceSetGetNodeAPIAddrMuxed(t *testing.T) {
 }
 
 func Test_NewServiceSetGetNodeAPIAddrMuxedTLS(t *testing.T) {
-	ln, mux := mustNewTLSMux()
+	ln, mux := mustNewTLSMux(t)
 	defer mux.Close()
 	go mux.Serve()
 	tn := mux.Listen(1) // Could be any byte value.
@@ -97,16 +96,14 @@ func mustNewMux() (net.Listener, *tcp.Mux) {
 	return ln, mux
 }
 
-func mustNewTLSMux() (net.Listener, *tcp.Mux) {
+func mustNewTLSMux(t *testing.T) (net.Listener, *tcp.Mux) {
 	ln, err := net.Listen("tcp", "localhost:0")
 	if err != nil {
 		panic("failed to create mock listener")
 	}
 
-	cert := x509.CertExampleDotComFile("")
-	defer os.Remove(cert)
-	key := x509.KeyExampleDotComFile("")
-	defer os.Remove(key)
+	cert := x509.CertExampleDotComFile(t.TempDir())
+	key := x509.KeyExampleDotComFile(t.TempDir())
 
 	mux, err := tcp.NewTLSMux(ln, nil, cert, key, "", true, false)
 	if err != nil {

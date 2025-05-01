@@ -40,7 +40,7 @@ func NewCertReloader(cert, key string) (*CertReloader, error) {
 // other GetCertificate calls.
 func (cr *CertReloader) GetCertificate() (*tls.Certificate, error) {
 	cr.mu.RLock()
-	lm, ok, err := newerThan(cr.modTime, cr.certPath, cr.keyPath)
+	_, ok, err := newerThan(cr.modTime, cr.certPath, cr.keyPath)
 	if err != nil || !ok {
 		defer cr.mu.RUnlock()
 		if err != nil {
@@ -57,7 +57,7 @@ func (cr *CertReloader) GetCertificate() (*tls.Certificate, error) {
 
 	// Now that we have the write lock, we check again if the certificate has actually
 	// been updated by another concurrent call to this function.
-	lm, ok, err = newerThan(cr.modTime, cr.certPath, cr.keyPath)
+	lm, ok, err := newerThan(cr.modTime, cr.certPath, cr.keyPath)
 	if err != nil || !ok {
 		defer cr.mu.RUnlock()
 		if err != nil {
