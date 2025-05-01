@@ -76,7 +76,7 @@ func (cr *CertReloader) GetCertificate() (*tls.Certificate, error) {
 		cr.logger.Printf("failed to reload certificate (%s), returning prior cert", err)
 		return cr.cert, nil
 	}
-	cr.logger.Printf("reloading modified certificate at %s and key at %s", cr.certPath, cr.keyPath)
+	cr.logger.Printf("reloading certificate at %s and key at %s", cr.certPath, cr.keyPath)
 	cr.cert = &pair
 	cr.modTime = latestTime
 	return cr.cert, nil
