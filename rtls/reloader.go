@@ -31,6 +31,11 @@ func NewCertReloader(cert, key string) (*CertReloader, error) {
 	if err != nil {
 		return nil, err
 	}
+	latestTime, err := latestModTime(cr.certPath, cr.keyPath)
+	if err != nil {
+		return nil, err
+	}
+	cr.modTime = latestTime
 	return cr, nil
 }
 
@@ -40,12 +45,16 @@ func NewCertReloader(cert, key string) (*CertReloader, error) {
 // other GetCertificate calls.
 func (cr *CertReloader) GetCertificate() (*tls.Certificate, error) {
 	cr.mu.RLock()
-	_, newer, err := newerThan(cr.modTime, cr.certPath, cr.keyPath)
-	if err != nil || !newer {
-		defer cr.mu.RUnlock()
-		if err != nil {
-			cr.logger.Printf("failed to check modification times(%s), returning prior cert", err)
-		}
+	latestTime, err := latestModTime(cr.certPath, cr.keyPath)
+	if err != nil {
+		cr.logger.Printf("failed to get latest modification time (%s), returning prior cert", err)
+		return cr.cert, nil
+	}
+
+	if latestTime.Equal(cr.modTime) {
+		// The certificate or key file has not changed, we can return the current cert.
+		// We release the read lock and return the current certificate.
+		cr.mu.RUnlock()
 		return cr.cert, nil
 	}
 
@@ -57,11 +66,9 @@ func (cr *CertReloader) GetCertificate() (*tls.Certificate, error) {
 
 	// Now that we have the write lock, we check again if the certificate has actually
 	// been updated by another concurrent call to this function.
-	lm, newer, err := newerThan(cr.modTime, cr.certPath, cr.keyPath)
-	if err != nil || !newer {
-		if err != nil {
-			cr.logger.Printf("failed to check modification times(%s), returning prior cert", err)
-		}
+	latestTime, err = latestModTime(cr.certPath, cr.keyPath)
+	if err != nil {
+		cr.logger.Printf("failed to get latest modification time (%s), returning prior cert", err)
 		return cr.cert, nil
 	}
 
@@ -71,7 +78,7 @@ func (cr *CertReloader) GetCertificate() (*tls.Certificate, error) {
 		return cr.cert, nil
 	}
 	cr.cert = &pair
-	cr.modTime = lm
+	cr.modTime = latestTime
 	return cr.cert, nil
 }
 
@@ -82,23 +89,21 @@ func loadKeyPair(certFile, keyFile string) (tls.Certificate, error) {
 	return tls.LoadX509KeyPair(certFile, keyFile)
 }
 
-// newerThan checks if any of the given files are newer than the given time.
-// It returns the modification time of the first file that is newer than
-// the given time, a boolean indicating if any file was newer, and an error
-// if any of the files could not be accessed. If no files are given, it returns
-// os.ErrNotExist.
-func newerThan(lm time.Time, file ...string) (time.Time, bool, error) {
+// latestModTime returns the latest modification time of the given files.
+// It returns os.ErrNotExist if no files are provided.
+func latestModTime(file ...string) (time.Time, error) {
 	if len(file) == 0 {
-		return time.Time{}, false, os.ErrNotExist
+		return time.Time{}, os.ErrNotExist
 	}
+	var latest time.Time
 	for _, f := range file {
 		info, err := os.Stat(f)
 		if err != nil {
-			return time.Time{}, false, err
+			return time.Time{}, err
 		}
-		if info.ModTime().After(lm) {
-			return info.ModTime(), true, nil
+		if info.ModTime().After(latest) {
+			latest = info.ModTime()
 		}
 	}
-	return time.Time{}, false, nil
+	return latest, nil
 }
