@@ -117,7 +117,7 @@ func New[T any](maxSize, batchSize int, t time.Duration) *Queue[T] {
 	return q
 }
 
-// Write queues a request, and returns a monotonically incrementing
+// Write queues a request, and returns a monotonically increasing
 // sequence number associated with the slice of objects. A slice with
 // a lower sequence number than second slice will always be transmitted
 // on the Queue's C object before the second slice.
@@ -126,7 +126,7 @@ func New[T any](maxSize, batchSize int, t time.Duration) *Queue[T] {
 // containing these objects is closed. Normally this close operation should
 // be called by whatever is processing the objects read from the queue, to
 // indicate that the objects have been processed. The canoncial use of this
-// is to allow the caller to block until the objects are processed, if desired.
+// is to allow the caller to block until the objects are processed.
 func (q *Queue[T]) Write(objects []T, c FlushChannel) (int64, error) {
 	select {
 	case <-q.done:
