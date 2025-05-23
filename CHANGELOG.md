@@ -1904,5 +1904,7 @@ _This release adds significant new functionality to the command-line tool, inclu
 - expvar support added to HTTP server.
 
 ## 1.0 (June 23rd 2015)
+_This version is a retagged version of code moved from a personal repository. The original code was first tagged in mid-2015._
+
 Check out [this tag](https://github.com/rqlite/rqlite/releases/tag/v1.0) for full details.
 
