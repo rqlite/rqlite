@@ -5,7 +5,7 @@ import (
 	"testing"
 )
 
-func TestParseRqliteHostEnv(t *testing.T) {
+func TestParseHostEnv(t *testing.T) {
 	tests := []struct {
 		name           string
 		envValue       string
@@ -125,11 +125,11 @@ func TestParseRqliteHostEnv(t *testing.T) {
 			}
 
 			// Call the function
-			result := parseRqliteHostEnv(argv)
+			result := parseHostEnv(argv)
 
 			// Check the results
 			if result != tt.result {
-				t.Errorf("parseRqliteHostEnv() = %v, want %v", result, tt.result)
+				t.Errorf("parseHostEnv() = %v, want %v", result, tt.result)
 			}
 			if argv.Host != tt.expectedHost {
 				t.Errorf("Host = %v, want %v", argv.Host, tt.expectedHost)

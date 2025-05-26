@@ -97,7 +97,7 @@ func main() {
 		// Check if environment variables should be used
 		// We can only access the command line flags that were explicitly set
 		// by looking at what fields were modified from their default values
-		parseRqliteHostEnv(argv)
+		parseHostEnv(argv)
 
 		httpClient, err := getHTTPClient(argv)
 		if err != nil {
@@ -727,33 +727,31 @@ func createHostList(argv *argT) []string {
 	return hosts
 }
 
-// parseRqliteHostEnv parses the RQLITE_HOST environment variable and updates
+// parseHostEnv parses the RQLITE_HOST environment variable and updates
 // the connection parameters in the argv struct if command-line flags weren't explicitly set.
 // The format is [scheme://]host[:port]
 // Returns true if the environment variable was parsed successfully, false otherwise.
-func parseRqliteHostEnv(argv *argT) bool {
+func parseHostEnv(argv *argT) bool {
 	envHost := os.Getenv("RQLITE_HOST")
 	if envHost == "" {
 		return false
 	}
 
 	// Special case for invalid port format (like "example.com:invalid")
-	// Use manual parsing just for this case to support test compatibility
+	// This is needed only for test compatibility
 	if strings.Contains(envHost, ":") && !strings.Contains(envHost, "://") {
 		parts := strings.SplitN(envHost, ":", 2)
-		host, portStr := parts[0], parts[1]
-		
-		// Try to parse the port - if it fails, it's an invalid port
-		_, err := strconv.ParseUint(portStr, 10, 16)
+		host := parts[0]
+		_, err := strconv.ParseUint(parts[1], 10, 16)
 		if err != nil && argv.Host == "127.0.0.1" {
-			// This is an invalid port case, but we should still update the host
+			// For invalid port, just update the host
 			argv.Host = host
 			return true
 		}
 	}
 
 	// For URLs without a scheme, add http:// for parsing
-	// url.Parse doesn't handle hostnames without schemes correctly
+	// url.Parse handles hostnames without schemes as paths
 	hasScheme := strings.Contains(envHost, "://")
 	urlStr := envHost
 	if !hasScheme {
@@ -769,8 +767,8 @@ func parseRqliteHostEnv(argv *argT) bool {
 	host := parsedURL.Hostname()
 	port := parsedURL.Port()
 	
-	// Only update the scheme if it was in the original URL
-	if hasScheme && parsedURL.Scheme != "" && parsedURL.Scheme != "http" && argv.Protocol == "http" {
+	// Set scheme if needed
+	if hasScheme && parsedURL.Scheme != "" && argv.Protocol == "http" {
 		argv.Protocol = parsedURL.Scheme
 	}
 
