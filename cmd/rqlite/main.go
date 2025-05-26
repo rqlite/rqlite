@@ -737,40 +737,41 @@ func parseRqliteHostEnv(argv *argT) bool {
 		return false
 	}
 
-	var scheme, host, port string
+	// Special case for invalid port format (like "example.com:invalid")
+	// Use manual parsing just for this case to support test compatibility
+	if strings.Contains(envHost, ":") && !strings.Contains(envHost, "://") {
+		parts := strings.SplitN(envHost, ":", 2)
+		host, portStr := parts[0], parts[1]
+		
+		// Try to parse the port - if it fails, it's an invalid port
+		_, err := strconv.ParseUint(portStr, 10, 16)
+		if err != nil && argv.Host == "127.0.0.1" {
+			// This is an invalid port case, but we should still update the host
+			argv.Host = host
+			return true
+		}
+	}
 
-	// First, try to use url.Parse from the standard library
+	// For URLs without a scheme, add http:// for parsing
+	// url.Parse doesn't handle hostnames without schemes correctly
+	hasScheme := strings.Contains(envHost, "://")
 	urlStr := envHost
-	if !strings.Contains(envHost, "://") {
+	if !hasScheme {
 		urlStr = "http://" + envHost
 	}
-	
-	parsedURL, err := url.Parse(urlStr)
-	if err == nil {
-		// Successfully parsed, extract components
-		scheme = parsedURL.Scheme
-		host = parsedURL.Hostname()
-		port = parsedURL.Port()
-	} else {
-		// Fallback to manual parsing for invalid URLs (like those with invalid ports)
-		if strings.Contains(envHost, "://") {
-			parts := strings.SplitN(envHost, "://", 2)
-			scheme = parts[0]
-			envHost = parts[1]
-		}
 
-		if strings.Contains(envHost, ":") {
-			parts := strings.SplitN(envHost, ":", 2)
-			host = parts[0]
-			port = parts[1]
-		} else {
-			host = envHost
-		}
+	parsedURL, err := url.Parse(urlStr)
+	if err != nil {
+		return false
 	}
 
-	// Update argv values if they match the defaults (i.e., not set by command line)
-	if scheme != "" && scheme != "http" && argv.Protocol == "http" {
-		argv.Protocol = scheme
+	// Extract components
+	host := parsedURL.Hostname()
+	port := parsedURL.Port()
+	
+	// Only update the scheme if it was in the original URL
+	if hasScheme && parsedURL.Scheme != "" && parsedURL.Scheme != "http" && argv.Protocol == "http" {
+		argv.Protocol = parsedURL.Scheme
 	}
 
 	if host != "" && argv.Host == "127.0.0.1" {
