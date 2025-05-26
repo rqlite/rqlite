@@ -737,24 +737,39 @@ func parseRqliteHostEnv(argv *argT) bool {
 		return false
 	}
 
-	// Check if URL has a scheme
 	var scheme, host, port string
-	if strings.Contains(envHost, "://") {
-		parts := strings.SplitN(envHost, "://", 2)
-		scheme = parts[0]
-		envHost = parts[1]
-	}
 
-	// Extract host and port
-	if strings.Contains(envHost, ":") {
-		host, port, _ = net.SplitHostPort(envHost)
+	// First, try to use url.Parse from the standard library
+	urlStr := envHost
+	if !strings.Contains(envHost, "://") {
+		urlStr = "http://" + envHost
+	}
+	
+	parsedURL, err := url.Parse(urlStr)
+	if err == nil {
+		// Successfully parsed, extract components
+		scheme = parsedURL.Scheme
+		host = parsedURL.Hostname()
+		port = parsedURL.Port()
 	} else {
-		host = envHost
+		// Fallback to manual parsing for invalid URLs (like those with invalid ports)
+		if strings.Contains(envHost, "://") {
+			parts := strings.SplitN(envHost, "://", 2)
+			scheme = parts[0]
+			envHost = parts[1]
+		}
+
+		if strings.Contains(envHost, ":") {
+			parts := strings.SplitN(envHost, ":", 2)
+			host = parts[0]
+			port = parts[1]
+		} else {
+			host = envHost
+		}
 	}
 
 	// Update argv values if they match the defaults (i.e., not set by command line)
-	// This assumes that command-line processing has already happened
-	if scheme != "" && argv.Protocol == "http" {
+	if scheme != "" && scheme != "http" && argv.Protocol == "http" {
 		argv.Protocol = scheme
 	}
 
@@ -767,6 +782,7 @@ func parseRqliteHostEnv(argv *argT) bool {
 		if err == nil {
 			argv.Port = uint16(portNum)
 		}
+		// Ignore port parsing errors
 	}
 
 	return true
