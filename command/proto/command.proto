@@ -172,6 +172,11 @@ message CDCEvent {
 	CDCRow new_row = 7;
 }
 
+message CDCEvents {
+	uint64 k = 1;
+	repeated CDCEvent events = 2;
+}
+
 message UpdateHookEvent {
 	enum Operation {
 		UNKNOWN = 0;
