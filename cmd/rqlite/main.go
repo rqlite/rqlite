@@ -12,6 +12,7 @@ import (
 	"net/url"
 	"os"
 	"sort"
+	"strconv"
 	"strings"
 	"syscall"
 
@@ -92,6 +93,11 @@ func main() {
 				cmd.Commit, cmd.Branch, cmd.Buildtime)
 			return nil
 		}
+
+		// Check if environment variables should be used
+		// We can only access the command line flags that were explicitly set
+		// by looking at what fields were modified from their default values
+		parseRqliteHostEnv(argv)
 
 		httpClient, err := getHTTPClient(argv)
 		if err != nil {
@@ -719,6 +725,51 @@ func createHostList(argv *argT) []string {
 	hosts = append(hosts, address6(argv))
 	hosts = append(hosts, strings.Split(argv.Alternatives, ",")...)
 	return hosts
+}
+
+// parseRqliteHostEnv parses the RQLITE_HOST environment variable and updates
+// the connection parameters in the argv struct if command-line flags weren't explicitly set.
+// The format is [scheme://]host[:port]
+// Returns true if the environment variable was parsed successfully, false otherwise.
+func parseRqliteHostEnv(argv *argT) bool {
+	envHost := os.Getenv("RQLITE_HOST")
+	if envHost == "" {
+		return false
+	}
+
+	// Check if URL has a scheme
+	var scheme, host, port string
+	if strings.Contains(envHost, "://") {
+		parts := strings.SplitN(envHost, "://", 2)
+		scheme = parts[0]
+		envHost = parts[1]
+	}
+
+	// Extract host and port
+	if strings.Contains(envHost, ":") {
+		host, port, _ = net.SplitHostPort(envHost)
+	} else {
+		host = envHost
+	}
+
+	// Update argv values if they match the defaults (i.e., not set by command line)
+	// This assumes that command-line processing has already happened
+	if scheme != "" && argv.Protocol == "http" {
+		argv.Protocol = scheme
+	}
+
+	if host != "" && argv.Host == "127.0.0.1" {
+		argv.Host = host
+	}
+
+	if port != "" && argv.Port == 4001 {
+		portNum, err := strconv.ParseUint(port, 10, 16)
+		if err == nil {
+			argv.Port = uint16(portNum)
+		}
+	}
+
+	return true
 }
 
 // address6 returns a string representation of the given address and port,
