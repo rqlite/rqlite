@@ -9,6 +9,8 @@
 import tempfile
 import os
 import unittest
+import subprocess
+import time
 
 from certs import x509cert, x509key
 from helpers import Node, Cluster, d_, write_random_file, deprovision_node
@@ -157,6 +159,52 @@ class TestForwardedJoin(unittest.TestCase):
     self.n2.start(join=self.n1.RaftAddr())
     l2 = self.n2.wait_for_leader()
     self.assertEqual(l0, l2)
+
+class TestSingleNodeJoin(unittest.TestCase):
+  def setUp(self):
+    # Setup single node
+    self.n0 = Node(RQLITED_PATH, '0')
+    self.n0.start()
+    self.n0.wait_for_leader()
+    
+    # Create a potential join target node
+    self.n1 = Node(RQLITED_PATH, '1')
+    self.n1.start()
+    self.n1.wait_for_leader()
+
+  def test_single_node_join_fails(self):
+    '''Test that a single-node cluster leader cannot join another cluster'''
+    # Check that n0 is a single-node cluster
+    nodes = self.n0.nodes()
+    self.assertEqual(len(nodes), 1)
+    
+    # Attempting to join n0 to n1 should fail
+    n0_restart = Node(RQLITED_PATH, '0', dir=self.n0.dir)
+    
+    # Start with join flag - this should exit with an error
+    proc = subprocess.Popen(
+        [RQLITED_PATH, '-node-id', n0_restart.node_id, 
+         '-http-addr', n0_restart.api_addr, 
+         '-raft-addr', n0_restart.raft_addr, 
+         '-join', self.n1.RaftAddr(), 
+         n0_restart.dir],
+        stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+    
+    # Wait a bit for the process to start and exit
+    time.sleep(3)
+    
+    # Check that the process exited with a non-zero status
+    exit_code = proc.poll()
+    self.assertIsNotNone(exit_code, "Process should have exited")
+    self.assertNotEqual(exit_code, 0, "Process should have exited with an error")
+    
+    # Cleanup
+    if proc.poll() is None:
+        proc.kill()
+
+  def tearDown(self):
+    deprovision_node(self.n0)
+    deprovision_node(self.n1)
 
 class TestJoinCatchup(unittest.TestCase):
   def setUp(self):
