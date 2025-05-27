@@ -1,3 +1,7 @@
+## v8.37.2 (unreleased)
+### Implementation changes and bug fixes
+- [PR #2092](https://github.com/rqlite/rqlite/pull/2092): Update Go module dependencies, Go version to 1.23.8, and toolchain to go1.23.9.
+
 ## v8.37.1 (May 27th 2025)
 ### Implementation changes and bug fixes
 - [PR #2090](https://github.com/rqlite/rqlite/pull/2090): Prevent a single-node cluster from joining another cluster. Fixes issue [#2087](https://github.com/rqlite/rqlite/issues/2087).
