@@ -1,6 +1,6 @@
 ## v8.37.1 (unreleased)
 ### Implementation changes and bug fixes
-- [PR #xxxx](https://github.com/rqlite/rqlite/pull/xxxx): Prevent a single-node cluster from joining another cluster.
+- [PR #2090](https://github.com/rqlite/rqlite/pull/2090): Prevent a single-node cluster from joining another cluster. Fixes [issue #2087](https://github.com/rqlite/rqlite/issues/2087).
 
 ## v8.37.0 (May 1st 2025)
 This release adds support for automatically reloading all X.509 certificates and keys. rqlite does this by monitoring the relevant files, reloading the information as needed. Previous releases required that rqlite be restarted to pick up new X.509 resources.
