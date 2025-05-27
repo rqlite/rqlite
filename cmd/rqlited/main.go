@@ -193,6 +193,16 @@ func main() {
 	}
 
 	// Create the cluster!
+	if len(cfg.JoinAddresses()) > 0 {
+		nodes, err := str.Nodes()
+		if err != nil {
+			log.Fatalf("failed to get nodes for pre-cluster check: %s", err.Error())
+		}
+		if len(nodes) == 1 && nodes[0].ID == cfg.NodeID {
+			log.Fatalf("node is already a single-node cluster leader, joining a cluster is not permitted")
+		}
+	}
+
 	nodes, err := str.Nodes()
 	if err != nil {
 		log.Fatalf("failed to get nodes %s", err.Error())
