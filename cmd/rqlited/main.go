@@ -522,8 +522,8 @@ func createCluster(ctx context.Context, cfg *Config, hasPeers bool, client *clus
 		if err != nil {
 			return fmt.Errorf("failed to get nodes: %s", err.Error())
 		}
-		
-		// If this node is the only node in a single-node cluster, 
+
+		// If this node is the only node in a single-node cluster,
 		// it doesn't make sense to join it to another cluster.
 		if len(nodes) == 1 && nodes[0].ID == str.ID() {
 			return fmt.Errorf("node is the only node in a single-node cluster, joining other clusters not supported")
