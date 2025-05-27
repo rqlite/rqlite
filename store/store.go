@@ -370,15 +370,17 @@ type Store struct {
 	numIgnoredJoins  int
 	numNoops         *atomic.Uint64
 	numSnapshots     *atomic.Uint64
+	cdcEnabled       bool // Whether Change Data Capture is enabled.
 }
 
 // Config represents the configuration of the underlying Store.
 type Config struct {
-	DBConf *DBConfig   // The DBConfig object for this Store.
-	Dir    string      // The working directory for raft.
-	Tn     Transport   // The underlying Transport for raft.
-	ID     string      // Node ID.
-	Logger *log.Logger // The logger to use to log stuff.
+	DBConf     *DBConfig   // The DBConfig object for this Store.
+	Dir        string      // The working directory for raft.
+	Tn         Transport   // The underlying Transport for raft.
+	ID         string      // Node ID.
+	Logger     *log.Logger // The logger to use to log stuff.
+	CDCEnabled bool        // Whether Change Data Capture is enabled.
 }
 
 // New returns a new Store.
@@ -427,6 +429,7 @@ func New(ly Layer, c *Config) *Store {
 		numLRUpgraded:   &atomic.Uint64{},
 		numNoops:        &atomic.Uint64{},
 		numSnapshots:    &atomic.Uint64{},
+		cdcEnabled:      c.CDCEnabled,
 	}
 }
 
@@ -586,7 +589,7 @@ func (s *Store) Open() (retErr error) {
 			s.dbConf.Extensions, sql.CnkOnCloseModeDisabled)
 	}
 
-	s.db, err = openOnDisk(s.dbPath, s.dbDrv, s.dbConf.FKConstraints)
+	s.db, err = openOnDisk(s.dbPath, s.dbDrv, s.dbConf.FKConstraints, s.cdcEnabled)
 	if err != nil {
 		return fmt.Errorf("failed to create on-disk database: %s", err)
 	}
@@ -2487,11 +2490,11 @@ func (s *Store) logBackup() bool {
 }
 
 // openOnDisk opens an on-disk database file at the configured path.
-func openOnDisk(path string, drv *sql.Driver, fkConstraints bool) (*sql.SwappableDB, error) {
+func openOnDisk(path string, drv *sql.Driver, fkConstraints bool, cdcEnabled bool) (*sql.SwappableDB, error) {
 	if err := sql.RemoveFiles(path); err != nil {
 		return nil, err
 	}
-	return sql.OpenSwappable(path, drv, fkConstraints, true)
+	return sql.OpenSwappable(path, drv, fkConstraints, true, cdcEnabled)
 }
 
 func createTemp(dir, pattern string) (*os.File, error) {

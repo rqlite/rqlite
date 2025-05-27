@@ -142,6 +142,13 @@ message Command {
     bool compressed = 3;
 }
 
+enum OperationType {
+	OPERATION_TYPE_UNKNOWN = 0;
+	OPERATION_TYPE_INSERT = 1;
+	OPERATION_TYPE_UPDATE = 2;
+	OPERATION_TYPE_DELETE = 3;
+}
+
 message CDCValue {
 	oneof value {
 		sint64 i = 1;
@@ -157,30 +164,18 @@ message CDCRow {
 }
 
 message CDCEvent {
-	enum Operation {
-		UNKNOWN = 0;
-		INSERT = 1;
-		UPDATE = 2;
-		DELETE = 3;
-	}
-	string error = 1;
-	Operation op = 2;
-	string table = 3;
-	int64 old_row_id = 4;
-	int64 new_row_id = 5;
-	CDCRow old_row = 6;
-	CDCRow new_row = 7;
+	OperationType operation = 1;
+	string table_name = 2;
+	int64 old_row_id = 3;
+	int64 new_row_id = 4;
+	CDCRow old_row = 5;
+	CDCRow new_row = 6;
+	int64 timestamp = 7;
 }
 
 message UpdateHookEvent {
-	enum Operation {
-		UNKNOWN = 0;
-		INSERT = 1;
-		UPDATE = 2;
-		DELETE = 3;
-	}
-	string error = 1;
-	Operation op = 2;
-	string table = 3;
-	int64 row_id = 4;
+	int64 old_row_id = 1;
+	int64 new_row_id = 2;
+	CDCRow old_row = 3;
+	CDCRow new_row = 4;
 }

@@ -145,6 +145,7 @@ type DB struct {
 
 	allOptimized   bool
 	allOptimizedMu sync.Mutex
+	cdcEnabled     bool
 
 	logger *log.Logger
 }
@@ -163,15 +164,15 @@ type PoolStats struct {
 }
 
 // Open opens a file-based database using the default driver.
-func Open(dbPath string, fkEnabled, wal bool) (retDB *DB, retErr error) {
-	return OpenWithDriver(DefaultDriver(), dbPath, fkEnabled, wal)
+func Open(dbPath string, fkEnabled, wal, cdcEnabled bool) (retDB *DB, retErr error) {
+	return OpenWithDriver(DefaultDriver(), dbPath, fkEnabled, wal, cdcEnabled)
 }
 
 // OpenWithDriver opens a file-based database, creating it if it does not exist.
 // After this function returns, an actual SQLite file will always exist. If the
 // database is opened in WAL mode, the WAL files will also be created if they
 // do not exist.
-func OpenWithDriver(drv *Driver, dbPath string, fkEnabled, wal bool) (retDB *DB, retErr error) {
+func OpenWithDriver(drv *Driver, dbPath string, fkEnabled, wal, cdcEnabled bool) (retDB *DB, retErr error) {
 	logger := log.New(log.Writer(), "[db] ", log.LstdFlags)
 	startTime := time.Now()
 	defer func() {
@@ -233,13 +234,7 @@ func OpenWithDriver(drv *Driver, dbPath string, fkEnabled, wal bool) (retDB *DB,
 	roDB.SetConnMaxIdleTime(30 * time.Second)
 	roDB.SetConnMaxLifetime(0)
 
-	// Make it clear which extensions have been loaded, if any.
-	extensions := drv.ExtensionNames()
-	if len(extensions) > 0 {
-		logger.Printf("loaded extensions: %s", strings.Join(extensions, ", "))
-	}
-
-	return &DB{
+	db := &DB{
 		drv:       drv,
 		path:      dbPath,
 		walPath:   dbPath + "-wal",
@@ -250,7 +245,41 @@ func OpenWithDriver(drv *Driver, dbPath string, fkEnabled, wal bool) (retDB *DB,
 		rwDSN:     rwDSN,
 		roDSN:     roDSN,
 		logger:    logger,
-	}, nil
+		// Set cdcEnabled from the passed parameter.
+		cdcEnabled: cdcEnabled,
+	}
+
+	if db.cdcEnabled {
+		logger.Printf("CDC (Change Data Capture) is enabled for database: %s", dbPath)
+		conn, err := db.rwDB.Conn(context.Background())
+		if err != nil {
+			// Not returning error here, as CDC is auxiliary. Log it.
+			logger.Printf("failed to get raw connection for CDC hook registration: %s", err.Error())
+		} else {
+			defer conn.Close()
+			err := conn.Raw(func(driverConn any) error {
+				sqlite3Conn, ok := driverConn.(*sqlite3.SQLiteConn)
+				if !ok {
+					return errors.New("driver connection is not sqlite3.SQLiteConn for CDC hook")
+				}
+				sqlite3Conn.RegisterPreUpdateHook(DefaultCDCHookCallback)
+				logger.Println("DefaultCDCHookCallback registered for CDC")
+				return nil
+			})
+			if err != nil {
+				// Log error from Raw or hook registration itself.
+				logger.Printf("failed to register CDC pre-update hook: %s", err.Error())
+			}
+		}
+	}
+
+	// Make it clear which extensions have been loaded, if any.
+	extensions := drv.ExtensionNames()
+	if len(extensions) > 0 {
+		logger.Printf("loaded extensions: %s", strings.Join(extensions, ", "))
+	}
+
+	return db, nil
 }
 
 // PreUpdateHookCallback is a callback function that is called before a row is modified
@@ -1342,6 +1371,7 @@ func (db *DB) Copy(dstDB *DB) error {
 // disk file. If the database is in WAL mode, a temporary on-disk
 // copy is made, and it is this copy that is serialized. This function must not
 // be called while any writes are happening to the database.
+// CDC status of the new DB is inherited from the source DB.
 func (db *DB) Serialize() ([]byte, error) {
 	if db.wal {
 		tmpFile, err := os.CreateTemp("", "rqlite-serialize")
@@ -1354,7 +1384,8 @@ func (db *DB) Serialize() ([]byte, error) {
 		if err := db.Backup(tmpFile.Name(), false); err != nil {
 			return nil, err
 		}
-		newDB, err := Open(tmpFile.Name(), db.fkEnabled, false)
+		// When serializing, the new DB created for backup should inherit CDC status.
+		newDB, err := Open(tmpFile.Name(), db.fkEnabled, false, db.cdcEnabled)
 		if err != nil {
 			return nil, err
 		}

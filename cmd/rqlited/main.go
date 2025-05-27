@@ -318,9 +318,10 @@ func createStore(cfg *Config, ln *tcp.Layer, extensions []string) (*store.Store,
 	dbConf.Extensions = extensions
 
 	str := store.New(ln, &store.Config{
-		DBConf: dbConf,
-		Dir:    cfg.DataPath,
-		ID:     cfg.NodeID,
+		DBConf:     dbConf,
+		Dir:        cfg.DataPath,
+		ID:         cfg.NodeID,
+		CDCEnabled: cfg.CDCEnabled,
 	})
 
 	// Set optional parameters on store.
