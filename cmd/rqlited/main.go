@@ -526,7 +526,7 @@ func createCluster(ctx context.Context, cfg *Config, hasPeers bool, client *clus
 		// If this node is the only node in a single-node cluster, 
 		// it doesn't make sense to join it to another cluster.
 		if len(nodes) == 1 && nodes[0].ID == str.ID() {
-			log.Fatalf("this node is already the leader of a single-node cluster, joining another cluster is not supported - exiting")
+			return fmt.Errorf("node is the only node in a single-node cluster, joining other clusters not supported")
 		}
 
 		// Explicit join operation requested, so do it.

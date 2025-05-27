@@ -197,10 +197,6 @@ class TestSingleNodeJoin(unittest.TestCase):
     exit_code = proc.poll()
     self.assertIsNotNone(exit_code, "Process should have exited")
     self.assertNotEqual(exit_code, 0, "Process should have exited with an error")
-    
-    # Cleanup
-    if proc.poll() is None:
-        proc.kill()
 
   def tearDown(self):
     deprovision_node(self.n0)
