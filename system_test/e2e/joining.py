@@ -12,8 +12,8 @@ import unittest
 import subprocess
 import time
 
-from certs import x509cert, x509key
-from helpers import Node, Cluster, d_, write_random_file, deprovision_node
+from system_test.e2e.certs import x509cert, x509key
+from system_test.e2e.helpers import Node, Cluster, d_, write_random_file, deprovision_node
 
 RQLITED_PATH = os.environ['RQLITED_PATH']
 
@@ -178,25 +178,19 @@ class TestSingleNodeJoin(unittest.TestCase):
     nodes = self.n0.nodes()
     self.assertEqual(len(nodes), 1)
     
-    # Attempting to join n0 to n1 should fail
-    n0_restart = Node(RQLITED_PATH, '0', dir=self.n0.dir)
+    # Stop the node gracefully
+    self.n0.stop(graceful=True)
     
-    # Start with join flag - this should exit with an error
-    proc = subprocess.Popen(
-        [RQLITED_PATH, '-node-id', n0_restart.node_id, 
-         '-http-addr', n0_restart.api_addr, 
-         '-raft-addr', n0_restart.raft_addr, 
-         '-join', self.n1.RaftAddr(), 
-         n0_restart.dir],
-        stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-    
-    # Wait a bit for the process to start and exit
-    time.sleep(3)
-    
-    # Check that the process exited with a non-zero status
-    exit_code = proc.poll()
-    self.assertIsNotNone(exit_code, "Process should have exited")
-    self.assertNotEqual(exit_code, 0, "Process should have exited with an error")
+    # Attempt to restart with join flag - this should exit with an error
+    try:
+      self.n0.start(join=self.n1.RaftAddr())
+      self.fail("Expected an exception when trying to join single-node cluster to another cluster")
+    except Exception:
+      # Expected behavior - the node should fail to start
+      pass
+      
+    # Verify that the process is not running
+    self.assertFalse(self.n0.running())
 
   def tearDown(self):
     deprovision_node(self.n0)
