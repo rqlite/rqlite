@@ -158,6 +158,42 @@ class TestForwardedJoin(unittest.TestCase):
     l2 = self.n2.wait_for_leader()
     self.assertEqual(l0, l2)
 
+class TestSingleNodeJoin(unittest.TestCase):
+  def setUp(self):
+    # Setup single node
+    self.n0 = Node(RQLITED_PATH, '0')
+    self.n0.start()
+    self.n0.wait_for_leader()
+    
+    # Create a potential join target node
+    self.n1 = Node(RQLITED_PATH, '1')
+    self.n1.start()
+    self.n1.wait_for_leader()
+
+  def test_single_node_join_fails(self):
+    '''Test that a single-node cluster leader cannot join another cluster'''
+    # Check that n0 is a single-node cluster
+    nodes = self.n0.nodes()
+    self.assertEqual(len(nodes), 1)
+    
+    # Stop the node gracefully
+    self.n0.stop(graceful=True)
+    
+    # Attempt to restart with join flag - this should exit with an error
+    try:
+      self.n0.start(join=self.n1.RaftAddr())
+      self.fail("Expected an exception when trying to join single-node cluster to another cluster")
+    except Exception:
+      # Expected behavior - the node should fail to start
+      pass
+      
+    # Verify that the process is not running
+    self.assertFalse(self.n0.running())
+
+  def tearDown(self):
+    deprovision_node(self.n0)
+    deprovision_node(self.n1)
+
 class TestJoinCatchup(unittest.TestCase):
   def setUp(self):
     self.n0 = Node(RQLITED_PATH, '0')

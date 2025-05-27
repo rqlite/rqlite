@@ -517,6 +517,18 @@ func createCluster(ctx context.Context, cfg *Config, hasPeers bool, client *clus
 	joiner := cluster.NewJoiner(client, cfg.JoinAttempts, cfg.JoinInterval)
 	joiner.SetCredentials(cluster.CredentialsFor(credStr, cfg.JoinAs))
 	if joins != nil && cfg.BootstrapExpect == 0 {
+		// Check if this node is already a member of a single-node cluster.
+		nodes, err := str.Nodes()
+		if err != nil {
+			return fmt.Errorf("failed to get nodes: %s", err.Error())
+		}
+
+		// If this node is the only node in a single-node cluster,
+		// it doesn't make sense to join it to another cluster.
+		if len(nodes) == 1 && nodes[0].ID == str.ID() {
+			return fmt.Errorf("node is the only node in a single-node cluster, joining other clusters not supported")
+		}
+
 		// Explicit join operation requested, so do it.
 		j, err := joiner.Do(ctx, joins, str.ID(), cfg.RaftAdv, clusterSuf)
 		if err != nil {
