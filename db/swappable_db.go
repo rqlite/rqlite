@@ -13,31 +13,36 @@ import (
 // SwappableDB is a wrapper around DB that allows the underlying database to be swapped out
 // in a thread-safe manner.
 type SwappableDB struct {
-	db   *DB
-	drv  *Driver
-	dbMu sync.RWMutex
+	db         *DB
+	drv        *Driver
+	dbMu       sync.RWMutex
+	cdcEnabled bool // Store CDC enabled status for the swappable DB
 }
 
 // OpenSwappable returns a new SwappableDB instance, which opens the database at the given path,
 // using the given driver. If drv is nil then the default driver is used. If fkEnabled is true,
 // foreign key constraints are enabled. If wal is true, the WAL journal mode is enabled.
-func OpenSwappable(dbPath string, drv *Driver, fkEnabled, wal bool) (*SwappableDB, error) {
+// cdcEnabled determines if Change Data Capture is active.
+func OpenSwappable(dbPath string, drv *Driver, fkEnabled, wal, cdcEnabled bool) (*SwappableDB, error) {
 	if drv == nil {
 		drv = DefaultDriver()
 	}
-	db, err := OpenWithDriver(drv, dbPath, fkEnabled, wal)
+	// Pass cdcEnabled to OpenWithDriver
+	db, err := OpenWithDriver(drv, dbPath, fkEnabled, wal, cdcEnabled)
 	if err != nil {
 		return nil, err
 	}
 	return &SwappableDB{
-		db:  db,
-		drv: drv,
+		db:         db,
+		drv:        drv,
+		cdcEnabled: cdcEnabled, // Store it
 	}, nil
 }
 
 // Swap swaps the underlying database with that at the given path. The Swap operation
 // may fail on some platforms if the file at path is open by another process. It is
 // the caller's responsibility to ensure the file at path is not in use.
+// The CDC enabled status from the SwappableDB instance is used for the new DB.
 func (s *SwappableDB) Swap(path string, fkConstraints, walEnabled bool) error {
 	if !IsValidSQLiteFile(path) {
 		return fmt.Errorf("invalid SQLite data")
@@ -55,7 +60,8 @@ func (s *SwappableDB) Swap(path string, fkConstraints, walEnabled bool) error {
 		return fmt.Errorf("failed to rename database: %s", err)
 	}
 
-	db, err := OpenWithDriver(s.drv, s.db.Path(), fkConstraints, walEnabled)
+	// Pass the stored s.cdcEnabled to OpenWithDriver for the new DB instance
+	db, err := OpenWithDriver(s.drv, s.db.Path(), fkConstraints, walEnabled, s.cdcEnabled)
 	if err != nil {
 		return fmt.Errorf("open SQLite file failed: %s", err)
 	}

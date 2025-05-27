@@ -1,4 +1,7 @@
 ## v8.37.2 (unreleased)
+### New features
+- Added experimental Change Data Capture (CDC) feature, allowing changes to database rows (INSERT, UPDATE, DELETE) to be logged as JSON events. See `DOC/cdc.md` for details.
+
 ### Implementation changes and bug fixes
 - [PR #2092](https://github.com/rqlite/rqlite/pull/2092): Update Go module dependencies, Go version to 1.23.8, and toolchain to go1.23.9.
 

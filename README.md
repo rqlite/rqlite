@@ -37,6 +37,7 @@ rqlite is your solution for a [rock](https://www.sqlite.org/testing.html)-[solid
 - **Scalable Reads**: [Read-only nodes](https://rqlite.io/docs/clustering/read-only-nodes/) for enhanced scalability.
 - **Transactions**: Supports a **form** of transactions.
 - **Easy Backups**: Hot [backups](https://rqlite.io/docs/guides/backup/), including [automatic backups to AWS S3 and MinIO](https://rqlite.io/docs/guides/backup/#automatic-backups), as well as [restore directly from SQLite](https://rqlite.io/docs/guides/backup/#restoring-from-sqlite).
+- **Change Data Capture (CDC)**: [Experimental feature](DOC/cdc.md) to capture row changes (INSERT, UPDATE, DELETE) as JSON events in logs.
 
 ## More questions?
 - [Join the rqlite Slack channel](https://rqlite.io/join-slack)
