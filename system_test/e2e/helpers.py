@@ -266,7 +266,6 @@ class Node(object):
     """Return true if the process is running, false otherwise."""
     if self.process is None:
       return False
-    # Poll the process - if returncode is None, the process is still running
     return self.process.poll() is None
 
   def db_path(self):

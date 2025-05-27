@@ -12,8 +12,8 @@ import unittest
 import subprocess
 import time
 
-from system_test.e2e.certs import x509cert, x509key
-from system_test.e2e.helpers import Node, Cluster, d_, write_random_file, deprovision_node
+from certs import x509cert, x509key
+from helpers import Node, Cluster, d_, write_random_file, deprovision_node
 
 RQLITED_PATH = os.environ['RQLITED_PATH']
 
