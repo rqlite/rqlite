@@ -10,7 +10,6 @@ import tempfile
 import os
 import unittest
 import subprocess
-import time
 
 from certs import x509cert, x509key
 from helpers import Node, Cluster, d_, write_random_file, deprovision_node
