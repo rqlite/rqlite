@@ -30,14 +30,15 @@ const (
 // should appear in the returned certificate. If noverify is true, the client will not verify
 // the server's certificate.
 func CreateClientConfig(certFile, keyFile, caCertFile, serverName string, noverify bool) (*tls.Config, error) {
-	var err error
-
 	config := createBaseTLSConfig(serverName, noverify)
 	if certFile != "" && keyFile != "" {
-		config.Certificates = make([]tls.Certificate, 1)
-		config.Certificates[0], err = tls.LoadX509KeyPair(certFile, keyFile)
+		mc, err := newMonitoredCertificate(certFile, keyFile)
 		if err != nil {
 			return nil, err
+		}
+		config.GetClientCertificate = func(info *tls.CertificateRequestInfo) (*tls.Certificate, error) {
+			// Get() will never return nil
+			return mc.Get(), nil
 		}
 	}
 	if caCertFile != "" {
@@ -76,13 +77,14 @@ func CreateClientConfigWithFunc(certFunc func() (*tls.Certificate, error), caCer
 // client. If mtls is MTLSStateEnabled, the server will require the client to present a
 // valid certificate.
 func CreateServerConfig(certFile, keyFile, caCertFile string, mtls MTLSState) (*tls.Config, error) {
-	var err error
-
 	config := createBaseTLSConfig(NoServerName, false)
-	config.Certificates = make([]tls.Certificate, 1)
-	config.Certificates[0], err = tls.LoadX509KeyPair(certFile, keyFile)
+	mc, err := newMonitoredCertificate(certFile, keyFile)
 	if err != nil {
 		return nil, err
+	}
+	config.GetCertificate = func(info *tls.ClientHelloInfo) (*tls.Certificate, error) {
+		// Get() will never return nil
+		return mc.Get(), nil
 	}
 	if caCertFile != "" {
 		if err := setCertPool(caCertFile, &config.ClientCAs); err != nil {
