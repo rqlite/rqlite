@@ -1,6 +1,7 @@
-## v8.37.2 (unreleased)
+## v8.37.2 (May 30th 2025)
 ### Implementation changes and bug fixes
 - [PR #2092](https://github.com/rqlite/rqlite/pull/2092): Update Go module dependencies, Go version to 1.23.8, and toolchain to go1.23.9.
+- [PR #2095](https://github.com/rqlite/rqlite/pull/2095): Upgrade SQL parser.
 
 ## v8.37.1 (May 27th 2025)
 ### Implementation changes and bug fixes
