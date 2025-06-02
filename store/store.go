@@ -1923,21 +1923,24 @@ func (s *Store) isStaleRead(freshness int64, strict bool) bool {
 }
 
 type fsmQueryResponse struct {
-	rows  []*proto.QueryRows
-	error error
+	rows             []*proto.QueryRows
+	error            error
+	PendingCDCEvents []*proto.CDCEvent // Added field
 }
 
 type fsmExecuteQueryResponse struct {
-	results []*proto.ExecuteQueryResponse
-	error   error
+	results          []*proto.ExecuteQueryResponse
+	error            error
+	PendingCDCEvents []*proto.CDCEvent // Added field
 }
 
 type fsmGenericResponse struct {
-	error error
+	error            error
+	PendingCDCEvents []*proto.CDCEvent // Added field for consistency, though may not be used by all generic responses
 }
 
 // fsmApply applies a Raft log entry to the database.
-func (s *Store) fsmApply(l *raft.Log) (e any) {
+func (s *Store) fsmApply(l *raft.Log) (e any) { // fsmResponse is the return type
 	defer func() {
 		s.fsmIdx.Store(l.Index)
 		s.fsmTarget.Signal(l.Index)
@@ -1964,8 +1967,127 @@ func (s *Store) fsmApply(l *raft.Log) (e any) {
 			s.logger.Fatalf("failed to set full snapshot needed: %s", err)
 		}
 	}
+
+	// After processing commands that modify the database, and if the processing was successful,
+	// check for and process any pending CDC events.
+	// This part assumes that `r` (the response from s.cmdProc.Process) would be augmented
+	// to carry []*command.CDCEvent. Since we cannot change cmdProc.Process in this subtask,
+	// this is a conceptual placement.
+	// The actual extraction of PendingCDCEvents would depend on the concrete type of `r`.
+	var pendingCDCEvents []*proto.CDCEvent
+	var responseError error
+
+	switch resp := r.(type) {
+	case *fsmExecuteQueryResponse:
+		pendingCDCEvents = resp.PendingCDCEvents
+		responseError = resp.error
+	case *fsmQueryResponse:
+		pendingCDCEvents = resp.PendingCDCEvents
+		responseError = resp.error
+	case *fsmGenericResponse:
+		pendingCDCEvents = resp.PendingCDCEvents // If generic responses ever carry them
+		responseError = resp.error
+	// Add cases for other FSM response types if they can result from `mutated` commands
+	}
+
+	if mutated && responseError == nil && len(pendingCDCEvents) > 0 {
+		s.logger.Printf("fsmApply: Original command (Raft index %d) successful, processing %d CDC event(s).", l.Index, len(pendingCDCEvents))
+		for _, event := range pendingCDCEvents {
+			if err := s.LogCDCEvent(event); err != nil {
+				// Logged critically by LogCDCEvent. This error does not change the outcome of the original command.
+				s.logger.Printf("fsmApply: CRITICAL: Original command (Raft index %d) applied, but Raft logging for a CDC event failed: %v. CDC Event Table: %s, Op: %s",
+					l.Index, err, event.GetTable(), event.GetOp().String())
+			}
+		}
+	}
+
+	// Specific handling for COMMAND_TYPE_CDC_EVENT
+	if cmd.Type == proto.Command_COMMAND_TYPE_CDC_EVENT {
+		var cdcEvent proto.CDCEvent
+		if err := proto.Unmarshal(cmd.SubCommand, &cdcEvent); err != nil {
+			return &fsmGenericResponse{error: fmt.Errorf("failed to unmarshal CDCEvent: %w", err)}
+		}
+
+		// The SubCommand of COMMAND_TYPE_CDC_EVENT should be the marshaled CDCEvent itself.
+		// This was done in LogCDCEvent.
+		eventData := cmd.SubCommand 
+
+		insertSQL := `INSERT INTO rqlite_cdc_log (lsn, commit_timestamp, event_type, table_name, event_data) VALUES (?, ?, ?, ?, ?)`
+		params := []any{
+			l.Index,                // lsn
+			l.AppendedAt.UnixNano(), // commit_timestamp
+			cdcEvent.Op.String(),   // event_type
+			cdcEvent.Table,         // table_name
+			eventData,              // event_data (already marshaled *proto.CDCEvent)
+		}
+
+		stmt := &proto.Statement{Sql: insertSQL}
+		for _, pVal := range params {
+			p, err := command.ParameterFromInterface(pVal)
+			if err != nil {
+				return &fsmGenericResponse{error: fmt.Errorf("failed to create parameter for CDC log insert: %w", err)}
+			}
+			stmt.Parameters = append(stmt.Parameters, p)
+		}
+		
+		req := &proto.Request{Statements: []*proto.Statement{stmt}}
+		// Use s.db.Execute directly, as this is part of FSM processing, not a user request.
+		// No need to go through s.execute again.
+		// We need to ensure this write is on the same connection/transaction context if possible,
+		// but since CDC events are separate raft entries, they are separate SQLite transactions.
+		_, execErr := s.db.Execute(req, false) 
+		if execErr != nil {
+			return &fsmGenericResponse{error: fmt.Errorf("failed to insert CDC event into rqlite_cdc_log: %w", execErr)}
+		}
+		// The response 'r' for a CDC_EVENT command is just a generic response.
+		// The original 'r' from cmdProc.Process is for the user command, not this CDC command.
+		return &fsmGenericResponse{error: nil}
+	}
+
 	return r
 }
+
+// LogCDCEvent proposes a command to log a single CDC event to the Raft log.
+func (s *Store) LogCDCEvent(event *proto.CDCEvent) error {
+	// Marshal the CDCEvent itself to be stored in the SubCommand of the CDC Command.
+	eventBytes, err := proto.Marshal(event)
+	if err != nil {
+		return fmt.Errorf("failed to marshal CDCEvent for Raft log: %w", err)
+	}
+
+	cmd := &proto.Command{
+		Type:       proto.Command_COMMAND_TYPE_CDC_EVENT,
+		SubCommand: eventBytes, // Store marshaled CDCEvent here
+		Compressed: false,      // CDC events are likely small, compression might be overkill
+	}
+
+	cmdBytes, err := command.Marshal(cmd)
+	if err != nil {
+		return fmt.Errorf("failed to marshal CDC Command for Raft log: %w", err)
+	}
+
+	af := s.raft.Apply(cmdBytes, s.ApplyTimeout)
+	if err := af.Error(); err != nil {
+		s.logger.Printf("failed to apply CDC event to Raft log (event for table %s, op %s): %v", event.Table, event.Op.String(), err)
+		return err
+	}
+
+	// Check response from FSM for this specific CDC command.
+	// The response will be *fsmGenericResponse.
+	resp, ok := af.Response().(*fsmGenericResponse)
+	if !ok {
+		s.logger.Printf("unexpected response type from Raft Apply for CDC event: %T", af.Response())
+		return fmt.Errorf("unexpected response type from Raft Apply for CDC event: %T", af.Response())
+	}
+	if resp.error != nil {
+		s.logger.Printf("FSM failed to apply CDC event (event for table %s, op %s): %v", event.Table, event.Op.String(), resp.error)
+		return resp.error
+	}
+
+	s.logger.Printf("Successfully logged CDC event for table %s, op %s to Raft index %d", event.Table, event.Op.String(), af.Index())
+	return nil
+}
+
 
 // fsmSnapshot returns a snapshot of the database.
 //

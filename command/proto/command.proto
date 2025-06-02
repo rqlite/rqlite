@@ -136,6 +136,7 @@ message Command {
         COMMAND_TYPE_JOIN = 5;
 	COMMAND_TYPE_EXECUTE_QUERY = 6;
 	COMMAND_TYPE_LOAD_CHUNK = 7;
+	COMMAND_TYPE_CDC_EVENT = 8;
     }
     Type type = 1;
     bytes sub_command = 2;

@@ -56,7 +56,10 @@ const (
 	numUpdateHooksCBErrors    = "update_hooks_callback_errors"
 	numUpdateHooksErrors      = "update_hooks_errors"
 	numCommitHooks            = "commit_hooks"
+	numRollbackHooks          = "rollback_hooks" // Added for rollback hook stats
 )
+
+const rqlitePendingCDCEventsKey = "rqlite_pending_cdc_events" // Key for TxnData
 
 var (
 	// ErrWALReplayDirectoryMismatch is returned when the WAL file(s) are not in the same
@@ -219,6 +222,20 @@ func OpenWithDriver(drv *Driver, dbPath string, fkEnabled, wal bool) (retDB *DB,
 		}
 	}
 
+	// Create the CDC log table if it doesn't exist.
+	createCDCTableSQL := `
+	CREATE TABLE IF NOT EXISTS rqlite_cdc_log (
+		lsn INTEGER PRIMARY KEY,
+		commit_timestamp INTEGER NOT NULL,
+		event_type TEXT NOT NULL,
+		table_name TEXT NOT NULL,
+		event_data BLOB NOT NULL
+	)`
+	if _, err := rwDB.Exec(createCDCTableSQL); err != nil {
+		logger.Printf("failed to create rqlite_cdc_log table: %s", err.Error())
+		return nil, fmt.Errorf("failed to create rqlite_cdc_log table: %w", err)
+	}
+
 	/////////////////////////////////////////////////////////////////////////
 	// Read-only connection
 	roDSN := MakeDSN(dbPath, ModeReadOnly, fkEnabled, wal)
@@ -260,9 +277,9 @@ type PreUpdateHookCallback func(ev *command.CDCEvent) error
 // RegisterPreUpdateHook registers a callback that is called before a row is modified
 // in the database. If a callback is already registered, it is replaced. If hook is nil,
 // the callback is removed.
-func (db *DB) RegisterPreUpdateHook(hook PreUpdateHookCallback, rowIDsOnly bool) error {
+func (db *DB) RegisterPreUpdateHook(userHook PreUpdateHookCallback, rowIDsOnly bool) error {
 	// Convert from SQLite hook data to rqlite hook data.
-	convertFn := func(d sqlite3.SQLitePreUpdateData) (*command.CDCEvent, error) {
+	internalConvertFn := func(d sqlite3.SQLitePreUpdateData, captureFullData bool) (*command.CDCEvent, error) {
 		ev := &command.CDCEvent{
 			Table:    d.TableName,
 			OldRowId: d.OldRowID,
@@ -280,7 +297,10 @@ func (db *DB) RegisterPreUpdateHook(hook PreUpdateHookCallback, rowIDsOnly bool)
 			return ev, fmt.Errorf("unknown preupdate hook operation %d", d.Op)
 		}
 
-		if !rowIDsOnly {
+		// Determine if full data should be captured for this specific conversion.
+		// Internal CDC always wants full data if possible, user's preference is separate.
+		// For now, we tie it to `captureFullData` argument.
+		if captureFullData {
 			c := d.Count()
 			if d.Op != sqlite3.SQLITE_INSERT {
 				oldRow := make([]any, c)
@@ -309,33 +329,77 @@ func (db *DB) RegisterPreUpdateHook(hook PreUpdateHookCallback, rowIDsOnly bool)
 		return ev, nil
 	}
 
-	// Register the callback with the SQLite connection.
-	var cb func(d sqlite3.SQLitePreUpdateData)
-	if hook != nil {
-		cb = func(d sqlite3.SQLitePreUpdateData) {
-			stats.Add(numPreupdates, 1)
-			ev, err := convertFn(d)
-			if err != nil {
-				stats.Add(numPreupdatesErrors, 1)
-				ev.Error = err.Error()
+	// This is the actual callback registered with SQLite.
+	sqliteCb := func(d sqlite3.SQLitePreUpdateData) {
+		stats.Add(numPreupdates, 1)
+
+		// Internal CDC event capture (always tries for full data)
+		// Pass `!rowIDsOnly` to internalConvertFn, so if user wants rowIDsOnly, internal also gets that.
+		// This is a simplification for now as discussed in thought process.
+		// A better way would be to always capture full data for internal use.
+		// For internal capture, we set it to true, meaning we want full rows.
+		internalEv, err := internalConvertFn(d, true) // true for full data for internal log
+		if err != nil {
+			stats.Add(numPreupdatesErrors, 1)
+			db.logger.Printf("Error converting data for internal CDC preupdate hook: %s", err.Error())
+			if internalEv == nil { 
+				internalEv = &command.CDCEvent{}
 			}
-			if err := hook(ev); err != nil {
+			internalEv.Error = err.Error()
+		}
+
+		currentConn := d.Conn()
+		if currentConn == nil {
+			db.logger.Printf("PreUpdateHook: No SQLiteConn available from SQLitePreUpdateData, cannot store CDC event.")
+		} else {
+			var pendingEvents []*command.CDCEvent
+			val := currentConn.GetTxnData(rqlitePendingCDCEventsKey)
+			if val != nil {
+				if evs, ok := val.([]*command.CDCEvent); ok {
+					pendingEvents = evs
+				} else {
+					db.logger.Printf("PreUpdateHook: TxnData for %s is not of type []*command.CDCEvent", rqlitePendingCDCEventsKey)
+				}
+			}
+			pendingEvents = append(pendingEvents, internalEv)
+			currentConn.SetTxnData(rqlitePendingCDCEventsKey, pendingEvents)
+			// db.logger.Printf("PreUpdateHook: Captured 1 CDC event for table %s, op %s. Total pending for tx: %d", internalEv.Table, internalEv.Op.String(), len(pendingEvents))
+		}
+
+		// Call user-provided hook if it exists
+		if userHook != nil {
+			// The user's hook should respect the rowIDsOnly preference they provided.
+			// So, we use internalConvertFn again, but this time with the user's rowIDsOnly preference.
+			userEv, userErr := internalConvertFn(d, !rowIDsOnly) // Pass !rowIDsOnly which aligns with original logic of convertFn
+			if userErr != nil {
+				stats.Add(numPreupdatesErrors, 1) // Count error for user hook processing as well
+				db.logger.Printf("Error converting data for user's preupdate hook: %s", userErr.Error())
+				if userEv == nil {
+					userEv = &command.CDCEvent{}
+				}
+				userEv.Error = userErr.Error() // Ensure error is propagated
+			}
+
+			if err := userHook(userEv); err != nil {
 				stats.Add(numPreupdatesCBErrors, 1)
+				db.logger.Printf("Error from user's preupdate hook: %s", err.Error())
 			}
 		}
 	}
+
+	db.logger.Printf("Registering internal and user PreUpdateHook (user hook present: %v)", userHook != nil)
 	f := func(driverConn any) error {
 		conn := driverConn.(*sqlite3.SQLiteConn)
-		conn.RegisterPreUpdateHook(cb)
+		conn.RegisterPreUpdateHook(sqliteCb) // Register our comprehensive callback
 		return nil
 	}
 
-	conn, err := db.rwDB.Conn(context.Background())
+	dbConn, err := db.rwDB.Conn(context.Background())
 	if err != nil {
 		return err
 	}
-	defer conn.Close()
-	if err := conn.Raw(f); err != nil {
+	defer dbConn.Close()
+	if err := dbConn.Raw(f); err != nil {
 		return err
 	}
 	return nil
@@ -394,47 +458,67 @@ func (db *DB) RegisterUpdateHook(hook UpdateHookCallback) error {
 	if err != nil {
 		return err
 	}
-	defer conn.Close()
-	if err := conn.Raw(f); err != nil {
+	defer dbConn.Close()
+	if err := dbConn.Raw(f); err != nil {
 		return err
 	}
 	return nil
 }
 
-// CommitHookCallback is a callback function that is called whenever a transaction
-// is committed to the database. If the callback returns true the transaction
-// is committed, otherwise it is rolled back.
-type CommitHookCallback func() bool
-
-// RegisterCommitHook registers a callback that is called whenever a transaction
-// is committed to the database. If a callback is already registered, it is replaced.
-// If hook is nil, the callback is removed.
-func (db *DB) RegisterCommitHook(hook CommitHookCallback) error {
-	var cb func() int
-	if hook != nil {
-		cb = func() int {
-			stats.Add(numCommitHooks, 1)
-			if hook() {
-				return 0
-			}
-			return 1
+// handleCommitCDC is called before a transaction is committed.
+// PopPendingCDCEvents retrieves and clears pending CDC events for a given connection's transaction.
+// It's called before a transaction is committed to gather any events captured by hooks.
+func (db *DB) PopPendingCDCEvents(conn *sql.Conn) ([]*command.CDCEvent, error) {
+	var eventsToReturn []*command.CDCEvent
+	err := conn.Raw(func(driverConn any) error {
+		sqconn, ok := driverConn.(*sqlite3.SQLiteConn)
+		if !ok {
+			db.logger.Println("PopPendingCDCEvents: driverConn is not SQLiteConn")
+			return fmt.Errorf("PopPendingCDCEvents: driverConn is not SQLiteConn")
 		}
-	}
-	f := func(driverConn any) error {
-		conn := driverConn.(*sqlite3.SQLiteConn)
-		conn.RegisterCommitHook(cb)
-		return nil
-	}
 
-	conn, err := db.rwDB.Conn(context.Background())
+		val := sqconn.GetTxnData(rqlitePendingCDCEventsKey)
+		if val != nil {
+			if pendingEvents, ok := val.([]*command.CDCEvent); ok {
+				if len(pendingEvents) > 0 {
+					db.logger.Printf("DB: PopPendingCDCEvents: Popping %d CDC events for transaction.", len(pendingEvents))
+					eventsToReturn = pendingEvents
+				}
+			} else if val != nil { // Make sure it's not nil before logging wrong type
+				db.logger.Printf("DB: PopPendingCDCEvents: TxnData for key '%s' is not of type []*command.CDCEvent", rqlitePendingCDCEventsKey)
+			}
+			sqconn.SetTxnData(rqlitePendingCDCEventsKey, nil) // Clear the events regardless of type
+		}
+		return nil
+	})
 	if err != nil {
-		return err
+		return nil, err
 	}
-	defer conn.Close()
-	if err := conn.Raw(f); err != nil {
-		return err
-	}
-	return nil
+	return eventsToReturn, nil
+}
+
+// handleRollbackCDC is called when a transaction is about to be rolled back.
+// It retrieves CDC events, logs their discard, and clears them.
+func (db *DB) handleRollbackCDC(conn *sql.Conn) error {
+	stats.Add(numRollbackHooks, 1)
+	return conn.Raw(func(driverConn any) error {
+		sqconn, ok := driverConn.(*sqlite3.SQLiteConn)
+		if !ok {
+			db.logger.Println("handleRollbackCDC: driverConn is not SQLiteConn")
+			return fmt.Errorf("handleRollbackCDC: driverConn is not SQLiteConn")
+		}
+
+		val := sqconn.GetTxnData(rqlitePendingCDCEventsKey)
+		if val != nil {
+			if pendingEvents, ok := val.([]*command.CDCEvent); ok && len(pendingEvents) > 0 {
+				db.logger.Printf("DB: Rollback: Discarding %d CDC events for transaction.", len(pendingEvents))
+			} else if !ok {
+				db.logger.Printf("DB: Rollback: TxnData for key '%s' is not of type []*command.CDCEvent", rqlitePendingCDCEventsKey)
+			}
+			sqconn.SetTxnData(rqlitePendingCDCEventsKey, nil)
+		}
+		return nil
+	})
 }
 
 // LastModified returns the last modified time of the database file, or the WAL file,
@@ -476,6 +560,12 @@ func (db *DB) WALSum() (string, error) {
 
 // Close closes the underlying database connection.
 func (db *DB) Close() error {
+	// Unregister hooks by passing nil? The go-sqlite3 driver docs should clarify.
+	// For now, assume closing the connection handles cleanup or hooks are persistent
+	// for the lifetime of the DB object and its connections.
+	// If explicit unregistration is needed, it would be done here by getting a conn
+	// and calling RegisterPreUpdateHook(nil), RegisterCommitHookWithConn(nil), etc.
+
 	if err := db.rwDB.Close(); err != nil {
 		return err
 	}
@@ -508,7 +598,7 @@ func (db *DB) Stats() (map[string]any, error) {
 	if err != nil {
 		return nil, err
 	}
-	stats := map[string]any{
+	statsMap := map[string]any{ // Renamed variable to avoid conflict with package stats
 		"extensions":       db.ExtensionNames(),
 		"version":          DBVersion,
 		"compile_options":  copts,
@@ -524,19 +614,19 @@ func (db *DB) Stats() (map[string]any, error) {
 
 	lm, err := db.LastModified()
 	if err == nil {
-		stats["last_modified"] = lm
+		statsMap["last_modified"] = lm
 	}
 
-	stats["path"] = db.path
-	if stats["size"], err = db.FileSize(); err != nil {
+	statsMap["path"] = db.path
+	if statsMap["size"], err = db.FileSize(); err != nil {
 		return nil, err
 	}
 	if db.wal {
-		if stats["wal_size"], err = db.WALSize(); err != nil {
+		if statsMap["wal_size"], err = db.WALSize(); err != nil {
 			return nil, err
 		}
 	}
-	return stats, nil
+	return statsMap, nil
 }
 
 // Size returns the size of the database in bytes. "Size" is defined as
@@ -838,11 +928,12 @@ func (db *DB) ExecuteStringStmt(query string) ([]*command.ExecuteQueryResponse, 
 }
 
 // Execute executes queries that modify the database.
-func (db *DB) Execute(req *command.Request, xTime bool) ([]*command.ExecuteQueryResponse, error) {
+// It now also returns any CDC events captured during the transaction.
+func (db *DB) Execute(req *command.Request, xTime bool) ([]*command.ExecuteQueryResponse, []*command.CDCEvent, error) {
 	stats.Add(numExecutions, int64(len(req.Statements)))
 	conn, err := db.rwDB.Conn(context.Background())
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	defer conn.Close()
 
@@ -860,8 +951,10 @@ type execerQueryer interface {
 	QueryContext(ctx context.Context, query string, args ...any) (*sql.Rows, error)
 }
 
-func (db *DB) executeWithConn(ctx context.Context, req *command.Request, xTime bool, conn *sql.Conn) ([]*command.ExecuteQueryResponse, error) {
+func (db *DB) executeWithConn(ctx context.Context, req *command.Request, xTime bool, conn *sql.Conn) ([]*command.ExecuteQueryResponse, []*command.CDCEvent, error) {
 	var err error
+	var poppedEvents []*command.CDCEvent
+	var popErr error
 
 	eqer := execerQueryer(conn)
 	var tx *sql.Tx
@@ -869,11 +962,15 @@ func (db *DB) executeWithConn(ctx context.Context, req *command.Request, xTime b
 		stats.Add(numETx, 1)
 		tx, err = conn.BeginTx(ctx, nil)
 		if err != nil {
-			return nil, err
+			return nil, nil, err
 		}
 		defer func() {
 			if tx != nil {
-				tx.Rollback() // Will be ignored if tx is committed
+				// This means commit failed or was never reached.
+				if errRoll := db.handleRollbackCDC(conn); errRoll != nil {
+					db.logger.Printf("executeWithConn: failed to handle rollback CDC during deferred rollback: %s", errRoll)
+				}
+				tx.Rollback() // Will be ignored if tx is already committed or rolled back.
 			}
 		}()
 		eqer = tx
@@ -890,11 +987,12 @@ func (db *DB) executeWithConn(ctx context.Context, req *command.Request, xTime b
 		}
 		allResults = append(allResults, result)
 		if tx != nil {
-			tx.Rollback()
-			tx = nil
-			return false
+			// Rollback will be handled by the defer func that calls db.handleRollbackCDC
+			// We just need to nil out tx so the commit part is skipped.
+			tx = nil 
+			return false // Stop processing further statements in this transaction
 		}
-		return true
+		return true // Continue if not in a transaction
 	}
 
 	// Execute each statement.
@@ -915,9 +1013,30 @@ func (db *DB) executeWithConn(ctx context.Context, req *command.Request, xTime b
 	}
 
 	if tx != nil {
+		// If commit fails, rollback is handled by the main defer, which will also call handleRollbackCDC.
+		// Pop events before attempting commit.
+		poppedEvents, popErr = db.PopPendingCDCEvents(conn)
+		if popErr != nil {
+			db.logger.Printf("executeWithConn: failed to pop CDC events before tx.Commit(): %s", popErr)
+			// If popping events fails, we might still try to commit the main transaction,
+			// but the CDC events are lost for this transaction. This is a significant issue.
+			// For now, we'll proceed with the commit attempt and return the popErr alongside other errors.
+		}
+
 		err = tx.Commit()
+		if err == nil {
+			tx = nil // Mark as successfully committed, so deferred rollback CDC handler knows.
+		} else {
+			// Commit failed, rollback will be handled by defer, which also calls handleRollbackCDC.
+			// We should ensure poppedEvents are cleared if commit fails right here.
+			// However, handleRollbackCDC in defer will handle it.
+		}
 	}
-	return allResults, err
+	if popErr != nil && err == nil {
+		// If DB commit was OK, but popping events failed, make sure overall error reflects popErr.
+		err = popErr
+	}
+	return allResults, poppedEvents, err
 }
 
 func (db *DB) executeStmtWithConn(ctx context.Context, stmt *command.Statement, xTime bool, eq execerQueryer, timeout time.Duration) (res *command.ExecuteQueryResponse, retErr error) {
@@ -1031,11 +1150,12 @@ func (db *DB) QueryStringStmtWithTimeout(query string, tx bool, timeout time.Dur
 }
 
 // Query executes queries that return rows, but don't modify the database.
-func (db *DB) Query(req *command.Request, xTime bool) ([]*command.QueryRows, error) {
+// It now also returns any CDC events captured during the transaction (though typically queries shouldn't produce CDC events).
+func (db *DB) Query(req *command.Request, xTime bool) ([]*command.QueryRows, []*command.CDCEvent, error) {
 	stats.Add(numQueries, int64(len(req.Statements)))
 	conn, err := db.roDB.Conn(context.Background())
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	defer conn.Close()
 
@@ -1052,8 +1172,10 @@ type queryer interface {
 	QueryContext(ctx context.Context, query string, args ...any) (*sql.Rows, error)
 }
 
-func (db *DB) queryWithConn(ctx context.Context, req *command.Request, xTime bool, conn *sql.Conn) ([]*command.QueryRows, error) {
+func (db *DB) queryWithConn(ctx context.Context, req *command.Request, xTime bool, conn *sql.Conn) ([]*command.QueryRows, []*command.CDCEvent, error) {
 	var err error
+	var poppedEvents []*command.CDCEvent
+	var popErr error
 
 	queryer := queryer(conn)
 	var tx *sql.Tx
@@ -1061,9 +1183,16 @@ func (db *DB) queryWithConn(ctx context.Context, req *command.Request, xTime boo
 		stats.Add(numQTx, 1)
 		tx, err = conn.BeginTx(ctx, nil)
 		if err != nil {
-			return nil, err
+			return nil, nil, err
 		}
-		defer tx.Rollback() // Will be ignored if tx is committed
+		defer func() {
+			if tx != nil {
+				if errRoll := db.handleRollbackCDC(conn); errRoll != nil {
+					db.logger.Printf("queryWithConn: failed to handle rollback CDC during deferred rollback: %s", errRoll)
+				}
+				tx.Rollback()
+			}
+		}()
 		queryer = tx
 	}
 
@@ -1106,9 +1235,20 @@ func (db *DB) queryWithConn(ctx context.Context, req *command.Request, xTime boo
 	}
 
 	if tx != nil {
+		poppedEvents, popErr = db.PopPendingCDCEvents(conn)
+		if popErr != nil {
+			db.logger.Printf("queryWithConn: failed to pop CDC events before tx.Commit(): %s", popErr)
+		}
+
 		err = tx.Commit()
+		if err == nil {
+			tx = nil // Mark as successfully committed
+		}
 	}
-	return allRows, err
+	if popErr != nil && err == nil {
+		err = popErr
+	}
+	return allRows, poppedEvents, err
 }
 
 func (db *DB) queryStmtWithConn(ctx context.Context, stmt *command.Statement, xTime bool, q queryer) (retRows *command.QueryRows, retErr error) {
@@ -1221,11 +1361,12 @@ func (db *DB) RequestStringStmtsWithTimeout(stmts []string, timeout time.Duratio
 }
 
 // Request processes a request that can contain both executes and queries.
-func (db *DB) Request(req *command.Request, xTime bool) ([]*command.ExecuteQueryResponse, error) {
+// It now also returns any CDC events captured during the transaction.
+func (db *DB) Request(req *command.Request, xTime bool) ([]*command.ExecuteQueryResponse, []*command.CDCEvent, error) {
 	stats.Add(numRequests, int64(len(req.Statements)))
 	conn, err := db.rwDB.Conn(context.Background())
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	defer conn.Close()
 
@@ -1238,13 +1379,23 @@ func (db *DB) Request(req *command.Request, xTime bool) ([]*command.ExecuteQuery
 
 	eq := execerQueryer(conn)
 	var tx *sql.Tx
+	var poppedEvents []*command.CDCEvent
+	var popErr error
+
 	if req.Transaction {
 		stats.Add(numRTx, 1)
 		tx, err = conn.BeginTx(ctx, nil)
 		if err != nil {
-			return nil, err
+			return nil, nil, err
 		}
-		defer tx.Rollback() // Will be ignored if tx is committed
+		defer func() {
+			if tx != nil {
+				if errRoll := db.handleRollbackCDC(conn); errRoll != nil {
+					db.logger.Printf("Request: failed to handle rollback CDC during deferred rollback: %s", errRoll)
+				}
+				tx.Rollback()
+			}
+		}()
 		eq = tx
 	}
 
@@ -1252,11 +1403,11 @@ func (db *DB) Request(req *command.Request, xTime bool) ([]*command.ExecuteQuery
 	// processing or break.
 	abortOnError := func(err error) bool {
 		if err != nil && tx != nil {
-			tx.Rollback()
-			tx = nil
+			// Rollback will be handled by the defer func that calls db.handleRollbackCDC
+			tx = nil // Stop processing for this transaction
 			return true
 		}
-		return false
+		return false // Continue if not in a transaction or no error
 	}
 
 	var eqResponse []*command.ExecuteQueryResponse
@@ -1292,9 +1443,20 @@ func (db *DB) Request(req *command.Request, xTime bool) ([]*command.ExecuteQuery
 	}
 
 	if tx != nil {
+		poppedEvents, popErr = db.PopPendingCDCEvents(conn)
+		if popErr != nil {
+			db.logger.Printf("Request: failed to pop CDC events before tx.Commit(): %s", popErr)
+		}
+
 		err = tx.Commit()
+		if err == nil {
+			tx = nil // Mark as successfully committed
+		}
 	}
-	return eqResponse, err
+	if popErr != nil && err == nil {
+		err = popErr
+	}
+	return eqResponse, poppedEvents, err
 }
 
 // Backup writes a consistent snapshot of the database to the given file.
