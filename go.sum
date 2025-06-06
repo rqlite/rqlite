@@ -235,8 +235,8 @@ github.com/rqlite/raft-boltdb/v2 v2.0.0-20230523104317-c08e70f4de48 h1:NZ62M+kT0
 github.com/rqlite/raft-boltdb/v2 v2.0.0-20230523104317-c08e70f4de48/go.mod h1:CRnsxgy5G8fAf5J+AM0yrsSdxXHKkIYOaq2sm+Q4DYc=
 github.com/rqlite/rqlite-disco-clients v0.0.0-20250205044118-8ada2b350099 h1:5cqkVLdl6sGJSY3kiF2dqaA3bD+8OS5FUdZqO0BxXLU=
 github.com/rqlite/rqlite-disco-clients v0.0.0-20250205044118-8ada2b350099/go.mod h1:6SVI8KegsW9Fyu2UQ+uvw0JI5CAILRYRyiQ/OFSJPrs=
-github.com/rqlite/sql v0.0.0-20250530185618-c2b588be35aa h1:EL+V1KDf6eVWJecvwvuUFPPo2tikHnw7QV5XTnw2NPQ=
-github.com/rqlite/sql v0.0.0-20250530185618-c2b588be35aa/go.mod h1:ib9zVtNgRKiGuoMyUqqL5aNpk+r+++YlyiVIkclVqPg=
+github.com/rqlite/sql v0.0.0-20250606085303-668f0351fa18 h1:mVG5km0ZSpLF3RwCm9HdkUGZFBH+YNx2++poQ7MVzsA=
+github.com/rqlite/sql v0.0.0-20250606085303-668f0351fa18/go.mod h1:ib9zVtNgRKiGuoMyUqqL5aNpk+r+++YlyiVIkclVqPg=
 github.com/sean-/seed v0.0.0-20170313163322-e2103e2c3529 h1:nn5Wsu0esKSJiIVhscUtVbo7ada43DJhG55ua/hjS5I=
 github.com/sean-/seed v0.0.0-20170313163322-e2103e2c3529/go.mod h1:DxrIzT+xaE7yg65j358z/aeFdxmN0P9QXhEzd20vsDc=
 github.com/sirupsen/logrus v1.2.0/go.mod h1:LxeOpSwHxABJmUn/MG1IvRgCAasNZTLOkJPxbbu5VWo=
