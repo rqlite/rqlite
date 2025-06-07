@@ -1,3 +1,7 @@
+## v8.37.4 (Jun 7th 2025)
+### Implementation changes and bug fixes
+- [PR #2098](https://github.com/rqlite/rqlite/pull/2098): Upgrade SQL parser.
+
 ## v8.37.3 (Jun 6th 2025)
 ### Implementation changes and bug fixes
 - [PR #2097](https://github.com/rqlite/rqlite/pull/2097): Upgrade SQL parser.
