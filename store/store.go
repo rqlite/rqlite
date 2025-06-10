@@ -290,8 +290,8 @@ type Store struct {
 	dbDrv *sql.Driver      // The SQLite database driver.
 	db    *sql.SwappableDB // The underlying SQLite store.
 
+	cdcMu       sync.RWMutex
 	cdcStreamer *sql.CDCStreamer // The CDC streamer for change data capture.
-	cdcMu       sync.RWMutex     // Protects cdcStreamer field.
 
 	dechunkManager *chunking.DechunkerManager
 	cmdProc        *CommandProcessor
