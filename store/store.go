@@ -462,16 +462,6 @@ func (s *Store) SetRestorePath(path string) error {
 func (s *Store) Open() (retErr error) {
 	defer func() {
 		if retErr == nil {
-			// Register CDC hooks if CDC is enabled
-			s.cdcMu.RLock()
-			if s.cdcStreamer != nil {
-				if err := s.registerCDCHooks(); err != nil {
-					// If hook registration fails, we should still proceed
-					s.logger.Printf("failed to register CDC hooks: %v", err)
-				}
-			}
-			s.cdcMu.RUnlock()
-
 			s.open.Set()
 		}
 	}()
@@ -1641,10 +1631,15 @@ func (s *Store) Database(leader bool) ([]byte, error) {
 // EnableCDC enables Change Data Capture on this Store. Events will be streamed
 // to the provided channel. It is the caller's responsibility to ensure that the
 // channel is read from, as the CDCStreamer will drop events if the channel is full.
+// The Store must be open for this call to succeed.
 // Returns ErrCDCEnabled if CDC is already enabled.
 func (s *Store) EnableCDC(out chan<- *proto.CDCEvents) error {
 	s.cdcMu.Lock()
 	defer s.cdcMu.Unlock()
+
+	if !s.open.Is() {
+		return ErrNotOpen
+	}
 
 	if s.cdcStreamer != nil {
 		return ErrCDCEnabled
@@ -1652,29 +1647,29 @@ func (s *Store) EnableCDC(out chan<- *proto.CDCEvents) error {
 
 	s.cdcStreamer = sql.NewCDCStreamer(out)
 
-	// Register CDC hooks with the database if the store is already open
-	if s.open.Is() {
-		if err := s.registerCDCHooks(); err != nil {
-			s.cdcStreamer = nil
-			return err
-		}
+	// Register CDC hooks with the database
+	if err := s.registerCDCHooks(); err != nil {
+		s.cdcStreamer = nil
+		return err
 	}
 
 	return nil
 }
 
 // DisableCDC disables Change Data Capture on this Store.
-func (s *Store) DisableCDC() {
+func (s *Store) DisableCDC() error {
 	s.cdcMu.Lock()
 	defer s.cdcMu.Unlock()
 
+	if !s.open.Is() {
+		return ErrNotOpen
+	}
+
 	if s.cdcStreamer != nil {
-		// Unregister CDC hooks from the database if the store is open
-		if s.open.Is() {
-			s.unregisterCDCHooks()
-		}
+		s.unregisterCDCHooks()
 		s.cdcStreamer = nil
 	}
+	return nil
 }
 
 // registerCDCHooks registers CDC hooks with the database.
