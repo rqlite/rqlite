@@ -79,6 +79,9 @@ var (
 	// is not valid.
 	ErrInvalidBackupFormat = errors.New("invalid backup format")
 
+	// ErrCDCEnabled is returned when CDC is already enabled.
+	ErrCDCEnabled = errors.New("CDC already enabled")
+
 	// ErrInvalidVacuumFormat is returned when the requested backup format is not
 	// compatible with vacuum.
 	ErrInvalidVacuum = errors.New("invalid vacuum")
@@ -286,6 +289,9 @@ type Store struct {
 
 	dbDrv *sql.Driver      // The SQLite database driver.
 	db    *sql.SwappableDB // The underlying SQLite store.
+
+	cdcMu       sync.RWMutex
+	cdcStreamer *sql.CDCStreamer // The CDC streamer for change data capture.
 
 	dechunkManager *chunking.DechunkerManager
 	cmdProc        *CommandProcessor
@@ -1622,6 +1628,53 @@ func (s *Store) Database(leader bool) ([]byte, error) {
 	return s.db.Serialize()
 }
 
+// EnableCDC enables Change Data Capture on this Store. Events will be streamed
+// to the provided channel. It is the caller's responsibility to ensure that the
+// channel is read from, as the CDCStreamer will drop events if the channel is full.
+// The Store must be open for this call to succeed.
+func (s *Store) EnableCDC(out chan<- *proto.CDCEvents, rowIDsOnly bool) error {
+	if !s.open.Is() {
+		return ErrNotOpen
+	}
+
+	s.cdcMu.Lock()
+	defer s.cdcMu.Unlock()
+	if s.cdcStreamer != nil {
+		return ErrCDCEnabled
+	}
+
+	s.cdcStreamer = sql.NewCDCStreamer(out)
+	if err := s.db.RegisterPreUpdateHook(s.cdcStreamer.PreupdateHook, rowIDsOnly); err != nil {
+		return err
+	}
+	if err := s.db.RegisterCommitHook(s.cdcStreamer.CommitHook); err != nil {
+		// Unregister preupdate hook if commit hook registration fails
+		s.db.RegisterPreUpdateHook(nil, false)
+		return err
+	}
+	return nil
+}
+
+// DisableCDC disables Change Data Capture on this Store.
+func (s *Store) DisableCDC() error {
+	s.cdcMu.Lock()
+	defer s.cdcMu.Unlock()
+	if s.cdcStreamer == nil {
+		return nil
+	}
+
+	if s.db != nil {
+		if err := s.db.RegisterPreUpdateHook(nil, false); err != nil {
+			return fmt.Errorf("failed to unregister preupdate hook: %w", err)
+		}
+		if err := s.db.RegisterCommitHook(nil); err != nil {
+			return fmt.Errorf("failed to unregister commit hook: %w", err)
+		}
+	}
+	s.cdcStreamer = nil
+	return nil
+}
+
 // Notify notifies this Store that a node is ready for bootstrapping at the
 // given address. Once the number of known nodes reaches the expected level
 // bootstrapping will be attempted using this Store. "Expected level" includes
@@ -1951,7 +2004,16 @@ func (s *Store) fsmApply(l *raft.Log) (e any) {
 		s.logger.Printf("first log applied since node start, log at index %d", l.Index)
 	}
 
-	cmd, mutated, r := s.cmdProc.Process(l.Data, s.db)
+	cmd, mutated, r := func() (*proto.Command, bool, any) {
+		// Reset CDC streamer with the current log index before processing if CDC is enabled
+		s.cdcMu.RLock()
+		defer s.cdcMu.RUnlock()
+		if s.cdcStreamer != nil {
+			s.cdcStreamer.Reset(l.Index)
+		}
+		return s.cmdProc.Process(l.Data, s.db)
+	}()
+
 	if mutated {
 		s.dbAppliedIdx.Store(l.Index)
 		s.appliedTarget.Signal(l.Index)
