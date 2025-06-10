@@ -27,9 +27,9 @@ func NewCDCStreamer(out chan<- *command.CDCEvents) *CDCStreamer {
 // current K value, and all pending events are cleared. This is used
 // to reset the CDCStreamer before a new transaction is started.
 func (s *CDCStreamer) Reset(k uint64) {
-	s.pending.K = k
 	s.pending = &command.CDCEvents{
 		Events: make([]*command.CDCEvent, 0),
+		K:      k,
 	}
 }
 
