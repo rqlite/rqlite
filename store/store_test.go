@@ -2727,6 +2727,67 @@ func Test_StoreEnableDisableCDC(t *testing.T) {
 	}
 }
 
+// Test_StoreCDCIntegration tests that CDC events are actually sent when database changes occur.
+func Test_StoreCDCIntegration(t *testing.T) {
+	s, ln := mustNewStore(t)
+	defer ln.Close()
+
+	// Create a channel for CDC events
+	cdcChannel := make(chan *proto.CDCEvents, 100)
+
+	// Enable CDC
+	if err := s.EnableCDC(cdcChannel); err != nil {
+		t.Fatalf("failed to enable CDC: %v", err)
+	}
+
+	if err := s.Open(); err != nil {
+		t.Fatalf("failed to open single-node store: %s", err.Error())
+	}
+	if err := s.Bootstrap(NewServer(s.ID(), s.Addr(), true)); err != nil {
+		t.Fatalf("failed to bootstrap single-node store: %s", err.Error())
+	}
+	defer s.Close(true)
+	_, err := s.WaitForLeader(10 * time.Second)
+	if err != nil {
+		t.Fatalf("Error waiting for leader: %s", err)
+	}
+
+	er := executeRequestFromStrings([]string{
+		`CREATE TABLE foo (id INTEGER NOT NULL PRIMARY KEY, name TEXT)`,
+		`INSERT INTO foo(id, name) VALUES(1, "fiona")`,
+	}, false, false)
+	_, err = s.Execute(er)
+	if err != nil {
+		t.Fatalf("failed to execute on single node: %s", err.Error())
+	}
+
+	// Check that we got change events
+	var foundInsert bool
+	timeout := time.After(5 * time.Second)
+	
+	for !foundInsert {
+		select {
+		case events := <-cdcChannel:
+			if events == nil {
+				t.Fatalf("received nil CDC events")
+			}
+			
+			// Check each event in this batch
+			for _, event := range events.Events {
+				if event.Table == "foo" && event.Op == proto.CDCEvent_INSERT {
+					foundInsert = true
+					if event.NewRowId != 1 {
+						t.Fatalf("expected new row ID to be 1, got %d", event.NewRowId)
+					}
+					break
+				}
+			}
+		case <-timeout:
+			t.Fatalf("timeout waiting for CDC INSERT event for table 'foo'")
+		}
+	}
+}
+
 func mustNewStoreAtPathsLn(id, dataPath, sqlitePath string, fk bool) (*Store, net.Listener) {
 	cfg := NewDBConfig()
 	cfg.FKConstraints = fk

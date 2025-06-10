@@ -462,6 +462,16 @@ func (s *Store) SetRestorePath(path string) error {
 func (s *Store) Open() (retErr error) {
 	defer func() {
 		if retErr == nil {
+			// Register CDC hooks if CDC is enabled
+			s.cdcMu.RLock()
+			if s.cdcStreamer != nil {
+				if err := s.registerCDCHooks(); err != nil {
+					// If hook registration fails, we should still proceed
+					s.logger.Printf("failed to register CDC hooks: %v", err)
+				}
+			}
+			s.cdcMu.RUnlock()
+			
 			s.open.Set()
 		}
 	}()
@@ -1641,6 +1651,15 @@ func (s *Store) EnableCDC(out chan<- *proto.CDCEvents) error {
 	}
 	
 	s.cdcStreamer = sql.NewCDCStreamer(out)
+	
+	// Register CDC hooks with the database if the store is already open
+	if s.open.Is() {
+		if err := s.registerCDCHooks(); err != nil {
+			s.cdcStreamer = nil
+			return err
+		}
+	}
+	
 	return nil
 }
 
@@ -1648,7 +1667,34 @@ func (s *Store) EnableCDC(out chan<- *proto.CDCEvents) error {
 func (s *Store) DisableCDC() {
 	s.cdcMu.Lock()
 	defer s.cdcMu.Unlock()
-	s.cdcStreamer = nil
+	
+	if s.cdcStreamer != nil {
+		// Unregister CDC hooks from the database if the store is open
+		if s.open.Is() {
+			s.unregisterCDCHooks()
+		}
+		s.cdcStreamer = nil
+	}
+}
+
+// registerCDCHooks registers CDC hooks with the database.
+// This should only be called when s.cdcMu is held and s.cdcStreamer is not nil.
+func (s *Store) registerCDCHooks() error {
+	if err := s.db.RegisterPreUpdateHook(s.cdcStreamer.PreupdateHook, false); err != nil {
+		return err
+	}
+	if err := s.db.RegisterCommitHook(s.cdcStreamer.CommitHook); err != nil {
+		// Unregister preupdate hook if commit hook registration fails
+		s.db.RegisterPreUpdateHook(nil, false)
+		return err
+	}
+	return nil
+}
+
+// unregisterCDCHooks unregisters CDC hooks from the database.
+func (s *Store) unregisterCDCHooks() {
+	s.db.RegisterPreUpdateHook(nil, false)
+	s.db.RegisterCommitHook(nil)
 }
 
 // Notify notifies this Store that a node is ready for bootstrapping at the
@@ -1980,17 +2026,18 @@ func (s *Store) fsmApply(l *raft.Log) (e any) {
 		s.logger.Printf("first log applied since node start, log at index %d", l.Index)
 	}
 
+	// Reset CDC streamer with the current log index before processing if CDC is enabled
+	s.cdcMu.RLock()
+	if s.cdcStreamer != nil {
+		s.cdcStreamer.Reset(l.Index)
+	}
+
 	cmd, mutated, r := s.cmdProc.Process(l.Data, s.db)
+	s.cdcMu.RUnlock()
+	
 	if mutated {
 		s.dbAppliedIdx.Store(l.Index)
 		s.appliedTarget.Signal(l.Index)
-		
-		// Reset CDC streamer with the current log index if CDC is enabled
-		s.cdcMu.RLock()
-		if s.cdcStreamer != nil {
-			s.cdcStreamer.Reset(l.Index)
-		}
-		s.cdcMu.RUnlock()
 	}
 	if cmd.Type == proto.Command_COMMAND_TYPE_NOOP {
 		s.numNoops.Add(1)
