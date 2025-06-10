@@ -2004,14 +2004,15 @@ func (s *Store) fsmApply(l *raft.Log) (e any) {
 		s.logger.Printf("first log applied since node start, log at index %d", l.Index)
 	}
 
-	// Reset CDC streamer with the current log index before processing if CDC is enabled
-	s.cdcMu.RLock()
-	if s.cdcStreamer != nil {
-		s.cdcStreamer.Reset(l.Index)
-	}
-
-	cmd, mutated, r := s.cmdProc.Process(l.Data, s.db)
-	s.cdcMu.RUnlock()
+	cmd, mutated, r := func() (*proto.Command, bool, any) {
+		// Reset CDC streamer with the current log index before processing if CDC is enabled
+		s.cdcMu.RLock()
+		defer s.cdcMu.RUnlock()
+		if s.cdcStreamer != nil {
+			s.cdcStreamer.Reset(l.Index)
+		}
+		return s.cmdProc.Process(l.Data, s.db)
+	}()
 
 	if mutated {
 		s.dbAppliedIdx.Store(l.Index)
