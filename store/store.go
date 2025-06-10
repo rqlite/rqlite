@@ -287,6 +287,8 @@ type Store struct {
 	dbDrv *sql.Driver      // The SQLite database driver.
 	db    *sql.SwappableDB // The underlying SQLite store.
 
+	cdcStreamer *sql.CDCStreamer // The CDC streamer for change data capture.
+
 	dechunkManager *chunking.DechunkerManager
 	cmdProc        *CommandProcessor
 
@@ -1620,6 +1622,18 @@ func (s *Store) Database(leader bool) ([]byte, error) {
 		return nil, ErrNotLeader
 	}
 	return s.db.Serialize()
+}
+
+// EnableCDC enables Change Data Capture on this Store. Events will be streamed
+// to the provided channel. It is the caller's responsibility to ensure that the
+// channel is read from, as the CDCStreamer will drop events if the channel is full.
+func (s *Store) EnableCDC(out chan<- *proto.CDCEvents) {
+	s.cdcStreamer = sql.NewCDCStreamer(out)
+}
+
+// DisableCDC disables Change Data Capture on this Store.
+func (s *Store) DisableCDC() {
+	s.cdcStreamer = nil
 }
 
 // Notify notifies this Store that a node is ready for bootstrapping at the

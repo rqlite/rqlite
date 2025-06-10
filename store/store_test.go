@@ -2658,6 +2658,67 @@ func Test_State(t *testing.T) {
 	}
 }
 
+// Test_StoreEnableCDC tests that CDC can be enabled and disabled on the Store.
+func Test_StoreEnableCDC(t *testing.T) {
+	s, ln := mustNewStore(t)
+	defer s.Close(true)
+	defer ln.Close()
+
+	// Initially CDC should be nil
+	if s.cdcStreamer != nil {
+		t.Fatalf("expected CDC streamer to be nil initially")
+	}
+
+	// Create a channel for CDC events
+	ch := make(chan *proto.CDCEvents, 10)
+
+	// Enable CDC
+	s.EnableCDC(ch)
+	if s.cdcStreamer == nil {
+		t.Fatalf("expected CDC streamer to be created after EnableCDC")
+	}
+
+	// Disable CDC
+	s.DisableCDC()
+	if s.cdcStreamer != nil {
+		t.Fatalf("expected CDC streamer to be nil after DisableCDC")
+	}
+}
+
+// Test_StoreEnableDisableCDC tests that CDC can be enabled and disabled multiple times.
+func Test_StoreEnableDisableCDC(t *testing.T) {
+	s, ln := mustNewStore(t)
+	defer s.Close(true)
+	defer ln.Close()
+
+	ch1 := make(chan *proto.CDCEvents, 10)
+	ch2 := make(chan *proto.CDCEvents, 10)
+
+	// Enable CDC with first channel
+	s.EnableCDC(ch1)
+	if s.cdcStreamer == nil {
+		t.Fatalf("expected CDC streamer to be created")
+	}
+
+	// Enable CDC with second channel (should replace first)
+	s.EnableCDC(ch2)
+	if s.cdcStreamer == nil {
+		t.Fatalf("expected CDC streamer to still be created")
+	}
+
+	// Disable CDC
+	s.DisableCDC()
+	if s.cdcStreamer != nil {
+		t.Fatalf("expected CDC streamer to be nil after disable")
+	}
+
+	// Enable again
+	s.EnableCDC(ch1)
+	if s.cdcStreamer == nil {
+		t.Fatalf("expected CDC streamer to be created again")
+	}
+}
+
 func mustNewStoreAtPathsLn(id, dataPath, sqlitePath string, fk bool) (*Store, net.Listener) {
 	cfg := NewDBConfig()
 	cfg.FKConstraints = fk
