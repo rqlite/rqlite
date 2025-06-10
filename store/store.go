@@ -291,7 +291,7 @@ type Store struct {
 	db    *sql.SwappableDB // The underlying SQLite store.
 
 	cdcStreamer *sql.CDCStreamer // The CDC streamer for change data capture.
-	cdcMu       sync.RWMutex   // Protects cdcStreamer field.
+	cdcMu       sync.RWMutex     // Protects cdcStreamer field.
 
 	dechunkManager *chunking.DechunkerManager
 	cmdProc        *CommandProcessor
@@ -471,7 +471,7 @@ func (s *Store) Open() (retErr error) {
 				}
 			}
 			s.cdcMu.RUnlock()
-			
+
 			s.open.Set()
 		}
 	}()
@@ -1645,13 +1645,13 @@ func (s *Store) Database(leader bool) ([]byte, error) {
 func (s *Store) EnableCDC(out chan<- *proto.CDCEvents) error {
 	s.cdcMu.Lock()
 	defer s.cdcMu.Unlock()
-	
+
 	if s.cdcStreamer != nil {
 		return ErrCDCEnabled
 	}
-	
+
 	s.cdcStreamer = sql.NewCDCStreamer(out)
-	
+
 	// Register CDC hooks with the database if the store is already open
 	if s.open.Is() {
 		if err := s.registerCDCHooks(); err != nil {
@@ -1659,7 +1659,7 @@ func (s *Store) EnableCDC(out chan<- *proto.CDCEvents) error {
 			return err
 		}
 	}
-	
+
 	return nil
 }
 
@@ -1667,7 +1667,7 @@ func (s *Store) EnableCDC(out chan<- *proto.CDCEvents) error {
 func (s *Store) DisableCDC() {
 	s.cdcMu.Lock()
 	defer s.cdcMu.Unlock()
-	
+
 	if s.cdcStreamer != nil {
 		// Unregister CDC hooks from the database if the store is open
 		if s.open.Is() {
@@ -2034,7 +2034,7 @@ func (s *Store) fsmApply(l *raft.Log) (e any) {
 
 	cmd, mutated, r := s.cmdProc.Process(l.Data, s.db)
 	s.cdcMu.RUnlock()
-	
+
 	if mutated {
 		s.dbAppliedIdx.Store(l.Index)
 		s.appliedTarget.Signal(l.Index)

@@ -2764,14 +2764,14 @@ func Test_StoreCDCIntegration(t *testing.T) {
 	// Check that we got change events
 	var foundInsert bool
 	timeout := time.After(5 * time.Second)
-	
+
 	for !foundInsert {
 		select {
 		case events := <-cdcChannel:
 			if events == nil {
 				t.Fatalf("received nil CDC events")
 			}
-			
+
 			// Check each event in this batch
 			for _, event := range events.Events {
 				if event.Table == "foo" && event.Op == proto.CDCEvent_INSERT {
