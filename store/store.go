@@ -1632,50 +1632,19 @@ func (s *Store) Database(leader bool) ([]byte, error) {
 // to the provided channel. It is the caller's responsibility to ensure that the
 // channel is read from, as the CDCStreamer will drop events if the channel is full.
 // The Store must be open for this call to succeed.
-// Returns ErrCDCEnabled if CDC is already enabled.
-func (s *Store) EnableCDC(out chan<- *proto.CDCEvents) error {
-	s.cdcMu.Lock()
-	defer s.cdcMu.Unlock()
-
+func (s *Store) EnableCDC(out chan<- *proto.CDCEvents, rowIDsOnly bool) error {
 	if !s.open.Is() {
 		return ErrNotOpen
 	}
 
+	s.cdcMu.Lock()
+	defer s.cdcMu.Unlock()
 	if s.cdcStreamer != nil {
 		return ErrCDCEnabled
 	}
 
 	s.cdcStreamer = sql.NewCDCStreamer(out)
-
-	// Register CDC hooks with the database
-	if err := s.registerCDCHooks(); err != nil {
-		s.cdcStreamer = nil
-		return err
-	}
-
-	return nil
-}
-
-// DisableCDC disables Change Data Capture on this Store.
-func (s *Store) DisableCDC() error {
-	s.cdcMu.Lock()
-	defer s.cdcMu.Unlock()
-
-	if !s.open.Is() {
-		return ErrNotOpen
-	}
-
-	if s.cdcStreamer != nil {
-		s.unregisterCDCHooks()
-		s.cdcStreamer = nil
-	}
-	return nil
-}
-
-// registerCDCHooks registers CDC hooks with the database.
-// This should only be called when s.cdcMu is held and s.cdcStreamer is not nil.
-func (s *Store) registerCDCHooks() error {
-	if err := s.db.RegisterPreUpdateHook(s.cdcStreamer.PreupdateHook, false); err != nil {
+	if err := s.db.RegisterPreUpdateHook(s.cdcStreamer.PreupdateHook, rowIDsOnly); err != nil {
 		return err
 	}
 	if err := s.db.RegisterCommitHook(s.cdcStreamer.CommitHook); err != nil {
@@ -1686,10 +1655,24 @@ func (s *Store) registerCDCHooks() error {
 	return nil
 }
 
-// unregisterCDCHooks unregisters CDC hooks from the database.
-func (s *Store) unregisterCDCHooks() {
-	s.db.RegisterPreUpdateHook(nil, false)
-	s.db.RegisterCommitHook(nil)
+// DisableCDC disables Change Data Capture on this Store.
+func (s *Store) DisableCDC() error {
+	s.cdcMu.Lock()
+	defer s.cdcMu.Unlock()
+	if s.cdcStreamer == nil {
+		return nil
+	}
+
+	if s.db != nil {
+		if err := s.db.RegisterPreUpdateHook(nil, false); err != nil {
+			return fmt.Errorf("failed to unregister preupdate hook: %w", err)
+		}
+		if err := s.db.RegisterCommitHook(nil); err != nil {
+			return fmt.Errorf("failed to unregister commit hook: %w", err)
+		}
+	}
+	s.cdcStreamer = nil
+	return nil
 }
 
 // Notify notifies this Store that a node is ready for bootstrapping at the
