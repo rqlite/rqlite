@@ -11,9 +11,9 @@ type CDCStreamer struct {
 }
 
 // NewCDCStreamer creates a new CDCStreamer. The out channel is used
-// to send the collected events to the client. The channel must
-// be buffered, as the CDCStreamer will block until the channel is
-// read.
+// to send the collected events to the client. It is the caller's
+// responsibility to ensure that the channel is read from, as the
+// CDCStreamer will drop events if the channel is full.
 func NewCDCStreamer(out chan<- *command.CDCEvents) *CDCStreamer {
 	return &CDCStreamer{
 		pending: &command.CDCEvents{
