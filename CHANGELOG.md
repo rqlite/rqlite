@@ -1,6 +1,7 @@
 ## v8.37.5 (unreleased)
 ### Implementation changes and bug fixes
 - [PR #2099](https://github.com/rqlite/rqlite/pull/2099): Add basic CDC streamer to database module.
+- [PR #2101](https://github.com/rqlite/rqlite/pull/2101): Add CDC support to Store component.
 
 ## v8.37.4 (Jun 7th 2025)
 ### Implementation changes and bug fixes
