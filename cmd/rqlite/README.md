@@ -43,6 +43,29 @@ Options:
       display CLI version
 ```
 
+### Environment Variables
+
+The rqlite shell also supports configuration through environment variables:
+
+- `RQLITE_HOST`: Connection string in the format `[scheme://]host[:port]`
+
+Environment variables are only used when the corresponding command-line flags are not explicitly set. Command-line flags always take precedence over environment variables.
+
+Examples:
+```sh
+# Connect to a host on a non-standard port
+export RQLITE_HOST=example.com:8080
+rqlite
+
+# Connect using HTTPS
+export RQLITE_HOST=https://secure.example.com
+rqlite
+
+# Command-line flags override environment variables
+export RQLITE_HOST=example.com:8080
+rqlite -H localhost -p 4001  # Will connect to localhost:4001, not example.com:8080
+```
+
 ## Example
 Connecting to a host running locally:
 ```sh
