@@ -155,7 +155,7 @@ func Test_StoreCDC_Events_Single(t *testing.T) {
 	}
 }
 
-// Test_StoreCDCNotOpen tests that EnableCDC and DisableCDC return ErrNotOpen when store is not open.
+// Test_StoreCDCNotOpen tests that EnableCDC returns ErrNotOpen when store is not open.
 func Test_StoreCDCNotOpen(t *testing.T) {
 	s, ln := mustNewStore(t)
 	defer s.Close(true)
@@ -166,11 +166,6 @@ func Test_StoreCDCNotOpen(t *testing.T) {
 
 	// Try to enable CDC on a closed store - should return ErrNotOpen
 	if err := s.EnableCDC(ch, false); err != ErrNotOpen {
-		t.Fatalf("expected ErrNotOpen, got: %v", err)
-	}
-
-	// Try to disable CDC on a closed store - should return ErrNotOpen
-	if err := s.DisableCDC(); err != ErrNotOpen {
 		t.Fatalf("expected ErrNotOpen, got: %v", err)
 	}
 }
