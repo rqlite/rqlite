@@ -187,7 +187,7 @@ func Test_SwapFailurePreservesOriginal(t *testing.T) {
 		t.Fatalf("failed to open swappable database: %s", err)
 	}
 	defer swappableDB.Close()
-	
+
 	// Add some data to the original database
 	mustExecuteSwappable(swappableDB, "CREATE TABLE original (id INTEGER PRIMARY KEY, name TEXT)")
 	mustExecuteSwappable(swappableDB, `INSERT INTO original(name) VALUES("original_data")`)
@@ -204,19 +204,19 @@ func Test_SwapFailurePreservesOriginal(t *testing.T) {
 	// Create a file that passes SQLite validation but will fail to open
 	corruptPath := mustTempPath()
 	defer os.Remove(corruptPath)
-	
+
 	// Create a file with SQLite header but invalid content
 	corruptFile, err := os.Create(corruptPath)
 	if err != nil {
 		t.Fatalf("failed to create corrupt file: %s", err)
 	}
-	
+
 	// Write SQLite file signature
 	sqliteHeader := []byte("SQLite format 3\000")
 	if _, err := corruptFile.Write(sqliteHeader); err != nil {
 		t.Fatalf("failed to write SQLite header: %s", err)
 	}
-	
+
 	// Write some invalid data that will make SQLite fail to parse the database
 	invalidData := make([]byte, 1000)
 	for i := range invalidData {
@@ -251,7 +251,7 @@ func Test_SwapFailurePreservesOriginal(t *testing.T) {
 
 	// Verify that we can still add data to the original database
 	mustExecuteSwappable(swappableDB, `INSERT INTO original(name) VALUES("more_data")`)
-	
+
 	rows, err = swappableDB.QueryStringStmt("SELECT COUNT(*) as count FROM original")
 	if err != nil {
 		t.Fatalf("failed to count rows in original database: %s", err)
@@ -279,13 +279,13 @@ func Test_SwapWithWALFiles(t *testing.T) {
 	defer os.Remove(swappablePath)
 	defer os.Remove(swappablePath + "-wal")
 	defer os.Remove(swappablePath + "-shm")
-	
+
 	swappableDB, err := OpenSwappable(swappablePath, nil, false, true) // WAL enabled
 	if err != nil {
 		t.Fatalf("failed to open swappable database: %s", err)
 	}
 	defer swappableDB.Close()
-	
+
 	// Add some data to create WAL files
 	mustExecuteSwappable(swappableDB, "CREATE TABLE wal_test (id INTEGER PRIMARY KEY, data TEXT)")
 	mustExecuteSwappable(swappableDB, `INSERT INTO wal_test(data) VALUES("wal_data")`)
@@ -299,18 +299,18 @@ func Test_SwapWithWALFiles(t *testing.T) {
 	// Create a corrupt file for swap failure
 	corruptPath := mustTempPath()
 	defer os.Remove(corruptPath)
-	
+
 	corruptFile, err := os.Create(corruptPath)
 	if err != nil {
 		t.Fatalf("failed to create corrupt file: %s", err)
 	}
-	
+
 	// Write SQLite file signature but invalid content
 	sqliteHeader := []byte("SQLite format 3\000")
 	if _, err := corruptFile.Write(sqliteHeader); err != nil {
 		t.Fatalf("failed to write SQLite header: %s", err)
 	}
-	
+
 	invalidData := make([]byte, 500)
 	for i := range invalidData {
 		invalidData[i] = 0xFF

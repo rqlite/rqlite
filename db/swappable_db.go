@@ -47,7 +47,7 @@ func generateTempPath(dbPath string) string {
 // Returns the temporary paths that were created, or an error if any rename fails.
 func renameToTemp(dbPath string) (tempPaths []string, err error) {
 	tempPath := generateTempPath(dbPath)
-	
+
 	// Try to rename main database file
 	if fileExists(dbPath) {
 		if err := os.Rename(dbPath, tempPath); err != nil {
@@ -55,7 +55,7 @@ func renameToTemp(dbPath string) (tempPaths []string, err error) {
 		}
 		tempPaths = append(tempPaths, tempPath)
 	}
-	
+
 	// Try to rename WAL file
 	walPath := dbPath + "-wal"
 	walTempPath := tempPath + "-wal"
@@ -69,8 +69,8 @@ func renameToTemp(dbPath string) (tempPaths []string, err error) {
 		}
 		tempPaths = append(tempPaths, walTempPath)
 	}
-	
-	// Try to rename SHM file  
+
+	// Try to rename SHM file
 	shmPath := dbPath + "-shm"
 	shmTempPath := tempPath + "-shm"
 	if fileExists(shmPath) {
@@ -86,19 +86,19 @@ func renameToTemp(dbPath string) (tempPaths []string, err error) {
 		}
 		tempPaths = append(tempPaths, shmTempPath)
 	}
-	
+
 	return tempPaths, nil
 }
 
 // restoreFromTemp restores the database files from their temporary names back to original names.
 func restoreFromTemp(dbPath string, tempPaths []string) error {
 	tempPath := generateTempPath(dbPath)
-	
+
 	// Restore in reverse order to handle dependencies
 	for i := len(tempPaths) - 1; i >= 0; i-- {
 		tempFile := tempPaths[i]
 		var originalPath string
-		
+
 		if tempFile == tempPath {
 			originalPath = dbPath
 		} else if tempFile == tempPath+"-wal" {
@@ -108,12 +108,12 @@ func restoreFromTemp(dbPath string, tempPaths []string) error {
 		} else {
 			continue // Skip unknown temp files
 		}
-		
+
 		if err := os.Rename(tempFile, originalPath); err != nil {
 			return fmt.Errorf("failed to restore %s from temp: %s", originalPath, err)
 		}
 	}
-	
+
 	return nil
 }
 
@@ -134,12 +134,12 @@ func (s *SwappableDB) Swap(path string, fkConstraints, walEnabled bool) error {
 
 	s.dbMu.Lock()
 	defer s.dbMu.Unlock()
-	
+
 	// Store the current database configuration for potential recovery
 	oldFKEnabled := s.db.FKEnabled()
 	oldWALEnabled := s.db.WALEnabled()
 	dbPath := s.db.Path()
-	
+
 	if err := s.db.Close(); err != nil {
 		return fmt.Errorf("failed to close: %s", err)
 	}
