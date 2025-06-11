@@ -127,7 +127,7 @@ func removeTempFiles(tempPaths []string) {
 // Swap swaps the underlying database with that at the given path. The Swap operation
 // may fail on some platforms if the file at path is open by another process. It is
 // the caller's responsibility to ensure the file at path is not in use.
-func (s *SwappableDB) Swap(path string, fkConstraints, walEnabled bool) error {
+func (s *SwappableDB) Swap(path string, fkConstraints, walEnabled bool) (retErr error) {
 	if !IsValidSQLiteFile(path) {
 		return fmt.Errorf("invalid SQLite data")
 	}
@@ -139,47 +139,54 @@ func (s *SwappableDB) Swap(path string, fkConstraints, walEnabled bool) error {
 	oldFKEnabled := s.db.FKEnabled()
 	oldWALEnabled := s.db.WALEnabled()
 	dbPath := s.db.Path()
+	var tempPaths []string
+	var newFileRenamed bool
+
+	defer func() {
+		if retErr != nil {
+			// Cleanup on failure
+			if newFileRenamed {
+				// Remove the new database file if it was renamed into place
+				os.Remove(dbPath)
+			}
+			if len(tempPaths) > 0 {
+				// Restore the original files from temporary names
+				restoreFromTemp(dbPath, tempPaths)
+			}
+			// Try to reopen the original database
+			if db, reopenErr := OpenWithDriver(s.drv, dbPath, oldFKEnabled, oldWALEnabled); reopenErr == nil {
+				s.db = db
+			}
+		} else {
+			// Success - clean up the temporary files
+			removeTempFiles(tempPaths)
+		}
+	}()
 
 	if err := s.db.Close(); err != nil {
 		return fmt.Errorf("failed to close: %s", err)
 	}
 
 	// Rename existing database files to temporary names instead of deleting them
-	tempPaths, err := renameToTemp(dbPath)
+	var err error
+	tempPaths, err = renameToTemp(dbPath)
 	if err != nil {
-		// Try to reopen the original database since files are still there
-		if db, reopenErr := OpenWithDriver(s.drv, dbPath, oldFKEnabled, oldWALEnabled); reopenErr == nil {
-			s.db = db
-		}
 		return fmt.Errorf("failed to rename existing files to temp: %s", err)
 	}
 
 	// Try to move the new database into place
 	if err := os.Rename(path, dbPath); err != nil {
-		// Restore the original files
-		restoreFromTemp(dbPath, tempPaths)
-		// Reopen the original database
-		if db, reopenErr := OpenWithDriver(s.drv, dbPath, oldFKEnabled, oldWALEnabled); reopenErr == nil {
-			s.db = db
-		}
 		return fmt.Errorf("failed to rename database: %s", err)
 	}
+	newFileRenamed = true
 
 	// Try to open the new database
 	db, err := OpenWithDriver(s.drv, dbPath, fkConstraints, walEnabled)
 	if err != nil {
-		// Remove the new database file and restore the original files
-		os.Remove(dbPath)
-		restoreFromTemp(dbPath, tempPaths)
-		// Reopen the original database
-		if reopenDB, reopenErr := OpenWithDriver(s.drv, dbPath, oldFKEnabled, oldWALEnabled); reopenErr == nil {
-			s.db = reopenDB
-		}
 		return fmt.Errorf("open SQLite file failed: %s", err)
 	}
 
-	// Success! Clean up the temporary files and update the database reference
-	removeTempFiles(tempPaths)
+	// Success! Update the database reference
 	s.db = db
 	return nil
 }
