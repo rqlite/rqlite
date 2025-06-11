@@ -57,6 +57,7 @@ func Test_AllowedPragmas(t *testing.T) {
 		"foreign keys",
 		"optimize",
 		"FOO PRAGMA main.synchronous=OFF",
+		`SELECT * FROM foo WHERE s="PRAGMA wal_autocheckpoint = 1000"`,
 	}
 
 	for _, s := range tests {
