@@ -164,3 +164,179 @@ func Test_SwapInvalidSQLiteFile(t *testing.T) {
 		t.Fatalf("expected an error when swapping with an invalid SQLite file, got nil")
 	}
 }
+
+// Test_SwapFailurePreservesOriginal tests that if a swap fails, the original database
+// is preserved and functional.
+func Test_SwapFailurePreservesOriginal(t *testing.T) {
+	// Helper function to execute statements on SwappableDB
+	mustExecuteSwappable := func(db *SwappableDB, stmt string) {
+		r, err := db.ExecuteStringStmt(stmt)
+		if err != nil {
+			t.Fatalf("failed to execute statement: %s", err.Error())
+		}
+		if len(r) > 0 && r[0].GetError() != "" {
+			t.Fatalf("failed to execute statement: %s", r[0].GetError())
+		}
+	}
+
+	// Create a SwappableDB with some data
+	swappablePath := mustTempPath()
+	defer os.Remove(swappablePath)
+	swappableDB, err := OpenSwappable(swappablePath, nil, false, false)
+	if err != nil {
+		t.Fatalf("failed to open swappable database: %s", err)
+	}
+	defer swappableDB.Close()
+	
+	// Add some data to the original database
+	mustExecuteSwappable(swappableDB, "CREATE TABLE original (id INTEGER PRIMARY KEY, name TEXT)")
+	mustExecuteSwappable(swappableDB, `INSERT INTO original(name) VALUES("original_data")`)
+
+	// Verify original data exists
+	rows, err := swappableDB.QueryStringStmt("SELECT * FROM original")
+	if err != nil {
+		t.Fatalf("failed to query original database: %s", err)
+	}
+	if exp, got := `[{"columns":["id","name"],"types":["integer","text"],"values":[[1,"original_data"]]}]`, asJSON(rows); exp != got {
+		t.Fatalf("unexpected original data, expected %s, got %s", exp, got)
+	}
+
+	// Create a file that passes SQLite validation but will fail to open
+	corruptPath := mustTempPath()
+	defer os.Remove(corruptPath)
+	
+	// Create a file with SQLite header but invalid content
+	corruptFile, err := os.Create(corruptPath)
+	if err != nil {
+		t.Fatalf("failed to create corrupt file: %s", err)
+	}
+	
+	// Write SQLite file signature
+	sqliteHeader := []byte("SQLite format 3\000")
+	if _, err := corruptFile.Write(sqliteHeader); err != nil {
+		t.Fatalf("failed to write SQLite header: %s", err)
+	}
+	
+	// Write some invalid data that will make SQLite fail to parse the database
+	invalidData := make([]byte, 1000)
+	for i := range invalidData {
+		invalidData[i] = 0xFF // Invalid content
+	}
+	if _, err := corruptFile.Write(invalidData); err != nil {
+		t.Fatalf("failed to write invalid data: %s", err)
+	}
+	corruptFile.Close()
+
+	// Verify that this file passes the IsValidSQLiteFile check but will fail to open
+	if !IsValidSQLiteFile(corruptPath) {
+		t.Fatalf("corrupt file should pass SQLite validation")
+	}
+
+	// Attempt to swap with the corrupt file - this should fail but preserve original
+	err = swappableDB.Swap(corruptPath, false, false)
+	if err == nil {
+		t.Fatalf("expected swap to fail with corrupt database")
+	}
+
+	t.Logf("Swap failed as expected with error: %s", err)
+
+	// Verify that the original database is still intact and functional
+	rows, err = swappableDB.QueryStringStmt("SELECT * FROM original")
+	if err != nil {
+		t.Fatalf("failed to query original database after failed swap: %s", err)
+	}
+	if exp, got := `[{"columns":["id","name"],"types":["integer","text"],"values":[[1,"original_data"]]}]`, asJSON(rows); exp != got {
+		t.Fatalf("original data lost after failed swap, expected %s, got %s", exp, got)
+	}
+
+	// Verify that we can still add data to the original database
+	mustExecuteSwappable(swappableDB, `INSERT INTO original(name) VALUES("more_data")`)
+	
+	rows, err = swappableDB.QueryStringStmt("SELECT COUNT(*) as count FROM original")
+	if err != nil {
+		t.Fatalf("failed to count rows in original database: %s", err)
+	}
+	if exp, got := `[{"columns":["count"],"types":["integer"],"values":[[2]]}]`, asJSON(rows); exp != got {
+		t.Fatalf("expected 2 rows in original table, got %s", got)
+	}
+}
+
+// Test_SwapWithWALFiles tests that the swap handles WAL files correctly during rollback.
+func Test_SwapWithWALFiles(t *testing.T) {
+	// Helper function to execute statements on SwappableDB
+	mustExecuteSwappable := func(db *SwappableDB, stmt string) {
+		r, err := db.ExecuteStringStmt(stmt)
+		if err != nil {
+			t.Fatalf("failed to execute statement: %s", err.Error())
+		}
+		if len(r) > 0 && r[0].GetError() != "" {
+			t.Fatalf("failed to execute statement: %s", r[0].GetError())
+		}
+	}
+
+	// Create a SwappableDB with WAL mode enabled
+	swappablePath := mustTempPath()
+	defer os.Remove(swappablePath)
+	defer os.Remove(swappablePath + "-wal")
+	defer os.Remove(swappablePath + "-shm")
+	
+	swappableDB, err := OpenSwappable(swappablePath, nil, false, true) // WAL enabled
+	if err != nil {
+		t.Fatalf("failed to open swappable database: %s", err)
+	}
+	defer swappableDB.Close()
+	
+	// Add some data to create WAL files
+	mustExecuteSwappable(swappableDB, "CREATE TABLE wal_test (id INTEGER PRIMARY KEY, data TEXT)")
+	mustExecuteSwappable(swappableDB, `INSERT INTO wal_test(data) VALUES("wal_data")`)
+
+	// Verify WAL file exists
+	walPath := swappablePath + "-wal"
+	if !fileExists(walPath) {
+		t.Fatalf("WAL file should exist at %s", walPath)
+	}
+
+	// Create a corrupt file for swap failure
+	corruptPath := mustTempPath()
+	defer os.Remove(corruptPath)
+	
+	corruptFile, err := os.Create(corruptPath)
+	if err != nil {
+		t.Fatalf("failed to create corrupt file: %s", err)
+	}
+	
+	// Write SQLite file signature but invalid content
+	sqliteHeader := []byte("SQLite format 3\000")
+	if _, err := corruptFile.Write(sqliteHeader); err != nil {
+		t.Fatalf("failed to write SQLite header: %s", err)
+	}
+	
+	invalidData := make([]byte, 500)
+	for i := range invalidData {
+		invalidData[i] = 0xFF
+	}
+	if _, err := corruptFile.Write(invalidData); err != nil {
+		t.Fatalf("failed to write invalid data: %s", err)
+	}
+	corruptFile.Close()
+
+	// Attempt to swap with the corrupt file - this should fail and restore WAL files
+	err = swappableDB.Swap(corruptPath, false, true)
+	if err == nil {
+		t.Fatalf("expected swap to fail with corrupt database")
+	}
+
+	// Verify that the original database with WAL is still functional
+	rows, err := swappableDB.QueryStringStmt("SELECT * FROM wal_test")
+	if err != nil {
+		t.Fatalf("failed to query original database after failed swap: %s", err)
+	}
+	if exp, got := `[{"columns":["id","data"],"types":["integer","text"],"values":[[1,"wal_data"]]}]`, asJSON(rows); exp != got {
+		t.Fatalf("original data lost after failed swap, expected %s, got %s", exp, got)
+	}
+
+	// Verify WAL file is still there
+	if !fileExists(walPath) {
+		t.Fatalf("WAL file should still exist after failed swap at %s", walPath)
+	}
+}

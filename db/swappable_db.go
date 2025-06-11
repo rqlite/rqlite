@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"path/filepath"
 	"sync"
 	"time"
 
@@ -35,6 +36,94 @@ func OpenSwappable(dbPath string, drv *Driver, fkEnabled, wal bool) (*SwappableD
 	}, nil
 }
 
+// generateTempPath generates a temporary file path for the given database path.
+func generateTempPath(dbPath string) string {
+	dir := filepath.Dir(dbPath)
+	base := filepath.Base(dbPath)
+	return filepath.Join(dir, "."+base+".tmp")
+}
+
+// renameToTemp renames the database files (main, WAL, SHM) to temporary names.
+// Returns the temporary paths that were created, or an error if any rename fails.
+func renameToTemp(dbPath string) (tempPaths []string, err error) {
+	tempPath := generateTempPath(dbPath)
+	
+	// Try to rename main database file
+	if fileExists(dbPath) {
+		if err := os.Rename(dbPath, tempPath); err != nil {
+			return nil, fmt.Errorf("failed to rename database file to temp: %s", err)
+		}
+		tempPaths = append(tempPaths, tempPath)
+	}
+	
+	// Try to rename WAL file
+	walPath := dbPath + "-wal"
+	walTempPath := tempPath + "-wal"
+	if fileExists(walPath) {
+		if err := os.Rename(walPath, walTempPath); err != nil {
+			// Rollback main database file rename
+			if len(tempPaths) > 0 {
+				os.Rename(tempPath, dbPath)
+			}
+			return nil, fmt.Errorf("failed to rename WAL file to temp: %s", err)
+		}
+		tempPaths = append(tempPaths, walTempPath)
+	}
+	
+	// Try to rename SHM file  
+	shmPath := dbPath + "-shm"
+	shmTempPath := tempPath + "-shm"
+	if fileExists(shmPath) {
+		if err := os.Rename(shmPath, shmTempPath); err != nil {
+			// Rollback previous renames
+			if len(tempPaths) > 1 {
+				os.Rename(walTempPath, walPath)
+			}
+			if len(tempPaths) > 0 {
+				os.Rename(tempPath, dbPath)
+			}
+			return nil, fmt.Errorf("failed to rename SHM file to temp: %s", err)
+		}
+		tempPaths = append(tempPaths, shmTempPath)
+	}
+	
+	return tempPaths, nil
+}
+
+// restoreFromTemp restores the database files from their temporary names back to original names.
+func restoreFromTemp(dbPath string, tempPaths []string) error {
+	tempPath := generateTempPath(dbPath)
+	
+	// Restore in reverse order to handle dependencies
+	for i := len(tempPaths) - 1; i >= 0; i-- {
+		tempFile := tempPaths[i]
+		var originalPath string
+		
+		if tempFile == tempPath {
+			originalPath = dbPath
+		} else if tempFile == tempPath+"-wal" {
+			originalPath = dbPath + "-wal"
+		} else if tempFile == tempPath+"-shm" {
+			originalPath = dbPath + "-shm"
+		} else {
+			continue // Skip unknown temp files
+		}
+		
+		if err := os.Rename(tempFile, originalPath); err != nil {
+			return fmt.Errorf("failed to restore %s from temp: %s", originalPath, err)
+		}
+	}
+	
+	return nil
+}
+
+// removeTempFiles removes the temporary database files.
+func removeTempFiles(tempPaths []string) {
+	for _, tempFile := range tempPaths {
+		os.Remove(tempFile) // Ignore errors since these are cleanup operations
+	}
+}
+
 // Swap swaps the underlying database with that at the given path. The Swap operation
 // may fail on some platforms if the file at path is open by another process. It is
 // the caller's responsibility to ensure the file at path is not in use.
@@ -45,20 +134,52 @@ func (s *SwappableDB) Swap(path string, fkConstraints, walEnabled bool) error {
 
 	s.dbMu.Lock()
 	defer s.dbMu.Unlock()
+	
+	// Store the current database configuration for potential recovery
+	oldFKEnabled := s.db.FKEnabled()
+	oldWALEnabled := s.db.WALEnabled()
+	dbPath := s.db.Path()
+	
 	if err := s.db.Close(); err != nil {
 		return fmt.Errorf("failed to close: %s", err)
 	}
-	if err := RemoveFiles(s.db.Path()); err != nil {
-		return fmt.Errorf("failed to remove files: %s", err)
+
+	// Rename existing database files to temporary names instead of deleting them
+	tempPaths, err := renameToTemp(dbPath)
+	if err != nil {
+		// Try to reopen the original database since files are still there
+		if db, reopenErr := OpenWithDriver(s.drv, dbPath, oldFKEnabled, oldWALEnabled); reopenErr == nil {
+			s.db = db
+		}
+		return fmt.Errorf("failed to rename existing files to temp: %s", err)
 	}
-	if err := os.Rename(path, s.db.Path()); err != nil {
+
+	// Try to move the new database into place
+	if err := os.Rename(path, dbPath); err != nil {
+		// Restore the original files
+		restoreFromTemp(dbPath, tempPaths)
+		// Reopen the original database
+		if db, reopenErr := OpenWithDriver(s.drv, dbPath, oldFKEnabled, oldWALEnabled); reopenErr == nil {
+			s.db = db
+		}
 		return fmt.Errorf("failed to rename database: %s", err)
 	}
 
-	db, err := OpenWithDriver(s.drv, s.db.Path(), fkConstraints, walEnabled)
+	// Try to open the new database
+	db, err := OpenWithDriver(s.drv, dbPath, fkConstraints, walEnabled)
 	if err != nil {
+		// Remove the new database file and restore the original files
+		os.Remove(dbPath)
+		restoreFromTemp(dbPath, tempPaths)
+		// Reopen the original database
+		if reopenDB, reopenErr := OpenWithDriver(s.drv, dbPath, oldFKEnabled, oldWALEnabled); reopenErr == nil {
+			s.db = reopenDB
+		}
 		return fmt.Errorf("open SQLite file failed: %s", err)
 	}
+
+	// Success! Clean up the temporary files and update the database reference
+	removeTempFiles(tempPaths)
 	s.db = db
 	return nil
 }
@@ -103,6 +224,13 @@ func (s *SwappableDB) QueryStringStmt(query string) ([]*command.QueryRows, error
 	s.dbMu.RLock()
 	defer s.dbMu.RUnlock()
 	return s.db.QueryStringStmt(query)
+}
+
+// ExecuteStringStmt calls ExecuteStringStmt on the underlying database.
+func (s *SwappableDB) ExecuteStringStmt(query string) ([]*command.ExecuteQueryResponse, error) {
+	s.dbMu.RLock()
+	defer s.dbMu.RUnlock()
+	return s.db.ExecuteStringStmt(query)
 }
 
 // VacuumInto calls VacuumInto on the underlying database.
