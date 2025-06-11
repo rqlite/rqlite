@@ -94,9 +94,6 @@ var BreakingPragmas = map[string]*regexp.Regexp{
 
 // IsBreakingPragma returns true if the given statement is a breaking PRAGMA.
 func IsBreakingPragma(stmt string) bool {
-	if !strings.Contains(strings.ToUpper(stmt), "PRAGMA") {
-		return false
-	}
 	for _, re := range BreakingPragmas {
 		if re.MatchString(stmt) {
 			return true
