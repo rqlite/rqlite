@@ -4,7 +4,7 @@ import (
 	"crypto/tls"
 	"sync"
 
-	command "github.com/rqlite/rqlite/v8/command/proto"
+	"github.com/rqlite/rqlite/v8/command/proto"
 )
 
 const (
@@ -25,10 +25,10 @@ type Cluster interface {
 // the state of the store. It is used by the CDC service to read and write its own state.
 type Store interface {
 	// Execute allows us to write state to the store.
-	Execute(er *command.ExecuteRequest) ([]*command.ExecuteQueryResponse, error)
+	Execute(er *proto.ExecuteRequest) ([]*proto.ExecuteQueryResponse, error)
 
 	// Query allows us to read state from the store.
-	Query(qr *command.QueryRequest) ([]*command.QueryRows, error)
+	Query(qr *proto.QueryRequest) ([]*proto.QueryRows, error)
 }
 
 // Service is a CDC service that reads events from a channel and processes them.
@@ -37,7 +37,7 @@ type Service struct {
 	clstr Cluster
 	str   Store
 
-	in       <-chan *command.CDCEvents
+	in       <-chan *proto.CDCEvents
 	tlsConfg *tls.Config
 
 	endpoint      string
@@ -49,7 +49,7 @@ type Service struct {
 }
 
 // NewService creates a new CDC service.
-func NewService(in <-chan *command.CDCEvents, endpoint string, tlsConfig *tls.Config, maxBatchSz, maxBatchDelay int64) *Service {
+func NewService(in <-chan *proto.CDCEvents, endpoint string, tlsConfig *tls.Config, maxBatchSz, maxBatchDelay int64) *Service {
 	return &Service{
 		clstr:         nil,
 		str:           nil,
@@ -63,12 +63,16 @@ func NewService(in <-chan *command.CDCEvents, endpoint string, tlsConfig *tls.Co
 }
 
 // Start starts the CDC service.
-func (s *Service) Start() {
+func (s *Service) Start() error {
+	if err := s.createStateTable(); err != nil {
+		return err
+	}
 	s.wg.Add(1)
 	go s.readEvents()
 
 	obCh := make(chan struct{}, leaderChanLen)
 	s.clstr.RegisterLeaderChange(obCh)
+	return nil
 }
 
 // Stop stops the CDC service.
@@ -81,4 +85,38 @@ func (s *Service) readEvents() {
 	defer s.wg.Done()
 	<-s.done
 	return
+}
+
+func (s *Service) createStateTable() error {
+	er := executeRequestFromString(`
+CREATE TABLE IF NOT EXISTS_rqlite_cdc_state (
+    k         TEXT PRIMARY KEY,
+    v_blob    BLOB,
+    v_text    TEXT,
+    v_int     INTEGER
+)`)
+	_, err := s.str.Execute(er)
+	return err
+
+}
+
+func executeRequestFromString(s string) *proto.ExecuteRequest {
+	return executeRequestFromStrings([]string{s}, false, false)
+}
+
+// executeRequestFromStrings converts a slice of strings into a proto.ExecuteRequest
+func executeRequestFromStrings(s []string, timings, tx bool) *proto.ExecuteRequest {
+	stmts := make([]*proto.Statement, len(s))
+	for i := range s {
+		stmts[i] = &proto.Statement{
+			Sql: s[i],
+		}
+	}
+	return &proto.ExecuteRequest{
+		Request: &proto.Request{
+			Statements:  stmts,
+			Transaction: tx,
+		},
+		Timings: timings,
+	}
 }
