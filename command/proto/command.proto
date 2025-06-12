@@ -127,19 +127,19 @@ message Noop {
 }
 
 message Command {
-    enum Type {
-        COMMAND_TYPE_UNKNOWN = 0;
-        COMMAND_TYPE_QUERY = 1;
-        COMMAND_TYPE_EXECUTE = 2;
-        COMMAND_TYPE_NOOP = 3;
-        COMMAND_TYPE_LOAD = 4;
-        COMMAND_TYPE_JOIN = 5;
+	enum Type {
+		COMMAND_TYPE_UNKNOWN = 0;
+		COMMAND_TYPE_QUERY = 1;
+		COMMAND_TYPE_EXECUTE = 2;
+		COMMAND_TYPE_NOOP = 3;
+		COMMAND_TYPE_LOAD = 4;
+		COMMAND_TYPE_JOIN = 5;
 		COMMAND_TYPE_EXECUTE_QUERY = 6;
 		COMMAND_TYPE_LOAD_CHUNK = 7;
-    }
-    Type type = 1;
-    bytes sub_command = 2;
-    bool compressed = 3;
+	}
+	Type type = 1;
+	bytes sub_command = 2;
+	bool compressed = 3;
 }
 
 message CDCValue {
