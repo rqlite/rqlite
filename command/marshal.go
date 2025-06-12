@@ -172,20 +172,6 @@ func UnmarshalLoadChunkRequest(b []byte, lr *proto.LoadChunkRequest) error {
 	return pb.Unmarshal(b, lr)
 }
 
-// MarshalSetKeyRequest marshals a SetKeyRequest command
-func MarshalSetKeyRequest(skr *proto.SetKeyRequest) ([]byte, error) {
-	b, err := pb.Marshal(skr)
-	if err != nil {
-		return nil, err
-	}
-	return b, nil
-}
-
-// UnmarshalSetKeyRequest unmarshals a SetKeyRequest command
-func UnmarshalSetKeyRequest(b []byte, skr *proto.SetKeyRequest) error {
-	return pb.Unmarshal(b, skr)
-}
-
 // UnmarshalSubCommand unmarshals a sub command m. It assumes that
 // m is the correct type.
 func UnmarshalSubCommand(c *proto.Command, m pb.Message) error {

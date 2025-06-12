@@ -15,11 +15,6 @@ import (
 // ExecuteQueryResponses is a slice of ExecuteQueryResponse, which detects mutations.
 type ExecuteQueryResponses []*proto.ExecuteQueryResponse
 
-type KeyValueSetter interface {
-	// Set sets the value for the given key.
-	Set(key []byte, value []byte) error
-}
-
 // Mutation returns true if any of the responses mutated the database.
 func (e ExecuteQueryResponses) Mutation() bool {
 	if len(e) == 0 {
@@ -46,9 +41,8 @@ func NewCommandProcessor(logger *log.Logger, dm *chunking.DechunkerManager) *Com
 		decMgmr: dm}
 }
 
-// Process processes the given command against the given database or key-value store. If
-// the database is actually changed, the third return value will be true, otherwise false.
-func (c *CommandProcessor) Process(data []byte, db *sql.SwappableDB, kv KeyValueSetter) (*proto.Command, bool, any) {
+// Process processes the given command against the given database.
+func (c *CommandProcessor) Process(data []byte, db *sql.SwappableDB) (*proto.Command, bool, any) {
 	cmd := &proto.Command{}
 	if err := command.Unmarshal(data, cmd); err != nil {
 		panic(fmt.Sprintf("failed to unmarshal cluster command: %s", err.Error()))
@@ -145,15 +139,6 @@ func (c *CommandProcessor) Process(data []byte, db *sql.SwappableDB, kv KeyValue
 		}
 		return cmd, true, &fsmGenericResponse{}
 	case proto.Command_COMMAND_TYPE_NOOP:
-		return cmd, false, &fsmGenericResponse{}
-	case proto.Command_COMMAND_TYPE_SET_KEY:
-		var skr proto.SetKeyRequest
-		if err := command.UnmarshalSetKeyRequest(cmd.SubCommand, &skr); err != nil {
-			panic(fmt.Sprintf("failed to unmarshal set-key subcommand: %s", err.Error()))
-		}
-		if err := kv.Set(skr.Key, skr.Value); err != nil {
-			return cmd, false, &fsmGenericResponse{error: fmt.Errorf("failed to set key: %s", err)}
-		}
 		return cmd, false, &fsmGenericResponse{}
 	default:
 		return cmd, false, &fsmGenericResponse{error: fmt.Errorf("unhandled command: %v", cmd.Type)}

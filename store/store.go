@@ -2011,7 +2011,7 @@ func (s *Store) fsmApply(l *raft.Log) (e any) {
 		if s.cdcStreamer != nil {
 			s.cdcStreamer.Reset(l.Index)
 		}
-		return s.cmdProc.Process(l.Data, s.db, s.boltStore)
+		return s.cmdProc.Process(l.Data, s.db)
 	}()
 
 	if mutated {

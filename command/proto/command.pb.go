@@ -136,7 +136,6 @@ const (
 	Command_COMMAND_TYPE_JOIN          Command_Type = 5
 	Command_COMMAND_TYPE_EXECUTE_QUERY Command_Type = 6
 	Command_COMMAND_TYPE_LOAD_CHUNK    Command_Type = 7
-	Command_COMMAND_TYPE_SET_KEY       Command_Type = 8
 )
 
 // Enum value maps for Command_Type.
@@ -150,7 +149,6 @@ var (
 		5: "COMMAND_TYPE_JOIN",
 		6: "COMMAND_TYPE_EXECUTE_QUERY",
 		7: "COMMAND_TYPE_LOAD_CHUNK",
-		8: "COMMAND_TYPE_SET_KEY",
 	}
 	Command_Type_value = map[string]int32{
 		"COMMAND_TYPE_UNKNOWN":       0,
@@ -161,7 +159,6 @@ var (
 		"COMMAND_TYPE_JOIN":          5,
 		"COMMAND_TYPE_EXECUTE_QUERY": 6,
 		"COMMAND_TYPE_LOAD_CHUNK":    7,
-		"COMMAND_TYPE_SET_KEY":       8,
 	}
 )
 
@@ -189,7 +186,7 @@ func (x Command_Type) Number() protoreflect.EnumNumber {
 
 // Deprecated: Use Command_Type.Descriptor instead.
 func (Command_Type) EnumDescriptor() ([]byte, []int) {
-	return file_command_proto_rawDescGZIP(), []int{18, 0}
+	return file_command_proto_rawDescGZIP(), []int{17, 0}
 }
 
 type CDCEvent_Operation int32
@@ -241,7 +238,7 @@ func (x CDCEvent_Operation) Number() protoreflect.EnumNumber {
 
 // Deprecated: Use CDCEvent_Operation.Descriptor instead.
 func (CDCEvent_Operation) EnumDescriptor() ([]byte, []int) {
-	return file_command_proto_rawDescGZIP(), []int{21, 0}
+	return file_command_proto_rawDescGZIP(), []int{20, 0}
 }
 
 type UpdateHookEvent_Operation int32
@@ -293,7 +290,7 @@ func (x UpdateHookEvent_Operation) Number() protoreflect.EnumNumber {
 
 // Deprecated: Use UpdateHookEvent_Operation.Descriptor instead.
 func (UpdateHookEvent_Operation) EnumDescriptor() ([]byte, []int) {
-	return file_command_proto_rawDescGZIP(), []int{23, 0}
+	return file_command_proto_rawDescGZIP(), []int{22, 0}
 }
 
 type Parameter struct {
@@ -1440,58 +1437,6 @@ func (x *Noop) GetId() string {
 	return ""
 }
 
-type SetKeyRequest struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Key           []byte                 `protobuf:"bytes,1,opt,name=key,proto3" json:"key,omitempty"`
-	Value         []byte                 `protobuf:"bytes,2,opt,name=value,proto3" json:"value,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
-}
-
-func (x *SetKeyRequest) Reset() {
-	*x = SetKeyRequest{}
-	mi := &file_command_proto_msgTypes[17]
-	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-	ms.StoreMessageInfo(mi)
-}
-
-func (x *SetKeyRequest) String() string {
-	return protoimpl.X.MessageStringOf(x)
-}
-
-func (*SetKeyRequest) ProtoMessage() {}
-
-func (x *SetKeyRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_command_proto_msgTypes[17]
-	if x != nil {
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		if ms.LoadMessageInfo() == nil {
-			ms.StoreMessageInfo(mi)
-		}
-		return ms
-	}
-	return mi.MessageOf(x)
-}
-
-// Deprecated: Use SetKeyRequest.ProtoReflect.Descriptor instead.
-func (*SetKeyRequest) Descriptor() ([]byte, []int) {
-	return file_command_proto_rawDescGZIP(), []int{17}
-}
-
-func (x *SetKeyRequest) GetKey() []byte {
-	if x != nil {
-		return x.Key
-	}
-	return nil
-}
-
-func (x *SetKeyRequest) GetValue() []byte {
-	if x != nil {
-		return x.Value
-	}
-	return nil
-}
-
 type Command struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Type          Command_Type           `protobuf:"varint,1,opt,name=type,proto3,enum=command.Command_Type" json:"type,omitempty"`
@@ -1503,7 +1448,7 @@ type Command struct {
 
 func (x *Command) Reset() {
 	*x = Command{}
-	mi := &file_command_proto_msgTypes[18]
+	mi := &file_command_proto_msgTypes[17]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1515,7 +1460,7 @@ func (x *Command) String() string {
 func (*Command) ProtoMessage() {}
 
 func (x *Command) ProtoReflect() protoreflect.Message {
-	mi := &file_command_proto_msgTypes[18]
+	mi := &file_command_proto_msgTypes[17]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1528,7 +1473,7 @@ func (x *Command) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Command.ProtoReflect.Descriptor instead.
 func (*Command) Descriptor() ([]byte, []int) {
-	return file_command_proto_rawDescGZIP(), []int{18}
+	return file_command_proto_rawDescGZIP(), []int{17}
 }
 
 func (x *Command) GetType() Command_Type {
@@ -1568,7 +1513,7 @@ type CDCValue struct {
 
 func (x *CDCValue) Reset() {
 	*x = CDCValue{}
-	mi := &file_command_proto_msgTypes[19]
+	mi := &file_command_proto_msgTypes[18]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1580,7 +1525,7 @@ func (x *CDCValue) String() string {
 func (*CDCValue) ProtoMessage() {}
 
 func (x *CDCValue) ProtoReflect() protoreflect.Message {
-	mi := &file_command_proto_msgTypes[19]
+	mi := &file_command_proto_msgTypes[18]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1593,7 +1538,7 @@ func (x *CDCValue) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CDCValue.ProtoReflect.Descriptor instead.
 func (*CDCValue) Descriptor() ([]byte, []int) {
-	return file_command_proto_rawDescGZIP(), []int{19}
+	return file_command_proto_rawDescGZIP(), []int{18}
 }
 
 func (x *CDCValue) GetValue() isCDCValue_Value {
@@ -1691,7 +1636,7 @@ type CDCRow struct {
 
 func (x *CDCRow) Reset() {
 	*x = CDCRow{}
-	mi := &file_command_proto_msgTypes[20]
+	mi := &file_command_proto_msgTypes[19]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1703,7 +1648,7 @@ func (x *CDCRow) String() string {
 func (*CDCRow) ProtoMessage() {}
 
 func (x *CDCRow) ProtoReflect() protoreflect.Message {
-	mi := &file_command_proto_msgTypes[20]
+	mi := &file_command_proto_msgTypes[19]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1716,7 +1661,7 @@ func (x *CDCRow) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CDCRow.ProtoReflect.Descriptor instead.
 func (*CDCRow) Descriptor() ([]byte, []int) {
-	return file_command_proto_rawDescGZIP(), []int{20}
+	return file_command_proto_rawDescGZIP(), []int{19}
 }
 
 func (x *CDCRow) GetValues() []*CDCValue {
@@ -1741,7 +1686,7 @@ type CDCEvent struct {
 
 func (x *CDCEvent) Reset() {
 	*x = CDCEvent{}
-	mi := &file_command_proto_msgTypes[21]
+	mi := &file_command_proto_msgTypes[20]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1753,7 +1698,7 @@ func (x *CDCEvent) String() string {
 func (*CDCEvent) ProtoMessage() {}
 
 func (x *CDCEvent) ProtoReflect() protoreflect.Message {
-	mi := &file_command_proto_msgTypes[21]
+	mi := &file_command_proto_msgTypes[20]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1766,7 +1711,7 @@ func (x *CDCEvent) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CDCEvent.ProtoReflect.Descriptor instead.
 func (*CDCEvent) Descriptor() ([]byte, []int) {
-	return file_command_proto_rawDescGZIP(), []int{21}
+	return file_command_proto_rawDescGZIP(), []int{20}
 }
 
 func (x *CDCEvent) GetError() string {
@@ -1828,7 +1773,7 @@ type CDCEvents struct {
 
 func (x *CDCEvents) Reset() {
 	*x = CDCEvents{}
-	mi := &file_command_proto_msgTypes[22]
+	mi := &file_command_proto_msgTypes[21]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1840,7 +1785,7 @@ func (x *CDCEvents) String() string {
 func (*CDCEvents) ProtoMessage() {}
 
 func (x *CDCEvents) ProtoReflect() protoreflect.Message {
-	mi := &file_command_proto_msgTypes[22]
+	mi := &file_command_proto_msgTypes[21]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1853,7 +1798,7 @@ func (x *CDCEvents) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CDCEvents.ProtoReflect.Descriptor instead.
 func (*CDCEvents) Descriptor() ([]byte, []int) {
-	return file_command_proto_rawDescGZIP(), []int{22}
+	return file_command_proto_rawDescGZIP(), []int{21}
 }
 
 func (x *CDCEvents) GetK() uint64 {
@@ -1882,7 +1827,7 @@ type UpdateHookEvent struct {
 
 func (x *UpdateHookEvent) Reset() {
 	*x = UpdateHookEvent{}
-	mi := &file_command_proto_msgTypes[23]
+	mi := &file_command_proto_msgTypes[22]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1894,7 +1839,7 @@ func (x *UpdateHookEvent) String() string {
 func (*UpdateHookEvent) ProtoMessage() {}
 
 func (x *UpdateHookEvent) ProtoReflect() protoreflect.Message {
-	mi := &file_command_proto_msgTypes[23]
+	mi := &file_command_proto_msgTypes[22]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1907,7 +1852,7 @@ func (x *UpdateHookEvent) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use UpdateHookEvent.ProtoReflect.Descriptor instead.
 func (*UpdateHookEvent) Descriptor() ([]byte, []int) {
-	return file_command_proto_rawDescGZIP(), []int{23}
+	return file_command_proto_rawDescGZIP(), []int{22}
 }
 
 func (x *UpdateHookEvent) GetError() string {
@@ -2034,17 +1979,14 @@ const file_command_proto_rawDesc = "" +
 	"\x11RemoveNodeRequest\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\"\x16\n" +
 	"\x04Noop\x12\x0e\n" +
-	"\x02id\x18\x01 \x01(\tR\x02id\"7\n" +
-	"\rSetKeyRequest\x12\x10\n" +
-	"\x03key\x18\x01 \x01(\fR\x03key\x12\x14\n" +
-	"\x05value\x18\x02 \x01(\fR\x05value\"\xe6\x02\n" +
+	"\x02id\x18\x01 \x01(\tR\x02id\"\xcc\x02\n" +
 	"\aCommand\x12)\n" +
 	"\x04type\x18\x01 \x01(\x0e2\x15.command.Command.TypeR\x04type\x12\x1f\n" +
 	"\vsub_command\x18\x02 \x01(\fR\n" +
 	"subCommand\x12\x1e\n" +
 	"\n" +
 	"compressed\x18\x03 \x01(\bR\n" +
-	"compressed\"\xee\x01\n" +
+	"compressed\"\xd4\x01\n" +
 	"\x04Type\x12\x18\n" +
 	"\x14COMMAND_TYPE_UNKNOWN\x10\x00\x12\x16\n" +
 	"\x12COMMAND_TYPE_QUERY\x10\x01\x12\x18\n" +
@@ -2053,8 +1995,7 @@ const file_command_proto_rawDesc = "" +
 	"\x11COMMAND_TYPE_LOAD\x10\x04\x12\x15\n" +
 	"\x11COMMAND_TYPE_JOIN\x10\x05\x12\x1e\n" +
 	"\x1aCOMMAND_TYPE_EXECUTE_QUERY\x10\x06\x12\x1b\n" +
-	"\x17COMMAND_TYPE_LOAD_CHUNK\x10\a\x12\x18\n" +
-	"\x14COMMAND_TYPE_SET_KEY\x10\b\"c\n" +
+	"\x17COMMAND_TYPE_LOAD_CHUNK\x10\a\"c\n" +
 	"\bCDCValue\x12\x0e\n" +
 	"\x01i\x18\x01 \x01(\x12H\x00R\x01i\x12\x0e\n" +
 	"\x01d\x18\x02 \x01(\x01H\x00R\x01d\x12\x0e\n" +
@@ -2112,7 +2053,7 @@ func file_command_proto_rawDescGZIP() []byte {
 }
 
 var file_command_proto_enumTypes = make([]protoimpl.EnumInfo, 5)
-var file_command_proto_msgTypes = make([]protoimpl.MessageInfo, 24)
+var file_command_proto_msgTypes = make([]protoimpl.MessageInfo, 23)
 var file_command_proto_goTypes = []any{
 	(QueryRequest_Level)(0),        // 0: command.QueryRequest.Level
 	(BackupRequest_Format)(0),      // 1: command.BackupRequest.Format
@@ -2136,13 +2077,12 @@ var file_command_proto_goTypes = []any{
 	(*NotifyRequest)(nil),          // 19: command.NotifyRequest
 	(*RemoveNodeRequest)(nil),      // 20: command.RemoveNodeRequest
 	(*Noop)(nil),                   // 21: command.Noop
-	(*SetKeyRequest)(nil),          // 22: command.SetKeyRequest
-	(*Command)(nil),                // 23: command.Command
-	(*CDCValue)(nil),               // 24: command.CDCValue
-	(*CDCRow)(nil),                 // 25: command.CDCRow
-	(*CDCEvent)(nil),               // 26: command.CDCEvent
-	(*CDCEvents)(nil),              // 27: command.CDCEvents
-	(*UpdateHookEvent)(nil),        // 28: command.UpdateHookEvent
+	(*Command)(nil),                // 22: command.Command
+	(*CDCValue)(nil),               // 23: command.CDCValue
+	(*CDCRow)(nil),                 // 24: command.CDCRow
+	(*CDCEvent)(nil),               // 25: command.CDCEvent
+	(*CDCEvents)(nil),              // 26: command.CDCEvents
+	(*UpdateHookEvent)(nil),        // 27: command.UpdateHookEvent
 }
 var file_command_proto_depIdxs = []int32{
 	5,  // 0: command.Statement.parameters:type_name -> command.Parameter
@@ -2158,11 +2098,11 @@ var file_command_proto_depIdxs = []int32{
 	12, // 10: command.ExecuteQueryResponse.e:type_name -> command.ExecuteResult
 	1,  // 11: command.BackupRequest.format:type_name -> command.BackupRequest.Format
 	2,  // 12: command.Command.type:type_name -> command.Command.Type
-	24, // 13: command.CDCRow.values:type_name -> command.CDCValue
+	23, // 13: command.CDCRow.values:type_name -> command.CDCValue
 	3,  // 14: command.CDCEvent.op:type_name -> command.CDCEvent.Operation
-	25, // 15: command.CDCEvent.old_row:type_name -> command.CDCRow
-	25, // 16: command.CDCEvent.new_row:type_name -> command.CDCRow
-	26, // 17: command.CDCEvents.events:type_name -> command.CDCEvent
+	24, // 15: command.CDCEvent.old_row:type_name -> command.CDCRow
+	24, // 16: command.CDCEvent.new_row:type_name -> command.CDCRow
+	25, // 17: command.CDCEvents.events:type_name -> command.CDCEvent
 	4,  // 18: command.UpdateHookEvent.op:type_name -> command.UpdateHookEvent.Operation
 	19, // [19:19] is the sub-list for method output_type
 	19, // [19:19] is the sub-list for method input_type
@@ -2188,7 +2128,7 @@ func file_command_proto_init() {
 		(*ExecuteQueryResponse_E)(nil),
 		(*ExecuteQueryResponse_Error)(nil),
 	}
-	file_command_proto_msgTypes[19].OneofWrappers = []any{
+	file_command_proto_msgTypes[18].OneofWrappers = []any{
 		(*CDCValue_I)(nil),
 		(*CDCValue_D)(nil),
 		(*CDCValue_B)(nil),
@@ -2201,7 +2141,7 @@ func file_command_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_command_proto_rawDesc), len(file_command_proto_rawDesc)),
 			NumEnums:      5,
-			NumMessages:   24,
+			NumMessages:   23,
 			NumExtensions: 0,
 			NumServices:   0,
 		},
