@@ -46,7 +46,8 @@ func NewCommandProcessor(logger *log.Logger, dm *chunking.DechunkerManager) *Com
 		decMgmr: dm}
 }
 
-// Process processes the given command against the given database.
+// Process processes the given command against the given database or key-value store. If
+// the database is actually changed, the third return value will be true, otherwise false.
 func (c *CommandProcessor) Process(data []byte, db *sql.SwappableDB, kv KeyValueSetter) (*proto.Command, bool, any) {
 	cmd := &proto.Command{}
 	if err := command.Unmarshal(data, cmd); err != nil {
