@@ -3,6 +3,7 @@ package cdc
 import (
 	"crypto/tls"
 	"sync"
+	"time"
 
 	"github.com/rqlite/rqlite/v8/command/proto"
 )
@@ -37,25 +38,25 @@ type Service struct {
 	clstr Cluster
 	str   Store
 
-	in       <-chan *proto.CDCEvents
-	tlsConfg *tls.Config
+	in        <-chan *proto.CDCEvents
+	tlsConfig *tls.Config
 
 	endpoint      string
-	maxBatchSz    int64
-	maxBatchDelay int64
+	maxBatchSz    int
+	maxBatchDelay time.Duration
 
 	wg   sync.WaitGroup
 	done chan struct{}
 }
 
 // NewService creates a new CDC service.
-func NewService(in <-chan *proto.CDCEvents, endpoint string, tlsConfig *tls.Config, maxBatchSz, maxBatchDelay int64) *Service {
+func NewService(clstr Cluster, str Store, in <-chan *proto.CDCEvents, endpoint string, tlsConfig *tls.Config, maxBatchSz int, maxBatchDelay time.Duration) *Service {
 	return &Service{
-		clstr:         nil,
-		str:           nil,
+		clstr:         clstr,
+		str:           str,
 		in:            in,
 		endpoint:      endpoint,
-		tlsConfg:      tlsConfig,
+		tlsConfig:     tlsConfig,
 		maxBatchSz:    maxBatchSz,
 		maxBatchDelay: maxBatchDelay,
 		done:          make(chan struct{}),
