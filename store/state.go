@@ -198,7 +198,7 @@ func RecoverNode(dataDir string, extensions []string, logger *log.Logger, logs r
 			return fmt.Errorf("failed to get log at index %d: %v", index, err)
 		}
 		if entry.Type == raft.LogCommand {
-			cmdProc.Process(entry.Data, db)
+			cmdProc.Process(entry.Data, db, stable)
 		}
 		lastIndex = entry.Index
 		lastTerm = entry.Term
