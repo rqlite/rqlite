@@ -2,6 +2,7 @@ package cdc
 
 import (
 	"crypto/tls"
+	"fmt"
 	"sync"
 	"time"
 
@@ -9,7 +10,8 @@ import (
 )
 
 const (
-	leaderChanLen = 5 // Support any fast back-to-back leadership changes.
+	highWatermarkKey = "high_watermark"
+	leaderChanLen    = 5 // Support any fast back-to-back leadership changes.
 )
 
 // Cluster is an interface that defines methods for cluster management.
@@ -45,8 +47,9 @@ type Service struct {
 	maxBatchSz    int
 	maxBatchDelay time.Duration
 
-	wg   sync.WaitGroup
-	done chan struct{}
+	highWatermark atomic.
+	wg            sync.WaitGroup
+	done          chan struct{}
 }
 
 // NewService creates a new CDC service.
@@ -98,7 +101,13 @@ CREATE TABLE IF NOT EXISTS_rqlite_cdc_state (
 )`)
 	_, err := s.str.Execute(er)
 	return err
+}
 
+func (s *Service) writeHighWatermark(value uint64) error {
+	sql := fmt.Sprintf(`INSERT OR REPLACE INTO _rqlite_cdc_state(k, v_int) VALUES ('%s', %d)`, highWatermarkKey, value)
+	er := executeRequestFromString(sql)
+	_, err := s.str.Execute(er)
+	return err
 }
 
 func executeRequestFromString(s string) *proto.ExecuteRequest {
