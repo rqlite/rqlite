@@ -517,6 +517,16 @@ func Test_SingleNodeParameterized(t *testing.T) {
 			expected: `{"results":[{"columns":["id","name","age"],"types":["integer","text","integer"],"values":[[1,"fiona",20]]}]}`,
 			execute:  false,
 		},
+		{
+			stmt:     []any{"SELECT * FROM foo WHERE NAME IN (?, ?)", "fiona", "declan"},
+			expected: `{"results":[{"columns":["id","name","age"],"types":["integer","text","integer"],"values":[[1,"fiona",20]]}]}`,
+			execute:  false,
+		},
+		{
+			stmt:     []any{"SELECT * FROM foo WHERE NAME IN (?, ?)", "ann", "bob"},
+			expected: `{"results":[{"columns":["id","name","age"],"types":["integer","text","integer"]}]}`,
+			execute:  false,
+		},
 	}
 
 	for i, tt := range tests {
