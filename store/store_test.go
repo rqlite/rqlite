@@ -1266,6 +1266,54 @@ func Test_SingleNodeRequestParameters(t *testing.T) {
 				Request: &proto.Request{
 					Statements: []*proto.Statement{
 						{
+							Sql: "SELECT * FROM foo WHERE id IN (?, ?)",
+							Parameters: []*proto.Parameter{
+								{
+									Value: &proto.Parameter_I{
+										I: 1,
+									},
+								},
+								{
+									Value: &proto.Parameter_I{
+										I: 2,
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+			expected: `[{"columns":["id","name"],"types":["integer","text"],"values":[[1,"fiona"]]}]`,
+		},
+		{
+			request: &proto.ExecuteQueryRequest{
+				Request: &proto.Request{
+					Statements: []*proto.Statement{
+						{
+							Sql: "SELECT * FROM foo WHERE id IN (?, ?)",
+							Parameters: []*proto.Parameter{
+								{
+									Value: &proto.Parameter_I{
+										I: 2,
+									},
+								},
+								{
+									Value: &proto.Parameter_I{
+										I: 3,
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+			expected: `[{"columns":["id","name"],"types":["integer","text"]}]`,
+		},
+		{
+			request: &proto.ExecuteQueryRequest{
+				Request: &proto.Request{
+					Statements: []*proto.Statement{
+						{
 							Sql: "SELECT id FROM foo WHERE name = :qux",
 							Parameters: []*proto.Parameter{
 								{
