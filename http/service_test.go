@@ -1255,8 +1255,8 @@ func Test_ForwardingRedirectExecute(t *testing.T) {
 	m := &MockStore{
 		leaderAddr: "foo:1234",
 	}
-	m.executeFn = func(er *command.ExecuteRequest) ([]*command.ExecuteQueryResponse, error) {
-		return nil, store.ErrNotLeader
+	m.executeFn = func(er *command.ExecuteRequest) ([]*command.ExecuteQueryResponse, uint64, error) {
+		return nil, 0, store.ErrNotLeader
 	}
 
 	c := &mockClusterService{
@@ -1507,7 +1507,7 @@ func Test_DBTimeoutQueryParam(t *testing.T) {
 }
 
 type MockStore struct {
-	executeFn   func(er *command.ExecuteRequest) ([]*command.ExecuteQueryResponse, error)
+	executeFn   func(er *command.ExecuteRequest) ([]*command.ExecuteQueryResponse, uint64, error)
 	queryFn     func(qr *command.QueryRequest) ([]*command.QueryRows, error)
 	requestFn   func(eqr *command.ExecuteQueryRequest) ([]*command.ExecuteQueryResponse, error)
 	backupFn    func(br *command.BackupRequest, dst io.Writer) error
@@ -1519,11 +1519,11 @@ type MockStore struct {
 	notReady    bool // Default value is true, easier to test.
 }
 
-func (m *MockStore) Execute(er *command.ExecuteRequest) ([]*command.ExecuteQueryResponse, error) {
+func (m *MockStore) Execute(er *command.ExecuteRequest) ([]*command.ExecuteQueryResponse, uint64, error) {
 	if m.executeFn != nil {
 		return m.executeFn(er)
 	}
-	return nil, nil
+	return nil, 0, nil
 }
 
 func (m *MockStore) Query(qr *command.QueryRequest) ([]*command.QueryRows, error) {

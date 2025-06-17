@@ -477,14 +477,14 @@ func mustNewMockTLSTransport() *mockTransport {
 }
 
 type mockDatabase struct {
-	executeFn func(er *command.ExecuteRequest) ([]*command.ExecuteQueryResponse, error)
+	executeFn func(er *command.ExecuteRequest) ([]*command.ExecuteQueryResponse, uint64, error)
 	queryFn   func(qr *command.QueryRequest) ([]*command.QueryRows, error)
 	requestFn func(rr *command.ExecuteQueryRequest) ([]*command.ExecuteQueryResponse, error)
 	backupFn  func(br *command.BackupRequest, dst io.Writer) error
 	loadFn    func(lr *command.LoadRequest) error
 }
 
-func (m *mockDatabase) Execute(er *command.ExecuteRequest) ([]*command.ExecuteQueryResponse, error) {
+func (m *mockDatabase) Execute(er *command.ExecuteRequest) ([]*command.ExecuteQueryResponse, uint64, error) {
 	return m.executeFn(er)
 }
 
@@ -514,8 +514,8 @@ func (m *mockDatabase) Load(lr *command.LoadRequest) error {
 }
 
 func mustNewMockDatabase() *mockDatabase {
-	e := func(er *command.ExecuteRequest) ([]*command.ExecuteQueryResponse, error) {
-		return []*command.ExecuteQueryResponse{}, nil
+	e := func(er *command.ExecuteRequest) ([]*command.ExecuteQueryResponse, uint64, error) {
+		return []*command.ExecuteQueryResponse{}, 0, nil
 	}
 	q := func(er *command.QueryRequest) ([]*command.QueryRows, error) {
 		return []*command.QueryRows{}, nil
