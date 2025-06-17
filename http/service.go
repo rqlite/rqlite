@@ -48,7 +48,7 @@ type Database interface {
 	// to return rows. If timings is true, then timing information will
 	// be return. If tx is true, then either all queries will be executed
 	// successfully or it will as though none executed.
-	Execute(er *command.ExecuteRequest) ([]*command.ExecuteQueryResponse, error)
+	Execute(er *command.ExecuteRequest) ([]*command.ExecuteQueryResponse, uint64, error)
 
 	// Query executes a slice of queries, each of which returns rows. If
 	// timings is true, then timing information will be returned. If tx
@@ -178,6 +178,7 @@ type Response struct {
 	Error       string     `json:"error,omitempty"`
 	Time        float64    `json:"time,omitempty"`
 	SequenceNum int64      `json:"sequence_number,omitempty"`
+	RaftIndex   uint64     `json:"-"` // JSON-hidden field for Raft log index
 
 	start time.Time
 	end   time.Time
@@ -755,7 +756,7 @@ func (s *Service) handleLoad(w http.ResponseWriter, r *http.Request, qp QueryPar
 		queries := []string{string(b)}
 		er := executeRequestFromStrings(queries, qp.Timings(), false)
 
-		response, err := s.store.Execute(er)
+		response, _, err := s.store.Execute(er)
 		if err != nil {
 			if err == store.ErrNotLeader {
 				if s.DoRedirect(w, r, qp) {
@@ -1203,7 +1204,7 @@ func (s *Service) execute(w http.ResponseWriter, r *http.Request, qp QueryParams
 		Timings: qp.Timings(),
 	}
 
-	results, resultsErr := s.store.Execute(er)
+	results, raftIndex, resultsErr := s.store.Execute(er)
 	if resultsErr != nil && resultsErr == store.ErrNotLeader {
 		if s.DoRedirect(w, r, qp) {
 			return
@@ -1223,6 +1224,7 @@ func (s *Service) execute(w http.ResponseWriter, r *http.Request, qp QueryParams
 		w.Header().Add(ServedByHTTPHeader, addr)
 		results, resultsErr = s.cluster.Execute(er, addr, makeCredentials(r),
 			qp.Timeout(defaultTimeout), qp.Retries(0))
+		raftIndex = 0 // Set to zero for forwarded requests as per issue requirements
 		if resultsErr != nil {
 			stats.Add(numRemoteExecutionsFailed, 1)
 			if resultsErr.Error() == "unauthorized" {
@@ -1239,6 +1241,7 @@ func (s *Service) execute(w http.ResponseWriter, r *http.Request, qp QueryParams
 		resp.Error = resultsErr.Error()
 	} else {
 		resp.Results.ExecuteQueryResponse = results
+		resp.RaftIndex = raftIndex
 	}
 	resp.end = time.Now()
 	s.writeResponse(w, qp, resp)
@@ -1613,7 +1616,7 @@ func (s *Service) runQueue() {
 			// a "checkpoint" through the queue.
 			if er.Request.Statements != nil {
 				for {
-					_, err = s.store.Execute(er)
+					_, _, err = s.store.Execute(er)
 					if err == nil {
 						// Success!
 						break

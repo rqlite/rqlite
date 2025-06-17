@@ -1121,29 +1121,29 @@ func (s *Store) Stats() (map[string]any, error) {
 }
 
 // Execute executes queries that return no rows, but do modify the database.
-func (s *Store) Execute(ex *proto.ExecuteRequest) ([]*proto.ExecuteQueryResponse, error) {
+func (s *Store) Execute(ex *proto.ExecuteRequest) ([]*proto.ExecuteQueryResponse, uint64, error) {
 	p := (*PragmaCheckRequest)(ex.Request)
 	if err := p.Check(); err != nil {
-		return nil, err
+		return nil, 0, err
 	}
 
 	if !s.open.Is() {
-		return nil, ErrNotOpen
+		return nil, 0, ErrNotOpen
 	}
 
 	if s.raft.State() != raft.Leader {
-		return nil, ErrNotLeader
+		return nil, 0, ErrNotLeader
 	}
 	if !s.Ready() {
-		return nil, ErrNotReady
+		return nil, 0, ErrNotReady
 	}
 	return s.execute(ex)
 }
 
-func (s *Store) execute(ex *proto.ExecuteRequest) ([]*proto.ExecuteQueryResponse, error) {
+func (s *Store) execute(ex *proto.ExecuteRequest) ([]*proto.ExecuteQueryResponse, uint64, error) {
 	b, compressed, err := s.tryCompress(ex)
 	if err != nil {
-		return nil, err
+		return nil, 0, err
 	}
 
 	c := &proto.Command{
@@ -1154,18 +1154,18 @@ func (s *Store) execute(ex *proto.ExecuteRequest) ([]*proto.ExecuteQueryResponse
 
 	b, err = command.Marshal(c)
 	if err != nil {
-		return nil, err
+		return nil, 0, err
 	}
 
 	af := s.raft.Apply(b, s.ApplyTimeout)
 	if af.Error() != nil {
 		if af.Error() == raft.ErrNotLeader {
-			return nil, ErrNotLeader
+			return nil, 0, ErrNotLeader
 		}
-		return nil, af.Error()
+		return nil, 0, af.Error()
 	}
 	r := af.Response().(*fsmExecuteQueryResponse)
-	return r.results, r.error
+	return r.results, af.Index(), r.error
 }
 
 // Query executes queries that return rows, and do not modify the database.
