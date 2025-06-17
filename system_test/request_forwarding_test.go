@@ -74,7 +74,7 @@ func Test_StoreClientSideBySide(t *testing.T) {
 	if exp, got := `[{"columns":["id","name"],"types":["integer","text"],"values":[[1,"fiona"]]}]`, asJSON(rows); exp != got {
 		t.Fatalf("unexpected results, exp %s, got %s", exp, got)
 	}
-	results, err := node.Store.Request(executeQueryRequestFromString(`SELECT * FROM foo`))
+	results, _, err := node.Store.Request(executeQueryRequestFromString(`SELECT * FROM foo`))
 	if err != nil {
 		t.Fatalf("failed to request on local: %s", err.Error())
 	}
@@ -104,7 +104,7 @@ func Test_StoreClientSideBySide(t *testing.T) {
 	if exp, got := `[{"columns":["id","name"],"types":["integer","text"],"values":[[1,"fiona"]]}]`, asJSON(rows); exp != got {
 		t.Fatalf("unexpected results, exp %s, got %s", exp, got)
 	}
-	results, err = node.Store.Request(executeQueryRequestFromString(`SELECT * FROM bar`))
+	results, _, err = node.Store.Request(executeQueryRequestFromString(`SELECT * FROM bar`))
 	if err != nil {
 		t.Fatalf("failed to request on local: %s", err.Error())
 	}
@@ -134,7 +134,7 @@ func Test_StoreClientSideBySide(t *testing.T) {
 	if exp, got := `[{"error":"no such table: qux"}]`, asJSON(rows); exp != got {
 		t.Fatalf("unexpected results, exp %s, got %s", exp, got)
 	}
-	results, err = node.Store.Request(executeQueryRequestFromString(`SELECT * FROM qux`))
+	results, _, err = node.Store.Request(executeQueryRequestFromString(`SELECT * FROM qux`))
 	if err != nil {
 		t.Fatalf("failed to request on local: %s", err.Error())
 	}

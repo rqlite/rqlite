@@ -1120,7 +1120,7 @@ func Test_SingleNodeRequest(t *testing.T) {
 
 	for _, tt := range tests {
 		eqr := executeQueryRequestFromStrings(tt.stmts, proto.QueryRequest_QUERY_REQUEST_LEVEL_WEAK, false, false)
-		r, err := s.Request(eqr)
+		r, _, err := s.Request(eqr)
 		if err != nil {
 			t.Fatalf("failed to execute request on single node: %s", err.Error())
 		}
@@ -1200,7 +1200,7 @@ func Test_SingleNodeRequestTx(t *testing.T) {
 
 	for _, tt := range tests {
 		eqr := executeQueryRequestFromStrings(tt.stmts, proto.QueryRequest_QUERY_REQUEST_LEVEL_WEAK, false, tt.tx)
-		r, err := s.Request(eqr)
+		r, _, err := s.Request(eqr)
 		if err != nil {
 			t.Fatalf("failed to execute request on single node: %s", err.Error())
 		}
@@ -1332,7 +1332,7 @@ func Test_SingleNodeRequestParameters(t *testing.T) {
 	}
 
 	for _, tt := range tests {
-		r, err := s.Request(tt.request)
+		r, _, err := s.Request(tt.request)
 		if err != nil {
 			t.Fatalf("failed to execute request on single node: %s", err.Error())
 		}
@@ -1499,7 +1499,7 @@ func Test_SingleNodeExecuteQueryFreshness(t *testing.T) {
 	rr := executeQueryRequestFromString("SELECT * FROM foo", proto.QueryRequest_QUERY_REQUEST_LEVEL_NONE,
 		false, false)
 	rr.Freshness = mustParseDuration("1ns").Nanoseconds()
-	eqr, err := s0.Request(rr)
+	eqr, _, err := s0.Request(rr)
 	if err != nil {
 		t.Fatalf("failed to query leader node: %s", err.Error())
 	}

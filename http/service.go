@@ -58,7 +58,7 @@ type Database interface {
 
 	// Request processes a slice of requests, each of which can be either
 	// an Execute or Query request.
-	Request(eqr *command.ExecuteQueryRequest) ([]*command.ExecuteQueryResponse, error)
+	Request(eqr *command.ExecuteQueryRequest) ([]*command.ExecuteQueryResponse, uint64, error)
 
 	// Load loads a SQLite file into the system via Raft consensus.
 	Load(lr *command.LoadRequest) error
@@ -1395,7 +1395,7 @@ func (s *Service) handleRequest(w http.ResponseWriter, r *http.Request, qp Query
 		FreshnessStrict: qp.FreshnessStrict(),
 	}
 
-	results, resultsErr := s.store.Request(eqr)
+	results, _, resultsErr := s.store.Request(eqr)
 	if resultsErr != nil && resultsErr == store.ErrNotLeader {
 		if s.DoRedirect(w, r, qp) {
 			return

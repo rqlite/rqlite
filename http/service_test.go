@@ -1319,8 +1319,8 @@ func Test_ForwardingRedirectExecuteQuery(t *testing.T) {
 	m := &MockStore{
 		leaderAddr: "foo:1234",
 	}
-	m.requestFn = func(er *command.ExecuteQueryRequest) ([]*command.ExecuteQueryResponse, error) {
-		return nil, store.ErrNotLeader
+	m.requestFn = func(er *command.ExecuteQueryRequest) ([]*command.ExecuteQueryResponse, uint64, error) {
+		return nil, 0, store.ErrNotLeader
 	}
 
 	c := &mockClusterService{
@@ -1509,7 +1509,7 @@ func Test_DBTimeoutQueryParam(t *testing.T) {
 type MockStore struct {
 	executeFn   func(er *command.ExecuteRequest) ([]*command.ExecuteQueryResponse, uint64, error)
 	queryFn     func(qr *command.QueryRequest) ([]*command.QueryRows, error)
-	requestFn   func(eqr *command.ExecuteQueryRequest) ([]*command.ExecuteQueryResponse, error)
+	requestFn   func(eqr *command.ExecuteQueryRequest) ([]*command.ExecuteQueryResponse, uint64, error)
 	backupFn    func(br *command.BackupRequest, dst io.Writer) error
 	loadFn      func(lr *command.LoadRequest) error
 	snapshotFn  func(n uint64) error
@@ -1533,11 +1533,11 @@ func (m *MockStore) Query(qr *command.QueryRequest) ([]*command.QueryRows, error
 	return nil, nil
 }
 
-func (m *MockStore) Request(eqr *command.ExecuteQueryRequest) ([]*command.ExecuteQueryResponse, error) {
+func (m *MockStore) Request(eqr *command.ExecuteQueryRequest) ([]*command.ExecuteQueryResponse, uint64, error) {
 	if m.requestFn != nil {
 		return m.requestFn(eqr)
 	}
-	return nil, nil
+	return nil, 0, nil
 }
 
 func (m *MockStore) Join(jr *command.JoinRequest) error {
