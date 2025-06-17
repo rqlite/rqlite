@@ -34,7 +34,7 @@ CREATE TABLE foo (id integer not null primary key, name text);
 INSERT INTO "foo" VALUES(1,'fiona');
 COMMIT;
 `
-	_, err := s.Execute(executeRequestFromString(dump, false, false))
+	_, _, err := s.Execute(executeRequestFromString(dump, false, false))
 	if err != nil {
 		t.Fatalf("failed to load simple dump: %s", err.Error())
 	}
@@ -114,7 +114,7 @@ func Test_OpenStoreSingleNode_VacuumFullNeeded(t *testing.T) {
 	er := executeRequestFromStrings([]string{
 		`CREATE TABLE foo (id INTEGER NOT NULL PRIMARY KEY, name TEXT)`,
 	}, false, false)
-	_, err := s.Execute(er)
+	_, _, err := s.Execute(er)
 	if err != nil {
 		t.Fatalf("failed to execute on single node: %s", err.Error())
 	}
@@ -188,7 +188,7 @@ func Test_SingleNodeExplicitVacuumOK(t *testing.T) {
 
 	doVacuum := func() {
 		er := executeRequestFromString(`VACUUM`, false, false)
-		_, err := s.Execute(er)
+		_, _, err := s.Execute(er)
 		if err != nil {
 			t.Fatalf("failed to execute on single node: %s", err.Error())
 		}
@@ -218,12 +218,12 @@ func Test_SingleNodeExplicitVacuumOK(t *testing.T) {
 
 	er := executeRequestFromString(`CREATE TABLE foo (id INTEGER NOT NULL PRIMARY KEY, name TEXT)`,
 		false, false)
-	_, err := s.Execute(er)
+	_, _, err := s.Execute(er)
 	if err != nil {
 		t.Fatalf("failed to execute on single node: %s", err.Error())
 	}
 	for i := 0; i < 100; i++ {
-		_, err := s.Execute(executeRequestFromString(`INSERT INTO foo(name) VALUES("fiona")`, false, false))
+		_, _, err := s.Execute(executeRequestFromString(`INSERT INTO foo(name) VALUES("fiona")`, false, false))
 		if err != nil {
 			t.Fatalf("failed to execute INSERT on single node: %s", err.Error())
 		}
@@ -273,7 +273,7 @@ func Test_SingleNodeExplicitVacuumOK_Stress(t *testing.T) {
 
 	doVacuum := func() {
 		er := executeRequestFromString(`VACUUM`, false, false)
-		_, err := s.Execute(er)
+		_, _, err := s.Execute(er)
 		if err != nil {
 			t.Fatalf("failed to execute on single node: %s", err.Error())
 		}
@@ -304,7 +304,7 @@ func Test_SingleNodeExplicitVacuumOK_Stress(t *testing.T) {
 	// Create a table
 	er := executeRequestFromString(`CREATE TABLE foo (id INTEGER NOT NULL PRIMARY KEY, name TEXT)`,
 		false, false)
-	_, err := s.Execute(er)
+	_, _, err := s.Execute(er)
 	if err != nil {
 		t.Fatalf("failed to execute on single node: %s", err.Error())
 	}
@@ -315,7 +315,7 @@ func Test_SingleNodeExplicitVacuumOK_Stress(t *testing.T) {
 	insertFn := func() {
 		defer wg.Done()
 		for i := 0; i < 500; i++ {
-			_, err := s.Execute(executeRequestFromString(`INSERT INTO foo(name) VALUES("fiona")`, false, false))
+			_, _, err := s.Execute(executeRequestFromString(`INSERT INTO foo(name) VALUES("fiona")`, false, false))
 			if err != nil {
 				t.Errorf("failed to execute INSERT on single node: %s", err.Error())
 			}
@@ -374,12 +374,12 @@ func Test_SingleNode_SnapshotWithAutoVac(t *testing.T) {
 	// Create a table, and insert some data.
 	er := executeRequestFromString(`CREATE TABLE foo (id INTEGER NOT NULL PRIMARY KEY, name TEXT)`,
 		false, false)
-	_, err := s.Execute(er)
+	_, _, err := s.Execute(er)
 	if err != nil {
 		t.Fatalf("failed to execute on single node: %s", err.Error())
 	}
 	for i := 0; i < 100; i++ {
-		_, err := s.Execute(executeRequestFromString(`INSERT INTO foo(name) VALUES("fiona")`, false, false))
+		_, _, err := s.Execute(executeRequestFromString(`INSERT INTO foo(name) VALUES("fiona")`, false, false))
 		if err != nil {
 			t.Fatalf("failed to execute INSERT on single node: %s", err.Error())
 		}
@@ -493,7 +493,7 @@ func Test_SingleNode_SnapshotWithAutoVac_Stress(t *testing.T) {
 	// Create a table
 	er := executeRequestFromString(`CREATE TABLE foo (id INTEGER NOT NULL PRIMARY KEY, name TEXT)`,
 		false, false)
-	_, err := s.Execute(er)
+	_, _, err := s.Execute(er)
 	if err != nil {
 		t.Fatalf("failed to execute on single node: %s", err.Error())
 	}
@@ -504,7 +504,7 @@ func Test_SingleNode_SnapshotWithAutoVac_Stress(t *testing.T) {
 	insertFn := func() {
 		defer wg.Done()
 		for i := 0; i < 500; i++ {
-			_, err := s.Execute(executeRequestFromString(`INSERT INTO foo(name) VALUES("fiona")`, false, false))
+			_, _, err := s.Execute(executeRequestFromString(`INSERT INTO foo(name) VALUES("fiona")`, false, false))
 			if err != nil {
 				t.Errorf("failed to execute INSERT on single node: %s", err.Error())
 			}

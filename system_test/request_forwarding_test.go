@@ -35,7 +35,7 @@ func Test_StoreClientSideBySide(t *testing.T) {
 
 	client := cluster.NewClient(mustNewDialer(cluster.MuxClusterHeader, false, false), 30*time.Second)
 
-	res, err := node.Store.Execute(executeRequestFromString("CREATE TABLE foo (id INTEGER NOT NULL PRIMARY KEY, name TEXT)"))
+	res, _, err := node.Store.Execute(executeRequestFromString("CREATE TABLE foo (id INTEGER NOT NULL PRIMARY KEY, name TEXT)"))
 	if err != nil {
 		t.Fatalf("failed to execute on local: %s", err.Error())
 	}
@@ -51,7 +51,7 @@ func Test_StoreClientSideBySide(t *testing.T) {
 	}
 
 	// ==============================================================================
-	res, err = node.Store.Execute(executeRequestFromString(`INSERT INTO foo(name) VALUES("fiona")`))
+	res, _, err = node.Store.Execute(executeRequestFromString(`INSERT INTO foo(name) VALUES("fiona")`))
 	if err != nil {
 		t.Fatalf("failed to execute on local: %s", err.Error())
 	}
