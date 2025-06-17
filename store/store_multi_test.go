@@ -100,7 +100,7 @@ func Test_MultiNodeSimple(t *testing.T) {
 		`CREATE TABLE foo (id INTEGER NOT NULL PRIMARY KEY, name TEXT)`,
 		`INSERT INTO foo(id, name) VALUES(1, "fiona")`,
 	}, false, false)
-	_, err := s0.Execute(er)
+	_, _, err := s0.Execute(er)
 	if err != nil {
 		t.Fatalf("failed to execute on single node: %s", err.Error())
 	}
@@ -346,7 +346,7 @@ func Test_MultiNodeSnapshot_BlockedSnapshot(t *testing.T) {
 		t.Fatalf("Error waiting for leader: %s", err)
 	}
 	er := executeRequestFromString(`CREATE TABLE foo (id INTEGER NOT NULL PRIMARY KEY, name TEXT)`, false, false)
-	_, err := s0.Execute(er)
+	_, _, err := s0.Execute(er)
 	if err != nil {
 		t.Fatalf("failed to execute on single node: %s", err.Error())
 	}
@@ -359,7 +359,7 @@ func Test_MultiNodeSnapshot_BlockedSnapshot(t *testing.T) {
 			stmts = append(stmts, `INSERT INTO foo(name) VALUES("fiona")`)
 		}
 		er = executeRequestFromStrings(stmts, false, false)
-		_, err = s.Execute(er)
+		_, _, err = s.Execute(er)
 		if err != nil {
 			t.Fatalf("failed to execute on single node: %s", err.Error())
 		}
@@ -483,7 +483,7 @@ func Test_MultiNodeDBAppliedIndex(t *testing.T) {
 		`INSERT INTO foo(id, name) VALUES(2, "fiona")`,
 		`INSERT INTO foo(id, name) VALUES(3, "fiona")`,
 	}, false, false)
-	_, err = s0.Execute(er)
+	_, _, err = s0.Execute(er)
 	if err != nil {
 		t.Fatalf("failed to execute on single node: %s", err.Error())
 	}
@@ -542,7 +542,7 @@ func Test_MultiNodeDBAppliedIndex(t *testing.T) {
 	er = executeRequestFromStrings([]string{
 		`INSERT INTO foo(id, name) VALUES(4, "fiona")`,
 	}, false, false)
-	_, err = s0.Execute(er)
+	_, _, err = s0.Execute(er)
 	if err != nil {
 		t.Fatalf("failed to execute on single node: %s", err.Error())
 	}
@@ -957,7 +957,7 @@ func Test_MultiNodeExecuteQuery(t *testing.T) {
 		`CREATE TABLE foo (id INTEGER NOT NULL PRIMARY KEY, name TEXT)`,
 		`INSERT INTO foo(id, name) VALUES(1, "fiona")`,
 	}, false, false)
-	_, err := s0.Execute(er)
+	_, _, err := s0.Execute(er)
 	if err != nil {
 		t.Fatalf("failed to execute on single node: %s", err.Error())
 	}
@@ -1066,7 +1066,7 @@ func Test_MultiNodeExecuteQueryFreshness(t *testing.T) {
 		`CREATE TABLE foo (id INTEGER NOT NULL PRIMARY KEY, name TEXT)`,
 		`INSERT INTO foo(id, name) VALUES(1, "fiona")`,
 	}, false, false)
-	_, err := s0.Execute(er)
+	_, _, err := s0.Execute(er)
 	if err != nil {
 		t.Fatalf("failed to execute on single node: %s", err.Error())
 	}
@@ -1262,7 +1262,7 @@ func Test_MultiNodeStoreLogTruncation(t *testing.T) {
 		`INSERT INTO foo(id, name) VALUES(5, "fiona")`,
 	}
 	for i := range queries {
-		_, err := s0.Execute(executeRequestFromString(queries[i], false, false))
+		_, _, err := s0.Execute(executeRequestFromString(queries[i], false, false))
 		if err != nil {
 			t.Fatalf("failed to execute on single node: %s", err.Error())
 		}
@@ -1276,7 +1276,7 @@ func Test_MultiNodeStoreLogTruncation(t *testing.T) {
 
 	// Do one more execute, to ensure there is at least one log not snapshot.
 	// Without this, there is no guarantee fsmIndex will be set on s1.
-	_, err := s0.Execute(executeRequestFromString(`INSERT INTO foo(id, name) VALUES(6, "fiona")`, false, false))
+	_, _, err := s0.Execute(executeRequestFromString(`INSERT INTO foo(id, name) VALUES(6, "fiona")`, false, false))
 	if err != nil {
 		t.Fatalf("failed to execute on single node: %s", err.Error())
 	}
@@ -1359,7 +1359,7 @@ func Test_MultiNodeExecuteQuery_Linearizable_AllUp(t *testing.T) {
 		`CREATE TABLE foo (id INTEGER NOT NULL PRIMARY KEY, name TEXT)`,
 		`INSERT INTO foo(id, name) VALUES(1, "fiona")`,
 	}, false, false)
-	_, err := s0.Execute(er)
+	_, _, err := s0.Execute(er)
 	if err != nil {
 		t.Fatalf("failed to execute on leader: %s", err.Error())
 	}
@@ -1442,7 +1442,7 @@ func Test_MultiNodeExecuteQuery_Linearizable_Quorum(t *testing.T) {
 		`CREATE TABLE foo (id INTEGER NOT NULL PRIMARY KEY, name TEXT)`,
 		`INSERT INTO foo(id, name) VALUES(1, "fiona")`,
 	}, false, false)
-	_, err := s0.Execute(er)
+	_, _, err := s0.Execute(er)
 	if err != nil {
 		t.Fatalf("failed to execute on leader: %s", err.Error())
 	}
@@ -1530,7 +1530,7 @@ func Test_MultiNodeExecuteQuery_Linearizable_NoQuorum(t *testing.T) {
 		`CREATE TABLE foo (id INTEGER NOT NULL PRIMARY KEY, name TEXT)`,
 		`INSERT INTO foo(id, name) VALUES(1, "fiona")`,
 	}, false, false)
-	_, err := s0.Execute(er)
+	_, _, err := s0.Execute(er)
 	if err != nil {
 		t.Fatalf("failed to execute on leader: %s", err.Error())
 	}
@@ -1606,7 +1606,7 @@ func Test_MultiNodeExecuteQuery_Linearizable_Concurrent(t *testing.T) {
 		`CREATE TABLE foo (id INTEGER NOT NULL PRIMARY KEY, name TEXT)`,
 		`INSERT INTO foo(id, name) VALUES(1, "fiona")`,
 	}, false, false)
-	_, err := s0.Execute(er)
+	_, _, err := s0.Execute(er)
 	if err != nil {
 		t.Fatalf("failed to execute on leader: %s", err.Error())
 	}

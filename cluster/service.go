@@ -89,7 +89,7 @@ type Dialer interface {
 // Database is the interface any queryable system must implement
 type Database interface {
 	// Execute executes a slice of SQL statements.
-	Execute(er *command.ExecuteRequest) ([]*command.ExecuteQueryResponse, error)
+	Execute(er *command.ExecuteRequest) ([]*command.ExecuteQueryResponse, uint64, error)
 
 	// Query executes a slice of queries, each of which returns rows.
 	Query(qr *command.QueryRequest) ([]*command.QueryRows, error)
@@ -320,7 +320,7 @@ func (s *Service) handleConn(conn net.Conn) {
 			} else if !s.checkCommandPerm(c, auth.PermExecute) {
 				resp.Error = "unauthorized"
 			} else {
-				res, err := s.db.Execute(er)
+				res, _, err := s.db.Execute(er)
 				if err != nil {
 					resp.Error = err.Error()
 				} else {

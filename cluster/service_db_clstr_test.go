@@ -43,11 +43,11 @@ func Test_ServiceExecute(t *testing.T) {
 	}
 
 	// Ready for Execute tests now.
-	db.executeFn = func(er *command.ExecuteRequest) ([]*command.ExecuteQueryResponse, error) {
+	db.executeFn = func(er *command.ExecuteRequest) ([]*command.ExecuteQueryResponse, uint64, error) {
 		if er.Request.Statements[0].Sql != "some SQL" {
 			t.Fatalf("incorrect SQL statement received")
 		}
-		return nil, errors.New("execute failed")
+		return nil, 0, errors.New("execute failed")
 	}
 	_, err := c.Execute(executeRequestFromString("some SQL"), s.Addr(), NO_CREDS, longWait, defaultMaxRetries)
 	if err == nil {
@@ -57,7 +57,7 @@ func Test_ServiceExecute(t *testing.T) {
 		t.Fatalf("incorrect error message received, got: %s", err.Error())
 	}
 
-	db.executeFn = func(er *command.ExecuteRequest) ([]*command.ExecuteQueryResponse, error) {
+	db.executeFn = func(er *command.ExecuteRequest) ([]*command.ExecuteQueryResponse, uint64, error) {
 		if er.Request.Statements[0].Sql != "some SQL" {
 			t.Fatalf("incorrect SQL statement received")
 		}
@@ -69,7 +69,7 @@ func Test_ServiceExecute(t *testing.T) {
 				},
 			},
 		}
-		return []*command.ExecuteQueryResponse{response}, nil
+		return []*command.ExecuteQueryResponse{response}, 0, nil
 	}
 	res, err := c.Execute(executeRequestFromString("some SQL"), s.Addr(), NO_CREDS, longWait, defaultMaxRetries)
 	if err != nil {
@@ -79,7 +79,7 @@ func Test_ServiceExecute(t *testing.T) {
 		t.Fatalf("unexpected results for execute, expected %s, got %s", exp, got)
 	}
 
-	db.executeFn = func(er *command.ExecuteRequest) ([]*command.ExecuteQueryResponse, error) {
+	db.executeFn = func(er *command.ExecuteRequest) ([]*command.ExecuteQueryResponse, uint64, error) {
 		if er.Request.Statements[0].Sql != "some SQL" {
 			t.Fatalf("incorrect SQL statement received")
 		}
@@ -88,7 +88,7 @@ func Test_ServiceExecute(t *testing.T) {
 				Error: "no such table",
 			},
 		}
-		return []*command.ExecuteQueryResponse{response}, nil
+		return []*command.ExecuteQueryResponse{response}, 0, nil
 	}
 	res, err = c.Execute(executeRequestFromString("some SQL"), s.Addr(), NO_CREDS, longWait, defaultMaxRetries)
 	if err != nil {
@@ -98,9 +98,9 @@ func Test_ServiceExecute(t *testing.T) {
 		t.Fatalf("unexpected results for execute, expected %s, got %s", exp, got)
 	}
 
-	db.executeFn = func(er *command.ExecuteRequest) ([]*command.ExecuteQueryResponse, error) {
+	db.executeFn = func(er *command.ExecuteRequest) ([]*command.ExecuteQueryResponse, uint64, error) {
 		time.Sleep(longWait)
-		return nil, nil
+		return nil, 0, nil
 	}
 	_, err = c.Execute(executeRequestFromString("some SQL"), s.Addr(), NO_CREDS, shortWait, defaultMaxRetries)
 	if err == nil {
