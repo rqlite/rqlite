@@ -2853,9 +2853,6 @@ func Test_StoreQueryRaftIndex(t *testing.T) {
 	for _, level := range levels {
 		req := queryRequestFromString("SELECT * FROM foo", false, false)
 		req.Level = level.level
-		if level.level == proto.QueryRequest_QUERY_REQUEST_LEVEL_LINEARIZABLE {
-			req.LinearizableTimeout = int64(5 * time.Second) // Set timeout for linearizable queries
-		}
 		_, index, err := s.Query(req)
 		if err != nil {
 			t.Fatalf("failed to execute %s query: %s", level.name, err.Error())
