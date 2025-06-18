@@ -153,6 +153,9 @@ func Test_StoreClientSideBySide(t *testing.T) {
 	if exp, got := `[{"error":"no such table: qux"}]`, asJSON(results); exp != got {
 		t.Fatalf("unexpected results, exp %s, got %s", exp, got)
 	}
+	// Statements causing errors are considered read-write by SQLite, so
+	// don't bother with index check. It's not super-meaningful.
+
 	rows, err = client.Query(queryRequestFromString(`SELECT * FROM qux`), leaderAddr, NO_CREDS, shortWait)
 	if err != nil {
 		t.Fatalf("failed to query via remote: %s", err.Error())
@@ -160,15 +163,12 @@ func Test_StoreClientSideBySide(t *testing.T) {
 	if exp, got := `[{"error":"no such table: qux"}]`, asJSON(rows); exp != got {
 		t.Fatalf("unexpected results, exp %s, got %s", exp, got)
 	}
-	results, idx, err = client.Request(executeQueryRequestFromString(`SELECT * FROM qux`), leaderAddr, NO_CREDS, shortWait, noRetries)
+	results, _, err = client.Request(executeQueryRequestFromString(`SELECT * FROM qux`), leaderAddr, NO_CREDS, shortWait, noRetries)
 	if err != nil {
 		t.Fatalf("failed to query via remote: %s", err.Error())
 	}
 	if exp, got := `[{"error":"no such table: qux"}]`, asJSON(results); exp != got {
 		t.Fatalf("unexpected results, exp %s, got %s", exp, got)
-	}
-	if idx != 0 {
-		t.Fatalf("expected zero index due to read, got %d", idx)
 	}
 }
 
