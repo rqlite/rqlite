@@ -49,7 +49,7 @@ func Test_ServiceExecute(t *testing.T) {
 		}
 		return nil, 0, errors.New("execute failed")
 	}
-	_, err := c.Execute(executeRequestFromString("some SQL"), s.Addr(), NO_CREDS, longWait, defaultMaxRetries)
+	_, _, err := c.Execute(executeRequestFromString("some SQL"), s.Addr(), NO_CREDS, longWait, defaultMaxRetries)
 	if err == nil {
 		t.Fatalf("client failed to report error")
 	}
@@ -71,7 +71,7 @@ func Test_ServiceExecute(t *testing.T) {
 		}
 		return []*command.ExecuteQueryResponse{response}, 0, nil
 	}
-	res, err := c.Execute(executeRequestFromString("some SQL"), s.Addr(), NO_CREDS, longWait, defaultMaxRetries)
+	res, _, err := c.Execute(executeRequestFromString("some SQL"), s.Addr(), NO_CREDS, longWait, defaultMaxRetries)
 	if err != nil {
 		t.Fatalf("failed to execute query: %s", err.Error())
 	}
@@ -90,7 +90,7 @@ func Test_ServiceExecute(t *testing.T) {
 		}
 		return []*command.ExecuteQueryResponse{response}, 0, nil
 	}
-	res, err = c.Execute(executeRequestFromString("some SQL"), s.Addr(), NO_CREDS, longWait, defaultMaxRetries)
+	res, _, err = c.Execute(executeRequestFromString("some SQL"), s.Addr(), NO_CREDS, longWait, defaultMaxRetries)
 	if err != nil {
 		t.Fatalf("failed to execute: %s", err.Error())
 	}
@@ -102,7 +102,7 @@ func Test_ServiceExecute(t *testing.T) {
 		time.Sleep(longWait)
 		return nil, 0, nil
 	}
-	_, err = c.Execute(executeRequestFromString("some SQL"), s.Addr(), NO_CREDS, shortWait, defaultMaxRetries)
+	_, _, err = c.Execute(executeRequestFromString("some SQL"), s.Addr(), NO_CREDS, shortWait, defaultMaxRetries)
 	if err == nil {
 		t.Fatalf("failed to receive expected error")
 	}

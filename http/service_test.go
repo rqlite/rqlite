@@ -1262,7 +1262,7 @@ func Test_ForwardingRedirectExecute(t *testing.T) {
 	c := &mockClusterService{
 		apiAddr: "https://bar:5678",
 	}
-	c.executeFn = func(er *command.ExecuteRequest, addr string, timeout time.Duration) ([]*command.ExecuteQueryResponse, error) {
+	c.executeFn = func(er *command.ExecuteRequest, addr string, timeout time.Duration) ([]*command.ExecuteQueryResponse, uint64, error) {
 		result := &command.ExecuteQueryResponse{
 			Result: &command.ExecuteQueryResponse_E{
 				E: &command.ExecuteResult{
@@ -1271,7 +1271,7 @@ func Test_ForwardingRedirectExecute(t *testing.T) {
 				},
 			},
 		}
-		return []*command.ExecuteQueryResponse{result}, nil
+		return []*command.ExecuteQueryResponse{result}, 0, nil
 	}
 
 	s := New("127.0.0.1:0", m, c, nil)
@@ -1326,7 +1326,7 @@ func Test_ForwardingRedirectExecuteQuery(t *testing.T) {
 	c := &mockClusterService{
 		apiAddr: "https://bar:5678",
 	}
-	c.requestFn = func(er *command.ExecuteQueryRequest, addr string, timeout time.Duration) ([]*command.ExecuteQueryResponse, error) {
+	c.requestFn = func(er *command.ExecuteQueryRequest, addr string, timeout time.Duration) ([]*command.ExecuteQueryResponse, uint64, error) {
 		resp := &command.ExecuteQueryResponse{
 			Result: &command.ExecuteQueryResponse_E{
 				E: &command.ExecuteResult{
@@ -1335,7 +1335,7 @@ func Test_ForwardingRedirectExecuteQuery(t *testing.T) {
 				},
 			},
 		}
-		return []*command.ExecuteQueryResponse{resp}, nil
+		return []*command.ExecuteQueryResponse{resp}, 0, nil
 	}
 
 	s := New("127.0.0.1:0", m, c, nil)
@@ -1605,9 +1605,9 @@ func (m *MockStore) ReadFrom(r io.Reader) (int64, error) {
 
 type mockClusterService struct {
 	apiAddr      string
-	executeFn    func(er *command.ExecuteRequest, addr string, t time.Duration) ([]*command.ExecuteQueryResponse, error)
+	executeFn    func(er *command.ExecuteRequest, addr string, t time.Duration) ([]*command.ExecuteQueryResponse, uint64, error)
 	queryFn      func(qr *command.QueryRequest, addr string, t time.Duration) ([]*command.QueryRows, error)
-	requestFn    func(eqr *command.ExecuteQueryRequest, nodeAddr string, timeout time.Duration) ([]*command.ExecuteQueryResponse, error)
+	requestFn    func(eqr *command.ExecuteQueryRequest, nodeAddr string, timeout time.Duration) ([]*command.ExecuteQueryResponse, uint64, error)
 	backupFn     func(br *command.BackupRequest, addr string, t time.Duration, w io.Writer) error
 	loadFn       func(lr *command.LoadRequest, addr string, t time.Duration) error
 	removeNodeFn func(rn *command.RemoveNodeRequest, nodeAddr string, t time.Duration) error
@@ -1619,11 +1619,11 @@ func (m *mockClusterService) GetNodeMeta(a string, r int, t time.Duration) (*clu
 	}, nil
 }
 
-func (m *mockClusterService) Execute(er *command.ExecuteRequest, addr string, creds *cluster.Credentials, t time.Duration, r int) ([]*command.ExecuteQueryResponse, error) {
+func (m *mockClusterService) Execute(er *command.ExecuteRequest, addr string, creds *cluster.Credentials, t time.Duration, r int) ([]*command.ExecuteQueryResponse, uint64, error) {
 	if m.executeFn != nil {
 		return m.executeFn(er, addr, t)
 	}
-	return nil, nil
+	return nil, 0, nil
 }
 
 func (m *mockClusterService) Query(qr *command.QueryRequest, addr string, creds *cluster.Credentials, t time.Duration) ([]*command.QueryRows, error) {
@@ -1633,11 +1633,11 @@ func (m *mockClusterService) Query(qr *command.QueryRequest, addr string, creds 
 	return nil, nil
 }
 
-func (m *mockClusterService) Request(eqr *command.ExecuteQueryRequest, nodeAddr string, creds *cluster.Credentials, timeout time.Duration, r int) ([]*command.ExecuteQueryResponse, error) {
+func (m *mockClusterService) Request(eqr *command.ExecuteQueryRequest, nodeAddr string, creds *cluster.Credentials, timeout time.Duration, r int) ([]*command.ExecuteQueryResponse, uint64, error) {
 	if m.requestFn != nil {
 		return m.requestFn(eqr, nodeAddr, timeout)
 	}
-	return nil, nil
+	return nil, 0, nil
 }
 
 func (m *mockClusterService) Backup(br *command.BackupRequest, addr string, creds *cluster.Credentials, t time.Duration, w io.Writer) error {

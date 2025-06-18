@@ -320,12 +320,13 @@ func (s *Service) handleConn(conn net.Conn) {
 			} else if !s.checkCommandPerm(c, auth.PermExecute) {
 				resp.Error = "unauthorized"
 			} else {
-				res, _, err := s.db.Execute(er)
+				res, idx, err := s.db.Execute(er)
 				if err != nil {
 					resp.Error = err.Error()
 				} else {
 					resp.Response = make([]*command.ExecuteQueryResponse, len(res))
 					copy(resp.Response, res)
+					resp.RaftIndex = idx
 				}
 			}
 			if err := marshalAndWrite(conn, resp); err != nil {
@@ -364,12 +365,13 @@ func (s *Service) handleConn(conn net.Conn) {
 			} else if !s.checkCommandPermAll(c, auth.PermQuery, auth.PermExecute) {
 				resp.Error = "unauthorized"
 			} else {
-				res, _, err := s.db.Request(rr)
+				res, idx, err := s.db.Request(rr)
 				if err != nil {
 					resp.Error = err.Error()
 				} else {
 					resp.Response = make([]*command.ExecuteQueryResponse, len(res))
 					copy(resp.Response, res)
+					resp.RaftIndex = idx
 				}
 			}
 			if err := marshalAndWrite(conn, resp); err != nil {

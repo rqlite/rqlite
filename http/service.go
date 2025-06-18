@@ -110,13 +110,13 @@ type Cluster interface {
 	GetNodeMetaer
 
 	// Execute performs an Execute Request on a remote node.
-	Execute(er *command.ExecuteRequest, nodeAddr string, creds *clstrPB.Credentials, timeout time.Duration, retries int) ([]*command.ExecuteQueryResponse, error)
+	Execute(er *command.ExecuteRequest, nodeAddr string, creds *clstrPB.Credentials, timeout time.Duration, retries int) ([]*command.ExecuteQueryResponse, uint64, error)
 
 	// Query performs an Query Request on a remote node.
 	Query(qr *command.QueryRequest, nodeAddr string, creds *clstrPB.Credentials, timeout time.Duration) ([]*command.QueryRows, error)
 
 	// Request performs an ExecuteQuery Request on a remote node.
-	Request(eqr *command.ExecuteQueryRequest, nodeAddr string, creds *clstrPB.Credentials, timeout time.Duration, retries int) ([]*command.ExecuteQueryResponse, error)
+	Request(eqr *command.ExecuteQueryRequest, nodeAddr string, creds *clstrPB.Credentials, timeout time.Duration, retries int) ([]*command.ExecuteQueryResponse, uint64, error)
 
 	// Backup retrieves a backup from a remote node and writes to the io.Writer.
 	Backup(br *command.BackupRequest, nodeAddr string, creds *clstrPB.Credentials, timeout time.Duration, w io.Writer) error
@@ -765,7 +765,7 @@ func (s *Service) handleLoad(w http.ResponseWriter, r *http.Request, qp QueryPar
 
 				w.Header().Add(ServedByHTTPHeader, ldrAddr)
 				var exErr error
-				response, exErr = s.cluster.Execute(er, ldrAddr, makeCredentials(r),
+				response, _, exErr = s.cluster.Execute(er, ldrAddr, makeCredentials(r),
 					qp.Timeout(defaultTimeout), qp.Retries(0))
 				if exErr != nil {
 					handleRemoteErr(exErr)
@@ -1222,9 +1222,8 @@ func (s *Service) execute(w http.ResponseWriter, r *http.Request, qp QueryParams
 		}
 
 		w.Header().Add(ServedByHTTPHeader, addr)
-		results, resultsErr = s.cluster.Execute(er, addr, makeCredentials(r),
+		results, raftIndex, resultsErr = s.cluster.Execute(er, addr, makeCredentials(r),
 			qp.Timeout(defaultTimeout), qp.Retries(0))
-		raftIndex = 0 // Set to zero for forwarded requests as per issue requirements
 		if resultsErr != nil {
 			stats.Add(numRemoteExecutionsFailed, 1)
 			if resultsErr.Error() == "unauthorized" {
@@ -1241,7 +1240,9 @@ func (s *Service) execute(w http.ResponseWriter, r *http.Request, qp QueryParams
 		resp.Error = resultsErr.Error()
 	} else {
 		resp.Results.ExecuteQueryResponse = results
-		resp.RaftIndex = raftIndex
+		if qp.RaftIndex() {
+			resp.RaftIndex = raftIndex
+		}
 	}
 	resp.end = time.Now()
 	s.writeResponse(w, qp, resp)
@@ -1395,7 +1396,7 @@ func (s *Service) handleRequest(w http.ResponseWriter, r *http.Request, qp Query
 		FreshnessStrict: qp.FreshnessStrict(),
 	}
 
-	results, _, resultsErr := s.store.Request(eqr)
+	results, raftIndex, resultsErr := s.store.Request(eqr)
 	if resultsErr != nil && resultsErr == store.ErrNotLeader {
 		if s.DoRedirect(w, r, qp) {
 			return
@@ -1413,7 +1414,7 @@ func (s *Service) handleRequest(w http.ResponseWriter, r *http.Request, qp Query
 		}
 
 		w.Header().Add(ServedByHTTPHeader, addr)
-		results, resultsErr = s.cluster.Request(eqr, addr, makeCredentials(r),
+		results, raftIndex, resultsErr = s.cluster.Request(eqr, addr, makeCredentials(r),
 			qp.Timeout(defaultTimeout), qp.Retries(0))
 		if resultsErr != nil {
 			stats.Add(numRemoteRequestsFailed, 1)
@@ -1431,6 +1432,9 @@ func (s *Service) handleRequest(w http.ResponseWriter, r *http.Request, qp Query
 		resp.Error = resultsErr.Error()
 	} else {
 		resp.Results.ExecuteQueryResponse = results
+		if qp.RaftIndex() {
+			resp.RaftIndex = raftIndex
+		}
 	}
 	resp.end = time.Now()
 	s.writeResponse(w, qp, resp)
@@ -1629,7 +1633,7 @@ func (s *Service) runQueue() {
 								req.SequenceNumber, s.Addr().String())
 							stats.Add(numQueuedExecutionsNoLeader, 1)
 						} else {
-							_, err = s.cluster.Execute(er, addr, nil, defaultTimeout, 0)
+							_, _, err = s.cluster.Execute(er, addr, nil, defaultTimeout, 0)
 							if err != nil {
 								s.logger.Printf("execute queue write failed for sequence number %d on node %s: %s",
 									req.SequenceNumber, s.Addr().String(), err.Error())
