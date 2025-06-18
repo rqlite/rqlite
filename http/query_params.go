@@ -215,6 +215,12 @@ func (qp QueryParams) Sync() bool {
 	return qp.HasKey("sync")
 }
 
+// RaftIndex returns true if the query parameters request the Raft index
+// to be included in the response.
+func (qp QueryParams) RaftIndex() bool {
+	return qp.HasKey("raft_index")
+}
+
 // Timeout returns the requested timeout duration.
 func (qp QueryParams) Timeout(def time.Duration) time.Duration {
 	t, ok := qp["timeout"]

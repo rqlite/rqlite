@@ -119,7 +119,7 @@ func Test_ClientExecute(t *testing.T) {
 			t.Fatalf("unexpected statement, got %s", er.Request.Statements[0])
 		}
 
-		p, err = pb.Marshal(&proto.CommandExecuteResponse{})
+		p, err = pb.Marshal(&proto.CommandExecuteResponse{RaftIndex: 1234})
 		if err != nil {
 			conn.Close()
 		}
@@ -129,10 +129,13 @@ func Test_ClientExecute(t *testing.T) {
 	defer srv.Close()
 
 	c := NewClient(&simpleDialer{}, 0)
-	_, err := c.Execute(executeRequestFromString("INSERT INTO foo (id) VALUES (1)"),
+	_, idx, err := c.Execute(executeRequestFromString("INSERT INTO foo (id) VALUES (1)"),
 		srv.Addr(), nil, time.Second, defaultMaxRetries)
 	if err != nil {
 		t.Fatal(err)
+	}
+	if idx != 1234 {
+		t.Fatalf("unexpected raft index, got %d, exp: %d", idx, 1234)
 	}
 }
 
@@ -197,7 +200,7 @@ func Test_ClientRequest(t *testing.T) {
 			t.Fatalf("unexpected statement, got %s", er.Request.Statements[0])
 		}
 
-		p, err = pb.Marshal(&proto.CommandRequestResponse{})
+		p, err = pb.Marshal(&proto.CommandRequestResponse{RaftIndex: 1234})
 		if err != nil {
 			conn.Close()
 		}
@@ -207,10 +210,13 @@ func Test_ClientRequest(t *testing.T) {
 	defer srv.Close()
 
 	c := NewClient(&simpleDialer{}, 0)
-	_, err := c.Request(executeQueryRequestFromString("SELECT * FROM foo"),
+	_, idx, err := c.Request(executeQueryRequestFromString("SELECT * FROM foo"),
 		srv.Addr(), nil, time.Second, defaultMaxRetries)
 	if err != nil {
 		t.Fatal(err)
+	}
+	if idx != 1234 {
+		t.Fatalf("unexpected raft index, got %d, exp: %d", idx, 1234)
 	}
 }
 
