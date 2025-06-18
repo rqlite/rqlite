@@ -49,14 +49,14 @@ message Command {
 }
 
 message CommandExecuteResponse {
-	string error = 1;
+    string error = 1;
     repeated command.ExecuteQueryResponse response = 2;
     uint64 raftIndex = 3;
 }
 
 message CommandQueryResponse {
-	string error = 1;
-	repeated command.QueryRows rows = 2;
+    string error = 1;
+    repeated command.QueryRows rows = 2;
     uint64 raftIndex = 3;
 }
 
