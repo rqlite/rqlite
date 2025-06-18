@@ -2688,7 +2688,6 @@ func Test_RWROCount(t *testing.T) {
 func Test_StoreExecuteRaftIndex(t *testing.T) {
 	s, ln := mustNewStore(t)
 	defer ln.Close()
-	defer s.Close(true)
 
 	if err := s.Open(); err != nil {
 		t.Fatalf("failed to open single-node store: %s", err.Error())
@@ -2735,11 +2734,11 @@ func Test_StoreExecuteRaftIndex(t *testing.T) {
 func Test_StoreRequestRaftIndex(t *testing.T) {
 	s, ln := mustNewStore(t)
 	defer ln.Close()
-	defer s.Close(true)
 
 	if err := s.Open(); err != nil {
 		t.Fatalf("failed to open single-node store: %s", err.Error())
 	}
+	defer s.Close(true)
 	if err := s.Bootstrap(NewServer(s.ID(), s.Addr(), true)); err != nil {
 		t.Fatalf("failed to bootstrap single-node store: %s", err.Error())
 	}
