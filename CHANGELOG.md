@@ -8,6 +8,7 @@
 - [PR #2110](https://github.com/rqlite/rqlite/pull/2110): Expose Raft log index via `Store.Execute()`.
 - [PR #2112](https://github.com/rqlite/rqlite/pull/2112): Expose Raft log index via `Store.Request()`.
 - [PR #2114](https://github.com/rqlite/rqlite/pull/2114): Support returning Raft Index in HTTP responses.
+- [PR #2115](https://github.com/rqlite/rqlite/pull/2115): Upgrade `go mod` dependencies.
 
 ## v8.37.4 (June 7th 2025)
 ### Implementation changes and bug fixes
