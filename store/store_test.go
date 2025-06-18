@@ -2685,6 +2685,124 @@ func Test_RWROCount(t *testing.T) {
 
 }
 
+func Test_StoreExecuteRaftIndex(t *testing.T) {
+	s, ln := mustNewStore(t)
+	defer ln.Close()
+
+	if err := s.Open(); err != nil {
+		t.Fatalf("failed to open single-node store: %s", err.Error())
+	}
+	defer s.Close(true)
+	if err := s.Bootstrap(NewServer(s.ID(), s.Addr(), true)); err != nil {
+		t.Fatalf("failed to bootstrap single-node store: %s", err.Error())
+	}
+	if _, err := s.WaitForLeader(10 * time.Second); err != nil {
+		t.Fatalf("Error waiting for leader: %s", err)
+	}
+
+	// Execute a command and verify we get a non-zero Raft index
+	er := executeRequestFromStrings([]string{
+		`CREATE TABLE foo (id INTEGER NOT NULL PRIMARY KEY, name TEXT)`,
+	}, false, false)
+	_, raftIndex, err := s.Execute(er)
+	if err != nil {
+		t.Fatalf("failed to execute on single node: %s", err.Error())
+	}
+
+	if raftIndex == 0 {
+		t.Fatalf("expected non-zero Raft index, got %d", raftIndex)
+	}
+
+	t.Logf("Successfully executed command and received Raft index: %d", raftIndex)
+
+	// Execute another command and verify the index increases
+	er2 := executeRequestFromStrings([]string{
+		`INSERT INTO foo(id, name) VALUES(1, "test")`,
+	}, false, false)
+
+	_, raftIndex2, err2 := s.Execute(er2)
+	if err2 != nil {
+		t.Fatalf("failed to execute second command: %s", err2.Error())
+	}
+
+	if raftIndex2 <= raftIndex {
+		t.Fatalf("expected second Raft index (%d) to be greater than first (%d)", raftIndex2, raftIndex)
+	}
+}
+
+// Test_StoreRequestRaftIndex tests that Store.Request returns the correct Raft index
+func Test_StoreRequestRaftIndex(t *testing.T) {
+	s, ln := mustNewStore(t)
+	defer ln.Close()
+
+	if err := s.Open(); err != nil {
+		t.Fatalf("failed to open single-node store: %s", err.Error())
+	}
+	defer s.Close(true)
+	if err := s.Bootstrap(NewServer(s.ID(), s.Addr(), true)); err != nil {
+		t.Fatalf("failed to bootstrap single-node store: %s", err.Error())
+	}
+	if _, err := s.WaitForLeader(10 * time.Second); err != nil {
+		t.Fatalf("Error waiting for leader: %s", err)
+	}
+
+	// Test 1: Write request should return a non-zero index
+	writeReq := executeQueryRequestFromStrings([]string{
+		`CREATE TABLE foo (id INTEGER NOT NULL PRIMARY KEY, name TEXT)`,
+	}, proto.QueryRequest_QUERY_REQUEST_LEVEL_STRONG, false, false)
+
+	_, raftIndex, err := s.Request(writeReq)
+	if err != nil {
+		t.Fatalf("failed to execute write request: %s", err.Error())
+	}
+	if raftIndex == 0 {
+		t.Fatalf("expected non-zero Raft index for write request, got %d", raftIndex)
+	}
+
+	// Test 2: Read-only request with NONE consistency should return index 0
+	readReq := executeQueryRequestFromStrings([]string{
+		`SELECT * FROM foo`,
+	}, proto.QueryRequest_QUERY_REQUEST_LEVEL_NONE, false, false)
+
+	_, readIndex, err := s.Request(readReq)
+	if err != nil {
+		t.Fatalf("failed to execute read request: %s", err.Error())
+	}
+	if readIndex != 0 {
+		t.Fatalf("expected index 0 for read-only request, got %d", readIndex)
+	}
+
+	// Test 3: Another write request should return a higher index
+	writeReq2 := executeQueryRequestFromStrings([]string{
+		`INSERT INTO foo(id, name) VALUES(1, "test")`,
+	}, proto.QueryRequest_QUERY_REQUEST_LEVEL_STRONG, false, false)
+
+	_, raftIndex2, err := s.Request(writeReq2)
+	if err != nil {
+		t.Fatalf("failed to execute second write request: %s", err.Error())
+	}
+	if raftIndex2 <= raftIndex {
+		t.Fatalf("expected second Raft index (%d) to be greater than first (%d)", raftIndex2, raftIndex)
+	}
+
+	// Test 4: STRONG read should go through Raft and return a non-zero index
+	strongReadReq := executeQueryRequestFromStrings([]string{
+		`SELECT * FROM foo`,
+	}, proto.QueryRequest_QUERY_REQUEST_LEVEL_STRONG, false, false)
+
+	_, strongReadIndex, err := s.Request(strongReadReq)
+	if err != nil {
+		t.Fatalf("failed to execute strong read request: %s", err.Error())
+	}
+
+	if strongReadIndex == 0 {
+		t.Fatalf("expected non-zero Raft index for STRONG read request, got %d", strongReadIndex)
+	}
+	if strongReadIndex <= raftIndex2 {
+		t.Fatalf("expected STRONG read Raft index (%d) to be greater than second write index (%d)", strongReadIndex, raftIndex2)
+	}
+}
+
 func Test_State(t *testing.T) {
 	s, ln := mustNewStore(t)
 	defer ln.Close()

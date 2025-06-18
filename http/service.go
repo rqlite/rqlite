@@ -178,7 +178,7 @@ type Response struct {
 	Error       string     `json:"error,omitempty"`
 	Time        float64    `json:"time,omitempty"`
 	SequenceNum int64      `json:"sequence_number,omitempty"`
-	RaftIndex   uint64     `json:"-"` // JSON-hidden field for Raft log index
+	RaftIndex   uint64     `json:"raft_index,omitempty"`
 
 	start time.Time
 	end   time.Time
