@@ -1265,7 +1265,7 @@ func (s *Store) Query(qr *proto.QueryRequest) (rows []*proto.QueryRows, raftInde
 			}
 			return nil, 0, af.Error()
 		}
-		s.strongReadTerm.Store(af.Index())
+		s.strongReadTerm.Store(readTerm)
 		r := af.Response().(*fsmQueryResponse)
 		return r.rows, af.Index(), r.error
 	}

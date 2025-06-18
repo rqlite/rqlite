@@ -2832,32 +2832,43 @@ func Test_StoreQueryRaftIndex(t *testing.T) {
 		t.Fatalf("expected non-zero Raft index for write request, got %d", writeIndex)
 	}
 
-	// Test 1: NONE consistency should return index 0
-	noneReq := queryRequestFromString("SELECT * FROM foo", false, false)
-	noneReq.Level = proto.QueryRequest_QUERY_REQUEST_LEVEL_NONE
-	_, noneIndex, err := s.Query(noneReq)
-	if err != nil {
-		t.Fatalf("failed to execute NONE query: %s", err.Error())
-	}
-	if noneIndex != 0 {
-		t.Fatalf("expected index 0 for NONE consistency query, got %d", noneIndex)
-	}
-
-	// Test 2: WEAK consistency should return index 0
-	weakReq := queryRequestFromString("SELECT * FROM foo", false, false)
-	weakReq.Level = proto.QueryRequest_QUERY_REQUEST_LEVEL_WEAK
-	_, weakIndex, err := s.Query(weakReq)
-	if err != nil {
-		t.Fatalf("failed to execute WEAK query: %s", err.Error())
-	}
-	if weakIndex != 0 {
-		t.Fatalf("expected index 0 for WEAK consistency query, got %d", weakIndex)
-	}
-
-	// Test 3: STRONG consistency should return non-zero index
+	// First do a STRONG query to set the strongReadTerm for the current term
 	strongReq := queryRequestFromString("SELECT * FROM foo", false, false)
 	strongReq.Level = proto.QueryRequest_QUERY_REQUEST_LEVEL_STRONG
-	_, strongIndex, err := s.Query(strongReq)
+	_, _, err = s.Query(strongReq)
+	if err != nil {
+		t.Fatalf("failed to execute initial STRONG query: %s", err.Error())
+	}
+
+	// Test that NONE, WEAK, and LINEARIZABLE consistency levels return index 0
+	levels := []struct {
+		level proto.QueryRequest_Level
+		name  string
+	}{
+		{proto.QueryRequest_QUERY_REQUEST_LEVEL_NONE, "NONE"},
+		{proto.QueryRequest_QUERY_REQUEST_LEVEL_WEAK, "WEAK"},
+		{proto.QueryRequest_QUERY_REQUEST_LEVEL_LINEARIZABLE, "LINEARIZABLE"},
+	}
+
+	for _, level := range levels {
+		req := queryRequestFromString("SELECT * FROM foo", false, false)
+		req.Level = level.level
+		if level.level == proto.QueryRequest_QUERY_REQUEST_LEVEL_LINEARIZABLE {
+			req.LinearizableTimeout = int64(5 * time.Second) // Set timeout for linearizable queries
+		}
+		_, index, err := s.Query(req)
+		if err != nil {
+			t.Fatalf("failed to execute %s query: %s", level.name, err.Error())
+		}
+		if index != 0 {
+			t.Fatalf("expected index 0 for %s consistency query, got %d", level.name, index)
+		}
+	}
+
+	// Test STRONG consistency should return non-zero index
+	strongTestReq := queryRequestFromString("SELECT * FROM foo", false, false)
+	strongTestReq.Level = proto.QueryRequest_QUERY_REQUEST_LEVEL_STRONG
+	_, strongIndex, err := s.Query(strongTestReq)
 	if err != nil {
 		t.Fatalf("failed to execute STRONG query: %s", err.Error())
 	}
