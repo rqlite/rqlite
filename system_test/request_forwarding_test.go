@@ -102,7 +102,7 @@ func Test_StoreClientSideBySide(t *testing.T) {
 		t.Fatalf("unexpected results, exp %s, got %s", exp, got)
 	}
 	if idx == 0 {
-		t.Fatalf("expected non-zero index, got %d", idx)
+		t.Fatalf("expected zero index due to only read, got %d", idx)
 	}
 
 	// ==============================================================================
@@ -134,8 +134,8 @@ func Test_StoreClientSideBySide(t *testing.T) {
 	if exp, got := `[{"columns":["id","name"],"types":["integer","text"],"values":[[1,"fiona"]]}]`, asJSON(results); exp != got {
 		t.Fatalf("unexpected results, exp %s, got %s", exp, got)
 	}
-	if idx == 0 {
-		t.Fatalf("expected non-zero index, got %d", idx)
+	if idx != 0 {
+		t.Fatalf("expected zero Raft index due to read, got %d", idx)
 	}
 
 	// ==============================================================================
@@ -167,8 +167,8 @@ func Test_StoreClientSideBySide(t *testing.T) {
 	if exp, got := `[{"error":"no such table: qux"}]`, asJSON(results); exp != got {
 		t.Fatalf("unexpected results, exp %s, got %s", exp, got)
 	}
-	if idx == 0 {
-		t.Fatalf("expected non-zero index, got %d", idx)
+	if idx != 0 {
+		t.Fatalf("expected zero index due to read, got %d", idx)
 	}
 }
 
