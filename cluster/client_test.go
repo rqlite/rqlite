@@ -129,7 +129,7 @@ func Test_ClientExecute(t *testing.T) {
 	defer srv.Close()
 
 	c := NewClient(&simpleDialer{}, 0)
-	_, err := c.Execute(executeRequestFromString("INSERT INTO foo (id) VALUES (1)"),
+	_, _, err := c.Execute(executeRequestFromString("INSERT INTO foo (id) VALUES (1)"),
 		srv.Addr(), nil, time.Second, defaultMaxRetries)
 	if err != nil {
 		t.Fatal(err)
@@ -207,7 +207,7 @@ func Test_ClientRequest(t *testing.T) {
 	defer srv.Close()
 
 	c := NewClient(&simpleDialer{}, 0)
-	_, err := c.Request(executeQueryRequestFromString("SELECT * FROM foo"),
+	_, _, err := c.Request(executeQueryRequestFromString("SELECT * FROM foo"),
 		srv.Addr(), nil, time.Second, defaultMaxRetries)
 	if err != nil {
 		t.Fatal(err)

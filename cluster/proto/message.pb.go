@@ -424,6 +424,7 @@ type CommandExecuteResponse struct {
 	state         protoimpl.MessageState        `protogen:"open.v1"`
 	Error         string                        `protobuf:"bytes,1,opt,name=error,proto3" json:"error,omitempty"`
 	Response      []*proto.ExecuteQueryResponse `protobuf:"bytes,2,rep,name=response,proto3" json:"response,omitempty"`
+	RaftIndex     uint64                        `protobuf:"varint,3,opt,name=raftIndex,proto3" json:"raftIndex,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -472,10 +473,18 @@ func (x *CommandExecuteResponse) GetResponse() []*proto.ExecuteQueryResponse {
 	return nil
 }
 
+func (x *CommandExecuteResponse) GetRaftIndex() uint64 {
+	if x != nil {
+		return x.RaftIndex
+	}
+	return 0
+}
+
 type CommandQueryResponse struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Error         string                 `protobuf:"bytes,1,opt,name=error,proto3" json:"error,omitempty"`
 	Rows          []*proto.QueryRows     `protobuf:"bytes,2,rep,name=rows,proto3" json:"rows,omitempty"`
+	RaftIndex     uint64                 `protobuf:"varint,3,opt,name=raftIndex,proto3" json:"raftIndex,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -524,10 +533,18 @@ func (x *CommandQueryResponse) GetRows() []*proto.QueryRows {
 	return nil
 }
 
+func (x *CommandQueryResponse) GetRaftIndex() uint64 {
+	if x != nil {
+		return x.RaftIndex
+	}
+	return 0
+}
+
 type CommandRequestResponse struct {
 	state         protoimpl.MessageState        `protogen:"open.v1"`
 	Error         string                        `protobuf:"bytes,1,opt,name=error,proto3" json:"error,omitempty"`
 	Response      []*proto.ExecuteQueryResponse `protobuf:"bytes,2,rep,name=response,proto3" json:"response,omitempty"`
+	RaftIndex     uint64                        `protobuf:"varint,3,opt,name=raftIndex,proto3" json:"raftIndex,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -574,6 +591,13 @@ func (x *CommandRequestResponse) GetResponse() []*proto.ExecuteQueryResponse {
 		return x.Response
 	}
 	return nil
+}
+
+func (x *CommandRequestResponse) GetRaftIndex() uint64 {
+	if x != nil {
+		return x.RaftIndex
+	}
+	return 0
 }
 
 type CommandBackupResponse struct {
@@ -895,16 +919,19 @@ const file_message_proto_rawDesc = "" +
 	"\x17COMMAND_TYPE_LOAD_CHUNK\x10\n" +
 	"\x12\x1e\n" +
 	"\x1aCOMMAND_TYPE_BACKUP_STREAM\x10\vB\t\n" +
-	"\arequest\"i\n" +
+	"\arequest\"\x87\x01\n" +
 	"\x16CommandExecuteResponse\x12\x14\n" +
 	"\x05error\x18\x01 \x01(\tR\x05error\x129\n" +
-	"\bresponse\x18\x02 \x03(\v2\x1d.command.ExecuteQueryResponseR\bresponse\"T\n" +
+	"\bresponse\x18\x02 \x03(\v2\x1d.command.ExecuteQueryResponseR\bresponse\x12\x1c\n" +
+	"\traftIndex\x18\x03 \x01(\x04R\traftIndex\"r\n" +
 	"\x14CommandQueryResponse\x12\x14\n" +
 	"\x05error\x18\x01 \x01(\tR\x05error\x12&\n" +
-	"\x04rows\x18\x02 \x03(\v2\x12.command.QueryRowsR\x04rows\"i\n" +
+	"\x04rows\x18\x02 \x03(\v2\x12.command.QueryRowsR\x04rows\x12\x1c\n" +
+	"\traftIndex\x18\x03 \x01(\x04R\traftIndex\"\x87\x01\n" +
 	"\x16CommandRequestResponse\x12\x14\n" +
 	"\x05error\x18\x01 \x01(\tR\x05error\x129\n" +
-	"\bresponse\x18\x02 \x03(\v2\x1d.command.ExecuteQueryResponseR\bresponse\"A\n" +
+	"\bresponse\x18\x02 \x03(\v2\x1d.command.ExecuteQueryResponseR\bresponse\x12\x1c\n" +
+	"\traftIndex\x18\x03 \x01(\x04R\traftIndex\"A\n" +
 	"\x15CommandBackupResponse\x12\x14\n" +
 	"\x05error\x18\x01 \x01(\tR\x05error\x12\x12\n" +
 	"\x04data\x18\x02 \x01(\fR\x04data\"+\n" +
