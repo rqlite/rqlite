@@ -94,7 +94,7 @@ func main() {
 			return nil
 		}
 
-		if argv.Host == "127.0.0.1" && argv.Port == 4001 && argv.Protocol == "http" {
+		if !(ctx.IsSet("--host", "-H") || ctx.IsSet("--port", "-p") || ctx.IsSet("--scheme", "-s")) {
 			parseHostEnv(argv)
 		}
 
