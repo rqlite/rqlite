@@ -9,11 +9,11 @@
 - [PR #2112](https://github.com/rqlite/rqlite/pull/2112): Expose Raft log index via `Store.Request()`.
 - [PR #2114](https://github.com/rqlite/rqlite/pull/2114): Support returning Raft Index in HTTP responses.
 
-## v8.37.4 (Jun 7th 2025)
+## v8.37.4 (June 7th 2025)
 ### Implementation changes and bug fixes
 - [PR #2098](https://github.com/rqlite/rqlite/pull/2098): Upgrade SQL parser.
 
-## v8.37.3 (Jun 6th 2025)
+## v8.37.3 (June 6th 2025)
 ### Implementation changes and bug fixes
 - [PR #2097](https://github.com/rqlite/rqlite/pull/2097): Upgrade SQL parser.
 
