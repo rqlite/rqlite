@@ -210,7 +210,7 @@ func (c *Client) Execute(er *command.ExecuteRequest, nodeAddr string, creds *pro
 // Query performs a Query on a remote node. If creds is nil, then
 // no credential information will be included in the Query request to the
 // remote node.
-func (c *Client) Query(qr *command.QueryRequest, nodeAddr string, creds *proto.Credentials, timeout time.Duration) ([]*command.QueryRows, error) {
+func (c *Client) Query(qr *command.QueryRequest, nodeAddr string, creds *proto.Credentials, timeout time.Duration) ([]*command.QueryRows, uint64, error) {
 	command := &proto.Command{
 		Type: proto.Command_COMMAND_TYPE_QUERY,
 		Request: &proto.Command_QueryRequest{
@@ -221,19 +221,19 @@ func (c *Client) Query(qr *command.QueryRequest, nodeAddr string, creds *proto.C
 	p, nr, err := c.retry(command, nodeAddr, timeout, defaultMaxRetries)
 	stats.Add(numClientQueryRetries, int64(nr))
 	if err != nil {
-		return nil, err
+		return nil, 0, err
 	}
 
 	a := &proto.CommandQueryResponse{}
 	err = pb.Unmarshal(p, a)
 	if err != nil {
-		return nil, err
+		return nil, 0, err
 	}
 
 	if a.Error != "" {
-		return nil, errors.New(a.Error)
+		return nil, 0, errors.New(a.Error)
 	}
-	return a.Rows, nil
+	return a.Rows, a.RaftIndex, nil
 }
 
 // Request performs an ExecuteQuery on a remote node. If creds is nil, then

@@ -54,7 +54,7 @@ type Database interface {
 	// timings is true, then timing information will be returned. If tx
 	// is true, then all queries will take place while a read transaction
 	// is held on the database.
-	Query(qr *command.QueryRequest) ([]*command.QueryRows, error)
+	Query(qr *command.QueryRequest) ([]*command.QueryRows, uint64, error)
 
 	// Request processes a slice of requests, each of which can be either
 	// an Execute or Query request.
@@ -113,7 +113,7 @@ type Cluster interface {
 	Execute(er *command.ExecuteRequest, nodeAddr string, creds *clstrPB.Credentials, timeout time.Duration, retries int) ([]*command.ExecuteQueryResponse, uint64, error)
 
 	// Query performs an Query Request on a remote node.
-	Query(qr *command.QueryRequest, nodeAddr string, creds *clstrPB.Credentials, timeout time.Duration) ([]*command.QueryRows, error)
+	Query(qr *command.QueryRequest, nodeAddr string, creds *clstrPB.Credentials, timeout time.Duration) ([]*command.QueryRows, uint64, error)
 
 	// Request performs an ExecuteQuery Request on a remote node.
 	Request(eqr *command.ExecuteQueryRequest, nodeAddr string, creds *clstrPB.Credentials, timeout time.Duration, retries int) ([]*command.ExecuteQueryResponse, uint64, error)
@@ -1313,7 +1313,7 @@ func (s *Service) handleQuery(w http.ResponseWriter, r *http.Request, qp QueryPa
 		LinearizableTimeout: qp.LinearizableTimeout(defaultLinearTimeout).Nanoseconds(),
 	}
 
-	results, resultsErr := s.store.Query(qr)
+	results, raftIndex, resultsErr := s.store.Query(qr)
 	if resultsErr != nil && resultsErr == store.ErrNotLeader {
 		if s.DoRedirect(w, r, qp) {
 			return
@@ -1331,7 +1331,7 @@ func (s *Service) handleQuery(w http.ResponseWriter, r *http.Request, qp QueryPa
 		}
 
 		w.Header().Add(ServedByHTTPHeader, addr)
-		results, resultsErr = s.cluster.Query(qr, addr, makeCredentials(r), qp.Timeout(defaultTimeout))
+		results, raftIndex, resultsErr = s.cluster.Query(qr, addr, makeCredentials(r), qp.Timeout(defaultTimeout))
 		if resultsErr != nil {
 			stats.Add(numRemoteQueriesFailed, 1)
 			if resultsErr.Error() == "unauthorized" {
@@ -1348,6 +1348,9 @@ func (s *Service) handleQuery(w http.ResponseWriter, r *http.Request, qp QueryPa
 		resp.Error = resultsErr.Error()
 	} else {
 		resp.Results.QueryRows = results
+		if qp.RaftIndex() {
+			resp.RaftIndex = raftIndex
+		}
 	}
 	resp.end = time.Now()
 	s.writeResponse(w, qp, resp)

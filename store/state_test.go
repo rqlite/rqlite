@@ -258,7 +258,7 @@ func Test_SingleNodeRecoverNoChange(t *testing.T) {
 		t.Helper()
 		qr := queryRequestFromString("SELECT * FROM foo", false, false)
 		qr.Level = proto.QueryRequest_QUERY_REQUEST_LEVEL_NONE
-		r, err := s.Query(qr)
+		r, _, err := s.Query(qr)
 		if err != nil {
 			t.Fatalf("failed to query single node: %s", err.Error())
 		}
@@ -326,7 +326,7 @@ func Test_SingleNodeRecoverNetworkChange(t *testing.T) {
 	queryTest := func(s *Store) {
 		qr := queryRequestFromString("SELECT * FROM foo", false, false)
 		qr.Level = proto.QueryRequest_QUERY_REQUEST_LEVEL_NONE
-		r, err := s.Query(qr)
+		r, _, err := s.Query(qr)
 		if err != nil {
 			t.Fatalf("failed to query single node: %s", err.Error())
 		}
@@ -406,7 +406,7 @@ func Test_SingleNodeRecoverNetworkChangeSnapshot(t *testing.T) {
 		t.Helper()
 		qr := queryRequestFromString("SELECT COUNT(*) FROM foo", false, false)
 		qr.Level = proto.QueryRequest_QUERY_REQUEST_LEVEL_STRONG
-		r, err := s.Query(qr)
+		r, _, err := s.Query(qr)
 		if err != nil {
 			t.Fatalf("failed to query single node: %s", err.Error())
 		}

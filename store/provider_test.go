@@ -34,7 +34,7 @@ func test_SingleNodeProvide(t *testing.T, vacuum, compress bool) {
 	}
 	qr := queryRequestFromString("SELECT * FROM foo", false, false)
 	qr.Level = command.QueryRequest_QUERY_REQUEST_LEVEL_NONE
-	r, err := s0.Query(qr)
+	r, _, err := s0.Query(qr)
 	if err != nil {
 		t.Fatalf("failed to query leader node: %s", err.Error())
 	}
@@ -83,7 +83,7 @@ func test_SingleNodeProvide(t *testing.T, vacuum, compress bool) {
 	}
 	qr = queryRequestFromString("SELECT * FROM foo", false, false)
 	qr.Level = command.QueryRequest_QUERY_REQUEST_LEVEL_STRONG
-	r, err = s1.Query(qr)
+	r, _, err = s1.Query(qr)
 	if err != nil {
 		t.Fatalf("failed to query leader node: %s", err.Error())
 	}
@@ -160,7 +160,7 @@ func Test_SingleNodeProvideLastIndex(t *testing.T) {
 	// Try various queries and commands which should not change the database.
 	qr := queryRequestFromString("SELECT * FROM foo", false, false)
 	qr.Level = command.QueryRequest_QUERY_REQUEST_LEVEL_STRONG
-	_, err = s.Query(qr)
+	_, _, err = s.Query(qr)
 	if err != nil {
 		t.Fatalf("failed to query leader node: %s", err.Error())
 	}
