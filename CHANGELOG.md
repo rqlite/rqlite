@@ -1,6 +1,6 @@
 ## v8.38.0 (June 18th 2025)
 ### New features
-- [PR #2113](https://github.com/rqlite/rqlite/pull/2113): Support returning Raft index in responses.
+- [PR #2113](https://github.com/rqlite/rqlite/pull/2113): Support returning Raft index in responses. See [the docs](https://rqlite.io/docs/api/api/#tracking-raft-indexes) for more details.
 
 ### Implementation changes and bug fixes
 - [PR #2099](https://github.com/rqlite/rqlite/pull/2099): Add basic CDC streamer to database module.
