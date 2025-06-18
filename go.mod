@@ -78,6 +78,4 @@ require (
 	google.golang.org/grpc v1.73.0 // indirect
 )
 
-replace (
-	github.com/armon/go-metrics => github.com/hashicorp/go-metrics v0.5.1
-)
+replace github.com/armon/go-metrics => github.com/hashicorp/go-metrics v0.5.1
