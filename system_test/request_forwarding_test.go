@@ -101,7 +101,7 @@ func Test_StoreClientSideBySide(t *testing.T) {
 	if exp, got := `[{"columns":["id","name"],"types":["integer","text"],"values":[[1,"fiona"]]}]`, asJSON(results); exp != got {
 		t.Fatalf("unexpected results, exp %s, got %s", exp, got)
 	}
-	if idx == 0 {
+	if idx != 0 {
 		t.Fatalf("expected zero index due to only read, got %d", idx)
 	}
 
