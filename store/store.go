@@ -108,6 +108,7 @@ const (
 	applyTimeout               = 10 * time.Second
 	openTimeout                = 120 * time.Second
 	sqliteFile                 = "db.sqlite"
+	linearizableTimeout        = 1 * time.Second
 	leaderWaitDelay            = 100 * time.Millisecond
 	appliedWaitDelay           = 100 * time.Millisecond
 	commitEquivalenceDelay     = 50 * time.Millisecond
@@ -1229,7 +1230,11 @@ func (s *Store) Query(qr *proto.QueryRequest) (rows []*proto.QueryRows, raftInde
 		if s.raft.CurrentTerm() != readTerm {
 			return nil, 0, ErrStaleRead
 		}
-		if _, err := s.WaitForFSMIndex(readIndex, time.Duration(qr.LinearizableTimeout)); err != nil {
+		lt := time.Duration(qr.LinearizableTimeout)
+		if lt == 0 {
+			lt = linearizableTimeout
+		}
+		if _, err := s.WaitForFSMIndex(readIndex, time.Duration(lt)); err != nil {
 			return nil, 0, err
 		}
 	}
