@@ -23,11 +23,10 @@ func ParseHostEnv() (protocol, host string, port uint16, succ bool) {
 		protocol = uri.Scheme
 	}
 
-	if uri.Hostname() != "" {
-		host = uri.Hostname()
-	} else {
+	if uri.Hostname() == "" {
 		return
 	}
+	host = uri.Hostname()
 
 	p, err := strconv.Atoi(uri.Port())
 	if err != nil {
