@@ -7,6 +7,8 @@ import (
 	"strconv"
 )
 
+const maxPortNumber = 65535
+
 // ParseHostEnv parses a host URL from an environment variable and extracts its components.
 // The URL must use http, https, or no protocol scheme
 // The URL must contain a hostname.
@@ -41,7 +43,7 @@ func ParseHostEnv(varName string) (protocol, host string, port uint16, err error
 		return "", "", 0, err
 	}
 
-	if p > 65535 {
+	if p > maxPortNumber {
 		return "", "", 0, fmt.Errorf("invalid port number %d", p)
 	}
 
