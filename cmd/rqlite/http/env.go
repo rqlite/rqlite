@@ -10,38 +10,29 @@ import (
 func ParseHostEnv() (protocol, host string, port uint16, err error) {
 	hostEnv, found := os.LookupEnv("RQLITE_HOST")
 	if !found {
-		err = fmt.Errorf("RQLITE_HOST environment variable not set")
-		return
+		return "", "", 0, fmt.Errorf("RQLITE_HOST environment variable not set")
 	}
 
 	uri, err := url.Parse(hostEnv)
 	if err != nil {
-		return
+		return "", "", 0, err
 	}
 
-	if uri.Scheme == "" {
-		protocol = "http"
-	} else if uri.Scheme != "http" && uri.Scheme != "https" {
-		err = fmt.Errorf("unsupported protocol %s", uri.Scheme)
-		return
-	} else {
-		protocol = uri.Scheme
+	if uri.Scheme != "http" && uri.Scheme != "https" && uri.Scheme != "" {
+		return "", "", 0, fmt.Errorf("unsupported protocol %s", uri.Scheme)
 	}
+	protocol = uri.Scheme
 
 	if uri.Hostname() == "" {
-		err = fmt.Errorf("RQLITE_HOST does not contain a hostname")
-		return
+		return "", "", 0, fmt.Errorf("RQLITE_HOST does not contain a hostname")
 	}
 	host = uri.Hostname()
 
 	p, err := strconv.Atoi(uri.Port())
 	if err != nil {
 		// uri.Port() is empty
-		err = nil
-		port = 4001
-	} else {
-		port = uint16(p)
+		return protocol, host, 0, nil
 	}
 
-	return
+	return protocol, host, uint16(p), nil
 }

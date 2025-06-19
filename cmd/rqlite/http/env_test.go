@@ -19,12 +19,12 @@ func TestParseHostEnv(t *testing.T) {
 		{
 			name:     "empty environment variable",
 			envValue: "",
-			hasErr:   false,
+			hasErr:   true,
 		},
 		{
 			name:             "simple HTTP host",
 			envValue:         "https://localhost:4002",
-			hasErr:           true,
+			hasErr:           false,
 			expectedProtocol: "https",
 			expectedHost:     "localhost",
 			expectedPort:     4002,
@@ -32,28 +32,28 @@ func TestParseHostEnv(t *testing.T) {
 		{
 			name:             "port defaults to 4001",
 			envValue:         "http://localhost",
-			hasErr:           true,
+			hasErr:           false,
 			expectedProtocol: "http",
 			expectedHost:     "localhost",
-			expectedPort:     4001,
+			expectedPort:     0,
 		},
 		{
 			name:             "host without scheme",
 			envValue:         "//localhost",
-			hasErr:           true,
-			expectedProtocol: "http",
+			hasErr:           false,
+			expectedProtocol: "",
 			expectedHost:     "localhost",
-			expectedPort:     4001,
+			expectedPort:     0,
 		},
 		{
 			name:     "invalid scheme",
 			envValue: "ftp://localhost:4001",
-			hasErr:   false,
+			hasErr:   true,
 		},
 		{
 			name:     "invalid URL",
 			envValue: "http://[invalid:url",
-			hasErr:   false,
+			hasErr:   true,
 		},
 	}
 
@@ -81,7 +81,7 @@ func TestParseHostEnv(t *testing.T) {
 			}
 
 			// Check the parsed values only if parsing was expected to succeed
-			if tt.hasErr {
+			if !tt.hasErr {
 				if protocol != tt.expectedProtocol {
 					t.Errorf("expected protocol %q, got %q", tt.expectedProtocol, protocol)
 				}

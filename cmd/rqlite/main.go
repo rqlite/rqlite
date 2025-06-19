@@ -96,11 +96,16 @@ func main() {
 		if !(ctx.IsSet("--host", "-H") || ctx.IsSet("--port", "-p") || ctx.IsSet("--scheme", "-s")) {
 			protocol, host, port, err := httpcl.ParseHostEnv()
 			if err == nil {
-				argv.Protocol = protocol
-				argv.Host = host
-				argv.Port = port
+				if protocol != "" {
+					argv.Protocol = protocol
+				}
+				if host != "" {
+					argv.Host = host
+				}
+				if port != 0 {
+					argv.Port = port
+				}
 			}
-			fmt.Println(err)
 		}
 
 		httpClient, err := getHTTPClient(argv)
