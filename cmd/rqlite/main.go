@@ -97,16 +97,17 @@ func main() {
 
 		if !(ctx.IsSet("--host", "-H") || ctx.IsSet("--port", "-p") || ctx.IsSet("--scheme", "-s")) {
 			protocol, host, port, err := httpcl.ParseHostEnv(HOST_ENV_VAR)
-			if err == nil {
-				if protocol != "" {
-					argv.Protocol = protocol
-				}
-				if host != "" {
-					argv.Host = host
-				}
-				if port != 0 {
-					argv.Port = port
-				}
+			if err != nil {
+				return err
+			}
+			if protocol != "" {
+				argv.Protocol = protocol
+			}
+			if host != "" {
+				argv.Host = host
+			}
+			if port != 0 {
+				argv.Port = port
 			}
 		}
 
