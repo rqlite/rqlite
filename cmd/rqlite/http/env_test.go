@@ -11,20 +11,20 @@ func TestParseHostEnv(t *testing.T) {
 	tests := []struct {
 		name             string
 		envValue         string
-		expectResult     bool
+		hasErr           bool
 		expectedProtocol string
 		expectedHost     string
 		expectedPort     uint16
 	}{
 		{
-			name:         "empty environment variable",
-			envValue:     "",
-			expectResult: false,
+			name:     "empty environment variable",
+			envValue: "",
+			hasErr:   false,
 		},
 		{
 			name:             "simple HTTP host",
 			envValue:         "https://localhost:4002",
-			expectResult:     true,
+			hasErr:           true,
 			expectedProtocol: "https",
 			expectedHost:     "localhost",
 			expectedPort:     4002,
@@ -32,7 +32,7 @@ func TestParseHostEnv(t *testing.T) {
 		{
 			name:             "port defaults to 4001",
 			envValue:         "http://localhost",
-			expectResult:     true,
+			hasErr:           true,
 			expectedProtocol: "http",
 			expectedHost:     "localhost",
 			expectedPort:     4001,
@@ -40,20 +40,20 @@ func TestParseHostEnv(t *testing.T) {
 		{
 			name:             "host without scheme",
 			envValue:         "//localhost",
-			expectResult:     true,
+			hasErr:           true,
 			expectedProtocol: "http",
 			expectedHost:     "localhost",
 			expectedPort:     4001,
 		},
 		{
-			name:         "invalid scheme",
-			envValue:     "ftp://localhost:4001",
-			expectResult: false,
+			name:     "invalid scheme",
+			envValue: "ftp://localhost:4001",
+			hasErr:   false,
 		},
 		{
-			name:         "invalid URL",
-			envValue:     "http://[invalid:url",
-			expectResult: false,
+			name:     "invalid URL",
+			envValue: "http://[invalid:url",
+			hasErr:   false,
 		},
 	}
 
@@ -68,15 +68,20 @@ func TestParseHostEnv(t *testing.T) {
 			defer os.Unsetenv("RQLITE_HOST")
 
 			// Call the function
-			protocol, host, port, success := http.ParseHostEnv()
+			protocol, host, port, err := http.ParseHostEnv()
 
-			// Check the result
-			if success != tt.expectResult {
-				t.Errorf("expected result %v, got %v", tt.expectResult, success)
+			if tt.hasErr {
+				if err == nil {
+					t.Errorf("expected error, got nil")
+				}
+			} else {
+				if err != nil {
+					t.Errorf("expected no error, got %v", err)
+				}
 			}
 
 			// Check the parsed values only if parsing was expected to succeed
-			if tt.expectResult {
+			if tt.hasErr {
 				if protocol != tt.expectedProtocol {
 					t.Errorf("expected protocol %q, got %q", tt.expectedProtocol, protocol)
 				}
