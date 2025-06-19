@@ -9,9 +9,9 @@ import (
 func ParseHostEnv() (protocol, host string, port uint16, succ bool) {
 	succ = false
 
-	hostEnv := os.Getenv("RQLITE_HOST")
+	hostEnv, found := os.LookupEnv("RQLITE_HOST")
 	uri, err := url.Parse(hostEnv)
-	if err != nil {
+	if err != nil || !found {
 		return
 	}
 
