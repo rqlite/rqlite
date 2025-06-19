@@ -12,7 +12,6 @@ import (
 	"net/url"
 	"os"
 	"sort"
-	"strconv"
 	"strings"
 	"syscall"
 
@@ -95,7 +94,12 @@ func main() {
 		}
 
 		if !(ctx.IsSet("--host", "-H") || ctx.IsSet("--port", "-p") || ctx.IsSet("--scheme", "-s")) {
-			parseHostEnv(argv)
+			protocol, host, port, succ := httpcl.ParseHostEnv()
+			if succ {
+				argv.Protocol = protocol
+				argv.Host = host
+				argv.Port = port
+			}
 		}
 
 		httpClient, err := getHTTPClient(argv)
@@ -276,44 +280,6 @@ func toggleFlag(op string, flag *bool) error {
 	}
 	*flag = (op == "on")
 	return nil
-}
-
-func parseHostEnv(argv *argT) bool {
-	var protocol, host string
-	var port uint16
-
-	hostEnv := os.Getenv("RQLITE_HOST")
-	uri, err := url.Parse(hostEnv)
-	if err != nil {
-		return false
-	}
-
-	if uri.Scheme == "" {
-		protocol = "http"
-	} else if uri.Scheme != "http" && uri.Scheme != "https" {
-		return false
-	} else {
-		protocol = uri.Scheme
-	}
-
-	if uri.Hostname() != "" {
-		host = uri.Hostname()
-	} else {
-		return false
-	}
-
-	p, err := strconv.Atoi(uri.Port())
-	if err != nil {
-		// uri.Port() is empty
-		port = 4001
-	} else {
-		port = uint16(p)
-	}
-
-	argv.Protocol = protocol
-	argv.Host = host
-	argv.Port = port
-	return true
 }
 
 func setConsistency(r string, c *string) error {
