@@ -1,3 +1,7 @@
+## v8.38.1 (unreleased)
+### Implementation changes and bug fixes
+- [PR #2118](https://github.com/rqlite/rqlite/pull/2118): Query supports returning Raft Index for Strong Consistency Reads.
+
 ## v8.38.0 (June 18th 2025)
 ### New features
 - [PR #2113](https://github.com/rqlite/rqlite/pull/2113): Support returning Raft index in responses. See [the docs](https://rqlite.io/docs/api/api/#tracking-raft-indexes) for more details.
