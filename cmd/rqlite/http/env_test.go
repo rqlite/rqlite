@@ -56,8 +56,18 @@ func TestParseHostEnv(t *testing.T) {
 			hasErr:   true,
 		},
 		{
-			name:     "invalid port",
+			name:     "large port number",
 			envValue: "http://localhost:99999999",
+			hasErr:   true,
+		},
+		{
+			name:     "negative port",
+			envValue: "http://localhost:-1",
+			hasErr:   true,
+		},
+		{
+			name:     "invalid port",
+			envValue: "http://localhost:port",
 			hasErr:   true,
 		},
 		{
