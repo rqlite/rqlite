@@ -24,6 +24,8 @@ import (
 	"github.com/rqlite/rqlite/v8/rtls"
 )
 
+const HOST_ENV_VAR = "RQLITE_HOST"
+
 const maxRedirect = 21
 
 type Node struct {
@@ -94,7 +96,7 @@ func main() {
 		}
 
 		if !(ctx.IsSet("--host", "-H") || ctx.IsSet("--port", "-p") || ctx.IsSet("--scheme", "-s")) {
-			protocol, host, port, err := httpcl.ParseHostEnv()
+			protocol, host, port, err := httpcl.ParseHostEnv(HOST_ENV_VAR)
 			if err == nil {
 				if protocol != "" {
 					argv.Protocol = protocol

@@ -7,10 +7,10 @@ import (
 	"strconv"
 )
 
-func ParseHostEnv() (protocol, host string, port uint16, err error) {
-	hostEnv, found := os.LookupEnv("RQLITE_HOST")
+func ParseHostEnv(varName string) (protocol, host string, port uint16, err error) {
+	hostEnv, found := os.LookupEnv(varName)
 	if !found {
-		return "", "", 0, fmt.Errorf("RQLITE_HOST environment variable not set")
+		return "", "", 0, fmt.Errorf("%s environment variable not set", varName)
 	}
 
 	uri, err := url.Parse(hostEnv)
@@ -24,7 +24,7 @@ func ParseHostEnv() (protocol, host string, port uint16, err error) {
 	protocol = uri.Scheme
 
 	if uri.Hostname() == "" {
-		return "", "", 0, fmt.Errorf("RQLITE_HOST does not contain a hostname")
+		return "", "", 0, fmt.Errorf("%s does not contain a hostname", varName)
 	}
 	host = uri.Hostname()
 

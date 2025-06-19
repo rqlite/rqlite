@@ -68,7 +68,7 @@ func TestParseHostEnv(t *testing.T) {
 			defer os.Unsetenv("RQLITE_HOST")
 
 			// Call the function
-			protocol, host, port, err := http.ParseHostEnv()
+			protocol, host, port, err := http.ParseHostEnv("RQLITE_HOST")
 
 			if tt.hasErr {
 				if err == nil {
