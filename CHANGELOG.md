@@ -1,3 +1,7 @@
+## v8.38.2 (unreleased)
+### Implementation changes and bug fixes
+- [PR #2119](https://github.com/rqlite/rqlite/pull/2119): CLI supports `RQLITE_HOST` as connection environment variable. Fixes issue [#2088](https://github.com/rqlite/rqlite/issues/2088). Thanks @m04f
+
 ## v8.38.1 (June 19th 2025)
 ### Implementation changes and bug fixes
 - [PR #2118](https://github.com/rqlite/rqlite/pull/2118): Query supports returning Raft Index for Strong Consistency Reads.
