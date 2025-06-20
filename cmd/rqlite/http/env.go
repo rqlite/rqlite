@@ -7,13 +7,13 @@ import (
 	"strconv"
 )
 
-const maxPortNumber = 65535
+const (
+	minPortNumber = 0
+	maxPortNumber = 65535
+)
 
 // ParseHostEnv parses a host URL from an environment variable and extracts its components.
-// The URL must use http, https, or no protocol scheme
-// The URL must contain a hostname.
-// If no port is specified in the URL, the port return value will be 0.
-// Returns the protocol scheme, hostname, port number, and any parsing error encountered.
+// It returns the protocol scheme, hostname, port number, or any parsing error encountered.
 func ParseHostEnv(varName string) (protocol, host string, port uint16, err error) {
 	hostEnv, found := os.LookupEnv(varName)
 	if !found {
@@ -35,17 +35,13 @@ func ParseHostEnv(varName string) (protocol, host string, port uint16, err error
 	}
 	host = uri.Hostname()
 
-	p, err := strconv.Atoi(uri.Port())
-	if err != nil {
-		if uri.Port() == "" {
-			return protocol, host, 0, nil
-		}
-		return "", "", 0, err
+	if uri.Port() == "" {
+		return protocol, host, 0, nil
 	}
 
-	if p > maxPortNumber {
+	p, err := strconv.Atoi(uri.Port())
+	if err != nil || p < minPortNumber || p > maxPortNumber {
 		return "", "", 0, fmt.Errorf("invalid port number %d", p)
 	}
-
 	return protocol, host, uint16(p), nil
 }
