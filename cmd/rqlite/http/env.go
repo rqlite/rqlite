@@ -39,9 +39,14 @@ func ParseHostEnv(varName string) (protocol, host string, port uint16, err error
 		return protocol, host, 0, nil
 	}
 
-	p, err := strconv.Atoi(uri.Port())
-	if err != nil || p < minPortNumber || p > maxPortNumber {
-		return "", "", 0, fmt.Errorf("invalid port number %d", p)
+	portStr := uri.Port()
+	p, err := strconv.Atoi(portStr)
+	if err != nil {
+		return "", "", 0, fmt.Errorf("port '%s' is not a valid number: %w", portStr, err)
+	}
+
+	if p < minPortNumber || p > maxPortNumber {
+		return "", "", 0, fmt.Errorf("port number %d is outside of valid range [%d, %d]", p, minPortNumber, maxPortNumber)
 	}
 	return protocol, host, uint16(p), nil
 }
