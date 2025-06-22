@@ -89,13 +89,13 @@ type Dialer interface {
 // Database is the interface any queryable system must implement
 type Database interface {
 	// Execute executes a slice of SQL statements.
-	Execute(er *command.ExecuteRequest) ([]*command.ExecuteQueryResponse, error)
+	Execute(er *command.ExecuteRequest) ([]*command.ExecuteQueryResponse, uint64, error)
 
 	// Query executes a slice of queries, each of which returns rows.
-	Query(qr *command.QueryRequest) ([]*command.QueryRows, error)
+	Query(qr *command.QueryRequest) ([]*command.QueryRows, uint64, error)
 
 	// Request processes a request that can both executes and queries.
-	Request(rr *command.ExecuteQueryRequest) ([]*command.ExecuteQueryResponse, error)
+	Request(rr *command.ExecuteQueryRequest) ([]*command.ExecuteQueryResponse, uint64, error)
 
 	// Backup writes a backup of the database to the writer.
 	Backup(br *command.BackupRequest, dst io.Writer) error
@@ -320,12 +320,13 @@ func (s *Service) handleConn(conn net.Conn) {
 			} else if !s.checkCommandPerm(c, auth.PermExecute) {
 				resp.Error = "unauthorized"
 			} else {
-				res, err := s.db.Execute(er)
+				res, idx, err := s.db.Execute(er)
 				if err != nil {
 					resp.Error = err.Error()
 				} else {
 					resp.Response = make([]*command.ExecuteQueryResponse, len(res))
 					copy(resp.Response, res)
+					resp.RaftIndex = idx
 				}
 			}
 			if err := marshalAndWrite(conn, resp); err != nil {
@@ -342,12 +343,13 @@ func (s *Service) handleConn(conn net.Conn) {
 			} else if !s.checkCommandPerm(c, auth.PermQuery) {
 				resp.Error = "unauthorized"
 			} else {
-				res, err := s.db.Query(qr)
+				res, idx, err := s.db.Query(qr)
 				if err != nil {
 					resp.Error = err.Error()
 				} else {
 					resp.Rows = make([]*command.QueryRows, len(res))
 					copy(resp.Rows, res)
+					resp.RaftIndex = idx
 				}
 			}
 			if err := marshalAndWrite(conn, resp); err != nil {
@@ -364,12 +366,13 @@ func (s *Service) handleConn(conn net.Conn) {
 			} else if !s.checkCommandPermAll(c, auth.PermQuery, auth.PermExecute) {
 				resp.Error = "unauthorized"
 			} else {
-				res, err := s.db.Request(rr)
+				res, idx, err := s.db.Request(rr)
 				if err != nil {
 					resp.Error = err.Error()
 				} else {
 					resp.Response = make([]*command.ExecuteQueryResponse, len(res))
 					copy(resp.Response, res)
+					resp.RaftIndex = idx
 				}
 			}
 			if err := marshalAndWrite(conn, resp); err != nil {

@@ -28,13 +28,13 @@ func test_SingleNodeProvide(t *testing.T, vacuum, compress bool) {
 		`CREATE TABLE foo (id INTEGER NOT NULL PRIMARY KEY, name TEXT)`,
 		`INSERT INTO foo(id, name) VALUES(1, "fiona")`,
 	}, false, false)
-	_, err := s0.Execute(er)
+	_, _, err := s0.Execute(er)
 	if err != nil {
 		t.Fatalf("failed to execute on single node: %s", err.Error())
 	}
 	qr := queryRequestFromString("SELECT * FROM foo", false, false)
 	qr.Level = command.QueryRequest_QUERY_REQUEST_LEVEL_NONE
-	r, err := s0.Query(qr)
+	r, _, err := s0.Query(qr)
 	if err != nil {
 		t.Fatalf("failed to query leader node: %s", err.Error())
 	}
@@ -83,7 +83,7 @@ func test_SingleNodeProvide(t *testing.T, vacuum, compress bool) {
 	}
 	qr = queryRequestFromString("SELECT * FROM foo", false, false)
 	qr.Level = command.QueryRequest_QUERY_REQUEST_LEVEL_STRONG
-	r, err = s1.Query(qr)
+	r, _, err = s1.Query(qr)
 	if err != nil {
 		t.Fatalf("failed to query leader node: %s", err.Error())
 	}
@@ -140,7 +140,7 @@ func Test_SingleNodeProvideLastIndex(t *testing.T) {
 		`CREATE TABLE foo (id INTEGER NOT NULL PRIMARY KEY, name TEXT)`,
 		`INSERT INTO foo(id, name) VALUES(1, "fiona")`,
 	}, false, false)
-	_, err = s.Execute(er)
+	_, _, err = s.Execute(er)
 	if err != nil {
 		t.Fatalf("failed to execute on single node: %s", err.Error())
 	}
@@ -160,7 +160,7 @@ func Test_SingleNodeProvideLastIndex(t *testing.T) {
 	// Try various queries and commands which should not change the database.
 	qr := queryRequestFromString("SELECT * FROM foo", false, false)
 	qr.Level = command.QueryRequest_QUERY_REQUEST_LEVEL_STRONG
-	_, err = s.Query(qr)
+	_, _, err = s.Query(qr)
 	if err != nil {
 		t.Fatalf("failed to query leader node: %s", err.Error())
 	}
@@ -193,7 +193,7 @@ func Test_SingleNodeProvideLastIndex(t *testing.T) {
 	er = executeRequestFromStrings([]string{
 		`INSERT INTO foo(id, name) VALUES(1, "fiona")`, // Constraint violation.
 	}, false, false)
-	_, err = s.Execute(er)
+	_, _, err = s.Execute(er)
 	if err != nil {
 		t.Fatalf("failed to execute on single node: %s", err.Error())
 	}
@@ -210,7 +210,7 @@ func Test_SingleNodeProvideLastIndex(t *testing.T) {
 	er = executeRequestFromStrings([]string{
 		`INSERT INTO foo(id, name) VALUES(2, "fiona")`,
 	}, false, false)
-	_, err = s.Execute(er)
+	_, _, err = s.Execute(er)
 	if err != nil {
 		t.Fatalf("failed to execute on single node: %s", err.Error())
 	}
@@ -250,7 +250,7 @@ func Test_SingleNodeProvideLastIndex_Restart(t *testing.T) {
 		`CREATE TABLE foo (id INTEGER NOT NULL PRIMARY KEY, name TEXT)`,
 		`INSERT INTO foo(id, name) VALUES(1, "fiona")`,
 	}, false, false)
-	if _, err := s.Execute(er); err != nil {
+	if _, _, err := s.Execute(er); err != nil {
 		t.Fatalf("failed to execute on single node: %s", err.Error())
 	}
 	if _, err := s.WaitForAppliedFSM(2 * time.Second); err != nil {

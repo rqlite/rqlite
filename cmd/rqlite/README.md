@@ -42,6 +42,11 @@ Options:
   -v, --version
       display CLI version
 ```
+### Environment Variables
+
+The rqlite shell also supports configuration through environment variables:
+
+- `RQLITE_HOST`: Connection string in the format `[scheme:]//host[:port]`
 
 ## Example
 Connecting to a host running locally:
@@ -83,4 +88,3 @@ localhost:8493>
 ```sh
 go build -o rqlite
 ```
-

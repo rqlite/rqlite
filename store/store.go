@@ -108,6 +108,7 @@ const (
 	applyTimeout               = 10 * time.Second
 	openTimeout                = 120 * time.Second
 	sqliteFile                 = "db.sqlite"
+	linearizableTimeout        = 1 * time.Second
 	leaderWaitDelay            = 100 * time.Millisecond
 	appliedWaitDelay           = 100 * time.Millisecond
 	commitEquivalenceDelay     = 50 * time.Millisecond
@@ -1121,29 +1122,29 @@ func (s *Store) Stats() (map[string]any, error) {
 }
 
 // Execute executes queries that return no rows, but do modify the database.
-func (s *Store) Execute(ex *proto.ExecuteRequest) ([]*proto.ExecuteQueryResponse, error) {
+func (s *Store) Execute(ex *proto.ExecuteRequest) ([]*proto.ExecuteQueryResponse, uint64, error) {
 	p := (*PragmaCheckRequest)(ex.Request)
 	if err := p.Check(); err != nil {
-		return nil, err
+		return nil, 0, err
 	}
 
 	if !s.open.Is() {
-		return nil, ErrNotOpen
+		return nil, 0, ErrNotOpen
 	}
 
 	if s.raft.State() != raft.Leader {
-		return nil, ErrNotLeader
+		return nil, 0, ErrNotLeader
 	}
 	if !s.Ready() {
-		return nil, ErrNotReady
+		return nil, 0, ErrNotReady
 	}
 	return s.execute(ex)
 }
 
-func (s *Store) execute(ex *proto.ExecuteRequest) ([]*proto.ExecuteQueryResponse, error) {
+func (s *Store) execute(ex *proto.ExecuteRequest) ([]*proto.ExecuteQueryResponse, uint64, error) {
 	b, compressed, err := s.tryCompress(ex)
 	if err != nil {
-		return nil, err
+		return nil, 0, err
 	}
 
 	c := &proto.Command{
@@ -1154,39 +1155,39 @@ func (s *Store) execute(ex *proto.ExecuteRequest) ([]*proto.ExecuteQueryResponse
 
 	b, err = command.Marshal(c)
 	if err != nil {
-		return nil, err
+		return nil, 0, err
 	}
 
 	af := s.raft.Apply(b, s.ApplyTimeout)
 	if af.Error() != nil {
 		if af.Error() == raft.ErrNotLeader {
-			return nil, ErrNotLeader
+			return nil, 0, ErrNotLeader
 		}
-		return nil, af.Error()
+		return nil, 0, af.Error()
 	}
 	r := af.Response().(*fsmExecuteQueryResponse)
-	return r.results, r.error
+	return r.results, af.Index(), r.error
 }
 
 // Query executes queries that return rows, and do not modify the database.
 // If the request read consistency level is LINEARIZABLE, that level may be
 // upgraded to STRONG if the Store determines that is necessary to guarantee
 // a linearizable read.
-func (s *Store) Query(qr *proto.QueryRequest) (rows []*proto.QueryRows, retErr error) {
+func (s *Store) Query(qr *proto.QueryRequest) (rows []*proto.QueryRows, raftIndex uint64, retErr error) {
 	p := (*PragmaCheckRequest)(qr.Request)
 	if err := p.Check(); err != nil {
-		return nil, err
+		return nil, 0, err
 	}
 
 	if !s.open.Is() {
-		return nil, ErrNotOpen
+		return nil, 0, ErrNotOpen
 	}
 
 	if qr.Level == proto.QueryRequest_QUERY_REQUEST_LEVEL_AUTO {
 		qr.Level = proto.QueryRequest_QUERY_REQUEST_LEVEL_WEAK
 		isVoter, err := s.IsVoter()
 		if err != nil {
-			return nil, err
+			return nil, 0, err
 		}
 		if !isVoter {
 			qr.Level = proto.QueryRequest_QUERY_REQUEST_LEVEL_NONE
@@ -1214,38 +1215,42 @@ func (s *Store) Query(qr *proto.QueryRequest) (rows []*proto.QueryRows, retErr e
 
 	if qr.Level == proto.QueryRequest_QUERY_REQUEST_LEVEL_LINEARIZABLE {
 		if s.raft.State() != raft.Leader {
-			return nil, ErrNotLeader
+			return nil, 0, ErrNotLeader
 		}
 		if !s.Ready() {
-			return nil, ErrNotReady
+			return nil, 0, ErrNotReady
 		}
 
 		// Implement the technique from the Raft dissertation, section
 		// 6.4 "Processing read-only queries more efficiently".
 		readIndex := s.raft.CommitIndex()
 		if err := s.VerifyLeader(); err != nil {
-			return nil, err
+			return nil, 0, err
 		}
 		if s.raft.CurrentTerm() != readTerm {
-			return nil, ErrStaleRead
+			return nil, 0, ErrStaleRead
 		}
-		if _, err := s.WaitForFSMIndex(readIndex, time.Duration(qr.LinearizableTimeout)); err != nil {
-			return nil, err
+		lt := time.Duration(qr.LinearizableTimeout)
+		if lt == 0 {
+			lt = linearizableTimeout
+		}
+		if _, err := s.WaitForFSMIndex(readIndex, time.Duration(lt)); err != nil {
+			return nil, 0, err
 		}
 	}
 
 	if qr.Level == proto.QueryRequest_QUERY_REQUEST_LEVEL_STRONG {
 		if s.raft.State() != raft.Leader {
-			return nil, ErrNotLeader
+			return nil, 0, ErrNotLeader
 		}
 
 		if !s.Ready() {
-			return nil, ErrNotReady
+			return nil, 0, ErrNotReady
 		}
 
 		b, compressed, err := s.tryCompress(qr)
 		if err != nil {
-			return nil, err
+			return nil, 0, err
 		}
 		c := &proto.Command{
 			Type:       proto.Command_COMMAND_TYPE_QUERY,
@@ -1255,29 +1260,30 @@ func (s *Store) Query(qr *proto.QueryRequest) (rows []*proto.QueryRows, retErr e
 
 		b, err = command.Marshal(c)
 		if err != nil {
-			return nil, err
+			return nil, 0, err
 		}
 
 		af := s.raft.Apply(b, s.ApplyTimeout)
 		if af.Error() != nil {
 			if af.Error() == raft.ErrNotLeader || af.Error() == raft.ErrLeadershipLost {
-				return nil, ErrNotLeader
+				return nil, 0, ErrNotLeader
 			}
-			return nil, af.Error()
+			return nil, 0, af.Error()
 		}
-		s.strongReadTerm.Store(af.Index())
+		s.strongReadTerm.Store(readTerm)
 		r := af.Response().(*fsmQueryResponse)
-		return r.rows, r.error
+		return r.rows, af.Index(), r.error
 	}
 
 	if qr.Level == proto.QueryRequest_QUERY_REQUEST_LEVEL_WEAK && s.raft.State() != raft.Leader {
-		return nil, ErrNotLeader
+		return nil, 0, ErrNotLeader
 	}
 	if qr.Level == proto.QueryRequest_QUERY_REQUEST_LEVEL_NONE && s.isStaleRead(qr.Freshness, qr.FreshnessStrict) {
-		return nil, ErrStaleRead
+		return nil, 0, ErrStaleRead
 	}
 
-	return s.db.Query(qr.Request, qr.Timings)
+	rows, err := s.db.Query(qr.Request, qr.Timings)
+	return rows, 0, err
 }
 
 // VerifyLeader checks that the current node is the Raft leader.
@@ -1305,14 +1311,14 @@ func (s *Store) VerifyLeader() (retErr error) {
 }
 
 // Request processes a request that may contain both Executes and Queries.
-func (s *Store) Request(eqr *proto.ExecuteQueryRequest) ([]*proto.ExecuteQueryResponse, error) {
+func (s *Store) Request(eqr *proto.ExecuteQueryRequest) ([]*proto.ExecuteQueryResponse, uint64, error) {
 	p := (*PragmaCheckRequest)(eqr.Request)
 	if err := p.Check(); err != nil {
-		return nil, err
+		return nil, 0, err
 	}
 
 	if !s.open.Is() {
-		return nil, ErrNotOpen
+		return nil, 0, ErrNotOpen
 	}
 	nRW, _ := s.RORWCount(eqr)
 	isLeader := s.raft.State() == raft.Leader
@@ -1330,29 +1336,29 @@ func (s *Store) Request(eqr *proto.ExecuteQueryRequest) ([]*proto.ExecuteQueryRe
 			return resp
 		}
 		if eqr.Level == proto.QueryRequest_QUERY_REQUEST_LEVEL_NONE && s.isStaleRead(eqr.Freshness, eqr.FreshnessStrict) {
-			return nil, ErrStaleRead
+			return nil, 0, ErrStaleRead
 		} else if eqr.Level == proto.QueryRequest_QUERY_REQUEST_LEVEL_WEAK {
 			if !isLeader {
-				return nil, ErrNotLeader
+				return nil, 0, ErrNotLeader
 			}
 		}
 		qr, err := s.db.Query(eqr.Request, eqr.Timings)
-		return convertFn(qr), err
+		return convertFn(qr), 0, err
 	}
 
 	// At least one write in the request, or STRONG consistency requested, so
 	// we need to go through consensus. Check that we can do that.
 	if !isLeader {
-		return nil, ErrNotLeader
+		return nil, 0, ErrNotLeader
 	}
 	if !s.Ready() {
-		return nil, ErrNotReady
+		return nil, 0, ErrNotReady
 	}
 
 	// Send the request through consensus.
 	b, compressed, err := s.tryCompress(eqr)
 	if err != nil {
-		return nil, err
+		return nil, 0, err
 	}
 	c := &proto.Command{
 		Type:       proto.Command_COMMAND_TYPE_EXECUTE_QUERY,
@@ -1361,18 +1367,18 @@ func (s *Store) Request(eqr *proto.ExecuteQueryRequest) ([]*proto.ExecuteQueryRe
 	}
 	b, err = command.Marshal(c)
 	if err != nil {
-		return nil, err
+		return nil, 0, err
 	}
 
 	af := s.raft.Apply(b, s.ApplyTimeout)
 	if af.Error() != nil {
 		if af.Error() == raft.ErrNotLeader {
-			return nil, ErrNotLeader
+			return nil, 0, ErrNotLeader
 		}
-		return nil, af.Error()
+		return nil, 0, af.Error()
 	}
 	r := af.Response().(*fsmExecuteQueryResponse)
-	return r.results, r.error
+	return r.results, af.Index(), r.error
 }
 
 // Backup writes a consistent snapshot of the underlying database to dst. This

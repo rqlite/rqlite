@@ -35,120 +35,135 @@ func Test_StoreClientSideBySide(t *testing.T) {
 
 	client := cluster.NewClient(mustNewDialer(cluster.MuxClusterHeader, false, false), 30*time.Second)
 
-	res, err := node.Store.Execute(executeRequestFromString("CREATE TABLE foo (id INTEGER NOT NULL PRIMARY KEY, name TEXT)"))
+	res, _, err := node.Store.Execute(executeRequestFromString("CREATE TABLE foo (id INTEGER NOT NULL PRIMARY KEY, name TEXT)"))
 	if err != nil {
 		t.Fatalf("failed to execute on local: %s", err.Error())
 	}
 	if exp, got := "[{}]", asJSON(res); exp != got {
 		t.Fatalf("unexpected results, exp %s, got %s", exp, got)
 	}
-	res, err = client.Execute(executeRequestFromString("CREATE TABLE bar (id INTEGER NOT NULL PRIMARY KEY, name TEXT)"), leaderAddr, NO_CREDS, shortWait, noRetries)
+	res, idx, err := client.Execute(executeRequestFromString("CREATE TABLE bar (id INTEGER NOT NULL PRIMARY KEY, name TEXT)"), leaderAddr, NO_CREDS, shortWait, noRetries)
 	if err != nil {
 		t.Fatalf("failed to execute via remote: %s", err.Error())
 	}
 	if exp, got := "[{}]", asJSON(res); exp != got {
 		t.Fatalf("unexpected results, exp %s, got %s", exp, got)
 	}
+	if idx == 0 {
+		t.Fatalf("expected non-zero index, got %d", idx)
+	}
 
 	// ==============================================================================
-	res, err = node.Store.Execute(executeRequestFromString(`INSERT INTO foo(name) VALUES("fiona")`))
+	res, _, err = node.Store.Execute(executeRequestFromString(`INSERT INTO foo(name) VALUES("fiona")`))
 	if err != nil {
 		t.Fatalf("failed to execute on local: %s", err.Error())
 	}
 	if exp, got := `[{"last_insert_id":1,"rows_affected":1}]`, asJSON(res); exp != got {
 		t.Fatalf("unexpected results, exp %s, got %s", exp, got)
 	}
-	res, err = client.Execute(executeRequestFromString(`INSERT INTO bar(name) VALUES("fiona")`), leaderAddr, NO_CREDS, shortWait, noRetries)
+	res, idx, err = client.Execute(executeRequestFromString(`INSERT INTO bar(name) VALUES("fiona")`), leaderAddr, NO_CREDS, shortWait, noRetries)
 	if err != nil {
 		t.Fatalf("failed to execute via remote: %s", err.Error())
 	}
 	if exp, got := `[{"last_insert_id":1,"rows_affected":1}]`, asJSON(res); exp != got {
 		t.Fatalf("unexpected results, exp %s, got %s", exp, got)
 	}
+	if idx == 0 {
+		t.Fatalf("expected non-zero index, got %d", idx)
+	}
 
 	// ==============================================================================
-	rows, err := node.Store.Query(queryRequestFromString(`SELECT * FROM foo`))
+	rows, _, err := node.Store.Query(queryRequestFromString(`SELECT * FROM foo`))
 	if err != nil {
 		t.Fatalf("failed to query on local: %s", err.Error())
 	}
 	if exp, got := `[{"columns":["id","name"],"types":["integer","text"],"values":[[1,"fiona"]]}]`, asJSON(rows); exp != got {
 		t.Fatalf("unexpected results, exp %s, got %s", exp, got)
 	}
-	results, err := node.Store.Request(executeQueryRequestFromString(`SELECT * FROM foo`))
+	results, _, err := node.Store.Request(executeQueryRequestFromString(`SELECT * FROM foo`))
 	if err != nil {
 		t.Fatalf("failed to request on local: %s", err.Error())
 	}
 	if exp, got := `[{"columns":["id","name"],"types":["integer","text"],"values":[[1,"fiona"]]}]`, asJSON(results); exp != got {
 		t.Fatalf("unexpected results, exp %s, got %s", exp, got)
 	}
-	rows, err = client.Query(queryRequestFromString(`SELECT * FROM foo`), leaderAddr, NO_CREDS, shortWait)
+	rows, _, err = client.Query(queryRequestFromString(`SELECT * FROM foo`), leaderAddr, NO_CREDS, shortWait)
 	if err != nil {
 		t.Fatalf("failed to query via remote: %s", err.Error())
 	}
 	if exp, got := `[{"columns":["id","name"],"types":["integer","text"],"values":[[1,"fiona"]]}]`, asJSON(rows); exp != got {
 		t.Fatalf("unexpected results, exp %s, got %s", exp, got)
 	}
-	results, err = client.Request(executeQueryRequestFromString(`SELECT * FROM foo`), leaderAddr, NO_CREDS, shortWait, 0)
+	results, idx, err = client.Request(executeQueryRequestFromString(`SELECT * FROM foo`), leaderAddr, NO_CREDS, shortWait, 0)
 	if err != nil {
 		t.Fatalf("failed to query via remote: %s", err.Error())
 	}
 	if exp, got := `[{"columns":["id","name"],"types":["integer","text"],"values":[[1,"fiona"]]}]`, asJSON(results); exp != got {
 		t.Fatalf("unexpected results, exp %s, got %s", exp, got)
 	}
+	if idx != 0 {
+		t.Fatalf("expected zero index due to only read, got %d", idx)
+	}
 
 	// ==============================================================================
-	rows, err = node.Store.Query(queryRequestFromString(`SELECT * FROM bar`))
+	rows, _, err = node.Store.Query(queryRequestFromString(`SELECT * FROM bar`))
 	if err != nil {
 		t.Fatalf("failed to query on local: %s", err.Error())
 	}
 	if exp, got := `[{"columns":["id","name"],"types":["integer","text"],"values":[[1,"fiona"]]}]`, asJSON(rows); exp != got {
 		t.Fatalf("unexpected results, exp %s, got %s", exp, got)
 	}
-	results, err = node.Store.Request(executeQueryRequestFromString(`SELECT * FROM bar`))
+	results, _, err = node.Store.Request(executeQueryRequestFromString(`SELECT * FROM bar`))
 	if err != nil {
 		t.Fatalf("failed to request on local: %s", err.Error())
 	}
 	if exp, got := `[{"columns":["id","name"],"types":["integer","text"],"values":[[1,"fiona"]]}]`, asJSON(results); exp != got {
 		t.Fatalf("unexpected results, exp %s, got %s", exp, got)
 	}
-	rows, err = client.Query(queryRequestFromString(`SELECT * FROM bar`), leaderAddr, NO_CREDS, shortWait)
+	rows, _, err = client.Query(queryRequestFromString(`SELECT * FROM bar`), leaderAddr, NO_CREDS, shortWait)
 	if err != nil {
 		t.Fatalf("failed to query via remote: %s", err.Error())
 	}
 	if exp, got := `[{"columns":["id","name"],"types":["integer","text"],"values":[[1,"fiona"]]}]`, asJSON(rows); exp != got {
 		t.Fatalf("unexpected results, exp %s, got %s", exp, got)
 	}
-	results, err = client.Request(executeQueryRequestFromString(`SELECT * FROM bar`), leaderAddr, NO_CREDS, shortWait, noRetries)
+	results, idx, err = client.Request(executeQueryRequestFromString(`SELECT * FROM bar`), leaderAddr, NO_CREDS, shortWait, noRetries)
 	if err != nil {
 		t.Fatalf("failed to query via remote: %s", err.Error())
 	}
 	if exp, got := `[{"columns":["id","name"],"types":["integer","text"],"values":[[1,"fiona"]]}]`, asJSON(results); exp != got {
 		t.Fatalf("unexpected results, exp %s, got %s", exp, got)
 	}
+	if idx != 0 {
+		t.Fatalf("expected zero Raft index due to read, got %d", idx)
+	}
 
 	// ==============================================================================
-	rows, err = node.Store.Query(queryRequestFromString(`SELECT * FROM qux`))
+	rows, _, err = node.Store.Query(queryRequestFromString(`SELECT * FROM qux`))
 	if err != nil {
 		t.Fatalf("failed to query on local: %s", err.Error())
 	}
 	if exp, got := `[{"error":"no such table: qux"}]`, asJSON(rows); exp != got {
 		t.Fatalf("unexpected results, exp %s, got %s", exp, got)
 	}
-	results, err = node.Store.Request(executeQueryRequestFromString(`SELECT * FROM qux`))
+	results, _, err = node.Store.Request(executeQueryRequestFromString(`SELECT * FROM qux`))
 	if err != nil {
 		t.Fatalf("failed to request on local: %s", err.Error())
 	}
 	if exp, got := `[{"error":"no such table: qux"}]`, asJSON(results); exp != got {
 		t.Fatalf("unexpected results, exp %s, got %s", exp, got)
 	}
-	rows, err = client.Query(queryRequestFromString(`SELECT * FROM qux`), leaderAddr, NO_CREDS, shortWait)
+	// Statements causing errors are considered read-write by SQLite, so
+	// don't bother with index check. It's not super-meaningful.
+
+	rows, _, err = client.Query(queryRequestFromString(`SELECT * FROM qux`), leaderAddr, NO_CREDS, shortWait)
 	if err != nil {
 		t.Fatalf("failed to query via remote: %s", err.Error())
 	}
 	if exp, got := `[{"error":"no such table: qux"}]`, asJSON(rows); exp != got {
 		t.Fatalf("unexpected results, exp %s, got %s", exp, got)
 	}
-	results, err = client.Request(executeQueryRequestFromString(`SELECT * FROM qux`), leaderAddr, NO_CREDS, shortWait, noRetries)
+	results, _, err = client.Request(executeQueryRequestFromString(`SELECT * FROM qux`), leaderAddr, NO_CREDS, shortWait, noRetries)
 	if err != nil {
 		t.Fatalf("failed to query via remote: %s", err.Error())
 	}

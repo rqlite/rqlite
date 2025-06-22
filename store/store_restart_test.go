@@ -26,7 +26,7 @@ func Test_OpenStoreCloseStartupSingleNode(t *testing.T) {
 		`CREATE TABLE foo (id INTEGER NOT NULL PRIMARY KEY, name TEXT)`,
 		`INSERT INTO foo(id, name) VALUES(1, "fiona")`,
 	}, false, false)
-	_, err := s.Execute(er)
+	_, _, err := s.Execute(er)
 	if err != nil {
 		t.Fatalf("failed to execute on single node: %s", err.Error())
 	}
@@ -44,7 +44,7 @@ func Test_OpenStoreCloseStartupSingleNode(t *testing.T) {
 	testPoll(t, func() bool {
 		qr := queryRequestFromString("SELECT COUNT(*) FROM foo", false, false)
 		qr.Level = command.QueryRequest_QUERY_REQUEST_LEVEL_STRONG
-		r, err := s.Query(qr)
+		r, _, err := s.Query(qr)
 		return err == nil && asJSON(r) == `[{"columns":["COUNT(*)"],"types":["integer"],"values":[[1]]}]`
 	}, 100*time.Millisecond, 5*time.Second)
 	if err := s.Close(true); err != nil {
@@ -67,7 +67,7 @@ func Test_OpenStoreCloseStartupSingleNode(t *testing.T) {
 	queryTest := func(s *Store, c int) {
 		qr := queryRequestFromString("SELECT COUNT(*) FROM foo", false, false)
 		qr.Level = command.QueryRequest_QUERY_REQUEST_LEVEL_STRONG
-		r, err := s.Query(qr)
+		r, _, err := s.Query(qr)
 		if err != nil {
 			t.Fatalf("failed to query single node: %s", err.Error())
 		}
@@ -82,7 +82,7 @@ func Test_OpenStoreCloseStartupSingleNode(t *testing.T) {
 		er := executeRequestFromStrings([]string{
 			`INSERT INTO foo(name) VALUES("fiona")`,
 		}, false, false)
-		if _, err := s.Execute(er); err != nil {
+		if _, _, err := s.Execute(er); err != nil {
 			t.Fatalf("failed to execute on single node: %s", err.Error())
 		}
 	}
@@ -121,7 +121,7 @@ func Test_OpenStoreCloseStartupSingleNode(t *testing.T) {
 	testPoll(t, func() bool {
 		qr := queryRequestFromString("SELECT COUNT(*) FROM foo", false, false)
 		qr.Level = command.QueryRequest_QUERY_REQUEST_LEVEL_NONE
-		r, err := s.Query(qr)
+		r, _, err := s.Query(qr)
 		return err == nil && asJSON(r) == `[{"columns":["COUNT(*)"],"types":["integer"],"values":[[10]]}]`
 	}, 100*time.Millisecond, 5*time.Second)
 	if err := s.Close(true); err != nil {
@@ -135,7 +135,7 @@ func Test_OpenStoreCloseStartupSingleNode(t *testing.T) {
 	if _, err := s.WaitForLeader(10 * time.Second); err != nil {
 		t.Fatalf("Error waiting for leader: %s", err)
 	}
-	_, err = s.Execute(executeRequestFromString(`INSERT INTO foo(name) VALUES("fiona")`, false, false))
+	_, _, err = s.Execute(executeRequestFromString(`INSERT INTO foo(name) VALUES("fiona")`, false, false))
 	if err != nil {
 		t.Fatalf("failed to execute on single node: %s", err.Error())
 	}
@@ -143,7 +143,7 @@ func Test_OpenStoreCloseStartupSingleNode(t *testing.T) {
 	testPoll(t, func() bool {
 		qr := queryRequestFromString("SELECT COUNT(*) FROM foo", false, false)
 		qr.Level = command.QueryRequest_QUERY_REQUEST_LEVEL_NONE
-		r, err := s.Query(qr)
+		r, _, err := s.Query(qr)
 		return err == nil && asJSON(r) == `[{"columns":["COUNT(*)"],"types":["integer"],"values":[[11]]}]`
 	}, 100*time.Millisecond, 5*time.Second)
 
@@ -176,7 +176,7 @@ func test_SnapshotStress(t *testing.T, s *Store) {
 	er := executeRequestFromString(
 		`CREATE TABLE foo (id INTEGER NOT NULL PRIMARY KEY, name TEXT)`,
 		false, false)
-	_, err := s.Execute(er)
+	_, _, err := s.Execute(er)
 	if err != nil {
 		t.Fatalf("failed to execute on single node: %s", err.Error())
 	}
@@ -186,14 +186,14 @@ func test_SnapshotStress(t *testing.T, s *Store) {
 		er := executeRequestFromString(
 			fmt.Sprintf(`INSERT INTO foo(name) VALUES("fiona-%d")`, i),
 			false, false)
-		_, err := s.Execute(er)
+		_, _, err := s.Execute(er)
 		if err != nil {
 			t.Fatalf("failed to execute on single node: %s", err.Error())
 		}
 	}
 	qr := queryRequestFromString("SELECT COUNT(*) FROM foo", false, false)
 	qr.Level = command.QueryRequest_QUERY_REQUEST_LEVEL_STRONG
-	r, err := s.Query(qr)
+	r, _, err := s.Query(qr)
 	if err != nil {
 		t.Fatalf("failed to query single node: %s", err.Error())
 	}
@@ -215,7 +215,7 @@ func test_SnapshotStress(t *testing.T, s *Store) {
 
 	qr = queryRequestFromString("SELECT COUNT(*) FROM foo", false, false)
 	qr.Level = command.QueryRequest_QUERY_REQUEST_LEVEL_STRONG
-	r, err = s.Query(qr)
+	r, _, err = s.Query(qr)
 	if err != nil {
 		t.Fatalf("failed to query single node: %s", err.Error())
 	}
@@ -281,11 +281,11 @@ func Test_OpenStoreCloseUserSnapshot(t *testing.T) {
 	er := executeRequestFromString(
 		`CREATE TABLE foo (id INTEGER NOT NULL PRIMARY KEY, name TEXT)`,
 		false, false)
-	_, err := s.Execute(er)
+	_, _, err := s.Execute(er)
 	if err != nil {
 		t.Fatalf("failed to execute on single node: %s", err.Error())
 	}
-	_, err = s.Execute(executeRequestFromString(`INSERT INTO foo(name) VALUES("fiona")`, false, false))
+	_, _, err = s.Execute(executeRequestFromString(`INSERT INTO foo(name) VALUES("fiona")`, false, false))
 	if err != nil {
 		t.Fatalf("failed to execute on single node: %s", err.Error())
 	}
@@ -309,7 +309,7 @@ func Test_OpenStoreCloseUserSnapshot(t *testing.T) {
 
 	qr := queryRequestFromString("SELECT * FROM foo", false, false)
 	qr.Level = command.QueryRequest_QUERY_REQUEST_LEVEL_STRONG
-	r, err := s.Query(qr)
+	r, _, err := s.Query(qr)
 	if err != nil {
 		t.Fatalf("failed to query single node: %s", err.Error())
 	}

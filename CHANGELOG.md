@@ -1,13 +1,28 @@
-## v8.37.5 (unreleased)
+## v8.38.2 (unreleased)
+### Implementation changes and bug fixes
+- [PR #2119](https://github.com/rqlite/rqlite/pull/2119): CLI supports `RQLITE_HOST` as connection environment variable. Fixes issue [#2088](https://github.com/rqlite/rqlite/issues/2088). Thanks @m04f
+
+## v8.38.1 (June 19th 2025)
+### Implementation changes and bug fixes
+- [PR #2118](https://github.com/rqlite/rqlite/pull/2118): Query supports returning Raft Index for Strong Consistency Reads.
+
+## v8.38.0 (June 18th 2025)
+### New features
+- [PR #2113](https://github.com/rqlite/rqlite/pull/2113): Support returning Raft index in responses. See [the docs](https://rqlite.io/docs/api/api/#tracking-raft-indexes) for more details.
+
 ### Implementation changes and bug fixes
 - [PR #2099](https://github.com/rqlite/rqlite/pull/2099): Add basic CDC streamer to database module.
 - [PR #2101](https://github.com/rqlite/rqlite/pull/2101): Add CDC support to Store component.
+- [PR #2110](https://github.com/rqlite/rqlite/pull/2110): Expose Raft log index via `Store.Execute()`.
+- [PR #2112](https://github.com/rqlite/rqlite/pull/2112): Expose Raft log index via `Store.Request()`.
+- [PR #2114](https://github.com/rqlite/rqlite/pull/2114): Support returning Raft Index in HTTP responses.
+- [PR #2115](https://github.com/rqlite/rqlite/pull/2115): Upgrade `go mod` dependencies.
 
-## v8.37.4 (Jun 7th 2025)
+## v8.37.4 (June 7th 2025)
 ### Implementation changes and bug fixes
 - [PR #2098](https://github.com/rqlite/rqlite/pull/2098): Upgrade SQL parser.
 
-## v8.37.3 (Jun 6th 2025)
+## v8.37.3 (June 6th 2025)
 ### Implementation changes and bug fixes
 - [PR #2097](https://github.com/rqlite/rqlite/pull/2097): Upgrade SQL parser.
 
