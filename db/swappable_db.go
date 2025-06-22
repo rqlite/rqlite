@@ -44,7 +44,7 @@ func backupDbPath(path string) string {
 // Swap swaps the underlying database with that at the given path. The Swap operation
 // may fail on some platforms if the file at path is open by another process. It is
 // the caller's responsibility to ensure the file at path is not in use.
-func (s *SwappableDB) Swap(path string, fkConstraints, walEnabled bool) error {
+func (s *SwappableDB) Swap(path string, fkConstraints, walEnabled bool) (retErr error) {
 	if !IsValidSQLiteFile(path) {
 		return fmt.Errorf("invalid SQLite data")
 	}
@@ -62,27 +62,29 @@ func (s *SwappableDB) Swap(path string, fkConstraints, walEnabled bool) error {
 		return fmt.Errorf("failed to rename old database: %s", err)
 	}
 	defer RemoveFiles(oldDbPath)
-
-	replaceDb := func(path string, fkConstraints, walEnabled bool) error {
-		if err := os.Rename(path, s.db.Path()); err != nil {
-			return fmt.Errorf("failed to rename database: %s", err)
+	defer func() {
+		if retErr == nil {
+			return
 		}
-
-		db, err := OpenWithDriver(s.drv, s.db.Path(), fkConstraints, walEnabled)
+		if err := RenameFiles(oldDbPath, s.db.Path()); err != nil {
+			retErr = fmt.Errorf("%w: failed to swap database (%v) and failed to recover original database (%v)", ErrDbDataLost, retErr, err)
+		}
+		db, err := OpenWithDriver(s.drv, s.db.Path(), oldFkConstraints, oldWalEnabled)
 		if err != nil {
-			return fmt.Errorf("open SQLite file failed: %s", err)
+			retErr = fmt.Errorf("%w: failed to swap database (%v) and failed to recover original database (%v)", ErrDbDataLost, retErr, err)
 		}
 		s.db = db
-		return nil
+	}()
+
+	if err := os.Rename(path, s.db.Path()); err != nil {
+		return fmt.Errorf("failed to rename database: %s", err)
 	}
 
-	if err := replaceDb(path, fkConstraints, walEnabled); err != nil {
-		if recoveryErr := replaceDb(oldDbPath, oldFkConstraints, oldWalEnabled); recoveryErr != nil {
-			return fmt.Errorf("%w: failed to swap database (%v) and failed to recover original database (%v)", ErrDbDataLost, err, recoveryErr)
-		}
-		return err
+	db, err := OpenWithDriver(s.drv, s.db.Path(), fkConstraints, walEnabled)
+	if err != nil {
+		return fmt.Errorf("open SQLite file failed: %s", err)
 	}
-
+	s.db = db
 	return nil
 }
 
