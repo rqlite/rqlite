@@ -58,10 +58,10 @@ func (s *SwappableDB) Swap(path string, fkConstraints, walEnabled bool) error {
 	oldDbPath := backupDbPath(s.db.Path())
 	oldFkConstraints := s.db.FKEnabled()
 	oldWalEnabled := s.db.WALEnabled()
-	if err := os.Rename(s.db.Path(), oldDbPath); err != nil {
+	if err := RenameFiles(s.db.Path(), oldDbPath); err != nil {
 		return fmt.Errorf("failed to rename old database: %s", err)
 	}
-	defer os.Remove(oldDbPath)
+	defer RemoveFiles(oldDbPath)
 
 	replaceDb := func(path string, fkConstraints, walEnabled bool) error {
 		if err := os.Rename(path, s.db.Path()); err != nil {
