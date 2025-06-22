@@ -1,12 +1,19 @@
 package cdc
 
 import (
+	"bytes"
 	"crypto/tls"
+	"encoding/json"
 	"fmt"
+	"log"
+	"net/http"
+	"os"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/rqlite/rqlite/v8/command/proto"
+	"github.com/rqlite/rqlite/v8/queue"
 )
 
 const (
@@ -43,26 +50,56 @@ type Service struct {
 	in        <-chan *proto.CDCEvents
 	tlsConfig *tls.Config
 
-	endpoint      string
-	maxBatchSz    int
+	// endpoint is the HTTP endpoint to which the CDC events are sent.
+	endpoint string
+
+	// httpClient is the HTTP client used to send requests to the endpoint.
+	httpClient *http.Client
+
+	// maxBatchSz is the maximum number of events to send in a single batch to the endpoint.
+	maxBatchSz int
+
+	// maxBatchDelay is the maximum delay before sending a batch of events, regardless
+	// of the number of events ready for sending. This is used to ensure that
+	// we don't wait too long for a batch to fill up.
 	maxBatchDelay time.Duration
 
-	highWatermark atomic.
-	wg            sync.WaitGroup
-	done          chan struct{}
+	// queue is a queue of events to be sent to the webhook. It implements the
+	// batching and timeout logic.
+	queue *queue.Queue[*proto.CDCEvents]
+
+	// highWatermark is the index of the last event that was successfully sent to the webhook
+	// by the cluster (which is not necessarily the same thing as this node).
+	highWatermark atomic.Uint64
+
+	// For CDC shutdown.
+	wg   sync.WaitGroup
+	done chan struct{}
+
+	logger *log.Logger
 }
 
 // NewService creates a new CDC service.
 func NewService(clstr Cluster, str Store, in <-chan *proto.CDCEvents, endpoint string, tlsConfig *tls.Config, maxBatchSz int, maxBatchDelay time.Duration) *Service {
+	httpClient := &http.Client{
+		Transport: &http.Transport{
+			TLSClientConfig: tlsConfig,
+		},
+		Timeout: 5 * time.Second,
+	}
+
 	return &Service{
 		clstr:         clstr,
 		str:           str,
 		in:            in,
-		endpoint:      endpoint,
 		tlsConfig:     tlsConfig,
+		endpoint:      endpoint,
+		httpClient:    httpClient,
 		maxBatchSz:    maxBatchSz,
 		maxBatchDelay: maxBatchDelay,
+		queue:         queue.New[*proto.CDCEvents](maxBatchSz, maxBatchSz, maxBatchDelay),
 		done:          make(chan struct{}),
+		logger:        log.New(os.Stdout, "[cdc service] ", log.LstdFlags),
 	}
 }
 
@@ -71,8 +108,9 @@ func (s *Service) Start() error {
 	if err := s.createStateTable(); err != nil {
 		return err
 	}
-	s.wg.Add(1)
+	s.wg.Add(2)
 	go s.readEvents()
+	go s.postEvents()
 
 	obCh := make(chan struct{}, leaderChanLen)
 	s.clstr.RegisterLeaderChange(obCh)
@@ -87,8 +125,59 @@ func (s *Service) Stop() {
 
 func (s *Service) readEvents() {
 	defer s.wg.Done()
-	<-s.done
-	return
+	for {
+		select {
+		case o := <-s.in:
+			s.queue.Write([]*proto.CDCEvents{o}, nil)
+		case <-s.done:
+			return
+		}
+	}
+}
+
+func (s *Service) postEvents() {
+	defer s.wg.Done()
+	for {
+		select {
+		case batch := <-s.queue.C:
+			if batch == nil || len(batch.Objects) == 0 {
+				continue
+			}
+
+			b, err := json.Marshal(batch.Objects)
+			if err != nil {
+				s.logger.Printf("error marshalling batch: %v", err)
+				continue
+			}
+
+			req, err := http.NewRequest("POST", s.endpoint, bytes.NewReader(b))
+			if err != nil {
+				s.logger.Printf("error creating HTTP request for endpoint: %v", err)
+				continue
+			}
+			req.Header.Set("Content-Type", "application/json")
+
+			maxRetries := 5
+			nAttempts := 0
+			retryDelay := 500 * time.Millisecond
+			for {
+				nAttempts++
+				resp, err := s.httpClient.Do(req)
+				if err == nil && (resp.StatusCode == http.StatusOK || resp.StatusCode == http.StatusAccepted) {
+					resp.Body.Close()
+					break
+				}
+				if nAttempts >= maxRetries {
+					s.logger.Printf("failed to send batch to endpoint after %d retries, last error: %v", nAttempts, err)
+					break
+				}
+				retryDelay *= 2
+				time.Sleep(retryDelay)
+			}
+		case <-s.done:
+			return
+		}
+	}
 }
 
 func (s *Service) createStateTable() error {
