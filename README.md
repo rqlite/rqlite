@@ -27,7 +27,7 @@ rqlite is your solution for a [rock](https://www.sqlite.org/testing.html)-[solid
 
 ### Key features
 - **Easy Deployment**: Up and running in seconds, with no separate SQLite installation.
-- **Developer-Friendly**: Easy-to-use [HTTP API](https://rqlite.io/docs/api/), [CLI](https://rqlite.io/docs/cli/), and [client libraries](https://rqlite.io/docs/api/client-libraries/).
+- **Developer-Friendly**: Access a SQLite database via an easy-to-use [HTTP API](https://rqlite.io/docs/api/). [CLI](https://rqlite.io/docs/cli/) and [client libraries](https://rqlite.io/docs/api/client-libraries/) also available.
 - **Rich feature set**: [Full-text search](https://www.sqlite.org/fts5.html), [JSON support](https://www.sqlite.org/json1.html), and [SQLite extensions support](https://rqlite.io/docs/guides/extensions/) including [Vector Search](https://github.com/asg017/sqlite-vec) and [Crypto](https://github.com/nalgeon/sqlean).
 - **Large data set support**: rqlite works well, even when managing multi-GB data sets.
 - **Reliable**: Fully replicated SQL database provides fault-tolerance and high-availability.
