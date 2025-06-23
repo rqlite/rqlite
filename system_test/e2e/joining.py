@@ -179,15 +179,10 @@ class TestSingleNodeJoin(unittest.TestCase):
     # Stop the node gracefully
     self.n0.stop(graceful=True)
     
-    # Attempt to restart with join flag - this should exit with an error
-    try:
-      self.n0.start(join=self.n1.RaftAddr())
-      self.fail("Expected an exception when trying to join single-node cluster to another cluster")
-    except Exception:
-      # Expected behavior - the node should fail to start
-      pass
-      
-    # Verify that the process is not running
+    # Attempt to restart with join flag - this should not result in a running
+    # process.
+    self.n0.start(join=self.n1.RaftAddr(), wait=False)
+    self.n0.process.wait(timeout=5)
     self.assertFalse(self.n0.running())
 
   def tearDown(self):
