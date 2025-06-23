@@ -13,7 +13,7 @@
 [![Slack](https://img.shields.io/badge/Slack--purple.svg)](https://www.rqlite.io/join-slack)
 [![Google Group](https://img.shields.io/badge/Google%20Group--blue.svg)](https://groups.google.com/group/rqlite)
 
-[*rqlite*](https://rqlite.io) is a developer-friendly and operator-centric solution for [Linux, macOS, and Windows, as well as various CPU platforms](https://github.com/rqlite/rqlite/releases).
+[*rqlite*](https://rqlite.io) is a developer-friendly and operator-centric database solution for [Linux, macOS, and Windows, as well as various CPU platforms](https://github.com/rqlite/rqlite/releases).
 
 - [_Quick Start_ guide](https://rqlite.io/docs/quick-start/)
 - [Developer guide](https://www.rqlite.io/docs/api)
