@@ -122,6 +122,24 @@ message RemoveNodeRequest {
 	string id = 1;
 }
 
+message CompareAndSwapRequest {
+	string key = 1;
+	string value = 2;
+	bool prevExist = 3;
+	string prevValue = 4;
+	uint64 prevIndex = 5;
+}
+
+message CompareAndSwapResponse {
+}
+
+message CompareAndDeleteRequest {
+	string key = 1;
+	bool prevExist = 2;
+	string prevValue = 3;
+	uint64 prevIndex = 4;
+}
+
 message Noop {
 	string id = 1;
 }
@@ -136,6 +154,8 @@ message Command {
 		COMMAND_TYPE_JOIN = 5;
 		COMMAND_TYPE_EXECUTE_QUERY = 6;
 		COMMAND_TYPE_LOAD_CHUNK = 7;
+		COMMAND_TYPE_COMPARE_AND_SWAP = 8;
+		COMMAND_TYPE_COMPARE_AND_DELETE = 9;
 	}
 	Type type = 1;
 	bytes sub_command = 2;

@@ -1829,6 +1829,13 @@ func (s *Store) Remove(rn *proto.RemoveNodeRequest) error {
 	return nil
 }
 
+func (s *Store) CompareAndSwap(req *proto.CompareAndSwapRequest) (*proto.CompareAndSwapResponse, uint64, error) {
+	if !s.open.Is() {
+		return nil, 0, ErrNotOpen
+	}
+	return nil, 0, nil
+}
+
 // Noop writes a noop command to the Raft log. A noop command simply
 // consumes a slot in the Raft log, but has no other effect on the
 // system.
