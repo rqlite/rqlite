@@ -159,6 +159,8 @@ class TestForwardedJoin(unittest.TestCase):
     self.assertEqual(l0, l2)
 
 class TestSingleNodeJoin(unittest.TestCase):
+  PROCESS_EXIT_TIMEOUT = 5
+
   def setUp(self):
     # Setup single node
     self.n0 = Node(RQLITED_PATH, '0')
@@ -179,15 +181,10 @@ class TestSingleNodeJoin(unittest.TestCase):
     # Stop the node gracefully
     self.n0.stop(graceful=True)
     
-    # Attempt to restart with join flag - this should exit with an error
-    try:
-      self.n0.start(join=self.n1.RaftAddr())
-      self.fail("Expected an exception when trying to join single-node cluster to another cluster")
-    except Exception:
-      # Expected behavior - the node should fail to start
-      pass
-      
-    # Verify that the process is not running
+    # Attempt to restart with join flag - this should not result in a running
+    # process.
+    self.n0.start(join=self.n1.RaftAddr(), wait=False)
+    self.n0.process.wait(timeout=self.PROCESS_EXIT_TIMEOUT)
     self.assertFalse(self.n0.running())
 
   def tearDown(self):
