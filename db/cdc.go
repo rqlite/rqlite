@@ -29,7 +29,7 @@ func NewCDCStreamer(out chan<- *command.CDCEvents) *CDCStreamer {
 func (s *CDCStreamer) Reset(k uint64) {
 	s.pending = &command.CDCEvents{
 		Events: make([]*command.CDCEvent, 0),
-		K:      k,
+		Index:  k,
 	}
 }
 

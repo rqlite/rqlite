@@ -1,7 +1,6 @@
 package cdc
 
 import (
-	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
@@ -11,6 +10,7 @@ import (
 	"time"
 
 	"github.com/rqlite/rqlite/v8/command/proto"
+	"google.golang.org/protobuf/encoding/protojson"
 )
 
 func Test_ServiceSingleEvent(t *testing.T) {
@@ -53,7 +53,7 @@ func Test_ServiceSingleEvent(t *testing.T) {
 		NewRowId: 2,
 	}
 	evs := &proto.CDCEvents{
-		K:      1,
+		Index:  1,
 		Events: []*proto.CDCEvent{ev},
 	}
 	eventsCh <- evs
@@ -61,12 +61,12 @@ func Test_ServiceSingleEvent(t *testing.T) {
 	// Wait for the service to forward the batch.
 	select {
 	case got := <-bodyCh:
-		var batch []*proto.CDCEvents
-		if err := json.Unmarshal(got, &batch); err != nil {
+		var batch proto.CDCEventsBatch
+		if err := protojson.Unmarshal(got, &batch); err != nil {
 			t.Fatalf("invalid JSON received: %v", err)
 		}
-		if len(batch) != 1 || batch[0].K != evs.K {
-			t.Fatalf("unexpected payload: %v", batch)
+		if len(batch.Payload) != 1 || batch.Payload[0].Index != evs.Index {
+			t.Fatalf("unexpected payload: %v", batch.Payload)
 		}
 		fmt.Println(string(got))
 	case <-time.After(2 * time.Second):

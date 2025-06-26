@@ -3,7 +3,6 @@ package cdc
 import (
 	"bytes"
 	"crypto/tls"
-	"encoding/json"
 	"fmt"
 	"log"
 	"net/http"
@@ -14,6 +13,7 @@ import (
 
 	"github.com/rqlite/rqlite/v8/command/proto"
 	"github.com/rqlite/rqlite/v8/queue"
+	"google.golang.org/protobuf/encoding/protojson"
 )
 
 const (
@@ -72,6 +72,8 @@ type Service struct {
 	// by the cluster (which is not necessarily the same thing as this node).
 	highWatermark atomic.Uint64
 
+	batchMarshaler protojson.MarshalOptions
+
 	// For CDC shutdown.
 	wg   sync.WaitGroup
 	done chan struct{}
@@ -89,17 +91,18 @@ func NewService(clstr Cluster, str Store, in <-chan *proto.CDCEvents, endpoint s
 	}
 
 	return &Service{
-		clstr:         clstr,
-		str:           str,
-		in:            in,
-		tlsConfig:     tlsConfig,
-		endpoint:      endpoint,
-		httpClient:    httpClient,
-		maxBatchSz:    maxBatchSz,
-		maxBatchDelay: maxBatchDelay,
-		queue:         queue.New[*proto.CDCEvents](maxBatchSz, maxBatchSz, maxBatchDelay),
-		done:          make(chan struct{}),
-		logger:        log.New(os.Stdout, "[cdc service] ", log.LstdFlags),
+		clstr:          clstr,
+		str:            str,
+		in:             in,
+		tlsConfig:      tlsConfig,
+		endpoint:       endpoint,
+		httpClient:     httpClient,
+		maxBatchSz:     maxBatchSz,
+		maxBatchDelay:  maxBatchDelay,
+		queue:          queue.New[*proto.CDCEvents](maxBatchSz, maxBatchSz, maxBatchDelay),
+		done:           make(chan struct{}),
+		batchMarshaler: protojson.MarshalOptions{},
+		logger:         log.New(os.Stdout, "[cdc service] ", log.LstdFlags),
 	}
 }
 
@@ -151,7 +154,8 @@ func (s *Service) postEvents() {
 				continue
 			}
 
-			b, err := json.Marshal(batch.Objects)
+			batchMsg := &proto.CDCEventsBatch{Payload: batch.Objects}
+			b, err := s.batchMarshaler.Marshal(batchMsg)
 			if err != nil {
 				s.logger.Printf("error marshalling batch: %v", err)
 				continue
@@ -172,7 +176,7 @@ func (s *Service) postEvents() {
 				resp, err := s.httpClient.Do(req)
 				if err == nil && (resp.StatusCode == http.StatusOK || resp.StatusCode == http.StatusAccepted) {
 					resp.Body.Close()
-					s.writeHighWatermark(batch.Objects[len(batch.Objects)-1].K)
+					s.writeHighWatermark(batch.Objects[len(batch.Objects)-1].Index)
 					break
 				}
 				if nAttempts >= maxRetries {
