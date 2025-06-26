@@ -128,6 +128,8 @@ func (s *Service) readEvents() {
 	for {
 		select {
 		case o := <-s.in:
+			// Right now just write the event to the queue. Events should be
+			// persisted to a disk-based queue for replay on Leader change.
 			s.queue.Write([]*proto.CDCEvents{o}, nil)
 		case <-s.done:
 			return
@@ -141,6 +143,11 @@ func (s *Service) postEvents() {
 		select {
 		case batch := <-s.queue.C:
 			if batch == nil || len(batch.Objects) == 0 {
+				continue
+			}
+
+			// Only the Leader actually sends events.
+			if !s.clstr.IsLeader() {
 				continue
 			}
 
@@ -165,6 +172,7 @@ func (s *Service) postEvents() {
 				resp, err := s.httpClient.Do(req)
 				if err == nil && (resp.StatusCode == http.StatusOK || resp.StatusCode == http.StatusAccepted) {
 					resp.Body.Close()
+					s.writeHighWatermark(batch.Objects[len(batch.Objects)-1].K)
 					break
 				}
 				if nAttempts >= maxRetries {
@@ -181,6 +189,7 @@ func (s *Service) postEvents() {
 }
 
 func (s *Service) createStateTable() error {
+	return nil
 	er := executeRequestFromString(`
 CREATE TABLE IF NOT EXISTS_rqlite_cdc_state (
     k         TEXT PRIMARY KEY,
@@ -193,6 +202,7 @@ CREATE TABLE IF NOT EXISTS_rqlite_cdc_state (
 }
 
 func (s *Service) writeHighWatermark(value uint64) error {
+	return nil
 	sql := fmt.Sprintf(`INSERT OR REPLACE INTO _rqlite_cdc_state(k, v_int) VALUES ('%s', %d)`, highWatermarkKey, value)
 	er := executeRequestFromString(sql)
 	_, err := s.str.Execute(er)
