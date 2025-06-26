@@ -193,7 +193,6 @@ func (s *Service) postEvents() {
 }
 
 func (s *Service) createStateTable() error {
-	return nil
 	er := executeRequestFromString(`
 CREATE TABLE IF NOT EXISTS_rqlite_cdc_state (
     k         TEXT PRIMARY KEY,
@@ -206,7 +205,6 @@ CREATE TABLE IF NOT EXISTS_rqlite_cdc_state (
 }
 
 func (s *Service) writeHighWatermark(value uint64) error {
-	return nil
 	sql := fmt.Sprintf(`INSERT OR REPLACE INTO _rqlite_cdc_state(k, v_int) VALUES ('%s', %d)`, highWatermarkKey, value)
 	er := executeRequestFromString(sql)
 	_, err := s.str.Execute(er)
