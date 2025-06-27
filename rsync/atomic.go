@@ -108,12 +108,12 @@ func (b *AtomicBool) Unset() {
 }
 
 // SetBool sets the AtomicBool to the given boolean value.
-func (b *AtomicBool) SetBool(value bool) {
-	if value {
-		b.Set()
-	} else {
-		b.Unset()
+func (b *AtomicBool) SetBool(state bool) {
+	var value int32
+	if state {
+		value = 1
 	}
+	atomic.StoreInt32(&b.state, value)
 }
 
 // Is returns true if the AtomicBool is true, false otherwise.
