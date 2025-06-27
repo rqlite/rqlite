@@ -29,11 +29,9 @@ func Test_ServiceSingleEvent(t *testing.T) {
 	}))
 	defer testSrv.Close()
 
-	// Mock cluster – this node is always leader.
 	cl := &mockCluster{}
 	cl.leader.Store(true)
 
-	// Construct and start the service.
 	svc := NewService(
 		cl,
 		&mockStore{},
@@ -90,6 +88,80 @@ func Test_ServiceSingleEvent(t *testing.T) {
 	pollExpvarUntil(t, numDroppedNotLeader, 1, 2*time.Second)
 }
 
+func Test_ServiceSingleEvent_Retry(t *testing.T) {
+	ResetStats()
+
+	// Channel for the service to receive events.
+	eventsCh := make(chan *proto.CDCEvents, 1)
+	bodyCh := make(chan []byte, 1)
+	firstErrSent := false
+	testSrv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		defer r.Body.Close()
+		if !firstErrSent {
+			w.WriteHeader(http.StatusInternalServerError)
+			firstErrSent = true
+			return
+		}
+		b, _ := io.ReadAll(r.Body)
+		bodyCh <- b
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer testSrv.Close()
+
+	cl := &mockCluster{}
+	cl.leader.Store(true)
+
+	svc := NewService(
+		cl,
+		&mockStore{},
+		eventsCh,
+		testSrv.URL,
+		nil,                 // no TLS
+		1,                   // maxBatchSz – flush immediately
+		50*time.Millisecond, // maxBatchDelay – short for test
+	)
+	if err := svc.Start(); err != nil {
+		t.Fatalf("failed to start service: %v", err)
+	}
+	defer svc.Stop()
+
+	// Send one dummy event to the service.
+	ev := &proto.CDCEvent{
+		Op:       proto.CDCEvent_INSERT,
+		Table:    "foo",
+		NewRowId: 2,
+	}
+	evs := &proto.CDCEvents{
+		Index:  1,
+		Events: []*proto.CDCEvent{ev},
+	}
+	eventsCh <- evs
+
+	// Wait for the service to forward the batch.
+	select {
+	case got := <-bodyCh:
+		var batch proto.CDCEventsBatch
+		if err := protojson.Unmarshal(got, &batch); err != nil {
+			t.Fatalf("invalid JSON received: %v", err)
+		}
+		if len(batch.Payload) != 1 || batch.Payload[0].Index != evs.Index {
+			t.Fatalf("unexpected payload: %v", batch.Payload)
+		}
+		if len(batch.Payload[0].Events) != 1 {
+			t.Fatalf("unexpected number of events in payload: %d", len(batch.Payload[0].Events))
+		}
+		if reflect.DeepEqual(batch.Payload[0].Events[0], evs.Events[0]) == false {
+			t.Fatalf("unexpected events in payload: %v", batch.Payload[0].Events)
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatalf("timeout waiting for HTTP POST")
+	}
+
+	testPoll(t, func() bool {
+		return svc.HighWatermark() == evs.Index
+	}, 2*time.Second)
+}
+
 func Test_ServiceMultiEvent(t *testing.T) {
 	ResetStats()
 
@@ -105,11 +177,9 @@ func Test_ServiceMultiEvent(t *testing.T) {
 	}))
 	defer testSrv.Close()
 
-	// Mock cluster – this node is always leader.
 	cl := &mockCluster{}
 	cl.leader.Store(true)
 
-	// Construct and start the service.
 	svc := NewService(
 		cl,
 		&mockStore{},
@@ -190,7 +260,6 @@ func Test_ServiceMultiEvent_Batch(t *testing.T) {
 	}))
 	defer testSrv.Close()
 
-	// Mock cluster – this node is always leader.
 	cl := &mockCluster{}
 	cl.leader.Store(true)
 

@@ -25,6 +25,7 @@ const (
 const (
 	numDroppedNotLeader    = "dropped_not_leader"
 	numDroppedFailedToSend = "dropped_failed_to_send"
+	numRetries             = "retries"
 	numSent                = "sent_events"
 )
 
@@ -32,7 +33,7 @@ const (
 var stats *expvar.Map
 
 func init() {
-	stats = expvar.NewMap("cdc_service")
+	stats = expvar.NewMap("cdc-service")
 	ResetStats()
 }
 
@@ -41,6 +42,7 @@ func ResetStats() {
 	stats.Init()
 	stats.Add(numDroppedNotLeader, 0)
 	stats.Add(numDroppedFailedToSend, 0)
+	stats.Add(numRetries, 0)
 	stats.Add(numSent, 0)
 }
 
@@ -146,6 +148,10 @@ func (s *Service) Start() error {
 
 // Stop stops the CDC service.
 func (s *Service) Stop() {
+	if s.clstr.IsLeader() {
+		// Best effort to write the high watermark before stopping.
+		s.writeHighWatermark(s.highWatermark.Load())
+	}
 	close(s.done)
 	s.wg.Wait()
 }
@@ -216,6 +222,7 @@ func (s *Service) postEvents() {
 					stats.Add(numDroppedFailedToSend, int64(len(batch.Objects)))
 					break
 				}
+				stats.Add(numRetries, 1)
 				retryDelay *= 2
 				time.Sleep(retryDelay)
 			}
@@ -229,11 +236,20 @@ func (s *Service) writeHighWatermarkLoop() {
 	defer s.wg.Done()
 	ticker := time.NewTicker(5 * time.Second)
 	defer ticker.Stop()
+
+	prevVal := s.highWatermark.Load()
 	for {
 		select {
 		case <-ticker.C:
-			if err := s.writeHighWatermark(s.highWatermark.Load()); err != nil {
-				s.logger.Printf("error writing high watermark to store: %v", err)
+			if s.highWatermark.Load() == prevVal {
+				// Nothing to do.
+				continue
+			}
+			prevVal = s.highWatermark.Load()
+			if s.clstr.IsLeader() {
+				if err := s.writeHighWatermark(s.highWatermark.Load()); err != nil {
+					s.logger.Printf("error writing high watermark to store: %v", err)
+				}
 				continue
 			}
 		case <-s.done:
