@@ -33,7 +33,7 @@ const (
 var stats *expvar.Map
 
 func init() {
-	stats = expvar.NewMap("cdc_service")
+	stats = expvar.NewMap("cdc-service")
 	ResetStats()
 }
 
