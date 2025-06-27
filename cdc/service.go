@@ -244,7 +244,7 @@ func (s *Service) writeHighWatermarkLoop() {
 
 func (s *Service) createStateTable() error {
 	er := executeRequestFromString(`
-CREATE TABLE IF NOT EXISTS_rqlite_cdc_state (
+CREATE TABLE IF NOT EXISTS _rqlite_cdc_state (
     k         TEXT PRIMARY KEY,
     v_blob    BLOB,
     v_text    TEXT,

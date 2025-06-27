@@ -1,3 +1,7 @@
+## v8.38.3 (unreleased)
+### Implementation changes and bug fixes
+- [PR #2106](https://github.com/rqlite/rqlite/pull/2106): Add initial CDC Service implementation.
+
 ## v8.38.2 (June 23rd 2025)
 ### Implementation changes and bug fixes
 - [PR #2119](https://github.com/rqlite/rqlite/pull/2119): CLI supports `RQLITE_HOST` as connection environment variable. Fixes issue [#2088](https://github.com/rqlite/rqlite/issues/2088). Thanks @m04f

@@ -1,6 +1,6 @@
 CDC Service Design
 
-Change-data-capture has been added to the database module of rqlite. This allows one to register two callacks -- one when rows are about to be updated, and one which is called when the updates are actually committed. The changes has been modeled using protobufs, and the events are sent to a Go channel.
+Change-data-capture has been added to the database module of rqlite. This allows one to register two callbacks -- one when rows are about to be updated, and one which is called when the updates are actually committed. The changes has been modeled using protobufs, and the events are sent to a Go channel.
 
 The next task is to design the "CDC Service" which will read this channel and transmit the events to a configurable webhook. rqlite is written in Go.
 
