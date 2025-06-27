@@ -96,8 +96,8 @@ type Service struct {
 
 	// highWatermark is the index of the last event that was successfully sent to the webhook
 	// by the cluster (which is not necessarily the same thing as this node).
-	highWatermark           atomic.Uint64
-	disableHighWatermarking rsync.AtomicBool
+	highWatermark            atomic.Uint64
+	highWatermarkingDisabled rsync.AtomicBool
 
 	batchMarshaler protojson.MarshalOptions
 
@@ -135,7 +135,7 @@ func NewService(clstr Cluster, str Store, in <-chan *proto.CDCEvents, endpoint s
 
 // Start starts the CDC service.
 func (s *Service) Start() error {
-	if s.disableHighWatermarking.IsNot() {
+	if s.highWatermarkingDisabled.IsNot() {
 		if err := s.createStateTable(); err != nil {
 			return err
 		}
@@ -144,7 +144,7 @@ func (s *Service) Start() error {
 	go s.readEvents()
 	go s.postEvents()
 
-	if s.disableHighWatermarking.IsNot() {
+	if s.highWatermarkingDisabled.IsNot() {
 		s.wg.Add(1)
 		go s.writeHighWatermarkLoop()
 	}
@@ -157,12 +157,12 @@ func (s *Service) Start() error {
 
 // SetHighWatermarking enables or disables high watermarking.
 func (s *Service) SetHighWatermarking(enabled bool) {
-	s.disableHighWatermarking.SetBool(enabled)
+	s.highWatermarkingDisabled.SetBool(!enabled)
 }
 
 // Stop stops the CDC service.
 func (s *Service) Stop() {
-	if s.clstr.IsLeader() {
+	if s.clstr.IsLeader() && s.highWatermarkingDisabled.IsNot() {
 		// Best effort to write the high watermark before stopping.
 		s.writeHighWatermark(s.highWatermark.Load())
 	}
