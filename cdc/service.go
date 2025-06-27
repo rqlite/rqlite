@@ -3,6 +3,7 @@ package cdc
 import (
 	"bytes"
 	"crypto/tls"
+	"expvar"
 	"fmt"
 	"log"
 	"net/http"
@@ -20,6 +21,28 @@ const (
 	highWatermarkKey = "high_watermark"
 	leaderChanLen    = 5 // Support any fast back-to-back leadership changes.
 )
+
+const (
+	numDroppedNotLeader    = "dropped_not_leader"
+	numDroppedFailedToSend = "dropped_failed_to_send"
+	numSent                = "sent_events"
+)
+
+// stats captures stats for the CDC Service.
+var stats *expvar.Map
+
+func init() {
+	stats = expvar.NewMap("cdc_service")
+	ResetStats()
+}
+
+// ResetStats resets the expvar stats for this module. Mostly for test purposes.
+func ResetStats() {
+	stats.Init()
+	stats.Add(numDroppedNotLeader, 0)
+	stats.Add(numDroppedFailedToSend, 0)
+	stats.Add(numSent, 0)
+}
 
 // Cluster is an interface that defines methods for cluster management.
 type Cluster interface {
@@ -151,6 +174,7 @@ func (s *Service) postEvents() {
 
 			// Only the Leader actually sends events.
 			if !s.clstr.IsLeader() {
+				stats.Add(numDroppedNotLeader, int64(len(batch.Objects)))
 				continue
 			}
 
@@ -177,10 +201,12 @@ func (s *Service) postEvents() {
 				if err == nil && (resp.StatusCode == http.StatusOK || resp.StatusCode == http.StatusAccepted) {
 					resp.Body.Close()
 					s.writeHighWatermark(batch.Objects[len(batch.Objects)-1].Index)
+					stats.Add(numSent, int64(len(batch.Objects)))
 					break
 				}
 				if nAttempts >= maxRetries {
 					s.logger.Printf("failed to send batch to endpoint after %d retries, last error: %v", nAttempts, err)
+					stats.Add(numDroppedFailedToSend, int64(len(batch.Objects)))
 					break
 				}
 				retryDelay *= 2

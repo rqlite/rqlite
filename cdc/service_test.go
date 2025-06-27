@@ -1,10 +1,11 @@
 package cdc
 
 import (
-	"fmt"
+	"expvar"
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"reflect"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -14,10 +15,11 @@ import (
 )
 
 func Test_ServiceSingleEvent(t *testing.T) {
+	ResetStats()
+
 	// Channel for the service to receive events.
 	eventsCh := make(chan *proto.CDCEvents, 1)
 
-	// Capture the POST body sent by the service.
 	bodyCh := make(chan []byte, 1)
 	testSrv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		defer r.Body.Close()
@@ -68,10 +70,20 @@ func Test_ServiceSingleEvent(t *testing.T) {
 		if len(batch.Payload) != 1 || batch.Payload[0].Index != evs.Index {
 			t.Fatalf("unexpected payload: %v", batch.Payload)
 		}
-		fmt.Println(string(got))
+		if len(batch.Payload[0].Events) != 1 {
+			t.Fatalf("unexpected number of events in payload: %d", len(batch.Payload[0].Events))
+		}
+		if reflect.DeepEqual(batch.Payload[0].Events[0], evs.Events[0]) == false {
+			t.Fatalf("unexpected events in payload: %v", batch.Payload[0].Events)
+		}
 	case <-time.After(2 * time.Second):
 		t.Fatalf("timeout waiting for HTTP POST")
 	}
+
+	// Next emulate CDC not running on the Leader.
+	cl.leader.Store(false)
+	eventsCh <- evs
+	pollExpvarUntil(t, numDroppedNotLeader, 1, 2*time.Second)
 }
 
 type mockCluster struct {
@@ -90,3 +102,26 @@ func (m *mockStore) Execute(*proto.ExecuteRequest) ([]*proto.ExecuteQueryRespons
 	return nil, nil
 }
 func (m *mockStore) Query(*proto.QueryRequest) ([]*proto.QueryRows, error) { return nil, nil }
+
+func pollExpvarUntil(t *testing.T, name string, expected int64, timeout time.Duration) {
+	t.Helper()
+	ticker := time.NewTicker(10 * time.Millisecond)
+	defer ticker.Stop()
+	timer := time.NewTimer(timeout)
+	defer timer.Stop()
+	for {
+		select {
+		case <-ticker.C:
+			val := stats.Get(name)
+			if val == nil {
+				t.Fatalf("expvar %s not found", name)
+			}
+			if i, ok := val.(*expvar.Int); ok && i.Value() == expected {
+				return
+			}
+		case <-timer.C:
+			t.Fatalf("timed out waiting for expvar %s to reach %d", name, expected)
+		}
+
+	}
+}
