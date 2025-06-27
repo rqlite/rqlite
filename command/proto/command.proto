@@ -173,8 +173,12 @@ message CDCEvent {
 }
 
 message CDCEvents {
-	uint64 k = 1;
+	uint64 index = 1;
 	repeated CDCEvent events = 2;
+}
+
+message CDCEventsBatch {
+	repeated CDCEvents payload = 1;
 }
 
 message UpdateHookEvent {

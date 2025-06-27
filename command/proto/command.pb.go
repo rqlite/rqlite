@@ -290,7 +290,7 @@ func (x UpdateHookEvent_Operation) Number() protoreflect.EnumNumber {
 
 // Deprecated: Use UpdateHookEvent_Operation.Descriptor instead.
 func (UpdateHookEvent_Operation) EnumDescriptor() ([]byte, []int) {
-	return file_command_proto_rawDescGZIP(), []int{22, 0}
+	return file_command_proto_rawDescGZIP(), []int{23, 0}
 }
 
 type Parameter struct {
@@ -1765,7 +1765,7 @@ func (x *CDCEvent) GetNewRow() *CDCRow {
 
 type CDCEvents struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
-	K             uint64                 `protobuf:"varint,1,opt,name=k,proto3" json:"k,omitempty"`
+	Index         uint64                 `protobuf:"varint,1,opt,name=index,proto3" json:"index,omitempty"`
 	Events        []*CDCEvent            `protobuf:"bytes,2,rep,name=events,proto3" json:"events,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
@@ -1801,9 +1801,9 @@ func (*CDCEvents) Descriptor() ([]byte, []int) {
 	return file_command_proto_rawDescGZIP(), []int{21}
 }
 
-func (x *CDCEvents) GetK() uint64 {
+func (x *CDCEvents) GetIndex() uint64 {
 	if x != nil {
-		return x.K
+		return x.Index
 	}
 	return 0
 }
@@ -1811,6 +1811,50 @@ func (x *CDCEvents) GetK() uint64 {
 func (x *CDCEvents) GetEvents() []*CDCEvent {
 	if x != nil {
 		return x.Events
+	}
+	return nil
+}
+
+type CDCEventsBatch struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Payload       []*CDCEvents           `protobuf:"bytes,1,rep,name=payload,proto3" json:"payload,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *CDCEventsBatch) Reset() {
+	*x = CDCEventsBatch{}
+	mi := &file_command_proto_msgTypes[22]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *CDCEventsBatch) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*CDCEventsBatch) ProtoMessage() {}
+
+func (x *CDCEventsBatch) ProtoReflect() protoreflect.Message {
+	mi := &file_command_proto_msgTypes[22]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use CDCEventsBatch.ProtoReflect.Descriptor instead.
+func (*CDCEventsBatch) Descriptor() ([]byte, []int) {
+	return file_command_proto_rawDescGZIP(), []int{22}
+}
+
+func (x *CDCEventsBatch) GetPayload() []*CDCEvents {
+	if x != nil {
+		return x.Payload
 	}
 	return nil
 }
@@ -1827,7 +1871,7 @@ type UpdateHookEvent struct {
 
 func (x *UpdateHookEvent) Reset() {
 	*x = UpdateHookEvent{}
-	mi := &file_command_proto_msgTypes[22]
+	mi := &file_command_proto_msgTypes[23]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1839,7 +1883,7 @@ func (x *UpdateHookEvent) String() string {
 func (*UpdateHookEvent) ProtoMessage() {}
 
 func (x *UpdateHookEvent) ProtoReflect() protoreflect.Message {
-	mi := &file_command_proto_msgTypes[22]
+	mi := &file_command_proto_msgTypes[23]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1852,7 +1896,7 @@ func (x *UpdateHookEvent) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use UpdateHookEvent.ProtoReflect.Descriptor instead.
 func (*UpdateHookEvent) Descriptor() ([]byte, []int) {
-	return file_command_proto_rawDescGZIP(), []int{22}
+	return file_command_proto_rawDescGZIP(), []int{23}
 }
 
 func (x *UpdateHookEvent) GetError() string {
@@ -2022,10 +2066,12 @@ const file_command_proto_rawDesc = "" +
 	"\n" +
 	"\x06UPDATE\x10\x02\x12\n" +
 	"\n" +
-	"\x06DELETE\x10\x03\"D\n" +
-	"\tCDCEvents\x12\f\n" +
-	"\x01k\x18\x01 \x01(\x04R\x01k\x12)\n" +
-	"\x06events\x18\x02 \x03(\v2\x11.command.CDCEventR\x06events\"\xc6\x01\n" +
+	"\x06DELETE\x10\x03\"L\n" +
+	"\tCDCEvents\x12\x14\n" +
+	"\x05index\x18\x01 \x01(\x04R\x05index\x12)\n" +
+	"\x06events\x18\x02 \x03(\v2\x11.command.CDCEventR\x06events\">\n" +
+	"\x0eCDCEventsBatch\x12,\n" +
+	"\apayload\x18\x01 \x03(\v2\x12.command.CDCEventsR\apayload\"\xc6\x01\n" +
 	"\x0fUpdateHookEvent\x12\x14\n" +
 	"\x05error\x18\x01 \x01(\tR\x05error\x122\n" +
 	"\x02op\x18\x02 \x01(\x0e2\".command.UpdateHookEvent.OperationR\x02op\x12\x14\n" +
@@ -2053,7 +2099,7 @@ func file_command_proto_rawDescGZIP() []byte {
 }
 
 var file_command_proto_enumTypes = make([]protoimpl.EnumInfo, 5)
-var file_command_proto_msgTypes = make([]protoimpl.MessageInfo, 23)
+var file_command_proto_msgTypes = make([]protoimpl.MessageInfo, 24)
 var file_command_proto_goTypes = []any{
 	(QueryRequest_Level)(0),        // 0: command.QueryRequest.Level
 	(BackupRequest_Format)(0),      // 1: command.BackupRequest.Format
@@ -2082,7 +2128,8 @@ var file_command_proto_goTypes = []any{
 	(*CDCRow)(nil),                 // 24: command.CDCRow
 	(*CDCEvent)(nil),               // 25: command.CDCEvent
 	(*CDCEvents)(nil),              // 26: command.CDCEvents
-	(*UpdateHookEvent)(nil),        // 27: command.UpdateHookEvent
+	(*CDCEventsBatch)(nil),         // 27: command.CDCEventsBatch
+	(*UpdateHookEvent)(nil),        // 28: command.UpdateHookEvent
 }
 var file_command_proto_depIdxs = []int32{
 	5,  // 0: command.Statement.parameters:type_name -> command.Parameter
@@ -2103,12 +2150,13 @@ var file_command_proto_depIdxs = []int32{
 	24, // 15: command.CDCEvent.old_row:type_name -> command.CDCRow
 	24, // 16: command.CDCEvent.new_row:type_name -> command.CDCRow
 	25, // 17: command.CDCEvents.events:type_name -> command.CDCEvent
-	4,  // 18: command.UpdateHookEvent.op:type_name -> command.UpdateHookEvent.Operation
-	19, // [19:19] is the sub-list for method output_type
-	19, // [19:19] is the sub-list for method input_type
-	19, // [19:19] is the sub-list for extension type_name
-	19, // [19:19] is the sub-list for extension extendee
-	0,  // [0:19] is the sub-list for field type_name
+	26, // 18: command.CDCEventsBatch.payload:type_name -> command.CDCEvents
+	4,  // 19: command.UpdateHookEvent.op:type_name -> command.UpdateHookEvent.Operation
+	20, // [20:20] is the sub-list for method output_type
+	20, // [20:20] is the sub-list for method input_type
+	20, // [20:20] is the sub-list for extension type_name
+	20, // [20:20] is the sub-list for extension extendee
+	0,  // [0:20] is the sub-list for field type_name
 }
 
 func init() { file_command_proto_init() }
@@ -2141,7 +2189,7 @@ func file_command_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_command_proto_rawDesc), len(file_command_proto_rawDesc)),
 			NumEnums:      5,
-			NumMessages:   23,
+			NumMessages:   24,
 			NumExtensions: 0,
 			NumServices:   0,
 		},

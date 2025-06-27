@@ -29,8 +29,8 @@ func Test_NewCDCStreamer_CommitEmpty(t *testing.T) {
 	}
 
 	events := <-ch
-	if events.K != 1234 {
-		t.Fatalf("expected K value to be 1234, got %d", events.K)
+	if events.Index != 1234 {
+		t.Fatalf("expected index value to be 1234, got %d", events.Index)
 	}
 	if len(events.Events) != 0 {
 		t.Fatalf("expected no events, got %d", len(events.Events))
@@ -61,8 +61,8 @@ func Test_NewCDCStreamer_CommitOne(t *testing.T) {
 	}
 
 	ev := <-ch
-	if ev.K != 5678 {
-		t.Fatalf("expected K value to be 5678, got %d", ev.K)
+	if ev.Index != 5678 {
+		t.Fatalf("expected index value to be 5678, got %d", ev.Index)
 	}
 	if len(ev.Events) != 1 {
 		t.Fatalf("expected 1 event, got %d", len(ev.Events))
@@ -103,8 +103,8 @@ func Test_NewCDCStreamer_CommitTwo(t *testing.T) {
 	}
 
 	ev := <-ch
-	if ev.K != 9012 {
-		t.Fatalf("expected K value to be 9012, got %d", ev.K)
+	if ev.Index != 9012 {
+		t.Fatalf("expected index value to be 9012, got %d", ev.GetIndex())
 	}
 	if len(ev.Events) != 2 {
 		t.Fatalf("expected 2 events, got %d", len(ev.Events))
@@ -158,8 +158,8 @@ func Test_NewCDCStreamer_ResetThenPreupdate(t *testing.T) {
 	}
 
 	ev := <-ch
-	if ev.K != 5678 {
-		t.Fatalf("expected K value to be 5678, got %d", ev.K)
+	if ev.Index != 5678 {
+		t.Fatalf("expected K value to be 5678, got %d", ev.Index)
 	}
 	if len(ev.Events) != 1 {
 		t.Fatalf("expected 1 event, got %d", len(ev.Events))
