@@ -26,3 +26,7 @@ This means that in addition to checking if it (the CDCS) is leader, it also chec
 Leadership changes
 
 The CDCS will listen for leadership changes -- this functionality is already offered by the Raft subsystem. When a node becomes a leader it will start reading the queue from the start, implementing the scheme above. This ensures that every event is transmitted at least once. Careful reading of the above will show that there is a race -- a node could check that is is leader, determine it isn't, and not send an event. However leadership could be gained between the leader check and the decision not to transmit. So when leadership changes a node must resend all events that have not been positively recorded via the high watermark. This means that leadership changes may result in a duplicates. 
+
+# Snapshot xfer issues
+
+See https://github.com/rqlite/rqlite/pull/2106/files#r2143667669
