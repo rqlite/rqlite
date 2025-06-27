@@ -29,11 +29,9 @@ func Test_ServiceSingleEvent(t *testing.T) {
 	}))
 	defer testSrv.Close()
 
-	// Mock cluster – this node is always leader.
 	cl := &mockCluster{}
 	cl.leader.Store(true)
 
-	// Construct and start the service.
 	svc := NewService(
 		cl,
 		&mockStore{},
@@ -179,11 +177,9 @@ func Test_ServiceMultiEvent(t *testing.T) {
 	}))
 	defer testSrv.Close()
 
-	// Mock cluster – this node is always leader.
 	cl := &mockCluster{}
 	cl.leader.Store(true)
 
-	// Construct and start the service.
 	svc := NewService(
 		cl,
 		&mockStore{},
@@ -264,7 +260,6 @@ func Test_ServiceMultiEvent_Batch(t *testing.T) {
 	}))
 	defer testSrv.Close()
 
-	// Mock cluster – this node is always leader.
 	cl := &mockCluster{}
 	cl.leader.Store(true)
 
