@@ -80,6 +80,10 @@ func Test_ServiceSingleEvent(t *testing.T) {
 		t.Fatalf("timeout waiting for HTTP POST")
 	}
 
+	testPoll(t, func() bool {
+		return svc.HighWatermark() == evs.Index
+	}, 2*time.Second)
+
 	// Next emulate CDC not running on the Leader.
 	cl.leader.Store(false)
 	eventsCh <- evs
@@ -165,6 +169,10 @@ func Test_ServiceMultiEvent(t *testing.T) {
 	case <-time.After(2 * time.Second):
 		t.Fatalf("timeout waiting for HTTP POST")
 	}
+
+	testPoll(t, func() bool {
+		return svc.HighWatermark() == evs2.Index
+	}, 2*time.Second)
 }
 
 func Test_ServiceMultiEvent_Batch(t *testing.T) {
@@ -279,6 +287,10 @@ func Test_ServiceMultiEvent_Batch(t *testing.T) {
 	case <-time.After(2 * time.Second):
 		t.Fatalf("timeout waiting for HTTP POST")
 	}
+
+	testPoll(t, func() bool {
+		return svc.HighWatermark() == evs3.Index
+	}, 2*time.Second)
 }
 
 type mockCluster struct {
@@ -318,5 +330,23 @@ func pollExpvarUntil(t *testing.T, name string, expected int64, timeout time.Dur
 			t.Fatalf("timed out waiting for expvar %s to reach %d", name, expected)
 		}
 
+	}
+}
+
+func testPoll(t *testing.T, condition func() bool, timeout time.Duration) {
+	t.Helper()
+	ticker := time.NewTicker(10 * time.Millisecond)
+	defer ticker.Stop()
+	timer := time.NewTimer(timeout)
+	defer timer.Stop()
+	for {
+		select {
+		case <-ticker.C:
+			if condition() {
+				return
+			}
+		case <-timer.C:
+			t.Fatalf("timed out waiting for condition")
+		}
 	}
 }

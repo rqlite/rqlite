@@ -150,6 +150,12 @@ func (s *Service) Stop() {
 	s.wg.Wait()
 }
 
+// HighWatermark returns the high watermark of the CDC service. This
+// is the index of the last event that was successfully sent to the webhook.
+func (s *Service) HighWatermark() uint64 {
+	return s.highWatermark.Load()
+}
+
 func (s *Service) readEvents() {
 	defer s.wg.Done()
 	for {
