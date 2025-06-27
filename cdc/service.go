@@ -200,6 +200,8 @@ func (s *Service) postEvents() {
 				resp, err := s.httpClient.Do(req)
 				if err == nil && (resp.StatusCode == http.StatusOK || resp.StatusCode == http.StatusAccepted) {
 					resp.Body.Close()
+					// XXX this should be a goroutine, don't block the main loop, and don't send
+					// high watermark every successful writes.
 					s.writeHighWatermark(batch.Objects[len(batch.Objects)-1].Index)
 					stats.Add(numSent, int64(len(batch.Objects)))
 					break
