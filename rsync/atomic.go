@@ -107,9 +107,23 @@ func (b *AtomicBool) Unset() {
 	atomic.StoreInt32(&b.state, 0)
 }
 
+// SetBool sets the AtomicBool to the given boolean value.
+func (b *AtomicBool) SetBool(value bool) {
+	if value {
+		b.Set()
+	} else {
+		b.Unset()
+	}
+}
+
 // Is returns true if the AtomicBool is true, false otherwise.
 func (b *AtomicBool) Is() bool {
 	return atomic.LoadInt32(&b.state) == 1
+}
+
+// IsNot returns true if the AtomicBool is false, false otherwise.
+func (b *AtomicBool) IsNot() bool {
+	return atomic.LoadInt32(&b.state) == 0
 }
 
 // AtomicString is a string with atomic operations.

@@ -14,6 +14,7 @@ import (
 
 	"github.com/rqlite/rqlite/v8/command/proto"
 	"github.com/rqlite/rqlite/v8/queue"
+	"github.com/rqlite/rqlite/v8/rsync"
 	"google.golang.org/protobuf/encoding/protojson"
 )
 
@@ -95,7 +96,8 @@ type Service struct {
 
 	// highWatermark is the index of the last event that was successfully sent to the webhook
 	// by the cluster (which is not necessarily the same thing as this node).
-	highWatermark atomic.Uint64
+	highWatermark           atomic.Uint64
+	disableHighWatermarking rsync.AtomicBool
 
 	batchMarshaler protojson.MarshalOptions
 
@@ -127,23 +129,35 @@ func NewService(clstr Cluster, str Store, in <-chan *proto.CDCEvents, endpoint s
 		queue:          queue.New[*proto.CDCEvents](maxBatchSz, maxBatchSz, maxBatchDelay),
 		done:           make(chan struct{}),
 		batchMarshaler: protojson.MarshalOptions{},
-		logger:         log.New(os.Stdout, "[cdc service] ", log.LstdFlags),
+		logger:         log.New(os.Stdout, "[cdc-service] ", log.LstdFlags),
 	}
 }
 
 // Start starts the CDC service.
 func (s *Service) Start() error {
-	if err := s.createStateTable(); err != nil {
-		return err
+	if s.disableHighWatermarking.IsNot() {
+		if err := s.createStateTable(); err != nil {
+			return err
+		}
 	}
-	s.wg.Add(3)
+	s.wg.Add(2)
 	go s.readEvents()
 	go s.postEvents()
-	go s.writeHighWatermarkLoop()
+
+	if s.disableHighWatermarking.IsNot() {
+		s.wg.Add(1)
+		go s.writeHighWatermarkLoop()
+	}
 
 	obCh := make(chan struct{}, leaderChanLen)
 	s.clstr.RegisterLeaderChange(obCh)
+	s.logger.Println("service started")
 	return nil
+}
+
+// SetHighWatermarking enables or disables high watermarking.
+func (s *Service) SetHighWatermarking(enabled bool) {
+	s.disableHighWatermarking.SetBool(enabled)
 }
 
 // Stop stops the CDC service.
