@@ -134,9 +134,10 @@ func (s *Service) Start() error {
 	if err := s.createStateTable(); err != nil {
 		return err
 	}
-	s.wg.Add(2)
+	s.wg.Add(3)
 	go s.readEvents()
 	go s.postEvents()
+	go s.writeHighWatermarkLoop()
 
 	obCh := make(chan struct{}, leaderChanLen)
 	s.clstr.RegisterLeaderChange(obCh)
@@ -200,9 +201,7 @@ func (s *Service) postEvents() {
 				resp, err := s.httpClient.Do(req)
 				if err == nil && (resp.StatusCode == http.StatusOK || resp.StatusCode == http.StatusAccepted) {
 					resp.Body.Close()
-					// XXX this should be a goroutine, don't block the main loop, and don't send
-					// high watermark every successful writes.
-					s.writeHighWatermark(batch.Objects[len(batch.Objects)-1].Index)
+					s.highWatermark.Store(batch.Objects[len(batch.Objects)-1].Index)
 					stats.Add(numSent, int64(len(batch.Objects)))
 					break
 				}
@@ -213,6 +212,23 @@ func (s *Service) postEvents() {
 				}
 				retryDelay *= 2
 				time.Sleep(retryDelay)
+			}
+		case <-s.done:
+			return
+		}
+	}
+}
+
+func (s *Service) writeHighWatermarkLoop() {
+	defer s.wg.Done()
+	ticker := time.NewTicker(5 * time.Second)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-ticker.C:
+			if err := s.writeHighWatermark(s.highWatermark.Load()); err != nil {
+				s.logger.Printf("error writing high watermark to store: %v", err)
+				continue
 			}
 		case <-s.done:
 			return
