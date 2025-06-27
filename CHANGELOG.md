@@ -1,6 +1,6 @@
 ## v8.38.3 (unreleased)
 ### Implementation changes and bug fixes
-- [PR #2106](https://github.com/rqlite/rqlite/pull/2106): Add initial CDC Service implementation.
+- [PR #2106](https://github.com/rqlite/rqlite/pull/2106), [PR #2126](https://github.com/rqlite/rqlite/pull/2126): Add initial CDC Service implementation.
 
 ## v8.38.2 (June 23rd 2025)
 ### Implementation changes and bug fixes
