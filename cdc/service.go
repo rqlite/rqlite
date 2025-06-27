@@ -198,17 +198,17 @@ func (s *Service) postEvents() {
 				continue
 			}
 
+			req, err := http.NewRequest("POST", s.endpoint, bytes.NewReader(b))
+			if err != nil {
+				s.logger.Printf("error creating HTTP request for endpoint: %v", err)
+				continue
+			}
+			req.Header.Set("Content-Type", "application/json")
+
 			maxRetries := 5
 			nAttempts := 0
 			retryDelay := 500 * time.Millisecond
 			for {
-				req, err := http.NewRequest("POST", s.endpoint, bytes.NewReader(b))
-				if err != nil {
-					s.logger.Printf("error creating HTTP request for endpoint: %v", err)
-					continue
-				}
-				req.Header.Set("Content-Type", "application/json")
-
 				nAttempts++
 				resp, err := s.httpClient.Do(req)
 				if err == nil && (resp.StatusCode == http.StatusOK || resp.StatusCode == http.StatusAccepted) {
