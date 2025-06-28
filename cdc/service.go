@@ -113,7 +113,7 @@ type Service struct {
 	// by the cluster (which is not necessarily the same thing as this node).
 	highWatermark atomic.Uint64
 
-	// highWatermarkI is the interval at which the high watermark is written to the store.
+	// highWatermarkInterval is the interval at which the high watermark is written to the store.
 	// This is used to ensure that the high watermark is written periodically,
 	highWatermarkInterval time.Duration
 
