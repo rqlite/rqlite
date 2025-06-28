@@ -73,7 +73,7 @@ func Test_ServiceSingleEvent(t *testing.T) {
 			t.Fatalf("unexpected number of events in payload: %d", len(batch.Payload[0].Events))
 		}
 		if reflect.DeepEqual(batch.Payload[0].Events[0], evs.Events[0]) == false {
-			t.Fatalf("unexpected events in payload: %v", batch.Payload[0].Events)
+			t.Fatalf("unexpected events in payload: %v %v", batch.Payload[0].Events, evs.Events[0])
 		}
 	case <-time.After(2 * time.Second):
 		t.Fatalf("timeout waiting for HTTP POST")

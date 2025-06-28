@@ -5,6 +5,16 @@ import (
 	"time"
 )
 
+const (
+	// LinearRetryPolicy indicates that the retry delay is constant.
+	LinearRetryPolicy = iota
+
+	// ExponentialRetryPolicy indicates that the retry delay increases exponentially with each retry.
+	ExponentialRetryPolicy
+)
+
+type RetryPolicy int
+
 // Config holds the configuration for the CDC service.
 type Config struct {
 	// LogOnly indicates whether the CDC service should only log events instead of sending
@@ -41,22 +51,27 @@ type Config struct {
 	// If the transmission fails after this many retries, it will be dropped.
 	TransmitMaxRetries int
 
-	// TransmitRetryDelay is the delay between retries for sending events to the endpoint.
-	// It increases exponentially with each retry.
-	TransmitRetryDelay time.Duration
+	// TransmitRetryPolicy defines the retry policy to use when sending events to the endpoint.
+	TransmitRetryPolicy RetryPolicy
+
+	// TransmitMinBackoff is the initial backoff time.
+	TransmitMinBackoff time.Duration
+
+	// TransmitMaxBackoff is the maximum backoff time for retries when using exponential backoff.
+	TransmitMaxBackoff time.Duration
 }
 
 // DefaultConfig returns a default configuration for the CDC service.
 func DefaultConfig() *Config {
 	return &Config{
-		Endpoint:                 "http://localhost:8080/cdc",
-		TLSConfig:                nil,
-		MaxBatchSz:               100,
-		MaxBatchDelay:            500 * time.Millisecond,
-		HighWatermarkingDisabled: false,
-		HighWatermarkInterval:    10 * time.Second,
-		TransmitTimeout:          5 * time.Second,
-		TransmitMaxRetries:       5,
-		TransmitRetryDelay:       100 * time.Millisecond,
+		Endpoint:              "http://localhost:8080/cdc",
+		MaxBatchSz:            100,
+		MaxBatchDelay:         time.Second,
+		HighWatermarkInterval: 10 * time.Second,
+		TransmitTimeout:       5 * time.Second,
+		TransmitRetryPolicy:   LinearRetryPolicy,
+		TransmitMaxRetries:    5,
+		TransmitMaxBackoff:    time.Minute,
+		TransmitMinBackoff:    500 * time.Millisecond,
 	}
 }

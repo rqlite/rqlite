@@ -94,8 +94,14 @@ type Service struct {
 	// transmitMaxRetries is the maximum number of retries for sending events to the endpoint.
 	transmitMaxRetries int
 
-	// transmitRetryDelay is the delay between retries for sending events to the endpoint.
-	transmitRetryDelay time.Duration
+	// TransmitMinBackoff is the delay between retries for sending events to the endpoint.
+	transmitMinBackoff time.Duration
+
+	// TransmitMaxBackoff is the maximum backoff time for retries when using exponential backoff.
+	transmitMaxBackoff time.Duration
+
+	// transmitRetryPolicy defines the retry policy to use when sending events to the endpoint.
+	transmitRetryPolicy RetryPolicy
 
 	// maxBatchSz is the maximum number of events to send in a single batch to the endpoint.
 	maxBatchSz int
@@ -147,7 +153,9 @@ func NewService(cfg *Config, clstr Cluster, str Store, in <-chan *proto.CDCEvent
 		tlsConfig:             cfg.TLSConfig,
 		transmitTimeout:       cfg.TransmitTimeout,
 		transmitMaxRetries:    cfg.TransmitMaxRetries,
-		transmitRetryDelay:    cfg.TransmitRetryDelay,
+		transmitMinBackoff:    cfg.TransmitMinBackoff,
+		transmitMaxBackoff:    cfg.TransmitMaxBackoff,
+		transmitRetryPolicy:   cfg.TransmitRetryPolicy,
 		maxBatchSz:            cfg.MaxBatchSz,
 		maxBatchDelay:         cfg.MaxBatchDelay,
 		highWatermarkInterval: cfg.HighWatermarkInterval,
@@ -247,7 +255,7 @@ func (s *Service) postEvents() {
 			req.Header.Set("Content-Type", "application/json")
 
 			nAttempts := 0
-			retryDelay := s.transmitRetryDelay
+			retryDelay := s.transmitMinBackoff
 			sentOK := false
 			for {
 				nAttempts++
@@ -263,13 +271,19 @@ func (s *Service) postEvents() {
 					sentOK = true
 					break
 				}
-				if nAttempts >= s.transmitMaxRetries {
+				if nAttempts == s.transmitMaxRetries {
 					s.logger.Printf("failed to send batch to endpoint after %d retries, last error: %v", nAttempts, err)
 					stats.Add(numDroppedFailedToSend, int64(len(batch.Objects)))
 					break
 				}
+
+				if s.transmitRetryPolicy == ExponentialRetryPolicy {
+					retryDelay *= 2
+					if retryDelay > s.transmitMaxBackoff {
+						retryDelay = s.transmitMaxBackoff
+					}
+				}
 				stats.Add(numRetries, 1)
-				retryDelay *= 2
 				time.Sleep(retryDelay)
 			}
 			if sentOK {
