@@ -15,7 +15,6 @@ import (
 	"github.com/rqlite/rqlite/v8/command/proto"
 	"github.com/rqlite/rqlite/v8/queue"
 	"github.com/rqlite/rqlite/v8/rsync"
-	"google.golang.org/protobuf/encoding/protojson"
 )
 
 const (
@@ -106,8 +105,6 @@ type Service struct {
 	// If true, the service will not write or read the high watermark from the store.
 	highWatermarkingDisabled rsync.AtomicBool
 
-	batchMarshaler protojson.MarshalOptions
-
 	// For CDC shutdown.
 	wg   sync.WaitGroup
 	done chan struct{}
@@ -136,7 +133,6 @@ func NewService(cfg *Config, clstr Cluster, str Store, in <-chan *proto.CDCEvent
 		highWatermarkInterval: cfg.HighWatermarkInterval,
 		queue:                 queue.New[*proto.CDCEvents](cfg.MaxBatchSz, cfg.MaxBatchSz, cfg.MaxBatchDelay),
 		done:                  make(chan struct{}),
-		batchMarshaler:        protojson.MarshalOptions{},
 		logger:                log.New(os.Stdout, "[cdc-service] ", log.LstdFlags),
 	}
 
@@ -217,8 +213,7 @@ func (s *Service) postEvents() {
 				continue
 			}
 
-			batchMsg := &proto.CDCEventsBatch{Payload: batch.Objects}
-			b, err := s.batchMarshaler.Marshal(batchMsg)
+			b, err := MarshalJSON(batch.Objects)
 			if err != nil {
 				s.logger.Printf("error marshalling batch: %v", err)
 				continue
