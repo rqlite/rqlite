@@ -75,7 +75,8 @@ type Service struct {
 	// in is the channel from which the CDC events are read. This channel is expected
 	in <-chan *proto.CDCEvents
 
-	// logOnly indicates whether the CDC service should only log events to standard output
+	// logOnly indicates whether the CDC service should only log events and not
+	// send them to the configured endpoint. This is mostly useful for testing.
 	logOnly bool
 
 	// endpoint is the HTTP endpoint to which the CDC events are sent.

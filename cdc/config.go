@@ -7,8 +7,8 @@ import (
 
 // Config holds the configuration for the CDC service.
 type Config struct {
-	// LogOnly indicates whether the CDC service should only log events to standard output
-	// instead of sending them to the configured endpoint. This is mostly useful for testing.
+	// LogOnly indicates whether the CDC service should only log events instead of sending
+	// them to the configured endpoint. This is mostly useful for testing.
 	LogOnly bool
 
 	// Endpoint is the HTTP endpoint to which the CDC events are sent.
