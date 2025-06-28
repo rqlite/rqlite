@@ -72,6 +72,6 @@ func DefaultConfig() *Config {
 		TransmitRetryPolicy:   LinearRetryPolicy,
 		TransmitMaxRetries:    5,
 		TransmitMaxBackoff:    time.Minute,
-		TransmitMinBackoff:    500 * time.Millisecond,
+		TransmitMinBackoff:    time.Second,
 	}
 }
