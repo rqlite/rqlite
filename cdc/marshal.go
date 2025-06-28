@@ -1,16 +1,49 @@
 package cdc
 
 import (
+	"encoding/json"
+
 	"github.com/rqlite/rqlite/v8/command/proto"
-	"google.golang.org/protobuf/encoding/protojson"
 )
+
+type CDCMessagesEnvelope struct {
+	Payload []*CDCMessage `json:"payload"`
+}
+
+type CDCMessage struct {
+	Index  uint64             `json:"index"`
+	Events []*CDCMessageEvent `json:"events"`
+}
+
+type CDCMessageEvent struct {
+	Op     string         `json:"op"`
+	Table  string         `json:"table,omitempty"`
+	Before map[string]any `json:"before,omitempty"`
+	After  map[string]any `json:"after,omitempty"`
+}
 
 func MarshalJSON(evs []*proto.CDCEvents) ([]byte, error) {
 	if len(evs) == 0 {
 		return nil, nil
 	}
 
-	mo := protojson.MarshalOptions{}
-	batchMsg := &proto.CDCEventsBatch{Payload: evs}
-	return mo.Marshal(batchMsg)
+	envelope := &CDCMessagesEnvelope{
+		Payload: make([]*CDCMessage, len(evs)),
+	}
+
+	for i, ev := range evs {
+		envelope.Payload[i] = &CDCMessage{
+			Index:  ev.Index,
+			Events: make([]*CDCMessageEvent, len(ev.Events)),
+		}
+
+		for j, event := range ev.Events {
+			envelope.Payload[i].Events[j] = &CDCMessageEvent{
+				Op:    event.Op.String(),
+				Table: event.Table,
+			}
+		}
+	}
+
+	return json.Marshal(envelope)
 }
