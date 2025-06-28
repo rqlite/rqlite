@@ -96,7 +96,14 @@ type Service struct {
 
 	// highWatermark is the index of the last event that was successfully sent to the webhook
 	// by the cluster (which is not necessarily the same thing as this node).
-	highWatermark            atomic.Uint64
+	highWatermark atomic.Uint64
+
+	// highWatermarkI is the interval at which the high watermark is written to the store.
+	// This is used to ensure that the high watermark is written periodically,
+	highWatermarkInterval time.Duration
+
+	// highWatermarkingDisabled indicates whether high watermarking is disabled.
+	// If true, the service will not write or read the high watermark from the store.
 	highWatermarkingDisabled rsync.AtomicBool
 
 	batchMarshaler protojson.MarshalOptions
@@ -109,28 +116,33 @@ type Service struct {
 }
 
 // NewService creates a new CDC service.
-func NewService(clstr Cluster, str Store, in <-chan *proto.CDCEvents, endpoint string, tlsConfig *tls.Config, maxBatchSz int, maxBatchDelay time.Duration) *Service {
+func NewService(cfg *Config, clstr Cluster, str Store, in <-chan *proto.CDCEvents) *Service {
 	httpClient := &http.Client{
 		Transport: &http.Transport{
-			TLSClientConfig: tlsConfig,
+			TLSClientConfig: cfg.TLSConfig,
 		},
-		Timeout: 5 * time.Second,
+		Timeout: cfg.TransmitTimeout,
 	}
 
-	return &Service{
-		clstr:          clstr,
-		str:            str,
-		in:             in,
-		tlsConfig:      tlsConfig,
-		endpoint:       endpoint,
-		httpClient:     httpClient,
-		maxBatchSz:     maxBatchSz,
-		maxBatchDelay:  maxBatchDelay,
-		queue:          queue.New[*proto.CDCEvents](maxBatchSz, maxBatchSz, maxBatchDelay),
-		done:           make(chan struct{}),
-		batchMarshaler: protojson.MarshalOptions{},
-		logger:         log.New(os.Stdout, "[cdc-service] ", log.LstdFlags),
+	srv := &Service{
+		clstr:                 clstr,
+		str:                   str,
+		in:                    in,
+		tlsConfig:             cfg.TLSConfig,
+		endpoint:              cfg.Endpoint,
+		httpClient:            httpClient,
+		maxBatchSz:            cfg.MaxBatchSz,
+		maxBatchDelay:         cfg.MaxBatchDelay,
+		highWatermarkInterval: cfg.HighWatermarkInterval,
+		queue:                 queue.New[*proto.CDCEvents](cfg.MaxBatchSz, cfg.MaxBatchSz, cfg.MaxBatchDelay),
+		done:                  make(chan struct{}),
+		batchMarshaler:        protojson.MarshalOptions{},
+		logger:                log.New(os.Stdout, "[cdc-service] ", log.LstdFlags),
 	}
+
+	srv.highWatermark.Store(0)
+	srv.highWatermarkingDisabled.SetBool(cfg.HighWatermarkingDisabled)
+	return srv
 }
 
 // Start starts the CDC service.
@@ -248,7 +260,7 @@ func (s *Service) postEvents() {
 
 func (s *Service) writeHighWatermarkLoop() {
 	defer s.wg.Done()
-	ticker := time.NewTicker(5 * time.Second)
+	ticker := time.NewTicker(s.highWatermarkInterval)
 	defer ticker.Stop()
 
 	prevVal := s.highWatermark.Load()
