@@ -88,6 +88,15 @@ type Service struct {
 	// tlsConfig is the TLS configuration used for the HTTP client.
 	tlsConfig *tls.Config
 
+	// transmitTimeout is the timeout for transmitting events to the endpoint.
+	transmitTimeout time.Duration
+
+	// transmitMaxRetries is the maximum number of retries for sending events to the endpoint.
+	transmitMaxRetries int
+
+	// transmitRetryDelay is the delay between retries for sending events to the endpoint.
+	transmitRetryDelay time.Duration
+
 	// maxBatchSz is the maximum number of events to send in a single batch to the endpoint.
 	maxBatchSz int
 
@@ -136,6 +145,9 @@ func NewService(cfg *Config, clstr Cluster, str Store, in <-chan *proto.CDCEvent
 		endpoint:              cfg.Endpoint,
 		httpClient:            httpClient,
 		tlsConfig:             cfg.TLSConfig,
+		transmitTimeout:       cfg.TransmitTimeout,
+		transmitMaxRetries:    cfg.TransmitMaxRetries,
+		transmitRetryDelay:    cfg.TransmitRetryDelay,
 		maxBatchSz:            cfg.MaxBatchSz,
 		maxBatchDelay:         cfg.MaxBatchDelay,
 		highWatermarkInterval: cfg.HighWatermarkInterval,
@@ -234,25 +246,25 @@ func (s *Service) postEvents() {
 			}
 			req.Header.Set("Content-Type", "application/json")
 
-			var evErr error
-			var evResp *http.Response
-			maxRetries := 5
 			nAttempts := 0
-			retryDelay := 500 * time.Millisecond
+			retryDelay := s.transmitRetryDelay
 			for {
 				nAttempts++
 				if s.logOnly {
 					s.logger.Println(string(b))
-				} else {
-					evResp, evErr = s.httpClient.Do(req)
-				}
-				if evErr == nil && (evResp.StatusCode == http.StatusOK || evResp.StatusCode == http.StatusAccepted) {
-					evResp.Body.Close()
 					s.highWatermark.Store(batch.Objects[len(batch.Objects)-1].Index)
 					stats.Add(numSent, int64(len(batch.Objects)))
 					break
 				}
-				if nAttempts >= maxRetries {
+
+				resp, err := s.httpClient.Do(req)
+				if err == nil && (resp.StatusCode == http.StatusOK || resp.StatusCode == http.StatusAccepted) {
+					resp.Body.Close()
+					s.highWatermark.Store(batch.Objects[len(batch.Objects)-1].Index)
+					stats.Add(numSent, int64(len(batch.Objects)))
+					break
+				}
+				if nAttempts >= s.transmitMaxRetries {
 					s.logger.Printf("failed to send batch to endpoint after %d retries, last error: %v", nAttempts, err)
 					stats.Add(numDroppedFailedToSend, int64(len(batch.Objects)))
 					break

@@ -89,6 +89,47 @@ func Test_ServiceSingleEvent(t *testing.T) {
 	pollExpvarUntil(t, numDroppedNotLeader, 1, 2*time.Second)
 }
 
+func Test_ServiceSingleEvent_LogOnly(t *testing.T) {
+	ResetStats()
+
+	// Channel for the service to receive events.
+	eventsCh := make(chan *proto.CDCEvents, 1)
+
+	cl := &mockCluster{}
+	cl.leader.Store(true)
+
+	cfg := DefaultConfig()
+	cfg.MaxBatchSz = 1
+	cfg.MaxBatchDelay = 50 * time.Millisecond
+	cfg.LogOnly = true
+	svc := NewService(
+		cfg,
+		cl,
+		&mockStore{},
+		eventsCh,
+	)
+	if err := svc.Start(); err != nil {
+		t.Fatalf("failed to start service: %v", err)
+	}
+	defer svc.Stop()
+
+	// Send one dummy event to the service.
+	ev := &proto.CDCEvent{
+		Op:       proto.CDCEvent_INSERT,
+		Table:    "foo",
+		NewRowId: 2,
+	}
+	evs := &proto.CDCEvents{
+		Index:  1,
+		Events: []*proto.CDCEvent{ev},
+	}
+	eventsCh <- evs
+
+	testPoll(t, func() bool {
+		return svc.HighWatermark() == evs.Index
+	}, 2*time.Second)
+}
+
 func Test_ServiceSingleEvent_Retry(t *testing.T) {
 	ResetStats()
 
