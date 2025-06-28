@@ -72,14 +72,20 @@ type Service struct {
 	clstr Cluster
 	str   Store
 
-	in        <-chan *proto.CDCEvents
-	tlsConfig *tls.Config
+	// in is the channel from which the CDC events are read. This channel is expected
+	in <-chan *proto.CDCEvents
+
+	// logOnly indicates whether the CDC service should only log events to standard output
+	logOnly bool
 
 	// endpoint is the HTTP endpoint to which the CDC events are sent.
 	endpoint string
 
 	// httpClient is the HTTP client used to send requests to the endpoint.
 	httpClient *http.Client
+
+	// tlsConfig is the TLS configuration used for the HTTP client.
+	tlsConfig *tls.Config
 
 	// maxBatchSz is the maximum number of events to send in a single batch to the endpoint.
 	maxBatchSz int
@@ -125,9 +131,10 @@ func NewService(cfg *Config, clstr Cluster, str Store, in <-chan *proto.CDCEvent
 		clstr:                 clstr,
 		str:                   str,
 		in:                    in,
-		tlsConfig:             cfg.TLSConfig,
+		logOnly:               cfg.LogOnly,
 		endpoint:              cfg.Endpoint,
 		httpClient:            httpClient,
+		tlsConfig:             cfg.TLSConfig,
 		maxBatchSz:            cfg.MaxBatchSz,
 		maxBatchDelay:         cfg.MaxBatchDelay,
 		highWatermarkInterval: cfg.HighWatermarkInterval,
@@ -226,14 +233,20 @@ func (s *Service) postEvents() {
 			}
 			req.Header.Set("Content-Type", "application/json")
 
+			var evErr error
+			var evResp *http.Response
 			maxRetries := 5
 			nAttempts := 0
 			retryDelay := 500 * time.Millisecond
 			for {
 				nAttempts++
-				resp, err := s.httpClient.Do(req)
-				if err == nil && (resp.StatusCode == http.StatusOK || resp.StatusCode == http.StatusAccepted) {
-					resp.Body.Close()
+				if s.logOnly {
+					s.logger.Println(string(b))
+				} else {
+					evResp, evErr = s.httpClient.Do(req)
+				}
+				if evErr == nil && (evResp.StatusCode == http.StatusOK || evResp.StatusCode == http.StatusAccepted) {
+					evResp.Body.Close()
 					s.highWatermark.Store(batch.Objects[len(batch.Objects)-1].Index)
 					stats.Add(numSent, int64(len(batch.Objects)))
 					break
