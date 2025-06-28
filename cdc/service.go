@@ -248,20 +248,19 @@ func (s *Service) postEvents() {
 
 			nAttempts := 0
 			retryDelay := s.transmitRetryDelay
+			sentOK := false
 			for {
 				nAttempts++
 				if s.logOnly {
 					s.logger.Println(string(b))
-					s.highWatermark.Store(batch.Objects[len(batch.Objects)-1].Index)
-					stats.Add(numSent, int64(len(batch.Objects)))
+					sentOK = true
 					break
 				}
 
 				resp, err := s.httpClient.Do(req)
 				if err == nil && (resp.StatusCode == http.StatusOK || resp.StatusCode == http.StatusAccepted) {
 					resp.Body.Close()
-					s.highWatermark.Store(batch.Objects[len(batch.Objects)-1].Index)
-					stats.Add(numSent, int64(len(batch.Objects)))
+					sentOK = true
 					break
 				}
 				if nAttempts >= s.transmitMaxRetries {
@@ -272,6 +271,10 @@ func (s *Service) postEvents() {
 				stats.Add(numRetries, 1)
 				retryDelay *= 2
 				time.Sleep(retryDelay)
+			}
+			if sentOK {
+				s.highWatermark.Store(batch.Objects[len(batch.Objects)-1].Index)
+				stats.Add(numSent, int64(len(batch.Objects)))
 			}
 		case <-s.done:
 			return
