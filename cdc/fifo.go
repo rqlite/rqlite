@@ -192,3 +192,70 @@ func (q *Queue) Dequeue() ([]byte, error) {
 	
 	return val, nil
 }
+
+// Delete removes a specific item from the queue by its index.
+// It is safe for concurrent use.
+func (q *Queue) Delete(idx uint64) error {
+	// Lock the mutex to ensure thread safety, consistent with other methods.
+	q.mu.Lock()
+	defer q.mu.Unlock()
+
+	// Convert the uint64 index into the 8-byte big-endian key.
+	key := make([]byte, 8)
+	binary.BigEndian.PutUint64(key, idx)
+
+	// Start a read-write transaction to delete the item.
+	err := q.db.Update(func(tx *bbolt.Tx) error {
+		b := tx.Bucket(bucketName)
+		// Delete the key. If the key doesn't exist, this is a no-op
+		// and does not return an error.
+		return b.Delete(key)
+	})
+
+	if err != nil {
+		return fmt.Errorf("failed to delete item with index %d: %w", idx, err)
+	}
+
+	return nil
+}
+
+// DeleteRange removes all items from the queue with an index
+// between lowerIdx and upperIdx, inclusive.
+// If lowerIdx > upperIdx, the operation is a no-op.
+func (q *Queue) DeleteRange(lowerIdx, upperIdx uint64) error {
+	// A forgiving check: if the range is invalid, do nothing.
+	if lowerIdx > upperIdx {
+		return nil
+	}
+
+	q.mu.Lock()
+	defer q.mu.Unlock()
+
+	minKey := make([]byte, 8)
+	binary.BigEndian.PutUint64(minKey, lowerIdx)
+
+	maxKey := make([]byte, 8)
+	binary.BigEndian.PutUint64(maxKey, upperIdx)
+
+	err := q.db.Update(func(tx *bbolt.Tx) error {
+		c := tx.Bucket(bucketName).Cursor()
+
+		// We repeatedly seek to the beginning of the range.
+		// After we delete an item, the next seek will find the
+		// new lowest item in the range. The loop terminates when
+		// seeking to minKey lands on a key outside our maxKey boundary.
+		for k, _ := c.Seek(minKey); k != nil && bytes.Compare(k, maxKey) <= 0; k, _ = c.Seek(minKey) {
+			if err := c.Delete(); err != nil {
+				// If delete fails, we should abort the transaction.
+				return err
+			}
+		}
+		return nil
+	})
+
+	if err != nil {
+		return fmt.Errorf("failed during range delete from %d to %d: %w", lowerIdx, upperIdx, err)
+	}
+
+	return nil
+}
