@@ -1,12 +1,11 @@
 package cdc
 
 import (
+	"bytes"
 	"encoding/binary"
 	"errors"
 	"fmt"
-	"log"
 	"sync"
-	"time"
 
 	"go.etcd.io/bbolt"
 )
@@ -108,14 +107,14 @@ func (q *Queue) First() (uint64, []byte, error) {
 		if k == nil {
 			return ErrQueueEmpty // No items in the queue.
 		}
-		
+
 		// BoltDB keys/values are only valid inside the transaction.
 		// We must copy them to new slices to use them after the transaction completes.
 		key = make([]byte, len(k))
 		copy(key, k)
 		val = make([]byte, len(v))
 		copy(val, v)
-		
+
 		return nil
 	})
 
@@ -150,7 +149,7 @@ func (q *Queue) Dequeue() ([]byte, error) {
 				// Queue is empty. We will wait.
 				return nil
 			}
-			
+
 			// Item found. Copy the key and value so we can use them after the
 			// view transaction closes and before the update transaction starts.
 			key = make([]byte, len(k))
@@ -165,7 +164,7 @@ func (q *Queue) Dequeue() ([]byte, error) {
 			// This indicates a DB error, not an empty queue.
 			return nil, fmt.Errorf("failed to check queue: %w", err)
 		}
-		
+
 		if key != nil {
 			// An item was found, so we break out of the waiting loop.
 			break
@@ -189,7 +188,7 @@ func (q *Queue) Dequeue() ([]byte, error) {
 	if err != nil {
 		return nil, fmt.Errorf("failed to delete dequeued item: %w", err)
 	}
-	
+
 	return val, nil
 }
 
