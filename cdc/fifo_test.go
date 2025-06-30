@@ -1,4 +1,4 @@
-package cdc
+package main
 
 import (
 	"bytes"
@@ -150,6 +150,144 @@ func TestDequeueOrder(t *testing.T) {
 	}
 }
 
+// TestDelete tests the deletion of a specific item from the queue.
+func TestDelete(t *testing.T) {
+	t.Parallel()
+	q, cleanup := newTestQueue(t)
+	defer cleanup()
+
+	// 1. Enqueue several items.
+	items := []struct {
+		idx  uint64
+		data []byte
+	}{
+		{1, []byte("one")},
+		{2, []byte("two")},
+		{3, []byte("three")},
+	}
+	for _, item := range items {
+		if err := q.Enqueue(item.idx, item.data); err != nil {
+			t.Fatalf("Enqueue failed for index %d: %v", item.idx, err)
+		}
+	}
+
+	// 2. Delete the middle item.
+	idxToDelete := uint64(2)
+	if err := q.Delete(idxToDelete); err != nil {
+		t.Fatalf("Delete failed for index %d: %v", idxToDelete, err)
+	}
+
+	// 3. Dequeue the remaining items and verify the order.
+	expectedOrder := [][]byte{
+		[]byte("one"),
+		[]byte("three"),
+	}
+
+	for i, expected := range expectedOrder {
+		dequeued, err := q.Dequeue()
+		if err != nil {
+			t.Fatalf("Dequeue failed at step %d after delete: %v", i, err)
+		}
+		if !bytes.Equal(dequeued, expected) {
+			t.Errorf("Step %d: Expected '%s', got '%s'", i, expected, dequeued)
+		}
+	}
+
+	// 4. Verify the queue is now empty.
+	_, _, err := q.First()
+	if !errors.Is(err, ErrQueueEmpty) {
+		t.Errorf("Expected queue to be empty, but First() returned err %v", err)
+	}
+
+	// 5. Test deleting a non-existent item (should be a no-op and not error).
+	err = q.Delete(999)
+	if err != nil {
+		t.Errorf("Deleting a non-existent item should not produce an error, got: %v", err)
+	}
+}
+
+// TestDeleteRange tests deleting a range of items.
+func TestDeleteRange(t *testing.T) {
+	t.Parallel()
+	q, cleanup := newTestQueue(t)
+	defer cleanup()
+
+	// 1. Populate the queue with 10 items, indices 1-10.
+	for i := 1; i <= 10; i++ {
+		item := []byte(fmt.Sprintf("item-%d", i))
+		if err := q.Enqueue(uint64(i), item); err != nil {
+			t.Fatalf("Failed to enqueue item %d", i)
+		}
+	}
+
+	// 2. Delete a range from the middle (inclusive).
+	// We will delete items 4, 5, 6, and 7.
+	if err := q.DeleteRange(4, 7); err != nil {
+		t.Fatalf("DeleteRange(4, 7) failed: %v", err)
+	}
+
+	// 3. Verify the remaining items are correct.
+	expectedItems := [][]byte{
+		[]byte("item-1"),
+		[]byte("item-2"),
+		[]byte("item-3"),
+		[]byte("item-8"),
+		[]byte("item-9"),
+		[]byte("item-10"),
+	}
+
+	var remainingItems [][]byte
+	for {
+		item, err := q.Dequeue()
+		if err != nil {
+			t.Fatalf("Dequeue failed unexpectedly: %v", err)
+		}
+		remainingItems = append(remainingItems, item)
+
+		// Check if queue is empty to break loop.
+		_, _, err = q.First()
+		if errors.Is(err, ErrQueueEmpty) {
+			break
+		}
+	}
+
+	if !reflect.DeepEqual(remainingItems, expectedItems) {
+		t.Errorf("Remaining items are not correct.\nGot:      %s\nExpected: %s", remainingItems, expectedItems)
+	}
+
+	// 4. Test edge cases.
+	t.Run("DeleteInvalidRange", func(t *testing.T) {
+		q, cleanup := newTestQueue(t)
+		defer cleanup()
+		q.Enqueue(1, []byte("a"))
+		// upper < lower should be a no-op
+		if err := q.DeleteRange(10, 1); err != nil {
+			t.Errorf("DeleteRange with invalid range should not error, got %v", err)
+		}
+		// Queue should still contain the item
+		_, _, err := q.First()
+		if err != nil {
+			t.Errorf("Queue should not be empty after invalid DeleteRange, got err: %v", err)
+		}
+	})
+
+	t.Run("DeleteAll", func(t *testing.T) {
+		q, cleanup := newTestQueue(t)
+		defer cleanup()
+		for i := 1; i <= 5; i++ {
+			q.Enqueue(uint64(i), []byte(fmt.Sprintf("item-%d", i)))
+		}
+		// Delete everything
+		if err := q.DeleteRange(0, 100); err != nil {
+			t.Errorf("DeleteRange covering all items failed: %v", err)
+		}
+		_, _, err := q.First()
+		if !errors.Is(err, ErrQueueEmpty) {
+			t.Errorf("Queue should be empty after deleting all items, got err: %v", err)
+		}
+	})
+}
+
 // TestDequeueBlocking tests that Dequeue blocks when the queue is empty
 // and unblocks when an item is added.
 func TestDequeueBlocking(t *testing.T) {
@@ -236,7 +374,7 @@ func TestConcurrency(t *testing.T) {
 
 	numItems := 100
 	var wg sync.WaitGroup
-	
+
 	// Slice to store enqueued items for later verification.
 	// We use a map to avoid duplicates and handle the non-deterministic
 	// order of concurrent writes.
@@ -263,7 +401,7 @@ func TestConcurrency(t *testing.T) {
 	// Slice to store dequeued items.
 	dequeuedItems := make([][]byte, 0, numItems)
 	var dequeuedMutex sync.Mutex
-	
+
 	// Start goroutines to dequeue items concurrently.
 	for i := 0; i < numItems; i++ {
 		wg.Add(1)
@@ -285,19 +423,19 @@ func TestConcurrency(t *testing.T) {
 	if len(dequeuedItems) != numItems {
 		t.Fatalf("Expected %d dequeued items, but got %d", numItems, len(dequeuedItems))
 	}
-	
+
 	// Verify that every enqueued item was dequeued exactly once.
 	dequeuedMap := make(map[string]bool)
 	for _, item := range dequeuedItems {
 		dequeuedMap[string(item)] = true
 	}
-	
+
 	// Convert map keys to slice for comparison
 	var enqueuedKeys []string
 	for k := range enqueuedItems {
 		enqueuedKeys = append(enqueuedKeys, k)
 	}
-	
+
 	var dequeuedKeys []string
 	for k := range dequeuedMap {
 		dequeuedKeys = append(dequeuedKeys, k)
@@ -305,7 +443,7 @@ func TestConcurrency(t *testing.T) {
 
 	sort.Strings(enqueuedKeys)
 	sort.Strings(dequeuedKeys)
-	
+
 	if !reflect.DeepEqual(enqueuedKeys, dequeuedKeys) {
 		t.Errorf("The set of enqueued items does not match the set of dequeued items")
 	}
