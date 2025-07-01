@@ -11,7 +11,6 @@ import (
 	"time"
 
 	"github.com/rqlite/rqlite/v8/command/proto"
-	"google.golang.org/protobuf/encoding/protojson"
 )
 
 func Test_ServiceSingleEvent(t *testing.T) {
@@ -32,14 +31,15 @@ func Test_ServiceSingleEvent(t *testing.T) {
 	cl := &mockCluster{}
 	cl.leader.Store(true)
 
+	cfg := DefaultConfig()
+	cfg.Endpoint = testSrv.URL
+	cfg.MaxBatchSz = 1
+	cfg.MaxBatchDelay = 50 * time.Millisecond
 	svc := NewService(
+		cfg,
 		cl,
 		&mockStore{},
 		eventsCh,
-		testSrv.URL,
-		nil,                 // no TLS
-		1,                   // maxBatchSz – flush immediately
-		50*time.Millisecond, // maxBatchDelay – short for test
 	)
 	if err := svc.Start(); err != nil {
 		t.Fatalf("failed to start service: %v", err)
@@ -61,18 +61,27 @@ func Test_ServiceSingleEvent(t *testing.T) {
 	// Wait for the service to forward the batch.
 	select {
 	case got := <-bodyCh:
-		var batch proto.CDCEventsBatch
-		if err := protojson.Unmarshal(got, &batch); err != nil {
+		exp := &CDCMessagesEnvelope{
+			Payload: []*CDCMessage{
+				{
+					Index: evs.Index,
+					Events: []*CDCMessageEvent{
+						{
+							Op:       ev.Op.String(),
+							Table:    ev.Table,
+							NewRowId: ev.NewRowId,
+							OldRowId: ev.OldRowId,
+						},
+					},
+				},
+			},
+		}
+		msg := &CDCMessagesEnvelope{}
+		if err := UnmarshalFromEnvelopeJSON(got, msg); err != nil {
 			t.Fatalf("invalid JSON received: %v", err)
 		}
-		if len(batch.Payload) != 1 || batch.Payload[0].Index != evs.Index {
-			t.Fatalf("unexpected payload: %v", batch.Payload)
-		}
-		if len(batch.Payload[0].Events) != 1 {
-			t.Fatalf("unexpected number of events in payload: %d", len(batch.Payload[0].Events))
-		}
-		if reflect.DeepEqual(batch.Payload[0].Events[0], evs.Events[0]) == false {
-			t.Fatalf("unexpected events in payload: %v", batch.Payload[0].Events)
+		if reflect.DeepEqual(msg, exp) == false {
+			t.Fatalf("unexpected payload: got %v, want %v", msg, exp)
 		}
 	case <-time.After(2 * time.Second):
 		t.Fatalf("timeout waiting for HTTP POST")
@@ -86,6 +95,47 @@ func Test_ServiceSingleEvent(t *testing.T) {
 	cl.leader.Store(false)
 	eventsCh <- evs
 	pollExpvarUntil(t, numDroppedNotLeader, 1, 2*time.Second)
+}
+
+func Test_ServiceSingleEvent_LogOnly(t *testing.T) {
+	ResetStats()
+
+	// Channel for the service to receive events.
+	eventsCh := make(chan *proto.CDCEvents, 1)
+
+	cl := &mockCluster{}
+	cl.leader.Store(true)
+
+	cfg := DefaultConfig()
+	cfg.MaxBatchSz = 1
+	cfg.MaxBatchDelay = 50 * time.Millisecond
+	cfg.LogOnly = true
+	svc := NewService(
+		cfg,
+		cl,
+		&mockStore{},
+		eventsCh,
+	)
+	if err := svc.Start(); err != nil {
+		t.Fatalf("failed to start service: %v", err)
+	}
+	defer svc.Stop()
+
+	// Send one dummy event to the service.
+	ev := &proto.CDCEvent{
+		Op:       proto.CDCEvent_INSERT,
+		Table:    "foo",
+		NewRowId: 2,
+	}
+	evs := &proto.CDCEvents{
+		Index:  1,
+		Events: []*proto.CDCEvent{ev},
+	}
+	eventsCh <- evs
+
+	testPoll(t, func() bool {
+		return svc.HighWatermark() == evs.Index
+	}, 2*time.Second)
 }
 
 func Test_ServiceSingleEvent_Retry(t *testing.T) {
@@ -111,14 +161,15 @@ func Test_ServiceSingleEvent_Retry(t *testing.T) {
 	cl := &mockCluster{}
 	cl.leader.Store(true)
 
+	cfg := DefaultConfig()
+	cfg.Endpoint = testSrv.URL
+	cfg.MaxBatchSz = 1
+	cfg.MaxBatchDelay = 50 * time.Millisecond
 	svc := NewService(
+		cfg,
 		cl,
 		&mockStore{},
 		eventsCh,
-		testSrv.URL,
-		nil,                 // no TLS
-		1,                   // maxBatchSz – flush immediately
-		50*time.Millisecond, // maxBatchDelay – short for test
 	)
 	if err := svc.Start(); err != nil {
 		t.Fatalf("failed to start service: %v", err)
@@ -140,18 +191,27 @@ func Test_ServiceSingleEvent_Retry(t *testing.T) {
 	// Wait for the service to forward the batch.
 	select {
 	case got := <-bodyCh:
-		var batch proto.CDCEventsBatch
-		if err := protojson.Unmarshal(got, &batch); err != nil {
+		exp := &CDCMessagesEnvelope{
+			Payload: []*CDCMessage{
+				{
+					Index: evs.Index,
+					Events: []*CDCMessageEvent{
+						{
+							Op:       ev.Op.String(),
+							Table:    ev.Table,
+							NewRowId: ev.NewRowId,
+							OldRowId: ev.OldRowId,
+						},
+					},
+				},
+			},
+		}
+		msg := &CDCMessagesEnvelope{}
+		if err := UnmarshalFromEnvelopeJSON(got, msg); err != nil {
 			t.Fatalf("invalid JSON received: %v", err)
 		}
-		if len(batch.Payload) != 1 || batch.Payload[0].Index != evs.Index {
-			t.Fatalf("unexpected payload: %v", batch.Payload)
-		}
-		if len(batch.Payload[0].Events) != 1 {
-			t.Fatalf("unexpected number of events in payload: %d", len(batch.Payload[0].Events))
-		}
-		if reflect.DeepEqual(batch.Payload[0].Events[0], evs.Events[0]) == false {
-			t.Fatalf("unexpected events in payload: %v", batch.Payload[0].Events)
+		if reflect.DeepEqual(msg, exp) == false {
+			t.Fatalf("unexpected payload: got %v, want %v", msg, exp)
 		}
 	case <-time.After(2 * time.Second):
 		t.Fatalf("timeout waiting for HTTP POST")
@@ -180,14 +240,15 @@ func Test_ServiceMultiEvent(t *testing.T) {
 	cl := &mockCluster{}
 	cl.leader.Store(true)
 
+	cfg := DefaultConfig()
+	cfg.Endpoint = testSrv.URL
+	cfg.MaxBatchSz = 2
+	cfg.MaxBatchDelay = time.Second
 	svc := NewService(
+		cfg,
 		cl,
 		&mockStore{},
 		eventsCh,
-		testSrv.URL,
-		nil, // no TLS
-		2,   // maxBatchSz – flush after 2 events
-		1*time.Second,
 	)
 	if err := svc.Start(); err != nil {
 		t.Fatalf("failed to start service: %v", err)
@@ -220,21 +281,38 @@ func Test_ServiceMultiEvent(t *testing.T) {
 	// Wait for the service to forward the batch.
 	select {
 	case got := <-bodyCh:
-		var batch proto.CDCEventsBatch
-		if err := protojson.Unmarshal(got, &batch); err != nil {
+		exp := &CDCMessagesEnvelope{
+			Payload: []*CDCMessage{
+				{
+					Index: evs1.Index,
+					Events: []*CDCMessageEvent{
+						{
+							Op:       ev1.Op.String(),
+							Table:    ev1.Table,
+							NewRowId: ev1.NewRowId,
+							OldRowId: ev1.OldRowId,
+						},
+					},
+				},
+				{
+					Index: evs2.Index,
+					Events: []*CDCMessageEvent{
+						{
+							Op:       ev2.Op.String(),
+							Table:    ev2.Table,
+							NewRowId: ev2.NewRowId,
+							OldRowId: ev2.OldRowId,
+						},
+					},
+				},
+			},
+		}
+		msg := &CDCMessagesEnvelope{}
+		if err := UnmarshalFromEnvelopeJSON(got, msg); err != nil {
 			t.Fatalf("invalid JSON received: %v", err)
 		}
-		if len(batch.Payload) != 2 {
-			t.Fatalf("unexpected payload length: %d", len(batch.Payload))
-		}
-		if batch.Payload[0].Index != evs1.Index || batch.Payload[1].Index != evs2.Index {
-			t.Fatalf("unexpected payload indices: %d, %d", batch.Payload[0].Index, batch.Payload[1].Index)
-		}
-		if len(batch.Payload[0].Events) != 1 || len(batch.Payload[1].Events) != 1 {
-			t.Fatalf("unexpected number of events in payload: %d, %d", len(batch.Payload[0].Events), len(batch.Payload[1].Events))
-		}
-		if !reflect.DeepEqual(batch.Payload[0].Events[0], evs1.Events[0]) || !reflect.DeepEqual(batch.Payload[1].Events[0], evs2.Events[0]) {
-			t.Fatalf("unexpected events in payload: %v, %v", batch.Payload[0].Events[0], batch.Payload[1].Events[0])
+		if reflect.DeepEqual(msg, exp) == false {
+			t.Fatalf("unexpected payload: got %v, want %v", msg, exp)
 		}
 	case <-time.After(2 * time.Second):
 		t.Fatalf("timeout waiting for HTTP POST")
@@ -263,15 +341,15 @@ func Test_ServiceMultiEvent_Batch(t *testing.T) {
 	cl := &mockCluster{}
 	cl.leader.Store(true)
 
-	// Construct and start the service.
+	cfg := DefaultConfig()
+	cfg.Endpoint = testSrv.URL
+	cfg.MaxBatchSz = 2
+	cfg.MaxBatchDelay = 100 * time.Millisecond
 	svc := NewService(
+		cfg,
 		cl,
 		&mockStore{},
 		eventsCh,
-		testSrv.URL,
-		nil, // no TLS
-		2,   // maxBatchSz – flush after 2 events
-		100*time.Millisecond,
 	)
 	if err := svc.Start(); err != nil {
 		t.Fatalf("failed to start service: %v", err)
@@ -298,14 +376,14 @@ func Test_ServiceMultiEvent_Batch(t *testing.T) {
 		Index:  2,
 		Events: []*proto.CDCEvent{ev2},
 	}
-	ev2 = &proto.CDCEvent{
+	ev3 := &proto.CDCEvent{
 		Op:       proto.CDCEvent_DELETE,
 		Table:    "qux",
 		OldRowId: 40,
 	}
 	evs3 := &proto.CDCEvents{
 		Index:  3,
-		Events: []*proto.CDCEvent{ev2},
+		Events: []*proto.CDCEvent{ev3},
 	}
 	eventsCh <- evs1
 	eventsCh <- evs2
@@ -314,21 +392,37 @@ func Test_ServiceMultiEvent_Batch(t *testing.T) {
 	// Wait for the service to forward the first batch.
 	select {
 	case got := <-bodyCh:
-		var batch proto.CDCEventsBatch
-		if err := protojson.Unmarshal(got, &batch); err != nil {
+		exp := &CDCMessagesEnvelope{
+			Payload: []*CDCMessage{
+				{
+					Index: evs1.Index,
+					Events: []*CDCMessageEvent{
+						{
+							Op:       ev1.Op.String(),
+							Table:    ev1.Table,
+							NewRowId: ev1.NewRowId,
+						},
+					},
+				},
+				{
+					Index: evs2.Index,
+					Events: []*CDCMessageEvent{
+						{
+							Op:       ev2.Op.String(),
+							Table:    ev2.Table,
+							NewRowId: ev2.NewRowId,
+							OldRowId: ev2.OldRowId,
+						},
+					},
+				},
+			},
+		}
+		msg := &CDCMessagesEnvelope{}
+		if err := UnmarshalFromEnvelopeJSON(got, msg); err != nil {
 			t.Fatalf("invalid JSON received: %v", err)
 		}
-		if len(batch.Payload) != 2 {
-			t.Fatalf("unexpected payload length: %d", len(batch.Payload))
-		}
-		if batch.Payload[0].Index != evs1.Index || batch.Payload[1].Index != evs2.Index {
-			t.Fatalf("unexpected payload indices: %d, %d", batch.Payload[0].Index, batch.Payload[1].Index)
-		}
-		if len(batch.Payload[0].Events) != 1 || len(batch.Payload[1].Events) != 1 {
-			t.Fatalf("unexpected number of events in payload: %d, %d", len(batch.Payload[0].Events), len(batch.Payload[1].Events))
-		}
-		if !reflect.DeepEqual(batch.Payload[0].Events[0], evs1.Events[0]) || !reflect.DeepEqual(batch.Payload[1].Events[0], evs2.Events[0]) {
-			t.Fatalf("unexpected events in payload: %v, %v", batch.Payload[0].Events[0], batch.Payload[1].Events[0])
+		if reflect.DeepEqual(msg, exp) == false {
+			t.Fatalf("unexpected payload: got %v, want %v", msg, exp)
 		}
 	case <-time.After(2 * time.Second):
 		t.Fatalf("timeout waiting for HTTP POST")
@@ -337,21 +431,26 @@ func Test_ServiceMultiEvent_Batch(t *testing.T) {
 	// Wait for the service to forward the second batch, which will be kicked out due to a timeout.
 	select {
 	case got := <-bodyCh:
-		var batch proto.CDCEventsBatch
-		if err := protojson.Unmarshal(got, &batch); err != nil {
+		exp := &CDCMessagesEnvelope{
+			Payload: []*CDCMessage{
+				{
+					Index: evs3.Index,
+					Events: []*CDCMessageEvent{
+						{
+							Op:       ev3.Op.String(),
+							Table:    ev3.Table,
+							OldRowId: ev3.OldRowId,
+						},
+					},
+				},
+			},
+		}
+		msg := &CDCMessagesEnvelope{}
+		if err := UnmarshalFromEnvelopeJSON(got, msg); err != nil {
 			t.Fatalf("invalid JSON received: %v", err)
 		}
-		if len(batch.Payload) != 1 {
-			t.Fatalf("unexpected payload length: %d", len(batch.Payload))
-		}
-		if batch.Payload[0].Index != evs3.Index {
-			t.Fatalf("unexpected payload index: %d", batch.Payload[0].Index)
-		}
-		if len(batch.Payload[0].Events) != 1 {
-			t.Fatalf("unexpected number of events in payload: %d", len(batch.Payload[0].Events))
-		}
-		if !reflect.DeepEqual(batch.Payload[0].Events[0], evs3.Events[0]) {
-			t.Fatalf("unexpected events in payload: %v", batch.Payload[0].Events[0])
+		if reflect.DeepEqual(msg, exp) == false {
+			t.Fatalf("unexpected payload: got %v, want %v", msg, exp)
 		}
 	case <-time.After(2 * time.Second):
 		t.Fatalf("timeout waiting for HTTP POST")
