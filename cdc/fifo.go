@@ -1,7 +1,6 @@
 package cdc
 
 import (
-	"bytes"
 	"encoding/binary"
 	"errors"
 	"fmt"
@@ -12,6 +11,7 @@ import (
 
 // bucketName is the name of the BoltDB bucket where queue items will be stored.
 var bucketName = []byte("fifo_queue")
+var metaBucketName = []byte("fifo_queue_meta")
 
 // ErrQueueEmpty is returned when First() is called on an empty queue.
 var ErrQueueEmpty = errors.New("queue is empty")
@@ -19,9 +19,11 @@ var ErrQueueEmpty = errors.New("queue is empty")
 // Queue is a persistent, disk-backed FIFO queue.
 // It is safe for concurrent use by multiple goroutines.
 type Queue struct {
-	db   *bbolt.DB
-	mu   sync.Mutex
-	cond *sync.Cond // cond is used to signal waiting Dequeue calls.
+	db *bbolt.DB
+
+	nextKey []byte
+	mu      sync.Mutex
+	cond    *sync.Cond // cond is used to signal waiting Dequeue calls.
 }
 
 // NewQueue creates or opens a new persistent queue at the given file path.
@@ -33,13 +35,26 @@ func NewQueue(path string) (*Queue, error) {
 		return nil, fmt.Errorf("failed to open boltdb: %w", err)
 	}
 
-	// Start a read-write transaction to ensure our bucket exists.
-	err = db.Update(func(tx *bbolt.Tx) error {
-		_, err := tx.CreateBucketIfNotExists(bucketName)
-		return err
-	})
-	if err != nil {
-		db.Close() // Close the db if bucket creation fails.
+	if err := db.Update(func(tx *bbolt.Tx) error {
+		if _, err := tx.CreateBucketIfNotExists(bucketName); err != nil {
+			return fmt.Errorf("failed to create bucket: %w", err)
+		}
+
+		if _, err := tx.CreateBucketIfNotExists(metaBucketName); err != nil {
+			return fmt.Errorf("failed to create meta bucket: %w", err)
+		}
+
+		// Ensure the meta bucket has a "max_key" entry.
+		// This is used to track the highest index in the queue.
+		metaBucket := tx.Bucket(metaBucketName)
+		if metaBucket.Get([]byte("max_key")) == nil {
+			if err := metaBucket.Put([]byte("max_key"), uint64tob(0)); err != nil {
+				return fmt.Errorf("failed to initialize max_key in meta bucket: %w", err)
+			}
+		}
+		return nil
+	}); err != nil {
+		db.Close()
 		return nil, fmt.Errorf("failed to create bucket: %w", err)
 	}
 
@@ -66,21 +81,47 @@ func (q *Queue) Enqueue(idx uint64, item []byte) error {
 	q.mu.Lock()
 	defer q.mu.Unlock()
 
+	// Only insert an item if its key is "newer" i.e. greater index than the last item we added.
+	var highestKey uint64
+	err := q.db.View(func(tx *bbolt.Tx) error {
+		idx, innerErr := q.getHighestKey(tx)
+		if innerErr != nil {
+			return fmt.Errorf("failed to get highest key: %w", innerErr)
+		}
+		highestKey = idx
+		return nil
+	})
+	if err != nil {
+		return fmt.Errorf("failed to read highest key: %w", err)
+	}
+	if idx <= highestKey {
+		return nil
+	}
+
 	// Convert the uint64 index into a byte slice.
 	// We use BigEndian to ensure that the byte representation sorts lexicographically
 	// in the same order as the numerical value of the index. This is how BoltDB
 	// maintains key order.
-	key := make([]byte, 8)
-	binary.BigEndian.PutUint64(key, idx)
+	key := uint64tob(idx)
 
 	// Start a read-write transaction to insert the new item.
-	err := q.db.Update(func(tx *bbolt.Tx) error {
-		b := tx.Bucket(bucketName)
-		return b.Put(key, item)
-	})
+	err = q.db.Update(func(tx *bbolt.Tx) error {
+		if err := tx.Bucket(bucketName).Put(key, item); err != nil {
+			return fmt.Errorf("failed to put item in bucket: %w", err)
+		}
 
+		// Record the highest key we've inserted so far.
+		if err := q.setHighestKey(tx, idx); err != nil {
+			return fmt.Errorf("failed to set highest key: %w", err)
+		}
+		return nil
+	})
 	if err != nil {
 		return fmt.Errorf("failed to enqueue item: %w", err)
+	}
+
+	if q.nextKey == nil {
+		q.nextKey = key
 	}
 
 	// After successfully adding an item, we signal the condition variable.
@@ -91,159 +132,131 @@ func (q *Queue) Enqueue(idx uint64, item []byte) error {
 	return nil
 }
 
-// First returns the first item in the queue (the one with the lowest index)
-// and its index, without removing it. If the queue is empty, it returns ErrQueueEmpty.
-func (q *Queue) First() (uint64, []byte, error) {
-	var key, val []byte
-
-	// Start a read-only transaction.
-	err := q.db.View(func(tx *bbolt.Tx) error {
-		b := tx.Bucket(bucketName)
-		c := b.Cursor()
-
-		// Move the cursor to the first key in the bucket.
-		// Because we use BigEndian for keys, this is the item with the lowest index.
-		k, v := c.First()
-		if k == nil {
-			return ErrQueueEmpty // No items in the queue.
-		}
-
-		// BoltDB keys/values are only valid inside the transaction.
-		// We must copy them to new slices to use them after the transaction completes.
-		key = make([]byte, len(k))
-		copy(key, k)
-		val = make([]byte, len(v))
-		copy(val, v)
-
-		return nil
-	})
-
-	if err != nil {
-		return 0, nil, err
-	}
-
-	// Convert the key back to a uint64 index.
-	idx := binary.BigEndian.Uint64(key)
-
-	return idx, val, nil
-}
-
 // Dequeue removes and returns the next available item from the queue.
 // If the queue is empty, Dequeue blocks until an item is enqueued.
-func (q *Queue) Dequeue() ([]byte, error) {
+func (q *Queue) Dequeue() (uint64, []byte, error) {
 	// The mutex is locked for the entire duration of the check-and-wait-or-delete logic.
 	// This is the core of the coordination.
 	q.mu.Lock()
 	defer q.mu.Unlock()
 
-	var key, val []byte
+	var retIdx uint64
+	var retVal []byte
+	var err error
 
 	// This loop is the standard pattern for using sync.Cond.
 	// It repeatedly checks the condition (is the queue non-empty?) until it's true.
 	for {
-		// Check if an item exists within a read-only transaction.
-		err := q.db.View(func(tx *bbolt.Tx) error {
-			c := tx.Bucket(bucketName).Cursor()
-			k, v := c.First()
-			if k == nil {
-				// Queue is empty. We will wait.
+		err = q.db.View(func(tx *bbolt.Tx) error {
+			if q.nextKey == nil {
 				return nil
+			}
+
+			c := tx.Bucket(bucketName).Cursor()
+			k, v := c.Seek(q.nextKey)
+			if k == nil {
+				return fmt.Errorf("next key does not exist")
 			}
 
 			// Item found. Copy the key and value so we can use them after the
 			// view transaction closes and before the update transaction starts.
-			key = make([]byte, len(k))
-			copy(key, k)
-			val = make([]byte, len(v))
-			copy(val, v)
+			retIdx = btouint64(k)
+			retVal = make([]byte, len(v))
+			copy(retVal, v)
 
+			// Now, move the nextKey to the next item in the queue.
+			// If there is no next item, we set nextKey to nil.
+			q.nextKey, _ = c.Next()
 			return nil
 		})
 
 		if err != nil {
 			// This indicates a DB error, not an empty queue.
-			return nil, fmt.Errorf("failed to check queue: %w", err)
+			return 0, nil, fmt.Errorf("failed to check queue: %w", err)
 		}
 
-		if key != nil {
-			// An item was found, so we break out of the waiting loop.
+		if retIdx != 0 {
+			// We fetched a "next" item from the queue.
 			break
 		}
 
-		// If key is nil, it means the queue was empty.
-		// We call cond.Wait(), which does three things atomically:
+		// There is no next item in the queue, so let's wait.
 		// 1. Unlocks the mutex (q.mu).
 		// 2. Puts the current goroutine to sleep.
 		// 3. When woken up by q.cond.Signal(), it re-locks the mutex before returning.
 		// This atomic unlock/wait/relock prevents the "lost wakeup" problem.
 		q.cond.Wait()
 	}
-	return val, nil
+	return retIdx, retVal, nil
 }
 
-// Delete removes a specific item from the queue by its index.
-// It is safe for concurrent use.
-func (q *Queue) Delete(idx uint64) error {
-	// Lock the mutex to ensure thread safety, consistent with other methods.
+// DeleteRange deletes all items in the queue with indices less than or equal to idx.
+func (q *Queue) DeleteRange(idx uint64) error {
 	q.mu.Lock()
 	defer q.mu.Unlock()
 
-	// Convert the uint64 index into the 8-byte big-endian key.
-	key := make([]byte, 8)
-	binary.BigEndian.PutUint64(key, idx)
-
-	// Start a read-write transaction to delete the item.
-	err := q.db.Update(func(tx *bbolt.Tx) error {
+	return q.db.Update(func(tx *bbolt.Tx) error {
 		b := tx.Bucket(bucketName)
-		// Delete the key. If the key doesn't exist, this is a no-op
-		// and does not return an error.
-		return b.Delete(key)
-	})
+		if b == nil {
+			return fmt.Errorf("bucket %s not found", bucketName)
+		}
 
-	if err != nil {
-		return fmt.Errorf("failed to delete item with index %d: %w", idx, err)
-	}
-
-	return nil
-}
-
-// DeleteRange removes all items from the queue with an index
-// between lowerIdx and upperIdx, inclusive.
-// If lowerIdx > upperIdx, the operation is a no-op.
-func (q *Queue) DeleteRange(lowerIdx, upperIdx uint64) error {
-	// A forgiving check: if the range is invalid, do nothing.
-	if lowerIdx > upperIdx {
-		return nil
-	}
-
-	q.mu.Lock()
-	defer q.mu.Unlock()
-
-	minKey := make([]byte, 8)
-	binary.BigEndian.PutUint64(minKey, lowerIdx)
-
-	maxKey := make([]byte, 8)
-	binary.BigEndian.PutUint64(maxKey, upperIdx)
-
-	err := q.db.Update(func(tx *bbolt.Tx) error {
-		c := tx.Bucket(bucketName).Cursor()
-
-		// We repeatedly seek to the beginning of the range.
-		// After we delete an item, the next seek will find the
-		// new lowest item in the range. The loop terminates when
-		// seeking to minKey lands on a key outside our maxKey boundary.
-		for k, _ := c.Seek(minKey); k != nil && bytes.Compare(k, maxKey) <= 0; k, _ = c.Seek(minKey) {
-			if err := c.Delete(); err != nil {
-				// If delete fails, we should abort the transaction.
-				return err
+		key := uint64tob(idx)
+		c := b.Cursor()
+		for k, _ := c.Seek(key); k != nil; k, _ = c.Prev() {
+			if err := b.Delete(k); err != nil {
+				return fmt.Errorf("failed to delete key %s: %w", k, err)
 			}
 		}
 		return nil
 	})
+}
 
+// HighestKey returns the index of the highest item every inserted into the queue.
+func (q *Queue) HighestKey() (uint64, error) {
+	var highestKey uint64
+	err := q.db.View(func(tx *bbolt.Tx) error {
+		var err error
+		highestKey, err = q.getHighestKey(tx)
+		if err != nil {
+			return fmt.Errorf("failed to get highest key: %w", err)
+		}
+		return nil
+	})
 	if err != nil {
-		return fmt.Errorf("failed during range delete from %d to %d: %w", lowerIdx, upperIdx, err)
+		return 0, fmt.Errorf("failed to read highest key: %w", err)
+	}
+	return highestKey, nil
+}
+
+func (q *Queue) setHighestKey(tx *bbolt.Tx, idx uint64) error {
+	key := uint64tob(idx)
+	return tx.Bucket(metaBucketName).Put([]byte("max_key"), key)
+}
+
+func (q *Queue) getHighestKey(tx *bbolt.Tx) (uint64, error) {
+	b := tx.Bucket(metaBucketName)
+	if b == nil {
+		return 0, fmt.Errorf("meta bucket not found")
 	}
 
-	return nil
+	key := b.Get([]byte("max_key"))
+	if key == nil {
+		return 0, fmt.Errorf("no max key found")
+	}
+
+	return btouint64(key), nil
+}
+
+func btouint64(b []byte) uint64 {
+	if len(b) != 8 {
+		panic(fmt.Sprintf("byte slice must be exactly 8 bytes long it is %d bytes long", len(b)))
+	}
+	return binary.BigEndian.Uint64(b)
+}
+
+func uint64tob(u uint64) []byte {
+	b := make([]byte, 8)
+	binary.BigEndian.PutUint64(b, u)
+	return b
 }
