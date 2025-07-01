@@ -6,15 +6,18 @@ import (
 	"github.com/rqlite/rqlite/v8/command/proto"
 )
 
+// CDCMessagesEnvelope is the envelope for CDC messages as transported over HTTP.
 type CDCMessagesEnvelope struct {
 	Payload []*CDCMessage `json:"payload"`
 }
 
+// CDCMessage represents a single CDC message containing an index and a list of events.
 type CDCMessage struct {
 	Index  uint64             `json:"index"`
 	Events []*CDCMessageEvent `json:"events"`
 }
 
+// CDCMessageEvent represents a single CDC event within a CDC message.
 type CDCMessageEvent struct {
 	Op       string         `json:"op"`
 	Table    string         `json:"table,omitempty"`
@@ -24,6 +27,7 @@ type CDCMessageEvent struct {
 	After    map[string]any `json:"after,omitempty"`
 }
 
+// MarshalToEnvelopeJSON converts a slice of CDC events to a JSON envelope format.
 func MarshalToEnvelopeJSON(evs []*proto.CDCEvents) ([]byte, error) {
 	if len(evs) == 0 {
 		return nil, nil
@@ -52,6 +56,7 @@ func MarshalToEnvelopeJSON(evs []*proto.CDCEvents) ([]byte, error) {
 	return json.Marshal(envelope)
 }
 
+// UnmarshalFromEnvelopeJSON converts a JSON envelope format into a CDCMessagesEnvelope structure.
 func UnmarshalFromEnvelopeJSON(data []byte, env *CDCMessagesEnvelope) error {
 	return json.Unmarshal(data, env)
 }
