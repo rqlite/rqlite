@@ -11,10 +11,9 @@ import (
 
 // bucketName is the name of the BoltDB bucket where queue items will be stored.
 var bucketName = []byte("fifo_queue")
-var metaBucketName = []byte("fifo_queue_meta")
 
-// ErrQueueEmpty is returned when a dequeue operation is attempted on an empty queue.
-var ErrQueueEmpty = errors.New("queue is empty")
+// metaBucketName is the name of the BoltDB bucket where metadata like highest key will be stored.
+var metaBucketName = []byte("fifo_queue_meta")
 
 // ErrQueueClosed is returned when an operation is attempted on a closed queue.
 var ErrQueueClosed = errors.New("queue is closed")
@@ -29,7 +28,7 @@ type Queue struct {
 	dequeueChan     chan dequeueReq
 	deleteRangeChan chan deleteRangeReq
 	queryChan       chan queryReq
-	quitChan        chan struct{}
+	done            chan struct{}
 
 	wg sync.WaitGroup
 }
@@ -68,24 +67,22 @@ func NewQueue(path string) (*Queue, error) {
 		dequeueChan:     make(chan dequeueReq),
 		deleteRangeChan: make(chan deleteRangeReq),
 		queryChan:       make(chan queryReq),
-		quitChan:        make(chan struct{}),
+		done:            make(chan struct{}),
 	}
 
-	// Start the single goroutine that manages all state and DB access.
 	q.wg.Add(1)
 	go q.run()
-
 	return q, nil
 }
 
 // Close gracefully shuts down the queue, ensuring all pending operations are finished.
 func (q *Queue) Close() {
-	close(q.quitChan)
+	close(q.done)
 	q.wg.Wait() // Wait for the run() goroutine to finish.
 }
 
-// run is the heart of the queue. It's a single goroutine that serializes
-// all access to the database, eliminating the need for locks.
+// run is a single goroutine that serializes all access to the database. This eliminates
+// the need for locks.
 func (q *Queue) run() {
 	defer q.wg.Done()
 	defer q.db.Close()
@@ -219,8 +216,7 @@ func (q *Queue) run() {
 				highestKey: highestKey,
 			}
 
-		case <-q.quitChan:
-			// Clean up any waiting goroutines before shutting down.
+		case <-q.done:
 			for _, waiter := range waitingDequeues {
 				waiter.respChan <- dequeueResp{err: ErrQueueClosed}
 			}
