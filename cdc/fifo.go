@@ -114,7 +114,8 @@ func (q *Queue) run() {
 		case req := <-q.enqueueChan:
 			// No need to check highestKey if idx is 0
 			if req.idx > 0 && req.idx <= highestKey {
-				continue // Ignore duplicate/old item
+				req.respChan <- enqueueResp{err: nil}
+				continue // Ignore duplicate/old items
 			}
 
 			key := uint64tob(req.idx)
@@ -129,7 +130,7 @@ func (q *Queue) run() {
 				return nil
 			})
 			if err != nil {
-				// In a real-world scenario, you might want to log this error.
+				req.respChan <- enqueueResp{err: fmt.Errorf("enqueue failed: %w", err)}
 				continue
 			}
 
@@ -153,6 +154,7 @@ func (q *Queue) run() {
 					return nil
 				})
 			}
+			req.respChan <- enqueueResp{err: nil}
 
 		case req := <-activeDequeueChan:
 			// If a request arrived but nextKey is nil, it means an enqueued item was
@@ -228,9 +230,11 @@ func (q *Queue) run() {
 }
 
 // Enqueue adds an item to the queue.
-func (q *Queue) Enqueue(idx uint64, item []byte) {
-	req := enqueueReq{idx: idx, item: item}
+func (q *Queue) Enqueue(idx uint64, item []byte) error {
+	req := enqueueReq{idx: idx, item: item, respChan: make(chan enqueueResp)}
 	q.enqueueChan <- req
+	resp := <-req.respChan
+	return resp.err
 }
 
 // Dequeue removes and returns the next available item from the queue.
@@ -268,6 +272,14 @@ func (q *Queue) Empty() (bool, error) {
 	return resp.isEmpty, nil
 }
 
+// HasNext checks if there is at least one item available to dequeue.
+func (q *Queue) HasNext() bool {
+	req := queryReq{respChan: make(chan queryResp)}
+	q.queryChan <- req
+	resp := <-req.respChan
+	return resp.hasNext
+}
+
 func getHighestKey(tx *bbolt.Tx) (uint64, error) {
 	key := tx.Bucket(metaBucketName).Get([]byte("max_key"))
 	if key == nil {
@@ -281,10 +293,13 @@ func setHighestKey(tx *bbolt.Tx, idx uint64) error {
 }
 
 type enqueueReq struct {
-	idx  uint64
-	item []byte
-	// Enqueue is fire-and-forget, so no response channel is needed.
-	// For a synchronous version, a 'resp chan error' could be added.
+	idx      uint64
+	item     []byte
+	respChan chan enqueueResp
+}
+
+type enqueueResp struct {
+	err error
 }
 
 type dequeueReq struct {

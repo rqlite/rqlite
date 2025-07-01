@@ -259,9 +259,7 @@ func Test_QueueHighestKey(t *testing.T) {
 	}
 
 	// Close and reopen queue, highest key should still be 3.
-	if err := q.Close(); err != nil {
-		t.Fatalf("Failed to close queue: %v", err)
-	}
+	q.Close()
 
 	q, err = NewQueue(path)
 	if err != nil {
@@ -335,9 +333,7 @@ func Test_QueuePersistence(t *testing.T) {
 	if err := q1.Enqueue(idx, item); err != nil {
 		t.Fatalf("Failed to enqueue item: %v", err)
 	}
-	if err := q1.Close(); err != nil {
-		t.Fatalf("Failed to close initial queue: %v", err)
-	}
+	q1.Close()
 
 	// 2. Reopen the queue from the same file.
 	q2, err := NewQueue(dbPath)
