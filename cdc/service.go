@@ -15,7 +15,6 @@ import (
 	"github.com/rqlite/rqlite/v8/command/proto"
 	"github.com/rqlite/rqlite/v8/queue"
 	"github.com/rqlite/rqlite/v8/rsync"
-	"google.golang.org/protobuf/encoding/protojson"
 )
 
 const (
@@ -73,14 +72,36 @@ type Service struct {
 	clstr Cluster
 	str   Store
 
-	in        <-chan *proto.CDCEvents
-	tlsConfig *tls.Config
+	// in is the channel from which the CDC events are read. This channel is expected
+	in <-chan *proto.CDCEvents
+
+	// logOnly indicates whether the CDC service should only log events and not
+	// send them to the configured endpoint. This is mostly useful for testing.
+	logOnly bool
 
 	// endpoint is the HTTP endpoint to which the CDC events are sent.
 	endpoint string
 
 	// httpClient is the HTTP client used to send requests to the endpoint.
 	httpClient *http.Client
+
+	// tlsConfig is the TLS configuration used for the HTTP client.
+	tlsConfig *tls.Config
+
+	// transmitTimeout is the timeout for transmitting events to the endpoint.
+	transmitTimeout time.Duration
+
+	// transmitMaxRetries is the maximum number of retries for sending events to the endpoint.
+	transmitMaxRetries int
+
+	// TransmitMinBackoff is the delay between retries for sending events to the endpoint.
+	transmitMinBackoff time.Duration
+
+	// TransmitMaxBackoff is the maximum backoff time for retries when using exponential backoff.
+	transmitMaxBackoff time.Duration
+
+	// transmitRetryPolicy defines the retry policy to use when sending events to the endpoint.
+	transmitRetryPolicy RetryPolicy
 
 	// maxBatchSz is the maximum number of events to send in a single batch to the endpoint.
 	maxBatchSz int
@@ -96,10 +117,15 @@ type Service struct {
 
 	// highWatermark is the index of the last event that was successfully sent to the webhook
 	// by the cluster (which is not necessarily the same thing as this node).
-	highWatermark            atomic.Uint64
-	highWatermarkingDisabled rsync.AtomicBool
+	highWatermark atomic.Uint64
 
-	batchMarshaler protojson.MarshalOptions
+	// highWatermarkInterval is the interval at which the high watermark is written to the store.
+	// This is used to ensure that the high watermark is written periodically,
+	highWatermarkInterval time.Duration
+
+	// highWatermarkingDisabled indicates whether high watermarking is disabled.
+	// If true, the service will not write or read the high watermark from the store.
+	highWatermarkingDisabled rsync.AtomicBool
 
 	// For CDC shutdown.
 	wg   sync.WaitGroup
@@ -109,28 +135,38 @@ type Service struct {
 }
 
 // NewService creates a new CDC service.
-func NewService(clstr Cluster, str Store, in <-chan *proto.CDCEvents, endpoint string, tlsConfig *tls.Config, maxBatchSz int, maxBatchDelay time.Duration) *Service {
+func NewService(cfg *Config, clstr Cluster, str Store, in <-chan *proto.CDCEvents) *Service {
 	httpClient := &http.Client{
 		Transport: &http.Transport{
-			TLSClientConfig: tlsConfig,
+			TLSClientConfig: cfg.TLSConfig,
 		},
-		Timeout: 5 * time.Second,
+		Timeout: cfg.TransmitTimeout,
 	}
 
-	return &Service{
-		clstr:          clstr,
-		str:            str,
-		in:             in,
-		tlsConfig:      tlsConfig,
-		endpoint:       endpoint,
-		httpClient:     httpClient,
-		maxBatchSz:     maxBatchSz,
-		maxBatchDelay:  maxBatchDelay,
-		queue:          queue.New[*proto.CDCEvents](maxBatchSz, maxBatchSz, maxBatchDelay),
-		done:           make(chan struct{}),
-		batchMarshaler: protojson.MarshalOptions{},
-		logger:         log.New(os.Stdout, "[cdc-service] ", log.LstdFlags),
+	srv := &Service{
+		clstr:                 clstr,
+		str:                   str,
+		in:                    in,
+		logOnly:               cfg.LogOnly,
+		endpoint:              cfg.Endpoint,
+		httpClient:            httpClient,
+		tlsConfig:             cfg.TLSConfig,
+		transmitTimeout:       cfg.TransmitTimeout,
+		transmitMaxRetries:    cfg.TransmitMaxRetries,
+		transmitMinBackoff:    cfg.TransmitMinBackoff,
+		transmitMaxBackoff:    cfg.TransmitMaxBackoff,
+		transmitRetryPolicy:   cfg.TransmitRetryPolicy,
+		maxBatchSz:            cfg.MaxBatchSz,
+		maxBatchDelay:         cfg.MaxBatchDelay,
+		highWatermarkInterval: cfg.HighWatermarkInterval,
+		queue:                 queue.New[*proto.CDCEvents](cfg.MaxBatchSz, cfg.MaxBatchSz, cfg.MaxBatchDelay),
+		done:                  make(chan struct{}),
+		logger:                log.New(os.Stdout, "[cdc-service] ", log.LstdFlags),
 	}
+
+	srv.highWatermark.Store(0)
+	srv.highWatermarkingDisabled.SetBool(cfg.HighWatermarkingDisabled)
+	return srv
 }
 
 // Start starts the CDC service.
@@ -205,8 +241,7 @@ func (s *Service) postEvents() {
 				continue
 			}
 
-			batchMsg := &proto.CDCEventsBatch{Payload: batch.Objects}
-			b, err := s.batchMarshaler.Marshal(batchMsg)
+			b, err := MarshalToEnvelopeJSON(batch.Objects)
 			if err != nil {
 				s.logger.Printf("error marshalling batch: %v", err)
 				continue
@@ -219,26 +254,41 @@ func (s *Service) postEvents() {
 			}
 			req.Header.Set("Content-Type", "application/json")
 
-			maxRetries := 5
 			nAttempts := 0
-			retryDelay := 500 * time.Millisecond
+			retryDelay := s.transmitMinBackoff
+			sentOK := false
 			for {
 				nAttempts++
+				if s.logOnly {
+					s.logger.Println(string(b))
+					sentOK = true
+					break
+				}
+
 				resp, err := s.httpClient.Do(req)
 				if err == nil && (resp.StatusCode == http.StatusOK || resp.StatusCode == http.StatusAccepted) {
 					resp.Body.Close()
-					s.highWatermark.Store(batch.Objects[len(batch.Objects)-1].Index)
-					stats.Add(numSent, int64(len(batch.Objects)))
+					sentOK = true
 					break
 				}
-				if nAttempts >= maxRetries {
+				if nAttempts == s.transmitMaxRetries {
 					s.logger.Printf("failed to send batch to endpoint after %d retries, last error: %v", nAttempts, err)
 					stats.Add(numDroppedFailedToSend, int64(len(batch.Objects)))
 					break
 				}
+
+				if s.transmitRetryPolicy == ExponentialRetryPolicy {
+					retryDelay *= 2
+					if retryDelay > s.transmitMaxBackoff {
+						retryDelay = s.transmitMaxBackoff
+					}
+				}
 				stats.Add(numRetries, 1)
-				retryDelay *= 2
 				time.Sleep(retryDelay)
+			}
+			if sentOK {
+				s.highWatermark.Store(batch.Objects[len(batch.Objects)-1].Index)
+				stats.Add(numSent, int64(len(batch.Objects)))
 			}
 		case <-s.done:
 			return
@@ -248,7 +298,7 @@ func (s *Service) postEvents() {
 
 func (s *Service) writeHighWatermarkLoop() {
 	defer s.wg.Done()
-	ticker := time.NewTicker(5 * time.Second)
+	ticker := time.NewTicker(s.highWatermarkInterval)
 	defer ticker.Stop()
 
 	prevVal := s.highWatermark.Load()
