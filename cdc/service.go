@@ -241,7 +241,7 @@ func (s *Service) postEvents() {
 				continue
 			}
 
-			b, err := MarshalJSON(batch.Objects)
+			b, err := MarshalToEnvelopeJSON(batch.Objects)
 			if err != nil {
 				s.logger.Printf("error marshalling batch: %v", err)
 				continue

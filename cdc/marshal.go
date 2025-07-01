@@ -16,13 +16,15 @@ type CDCMessage struct {
 }
 
 type CDCMessageEvent struct {
-	Op     string         `json:"op"`
-	Table  string         `json:"table,omitempty"`
-	Before map[string]any `json:"before,omitempty"`
-	After  map[string]any `json:"after,omitempty"`
+	Op       string         `json:"op"`
+	Table    string         `json:"table,omitempty"`
+	NewRowId int64          `json:"new_row_id,omitempty"`
+	OldRowId int64          `json:"old_row_id,omitempty"`
+	Before   map[string]any `json:"before,omitempty"`
+	After    map[string]any `json:"after,omitempty"`
 }
 
-func MarshalJSON(evs []*proto.CDCEvents) ([]byte, error) {
+func MarshalToEnvelopeJSON(evs []*proto.CDCEvents) ([]byte, error) {
 	if len(evs) == 0 {
 		return nil, nil
 	}
@@ -39,11 +41,17 @@ func MarshalJSON(evs []*proto.CDCEvents) ([]byte, error) {
 
 		for j, event := range ev.Events {
 			envelope.Payload[i].Events[j] = &CDCMessageEvent{
-				Op:    event.Op.String(),
-				Table: event.Table,
+				Op:       event.Op.String(),
+				Table:    event.Table,
+				NewRowId: event.NewRowId,
+				OldRowId: event.OldRowId,
 			}
 		}
 	}
 
 	return json.Marshal(envelope)
+}
+
+func UnmarshalFromEnvelopeJSON(data []byte, env *CDCMessagesEnvelope) error {
+	return json.Unmarshal(data, env)
 }
