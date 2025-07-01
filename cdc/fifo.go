@@ -35,6 +35,7 @@ func NewQueue(path string) (*Queue, error) {
 		return nil, fmt.Errorf("failed to open boltdb: %w", err)
 	}
 
+	var nextKey []byte
 	if err := db.Update(func(tx *bbolt.Tx) error {
 		if _, err := tx.CreateBucketIfNotExists(bucketName); err != nil {
 			return fmt.Errorf("failed to create bucket: %w", err)
@@ -52,6 +53,17 @@ func NewQueue(path string) (*Queue, error) {
 				return fmt.Errorf("failed to initialize max_key in meta bucket: %w", err)
 			}
 		}
+
+		// if the queue is not empty, we need to set nextkey
+		c := tx.Bucket(bucketName).Cursor()
+		if k, _ := c.First(); k != nil {
+			// Set nextKey to the first item in the queue.
+			// This ensures that the next Dequeue call will return the first item.
+			// We store it as a byte slice for consistency with how we store keys.
+			nextKey = make([]byte, len(k))
+			copy(nextKey, k)
+		}
+
 		return nil
 	}); err != nil {
 		db.Close()
@@ -59,7 +71,8 @@ func NewQueue(path string) (*Queue, error) {
 	}
 
 	q := &Queue{
-		db: db,
+		db:      db,
+		nextKey: nextKey,
 	}
 	// Initialize the condition variable with the queue's mutex.
 	// This is crucial for coordinating the Dequeue and Enqueue operations.
