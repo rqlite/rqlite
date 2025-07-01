@@ -86,6 +86,31 @@ func (q *Queue) Close() error {
 	return q.db.Close()
 }
 
+// Empty checks if the queue contains no items at all.
+func (q *Queue) Empty() (bool, error) {
+	var empty bool
+	err := q.db.View(func(tx *bbolt.Tx) error {
+		c := tx.Bucket(bucketName).Cursor()
+		if c == nil {
+			return fmt.Errorf("bucket %s not found", bucketName)
+		}
+		k, _ := c.First()
+		empty = (k == nil)
+		return nil
+	})
+	if err != nil {
+		return false, fmt.Errorf("failed to check if queue is empty: %w", err)
+	}
+	return empty, nil
+}
+
+// HasNext checks if there is an item available to dequeue.
+func (q *Queue) HasNext() bool {
+	q.mu.Lock()
+	defer q.mu.Unlock()
+	return q.nextKey != nil
+}
+
 // Enqueue adds an item to the queue with a given index.
 // The FIFO order is determined by the index; lower indices are considered "earlier" in the queue.
 func (q *Queue) Enqueue(idx uint64, item []byte) error {
@@ -220,6 +245,26 @@ func (q *Queue) DeleteRange(idx uint64) error {
 			if err := b.Delete(k); err != nil {
 				return fmt.Errorf("failed to delete key %s: %w", k, err)
 			}
+		}
+
+		// check if the nextKey was deleted.
+		// get next key
+		// If the nextKey was deleted, we need to update it.
+		k := b.Get(q.nextKey)
+		if k != nil {
+			// We're good, next key is still there. Leave it.
+			return nil
+		}
+
+		// nextKey was deleted, we need to find the new nextKey.
+		k, _ = c.First()
+		if k == nil {
+			// If the queue is now empty, reset nextKey to nil.
+			q.nextKey = nil
+		} else {
+			// If there are still items left, set nextKey to the first item.
+			q.nextKey = make([]byte, len(k))
+			copy(q.nextKey, k)
 		}
 		return nil
 	})

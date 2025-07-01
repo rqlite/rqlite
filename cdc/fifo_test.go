@@ -25,6 +25,15 @@ func Test_NewQueue(t *testing.T) {
 	if _, err := os.Stat(dbPath); os.IsNotExist(err) {
 		t.Fatalf("Database file was not created at %s", dbPath)
 	}
+
+	// Ensure the queue is empty
+	e, err := q.Empty()
+	if err != nil {
+		t.Fatalf("Queue Empty check failed: %v", err)
+	}
+	if !e {
+		t.Fatal("Newly created queue should be empty")
+	}
 }
 
 // Test_EnqueueDequeue tests the basic Enqueue and Dequeue operations.
@@ -37,6 +46,15 @@ func Test_EnqueueDequeue(t *testing.T) {
 	idx1 := uint64(10)
 	if err := q.Enqueue(idx1, item1); err != nil {
 		t.Fatalf("Enqueue failed: %v", err)
+	}
+
+	// Ensure the queue is not empty
+	e, err := q.Empty()
+	if err != nil {
+		t.Fatalf("Queue Empty check failed: %v", err)
+	}
+	if e {
+		t.Fatal("Queue should not be empty")
 	}
 
 	gotIdx, gotItem, err := q.Dequeue()
@@ -102,6 +120,34 @@ func Test_EnqueueDequeue(t *testing.T) {
 		t.Fatalf("HighestKey failed after enqueue: %v", err)
 	}
 	if hi != idx3 {
+		t.Errorf("Expected highest key to be %d, got %d", idx1, hi)
+	}
+}
+
+func Test_EnqueueHighest(t *testing.T) {
+	q, _, cleanup := newTestQueue(t)
+	defer cleanup()
+
+	// Enqueue a single item
+	item1 := []byte("hello world")
+	idx1 := uint64(10)
+	if err := q.Enqueue(idx1, item1); err != nil {
+		t.Fatalf("Enqueue failed: %v", err)
+	}
+
+	// Now insert an "older" item, it shouldn't actually be inserted.
+	item2 := []byte("older item")
+	idx2 := uint64(5)
+	if err := q.Enqueue(idx2, item2); err != nil {
+		t.Fatalf("Enqueue of older item failed: %v", err)
+	}
+
+	// Check that the highest key is still idx1.
+	hi, err := q.HighestKey()
+	if err != nil {
+		t.Fatalf("HighestKey failed after enqueue: %v", err)
+	}
+	if hi != idx1 {
 		t.Errorf("Expected highest key to be %d, got %d", idx1, hi)
 	}
 }
