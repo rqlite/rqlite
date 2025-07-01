@@ -18,6 +18,8 @@ var metaBucketName = []byte("fifo_queue_meta")
 // ErrQueueClosed is returned when an operation is attempted on a closed queue.
 var ErrQueueClosed = errors.New("queue is closed")
 
+var queueBufferSize = 100 // Size of the buffered channels for enqueue requests
+
 // Queue is a persistent, disk-backed FIFO queue managed by a single goroutine.
 // It is safe for concurrent use.
 type Queue struct {
@@ -63,7 +65,7 @@ func NewQueue(path string) (*Queue, error) {
 
 	q := &Queue{
 		db:              db,
-		enqueueChan:     make(chan enqueueReq, 100), // Buffered for performance
+		enqueueChan:     make(chan enqueueReq, queueBufferSize),
 		dequeueChan:     make(chan dequeueReq),
 		deleteRangeChan: make(chan deleteRangeReq),
 		queryChan:       make(chan queryReq),
@@ -78,11 +80,10 @@ func NewQueue(path string) (*Queue, error) {
 // Close gracefully shuts down the queue, ensuring all pending operations are finished.
 func (q *Queue) Close() {
 	close(q.done)
-	q.wg.Wait() // Wait for the run() goroutine to finish.
+	q.wg.Wait()
 }
 
-// run is a single goroutine that serializes all access to the database. This eliminates
-// the need for locks.
+// run is a single goroutine that serializes all access to the database.
 func (q *Queue) run() {
 	defer q.wg.Done()
 	defer q.db.Close()
@@ -325,8 +326,7 @@ type queryResp struct {
 
 func btouint64(b []byte) uint64 {
 	if len(b) != 8 {
-		// This should not happen in normal operation
-		return 0
+		panic(fmt.Sprintf("expected 8 bytes, got %d", len(b)))
 	}
 	return binary.BigEndian.Uint64(b)
 }
