@@ -57,6 +57,11 @@ func Test_EnqueueDequeue(t *testing.T) {
 		t.Fatal("Queue should not be empty")
 	}
 
+	// Should be no items to dequeue.
+	if !q.HasNext() {
+		t.Fatalf("HasNext should be false after dequeuing last item")
+	}
+
 	gotIdx, gotItem, err := q.Dequeue()
 	if err != nil {
 		t.Fatalf("First() failed after enqueue: %v", err)
@@ -91,6 +96,11 @@ func Test_EnqueueDequeue(t *testing.T) {
 		t.Fatalf("Enqueue failed for third item: %v", err)
 	}
 
+	// Should be more items to dequeue.
+	if !q.HasNext() {
+		t.Fatalf("HasNext should be true after enqueueing an item")
+	}
+
 	// Dequeue the second item.
 	gotIdx, gotItem, err = q.Dequeue()
 	if err != nil {
@@ -121,6 +131,11 @@ func Test_EnqueueDequeue(t *testing.T) {
 	}
 	if hi != idx3 {
 		t.Errorf("Expected highest key to be %d, got %d", idx1, hi)
+	}
+
+	// Should be no items to dequeue.
+	if q.HasNext() {
+		t.Fatalf("HasNext should be false after dequeuing last item")
 	}
 }
 
@@ -181,6 +196,11 @@ func Test_DeleteRange(t *testing.T) {
 		t.Fatalf("DeleteRange failed: %v", err)
 	}
 
+	// Should still have another item to dequeue.
+	if !q.HasNext() {
+		t.Fatalf("HasNext failed after DeleteRange")
+	}
+
 	// Dequeue next item, should be 3.
 	gotIdx, gotItem, err := q.Dequeue()
 	if err != nil {
@@ -192,11 +212,15 @@ func Test_DeleteRange(t *testing.T) {
 	if !bytes.Equal(gotItem, []byte("three")) {
 		t.Fatalf("Expected item 'three' after DeleteRange, got '%s'", gotItem)
 	}
+
+	// Should be no more items to dequeue.
+	if q.HasNext() {
+		t.Fatalf("HasNext should be false after dequeuing last item")
+	}
 }
 
 func Test_QueueHighestKey(t *testing.T) {
-	q, path, cleanup := newTestQueue(t)
-	defer cleanup()
+	q, path, _ := newTestQueue(t)
 
 	// Enqueue a few items.
 	items := []struct {
@@ -250,12 +274,14 @@ func Test_QueueHighestKey(t *testing.T) {
 	if hi != 3 {
 		t.Fatalf("Expected highest key to still be 3 after reopening, got %d", hi)
 	}
+
+	// Free up database file so it can be removed.
+	q.Close()
 }
 
 // Test_DequeueBlocking tests that Dequeue blocks when the queue is empty
 // and unblocks when an item is added.
 func Test_DequeueBlocking(t *testing.T) {
-	t.Parallel()
 	q, _, cleanup := newTestQueue(t)
 	defer cleanup()
 
