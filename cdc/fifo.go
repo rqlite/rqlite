@@ -178,17 +178,6 @@ func (q *Queue) Dequeue() ([]byte, error) {
 		// This atomic unlock/wait/relock prevents the "lost wakeup" problem.
 		q.cond.Wait()
 	}
-
-	// At this point, we have found an item (key and val are populated) and we still
-	// hold the mutex lock. Now we can safely delete it.
-	err := q.db.Update(func(tx *bbolt.Tx) error {
-		return tx.Bucket(bucketName).Delete(key)
-	})
-
-	if err != nil {
-		return nil, fmt.Errorf("failed to delete dequeued item: %w", err)
-	}
-
 	return val, nil
 }
 
