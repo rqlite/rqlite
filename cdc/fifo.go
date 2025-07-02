@@ -138,25 +138,30 @@ func (q *Queue) run() {
 				nextKey = key
 			}
 
-			// Fulfill any waiting dequeue requests immediately.
-			for len(waitingDequeues) > 0 && nextKey != nil {
+			// Fulfill any waiting dequeue request immediately.
+			if len(waitingDequeues) > 0 && nextKey != nil {
 				waiter := waitingDequeues[0]
 				waitingDequeues = waitingDequeues[1:] // Pop from waitlist
 
 				var resp dequeueResp
 				err := q.db.View(func(tx *bbolt.Tx) error {
 					b := tx.Bucket(bucketName)
-					resp.idx = btouint64(nextKey)
 					val := b.Get(nextKey)
 					if val == nil {
 						return fmt.Errorf("item not found for key %x", nextKey)
 					}
+					resp.idx = btouint64(nextKey)
 					resp.val = make([]byte, len(val))
 					copy(resp.val, val)
 
-					b.Cursor().Seek(nextKey)
-					nextKey, _ = b.Cursor().Next()
-					waiter.respChan <- resp
+					c := b.Cursor()
+					c.Seek(nextKey)
+					nk, _ := c.Next()
+					if nk != nil {
+						copy(nextKey, nk)
+					} else {
+						nextKey = nil // No more items available
+					}
 					return nil
 				})
 				resp.err = err
@@ -174,19 +179,25 @@ func (q *Queue) run() {
 			var resp dequeueResp
 			err := q.db.View(func(tx *bbolt.Tx) error {
 				b := tx.Bucket(bucketName)
-				resp.idx = btouint64(nextKey)
 				val := b.Get(nextKey)
 				if val == nil {
 					return fmt.Errorf("item not found for key %x", nextKey)
 				}
+
+				resp.idx = btouint64(nextKey)
 				resp.val = make([]byte, len(val))
 				copy(resp.val, val)
 
-				b.Cursor().Seek(nextKey)
-				nextKey, _ = b.Cursor().Next()
+				c := b.Cursor()
+				c.Seek(nextKey)
+				nk, _ := c.Next()
+				if nk != nil {
+					copy(nextKey, nk)
+				} else {
+					nextKey = nil // No more items available
+				}
 				return nil
 			})
-
 			resp.err = err
 			req.respChan <- resp
 
@@ -217,9 +228,17 @@ func (q *Queue) run() {
 			req.respChan <- err
 
 		case req := <-q.queryChan:
+			var isEmpty bool
+			err := q.db.View(func(tx *bbolt.Tx) error {
+				c := tx.Bucket(bucketName).Cursor()
+				k, _ := c.First()
+				isEmpty = k == nil // If no items, isEmpty is true
+				return nil
+			})
 			req.respChan <- queryResp{
+				err:        err,
 				hasNext:    nextKey != nil,
-				isEmpty:    nextKey == nil && len(waitingDequeues) == 0,
+				isEmpty:    isEmpty,
 				highestKey: highestKey,
 			}
 
@@ -272,7 +291,7 @@ func (q *Queue) Empty() (bool, error) {
 	req := queryReq{respChan: make(chan queryResp)}
 	q.queryChan <- req
 	resp := <-req.respChan
-	return resp.isEmpty, nil
+	return resp.isEmpty, resp.err
 }
 
 // HasNext checks if there is at least one item available to dequeue.
@@ -328,6 +347,7 @@ type queryResp struct {
 	hasNext    bool
 	isEmpty    bool
 	highestKey uint64
+	err        error
 }
 
 func btouint64(b []byte) uint64 {

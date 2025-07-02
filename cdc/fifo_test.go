@@ -36,8 +36,7 @@ func Test_NewQueue(t *testing.T) {
 	}
 }
 
-// Test_EnqueueDequeue tests the basic Enqueue and Dequeue operations.
-func Test_EnqueueDequeue(t *testing.T) {
+func Test_EnqueueDequeue_Simple(t *testing.T) {
 	q, _, cleanup := newTestQueue(t)
 	defer cleanup()
 
@@ -57,7 +56,7 @@ func Test_EnqueueDequeue(t *testing.T) {
 		t.Fatal("Queue should not be empty")
 	}
 
-	// Should be no items to dequeue.
+	// Should be items to dequeue.
 	if !q.HasNext() {
 		t.Fatalf("HasNext should be false after dequeuing last item")
 	}
@@ -71,6 +70,50 @@ func Test_EnqueueDequeue(t *testing.T) {
 	}
 	if !bytes.Equal(gotItem, item1) {
 		t.Errorf("Expected first item to be '%s', got '%s'", item1, gotItem)
+	}
+}
+
+// Test_EnqueueDequeue_Multi tests multiple Enqueue and Dequeue operations.
+func Test_EnqueueDequeue_Multi(t *testing.T) {
+	q, _, cleanup := newTestQueue(t)
+	defer cleanup()
+
+	// Enqueue a single item then dequeue it.
+	item1 := []byte("hello world")
+	idx1 := uint64(10)
+	if err := q.Enqueue(idx1, item1); err != nil {
+		t.Fatalf("Enqueue failed: %v", err)
+	}
+
+	// Ensure the queue is not empty
+	e, err := q.Empty()
+	if err != nil {
+		t.Fatalf("Queue Empty check failed: %v", err)
+	}
+	if e {
+		t.Fatal("Queue should not be empty")
+	}
+
+	// Should be items to dequeue.
+	if !q.HasNext() {
+		t.Fatalf("HasNext should be false after dequeuing last item")
+	}
+
+	// Dequeue the first item.
+	gotIdx, gotItem, err := q.Dequeue()
+	if err != nil {
+		t.Fatalf("First() failed after enqueue: %v", err)
+	}
+	if gotIdx != idx1 {
+		t.Errorf("Expected first index to be %d, got %d", idx1, gotIdx)
+	}
+	if !bytes.Equal(gotItem, item1) {
+		t.Errorf("Expected first item to be '%s', got '%s'", item1, gotItem)
+	}
+
+	// Should be no more items to dequeue.
+	if q.HasNext() {
+		t.Fatalf("HasNext should be false after enqueueing an item")
 	}
 
 	// check highest key
@@ -88,6 +131,11 @@ func Test_EnqueueDequeue(t *testing.T) {
 	idx2 := uint64(20)
 	if err := q.Enqueue(idx2, item2); err != nil {
 		t.Fatalf("Enqueue failed for second item: %v", err)
+	}
+
+	// Should be more items to dequeue.
+	if !q.HasNext() {
+		t.Fatalf("HasNext should be true after enqueueing an item")
 	}
 
 	item3 := []byte("third item")
@@ -112,6 +160,12 @@ func Test_EnqueueDequeue(t *testing.T) {
 	if !bytes.Equal(gotItem, item2) {
 		t.Fatalf("Expected second item to be '%s', got '%s'", item2, gotItem)
 	}
+
+	// Should be more items to dequeue since we only removed one.
+	if !q.HasNext() {
+		t.Fatalf("HasNext should be true after enqueueing an item")
+	}
+
 	// Dequeue the third item.
 	gotIdx, gotItem, err = q.Dequeue()
 	if err != nil {
