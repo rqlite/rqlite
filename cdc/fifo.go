@@ -22,7 +22,18 @@ var ErrQueueClosed = errors.New("queue is closed")
 var queueBufferSize = 100 // Size of the buffered channels for enqueue requests
 
 // Queue is a persistent, disk-backed FIFO queue managed by a single goroutine.
-// It is safe for concurrent use.
+//
+// It is safe for concurrent use. It has some particular properties that make it
+// suitable for the CDC service.
+//   - The queue is persistent and can be used to recover from crashes or restarts.
+//   - Dequeuing an item does not remove it from the queue. Only when DeleteRange is called
+//     will items be removed from the queue. This allows the CDC service to explicitly
+//     delete items only when it is sure they have been successfully transmitted.
+//   - The queue remembers -- even after restarts -- the highest index of any item ever
+//     enqueued. Since this queue is to be used to store changes associated with Raft
+//     log entries, once a given index has been written to the queue any further
+//     attempts to enqueue an item with that index will be ignored because those
+//     repeated enqueue attempts contain identical information as the original.
 type Queue struct {
 	db *bbolt.DB
 
@@ -111,7 +122,6 @@ func (q *Queue) run(nextKey []byte, highestKey uint64) {
 
 		select {
 		case req := <-q.enqueueChan:
-			// No need to check highestKey if idx is 0
 			if req.idx <= highestKey {
 				req.respChan <- enqueueResp{err: nil}
 				continue // Ignore duplicate/old items
