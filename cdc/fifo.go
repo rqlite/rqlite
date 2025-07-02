@@ -113,13 +113,6 @@ func (q *Queue) run(nextKey []byte, highestKey uint64) {
 
 	var waitingDequeues []dequeueReq // A list of callers waiting for an item.
 	for {
-		// If the queue is empty, we can't process a dequeue request.
-		// So we only listen on the dequeueChan if there are items.
-		var activeDequeueChan chan dequeueReq
-		if len(waitingDequeues) > 0 || nextKey != nil {
-			activeDequeueChan = q.dequeueChan
-		}
-
 		select {
 		case req := <-q.enqueueChan:
 			if req.idx <= highestKey {
@@ -149,64 +142,10 @@ func (q *Queue) run(nextKey []byte, highestKey uint64) {
 				nextKey = key
 			}
 
-			// Fulfill any waiting dequeue request immediately.
-			for len(waitingDequeues) > 0 && nextKey != nil {
-				waiter := waitingDequeues[0]
-				waitingDequeues = waitingDequeues[1:] // Pop from waitlist
-
-				var resp dequeueResp
-				err := q.db.View(func(tx *bbolt.Tx) error {
-					c := tx.Bucket(bucketName).Cursor()
-					_, val := c.Seek(nextKey)
-					if val == nil {
-						return fmt.Errorf("item not found for key %x", nextKey)
-					}
-					resp.idx = btouint64(nextKey)
-					resp.val = make([]byte, len(val))
-					copy(resp.val, val)
-
-					nk, _ := c.Next()
-					if nk != nil {
-						copy(nextKey, nk)
-					} else {
-						nextKey = nil // No more items available
-					}
-					return nil
-				})
-				resp.err = err
-				waiter.respChan <- resp
-			}
 			req.respChan <- enqueueResp{err: err}
 
-		case req := <-activeDequeueChan:
-			// If a request arrived but nextKey is nil it means there are no items available.
-			if nextKey == nil {
-				waitingDequeues = append(waitingDequeues, req)
-				continue
-			}
-
-			var resp dequeueResp
-			err := q.db.View(func(tx *bbolt.Tx) error {
-				c := tx.Bucket(bucketName).Cursor()
-				_, val := c.Seek(nextKey)
-				if val == nil {
-					return fmt.Errorf("item not found for key %x", nextKey)
-				}
-
-				resp.idx = btouint64(nextKey)
-				resp.val = make([]byte, len(val))
-				copy(resp.val, val)
-
-				nk, _ := c.Next()
-				if nk != nil {
-					copy(nextKey, nk)
-				} else {
-					nextKey = nil // No more items available
-				}
-				return nil
-			})
-			resp.err = err
-			req.respChan <- resp
+		case req := <-q.dequeueChan:
+			waitingDequeues = append(waitingDequeues, req)
 
 		case req := <-q.deleteRangeChan:
 			err := q.db.Update(func(tx *bbolt.Tx) error {
@@ -254,6 +193,34 @@ func (q *Queue) run(nextKey []byte, highestKey uint64) {
 				waiter.respChan <- dequeueResp{err: ErrQueueClosed}
 			}
 			return
+		}
+
+		// Fulfill any waiting dequeue requests.
+		for len(waitingDequeues) > 0 && nextKey != nil {
+			waiter := waitingDequeues[0]
+			waitingDequeues = waitingDequeues[1:] // Pop from waitlist
+
+			var resp dequeueResp
+			err := q.db.View(func(tx *bbolt.Tx) error {
+				c := tx.Bucket(bucketName).Cursor()
+				_, val := c.Seek(nextKey)
+				if val == nil {
+					return fmt.Errorf("item not found for key %x", nextKey)
+				}
+				resp.idx = btouint64(nextKey)
+				resp.val = make([]byte, len(val))
+				copy(resp.val, val)
+
+				nk, _ := c.Next()
+				if nk != nil {
+					copy(nextKey, nk)
+				} else {
+					nextKey = nil // No more items available
+				}
+				return nil
+			})
+			resp.err = err
+			waiter.respChan <- resp
 		}
 	}
 }
