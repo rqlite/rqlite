@@ -5,310 +5,362 @@ import (
 	"errors"
 	"fmt"
 	"sync"
+	"time"
 
 	"go.etcd.io/bbolt"
 )
 
 // bucketName is the name of the BoltDB bucket where queue items will be stored.
 var bucketName = []byte("fifo_queue")
+
+// metaBucketName is the name of the BoltDB bucket where metadata like highest key will be stored.
 var metaBucketName = []byte("fifo_queue_meta")
 
-// ErrQueueEmpty is returned when First() is called on an empty queue.
-var ErrQueueEmpty = errors.New("queue is empty")
+// ErrQueueClosed is returned when an operation is attempted on a closed queue.
+var ErrQueueClosed = errors.New("queue is closed")
 
-// Queue is a persistent, disk-backed FIFO queue.
-// It is safe for concurrent use by multiple goroutines.
+var queueBufferSize = 100 // Size of the buffered channels for enqueue requests
+
+// Queue is a persistent, disk-backed FIFO queue managed by a single goroutine.
+//
+// It is safe for concurrent use. It has some particular properties that make it
+// suitable for the CDC service.
+//   - The queue is persistent and can be used to recover from crashes or restarts.
+//   - Dequeuing an item does not remove it from the queue. Only when DeleteRange is called
+//     will items be removed from the queue. This allows the CDC service to explicitly
+//     delete items only when it is sure they have been successfully transmitted.
+//   - The queue remembers -- even after restarts -- the highest index of any item ever
+//     enqueued. Since this queue is to be used to store changes associated with Raft
+//     log entries, once a given index has been written to the queue any further
+//     attempts to enqueue an item with that index will be ignored because those
+//     repeated enqueue attempts contain identical information as the original.
 type Queue struct {
 	db *bbolt.DB
 
-	nextKey []byte
-	mu      sync.Mutex
-	cond    *sync.Cond // cond is used to signal waiting Dequeue calls.
+	// Channels for communicating with the managing goroutine
+	enqueueChan     chan enqueueReq
+	dequeueChan     chan dequeueReq
+	deleteRangeChan chan deleteRangeReq
+	queryChan       chan queryReq
+	done            chan struct{}
+
+	wg sync.WaitGroup
 }
 
 // NewQueue creates or opens a new persistent queue at the given file path.
 func NewQueue(path string) (*Queue, error) {
-	// Open the BoltDB database file at the given path.
-	// It will be created if it doesn't exist.
-	db, err := bbolt.Open(path, 0600, nil)
+	db, err := bbolt.Open(path, 0600, &bbolt.Options{Timeout: time.Second})
 	if err != nil {
 		return nil, fmt.Errorf("failed to open boltdb: %w", err)
 	}
 
+	// Prepare the database buckets in a single transaction.
 	var nextKey []byte
+	var highestKey uint64
 	if err := db.Update(func(tx *bbolt.Tx) error {
 		if _, err := tx.CreateBucketIfNotExists(bucketName); err != nil {
-			return fmt.Errorf("failed to create bucket: %w", err)
+			return fmt.Errorf("failed to create queue bucket: %w", err)
 		}
-
 		if _, err := tx.CreateBucketIfNotExists(metaBucketName); err != nil {
 			return fmt.Errorf("failed to create meta bucket: %w", err)
 		}
-
 		// Ensure the meta bucket has a "max_key" entry.
-		// This is used to track the highest index in the queue.
 		metaBucket := tx.Bucket(metaBucketName)
 		if metaBucket.Get([]byte("max_key")) == nil {
 			if err := metaBucket.Put([]byte("max_key"), uint64tob(0)); err != nil {
-				return fmt.Errorf("failed to initialize max_key in meta bucket: %w", err)
+				return fmt.Errorf("failed to initialize max_key: %w", err)
 			}
 		}
 
-		// if the queue is not empty, we need to set nextkey
+		// Initialize state from the DB.
+		var innerErr error
 		c := tx.Bucket(bucketName).Cursor()
-		if k, _ := c.First(); k != nil {
-			// Set nextKey to the first item in the queue.
-			// This ensures that the next Dequeue call will return the first item.
-			// We store it as a byte slice for consistency with how we store keys.
-			nextKey = make([]byte, len(k))
-			copy(nextKey, k)
-		}
-
-		return nil
-	}); err != nil {
-		db.Close()
-		return nil, fmt.Errorf("failed to create bucket: %w", err)
-	}
-
-	q := &Queue{
-		db:      db,
-		nextKey: nextKey,
-	}
-	// Initialize the condition variable with the queue's mutex.
-	// This is crucial for coordinating the Dequeue and Enqueue operations.
-	q.cond = sync.NewCond(&q.mu)
-
-	return q, nil
-}
-
-// Close closes the underlying BoltDB database.
-func (q *Queue) Close() error {
-	return q.db.Close()
-}
-
-// Empty checks if the queue contains no items at all.
-func (q *Queue) Empty() (bool, error) {
-	var empty bool
-	err := q.db.View(func(tx *bbolt.Tx) error {
-		c := tx.Bucket(bucketName).Cursor()
-		if c == nil {
-			return fmt.Errorf("bucket %s not found", bucketName)
-		}
-		k, _ := c.First()
-		empty = (k == nil)
-		return nil
-	})
-	if err != nil {
-		return false, fmt.Errorf("failed to check if queue is empty: %w", err)
-	}
-	return empty, nil
-}
-
-// HasNext checks if there is an item available to dequeue.
-func (q *Queue) HasNext() bool {
-	q.mu.Lock()
-	defer q.mu.Unlock()
-	return q.nextKey != nil
-}
-
-// Enqueue adds an item to the queue with a given index.
-// The FIFO order is determined by the index; lower indices are considered "earlier" in the queue.
-func (q *Queue) Enqueue(idx uint64, item []byte) error {
-	// Lock the mutex to ensure only one Enqueue operation happens at a time
-	// and to safely signal the condition variable.
-	q.mu.Lock()
-	defer q.mu.Unlock()
-
-	// Only insert an item if its key is "newer" i.e. greater index than the last item we added.
-	var highestKey uint64
-	err := q.db.View(func(tx *bbolt.Tx) error {
-		idx, innerErr := q.getHighestKey(tx)
+		nextKey, _ = c.First()
+		highestKey, innerErr = getHighestKey(tx)
 		if innerErr != nil {
 			return fmt.Errorf("failed to get highest key: %w", innerErr)
 		}
-		highestKey = idx
 		return nil
-	})
-	if err != nil {
-		return fmt.Errorf("failed to read highest key: %w", err)
-	}
-	if idx <= highestKey {
-		return nil
+	}); err != nil {
+		db.Close()
+		return nil, fmt.Errorf("failed to initialize buckets: %w", err)
 	}
 
-	// Convert the uint64 index into a byte slice.
-	// We use BigEndian to ensure that the byte representation sorts lexicographically
-	// in the same order as the numerical value of the index. This is how BoltDB
-	// maintains key order.
-	key := uint64tob(idx)
+	q := &Queue{
+		db:              db,
+		enqueueChan:     make(chan enqueueReq, queueBufferSize),
+		dequeueChan:     make(chan dequeueReq),
+		deleteRangeChan: make(chan deleteRangeReq),
+		queryChan:       make(chan queryReq),
+		done:            make(chan struct{}),
+	}
 
-	// Start a read-write transaction to insert the new item.
-	err = q.db.Update(func(tx *bbolt.Tx) error {
-		if err := tx.Bucket(bucketName).Put(key, item); err != nil {
-			return fmt.Errorf("failed to put item in bucket: %w", err)
+	q.wg.Add(1)
+	go q.run(nextKey, highestKey)
+	return q, nil
+}
+
+// Close gracefully shuts down the queue, ensuring all pending operations are finished.
+func (q *Queue) Close() {
+	close(q.done)
+	q.wg.Wait()
+}
+
+// run is a single goroutine that serializes all access to the database.
+func (q *Queue) run(nextKey []byte, highestKey uint64) {
+	defer q.wg.Done()
+	defer q.db.Close()
+
+	var waitingDequeues []dequeueReq // A list of callers waiting for an item.
+	for {
+		// If the queue is empty, we can't process a dequeue request.
+		// So we only listen on the dequeueChan if there are items.
+		var activeDequeueChan chan dequeueReq
+		if len(waitingDequeues) > 0 || nextKey != nil {
+			activeDequeueChan = q.dequeueChan
 		}
 
-		// Record the highest key we've inserted so far.
-		if err := q.setHighestKey(tx, idx); err != nil {
-			return fmt.Errorf("failed to set highest key: %w", err)
+		select {
+		case req := <-q.enqueueChan:
+			if req.idx <= highestKey {
+				req.respChan <- enqueueResp{err: nil}
+				continue // Ignore duplicate/old items
+			}
+
+			key := uint64tob(req.idx)
+			err := q.db.Update(func(tx *bbolt.Tx) error {
+				if err := tx.Bucket(bucketName).Put(key, req.item); err != nil {
+					return err
+				}
+				if req.idx > highestKey {
+					highestKey = req.idx
+					return setHighestKey(tx, highestKey)
+				}
+				return nil
+			})
+			if err != nil {
+				req.respChan <- enqueueResp{err: fmt.Errorf("enqueue failed: %w", err)}
+				continue
+			}
+
+			// If this is the first item added to a previously empty queue,
+			// it becomes the next item to be dequeued.
+			if nextKey == nil {
+				nextKey = key
+			}
+
+			// Fulfill any waiting dequeue request immediately.
+			for len(waitingDequeues) > 0 && nextKey != nil {
+				waiter := waitingDequeues[0]
+				waitingDequeues = waitingDequeues[1:] // Pop from waitlist
+
+				var resp dequeueResp
+				err := q.db.View(func(tx *bbolt.Tx) error {
+					c := tx.Bucket(bucketName).Cursor()
+					_, val := c.Seek(nextKey)
+					if val == nil {
+						return fmt.Errorf("item not found for key %x", nextKey)
+					}
+					resp.idx = btouint64(nextKey)
+					resp.val = make([]byte, len(val))
+					copy(resp.val, val)
+
+					nk, _ := c.Next()
+					if nk != nil {
+						copy(nextKey, nk)
+					} else {
+						nextKey = nil // No more items available
+					}
+					return nil
+				})
+				resp.err = err
+				waiter.respChan <- resp
+			}
+			req.respChan <- enqueueResp{err: err}
+
+		case req := <-activeDequeueChan:
+			// If a request arrived but nextKey is nil it means there are no items available.
+			if nextKey == nil {
+				waitingDequeues = append(waitingDequeues, req)
+				continue
+			}
+
+			var resp dequeueResp
+			err := q.db.View(func(tx *bbolt.Tx) error {
+				c := tx.Bucket(bucketName).Cursor()
+				_, val := c.Seek(nextKey)
+				if val == nil {
+					return fmt.Errorf("item not found for key %x", nextKey)
+				}
+
+				resp.idx = btouint64(nextKey)
+				resp.val = make([]byte, len(val))
+				copy(resp.val, val)
+
+				nk, _ := c.Next()
+				if nk != nil {
+					copy(nextKey, nk)
+				} else {
+					nextKey = nil // No more items available
+				}
+				return nil
+			})
+			resp.err = err
+			req.respChan <- resp
+
+		case req := <-q.deleteRangeChan:
+			err := q.db.Update(func(tx *bbolt.Tx) error {
+				b := tx.Bucket(bucketName)
+				c := b.Cursor()
+
+				// Seek to the oldest key and delete all until (and including) the requested index.
+				for k, _ := c.First(); k != nil && btouint64(k) <= req.idx; k, _ = c.Next() {
+					if err := b.Delete(k); err != nil {
+						return err
+					}
+				}
+
+				// Check if our cached 'nextKey' was deleted.
+				if nextKey != nil && b.Get(nextKey) == nil {
+					k, _ := c.First() // Find the new oldest key
+					if k != nil {
+						nextKey = make([]byte, len(k))
+						copy(nextKey, k)
+					} else {
+						nextKey = nil
+					}
+				}
+				return nil
+			})
+			req.respChan <- err
+
+		case req := <-q.queryChan:
+			var isEmpty bool
+			err := q.db.View(func(tx *bbolt.Tx) error {
+				c := tx.Bucket(bucketName).Cursor()
+				k, _ := c.First()
+				isEmpty = k == nil // If no items, isEmpty is true
+				return nil
+			})
+			req.respChan <- queryResp{
+				err:        err,
+				hasNext:    nextKey != nil,
+				isEmpty:    isEmpty,
+				highestKey: highestKey,
+			}
+
+		case <-q.done:
+			for _, waiter := range waitingDequeues {
+				waiter.respChan <- dequeueResp{err: ErrQueueClosed}
+			}
+			return
 		}
-		return nil
-	})
-	if err != nil {
-		return fmt.Errorf("failed to enqueue item: %w", err)
 	}
+}
 
-	if q.nextKey == nil {
-		q.nextKey = key
-	}
-
-	// After successfully adding an item, we signal the condition variable.
-	// This will wake up ONE goroutine that is waiting in a Dequeue() call.
-	// If no goroutines are waiting, this signal is a no-op.
-	q.cond.Signal()
-
-	return nil
+// Enqueue adds an item to the queue. Do not call Enqueue on a closed queue.
+func (q *Queue) Enqueue(idx uint64, item []byte) error {
+	req := enqueueReq{idx: idx, item: item, respChan: make(chan enqueueResp)}
+	q.enqueueChan <- req
+	resp := <-req.respChan
+	return resp.err
 }
 
 // Dequeue removes and returns the next available item from the queue.
-// If the queue is empty, Dequeue blocks until an item is enqueued.
+// If the queue is empty, Dequeue blocks until an item is available.
+// Do not call Dequeue on a closed queue.
 func (q *Queue) Dequeue() (uint64, []byte, error) {
-	// The mutex is locked for the entire duration of the check-and-wait-or-delete logic.
-	// This is the core of the coordination.
-	q.mu.Lock()
-	defer q.mu.Unlock()
-
-	var retIdx uint64
-	var retVal []byte
-	var err error
-
-	// This loop is the standard pattern for using sync.Cond.
-	// It repeatedly checks the condition (is the queue non-empty?) until it's true.
-	for {
-		err = q.db.View(func(tx *bbolt.Tx) error {
-			if q.nextKey == nil {
-				return nil
-			}
-
-			c := tx.Bucket(bucketName).Cursor()
-			k, v := c.Seek(q.nextKey)
-			if k == nil {
-				return fmt.Errorf("next key does not exist")
-			}
-
-			// Item found. Copy the key and value so we can use them after the
-			// view transaction closes and before the update transaction starts.
-			retIdx = btouint64(k)
-			retVal = make([]byte, len(v))
-			copy(retVal, v)
-
-			// Now, move the nextKey to the next item in the queue.
-			// If there is no next item, we set nextKey to nil.
-			q.nextKey, _ = c.Next()
-			return nil
-		})
-
-		if err != nil {
-			// This indicates a DB error, not an empty queue.
-			return 0, nil, fmt.Errorf("failed to check queue: %w", err)
-		}
-
-		if retIdx != 0 {
-			// We fetched a "next" item from the queue.
-			break
-		}
-
-		// There is no next item in the queue, so let's wait.
-		// 1. Unlocks the mutex (q.mu).
-		// 2. Puts the current goroutine to sleep.
-		// 3. When woken up by q.cond.Signal(), it re-locks the mutex before returning.
-		// This atomic unlock/wait/relock prevents the "lost wakeup" problem.
-		q.cond.Wait()
-	}
-	return retIdx, retVal, nil
+	req := dequeueReq{respChan: make(chan dequeueResp)}
+	q.dequeueChan <- req
+	resp := <-req.respChan
+	return resp.idx, resp.val, resp.err
 }
 
 // DeleteRange deletes all items in the queue with indices less than or equal to idx.
 func (q *Queue) DeleteRange(idx uint64) error {
-	q.mu.Lock()
-	defer q.mu.Unlock()
-
-	return q.db.Update(func(tx *bbolt.Tx) error {
-		b := tx.Bucket(bucketName)
-		if b == nil {
-			return fmt.Errorf("bucket %s not found", bucketName)
-		}
-
-		key := uint64tob(idx)
-		c := b.Cursor()
-		for k, _ := c.Seek(key); k != nil; k, _ = c.Prev() {
-			if err := b.Delete(k); err != nil {
-				return fmt.Errorf("failed to delete key %s: %w", k, err)
-			}
-		}
-
-		// check if the nextKey was deleted.
-		// get next key
-		// If the nextKey was deleted, we need to update it.
-		k := b.Get(q.nextKey)
-		if k != nil {
-			// We're good, next key is still there. Leave it.
-			return nil
-		}
-
-		// nextKey was deleted, we need to find the new nextKey.
-		k, _ = c.First()
-		if k == nil {
-			// If the queue is now empty, reset nextKey to nil.
-			q.nextKey = nil
-		} else {
-			// If there are still items left, set nextKey to the first item.
-			q.nextKey = make([]byte, len(k))
-			copy(q.nextKey, k)
-		}
-		return nil
-	})
+	req := deleteRangeReq{
+		idx:      idx,
+		respChan: make(chan error),
+	}
+	q.deleteRangeChan <- req
+	return <-req.respChan
 }
 
-// HighestKey returns the index of the highest item every inserted into the queue.
+// HighestKey returns the index of the highest item ever inserted into the queue.
 func (q *Queue) HighestKey() (uint64, error) {
-	var highestKey uint64
-	err := q.db.View(func(tx *bbolt.Tx) error {
-		var err error
-		highestKey, err = q.getHighestKey(tx)
-		if err != nil {
-			return fmt.Errorf("failed to get highest key: %w", err)
-		}
-		return nil
-	})
-	if err != nil {
-		return 0, fmt.Errorf("failed to read highest key: %w", err)
-	}
-	return highestKey, nil
+	req := queryReq{respChan: make(chan queryResp)}
+	q.queryChan <- req
+	resp := <-req.respChan
+	return resp.highestKey, resp.err
 }
 
-func (q *Queue) setHighestKey(tx *bbolt.Tx, idx uint64) error {
-	key := uint64tob(idx)
-	return tx.Bucket(metaBucketName).Put([]byte("max_key"), key)
+// Empty checks if the queue contains no items.
+func (q *Queue) Empty() (bool, error) {
+	req := queryReq{respChan: make(chan queryResp)}
+	q.queryChan <- req
+	resp := <-req.respChan
+	return resp.isEmpty, resp.err
 }
 
-func (q *Queue) getHighestKey(tx *bbolt.Tx) (uint64, error) {
-	b := tx.Bucket(metaBucketName)
-	if b == nil {
-		return 0, fmt.Errorf("meta bucket not found")
-	}
+// HasNext checks if there is at least one item available to dequeue.
+func (q *Queue) HasNext() bool {
+	req := queryReq{respChan: make(chan queryResp)}
+	q.queryChan <- req
+	resp := <-req.respChan
+	return resp.hasNext
+}
 
-	key := b.Get([]byte("max_key"))
+func getHighestKey(tx *bbolt.Tx) (uint64, error) {
+	key := tx.Bucket(metaBucketName).Get([]byte("max_key"))
 	if key == nil {
-		return 0, fmt.Errorf("no max key found")
+		return 0, fmt.Errorf("max_key not found")
 	}
-
 	return btouint64(key), nil
+}
+
+func setHighestKey(tx *bbolt.Tx, idx uint64) error {
+	return tx.Bucket(metaBucketName).Put([]byte("max_key"), uint64tob(idx))
+}
+
+type enqueueReq struct {
+	idx      uint64
+	item     []byte
+	respChan chan enqueueResp
+}
+
+type enqueueResp struct {
+	err error
+}
+
+type dequeueReq struct {
+	respChan chan dequeueResp
+}
+
+type dequeueResp struct {
+	idx uint64
+	val []byte
+	err error
+}
+
+type deleteRangeReq struct {
+	idx      uint64
+	respChan chan error
+}
+
+type queryReq struct {
+	respChan chan queryResp
+}
+
+type queryResp struct {
+	hasNext    bool
+	isEmpty    bool
+	highestKey uint64
+	err        error
 }
 
 func btouint64(b []byte) uint64 {
 	if len(b) != 8 {
-		panic(fmt.Sprintf("byte slice must be exactly 8 bytes long it is %d bytes long", len(b)))
+		panic(fmt.Sprintf("expected 8 bytes, got %d", len(b)))
 	}
 	return binary.BigEndian.Uint64(b)
 }

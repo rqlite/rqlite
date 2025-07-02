@@ -36,8 +36,7 @@ func Test_NewQueue(t *testing.T) {
 	}
 }
 
-// Test_EnqueueDequeue tests the basic Enqueue and Dequeue operations.
-func Test_EnqueueDequeue(t *testing.T) {
+func Test_EnqueueDequeue_Simple(t *testing.T) {
 	q, _, cleanup := newTestQueue(t)
 	defer cleanup()
 
@@ -57,7 +56,7 @@ func Test_EnqueueDequeue(t *testing.T) {
 		t.Fatal("Queue should not be empty")
 	}
 
-	// Should be no items to dequeue.
+	// Should be items to dequeue.
 	if !q.HasNext() {
 		t.Fatalf("HasNext should be false after dequeuing last item")
 	}
@@ -71,6 +70,50 @@ func Test_EnqueueDequeue(t *testing.T) {
 	}
 	if !bytes.Equal(gotItem, item1) {
 		t.Errorf("Expected first item to be '%s', got '%s'", item1, gotItem)
+	}
+}
+
+// Test_EnqueueDequeue_Multi tests multiple Enqueue and Dequeue operations.
+func Test_EnqueueDequeue_Multi(t *testing.T) {
+	q, _, cleanup := newTestQueue(t)
+	defer cleanup()
+
+	// Enqueue a single item then dequeue it.
+	item1 := []byte("hello world")
+	idx1 := uint64(10)
+	if err := q.Enqueue(idx1, item1); err != nil {
+		t.Fatalf("Enqueue failed: %v", err)
+	}
+
+	// Ensure the queue is not empty
+	e, err := q.Empty()
+	if err != nil {
+		t.Fatalf("Queue Empty check failed: %v", err)
+	}
+	if e {
+		t.Fatal("Queue should not be empty")
+	}
+
+	// Should be items to dequeue.
+	if !q.HasNext() {
+		t.Fatalf("HasNext should be false after dequeuing last item")
+	}
+
+	// Dequeue the first item.
+	gotIdx, gotItem, err := q.Dequeue()
+	if err != nil {
+		t.Fatalf("First() failed after enqueue: %v", err)
+	}
+	if gotIdx != idx1 {
+		t.Errorf("Expected first index to be %d, got %d", idx1, gotIdx)
+	}
+	if !bytes.Equal(gotItem, item1) {
+		t.Errorf("Expected first item to be '%s', got '%s'", item1, gotItem)
+	}
+
+	// Should be no more items to dequeue.
+	if q.HasNext() {
+		t.Fatalf("HasNext should be false after enqueueing an item")
 	}
 
 	// check highest key
@@ -88,6 +131,11 @@ func Test_EnqueueDequeue(t *testing.T) {
 	idx2 := uint64(20)
 	if err := q.Enqueue(idx2, item2); err != nil {
 		t.Fatalf("Enqueue failed for second item: %v", err)
+	}
+
+	// Should be more items to dequeue.
+	if !q.HasNext() {
+		t.Fatalf("HasNext should be true after enqueueing an item")
 	}
 
 	item3 := []byte("third item")
@@ -112,6 +160,12 @@ func Test_EnqueueDequeue(t *testing.T) {
 	if !bytes.Equal(gotItem, item2) {
 		t.Fatalf("Expected second item to be '%s', got '%s'", item2, gotItem)
 	}
+
+	// Should be more items to dequeue since we only removed one.
+	if !q.HasNext() {
+		t.Fatalf("HasNext should be true after enqueueing an item")
+	}
+
 	// Dequeue the third item.
 	gotIdx, gotItem, err = q.Dequeue()
 	if err != nil {
@@ -259,9 +313,7 @@ func Test_QueueHighestKey(t *testing.T) {
 	}
 
 	// Close and reopen queue, highest key should still be 3.
-	if err := q.Close(); err != nil {
-		t.Fatalf("Failed to close queue: %v", err)
-	}
+	q.Close()
 
 	q, err = NewQueue(path)
 	if err != nil {
@@ -327,7 +379,7 @@ func Test_QueuePersistence(t *testing.T) {
 	item := []byte("survivor")
 	idx := uint64(42)
 
-	// 1. Create a queue, add an item, and close it.
+	// reate a queue, add an item, and close it.
 	q1, err := NewQueue(dbPath)
 	if err != nil {
 		t.Fatalf("Failed to create initial queue: %v", err)
@@ -335,18 +387,15 @@ func Test_QueuePersistence(t *testing.T) {
 	if err := q1.Enqueue(idx, item); err != nil {
 		t.Fatalf("Failed to enqueue item: %v", err)
 	}
-	if err := q1.Close(); err != nil {
-		t.Fatalf("Failed to close initial queue: %v", err)
-	}
+	q1.Close()
 
-	// 2. Reopen the queue from the same file.
+	// Reopen the queue from the same file.
 	q2, err := NewQueue(dbPath)
 	if err != nil {
 		t.Fatalf("Failed to reopen queue: %v", err)
 	}
-	defer q2.Close()
 
-	// 3. Dequeue the item and verify it's the one we saved.
+	// Dequeue the item and verify it's the one we saved.
 	_, dequeuedItem, err := q2.Dequeue()
 	if err != nil {
 		t.Fatalf("Failed to dequeue from reopened queue: %v", err)
@@ -354,6 +403,61 @@ func Test_QueuePersistence(t *testing.T) {
 	if !bytes.Equal(dequeuedItem, item) {
 		t.Errorf("Expected item '%s' after reopening, got '%s'", item, dequeuedItem)
 	}
+
+	// Queue should not have any next items.
+	if q2.HasNext() {
+		t.Fatal("Queue should not have next items after dequeuing last item")
+	}
+
+	// Close the queue again.
+	q2.Close()
+
+	// Reopen the queue from the same file.
+	q3, err := NewQueue(dbPath)
+	if err != nil {
+		t.Fatalf("Failed to reopen queue: %v", err)
+	}
+
+	// Dequeue the item again, ensuring it's still available after reopening. This
+	// tests that the queue's state is persistent across closures because no deletion
+	// has occurred.
+	_, dequeuedItem, err = q3.Dequeue()
+	if err != nil {
+		t.Fatalf("Failed to dequeue from reopened queue: %v", err)
+	}
+	if !bytes.Equal(dequeuedItem, item) {
+		t.Errorf("Expected item '%s' after reopening, got '%s'", item, dequeuedItem)
+	}
+
+	// Now, let's actually delete the item and ensure it is gone, even after reopening.
+	if err := q3.DeleteRange(idx); err != nil {
+		t.Fatalf("Failed to delete item: %v", err)
+	}
+
+	// Close the queue and reopen it again.
+	q3.Close()
+
+	q4, err := NewQueue(dbPath)
+	if err != nil {
+		t.Fatalf("Failed to reopen queue after deletion: %v", err)
+	}
+
+	// Queue should actually be empty this time.
+	e, err := q4.Empty()
+	if err != nil {
+		t.Fatalf("Queue Empty check failed after deletion: %v", err)
+	}
+	if !e {
+		t.Fatal("Queue should be empty after deleting last item")
+	}
+
+	// Ensure HasNext returns false after deletion.
+	if q4.HasNext() {
+		t.Fatal("HasNext should return false after deleting last item")
+	}
+
+	// Close the queue.
+	q4.Close()
 }
 
 // newTestQueue is a helper function that creates a new Queue for testing.
