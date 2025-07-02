@@ -138,46 +138,52 @@ func (q *Queue) run() {
 				nextKey = key
 			}
 
-			// If a dequeue request was waiting, fulfill it immediately.
-			if len(waitingDequeues) > 0 {
+			// Fulfill any waiting dequeue requests immediately.
+			for len(waitingDequeues) > 0 && nextKey != nil {
 				waiter := waitingDequeues[0]
 				waitingDequeues = waitingDequeues[1:] // Pop from waitlist
-				waiter.respChan <- dequeueResp{idx: req.idx, val: req.item, err: nil}
 
-				// The item was consumed instantly, so find the next one.
-				q.db.Update(func(tx *bbolt.Tx) error {
-					tx.Bucket(bucketName).Delete(key)
-					c := tx.Bucket(bucketName).Cursor()
-					nextKey, _ = c.First()
+				var resp dequeueResp
+				err := q.db.View(func(tx *bbolt.Tx) error {
+					b := tx.Bucket(bucketName)
+					resp.idx = btouint64(nextKey)
+					val := b.Get(nextKey)
+					if val == nil {
+						return fmt.Errorf("item not found for key %x", nextKey)
+					}
+					resp.val = make([]byte, len(val))
+					copy(resp.val, val)
+
+					b.Cursor().Seek(nextKey)
+					nextKey, _ = b.Cursor().Next()
+					waiter.respChan <- resp
 					return nil
 				})
+				resp.err = err
+				waiter.respChan <- resp
 			}
-			req.respChan <- enqueueResp{err: nil}
+			req.respChan <- enqueueResp{err: err}
 
 		case req := <-activeDequeueChan:
-			// If a request arrived but nextKey is nil, it means an enqueued item was
-			// immediately consumed by a waiting dequeue. We add the new requester
-			// to the waitlist.
+			// If a request arrived but nextKey is nil it means there are no items available.
 			if nextKey == nil {
 				waitingDequeues = append(waitingDequeues, req)
 				continue
 			}
 
 			var resp dequeueResp
-			err := q.db.Update(func(tx *bbolt.Tx) error {
+			err := q.db.View(func(tx *bbolt.Tx) error {
 				b := tx.Bucket(bucketName)
 				resp.idx = btouint64(nextKey)
 				val := b.Get(nextKey)
+				if val == nil {
+					return fmt.Errorf("item not found for key %x", nextKey)
+				}
 				resp.val = make([]byte, len(val))
 				copy(resp.val, val)
 
-				if err := b.Delete(nextKey); err != nil {
-					return err
-				}
-
-				// Find the new next key.
-				c := b.Cursor()
-				nextKey, _ = c.First()
+				b.Cursor().Seek(nextKey)
+				nextKey, _ = b.Cursor().Next()
 				return nil
 			})
 
