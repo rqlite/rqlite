@@ -49,7 +49,7 @@ type Queue struct {
 
 // NewQueue creates or opens a new persistent queue at the given file path.
 func NewQueue(path string) (*Queue, error) {
-	db, err := bbolt.Open(path, 0600, &bbolt.Options{Timeout: time.Second})
+	db, err := bbolt.Open(path, 0600, &bbolt.Options{Timeout: time.Second, NoFreelistSync: true})
 	if err != nil {
 		return nil, fmt.Errorf("failed to open boltdb: %w", err)
 	}
