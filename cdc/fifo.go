@@ -140,7 +140,7 @@ func (q *Queue) run(nextKey []byte, highestKey uint64) {
 			}
 
 			// Fulfill any waiting dequeue request immediately.
-			if len(waitingDequeues) > 0 && nextKey != nil {
+			for len(waitingDequeues) > 0 && nextKey != nil {
 				waiter := waitingDequeues[0]
 				waitingDequeues = waitingDequeues[1:] // Pop from waitlist
 
