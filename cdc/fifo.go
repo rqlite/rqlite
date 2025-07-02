@@ -155,7 +155,6 @@ func (q *Queue) run(nextKey []byte, highestKey uint64) {
 					resp.val = make([]byte, len(val))
 					copy(resp.val, val)
 
-					c.Seek(nextKey)
 					nk, _ := c.Next()
 					if nk != nil {
 						copy(nextKey, nk)
@@ -188,7 +187,6 @@ func (q *Queue) run(nextKey []byte, highestKey uint64) {
 				resp.val = make([]byte, len(val))
 				copy(resp.val, val)
 
-				c.Seek(nextKey)
 				nk, _ := c.Next()
 				if nk != nil {
 					copy(nextKey, nk)
@@ -205,8 +203,8 @@ func (q *Queue) run(nextKey []byte, highestKey uint64) {
 				b := tx.Bucket(bucketName)
 				c := b.Cursor()
 
-				// Seek to the key and iterate backwards, deleting items.
-				for k, _ := c.Seek(uint64tob(req.idx)); k != nil; k, _ = c.Prev() {
+				// Seek to the oldest key and delete all until (and including) the requested index.
+				for k, _ := c.First(); k != nil && btouint64(k) <= req.idx; k, _ = c.Next() {
 					if err := b.Delete(k); err != nil {
 						return err
 					}
@@ -214,7 +212,7 @@ func (q *Queue) run(nextKey []byte, highestKey uint64) {
 
 				// Check if our cached 'nextKey' was deleted.
 				if nextKey != nil && b.Get(nextKey) == nil {
-					k, _ := c.First() // Find the new first key
+					k, _ := c.First() // Find the new oldest key
 					if k != nil {
 						nextKey = make([]byte, len(k))
 						copy(nextKey, k)
@@ -250,7 +248,7 @@ func (q *Queue) run(nextKey []byte, highestKey uint64) {
 	}
 }
 
-// Enqueue adds an item to the queue.
+// Enqueue adds an item to the queue. Do not call Enqueue on a closed queue.
 func (q *Queue) Enqueue(idx uint64, item []byte) error {
 	req := enqueueReq{idx: idx, item: item, respChan: make(chan enqueueResp)}
 	q.enqueueChan <- req
@@ -260,6 +258,7 @@ func (q *Queue) Enqueue(idx uint64, item []byte) error {
 
 // Dequeue removes and returns the next available item from the queue.
 // If the queue is empty, Dequeue blocks until an item is available.
+// Do not call Dequeue on a closed queue.
 func (q *Queue) Dequeue() (uint64, []byte, error) {
 	req := dequeueReq{respChan: make(chan dequeueResp)}
 	q.dequeueChan <- req
@@ -282,7 +281,7 @@ func (q *Queue) HighestKey() (uint64, error) {
 	req := queryReq{respChan: make(chan queryResp)}
 	q.queryChan <- req
 	resp := <-req.respChan
-	return resp.highestKey, nil
+	return resp.highestKey, resp.err
 }
 
 // Empty checks if the queue contains no items.
