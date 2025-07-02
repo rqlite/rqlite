@@ -43,6 +43,8 @@ func NewQueue(path string) (*Queue, error) {
 	}
 
 	// Prepare the database buckets in a single transaction.
+	var nextKey []byte
+	var highestKey uint64
 	if err := db.Update(func(tx *bbolt.Tx) error {
 		if _, err := tx.CreateBucketIfNotExists(bucketName); err != nil {
 			return fmt.Errorf("failed to create queue bucket: %w", err)
@@ -56,6 +58,15 @@ func NewQueue(path string) (*Queue, error) {
 			if err := metaBucket.Put([]byte("max_key"), uint64tob(0)); err != nil {
 				return fmt.Errorf("failed to initialize max_key: %w", err)
 			}
+		}
+
+		// Initialize state from the DB.
+		var innerErr error
+		c := tx.Bucket(bucketName).Cursor()
+		nextKey, _ = c.First()
+		highestKey, innerErr = getHighestKey(tx)
+		if innerErr != nil {
+			return fmt.Errorf("failed to get highest key: %w", innerErr)
 		}
 		return nil
 	}); err != nil {
@@ -73,7 +84,7 @@ func NewQueue(path string) (*Queue, error) {
 	}
 
 	q.wg.Add(1)
-	go q.run()
+	go q.run(nextKey, highestKey)
 	return q, nil
 }
 
@@ -84,22 +95,11 @@ func (q *Queue) Close() {
 }
 
 // run is a single goroutine that serializes all access to the database.
-func (q *Queue) run() {
+func (q *Queue) run(nextKey []byte, highestKey uint64) {
 	defer q.wg.Done()
 	defer q.db.Close()
 
-	var nextKey []byte
-	var highestKey uint64
 	var waitingDequeues []dequeueReq // A list of callers waiting for an item.
-
-	// Initialize state from the DB.
-	q.db.View(func(tx *bbolt.Tx) error {
-		c := tx.Bucket(bucketName).Cursor()
-		nextKey, _ = c.First()
-		highestKey, _ = getHighestKey(tx)
-		return nil
-	})
-
 	for {
 		// If the queue is empty, we can't process a dequeue request.
 		// So we only listen on the dequeueChan if there are items.
@@ -111,7 +111,7 @@ func (q *Queue) run() {
 		select {
 		case req := <-q.enqueueChan:
 			// No need to check highestKey if idx is 0
-			if req.idx > 0 && req.idx <= highestKey {
+			if req.idx <= highestKey {
 				req.respChan <- enqueueResp{err: nil}
 				continue // Ignore duplicate/old items
 			}
