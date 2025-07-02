@@ -145,8 +145,8 @@ func (q *Queue) run() {
 
 				var resp dequeueResp
 				err := q.db.View(func(tx *bbolt.Tx) error {
-					b := tx.Bucket(bucketName)
-					val := b.Get(nextKey)
+					c := tx.Bucket(bucketName).Cursor()
+					_, val := c.Seek(nextKey)
 					if val == nil {
 						return fmt.Errorf("item not found for key %x", nextKey)
 					}
@@ -154,7 +154,6 @@ func (q *Queue) run() {
 					resp.val = make([]byte, len(val))
 					copy(resp.val, val)
 
-					c := b.Cursor()
 					c.Seek(nextKey)
 					nk, _ := c.Next()
 					if nk != nil {
@@ -178,8 +177,8 @@ func (q *Queue) run() {
 
 			var resp dequeueResp
 			err := q.db.View(func(tx *bbolt.Tx) error {
-				b := tx.Bucket(bucketName)
-				val := b.Get(nextKey)
+				c := tx.Bucket(bucketName).Cursor()
+				_, val := c.Seek(nextKey)
 				if val == nil {
 					return fmt.Errorf("item not found for key %x", nextKey)
 				}
@@ -188,7 +187,6 @@ func (q *Queue) run() {
 				resp.val = make([]byte, len(val))
 				copy(resp.val, val)
 
-				c := b.Cursor()
 				c.Seek(nextKey)
 				nk, _ := c.Next()
 				if nk != nil {
