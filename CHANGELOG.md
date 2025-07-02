@@ -4,7 +4,7 @@
 - [PR #2128](https://github.com/rqlite/rqlite/pull/2128): Support CDC highwatermarking control.
 - [PR #2129](https://github.com/rqlite/rqlite/pull/2129): CDC Service improvements and refactoring.
 - [PR #2131](https://github.com/rqlite/rqlite/pull/2131): FIFO queue for CDC service.
-- [PR #2132](https://github.com/rqlite/rqlite/pull/2132): Move to channel-based FIFO service.
+- [PR #2132](https://github.com/rqlite/rqlite/pull/2132), [PR #2133](https://github.com/rqlite/rqlite/pull/2133): Move to channel-based FIFO service.
 
 ## v8.38.2 (June 23rd 2025)
 ### Implementation changes and bug fixes
