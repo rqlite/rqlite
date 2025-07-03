@@ -737,11 +737,17 @@ func Test_StoreLeaderObservation(t *testing.T) {
 	s.RegisterLeaderChange(ch2)
 
 	go func() {
-		<-ch1
+		b := <-ch1
+		if !b {
+			t.Errorf("expected true from ch1, got false")
+		}
 		countCh <- 1
 	}()
 	go func() {
-		<-ch2
+		b := <-ch2
+		if !b {
+			t.Errorf("expected true from ch2, got false")
+		}
 		countCh <- 2
 	}()
 
