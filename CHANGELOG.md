@@ -1,4 +1,4 @@
-## v8.38.3 (unreleased)
+## v8.38.3 (July 3rd 2025)
 ### Implementation changes and bug fixes
 - [PR #2139](https://github.com/rqlite/rqlite/pull/2139): 'go mod' updates.
 - [PR #2106](https://github.com/rqlite/rqlite/pull/2106), [PR #2126](https://github.com/rqlite/rqlite/pull/2126): Add initial CDC Service implementation.
