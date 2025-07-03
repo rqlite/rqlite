@@ -34,6 +34,9 @@ type Client interface {
 
 // Store is the interface the consensus system must implement.
 type Store interface {
+	// IsLeader returns whether this node is the Leader.
+	IsLeader() bool
+
 	// RegisterLeaderChange registers a channel that will be notified when
 	// a leadership change occurs.
 	RegisterLeaderChange(c chan<- bool)
@@ -129,6 +132,16 @@ func (s *Service) StartReporting(id, apiAddr, addr string) chan struct{} {
 	done := make(chan struct{})
 	reportCh := make(chan struct{}, leaderChanLen)
 
+	reportNonBlocking := func() {
+		select {
+		case reportCh <- struct{}{}:
+		default:
+			// If the channel is full, we don't block, and just drop the report.
+			// This is fine, as the ticker will report periodically anyway.
+			// This is useful if the discovery service is slow to respond, for example.
+		}
+	}
+
 	go func() {
 		for {
 			select {
@@ -145,26 +158,22 @@ func (s *Service) StartReporting(id, apiAddr, addr string) chan struct{} {
 		}
 	}()
 
-	isLeader := false
 	go func() {
 		for {
 			select {
-			case isLeader = <-obCh:
+			case isLeader := <-obCh:
 				if isLeader {
-					select {
-					case reportCh <- struct{}{}:
-					default:
-					}
+					reportNonBlocking()
 					s.logger.Printf("updated Leader API address to %s due to leadership change", apiAddr)
 				}
 			case <-ticker.C:
 				// Report it periodically in case a previous update failed due, for example,
-				// to a network issue contacting the discovery service.
-				if isLeader {
-					select {
-					case reportCh <- struct{}{}:
-					default:
-					}
+				// to a network issue contacting the discovery service. Do this by checking
+				// the cluster system directly. This means we don't need to worry about
+				// missing any leadership changes that occurred before this service
+				// started.
+				if s.s.IsLeader() {
+					reportNonBlocking()
 				}
 			case <-done:
 				return
