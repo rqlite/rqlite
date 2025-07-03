@@ -136,6 +136,7 @@ func (s *Service) StartReporting(id, apiAddr, addr string) chan struct{} {
 				if err := s.c.SetLeader(id, apiAddr, addr); err != nil {
 					s.logger.Printf("failed to update discovery service with Leader details: %s",
 						err.Error())
+					continue
 				}
 				s.updateContact(time.Now())
 			case <-done:
