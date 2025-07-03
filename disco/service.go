@@ -163,6 +163,7 @@ func (s *Service) StartReporting(id, apiAddr, addr string) chan struct{} {
 				// is waiting for leadership changes.
 				report(isLeader.Is())
 			case <-done:
+				defer ticker.Stop()
 				return
 			}
 		}
