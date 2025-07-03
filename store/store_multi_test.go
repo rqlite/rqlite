@@ -62,6 +62,63 @@ func Test_MultiNode_VerifyLeader(t *testing.T) {
 	}
 }
 
+// Test_MultiNode_LeaderObservations tests that the leader change
+// notifications work as expected in a multi-node cluster.
+func Test_MultiNode_LeaderObservations(t *testing.T) {
+	var wg sync.WaitGroup
+
+	ch0 := make(chan bool)
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		b := <-ch0
+		if !b {
+			t.Errorf("expected true on ch0, got false")
+		}
+	}()
+
+	ch1 := make(chan bool)
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		b := <-ch1
+		if b {
+			t.Errorf("expected false on ch1, got false")
+		}
+	}()
+
+	s0, ln0 := mustNewStore(t)
+	defer ln0.Close()
+	s0.RegisterLeaderChange(ch0)
+	if err := s0.Open(); err != nil {
+		t.Fatalf("failed to open single-node store: %s", err.Error())
+	}
+	defer s0.Close(true)
+
+	s1, ln1 := mustNewStore(t)
+	defer ln1.Close()
+	s1.RegisterLeaderChange(ch1)
+	if err := s1.Open(); err != nil {
+		t.Fatalf("failed to open single-node store: %s", err.Error())
+	}
+	defer s1.Close(true)
+
+	if err := s0.Bootstrap(NewServer(s0.ID(), s0.Addr(), true)); err != nil {
+		t.Fatalf("failed to bootstrap single-node store: %s", err.Error())
+	}
+	if _, err := s0.WaitForLeader(10 * time.Second); err != nil {
+		t.Fatalf("Error waiting for leader: %s", err)
+	}
+	if err := s0.Join(joinRequest(s1.ID(), s1.Addr(), true)); err != nil {
+		t.Fatalf("failed to join single-node store: %s", err.Error())
+	}
+	if _, err := s1.WaitForLeader(10 * time.Second); err != nil {
+		t.Fatalf("Error waiting for leader: %s", err)
+	}
+
+	wg.Wait()
+}
+
 // Test_MultiNodeSimple tests that a the core operation of a multi-node
 // cluster works as expected. That is, with a two node cluster, writes
 // actually replicate, and reads are consistent.

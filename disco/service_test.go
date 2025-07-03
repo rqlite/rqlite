@@ -137,8 +137,8 @@ func Test_StartReportingChange(t *testing.T) {
 	c.isLeaderFn = func() bool {
 		return true
 	}
-	var ch chan<- struct{}
-	c.registerLeaderChangeFn = func(c chan<- struct{}) {
+	var ch chan<- bool
+	c.registerLeaderChangeFn = func(c chan<- bool) {
 		ch = c
 	}
 
@@ -148,7 +148,7 @@ func Test_StartReportingChange(t *testing.T) {
 	done := s.StartReporting("1", "localhost:4001", "localhost:4002")
 
 	// Signal a leadership change.
-	ch <- struct{}{}
+	ch <- true
 	wg.Wait()
 	close(done)
 }
@@ -186,7 +186,7 @@ func (m *mockClient) String() string {
 
 type mockStore struct {
 	isLeaderFn             func() bool
-	registerLeaderChangeFn func(c chan<- struct{})
+	registerLeaderChangeFn func(c chan<- bool)
 }
 
 func (m *mockStore) IsLeader() bool {
@@ -196,7 +196,7 @@ func (m *mockStore) IsLeader() bool {
 	return false
 }
 
-func (m *mockStore) RegisterLeaderChange(c chan<- struct{}) {
+func (m *mockStore) RegisterLeaderChange(c chan<- bool) {
 	if m.registerLeaderChangeFn != nil {
 		m.registerLeaderChangeFn(c)
 	}

@@ -39,7 +39,7 @@ type Store interface {
 
 	// RegisterLeaderChange registers a channel that will be notified when
 	// a leadership change occurs.
-	RegisterLeaderChange(c chan<- struct{})
+	RegisterLeaderChange(c chan<- bool)
 }
 
 // Suffrage is the type of suffrage -- voting or non-voting -- a node has.
@@ -126,7 +126,7 @@ func (s *Service) Register(id, apiAddr, addr string) (bool, string, error) {
 // to go stale.
 func (s *Service) StartReporting(id, apiAddr, addr string) chan struct{} {
 	ticker := time.NewTicker(s.ReportInterval)
-	obCh := make(chan struct{}, leaderChanLen)
+	obCh := make(chan bool, leaderChanLen)
 	s.s.RegisterLeaderChange(obCh)
 
 	update := func(changed bool) {
