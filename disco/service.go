@@ -34,9 +34,6 @@ type Client interface {
 
 // Store is the interface the consensus system must implement.
 type Store interface {
-	// IsLeader returns whether this node is the Leader.
-	IsLeader() bool
-
 	// RegisterLeaderChange registers a channel that will be notified when
 	// a leadership change occurs.
 	RegisterLeaderChange(c chan<- bool)
@@ -129,28 +126,30 @@ func (s *Service) StartReporting(id, apiAddr, addr string) chan struct{} {
 	obCh := make(chan bool, leaderChanLen)
 	s.s.RegisterLeaderChange(obCh)
 
-	update := func(changed bool) {
-		if s.s.IsLeader() {
+	report := func(isLeader bool) {
+		if isLeader {
 			if err := s.c.SetLeader(id, apiAddr, addr); err != nil {
 				s.logger.Printf("failed to update discovery service with Leader details: %s",
 					err.Error())
-			}
-			if changed {
-				s.logger.Printf("updated Leader API address to %s due to leadership change",
-					apiAddr)
 			}
 			s.updateContact(time.Now())
 		}
 	}
 
 	done := make(chan struct{})
+	isLeader := false
 	go func() {
 		for {
 			select {
 			case <-ticker.C:
-				update(false)
-			case <-obCh:
-				update(true)
+				// Report it periodically in case a previous update failed due, for example,
+				// to a network issue contacting the discovery service.
+				report(isLeader)
+			case isLeader = <-obCh:
+				report(isLeader)
+				if isLeader {
+					s.logger.Printf("updated Leader API address to %s due to leadership change", apiAddr)
+				}
 			case <-done:
 				return
 			}

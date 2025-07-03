@@ -98,31 +98,6 @@ func Test_RegisterNonVoter(t *testing.T) {
 	}
 }
 
-func Test_StartReportingTimer(t *testing.T) {
-	// WaitGroups won't work because we don't know how many times
-	// setLeaderFn will be called.
-	calledCh := make(chan struct{}, 10)
-
-	m := &mockClient{}
-	m.setLeaderFn = func(id, apiAddr, addr string) error {
-		if id != "1" || apiAddr != "localhost:4001" || addr != "localhost:4002" {
-			t.Fatalf("wrong values passed to SetLeader")
-		}
-		calledCh <- struct{}{}
-		return nil
-	}
-	c := &mockStore{}
-	c.isLeaderFn = func() bool {
-		return true
-	}
-
-	s := NewService(m, c, Voter)
-	s.ReportInterval = 10 * time.Millisecond
-
-	go s.StartReporting("1", "localhost:4001", "localhost:4002")
-	<-calledCh
-}
-
 func Test_StartReportingChange(t *testing.T) {
 	var wg sync.WaitGroup
 	m := &mockClient{}
@@ -134,12 +109,8 @@ func Test_StartReportingChange(t *testing.T) {
 		return nil
 	}
 	c := &mockStore{}
-	c.isLeaderFn = func() bool {
-		return true
-	}
-	var ch chan<- bool
 	c.registerLeaderChangeFn = func(c chan<- bool) {
-		ch = c
+		c <- true
 	}
 
 	wg.Add(1)
@@ -147,9 +118,39 @@ func Test_StartReportingChange(t *testing.T) {
 	s.ReportInterval = 10 * time.Minute // Nothing will happen due to timer.
 	done := s.StartReporting("1", "localhost:4001", "localhost:4002")
 
-	// Signal a leadership change.
-	ch <- true
+	// Wait for leadership change
 	wg.Wait()
+	close(done)
+}
+
+// Test_StartReportingChange_Timer tests that once a node become the leader,
+// the StartReporting function will then periodically report its leadership
+// status to the discovery service, even if the leadership change channel
+// does not trigger.
+func Test_StartReportingChange_Timer(t *testing.T) {
+	m := &mockClient{}
+	ch := make(chan struct{})
+	nCalled := 0
+	m.setLeaderFn = func(id, apiAddr, addr string) error {
+		nCalled++
+		if nCalled > 1 {
+			ch <- struct{}{}
+		}
+		if id != "1" || apiAddr != "localhost:4001" || addr != "localhost:4002" {
+			t.Fatalf("wrong values passed to SetLeader")
+		}
+		return nil
+	}
+	c := &mockStore{}
+	c.registerLeaderChangeFn = func(c chan<- bool) {
+		c <- true
+	}
+
+	s := NewService(m, c, Voter)
+	s.ReportInterval = 100 * time.Millisecond
+	done := s.StartReporting("1", "localhost:4001", "localhost:4002")
+
+	<-ch // Wait for at least two calls to SetLeader
 	close(done)
 }
 
@@ -185,15 +186,7 @@ func (m *mockClient) String() string {
 }
 
 type mockStore struct {
-	isLeaderFn             func() bool
 	registerLeaderChangeFn func(c chan<- bool)
-}
-
-func (m *mockStore) IsLeader() bool {
-	if m.isLeaderFn != nil {
-		return m.isLeaderFn()
-	}
-	return false
 }
 
 func (m *mockStore) RegisterLeaderChange(c chan<- bool) {
