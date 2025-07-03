@@ -8,6 +8,7 @@
 - [PR #2134](https://github.com/rqlite/rqlite/pull/2134): Leader observations are now booleans.
 - [PR #2135](https://github.com/rqlite/rqlite/pull/2135): Use actual Leader Observation value.
 - [PR #2137](https://github.com/rqlite/rqlite/pull/2137): Perform Disco Service reporting in a distinct goroutine.
+- [PR #2138](https://github.com/rqlite/rqlite/pull/2138): Restore Disco service checking cluster service directly.
 
 ## v8.38.2 (June 23rd 2025)
 ### Implementation changes and bug fixes
