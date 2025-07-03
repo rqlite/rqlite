@@ -68,24 +68,22 @@ func Test_MultiNode_LeaderObservations(t *testing.T) {
 	var wg sync.WaitGroup
 
 	ch0 := make(chan bool)
-	ch0Correct := false
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
 		b := <-ch0
-		if b {
-			ch0Correct = true
+		if !b {
+			t.Errorf("expected true on ch0, got false")
 		}
 	}()
 
 	ch1 := make(chan bool)
-	ch1Correct := false
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
 		b := <-ch1
-		if !b {
-			ch1Correct = true
+		if b {
+			t.Errorf("expected false on ch1, got false")
 		}
 	}()
 
@@ -119,12 +117,6 @@ func Test_MultiNode_LeaderObservations(t *testing.T) {
 	}
 
 	wg.Wait()
-	if !ch0Correct {
-		t.Fatalf("expected channel 0 to get correct value")
-	}
-	if !ch1Correct {
-		t.Fatalf("expected channel 1 to get correct value")
-	}
 }
 
 // Test_MultiNodeSimple tests that a the core operation of a multi-node
