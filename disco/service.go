@@ -144,8 +144,8 @@ func (s *Service) StartReporting(id, apiAddr, addr string) chan struct{} {
 			select {
 			case b := <-obCh:
 				isLeader.SetBool(b)
-				report(isLeader.Is())
-				if isLeader.Is() {
+				go report(isLeader.Is())
+				if b {
 					s.logger.Printf("updated Leader API address to %s due to leadership change", apiAddr)
 				}
 			case <-done:
