@@ -6,6 +6,7 @@
 - [PR #2131](https://github.com/rqlite/rqlite/pull/2131): FIFO queue for CDC service.
 - [PR #2132](https://github.com/rqlite/rqlite/pull/2132), [PR #2133](https://github.com/rqlite/rqlite/pull/2133): Move to channel-based FIFO service.
 - [PR #2134](https://github.com/rqlite/rqlite/pull/2134): Leader observations are now booleans.
+- [PR #2136](https://github.com/rqlite/rqlite/pull/2136): Use actual Leader Observation value.
 
 ## v8.38.2 (June 23rd 2025)
 ### Implementation changes and bug fixes
