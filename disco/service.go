@@ -126,14 +126,6 @@ func (s *Service) StartReporting(id, apiAddr, addr string) chan struct{} {
 	obCh := make(chan bool, leaderChanLen)
 	s.s.RegisterLeaderChange(obCh)
 
-	report := func() {
-		if err := s.c.SetLeader(id, apiAddr, addr); err != nil {
-			s.logger.Printf("failed to update discovery service with Leader details: %s",
-				err.Error())
-		}
-		s.updateContact(time.Now())
-	}
-
 	done := make(chan struct{})
 	rCh := make(chan struct{}, leaderChanLen)
 
@@ -141,7 +133,11 @@ func (s *Service) StartReporting(id, apiAddr, addr string) chan struct{} {
 		for {
 			select {
 			case <-rCh:
-				report()
+				if err := s.c.SetLeader(id, apiAddr, addr); err != nil {
+					s.logger.Printf("failed to update discovery service with Leader details: %s",
+						err.Error())
+				}
+				s.updateContact(time.Now())
 			case <-done:
 				return
 			}
@@ -152,6 +148,14 @@ func (s *Service) StartReporting(id, apiAddr, addr string) chan struct{} {
 	go func() {
 		for {
 			select {
+			case isLeader = <-obCh:
+				if isLeader {
+					select {
+					case rCh <- struct{}{}:
+					default:
+					}
+					s.logger.Printf("updated Leader API address to %s due to leadership change", apiAddr)
+				}
 			case <-ticker.C:
 				// Report it periodically in case a previous update failed due, for example,
 				// to a network issue contacting the discovery service.
@@ -160,14 +164,6 @@ func (s *Service) StartReporting(id, apiAddr, addr string) chan struct{} {
 					case rCh <- struct{}{}:
 					default:
 					}
-				}
-			case isLeader = <-obCh:
-				if isLeader {
-					select {
-					case rCh <- struct{}{}:
-					default:
-					}
-					s.logger.Printf("updated Leader API address to %s due to leadership change", apiAddr)
 				}
 			case <-done:
 				return
