@@ -1,5 +1,6 @@
 ## v8.38.3 (unreleased)
 ### Implementation changes and bug fixes
+- [PR #2139](https://github.com/rqlite/rqlite/pull/2139): 'go mod' updates.
 - [PR #2106](https://github.com/rqlite/rqlite/pull/2106), [PR #2126](https://github.com/rqlite/rqlite/pull/2126): Add initial CDC Service implementation.
 - [PR #2128](https://github.com/rqlite/rqlite/pull/2128): Support CDC highwatermarking control.
 - [PR #2129](https://github.com/rqlite/rqlite/pull/2129): CDC Service improvements and refactoring.
