@@ -2345,8 +2345,8 @@ func (s *Store) observe() (closeCh, doneCh chan struct{}) {
 						}
 					}
 					s.leaderObserversMu.RUnlock()
-					s.selfLeaderChange(signal.LeaderID == raft.ServerID(s.raftID))
-					if signal.LeaderID == raft.ServerID(s.raftID) {
+					s.selfLeaderChange(isLeader)
+					if isLeader {
 						s.logger.Printf("this node (ID=%s) is now Leader", s.raftID)
 					} else {
 						if signal.LeaderID == "" {
