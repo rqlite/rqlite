@@ -2283,7 +2283,8 @@ func (s *Store) DeregisterObserver(o *raft.Observer) {
 }
 
 // RegisterLeaderChange registers the given channel which will
-// receive a signal when this node detects that the Leader changes.
+// receive a boolean when the leader changes. The boolean
+// indicates whether this node is the new leader or not.
 func (s *Store) RegisterLeaderChange(c chan<- bool) {
 	s.leaderObserversMu.Lock()
 	defer s.leaderObserversMu.Unlock()
