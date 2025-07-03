@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/rqlite/rqlite/v8/random"
+	"github.com/rqlite/rqlite/v8/rsync"
 )
 
 const (
@@ -122,7 +123,6 @@ func (s *Service) Register(id, apiAddr, addr string) (bool, string, error) {
 // to deal with any intermittent issues that caused Leadership information
 // to go stale.
 func (s *Service) StartReporting(id, apiAddr, addr string) chan struct{} {
-	ticker := time.NewTicker(s.ReportInterval)
 	obCh := make(chan bool, leaderChanLen)
 	s.s.RegisterLeaderChange(obCh)
 
@@ -136,20 +136,32 @@ func (s *Service) StartReporting(id, apiAddr, addr string) chan struct{} {
 		}
 	}
 
+	ticker := time.NewTicker(s.ReportInterval)
 	done := make(chan struct{})
-	isLeader := false
+	var isLeader rsync.AtomicBool
+	go func() {
+		for {
+			select {
+			case b := <-obCh:
+				isLeader.SetBool(b)
+				report(isLeader.Is())
+				if isLeader.Is() {
+					s.logger.Printf("updated Leader API address to %s due to leadership change", apiAddr)
+				}
+			case <-done:
+				return
+			}
+		}
+	}()
 	go func() {
 		for {
 			select {
 			case <-ticker.C:
 				// Report it periodically in case a previous update failed due, for example,
-				// to a network issue contacting the discovery service.
-				report(isLeader)
-			case isLeader = <-obCh:
-				report(isLeader)
-				if isLeader {
-					s.logger.Printf("updated Leader API address to %s due to leadership change", apiAddr)
-				}
+				// to a network issue contacting the discovery service. We do all this in
+				// a separate goroutine so there is no risk of blocking the goroutine that
+				// is waiting for leadership changes.
+				report(isLeader.Is())
 			case <-done:
 				return
 			}
