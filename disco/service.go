@@ -158,11 +158,10 @@ func (s *Service) StartReporting(id, apiAddr, addr string) chan struct{} {
 		}
 	}()
 
-	isLeader := false
 	go func() {
 		for {
 			select {
-			case isLeader = <-obCh:
+			case isLeader := <-obCh:
 				if isLeader {
 					reportNonBlocking()
 					s.logger.Printf("updated Leader API address to %s due to leadership change", apiAddr)
