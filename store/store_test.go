@@ -730,8 +730,8 @@ func Test_StoreLeaderObservation(t *testing.T) {
 		t.Fatalf("failed to open single-node store: %s", err.Error())
 	}
 
-	ch1 := make(chan struct{})
-	ch2 := make(chan struct{})
+	ch1 := make(chan bool)
+	ch2 := make(chan bool)
 	countCh := make(chan int, 2)
 	s.RegisterLeaderChange(ch1)
 	s.RegisterLeaderChange(ch2)

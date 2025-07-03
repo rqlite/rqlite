@@ -334,7 +334,7 @@ type Store struct {
 
 	// Raft changes observer
 	leaderObserversMu sync.RWMutex
-	leaderObservers   []chan<- struct{}
+	leaderObservers   []chan<- bool
 	observerClose     chan struct{}
 	observerDone      chan struct{}
 	observerChan      chan raft.Observation
@@ -416,7 +416,7 @@ func New(ly Layer, c *Config) *Store {
 		dbDir:           filepath.Dir(dbPath),
 		dbDrv:           sql.DefaultDriver(),
 		readyChans:      rsync.NewReadyChannels(),
-		leaderObservers: make([]chan<- struct{}, 0),
+		leaderObservers: make([]chan<- bool, 0),
 		reqMarshaller:   command.NewRequestMarshaler(),
 		logger:          logger,
 		notifyingNodes:  make(map[string]*Server),
@@ -2284,7 +2284,7 @@ func (s *Store) DeregisterObserver(o *raft.Observer) {
 
 // RegisterLeaderChange registers the given channel which will
 // receive a signal when this node detects that the Leader changes.
-func (s *Store) RegisterLeaderChange(c chan<- struct{}) {
+func (s *Store) RegisterLeaderChange(c chan<- bool) {
 	s.leaderObserversMu.Lock()
 	defer s.leaderObserversMu.Unlock()
 	s.leaderObservers = append(s.leaderObservers, c)
@@ -2333,9 +2333,11 @@ func (s *Store) observe() (closeCh, doneCh chan struct{}) {
 					}
 				case raft.LeaderObservation:
 					s.leaderObserversMu.RLock()
+					// check if this node is the leader
+					isLeader := signal.LeaderID == raft.ServerID(s.raftID)
 					for i := range s.leaderObservers {
 						select {
-						case s.leaderObservers[i] <- struct{}{}:
+						case s.leaderObservers[i] <- isLeader:
 							stats.Add(leaderChangesObserved, 1)
 						default:
 							stats.Add(leaderChangesDropped, 1)
