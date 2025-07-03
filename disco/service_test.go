@@ -145,6 +145,9 @@ func Test_StartReportingChange_Timer(t *testing.T) {
 	c.registerLeaderChangeFn = func(c chan<- bool) {
 		c <- true
 	}
+	c.isLeaderFn = func() bool {
+		return true // Simulate that this node is the leader.
+	}
 
 	s := NewService(m, c, Voter)
 	s.ReportInterval = 100 * time.Millisecond
@@ -186,7 +189,15 @@ func (m *mockClient) String() string {
 }
 
 type mockStore struct {
+	isLeaderFn             func() bool
 	registerLeaderChangeFn func(c chan<- bool)
+}
+
+func (m *mockStore) IsLeader() bool {
+	if m.isLeaderFn != nil {
+		return m.isLeaderFn()
+	}
+	return false
 }
 
 func (m *mockStore) RegisterLeaderChange(c chan<- bool) {
