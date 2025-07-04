@@ -22,8 +22,10 @@ import (
 	"github.com/rqlite/rqlite/v8/auto/backup"
 	"github.com/rqlite/rqlite/v8/auto/restore"
 	"github.com/rqlite/rqlite/v8/aws"
+	"github.com/rqlite/rqlite/v8/cdc"
 	"github.com/rqlite/rqlite/v8/cluster"
 	"github.com/rqlite/rqlite/v8/cmd"
+	"github.com/rqlite/rqlite/v8/command/proto"
 	"github.com/rqlite/rqlite/v8/db"
 	"github.com/rqlite/rqlite/v8/disco"
 	"github.com/rqlite/rqlite/v8/extensions"
@@ -215,6 +217,16 @@ func main() {
 		httpServ.RegisterStatus("auto_backups", backupSrv)
 	}
 
+	// Start CDC service if configured
+	cdcService, err := startCDC(mainCtx, cfg, str)
+	if err != nil {
+		log.Fatalf("failed to start CDC service: %s", err.Error())
+	}
+	var cdcServicePtr *cdc.Service
+	if cdcService != nil {
+		cdcServicePtr = cdcService
+	}
+
 	// Block until done.
 	<-mainCtx.Done()
 
@@ -222,6 +234,11 @@ func main() {
 	// possible that the node is going away.
 	httpServ.Close()
 	clstrServ.Close()
+
+	// Stop CDC service if it was started
+	if cdcServicePtr != nil {
+		cdcServicePtr.Stop()
+	}
 
 	if cfg.RaftClusterRemoveOnShutdown {
 		remover := cluster.NewRemover(clstrClient, 5*time.Second, str)
@@ -278,6 +295,92 @@ func startAutoBackups(ctx context.Context, cfg *Config, str *store.Store) (*back
 	u := backup.NewUploader(sc, provider, time.Duration(uCfg.Interval))
 	u.Start(ctx, str.IsLeader)
 	return u, nil
+}
+
+func startCDC(ctx context.Context, cfg *Config, str *store.Store) (*cdc.Service, error) {
+	if cfg.CDCConfigFile == "" {
+		return nil, nil
+	}
+
+	log.Printf("starting CDC service with config file: %s", cfg.CDCConfigFile)
+
+	// Read and parse the CDC configuration file
+	data, err := cdc.ReadConfigFile(cfg.CDCConfigFile)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read CDC config file: %s", err.Error())
+	}
+
+	cdcCfg, err := cdc.ParseJSONConfig(data)
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse CDC config file: %s", err.Error())
+	}
+
+	// Create a channel to receive CDC events from the database
+	eventsCh := make(chan *proto.CDCEvents, 1024)
+
+	// Enable CDC on the store
+	if err := str.EnableCDC(eventsCh, false); err != nil {
+		return nil, fmt.Errorf("failed to enable CDC: %s", err.Error())
+	}
+
+	// Create a cluster adapter for the CDC service
+	clusterAdapter := &cdcClusterAdapter{store: str}
+
+	// Create a store adapter for the CDC service
+	storeAdapter := &cdcStoreAdapter{store: str}
+
+	// Create the CDC service
+	cdcService := cdc.NewService(cdcCfg, clusterAdapter, storeAdapter, eventsCh)
+
+	// Start the CDC service
+	if err := cdcService.Start(); err != nil {
+		return nil, fmt.Errorf("failed to start CDC service: %s", err.Error())
+	}
+
+	log.Printf("CDC service started, sending events to %s", cdcCfg.Endpoint)
+	return cdcService, nil
+}
+
+// cdcClusterAdapter adapts the store's leadership notification system
+// to work with the CDC service's expected interface.
+type cdcClusterAdapter struct {
+	store *store.Store
+}
+
+func (c *cdcClusterAdapter) IsLeader() bool {
+	return c.store.IsLeader()
+}
+
+func (c *cdcClusterAdapter) RegisterLeaderChange(ch chan<- struct{}) {
+	// Create a channel to receive bool values from store
+	boolCh := make(chan bool, 1)
+	c.store.RegisterLeaderChange(boolCh)
+
+	// Start a goroutine to convert bool signals to struct{} signals
+	go func() {
+		for range boolCh {
+			select {
+			case ch <- struct{}{}:
+			default:
+				// Drop signal if channel is full
+			}
+		}
+	}()
+}
+
+// cdcStoreAdapter adapts the store's interface to match the CDC Store interface
+type cdcStoreAdapter struct {
+	store *store.Store
+}
+
+func (c *cdcStoreAdapter) Execute(er *proto.ExecuteRequest) ([]*proto.ExecuteQueryResponse, error) {
+	resp, _, err := c.store.Execute(er)
+	return resp, err
+}
+
+func (c *cdcStoreAdapter) Query(qr *proto.QueryRequest) ([]*proto.QueryRows, error) {
+	resp, _, err := c.store.Query(qr)
+	return resp, err
 }
 
 func createExtensionsStore(cfg *Config) (*extensions.Store, error) {

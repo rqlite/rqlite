@@ -86,6 +86,15 @@ long_help = """
 default = ""
 
 [[flags]]
+name = "CDCConfigFile"
+cli = "cdc-config"
+type = "string"
+short_help = "Path to CDC service configuration JSON file (enables CDC if set)"
+long_help = """
+"""
+default = ""
+
+[[flags]]
 name = "HTTPx509CACert"
 cli = "http-ca-cert"
 type = "string"
