@@ -7,9 +7,9 @@ import (
 
 func TestNewGCSClient(t *testing.T) {
 	testCases := []struct {
-		name   string
-		config *GCSConfig
-		opts   *GCSClientOpts
+		name        string
+		config      *GCSConfig
+		opts        *GCSClientOpts
 		expectError bool
 	}{
 		{
@@ -32,7 +32,7 @@ func TestNewGCSClient(t *testing.T) {
 				Path:            "test/path",
 				CredentialsFile: "/path/to/creds.json",
 			},
-			opts: nil,
+			opts:        nil,
 			expectError: false,
 		},
 		{
@@ -43,7 +43,7 @@ func TestNewGCSClient(t *testing.T) {
 				Path:            "test/path",
 				CredentialsJSON: "{\"type\": \"service_account\"}",
 			},
-			opts: nil,
+			opts:        nil,
 			expectError: false,
 		},
 	}
@@ -103,7 +103,7 @@ func TestGCSClient_String(t *testing.T) {
 
 func TestTimestampedPath(t *testing.T) {
 	testTime := time.Date(2023, 1, 1, 12, 0, 0, 0, time.UTC)
-	
+
 	testCases := []struct {
 		name     string
 		path     string

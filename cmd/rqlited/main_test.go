@@ -1,8 +1,8 @@
 package main
 
 import (
-	"testing"
 	"github.com/rqlite/rqlite/v8/auto/backup"
+	"testing"
 )
 
 func TestStartAutoBackups_GCSConfig(t *testing.T) {

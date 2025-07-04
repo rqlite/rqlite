@@ -10,11 +10,11 @@ import (
 
 func TestUnmarshalGCS(t *testing.T) {
 	testCases := []struct {
-		name         string
-		input        []byte
-		expectedCfg  *Config
-		expectedGCS  *gcp.GCSConfig
-		expectedErr  error
+		name        string
+		input       []byte
+		expectedCfg *Config
+		expectedGCS *gcp.GCSConfig
+		expectedErr error
 	}{
 		{
 			name: "ValidGCSConfig",
