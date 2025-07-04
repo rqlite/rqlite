@@ -29,6 +29,8 @@ type Config struct {
 	AutoBackupFile string
 	// Path to automatic restore configuration file. If not set, not enabled
 	AutoRestoreFile string
+	// Path to CDC service configuration JSON file (enables CDC if set)
+	CDCConfigFile string
 	// Path to X.509 CA certificate for HTTPS
 	HTTPx509CACert string
 	// Path to HTTPS X.509 certificate
@@ -143,6 +145,7 @@ func Forge(arguments []string) (*flag.FlagSet, *Config, error) {
 	fs.StringVar(&config.AuthFile, "auth", "", "Path to authentication and authorization file. If not set, not enabled")
 	fs.StringVar(&config.AutoBackupFile, "auto-backup", "", "Path to automatic backup configuration file. If not set, not enabled")
 	fs.StringVar(&config.AutoRestoreFile, "auto-restore", "", "Path to automatic restore configuration file. If not set, not enabled")
+	fs.StringVar(&config.CDCConfigFile, "cdc-config", "", "Path to CDC service configuration JSON file (enables CDC if set)")
 	fs.StringVar(&config.HTTPx509CACert, "http-ca-cert", "", "Path to X.509 CA certificate for HTTPS")
 	fs.StringVar(&config.HTTPx509Cert, "http-cert", "", "Path to HTTPS X.509 certificate")
 	fs.StringVar(&config.HTTPx509Key, "http-key", "", "Path to HTTPS X.509 private key")
