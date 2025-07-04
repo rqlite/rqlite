@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"compress/gzip"
 	"context"
+	"encoding/json"
 	"expvar"
 	"fmt"
 	"io"
@@ -12,6 +13,7 @@ import (
 	"time"
 
 	"github.com/rqlite/rqlite/v8/aws"
+	"github.com/rqlite/rqlite/v8/gcp"
 )
 
 // stats captures stats for the Uploader service.
@@ -60,19 +62,13 @@ func DownloadFile(ctx context.Context, cfgPath string) (path string, errOK bool,
 		return "", false, fmt.Errorf("failed to read auto-restore file: %s", err.Error())
 	}
 
-	dCfg, s3cfg, err := Unmarshal(b)
-	if err != nil {
-		return "", false, fmt.Errorf("failed to parse auto-restore file: %s", err.Error())
+	// Parse the config to determine storage type
+	var tempCfg struct {
+		Type string `json:"type"`
 	}
-	clientOpts := &aws.S3ClientOpts{
-		ForcePathStyle: s3cfg.ForcePathStyle,
+	if err := json.Unmarshal(b, &tempCfg); err != nil {
+		return "", false, fmt.Errorf("failed to parse storage type from auto-restore file: %s", err.Error())
 	}
-	sc, err := aws.NewS3Client(s3cfg.Endpoint, s3cfg.Region, s3cfg.AccessKeyID, s3cfg.SecretAccessKey,
-		s3cfg.Bucket, s3cfg.Path, clientOpts)
-	if err != nil {
-		return "", false, fmt.Errorf("failed to create aws S3 client: %s", err.Error())
-	}
-	d := NewDownloader(sc)
 
 	// Create a temporary file to download to.
 	f, err = os.CreateTemp("", "rqlite-auto-restore")
@@ -81,9 +77,45 @@ func DownloadFile(ctx context.Context, cfgPath string) (path string, errOK bool,
 	}
 	defer f.Close()
 
-	if err := d.Do(ctx, f, time.Duration(dCfg.Timeout)); err != nil {
-		return "", dCfg.ContinueOnFailure, fmt.Errorf("failed to download auto-restore file: %s", err.Error())
+	if tempCfg.Type == "gcs" {
+		// Handle GCS
+		dCfg, gcsCfg, err := UnmarshalGCS(b)
+		if err != nil {
+			return "", false, fmt.Errorf("failed to parse GCS auto-restore file: %s", err.Error())
+		}
+
+		gcsClientOpts := &gcp.GCSClientOpts{}
+		sc, err := gcp.NewGCSClient(gcsCfg, gcsClientOpts)
+		if err != nil {
+			return "", false, fmt.Errorf("failed to create GCS client: %s", err.Error())
+		}
+
+		d := NewDownloader(sc)
+		if err := d.Do(ctx, f, time.Duration(dCfg.Timeout)); err != nil {
+			return "", dCfg.ContinueOnFailure, fmt.Errorf("failed to download auto-restore file from GCS: %s", err.Error())
+		}
+	} else {
+		// Handle S3 (default)
+		dCfg, s3cfg, err := Unmarshal(b)
+		if err != nil {
+			return "", false, fmt.Errorf("failed to parse auto-restore file: %s", err.Error())
+		}
+
+		clientOpts := &aws.S3ClientOpts{
+			ForcePathStyle: s3cfg.ForcePathStyle,
+		}
+		sc, err := aws.NewS3Client(s3cfg.Endpoint, s3cfg.Region, s3cfg.AccessKeyID, s3cfg.SecretAccessKey,
+			s3cfg.Bucket, s3cfg.Path, clientOpts)
+		if err != nil {
+			return "", false, fmt.Errorf("failed to create aws S3 client: %s", err.Error())
+		}
+
+		d := NewDownloader(sc)
+		if err := d.Do(ctx, f, time.Duration(dCfg.Timeout)); err != nil {
+			return "", dCfg.ContinueOnFailure, fmt.Errorf("failed to download auto-restore file from S3: %s", err.Error())
+		}
 	}
+
 	return f.Name(), false, nil
 }
 
