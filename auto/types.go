@@ -61,7 +61,7 @@ func (s *StorageType) UnmarshalJSON(b []byte) error {
 	switch value := v.(type) {
 	case string:
 		*s = StorageType(value)
-		if *s != "s3" {
+		if *s != "s3" && *s != "gcs" {
 			return ErrUnsupportedStorageType
 		}
 		return nil

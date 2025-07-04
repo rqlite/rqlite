@@ -1,0 +1,49 @@
+# Example Google Cloud Storage (GCS) backup configuration
+{
+  "version": 1,
+  "type": "gcs",
+  "interval": "24h",
+  "vacuum": true,
+  "no_compress": false,
+  "timestamp": true,
+  "sub": {
+    "project_id": "my-project-id",
+    "bucket": "rqlite-backups",
+    "path": "production/backup.db",
+    "credentials_file": "/path/to/service-account.json"
+  }
+}
+
+# Alternative configuration using environment variables
+{
+  "version": 1,
+  "type": "gcs",
+  "interval": "12h",
+  "vacuum": false,
+  "no_compress": false,
+  "timestamp": true,
+  "sub": {
+    "project_id": "$GCP_PROJECT_ID",
+    "bucket": "$GCS_BUCKET",
+    "path": "backup.db",
+    "credentials_json": "$GOOGLE_APPLICATION_CREDENTIALS_JSON"
+  }
+}
+
+# Example S3 configuration (existing functionality unchanged)
+{
+  "version": 1,
+  "type": "s3",
+  "interval": "24h",
+  "vacuum": true,
+  "no_compress": false,
+  "timestamp": true,
+  "sub": {
+    "region": "us-west-2",
+    "access_key_id": "$AWS_ACCESS_KEY_ID",
+    "secret_access_key": "$AWS_SECRET_ACCESS_KEY",
+    "bucket": "rqlite-backups",
+    "path": "backup.db",
+    "force_path_style": false
+  }
+}

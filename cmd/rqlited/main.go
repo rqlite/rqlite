@@ -4,6 +4,7 @@ package main
 import (
 	"context"
 	"crypto/tls"
+	"encoding/json"
 	"fmt"
 	"log"
 	"net"
@@ -27,6 +28,7 @@ import (
 	"github.com/rqlite/rqlite/v8/db"
 	"github.com/rqlite/rqlite/v8/disco"
 	"github.com/rqlite/rqlite/v8/extensions"
+	"github.com/rqlite/rqlite/v8/gcp"
 	httpd "github.com/rqlite/rqlite/v8/http"
 	"github.com/rqlite/rqlite/v8/rarchive"
 	"github.com/rqlite/rqlite/v8/rtls"
@@ -261,23 +263,59 @@ func startAutoBackups(ctx context.Context, cfg *Config, str *store.Store) (*back
 		return nil, fmt.Errorf("failed to read auto-backup file: %s", err.Error())
 	}
 
-	uCfg, s3cfg, err := backup.Unmarshal(b)
-	if err != nil {
-		return nil, fmt.Errorf("failed to parse auto-backup file: %s", err.Error())
+	// Parse the config to determine storage type
+	var tempCfg struct {
+		Type string `json:"type"`
 	}
-	provider := store.NewProvider(str, uCfg.Vacuum, !uCfg.NoCompress)
-	s3ClientOps := &aws.S3ClientOpts{
-		ForcePathStyle: s3cfg.ForcePathStyle,
-		Timestamp:      uCfg.Timestamp,
+	if err := json.Unmarshal(b, &tempCfg); err != nil {
+		return nil, fmt.Errorf("failed to parse storage type from auto-backup file: %s", err.Error())
 	}
-	sc, err := aws.NewS3Client(s3cfg.Endpoint, s3cfg.Region, s3cfg.AccessKeyID, s3cfg.SecretAccessKey,
-		s3cfg.Bucket, s3cfg.Path, s3ClientOps)
-	if err != nil {
-		return nil, fmt.Errorf("failed to create aws S3 client: %s", err.Error())
+
+	provider := store.NewProvider(str, false, true) // We'll update these after parsing
+
+	if tempCfg.Type == "gcs" {
+		// Handle GCS
+		uCfg, gcsCfg, err := backup.UnmarshalGCS(b)
+		if err != nil {
+			return nil, fmt.Errorf("failed to parse GCS auto-backup file: %s", err.Error())
+		}
+		provider = store.NewProvider(str, uCfg.Vacuum, !uCfg.NoCompress)
+
+		gcsClientOpts := &gcp.GCSClientOpts{
+			Timestamp: uCfg.Timestamp,
+		}
+
+		sc, err := gcp.NewGCSClient(gcsCfg, gcsClientOpts)
+		if err != nil {
+			return nil, fmt.Errorf("failed to create GCS client: %s", err.Error())
+		}
+
+		u := backup.NewUploader(sc, provider, time.Duration(uCfg.Interval))
+		u.Start(ctx, str.IsLeader)
+		return u, nil
+	} else {
+		// Handle S3 (default)
+		uCfg, s3cfg, err := backup.Unmarshal(b)
+		if err != nil {
+			return nil, fmt.Errorf("failed to parse auto-backup file: %s", err.Error())
+		}
+		provider = store.NewProvider(str, uCfg.Vacuum, !uCfg.NoCompress)
+
+		s3ClientOps := &aws.S3ClientOpts{
+			ForcePathStyle: s3cfg.ForcePathStyle,
+			Timestamp:      uCfg.Timestamp,
+		}
+
+		sc, err := aws.NewS3Client(s3cfg.Endpoint, s3cfg.Region, s3cfg.AccessKeyID, s3cfg.SecretAccessKey,
+			s3cfg.Bucket, s3cfg.Path, s3ClientOps)
+		if err != nil {
+			return nil, fmt.Errorf("failed to create aws S3 client: %s", err.Error())
+		}
+
+		u := backup.NewUploader(sc, provider, time.Duration(uCfg.Interval))
+		u.Start(ctx, str.IsLeader)
+		return u, nil
 	}
-	u := backup.NewUploader(sc, provider, time.Duration(uCfg.Interval))
-	u.Start(ctx, str.IsLeader)
-	return u, nil
 }
 
 func createExtensionsStore(cfg *Config) (*extensions.Store, error) {
