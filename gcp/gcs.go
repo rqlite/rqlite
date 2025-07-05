@@ -3,11 +3,8 @@ package gcp
 import (
 	"bytes"
 	"context"
-	"crypto"
 	"crypto/rsa"
-	"crypto/sha256"
 	"crypto/x509"
-	"encoding/base64"
 	"encoding/json"
 	"encoding/pem"
 	"fmt"
@@ -20,129 +17,115 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/rqlite/rqlite/v8/gcp/jws"
 )
 
-// Config holds the parameters needed to build a GCSClient.
 type Config struct {
-	UploadEndpoint string // e.g. "https://storage.googleapis.com"
+	UploadEndpoint string // defaults to https://storage.googleapis.com
 	Bucket         string
 	ProjectID      string
 	ObjectName     string
 	CredentialPath string
 }
 
-// GCSClient performs one-shot operations against a single bucket / object.
 type GCSClient struct {
 	cfg Config
 
 	sa          serviceAccount
-	tok         string
-	tokExpiry   time.Time
+	accessToken string
+	expiry      time.Time
 	tokenMu     sync.Mutex
-	httpClient  *http.Client
-	uploadURL   string
-	objectURL   string
-	bucketURL   string
-	metadataURL string
+
+	http      *http.Client
+	uploadURL string
+	objectURL string
+	bucketURL string
 }
 
-// New returns a ready-to-use client.
 func New(cfg Config) (*GCSClient, error) {
 	if cfg.UploadEndpoint == "" {
 		cfg.UploadEndpoint = "https://storage.googleapis.com"
 	}
-
 	sa, err := loadServiceAccount(cfg.CredentialPath)
 	if err != nil {
 		return nil, err
 	}
-
 	base := strings.TrimRight(cfg.UploadEndpoint, "/")
-	upURL := fmt.Sprintf("%s/upload/storage/v1/b/%s/o", base, url.PathEscape(cfg.Bucket))
-	objURL := fmt.Sprintf("%s/storage/v1/b/%s/o/%s",
-		base, url.PathEscape(cfg.Bucket), url.PathEscape(cfg.ObjectName))
-	bktURL := fmt.Sprintf("%s/storage/v1/b/%s", base, url.PathEscape(cfg.Bucket))
 
 	return &GCSClient{
-		cfg:         cfg,
-		sa:          *sa,
-		httpClient:  http.DefaultClient,
-		uploadURL:   upURL,
-		objectURL:   objURL,
-		bucketURL:   bktURL,
-		metadataURL: objURL, // same URL, no alt=media
+		cfg:       cfg,
+		sa:        *sa,
+		http:      http.DefaultClient,
+		uploadURL: fmt.Sprintf("%s/upload/storage/v1/b/%s/o", base, url.PathEscape(cfg.Bucket)),
+		objectURL: fmt.Sprintf("%s/storage/v1/b/%s/o/%s",
+			base, url.PathEscape(cfg.Bucket), url.PathEscape(cfg.ObjectName)),
+		bucketURL: fmt.Sprintf("%s/storage/v1/b/%s", base, url.PathEscape(cfg.Bucket)),
 	}, nil
 }
 
-// EnsureBucket creates the bucket if it does not exist.
 func (c *GCSClient) EnsureBucket(ctx context.Context) error {
 	req, _ := http.NewRequestWithContext(ctx, http.MethodGet, c.bucketURL, nil)
 	if err := c.addAuth(req); err != nil {
 		return err
 	}
-
-	res, err := c.httpClient.Do(req)
+	res, err := c.http.Do(req)
 	if err != nil {
 		return err
 	}
 	defer res.Body.Close()
 
-	if res.StatusCode == http.StatusOK {
+	switch res.StatusCode {
+	case http.StatusOK:
 		return nil // already exists
-	}
-	if res.StatusCode != http.StatusNotFound {
+	case http.StatusNotFound:
+		body := fmt.Sprintf(`{"name":"%s"}`, c.cfg.Bucket)
+		u := c.bucketURL + "?project=" + url.QueryEscape(c.cfg.ProjectID)
+		req, _ = http.NewRequestWithContext(ctx, http.MethodPost, u, strings.NewReader(body))
+		req.Header.Set("Content-Type", "application/json")
+		if err := c.addAuth(req); err != nil {
+			return err
+		}
+		res, err = c.http.Do(req)
+		if err != nil {
+			return err
+		}
+		defer res.Body.Close()
+		if res.StatusCode != http.StatusOK {
+			b, _ := io.ReadAll(res.Body)
+			return fmt.Errorf("bucket creation failed: %s", b)
+		}
+		return nil
+	default:
 		b, _ := io.ReadAll(res.Body)
 		return fmt.Errorf("bucket check failed: %s", b)
 	}
-
-	// Need to create.
-	body := fmt.Sprintf(`{"name":"%s"}`, c.cfg.Bucket)
-	u := fmt.Sprintf("%s?project=%s", c.bucketURL, url.QueryEscape(c.cfg.ProjectID))
-	req, _ = http.NewRequestWithContext(ctx, http.MethodPost, u, strings.NewReader(body))
-	req.Header.Set("Content-Type", "application/json")
-	if err := c.addAuth(req); err != nil {
-		return err
-	}
-
-	res, err = c.httpClient.Do(req)
-	if err != nil {
-		return err
-	}
-	defer res.Body.Close()
-	if res.StatusCode != http.StatusOK {
-		b, _ := io.ReadAll(res.Body)
-		return fmt.Errorf("bucket creation failed: %s", b)
-	}
-	return nil
 }
 
-// Upload streams reader into the object and sets its custom ID metadata.
 func (c *GCSClient) Upload(ctx context.Context, r io.Reader, id string) error {
 	var buf bytes.Buffer
-	mw := multipart.NewWriter(&buf)
+	w := multipart.NewWriter(&buf)
 
-	// Part 1: object metadata.
 	meta := fmt.Sprintf(`{"name":"%s","metadata":{"id":"%s"}}`, c.cfg.ObjectName, id)
-	hdr := textproto.MIMEHeader{"Content-Type": {"application/json; charset=UTF-8"}}
-	part, _ := mw.CreatePart(hdr)
+	hdr := textproto.MIMEHeader{"Content-Type": {"application/json"}}
+	part, _ := w.CreatePart(hdr)
 	part.Write([]byte(meta))
 
-	// Part 2: the data.
 	hdr = textproto.MIMEHeader{"Content-Type": {"application/octet-stream"}}
-	part, _ = mw.CreatePart(hdr)
+	part, _ = w.CreatePart(hdr)
 	if _, err := io.Copy(part, r); err != nil {
 		return err
 	}
-	mw.Close()
+	w.Close()
 
 	u := c.uploadURL + "?uploadType=multipart"
 	req, _ := http.NewRequestWithContext(ctx, http.MethodPost, u, &buf)
-	req.Header.Set("Content-Type", "multipart/related; boundary="+mw.Boundary())
+	req.Header.Set("Content-Type", "multipart/related; boundary="+w.Boundary())
 	if err := c.addAuth(req); err != nil {
 		return err
 	}
 
-	res, err := c.httpClient.Do(req)
+	res, err := c.http.Do(req)
 	if err != nil {
 		return err
 	}
@@ -154,15 +137,12 @@ func (c *GCSClient) Upload(ctx context.Context, r io.Reader, id string) error {
 	return nil
 }
 
-// Download writes the object into writer, starting at offset 0.
 func (c *GCSClient) Download(ctx context.Context, w io.WriterAt) error {
-	u := c.objectURL + "?alt=media"
-	req, _ := http.NewRequestWithContext(ctx, http.MethodGet, u, nil)
+	req, _ := http.NewRequestWithContext(ctx, http.MethodGet, c.objectURL+"?alt=media", nil)
 	if err := c.addAuth(req); err != nil {
 		return err
 	}
-
-	res, err := c.httpClient.Do(req)
+	res, err := c.http.Do(req)
 	if err != nil {
 		return err
 	}
@@ -172,61 +152,52 @@ func (c *GCSClient) Download(ctx context.Context, w io.WriterAt) error {
 		return fmt.Errorf("download failed: %s", b)
 	}
 
-	var (
-		buf     = make([]byte, 32*1024)
-		offset  int64
-		werr    error
-		readErr error
-	)
+	buf := make([]byte, 32*1024)
+	var off int64
 	for {
 		n, err := res.Body.Read(buf)
 		if n > 0 {
-			if _, werr = w.WriteAt(buf[:n], offset); werr != nil {
+			if _, werr := w.WriteAt(buf[:n], off); werr != nil {
 				return werr
 			}
-			offset += int64(n)
+			off += int64(n)
 		}
 		if err == io.EOF {
 			break
 		}
 		if err != nil {
-			readErr = err
-			break
+			return err
 		}
 	}
-	return readErr
+	return nil
 }
 
-// Delete removes the object.
 func (c *GCSClient) Delete(ctx context.Context) error {
 	req, _ := http.NewRequestWithContext(ctx, http.MethodDelete, c.objectURL, nil)
 	if err := c.addAuth(req); err != nil {
 		return err
 	}
-
-	res, err := c.httpClient.Do(req)
+	res, err := c.http.Do(req)
 	if err != nil {
 		return err
 	}
 	defer res.Body.Close()
-	if res.StatusCode == http.StatusNotFound {
-		return nil // already gone
-	}
-	if res.StatusCode != http.StatusOK && res.StatusCode != http.StatusNoContent {
+
+	switch res.StatusCode {
+	case http.StatusOK, http.StatusNoContent, http.StatusNotFound:
+		return nil
+	default:
 		b, _ := io.ReadAll(res.Body)
 		return fmt.Errorf("delete failed: %s", b)
 	}
-	return nil
 }
 
-// CurrentID reads the custom metadata "id" of the current object.
 func (c *GCSClient) CurrentID(ctx context.Context) (string, error) {
-	req, _ := http.NewRequestWithContext(ctx, http.MethodGet, c.metadataURL, nil)
+	req, _ := http.NewRequestWithContext(ctx, http.MethodGet, c.objectURL, nil)
 	if err := c.addAuth(req); err != nil {
 		return "", err
 	}
-
-	res, err := c.httpClient.Do(req)
+	res, err := c.http.Do(req)
 	if err != nil {
 		return "", err
 	}
@@ -235,7 +206,6 @@ func (c *GCSClient) CurrentID(ctx context.Context) (string, error) {
 		b, _ := io.ReadAll(res.Body)
 		return "", fmt.Errorf("metadata fetch failed: %s", b)
 	}
-
 	var obj struct {
 		Metadata map[string]string `json:"metadata"`
 	}
@@ -246,7 +216,7 @@ func (c *GCSClient) CurrentID(ctx context.Context) (string, error) {
 }
 
 func (c *GCSClient) addAuth(req *http.Request) error {
-	tok, err := c.token(req.Context())
+	tok, err := c.getToken(req.Context())
 	if err != nil {
 		return err
 	}
@@ -254,28 +224,41 @@ func (c *GCSClient) addAuth(req *http.Request) error {
 	return nil
 }
 
-func (c *GCSClient) token(ctx context.Context) (string, error) {
+func (c *GCSClient) getToken(ctx context.Context) (string, error) {
 	c.tokenMu.Lock()
 	defer c.tokenMu.Unlock()
 
-	if time.Until(c.tokExpiry) > 2*time.Minute {
-		return c.tok, nil
+	if time.Until(c.expiry) > 2*time.Minute {
+		return c.accessToken, nil
 	}
 
-	jwt, err := jwtSigned(&c.sa,
-		"https://www.googleapis.com/auth/devstorage.read_write",
-		time.Now(),
-	)
+	jwt, err := makeJWT(&c.sa)
 	if err != nil {
 		return "", err
 	}
-
-	tok, exp, err := fetchAccessToken(ctx, jwt, c.httpClient)
+	tok, exp, err := fetchToken(ctx, jwt, c.http)
 	if err != nil {
 		return "", err
 	}
-	c.tok, c.tokExpiry = tok, exp
+	c.accessToken, c.expiry = tok, exp
 	return tok, nil
+}
+
+func makeJWT(sa *serviceAccount) (string, error) {
+	priv, err := parseKey(sa.PrivateKey)
+	if err != nil {
+		return "", err
+	}
+	now := time.Now().Unix()
+	cs := &jws.ClaimSet{
+		Iss:   sa.ClientEmail,
+		Scope: "https://www.googleapis.com/auth/devstorage.read_write",
+		Aud:   "https://oauth2.googleapis.com/token",
+		Iat:   now,
+		Exp:   now + 3600,
+	}
+	hdr := &jws.Header{Algorithm: "RS256", Typ: "JWT"}
+	return jws.Encode(hdr, cs, priv)
 }
 
 type serviceAccount struct {
@@ -283,13 +266,12 @@ type serviceAccount struct {
 	PrivateKey  string `json:"private_key"`
 }
 
-func loadServiceAccount(path string) (*serviceAccount, error) {
-	f, err := os.Open(path)
+func loadServiceAccount(p string) (*serviceAccount, error) {
+	f, err := os.Open(p)
 	if err != nil {
 		return nil, err
 	}
 	defer f.Close()
-
 	var sa serviceAccount
 	if err := json.NewDecoder(f).Decode(&sa); err != nil {
 		return nil, err
@@ -297,7 +279,7 @@ func loadServiceAccount(path string) (*serviceAccount, error) {
 	return &sa, nil
 }
 
-func parsePrivateKey(pemKey string) (*rsa.PrivateKey, error) {
+func parseKey(pemKey string) (*rsa.PrivateKey, error) {
 	block, _ := pem.Decode([]byte(pemKey))
 	if block == nil {
 		return nil, fmt.Errorf("invalid PEM")
@@ -313,41 +295,18 @@ func parsePrivateKey(pemKey string) (*rsa.PrivateKey, error) {
 	return rsaKey, nil
 }
 
-func jwtSigned(sa *serviceAccount, scope string, now time.Time) (string, error) {
-	priv, err := parsePrivateKey(sa.PrivateKey)
-	if err != nil {
-		return "", err
-	}
-
-	hdr := base64.RawURLEncoding.EncodeToString([]byte(`{"alg":"RS256","typ":"JWT"}`))
-	iat := now.Unix()
-	exp := iat + 3600
-	claims := fmt.Sprintf(`{"iss":"%s","scope":"%s","aud":"https://oauth2.googleapis.com/token","iat":%d,"exp":%d}`,
-		sa.ClientEmail, scope, iat, exp)
-	clm := base64.RawURLEncoding.EncodeToString([]byte(claims))
-
-	unsigned := hdr + "." + clm
-	hash := sha256.Sum256([]byte(unsigned))
-	sig, err := rsa.SignPKCS1v15(nil, priv, crypto.SHA256, hash[:])
-	if err != nil {
-		return "", err
-	}
-	return unsigned + "." + base64.RawURLEncoding.EncodeToString(sig), nil
-}
-
-type tokResp struct {
+type tokenResp struct {
 	AccessToken string `json:"access_token"`
 	ExpiresIn   int64  `json:"expires_in"`
 }
 
-func fetchAccessToken(ctx context.Context, assertion string, hc *http.Client) (string, time.Time, error) {
-	form := url.Values{
+func fetchToken(ctx context.Context, jwt string, hc *http.Client) (string, time.Time, error) {
+	data := url.Values{
 		"grant_type": {"urn:ietf:params:oauth:grant-type:jwt-bearer"},
-		"assertion":  {assertion},
+		"assertion":  {jwt},
 	}
-
 	req, _ := http.NewRequestWithContext(ctx, http.MethodPost,
-		"https://oauth2.googleapis.com/token", strings.NewReader(form.Encode()))
+		"https://oauth2.googleapis.com/token", strings.NewReader(data.Encode()))
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 
 	res, err := hc.Do(req)
@@ -359,10 +318,10 @@ func fetchAccessToken(ctx context.Context, assertion string, hc *http.Client) (s
 		b, _ := io.ReadAll(res.Body)
 		return "", time.Time{}, fmt.Errorf("token exchange failed: %s", b)
 	}
-
-	var tr tokResp
+	var tr tokenResp
 	if err := json.NewDecoder(res.Body).Decode(&tr); err != nil {
 		return "", time.Time{}, err
 	}
-	return tr.AccessToken, time.Now().Add(time.Duration(tr.ExpiresIn) * time.Second), nil
+	exp := time.Now().Add(time.Duration(tr.ExpiresIn) * time.Second)
+	return tr.AccessToken, exp, nil
 }
