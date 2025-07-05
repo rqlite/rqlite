@@ -56,7 +56,7 @@ func New(cfg Config) (*GCSClient, error) {
 	return &GCSClient{
 		cfg:       cfg,
 		sa:        *sa,
-		http:      http.DefaultClient,
+		http:      &http.Client{},
 		uploadURL: fmt.Sprintf("%s/upload/storage/v1/b/%s/o", base, url.PathEscape(cfg.Bucket)),
 		objectURL: fmt.Sprintf("%s/storage/v1/b/%s/o/%s",
 			base, url.PathEscape(cfg.Bucket), url.PathEscape(cfg.ObjectName)),
