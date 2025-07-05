@@ -109,10 +109,24 @@ func (c *GCSClient) Upload(ctx context.Context, r io.Reader, id string) error {
 	var buf bytes.Buffer
 	w := multipart.NewWriter(&buf)
 
-	meta := fmt.Sprintf(`{"name":"%s","metadata":{"id":"%s"}}`, c.cfg.ObjectName, id)
+	metaData := struct {
+		Name     string `json:"name"`
+		Metadata struct {
+			ID string `json:"id"`
+		} `json:"metadata"`
+	}{
+		Name: c.cfg.ObjectName,
+	}
+	metaData.Metadata.ID = id
+
+	meta, err := json.Marshal(metaData)
+	if err != nil {
+		return fmt.Errorf("failed to marshal metadata: %w", err)
+	}
+
 	hdr := textproto.MIMEHeader{"Content-Type": {"application/json"}}
 	part, _ := w.CreatePart(hdr)
-	part.Write([]byte(meta))
+	part.Write(meta)
 
 	hdr = textproto.MIMEHeader{"Content-Type": {"application/octet-stream"}}
 	part, _ = w.CreatePart(hdr)
