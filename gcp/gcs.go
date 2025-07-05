@@ -65,7 +65,10 @@ func New(cfg Config) (*GCSClient, error) {
 }
 
 func (c *GCSClient) EnsureBucket(ctx context.Context) error {
-	req, _ := http.NewRequestWithContext(ctx, http.MethodGet, c.bucketURL, nil)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, c.bucketURL, nil)
+	if err != nil {
+		return err
+	}
 	if err := c.addAuth(req); err != nil {
 		return err
 	}
@@ -162,10 +165,10 @@ func (c *GCSClient) Download(ctx context.Context, w io.WriterAt) error {
 			}
 			off += int64(n)
 		}
-		if err == io.EOF {
-			break
-		}
 		if err != nil {
+			if err == io.EOF {
+				break
+			}
 			return err
 		}
 	}
