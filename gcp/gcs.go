@@ -133,7 +133,9 @@ func (c *GCSClient) Upload(ctx context.Context, r io.Reader, id string) error {
 	if _, err := io.Copy(part, r); err != nil {
 		return err
 	}
-	w.Close()
+	if err := w.Close(); err != nil {
+		return fmt.Errorf("failed to close multipart writer: %w", err)
+	}
 
 	u := c.uploadURL + "?uploadType=multipart"
 	req, _ := http.NewRequestWithContext(ctx, http.MethodPost, u, &buf)
