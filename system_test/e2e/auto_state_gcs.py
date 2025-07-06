@@ -72,3 +72,6 @@ class TestAutoBackup_GCS(unittest.TestCase):
     os.remove(cfg)
     os.remove(backup_file)
     delete_gcs_object(gcs_credentials_file, GCS_BUCKET, name)
+
+if __name__ == "__main__":
+  unittest.main(verbosity=2)
