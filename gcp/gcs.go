@@ -76,7 +76,7 @@ func NewGCSClient(cfg *GCSConfig) (*GCSClient, error) {
 
 // String returns a string representation of the GCSClient.
 func (s *GCSClient) String() string {
-	return fmt.Sprintf("GCSClient{Bucket: %s, Name: %s}", s.cfg.Bucket, s.cfg.Name)
+	return fmt.Sprintf("gs://%s/%s", g.bucket, g.path)
 }
 
 // EnsureBucket ensures the bucket actually exists in GCS.
