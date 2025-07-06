@@ -309,7 +309,7 @@ func createGCSCredFile(t *testing.T) string {
 	if err != nil {
 		t.Fatalf("temp file: %v", err)
 	}
-	cred := `{"client_email":"test@example.com","private_key":"-----BEGIN PRIVATE KEY-----\n-----END PRIVATE KEY-----"}`
+	cred := `{"client_email":"test@example.com","private_key":"-----BEGIN PRIVATE KEY----------END PRIVATE KEY-----"}`
 	if _, err = f.WriteString(cred); err != nil {
 		t.Fatalf("write cred: %v", err)
 	}
