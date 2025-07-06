@@ -32,7 +32,7 @@ func Test_EnsureBucketExists(t *testing.T) {
 	if err := cli.EnsureBucket(context.Background()); err != nil {
 		t.Fatalf("EnsureBucket: %v", err)
 	}
-	want := "/storage/v1/b/bucket"
+	want := "/storage/v1/b/mybucket"
 	if gotPath != want {
 		t.Errorf("path = %s, want %s", gotPath, want)
 	}
@@ -44,24 +44,24 @@ func Test_EnsureBucketCreate(t *testing.T) {
 		switch atomic.AddInt32(&step, 1) {
 		case 1: // initial GET -> 404
 			if r.Method != http.MethodGet {
-				t.Errorf("step1 method %s", r.Method)
+				t.Fatalf("step1 method %s", r.Method)
 			}
 			w.WriteHeader(http.StatusNotFound)
 		case 2: // POST create
 			if r.Method != http.MethodPost {
-				t.Errorf("step2 method %s", r.Method)
+				t.Fatalf("step2 method %s", r.Method)
 			}
 			if !strings.Contains(r.URL.RawQuery, "project=proj") {
-				t.Errorf("missing project param")
+				t.Fatalf("missing project param")
 			}
 			var body bytes.Buffer
 			io.Copy(&body, r.Body)
-			if !strings.Contains(body.String(), `"name":"bucket"`) {
-				t.Errorf("create body = %s", body.String())
+			if !strings.Contains(body.String(), `"name":"mybucket"`) {
+				t.Fatalf("create body = %s", body.String())
 			}
 			w.WriteHeader(http.StatusOK)
 		default:
-			t.Errorf("unexpected extra request")
+			t.Fatalf("unexpected extra request")
 		}
 	}
 	cli, shutdown := newTestClient(t, handler)
@@ -71,24 +71,24 @@ func Test_EnsureBucketCreate(t *testing.T) {
 		t.Fatalf("EnsureBucket create: %v", err)
 	}
 	if step != 2 {
-		t.Errorf("expected 2 requests, got %d", step)
+		t.Fatalf("expected 2 requests, got %d", step)
 	}
 }
 
 func Test_Upload(t *testing.T) {
 	handler := func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodPost {
-			t.Errorf("method %s", r.Method)
+			t.Fatalf("method %s", r.Method)
 		}
-		if !strings.HasPrefix(r.URL.Path, "/upload/storage/v1/b/bucket/o") {
-			t.Errorf("path %s", r.URL.Path)
+		if !strings.HasPrefix(r.URL.Path, "/upload/storage/v1/b/mybucket/o") {
+			t.Fatalf("path %s", r.URL.Path)
 		}
 		if r.Header.Get("Authorization") != "Bearer TESTTOKEN" {
-			t.Errorf("auth header missing")
+			t.Fatalf("auth header missing")
 		}
 		mediaType, params, err := mime.ParseMediaType(r.Header.Get("Content-Type"))
 		if err != nil || !strings.HasPrefix(mediaType, "multipart/related") {
-			t.Errorf("content-type: %s", r.Header.Get("Content-Type"))
+			t.Fatalf("content-type: %s", r.Header.Get("Content-Type"))
 		}
 		mr := multipart.NewReader(r.Body, params["boundary"])
 		// part 1: metadata
@@ -100,16 +100,16 @@ func Test_Upload(t *testing.T) {
 			} `json:"metadata"`
 		}
 		if err := json.NewDecoder(p1).Decode(&meta); err != nil {
-			t.Errorf("metadata decode: %v", err)
+			t.Fatalf("metadata decode: %v", err)
 		}
 		if meta.Name != "object.txt" || meta.Metadata.ID != "v123" {
-			t.Errorf("metadata %+v", meta)
+			t.Fatalf("metadata %+v", meta)
 		}
 		// part 2: data
 		p2, _ := mr.NextPart()
 		body, _ := io.ReadAll(p2)
 		if string(body) != "hello" {
-			t.Errorf("payload %q", body)
+			t.Fatalf("payload %q", body)
 		}
 		w.WriteHeader(http.StatusOK)
 	}
@@ -125,10 +125,13 @@ func Test_Upload(t *testing.T) {
 func Test_Download(t *testing.T) {
 	handler := func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodGet {
-			t.Errorf("method %s", r.Method)
+			t.Fatalf("method %s", r.Method)
 		}
 		if !strings.Contains(r.URL.RawQuery, "alt=media") {
-			t.Errorf("missing alt=media")
+			t.Fatalf("missing alt=media")
+		}
+		if r.URL.Path != "/storage/v1/b/mybucket/o/object.txt" {
+			t.Fatalf("path %s", r.URL.Path)
 		}
 		w.WriteHeader(http.StatusOK)
 		w.Write([]byte("world"))
@@ -141,14 +144,17 @@ func Test_Download(t *testing.T) {
 		t.Fatalf("Download: %v", err)
 	}
 	if buf.String() != "world" {
-		t.Errorf("got %q, want %q", buf.String(), "world")
+		t.Fatalf("got %q, want %q", buf.String(), "world")
 	}
 }
 
 func Test_Delete(t *testing.T) {
 	handler := func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodDelete {
-			t.Errorf("method %s", r.Method)
+			t.Fatalf("method %s", r.Method)
+		}
+		if r.URL.Path != "/storage/v1/b/mybucket/o/object.txt" {
+			t.Fatalf("path %s", r.URL.Path)
 		}
 		w.WriteHeader(http.StatusOK)
 	}
@@ -219,7 +225,7 @@ func newTestClient(t *testing.T, h http.HandlerFunc) (*GCSClient, func()) {
 	cfg := &GCSConfig{
 		Endpoint:        ts.URL, // override base
 		ProjectID:       "proj",
-		Bucket:          "bucket",
+		Bucket:          "mybucket",
 		Name:            "object.txt",
 		CredentialsPath: createCredFile(t), // dummy, never used
 	}
