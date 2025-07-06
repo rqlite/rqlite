@@ -21,7 +21,6 @@ import (
 	"github.com/rqlite/rqlite/v8/auth"
 	"github.com/rqlite/rqlite/v8/auto/backup"
 	"github.com/rqlite/rqlite/v8/auto/restore"
-	"github.com/rqlite/rqlite/v8/aws"
 	"github.com/rqlite/rqlite/v8/cluster"
 	"github.com/rqlite/rqlite/v8/cmd"
 	"github.com/rqlite/rqlite/v8/db"
@@ -261,20 +260,11 @@ func startAutoBackups(ctx context.Context, cfg *Config, str *store.Store) (*back
 		return nil, fmt.Errorf("failed to read auto-backup file: %s", err.Error())
 	}
 
-	uCfg, s3cfg, err := backup.Unmarshal(b)
+	uCfg, sc, err := backup.NewStorageClient(b)
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse auto-backup file: %s", err.Error())
 	}
 	provider := store.NewProvider(str, uCfg.Vacuum, !uCfg.NoCompress)
-	s3ClientOps := &aws.S3ClientOpts{
-		ForcePathStyle: s3cfg.ForcePathStyle,
-		Timestamp:      uCfg.Timestamp,
-	}
-	sc, err := aws.NewS3Client(s3cfg.Endpoint, s3cfg.Region, s3cfg.AccessKeyID, s3cfg.SecretAccessKey,
-		s3cfg.Bucket, s3cfg.Path, s3ClientOps)
-	if err != nil {
-		return nil, fmt.Errorf("failed to create aws S3 client: %s", err.Error())
-	}
 	u := backup.NewUploader(sc, provider, time.Duration(uCfg.Interval))
 	u.Start(ctx, str.IsLeader)
 	return u, nil

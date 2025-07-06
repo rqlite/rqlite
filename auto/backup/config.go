@@ -7,6 +7,7 @@ import (
 
 	"github.com/rqlite/rqlite/v8/auto"
 	"github.com/rqlite/rqlite/v8/aws"
+	"github.com/rqlite/rqlite/v8/gcp"
 )
 
 // Config is the config file format for the upload service
@@ -20,8 +21,8 @@ type Config struct {
 	Sub        json.RawMessage  `json:"sub"`
 }
 
-// Unmarshal unmarshals the config file and returns the config and subconfig
-func Unmarshal(data []byte) (*Config, *aws.S3Config, error) {
+// NewStorageClient unmarshals the config data and returns the Config and StorageClient.
+func NewStorageClient(data []byte) (*Config, StorageClient, error) {
 	cfg := &Config{}
 	err := json.Unmarshal(data, cfg)
 	if err != nil {
@@ -32,12 +33,32 @@ func Unmarshal(data []byte) (*Config, *aws.S3Config, error) {
 		return nil, nil, auto.ErrInvalidVersion
 	}
 
-	s3cfg := &aws.S3Config{}
-	err = json.Unmarshal(cfg.Sub, s3cfg)
-	if err != nil {
-		return nil, nil, err
+	var sc StorageClient
+	switch cfg.Type {
+	case auto.StorageTypeS3:
+		s3cfg := &aws.S3Config{}
+		err = json.Unmarshal(cfg.Sub, s3cfg)
+		if err != nil {
+			return nil, nil, err
+		}
+		s3ClientOps := &aws.S3ClientOpts{
+			ForcePathStyle: s3cfg.ForcePathStyle,
+			Timestamp:      cfg.Timestamp,
+		}
+		sc, err = aws.NewS3Client(s3cfg.Endpoint, s3cfg.Region, s3cfg.AccessKeyID, s3cfg.SecretAccessKey,
+			s3cfg.Bucket, s3cfg.Path, s3ClientOps)
+	case auto.StorageTypeGCS:
+		gcsCfg := &gcp.GCSConfig{}
+		err = json.Unmarshal(cfg.Sub, gcsCfg)
+		if err != nil {
+			return nil, nil, err
+		}
+		sc, err = gcp.NewGCSClient(gcsCfg)
+	default:
+		return nil, nil, auto.ErrUnsupportedStorageType
 	}
-	return cfg, s3cfg, nil
+
+	return cfg, sc, err
 }
 
 // ReadConfigFile reads the config file and returns the data. It also expands

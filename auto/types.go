@@ -49,8 +49,16 @@ func (d *Duration) UnmarshalJSON(b []byte) error {
 	}
 }
 
-// StorageType is a wrapper around string that allows us to unmarshal
+// StorageType represents the type of storage service used for backups.
 type StorageType string
+
+const (
+	// StorageTypeS3 is the storage type for Amazon S3
+	StorageTypeS3 StorageType = "s3"
+
+	// StorageTypeGCS is the storage type for Google Cloud Storage
+	StorageTypeGCS StorageType = "gcs"
+)
 
 // UnmarshalJSON unmarshals the storage type from a string and validates it
 func (s *StorageType) UnmarshalJSON(b []byte) error {
@@ -61,7 +69,7 @@ func (s *StorageType) UnmarshalJSON(b []byte) error {
 	switch value := v.(type) {
 	case string:
 		*s = StorageType(value)
-		if *s != "s3" {
+		if *s != StorageTypeS3 && *s != StorageTypeGCS {
 			return ErrUnsupportedStorageType
 		}
 		return nil
