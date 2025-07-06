@@ -13,4 +13,4 @@ RUN sudo apt-get install gcc-mipsel-linux-gnu
 RUN sudo apt-get install gcc-mips64-linux-gnuabi64
 RUN sudo apt-get install gcc-mips64el-linux-gnuabi64
 RUN sudo apt-get install python3 python3-pip
-RUN python3 -m pip install requests boto3
+RUN python3 -m pip install requests boto3 google-cloud-storage
