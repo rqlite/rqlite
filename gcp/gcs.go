@@ -21,6 +21,13 @@ import (
 	"github.com/rqlite/rqlite/v8/gcp/jws"
 )
 
+var (
+	defaultEndpoint         = "https://storage.googleapis.com"
+	defaultDownloadBufferSz = 32 * 1024 // 32 KiB
+	jwtScope                = "https://www.googleapis.com/auth/devstorage.read_write"
+	jwtAudTarget            = "https://oauth2.googleapis.com/token"
+)
+
 // GCSConfig is the subconfig for the GCS storage type.
 type GCSConfig struct {
 	Endpoint        string `json:"endpoint,omitempty"`
@@ -48,7 +55,7 @@ type GCSClient struct {
 // NewGCSClient returns an instance of a GCSClient.
 func NewGCSClient(cfg *GCSConfig) (*GCSClient, error) {
 	if cfg.Endpoint == "" {
-		cfg.Endpoint = "https://storage.googleapis.com"
+		cfg.Endpoint = defaultEndpoint
 	}
 	sa, err := loadServiceAccount(cfg.CredentialsPath)
 	if err != nil {
@@ -135,11 +142,19 @@ func (c *GCSClient) Upload(ctx context.Context, r io.Reader, id string) error {
 	}
 
 	hdr := textproto.MIMEHeader{"Content-Type": {"application/json"}}
-	part, _ := w.CreatePart(hdr)
-	part.Write(meta)
+	part, err := w.CreatePart(hdr)
+	if err != nil {
+		return fmt.Errorf("failed to create metadata part: %w", err)
+	}
+	if _, err := part.Write(meta); err != nil {
+		return fmt.Errorf("failed to write metadata part: %w", err)
+	}
 
 	hdr = textproto.MIMEHeader{"Content-Type": {"application/octet-stream"}}
-	part, _ = w.CreatePart(hdr)
+	part, err = w.CreatePart(hdr)
+	if err != nil {
+		return fmt.Errorf("failed to create data part: %w", err)
+	}
 	if _, err := io.Copy(part, r); err != nil {
 		return err
 	}
@@ -182,7 +197,7 @@ func (c *GCSClient) Download(ctx context.Context, w io.WriterAt) error {
 		return fmt.Errorf("download failed: %s", b)
 	}
 
-	buf := make([]byte, 32*1024)
+	buf := make([]byte, defaultDownloadBufferSz)
 	var off int64
 	for {
 		n, err := res.Body.Read(buf)
@@ -284,8 +299,8 @@ func makeJWT(sa *serviceAccount) (string, error) {
 	now := time.Now().Unix()
 	cs := &jws.ClaimSet{
 		Iss:   sa.ClientEmail,
-		Scope: "https://www.googleapis.com/auth/devstorage.read_write",
-		Aud:   "https://oauth2.googleapis.com/token",
+		Scope: jwtScope,
+		Aud:   jwtAudTarget,
 		Iat:   now,
 		Exp:   now + 3600,
 	}
@@ -338,7 +353,7 @@ func fetchToken(ctx context.Context, jwt string, hc *http.Client) (string, time.
 		"assertion":  {jwt},
 	}
 	req, _ := http.NewRequestWithContext(ctx, http.MethodPost,
-		"https://oauth2.googleapis.com/token", strings.NewReader(data.Encode()))
+		jwtAudTarget, strings.NewReader(data.Encode()))
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 
 	res, err := hc.Do(req)
