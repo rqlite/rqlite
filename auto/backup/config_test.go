@@ -4,12 +4,10 @@ import (
 	"bytes"
 	"errors"
 	"os"
-	"reflect"
 	"testing"
 	"time"
 
 	"github.com/rqlite/rqlite/v8/auto"
-	"github.com/rqlite/rqlite/v8/aws"
 )
 
 func Test_ReadConfigFile(t *testing.T) {
@@ -102,12 +100,11 @@ key2=TEST_VAR2`)
 	})
 }
 
-func TestUnmarshal(t *testing.T) {
+func Test_NewStorageClient(t *testing.T) {
 	testCases := []struct {
 		name        string
 		input       []byte
 		expectedCfg *Config
-		expectedS3  *aws.S3Config
 		expectedErr error
 	}{
 		{
@@ -137,13 +134,6 @@ func TestUnmarshal(t *testing.T) {
 				Vacuum:     true,
 				Interval:   24 * auto.Duration(time.Hour),
 			},
-			expectedS3: &aws.S3Config{
-				AccessKeyID:     "test_id",
-				SecretAccessKey: "test_secret",
-				Region:          "us-west-2",
-				Bucket:          "test_bucket",
-				Path:            "test/path",
-			},
 			expectedErr: nil,
 		},
 		{
@@ -171,13 +161,6 @@ func TestUnmarshal(t *testing.T) {
 				Interval:   24 * auto.Duration(time.Hour),
 				Vacuum:     false,
 			},
-			expectedS3: &aws.S3Config{
-				AccessKeyID:     "test_id",
-				SecretAccessKey: "test_secret",
-				Region:          "us-west-2",
-				Bucket:          "test_bucket",
-				Path:            "test/path",
-			},
 			expectedErr: nil,
 		},
 		{
@@ -197,7 +180,6 @@ func TestUnmarshal(t *testing.T) {
 				}
 			}			`),
 			expectedCfg: nil,
-			expectedS3:  nil,
 			expectedErr: auto.ErrInvalidVersion,
 		},
 		{
@@ -217,28 +199,19 @@ func TestUnmarshal(t *testing.T) {
 				}
 			}			`),
 			expectedCfg: nil,
-			expectedS3:  nil,
 			expectedErr: auto.ErrUnsupportedStorageType,
 		},
 	}
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			cfg, s3Cfg, err := Unmarshal(tc.input)
-			_ = s3Cfg
-
+			cfg, _, err := NewStorageClient(tc.input)
 			if !errors.Is(err, tc.expectedErr) {
 				t.Fatalf("Test case %s failed, expected error %v, got %v", tc.name, tc.expectedErr, err)
 			}
 
 			if !compareConfig(cfg, tc.expectedCfg) {
 				t.Fatalf("Test case %s failed, expected config %+v, got %+v", tc.name, tc.expectedCfg, cfg)
-			}
-
-			if tc.expectedS3 != nil {
-				if !reflect.DeepEqual(s3Cfg, tc.expectedS3) {
-					t.Fatalf("Test case %s failed, expected S3Config %+v, got %+v", tc.name, tc.expectedS3, s3Cfg)
-				}
 			}
 		})
 	}
