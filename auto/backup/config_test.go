@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/rqlite/rqlite/v8/auto"
+	"github.com/rqlite/rqlite/v8/aws"
 )
 
 func Test_ReadConfigFile(t *testing.T) {
@@ -102,10 +103,11 @@ key2=TEST_VAR2`)
 
 func Test_NewStorageClient(t *testing.T) {
 	testCases := []struct {
-		name        string
-		input       []byte
-		expectedCfg *Config
-		expectedErr error
+		name           string
+		input          []byte
+		expectedCfg    *Config
+		expectedClient StorageClient
+		expectedErr    error
 	}{
 		{
 			name: "ValidS3Config",
@@ -134,7 +136,8 @@ func Test_NewStorageClient(t *testing.T) {
 				Vacuum:     true,
 				Interval:   24 * auto.Duration(time.Hour),
 			},
-			expectedErr: nil,
+			expectedClient: mustNewS3Client(t, "", "us-west-2", "test_id", "test_secret", "test_bucket", "test/path"),
+			expectedErr:    nil,
 		},
 		{
 			name: "ValidS3ConfigNoptionalFields",
@@ -161,7 +164,8 @@ func Test_NewStorageClient(t *testing.T) {
 				Interval:   24 * auto.Duration(time.Hour),
 				Vacuum:     false,
 			},
-			expectedErr: nil,
+			expectedClient: mustNewS3Client(t, "", "us-west-2", "test_id", "test_secret", "test_bucket", "test/path"),
+			expectedErr:    nil,
 		},
 		{
 			name: "InvalidVersion",
@@ -205,9 +209,21 @@ func Test_NewStorageClient(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			cfg, _, err := NewStorageClient(tc.input)
+			cfg, sc, err := NewStorageClient(tc.input)
 			if !errors.Is(err, tc.expectedErr) {
 				t.Fatalf("Test case %s failed, expected error %v, got %v", tc.name, tc.expectedErr, err)
+			}
+
+			if tc.expectedClient != nil {
+				switch tc.expectedClient.(type) {
+				case *aws.S3Client:
+					_, ok := sc.(*aws.S3Client)
+					if !ok {
+						t.Fatalf("Test case %s failed, expected S3Client, got %T", tc.name, sc)
+					}
+				default:
+					t.Fatalf("Test case %s failed, unexpected client type %T", tc.name, sc)
+				}
 			}
 
 			if !compareConfig(cfg, tc.expectedCfg) {
@@ -225,4 +241,13 @@ func compareConfig(a, b *Config) bool {
 		a.Type == b.Type &&
 		a.NoCompress == b.NoCompress &&
 		a.Interval == b.Interval
+}
+
+func mustNewS3Client(t *testing.T, endpoint, region, accessKey, secretKey, bucket, key string) *aws.S3Client {
+	t.Helper()
+	client, err := aws.NewS3Client(endpoint, region, accessKey, secretKey, bucket, key, nil)
+	if err != nil {
+		t.Fatalf("Failed to create S3 client: %v", err)
+	}
+	return client
 }
