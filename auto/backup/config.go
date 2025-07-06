@@ -35,7 +35,7 @@ func NewStorageClient(data []byte) (*Config, StorageClient, error) {
 
 	var sc StorageClient
 	switch cfg.Type {
-	case "s3":
+	case auto.StorageTypeS3:
 		s3cfg := &aws.S3Config{}
 		err = json.Unmarshal(cfg.Sub, s3cfg)
 		if err != nil {
@@ -47,7 +47,7 @@ func NewStorageClient(data []byte) (*Config, StorageClient, error) {
 		}
 		sc, err = aws.NewS3Client(s3cfg.Endpoint, s3cfg.Region, s3cfg.AccessKeyID, s3cfg.SecretAccessKey,
 			s3cfg.Bucket, s3cfg.Path, s3ClientOps)
-	case "gcs":
+	case auto.StorageTypeGCS:
 		gcsCfg := &gcp.GCSConfig{}
 		err = json.Unmarshal(cfg.Sub, gcsCfg)
 		if err != nil {
