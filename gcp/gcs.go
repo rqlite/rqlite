@@ -75,20 +75,20 @@ func NewGCSClient(cfg *GCSConfig) (*GCSClient, error) {
 }
 
 // String returns a string representation of the GCSClient.
-func (s *GCSClient) String() string {
-	return fmt.Sprintf("gs://%s/%s", g.bucket, g.path)
+func (g *GCSClient) String() string {
+	return fmt.Sprintf("gs://%s/%s", g.cfg.Bucket, g.cfg.Name)
 }
 
 // EnsureBucket ensures the bucket actually exists in GCS.
-func (c *GCSClient) EnsureBucket(ctx context.Context) error {
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, c.bucketURL, nil)
+func (g *GCSClient) EnsureBucket(ctx context.Context) error {
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, g.bucketURL, nil)
 	if err != nil {
 		return err
 	}
-	if err := c.addAuth(req); err != nil {
+	if err := g.addAuth(req); err != nil {
 		return err
 	}
-	res, err := c.http.Do(req)
+	res, err := g.http.Do(req)
 	if err != nil {
 		return err
 	}
@@ -98,14 +98,14 @@ func (c *GCSClient) EnsureBucket(ctx context.Context) error {
 	case http.StatusOK:
 		return nil // already exists
 	case http.StatusNotFound:
-		body := fmt.Sprintf(`{"name":"%s"}`, c.cfg.Bucket)
-		u := c.bucketURL + "?project=" + url.QueryEscape(c.cfg.ProjectID)
+		body := fmt.Sprintf(`{"name":"%s"}`, g.cfg.Bucket)
+		u := g.bucketURL + "?project=" + url.QueryEscape(g.cfg.ProjectID)
 		req, _ = http.NewRequestWithContext(ctx, http.MethodPost, u, strings.NewReader(body))
 		req.Header.Set("Content-Type", "application/json")
-		if err := c.addAuth(req); err != nil {
+		if err := g.addAuth(req); err != nil {
 			return err
 		}
-		res, err = c.http.Do(req)
+		res, err = g.http.Do(req)
 		if err != nil {
 			return err
 		}
@@ -122,7 +122,7 @@ func (c *GCSClient) EnsureBucket(ctx context.Context) error {
 }
 
 // Upload uploads data to GCS.
-func (c *GCSClient) Upload(ctx context.Context, r io.Reader, id string) error {
+func (g *GCSClient) Upload(ctx context.Context, r io.Reader, id string) error {
 	var buf bytes.Buffer
 	w := multipart.NewWriter(&buf)
 
@@ -132,7 +132,7 @@ func (c *GCSClient) Upload(ctx context.Context, r io.Reader, id string) error {
 			ID string `json:"id"`
 		} `json:"metadata"`
 	}{
-		Name: c.cfg.Name,
+		Name: g.cfg.Name,
 	}
 	metaData.Metadata.ID = id
 
@@ -162,14 +162,14 @@ func (c *GCSClient) Upload(ctx context.Context, r io.Reader, id string) error {
 		return fmt.Errorf("failed to close multipart writer: %w", err)
 	}
 
-	u := c.uploadURL + "?uploadType=multipart"
+	u := g.uploadURL + "?uploadType=multipart"
 	req, _ := http.NewRequestWithContext(ctx, http.MethodPost, u, &buf)
 	req.Header.Set("Content-Type", "multipart/related; boundary="+w.Boundary())
-	if err := c.addAuth(req); err != nil {
+	if err := g.addAuth(req); err != nil {
 		return err
 	}
 
-	res, err := c.http.Do(req)
+	res, err := g.http.Do(req)
 	if err != nil {
 		return err
 	}
@@ -182,12 +182,12 @@ func (c *GCSClient) Upload(ctx context.Context, r io.Reader, id string) error {
 }
 
 // Download downloads data from GCS.
-func (c *GCSClient) Download(ctx context.Context, w io.WriterAt) error {
-	req, _ := http.NewRequestWithContext(ctx, http.MethodGet, c.objectURL+"?alt=media", nil)
-	if err := c.addAuth(req); err != nil {
+func (g *GCSClient) Download(ctx context.Context, w io.WriterAt) error {
+	req, _ := http.NewRequestWithContext(ctx, http.MethodGet, g.objectURL+"?alt=media", nil)
+	if err := g.addAuth(req); err != nil {
 		return err
 	}
-	res, err := c.http.Do(req)
+	res, err := g.http.Do(req)
 	if err != nil {
 		return err
 	}
@@ -218,12 +218,12 @@ func (c *GCSClient) Download(ctx context.Context, w io.WriterAt) error {
 }
 
 // Delete deletes object from GCS.
-func (c *GCSClient) Delete(ctx context.Context) error {
-	req, _ := http.NewRequestWithContext(ctx, http.MethodDelete, c.objectURL, nil)
-	if err := c.addAuth(req); err != nil {
+func (g *GCSClient) Delete(ctx context.Context) error {
+	req, _ := http.NewRequestWithContext(ctx, http.MethodDelete, g.objectURL, nil)
+	if err := g.addAuth(req); err != nil {
 		return err
 	}
-	res, err := c.http.Do(req)
+	res, err := g.http.Do(req)
 	if err != nil {
 		return err
 	}
@@ -239,12 +239,12 @@ func (c *GCSClient) Delete(ctx context.Context) error {
 }
 
 // CurrentID returns the last ID uploaded to GCS.
-func (c *GCSClient) CurrentID(ctx context.Context) (string, error) {
-	req, _ := http.NewRequestWithContext(ctx, http.MethodGet, c.objectURL, nil)
-	if err := c.addAuth(req); err != nil {
+func (g *GCSClient) CurrentID(ctx context.Context) (string, error) {
+	req, _ := http.NewRequestWithContext(ctx, http.MethodGet, g.objectURL, nil)
+	if err := g.addAuth(req); err != nil {
 		return "", err
 	}
-	res, err := c.http.Do(req)
+	res, err := g.http.Do(req)
 	if err != nil {
 		return "", err
 	}
@@ -262,8 +262,8 @@ func (c *GCSClient) CurrentID(ctx context.Context) (string, error) {
 	return obj.Metadata["id"], nil
 }
 
-func (c *GCSClient) addAuth(req *http.Request) error {
-	tok, err := c.getToken(req.Context())
+func (g *GCSClient) addAuth(req *http.Request) error {
+	tok, err := g.getToken(req.Context())
 	if err != nil {
 		return err
 	}
@@ -271,23 +271,23 @@ func (c *GCSClient) addAuth(req *http.Request) error {
 	return nil
 }
 
-func (c *GCSClient) getToken(ctx context.Context) (string, error) {
-	c.tokenMu.Lock()
-	defer c.tokenMu.Unlock()
+func (g *GCSClient) getToken(ctx context.Context) (string, error) {
+	g.tokenMu.Lock()
+	defer g.tokenMu.Unlock()
 
-	if time.Until(c.expiry) > 2*time.Minute {
-		return c.accessToken, nil
+	if time.Until(g.expiry) > 2*time.Minute {
+		return g.accessToken, nil
 	}
 
-	jwt, err := makeJWT(&c.sa)
+	jwt, err := makeJWT(&g.sa)
 	if err != nil {
 		return "", err
 	}
-	tok, exp, err := fetchToken(ctx, jwt, c.http)
+	tok, exp, err := fetchToken(ctx, jwt, g.http)
 	if err != nil {
 		return "", err
 	}
-	c.accessToken, c.expiry = tok, exp
+	g.accessToken, g.expiry = tok, exp
 	return tok, nil
 }
 
