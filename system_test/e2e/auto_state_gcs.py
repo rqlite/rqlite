@@ -71,6 +71,7 @@ class TestAutoBackup_GCS(unittest.TestCase):
     deprovision_node(node)
     os.remove(cfg)
     os.remove(backup_file)
+    os.remove(gcs_credentials_file)
     delete_gcs_object(gcs_credentials_file, GCS_BUCKET, name)
 
 if __name__ == "__main__":
