@@ -9,6 +9,7 @@ import (
 
 	"github.com/rqlite/rqlite/v8/auto"
 	"github.com/rqlite/rqlite/v8/aws"
+	"github.com/rqlite/rqlite/v8/gcp"
 )
 
 func Test_ReadConfigFile(t *testing.T) {
@@ -102,6 +103,9 @@ key2=TEST_VAR2`)
 }
 
 func Test_NewStorageClient(t *testing.T) {
+	gcsCredsFile := createGCSCredFile(t)
+	defer os.Remove(gcsCredsFile)
+
 	testCases := []struct {
 		name           string
 		input          []byte
@@ -168,6 +172,34 @@ func Test_NewStorageClient(t *testing.T) {
 			expectedErr:    nil,
 		},
 		{
+			name: "ValidGCSConfig",
+			input: []byte(`
+				{
+					"version": 1,
+					"type": "gcs",
+					"no_compress": true,
+					"timestamp": true,
+					"interval": "24h",
+					"sub": {
+						"bucket": "test_bucket",
+						"name": "test/path",
+						"project_id": "test_project",
+						"credentials_file": "` + gcsCredsFile + `"
+					}
+				}
+				`),
+			expectedCfg: &Config{
+				Version:    1,
+				Type:       "s3",
+				NoCompress: true,
+				Timestamp:  true,
+				Vacuum:     true,
+				Interval:   24 * auto.Duration(time.Hour),
+			},
+			expectedClient: mustNewGCSClient(t, "test_bucket", "test/path", "test_project", gcsCredsFile),
+			expectedErr:    nil,
+		},
+		{
 			name: "InvalidVersion",
 			input: []byte(`
 			{
@@ -221,6 +253,11 @@ func Test_NewStorageClient(t *testing.T) {
 					if !ok {
 						t.Fatalf("Test case %s failed, expected S3Client, got %T", tc.name, sc)
 					}
+				case *gcp.GCSClient:
+					_, ok := sc.(*gcp.GCSClient)
+					if !ok {
+						t.Fatalf("Test case %s failed, expected GCSClient, got %T", tc.name, sc)
+					}
 				default:
 					t.Fatalf("Test case %s failed, unexpected client type %T", tc.name, sc)
 				}
@@ -250,4 +287,32 @@ func mustNewS3Client(t *testing.T, endpoint, region, accessKey, secretKey, bucke
 		t.Fatalf("Failed to create S3 client: %v", err)
 	}
 	return client
+}
+
+func mustNewGCSClient(t *testing.T, bucket, name, projectID, credentialsFile string) *gcp.GCSClient {
+	t.Helper()
+	client, err := gcp.NewGCSClient(&gcp.GCSConfig{
+		Bucket:          bucket,
+		Name:            name,
+		ProjectID:       projectID,
+		CredentialsPath: credentialsFile,
+	})
+	if err != nil {
+		t.Fatalf("Failed to create GCS client: %v", err)
+	}
+	return client
+}
+
+func createGCSCredFile(t *testing.T) string {
+	t.Helper()
+	f, err := os.CreateTemp("", "cred-*.json")
+	if err != nil {
+		t.Fatalf("temp file: %v", err)
+	}
+	cred := `{"client_email":"test@example.com","private_key":"-----BEGIN PRIVATE KEY-----\n-----END PRIVATE KEY-----"}`
+	if _, err = f.WriteString(cred); err != nil {
+		t.Fatalf("write cred: %v", err)
+	}
+	f.Close()
+	return f.Name()
 }
