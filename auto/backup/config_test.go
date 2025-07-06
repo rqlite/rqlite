@@ -3,6 +3,7 @@ package backup
 import (
 	"bytes"
 	"errors"
+	"fmt"
 	"os"
 	"testing"
 	"time"
@@ -173,21 +174,19 @@ func Test_NewStorageClient(t *testing.T) {
 		},
 		{
 			name: "ValidGCSConfig",
-			input: []byte(`
-				{
-					"version": 1,
-					"type": "gcs",
-					"no_compress": true,
-					"timestamp": true,
-					"interval": "24h",
-					"sub": {
-						"bucket": "test_bucket",
-						"name": "test/path",
-						"project_id": "test_project",
-						"credentials_path": "` + gcsCredsFile + `"
-					}
-				}
-				`),
+			input: []byte(fmt.Sprintf(`{
+				           "version": 1,
+				           "type": "gcs",
+				           "no_compress": true,
+				           "timestamp": true,
+				           "interval": "24h",
+				           "sub": {
+				               "bucket": "test_bucket",
+				               "name": "test/path",
+				               "project_id": "test_project",
+				               "credentials_path": %q
+				           }
+				       }`, gcsCredsFile)),
 			expectedCfg: &Config{
 				Version:    1,
 				Type:       "gcs",
