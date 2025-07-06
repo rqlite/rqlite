@@ -17,6 +17,37 @@ import (
 	"time"
 )
 
+func Test_NewGCSClient(t *testing.T) {
+	cfg := &GCSConfig{
+		Endpoint:        "http://localhost:8080",
+		ProjectID:       "proj",
+		Bucket:          "mybucket",
+		Name:            "object.txt",
+		CredentialsPath: createCredFile(t), // dummy, never used
+	}
+
+	cli, err := NewGCSClient(cfg)
+	if err != nil {
+		t.Fatalf("NewGCSClient: %v", err)
+	}
+
+	if cli.cfg.ProjectID != "proj" {
+		t.Errorf("ProjectID = %s, want proj", cli.cfg.ProjectID)
+	}
+	if cli.cfg.Bucket != "mybucket" {
+		t.Errorf("Bucket = %s, want mybucket", cli.cfg.Bucket)
+	}
+	if cli.cfg.Name != "object.txt" {
+		t.Errorf("Name = %s, want object.txt", cli.cfg.Name)
+	}
+	if cli.cfg.Endpoint != "http://localhost:8080" {
+		t.Errorf("Endpoint = %s, want http://localhost:8080", cli.cfg.Endpoint)
+	}
+	if cli.cfg.CredentialsPath != "" {
+		t.Errorf("CredentialsPath = %s, want empty", cli.cfg.CredentialsPath)
+	}
+}
+
 func Test_EnsureBucketExists(t *testing.T) {
 	var gotPath string
 	handler := func(w http.ResponseWriter, r *http.Request) {
