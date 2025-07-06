@@ -103,7 +103,7 @@ key2=TEST_VAR2`)
 }
 
 func Test_NewStorageClient(t *testing.T) {
-	gcsCredsFile := createGCSCredFile(t)
+	gcsCredsFile := mustGCSCredFile(t)
 	defer os.Remove(gcsCredsFile)
 
 	testCases := []struct {
@@ -303,7 +303,7 @@ func mustNewGCSClient(t *testing.T, bucket, name, projectID, credentialsFile str
 	return client
 }
 
-func createGCSCredFile(t *testing.T) string {
+func mustGCSCredFile(t *testing.T) string {
 	t.Helper()
 	f, err := os.CreateTemp("", "cred-*.json")
 	if err != nil {
