@@ -245,7 +245,7 @@ jobs:
             RQLITED_PATH: /home/circleci/go/bin/rqlited
     resource_class: large
 
-  end_to_end_auto_state:
+  end_to_end_auto_state_s3:
     docker:
       - image: << pipeline.parameters.primary_image >>
       - image: minio/minio
@@ -258,7 +258,7 @@ jobs:
       - run: mc alias set myminio http://minio:9000 minioadmin minioadmin
       - run: mc mb myminio/minio-bucket
       - run:
-          command: python3 system_test/e2e/auto_state.py
+          command: python3 system_test/e2e/auto_state_s3.py
           environment:
             RQLITED_PATH: /home/circleci/go/bin/rqlited
             MINIO_ENDPOINT: http://minio:9000
@@ -312,6 +312,6 @@ workflows:
       - end_to_end_multi_adv
       - end_to_end_joining
       - end_to_end_autoclustering
-      - end_to_end_auto_state
+      - end_to_end_auto_state_s3
       - end_to_end_upgrade
       - end_to_end_extensions

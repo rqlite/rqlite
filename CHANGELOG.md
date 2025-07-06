@@ -1,3 +1,7 @@
+## v8.39.0 (unreleased)
+### New features
+- [PR #2144](https://github.com/rqlite/rqlite/pull/2144): Automatic _Backup and Restore_ now supports Google Cloud Storage.
+
 ## v8.38.3 (July 3rd 2025)
 ### Implementation changes and bug fixes
 - [PR #2139](https://github.com/rqlite/rqlite/pull/2139): 'go mod' updates.

@@ -14,7 +14,7 @@ S3_BUCKET_REGION = 'us-west-2'
 
 RQLITED_PATH = os.environ['RQLITED_PATH']
 
-class TestAutoBackupRestore(unittest.TestCase):
+class TestAutoBackupRestore_S3(unittest.TestCase):
   @unittest.skipUnless(env_present('RQLITE_S3_ACCESS_KEY'), "S3 credentials not available")
   def test(self):
     '''Test that an automatic backup and restore works back-to-back'''
@@ -143,7 +143,7 @@ class TestAutoBackupRestore_Minio(unittest.TestCase):
     os.remove(auto_backup_cfg_file)
     os.remove(auto_restore_cfg_file)
 
-class TestAutoRestoreS3(unittest.TestCase):
+class TestAutoRestore_S3(unittest.TestCase):
   def create_sqlite_file(self):
     tmp_file = temp_file()
     conn = sqlite3.connect(tmp_file)
@@ -300,7 +300,7 @@ class TestAutoRestoreS3(unittest.TestCase):
     os.remove(compressed_tmp_file)
     delete_s3_object(access_key_id, secret_access_key_id, S3_BUCKET, path)
 
-class TestAutoBackupS3(unittest.TestCase):
+class TestAutoBackup_S3(unittest.TestCase):
   @unittest.skipUnless(env_present('RQLITE_S3_ACCESS_KEY'), "S3 credentials not available")
   def test_no_compress(self):
     '''Test that automatic backups to S3 work with compression off, and don't happen unnecessarily'''
