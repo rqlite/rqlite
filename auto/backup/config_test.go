@@ -184,13 +184,13 @@ func Test_NewStorageClient(t *testing.T) {
 						"bucket": "test_bucket",
 						"name": "test/path",
 						"project_id": "test_project",
-						"credentials_file": "` + gcsCredsFile + `"
+						"credentials_path": "` + gcsCredsFile + `"
 					}
 				}
 				`),
 			expectedCfg: &Config{
 				Version:    1,
-				Type:       "s3",
+				Type:       "gcs",
 				NoCompress: true,
 				Timestamp:  true,
 				Vacuum:     true,
