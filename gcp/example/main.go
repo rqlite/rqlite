@@ -14,10 +14,10 @@ func main() {
 	ctx := context.Background()
 
 	cfg := gcp.GCSConfig{
-		Bucket:         "my-demo-bucket",
-		ProjectID:      "my-gcp-project",
-		ObjectName:     "sample.txt",
-		CredentialPath: os.Getenv("GOOGLE_APPLICATION_CREDENTIALS"),
+		Bucket:          "my-demo-bucket",
+		ProjectID:       "my-gcp-project",
+		Name:            "sample.txt",
+		CredentialsPath: os.Getenv("GOOGLE_APPLICATION_CREDENTIALS"),
 	}
 
 	client, err := gcp.NewGCSClient(&cfg)

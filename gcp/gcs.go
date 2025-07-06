@@ -23,13 +23,14 @@ import (
 
 // GCSConfig is the subconfig for the GCS storage type.
 type GCSConfig struct {
-	UploadEndpoint string // defaults to https://storage.googleapis.com
-	Bucket         string
-	ProjectID      string
-	ObjectName     string
-	CredentialPath string
+	Endpoint        string `json:"endpoint,omitempty"`
+	ProjectID       string `json:"project_id"`
+	Bucket          string `json:"bucket"`
+	Name            string `json:"name"`
+	CredentialsPath string `json:"credentials_path"`
 }
 
+// GCSClient is a client for uploading data to Google Cloud Storage (GCS).
 type GCSClient struct {
 	cfg *GCSConfig
 
@@ -46,14 +47,14 @@ type GCSClient struct {
 
 // NewGCSClient returns an instance of a GCSClient.
 func NewGCSClient(cfg *GCSConfig) (*GCSClient, error) {
-	if cfg.UploadEndpoint == "" {
-		cfg.UploadEndpoint = "https://storage.googleapis.com"
+	if cfg.Endpoint == "" {
+		cfg.Endpoint = "https://storage.googleapis.com"
 	}
-	sa, err := loadServiceAccount(cfg.CredentialPath)
+	sa, err := loadServiceAccount(cfg.CredentialsPath)
 	if err != nil {
 		return nil, err
 	}
-	base := strings.TrimRight(cfg.UploadEndpoint, "/")
+	base := strings.TrimRight(cfg.Endpoint, "/")
 
 	return &GCSClient{
 		cfg:       cfg,
@@ -61,9 +62,14 @@ func NewGCSClient(cfg *GCSConfig) (*GCSClient, error) {
 		http:      &http.Client{},
 		uploadURL: fmt.Sprintf("%s/upload/storage/v1/b/%s/o", base, url.PathEscape(cfg.Bucket)),
 		objectURL: fmt.Sprintf("%s/storage/v1/b/%s/o/%s",
-			base, url.PathEscape(cfg.Bucket), url.PathEscape(cfg.ObjectName)),
+			base, url.PathEscape(cfg.Bucket), url.PathEscape(cfg.Name)),
 		bucketURL: fmt.Sprintf("%s/storage/v1/b/%s", base, url.PathEscape(cfg.Bucket)),
 	}, nil
+}
+
+// String returns a string representation of the GCSClient.
+func (s *GCSClient) String() string {
+	return fmt.Sprintf("GCSClient{Bucket: %s, Name: %s}", s.cfg.Bucket, s.cfg.Name)
 }
 
 // EnsureBucket ensures the bucket actually exists in GCS.
@@ -119,7 +125,7 @@ func (c *GCSClient) Upload(ctx context.Context, r io.Reader, id string) error {
 			ID string `json:"id"`
 		} `json:"metadata"`
 	}{
-		Name: c.cfg.ObjectName,
+		Name: c.cfg.Name,
 	}
 	metaData.Metadata.ID = id
 
