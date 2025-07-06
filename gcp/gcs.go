@@ -21,7 +21,8 @@ import (
 	"github.com/rqlite/rqlite/v8/gcp/jws"
 )
 
-type Config struct {
+// GCSConfig is the subconfig for the GCS storage type.
+type GCSConfig struct {
 	UploadEndpoint string // defaults to https://storage.googleapis.com
 	Bucket         string
 	ProjectID      string
@@ -30,7 +31,7 @@ type Config struct {
 }
 
 type GCSClient struct {
-	cfg Config
+	cfg *GCSConfig
 
 	sa          serviceAccount
 	accessToken string
@@ -43,7 +44,8 @@ type GCSClient struct {
 	bucketURL string
 }
 
-func New(cfg Config) (*GCSClient, error) {
+// NewGCSClient returns an instance of a GCSClient.
+func NewGCSClient(cfg *GCSConfig) (*GCSClient, error) {
 	if cfg.UploadEndpoint == "" {
 		cfg.UploadEndpoint = "https://storage.googleapis.com"
 	}
@@ -64,6 +66,7 @@ func New(cfg Config) (*GCSClient, error) {
 	}, nil
 }
 
+// EnsureBucket ensures the bucket actually exists in GCS.
 func (c *GCSClient) EnsureBucket(ctx context.Context) error {
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, c.bucketURL, nil)
 	if err != nil {
@@ -105,6 +108,7 @@ func (c *GCSClient) EnsureBucket(ctx context.Context) error {
 	}
 }
 
+// Upload uploads data to GCS.
 func (c *GCSClient) Upload(ctx context.Context, r io.Reader, id string) error {
 	var buf bytes.Buffer
 	w := multipart.NewWriter(&buf)
@@ -156,6 +160,7 @@ func (c *GCSClient) Upload(ctx context.Context, r io.Reader, id string) error {
 	return nil
 }
 
+// Download downloads data from GCS.
 func (c *GCSClient) Download(ctx context.Context, w io.WriterAt) error {
 	req, _ := http.NewRequestWithContext(ctx, http.MethodGet, c.objectURL+"?alt=media", nil)
 	if err := c.addAuth(req); err != nil {
@@ -191,6 +196,7 @@ func (c *GCSClient) Download(ctx context.Context, w io.WriterAt) error {
 	return nil
 }
 
+// Delete deletes object from GCS.
 func (c *GCSClient) Delete(ctx context.Context) error {
 	req, _ := http.NewRequestWithContext(ctx, http.MethodDelete, c.objectURL, nil)
 	if err := c.addAuth(req); err != nil {
@@ -211,6 +217,7 @@ func (c *GCSClient) Delete(ctx context.Context) error {
 	}
 }
 
+// CurrentID returns the last ID uploaded to GCS.
 func (c *GCSClient) CurrentID(ctx context.Context) (string, error) {
 	req, _ := http.NewRequestWithContext(ctx, http.MethodGet, c.objectURL, nil)
 	if err := c.addAuth(req); err != nil {

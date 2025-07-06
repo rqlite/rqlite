@@ -13,14 +13,14 @@ import (
 func main() {
 	ctx := context.Background()
 
-	cfg := gcp.Config{
+	cfg := gcp.GCSConfig{
 		Bucket:         "my-demo-bucket",
 		ProjectID:      "my-gcp-project",
 		ObjectName:     "sample.txt",
 		CredentialPath: os.Getenv("GOOGLE_APPLICATION_CREDENTIALS"),
 	}
 
-	client, err := gcp.New(cfg)
+	client, err := gcp.NewGCSClient(&cfg)
 	if err != nil {
 		panic(err)
 	}
