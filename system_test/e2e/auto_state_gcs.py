@@ -5,8 +5,8 @@ import json
 import unittest
 import sqlite3
 
-from helpers import Node, deprovision_node, write_random_file, random_string, env_present
-from gcs import delete_gcs_object, download_gcs_object
+from helpers import Node, deprovision_node, write_random_file, random_string, env_present, temp_file, d_
+from gcs import delete_gcs_object, download_gcs_object, upload_gcs_object
 
 GCS_BUCKET = 'rqlite-testing-circleci'
 
@@ -71,6 +71,60 @@ class TestAutoBackup_GCS(unittest.TestCase):
     deprovision_node(node)
     os.remove(cfg)
     os.remove(backup_file)
+    os.remove(gcs_credentials_file)
+    delete_gcs_object(gcs_credentials_file, GCS_BUCKET, name)
+
+class TestAutoRestore_GCS(unittest.TestCase):
+  def create_sqlite_file(self):
+    tmp_file = temp_file()
+    conn = sqlite3.connect(tmp_file)
+    c = conn.cursor()
+    c.execute('CREATE TABLE foo (id INTEGER NOT NULL PRIMARY KEY, name TEXT)')
+    c.execute('INSERT INTO foo(name) VALUES("fiona")')
+    conn.commit()
+    conn.close()
+    return tmp_file
+
+  @unittest.skipUnless(env_present('RQLITE_GCS_CREDENTIALS'), "GCS credentials not available")
+  def test_not_compressed(self):
+    '''Test that automatic restores from Google Cloud Storage work with non-compressed data'''
+
+    node = None
+    cfg = None
+    name = None
+
+    project_id = os.environ['RQLITE_GCS_PROJECT_ID']
+    gcs_credentials_file = write_random_file(os.environ['RQLITE_GCS_CREDENTIALS'])
+
+    # Upload a test SQLite file to S3.
+    tmp_file = self.create_sqlite_file()
+
+    name = random_string(32)
+    upload_gcs_object(gcs_credentials_file, GCS_BUCKET, name, tmp_file)
+
+    # Create the auto-restore config file
+    auto_restore_cfg = {
+      "version": 1,
+      "type": "gcs",
+      "sub" : {
+        "project_id": project_id,
+        "bucket": GCS_BUCKET,
+        "name": name,
+        "credentials_path": gcs_credentials_file
+
+      }
+    }
+    cfg = write_random_file(json.dumps(auto_restore_cfg))
+
+    node = Node(RQLITED_PATH, '0', auto_restore=cfg)
+    node.start()
+    node.wait_for_ready()
+    j = node.query('SELECT * FROM foo')
+    self.assertEqual(j, d_("{'results': [{'values': [[1, 'fiona']], 'types': ['integer', 'text'], 'columns': ['id', 'name']}]}"))
+
+    deprovision_node(node)
+    os.remove(cfg)
+    os.remove(tmp_file)
     os.remove(gcs_credentials_file)
     delete_gcs_object(gcs_credentials_file, GCS_BUCKET, name)
 
