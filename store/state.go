@@ -13,9 +13,9 @@ import (
 	"github.com/rqlite/rqlite/v8/command/chunking"
 	"github.com/rqlite/rqlite/v8/command/proto"
 	sql "github.com/rqlite/rqlite/v8/db"
-	rlog "github.com/rqlite/rqlite/v8/log"
 	"github.com/rqlite/rqlite/v8/random"
 	"github.com/rqlite/rqlite/v8/snapshot"
+	rlog "github.com/rqlite/rqlite/v8/store/log"
 )
 
 // PragmaCheckRequest is a type that wraps a proto.Request and checks

@@ -7,7 +7,7 @@ import (
 	"os"
 	"strings"
 
-	"github.com/rqlite/rqlite/v8/gcp"
+	"github.com/rqlite/rqlite/v8/auto/gcp"
 )
 
 func main() {
