@@ -6,8 +6,8 @@ import (
 	"os"
 
 	"github.com/rqlite/rqlite/v8/auto"
-	"github.com/rqlite/rqlite/v8/aws"
-	"github.com/rqlite/rqlite/v8/gcp"
+	"github.com/rqlite/rqlite/v8/auto/aws"
+	"github.com/rqlite/rqlite/v8/auto/gcp"
 )
 
 // Config is the config file format for the upload service
