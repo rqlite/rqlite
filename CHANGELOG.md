@@ -1,3 +1,7 @@
+## v8.39.2 (unreleased)
+### Implementation changes and bug fixes
+- [PR #2149](https://github.com/rqlite/rqlite/pull/2149): Consolidate the top-level of the source tree.
+
 ## v8.39.1 (July 7th 2025)
 ### Implementation changes and bug fixes
 - [PR #2147](https://github.com/rqlite/rqlite/pull/2147): Support timestamped uploads to Google Cloud Storage.
