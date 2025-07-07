@@ -1,6 +1,7 @@
 ## v8.39.1 (July 7th 2025)
 ### Implementation changes and bug fixes
 - [PR #2147](https://github.com/rqlite/rqlite/pull/2147): Support timestamped uploads to Google Cloud Storage.
+- [PR #2148](https://github.com/rqlite/rqlite/pull/2148): Use correct Metadata ID for GCS uploads.
 
 ## v8.39.0 (July 6th 2025)
 ### New features
