@@ -10,8 +10,6 @@ import (
 	"log"
 	"os"
 	"time"
-
-	"github.com/rqlite/rqlite/v8/aws"
 )
 
 // stats captures stats for the Uploader service.
@@ -60,17 +58,11 @@ func DownloadFile(ctx context.Context, cfgPath string) (path string, errOK bool,
 		return "", false, fmt.Errorf("failed to read auto-restore file: %s", err.Error())
 	}
 
-	dCfg, s3cfg, err := Unmarshal(b)
+	var sc StorageClient
+	var dCfg *Config
+	dCfg, sc, err = NewStorageClient(b)
 	if err != nil {
-		return "", false, fmt.Errorf("failed to parse auto-restore file: %s", err.Error())
-	}
-	clientOpts := &aws.S3ClientOpts{
-		ForcePathStyle: s3cfg.ForcePathStyle,
-	}
-	sc, err := aws.NewS3Client(s3cfg.Endpoint, s3cfg.Region, s3cfg.AccessKeyID, s3cfg.SecretAccessKey,
-		s3cfg.Bucket, s3cfg.Path, clientOpts)
-	if err != nil {
-		return "", false, fmt.Errorf("failed to create aws S3 client: %s", err.Error())
+		return "", false, fmt.Errorf("failed to create storage client: %s", err.Error())
 	}
 	d := NewDownloader(sc)
 
@@ -93,11 +85,13 @@ type StorageClient interface {
 	fmt.Stringer
 }
 
+// Downloader is a struct that handles downloading data from a storage service.
 type Downloader struct {
 	storageClient StorageClient
 	logger        *log.Logger
 }
 
+// NewDownloader creates a new Downloader instance with the given StorageClient.
 func NewDownloader(storageClient StorageClient) *Downloader {
 	return &Downloader{
 		storageClient: storageClient,
@@ -105,6 +99,7 @@ func NewDownloader(storageClient StorageClient) *Downloader {
 	}
 }
 
+// Do downloads data from the storage service and writes it to the provided writer.
 func (d *Downloader) Do(ctx context.Context, w io.Writer, timeout time.Duration) (err error) {
 	var cw *countingWriterAt
 	defer func() {

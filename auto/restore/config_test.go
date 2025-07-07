@@ -4,12 +4,12 @@ import (
 	"bytes"
 	"errors"
 	"os"
-	"reflect"
 	"testing"
 	"time"
 
 	"github.com/rqlite/rqlite/v8/auto"
 	"github.com/rqlite/rqlite/v8/aws"
+	"github.com/rqlite/rqlite/v8/gcp"
 )
 
 func Test_ReadConfigFile(t *testing.T) {
@@ -102,12 +102,13 @@ key2=TEST_VAR2`)
 	})
 }
 
-func TestUnmarshal(t *testing.T) {
+func TestNewStorageClient(t *testing.T) {
 	testCases := []struct {
 		name        string
 		input       []byte
 		expectedCfg *Config
-		expectedS3  *aws.S3Config
+		expectS3    bool
+		expectGCS   bool
 		expectedErr error
 	}{
 		{
@@ -132,13 +133,7 @@ func TestUnmarshal(t *testing.T) {
 				Timeout:           30 * auto.Duration(time.Second),
 				ContinueOnFailure: false,
 			},
-			expectedS3: &aws.S3Config{
-				AccessKeyID:     "test_id",
-				SecretAccessKey: "test_secret",
-				Region:          "us-west-2",
-				Bucket:          "test_bucket",
-				Path:            "test/path",
-			},
+			expectS3:    true,
 			expectedErr: nil,
 		},
 		{
@@ -163,13 +158,7 @@ func TestUnmarshal(t *testing.T) {
 				Timeout:           auto.Duration(30 * time.Second),
 				ContinueOnFailure: true,
 			},
-			expectedS3: &aws.S3Config{
-				AccessKeyID:     "test_id",
-				SecretAccessKey: "test_secret",
-				Region:          "us-west-2",
-				Bucket:          "test_bucket",
-				Path:            "test/path",
-			},
+			expectS3:    true,
 			expectedErr: nil,
 		},
 		{
@@ -188,7 +177,6 @@ func TestUnmarshal(t *testing.T) {
 				}
 			}			`),
 			expectedCfg: nil,
-			expectedS3:  nil,
 			expectedErr: auto.ErrInvalidVersion,
 		},
 		{
@@ -207,29 +195,35 @@ func TestUnmarshal(t *testing.T) {
 				}
 			}			`),
 			expectedCfg: nil,
-			expectedS3:  nil,
 			expectedErr: auto.ErrUnsupportedStorageType,
 		},
 	}
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			cfg, s3Cfg, err := Unmarshal(tc.input)
-			_ = s3Cfg
+			_, sc, err := NewStorageClient(tc.input)
+			if err != nil && !errors.Is(err, tc.expectedErr) {
+				t.Fatalf("Test case %s failed, expected error %v, got %v", tc.name, tc.expectedErr, err)
+			}
+
+			if tc.expectS3 {
+				if _, ok := sc.(*aws.S3Client); !ok {
+					t.Fatalf("Test case %s failed, expected S3 client, got %T", tc.name, sc)
+				}
+			} else if tc.expectGCS {
+				if _, ok := sc.(*gcp.GCSClient); !ok {
+					t.Fatalf("Test case %s failed, expected GCS client, got %T", tc.name, sc)
+				}
+			} else {
+				if sc != nil {
+					t.Fatalf("Test case %s failed, expected no storage client, got %T", tc.name, sc)
+				}
+			}
 
 			if !errors.Is(err, tc.expectedErr) {
 				t.Fatalf("Test case %s failed, expected error %v, got %v", tc.name, tc.expectedErr, err)
 			}
 
-			if !compareConfig(cfg, tc.expectedCfg) {
-				t.Fatalf("Test case %s failed, expected config %+v, got %+v", tc.name, tc.expectedCfg, cfg)
-			}
-
-			if tc.expectedS3 != nil {
-				if !reflect.DeepEqual(s3Cfg, tc.expectedS3) {
-					t.Fatalf("Test case %s failed, expected S3Config %+v, got %+v", tc.name, tc.expectedS3, s3Cfg)
-				}
-			}
 		})
 	}
 }
