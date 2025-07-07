@@ -34,7 +34,6 @@ class TestAutoBackup_GCS(unittest.TestCase):
         "bucket": GCS_BUCKET,
         "name": name,
         "credentials_path": gcs_credentials_file
-
       }
     }
     cfg = write_random_file(json.dumps(auto_backup_cfg))
@@ -111,7 +110,6 @@ class TestAutoRestore_GCS(unittest.TestCase):
         "bucket": GCS_BUCKET,
         "name": name,
         "credentials_path": gcs_credentials_file
-
       }
     }
     cfg = write_random_file(json.dumps(auto_restore_cfg))
