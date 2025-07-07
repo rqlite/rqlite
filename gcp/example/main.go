@@ -20,7 +20,7 @@ func main() {
 		CredentialsPath: os.Getenv("GOOGLE_APPLICATION_CREDENTIALS"),
 	}
 
-	client, err := gcp.NewGCSClient(&cfg)
+	client, err := gcp.NewGCSClient(&cfg, nil)
 	if err != nil {
 		panic(err)
 	}

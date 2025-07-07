@@ -73,7 +73,7 @@ func NewStorageClient(data []byte) (*Config, StorageClient, error) {
 		if err != nil {
 			return nil, nil, err
 		}
-		sc, err = gcp.NewGCSClient(gcsCfg)
+		sc, err = gcp.NewGCSClient(gcsCfg, nil)
 	default:
 		return nil, nil, auto.ErrUnsupportedStorageType
 	}
