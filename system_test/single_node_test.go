@@ -17,7 +17,7 @@ import (
 
 	"github.com/rqlite/rqlite/v8/cluster"
 	httpd "github.com/rqlite/rqlite/v8/http"
-	"github.com/rqlite/rqlite/v8/random"
+	"github.com/rqlite/rqlite/v8/internal/random"
 	"github.com/rqlite/rqlite/v8/store"
 	"github.com/rqlite/rqlite/v8/tcp"
 )

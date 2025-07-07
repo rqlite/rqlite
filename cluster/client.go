@@ -15,7 +15,7 @@ import (
 	"github.com/rqlite/rqlite/v8/auth"
 	"github.com/rqlite/rqlite/v8/cluster/proto"
 	command "github.com/rqlite/rqlite/v8/command/proto"
-	"github.com/rqlite/rqlite/v8/rtls"
+	"github.com/rqlite/rqlite/v8/internal/rtls"
 	"github.com/rqlite/rqlite/v8/tcp"
 	"github.com/rqlite/rqlite/v8/tcp/pool"
 	pb "google.golang.org/protobuf/proto"

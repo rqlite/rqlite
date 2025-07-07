@@ -8,7 +8,7 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/rqlite/rqlite/v8/rarchive"
+	"github.com/rqlite/rqlite/v8/internal/rarchive"
 )
 
 // Store is a collection of extensions.

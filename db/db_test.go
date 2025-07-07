@@ -12,7 +12,7 @@ import (
 
 	"github.com/rqlite/rqlite/v8/command/encoding"
 	command "github.com/rqlite/rqlite/v8/command/proto"
-	"github.com/rqlite/rqlite/v8/random"
+	"github.com/rqlite/rqlite/v8/internal/random"
 )
 
 // Test_OpenNonExistentDatabase tests that opening a nonexistent database

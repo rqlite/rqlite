@@ -9,7 +9,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/rqlite/rqlite/v8/rtls"
+	"github.com/rqlite/rqlite/v8/internal/rtls"
 )
 
 // Test_IsServingHTTP_HTTPServer tests that we correctly detect an HTTP server running.

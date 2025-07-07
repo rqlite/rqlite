@@ -21,7 +21,7 @@ import (
 	"github.com/rqlite/rqlite/v8/cmd"
 	"github.com/rqlite/rqlite/v8/cmd/rqlite/history"
 	httpcl "github.com/rqlite/rqlite/v8/cmd/rqlite/http"
-	"github.com/rqlite/rqlite/v8/rtls"
+	"github.com/rqlite/rqlite/v8/internal/rtls"
 )
 
 const HOST_ENV_VAR = "RQLITE_HOST"

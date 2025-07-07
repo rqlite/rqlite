@@ -13,7 +13,7 @@ import (
 	"github.com/rqlite/rqlite/v8/command/chunking"
 	"github.com/rqlite/rqlite/v8/command/proto"
 	sql "github.com/rqlite/rqlite/v8/db"
-	"github.com/rqlite/rqlite/v8/random"
+	"github.com/rqlite/rqlite/v8/internal/random"
 	"github.com/rqlite/rqlite/v8/snapshot"
 	rlog "github.com/rqlite/rqlite/v8/store/log"
 )

@@ -1,6 +1,7 @@
 ## v8.39.2 (unreleased)
 ### Implementation changes and bug fixes
 - [PR #2149](https://github.com/rqlite/rqlite/pull/2149): Consolidate the top-level of the source tree.
+- [PR #2150](https://github.com/rqlite/rqlite/pull/2150): Move various utilities into an `internal` module.
 
 ## v8.39.1 (July 7th 2025)
 ### Implementation changes and bug fixes

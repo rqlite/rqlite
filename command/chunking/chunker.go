@@ -9,8 +9,8 @@ import (
 	"sync"
 
 	"github.com/rqlite/rqlite/v8/command/proto"
-	"github.com/rqlite/rqlite/v8/progress"
-	"github.com/rqlite/rqlite/v8/random"
+	"github.com/rqlite/rqlite/v8/internal/progress"
+	"github.com/rqlite/rqlite/v8/internal/random"
 )
 
 const (

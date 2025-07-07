@@ -19,7 +19,7 @@ import (
 	"github.com/rqlite/go-sqlite3"
 	command "github.com/rqlite/rqlite/v8/command/proto"
 	"github.com/rqlite/rqlite/v8/db/humanize"
-	"github.com/rqlite/rqlite/v8/rsum"
+	"github.com/rqlite/rqlite/v8/internal/rsum"
 )
 
 const (

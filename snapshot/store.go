@@ -15,7 +15,7 @@ import (
 
 	"github.com/hashicorp/raft"
 	"github.com/rqlite/rqlite/v8/db"
-	"github.com/rqlite/rqlite/v8/rsync"
+	"github.com/rqlite/rqlite/v8/internal/rsync"
 )
 
 const (

@@ -12,7 +12,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/rqlite/rqlite/v8/rtls"
+	"github.com/rqlite/rqlite/v8/internal/rtls"
 )
 
 const (

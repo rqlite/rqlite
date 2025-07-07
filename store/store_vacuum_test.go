@@ -8,7 +8,7 @@ import (
 
 	"github.com/rqlite/rqlite/v8/command/proto"
 	"github.com/rqlite/rqlite/v8/db"
-	"github.com/rqlite/rqlite/v8/rarchive"
+	"github.com/rqlite/rqlite/v8/internal/rarchive"
 )
 
 // Test_SingleNodeBackupBinary tests that requesting a binary-formatted
