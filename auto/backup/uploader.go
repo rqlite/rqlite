@@ -11,7 +11,7 @@ import (
 	"time"
 
 	"github.com/rqlite/rqlite/v8/db/humanize"
-	"github.com/rqlite/rqlite/v8/progress"
+	"github.com/rqlite/rqlite/v8/internal/progress"
 )
 
 // StorageClient is an interface for uploading data to a storage service.

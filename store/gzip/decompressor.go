@@ -4,7 +4,7 @@ import (
 	"compress/gzip"
 	"io"
 
-	"github.com/rqlite/rqlite/v8/progress"
+	"github.com/rqlite/rqlite/v8/internal/progress"
 )
 
 // Decompressor is a wrapper around a gzip.Reader that reads from an io.Reader
