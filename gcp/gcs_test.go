@@ -45,7 +45,7 @@ func Test_NewGCSClient(t *testing.T) {
 		t.Errorf("Endpoint = %s, want http://localhost:8080", cli.cfg.Endpoint)
 	}
 	if cli.cfg.CredentialsPath != credsPath {
-		t.Errorf("CredentialsPath = %s, want empty", cli.cfg.CredentialsPath)
+		t.Errorf("CredentialsPath = %s, want %s", cli.cfg.CredentialsPath, credsPath)
 	}
 }
 
