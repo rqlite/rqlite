@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"io"
 	"os"
+	"time"
 
 	"github.com/rqlite/rqlite/v8/auto"
 	"github.com/rqlite/rqlite/v8/aws"
@@ -47,6 +48,10 @@ func NewStorageClient(data []byte) (*Config, StorageClient, error) {
 
 	if dCfg.Version > auto.Version {
 		return nil, nil, auto.ErrInvalidVersion
+	}
+
+	if dCfg.Timeout == 0 {
+		dCfg.Timeout = auto.Duration(30 * time.Second)
 	}
 
 	var sc StorageClient

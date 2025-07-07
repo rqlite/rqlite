@@ -4,17 +4,12 @@ import (
 	"bytes"
 	"compress/gzip"
 	"context"
-	"encoding/json"
 	"expvar"
 	"fmt"
 	"io"
 	"log"
 	"os"
 	"time"
-
-	"github.com/rqlite/rqlite/v8/auto"
-	"github.com/rqlite/rqlite/v8/aws"
-	"github.com/rqlite/rqlite/v8/gcp"
 )
 
 // stats captures stats for the Uploader service.
@@ -69,30 +64,6 @@ func DownloadFile(ctx context.Context, cfgPath string) (path string, errOK bool,
 	if err != nil {
 		return "", false, fmt.Errorf("failed to create storage client: %s", err.Error())
 	}
-
-	switch dCfg.Type {
-	case auto.StorageTypeS3:
-		s3cfg := &aws.S3Config{}
-		err = json.Unmarshal(dCfg.Sub, s3cfg)
-		if err != nil {
-			return "", false, err
-		}
-		s3ClientOps := &aws.S3ClientOpts{
-			ForcePathStyle: s3cfg.ForcePathStyle,
-		}
-		sc, err = aws.NewS3Client(s3cfg.Endpoint, s3cfg.Region, s3cfg.AccessKeyID, s3cfg.SecretAccessKey,
-			s3cfg.Bucket, s3cfg.Path, s3ClientOps)
-	case auto.StorageTypeGCS:
-		gcsCfg := &gcp.GCSConfig{}
-		err = json.Unmarshal(dCfg.Sub, gcsCfg)
-		if err != nil {
-			return "", false, err
-		}
-		sc, err = gcp.NewGCSClient(gcsCfg)
-	default:
-		return "", false, auto.ErrUnsupportedStorageType
-	}
-
 	d := NewDownloader(sc)
 
 	// Create a temporary file to download to.
