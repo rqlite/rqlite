@@ -18,12 +18,13 @@ import (
 )
 
 func Test_NewGCSClient(t *testing.T) {
+	credsPath := createCredFile(t)
 	cfg := &GCSConfig{
 		Endpoint:        "http://localhost:8080",
 		ProjectID:       "proj",
 		Bucket:          "mybucket",
 		Name:            "object.txt",
-		CredentialsPath: createCredFile(t), // dummy, never used
+		CredentialsPath: credsPath,
 	}
 
 	cli, err := NewGCSClient(cfg, nil)
@@ -43,8 +44,8 @@ func Test_NewGCSClient(t *testing.T) {
 	if cli.cfg.Endpoint != "http://localhost:8080" {
 		t.Errorf("Endpoint = %s, want http://localhost:8080", cli.cfg.Endpoint)
 	}
-	if cli.cfg.CredentialsPath != cli.cfg.CredentialsPath {
-		t.Errorf("CredentialsPath = %s, want empty", cli.cfg.CredentialsPath)
+	if cli.cfg.CredentialsPath != credsPath {
+		t.Errorf("CredentialsPath = %s, want %s", cli.cfg.CredentialsPath, credsPath)
 	}
 }
 
@@ -127,7 +128,7 @@ func Test_Upload(t *testing.T) {
 		var meta struct {
 			Name     string `json:"name"`
 			Metadata struct {
-				ID string `json:"id"`
+				ID string `json:"rqlite-auto-backup-id"`
 			} `json:"metadata"`
 		}
 		if err := json.NewDecoder(p1).Decode(&meta); err != nil {
@@ -203,7 +204,7 @@ func Test_CurrentID(t *testing.T) {
 			t.Errorf("method %s", r.Method)
 		}
 		resp := map[string]any{
-			"metadata": map[string]string{"id": "xyz"},
+			"metadata": map[string]string{GCPGCSIDKey: "xyz"},
 		}
 		enc := json.NewEncoder(w)
 		enc.Encode(resp)

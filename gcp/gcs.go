@@ -26,6 +26,8 @@ var (
 	defaultDownloadBufferSz = 32 * 1024 // 32 KiB
 	jwtScope                = "https://www.googleapis.com/auth/devstorage.read_write"
 	jwtAudTarget            = "https://oauth2.googleapis.com/token"
+
+	GCPGCSIDKey = "rqlite-auto-backup-id"
 )
 
 // TimestampedPath returns a new path with the given timestamp prepended.
@@ -149,7 +151,7 @@ func (g *GCSClient) Upload(ctx context.Context, r io.Reader, id string) error {
 	metaData := struct {
 		Name     string `json:"name"`
 		Metadata struct {
-			ID string `json:"id"`
+			ID string `json:"rqlite-auto-backup-id"`
 		} `json:"metadata"`
 	}{
 		Name: name,
@@ -279,7 +281,12 @@ func (g *GCSClient) CurrentID(ctx context.Context) (string, error) {
 	if err := json.NewDecoder(res.Body).Decode(&obj); err != nil {
 		return "", err
 	}
-	return obj.Metadata["id"], nil
+
+	id, ok := obj.Metadata[GCPGCSIDKey]
+	if !ok {
+		return "", fmt.Errorf("ID key (%s) not found in metadata %v", GCPGCSIDKey, g)
+	}
+	return id, nil
 }
 
 func (g *GCSClient) addAuth(req *http.Request) error {
