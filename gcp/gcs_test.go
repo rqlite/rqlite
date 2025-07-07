@@ -112,7 +112,7 @@ func Test_Upload(t *testing.T) {
 			t.Fatalf("method %s", r.Method)
 		}
 		if !strings.HasPrefix(r.URL.Path, "/upload/storage/v1/b/mybucket/o") {
-			t.Fatalf("path %s", r.URL.Path)
+			t.Fatalf("received path does not have correct prefix: %s", r.URL.Path)
 		}
 		if r.Header.Get("Authorization") != "Bearer TESTTOKEN" {
 			t.Fatalf("auth header missing")

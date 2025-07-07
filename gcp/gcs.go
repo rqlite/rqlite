@@ -142,13 +142,17 @@ func (g *GCSClient) Upload(ctx context.Context, r io.Reader, id string) error {
 	var buf bytes.Buffer
 	w := multipart.NewWriter(&buf)
 
+	name := g.cfg.Name
+	if g.timestamp {
+		name = TimestampedPath(name, time.Now().UTC())
+	}
 	metaData := struct {
 		Name     string `json:"name"`
 		Metadata struct {
 			ID string `json:"id"`
 		} `json:"metadata"`
 	}{
-		Name: g.cfg.Name,
+		Name: name,
 	}
 	metaData.Metadata.ID = id
 
@@ -178,11 +182,7 @@ func (g *GCSClient) Upload(ctx context.Context, r io.Reader, id string) error {
 		return fmt.Errorf("failed to close multipart writer: %w", err)
 	}
 
-	objectURL := g.objectURL
-	if g.timestamp {
-		objectURL = TimestampedPath(g.objectURL, time.Now())
-	}
-	u := objectURL + "?uploadType=multipart"
+	u := g.uploadURL + "?uploadType=multipart"
 	req, _ := http.NewRequestWithContext(ctx, http.MethodPost, u, &buf)
 	req.Header.Set("Content-Type", "multipart/related; boundary="+w.Boundary())
 	if err := g.addAuth(req); err != nil {
