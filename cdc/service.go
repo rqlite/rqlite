@@ -13,8 +13,8 @@ import (
 	"time"
 
 	"github.com/rqlite/rqlite/v8/command/proto"
+	"github.com/rqlite/rqlite/v8/internal/rsync"
 	"github.com/rqlite/rqlite/v8/queue"
-	"github.com/rqlite/rqlite/v8/rsync"
 )
 
 const (

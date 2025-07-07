@@ -9,7 +9,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/rqlite/rqlite/v8/random"
+	"github.com/rqlite/rqlite/v8/internal/random"
 )
 
 // Benchmark using strings.Contains
