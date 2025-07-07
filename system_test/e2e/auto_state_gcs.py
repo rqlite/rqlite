@@ -68,10 +68,10 @@ class TestAutoBackup_GCS(unittest.TestCase):
     conn.close()
 
     deprovision_node(node)
+    delete_gcs_object(gcs_credentials_file, GCS_BUCKET, name)
     os.remove(cfg)
     os.remove(backup_file)
     os.remove(gcs_credentials_file)
-    delete_gcs_object(gcs_credentials_file, GCS_BUCKET, name)
 
 class TestAutoRestore_GCS(unittest.TestCase):
   def create_sqlite_file(self):
@@ -121,10 +121,10 @@ class TestAutoRestore_GCS(unittest.TestCase):
     self.assertEqual(j, d_("{'results': [{'values': [[1, 'fiona']], 'types': ['integer', 'text'], 'columns': ['id', 'name']}]}"))
 
     deprovision_node(node)
+    delete_gcs_object(gcs_credentials_file, GCS_BUCKET, name)
     os.remove(cfg)
     os.remove(tmp_file)
     os.remove(gcs_credentials_file)
-    delete_gcs_object(gcs_credentials_file, GCS_BUCKET, name)
 
 if __name__ == "__main__":
   unittest.main(verbosity=2)
