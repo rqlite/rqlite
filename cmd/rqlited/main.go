@@ -27,8 +27,8 @@ import (
 	"github.com/rqlite/rqlite/v8/db"
 	"github.com/rqlite/rqlite/v8/db/extensions"
 	httpd "github.com/rqlite/rqlite/v8/http"
-	"github.com/rqlite/rqlite/v8/rarchive"
-	"github.com/rqlite/rqlite/v8/rtls"
+	"github.com/rqlite/rqlite/v8/internal/rarchive"
+	"github.com/rqlite/rqlite/v8/internal/rtls"
 	"github.com/rqlite/rqlite/v8/store"
 	"github.com/rqlite/rqlite/v8/tcp"
 )

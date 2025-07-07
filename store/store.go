@@ -30,9 +30,9 @@ import (
 	sql "github.com/rqlite/rqlite/v8/db"
 	"github.com/rqlite/rqlite/v8/db/humanize"
 	wal "github.com/rqlite/rqlite/v8/db/wal"
+	"github.com/rqlite/rqlite/v8/internal/random"
+	"github.com/rqlite/rqlite/v8/internal/rsync"
 	"github.com/rqlite/rqlite/v8/progress"
-	"github.com/rqlite/rqlite/v8/random"
-	"github.com/rqlite/rqlite/v8/rsync"
 	"github.com/rqlite/rqlite/v8/snapshot"
 	rlog "github.com/rqlite/rqlite/v8/store/log"
 )

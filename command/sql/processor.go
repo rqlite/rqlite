@@ -10,7 +10,7 @@ import (
 	"time"
 
 	"github.com/rqlite/rqlite/v8/command/proto"
-	"github.com/rqlite/rqlite/v8/random"
+	"github.com/rqlite/rqlite/v8/internal/random"
 	"github.com/rqlite/sql"
 	rsql "github.com/rqlite/sql"
 )

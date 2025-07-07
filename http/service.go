@@ -27,8 +27,8 @@ import (
 	command "github.com/rqlite/rqlite/v8/command/proto"
 	"github.com/rqlite/rqlite/v8/command/sql"
 	"github.com/rqlite/rqlite/v8/db"
+	"github.com/rqlite/rqlite/v8/internal/rtls"
 	"github.com/rqlite/rqlite/v8/queue"
-	"github.com/rqlite/rqlite/v8/rtls"
 	"github.com/rqlite/rqlite/v8/store"
 )
 
