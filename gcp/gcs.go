@@ -28,6 +28,14 @@ var (
 	jwtAudTarget            = "https://oauth2.googleapis.com/token"
 )
 
+// TimestampedPath returns a new path with the given timestamp prepended.
+// If path contains /, the timestamp is prepended to the last segment.
+func TimestampedPath(path string, t time.Time) string {
+	parts := strings.Split(path, "/")
+	parts[len(parts)-1] = fmt.Sprintf("%s_%s", t.Format("20060102150405"), parts[len(parts)-1])
+	return strings.Join(parts, "/")
+}
+
 // GCSConfig is the subconfig for the GCS storage type.
 type GCSConfig struct {
 	Endpoint        string `json:"endpoint,omitempty"`
@@ -50,10 +58,17 @@ type GCSClient struct {
 	uploadURL string
 	objectURL string
 	bucketURL string
+
+	timestamp bool
+}
+
+// GCSClientOpts are options for creating a GCSClient.
+type GCSClientOpts struct {
+	Timestamp bool
 }
 
 // NewGCSClient returns an instance of a GCSClient.
-func NewGCSClient(cfg *GCSConfig) (*GCSClient, error) {
+func NewGCSClient(cfg *GCSConfig, opts *GCSClientOpts) (*GCSClient, error) {
 	if cfg.Endpoint == "" {
 		cfg.Endpoint = defaultEndpoint
 	}
@@ -71,6 +86,7 @@ func NewGCSClient(cfg *GCSConfig) (*GCSClient, error) {
 		objectURL: fmt.Sprintf("%s/storage/v1/b/%s/o/%s",
 			base, url.PathEscape(cfg.Bucket), url.PathEscape(cfg.Name)),
 		bucketURL: fmt.Sprintf("%s/storage/v1/b/%s", base, url.PathEscape(cfg.Bucket)),
+		timestamp: opts != nil && opts.Timestamp,
 	}, nil
 }
 
@@ -162,7 +178,11 @@ func (g *GCSClient) Upload(ctx context.Context, r io.Reader, id string) error {
 		return fmt.Errorf("failed to close multipart writer: %w", err)
 	}
 
-	u := g.uploadURL + "?uploadType=multipart"
+	objectURL := g.objectURL
+	if g.timestamp {
+		objectURL = TimestampedPath(g.objectURL, time.Now())
+	}
+	u := objectURL + "?uploadType=multipart"
 	req, _ := http.NewRequestWithContext(ctx, http.MethodPost, u, &buf)
 	req.Header.Set("Content-Type", "multipart/related; boundary="+w.Boundary())
 	if err := g.addAuth(req); err != nil {

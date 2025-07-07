@@ -1,3 +1,7 @@
+## v8.39.1 (July 7th 2025)
+### Implementation changes and bug fixes
+- [PR #2147](https://github.com/rqlite/rqlite/pull/2147): Support timestamped uploads to Google Cloud Storage.
+
 ## v8.39.0 (July 6th 2025)
 ### New features
 - [PR #2144](https://github.com/rqlite/rqlite/pull/2144), [PR #2145](https://github.com/rqlite/rqlite/pull/2145), [PR #2146](https://github.com/rqlite/rqlite/pull/2146): Automatic _Backup and Restore_ now supports Google Cloud Storage.

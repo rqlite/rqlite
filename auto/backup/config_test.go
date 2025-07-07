@@ -295,7 +295,7 @@ func mustNewGCSClient(t *testing.T, bucket, name, projectID, credentialsFile str
 		Name:            name,
 		ProjectID:       projectID,
 		CredentialsPath: credentialsFile,
-	})
+	}, nil)
 	if err != nil {
 		t.Fatalf("Failed to create GCS client: %v", err)
 	}

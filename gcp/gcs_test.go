@@ -26,7 +26,7 @@ func Test_NewGCSClient(t *testing.T) {
 		CredentialsPath: createCredFile(t), // dummy, never used
 	}
 
-	cli, err := NewGCSClient(cfg)
+	cli, err := NewGCSClient(cfg, nil)
 	if err != nil {
 		t.Fatalf("NewGCSClient: %v", err)
 	}
@@ -261,7 +261,7 @@ func newTestClient(t *testing.T, h http.HandlerFunc) (*GCSClient, func()) {
 		CredentialsPath: createCredFile(t), // dummy, never used
 	}
 
-	cli, err := NewGCSClient(cfg)
+	cli, err := NewGCSClient(cfg, nil)
 	if err != nil {
 		t.Fatalf("NewGCSClient: %v", err)
 	}
