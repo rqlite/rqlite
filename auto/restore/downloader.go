@@ -114,11 +114,13 @@ type StorageClient interface {
 	fmt.Stringer
 }
 
+// Downloader is a struct that handles downloading data from a storage service.
 type Downloader struct {
 	storageClient StorageClient
 	logger        *log.Logger
 }
 
+// NewDownloader creates a new Downloader instance with the given StorageClient.
 func NewDownloader(storageClient StorageClient) *Downloader {
 	return &Downloader{
 		storageClient: storageClient,
@@ -126,6 +128,7 @@ func NewDownloader(storageClient StorageClient) *Downloader {
 	}
 }
 
+// Do downloads data from the storage service and writes it to the provided writer.
 func (d *Downloader) Do(ctx context.Context, w io.Writer, timeout time.Duration) (err error) {
 	var cw *countingWriterAt
 	defer func() {
