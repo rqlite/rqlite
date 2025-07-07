@@ -284,7 +284,7 @@ func (g *GCSClient) CurrentID(ctx context.Context) (string, error) {
 
 	id, ok := obj.Metadata[GCPGCSIDKey]
 	if !ok {
-		return "", fmt.Errorf("sum metadata not found for %v", g)
+		return "", fmt.Errorf("ID key (%s) not found in metadata %v", GCPGCSIDKey, g)
 	}
 	return id, nil
 }
