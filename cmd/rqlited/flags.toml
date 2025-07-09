@@ -86,6 +86,15 @@ long_help = """
 default = ""
 
 [[flags]]
+name = "CDCFile"
+cli = "cdc"
+type = "string"
+short_help = "Path to Change Data Capture (CDC) configuration file. If not set, not enabled"
+long_help = """
+"""
+default = ""
+
+[[flags]]
 name = "HTTPx509CACert"
 cli = "http-ca-cert"
 type = "string"
