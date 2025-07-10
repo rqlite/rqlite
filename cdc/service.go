@@ -8,6 +8,7 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"path/filepath"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -18,6 +19,7 @@ import (
 )
 
 const (
+	cdcDB            = "cdc.db"
 	highWatermarkKey = "high_watermark"
 	leaderChanLen    = 5 // Support any fast back-to-back leadership changes.
 )
@@ -53,7 +55,7 @@ type Cluster interface {
 
 	// RegisterLeaderChange registers the given channel which will receive
 	// a signal when the node detects that the Leader changes.
-	RegisterLeaderChange(c chan<- struct{})
+	RegisterLeaderChange(c chan<- bool)
 }
 
 // Store is an interface that defines methods for executing commands and querying
@@ -69,6 +71,7 @@ type Store interface {
 // Service is a CDC service that reads events from a channel and processes them.
 // It is used to stream changes to a HTTP endpoint.
 type Service struct {
+	dir   string
 	clstr Cluster
 	str   Store
 
@@ -111,8 +114,14 @@ type Service struct {
 	// we don't wait too long for a batch to fill up.
 	maxBatchDelay time.Duration
 
-	// queue is a queue of events to be sent to the webhook. It implements the
-	// batching and timeout logic.
+	// fifo is the persistent queue that collects CDC events generated on this node.
+	// The CDC service stores these events regardless of its leader status. This allows
+	// the service to recover from leader changes and ensure that every event is transmitted
+	// at least once to the webhook endpoint.
+	fifo *Queue
+
+	// queue implements the batching of CDC events before transmission to the webhook. The
+	// contents of this queue do not persist across restarts or leader changes.
 	queue *queue.Queue[*proto.CDCEvents]
 
 	// highWatermark is the index of the last event that was successfully sent to the webhook
@@ -127,6 +136,12 @@ type Service struct {
 	// If true, the service will not write or read the high watermark from the store.
 	highWatermarkingDisabled rsync.AtomicBool
 
+	// Channel to receive notifications of leader changes.
+	leaderObCh chan bool
+
+	// Channel to receive high watermark updates from the cluster.
+	hwmObCh chan uint64
+
 	// For CDC shutdown.
 	wg   sync.WaitGroup
 	done chan struct{}
@@ -135,7 +150,7 @@ type Service struct {
 }
 
 // NewService creates a new CDC service.
-func NewService(cfg *Config, clstr Cluster, str Store, in <-chan *proto.CDCEvents) *Service {
+func NewService(dir string, clstr Cluster, str Store, in <-chan *proto.CDCEvents, cfg *Config) (*Service, error) {
 	httpClient := &http.Client{
 		Transport: &http.Transport{
 			TLSClientConfig: cfg.TLSConfig,
@@ -144,6 +159,7 @@ func NewService(cfg *Config, clstr Cluster, str Store, in <-chan *proto.CDCEvent
 	}
 
 	srv := &Service{
+		dir:                   dir,
 		clstr:                 clstr,
 		str:                   str,
 		in:                    in,
@@ -160,13 +176,21 @@ func NewService(cfg *Config, clstr Cluster, str Store, in <-chan *proto.CDCEvent
 		maxBatchDelay:         cfg.MaxBatchDelay,
 		highWatermarkInterval: cfg.HighWatermarkInterval,
 		queue:                 queue.New[*proto.CDCEvents](cfg.MaxBatchSz, cfg.MaxBatchSz, cfg.MaxBatchDelay),
+		leaderObCh:            make(chan bool, leaderChanLen),
+		hwmObCh:               make(chan uint64, leaderChanLen),
 		done:                  make(chan struct{}),
 		logger:                log.New(os.Stdout, "[cdc-service] ", log.LstdFlags),
 	}
 
+	fifo, err := NewQueue(filepath.Join(dir, cdcDB))
+	if err != nil {
+		return nil, err
+	}
+	srv.fifo = fifo
+
 	srv.highWatermark.Store(0)
 	srv.highWatermarkingDisabled.SetBool(cfg.HighWatermarkingDisabled)
-	return srv
+	return srv, nil
 }
 
 // Start starts the CDC service.
@@ -178,15 +202,9 @@ func (s *Service) Start() error {
 	}
 	s.wg.Add(2)
 	go s.readEvents()
-	go s.postEvents()
+	go s.mainLoop()
 
-	if s.highWatermarkingDisabled.IsNot() {
-		s.wg.Add(1)
-		go s.writeHighWatermarkLoop()
-	}
-
-	obCh := make(chan struct{}, leaderChanLen)
-	s.clstr.RegisterLeaderChange(obCh)
+	s.clstr.RegisterLeaderChange(s.leaderObCh)
 	s.logger.Println("service started")
 	return nil
 }
@@ -203,6 +221,7 @@ func (s *Service) Stop() {
 		s.writeHighWatermark(s.highWatermark.Load())
 	}
 	close(s.done)
+	s.fifo.Close()
 	s.wg.Wait()
 }
 
@@ -226,10 +245,46 @@ func (s *Service) readEvents() {
 	}
 }
 
-func (s *Service) postEvents() {
+func (s *Service) mainLoop() {
 	defer s.wg.Done()
+
+	// This ticker is used to periodically broadcast the high watermark to the cluster.
+	hwmTicker := time.NewTicker(s.highWatermarkInterval)
+	defer hwmTicker.Stop()
+
+	preHWM := s.highWatermark.Load()
 	for {
 		select {
+		case <-hwmTicker.C:
+			if s.highWatermarkingDisabled.Is() {
+				continue
+			}
+			if s.highWatermark.Load() == preHWM {
+				// Nothing to do.
+				continue
+			}
+			preHWM = s.highWatermark.Load()
+			if s.clstr.IsLeader() {
+				if err := s.writeHighWatermark(s.highWatermark.Load()); err != nil {
+					s.logger.Printf("error writing high watermark to store: %v", err)
+				}
+			}
+
+		case hwm := <-s.hwmObCh:
+			s.logger.Println("received high watermark update:", hwm)
+			if hwm > s.highWatermark.Load() {
+				s.highWatermark.Store(hwm)
+				// This means all events up to this high watermark have been
+				// successfully sent to the webhook by the cluster. We can
+				// delete all events up and including that point from our FIFO.
+			}
+
+		case isLeader := <-s.leaderObCh:
+			s.logger.Println("is leader:", isLeader)
+			// If not leader then reset batching queue and get ready to start
+			// retrasmitting events from high-water mark. If we have become
+			// the leader then start reading from the batching queue.
+
 		case batch := <-s.queue.C:
 			if batch == nil || len(batch.Objects) == 0 {
 				continue
@@ -290,32 +345,7 @@ func (s *Service) postEvents() {
 				s.highWatermark.Store(batch.Objects[len(batch.Objects)-1].Index)
 				stats.Add(numSent, int64(len(batch.Objects)))
 			}
-		case <-s.done:
-			return
-		}
-	}
-}
 
-func (s *Service) writeHighWatermarkLoop() {
-	defer s.wg.Done()
-	ticker := time.NewTicker(s.highWatermarkInterval)
-	defer ticker.Stop()
-
-	prevVal := s.highWatermark.Load()
-	for {
-		select {
-		case <-ticker.C:
-			if s.highWatermark.Load() == prevVal {
-				// Nothing to do.
-				continue
-			}
-			prevVal = s.highWatermark.Load()
-			if s.clstr.IsLeader() {
-				if err := s.writeHighWatermark(s.highWatermark.Load()); err != nil {
-					s.logger.Printf("error writing high watermark to store: %v", err)
-				}
-				continue
-			}
 		case <-s.done:
 			return
 		}
