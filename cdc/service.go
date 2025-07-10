@@ -127,6 +127,8 @@ type Service struct {
 	// If true, the service will not write or read the high watermark from the store.
 	highWatermarkingDisabled rsync.AtomicBool
 
+	leaderObCh chan struct{} // Channel to receive notifications of leader changes.
+
 	// For CDC shutdown.
 	wg   sync.WaitGroup
 	done chan struct{}
@@ -160,6 +162,7 @@ func NewService(cfg *Config, clstr Cluster, str Store, in <-chan *proto.CDCEvent
 		maxBatchDelay:         cfg.MaxBatchDelay,
 		highWatermarkInterval: cfg.HighWatermarkInterval,
 		queue:                 queue.New[*proto.CDCEvents](cfg.MaxBatchSz, cfg.MaxBatchSz, cfg.MaxBatchDelay),
+		leaderObCh:            make(chan struct{}, leaderChanLen),
 		done:                  make(chan struct{}),
 		logger:                log.New(os.Stdout, "[cdc-service] ", log.LstdFlags),
 	}
@@ -178,15 +181,9 @@ func (s *Service) Start() error {
 	}
 	s.wg.Add(2)
 	go s.readEvents()
-	go s.postEvents()
+	go s.mainLoop()
 
-	if s.highWatermarkingDisabled.IsNot() {
-		s.wg.Add(1)
-		go s.writeHighWatermarkLoop()
-	}
-
-	obCh := make(chan struct{}, leaderChanLen)
-	s.clstr.RegisterLeaderChange(obCh)
+	s.clstr.RegisterLeaderChange(s.leaderObCh)
 	s.logger.Println("service started")
 	return nil
 }
@@ -226,10 +223,36 @@ func (s *Service) readEvents() {
 	}
 }
 
-func (s *Service) postEvents() {
+func (s *Service) mainLoop() {
 	defer s.wg.Done()
+
+	hwmTicker := time.NewTicker(s.highWatermarkInterval)
+	defer hwmTicker.Stop()
+	preHWM := s.highWatermark.Load()
+
 	for {
 		select {
+		case <-hwmTicker.C:
+			if s.highWatermarkingDisabled.Is() {
+				continue
+			}
+			if s.highWatermark.Load() == preHWM {
+				// Nothing to do.
+				continue
+			}
+			preHWM = s.highWatermark.Load()
+			if s.clstr.IsLeader() {
+				if err := s.writeHighWatermark(s.highWatermark.Load()); err != nil {
+					s.logger.Printf("error writing high watermark to store: %v", err)
+				}
+			}
+
+		case <-s.leaderObCh:
+			s.logger.Println("leader change detected")
+			// If not leader then reset batching queue and get ready to start
+			// retrasmitting events from high-water mark. If we have become
+			// the leader then start reading from the batching queue.
+
 		case batch := <-s.queue.C:
 			if batch == nil || len(batch.Objects) == 0 {
 				continue
@@ -290,32 +313,7 @@ func (s *Service) postEvents() {
 				s.highWatermark.Store(batch.Objects[len(batch.Objects)-1].Index)
 				stats.Add(numSent, int64(len(batch.Objects)))
 			}
-		case <-s.done:
-			return
-		}
-	}
-}
 
-func (s *Service) writeHighWatermarkLoop() {
-	defer s.wg.Done()
-	ticker := time.NewTicker(s.highWatermarkInterval)
-	defer ticker.Stop()
-
-	prevVal := s.highWatermark.Load()
-	for {
-		select {
-		case <-ticker.C:
-			if s.highWatermark.Load() == prevVal {
-				// Nothing to do.
-				continue
-			}
-			prevVal = s.highWatermark.Load()
-			if s.clstr.IsLeader() {
-				if err := s.writeHighWatermark(s.highWatermark.Load()); err != nil {
-					s.logger.Printf("error writing high watermark to store: %v", err)
-				}
-				continue
-			}
 		case <-s.done:
 			return
 		}
