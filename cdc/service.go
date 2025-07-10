@@ -16,6 +16,7 @@ import (
 	"github.com/rqlite/rqlite/v8/command/proto"
 	"github.com/rqlite/rqlite/v8/internal/rsync"
 	"github.com/rqlite/rqlite/v8/queue"
+	pb "google.golang.org/protobuf/proto"
 )
 
 const (
@@ -25,10 +26,11 @@ const (
 )
 
 const (
-	numDroppedNotLeader    = "dropped_not_leader"
-	numDroppedFailedToSend = "dropped_failed_to_send"
-	numRetries             = "retries"
-	numSent                = "sent_events"
+	numDroppedNotLeader       = "dropped_not_leader"
+	numDroppedFailedToEnqueue = "dropped_failed_to_enqueue"
+	numDroppedFailedToSend    = "dropped_failed_to_send"
+	numRetries                = "retries"
+	numSent                   = "sent_events"
 )
 
 // stats captures stats for the CDC Service.
@@ -43,6 +45,7 @@ func init() {
 func ResetStats() {
 	stats.Init()
 	stats.Add(numDroppedNotLeader, 0)
+	stats.Add(numDroppedFailedToEnqueue, 0)
 	stats.Add(numDroppedFailedToSend, 0)
 	stats.Add(numRetries, 0)
 	stats.Add(numSent, 0)
@@ -234,12 +237,41 @@ func (s *Service) readEvents() {
 	for {
 		select {
 		case o := <-s.in:
-			// Right now just write the event to the queue. Events should be
-			// persisted to a disk-based queue for replay on Leader change.
-			s.queue.Write([]*proto.CDCEvents{o}, nil)
+			// convert o to a byte slice so I can write to a disk-based queue.
+			if o == nil || len(o.Events) == 0 || o.Index == 0 || o.Index <= s.highWatermark.Load() {
+				continue
+			}
+			data, err := pb.Marshal(o)
+			if err != nil {
+				s.logger.Printf("error marshalling CDC event: %v", err)
+				stats.Add(numDroppedFailedToEnqueue, 1)
+				continue
+			}
+
+			if err := s.fifo.Enqueue(o.Index, data); err != nil {
+				s.logger.Printf("error enqueueing CDC event: %v", err)
+				stats.Add(numDroppedFailedToEnqueue, 1)
+				continue
+			}
 		case <-s.done:
 			return
 		}
+	}
+}
+
+// this loop is what needs to be started and stopped on leader changes. It also needs
+// to be synced with delete of events in the FIFO queue due to highwater mark updates.
+func (s *Service) dequeueLoop() {
+	for {
+		_, _, err := s.fifo.Dequeue()
+		if err != nil {
+			s.logger.Printf("error dequeueing CDC event: %v", err)
+			continue
+		}
+
+		events := make([]*proto.CDCEvents, 0)
+		// unmarshall the events here.
+		s.queue.Write(events, nil)
 	}
 }
 
