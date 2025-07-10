@@ -129,6 +129,8 @@ type Service struct {
 
 	leaderObCh chan bool // Channel to receive notifications of leader changes.
 
+	hwmObCh chan uint64 // Channel to receive high watermark updates from the cluster.
+
 	// For CDC shutdown.
 	wg   sync.WaitGroup
 	done chan struct{}
@@ -163,6 +165,7 @@ func NewService(cfg *Config, clstr Cluster, str Store, in <-chan *proto.CDCEvent
 		highWatermarkInterval: cfg.HighWatermarkInterval,
 		queue:                 queue.New[*proto.CDCEvents](cfg.MaxBatchSz, cfg.MaxBatchSz, cfg.MaxBatchDelay),
 		leaderObCh:            make(chan bool, leaderChanLen),
+		hwmObCh:               make(chan uint64, leaderChanLen),
 		done:                  make(chan struct{}),
 		logger:                log.New(os.Stdout, "[cdc-service] ", log.LstdFlags),
 	}
@@ -226,10 +229,11 @@ func (s *Service) readEvents() {
 func (s *Service) mainLoop() {
 	defer s.wg.Done()
 
+	// This ticker is used to periodically broadcast the high watermark to the cluster.
 	hwmTicker := time.NewTicker(s.highWatermarkInterval)
 	defer hwmTicker.Stop()
-	preHWM := s.highWatermark.Load()
 
+	preHWM := s.highWatermark.Load()
 	for {
 		select {
 		case <-hwmTicker.C:
@@ -245,6 +249,15 @@ func (s *Service) mainLoop() {
 				if err := s.writeHighWatermark(s.highWatermark.Load()); err != nil {
 					s.logger.Printf("error writing high watermark to store: %v", err)
 				}
+			}
+
+		case hwm := <-s.hwmObCh:
+			s.logger.Println("received high watermark update:", hwm)
+			if hwm > s.highWatermark.Load() {
+				s.highWatermark.Store(hwm)
+				// This means all events up to this high watermark have been
+				// successfully sent to the webhook by the cluster. We can
+				// delete all events up and including that point from our FIFO.
 			}
 
 		case isLeader := <-s.leaderObCh:
