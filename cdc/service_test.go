@@ -483,12 +483,20 @@ func Test_ServiceMultiEvent_Batch(t *testing.T) {
 
 type mockCluster struct {
 	leader atomic.Bool
+	obCh   chan<- bool
 }
 
 func (m *mockCluster) IsLeader() bool { return m.leader.Load() }
 
-func (m *mockCluster) RegisterLeaderChange(chan<- bool) {
-	// Not needed for this simple test.
+func (m *mockCluster) RegisterLeaderChange(ch chan<- bool) {
+	m.obCh = ch
+}
+
+func (m *mockCluster) SignalLeaderChange(leader bool) {
+	m.leader.Store(leader)
+	if m.obCh != nil {
+		m.obCh <- leader
+	}
 }
 
 type mockStore struct{}

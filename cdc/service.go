@@ -19,7 +19,7 @@ import (
 )
 
 const (
-	cdcFIFODB        = "cdc_fifo.db"
+	cdcDB            = "cdc.db"
 	highWatermarkKey = "high_watermark"
 	leaderChanLen    = 5 // Support any fast back-to-back leadership changes.
 )
@@ -71,7 +71,7 @@ type Store interface {
 // Service is a CDC service that reads events from a channel and processes them.
 // It is used to stream changes to a HTTP endpoint.
 type Service struct {
-	dir   string // The directory where the service stores its state.
+	dir   string
 	clstr Cluster
 	str   Store
 
@@ -136,9 +136,11 @@ type Service struct {
 	// If true, the service will not write or read the high watermark from the store.
 	highWatermarkingDisabled rsync.AtomicBool
 
-	leaderObCh chan bool // Channel to receive notifications of leader changes.
+	// Channel to receive notifications of leader changes.
+	leaderObCh chan bool
 
-	hwmObCh chan uint64 // Channel to receive high watermark updates from the cluster.
+	// Channel to receive high watermark updates from the cluster.
+	hwmObCh chan uint64
 
 	// For CDC shutdown.
 	wg   sync.WaitGroup
@@ -180,7 +182,7 @@ func NewService(dir string, clstr Cluster, str Store, in <-chan *proto.CDCEvents
 		logger:                log.New(os.Stdout, "[cdc-service] ", log.LstdFlags),
 	}
 
-	fifo, err := NewQueue(filepath.Join(dir, cdcFIFODB))
+	fifo, err := NewQueue(filepath.Join(dir, cdcDB))
 	if err != nil {
 		return nil, err
 	}
