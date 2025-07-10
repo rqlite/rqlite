@@ -53,7 +53,7 @@ type Cluster interface {
 
 	// RegisterLeaderChange registers the given channel which will receive
 	// a signal when the node detects that the Leader changes.
-	RegisterLeaderChange(c chan<- struct{})
+	RegisterLeaderChange(c chan<- bool)
 }
 
 // Store is an interface that defines methods for executing commands and querying
@@ -127,7 +127,7 @@ type Service struct {
 	// If true, the service will not write or read the high watermark from the store.
 	highWatermarkingDisabled rsync.AtomicBool
 
-	leaderObCh chan struct{} // Channel to receive notifications of leader changes.
+	leaderObCh chan bool // Channel to receive notifications of leader changes.
 
 	// For CDC shutdown.
 	wg   sync.WaitGroup
@@ -162,7 +162,7 @@ func NewService(cfg *Config, clstr Cluster, str Store, in <-chan *proto.CDCEvent
 		maxBatchDelay:         cfg.MaxBatchDelay,
 		highWatermarkInterval: cfg.HighWatermarkInterval,
 		queue:                 queue.New[*proto.CDCEvents](cfg.MaxBatchSz, cfg.MaxBatchSz, cfg.MaxBatchDelay),
-		leaderObCh:            make(chan struct{}, leaderChanLen),
+		leaderObCh:            make(chan bool, leaderChanLen),
 		done:                  make(chan struct{}),
 		logger:                log.New(os.Stdout, "[cdc-service] ", log.LstdFlags),
 	}
@@ -247,8 +247,8 @@ func (s *Service) mainLoop() {
 				}
 			}
 
-		case <-s.leaderObCh:
-			s.logger.Println("leader change detected")
+		case isLeader := <-s.leaderObCh:
+			s.logger.Println("is leader:", isLeader)
 			// If not leader then reset batching queue and get ready to start
 			// retrasmitting events from high-water mark. If we have become
 			// the leader then start reading from the batching queue.

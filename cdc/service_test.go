@@ -467,7 +467,7 @@ type mockCluster struct {
 
 func (m *mockCluster) IsLeader() bool { return m.leader.Load() }
 
-func (m *mockCluster) RegisterLeaderChange(chan<- struct{}) {
+func (m *mockCluster) RegisterLeaderChange(chan<- bool) {
 	// Not needed for this simple test.
 }
 
