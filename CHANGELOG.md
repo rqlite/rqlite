@@ -2,6 +2,7 @@
 ### Implementation changes and bug fixes
 - [PR #2149](https://github.com/rqlite/rqlite/pull/2149): Consolidate the top-level of the source tree.
 - [PR #2150](https://github.com/rqlite/rqlite/pull/2150): Move various utilities into an `internal` module.
+- [PR #2152](https://github.com/rqlite/rqlite/pull/2152): Remodel the main CDC loop.
 
 ## v8.39.1 (July 7th 2025)
 ### Implementation changes and bug fixes
