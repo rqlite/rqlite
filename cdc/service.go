@@ -8,6 +8,7 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"path/filepath"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -18,6 +19,7 @@ import (
 )
 
 const (
+	cdcFIFODB        = "cdc_fifo.db"
 	highWatermarkKey = "high_watermark"
 	leaderChanLen    = 5 // Support any fast back-to-back leadership changes.
 )
@@ -69,6 +71,7 @@ type Store interface {
 // Service is a CDC service that reads events from a channel and processes them.
 // It is used to stream changes to a HTTP endpoint.
 type Service struct {
+	dir   string // The directory where the service stores its state.
 	clstr Cluster
 	str   Store
 
@@ -111,8 +114,14 @@ type Service struct {
 	// we don't wait too long for a batch to fill up.
 	maxBatchDelay time.Duration
 
-	// queue is a queue of events to be sent to the webhook. It implements the
-	// batching and timeout logic.
+	// fifo is the persistent queue that collects CDC events generated on this node.
+	// The CDC service stores these events regardless of its leader status. This allows
+	// the service to recover from leader changes and ensure that every event is transmitted
+	// at least once to the webhook endpoint.
+	fifo *Queue
+
+	// queue implements the batching of CDC events before transmission to the webhook. The
+	// contents of this queue do not persist across restarts or leader changes.
 	queue *queue.Queue[*proto.CDCEvents]
 
 	// highWatermark is the index of the last event that was successfully sent to the webhook
@@ -139,7 +148,7 @@ type Service struct {
 }
 
 // NewService creates a new CDC service.
-func NewService(cfg *Config, clstr Cluster, str Store, in <-chan *proto.CDCEvents) *Service {
+func NewService(dir string, clstr Cluster, str Store, in <-chan *proto.CDCEvents, cfg *Config) (*Service, error) {
 	httpClient := &http.Client{
 		Transport: &http.Transport{
 			TLSClientConfig: cfg.TLSConfig,
@@ -148,6 +157,7 @@ func NewService(cfg *Config, clstr Cluster, str Store, in <-chan *proto.CDCEvent
 	}
 
 	srv := &Service{
+		dir:                   dir,
 		clstr:                 clstr,
 		str:                   str,
 		in:                    in,
@@ -170,9 +180,15 @@ func NewService(cfg *Config, clstr Cluster, str Store, in <-chan *proto.CDCEvent
 		logger:                log.New(os.Stdout, "[cdc-service] ", log.LstdFlags),
 	}
 
+	fifo, err := NewQueue(filepath.Join(dir, cdcFIFODB))
+	if err != nil {
+		return nil, err
+	}
+	srv.fifo = fifo
+
 	srv.highWatermark.Store(0)
 	srv.highWatermarkingDisabled.SetBool(cfg.HighWatermarkingDisabled)
-	return srv
+	return srv, nil
 }
 
 // Start starts the CDC service.
@@ -203,6 +219,7 @@ func (s *Service) Stop() {
 		s.writeHighWatermark(s.highWatermark.Load())
 	}
 	close(s.done)
+	s.fifo.Close()
 	s.wg.Wait()
 }
 

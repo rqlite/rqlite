@@ -35,12 +35,16 @@ func Test_ServiceSingleEvent(t *testing.T) {
 	cfg.Endpoint = testSrv.URL
 	cfg.MaxBatchSz = 1
 	cfg.MaxBatchDelay = 50 * time.Millisecond
-	svc := NewService(
-		cfg,
+	svc, err := NewService(
+		t.TempDir(),
 		cl,
 		&mockStore{},
 		eventsCh,
+		cfg,
 	)
+	if err != nil {
+		t.Fatalf("failed to create service: %v", err)
+	}
 	if err := svc.Start(); err != nil {
 		t.Fatalf("failed to start service: %v", err)
 	}
@@ -110,12 +114,16 @@ func Test_ServiceSingleEvent_LogOnly(t *testing.T) {
 	cfg.MaxBatchSz = 1
 	cfg.MaxBatchDelay = 50 * time.Millisecond
 	cfg.LogOnly = true
-	svc := NewService(
-		cfg,
+	svc, err := NewService(
+		t.TempDir(),
 		cl,
 		&mockStore{},
 		eventsCh,
+		cfg,
 	)
+	if err != nil {
+		t.Fatalf("failed to create service: %v", err)
+	}
 	if err := svc.Start(); err != nil {
 		t.Fatalf("failed to start service: %v", err)
 	}
@@ -165,12 +173,16 @@ func Test_ServiceSingleEvent_Retry(t *testing.T) {
 	cfg.Endpoint = testSrv.URL
 	cfg.MaxBatchSz = 1
 	cfg.MaxBatchDelay = 50 * time.Millisecond
-	svc := NewService(
-		cfg,
+	svc, err := NewService(
+		t.TempDir(),
 		cl,
 		&mockStore{},
 		eventsCh,
+		cfg,
 	)
+	if err != nil {
+		t.Fatalf("failed to create service: %v", err)
+	}
 	if err := svc.Start(); err != nil {
 		t.Fatalf("failed to start service: %v", err)
 	}
@@ -244,12 +256,16 @@ func Test_ServiceMultiEvent(t *testing.T) {
 	cfg.Endpoint = testSrv.URL
 	cfg.MaxBatchSz = 2
 	cfg.MaxBatchDelay = time.Second
-	svc := NewService(
-		cfg,
+	svc, err := NewService(
+		t.TempDir(),
 		cl,
 		&mockStore{},
 		eventsCh,
+		cfg,
 	)
+	if err != nil {
+		t.Fatalf("failed to create service: %v", err)
+	}
 	if err := svc.Start(); err != nil {
 		t.Fatalf("failed to start service: %v", err)
 	}
@@ -345,12 +361,16 @@ func Test_ServiceMultiEvent_Batch(t *testing.T) {
 	cfg.Endpoint = testSrv.URL
 	cfg.MaxBatchSz = 2
 	cfg.MaxBatchDelay = 100 * time.Millisecond
-	svc := NewService(
-		cfg,
+	svc, err := NewService(
+		t.TempDir(),
 		cl,
 		&mockStore{},
 		eventsCh,
+		cfg,
 	)
+	if err != nil {
+		t.Fatalf("failed to create service: %v", err)
+	}
 	if err := svc.Start(); err != nil {
 		t.Fatalf("failed to start service: %v", err)
 	}
