@@ -1077,7 +1077,7 @@ func (s *Service) handleLeader(w http.ResponseWriter, r *http.Request, qp QueryP
 			if err == store.ErrNotOpen {
 				statusCode = http.StatusServiceUnavailable
 			} else if err == store.ErrNotLeader {
-				statusCode = http.StatusBadRequest
+				statusCode = http.StatusServiceUnavailable
 			}
 			http.Error(w, fmt.Sprintf("stepdown: %s", err.Error()), statusCode)
 			return

@@ -1778,8 +1778,8 @@ func Test_LeaderDELETE_Error(t *testing.T) {
 	rr := httptest.NewRecorder()
 	s.ServeHTTP(rr, req)
 
-	if rr.Code != http.StatusBadRequest {
-		t.Fatalf("expected 400, got %d", rr.Code)
+	if rr.Code != http.StatusServiceUnavailable {
+		t.Fatalf("expected 503, got %d", rr.Code)
 	}
 
 	if !strings.Contains(rr.Body.String(), "stepdown") {

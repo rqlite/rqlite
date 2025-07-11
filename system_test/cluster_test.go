@@ -2328,8 +2328,19 @@ func Test_ClusterLeader_Stepdown(t *testing.T) {
 		t.Fatalf("failed waiting for leader: %s", err.Error())
 	}
 
-	// Test stepdown on leader
-	err := leader.Stepdown(false)
+	// Get leader info before stepdown
+	leaderInfoBefore, err := leader.Leader()
+	if err != nil {
+		t.Fatalf("failed to get leader info before stepdown: %s", err.Error())
+	}
+
+	var leaderDataBefore map[string]string
+	if err := json.Unmarshal([]byte(leaderInfoBefore), &leaderDataBefore); err != nil {
+		t.Fatalf("failed to parse leader response before stepdown: %s", err.Error())
+	}
+
+	// Test stepdown on leader with wait=true for maximum testing
+	err = leader.Stepdown(true)
 	if err != nil {
 		t.Fatalf("failed to trigger stepdown on leader: %s", err.Error())
 	}
@@ -2340,6 +2351,22 @@ func Test_ClusterLeader_Stepdown(t *testing.T) {
 	// Verify that cluster still has a leader (follower should become leader)
 	if _, err := follower.WaitForLeader(); err != nil {
 		t.Fatalf("cluster has no leader after stepdown: %s", err.Error())
+	}
+
+	// Get leader info after stepdown and confirm it's different
+	leaderInfoAfter, err := follower.Leader()
+	if err != nil {
+		t.Fatalf("failed to get leader info after stepdown: %s", err.Error())
+	}
+
+	var leaderDataAfter map[string]string
+	if err := json.Unmarshal([]byte(leaderInfoAfter), &leaderDataAfter); err != nil {
+		t.Fatalf("failed to parse leader response after stepdown: %s", err.Error())
+	}
+
+	// Confirm that the leader has changed
+	if leaderDataBefore["addr"] == leaderDataAfter["addr"] {
+		t.Fatalf("leader did not change after stepdown: %s", leaderDataBefore["addr"])
 	}
 }
 
