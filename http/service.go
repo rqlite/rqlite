@@ -97,6 +97,10 @@ type Store interface {
 	// the Raft system. It then triggers a Raft snapshot, which will then make
 	// Raft aware of the new data.
 	ReadFrom(r io.Reader) (int64, error)
+
+	// Stepdown forces this node to relinquish leadership to another node in
+	// the cluster.
+	Stepdown(wait bool) error
 }
 
 // GetNodeMetaer is the interface that wraps the GetNodeMeta method.
@@ -527,6 +531,8 @@ func (s *Service) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		s.handleStatus(w, r, params)
 	case strings.HasPrefix(r.URL.Path, "/nodes"):
 		s.handleNodes(w, r, params)
+	case r.URL.Path == "/leader":
+		s.handleLeader(w, r, params)
 	case strings.HasPrefix(r.URL.Path, "/readyz"):
 		stats.Add(numReadyz, 1)
 		s.handleReadyz(w, r, params)
@@ -1023,6 +1029,63 @@ func (s *Service) handleNodes(w http.ResponseWriter, r *http.Request, qp QueryPa
 	if err != nil {
 		http.Error(w, fmt.Sprintf("JSON marshal: %s", err.Error()),
 			http.StatusInternalServerError)
+	}
+}
+
+// handleLeader returns leader information, or triggers leader stepdown.
+func (s *Service) handleLeader(w http.ResponseWriter, r *http.Request, qp QueryParams) {
+	w.Header().Set("Content-Type", "application/json; charset=utf-8")
+
+	if !s.CheckRequestPerm(r, auth.PermStatus) {
+		w.WriteHeader(http.StatusUnauthorized)
+		return
+	}
+
+	switch r.Method {
+	case "GET":
+		// Return leader information
+		leaderAddr, err := s.store.LeaderAddr()
+		if err != nil {
+			statusCode := http.StatusInternalServerError
+			if err == store.ErrNotOpen {
+				statusCode = http.StatusServiceUnavailable
+			}
+			http.Error(w, fmt.Sprintf("leader address: %s", err.Error()), statusCode)
+			return
+		}
+
+		leaderAPIAddr := s.LeaderAPIAddr()
+		response := map[string]string{
+			"addr":     leaderAddr,
+			"api_addr": leaderAPIAddr,
+		}
+
+		enc := json.NewEncoder(w)
+		if qp.Pretty() {
+			enc.SetIndent("", "    ")
+		}
+		if err := enc.Encode(response); err != nil {
+			http.Error(w, fmt.Sprintf("JSON encode: %s", err.Error()),
+				http.StatusInternalServerError)
+		}
+
+	case "DELETE":
+		// Trigger leader stepdown
+		wait := qp.Wait()
+		if err := s.store.Stepdown(wait); err != nil {
+			statusCode := http.StatusInternalServerError
+			if err == store.ErrNotOpen {
+				statusCode = http.StatusServiceUnavailable
+			} else if err == store.ErrNotLeader {
+				statusCode = http.StatusBadRequest
+			}
+			http.Error(w, fmt.Sprintf("stepdown: %s", err.Error()), statusCode)
+			return
+		}
+		w.WriteHeader(http.StatusOK)
+
+	default:
+		w.WriteHeader(http.StatusMethodNotAllowed)
 	}
 }
 
