@@ -2,6 +2,7 @@ package system
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"net"
 	"os"
@@ -2259,6 +2260,86 @@ func Test_MultiNodeCluster_Boot(t *testing.T) {
 	_, err = node1.Boot("testdata/auto-restore.sqlite")
 	if err == nil {
 		t.Fatalf("expected error booting")
+	}
+}
+
+func Test_ClusterLeader_GET(t *testing.T) {
+	leader := mustNewLeaderNode("leader1")
+	defer leader.Deprovision()
+
+	follower := mustNewNode("follower1", false)
+	defer follower.Deprovision()
+
+	if err := follower.Join(leader); err != nil {
+		t.Fatalf("failed to join node: %s", err.Error())
+	}
+
+	// Test leader endpoint on leader
+	leaderInfo, err := leader.Leader()
+	if err != nil {
+		t.Fatalf("failed to get leader info from leader: %s", err.Error())
+	}
+
+	// Parse the JSON response
+	var leaderData map[string]string
+	if err := json.Unmarshal([]byte(leaderInfo), &leaderData); err != nil {
+		t.Fatalf("failed to parse leader response: %s", err.Error())
+	}
+
+	// Check that we have addr and api_addr
+	if leaderData["addr"] == "" {
+		t.Fatalf("leader addr is empty")
+	}
+	if leaderData["api_addr"] == "" {
+		t.Fatalf("leader api_addr is empty")
+	}
+
+	// Test leader endpoint on follower - should return same leader info
+	followerInfo, err := follower.Leader()
+	if err != nil {
+		t.Fatalf("failed to get leader info from follower: %s", err.Error())
+	}
+
+	var followerData map[string]string
+	if err := json.Unmarshal([]byte(followerInfo), &followerData); err != nil {
+		t.Fatalf("failed to parse follower leader response: %s", err.Error())
+	}
+
+	// Both should report the same leader
+	if leaderData["addr"] != followerData["addr"] {
+		t.Fatalf("leader and follower report different leader addresses: %s vs %s",
+			leaderData["addr"], followerData["addr"])
+	}
+}
+
+func Test_ClusterLeader_Stepdown(t *testing.T) {
+	leader := mustNewLeaderNode("leader1")
+	defer leader.Deprovision()
+
+	follower := mustNewNode("follower1", false)
+	defer follower.Deprovision()
+
+	if err := follower.Join(leader); err != nil {
+		t.Fatalf("failed to join node: %s", err.Error())
+	}
+
+	// Wait for cluster to stabilize
+	if _, err := leader.WaitForLeader(); err != nil {
+		t.Fatalf("failed waiting for leader: %s", err.Error())
+	}
+
+	// Test stepdown on leader
+	err := leader.Stepdown(false)
+	if err != nil {
+		t.Fatalf("failed to trigger stepdown on leader: %s", err.Error())
+	}
+
+	// Give some time for leadership transition
+	time.Sleep(2 * time.Second)
+
+	// Verify that cluster still has a leader (follower should become leader)
+	if _, err := follower.WaitForLeader(); err != nil {
+		t.Fatalf("cluster has no leader after stepdown: %s", err.Error())
 	}
 }
 
