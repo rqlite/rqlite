@@ -35,6 +35,8 @@ const (
 	PermLoad = "load"
 	// PermSnapshot means user can request a snapshot.
 	PermSnapshot = "snapshot"
+	// PermLeaderOps means user can perform leader-related operations
+	PermLeaderOps = "leader-ops"
 )
 
 // BasicAuther is the interface an object must support to return basic auth information.

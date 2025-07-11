@@ -1036,7 +1036,7 @@ func (s *Service) handleNodes(w http.ResponseWriter, r *http.Request, qp QueryPa
 func (s *Service) handleLeader(w http.ResponseWriter, r *http.Request, qp QueryParams) {
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")
 
-	if !s.CheckRequestPerm(r, auth.PermStatus) {
+	if !s.CheckRequestPerm(r, auth.PermLeaderOps) {
 		w.WriteHeader(http.StatusUnauthorized)
 		return
 	}
