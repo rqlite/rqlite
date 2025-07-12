@@ -2345,7 +2345,7 @@ func Test_ClusterLeader_Stepdown(t *testing.T) {
 		t.Fatalf("failed to trigger stepdown on leader: %s", err.Error())
 	}
 
-	testPoll(t*testing.T, func() (bool, error) {
+	testPoll(t *testing.T, func() (bool, error) {
 		leaderInfoAfter, err := follower.Leader()
 		if err != nil {
 			return false, nil
@@ -2354,7 +2354,7 @@ func Test_ClusterLeader_Stepdown(t *testing.T) {
 		if err := json.Unmarshal([]byte(leaderInfoAfter), &leaderDataAfter); err != nil {
 			return false, nil
 		}
-		return leaderDataBefore["addr"] != leaderDataAfter["addr"]
+		return leaderDataBefore["addr"] != leaderDataAfter["addr"], nil
 	}, time.Second, 10*time.Second)
 }
 
