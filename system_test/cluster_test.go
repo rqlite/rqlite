@@ -2345,7 +2345,7 @@ func Test_ClusterLeader_Stepdown(t *testing.T) {
 		t.Fatalf("failed to trigger stepdown on leader: %s", err.Error())
 	}
 
-	testPoll(t *testing.T, func() (bool, error) {
+	testPoll(t, func() (bool, error) {
 		leaderInfoAfter, err := follower.Leader()
 		if err != nil {
 			return false, nil
