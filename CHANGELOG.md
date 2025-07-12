@@ -1,6 +1,7 @@
 ## v8.40.0 (unreleased)
 ### New features
 - [PR #2154](https://github.com/rqlite/rqlite/pull/2154), [PR #2156](https://github.com/rqlite/rqlite/pull/2156): Add a HTTP API which instructs the Leader to stepdown, transferring Leadership to another node in the cluster. Fixes issue [#2153](https://github.com/rqlite/rqlite/issues/2153).
+- [PR #2159](https://github.com/rqlite/rqlite/pull/2159): Add .stepdown command to rqlite shell.
 
 ### Implementation changes and bug fixes
 - [PR #2149](https://github.com/rqlite/rqlite/pull/2149): Consolidate the top-level of the source tree.
