@@ -98,51 +98,7 @@ func (x Command_Type) Number() protoreflect.EnumNumber {
 
 // Deprecated: Use Command_Type.Descriptor instead.
 func (Command_Type) EnumDescriptor() ([]byte, []int) {
-	return file_message_proto_rawDescGZIP(), []int{3, 0}
-}
-
-type StepdownRequest struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Wait          bool                   `protobuf:"varint,1,opt,name=wait,proto3" json:"wait,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
-}
-
-func (x *StepdownRequest) Reset() {
-	*x = StepdownRequest{}
-	mi := &file_message_proto_msgTypes[0]
-	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-	ms.StoreMessageInfo(mi)
-}
-
-func (x *StepdownRequest) String() string {
-	return protoimpl.X.MessageStringOf(x)
-}
-
-func (*StepdownRequest) ProtoMessage() {}
-
-func (x *StepdownRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_message_proto_msgTypes[0]
-	if x != nil {
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		if ms.LoadMessageInfo() == nil {
-			ms.StoreMessageInfo(mi)
-		}
-		return ms
-	}
-	return mi.MessageOf(x)
-}
-
-// Deprecated: Use StepdownRequest.ProtoReflect.Descriptor instead.
-func (*StepdownRequest) Descriptor() ([]byte, []int) {
-	return file_message_proto_rawDescGZIP(), []int{0}
-}
-
-func (x *StepdownRequest) GetWait() bool {
-	if x != nil {
-		return x.Wait
-	}
-	return false
+	return file_message_proto_rawDescGZIP(), []int{2, 0}
 }
 
 type Credentials struct {
@@ -155,7 +111,7 @@ type Credentials struct {
 
 func (x *Credentials) Reset() {
 	*x = Credentials{}
-	mi := &file_message_proto_msgTypes[1]
+	mi := &file_message_proto_msgTypes[0]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -167,7 +123,7 @@ func (x *Credentials) String() string {
 func (*Credentials) ProtoMessage() {}
 
 func (x *Credentials) ProtoReflect() protoreflect.Message {
-	mi := &file_message_proto_msgTypes[1]
+	mi := &file_message_proto_msgTypes[0]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -180,7 +136,7 @@ func (x *Credentials) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Credentials.ProtoReflect.Descriptor instead.
 func (*Credentials) Descriptor() ([]byte, []int) {
-	return file_message_proto_rawDescGZIP(), []int{1}
+	return file_message_proto_rawDescGZIP(), []int{0}
 }
 
 func (x *Credentials) GetUsername() string {
@@ -208,7 +164,7 @@ type NodeMeta struct {
 
 func (x *NodeMeta) Reset() {
 	*x = NodeMeta{}
-	mi := &file_message_proto_msgTypes[2]
+	mi := &file_message_proto_msgTypes[1]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -220,7 +176,7 @@ func (x *NodeMeta) String() string {
 func (*NodeMeta) ProtoMessage() {}
 
 func (x *NodeMeta) ProtoReflect() protoreflect.Message {
-	mi := &file_message_proto_msgTypes[2]
+	mi := &file_message_proto_msgTypes[1]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -233,7 +189,7 @@ func (x *NodeMeta) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use NodeMeta.ProtoReflect.Descriptor instead.
 func (*NodeMeta) Descriptor() ([]byte, []int) {
-	return file_message_proto_rawDescGZIP(), []int{2}
+	return file_message_proto_rawDescGZIP(), []int{1}
 }
 
 func (x *NodeMeta) GetUrl() string {
@@ -280,7 +236,7 @@ type Command struct {
 
 func (x *Command) Reset() {
 	*x = Command{}
-	mi := &file_message_proto_msgTypes[3]
+	mi := &file_message_proto_msgTypes[2]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -292,7 +248,7 @@ func (x *Command) String() string {
 func (*Command) ProtoMessage() {}
 
 func (x *Command) ProtoReflect() protoreflect.Message {
-	mi := &file_message_proto_msgTypes[3]
+	mi := &file_message_proto_msgTypes[2]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -305,7 +261,7 @@ func (x *Command) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Command.ProtoReflect.Descriptor instead.
 func (*Command) Descriptor() ([]byte, []int) {
-	return file_message_proto_rawDescGZIP(), []int{3}
+	return file_message_proto_rawDescGZIP(), []int{2}
 }
 
 func (x *Command) GetType() Command_Type {
@@ -403,7 +359,7 @@ func (x *Command) GetLoadChunkRequest() *proto.LoadChunkRequest {
 	return nil
 }
 
-func (x *Command) GetStepdownRequest() *StepdownRequest {
+func (x *Command) GetStepdownRequest() *proto.StepdownRequest {
 	if x != nil {
 		if x, ok := x.Request.(*Command_StepdownRequest); ok {
 			return x.StepdownRequest
@@ -460,7 +416,7 @@ type Command_LoadChunkRequest struct {
 }
 
 type Command_StepdownRequest struct {
-	StepdownRequest *StepdownRequest `protobuf:"bytes,12,opt,name=stepdown_request,json=stepdownRequest,proto3,oneof"`
+	StepdownRequest *proto.StepdownRequest `protobuf:"bytes,12,opt,name=stepdown_request,json=stepdownRequest,proto3,oneof"`
 }
 
 func (*Command_ExecuteRequest) isCommand_Request() {}
@@ -494,7 +450,7 @@ type CommandExecuteResponse struct {
 
 func (x *CommandExecuteResponse) Reset() {
 	*x = CommandExecuteResponse{}
-	mi := &file_message_proto_msgTypes[4]
+	mi := &file_message_proto_msgTypes[3]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -506,7 +462,7 @@ func (x *CommandExecuteResponse) String() string {
 func (*CommandExecuteResponse) ProtoMessage() {}
 
 func (x *CommandExecuteResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_message_proto_msgTypes[4]
+	mi := &file_message_proto_msgTypes[3]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -519,7 +475,7 @@ func (x *CommandExecuteResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CommandExecuteResponse.ProtoReflect.Descriptor instead.
 func (*CommandExecuteResponse) Descriptor() ([]byte, []int) {
-	return file_message_proto_rawDescGZIP(), []int{4}
+	return file_message_proto_rawDescGZIP(), []int{3}
 }
 
 func (x *CommandExecuteResponse) GetError() string {
@@ -554,7 +510,7 @@ type CommandQueryResponse struct {
 
 func (x *CommandQueryResponse) Reset() {
 	*x = CommandQueryResponse{}
-	mi := &file_message_proto_msgTypes[5]
+	mi := &file_message_proto_msgTypes[4]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -566,7 +522,7 @@ func (x *CommandQueryResponse) String() string {
 func (*CommandQueryResponse) ProtoMessage() {}
 
 func (x *CommandQueryResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_message_proto_msgTypes[5]
+	mi := &file_message_proto_msgTypes[4]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -579,7 +535,7 @@ func (x *CommandQueryResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CommandQueryResponse.ProtoReflect.Descriptor instead.
 func (*CommandQueryResponse) Descriptor() ([]byte, []int) {
-	return file_message_proto_rawDescGZIP(), []int{5}
+	return file_message_proto_rawDescGZIP(), []int{4}
 }
 
 func (x *CommandQueryResponse) GetError() string {
@@ -614,7 +570,7 @@ type CommandRequestResponse struct {
 
 func (x *CommandRequestResponse) Reset() {
 	*x = CommandRequestResponse{}
-	mi := &file_message_proto_msgTypes[6]
+	mi := &file_message_proto_msgTypes[5]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -626,7 +582,7 @@ func (x *CommandRequestResponse) String() string {
 func (*CommandRequestResponse) ProtoMessage() {}
 
 func (x *CommandRequestResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_message_proto_msgTypes[6]
+	mi := &file_message_proto_msgTypes[5]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -639,7 +595,7 @@ func (x *CommandRequestResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CommandRequestResponse.ProtoReflect.Descriptor instead.
 func (*CommandRequestResponse) Descriptor() ([]byte, []int) {
-	return file_message_proto_rawDescGZIP(), []int{6}
+	return file_message_proto_rawDescGZIP(), []int{5}
 }
 
 func (x *CommandRequestResponse) GetError() string {
@@ -673,7 +629,7 @@ type CommandBackupResponse struct {
 
 func (x *CommandBackupResponse) Reset() {
 	*x = CommandBackupResponse{}
-	mi := &file_message_proto_msgTypes[7]
+	mi := &file_message_proto_msgTypes[6]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -685,7 +641,7 @@ func (x *CommandBackupResponse) String() string {
 func (*CommandBackupResponse) ProtoMessage() {}
 
 func (x *CommandBackupResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_message_proto_msgTypes[7]
+	mi := &file_message_proto_msgTypes[6]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -698,7 +654,7 @@ func (x *CommandBackupResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CommandBackupResponse.ProtoReflect.Descriptor instead.
 func (*CommandBackupResponse) Descriptor() ([]byte, []int) {
-	return file_message_proto_rawDescGZIP(), []int{7}
+	return file_message_proto_rawDescGZIP(), []int{6}
 }
 
 func (x *CommandBackupResponse) GetError() string {
@@ -724,7 +680,7 @@ type CommandLoadResponse struct {
 
 func (x *CommandLoadResponse) Reset() {
 	*x = CommandLoadResponse{}
-	mi := &file_message_proto_msgTypes[8]
+	mi := &file_message_proto_msgTypes[7]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -736,7 +692,7 @@ func (x *CommandLoadResponse) String() string {
 func (*CommandLoadResponse) ProtoMessage() {}
 
 func (x *CommandLoadResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_message_proto_msgTypes[8]
+	mi := &file_message_proto_msgTypes[7]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -749,7 +705,7 @@ func (x *CommandLoadResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CommandLoadResponse.ProtoReflect.Descriptor instead.
 func (*CommandLoadResponse) Descriptor() ([]byte, []int) {
-	return file_message_proto_rawDescGZIP(), []int{8}
+	return file_message_proto_rawDescGZIP(), []int{7}
 }
 
 func (x *CommandLoadResponse) GetError() string {
@@ -768,7 +724,7 @@ type CommandLoadChunkResponse struct {
 
 func (x *CommandLoadChunkResponse) Reset() {
 	*x = CommandLoadChunkResponse{}
-	mi := &file_message_proto_msgTypes[9]
+	mi := &file_message_proto_msgTypes[8]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -780,7 +736,7 @@ func (x *CommandLoadChunkResponse) String() string {
 func (*CommandLoadChunkResponse) ProtoMessage() {}
 
 func (x *CommandLoadChunkResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_message_proto_msgTypes[9]
+	mi := &file_message_proto_msgTypes[8]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -793,7 +749,7 @@ func (x *CommandLoadChunkResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CommandLoadChunkResponse.ProtoReflect.Descriptor instead.
 func (*CommandLoadChunkResponse) Descriptor() ([]byte, []int) {
-	return file_message_proto_rawDescGZIP(), []int{9}
+	return file_message_proto_rawDescGZIP(), []int{8}
 }
 
 func (x *CommandLoadChunkResponse) GetError() string {
@@ -812,7 +768,7 @@ type CommandRemoveNodeResponse struct {
 
 func (x *CommandRemoveNodeResponse) Reset() {
 	*x = CommandRemoveNodeResponse{}
-	mi := &file_message_proto_msgTypes[10]
+	mi := &file_message_proto_msgTypes[9]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -824,7 +780,7 @@ func (x *CommandRemoveNodeResponse) String() string {
 func (*CommandRemoveNodeResponse) ProtoMessage() {}
 
 func (x *CommandRemoveNodeResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_message_proto_msgTypes[10]
+	mi := &file_message_proto_msgTypes[9]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -837,7 +793,7 @@ func (x *CommandRemoveNodeResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CommandRemoveNodeResponse.ProtoReflect.Descriptor instead.
 func (*CommandRemoveNodeResponse) Descriptor() ([]byte, []int) {
-	return file_message_proto_rawDescGZIP(), []int{10}
+	return file_message_proto_rawDescGZIP(), []int{9}
 }
 
 func (x *CommandRemoveNodeResponse) GetError() string {
@@ -856,7 +812,7 @@ type CommandNotifyResponse struct {
 
 func (x *CommandNotifyResponse) Reset() {
 	*x = CommandNotifyResponse{}
-	mi := &file_message_proto_msgTypes[11]
+	mi := &file_message_proto_msgTypes[10]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -868,7 +824,7 @@ func (x *CommandNotifyResponse) String() string {
 func (*CommandNotifyResponse) ProtoMessage() {}
 
 func (x *CommandNotifyResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_message_proto_msgTypes[11]
+	mi := &file_message_proto_msgTypes[10]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -881,7 +837,7 @@ func (x *CommandNotifyResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CommandNotifyResponse.ProtoReflect.Descriptor instead.
 func (*CommandNotifyResponse) Descriptor() ([]byte, []int) {
-	return file_message_proto_rawDescGZIP(), []int{11}
+	return file_message_proto_rawDescGZIP(), []int{10}
 }
 
 func (x *CommandNotifyResponse) GetError() string {
@@ -901,7 +857,7 @@ type CommandJoinResponse struct {
 
 func (x *CommandJoinResponse) Reset() {
 	*x = CommandJoinResponse{}
-	mi := &file_message_proto_msgTypes[12]
+	mi := &file_message_proto_msgTypes[11]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -913,7 +869,7 @@ func (x *CommandJoinResponse) String() string {
 func (*CommandJoinResponse) ProtoMessage() {}
 
 func (x *CommandJoinResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_message_proto_msgTypes[12]
+	mi := &file_message_proto_msgTypes[11]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -926,7 +882,7 @@ func (x *CommandJoinResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CommandJoinResponse.ProtoReflect.Descriptor instead.
 func (*CommandJoinResponse) Descriptor() ([]byte, []int) {
-	return file_message_proto_rawDescGZIP(), []int{12}
+	return file_message_proto_rawDescGZIP(), []int{11}
 }
 
 func (x *CommandJoinResponse) GetError() string {
@@ -952,7 +908,7 @@ type CommandStepdownResponse struct {
 
 func (x *CommandStepdownResponse) Reset() {
 	*x = CommandStepdownResponse{}
-	mi := &file_message_proto_msgTypes[13]
+	mi := &file_message_proto_msgTypes[12]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -964,7 +920,7 @@ func (x *CommandStepdownResponse) String() string {
 func (*CommandStepdownResponse) ProtoMessage() {}
 
 func (x *CommandStepdownResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_message_proto_msgTypes[13]
+	mi := &file_message_proto_msgTypes[12]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -977,7 +933,7 @@ func (x *CommandStepdownResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CommandStepdownResponse.ProtoReflect.Descriptor instead.
 func (*CommandStepdownResponse) Descriptor() ([]byte, []int) {
-	return file_message_proto_rawDescGZIP(), []int{13}
+	return file_message_proto_rawDescGZIP(), []int{12}
 }
 
 func (x *CommandStepdownResponse) GetError() string {
@@ -991,9 +947,7 @@ var File_message_proto protoreflect.FileDescriptor
 
 const file_message_proto_rawDesc = "" +
 	"\n" +
-	"\rmessage.proto\x12\acluster\x1a\x1bcommand/proto/command.proto\"%\n" +
-	"\x0fStepdownRequest\x12\x12\n" +
-	"\x04wait\x18\x01 \x01(\bR\x04wait\"E\n" +
+	"\rmessage.proto\x12\acluster\x1a\x1bcommand/proto/command.proto\"E\n" +
 	"\vCredentials\x12\x1a\n" +
 	"\busername\x18\x01 \x01(\tR\busername\x12\x1a\n" +
 	"\bpassword\x18\x02 \x01(\tR\bpassword\"Y\n" +
@@ -1013,7 +967,7 @@ const file_message_proto_rawDesc = "" +
 	"\x15execute_query_request\x18\n" +
 	" \x01(\v2\x1c.command.ExecuteQueryRequestH\x00R\x13executeQueryRequest\x12I\n" +
 	"\x12load_chunk_request\x18\v \x01(\v2\x19.command.LoadChunkRequestH\x00R\x10loadChunkRequest\x12E\n" +
-	"\x10stepdown_request\x18\f \x01(\v2\x18.cluster.StepdownRequestH\x00R\x0fstepdownRequest\x126\n" +
+	"\x10stepdown_request\x18\f \x01(\v2\x18.command.StepdownRequestH\x00R\x0fstepdownRequest\x126\n" +
 	"\vcredentials\x18\x04 \x01(\v2\x14.cluster.CredentialsR\vcredentials\"\xe2\x02\n" +
 	"\x04Type\x12\x18\n" +
 	"\x14COMMAND_TYPE_UNKNOWN\x10\x00\x12\x1e\n" +
@@ -1073,48 +1027,48 @@ func file_message_proto_rawDescGZIP() []byte {
 }
 
 var file_message_proto_enumTypes = make([]protoimpl.EnumInfo, 1)
-var file_message_proto_msgTypes = make([]protoimpl.MessageInfo, 14)
+var file_message_proto_msgTypes = make([]protoimpl.MessageInfo, 13)
 var file_message_proto_goTypes = []any{
 	(Command_Type)(0),                  // 0: cluster.Command.Type
-	(*StepdownRequest)(nil),            // 1: cluster.StepdownRequest
-	(*Credentials)(nil),                // 2: cluster.Credentials
-	(*NodeMeta)(nil),                   // 3: cluster.NodeMeta
-	(*Command)(nil),                    // 4: cluster.Command
-	(*CommandExecuteResponse)(nil),     // 5: cluster.CommandExecuteResponse
-	(*CommandQueryResponse)(nil),       // 6: cluster.CommandQueryResponse
-	(*CommandRequestResponse)(nil),     // 7: cluster.CommandRequestResponse
-	(*CommandBackupResponse)(nil),      // 8: cluster.CommandBackupResponse
-	(*CommandLoadResponse)(nil),        // 9: cluster.CommandLoadResponse
-	(*CommandLoadChunkResponse)(nil),   // 10: cluster.CommandLoadChunkResponse
-	(*CommandRemoveNodeResponse)(nil),  // 11: cluster.CommandRemoveNodeResponse
-	(*CommandNotifyResponse)(nil),      // 12: cluster.CommandNotifyResponse
-	(*CommandJoinResponse)(nil),        // 13: cluster.CommandJoinResponse
-	(*CommandStepdownResponse)(nil),    // 14: cluster.CommandStepdownResponse
-	(*proto.ExecuteRequest)(nil),       // 15: command.ExecuteRequest
-	(*proto.QueryRequest)(nil),         // 16: command.QueryRequest
-	(*proto.BackupRequest)(nil),        // 17: command.BackupRequest
-	(*proto.LoadRequest)(nil),          // 18: command.LoadRequest
-	(*proto.RemoveNodeRequest)(nil),    // 19: command.RemoveNodeRequest
-	(*proto.NotifyRequest)(nil),        // 20: command.NotifyRequest
-	(*proto.JoinRequest)(nil),          // 21: command.JoinRequest
-	(*proto.ExecuteQueryRequest)(nil),  // 22: command.ExecuteQueryRequest
-	(*proto.LoadChunkRequest)(nil),     // 23: command.LoadChunkRequest
+	(*Credentials)(nil),                // 1: cluster.Credentials
+	(*NodeMeta)(nil),                   // 2: cluster.NodeMeta
+	(*Command)(nil),                    // 3: cluster.Command
+	(*CommandExecuteResponse)(nil),     // 4: cluster.CommandExecuteResponse
+	(*CommandQueryResponse)(nil),       // 5: cluster.CommandQueryResponse
+	(*CommandRequestResponse)(nil),     // 6: cluster.CommandRequestResponse
+	(*CommandBackupResponse)(nil),      // 7: cluster.CommandBackupResponse
+	(*CommandLoadResponse)(nil),        // 8: cluster.CommandLoadResponse
+	(*CommandLoadChunkResponse)(nil),   // 9: cluster.CommandLoadChunkResponse
+	(*CommandRemoveNodeResponse)(nil),  // 10: cluster.CommandRemoveNodeResponse
+	(*CommandNotifyResponse)(nil),      // 11: cluster.CommandNotifyResponse
+	(*CommandJoinResponse)(nil),        // 12: cluster.CommandJoinResponse
+	(*CommandStepdownResponse)(nil),    // 13: cluster.CommandStepdownResponse
+	(*proto.ExecuteRequest)(nil),       // 14: command.ExecuteRequest
+	(*proto.QueryRequest)(nil),         // 15: command.QueryRequest
+	(*proto.BackupRequest)(nil),        // 16: command.BackupRequest
+	(*proto.LoadRequest)(nil),          // 17: command.LoadRequest
+	(*proto.RemoveNodeRequest)(nil),    // 18: command.RemoveNodeRequest
+	(*proto.NotifyRequest)(nil),        // 19: command.NotifyRequest
+	(*proto.JoinRequest)(nil),          // 20: command.JoinRequest
+	(*proto.ExecuteQueryRequest)(nil),  // 21: command.ExecuteQueryRequest
+	(*proto.LoadChunkRequest)(nil),     // 22: command.LoadChunkRequest
+	(*proto.StepdownRequest)(nil),      // 23: command.StepdownRequest
 	(*proto.ExecuteQueryResponse)(nil), // 24: command.ExecuteQueryResponse
 	(*proto.QueryRows)(nil),            // 25: command.QueryRows
 }
 var file_message_proto_depIdxs = []int32{
 	0,  // 0: cluster.Command.type:type_name -> cluster.Command.Type
-	15, // 1: cluster.Command.execute_request:type_name -> command.ExecuteRequest
-	16, // 2: cluster.Command.query_request:type_name -> command.QueryRequest
-	17, // 3: cluster.Command.backup_request:type_name -> command.BackupRequest
-	18, // 4: cluster.Command.load_request:type_name -> command.LoadRequest
-	19, // 5: cluster.Command.remove_node_request:type_name -> command.RemoveNodeRequest
-	20, // 6: cluster.Command.notify_request:type_name -> command.NotifyRequest
-	21, // 7: cluster.Command.join_request:type_name -> command.JoinRequest
-	22, // 8: cluster.Command.execute_query_request:type_name -> command.ExecuteQueryRequest
-	23, // 9: cluster.Command.load_chunk_request:type_name -> command.LoadChunkRequest
-	1,  // 10: cluster.Command.stepdown_request:type_name -> cluster.StepdownRequest
-	2,  // 11: cluster.Command.credentials:type_name -> cluster.Credentials
+	14, // 1: cluster.Command.execute_request:type_name -> command.ExecuteRequest
+	15, // 2: cluster.Command.query_request:type_name -> command.QueryRequest
+	16, // 3: cluster.Command.backup_request:type_name -> command.BackupRequest
+	17, // 4: cluster.Command.load_request:type_name -> command.LoadRequest
+	18, // 5: cluster.Command.remove_node_request:type_name -> command.RemoveNodeRequest
+	19, // 6: cluster.Command.notify_request:type_name -> command.NotifyRequest
+	20, // 7: cluster.Command.join_request:type_name -> command.JoinRequest
+	21, // 8: cluster.Command.execute_query_request:type_name -> command.ExecuteQueryRequest
+	22, // 9: cluster.Command.load_chunk_request:type_name -> command.LoadChunkRequest
+	23, // 10: cluster.Command.stepdown_request:type_name -> command.StepdownRequest
+	1,  // 11: cluster.Command.credentials:type_name -> cluster.Credentials
 	24, // 12: cluster.CommandExecuteResponse.response:type_name -> command.ExecuteQueryResponse
 	25, // 13: cluster.CommandQueryResponse.rows:type_name -> command.QueryRows
 	24, // 14: cluster.CommandRequestResponse.response:type_name -> command.ExecuteQueryResponse
@@ -1130,7 +1084,7 @@ func file_message_proto_init() {
 	if File_message_proto != nil {
 		return
 	}
-	file_message_proto_msgTypes[3].OneofWrappers = []any{
+	file_message_proto_msgTypes[2].OneofWrappers = []any{
 		(*Command_ExecuteRequest)(nil),
 		(*Command_QueryRequest)(nil),
 		(*Command_BackupRequest)(nil),
@@ -1148,7 +1102,7 @@ func file_message_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_message_proto_rawDesc), len(file_message_proto_rawDesc)),
 			NumEnums:      1,
-			NumMessages:   14,
+			NumMessages:   13,
 			NumExtensions: 0,
 			NumServices:   0,
 		},

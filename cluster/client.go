@@ -392,7 +392,7 @@ func (c *Client) RemoveNode(rn *command.RemoveNodeRequest, nodeAddr string, cred
 // Stepdown triggers leader stepdown on a remote node. If creds is nil, then no
 // credential information will be included in the Stepdown request to the
 // remote node.
-func (c *Client) Stepdown(sr *proto.StepdownRequest, nodeAddr string, creds *proto.Credentials, timeout time.Duration) error {
+func (c *Client) Stepdown(sr *command.StepdownRequest, nodeAddr string, creds *proto.Credentials, timeout time.Duration) error {
 	conn, err := c.dial(nodeAddr)
 	if err != nil {
 		return err

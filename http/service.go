@@ -132,7 +132,7 @@ type Cluster interface {
 	RemoveNode(rn *command.RemoveNodeRequest, nodeAddr string, creds *clstrPB.Credentials, timeout time.Duration) error
 
 	// Stepdown triggers leader stepdown on a remote node.
-	Stepdown(sr *clstrPB.StepdownRequest, nodeAddr string, creds *clstrPB.Credentials, timeout time.Duration) error
+	Stepdown(sr *command.StepdownRequest, nodeAddr string, creds *clstrPB.Credentials, timeout time.Duration) error
 
 	// Stats returns stats on the Cluster.
 	Stats() (map[string]any, error)
@@ -1095,7 +1095,7 @@ func (s *Service) handleLeader(w http.ResponseWriter, r *http.Request, qp QueryP
 				}
 
 				w.Header().Add(ServedByHTTPHeader, addr)
-				sr := &clstrPB.StepdownRequest{
+				sr := &command.StepdownRequest{
 					Wait: wait,
 				}
 				stepdownErr := s.cluster.Stepdown(sr, addr, makeCredentials(r), qp.Timeout(defaultTimeout))

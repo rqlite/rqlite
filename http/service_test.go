@@ -1623,7 +1623,7 @@ type mockClusterService struct {
 	backupFn     func(br *command.BackupRequest, addr string, t time.Duration, w io.Writer) error
 	loadFn       func(lr *command.LoadRequest, addr string, t time.Duration) error
 	removeNodeFn func(rn *command.RemoveNodeRequest, nodeAddr string, t time.Duration) error
-	stepdownFn   func(sr *cluster.StepdownRequest, nodeAddr string, t time.Duration) error
+	stepdownFn   func(sr *command.StepdownRequest, nodeAddr string, t time.Duration) error
 }
 
 func (m *mockClusterService) GetNodeMeta(a string, r int, t time.Duration) (*cluster.NodeMeta, error) {
@@ -1674,7 +1674,7 @@ func (m *mockClusterService) RemoveNode(rn *command.RemoveNodeRequest, addr stri
 	return nil
 }
 
-func (m *mockClusterService) Stepdown(sr *cluster.StepdownRequest, addr string, creds *cluster.Credentials, t time.Duration) error {
+func (m *mockClusterService) Stepdown(sr *command.StepdownRequest, addr string, creds *cluster.Credentials, t time.Duration) error {
 	if m.stepdownFn != nil {
 		return m.stepdownFn(sr, addr, t)
 	}
@@ -1778,7 +1778,7 @@ func Test_LeaderDELETE_ForwardToLeader(t *testing.T) {
 	}
 	cluster := &mockClusterService{
 		apiAddr: "http://127.0.0.1:4001",
-		stepdownFn: func(sr *cluster.StepdownRequest, nodeAddr string, t time.Duration) error {
+		stepdownFn: func(sr *command.StepdownRequest, nodeAddr string, t time.Duration) error {
 			stepdownCalled = true
 			return nil
 		},
@@ -1812,7 +1812,7 @@ func Test_LeaderDELETE_ForwardError(t *testing.T) {
 	}
 	cluster := &mockClusterService{
 		apiAddr: "http://127.0.0.1:4001",
-		stepdownFn: func(sr *cluster.StepdownRequest, nodeAddr string, t time.Duration) error {
+		stepdownFn: func(sr *command.StepdownRequest, nodeAddr string, t time.Duration) error {
 			return errors.New("stepdown failed")
 		},
 	}
