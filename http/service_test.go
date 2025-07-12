@@ -414,6 +414,7 @@ func Test_401Routes_NoBasicAuth(t *testing.T) {
 		"/remove",
 		"/status",
 		"/nodes",
+		"/leader",
 		"/readyz",
 		"/debug/vars",
 		"/debug/pprof/cmdline",
@@ -452,6 +453,7 @@ func Test_401Routes_BasicAuthBadPassword(t *testing.T) {
 		"/boot",
 		"/status",
 		"/nodes",
+		"/leader",
 		"/readyz",
 		"/debug/vars",
 		"/debug/pprof/cmdline",
@@ -498,6 +500,7 @@ func Test_401Routes_BasicAuthBadPerm(t *testing.T) {
 		"/snapshot",
 		"/status",
 		"/nodes",
+		"/leader",
 		"/readyz",
 		"/debug/vars",
 		"/debug/pprof/cmdline",
@@ -1515,6 +1518,7 @@ type MockStore struct {
 	snapshotFn  func(n uint64) error
 	readFromFn  func(r io.Reader) (int64, error)
 	committedFn func(timeout time.Duration) (uint64, error)
+	stepdownFn  func(wait bool) error
 	leaderAddr  string
 	notReady    bool // Default value is true, easier to test.
 }
@@ -1603,6 +1607,13 @@ func (m *MockStore) ReadFrom(r io.Reader) (int64, error) {
 	return 0, nil
 }
 
+func (m *MockStore) Stepdown(wait bool) error {
+	if m.stepdownFn != nil {
+		return m.stepdownFn(wait)
+	}
+	return nil
+}
+
 type mockClusterService struct {
 	apiAddr      string
 	executeFn    func(er *command.ExecuteRequest, addr string, t time.Duration) ([]*command.ExecuteQueryResponse, uint64, error)
@@ -1659,6 +1670,140 @@ func (m *mockClusterService) RemoveNode(rn *command.RemoveNodeRequest, addr stri
 		return m.removeNodeFn(rn, addr, t)
 	}
 	return nil
+}
+
+func Test_LeaderGET(t *testing.T) {
+	store := &MockStore{leaderAddr: "127.0.0.1:8001"}
+	cluster := &mockClusterService{apiAddr: "http://127.0.0.1:4001"}
+	cred := &mockCredentialStore{HasPermOK: true}
+
+	s := New("127.0.0.1:4001", store, cluster, cred)
+
+	// Test GET request
+	req, err := http.NewRequest("GET", "/leader", nil)
+	if err != nil {
+		t.Fatalf("failed to create GET request: %s", err.Error())
+	}
+	rr := httptest.NewRecorder()
+	s.ServeHTTP(rr, req)
+
+	if rr.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", rr.Code)
+	}
+
+	// Check response body
+	expected := `{"addr":"127.0.0.1:8001","api_addr":"http://127.0.0.1:4001"}`
+	actual := strings.TrimSpace(rr.Body.String())
+	if actual != expected {
+		t.Fatalf("expected %s, got %s", expected, actual)
+	}
+}
+
+func Test_LeaderDELETE(t *testing.T) {
+	stepdownCalled := false
+	stepdownWait := false
+	store := &MockStore{
+		leaderAddr: "127.0.0.1:8001",
+		stepdownFn: func(wait bool) error {
+			stepdownCalled = true
+			stepdownWait = wait
+			return nil
+		},
+	}
+	cluster := &mockClusterService{apiAddr: "http://127.0.0.1:4001"}
+	cred := &mockCredentialStore{HasPermOK: true}
+
+	s := New("127.0.0.1:4001", store, cluster, cred)
+
+	// Test DELETE request without wait
+	req, err := http.NewRequest("DELETE", "/leader", nil)
+	if err != nil {
+		t.Fatalf("failed to create DELETE request: %s", err.Error())
+	}
+	rr := httptest.NewRecorder()
+	s.ServeHTTP(rr, req)
+
+	if rr.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", rr.Code)
+	}
+
+	if !stepdownCalled {
+		t.Fatalf("expected stepdown to be called")
+	}
+
+	if stepdownWait {
+		t.Fatalf("expected stepdown to be called with wait=false")
+	}
+
+	// Test DELETE request with wait
+	stepdownCalled = false
+	stepdownWait = false
+
+	req, err = http.NewRequest("DELETE", "/leader?wait", nil)
+	if err != nil {
+		t.Fatalf("failed to create DELETE request with wait: %s", err.Error())
+	}
+	rr = httptest.NewRecorder()
+	s.ServeHTTP(rr, req)
+
+	if rr.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", rr.Code)
+	}
+
+	if !stepdownCalled {
+		t.Fatalf("expected stepdown to be called")
+	}
+
+	if !stepdownWait {
+		t.Fatalf("expected stepdown to be called with wait=true")
+	}
+}
+
+func Test_LeaderDELETE_Error(t *testing.T) {
+	store := &MockStore{
+		leaderAddr: "127.0.0.1:8001",
+		stepdownFn: func(wait bool) error {
+			return store.ErrNotLeader
+		},
+	}
+	cluster := &mockClusterService{apiAddr: "http://127.0.0.1:4001"}
+	cred := &mockCredentialStore{HasPermOK: true}
+
+	s := New("127.0.0.1:4001", store, cluster, cred)
+
+	req, err := http.NewRequest("DELETE", "/leader", nil)
+	if err != nil {
+		t.Fatalf("failed to create DELETE request: %s", err.Error())
+	}
+	rr := httptest.NewRecorder()
+	s.ServeHTTP(rr, req)
+
+	if rr.Code != http.StatusServiceUnavailable {
+		t.Fatalf("expected 503, got %d", rr.Code)
+	}
+
+	if !strings.Contains(rr.Body.String(), "stepdown") {
+		t.Fatalf("expected error message to contain 'stepdown', got %s", rr.Body.String())
+	}
+}
+
+func Test_LeaderMethodNotAllowed(t *testing.T) {
+	store := &MockStore{leaderAddr: "127.0.0.1:8001"}
+	cluster := &mockClusterService{apiAddr: "http://127.0.0.1:4001"}
+	cred := &mockCredentialStore{HasPermOK: true}
+
+	s := New("127.0.0.1:4001", store, cluster, cred)
+
+	req, err := http.NewRequest("POST", "/leader", nil)
+	if err != nil {
+		t.Fatalf("failed to create POST request: %s", err.Error())
+	}
+	rr := httptest.NewRecorder()
+	s.ServeHTTP(rr, req)
+
+	if rr.Code != http.StatusMethodNotAllowed {
+		t.Fatalf("expected 405, got %d", rr.Code)
+	}
 }
 
 type mockCredentialStore struct {

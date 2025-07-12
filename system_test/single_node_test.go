@@ -5,6 +5,7 @@ package system
 
 import (
 	"compress/gzip"
+	"encoding/json"
 	"fmt"
 	"io"
 	"os"
@@ -1849,5 +1850,51 @@ func Test_SingleNodeLoad_OK(t *testing.T) {
 	}
 	if r != `{"results":[{"columns":["id","name"],"types":["integer","text"],"values":[[2,"fiona"]]}]}` {
 		t.Fatalf("test received wrong result got %s", r)
+	}
+}
+
+func Test_SingleNodeLeader_GET(t *testing.T) {
+	node := mustNewLeaderNode("leader1")
+	defer node.Deprovision()
+
+	// Test leader endpoint GET
+	leader, err := node.Leader()
+	if err != nil {
+		t.Fatalf("failed to get leader: %s", err.Error())
+	}
+
+	// Parse the JSON response
+	var leaderInfo map[string]string
+	if err := json.Unmarshal([]byte(leader), &leaderInfo); err != nil {
+		t.Fatalf("failed to parse leader response: %s", err.Error())
+	}
+
+	// Check that we have addr and api_addr
+	if leaderInfo["addr"] == "" {
+		t.Fatalf("leader addr is empty")
+	}
+	if leaderInfo["api_addr"] == "" {
+		t.Fatalf("leader api_addr is empty")
+	}
+}
+
+func Test_SingleNodeLeader_Stepdown(t *testing.T) {
+	node := mustNewLeaderNode("leader1")
+	defer node.Deprovision()
+
+	// Test stepdown without wait - should succeed but not wait for result
+	err := node.Stepdown(false)
+	if err != nil {
+		t.Fatalf("failed to trigger stepdown: %s", err.Error())
+	}
+
+	// Test stepdown with wait - should fail in single node cluster as there's no peer to transfer to
+	err = node.Stepdown(true)
+	if err == nil {
+		t.Fatalf("expected stepdown with wait to fail in single-node cluster")
+	}
+	// Check that it's the expected error
+	if !strings.Contains(err.Error(), "cannot find peer") {
+		t.Fatalf("unexpected error message: %s", err.Error())
 	}
 }

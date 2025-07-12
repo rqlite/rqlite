@@ -360,6 +360,52 @@ func (n *Node) Status() (string, error) {
 	return string(body), nil
 }
 
+// Leader returns the leader information for the node.
+func (n *Node) Leader() (string, error) {
+	v, _ := url.Parse("http://" + n.APIAddr + "/leader")
+
+	resp, err := http.Get(v.String())
+	if err != nil {
+		return "", err
+	}
+	defer resp.Body.Close()
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return "", fmt.Errorf("failed to read leader response: %w", err)
+	}
+	if resp.StatusCode != 200 {
+		return "", fmt.Errorf("leader endpoint returned: %s (%s)", resp.Status,
+			strings.TrimSuffix(string(body), "\n"))
+	}
+	return string(body), nil
+}
+
+// Stepdown triggers leader stepdown on the node.
+func (n *Node) Stepdown(wait bool) error {
+	urlStr := "http://" + n.APIAddr + "/leader"
+	if wait {
+		urlStr += "?wait"
+	}
+
+	req, err := http.NewRequest("DELETE", urlStr, nil)
+	if err != nil {
+		return err
+	}
+
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != 200 {
+		body, _ := io.ReadAll(resp.Body)
+		return fmt.Errorf("stepdown endpoint returned: %s (%s)", resp.Status,
+			strings.TrimSuffix(string(body), "\n"))
+	}
+	return nil
+}
+
 // IsVoter returns whether the node is a voter or not.
 func (n *Node) IsVoter() (bool, error) {
 	statusJSON, err := n.Status()
