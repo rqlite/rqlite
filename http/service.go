@@ -1059,19 +1059,41 @@ func (s *Service) handleLeader(w http.ResponseWriter, r *http.Request, qp QueryP
 			return
 		}
 
-		leaderAPIAddr := s.LeaderAPIAddr()
-		response := map[string]string{
-			"addr":     leaderAddr,
-			"api_addr": leaderAPIAddr,
+		// Get nodes in the cluster, and pull out the leader
+		sNodes, err := s.store.Nodes()
+		if err != nil {
+			statusCode := http.StatusInternalServerError
+			if err == store.ErrNotOpen {
+				statusCode = http.StatusServiceUnavailable
+			}
+			http.Error(w, fmt.Sprintf("store nodes: %s", err.Error()), statusCode)
+			return
+		}
+		leader := NewNodesFromServers(sNodes).GetNodeByAddr(leaderAddr)
+		if leader == nil {
+			http.Error(w, fmt.Sprintf("leader node not found: %s", leaderAddr), http.StatusInternalServerError)
+			return
 		}
 
-		enc := json.NewEncoder(w)
+		var b []byte
 		if qp.Pretty() {
-			enc.SetIndent("", "    ")
+			b, err = json.MarshalIndent(leader, "", "    ")
+			if err != nil {
+				http.Error(w, fmt.Sprintf("JSON marshal: %s", err.Error()), http.StatusInternalServerError)
+				return
+			}
+		} else {
+			b, err = json.Marshal(leader)
+			if err != nil {
+				http.Error(w, fmt.Sprintf("JSON marshal: %s", err.Error()), http.StatusInternalServerError)
+				return
+			}
 		}
-		if err := enc.Encode(response); err != nil {
-			http.Error(w, fmt.Sprintf("JSON encode: %s", err.Error()),
-				http.StatusInternalServerError)
+
+		w.WriteHeader(http.StatusOK)
+		if _, err := w.Write(b); err != nil {
+			s.logger.Println("failed to write leader response to client", err.Error())
+			return
 		}
 
 	case "DELETE":
