@@ -34,6 +34,7 @@ const (
 	numRemoveNodeRequest  = "num_remove_node_req"
 	numNotifyRequest      = "num_notify_req"
 	numJoinRequest        = "num_join_req"
+	numStepdownRequest    = "num_stepdown_req"
 
 	numClientRetries            = "num_client_retries"
 	numGetNodeAPIRequestRetries = "num_get_node_api_req_retries"
@@ -69,6 +70,7 @@ func init() {
 	stats.Add(numGetNodeAPIRequestLocal, 0)
 	stats.Add(numNotifyRequest, 0)
 	stats.Add(numJoinRequest, 0)
+	stats.Add(numStepdownRequest, 0)
 	stats.Add(numClientRetries, 0)
 	stats.Add(numGetNodeAPIRequestRetries, 0)
 	stats.Add(numClientLoadRetries, 0)
@@ -121,6 +123,10 @@ type Manager interface {
 
 	// Join joins a remote node to the cluster.
 	Join(n *command.JoinRequest) error
+
+	// Stepdown forces this node to relinquish leadership to another node in
+	// the cluster.
+	Stepdown(wait bool) error
 }
 
 // CredentialStore is the interface credential stores must support.
@@ -527,6 +533,24 @@ func (s *Service) handleConn(conn net.Conn) {
 					}
 				} else {
 					resp.Error = "unauthorized"
+				}
+			}
+			if err := marshalAndWrite(conn, resp); err != nil {
+				return
+			}
+
+		case proto.Command_COMMAND_TYPE_STEPDOWN:
+			stats.Add(numStepdownRequest, 1)
+			resp := &proto.CommandStepdownResponse{}
+
+			sr := c.GetStepdownRequest()
+			if sr == nil {
+				resp.Error = "StepdownRequest is nil"
+			} else if !s.checkCommandPerm(c, auth.PermLeaderOps) {
+				resp.Error = "unauthorized"
+			} else {
+				if err := s.mgr.Stepdown(sr.Wait); err != nil {
+					resp.Error = err.Error()
 				}
 			}
 			if err := marshalAndWrite(conn, resp); err != nil {
