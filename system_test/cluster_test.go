@@ -2273,6 +2273,9 @@ func Test_ClusterLeader_GET(t *testing.T) {
 	if err := follower.Join(leader); err != nil {
 		t.Fatalf("failed to join node: %s", err.Error())
 	}
+	if _, err := follower.WaitForLeader(); err != nil {
+		t.Fatalf("failed waiting for follower: %s", err.Error())
+	}
 
 	// Test leader endpoint on leader
 	leaderInfo, err := leader.Leader()
@@ -2321,6 +2324,9 @@ func Test_ClusterLeader_Stepdown(t *testing.T) {
 
 	if err := follower.Join(leader); err != nil {
 		t.Fatalf("failed to join node: %s", err.Error())
+	}
+	if _, err := follower.WaitForLeader(); err != nil {
+		t.Fatalf("failed waiting for follower: %s", err.Error())
 	}
 
 	// Wait for cluster to stabilize
