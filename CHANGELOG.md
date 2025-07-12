@@ -1,4 +1,7 @@
-## v8.39.2 (unreleased)
+## v8.40.0 (unreleased)
+### New features
+- [PR #2154](https://github.com/rqlite/rqlite/pull/2154): Add a HTTP API which triggers the Leader to stepdown. Fixes issue [#2153](https://github.com/rqlite/rqlite/issues/2153).
+
 ### Implementation changes and bug fixes
 - [PR #2149](https://github.com/rqlite/rqlite/pull/2149): Consolidate the top-level of the source tree.
 - [PR #2150](https://github.com/rqlite/rqlite/pull/2150): Move various utilities into an `internal` module.
