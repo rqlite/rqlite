@@ -350,6 +350,26 @@ func RemoveFiles(path string) error {
 	return nil
 }
 
+func RenameWalFiles(oldPath, newPath string) error {
+	if err := os.Rename(oldPath+"-wal", newPath+"-wal"); err != nil && !os.IsNotExist(err) {
+		return err
+	}
+	if err := os.Rename(oldPath+"-shm", newPath+"-shm"); err != nil && !os.IsNotExist(err) {
+		return err
+	}
+	return nil
+}
+
+func RenameFiles(oldPath, newPath string) error {
+	if err := os.Rename(oldPath, newPath); err != nil {
+		return err
+	}
+	if err := RenameWalFiles(oldPath, newPath); err != nil {
+		return err
+	}
+	return nil
+}
+
 // ReplayWAL replays the given WAL files into the database at the given path,
 // in the order given by the slice. The supplied WAL files must be in the same
 // directory as the database file and are deleted as a result of the replay operation.
