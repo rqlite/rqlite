@@ -73,6 +73,7 @@ func init() {
 		`.schema                                       Show CREATE statements for all tables`,
 		`.snapshot                                     Request a Raft snapshot and log truncation on connected node`,
 		`.status                                       Show status and diagnostic information for connected node`,
+		`.stepdown                                     Instruct the cluster leader to stepdown and transfer leadership`,
 		`.sysdump FILE                                 Dump system diagnostics to FILE`,
 		`.tables                                       List names of tables`,
 		`.timer on|off                                 Turn query timings on or off`,
@@ -254,6 +255,8 @@ func main() {
 				break FOR_READ
 			case ".SNAPSHOT":
 				err = snapshot(client, argv)
+			case ".STEPDOWN":
+				err = stepdown(client, argv)
 			case "SELECT", "PRAGMA":
 				err = queryWithClient(ctx, client, timer, blobArray, consistency, line)
 			default:
@@ -370,6 +373,31 @@ func snapshot(client *httpcl.Client, argv *argT) error {
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusNoContent {
+		return fmt.Errorf("server responded with %s", resp.Status)
+	}
+	return nil
+}
+
+func stepdown(client *httpcl.Client, argv *argT) error {
+	url := fmt.Sprintf("%s://%s/leader", argv.Protocol, address6(argv))
+	req, err := http.NewRequest("DELETE", url, nil)
+	if err != nil {
+		return err
+	}
+	if argv.Credentials != "" {
+		creds := strings.Split(argv.Credentials, ":")
+		if len(creds) != 2 {
+			return fmt.Errorf("invalid Basic Auth credentials format")
+		}
+		req.SetBasicAuth(creds[0], creds[1])
+	}
+
+	resp, err := client.Do(req)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
 		return fmt.Errorf("server responded with %s", resp.Status)
 	}
 	return nil
