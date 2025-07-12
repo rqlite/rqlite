@@ -528,6 +528,7 @@ type MockManager struct {
 	notifyFn     func(n *command.NotifyRequest) error
 	joinFn       func(j *command.JoinRequest) error
 	leaderAddrFn func() (string, error)
+	stepdownFn   func(wait bool) error
 	commitIndex  uint64
 }
 
@@ -550,6 +551,13 @@ func (m *MockManager) Join(j *command.JoinRequest) error {
 		return nil
 	}
 	return m.joinFn(j)
+}
+
+func (m *MockManager) Stepdown(wait bool) error {
+	if m.stepdownFn == nil {
+		return nil
+	}
+	return m.stepdownFn(wait)
 }
 
 func (m *MockManager) LeaderAddr() (string, error) {

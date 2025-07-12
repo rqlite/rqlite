@@ -131,6 +131,9 @@ type Cluster interface {
 	// RemoveNode removes a node from the cluster.
 	RemoveNode(rn *command.RemoveNodeRequest, nodeAddr string, creds *clstrPB.Credentials, timeout time.Duration) error
 
+	// Stepdown triggers leader stepdown on a remote node.
+	Stepdown(sr *clstrPB.StepdownRequest, nodeAddr string, creds *clstrPB.Credentials, timeout time.Duration) error
+
 	// Stats returns stats on the Cluster.
 	Stats() (map[string]any, error)
 }
@@ -233,6 +236,7 @@ const (
 	numRemoteBackups                  = "remote_backups"
 	numRemoteLoads                    = "remote_loads"
 	numRemoteRemoveNode               = "remote_remove_node"
+	numRemoteStepdowns                = "remote_stepdowns"
 	numReadyz                         = "num_readyz"
 	numStatus                         = "num_status"
 	numBackups                        = "backups"
@@ -306,6 +310,7 @@ func ResetStats() {
 	stats.Add(numRemoteBackups, 0)
 	stats.Add(numRemoteLoads, 0)
 	stats.Add(numRemoteRemoveNode, 0)
+	stats.Add(numRemoteStepdowns, 0)
 	stats.Add(numReadyz, 0)
 	stats.Add(numStatus, 0)
 	stats.Add(numBackups, 0)
@@ -1073,10 +1078,42 @@ func (s *Service) handleLeader(w http.ResponseWriter, r *http.Request, qp QueryP
 		// Trigger leader stepdown
 		wait := qp.Wait()
 		if err := s.store.Stepdown(wait); err != nil {
+			if err == store.ErrNotLeader {
+				if s.DoRedirect(w, r, qp) {
+					return
+				}
+
+				addr, err := s.LeaderAddr()
+				if err != nil {
+					if errors.Is(err, ErrLeaderNotFound) {
+						stats.Add(numLeaderNotFound, 1)
+						http.Error(w, ErrLeaderNotFound.Error(), http.StatusServiceUnavailable)
+						return
+					}
+					http.Error(w, fmt.Sprintf("leader address: %s", err.Error()), http.StatusInternalServerError)
+					return
+				}
+
+				w.Header().Add(ServedByHTTPHeader, addr)
+				sr := &clstrPB.StepdownRequest{
+					Wait: wait,
+				}
+				stepdownErr := s.cluster.Stepdown(sr, addr, makeCredentials(r), qp.Timeout(defaultTimeout))
+				if stepdownErr != nil {
+					if stepdownErr.Error() == "unauthorized" {
+						http.Error(w, "remote stepdown not authorized", http.StatusUnauthorized)
+					} else {
+						http.Error(w, stepdownErr.Error(), http.StatusInternalServerError)
+					}
+					return
+				}
+				stats.Add(numRemoteStepdowns, 1)
+				w.WriteHeader(http.StatusOK)
+				return
+			}
+
 			statusCode := http.StatusInternalServerError
 			if err == store.ErrNotOpen {
-				statusCode = http.StatusServiceUnavailable
-			} else if err == store.ErrNotLeader {
 				statusCode = http.StatusServiceUnavailable
 			}
 			http.Error(w, fmt.Sprintf("stepdown: %s", err.Error()), statusCode)

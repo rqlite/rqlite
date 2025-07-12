@@ -3,6 +3,10 @@ package cluster;
 
 import "command/proto/command.proto";
 
+message StepdownRequest {
+    bool wait = 1;
+}
+
 option go_package = "github.com/rqlite/rqlite/v8/cluster/proto";
 
 message Credentials {
@@ -30,6 +34,7 @@ message Command {
         COMMAND_TYPE_REQUEST = 9;
         COMMAND_TYPE_LOAD_CHUNK = 10;
         COMMAND_TYPE_BACKUP_STREAM = 11;
+        COMMAND_TYPE_STEPDOWN = 12;
     }
     Type type = 1;
 
@@ -43,6 +48,7 @@ message Command {
         command.JoinRequest join_request = 9;
         command.ExecuteQueryRequest execute_query_request = 10;
         command.LoadChunkRequest load_chunk_request = 11;
+        StepdownRequest stepdown_request = 12;
     }
 
     Credentials credentials = 4;
@@ -90,4 +96,8 @@ message CommandNotifyResponse {
 message CommandJoinResponse {
     string error = 1;
     string leader = 2;
+}
+
+message CommandStepdownResponse {
+    string error = 1;
 }

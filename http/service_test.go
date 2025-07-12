@@ -3,6 +3,7 @@ package http
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -1622,6 +1623,7 @@ type mockClusterService struct {
 	backupFn     func(br *command.BackupRequest, addr string, t time.Duration, w io.Writer) error
 	loadFn       func(lr *command.LoadRequest, addr string, t time.Duration) error
 	removeNodeFn func(rn *command.RemoveNodeRequest, nodeAddr string, t time.Duration) error
+	stepdownFn   func(sr *cluster.StepdownRequest, nodeAddr string, t time.Duration) error
 }
 
 func (m *mockClusterService) GetNodeMeta(a string, r int, t time.Duration) (*cluster.NodeMeta, error) {
@@ -1668,6 +1670,13 @@ func (m *mockClusterService) Load(lr *command.LoadRequest, nodeAddr string, cred
 func (m *mockClusterService) RemoveNode(rn *command.RemoveNodeRequest, addr string, creds *cluster.Credentials, t time.Duration) error {
 	if m.removeNodeFn != nil {
 		return m.removeNodeFn(rn, addr, t)
+	}
+	return nil
+}
+
+func (m *mockClusterService) Stepdown(sr *cluster.StepdownRequest, addr string, creds *cluster.Credentials, t time.Duration) error {
+	if m.stepdownFn != nil {
+		return m.stepdownFn(sr, addr, t)
 	}
 	return nil
 }
@@ -1759,14 +1768,21 @@ func Test_LeaderDELETE(t *testing.T) {
 	}
 }
 
-func Test_LeaderDELETE_Error(t *testing.T) {
+func Test_LeaderDELETE_ForwardToLeader(t *testing.T) {
+	stepdownCalled := false
 	store := &MockStore{
 		leaderAddr: "127.0.0.1:8001",
 		stepdownFn: func(wait bool) error {
 			return store.ErrNotLeader
 		},
 	}
-	cluster := &mockClusterService{apiAddr: "http://127.0.0.1:4001"}
+	cluster := &mockClusterService{
+		apiAddr: "http://127.0.0.1:4001",
+		stepdownFn: func(sr *cluster.StepdownRequest, nodeAddr string, t time.Duration) error {
+			stepdownCalled = true
+			return nil
+		},
+	}
 	cred := &mockCredentialStore{HasPermOK: true}
 
 	s := New("127.0.0.1:4001", store, cluster, cred)
@@ -1778,12 +1794,45 @@ func Test_LeaderDELETE_Error(t *testing.T) {
 	rr := httptest.NewRecorder()
 	s.ServeHTTP(rr, req)
 
-	if rr.Code != http.StatusServiceUnavailable {
-		t.Fatalf("expected 503, got %d", rr.Code)
+	if rr.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", rr.Code)
 	}
 
-	if !strings.Contains(rr.Body.String(), "stepdown") {
-		t.Fatalf("expected error message to contain 'stepdown', got %s", rr.Body.String())
+	if !stepdownCalled {
+		t.Fatalf("expected stepdown to be forwarded to leader")
+	}
+}
+
+func Test_LeaderDELETE_ForwardError(t *testing.T) {
+	store := &MockStore{
+		leaderAddr: "127.0.0.1:8001",
+		stepdownFn: func(wait bool) error {
+			return store.ErrNotLeader
+		},
+	}
+	cluster := &mockClusterService{
+		apiAddr: "http://127.0.0.1:4001",
+		stepdownFn: func(sr *cluster.StepdownRequest, nodeAddr string, t time.Duration) error {
+			return errors.New("stepdown failed")
+		},
+	}
+	cred := &mockCredentialStore{HasPermOK: true}
+
+	s := New("127.0.0.1:4001", store, cluster, cred)
+
+	req, err := http.NewRequest("DELETE", "/leader", nil)
+	if err != nil {
+		t.Fatalf("failed to create DELETE request: %s", err.Error())
+	}
+	rr := httptest.NewRecorder()
+	s.ServeHTTP(rr, req)
+
+	if rr.Code != http.StatusInternalServerError {
+		t.Fatalf("expected 500, got %d", rr.Code)
+	}
+
+	if !strings.Contains(rr.Body.String(), "stepdown failed") {
+		t.Fatalf("expected error message to contain 'stepdown failed', got %s", rr.Body.String())
 	}
 }
 
