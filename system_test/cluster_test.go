@@ -2345,29 +2345,17 @@ func Test_ClusterLeader_Stepdown(t *testing.T) {
 		t.Fatalf("failed to trigger stepdown on leader: %s", err.Error())
 	}
 
-	// Give some time for leadership transition
-	time.Sleep(2 * time.Second)
-
-	// Verify that cluster still has a leader (follower should become leader)
-	if _, err := follower.WaitForLeader(); err != nil {
-		t.Fatalf("cluster has no leader after stepdown: %s", err.Error())
-	}
-
-	// Get leader info after stepdown and confirm it's different
-	leaderInfoAfter, err := follower.Leader()
-	if err != nil {
-		t.Fatalf("failed to get leader info after stepdown: %s", err.Error())
-	}
-
-	var leaderDataAfter map[string]string
-	if err := json.Unmarshal([]byte(leaderInfoAfter), &leaderDataAfter); err != nil {
-		t.Fatalf("failed to parse leader response after stepdown: %s", err.Error())
-	}
-
-	// Confirm that the leader has changed
-	if leaderDataBefore["addr"] == leaderDataAfter["addr"] {
-		t.Fatalf("leader did not change after stepdown: %s", leaderDataBefore["addr"])
-	}
+	testPoll(t*testing.T, func() (bool, error) {
+		leaderInfoAfter, err := follower.Leader()
+		if err != nil {
+			return false, nil
+		}
+		var leaderDataAfter map[string]string
+		if err := json.Unmarshal([]byte(leaderInfoAfter), &leaderDataAfter); err != nil {
+			return false, nil
+		}
+		return leaderDataBefore["addr"] != leaderDataAfter["addr"]
+	}, time.Second, 10*time.Second)
 }
 
 func sleepForSecond() {
