@@ -1557,8 +1557,10 @@ func (m *MockStore) Remove(rn *command.RemoveNodeRequest) error {
 	return nil
 }
 
-func (m *MockStore) LeaderAddr() (string, error) {
-	return m.leaderAddr, nil
+func (m *MockStore) Leader() (*store.Server, error) {
+	return &store.Server{
+		Addr: m.leaderAddr,
+	}, nil
 }
 
 func (m *MockStore) Ready() bool {
