@@ -802,6 +802,11 @@ func Test_MultiNodeStepdown_Explicit(t *testing.T) {
 		t.Fatalf("expected error when stepping down with non-existent ID")
 	}
 
+	// Test explicit stepdown with leader ID, which should fail.
+	if err := s0.Stepdown(false, s0.ID()); err == nil {
+		t.Fatalf("expected error when stepping down with leader ID")
+	}
+
 	// Tell leader to step down and handover to an explicit follower.
 	if err := s0.Stepdown(true, s2.ID()); err != nil {
 		t.Fatalf("leader failed to step down: %s", err.Error())
