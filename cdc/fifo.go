@@ -21,6 +21,12 @@ var ErrQueueClosed = errors.New("queue is closed")
 
 var queueBufferSize = 100 // Size of the buffered channels for enqueue requests
 
+// Item is what clients receive from C().
+type Item struct {
+	Idx uint64
+	Val []byte
+}
+
 // Queue is a persistent, disk-backed FIFO queue managed by a single goroutine.
 //
 // It is safe for concurrent use. It has some particular properties that make it
@@ -39,9 +45,9 @@ type Queue struct {
 
 	// Channels for communicating with the managing goroutine
 	enqueueChan     chan enqueueReq
-	dequeueChan     chan dequeueReq
 	deleteRangeChan chan deleteRangeReq
 	queryChan       chan queryReq
+	itemsChan       chan Item
 	done            chan struct{}
 
 	wg sync.WaitGroup
@@ -89,9 +95,9 @@ func NewQueue(path string) (*Queue, error) {
 	q := &Queue{
 		db:              db,
 		enqueueChan:     make(chan enqueueReq, queueBufferSize),
-		dequeueChan:     make(chan dequeueReq),
 		deleteRangeChan: make(chan deleteRangeReq),
 		queryChan:       make(chan queryReq),
+		itemsChan:       make(chan Item),
 		done:            make(chan struct{}),
 	}
 
@@ -106,12 +112,59 @@ func (q *Queue) Close() {
 	q.wg.Wait()
 }
 
+// C returns a channel of queued items. It blocks if the queue is empty.
+// It closes when Close() is called.
+func (q *Queue) C() <-chan Item {
+	return q.itemsChan
+}
+
+// Enqueue adds an item to the queue. Do not call Enqueue on a closed queue.
+func (q *Queue) Enqueue(idx uint64, item []byte) error {
+	req := enqueueReq{idx: idx, item: item, respChan: make(chan enqueueResp)}
+	q.enqueueChan <- req
+	resp := <-req.respChan
+	return resp.err
+}
+
+// DeleteRange deletes all items in the queue with indices less than or equal to idx.
+func (q *Queue) DeleteRange(idx uint64) error {
+	req := deleteRangeReq{
+		idx:      idx,
+		respChan: make(chan error),
+	}
+	q.deleteRangeChan <- req
+	return <-req.respChan
+}
+
+// HighestKey returns the index of the highest item ever inserted into the queue.
+func (q *Queue) HighestKey() (uint64, error) {
+	req := queryReq{respChan: make(chan queryResp)}
+	q.queryChan <- req
+	resp := <-req.respChan
+	return resp.highestKey, resp.err
+}
+
+// Empty checks if the queue contains no items.
+func (q *Queue) Empty() (bool, error) {
+	req := queryReq{respChan: make(chan queryResp)}
+	q.queryChan <- req
+	resp := <-req.respChan
+	return resp.isEmpty, resp.err
+}
+
+// HasNext checks if there is at least one item available to dequeue.
+func (q *Queue) HasNext() bool {
+	req := queryReq{respChan: make(chan queryResp)}
+	q.queryChan <- req
+	resp := <-req.respChan
+	return resp.hasNext
+}
+
 // run is a single goroutine that serializes all access to the database.
 func (q *Queue) run(nextKey []byte, highestKey uint64) {
 	defer q.wg.Done()
 	defer q.db.Close()
 
-	var waitingDequeues []dequeueReq // A list of callers waiting for an item.
 	for {
 		select {
 		case req := <-q.enqueueChan:
@@ -143,9 +196,6 @@ func (q *Queue) run(nextKey []byte, highestKey uint64) {
 			}
 
 			req.respChan <- enqueueResp{err: err}
-
-		case req := <-q.dequeueChan:
-			waitingDequeues = append(waitingDequeues, req)
 
 		case req := <-q.deleteRangeChan:
 			err := q.db.Update(func(tx *bbolt.Tx) error {
@@ -189,92 +239,39 @@ func (q *Queue) run(nextKey []byte, highestKey uint64) {
 			}
 
 		case <-q.done:
-			for _, waiter := range waitingDequeues {
-				waiter.respChan <- dequeueResp{err: ErrQueueClosed}
-			}
 			return
 		}
 
-		// Fulfill any waiting dequeue requests.
-		for len(waitingDequeues) > 0 && nextKey != nil {
-			waiter := waitingDequeues[0]
-			waitingDequeues = waitingDequeues[1:] // Pop from waitlist
+		// Drain all available items.
+		for nextKey != nil {
+			var idx uint64
+			var val, nk []byte
 
-			var resp dequeueResp
-			err := q.db.View(func(tx *bbolt.Tx) error {
+			if err := q.db.View(func(tx *bbolt.Tx) error {
 				c := tx.Bucket(bucketName).Cursor()
-				_, val := c.Seek(nextKey)
-				if val == nil {
-					return fmt.Errorf("item not found for key %x", nextKey)
+				k, v := c.Seek(nextKey)
+				if v == nil {
+					return fmt.Errorf("missing key %x", nextKey)
 				}
-				resp.idx = btouint64(nextKey)
-				resp.val = make([]byte, len(val))
-				copy(resp.val, val)
-
-				nk, _ := c.Next()
-				if nk != nil {
-					copy(nextKey, nk)
-				} else {
-					nextKey = nil // No more items available
+				idx = btouint64(k)
+				val = append([]byte(nil), v...)
+				if k2, _ := c.Next(); k2 != nil {
+					nk = append([]byte(nil), k2...)
 				}
 				return nil
-			})
-			resp.err = err
-			waiter.respChan <- resp
+			}); err != nil {
+				break
+			}
+
+			// Send asynchronously so we never block here
+			// XXX no guarantee this goroutine will run in order with a later goroutine.
+			nextKey = nk
+			item := Item{Idx: idx, Val: val}
+			go func(it Item) {
+				q.itemsChan <- it
+			}(item)
 		}
 	}
-}
-
-// Enqueue adds an item to the queue. Do not call Enqueue on a closed queue.
-func (q *Queue) Enqueue(idx uint64, item []byte) error {
-	req := enqueueReq{idx: idx, item: item, respChan: make(chan enqueueResp)}
-	q.enqueueChan <- req
-	resp := <-req.respChan
-	return resp.err
-}
-
-// Dequeue removes and returns the next available item from the queue.
-// If the queue is empty, Dequeue blocks until an item is available.
-// Do not call Dequeue on a closed queue.
-func (q *Queue) Dequeue() (uint64, []byte, error) {
-	req := dequeueReq{respChan: make(chan dequeueResp)}
-	q.dequeueChan <- req
-	resp := <-req.respChan
-	return resp.idx, resp.val, resp.err
-}
-
-// DeleteRange deletes all items in the queue with indices less than or equal to idx.
-func (q *Queue) DeleteRange(idx uint64) error {
-	req := deleteRangeReq{
-		idx:      idx,
-		respChan: make(chan error),
-	}
-	q.deleteRangeChan <- req
-	return <-req.respChan
-}
-
-// HighestKey returns the index of the highest item ever inserted into the queue.
-func (q *Queue) HighestKey() (uint64, error) {
-	req := queryReq{respChan: make(chan queryResp)}
-	q.queryChan <- req
-	resp := <-req.respChan
-	return resp.highestKey, resp.err
-}
-
-// Empty checks if the queue contains no items.
-func (q *Queue) Empty() (bool, error) {
-	req := queryReq{respChan: make(chan queryResp)}
-	q.queryChan <- req
-	resp := <-req.respChan
-	return resp.isEmpty, resp.err
-}
-
-// HasNext checks if there is at least one item available to dequeue.
-func (q *Queue) HasNext() bool {
-	req := queryReq{respChan: make(chan queryResp)}
-	q.queryChan <- req
-	resp := <-req.respChan
-	return resp.hasNext
 }
 
 func getHighestKey(tx *bbolt.Tx) (uint64, error) {
@@ -296,16 +293,6 @@ type enqueueReq struct {
 }
 
 type enqueueResp struct {
-	err error
-}
-
-type dequeueReq struct {
-	respChan chan dequeueResp
-}
-
-type dequeueResp struct {
-	idx uint64
-	val []byte
 	err error
 }
 
