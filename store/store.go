@@ -51,6 +51,9 @@ var (
 	// operation.
 	ErrNotLeader = errors.New("not leader")
 
+	// ErrLeaderNotFound is returned when a node cannot locate a leader.
+	ErrLeaderNotFound = errors.New("leader not found")
+
 	// ErrNotSingleNode is returned when a node attempts to execute a single-node
 	// only operation.
 	ErrNotSingleNode = errors.New("not single-node")
@@ -890,6 +893,22 @@ func (s *Store) Addr() string {
 // ID returns the Raft ID of the store.
 func (s *Store) ID() string {
 	return s.raftID
+}
+
+// Leader returns the current Raft leader, if one exists.
+func (s *Store) Leader() (*Server, error) {
+	if !s.open.Is() {
+		return nil, ErrNotOpen
+	}
+	addr, id := s.raft.LeaderWithID()
+	if addr == "" || id == "" {
+		return nil, ErrLeaderNotFound
+	}
+	return &Server{
+		ID:       string(id),
+		Addr:     string(addr),
+		Suffrage: raft.Voter.String(),
+	}, nil
 }
 
 // LeaderAddr returns the address of the current leader. Returns a
