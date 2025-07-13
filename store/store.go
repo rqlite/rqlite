@@ -667,13 +667,23 @@ func (s *Store) Bootstrap(servers ...*Server) error {
 }
 
 // Stepdown forces this node to relinquish leadership to another node in
-// the cluster. If this node is not the leader, and 'wait' is true, an error
-// will be returned.
-func (s *Store) Stepdown(wait bool) error {
+// the cluster. If wait is true, then this function blocks until the
+// leadership transfer is complete, or an error occurs. If id is empty
+// then the target node for Leadership is chosen by the Store.
+func (s *Store) Stepdown(wait bool, id string) error {
 	if !s.open.Is() {
 		return ErrNotOpen
 	}
-	f := s.raft.LeadershipTransfer()
+	var f raft.Future
+	if id == "" {
+		f = s.raft.LeadershipTransfer()
+	} else {
+		addr, err := s.AddrForId(id)
+		if err != nil {
+			return err
+		}
+		f = s.raft.LeadershipTransferToServer(raft.ServerID(id), raft.ServerAddress(addr))
+	}
 	if !wait {
 		return nil
 	}
@@ -842,6 +852,24 @@ func (s *Store) IsVoter() (bool, error) {
 		}
 	}
 	return false, nil
+}
+
+// AddrForId returns the Raft address of the node with the given ID.
+func (s *Store) AddrForId(id string) (string, error) {
+	if !s.open.Is() {
+		return "", ErrNotOpen
+	}
+
+	cfg := s.raft.GetConfiguration()
+	if cfg.Error() != nil {
+		return "", cfg.Error()
+	}
+	for _, srv := range cfg.Configuration().Servers {
+		if srv.ID == raft.ServerID(id) {
+			return string(srv.Address), nil
+		}
+	}
+	return "", fmt.Errorf("no node with ID %s in cluster", id)
 }
 
 // State returns the current node's Raft state

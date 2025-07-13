@@ -1608,7 +1608,7 @@ func (m *MockStore) ReadFrom(r io.Reader) (int64, error) {
 	return 0, nil
 }
 
-func (m *MockStore) Stepdown(wait bool) error {
+func (m *MockStore) Stepdown(wait bool, id string) error {
 	if m.stepdownFn != nil {
 		return m.stepdownFn(wait)
 	}

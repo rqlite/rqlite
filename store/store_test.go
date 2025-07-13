@@ -26,7 +26,7 @@ func Test_NonOpenStore(t *testing.T) {
 	defer s.Close(true)
 	defer ln.Close()
 
-	if err := s.Stepdown(false); err != ErrNotOpen {
+	if err := s.Stepdown(false, ""); err != ErrNotOpen {
 		t.Fatalf("wrong error received for non-open store: %s", err)
 	}
 	if s.IsLeader() {
@@ -2446,7 +2446,7 @@ func Test_SingleNodeStepdown(t *testing.T) {
 	}
 
 	// Tell leader to step down. Should fail as there is no other node available.
-	if err := s.Stepdown(true); err == nil {
+	if err := s.Stepdown(true, ""); err == nil {
 		t.Fatalf("single node stepped down OK")
 	}
 }
@@ -2466,7 +2466,7 @@ func Test_SingleNodeStepdownNoWaitOK(t *testing.T) {
 	}
 
 	// Tell leader to step down without waiting.
-	if err := s.Stepdown(false); err != nil {
+	if err := s.Stepdown(false, ""); err != nil {
 		t.Fatalf("single node reported error stepping down even when told not to wait")
 	}
 }
