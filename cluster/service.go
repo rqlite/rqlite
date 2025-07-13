@@ -549,7 +549,7 @@ func (s *Service) handleConn(conn net.Conn) {
 			} else if !s.checkCommandPerm(c, auth.PermLeaderOps) {
 				resp.Error = "unauthorized"
 			} else {
-				if err := s.mgr.Stepdown(sr.Wait, ""); err != nil {
+				if err := s.mgr.Stepdown(sr.Wait, sr.Id); err != nil {
 					resp.Error = err.Error()
 				}
 			}
