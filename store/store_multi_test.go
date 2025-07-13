@@ -741,7 +741,7 @@ func Test_MultiNodeStepdown(t *testing.T) {
 	}
 
 	// Tell leader to step down. After this finishes there should be a new Leader.
-	if err := s0.Stepdown(true); err != nil {
+	if err := s0.Stepdown(true, ""); err != nil {
 		t.Fatalf("leader failed to step down: %s", err.Error())
 	}
 

@@ -100,7 +100,7 @@ type Store interface {
 
 	// Stepdown forces this node to relinquish leadership to another node in
 	// the cluster.
-	Stepdown(wait bool) error
+	Stepdown(wait bool, id string) error
 }
 
 // GetNodeMetaer is the interface that wraps the GetNodeMeta method.
@@ -1077,7 +1077,7 @@ func (s *Service) handleLeader(w http.ResponseWriter, r *http.Request, qp QueryP
 	case "DELETE":
 		// Trigger leader stepdown
 		wait := qp.Wait()
-		if err := s.store.Stepdown(wait); err != nil {
+		if err := s.store.Stepdown(wait, ""); err != nil {
 			if err == store.ErrNotLeader {
 				if s.DoRedirect(w, r, qp) {
 					return
