@@ -141,6 +141,16 @@ func (n Nodes) GetNode(id string) *Node {
 	return nil
 }
 
+// GetNodeByAddr returns the Node with the given Raft address, or nil if no such node exists.
+func (n Nodes) GetNodeByAddr(addr string) *Node {
+	for _, node := range n {
+		if node.Addr == addr {
+			return node
+		}
+	}
+	return nil
+}
+
 // Test tests the reachability and leadership status of all nodes. It does this
 // in parallel, and blocks until all nodes have been tested.
 func (n Nodes) Test(gm GetNodeMetaer, leaderAddr string, retries int, timeout time.Duration) {
