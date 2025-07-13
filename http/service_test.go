@@ -1515,6 +1515,7 @@ type MockStore struct {
 	queryFn     func(qr *command.QueryRequest) ([]*command.QueryRows, uint64, error)
 	requestFn   func(eqr *command.ExecuteQueryRequest) ([]*command.ExecuteQueryResponse, uint64, error)
 	backupFn    func(br *command.BackupRequest, dst io.Writer) error
+	nodeFn      func() ([]*store.Server, error)
 	loadFn      func(lr *command.LoadRequest) error
 	snapshotFn  func(n uint64) error
 	readFromFn  func(r io.Reader) (int64, error)
@@ -1577,6 +1578,9 @@ func (m *MockStore) Stats() (map[string]any, error) {
 }
 
 func (m *MockStore) Nodes() ([]*store.Server, error) {
+	if m.nodeFn != nil {
+		return m.nodeFn()
+	}
 	return nil, nil
 }
 
@@ -1681,8 +1685,8 @@ func (m *mockClusterService) Stepdown(sr *command.StepdownRequest, addr string, 
 	return nil
 }
 
-func Test_LeaderGET(t *testing.T) {
-	store := &MockStore{leaderAddr: "127.0.0.1:8001"}
+func Test_Leader_GET(t *testing.T) {
+	store := &MockStore{leaderAddr: "127.0.0.1:4002"}
 	cluster := &mockClusterService{apiAddr: "http://127.0.0.1:4001"}
 	cred := &mockCredentialStore{HasPermOK: true}
 
@@ -1697,7 +1701,7 @@ func Test_LeaderGET(t *testing.T) {
 	s.ServeHTTP(rr, req)
 
 	if rr.Code != http.StatusOK {
-		t.Fatalf("expected 200, got %d", rr.Code)
+		t.Fatalf("expected 200, got %d (body: %s)", rr.Code, rr.Body.String())
 	}
 
 	// Check response body
@@ -1708,7 +1712,7 @@ func Test_LeaderGET(t *testing.T) {
 	}
 }
 
-func Test_LeaderDELETE(t *testing.T) {
+func Test_Leader_DELETE(t *testing.T) {
 	stepdownCalled := false
 	stepdownWait := false
 	store := &MockStore{
