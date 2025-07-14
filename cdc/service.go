@@ -5,14 +5,13 @@ import (
 	"crypto/tls"
 	"expvar"
 	"fmt"
-	"log"
 	"net/http"
-	"os"
 	"path/filepath"
 	"sync"
 	"sync/atomic"
 	"time"
 
+	"github.com/hashicorp/go-hclog"
 	"github.com/rqlite/rqlite/v8/command/proto"
 	"github.com/rqlite/rqlite/v8/internal/rsync"
 	"github.com/rqlite/rqlite/v8/queue"
@@ -146,7 +145,7 @@ type Service struct {
 	wg   sync.WaitGroup
 	done chan struct{}
 
-	logger *log.Logger
+	logger hclog.Logger
 }
 
 // NewService creates a new CDC service.
@@ -179,7 +178,7 @@ func NewService(dir string, clstr Cluster, str Store, in <-chan *proto.CDCEvents
 		leaderObCh:            make(chan bool, leaderChanLen),
 		hwmObCh:               make(chan uint64, leaderChanLen),
 		done:                  make(chan struct{}),
-		logger:                log.New(os.Stdout, "[cdc-service] ", log.LstdFlags),
+		logger:                hclog.Default().Named("cdc-service"),
 	}
 
 	fifo, err := NewQueue(filepath.Join(dir, cdcDB))
@@ -205,7 +204,7 @@ func (s *Service) Start() error {
 	go s.mainLoop()
 
 	s.clstr.RegisterLeaderChange(s.leaderObCh)
-	s.logger.Println("service started")
+	s.logger.Info("service started")
 	return nil
 }
 
@@ -266,12 +265,12 @@ func (s *Service) mainLoop() {
 			preHWM = s.highWatermark.Load()
 			if s.clstr.IsLeader() {
 				if err := s.writeHighWatermark(s.highWatermark.Load()); err != nil {
-					s.logger.Printf("error writing high watermark to store: %v", err)
+					s.logger.Error("error writing high watermark to store", "error", err)
 				}
 			}
 
 		case hwm := <-s.hwmObCh:
-			s.logger.Println("received high watermark update:", hwm)
+			s.logger.Info(fmt.Sprintf("received high watermark update: %d", hwm))
 			if hwm > s.highWatermark.Load() {
 				s.highWatermark.Store(hwm)
 				// This means all events up to this high watermark have been
@@ -280,7 +279,7 @@ func (s *Service) mainLoop() {
 			}
 
 		case isLeader := <-s.leaderObCh:
-			s.logger.Println("is leader:", isLeader)
+			s.logger.Info(fmt.Sprintf("is leader: %t", isLeader))
 			// If not leader then reset batching queue and get ready to start
 			// retrasmitting events from high-water mark. If we have become
 			// the leader then start reading from the batching queue.
@@ -298,13 +297,13 @@ func (s *Service) mainLoop() {
 
 			b, err := MarshalToEnvelopeJSON(batch.Objects)
 			if err != nil {
-				s.logger.Printf("error marshalling batch: %v", err)
+				s.logger.Error("error marshalling batch", "error", err)
 				continue
 			}
 
 			req, err := http.NewRequest("POST", s.endpoint, bytes.NewReader(b))
 			if err != nil {
-				s.logger.Printf("error creating HTTP request for endpoint: %v", err)
+				s.logger.Error("error creating HTTP request for endpoint", "error", err)
 				continue
 			}
 			req.Header.Set("Content-Type", "application/json")
@@ -315,7 +314,7 @@ func (s *Service) mainLoop() {
 			for {
 				nAttempts++
 				if s.logOnly {
-					s.logger.Println(string(b))
+					s.logger.Info(string(b))
 					sentOK = true
 					break
 				}
@@ -327,7 +326,7 @@ func (s *Service) mainLoop() {
 					break
 				}
 				if nAttempts == s.transmitMaxRetries {
-					s.logger.Printf("failed to send batch to endpoint after %d retries, last error: %v", nAttempts, err)
+					s.logger.Error(fmt.Sprintf("failed to send batch to endpoint after %d retries, last error", nAttempts), "error", err)
 					stats.Add(numDroppedFailedToSend, int64(len(batch.Objects)))
 					break
 				}

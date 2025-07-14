@@ -3,9 +3,9 @@ package snapshot
 import (
 	"expvar"
 	"io"
-	"log"
 	"time"
 
+	"github.com/hashicorp/go-hclog"
 	"github.com/hashicorp/raft"
 	"github.com/rqlite/rqlite/v8/internal/progress"
 )
@@ -13,14 +13,14 @@ import (
 // Snapshot represents a snapshot of the database state.
 type Snapshot struct {
 	rc     io.ReadCloser
-	logger *log.Logger
+	logger hclog.Logger
 }
 
 // NewSnapshot creates a new snapshot.
 func NewSnapshot(rc io.ReadCloser) *Snapshot {
 	return &Snapshot{
 		rc:     rc,
-		logger: log.New(log.Writer(), "[snapshot] ", log.LstdFlags),
+		logger: hclog.Default().Named("snapshot"),
 	}
 }
 
@@ -31,7 +31,7 @@ func (s *Snapshot) Persist(sink raft.SnapshotSink) error {
 
 	cw := progress.NewCountingWriter(sink)
 	cm := progress.StartCountingMonitor(func(n int64) {
-		s.logger.Printf("persisted %d bytes", n)
+		s.logger.Info("persisted %d bytes", n)
 	}, cw)
 	n, err := func() (int64, error) {
 		defer cm.StopAndWait()

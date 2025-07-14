@@ -2,11 +2,10 @@ package disco
 
 import (
 	"fmt"
-	"log"
-	"os"
 	"sync"
 	"time"
 
+	"github.com/hashicorp/go-hclog"
 	"github.com/rqlite/rqlite/v8/internal/random"
 )
 
@@ -73,7 +72,7 @@ type Service struct {
 	s   Store
 	suf Suffrage
 
-	logger *log.Logger
+	logger hclog.Logger
 
 	mu          sync.Mutex
 	lastContact time.Time
@@ -87,7 +86,7 @@ func NewService(c Client, s Store, suf Suffrage) *Service {
 		suf:              suf,
 		RegisterInterval: 3 * time.Second,
 		ReportInterval:   10 * time.Second,
-		logger:           log.New(os.Stderr, "[disco] ", log.LstdFlags),
+		logger:           hclog.Default().Named("disco"),
 	}
 }
 
@@ -98,7 +97,7 @@ func (s *Service) Register(id, apiAddr, addr string) (bool, string, error) {
 	for {
 		_, _, cRaftAddr, ok, err := s.c.GetLeader()
 		if err != nil {
-			s.logger.Printf("failed to get leader: %s", err.Error())
+			s.logger.Error("failed to get leader", "error", err)
 		}
 		if ok {
 			return false, cRaftAddr, nil
@@ -107,7 +106,7 @@ func (s *Service) Register(id, apiAddr, addr string) (bool, string, error) {
 		if s.suf.IsVoter() {
 			ok, err = s.c.InitializeLeader(id, apiAddr, addr)
 			if err != nil {
-				s.logger.Printf("failed to initialize as Leader: %s", err.Error())
+				s.logger.Error("failed to initialize as Leader", "error", err)
 			}
 			if ok {
 				s.updateContact(time.Now())
@@ -147,8 +146,7 @@ func (s *Service) StartReporting(id, apiAddr, addr string) chan struct{} {
 			select {
 			case <-reportCh:
 				if err := s.c.SetLeader(id, apiAddr, addr); err != nil {
-					s.logger.Printf("failed to update discovery service with Leader details: %s",
-						err.Error())
+					s.logger.Error("failed to update discovery service with Leader details", "error", err)
 					continue
 				}
 				s.updateContact(time.Now())
@@ -164,7 +162,7 @@ func (s *Service) StartReporting(id, apiAddr, addr string) chan struct{} {
 			case isLeader := <-obCh:
 				if isLeader {
 					reportNonBlocking()
-					s.logger.Printf("updated Leader API address to %s due to leadership change", apiAddr)
+					s.logger.Info(fmt.Sprintf("updated Leader API address to %s due to leadership change", apiAddr))
 				}
 			case <-ticker.C:
 				// Report it periodically in case a previous update failed due, for example,

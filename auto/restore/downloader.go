@@ -7,9 +7,10 @@ import (
 	"expvar"
 	"fmt"
 	"io"
-	"log"
 	"os"
 	"time"
+
+	"github.com/hashicorp/go-hclog"
 )
 
 // stats captures stats for the Uploader service.
@@ -88,14 +89,14 @@ type StorageClient interface {
 // Downloader is a struct that handles downloading data from a storage service.
 type Downloader struct {
 	storageClient StorageClient
-	logger        *log.Logger
+	logger        hclog.Logger
 }
 
 // NewDownloader creates a new Downloader instance with the given StorageClient.
 func NewDownloader(storageClient StorageClient) *Downloader {
 	return &Downloader{
 		storageClient: storageClient,
-		logger:        log.New(os.Stderr, "[downloader] ", log.LstdFlags),
+		logger:        hclog.Default().Named("downloader"),
 	}
 }
 

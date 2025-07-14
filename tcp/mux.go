@@ -6,12 +6,11 @@ import (
 	"expvar"
 	"fmt"
 	"io"
-	"log"
 	"net"
-	"os"
 	"sync"
 	"time"
 
+	"github.com/hashicorp/go-hclog"
 	"github.com/rqlite/rqlite/v8/internal/rtls"
 )
 
@@ -82,7 +81,7 @@ type Mux struct {
 	Timeout time.Duration
 
 	// Out-of-band error logger
-	Logger *log.Logger
+	Logger hclog.Logger
 
 	certReloader *rtls.CertReloader
 	tlsConfig    *tls.Config
@@ -101,7 +100,7 @@ func NewMux(ln net.Listener, adv net.Addr) (*Mux, error) {
 		addr:    addr,
 		m:       make(map[byte]*listener),
 		Timeout: DefaultTimeout,
-		Logger:  log.New(os.Stderr, "[mux] ", log.LstdFlags),
+		Logger:  hclog.Default().Named("mux"),
 	}, nil
 }
 
@@ -154,7 +153,7 @@ func (mux *Mux) Serve() error {
 	if mux.tlsConfig != nil {
 		tlsStr = "TLS "
 	}
-	mux.Logger.Printf("%smux serving on %s, advertising %s", tlsStr, mux.ln.Addr().String(), mux.addr)
+	mux.Logger.Info(fmt.Sprintf("%smux serving on %s, advertising %s", tlsStr, mux.ln.Addr().String(), mux.addr))
 
 	for {
 		// Wait for the next connection.
@@ -230,7 +229,7 @@ func (mux *Mux) handleConn(conn net.Conn) {
 	// Set a read deadline so connections with no data don't timeout.
 	if err := conn.SetReadDeadline(time.Now().Add(mux.Timeout)); err != nil {
 		conn.Close()
-		mux.Logger.Printf("cannot set read deadline: %s", err)
+		mux.Logger.Error("cannot set read deadline", "error", err)
 		return
 	}
 
@@ -238,14 +237,14 @@ func (mux *Mux) handleConn(conn net.Conn) {
 	var typ [1]byte
 	if _, err := io.ReadFull(conn, typ[:]); err != nil {
 		conn.Close()
-		mux.Logger.Printf("cannot read header byte: %s", err)
+		mux.Logger.Error("cannot read header byte", "error", err)
 		return
 	}
 
 	// Reset read deadline and let the listener handle that.
 	if err := conn.SetReadDeadline(time.Time{}); err != nil {
 		conn.Close()
-		mux.Logger.Printf("cannot reset set read deadline: %s", err)
+		mux.Logger.Error("cannot reset set read deadline", "error", err)
 		return
 	}
 

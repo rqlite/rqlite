@@ -10,7 +10,6 @@ import (
 	"expvar"
 	"fmt"
 	"io"
-	"log"
 	"net"
 	"net/http"
 	"net/http/pprof"
@@ -21,6 +20,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/hashicorp/go-hclog"
 	"github.com/rqlite/rqlite/v8/auth"
 	clstrPB "github.com/rqlite/rqlite/v8/cluster/proto"
 	"github.com/rqlite/rqlite/v8/command/encoding"
@@ -364,7 +364,7 @@ type Service struct {
 
 	BuildInfo map[string]any
 
-	logger *log.Logger
+	logger hclog.Logger
 }
 
 // New returns an uninitialized HTTP service. If credentials is nil, then
@@ -380,7 +380,7 @@ func New(addr string, store Store, cluster Cluster, credentials CredentialStore)
 		start:               time.Now(),
 		statuses:            make(map[string]StatusReporter),
 		credentialStore:     credentials,
-		logger:              log.New(os.Stderr, "[http] ", log.LstdFlags),
+		logger:              hclog.Default().Named("http"),
 	}
 }
 
@@ -431,7 +431,7 @@ func (s *Service) Start() error {
 		} else {
 			b.WriteString(", mutual TLS disabled")
 		}
-		s.logger.Println(b.String())
+		s.logger.Info(b.String())
 	}
 	s.ln = ln
 
@@ -440,25 +440,25 @@ func (s *Service) Start() error {
 
 	s.stmtQueue = queue.New[*command.Statement](s.DefaultQueueCap, s.DefaultQueueBatchSz, s.DefaultQueueTimeout)
 	go s.runQueue()
-	s.logger.Printf("execute queue processing started with capacity %d, batch size %d, timeout %s",
-		s.DefaultQueueCap, s.DefaultQueueBatchSz, s.DefaultQueueTimeout.String())
+	s.logger.Info(fmt.Sprintf("execute queue processing started with capacity %d, batch size %d, timeout %s",
+		s.DefaultQueueCap, s.DefaultQueueBatchSz, s.DefaultQueueTimeout.String()))
 
 	go func() {
 		err := s.httpServer.Serve(s.ln)
 		if err != nil {
-			s.logger.Printf("HTTP service on %s stopped: %s", s.ln.Addr().String(), err.Error())
+			s.logger.Error(fmt.Sprintf("HTTP service on %s stopped", s.ln.Addr().String()), "error", err)
 		}
 	}()
-	s.logger.Println("service listening on", s.Addr())
+	s.logger.Info(fmt.Sprintf("service listening on %s", s.Addr()))
 
 	return nil
 }
 
 // Close closes the service.
 func (s *Service) Close() {
-	s.logger.Println("closing HTTP service on", s.ln.Addr().String())
+	s.logger.Info(fmt.Sprintf("closing HTTP service on %s", s.ln.Addr()))
 	if err := s.httpServer.Shutdown(context.Background()); err != nil {
-		s.logger.Println("HTTP service shutdown error:", err.Error())
+		s.logger.Error("HTTP service shutdown error", "error", err)
 	}
 
 	s.stmtQueue.Close()
@@ -738,7 +738,7 @@ func (s *Service) handleLoad(w http.ResponseWriter, r *http.Request, qp QueryPar
 	r.Body.Close()
 
 	if db.IsValidSQLiteData(b) {
-		s.logger.Printf("SQLite database file detected as load data")
+		s.logger.Info("SQLite database file detected as load data")
 		lr := &command.LoadRequest{
 			Data: b,
 		}
@@ -821,7 +821,7 @@ func (s *Service) handleBoot(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	s.logger.Printf("starting boot process")
+	s.logger.Info("starting boot process")
 	_, err = s.store.ReadFrom(bufReader)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusServiceUnavailable)
@@ -953,7 +953,7 @@ func (s *Service) handleStatus(w http.ResponseWriter, r *http.Request, qp QueryP
 		for k, v := range s.statuses {
 			stat, err := v.Stats()
 			if err != nil {
-				s.logger.Printf("failed to retrieve stats for registered reporter %s: %s", k, err.Error())
+				s.logger.Error(fmt.Sprintf("failed to retrieve stats for registered reporter %s", k), "error", err)
 				stat = map[string]any{"error": err.Error()}
 			}
 			status[k] = stat
@@ -981,7 +981,7 @@ func (s *Service) handleStatus(w http.ResponseWriter, r *http.Request, qp QueryP
 
 	_, err = w.Write(b)
 	if err != nil {
-		s.logger.Println("failed to write status to client", err.Error())
+		s.logger.Error("failed to write status to client", "error", err)
 		return
 	}
 }
@@ -1732,14 +1732,14 @@ func (s *Service) runQueue() {
 					if err == store.ErrNotLeader {
 						addr, err := s.store.LeaderAddr()
 						if err != nil || addr == "" {
-							s.logger.Printf("execute queue can't find leader for sequence number %d on node %s",
-								req.SequenceNumber, s.Addr().String())
+							s.logger.Warn(fmt.Sprintf("execute queue can't find leader for sequence number %d on node %s",
+								req.SequenceNumber, s.Addr()))
 							stats.Add(numQueuedExecutionsNoLeader, 1)
 						} else {
 							_, _, err = s.cluster.Execute(er, addr, nil, defaultTimeout, 0)
 							if err != nil {
-								s.logger.Printf("execute queue write failed for sequence number %d on node %s: %s",
-									req.SequenceNumber, s.Addr().String(), err.Error())
+								s.logger.Error(fmt.Sprintf("execute queue write failed for sequence number %d on node %s",
+									req.SequenceNumber, s.Addr()), "error", err)
 								if err.Error() == "leadership lost while committing log" {
 									stats.Add(numQueuedExecutionsLeadershipLost, 1)
 								} else if err.Error() == "not leader" {
@@ -1837,7 +1837,7 @@ func (s *Service) writeResponse(w http.ResponseWriter, qp QueryParams, j Respons
 	}
 	_, err = w.Write(b)
 	if err != nil {
-		s.logger.Println("writing response failed:", err.Error())
+		s.logger.Error("writing response failed", "error", err)
 	}
 }
 

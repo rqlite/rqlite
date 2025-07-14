@@ -2,13 +2,13 @@ package store
 
 import (
 	"fmt"
-	"log"
 	"net"
 	"os"
 	"path/filepath"
 	"strings"
 	"time"
 
+	"github.com/hashicorp/go-hclog"
 	"github.com/hashicorp/raft"
 	"github.com/rqlite/rqlite/v8/command/chunking"
 	"github.com/rqlite/rqlite/v8/command/proto"
@@ -114,11 +114,9 @@ func HasData(dir string) (bool, error) {
 // RecoverNode is used to manually force a new configuration, in the event that
 // quorum cannot be restored. This borrows heavily from RecoverCluster functionality
 // of the Hashicorp Raft library, but has been customized for rqlite use.
-func RecoverNode(dataDir string, extensions []string, logger *log.Logger, logs raft.LogStore,
+func RecoverNode(dataDir string, extensions []string, logger hclog.Logger, logs raft.LogStore,
 	stable *rlog.Log, snaps raft.SnapshotStore, tn raft.Transport, conf raft.Configuration) error {
-	logPrefix := logger.Prefix()
-	logger.SetPrefix(fmt.Sprintf("%s[recovery] ", logPrefix))
-	defer logger.SetPrefix(logPrefix)
+	logger = logger.Named("recovery")
 
 	// Sanity check the Raft peer configuration.
 	if err := checkRaftConfiguration(conf); err != nil {
@@ -139,7 +137,7 @@ func RecoverNode(dataDir string, extensions []string, logger *log.Logger, logs r
 	if err != nil {
 		return fmt.Errorf("failed to list snapshots: %s", err)
 	}
-	logger.Printf("recovery detected %d snapshots", len(snapshots))
+	logger.Info(fmt.Sprintf("recovery detected %d snapshots", len(snapshots)))
 	if len(snapshots) > 0 {
 		if err := func() error {
 			snapID := snapshots[0].ID
@@ -189,8 +187,8 @@ func RecoverNode(dataDir string, extensions []string, logger *log.Logger, logs r
 	if err != nil {
 		return fmt.Errorf("failed to find last log: %v", err)
 	}
-	logger.Printf("snapshot's last index is %d, last index written to log is %d, last term is %d",
-		lastIndex, lastLogIndex, lastTerm)
+	logger.Info(fmt.Sprintf("snapshot's last index is %d, last index written to log is %d, last term is %d",
+		lastIndex, lastLogIndex, lastTerm))
 
 	for index := snapshotIndex + 1; index <= lastLogIndex; index++ {
 		var entry raft.Log
@@ -204,8 +202,8 @@ func RecoverNode(dataDir string, extensions []string, logger *log.Logger, logs r
 		lastTerm = entry.Term
 	}
 	if snapshotIndex+1 <= lastLogIndex {
-		logger.Printf("replayed logs from %d to %d", snapshotIndex+1, lastLogIndex)
-		logger.Printf("last index is now %d, last term is %d", lastIndex, lastTerm)
+		logger.Info(fmt.Sprintf("replayed logs from %d to %d", snapshotIndex+1, lastLogIndex))
+		logger.Info(fmt.Sprintf("last index is now %d, last term is %d", lastIndex, lastTerm))
 	}
 
 	// Create a new snapshot, placing the configuration in as if it was
@@ -228,7 +226,7 @@ func RecoverNode(dataDir string, extensions []string, logger *log.Logger, logs r
 	if err = sink.Close(); err != nil {
 		return fmt.Errorf("failed to finalize snapshot: %v", err)
 	}
-	logger.Printf("recovery snapshot %s created successfully using %s", sink.ID(), tmpDBPath)
+	logger.Info(fmt.Sprintf("recovery snapshot %s created successfully using %s", sink.ID(), tmpDBPath))
 
 	// Compact the log so that we don't get bad interference from any
 	// configuration change log entries that might be there.

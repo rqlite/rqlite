@@ -9,13 +9,13 @@ import (
 	"expvar"
 	"fmt"
 	"io"
-	"log"
 	"os"
 	"path/filepath"
 	"strings"
 	"sync"
 	"time"
 
+	"github.com/hashicorp/go-hclog"
 	"github.com/rqlite/go-sqlite3"
 	command "github.com/rqlite/rqlite/v8/command/proto"
 	"github.com/rqlite/rqlite/v8/db/humanize"
@@ -148,7 +148,7 @@ type DB struct {
 	allOptimized   bool
 	allOptimizedMu sync.Mutex
 
-	logger *log.Logger
+	logger hclog.Logger
 }
 
 // PoolStats represents connection pool statistics
@@ -174,14 +174,14 @@ func Open(dbPath string, fkEnabled, wal bool) (retDB *DB, retErr error) {
 // database is opened in WAL mode, the WAL files will also be created if they
 // do not exist.
 func OpenWithDriver(drv *Driver, dbPath string, fkEnabled, wal bool) (retDB *DB, retErr error) {
-	logger := log.New(log.Writer(), "[db] ", log.LstdFlags)
+	logger := hclog.Default().Named("db")
 	startTime := time.Now()
 	defer func() {
 		if retErr != nil {
 			return
 		}
 		if dur := time.Since(startTime); dur > durToOpenLog {
-			logger.Printf("opened database %s in %s", dbPath, dur)
+			logger.Info(fmt.Sprintf("opened database %s in %s", dbPath, dur))
 		}
 		stats.Get(openDuration).(*expvar.Int).Set(time.Since(startTime).Milliseconds())
 	}()
@@ -238,7 +238,7 @@ func OpenWithDriver(drv *Driver, dbPath string, fkEnabled, wal bool) (retDB *DB,
 	// Make it clear which extensions have been loaded, if any.
 	extensions := drv.ExtensionNames()
 	if len(extensions) > 0 {
-		logger.Printf("loaded extensions: %s", strings.Join(extensions, ", "))
+		logger.Info(fmt.Sprintf("loaded extensions: %s", strings.Join(extensions, ", ")))
 	}
 
 	return &DB{
@@ -648,7 +648,7 @@ func (db *DB) CheckpointWithTimeout(mode CheckpointMode, dur time.Duration) (err
 		defer func() {
 			// Reset back to default
 			if err := db.SetBusyTimeout(rwBt, -1); err != nil {
-				db.logger.Printf("failed to reset busy_timeout on checkpointing connection: %s", err.Error())
+				db.logger.Error("failed to reset busy_timeout on checkpointing connection", "error", err)
 			}
 		}()
 	}

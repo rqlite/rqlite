@@ -3,11 +3,11 @@ package http
 import (
 	"fmt"
 	"io"
-	"log"
 	"net/http"
 	"net/url"
-	"os"
 	"strings"
+
+	"github.com/hashicorp/go-hclog"
 )
 
 // ErrNoAvailableHost indicates that the client could not find an available host to send the request to.
@@ -47,7 +47,7 @@ type Client struct {
 
 	// creds stores the http basic authentication username and password
 	creds  string
-	logger *log.Logger
+	logger hclog.Logger
 
 	// currentHost keeps track of the last available host
 	currentHost int
@@ -63,7 +63,7 @@ func NewClient(client *http.Client, hosts []string, configFuncs ...ConfigFunc) *
 		scheme:      "http",
 		maxRedirect: 21,
 		Prefix:      "/",
-		logger:      log.New(os.Stderr, "[client] ", log.LstdFlags),
+		logger:      hclog.Default().Named("client"),
 	}
 
 	for _, f := range configFuncs {
@@ -89,7 +89,7 @@ func WithPrefix(prefix string) ConfigFunc {
 }
 
 // WithLogger changes the default logger to the one provided.
-func WithLogger(logger *log.Logger) ConfigFunc {
+func WithLogger(logger hclog.Logger) ConfigFunc {
 	return func(client *Client) {
 		client.logger = logger
 	}
@@ -150,15 +150,15 @@ func (c *Client) doRequest(method string, url *url.URL, body io.Reader) (*http.R
 		// If we did too many redirects, we will consider the host as unavailable as well,
 		// and we will retry the request from another host
 		if err == ErrTooManyRedirects {
-			c.logger.Printf("too many redirects from host: '%s'", host)
+			c.logger.Warn(fmt.Sprintf("too many redirects from host: '%s'", host))
 		}
 
-		c.logger.Printf("host '%s' is unavailable, retrying with the next available host", host)
+		c.logger.Info(fmt.Sprintf("host '%s' is unavailable, retrying with the next available host", host))
 		triedHosts++
 		c.nextHost()
 	}
 
-	c.logger.Printf("none of the available hosts are responsive")
+	c.logger.Error("none of the available hosts are responsive")
 	return nil, ErrNoAvailableHost
 }
 

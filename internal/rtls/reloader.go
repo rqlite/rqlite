@@ -2,10 +2,12 @@ package rtls
 
 import (
 	"crypto/tls"
-	"log"
+	"fmt"
 	"os"
 	"sync"
 	"time"
+
+	"github.com/hashicorp/go-hclog"
 )
 
 // CertReloader is a simple TLS certificate reloader. It loads the certificate
@@ -14,7 +16,7 @@ import (
 type CertReloader struct {
 	certPath, keyPath string
 	modTime           time.Time
-	logger            *log.Logger
+	logger            hclog.Logger
 
 	mu   sync.RWMutex
 	cert *tls.Certificate
@@ -25,7 +27,7 @@ func NewCertReloader(cert, key string) (*CertReloader, error) {
 	cr := &CertReloader{
 		certPath: cert,
 		keyPath:  key,
-		logger:   log.New(os.Stderr, "[cert-reloader] ", log.LstdFlags),
+		logger:   hclog.Default().Named("cert-reloader"),
 	}
 	pair, err := loadKeyPair(cr.certPath, cr.keyPath)
 	if err != nil {
@@ -50,7 +52,7 @@ func (cr *CertReloader) GetCertificate() (*tls.Certificate, error) {
 	if err != nil || !latestTime.After(cr.modTime) {
 		defer cr.mu.RUnlock()
 		if err != nil {
-			cr.logger.Printf("failed to get latest modification time (%s), returning prior cert", err)
+			cr.logger.Error("failed to get latest modification time, returning prior cert", "error", err)
 		}
 		return cr.cert, nil
 	}
@@ -66,17 +68,17 @@ func (cr *CertReloader) GetCertificate() (*tls.Certificate, error) {
 	latestTime, err = latestModTime(cr.certPath, cr.keyPath)
 	if err != nil || !latestTime.After(cr.modTime) {
 		if err != nil {
-			cr.logger.Printf("failed to get latest modification time (%s), returning prior cert", err)
+			cr.logger.Error("failed to get latest modification time, returning prior cert", "error", err)
 		}
 		return cr.cert, nil
 	}
 
 	pair, err := loadKeyPair(cr.certPath, cr.keyPath)
 	if err != nil {
-		cr.logger.Printf("failed to reload certificate (%s), returning prior cert", err)
+		cr.logger.Error("failed to reload certificate, returning prior cert", "error", err)
 		return cr.cert, nil
 	}
-	cr.logger.Printf("reloading certificate at %s and key at %s", cr.certPath, cr.keyPath)
+	cr.logger.Info(fmt.Sprintf("reloading certificate at %s and key at %s", cr.certPath, cr.keyPath))
 	cr.cert = &pair
 	cr.modTime = latestTime
 	return cr.cert, nil

@@ -3,10 +3,10 @@ package cluster
 import (
 	"context"
 	"errors"
-	"log"
-	"os"
+	"fmt"
 	"time"
 
+	"github.com/hashicorp/go-hclog"
 	"github.com/rqlite/rqlite/v8/cluster/proto"
 	command "github.com/rqlite/rqlite/v8/command/proto"
 )
@@ -32,7 +32,7 @@ type Joiner struct {
 
 	client *Client
 	creds  *proto.Credentials
-	logger *log.Logger
+	logger hclog.Logger
 }
 
 // NewJoiner returns an instantiated Joiner.
@@ -41,7 +41,7 @@ func NewJoiner(client *Client, numAttempts int, attemptInterval time.Duration) *
 		client:          client,
 		numAttempts:     numAttempts,
 		attemptInterval: attemptInterval,
-		logger:          log.New(os.Stderr, "[cluster-join] ", log.LstdFlags),
+		logger:          hclog.Default().Named("cluster-join"),
 	}
 }
 
@@ -73,12 +73,12 @@ func (j *Joiner) Do(ctx context.Context, targetAddrs []string, id, addr string, 
 				if j.creds == nil {
 					helpMsg = " (did you forget to set -join-as?)"
 				}
-				j.logger.Printf("failed to join via node at %s: %s%s", ta, err, helpMsg)
+				j.logger.Error(fmt.Sprintf("failed to join via node at %s%s", ta, helpMsg), "error", err)
 			}
 		}
 		if i+1 < j.numAttempts {
 			// This logic message only make sense if performing more than 1 join-attempt.
-			j.logger.Printf("failed to join cluster at %s, sleeping %s before retry", targetAddrs, j.attemptInterval)
+			j.logger.Warn(fmt.Sprintf("failed to join cluster at %s, sleeping %s before retry", targetAddrs, j.attemptInterval))
 			select {
 			case <-ctx.Done():
 				return "", ErrJoinCanceled
@@ -87,7 +87,7 @@ func (j *Joiner) Do(ctx context.Context, targetAddrs []string, id, addr string, 
 			}
 		}
 	}
-	j.logger.Printf("failed to join cluster at %s, after %d attempt(s)", targetAddrs, j.numAttempts)
+	j.logger.Error(fmt.Sprintf("failed to join cluster at %s, after %d attempt(s)", targetAddrs, j.numAttempts))
 	return "", ErrJoinFailed
 }
 

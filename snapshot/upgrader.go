@@ -5,11 +5,11 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"log"
 	"os"
 	"path/filepath"
 	"sort"
 
+	"github.com/hashicorp/go-hclog"
 	"github.com/hashicorp/raft"
 	"github.com/rqlite/rqlite/v8/db"
 )
@@ -21,7 +21,7 @@ const (
 // Upgrade writes a copy of the 7.x-format Snapshot directory at 'old' to a
 // 8.x-format new Snapshot directory at 'new'. If the upgrade is successful,
 // the 'old' directory is removed before the function returns.
-func Upgrade7To8(old, new string, logger *log.Logger) (retErr error) {
+func Upgrade7To8(old, new string, logger hclog.Logger) (retErr error) {
 	defer func() {
 		if retErr != nil {
 			stats.Add(upgradeFail, 1)
@@ -31,8 +31,7 @@ func Upgrade7To8(old, new string, logger *log.Logger) (retErr error) {
 	defer func() {
 		if retErr != nil {
 			if err := os.RemoveAll(newTmpDir); err != nil && !os.IsNotExist(err) {
-				logger.Printf("failed to remove temporary upgraded snapshot directory at %s due to outer error (%s) cleanup: %s",
-					newTmpDir, retErr, err)
+				logger.Error(fmt.Sprintf("failed to remove temporary upgraded snapshot directory at %s due to outer error (%s) cleanup", newTmpDir, retErr), "error", err)
 			}
 		}
 	}()
@@ -40,7 +39,7 @@ func Upgrade7To8(old, new string, logger *log.Logger) (retErr error) {
 	// If a temporary version of the new snapshot exists, remove it. This implies a
 	// previous upgrade attempt was interrupted. We will need to start over.
 	if dirExists(newTmpDir) {
-		logger.Printf("detected temporary upgraded snapshot directory at %s, removing it", newTmpDir)
+		logger.Info(fmt.Sprintf("detected temporary upgraded snapshot directory at %s, removing it", newTmpDir))
 		if err := os.RemoveAll(newTmpDir); err != nil {
 			return fmt.Errorf("failed to remove temporary upgraded snapshot directory %s: %s", newTmpDir, err)
 		}
@@ -53,7 +52,7 @@ func Upgrade7To8(old, new string, logger *log.Logger) (retErr error) {
 		}
 
 		if oldIsEmpty {
-			logger.Printf("old snapshot directory %s is empty, nothing to upgrade", old)
+			logger.Info(fmt.Sprintf("old snapshot directory %s is empty, nothing to upgrade", old))
 			if err := os.RemoveAll(old); err != nil {
 				return fmt.Errorf("failed to remove empty old snapshot directory %s: %s", old, err)
 			}
@@ -61,15 +60,15 @@ func Upgrade7To8(old, new string, logger *log.Logger) (retErr error) {
 		}
 
 		if dirExists(new) {
-			logger.Printf("new snapshot directory %s exists", old)
+			logger.Info(fmt.Sprintf("new snapshot directory %s exists", old))
 			if err := os.RemoveAll(old); err != nil {
 				return fmt.Errorf("failed to remove old snapshot directory %s: %s", old, err)
 			}
-			logger.Printf("removed old snapshot directory %s as no upgrade is needed", old)
+			logger.Info(fmt.Sprintf("removed old snapshot directory %s as no upgrade is needed", old))
 			return nil
 		}
 	} else {
-		logger.Printf("old v7 snapshot directory does not exist at %s, nothing to upgrade", old)
+		logger.Info(fmt.Sprintf("old v7 snapshot directory does not exist at %s, nothing to upgrade", old))
 		return nil
 	}
 
@@ -118,13 +117,13 @@ func Upgrade7To8(old, new string, logger *log.Logger) (retErr error) {
 		if err != nil {
 			return fmt.Errorf("failed to get size of old state file %s: %s", oldStatePath, err)
 		}
-		logger.Printf("successfully opened old state file at %s (%d bytes in size)", oldStatePath, sz)
+		logger.Info(fmt.Sprintf("successfully opened old state file at %s (%d bytes in size)", oldStatePath, sz))
 
 		headerLength := int64(16)
 		if sz < headerLength {
 			return fmt.Errorf("old state file %s is too small to be valid", oldStatePath)
 		} else if sz == headerLength {
-			logger.Printf("old state file %s contains no database data, no data to upgrade", oldStatePath)
+			logger.Info(fmt.Sprintf("old state file %s contains no database data, no data to upgrade", oldStatePath))
 		} else {
 			// Skip past the header and length of the old state file.
 			if _, err := stateFd.Seek(headerLength, 0); err != nil {
@@ -165,7 +164,7 @@ func Upgrade7To8(old, new string, logger *log.Logger) (retErr error) {
 	if err := removeDirSync(old); err != nil {
 		return fmt.Errorf("failed to remove old snapshot directory %s: %s", old, err)
 	}
-	logger.Printf("upgraded snapshot directory %s to %s", old, new)
+	logger.Info(fmt.Sprintf("upgraded snapshot directory %s to %s", old, new))
 	stats.Add(upgradeOk, 1)
 
 	return nil

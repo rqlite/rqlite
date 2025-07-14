@@ -5,7 +5,6 @@ import (
 	"context"
 	"crypto/tls"
 	"fmt"
-	"log"
 	"net"
 	"os"
 	"path/filepath"
@@ -14,6 +13,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/hashicorp/go-hclog"
 	consul "github.com/rqlite/rqlite-disco-clients/consul"
 	"github.com/rqlite/rqlite-disco-clients/dns"
 	"github.com/rqlite/rqlite-disco-clients/dnssrv"
@@ -52,15 +52,15 @@ storage engine. It provides an easy-to-use, fault-tolerant store for relational 
 Visit https://www.rqlite.io to learn more.`
 
 func init() {
-	log.SetFlags(log.LstdFlags)
-	log.SetOutput(os.Stderr)
-	log.SetPrefix(fmt.Sprintf("[%s] ", name))
+	def := hclog.New(hclog.DefaultOptions).Named(fmt.Sprintf("%s", name))
+	hclog.SetDefault(def)
 }
 
 func main() {
 	// Handle signals first, so signal handling is established before anything else.
 	sigCh := HandleSignals(syscall.SIGINT, syscall.SIGTERM, os.Interrupt)
 	mainCtx, _ := CreateContext(sigCh)
+	log := hclog.Default()
 
 	cfg, err := ParseFlags(name, desc, &BuildInfo{
 		Version:       cmd.Version,
@@ -69,16 +69,17 @@ func main() {
 		SQLiteVersion: db.DBVersion,
 	})
 	if err != nil {
-		log.Fatalf("failed to parse command-line flags: %s", err.Error())
+		log.Error("failed to parse command-line flags", "error", err)
+		os.Exit(1)
 	}
 	fmt.Print(logo)
 
 	// Configure logging and pump out initial message.
-	log.Printf("%s starting, version %s, SQLite %s, commit %s, branch %s, compiler (toolchain) %s, compiler (command) %s",
-		name, cmd.Version, db.DBVersion, cmd.Commit, cmd.Branch, runtime.Compiler, cmd.CompilerCommand)
-	log.Printf("%s, target architecture is %s, operating system target is %s", runtime.Version(),
-		runtime.GOARCH, runtime.GOOS)
-	log.Printf("launch command: %s", strings.Join(os.Args, " "))
+	log.Info(fmt.Sprintf("%s starting, version %s, SQLite %s, commit %s, branch %s, compiler (toolchain) %s, compiler (command) %s",
+		name, cmd.Version, db.DBVersion, cmd.Commit, cmd.Branch, runtime.Compiler, cmd.CompilerCommand))
+	log.Info(fmt.Sprintf("%s, target architecture is %s, operating system target is %s", runtime.Version(),
+		runtime.GOARCH, runtime.GOOS))
+	log.Info(fmt.Sprintf("launch command: %s", strings.Join(os.Args, " ")))
 
 	// Start requested profiling.
 	startProfile(cfg.CPUProfile, cfg.MemProfile, cfg.TraceProfile)
@@ -86,11 +87,13 @@ func main() {
 	// Create internode network mux and configure.
 	muxLn, err := net.Listen("tcp", cfg.RaftAddr)
 	if err != nil {
-		log.Fatalf("failed to listen on %s: %s", cfg.RaftAddr, err.Error())
+		log.Error(fmt.Sprintf("failed to listen on %s", cfg.RaftAddr), "error", err)
+		os.Exit(1)
 	}
 	mux, err := startNodeMux(cfg, muxLn)
 	if err != nil {
-		log.Fatalf("failed to start node mux: %s", err.Error())
+		log.Error("failed to start node mux", "error", err)
+		os.Exit(1)
 	}
 
 	// Raft internode layer
@@ -98,51 +101,58 @@ func main() {
 	raftDialer, err := cluster.CreateRaftDialer(cfg.NodeX509Cert, cfg.NodeX509Key, cfg.NodeX509CACert,
 		cfg.NodeVerifyServerName, cfg.NoNodeVerify)
 	if err != nil {
-		log.Fatalf("failed to create Raft dialer: %s", err.Error())
+		log.Error("failed to create Raft dialer", "error", err)
+		os.Exit(1)
 	}
 	raftTn := tcp.NewLayer(raftLn, raftDialer)
 
 	// Create extension store.
 	extensionsStore, err := createExtensionsStore(cfg)
 	if err != nil {
-		log.Fatalf("failed to create extensions store: %s", err.Error())
+		log.Error("failed to create extensions store", "error", err)
+		os.Exit(1)
 	}
 	extensionsPaths, err := extensionsStore.List()
 	if err != nil {
-		log.Fatalf("failed to list extensions: %s", err.Error())
+		log.Error("failed to list extensions", "error", err)
+		os.Exit(1)
 	}
 
 	// Create the store.
 	str, err := createStore(cfg, raftTn, extensionsPaths)
 	if err != nil {
-		log.Fatalf("failed to create store: %s", err.Error())
+		log.Error("failed to create store", "error", err)
+		os.Exit(1)
 	}
 
 	// Install the auto-restore data, if necessary.
 	if cfg.AutoRestoreFile != "" {
 		hd, err := store.HasData(str.Path())
 		if err != nil {
-			log.Fatalf("failed to check for existing data: %s", err.Error())
+			log.Error("failed to check for existing data", "error", err)
+			os.Exit(1)
 		}
 		if hd {
-			log.Printf("auto-restore requested, but data already exists in %s, skipping", str.Path())
+			log.Info(fmt.Sprintf("auto-restore requested, but data already exists in %s, skipping", str.Path()))
 		} else {
-			log.Printf("auto-restore requested, initiating download")
+			log.Info("auto-restore requested, initiating download")
 			start := time.Now()
 			path, errOK, err := restore.DownloadFile(mainCtx, cfg.AutoRestoreFile)
 			if err != nil {
 				var b strings.Builder
-				b.WriteString(fmt.Sprintf("failed to download auto-restore file: %s", err.Error()))
+				b.WriteString("failed to download auto-restore file")
 				if errOK {
 					b.WriteString(", continuing with node startup anyway")
-					log.Print(b.String())
+					log.Warn(b.String(), "error", err)
 				} else {
-					log.Fatal(b.String())
+					log.Error(b.String(), "error", err)
+					os.Exit(1)
 				}
 			} else {
-				log.Printf("auto-restore file downloaded in %s", time.Since(start))
+				log.Info(fmt.Sprintf("auto-restore file downloaded in %s", time.Since(start)))
 				if err := str.SetRestorePath(path); err != nil {
-					log.Fatalf("failed to preload auto-restore data: %s", err.Error())
+					log.Error("failed to preload auto-restore data", "error", err)
+					os.Exit(1)
 				}
 			}
 		}
@@ -151,13 +161,15 @@ func main() {
 	// Get any credential store.
 	credStr, err := credentialStore(cfg)
 	if err != nil {
-		log.Fatalf("failed to get credential store: %s", err.Error())
+		log.Error("failed to get credential store", "error", err)
+		os.Exit(1)
 	}
 
 	// Create cluster service now, so nodes will be able to learn information about each other.
 	clstrServ, err := clusterService(cfg, mux.Listen(cluster.MuxClusterHeader), str, str, credStr)
 	if err != nil {
-		log.Fatalf("failed to create cluster service: %s", err.Error())
+		log.Error("failed to create cluster service", "error", err)
+		os.Exit(1)
 	}
 
 	// Create the HTTP service.
@@ -167,16 +179,19 @@ func main() {
 	// be able to do much until that happens however.
 	clstrClient, err := createClusterClient(cfg, clstrServ)
 	if err != nil {
-		log.Fatalf("failed to create cluster client: %s", err.Error())
+		log.Error("failed to create cluster client", "error", err)
+		os.Exit(1)
 	}
 	httpServ, err := startHTTPService(cfg, str, clstrClient, credStr)
 	if err != nil {
-		log.Fatalf("failed to start HTTP server: %s", err.Error())
+		log.Error("failed to start HTTP server", "error", err)
+		os.Exit(1)
 	}
 
 	// Now, open store. How long this takes does depend on how much data is being stored by rqlite.
 	if err := str.Open(); err != nil {
-		log.Fatalf("failed to open store: %s", err.Error())
+		log.Error("failed to open store", "error", err)
+		os.Exit(1)
 	}
 
 	// Register remaining status providers.
@@ -187,28 +202,32 @@ func main() {
 		"extensions": extensionsStore,
 	} {
 		if err := httpServ.RegisterStatus(n, r); err != nil {
-			log.Fatalf("failed to register %s status provider: %s", n, err.Error())
+			log.Error(fmt.Sprintf("failed to register %s status provider", n), "error", err)
+			os.Exit(1)
 		}
 	}
 
 	// Create the cluster!
 	nodes, err := str.Nodes()
 	if err != nil {
-		log.Fatalf("failed to get nodes %s", err.Error())
+		log.Error("failed to get nodes", "error", err)
+		os.Exit(1)
 	}
 	if err := createCluster(mainCtx, cfg, len(nodes) > 0, clstrClient, str, httpServ, credStr); err != nil {
-		log.Fatalf("clustering failure: %s", err.Error())
+		log.Error("clustering failure", "error", err)
+		os.Exit(1)
 	}
 
 	// Tell the user the node is ready for HTTP, giving some advice on how to connect.
-	log.Printf("node HTTP API available at %s", cfg.HTTPURL())
+	log.Info(fmt.Sprintf("node HTTP API available at %s", cfg.HTTPURL()))
 	h, p, _ := net.SplitHostPort(cfg.HTTPAdv)
-	log.Printf("connect using the command-line tool via 'rqlite -H %s -p %s'", h, p)
+	log.Info(fmt.Sprintf("connect using the command-line tool via 'rqlite -H %s -p %s'", h, p))
 
 	// Start any requested auto-backups
 	backupSrv, err := startAutoBackups(mainCtx, cfg, str)
 	if err != nil {
-		log.Fatalf("failed to start auto-backups: %s", err.Error())
+		log.Error("failed to start auto-backups", "error", err)
+		os.Exit(1)
 	}
 	if backupSrv != nil {
 		httpServ.RegisterStatus("auto_backups", backupSrv)
@@ -225,17 +244,18 @@ func main() {
 	if cfg.RaftClusterRemoveOnShutdown {
 		remover := cluster.NewRemover(clstrClient, 5*time.Second, str)
 		remover.SetCredentials(cluster.CredentialsFor(credStr, cfg.JoinAs))
-		log.Printf("initiating removal of this node from cluster before shutdown")
+		log.Info("initiating removal of this node from cluster before shutdown")
 		if err := remover.Do(cfg.NodeID, true); err != nil {
-			log.Fatalf("failed to remove this node from cluster before shutdown: %s", err.Error())
+			log.Error("failed to remove this node from cluster before shutdown", "error", err)
+			os.Exit(1)
 		}
-		log.Printf("removed this node successfully from cluster before shutdown")
+		log.Info("removed this node successfully from cluster before shutdown")
 	}
 
 	if cfg.RaftStepdownOnShutdown {
 		if str.IsLeader() {
 			// Don't log a confusing message if (probably) not Leader
-			log.Printf("stepping down as Leader before shutdown")
+			log.Info("stepping down as Leader before shutdown")
 		}
 		// Perform a stepdown, ignore any errors.
 		str.Stepdown(true)
@@ -244,10 +264,10 @@ func main() {
 	defer mux.Close()
 
 	if err := str.Close(true); err != nil {
-		log.Printf("failed to close store: %s", err.Error())
+		log.Error("failed to close store", "error", err)
 	}
 	stopProfile()
-	log.Println("rqlite server stopped")
+	log.Info("rqlite server stopped")
 }
 
 func startAutoBackups(ctx context.Context, cfg *Config, str *store.Store) (*backup.Uploader, error) {
@@ -272,27 +292,33 @@ func startAutoBackups(ctx context.Context, cfg *Config, str *store.Store) (*back
 
 func createExtensionsStore(cfg *Config) (*extensions.Store, error) {
 	str, err := extensions.NewStore(filepath.Join(cfg.DataPath, "extensions"))
+	log := hclog.Default()
 	if err != nil {
-		log.Fatalf("failed to create extension store: %s", err.Error())
+		log.Error("failed to create extension store", "error", err)
+		os.Exit(1)
 	}
 
 	if len(cfg.ExtensionPaths) > 0 {
 		for _, path := range cfg.ExtensionPaths {
 			if isDir(path) {
 				if err := str.LoadFromDir(path); err != nil {
-					log.Fatalf("failed to load extensions from directory: %s", err.Error())
+					log.Error("failed to load extensions from directory", "error", err)
+					os.Exit(1)
 				}
 			} else if rarchive.IsZipFile(path) {
 				if err := str.LoadFromZip(path); err != nil {
-					log.Fatalf("failed to load extensions from zip file: %s", err.Error())
+					log.Error("failed to load extensions from zip file", "error", err)
+					os.Exit(1)
 				}
 			} else if rarchive.IsTarGzipFile(path) {
 				if err := str.LoadFromTarGzip(path); err != nil {
-					log.Fatalf("failed to load extensions from tar.gz file: %s", err.Error())
+					log.Error("failed to load extensions from tar.gz file", "error", err)
+					os.Exit(1)
 				}
 			} else {
 				if err := str.LoadFromFile(path); err != nil {
-					log.Fatalf("failed to load extension from file: %s", err.Error())
+					log.Error("failed to load extension from file", "error", err)
+					os.Exit(1)
 				}
 			}
 		}
@@ -302,6 +328,8 @@ func createExtensionsStore(cfg *Config) (*extensions.Store, error) {
 }
 
 func createStore(cfg *Config, ln *tcp.Layer, extensions []string) (*store.Store, error) {
+	log := hclog.Default()
+
 	dbConf := store.NewDBConfig()
 	dbConf.OnDiskPath = cfg.OnDiskPath
 	dbConf.FKConstraints = cfg.FKConstraints
@@ -330,9 +358,9 @@ func createStore(cfg *Config, ln *tcp.Layer, extensions []string) (*store.Store,
 	str.AutoOptimizeInterval = cfg.AutoOptimizeInterval
 
 	if store.IsNewNode(cfg.DataPath) {
-		log.Printf("no preexisting node state detected in %s, node may be bootstrapping", cfg.DataPath)
+		log.Info(fmt.Sprintf("no preexisting node state detected in %s, node may be bootstrapping", cfg.DataPath))
 	} else {
-		log.Printf("preexisting node state detected in %s", cfg.DataPath)
+		log.Info(fmt.Sprintf("preexisting node state detected in %s", cfg.DataPath))
 	}
 
 	return str, nil
@@ -421,7 +449,7 @@ func startNodeMux(cfg *Config, ln net.Listener) (*tcp.Mux, error) {
 		} else {
 			b.WriteString(", mutual TLS disabled")
 		}
-		log.Println(b.String())
+		hclog.Default().Info(b.String())
 		mux, err = tcp.NewTLSMux(ln, adv, cfg.NodeX509Cert, cfg.NodeX509Key, cfg.NodeX509CACert,
 			cfg.NoNodeVerify, cfg.NodeVerifyClient)
 	} else {
@@ -480,6 +508,7 @@ func createClusterClient(cfg *Config, clstr *cluster.Service) (*cluster.Client, 
 
 func createCluster(ctx context.Context, cfg *Config, hasPeers bool, client *cluster.Client, str *store.Store,
 	httpServ *httpd.Service, credStr *auth.CredentialsStore) error {
+	log := hclog.Default()
 	joins := cfg.JoinAddresses()
 	if err := networkCheckJoinAddrs(joins); err != nil {
 		return err
@@ -490,7 +519,7 @@ func createCluster(ctx context.Context, cfg *Config, hasPeers bool, client *clus
 		}
 
 		// Brand new node, told to bootstrap itself. So do it.
-		log.Println("bootstrapping single new node")
+		log.Info("bootstrapping single new node")
 		if err := str.Bootstrap(store.NewServer(str.ID(), cfg.RaftAdv, true)); err != nil {
 			return fmt.Errorf("failed to bootstrap single new node: %s", err.Error())
 		}
@@ -524,7 +553,7 @@ func createCluster(ctx context.Context, cfg *Config, hasPeers bool, client *clus
 		if err != nil {
 			return fmt.Errorf("failed to join cluster: %s", err.Error())
 		}
-		log.Println("successfully joined cluster at", j)
+		log.Info(fmt.Sprintf("successfully joined cluster at %s", j))
 		return nil
 	}
 
@@ -544,7 +573,7 @@ func createCluster(ctx context.Context, cfg *Config, hasPeers bool, client *clus
 	// DNS-based discovery requested. It's OK to proceed with this even if this node
 	// is already part of a cluster. Re-joining and re-notifying other nodes will be
 	// ignored when the node is already part of the cluster.
-	log.Printf("discovery mode: %s", cfg.DiscoMode)
+	log.Info(fmt.Sprintf("discovery mode: %s", cfg.DiscoMode))
 	switch cfg.DiscoMode {
 	case DiscoModeDNS, DiscoModeDNSSRV:
 		rc := cfg.DiscoConfigReader()
@@ -589,34 +618,34 @@ func createCluster(ctx context.Context, cfg *Config, hasPeers bool, client *clus
 		httpServ.RegisterStatus("disco", discoService)
 
 		if hasPeers {
-			log.Printf("preexisting node configuration detected, not registering with discovery service")
+			log.Info("preexisting node configuration detected, not registering with discovery service")
 			return nil
 		}
-		log.Println("no preexisting nodes, registering with discovery service")
+		log.Info("no preexisting nodes, registering with discovery service")
 
 		leader, addr, err := discoService.Register(str.ID(), cfg.HTTPURL(), cfg.RaftAdv)
 		if err != nil {
 			return fmt.Errorf("failed to register with discovery service: %s", err.Error())
 		}
 		if leader {
-			log.Println("node registered as leader using discovery service")
+			log.Info("node registered as leader using discovery service")
 			if err := str.Bootstrap(store.NewServer(str.ID(), str.Addr(), true)); err != nil {
 				return fmt.Errorf("failed to bootstrap single new node: %s", err.Error())
 			}
 		} else {
 			for {
-				log.Printf("discovery service returned %s as join address", addr)
+				log.Info(fmt.Sprintf("discovery service returned %s as join address", addr))
 				if j, err := joiner.Do(ctx, []string{addr}, str.ID(), cfg.RaftAdv, clusterSuf); err != nil {
-					log.Printf("failed to join cluster at %s: %s", addr, err.Error())
+					log.Error(fmt.Sprintf("failed to join cluster at %s", addr), "error", err)
 
 					time.Sleep(time.Second)
 					_, addr, err = discoService.Register(str.ID(), cfg.HTTPURL(), cfg.RaftAdv)
 					if err != nil {
-						log.Printf("failed to get updated leader: %s", err.Error())
+						log.Error("failed to get updated leader", "error", err)
 					}
 					continue
 				} else {
-					log.Println("successfully joined cluster at", j)
+					log.Info(fmt.Sprintf("successfully joined cluster at %s", j))
 					break
 				}
 			}
@@ -630,7 +659,7 @@ func createCluster(ctx context.Context, cfg *Config, hasPeers bool, client *clus
 
 func networkCheckJoinAddrs(joinAddrs []string) error {
 	if len(joinAddrs) > 0 {
-		log.Println("checking that supplied join addresses don't serve HTTP(S)")
+		hclog.Default().Info("checking that supplied join addresses don't serve HTTP(S)")
 		if addr, ok := httpd.AnyServingHTTP(joinAddrs); ok {
 			return fmt.Errorf("join address %s appears to be serving HTTP when it should be Raft", addr)
 		}

@@ -2,10 +2,11 @@ package store
 
 import (
 	"expvar"
+	"fmt"
 	"io"
-	"log"
 	"time"
 
+	"github.com/hashicorp/go-hclog"
 	"github.com/hashicorp/raft"
 )
 
@@ -42,7 +43,7 @@ type FSMSnapshot struct {
 
 	raft.FSMSnapshot
 	persistSucceeded bool
-	logger           *log.Logger
+	logger           hclog.Logger
 }
 
 // Persist writes the snapshot to the given sink.
@@ -55,12 +56,12 @@ func (f *FSMSnapshot) Persist(sink raft.SnapshotSink) (retError error) {
 			stats.Add(numSnapshotPersists, 1)
 			stats.Get(snapshotPersistDuration).(*expvar.Int).Set(dur.Milliseconds())
 			if f.logger != nil {
-				f.logger.Printf("persisted snapshot %s in %s", sink.ID(), dur)
+				f.logger.Info(fmt.Sprintf("persisted snapshot %s in %s", sink.ID(), dur))
 			}
 		} else {
 			stats.Add(numSnapshotPersistsFailed, 1)
 			if f.logger != nil {
-				f.logger.Printf("failed to persist snapshot %s: %v", sink.ID(), retError)
+				f.logger.Error(fmt.Sprintf("failed to persist snapshot %s", sink.ID()), "error", retError)
 			}
 		}
 	}()

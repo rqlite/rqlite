@@ -5,7 +5,6 @@ import (
 	"expvar"
 	"fmt"
 	"io"
-	"log"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -13,6 +12,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/hashicorp/go-hclog"
 	"github.com/hashicorp/raft"
 	"github.com/rqlite/rqlite/v8/db"
 	"github.com/rqlite/rqlite/v8/internal/rsync"
@@ -131,7 +131,7 @@ func (l *LockingSnapshot) Close() error {
 type Store struct {
 	dir            string
 	fullNeededPath string
-	logger         *log.Logger
+	logger         hclog.Logger
 
 	mrsw *rsync.MultiRSW
 
@@ -148,10 +148,10 @@ func NewStore(dir string) (*Store, error) {
 	str := &Store{
 		dir:            dir,
 		fullNeededPath: filepath.Join(dir, fullNeededFile),
-		logger:         log.New(os.Stderr, "[snapshot-store] ", log.LstdFlags),
+		logger:         hclog.Default().Named("snapshot-store"),
 		mrsw:           rsync.NewMultiRSW(),
 	}
-	str.logger.Printf("store initialized using %s", dir)
+	str.logger.Info(fmt.Sprintf("store initialized using %s", dir))
 
 	emp, err := dirIsEmpty(dir)
 	if err != nil {
@@ -314,7 +314,7 @@ func (s *Store) Reap() (retN int, retErr error) {
 			return n, err
 		}
 		if s.LogReaping {
-			s.logger.Printf("reaped snapshot %s", snap.ID)
+			s.logger.Info(fmt.Sprintf("reaped snapshot %s", snap.ID))
 		}
 		n++
 	}
@@ -334,9 +334,9 @@ func (s *Store) check() (retError error) {
 		if err := syncDirMaybe(s.dir); err != nil && retError == nil {
 			retError = err
 		}
-		s.logger.Printf("check complete")
+		s.logger.Info("check complete")
 	}()
-	s.logger.Printf("checking consistency of snapshot store at %s", s.dir)
+	s.logger.Info(fmt.Sprintf("checking consistency of snapshot store at %s", s.dir))
 
 	if err := RemoveAllTmpSnapshotData(s.dir); err != nil {
 		return err

@@ -11,7 +11,6 @@ import (
 	"expvar"
 	"fmt"
 	"io"
-	"log"
 	"net"
 	"os"
 	"path/filepath"
@@ -343,7 +342,7 @@ type Store struct {
 	firstLogAppliedT time.Time // Time first log is applied
 	openT            time.Time // Timestamp when Store opens.
 
-	logger *log.Logger
+	logger hclog.Logger
 
 	notifyMu        sync.Mutex
 	BootstrapExpect int
@@ -381,18 +380,18 @@ type Store struct {
 
 // Config represents the configuration of the underlying Store.
 type Config struct {
-	DBConf *DBConfig   // The DBConfig object for this Store.
-	Dir    string      // The working directory for raft.
-	Tn     Transport   // The underlying Transport for raft.
-	ID     string      // Node ID.
-	Logger *log.Logger // The logger to use to log stuff.
+	DBConf *DBConfig    // The DBConfig object for this Store.
+	Dir    string       // The working directory for raft.
+	Tn     Transport    // The underlying Transport for raft.
+	ID     string       // Node ID.
+	Logger hclog.Logger // The logger to use to log stuff.
 }
 
 // New returns a new Store.
 func New(ly Layer, c *Config) *Store {
 	logger := c.Logger
 	if logger == nil {
-		logger = log.New(os.Stderr, "[store] ", log.LstdFlags)
+		logger = hclog.Default().Named("store")
 	}
 
 	dbPath := filepath.Join(c.Dir, sqliteFile)
@@ -483,10 +482,10 @@ func (s *Store) Open() (retErr error) {
 	s.numNoops.Store(0)
 	s.numSnapshots.Store(0)
 	s.openT = time.Now()
-	s.logger.Printf("opening store with node ID %s, listening on %s", s.raftID, s.ly.Addr().String())
+	s.logger.Info(fmt.Sprintf("opening store with node ID %s, listening on %s", s.raftID, s.ly.Addr().String()))
 
 	// Create all the required Raft directories.
-	s.logger.Printf("ensuring data directory exists at %s", s.raftDir)
+	s.logger.Info(fmt.Sprintf("ensuring data directory exists at %s", s.raftDir))
 	if err := os.MkdirAll(s.raftDir, 0755); err != nil {
 		return err
 	}
@@ -503,7 +502,7 @@ func (s *Store) Open() (retErr error) {
 	// Create the database directory, if it doesn't already exist.
 	parentDBDir := filepath.Dir(s.dbPath)
 	if !dirExists(parentDBDir) {
-		s.logger.Printf("creating directory for database at %s", parentDBDir)
+		s.logger.Info(fmt.Sprintf("creating directory for database at %s", parentDBDir))
 		err := os.MkdirAll(parentDBDir, 0755)
 		if err != nil {
 			return err
@@ -537,7 +536,7 @@ func (s *Store) Open() (retErr error) {
 	if err != nil {
 		return fmt.Errorf("list snapshots: %s", err)
 	}
-	s.logger.Printf("%d preexisting snapshots present", len(snaps))
+	s.logger.Info(fmt.Sprintf("%d preexisting snapshots present", len(snaps)))
 
 	// Create the Raft log store and verify it.
 	raftDBSize, err := fileSizeExists(s.raftDBPath)
@@ -552,7 +551,7 @@ func (s *Store) Open() (retErr error) {
 	if err != nil {
 		return fmt.Errorf("failed to retrieve log store indexes: %s", err)
 	}
-	s.logger.Printf("raft log is %d bytes at open, indexes are: first %d, last %d", raftDBSize, fi, li)
+	s.logger.Info(fmt.Sprintf("raft log is %d bytes at open, indexes are: first %d, last %d", raftDBSize, fi, li))
 	if fi != 0 && li != 0 {
 		err = s.boltStore.GetLog(fi, &raft.Log{})
 		if err != nil {
@@ -571,7 +570,7 @@ func (s *Store) Open() (retErr error) {
 
 	// Request to recover node?
 	if pathExists(s.peersPath) {
-		s.logger.Printf("attempting node recovery using %s", s.peersPath)
+		s.logger.Info(fmt.Sprintf("attempting node recovery using %s", s.peersPath))
 		config, err := raft.ReadConfigJSON(s.peersPath)
 		if err != nil {
 			return fmt.Errorf("failed to read peers file: %s", err.Error())
@@ -583,7 +582,7 @@ func (s *Store) Open() (retErr error) {
 		if err := os.Rename(s.peersPath, s.peersInfoPath); err != nil {
 			return fmt.Errorf("failed to move %s after recovery: %s", s.peersPath, err.Error())
 		}
-		s.logger.Printf("node recovered successfully using %s", s.peersPath)
+		s.logger.Info(fmt.Sprintf("node recovered successfully using %s", s.peersPath))
 		stats.Add(numRecoveries, 1)
 	}
 
@@ -711,7 +710,7 @@ func (s *Store) Committed(timeout time.Duration) (uint64, error) {
 func (s *Store) Close(wait bool) (retErr error) {
 	defer func() {
 		if retErr == nil {
-			s.logger.Printf("store closed with node ID %s, listening on %s", s.raftID, s.ly.Addr().String())
+			s.logger.Info(fmt.Sprintf("store closed with node ID %s, listening on %s", s.raftID, s.ly.Addr().String()))
 			s.open.Unset()
 		}
 	}()
@@ -1024,7 +1023,7 @@ func (s *Store) Stats() (map[string]any, error) {
 	dbStatus, err := s.db.Stats()
 	if err != nil {
 		stats.Add(numDBStatsErrors, 1)
-		s.logger.Printf("failed to get database stats: %s", err.Error())
+		s.logger.Error("failed to get database stats", "error", err.Error())
 	}
 
 	nodes, err := s.Nodes()
@@ -1407,8 +1406,8 @@ func (s *Store) Backup(br *proto.BackupRequest, dst io.Writer) (retErr error) {
 			stats.Add(numBackups, 1)
 			if s.logBackup() {
 				dbFileSz, _ := s.db.FileSize()
-				s.logger.Printf("%s database file backed up in %s",
-					friendlyBytes(uint64(dbFileSz)), time.Since(startT))
+				s.logger.Info(fmt.Sprintf("%s database file backed up in %s",
+					friendlyBytes(uint64(dbFileSz)), time.Since(startT)))
 			}
 		}
 	}()
@@ -1522,7 +1521,7 @@ func (s *Store) load(lr *proto.LoadRequest) error {
 
 	b, err := command.MarshalLoadRequest(lr)
 	if err != nil {
-		s.logger.Printf("load failed during load-request marshalling %s", err.Error())
+		s.logger.Error("load failed during load-request marshalling", "error", err.Error())
 		return err
 	}
 
@@ -1541,10 +1540,10 @@ func (s *Store) load(lr *proto.LoadRequest) error {
 		if af.Error() == raft.ErrNotLeader {
 			return ErrNotLeader
 		}
-		s.logger.Printf("load failed during Apply: %s", af.Error())
+		s.logger.Error("load failed during Apply", "error", af.Error())
 		return af.Error()
 	}
-	s.logger.Printf("node loaded in %s (%d bytes)", time.Since(startT), len(b))
+	s.logger.Info(fmt.Sprintf("node loaded in %s (%d bytes)", time.Since(startT), len(b)))
 	return nil
 }
 
@@ -1574,7 +1573,7 @@ func (s *Store) ReadFrom(r io.Reader) (int64, error) {
 
 	cw := progress.NewCountingWriter(f)
 	cm := progress.StartCountingMonitor(func(n int64) {
-		s.logger.Printf("boot process installed %d bytes", n)
+		s.logger.Info(fmt.Sprintf("boot process installed %d bytes", n))
 	}, cw)
 	n, err := func() (int64, error) {
 		defer cm.StopAndWait()
@@ -1605,7 +1604,8 @@ func (s *Store) ReadFrom(r io.Reader) (int64, error) {
 
 	// Snapshot, so we load the new database into the Raft system.
 	if err := s.snapshotStore.SetFullNeeded(); err != nil {
-		s.logger.Fatalf("failed to set full snapshot needed: %s", err)
+		s.logger.Error("failed to set full snapshot needed", "error", err)
+		os.Exit(1)
 	}
 	if err := s.Snapshot(1); err != nil {
 		return n, err
@@ -1722,8 +1722,8 @@ func (s *Store) Notify(nr *proto.NotifyRequest) error {
 	if len(s.notifyingNodes) < s.BootstrapExpect {
 		return nil
 	}
-	s.logger.Printf("reached expected bootstrap count of %d, starting cluster bootstrap",
-		s.BootstrapExpect)
+	s.logger.Info(fmt.Sprintf("reached expected bootstrap count of %d, starting cluster bootstrap",
+		s.BootstrapExpect))
 
 	raftServers := make([]raft.Server, 0, len(s.notifyingNodes))
 	for _, n := range s.notifyingNodes {
@@ -1736,9 +1736,9 @@ func (s *Store) Notify(nr *proto.NotifyRequest) error {
 		Servers: raftServers,
 	})
 	if bf.Error() != nil {
-		s.logger.Printf("cluster bootstrap failed: %s", bf.Error())
+		s.logger.Error("cluster bootstrap failed", "error", bf.Error())
 	} else {
-		s.logger.Printf("cluster bootstrap successful, servers: %s", raftServers)
+		s.logger.Info(fmt.Sprintf("cluster bootstrap successful, servers: %s", raftServers))
 	}
 	s.bootstrapped = true
 	return nil
@@ -1769,7 +1769,7 @@ func (s *Store) Join(jr *proto.JoinRequest) error {
 
 	configFuture := s.raft.GetConfiguration()
 	if err := configFuture.Error(); err != nil {
-		s.logger.Printf("failed to get raft configuration: %v", err)
+		s.logger.Error("failed to get raft configuration", "error", err)
 		return err
 	}
 
@@ -1782,16 +1782,16 @@ func (s *Store) Join(jr *proto.JoinRequest) error {
 			if srv.Address == raft.ServerAddress(addr) && srv.ID == raft.ServerID(id) {
 				stats.Add(numIgnoredJoins, 1)
 				s.numIgnoredJoins++
-				s.logger.Printf("node %s at %s already member of cluster, ignoring join request", id, addr)
+				s.logger.Info(fmt.Sprintf("node %s at %s already member of cluster, ignoring join request", id, addr))
 				return nil
 			}
 
 			if err := s.remove(id); err != nil {
-				s.logger.Printf("failed to remove node %s: %v", id, err)
+				s.logger.Error(fmt.Sprintf("failed to remove node %s", id), "error", err)
 				return err
 			}
 			stats.Add(numRemovedBeforeJoins, 1)
-			s.logger.Printf("removed node %s prior to rejoin with changed ID or address", id)
+			s.logger.Info(fmt.Sprintf("removed node %s prior to rejoin with changed ID or address", id))
 		}
 	}
 
@@ -1809,7 +1809,7 @@ func (s *Store) Join(jr *proto.JoinRequest) error {
 	}
 
 	stats.Add(numJoins, 1)
-	s.logger.Printf("node with ID %s, at %s, joined successfully as %s", id, addr, prettyVoter(voter))
+	s.logger.Info(fmt.Sprintf("node with ID %s, at %s, joined successfully as %s", id, addr, prettyVoter(voter)))
 	return nil
 }
 
@@ -1820,12 +1820,12 @@ func (s *Store) Remove(rn *proto.RemoveNodeRequest) error {
 	}
 	id := rn.Id
 
-	s.logger.Printf("received request to remove node %s", id)
+	s.logger.Info(fmt.Sprintf("received request to remove node %s", id))
 	if err := s.remove(id); err != nil {
 		return err
 	}
 
-	s.logger.Printf("node %s removed successfully", id)
+	s.logger.Info(fmt.Sprintf("node %s removed successfully", id))
 	return nil
 }
 
@@ -1960,10 +1960,8 @@ func (s *Store) raftConfig() *raft.Config {
 	if s.ElectionTimeout != 0 {
 		config.ElectionTimeout = s.ElectionTimeout
 	}
-	opts := hclog.DefaultOptions
-	opts.Name = ""
-	opts.Level = s.hcLogLevel()
-	config.Logger = hclog.FromStandardLogger(log.New(os.Stderr, "[raft] ", log.LstdFlags), opts)
+	config.Logger = hclog.Default().Named("raft")
+	config.Logger.SetLevel(s.hcLogLevel())
 	return config
 }
 
@@ -2007,7 +2005,7 @@ func (s *Store) fsmApply(l *raft.Log) (e any) {
 
 	if s.firstLogAppliedT.IsZero() {
 		s.firstLogAppliedT = time.Now()
-		s.logger.Printf("first log applied since node start, log at index %d", l.Index)
+		s.logger.Info(fmt.Sprintf("first log applied since node start, log at index %d", l.Index))
 	}
 
 	cmd, mutated, r := func() (*proto.Command, bool, any) {
@@ -2029,7 +2027,7 @@ func (s *Store) fsmApply(l *raft.Log) (e any) {
 	} else if cmd.Type == proto.Command_COMMAND_TYPE_LOAD {
 		// Swapping in a new database invalidates any existing snapshot.
 		if err := s.snapshotStore.SetFullNeeded(); err != nil {
-			s.logger.Fatalf("failed to set full snapshot needed: %s", err)
+			s.logger.Error("failed to set full snapshot needed", "error", err)
 		}
 	}
 	return r
@@ -2057,7 +2055,7 @@ func (s *Store) fsmSnapshot() (fSnap raft.FSMSnapshot, retErr error) {
 		}
 		lt, err := s.db.DBLastModified()
 		if err != nil {
-			s.logger.Printf("failed to get last modified time: %s", err)
+			s.logger.Error("failed to get last modified time", "error", err)
 			s.snapshotStore.SetFullNeeded()
 		} else {
 			s.dbModifiedTime.Store(lt)
@@ -2074,7 +2072,7 @@ func (s *Store) fsmSnapshot() (fSnap raft.FSMSnapshot, retErr error) {
 			stats.Add(numAutoVacuumsFailed, 1)
 			return nil, err
 		}
-		s.logger.Printf("database vacuumed in %s", time.Since(vacStart))
+		s.logger.Info(fmt.Sprintf("database vacuumed in %s", time.Since(vacStart)))
 		stats.Get(autoVacuumDuration).(*expvar.Int).Set(time.Since(vacStart).Milliseconds())
 		stats.Add(numAutoVacuums, 1)
 		s.numAutoVacuums++
@@ -2092,7 +2090,7 @@ func (s *Store) fsmSnapshot() (fSnap raft.FSMSnapshot, retErr error) {
 			stats.Add(numAutoOptimizesFailed, 1)
 			return nil, err
 		}
-		s.logger.Printf("database optimized in %s", time.Since(optStart))
+		s.logger.Info(fmt.Sprintf("database optimized in %s", time.Since(optStart)))
 		stats.Get(autoOptimizeDuration).(*expvar.Int).Set(time.Since(optStart).Milliseconds())
 		stats.Add(numAutoOptimizes, 1)
 		s.numAutoOptimizes++
@@ -2198,15 +2196,16 @@ func (s *Store) fsmSnapshot() (fSnap raft.FSMSnapshot, retErr error) {
 	fs := FSMSnapshot{
 		FSMSnapshot: fsmSnapshot,
 		OnFailure: func() {
-			s.logger.Printf("Persisting snapshot did not succeed, full snapshot needed")
+			s.logger.Warn("Persisting snapshot did not succeed, full snapshot needed")
 			if err := s.snapshotStore.SetFullNeeded(); err != nil {
 				// If this happens, only recourse is to shut down the node.
-				s.logger.Fatalf("failed to set full snapshot needed: %s", err)
+				s.logger.Error("failed to set full snapshot needed", "error", err)
+				os.Exit(1)
 			}
 		},
 	}
 	if fullNeeded || s.logIncremental() {
-		s.logger.Printf("%s snapshot created in %s on node ID %s", fPLog, dur, s.raftID)
+		s.logger.Info(fmt.Sprintf("%s snapshot created in %s on node ID %s", fPLog, dur, s.raftID))
 		fs.logger = s.logger
 	}
 	return &fs, nil
@@ -2221,7 +2220,7 @@ func (s *Store) fsmRestore(rc io.ReadCloser) (retErr error) {
 			stats.Add(numRestoresFailed, 1)
 		}
 	}()
-	s.logger.Printf("initiating node restore on node ID %s", s.raftID)
+	s.logger.Info(fmt.Sprintf("initiating node restore on node ID %s", s.raftID))
 	startT := time.Now()
 
 	// Create a scatch file to write the restore data to.
@@ -2244,7 +2243,7 @@ func (s *Store) fsmRestore(rc io.ReadCloser) (retErr error) {
 	if err := s.db.Swap(tmpFile.Name(), s.dbConf.FKConstraints, true); err != nil {
 		return fmt.Errorf("error swapping database file: %v", err)
 	}
-	s.logger.Printf("successfully opened database at %s due to restore", s.db.Path())
+	s.logger.Info(fmt.Sprintf("successfully opened database at %s due to restore", s.db.Path()))
 
 	// Take conservative approach and assume that everything has changed, so update
 	// the indexes. It is possible that dbAppliedIdx is now ahead of some other nodes'
@@ -2267,7 +2266,7 @@ func (s *Store) fsmRestore(rc io.ReadCloser) (retErr error) {
 	s.dbModifiedTime.Store(lt)
 
 	stats.Add(numRestores, 1)
-	s.logger.Printf("node restored in %s", time.Since(startT))
+	s.logger.Info(fmt.Sprintf("node restored in %s", time.Since(startT)))
 	rc.Close()
 	return nil
 }
@@ -2306,7 +2305,7 @@ func (s *Store) observe() (closeCh, doneCh chan struct{}) {
 
 					nodes, err := s.Nodes()
 					if err != nil {
-						s.logger.Printf("failed to get nodes configuration during reap check: %s", err.Error())
+						s.logger.Error("failed to get nodes configuration during reap check", "error", err.Error())
 					}
 					servers := Servers(nodes)
 					id := string(signal.PeerID)
@@ -2314,7 +2313,7 @@ func (s *Store) observe() (closeCh, doneCh chan struct{}) {
 
 					isReadOnly, found := servers.IsReadOnly(id)
 					if !found {
-						s.logger.Printf("node %s (failing heartbeat) is not present in configuration", id)
+						s.logger.Warn(fmt.Sprintf("node %s (failing heartbeat) is not present in configuration", id))
 						break
 					}
 
@@ -2326,10 +2325,10 @@ func (s *Store) observe() (closeCh, doneCh chan struct{}) {
 						}
 						if err := s.remove(id); err != nil {
 							stats.Add(nodesReapedFailed, 1)
-							s.logger.Printf("failed to reap %s %s: %s", pn, id, err.Error())
+							s.logger.Error(fmt.Sprintf("failed to reap %s %s", pn, id), "error", err)
 						} else {
 							stats.Add(nodesReapedOK, 1)
-							s.logger.Printf("successfully reaped %s %s", pn, id)
+							s.logger.Info(fmt.Sprintf("successfully reaped %s %s", pn, id))
 						}
 					}
 				case raft.LeaderObservation:
@@ -2347,12 +2346,12 @@ func (s *Store) observe() (closeCh, doneCh chan struct{}) {
 					s.leaderObserversMu.RUnlock()
 					s.selfLeaderChange(isLeader)
 					if isLeader {
-						s.logger.Printf("this node (ID=%s) is now Leader", s.raftID)
+						s.logger.Info(fmt.Sprintf("this node (ID=%s) is now Leader", s.raftID))
 					} else {
 						if signal.LeaderID == "" {
-							s.logger.Printf("Leader is now unknown")
+							s.logger.Warn("Leader is now unknown")
 						} else {
-							s.logger.Printf("node %s is now Leader", signal.LeaderID)
+							s.logger.Info(fmt.Sprintf("node %s is now Leader", signal.LeaderID))
 						}
 					}
 				}
@@ -2374,7 +2373,7 @@ func (s *Store) Snapshot(n uint64) (retError error) {
 	defer func() {
 		if retError != nil && retError != ErrNothingNewToSnapshot {
 			stats.Add(numUserSnapshotsFailed, 1)
-			s.logger.Printf("failed to generate user-requested snapshot: %s", retError.Error())
+			s.logger.Error("failed to generate user-requested snapshot", "error", retError)
 		}
 	}()
 
@@ -2383,7 +2382,7 @@ func (s *Store) Snapshot(n uint64) (retError error) {
 		defer func() {
 			cfg.TrailingLogs = s.numTrailingLogs
 			if err := s.raft.ReloadConfig(cfg); err != nil {
-				s.logger.Printf("failed to reload Raft config: %s", err.Error())
+				s.logger.Error("failed to reload Raft config", "error", err)
 			}
 		}()
 		cfg.TrailingLogs = n
@@ -2422,13 +2421,13 @@ func (s *Store) runWALSnapshotting() (closeCh, doneCh chan struct{}) {
 			case <-ticker.C:
 				sz, err := fileSizeExists(s.walPath)
 				if err != nil {
-					s.logger.Printf("failed to check WAL size: %s", err.Error())
+					s.logger.Error("failed to check WAL size", "error", err)
 					continue
 				}
 				if uint64(sz) >= s.SnapshotThresholdWALSize {
 					if err := s.Snapshot(0); err != nil {
 						stats.Add(numWALSnapshotsFailed, 1)
-						s.logger.Printf("failed to snapshot due to WAL threshold: %s", err.Error())
+						s.logger.Error("failed to snapshot due to WAL threshold", "error", err)
 					}
 					stats.Add(numWALSnapshots, 1)
 				}
@@ -2448,25 +2447,25 @@ func (s *Store) selfLeaderChange(leader bool) {
 			// Whatever happens, this is a one-shot attempt to perform a restore
 			err := os.Remove(s.restorePath)
 			if err != nil {
-				s.logger.Printf("failed to remove restore path after restore %s: %s",
-					s.restorePath, err.Error())
+				s.logger.Error(fmt.Sprintf("failed to remove restore path after restore %s",
+					s.restorePath), "error", err)
 			}
 			s.restorePath = ""
 			close(s.restoreDoneCh)
 		}()
 
 		if !leader {
-			s.logger.Printf("different node became leader, not performing auto-restore")
+			s.logger.Info("different node became leader, not performing auto-restore")
 			stats.Add(numAutoRestoresSkipped, 1)
 		} else {
-			s.logger.Printf("this node is now leader, auto-restoring from %s", s.restorePath)
+			s.logger.Info(fmt.Sprintf("this node is now leader, auto-restoring from %s", s.restorePath))
 			if err := s.installRestore(); err != nil {
-				s.logger.Printf("failed to auto-restore from %s: %s", s.restorePath, err.Error())
+				s.logger.Error(fmt.Sprintf("failed to auto-restore from %s", s.restorePath), "error", err)
 				stats.Add(numAutoRestoresFailed, 1)
 				return
 			}
 			stats.Add(numAutoRestores, 1)
-			s.logger.Printf("node auto-restored successfully from %s", s.restorePath)
+			s.logger.Info(fmt.Sprintf("node auto-restored successfully from %s", s.restorePath))
 		}
 	}
 }

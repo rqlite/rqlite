@@ -1547,7 +1547,7 @@ COMMIT;
 		t.Fatalf("Backup Failed: unable to create temp file, %s", err.Error())
 	}
 	defer os.Remove(f.Name())
-	s.logger.Printf("backup file is %s", f.Name())
+	s.logger.Info(fmt.Sprintf("backup file is %s", f.Name()))
 
 	if err := s.Backup(backupRequestSQL(true), f); err != nil {
 		t.Fatalf("Backup failed %s", err.Error())

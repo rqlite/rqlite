@@ -2,10 +2,10 @@ package store
 
 import (
 	"fmt"
-	"log"
 	"os"
 	"path/filepath"
 
+	"github.com/hashicorp/go-hclog"
 	"github.com/rqlite/rqlite/v8/command"
 	"github.com/rqlite/rqlite/v8/command/chunking"
 	"github.com/rqlite/rqlite/v8/command/proto"
@@ -30,12 +30,12 @@ func (e ExecuteQueryResponses) Mutation() bool {
 
 // CommandProcessor processes commands by applying them to the underlying database.
 type CommandProcessor struct {
-	logger  *log.Logger
+	logger  hclog.Logger
 	decMgmr *chunking.DechunkerManager
 }
 
 // NewCommandProcessor returns a new instance of CommandProcessor.
-func NewCommandProcessor(logger *log.Logger, dm *chunking.DechunkerManager) *CommandProcessor {
+func NewCommandProcessor(logger hclog.Logger, dm *chunking.DechunkerManager) *CommandProcessor {
 	return &CommandProcessor{
 		logger:  logger,
 		decMgmr: dm}
@@ -129,7 +129,7 @@ func (c *CommandProcessor) Process(data []byte, db *sql.SwappableDB) (*proto.Com
 				// of a database load. If that happened then the database has already been loaded, and
 				// this load should be ignored.
 				if !sql.IsValidSQLiteFile(path) {
-					c.logger.Printf("invalid chunked database file - ignoring")
+					c.logger.Warn("invalid chunked database file - ignoring")
 					return cmd, false, &fsmGenericResponse{error: fmt.Errorf("invalid chunked database file - ignoring")}
 				}
 				if err := db.Swap(path, db.FKEnabled(), db.WALEnabled()); err != nil {

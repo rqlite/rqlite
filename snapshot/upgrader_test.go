@@ -4,14 +4,15 @@ import (
 	"fmt"
 	"io"
 	"io/fs"
-	"log"
 	"os"
 	"path/filepath"
 	"testing"
+
+	"github.com/hashicorp/go-hclog"
 )
 
 func Test_Upgrade_NothingToDo(t *testing.T) {
-	logger := log.New(os.Stderr, "[snapshot-store-upgrader] ", 0)
+	logger := hclog.Default().Named("snapshot-store-upgrader")
 	if err := Upgrade7To8("/does/not/exist", "/does/not/exist/either", logger); err != nil {
 		t.Fatalf("failed to upgrade nonexistent directories: %s", err)
 	}
@@ -24,7 +25,7 @@ func Test_Upgrade_NothingToDo(t *testing.T) {
 }
 
 func Test_Upgrade_OK(t *testing.T) {
-	logger := log.New(os.Stderr, "[snapshot-store-upgrader] ", 0)
+	logger := hclog.Default().Named("snapshot-store-upgrader")
 	v7Snapshot := "testdata/upgrade/v7.20.3-snapshots"
 	v7SnapshotID := "2-18-1686659761026"
 	oldTemp := filepath.Join(t.TempDir(), "snapshots")
@@ -67,7 +68,7 @@ func Test_Upgrade_OK(t *testing.T) {
 }
 
 func Test_Upgrade_EmptyOK(t *testing.T) {
-	logger := log.New(os.Stderr, "[snapshot-store-upgrader] ", 0)
+	logger := hclog.Default().Named("snapshot-store-upgrader")
 	v7Snapshot := "testdata/upgrade/v7.20.3-empty-snapshots"
 	v7SnapshotID := "2-18-1686659761026"
 	oldTemp := filepath.Join(t.TempDir(), "snapshots")

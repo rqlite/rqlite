@@ -5,11 +5,11 @@ import (
 	"expvar"
 	"fmt"
 	"io"
-	"log"
 	"os"
 	"strconv"
 	"time"
 
+	"github.com/hashicorp/go-hclog"
 	"github.com/rqlite/rqlite/v8/db/humanize"
 	"github.com/rqlite/rqlite/v8/internal/progress"
 )
@@ -77,7 +77,7 @@ type Uploader struct {
 	dataProvider  DataProvider
 	interval      time.Duration
 
-	logger             *log.Logger
+	logger             hclog.Logger
 	lastUploadTime     time.Time
 	lastUploadDuration time.Duration
 
@@ -90,7 +90,7 @@ func NewUploader(storageClient StorageClient, dataProvider DataProvider, interva
 		storageClient: storageClient,
 		dataProvider:  dataProvider,
 		interval:      interval,
-		logger:        log.New(os.Stderr, "[uploader] ", log.LstdFlags),
+		logger:        hclog.Default().Named("uploader"),
 	}
 }
 
@@ -101,7 +101,7 @@ func (u *Uploader) Start(ctx context.Context, isUploadEnabled func() bool) chan 
 		isUploadEnabled = func() bool { return true }
 	}
 
-	u.logger.Printf("starting upload to %s every %s", u.storageClient, u.interval)
+	u.logger.Info(fmt.Sprintf("starting upload to %s every %s", u.storageClient, u.interval))
 	ticker := time.NewTicker(u.interval)
 	go func() {
 		defer ticker.Stop()
@@ -109,14 +109,14 @@ func (u *Uploader) Start(ctx context.Context, isUploadEnabled func() bool) chan 
 		for {
 			select {
 			case <-ctx.Done():
-				u.logger.Println("upload service shutting down")
+				u.logger.Info("upload service shutting down")
 				return
 			case <-ticker.C:
 				if !isUploadEnabled() {
 					continue
 				}
 				if err := u.upload(ctx); err != nil {
-					u.logger.Printf("failed to upload to %s: %v", u.storageClient, err)
+					u.logger.Error(fmt.Sprintf("failed to upload to %s", u.storageClient), "error", err)
 				}
 			}
 		}
@@ -167,7 +167,7 @@ func (u *Uploader) upload(ctx context.Context) error {
 		cloudID, err := u.storageClient.CurrentID(ctx)
 		if err != nil {
 			stats.Add(numSumGetFail, 1)
-			u.logger.Printf("failed to get current sum from %s: %v", u.storageClient, err)
+			u.logger.Error(fmt.Sprintf("failed to get current sum from %s", u.storageClient), "error", err)
 		} else if cloudID == strconv.FormatUint(li, 10) {
 			stats.Add(numUploadsSkippedID, 1)
 			return nil
@@ -192,9 +192,9 @@ func (u *Uploader) upload(ctx context.Context) error {
 	stats.Get(lastUploadBytes).(*expvar.Int).Set(cr.Count())
 	u.lastUploadTime = time.Now()
 	u.lastUploadDuration = time.Since(startTime)
-	u.logger.Printf("completed auto upload of %s to %s in %s",
+	u.logger.Info(fmt.Sprintf("completed auto upload of %s to %s in %s",
 		humanize.Bytes(uint64(stats.Get(lastUploadBytes).(*expvar.Int).Value())),
-		u.storageClient, u.lastUploadDuration)
+		u.storageClient, u.lastUploadDuration))
 	return nil
 }
 

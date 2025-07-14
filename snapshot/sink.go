@@ -129,7 +129,7 @@ func (s *Sink) processSnapshotData() (retErr error) {
 		if retErr != nil {
 			err := RemoveAllTmpSnapshotData(s.str.Dir())
 			if err != nil {
-				s.str.logger.Printf("failed to remove temporary snapshot data: %s", err.Error())
+				s.str.logger.Error("failed to remove temporary snapshot data", "error", err)
 			}
 		}
 	}()

@@ -2,9 +2,11 @@ package main
 
 import (
 	"context"
-	"log"
+	"fmt"
 	"os"
 	"os/signal"
+
+	"github.com/hashicorp/go-hclog"
 )
 
 const (
@@ -19,7 +21,7 @@ func HandleSignals(sigs ...os.Signal) <-chan os.Signal {
 		signal.Notify(sigCh, sigs...)
 		for {
 			sig := <-sigCh
-			log.Printf(`received signal "%s"`, sig.String())
+			hclog.Default().Info(fmt.Sprintf(`received signal "%s"`, sig))
 			ch <- sig
 		}
 	}()

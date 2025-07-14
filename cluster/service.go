@@ -7,13 +7,12 @@ import (
 	"expvar"
 	"fmt"
 	"io"
-	"log"
 	"net"
-	"os"
 	"strconv"
 	"sync"
 	"time"
 
+	"github.com/hashicorp/go-hclog"
 	"github.com/rqlite/rqlite/v8/auth"
 	"github.com/rqlite/rqlite/v8/cluster/proto"
 	command "github.com/rqlite/rqlite/v8/command/proto"
@@ -150,7 +149,7 @@ type Service struct {
 	apiAddr string // host:port this node serves the HTTP API.
 	version string // Version of software this node is running.
 
-	logger *log.Logger
+	logger hclog.Logger
 }
 
 // New returns a new instance of the cluster service
@@ -160,7 +159,7 @@ func New(ln net.Listener, db Database, m Manager, credentialStore CredentialStor
 		addr:            ln.Addr(),
 		db:              db,
 		mgr:             m,
-		logger:          log.New(os.Stderr, "[cluster] ", log.LstdFlags),
+		logger:          hclog.Default().Named("cluster"),
 		credentialStore: credentialStore,
 	}
 }
@@ -168,7 +167,7 @@ func New(ln net.Listener, db Database, m Manager, credentialStore CredentialStor
 // Open opens the Service.
 func (s *Service) Open() error {
 	go s.serve()
-	s.logger.Println("service listening on", s.addr)
+	s.logger.Info(fmt.Sprintf("service listening on %s", s.addr))
 	return nil
 }
 
@@ -443,7 +442,7 @@ func (s *Service) handleConn(conn net.Conn) {
 			// space on the wire.
 			br.Compress = true
 			if err := s.db.Backup(br, conn); err != nil {
-				s.logger.Printf("failed to stream backup: %s", err.Error())
+				s.logger.Error("failed to stream backup", "error", err.Error())
 				return
 			}
 

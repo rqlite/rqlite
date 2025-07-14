@@ -4,11 +4,10 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"log"
-	"os"
 	"sync"
 	"time"
 
+	"github.com/hashicorp/go-hclog"
 	"github.com/rqlite/rqlite/v8/cluster/proto"
 	command "github.com/rqlite/rqlite/v8/command/proto"
 	"github.com/rqlite/rqlite/v8/internal/random"
@@ -118,7 +117,7 @@ type Bootstrapper struct {
 	client *Client
 	creds  *proto.Credentials
 
-	logger   *log.Logger
+	logger   hclog.Logger
 	Interval time.Duration
 
 	bootStatusMu sync.RWMutex
@@ -133,7 +132,7 @@ func NewBootstrapper(p AddressProvider, client *Client) *Bootstrapper {
 	bs := &Bootstrapper{
 		provider: p,
 		client:   client,
-		logger:   log.New(os.Stderr, "[cluster-bootstrap] ", log.LstdFlags),
+		logger:   hclog.Default().Named("cluster-bootstrap"),
 		Interval: bootCheckInterval,
 	}
 	return bs
@@ -174,7 +173,7 @@ func (b *Bootstrapper) Boot(ctx context.Context, id, raftAddr string, suf Suffra
 		case <-ctx.Done():
 			b.nBootCanceled++
 			if done() {
-				b.logger.Printf("boot operation marked done")
+				b.logger.Info("boot operation marked done")
 				b.setBootStatus(BootDone)
 				return nil
 			}
@@ -187,7 +186,7 @@ func (b *Bootstrapper) Boot(ctx context.Context, id, raftAddr string, suf Suffra
 
 		case <-tickerT.C:
 			if done() {
-				b.logger.Printf("boot operation marked done")
+				b.logger.Info("boot operation marked done")
 				b.setBootStatus(BootDone)
 				return nil
 			}
@@ -195,7 +194,7 @@ func (b *Bootstrapper) Boot(ctx context.Context, id, raftAddr string, suf Suffra
 
 			targets, err := b.provider.Lookup()
 			if err != nil {
-				b.logger.Printf("provider lookup failed %s", err.Error())
+				b.logger.Error("provider lookup failed", "error", err)
 			}
 			if len(targets) == 0 {
 				continue
@@ -204,7 +203,7 @@ func (b *Bootstrapper) Boot(ctx context.Context, id, raftAddr string, suf Suffra
 			// Try an explicit join first. Joining an existing cluster is always given priority
 			// over trying to form a new cluster.
 			if j, err := joiner.Do(ctx, targets, id, raftAddr, suf); err == nil {
-				b.logger.Printf("succeeded directly joining cluster via node at %s as %s", j, suf)
+				b.logger.Info(fmt.Sprintf("succeeded directly joining cluster via node at %s as %s", j, suf))
 				b.setBootStatus(BootJoin)
 				return nil
 			}
@@ -218,10 +217,9 @@ func (b *Bootstrapper) Boot(ctx context.Context, id, raftAddr string, suf Suffra
 				// If this is a new cluster, some node will then reach the bootstrap-expect value
 				// first, form the cluster, beating all other nodes to it.
 				if err := b.notify(targets, id, raftAddr); err != nil {
-					b.logger.Printf("failed to notify all targets: %s (%s, will retry)", targets,
-						err.Error())
+					b.logger.Warn(fmt.Sprintf("failed to notify all targets: %s", targets), "error", err)
 				} else {
-					b.logger.Printf("succeeded notifying all targets: %s", targets)
+					b.logger.Info(fmt.Sprintf("succeeded notifying all targets: %s", targets))
 				}
 			}
 		}

@@ -13,6 +13,7 @@ import (
 	"testing/quick"
 	"time"
 
+	"github.com/hashicorp/go-hclog"
 	"github.com/rqlite/rqlite/v8/testdata/x509"
 )
 
@@ -41,7 +42,7 @@ func TestMux(t *testing.T) {
 		defer mux.Close()
 		mux.Timeout = 200 * time.Millisecond
 		if !testing.Verbose() {
-			mux.Logger = log.New(io.Discard, "", 0)
+			mux.Logger = hclog.NewNullLogger()
 		}
 		for i := uint8(0); i < n; i++ {
 			ln := mux.Listen(i)
@@ -141,7 +142,7 @@ func TestMux_Advertise(t *testing.T) {
 	defer mux.Close()
 	mux.Timeout = 200 * time.Millisecond
 	if !testing.Verbose() {
-		mux.Logger = log.New(io.Discard, "", 0)
+		mux.Logger = hclog.NewNullLogger()
 	}
 
 	ln := mux.Listen(1)

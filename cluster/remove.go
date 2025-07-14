@@ -1,10 +1,10 @@
 package cluster
 
 import (
-	"log"
-	"os"
+	"fmt"
 	"time"
 
+	"github.com/hashicorp/go-hclog"
 	"github.com/rqlite/rqlite/v8/cluster/proto"
 	command "github.com/rqlite/rqlite/v8/command/proto"
 )
@@ -27,7 +27,7 @@ type Remover struct {
 	client  *Client
 	creds   *proto.Credentials
 
-	log *log.Logger
+	log hclog.Logger
 }
 
 // / NewRemover returns an instantiated Remover.
@@ -36,7 +36,7 @@ func NewRemover(client *Client, timeout time.Duration, control Control) *Remover
 		client:  client,
 		timeout: timeout,
 		control: control,
-		log:     log.New(os.Stderr, "[cluster-remove] ", log.LstdFlags),
+		log:     hclog.Default().Named("cluster-remove"),
 	}
 }
 
@@ -59,9 +59,9 @@ func (r *Remover) Do(id string, confirm bool) error {
 				return innerErr
 			}
 
-			r.log.Printf("removing node %s from cluster via leader at %s", id, laddr)
+			r.log.Info(fmt.Sprintf("removing node %s from cluster via leader at %s", id, laddr))
 			if innerErr = r.client.RemoveNode(rn, laddr, r.creds, r.timeout); innerErr != nil {
-				r.log.Printf("failed to remove node %s from cluster via leader at %s: %s", id, laddr, innerErr)
+				r.log.Error(fmt.Sprintf("failed to remove node %s from cluster via leader at %s", id, laddr), "error", innerErr)
 				return innerErr
 			}
 			return nil
