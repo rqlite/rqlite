@@ -1,9 +1,0 @@
-#!/bin/bash
-set -e
-
-# Stop the rqlite service if it's running
-if [ -d /run/systemd/system ]; then
-    if systemctl is-active --quiet rqlite; then
-        systemctl stop rqlite >/dev/null 2>&1 || true
-    fi
-fi
