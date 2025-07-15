@@ -1,0 +1,16 @@
+Package: rqlite
+Version: VERSION_PLACEHOLDER
+Architecture: amd64
+Maintainer: Philip O'Toole <philip.otoole@rqlite.io>
+Depends: libc6 (>= 2.31)
+Homepage: https://rqlite.io
+Description: rqlite - lightweight, distributed relational database built on SQLite
+ rqlite is an easy-to-use, lightweight, distributed relational database,
+ which uses SQLite as its storage engine. rqlite gives you the functionality
+ of a rock solid, fault-tolerant, replicated relational database, but with
+ very easy installation, deployment, and operation.
+ .
+ With rqlite you've got a lightweight and reliable distributed relational
+ data store. Think etcd or Consul, but with relational data modelling,
+ the most widely used query language of all time, and relaxed consistency
+ requirements.

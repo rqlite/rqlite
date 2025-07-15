@@ -1,0 +1,15 @@
+# Environment file for rqlite service
+# This file is sourced by the systemd service unit to set environment variables
+# and additional command line arguments for rqlited.
+
+# Example: Bind to all interfaces instead of localhost only
+# RQLITE_EXTRA_ARGS="--http-addr 0.0.0.0:4001 --raft-addr 0.0.0.0:4002"
+
+# Example: Join an existing cluster
+# RQLITE_EXTRA_ARGS="--join http://node1:4001,http://node2:4001"
+
+# Example: Enable authentication
+# RQLITE_EXTRA_ARGS="--auth /path/to/auth.json"
+
+# By default, no extra arguments are set
+RQLITE_EXTRA_ARGS=""
