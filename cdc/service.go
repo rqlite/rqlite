@@ -5,7 +5,6 @@ import (
 	"crypto/tls"
 	"expvar"
 	"fmt"
-	"log"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -16,6 +15,7 @@ import (
 	"github.com/rqlite/rqlite/v8/command/proto"
 	"github.com/rqlite/rqlite/v8/internal/rsync"
 	"github.com/rqlite/rqlite/v8/queue"
+	"github.com/rqlite/rqlite/v8/rqlog"
 )
 
 const (
@@ -146,7 +146,7 @@ type Service struct {
 	wg   sync.WaitGroup
 	done chan struct{}
 
-	logger *log.Logger
+	logger rqlog.Logger
 }
 
 // NewService creates a new CDC service.
@@ -179,7 +179,7 @@ func NewService(dir string, clstr Cluster, str Store, in <-chan *proto.CDCEvents
 		leaderObCh:            make(chan bool, leaderChanLen),
 		hwmObCh:               make(chan uint64, leaderChanLen),
 		done:                  make(chan struct{}),
-		logger:                log.New(os.Stdout, "[cdc-service] ", log.LstdFlags),
+		logger:                rqlog.Default().WithName("[cdc-service] ").WithOutput(os.Stdout),
 	}
 
 	fifo, err := NewQueue(filepath.Join(dir, cdcDB))

@@ -5,13 +5,13 @@ import (
 	"expvar"
 	"fmt"
 	"io"
-	"log"
 	"os"
 	"strconv"
 	"time"
 
 	"github.com/rqlite/rqlite/v8/db/humanize"
 	"github.com/rqlite/rqlite/v8/internal/progress"
+	"github.com/rqlite/rqlite/v8/rqlog"
 )
 
 // StorageClient is an interface for uploading data to a storage service.
@@ -77,7 +77,7 @@ type Uploader struct {
 	dataProvider  DataProvider
 	interval      time.Duration
 
-	logger             *log.Logger
+	logger             rqlog.Logger
 	lastUploadTime     time.Time
 	lastUploadDuration time.Duration
 
@@ -90,7 +90,7 @@ func NewUploader(storageClient StorageClient, dataProvider DataProvider, interva
 		storageClient: storageClient,
 		dataProvider:  dataProvider,
 		interval:      interval,
-		logger:        log.New(os.Stderr, "[uploader] ", log.LstdFlags),
+		logger:        rqlog.Default().WithName("[uploader] ").WithOutput(os.Stderr),
 	}
 }
 

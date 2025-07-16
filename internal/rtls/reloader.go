@@ -2,10 +2,11 @@ package rtls
 
 import (
 	"crypto/tls"
-	"log"
 	"os"
 	"sync"
 	"time"
+
+	"github.com/rqlite/rqlite/v8/rqlog"
 )
 
 // CertReloader is a simple TLS certificate reloader. It loads the certificate
@@ -14,7 +15,7 @@ import (
 type CertReloader struct {
 	certPath, keyPath string
 	modTime           time.Time
-	logger            *log.Logger
+	logger            rqlog.Logger
 
 	mu   sync.RWMutex
 	cert *tls.Certificate
@@ -25,7 +26,7 @@ func NewCertReloader(cert, key string) (*CertReloader, error) {
 	cr := &CertReloader{
 		certPath: cert,
 		keyPath:  key,
-		logger:   log.New(os.Stderr, "[cert-reloader] ", log.LstdFlags),
+		logger:   rqlog.Default().WithName("[cert-reloader] ").WithOutput(os.Stderr),
 	}
 	pair, err := loadKeyPair(cr.certPath, cr.keyPath)
 	if err != nil {

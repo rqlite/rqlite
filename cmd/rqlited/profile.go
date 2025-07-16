@@ -1,11 +1,12 @@
 package main
 
 import (
-	"log"
 	"os"
 	"runtime"
 	"runtime/pprof"
 	"runtime/trace"
+
+	"github.com/rqlite/rqlite/v8/rqlog"
 )
 
 // prof stores the file locations of active profiles.
@@ -17,6 +18,7 @@ var prof struct {
 
 // startProfile starts any requested profiling.
 func startProfile(cpuprofile, memprofile, traceprofile string) {
+	log := rqlog.Default()
 	if cpuprofile != "" {
 		f, err := os.Create(cpuprofile)
 		if err != nil {
@@ -54,6 +56,7 @@ func startProfile(cpuprofile, memprofile, traceprofile string) {
 
 // stopProfile stops any active profiling.
 func stopProfile() {
+	log := rqlog.Default()
 	if prof.cpu != nil {
 		pprof.StopCPUProfile()
 		if err := prof.cpu.Close(); err != nil {

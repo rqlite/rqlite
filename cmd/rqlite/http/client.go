@@ -3,11 +3,12 @@ package http
 import (
 	"fmt"
 	"io"
-	"log"
 	"net/http"
 	"net/url"
 	"os"
 	"strings"
+
+	"github.com/rqlite/rqlite/v8/rqlog"
 )
 
 // ErrNoAvailableHost indicates that the client could not find an available host to send the request to.
@@ -47,7 +48,7 @@ type Client struct {
 
 	// creds stores the http basic authentication username and password
 	creds  string
-	logger *log.Logger
+	logger rqlog.Logger
 
 	// currentHost keeps track of the last available host
 	currentHost int
@@ -63,7 +64,7 @@ func NewClient(client *http.Client, hosts []string, configFuncs ...ConfigFunc) *
 		scheme:      "http",
 		maxRedirect: 21,
 		Prefix:      "/",
-		logger:      log.New(os.Stderr, "[client] ", log.LstdFlags),
+		logger:      rqlog.Default().WithName("[client] ").WithOutput(os.Stderr),
 	}
 
 	for _, f := range configFuncs {
@@ -89,7 +90,7 @@ func WithPrefix(prefix string) ConfigFunc {
 }
 
 // WithLogger changes the default logger to the one provided.
-func WithLogger(logger *log.Logger) ConfigFunc {
+func WithLogger(logger rqlog.Logger) ConfigFunc {
 	return func(client *Client) {
 		client.logger = logger
 	}

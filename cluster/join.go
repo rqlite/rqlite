@@ -3,12 +3,12 @@ package cluster
 import (
 	"context"
 	"errors"
-	"log"
 	"os"
 	"time"
 
 	"github.com/rqlite/rqlite/v8/cluster/proto"
 	command "github.com/rqlite/rqlite/v8/command/proto"
+	"github.com/rqlite/rqlite/v8/rqlog"
 )
 
 var (
@@ -32,7 +32,7 @@ type Joiner struct {
 
 	client *Client
 	creds  *proto.Credentials
-	logger *log.Logger
+	logger rqlog.Logger
 }
 
 // NewJoiner returns an instantiated Joiner.
@@ -41,7 +41,7 @@ func NewJoiner(client *Client, numAttempts int, attemptInterval time.Duration) *
 		client:          client,
 		numAttempts:     numAttempts,
 		attemptInterval: attemptInterval,
-		logger:          log.New(os.Stderr, "[cluster-join] ", log.LstdFlags),
+		logger:          rqlog.Default().WithName("[cluster-join] ").WithOutput(os.Stderr),
 	}
 }
 

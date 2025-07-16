@@ -2,7 +2,6 @@ package store
 
 import (
 	"fmt"
-	"log"
 	"net"
 	"os"
 	"path/filepath"
@@ -14,6 +13,7 @@ import (
 	"github.com/rqlite/rqlite/v8/command/proto"
 	sql "github.com/rqlite/rqlite/v8/db"
 	"github.com/rqlite/rqlite/v8/internal/random"
+	"github.com/rqlite/rqlite/v8/rqlog"
 	"github.com/rqlite/rqlite/v8/snapshot"
 	rlog "github.com/rqlite/rqlite/v8/store/log"
 )
@@ -114,7 +114,7 @@ func HasData(dir string) (bool, error) {
 // RecoverNode is used to manually force a new configuration, in the event that
 // quorum cannot be restored. This borrows heavily from RecoverCluster functionality
 // of the Hashicorp Raft library, but has been customized for rqlite use.
-func RecoverNode(dataDir string, extensions []string, logger *log.Logger, logs raft.LogStore,
+func RecoverNode(dataDir string, extensions []string, logger rqlog.Logger, logs raft.LogStore,
 	stable *rlog.Log, snaps raft.SnapshotStore, tn raft.Transport, conf raft.Configuration) error {
 	logPrefix := logger.Prefix()
 	logger.SetPrefix(fmt.Sprintf("%s[recovery] ", logPrefix))

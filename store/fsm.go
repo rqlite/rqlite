@@ -3,10 +3,10 @@ package store
 import (
 	"expvar"
 	"io"
-	"log"
 	"time"
 
 	"github.com/hashicorp/raft"
+	"github.com/rqlite/rqlite/v8/rqlog"
 )
 
 // FSM is a wrapper around the Store which implements raft.FSM.
@@ -42,7 +42,7 @@ type FSMSnapshot struct {
 
 	raft.FSMSnapshot
 	persistSucceeded bool
-	logger           *log.Logger
+	logger           rqlog.Logger
 }
 
 // Persist writes the snapshot to the given sink.

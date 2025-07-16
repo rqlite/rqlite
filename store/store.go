@@ -11,7 +11,6 @@ import (
 	"expvar"
 	"fmt"
 	"io"
-	"log"
 	"net"
 	"os"
 	"path/filepath"
@@ -33,6 +32,7 @@ import (
 	"github.com/rqlite/rqlite/v8/internal/progress"
 	"github.com/rqlite/rqlite/v8/internal/random"
 	"github.com/rqlite/rqlite/v8/internal/rsync"
+	"github.com/rqlite/rqlite/v8/rqlog"
 	"github.com/rqlite/rqlite/v8/snapshot"
 	rlog "github.com/rqlite/rqlite/v8/store/log"
 )
@@ -343,7 +343,7 @@ type Store struct {
 	firstLogAppliedT time.Time // Time first log is applied
 	openT            time.Time // Timestamp when Store opens.
 
-	logger *log.Logger
+	logger rqlog.Logger
 
 	notifyMu        sync.Mutex
 	BootstrapExpect int
@@ -381,18 +381,18 @@ type Store struct {
 
 // Config represents the configuration of the underlying Store.
 type Config struct {
-	DBConf *DBConfig   // The DBConfig object for this Store.
-	Dir    string      // The working directory for raft.
-	Tn     Transport   // The underlying Transport for raft.
-	ID     string      // Node ID.
-	Logger *log.Logger // The logger to use to log stuff.
+	DBConf *DBConfig    // The DBConfig object for this Store.
+	Dir    string       // The working directory for raft.
+	Tn     Transport    // The underlying Transport for raft.
+	ID     string       // Node ID.
+	Logger rqlog.Logger // The logger to use to log stuff.
 }
 
 // New returns a new Store.
 func New(ly Layer, c *Config) *Store {
 	logger := c.Logger
 	if logger == nil {
-		logger = log.New(os.Stderr, "[store] ", log.LstdFlags)
+		logger = rqlog.Default().WithName("[store] ").WithOutput(os.Stderr)
 	}
 
 	dbPath := filepath.Join(c.Dir, sqliteFile)
@@ -1963,7 +1963,8 @@ func (s *Store) raftConfig() *raft.Config {
 	opts := hclog.DefaultOptions
 	opts.Name = ""
 	opts.Level = s.hcLogLevel()
-	config.Logger = hclog.FromStandardLogger(log.New(os.Stderr, "[raft] ", log.LstdFlags), opts)
+	logger := rqlog.Default().WithName("[raft] ").WithOutput(os.Stderr)
+	config.Logger = hclog.FromStandardLogger(logger.StandardLogger(), opts)
 	return config
 }
 

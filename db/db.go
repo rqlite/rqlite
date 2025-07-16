@@ -20,6 +20,7 @@ import (
 	command "github.com/rqlite/rqlite/v8/command/proto"
 	"github.com/rqlite/rqlite/v8/db/humanize"
 	"github.com/rqlite/rqlite/v8/internal/rsum"
+	"github.com/rqlite/rqlite/v8/rqlog"
 )
 
 const (
@@ -148,7 +149,7 @@ type DB struct {
 	allOptimized   bool
 	allOptimizedMu sync.Mutex
 
-	logger *log.Logger
+	logger rqlog.Logger
 }
 
 // PoolStats represents connection pool statistics
@@ -174,7 +175,7 @@ func Open(dbPath string, fkEnabled, wal bool) (retDB *DB, retErr error) {
 // database is opened in WAL mode, the WAL files will also be created if they
 // do not exist.
 func OpenWithDriver(drv *Driver, dbPath string, fkEnabled, wal bool) (retDB *DB, retErr error) {
-	logger := log.New(log.Writer(), "[db] ", log.LstdFlags)
+	logger := rqlog.Default().WithName("[db] ").WithOutput(log.Writer())
 	startTime := time.Now()
 	defer func() {
 		if retErr != nil {

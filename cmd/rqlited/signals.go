@@ -2,9 +2,10 @@ package main
 
 import (
 	"context"
-	"log"
 	"os"
 	"os/signal"
+
+	"github.com/rqlite/rqlite/v8/rqlog"
 )
 
 const (
@@ -19,7 +20,7 @@ func HandleSignals(sigs ...os.Signal) <-chan os.Signal {
 		signal.Notify(sigCh, sigs...)
 		for {
 			sig := <-sigCh
-			log.Printf(`received signal "%s"`, sig.String())
+			rqlog.Default().Printf(`received signal "%s"`, sig.String())
 			ch <- sig
 		}
 	}()

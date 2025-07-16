@@ -10,7 +10,6 @@ import (
 	"expvar"
 	"fmt"
 	"io"
-	"log"
 	"net"
 	"net/http"
 	"net/http/pprof"
@@ -29,6 +28,7 @@ import (
 	"github.com/rqlite/rqlite/v8/db"
 	"github.com/rqlite/rqlite/v8/internal/rtls"
 	"github.com/rqlite/rqlite/v8/queue"
+	"github.com/rqlite/rqlite/v8/rqlog"
 	"github.com/rqlite/rqlite/v8/store"
 )
 
@@ -364,7 +364,7 @@ type Service struct {
 
 	BuildInfo map[string]any
 
-	logger *log.Logger
+	logger rqlog.Logger
 }
 
 // New returns an uninitialized HTTP service. If credentials is nil, then
@@ -380,7 +380,7 @@ func New(addr string, store Store, cluster Cluster, credentials CredentialStore)
 		start:               time.Now(),
 		statuses:            make(map[string]StatusReporter),
 		credentialStore:     credentials,
-		logger:              log.New(os.Stderr, "[http] ", log.LstdFlags),
+		logger:              rqlog.Default().WithName("[http] ").WithOutput(os.Stderr),
 	}
 }
 

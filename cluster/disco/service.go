@@ -2,12 +2,12 @@ package disco
 
 import (
 	"fmt"
-	"log"
 	"os"
 	"sync"
 	"time"
 
 	"github.com/rqlite/rqlite/v8/internal/random"
+	"github.com/rqlite/rqlite/v8/rqlog"
 )
 
 const (
@@ -73,7 +73,7 @@ type Service struct {
 	s   Store
 	suf Suffrage
 
-	logger *log.Logger
+	logger rqlog.Logger
 
 	mu          sync.Mutex
 	lastContact time.Time
@@ -87,7 +87,7 @@ func NewService(c Client, s Store, suf Suffrage) *Service {
 		suf:              suf,
 		RegisterInterval: 3 * time.Second,
 		ReportInterval:   10 * time.Second,
-		logger:           log.New(os.Stderr, "[disco] ", log.LstdFlags),
+		logger:           rqlog.Default().WithName("[disco] ").WithOutput(os.Stderr),
 	}
 }
 

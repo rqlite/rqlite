@@ -1,12 +1,12 @@
 package cluster
 
 import (
-	"log"
 	"os"
 	"time"
 
 	"github.com/rqlite/rqlite/v8/cluster/proto"
 	command "github.com/rqlite/rqlite/v8/command/proto"
+	"github.com/rqlite/rqlite/v8/rqlog"
 )
 
 const (
@@ -27,7 +27,7 @@ type Remover struct {
 	client  *Client
 	creds   *proto.Credentials
 
-	log *log.Logger
+	log rqlog.Logger
 }
 
 // / NewRemover returns an instantiated Remover.
@@ -36,7 +36,7 @@ func NewRemover(client *Client, timeout time.Duration, control Control) *Remover
 		client:  client,
 		timeout: timeout,
 		control: control,
-		log:     log.New(os.Stderr, "[cluster-remove] ", log.LstdFlags),
+		log:     rqlog.Default().WithName("[cluster-remove] ").WithOutput(os.Stderr),
 	}
 }
 

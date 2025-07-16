@@ -5,13 +5,13 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"log"
 	"os"
 	"path/filepath"
 	"sort"
 
 	"github.com/hashicorp/raft"
 	"github.com/rqlite/rqlite/v8/db"
+	"github.com/rqlite/rqlite/v8/rqlog"
 )
 
 const (
@@ -21,7 +21,7 @@ const (
 // Upgrade writes a copy of the 7.x-format Snapshot directory at 'old' to a
 // 8.x-format new Snapshot directory at 'new'. If the upgrade is successful,
 // the 'old' directory is removed before the function returns.
-func Upgrade7To8(old, new string, logger *log.Logger) (retErr error) {
+func Upgrade7To8(old, new string, logger rqlog.Logger) (retErr error) {
 	defer func() {
 		if retErr != nil {
 			stats.Add(upgradeFail, 1)

@@ -7,7 +7,6 @@ import (
 	"expvar"
 	"fmt"
 	"io"
-	"log"
 	"net"
 	"os"
 	"strconv"
@@ -17,6 +16,7 @@ import (
 	"github.com/rqlite/rqlite/v8/auth"
 	"github.com/rqlite/rqlite/v8/cluster/proto"
 	command "github.com/rqlite/rqlite/v8/command/proto"
+	"github.com/rqlite/rqlite/v8/rqlog"
 	pb "google.golang.org/protobuf/proto"
 )
 
@@ -150,7 +150,7 @@ type Service struct {
 	apiAddr string // host:port this node serves the HTTP API.
 	version string // Version of software this node is running.
 
-	logger *log.Logger
+	logger rqlog.Logger
 }
 
 // New returns a new instance of the cluster service
@@ -160,7 +160,7 @@ func New(ln net.Listener, db Database, m Manager, credentialStore CredentialStor
 		addr:            ln.Addr(),
 		db:              db,
 		mgr:             m,
-		logger:          log.New(os.Stderr, "[cluster] ", log.LstdFlags),
+		logger:          rqlog.Default().WithName("[cluster] ").WithOutput(os.Stderr),
 		credentialStore: credentialStore,
 	}
 }

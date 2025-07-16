@@ -2,7 +2,6 @@ package store
 
 import (
 	"fmt"
-	"log"
 	"os"
 	"path/filepath"
 
@@ -10,6 +9,7 @@ import (
 	"github.com/rqlite/rqlite/v8/command/chunking"
 	"github.com/rqlite/rqlite/v8/command/proto"
 	sql "github.com/rqlite/rqlite/v8/db"
+	"github.com/rqlite/rqlite/v8/rqlog"
 )
 
 // ExecuteQueryResponses is a slice of ExecuteQueryResponse, which detects mutations.
@@ -30,12 +30,12 @@ func (e ExecuteQueryResponses) Mutation() bool {
 
 // CommandProcessor processes commands by applying them to the underlying database.
 type CommandProcessor struct {
-	logger  *log.Logger
+	logger  rqlog.Logger
 	decMgmr *chunking.DechunkerManager
 }
 
 // NewCommandProcessor returns a new instance of CommandProcessor.
-func NewCommandProcessor(logger *log.Logger, dm *chunking.DechunkerManager) *CommandProcessor {
+func NewCommandProcessor(logger rqlog.Logger, dm *chunking.DechunkerManager) *CommandProcessor {
 	return &CommandProcessor{
 		logger:  logger,
 		decMgmr: dm}

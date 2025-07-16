@@ -29,6 +29,7 @@ import (
 	httpd "github.com/rqlite/rqlite/v8/http"
 	"github.com/rqlite/rqlite/v8/internal/rarchive"
 	"github.com/rqlite/rqlite/v8/internal/rtls"
+	"github.com/rqlite/rqlite/v8/rqlog"
 	"github.com/rqlite/rqlite/v8/store"
 	"github.com/rqlite/rqlite/v8/tcp"
 )
@@ -55,6 +56,11 @@ func init() {
 	log.SetFlags(log.LstdFlags)
 	log.SetOutput(os.Stderr)
 	log.SetPrefix(fmt.Sprintf("[%s] ", name))
+	rqlog.SetDefault(rqlog.NewRqLogger(
+		log.Default().Writer(),
+		log.Default().Prefix(),
+		log.Default().Flags(),
+	))
 }
 
 func main() {

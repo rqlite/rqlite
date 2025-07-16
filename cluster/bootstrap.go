@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"log"
 	"os"
 	"sync"
 	"time"
@@ -12,6 +11,7 @@ import (
 	"github.com/rqlite/rqlite/v8/cluster/proto"
 	command "github.com/rqlite/rqlite/v8/command/proto"
 	"github.com/rqlite/rqlite/v8/internal/random"
+	"github.com/rqlite/rqlite/v8/rqlog"
 )
 
 var (
@@ -118,7 +118,7 @@ type Bootstrapper struct {
 	client *Client
 	creds  *proto.Credentials
 
-	logger   *log.Logger
+	logger   rqlog.Logger
 	Interval time.Duration
 
 	bootStatusMu sync.RWMutex
@@ -133,7 +133,7 @@ func NewBootstrapper(p AddressProvider, client *Client) *Bootstrapper {
 	bs := &Bootstrapper{
 		provider: p,
 		client:   client,
-		logger:   log.New(os.Stderr, "[cluster-bootstrap] ", log.LstdFlags),
+		logger:   rqlog.Default().WithName("[cluster-bootstrap] ").WithOutput(os.Stderr),
 		Interval: bootCheckInterval,
 	}
 	return bs

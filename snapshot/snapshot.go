@@ -8,19 +8,20 @@ import (
 
 	"github.com/hashicorp/raft"
 	"github.com/rqlite/rqlite/v8/internal/progress"
+	"github.com/rqlite/rqlite/v8/rqlog"
 )
 
 // Snapshot represents a snapshot of the database state.
 type Snapshot struct {
 	rc     io.ReadCloser
-	logger *log.Logger
+	logger rqlog.Logger
 }
 
 // NewSnapshot creates a new snapshot.
 func NewSnapshot(rc io.ReadCloser) *Snapshot {
 	return &Snapshot{
 		rc:     rc,
-		logger: log.New(log.Writer(), "[snapshot] ", log.LstdFlags),
+		logger: rqlog.Default().WithName("[snapshot] ").WithOutput(log.Writer()),
 	}
 }
 

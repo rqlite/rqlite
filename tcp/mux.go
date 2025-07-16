@@ -6,13 +6,13 @@ import (
 	"expvar"
 	"fmt"
 	"io"
-	"log"
 	"net"
 	"os"
 	"sync"
 	"time"
 
 	"github.com/rqlite/rqlite/v8/internal/rtls"
+	"github.com/rqlite/rqlite/v8/rqlog"
 )
 
 const (
@@ -82,7 +82,7 @@ type Mux struct {
 	Timeout time.Duration
 
 	// Out-of-band error logger
-	Logger *log.Logger
+	Logger rqlog.Logger
 
 	certReloader *rtls.CertReloader
 	tlsConfig    *tls.Config
@@ -101,7 +101,7 @@ func NewMux(ln net.Listener, adv net.Addr) (*Mux, error) {
 		addr:    addr,
 		m:       make(map[byte]*listener),
 		Timeout: DefaultTimeout,
-		Logger:  log.New(os.Stderr, "[mux] ", log.LstdFlags),
+		Logger:  rqlog.Default().WithName("[mux] ").WithOutput(os.Stderr),
 	}, nil
 }
 

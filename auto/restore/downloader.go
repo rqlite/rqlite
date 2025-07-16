@@ -7,9 +7,10 @@ import (
 	"expvar"
 	"fmt"
 	"io"
-	"log"
 	"os"
 	"time"
+
+	"github.com/rqlite/rqlite/v8/rqlog"
 )
 
 // stats captures stats for the Uploader service.
@@ -88,14 +89,14 @@ type StorageClient interface {
 // Downloader is a struct that handles downloading data from a storage service.
 type Downloader struct {
 	storageClient StorageClient
-	logger        *log.Logger
+	logger        rqlog.Logger
 }
 
 // NewDownloader creates a new Downloader instance with the given StorageClient.
 func NewDownloader(storageClient StorageClient) *Downloader {
 	return &Downloader{
 		storageClient: storageClient,
-		logger:        log.New(os.Stderr, "[downloader] ", log.LstdFlags),
+		logger:        rqlog.Default().WithName("[downloader] ").WithOutput(os.Stderr),
 	}
 }
 

@@ -5,7 +5,6 @@ import (
 	"expvar"
 	"fmt"
 	"io"
-	"log"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -16,6 +15,7 @@ import (
 	"github.com/hashicorp/raft"
 	"github.com/rqlite/rqlite/v8/db"
 	"github.com/rqlite/rqlite/v8/internal/rsync"
+	"github.com/rqlite/rqlite/v8/rqlog"
 )
 
 const (
@@ -131,7 +131,7 @@ func (l *LockingSnapshot) Close() error {
 type Store struct {
 	dir            string
 	fullNeededPath string
-	logger         *log.Logger
+	logger         rqlog.Logger
 
 	mrsw *rsync.MultiRSW
 
@@ -148,7 +148,7 @@ func NewStore(dir string) (*Store, error) {
 	str := &Store{
 		dir:            dir,
 		fullNeededPath: filepath.Join(dir, fullNeededFile),
-		logger:         log.New(os.Stderr, "[snapshot-store] ", log.LstdFlags),
+		logger:         rqlog.Default().WithName("[snapshot-store] ").WithOutput(os.Stderr),
 		mrsw:           rsync.NewMultiRSW(),
 	}
 	str.logger.Printf("store initialized using %s", dir)
