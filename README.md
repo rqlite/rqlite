@@ -21,7 +21,7 @@
 _Check out the [rqlite FAQ](https://rqlite.io/docs/faq)_.
 
 ## Why run rqlite?
-rqlite is very simple to deploy, run, and manage – simplicity-of-operation is a key design goal. It’s also lightweight and easy to query. It’s a single binary you can drop anywhere on a machine, and just start it, which makes it very convenient. It takes literally seconds to configure and form a cluster, which provides you with fault-tolerance and high-availability. Think [Consul](https://www.consul.io/) or [etcd](https://etcd.io/), but with relational modeling available. 
+rqlite is very simple to deploy, run, and manage – simplicity-of-operation is a key design goal. It’s also lightweight and easy to query. It’s a [single binary](https://github.com/rqlite/rqlite/releases) you can drop anywhere on a machine, and just start it, which makes it very convenient. It takes literally seconds [to configure and form a cluster](https://rqlite.io/docs/clustering/), which provides you with fault-tolerance and high-availability. Think [Consul](https://www.consul.io/) or [etcd](https://etcd.io/), but with relational modeling available. 
 
 ### Key features
 - **Easy Deployment**: Up and running in seconds, with no separate SQLite installation.
