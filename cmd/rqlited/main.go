@@ -238,7 +238,7 @@ func main() {
 			log.Printf("stepping down as Leader before shutdown")
 		}
 		// Perform a stepdown, ignore any errors.
-		str.Stepdown(true)
+		str.Stepdown(true, "")
 	}
 	muxLn.Close()
 	defer mux.Close()
