@@ -1075,9 +1075,8 @@ func (s *Service) handleLeader(w http.ResponseWriter, r *http.Request, qp QueryP
 		b, err := func() ([]byte, error) {
 			if qp.Pretty() {
 				return json.MarshalIndent(node, "", "    ")
-			} else {
-				return json.Marshal(node)
 			}
+			return json.Marshal(node)
 		}()
 		if err != nil {
 			http.Error(w, fmt.Sprintf("JSON marshal: %s", err.Error()), http.StatusInternalServerError)
