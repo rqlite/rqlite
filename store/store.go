@@ -671,12 +671,45 @@ func (s *Store) Bootstrap(servers ...*Server) error {
 
 // Stepdown forces this node to relinquish leadership to another node in
 // the cluster. If this node is not the leader, and 'wait' is true, an error
-// will be returned.
-func (s *Store) Stepdown(wait bool) error {
+// will be returned. If id is non-empty, leadership will be transferred to the
+// node with the given ID.
+func (s *Store) Stepdown(wait bool, id string) error {
 	if !s.open.Is() {
 		return ErrNotOpen
 	}
-	f := s.raft.LeadershipTransfer()
+
+	var f raft.Future
+	if id == "" {
+		// Transfer leadership to any available node
+		f = s.raft.LeadershipTransfer()
+	} else {
+		// Transfer leadership to specific node
+		// First, get the current Raft configuration to find the target node
+		configFuture := s.raft.GetConfiguration()
+		if configFuture.Error() != nil {
+			return configFuture.Error()
+		}
+
+		config := configFuture.Configuration()
+		var targetAddr raft.ServerAddress
+		found := false
+
+		for _, server := range config.Servers {
+			if string(server.ID) == id {
+				targetAddr = server.Address
+				found = true
+				break
+			}
+		}
+
+		if !found {
+			return fmt.Errorf("node with ID %s not found in cluster", id)
+		}
+
+		// Transfer leadership to the specific node
+		f = s.raft.LeadershipTransferToServer(raft.ServerID(id), targetAddr)
+	}
+
 	if !wait {
 		return nil
 	}
