@@ -1051,29 +1051,42 @@ func (s *Service) handleLeader(w http.ResponseWriter, r *http.Request, qp QueryP
 	switch r.Method {
 	case "GET":
 		// Return leader information
+		laddr := ""
 		ldr, err := s.store.Leader()
 		if err != nil {
-			statusCode := http.StatusInternalServerError
-			if err == store.ErrNotOpen {
-				statusCode = http.StatusServiceUnavailable
+			if err == store.ErrLeaderNotFound || err == store.ErrNotOpen {
+				http.Error(w, ErrLeaderNotFound.Error(), http.StatusServiceUnavailable)
+			} else {
+				http.Error(w, fmt.Sprintf("leader: %s", err.Error()), http.StatusInternalServerError)
 			}
-			http.Error(w, fmt.Sprintf("leader address: %s", err.Error()), statusCode)
 			return
 		}
-
-		leaderAPIAddr := s.LeaderAPIAddr()
-		response := map[string]string{
-			"addr":     ldr.Addr,
-			"api_addr": leaderAPIAddr,
+		if ldr != nil {
+			laddr = ldr.Addr
 		}
 
-		enc := json.NewEncoder(w)
-		if qp.Pretty() {
-			enc.SetIndent("", "    ")
+		node := NewNodeFromServer(ldr)
+		if node == nil {
+			http.Error(w, "leader node", http.StatusInternalServerError)
+			return
 		}
-		if err := enc.Encode(response); err != nil {
-			http.Error(w, fmt.Sprintf("JSON encode: %s", err.Error()),
-				http.StatusInternalServerError)
+		node.Test(s.cluster, laddr, qp.Retries(0), qp.Timeout(defaultTimeout))
+
+		b, err := func() ([]byte, error) {
+			if qp.Pretty() {
+				return json.MarshalIndent(node, "", "    ")
+			} else {
+				return json.Marshal(node)
+			}
+		}()
+		if err != nil {
+			http.Error(w, fmt.Sprintf("JSON marshal: %s", err.Error()), http.StatusInternalServerError)
+			return
+		}
+		_, err = w.Write(b)
+		if err != nil {
+			s.logger.Println("failed to write leader node to client", err.Error())
+			return
 		}
 
 	case "POST":
