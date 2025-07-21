@@ -96,6 +96,9 @@ var (
 	// ErrNothingNewToSnapshot is returned when a snapshot is requested but there
 	// are no new log entries to snapshot.
 	ErrNothingNewToSnapshot = errors.New("nothing new to snapshot")
+
+	// ErrNodeNotFound is returned when a node with a given ID is not found in the cluster.
+	ErrNodeNotFound = errors.New("node not found in cluster")
 )
 
 const (
@@ -684,7 +687,7 @@ func (s *Store) getServerAddressByID(id string) (raft.ServerAddress, error) {
 		}
 	}
 
-	return "", fmt.Errorf("node with ID %s not found in cluster", id)
+	return "", ErrNodeNotFound
 }
 
 // Stepdown forces this node to relinquish leadership to another node in

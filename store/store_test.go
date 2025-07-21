@@ -2484,9 +2484,8 @@ func Test_SingleNodeStepdownInvalidID(t *testing.T) {
 	if err == nil {
 		t.Fatalf("stepdown with invalid node ID should have failed")
 	}
-	expectedError := fmt.Sprintf("node with ID %s not found in cluster", invalidID)
-	if err.Error() != expectedError {
-		t.Fatalf("expected error '%s', got '%s'", expectedError, err.Error())
+	if !errors.Is(err, ErrNodeNotFound) {
+		t.Fatalf("expected ErrNodeNotFound, got %v", err)
 	}
 }
 
