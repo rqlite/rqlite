@@ -2342,9 +2342,9 @@ func Test_ClusterLeader_Stepdown(t *testing.T) {
 		t.Fatalf("failed to get leader info before stepdown: %s", err.Error())
 	}
 
-	var leaderDataBefore map[string]string
-	if err := json.Unmarshal([]byte(leaderInfoBefore), &leaderDataBefore); err != nil {
-		t.Fatalf("failed to parse leader response before stepdown: %s", err.Error())
+	var ldrNode http.Node
+	if err := json.Unmarshal([]byte(leaderInfoBefore), &ldrNode); err != nil {
+		t.Fatalf("failed to parse leader response: %s", err.Error())
 	}
 
 	// Test stepdown on leader with wait=true for maximum testing
@@ -2358,11 +2358,11 @@ func Test_ClusterLeader_Stepdown(t *testing.T) {
 		if err != nil {
 			return false, nil
 		}
-		var leaderDataAfter map[string]string
-		if err := json.Unmarshal([]byte(leaderInfoAfter), &leaderDataAfter); err != nil {
-			return false, nil
+		var node http.Node
+		if err := json.Unmarshal([]byte(leaderInfoAfter), &node); err != nil {
+			t.Fatalf("failed to parse leader response: %s", err.Error())
 		}
-		return leaderDataBefore["addr"] != leaderDataAfter["addr"], nil
+		return ldrNode.Addr != node.Addr, nil
 	}, time.Second, 10*time.Second)
 }
 
