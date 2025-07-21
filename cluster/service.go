@@ -125,8 +125,9 @@ type Manager interface {
 	Join(n *command.JoinRequest) error
 
 	// Stepdown forces this node to relinquish leadership to another node in
-	// the cluster.
-	Stepdown(wait bool) error
+	// the cluster. If id is non-empty, leadership will be transferred to the
+	// node with the given ID.
+	Stepdown(wait bool, id string) error
 }
 
 // CredentialStore is the interface credential stores must support.
@@ -549,7 +550,7 @@ func (s *Service) handleConn(conn net.Conn) {
 			} else if !s.checkCommandPerm(c, auth.PermLeaderOps) {
 				resp.Error = "unauthorized"
 			} else {
-				if err := s.mgr.Stepdown(sr.Wait); err != nil {
+				if err := s.mgr.Stepdown(sr.Wait, sr.Id); err != nil {
 					resp.Error = err.Error()
 				}
 			}

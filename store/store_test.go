@@ -26,7 +26,7 @@ func Test_NonOpenStore(t *testing.T) {
 	defer s.Close(true)
 	defer ln.Close()
 
-	if err := s.Stepdown(false); err != ErrNotOpen {
+	if err := s.Stepdown(false, ""); err != ErrNotOpen {
 		t.Fatalf("wrong error received for non-open store: %s", err)
 	}
 	if s.IsLeader() {
@@ -2459,8 +2459,33 @@ func Test_SingleNodeStepdown(t *testing.T) {
 	}
 
 	// Tell leader to step down. Should fail as there is no other node available.
-	if err := s.Stepdown(true); err == nil {
+	if err := s.Stepdown(true, ""); err == nil {
 		t.Fatalf("single node stepped down OK")
+	}
+}
+
+func Test_SingleNodeStepdownInvalidID(t *testing.T) {
+	s, ln := mustNewStore(t)
+	defer ln.Close()
+	if err := s.Open(); err != nil {
+		t.Fatalf("failed to open single-node store: %s", err.Error())
+	}
+	defer s.Close(true)
+	if err := s.Bootstrap(NewServer(s.ID(), s.Addr(), true)); err != nil {
+		t.Fatalf("failed to bootstrap single-node store: %s", err.Error())
+	}
+	if _, err := s.WaitForLeader(10 * time.Second); err != nil {
+		t.Fatalf("Error waiting for leader: %s", err)
+	}
+
+	// Tell leader to step down with invalid node ID. Should fail with proper error.
+	invalidID := "nonexistent-node"
+	err := s.Stepdown(true, invalidID)
+	if err == nil {
+		t.Fatalf("stepdown with invalid node ID should have failed")
+	}
+	if !errors.Is(err, ErrNodeNotFound) {
+		t.Fatalf("expected ErrNodeNotFound, got %v", err)
 	}
 }
 
@@ -2479,7 +2504,7 @@ func Test_SingleNodeStepdownNoWaitOK(t *testing.T) {
 	}
 
 	// Tell leader to step down without waiting.
-	if err := s.Stepdown(false); err != nil {
+	if err := s.Stepdown(false, ""); err != nil {
 		t.Fatalf("single node reported error stepping down even when told not to wait")
 	}
 }

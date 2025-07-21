@@ -1519,7 +1519,7 @@ type MockStore struct {
 	snapshotFn  func(n uint64) error
 	readFromFn  func(r io.Reader) (int64, error)
 	committedFn func(timeout time.Duration) (uint64, error)
-	stepdownFn  func(wait bool) error
+	stepdownFn  func(wait bool, id string) error
 	leaderAddr  string
 	notReady    bool // Default value is true, easier to test.
 }
@@ -1610,9 +1610,9 @@ func (m *MockStore) ReadFrom(r io.Reader) (int64, error) {
 	return 0, nil
 }
 
-func (m *MockStore) Stepdown(wait bool) error {
+func (m *MockStore) Stepdown(wait bool, id string) error {
 	if m.stepdownFn != nil {
-		return m.stepdownFn(wait)
+		return m.stepdownFn(wait, id)
 	}
 	return nil
 }
@@ -1714,7 +1714,7 @@ func Test_Leader_POST(t *testing.T) {
 	stepdownWait := false
 	store := &MockStore{
 		leaderAddr: "127.0.0.1:8001",
-		stepdownFn: func(wait bool) error {
+		stepdownFn: func(wait bool, id string) error {
 			stepdownCalled = true
 			stepdownWait = wait
 			return nil
@@ -1773,7 +1773,7 @@ func Test_LeaderPOST_ForwardToLeader(t *testing.T) {
 	stepdownCalled := false
 	store := &MockStore{
 		leaderAddr: "127.0.0.1:8001",
-		stepdownFn: func(wait bool) error {
+		stepdownFn: func(wait bool, id string) error {
 			return store.ErrNotLeader
 		},
 	}
@@ -1807,7 +1807,7 @@ func Test_LeaderPOST_ForwardToLeader(t *testing.T) {
 func Test_LeaderPOST_ForwardError(t *testing.T) {
 	store := &MockStore{
 		leaderAddr: "127.0.0.1:8001",
-		stepdownFn: func(wait bool) error {
+		stepdownFn: func(wait bool, id string) error {
 			return store.ErrNotLeader
 		},
 	}
@@ -1853,6 +1853,168 @@ func Test_LeaderMethodNotAllowed(t *testing.T) {
 
 	if rr.Code != http.StatusMethodNotAllowed {
 		t.Fatalf("expected 405, got %d", rr.Code)
+	}
+}
+
+func Test_Leader_POST_JSON_TargetNode(t *testing.T) {
+	stepdownCalled := false
+	stepdownWait := false
+	stepdownID := ""
+	store := &MockStore{
+		leaderAddr: "127.0.0.1:8001",
+		stepdownFn: func(wait bool, id string) error {
+			stepdownCalled = true
+			stepdownWait = wait
+			stepdownID = id
+			return nil
+		},
+	}
+	cluster := &mockClusterService{apiAddr: "http://127.0.0.1:4001"}
+	cred := &mockCredentialStore{HasPermOK: true}
+
+	s := New("127.0.0.1:4001", store, cluster, cred)
+
+	// Test with JSON body specifying target node
+	reqBody := `{"id": "node1"}`
+	req, err := http.NewRequest("POST", "/leader?wait", strings.NewReader(reqBody))
+	if err != nil {
+		t.Fatalf("failed to create POST request: %s", err.Error())
+	}
+	req.Header.Set("Content-Type", "application/json")
+	rr := httptest.NewRecorder()
+	s.ServeHTTP(rr, req)
+
+	if rr.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", rr.Code)
+	}
+
+	if !stepdownCalled {
+		t.Fatalf("expected stepdown to be called")
+	}
+
+	if !stepdownWait {
+		t.Fatalf("expected stepdown to be called with wait=true")
+	}
+
+	if stepdownID != "node1" {
+		t.Fatalf("expected stepdown to be called with id='node1', got '%s'", stepdownID)
+	}
+}
+
+func Test_Leader_POST_JSON_EmptyID(t *testing.T) {
+	stepdownCalled := false
+	stepdownID := ""
+	store := &MockStore{
+		leaderAddr: "127.0.0.1:8001",
+		stepdownFn: func(wait bool, id string) error {
+			stepdownCalled = true
+			stepdownID = id
+			return nil
+		},
+	}
+	cluster := &mockClusterService{apiAddr: "http://127.0.0.1:4001"}
+	cred := &mockCredentialStore{HasPermOK: true}
+
+	s := New("127.0.0.1:4001", store, cluster, cred)
+
+	// Test with JSON body but empty ID (should behave like no JSON)
+	reqBody := `{"id": ""}`
+	req, err := http.NewRequest("POST", "/leader", strings.NewReader(reqBody))
+	if err != nil {
+		t.Fatalf("failed to create POST request: %s", err.Error())
+	}
+	req.Header.Set("Content-Type", "application/json")
+	rr := httptest.NewRecorder()
+	s.ServeHTTP(rr, req)
+
+	if rr.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", rr.Code)
+	}
+
+	if !stepdownCalled {
+		t.Fatalf("expected stepdown to be called")
+	}
+
+	if stepdownID != "" {
+		t.Fatalf("expected stepdown to be called with empty id, got '%s'", stepdownID)
+	}
+}
+
+func Test_Leader_POST_JSON_InvalidJSON(t *testing.T) {
+	store := &MockStore{leaderAddr: "127.0.0.1:8001"}
+	cluster := &mockClusterService{apiAddr: "http://127.0.0.1:4001"}
+	cred := &mockCredentialStore{HasPermOK: true}
+
+	s := New("127.0.0.1:4001", store, cluster, cred)
+
+	// Test with invalid JSON
+	reqBody := `{"id": "node1"`
+	req, err := http.NewRequest("POST", "/leader", strings.NewReader(reqBody))
+	if err != nil {
+		t.Fatalf("failed to create POST request: %s", err.Error())
+	}
+	req.Header.Set("Content-Type", "application/json")
+	rr := httptest.NewRecorder()
+	s.ServeHTTP(rr, req)
+
+	if rr.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400, got %d", rr.Code)
+	}
+
+	if !strings.Contains(rr.Body.String(), "invalid JSON") {
+		t.Fatalf("expected error message to contain 'invalid JSON', got %s", rr.Body.String())
+	}
+}
+
+func Test_Leader_POST_JSON_ForwardToLeader(t *testing.T) {
+	stepdownCalled := false
+	var forwardedRequest *command.StepdownRequest
+	store := &MockStore{
+		leaderAddr: "127.0.0.1:8001",
+		stepdownFn: func(wait bool, id string) error {
+			return store.ErrNotLeader
+		},
+	}
+	cluster := &mockClusterService{
+		apiAddr: "http://127.0.0.1:4001",
+		stepdownFn: func(sr *command.StepdownRequest, nodeAddr string, t time.Duration) error {
+			stepdownCalled = true
+			forwardedRequest = sr
+			return nil
+		},
+	}
+	cred := &mockCredentialStore{HasPermOK: true}
+
+	s := New("127.0.0.1:4001", store, cluster, cred)
+
+	// Test forwarding with target node ID
+	reqBody := `{"id": "node1"}`
+	req, err := http.NewRequest("POST", "/leader?wait", strings.NewReader(reqBody))
+	if err != nil {
+		t.Fatalf("failed to create POST request: %s", err.Error())
+	}
+	req.Header.Set("Content-Type", "application/json")
+	rr := httptest.NewRecorder()
+	s.ServeHTTP(rr, req)
+
+	if rr.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", rr.Code)
+	}
+
+	if !stepdownCalled {
+		t.Fatalf("expected stepdown to be forwarded to leader")
+	}
+
+	if forwardedRequest == nil {
+		t.Fatalf("expected stepdown request to be forwarded")
+	}
+
+	if forwardedRequest.Id != "node1" {
+		t.Fatalf("expected forwarded request to have id='node1', got '%s'", forwardedRequest.Id)
+	}
+
+	if !forwardedRequest.Wait {
+		t.Fatalf("expected forwarded request to have wait=true")
 	}
 }
 

@@ -755,18 +755,87 @@ func Test_MultiNodeStepdown(t *testing.T) {
 	}
 
 	// Telling a follower to stepdown should fail.
-	if err := s1.Stepdown(true); err != ErrNotLeader {
+	if err := s1.Stepdown(true, ""); err != ErrNotLeader {
 		t.Fatalf("expected ErrNotLeader when follower is told to step down")
 	}
 
 	// Tell leader to step down. After this finishes there should be a new Leader.
-	if err := s0.Stepdown(true); err != nil {
+	if err := s0.Stepdown(true, ""); err != nil {
 		t.Fatalf("leader failed to step down: %s", err.Error())
 	}
 
 	check := func() bool {
 		leader, err := s1.WaitForLeader(10 * time.Second)
 		if err != nil || leader == s0.Addr() {
+			return false
+		}
+		return true
+	}
+	testPoll(t, check, 250*time.Millisecond, 10*time.Second)
+}
+
+func Test_MultiNodeStepdownTargetNode(t *testing.T) {
+	s0, ln0 := mustNewStore(t)
+	defer ln0.Close()
+	if err := s0.Open(); err != nil {
+		t.Fatalf("failed to open single-node store: %s", err.Error())
+	}
+	defer s0.Close(true)
+
+	s1, ln1 := mustNewStore(t)
+	defer ln1.Close()
+	if err := s1.Open(); err != nil {
+		t.Fatalf("failed to open single-node store: %s", err.Error())
+	}
+	defer s1.Close(true)
+
+	s2, ln2 := mustNewStore(t)
+	defer ln2.Close()
+	if err := s2.Open(); err != nil {
+		t.Fatalf("failed to open single-node store: %s", err.Error())
+	}
+	defer s2.Close(true)
+
+	// Join stores
+	if err := s0.Bootstrap(NewServer(s0.ID(), s0.Addr(), true)); err != nil {
+		t.Fatalf("failed to bootstrap single-node store: %s", err.Error())
+	}
+	if _, err := s0.WaitForLeader(10 * time.Second); err != nil {
+		t.Fatalf("Error waiting for leader: %s", err)
+	}
+
+	// Join the second node to the cluster
+	if err := s0.Join(joinRequest(s1.ID(), s1.Addr(), true)); err != nil {
+		t.Fatalf("failed to join to node at %s: %s", s0.Addr(), err.Error())
+	}
+	if _, err := s1.WaitForLeader(10 * time.Second); err != nil {
+		t.Fatalf("Error waiting for leader: %s", err)
+	}
+
+	// Join the third node to the cluster
+	if err := s0.Join(joinRequest(s2.ID(), s2.Addr(), true)); err != nil {
+		t.Fatalf("failed to join to node at %s: %s", s0.Addr(), err.Error())
+	}
+	if _, err := s2.WaitForLeader(10 * time.Second); err != nil {
+		t.Fatalf("Error waiting for leader: %s", err)
+	}
+
+	// Test stepdown with invalid node ID
+	if err := s0.Stepdown(true, "nonexistent-node"); err == nil {
+		t.Fatalf("expected error when stepping down to nonexistent node")
+	} else if !strings.Contains(err.Error(), "not found in cluster") {
+		t.Fatalf("expected 'not found in cluster' error, got: %s", err.Error())
+	}
+
+	// Test stepdown with specific target node
+	if err := s0.Stepdown(true, s1.ID()); err != nil {
+		t.Fatalf("leader failed to step down to specific node: %s", err.Error())
+	}
+
+	// Verify that s1 became the new leader
+	check := func() bool {
+		leader, err := s1.WaitForLeader(10 * time.Second)
+		if err != nil || leader != s1.Addr() {
 			return false
 		}
 		return true

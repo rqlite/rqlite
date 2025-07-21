@@ -99,8 +99,9 @@ type Store interface {
 	ReadFrom(r io.Reader) (int64, error)
 
 	// Stepdown forces this node to relinquish leadership to another node in
-	// the cluster.
-	Stepdown(wait bool) error
+	// the cluster. If id is non-empty, leadership will be transferred to the
+	// node with the given ID.
+	Stepdown(wait bool, id string) error
 }
 
 // GetNodeMetaer is the interface that wraps the GetNodeMeta method.
@@ -1091,7 +1092,21 @@ func (s *Service) handleLeader(w http.ResponseWriter, r *http.Request, qp QueryP
 	case "POST":
 		// Trigger leader stepdown
 		wait := qp.Wait()
-		if err := s.store.Stepdown(wait); err != nil {
+
+		// Parse optional JSON body for target node ID
+		var nodeID string
+		if r.Header.Get("Content-Type") == "application/json" && r.ContentLength > 0 {
+			var reqBody struct {
+				ID string `json:"id"`
+			}
+			if err := json.NewDecoder(r.Body).Decode(&reqBody); err != nil {
+				http.Error(w, fmt.Sprintf("invalid JSON: %s", err.Error()), http.StatusBadRequest)
+				return
+			}
+			nodeID = reqBody.ID
+		}
+
+		if err := s.store.Stepdown(wait, nodeID); err != nil {
 			if err == store.ErrNotLeader {
 				if s.DoRedirect(w, r, qp) {
 					return
@@ -1110,6 +1125,7 @@ func (s *Service) handleLeader(w http.ResponseWriter, r *http.Request, qp QueryP
 
 				w.Header().Add(ServedByHTTPHeader, addr)
 				sr := &command.StepdownRequest{
+					Id:   nodeID,
 					Wait: wait,
 				}
 				stepdownErr := s.cluster.Stepdown(sr, addr, makeCredentials(r), qp.Timeout(defaultTimeout))

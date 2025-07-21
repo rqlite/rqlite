@@ -96,6 +96,9 @@ var (
 	// ErrNothingNewToSnapshot is returned when a snapshot is requested but there
 	// are no new log entries to snapshot.
 	ErrNothingNewToSnapshot = errors.New("nothing new to snapshot")
+
+	// ErrNodeNotFound is returned when a node with a given ID is not found in the cluster.
+	ErrNodeNotFound = errors.New("node not found in cluster")
 )
 
 const (
@@ -669,14 +672,48 @@ func (s *Store) Bootstrap(servers ...*Server) error {
 	return fut.Error()
 }
 
+// getServerAddressByID returns the server address for the given server ID.
+// It returns an error if the server ID is not found in the cluster configuration.
+func (s *Store) getServerAddressByID(id string) (raft.ServerAddress, error) {
+	configFuture := s.raft.GetConfiguration()
+	if configFuture.Error() != nil {
+		return "", configFuture.Error()
+	}
+
+	config := configFuture.Configuration()
+	for _, server := range config.Servers {
+		if string(server.ID) == id {
+			return server.Address, nil
+		}
+	}
+
+	return "", ErrNodeNotFound
+}
+
 // Stepdown forces this node to relinquish leadership to another node in
 // the cluster. If this node is not the leader, and 'wait' is true, an error
-// will be returned.
-func (s *Store) Stepdown(wait bool) error {
+// will be returned. If id is non-empty, leadership will be transferred to the
+// node with the given ID.
+func (s *Store) Stepdown(wait bool, id string) error {
 	if !s.open.Is() {
 		return ErrNotOpen
 	}
-	f := s.raft.LeadershipTransfer()
+
+	var f raft.Future
+	if id == "" {
+		// Transfer leadership to any available node
+		f = s.raft.LeadershipTransfer()
+	} else {
+		// Transfer leadership to specific node
+		targetAddr, err := s.getServerAddressByID(id)
+		if err != nil {
+			return err
+		}
+
+		// Transfer leadership to the specific node
+		f = s.raft.LeadershipTransferToServer(raft.ServerID(id), targetAddr)
+	}
+
 	if !wait {
 		return nil
 	}
