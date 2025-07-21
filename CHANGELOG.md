@@ -1,3 +1,7 @@
+## v8.40.1 (unreleased)
+### Implementation changes and bug fixes
+- [PR #2172](https://github.com/rqlite/rqlite/pull/2172): Allow specification of target node as new Leader during Stepdown.
+
 ## v8.40.0 (July 21st 2025)
 ### New features
 - [PR #2154](https://github.com/rqlite/rqlite/pull/2154), [PR #2156](https://github.com/rqlite/rqlite/pull/2156), [PR #2170](https://github.com/rqlite/rqlite/pull/2170): Add a HTTP API which instructs the Leader to stepdown, transferring Leadership to another node in the cluster. Fixes issue [#2153](https://github.com/rqlite/rqlite/issues/2153).
