@@ -1018,13 +1018,15 @@ func (s *Service) handleNodes(w http.ResponseWriter, r *http.Request, qp QueryPa
 	}
 
 	// Now test the nodes
-	ldr, err := s.store.Leader()
-	if err != nil {
-		http.Error(w, fmt.Sprintf("leader: %s", err.Error()),
-			http.StatusInternalServerError)
+	laddr := ""
+	lNode, err := s.store.Leader()
+	if err != nil && err != store.ErrLeaderNotFound {
+		http.Error(w, fmt.Sprintf("leader: %s", err.Error()), http.StatusInternalServerError)
 		return
+	} else if lNode != nil {
+		laddr = lNode.Addr
 	}
-	nodes.Test(s.cluster, ldr.Addr, qp.Retries(0), qp.Timeout(defaultTimeout))
+	nodes.Test(s.cluster, laddr, qp.Retries(0), qp.Timeout(defaultTimeout))
 
 	enc := NewNodesRespEncoder(w, qp.Version() != "2")
 	if qp.Pretty() {
