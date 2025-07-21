@@ -669,6 +669,24 @@ func (s *Store) Bootstrap(servers ...*Server) error {
 	return fut.Error()
 }
 
+// getServerAddressByID returns the server address for the given server ID.
+// It returns an error if the server ID is not found in the cluster configuration.
+func (s *Store) getServerAddressByID(id string) (raft.ServerAddress, error) {
+	configFuture := s.raft.GetConfiguration()
+	if configFuture.Error() != nil {
+		return "", configFuture.Error()
+	}
+
+	config := configFuture.Configuration()
+	for _, server := range config.Servers {
+		if string(server.ID) == id {
+			return server.Address, nil
+		}
+	}
+
+	return "", fmt.Errorf("node with ID %s not found in cluster", id)
+}
+
 // Stepdown forces this node to relinquish leadership to another node in
 // the cluster. If this node is not the leader, and 'wait' is true, an error
 // will be returned. If id is non-empty, leadership will be transferred to the
@@ -684,26 +702,9 @@ func (s *Store) Stepdown(wait bool, id string) error {
 		f = s.raft.LeadershipTransfer()
 	} else {
 		// Transfer leadership to specific node
-		// First, get the current Raft configuration to find the target node
-		configFuture := s.raft.GetConfiguration()
-		if configFuture.Error() != nil {
-			return configFuture.Error()
-		}
-
-		config := configFuture.Configuration()
-		var targetAddr raft.ServerAddress
-		found := false
-
-		for _, server := range config.Servers {
-			if string(server.ID) == id {
-				targetAddr = server.Address
-				found = true
-				break
-			}
-		}
-
-		if !found {
-			return fmt.Errorf("node with ID %s not found in cluster", id)
+		targetAddr, err := s.getServerAddressByID(id)
+		if err != nil {
+			return err
 		}
 
 		// Transfer leadership to the specific node
