@@ -2282,19 +2282,15 @@ func Test_ClusterLeader_GET(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to get leader info from leader: %s", err.Error())
 	}
-
-	// Parse the JSON response
-	var leaderData map[string]string
-	if err := json.Unmarshal([]byte(leaderInfo), &leaderData); err != nil {
+	var nodeL http.Node
+	if err := json.Unmarshal([]byte(leaderInfo), &nodeL); err != nil {
 		t.Fatalf("failed to parse leader response: %s", err.Error())
 	}
-
-	// Check that we have addr and api_addr
-	if leaderData["addr"] == "" {
-		t.Fatalf("leader addr is empty")
+	if nodeL.Addr == "" {
+		t.Fatalf("leader Addr is empty")
 	}
-	if leaderData["api_addr"] == "" {
-		t.Fatalf("leader api_addr is empty")
+	if nodeL.APIAddr == "" {
+		t.Fatalf("leader API Addr is empty")
 	}
 
 	// Test leader endpoint on follower - should return same leader info
@@ -2302,16 +2298,22 @@ func Test_ClusterLeader_GET(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to get leader info from follower: %s", err.Error())
 	}
-
-	var followerData map[string]string
-	if err := json.Unmarshal([]byte(followerInfo), &followerData); err != nil {
-		t.Fatalf("failed to parse follower leader response: %s", err.Error())
+	var nodeF http.Node
+	if err := json.Unmarshal([]byte(followerInfo), &nodeF); err != nil {
+		t.Fatalf("failed to parse follower response: %s", err.Error())
+	}
+	if nodeF.Addr == "" {
+		t.Fatalf("leader Addr is empty")
+	}
+	if nodeF.APIAddr == "" {
+		t.Fatalf("leader API Addr is empty")
 	}
 
-	// Both should report the same leader
-	if leaderData["addr"] != followerData["addr"] {
-		t.Fatalf("leader and follower report different leader addresses: %s vs %s",
-			leaderData["addr"], followerData["addr"])
+	if nodeL.Addr != nodeF.Addr {
+		t.Fatalf("leader Addr mismatch: expected %s, got %s", nodeL.Addr, nodeF.Addr)
+	}
+	if nodeL.APIAddr != nodeF.APIAddr {
+		t.Fatalf("leader API Addr mismatch: expected %s, got %s", nodeL.APIAddr, nodeF.APIAddr)
 	}
 }
 
