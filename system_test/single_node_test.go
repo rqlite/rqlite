@@ -17,6 +17,7 @@ import (
 	"time"
 
 	"github.com/rqlite/rqlite/v8/cluster"
+	"github.com/rqlite/rqlite/v8/http"
 	httpd "github.com/rqlite/rqlite/v8/http"
 	"github.com/rqlite/rqlite/v8/internal/random"
 	"github.com/rqlite/rqlite/v8/store"
@@ -1863,18 +1864,17 @@ func Test_SingleNodeLeader_GET(t *testing.T) {
 		t.Fatalf("failed to get leader: %s", err.Error())
 	}
 
-	// Parse the JSON response
-	var leaderInfo map[string]string
-	if err := json.Unmarshal([]byte(leader), &leaderInfo); err != nil {
+	var server http.Node
+	if err := json.Unmarshal([]byte(leader), &server); err != nil {
 		t.Fatalf("failed to parse leader response: %s", err.Error())
 	}
 
 	// Check that we have addr and api_addr
-	if leaderInfo["addr"] == "" {
+	if server.Addr == "" {
 		t.Fatalf("leader addr is empty")
 	}
-	if leaderInfo["api_addr"] == "" {
-		t.Fatalf("leader api_addr is empty")
+	if server.APIAddr == "" {
+		t.Fatalf("leader API dddr is empty")
 	}
 }
 
