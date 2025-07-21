@@ -7,6 +7,14 @@ type Server struct {
 	Suffrage string `json:"suffrage,omitempty"`
 }
 
+// Equal returns whether the two servers are identical.
+func (s *Server) Equal(other *Server) bool {
+	if s == nil || other == nil {
+		return false
+	}
+	return s.ID == other.ID && s.Addr == other.Addr && s.Suffrage == other.Suffrage
+}
+
 // NewServer returns an initialized Server.
 func NewServer(id, addr string, voter bool) *Server {
 	v := "voter"

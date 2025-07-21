@@ -95,6 +95,19 @@ func Test_OpenStoreSingleNode(t *testing.T) {
 	if got, exp := id, s.raftID; got != exp {
 		t.Fatalf("wrong leader ID returned, got: %s, exp %s", got, exp)
 	}
+	node, err := s.Leader()
+	if err != nil {
+		t.Fatalf("failed to retrieve leader node: %s", err.Error())
+	}
+	if node == nil {
+		t.Fatalf("leader node should not be nil")
+	}
+	if node.ID != s.raftID {
+		t.Fatalf("wrong leader ID returned, got: %s, exp %s", node.ID, s.raftID)
+	}
+	if node.Addr != s.Addr() {
+		t.Fatalf("wrong leader address returned, got: %s, exp %s", node.Addr, s.Addr())
+	}
 }
 
 // Test_SingleNodeOnDiskSQLitePath ensures that basic functionality works when the SQLite

@@ -68,14 +68,17 @@ type Database interface {
 type Store interface {
 	Database
 
-	// Remove removes the node from the cluster.
-	Remove(rn *command.RemoveNodeRequest) error
+	// Leader returns the Leader of the cluster
+	Leader() (*store.Server, error)
 
-	// LeaderAddr returns the Raft address of the leader of the cluster.
-	LeaderAddr() (string, error)
+	// Nodes returns the slice of store.Servers in the cluster
+	Nodes() ([]*store.Server, error)
 
 	// Ready returns whether the Store is ready to service requests.
 	Ready() bool
+
+	// Remove removes the node from the cluster.
+	Remove(rn *command.RemoveNodeRequest) error
 
 	// Committed blocks until the local commit index is greater than or
 	// equal to the Leader index, as checked when the function is called.
@@ -83,9 +86,6 @@ type Store interface {
 
 	// Stats returns stats on the Store.
 	Stats() (map[string]any, error)
-
-	// Nodes returns the slice of store.Servers in the cluster
-	Nodes() ([]*store.Server, error)
 
 	// Backup writes backup of the node state to dst
 	Backup(br *command.BackupRequest, dst io.Writer) error
@@ -1018,13 +1018,15 @@ func (s *Service) handleNodes(w http.ResponseWriter, r *http.Request, qp QueryPa
 	}
 
 	// Now test the nodes
-	lAddr, err := s.store.LeaderAddr()
-	if err != nil {
-		http.Error(w, fmt.Sprintf("leader address: %s", err.Error()),
-			http.StatusInternalServerError)
+	laddr := ""
+	lNode, err := s.store.Leader()
+	if err != nil && err != store.ErrLeaderNotFound {
+		http.Error(w, fmt.Sprintf("leader: %s", err.Error()), http.StatusInternalServerError)
 		return
+	} else if lNode != nil {
+		laddr = lNode.Addr
 	}
-	nodes.Test(s.cluster, lAddr, qp.Retries(0), qp.Timeout(defaultTimeout))
+	nodes.Test(s.cluster, laddr, qp.Retries(0), qp.Timeout(defaultTimeout))
 
 	enc := NewNodesRespEncoder(w, qp.Version() != "2")
 	if qp.Pretty() {
@@ -1049,7 +1051,7 @@ func (s *Service) handleLeader(w http.ResponseWriter, r *http.Request, qp QueryP
 	switch r.Method {
 	case "GET":
 		// Return leader information
-		leaderAddr, err := s.store.LeaderAddr()
+		ldr, err := s.store.Leader()
 		if err != nil {
 			statusCode := http.StatusInternalServerError
 			if err == store.ErrNotOpen {
@@ -1061,7 +1063,7 @@ func (s *Service) handleLeader(w http.ResponseWriter, r *http.Request, qp QueryP
 
 		leaderAPIAddr := s.LeaderAPIAddr()
 		response := map[string]string{
-			"addr":     leaderAddr,
+			"addr":     ldr.Addr,
 			"api_addr": leaderAPIAddr,
 		}
 
@@ -1677,24 +1679,24 @@ func (s *Service) CheckRequestPermAll(r *http.Request, perms ...string) (b bool)
 
 // LeaderAddr returns the Raft address of the leader, as known by this node.
 func (s *Service) LeaderAddr() (string, error) {
-	addr, err := s.store.LeaderAddr()
+	ldr, err := s.store.Leader()
 	if err != nil {
 		return "", err
 	}
-	if addr == "" {
+	if ldr.Addr == "" {
 		return "", ErrLeaderNotFound
 	}
-	return addr, nil
+	return ldr.Addr, nil
 }
 
 // LeaderAPIAddr returns the HTTP API address of the leader, as known by this node.
 func (s *Service) LeaderAPIAddr() string {
-	nodeAddr, err := s.store.LeaderAddr()
+	ldr, err := s.store.Leader()
 	if err != nil {
 		return ""
 	}
 
-	meta, err := s.cluster.GetNodeMeta(nodeAddr, 0, defaultTimeout)
+	meta, err := s.cluster.GetNodeMeta(ldr.Addr, 0, defaultTimeout)
 	if err != nil {
 		return ""
 	}
@@ -1730,13 +1732,13 @@ func (s *Service) runQueue() {
 					}
 
 					if err == store.ErrNotLeader {
-						addr, err := s.store.LeaderAddr()
-						if err != nil || addr == "" {
+						ldr, err := s.store.Leader()
+						if err != nil || ldr.Addr == "" {
 							s.logger.Printf("execute queue can't find leader for sequence number %d on node %s",
 								req.SequenceNumber, s.Addr().String())
 							stats.Add(numQueuedExecutionsNoLeader, 1)
 						} else {
-							_, _, err = s.cluster.Execute(er, addr, nil, defaultTimeout, 0)
+							_, _, err = s.cluster.Execute(er, ldr.Addr, nil, defaultTimeout, 0)
 							if err != nil {
 								s.logger.Printf("execute queue write failed for sequence number %d on node %s: %s",
 									req.SequenceNumber, s.Addr().String(), err.Error())

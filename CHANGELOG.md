@@ -4,6 +4,7 @@
 - [PR #2159](https://github.com/rqlite/rqlite/pull/2159): Add `.stepdown` command to rqlite shell.
 
 ### Implementation changes and bug fixes
+- [PR #2161](https://github.com/rqlite/rqlite/pull/2161): Minor refactor of HTTP-Store interfaces.
 - [PR #2149](https://github.com/rqlite/rqlite/pull/2149): Consolidate the top-level of the source tree.
 - [PR #2150](https://github.com/rqlite/rqlite/pull/2150): Move various utilities into an `internal` module.
 - [PR #2152](https://github.com/rqlite/rqlite/pull/2152): Remodel the main CDC loop.

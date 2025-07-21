@@ -14,7 +14,7 @@ import (
 	"github.com/rqlite/rqlite/v8/db"
 )
 
-func Test_MultiNode_VerifyLeader(t *testing.T) {
+func Test_MultiNode_Leader_VerifyLeader(t *testing.T) {
 	s0, ln0 := mustNewStore(t)
 	defer ln0.Close()
 	if err := s0.Open(); err != nil {
@@ -44,6 +44,20 @@ func Test_MultiNode_VerifyLeader(t *testing.T) {
 		t.Fatalf("Error waiting for leader: %s", err)
 	}
 
+	// Ensure the leader is the same on both nodes.
+	node0, err := s0.Leader()
+	if err != nil {
+		t.Fatalf("failed to get leader on single node: %s", err.Error())
+	}
+	node1, err := s1.Leader()
+	if err != nil {
+		t.Fatalf("failed to get leader on follower: %s", err.Error())
+	}
+	if !node0.Equal(node1) {
+		t.Fatalf("leader mismatch, got: %s, exp: %s", node1.ID, node0.ID)
+	}
+
+	// Verify the leader on both nodes.
 	if err := s0.VerifyLeader(); err != nil {
 		t.Fatalf("failed to verify leader on leader: %s", err.Error())
 	}
