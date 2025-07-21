@@ -2464,6 +2464,32 @@ func Test_SingleNodeStepdown(t *testing.T) {
 	}
 }
 
+func Test_SingleNodeStepdownInvalidID(t *testing.T) {
+	s, ln := mustNewStore(t)
+	defer ln.Close()
+	if err := s.Open(); err != nil {
+		t.Fatalf("failed to open single-node store: %s", err.Error())
+	}
+	defer s.Close(true)
+	if err := s.Bootstrap(NewServer(s.ID(), s.Addr(), true)); err != nil {
+		t.Fatalf("failed to bootstrap single-node store: %s", err.Error())
+	}
+	if _, err := s.WaitForLeader(10 * time.Second); err != nil {
+		t.Fatalf("Error waiting for leader: %s", err)
+	}
+
+	// Tell leader to step down with invalid node ID. Should fail with proper error.
+	invalidID := "nonexistent-node"
+	err := s.Stepdown(true, invalidID)
+	if err == nil {
+		t.Fatalf("stepdown with invalid node ID should have failed")
+	}
+	expectedError := fmt.Sprintf("node with ID %s not found in cluster", invalidID)
+	if err.Error() != expectedError {
+		t.Fatalf("expected error '%s', got '%s'", expectedError, err.Error())
+	}
+}
+
 func Test_SingleNodeStepdownNoWaitOK(t *testing.T) {
 	s, ln := mustNewStore(t)
 	defer ln.Close()
