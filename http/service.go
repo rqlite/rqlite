@@ -1076,7 +1076,7 @@ func (s *Service) handleLeader(w http.ResponseWriter, r *http.Request, qp QueryP
 				http.StatusInternalServerError)
 		}
 
-	case "DELETE":
+	case "POST":
 		// Trigger leader stepdown
 		wait := qp.Wait()
 		if err := s.store.Stepdown(wait); err != nil {

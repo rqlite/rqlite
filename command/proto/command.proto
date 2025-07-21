@@ -123,7 +123,8 @@ message RemoveNodeRequest {
 }
 
 message StepdownRequest {
-	bool wait = 1;
+	string id = 1;
+	bool wait = 2;
 }
 
 message Noop {
