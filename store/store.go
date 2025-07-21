@@ -680,6 +680,9 @@ func (s *Store) Stepdown(wait bool) error {
 	if !wait {
 		return nil
 	}
+	if f.Error() == raft.ErrNotLeader {
+		return ErrNotLeader
+	}
 	return f.Error()
 }
 

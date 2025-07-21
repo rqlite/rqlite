@@ -387,7 +387,7 @@ func (n *Node) Stepdown(wait bool) error {
 		urlStr += "?wait"
 	}
 
-	req, err := http.NewRequest("DELETE", urlStr, nil)
+	req, err := http.NewRequest("POST", urlStr, nil)
 	if err != nil {
 		return err
 	}

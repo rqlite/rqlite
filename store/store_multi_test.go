@@ -754,6 +754,11 @@ func Test_MultiNodeStepdown(t *testing.T) {
 		t.Fatalf("Error waiting for leader: %s", err)
 	}
 
+	// Telling a follower to stepdown should fail.
+	if err := s1.Stepdown(true); err != ErrNotLeader {
+		t.Fatalf("expected ErrNotLeader when follower is told to step down")
+	}
+
 	// Tell leader to step down. After this finishes there should be a new Leader.
 	if err := s0.Stepdown(true); err != nil {
 		t.Fatalf("leader failed to step down: %s", err.Error())

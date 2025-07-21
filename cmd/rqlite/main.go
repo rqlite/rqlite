@@ -379,8 +379,8 @@ func snapshot(client *httpcl.Client, argv *argT) error {
 }
 
 func stepdown(client *httpcl.Client, argv *argT) error {
-	url := fmt.Sprintf("%s://%s/leader", argv.Protocol, address6(argv))
-	req, err := http.NewRequest("DELETE", url, nil)
+	url := fmt.Sprintf("%s://%s/leader?wait=true", argv.Protocol, address6(argv))
+	req, err := http.NewRequest("POST", url, nil)
 	if err != nil {
 		return err
 	}

@@ -1683,7 +1683,7 @@ func (m *mockClusterService) Stepdown(sr *command.StepdownRequest, addr string, 
 	return nil
 }
 
-func Test_LeaderGET(t *testing.T) {
+func Test_Leader_GET(t *testing.T) {
 	store := &MockStore{leaderAddr: "127.0.0.1:8001"}
 	cluster := &mockClusterService{apiAddr: "http://127.0.0.1:4001"}
 	cred := &mockCredentialStore{HasPermOK: true}
@@ -1702,15 +1702,14 @@ func Test_LeaderGET(t *testing.T) {
 		t.Fatalf("expected 200, got %d", rr.Code)
 	}
 
-	// Check response body
-	expected := `{"addr":"127.0.0.1:8001","api_addr":"http://127.0.0.1:4001"}`
-	actual := strings.TrimSpace(rr.Body.String())
-	if actual != expected {
-		t.Fatalf("expected %s, got %s", expected, actual)
+	// Ensure the response is well formed.
+	var node Node
+	if err := json.Unmarshal(rr.Body.Bytes(), &node); err != nil {
+		t.Fatalf("failed to unmarshal response body: %s", err.Error())
 	}
 }
 
-func Test_LeaderDELETE(t *testing.T) {
+func Test_Leader_POST(t *testing.T) {
 	stepdownCalled := false
 	stepdownWait := false
 	store := &MockStore{
@@ -1726,10 +1725,10 @@ func Test_LeaderDELETE(t *testing.T) {
 
 	s := New("127.0.0.1:4001", store, cluster, cred)
 
-	// Test DELETE request without wait
-	req, err := http.NewRequest("DELETE", "/leader", nil)
+	// Test POST request without wait
+	req, err := http.NewRequest("POST", "/leader", nil)
 	if err != nil {
-		t.Fatalf("failed to create DELETE request: %s", err.Error())
+		t.Fatalf("failed to create POST request: %s", err.Error())
 	}
 	rr := httptest.NewRecorder()
 	s.ServeHTTP(rr, req)
@@ -1746,13 +1745,13 @@ func Test_LeaderDELETE(t *testing.T) {
 		t.Fatalf("expected stepdown to be called with wait=false")
 	}
 
-	// Test DELETE request with wait
+	// Test POST request with wait
 	stepdownCalled = false
 	stepdownWait = false
 
-	req, err = http.NewRequest("DELETE", "/leader?wait", nil)
+	req, err = http.NewRequest("POST", "/leader?wait", nil)
 	if err != nil {
-		t.Fatalf("failed to create DELETE request with wait: %s", err.Error())
+		t.Fatalf("failed to create POST request with wait: %s", err.Error())
 	}
 	rr = httptest.NewRecorder()
 	s.ServeHTTP(rr, req)
@@ -1770,7 +1769,7 @@ func Test_LeaderDELETE(t *testing.T) {
 	}
 }
 
-func Test_LeaderDELETE_ForwardToLeader(t *testing.T) {
+func Test_LeaderPOST_ForwardToLeader(t *testing.T) {
 	stepdownCalled := false
 	store := &MockStore{
 		leaderAddr: "127.0.0.1:8001",
@@ -1789,9 +1788,9 @@ func Test_LeaderDELETE_ForwardToLeader(t *testing.T) {
 
 	s := New("127.0.0.1:4001", store, cluster, cred)
 
-	req, err := http.NewRequest("DELETE", "/leader", nil)
+	req, err := http.NewRequest("POST", "/leader", nil)
 	if err != nil {
-		t.Fatalf("failed to create DELETE request: %s", err.Error())
+		t.Fatalf("failed to create POST request: %s", err.Error())
 	}
 	rr := httptest.NewRecorder()
 	s.ServeHTTP(rr, req)
@@ -1805,7 +1804,7 @@ func Test_LeaderDELETE_ForwardToLeader(t *testing.T) {
 	}
 }
 
-func Test_LeaderDELETE_ForwardError(t *testing.T) {
+func Test_LeaderPOST_ForwardError(t *testing.T) {
 	store := &MockStore{
 		leaderAddr: "127.0.0.1:8001",
 		stepdownFn: func(wait bool) error {
@@ -1822,9 +1821,9 @@ func Test_LeaderDELETE_ForwardError(t *testing.T) {
 
 	s := New("127.0.0.1:4001", store, cluster, cred)
 
-	req, err := http.NewRequest("DELETE", "/leader", nil)
+	req, err := http.NewRequest("POST", "/leader", nil)
 	if err != nil {
-		t.Fatalf("failed to create DELETE request: %s", err.Error())
+		t.Fatalf("failed to create POST request: %s", err.Error())
 	}
 	rr := httptest.NewRecorder()
 	s.ServeHTTP(rr, req)
@@ -1845,9 +1844,9 @@ func Test_LeaderMethodNotAllowed(t *testing.T) {
 
 	s := New("127.0.0.1:4001", store, cluster, cred)
 
-	req, err := http.NewRequest("POST", "/leader", nil)
+	req, err := http.NewRequest("DELETE", "/leader", nil)
 	if err != nil {
-		t.Fatalf("failed to create POST request: %s", err.Error())
+		t.Fatalf("failed to create DELETE request: %s", err.Error())
 	}
 	rr := httptest.NewRecorder()
 	s.ServeHTTP(rr, req)
