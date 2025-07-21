@@ -44,6 +44,18 @@ func Test_MultiNode_VerifyLeader(t *testing.T) {
 		t.Fatalf("Error waiting for leader: %s", err)
 	}
 
+	node0, err := s0.Leader()
+	if err != nil {
+		t.Fatalf("failed to get leader on single node: %s", err.Error())
+	}
+	node1, err := s1.Leader()
+	if err != nil {
+		t.Fatalf("failed to get leader on follower: %s", err.Error())
+	}
+	if !node0.Equal(node1) {
+		t.Fatalf("leader mismatch, got: %s, exp: %s", node1.ID, node0.ID)
+	}
+
 	if err := s0.VerifyLeader(); err != nil {
 		t.Fatalf("failed to verify leader on leader: %s", err.Error())
 	}
