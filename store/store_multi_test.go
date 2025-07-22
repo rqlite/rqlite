@@ -878,21 +878,33 @@ func Test_MultiNodeStepdownTargetNode(t *testing.T) {
 	}
 
 	// Test stepdown with invalid node ID
-	if err := s0.Stepdown(true, "nonexistent-node"); err == nil {
+	if err := s0.Stepdown(true, "nonexistent-node"); err != ErrNodeNotFound {
 		t.Fatalf("expected error when stepping down to nonexistent node")
-	} else if !strings.Contains(err.Error(), "not found in cluster") {
-		t.Fatalf("expected 'not found in cluster' error, got: %s", err.Error())
 	}
 
-	// Test stepdown with specific target node
-	if err := s0.Stepdown(true, s1.ID()); err != nil {
+	// Test stepdown with leader ID, which should fail.
+	leader, err := s0.Leader()
+	if err != nil {
+		t.Fatalf("failed to get leader address: %s", err.Error())
+	}
+	if err := s0.Stepdown(true, leader.ID); err == nil {
+		t.Fatalf("expected error when stepping down to Leader's own node ID")
+	}
+
+	// Test stepdown with specific target node, and verify it becomes leader.
+	followers, err := s0.Followers()
+	if err != nil {
+		t.Fatalf("failed to get followers: %s", err.Error())
+	}
+	if len(followers) != 2 {
+		t.Fatalf("expected two followers")
+	}
+	if err := s0.Stepdown(true, followers[0].ID); err != nil {
 		t.Fatalf("leader failed to step down to specific node: %s", err.Error())
 	}
-
-	// Verify that s1 became the new leader
 	check := func() bool {
 		leader, err := s1.WaitForLeader(10 * time.Second)
-		if err != nil || leader != s1.Addr() {
+		if err != nil || leader != followers[0].Addr {
 			return false
 		}
 		return true
