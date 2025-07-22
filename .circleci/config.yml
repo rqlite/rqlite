@@ -116,9 +116,6 @@ jobs:
           cc: musl-gcc
           goarch: amd64
       - cross_compile:
-          cc: riscv64-linux-gnu-gcc
-          goarch: riscv64
-      - cross_compile:
           cc: powerpc64le-linux-gnu-gcc
           goarch: ppc64le
     resource_class: large
