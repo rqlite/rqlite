@@ -1174,3 +1174,7 @@ func testPoll(t *testing.T, f func() (bool, error), period time.Duration, timeou
 		}
 	}
 }
+
+func sleepForSecond() {
+	time.Sleep(mustParseDuration("1s"))
+}

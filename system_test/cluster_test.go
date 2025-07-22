@@ -2365,7 +2365,3 @@ func Test_ClusterLeader_Stepdown(t *testing.T) {
 		return ldrNode.Addr != node.Addr, nil
 	}, time.Second, 10*time.Second)
 }
-
-func sleepForSecond() {
-	time.Sleep(mustParseDuration("1s"))
-}

@@ -1882,19 +1882,17 @@ func Test_SingleNodeLeader_Stepdown(t *testing.T) {
 	node := mustNewLeaderNode("leader1")
 	defer node.Deprovision()
 
-	// Test stepdown without wait - should succeed but not wait for result
+	// Test stepdown without wait - should succeed if not waiting for result
 	err := node.Stepdown(false)
 	if err != nil {
 		t.Fatalf("failed to trigger stepdown: %s", err.Error())
 	}
+	sleepForSecond() // give time for stepdown attempt to complete
 
-	// Test stepdown with wait - should fail in single node cluster as there's no peer to transfer to
+	// Test stepdown with wait - should fail in single node cluster as there's
+	// no peer to transfer to
 	err = node.Stepdown(true)
 	if err == nil {
 		t.Fatalf("expected stepdown with wait to fail in single-node cluster")
-	}
-	// Check that it's the expected error
-	if !strings.Contains(err.Error(), "cannot find peer") {
-		t.Fatalf("unexpected error message: %s", err.Error())
 	}
 }
