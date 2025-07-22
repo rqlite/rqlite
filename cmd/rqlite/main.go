@@ -73,7 +73,7 @@ func init() {
 		`.schema                                       Show CREATE statements for all tables`,
 		`.snapshot                                     Request a Raft snapshot and log truncation on connected node`,
 		`.status                                       Show status and diagnostic information for connected node`,
-		`.stepdown                                     Instruct the cluster leader to stepdown and transfer leadership`,
+		`.stepdown [NODEID]                            Instruct the cluster leader to stepdown and transfer leadership. 'NODEID' to specify explicit new leader node`,
 		`.sysdump FILE                                 Dump system diagnostics to FILE`,
 		`.tables                                       List names of tables`,
 		`.timer on|off                                 Turn query timings on or off`,
@@ -256,7 +256,11 @@ func main() {
 			case ".SNAPSHOT":
 				err = snapshot(client, argv)
 			case ".STEPDOWN":
-				err = stepdown(client, argv)
+				nodeID := ""
+				if index != -1 && index < len(line)-1 {
+					nodeID = strings.TrimSpace(line[index+1:])
+				}
+				err = stepdown(client, nodeID, argv)
 			case "SELECT", "PRAGMA":
 				err = queryWithClient(ctx, client, timer, blobArray, consistency, line)
 			default:
@@ -378,12 +382,29 @@ func snapshot(client *httpcl.Client, argv *argT) error {
 	return nil
 }
 
-func stepdown(client *httpcl.Client, argv *argT) error {
+func stepdown(client *httpcl.Client, nodeID string, argv *argT) error {
 	url := fmt.Sprintf("%s://%s/leader?wait=true", argv.Protocol, address6(argv))
-	req, err := http.NewRequest("POST", url, nil)
+
+	var body io.Reader
+	if nodeID != "" {
+		// Create JSON body with node ID
+		reqBody := map[string]string{"id": nodeID}
+		jsonBody, err := json.Marshal(reqBody)
+		if err != nil {
+			return err
+		}
+		body = bytes.NewReader(jsonBody)
+	}
+
+	req, err := http.NewRequest("POST", url, body)
 	if err != nil {
 		return err
 	}
+
+	if nodeID != "" {
+		req.Header.Set("Content-Type", "application/json")
+	}
+
 	if argv.Credentials != "" {
 		creds := strings.Split(argv.Credentials, ":")
 		if len(creds) != 2 {
