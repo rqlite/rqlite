@@ -990,6 +990,42 @@ func (s *Store) HasLeaderID() bool {
 	return id != ""
 }
 
+// Followers returns the list of followers in the cluster, sorted by ID ascending.
+// This is a point-in-time snapshot of the followers, and may not reflect the
+// current state of the cluster if the cluster leadership subsequently changes
+// or changes while this function is running. It is useful for testing purposes
+// where leadership is not expected to change while the function is running.
+func (s *Store) Followers() ([]*Server, error) {
+	if !s.open.Is() {
+		return nil, ErrNotOpen
+	}
+
+	f := s.raft.GetConfiguration()
+	if f.Error() != nil {
+		return nil, f.Error()
+	}
+
+	_, id := s.raft.LeaderWithID()
+	if id == "" {
+		return nil, ErrLeaderNotFound
+	}
+
+	rs := f.Configuration().Servers
+	var followers []*Server
+	for i := range rs {
+		if rs[i].ID != raft.ServerID(id) && rs[i].Suffrage == raft.Voter {
+			followers = append(followers, &Server{
+				ID:       string(rs[i].ID),
+				Addr:     string(rs[i].Address),
+				Suffrage: rs[i].Suffrage.String(),
+			})
+		}
+	}
+
+	sort.Sort(Servers(followers))
+	return followers, nil
+}
+
 // CommitIndex returns the Raft commit index.
 func (s *Store) CommitIndex() (uint64, error) {
 	if !s.open.Is() {

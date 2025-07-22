@@ -108,6 +108,12 @@ func Test_OpenStoreSingleNode(t *testing.T) {
 	if node.Addr != s.Addr() {
 		t.Fatalf("wrong leader address returned, got: %s, exp %s", node.Addr, s.Addr())
 	}
+
+	if followers, err := s.Followers(); err != nil {
+		t.Fatalf("failed to retrieve followers: %s", err.Error())
+	} else if len(followers) != 0 {
+		t.Fatalf("expected no followers, got %d", len(followers))
+	}
 }
 
 // Test_SingleNodeOnDiskSQLitePath ensures that basic functionality works when the SQLite
@@ -2464,7 +2470,7 @@ func Test_SingleNodeStepdown(t *testing.T) {
 	}
 }
 
-func Test_SingleNodeStepdownInvalidID(t *testing.T) {
+func Test_SingleNodeStepdown_InvalidID(t *testing.T) {
 	s, ln := mustNewStore(t)
 	defer ln.Close()
 	if err := s.Open(); err != nil {
@@ -2489,7 +2495,7 @@ func Test_SingleNodeStepdownInvalidID(t *testing.T) {
 	}
 }
 
-func Test_SingleNodeStepdownNoWaitOK(t *testing.T) {
+func Test_SingleNodeStepdown_NoWaitOK(t *testing.T) {
 	s, ln := mustNewStore(t)
 	defer ln.Close()
 	if err := s.Open(); err != nil {
