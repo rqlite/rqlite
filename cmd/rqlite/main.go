@@ -73,7 +73,7 @@ func init() {
 		`.schema                                       Show CREATE statements for all tables`,
 		`.snapshot                                     Request a Raft snapshot and log truncation on connected node`,
 		`.status                                       Show status and diagnostic information for connected node`,
-		`.stepdown [NODEID]                            Instruct the cluster leader to stepdown, optionally explicitly specifying new Leader node`,
+		`.stepdown [NODEID]                            Instruct the leader to stepdown, optionally specifying new Leader node`,
 		`.sysdump FILE                                 Dump system diagnostics to FILE`,
 		`.tables                                       List names of tables`,
 		`.timer on|off                                 Turn query timings on or off`,
