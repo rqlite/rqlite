@@ -14,6 +14,63 @@ import (
 	"github.com/rqlite/rqlite/v8/db"
 )
 
+func Test_MultiNode_Leader_Followers(t *testing.T) {
+	s0, ln0 := mustNewStore(t)
+	defer ln0.Close()
+	if err := s0.Open(); err != nil {
+		t.Fatalf("failed to open single-node store: %s", err.Error())
+	}
+	defer s0.Close(true)
+	if err := s0.Bootstrap(NewServer(s0.ID(), s0.Addr(), true)); err != nil {
+		t.Fatalf("failed to bootstrap single-node store: %s", err.Error())
+	}
+	if _, err := s0.WaitForLeader(10 * time.Second); err != nil {
+		t.Fatalf("Error waiting for leader: %s", err)
+	}
+
+	s1, ln1 := mustNewStore(t)
+	defer ln1.Close()
+	if err := s1.Open(); err != nil {
+		t.Fatalf("failed to open single-node store: %s", err.Error())
+	}
+	defer s1.Close(true)
+	if err := s0.Join(joinRequest(s1.ID(), s1.Addr(), true)); err != nil {
+		t.Fatalf("failed to join single-node store: %s", err.Error())
+	}
+	if _, err := s1.WaitForLeader(10 * time.Second); err != nil {
+		t.Fatalf("Error waiting for leader: %s", err)
+	}
+
+	// Ensure the leader is the same on both nodes.
+	node0, err := s0.Leader()
+	if err != nil {
+		t.Fatalf("failed to get leader on single node: %s", err.Error())
+	}
+	node1, err := s1.Leader()
+	if err != nil {
+		t.Fatalf("failed to get leader on follower: %s", err.Error())
+	}
+	if !node0.Equal(node1) {
+		t.Fatalf("leader mismatch, got: %s, exp: %s", node1.ID, node0.ID)
+	}
+
+	// Check the followers returned by each node, and compare.
+	followers0, err := s0.Followers()
+	if err != nil {
+		t.Fatalf("failed to get followers on single node: %s", err.Error())
+	}
+	followers1, err := s1.Followers()
+	if err != nil {
+		t.Fatalf("failed to get followers on follower: %s", err.Error())
+	}
+	if len(followers0) != 1 || len(followers1) != 1 {
+		t.Fatalf("expected one follower on each node, got: %d, %d", len(followers0), len(followers1))
+	}
+	if !followers0[0].Equal(followers1[0]) {
+		t.Fatalf("followers mismatch, got: %s, exp: %s", followers1[0].ID, followers0[0].ID)
+	}
+}
+
 func Test_MultiNode_Leader_VerifyLeader(t *testing.T) {
 	s0, ln0 := mustNewStore(t)
 	defer ln0.Close()
