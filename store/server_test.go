@@ -1,10 +1,11 @@
 package store
 
 import (
+	"sort"
 	"testing"
 )
 
-func Test_IsReadOnly(t *testing.T) {
+func Test_Server_IsReadOnly(t *testing.T) {
 	testCases := []struct {
 		name          string
 		servers       Servers
@@ -65,7 +66,7 @@ func Test_IsReadOnly(t *testing.T) {
 	}
 }
 
-func Test_Contains(t *testing.T) {
+func Test_Server_Contains(t *testing.T) {
 	testCases := []struct {
 		name     string
 		servers  Servers
@@ -109,5 +110,22 @@ func Test_Contains(t *testing.T) {
 				t.Fatalf("Contains for %s returned %t, expected %t", tc.name, actual, tc.expected)
 			}
 		})
+	}
+}
+
+func Test_Server_Sort(t *testing.T) {
+	servers := Servers{
+		{ID: "3", Addr: "localhost:4003", Suffrage: "Voter"},
+		{ID: "1", Addr: "localhost:4001", Suffrage: "Voter"},
+		{ID: "2", Addr: "localhost:4002", Suffrage: "Nonvoter"},
+	}
+	expectedOrder := []string{"1", "2", "3"}
+
+	sort.Sort(Servers(servers))
+
+	for i, server := range servers {
+		if server.ID != expectedOrder[i] {
+			t.Fatalf("Expected server ID %s at index %d, got %s", expectedOrder[i], i, server.ID)
+		}
 	}
 }

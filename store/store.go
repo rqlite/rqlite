@@ -1011,7 +1011,7 @@ func (s *Store) Followers() ([]*Server, error) {
 	}
 
 	rs := f.Configuration().Servers
-	var followers []*Server
+	followers := make([]*Server, 0, len(rs)-1)
 	for i := range rs {
 		if rs[i].ID != raft.ServerID(id) && rs[i].Suffrage == raft.Voter {
 			followers = append(followers, &Server{
