@@ -13,16 +13,16 @@
 [![Slack](https://img.shields.io/badge/Slack--purple.svg)](https://www.rqlite.io/join-slack)
 [![Google Group](https://img.shields.io/badge/Google%20Group--blue.svg)](https://groups.google.com/group/rqlite)
 
-[rqlite](https://rqlite.io) is a [rock](https://www.sqlite.org/testing.html)-[solid](https://philipotoole.com/how-is-rqlite-tested/), lightweight, fault-tolerant, relational database with **effortless installation, deployment, and operation**.
+[rqlite](https://rqlite.io) is a [rock](https://www.sqlite.org/testing.html)-[solid](https://philipotoole.com/how-is-rqlite-tested/), highly-available, distributed relational database built on SQLite. It's lightweight, developer-friendly and exceptionally easy to operate.
 
-Use rqlite to reliably store your most important data, ensuring it's always available to your applications. Whether you're deploying **resilient services in the cloud** or **reliable applications at the edge**, rqlite provides you with a developer-friendly database that's exceptionally easy to operate.
+Use rqlite to reliably store your most important data, ensuring it's always available to your applications. Whether you're deploying **resilient services in the cloud** or **reliable applications at the edge**, rqlite is a solution with effortless installation, deployment, and operation.
 
 - [_Quick Start_ guide](https://rqlite.io/docs/quick-start/)
 - [Developer guide](https://www.rqlite.io/docs/api)
 
 _Check out the [rqlite FAQ](https://rqlite.io/docs/faq)_.
 
-## Why run rqlite?
+## Why run rqlite? 
 rqlite is very simple to deploy, run, and manage – simplicity-of-operation is a key design goal. It’s also lightweight and easy to query. It’s a [single binary](https://github.com/rqlite/rqlite/releases) you can drop anywhere on a machine, and just start it, which makes it very convenient. It takes literally seconds [to configure and form a cluster](https://rqlite.io/docs/clustering/), providing you with fault-tolerance and high-availability. Think [Consul](https://www.consul.io/) or [etcd](https://etcd.io/), but with relational modeling available. 
 
 ### Key features
