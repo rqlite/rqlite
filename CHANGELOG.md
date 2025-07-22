@@ -1,6 +1,9 @@
-## v8.40.1 (unreleased)
-### Implementation changes and bug fixes
+## v8.41.0 (unreleased)
+### New features
 - [PR #2172](https://github.com/rqlite/rqlite/pull/2172): Allow specification of target node as new Leader during Stepdown.
+- [PR #2176](https://github.com/rqlite/rqlite/pull/2176): rqlite shell supports specifying ID of new leader node after stepdown.
+
+### Implementation changes and bug fixes
 - [PR #2173](https://github.com/rqlite/rqlite/pull/2173): Add `Followers()` method to Store.
 
 ## v8.40.0 (July 21st 2025)
