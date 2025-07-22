@@ -122,6 +122,16 @@ jobs:
           cc: powerpc64le-linux-gnu-gcc
           goarch: ppc64le
     resource_class: large
+  cross_compile_risc:
+    docker:
+      - image: << pipeline.parameters.primary_image >>
+    steps:
+      - checkout
+      - restore_and_save_cache
+      - cross_compile:
+          cc: riscv64-linux-gnu-gcc
+          goarch: riscv64
+    resource_class: large
   cross_compile_arm:
     docker:
       - image: << pipeline.parameters.primary_image >>
@@ -312,6 +322,7 @@ workflows:
     jobs:
       - lint
       - cross_compile
+      - cross_compile_risc
       - cross_compile_windows
       - cross_compile_arm
       - cross_compile_mips
