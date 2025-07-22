@@ -13,9 +13,9 @@
 [![Slack](https://img.shields.io/badge/Slack--purple.svg)](https://www.rqlite.io/join-slack)
 [![Google Group](https://img.shields.io/badge/Google%20Group--blue.svg)](https://groups.google.com/group/rqlite)
 
-[rqlite](https://rqlite.io) is a [rock](https://www.sqlite.org/testing.html)-[solid](https://philipotoole.com/how-is-rqlite-tested/), highly-available, distributed relational database built on SQLite. It's lightweight, developer-friendly and exceptionally easy to operate.
+[rqlite](https://rqlite.io) is a [rock](https://www.sqlite.org/testing.html)-[solid](https://philipotoole.com/how-is-rqlite-tested/), highly-available, distributed relational database built on SQLite. It's lightweight, developer-friendly, and exceptionally easy to operate.
 
-Use rqlite to reliably store your most important data, ensuring it's always available to your applications. Whether you're deploying **resilient services in the cloud** or **reliable applications at the edge**, rqlite is a solution with effortless installation, deployment, and operation.
+Use rqlite to reliably store your most important data, ensuring it's always available to your applications. Whether you're deploying **resilient services in the cloud** or **reliable applications at the edge**, rqlite is a solution that offers effortless installation, deployment, and operation.
 
 - [_Quick Start_ guide](https://rqlite.io/docs/quick-start/)
 - [Developer guide](https://www.rqlite.io/docs/api)
