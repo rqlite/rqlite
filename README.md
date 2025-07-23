@@ -18,7 +18,7 @@
 Use rqlite to reliably store your most important data, ensuring it's always available to your applications. Whether you're deploying **resilient services in the cloud** or **reliable applications at the edge**, rqlite is a solution that offers effortless installation, deployment, and operation.
 
 ### Quick Start
-[_Check out the full Quick Start_guide_](https://rqlite.io/docs/quick-start/)
+[_Check out the full Quick Start guide_](https://rqlite.io/docs/quick-start/)
 
 **1. Run a rqlite node:**
 ```bash
@@ -43,11 +43,11 @@ Now you have a single-node running. [Learn how to form a multi-node cluster in s
 ## Key features
 
 **Core functionality**
-- **Relational**: Full SQL support via SQLite, including Full-text search, JSON support, and more.
-- **Extensible**: Load SQLite extensions to add capabilities like Vector Search and Crypto.
+- **Relational**: Full SQL support via SQLite, including [Full-text search](https://www.sqlite.org/fts5.html), JSON support, and more.
+- **Extensible**: [Load SQLite extensions](https://rqlite.io/docs/guides/extensions/) to add capabilities like [Vector Search](https://github.com/asg017/sqlite-vec) and [Crypto](https://github.com/nalgeon/sqlean).
 - **Atomic Transactions**: Execute multiple SQL statements atomically within a single API request. Learn more about transaction support.
 
-**Easy operations**
+**Easy Operations**
 - **Easy Deployment**: A single binary with no external dependencies. Up and running in seconds.
 - **High Availability**: Fully replicated database provides fault-tolerance. Outage of a node doesn't impact the cluster.
 - **Dynamic Clustering**: Automatic clustering via [Kubernetes](https://rqlite.io/docs/guides/kubernetes/), [Docker Compose](https://rqlite.io/docs/guides/docker-compose/), Consul, etcd, or DNS.
@@ -61,7 +61,6 @@ Now you have a single-node running. [Learn how to form a multi-node cluster in s
 ## More questions?
 - [Join the rqlite Slack channel](https://rqlite.io/join-slack)
 - [Sign up for Office Hours](https://rqlite.io/office-hours)
-
 
 ## Pronunciation
 Common pronunciations of rqlite include "R Q lite" and "ree-qwell-lite".
