@@ -1,4 +1,4 @@
-## v8.41.0 (unreleased)
+## v8.41.0 (July 23rd 2025)
 ### New features
 - [PR #2172](https://github.com/rqlite/rqlite/pull/2172): Allow specification of target node as new Leader during Stepdown.
 - [PR #2176](https://github.com/rqlite/rqlite/pull/2176): rqlite shell supports specifying ID of new leader node after stepdown.
