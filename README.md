@@ -54,7 +54,7 @@ Now you have a single-node running. [Learn how to form a multi-node cluster in s
 - **Effortless Backups**: Hot [backups](https://rqlite.io/docs/guides/backup/), including [automatic backups to AWS S3, MinIO, and Google Cloud](https://rqlite.io/docs/guides/backup/#automatic-backups), as well as [restore directly from SQLite](https://rqlite.io/docs/guides/backup/#restoring-from-sqlite) and Cloud-based storage.
 
 **Developer Experience**
-- **Simple APIs**: Easy-to-use [HTTP API](https://rqlite.io/docs/api/), [CLI](https://rqlite.io/docs/cli/) and official/community [client libraries](https://rqlite.io/docs/api/client-libraries/).
+- **Simple APIs**: Easy-to-use [HTTP API](https://rqlite.io/docs/api/), [CLI](https://rqlite.io/docs/cli/) and [client libraries](https://rqlite.io/docs/api/client-libraries/) are also available.
 - **Robust Security**: [End-to-end encryption with TLS](https://rqlite.io/docs/guides/security/) and rich authentication/authorization controls.
 - **Tunable Consistency**: Customize [read consistency](https://rqlite.io/docs/api/read-consistency/) and [durability](https://rqlite.io/docs/api/queued-writes/) to match your application's needs.
 
