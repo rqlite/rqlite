@@ -5,6 +5,7 @@
 
 ### Implementation changes and bug fixes
 - [PR #2173](https://github.com/rqlite/rqlite/pull/2173): Add `Followers()` method to Store.
+- [PR #2179](https://github.com/rqlite/rqlite/pull/2179): Upgrade dependencies via 'go get'.
 
 ## v8.40.0 (July 21st 2025)
 ### New features
