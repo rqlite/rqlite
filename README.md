@@ -17,31 +17,50 @@
 
 Use rqlite to reliably store your most important data, ensuring it's always available to your applications. Whether you're deploying **resilient services in the cloud** or **reliable applications at the edge**, rqlite is a solution that offers effortless installation, deployment, and operation.
 
-- [_Quick Start_ guide](https://rqlite.io/docs/quick-start/)
-- [Developer guide](https://www.rqlite.io/docs/api)
+## Quick Start
+[_Check out the full Quick Start guide_](https://rqlite.io/docs/quick-start/)
 
-_Check out the [rqlite FAQ](https://rqlite.io/docs/faq)_.
+**1. Run a rqlite node:**
+```bash
+docker run -p 4001:4001 rqlite/rqlite
+```
 
-## Why run rqlite? 
-rqlite is very simple to deploy, run, and manage – simplicity-of-operation is a key design goal. It’s also lightweight and [easy to query](https://rqlite.io/docs/api/api/). It’s a [single binary](https://github.com/rqlite/rqlite/releases) you can drop anywhere on a machine, and just start it, which makes it very convenient. It takes literally seconds [to configure and form a cluster](https://rqlite.io/docs/clustering/), providing you with fault-tolerance and high-availability. Think [Consul](https://www.consul.io/) or [etcd](https://etcd.io/), but with relational modeling available. 
+**2. Create a table and insert a row:**
+```bash
+curl -XPOST 'localhost:4001/db/execute' -H 'Content-Type: application/json' -d '[
+     "CREATE TABLE foo (id INTEGER NOT NULL PRIMARY KEY, name TEXT)",
+     "INSERT INTO foo(id, name) VALUES(1, \"fiona\")"
+]'
+```
 
-### Key features
-- **Easy Deployment**: Up and running in seconds, with no separate SQLite installation.
-- **Developer-Friendly**: Easy-to-use [HTTP API](https://rqlite.io/docs/api/), [CLI](https://rqlite.io/docs/cli/) and [client libraries](https://rqlite.io/docs/api/client-libraries/).
-- **Rich feature set**: [Full-text search](https://www.sqlite.org/fts5.html), [JSON support](https://www.sqlite.org/json1.html), and [SQLite extensions support](https://rqlite.io/docs/guides/extensions/) including [Vector Search](https://github.com/asg017/sqlite-vec) and [Crypto](https://github.com/nalgeon/sqlean).
-- **Large data set support**: rqlite works well and has been tested with 2GB+ databases.
-- **Reliable**: Fully replicated SQL database provides fault-tolerance and high-availability.
-- **Dynamic Clustering**: Integrates with [Kubernetes](https://rqlite.io/docs/guides/kubernetes/), [Docker Compose](https://rqlite.io/docs/guides/docker-compose/), Consul, etcd, and DNS for [automatic clustering](https://rqlite.io/docs/clustering/automatic-clustering/).
-- **Robust Security**: [Extensive encryption and TLS support](https://rqlite.io/docs/guides/security/).
-- **Flexible Consistency**: Customize [read/write performance](https://rqlite.io/docs/api/read-consistency/) and [durability](https://rqlite.io/docs/api/queued-writes/).
-- **Scalable Reads**: [Read-only nodes](https://rqlite.io/docs/clustering/read-only-nodes/) for enhanced scalability.
-- **Transactions**: Supports a **form** of transactions.
-- **Easy Backups**: Hot [backups](https://rqlite.io/docs/guides/backup/), including [automatic backups to AWS S3, MinIO, and Google Cloud](https://rqlite.io/docs/guides/backup/#automatic-backups), as well as [restore directly from SQLite](https://rqlite.io/docs/guides/backup/#restoring-from-sqlite) and Cloud-based storage.
+**3. Query the data:**
+```bash
+curl -G 'localhost:4001/db/query' --data-urlencode 'q=SELECT * FROM foo'
+```
+
+Now you have a single-node running. [Learn how to form a multi-node cluster in seconds.](https://rqlite.io/docs/clustering/) and dive into the [_Developer Guide_](https://www.rqlite.io/docs/api).
+
+## Key features
+
+**Core functionality**
+- **Relational**: Full SQL support via SQLite, including [Full-text search](https://www.sqlite.org/fts5.html), JSON support, and more.
+- **Extensible**: [Load SQLite extensions](https://rqlite.io/docs/guides/extensions/) to add capabilities like [Vector Search](https://github.com/asg017/sqlite-vec) and [Crypto](https://github.com/nalgeon/sqlean).
+- **Atomic Requests**: Execute multiple SQL statements atomically within a single API request.
+
+**Easy Operations**
+- **Easy Deployment**: A single binary with no external dependencies. Up and running in seconds.
+- **High Availability**: Fully replicated database provides fault-tolerance. Outage of a node doesn't impact the cluster.
+- **Dynamic Clustering**: Automatic clustering via [Kubernetes](https://rqlite.io/docs/guides/kubernetes/), [Docker Compose](https://rqlite.io/docs/guides/docker-compose/), Consul, etcd, or DNS.
+- **Effortless Backups**: Hot [backups](https://rqlite.io/docs/guides/backup/), including [automatic backups to AWS S3, MinIO, and Google Cloud](https://rqlite.io/docs/guides/backup/#automatic-backups), as well as [restore directly from SQLite](https://rqlite.io/docs/guides/backup/#restoring-from-sqlite) and Cloud-based storage.
+
+**Developer Experience**
+- **Simple APIs**: Easy-to-use [HTTP API](https://rqlite.io/docs/api/), [CLI](https://rqlite.io/docs/cli/) and [client libraries](https://rqlite.io/docs/api/client-libraries/) are also available.
+- **Robust Security**: [End-to-end encryption with TLS](https://rqlite.io/docs/guides/security/) and rich authentication/authorization controls.
+- **Tunable Consistency**: Customize [read consistency](https://rqlite.io/docs/api/read-consistency/) and [durability](https://rqlite.io/docs/api/queued-writes/) to match your application's needs.
 
 ## More questions?
 - [Join the rqlite Slack channel](https://rqlite.io/join-slack)
 - [Sign up for Office Hours](https://rqlite.io/office-hours)
-
 
 ## Pronunciation
 Common pronunciations of rqlite include "R Q lite" and "ree-qwell-lite".
