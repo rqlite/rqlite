@@ -45,18 +45,18 @@ Now you have a single-node running. [Learn how to form a multi-node cluster in s
 **Core functionality**
 - **Relational**: Full SQL support via SQLite, including [Full-text search](https://www.sqlite.org/fts5.html), JSON support, and more.
 - **Extensible**: [Load SQLite extensions](https://rqlite.io/docs/guides/extensions/) to add capabilities like [Vector Search](https://github.com/asg017/sqlite-vec) and [Crypto](https://github.com/nalgeon/sqlean).
-- **Atomic Transactions**: Execute multiple SQL statements atomically within a single API request. Learn more about transaction support.
+- **Atomic Requests**: Execute multiple SQL statements atomically within a single API request.
 
 **Easy Operations**
 - **Easy Deployment**: A single binary with no external dependencies. Up and running in seconds.
 - **High Availability**: Fully replicated database provides fault-tolerance. Outage of a node doesn't impact the cluster.
 - **Dynamic Clustering**: Automatic clustering via [Kubernetes](https://rqlite.io/docs/guides/kubernetes/), [Docker Compose](https://rqlite.io/docs/guides/docker-compose/), Consul, etcd, or DNS.
-- **Effortless Backups**: Hot [backups](https://rqlite.io/docs/guides/backup/) to local disk or cloud storage (AWS S3, MinIO, Google Cloud).
+- **Effortless Backups**: Hot [backups](https://rqlite.io/docs/guides/backup/), including [automatic backups to AWS S3, MinIO, and Google Cloud](https://rqlite.io/docs/guides/backup/#automatic-backups), as well as [restore directly from SQLite](https://rqlite.io/docs/guides/backup/#restoring-from-sqlite) and Cloud-based storage.
 
 **Developer Experience**
 - **Simple APIs**: Easy-to-use [HTTP API](https://rqlite.io/docs/api/), [CLI](https://rqlite.io/docs/cli/) and official/community [client libraries](https://rqlite.io/docs/api/client-libraries/).
 - **Robust Security**: [End-to-end encryption with TLS](https://rqlite.io/docs/guides/security/) and rich authentication/authorization controls.
-- **Tunable Consistency**: Customize [read/write performance](https://rqlite.io/docs/api/read-consistency/) and [durability](https://rqlite.io/docs/api/queued-writes/) to match your application's needs.
+- **Tunable Consistency**: Customize [read consistency](https://rqlite.io/docs/api/read-consistency/) and [durability](https://rqlite.io/docs/api/queued-writes/) to match your application's needs.
 
 ## More questions?
 - [Join the rqlite Slack channel](https://rqlite.io/join-slack)
