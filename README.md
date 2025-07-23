@@ -18,7 +18,7 @@
 Use rqlite to reliably store your most important data, ensuring it's always available to your applications. Whether you're deploying **resilient services in the cloud** or **reliable applications at the edge**, rqlite is a solution that offers effortless installation, deployment, and operation.
 
 ### Quick Start
-- [_Check out the full Quick Start_guide_](https://rqlite.io/docs/quick-start/)
+[_Check out the full Quick Start_guide_](https://rqlite.io/docs/quick-start/)
 
 **1. Run a rqlite node:**
 ```bash
