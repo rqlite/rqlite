@@ -29,7 +29,7 @@ rqlite is very simple to deploy, run, and manage – simplicity-of-operation is 
 - **Easy Deployment**: Up and running in seconds, with no separate SQLite installation.
 - **Developer-Friendly**: Easy-to-use [HTTP API](https://rqlite.io/docs/api/), [CLI](https://rqlite.io/docs/cli/) and [client libraries](https://rqlite.io/docs/api/client-libraries/).
 - **Rich feature set**: [Full-text search](https://www.sqlite.org/fts5.html), [JSON support](https://www.sqlite.org/json1.html), and [SQLite extensions support](https://rqlite.io/docs/guides/extensions/) including [Vector Search](https://github.com/asg017/sqlite-vec) and [Crypto](https://github.com/nalgeon/sqlean).
-- **Large data set support**: rqlite works well, even when managing multi-GB data sets.
+- **Large data set support**: rqlite works well and has been tested with 2GB+ databases.
 - **Reliable**: Fully replicated SQL database provides fault-tolerance and high-availability.
 - **Dynamic Clustering**: Integrates with [Kubernetes](https://rqlite.io/docs/guides/kubernetes/), [Docker Compose](https://rqlite.io/docs/guides/docker-compose/), Consul, etcd, and DNS for [automatic clustering](https://rqlite.io/docs/clustering/automatic-clustering/).
 - **Robust Security**: [Extensive encryption and TLS support](https://rqlite.io/docs/guides/security/).
