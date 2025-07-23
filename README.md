@@ -50,7 +50,7 @@ Now you have a single-node running. [Learn how to form a multi-node cluster in s
 **Easy Operations**
 - **Easy Deployment**: A single binary with no external dependencies. Up and running in seconds.
 - **High Availability**: Fully replicated database provides fault-tolerance. Outage of a node doesn't impact the cluster.
-- **Dynamic Clustering**: Automatic clustering via [Kubernetes](https://rqlite.io/docs/guides/kubernetes/), [Docker Compose](https://rqlite.io/docs/guides/docker-compose/), Consul, etcd, or DNS.
+- **Dynamic Clustering**: Automatic [clustering](https://rqlite.io/docs/clustering/) via [Kubernetes](https://rqlite.io/docs/guides/kubernetes/), [Docker Compose](https://rqlite.io/docs/guides/docker-compose/), Consul, etcd, or DNS.
 - **Effortless Backups**: Hot [backups](https://rqlite.io/docs/guides/backup/), including [automatic backups to AWS S3, MinIO, and Google Cloud](https://rqlite.io/docs/guides/backup/#automatic-backups), as well as [restore directly from SQLite](https://rqlite.io/docs/guides/backup/#restoring-from-sqlite) and Cloud-based storage.
 
 **Developer Experience**
