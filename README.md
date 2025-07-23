@@ -13,7 +13,7 @@
 [![Slack](https://img.shields.io/badge/Slack--purple.svg)](https://www.rqlite.io/join-slack)
 [![Google Group](https://img.shields.io/badge/Google%20Group--blue.svg)](https://groups.google.com/group/rqlite)
 
-[rqlite](https://rqlite.io) is a [rock](https://www.sqlite.org/testing.html)-[solid](https://philipotoole.com/how-is-rqlite-tested/), highly-available, distributed relational database built on SQLite. It's lightweight, developer-friendly, and exceptionally easy to operate.
+[rqlite](https://rqlite.io) is a [rock](https://www.sqlite.org/testing.html)-[solid](https://philipotoole.com/how-is-rqlite-tested/), highly-available, distributed relational database built on [SQLite](https://www.sqlite.org/). It's lightweight, developer-friendly, and exceptionally easy to operate.
 
 Use rqlite to reliably store your most important data, ensuring it's always available to your applications. Whether you're deploying **resilient services in the cloud** or **reliable applications at the edge**, rqlite is a solution that offers effortless installation, deployment, and operation.
 
@@ -23,7 +23,7 @@ Use rqlite to reliably store your most important data, ensuring it's always avai
 _Check out the [rqlite FAQ](https://rqlite.io/docs/faq)_.
 
 ## Why run rqlite? 
-rqlite is very simple to deploy, run, and manage – simplicity-of-operation is a key design goal. It’s also lightweight and easy to query. It’s a [single binary](https://github.com/rqlite/rqlite/releases) you can drop anywhere on a machine, and just start it, which makes it very convenient. It takes literally seconds [to configure and form a cluster](https://rqlite.io/docs/clustering/), providing you with fault-tolerance and high-availability. Think [Consul](https://www.consul.io/) or [etcd](https://etcd.io/), but with relational modeling available. 
+rqlite is very simple to deploy, run, and manage – simplicity-of-operation is a key design goal. It’s also lightweight and [easy to query](https://rqlite.io/docs/api/api/). It’s a [single binary](https://github.com/rqlite/rqlite/releases) you can drop anywhere on a machine, and just start it, which makes it very convenient. It takes literally seconds [to configure and form a cluster](https://rqlite.io/docs/clustering/), providing you with fault-tolerance and high-availability. Think [Consul](https://www.consul.io/) or [etcd](https://etcd.io/), but with relational modeling available. 
 
 ### Key features
 - **Easy Deployment**: Up and running in seconds, with no separate SQLite installation.
