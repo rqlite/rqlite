@@ -15,7 +15,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/rqlite/go-sqlite3"
+	"github.com/mattn/go-sqlite3"
 	"github.com/rqlite/rqlite/v8/internal/random"
 )
 

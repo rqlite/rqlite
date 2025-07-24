@@ -16,7 +16,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/rqlite/go-sqlite3"
+	"github.com/mattn/go-sqlite3"
 	command "github.com/rqlite/rqlite/v8/command/proto"
 	"github.com/rqlite/rqlite/v8/db/humanize"
 	"github.com/rqlite/rqlite/v8/internal/rsum"

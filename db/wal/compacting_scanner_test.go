@@ -10,7 +10,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	_ "github.com/rqlite/go-sqlite3"
+	_ "github.com/mattn/go-sqlite3"
 )
 
 func Test_CompactingScanner_Scan_Empty(t *testing.T) {
