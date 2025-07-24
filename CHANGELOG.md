@@ -2,6 +2,9 @@
 ### New features
 - [PR #2182](https://github.com/rqlite/rqlite/pull/2182): Support providing backups in DELETE mode.
 
+### Implementation changes and bug fixes
+- [PR #2180](https://github.com/rqlite/rqlite/pull/2180): Use `require` for some Go modules, instead of direct `import`.
+
 ## v8.41.0 (July 23rd 2025)
 ### New features
 - [PR #2172](https://github.com/rqlite/rqlite/pull/2172): Allow specification of target node as new Leader during Stepdown.
