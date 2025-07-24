@@ -88,6 +88,7 @@ message BackupRequest {
 		BACKUP_REQUEST_FORMAT_NONE = 0;
 		BACKUP_REQUEST_FORMAT_SQL = 1;
 		BACKUP_REQUEST_FORMAT_BINARY = 2;
+		BACKUP_REQUEST_FORMAT_DELETE = 3;
 	}
 	Format format = 1;
 	bool Leader = 2;

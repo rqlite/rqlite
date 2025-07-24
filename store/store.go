@@ -1592,6 +1592,39 @@ func (s *Store) Backup(br *proto.BackupRequest, dst io.Writer) (retErr error) {
 			ww = dstGz
 		}
 		return s.db.Dump(ww)
+	} else if br.Format == proto.BackupRequest_BACKUP_REQUEST_FORMAT_DELETE {
+		// Create a temporary database file in DELETE mode
+		tmpFD, err := createTemp(s.dbDir, backupScratchPattern)
+		if err != nil {
+			return err
+		}
+		defer os.Remove(tmpFD.Name())
+		defer tmpFD.Close()
+
+		// Copy the current database to the temporary file and convert to DELETE mode
+		if err := s.db.Backup(tmpFD.Name(), br.Vacuum); err != nil {
+			return err
+		}
+
+		// Re-open the temporary file for reading (to ensure all data is written)
+		tmpReadFD, err := os.Open(tmpFD.Name())
+		if err != nil {
+			return err
+		}
+		defer tmpReadFD.Close()
+
+		// Stream the DELETE mode database to the destination
+		if br.Compress {
+			dstGz, err := gzip.NewWriterLevel(dst, gzip.BestSpeed)
+			if err != nil {
+				return err
+			}
+			defer dstGz.Close()
+			_, err = io.Copy(dstGz, tmpReadFD)
+		} else {
+			_, err = io.Copy(dst, tmpReadFD)
+		}
+		return err
 	}
 	return ErrInvalidBackupFormat
 }

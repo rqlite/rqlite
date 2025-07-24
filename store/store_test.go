@@ -15,6 +15,7 @@ import (
 
 	"github.com/rqlite/rqlite/v8/command/encoding"
 	"github.com/rqlite/rqlite/v8/command/proto"
+	"github.com/rqlite/rqlite/v8/db"
 	"github.com/rqlite/rqlite/v8/internal/random"
 	"github.com/rqlite/rqlite/v8/internal/rarchive"
 	"github.com/rqlite/rqlite/v8/testdata/chinook"
@@ -1579,6 +1580,95 @@ COMMIT;
 	}
 	if ret := bytes.Compare(bkp, []byte(dump)); ret != 0 {
 		t.Fatalf("Backup Failed: backup bytes are not same")
+	}
+}
+
+// Test_SingleNodeBackupDelete tests that requesting a DELETE-formatted
+// backup works as expected.
+func Test_SingleNodeBackupDelete(t *testing.T) {
+	s, ln := mustNewStore(t)
+	defer ln.Close()
+
+	if err := s.Open(); err != nil {
+		t.Fatalf("failed to open single-node store: %s", err.Error())
+	}
+	if err := s.Bootstrap(NewServer(s.ID(), s.Addr(), true)); err != nil {
+		t.Fatalf("failed to bootstrap single-node store: %s", err.Error())
+	}
+	defer s.Close(true)
+	if _, err := s.WaitForLeader(10 * time.Second); err != nil {
+		t.Fatalf("Error waiting for leader: %s", err)
+	}
+
+	dump := `PRAGMA foreign_keys=OFF;
+BEGIN TRANSACTION;
+CREATE TABLE foo (id integer not null primary key, name text);
+INSERT INTO "foo" VALUES(1,'fiona');
+COMMIT;
+`
+	_, _, err := s.Execute(executeRequestFromString(dump, false, false))
+	if err != nil {
+		t.Fatalf("failed to load simple dump: %s", err.Error())
+	}
+
+	// Test uncompressed DELETE format backup
+	f, err := os.CreateTemp("", "rqlite-baktest-delete-")
+	if err != nil {
+		t.Fatalf("Backup Failed: unable to create temp file, %s", err.Error())
+	}
+	defer os.Remove(f.Name())
+	defer f.Close()
+
+	if err := s.Backup(backupRequestDelete(true, false, false), f); err != nil {
+		t.Fatalf("DELETE backup failed %s", err.Error())
+	}
+
+	// Check that the backup file is a valid SQLite database
+	f.Seek(0, 0)
+	header := make([]byte, 20) // Need at least 20 bytes for DELETE mode check
+	if _, err := f.Read(header); err != nil {
+		t.Fatalf("failed to read backup file header: %s", err.Error())
+	}
+	if !db.IsValidSQLiteData(header) {
+		t.Fatalf("backup file is not a valid SQLite database")
+	}
+
+	// Check that the backup file is in DELETE mode
+	if !db.IsDELETEModeEnabled(header) {
+		t.Fatalf("backup file is not in DELETE mode")
+	}
+
+	// Test compressed DELETE format backup
+	gzf, err := os.CreateTemp("", "rqlite-baktest-delete-gz-")
+	if err != nil {
+		t.Fatalf("Compressed backup Failed: unable to create temp file, %s", err.Error())
+	}
+	defer os.Remove(gzf.Name())
+	defer gzf.Close()
+
+	if err := s.Backup(backupRequestDelete(true, false, true), gzf); err != nil {
+		t.Fatalf("Compressed DELETE backup failed %s", err.Error())
+	}
+
+	// Verify the compressed backup can be decompressed and is valid
+	guzf, err := rarchive.Gunzip(gzf.Name())
+	if err != nil {
+		t.Fatalf("Failed to gunzip DELETE backup file %s", err.Error())
+	}
+	defer os.Remove(guzf)
+
+	guzData, err := os.ReadFile(guzf)
+	if err != nil {
+		t.Fatalf("failed to read gunzipped DELETE backup: %s", err.Error())
+	}
+	if len(guzData) < 20 {
+		t.Fatalf("gunzipped DELETE backup file is too short: %d bytes", len(guzData))
+	}
+	if !db.IsValidSQLiteData(guzData[:16]) {
+		t.Fatalf("gunzipped DELETE backup file is not a valid SQLite database")
+	}
+	if !db.IsDELETEModeEnabled(guzData[:20]) {
+		t.Fatalf("gunzipped DELETE backup file is not in DELETE mode")
 	}
 }
 
@@ -3159,6 +3249,15 @@ func backupRequestSQL(leader bool) *proto.BackupRequest {
 func backupRequestBinary(leader, vacuum, compress bool) *proto.BackupRequest {
 	return &proto.BackupRequest{
 		Format:   proto.BackupRequest_BACKUP_REQUEST_FORMAT_BINARY,
+		Leader:   leader,
+		Vacuum:   vacuum,
+		Compress: compress,
+	}
+}
+
+func backupRequestDelete(leader, vacuum, compress bool) *proto.BackupRequest {
+	return &proto.BackupRequest{
+		Format:   proto.BackupRequest_BACKUP_REQUEST_FORMAT_DELETE,
 		Leader:   leader,
 		Vacuum:   vacuum,
 		Compress: compress,
