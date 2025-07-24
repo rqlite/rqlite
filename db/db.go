@@ -1113,6 +1113,187 @@ func (db *DB) queryWithConn(ctx context.Context, req *command.Request, xTime boo
 	return allRows, err
 }
 
+// qualifyJoinColumns attempts to qualify column names with table names for JOIN queries with SELECT *.
+// It detects JOIN queries and maps columns to their originating tables based on schema information.
+func (db *DB) qualifyJoinColumns(sql string, columns []string, q queryer) ([]string, error) {
+	// Convert to uppercase for parsing
+	sqlUpper := strings.ToUpper(strings.TrimSpace(sql))
+
+	// Only process SELECT * queries that contain JOIN
+	if !strings.HasPrefix(sqlUpper, "SELECT") || !strings.Contains(sqlUpper, "JOIN") {
+		return columns, nil
+	}
+
+	// Check if it's SELECT * (with possible whitespace)
+	selectClause := sqlUpper[6:] // Skip "SELECT"
+	selectClause = strings.TrimSpace(selectClause)
+	if !strings.HasPrefix(selectClause, "*") {
+		return columns, nil
+	}
+
+	// Extract table names from the query
+	tables, err := db.extractTableNamesFromJoin(sql, q)
+	if err != nil {
+		// If we can't parse table names, return original columns
+		return columns, nil
+	}
+
+	if len(tables) < 2 {
+		// Not a multi-table join, return original columns
+		return columns, nil
+	}
+
+	// Get column information for each table
+	tableColumns := make(map[string][]string)
+	for _, table := range tables {
+		cols, err := db.getTableColumns(table, q)
+		if err != nil {
+			// If we can't get table info, return original columns
+			return columns, nil
+		}
+		tableColumns[table] = cols
+	}
+
+	// Map columns to tables based on position
+	qualifiedColumns := make([]string, 0, len(columns))
+	colIndex := 0
+
+	for _, table := range tables {
+		tableCols := tableColumns[table]
+		for _, col := range tableCols {
+			if colIndex < len(columns) {
+				qualifiedColumns = append(qualifiedColumns, table+"."+col)
+				colIndex++
+			}
+		}
+	}
+
+	// If we couldn't map all columns, return original
+	if len(qualifiedColumns) != len(columns) {
+		return columns, nil
+	}
+
+	return qualifiedColumns, nil
+}
+
+// extractTableNamesFromJoin extracts table names from a JOIN query in the order they appear.
+// This is a simplified parser that handles basic JOIN patterns.
+func (db *DB) extractTableNamesFromJoin(sql string, q queryer) ([]string, error) {
+	// Simplified approach: extract table names from FROM and JOIN clauses
+	sqlUpper := strings.ToUpper(sql)
+
+	// Find the FROM clause
+	fromIndex := strings.Index(sqlUpper, "FROM")
+	if fromIndex == -1 {
+		return nil, fmt.Errorf("no FROM clause found")
+	}
+
+	// Extract the part after FROM
+	afterFrom := sql[fromIndex+4:]
+
+	// Split by JOIN keywords to find table references
+	joinKeywords := []string{"JOIN", "INNER JOIN", "LEFT JOIN", "RIGHT JOIN", "FULL JOIN", "CROSS JOIN"}
+
+	tables := make([]string, 0, 2)
+
+	// Find the first table (after FROM)
+	firstTablePart := afterFrom
+	for _, keyword := range joinKeywords {
+		if idx := strings.Index(strings.ToUpper(firstTablePart), keyword); idx != -1 {
+			firstTablePart = firstTablePart[:idx]
+			break
+		}
+	}
+
+	// Extract first table name
+	firstTable := db.extractTableName(strings.TrimSpace(firstTablePart))
+	if firstTable != "" {
+		tables = append(tables, firstTable)
+	}
+
+	// Find all JOIN clauses and extract table names
+	remaining := afterFrom
+	for _, keyword := range joinKeywords {
+		for {
+			upperRemaining := strings.ToUpper(remaining)
+			joinIndex := strings.Index(upperRemaining, keyword)
+			if joinIndex == -1 {
+				break
+			}
+
+			// Move past the JOIN keyword
+			afterJoin := remaining[joinIndex+len(keyword):]
+
+			// Find the table name after JOIN (before ON clause)
+			onIndex := strings.Index(strings.ToUpper(afterJoin), "ON")
+			if onIndex == -1 {
+				break
+			}
+
+			tableClause := strings.TrimSpace(afterJoin[:onIndex])
+			tableName := db.extractTableName(tableClause)
+			if tableName != "" {
+				tables = append(tables, tableName)
+			}
+
+			// Continue searching after this JOIN
+			remaining = afterJoin[onIndex:]
+		}
+	}
+
+	return tables, nil
+}
+
+// extractTableName extracts a clean table name from a table clause.
+// Handles quoted table names and table aliases.
+func (db *DB) extractTableName(tableClause string) string {
+	tableClause = strings.TrimSpace(tableClause)
+	if tableClause == "" {
+		return ""
+	}
+
+	// Split by whitespace to handle aliases (table alias_name)
+	parts := strings.Fields(tableClause)
+	if len(parts) == 0 {
+		return ""
+	}
+
+	tableName := parts[0]
+
+	// Remove quotes if present
+	tableName = strings.Trim(tableName, `"'`)
+
+	return tableName
+}
+
+// getTableColumns retrieves column names for a table using PRAGMA table_info.
+func (db *DB) getTableColumns(tableName string, q queryer) ([]string, error) {
+	query := "PRAGMA table_info(" + tableName + ")"
+
+	rows, err := q.QueryContext(context.Background(), query)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var columns []string
+	for rows.Next() {
+		var cid int
+		var name, dataType string
+		var notnull, pk int
+		var dfltValue interface{}
+
+		err := rows.Scan(&cid, &name, &dataType, &notnull, &dfltValue, &pk)
+		if err != nil {
+			return nil, err
+		}
+
+		columns = append(columns, name)
+	}
+
+	return columns, rows.Err()
+}
+
 func (db *DB) queryStmtWithConn(ctx context.Context, stmt *command.Statement, xTime bool, q queryer) (retRows *command.QueryRows, retErr error) {
 	defer func() {
 		if retErr != nil {
@@ -1194,7 +1375,14 @@ func (db *DB) queryStmtWithConn(ctx context.Context, stmt *command.Statement, xT
 		rows.Time = time.Since(start).Seconds()
 	}
 
-	rows.Columns = columns
+	// Attempt to qualify column names for JOIN queries
+	qualifiedColumns, err := db.qualifyJoinColumns(stmt.Sql, columns, q)
+	if err != nil {
+		// If qualification fails, use original columns
+		qualifiedColumns = columns
+	}
+
+	rows.Columns = qualifiedColumns
 	rows.Types = xTypes
 	return rows, nil
 }
