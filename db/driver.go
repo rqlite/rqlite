@@ -7,7 +7,7 @@ import (
 	"sort"
 	"sync"
 
-	"github.com/rqlite/go-sqlite3"
+	"github.com/mattn/go-sqlite3"
 )
 
 const (
