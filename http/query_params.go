@@ -188,6 +188,8 @@ func (qp QueryParams) BackupFormat() command.BackupRequest_Format {
 	switch f {
 	case "sql":
 		return command.BackupRequest_BACKUP_REQUEST_FORMAT_SQL
+	case "delete":
+		return command.BackupRequest_BACKUP_REQUEST_FORMAT_DELETE
 	default:
 		return command.BackupRequest_BACKUP_REQUEST_FORMAT_BINARY
 	}
