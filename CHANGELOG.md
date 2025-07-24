@@ -1,5 +1,5 @@
-## v8.41.1 (unreleased)
-### Implementation changes and bug fixes
+## v8.42.0 (unreleased)
+### New features
 - [PR #2182](https://github.com/rqlite/rqlite/pull/2182): Support providing backups in DELETE mode.
 
 ## v8.41.0 (July 23rd 2025)
