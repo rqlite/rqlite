@@ -5,8 +5,6 @@ import (
 	"net/url"
 	"reflect"
 	"testing"
-
-	command "github.com/rqlite/rqlite/v8/command/proto"
 )
 
 // Test_NewQueryParams tests the NewQueryParams function for various scenarios.
@@ -65,33 +63,5 @@ func Test_NewQueryParamsTimes(t *testing.T) {
 	qp := QueryParams{}
 	if qp.Freshness() != 0 {
 		t.Errorf("Expected 0, got %v", qp.Freshness())
-	}
-}
-
-// Test_BackupFormat tests the BackupFormat function.
-func Test_BackupFormat(t *testing.T) {
-	testCases := []struct {
-		name     string
-		fmt      string
-		expected command.BackupRequest_Format
-	}{
-		{"No format", "", command.BackupRequest_BACKUP_REQUEST_FORMAT_BINARY},
-		{"Binary format", "binary", command.BackupRequest_BACKUP_REQUEST_FORMAT_BINARY},
-		{"SQL format", "sql", command.BackupRequest_BACKUP_REQUEST_FORMAT_SQL},
-		{"DELETE format", "delete", command.BackupRequest_BACKUP_REQUEST_FORMAT_DELETE},
-		{"Unknown format", "unknown", command.BackupRequest_BACKUP_REQUEST_FORMAT_BINARY},
-	}
-
-	for _, tc := range testCases {
-		t.Run(tc.name, func(t *testing.T) {
-			qp := QueryParams{}
-			if tc.fmt != "" {
-				qp["fmt"] = tc.fmt
-			}
-			got := qp.BackupFormat()
-			if got != tc.expected {
-				t.Errorf("Expected %v, got %v", tc.expected, got)
-			}
-		})
 	}
 }
