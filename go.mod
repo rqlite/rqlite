@@ -78,4 +78,7 @@ require (
 	google.golang.org/grpc v1.74.2 // indirect
 )
 
-replace github.com/armon/go-metrics => github.com/hashicorp/go-metrics v0.5.1
+replace (
+	github.com/armon/go-metrics => github.com/hashicorp/go-metrics v0.5.1
+	github.com/mattn/go-sqlite3 => github.com/rqlite/go-sqlite3 v1.38.0
+)

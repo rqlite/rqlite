@@ -184,8 +184,6 @@ github.com/mattn/go-isatty v0.0.12/go.mod h1:cbi8OIDigv2wuxKPP5vlRcQ1OAZbq2CE4Ky
 github.com/mattn/go-isatty v0.0.14/go.mod h1:7GGIvUiUoEMVVmxf/4nioHXj79iQHKdU27kJ6hsGG94=
 github.com/mattn/go-isatty v0.0.20 h1:xfD0iDuEKnDkl03q4limB+vH+GxLEtL/jb4xVJSWWEY=
 github.com/mattn/go-isatty v0.0.20/go.mod h1:W+V8PltTTMOvKvAeJH7IuucS94S2C6jfK/D7dTCTo3Y=
-github.com/mattn/go-sqlite3 v1.14.29 h1:1O6nRLJKvsi1H2Sj0Hzdfojwt8GiGKm+LOfLaBFaouQ=
-github.com/mattn/go-sqlite3 v1.14.29/go.mod h1:Uh1q+B4BYcTPb+yiD3kU8Ct7aC0hY9fxUwlHK0RXw+Y=
 github.com/matttproud/golang_protobuf_extensions v1.0.1/go.mod h1:D8He9yQNgCq6Z5Ld7szi9bcBfOoFv/3dc6xSMkL2PC0=
 github.com/miekg/dns v1.1.56 h1:5imZaSeoRNvpM9SzWNhEcP9QliKiz20/dA2QabIGVnE=
 github.com/miekg/dns v1.1.56/go.mod h1:cRm6Oo2C8TY9ZS/TqsSrseAcncm74lfK5G+ikN2SWWY=
@@ -231,6 +229,8 @@ github.com/prometheus/procfs v0.0.2/go.mod h1:TjEm7ze935MbeOT/UhFTIMYKhuLP4wbCsT
 github.com/prometheus/procfs v0.0.8/go.mod h1:7Qr8sr6344vo1JqZ6HhLceV9o3AJ1Ff+GxbHq6oeK9A=
 github.com/prometheus/procfs v0.1.3/go.mod h1:lV6e/gmhEcM9IjHGsFOCxxuZ+z1YqCvr4OA4YeYWdaU=
 github.com/prometheus/procfs v0.6.0/go.mod h1:cz+aTbrPOrUb4q7XlbU9ygM+/jj0fzG6c1xBZuNvfVA=
+github.com/rqlite/go-sqlite3 v1.38.0 h1:o3qTaVEHRzPsvTabUpPGPyNqnCyxEW3ccxHuPeUW/YI=
+github.com/rqlite/go-sqlite3 v1.38.0/go.mod h1:R9H7CatgYBt3c+fSV/5yo2vLh4ZjCB0aMHdkv69fP4A=
 github.com/rqlite/raft-boltdb/v2 v2.0.0-20230523104317-c08e70f4de48 h1:NZ62M+kT0JqhyFUMc8I4SMmfmD4NGJxhb2ePJQXjryc=
 github.com/rqlite/raft-boltdb/v2 v2.0.0-20230523104317-c08e70f4de48/go.mod h1:CRnsxgy5G8fAf5J+AM0yrsSdxXHKkIYOaq2sm+Q4DYc=
 github.com/rqlite/rqlite-disco-clients v0.0.0-20250205044118-8ada2b350099 h1:5cqkVLdl6sGJSY3kiF2dqaA3bD+8OS5FUdZqO0BxXLU=
