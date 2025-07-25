@@ -27,7 +27,7 @@ docker run -p 4001:4001 rqlite/rqlite
 
 **2. Create a table and insert a row:**
 ```bash
-curl -XPOST 'localhost:4001/db/execute' -H 'Content-Type: application/json' -d '[
+curl -XPOST 'localhost:4001/db/execute?pretty' -H 'Content-Type: application/json' -d '[
      "CREATE TABLE foo (id INTEGER NOT NULL PRIMARY KEY, name TEXT)",
      "INSERT INTO foo(id, name) VALUES(1, \"fiona\")"
 ]'
@@ -35,7 +35,7 @@ curl -XPOST 'localhost:4001/db/execute' -H 'Content-Type: application/json' -d '
 
 **3. Query the data:**
 ```bash
-curl -G 'localhost:4001/db/query' --data-urlencode 'q=SELECT * FROM foo'
+curl -G 'localhost:4001/db/query?pretty' --data-urlencode 'q=SELECT * FROM foo'
 ```
 
 Now you have a single-node running. [Learn how to form a multi-node cluster in seconds.](https://rqlite.io/docs/clustering/) and dive into the [_Developer Guide_](https://www.rqlite.io/docs/api).
