@@ -904,7 +904,7 @@ func Test_MultiNodeStepdownTargetNode(t *testing.T) {
 	}
 	check := func(failed bool) bool {
 		leader, err := s1.WaitForLeader(10 * time.Second)
-		if err != nil || leader == followers[0].Addr {
+		if err != nil || leader != followers[0].Addr {
 			if failed {
 				t.Fatalf("stepdown didn't complete successfully, error: %v, leader: %s", err, leader)
 			}
