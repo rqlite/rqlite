@@ -1,6 +1,7 @@
-## v8.42.0 (unreleased)
+## v8.42.0 (July 25th 2025)
 ### New features
 - [PR #2182](https://github.com/rqlite/rqlite/pull/2182): Support providing backups in DELETE mode.
+- [PR #2183](https://github.com/rqlite/rqlite/pull/2183): Upgrade SQLite to 3.50.3.
 
 ### Implementation changes and bug fixes
 - [PR #2180](https://github.com/rqlite/rqlite/pull/2180): Use `require` for some Go modules, instead of direct `import`.
