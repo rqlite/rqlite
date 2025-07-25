@@ -38,7 +38,7 @@ curl -XPOST 'localhost:4001/db/execute?pretty' -H 'Content-Type: application/jso
 curl -G 'localhost:4001/db/query?pretty' --data-urlencode 'q=SELECT * FROM foo'
 ```
 
-Now you have a single-node running. [Learn how to form a multi-node cluster in seconds.](https://rqlite.io/docs/clustering/) and dive into the [_Developer Guide_](https://www.rqlite.io/docs/api).
+[Learn how to form a multi-node cluster in seconds.](https://rqlite.io/docs/clustering/) and dive into the [_Developer Guide_](https://www.rqlite.io/docs/api).
 
 ## Key features
 
