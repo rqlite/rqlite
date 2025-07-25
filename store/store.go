@@ -2486,7 +2486,7 @@ func (s *Store) observe() (closeCh, doneCh chan struct{}) {
 						if signal.LeaderID == "" {
 							s.logger.Printf("Leader is now unknown")
 						} else {
-							s.logger.Printf("node %s is now Leader", signal.LeaderID)
+							s.logger.Printf("node %s at %s is now Leader", signal.LeaderID, signal.LeaderAddr)
 						}
 					}
 				}
