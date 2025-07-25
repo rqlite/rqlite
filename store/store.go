@@ -706,6 +706,7 @@ func (s *Store) Stepdown(wait bool, id string) error {
 	var f raft.Future
 	if id == "" {
 		// Transfer leadership to any available node
+		s.logger.Printf("stepping down from leadership, transferring to any available node")
 		f = s.raft.LeadershipTransfer()
 	} else {
 		// Transfer leadership to specific node
@@ -715,6 +716,7 @@ func (s *Store) Stepdown(wait bool, id string) error {
 		}
 
 		// Transfer leadership to the specific node
+		s.logger.Printf("stepping down from leadership, transferring to node %s at %s", id, targetAddr)
 		f = s.raft.LeadershipTransferToServer(raft.ServerID(id), targetAddr)
 	}
 

@@ -3350,6 +3350,14 @@ func asJSONAssociative(v any) string {
 
 func testPoll(t *testing.T, f func() bool, checkPeriod time.Duration, timeout time.Duration) {
 	t.Helper()
+	g := func(_ bool) bool {
+		return f()
+	}
+	testPollLog(t, g, checkPeriod, timeout)
+}
+
+func testPollLog(t *testing.T, f func(to bool) bool, checkPeriod time.Duration, timeout time.Duration) {
+	t.Helper()
 	tck := time.NewTicker(checkPeriod)
 	defer tck.Stop()
 	tmr := time.NewTimer(timeout)
@@ -3358,10 +3366,11 @@ func testPoll(t *testing.T, f func() bool, checkPeriod time.Duration, timeout ti
 	for {
 		select {
 		case <-tck.C:
-			if f() {
+			if f(false) {
 				return
 			}
 		case <-tmr.C:
+			f(true)
 			t.Fatalf("timeout expired: %s", t.Name())
 		}
 	}
