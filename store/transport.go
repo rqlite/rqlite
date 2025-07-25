@@ -2,7 +2,9 @@ package store
 
 import (
 	"io"
+	"log"
 	"net"
+	"os"
 	"sync/atomic"
 	"time"
 
@@ -57,6 +59,7 @@ type NodeTransport struct {
 	leaderCommitIndex  *atomic.Uint64
 	done               chan struct{}
 	closed             bool
+	logger             *log.Logger
 }
 
 // NewNodeTransport returns an initialized NodeTransport.
@@ -66,6 +69,7 @@ func NewNodeTransport(transport *raft.NetworkTransport) *NodeTransport {
 		commandCommitIndex: &atomic.Uint64{},
 		leaderCommitIndex:  &atomic.Uint64{},
 		done:               make(chan struct{}),
+		logger:             log.New(os.Stderr, "[transport] ", log.LstdFlags),
 	}
 }
 
@@ -130,6 +134,9 @@ func (n *NodeTransport) Consumer() <-chan raft.RPC {
 						}
 					}
 					n.leaderCommitIndex.Store(cmd.LeaderCommitIndex)
+				case *raft.TimeoutNowRequest:
+					n.logger.Printf("TimeoutNowRequest received on this node (%s) from node %s at %s",
+						n.LocalAddr(), cmd.ID, cmd.Addr)
 				}
 				ch <- rpc
 			}

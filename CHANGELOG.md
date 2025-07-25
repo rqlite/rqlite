@@ -5,6 +5,7 @@
 
 ### Implementation changes and bug fixes
 - [PR #2180](https://github.com/rqlite/rqlite/pull/2180): Use `require` for some Go modules, instead of direct `import`.
+- [PR #2184](https://github.com/rqlite/rqlite/pull/2184): Add Raft transport-level logging.
 
 ## v8.41.0 (July 23rd 2025)
 ### New features
