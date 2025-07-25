@@ -3366,3 +3366,25 @@ func testPoll(t *testing.T, f func() bool, checkPeriod time.Duration, timeout ti
 		}
 	}
 }
+
+// testPollLog is like testPoll but it lets the function know when it is called after timing out.
+// This is useful for debugging flakey tests.
+func testPollLog(t *testing.T, f func(to bool) bool, checkPeriod time.Duration, timeout time.Duration) {
+	t.Helper()
+	tck := time.NewTicker(checkPeriod)
+	defer tck.Stop()
+	tmr := time.NewTimer(timeout)
+	defer tmr.Stop()
+
+	for {
+		select {
+		case <-tck.C:
+			if f(false) {
+				return
+			}
+		case <-tmr.C:
+			f(true)
+			t.Fatalf("timeout expired: %s", t.Name())
+		}
+	}
+}

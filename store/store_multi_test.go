@@ -902,14 +902,17 @@ func Test_MultiNodeStepdownTargetNode(t *testing.T) {
 	if err := s0.Stepdown(true, followers[0].ID); err != nil {
 		t.Fatalf("leader failed to step down to specific node: %s", err.Error())
 	}
-	check := func() bool {
+	check := func(failed bool) bool {
 		leader, err := s1.WaitForLeader(10 * time.Second)
-		if err != nil || leader != followers[0].Addr {
+		if err != nil || leader == followers[0].Addr {
+			if failed {
+				t.Fatalf("stepdown didn't complete successfully, error: %v, leader: %s", err, leader)
+			}
 			return false
 		}
 		return true
 	}
-	testPoll(t, check, 250*time.Millisecond, 10*time.Second)
+	testPollLog(t, check, 250*time.Millisecond, 10*time.Second)
 }
 
 func Test_MultiNodeStoreNotifyBootstrap(t *testing.T) {
