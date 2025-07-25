@@ -876,6 +876,30 @@ func Test_MultiNodeStepdownTargetNode(t *testing.T) {
 	if _, err := s2.WaitForLeader(10 * time.Second); err != nil {
 		t.Fatalf("Error waiting for leader: %s", err)
 	}
+	if f, err := s2.Noop("don't care"); err != nil && f.Error() != nil {
+		t.Fatalf("failed to noop on single node")
+	}
+
+	// Get the leader's commit index, and ensure all nodes have the same one.
+	// This should ensure every node has every log, and that each node can
+	// become leader.
+	leader, err := s0.Leader()
+	if err != nil {
+		t.Fatalf("failed to get leader address: %s", err.Error())
+	}
+	if leader.ID != s0.ID() {
+		t.Fatalf("expected leader to be s0, got %s", leader.ID)
+	}
+	idx, err := s0.LeaderCommitIndex()
+	if err != nil {
+		t.Fatalf("failed to get leader commit index: %s", err.Error())
+	}
+	if err := s1.WaitForCommitIndex(idx, 5*time.Second); err != nil {
+		t.Fatalf("failed to wait for commit index on follower: %s", err.Error())
+	}
+	if err := s2.WaitForCommitIndex(idx, 5*time.Second); err != nil {
+		t.Fatalf("failed to wait for commit index on follower: %s", err.Error())
+	}
 
 	// Test stepdown with invalid node ID
 	if err := s0.Stepdown(true, "nonexistent-node"); err != ErrNodeNotFound {
@@ -883,10 +907,6 @@ func Test_MultiNodeStepdownTargetNode(t *testing.T) {
 	}
 
 	// Test stepdown with leader ID, which should fail.
-	leader, err := s0.Leader()
-	if err != nil {
-		t.Fatalf("failed to get leader address: %s", err.Error())
-	}
 	if err := s0.Stepdown(true, leader.ID); err == nil {
 		t.Fatalf("expected error when stepping down to Leader's own node ID")
 	}
