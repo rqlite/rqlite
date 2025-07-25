@@ -55,3 +55,9 @@ _testmain.go
 
 *.exe
 *.test
+
+# Build artifacts
+*.tar.gz
+*.deb
+rqlite-v*
+pkg/

@@ -28,10 +28,13 @@ jobs:
         run: sudo apt-get update
 
       - name: Install compilers
-        run: sudo apt-get install gcc musl-dev musl-tools gcc-arm-linux-gnueabi gcc-aarch64-linux-gnu gcc-riscv64-linux-gnu gcc-powerpc64le-linux-gnu gcc-mips-linux-gnu gcc-mipsel-linux-gnu gcc-mips64-linux-gnuabi64 gcc-mips64el-linux-gnuabi64
+        run: sudo apt-get install gcc musl-dev musl-tools gcc-arm-linux-gnueabi gcc-aarch64-linux-gnu gcc-riscv64-linux-gnu gcc-powerpc64le-linux-gnu gcc-mips-linux-gnu gcc-mipsel-linux-gnu gcc-mips64-linux-gnuabi64 gcc-mips64el-linux-gnuabi64 fakeroot
         
       - name: Build the release binaries
         run: .github/workflows/build.sh ${{ github.event.release.tag_name }}
+
+      - name: Build Debian package (amd64)
+        run: .github/workflows/build-deb.sh ${{ github.event.release.tag_name }}
 
       - name: Upload Release Assets
         run: |
@@ -42,6 +45,14 @@ jobs:
               -H "Content-type: application/octet-stream" \
               --data-binary @$tarball \
               "https://uploads.github.com/repos/rqlite/rqlite/releases/${{ github.event.release.id }}/assets?name=$tarball"
+          done
+          for debfile in *.deb; do
+            curl \
+              -X POST \
+              -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
+              -H "Content-type: application/octet-stream" \
+              --data-binary @$debfile \
+              "https://uploads.github.com/repos/rqlite/rqlite/releases/${{ github.event.release.id }}/assets?name=$debfile"
           done
 
       - name: Update the release notes
