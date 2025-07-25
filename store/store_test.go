@@ -3350,25 +3350,12 @@ func asJSONAssociative(v any) string {
 
 func testPoll(t *testing.T, f func() bool, checkPeriod time.Duration, timeout time.Duration) {
 	t.Helper()
-	tck := time.NewTicker(checkPeriod)
-	defer tck.Stop()
-	tmr := time.NewTimer(timeout)
-	defer tmr.Stop()
-
-	for {
-		select {
-		case <-tck.C:
-			if f() {
-				return
-			}
-		case <-tmr.C:
-			t.Fatalf("timeout expired: %s", t.Name())
-		}
+	g := func(_ bool) bool {
+		return f()
 	}
+	testPollLog(t, g, checkPeriod, timeout)
 }
 
-// testPollLog is like testPoll but it lets the function know when it is called after timing out.
-// This is useful for debugging flakey tests.
 func testPollLog(t *testing.T, f func(to bool) bool, checkPeriod time.Duration, timeout time.Duration) {
 	t.Helper()
 	tck := time.NewTicker(checkPeriod)
