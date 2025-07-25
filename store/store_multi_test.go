@@ -876,6 +876,9 @@ func Test_MultiNodeStepdownTargetNode(t *testing.T) {
 	if _, err := s2.WaitForLeader(10 * time.Second); err != nil {
 		t.Fatalf("Error waiting for leader: %s", err)
 	}
+	if f, err := s2.Noop("don't care"); err != nil && f.Error() != nil {
+		t.Fatalf("failed to noop on single node")
+	}
 
 	// Get the leader's commit index, and ensure all nodes have the same one.
 	// This should ensure every node has every log, and that each node can
