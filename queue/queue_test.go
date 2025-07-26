@@ -111,7 +111,7 @@ func Test_NewQueue(t *testing.T) {
 	defer q.Close()
 }
 
-func Test_NewQueueClosedWrite(t *testing.T) {
+func Test_Queue_ClosedWrite(t *testing.T) {
 	q := New[*command.Statement](1, 1, 100*time.Millisecond)
 	if q == nil {
 		t.Fatalf("failed to create new Queue")
@@ -122,7 +122,7 @@ func Test_NewQueueClosedWrite(t *testing.T) {
 	}
 }
 
-func Test_NewQueueWriteNil(t *testing.T) {
+func Test_Queue_WriteNil(t *testing.T) {
 	q := New[*command.Statement](1, 1, 60*time.Second)
 	defer q.Close()
 
@@ -131,7 +131,7 @@ func Test_NewQueueWriteNil(t *testing.T) {
 	}
 }
 
-func Test_NewQueueWriteBatchSizeSingle(t *testing.T) {
+func Test_Queue_WriteBatchSizeSingle(t *testing.T) {
 	q := New[*command.Statement](1024, 1, 60*time.Second)
 	defer q.Close()
 
@@ -152,7 +152,7 @@ func Test_NewQueueWriteBatchSizeSingle(t *testing.T) {
 	}
 }
 
-func Test_NewQueueWriteBatchSizeDouble(t *testing.T) {
+func Test_Queue_WriteBatchSizeDouble(t *testing.T) {
 	q := New[*command.Statement](1024, 1, 60*time.Second)
 	defer q.Close()
 
@@ -188,7 +188,7 @@ func Test_NewQueueWriteBatchSizeDouble(t *testing.T) {
 	}
 }
 
-func Test_NewQueueWriteNilAndOne(t *testing.T) {
+func Test_Queue_WriteNilAndOne(t *testing.T) {
 	q := New[*command.Statement](1024, 2, 60*time.Second)
 	defer q.Close()
 
@@ -210,7 +210,7 @@ func Test_NewQueueWriteNilAndOne(t *testing.T) {
 	}
 }
 
-func Test_NewQueueWriteBatchSizeSingleChan(t *testing.T) {
+func Test_Queue_WriteBatchSizeSingleChan(t *testing.T) {
 	q := New[*command.Statement](1024, 1, 60*time.Second)
 	defer q.Close()
 
@@ -241,7 +241,7 @@ func Test_NewQueueWriteBatchSizeSingleChan(t *testing.T) {
 	}
 }
 
-func Test_NewQueueWriteNilSingleChan(t *testing.T) {
+func Test_Queue_WriteNilSingleChan(t *testing.T) {
 	q := New[*command.Statement](1024, 1, 60*time.Second)
 	defer q.Close()
 
@@ -272,7 +272,7 @@ func Test_NewQueueWriteNilSingleChan(t *testing.T) {
 	}
 }
 
-func Test_NewQueueWriteBatchSizeMulti(t *testing.T) {
+func Test_Queue_WriteBatchSizeMulti(t *testing.T) {
 	q := New[*command.Statement](1024, 5, 60*time.Second)
 	defer q.Close()
 
@@ -313,7 +313,7 @@ func Test_NewQueueWriteBatchSizeMulti(t *testing.T) {
 	}
 }
 
-func Test_NewQueueWriteTimeout(t *testing.T) {
+func Test_Queue_WriteTimeout(t *testing.T) {
 	q := New[*command.Statement](1024, 10, 1*time.Second)
 	defer q.Close()
 
@@ -337,9 +337,9 @@ func Test_NewQueueWriteTimeout(t *testing.T) {
 	}
 }
 
-// Test_NewQueueWriteTimeoutMulti ensures that timer expiring
+// Test_Queue_WriteTimeoutMulti ensures that timer expiring
 // twice in a row works fine.
-func Test_NewQueueWriteTimeoutMulti(t *testing.T) {
+func Test_Queue_WriteTimeoutMulti(t *testing.T) {
 	q := New[*command.Statement](1024, 10, 1*time.Second)
 	defer q.Close()
 
@@ -380,9 +380,9 @@ func Test_NewQueueWriteTimeoutMulti(t *testing.T) {
 	}
 }
 
-// Test_NewQueueWriteTimeoutBatch ensures that timer expiring
+// Test_Queue_WriteTimeoutBatch ensures that timer expiring
 // followed by a batch, works fine.
-func Test_NewQueueWriteTimeoutBatch(t *testing.T) {
+func Test_Queue_WriteTimeoutBatch(t *testing.T) {
 	q := New[*command.Statement](1024, 2, 1*time.Second)
 	defer q.Close()
 
@@ -425,5 +425,56 @@ func Test_NewQueueWriteTimeoutBatch(t *testing.T) {
 		}
 	case <-time.After(5 * time.Second):
 		t.Fatalf("timed out waiting for statement")
+	}
+}
+
+func Test_Queue_FlushResetEmpty(t *testing.T) {
+	q := New[*command.Statement](1, 1, 100*time.Millisecond)
+	if q == nil {
+		t.Fatalf("failed to create new Queue")
+	}
+	defer q.Close()
+
+	if err := q.Flush(); err != nil {
+		t.Fatalf("failed to flush empty queue: %s", err.Error())
+	}
+	if err := q.Reset(); err != nil {
+		t.Fatalf("failed to reset empty queue: %s", err.Error())
+	}
+}
+
+func Test_Queue_FlushReset(t *testing.T) {
+	q := New[*command.Statement](100, 100, time.Hour)
+	if q == nil {
+		t.Fatalf("failed to create new Queue")
+	}
+	defer q.Close()
+
+	if _, err := q.Write(testStmtsFoo, nil); err != nil {
+		t.Fatalf("failed to write: %s", err.Error())
+	}
+
+	if err := q.Flush(); err != nil {
+		t.Fatalf("failed to flush queue: %s", err.Error())
+	}
+
+	select {
+	case req := <-q.C:
+		if len(req.Objects) != 1 {
+			t.Fatalf("received wrong length slice")
+		}
+		if req.Objects[0].Sql != "SELECT * FROM foo" {
+			t.Fatalf("received wrong SQL")
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatalf("timed out waiting for statement to be flushed")
+	}
+
+	if _, err := q.Write(testStmtsFoo, nil); err != nil {
+		t.Fatalf("failed to write: %s", err.Error())
+	}
+
+	if err := q.Reset(); err != nil {
+		t.Fatalf("failed to reset queue: %s", err.Error())
 	}
 }
