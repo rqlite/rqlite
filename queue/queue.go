@@ -173,7 +173,9 @@ func (q *Queue[T]) Close() error {
 	return nil
 }
 
-// Depth returns the number of queued requests
+// Depth returns the number of queued requests. Requests which have
+// been dequeued but not yet sent to C are not counted
+// in this number. XXX THIS IS NOT CLEARL DEFINED ACTUALLY.
 func (q *Queue[T]) Depth() int {
 	return len(q.batchCh)
 }
@@ -220,6 +222,8 @@ func (q *Queue[T]) run() {
 	for {
 		select {
 		case s := <-q.batchCh:
+			// Not sure I like this. Maybe we should just
+			// block on the channel until it reaches the batch size? XXX
 			queuedStmts = append(queuedStmts, s)
 			if len(queuedStmts) == 1 {
 				// First item in queue, start the timer so that if

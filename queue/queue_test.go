@@ -474,7 +474,30 @@ func Test_Queue_FlushReset(t *testing.T) {
 		t.Fatalf("failed to write: %s", err.Error())
 	}
 
+	testPoll(t, func() bool {
+		return q.Depth() == 1
+	}, time.Second)
+
 	if err := q.Reset(); err != nil {
 		t.Fatalf("failed to reset queue: %s", err.Error())
+	}
+}
+
+func testPoll(t *testing.T, fn func() bool, timeout time.Duration) {
+	t.Helper()
+	timer := time.NewTimer(timeout)
+	defer timer.Stop()
+	ticker := time.NewTicker(50 * time.Millisecond)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-timer.C:
+			t.Fatalf("timed out waiting for condition")
+		case <-ticker.C:
+			if fn() {
+				return
+			}
+		}
 	}
 }
