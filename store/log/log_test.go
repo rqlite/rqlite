@@ -9,7 +9,7 @@ import (
 )
 
 func Test_LogNewEmpty(t *testing.T) {
-	path := mustTempFile()
+	path := mustTempFile(t)
 
 	l, err := New(path, false)
 	if err != nil {
@@ -49,7 +49,7 @@ func Test_LogNewEmpty(t *testing.T) {
 }
 
 func Test_LogNewExistNotEmpty(t *testing.T) {
-	path := mustTempFile()
+	path := mustTempFile(t)
 
 	// Write some entries directory to the BoltDB Raft store.
 	bs, err := raftboltdb.NewBoltStore(path)
@@ -158,7 +158,7 @@ func Test_LogNewExistNotEmpty(t *testing.T) {
 }
 
 func Test_LogNewExistNotEmptyNoFreelistSync(t *testing.T) {
-	path := mustTempFile()
+	path := mustTempFile(t)
 
 	// Write some entries directory to the BoltDB Raft store.
 	bs, err := raftboltdb.NewBoltStore(path)
@@ -259,7 +259,7 @@ func Test_LogNewExistNotEmptyNoFreelistSync(t *testing.T) {
 }
 
 func Test_LogDeleteAll(t *testing.T) {
-	path := mustTempFile()
+	path := mustTempFile(t)
 
 	// Write some entries directory to the BoltDB Raft store.
 	bs, err := raftboltdb.NewBoltStore(path)
@@ -333,7 +333,7 @@ func Test_LogDeleteAll(t *testing.T) {
 }
 
 func Test_LogLastCommandIndexNotExist(t *testing.T) {
-	path := mustTempFile()
+	path := mustTempFile(t)
 
 	// Write some entries directory to the BoltDB Raft store.
 	bs, err := raftboltdb.NewBoltStore(path)
@@ -416,7 +416,7 @@ func Test_LogLastCommandIndexNotExist(t *testing.T) {
 }
 
 func Test_LogStats(t *testing.T) {
-	path := mustTempFile()
+	path := mustTempFile(t)
 
 	// Write some entries directory to the BoltDB Raft store.
 	bs, err := raftboltdb.NewBoltStore(path)
