@@ -37,6 +37,8 @@ var (
 	ErrLeaderNotFound = errors.New("leader not found")
 )
 
+const kubernetesServiceHostEnv = "KUBERNETES_SERVICE_HOST"
+
 type ResultsError interface {
 	Error() string
 	IsAuthorized() bool
@@ -882,12 +884,13 @@ func (s *Service) handleStatus(w http.ResponseWriter, r *http.Request, qp QueryP
 	}
 
 	rt := map[string]any{
-		"GOARCH":        runtime.GOARCH,
-		"GOOS":          runtime.GOOS,
-		"GOMAXPROCS":    runtime.GOMAXPROCS(0),
-		"num_cpu":       runtime.NumCPU(),
-		"num_goroutine": runtime.NumGoroutine(),
-		"version":       runtime.Version(),
+		"GOARCH":          runtime.GOARCH,
+		"GOOS":            runtime.GOOS,
+		"GOMAXPROCS":      runtime.GOMAXPROCS(0),
+		"num_cpu":         runtime.NumCPU(),
+		"num_goroutine":   runtime.NumGoroutine(),
+		"version":         runtime.Version(),
+		"kubernetes_hint": kubernetesHint(),
 	}
 
 	oss := map[string]any{
@@ -1925,6 +1928,11 @@ func prettyEnabled(e bool) string {
 		return "enabled"
 	}
 	return "disabled"
+}
+
+func kubernetesHint() bool {
+	_, ok := os.LookupEnv(kubernetesServiceHostEnv)
+	return ok
 }
 
 // queryRequestFromStrings converts a slice of strings into a command.QueryRequest
