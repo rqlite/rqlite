@@ -334,6 +334,10 @@ func Test_LogDeleteAll(t *testing.T) {
 	if f {
 		t.Fatalf("got wrong value for has command of empty log: %v", f)
 	}
+
+	if err := l.Close(); err != nil {
+		t.Fatalf("failed to close log: %s", err)
+	}
 }
 
 func Test_LogLastCommandIndexNotExist(t *testing.T) {
@@ -416,6 +420,10 @@ func Test_LogLastCommandIndexNotExist(t *testing.T) {
 	}
 	if lci != 0 {
 		t.Fatalf("got wrong value for last command index of not empty log: %d", lci)
+	}
+
+	if err := l.Close(); err != nil {
+		t.Fatalf("failed to close log: %s", err)
 	}
 }
 
