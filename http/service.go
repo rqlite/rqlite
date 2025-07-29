@@ -37,6 +37,8 @@ var (
 	ErrLeaderNotFound = errors.New("leader not found")
 )
 
+const kubernetesServiceHostEnv = "KUBERNETES_SERVICE_HOST"
+
 type ResultsError interface {
 	Error() string
 	IsAuthorized() bool
@@ -1927,8 +1929,6 @@ func prettyEnabled(e bool) string {
 	}
 	return "disabled"
 }
-
-const kubernetesServiceHostEnv = "KUBERNETES_SERVICE_HOST"
 
 func kubernetesHint() bool {
 	_, ok := os.LookupEnv(kubernetesServiceHostEnv)
