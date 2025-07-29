@@ -46,6 +46,10 @@ func Test_LogNewEmpty(t *testing.T) {
 	if f {
 		t.Fatalf("got wrong value for has command of empty log: %v", f)
 	}
+
+	if err := l.Close(); err != nil {
+		t.Fatalf("failed to close log: %s", err)
+	}
 }
 
 func Test_LogNewExistNotEmpty(t *testing.T) {
