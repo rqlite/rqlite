@@ -440,7 +440,7 @@ func Test_LogStats(t *testing.T) {
 // mustTempFile returns a path to a temporary file. The file will
 // be automatically removed when the test completes.
 func mustTempFile(t *testing.T) string {
-	tmpfile, err := os.CreateTemp(t.TempDir(), "rqlite-db-test")
+	tmpfile, err := os.CreateTemp(t.TempDir(), "rqlite-log-test")
 	if err != nil {
 		panic(err.Error())
 	}
