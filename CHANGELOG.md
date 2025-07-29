@@ -1,3 +1,7 @@
+## v8.42.1 (unreleased)
+### Implementation changes and bug fixes
+- [PR #2186](https://github.com/rqlite/rqlite/pull/2186): Add "running inside Kubernetes" hint to `/status`
+
 ## v8.42.0 (July 25th 2025)
 ### New features
 - [PR #2182](https://github.com/rqlite/rqlite/pull/2182): Support providing backups in DELETE mode.
