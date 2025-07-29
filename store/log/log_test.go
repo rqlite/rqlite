@@ -10,7 +10,6 @@ import (
 
 func Test_LogNewEmpty(t *testing.T) {
 	path := mustTempFile()
-	defer os.Remove(path)
 
 	l, err := New(path, false)
 	if err != nil {
@@ -51,7 +50,6 @@ func Test_LogNewEmpty(t *testing.T) {
 
 func Test_LogNewExistNotEmpty(t *testing.T) {
 	path := mustTempFile()
-	defer os.Remove(path)
 
 	// Write some entries directory to the BoltDB Raft store.
 	bs, err := raftboltdb.NewBoltStore(path)
@@ -161,7 +159,6 @@ func Test_LogNewExistNotEmpty(t *testing.T) {
 
 func Test_LogNewExistNotEmptyNoFreelistSync(t *testing.T) {
 	path := mustTempFile()
-	defer os.Remove(path)
 
 	// Write some entries directory to the BoltDB Raft store.
 	bs, err := raftboltdb.NewBoltStore(path)
@@ -263,7 +260,6 @@ func Test_LogNewExistNotEmptyNoFreelistSync(t *testing.T) {
 
 func Test_LogDeleteAll(t *testing.T) {
 	path := mustTempFile()
-	defer os.Remove(path)
 
 	// Write some entries directory to the BoltDB Raft store.
 	bs, err := raftboltdb.NewBoltStore(path)
@@ -338,7 +334,6 @@ func Test_LogDeleteAll(t *testing.T) {
 
 func Test_LogLastCommandIndexNotExist(t *testing.T) {
 	path := mustTempFile()
-	defer os.Remove(path)
 
 	// Write some entries directory to the BoltDB Raft store.
 	bs, err := raftboltdb.NewBoltStore(path)
@@ -422,7 +417,6 @@ func Test_LogLastCommandIndexNotExist(t *testing.T) {
 
 func Test_LogStats(t *testing.T) {
 	path := mustTempFile()
-	defer os.Remove(path)
 
 	// Write some entries directory to the BoltDB Raft store.
 	bs, err := raftboltdb.NewBoltStore(path)
@@ -443,10 +437,10 @@ func Test_LogStats(t *testing.T) {
 	}
 }
 
-// mustTempFile returns a path to a temporary file in directory dir. It is up to the
-// caller to remove the file once it is no longer needed.
-func mustTempFile() string {
-	tmpfile, err := os.CreateTemp("", "rqlite-db-test")
+// mustTempFile returns a path to a temporary file in directory dir. The
+// file will be automatically removed when the test completes.
+func mustTempFile(t *testing.T) string {
+	tmpfile, err := os.CreateTemp(t.TempDir(), "rqlite-db-test")
 	if err != nil {
 		panic(err.Error())
 	}
