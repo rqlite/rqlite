@@ -1928,8 +1928,10 @@ func prettyEnabled(e bool) string {
 	return "disabled"
 }
 
+const kubernetesServiceHostEnv = "KUBERNETES_SERVICE_HOST"
+
 func kubernetesHint() bool {
-	_, ok := os.LookupEnv("KUBERNETES_SERVICE_HOST")
+	_, ok := os.LookupEnv(kubernetesServiceHostEnv)
 	return ok
 }
 
