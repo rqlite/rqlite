@@ -1373,7 +1373,7 @@ func (db *DB) Serialize() ([]byte, error) {
 
 // Dump writes a consistent snapshot of the database in SQL text format.
 // This function can be called when changes to the database are in flight.
-func (db *DB) Dump(w io.Writer) error {
+func (db *DB) Dump(w io.Writer, tableNames ...string) error {
 	conn, err := db.roDB.Conn(context.Background())
 	if err != nil {
 		return err
@@ -1396,9 +1396,19 @@ func (db *DB) Dump(w io.Writer) error {
 		return err
 	}
 
+	// Build the query with optional table filtering
+	tableAnd := ""
+	if len(tableNames) > 0 {
+		quotedNames := make([]string, len(tableNames))
+		for i, name := range tableNames {
+			quotedNames[i] = fmt.Sprintf("'%s'", strings.Replace(name, "'", "''", -1))
+		}
+		tableAnd = fmt.Sprintf("AND name IN (%s)", strings.Join(quotedNames, ","))
+	}
+
 	// Get the schema.
-	query := `SELECT "name", "type", "sql" FROM "sqlite_master"
-              WHERE "sql" NOT NULL AND "type" == 'table' ORDER BY "name"`
+	query := fmt.Sprintf(`SELECT "name", "type", "sql" FROM "sqlite_master"
+                         WHERE "sql" NOT NULL AND "type" == 'table' %s ORDER BY "name"`, tableAnd)
 	rows, err := db.queryWithConn(ctx, commReq(query), false, conn)
 	if err != nil {
 		return err
@@ -1406,6 +1416,7 @@ func (db *DB) Dump(w io.Writer) error {
 	row := rows[0]
 	for _, v := range row.Values {
 		table := v.Parameters[0].GetS()
+
 		var stmt string
 
 		if table == "sqlite_sequence" {
@@ -1459,6 +1470,8 @@ func (db *DB) Dump(w io.Writer) error {
 	}
 	row = rows[0]
 	for _, v := range row.Values {
+		// For indexes, triggers, and views, we could add more sophisticated filtering
+		// based on the table they relate to, but for now include all of them
 		if _, err := w.Write([]byte(fmt.Sprintf("%s;\n", v.Parameters[2].GetS()))); err != nil {
 			return err
 		}

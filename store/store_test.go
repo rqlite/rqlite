@@ -1672,6 +1672,201 @@ COMMIT;
 	}
 }
 
+// Test_SingleNodeBackupSingleTable tests that backing up a single table works.
+func Test_SingleNodeBackupSingleTable(t *testing.T) {
+	s, ln := mustNewStore(t)
+	defer ln.Close()
+
+	if err := s.Open(); err != nil {
+		t.Fatalf("failed to open single-node store: %s", err.Error())
+	}
+	if err := s.Bootstrap(NewServer(s.ID(), s.Addr(), true)); err != nil {
+		t.Fatalf("failed to bootstrap single-node store: %s", err.Error())
+	}
+	defer s.Close(true)
+	if _, err := s.WaitForLeader(10 * time.Second); err != nil {
+		t.Fatalf("Error waiting for leader: %s", err)
+	}
+
+	// Create two tables
+	dump := `PRAGMA foreign_keys=OFF;
+BEGIN TRANSACTION;
+CREATE TABLE foo (id integer not null primary key, name text);
+INSERT INTO "foo" VALUES(1,'fiona');
+CREATE TABLE bar (id integer not null primary key, age integer);
+INSERT INTO "bar" VALUES(1,25);
+COMMIT;
+`
+	_, _, err := s.Execute(executeRequestFromString(dump, false, false))
+	if err != nil {
+		t.Fatalf("failed to load dump: %s", err.Error())
+	}
+
+	// Backup only the 'foo' table
+	f, err := os.CreateTemp("", "rqlite-baktest-single-")
+	if err != nil {
+		t.Fatalf("Backup Failed: unable to create temp file, %s", err.Error())
+	}
+	defer os.Remove(f.Name())
+	s.logger.Printf("backup file is %s", f.Name())
+
+	if err := s.Backup(backupRequestSQLWithTables(true, []string{"foo"}), f); err != nil {
+		t.Fatalf("Backup failed %s", err.Error())
+	}
+
+	// Check the backed up data contains only foo table
+	bkp, err := os.ReadFile(f.Name())
+	if err != nil {
+		t.Fatalf("Backup Failed: unable to read backup file, %s", err.Error())
+	}
+	backupStr := string(bkp)
+	if !strings.Contains(backupStr, "CREATE TABLE foo") {
+		t.Fatalf("Backup should contain foo table")
+	}
+	if !strings.Contains(backupStr, "INSERT INTO \"foo\" VALUES(1,'fiona')") {
+		t.Fatalf("Backup should contain foo table data")
+	}
+	if strings.Contains(backupStr, "CREATE TABLE bar") {
+		t.Fatalf("Backup should not contain bar table")
+	}
+	if strings.Contains(backupStr, "INSERT INTO \"bar\"") {
+		t.Fatalf("Backup should not contain bar table data")
+	}
+}
+
+// Test_SingleNodeBackupTwoTables tests that backing up two specific tables works.
+func Test_SingleNodeBackupTwoTables(t *testing.T) {
+	s, ln := mustNewStore(t)
+	defer ln.Close()
+
+	if err := s.Open(); err != nil {
+		t.Fatalf("failed to open single-node store: %s", err.Error())
+	}
+	if err := s.Bootstrap(NewServer(s.ID(), s.Addr(), true)); err != nil {
+		t.Fatalf("failed to bootstrap single-node store: %s", err.Error())
+	}
+	defer s.Close(true)
+	if _, err := s.WaitForLeader(10 * time.Second); err != nil {
+		t.Fatalf("Error waiting for leader: %s", err)
+	}
+
+	// Create three tables
+	dump := `PRAGMA foreign_keys=OFF;
+BEGIN TRANSACTION;
+CREATE TABLE foo (id integer not null primary key, name text);
+INSERT INTO "foo" VALUES(1,'fiona');
+CREATE TABLE bar (id integer not null primary key, age integer);
+INSERT INTO "bar" VALUES(1,25);
+CREATE TABLE baz (id integer not null primary key, city text);
+INSERT INTO "baz" VALUES(1,'vancouver');
+COMMIT;
+`
+	_, _, err := s.Execute(executeRequestFromString(dump, false, false))
+	if err != nil {
+		t.Fatalf("failed to load dump: %s", err.Error())
+	}
+
+	// Backup only the 'foo' and 'bar' tables
+	f, err := os.CreateTemp("", "rqlite-baktest-two-")
+	if err != nil {
+		t.Fatalf("Backup Failed: unable to create temp file, %s", err.Error())
+	}
+	defer os.Remove(f.Name())
+	s.logger.Printf("backup file is %s", f.Name())
+
+	if err := s.Backup(backupRequestSQLWithTables(true, []string{"foo", "bar"}), f); err != nil {
+		t.Fatalf("Backup failed %s", err.Error())
+	}
+
+	// Check the backed up data contains only foo and bar tables
+	bkp, err := os.ReadFile(f.Name())
+	if err != nil {
+		t.Fatalf("Backup Failed: unable to read backup file, %s", err.Error())
+	}
+	backupStr := string(bkp)
+	if !strings.Contains(backupStr, "CREATE TABLE foo") {
+		t.Fatalf("Backup should contain foo table")
+	}
+	if !strings.Contains(backupStr, "INSERT INTO \"foo\" VALUES(1,'fiona')") {
+		t.Fatalf("Backup should contain foo table data")
+	}
+	if !strings.Contains(backupStr, "CREATE TABLE bar") {
+		t.Fatalf("Backup should contain bar table")
+	}
+	if !strings.Contains(backupStr, "INSERT INTO \"bar\" VALUES(1,25)") {
+		t.Fatalf("Backup should contain bar table data")
+	}
+	if strings.Contains(backupStr, "CREATE TABLE baz") {
+		t.Fatalf("Backup should not contain baz table")
+	}
+	if strings.Contains(backupStr, "INSERT INTO \"baz\"") {
+		t.Fatalf("Backup should not contain baz table data")
+	}
+}
+
+// Test_SingleNodeBackupNonExistentTable tests that backing up a non-existent table works gracefully.
+func Test_SingleNodeBackupNonExistentTable(t *testing.T) {
+	s, ln := mustNewStore(t)
+	defer ln.Close()
+
+	if err := s.Open(); err != nil {
+		t.Fatalf("failed to open single-node store: %s", err.Error())
+	}
+	if err := s.Bootstrap(NewServer(s.ID(), s.Addr(), true)); err != nil {
+		t.Fatalf("failed to bootstrap single-node store: %s", err.Error())
+	}
+	defer s.Close(true)
+	if _, err := s.WaitForLeader(10 * time.Second); err != nil {
+		t.Fatalf("Error waiting for leader: %s", err)
+	}
+
+	// Create one table
+	dump := `PRAGMA foreign_keys=OFF;
+BEGIN TRANSACTION;
+CREATE TABLE foo (id integer not null primary key, name text);
+INSERT INTO "foo" VALUES(1,'fiona');
+COMMIT;
+`
+	_, _, err := s.Execute(executeRequestFromString(dump, false, false))
+	if err != nil {
+		t.Fatalf("failed to load dump: %s", err.Error())
+	}
+
+	// Try to backup a non-existent table
+	f, err := os.CreateTemp("", "rqlite-baktest-nonexistent-")
+	if err != nil {
+		t.Fatalf("Backup Failed: unable to create temp file, %s", err.Error())
+	}
+	defer os.Remove(f.Name())
+	s.logger.Printf("backup file is %s", f.Name())
+
+	if err := s.Backup(backupRequestSQLWithTables(true, []string{"nonexistent"}), f); err != nil {
+		t.Fatalf("Backup failed %s", err.Error())
+	}
+
+	// Check the backed up data should contain minimal dump structure but no tables
+	bkp, err := os.ReadFile(f.Name())
+	if err != nil {
+		t.Fatalf("Backup Failed: unable to read backup file, %s", err.Error())
+	}
+	backupStr := string(bkp)
+	if !strings.Contains(backupStr, "PRAGMA foreign_keys=OFF") {
+		t.Fatalf("Backup should contain PRAGMA statement")
+	}
+	if !strings.Contains(backupStr, "BEGIN TRANSACTION") {
+		t.Fatalf("Backup should contain BEGIN TRANSACTION")
+	}
+	if !strings.Contains(backupStr, "COMMIT") {
+		t.Fatalf("Backup should contain COMMIT")
+	}
+	if strings.Contains(backupStr, "CREATE TABLE") {
+		t.Fatalf("Backup should not contain any CREATE TABLE statements")
+	}
+	if strings.Contains(backupStr, "INSERT INTO") {
+		t.Fatalf("Backup should not contain any INSERT statements")
+	}
+}
+
 // Test_SingleNodeSingleCommandTrigger tests that a SQLite trigger works.
 func Test_SingleNodeSingleCommandTrigger(t *testing.T) {
 	s, ln := mustNewStore(t)
@@ -3243,6 +3438,14 @@ func backupRequestSQL(leader bool) *proto.BackupRequest {
 	return &proto.BackupRequest{
 		Format: proto.BackupRequest_BACKUP_REQUEST_FORMAT_SQL,
 		Leader: leader,
+	}
+}
+
+func backupRequestSQLWithTables(leader bool, tables []string) *proto.BackupRequest {
+	return &proto.BackupRequest{
+		Format: proto.BackupRequest_BACKUP_REQUEST_FORMAT_SQL,
+		Leader: leader,
+		Tables: tables,
 	}
 }
 

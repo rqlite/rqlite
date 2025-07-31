@@ -1058,6 +1058,7 @@ type BackupRequest struct {
 	Leader        bool                   `protobuf:"varint,2,opt,name=Leader,proto3" json:"Leader,omitempty"`
 	Vacuum        bool                   `protobuf:"varint,3,opt,name=Vacuum,proto3" json:"Vacuum,omitempty"`
 	Compress      bool                   `protobuf:"varint,4,opt,name=Compress,proto3" json:"Compress,omitempty"`
+	Tables        []string               `protobuf:"bytes,5,rep,name=tables,proto3" json:"tables,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -1118,6 +1119,13 @@ func (x *BackupRequest) GetCompress() bool {
 		return x.Compress
 	}
 	return false
+}
+
+func (x *BackupRequest) GetTables() []string {
+	if x != nil {
+		return x.Tables
+	}
+	return nil
 }
 
 type LoadRequest struct {
@@ -2050,12 +2058,13 @@ const file_command_proto_rawDesc = "" +
 	"\x01q\x18\x01 \x01(\v2\x12.command.QueryRowsH\x00R\x01q\x12&\n" +
 	"\x01e\x18\x02 \x01(\v2\x16.command.ExecuteResultH\x00R\x01e\x12\x16\n" +
 	"\x05error\x18\x03 \x01(\tH\x00R\x05errorB\b\n" +
-	"\x06result\"\xa0\x02\n" +
+	"\x06result\"\xb8\x02\n" +
 	"\rBackupRequest\x125\n" +
 	"\x06format\x18\x01 \x01(\x0e2\x1d.command.BackupRequest.FormatR\x06format\x12\x16\n" +
 	"\x06Leader\x18\x02 \x01(\bR\x06Leader\x12\x16\n" +
 	"\x06Vacuum\x18\x03 \x01(\bR\x06Vacuum\x12\x1a\n" +
-	"\bCompress\x18\x04 \x01(\bR\bCompress\"\x8b\x01\n" +
+	"\bCompress\x18\x04 \x01(\bR\bCompress\x12\x16\n" +
+	"\x06tables\x18\x05 \x03(\tR\x06tables\"\x8b\x01\n" +
 	"\x06Format\x12\x1e\n" +
 	"\x1aBACKUP_REQUEST_FORMAT_NONE\x10\x00\x12\x1d\n" +
 	"\x19BACKUP_REQUEST_FORMAT_SQL\x10\x01\x12 \n" +
