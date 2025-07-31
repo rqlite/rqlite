@@ -1593,7 +1593,7 @@ func (s *Store) Backup(br *proto.BackupRequest, dst io.Writer) (retErr error) {
 			defer dstGz.Close()
 			ww = dstGz
 		}
-		return s.db.DumpTables(ww, br.Tables)
+		return s.db.Dump(ww, br.Tables...)
 	} else if br.Format == proto.BackupRequest_BACKUP_REQUEST_FORMAT_DELETE {
 		// Create a temporary database file in DELETE mode
 		tmpFD, err := createTemp(s.dbDir, backupScratchPattern)

@@ -162,17 +162,10 @@ func (s *SwappableDB) Path() string {
 }
 
 // Dump calls Dump on the underlying database.
-func (s *SwappableDB) Dump(w io.Writer) error {
+func (s *SwappableDB) Dump(w io.Writer, tableNames ...string) error {
 	s.dbMu.RLock()
 	defer s.dbMu.RUnlock()
-	return s.db.Dump(w)
-}
-
-// DumpTables calls DumpTables on the underlying database.
-func (s *SwappableDB) DumpTables(w io.Writer, tableNames []string) error {
-	s.dbMu.RLock()
-	defer s.dbMu.RUnlock()
-	return s.db.DumpTables(w, tableNames)
+	return s.db.Dump(w, tableNames...)
 }
 
 // Vacuum calls Vacuum on the underlying database.
