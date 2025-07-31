@@ -656,6 +656,7 @@ func (s *Service) handleBackup(w http.ResponseWriter, r *http.Request, qp QueryP
 		Leader:   !qp.NoLeader(),
 		Vacuum:   qp.Vacuum(),
 		Compress: qp.Compress(),
+		Tables:   qp.Tables(),
 	}
 	addBackupFormatHeader(w, qp)
 

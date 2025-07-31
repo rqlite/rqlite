@@ -789,6 +789,50 @@ func Test_BackupDeleteOK(t *testing.T) {
 	}
 }
 
+func Test_BackupTablesOK(t *testing.T) {
+	m := &MockStore{}
+	c := &mockClusterService{}
+	s := New("127.0.0.1:0", m, c, nil)
+	if err := s.Start(); err != nil {
+		t.Fatalf("failed to start service")
+	}
+	defer s.Close()
+
+	// Track that the backup function is called with specified tables
+	var capturedRequest *command.BackupRequest
+	m.backupFn = func(br *command.BackupRequest, dst io.Writer) error {
+		capturedRequest = br
+		return nil
+	}
+
+	client := &http.Client{}
+	host := fmt.Sprintf("http://%s", s.Addr().String())
+	resp, err := client.Get(host + "/db/backup?fmt=sql&tables=users,products")
+	if err != nil {
+		t.Fatalf("failed to make backup request")
+	}
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("failed to get expected StatusOK for backup, got %d", resp.StatusCode)
+	}
+
+	// Verify that the backup request has the specified tables
+	if capturedRequest == nil {
+		t.Fatalf("backup function was not called")
+	}
+	if capturedRequest.Format != command.BackupRequest_BACKUP_REQUEST_FORMAT_SQL {
+		t.Fatalf("expected SQL format, got %v", capturedRequest.Format)
+	}
+	expectedTables := []string{"users", "products"}
+	if len(capturedRequest.Tables) != len(expectedTables) {
+		t.Fatalf("expected %d tables, got %d", len(expectedTables), len(capturedRequest.Tables))
+	}
+	for i, table := range expectedTables {
+		if capturedRequest.Tables[i] != table {
+			t.Fatalf("expected table %s at index %d, got %s", table, i, capturedRequest.Tables[i])
+		}
+	}
+}
+
 func Test_LoadOK(t *testing.T) {
 	m := &MockStore{
 		leaderAddr: "foo:1234",

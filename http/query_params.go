@@ -259,6 +259,24 @@ func (qp QueryParams) Version() string {
 	return qp["ver"]
 }
 
+// Tables returns the requested table names as a slice, parsed from comma-separated values.
+func (qp QueryParams) Tables() []string {
+	t := qp["tables"]
+	if t == "" {
+		return nil
+	}
+	// Split by comma and trim whitespace
+	tables := strings.Split(t, ",")
+	var result []string
+	for _, table := range tables {
+		table = strings.TrimSpace(table)
+		if table != "" {
+			result = append(result, table)
+		}
+	}
+	return result
+}
+
 // HasKey returns true if the given key is present in the query parameters.
 func (qp QueryParams) HasKey(k string) bool {
 	_, ok := qp[k]

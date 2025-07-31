@@ -65,3 +65,40 @@ func Test_NewQueryParamsTimes(t *testing.T) {
 		t.Errorf("Expected 0, got %v", qp.Freshness())
 	}
 }
+
+// Test_QueryParams_Tables tests the Tables method for various scenarios.
+func Test_QueryParams_Tables(t *testing.T) {
+	testCases := []struct {
+		name     string
+		rawQuery string
+		expected []string
+	}{
+		{"No tables parameter", "", nil},
+		{"Empty tables parameter", "tables=", nil},
+		{"Single table", "tables=users", []string{"users"}},
+		{"Multiple tables", "tables=users,products,orders", []string{"users", "products", "orders"}},
+		{"Tables with spaces", "tables=users, products , orders", []string{"users", "products", "orders"}},
+		{"Tables with empty values", "tables=users,,products", []string{"users", "products"}},
+		{"Only commas", "tables=,,,", nil},
+		{"Mixed empty and valid", "tables= ,users, , products, ", []string{"users", "products"}},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			req := &http.Request{
+				URL: &url.URL{
+					RawQuery: tc.rawQuery,
+				},
+			}
+			qp, err := NewQueryParams(req)
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+
+			result := qp.Tables()
+			if !reflect.DeepEqual(result, tc.expected) {
+				t.Errorf("expected %v, got %v", tc.expected, result)
+			}
+		})
+	}
+}

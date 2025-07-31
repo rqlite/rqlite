@@ -1468,6 +1468,123 @@ func (db *DB) Dump(w io.Writer) error {
 	return err
 }
 
+// DumpTables writes SQL statements to recreate and populate the specified tables to the given writer.
+// If tableNames is empty or nil, all tables will be dumped (same as Dump).
+func (db *DB) DumpTables(w io.Writer, tableNames []string) error {
+	if len(tableNames) == 0 {
+		// If no specific tables requested, dump all tables
+		return db.Dump(w)
+	}
+
+	conn, err := db.roDB.Conn(context.Background())
+	if err != nil {
+		return err
+	}
+	defer conn.Close()
+	ctx := context.Background()
+
+	// Convenience function to convert string query to protobuf.
+	commReq := func(query string) *command.Request {
+		return &command.Request{
+			Statements: []*command.Statement{
+				{
+					Sql: query,
+				},
+			},
+		}
+	}
+
+	if _, err := w.Write([]byte("PRAGMA foreign_keys=OFF;\nBEGIN TRANSACTION;\n")); err != nil {
+		return err
+	}
+
+	// Create a set of requested table names for quick lookup
+	tableSet := make(map[string]bool)
+	for _, name := range tableNames {
+		tableSet[name] = true
+	}
+
+	// Get the schema for requested tables only
+	query := `SELECT "name", "type", "sql" FROM "sqlite_master"
+              WHERE "sql" NOT NULL AND "type" == 'table' ORDER BY "name"`
+	rows, err := db.queryWithConn(ctx, commReq(query), false, conn)
+	if err != nil {
+		return err
+	}
+	row := rows[0]
+	for _, v := range row.Values {
+		table := v.Parameters[0].GetS()
+
+		// Skip tables not in our requested list
+		if !tableSet[table] {
+			continue
+		}
+
+		var stmt string
+
+		if table == "sqlite_sequence" {
+			stmt = `DELETE FROM "sqlite_sequence";`
+		} else if table == "sqlite_stat1" {
+			stmt = `ANALYZE "sqlite_master";`
+		} else if strings.HasPrefix(table, "sqlite_") {
+			continue
+		} else {
+			stmt = v.Parameters[2].GetS()
+		}
+
+		if _, err := w.Write([]byte(fmt.Sprintf("%s;\n", stmt))); err != nil {
+			return err
+		}
+
+		tableIndent := strings.Replace(table, `"`, `""`, -1)
+		r, err := db.queryWithConn(ctx, commReq(fmt.Sprintf(`PRAGMA table_info("%s")`, tableIndent)),
+			false, conn)
+		if err != nil {
+			return err
+		}
+		var columnNames []string
+		for _, w := range r[0].Values {
+			columnNames = append(columnNames, fmt.Sprintf(`'||quote("%s")||'`, w.Parameters[1].GetS()))
+		}
+
+		query = fmt.Sprintf(`SELECT 'INSERT INTO "%s" VALUES(%s)' FROM "%s";`,
+			tableIndent,
+			strings.Join(columnNames, ","),
+			tableIndent)
+		r, err = db.queryWithConn(ctx, commReq(query), false, conn)
+
+		if err != nil {
+			return err
+		}
+		for _, x := range r[0].Values {
+			y := fmt.Sprintf("%s;\n", x.Parameters[0].GetS())
+			if _, err := w.Write([]byte(y)); err != nil {
+				return err
+			}
+		}
+	}
+
+	// Do indexes, triggers, and views related to the specified tables
+	// For now, we'll include all indexes, triggers, and views, but we could filter these too if needed
+	query = `SELECT "name", "type", "sql" FROM "sqlite_master"
+			  WHERE "sql" NOT NULL AND "type" IN ('index', 'trigger', 'view')`
+	rows, err = db.queryWithConn(ctx, commReq(query), false, conn)
+	if err != nil {
+		return err
+	}
+	row = rows[0]
+	for _, v := range row.Values {
+		// For indexes, triggers, and views, we could add more sophisticated filtering
+		// based on the table they relate to, but for now include all of them
+		if _, err := w.Write([]byte(fmt.Sprintf("%s;\n", v.Parameters[2].GetS()))); err != nil {
+			return err
+		}
+	}
+
+	_, err = w.Write([]byte("COMMIT;\n"))
+	return err
+}
+
 // StmtReadOnly returns whether the given SQL statement is read-only.
 // As per https://www.sqlite.org/c3ref/stmt_readonly.html, this function
 // may not return 100% correct results, but should cover most scenarios.

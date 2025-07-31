@@ -94,6 +94,7 @@ message BackupRequest {
 	bool Leader = 2;
 	bool Vacuum = 3;
 	bool Compress = 4;
+	repeated string tables = 5;
 }
 
 message LoadRequest {
