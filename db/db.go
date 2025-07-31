@@ -896,6 +896,10 @@ func (db *DB) executeWithConn(ctx context.Context, req *command.Request, xTime b
 			tx = nil
 			return false
 		}
+		if req.RollbackOnError {
+			db.executeStmtWithConn(ctx, &command.Statement{Sql: "ROLLBACK"}, false, eqer, time.Duration(req.DbTimeout))
+			return false
+		}
 		return true
 	}
 

@@ -770,6 +770,7 @@ func (s *Service) handleLoad(w http.ResponseWriter, r *http.Request, qp QueryPar
 		// No JSON structure expected for this API, just a bunch of SQL statements.
 		queries := []string{string(b)}
 		er := executeRequestFromStrings(queries, qp.Timings(), false)
+		er.Request.RollbackOnError = true
 
 		response, _, err := s.store.Execute(er)
 		if err != nil {
