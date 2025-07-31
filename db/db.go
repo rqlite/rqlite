@@ -882,6 +882,7 @@ func (db *DB) executeWithConn(ctx context.Context, req *command.Request, xTime b
 	}
 
 	var allResults []*command.ExecuteQueryResponse
+	var explicitTxActive bool // Track if we're in an explicit transaction from SQL
 
 	// handleError sets the error field on the given result. It returns
 	// whether the caller should continue processing or break.
@@ -896,6 +897,26 @@ func (db *DB) executeWithConn(ctx context.Context, req *command.Request, xTime b
 			tx = nil
 			return false
 		}
+		// If we're in an explicit transaction and got an error,
+		// we should rollback the explicit transaction
+		if explicitTxActive && !req.Transaction {
+			rollbackResult := &command.ExecuteQueryResponse{
+				Result: &command.ExecuteQueryResponse_E{
+					E: &command.ExecuteResult{
+						LastInsertId: 0,
+						RowsAffected: 0,
+					},
+				},
+			}
+			_, rollbackErr := eqer.ExecContext(ctx, "ROLLBACK", nil...)
+			if rollbackErr != nil {
+				rollbackResult.Result = &command.ExecuteQueryResponse_Error{
+					Error: rollbackErr.Error(),
+				}
+			}
+			allResults = append(allResults, rollbackResult)
+			explicitTxActive = false
+		}
 		return true
 	}
 
@@ -904,6 +925,16 @@ func (db *DB) executeWithConn(ctx context.Context, req *command.Request, xTime b
 		ss := stmt.Sql
 		if ss == "" {
 			continue
+		}
+
+		// Track explicit transaction state
+		if !req.Transaction {
+			sqlLower := strings.ToLower(strings.TrimSpace(ss))
+			if strings.HasPrefix(sqlLower, "begin") {
+				explicitTxActive = true
+			} else if strings.HasPrefix(sqlLower, "commit") || strings.HasPrefix(sqlLower, "rollback") {
+				explicitTxActive = false
+			}
 		}
 
 		result, err := db.executeStmtWithConn(ctx, stmt, xTime, eqer, time.Duration(req.DbTimeout))

@@ -787,6 +787,11 @@ func (s *Service) handleLoad(w http.ResponseWriter, r *http.Request, qp QueryPar
 				}
 				resp.Results.ExecuteQueryResponse = response
 				stats.Add(numRemoteLoads, 1)
+				
+				// Check if remote execution had errors and rollback if needed
+				if s.hasExecutionErrors(response) {
+					s.rollbackFailedRestore(ldrAddr, makeCredentials(r), qp)
+				}
 			} else {
 				// Local execute failed for some reason other than not
 				// being the leader. Nothing we can do here.
@@ -795,6 +800,11 @@ func (s *Service) handleLoad(w http.ResponseWriter, r *http.Request, qp QueryPar
 		} else {
 			// Successful local execute.
 			resp.Results.ExecuteQueryResponse = response
+			
+			// Check if local execution had errors and rollback if needed
+			if s.hasExecutionErrors(response) {
+				s.rollbackFailedRestore("", nil, qp)
+			}
 		}
 		resp.end = time.Now()
 	}
@@ -1961,5 +1971,55 @@ func makeCredentials(r *http.Request) *clstrPB.Credentials {
 	return &clstrPB.Credentials{
 		Username: username,
 		Password: password,
+	}
+}
+
+// hasExecutionErrors checks if any of the ExecuteQueryResponse results contain errors
+func (s *Service) hasExecutionErrors(results []*command.ExecuteQueryResponse) bool {
+	if results == nil {
+		return false
+	}
+	for _, result := range results {
+		if result.GetE() != nil && result.GetE().Error != "" {
+			return true
+		}
+		if result.GetError() != "" {
+			return true
+		}
+	}
+	return false
+}
+
+// rollbackFailedRestore attempts to rollback any open transaction after a failed restore
+func (s *Service) rollbackFailedRestore(remoteAddr string, creds *clstrPB.Credentials, qp QueryParams) {
+	s.logger.Printf("restore operation failed, attempting to rollback any open transaction")
+	
+	// Create a ROLLBACK statement
+	rollbackStmt := []*command.Statement{
+		{Sql: "ROLLBACK"},
+	}
+	
+	rollbackER := &command.ExecuteRequest{
+		Request: &command.Request{
+			Statements:  rollbackStmt,
+			Transaction: false,
+		},
+		Timings: false,
+	}
+	
+	var rollbackErr error
+	if remoteAddr != "" {
+		// Execute rollback on remote node
+		_, _, rollbackErr = s.cluster.Execute(rollbackER, remoteAddr, creds, qp.Timeout(defaultTimeout), qp.Retries(0))
+	} else {
+		// Execute rollback locally
+		_, _, rollbackErr = s.store.Execute(rollbackER)
+	}
+	
+	if rollbackErr != nil {
+		// Log the error but don't fail the request - the original error is more important
+		s.logger.Printf("failed to rollback transaction after restore failure: %s", rollbackErr.Error())
+	} else {
+		s.logger.Printf("successfully rolled back transaction after restore failure")
 	}
 }
