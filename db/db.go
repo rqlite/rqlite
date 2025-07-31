@@ -1396,18 +1396,19 @@ func (db *DB) Dump(w io.Writer, tableNames ...string) error {
 		return err
 	}
 
-	// Create a set of requested table names for quick lookup if specific tables are requested
-	var tableSet map[string]bool
+	// Build the query with optional table filtering
+	tableAnd := ""
 	if len(tableNames) > 0 {
-		tableSet = make(map[string]bool)
-		for _, name := range tableNames {
-			tableSet[name] = true
+		quotedNames := make([]string, len(tableNames))
+		for i, name := range tableNames {
+			quotedNames[i] = fmt.Sprintf("'%s'", strings.Replace(name, "'", "''", -1))
 		}
+		tableAnd = fmt.Sprintf(" AND name IN (%s)", strings.Join(quotedNames, ","))
 	}
 
 	// Get the schema.
-	query := `SELECT "name", "type", "sql" FROM "sqlite_master"
-              WHERE "sql" NOT NULL AND "type" == 'table' ORDER BY "name"`
+	query := fmt.Sprintf(`SELECT "name", "type", "sql" FROM "sqlite_master"
+                         WHERE "sql" NOT NULL AND "type" == 'table'%s ORDER BY "name"`, tableAnd)
 	rows, err := db.queryWithConn(ctx, commReq(query), false, conn)
 	if err != nil {
 		return err
@@ -1415,11 +1416,6 @@ func (db *DB) Dump(w io.Writer, tableNames ...string) error {
 	row := rows[0]
 	for _, v := range row.Values {
 		table := v.Parameters[0].GetS()
-
-		// Skip tables not in our requested list (if specific tables were requested)
-		if tableSet != nil && !tableSet[table] {
-			continue
-		}
 
 		var stmt string
 
