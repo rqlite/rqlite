@@ -1403,12 +1403,12 @@ func (db *DB) Dump(w io.Writer, tableNames ...string) error {
 		for i, name := range tableNames {
 			quotedNames[i] = fmt.Sprintf("'%s'", strings.Replace(name, "'", "''", -1))
 		}
-		tableAnd = fmt.Sprintf(" AND name IN (%s)", strings.Join(quotedNames, ","))
+		tableAnd = fmt.Sprintf("AND name IN (%s)", strings.Join(quotedNames, ","))
 	}
 
 	// Get the schema.
 	query := fmt.Sprintf(`SELECT "name", "type", "sql" FROM "sqlite_master"
-                         WHERE "sql" NOT NULL AND "type" == 'table'%s ORDER BY "name"`, tableAnd)
+                         WHERE "sql" NOT NULL AND "type" == 'table' %s ORDER BY "name"`, tableAnd)
 	rows, err := db.queryWithConn(ctx, commReq(query), false, conn)
 	if err != nil {
 		return err
