@@ -655,6 +655,38 @@ func testSimpleJoinStatements(t *testing.T, db *DB) {
 	}
 }
 
+func testJoinSelectStarStatements(t *testing.T, db *DB) {
+	_, err := db.ExecuteStringStmt("CREATE TABLE contacts (id INTEGER PRIMARY KEY, name TEXT, first_name TEXT, created_at TEXT, updated_at TEXT, title_id INTEGER)")
+	if err != nil {
+		t.Fatalf("failed to create contacts table: %s", err.Error())
+	}
+
+	_, err = db.ExecuteStringStmt("CREATE TABLE titles (id INTEGER PRIMARY KEY, name TEXT, created_at TEXT, updated_at TEXT)")
+	if err != nil {
+		t.Fatalf("failed to create titles table: %s", err.Error())
+	}
+
+	_, err = db.ExecuteStringStmt(`INSERT INTO contacts VALUES(1, 'Doe', 'John', '2023-01-01', '2023-01-01', 1)`)
+	if err != nil {
+		t.Fatalf("failed to insert into contacts: %s", err.Error())
+	}
+
+	_, err = db.ExecuteStringStmt(`INSERT INTO titles VALUES(1, 'Manager', '2023-01-01', '2023-01-01')`)
+	if err != nil {
+		t.Fatalf("failed to insert into titles: %s", err.Error())
+	}
+
+	// Test SELECT * from JOIN - this should have qualified column names
+	r, err := db.QueryStringStmt(`SELECT * FROM contacts JOIN titles ON contacts.title_id = titles.id`)
+	if err != nil {
+		t.Fatalf("failed to query table using JOIN with SELECT *: %s", err.Error())
+	}
+	// Expected: qualified column names for joins
+	if exp, got := `[{"columns":["contacts.id","contacts.name","contacts.first_name","contacts.created_at","contacts.updated_at","contacts.title_id","titles.id","titles.name","titles.created_at","titles.updated_at"],"types":["integer","text","text","text","text","integer","integer","text","text","text"],"values":[[1,"Doe","John","2023-01-01","2023-01-01",1,1,"Manager","2023-01-01","2023-01-01"]]}]`, asJSON(r); exp != got {
+		t.Fatalf("unexpected results for JOIN SELECT * query\nexp: %s\ngot: %s", exp, got)
+	}
+}
+
 func testSimpleSingleConcatStatements(t *testing.T, db *DB) {
 	_, err := db.ExecuteStringStmt("CREATE TABLE foo (id INTEGER NOT NULL PRIMARY KEY, name TEXT)")
 	if err != nil {
@@ -1797,6 +1829,7 @@ func Test_DatabaseCommonOperations(t *testing.T) {
 		{"SimpleSingleJSONStatements", testSimpleSingleJSONStatements},
 		{"SimpleSingleJSONBStatements", testSimpleSingleJSONBStatements},
 		{"SimpleJoinStatements", testSimpleJoinStatements},
+		{"JoinSelectStarStatements", testJoinSelectStarStatements},
 		{"SimpleSingleConcatStatements", testSimpleSingleConcatStatements},
 		{"SimpleMultiStatements", testSimpleMultiStatements},
 		{"SimpleSingleMultiLineStatements", testSimpleSingleMultiLineStatements},
