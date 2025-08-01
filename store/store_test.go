@@ -2165,6 +2165,59 @@ COMMIT;
 	}
 }
 
+func Test_SingleNodeLoad_SQLFail(t *testing.T) {
+	s, ln := mustNewStore(t)
+	defer ln.Close()
+
+	if err := s.Open(); err != nil {
+		t.Fatalf("failed to open single-node store: %s", err.Error())
+	}
+	if err := s.Bootstrap(NewServer(s.ID(), s.Addr(), true)); err != nil {
+		t.Fatalf("failed to bootstrap single-node store: %s", err.Error())
+	}
+	defer s.Close(true)
+	if _, err := s.WaitForLeader(10 * time.Second); err != nil {
+		t.Fatalf("Error waiting for leader: %s", err)
+	}
+
+	dump := `PRAGMA foreign_keys=OFF;
+BEGIN TRANSACTION;
+CREATE TABLE bar (id integer not null primary key, name text);
+INSERT INTO "bar" VALUES(1,'declan');
+INSERT INTO "bar" VALUES(1,'fiona');
+COMMIT;
+`
+	er := executeRequestFromString(dump, false, false)
+	er.Request.RollbackOnError = true
+	_, _, err := s.Execute(er)
+	if err != nil {
+		t.Fatalf("failed to load simple dump: %s", err.Error())
+	}
+
+	// Check that data were loaded correctly.
+	qr := queryRequestFromString("SELECT * FROM bar", false, true)
+	qr.Level = proto.QueryRequest_QUERY_REQUEST_LEVEL_STRONG
+	r, _, err := s.Query(qr)
+	if err != nil {
+		t.Fatalf("failed to query single node: %s", err.Error())
+	}
+	if exp, got := `[{"error":"no such table: bar"}]`, asJSON(r); exp != got {
+		t.Fatalf("unexpected results for query\nexp: %s\ngot: %s", exp, got)
+	}
+
+	// Check that the transaction was rolled back by trying to start a new transaction.
+	// It should succeed.
+	er = executeRequestFromString("BEGIN TRANSACTION; COMMIT;", false, false)
+	rer, _, err := s.Execute(er)
+	if err != nil {
+		t.Fatalf("failed to start new transaction after SQL error: %s", err.Error())
+	}
+	if asJSON(rer) != `[{"last_insert_id":1}]` {
+		t.Fatalf("expected no results after starting new transaction, got %s", asJSON(rer))
+	}
+
+}
+
 func Test_SingleNodeAutoRestore(t *testing.T) {
 	s, ln := mustNewStore(t)
 	defer ln.Close()
