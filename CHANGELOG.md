@@ -5,6 +5,7 @@
 ### Implementation changes and bug fixes
 - [PR #2186](https://github.com/rqlite/rqlite/pull/2186): Add "running inside Kubernetes" hint to `/status`
 - [PR #2190](https://github.com/rqlite/rqlite/pull/2190): Rollback transaction if restore fails. Fixes issue [#385](https://github.com/rqlite/rqlite/issues/385).
+- [PR #2191](https://github.com/rqlite/rqlite/pull/2191): 'go mod' updates.
 
 ## v8.42.0 (July 25th 2025)
 ### New features
