@@ -59,7 +59,7 @@ func init() {
 		`.blobarray on|off                             Display BLOB data as byte arrays`,
 		`.boot FILE                                    Boot the node using a SQLite file read from FILE`,
 		`.consistency [none|weak|linearizable|strong]  Show or set read consistency level`,
-		`.dump FILE                                    Dump the database in SQL text format to FILE`,
+		`.dump FILE [TABLES]                          Dump the database in SQL text format to FILE, optionally limited to comma-separated TABLES`,
 		`.exit                                         Exit this program`,
 		`.expvar                                       Show expvar (Go runtime) information for connected node`,
 		`.extensions                                   Show loaded SQLite extensions`,
@@ -248,7 +248,28 @@ func main() {
 					err = fmt.Errorf("please specify an output file for the SQL text")
 					break
 				}
-				err = dump(ctx, line[index+1:], argv)
+				args := strings.Fields(line[index+1:])
+				if len(args) == 0 {
+					err = fmt.Errorf("please specify an output file for the SQL text")
+					break
+				}
+				filename := args[0]
+				var tables []string
+				if len(args) > 1 {
+					// Join all remaining arguments as table specification and split by comma
+					tablesStr := strings.Join(args[1:], " ")
+					tables = strings.Split(tablesStr, ",")
+					// Trim whitespace from table names and filter empty ones
+					var cleanTables []string
+					for _, table := range tables {
+						table = strings.TrimSpace(table)
+						if table != "" {
+							cleanTables = append(cleanTables, table)
+						}
+					}
+					tables = cleanTables
+				}
+				err = dump(ctx, filename, tables, argv)
 			case ".HELP":
 				ctx.String("%s", strings.Join(cliHelp, "\n"))
 			case ".QUIT", "QUIT", "EXIT", ".EXIT":

@@ -62,9 +62,12 @@ func backup(ctx *cli.Context, filename string, argv *argT) error {
 	return nil
 }
 
-func dump(ctx *cli.Context, filename string, argv *argT) error {
+func dump(ctx *cli.Context, filename string, tables []string, argv *argT) error {
 	queryStr := url.Values{}
 	queryStr.Set("fmt", "sql")
+	if len(tables) > 0 {
+		queryStr.Set("tables", strings.Join(tables, ","))
+	}
 	u := url.URL{
 		Scheme:   argv.Protocol,
 		Host:     address6(argv),
