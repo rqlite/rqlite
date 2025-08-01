@@ -59,7 +59,7 @@ func init() {
 		`.blobarray on|off                             Display BLOB data as byte arrays`,
 		`.boot FILE                                    Boot the node using a SQLite file read from FILE`,
 		`.consistency [none|weak|linearizable|strong]  Show or set read consistency level`,
-		`.dump FILE [TABLES]                          Dump the database in SQL text format to FILE, optionally limited to comma-separated TABLES`,
+		`.dump FILE [TABLE,TABLE...]                   Dump the database in SQL text to FILE, optionally limited to TABLEs`,
 		`.exit                                         Exit this program`,
 		`.expvar                                       Show expvar (Go runtime) information for connected node`,
 		`.extensions                                   Show loaded SQLite extensions`,
