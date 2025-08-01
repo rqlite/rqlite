@@ -1,4 +1,4 @@
-## v8.43.0 (unreleased)
+## v8.43.0 (July 31st 2025)
 ### New features
 - [PR #2189](https://github.com/rqlite/rqlite/pull/2189): Support backing up specific tables. Fixes issue [#1381](https://github.com/rqlite/rqlite/issues/1381).
 
