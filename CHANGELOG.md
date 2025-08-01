@@ -1,3 +1,7 @@
+## v8.43.1 (unreleased)
+### Implementation changes and bug fixes
+- [PR #2193](https://github.com/rqlite/rqlite/pull/2193): rqlite shell `.dump` supports limiting tables.
+
 ## v8.43.0 (July 31st 2025)
 ### New features
 - [PR #2189](https://github.com/rqlite/rqlite/pull/2189): Support backing up specific tables. Fixes issue [#1381](https://github.com/rqlite/rqlite/issues/1381).
