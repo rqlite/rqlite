@@ -1432,77 +1432,58 @@ func testSerialize(t *testing.T, db *DB) {
 }
 
 func testDump(t *testing.T, db *DB) {
-	expRows := `[{"columns":["COUNT(*)"],"types":["integer"],"values":[[347]]}]`
+	const expRows = `[{"columns":["COUNT(*)"],"types":["integer"],"values":[[347]]}]`
 
-	_, err := db.ExecuteStringStmt(chinook.DB)
+	// load full Chinook dump
+	if _, err := db.ExecuteStringStmt(chinook.DB); err != nil {
+		t.Fatalf("load chinook: %v", err)
+	}
+
+	// verify original row count
+	rows, err := db.QueryStringStmt("SELECT COUNT(*) FROM Album")
 	if err != nil {
-		t.Fatalf("failed to load chinook dump: %s", err.Error())
+		t.Fatalf("count rows: %v", err)
 	}
-	r, err := db.QueryStringStmt(`SELECT COUNT(*) FROM Album`)
-	if err != nil {
-		t.Fatalf("failed to count rows: %s", err.Error())
-	}
-	if exp, got := expRows, asJSON(r); exp != got {
-		t.Fatalf("unexpected results for query\nexp: %s\ngot: %s", exp, got)
+	if got := asJSON(rows); got != expRows {
+		t.Fatalf("original count: got %s want %s", got, expRows)
 	}
 
-	var b strings.Builder
-	if err := db.Dump(&b); err != nil {
-		t.Fatalf("failed to dump database: %s", err.Error())
+	tests := []struct {
+		name   string
+		tables []string
+		want   string
+	}{
+		{"full dump", nil, expRows},
+		{"no such table", []string{"foo"}, `[{"error":"no such table: Album"}]`},
+		{"single table", []string{"Album"}, expRows},
 	}
 
-	newDB, newDBPath := mustCreateOnDiskDatabase()
-	defer newDB.Close()
-	defer os.Remove(newDBPath)
-	if _, err := newDB.ExecuteStringStmt(b.String()); err != nil {
-		t.Fatalf("failed to load dumped database into new database: %s", err.Error())
-	}
-	r, err = newDB.QueryStringStmt(`SELECT COUNT(*) FROM Album`)
-	if err != nil {
-		t.Fatalf("failed to count rows in new database: %s", err.Error())
-	}
-	if exp, got := expRows, asJSON(r); exp != got {
-		t.Fatalf("unexpected results for query of new database\nexp: %s\ngot: %s", exp, got)
-	}
+	for _, tc := range tests {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			var buf strings.Builder
+			if err := db.Dump(&buf, tc.tables...); err != nil {
+				t.Fatalf("dump %s: %v", tc.name, err)
+			}
 
-	// Test when non-existent tables are dumped.
-	var b2 strings.Builder
-	if err := db.Dump(&b2, "non-existent"); err != nil {
-		t.Fatalf("failed to dump database: %s", err.Error())
-	}
+			// load dump into new DB
+			newDB, path := mustCreateOnDiskDatabase()
+			defer newDB.Close()
+			defer os.Remove(path)
 
-	newDB2, newDBPath2 := mustCreateOnDiskDatabase()
-	defer newDB2.Close()
-	defer os.Remove(newDBPath2)
-	if _, err := newDB2.ExecuteStringStmt(b2.String()); err != nil {
-		t.Fatalf("failed to load dumped database into new database: %s", err.Error())
-	}
-	r, err = newDB2.QueryStringStmt(`SELECT COUNT(*) FROM Album`)
-	if err != nil {
-		t.Fatalf("failed to count rows in new database: %s", err.Error())
-	}
-	if exp, got := `[{"error":"no such table: Album"}]`, asJSON(r); exp != got {
-		t.Fatalf("unexpected results for query of new database\nexp: %s\ngot: %s", exp, got)
-	}
+			if _, err := newDB.ExecuteStringStmt(buf.String()); err != nil {
+				t.Fatalf("load %s: %v", tc.name, err)
+			}
 
-	// Test when the one actual table is dumped.
-	var b3 strings.Builder
-	if err := db.Dump(&b2, "Album"); err != nil {
-		t.Fatalf("failed to dump database: %s", err.Error())
-	}
-
-	newDB3, newDBPath3 := mustCreateOnDiskDatabase()
-	defer newDB3.Close()
-	defer os.Remove(newDBPath3)
-	if _, err := newDB3.ExecuteStringStmt(b3.String()); err != nil {
-		t.Fatalf("failed to load dumped database into new database: %s", err.Error())
-	}
-	r, err = newDB3.QueryStringStmt(`SELECT COUNT(*) FROM Album`)
-	if err != nil {
-		t.Fatalf("failed to count rows in new database: %s", err.Error())
-	}
-	if exp, got := `[{"error":"no such table: Album"}]`, asJSON(r); exp != got {
-		t.Fatalf("unexpected results for query of new database\nexp: %s\ngot: %s", exp, got)
+			// verify row count in new DB
+			rows, err := newDB.QueryStringStmt("SELECT COUNT(*) FROM Album")
+			if err != nil {
+				t.Fatalf("query %s: %v", tc.name, err)
+			}
+			if got := asJSON(rows); got != tc.want {
+				t.Fatalf("%s: got %s want %s", tc.name, got, tc.want)
+			}
+		})
 	}
 }
 
