@@ -89,7 +89,8 @@ type Queue[T any] struct {
 
 	done   chan struct{}
 	closed chan struct{}
-	flush  chan struct{}
+	flush  chan *flushReq
+	reset  chan *resetReq
 
 	seqMu  sync.Mutex
 	seqNum int64
@@ -108,7 +109,8 @@ func New[T any](maxSize, batchSize int, t time.Duration) *Queue[T] {
 		sendCh:    make(chan *Request[T], 1),
 		done:      make(chan struct{}),
 		closed:    make(chan struct{}),
-		flush:     make(chan struct{}),
+		flush:     make(chan *flushReq, 1),
+		reset:     make(chan *resetReq, 1),
 		seqNum:    time.Now().UnixNano(),
 	}
 
@@ -152,7 +154,11 @@ func (q *Queue[T]) Write(objects []T, c FlushChannel) (int64, error) {
 
 // Flush flushes the queue
 func (q *Queue[T]) Flush() error {
-	q.flush <- struct{}{}
+	req := &flushReq{
+		ch: make(chan struct{}),
+	}
+	q.flush <- req
+	<-req.ch
 	return nil
 }
 
@@ -167,7 +173,9 @@ func (q *Queue[T]) Close() error {
 	return nil
 }
 
-// Depth returns the number of queued requests
+// Depth returns the number of queued requests. Requests which have
+// been dequeued but not yet sent to C are not counted
+// in this number. XXX THIS IS NOT CLEARL DEFINED ACTUALLY.
 func (q *Queue[T]) Depth() int {
 	return len(q.batchCh)
 }
@@ -179,6 +187,17 @@ func (q *Queue[T]) Stats() (map[string]any, error) {
 		"batch_size": q.batchSize,
 		"timeout":    q.timeout.String(),
 	}, nil
+}
+
+// Reset resets to the queue to be empty. Any queued objects are dropped.
+// This function should not be called concurrently with Write.
+func (q *Queue[T]) Reset() error {
+	req := &resetReq{
+		ch: make(chan struct{}),
+	}
+	q.reset <- req
+	<-req.ch
+	return nil
 }
 
 func (q *Queue[T]) run() {
@@ -203,6 +222,8 @@ func (q *Queue[T]) run() {
 	for {
 		select {
 		case s := <-q.batchCh:
+			// Not sure I like this. Maybe we should just
+			// block on the channel until it reaches the batch size? XXX
 			queuedStmts = append(queuedStmts, s)
 			if len(queuedStmts) == 1 {
 				// First item in queue, start the timer so that if
@@ -217,10 +238,22 @@ func (q *Queue[T]) run() {
 			stats.Add(numTimeout, 1)
 			q.numTimeouts++
 			writeFn()
-		case <-q.flush:
+		case req := <-q.flush:
 			stats.Add(numFlush, 1)
 			stopTimer(timer)
+			for len(q.batchCh) > 0 {
+				s := <-q.batchCh
+				queuedStmts = append(queuedStmts, s)
+			}
 			writeFn()
+			close(req.ch)
+		case req := <-q.reset:
+			stopTimer(timer)
+			queuedStmts = queuedStmts[:0]
+			for len(q.batchCh) > 0 {
+				_ = <-q.batchCh
+			}
+			close(req.ch)
 		case <-q.done:
 			stopTimer(timer)
 			return
@@ -232,4 +265,12 @@ func stopTimer(timer *time.Timer) {
 	if !timer.Stop() && len(timer.C) > 0 {
 		<-timer.C
 	}
+}
+
+type resetReq struct {
+	ch chan struct{}
+}
+
+type flushReq struct {
+	ch chan struct{}
 }
