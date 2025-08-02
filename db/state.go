@@ -16,6 +16,7 @@ import (
 	"strings"
 
 	"github.com/mattn/go-sqlite3"
+	command "github.com/rqlite/rqlite/v8/command/proto"
 	"github.com/rqlite/rqlite/v8/internal/random"
 )
 
@@ -399,4 +400,44 @@ func ReplayWAL(path string, wals []string, deleteMode bool) error {
 		return err
 	}
 	return fd.Close()
+}
+
+func DumpTablesReq(tables ...string) *command.Request {
+	if len(tables) == 0 {
+		return &command.Request{
+			Statements: []*command.Statement{
+				{
+					Sql: `SELECT "name", "type", "sql" FROM sqlite_master WHERE "sql" NOT NULL AND type='table' ORDER BY name`,
+				},
+			},
+		}
+	}
+
+	var sb strings.Builder
+	sb.WriteString(`SELECT "name", "type", "sql" FROM sqlite_master WHERE "sql" NOT NULL AND type='table' AND name IN (`)
+	for i := range tables {
+		if i > 0 {
+			sb.WriteString(", ")
+		}
+		sb.WriteString("?")
+	}
+	sb.WriteString(") ORDER BY name")
+
+	parameters := make([]*command.Parameter, len(tables))
+	for i, table := range tables {
+		parameters[i] = &command.Parameter{
+			Value: &command.Parameter_S{
+				S: table,
+			},
+		}
+	}
+
+	return &command.Request{
+		Statements: []*command.Statement{
+			{
+				Sql:        sb.String(),
+				Parameters: parameters,
+			},
+		},
+	}
 }

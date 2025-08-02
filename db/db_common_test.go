@@ -1464,6 +1464,46 @@ func testDump(t *testing.T, db *DB) {
 	if exp, got := expRows, asJSON(r); exp != got {
 		t.Fatalf("unexpected results for query of new database\nexp: %s\ngot: %s", exp, got)
 	}
+
+	// Test when non-existent tables are dumped.
+	var b2 strings.Builder
+	if err := db.Dump(&b2, "non-existent"); err != nil {
+		t.Fatalf("failed to dump database: %s", err.Error())
+	}
+
+	newDB2, newDBPath2 := mustCreateOnDiskDatabase()
+	defer newDB2.Close()
+	defer os.Remove(newDBPath2)
+	if _, err := newDB2.ExecuteStringStmt(b2.String()); err != nil {
+		t.Fatalf("failed to load dumped database into new database: %s", err.Error())
+	}
+	r, err = newDB2.QueryStringStmt(`SELECT COUNT(*) FROM Album`)
+	if err != nil {
+		t.Fatalf("failed to count rows in new database: %s", err.Error())
+	}
+	if exp, got := `[{"error":"no such table: Album"}]`, asJSON(r); exp != got {
+		t.Fatalf("unexpected results for query of new database\nexp: %s\ngot: %s", exp, got)
+	}
+
+	// Test when the one actual table is dumped.
+	var b3 strings.Builder
+	if err := db.Dump(&b2, "Album"); err != nil {
+		t.Fatalf("failed to dump database: %s", err.Error())
+	}
+
+	newDB3, newDBPath3 := mustCreateOnDiskDatabase()
+	defer newDB3.Close()
+	defer os.Remove(newDBPath3)
+	if _, err := newDB3.ExecuteStringStmt(b3.String()); err != nil {
+		t.Fatalf("failed to load dumped database into new database: %s", err.Error())
+	}
+	r, err = newDB3.QueryStringStmt(`SELECT COUNT(*) FROM Album`)
+	if err != nil {
+		t.Fatalf("failed to count rows in new database: %s", err.Error())
+	}
+	if exp, got := `[{"error":"no such table: Album"}]`, asJSON(r); exp != got {
+		t.Fatalf("unexpected results for query of new database\nexp: %s\ngot: %s", exp, got)
+	}
 }
 
 func testSize(t *testing.T, db *DB) {
