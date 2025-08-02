@@ -13,6 +13,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/rqlite/rqlite/v8/command"
 	"github.com/rqlite/rqlite/v8/command/proto"
 	"github.com/rqlite/rqlite/v8/internal/rsync"
 	"github.com/rqlite/rqlite/v8/queue"
@@ -120,9 +121,9 @@ type Service struct {
 	// at least once to the webhook endpoint.
 	fifo *Queue
 
-	// queue implements the batching of CDC events before transmission to the webhook. The
+	// batcher implements the batching of CDC events before transmission to the webhook. The
 	// contents of this queue do not persist across restarts or leader changes.
-	queue *queue.Queue[*proto.CDCEvents]
+	batcher *queue.Queue[*proto.CDCEvents]
 
 	// highWatermark is the index of the last event that was successfully sent to the webhook
 	// by the cluster (which is not necessarily the same thing as this node).
@@ -175,7 +176,7 @@ func NewService(dir string, clstr Cluster, str Store, in <-chan *proto.CDCEvents
 		maxBatchSz:            cfg.MaxBatchSz,
 		maxBatchDelay:         cfg.MaxBatchDelay,
 		highWatermarkInterval: cfg.HighWatermarkInterval,
-		queue:                 queue.New[*proto.CDCEvents](cfg.MaxBatchSz, cfg.MaxBatchSz, cfg.MaxBatchDelay),
+		batcher:               queue.New[*proto.CDCEvents](cfg.MaxBatchSz, cfg.MaxBatchSz, cfg.MaxBatchDelay),
 		leaderObCh:            make(chan bool, leaderChanLen),
 		hwmObCh:               make(chan uint64, leaderChanLen),
 		done:                  make(chan struct{}),
@@ -201,7 +202,7 @@ func (s *Service) Start() error {
 		}
 	}
 	s.wg.Add(2)
-	go s.readEvents()
+	go s.writeToFIFO()
 	go s.mainLoop()
 
 	s.clstr.RegisterLeaderChange(s.leaderObCh)
@@ -231,17 +232,50 @@ func (s *Service) HighWatermark() uint64 {
 	return s.highWatermark.Load()
 }
 
-func (s *Service) readEvents() {
+func (s *Service) writeToFIFO() {
 	defer s.wg.Done()
 	for {
 		select {
 		case o := <-s.in:
-			// Right now just write the event to the queue. Events should be
-			// persisted to a disk-based queue for replay on Leader change.
-			s.queue.Write([]*proto.CDCEvents{o}, nil)
+			b, err := command.MarshalCDCEvents(o)
+			if err != nil {
+				s.logger.Printf("error marshalling CDC events: %v", err)
+				continue
+			}
+			if err := s.fifo.Enqueue(o.Index, b); err != nil {
+				s.logger.Printf("error enqueueing CDC events: %v", err)
+			}
 		case <-s.done:
 			return
 		}
+	}
+}
+
+func (s *Service) readFromFIFO() {
+	for {
+		select {
+		case <-s.done:
+			return
+		case resp := <-s.fifo.dequeueChan
+			if resp.err != nil {
+				s.logger.Printf("error dequeueing from FIFO: %v", resp.err)
+				continue
+			}
+			o, err := command.UnmarshalCDCEvents(resp.
+			if err != nil {
+				s.logger.Printf("error unmarshalling CDC events: %v", err)
+				continue
+			}
+		}
+
+
+		_, b, err := s.fifo.Dequeue()
+		if err != nil {
+			s.logger.Printf("error dequeueing from FIFO: %v", err)
+			continue
+		}
+
+		s.batcher.Write([]*proto.CDCEvents{o}, nil)
 	}
 }
 
@@ -282,10 +316,15 @@ func (s *Service) mainLoop() {
 		case isLeader := <-s.leaderObCh:
 			s.logger.Println("is leader:", isLeader)
 			// If not leader then reset batching queue and get ready to start
-			// retrasmitting events from high-water mark. If we have become
+			// retransmitting events from high-water mark. If we have become
 			// the leader then start reading from the batching queue.
+			if isLeader {
+				s.readFromFIFO()
+			} else {
+				// If we are not the leader, stop reading from the FIFO and reset the batcher.
+			}
 
-		case batch := <-s.queue.C:
+		case batch := <-s.batcher.C:
 			if batch == nil || len(batch.Objects) == 0 {
 				continue
 			}
