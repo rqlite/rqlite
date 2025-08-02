@@ -402,6 +402,9 @@ func ReplayWAL(path string, wals []string, deleteMode bool) error {
 	return fd.Close()
 }
 
+// DumpTablesReq returns a command.Request that will dump the schema of the
+// given tables, or all tables if none are specified. This form protects
+// against SQL injection by using parameterized queries.
 func DumpTablesReq(tables ...string) *command.Request {
 	if len(tables) == 0 {
 		return &command.Request{
