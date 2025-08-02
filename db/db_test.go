@@ -305,6 +305,20 @@ func Test_TableCreation(t *testing.T) {
 	testQ()
 }
 
+func Test_QueryReadOnly(t *testing.T) {
+	db, path := mustCreateOnDiskDatabaseWAL()
+	defer db.Close()
+	defer os.Remove(path)
+
+	r, err := db.QueryStringStmt("CREATE TABLE foo (id INTEGER NOT NULL PRIMARY KEY, name TEXT)")
+	if err != nil {
+		t.Fatalf("failed to create table: %s", err.Error())
+	}
+	if exp, got := `[{"error":"attempt to change database via query operation"}]`, asJSON(r); exp != got {
+		t.Fatalf("unexpected results for query, expected %s, got %s", exp, got)
+	}
+}
+
 // Test_LoadExtensionDisabled tests that loading extensions is disabled
 // by default.
 func Test_LoadExtensionDisabled(t *testing.T) {
