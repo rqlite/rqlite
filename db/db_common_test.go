@@ -995,6 +995,84 @@ func testSimpleParameterizedStatements(t *testing.T, db *DB) {
 	}
 }
 
+func testSimpleParameterizedStatements_IN(t *testing.T, db *DB) {
+	_, err := db.ExecuteStringStmt("CREATE TABLE foo (id INTEGER NOT NULL PRIMARY KEY, name TEXT)")
+	if err != nil {
+		t.Fatalf("failed to create table: %s", err.Error())
+	}
+
+	req := &command.Request{
+		Statements: []*command.Statement{
+			{
+				Sql: "SELECT name FROM sqlite_master WHERE name IN(?)",
+				Parameters: []*command.Parameter{
+					{
+						Value: &command.Parameter_S{
+							S: "foo",
+						},
+					},
+				},
+			},
+		},
+	}
+	r, err := db.Query(req, false)
+	if err != nil {
+		t.Fatalf("failed to query table: %s", err.Error())
+	}
+	if exp, got := `[{"columns":["name"],"types":["text"],"values":[["foo"]]}]`, asJSON(r); exp != got {
+		t.Fatalf("unexpected results for query\nexp: %s\ngot: %s", exp, got)
+	}
+
+	req = &command.Request{
+		Statements: []*command.Statement{
+			{
+				Sql: "SELECT name FROM sqlite_master WHERE name IN(?, ?)",
+				Parameters: []*command.Parameter{
+					{
+						Value: &command.Parameter_S{
+							S: "foo",
+						},
+					},
+					{
+						Value: &command.Parameter_S{
+							S: "bar",
+						},
+					},
+				},
+			},
+		},
+	}
+	r, err = db.Query(req, false)
+	if err != nil {
+		t.Fatalf("failed to query table: %s", err.Error())
+	}
+	if exp, got := `[{"columns":["name"],"types":["text"],"values":[["foo"]]}]`, asJSON(r); exp != got {
+		t.Fatalf("unexpected results for query\nexp: %s\ngot: %s", exp, got)
+	}
+
+	req = &command.Request{
+		Statements: []*command.Statement{
+			{
+				Sql: "SELECT name FROM sqlite_master WHERE name IN(?)",
+				Parameters: []*command.Parameter{
+					{
+						Value: &command.Parameter_S{
+							S: "qux",
+						},
+					},
+				},
+			},
+		},
+	}
+	r, err = db.Query(req, false)
+	if err != nil {
+		t.Fatalf("failed to query table: %s", err.Error())
+	}
+	if exp, got := `[{"columns":["name"],"types":["text"]}]`, asJSON(r); exp != got {
+		t.Fatalf("unexpected results for query\nexp: %s\ngot: %s", exp, got)
+	}
+}
+
 func testSimpleTwoParameterizedStatements(t *testing.T, db *DB) {
 	_, err := db.ExecuteStringStmt("CREATE TABLE foo (id INTEGER NOT NULL PRIMARY KEY, first TEXT, last TEXT)")
 	if err != nil {
@@ -1805,6 +1883,7 @@ func Test_DatabaseCommonOperations(t *testing.T) {
 		{"SimplePragmaTableInfo", testSimplePragmaTableInfo},
 		{"WriteOnQueryDatabaseShouldFail", testWriteOnQueryDatabaseShouldFail},
 		{"SimpleParameterizedStatements", testSimpleParameterizedStatements},
+		{"SimpleParameterizedStatements_IN", testSimpleParameterizedStatements_IN},
 		{"SimpleTwoParameterizedStatements", testSimpleTwoParameterizedStatements},
 		{"SimpleNilParameterizedStatements", testSimpleNilParameterizedStatements},
 		{"SimpleNamedParameterizedStatements", testSimpleNamedParameterizedStatements},
