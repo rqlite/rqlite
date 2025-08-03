@@ -8,7 +8,6 @@ import (
 	"testing"
 
 	command "github.com/rqlite/rqlite/v8/command/proto"
-	"github.com/rqlite/rqlite/v8/testdata/chinook"
 )
 
 func testBusyTimeout(t *testing.T, db *DB) {
@@ -1510,37 +1509,57 @@ func testSerialize(t *testing.T, db *DB) {
 }
 
 func testDump(t *testing.T, db *DB) {
-	expRows := `[{"columns":["COUNT(*)"],"types":["integer"],"values":[[347]]}]`
+	const expRows = `[{"columns":["COUNT(*)"],"types":["integer"],"values":[[0]]}]`
 
-	_, err := db.ExecuteStringStmt(chinook.DB)
-	if err != nil {
-		t.Fatalf("failed to load chinook dump: %s", err.Error())
-	}
-	r, err := db.QueryStringStmt(`SELECT COUNT(*) FROM Album`)
-	if err != nil {
-		t.Fatalf("failed to count rows: %s", err.Error())
-	}
-	if exp, got := expRows, asJSON(r); exp != got {
-		t.Fatalf("unexpected results for query\nexp: %s\ngot: %s", exp, got)
+	if _, err := db.ExecuteStringStmt(`CREATE TABLE Album (id INTEGER NOT NULL PRIMARY KEY, name TEXT)`); err != nil {
+		t.Fatalf("load chinook: %v", err)
 	}
 
-	var b strings.Builder
-	if err := db.Dump(&b); err != nil {
-		t.Fatalf("failed to dump database: %s", err.Error())
+	// verify original row count
+	rows, err := db.QueryStringStmt("SELECT COUNT(*) FROM Album")
+	if err != nil {
+		t.Fatalf("count rows: %v", err)
+	}
+	if got := asJSON(rows); got != expRows {
+		t.Fatalf("original count: got %s want %s", got, expRows)
 	}
 
-	newDB, newDBPath := mustCreateOnDiskDatabase()
-	defer newDB.Close()
-	defer os.Remove(newDBPath)
-	if _, err := newDB.ExecuteStringStmt(b.String()); err != nil {
-		t.Fatalf("failed to load dumped database into new database: %s", err.Error())
+	tests := []struct {
+		name   string
+		tables []string
+		want   string
+	}{
+		{"full dump", nil, expRows},
+		{"no such table", []string{"foo"}, `[{"error":"no such table: Album"}]`},
+		{"single table", []string{"Album"}, expRows},
 	}
-	r, err = newDB.QueryStringStmt(`SELECT COUNT(*) FROM Album`)
-	if err != nil {
-		t.Fatalf("failed to count rows in new database: %s", err.Error())
-	}
-	if exp, got := expRows, asJSON(r); exp != got {
-		t.Fatalf("unexpected results for query of new database\nexp: %s\ngot: %s", exp, got)
+
+	for _, tc := range tests {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			var buf strings.Builder
+			if err := db.Dump(&buf, tc.tables...); err != nil {
+				t.Fatalf("dump %s: %v", tc.name, err)
+			}
+
+			// load dump into new DB
+			newDB, path := mustCreateOnDiskDatabase()
+			defer newDB.Close()
+			defer os.Remove(path)
+
+			if _, err := newDB.ExecuteStringStmt(buf.String()); err != nil {
+				t.Fatalf("load %s: %v", tc.name, err)
+			}
+
+			// verify row count in new DB
+			rows, err := newDB.QueryStringStmt("SELECT COUNT(*) FROM Album")
+			if err != nil {
+				t.Fatalf("query %s: %v", tc.name, err)
+			}
+			if got := asJSON(rows); got != tc.want {
+				t.Fatalf("%s: got %s want %s", tc.name, got, tc.want)
+			}
+		})
 	}
 }
 

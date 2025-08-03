@@ -1400,20 +1400,8 @@ func (db *DB) Dump(w io.Writer, tableNames ...string) error {
 		return err
 	}
 
-	// Build the query with optional table filtering
-	tableAnd := ""
-	if len(tableNames) > 0 {
-		quotedNames := make([]string, len(tableNames))
-		for i, name := range tableNames {
-			quotedNames[i] = fmt.Sprintf("'%s'", strings.Replace(name, "'", "''", -1))
-		}
-		tableAnd = fmt.Sprintf("AND name IN (%s)", strings.Join(quotedNames, ","))
-	}
-
 	// Get the schema.
-	query := fmt.Sprintf(`SELECT "name", "type", "sql" FROM "sqlite_master"
-                         WHERE "sql" NOT NULL AND "type" == 'table' %s ORDER BY "name"`, tableAnd)
-	rows, err := db.queryWithConn(ctx, commReq(query), false, conn)
+	rows, err := db.queryWithConn(ctx, DumpTablesReq(tableNames...), false, conn)
 	if err != nil {
 		return err
 	}
@@ -1448,7 +1436,7 @@ func (db *DB) Dump(w io.Writer, tableNames ...string) error {
 			columnNames = append(columnNames, fmt.Sprintf(`'||quote("%s")||'`, w.Parameters[1].GetS()))
 		}
 
-		query = fmt.Sprintf(`SELECT 'INSERT INTO "%s" VALUES(%s)' FROM "%s";`,
+		query := fmt.Sprintf(`SELECT 'INSERT INTO "%s" VALUES(%s)' FROM "%s";`,
 			tableIndent,
 			strings.Join(columnNames, ","),
 			tableIndent)
@@ -1466,7 +1454,7 @@ func (db *DB) Dump(w io.Writer, tableNames ...string) error {
 	}
 
 	// Do indexes, triggers, and views.
-	query = `SELECT "name", "type", "sql" FROM "sqlite_master"
+	query := `SELECT "name", "type", "sql" FROM "sqlite_master"
 			  WHERE "sql" NOT NULL AND "type" IN ('index', 'trigger', 'view')`
 	rows, err = db.queryWithConn(ctx, commReq(query), false, conn)
 	if err != nil {
