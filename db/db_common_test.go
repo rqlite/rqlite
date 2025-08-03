@@ -1530,6 +1530,7 @@ func testDump(t *testing.T, db *DB) {
 		want   string
 	}{
 		{"full dump", nil, expRows},
+		{"SQL injection", []string{"foo;DROP TABLE Album"}, `[{"error":"no such table: Album"}]`},
 		{"no such table", []string{"foo"}, `[{"error":"no such table: Album"}]`},
 		{"single table", []string{"Album"}, expRows},
 	}
