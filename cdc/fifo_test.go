@@ -2,6 +2,7 @@ package cdc
 
 import (
 	"bytes"
+	"fmt"
 	"os"
 	"path/filepath"
 	"testing"
@@ -367,6 +368,192 @@ func Test_DequeueBlocking(t *testing.T) {
 		}
 	case <-time.After(1 * time.Second):
 		t.Fatal("Timed out waiting for Dequeue to unblock")
+	}
+}
+
+// Test_Events_Basic tests the basic functionality of the Events channel.
+func Test_Events_Basic(t *testing.T) {
+	q, _, cleanup := newTestQueue(t)
+	defer cleanup()
+
+	// Get the events channel
+	eventsCh := q.Events()
+
+	// Enqueue an item
+	item := []byte("test event")
+	idx := uint64(1)
+	if err := q.Enqueue(idx, item); err != nil {
+		t.Fatalf("Enqueue failed: %v", err)
+	}
+
+	// Receive the event from the channel
+	select {
+	case event := <-eventsCh:
+		if event.Index != idx {
+			t.Errorf("Expected event index %d, got %d", idx, event.Index)
+		}
+		if !bytes.Equal(event.Data, item) {
+			t.Errorf("Expected event data '%s', got '%s'", item, event.Data)
+		}
+	case <-time.After(1 * time.Second):
+		t.Fatal("Timed out waiting for event from channel")
+	}
+}
+
+// Test_Events_Multiple tests receiving multiple events from the channel.
+func Test_Events_Multiple(t *testing.T) {
+	q, _, cleanup := newTestQueue(t)
+	defer cleanup()
+
+	// Get the events channel
+	eventsCh := q.Events()
+
+	// Enqueue multiple items
+	items := []struct {
+		idx  uint64
+		data []byte
+	}{
+		{1, []byte("first")},
+		{2, []byte("second")},
+		{3, []byte("third")},
+	}
+
+	for _, item := range items {
+		if err := q.Enqueue(item.idx, item.data); err != nil {
+			t.Fatalf("Enqueue failed for index %d: %v", item.idx, err)
+		}
+	}
+
+	// Receive all events
+	for i, expectedItem := range items {
+		select {
+		case event := <-eventsCh:
+			if event.Index != expectedItem.idx {
+				t.Errorf("Event %d: expected index %d, got %d", i, expectedItem.idx, event.Index)
+			}
+			if !bytes.Equal(event.Data, expectedItem.data) {
+				t.Errorf("Event %d: expected data '%s', got '%s'", i, expectedItem.data, event.Data)
+			}
+		case <-time.After(1 * time.Second):
+			t.Fatalf("Timed out waiting for event %d from channel", i)
+		}
+	}
+}
+
+// Test_Events_SameChannelReturned tests that calling Events() multiple times returns the same channel.
+func Test_Events_SameChannelReturned(t *testing.T) {
+	q, _, cleanup := newTestQueue(t)
+	defer cleanup()
+
+	ch1 := q.Events()
+	ch2 := q.Events()
+
+	if ch1 != ch2 {
+		t.Error("Events() should return the same channel when called multiple times")
+	}
+}
+
+// Test_Events_ChannelClosedOnQueueClose tests that the events channel is closed when the queue is closed.
+func Test_Events_ChannelClosedOnQueueClose(t *testing.T) {
+	q, _, _ := newTestQueue(t) // Don't call cleanup automatically
+
+	eventsCh := q.Events()
+	
+	// Close the queue
+	q.Close()
+
+	// The events channel should be closed
+	select {
+	case _, ok := <-eventsCh:
+		if ok {
+			t.Error("Events channel should be closed when queue is closed")
+		}
+	case <-time.After(1 * time.Second):
+		t.Fatal("Timed out waiting for events channel to close")
+	}
+}
+
+// Test_Events_WithDequeue tests that both Events channel and Dequeue can work simultaneously.
+func Test_Events_WithDequeue(t *testing.T) {
+	q, _, cleanup := newTestQueue(t)
+	defer cleanup()
+
+	eventsCh := q.Events()
+
+	// Enqueue first item
+	item1 := []byte("for events")
+	if err := q.Enqueue(1, item1); err != nil {
+		t.Fatalf("Enqueue failed: %v", err)
+	}
+
+	// Read first item from events channel
+	select {
+	case event := <-eventsCh:
+		if event.Index != 1 || !bytes.Equal(event.Data, item1) {
+			t.Errorf("Unexpected event: index=%d, data=%s", event.Index, event.Data)
+		}
+	case <-time.After(1 * time.Second):
+		t.Fatal("Timed out waiting for first event")
+	}
+
+	// Now enqueue second item
+	item2 := []byte("for dequeue")
+	if err := q.Enqueue(2, item2); err != nil {
+		t.Fatalf("Enqueue failed: %v", err)
+	}
+
+	// Call Dequeue to get the second item
+	idx, val, err := q.Dequeue()
+	if err != nil {
+		t.Fatalf("Dequeue failed: %v", err)
+	}
+	if idx != 2 || !bytes.Equal(val, item2) {
+		t.Errorf("Unexpected dequeue result: index=%d, data=%s", idx, val)
+	}
+}
+
+// Test_Events_BlockingBehavior tests that a full events channel doesn't block the queue.
+func Test_Events_BlockingBehavior(t *testing.T) {
+	q, _, cleanup := newTestQueue(t)
+	defer cleanup()
+
+	eventsCh := q.Events()
+
+	// Enqueue more items than the channel buffer size to test non-blocking behavior
+	numItems := queueBufferSize + 10
+	for i := 1; i <= numItems; i++ {
+		item := []byte(fmt.Sprintf("item%d", i))
+		if err := q.Enqueue(uint64(i), item); err != nil {
+			t.Fatalf("Enqueue failed for item %d: %v", i, err)
+		}
+	}
+
+	// The queue should not be blocked even if we don't read from the channel immediately
+	// We should be able to enqueue more items
+	extraItem := []byte("extra")
+	if err := q.Enqueue(uint64(numItems+1), extraItem); err != nil {
+		t.Fatalf("Enqueue failed for extra item: %v", err)
+	}
+
+	// Now read from the channel - we should get at least some events
+	receivedCount := 0
+	timeout := time.After(2 * time.Second)
+	
+	for receivedCount < queueBufferSize {
+		select {
+		case event := <-eventsCh:
+			receivedCount++
+			expectedData := []byte(fmt.Sprintf("item%d", receivedCount))
+			if !bytes.Equal(event.Data, expectedData) {
+				t.Errorf("Event %d: expected data '%s', got '%s'", receivedCount, expectedData, event.Data)
+			}
+		case <-timeout:
+			break
+		}
+	}
+
+	if receivedCount == 0 {
+		t.Error("Should have received at least some events from the channel")
 	}
 }
 
