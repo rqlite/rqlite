@@ -131,7 +131,7 @@ func (q *Queue) run(nextKey []byte, highestKey uint64) {
 
 	var waitingDequeues []dequeueReq // A list of callers waiting for an item.
 	var eventsOutChan chan Event     // The events channel for push-based consumption
-	
+
 	// Helper function to close events channel on shutdown
 	defer func() {
 		if eventsOutChan != nil {
@@ -177,7 +177,7 @@ func (q *Queue) run(nextKey []byte, highestKey uint64) {
 		case req := <-q.eventsChan:
 			// Create and return the events channel
 			if eventsOutChan == nil {
-				eventsOutChan = make(chan Event, queueBufferSize)
+				eventsOutChan = make(chan Event, 10) // Moderate buffer size
 			}
 			req.respChan <- eventsOutChan
 
@@ -229,7 +229,7 @@ func (q *Queue) run(nextKey []byte, highestKey uint64) {
 			return
 		}
 
-		// Fulfill any waiting dequeue requests first (this is the original logic)
+		// Fulfill any waiting dequeue requests first (original logic)
 		for len(waitingDequeues) > 0 && nextKey != nil {
 			waiter := waitingDequeues[0]
 			waitingDequeues = waitingDequeues[1:] // Pop from waitlist
@@ -257,9 +257,8 @@ func (q *Queue) run(nextKey []byte, highestKey uint64) {
 			resp.err = err
 			waiter.respChan <- resp
 		}
-		
-		// After processing dequeue waiters, try to send to events channel
-		// Only send to events if there are no more waiting dequeue requests
+
+		// Send remaining items to events channel if no dequeue waiters
 		for len(waitingDequeues) == 0 && eventsOutChan != nil && nextKey != nil {
 			var event Event
 			err := q.db.View(func(tx *bbolt.Tx) error {
@@ -281,7 +280,7 @@ func (q *Queue) run(nextKey []byte, highestKey uint64) {
 				}
 				return nil
 			})
-			
+
 			if err != nil {
 				break
 			}
@@ -362,11 +361,11 @@ func (q *Queue) HasNext() bool {
 func (q *Queue) Events() <-chan Event {
 	q.eventsChMutex.Lock()
 	defer q.eventsChMutex.Unlock()
-	
+
 	if q.eventsOutChan != nil {
 		return q.eventsOutChan
 	}
-	
+
 	// Request the events channel from the managing goroutine
 	req := eventsChanReq{respChan: make(chan chan Event)}
 	q.eventsChan <- req
