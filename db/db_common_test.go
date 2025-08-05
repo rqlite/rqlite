@@ -320,6 +320,32 @@ func Test_DB_EmptyStatements(t *testing.T) {
 	}
 }
 
+func Test_Geopoly(t *testing.T) {
+	db, path := mustCreateOnDiskDatabaseWAL()
+	defer db.Close()
+	defer os.Remove(path)
+	
+	_, err := db.ExecuteStringStmt("CREATE VIRTUAL TABLE polygons USING geopoly(a, b, c)")
+	if err != nil {
+		t.Fatalf("failed to create table: %s", err.Error())
+	}
+	_, err = db.ExecuteStringStmt(`INSERT INTO polygons(_shape) VALUES('[[0,0],[2,0],[1,2],[0,0]]')`)
+	if err != nil {
+		t.Fatalf("failed to insert record: %s", err.Error())
+	}
+	_, err = db.ExecuteStringStmt(`INSERT INTO polygons(_shape) VALUES('[[1,1],[3,1],[3,3],[1,3],[1,1]]')`)
+	if err != nil {
+		t.Fatalf("failed to insert record: %s", err.Error())
+	}
+	rows, err := db.QueryStringStmt(`SELECT _shape FROM polygons WHERE geopoly_overlap(_shape, '[[0,0],[4,0],[4,4],[0,4],[0,0]]')`)
+	if err != nil {
+		t.Fatalf("failed to query table: %s", err.Error())
+	}
+	if exp, got := `[{"columns":["_shape"],"types":["text"],"values":[["\u0001\u0000\u0000\u0003\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000@\u0000\u0000\u0000\u0000\u0000\u0000\ufffd?\u0000\u0000\u0000@"],["\u0001\u0000\u0000\u0004\u0000\u0000\ufffd?\u0000\u0000\ufffd?\u0000\u0000@@\u0000\u0000\ufffd?\u0000\u0000@@\u0000\u0000@@\u0000\u0000\ufffd?\u0000\u0000@@"]]}]`, asJSON(rows); exp != got {
+		t.Fatalf("unexpected results for query\nexp: %s\ngot: %s", exp, got)
+	}
+}
+
 func Test_DB_ReadOnlyStatements(t *testing.T) {
 	db, path := mustCreateOnDiskDatabaseWAL()
 	defer db.Close()
@@ -1869,21 +1895,21 @@ func Test_DB_JSON1(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to perform simple SELECT: %s", err.Error())
 	}
-	if exp, got := ``, asJSON(q); exp != got {
+	if exp, got := `[{"columns":["phone"],"types":["text"],"values":[["{\"mobile\":\"789111\",\"home\":\"123456\"}"]]}]`, asJSON(q); exp != got {
 		t.Fatalf("unexpected results for simple query, expected %s, got %s", exp, got)
 	}
 	q, err = db.QueryStringStmt("SELECT json_extract(customer.phone, '$.mobile') FROM customer")
 	if err != nil {
 		t.Fatalf("failed to perform simple SELECT: %s", err.Error())
 	}
-	if exp, got := `[{"columns":["json_extract(customer.phone, '$.mobile')"],"types":["text"],"values":[[ "789111"]]}]`, asJSON(q); exp != got {
+	if exp, got := `[{"columns":["json_extract(customer.phone, '$.mobile')"],"types":["text"],"values":[["789111"]]}]`, asJSON(q); exp != got {
 		t.Fatalf("unexpected results for JSON query, expected %s, got %s", exp, got)
 	}
 	q, err = db.QueryStringStmt("SELECT customer.phone ->> '$.mobile' FROM customer")
 	if err != nil {
 		t.Fatalf("failed to perform simple SELECT: %s", err.Error())
 	}
-	if exp, got := `[{"columns":["customer.phone ->> '$.mobile'"],"types":["text"],"values":[[ "789111"]]}]`, asJSON(q); exp != got {
+	if exp, got := `[{"columns":["customer.phone ->> '$.mobile'"],"types":["text"],"values":[["789111"]]}]`, asJSON(q); exp != got {
 		t.Fatalf("unexpected results for JSON query, expected %s, got %s", exp, got)
 	}
 }
