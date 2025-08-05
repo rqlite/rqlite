@@ -10,7 +10,11 @@ import (
 	command "github.com/rqlite/rqlite/v8/command/proto"
 )
 
-func testBusyTimeout(t *testing.T, db *DB) {
+func Test_DB_BusyTimeout(t *testing.T) {
+	db, path := mustCreateOnDiskDatabaseWAL()
+	defer db.Close()
+	defer os.Remove(path)
+
 	wantRw := rand.N(10000)
 	wantRo := rand.N(10000)
 
@@ -29,14 +33,22 @@ func testBusyTimeout(t *testing.T, db *DB) {
 	}
 }
 
-func testCompileOptions(t *testing.T, db *DB) {
+func Test_DB_CompileOptions(t *testing.T) {
+	db, path := mustCreateOnDiskDatabaseWAL()
+	defer db.Close()
+	defer os.Remove(path)
+
 	_, err := db.CompileOptions()
 	if err != nil {
 		t.Fatalf("failed to retrieve compilation options: %s", err.Error())
 	}
 }
 
-func testSetSynchronousMode(t *testing.T, db *DB) {
+func Test_DB_SetSynchronousMode(t *testing.T) {
+	db, path := mustCreateOnDiskDatabaseWAL()
+	defer db.Close()
+	defer os.Remove(path)
+
 	modes := []SynchronousMode{
 		SynchronousOff,
 		SynchronousNormal,
@@ -57,7 +69,11 @@ func testSetSynchronousMode(t *testing.T, db *DB) {
 	}
 }
 
-func testTableNotExist(t *testing.T, db *DB) {
+func Test_DB_TableNotExist(t *testing.T) {
+	db, path := mustCreateOnDiskDatabaseWAL()
+	defer db.Close()
+	defer os.Remove(path)
+
 	q, err := db.QueryStringStmt("SELECT * FROM foo")
 	if err != nil {
 		t.Fatalf("failed to query empty table: %s", err.Error())
@@ -67,7 +83,11 @@ func testTableNotExist(t *testing.T, db *DB) {
 	}
 }
 
-func testTableCreation(t *testing.T, db *DB) {
+func Test_DB_TableCreation(t *testing.T) {
+	db, path := mustCreateOnDiskDatabaseWAL()
+	defer db.Close()
+	defer os.Remove(path)
+
 	r, err := db.ExecuteStringStmt("CREATE TABLE foo (id INTEGER NOT NULL PRIMARY KEY, name TEXT)")
 	if err != nil {
 		t.Fatalf("failed to create table: %s", err.Error())
@@ -85,7 +105,11 @@ func testTableCreation(t *testing.T, db *DB) {
 	}
 }
 
-func testTableCreationFTS(t *testing.T, db *DB) {
+func Test_DB_TableCreationFTS(t *testing.T) {
+	db, path := mustCreateOnDiskDatabaseWAL()
+	defer db.Close()
+	defer os.Remove(path)
+
 	r, err := db.ExecuteStringStmt("CREATE VIRTUAL TABLE foo3 USING fts3(id INTEGER NOT NULL PRIMARY KEY, name TEXT)")
 	if err != nil {
 		t.Fatalf("failed to create table: %s", err.Error())
@@ -110,7 +134,11 @@ func testTableCreationFTS(t *testing.T, db *DB) {
 	}
 }
 
-func testSQLiteMasterTable(t *testing.T, db *DB) {
+func Test_DB_SQLiteMasterTable(t *testing.T) {
+	db, path := mustCreateOnDiskDatabaseWAL()
+	defer db.Close()
+	defer os.Remove(path)
+
 	_, err := db.ExecuteStringStmt("CREATE TABLE foo (id INTEGER NOT NULL PRIMARY KEY, name TEXT)")
 	if err != nil {
 		t.Fatalf("failed to create table: %s", err.Error())
@@ -125,7 +153,11 @@ func testSQLiteMasterTable(t *testing.T, db *DB) {
 	}
 }
 
-func testSQLiteTimeTypes(t *testing.T, db *DB) {
+func Test_DB_SQLiteTimeTypes(t *testing.T) {
+	db, path := mustCreateOnDiskDatabaseWAL()
+	defer db.Close()
+	defer os.Remove(path)
+
 	_, err := db.ExecuteStringStmt("CREATE TABLE foo(d DATE, ts TIMESTAMP, dt DATETIME)")
 	if err != nil {
 		t.Fatalf("failed to create table: %s", err.Error())
@@ -145,7 +177,11 @@ func testSQLiteTimeTypes(t *testing.T, db *DB) {
 	}
 }
 
-func testSQLiteRandomBlob(t *testing.T, db *DB) {
+func Test_DB_SQLiteRandomBlob(t *testing.T) {
+	db, path := mustCreateOnDiskDatabaseWAL()
+	defer db.Close()
+	defer os.Remove(path)
+
 	_, err := db.ExecuteStringStmt("CREATE TABLE large_data (id INTEGER PRIMARY KEY, large_text TEXT)")
 	if err != nil {
 		t.Fatalf("failed to create table: %s", err.Error())
@@ -174,7 +210,11 @@ func testSQLiteRandomBlob(t *testing.T, db *DB) {
 	}
 }
 
-func testNotNULLField(t *testing.T, db *DB) {
+func Test_DB_NotNULLField(t *testing.T) {
+	db, path := mustCreateOnDiskDatabaseWAL()
+	defer db.Close()
+	defer os.Remove(path)
+
 	_, err := db.ExecuteStringStmt("CREATE TABLE foo (id INTEGER NOT NULL PRIMARY KEY, name TEXT)")
 	if err != nil {
 		t.Fatalf("failed to create table: %s", err.Error())
@@ -188,7 +228,11 @@ func testNotNULLField(t *testing.T, db *DB) {
 	}
 }
 
-func testBLOB(t *testing.T, db *DB) {
+func Test_DB_BLOB(t *testing.T) {
+	db, path := mustCreateOnDiskDatabaseWAL()
+	defer db.Close()
+	defer os.Remove(path)
+
 	_, err := db.ExecuteStringStmt("CREATE TABLE foo (name TEXT, data BLOB)")
 	if err != nil {
 		t.Fatalf("failed to create table: %s", err.Error())
@@ -212,7 +256,11 @@ func testBLOB(t *testing.T, db *DB) {
 	}
 }
 
-func testHexQuery(t *testing.T, db *DB) {
+func Test_DB_HexQuery(t *testing.T) {
+	db, path := mustCreateOnDiskDatabaseWAL()
+	defer db.Close()
+	defer os.Remove(path)
+
 	_, err := db.ExecuteStringStmt("CREATE TABLE foo(blob_column BLOB)")
 	if err != nil {
 		t.Fatalf("failed to create table: %s", err.Error())
@@ -230,7 +278,11 @@ func testHexQuery(t *testing.T, db *DB) {
 	}
 }
 
-func testSTRICT(t *testing.T, db *DB) {
+func Test_DB_STRICT(t *testing.T) {
+	db, path := mustCreateOnDiskDatabaseWAL()
+	defer db.Close()
+	defer os.Remove(path)
+
 	_, err := db.ExecuteStringStmt("CREATE TABLE foo (name TEXT, data BLOB) STRICT")
 	if err != nil {
 		t.Fatalf("failed to create table: %s", err.Error())
@@ -244,7 +296,8 @@ func testSTRICT(t *testing.T, db *DB) {
 		t.Fatalf("unexpected results for query\nexp: %s\ngot: %s", exp, got)
 	}
 
-	rows, err := db.QueryStringStmt(`SELECT * FROM foo`)
+
+rows, err := db.QueryStringStmt(`SELECT * FROM foo`)
 	if err != nil {
 		t.Fatalf("failed to query table: %s", err.Error())
 	}
@@ -253,7 +306,11 @@ func testSTRICT(t *testing.T, db *DB) {
 	}
 }
 
-func testEmptyStatements(t *testing.T, db *DB) {
+func Test_DB_EmptyStatements(t *testing.T) {
+	db, path := mustCreateOnDiskDatabaseWAL()
+	defer db.Close()
+	defer os.Remove(path)
+
 	_, err := db.ExecuteStringStmt("")
 	if err != nil {
 		t.Fatalf("failed to execute empty statement: %s", err.Error())
@@ -264,29 +321,11 @@ func testEmptyStatements(t *testing.T, db *DB) {
 	}
 }
 
-func testGeopoly(t *testing.T, db *DB) {
-	_, err := db.ExecuteStringStmt("CREATE VIRTUAL TABLE polygons USING geopoly(a, b, c)")
-	if err != nil {
-		t.Fatalf("failed to create table: %s", err.Error())
-	}
-	_, err = db.ExecuteStringStmt(`INSERT INTO polygons(_shape) VALUES('[[0,0],[2,0],[1,2],[0,0]]')`)
-	if err != nil {
-		t.Fatalf("failed to insert record: %s", err.Error())
-	}
-	_, err = db.ExecuteStringStmt(`INSERT INTO polygons(_shape) VALUES('[[1,1],[3,1],[3,3],[1,3],[1,1]]')`)
-	if err != nil {
-		t.Fatalf("failed to insert record: %s", err.Error())
-	}
-	rows, err := db.QueryStringStmt(`SELECT _shape FROM polygons WHERE geopoly_overlap(_shape, '[[0,0],[4,0],[4,4],[0,4],[0,0]]')`)
-	if err != nil {
-		t.Fatalf("failed to query table: %s", err.Error())
-	}
-	if exp, got := `[{"columns":["_shape"],"types":["text"],"values":[["\u0001\u0000\u0000\u0003\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000@\u0000\u0000\u0000\u0000\u0000\u0000\ufffd?\u0000\u0000\u0000@"],["\u0001\u0000\u0000\u0004\u0000\u0000\ufffd?\u0000\u0000\ufffd?\u0000\u0000@@\u0000\u0000\ufffd?\u0000\u0000@@\u0000\u0000@@\u0000\u0000\ufffd?\u0000\u0000@@"]]}]`, asJSON(rows); exp != got {
-		t.Fatalf("unexpected results for query\nexp: %s\ngot: %s", exp, got)
-	}
-}
+func Test_DB_ReadOnlyStatements(t *testing.T) {
+	db, path := mustCreateOnDiskDatabaseWAL()
+	defer db.Close()
+	defer os.Remove(path)
 
-func testReadOnlyStatements(t *testing.T, db *DB) {
 	_, err := db.ExecuteStringStmt("CREATE TABLE foo (id INTEGER NOT NULL PRIMARY KEY, name TEXT)")
 	if err != nil {
 		t.Fatalf("failed to create table: %s", err.Error())
@@ -340,7 +379,11 @@ func testReadOnlyStatements(t *testing.T, db *DB) {
 	}
 }
 
-func testSimpleStatementsNumeric(t *testing.T, db *DB) {
+func Test_DB_SimpleStatementsNumeric(t *testing.T) {
+	db, path := mustCreateOnDiskDatabaseWAL()
+	defer db.Close()
+	defer os.Remove(path)
+
 	_, err := db.ExecuteStringStmt("CREATE TABLE foo (id INTEGER NOT NULL PRIMARY KEY, name TEXT, age NUMERIC)")
 	if err != nil {
 		t.Fatalf("failed to create table: %s", err.Error())
@@ -360,7 +403,11 @@ func testSimpleStatementsNumeric(t *testing.T, db *DB) {
 	}
 }
 
-func testSimpleStatementsCollate(t *testing.T, db *DB) {
+func Test_DB_SimpleStatementsCollate(t *testing.T) {
+	db, path := mustCreateOnDiskDatabaseWAL()
+	defer db.Close()
+	defer os.Remove(path)
+
 	_, err := db.ExecuteStringStmt("CREATE TABLE foo(x INTEGER PRIMARY KEY, a, b COLLATE BINARY, c COLLATE RTRIM, d COLLATE NOCASE)")
 	if err != nil {
 		t.Fatalf("failed to create table: %s", err.Error())
@@ -425,7 +472,11 @@ func testSimpleStatementsCollate(t *testing.T, db *DB) {
 	}
 }
 
-func testSimpleSingleStatements(t *testing.T, db *DB) {
+func Test_DB_SimpleSingleStatements(t *testing.T) {
+	db, path := mustCreateOnDiskDatabaseWAL()
+	defer db.Close()
+	defer os.Remove(path)
+
 	_, err := db.ExecuteStringStmt("CREATE TABLE foo (id INTEGER NOT NULL PRIMARY KEY, name TEXT)")
 	if err != nil {
 		t.Fatalf("failed to create table: %s", err.Error())
@@ -482,8 +533,12 @@ func testSimpleSingleStatements(t *testing.T, db *DB) {
 	}
 }
 
-// testSimpleExpressionStatements tests that types are set for expressions.
-func testSimpleExpressionStatements(t *testing.T, db *DB) {
+// Test_DB_SimpleExpressionStatements tests that types are set for expressions.
+func Test_DB_SimpleExpressionStatements(t *testing.T) {
+	db, path := mustCreateOnDiskDatabaseWAL()
+	defer db.Close()
+	defer os.Remove(path)
+
 	_, err := db.ExecuteStringStmt("CREATE TABLE foo (id INTEGER NOT NULL PRIMARY KEY, name TEXT, age INTEGER, height REAL)")
 	if err != nil {
 		t.Fatalf("failed to create table: %s", err.Error())
@@ -540,7 +595,11 @@ func testSimpleExpressionStatements(t *testing.T, db *DB) {
 	}
 }
 
-func testUpsertStatements(t *testing.T, db *DB) {
+func Test_DB_UpsertStatements(t *testing.T) {
+	db, path := mustCreateOnDiskDatabaseWAL()
+	defer db.Close()
+	defer os.Remove(path)
+
 	_, err := db.ExecuteStringStmt("CREATE TABLE vocabulary(word TEXT PRIMARY KEY, count INT DEFAULT 1)")
 	if err != nil {
 		t.Fatalf("failed to create table: %s", err.Error())
@@ -571,7 +630,11 @@ func testUpsertStatements(t *testing.T, db *DB) {
 	}
 }
 
-func testSimpleSingleJSONStatements(t *testing.T, db *DB) {
+func Test_DB_SimpleSingleJSONStatements(t *testing.T) {
+	db, path := mustCreateOnDiskDatabaseWAL()
+	defer db.Close()
+	defer os.Remove(path)
+
 	_, err := db.ExecuteStringStmt("CREATE TABLE foo (c0 VARCHAR(36), c1 JSON, c2 NCHAR, c3 NVARCHAR, c4 CLOB)")
 	if err != nil {
 		t.Fatalf("failed to create table: %s", err.Error())
@@ -591,7 +654,11 @@ func testSimpleSingleJSONStatements(t *testing.T, db *DB) {
 	}
 }
 
-func testSimpleSingleJSONBStatements(t *testing.T, db *DB) {
+func Test_DB_SimpleSingleJSONBStatements(t *testing.T) {
+	db, path := mustCreateOnDiskDatabaseWAL()
+	defer db.Close()
+	defer os.Remove(path)
+
 	_, err := db.ExecuteStringStmt("CREATE TABLE foo (tag JSONB)")
 	if err != nil {
 		t.Fatalf("failed to create table: %s", err.Error())
@@ -606,12 +673,16 @@ func testSimpleSingleJSONBStatements(t *testing.T, db *DB) {
 	if err != nil {
 		t.Fatalf("failed to query: %s", err.Error())
 	}
-	if exp, got := `[{"columns":["tag->>'mittens'"],"types":["text"],"values":[["qux"]]}]`, asJSON(r); exp != got {
+	if exp, got := `[{"columns":["tag->>'mittens'"],"types":["text"],"values":[[ "qux"]]}]`, asJSON(r); exp != got {
 		t.Fatalf("unexpected results for query, expected %s, got %s", exp, got)
 	}
 }
 
-func testSimpleJoinStatements(t *testing.T, db *DB) {
+func Test_DB_SimpleJoinStatements(t *testing.T) {
+	db, path := mustCreateOnDiskDatabaseWAL()
+	defer db.Close()
+	defer os.Remove(path)
+
 	_, err := db.ExecuteStringStmt("CREATE TABLE names (id INTEGER NOT NULL PRIMARY KEY, name TEXT, ssn TEXT)")
 	if err != nil {
 		t.Fatalf("failed to create table: %s", err.Error())
@@ -640,7 +711,7 @@ func testSimpleJoinStatements(t *testing.T, db *DB) {
 		t.Fatalf("failed to create table: %s", err.Error())
 	}
 
-	_, err = db.ExecuteStringStmt(`INSERT INTO "staff" VALUES(1,'acme','222-22-333')`)
+	_, err = db.ExecuteStringStmt(`INSERT INTO \"staff\" VALUES(1,'acme','222-22-333')`)
 	if err != nil {
 		t.Fatalf("failed to insert record: %s", err.Error())
 	}
@@ -654,27 +725,35 @@ func testSimpleJoinStatements(t *testing.T, db *DB) {
 	}
 }
 
-func testSimpleSingleConcatStatements(t *testing.T, db *DB) {
+func Test_DB_SimpleSingleConcatStatements(t *testing.T) {
+	db, path := mustCreateOnDiskDatabaseWAL()
+	defer db.Close()
+	defer os.Remove(path)
+
 	_, err := db.ExecuteStringStmt("CREATE TABLE foo (id INTEGER NOT NULL PRIMARY KEY, name TEXT)")
 	if err != nil {
 		t.Fatalf("failed to create table: %s", err.Error())
 	}
 
-	_, err = db.ExecuteStringStmt(`INSERT INTO foo(name) VALUES("fiona")`)
+	_, err = db.ExecuteStringStmt(`INSERT INTO foo(name) VALUES(\"fiona\")`)
 	if err != nil {
 		t.Fatalf("failed to insert record: %s", err.Error())
 	}
 
-	r, err := db.QueryStringStmt(`SELECT id || "_bar", name FROM foo`)
+	r, err := db.QueryStringStmt(`SELECT id || \"_bar\", name FROM foo`)
 	if err != nil {
 		t.Fatalf("failed to query table: %s", err.Error())
 	}
-	if exp, got := `[{"columns":["id || \"_bar\"","name"],"types":["text","text"],"values":[["1_bar","fiona"]]}]`, asJSON(r); exp != got {
+	if exp, got := `[{"columns":["id || \"_bar\"","name"],"types":["text","text"],"values":[[1_bar","fiona"]]}]`, asJSON(r); exp != got {
 		t.Fatalf("unexpected results for query\nexp: %s\ngot: %s", exp, got)
 	}
 }
 
-func testSimpleMultiStatements(t *testing.T, db *DB) {
+func Test_DB_SimpleMultiStatements(t *testing.T) {
+	db, path := mustCreateOnDiskDatabaseWAL()
+	defer db.Close()
+	defer os.Remove(path)
+
 	_, err := db.ExecuteStringStmt("CREATE TABLE foo (id INTEGER NOT NULL PRIMARY KEY, name TEXT)")
 	if err != nil {
 		t.Fatalf("failed to create table: %s", err.Error())
@@ -717,7 +796,11 @@ func testSimpleMultiStatements(t *testing.T, db *DB) {
 	}
 }
 
-func testSimpleSingleMultiLineStatements(t *testing.T, db *DB) {
+func Test_DB_SimpleSingleMultiLineStatements(t *testing.T) {
+	db, path := mustCreateOnDiskDatabaseWAL()
+	defer db.Close()
+	defer os.Remove(path)
+
 	req := &command.Request{
 		Statements: []*command.Statement{
 			{
@@ -753,7 +836,11 @@ name TEXT
 	}
 }
 
-func testSimpleFailingStatements_Execute(t *testing.T, db *DB) {
+func Test_DB_SimpleFailingStatements_Execute(t *testing.T) {
+	db, path := mustCreateOnDiskDatabaseWAL()
+	defer db.Close()
+	defer os.Remove(path)
+
 	r, err := db.ExecuteStringStmt(`INSERT INTO foo(name) VALUES("fiona")`)
 	if err != nil {
 		t.Fatalf("error executing insertion into nonexistent table: %s", err.Error())
@@ -800,7 +887,11 @@ func testSimpleFailingStatements_Execute(t *testing.T, db *DB) {
 	}
 }
 
-func testSimpleFailingStatements_Query(t *testing.T, db *DB) {
+func Test_DB_SimpleFailingStatements_Query(t *testing.T) {
+	db, path := mustCreateOnDiskDatabaseWAL()
+	defer db.Close()
+	defer os.Remove(path)
+
 	ro, err := db.QueryStringStmt(`SELECT * FROM bar`)
 	if err != nil {
 		t.Fatalf("failed to attempt query of nonexistent table: %s", err.Error())
@@ -839,7 +930,11 @@ func testSimpleFailingStatements_Query(t *testing.T, db *DB) {
 	}
 }
 
-func testSimplePragmaTableInfo(t *testing.T, db *DB) {
+func Test_DB_SimplePragmaTableInfo(t *testing.T) {
+	db, path := mustCreateOnDiskDatabaseWAL()
+	defer db.Close()
+	defer os.Remove(path)
+
 	r, err := db.ExecuteStringStmt(`CREATE TABLE foo (id INTEGER NOT NULL PRIMARY KEY, name TEXT)`)
 	if err != nil {
 		t.Fatalf("failed to create table: %s", err.Error())
@@ -857,7 +952,11 @@ func testSimplePragmaTableInfo(t *testing.T, db *DB) {
 	}
 }
 
-func testWriteOnQueryDatabaseShouldFail(t *testing.T, db *DB) {
+func Test_DB_WriteOnQueryDatabaseShouldFail(t *testing.T) {
+	db, path := mustCreateOnDiskDatabaseWAL()
+	defer db.Close()
+	defer os.Remove(path)
+
 	r, err := db.ExecuteStringStmt(`CREATE TABLE foo (id INTEGER NOT NULL PRIMARY KEY, name TEXT)`)
 	if err != nil {
 		t.Fatalf("failed to create table: %s", err.Error())
@@ -891,7 +990,11 @@ func testWriteOnQueryDatabaseShouldFail(t *testing.T, db *DB) {
 	}
 }
 
-func testSimpleParameterizedStatements(t *testing.T, db *DB) {
+func Test_DB_SimpleParameterizedStatements(t *testing.T) {
+	db, path := mustCreateOnDiskDatabaseWAL()
+	defer db.Close()
+	defer os.Remove(path)
+
 	_, err := db.ExecuteStringStmt("CREATE TABLE foo (id INTEGER NOT NULL PRIMARY KEY, name TEXT)")
 	if err != nil {
 		t.Fatalf("failed to create table: %s", err.Error())
@@ -994,7 +1097,11 @@ func testSimpleParameterizedStatements(t *testing.T, db *DB) {
 	}
 }
 
-func testSimpleParameterizedStatements_IN(t *testing.T, db *DB) {
+func Test_DB_SimpleParameterizedStatements_IN(t *testing.T) {
+	db, path := mustCreateOnDiskDatabaseWAL()
+	defer db.Close()
+	defer os.Remove(path)
+
 	_, err := db.ExecuteStringStmt("CREATE TABLE foo (id INTEGER NOT NULL PRIMARY KEY, name TEXT)")
 	if err != nil {
 		t.Fatalf("failed to create table: %s", err.Error())
@@ -1018,7 +1125,7 @@ func testSimpleParameterizedStatements_IN(t *testing.T, db *DB) {
 	if err != nil {
 		t.Fatalf("failed to query table: %s", err.Error())
 	}
-	if exp, got := `[{"columns":["name"],"types":["text"],"values":[["foo"]]}]`, asJSON(r); exp != got {
+	if exp, got := `[{"columns":["name"],"types":["text"],"values":[[ "foo"]]}]`, asJSON(r); exp != got {
 		t.Fatalf("unexpected results for query\nexp: %s\ngot: %s", exp, got)
 	}
 
@@ -1045,7 +1152,7 @@ func testSimpleParameterizedStatements_IN(t *testing.T, db *DB) {
 	if err != nil {
 		t.Fatalf("failed to query table: %s", err.Error())
 	}
-	if exp, got := `[{"columns":["name"],"types":["text"],"values":[["foo"]]}]`, asJSON(r); exp != got {
+	if exp, got := `[{"columns":["name"],"types":["text"],"values":[[ "foo"]]}]`, asJSON(r); exp != got {
 		t.Fatalf("unexpected results for query\nexp: %s\ngot: %s", exp, got)
 	}
 
@@ -1072,7 +1179,11 @@ func testSimpleParameterizedStatements_IN(t *testing.T, db *DB) {
 	}
 }
 
-func testSimpleTwoParameterizedStatements(t *testing.T, db *DB) {
+func Test_DB_SimpleTwoParameterizedStatements(t *testing.T) {
+	db, path := mustCreateOnDiskDatabaseWAL()
+	defer db.Close()
+	defer os.Remove(path)
+
 	_, err := db.ExecuteStringStmt("CREATE TABLE foo (id INTEGER NOT NULL PRIMARY KEY, first TEXT, last TEXT)")
 	if err != nil {
 		t.Fatalf("failed to create table: %s", err.Error())
@@ -1112,7 +1223,11 @@ func testSimpleTwoParameterizedStatements(t *testing.T, db *DB) {
 	}
 }
 
-func testSimpleNilParameterizedStatements(t *testing.T, db *DB) {
+func Test_DB_SimpleNilParameterizedStatements(t *testing.T) {
+	db, path := mustCreateOnDiskDatabaseWAL()
+	defer db.Close()
+	defer os.Remove(path)
+
 	_, err := db.ExecuteStringStmt("CREATE TABLE foo (id INTEGER NOT NULL PRIMARY KEY, first TEXT, last TEXT)")
 	if err != nil {
 		t.Fatalf("failed to create table: %s", err.Error())
@@ -1150,7 +1265,11 @@ func testSimpleNilParameterizedStatements(t *testing.T, db *DB) {
 	}
 }
 
-func testSimpleNamedParameterizedStatements(t *testing.T, db *DB) {
+func Test_DB_SimpleNamedParameterizedStatements(t *testing.T) {
+	db, path := mustCreateOnDiskDatabaseWAL()
+	defer db.Close()
+	defer os.Remove(path)
+
 	_, err := db.ExecuteStringStmt("CREATE TABLE foo (id INTEGER NOT NULL PRIMARY KEY, first TEXT, last TEXT)")
 	if err != nil {
 		t.Fatalf("failed to create table: %s", err.Error())
@@ -1189,7 +1308,8 @@ func testSimpleNamedParameterizedStatements(t *testing.T, db *DB) {
 		t.Fatalf("failed to insert parameterized statement: %s", err.Error())
 	}
 
-	rows, err := db.QueryStringStmt(`SELECT * FROM foo`)
+
+rows, err := db.QueryStringStmt(`SELECT * FROM foo`)
 	if err != nil {
 		t.Fatalf("failed to query table: %s", err.Error())
 	}
@@ -1256,7 +1376,11 @@ func testSimpleNamedParameterizedStatements(t *testing.T, db *DB) {
 	}
 }
 
-func testSimpleRequest(t *testing.T, db *DB) {
+func Test_DB_SimpleRequest(t *testing.T) {
+	db, path := mustCreateOnDiskDatabaseWAL()
+	defer db.Close()
+	defer os.Remove(path)
+
 	_, err := db.ExecuteStringStmt("CREATE TABLE foo (id INTEGER NOT NULL PRIMARY KEY, first TEXT, last TEXT)")
 	if err != nil {
 		t.Fatalf("failed to create table: %s", err.Error())
@@ -1297,7 +1421,7 @@ func testSimpleRequest(t *testing.T, db *DB) {
 				`SELECT COUNT(*) FROM foo`,
 				`SELECT last FROM foo WHERE first="richard"`,
 			},
-			exp: `[{"last_insert_id":3,"rows_affected":1},{"columns":["COUNT(*)"],"types":["integer"],"values":[[3]]},{"columns":["last"],"types":["text"],"values":[["feynman"]]}]`,
+			exp: `[{"last_insert_id":3,"rows_affected":1},{"columns":["COUNT(*)"],"types":["integer"],"values":[[3]]},{"columns":["last"],"types":["text"],"values":[[ "feynman"]]}]`,
 		},
 		{
 			name: "insert and select nonexistent table",
@@ -1323,10 +1447,14 @@ func testSimpleRequest(t *testing.T, db *DB) {
 	}
 }
 
-// testSimpleRequestTx tests that a transaction is rolled back when an error occurs, and that
+// Test_DB_SimpleRequestTx tests that a transaction is rolled back when an error occurs, and that
 // subsequent statements after the failed statement are not processed. This also checks that
 // the code which checks if the statement is a query or not works when holding a transaction.
-func testSimpleRequestTx(t *testing.T, db *DB) {
+func Test_DB_SimpleRequestTx(t *testing.T) {
+	db, path := mustCreateOnDiskDatabaseWAL()
+	defer db.Close()
+	defer os.Remove(path)
+
 	mustExecute(db, `CREATE TABLE foo (id INTEGER NOT NULL PRIMARY KEY, name TEXT)`)
 	mustExecute(db, `INSERT INTO foo(id, name) VALUES(1, "fiona")`)
 
@@ -1353,7 +1481,11 @@ func testSimpleRequestTx(t *testing.T, db *DB) {
 	}
 }
 
-func testCommonTableExpressions(t *testing.T, db *DB) {
+func Test_DB_CommonTableExpressions(t *testing.T) {
+	db, path := mustCreateOnDiskDatabaseWAL()
+	defer db.Close()
+	defer os.Remove(path)
+
 	_, err := db.ExecuteStringStmt("CREATE TABLE test(x foo)")
 	if err != nil {
 		t.Fatalf("failed to create table: %s", err.Error())
@@ -1381,7 +1513,11 @@ func testCommonTableExpressions(t *testing.T, db *DB) {
 	}
 }
 
-func testUniqueConstraints(t *testing.T, db *DB) {
+func Test_DB_UniqueConstraints(t *testing.T) {
+	db, path := mustCreateOnDiskDatabaseWAL()
+	defer db.Close()
+	defer os.Remove(path)
+
 	_, err := db.ExecuteStringStmt("CREATE TABLE foo (id INTEGER NOT NULL PRIMARY KEY, name TEXT, CONSTRAINT name_unique UNIQUE (name))")
 	if err != nil {
 		t.Fatalf("failed to create table: %s", err.Error())
@@ -1405,7 +1541,11 @@ func testUniqueConstraints(t *testing.T, db *DB) {
 	}
 }
 
-func testPartialFail(t *testing.T, db *DB) {
+func Test_DB_PartialFail(t *testing.T) {
+	db, path := mustCreateOnDiskDatabaseWAL()
+	defer db.Close()
+	defer os.Remove(path)
+
 	_, err := db.ExecuteStringStmt("CREATE TABLE foo (id INTEGER NOT NULL PRIMARY KEY, name TEXT)")
 	if err != nil {
 		t.Fatalf("failed to create table: %s", err.Error())
@@ -1443,7 +1583,11 @@ func testPartialFail(t *testing.T, db *DB) {
 	}
 }
 
-func testSerialize(t *testing.T, db *DB) {
+func Test_DB_Serialize(t *testing.T) {
+	db, path := mustCreateOnDiskDatabaseWAL()
+	defer db.Close()
+	defer os.Remove(path)
+
 	_, err := db.ExecuteStringStmt("CREATE TABLE foo (id INTEGER NOT NULL PRIMARY KEY, name TEXT)")
 	if err != nil {
 		t.Fatalf("failed to create table: %s", err.Error())
@@ -1508,7 +1652,11 @@ func testSerialize(t *testing.T, db *DB) {
 	}
 }
 
-func testDump(t *testing.T, db *DB) {
+func Test_DB_Dump(t *testing.T) {
+	db, path := mustCreateOnDiskDatabaseWAL()
+	defer db.Close()
+	defer os.Remove(path)
+
 	const expRows = `[{"columns":["COUNT(*)"],"types":["integer"],"values":[[0]]}]`
 
 	if _, err := db.ExecuteStringStmt(`CREATE TABLE Album (id INTEGER NOT NULL PRIMARY KEY, name TEXT)`); err != nil {
@@ -1516,7 +1664,8 @@ func testDump(t *testing.T, db *DB) {
 	}
 
 	// verify original row count
-	rows, err := db.QueryStringStmt("SELECT COUNT(*) FROM Album")
+
+rows, err := db.QueryStringStmt("SELECT COUNT(*) FROM Album")
 	if err != nil {
 		t.Fatalf("count rows: %v", err)
 	}
@@ -1553,7 +1702,8 @@ func testDump(t *testing.T, db *DB) {
 			}
 
 			// verify row count in new DB
-			rows, err := newDB.QueryStringStmt("SELECT COUNT(*) FROM Album")
+		
+rows, err := newDB.QueryStringStmt("SELECT COUNT(*) FROM Album")
 			if err != nil {
 				t.Fatalf("query %s: %v", tc.name, err)
 			}
@@ -1564,23 +1714,39 @@ func testDump(t *testing.T, db *DB) {
 	}
 }
 
-func testSize(t *testing.T, db *DB) {
+func Test_DB_Size(t *testing.T) {
+	db, path := mustCreateOnDiskDatabaseWAL()
+	defer db.Close()
+	defer os.Remove(path)
+
 	if _, err := db.Size(); err != nil {
 		t.Fatalf("failed to read database size: %s", err)
 	}
 }
-func testDBFileSize(t *testing.T, db *DB) {
+func Test_DB_FileSize(t *testing.T) {
+	db, path := mustCreateOnDiskDatabaseWAL()
+	defer db.Close()
+	defer os.Remove(path)
+
 	if _, err := db.FileSize(); err != nil {
 		t.Fatalf("failed to read database file size: %s", err)
 	}
 }
-func testDBWALSize(t *testing.T, db *DB) {
+func Test_DB_WALSize(t *testing.T) {
+	db, path := mustCreateOnDiskDatabaseWAL()
+	defer db.Close()
+	defer os.Remove(path)
+
 	if _, err := db.WALSize(); err != nil {
 		t.Fatalf("failed to read database WAL file size: %s", err)
 	}
 }
 
-func testStmtReadOnly(t *testing.T, db *DB) {
+func Test_DB_StmtReadOnly(t *testing.T) {
+	db, path := mustCreateOnDiskDatabaseWAL()
+	defer db.Close()
+	defer os.Remove(path)
+
 	r, err := db.ExecuteStringStmt(`CREATE TABLE foo (id INTEGER NOT NULL PRIMARY KEY, name TEXT)`)
 	if err != nil {
 		t.Fatalf("failed to create table: %s", err.Error())
@@ -1688,7 +1854,11 @@ func testStmtReadOnly(t *testing.T, db *DB) {
 	}
 }
 
-func testJSON1(t *testing.T, db *DB) {
+func Test_DB_JSON1(t *testing.T) {
+	db, path := mustCreateOnDiskDatabaseWAL()
+	defer db.Close()
+	defer os.Remove(path)
+
 	_, err := db.ExecuteStringStmt("CREATE TABLE customer(name,phone)")
 	if err != nil {
 		t.Fatalf("failed to create table: %s", err.Error())
@@ -1703,26 +1873,30 @@ func testJSON1(t *testing.T, db *DB) {
 	if err != nil {
 		t.Fatalf("failed to perform simple SELECT: %s", err.Error())
 	}
-	if exp, got := `[{"columns":["phone"],"types":["text"],"values":[["{\"mobile\":\"789111\",\"home\":\"123456\"}"]]}]`, asJSON(q); exp != got {
+	if exp, got := `[{"columns":["phone"],"types":["text"],"values":[[ "{\"mobile\":\"789111\",\"home\":\"123456\"}"]]}]`, asJSON(q); exp != got {
 		t.Fatalf("unexpected results for simple query, expected %s, got %s", exp, got)
 	}
 	q, err = db.QueryStringStmt("SELECT json_extract(customer.phone, '$.mobile') FROM customer")
 	if err != nil {
 		t.Fatalf("failed to perform simple SELECT: %s", err.Error())
 	}
-	if exp, got := `[{"columns":["json_extract(customer.phone, '$.mobile')"],"types":["text"],"values":[["789111"]]}]`, asJSON(q); exp != got {
+	if exp, got := `[{"columns":["json_extract(customer.phone, '$.mobile')"],"types":["text"],"values":[[ "789111"]]}]`, asJSON(q); exp != got {
 		t.Fatalf("unexpected results for JSON query, expected %s, got %s", exp, got)
 	}
 	q, err = db.QueryStringStmt("SELECT customer.phone ->> '$.mobile' FROM customer")
 	if err != nil {
 		t.Fatalf("failed to perform simple SELECT: %s", err.Error())
 	}
-	if exp, got := `[{"columns":["customer.phone ->> '$.mobile'"],"types":["text"],"values":[["789111"]]}]`, asJSON(q); exp != got {
+	if exp, got := `[{"columns":["customer.phone ->> '$.mobile'"],"types":["text"],"values":[[ "789111"]]}]`, asJSON(q); exp != got {
 		t.Fatalf("unexpected results for JSON query, expected %s, got %s", exp, got)
 	}
 }
 
-func testDBSTAT_table(t *testing.T, db *DB) {
+func Test_DB_DBSTAT_table(t *testing.T) {
+	db, path := mustCreateOnDiskDatabaseWAL()
+	defer db.Close()
+	defer os.Remove(path)
+
 	_, err := db.ExecuteStringStmt("CREATE TABLE foo (id INTEGER NOT NULL PRIMARY KEY, name TEXT)")
 	if err != nil {
 		t.Fatalf("failed to create table: %s", err.Error())
@@ -1737,7 +1911,11 @@ func testDBSTAT_table(t *testing.T, db *DB) {
 	}
 }
 
-func testCopy(t *testing.T, db *DB) {
+func Test_DB_Copy(t *testing.T) {
+	db, path := mustCreateOnDiskDatabaseWAL()
+	defer db.Close()
+	defer os.Remove(path)
+
 	_, err := db.ExecuteStringStmt("CREATE TABLE foo (id INTEGER NOT NULL PRIMARY KEY, name TEXT)")
 	if err != nil {
 		t.Fatalf("failed to create table: %s", err.Error())
@@ -1795,7 +1973,11 @@ func testCopy(t *testing.T, db *DB) {
 	}
 }
 
-func testBackup(t *testing.T, db *DB) {
+func Test_DB_Backup(t *testing.T) {
+	db, path := mustCreateOnDiskDatabaseWAL()
+	defer db.Close()
+	defer os.Remove(path)
+
 	for _, vacuum := range []bool{false, true} {
 		_, err := db.ExecuteStringStmt("CREATE TABLE foo (id INTEGER NOT NULL PRIMARY KEY, name TEXT)")
 		if err != nil {
@@ -1860,76 +2042,8 @@ func testBackup(t *testing.T, db *DB) {
 		if err != nil {
 			t.Fatalf("failed to query table: %s", err.Error())
 		}
-		if exp, got := `[{"columns":["name"],"types":["text"],"values":[["foo"],["baz"]]}]`, asJSON(ro); exp != got {
+		if exp, got := `[{"columns":["name"],"types":["text"],"values":[[ "foo"],["baz"]]}]`, asJSON(ro); exp != got {
 			t.Fatalf("unexpected results for query\nexp: %s\ngot: %s", exp, got)
 		}
-	}
-}
-
-func Test_DatabaseCommonOperations(t *testing.T) {
-	testCases := []struct {
-		name     string
-		testFunc func(*testing.T, *DB)
-	}{
-		{"BusyTimeout", testBusyTimeout},
-		{"SetSynchronousMode", testSetSynchronousMode},
-		{"CompileOptions", testCompileOptions},
-		{"TableNotExist", testTableNotExist},
-		{"TableCreation", testTableCreation},
-		{"TableCreationFTS", testTableCreationFTS},
-		{"SQLiteMasterTable", testSQLiteMasterTable},
-		{"SQLiteTimeTypes", testSQLiteTimeTypes},
-		{"NotNULLField", testNotNULLField},
-		{"RandomBlob", testSQLiteRandomBlob},
-		{"BasicBLOB", testBLOB},
-		{"HexQuery", testHexQuery},
-		{"Strict", testSTRICT},
-		{"EmptyStatements", testEmptyStatements},
-		{"GeopolyStatements", testGeopoly},
-		{"ReadOnlyStatements", testReadOnlyStatements},
-		{"SimpleSingleStatements", testSimpleSingleStatements},
-		{"SimpleStatementsNumeric", testSimpleStatementsNumeric},
-		{"SimpleStatementsCollate", testSimpleStatementsCollate},
-		{"SimpleExpressionStatements", testSimpleExpressionStatements},
-		{"SimpleUpsertStatements", testUpsertStatements},
-		{"SimpleSingleJSONStatements", testSimpleSingleJSONStatements},
-		{"SimpleSingleJSONBStatements", testSimpleSingleJSONBStatements},
-		{"SimpleJoinStatements", testSimpleJoinStatements},
-		{"SimpleSingleConcatStatements", testSimpleSingleConcatStatements},
-		{"SimpleMultiStatements", testSimpleMultiStatements},
-		{"SimpleSingleMultiLineStatements", testSimpleSingleMultiLineStatements},
-		{"SimpleFailingStatements_Execute", testSimpleFailingStatements_Execute},
-		{"SimpleFailingStatements_Query", testSimpleFailingStatements_Query},
-		{"SimplePragmaTableInfo", testSimplePragmaTableInfo},
-		{"WriteOnQueryDatabaseShouldFail", testWriteOnQueryDatabaseShouldFail},
-		{"SimpleParameterizedStatements", testSimpleParameterizedStatements},
-		{"SimpleParameterizedStatements_IN", testSimpleParameterizedStatements_IN},
-		{"SimpleTwoParameterizedStatements", testSimpleTwoParameterizedStatements},
-		{"SimpleNilParameterizedStatements", testSimpleNilParameterizedStatements},
-		{"SimpleNamedParameterizedStatements", testSimpleNamedParameterizedStatements},
-		{"SimpleRequest", testSimpleRequest},
-		{"SimpleRequestTx", testSimpleRequestTx},
-		{"CommonTableExpressions", testCommonTableExpressions},
-		{"UniqueConstraints", testUniqueConstraints},
-		{"PartialFail", testPartialFail},
-		{"Serialize", testSerialize},
-		{"Dump", testDump},
-		{"Size", testSize},
-		{"DBFileSize", testDBFileSize},
-		{"DBWALSize", testDBWALSize},
-		{"StmtReadOnly", testStmtReadOnly},
-		{"JSON1", testJSON1},
-		{"DBSTAT_table", testDBSTAT_table},
-		{"Copy", testCopy},
-		{"Backup", testBackup},
-	}
-
-	for _, tc := range testCases {
-		db, path := mustCreateOnDiskDatabaseWAL()
-		defer db.Close()
-		defer os.Remove(path)
-		t.Run(tc.name+":wal", func(t *testing.T) {
-			tc.testFunc(t, db)
-		})
 	}
 }
