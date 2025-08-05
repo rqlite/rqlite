@@ -324,7 +324,7 @@ func Test_Geopoly(t *testing.T) {
 	db, path := mustCreateOnDiskDatabaseWAL()
 	defer db.Close()
 	defer os.Remove(path)
-	
+
 	_, err := db.ExecuteStringStmt("CREATE VIRTUAL TABLE polygons USING geopoly(a, b, c)")
 	if err != nil {
 		t.Fatalf("failed to create table: %s", err.Error())
