@@ -296,8 +296,7 @@ func Test_DB_STRICT(t *testing.T) {
 		t.Fatalf("unexpected results for query\nexp: %s\ngot: %s", exp, got)
 	}
 
-
-rows, err := db.QueryStringStmt(`SELECT * FROM foo`)
+	rows, err := db.QueryStringStmt(`SELECT * FROM foo`)
 	if err != nil {
 		t.Fatalf("failed to query table: %s", err.Error())
 	}
@@ -1308,8 +1307,7 @@ func Test_DB_SimpleNamedParameterizedStatements(t *testing.T) {
 		t.Fatalf("failed to insert parameterized statement: %s", err.Error())
 	}
 
-
-rows, err := db.QueryStringStmt(`SELECT * FROM foo`)
+	rows, err := db.QueryStringStmt(`SELECT * FROM foo`)
 	if err != nil {
 		t.Fatalf("failed to query table: %s", err.Error())
 	}
@@ -1665,7 +1663,7 @@ func Test_DB_Dump(t *testing.T) {
 
 	// verify original row count
 
-rows, err := db.QueryStringStmt("SELECT COUNT(*) FROM Album")
+	rows, err := db.QueryStringStmt("SELECT COUNT(*) FROM Album")
 	if err != nil {
 		t.Fatalf("count rows: %v", err)
 	}
@@ -1702,8 +1700,8 @@ rows, err := db.QueryStringStmt("SELECT COUNT(*) FROM Album")
 			}
 
 			// verify row count in new DB
-		
-rows, err := newDB.QueryStringStmt("SELECT COUNT(*) FROM Album")
+
+			rows, err := newDB.QueryStringStmt("SELECT COUNT(*) FROM Album")
 			if err != nil {
 				t.Fatalf("query %s: %v", tc.name, err)
 			}
