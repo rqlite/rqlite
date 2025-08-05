@@ -710,7 +710,7 @@ func Test_DB_SimpleJoinStatements(t *testing.T) {
 		t.Fatalf("failed to create table: %s", err.Error())
 	}
 
-	_, err = db.ExecuteStringStmt(`INSERT INTO \"staff\" VALUES(1,'acme','222-22-333')`)
+	_, err = db.ExecuteStringStmt(`INSERT INTO "staff" VALUES(1,'acme','222-22-333')`)
 	if err != nil {
 		t.Fatalf("failed to insert record: %s", err.Error())
 	}
@@ -734,12 +734,12 @@ func Test_DB_SimpleSingleConcatStatements(t *testing.T) {
 		t.Fatalf("failed to create table: %s", err.Error())
 	}
 
-	_, err = db.ExecuteStringStmt(`INSERT INTO foo(name) VALUES(\"fiona\")`)
+	_, err = db.ExecuteStringStmt(`INSERT INTO foo(name) VALUES("fiona")`)
 	if err != nil {
 		t.Fatalf("failed to insert record: %s", err.Error())
 	}
 
-	r, err := db.QueryStringStmt(`SELECT id || \"_bar\", name FROM foo`)
+	r, err := db.QueryStringStmt(`SELECT id || "_bar", name FROM foo`)
 	if err != nil {
 		t.Fatalf("failed to query table: %s", err.Error())
 	}
@@ -1151,7 +1151,7 @@ func Test_DB_SimpleParameterizedStatements_IN(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to query table: %s", err.Error())
 	}
-	if exp, got := `[{"columns":["name"],"types":["text"],"values":[[ "foo"]]}]`, asJSON(r); exp != got {
+	if exp, got := `[{"columns":["name"],"types":["text"],"values":[["foo"]]}]`, asJSON(r); exp != got {
 		t.Fatalf("unexpected results for query\nexp: %s\ngot: %s", exp, got)
 	}
 
