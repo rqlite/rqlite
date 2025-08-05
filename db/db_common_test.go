@@ -672,7 +672,7 @@ func Test_DB_SimpleSingleJSONBStatements(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to query: %s", err.Error())
 	}
-	if exp, got := `[{"columns":["tag->>'mittens'"],"types":["text"],"values":[[ "qux"]]}]`, asJSON(r); exp != got {
+	if exp, got := `[{"columns":["tag->>'mittens'"],"types":["text"],"values":[["qux"]]}]`, asJSON(r); exp != got {
 		t.Fatalf("unexpected results for query, expected %s, got %s", exp, got)
 	}
 }
@@ -743,7 +743,7 @@ func Test_DB_SimpleSingleConcatStatements(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to query table: %s", err.Error())
 	}
-	if exp, got := `[{"columns":["id || \"_bar\"","name"],"types":["text","text"],"values":[[1_bar","fiona"]]}]`, asJSON(r); exp != got {
+	if exp, got := `[{"columns":["id || \"_bar\"","name"],"types":["text","text"],"values":[["1_bar","fiona"]]}]`, asJSON(r); exp != got {
 		t.Fatalf("unexpected results for query\nexp: %s\ngot: %s", exp, got)
 	}
 }
@@ -1124,7 +1124,7 @@ func Test_DB_SimpleParameterizedStatements_IN(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to query table: %s", err.Error())
 	}
-	if exp, got := `[{"columns":["name"],"types":["text"],"values":[[ "foo"]]}]`, asJSON(r); exp != got {
+	if exp, got := `[{"columns":["name"],"types":["text"],"values":[["foo"]]}]`, asJSON(r); exp != got {
 		t.Fatalf("unexpected results for query\nexp: %s\ngot: %s", exp, got)
 	}
 
@@ -1419,7 +1419,7 @@ func Test_DB_SimpleRequest(t *testing.T) {
 				`SELECT COUNT(*) FROM foo`,
 				`SELECT last FROM foo WHERE first="richard"`,
 			},
-			exp: `[{"last_insert_id":3,"rows_affected":1},{"columns":["COUNT(*)"],"types":["integer"],"values":[[3]]},{"columns":["last"],"types":["text"],"values":[[ "feynman"]]}]`,
+			exp: `[{"last_insert_id":3,"rows_affected":1},{"columns":["COUNT(*)"],"types":["integer"],"values":[[3]]},{"columns":["last"],"types":["text"],"values":[["feynman"]]}]`,
 		},
 		{
 			name: "insert and select nonexistent table",
@@ -1662,7 +1662,6 @@ func Test_DB_Dump(t *testing.T) {
 	}
 
 	// verify original row count
-
 	rows, err := db.QueryStringStmt("SELECT COUNT(*) FROM Album")
 	if err != nil {
 		t.Fatalf("count rows: %v", err)
@@ -1700,7 +1699,6 @@ func Test_DB_Dump(t *testing.T) {
 			}
 
 			// verify row count in new DB
-
 			rows, err := newDB.QueryStringStmt("SELECT COUNT(*) FROM Album")
 			if err != nil {
 				t.Fatalf("query %s: %v", tc.name, err)
@@ -1871,7 +1869,7 @@ func Test_DB_JSON1(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to perform simple SELECT: %s", err.Error())
 	}
-	if exp, got := `[{"columns":["phone"],"types":["text"],"values":[[ "{\"mobile\":\"789111\",\"home\":\"123456\"}"]]}]`, asJSON(q); exp != got {
+	if exp, got := ``, asJSON(q); exp != got {
 		t.Fatalf("unexpected results for simple query, expected %s, got %s", exp, got)
 	}
 	q, err = db.QueryStringStmt("SELECT json_extract(customer.phone, '$.mobile') FROM customer")
@@ -2040,7 +2038,7 @@ func Test_DB_Backup(t *testing.T) {
 		if err != nil {
 			t.Fatalf("failed to query table: %s", err.Error())
 		}
-		if exp, got := `[{"columns":["name"],"types":["text"],"values":[[ "foo"],["baz"]]}]`, asJSON(ro); exp != got {
+		if exp, got := `[{"columns":["name"],"types":["text"],"values":[["foo"],["baz"]]}]`, asJSON(ro); exp != got {
 			t.Fatalf("unexpected results for query\nexp: %s\ngot: %s", exp, got)
 		}
 	}
