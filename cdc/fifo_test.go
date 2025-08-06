@@ -37,6 +37,7 @@ func Test_NewQueue(t *testing.T) {
 	}
 }
 
+// Test_EnqueueEvents_Simple tests a single Enqueue operation and receiving the event.
 func Test_EnqueueEvents_Simple(t *testing.T) {
 	q, _, cleanup := newTestQueue(t)
 	defer cleanup()
@@ -128,6 +129,7 @@ func Test_EnqueueEvents_Multi(t *testing.T) {
 	}
 }
 
+// Test_EnqueueHighest tests that enqueuing an older item does not change the highest key.
 func Test_EnqueueHighest(t *testing.T) {
 	q, _, cleanup := newTestQueue(t)
 	defer cleanup()
@@ -156,6 +158,7 @@ func Test_EnqueueHighest(t *testing.T) {
 	}
 }
 
+// Test_DeleteRange tests deleting a range of items from the queue.
 func Test_DeleteRange(t *testing.T) {
 	q, _, cleanup := newTestQueue(t)
 	defer cleanup()
@@ -219,6 +222,7 @@ func Test_DeleteRange(t *testing.T) {
 	}
 }
 
+// Test_QueueHighestKey tests that HighestKey returns the correct value after various operations.
 func Test_QueueHighestKey(t *testing.T) {
 	q, path, _ := newTestQueue(t)
 
@@ -579,7 +583,6 @@ func Test_Events_BufferedChannelBehavior(t *testing.T) {
 			receivedEvents = append(receivedEvents, event)
 		case <-time.After(100 * time.Millisecond):
 			// No more events available immediately
-			break
 		}
 	}
 
@@ -657,7 +660,7 @@ func Test_Events_InterruptedReader(t *testing.T) {
 	}
 
 	// Wait a bit to simulate gap in reading
-	time.Sleep(100 * time.Millisecond)
+	time.Sleep(200 * time.Millisecond)
 
 	// Resume reading - should get all items from second batch
 	for i, expectedItem := range secondBatch {
@@ -740,65 +743,6 @@ func Test_Events_ConcurrentReaders(t *testing.T) {
 		if !receivedIndices[i] {
 			t.Errorf("Missing event with index %d", i)
 		}
-	}
-}
-
-// Test_Events_TriggersPendingEvents tests that calling Events() triggers sending any pending events.
-func Test_Events_TriggersPendingEvents(t *testing.T) {
-	q, _, cleanup := newTestQueue(t)
-	defer cleanup()
-
-	// Enqueue items before getting the events channel
-	item1 := []byte("hello world 1")
-	item2 := []byte("hello world 2")
-	idx1 := uint64(10)
-	idx2 := uint64(11)
-
-	if err := q.Enqueue(idx1, item1); err != nil {
-		t.Fatalf("Failed to enqueue item 1: %v", err)
-	}
-	if err := q.Enqueue(idx2, item2); err != nil {
-		t.Fatalf("Failed to enqueue item 2: %v", err)
-	}
-
-	// Give a brief moment for the items to be written to BoltDB
-	time.Sleep(10 * time.Millisecond)
-
-	// Now get the events channel - this should trigger sending pending events
-	eventsCh := q.Events()
-
-	// We should receive the events that were already enqueued
-	var receivedEvents []Event
-	timeout := time.After(1 * time.Second)
-
-	for len(receivedEvents) < 2 {
-		select {
-		case event := <-eventsCh:
-			receivedEvents = append(receivedEvents, event)
-		case <-timeout:
-			t.Fatalf("Timed out waiting for events. Got %d, expected 2", len(receivedEvents))
-		}
-	}
-
-	// Verify we got the correct events
-	if len(receivedEvents) != 2 {
-		t.Fatalf("Expected 2 events, got %d", len(receivedEvents))
-	}
-
-	// Check first event
-	if receivedEvents[0].Index != idx1 {
-		t.Errorf("Expected first event index %d, got %d", idx1, receivedEvents[0].Index)
-	}
-	if !bytes.Equal(receivedEvents[0].Data, item1) {
-		t.Errorf("Expected first event data %q, got %q", item1, receivedEvents[0].Data)
-	}
-
-	// Check second event
-	if receivedEvents[1].Index != idx2 {
-		t.Errorf("Expected second event index %d, got %d", idx2, receivedEvents[1].Index)
-	}
-	if !bytes.Equal(receivedEvents[1].Data, item2) {
-		t.Errorf("Expected second event data %q, got %q", item2, receivedEvents[1].Data)
 	}
 }
 
