@@ -3,6 +3,7 @@
 - [PR #2198](https://github.com/rqlite/rqlite/pull/2198): Refactor some of the database-level unit tests.
 - [PR #2197](https://github.com/rqlite/rqlite/pull/2197): CDC FIFO should provide events via a channel.
 - [PR #2200](https://github.com/rqlite/rqlite/pull/2200), [PR #2201](https://github.com/rqlite/rqlite/pull/2201): Minor refactors of CDC FIFO.
+- [PR #2202](https://github.com/rqlite/rqlite/pull/2202): Add Home and End key support to CLI. Fixes issue [#1730](https://github.com/rqlite/rqlite/issues/1730).
   
 ## v8.43.1 (August 3rd 2025)
 ### Implementation changes and bug fixes
