@@ -177,6 +177,10 @@ func main() {
 			if input == "" {
 				continue
 			}
+
+			// Add command to history for up/down arrow navigation
+			line.AppendHistory(input)
+
 			var (
 				index = strings.Index(input, " ")
 				cmd   = input
@@ -270,7 +274,7 @@ func main() {
 				}
 				err = dump(ctx, filename, tables, argv)
 			case ".HELP":
-				ctx.String("%s", strings.Join(cliHelp, "\n"))
+				ctx.String("%s\n", strings.Join(cliHelp, "\n"))
 			case ".QUIT", "QUIT", "EXIT", ".EXIT":
 				break FOR_READ
 			case ".SNAPSHOT":
