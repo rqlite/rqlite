@@ -32,9 +32,11 @@ type Event struct {
 // It is safe for concurrent use. It has some particular properties that make it
 // suitable for the CDC service.
 //   - The queue is persistent and can be used to recover from crashes or restarts.
-//   - Dequeuing an item does not remove it from the queue. Only when DeleteRange is called
-//     will items be removed from the queue. This allows the CDC service to explicitly
-//     delete items only when it is sure they have been successfully transmitted.
+//   - The queue will emit items as events on the Events channel.
+//   - Reading an item from the Events channel does not remove it from the queue.
+//     Only when DeleteRange is called will items be removed from the queue. This
+//     allows the CDC service to explicitly delete items only when it is sure they
+//     have been successfully transmitted.
 //   - The queue remembers -- even after restarts -- the highest index of any item ever
 //     enqueued. Since this queue is to be used to store changes associated with Raft
 //     log entries, once a given index has been written to the queue any further
@@ -84,7 +86,8 @@ func NewQueue(path string) (*Queue, error) {
 		// Initialize state from the DB.
 		var innerErr error
 		c := tx.Bucket(bucketName).Cursor()
-		nextKey, _ = c.First()
+		nk, _ := c.First()
+		copy(nextKey, nk)
 		highestKey, innerErr = getHighestKey(tx)
 		if innerErr != nil {
 			return fmt.Errorf("failed to get highest key: %w", innerErr)
