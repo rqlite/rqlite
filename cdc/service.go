@@ -13,6 +13,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/rqlite/rqlite/v8/command"
 	"github.com/rqlite/rqlite/v8/command/proto"
 	"github.com/rqlite/rqlite/v8/internal/rsync"
 	"github.com/rqlite/rqlite/v8/queue"
@@ -236,13 +237,45 @@ func (s *Service) writeToFIFO() {
 	for {
 		select {
 		case o := <-s.in:
-			// Right now just write the event to the queue. Events should be
-			// persisted to a disk-based queue for replay on Leader change.
-			s.batcher.Write([]*proto.CDCEvents{o}, nil)
+			b, err := command.MarshalCDCEvents(o)
+			if err != nil {
+				s.logger.Printf("error marshalling CDC events: %v", err)
+				continue
+			}
+			if err := s.fifo.Enqueue(o.Index, b); err != nil {
+				s.logger.Printf("error enqueueing CDC events: %v", err)
+			}
 		case <-s.done:
 			return
 		}
 	}
+}
+
+func (s *Service) readFromFIFO() (chan struct{}, chan struct{}) {
+	stop := make(chan struct{})
+	done := make(chan struct{})
+	ch := s.fifo.Events()
+	go func() {
+		for {
+			select {
+			case <-stop:
+				close(done)
+				return
+			case data := <-ch:
+				events, err := command.UnmarshalCDCEvents(data.Data)
+				if err != nil {
+					s.logger.Printf("error unmarshalling CDC events from FIFO: %v", err)
+					continue
+				}
+				if len(events.Events) == 0 {
+					s.logger.Println("received empty CDC events from FIFO, skipping")
+					continue
+				}
+				s.batcher.Write([]*proto.CDCEvents{events}, nil)
+			}
+		}
+	}()
+	return stop, done
 }
 
 func (s *Service) mainLoop() {
@@ -251,6 +284,9 @@ func (s *Service) mainLoop() {
 	// This ticker is used to periodically broadcast the high watermark to the cluster.
 	hwmTicker := time.NewTicker(s.highWatermarkInterval)
 	defer hwmTicker.Stop()
+
+	var stop chan struct{}
+	var done chan struct{}
 
 	preHWM := s.highWatermark.Load()
 	for {
@@ -282,8 +318,19 @@ func (s *Service) mainLoop() {
 		case isLeader := <-s.leaderObCh:
 			s.logger.Println("is leader:", isLeader)
 			// If not leader then reset batching queue and get ready to start
-			// retrasmitting events from high-water mark. If we have become
-			// the leader then start reading from the batching queue.
+			// retransmitting events from high-water mark. If we have become
+			// the leader then start reading from the batching queue. XXX TBD
+			if isLeader {
+				stop, done = s.readFromFIFO()
+			} else {
+				if stop == nil {
+					continue
+				}
+				close(stop)
+				stop = nil
+				<-done
+				done = nil
+			}
 
 		case batch := <-s.batcher.C:
 			if batch == nil || len(batch.Objects) == 0 {
