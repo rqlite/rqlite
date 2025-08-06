@@ -268,8 +268,8 @@ func (s *Service) readFromFIFO() (chan struct{}, chan struct{}) {
 					continue
 				}
 				if len(events.Events) == 0 {
+					panic("xxxx")
 					s.logger.Println("received empty CDC events from FIFO, skipping")
-					continue
 				}
 				s.batcher.Write([]*proto.CDCEvents{events}, nil)
 			}
