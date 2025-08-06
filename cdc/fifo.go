@@ -45,15 +45,12 @@ type Queue struct {
 
 	// Channels for communicating with the managing goroutine
 	enqueueChan     chan enqueueReq
-	dequeueChan     chan dequeueReq
 	deleteRangeChan chan deleteRangeReq
 	queryChan       chan queryReq
-	eventsChan      chan eventsChanReq
 	done            chan struct{}
 
-	// Events channel for push-based consumption (created on first call to Events())
-	eventsOutChan chan Event
-	eventsChMutex sync.RWMutex
+	// Events channel for consuming queue events (created at initialization)
+	eventsChan chan Event
 
 	wg sync.WaitGroup
 }
@@ -100,11 +97,10 @@ func NewQueue(path string) (*Queue, error) {
 	q := &Queue{
 		db:              db,
 		enqueueChan:     make(chan enqueueReq, queueBufferSize),
-		dequeueChan:     make(chan dequeueReq),
 		deleteRangeChan: make(chan deleteRangeReq),
 		queryChan:       make(chan queryReq),
-		eventsChan:      make(chan eventsChanReq),
 		done:            make(chan struct{}),
+		eventsChan:      make(chan Event, 10), // Buffered channel for events
 	}
 
 	q.wg.Add(1)
@@ -128,16 +124,56 @@ func (q *Queue) Close() {
 func (q *Queue) run(nextKey []byte, highestKey uint64) {
 	defer q.wg.Done()
 	defer q.db.Close()
+	defer close(q.eventsChan) // Close events channel when queue shuts down
 
-	var waitingDequeues []dequeueReq // A list of callers waiting for an item.
-	var eventsOutChan chan Event     // The events channel for push-based consumption
+	// Helper function to try sending available events
+	tryServeEvents := func() {
+		for nextKey != nil {
+			var event Event
+			err := q.db.View(func(tx *bbolt.Tx) error {
+				c := tx.Bucket(bucketName).Cursor()
+				_, val := c.Seek(nextKey)
+				if val == nil {
+					return fmt.Errorf("item not found for key %x", nextKey)
+				}
+				event.Index = btouint64(nextKey)
+				event.Data = make([]byte, len(val))
+				copy(event.Data, val)
+				return nil
+			})
 
-	// Helper function to close events channel on shutdown
-	defer func() {
-		if eventsOutChan != nil {
-			close(eventsOutChan)
+			if err != nil {
+				break
+			}
+
+			// Try to send to events channel (non-blocking)
+			select {
+			case q.eventsChan <- event:
+				// Successfully sent, advance to next item
+				err := q.db.View(func(tx *bbolt.Tx) error {
+					c := tx.Bucket(bucketName).Cursor()
+					c.Seek(nextKey)
+					nk, _ := c.Next()
+					if nk != nil {
+						nextKey = make([]byte, len(nk))
+						copy(nextKey, nk)
+					} else {
+						nextKey = nil // No more items available
+					}
+					return nil
+				})
+				if err != nil {
+					break
+				}
+			default:
+				// Events channel is full, stop processing
+				return
+			}
 		}
-	}()
+	}
+
+	// Send any existing events on startup
+	tryServeEvents()
 
 	for {
 		select {
@@ -164,22 +200,15 @@ func (q *Queue) run(nextKey []byte, highestKey uint64) {
 			}
 
 			// If this is the first item added to a previously empty queue,
-			// it becomes the next item to be dequeued.
+			// it becomes the next item to be sent to events channel.
 			if nextKey == nil {
 				nextKey = key
 			}
 
 			req.respChan <- enqueueResp{err: err}
 
-		case req := <-q.dequeueChan:
-			waitingDequeues = append(waitingDequeues, req)
-
-		case req := <-q.eventsChan:
-			// Create and return the events channel
-			if eventsOutChan == nil {
-				eventsOutChan = make(chan Event, 10) // Moderate buffer size
-			}
-			req.respChan <- eventsOutChan
+			// Try to send any available events to the events channel
+			tryServeEvents()
 
 		case req := <-q.deleteRangeChan:
 			err := q.db.Update(func(tx *bbolt.Tx) error {
@@ -207,93 +236,30 @@ func (q *Queue) run(nextKey []byte, highestKey uint64) {
 			})
 			req.respChan <- err
 
+			// Try to send any available events after deletion
+			if err == nil {
+				tryServeEvents()
+			}
+
 		case req := <-q.queryChan:
 			var isEmpty bool
+			var hasNext bool
 			err := q.db.View(func(tx *bbolt.Tx) error {
 				c := tx.Bucket(bucketName).Cursor()
 				k, _ := c.First()
 				isEmpty = k == nil // If no items, isEmpty is true
+				hasNext = k != nil // If there are any items, hasNext is true
 				return nil
 			})
 			req.respChan <- queryResp{
 				err:        err,
-				hasNext:    nextKey != nil,
+				hasNext:    hasNext,
 				isEmpty:    isEmpty,
 				highestKey: highestKey,
 			}
 
 		case <-q.done:
-			for _, waiter := range waitingDequeues {
-				waiter.respChan <- dequeueResp{err: ErrQueueClosed}
-			}
 			return
-		}
-
-		// Fulfill any waiting dequeue requests first (original logic)
-		for len(waitingDequeues) > 0 && nextKey != nil {
-			waiter := waitingDequeues[0]
-			waitingDequeues = waitingDequeues[1:] // Pop from waitlist
-
-			var resp dequeueResp
-			err := q.db.View(func(tx *bbolt.Tx) error {
-				c := tx.Bucket(bucketName).Cursor()
-				_, val := c.Seek(nextKey)
-				if val == nil {
-					return fmt.Errorf("item not found for key %x", nextKey)
-				}
-				resp.idx = btouint64(nextKey)
-				resp.val = make([]byte, len(val))
-				copy(resp.val, val)
-
-				nk, _ := c.Next()
-				if nk != nil {
-					nextKey = make([]byte, len(nk))
-					copy(nextKey, nk)
-				} else {
-					nextKey = nil // No more items available
-				}
-				return nil
-			})
-			resp.err = err
-			waiter.respChan <- resp
-		}
-
-		// Send remaining items to events channel if no dequeue waiters
-		for len(waitingDequeues) == 0 && eventsOutChan != nil && nextKey != nil {
-			var event Event
-			err := q.db.View(func(tx *bbolt.Tx) error {
-				c := tx.Bucket(bucketName).Cursor()
-				_, val := c.Seek(nextKey)
-				if val == nil {
-					return fmt.Errorf("item not found for key %x", nextKey)
-				}
-				event.Index = btouint64(nextKey)
-				event.Data = make([]byte, len(val))
-				copy(event.Data, val)
-
-				nk, _ := c.Next()
-				if nk != nil {
-					nextKey = make([]byte, len(nk))
-					copy(nextKey, nk)
-				} else {
-					nextKey = nil // No more items available
-				}
-				return nil
-			})
-
-			if err != nil {
-				break
-			}
-
-			// Try to send to events channel (non-blocking)
-			select {
-			case eventsOutChan <- event:
-				// Successfully sent to events channel, continue to next item
-			default:
-				// Events channel is full, put the item back and stop processing
-				nextKey = uint64tob(event.Index)
-				break
-			}
 		}
 	}
 }
@@ -306,17 +272,11 @@ func (q *Queue) Enqueue(idx uint64, item []byte) error {
 	return resp.err
 }
 
-// Dequeue removes and returns the next available item from the queue.
-// If the queue is empty, Dequeue blocks until an item is available.
-// Do not call Dequeue on a closed queue.
-//
-// Deprecated: Use Events() method instead for better integration with Go's concurrency patterns.
-// The Events() method provides a channel-based push interface that works better with select statements.
-func (q *Queue) Dequeue() (uint64, []byte, error) {
-	req := dequeueReq{respChan: make(chan dequeueResp)}
-	q.dequeueChan <- req
-	resp := <-req.respChan
-	return resp.idx, resp.val, resp.err
+// Events returns a channel that will receive events from the queue as they become available.
+// This provides a push-based interface for consuming events. The returned channel will be
+// closed when the queue is closed. This method always returns the same channel instance.
+func (q *Queue) Events() <-chan Event {
+	return q.eventsChan
 }
 
 // DeleteRange deletes all items in the queue with indices less than or equal to idx.
@@ -353,26 +313,6 @@ func (q *Queue) HasNext() bool {
 	return resp.hasNext
 }
 
-// Events returns a channel that will receive events from the queue as they become available.
-// This provides a push-based interface for consuming events, which integrates better with
-// Go's concurrency patterns compared to the blocking Dequeue() method.
-// The returned channel will be closed when the queue is closed.
-// This method can be called multiple times but will return the same channel instance.
-func (q *Queue) Events() <-chan Event {
-	q.eventsChMutex.Lock()
-	defer q.eventsChMutex.Unlock()
-
-	if q.eventsOutChan != nil {
-		return q.eventsOutChan
-	}
-
-	// Request the events channel from the managing goroutine
-	req := eventsChanReq{respChan: make(chan chan Event)}
-	q.eventsChan <- req
-	q.eventsOutChan = <-req.respChan
-	return q.eventsOutChan
-}
-
 func getHighestKey(tx *bbolt.Tx) (uint64, error) {
 	key := tx.Bucket(metaBucketName).Get([]byte("max_key"))
 	if key == nil {
@@ -395,16 +335,6 @@ type enqueueResp struct {
 	err error
 }
 
-type dequeueReq struct {
-	respChan chan dequeueResp
-}
-
-type dequeueResp struct {
-	idx uint64
-	val []byte
-	err error
-}
-
 type deleteRangeReq struct {
 	idx      uint64
 	respChan chan error
@@ -419,10 +349,6 @@ type queryResp struct {
 	isEmpty    bool
 	highestKey uint64
 	err        error
-}
-
-type eventsChanReq struct {
-	respChan chan chan Event
 }
 
 func btouint64(b []byte) uint64 {
