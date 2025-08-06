@@ -44,10 +44,11 @@ type Queue struct {
 	db *bbolt.DB
 
 	// Channels for communicating with the managing goroutine
-	enqueueChan     chan enqueueReq
-	deleteRangeChan chan deleteRangeReq
-	queryChan       chan queryReq
-	done            chan struct{}
+	enqueueChan       chan enqueueReq
+	deleteRangeChan   chan deleteRangeReq
+	queryChan         chan queryReq
+	triggerEventsChan chan struct{}
+	done              chan struct{}
 
 	// Events channel for consuming queue events (created at initialization)
 	eventsChan chan Event
@@ -95,12 +96,13 @@ func NewQueue(path string) (*Queue, error) {
 	}
 
 	q := &Queue{
-		db:              db,
-		enqueueChan:     make(chan enqueueReq, queueBufferSize),
-		deleteRangeChan: make(chan deleteRangeReq),
-		queryChan:       make(chan queryReq),
-		done:            make(chan struct{}),
-		eventsChan:      make(chan Event, 10), // Buffered channel for events
+		db:                db,
+		enqueueChan:       make(chan enqueueReq, queueBufferSize),
+		deleteRangeChan:   make(chan deleteRangeReq),
+		queryChan:         make(chan queryReq),
+		triggerEventsChan: make(chan struct{}),
+		done:              make(chan struct{}),
+		eventsChan:        make(chan Event, 10), // Buffered channel for events
 	}
 
 	q.wg.Add(1)
@@ -258,6 +260,10 @@ func (q *Queue) run(nextKey []byte, highestKey uint64) {
 				highestKey: highestKey,
 			}
 
+		case <-q.triggerEventsChan:
+			// Client requested Events channel, trigger sending any pending events
+			tryServeEvents()
+
 		case <-q.done:
 			return
 		}
@@ -275,7 +281,14 @@ func (q *Queue) Enqueue(idx uint64, item []byte) error {
 // Events returns a channel that will receive events from the queue as they become available.
 // This provides a push-based interface for consuming events. The returned channel will be
 // closed when the queue is closed. This method always returns the same channel instance.
+// When called, it triggers sending any pending events that are already in BoltDB.
 func (q *Queue) Events() <-chan Event {
+	// Trigger sending any pending events (non-blocking)
+	select {
+	case q.triggerEventsChan <- struct{}{}:
+	default:
+		// If channel is full, don't block - the run loop will handle it eventually
+	}
 	return q.eventsChan
 }
 
