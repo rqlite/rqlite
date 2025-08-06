@@ -21,14 +21,22 @@ var ErrQueueClosed = errors.New("queue is closed")
 
 var queueBufferSize = 100 // Size of the buffered channels for enqueue requests
 
+// Event represents a dequeued item from the queue with its index and data.
+type Event struct {
+	Index uint64
+	Data  []byte
+}
+
 // Queue is a persistent, disk-backed FIFO queue managed by a single goroutine.
 //
 // It is safe for concurrent use. It has some particular properties that make it
 // suitable for the CDC service.
 //   - The queue is persistent and can be used to recover from crashes or restarts.
-//   - Dequeuing an item does not remove it from the queue. Only when DeleteRange is called
-//     will items be removed from the queue. This allows the CDC service to explicitly
-//     delete items only when it is sure they have been successfully transmitted.
+//   - The queue will emit items as events on the Events channel.
+//   - Reading an item from the Events channel does not remove it from the queue.
+//     Only when DeleteRange is called will items be removed from the queue. This
+//     allows the CDC service to explicitly delete items only when it is sure they
+//     have been successfully transmitted.
 //   - The queue remembers -- even after restarts -- the highest index of any item ever
 //     enqueued. Since this queue is to be used to store changes associated with Raft
 //     log entries, once a given index has been written to the queue any further
@@ -39,10 +47,12 @@ type Queue struct {
 
 	// Channels for communicating with the managing goroutine
 	enqueueChan     chan enqueueReq
-	dequeueChan     chan dequeueReq
 	deleteRangeChan chan deleteRangeReq
 	queryChan       chan queryReq
 	done            chan struct{}
+
+	// Events channel for consuming queue events (created at initialization)
+	eventsChan chan Event
 
 	wg sync.WaitGroup
 }
@@ -75,7 +85,11 @@ func NewQueue(path string) (*Queue, error) {
 		// Initialize state from the DB.
 		var innerErr error
 		c := tx.Bucket(bucketName).Cursor()
-		nextKey, _ = c.First()
+		nk, _ := c.First()
+		if nk != nil {
+			nextKey = make([]byte, 8)
+			copy(nextKey, nk)
+		}
 		highestKey, innerErr = getHighestKey(tx)
 		if innerErr != nil {
 			return fmt.Errorf("failed to get highest key: %w", innerErr)
@@ -89,10 +103,10 @@ func NewQueue(path string) (*Queue, error) {
 	q := &Queue{
 		db:              db,
 		enqueueChan:     make(chan enqueueReq, queueBufferSize),
-		dequeueChan:     make(chan dequeueReq),
 		deleteRangeChan: make(chan deleteRangeReq),
 		queryChan:       make(chan queryReq),
 		done:            make(chan struct{}),
+		eventsChan:      make(chan Event, 10), // Buffered channel for events
 	}
 
 	q.wg.Add(1)
@@ -102,7 +116,13 @@ func NewQueue(path string) (*Queue, error) {
 
 // Close gracefully shuts down the queue, ensuring all pending operations are finished.
 func (q *Queue) Close() {
-	close(q.done)
+	select {
+	case <-q.done:
+		// Already closed
+		return
+	default:
+		close(q.done)
+	}
 	q.wg.Wait()
 }
 
@@ -110,8 +130,57 @@ func (q *Queue) Close() {
 func (q *Queue) run(nextKey []byte, highestKey uint64) {
 	defer q.wg.Done()
 	defer q.db.Close()
+	defer close(q.eventsChan) // Close events channel when queue shuts down
 
-	var waitingDequeues []dequeueReq // A list of callers waiting for an item.
+	// Helper function to try sending available events
+	tryServeEvents := func() {
+		for nextKey != nil {
+			var event Event
+			err := q.db.View(func(tx *bbolt.Tx) error {
+				c := tx.Bucket(bucketName).Cursor()
+				_, val := c.Seek(nextKey)
+				if val == nil {
+					return fmt.Errorf("item not found for key %x", nextKey)
+				}
+				event.Index = btouint64(nextKey)
+				event.Data = make([]byte, len(val))
+				copy(event.Data, val)
+				return nil
+			})
+
+			if err != nil {
+				break
+			}
+
+			// Try to send to events channel (non-blocking)
+			select {
+			case q.eventsChan <- event:
+				// Successfully sent, advance to next item
+				err := q.db.View(func(tx *bbolt.Tx) error {
+					c := tx.Bucket(bucketName).Cursor()
+					c.Seek(nextKey)
+					nk, _ := c.Next()
+					if nk != nil {
+						nextKey = make([]byte, len(nk))
+						copy(nextKey, nk)
+					} else {
+						nextKey = nil // No more items available
+					}
+					return nil
+				})
+				if err != nil {
+					return
+				}
+			default:
+				// Events channel is full, stop processing
+				return
+			}
+		}
+	}
+
+	// Load any on-disk events into the channel
+	tryServeEvents()
+
 	for {
 		select {
 		case req := <-q.enqueueChan:
@@ -137,15 +206,15 @@ func (q *Queue) run(nextKey []byte, highestKey uint64) {
 			}
 
 			// If this is the first item added to a previously empty queue,
-			// it becomes the next item to be dequeued.
+			// it becomes the next item to be sent to events channel.
 			if nextKey == nil {
 				nextKey = key
 			}
 
 			req.respChan <- enqueueResp{err: err}
 
-		case req := <-q.dequeueChan:
-			waitingDequeues = append(waitingDequeues, req)
+			// Try to send any available events to the events channel
+			tryServeEvents()
 
 		case req := <-q.deleteRangeChan:
 			err := q.db.Update(func(tx *bbolt.Tx) error {
@@ -175,52 +244,23 @@ func (q *Queue) run(nextKey []byte, highestKey uint64) {
 
 		case req := <-q.queryChan:
 			var isEmpty bool
+			var hasNext bool
 			err := q.db.View(func(tx *bbolt.Tx) error {
 				c := tx.Bucket(bucketName).Cursor()
 				k, _ := c.First()
 				isEmpty = k == nil // If no items, isEmpty is true
+				hasNext = k != nil // If there are any items, hasNext is true
 				return nil
 			})
 			req.respChan <- queryResp{
 				err:        err,
-				hasNext:    nextKey != nil,
+				hasNext:    hasNext,
 				isEmpty:    isEmpty,
 				highestKey: highestKey,
 			}
 
 		case <-q.done:
-			for _, waiter := range waitingDequeues {
-				waiter.respChan <- dequeueResp{err: ErrQueueClosed}
-			}
 			return
-		}
-
-		// Fulfill any waiting dequeue requests.
-		for len(waitingDequeues) > 0 && nextKey != nil {
-			waiter := waitingDequeues[0]
-			waitingDequeues = waitingDequeues[1:] // Pop from waitlist
-
-			var resp dequeueResp
-			err := q.db.View(func(tx *bbolt.Tx) error {
-				c := tx.Bucket(bucketName).Cursor()
-				_, val := c.Seek(nextKey)
-				if val == nil {
-					return fmt.Errorf("item not found for key %x", nextKey)
-				}
-				resp.idx = btouint64(nextKey)
-				resp.val = make([]byte, len(val))
-				copy(resp.val, val)
-
-				nk, _ := c.Next()
-				if nk != nil {
-					copy(nextKey, nk)
-				} else {
-					nextKey = nil // No more items available
-				}
-				return nil
-			})
-			resp.err = err
-			waiter.respChan <- resp
 		}
 	}
 }
@@ -233,14 +273,11 @@ func (q *Queue) Enqueue(idx uint64, item []byte) error {
 	return resp.err
 }
 
-// Dequeue removes and returns the next available item from the queue.
-// If the queue is empty, Dequeue blocks until an item is available.
-// Do not call Dequeue on a closed queue.
-func (q *Queue) Dequeue() (uint64, []byte, error) {
-	req := dequeueReq{respChan: make(chan dequeueResp)}
-	q.dequeueChan <- req
-	resp := <-req.respChan
-	return resp.idx, resp.val, resp.err
+// Events returns a channel that will receive events from the queue as they become available.
+// This provides a push-based interface for consuming events. The returned channel will be
+// closed when the queue is closed. This method always returns the same channel instance.
+func (q *Queue) Events() <-chan Event {
+	return q.eventsChan
 }
 
 // DeleteRange deletes all items in the queue with indices less than or equal to idx.
@@ -296,16 +333,6 @@ type enqueueReq struct {
 }
 
 type enqueueResp struct {
-	err error
-}
-
-type dequeueReq struct {
-	respChan chan dequeueResp
-}
-
-type dequeueResp struct {
-	idx uint64
-	val []byte
 	err error
 }
 

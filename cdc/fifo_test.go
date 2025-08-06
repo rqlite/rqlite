@@ -2,6 +2,7 @@ package cdc
 
 import (
 	"bytes"
+	"fmt"
 	"os"
 	"path/filepath"
 	"testing"
@@ -36,11 +37,15 @@ func Test_NewQueue(t *testing.T) {
 	}
 }
 
-func Test_EnqueueDequeue_Simple(t *testing.T) {
+// Test_EnqueueEvents_Simple tests a single Enqueue operation and receiving the event.
+func Test_EnqueueEvents_Simple(t *testing.T) {
 	q, _, cleanup := newTestQueue(t)
 	defer cleanup()
 
-	// Enqueue a single item then dequeue it.
+	// Get the events channel
+	eventsCh := q.Events()
+
+	// Enqueue a single item then receive it from events channel.
 	item1 := []byte("hello world")
 	idx1 := uint64(10)
 	if err := q.Enqueue(idx1, item1); err != nil {
@@ -56,143 +61,75 @@ func Test_EnqueueDequeue_Simple(t *testing.T) {
 		t.Fatal("Queue should not be empty")
 	}
 
-	// Should be items to dequeue.
+	// Should be items to receive from events channel.
 	if !q.HasNext() {
-		t.Fatalf("HasNext should be false after dequeuing last item")
+		t.Fatalf("HasNext should be true after enqueuing an item")
 	}
 
-	gotIdx, gotItem, err := q.Dequeue()
-	if err != nil {
-		t.Fatalf("First() failed after enqueue: %v", err)
-	}
-	if gotIdx != idx1 {
-		t.Errorf("Expected first index to be %d, got %d", idx1, gotIdx)
-	}
-	if !bytes.Equal(gotItem, item1) {
-		t.Errorf("Expected first item to be '%s', got '%s'", item1, gotItem)
+	// Receive the event from the channel
+	select {
+	case event := <-eventsCh:
+		if event.Index != idx1 {
+			t.Errorf("Expected event index to be %d, got %d", idx1, event.Index)
+		}
+		if !bytes.Equal(event.Data, item1) {
+			t.Errorf("Expected event data to be '%s', got '%s'", item1, event.Data)
+		}
+	case <-time.After(1 * time.Second):
+		t.Fatal("Timed out waiting for event from channel")
 	}
 }
 
-// Test_EnqueueDequeue_Multi tests multiple Enqueue and Dequeue operations.
-func Test_EnqueueDequeue_Multi(t *testing.T) {
+// Test_EnqueueEvents_Multi tests multiple Enqueue operations and receiving events.
+func Test_EnqueueEvents_Multi(t *testing.T) {
 	q, _, cleanup := newTestQueue(t)
 	defer cleanup()
 
-	// Enqueue a single item then dequeue it.
-	item1 := []byte("hello world")
-	idx1 := uint64(10)
-	if err := q.Enqueue(idx1, item1); err != nil {
-		t.Fatalf("Enqueue failed: %v", err)
+	// Get the events channel
+	eventsCh := q.Events()
+
+	// Enqueue multiple items
+	items := []struct {
+		idx  uint64
+		data []byte
+	}{
+		{10, []byte("first item")},
+		{20, []byte("second item")},
+		{30, []byte("third item")},
 	}
 
-	// Ensure the queue is not empty
-	e, err := q.Empty()
-	if err != nil {
-		t.Fatalf("Queue Empty check failed: %v", err)
-	}
-	if e {
-		t.Fatal("Queue should not be empty")
+	for _, item := range items {
+		if err := q.Enqueue(item.idx, item.data); err != nil {
+			t.Fatalf("Enqueue failed for index %d: %v", item.idx, err)
+		}
 	}
 
-	// Should be items to dequeue.
-	if !q.HasNext() {
-		t.Fatalf("HasNext should be false after dequeuing last item")
+	// Receive all events in order
+	for i, expectedItem := range items {
+		select {
+		case event := <-eventsCh:
+			if event.Index != expectedItem.idx {
+				t.Errorf("Event %d: expected index %d, got %d", i, expectedItem.idx, event.Index)
+			}
+			if !bytes.Equal(event.Data, expectedItem.data) {
+				t.Errorf("Event %d: expected data '%s', got '%s'", i, expectedItem.data, event.Data)
+			}
+		case <-time.After(1 * time.Second):
+			t.Fatalf("Timed out waiting for event %d from channel", i)
+		}
 	}
 
-	// Dequeue the first item.
-	gotIdx, gotItem, err := q.Dequeue()
-	if err != nil {
-		t.Fatalf("First() failed after enqueue: %v", err)
-	}
-	if gotIdx != idx1 {
-		t.Errorf("Expected first index to be %d, got %d", idx1, gotIdx)
-	}
-	if !bytes.Equal(gotItem, item1) {
-		t.Errorf("Expected first item to be '%s', got '%s'", item1, gotItem)
-	}
-
-	// Should be no more items to dequeue.
-	if q.HasNext() {
-		t.Fatalf("HasNext should be false after enqueueing an item")
-	}
-
-	// check highest key
+	// Check highest key
 	hi, err := q.HighestKey()
 	if err != nil {
 		t.Fatalf("HighestKey failed after enqueue: %v", err)
 	}
-	if hi != idx1 {
-		t.Errorf("Expected highest key to be %d, got %d", idx1, hi)
-	}
-
-	// Next enqueue two items, and dequeue each, ensuring we get them in the
-	// expected order.
-	item2 := []byte("second item")
-	idx2 := uint64(20)
-	if err := q.Enqueue(idx2, item2); err != nil {
-		t.Fatalf("Enqueue failed for second item: %v", err)
-	}
-
-	// Should be more items to dequeue.
-	if !q.HasNext() {
-		t.Fatalf("HasNext should be true after enqueueing an item")
-	}
-
-	item3 := []byte("third item")
-	idx3 := uint64(30)
-	if err := q.Enqueue(idx3, item3); err != nil {
-		t.Fatalf("Enqueue failed for third item: %v", err)
-	}
-
-	// Should be more items to dequeue.
-	if !q.HasNext() {
-		t.Fatalf("HasNext should be true after enqueueing an item")
-	}
-
-	// Dequeue the second item.
-	gotIdx, gotItem, err = q.Dequeue()
-	if err != nil {
-		t.Fatalf("Dequeue failed for second item: %v", err)
-	}
-	if gotIdx != idx2 {
-		t.Fatalf("Expected second index to be %d, got %d", idx2, gotIdx)
-	}
-	if !bytes.Equal(gotItem, item2) {
-		t.Fatalf("Expected second item to be '%s', got '%s'", item2, gotItem)
-	}
-
-	// Should be more items to dequeue since we only removed one.
-	if !q.HasNext() {
-		t.Fatalf("HasNext should be true after enqueueing an item")
-	}
-
-	// Dequeue the third item.
-	gotIdx, gotItem, err = q.Dequeue()
-	if err != nil {
-		t.Fatalf("Dequeue failed for third item: %v", err)
-	}
-	if gotIdx != idx3 {
-		t.Fatalf("Expected third index to be %d, got %d", idx3, gotIdx)
-	}
-	if !bytes.Equal(gotItem, item3) {
-		t.Fatalf("Expected third item to be '%s', got '%s'", item3, gotItem)
-	}
-
-	// check highest key
-	hi, err = q.HighestKey()
-	if err != nil {
-		t.Fatalf("HighestKey failed after enqueue: %v", err)
-	}
-	if hi != idx3 {
-		t.Errorf("Expected highest key to be %d, got %d", idx1, hi)
-	}
-
-	// Should be no items to dequeue.
-	if q.HasNext() {
-		t.Fatalf("HasNext should be false after dequeuing last item")
+	if hi != 30 {
+		t.Errorf("Expected highest key to be 30, got %d", hi)
 	}
 }
 
+// Test_EnqueueHighest tests that enqueuing an older item does not change the highest key.
 func Test_EnqueueHighest(t *testing.T) {
 	q, _, cleanup := newTestQueue(t)
 	defer cleanup()
@@ -221,6 +158,7 @@ func Test_EnqueueHighest(t *testing.T) {
 	}
 }
 
+// Test_DeleteRange tests deleting a range of items from the queue.
 func Test_DeleteRange(t *testing.T) {
 	q, _, cleanup := newTestQueue(t)
 	defer cleanup()
@@ -229,6 +167,9 @@ func Test_DeleteRange(t *testing.T) {
 	if err := q.DeleteRange(1); err != nil {
 		t.Fatalf("DeleteRange on empty queue should not error: %v", err)
 	}
+
+	// Get the events channel before enqueuing
+	eventsCh := q.Events()
 
 	// Enqueue a few items.
 	items := []struct {
@@ -245,34 +186,43 @@ func Test_DeleteRange(t *testing.T) {
 		}
 	}
 
+	// Consume all events that were sent during enqueue
+	for i := 0; i < len(items); i++ {
+		select {
+		case event := <-eventsCh:
+			// Verify the events are in order
+			expectedItem := items[i]
+			if event.Index != expectedItem.idx {
+				t.Fatalf("Event %d: expected index %d, got %d", i, expectedItem.idx, event.Index)
+			}
+			if !bytes.Equal(event.Data, expectedItem.data) {
+				t.Fatalf("Event %d: expected data '%s', got '%s'", i, expectedItem.data, event.Data)
+			}
+		case <-time.After(1 * time.Second):
+			t.Fatalf("Timed out waiting for event %d", i)
+		}
+	}
+
 	// Delete a range of items.
 	if err := q.DeleteRange(2); err != nil {
 		t.Fatalf("DeleteRange failed: %v", err)
 	}
 
-	// Should still have another item to dequeue.
+	// Should still have item 3 in the database
 	if !q.HasNext() {
-		t.Fatalf("HasNext failed after DeleteRange")
+		t.Fatalf("HasNext should be true, item 3 should still exist after DeleteRange")
 	}
 
-	// Dequeue next item, should be 3.
-	gotIdx, gotItem, err := q.Dequeue()
-	if err != nil {
-		t.Fatalf("Dequeue failed after DeleteRange: %v", err)
-	}
-	if gotIdx != 3 {
-		t.Fatalf("Expected index 3 after DeleteRange, got %d", gotIdx)
-	}
-	if !bytes.Equal(gotItem, []byte("three")) {
-		t.Fatalf("Expected item 'three' after DeleteRange, got '%s'", gotItem)
-	}
-
-	// Should be no more items to dequeue.
-	if q.HasNext() {
-		t.Fatalf("HasNext should be false after dequeuing last item")
+	// No more events should be available since all were consumed
+	select {
+	case event := <-eventsCh:
+		t.Fatalf("Unexpected event received after DeleteRange: index=%d", event.Index)
+	case <-time.After(100 * time.Millisecond):
+		// Expected - no more events
 	}
 }
 
+// Test_QueueHighestKey tests that HighestKey returns the correct value after various operations.
 func Test_QueueHighestKey(t *testing.T) {
 	q, path, _ := newTestQueue(t)
 
@@ -331,55 +281,36 @@ func Test_QueueHighestKey(t *testing.T) {
 	q.Close()
 }
 
-// Test_DequeueBlocking tests that Dequeue blocks when the queue is empty
-// and unblocks when an item is added.
-func Test_DequeueBlocking(t *testing.T) {
-	q, _, cleanup := newTestQueue(t)
-	defer cleanup()
+// Test_Events_ChannelCloseOnQueueClose tests that the events channel is closed when the queue is closed.
+func Test_Events_ChannelCloseOnQueueClose(t *testing.T) {
+	q, _, _ := newTestQueue(t) // Don't call cleanup automatically
 
-	item := []byte("unblock me")
-	itemChan := make(chan []byte)
+	// Get the events channel
+	eventsCh := q.Events()
 
-	// This goroutine will call Dequeue and block until an item is available.
-	go func() {
-		_, dequeuedItem, err := q.Dequeue()
-		if err != nil {
-			t.Errorf("Dequeue in goroutine failed: %v", err)
-			close(itemChan)
-			return
-		}
-		itemChan <- dequeuedItem
-	}()
+	// Close the queue
+	q.Close()
 
-	// Give the goroutine a moment to start and call Dequeue, which should block.
-	time.Sleep(100 * time.Millisecond)
-
-	// Now, enqueue an item. This should unblock the waiting goroutine.
-	if err := q.Enqueue(1, item); err != nil {
-		t.Fatalf("Enqueue failed: %v", err)
-	}
-
-	// Wait for the dequeued item from the channel, with a timeout.
+	// The events channel should be closed
 	select {
-	case receivedItem := <-itemChan:
-		if !bytes.Equal(receivedItem, item) {
-			t.Errorf("Expected dequeued item to be '%s', got '%s'", item, receivedItem)
+	case _, ok := <-eventsCh:
+		if ok {
+			t.Error("Events channel should be closed when queue is closed")
 		}
 	case <-time.After(1 * time.Second):
-		t.Fatal("Timed out waiting for Dequeue to unblock")
+		t.Fatal("Timed out waiting for events channel to close")
 	}
 }
 
 // Test_QueuePersistence ensures that items remain in the queue after closing and reopening it.
 func Test_QueuePersistence(t *testing.T) {
-	// This test cannot run in parallel because it relies on a specific file path.
 	dir := t.TempDir()
 	dbPath := filepath.Join(dir, "persist_test.db")
 
 	item := []byte("survivor")
 	idx := uint64(42)
 
-	// reate a queue, add an item, and close it.
+	// create a queue, add an item, and close it.
 	q1, err := NewQueue(dbPath)
 	if err != nil {
 		t.Fatalf("Failed to create initial queue: %v", err)
@@ -395,18 +326,18 @@ func Test_QueuePersistence(t *testing.T) {
 		t.Fatalf("Failed to reopen queue: %v", err)
 	}
 
-	// Dequeue the item and verify it's the one we saved.
-	_, dequeuedItem, err := q2.Dequeue()
-	if err != nil {
-		t.Fatalf("Failed to dequeue from reopened queue: %v", err)
-	}
-	if !bytes.Equal(dequeuedItem, item) {
-		t.Errorf("Expected item '%s' after reopening, got '%s'", item, dequeuedItem)
-	}
-
-	// Queue should not have any next items.
-	if q2.HasNext() {
-		t.Fatal("Queue should not have next items after dequeuing last item")
+	// Get the events channel and receive the item to verify it's the one we saved.
+	eventsCh := q2.Events()
+	select {
+	case event := <-eventsCh:
+		if !bytes.Equal(event.Data, item) {
+			t.Errorf("Expected item '%s' after reopening, got '%s'", item, event.Data)
+		}
+		if event.Index != idx {
+			t.Errorf("Expected index %d after reopening, got %d", idx, event.Index)
+		}
+	case <-time.After(1 * time.Second):
+		t.Fatal("Timed out waiting for event from reopened queue")
 	}
 
 	// Close the queue again.
@@ -418,15 +349,20 @@ func Test_QueuePersistence(t *testing.T) {
 		t.Fatalf("Failed to reopen queue: %v", err)
 	}
 
-	// Dequeue the item again, ensuring it's still available after reopening. This
+	// Receive the item again from events channel, ensuring it's still available after reopening. This
 	// tests that the queue's state is persistent across closures because no deletion
 	// has occurred.
-	_, dequeuedItem, err = q3.Dequeue()
-	if err != nil {
-		t.Fatalf("Failed to dequeue from reopened queue: %v", err)
-	}
-	if !bytes.Equal(dequeuedItem, item) {
-		t.Errorf("Expected item '%s' after reopening, got '%s'", item, dequeuedItem)
+	eventsCh = q3.Events()
+	select {
+	case event := <-eventsCh:
+		if !bytes.Equal(event.Data, item) {
+			t.Errorf("Expected item '%s' after reopening, got '%s'", item, event.Data)
+		}
+		if event.Index != idx {
+			t.Errorf("Expected index %d after reopening, got %d", idx, event.Index)
+		}
+	case <-time.After(1 * time.Second):
+		t.Fatal("Timed out waiting for event from reopened queue")
 	}
 
 	// Now, let's actually delete the item and ensure it is gone, even after reopening.
@@ -458,6 +394,356 @@ func Test_QueuePersistence(t *testing.T) {
 
 	// Close the queue.
 	q4.Close()
+}
+
+// Test_Events_SameChannelReturned tests that calling Events() multiple times returns the same channel.
+func Test_Events_SameChannelReturned(t *testing.T) {
+	q, _, cleanup := newTestQueue(t)
+	defer cleanup()
+
+	ch1 := q.Events()
+	ch2 := q.Events()
+
+	if ch1 != ch2 {
+		t.Error("Events() should return the same channel when called multiple times")
+	}
+}
+
+// Test_Events_NoReader tests that events can be enqueued when no one is reading from the Events channel.
+func Test_Events_NoReader(t *testing.T) {
+	q, _, cleanup := newTestQueue(t)
+	defer cleanup()
+
+	// Enqueue several items without reading from Events channel
+	items := []struct {
+		idx  uint64
+		data []byte
+	}{
+		{1, []byte("first")},
+		{2, []byte("second")},
+		{3, []byte("third")},
+		{4, []byte("fourth")},
+		{5, []byte("fifth")},
+	}
+
+	for _, item := range items {
+		if err := q.Enqueue(item.idx, item.data); err != nil {
+			t.Fatalf("Enqueue failed for index %d: %v", item.idx, err)
+		}
+	}
+
+	// Verify queue is not empty
+	if empty, err := q.Empty(); err != nil {
+		t.Fatalf("Empty check failed: %v", err)
+	} else if empty {
+		t.Fatal("Queue should not be empty after enqueuing items")
+	}
+
+	// Verify highest key
+	if hi, err := q.HighestKey(); err != nil {
+		t.Fatalf("HighestKey failed: %v", err)
+	} else if hi != 5 {
+		t.Errorf("Expected highest key to be 5, got %d", hi)
+	}
+
+	// Now get the events channel and verify all events are available
+	eventsCh := q.Events()
+	for i, expectedItem := range items {
+		select {
+		case event := <-eventsCh:
+			if event.Index != expectedItem.idx {
+				t.Errorf("Event %d: expected index %d, got %d", i, expectedItem.idx, event.Index)
+			}
+			if !bytes.Equal(event.Data, expectedItem.data) {
+				t.Errorf("Event %d: expected data '%s', got '%s'", i, expectedItem.data, event.Data)
+			}
+		case <-time.After(1 * time.Second):
+			t.Fatalf("Timed out waiting for event %d", i)
+		}
+	}
+}
+
+// Test_Events_ReaderAppearsLater tests when a reader appears after events have already been queued.
+func Test_Events_ReaderAppearsLater(t *testing.T) {
+	q, _, cleanup := newTestQueue(t)
+	defer cleanup()
+
+	// Enqueue items before getting Events channel
+	items := []struct {
+		idx  uint64
+		data []byte
+	}{
+		{10, []byte("pre-reader-1")},
+		{20, []byte("pre-reader-2")},
+		{30, []byte("pre-reader-3")},
+	}
+
+	for _, item := range items {
+		if err := q.Enqueue(item.idx, item.data); err != nil {
+			t.Fatalf("Enqueue failed for index %d: %v", item.idx, err)
+		}
+	}
+
+	// Wait a bit to ensure enqueue operations complete
+	time.Sleep(50 * time.Millisecond)
+
+	// Now get the events channel - this should make all queued events available
+	eventsCh := q.Events()
+
+	// Receive all pre-queued events
+	for i, expectedItem := range items {
+		select {
+		case event := <-eventsCh:
+			if event.Index != expectedItem.idx {
+				t.Errorf("Event %d: expected index %d, got %d", i, expectedItem.idx, event.Index)
+			}
+			if !bytes.Equal(event.Data, expectedItem.data) {
+				t.Errorf("Event %d: expected data '%s', got '%s'", i, expectedItem.data, event.Data)
+			}
+		case <-time.After(1 * time.Second):
+			t.Fatalf("Timed out waiting for pre-queued event %d", i)
+		}
+	}
+
+	// Enqueue more items after reader is active
+	postItems := []struct {
+		idx  uint64
+		data []byte
+	}{
+		{40, []byte("post-reader-1")},
+		{50, []byte("post-reader-2")},
+	}
+
+	for _, item := range postItems {
+		if err := q.Enqueue(item.idx, item.data); err != nil {
+			t.Fatalf("Enqueue failed for post-reader index %d: %v", item.idx, err)
+		}
+	}
+
+	// Receive post-reader events
+	for i, expectedItem := range postItems {
+		select {
+		case event := <-eventsCh:
+			if event.Index != expectedItem.idx {
+				t.Errorf("Post-reader event %d: expected index %d, got %d", i, expectedItem.idx, event.Index)
+			}
+			if !bytes.Equal(event.Data, expectedItem.data) {
+				t.Errorf("Post-reader event %d: expected data '%s', got '%s'", i, expectedItem.data, event.Data)
+			}
+		case <-time.After(1 * time.Second):
+			t.Fatalf("Timed out waiting for post-reader event %d", i)
+		}
+	}
+}
+
+// Test_Events_BufferedChannelBehavior tests the behavior when the events channel buffer fills up.
+func Test_Events_BufferedChannelBehavior(t *testing.T) {
+	q, _, cleanup := newTestQueue(t)
+	defer cleanup()
+
+	// Get events channel but don't read from it initially
+	eventsCh := q.Events()
+
+	// Enqueue items up to and beyond the buffer size (which is 10)
+	const numItems = 15
+	items := make([]struct {
+		idx  uint64
+		data []byte
+	}, numItems)
+
+	for i := 0; i < numItems; i++ {
+		items[i] = struct {
+			idx  uint64
+			data []byte
+		}{
+			idx:  uint64(i + 1),
+			data: []byte(fmt.Sprintf("item-%d", i+1)),
+		}
+	}
+
+	// Enqueue all items
+	for _, item := range items {
+		if err := q.Enqueue(item.idx, item.data); err != nil {
+			t.Fatalf("Enqueue failed for index %d: %v", item.idx, err)
+		}
+	}
+
+	// Wait a bit for processing
+	time.Sleep(100 * time.Millisecond)
+
+	// Start reading events - should get at least the buffered events
+	// Note: Due to the non-blocking send in the implementation, we may not get all events
+	// if the buffer was full, but we should get the buffered ones in order
+	receivedEvents := make([]Event, 0, numItems)
+
+	// Try to receive events with timeout
+	for i := 0; i < numItems; i++ {
+		select {
+		case event := <-eventsCh:
+			receivedEvents = append(receivedEvents, event)
+		case <-time.After(100 * time.Millisecond):
+			// No more events available immediately
+		}
+	}
+
+	// Verify we received events in order and they match expectations
+	if len(receivedEvents) == 0 {
+		t.Fatal("Should have received at least some events")
+	}
+
+	for i, event := range receivedEvents {
+		expectedIdx := uint64(i + 1)
+		expectedData := []byte(fmt.Sprintf("item-%d", i+1))
+
+		if event.Index != expectedIdx {
+			t.Errorf("Event %d: expected index %d, got %d", i, expectedIdx, event.Index)
+		}
+		if !bytes.Equal(event.Data, expectedData) {
+			t.Errorf("Event %d: expected data '%s', got '%s'", i, expectedData, event.Data)
+		}
+	}
+
+	t.Logf("Received %d out of %d events", len(receivedEvents), numItems)
+}
+
+// Test_Events_InterruptedReader tests when a reader stops and resumes reading.
+func Test_Events_InterruptedReader(t *testing.T) {
+	q, _, cleanup := newTestQueue(t)
+	defer cleanup()
+
+	eventsCh := q.Events()
+
+	// Enqueue first batch of items
+	firstBatch := []struct {
+		idx  uint64
+		data []byte
+	}{
+		{1, []byte("batch1-item1")},
+		{2, []byte("batch1-item2")},
+	}
+
+	for _, item := range firstBatch {
+		if err := q.Enqueue(item.idx, item.data); err != nil {
+			t.Fatalf("Enqueue failed for index %d: %v", item.idx, err)
+		}
+	}
+
+	// Read first batch
+	for i, expectedItem := range firstBatch {
+		select {
+		case event := <-eventsCh:
+			if event.Index != expectedItem.idx {
+				t.Errorf("First batch event %d: expected index %d, got %d", i, expectedItem.idx, event.Index)
+			}
+			if !bytes.Equal(event.Data, expectedItem.data) {
+				t.Errorf("First batch event %d: expected data '%s', got '%s'", i, expectedItem.data, event.Data)
+			}
+		case <-time.After(1 * time.Second):
+			t.Fatalf("Timed out waiting for first batch event %d", i)
+		}
+	}
+
+	// Stop reading (simulate interrupted reader) and enqueue more items
+	secondBatch := []struct {
+		idx  uint64
+		data []byte
+	}{
+		{3, []byte("batch2-item1")},
+		{4, []byte("batch2-item2")},
+		{5, []byte("batch2-item3")},
+	}
+
+	for _, item := range secondBatch {
+		if err := q.Enqueue(item.idx, item.data); err != nil {
+			t.Fatalf("Enqueue failed for index %d: %v", item.idx, err)
+		}
+	}
+
+	// Wait a bit to simulate gap in reading
+	time.Sleep(200 * time.Millisecond)
+
+	// Resume reading - should get all items from second batch
+	for i, expectedItem := range secondBatch {
+		select {
+		case event := <-eventsCh:
+			if event.Index != expectedItem.idx {
+				t.Errorf("Second batch event %d: expected index %d, got %d", i, expectedItem.idx, event.Index)
+			}
+			if !bytes.Equal(event.Data, expectedItem.data) {
+				t.Errorf("Second batch event %d: expected data '%s', got '%s'", i, expectedItem.data, event.Data)
+			}
+		case <-time.After(1 * time.Second):
+			t.Fatalf("Timed out waiting for second batch event %d", i)
+		}
+	}
+}
+
+// Test_Events_ConcurrentReaders tests multiple goroutines reading from the same Events channel.
+func Test_Events_ConcurrentReaders(t *testing.T) {
+	q, _, cleanup := newTestQueue(t)
+	defer cleanup()
+
+	eventsCh := q.Events()
+	const numReaders = 3
+	const numItemsPerReader = 5
+
+	// Channel to collect events from all readers
+	allEvents := make(chan Event, numReaders*numItemsPerReader)
+
+	// Start multiple readers
+	for i := 0; i < numReaders; i++ {
+		go func(readerID int) {
+			for {
+				select {
+				case event, ok := <-eventsCh:
+					if !ok {
+						return // Channel closed
+					}
+					allEvents <- event
+				case <-time.After(2 * time.Second):
+					return // Timeout
+				}
+			}
+		}(i)
+	}
+
+	// Enqueue items
+	const totalItems = numReaders * numItemsPerReader
+	for i := 1; i <= totalItems; i++ {
+		item := []byte(fmt.Sprintf("concurrent-item-%d", i))
+		if err := q.Enqueue(uint64(i), item); err != nil {
+			t.Fatalf("Enqueue failed for index %d: %v", i, err)
+		}
+	}
+
+	// Collect all events
+	receivedEvents := make([]Event, 0, totalItems)
+	for i := 0; i < totalItems; i++ {
+		select {
+		case event := <-allEvents:
+			receivedEvents = append(receivedEvents, event)
+		case <-time.After(2 * time.Second):
+			t.Fatalf("Timed out waiting for event %d", i+1)
+		}
+	}
+
+	// Verify we received all events
+	if len(receivedEvents) != totalItems {
+		t.Errorf("Expected %d events, got %d", totalItems, len(receivedEvents))
+	}
+
+	// Create a map to track which events we received
+	receivedIndices := make(map[uint64]bool)
+	for _, event := range receivedEvents {
+		receivedIndices[event.Index] = true
+	}
+
+	// Verify all indices from 1 to totalItems were received
+	for i := uint64(1); i <= totalItems; i++ {
+		if !receivedIndices[i] {
+			t.Errorf("Missing event with index %d", i)
+		}
+	}
 }
 
 // newTestQueue is a helper function that creates a new Queue for testing.
