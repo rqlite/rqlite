@@ -2,6 +2,7 @@
 ### Implementation changes and bug fixes
 - [PR #2198](https://github.com/rqlite/rqlite/pull/2198): Refactor some of the database-level unit tests.
 - [PR #2197](https://github.com/rqlite/rqlite/pull/2197): CDC FIFO should provide events via a channel.
+- [PR #2200](https://github.com/rqlite/rqlite/pull/2200): CDC FIFO exposes read channel directly.
   
 ## v8.43.1 (August 3rd 2025)
 ### Implementation changes and bug fixes
