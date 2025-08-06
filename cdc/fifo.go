@@ -51,7 +51,10 @@ type Queue struct {
 	queryChan       chan queryReq
 	done            chan struct{}
 
-	// Events channel for consuming queue events (created at initialization)
+	// C is the channel for consuming queue events.
+	C <-chan Event
+
+	// eventsChan is the write-side of the C channel.
 	eventsChan chan Event
 
 	wg sync.WaitGroup
@@ -100,13 +103,15 @@ func NewQueue(path string) (*Queue, error) {
 		return nil, fmt.Errorf("failed to initialize buckets: %w", err)
 	}
 
+	eventsChan := make(chan Event, 10)
 	q := &Queue{
 		db:              db,
 		enqueueChan:     make(chan enqueueReq, queueBufferSize),
 		deleteRangeChan: make(chan deleteRangeReq),
 		queryChan:       make(chan queryReq),
 		done:            make(chan struct{}),
-		eventsChan:      make(chan Event, 10), // Buffered channel for events
+		eventsChan:      eventsChan,
+		C:               eventsChan,
 	}
 
 	q.wg.Add(1)
@@ -271,13 +276,6 @@ func (q *Queue) Enqueue(idx uint64, item []byte) error {
 	q.enqueueChan <- req
 	resp := <-req.respChan
 	return resp.err
-}
-
-// Events returns a channel that will receive events from the queue as they become available.
-// This provides a push-based interface for consuming events. The returned channel will be
-// closed when the queue is closed. This method always returns the same channel instance.
-func (q *Queue) Events() <-chan Event {
-	return q.eventsChan
 }
 
 // DeleteRange deletes all items in the queue with indices less than or equal to idx.
