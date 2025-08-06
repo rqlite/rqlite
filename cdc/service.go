@@ -122,7 +122,7 @@ type Service struct {
 
 	// queue implements the batching of CDC events before transmission to the webhook. The
 	// contents of this queue do not persist across restarts or leader changes.
-	queue *queue.Queue[*proto.CDCEvents]
+	batcher *queue.Queue[*proto.CDCEvents]
 
 	// highWatermark is the index of the last event that was successfully sent to the webhook
 	// by the cluster (which is not necessarily the same thing as this node).
@@ -175,7 +175,7 @@ func NewService(dir string, clstr Cluster, str Store, in <-chan *proto.CDCEvents
 		maxBatchSz:            cfg.MaxBatchSz,
 		maxBatchDelay:         cfg.MaxBatchDelay,
 		highWatermarkInterval: cfg.HighWatermarkInterval,
-		queue:                 queue.New[*proto.CDCEvents](cfg.MaxBatchSz, cfg.MaxBatchSz, cfg.MaxBatchDelay),
+		batcher:               queue.New[*proto.CDCEvents](cfg.MaxBatchSz, cfg.MaxBatchSz, cfg.MaxBatchDelay),
 		leaderObCh:            make(chan bool, leaderChanLen),
 		hwmObCh:               make(chan uint64, leaderChanLen),
 		done:                  make(chan struct{}),
@@ -238,7 +238,7 @@ func (s *Service) readEvents() {
 		case o := <-s.in:
 			// Right now just write the event to the queue. Events should be
 			// persisted to a disk-based queue for replay on Leader change.
-			s.queue.Write([]*proto.CDCEvents{o}, nil)
+			s.batcher.Write([]*proto.CDCEvents{o}, nil)
 		case <-s.done:
 			return
 		}
@@ -285,7 +285,7 @@ func (s *Service) mainLoop() {
 			// retrasmitting events from high-water mark. If we have become
 			// the leader then start reading from the batching queue.
 
-		case batch := <-s.queue.C:
+		case batch := <-s.batcher.C:
 			if batch == nil || len(batch.Objects) == 0 {
 				continue
 			}
