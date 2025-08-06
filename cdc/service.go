@@ -201,7 +201,7 @@ func (s *Service) Start() error {
 		}
 	}
 	s.wg.Add(2)
-	go s.readEvents()
+	go s.writeToFIFO()
 	go s.mainLoop()
 
 	s.clstr.RegisterLeaderChange(s.leaderObCh)
@@ -231,7 +231,7 @@ func (s *Service) HighWatermark() uint64 {
 	return s.highWatermark.Load()
 }
 
-func (s *Service) readEvents() {
+func (s *Service) writeToFIFO() {
 	defer s.wg.Done()
 	for {
 		select {
