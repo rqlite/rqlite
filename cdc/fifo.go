@@ -165,7 +165,7 @@ func (q *Queue) run(nextKey []byte, highestKey uint64) {
 					return nil
 				})
 				if err != nil {
-					break
+					return
 				}
 			default:
 				// Events channel is full, stop processing
@@ -174,7 +174,7 @@ func (q *Queue) run(nextKey []byte, highestKey uint64) {
 		}
 	}
 
-	// Send any existing events on startup
+	// Load any on-disk events into the channel
 	tryServeEvents()
 
 	for {
@@ -238,11 +238,6 @@ func (q *Queue) run(nextKey []byte, highestKey uint64) {
 			})
 			req.respChan <- err
 
-			// Try to send any available events after deletion
-			if err == nil {
-				tryServeEvents()
-			}
-
 		case req := <-q.queryChan:
 			var isEmpty bool
 			var hasNext bool
@@ -261,7 +256,6 @@ func (q *Queue) run(nextKey []byte, highestKey uint64) {
 			}
 
 		case <-q.triggerEventsChan:
-			// Client requested Events channel, trigger sending any pending events
 			tryServeEvents()
 
 		case <-q.done:

@@ -300,14 +300,13 @@ func Test_Events_ChannelCloseOnQueueClose(t *testing.T) {
 
 // Test_QueuePersistence ensures that items remain in the queue after closing and reopening it.
 func Test_QueuePersistence(t *testing.T) {
-	// This test cannot run in parallel because it relies on a specific file path.
 	dir := t.TempDir()
 	dbPath := filepath.Join(dir, "persist_test.db")
 
 	item := []byte("survivor")
 	idx := uint64(42)
 
-	// reate a queue, add an item, and close it.
+	// create a queue, add an item, and close it.
 	q1, err := NewQueue(dbPath)
 	if err != nil {
 		t.Fatalf("Failed to create initial queue: %v", err)
