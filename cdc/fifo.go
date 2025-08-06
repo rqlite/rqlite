@@ -271,8 +271,8 @@ func (q *Queue) run(nextKey []byte, highestKey uint64) {
 }
 
 // Enqueue adds an item to the queue. Do not call Enqueue on a closed queue.
-func (q *Queue) Enqueue(idx uint64, item []byte) error {
-	req := enqueueReq{idx: idx, item: item, respChan: make(chan enqueueResp)}
+func (q *Queue) Enqueue(ev *Event) error {
+	req := enqueueReq{idx: ev.Index, item: ev.Data, respChan: make(chan enqueueResp)}
 	q.enqueueChan <- req
 	resp := <-req.respChan
 	return resp.err
