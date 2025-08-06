@@ -272,6 +272,9 @@ func (q *Queue) run(nextKey []byte, highestKey uint64) {
 
 // Enqueue adds an item to the queue. Do not call Enqueue on a closed queue.
 func (q *Queue) Enqueue(ev *Event) error {
+	if ev == nil {
+		return errors.New("event cannot be nil")
+	}
 	req := enqueueReq{idx: ev.Index, item: ev.Data, respChan: make(chan enqueueResp)}
 	q.enqueueChan <- req
 	resp := <-req.respChan
