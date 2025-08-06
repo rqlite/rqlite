@@ -87,7 +87,10 @@ func NewQueue(path string) (*Queue, error) {
 		var innerErr error
 		c := tx.Bucket(bucketName).Cursor()
 		nk, _ := c.First()
-		copy(nextKey, nk)
+		if nk != nil {
+			nextKey = make([]byte, 8)
+			copy(nextKey, nk)
+		}
 		highestKey, innerErr = getHighestKey(tx)
 		if innerErr != nil {
 			return fmt.Errorf("failed to get highest key: %w", innerErr)
