@@ -5,7 +5,6 @@ go 1.23.8
 toolchain go1.23.9
 
 require (
-	github.com/Bowery/prompt v0.0.0-20190916142128-fa8279994f75
 	github.com/aws/aws-sdk-go-v2 v1.37.1
 	github.com/aws/aws-sdk-go-v2/config v1.30.2
 	github.com/aws/aws-sdk-go-v2/credentials v1.18.2
@@ -16,6 +15,7 @@ require (
 	github.com/mattn/go-sqlite3 v1.14.30
 	github.com/mkideal/cli v0.2.7
 	github.com/mkideal/pkg v0.1.3
+	github.com/peterh/liner v1.2.2
 	github.com/rqlite/raft-boltdb/v2 v2.0.0-20230523104317-c08e70f4de48
 	github.com/rqlite/rqlite-disco-clients v0.0.0-20250205044118-8ada2b350099
 	github.com/rqlite/sql v0.0.0-20250623131620-453fa49cad04
@@ -60,6 +60,7 @@ require (
 	github.com/labstack/gommon v0.4.2 // indirect
 	github.com/mattn/go-colorable v0.1.14 // indirect
 	github.com/mattn/go-isatty v0.0.20 // indirect
+	github.com/mattn/go-runewidth v0.0.3 // indirect
 	github.com/mitchellh/go-homedir v1.1.0 // indirect
 	github.com/mitchellh/mapstructure v1.5.0 // indirect
 	github.com/mkideal/expr v0.1.0 // indirect

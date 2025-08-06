@@ -15,9 +15,9 @@ import (
 	"strings"
 	"syscall"
 
-	"github.com/Bowery/prompt"
 	"github.com/mkideal/cli"
 	clix "github.com/mkideal/cli/ext"
+	"github.com/peterh/liner"
 	"github.com/rqlite/rqlite/v8/cmd"
 	"github.com/rqlite/rqlite/v8/cmd/rqlite/history"
 	httpcl "github.com/rqlite/rqlite/v8/cmd/rqlite/http"
@@ -139,19 +139,17 @@ func main() {
 		timer := false
 		consistency := "weak"
 		prefix := fmt.Sprintf("%s>", address6(argv))
-		term, err := prompt.NewTerminal()
-		if err != nil {
-			ctx.String("%s %v\n", ctx.Color().Red("ERR!"), err)
-			return nil
-		}
-		term.Close()
+
+		// Set up line editing with liner
+		line := liner.NewLiner()
+		defer line.Close()
 
 		// Set up command history.
 		hr := history.Reader()
 		if hr != nil {
-			histCmds, err := history.Read(hr)
-			if err == nil {
-				term.History = histCmds
+			_, err := line.ReadHistory(hr)
+			if err != nil {
+				// If reading history fails, it's not critical - just continue
 			}
 			hr.Close()
 		}
@@ -164,35 +162,36 @@ func main() {
 
 	FOR_READ:
 		for {
-			term.Reopen()
-			line, err := term.Basic(prefix, false)
-			term.Close()
+			input, err := line.Prompt(prefix + " ")
 			if err != nil {
-				if errors.Is(err, prompt.ErrEOF) {
+				if err == liner.ErrPromptAborted {
+					break FOR_READ
+				}
+				if err == io.EOF {
 					break FOR_READ
 				}
 				return err
 			}
 
-			line = strings.TrimSpace(line)
-			if line == "" {
+			input = strings.TrimSpace(input)
+			if input == "" {
 				continue
 			}
 			var (
-				index = strings.Index(line, " ")
-				cmd   = line
+				index = strings.Index(input, " ")
+				cmd   = input
 			)
 			if index >= 0 {
-				cmd = line[:index]
+				cmd = input[:index]
 			}
 			cmd = strings.ToUpper(cmd)
 			switch cmd {
 			case ".CONSISTENCY":
-				if index == -1 || index == len(line)-1 {
+				if index == -1 || index == len(input)-1 {
 					ctx.String("%s\n", consistency)
 					break
 				}
-				err = setConsistency(line[index+1:], &consistency)
+				err = setConsistency(input[index+1:], &consistency)
 			case ".EXTENSIONS":
 				err = extensions(ctx, client, cmd, argv)
 			case ".TABLES":
@@ -202,53 +201,53 @@ func main() {
 			case ".SCHEMA":
 				err = queryWithClient(ctx, client, timer, blobArray, consistency, `SELECT sql FROM sqlite_master`)
 			case ".TIMER":
-				err = toggleFlag(line[index+1:], &timer)
+				err = toggleFlag(input[index+1:], &timer)
 			case ".BLOBARRAY":
-				err = toggleFlag(line[index+1:], &blobArray)
+				err = toggleFlag(input[index+1:], &blobArray)
 			case ".STATUS":
 				err = status(ctx, client, cmd, argv)
 			case ".READY":
 				err = ready(ctx, client, argv)
 			case ".NODES":
-				if index == -1 || index == len(line)-1 {
-					err = nodes(ctx, client, cmd, line, argv, false)
+				if index == -1 || index == len(input)-1 {
+					err = nodes(ctx, client, cmd, input, argv, false)
 					break
 				}
-				err = nodes(ctx, client, cmd, line, argv, true)
+				err = nodes(ctx, client, cmd, input, argv, true)
 			case ".EXPVAR":
-				err = expvar(ctx, client, cmd, line, argv)
+				err = expvar(ctx, client, cmd, input, argv)
 			case ".REMOVE":
-				err = removeNode(client, line[index+1:], argv)
+				err = removeNode(client, input[index+1:], argv)
 			case ".BACKUP":
-				if index == -1 || index == len(line)-1 {
+				if index == -1 || index == len(input)-1 {
 					err = fmt.Errorf("please specify an output file for the backup")
 					break
 				}
-				err = backup(ctx, line[index+1:], argv)
+				err = backup(ctx, input[index+1:], argv)
 			case ".RESTORE":
-				if index == -1 || index == len(line)-1 {
+				if index == -1 || index == len(input)-1 {
 					err = fmt.Errorf("please specify an input file to restore from")
 					break
 				}
-				err = restore(ctx, line[index+1:], argv)
+				err = restore(ctx, input[index+1:], argv)
 			case ".BOOT":
-				if index == -1 || index == len(line)-1 {
+				if index == -1 || index == len(input)-1 {
 					err = fmt.Errorf("please specify an input file to boot with")
 					break
 				}
-				err = boot(ctx, line[index+1:], argv)
+				err = boot(ctx, input[index+1:], argv)
 			case ".SYSDUMP":
-				if index == -1 || index == len(line)-1 {
+				if index == -1 || index == len(input)-1 {
 					err = fmt.Errorf("please specify an output file for the sysdump")
 					break
 				}
-				err = sysdump(ctx, httpClient, line[index+1:], argv)
+				err = sysdump(ctx, httpClient, input[index+1:], argv)
 			case ".DUMP":
-				if index == -1 || index == len(line)-1 {
+				if index == -1 || index == len(input)-1 {
 					err = fmt.Errorf("please specify an output file for the SQL text")
 					break
 				}
-				args := strings.Fields(line[index+1:])
+				args := strings.Fields(input[index+1:])
 				if len(args) == 0 {
 					err = fmt.Errorf("please specify an output file for the SQL text")
 					break
@@ -278,14 +277,14 @@ func main() {
 				err = snapshot(client, argv)
 			case ".STEPDOWN":
 				nodeID := ""
-				if index != -1 && index < len(line)-1 {
-					nodeID = strings.TrimSpace(line[index+1:])
+				if index != -1 && index < len(input)-1 {
+					nodeID = strings.TrimSpace(input[index+1:])
 				}
 				err = stepdown(client, nodeID, argv)
 			case "SELECT", "PRAGMA":
-				err = queryWithClient(ctx, client, timer, blobArray, consistency, line)
+				err = queryWithClient(ctx, client, timer, blobArray, consistency, input)
 			default:
-				err = executeWithClient(ctx, client, timer, line)
+				err = executeWithClient(ctx, client, timer, input)
 			}
 			if hcerr, ok := err.(*httpcl.HostChangedError); ok {
 				// If a previous request was executed on a different host, make that change
@@ -301,9 +300,10 @@ func main() {
 		hw := history.Writer()
 		if hw != nil {
 			sz := history.Size()
-			history.Write(term.History, sz, hw)
+			// Write history using liner's WriteHistory method
+			_, err := line.WriteHistory(hw)
 			hw.Close()
-			if sz <= 0 {
+			if err != nil || sz <= 0 {
 				history.Delete()
 			}
 		}
