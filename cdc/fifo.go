@@ -278,7 +278,6 @@ func (q *Queue) Enqueue(idx uint64, item []byte) error {
 	return resp.err
 }
 
-
 // DeleteRange deletes all items in the queue with indices less than or equal to idx.
 func (q *Queue) DeleteRange(idx uint64) error {
 	req := deleteRangeReq{
