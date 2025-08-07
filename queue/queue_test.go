@@ -131,6 +131,27 @@ func Test_NewQueueWriteNil(t *testing.T) {
 	}
 }
 
+func Test_NewQueueWriteOne(t *testing.T) {
+	q := New[*command.Statement](1024, 1, 60*time.Second)
+	defer q.Close()
+
+	if _, err := q.WriteOne(testStmtFoo, nil); err != nil {
+		t.Fatalf("failed to write: %s", err.Error())
+	}
+
+	select {
+	case req := <-q.C:
+		if exp, got := 1, len(req.Objects); exp != got {
+			t.Fatalf("received wrong length slice, exp %d, got %d", exp, got)
+		}
+		if !reflect.DeepEqual(req.Objects[0], testStmtFoo) {
+			t.Fatalf("received wrong statement, got: %v, want: %v", req.Objects[0], testStmtFoo)
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatalf("timed out waiting for statement")
+	}
+}
+
 func Test_NewQueueWriteBatchSizeSingle(t *testing.T) {
 	q := New[*command.Statement](1024, 1, 60*time.Second)
 	defer q.Close()

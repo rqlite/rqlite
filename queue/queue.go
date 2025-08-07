@@ -150,6 +150,12 @@ func (q *Queue[T]) Write(objects []T, c FlushChannel) (int64, error) {
 	return q.seqNum, nil
 }
 
+// WriteOne queues a single object, and returns a monotonically increasing
+// sequence number associated with the object. See Write() for more details.
+func (q *Queue[T]) WriteOne(object T, c FlushChannel) (int64, error) {
+	return q.Write([]T{object}, c)
+}
+
 // Flush flushes the queue
 func (q *Queue[T]) Flush() error {
 	q.flush <- struct{}{}
