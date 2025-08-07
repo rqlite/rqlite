@@ -60,7 +60,7 @@ func Test_MarshalUnmarshal_CDCIndexedEventGroup(t *testing.T) {
 				t.Fatalf("failed to marshal CDCIndexedEventGroup: %v", err)
 			}
 
-			unmarshaledEvents, err := UnmarshalCDCIndexedChangeSet(data)
+			unmarshaledEvents, err := UnmarshalCDCIndexedEventGroup(data)
 			if err != nil {
 				t.Fatalf("failed to unmarshal CDCIndexedEventGroup: %v", err)
 			}

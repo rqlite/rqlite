@@ -5,7 +5,7 @@ import (
 	pb "google.golang.org/protobuf/proto"
 )
 
-// MarshalCDCIndexedChangeSet marshals a CDCIndexedChangeSet object into a byte slice.
+// MarshalCDCIndexedEventGroup marshals a CDCIndexedChangeSet object into a byte slice.
 func MarshalCDCIndexedEventGroup(e *proto.CDCIndexedEventGroup) ([]byte, error) {
 	if e == nil {
 		return nil, nil
@@ -13,8 +13,8 @@ func MarshalCDCIndexedEventGroup(e *proto.CDCIndexedEventGroup) ([]byte, error) 
 	return pb.Marshal(e)
 }
 
-// UnmarshalCDCIndexedChangeSet unmarshals a byte slice into a CDCIndexedChangeSet object.
-func UnmarshalCDCIndexedChangeSet(data []byte) (*proto.CDCIndexedEventGroup, error) {
+// UnmarshalCDCIndexedEventGroup unmarshals a byte slice into a CDCIndexedChangeSet object.
+func UnmarshalCDCIndexedEventGroup(data []byte) (*proto.CDCIndexedEventGroup, error) {
 	if data == nil {
 		return nil, nil
 	}
