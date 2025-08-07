@@ -1,6 +1,7 @@
 ## v8.43.3 (unreleased)
 ### Implementation changes and bug fixes
 - [PR #2204](https://github.com/rqlite/rqlite/pull/2204): Add byte-marshalling for CDC Events.
+- [PR #2205](https://github.com/rqlite/rqlite/pull/2205): Improve CDC Protobuf naming.
 
 ## v8.43.2 (August 6th 2025)
 ### Implementation changes and bug fixes
