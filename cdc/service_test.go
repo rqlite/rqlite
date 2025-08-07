@@ -50,6 +50,9 @@ func Test_ServiceSingleEvent(t *testing.T) {
 	}
 	defer svc.Stop()
 
+	// Make it the leader.
+	cl.SignalLeaderChange(true)
+
 	// Send one dummy event to the service.
 	ev := &proto.CDCEvent{
 		Op:       proto.CDCEvent_INSERT,
