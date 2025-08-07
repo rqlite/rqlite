@@ -5,20 +5,20 @@ import (
 	pb "google.golang.org/protobuf/proto"
 )
 
-// MarshalCDCEvents marshals a CDCEvents object into a byte slice.
-func MarshalCDCEvents(e *proto.CDCEvents) ([]byte, error) {
+// MarshalCDCIndexedEventGroup marshals a CDCIndexedChangeSet object into a byte slice.
+func MarshalCDCIndexedEventGroup(e *proto.CDCIndexedEventGroup) ([]byte, error) {
 	if e == nil {
 		return nil, nil
 	}
 	return pb.Marshal(e)
 }
 
-// UnmarshalCDCEvents unmarshals a byte slice into a CDCEvents object.
-func UnmarshalCDCEvents(data []byte) (*proto.CDCEvents, error) {
+// UnmarshalCDCIndexedEventGroup unmarshals a byte slice into a CDCIndexedChangeSet object.
+func UnmarshalCDCIndexedEventGroup(data []byte) (*proto.CDCIndexedEventGroup, error) {
 	if data == nil {
 		return nil, nil
 	}
-	e := &proto.CDCEvents{}
+	e := &proto.CDCIndexedEventGroup{}
 	if err := pb.Unmarshal(data, e); err != nil {
 		return nil, err
 	}

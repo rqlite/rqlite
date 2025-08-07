@@ -7,14 +7,14 @@ import (
 	pb "google.golang.org/protobuf/proto"
 )
 
-func Test_MarshalUnmarshal_CDCEvents(t *testing.T) {
+func Test_MarshalUnmarshal_CDCIndexedEventGroup(t *testing.T) {
 	testCases := []struct {
 		name   string
-		events *proto.CDCEvents
+		events *proto.CDCIndexedEventGroup
 	}{
 		{
 			name: "full event with all data types",
-			events: &proto.CDCEvents{
+			events: &proto.CDCIndexedEventGroup{
 				Events: []*proto.CDCEvent{
 					{
 						Op:    proto.CDCEvent_INSERT,
@@ -41,11 +41,11 @@ func Test_MarshalUnmarshal_CDCEvents(t *testing.T) {
 		},
 		{
 			name:   "empty events slice",
-			events: &proto.CDCEvents{Events: []*proto.CDCEvent{}},
+			events: &proto.CDCIndexedEventGroup{Events: []*proto.CDCEvent{}},
 		},
 		{
 			name:   "nil events slice",
-			events: &proto.CDCEvents{Events: nil},
+			events: &proto.CDCIndexedEventGroup{Events: nil},
 		},
 		{
 			name:   "nil events object",
@@ -55,14 +55,14 @@ func Test_MarshalUnmarshal_CDCEvents(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			data, err := MarshalCDCEvents(tc.events)
+			data, err := MarshalCDCIndexedEventGroup(tc.events)
 			if err != nil {
-				t.Fatalf("failed to marshal CDCEvents: %v", err)
+				t.Fatalf("failed to marshal CDCIndexedEventGroup: %v", err)
 			}
 
-			unmarshaledEvents, err := UnmarshalCDCEvents(data)
+			unmarshaledEvents, err := UnmarshalCDCIndexedEventGroup(data)
 			if err != nil {
-				t.Fatalf("failed to unmarshal CDCEvents: %v", err)
+				t.Fatalf("failed to unmarshal CDCIndexedEventGroup: %v", err)
 			}
 
 			if !pb.Equal(unmarshaledEvents, tc.events) {

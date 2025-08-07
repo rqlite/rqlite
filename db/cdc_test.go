@@ -8,7 +8,7 @@ import (
 )
 
 func Test_NewCDCStreamer(t *testing.T) {
-	ch := make(chan *command.CDCEvents, 10)
+	ch := make(chan *command.CDCIndexedEventGroup, 10)
 	streamer := NewCDCStreamer(ch)
 	if streamer == nil {
 		t.Fatalf("expected CDCStreamer to be created, got nil")
@@ -19,7 +19,7 @@ func Test_NewCDCStreamer(t *testing.T) {
 }
 
 func Test_NewCDCStreamer_CommitEmpty(t *testing.T) {
-	ch := make(chan *command.CDCEvents, 10)
+	ch := make(chan *command.CDCIndexedEventGroup, 10)
 	streamer := NewCDCStreamer(ch)
 
 	streamer.Reset(1234)
@@ -41,7 +41,7 @@ func Test_NewCDCStreamer_CommitEmpty(t *testing.T) {
 }
 
 func Test_NewCDCStreamer_CommitOne(t *testing.T) {
-	ch := make(chan *command.CDCEvents, 10)
+	ch := make(chan *command.CDCIndexedEventGroup, 10)
 	streamer := NewCDCStreamer(ch)
 
 	streamer.Reset(5678)
@@ -73,7 +73,7 @@ func Test_NewCDCStreamer_CommitOne(t *testing.T) {
 }
 
 func Test_NewCDCStreamer_CommitTwo(t *testing.T) {
-	ch := make(chan *command.CDCEvents, 10)
+	ch := make(chan *command.CDCIndexedEventGroup, 10)
 	streamer := NewCDCStreamer(ch)
 
 	streamer.Reset(9012)
@@ -121,7 +121,7 @@ func Test_NewCDCStreamer_CommitTwo(t *testing.T) {
 // when  predupdate is called followed by a reset. It ensures that the reset
 // clears out any pending events.
 func Test_NewCDCStreamer_ResetThenPreupdate(t *testing.T) {
-	ch := make(chan *command.CDCEvents, 10)
+	ch := make(chan *command.CDCIndexedEventGroup, 10)
 	streamer := NewCDCStreamer(ch)
 
 	streamer.Reset(1234)

@@ -28,7 +28,7 @@ type CDCMessageEvent struct {
 }
 
 // MarshalToEnvelopeJSON converts a slice of CDC events to a JSON envelope format.
-func MarshalToEnvelopeJSON(evs []*proto.CDCEvents) ([]byte, error) {
+func MarshalToEnvelopeJSON(evs []*proto.CDCIndexedEventGroup) ([]byte, error) {
 	if len(evs) == 0 {
 		return nil, nil
 	}

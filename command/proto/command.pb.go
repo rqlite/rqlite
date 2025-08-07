@@ -1834,7 +1834,7 @@ func (x *CDCEvent) GetNewRow() *CDCRow {
 	return nil
 }
 
-type CDCEvents struct {
+type CDCIndexedEventGroup struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Index         uint64                 `protobuf:"varint,1,opt,name=index,proto3" json:"index,omitempty"`
 	Events        []*CDCEvent            `protobuf:"bytes,2,rep,name=events,proto3" json:"events,omitempty"`
@@ -1842,20 +1842,20 @@ type CDCEvents struct {
 	sizeCache     protoimpl.SizeCache
 }
 
-func (x *CDCEvents) Reset() {
-	*x = CDCEvents{}
+func (x *CDCIndexedEventGroup) Reset() {
+	*x = CDCIndexedEventGroup{}
 	mi := &file_command_proto_msgTypes[22]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
 
-func (x *CDCEvents) String() string {
+func (x *CDCIndexedEventGroup) String() string {
 	return protoimpl.X.MessageStringOf(x)
 }
 
-func (*CDCEvents) ProtoMessage() {}
+func (*CDCIndexedEventGroup) ProtoMessage() {}
 
-func (x *CDCEvents) ProtoReflect() protoreflect.Message {
+func (x *CDCIndexedEventGroup) ProtoReflect() protoreflect.Message {
 	mi := &file_command_proto_msgTypes[22]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
@@ -1867,46 +1867,46 @@ func (x *CDCEvents) ProtoReflect() protoreflect.Message {
 	return mi.MessageOf(x)
 }
 
-// Deprecated: Use CDCEvents.ProtoReflect.Descriptor instead.
-func (*CDCEvents) Descriptor() ([]byte, []int) {
+// Deprecated: Use CDCIndexedEventGroup.ProtoReflect.Descriptor instead.
+func (*CDCIndexedEventGroup) Descriptor() ([]byte, []int) {
 	return file_command_proto_rawDescGZIP(), []int{22}
 }
 
-func (x *CDCEvents) GetIndex() uint64 {
+func (x *CDCIndexedEventGroup) GetIndex() uint64 {
 	if x != nil {
 		return x.Index
 	}
 	return 0
 }
 
-func (x *CDCEvents) GetEvents() []*CDCEvent {
+func (x *CDCIndexedEventGroup) GetEvents() []*CDCEvent {
 	if x != nil {
 		return x.Events
 	}
 	return nil
 }
 
-type CDCEventsBatch struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Payload       []*CDCEvents           `protobuf:"bytes,1,rep,name=payload,proto3" json:"payload,omitempty"`
+type CDCIndexedEventGroupBatch struct {
+	state         protoimpl.MessageState  `protogen:"open.v1"`
+	Payload       []*CDCIndexedEventGroup `protobuf:"bytes,1,rep,name=payload,proto3" json:"payload,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
 
-func (x *CDCEventsBatch) Reset() {
-	*x = CDCEventsBatch{}
+func (x *CDCIndexedEventGroupBatch) Reset() {
+	*x = CDCIndexedEventGroupBatch{}
 	mi := &file_command_proto_msgTypes[23]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
 
-func (x *CDCEventsBatch) String() string {
+func (x *CDCIndexedEventGroupBatch) String() string {
 	return protoimpl.X.MessageStringOf(x)
 }
 
-func (*CDCEventsBatch) ProtoMessage() {}
+func (*CDCIndexedEventGroupBatch) ProtoMessage() {}
 
-func (x *CDCEventsBatch) ProtoReflect() protoreflect.Message {
+func (x *CDCIndexedEventGroupBatch) ProtoReflect() protoreflect.Message {
 	mi := &file_command_proto_msgTypes[23]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
@@ -1918,12 +1918,12 @@ func (x *CDCEventsBatch) ProtoReflect() protoreflect.Message {
 	return mi.MessageOf(x)
 }
 
-// Deprecated: Use CDCEventsBatch.ProtoReflect.Descriptor instead.
-func (*CDCEventsBatch) Descriptor() ([]byte, []int) {
+// Deprecated: Use CDCIndexedEventGroupBatch.ProtoReflect.Descriptor instead.
+func (*CDCIndexedEventGroupBatch) Descriptor() ([]byte, []int) {
 	return file_command_proto_rawDescGZIP(), []int{23}
 }
 
-func (x *CDCEventsBatch) GetPayload() []*CDCEvents {
+func (x *CDCIndexedEventGroupBatch) GetPayload() []*CDCIndexedEventGroup {
 	if x != nil {
 		return x.Payload
 	}
@@ -2143,12 +2143,12 @@ const file_command_proto_rawDesc = "" +
 	"\n" +
 	"\x06UPDATE\x10\x02\x12\n" +
 	"\n" +
-	"\x06DELETE\x10\x03\"L\n" +
-	"\tCDCEvents\x12\x14\n" +
+	"\x06DELETE\x10\x03\"W\n" +
+	"\x14CDCIndexedEventGroup\x12\x14\n" +
 	"\x05index\x18\x01 \x01(\x04R\x05index\x12)\n" +
-	"\x06events\x18\x02 \x03(\v2\x11.command.CDCEventR\x06events\">\n" +
-	"\x0eCDCEventsBatch\x12,\n" +
-	"\apayload\x18\x01 \x03(\v2\x12.command.CDCEventsR\apayload\"\xc6\x01\n" +
+	"\x06events\x18\x02 \x03(\v2\x11.command.CDCEventR\x06events\"T\n" +
+	"\x19CDCIndexedEventGroupBatch\x127\n" +
+	"\apayload\x18\x01 \x03(\v2\x1d.command.CDCIndexedEventGroupR\apayload\"\xc6\x01\n" +
 	"\x0fUpdateHookEvent\x12\x14\n" +
 	"\x05error\x18\x01 \x01(\tR\x05error\x122\n" +
 	"\x02op\x18\x02 \x01(\x0e2\".command.UpdateHookEvent.OperationR\x02op\x12\x14\n" +
@@ -2178,36 +2178,36 @@ func file_command_proto_rawDescGZIP() []byte {
 var file_command_proto_enumTypes = make([]protoimpl.EnumInfo, 5)
 var file_command_proto_msgTypes = make([]protoimpl.MessageInfo, 25)
 var file_command_proto_goTypes = []any{
-	(QueryRequest_Level)(0),        // 0: command.QueryRequest.Level
-	(BackupRequest_Format)(0),      // 1: command.BackupRequest.Format
-	(Command_Type)(0),              // 2: command.Command.Type
-	(CDCEvent_Operation)(0),        // 3: command.CDCEvent.Operation
-	(UpdateHookEvent_Operation)(0), // 4: command.UpdateHookEvent.Operation
-	(*Parameter)(nil),              // 5: command.Parameter
-	(*Statement)(nil),              // 6: command.Statement
-	(*Request)(nil),                // 7: command.Request
-	(*QueryRequest)(nil),           // 8: command.QueryRequest
-	(*Values)(nil),                 // 9: command.Values
-	(*QueryRows)(nil),              // 10: command.QueryRows
-	(*ExecuteRequest)(nil),         // 11: command.ExecuteRequest
-	(*ExecuteResult)(nil),          // 12: command.ExecuteResult
-	(*ExecuteQueryRequest)(nil),    // 13: command.ExecuteQueryRequest
-	(*ExecuteQueryResponse)(nil),   // 14: command.ExecuteQueryResponse
-	(*BackupRequest)(nil),          // 15: command.BackupRequest
-	(*LoadRequest)(nil),            // 16: command.LoadRequest
-	(*LoadChunkRequest)(nil),       // 17: command.LoadChunkRequest
-	(*JoinRequest)(nil),            // 18: command.JoinRequest
-	(*NotifyRequest)(nil),          // 19: command.NotifyRequest
-	(*RemoveNodeRequest)(nil),      // 20: command.RemoveNodeRequest
-	(*StepdownRequest)(nil),        // 21: command.StepdownRequest
-	(*Noop)(nil),                   // 22: command.Noop
-	(*Command)(nil),                // 23: command.Command
-	(*CDCValue)(nil),               // 24: command.CDCValue
-	(*CDCRow)(nil),                 // 25: command.CDCRow
-	(*CDCEvent)(nil),               // 26: command.CDCEvent
-	(*CDCEvents)(nil),              // 27: command.CDCEvents
-	(*CDCEventsBatch)(nil),         // 28: command.CDCEventsBatch
-	(*UpdateHookEvent)(nil),        // 29: command.UpdateHookEvent
+	(QueryRequest_Level)(0),           // 0: command.QueryRequest.Level
+	(BackupRequest_Format)(0),         // 1: command.BackupRequest.Format
+	(Command_Type)(0),                 // 2: command.Command.Type
+	(CDCEvent_Operation)(0),           // 3: command.CDCEvent.Operation
+	(UpdateHookEvent_Operation)(0),    // 4: command.UpdateHookEvent.Operation
+	(*Parameter)(nil),                 // 5: command.Parameter
+	(*Statement)(nil),                 // 6: command.Statement
+	(*Request)(nil),                   // 7: command.Request
+	(*QueryRequest)(nil),              // 8: command.QueryRequest
+	(*Values)(nil),                    // 9: command.Values
+	(*QueryRows)(nil),                 // 10: command.QueryRows
+	(*ExecuteRequest)(nil),            // 11: command.ExecuteRequest
+	(*ExecuteResult)(nil),             // 12: command.ExecuteResult
+	(*ExecuteQueryRequest)(nil),       // 13: command.ExecuteQueryRequest
+	(*ExecuteQueryResponse)(nil),      // 14: command.ExecuteQueryResponse
+	(*BackupRequest)(nil),             // 15: command.BackupRequest
+	(*LoadRequest)(nil),               // 16: command.LoadRequest
+	(*LoadChunkRequest)(nil),          // 17: command.LoadChunkRequest
+	(*JoinRequest)(nil),               // 18: command.JoinRequest
+	(*NotifyRequest)(nil),             // 19: command.NotifyRequest
+	(*RemoveNodeRequest)(nil),         // 20: command.RemoveNodeRequest
+	(*StepdownRequest)(nil),           // 21: command.StepdownRequest
+	(*Noop)(nil),                      // 22: command.Noop
+	(*Command)(nil),                   // 23: command.Command
+	(*CDCValue)(nil),                  // 24: command.CDCValue
+	(*CDCRow)(nil),                    // 25: command.CDCRow
+	(*CDCEvent)(nil),                  // 26: command.CDCEvent
+	(*CDCIndexedEventGroup)(nil),      // 27: command.CDCIndexedEventGroup
+	(*CDCIndexedEventGroupBatch)(nil), // 28: command.CDCIndexedEventGroupBatch
+	(*UpdateHookEvent)(nil),           // 29: command.UpdateHookEvent
 }
 var file_command_proto_depIdxs = []int32{
 	5,  // 0: command.Statement.parameters:type_name -> command.Parameter
@@ -2227,8 +2227,8 @@ var file_command_proto_depIdxs = []int32{
 	3,  // 14: command.CDCEvent.op:type_name -> command.CDCEvent.Operation
 	25, // 15: command.CDCEvent.old_row:type_name -> command.CDCRow
 	25, // 16: command.CDCEvent.new_row:type_name -> command.CDCRow
-	26, // 17: command.CDCEvents.events:type_name -> command.CDCEvent
-	27, // 18: command.CDCEventsBatch.payload:type_name -> command.CDCEvents
+	26, // 17: command.CDCIndexedEventGroup.events:type_name -> command.CDCEvent
+	27, // 18: command.CDCIndexedEventGroupBatch.payload:type_name -> command.CDCIndexedEventGroup
 	4,  // 19: command.UpdateHookEvent.op:type_name -> command.UpdateHookEvent.Operation
 	20, // [20:20] is the sub-list for method output_type
 	20, // [20:20] is the sub-list for method input_type
