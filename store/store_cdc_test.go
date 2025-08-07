@@ -23,7 +23,7 @@ func Test_StoreEnableCDC(t *testing.T) {
 	}
 
 	// Create a channel for CDC events
-	ch := make(chan *proto.CDCEvents, 10)
+	ch := make(chan *proto.CDCIndexedEventGroup, 10)
 
 	// Enable CDC
 	if err := s.EnableCDC(ch, false); err != nil {
@@ -52,8 +52,8 @@ func Test_StoreEnableDisableCDC(t *testing.T) {
 		t.Fatalf("failed to open store: %v", err)
 	}
 
-	ch1 := make(chan *proto.CDCEvents, 10)
-	ch2 := make(chan *proto.CDCEvents, 10)
+	ch1 := make(chan *proto.CDCIndexedEventGroup, 10)
+	ch2 := make(chan *proto.CDCIndexedEventGroup, 10)
 
 	// Enable CDC with first channel
 	if err := s.EnableCDC(ch1, false); err != nil {
@@ -94,7 +94,7 @@ func Test_StoreCDC_Events_Single(t *testing.T) {
 	defer ln.Close()
 
 	// Create a channel for CDC events
-	cdcChannel := make(chan *proto.CDCEvents, 100)
+	cdcChannel := make(chan *proto.CDCIndexedEventGroup, 100)
 
 	if err := s.Open(); err != nil {
 		t.Fatalf("failed to open single-node store: %s", err.Error())
@@ -162,7 +162,7 @@ func Test_StoreCDCNotOpen(t *testing.T) {
 	defer ln.Close()
 
 	// Create a channel for CDC events
-	ch := make(chan *proto.CDCEvents, 10)
+	ch := make(chan *proto.CDCIndexedEventGroup, 10)
 
 	// Try to enable CDC on a closed store - should return ErrNotOpen
 	if err := s.EnableCDC(ch, false); err != ErrNotOpen {

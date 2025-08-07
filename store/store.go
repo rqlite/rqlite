@@ -1772,7 +1772,7 @@ func (s *Store) Database(leader bool) ([]byte, error) {
 // to the provided channel. It is the caller's responsibility to ensure that the
 // channel is read from, as the CDCStreamer will drop events if the channel is full.
 // The Store must be open for this call to succeed.
-func (s *Store) EnableCDC(out chan<- *proto.CDCEvents, rowIDsOnly bool) error {
+func (s *Store) EnableCDC(out chan<- *proto.CDCIndexedEventGroup, rowIDsOnly bool) error {
 	if !s.open.Is() {
 		return ErrNotOpen
 	}
