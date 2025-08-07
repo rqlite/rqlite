@@ -144,8 +144,8 @@ func Test_NewQueueWriteOne(t *testing.T) {
 		if exp, got := 1, len(req.Objects); exp != got {
 			t.Fatalf("received wrong length slice, exp %d, got %d", exp, got)
 		}
-		if req.Objects[0].Sql != "SELECT * FROM foo" {
-			t.Fatalf("received wrong SQL")
+if !reflect.DeepEqual(req.Objects[0], testStmtFoo) {
+			t.Fatalf("received wrong statement, got: %v, want: %v", req.Objects[0], testStmtFoo)
 		}
 	case <-time.After(5 * time.Second):
 		t.Fatalf("timed out waiting for statement")
