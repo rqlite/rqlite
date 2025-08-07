@@ -1,3 +1,7 @@
+## v8.43.3 (unreleased)
+### Implementation changes and bug fixes
+- [PR #2204](https://github.com/rqlite/rqlite/pull/2204): Add byte-marshalling for CDC Events.
+
 ## v8.43.2 (August 6th 2025)
 ### Implementation changes and bug fixes
 - [PR #2198](https://github.com/rqlite/rqlite/pull/2198): Refactor some of the database-level unit tests.
