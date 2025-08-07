@@ -110,7 +110,7 @@ func NewMux(ln net.Listener, adv net.Addr) (*Mux, error) {
 // then the server will not verify the client's certificate. If mutual is true,
 // then the server will require the client to present a trusted certificate.
 func NewTLSMux(ln net.Listener, adv net.Addr, cert, key, caCert string, insecure, mutual bool) (*Mux, error) {
-	return newTLSMux(ln, adv, cert, key, caCert, false)
+	return newTLSMux(ln, adv, cert, key, caCert, mutual)
 }
 
 // NewMutualTLSMux returns a new instance of Mux for ln, and encrypts all traffic
