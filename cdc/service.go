@@ -75,7 +75,7 @@ type Service struct {
 	clstr Cluster
 	str   Store
 
-	// in is the channel from which the CDC events are read. This channel is expected
+	// in is the channel from which the CDC events are read.
 	in <-chan *proto.CDCEvents
 
 	// logOnly indicates whether the CDC service should only log events and not
