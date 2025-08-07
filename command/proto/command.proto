@@ -180,13 +180,13 @@ message CDCEvent {
 	CDCRow new_row = 7;
 }
 
-message CDCEvents {
+message CDCIndexedEventGroup {
 	uint64 index = 1;
 	repeated CDCEvent events = 2;
 }
 
-message CDCEventsBatch {
-	repeated CDCEvents payload = 1;
+message CDCIndexedEventGroupBatch {
+	repeated CDCIndexedEventGroup payload = 1;
 }
 
 message UpdateHookEvent {

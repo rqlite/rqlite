@@ -6,17 +6,17 @@ import command "github.com/rqlite/rqlite/v8/command/proto"
 // to a channel when the commit hook is called. It is used to stream
 // changes to a client.
 type CDCStreamer struct {
-	pending *command.CDCEvents
-	out     chan<- *command.CDCEvents
+	pending *command.CDCIndexedEventGroup
+	out     chan<- *command.CDCIndexedEventGroup
 }
 
 // NewCDCStreamer creates a new CDCStreamer. The out channel is used
 // to send the collected events to the client. It is the caller's
 // responsibility to ensure that the channel is read from, as the
 // CDCStreamer will drop events if the channel is full.
-func NewCDCStreamer(out chan<- *command.CDCEvents) *CDCStreamer {
+func NewCDCStreamer(out chan<- *command.CDCIndexedEventGroup) *CDCStreamer {
 	return &CDCStreamer{
-		pending: &command.CDCEvents{
+		pending: &command.CDCIndexedEventGroup{
 			Events: make([]*command.CDCEvent, 0),
 		},
 		out: out,
@@ -27,7 +27,7 @@ func NewCDCStreamer(out chan<- *command.CDCEvents) *CDCStreamer {
 // current K value, and all pending events are cleared. This is used
 // to reset the CDCStreamer before a new transaction is started.
 func (s *CDCStreamer) Reset(k uint64) {
-	s.pending = &command.CDCEvents{
+	s.pending = &command.CDCIndexedEventGroup{
 		Events: make([]*command.CDCEvent, 0),
 		Index:  k,
 	}
@@ -48,7 +48,7 @@ func (s *CDCStreamer) CommitHook() bool {
 	default:
 		stats.Add(cdcDroppedEvents, 1)
 	}
-	s.pending = &command.CDCEvents{
+	s.pending = &command.CDCIndexedEventGroup{
 		Events: make([]*command.CDCEvent, 0),
 	}
 	return true

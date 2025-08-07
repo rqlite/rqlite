@@ -76,7 +76,7 @@ type Service struct {
 	str   Store
 
 	// in is the channel from which the CDC events are read.
-	in <-chan *proto.CDCEvents
+	in <-chan *proto.CDCIndexedEventGroup
 
 	// logOnly indicates whether the CDC service should only log events and not
 	// send them to the configured endpoint. This is mostly useful for testing.
@@ -122,7 +122,7 @@ type Service struct {
 
 	// queue implements the batching of CDC events before transmission to the webhook. The
 	// contents of this queue do not persist across restarts or leader changes.
-	batcher *queue.Queue[*proto.CDCEvents]
+	batcher *queue.Queue[*proto.CDCIndexedEventGroup]
 
 	// highWatermark is the index of the last event that was successfully sent to the webhook
 	// by the cluster (which is not necessarily the same thing as this node).
@@ -150,7 +150,7 @@ type Service struct {
 }
 
 // NewService creates a new CDC service.
-func NewService(dir string, clstr Cluster, str Store, in <-chan *proto.CDCEvents, cfg *Config) (*Service, error) {
+func NewService(dir string, clstr Cluster, str Store, in <-chan *proto.CDCIndexedEventGroup, cfg *Config) (*Service, error) {
 	httpClient := &http.Client{
 		Transport: &http.Transport{
 			TLSClientConfig: cfg.TLSConfig,
@@ -175,7 +175,7 @@ func NewService(dir string, clstr Cluster, str Store, in <-chan *proto.CDCEvents
 		maxBatchSz:            cfg.MaxBatchSz,
 		maxBatchDelay:         cfg.MaxBatchDelay,
 		highWatermarkInterval: cfg.HighWatermarkInterval,
-		batcher:               queue.New[*proto.CDCEvents](cfg.MaxBatchSz, cfg.MaxBatchSz, cfg.MaxBatchDelay),
+		batcher:               queue.New[*proto.CDCIndexedEventGroup](cfg.MaxBatchSz, cfg.MaxBatchSz, cfg.MaxBatchDelay),
 		leaderObCh:            make(chan bool, leaderChanLen),
 		hwmObCh:               make(chan uint64, leaderChanLen),
 		done:                  make(chan struct{}),
@@ -238,7 +238,7 @@ func (s *Service) writeToFIFO() {
 		case o := <-s.in:
 			// Right now just write the event to the queue. Events should be
 			// persisted to a disk-based queue for replay on Leader change.
-			s.batcher.Write([]*proto.CDCEvents{o}, nil)
+			s.batcher.Write([]*proto.CDCIndexedEventGroup{o}, nil)
 		case <-s.done:
 			return
 		}

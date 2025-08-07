@@ -17,7 +17,7 @@ func Test_ServiceSingleEvent(t *testing.T) {
 	ResetStats()
 
 	// Channel for the service to receive events.
-	eventsCh := make(chan *proto.CDCEvents, 1)
+	eventsCh := make(chan *proto.CDCIndexedEventGroup, 1)
 
 	bodyCh := make(chan []byte, 1)
 	testSrv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -56,7 +56,7 @@ func Test_ServiceSingleEvent(t *testing.T) {
 		Table:    "foo",
 		NewRowId: 2,
 	}
-	evs := &proto.CDCEvents{
+	evs := &proto.CDCIndexedEventGroup{
 		Index:  1,
 		Events: []*proto.CDCEvent{ev},
 	}
@@ -105,7 +105,7 @@ func Test_ServiceSingleEvent_LogOnly(t *testing.T) {
 	ResetStats()
 
 	// Channel for the service to receive events.
-	eventsCh := make(chan *proto.CDCEvents, 1)
+	eventsCh := make(chan *proto.CDCIndexedEventGroup, 1)
 
 	cl := &mockCluster{}
 	cl.leader.Store(true)
@@ -135,7 +135,7 @@ func Test_ServiceSingleEvent_LogOnly(t *testing.T) {
 		Table:    "foo",
 		NewRowId: 2,
 	}
-	evs := &proto.CDCEvents{
+	evs := &proto.CDCIndexedEventGroup{
 		Index:  1,
 		Events: []*proto.CDCEvent{ev},
 	}
@@ -150,7 +150,7 @@ func Test_ServiceSingleEvent_Retry(t *testing.T) {
 	ResetStats()
 
 	// Channel for the service to receive events.
-	eventsCh := make(chan *proto.CDCEvents, 1)
+	eventsCh := make(chan *proto.CDCIndexedEventGroup, 1)
 	bodyCh := make(chan []byte, 1)
 	firstErrSent := false
 	testSrv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -194,7 +194,7 @@ func Test_ServiceSingleEvent_Retry(t *testing.T) {
 		Table:    "foo",
 		NewRowId: 2,
 	}
-	evs := &proto.CDCEvents{
+	evs := &proto.CDCIndexedEventGroup{
 		Index:  1,
 		Events: []*proto.CDCEvent{ev},
 	}
@@ -238,7 +238,7 @@ func Test_ServiceMultiEvent(t *testing.T) {
 	ResetStats()
 
 	// Channel for the service to receive events.
-	eventsCh := make(chan *proto.CDCEvents, 1)
+	eventsCh := make(chan *proto.CDCIndexedEventGroup, 1)
 
 	bodyCh := make(chan []byte, 1)
 	testSrv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -277,7 +277,7 @@ func Test_ServiceMultiEvent(t *testing.T) {
 		Table:    "foo",
 		NewRowId: 10,
 	}
-	evs1 := &proto.CDCEvents{
+	evs1 := &proto.CDCIndexedEventGroup{
 		Index:  1,
 		Events: []*proto.CDCEvent{ev1},
 	}
@@ -287,7 +287,7 @@ func Test_ServiceMultiEvent(t *testing.T) {
 		OldRowId: 20,
 		NewRowId: 30,
 	}
-	evs2 := &proto.CDCEvents{
+	evs2 := &proto.CDCIndexedEventGroup{
 		Index:  2,
 		Events: []*proto.CDCEvent{ev2},
 	}
@@ -343,7 +343,7 @@ func Test_ServiceMultiEvent_Batch(t *testing.T) {
 	ResetStats()
 
 	// Channel for the service to receive events.
-	eventsCh := make(chan *proto.CDCEvents, 1)
+	eventsCh := make(chan *proto.CDCIndexedEventGroup, 1)
 
 	bodyCh := make(chan []byte, 1)
 	testSrv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -382,7 +382,7 @@ func Test_ServiceMultiEvent_Batch(t *testing.T) {
 		Table:    "foo",
 		NewRowId: 10,
 	}
-	evs1 := &proto.CDCEvents{
+	evs1 := &proto.CDCIndexedEventGroup{
 		Index:  1,
 		Events: []*proto.CDCEvent{ev1},
 	}
@@ -392,7 +392,7 @@ func Test_ServiceMultiEvent_Batch(t *testing.T) {
 		OldRowId: 20,
 		NewRowId: 30,
 	}
-	evs2 := &proto.CDCEvents{
+	evs2 := &proto.CDCIndexedEventGroup{
 		Index:  2,
 		Events: []*proto.CDCEvent{ev2},
 	}
@@ -401,7 +401,7 @@ func Test_ServiceMultiEvent_Batch(t *testing.T) {
 		Table:    "qux",
 		OldRowId: 40,
 	}
-	evs3 := &proto.CDCEvents{
+	evs3 := &proto.CDCIndexedEventGroup{
 		Index:  3,
 		Events: []*proto.CDCEvent{ev3},
 	}
