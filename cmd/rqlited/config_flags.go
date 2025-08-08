@@ -37,7 +37,7 @@ type Config struct {
 	HTTPx509Key string
 	// Enable mutual TLS for HTTPS
 	HTTPVerifyClient bool
-	// Path to X.509 CA certificate for node-to-node encryption
+	// Path to X.509 CA certificate for node-to-node communication (used exclusively for certificate validation)
 	NodeX509CACert string
 	// Path to X.509 certificate for node-to-node mutual authentication and encryption
 	NodeX509Cert string
@@ -45,7 +45,7 @@ type Config struct {
 	NodeX509Key string
 	// Skip verification of any node-node certificate
 	NoNodeVerify bool
-	// Enable mutual TLS for node-to-node communication
+	// Enable mutual TLS for node-to-node communication (requires CA cert for client verification)
 	NodeVerifyClient bool
 	// Hostname to verify on certificate returned by a node
 	NodeVerifyServerName string
@@ -147,11 +147,11 @@ func Forge(arguments []string) (*flag.FlagSet, *Config, error) {
 	fs.StringVar(&config.HTTPx509Cert, "http-cert", "", "Path to HTTPS X.509 certificate")
 	fs.StringVar(&config.HTTPx509Key, "http-key", "", "Path to HTTPS X.509 private key")
 	fs.BoolVar(&config.HTTPVerifyClient, "http-verify-client", false, "Enable mutual TLS for HTTPS")
-	fs.StringVar(&config.NodeX509CACert, "node-ca-cert", "", "Path to X.509 CA certificate for node-to-node encryption")
+	fs.StringVar(&config.NodeX509CACert, "node-ca-cert", "", "Path to X.509 CA certificate for node-to-node communication (used exclusively for certificate validation)")
 	fs.StringVar(&config.NodeX509Cert, "node-cert", "", "Path to X.509 certificate for node-to-node mutual authentication and encryption")
 	fs.StringVar(&config.NodeX509Key, "node-key", "", "Path to X.509 private key for node-to-node mutual authentication and encryption")
 	fs.BoolVar(&config.NoNodeVerify, "node-no-verify", false, "Skip verification of any node-node certificate")
-	fs.BoolVar(&config.NodeVerifyClient, "node-verify-client", false, "Enable mutual TLS for node-to-node communication")
+	fs.BoolVar(&config.NodeVerifyClient, "node-verify-client", false, "Enable mutual TLS for node-to-node communication (requires CA cert for client verification)")
 	fs.StringVar(&config.NodeVerifyServerName, "node-verify-server-name", "", "Hostname to verify on certificate returned by a node")
 	fs.StringVar(&config.NodeID, "node-id", "", "Unique ID for node. If not set, set to advertised Raft address")
 	fs.StringVar(&config.RaftAddr, "raft-addr", "localhost:4002", "Raft communication bind address")

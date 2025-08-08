@@ -414,7 +414,11 @@ func startNodeMux(cfg *Config, ln net.Listener) (*tcp.Mux, error) {
 		b.WriteString(fmt.Sprintf("enabling node-to-node encryption with cert: %s, key: %s",
 			cfg.NodeX509Cert, cfg.NodeX509Key))
 		if cfg.NodeX509CACert != "" {
-			b.WriteString(fmt.Sprintf(", CA cert %s", cfg.NodeX509CACert))
+			if cfg.NodeVerifyClient {
+				b.WriteString(fmt.Sprintf(", CA cert %s (for client verification)", cfg.NodeX509CACert))
+			} else {
+				b.WriteString(fmt.Sprintf(", CA cert %s (for server verification)", cfg.NodeX509CACert))
+			}
 		}
 		if cfg.NodeVerifyClient {
 			b.WriteString(", mutual TLS enabled")
