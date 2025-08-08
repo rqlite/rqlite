@@ -25,10 +25,13 @@ const (
 // CreateClientConfig creates a new tls.Config for use by a client. The certFile and keyFile
 // parameters are the paths to the client's certificate and key files, which will be used to
 // authenticate the client to the server if mutual TLS is active. The caCertFile parameter
-// is the path to the CA certificate file, which the client will use to verify any certificate
-// presented by the server. serverName can also be set, informing the client which hostname
-// should appear in the returned certificate. If noverify is true, the client will not verify
-// the server's certificate.
+// is the path to the CA certificate file, which the client will use to verify the server's
+// certificate during TLS handshake. serverName can also be set, informing the client which
+// hostname should appear in the server's certificate. If noverify is true, the client will
+// not verify the server's certificate.
+//
+// Note: The caCertFile is used for validating the server's certificate during TLS handshake.
+// This is separate from mutual TLS, where the server validates the client's certificate.
 func CreateClientConfig(certFile, keyFile, caCertFile, serverName string, noverify bool) (*tls.Config, error) {
 	var err error
 
@@ -51,9 +54,11 @@ func CreateClientConfig(certFile, keyFile, caCertFile, serverName string, noveri
 // CreateClientConfigWithFunc creates a new tls.Config for use by a client. The certFunc
 // parameter is a function that returns the client's certificate and key. The caCertFile
 // parameter is the path to the CA certificate file, which the client will use to verify
-// any certificate presented by the server. serverName can also be set, informing the client
-// which hostname should appear in the returned certificate. If noverify is true, the client
-// will not verify the server's certificate.
+// the server's certificate during TLS handshake. serverName can also be set, informing the
+// client which hostname should appear in the server's certificate. If noverify is true,
+// the client will not verify the server's certificate.
+//
+// Note: The caCertFile is used for validating the server's certificate during TLS handshake.
 func CreateClientConfigWithFunc(certFunc func() (*tls.Certificate, error), caCertFile, serverName string, noverify bool) (*tls.Config, error) {
 	config := createBaseTLSConfig(serverName, noverify)
 	if certFunc != nil {
@@ -73,8 +78,12 @@ func CreateClientConfigWithFunc(certFunc func() (*tls.Certificate, error), caCer
 // parameters are the paths to the server's certificate and key files, which will be used to
 // authenticate the server to the client. The caCertFile parameter is the path to the CA
 // certificate file, which the server will use to verify any certificate presented by the
-// client. If mtls is MTLSStateEnabled, the server will require the client to present a
-// valid certificate.
+// client during mutual TLS authentication. If mtls is MTLSStateEnabled, the server will
+// require clients to present a valid certificate that can be verified using the CA certificate.
+//
+// Note: The caCertFile is used exclusively for validating client certificates during mutual TLS.
+// It is not used for server certificate validation - that is handled by clients using their
+// own CA certificate configuration.
 func CreateServerConfig(certFile, keyFile, caCertFile string, mtls MTLSState) (*tls.Config, error) {
 	var err error
 
@@ -96,8 +105,11 @@ func CreateServerConfig(certFile, keyFile, caCertFile string, mtls MTLSState) (*
 // CreateServerConfigWithFunc creates a new tls.Config for use by a server. The certFunc
 // parameter is a function that returns the server's certificate and key. The caCertFile
 // parameter is the path to the CA certificate file, which the server will use to verify
-// any certificate presented by the client. If mtls is MTLSStateEnabled, the server will
-// require the client to present a valid certificate.
+// any certificate presented by the client during mutual TLS authentication. If mtls is
+// MTLSStateEnabled, the server will require clients to present a valid certificate that
+// can be verified using the CA certificate.
+//
+// Note: The caCertFile is used exclusively for validating client certificates during mutual TLS.
 func CreateServerConfigWithFunc(certFunc func() (*tls.Certificate, error), caCertFile string, mtls MTLSState) (*tls.Config, error) {
 	config := createBaseTLSConfig(NoServerName, false)
 	config.GetCertificate = func(hello *tls.ClientHelloInfo) (*tls.Certificate, error) {

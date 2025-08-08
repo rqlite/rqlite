@@ -110,11 +110,14 @@ func NewMux(ln net.Listener, adv net.Addr) (*Mux, error) {
 // then the server will not verify the client's certificate. If mutual is true,
 // then the server will require the client to present a trusted certificate.
 func NewTLSMux(ln net.Listener, adv net.Addr, cert, key, caCert string, insecure, mutual bool) (*Mux, error) {
-	return newTLSMux(ln, adv, cert, key, caCert, false)
+	return newTLSMux(ln, adv, cert, key, caCert, mutual)
 }
 
 // NewMutualTLSMux returns a new instance of Mux for ln, and encrypts all traffic
-// using TLS. The server will also verify the client's certificate.
+// using TLS with mutual authentication enabled. The server will require the client
+// to present a certificate that can be validated using the provided CA certificate.
+// The caCert parameter specifies the CA certificate used to validate client certificates
+// for mutual TLS authentication. If adv is nil, then the addr of ln is used.
 func NewMutualTLSMux(ln net.Listener, adv net.Addr, cert, key, caCert string) (*Mux, error) {
 	return newTLSMux(ln, adv, cert, key, caCert, true)
 }

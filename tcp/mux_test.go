@@ -3,6 +3,7 @@ package tcp
 import (
 	"bytes"
 	"crypto/tls"
+	"crypto/x509/pkix"
 	"io"
 	"log"
 	"net"
@@ -13,6 +14,7 @@ import (
 	"testing/quick"
 	"time"
 
+	"github.com/rqlite/rqlite/v8/internal/rtls"
 	"github.com/rqlite/rqlite/v8/testdata/x509"
 )
 
@@ -261,5 +263,85 @@ func mustTCPListener(bind string) net.Listener {
 func mustRename(new, old string) {
 	if err := os.Rename(old, new); err != nil {
 		panic(err)
+	}
+}
+
+func mustWriteTempFile(t *testing.T, b []byte) string {
+	f, err := os.CreateTemp(t.TempDir(), "rqlite-test")
+	if err != nil {
+		panic("failed to create temp file")
+	}
+	defer f.Close()
+	if _, err := f.Write(b); err != nil {
+		panic("failed to write to temp file")
+	}
+	return f.Name()
+}
+
+// Test_NewTLSMux_MutualTLS_Enabled verifies that the mutual parameter is properly
+// passed through and that mutual TLS is actually enabled when requested.
+func Test_NewTLSMux_MutualTLS_Enabled(t *testing.T) {
+	ln := mustTCPListener("127.0.0.1:0")
+	defer ln.Close()
+
+	// Create cert and key files using the x509 helper
+	certFile := x509.CertExampleDotComFile("")
+	defer os.Remove(certFile)
+	keyFile := x509.KeyExampleDotComFile("")
+	defer os.Remove(keyFile)
+
+	// Generate a CA cert for testing
+	caCertPEM, _, err := rtls.GenerateCert(pkix.Name{CommonName: "rqlite-ca"}, 365*24*time.Hour, 2048, nil, nil)
+	if err != nil {
+		t.Fatalf("failed to generate CA cert: %v", err)
+	}
+	caCertFile := mustWriteTempFile(t, caCertPEM)
+	defer os.Remove(caCertFile)
+
+	// Test with mutual=true
+	mux, err := NewTLSMux(ln, nil, certFile, keyFile, caCertFile, false, true)
+	if err != nil {
+		t.Fatalf("failed to create TLS mux with mutual=true: %s", err.Error())
+	}
+	defer mux.Close()
+
+	// Check that the TLS config has mutual TLS enabled
+	if mux.tlsConfig.ClientAuth != tls.RequireAndVerifyClientCert {
+		t.Fatalf("expected ClientAuth to be RequireAndVerifyClientCert with mutual=true, got %v", mux.tlsConfig.ClientAuth)
+	}
+	if mux.tlsConfig.ClientCAs == nil {
+		t.Fatalf("expected ClientCAs to be set with mutual=true and caCert provided")
+	}
+}
+
+// Test_NewTLSMux_MutualTLS_Disabled verifies that mutual TLS is disabled when not requested.
+func Test_NewTLSMux_MutualTLS_Disabled(t *testing.T) {
+	ln := mustTCPListener("127.0.0.1:0")
+	defer ln.Close()
+
+	// Create cert and key files using the x509 helper
+	certFile := x509.CertExampleDotComFile("")
+	defer os.Remove(certFile)
+	keyFile := x509.KeyExampleDotComFile("")
+	defer os.Remove(keyFile)
+
+	// Generate a CA cert for testing
+	caCertPEM, _, err := rtls.GenerateCert(pkix.Name{CommonName: "rqlite-ca"}, 365*24*time.Hour, 2048, nil, nil)
+	if err != nil {
+		t.Fatalf("failed to generate CA cert: %v", err)
+	}
+	caCertFile := mustWriteTempFile(t, caCertPEM)
+	defer os.Remove(caCertFile)
+
+	// Test with mutual=false
+	mux, err := NewTLSMux(ln, nil, certFile, keyFile, caCertFile, false, false)
+	if err != nil {
+		t.Fatalf("failed to create TLS mux with mutual=false: %s", err.Error())
+	}
+	defer mux.Close()
+
+	// Check that the TLS config has mutual TLS disabled
+	if mux.tlsConfig.ClientAuth != tls.NoClientCert {
+		t.Fatalf("expected ClientAuth to be NoClientCert with mutual=false, got %v", mux.tlsConfig.ClientAuth)
 	}
 }
