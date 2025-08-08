@@ -193,6 +193,7 @@ func TestTLSMux(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	defer conn.Close()
 
 	state := conn.ConnectionState()
 	if !state.HandshakeComplete {
@@ -217,6 +218,7 @@ func TestTLSMux(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	defer conn.Close()
 
 	state = conn.ConnectionState()
 	if !state.HandshakeComplete {
