@@ -108,8 +108,8 @@ func NewMux(ln net.Listener, adv net.Addr) (*Mux, error) {
 // NewTLSMux returns a new instance of Mux for ln, and encrypts all traffic
 // using TLS. If adv is nil, then the addr of ln is used. The server will not
 // require clients to present a valid certificate since mutual TLS is not enabled.
-func NewTLSMux(ln net.Listener, adv net.Addr, cert, key, caCert string) (*Mux, error) {
-	return newTLSMux(ln, adv, cert, key, caCert, false)
+func NewTLSMux(ln net.Listener, adv net.Addr, cert, key string) (*Mux, error) {
+	return newTLSMux(ln, adv, cert, key, "", false)
 }
 
 // NewMutualTLSMux returns a new instance of Mux for ln, and encrypts all traffic

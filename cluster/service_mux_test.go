@@ -105,7 +105,7 @@ func mustNewTLSMux(t *testing.T) (net.Listener, *tcp.Mux) {
 	cert := x509.CertExampleDotComFile(t.TempDir())
 	key := x509.KeyExampleDotComFile(t.TempDir())
 
-	mux, err := tcp.NewTLSMux(ln, nil, cert, key, "")
+	mux, err := tcp.NewTLSMux(ln, nil, cert, key)
 	if err != nil {
 		panic(fmt.Sprintf("failed to create TLS mux: %s", err))
 	}

@@ -425,7 +425,7 @@ func startNodeMux(cfg *Config, ln net.Listener) (*tcp.Mux, error) {
 		if cfg.NodeVerifyClient {
 			mux, err = tcp.NewMutualTLSMux(ln, adv, cfg.NodeX509Cert, cfg.NodeX509Key, cfg.NodeX509CACert)
 		} else {
-			mux, err = tcp.NewTLSMux(ln, adv, cfg.NodeX509Cert, cfg.NodeX509Key, cfg.NodeX509CACert)
+			mux, err = tcp.NewTLSMux(ln, adv, cfg.NodeX509Cert, cfg.NodeX509Key)
 		}
 	} else {
 		mux, err = tcp.NewMux(ln, adv)
