@@ -277,7 +277,6 @@ func TestMutualTLSMux(t *testing.T) {
 	if !strings.Contains(err.Error(), "certificate required") {
 		t.Fatalf("expected error to reference missing client certificate, got %s", err.Error())
 	}
-
 }
 
 type mockAddr struct {
