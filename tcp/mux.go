@@ -114,6 +114,7 @@ func NewTLSMux(ln net.Listener, adv net.Addr, cert, key string) (*Mux, error) {
 
 // NewMutualTLSMux returns a new instance of Mux for ln, and encrypts all traffic
 // using TLS. The server will also require clients to present a valid certificate.
+// If caCert is not empty, that CA certificate will be added to the pool of CAs.
 func NewMutualTLSMux(ln net.Listener, adv net.Addr, cert, key, caCert string) (*Mux, error) {
 	return newTLSMux(ln, adv, cert, key, caCert, true)
 }
