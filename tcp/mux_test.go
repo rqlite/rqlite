@@ -264,6 +264,7 @@ func TestMutualTLSMux(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	defer conn.Close()
 
 	// Ensure mutual TLS is being enforced.
 	var b [1]byte
