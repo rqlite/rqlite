@@ -422,8 +422,7 @@ func startNodeMux(cfg *Config, ln net.Listener) (*tcp.Mux, error) {
 			b.WriteString(", mutual TLS disabled")
 		}
 		log.Println(b.String())
-		mux, err = tcp.NewTLSMux(ln, adv, cfg.NodeX509Cert, cfg.NodeX509Key, cfg.NodeX509CACert,
-			cfg.NoNodeVerify, cfg.NodeVerifyClient)
+		mux, err = tcp.NewTLSMux(ln, adv, cfg.NodeX509Cert, cfg.NodeX509Key, cfg.NodeX509CACert)
 	} else {
 		mux, err = tcp.NewMux(ln, adv)
 	}
