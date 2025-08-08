@@ -179,7 +179,7 @@ func TestTLSMux(t *testing.T) {
 	key := x509.KeyExampleDotComFile("")
 	defer os.Remove(key)
 
-	mux, err := NewTLSMux(tcpListener, nil, cert, key, "", true, false)
+	mux, err := NewTLSMux(tcpListener, nil, cert, key)
 	if err != nil {
 		t.Fatalf("failed to create mux: %s", err.Error())
 	}
@@ -193,6 +193,7 @@ func TestTLSMux(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	defer conn.Close()
 
 	state := conn.ConnectionState()
 	if !state.HandshakeComplete {
@@ -217,6 +218,7 @@ func TestTLSMux(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	defer conn.Close()
 
 	state = conn.ConnectionState()
 	if !state.HandshakeComplete {
@@ -230,9 +232,50 @@ func TestTLSMux(t *testing.T) {
 func TestTLSMux_Fail(t *testing.T) {
 	tcpListener := mustTCPListener("127.0.0.1:0")
 	defer tcpListener.Close()
-	_, err := NewTLSMux(tcpListener, nil, "xxxx", "yyyy", "", true, false)
+	_, err := NewTLSMux(tcpListener, nil, "xxxx", "yyyy")
 	if err == nil {
 		t.Fatalf("created mux unexpectedly with bad resources")
+	}
+}
+
+func TestMutualTLSMux(t *testing.T) {
+	tcpListener := mustTCPListener("127.0.0.1:0")
+	defer tcpListener.Close()
+
+	cert := x509.CertExampleDotComFile("")
+	defer os.Remove(cert)
+	key := x509.KeyExampleDotComFile("")
+	defer os.Remove(key)
+	caCert := x509.CertMyCAFile("")
+	defer os.Remove(caCert)
+
+	mux, err := NewMutualTLSMux(tcpListener, nil, cert, key, caCert)
+	if err != nil {
+		t.Fatalf("failed to create mutual TLS mux: %s", err.Error())
+	}
+	defer mux.Close()
+	go mux.Serve()
+
+	if mux.tlsConfig.ClientAuth != tls.RequireAndVerifyClientCert {
+		t.Fatalf("expected RequireAndVerifyClientCert, got %v", mux.tlsConfig.ClientAuth)
+	}
+
+	conn, err := tls.Dial("tcp", tcpListener.Addr().String(), &tls.Config{
+		InsecureSkipVerify: true,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer conn.Close()
+
+	// Ensure mutual TLS is being enforced.
+	var b [1]byte
+	_, err = conn.Read(b[:])
+	if err == nil {
+		t.Fatalf("expected error reading from mux enforcing mutual TLS, got nil")
+	}
+	if !strings.Contains(err.Error(), "certificate required") {
+		t.Fatalf("expected error to reference missing client certificate, got %s", err.Error())
 	}
 }
 
