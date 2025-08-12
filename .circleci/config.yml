@@ -2,6 +2,9 @@
 # Check https://circleci.com/docs/2.0/language-go/ for more details
 version: 2.1
 
+orbs:
+  win: circleci/windows@5.0
+
 parameters:
   primary_image:
     type: string
@@ -168,6 +171,29 @@ jobs:
           cc: mips64el-linux-gnuabi64-gcc
           goarch: mips64le
     resource_class: large
+
+  windows_build_and_test:
+    executor:
+      name: win/default   # from circleci/windows orb
+      shell: powershell.exe
+    steps:
+      - checkout
+
+      # Install Go and MinGW (for CGO builds)
+      - run:
+          name: Install Go and MinGW
+          command: |
+            choco install -y golang mingw
+            refreshenv
+
+      # Add Go and MinGW to PATH for this session
+      - run:
+          name: Add Go to PATH and check versions
+          command: |
+            $env:PATH += ";C:\Program Files\Go\bin;C:\ProgramData\chocolatey\lib\mingw\tools\install\mingw64\bin"
+            go version
+            gcc --version
+
 
   end_to_end_single:
     docker:
