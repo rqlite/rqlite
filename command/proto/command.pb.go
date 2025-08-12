@@ -1998,6 +1998,58 @@ func (x *UpdateHookEvent) GetRowId() int64 {
 	return 0
 }
 
+type LeadershipChangeEvent struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Id            string                 `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`
+	Address       string                 `protobuf:"bytes,2,opt,name=address,proto3" json:"address,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *LeadershipChangeEvent) Reset() {
+	*x = LeadershipChangeEvent{}
+	mi := &file_command_proto_msgTypes[25]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *LeadershipChangeEvent) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*LeadershipChangeEvent) ProtoMessage() {}
+
+func (x *LeadershipChangeEvent) ProtoReflect() protoreflect.Message {
+	mi := &file_command_proto_msgTypes[25]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use LeadershipChangeEvent.ProtoReflect.Descriptor instead.
+func (*LeadershipChangeEvent) Descriptor() ([]byte, []int) {
+	return file_command_proto_rawDescGZIP(), []int{25}
+}
+
+func (x *LeadershipChangeEvent) GetId() string {
+	if x != nil {
+		return x.Id
+	}
+	return ""
+}
+
+func (x *LeadershipChangeEvent) GetAddress() string {
+	if x != nil {
+		return x.Address
+	}
+	return ""
+}
+
 var File_command_proto protoreflect.FileDescriptor
 
 const file_command_proto_rawDesc = "" +
@@ -2161,7 +2213,10 @@ const file_command_proto_rawDesc = "" +
 	"\n" +
 	"\x06UPDATE\x10\x02\x12\n" +
 	"\n" +
-	"\x06DELETE\x10\x03B+Z)github.com/rqlite/rqlite/v8/command/protob\x06proto3"
+	"\x06DELETE\x10\x03\"A\n" +
+	"\x15LeadershipChangeEvent\x12\x0e\n" +
+	"\x02id\x18\x01 \x01(\tR\x02id\x12\x18\n" +
+	"\aaddress\x18\x02 \x01(\tR\aaddressB+Z)github.com/rqlite/rqlite/v8/command/protob\x06proto3"
 
 var (
 	file_command_proto_rawDescOnce sync.Once
@@ -2176,7 +2231,7 @@ func file_command_proto_rawDescGZIP() []byte {
 }
 
 var file_command_proto_enumTypes = make([]protoimpl.EnumInfo, 5)
-var file_command_proto_msgTypes = make([]protoimpl.MessageInfo, 25)
+var file_command_proto_msgTypes = make([]protoimpl.MessageInfo, 26)
 var file_command_proto_goTypes = []any{
 	(QueryRequest_Level)(0),           // 0: command.QueryRequest.Level
 	(BackupRequest_Format)(0),         // 1: command.BackupRequest.Format
@@ -2208,6 +2263,7 @@ var file_command_proto_goTypes = []any{
 	(*CDCIndexedEventGroup)(nil),      // 27: command.CDCIndexedEventGroup
 	(*CDCIndexedEventGroupBatch)(nil), // 28: command.CDCIndexedEventGroupBatch
 	(*UpdateHookEvent)(nil),           // 29: command.UpdateHookEvent
+	(*LeadershipChangeEvent)(nil),     // 30: command.LeadershipChangeEvent
 }
 var file_command_proto_depIdxs = []int32{
 	5,  // 0: command.Statement.parameters:type_name -> command.Parameter
@@ -2267,7 +2323,7 @@ func file_command_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_command_proto_rawDesc), len(file_command_proto_rawDesc)),
 			NumEnums:      5,
-			NumMessages:   25,
+			NumMessages:   26,
 			NumExtensions: 0,
 			NumServices:   0,
 		},

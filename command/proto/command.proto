@@ -201,3 +201,8 @@ message UpdateHookEvent {
 	string table = 3;
 	int64 row_id = 4;
 }
+
+message LeadershipChangeEvent {
+	string id = 1;
+	string address = 2;
+}
