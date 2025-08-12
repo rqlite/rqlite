@@ -323,10 +323,10 @@ func (s *Service) mainLoop() {
 			}
 			s.isLeader.SetBool(leaderNow)
 			if s.isLeader.Is() {
-				s.logger.Println("leadership changed, this node now leader")
+				s.logger.Println("leadership changed, this node now leader, starting CDC transmission")
 				stop, done = s.readFromFIFO()
 			} else {
-				s.logger.Println("leadership changed, this node no longer leader")
+				s.logger.Println("leadership changed, this node no longer leader, pausing CDC transmission")
 				close(stop)
 				stop = nil
 				<-done
