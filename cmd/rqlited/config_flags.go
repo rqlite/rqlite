@@ -43,7 +43,7 @@ type Config struct {
 	NodeX509Cert string
 	// Path to X.509 private key for node-to-node mutual authentication and encryption
 	NodeX509Key string
-	// Skip verification of any node-node certificate
+	// Skip verification of any presented certificate.
 	NoNodeVerify bool
 	// Enable mutual TLS for node-to-node communication
 	NodeVerifyClient bool
@@ -150,7 +150,7 @@ func Forge(arguments []string) (*flag.FlagSet, *Config, error) {
 	fs.StringVar(&config.NodeX509CACert, "node-ca-cert", "", "Path to X.509 CA certificate for node-to-node encryption")
 	fs.StringVar(&config.NodeX509Cert, "node-cert", "", "Path to X.509 certificate for node-to-node mutual authentication and encryption")
 	fs.StringVar(&config.NodeX509Key, "node-key", "", "Path to X.509 private key for node-to-node mutual authentication and encryption")
-	fs.BoolVar(&config.NoNodeVerify, "node-no-verify", false, "Skip verification of any node-node certificate")
+	fs.BoolVar(&config.NoNodeVerify, "node-no-verify", false, "Skip verification of any presented certificate.")
 	fs.BoolVar(&config.NodeVerifyClient, "node-verify-client", false, "Enable mutual TLS for node-to-node communication")
 	fs.StringVar(&config.NodeVerifyServerName, "node-verify-server-name", "", "Hostname to verify on certificate returned by a node")
 	fs.StringVar(&config.NodeID, "node-id", "", "Unique ID for node. If not set, set to advertised Raft address")
