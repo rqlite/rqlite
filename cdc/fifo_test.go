@@ -561,7 +561,7 @@ func Test_Events_BufferedChannelBehavior(t *testing.T) {
 	// Start reading events - should get at least the buffered events
 	// Note: Due to the non-blocking send in the implementation, we may not get all events
 	// if the buffer was full, but we should get the buffered ones in order
-	receivedEvents := make([]Event, 0, numItems)
+	receivedEvents := make([]*Event, 0, numItems)
 
 	// Try to receive events with timeout
 	for i := 0; i < numItems; i++ {
@@ -589,8 +589,6 @@ func Test_Events_BufferedChannelBehavior(t *testing.T) {
 			t.Errorf("Event %d: expected data '%s', got '%s'", i, expectedData, event.Data)
 		}
 	}
-
-	t.Logf("Received %d out of %d events", len(receivedEvents), numItems)
 }
 
 // Test_Events_InterruptedReader tests when a reader stops and resumes reading.
@@ -675,7 +673,7 @@ func Test_Events_ConcurrentReaders(t *testing.T) {
 	const numItemsPerReader = 5
 
 	// Channel to collect events from all readers
-	allEvents := make(chan Event, numReaders*numItemsPerReader)
+	allEvents := make(chan *Event, numReaders*numItemsPerReader)
 
 	// Start multiple readers
 	for i := 0; i < numReaders; i++ {
@@ -704,7 +702,7 @@ func Test_Events_ConcurrentReaders(t *testing.T) {
 	}
 
 	// Collect all events
-	receivedEvents := make([]Event, 0, totalItems)
+	receivedEvents := make([]*Event, 0, totalItems)
 	for i := 0; i < totalItems; i++ {
 		select {
 		case event := <-allEvents:

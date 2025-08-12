@@ -6,7 +6,6 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"reflect"
-	"sync/atomic"
 	"testing"
 	"time"
 
@@ -29,7 +28,6 @@ func Test_ServiceSingleEvent(t *testing.T) {
 	defer testSrv.Close()
 
 	cl := &mockCluster{}
-	cl.leader.Store(true)
 
 	cfg := DefaultConfig()
 	cfg.Endpoint = testSrv.URL
@@ -50,6 +48,9 @@ func Test_ServiceSingleEvent(t *testing.T) {
 	}
 	defer svc.Stop()
 
+	// Make it the leader.
+	cl.SignalLeaderChange(true)
+
 	// Send one dummy event to the service.
 	ev := &proto.CDCEvent{
 		Op:       proto.CDCEvent_INSERT,
@@ -57,48 +58,70 @@ func Test_ServiceSingleEvent(t *testing.T) {
 		NewRowId: 2,
 	}
 	evs := &proto.CDCIndexedEventGroup{
-		Index:  1,
+		Index:  66,
 		Events: []*proto.CDCEvent{ev},
 	}
-	eventsCh <- evs
 
-	// Wait for the service to forward the batch.
-	select {
-	case got := <-bodyCh:
-		exp := &CDCMessagesEnvelope{
-			Payload: []*CDCMessage{
-				{
-					Index: evs.Index,
-					Events: []*CDCMessageEvent{
-						{
-							Op:       ev.Op.String(),
-							Table:    ev.Table,
-							NewRowId: ev.NewRowId,
-							OldRowId: ev.OldRowId,
+	// Test function which waits for the service to forward events. If duration is zero
+	// then the test will fail if any events are forwarded within the duration.
+	waitFn := func(dur time.Duration, expCount int) {
+		n := 0
+		select {
+		case got := <-bodyCh:
+			if expCount == 0 {
+				t.Fatalf("unexpected HTTP POST received: %s", got)
+			}
+			n++
+			exp := &CDCMessagesEnvelope{
+				Payload: []*CDCMessage{
+					{
+						Index: evs.Index,
+						Events: []*CDCMessageEvent{
+							{
+								Op:       ev.Op.String(),
+								Table:    ev.Table,
+								NewRowId: ev.NewRowId,
+								OldRowId: ev.OldRowId,
+							},
 						},
 					},
 				},
-			},
+			}
+			msg := &CDCMessagesEnvelope{}
+			if err := UnmarshalFromEnvelopeJSON(got, msg); err != nil {
+				t.Fatalf("invalid JSON received: %v", err)
+			}
+			if reflect.DeepEqual(msg, exp) == false {
+				t.Fatalf("unexpected payload: got %v, want %v", msg, exp)
+			}
+			if n == expCount {
+				return // Expected number of events received.
+			}
+		case <-time.After(dur):
+			if expCount > 0 {
+				t.Fatalf("timeout waiting for HTTP POST")
+			}
 		}
-		msg := &CDCMessagesEnvelope{}
-		if err := UnmarshalFromEnvelopeJSON(got, msg); err != nil {
-			t.Fatalf("invalid JSON received: %v", err)
-		}
-		if reflect.DeepEqual(msg, exp) == false {
-			t.Fatalf("unexpected payload: got %v, want %v", msg, exp)
-		}
-	case <-time.After(2 * time.Second):
-		t.Fatalf("timeout waiting for HTTP POST")
 	}
+
+	eventsCh <- evs
+	waitFn(1*time.Second, 1)
 
 	testPoll(t, func() bool {
 		return svc.HighWatermark() == evs.Index
 	}, 2*time.Second)
 
 	// Next emulate CDC not running on the Leader.
-	cl.leader.Store(false)
+	cl.SignalLeaderChange(false)
+	testPoll(t, func() bool { return !svc.IsLeader() }, 2*time.Second)
+
+	// Send events, and make sure they are ignored.
+	evs.Index = 67
 	eventsCh <- evs
-	pollExpvarUntil(t, numDroppedNotLeader, 1, 2*time.Second)
+	waitFn(1*time.Second, 0)
+
+	cl.SignalLeaderChange(true)
+	waitFn(2*time.Second, 1)
 }
 
 func Test_ServiceSingleEvent_LogOnly(t *testing.T) {
@@ -108,7 +131,6 @@ func Test_ServiceSingleEvent_LogOnly(t *testing.T) {
 	eventsCh := make(chan *proto.CDCIndexedEventGroup, 1)
 
 	cl := &mockCluster{}
-	cl.leader.Store(true)
 
 	cfg := DefaultConfig()
 	cfg.MaxBatchSz = 1
@@ -128,6 +150,7 @@ func Test_ServiceSingleEvent_LogOnly(t *testing.T) {
 		t.Fatalf("failed to start service: %v", err)
 	}
 	defer svc.Stop()
+	cl.SignalLeaderChange(true)
 
 	// Send one dummy event to the service.
 	ev := &proto.CDCEvent{
@@ -167,7 +190,6 @@ func Test_ServiceSingleEvent_Retry(t *testing.T) {
 	defer testSrv.Close()
 
 	cl := &mockCluster{}
-	cl.leader.Store(true)
 
 	cfg := DefaultConfig()
 	cfg.Endpoint = testSrv.URL
@@ -187,6 +209,7 @@ func Test_ServiceSingleEvent_Retry(t *testing.T) {
 		t.Fatalf("failed to start service: %v", err)
 	}
 	defer svc.Stop()
+	cl.SignalLeaderChange(true)
 
 	// Send one dummy event to the service.
 	ev := &proto.CDCEvent{
@@ -250,7 +273,6 @@ func Test_ServiceMultiEvent(t *testing.T) {
 	defer testSrv.Close()
 
 	cl := &mockCluster{}
-	cl.leader.Store(true)
 
 	cfg := DefaultConfig()
 	cfg.Endpoint = testSrv.URL
@@ -270,6 +292,7 @@ func Test_ServiceMultiEvent(t *testing.T) {
 		t.Fatalf("failed to start service: %v", err)
 	}
 	defer svc.Stop()
+	cl.SignalLeaderChange(true)
 
 	// Create the Events and send them.
 	ev1 := &proto.CDCEvent{
@@ -355,7 +378,6 @@ func Test_ServiceMultiEvent_Batch(t *testing.T) {
 	defer testSrv.Close()
 
 	cl := &mockCluster{}
-	cl.leader.Store(true)
 
 	cfg := DefaultConfig()
 	cfg.Endpoint = testSrv.URL
@@ -375,6 +397,7 @@ func Test_ServiceMultiEvent_Batch(t *testing.T) {
 		t.Fatalf("failed to start service: %v", err)
 	}
 	defer svc.Stop()
+	cl.SignalLeaderChange(true)
 
 	// Create the Events and send them.
 	ev1 := &proto.CDCEvent{
@@ -482,18 +505,14 @@ func Test_ServiceMultiEvent_Batch(t *testing.T) {
 }
 
 type mockCluster struct {
-	leader atomic.Bool
-	obCh   chan<- bool
+	obCh chan<- bool
 }
-
-func (m *mockCluster) IsLeader() bool { return m.leader.Load() }
 
 func (m *mockCluster) RegisterLeaderChange(ch chan<- bool) {
 	m.obCh = ch
 }
 
 func (m *mockCluster) SignalLeaderChange(leader bool) {
-	m.leader.Store(leader)
 	if m.obCh != nil {
 		m.obCh <- leader
 	}
