@@ -43,6 +43,28 @@ commands: # a reusable command with parameters
             GOOS: <<parameters.goos>>
             CC: <<parameters.cc>>
 
+  windows_setup_and_cache:
+    steps:
+      - checkout
+      - restore_cache:
+          keys:
+            - go-mod-v4-{{ checksum "go.sum" }}
+      - run:
+          name: Install Go and MinGW
+          command: |
+            choco install -y golang mingw
+            refreshenv
+      - run:
+          name: Add toolchains to PATH
+          command: |
+            $env:PATH += ";C:\Program Files\Go\bin;C:\ProgramData\chocolatey\lib\mingw\tools\install\mingw64\bin"
+            go version
+            gcc --version
+      - run:
+          name: Fetch modules
+          command: |
+            go get -v -t -d ./...
+
 jobs:
   lint:
     docker:
@@ -178,25 +200,7 @@ jobs:
       shell: powershell.exe
       size: large
     steps:
-      - checkout
-      - restore_cache:
-          keys:
-            - go-mod-v4-{{ checksum "go.sum" }}
-      - run:
-          name: Install Go and MinGW
-          command: |
-            choco install -y golang mingw
-            refreshenv
-      - run:
-          name: Add toolchains to PATH
-          command: |
-            $env:PATH += ";C:\Program Files\Go\bin;C:\ProgramData\chocolatey\lib\mingw\tools\install\mingw64\bin"
-            go version
-            gcc --version
-      - run:
-          name: Fetch modules
-          command: |
-            go get -v -t -d ./...
+      - windows_setup_and_cache
       - run:
           name: Test even packages
           command: |
@@ -217,25 +221,7 @@ jobs:
       shell: powershell.exe
       size: large
     steps:
-      - checkout
-      - restore_cache:
-          keys:
-            - go-mod-v4-{{ checksum "go.sum" }}
-      - run:
-          name: Install Go and MinGW
-          command: |
-            choco install -y golang mingw
-            refreshenv
-      - run:
-          name: Add toolchains to PATH
-          command: |
-            $env:PATH += ";C:\Program Files\Go\bin;C:\ProgramData\chocolatey\lib\mingw\tools\install\mingw64\bin"
-            go version
-            gcc --version
-      - run:
-          name: Fetch modules
-          command: |
-            go get -v -t -d ./...
+      - windows_setup_and_cache
       - run:
           name: Test odd packages
           command: |
