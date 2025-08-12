@@ -52,10 +52,10 @@ type Queue struct {
 	done            chan struct{}
 
 	// C is the channel for consuming queue events.
-	C <-chan Event
+	C <-chan *Event
 
 	// eventsChan is the write-side of the C channel.
-	eventsChan chan Event
+	eventsChan chan *Event
 
 	wg sync.WaitGroup
 }
@@ -103,7 +103,7 @@ func NewQueue(path string) (*Queue, error) {
 		return nil, fmt.Errorf("failed to initialize buckets: %w", err)
 	}
 
-	eventsChan := make(chan Event, 10)
+	eventsChan := make(chan *Event, 10)
 	q := &Queue{
 		db:              db,
 		enqueueChan:     make(chan enqueueReq, queueBufferSize),
@@ -140,7 +140,7 @@ func (q *Queue) run(nextKey []byte, highestKey uint64) {
 	// Helper function to try sending available events
 	tryServeEvents := func() {
 		for nextKey != nil {
-			var event Event
+			event := &Event{}
 			err := q.db.View(func(tx *bbolt.Tx) error {
 				c := tx.Bucket(bucketName).Cursor()
 				_, val := c.Seek(nextKey)

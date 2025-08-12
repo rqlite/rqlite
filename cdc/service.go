@@ -13,6 +13,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/rqlite/rqlite/v8/command"
 	"github.com/rqlite/rqlite/v8/command/proto"
 	"github.com/rqlite/rqlite/v8/internal/rsync"
 	"github.com/rqlite/rqlite/v8/queue"
@@ -50,9 +51,6 @@ func ResetStats() {
 
 // Cluster is an interface that defines methods for cluster management.
 type Cluster interface {
-	// IsLeader returns true if the node is the leader of the cluster.
-	IsLeader() bool
-
 	// RegisterLeaderChange registers the given channel which will receive
 	// a signal when the node detects that the Leader changes.
 	RegisterLeaderChange(c chan<- bool)
@@ -216,10 +214,6 @@ func (s *Service) SetHighWatermarking(enabled bool) {
 
 // Stop stops the CDC service.
 func (s *Service) Stop() {
-	if s.clstr.IsLeader() && s.highWatermarkingDisabled.IsNot() {
-		// Best effort to write the high watermark before stopping.
-		s.writeHighWatermark(s.highWatermark.Load())
-	}
 	close(s.done)
 	s.fifo.Close()
 	s.wg.Wait()
@@ -236,13 +230,44 @@ func (s *Service) writeToFIFO() {
 	for {
 		select {
 		case o := <-s.in:
-			// Right now just write the event to the queue. Events should be
-			// persisted to a disk-based queue for replay on Leader change.
-			s.batcher.Write([]*proto.CDCIndexedEventGroup{o}, nil)
+			b, err := command.MarshalCDCIndexedEventGroup(o)
+			if err != nil {
+				s.logger.Printf("error marshalling CDC events: %v", err)
+				continue
+			}
+			if err := s.fifo.Enqueue(&Event{Index: o.Index, Data: b}); err != nil {
+				s.logger.Printf("error enqueueing CDC events: %v", err)
+			}
 		case <-s.done:
 			return
 		}
 	}
+}
+
+func (s *Service) readFromFIFO() (chan struct{}, chan struct{}) {
+	stop := make(chan struct{})
+	done := make(chan struct{})
+	go func() {
+		for {
+			select {
+			case <-stop:
+				close(done)
+				return
+			case ev := <-s.fifo.C:
+				if ev == nil {
+					close(done)
+					return
+				}
+				events, err := command.UnmarshalCDCIndexedEventGroup(ev.Data)
+				if err != nil {
+					s.logger.Printf("error unmarshalling CDC events from FIFO: %v", err)
+					continue
+				}
+				s.batcher.Write([]*proto.CDCIndexedEventGroup{events}, nil)
+			}
+		}
+	}()
+	return stop, done
 }
 
 func (s *Service) mainLoop() {
@@ -251,6 +276,10 @@ func (s *Service) mainLoop() {
 	// This ticker is used to periodically broadcast the high watermark to the cluster.
 	hwmTicker := time.NewTicker(s.highWatermarkInterval)
 	defer hwmTicker.Stop()
+
+	var stop chan struct{}
+	var done chan struct{}
+	isLeader := false
 
 	preHWM := s.highWatermark.Load()
 	for {
@@ -264,14 +293,13 @@ func (s *Service) mainLoop() {
 				continue
 			}
 			preHWM = s.highWatermark.Load()
-			if s.clstr.IsLeader() {
+			if isLeader {
 				if err := s.writeHighWatermark(s.highWatermark.Load()); err != nil {
 					s.logger.Printf("error writing high watermark to store: %v", err)
 				}
 			}
 
 		case hwm := <-s.hwmObCh:
-			s.logger.Println("received high watermark update:", hwm)
 			if hwm > s.highWatermark.Load() {
 				s.highWatermark.Store(hwm)
 				// This means all events up to this high watermark have been
@@ -279,11 +307,25 @@ func (s *Service) mainLoop() {
 				// delete all events up and including that point from our FIFO.
 			}
 
-		case isLeader := <-s.leaderObCh:
-			s.logger.Println("is leader:", isLeader)
+		case leaderNow := <-s.leaderObCh:
 			// If not leader then reset batching queue and get ready to start
-			// retrasmitting events from high-water mark. If we have become
-			// the leader then start reading from the batching queue.
+			// retransmitting events from high-water mark. If we have become
+			// the leader then start reading from the batching queue. XXX TBD
+			if leaderNow != isLeader {
+				s.logger.Printf("leader status changed: isLeader=%v, leaderNow=%v", isLeader, leaderNow)
+				isLeader = leaderNow
+			}
+			if isLeader {
+				stop, done = s.readFromFIFO()
+			} else {
+				if stop == nil {
+					continue
+				}
+				close(stop)
+				stop = nil
+				<-done
+				done = nil
+			}
 
 		case batch := <-s.batcher.C:
 			if batch == nil || len(batch.Objects) == 0 {
@@ -291,7 +333,7 @@ func (s *Service) mainLoop() {
 			}
 
 			// Only the Leader actually sends events.
-			if !s.clstr.IsLeader() {
+			if !isLeader {
 				stats.Add(numDroppedNotLeader, int64(len(batch.Objects)))
 				continue
 			}
@@ -347,6 +389,10 @@ func (s *Service) mainLoop() {
 			}
 
 		case <-s.done:
+			if isLeader && s.highWatermarkingDisabled.IsNot() {
+				// Best effort to write the high watermark before stopping.
+				s.writeHighWatermark(s.highWatermark.Load())
+			}
 			return
 		}
 	}
