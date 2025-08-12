@@ -175,7 +175,7 @@ jobs:
   windows_build_and_test:
     executor:
       name: win/default   # from circleci/windows orb
-      size: medium
+      size: 2xlarge
       shell: powershell.exe
     steps:
       - checkout
