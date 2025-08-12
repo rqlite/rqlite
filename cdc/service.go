@@ -215,8 +215,8 @@ func (s *Service) SetHighWatermarking(enabled bool) {
 // Stop stops the CDC service.
 func (s *Service) Stop() {
 	close(s.done)
-	s.fifo.Close()
 	s.wg.Wait()
+	s.fifo.Close()
 }
 
 // HighWatermark returns the high watermark of the CDC service. This

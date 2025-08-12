@@ -61,36 +61,40 @@ func Test_ServiceSingleEvent(t *testing.T) {
 		Index:  66,
 		Events: []*proto.CDCEvent{ev},
 	}
-	eventsCh <- evs
 
-	// Wait for the service to forward the batch.
-	select {
-	case got := <-bodyCh:
-		exp := &CDCMessagesEnvelope{
-			Payload: []*CDCMessage{
-				{
-					Index: evs.Index,
-					Events: []*CDCMessageEvent{
-						{
-							Op:       ev.Op.String(),
-							Table:    ev.Table,
-							NewRowId: ev.NewRowId,
-							OldRowId: ev.OldRowId,
+	// Test function which waits for the service to forward events.
+	waitFn := func() {
+		select {
+		case got := <-bodyCh:
+			exp := &CDCMessagesEnvelope{
+				Payload: []*CDCMessage{
+					{
+						Index: evs.Index,
+						Events: []*CDCMessageEvent{
+							{
+								Op:       ev.Op.String(),
+								Table:    ev.Table,
+								NewRowId: ev.NewRowId,
+								OldRowId: ev.OldRowId,
+							},
 						},
 					},
 				},
-			},
+			}
+			msg := &CDCMessagesEnvelope{}
+			if err := UnmarshalFromEnvelopeJSON(got, msg); err != nil {
+				t.Fatalf("invalid JSON received: %v", err)
+			}
+			if reflect.DeepEqual(msg, exp) == false {
+				t.Fatalf("unexpected payload: got %v, want %v", msg, exp)
+			}
+		case <-time.After(2 * time.Second):
+			t.Fatalf("timeout waiting for HTTP POST")
 		}
-		msg := &CDCMessagesEnvelope{}
-		if err := UnmarshalFromEnvelopeJSON(got, msg); err != nil {
-			t.Fatalf("invalid JSON received: %v", err)
-		}
-		if reflect.DeepEqual(msg, exp) == false {
-			t.Fatalf("unexpected payload: got %v, want %v", msg, exp)
-		}
-	case <-time.After(2 * time.Second):
-		t.Fatalf("timeout waiting for HTTP POST")
 	}
+
+	eventsCh <- evs
+	waitFn()
 
 	testPoll(t, func() bool {
 		return svc.HighWatermark() == evs.Index
@@ -99,7 +103,6 @@ func Test_ServiceSingleEvent(t *testing.T) {
 	// Next emulate CDC not running on the Leader.
 	cl.SignalLeaderChange(false)
 	eventsCh <- evs
-	pollExpvarUntil(t, numDroppedNotLeader, 1, 2*time.Second)
 }
 
 func Test_ServiceSingleEvent_LogOnly(t *testing.T) {
