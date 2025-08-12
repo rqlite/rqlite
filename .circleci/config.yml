@@ -172,8 +172,6 @@ jobs:
           goarch: mips64le
     resource_class: large
 
-
-jobs:
   windows_test_even:
     executor:
       name: win/default
