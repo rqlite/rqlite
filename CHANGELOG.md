@@ -4,6 +4,7 @@
 - [PR #2204](https://github.com/rqlite/rqlite/pull/2204): Add byte-marshalling for CDC Events.
 - [PR #2205](https://github.com/rqlite/rqlite/pull/2205): Improve CDC Protobuf naming.
 - [PR #2208](https://github.com/rqlite/rqlite/pull/2208): Remove unused parameters from TLS mux functions.
+- [PR #2211](https://github.com/rqlite/rqlite/pull/2211): Further CDC-FIFO integration.
 
 ## v8.43.2 (August 6th 2025)
 ### Implementation changes and bug fixes
