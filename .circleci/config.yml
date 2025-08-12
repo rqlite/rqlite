@@ -409,8 +409,8 @@ workflows:
       - test_even_race
       - test_odd
       - test_odd_race
-      - windows_build_and_test_even
-      - windows_build_and_test_odd
+      - windows_test_even
+      - windows_test_odd
       - end_to_end_single
       - end_to_end_multi
       - end_to_end_multi_adv
