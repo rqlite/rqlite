@@ -135,9 +135,8 @@ type Service struct {
 	// If true, the service will not write or read the high watermark from the store.
 	highWatermarkingDisabled rsync.AtomicBool
 
-	// Channel to receive notifications of leader changes.
+	// Channel to receive notifications of leader changes and store latest state.
 	leaderObCh chan bool
-
 	isLeader rsync.AtomicBool
 
 	// Channel to receive high watermark updates from the cluster.
