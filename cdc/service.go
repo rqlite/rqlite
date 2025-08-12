@@ -69,9 +69,10 @@ type Store interface {
 // Service is a CDC service that reads events from a channel and processes them.
 // It is used to stream changes to a HTTP endpoint.
 type Service struct {
-	dir   string
-	clstr Cluster
-	str   Store
+	nodeID string
+	dir    string
+	clstr  Cluster
+	str    Store
 
 	// in is the channel from which the CDC events are read.
 	in <-chan *proto.CDCIndexedEventGroup
@@ -150,7 +151,7 @@ type Service struct {
 }
 
 // NewService creates a new CDC service.
-func NewService(dir string, clstr Cluster, str Store, in <-chan *proto.CDCIndexedEventGroup, cfg *Config) (*Service, error) {
+func NewService(nodeID, dir string, clstr Cluster, str Store, in <-chan *proto.CDCIndexedEventGroup, cfg *Config) (*Service, error) {
 	httpClient := &http.Client{
 		Transport: &http.Transport{
 			TLSClientConfig: cfg.TLSConfig,
@@ -159,6 +160,7 @@ func NewService(dir string, clstr Cluster, str Store, in <-chan *proto.CDCIndexe
 	}
 
 	srv := &Service{
+		nodeID:                nodeID,
 		dir:                   dir,
 		clstr:                 clstr,
 		str:                   str,
