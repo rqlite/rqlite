@@ -62,10 +62,16 @@ func Test_ServiceSingleEvent(t *testing.T) {
 		Events: []*proto.CDCEvent{ev},
 	}
 
-	// Test function which waits for the service to forward events.
-	waitFn := func() {
+	// Test function which waits for the service to forward events. If duration is zero
+	// then the test will fail if any events are forwarded within the duration.
+	waitFn := func(dur time.Duration, expCount int) {
+		n := 0
 		select {
 		case got := <-bodyCh:
+			if expCount == 0 {
+				t.Fatalf("unexpected HTTP POST received: %s", got)
+			}
+			n++
 			exp := &CDCMessagesEnvelope{
 				Payload: []*CDCMessage{
 					{
@@ -88,13 +94,18 @@ func Test_ServiceSingleEvent(t *testing.T) {
 			if reflect.DeepEqual(msg, exp) == false {
 				t.Fatalf("unexpected payload: got %v, want %v", msg, exp)
 			}
-		case <-time.After(2 * time.Second):
-			t.Fatalf("timeout waiting for HTTP POST")
+			if n == expCount {
+				return // Expected number of events received.
+			}
+		case <-time.After(dur):
+			if expCount > 0 {
+				t.Fatalf("timeout waiting for HTTP POST")
+			}
 		}
 	}
 
 	eventsCh <- evs
-	waitFn()
+	waitFn(1*time.Second, 1)
 
 	testPoll(t, func() bool {
 		return svc.HighWatermark() == evs.Index
@@ -102,7 +113,15 @@ func Test_ServiceSingleEvent(t *testing.T) {
 
 	// Next emulate CDC not running on the Leader.
 	cl.SignalLeaderChange(false)
+	testPoll(t, func() bool { return !svc.IsLeader() }, 2*time.Second)
+
+	// Send events, and make sure they are ignored.
+	evs.Index = 67
 	eventsCh <- evs
+	waitFn(1*time.Second, 0)
+
+	cl.SignalLeaderChange(true)
+	waitFn(2*time.Second, 1)
 }
 
 func Test_ServiceSingleEvent_LogOnly(t *testing.T) {

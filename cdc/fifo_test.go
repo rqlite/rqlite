@@ -589,8 +589,6 @@ func Test_Events_BufferedChannelBehavior(t *testing.T) {
 			t.Errorf("Event %d: expected data '%s', got '%s'", i, expectedData, event.Data)
 		}
 	}
-
-	t.Logf("Received %d out of %d events", len(receivedEvents), numItems)
 }
 
 // Test_Events_InterruptedReader tests when a reader stops and resumes reading.

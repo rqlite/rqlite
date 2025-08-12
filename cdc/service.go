@@ -137,6 +137,8 @@ type Service struct {
 	// Channel to receive notifications of leader changes.
 	leaderObCh chan bool
 
+	isLeader rsync.AtomicBool
+
 	// Channel to receive high watermark updates from the cluster.
 	hwmObCh chan uint64
 
@@ -225,6 +227,11 @@ func (s *Service) HighWatermark() uint64 {
 	return s.highWatermark.Load()
 }
 
+// IsLeader returns whether the CDC service is running on the Leader.
+func (s *Service) IsLeader() bool {
+	return s.isLeader.Is()
+}
+
 func (s *Service) writeToFIFO() {
 	defer s.wg.Done()
 	for {
@@ -279,7 +286,6 @@ func (s *Service) mainLoop() {
 
 	var stop chan struct{}
 	var done chan struct{}
-	isLeader := false
 
 	preHWM := s.highWatermark.Load()
 	for {
@@ -293,7 +299,7 @@ func (s *Service) mainLoop() {
 				continue
 			}
 			preHWM = s.highWatermark.Load()
-			if isLeader {
+			if s.isLeader.Is() {
 				if err := s.writeHighWatermark(s.highWatermark.Load()); err != nil {
 					s.logger.Printf("error writing high watermark to store: %v", err)
 				}
@@ -311,21 +317,18 @@ func (s *Service) mainLoop() {
 			}
 
 		case leaderNow := <-s.leaderObCh:
-			if leaderNow == isLeader {
+			if leaderNow == s.isLeader.Is() {
 				continue
 			}
-			isLeader = leaderNow
-			if isLeader {
-				s.logger.Println("leadership changed, this node now leader")
+			s.isLeader.SetBool(leaderNow)
+			if s.isLeader.Is() {
 			} else {
-				s.logger.Println("leadership changed, this node no longer leader")
 			}
-			if isLeader {
+			if s.isLeader.Is() {
+				s.logger.Println("leadership changed, this node now leader")
 				stop, done = s.readFromFIFO()
 			} else {
-				if stop == nil {
-					continue
-				}
+				s.logger.Println("leadership changed, this node no longer leader")
 				close(stop)
 				stop = nil
 				<-done
@@ -338,7 +341,7 @@ func (s *Service) mainLoop() {
 			}
 
 			// Only the Leader actually sends events.
-			if !isLeader {
+			if s.isLeader.IsNot() {
 				stats.Add(numDroppedNotLeader, int64(len(batch.Objects)))
 				continue
 			}
@@ -394,7 +397,7 @@ func (s *Service) mainLoop() {
 			}
 
 		case <-s.done:
-			if isLeader && s.highWatermarkingDisabled.IsNot() {
+			if s.isLeader.Is() && s.highWatermarkingDisabled.IsNot() {
 				// Best effort to write the high watermark before stopping.
 				s.writeHighWatermark(s.highWatermark.Load())
 			}
