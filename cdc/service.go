@@ -305,15 +305,18 @@ func (s *Service) mainLoop() {
 				// This means all events up to this high watermark have been
 				// successfully sent to the webhook by the cluster. We can
 				// delete all events up and including that point from our FIFO.
+				if err := s.fifo.DeleteRange(hwm); err != nil {
+					s.logger.Printf("error deleting events up to high watermark from FIFO: %v", err)
+				}
 			}
 
 		case leaderNow := <-s.leaderObCh:
-			// If not leader then reset batching queue and get ready to start
-			// retransmitting events from high-water mark. If we have become
-			// the leader then start reading from the batching queue. XXX TBD
-			if leaderNow != isLeader {
-				s.logger.Printf("leader status changed: isLeader=%v, leaderNow=%v", isLeader, leaderNow)
-				isLeader = leaderNow
+			if leaderNow == isLeader {
+				continue
+			}
+			isLeader = leaderNow
+			if isLeader {
+				s.logger.Println("leadership changed, this node now leader")
 			}
 			if isLeader {
 				stop, done = s.readFromFIFO()
