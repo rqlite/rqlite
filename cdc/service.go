@@ -137,7 +137,7 @@ type Service struct {
 
 	// Channel to receive notifications of leader changes and store latest state.
 	leaderObCh chan bool
-	isLeader rsync.AtomicBool
+	isLeader   rsync.AtomicBool
 
 	// Channel to receive high watermark updates from the cluster.
 	hwmObCh chan uint64
