@@ -34,6 +34,7 @@ func Test_ServiceSingleEvent(t *testing.T) {
 	cfg.MaxBatchSz = 1
 	cfg.MaxBatchDelay = 50 * time.Millisecond
 	svc, err := NewService(
+		"node1",
 		t.TempDir(),
 		cl,
 		&mockStore{},
@@ -137,6 +138,7 @@ func Test_ServiceSingleEvent_LogOnly(t *testing.T) {
 	cfg.MaxBatchDelay = 50 * time.Millisecond
 	cfg.LogOnly = true
 	svc, err := NewService(
+		"node1",
 		t.TempDir(),
 		cl,
 		&mockStore{},
@@ -196,6 +198,7 @@ func Test_ServiceSingleEvent_Retry(t *testing.T) {
 	cfg.MaxBatchSz = 1
 	cfg.MaxBatchDelay = 50 * time.Millisecond
 	svc, err := NewService(
+		"node1",
 		t.TempDir(),
 		cl,
 		&mockStore{},
@@ -279,6 +282,7 @@ func Test_ServiceMultiEvent(t *testing.T) {
 	cfg.MaxBatchSz = 2
 	cfg.MaxBatchDelay = time.Second
 	svc, err := NewService(
+		"node1",
 		t.TempDir(),
 		cl,
 		&mockStore{},
@@ -384,6 +388,7 @@ func Test_ServiceMultiEvent_Batch(t *testing.T) {
 	cfg.MaxBatchSz = 2
 	cfg.MaxBatchDelay = 100 * time.Millisecond
 	svc, err := NewService(
+		"node1",
 		t.TempDir(),
 		cl,
 		&mockStore{},
