@@ -119,6 +119,7 @@ func NewMutualTLSMux(ln net.Listener, adv net.Addr, cert, key, caCert string) (*
 	return newTLSMux(ln, adv, cert, key, caCert, true)
 }
 
+// newTLSMux is an internal helper to create a TLS Mux.
 func newTLSMux(ln net.Listener, adv net.Addr, cert, key, caCert string, mutual bool) (*Mux, error) {
 	mux, err := NewMux(ln, adv)
 	if err != nil {
