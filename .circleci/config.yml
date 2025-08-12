@@ -176,6 +176,7 @@ jobs:
     executor:
       name: win/default
       shell: powershell.exe
+      size: large
     steps:
       - checkout
       - restore_cache:
@@ -209,12 +210,12 @@ jobs:
           key: go-mod-v4-{{ checksum "go.sum" }}
           paths:
             - "C:\\Users\\circleci\\go\\pkg\\mod"
-    resource_class: large
 
   windows_test_odd:
     executor:
       name: win/default
       shell: powershell.exe
+      size: large
     steps:
       - checkout
       - restore_cache:
@@ -248,7 +249,6 @@ jobs:
           key: go-mod-v4-{{ checksum "go.sum" }}
           paths:
             - "C:\\Users\\circleci\\go\\pkg\\mod"
-    resource_class: large
 
   end_to_end_single:
     docker:
