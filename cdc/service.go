@@ -322,9 +322,6 @@ func (s *Service) mainLoop() {
 			}
 			s.isLeader.SetBool(leaderNow)
 			if s.isLeader.Is() {
-			} else {
-			}
-			if s.isLeader.Is() {
 				s.logger.Println("leadership changed, this node now leader")
 				stop, done = s.readFromFIFO()
 			} else {
