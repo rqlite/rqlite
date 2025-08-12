@@ -175,6 +175,7 @@ jobs:
   windows_build_and_test:
     executor:
       name: win/default   # from circleci/windows orb
+      size: medium
       shell: powershell.exe
     steps:
       - checkout
@@ -193,6 +194,14 @@ jobs:
             $env:PATH += ";C:\Program Files\Go\bin;C:\ProgramData\chocolatey\lib\mingw\tools\install\mingw64\bin"
             go version
             gcc --version
+
+      - run:
+          name: Build and test
+          command: |
+            $env:CGO_ENABLED = "1"
+            $env:CC = "x86_64-w64-mingw32-gcc"
+            go build ./...
+            go test ./...
 
 
   end_to_end_single:
