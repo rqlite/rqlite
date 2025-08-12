@@ -96,8 +96,6 @@ func Test_ServiceSingleEvent(t *testing.T) {
 		return svc.HighWatermark() == evs.Index
 	}, 2*time.Second)
 
-	return
-
 	// Next emulate CDC not running on the Leader.
 	cl.SignalLeaderChange(false)
 	eventsCh <- evs
