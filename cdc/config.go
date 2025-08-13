@@ -7,6 +7,8 @@ import (
 	"net/url"
 	"os"
 	"time"
+
+	"github.com/rqlite/rqlite/v8/internal/rtls"
 )
 
 const (
@@ -29,7 +31,29 @@ type Config struct {
 	Endpoint string `json:"endpoint"`
 
 	// TLSConfig is the TLS configuration used for the HTTP client.
+	// This field is excluded from JSON serialization. Use the individual
+	// TLS fields below for JSON configuration.
 	TLSConfig *tls.Config `json:"-"`
+
+	// TLS configuration fields for JSON serialization and user configuration.
+	// These follow the same pattern used elsewhere in rqlite.
+
+	// CACertFile is the path to the CA certificate file for TLS verification.
+	CACertFile string `json:"ca_cert_file,omitempty"`
+
+	// CertFile is the path to the client certificate file for mutual TLS.
+	CertFile string `json:"cert_file,omitempty"`
+
+	// KeyFile is the path to the client private key file for mutual TLS.
+	KeyFile string `json:"key_file,omitempty"`
+
+	// InsecureSkipVerify controls whether the client verifies the server's certificate.
+	// If true, TLS accepts any certificate presented by the server.
+	InsecureSkipVerify bool `json:"insecure_skip_verify,omitempty"`
+
+	// ServerName is used to verify the hostname on the returned certificates.
+	// If empty, the hostname used for the connection is used.
+	ServerName string `json:"server_name,omitempty"`
 
 	// MaxBatchSz is the maximum number of events to send in a single batch to the endpoint.
 	MaxBatchSz int `json:"max_batch_size"`
@@ -78,6 +102,24 @@ func DefaultConfig() *Config {
 		TransmitMaxBackoff:    time.Minute,
 		TransmitMinBackoff:    time.Second,
 	}
+}
+
+// BuildTLSConfig creates a *tls.Config from the individual TLS configuration fields.
+// If TLSConfig is already set, it returns that directly (for backward compatibility).
+// This uses the same TLS utilities as other parts of rqlite.
+func (c *Config) BuildTLSConfig() (*tls.Config, error) {
+	// If TLSConfig is already set, use it directly
+	if c.TLSConfig != nil {
+		return c.TLSConfig, nil
+	}
+
+	// If no TLS fields are set, return nil (no TLS)
+	if c.CACertFile == "" && c.CertFile == "" && c.KeyFile == "" && !c.InsecureSkipVerify && c.ServerName == "" {
+		return nil, nil
+	}
+
+	// Use the existing rtls package to create the TLS config
+	return rtls.CreateClientConfig(c.CertFile, c.KeyFile, c.CACertFile, c.ServerName, c.InsecureSkipVerify)
 }
 
 // NewConfig creates a new Config from a string. If the string can be parsed

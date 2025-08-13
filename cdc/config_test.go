@@ -1,6 +1,7 @@
 package cdc
 
 import (
+	"crypto/tls"
 	"encoding/json"
 	"os"
 	"path/filepath"
@@ -199,5 +200,127 @@ func Test_NewConfig_PartialConfig(t *testing.T) {
 	}
 	if config.MaxBatchDelay != 0 {
 		t.Fatalf("Expected MaxBatchDelay to be 0 (zero value), got %v", config.MaxBatchDelay)
+	}
+}
+
+func TestConfig_BuildTLSConfig(t *testing.T) {
+	tests := []struct {
+		name    string
+		config  *Config
+		wantNil bool
+		wantErr bool
+	}{
+		{
+			name:    "no TLS config",
+			config:  &Config{},
+			wantNil: true,
+			wantErr: false,
+		},
+		{
+			name: "existing TLS config",
+			config: &Config{
+				TLSConfig: &tls.Config{ServerName: "test"},
+			},
+			wantNil: false,
+			wantErr: false,
+		},
+		{
+			name: "insecure skip verify only",
+			config: &Config{
+				InsecureSkipVerify: true,
+			},
+			wantNil: false,
+			wantErr: false,
+		},
+		{
+			name: "server name only",
+			config: &Config{
+				ServerName: "example.com",
+			},
+			wantNil: false,
+			wantErr: false,
+		},
+		{
+			name: "invalid cert/key combination",
+			config: &Config{
+				CertFile: "nonexistent.crt",
+				KeyFile:  "nonexistent.key",
+			},
+			wantNil: true,
+			wantErr: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			tlsConfig, err := tt.config.BuildTLSConfig()
+
+			if tt.wantErr && err == nil {
+				t.Error("BuildTLSConfig() expected error, got nil")
+			}
+			if !tt.wantErr && err != nil {
+				t.Errorf("BuildTLSConfig() unexpected error: %v", err)
+			}
+			if tt.wantNil && tlsConfig != nil {
+				t.Error("BuildTLSConfig() expected nil, got non-nil config")
+			}
+			if !tt.wantNil && !tt.wantErr && tlsConfig == nil {
+				t.Error("BuildTLSConfig() expected non-nil config, got nil")
+			}
+		})
+	}
+}
+
+func TestNewConfig_WithTLSFields(t *testing.T) {
+	// Create a temporary JSON config file with TLS fields
+	tmpFile, err := os.CreateTemp("", "cdc_tls_config_*.json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer os.Remove(tmpFile.Name())
+
+	configJSON := `{
+		"endpoint": "https://secure.example.com/cdc",
+		"max_batch_size": 25,
+		"insecure_skip_verify": true,
+		"server_name": "secure.example.com"
+	}`
+
+	if _, err := tmpFile.WriteString(configJSON); err != nil {
+		t.Fatal(err)
+	}
+	tmpFile.Close()
+
+	config, err := NewConfig(tmpFile.Name())
+	if err != nil {
+		t.Fatalf("NewConfig() failed: %v", err)
+	}
+
+	if config.Endpoint != "https://secure.example.com/cdc" {
+		t.Errorf("Expected endpoint 'https://secure.example.com/cdc', got '%s'", config.Endpoint)
+	}
+	if config.MaxBatchSz != 25 {
+		t.Errorf("Expected MaxBatchSz 25, got %d", config.MaxBatchSz)
+	}
+	if !config.InsecureSkipVerify {
+		t.Error("Expected InsecureSkipVerify to be true")
+	}
+	if config.ServerName != "secure.example.com" {
+		t.Errorf("Expected ServerName 'secure.example.com', got '%s'", config.ServerName)
+	}
+
+	// Test that BuildTLSConfig works with these fields
+	tlsConfig, err := config.BuildTLSConfig()
+	if err != nil {
+		t.Fatalf("BuildTLSConfig() failed: %v", err)
+	}
+	if tlsConfig == nil {
+		t.Error("Expected non-nil TLS config")
+	}
+	if !tlsConfig.InsecureSkipVerify {
+		t.Error("Expected TLS config InsecureSkipVerify to be true")
+	}
+	if tlsConfig.ServerName != "secure.example.com" {
+		t.Errorf("Expected TLS config ServerName 'secure.example.com', got '%s'", tlsConfig.ServerName)
 	}
 }
