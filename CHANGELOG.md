@@ -6,6 +6,7 @@
 - [PR #2208](https://github.com/rqlite/rqlite/pull/2208): Remove unused parameters from TLS mux functions.
 - [PR #2211](https://github.com/rqlite/rqlite/pull/2211): Further CDC-FIFO integration.
 - [PR #2214](https://github.com/rqlite/rqlite/pull/2214): Pass node ID to CDC Service.
+- [PR #2216](https://github.com/rqlite/rqlite/pull/2216): Add CDC config processing with JSON support, NewConfig function, and TLS configuration.
 
 ## v8.43.2 (August 6th 2025)
 ### Implementation changes and bug fixes
