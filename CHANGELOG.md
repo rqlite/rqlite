@@ -7,6 +7,7 @@
 - [PR #2211](https://github.com/rqlite/rqlite/pull/2211): Further CDC-FIFO integration.
 - [PR #2214](https://github.com/rqlite/rqlite/pull/2214): Pass node ID to CDC Service.
 - [PR #2216](https://github.com/rqlite/rqlite/pull/2216): Add support for JSON-based CDC configuration.
+- [PR #2217](https://github.com/rqlite/rqlite/pull/2217): Tweak Queued Writes help output.
 
 ## v8.43.2 (August 6th 2025)
 ### Implementation changes and bug fixes
