@@ -30,11 +30,6 @@ type Config struct {
 	// Endpoint is the HTTP endpoint to which the CDC events are sent.
 	Endpoint string `json:"endpoint"`
 
-	// TLSConfig is the TLS configuration used for the HTTP client.
-	// This field is excluded from JSON serialization. Use the individual
-	// TLS fields below for JSON configuration.
-	TLSConfig *tls.Config `json:"-"`
-
 	// TLS configuration fields for JSON serialization and user configuration.
 	// These follow the same pattern used elsewhere in rqlite.
 
@@ -104,15 +99,9 @@ func DefaultConfig() *Config {
 	}
 }
 
-// BuildTLSConfig creates a *tls.Config from the individual TLS configuration fields.
-// If TLSConfig is already set, it returns that directly (for backward compatibility).
+// TLSConfig creates a *tls.Config from the individual TLS configuration fields.
 // This uses the same TLS utilities as other parts of rqlite.
-func (c *Config) BuildTLSConfig() (*tls.Config, error) {
-	// If TLSConfig is already set, use it directly
-	if c.TLSConfig != nil {
-		return c.TLSConfig, nil
-	}
-
+func (c *Config) TLSConfig() (*tls.Config, error) {
 	// If no TLS fields are set, return nil (no TLS)
 	if c.CACertFile == "" && c.CertFile == "" && c.KeyFile == "" && !c.InsecureSkipVerify && c.ServerName == "" {
 		return nil, nil

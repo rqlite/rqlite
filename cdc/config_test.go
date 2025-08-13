@@ -1,7 +1,6 @@
 package cdc
 
 import (
-	"crypto/tls"
 	"encoding/json"
 	"os"
 	"path/filepath"
@@ -203,7 +202,7 @@ func Test_NewConfig_PartialConfig(t *testing.T) {
 	}
 }
 
-func TestConfig_BuildTLSConfig(t *testing.T) {
+func TestConfig_TLSConfig(t *testing.T) {
 	tests := []struct {
 		name    string
 		config  *Config
@@ -214,14 +213,6 @@ func TestConfig_BuildTLSConfig(t *testing.T) {
 			name:    "no TLS config",
 			config:  &Config{},
 			wantNil: true,
-			wantErr: false,
-		},
-		{
-			name: "existing TLS config",
-			config: &Config{
-				TLSConfig: &tls.Config{ServerName: "test"},
-			},
-			wantNil: false,
 			wantErr: false,
 		},
 		{
@@ -253,19 +244,19 @@ func TestConfig_BuildTLSConfig(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			tlsConfig, err := tt.config.BuildTLSConfig()
+			tlsConfig, err := tt.config.TLSConfig()
 
 			if tt.wantErr && err == nil {
-				t.Error("BuildTLSConfig() expected error, got nil")
+				t.Error("TLSConfig() expected error, got nil")
 			}
 			if !tt.wantErr && err != nil {
-				t.Errorf("BuildTLSConfig() unexpected error: %v", err)
+				t.Errorf("TLSConfig() unexpected error: %v", err)
 			}
 			if tt.wantNil && tlsConfig != nil {
-				t.Error("BuildTLSConfig() expected nil, got non-nil config")
+				t.Error("TLSConfig() expected nil, got non-nil config")
 			}
 			if !tt.wantNil && !tt.wantErr && tlsConfig == nil {
-				t.Error("BuildTLSConfig() expected non-nil config, got nil")
+				t.Error("TLSConfig() expected non-nil config, got nil")
 			}
 		})
 	}
@@ -309,10 +300,10 @@ func TestNewConfig_WithTLSFields(t *testing.T) {
 		t.Errorf("Expected ServerName 'secure.example.com', got '%s'", config.ServerName)
 	}
 
-	// Test that BuildTLSConfig works with these fields
-	tlsConfig, err := config.BuildTLSConfig()
+	// Test that TLSConfig works with these fields
+	tlsConfig, err := config.TLSConfig()
 	if err != nil {
-		t.Fatalf("BuildTLSConfig() failed: %v", err)
+		t.Fatalf("TLSConfig() failed: %v", err)
 	}
 	if tlsConfig == nil {
 		t.Error("Expected non-nil TLS config")
