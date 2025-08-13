@@ -151,9 +151,15 @@ type Service struct {
 
 // NewService creates a new CDC service.
 func NewService(nodeID, dir string, clstr Cluster, str Store, in <-chan *proto.CDCIndexedEventGroup, cfg *Config) (*Service, error) {
+	// Build the TLS configuration from the config fields
+	tlsConfig, err := cfg.TLSConfig()
+	if err != nil {
+		return nil, fmt.Errorf("failed to build TLS config: %w", err)
+	}
+
 	httpClient := &http.Client{
 		Transport: &http.Transport{
-			TLSClientConfig: cfg.TLSConfig,
+			TLSClientConfig: tlsConfig,
 		},
 		Timeout: cfg.TransmitTimeout,
 	}
@@ -167,7 +173,7 @@ func NewService(nodeID, dir string, clstr Cluster, str Store, in <-chan *proto.C
 		logOnly:               cfg.LogOnly,
 		endpoint:              cfg.Endpoint,
 		httpClient:            httpClient,
-		tlsConfig:             cfg.TLSConfig,
+		tlsConfig:             tlsConfig,
 		transmitTimeout:       cfg.TransmitTimeout,
 		transmitMaxRetries:    cfg.TransmitMaxRetries,
 		transmitMinBackoff:    cfg.TransmitMinBackoff,
