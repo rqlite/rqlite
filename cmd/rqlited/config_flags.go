@@ -111,11 +111,11 @@ type Config struct {
 	RaftReapReadOnlyNodeTimeout time.Duration
 	// Timeout for initial connection to other nodes
 	ClusterConnectTimeout time.Duration
-	// QueuedWrites queue capacity
+	// Queued Writes queue capacity
 	WriteQueueCap int
-	// QueuedWrites queue batch size
+	// Queued Writes queue batch size
 	WriteQueueBatchSz int
-	// QueuedWrites queue timeout
+	// Queued Writes queue timeout
 	WriteQueueTimeout time.Duration
 	// Use a transaction when processing a queued write
 	WriteQueueTx bool
@@ -184,9 +184,9 @@ func Forge(arguments []string) (*flag.FlagSet, *Config, error) {
 	fs.DurationVar(&config.RaftReapNodeTimeout, "raft-reap-node-timeout", mustParseDuration("0h"), "Time after which a non-reachable voting node will be reaped. If not set, no reaping takes place")
 	fs.DurationVar(&config.RaftReapReadOnlyNodeTimeout, "raft-reap-read-only-node-timeout", mustParseDuration("0h"), "Time after which a non-reachable non-voting node will be reaped. If not set, no reaping takes place")
 	fs.DurationVar(&config.ClusterConnectTimeout, "cluster-connect-timeout", mustParseDuration("30s"), "Timeout for initial connection to other nodes")
-	fs.IntVar(&config.WriteQueueCap, "write-queue-capacity", 1024, "QueuedWrites queue capacity")
-	fs.IntVar(&config.WriteQueueBatchSz, "write-queue-batch-size", 128, "QueuedWrites queue batch size")
-	fs.DurationVar(&config.WriteQueueTimeout, "write-queue-timeout", mustParseDuration("50ms"), "QueuedWrites queue timeout")
+	fs.IntVar(&config.WriteQueueCap, "write-queue-capacity", 1024, "Queued Writes queue capacity")
+	fs.IntVar(&config.WriteQueueBatchSz, "write-queue-batch-size", 128, "Queued Writes queue batch size")
+	fs.DurationVar(&config.WriteQueueTimeout, "write-queue-timeout", mustParseDuration("50ms"), "Queued Writes queue timeout")
 	fs.BoolVar(&config.WriteQueueTx, "write-queue-tx", false, "Use a transaction when processing a queued write")
 	fs.StringVar(&config.CPUProfile, "cpu-profile", "", "Path to file for CPU profiling information")
 	fs.StringVar(&config.MemProfile, "mem-profile", "", "Path to file for memory profiling information")
