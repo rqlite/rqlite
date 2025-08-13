@@ -17,6 +17,8 @@ func Test_NewConfig_ValidURL(t *testing.T) {
 		{"https URL", "https://example.com/cdc"},
 		{"http with port", "http://localhost:9090/cdc"},
 		{"https with port", "https://api.example.com:443/webhook"},
+		{"http with BasicAuth", "http://user:pass@example.com/cdc"},
+		{"https with BasicAuth", "https://username:password@api.example.com:443/webhook"},
 	}
 
 	for _, tt := range tests {
