@@ -55,11 +55,13 @@ func (t *Transport) Addr() net.Addr {
 // custom configuration of the InstallSnapshot method.
 type NodeTransport struct {
 	*raft.NetworkTransport
-	commandCommitIndex *atomic.Uint64
-	leaderCommitIndex  *atomic.Uint64
-	done               chan struct{}
-	closed             bool
-	logger             *log.Logger
+	commandCommitIndex     *atomic.Uint64
+	leaderCommitIndex      *atomic.Uint64
+	done                   chan struct{}
+	closed                 bool
+	logger                 *log.Logger
+	appendEntriesTxHandler func(req *raft.AppendEntriesRequest) error
+	appendEntriesRxHandler func(req *raft.AppendEntriesRequest) error
 }
 
 // NewNodeTransport returns an initialized NodeTransport.
@@ -83,6 +85,18 @@ func (n *NodeTransport) CommandCommitIndex() uint64 {
 // which is known to be replicated to the majority of the cluster.
 func (n *NodeTransport) LeaderCommitIndex() uint64 {
 	return n.leaderCommitIndex.Load()
+}
+
+// SetAppendEntriesTxHandler sets a callback that is called anytime the NodeTransport
+// is used to send an AppendEntries request.
+func (n *NodeTransport) SetAppendEntriesTxHandler(cb func(req *raft.AppendEntriesRequest) error) {
+	n.appendEntriesTxHandler = cb
+}
+
+// SetAppendEntriesRxHandler sets a callback that is called anytime the NodeTransport
+// receives an AppendEntries request.
+func (n *NodeTransport) SetAppendEntriesRxHandler(cb func(req *raft.AppendEntriesRequest) error) {
+	n.appendEntriesRxHandler = cb
 }
 
 // Close closes the transport
@@ -112,6 +126,18 @@ func (n *NodeTransport) InstallSnapshot(id raft.ServerID, target raft.ServerAddr
 	return n.NetworkTransport.InstallSnapshot(id, target, args, resp, gzipData)
 }
 
+// AppendEntries sends the appropriate RPC to the target node.
+func (n *NodeTransport) AppendEntries(id raft.ServerID, target raft.ServerAddress, args *raft.AppendEntriesRequest, resp *raft.AppendEntriesResponse) error {
+	// Call the Tx handler if set, allowing it to process/modify the request
+	if n.appendEntriesTxHandler != nil {
+		if err := n.appendEntriesTxHandler(args); err != nil {
+			return err
+		}
+	}
+	// Delegate to the underlying transport
+	return n.NetworkTransport.AppendEntries(id, target, args, resp)
+}
+
 // Consumer returns a channel of RPC requests to be consumed.
 func (n *NodeTransport) Consumer() <-chan raft.RPC {
 	ch := make(chan raft.RPC)
@@ -128,6 +154,12 @@ func (n *NodeTransport) Consumer() <-chan raft.RPC {
 						rpc.Reader = gzip.NewDecompressor(rpc.Reader)
 					}
 				case *raft.AppendEntriesRequest:
+					// Call the Rx handler if set, allowing it to process/modify the request
+					if n.appendEntriesRxHandler != nil {
+						if err := n.appendEntriesRxHandler(cmd); err != nil {
+							n.logger.Printf("AppendEntriesRxHandler error: %v", err)
+						}
+					}
 					for _, e := range cmd.Entries {
 						if e.Type == raft.LogCommand {
 							n.commandCommitIndex.Store(e.Index)
