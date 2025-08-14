@@ -1,4 +1,4 @@
-## v8.43.4 (August 14th 2025)
+## v8.43.3 (August 14th 2025)
 ### Implementation changes and bug fixes
 - [PR #2206](https://github.com/rqlite/rqlite/pull/2206): Add convenience WriteOne() to Queue.
 - [PR #2204](https://github.com/rqlite/rqlite/pull/2204): Add byte-marshalling for CDC Events.
