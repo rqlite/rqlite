@@ -93,7 +93,10 @@ func main() {
 		log.Fatalf("failed to start node mux: %s", err.Error())
 	}
 
-	// Raft internode layer
+	// Create the Raft internode layer. All Raft-related traffic is sent over this layer.
+	// This layer allows both connections to be served from other nodes in the cluster
+	// for the purposes of Raft communication, and making connections to be made to other
+	// nodes in the cluster, again for Raft traffic.
 	raftLn := mux.Listen(cluster.MuxRaftHeader)
 	raftDialer, err := cluster.CreateRaftDialer(cfg.NodeX509Cert, cfg.NodeX509Key, cfg.NodeX509CACert,
 		cfg.NodeVerifyServerName, cfg.NoNodeVerify)
@@ -418,15 +421,12 @@ func startNodeMux(cfg *Config, ln net.Listener) (*tcp.Mux, error) {
 		}
 		if cfg.NodeVerifyClient {
 			b.WriteString(", mutual TLS enabled")
-		} else {
-			b.WriteString(", mutual TLS disabled")
-		}
-		log.Println(b.String())
-		if cfg.NodeVerifyClient {
 			mux, err = tcp.NewMutualTLSMux(ln, adv, cfg.NodeX509Cert, cfg.NodeX509Key, cfg.NodeX509CACert)
 		} else {
+			b.WriteString(", mutual TLS disabled")
 			mux, err = tcp.NewTLSMux(ln, adv, cfg.NodeX509Cert, cfg.NodeX509Key)
 		}
+		log.Println(b.String())
 	} else {
 		mux, err = tcp.NewMux(ln, adv)
 	}
