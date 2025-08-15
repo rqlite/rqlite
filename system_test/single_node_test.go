@@ -1209,13 +1209,9 @@ func Test_SingleNodeUpgrades_NoSnapshots(t *testing.T) {
 		defer timer.Stop()
 		ticker := time.NewTicker(100 * time.Millisecond)
 		defer ticker.Stop()
-		testSuccess := make(chan struct{})
-		var once sync.Once
 
 		for {
 			select {
-			case <-testSuccess:
-				return
 			case <-timer.C:
 				t.Fatalf(`timeout waiting for correct results with %s data`, dir)
 			case <-ticker.C:
@@ -1225,7 +1221,7 @@ func Test_SingleNodeUpgrades_NoSnapshots(t *testing.T) {
 				}
 				expected := `{"results":[{"columns":["COUNT(*)"],"types":["integer"],"values":[[20]]}]}`
 				if r == expected {
-					once.Do(func() { close(testSuccess) })
+					return
 				}
 			}
 		}
@@ -1270,13 +1266,9 @@ func Test_SingleNodeUpgrades_Snapshots(t *testing.T) {
 		defer timer.Stop()
 		ticker := time.NewTicker(100 * time.Millisecond)
 		defer ticker.Stop()
-		testSuccess := make(chan struct{})
-		var once sync.Once
 
 		for {
 			select {
-			case <-testSuccess:
-				return
 			case <-timer.C:
 				t.Fatalf(`timeout waiting for correct results with %s data`, dir)
 			case <-ticker.C:
@@ -1286,7 +1278,7 @@ func Test_SingleNodeUpgrades_Snapshots(t *testing.T) {
 				}
 				expected := `{"results":[{"columns":["COUNT(*)"],"types":["integer"],"values":[[20]]}]}`
 				if r == expected {
-					once.Do(func() { close(testSuccess) })
+					return
 				}
 			}
 		}
