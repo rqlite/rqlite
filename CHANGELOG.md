@@ -1,6 +1,7 @@
 ## v8.43.4 (unreleased)
 ### Implementation changes and bug fixes
-- [PR #2220](https://github.com/rqlite/rqlite/pull/2220): Allow AppendEntriesRequest to carry rqlite-specific messages.
+- [PR #2220](https://github.com/rqlite/rqlite/pull/2220): Allow `AppendEntriesRequest` to carry application-specific messages.
+- [PR #2221](https://github.com/rqlite/rqlite/pull/2221): Improve the CDC HTTP POST event envelope.
 
 ## v8.43.3 (August 14th 2025)
 ### Implementation changes and bug fixes
