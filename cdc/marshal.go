@@ -2,13 +2,17 @@ package cdc
 
 import (
 	"encoding/json"
+	"time"
 
 	"github.com/rqlite/rqlite/v8/command/proto"
 )
 
 // CDCMessagesEnvelope is the envelope for CDC messages as transported over HTTP.
 type CDCMessagesEnvelope struct {
-	Payload []*CDCMessage `json:"payload"`
+	ServiceID string        `json:"service_id,omitempty"`
+	NodeID    string        `json:"node_id"`
+	Payload   []*CDCMessage `json:"payload"`
+	Timestamp time.Time     `json:"timestamp"`
 }
 
 // CDCMessage represents a single CDC message containing an index and a list of events.
