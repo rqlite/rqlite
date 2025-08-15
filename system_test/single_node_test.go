@@ -1210,6 +1210,7 @@ func Test_SingleNodeUpgrades_NoSnapshots(t *testing.T) {
 		ticker := time.NewTicker(100 * time.Millisecond)
 		defer ticker.Stop()
 		testSuccess := make(chan struct{})
+		var once sync.Once
 
 		for {
 			select {
@@ -1224,7 +1225,7 @@ func Test_SingleNodeUpgrades_NoSnapshots(t *testing.T) {
 				}
 				expected := `{"results":[{"columns":["COUNT(*)"],"types":["integer"],"values":[[20]]}]}`
 				if r == expected {
-					close(testSuccess)
+					once.Do(func() { close(testSuccess) })
 				}
 			}
 		}
@@ -1270,6 +1271,7 @@ func Test_SingleNodeUpgrades_Snapshots(t *testing.T) {
 		ticker := time.NewTicker(100 * time.Millisecond)
 		defer ticker.Stop()
 		testSuccess := make(chan struct{})
+		var once sync.Once
 
 		for {
 			select {
@@ -1284,7 +1286,7 @@ func Test_SingleNodeUpgrades_Snapshots(t *testing.T) {
 				}
 				expected := `{"results":[{"columns":["COUNT(*)"],"types":["integer"],"values":[[20]]}]}`
 				if r == expected {
-					close(testSuccess)
+					once.Do(func() { close(testSuccess) })
 				}
 			}
 		}
