@@ -1195,8 +1195,7 @@ func Test_SingleNodeUpgrades_NoSnapshots(t *testing.T) {
 			t.Fatalf("failed to copy node test directory: %s", err)
 		}
 
-		mux, ln := mustNewOpenMux("")
-		defer ln.Close()
+		mux, _ := mustNewOpenMux("")
 		raftDialer := tcp.NewDialer(cluster.MuxRaftHeader, nil)
 		clstrDialer := tcp.NewDialer(cluster.MuxClusterHeader, nil)
 		node := mustNodeEncrypted("node1", destdir, false, false, mux, raftDialer, clstrDialer)
@@ -1255,8 +1254,7 @@ func Test_SingleNodeUpgrades_Snapshots(t *testing.T) {
 			t.Fatalf("failed to copy node test directory: %s", err)
 		}
 
-		mux, ln := mustNewOpenMux("")
-		defer ln.Close()
+		mux, _ := mustNewOpenMux("")
 		raftDialer := tcp.NewDialer(cluster.MuxRaftHeader, nil)
 		clstrDialer := tcp.NewDialer(cluster.MuxClusterHeader, nil)
 		node := mustNodeEncrypted("node1", destdir, false, false, mux, raftDialer, clstrDialer)
