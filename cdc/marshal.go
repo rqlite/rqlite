@@ -9,7 +9,7 @@ import (
 
 // CDCMessagesEnvelope is the envelope for CDC messages as transported over HTTP.
 type CDCMessagesEnvelope struct {
-	ServiceID string        `json"service_id,omitempty"`
+	ServiceID string        `json:"service_id,omitempty"`
 	NodeID    string        `json:"node_id"`
 	Payload   []*CDCMessage `json:"payload"`
 	Timestamp time.Time     `json:"timestamp"`
