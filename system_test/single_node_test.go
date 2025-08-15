@@ -1205,26 +1205,17 @@ func Test_SingleNodeUpgrades_NoSnapshots(t *testing.T) {
 			t.Fatalf("node never became leader with %s data:", dir)
 		}
 
-		timer := time.NewTimer(5 * time.Second)
-		defer timer.Stop()
-		ticker := time.NewTicker(100 * time.Millisecond)
-		defer ticker.Stop()
-
-		for {
-			select {
-			case <-timer.C:
-				t.Fatalf(`timeout waiting for correct results with %s data`, dir)
-			case <-ticker.C:
-				r, err := node.QueryNoneConsistency(`SELECT COUNT(*) FROM foo`)
-				if err != nil {
-					t.Fatalf("query failed with %s data: %s", dir, err)
-				}
-				expected := `{"results":[{"columns":["COUNT(*)"],"types":["integer"],"values":[[20]]}]}`
-				if r == expected {
-					return
-				}
+		testPoll(t, func() (bool, error) {
+			r, err := node.QueryNoneConsistency(`SELECT COUNT(*) FROM foo`)
+			if err != nil {
+				return false, fmt.Errorf("query failed with %s data: %w", dir, err)
 			}
-		}
+			expected := `{"results":[{"columns":["COUNT(*)"],"types":["integer"],"values":[[20]]}]}`
+			if r == expected {
+				return true, nil
+			}
+			return false, nil
+		}, 100*time.Millisecond, 5*time.Second)
 	}
 
 	for _, version := range versions {
@@ -1262,26 +1253,17 @@ func Test_SingleNodeUpgrades_Snapshots(t *testing.T) {
 			t.Fatalf("node never became leader with %s data:", dir)
 		}
 
-		timer := time.NewTimer(5 * time.Second)
-		defer timer.Stop()
-		ticker := time.NewTicker(100 * time.Millisecond)
-		defer ticker.Stop()
-
-		for {
-			select {
-			case <-timer.C:
-				t.Fatalf(`timeout waiting for correct results with %s data`, dir)
-			case <-ticker.C:
-				r, err := node.QueryNoneConsistency(`SELECT COUNT(*) FROM foo`)
-				if err != nil {
-					t.Fatalf("query failed with %s data: %s", dir, err)
-				}
-				expected := `{"results":[{"columns":["COUNT(*)"],"types":["integer"],"values":[[20]]}]}`
-				if r == expected {
-					return
-				}
+		testPoll(t, func() (bool, error) {
+			r, err := node.QueryNoneConsistency(`SELECT COUNT(*) FROM foo`)
+			if err != nil {
+				return false, fmt.Errorf("query failed with %s data: %w", dir, err)
 			}
-		}
+			expected := `{"results":[{"columns":["COUNT(*)"],"types":["integer"],"values":[[20]]}]}`
+			if r == expected {
+				return true, nil
+			}
+			return false, nil
+		}, 100*time.Millisecond, 5*time.Second)
 	}
 
 	for _, version := range versions {
