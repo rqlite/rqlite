@@ -23,6 +23,11 @@ type RetryPolicy int
 
 // Config holds the configuration for the CDC service.
 type Config struct {
+	// ServiceID is an optional field. If set, it will be part of the event sent to the downstream
+	// CDC consumer. This allows CDC consumers to receive events from multiple rqlite systems
+	// and differentiate between events sent by those systems.
+	ServiceID string `json:"service_id,omitempty"`
+
 	// LogOnly indicates whether the CDC service should only log events instead of sending
 	// them to the configured endpoint. This is mostly useful for testing.
 	LogOnly bool `json:"log_only"`
