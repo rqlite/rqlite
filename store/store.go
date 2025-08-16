@@ -102,28 +102,25 @@ var (
 )
 
 const (
-	snapshotsDirName           = "rsnapshots"
-	restoreScratchPattern      = "rqlite-restore-*"
-	bootScatchPattern          = "rqlite-boot-*"
-	backupScratchPattern       = "rqlite-backup-*"
-	walSnapshotScratchPattern  = "rqlite-wal-snapshot-*"
-	raftDBPath                 = "raft.db" // Changing this will break backwards compatibility.
-	peersPath                  = "raft/peers.json"
-	peersInfoPath              = "raft/peers.info"
-	retainSnapshotCount        = 1
-	applyTimeout               = 10 * time.Second
-	openTimeout                = 120 * time.Second
-	sqliteFile                 = "db.sqlite"
-	linearizableTimeout        = 1 * time.Second
-	leaderWaitDelay            = 100 * time.Millisecond
-	appliedWaitDelay           = 100 * time.Millisecond
-	commitEquivalenceDelay     = 50 * time.Millisecond
-	appliedIndexUpdateInterval = 5 * time.Second
-	connectionPoolCount        = 5
-	connectionTimeout          = 10 * time.Second
-	raftLogCacheSize           = 512
-	trailingScale              = 1.25
-	observerChanLen            = 50
+	snapshotsDirName          = "rsnapshots"
+	restoreScratchPattern     = "rqlite-restore-*"
+	bootScatchPattern         = "rqlite-boot-*"
+	backupScratchPattern      = "rqlite-backup-*"
+	walSnapshotScratchPattern = "rqlite-wal-snapshot-*"
+	raftDBPath                = "raft.db" // Changing this will break backwards compatibility.
+	peersPath                 = "raft/peers.json"
+	peersInfoPath             = "raft/peers.info"
+	applyTimeout              = 10 * time.Second
+	sqliteFile                = "db.sqlite"
+	linearizableTimeout       = 1 * time.Second
+	leaderWaitDelay           = 100 * time.Millisecond
+	appliedWaitDelay          = 100 * time.Millisecond
+	commitEquivalenceDelay    = 50 * time.Millisecond
+	connectionPoolCount       = 5
+	connectionTimeout         = 10 * time.Second
+	raftLogCacheSize          = 512
+	trailingScale             = 1.25
+	observerChanLen           = 50
 
 	baseVacuumTimeKey   = "rqlite_base_vacuum"
 	lastVacuumTimeKey   = "rqlite_last_vacuum"
