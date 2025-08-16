@@ -37,7 +37,6 @@ func Test_ServiceSingleEvent(t *testing.T) {
 		"node1",
 		t.TempDir(),
 		cl,
-		&mockStore{},
 		eventsCh,
 		cfg,
 	)
@@ -141,7 +140,6 @@ func Test_ServiceSingleEvent_LogOnly(t *testing.T) {
 		"node1",
 		t.TempDir(),
 		cl,
-		&mockStore{},
 		eventsCh,
 		cfg,
 	)
@@ -201,7 +199,6 @@ func Test_ServiceSingleEvent_Retry(t *testing.T) {
 		"node1",
 		t.TempDir(),
 		cl,
-		&mockStore{},
 		eventsCh,
 		cfg,
 	)
@@ -285,7 +282,6 @@ func Test_ServiceMultiEvent(t *testing.T) {
 		"node1",
 		t.TempDir(),
 		cl,
-		&mockStore{},
 		eventsCh,
 		cfg,
 	)
@@ -391,7 +387,6 @@ func Test_ServiceMultiEvent_Batch(t *testing.T) {
 		"node1",
 		t.TempDir(),
 		cl,
-		&mockStore{},
 		eventsCh,
 		cfg,
 	)
@@ -523,12 +518,15 @@ func (m *mockCluster) SignalLeaderChange(leader bool) {
 	}
 }
 
-type mockStore struct{}
-
-func (m *mockStore) Execute(*proto.ExecuteRequest) ([]*proto.ExecuteQueryResponse, error) {
-	return nil, nil
+func (m *mockCluster) SetHighWatermark(value uint64) error {
+	// Mock implementation does nothing.
+	return nil
 }
-func (m *mockStore) Query(*proto.QueryRequest) ([]*proto.QueryRows, error) { return nil, nil }
+
+func (m *mockCluster) GetHighWatermark() (uint64, error) {
+	// Mock implementation does nothing.
+	return 0, nil
+}
 
 func pollExpvarUntil(t *testing.T, name string, expected int64, timeout time.Duration) {
 	t.Helper()

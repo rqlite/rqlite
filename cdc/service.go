@@ -20,9 +20,8 @@ import (
 )
 
 const (
-	cdcDB            = "cdc.db"
-	highWatermarkKey = "high_watermark"
-	leaderChanLen    = 5 // Support any fast back-to-back leadership changes.
+	cdcDB         = "fifo.db"
+	leaderChanLen = 5 // Support any fast back-to-back leadership changes.
 )
 
 const (
@@ -49,21 +48,17 @@ func ResetStats() {
 	stats.Add(numSent, 0)
 }
 
-// Cluster is an interface that defines methods for cluster management.
+// Cluster is an interface that defines methods for cluster management and communication.
 type Cluster interface {
 	// RegisterLeaderChange registers the given channel which will receive
 	// a signal when the node detects that the Leader changes.
 	RegisterLeaderChange(c chan<- bool)
-}
 
-// Store is an interface that defines methods for executing commands and querying
-// the state of the store. It is used by the CDC service to read and write its own state.
-type Store interface {
-	// Execute allows us to write state to the store.
-	Execute(er *proto.ExecuteRequest) ([]*proto.ExecuteQueryResponse, error)
+	// SetHighWatermark sets the high watermark across the cluster.
+	SetHighWatermark(value uint64) error
 
-	// Query allows us to read state from the store.
-	Query(qr *proto.QueryRequest) ([]*proto.QueryRows, error)
+	// GetHighWatermark retrieves the high watermark for the cluster.
+	GetHighWatermark() (uint64, error)
 }
 
 // Service is a CDC service that reads events from a channel and processes them.
@@ -72,7 +67,6 @@ type Service struct {
 	nodeID string
 	dir    string
 	clstr  Cluster
-	str    Store
 
 	// in is the channel from which the CDC events are read.
 	in <-chan *proto.CDCIndexedEventGroup
@@ -150,7 +144,7 @@ type Service struct {
 }
 
 // NewService creates a new CDC service.
-func NewService(nodeID, dir string, clstr Cluster, str Store, in <-chan *proto.CDCIndexedEventGroup, cfg *Config) (*Service, error) {
+func NewService(nodeID, dir string, clstr Cluster, in <-chan *proto.CDCIndexedEventGroup, cfg *Config) (*Service, error) {
 	// Build the TLS configuration from the config fields
 	tlsConfig, err := cfg.TLSConfig()
 	if err != nil {
@@ -168,7 +162,6 @@ func NewService(nodeID, dir string, clstr Cluster, str Store, in <-chan *proto.C
 		nodeID:                nodeID,
 		dir:                   dir,
 		clstr:                 clstr,
-		str:                   str,
 		in:                    in,
 		logOnly:               cfg.LogOnly,
 		endpoint:              cfg.Endpoint,
@@ -182,12 +175,12 @@ func NewService(nodeID, dir string, clstr Cluster, str Store, in <-chan *proto.C
 		maxBatchSz:            cfg.MaxBatchSz,
 		maxBatchDelay:         cfg.MaxBatchDelay,
 		highWatermarkInterval: cfg.HighWatermarkInterval,
-		batcher:               queue.New[*proto.CDCIndexedEventGroup](cfg.MaxBatchSz, cfg.MaxBatchSz, cfg.MaxBatchDelay),
 		leaderObCh:            make(chan bool, leaderChanLen),
 		hwmObCh:               make(chan uint64, leaderChanLen),
 		done:                  make(chan struct{}),
 		logger:                log.New(os.Stdout, "[cdc-service] ", log.LstdFlags),
 	}
+	srv.initBatcher()
 
 	fifo, err := NewQueue(filepath.Join(dir, cdcDB))
 	if err != nil {
@@ -202,11 +195,6 @@ func NewService(nodeID, dir string, clstr Cluster, str Store, in <-chan *proto.C
 
 // Start starts the CDC service.
 func (s *Service) Start() error {
-	if s.highWatermarkingDisabled.IsNot() {
-		if err := s.createStateTable(); err != nil {
-			return err
-		}
-	}
 	s.wg.Add(2)
 	go s.writeToFIFO()
 	go s.mainLoop()
@@ -307,7 +295,7 @@ func (s *Service) mainLoop() {
 			}
 			preHWM = s.highWatermark.Load()
 			if s.isLeader.Is() {
-				if err := s.writeHighWatermark(s.highWatermark.Load()); err != nil {
+				if err := s.clstr.SetHighWatermark(s.highWatermark.Load()); err != nil {
 					s.logger.Printf("error writing high watermark to store: %v", err)
 				}
 			}
@@ -337,6 +325,7 @@ func (s *Service) mainLoop() {
 				stop = nil
 				<-done
 				done = nil
+				s.initBatcher()
 			}
 
 		case batch := <-s.batcher.C:
@@ -403,49 +392,13 @@ func (s *Service) mainLoop() {
 		case <-s.done:
 			if s.isLeader.Is() && s.highWatermarkingDisabled.IsNot() {
 				// Best effort to write the high watermark before stopping.
-				s.writeHighWatermark(s.highWatermark.Load())
+				s.clstr.SetHighWatermark(s.highWatermark.Load())
 			}
 			return
 		}
 	}
 }
 
-func (s *Service) createStateTable() error {
-	er := executeRequestFromString(`
-CREATE TABLE IF NOT EXISTS _rqlite_cdc_state (
-    k         TEXT PRIMARY KEY,
-    v_blob    BLOB,
-    v_text    TEXT,
-    v_int     INTEGER
-)`)
-	_, err := s.str.Execute(er)
-	return err
-}
-
-func (s *Service) writeHighWatermark(value uint64) error {
-	sql := fmt.Sprintf(`INSERT OR REPLACE INTO _rqlite_cdc_state(k, v_int) VALUES ('%s', %d)`, highWatermarkKey, value)
-	er := executeRequestFromString(sql)
-	_, err := s.str.Execute(er)
-	return err
-}
-
-func executeRequestFromString(s string) *proto.ExecuteRequest {
-	return executeRequestFromStrings([]string{s}, false, false)
-}
-
-// executeRequestFromStrings converts a slice of strings into a proto.ExecuteRequest
-func executeRequestFromStrings(s []string, timings, tx bool) *proto.ExecuteRequest {
-	stmts := make([]*proto.Statement, len(s))
-	for i := range s {
-		stmts[i] = &proto.Statement{
-			Sql: s[i],
-		}
-	}
-	return &proto.ExecuteRequest{
-		Request: &proto.Request{
-			Statements:  stmts,
-			Transaction: tx,
-		},
-		Timings: timings,
-	}
+func (s *Service) initBatcher() {
+	s.batcher = queue.New[*proto.CDCIndexedEventGroup](s.maxBatchSz, s.maxBatchSz, s.maxBatchDelay)
 }
