@@ -37,7 +37,6 @@ func Test_ServiceSingleEvent(t *testing.T) {
 		"node1",
 		t.TempDir(),
 		cl,
-		&mockStore{},
 		eventsCh,
 		cfg,
 	)
@@ -74,6 +73,7 @@ func Test_ServiceSingleEvent(t *testing.T) {
 			}
 			n++
 			exp := &CDCMessagesEnvelope{
+				NodeID: "node1",
 				Payload: []*CDCMessage{
 					{
 						Index: evs.Index,
@@ -141,7 +141,6 @@ func Test_ServiceSingleEvent_LogOnly(t *testing.T) {
 		"node1",
 		t.TempDir(),
 		cl,
-		&mockStore{},
 		eventsCh,
 		cfg,
 	)
@@ -201,7 +200,6 @@ func Test_ServiceSingleEvent_Retry(t *testing.T) {
 		"node1",
 		t.TempDir(),
 		cl,
-		&mockStore{},
 		eventsCh,
 		cfg,
 	)
@@ -230,6 +228,7 @@ func Test_ServiceSingleEvent_Retry(t *testing.T) {
 	select {
 	case got := <-bodyCh:
 		exp := &CDCMessagesEnvelope{
+			NodeID: "node1",
 			Payload: []*CDCMessage{
 				{
 					Index: evs.Index,
@@ -285,7 +284,6 @@ func Test_ServiceMultiEvent(t *testing.T) {
 		"node1",
 		t.TempDir(),
 		cl,
-		&mockStore{},
 		eventsCh,
 		cfg,
 	)
@@ -325,6 +323,7 @@ func Test_ServiceMultiEvent(t *testing.T) {
 	select {
 	case got := <-bodyCh:
 		exp := &CDCMessagesEnvelope{
+			NodeID: "node1",
 			Payload: []*CDCMessage{
 				{
 					Index: evs1.Index,
@@ -384,6 +383,7 @@ func Test_ServiceMultiEvent_Batch(t *testing.T) {
 	cl := &mockCluster{}
 
 	cfg := DefaultConfig()
+	cfg.ServiceID = "service1" // Test service ID inclusion.
 	cfg.Endpoint = testSrv.URL
 	cfg.MaxBatchSz = 2
 	cfg.MaxBatchDelay = 100 * time.Millisecond
@@ -391,7 +391,6 @@ func Test_ServiceMultiEvent_Batch(t *testing.T) {
 		"node1",
 		t.TempDir(),
 		cl,
-		&mockStore{},
 		eventsCh,
 		cfg,
 	)
@@ -441,6 +440,8 @@ func Test_ServiceMultiEvent_Batch(t *testing.T) {
 	select {
 	case got := <-bodyCh:
 		exp := &CDCMessagesEnvelope{
+			ServiceID: "service1",
+			NodeID:    "node1",
 			Payload: []*CDCMessage{
 				{
 					Index: evs1.Index,
@@ -480,6 +481,8 @@ func Test_ServiceMultiEvent_Batch(t *testing.T) {
 	select {
 	case got := <-bodyCh:
 		exp := &CDCMessagesEnvelope{
+			ServiceID: "service1",
+			NodeID:    "node1",
 			Payload: []*CDCMessage{
 				{
 					Index: evs3.Index,
@@ -523,12 +526,15 @@ func (m *mockCluster) SignalLeaderChange(leader bool) {
 	}
 }
 
-type mockStore struct{}
-
-func (m *mockStore) Execute(*proto.ExecuteRequest) ([]*proto.ExecuteQueryResponse, error) {
-	return nil, nil
+func (m *mockCluster) SetHighWatermark(value uint64) error {
+	// Mock implementation does nothing.
+	return nil
 }
-func (m *mockStore) Query(*proto.QueryRequest) ([]*proto.QueryRows, error) { return nil, nil }
+
+func (m *mockCluster) GetHighWatermark() (uint64, error) {
+	// Mock implementation does nothing.
+	return 0, nil
+}
 
 func pollExpvarUntil(t *testing.T, name string, expected int64, timeout time.Duration) {
 	t.Helper()
