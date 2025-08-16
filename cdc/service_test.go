@@ -531,11 +531,6 @@ func (m *mockCluster) SetHighWatermark(value uint64) error {
 	return nil
 }
 
-func (m *mockCluster) GetHighWatermark() (uint64, error) {
-	// Mock implementation does nothing.
-	return 0, nil
-}
-
 func pollExpvarUntil(t *testing.T, name string, expected int64, timeout time.Duration) {
 	t.Helper()
 	ticker := time.NewTicker(10 * time.Millisecond)

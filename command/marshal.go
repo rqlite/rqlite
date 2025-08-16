@@ -172,6 +172,18 @@ func UnmarshalLoadChunkRequest(b []byte, lr *proto.LoadChunkRequest) error {
 	return pb.Unmarshal(b, lr)
 }
 
+// MarshalAppendEntriesExtension marshals an AppendEntriesExtension
+// object into a byte slice.
+func MarshalAppendEntriesExtension(ext *proto.AppendEntriesExtension) ([]byte, error) {
+	return pb.Marshal(ext)
+}
+
+// UnmarshalAppendEntriesExtension unmarshals a byte slice into an
+// AppendEntriesExtension object.
+func UnmarshalAppendEntriesExtension(b []byte, ext *proto.AppendEntriesExtension) error {
+	return pb.Unmarshal(b, ext)
+}
+
 // UnmarshalSubCommand unmarshals a sub command m. It assumes that
 // m is the correct type.
 func UnmarshalSubCommand(c *proto.Command, m pb.Message) error {

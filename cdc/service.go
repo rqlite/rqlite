@@ -56,9 +56,6 @@ type Cluster interface {
 
 	// SetHighWatermark sets the high watermark across the cluster.
 	SetHighWatermark(value uint64) error
-
-	// GetHighWatermark retrieves the high watermark for the cluster.
-	GetHighWatermark() (uint64, error)
 }
 
 // Service is a CDC service that reads events from a channel and processes them.
