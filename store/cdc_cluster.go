@@ -54,28 +54,31 @@ func (c *CDCCluster) RegisterHWMChange(ch chan<- uint64) {
 }
 
 func (c *CDCCluster) appendEntriesTxHandler(req *raft.AppendEntriesRequest) (retErr error) {
-	if c.prevHWM.Load() == c.hwm.Load() {
+	hwm := c.hwm.Load()
+	if c.prevHWM.Load() == hwm {
 		return nil
 	}
 	defer func() {
 		if retErr == nil {
-			c.prevHWM.Store(c.hwm.Load())
+			c.prevHWM.Store(hwm)
 		}
 	}()
 
 	ex := proto.AppendEntriesExtension{
-		CdcHWM: c.hwm.Load(),
+		CdcHWM: hwm,
 	}
 	b, err := command.MarshalAppendEntriesExtension(&ex)
 	if err != nil {
 		return err
 	}
 
-	// Create a raft log and append to the end
-	log := &raft.Log{
-		Extensions: b,
+	if len(req.Entries) > 0 {
+		req.Entries[len(req.Entries)-1].Extensions = b
+	} else {
+		req.Entries = append(req.Entries, &raft.Log{
+			Extensions: b,
+		})
 	}
-	req.Entries = append(req.Entries, log)
 	return nil
 }
 
@@ -95,14 +98,12 @@ func (c *CDCCluster) appendEntriesRxHandler(req *raft.AppendEntriesRequest) erro
 		return err
 	}
 
-	// for every observer, send the high watermark
 	c.hwmObserversMu.RLock()
 	for _, ch := range c.hwmObservers {
 		select {
 		case ch <- ex.CdcHWM:
 		default:
-			// If the channel is full, we skip sending.
-			// This avoids blocking the AppendEntries handler.
+			// Avoid blocking the AppendEntries handler.
 		}
 	}
 	c.hwmObserversMu.RUnlock()
