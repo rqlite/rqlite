@@ -402,5 +402,9 @@ func (s *Service) mainLoop() {
 }
 
 func (s *Service) initBatcher() {
+	if s.batcher != nil {
+		s.batcher.Close()
+		s.batcher = nil
+	}
 	s.batcher = queue.New[*proto.CDCIndexedEventGroup](s.maxBatchSz, s.maxBatchSz, s.maxBatchDelay)
 }
