@@ -12,7 +12,7 @@ type CDCMessagesEnvelope struct {
 	ServiceID string        `json:"service_id,omitempty"`
 	NodeID    string        `json:"node_id"`
 	Payload   []*CDCMessage `json:"payload"`
-	Timestamp time.Time     `json:"timestamp"`
+	Timestamp int64         `json:"ts_ns,omitempty"`
 }
 
 // CDCMessage represents a single CDC message containing an index and a list of events.
@@ -32,13 +32,18 @@ type CDCMessageEvent struct {
 }
 
 // MarshalToEnvelopeJSON converts a slice of CDC events to a JSON envelope format.
-func MarshalToEnvelopeJSON(evs []*proto.CDCIndexedEventGroup) ([]byte, error) {
+func MarshalToEnvelopeJSON(serviceID, nodeID string, ts bool, evs []*proto.CDCIndexedEventGroup) ([]byte, error) {
 	if len(evs) == 0 {
 		return nil, nil
 	}
 
 	envelope := &CDCMessagesEnvelope{
-		Payload: make([]*CDCMessage, len(evs)),
+		ServiceID: serviceID,
+		NodeID:    nodeID,
+		Payload:   make([]*CDCMessage, len(evs)),
+	}
+	if ts {
+		envelope.Timestamp = time.Now().UnixNano()
 	}
 
 	for i, ev := range evs {

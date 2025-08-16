@@ -64,9 +64,10 @@ type Cluster interface {
 // Service is a CDC service that reads events from a channel and processes them.
 // It is used to stream changes to a HTTP endpoint.
 type Service struct {
-	nodeID string
-	dir    string
-	clstr  Cluster
+	serviceID string
+	nodeID    string
+	dir       string
+	clstr     Cluster
 
 	// in is the channel from which the CDC events are read.
 	in <-chan *proto.CDCIndexedEventGroup
@@ -159,6 +160,7 @@ func NewService(nodeID, dir string, clstr Cluster, in <-chan *proto.CDCIndexedEv
 	}
 
 	srv := &Service{
+		serviceID:             cfg.ServiceID,
 		nodeID:                nodeID,
 		dir:                   dir,
 		clstr:                 clstr,
@@ -339,7 +341,7 @@ func (s *Service) mainLoop() {
 				continue
 			}
 
-			b, err := MarshalToEnvelopeJSON(batch.Objects)
+			b, err := MarshalToEnvelopeJSON(s.serviceID, s.nodeID, false, batch.Objects)
 			if err != nil {
 				s.logger.Printf("error marshalling batch: %v", err)
 				continue
