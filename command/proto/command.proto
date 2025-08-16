@@ -201,3 +201,7 @@ message UpdateHookEvent {
 	string table = 3;
 	int64 row_id = 4;
 }
+
+message AppendEntriesExtension {
+	uint64 cdcHWM = 1;
+}

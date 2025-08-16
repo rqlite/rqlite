@@ -5,6 +5,8 @@ import (
 	"sync/atomic"
 
 	"github.com/hashicorp/raft"
+	"github.com/rqlite/rqlite/v8/command"
+	"github.com/rqlite/rqlite/v8/command/proto"
 )
 
 // CDCCluster is a struct that wraps a Store and implements the functionality
@@ -12,27 +14,23 @@ import (
 type CDCCluster struct {
 	str            *Store
 	hwm            atomic.Uint64
+	prevHWM        atomic.Uint64
 	hwmObserversMu sync.RWMutex
 	hwmObservers   []chan<- uint64
 }
 
 // NewCDCCluster creates a new CDCCluster instance.
 func NewCDCCluster(s *Store) *CDCCluster {
-	appendEntriesTxHandler := func(req *raft.AppendEntriesRequest) error {
-		return nil
-	}
-	appendEntriesRxHandler := func(req *raft.AppendEntriesRequest) error {
-		return nil
-	}
-
-	s.raftTn.SetAppendEntriesTxHandler(appendEntriesTxHandler)
-	s.raftTn.SetAppendEntriesRxHandler(appendEntriesRxHandler)
-
-	return &CDCCluster{
+	c := &CDCCluster{
 		str:          s,
 		hwm:          atomic.Uint64{},
 		hwmObservers: make([]chan<- uint64, 0),
 	}
+
+	s.raftTn.SetAppendEntriesTxHandler(c.appendEntriesTxHandler)
+	s.raftTn.SetAppendEntriesRxHandler(c.appendEntriesRxHandler)
+
+	return c
 }
 
 // SetHighWatermark sets the high watermark for the CDC service.
@@ -53,4 +51,60 @@ func (c *CDCCluster) RegisterHWMChange(ch chan<- uint64) {
 	c.hwmObserversMu.Lock()
 	defer c.hwmObserversMu.Unlock()
 	c.hwmObservers = append(c.hwmObservers, ch)
+}
+
+func (c *CDCCluster) appendEntriesTxHandler(req *raft.AppendEntriesRequest) (retErr error) {
+	if c.prevHWM.Load() == c.hwm.Load() {
+		return nil
+	}
+	defer func() {
+		if retErr == nil {
+			c.prevHWM.Store(c.hwm.Load())
+		}
+	}()
+
+	ex := proto.AppendEntriesExtension{
+		CdcHWM: c.hwm.Load(),
+	}
+	b, err := command.MarshalAppendEntriesExtension(&ex)
+	if err != nil {
+		return err
+	}
+
+	// Create a raft log and append to the end
+	log := &raft.Log{
+		Extensions: b,
+	}
+	req.Entries = append(req.Entries, log)
+	return nil
+}
+
+func (c *CDCCluster) appendEntriesRxHandler(req *raft.AppendEntriesRequest) error {
+	if len(req.Entries) == 0 {
+		return nil
+	}
+
+	// Only the last log will carry an extension.
+	lastLog := req.Entries[len(req.Entries)-1]
+	if lastLog.Extensions == nil {
+		return nil
+	}
+
+	var ex proto.AppendEntriesExtension
+	if err := command.UnmarshalAppendEntriesExtension(lastLog.Extensions, &ex); err != nil {
+		return err
+	}
+
+	// for every observer, send the high watermark
+	c.hwmObserversMu.RLock()
+	for _, ch := range c.hwmObservers {
+		select {
+		case ch <- ex.CdcHWM:
+		default:
+			// If the channel is full, we skip sending.
+			// This avoids blocking the AppendEntries handler.
+		}
+	}
+	c.hwmObserversMu.RUnlock()
+	return nil
 }

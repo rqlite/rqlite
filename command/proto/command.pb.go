@@ -1998,6 +1998,50 @@ func (x *UpdateHookEvent) GetRowId() int64 {
 	return 0
 }
 
+type AppendEntriesExtension struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	CdcHWM        uint64                 `protobuf:"varint,1,opt,name=cdcHWM,proto3" json:"cdcHWM,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *AppendEntriesExtension) Reset() {
+	*x = AppendEntriesExtension{}
+	mi := &file_command_proto_msgTypes[25]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *AppendEntriesExtension) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*AppendEntriesExtension) ProtoMessage() {}
+
+func (x *AppendEntriesExtension) ProtoReflect() protoreflect.Message {
+	mi := &file_command_proto_msgTypes[25]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use AppendEntriesExtension.ProtoReflect.Descriptor instead.
+func (*AppendEntriesExtension) Descriptor() ([]byte, []int) {
+	return file_command_proto_rawDescGZIP(), []int{25}
+}
+
+func (x *AppendEntriesExtension) GetCdcHWM() uint64 {
+	if x != nil {
+		return x.CdcHWM
+	}
+	return 0
+}
+
 var File_command_proto protoreflect.FileDescriptor
 
 const file_command_proto_rawDesc = "" +
@@ -2161,7 +2205,9 @@ const file_command_proto_rawDesc = "" +
 	"\n" +
 	"\x06UPDATE\x10\x02\x12\n" +
 	"\n" +
-	"\x06DELETE\x10\x03B+Z)github.com/rqlite/rqlite/v8/command/protob\x06proto3"
+	"\x06DELETE\x10\x03\"0\n" +
+	"\x16AppendEntriesExtension\x12\x16\n" +
+	"\x06cdcHWM\x18\x01 \x01(\x04R\x06cdcHWMB+Z)github.com/rqlite/rqlite/v8/command/protob\x06proto3"
 
 var (
 	file_command_proto_rawDescOnce sync.Once
@@ -2176,7 +2222,7 @@ func file_command_proto_rawDescGZIP() []byte {
 }
 
 var file_command_proto_enumTypes = make([]protoimpl.EnumInfo, 5)
-var file_command_proto_msgTypes = make([]protoimpl.MessageInfo, 25)
+var file_command_proto_msgTypes = make([]protoimpl.MessageInfo, 26)
 var file_command_proto_goTypes = []any{
 	(QueryRequest_Level)(0),           // 0: command.QueryRequest.Level
 	(BackupRequest_Format)(0),         // 1: command.BackupRequest.Format
@@ -2208,6 +2254,7 @@ var file_command_proto_goTypes = []any{
 	(*CDCIndexedEventGroup)(nil),      // 27: command.CDCIndexedEventGroup
 	(*CDCIndexedEventGroupBatch)(nil), // 28: command.CDCIndexedEventGroupBatch
 	(*UpdateHookEvent)(nil),           // 29: command.UpdateHookEvent
+	(*AppendEntriesExtension)(nil),    // 30: command.AppendEntriesExtension
 }
 var file_command_proto_depIdxs = []int32{
 	5,  // 0: command.Statement.parameters:type_name -> command.Parameter
@@ -2267,7 +2314,7 @@ func file_command_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_command_proto_rawDesc), len(file_command_proto_rawDesc)),
 			NumEnums:      5,
-			NumMessages:   25,
+			NumMessages:   26,
 			NumExtensions: 0,
 			NumServices:   0,
 		},
