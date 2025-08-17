@@ -29,6 +29,16 @@ long_help = """
 default = ""
 
 [[flags]]
+name = "CDCConfig"
+cli = "cdc-config"
+type = "string"
+short_help = "Set CDC HTTP endpoint, or path to CDC config file. If not set, CDC not enabled"
+long_help = """
+If the passed value is a valid URL then CDC events will be posted to that endpoint. Otherwise the value is interpreted as the path to the CDC configuration file.
+"""
+default = ""
+
+[[flags]]
 name = "HTTPAddr"
 cli = "http-addr"
 type = "string"

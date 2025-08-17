@@ -17,6 +17,8 @@ type Config struct {
 	ShowVersion bool
 	// Comma-delimited list of paths to directories, zipfiles, or tar.gz files containing SQLite extensions
 	ExtensionPaths []string
+	// Set CDC HTTP endpoint, or path to CDC config file. If not set, CDC not enabled
+	CDCConfig string
 	// HTTP server bind address. To enable HTTPS, set X.509 certificate and key
 	HTTPAddr string
 	// Advertised HTTP address. If not set, same as HTTP server bind address
@@ -137,6 +139,7 @@ func Forge(arguments []string) (*flag.FlagSet, *Config, error) {
 	fs.BoolVar(&config.ShowVersion, "version", false, "Show version information and exit")
 	var tmpExtensionPaths string
 	fs.StringVar(&tmpExtensionPaths, "extensions-path", "", "Comma-delimited list of paths to directories, zipfiles, or tar.gz files containing SQLite extensions")
+	fs.StringVar(&config.CDCConfig, "cdc-config", "", "Set CDC HTTP endpoint, or path to CDC config file. If not set, CDC not enabled")
 	fs.StringVar(&config.HTTPAddr, "http-addr", "localhost:4001", "HTTP server bind address. To enable HTTPS, set X.509 certificate and key")
 	fs.StringVar(&config.HTTPAdv, "http-adv-addr", "", "Advertised HTTP address. If not set, same as HTTP server bind address")
 	fs.StringVar(&config.HTTPAllowOrigin, "http-allow-origin", "", "Value to set for Access-Control-Allow-Origin HTTP header")
