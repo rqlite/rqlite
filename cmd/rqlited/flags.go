@@ -156,6 +156,11 @@ func (c *Config) Validate() error {
 		}
 	}
 
+	// Change-Data-Capture (CDC) OK?
+	if c.CDCConfig != "" && c.RaftNonVoter {
+		return errors.New("CDC cannot be enabled on non-voting nodes")
+	}
+
 	// Valid disco mode?
 	switch c.DiscoMode {
 	case "":
