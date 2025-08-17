@@ -29,7 +29,6 @@ func NewCDCCluster(s *Store) *CDCCluster {
 
 	s.raftTn.SetAppendEntriesTxHandler(c.appendEntriesTxHandler)
 	s.raftTn.SetAppendEntriesRxHandler(c.appendEntriesRxHandler)
-
 	return c
 }
 
@@ -53,32 +52,18 @@ func (c *CDCCluster) RegisterHWMChange(ch chan<- uint64) {
 	c.hwmObservers = append(c.hwmObservers, ch)
 }
 
-func (c *CDCCluster) appendEntriesTxHandler(req *raft.AppendEntriesRequest) (retErr error) {
-	hwm := c.hwm.Load()
-	if c.prevHWM.Load() == hwm {
-		return nil
-	}
-	defer func() {
-		if retErr == nil {
-			c.prevHWM.Store(hwm)
-		}
-	}()
-
+func (c *CDCCluster) appendEntriesTxHandler(req *raft.AppendEntriesRequest) error {
 	ex := proto.AppendEntriesExtension{
-		CdcHWM: hwm,
+		CdcHWM: c.hwm.Load(),
 	}
 	b, err := command.MarshalAppendEntriesExtension(&ex)
 	if err != nil {
 		return err
 	}
 
-	if len(req.Entries) > 0 {
-		req.Entries[len(req.Entries)-1].Extensions = b
-	} else {
-		req.Entries = append(req.Entries, &raft.Log{
-			Extensions: b,
-		})
-	}
+	req.Entries = append(req.Entries, &raft.Log{
+		Extensions: b,
+	})
 	return nil
 }
 
@@ -87,21 +72,36 @@ func (c *CDCCluster) appendEntriesRxHandler(req *raft.AppendEntriesRequest) erro
 		return nil
 	}
 
-	// Only the last log will carry an extension.
+	// Only the last log will carry an extension. If the last one doesn't have an extension,
+	// there's nothing to do.
 	lastLog := req.Entries[len(req.Entries)-1]
 	if lastLog.Extensions == nil {
 		return nil
 	}
 
+	// Last log entry has an extension which means that log entry was inserted by the application.
+	// Make sure we remove the last log entry before this function finishes, so the Raft system
+	// doesn't see it.
+	defer func() {
+		req.Entries = req.Entries[:len(req.Entries)-1]
+	}()
 	var ex proto.AppendEntriesExtension
 	if err := command.UnmarshalAppendEntriesExtension(lastLog.Extensions, &ex); err != nil {
 		return err
 	}
+	hwm := ex.CdcHWM
 
+	if hwm == c.prevHWM.Load() {
+		// Ignore any repeats once we're up to date.
+		return nil
+	}
+	c.prevHWM.Store(hwm)
+
+	// Notify observers.
 	c.hwmObserversMu.RLock()
 	for _, ch := range c.hwmObservers {
 		select {
-		case ch <- ex.CdcHWM:
+		case ch <- hwm:
 		default:
 			// Avoid blocking the AppendEntries handler.
 		}
