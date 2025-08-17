@@ -29,7 +29,6 @@ func NewCDCCluster(s *Store) *CDCCluster {
 
 	s.raftTn.SetAppendEntriesTxHandler(c.appendEntriesTxHandler)
 	s.raftTn.SetAppendEntriesRxHandler(c.appendEntriesRxHandler)
-
 	return c
 }
 
