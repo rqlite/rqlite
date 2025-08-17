@@ -5,6 +5,7 @@ import (
 	"log"
 	"net"
 	"os"
+	"sync"
 	"sync/atomic"
 	"time"
 
@@ -55,13 +56,16 @@ func (t *Transport) Addr() net.Addr {
 // custom configuration of the InstallSnapshot method.
 type NodeTransport struct {
 	*raft.NetworkTransport
+
+	aeMu                   sync.RWMutex
 	appendEntriesTxHandler func(req *raft.AppendEntriesRequest) error
 	appendEntriesRxHandler func(req *raft.AppendEntriesRequest) error
-	commandCommitIndex     *atomic.Uint64
-	leaderCommitIndex      *atomic.Uint64
-	done                   chan struct{}
-	closed                 bool
-	logger                 *log.Logger
+
+	commandCommitIndex *atomic.Uint64
+	leaderCommitIndex  *atomic.Uint64
+	done               chan struct{}
+	closed             bool
+	logger             *log.Logger
 }
 
 // NewNodeTransport returns an initialized NodeTransport.
@@ -91,6 +95,8 @@ func (n *NodeTransport) LeaderCommitIndex() uint64 {
 // is used to send an AppendEntries request. The handler is called *before* the request
 // is handed off to the Raft library.
 func (n *NodeTransport) SetAppendEntriesTxHandler(cb func(req *raft.AppendEntriesRequest) error) {
+	n.aeMu.Lock()
+	defer n.aeMu.Unlock()
 	n.appendEntriesTxHandler = cb
 }
 
@@ -98,6 +104,8 @@ func (n *NodeTransport) SetAppendEntriesTxHandler(cb func(req *raft.AppendEntrie
 // receives an AppendEntries request. The handler is called *before* the request
 // is handed off to the Raft library.
 func (n *NodeTransport) SetAppendEntriesRxHandler(cb func(req *raft.AppendEntriesRequest) error) {
+	n.aeMu.Lock()
+	defer n.aeMu.Unlock()
 	n.appendEntriesRxHandler = cb
 }
 
@@ -130,6 +138,8 @@ func (n *NodeTransport) InstallSnapshot(id raft.ServerID, target raft.ServerAddr
 
 // AppendEntries sends the appropriate RPC to the target node.
 func (n *NodeTransport) AppendEntries(id raft.ServerID, target raft.ServerAddress, args *raft.AppendEntriesRequest, resp *raft.AppendEntriesResponse) error {
+	n.aeMu.RLock()
+	defer n.aeMu.RUnlock()
 	if n.appendEntriesTxHandler != nil {
 		if err := n.appendEntriesTxHandler(args); err != nil {
 			return err
@@ -154,8 +164,11 @@ func (n *NodeTransport) Consumer() <-chan raft.RPC {
 						rpc.Reader = gzip.NewDecompressor(rpc.Reader)
 					}
 				case *raft.AppendEntriesRequest:
-					if n.appendEntriesRxHandler != nil {
-						if err := n.appendEntriesRxHandler(cmd); err != nil {
+					n.aeMu.RLock()
+					handler := n.appendEntriesRxHandler
+					n.aeMu.RUnlock()
+					if handler != nil {
+						if err := handler(cmd); err != nil {
 							n.logger.Printf("AppendEntriesRxHandler error: %v", err)
 						}
 					}

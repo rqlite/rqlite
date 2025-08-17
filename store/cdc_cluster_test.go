@@ -41,13 +41,6 @@ func Test_MultiNode_CDCCluster(t *testing.T) {
 	}
 	defer s1.Close(true)
 
-	s2, ln2 := mustNewStore(t)
-	defer ln2.Close()
-	if err := s2.Open(); err != nil {
-		t.Fatalf("failed to open single-node store: %s", err.Error())
-	}
-	defer s2.Close(true)
-
 	// Join stores
 	if err := s0.Bootstrap(NewServer(s0.ID(), s0.Addr(), true)); err != nil {
 		t.Fatalf("failed to bootstrap single-node store: %s", err.Error())
