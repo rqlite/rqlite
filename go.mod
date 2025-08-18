@@ -82,5 +82,6 @@ require (
 
 replace (
 	github.com/armon/go-metrics => github.com/hashicorp/go-metrics v0.5.1
+	github.com/hashicorp/raft => github.com/rqlite/raft2 v0.0.0-20250818173213-0dabcdd04a57
 	github.com/mattn/go-sqlite3 => github.com/rqlite/go-sqlite3 v1.40.0
 )

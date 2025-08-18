@@ -60,38 +60,22 @@ func (c *CDCCluster) appendEntriesTxHandler(req *raft.AppendEntriesRequest) erro
 	if err != nil {
 		return err
 	}
-
-	req.Entries = append(req.Entries, &raft.Log{
-		Extensions: b,
-	})
+	req.Extensions = b
 	return nil
 }
 
 func (c *CDCCluster) appendEntriesRxHandler(req *raft.AppendEntriesRequest) error {
-	if len(req.Entries) == 0 {
+	if len(req.Extensions) == 0 {
 		return nil
 	}
 
-	// Only the last log will carry an extension. If the last one doesn't have an extension,
-	// there's nothing to do.
-	lastLog := req.Entries[len(req.Entries)-1]
-	if lastLog.Extensions == nil {
-		return nil
-	}
-
-	// Last log entry has an extension which means that log entry was inserted by the application.
-	// Make sure we remove the last log entry before this function finishes, so the Raft system
-	// doesn't see it.
-	defer func() {
-		req.Entries = req.Entries[:len(req.Entries)-1]
-	}()
 	var ex proto.AppendEntriesExtension
-	if err := command.UnmarshalAppendEntriesExtension(lastLog.Extensions, &ex); err != nil {
+	if err := command.UnmarshalAppendEntriesExtension(req.Extensions, &ex); err != nil {
 		return err
 	}
 	hwm := ex.CdcHWM
 
-	if hwm == c.prevHWM.Load() {
+	if hwm <= c.prevHWM.Load() {
 		// Ignore any repeats once we're up to date.
 		return nil
 	}
