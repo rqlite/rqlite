@@ -44,8 +44,8 @@ type argT struct {
 	Prefix       string        `cli:"P,prefix" usage:"rqlited HTTP URL prefix" dft:"/"`
 	Insecure     bool          `cli:"i,insecure" usage:"do not verify rqlited HTTPS certificate" dft:"false"`
 	CACert       string        `cli:"c,ca-cert" usage:"path to trusted X.509 root CA certificate"`
-	ClientCert   string        `cli:"d,client-cert" usage:"path to client X.509 certificate for mTLS"`
-	ClientKey    string        `cli:"k,client-key" usage:"path to client X.509 key for mTLS"`
+	ClientCert   string        `cli:"d,client-cert" usage:"path to client X.509 certificate for mutual TLS"`
+	ClientKey    string        `cli:"k,client-key" usage:"path to client X.509 key for mutual TLS"`
 	Credentials  string        `cli:"u,user" usage:"set basic auth credentials in form username:password"`
 	Version      bool          `cli:"v,version" usage:"display CLI version"`
 	HTTPTimeout  clix.Duration `cli:"t,http-timeout" usage:"set timeout on HTTP requests" dft:"30s"`
