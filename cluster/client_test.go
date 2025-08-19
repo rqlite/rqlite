@@ -404,11 +404,8 @@ func Test_ClientBroadcast(t *testing.T) {
 	defer srv.Close()
 
 	c := NewClient(&simpleDialer{}, 0)
-	br := &proto.BroadcastRequest{
-		NodeId:        "node1",
-		HighwaterMark: 12345,
-	}
-	responses, err := c.Broadcast(br, 0, time.Second, srv.Addr())
+	c.SetLocal("node1", nil) // Set local node address to match test expectation
+	responses, err := c.BroadcastHWM(12345, 0, time.Second, srv.Addr())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -456,12 +453,8 @@ func Test_ClientBroadcast_MultipleNodes(t *testing.T) {
 	defer srv2.Close()
 
 	c := NewClient(&simpleDialer{}, 0)
-	br := &proto.BroadcastRequest{
-		NodeId:        "test-node",
-		HighwaterMark: 999,
-	}
-
-	responses, err := c.Broadcast(br, 0, time.Second, srv1.Addr(), srv2.Addr())
+	c.SetLocal("test-node", nil) // Set local node address to match test expectation
+	responses, err := c.BroadcastHWM(999, 0, time.Second, srv1.Addr(), srv2.Addr())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -477,12 +470,7 @@ func Test_ClientBroadcast_MultipleNodes(t *testing.T) {
 
 func Test_ClientBroadcast_EmptyNodeList(t *testing.T) {
 	c := NewClient(&simpleDialer{}, 0)
-	br := &proto.BroadcastRequest{
-		NodeId:        "test",
-		HighwaterMark: 1,
-	}
-
-	responses, err := c.Broadcast(br, 0, time.Second)
+	responses, err := c.BroadcastHWM(1, 0, time.Second)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -514,11 +502,8 @@ func Test_ClientBroadcast_WithError(t *testing.T) {
 	defer srv.Close()
 
 	c := NewClient(&simpleDialer{}, 0)
-	br := &proto.BroadcastRequest{
-		NodeId:        "node1",
-		HighwaterMark: 12345,
-	}
-	responses, err := c.Broadcast(br, 0, time.Second, srv.Addr())
+	c.SetLocal("node1", nil) // Set local node address to match test expectation
+	responses, err := c.BroadcastHWM(12345, 0, time.Second, srv.Addr())
 	if err != nil {
 		t.Fatal(err)
 	}

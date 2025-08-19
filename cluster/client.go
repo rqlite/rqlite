@@ -522,10 +522,21 @@ func (c *Client) Join(jr *command.JoinRequest, nodeAddr string, creds *proto.Cre
 	}
 }
 
-// Broadcast performs a broadcast to all specified nodes.
-func (c *Client) Broadcast(br *proto.BroadcastRequest, retries int, timeout time.Duration, nodeAddr ...string) (map[string]*proto.BroadcastResponse, error) {
+// BroadcastHWM performs a broadcast to all specified nodes.
+func (c *Client) BroadcastHWM(hwm uint64, retries int, timeout time.Duration, nodeAddr ...string) (map[string]*proto.BroadcastResponse, error) {
 	if len(nodeAddr) == 0 {
 		return map[string]*proto.BroadcastResponse{}, nil
+	}
+
+	// Get local node address for the broadcast request
+	c.localMu.RLock()
+	localAddr := c.localNodeAddr
+	c.localMu.RUnlock()
+
+	// Create the broadcast request
+	br := &proto.BroadcastRequest{
+		NodeId:        localAddr,
+		HighwaterMark: hwm,
 	}
 
 	// Channel to collect results
