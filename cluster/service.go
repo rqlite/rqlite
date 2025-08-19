@@ -560,13 +560,13 @@ func (s *Service) handleConn(conn net.Conn) {
 				return
 			}
 
-		case proto.Command_COMMAND_TYPE_BROADCAST:
+		case proto.Command_COMMAND_TYPE_HIGHWATER_MARK_UPDATE:
 			stats.Add(numBroadcastRequest, 1)
-			resp := &proto.BroadcastResponse{}
+			resp := &proto.HighwaterMarkUpdateResponse{}
 
-			br := c.GetBroadcastRequest()
+			br := c.GetHighwaterMarkUpdateRequest()
 			if br == nil {
-				resp.Error = "BroadcastRequest is nil"
+				resp.Error = "HighwaterMarkUpdateRequest is nil"
 			} else {
 				// For now, just log the request and respond with no error
 				log.Printf("Received broadcast request: node_id=%s, highwater_mark=%d", br.NodeId, br.HighwaterMark)

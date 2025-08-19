@@ -637,9 +637,9 @@ func Test_ServiceHandleBroadcast(t *testing.T) {
 
 	// Create broadcast command
 	command := &proto.Command{
-		Type: proto.Command_COMMAND_TYPE_BROADCAST,
-		Request: &proto.Command_BroadcastRequest{
-			BroadcastRequest: &proto.BroadcastRequest{
+		Type: proto.Command_COMMAND_TYPE_HIGHWATER_MARK_UPDATE,
+		Request: &proto.Command_HighwaterMarkUpdateRequest{
+			HighwaterMarkUpdateRequest: &proto.HighwaterMarkUpdateRequest{
 				NodeId:        "test-node",
 				HighwaterMark: 987654,
 			},
@@ -658,7 +658,7 @@ func Test_ServiceHandleBroadcast(t *testing.T) {
 	}
 
 	// Parse response
-	resp := &proto.BroadcastResponse{}
+	resp := &proto.HighwaterMarkUpdateResponse{}
 	if err := pb.Unmarshal(p, resp); err != nil {
 		t.Fatalf("failed to unmarshal response: %s", err)
 	}

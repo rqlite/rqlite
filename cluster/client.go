@@ -523,9 +523,9 @@ func (c *Client) Join(jr *command.JoinRequest, nodeAddr string, creds *proto.Cre
 }
 
 // BroadcastHWM performs a broadcast to all specified nodes.
-func (c *Client) BroadcastHWM(hwm uint64, retries int, timeout time.Duration, nodeAddr ...string) (map[string]*proto.BroadcastResponse, error) {
+func (c *Client) BroadcastHWM(hwm uint64, retries int, timeout time.Duration, nodeAddr ...string) (map[string]*proto.HighwaterMarkUpdateResponse, error) {
 	if len(nodeAddr) == 0 {
-		return map[string]*proto.BroadcastResponse{}, nil
+		return map[string]*proto.HighwaterMarkUpdateResponse{}, nil
 	}
 
 	// Get local node address for the broadcast request
@@ -534,14 +534,14 @@ func (c *Client) BroadcastHWM(hwm uint64, retries int, timeout time.Duration, no
 	c.localMu.RUnlock()
 
 	// Create the broadcast request
-	br := &proto.BroadcastRequest{
+	br := &proto.HighwaterMarkUpdateRequest{
 		NodeId:        localAddr,
 		HighwaterMark: hwm,
 	}
 
 	// Channel to collect results
 	type result struct {
-		resp *proto.BroadcastResponse
+		resp *proto.HighwaterMarkUpdateResponse
 		addr string
 		err  error
 	}
@@ -553,9 +553,9 @@ func (c *Client) BroadcastHWM(hwm uint64, retries int, timeout time.Duration, no
 		go func(nodeAddress string) {
 			// Create the command
 			command := &proto.Command{
-				Type: proto.Command_COMMAND_TYPE_BROADCAST,
-				Request: &proto.Command_BroadcastRequest{
-					BroadcastRequest: br,
+				Type: proto.Command_COMMAND_TYPE_HIGHWATER_MARK_UPDATE,
+				Request: &proto.Command_HighwaterMarkUpdateRequest{
+					HighwaterMarkUpdateRequest: br,
 				},
 			}
 
@@ -586,7 +586,7 @@ func (c *Client) BroadcastHWM(hwm uint64, retries int, timeout time.Duration, no
 				}
 
 				// Parse response
-				resp := &proto.BroadcastResponse{}
+				resp := &proto.HighwaterMarkUpdateResponse{}
 				if err := pb.Unmarshal(p, resp); err != nil {
 					lastErr = err
 					continue
@@ -603,7 +603,7 @@ func (c *Client) BroadcastHWM(hwm uint64, retries int, timeout time.Duration, no
 	}
 
 	// Collect results with timeout
-	responses := make(map[string]*proto.BroadcastResponse)
+	responses := make(map[string]*proto.HighwaterMarkUpdateResponse)
 	collected := 0
 
 	timeoutChan := time.After(timeout)
@@ -612,7 +612,7 @@ func (c *Client) BroadcastHWM(hwm uint64, retries int, timeout time.Duration, no
 		select {
 		case res := <-resultChan:
 			if res.err != nil {
-				responses[res.addr] = &proto.BroadcastResponse{Error: res.err.Error()}
+				responses[res.addr] = &proto.HighwaterMarkUpdateResponse{Error: res.err.Error()}
 			} else {
 				responses[res.addr] = res.resp
 			}
@@ -621,7 +621,7 @@ func (c *Client) BroadcastHWM(hwm uint64, retries int, timeout time.Duration, no
 			// Timeout reached, fill remaining responses with timeout errors
 			for _, addr := range nodeAddr {
 				if _, exists := responses[addr]; !exists {
-					responses[addr] = &proto.BroadcastResponse{Error: "timeout"}
+					responses[addr] = &proto.HighwaterMarkUpdateResponse{Error: "timeout"}
 				}
 			}
 			collected = len(nodeAddr)

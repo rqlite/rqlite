@@ -380,12 +380,12 @@ func Test_ClientBroadcast(t *testing.T) {
 			// test exit can cause that too.
 			return
 		}
-		if c.Type != proto.Command_COMMAND_TYPE_BROADCAST {
+		if c.Type != proto.Command_COMMAND_TYPE_HIGHWATER_MARK_UPDATE {
 			t.Fatalf("unexpected command type: %d", c.Type)
 		}
-		br := c.GetBroadcastRequest()
+		br := c.GetHighwaterMarkUpdateRequest()
 		if br == nil {
-			t.Fatal("expected broadcast request, got nil")
+			t.Fatal("expected highwater mark update request, got nil")
 		}
 		if br.NodeId != "node1" {
 			t.Fatalf("unexpected node_id, got %s", br.NodeId)
@@ -394,7 +394,7 @@ func Test_ClientBroadcast(t *testing.T) {
 			t.Fatalf("unexpected highwater_mark, got %d", br.HighwaterMark)
 		}
 
-		p, err = pb.Marshal(&proto.BroadcastResponse{})
+		p, err = pb.Marshal(&proto.HighwaterMarkUpdateResponse{})
 		if err != nil {
 			conn.Close()
 		}
@@ -433,11 +433,11 @@ func Test_ClientBroadcast_MultipleNodes(t *testing.T) {
 		if c == nil {
 			return
 		}
-		if c.Type != proto.Command_COMMAND_TYPE_BROADCAST {
+		if c.Type != proto.Command_COMMAND_TYPE_HIGHWATER_MARK_UPDATE {
 			t.Fatalf("unexpected command type: %d", c.Type)
 		}
 
-		p, err = pb.Marshal(&proto.BroadcastResponse{})
+		p, err = pb.Marshal(&proto.HighwaterMarkUpdateResponse{})
 		if err != nil {
 			conn.Close()
 		}
@@ -488,11 +488,11 @@ func Test_ClientBroadcast_WithError(t *testing.T) {
 		if c == nil {
 			return
 		}
-		if c.Type != proto.Command_COMMAND_TYPE_BROADCAST {
+		if c.Type != proto.Command_COMMAND_TYPE_HIGHWATER_MARK_UPDATE {
 			t.Fatalf("unexpected command type: %d", c.Type)
 		}
 
-		p, err = pb.Marshal(&proto.BroadcastResponse{Error: "test error"})
+		p, err = pb.Marshal(&proto.HighwaterMarkUpdateResponse{Error: "test error"})
 		if err != nil {
 			conn.Close()
 		}

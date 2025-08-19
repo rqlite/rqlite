@@ -31,7 +31,7 @@ message Command {
         COMMAND_TYPE_LOAD_CHUNK = 10;
         COMMAND_TYPE_BACKUP_STREAM = 11;
         COMMAND_TYPE_STEPDOWN = 12;
-        COMMAND_TYPE_BROADCAST = 13;
+        COMMAND_TYPE_HIGHWATER_MARK_UPDATE = 13;
     }
     Type type = 1;
 
@@ -46,7 +46,7 @@ message Command {
         command.ExecuteQueryRequest execute_query_request = 10;
         command.LoadChunkRequest load_chunk_request = 11;
         command.StepdownRequest stepdown_request = 12;
-        BroadcastRequest broadcast_request = 13;
+        HighwaterMarkUpdateRequest highwater_mark_update_request = 13;
     }
 
     Credentials credentials = 4;
@@ -100,11 +100,11 @@ message CommandStepdownResponse {
     string error = 1;
 }
 
-message BroadcastRequest {
+message HighwaterMarkUpdateRequest {
     string node_id = 1;
     uint64 highwater_mark = 2;
 }
 
-message BroadcastResponse {
+message HighwaterMarkUpdateResponse {
     string error = 1;
 }
