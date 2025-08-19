@@ -24,18 +24,19 @@ import (
 var stats *expvar.Map
 
 const (
-	numGetNodeAPIRequest  = "num_get_node_api_req"
-	numGetNodeAPIResponse = "num_get_node_api_resp"
-	numExecuteRequest     = "num_execute_req"
-	numQueryRequest       = "num_query_req"
-	numRequestRequest     = "num_request_req"
-	numBackupRequest      = "num_backup_req"
-	numLoadRequest        = "num_load_req"
-	numRemoveNodeRequest  = "num_remove_node_req"
-	numNotifyRequest      = "num_notify_req"
-	numJoinRequest        = "num_join_req"
-	numStepdownRequest    = "num_stepdown_req"
-	numBroadcastRequest   = "num_broadcast_req"
+	numGetNodeAPIRequest   = "num_get_node_api_req"
+	numGetNodeAPIResponse  = "num_get_node_api_resp"
+	numExecuteRequest      = "num_execute_req"
+	numQueryRequest        = "num_query_req"
+	numRequestRequest      = "num_request_req"
+	numBackupRequest       = "num_backup_req"
+	numLoadRequest         = "num_load_req"
+	numRemoveNodeRequest   = "num_remove_node_req"
+	numNotifyRequest       = "num_notify_req"
+	numJoinRequest         = "num_join_req"
+	numStepdownRequest     = "num_stepdown_req"
+	numBroadcastHWMRequest = "num_broadcast_hwm_req"
+	numHWMUpdateDropped    = "num_hwm_update_dropped"
 
 	numClientRetries            = "num_client_retries"
 	numGetNodeAPIRequestRetries = "num_get_node_api_req_retries"
@@ -72,7 +73,8 @@ func init() {
 	stats.Add(numNotifyRequest, 0)
 	stats.Add(numJoinRequest, 0)
 	stats.Add(numStepdownRequest, 0)
-	stats.Add(numBroadcastRequest, 0)
+	stats.Add(numBroadcastHWMRequest, 0)
+	stats.Add(numHWMUpdateDropped, 0)
 	stats.Add(numClientRetries, 0)
 	stats.Add(numGetNodeAPIRequestRetries, 0)
 	stats.Add(numClientLoadRetries, 0)
@@ -149,10 +151,10 @@ type Service struct {
 	credentialStore CredentialStore
 
 	mu         sync.RWMutex
-	https      bool                                     // Serving HTTPS?
-	apiAddr    string                                   // host:port this node serves the HTTP API.
-	version    string                                   // Version of software this node is running.
-	hwmUpdateC chan<- *proto.HighwaterMarkUpdateRequest // Channel for HWM updates
+	https      bool          // Serving HTTPS?
+	apiAddr    string        // host:port this node serves the HTTP API.
+	version    string        // Version of software this node is running.
+	hwmUpdateC chan<- uint64 // Channel for HWM updates
 
 	logger *log.Logger
 }
@@ -183,7 +185,7 @@ func (s *Service) Close() error {
 }
 
 // RegisterHWMUpdate registers a channel to receive highwater mark update requests.
-func (s *Service) RegisterHWMUpdate(c chan<- *proto.HighwaterMarkUpdateRequest) {
+func (s *Service) RegisterHWMUpdate(c chan<- uint64) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.hwmUpdateC = c
@@ -569,7 +571,7 @@ func (s *Service) handleConn(conn net.Conn) {
 			}
 
 		case proto.Command_COMMAND_TYPE_HIGHWATER_MARK_UPDATE:
-			stats.Add(numBroadcastRequest, 1)
+			stats.Add(numBroadcastHWMRequest, 1)
 			resp := &proto.HighwaterMarkUpdateResponse{}
 
 			br := c.GetHighwaterMarkUpdateRequest()
@@ -580,15 +582,13 @@ func (s *Service) handleConn(conn net.Conn) {
 				s.mu.RLock()
 				if s.hwmUpdateC != nil {
 					select {
-					case s.hwmUpdateC <- br:
+					case s.hwmUpdateC <- br.HighwaterMark:
 					default:
 						// Channel is full, don't block
+						stats.Add(numHWMUpdateDropped, 1)
 					}
 				}
 				s.mu.RUnlock()
-
-				// For now, also log the request and respond with no error
-				log.Printf("Received broadcast request: node_id=%s, highwater_mark=%d", br.NodeId, br.HighwaterMark)
 			}
 			if err := marshalAndWrite(conn, resp); err != nil {
 				return

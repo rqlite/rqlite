@@ -473,7 +473,7 @@ func Test_ServiceRegisterHWMUpdate(t *testing.T) {
 	defer s.Close()
 
 	// Create a channel to receive highwater mark updates
-	hwmCh := make(chan *proto.HighwaterMarkUpdateRequest, 1)
+	hwmCh := make(chan uint64, 1)
 	s.RegisterHWMUpdate(hwmCh)
 
 	// Create a client and send highwater mark update
@@ -501,11 +501,8 @@ func Test_ServiceRegisterHWMUpdate(t *testing.T) {
 	// Check that we received the update on the channel
 	select {
 	case hwmUpdate := <-hwmCh:
-		if hwmUpdate.NodeId != "test-node" {
-			t.Fatalf("expected node_id to be 'test-node', got: %s", hwmUpdate.NodeId)
-		}
-		if hwmUpdate.HighwaterMark != testHWM {
-			t.Fatalf("expected highwater_mark to be %d, got: %d", testHWM, hwmUpdate.HighwaterMark)
+		if hwmUpdate != testHWM {
+			t.Fatalf("expected highwater_mark to be %d, got: %d", testHWM, hwmUpdate)
 		}
 	case <-time.After(5 * time.Second):
 		t.Fatalf("timeout waiting for highwater mark update on channel")
