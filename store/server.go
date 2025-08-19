@@ -67,6 +67,36 @@ func (s Servers) Contains(id string) bool {
 	return false
 }
 
+// Voters returns a new slice of servers, only containing the voting nodes.
+func (s Servers) Voters() Servers {
+	if s == nil {
+		return nil
+	}
+
+	var voters Servers
+	for _, n := range s {
+		if n != nil && n.Suffrage != "Nonvoter" {
+			voters = append(voters, n)
+		}
+	}
+	return voters
+}
+
+// NonVoters returns a new slice of servers, only containing the non-voting nodes.
+func (s Servers) NonVoters() Servers {
+	if s == nil {
+		return nil
+	}
+
+	var nonVoters Servers
+	for _, n := range s {
+		if n != nil && n.Suffrage == "Nonvoter" {
+			nonVoters = append(nonVoters, n)
+		}
+	}
+	return nonVoters
+}
+
 func (s Servers) Less(i, j int) bool { return s[i].ID < s[j].ID }
 func (s Servers) Len() int           { return len(s) }
 func (s Servers) Swap(i, j int)      { s[i], s[j] = s[j], s[i] }
