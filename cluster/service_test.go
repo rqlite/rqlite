@@ -13,7 +13,6 @@ import (
 	"github.com/rqlite/rqlite/v8/cluster/proto"
 	command "github.com/rqlite/rqlite/v8/command/proto"
 	"github.com/rqlite/rqlite/v8/testdata/x509"
-	pb "google.golang.org/protobuf/proto"
 )
 
 func Test_NewServiceOpenClose(t *testing.T) {
@@ -425,6 +424,41 @@ func Test_NewServiceJoin(t *testing.T) {
 	}
 }
 
+func Test_ServiceHandleHighwaterMarkUpdate(t *testing.T) {
+	ml := mustNewMockTransport()
+	mgr := mustNewMockManager()
+	s := New(ml, mustNewMockDatabase(), mgr, mustNewMockCredentialStore())
+	if s == nil {
+		t.Fatalf("failed to create cluster service")
+	}
+
+	if err := s.Open(); err != nil {
+		t.Fatalf("failed to open cluster service")
+	}
+	defer s.Close()
+
+	// Create a client and send highwater mark update
+	c := NewClient(ml, 30*time.Second)
+	c.SetLocal("test-node", nil)
+
+	// Use the client to send a highwater mark update
+	responses, err := c.BroadcastHWM(987654, 0, 5*time.Second, s.Addr())
+	if err != nil {
+		t.Fatalf("failed to broadcast highwater mark update: %s", err)
+	}
+
+	// Check that we got a response for the service address
+	resp, ok := responses[s.Addr()]
+	if !ok {
+		t.Fatalf("expected response for address %s", s.Addr())
+	}
+
+	// Check response has no error
+	if resp.Error != "" {
+		t.Fatalf("expected no error, got: %s", resp.Error)
+	}
+}
+
 type mockTransport struct {
 	tn              net.Listener
 	remoteEncrypted bool
@@ -614,59 +648,6 @@ func (m *mockCredentialStore) AA(username, password, perm string) bool {
 
 func mustNewMockCredentialStore() *mockCredentialStore {
 	return &mockCredentialStore{HasPermOK: true}
-}
-
-func Test_ServiceHandleBroadcast(t *testing.T) {
-	ml := mustNewMockTransport()
-	mgr := mustNewMockManager()
-	s := New(ml, mustNewMockDatabase(), mgr, mustNewMockCredentialStore())
-	if s == nil {
-		t.Fatalf("failed to create cluster service")
-	}
-
-	if err := s.Open(); err != nil {
-		t.Fatalf("failed to open cluster service")
-	}
-	defer s.Close()
-
-	c, err := net.Dial("tcp", s.Addr())
-	if err != nil {
-		t.Fatalf("failed to connect to service")
-	}
-	defer c.Close()
-
-	// Create broadcast command
-	command := &proto.Command{
-		Type: proto.Command_COMMAND_TYPE_HIGHWATER_MARK_UPDATE,
-		Request: &proto.Command_HighwaterMarkUpdateRequest{
-			HighwaterMarkUpdateRequest: &proto.HighwaterMarkUpdateRequest{
-				NodeId:        "test-node",
-				HighwaterMark: 987654,
-			},
-		},
-	}
-
-	// Send command
-	if err := writeCommand(c, command, 5*time.Second); err != nil {
-		t.Fatalf("failed to write command: %s", err)
-	}
-
-	// Read response
-	p, err := readResponse(c, 5*time.Second)
-	if err != nil {
-		t.Fatalf("failed to read response: %s", err)
-	}
-
-	// Parse response
-	resp := &proto.HighwaterMarkUpdateResponse{}
-	if err := pb.Unmarshal(p, resp); err != nil {
-		t.Fatalf("failed to unmarshal response: %s", err)
-	}
-
-	// Check response
-	if resp.Error != "" {
-		t.Fatalf("expected no error, got: %s", resp.Error)
-	}
 }
 
 func makeCredentials(username, password string) *proto.Credentials {
