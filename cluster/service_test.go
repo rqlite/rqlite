@@ -459,6 +459,59 @@ func Test_ServiceHandleHighwaterMarkUpdate(t *testing.T) {
 	}
 }
 
+func Test_ServiceRegisterHWMUpdate(t *testing.T) {
+	ml := mustNewMockTransport()
+	mgr := mustNewMockManager()
+	s := New(ml, mustNewMockDatabase(), mgr, mustNewMockCredentialStore())
+	if s == nil {
+		t.Fatalf("failed to create cluster service")
+	}
+
+	if err := s.Open(); err != nil {
+		t.Fatalf("failed to open cluster service")
+	}
+	defer s.Close()
+
+	// Create a channel to receive highwater mark updates
+	hwmCh := make(chan *proto.HighwaterMarkUpdateRequest, 1)
+	s.RegisterHWMUpdate(hwmCh)
+
+	// Create a client and send highwater mark update
+	c := NewClient(ml, 30*time.Second)
+	c.SetLocal("test-node", nil)
+
+	// Use the client to send a highwater mark update
+	testHWM := uint64(123456)
+	responses, err := c.BroadcastHWM(testHWM, 0, 5*time.Second, s.Addr())
+	if err != nil {
+		t.Fatalf("failed to broadcast highwater mark update: %s", err)
+	}
+
+	// Check that we got a response for the service address
+	resp, ok := responses[s.Addr()]
+	if !ok {
+		t.Fatalf("expected response for address %s", s.Addr())
+	}
+
+	// Check response has no error
+	if resp.Error != "" {
+		t.Fatalf("expected no error, got: %s", resp.Error)
+	}
+
+	// Check that we received the update on the channel
+	select {
+	case hwmUpdate := <-hwmCh:
+		if hwmUpdate.NodeId != "test-node" {
+			t.Fatalf("expected node_id to be 'test-node', got: %s", hwmUpdate.NodeId)
+		}
+		if hwmUpdate.HighwaterMark != testHWM {
+			t.Fatalf("expected highwater_mark to be %d, got: %d", testHWM, hwmUpdate.HighwaterMark)
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatalf("timeout waiting for highwater mark update on channel")
+	}
+}
+
 type mockTransport struct {
 	tn              net.Listener
 	remoteEncrypted bool
