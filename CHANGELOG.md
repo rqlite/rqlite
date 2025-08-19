@@ -3,6 +3,7 @@
 - [PR #2220](https://github.com/rqlite/rqlite/pull/2220): Allow `AppendEntriesRequest` to carry application-specific messages.
 - [PR #2221](https://github.com/rqlite/rqlite/pull/2221): Improve the CDC HTTP POST event envelope.
 - [PR #2226](https://github.com/rqlite/rqlite/pull/2226), [PR #2228](https://github.com/rqlite/rqlite/pull/2228): Initial integration between Store and CDC Service.
+- [PR #2231](https://github.com/rqlite/rqlite/pull/2231): Implement cluster-wide broadcast of CDC HWM, fixes issue [#2230](https://github.com/rqlite/rqlite/issues/2230).
 
 ## v8.43.3 (August 14th 2025)
 ### Implementation changes and bug fixes
