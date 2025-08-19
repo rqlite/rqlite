@@ -368,3 +368,153 @@ func (s *simpleDialer) Dial(address string, timeout time.Duration) (net.Conn, er
 	}
 	return conn, nil
 }
+
+func Test_ClientBroadcast(t *testing.T) {
+	srv := servicetest.NewService()
+	srv.Handler = func(conn net.Conn) {
+		var p []byte
+		var err error
+		c := readCommand(conn)
+		if c == nil {
+			// Error on connection, so give up, as normal
+			// test exit can cause that too.
+			return
+		}
+		if c.Type != proto.Command_COMMAND_TYPE_HIGHWATER_MARK_UPDATE {
+			t.Fatalf("unexpected command type: %d", c.Type)
+		}
+		br := c.GetHighwaterMarkUpdateRequest()
+		if br == nil {
+			t.Fatal("expected highwater mark update request, got nil")
+		}
+		if br.NodeId != "node1" {
+			t.Fatalf("unexpected node_id, got %s", br.NodeId)
+		}
+		if br.HighwaterMark != 12345 {
+			t.Fatalf("unexpected highwater_mark, got %d", br.HighwaterMark)
+		}
+
+		p, err = pb.Marshal(&proto.HighwaterMarkUpdateResponse{})
+		if err != nil {
+			conn.Close()
+		}
+		writeBytesWithLength(conn, p)
+	}
+	srv.Start()
+	defer srv.Close()
+
+	c := NewClient(&simpleDialer{}, 0)
+	c.SetLocal("node1", nil) // Set local node address to match test expectation
+	responses, err := c.BroadcastHWM(12345, 0, time.Second, srv.Addr())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(responses) != 1 {
+		t.Fatalf("expected 1 response, got %d", len(responses))
+	}
+	resp, exists := responses[srv.Addr()]
+	if !exists {
+		t.Fatalf("response for %s not found", srv.Addr())
+	}
+	if resp.Error != "" {
+		t.Fatalf("unexpected error in response: %s", resp.Error)
+	}
+}
+
+func Test_ClientBroadcast_MultipleNodes(t *testing.T) {
+	// Create multiple test services
+	srv1 := servicetest.NewService()
+	srv2 := servicetest.NewService()
+
+	handler := func(conn net.Conn) {
+		var p []byte
+		var err error
+		c := readCommand(conn)
+		if c == nil {
+			return
+		}
+		if c.Type != proto.Command_COMMAND_TYPE_HIGHWATER_MARK_UPDATE {
+			t.Fatalf("unexpected command type: %d", c.Type)
+		}
+
+		p, err = pb.Marshal(&proto.HighwaterMarkUpdateResponse{})
+		if err != nil {
+			conn.Close()
+		}
+		writeBytesWithLength(conn, p)
+	}
+
+	srv1.Handler = handler
+	srv2.Handler = handler
+
+	srv1.Start()
+	srv2.Start()
+	defer srv1.Close()
+	defer srv2.Close()
+
+	c := NewClient(&simpleDialer{}, 0)
+	c.SetLocal("test-node", nil) // Set local node address to match test expectation
+	responses, err := c.BroadcastHWM(999, 0, time.Second, srv1.Addr(), srv2.Addr())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(responses) != 2 {
+		t.Fatalf("expected 2 responses, got %d", len(responses))
+	}
+	for addr, resp := range responses {
+		if resp.Error != "" {
+			t.Fatalf("unexpected error in response from %s: %s", addr, resp.Error)
+		}
+	}
+}
+
+func Test_ClientBroadcast_EmptyNodeList(t *testing.T) {
+	c := NewClient(&simpleDialer{}, 0)
+	responses, err := c.BroadcastHWM(1, 0, time.Second)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(responses) != 0 {
+		t.Fatalf("expected 0 responses, got %d", len(responses))
+	}
+}
+
+func Test_ClientBroadcast_WithError(t *testing.T) {
+	srv := servicetest.NewService()
+	srv.Handler = func(conn net.Conn) {
+		var p []byte
+		var err error
+		c := readCommand(conn)
+		if c == nil {
+			return
+		}
+		if c.Type != proto.Command_COMMAND_TYPE_HIGHWATER_MARK_UPDATE {
+			t.Fatalf("unexpected command type: %d", c.Type)
+		}
+
+		p, err = pb.Marshal(&proto.HighwaterMarkUpdateResponse{Error: "test error"})
+		if err != nil {
+			conn.Close()
+		}
+		writeBytesWithLength(conn, p)
+	}
+	srv.Start()
+	defer srv.Close()
+
+	c := NewClient(&simpleDialer{}, 0)
+	c.SetLocal("node1", nil) // Set local node address to match test expectation
+	responses, err := c.BroadcastHWM(12345, 0, time.Second, srv.Addr())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(responses) != 1 {
+		t.Fatalf("expected 1 response, got %d", len(responses))
+	}
+	resp, exists := responses[srv.Addr()]
+	if !exists {
+		t.Fatalf("response for %s not found", srv.Addr())
+	}
+	if resp.Error != "test error" {
+		t.Fatalf("expected 'test error', got '%s'", resp.Error)
+	}
+}

@@ -24,17 +24,19 @@ import (
 var stats *expvar.Map
 
 const (
-	numGetNodeAPIRequest  = "num_get_node_api_req"
-	numGetNodeAPIResponse = "num_get_node_api_resp"
-	numExecuteRequest     = "num_execute_req"
-	numQueryRequest       = "num_query_req"
-	numRequestRequest     = "num_request_req"
-	numBackupRequest      = "num_backup_req"
-	numLoadRequest        = "num_load_req"
-	numRemoveNodeRequest  = "num_remove_node_req"
-	numNotifyRequest      = "num_notify_req"
-	numJoinRequest        = "num_join_req"
-	numStepdownRequest    = "num_stepdown_req"
+	numGetNodeAPIRequest   = "num_get_node_api_req"
+	numGetNodeAPIResponse  = "num_get_node_api_resp"
+	numExecuteRequest      = "num_execute_req"
+	numQueryRequest        = "num_query_req"
+	numRequestRequest      = "num_request_req"
+	numBackupRequest       = "num_backup_req"
+	numLoadRequest         = "num_load_req"
+	numRemoveNodeRequest   = "num_remove_node_req"
+	numNotifyRequest       = "num_notify_req"
+	numJoinRequest         = "num_join_req"
+	numStepdownRequest     = "num_stepdown_req"
+	numBroadcastHWMRequest = "num_broadcast_hwm_req"
+	numHWMUpdateDropped    = "num_hwm_update_dropped"
 
 	numClientRetries            = "num_client_retries"
 	numGetNodeAPIRequestRetries = "num_get_node_api_req_retries"
@@ -71,6 +73,8 @@ func init() {
 	stats.Add(numNotifyRequest, 0)
 	stats.Add(numJoinRequest, 0)
 	stats.Add(numStepdownRequest, 0)
+	stats.Add(numBroadcastHWMRequest, 0)
+	stats.Add(numHWMUpdateDropped, 0)
 	stats.Add(numClientRetries, 0)
 	stats.Add(numGetNodeAPIRequestRetries, 0)
 	stats.Add(numClientLoadRetries, 0)
@@ -151,6 +155,9 @@ type Service struct {
 	apiAddr string // host:port this node serves the HTTP API.
 	version string // Version of software this node is running.
 
+	hwmMu      sync.RWMutex
+	hwmUpdateC chan<- uint64 // Channel for HWM updates
+
 	logger *log.Logger
 }
 
@@ -177,6 +184,13 @@ func (s *Service) Open() error {
 func (s *Service) Close() error {
 	s.ln.Close()
 	return nil
+}
+
+// RegisterHWMUpdate registers a channel to receive highwater mark update requests.
+func (s *Service) RegisterHWMUpdate(c chan<- uint64) {
+	s.hwmMu.Lock()
+	defer s.hwmMu.Unlock()
+	s.hwmUpdateC = c
 }
 
 // Addr returns the address the service is listening on.
@@ -553,6 +567,30 @@ func (s *Service) handleConn(conn net.Conn) {
 				if err := s.mgr.Stepdown(sr.Wait, sr.Id); err != nil {
 					resp.Error = err.Error()
 				}
+			}
+			if err := marshalAndWrite(conn, resp); err != nil {
+				return
+			}
+
+		case proto.Command_COMMAND_TYPE_HIGHWATER_MARK_UPDATE:
+			stats.Add(numBroadcastHWMRequest, 1)
+			resp := &proto.HighwaterMarkUpdateResponse{}
+
+			br := c.GetHighwaterMarkUpdateRequest()
+			if br == nil {
+				resp.Error = "HighwaterMarkUpdateRequest is nil"
+			} else {
+				// Send to registered channel if available
+				s.hwmMu.RLock()
+				if s.hwmUpdateC != nil {
+					select {
+					case s.hwmUpdateC <- br.HighwaterMark:
+					default:
+						// Channel is full, don't block
+						stats.Add(numHWMUpdateDropped, 1)
+					}
+				}
+				s.hwmMu.RUnlock()
 			}
 			if err := marshalAndWrite(conn, resp); err != nil {
 				return

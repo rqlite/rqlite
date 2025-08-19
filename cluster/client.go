@@ -522,6 +522,115 @@ func (c *Client) Join(jr *command.JoinRequest, nodeAddr string, creds *proto.Cre
 	}
 }
 
+// BroadcastHWM performs a broadcast to all specified nodes.
+func (c *Client) BroadcastHWM(hwm uint64, retries int, timeout time.Duration, nodeAddr ...string) (map[string]*proto.HighwaterMarkUpdateResponse, error) {
+	if len(nodeAddr) == 0 {
+		return map[string]*proto.HighwaterMarkUpdateResponse{}, nil
+	}
+
+	// Get local node address for the broadcast request
+	c.localMu.RLock()
+	localAddr := c.localNodeAddr
+	c.localMu.RUnlock()
+
+	// Create the broadcast request
+	br := &proto.HighwaterMarkUpdateRequest{
+		NodeId:        localAddr,
+		HighwaterMark: hwm,
+	}
+
+	// Channel to collect results
+	type result struct {
+		resp *proto.HighwaterMarkUpdateResponse
+		addr string
+		err  error
+	}
+
+	resultChan := make(chan result, len(nodeAddr))
+
+	// Launch goroutines for parallel requests
+	for _, addr := range nodeAddr {
+		go func(nodeAddress string) {
+			// Create the command
+			command := &proto.Command{
+				Type: proto.Command_COMMAND_TYPE_HIGHWATER_MARK_UPDATE,
+				Request: &proto.Command_HighwaterMarkUpdateRequest{
+					HighwaterMarkUpdateRequest: br,
+				},
+			}
+
+			// Attempt with retries
+			var lastErr error
+			for attempt := 0; attempt <= retries; attempt++ {
+				conn, err := c.dial(nodeAddress)
+				if err != nil {
+					lastErr = err
+					continue
+				}
+
+				// Write command
+				if err := writeCommand(conn, command, timeout); err != nil {
+					conn.Close()
+					handleConnError(conn)
+					lastErr = err
+					continue
+				}
+
+				// Read response
+				p, err := readResponse(conn, timeout)
+				conn.Close()
+				if err != nil {
+					handleConnError(conn)
+					lastErr = err
+					continue
+				}
+
+				// Parse response
+				resp := &proto.HighwaterMarkUpdateResponse{}
+				if err := pb.Unmarshal(p, resp); err != nil {
+					lastErr = err
+					continue
+				}
+
+				// Success
+				resultChan <- result{resp: resp, addr: nodeAddress, err: nil}
+				return
+			}
+
+			// All retries failed
+			resultChan <- result{resp: nil, addr: nodeAddress, err: lastErr}
+		}(addr)
+	}
+
+	// Collect results with timeout
+	responses := make(map[string]*proto.HighwaterMarkUpdateResponse)
+	collected := 0
+
+	timeoutChan := time.After(timeout)
+
+	for collected < len(nodeAddr) {
+		select {
+		case res := <-resultChan:
+			if res.err != nil {
+				responses[res.addr] = &proto.HighwaterMarkUpdateResponse{Error: res.err.Error()}
+			} else {
+				responses[res.addr] = res.resp
+			}
+			collected++
+		case <-timeoutChan:
+			// Timeout reached, fill remaining responses with timeout errors
+			for _, addr := range nodeAddr {
+				if _, exists := responses[addr]; !exists {
+					responses[addr] = &proto.HighwaterMarkUpdateResponse{Error: "timeout"}
+				}
+			}
+			collected = len(nodeAddr)
+		}
+	}
+
+	return responses, nil
+}
+
 // Stats returns stats on the Client instance
 func (c *Client) Stats() (map[string]any, error) {
 	c.poolMu.RLock()
