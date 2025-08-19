@@ -522,6 +522,109 @@ func (c *Client) Join(jr *command.JoinRequest, nodeAddr string, creds *proto.Cre
 	}
 }
 
+// Broadcast performs a broadcast to all specified nodes.
+func (c *Client) Broadcast(br *proto.BroadcastRequest, retries int, timeout time.Duration, nodeAddr ...string) ([]*proto.BroadcastResponse, error) {
+	if len(nodeAddr) == 0 {
+		return []*proto.BroadcastResponse{}, nil
+	}
+
+	// Channel to collect results
+	type result struct {
+		resp *proto.BroadcastResponse
+		addr string
+		err  error
+	}
+
+	resultChan := make(chan result, len(nodeAddr))
+
+	// Launch goroutines for parallel requests
+	for _, addr := range nodeAddr {
+		go func(nodeAddress string) {
+			// Create the command
+			command := &proto.Command{
+				Type: proto.Command_COMMAND_TYPE_BROADCAST,
+				Request: &proto.Command_BroadcastRequest{
+					BroadcastRequest: br,
+				},
+			}
+
+			// Attempt with retries
+			var lastErr error
+			for attempt := 0; attempt <= retries; attempt++ {
+				conn, err := c.dial(nodeAddress)
+				if err != nil {
+					lastErr = err
+					continue
+				}
+
+				// Write command
+				if err := writeCommand(conn, command, timeout); err != nil {
+					conn.Close()
+					handleConnError(conn)
+					lastErr = err
+					continue
+				}
+
+				// Read response
+				p, err := readResponse(conn, timeout)
+				conn.Close()
+				if err != nil {
+					handleConnError(conn)
+					lastErr = err
+					continue
+				}
+
+				// Parse response
+				resp := &proto.BroadcastResponse{}
+				if err := pb.Unmarshal(p, resp); err != nil {
+					lastErr = err
+					continue
+				}
+
+				// Success
+				resultChan <- result{resp: resp, addr: nodeAddress, err: nil}
+				return
+			}
+
+			// All retries failed
+			resultChan <- result{resp: nil, addr: nodeAddress, err: lastErr}
+		}(addr)
+	}
+
+	// Collect results with timeout
+	responses := make([]*proto.BroadcastResponse, len(nodeAddr))
+	collected := 0
+	var errs []error
+
+	timeoutChan := time.After(timeout)
+
+	for collected < len(nodeAddr) {
+		select {
+		case res := <-resultChan:
+			if res.err != nil {
+				errs = append(errs, fmt.Errorf("node %s: %w", res.addr, res.err))
+				responses[collected] = &proto.BroadcastResponse{Error: res.err.Error()}
+			} else {
+				responses[collected] = res.resp
+			}
+			collected++
+		case <-timeoutChan:
+			// Timeout reached, fill remaining responses with timeout errors
+			for i := collected; i < len(nodeAddr); i++ {
+				responses[i] = &proto.BroadcastResponse{Error: "timeout"}
+			}
+			collected = len(nodeAddr)
+		}
+	}
+
+	// Return responses and any error
+	if len(errs) > 0 {
+		return responses, fmt.Errorf("broadcast errors: %v", errs)
+	}
+
+	return responses, nil
+}
+
 // Stats returns stats on the Client instance
 func (c *Client) Stats() (map[string]any, error) {
 	c.poolMu.RLock()

@@ -368,3 +368,160 @@ func (s *simpleDialer) Dial(address string, timeout time.Duration) (net.Conn, er
 	}
 	return conn, nil
 }
+
+func Test_ClientBroadcast(t *testing.T) {
+	srv := servicetest.NewService()
+	srv.Handler = func(conn net.Conn) {
+		var p []byte
+		var err error
+		c := readCommand(conn)
+		if c == nil {
+			// Error on connection, so give up, as normal
+			// test exit can cause that too.
+			return
+		}
+		if c.Type != proto.Command_COMMAND_TYPE_BROADCAST {
+			t.Fatalf("unexpected command type: %d", c.Type)
+		}
+		br := c.GetBroadcastRequest()
+		if br == nil {
+			t.Fatal("expected broadcast request, got nil")
+		}
+		if br.NodeId != "node1" {
+			t.Fatalf("unexpected node_id, got %s", br.NodeId)
+		}
+		if br.HigherwaterMark != 12345 {
+			t.Fatalf("unexpected higherwater_mark, got %d", br.HigherwaterMark)
+		}
+
+		p, err = pb.Marshal(&proto.BroadcastResponse{})
+		if err != nil {
+			conn.Close()
+		}
+		writeBytesWithLength(conn, p)
+	}
+	srv.Start()
+	defer srv.Close()
+
+	c := NewClient(&simpleDialer{}, 0)
+	br := &proto.BroadcastRequest{
+		NodeId:          "node1",
+		HigherwaterMark: 12345,
+	}
+	responses, err := c.Broadcast(br, 0, time.Second, srv.Addr())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(responses) != 1 {
+		t.Fatalf("expected 1 response, got %d", len(responses))
+	}
+	if responses[0].Error != "" {
+		t.Fatalf("unexpected error in response: %s", responses[0].Error)
+	}
+}
+
+func Test_ClientBroadcast_MultipleNodes(t *testing.T) {
+	// Create multiple test services
+	srv1 := servicetest.NewService()
+	srv2 := servicetest.NewService()
+
+	handler := func(conn net.Conn) {
+		var p []byte
+		var err error
+		c := readCommand(conn)
+		if c == nil {
+			return
+		}
+		if c.Type != proto.Command_COMMAND_TYPE_BROADCAST {
+			t.Fatalf("unexpected command type: %d", c.Type)
+		}
+
+		p, err = pb.Marshal(&proto.BroadcastResponse{})
+		if err != nil {
+			conn.Close()
+		}
+		writeBytesWithLength(conn, p)
+	}
+
+	srv1.Handler = handler
+	srv2.Handler = handler
+
+	srv1.Start()
+	srv2.Start()
+	defer srv1.Close()
+	defer srv2.Close()
+
+	c := NewClient(&simpleDialer{}, 0)
+	br := &proto.BroadcastRequest{
+		NodeId:          "test-node",
+		HigherwaterMark: 999,
+	}
+
+	responses, err := c.Broadcast(br, 0, time.Second, srv1.Addr(), srv2.Addr())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(responses) != 2 {
+		t.Fatalf("expected 2 responses, got %d", len(responses))
+	}
+	for i, resp := range responses {
+		if resp.Error != "" {
+			t.Fatalf("unexpected error in response %d: %s", i, resp.Error)
+		}
+	}
+}
+
+func Test_ClientBroadcast_EmptyNodeList(t *testing.T) {
+	c := NewClient(&simpleDialer{}, 0)
+	br := &proto.BroadcastRequest{
+		NodeId:          "test",
+		HigherwaterMark: 1,
+	}
+
+	responses, err := c.Broadcast(br, 0, time.Second)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(responses) != 0 {
+		t.Fatalf("expected 0 responses, got %d", len(responses))
+	}
+}
+
+func Test_ClientBroadcast_WithError(t *testing.T) {
+	srv := servicetest.NewService()
+	srv.Handler = func(conn net.Conn) {
+		var p []byte
+		var err error
+		c := readCommand(conn)
+		if c == nil {
+			return
+		}
+		if c.Type != proto.Command_COMMAND_TYPE_BROADCAST {
+			t.Fatalf("unexpected command type: %d", c.Type)
+		}
+
+		p, err = pb.Marshal(&proto.BroadcastResponse{Error: "test error"})
+		if err != nil {
+			conn.Close()
+		}
+		writeBytesWithLength(conn, p)
+	}
+	srv.Start()
+	defer srv.Close()
+
+	c := NewClient(&simpleDialer{}, 0)
+	br := &proto.BroadcastRequest{
+		NodeId:          "node1",
+		HigherwaterMark: 12345,
+	}
+	responses, err := c.Broadcast(br, 0, time.Second, srv.Addr())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(responses) != 1 {
+		t.Fatalf("expected 1 response, got %d", len(responses))
+	}
+	if responses[0].Error != "test error" {
+		t.Fatalf("expected 'test error', got '%s'", responses[0].Error)
+	}
+}

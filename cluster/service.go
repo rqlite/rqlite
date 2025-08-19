@@ -35,6 +35,7 @@ const (
 	numNotifyRequest      = "num_notify_req"
 	numJoinRequest        = "num_join_req"
 	numStepdownRequest    = "num_stepdown_req"
+	numBroadcastRequest   = "num_broadcast_req"
 
 	numClientRetries            = "num_client_retries"
 	numGetNodeAPIRequestRetries = "num_get_node_api_req_retries"
@@ -71,6 +72,7 @@ func init() {
 	stats.Add(numNotifyRequest, 0)
 	stats.Add(numJoinRequest, 0)
 	stats.Add(numStepdownRequest, 0)
+	stats.Add(numBroadcastRequest, 0)
 	stats.Add(numClientRetries, 0)
 	stats.Add(numGetNodeAPIRequestRetries, 0)
 	stats.Add(numClientLoadRetries, 0)
@@ -553,6 +555,21 @@ func (s *Service) handleConn(conn net.Conn) {
 				if err := s.mgr.Stepdown(sr.Wait, sr.Id); err != nil {
 					resp.Error = err.Error()
 				}
+			}
+			if err := marshalAndWrite(conn, resp); err != nil {
+				return
+			}
+
+		case proto.Command_COMMAND_TYPE_BROADCAST:
+			stats.Add(numBroadcastRequest, 1)
+			resp := &proto.BroadcastResponse{}
+
+			br := c.GetBroadcastRequest()
+			if br == nil {
+				resp.Error = "BroadcastRequest is nil"
+			} else {
+				// For now, just log the request and respond with no error
+				log.Printf("Received broadcast request: node_id=%s, higherwater_mark=%d", br.NodeId, br.HigherwaterMark)
 			}
 			if err := marshalAndWrite(conn, resp); err != nil {
 				return

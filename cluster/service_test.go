@@ -13,6 +13,7 @@ import (
 	"github.com/rqlite/rqlite/v8/cluster/proto"
 	command "github.com/rqlite/rqlite/v8/command/proto"
 	"github.com/rqlite/rqlite/v8/testdata/x509"
+	pb "google.golang.org/protobuf/proto"
 )
 
 func Test_NewServiceOpenClose(t *testing.T) {
@@ -613,6 +614,59 @@ func (m *mockCredentialStore) AA(username, password, perm string) bool {
 
 func mustNewMockCredentialStore() *mockCredentialStore {
 	return &mockCredentialStore{HasPermOK: true}
+}
+
+func Test_ServiceHandleBroadcast(t *testing.T) {
+	ml := mustNewMockTransport()
+	mgr := mustNewMockManager()
+	s := New(ml, mustNewMockDatabase(), mgr, mustNewMockCredentialStore())
+	if s == nil {
+		t.Fatalf("failed to create cluster service")
+	}
+
+	if err := s.Open(); err != nil {
+		t.Fatalf("failed to open cluster service")
+	}
+	defer s.Close()
+
+	c, err := net.Dial("tcp", s.Addr())
+	if err != nil {
+		t.Fatalf("failed to connect to service")
+	}
+	defer c.Close()
+
+	// Create broadcast command
+	command := &proto.Command{
+		Type: proto.Command_COMMAND_TYPE_BROADCAST,
+		Request: &proto.Command_BroadcastRequest{
+			BroadcastRequest: &proto.BroadcastRequest{
+				NodeId:          "test-node",
+				HigherwaterMark: 987654,
+			},
+		},
+	}
+
+	// Send command
+	if err := writeCommand(c, command, 5*time.Second); err != nil {
+		t.Fatalf("failed to write command: %s", err)
+	}
+
+	// Read response
+	p, err := readResponse(c, 5*time.Second)
+	if err != nil {
+		t.Fatalf("failed to read response: %s", err)
+	}
+
+	// Parse response
+	resp := &proto.BroadcastResponse{}
+	if err := pb.Unmarshal(p, resp); err != nil {
+		t.Fatalf("failed to unmarshal response: %s", err)
+	}
+
+	// Check response
+	if resp.Error != "" {
+		t.Fatalf("expected no error, got: %s", resp.Error)
+	}
 }
 
 func makeCredentials(username, password string) *proto.Credentials {
