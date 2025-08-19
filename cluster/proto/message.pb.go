@@ -963,11 +963,11 @@ func (x *CommandStepdownResponse) GetError() string {
 }
 
 type BroadcastRequest struct {
-	state           protoimpl.MessageState `protogen:"open.v1"`
-	NodeId          string                 `protobuf:"bytes,1,opt,name=node_id,json=nodeId,proto3" json:"node_id,omitempty"`
-	HigherwaterMark uint64                 `protobuf:"varint,2,opt,name=higherwater_mark,json=higherwaterMark,proto3" json:"higherwater_mark,omitempty"`
-	unknownFields   protoimpl.UnknownFields
-	sizeCache       protoimpl.SizeCache
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	NodeId        string                 `protobuf:"bytes,1,opt,name=node_id,json=nodeId,proto3" json:"node_id,omitempty"`
+	HighwaterMark uint64                 `protobuf:"varint,2,opt,name=highwater_mark,json=highwaterMark,proto3" json:"highwater_mark,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
 }
 
 func (x *BroadcastRequest) Reset() {
@@ -1007,9 +1007,9 @@ func (x *BroadcastRequest) GetNodeId() string {
 	return ""
 }
 
-func (x *BroadcastRequest) GetHigherwaterMark() uint64 {
+func (x *BroadcastRequest) GetHighwaterMark() uint64 {
 	if x != nil {
-		return x.HigherwaterMark
+		return x.HighwaterMark
 	}
 	return 0
 }
@@ -1129,10 +1129,10 @@ const file_message_proto_rawDesc = "" +
 	"\x05error\x18\x01 \x01(\tR\x05error\x12\x16\n" +
 	"\x06leader\x18\x02 \x01(\tR\x06leader\"/\n" +
 	"\x17CommandStepdownResponse\x12\x14\n" +
-	"\x05error\x18\x01 \x01(\tR\x05error\"V\n" +
+	"\x05error\x18\x01 \x01(\tR\x05error\"R\n" +
 	"\x10BroadcastRequest\x12\x17\n" +
-	"\anode_id\x18\x01 \x01(\tR\x06nodeId\x12)\n" +
-	"\x10higherwater_mark\x18\x02 \x01(\x04R\x0fhigherwaterMark\")\n" +
+	"\anode_id\x18\x01 \x01(\tR\x06nodeId\x12%\n" +
+	"\x0ehighwater_mark\x18\x02 \x01(\x04R\rhighwaterMark\")\n" +
 	"\x11BroadcastResponse\x12\x14\n" +
 	"\x05error\x18\x01 \x01(\tR\x05errorB+Z)github.com/rqlite/rqlite/v8/cluster/protob\x06proto3"
 

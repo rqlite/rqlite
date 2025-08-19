@@ -390,8 +390,8 @@ func Test_ClientBroadcast(t *testing.T) {
 		if br.NodeId != "node1" {
 			t.Fatalf("unexpected node_id, got %s", br.NodeId)
 		}
-		if br.HigherwaterMark != 12345 {
-			t.Fatalf("unexpected higherwater_mark, got %d", br.HigherwaterMark)
+		if br.HighwaterMark != 12345 {
+			t.Fatalf("unexpected highwater_mark, got %d", br.HighwaterMark)
 		}
 
 		p, err = pb.Marshal(&proto.BroadcastResponse{})
@@ -405,8 +405,8 @@ func Test_ClientBroadcast(t *testing.T) {
 
 	c := NewClient(&simpleDialer{}, 0)
 	br := &proto.BroadcastRequest{
-		NodeId:          "node1",
-		HigherwaterMark: 12345,
+		NodeId:        "node1",
+		HighwaterMark: 12345,
 	}
 	responses, err := c.Broadcast(br, 0, time.Second, srv.Addr())
 	if err != nil {
@@ -415,8 +415,12 @@ func Test_ClientBroadcast(t *testing.T) {
 	if len(responses) != 1 {
 		t.Fatalf("expected 1 response, got %d", len(responses))
 	}
-	if responses[0].Error != "" {
-		t.Fatalf("unexpected error in response: %s", responses[0].Error)
+	resp, exists := responses[srv.Addr()]
+	if !exists {
+		t.Fatalf("response for %s not found", srv.Addr())
+	}
+	if resp.Error != "" {
+		t.Fatalf("unexpected error in response: %s", resp.Error)
 	}
 }
 
@@ -453,8 +457,8 @@ func Test_ClientBroadcast_MultipleNodes(t *testing.T) {
 
 	c := NewClient(&simpleDialer{}, 0)
 	br := &proto.BroadcastRequest{
-		NodeId:          "test-node",
-		HigherwaterMark: 999,
+		NodeId:        "test-node",
+		HighwaterMark: 999,
 	}
 
 	responses, err := c.Broadcast(br, 0, time.Second, srv1.Addr(), srv2.Addr())
@@ -464,9 +468,9 @@ func Test_ClientBroadcast_MultipleNodes(t *testing.T) {
 	if len(responses) != 2 {
 		t.Fatalf("expected 2 responses, got %d", len(responses))
 	}
-	for i, resp := range responses {
+	for addr, resp := range responses {
 		if resp.Error != "" {
-			t.Fatalf("unexpected error in response %d: %s", i, resp.Error)
+			t.Fatalf("unexpected error in response from %s: %s", addr, resp.Error)
 		}
 	}
 }
@@ -474,8 +478,8 @@ func Test_ClientBroadcast_MultipleNodes(t *testing.T) {
 func Test_ClientBroadcast_EmptyNodeList(t *testing.T) {
 	c := NewClient(&simpleDialer{}, 0)
 	br := &proto.BroadcastRequest{
-		NodeId:          "test",
-		HigherwaterMark: 1,
+		NodeId:        "test",
+		HighwaterMark: 1,
 	}
 
 	responses, err := c.Broadcast(br, 0, time.Second)
@@ -511,8 +515,8 @@ func Test_ClientBroadcast_WithError(t *testing.T) {
 
 	c := NewClient(&simpleDialer{}, 0)
 	br := &proto.BroadcastRequest{
-		NodeId:          "node1",
-		HigherwaterMark: 12345,
+		NodeId:        "node1",
+		HighwaterMark: 12345,
 	}
 	responses, err := c.Broadcast(br, 0, time.Second, srv.Addr())
 	if err != nil {
@@ -521,7 +525,11 @@ func Test_ClientBroadcast_WithError(t *testing.T) {
 	if len(responses) != 1 {
 		t.Fatalf("expected 1 response, got %d", len(responses))
 	}
-	if responses[0].Error != "test error" {
-		t.Fatalf("expected 'test error', got '%s'", responses[0].Error)
+	resp, exists := responses[srv.Addr()]
+	if !exists {
+		t.Fatalf("response for %s not found", srv.Addr())
+	}
+	if resp.Error != "test error" {
+		t.Fatalf("expected 'test error', got '%s'", resp.Error)
 	}
 }

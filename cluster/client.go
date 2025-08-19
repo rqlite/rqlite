@@ -523,9 +523,9 @@ func (c *Client) Join(jr *command.JoinRequest, nodeAddr string, creds *proto.Cre
 }
 
 // Broadcast performs a broadcast to all specified nodes.
-func (c *Client) Broadcast(br *proto.BroadcastRequest, retries int, timeout time.Duration, nodeAddr ...string) ([]*proto.BroadcastResponse, error) {
+func (c *Client) Broadcast(br *proto.BroadcastRequest, retries int, timeout time.Duration, nodeAddr ...string) (map[string]*proto.BroadcastResponse, error) {
 	if len(nodeAddr) == 0 {
-		return []*proto.BroadcastResponse{}, nil
+		return map[string]*proto.BroadcastResponse{}, nil
 	}
 
 	// Channel to collect results
@@ -592,9 +592,8 @@ func (c *Client) Broadcast(br *proto.BroadcastRequest, retries int, timeout time
 	}
 
 	// Collect results with timeout
-	responses := make([]*proto.BroadcastResponse, len(nodeAddr))
+	responses := make(map[string]*proto.BroadcastResponse)
 	collected := 0
-	var errs []error
 
 	timeoutChan := time.After(timeout)
 
@@ -602,24 +601,20 @@ func (c *Client) Broadcast(br *proto.BroadcastRequest, retries int, timeout time
 		select {
 		case res := <-resultChan:
 			if res.err != nil {
-				errs = append(errs, fmt.Errorf("node %s: %w", res.addr, res.err))
-				responses[collected] = &proto.BroadcastResponse{Error: res.err.Error()}
+				responses[res.addr] = &proto.BroadcastResponse{Error: res.err.Error()}
 			} else {
-				responses[collected] = res.resp
+				responses[res.addr] = res.resp
 			}
 			collected++
 		case <-timeoutChan:
 			// Timeout reached, fill remaining responses with timeout errors
-			for i := collected; i < len(nodeAddr); i++ {
-				responses[i] = &proto.BroadcastResponse{Error: "timeout"}
+			for _, addr := range nodeAddr {
+				if _, exists := responses[addr]; !exists {
+					responses[addr] = &proto.BroadcastResponse{Error: "timeout"}
+				}
 			}
 			collected = len(nodeAddr)
 		}
-	}
-
-	// Return responses and any error
-	if len(errs) > 0 {
-		return responses, fmt.Errorf("broadcast errors: %v", errs)
 	}
 
 	return responses, nil

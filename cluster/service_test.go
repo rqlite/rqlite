@@ -640,8 +640,8 @@ func Test_ServiceHandleBroadcast(t *testing.T) {
 		Type: proto.Command_COMMAND_TYPE_BROADCAST,
 		Request: &proto.Command_BroadcastRequest{
 			BroadcastRequest: &proto.BroadcastRequest{
-				NodeId:          "test-node",
-				HigherwaterMark: 987654,
+				NodeId:        "test-node",
+				HighwaterMark: 987654,
 			},
 		},
 	}

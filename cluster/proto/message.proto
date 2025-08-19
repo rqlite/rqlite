@@ -102,7 +102,7 @@ message CommandStepdownResponse {
 
 message BroadcastRequest {
     string node_id = 1;
-    uint64 higherwater_mark = 2;
+    uint64 highwater_mark = 2;
 }
 
 message BroadcastResponse {

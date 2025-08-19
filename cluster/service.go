@@ -569,7 +569,7 @@ func (s *Service) handleConn(conn net.Conn) {
 				resp.Error = "BroadcastRequest is nil"
 			} else {
 				// For now, just log the request and respond with no error
-				log.Printf("Received broadcast request: node_id=%s, higherwater_mark=%d", br.NodeId, br.HigherwaterMark)
+				log.Printf("Received broadcast request: node_id=%s, highwater_mark=%d", br.NodeId, br.HighwaterMark)
 			}
 			if err := marshalAndWrite(conn, resp); err != nil {
 				return
