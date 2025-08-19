@@ -150,10 +150,12 @@ type Service struct {
 
 	credentialStore CredentialStore
 
-	mu         sync.RWMutex
-	https      bool          // Serving HTTPS?
-	apiAddr    string        // host:port this node serves the HTTP API.
-	version    string        // Version of software this node is running.
+	mu      sync.RWMutex
+	https   bool   // Serving HTTPS?
+	apiAddr string // host:port this node serves the HTTP API.
+	version string // Version of software this node is running.
+
+	hwmMu      sync.RWMutex
 	hwmUpdateC chan<- uint64 // Channel for HWM updates
 
 	logger *log.Logger
@@ -186,8 +188,8 @@ func (s *Service) Close() error {
 
 // RegisterHWMUpdate registers a channel to receive highwater mark update requests.
 func (s *Service) RegisterHWMUpdate(c chan<- uint64) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
+	s.hwmMu.Lock()
+	defer s.hwmMu.Unlock()
 	s.hwmUpdateC = c
 }
 
@@ -579,7 +581,7 @@ func (s *Service) handleConn(conn net.Conn) {
 				resp.Error = "HighwaterMarkUpdateRequest is nil"
 			} else {
 				// Send to registered channel if available
-				s.mu.RLock()
+				s.hwmMu.RLock()
 				if s.hwmUpdateC != nil {
 					select {
 					case s.hwmUpdateC <- br.HighwaterMark:
@@ -588,7 +590,7 @@ func (s *Service) handleConn(conn net.Conn) {
 						stats.Add(numHWMUpdateDropped, 1)
 					}
 				}
-				s.mu.RUnlock()
+				s.hwmMu.RUnlock()
 			}
 			if err := marshalAndWrite(conn, resp); err != nil {
 				return
