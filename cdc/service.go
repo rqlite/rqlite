@@ -307,7 +307,6 @@ func (s *Service) mainLoop() {
 			}
 
 		case hwm := <-s.hwmObCh:
-			s.hwmUpdated.Add(1)
 			if hwm > s.highWatermark.Load() {
 				s.highWatermark.Store(hwm)
 				// This means all events up to this high watermark have been
@@ -317,6 +316,7 @@ func (s *Service) mainLoop() {
 					s.logger.Printf("error deleting events up to high watermark from FIFO: %v", err)
 				}
 			}
+			s.hwmUpdated.Add(1)
 
 		case leaderNow := <-s.leaderObCh:
 			if leaderNow == s.isLeader.Is() {
