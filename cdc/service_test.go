@@ -587,6 +587,11 @@ func Test_ServiceHWMUpdate(t *testing.T) {
 		return svc.HighWatermark() == 30
 	}, 2*time.Second)
 
+	// Check that FIFO has all 3 events
+	if svc.fifo.Len() != 3 {
+		t.Fatalf("expected FIFO to contain 3 events, got %d", svc.fifo.Len())
+	}
+
 	// Get the highest key from FIFO before HWM update to verify events are there
 	highestKeyBefore, err := svc.fifo.HighestKey()
 	if err != nil {
@@ -611,16 +616,36 @@ func Test_ServiceHWMUpdate(t *testing.T) {
 		t.Fatalf("expected high watermark to remain 30, got %d", svc.HighWatermark())
 	}
 
+	// Verify that the FIFO has NOT been pruned (since HWM update was ignored)
+	if svc.fifo.Len() != 3 {
+		t.Fatalf("expected FIFO to still contain 3 events after ignored HWM update, got %d", svc.fifo.Len())
+	}
+
 	// Send a high-water mark update that should update the HWM and prune older events
-	cl.SignalHWMUpdate(30)
+	cl.SignalHWMUpdate(35)
+
+	// Wait for HWM update to be processed
+	initialCount2 := svc.hwmUpdated.Load()
+	testPoll(t, func() bool {
+		return svc.hwmUpdated.Load() > initialCount2
+	}, 2*time.Second)
 
 	// Verify that the service's high watermark is updated
 	testPoll(t, func() bool {
-		return svc.HighWatermark() == 30
+		return svc.HighWatermark() == 35
 	}, 2*time.Second)
 
+	// Verify that the FIFO has been emptied (all events <= 35 should be deleted)
+	isEmpty, err := svc.fifo.Empty()
+	if err != nil {
+		t.Fatalf("failed to check if FIFO is empty: %v", err)
+	}
+	if !isEmpty {
+		t.Fatalf("expected FIFO to be empty after HWM update to 35, but it contains %d events", svc.fifo.Len())
+	}
+
 	// The highest key should still be 30 since that's the highest event ever added,
-	// but events <= 30 should have been deleted via DeleteRange (which includes all our events)
+	// but events <= 35 should have been deleted via DeleteRange (which includes all our events)
 	highestKeyAfter, err := svc.fifo.HighestKey()
 	if err != nil {
 		t.Fatalf("failed to get highest key from FIFO after HWM update: %v", err)
@@ -679,11 +704,21 @@ func Test_ServiceHWMUpdate_BoundaryConditions(t *testing.T) {
 		return svc.HighWatermark() == 50
 	}, 2*time.Second)
 
+	// Check that FIFO has 1 event
+	if svc.fifo.Len() != 1 {
+		t.Fatalf("expected FIFO to contain 1 event, got %d", svc.fifo.Len())
+	}
+
 	// Test HWM update with value higher than current HWM
 	cl.SignalHWMUpdate(60)
 	testPoll(t, func() bool {
 		return svc.HighWatermark() == 60
 	}, 2*time.Second)
+
+	// Check that FIFO has been emptied (event with index 50 should be deleted since 50 <= 60)
+	if svc.fifo.Len() != 0 {
+		t.Fatalf("expected FIFO to be empty after HWM update to 60, got %d events", svc.fifo.Len())
+	}
 
 	// Test HWM update with value less than current HWM
 	cl.SignalHWMUpdate(40)
@@ -696,6 +731,11 @@ func Test_ServiceHWMUpdate_BoundaryConditions(t *testing.T) {
 
 	if svc.HighWatermark() != 60 {
 		t.Fatalf("expected high watermark to remain 60 when HWM update is less than current, got %d", svc.HighWatermark())
+	}
+
+	// Check that FIFO remains empty (no change since HWM update was ignored)
+	if svc.fifo.Len() != 0 {
+		t.Fatalf("expected FIFO to remain empty after ignored HWM update, got %d events", svc.fifo.Len())
 	}
 
 	// Test HWM update when service is not leader - should still work
