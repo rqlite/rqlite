@@ -321,7 +321,6 @@ func (s *Service) mainLoop() {
 		case hwm := <-s.hwmObCh:
 			if hwm > s.highWatermark.Load() {
 				s.highWatermark.Store(hwm)
-				// Persist the HWM to disk
 				if err := writeHWMToFile(s.hwmFilePath, hwm); err != nil {
 					s.logger.Printf("error writing high watermark to file: %v", err)
 				}
@@ -464,23 +463,21 @@ func writeHWMToFile(path string, hwm uint64) error {
 	if err != nil {
 		return err
 	}
+	defer os.Remove(tmpPath)
 
 	_, err = file.Write(jsonData)
 	if err != nil {
 		file.Close()
-		os.Remove(tmpPath)
 		return err
 	}
 
 	// Sync to disk
 	if err := file.Sync(); err != nil {
 		file.Close()
-		os.Remove(tmpPath)
 		return err
 	}
 
 	if err := file.Close(); err != nil {
-		os.Remove(tmpPath)
 		return err
 	}
 
