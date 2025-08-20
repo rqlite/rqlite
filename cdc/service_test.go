@@ -513,11 +513,16 @@ func Test_ServiceMultiEvent_Batch(t *testing.T) {
 }
 
 type mockCluster struct {
-	obCh chan<- bool
+	obCh    chan<- bool
+	hwmObCh chan<- uint64
 }
 
 func (m *mockCluster) RegisterLeaderChange(ch chan<- bool) {
 	m.obCh = ch
+}
+
+func (m *mockCluster) RegisterHWMUpdate(ch chan<- uint64) {
+	m.hwmObCh = ch
 }
 
 func (m *mockCluster) SignalLeaderChange(leader bool) {

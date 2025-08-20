@@ -52,6 +52,12 @@ func (c *CDCCluster) RegisterHWMChange(ch chan<- uint64) {
 	c.hwmObservers = append(c.hwmObservers, ch)
 }
 
+// RegisterHWMUpdate registers a channel to receive highwater mark update requests.
+// This is an alias for RegisterHWMChange to implement the CDC Cluster interface.
+func (c *CDCCluster) RegisterHWMUpdate(ch chan<- uint64) {
+	c.RegisterHWMChange(ch)
+}
+
 func (c *CDCCluster) appendEntriesTxHandler(req *raft.AppendEntriesRequest) error {
 	ex := proto.AppendEntriesExtension{
 		CdcHWM: c.hwm.Load(),
