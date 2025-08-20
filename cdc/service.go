@@ -56,64 +56,6 @@ func ResetStats() {
 	stats.Add(numSent, 0)
 }
 
-// readHWMFromFile reads the high watermark from the specified file.
-// Returns 0 if the file doesn't exist or if there's an error reading it.
-func readHWMFromFile(path string) uint64 {
-	data, err := os.ReadFile(path)
-	if err != nil {
-		return 0 // File doesn't exist or can't be read
-	}
-
-	var hwm hwmData
-	if err := json.Unmarshal(data, &hwm); err != nil {
-		return 0 // Invalid JSON
-	}
-
-	return hwm.HWM
-}
-
-// writeHWMToFile writes the high watermark to the specified file with an fsync.
-func writeHWMToFile(path string, hwm uint64) error {
-	data := hwmData{
-		HWM:       hwm,
-		Timestamp: time.Now().UTC().Format(time.RFC3339),
-	}
-
-	jsonData, err := json.Marshal(data)
-	if err != nil {
-		return err
-	}
-
-	// Write to a temporary file first, then rename to ensure atomicity
-	tmpPath := path + ".tmp"
-	file, err := os.Create(tmpPath)
-	if err != nil {
-		return err
-	}
-
-	_, err = file.Write(jsonData)
-	if err != nil {
-		file.Close()
-		os.Remove(tmpPath)
-		return err
-	}
-
-	// Sync to disk
-	if err := file.Sync(); err != nil {
-		file.Close()
-		os.Remove(tmpPath)
-		return err
-	}
-
-	if err := file.Close(); err != nil {
-		os.Remove(tmpPath)
-		return err
-	}
-
-	// Atomically replace the old file
-	return os.Rename(tmpPath, path)
-}
-
 // Cluster is an interface that defines methods for cluster management and communication.
 type Cluster interface {
 	// RegisterLeaderChange registers the given channel which will receive
@@ -379,16 +321,15 @@ func (s *Service) mainLoop() {
 		case hwm := <-s.hwmObCh:
 			if hwm > s.highWatermark.Load() {
 				s.highWatermark.Store(hwm)
+				// Persist the HWM to disk
+				if err := writeHWMToFile(s.hwmFilePath, hwm); err != nil {
+					s.logger.Printf("error writing high watermark to file: %v", err)
+				}
 				// This means all events up to this high watermark have been
 				// successfully sent to the webhook by the cluster. We can
 				// delete all events up and including that point from our FIFO.
 				if err := s.fifo.DeleteRange(hwm); err != nil {
 					s.logger.Printf("error deleting events up to high watermark from FIFO: %v", err)
-				} else {
-					// FIFO was pruned successfully, persist the HWM to disk
-					if err := writeHWMToFile(s.hwmFilePath, hwm); err != nil {
-						s.logger.Printf("error writing high watermark to file: %v", err)
-					}
 				}
 			}
 			s.hwmUpdated.Add(1)
@@ -487,4 +428,62 @@ func (s *Service) initBatcher() {
 		s.batcher = nil
 	}
 	s.batcher = queue.New[*proto.CDCIndexedEventGroup](s.maxBatchSz, s.maxBatchSz, s.maxBatchDelay)
+}
+
+// readHWMFromFile reads the high watermark from the specified file.
+// Returns 0 if the file doesn't exist or if there's an error reading it.
+func readHWMFromFile(path string) uint64 {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return 0 // File doesn't exist or can't be read
+	}
+
+	var hwm hwmData
+	if err := json.Unmarshal(data, &hwm); err != nil {
+		return 0 // Invalid JSON
+	}
+
+	return hwm.HWM
+}
+
+// writeHWMToFile writes the high watermark to the specified file with an fsync.
+func writeHWMToFile(path string, hwm uint64) error {
+	data := hwmData{
+		HWM:       hwm,
+		Timestamp: time.Now().UTC().Format(time.RFC3339),
+	}
+
+	jsonData, err := json.Marshal(data)
+	if err != nil {
+		return err
+	}
+
+	// Write to a temporary file first, then rename to ensure atomicity
+	tmpPath := path + ".tmp"
+	file, err := os.Create(tmpPath)
+	if err != nil {
+		return err
+	}
+
+	_, err = file.Write(jsonData)
+	if err != nil {
+		file.Close()
+		os.Remove(tmpPath)
+		return err
+	}
+
+	// Sync to disk
+	if err := file.Sync(); err != nil {
+		file.Close()
+		os.Remove(tmpPath)
+		return err
+	}
+
+	if err := file.Close(); err != nil {
+		os.Remove(tmpPath)
+		return err
+	}
+
+	// Atomically replace the old file
+	return os.Rename(tmpPath, path)
 }
