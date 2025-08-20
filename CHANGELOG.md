@@ -7,6 +7,7 @@
 - [PR #2233](https://github.com/rqlite/rqlite/pull/2233): Add Voters() and NonVoters() convenience methods to Store Servers.
 - [PR #2238](https://github.com/rqlite/rqlite/pull/2238): Improve CDC and FIFO unit testing.
 - [PR #2240](https://github.com/rqlite/rqlite/pull/2240): Add Len() method to CDC FIFO.
+- [PR #2242](https://github.com/rqlite/rqlite/pull/2242): Persist High Water Mark across CDC Service restarts.
 
 ## v8.43.3 (August 14th 2025)
 ### Implementation changes and bug fixes

@@ -3,6 +3,7 @@ package cdc
 import (
 	"bytes"
 	"crypto/tls"
+	"encoding/json"
 	"expvar"
 	"fmt"
 	"log"
@@ -21,6 +22,7 @@ import (
 
 const (
 	cdcDB         = "fifo.db"
+	hwmFile       = "hwm.json"
 	leaderChanLen = 5 // Support any fast back-to-back leadership changes.
 )
 
@@ -30,6 +32,12 @@ const (
 	numRetries             = "retries"
 	numSent                = "sent_events"
 )
+
+// hwmData represents the structure of the high watermark file.
+type hwmData struct {
+	HWM       uint64 `json:"hwm"`
+	Timestamp string `json:"timestamp"`
+}
 
 // stats captures stats for the CDC Service.
 var stats *expvar.Map
@@ -64,10 +72,11 @@ type Cluster interface {
 // Service is a CDC service that reads events from a channel and processes them.
 // It is used to stream changes to a HTTP endpoint.
 type Service struct {
-	serviceID string
-	nodeID    string
-	dir       string
-	clstr     Cluster
+	serviceID   string
+	nodeID      string
+	dir         string
+	hwmFilePath string
+	clstr       Cluster
 
 	// in is the channel from which the CDC events are read.
 	in <-chan *proto.CDCIndexedEventGroup
@@ -166,6 +175,7 @@ func NewService(nodeID, dir string, clstr Cluster, in <-chan *proto.CDCIndexedEv
 		serviceID:             cfg.ServiceID,
 		nodeID:                nodeID,
 		dir:                   dir,
+		hwmFilePath:           filepath.Join(dir, hwmFile),
 		clstr:                 clstr,
 		in:                    in,
 		logOnly:               cfg.LogOnly,
@@ -193,7 +203,9 @@ func NewService(nodeID, dir string, clstr Cluster, in <-chan *proto.CDCIndexedEv
 	}
 	srv.fifo = fifo
 
-	srv.highWatermark.Store(0)
+	// Read initial HWM from file if it exists
+	initialHWM := readHWMFromFile(srv.hwmFilePath)
+	srv.highWatermark.Store(initialHWM)
 	srv.highWatermarkingDisabled.SetBool(cfg.HighWatermarkingDisabled)
 	return srv, nil
 }
@@ -309,6 +321,9 @@ func (s *Service) mainLoop() {
 		case hwm := <-s.hwmObCh:
 			if hwm > s.highWatermark.Load() {
 				s.highWatermark.Store(hwm)
+				if err := writeHWMToFile(s.hwmFilePath, hwm); err != nil {
+					s.logger.Printf("error writing high watermark to file: %v", err)
+				}
 				// This means all events up to this high watermark have been
 				// successfully sent to the webhook by the cluster. We can
 				// delete all events up and including that point from our FIFO.
@@ -412,4 +427,60 @@ func (s *Service) initBatcher() {
 		s.batcher = nil
 	}
 	s.batcher = queue.New[*proto.CDCIndexedEventGroup](s.maxBatchSz, s.maxBatchSz, s.maxBatchDelay)
+}
+
+// readHWMFromFile reads the high watermark from the specified file.
+// Returns 0 if the file doesn't exist or if there's an error reading it.
+func readHWMFromFile(path string) uint64 {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return 0 // File doesn't exist or can't be read
+	}
+
+	var hwm hwmData
+	if err := json.Unmarshal(data, &hwm); err != nil {
+		return 0 // Invalid JSON
+	}
+
+	return hwm.HWM
+}
+
+// writeHWMToFile writes the high watermark to the specified file with an fsync.
+func writeHWMToFile(path string, hwm uint64) error {
+	data := hwmData{
+		HWM:       hwm,
+		Timestamp: time.Now().UTC().Format(time.RFC3339),
+	}
+
+	jsonData, err := json.Marshal(data)
+	if err != nil {
+		return err
+	}
+
+	// Write to a temporary file first, then rename to ensure atomicity
+	tmpPath := path + ".tmp"
+	file, err := os.Create(tmpPath)
+	if err != nil {
+		return err
+	}
+	defer os.Remove(tmpPath)
+
+	_, err = file.Write(jsonData)
+	if err != nil {
+		file.Close()
+		return err
+	}
+
+	// Sync to disk
+	if err := file.Sync(); err != nil {
+		file.Close()
+		return err
+	}
+
+	if err := file.Close(); err != nil {
+		return err
+	}
+
+	// Atomically replace the old file
+	return os.Rename(tmpPath, path)
 }

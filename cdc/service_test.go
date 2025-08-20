@@ -821,3 +821,65 @@ func testPoll(t *testing.T, condition func() bool, timeout time.Duration) {
 		}
 	}
 }
+
+// Test_ServiceHWMPersistence tests that the high watermark persists across service restarts.
+func Test_ServiceHWMPersistence(t *testing.T) {
+	ResetStats()
+
+	// Use a temp directory for this test
+	dir := t.TempDir()
+
+	// Channel for the service to receive events
+	eventsCh := make(chan *proto.CDCIndexedEventGroup, 1)
+
+	cl := &mockCluster{}
+
+	cfg := DefaultConfig()
+	cfg.LogOnly = true // Use log-only mode to avoid HTTP server setup
+	cfg.MaxBatchSz = 1
+	cfg.MaxBatchDelay = 50 * time.Millisecond
+
+	// Create the first service
+	svc1, err := NewService("node1", dir, cl, eventsCh, cfg)
+	if err != nil {
+		t.Fatalf("failed to create first service: %v", err)
+	}
+	if err := svc1.Start(); err != nil {
+		t.Fatalf("failed to start first service: %v", err)
+	}
+
+	// Make it the leader
+	cl.SignalLeaderChange(true)
+
+	// Send an HWM update
+	testHWM := uint64(12345)
+	cl.SignalHWMUpdate(testHWM)
+
+	// Wait for HWM update to be processed
+	initialCount := svc1.hwmUpdated.Load()
+	testPoll(t, func() bool {
+		return svc1.hwmUpdated.Load() > initialCount
+	}, 2*time.Second)
+
+	// Verify that the HWM was updated
+	if svc1.HighWatermark() != testHWM {
+		t.Fatalf("expected high watermark to be %d, got %d", testHWM, svc1.HighWatermark())
+	}
+
+	// Stop the first service
+	svc1.Stop()
+
+	// Create a new service using the same directory
+	svc2, err := NewService("node1", dir, cl, eventsCh, cfg)
+	if err != nil {
+		t.Fatalf("failed to create second service: %v", err)
+	}
+
+	// Verify that the new service has the correct HWM value from the file
+	if svc2.HighWatermark() != testHWM {
+		t.Fatalf("expected new service to have high watermark %d, got %d", testHWM, svc2.HighWatermark())
+	}
+
+	// Clean up
+	svc2.Stop()
+}
