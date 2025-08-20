@@ -5,7 +5,7 @@
 - [PR #2226](https://github.com/rqlite/rqlite/pull/2226), [PR #2228](https://github.com/rqlite/rqlite/pull/2228): Initial integration between Store and CDC Service.
 - [PR #2231](https://github.com/rqlite/rqlite/pull/2231): Implement cluster-wide broadcast of CDC HWM, fixes issue [#2230](https://github.com/rqlite/rqlite/issues/2230).
 - [PR #2233](https://github.com/rqlite/rqlite/pull/2233): Add Voters() and NonVoters() convenience methods to Store Servers.
-- [PR #2238](https://github.com/rqlite/rqlite/pull/2238): Add unit tests for CDC Service high-water mark updates with FIFO queue verification.
+- [PR #2238](https://github.com/rqlite/rqlite/pull/2238): Improve CDC and FIFO unit testing.
 - [PR #2240](https://github.com/rqlite/rqlite/pull/2240): Add Len() method to CDC FIFO.
 
 ## v8.43.3 (August 14th 2025)
