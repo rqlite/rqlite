@@ -203,9 +203,7 @@ func NewService(nodeID, dir string, clstr Cluster, in <-chan *proto.CDCIndexedEv
 	}
 	srv.fifo = fifo
 
-	// Read initial HWM from file if it exists
-	initialHWM := readHWMFromFile(srv.hwmFilePath)
-	srv.highWatermark.Store(initialHWM)
+	srv.highWatermark.Store(readHWMFromFile(srv.hwmFilePath))
 	srv.highWatermarkingDisabled.SetBool(cfg.HighWatermarkingDisabled)
 	return srv, nil
 }
