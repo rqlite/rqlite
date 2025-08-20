@@ -202,6 +202,7 @@ func (s *Service) Start() error {
 	go s.mainLoop()
 
 	s.clstr.RegisterLeaderChange(s.leaderObCh)
+	s.clstr.RegisterHWMUpdate(s.hwmObCh)
 	s.logger.Println("service started")
 	return nil
 }
