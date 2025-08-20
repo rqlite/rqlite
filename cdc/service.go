@@ -141,6 +141,9 @@ type Service struct {
 	wg   sync.WaitGroup
 	done chan struct{}
 
+	// For white box testing
+	hwmUpdated atomic.Uint64
+
 	logger *log.Logger
 }
 
@@ -313,6 +316,7 @@ func (s *Service) mainLoop() {
 					s.logger.Printf("error deleting events up to high watermark from FIFO: %v", err)
 				}
 			}
+			s.hwmUpdated.Add(1)
 
 		case leaderNow := <-s.leaderObCh:
 			if leaderNow == s.isLeader.Is() {
