@@ -302,6 +302,135 @@ func Test_Events_ChannelCloseOnQueueClose(t *testing.T) {
 	}
 }
 
+// Test_QueueLen tests the Len() method under various conditions.
+func Test_QueueLen(t *testing.T) {
+	q, _, cleanup := newTestQueue(t)
+	defer cleanup()
+
+	// Test 1: initialized queue, Len should be zero
+	if len := q.Len(); len != 0 {
+		t.Errorf("Expected length of empty queue to be 0, got %d", len)
+	}
+
+	// Get the events channel before enqueuing
+	eventsCh := q.C
+
+	// Test 2: add an item, Len should be 1
+	if err := q.Enqueue(&Event{Index: 1, Data: []byte("first item")}); err != nil {
+		t.Fatalf("Enqueue failed: %v", err)
+	}
+	if len := q.Len(); len != 1 {
+		t.Errorf("Expected length after adding one item to be 1, got %d", len)
+	}
+
+	// Test 3: add another item, Len should be 2
+	if err := q.Enqueue(&Event{Index: 2, Data: []byte("second item")}); err != nil {
+		t.Fatalf("Enqueue failed: %v", err)
+	}
+	if len := q.Len(); len != 2 {
+		t.Errorf("Expected length after adding two items to be 2, got %d", len)
+	}
+
+	// Test 4: dequeue (read from events channel), Len should still be 2
+	// Reading from the events channel does not remove items from the database
+	select {
+	case event := <-eventsCh:
+		if event.Index != 1 {
+			t.Errorf("Expected first event index to be 1, got %d", event.Index)
+		}
+	case <-time.After(1 * time.Second):
+		t.Fatal("Timed out waiting for first event")
+	}
+
+	// Length should still be 2 after reading from channel
+	if len := q.Len(); len != 2 {
+		t.Errorf("Expected length to still be 2 after reading from events channel, got %d", len)
+	}
+
+	// Read the second event too
+	select {
+	case event := <-eventsCh:
+		if event.Index != 2 {
+			t.Errorf("Expected second event index to be 2, got %d", event.Index)
+		}
+	case <-time.After(1 * time.Second):
+		t.Fatal("Timed out waiting for second event")
+	}
+
+	// Length should still be 2 after reading both events
+	if len := q.Len(); len != 2 {
+		t.Errorf("Expected length to still be 2 after reading both events, got %d", len)
+	}
+
+	// Test 5: delete range should affect Len
+	if err := q.DeleteRange(1); err != nil {
+		t.Fatalf("DeleteRange failed: %v", err)
+	}
+
+	// Length should now be 1 after deleting the first item
+	if len := q.Len(); len != 1 {
+		t.Errorf("Expected length to be 1 after deleting first item, got %d", len)
+	}
+
+	// Delete the remaining item
+	if err := q.DeleteRange(2); err != nil {
+		t.Fatalf("DeleteRange failed: %v", err)
+	}
+
+	// Length should now be 0 after deleting all items
+	if len := q.Len(); len != 0 {
+		t.Errorf("Expected length to be 0 after deleting all items, got %d", len)
+	}
+
+	// Verify that Empty() also returns true
+	if empty, err := q.Empty(); err != nil {
+		t.Fatalf("Empty check failed: %v", err)
+	} else if !empty {
+		t.Error("Queue should be empty after deleting all items")
+	}
+}
+
+// Test_QueueLen_MultipleItems tests Len() with more items to ensure accuracy.
+func Test_QueueLen_MultipleItems(t *testing.T) {
+	q, _, cleanup := newTestQueue(t)
+	defer cleanup()
+
+	// Add multiple items
+	const numItems = 10
+	for i := 1; i <= numItems; i++ {
+		if err := q.Enqueue(&Event{Index: uint64(i), Data: []byte(fmt.Sprintf("item-%d", i))}); err != nil {
+			t.Fatalf("Enqueue failed for item %d: %v", i, err)
+		}
+
+		// Check length after each addition
+		if len := q.Len(); len != i {
+			t.Errorf("Expected length to be %d after adding item %d, got %d", i, i, len)
+		}
+	}
+
+	// Delete items in batches and verify length decreases correctly
+	if err := q.DeleteRange(3); err != nil {
+		t.Fatalf("DeleteRange(3) failed: %v", err)
+	}
+	if len := q.Len(); len != 7 {
+		t.Errorf("Expected length to be 7 after deleting first 3 items, got %d", len)
+	}
+
+	if err := q.DeleteRange(7); err != nil {
+		t.Fatalf("DeleteRange(7) failed: %v", err)
+	}
+	if len := q.Len(); len != 3 {
+		t.Errorf("Expected length to be 3 after deleting items 1-7, got %d", len)
+	}
+
+	if err := q.DeleteRange(10); err != nil {
+		t.Fatalf("DeleteRange(10) failed: %v", err)
+	}
+	if len := q.Len(); len != 0 {
+		t.Errorf("Expected length to be 0 after deleting all items, got %d", len)
+	}
+}
+
 // Test_QueuePersistence ensures that items remain in the queue after closing and reopening it.
 func Test_QueuePersistence(t *testing.T) {
 	dir := t.TempDir()

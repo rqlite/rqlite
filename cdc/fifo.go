@@ -250,17 +250,24 @@ func (q *Queue) run(nextKey []byte, highestKey uint64) {
 		case req := <-q.queryChan:
 			var isEmpty bool
 			var hasNext bool
+			var len int
 			err := q.db.View(func(tx *bbolt.Tx) error {
-				c := tx.Bucket(bucketName).Cursor()
+				bucket := tx.Bucket(bucketName)
+				c := bucket.Cursor()
 				k, _ := c.First()
 				isEmpty = k == nil // If no items, isEmpty is true
 				hasNext = k != nil // If there are any items, hasNext is true
+
+				// Get the number of key/value pairs in the bucket
+				stats := bucket.Stats()
+				len = stats.KeyN
 				return nil
 			})
 			req.respChan <- queryResp{
 				err:        err,
 				hasNext:    hasNext,
 				isEmpty:    isEmpty,
+				len:        len,
 				highestKey: highestKey,
 			}
 
@@ -315,6 +322,14 @@ func (q *Queue) HasNext() bool {
 	return resp.hasNext
 }
 
+// Len returns the number of items currently in the queue.
+func (q *Queue) Len() int {
+	req := queryReq{respChan: make(chan queryResp)}
+	q.queryChan <- req
+	resp := <-req.respChan
+	return resp.len
+}
+
 func getHighestKey(tx *bbolt.Tx) (uint64, error) {
 	key := tx.Bucket(metaBucketName).Get([]byte("max_key"))
 	if key == nil {
@@ -349,6 +364,7 @@ type queryReq struct {
 type queryResp struct {
 	hasNext    bool
 	isEmpty    bool
+	len        int
 	highestKey uint64
 	err        error
 }
