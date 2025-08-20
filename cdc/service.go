@@ -141,6 +141,9 @@ type Service struct {
 	wg   sync.WaitGroup
 	done chan struct{}
 
+	// For white box testing
+	hwmUpdated atomic.Uint64
+
 	logger *log.Logger
 }
 
@@ -304,6 +307,7 @@ func (s *Service) mainLoop() {
 			}
 
 		case hwm := <-s.hwmObCh:
+			s.hwmUpdated.Add(1)
 			if hwm > s.highWatermark.Load() {
 				s.highWatermark.Store(hwm)
 				// This means all events up to this high watermark have been

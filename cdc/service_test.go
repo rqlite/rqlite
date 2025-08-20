@@ -515,7 +515,7 @@ func Test_ServiceMultiEvent_Batch(t *testing.T) {
 func Test_ServiceHWMUpdate(t *testing.T) {
 	ResetStats()
 
-	// Channel for the service to receive events.
+	// Channel to send events to the CDC Service.
 	eventsCh := make(chan *proto.CDCIndexedEventGroup, 10)
 
 	cl := &mockCluster{}
@@ -599,23 +599,28 @@ func Test_ServiceHWMUpdate(t *testing.T) {
 	// Send a high-water mark update that should prune events with index <= 20
 	cl.SignalHWMUpdate(20)
 
+	// Wait for HWM update to be processed (should be ignored since 20 < 30)
+	initialCount := svc.hwmUpdated.Load()
+	testPoll(t, func() bool {
+		return svc.hwmUpdated.Load() > initialCount
+	}, 2*time.Second)
+
 	// Verify that the service's high watermark is NOT updated (because 20 < 30)
 	// The service should ignore HWM updates that are <= current HWM
-	time.Sleep(100 * time.Millisecond) // Give time for processing
 	if svc.HighWatermark() != 30 {
 		t.Fatalf("expected high watermark to remain 30, got %d", svc.HighWatermark())
 	}
 
 	// Send a high-water mark update that should update the HWM and prune older events
-	cl.SignalHWMUpdate(35)
+	cl.SignalHWMUpdate(30)
 
 	// Verify that the service's high watermark is updated
 	testPoll(t, func() bool {
-		return svc.HighWatermark() == 35
+		return svc.HighWatermark() == 30
 	}, 2*time.Second)
 
 	// The highest key should still be 30 since that's the highest event ever added,
-	// but events <= 35 should have been deleted via DeleteRange (which includes all our events)
+	// but events <= 30 should have been deleted via DeleteRange (which includes all our events)
 	highestKeyAfter, err := svc.fifo.HighestKey()
 	if err != nil {
 		t.Fatalf("failed to get highest key from FIFO after HWM update: %v", err)
@@ -628,7 +633,7 @@ func Test_ServiceHWMUpdate(t *testing.T) {
 func Test_ServiceHWMUpdate_BoundaryConditions(t *testing.T) {
 	ResetStats()
 
-	// Channel for the service to receive events.
+	// Channel to send events to the CDC Service.
 	eventsCh := make(chan *proto.CDCIndexedEventGroup, 10)
 
 	cl := &mockCluster{}
@@ -674,18 +679,23 @@ func Test_ServiceHWMUpdate_BoundaryConditions(t *testing.T) {
 		return svc.HighWatermark() == 50
 	}, 2*time.Second)
 
-	// Test HWM update with value equal to current HWM
-	cl.SignalHWMUpdate(50)
-	time.Sleep(100 * time.Millisecond)
-	if svc.HighWatermark() != 50 {
-		t.Fatalf("expected high watermark to remain 50 when HWM update equals current, got %d", svc.HighWatermark())
-	}
+	// Test HWM update with value higher than current HWM
+	cl.SignalHWMUpdate(60)
+	testPoll(t, func() bool {
+		return svc.HighWatermark() == 60
+	}, 2*time.Second)
 
 	// Test HWM update with value less than current HWM
 	cl.SignalHWMUpdate(40)
-	time.Sleep(100 * time.Millisecond)
-	if svc.HighWatermark() != 50 {
-		t.Fatalf("expected high watermark to remain 50 when HWM update is less than current, got %d", svc.HighWatermark())
+
+	// Wait for HWM update to be processed (should be ignored since 40 < 60)
+	initialCount := svc.hwmUpdated.Load()
+	testPoll(t, func() bool {
+		return svc.hwmUpdated.Load() > initialCount
+	}, 2*time.Second)
+
+	if svc.HighWatermark() != 60 {
+		t.Fatalf("expected high watermark to remain 60 when HWM update is less than current, got %d", svc.HighWatermark())
 	}
 
 	// Test HWM update when service is not leader - should still work
@@ -693,11 +703,11 @@ func Test_ServiceHWMUpdate_BoundaryConditions(t *testing.T) {
 	testPoll(t, func() bool { return !svc.IsLeader() }, 2*time.Second)
 
 	// Send HWM update greater than current
-	cl.SignalHWMUpdate(60)
+	cl.SignalHWMUpdate(70)
 
 	// Verify that HWM is updated even when not leader
 	testPoll(t, func() bool {
-		return svc.HighWatermark() == 60
+		return svc.HighWatermark() == 70
 	}, 2*time.Second)
 }
 
