@@ -54,6 +54,9 @@ type Cluster interface {
 	// a signal when the node detects that the Leader changes.
 	RegisterLeaderChange(c chan<- bool)
 
+	// RegisterHWMUpdate registers a channel to receive highwater mark update requests.
+	RegisterHWMUpdate(c chan<- uint64)
+
 	// SetHighWatermark sets the high watermark across the cluster.
 	SetHighWatermark(value uint64) error
 }
