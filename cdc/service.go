@@ -339,6 +339,9 @@ func (s *Service) mainLoop() {
 			if s.isLeader.Is() {
 				s.logger.Println("leadership changed, this node now leader, starting CDC transmission")
 				stop, done = s.readFromFIFO()
+							// here start leader loop, which posts events to HTTP, updates HWM variable, persists HWM to json, prunes FIFO
+			// kick off another loop which broadcasts the HWM
+			// do no listen for HWM updates from cluster.
 			} else {
 				s.logger.Println("leadership changed, this node no longer leader, pausing CDC transmission")
 				close(stop)
@@ -346,6 +349,8 @@ func (s *Service) mainLoop() {
 				<-done
 				done = nil
 				s.initBatcher()
+				// Start a loop here which listens for HWM updates from cluster
+				// Prunes FIFO and persists to JSON
 			}
 
 		case batch := <-s.batcher.C:
