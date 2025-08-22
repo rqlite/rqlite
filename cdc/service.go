@@ -299,8 +299,8 @@ func (s *Service) mainLoop() {
 	}
 }
 
-// leaderLoop handles CDC operations when this node is the leader.
-// It reads from FIFO, processes batches, sends to HTTP endpoint, and manages high watermark.
+// leaderLoop handles CDC operations when this service is running on the leader.
+// It reads from FIFO, processes batches, sends to HTTP endpoint, and broadcasts the high watermark.
 func (s *Service) leaderLoop() (chan struct{}, chan struct{}) {
 	stop := make(chan struct{})
 	done := make(chan struct{})
@@ -427,8 +427,7 @@ func (s *Service) leaderHWMLoop() (chan struct{}, chan struct{}) {
 	return stop, done
 }
 
-// followerLoop handles CDC operations when this node is a follower.
-// Currently this is just a placeholder as HWM updates are handled in mainLoop.
+// followerLoop handles CDC operations when this service is running on a follower.
 func (s *Service) followerLoop() (chan struct{}, chan struct{}) {
 	stop := make(chan struct{})
 	done := make(chan struct{})
@@ -460,6 +459,9 @@ func (s *Service) followerLoop() (chan struct{}, chan struct{}) {
 	return stop, done
 }
 
+// writeToFIFO handles events sent to this service. It writes the events to the FIFO.
+// Writing to the FIFO happens regardless of whether this service is running on
+// the leader or a follower.
 func (s *Service) writeToFIFO() {
 	defer s.wg.Done()
 	for {
