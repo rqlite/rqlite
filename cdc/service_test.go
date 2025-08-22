@@ -511,7 +511,7 @@ func Test_ServiceMultiEvent_Batch(t *testing.T) {
 	}, 2*time.Second)
 }
 
-func Test_ServiceHWMUpdate(t *testing.T) {
+func Test_ServiceHWMUpdate_Leader(t *testing.T) {
 	ResetStats()
 
 	// Channel to send events to the CDC Service.
