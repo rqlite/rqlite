@@ -63,11 +63,6 @@ type Config struct {
 	// we don't wait too long for a batch to fill up.
 	MaxBatchDelay time.Duration `json:"max_batch_delay"`
 
-	// HighWatermarkingDisabled indicates whether high watermarking is disabled.
-	// If true, the service will not write or read the high watermark from the store.
-	// This is useful for testing or when high watermarking is not needed.
-	HighWatermarkingDisabled bool `json:"high_watermarking_disabled"`
-
 	// HighWatermarkInterval is the interval at which the high watermark is written to the store.
 	HighWatermarkInterval time.Duration `json:"high_watermark_interval"`
 

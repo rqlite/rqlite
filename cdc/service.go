@@ -65,8 +65,8 @@ type Cluster interface {
 	// RegisterHWMUpdate registers a channel to receive highwater mark updates.
 	RegisterHWMUpdate(c chan<- uint64)
 
-	// SetHighWatermark sets the high watermark across the cluster.
-	SetHighWatermark(value uint64) error
+	// BroadcastHighWatermark sets the high watermark across the cluster.
+	BroadcastHighWatermark(value uint64) error
 }
 
 // Service is a CDC service that reads events from a channel and processes them.
@@ -135,10 +135,6 @@ type Service struct {
 	// This is used to ensure that the high watermark is written periodically,
 	highWatermarkInterval time.Duration
 
-	// highWatermarkingDisabled indicates whether high watermarking is disabled.
-	// If true, the service will not write or read the high watermark from the store.
-	highWatermarkingDisabled rsync.AtomicBool
-
 	// Channel to receive notifications of leader changes and store latest state.
 	leaderObCh chan bool
 	isLeader   rsync.AtomicBool
@@ -151,7 +147,8 @@ type Service struct {
 	done chan struct{}
 
 	// For white box testing
-	hwmUpdated atomic.Uint64
+	hwmLeaderUpdated   atomic.Uint64
+	hwmFollowerUpdated atomic.Uint64
 
 	logger *log.Logger
 }
@@ -204,7 +201,6 @@ func NewService(nodeID, dir string, clstr Cluster, in <-chan *proto.CDCIndexedEv
 	srv.fifo = fifo
 
 	srv.highWatermark.Store(readHWMFromFile(srv.hwmFilePath))
-	srv.highWatermarkingDisabled.SetBool(cfg.HighWatermarkingDisabled)
 	return srv, nil
 }
 
@@ -218,11 +214,6 @@ func (s *Service) Start() error {
 	s.clstr.RegisterHWMUpdate(s.hwmObCh)
 	s.logger.Println("service started")
 	return nil
-}
-
-// SetHighWatermarking enables or disables high watermarking.
-func (s *Service) SetHighWatermarking(enabled bool) {
-	s.highWatermarkingDisabled.SetBool(!enabled)
 }
 
 // Stop stops the CDC service.
@@ -241,6 +232,229 @@ func (s *Service) HighWatermark() uint64 {
 // IsLeader returns whether the CDC service is running on the Leader.
 func (s *Service) IsLeader() bool {
 	return s.isLeader.Is()
+}
+
+func (s *Service) mainLoop() {
+	defer s.wg.Done()
+
+	var leaderStop, leaderDone chan struct{}
+	var followerStop, followerDone chan struct{}
+
+	// Helper function to stop leader loop
+	stopLeaderLoop := func() {
+		if leaderStop != nil {
+			close(leaderStop)
+			<-leaderDone
+			leaderStop = nil
+			leaderDone = nil
+			s.initBatcher()
+		}
+	}
+
+	// Helper function to stop follower loop
+	stopFollowerLoop := func() {
+		if followerStop != nil {
+			close(followerStop)
+			<-followerDone
+			followerStop = nil
+			followerDone = nil
+		}
+	}
+
+	// Cleanup on exit
+	defer func() {
+		stopLeaderLoop()
+		stopFollowerLoop()
+	}()
+
+	// Start in follower state.
+	followerStop, followerDone = s.followerLoop()
+
+	for {
+		select {
+		case leaderNow := <-s.leaderObCh:
+			if leaderNow == s.isLeader.Is() {
+				continue
+			}
+			s.isLeader.SetBool(leaderNow)
+			if s.isLeader.Is() {
+				s.logger.Println("leadership changed, this node now leader, starting CDC transmission")
+				stopFollowerLoop()
+				leaderStop, leaderDone = s.leaderLoop()
+			} else {
+				s.logger.Println("leadership changed, this node no longer leader, pausing CDC transmission")
+				stopLeaderLoop()
+				followerStop, followerDone = s.followerLoop()
+			}
+
+		case <-s.done:
+			return
+		}
+	}
+}
+
+// leaderLoop handles CDC operations when this node is the leader.
+// It reads from FIFO, processes batches, sends to HTTP endpoint, and manages high watermark.
+func (s *Service) leaderLoop() (chan struct{}, chan struct{}) {
+	stop := make(chan struct{})
+	done := make(chan struct{})
+
+	go func() {
+		defer close(done)
+
+		// Start reading from FIFO
+		fifoStop, fifoDone := s.readFromFIFO()
+		defer func() {
+			if fifoStop != nil {
+				close(fifoStop)
+				<-fifoDone
+			}
+		}()
+
+		// Start periodic high watermark update handling
+		hwmStop, hwmDone := s.leaderHWMLoop()
+		defer func() {
+			if hwmStop != nil {
+				close(hwmStop)
+				<-hwmDone
+			}
+		}()
+
+		for {
+			select {
+			case <-stop:
+				return
+
+			case batch := <-s.batcher.C:
+				if batch == nil || len(batch.Objects) == 0 {
+					continue
+				}
+
+				b, err := MarshalToEnvelopeJSON(s.serviceID, s.nodeID, false, batch.Objects)
+				if err != nil {
+					s.logger.Printf("error marshalling batch: %v", err)
+					continue
+				}
+
+				req, err := http.NewRequest("POST", s.endpoint, bytes.NewReader(b))
+				if err != nil {
+					s.logger.Printf("error creating HTTP request for endpoint: %v", err)
+					continue
+				}
+				req.Header.Set("Content-Type", "application/json")
+
+				nAttempts := 0
+				retryDelay := s.transmitMinBackoff
+				sentOK := false
+				for {
+					nAttempts++
+					if s.logOnly {
+						s.logger.Println(string(b))
+						sentOK = true
+						break
+					}
+
+					resp, err := s.httpClient.Do(req)
+					if err == nil && (resp.StatusCode == http.StatusOK || resp.StatusCode == http.StatusAccepted) {
+						resp.Body.Close()
+						sentOK = true
+						break
+					}
+					if nAttempts == s.transmitMaxRetries {
+						s.logger.Printf("failed to send batch to endpoint after %d retries, last error: %v", nAttempts, err)
+						stats.Add(numDroppedFailedToSend, int64(len(batch.Objects)))
+						break
+					}
+
+					if s.transmitRetryPolicy == ExponentialRetryPolicy {
+						retryDelay *= 2
+						if retryDelay > s.transmitMaxBackoff {
+							retryDelay = s.transmitMaxBackoff
+						}
+					}
+					stats.Add(numRetries, 1)
+					time.Sleep(retryDelay)
+				}
+				if sentOK {
+					s.highWatermark.Store(batch.Objects[len(batch.Objects)-1].Index)
+					stats.Add(numSent, int64(len(batch.Objects)))
+				}
+			}
+		}
+	}()
+
+	return stop, done
+}
+
+// leaderHWMLoop handles periodic high watermark operations for leaders.
+// It broadcasts HWM to cluster, writes to disk, and prunes FIFO.
+func (s *Service) leaderHWMLoop() (chan struct{}, chan struct{}) {
+	stop := make(chan struct{})
+	done := make(chan struct{})
+
+	go func() {
+		defer close(done)
+
+		hwmTicker := time.NewTicker(s.highWatermarkInterval)
+		defer hwmTicker.Stop()
+		for {
+			select {
+			case <-stop:
+				return
+
+			case <-hwmTicker.C:
+				hwm := s.highWatermark.Load()
+				if err := s.clstr.BroadcastHighWatermark(hwm); err != nil {
+					s.logger.Printf("error writing high watermark to store: %v", err)
+				}
+				if err := s.fifo.DeleteRange(hwm); err != nil {
+					s.logger.Printf("error deleting events up to high watermark from FIFO: %v", err)
+				}
+				s.hwmFollowerUpdated.Add(1)
+			}
+		}
+	}()
+
+	return stop, done
+}
+
+// followerLoop handles CDC operations when this node is a follower.
+// Currently this is just a placeholder as HWM updates are handled in mainLoop.
+func (s *Service) followerLoop() (chan struct{}, chan struct{}) {
+	stop := make(chan struct{})
+	done := make(chan struct{})
+
+	var prevHWM uint64
+	go func() {
+		defer close(done)
+
+		for {
+			select {
+			case <-stop:
+				return
+			case hwm := <-s.hwmObCh:
+				if hwm <= prevHWM {
+					continue
+				}
+
+				// Handle high watermark updates from cluster
+				s.highWatermark.Store(hwm)
+				if err := writeHWMToFile(s.hwmFilePath, hwm); err != nil {
+					s.logger.Printf("error writing high watermark to file: %v", err)
+				}
+				// This means all events up to this high watermark have been
+				// successfully sent to the webhook by the cluster. We can
+				// delete all events up and including that point from our FIFO.
+				if err := s.fifo.DeleteRange(hwm); err != nil {
+					s.logger.Printf("error deleting events up to high watermark from FIFO: %v", err)
+				}
+				prevHWM = hwm
+				s.hwmFollowerUpdated.Add(1)
+			}
+		}
+	}()
+
+	return stop, done
 }
 
 func (s *Service) writeToFIFO() {
@@ -286,137 +500,6 @@ func (s *Service) readFromFIFO() (chan struct{}, chan struct{}) {
 		}
 	}()
 	return stop, done
-}
-
-func (s *Service) mainLoop() {
-	defer s.wg.Done()
-
-	// This ticker is used to periodically broadcast the high watermark to the cluster.
-	hwmTicker := time.NewTicker(s.highWatermarkInterval)
-	defer hwmTicker.Stop()
-
-	var stop chan struct{}
-	var done chan struct{}
-
-	preHWM := s.highWatermark.Load()
-	for {
-		select {
-		case <-hwmTicker.C:
-			if s.highWatermarkingDisabled.Is() {
-				continue
-			}
-			if s.highWatermark.Load() == preHWM {
-				// Nothing to do.
-				continue
-			}
-			preHWM = s.highWatermark.Load()
-			if s.isLeader.Is() {
-				if err := s.clstr.SetHighWatermark(s.highWatermark.Load()); err != nil {
-					s.logger.Printf("error writing high watermark to store: %v", err)
-				}
-			}
-
-		case hwm := <-s.hwmObCh:
-			if hwm > s.highWatermark.Load() {
-				s.highWatermark.Store(hwm)
-				if err := writeHWMToFile(s.hwmFilePath, hwm); err != nil {
-					s.logger.Printf("error writing high watermark to file: %v", err)
-				}
-				// This means all events up to this high watermark have been
-				// successfully sent to the webhook by the cluster. We can
-				// delete all events up and including that point from our FIFO.
-				if err := s.fifo.DeleteRange(hwm); err != nil {
-					s.logger.Printf("error deleting events up to high watermark from FIFO: %v", err)
-				}
-			}
-			s.hwmUpdated.Add(1)
-
-		case leaderNow := <-s.leaderObCh:
-			if leaderNow == s.isLeader.Is() {
-				continue
-			}
-			s.isLeader.SetBool(leaderNow)
-			if s.isLeader.Is() {
-				s.logger.Println("leadership changed, this node now leader, starting CDC transmission")
-				stop, done = s.readFromFIFO()
-			} else {
-				s.logger.Println("leadership changed, this node no longer leader, pausing CDC transmission")
-				close(stop)
-				stop = nil
-				<-done
-				done = nil
-				s.initBatcher()
-			}
-
-		case batch := <-s.batcher.C:
-			if batch == nil || len(batch.Objects) == 0 {
-				continue
-			}
-
-			// Only the Leader actually sends events.
-			if s.isLeader.IsNot() {
-				stats.Add(numDroppedNotLeader, int64(len(batch.Objects)))
-				continue
-			}
-
-			b, err := MarshalToEnvelopeJSON(s.serviceID, s.nodeID, false, batch.Objects)
-			if err != nil {
-				s.logger.Printf("error marshalling batch: %v", err)
-				continue
-			}
-
-			req, err := http.NewRequest("POST", s.endpoint, bytes.NewReader(b))
-			if err != nil {
-				s.logger.Printf("error creating HTTP request for endpoint: %v", err)
-				continue
-			}
-			req.Header.Set("Content-Type", "application/json")
-
-			nAttempts := 0
-			retryDelay := s.transmitMinBackoff
-			sentOK := false
-			for {
-				nAttempts++
-				if s.logOnly {
-					s.logger.Println(string(b))
-					sentOK = true
-					break
-				}
-
-				resp, err := s.httpClient.Do(req)
-				if err == nil && (resp.StatusCode == http.StatusOK || resp.StatusCode == http.StatusAccepted) {
-					resp.Body.Close()
-					sentOK = true
-					break
-				}
-				if nAttempts == s.transmitMaxRetries {
-					s.logger.Printf("failed to send batch to endpoint after %d retries, last error: %v", nAttempts, err)
-					stats.Add(numDroppedFailedToSend, int64(len(batch.Objects)))
-					break
-				}
-
-				if s.transmitRetryPolicy == ExponentialRetryPolicy {
-					retryDelay *= 2
-					if retryDelay > s.transmitMaxBackoff {
-						retryDelay = s.transmitMaxBackoff
-					}
-				}
-				stats.Add(numRetries, 1)
-				time.Sleep(retryDelay)
-			}
-			if sentOK {
-				s.highWatermark.Store(batch.Objects[len(batch.Objects)-1].Index)
-				stats.Add(numSent, int64(len(batch.Objects)))
-			}
-
-		case <-s.done:
-			if s.isLeader.Is() && s.highWatermarkingDisabled.IsNot() {
-				// Best effort to write the high watermark before stopping.
-				s.clstr.SetHighWatermark(s.highWatermark.Load())
-			}
-			return
-		}
-	}
 }
 
 func (s *Service) initBatcher() {
