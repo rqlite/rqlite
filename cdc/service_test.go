@@ -652,25 +652,93 @@ func Test_ServiceHWMUpdate_Follow(t *testing.T) {
 	}, 2*time.Second)
 }
 
-func testPoll(t *testing.T, condition func() bool, timeout time.Duration) {
-	t.Helper()
-	ticker := time.NewTicker(10 * time.Millisecond)
-	defer ticker.Stop()
-	timer := time.NewTimer(timeout)
-	defer timer.Stop()
-	for {
-		select {
-		case <-ticker.C:
-			if condition() {
-				return
-			}
-		case <-timer.C:
-			t.Fatalf("timed out waiting for condition")
-		}
+// mockCluster manages multiple CDC services for comprehensive testing
+func Test_ServiceHWMUpdate_Follow_Restart(t *testing.T) {
+	ResetStats()
+
+	// Channel to send events to the CDC Service.
+	eventsCh := make(chan *proto.CDCIndexedEventGroup, 10)
+
+	cl := &mockCluster{}
+
+	cfg := DefaultConfig()
+	cfg.MaxBatchSz = 1
+	cfg.MaxBatchDelay = 50 * time.Millisecond
+	cfg.LogOnly = true // Use log-only mode to avoid HTTP complexity
+	tmpDir := t.TempDir()
+	svc, err := NewService(
+		"node1",
+		tmpDir,
+		cl,
+		eventsCh,
+		cfg,
+	)
+	if err != nil {
+		t.Fatalf("failed to create service: %v", err)
 	}
+	if err := svc.Start(); err != nil {
+		t.Fatalf("failed to start service: %v", err)
+	}
+
+	// Make it the leader.
+	testPoll(t, func() bool { return !svc.IsLeader() }, 2*time.Second)
+
+	// Add some events to the FIFO queue
+	events := []*proto.CDCIndexedEventGroup{
+		{
+			Index: 10,
+			Events: []*proto.CDCEvent{
+				{
+					Op:       proto.CDCEvent_INSERT,
+					Table:    "foo",
+					NewRowId: 1,
+				},
+			},
+		},
+	}
+
+	// Send events to the service
+	for _, ev := range events {
+		eventsCh <- ev
+	}
+
+	// Confirm FIFO has the events
+	testPoll(t, func() bool {
+		return svc.fifo.Len() == 1
+	}, 2*time.Second)
+
+	// Simulate a high watermark update from the cluster, which should
+	// prune FIFO.
+	cl.BroadcastHighWatermark(10)
+
+	// Wait for events to be processed and high watermark updated
+	testPoll(t, func() bool {
+		return svc.hwmFollowerUpdated.Load() == 1 && svc.fifo.Len() == 0 && svc.HighWatermark() == 10
+	}, 2*time.Second)
+
+	// Create second service using the same dir to check that the highwater
+	// mark is correctly restored.
+	svc.Stop() // Explicitly stop the first service to ensure clean state, including BoltDB.
+
+	svc2, err := NewService(
+		"node1",
+		tmpDir,
+		cl,
+		eventsCh,
+		cfg,
+	)
+	if err != nil {
+		t.Fatalf("failed to create service: %v", err)
+	}
+	if err := svc2.Start(); err != nil {
+		t.Fatalf("failed to start service: %v", err)
+	}
+	defer svc2.Stop()
+	testPoll(t, func() bool {
+		return svc2.HighWatermark() == 10
+	}, 2*time.Second)
 }
 
-// mockCluster manages multiple CDC services for comprehensive testing
 type mockCluster struct {
 	mu             sync.Mutex
 	leaderChannels []chan<- bool
@@ -747,4 +815,22 @@ func (tc *mockCluster) GetCurrentLeader() int {
 	tc.mu.Lock()
 	defer tc.mu.Unlock()
 	return tc.currentLeader
+}
+
+func testPoll(t *testing.T, condition func() bool, timeout time.Duration) {
+	t.Helper()
+	ticker := time.NewTicker(10 * time.Millisecond)
+	defer ticker.Stop()
+	timer := time.NewTimer(timeout)
+	defer timer.Stop()
+	for {
+		select {
+		case <-ticker.C:
+			if condition() {
+				return
+			}
+		case <-timer.C:
+			t.Fatalf("timed out waiting for condition")
+		}
+	}
 }
