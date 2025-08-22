@@ -407,6 +407,9 @@ func (s *Service) leaderHWMLoop() (chan struct{}, chan struct{}) {
 				if err := s.clstr.BroadcastHighWatermark(hwm); err != nil {
 					s.logger.Printf("error writing high watermark to store: %v", err)
 				}
+				if err := writeHWMToFile(s.hwmFilePath, hwm); err != nil {
+					s.logger.Printf("error writing high watermark to file: %v", err)
+				}
 				if err := s.fifo.DeleteRange(hwm); err != nil {
 					s.logger.Printf("error deleting events up to high watermark from FIFO: %v", err)
 				}
