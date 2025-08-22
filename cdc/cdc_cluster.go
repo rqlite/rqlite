@@ -36,19 +36,14 @@ func (c *CDCCluster) RegisterHWMUpdate(ch chan<- uint64) {
 	c.clstr.RegisterHWMUpdate(ch)
 }
 
-// BroadcastHighWatermark sets the high watermark across the cluster.
+// BroadcastHighWatermark sets the high watermark across the voting cluster nodes.
 func (c *CDCCluster) BroadcastHighWatermark(value uint64) error {
-	// Get the cluster nodes to broadcast to
 	servers, err := c.store.Nodes()
 	if err != nil {
 		return err
 	}
 
-	// Extract addresses from servers, excluding current node if needed
-	nodeAddrs := make([]string, 0, len(servers))
-	for _, server := range servers {
-		nodeAddrs = append(nodeAddrs, server.Addr)
-	}
+	nodeAddrs := store.Servers(servers).Voters().Addrs()
 
 	// For now, we'll use reasonable default parameters.
 	// In a real implementation, these parameters might be configurable.

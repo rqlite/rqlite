@@ -97,6 +97,21 @@ func (s Servers) NonVoters() Servers {
 	return nonVoters
 }
 
+// Addrs returns a slice of addresses from the servers.
+func (s Servers) Addrs() []string {
+	if s == nil {
+		return nil
+	}
+
+	addrs := make([]string, 0, len(s))
+	for _, server := range s {
+		if server != nil {
+			addrs = append(addrs, server.Addr)
+		}
+	}
+	return addrs
+}
+
 func (s Servers) Less(i, j int) bool { return s[i].ID < s[j].ID }
 func (s Servers) Len() int           { return len(s) }
 func (s Servers) Swap(i, j int)      { s[i], s[j] = s[j], s[i] }
