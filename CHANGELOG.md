@@ -9,6 +9,7 @@
 - [PR #2240](https://github.com/rqlite/rqlite/pull/2240): Add Len() method to CDC FIFO.
 - [PR #2242](https://github.com/rqlite/rqlite/pull/2242): Persist High Water Mark across CDC Service restarts.
 - [PR #2248](https://github.com/rqlite/rqlite/pull/2248): Refactor main CDC loop into Leader and Follower loops.
+- [PR #2250](https://github.com/rqlite/rqlite/pull/2250): Cluster-level unit testing of CDC service.
 
 ## v8.43.3 (August 14th 2025)
 ### Implementation changes and bug fixes

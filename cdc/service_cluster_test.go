@@ -671,6 +671,15 @@ func Test_Cluster_500Events(t *testing.T) {
 		}(eCh)
 	}
 
+	// Simulate leadership changing on cluster during processing. While events
+	// may be repeated, none should be lost.
+	go func() {
+		time.Sleep(2 * time.Second)
+		cluster.SetLeader(1)
+		time.Sleep(2 * time.Second)
+		cluster.SetLeader(2)
+	}()
+
 	// Confirm that HWM is set correctly across cluster.
 	testPoll(t, func() bool {
 		return services[0].HighWatermark() == uint64(numEvents) &&
@@ -681,6 +690,10 @@ func Test_Cluster_500Events(t *testing.T) {
 	testPoll(t, func() bool {
 		return httpServer.GetRequestCount() > 0 && httpServer.GetMessageCount() == numEvents
 	}, 30*time.Second)
+
+	if !httpServer.CheckMessagesExist(numEvents) {
+		t.Fatalf("expected all messages from 1 to %d, but some are missing", numEvents)
+	}
 }
 
 // Test helper to create an HTTP test server that records requests
@@ -740,4 +753,16 @@ func (h *httpTestServer) GetMessageCount() int {
 	h.mu.Lock()
 	defer h.mu.Unlock()
 	return len(h.messages)
+}
+
+// write a function to check that the messages map has every key from 1 to n
+func (h *httpTestServer) CheckMessagesExist(n int) bool {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	for i := 1; i <= n; i++ {
+		if _, ok := h.messages[uint64(i)]; !ok {
+			return false
+		}
+	}
+	return true
 }
