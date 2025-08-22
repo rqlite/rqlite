@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"reflect"
+	"sync"
 	"testing"
 	"time"
 
@@ -48,7 +49,7 @@ func Test_ServiceSingleEvent(t *testing.T) {
 	defer svc.Stop()
 
 	// Make it the leader.
-	cl.SignalLeaderChange(true)
+	cl.SetLeader(0)
 
 	// Send one dummy event to the service.
 	ev := &proto.CDCEvent{
@@ -112,7 +113,7 @@ func Test_ServiceSingleEvent(t *testing.T) {
 	}, 2*time.Second)
 
 	// Next emulate CDC not running on the Leader.
-	cl.SignalLeaderChange(false)
+	cl.SetLeader(-1)
 	testPoll(t, func() bool { return !svc.IsLeader() }, 2*time.Second)
 
 	// Send events, and make sure they are ignored.
@@ -120,7 +121,7 @@ func Test_ServiceSingleEvent(t *testing.T) {
 	eventsCh <- evs
 	waitFn(1*time.Second, 0)
 
-	cl.SignalLeaderChange(true)
+	cl.SetLeader(0)
 	waitFn(2*time.Second, 1)
 }
 
@@ -150,7 +151,7 @@ func Test_ServiceSingleEvent_LogOnly(t *testing.T) {
 		t.Fatalf("failed to start service: %v", err)
 	}
 	defer svc.Stop()
-	cl.SignalLeaderChange(true)
+	cl.SetLeader(0)
 
 	// Send one dummy event to the service.
 	ev := &proto.CDCEvent{
@@ -209,7 +210,7 @@ func Test_ServiceSingleEvent_Retry(t *testing.T) {
 		t.Fatalf("failed to start service: %v", err)
 	}
 	defer svc.Stop()
-	cl.SignalLeaderChange(true)
+	cl.SetLeader(0)
 
 	// Send one dummy event to the service.
 	ev := &proto.CDCEvent{
@@ -293,7 +294,7 @@ func Test_ServiceMultiEvent(t *testing.T) {
 		t.Fatalf("failed to start service: %v", err)
 	}
 	defer svc.Stop()
-	cl.SignalLeaderChange(true)
+	cl.SetLeader(0)
 
 	// Create the Events and send them.
 	ev1 := &proto.CDCEvent{
@@ -400,7 +401,7 @@ func Test_ServiceMultiEvent_Batch(t *testing.T) {
 		t.Fatalf("failed to start service: %v", err)
 	}
 	defer svc.Stop()
-	cl.SignalLeaderChange(true)
+	cl.SetLeader(0)
 
 	// Create the Events and send them.
 	ev1 := &proto.CDCEvent{
@@ -539,7 +540,7 @@ func Test_ServiceHWMUpdate_Leader(t *testing.T) {
 	defer svc.Stop()
 
 	// Make it the leader.
-	cl.SignalLeaderChange(true)
+	cl.SetLeader(0)
 	testPoll(t, func() bool { return svc.IsLeader() }, 2*time.Second)
 
 	// Add some events to the FIFO queue
@@ -651,39 +652,6 @@ func Test_ServiceHWMUpdate_Follow(t *testing.T) {
 	}, 2*time.Second)
 }
 
-type mockCluster struct {
-	obCh    chan<- bool
-	hwmObCh chan<- uint64
-}
-
-func (m *mockCluster) RegisterLeaderChange(ch chan<- bool) {
-	m.obCh = ch
-}
-
-func (m *mockCluster) RegisterHWMUpdate(ch chan<- uint64) {
-	m.hwmObCh = ch
-}
-
-func (m *mockCluster) SignalLeaderChange(leader bool) {
-	if m.obCh != nil {
-		m.obCh <- leader
-	}
-}
-
-func (m *mockCluster) SignalHWMUpdate(hwm uint64) {
-	if m.hwmObCh != nil {
-		m.hwmObCh <- hwm
-	}
-}
-
-func (m *mockCluster) BroadcastHighWatermark(value uint64) error {
-	if m.hwmObCh != nil {
-		m.hwmObCh <- value
-		return nil
-	}
-	return nil // No observer, nothing to do.
-}
-
 func testPoll(t *testing.T, condition func() bool, timeout time.Duration) {
 	t.Helper()
 	ticker := time.NewTicker(10 * time.Millisecond)
@@ -700,4 +668,83 @@ func testPoll(t *testing.T, condition func() bool, timeout time.Duration) {
 			t.Fatalf("timed out waiting for condition")
 		}
 	}
+}
+
+// mockCluster manages multiple CDC services for comprehensive testing
+type mockCluster struct {
+	mu             sync.Mutex
+	leaderChannels []chan<- bool
+	hwmChannels    []chan<- uint64
+	currentLeader  int // index of current leader, -1 if none
+}
+
+func newMockCluster() *mockCluster {
+	return &mockCluster{
+		currentLeader: -1,
+	}
+}
+
+func (tc *mockCluster) RegisterLeaderChange(ch chan<- bool) {
+	tc.mu.Lock()
+	defer tc.mu.Unlock()
+	tc.leaderChannels = append(tc.leaderChannels, ch)
+}
+
+func (tc *mockCluster) RegisterHWMUpdate(ch chan<- uint64) {
+	tc.mu.Lock()
+	defer tc.mu.Unlock()
+	tc.hwmChannels = append(tc.hwmChannels, ch)
+}
+
+func (tc *mockCluster) BroadcastHighWatermark(value uint64) error {
+	tc.mu.Lock()
+	defer tc.mu.Unlock()
+
+	// Default behavior: broadcast to all registered HWM channels
+	for _, ch := range tc.hwmChannels {
+		select {
+		case ch <- value:
+		default:
+			// Non-blocking send to avoid deadlocks
+		}
+	}
+	return nil
+}
+
+// SetLeader send a True to channel at leaderIndex and False to all others.
+// Indexes are zero-based. Send -1 to mark no leader.
+func (tc *mockCluster) SetLeader(leaderIndex int) {
+	tc.mu.Lock()
+	defer tc.mu.Unlock()
+
+	tc.currentLeader = leaderIndex
+	for i, ch := range tc.leaderChannels {
+		isLeader := (i == leaderIndex)
+		select {
+		case ch <- isLeader:
+		default:
+			// Non-blocking send to avoid deadlocks
+		}
+	}
+}
+
+// BroadcastHWM sends HWM update to all registered channels
+func (tc *mockCluster) BroadcastHWM(hwm uint64) {
+	tc.mu.Lock()
+	defer tc.mu.Unlock()
+
+	for _, ch := range tc.hwmChannels {
+		select {
+		case ch <- hwm:
+		default:
+			// Non-blocking send to avoid deadlocks
+		}
+	}
+}
+
+// GetCurrentLeader returns the current leader index
+func (tc *mockCluster) GetCurrentLeader() int {
+	tc.mu.Lock()
+	defer tc.mu.Unlock()
+	return tc.currentLeader
 }
