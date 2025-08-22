@@ -292,3 +292,75 @@ func Test_Server_NonVoters(t *testing.T) {
 		})
 	}
 }
+
+func Test_Server_Addrs(t *testing.T) {
+	testCases := []struct {
+		name     string
+		servers  Servers
+		expected []string // Expected addresses
+	}{
+		{
+			name:     "EmptyServers",
+			servers:  nil,
+			expected: nil,
+		},
+		{
+			name:     "EmptySlice",
+			servers:  Servers{},
+			expected: []string{},
+		},
+		{
+			name: "SingleServer",
+			servers: Servers{
+				{ID: "node1", Addr: "localhost:4001", Suffrage: "Voter"},
+			},
+			expected: []string{"localhost:4001"},
+		},
+		{
+			name: "MultipleServers",
+			servers: Servers{
+				{ID: "node1", Addr: "localhost:4001", Suffrage: "Voter"},
+				{ID: "node2", Addr: "localhost:4002", Suffrage: "Nonvoter"},
+				{ID: "node3", Addr: "localhost:4003", Suffrage: "Voter"},
+			},
+			expected: []string{"localhost:4001", "localhost:4002", "localhost:4003"},
+		},
+		{
+			name: "WithNilElements",
+			servers: Servers{
+				{ID: "node1", Addr: "localhost:4001", Suffrage: "Voter"},
+				nil,
+				{ID: "node2", Addr: "localhost:4002", Suffrage: "Nonvoter"},
+			},
+			expected: []string{"localhost:4001", "localhost:4002"},
+		},
+		{
+			name: "AllNilElements",
+			servers: Servers{
+				nil,
+				nil,
+			},
+			expected: []string{},
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			addrs := tc.servers.Addrs()
+
+			if tc.expected == nil && addrs != nil {
+				t.Fatalf("Addrs for %s returned %+v, expected nil", tc.name, addrs)
+			}
+
+			if len(addrs) != len(tc.expected) {
+				t.Fatalf("Addrs for %s returned %d addresses, expected %d", tc.name, len(addrs), len(tc.expected))
+			}
+
+			for i, expectedAddr := range tc.expected {
+				if addrs[i] != expectedAddr {
+					t.Fatalf("Addrs for %s returned address %s at index %d, expected %s", tc.name, addrs[i], i, expectedAddr)
+				}
+			}
+		})
+	}
+}
