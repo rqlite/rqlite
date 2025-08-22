@@ -212,7 +212,11 @@ func (s *Service) Start() error {
 
 	s.clstr.RegisterLeaderChange(s.leaderObCh)
 	s.clstr.RegisterHWMUpdate(s.hwmObCh)
-	s.logger.Println("service started")
+	if s.serviceID == "" {
+		s.logger.Printf("service started with node ID %s", s.nodeID)
+	} else {
+		s.logger.Printf("service started with ID %s, node ID %s", s.serviceID, s.nodeID)
+	}
 	return nil
 }
 
@@ -278,11 +282,13 @@ func (s *Service) mainLoop() {
 			}
 			s.isLeader.SetBool(leaderNow)
 			if s.isLeader.Is() {
-				s.logger.Println("leadership changed, this node now leader, starting CDC transmission")
+				s.logger.Printf("leadership changed, this node (ID:%s) now leader, starting CDC transmission",
+					s.nodeID)
 				stopFollowerLoop()
 				leaderStop, leaderDone = s.leaderLoop()
 			} else {
-				s.logger.Println("leadership changed, this node no longer leader, pausing CDC transmission")
+				s.logger.Printf("leadership changed, this node (ID:%s) no longer leader, pausing CDC transmission",
+					s.nodeID)
 				stopLeaderLoop()
 				followerStop, followerDone = s.followerLoop()
 			}
