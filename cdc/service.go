@@ -239,29 +239,23 @@ func (s *Service) IsLeader() bool {
 	return s.isLeader.Is()
 }
 
-// Stats implements the StatusReporter interface and returns statistics
-// about the CDC service.
+// Stats returns statistics about the CDC service.
 func (s *Service) Stats() (map[string]any, error) {
-	stats := make(map[string]any)
-
+	stats := map[string]any{
+		"node_id":                  s.nodeID,
+		"dir":                      s.dir,
+		"current_highwater_mark":   s.HighWatermark(),
+		"persisted_highwater_mark": readHWMFromFile(s.hwmFilePath),
+		"is_leader":                s.IsLeader(),
+		"endpoint":                 httpurl.RemoveBasicAuth(s.endpoint),
+		"fifo": map[string]any{
+			"has_next": s.fifo.HasNext(),
+			"length":   s.fifo.Len(),
+		},
+	}
 	if s.serviceID != "" {
 		stats["service_id"] = s.serviceID
 	}
-
-	stats["node_id"] = s.nodeID
-	stats["dir"] = s.dir
-	stats["current_highwater_mark"] = s.HighWatermark()
-	stats["persisted_highwater_mark"] = readHWMFromFile(s.hwmFilePath)
-	stats["is_leader"] = s.IsLeader()
-
-	fifoStats := map[string]any{
-		"has_next": s.fifo.HasNext(),
-		"length":   s.fifo.Len(),
-	}
-	stats["fifo"] = fifoStats
-
-	stats["endpoint"] = httpurl.RemoveBasicAuth(s.endpoint)
-
 	return stats, nil
 }
 
