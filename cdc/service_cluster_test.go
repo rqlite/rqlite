@@ -663,20 +663,26 @@ func Test_Cluster_500Events(t *testing.T) {
 	}
 
 	numEvents := 500
-	for _, eCh := range eventChannels {
+	leaderSwitch := make(chan struct{})
+	for eIdx, eCh := range eventChannels {
 		go func(ch chan *proto.CDCIndexedEventGroup) {
+			// Simulate leadership changing on cluster during processing. While events
+			// may be repeated, none should be lost. These indexes were chosen at random.
 			for i := range numEvents {
+				if eIdx == 0 {
+					if i == 135 || i == 389 {
+						leaderSwitch <- struct{}{}
+					}
+				}
 				ch <- makeEvent(int64(i + 1))
 			}
 		}(eCh)
 	}
 
-	// Simulate leadership changing on cluster during processing. While events
-	// may be repeated, none should be lost.
 	go func() {
-		time.Sleep(2 * time.Second)
+		<-leaderSwitch
 		cluster.SetLeader(1)
-		time.Sleep(2 * time.Second)
+		<-leaderSwitch
 		cluster.SetLeader(2)
 	}()
 
@@ -696,7 +702,6 @@ func Test_Cluster_500Events(t *testing.T) {
 	}
 }
 
-// Test helper to create an HTTP test server that records requests
 type httpTestServer struct {
 	*httptest.Server
 	requests [][]byte
@@ -755,7 +760,6 @@ func (h *httpTestServer) GetMessageCount() int {
 	return len(h.messages)
 }
 
-// write a function to check that the messages map has every key from 1 to n
 func (h *httpTestServer) CheckMessagesExist(n int) bool {
 	h.mu.Lock()
 	defer h.mu.Unlock()
