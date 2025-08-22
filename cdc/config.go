@@ -90,7 +90,7 @@ func DefaultConfig() *Config {
 		Endpoint:              "http://localhost:8080/cdc",
 		MaxBatchSz:            100,
 		MaxBatchDelay:         time.Second,
-		HighWatermarkInterval: 10 * time.Second,
+		HighWatermarkInterval: 5 * time.Second,
 		TransmitTimeout:       5 * time.Second,
 		TransmitRetryPolicy:   LinearRetryPolicy,
 		TransmitMaxRetries:    5,

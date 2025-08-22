@@ -255,8 +255,8 @@ func (q *Queue) run(nextKey []byte, highestKey uint64) {
 				bucket := tx.Bucket(bucketName)
 				c := bucket.Cursor()
 				k, _ := c.First()
-				isEmpty = k == nil // If no items, isEmpty is true
-				hasNext = k != nil // If there are any items, hasNext is true
+				isEmpty = k == nil       // If no items, isEmpty is true
+				hasNext = nextKey != nil // Any items to dequeue?
 
 				// Get the number of key/value pairs in the bucket
 				stats := bucket.Stats()
