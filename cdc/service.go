@@ -65,8 +65,8 @@ type Cluster interface {
 	// RegisterHWMUpdate registers a channel to receive highwater mark updates.
 	RegisterHWMUpdate(c chan<- uint64)
 
-	// SetHighWatermark sets the high watermark across the cluster.
-	SetHighWatermark(value uint64) error
+	// BroadcastHighWatermark sets the high watermark across the cluster.
+	BroadcastHighWatermark(value uint64) error
 }
 
 // Service is a CDC service that reads events from a channel and processes them.
@@ -404,7 +404,7 @@ func (s *Service) leaderHWMLoop() (chan struct{}, chan struct{}) {
 
 			case <-hwmTicker.C:
 				hwm := s.highWatermark.Load()
-				if err := s.clstr.SetHighWatermark(hwm); err != nil {
+				if err := s.clstr.BroadcastHighWatermark(hwm); err != nil {
 					s.logger.Printf("error writing high watermark to store: %v", err)
 				}
 				if err := s.fifo.DeleteRange(hwm); err != nil {

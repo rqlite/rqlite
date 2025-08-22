@@ -637,7 +637,7 @@ func Test_ServiceHWMUpdate_Follow(t *testing.T) {
 	}
 
 	// Simulate a high watermark update from the cluster.
-	cl.SetHighWatermark(10)
+	cl.BroadcastHighWatermark(10)
 
 	// Wait for events to be processed and high watermark updated
 	testPoll(t, func() bool {
@@ -671,7 +671,7 @@ func (m *mockCluster) SignalHWMUpdate(hwm uint64) {
 	}
 }
 
-func (m *mockCluster) SetHighWatermark(value uint64) error {
+func (m *mockCluster) BroadcastHighWatermark(value uint64) error {
 	if m.hwmObCh != nil {
 		m.hwmObCh <- value
 		return nil
