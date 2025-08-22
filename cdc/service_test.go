@@ -636,13 +636,18 @@ func Test_ServiceHWMUpdate_Follow(t *testing.T) {
 		eventsCh <- ev
 	}
 
-	// Simulate a high watermark update from the cluster.
+	// Confirm FIFO has the events
+	testPoll(t, func() bool {
+		return svc.fifo.Len() == 1
+	}, 2*time.Second)
+
+	// Simulate a high watermark update from the cluster, which should
+	// prune FIFO.
 	cl.BroadcastHighWatermark(10)
 
 	// Wait for events to be processed and high watermark updated
 	testPoll(t, func() bool {
-		e, _ := svc.fifo.Empty()
-		return e
+		return svc.hwmFollowerUpdated.Load() == 1 && svc.fifo.Len() == 0 && svc.HighWatermark() == 10
 	}, 2*time.Second)
 }
 
