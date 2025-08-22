@@ -267,6 +267,9 @@ func (s *Service) mainLoop() {
 		stopFollowerLoop()
 	}()
 
+	// Start in follower state.
+	followerStop, followerDone = s.followerLoop()
+
 	for {
 		select {
 		case leaderNow := <-s.leaderObCh:

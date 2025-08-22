@@ -587,6 +587,65 @@ func Test_ServiceHWMUpdate_Leader(t *testing.T) {
 	}, 2*time.Second)
 }
 
+func Test_ServiceHWMUpdate_Follow(t *testing.T) {
+	ResetStats()
+
+	// Channel to send events to the CDC Service.
+	eventsCh := make(chan *proto.CDCIndexedEventGroup, 10)
+
+	cl := &mockCluster{}
+
+	cfg := DefaultConfig()
+	cfg.MaxBatchSz = 1
+	cfg.MaxBatchDelay = 50 * time.Millisecond
+	cfg.LogOnly = true // Use log-only mode to avoid HTTP complexity
+	svc, err := NewService(
+		"node1",
+		t.TempDir(),
+		cl,
+		eventsCh,
+		cfg,
+	)
+	if err != nil {
+		t.Fatalf("failed to create service: %v", err)
+	}
+	if err := svc.Start(); err != nil {
+		t.Fatalf("failed to start service: %v", err)
+	}
+	defer svc.Stop()
+
+	// Make it the leader.
+	testPoll(t, func() bool { return !svc.IsLeader() }, 2*time.Second)
+
+	// Add some events to the FIFO queue
+	events := []*proto.CDCIndexedEventGroup{
+		{
+			Index: 10,
+			Events: []*proto.CDCEvent{
+				{
+					Op:       proto.CDCEvent_INSERT,
+					Table:    "foo",
+					NewRowId: 1,
+				},
+			},
+		},
+	}
+
+	// Send events to the service
+	for _, ev := range events {
+		eventsCh <- ev
+	}
+
+	// Simulate a high watermark update from the cluster.
+	cl.SetHighWatermark(10)
+
+	// Wait for events to be processed and high watermark updated
+	testPoll(t, func() bool {
+		e, _ := svc.fifo.Empty()
+		return e
+	}, 2*time.Second)
+}
+
 type mockCluster struct {
 	obCh    chan<- bool
 	hwmObCh chan<- uint64
@@ -613,8 +672,11 @@ func (m *mockCluster) SignalHWMUpdate(hwm uint64) {
 }
 
 func (m *mockCluster) SetHighWatermark(value uint64) error {
-	// Mock implementation does nothing.
-	return nil
+	if m.hwmObCh != nil {
+		m.hwmObCh <- value
+		return nil
+	}
+	return nil // No observer, nothing to do.
 }
 
 func testPoll(t *testing.T, condition func() bool, timeout time.Duration) {
