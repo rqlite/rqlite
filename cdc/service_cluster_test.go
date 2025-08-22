@@ -6,11 +6,13 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"slices"
 	"sync"
 	"testing"
 	"time"
 
 	"github.com/rqlite/rqlite/v8/command/proto"
+	"github.com/rqlite/rqlite/v8/internal/random"
 )
 
 // Test_ClusterBasicDelivery tests that only the leader sends events to HTTP endpoint
@@ -664,13 +666,14 @@ func Test_Cluster_500Events(t *testing.T) {
 
 	numEvents := 500
 	leaderSwitch := make(chan struct{})
+	rns := random.IntN(4, 500)
 	for eIdx, eCh := range eventChannels {
 		go func(ch chan *proto.CDCIndexedEventGroup) {
 			// Simulate leadership changing on cluster during processing. While events
 			// may be repeated, none should be lost. These indexes were chosen at random.
 			for i := range numEvents {
 				if eIdx == 0 {
-					if i == 135 || i == 389 {
+					if slices.Contains(rns, i) {
 						leaderSwitch <- struct{}{}
 					}
 				}

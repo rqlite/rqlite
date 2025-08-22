@@ -2,11 +2,25 @@ package random
 
 import (
 	"math/rand/v2"
+	"sort"
 	"strings"
 	"time"
 )
 
 const srcChars = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ"
+
+// IntN returns a sorted slice of n random integers in the range [0, l).
+func IntN(n, l int) []int {
+	if n <= 0 {
+		return nil
+	}
+	nums := make([]int, n)
+	for i := range nums {
+		nums[i] = rand.N(l)
+	}
+	sort.Ints(nums)
+	return nums
+}
 
 // String returns a random string of n characters long.
 func StringN(n int) string {
