@@ -16,6 +16,7 @@ import (
 
 	"github.com/rqlite/rqlite/v8/command"
 	"github.com/rqlite/rqlite/v8/command/proto"
+	httpurl "github.com/rqlite/rqlite/v8/http/url"
 	"github.com/rqlite/rqlite/v8/internal/rsync"
 	"github.com/rqlite/rqlite/v8/queue"
 )
@@ -236,6 +237,32 @@ func (s *Service) HighWatermark() uint64 {
 // IsLeader returns whether the CDC service is running on the Leader.
 func (s *Service) IsLeader() bool {
 	return s.isLeader.Is()
+}
+
+// Stats implements the StatusReporter interface and returns statistics
+// about the CDC service.
+func (s *Service) Stats() (map[string]any, error) {
+	stats := make(map[string]any)
+
+	if s.serviceID != "" {
+		stats["service_id"] = s.serviceID
+	}
+
+	stats["node_id"] = s.nodeID
+	stats["dir"] = s.dir
+	stats["current_highwater_mark"] = s.HighWatermark()
+	stats["persisted_highwater_mark"] = readHWMFromFile(s.hwmFilePath)
+	stats["is_leader"] = s.IsLeader()
+
+	fifoStats := map[string]any{
+		"has_next": s.fifo.HasNext(),
+		"length":   s.fifo.Len(),
+	}
+	stats["fifo"] = fifoStats
+
+	stats["endpoint"] = httpurl.RemoveBasicAuth(s.endpoint)
+
+	return stats, nil
 }
 
 func (s *Service) mainLoop() {
