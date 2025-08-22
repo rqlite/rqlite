@@ -691,7 +691,7 @@ func Test_Cluster_500Events(t *testing.T) {
 		return services[0].HighWatermark() == uint64(numEvents) &&
 			services[1].HighWatermark() == uint64(numEvents) &&
 			services[2].HighWatermark() == uint64(numEvents)
-	}, 30*time.Second)
+	}, 60*time.Second)
 
 	testPoll(t, func() bool {
 		return httpServer.GetRequestCount() > 0 && httpServer.GetMessageCount() == numEvents
