@@ -135,10 +135,6 @@ type Service struct {
 	// This is used to ensure that the high watermark is written periodically,
 	highWatermarkInterval time.Duration
 
-	// highWatermarkingDisabled indicates whether high watermarking is disabled.
-	// If true, the service will not write or read the high watermark from the store.
-	highWatermarkingDisabled rsync.AtomicBool
-
 	// Channel to receive notifications of leader changes and store latest state.
 	leaderObCh chan bool
 	isLeader   rsync.AtomicBool
@@ -151,7 +147,8 @@ type Service struct {
 	done chan struct{}
 
 	// For white box testing
-	hwmUpdated atomic.Uint64
+	hwmLeaderUpdated   atomic.Uint64
+	hwmFollowerUpdated atomic.Uint64
 
 	logger *log.Logger
 }
@@ -204,7 +201,6 @@ func NewService(nodeID, dir string, clstr Cluster, in <-chan *proto.CDCIndexedEv
 	srv.fifo = fifo
 
 	srv.highWatermark.Store(readHWMFromFile(srv.hwmFilePath))
-	srv.highWatermarkingDisabled.SetBool(cfg.HighWatermarkingDisabled)
 	return srv, nil
 }
 
@@ -218,11 +214,6 @@ func (s *Service) Start() error {
 	s.clstr.RegisterHWMUpdate(s.hwmObCh)
 	s.logger.Println("service started")
 	return nil
-}
-
-// SetHighWatermarking enables or disables high watermarking.
-func (s *Service) SetHighWatermarking(enabled bool) {
-	s.highWatermarkingDisabled.SetBool(!enabled)
 }
 
 // Stop stops the CDC service.
@@ -243,49 +234,60 @@ func (s *Service) IsLeader() bool {
 	return s.isLeader.Is()
 }
 
-func (s *Service) writeToFIFO() {
+func (s *Service) mainLoop() {
 	defer s.wg.Done()
+
+	var leaderStop, leaderDone chan struct{}
+	var followerStop, followerDone chan struct{}
+
+	// Helper function to stop leader loop
+	stopLeaderLoop := func() {
+		if leaderStop != nil {
+			close(leaderStop)
+			<-leaderDone
+			leaderStop = nil
+			leaderDone = nil
+			s.initBatcher()
+		}
+	}
+
+	// Helper function to stop follower loop
+	stopFollowerLoop := func() {
+		if followerStop != nil {
+			close(followerStop)
+			<-followerDone
+			followerStop = nil
+			followerDone = nil
+		}
+	}
+
+	// Cleanup on exit
+	defer func() {
+		stopLeaderLoop()
+		stopFollowerLoop()
+	}()
+
 	for {
 		select {
-		case o := <-s.in:
-			b, err := command.MarshalCDCIndexedEventGroup(o)
-			if err != nil {
-				s.logger.Printf("error marshalling CDC events: %v", err)
+		case leaderNow := <-s.leaderObCh:
+			if leaderNow == s.isLeader.Is() {
 				continue
 			}
-			if err := s.fifo.Enqueue(&Event{Index: o.Index, Data: b}); err != nil {
-				s.logger.Printf("error enqueueing CDC events: %v", err)
+			s.isLeader.SetBool(leaderNow)
+			if s.isLeader.Is() {
+				s.logger.Println("leadership changed, this node now leader, starting CDC transmission")
+				stopFollowerLoop()
+				leaderStop, leaderDone = s.leaderLoop()
+			} else {
+				s.logger.Println("leadership changed, this node no longer leader, pausing CDC transmission")
+				stopLeaderLoop()
+				followerStop, followerDone = s.followerLoop()
 			}
+
 		case <-s.done:
 			return
 		}
 	}
-}
-
-func (s *Service) readFromFIFO() (chan struct{}, chan struct{}) {
-	stop := make(chan struct{})
-	done := make(chan struct{})
-	go func() {
-		for {
-			select {
-			case <-stop:
-				close(done)
-				return
-			case ev := <-s.fifo.C:
-				if ev == nil {
-					close(done)
-					return
-				}
-				events, err := command.UnmarshalCDCIndexedEventGroup(ev.Data)
-				if err != nil {
-					s.logger.Printf("error unmarshalling CDC events from FIFO: %v", err)
-					continue
-				}
-				s.batcher.Write([]*proto.CDCIndexedEventGroup{events}, nil)
-			}
-		}
-	}()
-	return stop, done
 }
 
 // leaderLoop handles CDC operations when this node is the leader.
@@ -306,7 +308,7 @@ func (s *Service) leaderLoop() (chan struct{}, chan struct{}) {
 			}
 		}()
 
-		// Start periodic high watermark management goroutine
+		// Start periodic high watermark update handling
 		hwmStop, hwmDone := s.leaderHWMLoop()
 		defer func() {
 			if hwmStop != nil {
@@ -392,26 +394,20 @@ func (s *Service) leaderHWMLoop() (chan struct{}, chan struct{}) {
 
 		hwmTicker := time.NewTicker(s.highWatermarkInterval)
 		defer hwmTicker.Stop()
-
-		preHWM := s.highWatermark.Load()
-
 		for {
 			select {
 			case <-stop:
 				return
 
 			case <-hwmTicker.C:
-				if s.highWatermarkingDisabled.Is() {
-					continue
-				}
-				if s.highWatermark.Load() == preHWM {
-					// Nothing to do.
-					continue
-				}
-				preHWM = s.highWatermark.Load()
-				if err := s.clstr.SetHighWatermark(s.highWatermark.Load()); err != nil {
+				hwm := s.highWatermark.Load()
+				if err := s.clstr.SetHighWatermark(hwm); err != nil {
 					s.logger.Printf("error writing high watermark to store: %v", err)
 				}
+				if err := s.fifo.DeleteRange(hwm); err != nil {
+					s.logger.Printf("error deleting events up to high watermark from FIFO: %v", err)
+				}
+				s.hwmFollowerUpdated.Add(1)
 			}
 		}
 	}()
@@ -425,6 +421,7 @@ func (s *Service) followerLoop() (chan struct{}, chan struct{}) {
 	stop := make(chan struct{})
 	done := make(chan struct{})
 
+	var prevHWM uint64
 	go func() {
 		defer close(done)
 
@@ -432,51 +429,12 @@ func (s *Service) followerLoop() (chan struct{}, chan struct{}) {
 			select {
 			case <-stop:
 				return
-			}
-		}
-	}()
+			case hwm := <-s.hwmObCh:
+				if hwm <= prevHWM {
+					continue
+				}
 
-	return stop, done
-}
-
-func (s *Service) mainLoop() {
-	defer s.wg.Done()
-
-	var leaderStop, leaderDone chan struct{}
-	var followerStop, followerDone chan struct{}
-
-	// Helper function to stop leader loop
-	stopLeaderLoop := func() {
-		if leaderStop != nil {
-			close(leaderStop)
-			<-leaderDone
-			leaderStop = nil
-			leaderDone = nil
-			s.initBatcher()
-		}
-	}
-
-	// Helper function to stop follower loop
-	stopFollowerLoop := func() {
-		if followerStop != nil {
-			close(followerStop)
-			<-followerDone
-			followerStop = nil
-			followerDone = nil
-		}
-	}
-
-	// Cleanup on exit
-	defer func() {
-		stopLeaderLoop()
-		stopFollowerLoop()
-	}()
-
-	for {
-		select {
-		case hwm := <-s.hwmObCh:
-			// Handle high watermark updates from cluster (both leader and follower should process these)
-			if hwm > s.highWatermark.Load() {
+				// Handle high watermark updates from cluster
 				s.highWatermark.Store(hwm)
 				if err := writeHWMToFile(s.hwmFilePath, hwm); err != nil {
 					s.logger.Printf("error writing high watermark to file: %v", err)
@@ -487,32 +445,58 @@ func (s *Service) mainLoop() {
 				if err := s.fifo.DeleteRange(hwm); err != nil {
 					s.logger.Printf("error deleting events up to high watermark from FIFO: %v", err)
 				}
+				prevHWM = hwm
+				s.hwmFollowerUpdated.Add(1)
 			}
-			s.hwmUpdated.Add(1)
+		}
+	}()
 
-		case leaderNow := <-s.leaderObCh:
-			if leaderNow == s.isLeader.Is() {
+	return stop, done
+}
+
+func (s *Service) writeToFIFO() {
+	defer s.wg.Done()
+	for {
+		select {
+		case o := <-s.in:
+			b, err := command.MarshalCDCIndexedEventGroup(o)
+			if err != nil {
+				s.logger.Printf("error marshalling CDC events: %v", err)
 				continue
 			}
-			s.isLeader.SetBool(leaderNow)
-			if s.isLeader.Is() {
-				s.logger.Println("leadership changed, this node now leader, starting CDC transmission")
-				stopFollowerLoop()
-				leaderStop, leaderDone = s.leaderLoop()
-			} else {
-				s.logger.Println("leadership changed, this node no longer leader, pausing CDC transmission")
-				stopLeaderLoop()
-				followerStop, followerDone = s.followerLoop()
+			if err := s.fifo.Enqueue(&Event{Index: o.Index, Data: b}); err != nil {
+				s.logger.Printf("error enqueueing CDC events: %v", err)
 			}
-
 		case <-s.done:
-			if s.isLeader.Is() && s.highWatermarkingDisabled.IsNot() {
-				// Best effort to write the high watermark before stopping.
-				s.clstr.SetHighWatermark(s.highWatermark.Load())
-			}
 			return
 		}
 	}
+}
+
+func (s *Service) readFromFIFO() (chan struct{}, chan struct{}) {
+	stop := make(chan struct{})
+	done := make(chan struct{})
+	go func() {
+		for {
+			select {
+			case <-stop:
+				close(done)
+				return
+			case ev := <-s.fifo.C:
+				if ev == nil {
+					close(done)
+					return
+				}
+				events, err := command.UnmarshalCDCIndexedEventGroup(ev.Data)
+				if err != nil {
+					s.logger.Printf("error unmarshalling CDC events from FIFO: %v", err)
+					continue
+				}
+				s.batcher.Write([]*proto.CDCIndexedEventGroup{events}, nil)
+			}
+		}
+	}()
+	return stop, done
 }
 
 func (s *Service) initBatcher() {

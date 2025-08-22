@@ -52,17 +52,16 @@ func Test_NewConfig_InvalidURL_ValidFile(t *testing.T) {
 
 	// Create a test config
 	testConfig := &Config{
-		LogOnly:                  true,
-		Endpoint:                 "https://test.example.com/cdc",
-		MaxBatchSz:               50,
-		MaxBatchDelay:            5 * time.Second,
-		HighWatermarkingDisabled: true,
-		HighWatermarkInterval:    30 * time.Second,
-		TransmitTimeout:          10 * time.Second,
-		TransmitMaxRetries:       3,
-		TransmitRetryPolicy:      ExponentialRetryPolicy,
-		TransmitMinBackoff:       2 * time.Second,
-		TransmitMaxBackoff:       2 * time.Minute,
+		LogOnly:               true,
+		Endpoint:              "https://test.example.com/cdc",
+		MaxBatchSz:            50,
+		MaxBatchDelay:         5 * time.Second,
+		HighWatermarkInterval: 30 * time.Second,
+		TransmitTimeout:       10 * time.Second,
+		TransmitMaxRetries:    3,
+		TransmitRetryPolicy:   ExponentialRetryPolicy,
+		TransmitMinBackoff:    2 * time.Second,
+		TransmitMaxBackoff:    2 * time.Minute,
 	}
 
 	// Marshall to JSON
@@ -98,9 +97,6 @@ func Test_NewConfig_InvalidURL_ValidFile(t *testing.T) {
 	}
 	if config.MaxBatchDelay != testConfig.MaxBatchDelay {
 		t.Fatalf("Expected MaxBatchDelay %v, got %v", testConfig.MaxBatchDelay, config.MaxBatchDelay)
-	}
-	if config.HighWatermarkingDisabled != testConfig.HighWatermarkingDisabled {
-		t.Fatalf("Expected HighWatermarkingDisabled %v, got %v", testConfig.HighWatermarkingDisabled, config.HighWatermarkingDisabled)
 	}
 	if config.HighWatermarkInterval != testConfig.HighWatermarkInterval {
 		t.Fatalf("Expected HighWatermarkInterval %v, got %v", testConfig.HighWatermarkInterval, config.HighWatermarkInterval)
