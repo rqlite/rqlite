@@ -244,37 +244,23 @@ func (s *Service) IsLeader() bool {
 func (s *Service) Stats() (map[string]any, error) {
 	stats := make(map[string]any)
 
-	// Add service ID if non-empty
 	if s.serviceID != "" {
 		stats["service_id"] = s.serviceID
 	}
 
-	// Add node ID
 	stats["node_id"] = s.nodeID
-
-	// Add directory
 	stats["dir"] = s.dir
-
-	// Add current high watermark (in memory)
 	stats["current_highwater_mark"] = s.HighWatermark()
-
-	// Add persisted high watermark (from file)
 	stats["persisted_highwater_mark"] = readHWMFromFile(s.hwmFilePath)
-
-	// Add leader status
 	stats["is_leader"] = s.IsLeader()
 
-	// Add FIFO hasNext status
-	stats["has_next"] = s.fifo.HasNext()
-
-	// Add FIFO subsection with its details
 	fifoStats := map[string]any{
-		"length": s.fifo.Len(),
+		"has_next": s.fifo.HasNext(),
+		"length":   s.fifo.Len(),
 	}
 	stats["fifo"] = fifoStats
 
-	// Add HTTP endpoint with BasicAuth redacted
-	stats["http_endpoint"] = httpurl.RemoveBasicAuth(s.endpoint)
+	stats["endpoint"] = httpurl.RemoveBasicAuth(s.endpoint)
 
 	return stats, nil
 }
