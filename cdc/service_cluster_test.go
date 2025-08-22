@@ -27,7 +27,7 @@ func Test_ClusterBasicDelivery(t *testing.T) {
 	services := make([]*Service, 3)
 	eventChannels := make([]chan *proto.CDCIndexedEventGroup, 3)
 
-	for i := 0; i < 3; i++ {
+	for i := range 3 {
 		eventsCh := make(chan *proto.CDCIndexedEventGroup, 10)
 		eventChannels[i] = eventsCh
 
@@ -35,9 +35,10 @@ func Test_ClusterBasicDelivery(t *testing.T) {
 		cfg.Endpoint = httpServer.URL
 		cfg.MaxBatchSz = 1
 		cfg.MaxBatchDelay = 50 * time.Millisecond
+		cfg.HighWatermarkInterval = 100 * time.Millisecond // Short interval for testing
 
 		svc, err := NewService(
-			fmt.Sprintf("node%d", i+1),
+			fmt.Sprintf("node%d", i),
 			t.TempDir(),
 			cluster,
 			eventsCh,
@@ -51,7 +52,6 @@ func Test_ClusterBasicDelivery(t *testing.T) {
 			t.Fatalf("failed to start service %d: %v", i, err)
 		}
 		defer svc.Stop()
-
 		services[i] = svc
 	}
 
@@ -105,204 +105,185 @@ func Test_ClusterBasicDelivery(t *testing.T) {
 		t.Fatalf("expected 2 HTTP requests, got %d", len(requests))
 	}
 
-	// Verify non-leaders don't send HTTP requests
+	// Verify followers don't send HTTP requests
 	httpServer.ClearRequests()
 
-	// Send events to non-leaders
-	eventChannels[1] <- events[0]
-	eventChannels[2] <- events[1]
+	// Send events to followers
+	for _, ev := range events {
+		eventChannels[1] <- ev
+		eventChannels[2] <- ev
+	}
 
 	// Wait a bit to ensure no HTTP requests are made
 	time.Sleep(200 * time.Millisecond)
 
 	if httpServer.GetRequestCount() != 0 {
-		t.Fatalf("non-leaders should not send HTTP requests, got %d", httpServer.GetRequestCount())
+		t.Fatalf("followers should not send CDC HTTP requests, got %d", httpServer.GetRequestCount())
 	}
+
+	testPoll(t, func() bool {
+		return services[1].HighWatermark() == 20
+	}, 1*time.Second)
+
 }
 
-// // Test_ClusterSimpleHWM tests basic HWM functionality with TestCluster
-// func Test_ClusterSimpleHWM(t *testing.T) {
-// 	ResetStats()
+// Test_ClusterSimpleHWM tests basic HWM functionality with mockCluster
+func Test_ClusterSimpleHWM(t *testing.T) {
+	ResetStats()
 
-// 	// Setup test cluster
-// 	cluster := NewTestCluster()
+	// Setup test cluster
+	cluster := newMockCluster()
 
-// 	// Create one service
-// 	eventsCh := make(chan *proto.CDCIndexedEventGroup, 10)
+	// Create one service
+	eventsCh := make(chan *proto.CDCIndexedEventGroup, 10)
 
-// 	cfg := DefaultConfig()
-// 	cfg.MaxBatchSz = 1
-// 	cfg.MaxBatchDelay = 50 * time.Millisecond
-// 	cfg.LogOnly = true // Use log-only mode to avoid HTTP complexity
-// 	cfg.HighWatermarkInterval = 100 * time.Millisecond
+	cfg := DefaultConfig()
+	cfg.MaxBatchSz = 1
+	cfg.MaxBatchDelay = 50 * time.Millisecond
+	cfg.LogOnly = true // Use log-only mode to avoid HTTP complexity
+	cfg.HighWatermarkInterval = 100 * time.Millisecond
 
-// 	svc, err := NewService(
-// 		"node1",
-// 		t.TempDir(),
-// 		cluster,
-// 		eventsCh,
-// 		cfg,
-// 	)
-// 	if err != nil {
-// 		t.Fatalf("failed to create service: %v", err)
-// 	}
+	svc, err := NewService(
+		"node1",
+		t.TempDir(),
+		cluster,
+		eventsCh,
+		cfg,
+	)
+	if err != nil {
+		t.Fatalf("failed to create service: %v", err)
+	}
 
-// 	if err := svc.Start(); err != nil {
-// 		t.Fatalf("failed to start service: %v", err)
-// 	}
-// 	defer svc.Stop()
+	if err := svc.Start(); err != nil {
+		t.Fatalf("failed to start service: %v", err)
+	}
+	defer svc.Stop()
 
-// 	// Make it the leader
-// 	cluster.SetLeader(0)
-// 	testPoll(t, func() bool { return svc.IsLeader() }, 2*time.Second)
+	// Make it the leader
+	cluster.SetLeader(0)
+	testPoll(t, func() bool { return svc.IsLeader() }, 2*time.Second)
 
-// 	// Send an event
-// 	event := &proto.CDCIndexedEventGroup{
-// 		Index: 10,
-// 		Events: []*proto.CDCEvent{
-// 			{
-// 				Op:       proto.CDCEvent_INSERT,
-// 				Table:    "foo",
-// 				NewRowId: 1,
-// 			},
-// 		},
-// 	}
-// 	eventsCh <- event
+	// Send an event
+	event := &proto.CDCIndexedEventGroup{
+		Index: 10,
+		Events: []*proto.CDCEvent{
+			{
+				Op:       proto.CDCEvent_INSERT,
+				Table:    "foo",
+				NewRowId: 1,
+			},
+		},
+	}
+	eventsCh <- event
 
-// 	// Wait for event to be processed and local HWM updated
-// 	testPoll(t, func() bool {
-// 		return svc.HighWatermark() == 10
-// 	}, 2*time.Second)
+	// Wait for event to be processed and local HWM updated
+	testPoll(t, func() bool {
+		return svc.HighWatermark() == 10
+	}, 2*time.Second)
 
-// 	t.Logf("Service HWM after processing: %d", svc.HighWatermark())
-// }
+	t.Logf("Service HWM after processing: %d", svc.HighWatermark())
+}
 
-// // Test_ClusterHWMPropagation tests high watermark propagation across cluster
-// func Test_ClusterHWMPropagation(t *testing.T) {
-// 	ResetStats()
+// Test_ClusterHWMPropagation tests high watermark propagation across cluster
+func Test_ClusterHWMPropagation(t *testing.T) {
+	ResetStats()
 
-// 	// Setup HTTP test server
-// 	httpServer := NewhttpTestServer()
-// 	defer httpServer.Close()
+	httpServer := NewhttpTestServer()
+	defer httpServer.Close()
 
-// 	// Setup test cluster
-// 	cluster := NewTestCluster()
+	cluster := newMockCluster()
 
-// 	// Track HWM broadcasts
-// 	var broadcastedHWM uint64
-// 	var broadcastMutex sync.Mutex
-// 	// cluster.SetBroadcastHWMFunc(func(hwm uint64) error {
-// 	// 	broadcastMutex.Lock()
-// 	// 	broadcastedHWM = hwm
-// 	// 	broadcastMutex.Unlock()
-// 	// 	t.Logf("Broadcasting HWM: %d", hwm)
-// 	// 	// Directly broadcast to channels instead of calling BroadcastHWM to avoid deadlock
-// 	// 	for _, ch := range cluster.hwmChannels {
-// 	// 		select {
-// 	// 		case ch <- hwm:
-// 	// 		default:
-// 	// 			// Non-blocking send to avoid deadlocks
-// 	// 		}
-// 	// 	}
-// 	// 	return nil
-// 	// })
+	// Create three services
+	services := make([]*Service, 3)
+	eventChannels := make([]chan *proto.CDCIndexedEventGroup, 3)
 
-// 	// Create three services
-// 	services := make([]*Service, 3)
-// 	eventChannels := make([]chan *proto.CDCIndexedEventGroup, 3)
+	for i := 0; i < 3; i++ {
+		eventsCh := make(chan *proto.CDCIndexedEventGroup, 10)
+		eventChannels[i] = eventsCh
 
-// 	for i := 0; i < 3; i++ {
-// 		eventsCh := make(chan *proto.CDCIndexedEventGroup, 10)
-// 		eventChannels[i] = eventsCh
+		cfg := DefaultConfig()
+		cfg.Endpoint = httpServer.URL
+		cfg.MaxBatchSz = 1
+		cfg.MaxBatchDelay = 50 * time.Millisecond
+		cfg.HighWatermarkInterval = 100 * time.Millisecond // Short interval for testing
 
-// 		cfg := DefaultConfig()
-// 		cfg.Endpoint = httpServer.URL
-// 		cfg.MaxBatchSz = 1
-// 		cfg.MaxBatchDelay = 50 * time.Millisecond
-// 		cfg.HighWatermarkInterval = 100 * time.Millisecond // Short interval for testing
+		svc, err := NewService(
+			fmt.Sprintf("node%d", i+1),
+			t.TempDir(),
+			cluster,
+			eventsCh,
+			cfg,
+		)
+		if err != nil {
+			t.Fatalf("failed to create service %d: %v", i, err)
+		}
 
-// 		svc, err := NewService(
-// 			fmt.Sprintf("node%d", i+1),
-// 			t.TempDir(),
-// 			cluster,
-// 			eventsCh,
-// 			cfg,
-// 		)
-// 		if err != nil {
-// 			t.Fatalf("failed to create service %d: %v", i, err)
-// 		}
+		if err := svc.Start(); err != nil {
+			t.Fatalf("failed to start service %d: %v", i, err)
+		}
+		defer svc.Stop()
+		services[i] = svc
+	}
 
-// 		if err := svc.Start(); err != nil {
-// 			t.Fatalf("failed to start service %d: %v", i, err)
-// 		}
-// 		defer svc.Stop()
+	// Make service 0 the leader
+	cluster.SetLeader(0)
+	testPoll(t, func() bool {
+		return services[0].IsLeader() && !services[1].IsLeader() && !services[2].IsLeader()
+	}, 2*time.Second)
 
-// 		services[i] = svc
-// 	}
+	// Send all events to each Service's channel, in parallel simulating
+	// the database layer sending events to the CDC service.
+	events := []*proto.CDCIndexedEventGroup{
+		{
+			Index: 10,
+			Events: []*proto.CDCEvent{
+				{
+					Op:       proto.CDCEvent_INSERT,
+					Table:    "foo",
+					NewRowId: 1,
+				},
+			},
+		},
+		{
+			Index: 20,
+			Events: []*proto.CDCEvent{
+				{
+					Op:       proto.CDCEvent_INSERT,
+					Table:    "foo",
+					NewRowId: 2,
+				},
+			},
+		},
+	}
+	for _, eCh := range eventChannels {
+		go func(ch chan *proto.CDCIndexedEventGroup) {
+			for _, ev := range events {
+				ch <- ev
+			}
+		}(eCh)
+	}
 
-// 	// Make service 0 the leader
-// 	cluster.SetLeader(0)
-// 	testPoll(t, func() bool {
-// 		return services[0].IsLeader() && !services[1].IsLeader() && !services[2].IsLeader()
-// 	}, 2*time.Second)
+	// Wait for events to be sent by the Leader
+	testPoll(t, func() bool {
+		return httpServer.GetRequestCount() == 2
+	}, time.Second)
 
-// 	// Send events to the leader
-// 	events := []*proto.CDCIndexedEventGroup{
-// 		{
-// 			Index: 10,
-// 			Events: []*proto.CDCEvent{
-// 				{
-// 					Op:       proto.CDCEvent_INSERT,
-// 					Table:    "foo",
-// 					NewRowId: 1,
-// 				},
-// 			},
-// 		},
-// 		{
-// 			Index: 20,
-// 			Events: []*proto.CDCEvent{
-// 				{
-// 					Op:       proto.CDCEvent_INSERT,
-// 					Table:    "foo",
-// 					NewRowId: 2,
-// 				},
-// 			},
-// 		},
-// 	}
+	// Confirm that HWM is set correctly across cluster.
+	testPoll(t, func() bool {
+		return services[0].HighWatermark() == 20 && services[1].HighWatermark() == 20 && services[2].HighWatermark() == 20
+	}, time.Second)
 
-// 	for _, ev := range events {
-// 		eventChannels[0] <- ev
-// 	}
-
-// 	// Wait for events to be sent
-// 	testPoll(t, func() bool {
-// 		return httpServer.GetRequestCount() == 2
-// 	}, 2*time.Second)
-
-// 	// Wait for leader's HWM to be updated (happens immediately after sending)
-// 	testPoll(t, func() bool {
-// 		return services[0].HighWatermark() == 20
-// 	}, 2*time.Second)
-
-// 	t.Logf("Leader HWM after sending: %d", services[0].HighWatermark())
-
-// 	// Wait for HWM to be broadcast periodically
-// 	testPoll(t, func() bool {
-// 		broadcastMutex.Lock()
-// 		hwm := broadcastedHWM
-// 		broadcastMutex.Unlock()
-// 		t.Logf("Checking broadcast HWM: %d", hwm)
-// 		return hwm == 20
-// 	}, 1*time.Second)
-
-// 	// Wait for HWM propagation to followers
-// 	testPoll(t, func() bool {
-// 		hwm1 := services[1].HighWatermark()
-// 		hwm2 := services[2].HighWatermark()
-// 		t.Logf("Follower HWMs: node2=%d, node3=%d", hwm1, hwm2)
-// 		return hwm1 == 20 && hwm2 == 20
-// 	}, 2*time.Second)
-// }
+	// Check internals
+	testPoll(t, func() bool {
+		return services[1].hwmFollowerUpdated.Load() != 0 && services[2].hwmFollowerUpdated.Load() != 0
+	}, time.Second)
+	if services[0].hwmLeaderUpdated.Load() == 0 {
+		t.Fatalf("expected leader to have updated HWM, got 0")
+	}
+	if services[0].hwmFollowerUpdated.Load() != 0 {
+		t.Fatalf("expected leader to node have follower-updated HWM")
+	}
+}
 
 // // Test_ClusterLeadershipChange tests leadership changes and catch-up behavior
 // func Test_ClusterLeadershipChange(t *testing.T) {

@@ -35,6 +35,10 @@ func Test_NewQueue(t *testing.T) {
 	if !e {
 		t.Fatal("Newly created queue should be empty")
 	}
+
+	if q.HasNext() {
+		t.Fatal("HasNext should return false for a newly created queue")
+	}
 }
 
 // Test_EnqueueEvents_Simple tests a single Enqueue operation and receiving the event.
@@ -61,9 +65,8 @@ func Test_EnqueueEvents_Simple(t *testing.T) {
 		t.Fatal("Queue should not be empty")
 	}
 
-	// Should be items to receive from events channel.
-	if !q.HasNext() {
-		t.Fatalf("HasNext should be true after enqueuing an item")
+	if q.HasNext() {
+		t.Fatalf("HasNext should be false after enqueuing only item")
 	}
 
 	// Receive the event from the channel
@@ -186,7 +189,12 @@ func Test_DeleteRange(t *testing.T) {
 		}
 	}
 
-	// Consume all events that were sent during enqueue
+	// Check that there are 3 items in the FIFO.
+	testPoll(t, func() bool {
+		return q.Len() == 3
+	}, time.Second)
+
+	// Consume all events in the FiFO
 	for i := 0; i < len(items); i++ {
 		select {
 		case event := <-eventsCh:
@@ -203,15 +211,40 @@ func Test_DeleteRange(t *testing.T) {
 		}
 	}
 
+	// Should be no more items to dequee.
+	if q.HasNext() {
+		t.Fatalf("HasNext should be false after dequeue, but it returned true")
+	}
+
 	// Delete a range of items.
 	if err := q.DeleteRange(2); err != nil {
 		t.Fatalf("DeleteRange failed: %v", err)
 	}
 
-	// Should still have item 3 in the database
-	if !q.HasNext() {
-		t.Fatalf("HasNext should be true, item 3 should still exist after DeleteRange")
+	// Check that there is still 1 item in the FIFO.
+	testPoll(t, func() bool {
+		return q.Len() == 1
+	}, time.Second)
+
+	// Test that deleting up to a range that was already deleted is a no-op.
+	if err := q.DeleteRange(2); err != nil {
+		t.Fatalf("DeleteRange failed: %v", err)
 	}
+
+	// Check that there is still 1 item in the FIFO.
+	testPoll(t, func() bool {
+		return q.Len() == 1
+	}, time.Second)
+
+	// Finally delete last item.
+	if err := q.DeleteRange(3); err != nil {
+		t.Fatalf("DeleteRange failed: %v", err)
+	}
+
+	// Check that there is no more in the FIFO.
+	testPoll(t, func() bool {
+		return q.Len() == 0
+	}, time.Second)
 
 	// No more events should be available since all were consumed
 	select {

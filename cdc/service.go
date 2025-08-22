@@ -410,7 +410,7 @@ func (s *Service) leaderHWMLoop() (chan struct{}, chan struct{}) {
 				if err := s.fifo.DeleteRange(hwm); err != nil {
 					s.logger.Printf("error deleting events up to high watermark from FIFO: %v", err)
 				}
-				s.hwmFollowerUpdated.Add(1)
+				s.hwmLeaderUpdated.Add(1)
 			}
 		}
 	}()
@@ -424,7 +424,6 @@ func (s *Service) followerLoop() (chan struct{}, chan struct{}) {
 	stop := make(chan struct{})
 	done := make(chan struct{})
 
-	var prevHWM uint64
 	go func() {
 		defer close(done)
 
@@ -433,10 +432,6 @@ func (s *Service) followerLoop() (chan struct{}, chan struct{}) {
 			case <-stop:
 				return
 			case hwm := <-s.hwmObCh:
-				if hwm <= prevHWM {
-					continue
-				}
-
 				// Handle high watermark updates from cluster
 				s.highWatermark.Store(hwm)
 				if err := writeHWMToFile(s.hwmFilePath, hwm); err != nil {
@@ -448,7 +443,6 @@ func (s *Service) followerLoop() (chan struct{}, chan struct{}) {
 				if err := s.fifo.DeleteRange(hwm); err != nil {
 					s.logger.Printf("error deleting events up to high watermark from FIFO: %v", err)
 				}
-				prevHWM = hwm
 				s.hwmFollowerUpdated.Add(1)
 			}
 		}
