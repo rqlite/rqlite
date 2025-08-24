@@ -13,6 +13,7 @@
 - [PR #2252](https://github.com/rqlite/rqlite/pull/2252), [PR #2253](https://github.com/rqlite/rqlite/pull/2253): CDC Service now returns Status.
 - [PR #2255](https://github.com/rqlite/rqlite/pull/2255): Create CDCCluster object to provide functionality to the CDC Service, fixes issue [#2254](https://github.com/rqlite/rqlite/issues/2254).
 - [PR #2256](https://github.com/rqlite/rqlite/pull/2256): Create dedicated CDC test HTTP Server.
+- [PR #2257](https://github.com/rqlite/rqlite/pull/2257): Basic CDC system-level test.
 
 ## v8.43.3 (August 14th 2025)
 ### Implementation changes and bug fixes
