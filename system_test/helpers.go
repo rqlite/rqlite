@@ -841,8 +841,7 @@ func mustNodeEncrypted(id, dir string, enableSingle, httpEncrypt bool, mux *tcp.
 	cdcCfg.LogOnly = true
 
 	cdcCluster := cdc.NewCDCCluster(node.Store, clstr, clstrClient)
-	cdcCh := make(chan *proto.CDCIndexedEventGroup, 10)
-	cdcService, err := cdc.NewService(id, dir, cdcCluster, cdcCh, cdcCfg)
+	cdcService, err := cdc.NewService(id, dir, cdcCluster, cdcCfg)
 	if err != nil {
 		panic(fmt.Sprintf("failed to create CDC service: %s", err.Error()))
 	}

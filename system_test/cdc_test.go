@@ -8,6 +8,8 @@ func Test_CDC_SingleNode(t *testing.T) {
 	node := mustNewLeaderNode("node1")
 	defer node.Deprovision()
 
+	node.Store.EnableCDC(node.CDC.C(), false)
+
 	_, err := node.Execute(`CREATE TABLE foo (id integer not null primary key, name text)`)
 	if err != nil {
 		t.Fatalf("failed to create table: %v", err)
