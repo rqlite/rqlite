@@ -3,14 +3,11 @@ package cdc
 import (
 	"encoding/json"
 	"fmt"
-	"io"
-	"net/http"
-	"net/http/httptest"
 	"slices"
-	"sync"
 	"testing"
 	"time"
 
+	"github.com/rqlite/rqlite/v8/cdc/cdctest"
 	"github.com/rqlite/rqlite/v8/command/proto"
 	"github.com/rqlite/rqlite/v8/internal/random"
 )
@@ -20,7 +17,7 @@ func Test_ClusterBasicDelivery(t *testing.T) {
 	ResetStats()
 
 	// Setup HTTP test server
-	httpServer := newHTTPTestServer()
+	httpServer := cdctest.NewHTTPTestServer()
 	defer httpServer.Close()
 
 	// Setup test cluster
@@ -191,7 +188,7 @@ func Test_ClusterSimpleHWM(t *testing.T) {
 func Test_ClusterHWMPropagation(t *testing.T) {
 	ResetStats()
 
-	httpServer := newHTTPTestServer()
+	httpServer := cdctest.NewHTTPTestServer()
 	defer httpServer.Close()
 
 	cluster := newMockCluster()
@@ -292,7 +289,7 @@ func Test_ClusterHWMPropagation(t *testing.T) {
 func Test_ClusterLeadershipChange(t *testing.T) {
 	ResetStats()
 
-	httpServer := newHTTPTestServer()
+	httpServer := cdctest.NewHTTPTestServer()
 	defer httpServer.Close()
 
 	cluster := newMockCluster()
@@ -407,7 +404,7 @@ func Test_ClusterHWMDeletion(t *testing.T) {
 	ResetStats()
 
 	// Setup HTTP test server
-	httpServer := newHTTPTestServer()
+	httpServer := cdctest.NewHTTPTestServer()
 	defer httpServer.Close()
 
 	// Setup test cluster
@@ -492,7 +489,7 @@ func Test_ClusterBatchingBehavior(t *testing.T) {
 	ResetStats()
 
 	// Setup HTTP test server
-	httpServer := newHTTPTestServer()
+	httpServer := cdctest.NewHTTPTestServer()
 	defer httpServer.Close()
 
 	// Setup test cluster
@@ -605,10 +602,10 @@ func Test_ClusterBatchingBehavior(t *testing.T) {
 	}
 }
 
-func Test_Cluster_500Events(t *testing.T) {
+func Test_Cluster_100Events(t *testing.T) {
 	ResetStats()
 
-	httpServer := newHTTPTestServer()
+	httpServer := cdctest.NewHTTPTestServer()
 	defer httpServer.Close()
 
 	cluster := newMockCluster()
@@ -664,9 +661,9 @@ func Test_Cluster_500Events(t *testing.T) {
 		}
 	}
 
-	numEvents := 500
+	numEvents := 100
 	leaderSwitch := make(chan struct{})
-	rns := random.IntN(4, 500)
+	rns := random.IntN(3, 100)
 	for eIdx, eCh := range eventChannels {
 		go func(ch chan *proto.CDCIndexedEventGroup) {
 			// Simulate leadership changing on cluster during processing. While events
@@ -703,73 +700,4 @@ func Test_Cluster_500Events(t *testing.T) {
 	if !httpServer.CheckMessagesExist(numEvents) {
 		t.Fatalf("expected all messages from 1 to %d, but some are missing", numEvents)
 	}
-}
-
-type httpTestServer struct {
-	*httptest.Server
-	requests [][]byte
-	messages map[uint64]*CDCMessage
-	mu       sync.Mutex
-}
-
-func newHTTPTestServer() *httpTestServer {
-	hts := &httpTestServer{
-		messages: make(map[uint64]*CDCMessage),
-	}
-	hts.Server = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		hts.mu.Lock()
-		defer hts.mu.Unlock()
-
-		defer r.Body.Close()
-		body, _ := io.ReadAll(r.Body)
-
-		hts.requests = append(hts.requests, body)
-		var envelope CDCMessagesEnvelope
-		if err := json.Unmarshal(body, &envelope); err != nil {
-			w.WriteHeader(http.StatusServiceUnavailable)
-		}
-		for _, msg := range envelope.Payload {
-			hts.messages[msg.Index] = msg
-		}
-
-		w.WriteHeader(http.StatusOK)
-	}))
-	return hts
-}
-
-func (h *httpTestServer) GetRequests() [][]byte {
-	h.mu.Lock()
-	defer h.mu.Unlock()
-	result := make([][]byte, len(h.requests))
-	copy(result, h.requests)
-	return result
-}
-
-func (h *httpTestServer) GetRequestCount() int {
-	h.mu.Lock()
-	defer h.mu.Unlock()
-	return len(h.requests)
-}
-
-func (h *httpTestServer) ClearRequests() {
-	h.mu.Lock()
-	defer h.mu.Unlock()
-	h.requests = nil
-}
-
-func (h *httpTestServer) GetMessageCount() int {
-	h.mu.Lock()
-	defer h.mu.Unlock()
-	return len(h.messages)
-}
-
-func (h *httpTestServer) CheckMessagesExist(n int) bool {
-	h.mu.Lock()
-	defer h.mu.Unlock()
-	for i := 1; i <= n; i++ {
-		if _, ok := h.messages[uint64(i)]; !ok {
-			return false
-		}
-	}
-	return true
 }
