@@ -28,12 +28,17 @@ func NewHTTPTestServer() *HTTPTestServer {
 		defer hts.mu.Unlock()
 
 		defer r.Body.Close()
-		body, _ := io.ReadAll(r.Body)
+		body, err := io.ReadAll(r.Body)
+		if err != nil || len(body) == 0 {
+			w.WriteHeader(http.StatusBadRequest)
+			return
+		}
 
 		hts.requests = append(hts.requests, body)
 		var envelope cdcjson.CDCMessagesEnvelope
 		if err := cdcjson.UnmarshalFromEnvelopeJSON(body, &envelope); err != nil {
 			w.WriteHeader(http.StatusServiceUnavailable)
+			return
 		}
 		for _, msg := range envelope.Payload {
 			hts.messages[msg.Index] = msg
