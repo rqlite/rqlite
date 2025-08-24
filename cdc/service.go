@@ -25,7 +25,8 @@ import (
 const (
 	cdcDB         = "fifo.db"
 	hwmFile       = "hwm.json"
-	leaderChanLen = 5 // Support any fast back-to-back leadership changes.
+	leaderChanLen = 5   // Support any fast back-to-back leadership changes.
+	inChanLen     = 100 // Size of the input channel for CDC events.
 )
 
 const (
@@ -81,7 +82,7 @@ type Service struct {
 	clstr       Cluster
 
 	// in is the channel from which the CDC events are read.
-	in <-chan *proto.CDCIndexedEventGroup
+	in chan *proto.CDCIndexedEventGroup
 
 	// logOnly indicates whether the CDC service should only log events and not
 	// send them to the configured endpoint. This is mostly useful for testing.
@@ -156,7 +157,7 @@ type Service struct {
 }
 
 // NewService creates a new CDC service.
-func NewService(nodeID, dir string, clstr Cluster, in <-chan *proto.CDCIndexedEventGroup, cfg *Config) (*Service, error) {
+func NewService(nodeID, dir string, clstr Cluster, cfg *Config) (*Service, error) {
 	// Build the TLS configuration from the config fields
 	tlsConfig, err := cfg.TLSConfig()
 	if err != nil {
@@ -176,7 +177,7 @@ func NewService(nodeID, dir string, clstr Cluster, in <-chan *proto.CDCIndexedEv
 		dir:                   dir,
 		hwmFilePath:           filepath.Join(dir, hwmFile),
 		clstr:                 clstr,
-		in:                    in,
+		in:                    make(chan *proto.CDCIndexedEventGroup, inChanLen),
 		logOnly:               cfg.LogOnly,
 		endpoint:              cfg.Endpoint,
 		httpClient:            httpClient,
@@ -204,6 +205,11 @@ func NewService(nodeID, dir string, clstr Cluster, in <-chan *proto.CDCIndexedEv
 
 	srv.highWatermark.Store(readHWMFromFile(srv.hwmFilePath))
 	return srv, nil
+}
+
+// C returns the channel to which CDC events are sent.
+func (s *Service) C() chan<- *proto.CDCIndexedEventGroup {
+	return s.in
 }
 
 // Start starts the CDC service.

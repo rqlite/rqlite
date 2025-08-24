@@ -16,9 +16,6 @@ import (
 func Test_ServiceSingleEvent(t *testing.T) {
 	ResetStats()
 
-	// Channel for the service to receive events.
-	eventsCh := make(chan *proto.CDCIndexedEventGroup, 1)
-
 	bodyCh := make(chan []byte, 1)
 	testSrv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		defer r.Body.Close()
@@ -38,7 +35,6 @@ func Test_ServiceSingleEvent(t *testing.T) {
 		"node1",
 		t.TempDir(),
 		cl,
-		eventsCh,
 		cfg,
 	)
 	if err != nil {
@@ -106,7 +102,7 @@ func Test_ServiceSingleEvent(t *testing.T) {
 		}
 	}
 
-	eventsCh <- evs
+	svc.C() <- evs
 	waitFn(1*time.Second, 1)
 
 	testPoll(t, func() bool {
@@ -119,7 +115,7 @@ func Test_ServiceSingleEvent(t *testing.T) {
 
 	// Send events, and make sure they are ignored.
 	evs.Index = 67
-	eventsCh <- evs
+	svc.C() <- evs
 	waitFn(1*time.Second, 0)
 
 	cl.SetLeader(0)
@@ -128,9 +124,6 @@ func Test_ServiceSingleEvent(t *testing.T) {
 
 func Test_ServiceSingleEvent_LogOnly(t *testing.T) {
 	ResetStats()
-
-	// Channel for the service to receive events.
-	eventsCh := make(chan *proto.CDCIndexedEventGroup, 1)
 
 	cl := &mockCluster{}
 
@@ -142,7 +135,6 @@ func Test_ServiceSingleEvent_LogOnly(t *testing.T) {
 		"node1",
 		t.TempDir(),
 		cl,
-		eventsCh,
 		cfg,
 	)
 	if err != nil {
@@ -164,7 +156,7 @@ func Test_ServiceSingleEvent_LogOnly(t *testing.T) {
 		Index:  1,
 		Events: []*proto.CDCEvent{ev},
 	}
-	eventsCh <- evs
+	svc.C() <- evs
 
 	testPoll(t, func() bool {
 		return svc.HighWatermark() == evs.Index
@@ -174,8 +166,6 @@ func Test_ServiceSingleEvent_LogOnly(t *testing.T) {
 func Test_ServiceSingleEvent_Retry(t *testing.T) {
 	ResetStats()
 
-	// Channel for the service to receive events.
-	eventsCh := make(chan *proto.CDCIndexedEventGroup, 1)
 	bodyCh := make(chan []byte, 1)
 	firstErrSent := false
 	testSrv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -201,7 +191,6 @@ func Test_ServiceSingleEvent_Retry(t *testing.T) {
 		"node1",
 		t.TempDir(),
 		cl,
-		eventsCh,
 		cfg,
 	)
 	if err != nil {
@@ -223,7 +212,7 @@ func Test_ServiceSingleEvent_Retry(t *testing.T) {
 		Index:  1,
 		Events: []*proto.CDCEvent{ev},
 	}
-	eventsCh <- evs
+	svc.C() <- evs
 
 	// Wait for the service to forward the batch.
 	select {
@@ -263,9 +252,6 @@ func Test_ServiceSingleEvent_Retry(t *testing.T) {
 func Test_ServiceMultiEvent(t *testing.T) {
 	ResetStats()
 
-	// Channel for the service to receive events.
-	eventsCh := make(chan *proto.CDCIndexedEventGroup, 1)
-
 	bodyCh := make(chan []byte, 1)
 	testSrv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		defer r.Body.Close()
@@ -285,7 +271,6 @@ func Test_ServiceMultiEvent(t *testing.T) {
 		"node1",
 		t.TempDir(),
 		cl,
-		eventsCh,
 		cfg,
 	)
 	if err != nil {
@@ -317,8 +302,8 @@ func Test_ServiceMultiEvent(t *testing.T) {
 		Index:  2,
 		Events: []*proto.CDCEvent{ev2},
 	}
-	eventsCh <- evs1
-	eventsCh <- evs2
+	svc.C() <- evs1
+	svc.C() <- evs2
 
 	// Wait for the service to forward the batch.
 	select {
@@ -369,9 +354,6 @@ func Test_ServiceMultiEvent(t *testing.T) {
 func Test_ServiceMultiEvent_Batch(t *testing.T) {
 	ResetStats()
 
-	// Channel for the service to receive events.
-	eventsCh := make(chan *proto.CDCIndexedEventGroup, 1)
-
 	bodyCh := make(chan []byte, 1)
 	testSrv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		defer r.Body.Close()
@@ -392,7 +374,6 @@ func Test_ServiceMultiEvent_Batch(t *testing.T) {
 		"node1",
 		t.TempDir(),
 		cl,
-		eventsCh,
 		cfg,
 	)
 	if err != nil {
@@ -433,9 +414,9 @@ func Test_ServiceMultiEvent_Batch(t *testing.T) {
 		Index:  3,
 		Events: []*proto.CDCEvent{ev3},
 	}
-	eventsCh <- evs1
-	eventsCh <- evs2
-	eventsCh <- evs3
+	svc.C() <- evs1
+	svc.C() <- evs2
+	svc.C() <- evs3
 
 	// Wait for the service to forward the first batch.
 	select {
@@ -516,9 +497,6 @@ func Test_ServiceMultiEvent_Batch(t *testing.T) {
 func Test_ServiceHWMUpdate_Leader(t *testing.T) {
 	ResetStats()
 
-	// Channel to send events to the CDC Service.
-	eventsCh := make(chan *proto.CDCIndexedEventGroup, 10)
-
 	cl := &mockCluster{}
 
 	cfg := DefaultConfig()
@@ -529,7 +507,6 @@ func Test_ServiceHWMUpdate_Leader(t *testing.T) {
 		"node1",
 		t.TempDir(),
 		cl,
-		eventsCh,
 		cfg,
 	)
 	if err != nil {
@@ -580,7 +557,7 @@ func Test_ServiceHWMUpdate_Leader(t *testing.T) {
 
 	// Send events to the service
 	for _, ev := range events {
-		eventsCh <- ev
+		svc.C() <- ev
 	}
 
 	// Wait for events to be processed and high watermark updated
@@ -592,9 +569,6 @@ func Test_ServiceHWMUpdate_Leader(t *testing.T) {
 func Test_ServiceHWMUpdate_Follow(t *testing.T) {
 	ResetStats()
 
-	// Channel to send events to the CDC Service.
-	eventsCh := make(chan *proto.CDCIndexedEventGroup, 10)
-
 	cl := &mockCluster{}
 
 	cfg := DefaultConfig()
@@ -605,7 +579,6 @@ func Test_ServiceHWMUpdate_Follow(t *testing.T) {
 		"node1",
 		t.TempDir(),
 		cl,
-		eventsCh,
 		cfg,
 	)
 	if err != nil {
@@ -635,7 +608,7 @@ func Test_ServiceHWMUpdate_Follow(t *testing.T) {
 
 	// Send events to the service
 	for _, ev := range events {
-		eventsCh <- ev
+		svc.C() <- ev
 	}
 
 	// Confirm FIFO has the events
@@ -657,9 +630,6 @@ func Test_ServiceHWMUpdate_Follow(t *testing.T) {
 func Test_ServiceHWMUpdate_Follow_Restart(t *testing.T) {
 	ResetStats()
 
-	// Channel to send events to the CDC Service.
-	eventsCh := make(chan *proto.CDCIndexedEventGroup, 10)
-
 	cl := &mockCluster{}
 
 	cfg := DefaultConfig()
@@ -671,7 +641,6 @@ func Test_ServiceHWMUpdate_Follow_Restart(t *testing.T) {
 		"node1",
 		tmpDir,
 		cl,
-		eventsCh,
 		cfg,
 	)
 	if err != nil {
@@ -700,7 +669,7 @@ func Test_ServiceHWMUpdate_Follow_Restart(t *testing.T) {
 
 	// Send events to the service
 	for _, ev := range events {
-		eventsCh <- ev
+		svc.C() <- ev
 	}
 
 	// Confirm FIFO has the events
@@ -725,7 +694,6 @@ func Test_ServiceHWMUpdate_Follow_Restart(t *testing.T) {
 		"node1",
 		tmpDir,
 		cl,
-		eventsCh,
 		cfg,
 	)
 	if err != nil {
