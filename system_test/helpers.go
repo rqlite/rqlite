@@ -19,6 +19,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/rqlite/rqlite/v8/cdc"
+	"github.com/rqlite/rqlite/v8/cdc/cdctest"
 	"github.com/rqlite/rqlite/v8/cluster"
 	"github.com/rqlite/rqlite/v8/command/encoding"
 	"github.com/rqlite/rqlite/v8/command/proto"
@@ -64,6 +66,8 @@ type Node struct {
 	Cluster      *cluster.Service
 	Client       *cluster.Client
 	Mux          *tcp.Mux
+	CDC          *cdc.Service
+	CDCEndpoint  *cdctest.HTTPTestServer
 }
 
 // SameAs returns true if this node is the same as node o.
@@ -78,6 +82,7 @@ func (n *Node) Close(graceful bool) error {
 	}
 	n.Service.Close()
 	n.Cluster.Close()
+	n.CDC.Stop()
 	return nil
 }
 
@@ -802,18 +807,6 @@ func mustNodeEncrypted(id, dir string, enableSingle, httpEncrypt bool, mux *tcp.
 	node.Store.SnapshotInterval = SnapshotInterval
 	node.Store.ElectionTimeout = ElectionTimeout
 
-	if err := node.Store.Open(); err != nil {
-		panic(fmt.Sprintf("failed to open store: %s", err.Error()))
-	}
-	if enableSingle {
-		if err := node.Store.Bootstrap(store.NewServer(node.Store.ID(), node.Store.Addr(), true)); err != nil {
-			panic(fmt.Sprintf("failed to bootstrap store: %s", err.Error()))
-		}
-	}
-
-	node.RaftAddr = node.Store.Addr()
-	node.ID = node.Store.ID()
-
 	credStr := mustNewMockCredentialStore()
 	clstr := cluster.New(mux.Listen(cluster.MuxClusterHeader), node.Store, node.Store, credStr)
 	if err := clstr.Open(); err != nil {
@@ -838,8 +831,35 @@ func mustNodeEncrypted(id, dir string, enableSingle, httpEncrypt bool, mux *tcp.
 	}
 	node.APIAddr = node.Service.Addr().String()
 
-	// Finally, set API address in Cluster service
+	// Set API address in Cluster service
 	clstr.SetAPIAddr(node.APIAddr)
+
+	// Configure CDC before opening the store.
+	node.CDCEndpoint = cdctest.NewHTTPTestServer()
+	cdcCfg := cdc.DefaultConfig()
+	cdcCfg.Endpoint = node.CDCEndpoint.URL
+	cdcCfg.LogOnly = true
+
+	cdcCluster := cdc.NewCDCCluster(node.Store, clstr, clstrClient)
+	cdcCh := make(chan *proto.CDCIndexedEventGroup, 10)
+	cdcService, err := cdc.NewService(id, dir, cdcCluster, cdcCh, cdcCfg)
+	if err != nil {
+		panic(fmt.Sprintf("failed to create CDC service: %s", err.Error()))
+	}
+	node.CDC = cdcService
+	node.CDC.Start()
+
+	if err := node.Store.Open(); err != nil {
+		panic(fmt.Sprintf("failed to open store: %s", err.Error()))
+	}
+	if enableSingle {
+		if err := node.Store.Bootstrap(store.NewServer(node.Store.ID(), node.Store.Addr(), true)); err != nil {
+			panic(fmt.Sprintf("failed to bootstrap store: %s", err.Error()))
+		}
+	}
+
+	node.RaftAddr = node.Store.Addr()
+	node.ID = node.Store.ID()
 
 	return node
 }
