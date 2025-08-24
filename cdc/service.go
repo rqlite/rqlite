@@ -14,6 +14,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	cdcjson "github.com/rqlite/rqlite/v8/cdc/json"
 	"github.com/rqlite/rqlite/v8/command"
 	"github.com/rqlite/rqlite/v8/command/proto"
 	httpurl "github.com/rqlite/rqlite/v8/http/url"
@@ -357,7 +358,7 @@ func (s *Service) leaderLoop() (chan struct{}, chan struct{}) {
 					continue
 				}
 
-				b, err := MarshalToEnvelopeJSON(s.serviceID, s.nodeID, false, batch.Objects)
+				b, err := cdcjson.MarshalToEnvelopeJSON(s.serviceID, s.nodeID, false, batch.Objects)
 				if err != nil {
 					s.logger.Printf("error marshalling batch: %v", err)
 					continue

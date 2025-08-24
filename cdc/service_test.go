@@ -9,6 +9,7 @@ import (
 	"testing"
 	"time"
 
+	cdcjson "github.com/rqlite/rqlite/v8/cdc/json"
 	"github.com/rqlite/rqlite/v8/command/proto"
 )
 
@@ -72,12 +73,12 @@ func Test_ServiceSingleEvent(t *testing.T) {
 				t.Fatalf("unexpected HTTP POST received: %s", got)
 			}
 			n++
-			exp := &CDCMessagesEnvelope{
+			exp := &cdcjson.CDCMessagesEnvelope{
 				NodeID: "node1",
-				Payload: []*CDCMessage{
+				Payload: []*cdcjson.CDCMessage{
 					{
 						Index: evs.Index,
-						Events: []*CDCMessageEvent{
+						Events: []*cdcjson.CDCMessageEvent{
 							{
 								Op:       ev.Op.String(),
 								Table:    ev.Table,
@@ -88,8 +89,8 @@ func Test_ServiceSingleEvent(t *testing.T) {
 					},
 				},
 			}
-			msg := &CDCMessagesEnvelope{}
-			if err := UnmarshalFromEnvelopeJSON(got, msg); err != nil {
+			msg := &cdcjson.CDCMessagesEnvelope{}
+			if err := cdcjson.UnmarshalFromEnvelopeJSON(got, msg); err != nil {
 				t.Fatalf("invalid JSON received: %v", err)
 			}
 			if reflect.DeepEqual(msg, exp) == false {
@@ -227,12 +228,12 @@ func Test_ServiceSingleEvent_Retry(t *testing.T) {
 	// Wait for the service to forward the batch.
 	select {
 	case got := <-bodyCh:
-		exp := &CDCMessagesEnvelope{
+		exp := &cdcjson.CDCMessagesEnvelope{
 			NodeID: "node1",
-			Payload: []*CDCMessage{
+			Payload: []*cdcjson.CDCMessage{
 				{
 					Index: evs.Index,
-					Events: []*CDCMessageEvent{
+					Events: []*cdcjson.CDCMessageEvent{
 						{
 							Op:       ev.Op.String(),
 							Table:    ev.Table,
@@ -243,8 +244,8 @@ func Test_ServiceSingleEvent_Retry(t *testing.T) {
 				},
 			},
 		}
-		msg := &CDCMessagesEnvelope{}
-		if err := UnmarshalFromEnvelopeJSON(got, msg); err != nil {
+		msg := &cdcjson.CDCMessagesEnvelope{}
+		if err := cdcjson.UnmarshalFromEnvelopeJSON(got, msg); err != nil {
 			t.Fatalf("invalid JSON received: %v", err)
 		}
 		if reflect.DeepEqual(msg, exp) == false {
@@ -322,12 +323,12 @@ func Test_ServiceMultiEvent(t *testing.T) {
 	// Wait for the service to forward the batch.
 	select {
 	case got := <-bodyCh:
-		exp := &CDCMessagesEnvelope{
+		exp := &cdcjson.CDCMessagesEnvelope{
 			NodeID: "node1",
-			Payload: []*CDCMessage{
+			Payload: []*cdcjson.CDCMessage{
 				{
 					Index: evs1.Index,
-					Events: []*CDCMessageEvent{
+					Events: []*cdcjson.CDCMessageEvent{
 						{
 							Op:       ev1.Op.String(),
 							Table:    ev1.Table,
@@ -338,7 +339,7 @@ func Test_ServiceMultiEvent(t *testing.T) {
 				},
 				{
 					Index: evs2.Index,
-					Events: []*CDCMessageEvent{
+					Events: []*cdcjson.CDCMessageEvent{
 						{
 							Op:       ev2.Op.String(),
 							Table:    ev2.Table,
@@ -349,8 +350,8 @@ func Test_ServiceMultiEvent(t *testing.T) {
 				},
 			},
 		}
-		msg := &CDCMessagesEnvelope{}
-		if err := UnmarshalFromEnvelopeJSON(got, msg); err != nil {
+		msg := &cdcjson.CDCMessagesEnvelope{}
+		if err := cdcjson.UnmarshalFromEnvelopeJSON(got, msg); err != nil {
 			t.Fatalf("invalid JSON received: %v", err)
 		}
 		if reflect.DeepEqual(msg, exp) == false {
@@ -439,13 +440,13 @@ func Test_ServiceMultiEvent_Batch(t *testing.T) {
 	// Wait for the service to forward the first batch.
 	select {
 	case got := <-bodyCh:
-		exp := &CDCMessagesEnvelope{
+		exp := &cdcjson.CDCMessagesEnvelope{
 			ServiceID: "service1",
 			NodeID:    "node1",
-			Payload: []*CDCMessage{
+			Payload: []*cdcjson.CDCMessage{
 				{
 					Index: evs1.Index,
-					Events: []*CDCMessageEvent{
+					Events: []*cdcjson.CDCMessageEvent{
 						{
 							Op:       ev1.Op.String(),
 							Table:    ev1.Table,
@@ -455,7 +456,7 @@ func Test_ServiceMultiEvent_Batch(t *testing.T) {
 				},
 				{
 					Index: evs2.Index,
-					Events: []*CDCMessageEvent{
+					Events: []*cdcjson.CDCMessageEvent{
 						{
 							Op:       ev2.Op.String(),
 							Table:    ev2.Table,
@@ -466,8 +467,8 @@ func Test_ServiceMultiEvent_Batch(t *testing.T) {
 				},
 			},
 		}
-		msg := &CDCMessagesEnvelope{}
-		if err := UnmarshalFromEnvelopeJSON(got, msg); err != nil {
+		msg := &cdcjson.CDCMessagesEnvelope{}
+		if err := cdcjson.UnmarshalFromEnvelopeJSON(got, msg); err != nil {
 			t.Fatalf("invalid JSON received: %v", err)
 		}
 		if reflect.DeepEqual(msg, exp) == false {
@@ -480,13 +481,13 @@ func Test_ServiceMultiEvent_Batch(t *testing.T) {
 	// Wait for the service to forward the second batch, which will be kicked out due to a timeout.
 	select {
 	case got := <-bodyCh:
-		exp := &CDCMessagesEnvelope{
+		exp := &cdcjson.CDCMessagesEnvelope{
 			ServiceID: "service1",
 			NodeID:    "node1",
-			Payload: []*CDCMessage{
+			Payload: []*cdcjson.CDCMessage{
 				{
 					Index: evs3.Index,
-					Events: []*CDCMessageEvent{
+					Events: []*cdcjson.CDCMessageEvent{
 						{
 							Op:       ev3.Op.String(),
 							Table:    ev3.Table,
@@ -496,8 +497,8 @@ func Test_ServiceMultiEvent_Batch(t *testing.T) {
 				},
 			},
 		}
-		msg := &CDCMessagesEnvelope{}
-		if err := UnmarshalFromEnvelopeJSON(got, msg); err != nil {
+		msg := &cdcjson.CDCMessagesEnvelope{}
+		if err := cdcjson.UnmarshalFromEnvelopeJSON(got, msg); err != nil {
 			t.Fatalf("invalid JSON received: %v", err)
 		}
 		if reflect.DeepEqual(msg, exp) == false {
