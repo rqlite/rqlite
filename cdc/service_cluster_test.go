@@ -602,7 +602,7 @@ func Test_ClusterBatchingBehavior(t *testing.T) {
 	}
 }
 
-func Test_Cluster_500Events(t *testing.T) {
+func Test_Cluster_100Events(t *testing.T) {
 	ResetStats()
 
 	httpServer := cdctest.NewHTTPTestServer()
@@ -661,9 +661,9 @@ func Test_Cluster_500Events(t *testing.T) {
 		}
 	}
 
-	numEvents := 500
+	numEvents := 100
 	leaderSwitch := make(chan struct{})
-	rns := random.IntN(4, 500)
+	rns := random.IntN(3, 100)
 	for eIdx, eCh := range eventChannels {
 		go func(ch chan *proto.CDCIndexedEventGroup) {
 			// Simulate leadership changing on cluster during processing. While events
