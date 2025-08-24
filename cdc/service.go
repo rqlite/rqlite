@@ -294,7 +294,8 @@ func (s *Service) mainLoop() {
 	}()
 
 	// Start in follower state.
-	followerStop, followerDone = s.followerLoop()
+	//followerStop, followerDone = s.followerLoop()
+	leaderStop, leaderDone = s.leaderLoop()
 
 	for {
 		select {
