@@ -838,7 +838,6 @@ func mustNodeEncrypted(id, dir string, enableSingle, httpEncrypt bool, mux *tcp.
 	node.CDCEndpoint = cdctest.NewHTTPTestServer()
 	cdcCfg := cdc.DefaultConfig()
 	cdcCfg.Endpoint = node.CDCEndpoint.URL
-	cdcCfg.LogOnly = true
 
 	cdcCluster := cdc.NewCDCCluster(node.Store, clstr, clstrClient)
 	cdcService, err := cdc.NewService(id, dir, cdcCluster, cdcCfg)

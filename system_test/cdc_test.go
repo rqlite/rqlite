@@ -2,6 +2,7 @@ package system
 
 import (
 	"testing"
+	"time"
 )
 
 func Test_CDC_SingleNode(t *testing.T) {
@@ -26,4 +27,9 @@ func Test_CDC_SingleNode(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to delete data: %v", err)
 	}
+
+	testPoll(t, func() (bool, error) {
+		// 1 create, 1 insert, 1 update, 1 delete
+		return node.CDCEndpoint.GetMessageCount() == 4, nil
+	}, 100*time.Millisecond, 5*time.Second)
 }
