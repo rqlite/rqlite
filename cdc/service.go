@@ -489,8 +489,10 @@ func (s *Service) followerLoop() (chan struct{}, chan struct{}) {
 			case <-stop:
 				return
 			case hwm := <-s.hwmObCh:
+				if hwm <= s.highWatermark.Load() {
+					continue
+				}
 				// Handle high watermark updates from cluster
-				s.highWatermark.Store(hwm)
 				if err := writeHWMToFile(s.hwmFilePath, hwm); err != nil {
 					s.logger.Printf("error writing high watermark to file: %v", err)
 				}
@@ -500,6 +502,7 @@ func (s *Service) followerLoop() (chan struct{}, chan struct{}) {
 				if err := s.fifo.DeleteRange(hwm); err != nil {
 					s.logger.Printf("error deleting events up to high watermark from FIFO: %v", err)
 				}
+				s.highWatermark.Store(hwm)
 				s.hwmFollowerUpdated.Add(1)
 			}
 		}
