@@ -484,6 +484,7 @@ func (s *Service) followerLoop() (chan struct{}, chan struct{}) {
 	stop := make(chan struct{})
 	done := make(chan struct{})
 
+	lastPersisted := uint64(0)
 	go func() {
 		defer close(done)
 
@@ -492,19 +493,20 @@ func (s *Service) followerLoop() (chan struct{}, chan struct{}) {
 			case <-stop:
 				return
 			case hwm := <-s.hwmObCh:
-				if hwm <= s.highWatermark.Load() {
-					continue
+				if hwm > lastPersisted {
+					// Handle high watermark updates from cluster
+					if err := writeHWMToFile(s.hwmFilePath, hwm); err != nil {
+						s.logger.Printf("error writing high watermark to file: %v", err)
+					}
+					// This means all events up to this high watermark have been
+					// successfully sent to the webhook by the cluster. We can
+					// delete all events up and including that point from our FIFO.
+					if err := s.fifo.DeleteRange(hwm); err != nil {
+						s.logger.Printf("error deleting events up to high watermark from FIFO: %v", err)
+					}
+					lastPersisted = hwm
 				}
-				// Handle high watermark updates from cluster
-				if err := writeHWMToFile(s.hwmFilePath, hwm); err != nil {
-					s.logger.Printf("error writing high watermark to file: %v", err)
-				}
-				// This means all events up to this high watermark have been
-				// successfully sent to the webhook by the cluster. We can
-				// delete all events up and including that point from our FIFO.
-				if err := s.fifo.DeleteRange(hwm); err != nil {
-					s.logger.Printf("error deleting events up to high watermark from FIFO: %v", err)
-				}
+
 				s.highWatermark.Store(hwm)
 				s.hwmFollowerUpdated.Add(1)
 			}
