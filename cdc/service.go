@@ -146,8 +146,9 @@ type Service struct {
 	hwmObCh chan uint64
 
 	// For CDC shutdown.
-	wg   sync.WaitGroup
-	done chan struct{}
+	wg      sync.WaitGroup
+	done    chan struct{}
+	started rsync.AtomicBool
 
 	// For white box testing
 	hwmLeaderUpdated   atomic.Uint64
@@ -213,7 +214,15 @@ func (s *Service) C() chan<- *proto.CDCIndexedEventGroup {
 }
 
 // Start starts the CDC service.
-func (s *Service) Start() error {
+func (s *Service) Start() (retErr error) {
+	defer func() {
+		s.started.SetBool(retErr == nil)
+	}()
+
+	if s.started.Is() {
+		return fmt.Errorf("service already started")
+	}
+
 	s.wg.Add(2)
 	go s.writeToFIFO()
 	go s.mainLoop()
@@ -230,9 +239,13 @@ func (s *Service) Start() error {
 
 // Stop stops the CDC service.
 func (s *Service) Stop() {
+	if s.started.IsNot() {
+		return
+	}
 	close(s.done)
 	s.wg.Wait()
 	s.fifo.Close()
+	s.started.Unset()
 }
 
 // HighWatermark returns the high watermark of the CDC service. This
@@ -244,6 +257,14 @@ func (s *Service) HighWatermark() uint64 {
 // IsLeader returns whether the CDC service is running on the Leader.
 func (s *Service) IsLeader() bool {
 	return s.isLeader.Is()
+}
+
+// SetLeader sets the leader status of the CDC service. This is typically
+// performed automatically by the cluster when leadership changes but
+// explicitly setting it is useful for testing. It is not recommended to
+// call this method outside of tests.
+func (s *Service) SetLeader(isLeader bool) {
+	s.leaderObCh <- isLeader
 }
 
 // Stats returns statistics about the CDC service.

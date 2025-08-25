@@ -20,7 +20,6 @@ import (
 	"time"
 
 	"github.com/rqlite/rqlite/v8/cdc"
-	"github.com/rqlite/rqlite/v8/cdc/cdctest"
 	"github.com/rqlite/rqlite/v8/cluster"
 	"github.com/rqlite/rqlite/v8/command/encoding"
 	"github.com/rqlite/rqlite/v8/command/proto"
@@ -67,7 +66,6 @@ type Node struct {
 	Client       *cluster.Client
 	Mux          *tcp.Mux
 	CDC          *cdc.Service
-	CDCEndpoint  *cdctest.HTTPTestServer
 }
 
 // SameAs returns true if this node is the same as node o.
@@ -88,6 +86,10 @@ func (n *Node) Close(graceful bool) error {
 
 // Deprovision shuts down and removes all resources associated with the node.
 func (n *Node) Deprovision() {
+	if n == nil {
+		return
+	}
+	n.CDC.Stop()
 	n.Service.Close()
 	n.Store.Close(true)
 	n.Cluster.Close()
@@ -833,19 +835,6 @@ func mustNodeEncrypted(id, dir string, enableSingle, httpEncrypt bool, mux *tcp.
 
 	// Set API address in Cluster service
 	clstr.SetAPIAddr(node.APIAddr)
-
-	// Configure CDC before opening the store.
-	node.CDCEndpoint = cdctest.NewHTTPTestServer()
-	cdcCfg := cdc.DefaultConfig()
-	cdcCfg.Endpoint = node.CDCEndpoint.URL
-
-	cdcCluster := cdc.NewCDCCluster(node.Store, clstr, clstrClient)
-	cdcService, err := cdc.NewService(id, dir, cdcCluster, cdcCfg)
-	if err != nil {
-		panic(fmt.Sprintf("failed to create CDC service: %s", err.Error()))
-	}
-	node.CDC = cdcService
-	node.CDC.Start()
 
 	if err := node.Store.Open(); err != nil {
 		panic(fmt.Sprintf("failed to open store: %s", err.Error()))
