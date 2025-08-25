@@ -1,6 +1,7 @@
 package cdctest
 
 import (
+	"fmt"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -16,6 +17,8 @@ type HTTPTestServer struct {
 	requests [][]byte
 	messages map[uint64]*cdcjson.CDCMessage
 	mu       sync.Mutex
+
+	DumpRequest bool
 }
 
 // NewHTTPTestServer creates a new instance of HTTPTestServer.
@@ -42,6 +45,10 @@ func NewHTTPTestServer() *HTTPTestServer {
 		}
 		for _, msg := range envelope.Payload {
 			hts.messages[msg.Index] = msg
+		}
+
+		if hts.DumpRequest {
+			fmt.Println(string(body))
 		}
 
 		w.WriteHeader(http.StatusOK)

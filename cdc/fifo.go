@@ -103,7 +103,7 @@ func NewQueue(path string) (*Queue, error) {
 		return nil, fmt.Errorf("failed to initialize buckets: %w", err)
 	}
 
-	eventsChan := make(chan *Event, 10)
+	eventsChan := make(chan *Event, 1)
 	q := &Queue{
 		db:              db,
 		enqueueChan:     make(chan enqueueReq, queueBufferSize),
