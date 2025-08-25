@@ -65,7 +65,7 @@ func Test_EnqueueEvents_Simple(t *testing.T) {
 		t.Fatal("Queue should not be empty")
 	}
 
-	if q.HasNext() {
+	if !q.HasNext() {
 		t.Fatalf("HasNext should be false after enqueuing only item")
 	}
 
@@ -633,8 +633,9 @@ func Test_Events_ReaderAppearsLater(t *testing.T) {
 		}
 	}
 
-	// Wait a bit to ensure enqueue operations complete
-	time.Sleep(50 * time.Millisecond)
+	testPoll(t, func() bool {
+		return q.Len() == len(items)
+	}, time.Second)
 
 	// Now get the events channel - this should make all queued events available
 	eventsCh := q.C
