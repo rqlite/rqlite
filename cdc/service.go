@@ -459,6 +459,9 @@ func (s *Service) leaderHWMLoop() (chan struct{}, chan struct{}) {
 
 			case <-hwmTicker.C:
 				hwm := s.highWatermark.Load()
+				if hwm == 0 {
+					continue
+				}
 				if err := s.clstr.BroadcastHighWatermark(hwm); err != nil {
 					s.logger.Printf("error writing high watermark to store: %v", err)
 				}

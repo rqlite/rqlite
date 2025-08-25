@@ -53,7 +53,7 @@ func Test_CDC_SingleNode(t *testing.T) {
 }
 
 func Test_CDC_MultiNode(t *testing.T) {
-	node1 := mustNewLeaderNode("leader1")
+	node1 := mustNewLeaderNode("node1")
 	defer node1.Deprovision()
 	node2 := mustNewNode("node2", false)
 	defer node2.Deprovision()
