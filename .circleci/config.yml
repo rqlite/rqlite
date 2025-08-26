@@ -62,7 +62,7 @@ jobs:
       - checkout
       - checkout
       - restore_and_save_cache
-      - run: go list ./... | circleci tests run --command "xargs gotestsum --junitfile junit.xml --format testname --" --split-by=filesize
+      - run: go list -f '{{range .TestGoFiles}}{{$.Dir}}/{{.}}{{"\n"}}{{end}}' ./... | circleci tests run --command "xargs gotestsum --junitfile junit.xml --format testname --" --split-by=filesize
 
   test_odd:
     docker:
