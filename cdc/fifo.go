@@ -124,6 +124,64 @@ func (q *Queue) Close() {
 	q.wg.Wait()
 }
 
+// Enqueue adds an item to the queue. Do not call Enqueue on a closed queue.
+func (q *Queue) Enqueue(ev *Event) error {
+	if ev == nil {
+		return errors.New("event cannot be nil")
+	}
+
+	req := enqueueReq{idx: ev.Index, item: ev.Data, respChan: make(chan enqueueResp)}
+	select {
+	case <-q.done:
+		return ErrQueueClosed
+	case q.enqueueChan <- req:
+	}
+	resp := <-req.respChan
+	return resp.err
+}
+
+// DeleteRange deletes all items in the queue with indices less than or equal to idx.
+func (q *Queue) DeleteRange(idx uint64) error {
+	req := deleteRangeReq{
+		idx:      idx,
+		respChan: make(chan error),
+	}
+	q.deleteRangeChan <- req
+	return <-req.respChan
+}
+
+// HighestKey returns the index of the highest item ever inserted into the queue.
+func (q *Queue) HighestKey() (uint64, error) {
+	req := queryReq{respChan: make(chan queryResp)}
+	q.queryChan <- req
+	resp := <-req.respChan
+	return resp.highestKey, resp.err
+}
+
+// Empty checks if the queue contains no items.
+func (q *Queue) Empty() (bool, error) {
+	req := queryReq{respChan: make(chan queryResp)}
+	q.queryChan <- req
+	resp := <-req.respChan
+	return resp.isEmpty, resp.err
+}
+
+// HasNext checks if there is at least one item available to dequeue.
+func (q *Queue) HasNext() bool {
+	req := queryReq{respChan: make(chan queryResp)}
+	q.queryChan <- req
+	resp := <-req.respChan
+	return resp.hasNext
+}
+
+// Len returns the number of items currently in the queue.
+func (q *Queue) Len() int {
+	req := queryReq{respChan: make(chan queryResp)}
+	q.queryChan <- req
+	resp := <-req.respChan
+	return resp.len
+}
+
 func (q *Queue) run(highestKey uint64) {
 	defer q.wg.Done()
 	defer q.db.Close()
@@ -198,11 +256,15 @@ func (q *Queue) run(highestKey uint64) {
 					return err
 				}
 				if req.idx > highestKey {
-					highestKey = req.idx
-					return setHighestKey(tx, highestKey)
+					if err := setHighestKey(tx, req.idx); err != nil {
+						return err
+					}
 				}
 				return nil
 			})
+			if err == nil && req.idx > highestKey {
+				highestKey = req.idx
+			}
 			req.respChan <- enqueueResp{err: err}
 			if err == nil && nextEv == nil {
 				_ = loadHead()
@@ -260,59 +322,6 @@ func (q *Queue) run(highestKey uint64) {
 			return
 		}
 	}
-}
-
-// Enqueue adds an item to the queue. Do not call Enqueue on a closed queue.
-func (q *Queue) Enqueue(ev *Event) error {
-	if ev == nil {
-		return errors.New("event cannot be nil")
-	}
-	req := enqueueReq{idx: ev.Index, item: ev.Data, respChan: make(chan enqueueResp)}
-	q.enqueueChan <- req
-	resp := <-req.respChan
-	return resp.err
-}
-
-// DeleteRange deletes all items in the queue with indices less than or equal to idx.
-func (q *Queue) DeleteRange(idx uint64) error {
-	req := deleteRangeReq{
-		idx:      idx,
-		respChan: make(chan error),
-	}
-	q.deleteRangeChan <- req
-	return <-req.respChan
-}
-
-// HighestKey returns the index of the highest item ever inserted into the queue.
-func (q *Queue) HighestKey() (uint64, error) {
-	req := queryReq{respChan: make(chan queryResp)}
-	q.queryChan <- req
-	resp := <-req.respChan
-	return resp.highestKey, resp.err
-}
-
-// Empty checks if the queue contains no items.
-func (q *Queue) Empty() (bool, error) {
-	req := queryReq{respChan: make(chan queryResp)}
-	q.queryChan <- req
-	resp := <-req.respChan
-	return resp.isEmpty, resp.err
-}
-
-// HasNext checks if there is at least one item available to dequeue.
-func (q *Queue) HasNext() bool {
-	req := queryReq{respChan: make(chan queryResp)}
-	q.queryChan <- req
-	resp := <-req.respChan
-	return resp.hasNext
-}
-
-// Len returns the number of items currently in the queue.
-func (q *Queue) Len() int {
-	req := queryReq{respChan: make(chan queryResp)}
-	q.queryChan <- req
-	resp := <-req.respChan
-	return resp.len
 }
 
 func getHighestKey(tx *bbolt.Tx) (uint64, error) {
