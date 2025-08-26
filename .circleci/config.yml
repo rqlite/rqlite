@@ -53,6 +53,26 @@ jobs:
       - run: go vet ./...
     resource_class: large
 
+  test_p:
+    docker:
+      - image: << pipeline.parameters.primary_image >>
+    parallelism: 4    # change to 3, 5, etc.
+    steps:
+      - checkout
+      - checkout
+      - restore_and_save_cache
+      - run:
+          name: Run partitioned tests
+          command: |
+            set -euo pipefail
+            # Select packages where (line_index % total) == index
+            pkgs=$(go list ./... | awk -v idx="${CIRCLE_NODE_INDEX}" -v tot="${CIRCLE_NODE_TOTAL}" '((NR-1) % tot) == idx')
+            if [ -z "$pkgs" ]; then
+              echo "No packages assigned to this node"; exit 0
+            fi
+            # Optionally batch to avoid arg list limits:
+            printf "%s\n" $pkgs | xargs -n 50 go test -failfast
+
   test_odd:
     docker:
       - image: << pipeline.parameters.primary_image >>
@@ -328,6 +348,7 @@ workflows:
       - test_even_race
       - test_odd
       - test_odd_race
+      - test_p
       - end_to_end_single
       - end_to_end_multi
       - end_to_end_multi_adv
