@@ -41,6 +41,17 @@ func Test_NewQueue(t *testing.T) {
 	}
 }
 
+func Test_Queue_Closed(t *testing.T) {
+	q, _, _ := newTestQueue(t)
+	q.Close()
+	if err := q.Enqueue(&Event{Index: 10, Data: []byte("hello")}); err != ErrQueueClosed {
+		t.Fatalf("Enqueue should fail on closed queue")
+	}
+	if err := q.DeleteRange(10); err != ErrQueueClosed {
+		t.Fatalf("DeleteRange should fail on closed queue")
+	}
+}
+
 // Test_EnqueueEvents_Simple tests a single Enqueue operation and receiving the event.
 func Test_EnqueueEvents_Simple(t *testing.T) {
 	q, _, cleanup := newTestQueue(t)
@@ -65,7 +76,7 @@ func Test_EnqueueEvents_Simple(t *testing.T) {
 		t.Fatal("Queue should not be empty")
 	}
 
-	if q.HasNext() {
+	if !q.HasNext() {
 		t.Fatalf("HasNext should be false after enqueuing only item")
 	}
 
@@ -171,17 +182,28 @@ func Test_DeleteRange(t *testing.T) {
 		t.Fatalf("DeleteRange on empty queue should not error: %v", err)
 	}
 
-	// Get the events channel before enqueuing
-	eventsCh := q.C
+	firstItem := &Event{Index: 1, Data: []byte("first item")}
+	if err := q.Enqueue(firstItem); err != nil {
+		t.Fatalf("Enqueue failed for index %d: %v", firstItem.Index, err)
+	}
 
-	// Enqueue a few items.
+	// Delete the first item to make sure it's gone and has no further effect on the queue.
+	if err := q.DeleteRange(firstItem.Index); err != nil {
+		t.Fatalf("DeleteRange failed: %v", err)
+	}
+	// Check that there is still 1 item in the FIFO.
+	testPoll(t, func() bool {
+		return q.Len() == 0
+	}, time.Second)
+
+	// Enqueue a few more items.
 	items := []struct {
 		idx  uint64
 		data []byte
 	}{
-		{1, []byte("one")},
-		{2, []byte("two")},
-		{3, []byte("three")},
+		{2, []byte("one")},
+		{3, []byte("two")},
+		{4, []byte("three")},
 	}
 	for _, item := range items {
 		if err := q.Enqueue(&Event{Index: item.idx, Data: item.data}); err != nil {
@@ -197,7 +219,7 @@ func Test_DeleteRange(t *testing.T) {
 	// Consume all events in the FiFO
 	for i := 0; i < len(items); i++ {
 		select {
-		case event := <-eventsCh:
+		case event := <-q.C:
 			// Verify the events are in order
 			expectedItem := items[i]
 			if event.Index != expectedItem.idx {
@@ -217,7 +239,7 @@ func Test_DeleteRange(t *testing.T) {
 	}
 
 	// Delete a range of items.
-	if err := q.DeleteRange(2); err != nil {
+	if err := q.DeleteRange(3); err != nil {
 		t.Fatalf("DeleteRange failed: %v", err)
 	}
 
@@ -227,7 +249,7 @@ func Test_DeleteRange(t *testing.T) {
 	}, time.Second)
 
 	// Test that deleting up to a range that was already deleted is a no-op.
-	if err := q.DeleteRange(2); err != nil {
+	if err := q.DeleteRange(3); err != nil {
 		t.Fatalf("DeleteRange failed: %v", err)
 	}
 
@@ -237,7 +259,7 @@ func Test_DeleteRange(t *testing.T) {
 	}, time.Second)
 
 	// Finally delete last item.
-	if err := q.DeleteRange(3); err != nil {
+	if err := q.DeleteRange(4); err != nil {
 		t.Fatalf("DeleteRange failed: %v", err)
 	}
 
@@ -248,7 +270,7 @@ func Test_DeleteRange(t *testing.T) {
 
 	// No more events should be available since all were consumed
 	select {
-	case event := <-eventsCh:
+	case event := <-q.C:
 		t.Fatalf("Unexpected event received after DeleteRange: index=%d", event.Index)
 	case <-time.After(100 * time.Millisecond):
 		// Expected - no more events
@@ -633,8 +655,9 @@ func Test_Events_ReaderAppearsLater(t *testing.T) {
 		}
 	}
 
-	// Wait a bit to ensure enqueue operations complete
-	time.Sleep(50 * time.Millisecond)
+	testPoll(t, func() bool {
+		return q.Len() == len(items)
+	}, time.Second)
 
 	// Now get the events channel - this should make all queued events available
 	eventsCh := q.C

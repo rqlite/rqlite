@@ -68,7 +68,6 @@ func NewQueue(path string) (*Queue, error) {
 	}
 
 	// Prepare the database buckets in a single transaction.
-	var nextKey []byte
 	var highestKey uint64
 	if err := db.Update(func(tx *bbolt.Tx) error {
 		if _, err := tx.CreateBucketIfNotExists(bucketName); err != nil {
@@ -87,12 +86,6 @@ func NewQueue(path string) (*Queue, error) {
 
 		// Initialize state from the DB.
 		var innerErr error
-		c := tx.Bucket(bucketName).Cursor()
-		nk, _ := c.First()
-		if nk != nil {
-			nextKey = make([]byte, 8)
-			copy(nextKey, nk)
-		}
 		highestKey, innerErr = getHighestKey(tx)
 		if innerErr != nil {
 			return fmt.Errorf("failed to get highest key: %w", innerErr)
@@ -103,7 +96,7 @@ func NewQueue(path string) (*Queue, error) {
 		return nil, fmt.Errorf("failed to initialize buckets: %w", err)
 	}
 
-	eventsChan := make(chan *Event, 1)
+	eventsChan := make(chan *Event)
 	q := &Queue{
 		db:              db,
 		enqueueChan:     make(chan enqueueReq, queueBufferSize),
@@ -115,7 +108,7 @@ func NewQueue(path string) (*Queue, error) {
 	}
 
 	q.wg.Add(1)
-	go q.run(nextKey, highestKey)
+	go q.run(highestKey)
 	return q, nil
 }
 
@@ -131,157 +124,18 @@ func (q *Queue) Close() {
 	q.wg.Wait()
 }
 
-// run is a single goroutine that serializes all access to the database.
-func (q *Queue) run(nextKey []byte, highestKey uint64) {
-	defer q.wg.Done()
-	defer q.db.Close()
-	defer close(q.eventsChan) // Close events channel when queue shuts down
-
-	// Helper function to try sending available events
-	tryServeEvents := func() {
-		for nextKey != nil {
-			event := &Event{}
-			err := q.db.View(func(tx *bbolt.Tx) error {
-				c := tx.Bucket(bucketName).Cursor()
-				_, val := c.Seek(nextKey)
-				if val == nil {
-					return fmt.Errorf("item not found for key %x", nextKey)
-				}
-				event.Index = btouint64(nextKey)
-				event.Data = make([]byte, len(val))
-				copy(event.Data, val)
-				return nil
-			})
-
-			if err != nil {
-				break
-			}
-
-			// Try to send to events channel (non-blocking)
-			select {
-			case q.eventsChan <- event:
-				// Successfully sent, advance to next item
-				err := q.db.View(func(tx *bbolt.Tx) error {
-					c := tx.Bucket(bucketName).Cursor()
-					c.Seek(nextKey)
-					nk, _ := c.Next()
-					if nk != nil {
-						nextKey = make([]byte, len(nk))
-						copy(nextKey, nk)
-					} else {
-						nextKey = nil // No more items available
-					}
-					return nil
-				})
-				if err != nil {
-					return
-				}
-			default:
-				// Events channel is full, stop processing
-				return
-			}
-		}
-	}
-
-	// Load any on-disk events into the channel
-	tryServeEvents()
-
-	for {
-		select {
-		case req := <-q.enqueueChan:
-			if req.idx <= highestKey {
-				req.respChan <- enqueueResp{err: nil}
-				continue // Ignore duplicate/old items
-			}
-
-			key := uint64tob(req.idx)
-			err := q.db.Update(func(tx *bbolt.Tx) error {
-				if err := tx.Bucket(bucketName).Put(key, req.item); err != nil {
-					return err
-				}
-				if req.idx > highestKey {
-					highestKey = req.idx
-					return setHighestKey(tx, highestKey)
-				}
-				return nil
-			})
-			if err != nil {
-				req.respChan <- enqueueResp{err: fmt.Errorf("enqueue failed: %w", err)}
-				continue
-			}
-
-			// If this is the first item added to a previously empty queue,
-			// it becomes the next item to be sent to events channel.
-			if nextKey == nil {
-				nextKey = key
-			}
-
-			req.respChan <- enqueueResp{err: err}
-
-			// Try to send any available events to the events channel
-			tryServeEvents()
-
-		case req := <-q.deleteRangeChan:
-			err := q.db.Update(func(tx *bbolt.Tx) error {
-				b := tx.Bucket(bucketName)
-				c := b.Cursor()
-
-				// Seek to the oldest key and delete all until (and including) the requested index.
-				for k, _ := c.First(); k != nil && btouint64(k) <= req.idx; k, _ = c.Next() {
-					if err := b.Delete(k); err != nil {
-						return err
-					}
-				}
-
-				// Check if our cached 'nextKey' was deleted.
-				if nextKey != nil && b.Get(nextKey) == nil {
-					k, _ := c.First() // Find the new oldest key
-					if k != nil {
-						nextKey = make([]byte, len(k))
-						copy(nextKey, k)
-					} else {
-						nextKey = nil
-					}
-				}
-				return nil
-			})
-			req.respChan <- err
-
-		case req := <-q.queryChan:
-			var isEmpty bool
-			var hasNext bool
-			var len int
-			err := q.db.View(func(tx *bbolt.Tx) error {
-				bucket := tx.Bucket(bucketName)
-				c := bucket.Cursor()
-				k, _ := c.First()
-				isEmpty = k == nil       // If no items, isEmpty is true
-				hasNext = nextKey != nil // Any items to dequeue?
-
-				// Get the number of key/value pairs in the bucket
-				stats := bucket.Stats()
-				len = stats.KeyN
-				return nil
-			})
-			req.respChan <- queryResp{
-				err:        err,
-				hasNext:    hasNext,
-				isEmpty:    isEmpty,
-				len:        len,
-				highestKey: highestKey,
-			}
-
-		case <-q.done:
-			return
-		}
-	}
-}
-
 // Enqueue adds an item to the queue. Do not call Enqueue on a closed queue.
 func (q *Queue) Enqueue(ev *Event) error {
 	if ev == nil {
 		return errors.New("event cannot be nil")
 	}
+
+	select {
+	case <-q.done:
+		return ErrQueueClosed
+	default:
+	}
+
 	req := enqueueReq{idx: ev.Index, item: ev.Data, respChan: make(chan enqueueResp)}
 	q.enqueueChan <- req
 	resp := <-req.respChan
@@ -290,6 +144,12 @@ func (q *Queue) Enqueue(ev *Event) error {
 
 // DeleteRange deletes all items in the queue with indices less than or equal to idx.
 func (q *Queue) DeleteRange(idx uint64) error {
+	select {
+	case <-q.done:
+		return ErrQueueClosed
+	default:
+	}
+
 	req := deleteRangeReq{
 		idx:      idx,
 		respChan: make(chan error),
@@ -300,6 +160,11 @@ func (q *Queue) DeleteRange(idx uint64) error {
 
 // HighestKey returns the index of the highest item ever inserted into the queue.
 func (q *Queue) HighestKey() (uint64, error) {
+	select {
+	case <-q.done:
+		return 0, ErrQueueClosed
+	default:
+	}
 	req := queryReq{respChan: make(chan queryResp)}
 	q.queryChan <- req
 	resp := <-req.respChan
@@ -308,6 +173,12 @@ func (q *Queue) HighestKey() (uint64, error) {
 
 // Empty checks if the queue contains no items.
 func (q *Queue) Empty() (bool, error) {
+	select {
+	case <-q.done:
+		return false, ErrQueueClosed
+	default:
+	}
+
 	req := queryReq{respChan: make(chan queryResp)}
 	q.queryChan <- req
 	resp := <-req.respChan
@@ -324,10 +195,162 @@ func (q *Queue) HasNext() bool {
 
 // Len returns the number of items currently in the queue.
 func (q *Queue) Len() int {
+	select {
+	case <-q.done:
+		return 0
+	default:
+	}
+
 	req := queryReq{respChan: make(chan queryResp)}
 	q.queryChan <- req
 	resp := <-req.respChan
 	return resp.len
+}
+
+func (q *Queue) run(highestKey uint64) {
+	defer q.wg.Done()
+	defer q.db.Close()
+	defer close(q.eventsChan)
+
+	var (
+		nextEv   *Event
+		outCh    chan *Event
+		nextFrom uint64 // next index to emit
+	)
+
+	loadHead := func() error {
+		if nextEv != nil {
+			outCh = q.eventsChan
+			return nil
+		}
+		return q.db.View(func(tx *bbolt.Tx) error {
+			c := tx.Bucket(bucketName).Cursor()
+			var k, v []byte
+			k, v = c.Seek(uint64tob(nextFrom))
+			if k == nil {
+				nextEv = nil
+				outCh = nil
+				return nil
+			}
+			e := &Event{Index: btouint64(k)}
+			e.Data = append([]byte(nil), v...)
+			nextEv = e
+			outCh = q.eventsChan
+			return nil
+		})
+	}
+
+	advanceHead := func() error {
+		// We just emitted nextEv; define the next read position.
+		nextFrom = nextEv.Index + 1
+
+		nextEv = nil
+		outCh = nil
+		return q.db.View(func(tx *bbolt.Tx) error {
+			c := tx.Bucket(bucketName).Cursor()
+			k, v := c.Seek(uint64tob(nextFrom))
+			if k != nil {
+				e := &Event{Index: btouint64(k)}
+				e.Data = append([]byte(nil), v...)
+				nextEv = e
+				outCh = q.eventsChan
+			}
+			return nil
+		})
+	}
+
+	if err := loadHead(); err != nil {
+		panic(fmt.Sprintf("failed to load initial head: %v", err))
+	}
+
+	for {
+		select {
+		case outCh <- nextEv:
+			if err := advanceHead(); err != nil {
+				panic(fmt.Sprintf("failed to advance head: %v", err))
+			}
+
+		case req := <-q.enqueueChan:
+			if req.idx <= highestKey {
+				req.respChan <- enqueueResp{err: nil}
+				continue
+			}
+			key := uint64tob(req.idx)
+			err := q.db.Update(func(tx *bbolt.Tx) error {
+				if err := tx.Bucket(bucketName).Put(key, req.item); err != nil {
+					return err
+				}
+				if req.idx > highestKey {
+					if err := setHighestKey(tx, req.idx); err != nil {
+						return err
+					}
+				}
+				return nil
+			})
+			if err == nil && req.idx > highestKey {
+				highestKey = req.idx
+			}
+			req.respChan <- enqueueResp{err: err}
+			if err == nil && nextEv == nil {
+				if err := loadHead(); err != nil {
+					panic(fmt.Sprintf("failed to load head after enqueue: %v", err))
+				}
+			}
+
+		case req := <-q.deleteRangeChan:
+			var deletedHead bool
+			err := q.db.Update(func(tx *bbolt.Tx) error {
+				b := tx.Bucket(bucketName)
+				c := b.Cursor()
+
+				if nextEv != nil && nextEv.Index <= req.idx {
+					deletedHead = true
+				}
+
+				for k, _ := c.First(); k != nil && btouint64(k) <= req.idx; k, _ = c.Next() {
+					if derr := b.Delete(k); derr != nil {
+						return derr
+					}
+				}
+				return nil
+			})
+			// Ensure cursor moves past deleted range
+			if err == nil && nextFrom != 0 && nextFrom <= req.idx {
+				nextFrom = req.idx + 1
+			}
+			req.respChan <- err
+
+			if err == nil {
+				if deletedHead {
+					nextEv = nil
+					outCh = nil
+				}
+				if err := loadHead(); err != nil {
+					panic(fmt.Sprintf("failed to load head after delete: %v", err))
+				}
+			}
+
+		case req := <-q.queryChan:
+			var isEmpty bool
+			var l int
+			err := q.db.View(func(tx *bbolt.Tx) error {
+				st := tx.Bucket(bucketName).Stats()
+				l = st.KeyN
+				isEmpty = (l == 0)
+				return nil
+			})
+			req.respChan <- queryResp{
+				err:        err,
+				hasNext:    nextEv != nil,
+				isEmpty:    isEmpty,
+				len:        l,
+				highestKey: highestKey,
+			}
+
+		case <-q.done:
+			return
+		}
+	}
 }
 
 func getHighestKey(tx *bbolt.Tx) (uint64, error) {

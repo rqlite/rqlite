@@ -1534,23 +1534,22 @@ func Test_MultiNodeStoreLogTruncation(t *testing.T) {
 	if _, err := s1.WaitForLeader(10 * time.Second); err != nil {
 		t.Fatalf("Error waiting for leader: %s", err)
 	}
-	// Wait until the log entries have been applied to the follower,
-	// and then query.
-	if err := s1.WaitForAppliedIndex(8, 5*time.Second); err != nil {
-		t.Fatalf("error waiting for follower to apply index: %s:", err.Error())
-	}
-	qr := queryRequestFromString("SELECT count(*) FROM foo", false, true)
-	qr.Level = proto.QueryRequest_QUERY_REQUEST_LEVEL_NONE
-	r, _, err := s1.Query(qr)
-	if err != nil {
-		t.Fatalf("failed to query single node: %s", err.Error())
-	}
-	if exp, got := `["count(*)"]`, asJSON(r[0].Columns); exp != got {
-		t.Fatalf("unexpected results for query\nexp: %s\ngot: %s", exp, got)
-	}
-	if exp, got := `[[6]]`, asJSON(r[0].Values); exp != got {
-		t.Fatalf("unexpected results for query\nexp: %s\ngot: %s", exp, got)
-	}
+
+	testPoll(t, func() bool {
+		qr := queryRequestFromString("SELECT count(*) FROM foo", false, true)
+		qr.Level = proto.QueryRequest_QUERY_REQUEST_LEVEL_NONE
+		r, _, err := s1.Query(qr)
+		if err != nil {
+			t.Fatalf("failed to query single node: %s", err.Error())
+		}
+		if exp, got := `["count(*)"]`, asJSON(r[0].Columns); exp != got {
+			return false
+		}
+		if exp, got := `[[6]]`, asJSON(r[0].Values); exp != got {
+			return false
+		}
+		return true
+	}, 100*time.Millisecond, 5*time.Second)
 }
 
 func Test_MultiNodeExecuteQuery_Linearizable_AllUp(t *testing.T) {
