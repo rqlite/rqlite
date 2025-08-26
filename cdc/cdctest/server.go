@@ -72,6 +72,19 @@ func (h *HTTPTestServer) GetRequestCount() int {
 	return len(h.requests)
 }
 
+// GetHighestMessageIndex returns the highest message index received by the server.
+func (h *HTTPTestServer) GetHighestMessageIndex() uint64 {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	var highest uint64
+	for index := range h.messages {
+		if index > highest {
+			highest = index
+		}
+	}
+	return highest
+}
+
 // ClearRequests clears the stored requests.
 func (h *HTTPTestServer) ClearRequests() {
 	h.mu.Lock()

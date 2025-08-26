@@ -115,6 +115,17 @@ func Test_CDC_MultiNode(t *testing.T) {
 		return testEndpoint.GetMessageCount() == 4, nil
 	}, 100*time.Millisecond, 5*time.Second)
 
+	hi := testEndpoint.GetHighestMessageIndex()
+	testPoll(t, func() (bool, error) {
+		return node1.CDC.HighWatermark() == hi, nil
+	}, 100*time.Millisecond, 2*time.Second)
+
+	// Wait the highwater mark to be replicated to other nodes.
+	testPoll(t, func() (bool, error) {
+		f := node2.CDC.HighWatermark() == hi && node3.CDC.HighWatermark() == hi
+		return f, nil
+	}, 100*time.Millisecond, 2*time.Second)
+
 	testEndpoint.ClearRequests()
 
 	// Kill the leader, ensure future changes are still captured.
