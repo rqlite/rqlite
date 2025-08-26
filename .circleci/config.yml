@@ -57,22 +57,12 @@ jobs:
     docker:
       - image: << pipeline.parameters.primary_image >>
     parallelism: 8    # change to 3, 5, etc.
+    resource_class: large
     steps:
       - checkout
       - checkout
       - restore_and_save_cache
-      - run:
-          name: Run partitioned tests
-          command: |
-            set -euo pipefail
-            # Select packages where (line_index % total) == index
-            pkgs=$(go list ./... | awk -v idx="${CIRCLE_NODE_INDEX}" -v tot="${CIRCLE_NODE_TOTAL}" '((NR-1) % tot) == idx')
-            if [ -z "$pkgs" ]; then
-              echo "No packages assigned to this node"; exit 0
-            fi
-            # Optionally batch to avoid arg list limits:
-            printf "%s\n" $pkgs | xargs -n 50 go test -failfast
-    resource_class: large
+      - run: go list ./... | circleci tests run --command "xargs gotestsum --junitfile junit.xml --format testname --" --split-by=filesize
 
   test_odd:
     docker:
