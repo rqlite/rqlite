@@ -115,12 +115,12 @@ func Test_CDC_MultiNode(t *testing.T) {
 		return testEndpoint.GetMessageCount() == 4, nil
 	}, 100*time.Millisecond, 5*time.Second)
 
+	testEndpoint.ClearRequests()
+
 	// Kill the leader, ensure future changes are still captured.
 	node1.Deprovision()
 	cluster := Cluster{node2, node3}
 	cluster.WaitForNewLeader(node1)
-
-	testEndpoint.ClearRequests()
 
 	_, err = node2.Execute(`INSERT INTO foo (id, name) VALUES (2, 'Bob')`)
 	if err != nil {
