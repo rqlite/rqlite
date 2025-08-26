@@ -89,7 +89,9 @@ func (n *Node) Deprovision() {
 	if n == nil {
 		return
 	}
-	n.CDC.Stop()
+	if n.CDC != nil {
+		n.CDC.Stop()
+	}
 	n.Service.Close()
 	n.Store.Close(true)
 	n.Cluster.Close()

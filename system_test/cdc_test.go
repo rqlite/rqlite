@@ -21,7 +21,7 @@ func Test_CDC_SingleNode(t *testing.T) {
 	cdcCluster := cdc.NewCDCCluster(node.Store, node.Cluster, node.Client)
 	cdcService, err := cdc.NewService(node.ID, node.Dir, cdcCluster, cdcCfg)
 	if err != nil {
-		panic(fmt.Sprintf("failed to create CDC service: %s", err.Error()))
+		t.Fatalf("failed to create CDC service: %s", err.Error())
 	}
 	node.CDC = cdcService
 	node.CDC.Start()
