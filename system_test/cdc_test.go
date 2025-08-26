@@ -126,9 +126,12 @@ func Test_CDC_MultiNode(t *testing.T) {
 		return f, nil
 	}, 100*time.Millisecond, 2*time.Second)
 
-	testEndpoint.ClearRequests()
+	testEndpoint.Reset()
+	if testEndpoint.GetMessageCount() != 0 {
+		t.Fatalf("expected 0 messages after clear, got %d", testEndpoint.GetMessageCount())
+	}
 
-	// Kill the leader, ensure future changes are still captured.
+	// Kill the leader, ensure future changes are still sent to the endpoint.
 	node1.Deprovision()
 	cluster := Cluster{node2, node3}
 	cluster.WaitForNewLeader(node1)
@@ -140,4 +143,7 @@ func Test_CDC_MultiNode(t *testing.T) {
 	testPoll(t, func() (bool, error) {
 		return testEndpoint.GetMessageCount() == 1, nil
 	}, 100*time.Millisecond, 2*time.Second)
+	if testEndpoint.GetRequestCount() != 1 {
+		t.Fatalf("expected 1 request, got %d", testEndpoint.GetRequestCount())
+	}
 }

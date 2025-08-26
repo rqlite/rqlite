@@ -85,11 +85,12 @@ func (h *HTTPTestServer) GetHighestMessageIndex() uint64 {
 	return highest
 }
 
-// ClearRequests clears the stored requests.
-func (h *HTTPTestServer) ClearRequests() {
+// Reset delete all received data.
+func (h *HTTPTestServer) Reset() {
 	h.mu.Lock()
 	defer h.mu.Unlock()
 	h.requests = nil
+	h.messages = make(map[uint64]*cdcjson.CDCMessage)
 }
 
 // GetMessageCount returns the number of unique messages received by the server.
