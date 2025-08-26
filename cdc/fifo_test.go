@@ -171,9 +171,6 @@ func Test_DeleteRange(t *testing.T) {
 		t.Fatalf("DeleteRange on empty queue should not error: %v", err)
 	}
 
-	// Get the events channel before enqueuing
-	eventsCh := q.C
-
 	// Enqueue a few items.
 	items := []struct {
 		idx  uint64
@@ -197,7 +194,7 @@ func Test_DeleteRange(t *testing.T) {
 	// Consume all events in the FiFO
 	for i := 0; i < len(items); i++ {
 		select {
-		case event := <-eventsCh:
+		case event := <-q.C:
 			// Verify the events are in order
 			expectedItem := items[i]
 			if event.Index != expectedItem.idx {
@@ -248,7 +245,7 @@ func Test_DeleteRange(t *testing.T) {
 
 	// No more events should be available since all were consumed
 	select {
-	case event := <-eventsCh:
+	case event := <-q.C:
 		t.Fatalf("Unexpected event received after DeleteRange: index=%d", event.Index)
 	case <-time.After(100 * time.Millisecond):
 		// Expected - no more events
