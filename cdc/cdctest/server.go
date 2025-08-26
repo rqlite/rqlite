@@ -1,6 +1,7 @@
 package cdctest
 
 import (
+	"fmt"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -16,6 +17,8 @@ type HTTPTestServer struct {
 	requests [][]byte
 	messages map[uint64]*cdcjson.CDCMessage
 	mu       sync.Mutex
+
+	DumpRequest bool
 }
 
 // NewHTTPTestServer creates a new instance of HTTPTestServer.
@@ -44,6 +47,10 @@ func NewHTTPTestServer() *HTTPTestServer {
 			hts.messages[msg.Index] = msg
 		}
 
+		if hts.DumpRequest {
+			fmt.Println(string(body))
+		}
+
 		w.WriteHeader(http.StatusOK)
 	}))
 	return hts
@@ -65,11 +72,25 @@ func (h *HTTPTestServer) GetRequestCount() int {
 	return len(h.requests)
 }
 
-// ClearRequests clears the stored requests.
-func (h *HTTPTestServer) ClearRequests() {
+// GetHighestMessageIndex returns the highest message index received by the server.
+func (h *HTTPTestServer) GetHighestMessageIndex() uint64 {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	var highest uint64
+	for index := range h.messages {
+		if index > highest {
+			highest = index
+		}
+	}
+	return highest
+}
+
+// Reset delete all received data.
+func (h *HTTPTestServer) Reset() {
 	h.mu.Lock()
 	defer h.mu.Unlock()
 	h.requests = nil
+	h.messages = make(map[uint64]*cdcjson.CDCMessage)
 }
 
 // GetMessageCount returns the number of unique messages received by the server.

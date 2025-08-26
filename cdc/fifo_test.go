@@ -277,6 +277,40 @@ func Test_DeleteRange(t *testing.T) {
 	}
 }
 
+func Test_DeleteRange_NeverRead(t *testing.T) {
+	q, _, cleanup := newTestQueue(t)
+	defer cleanup()
+
+	// Enqueue a few items.
+	items := []struct {
+		idx  uint64
+		data []byte
+	}{
+		{1, []byte("one")},
+		{2, []byte("two")},
+		{3, []byte("three")},
+	}
+	for _, item := range items {
+		if err := q.Enqueue(&Event{Index: item.idx, Data: item.data}); err != nil {
+			t.Fatalf("Enqueue failed for index %d: %v", item.idx, err)
+		}
+	}
+
+	// Check that there are 3 items in the FIFO.
+	testPoll(t, func() bool {
+		return q.Len() == 3
+	}, time.Second)
+
+	// Never read, just delete them all.
+	if err := q.DeleteRange(3); err != nil {
+		t.Fatalf("DeleteRange failed: %v", err)
+	}
+
+	testPoll(t, func() bool {
+		return q.Len() == 0
+	}, time.Second)
+}
+
 // Test_QueueHighestKey tests that HighestKey returns the correct value after various operations.
 func Test_QueueHighestKey(t *testing.T) {
 	q, path, _ := newTestQueue(t)

@@ -101,7 +101,7 @@ func Test_ClusterBasicDelivery(t *testing.T) {
 	}
 
 	// Verify followers don't send HTTP requests
-	httpServer.ClearRequests()
+	httpServer.Reset()
 
 	// Send events to followers
 	for _, ev := range events {
