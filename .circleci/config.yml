@@ -56,7 +56,7 @@ jobs:
   test_p:
     docker:
       - image: << pipeline.parameters.primary_image >>
-    parallelism: 4    # change to 3, 5, etc.
+    parallelism: 8    # change to 3, 5, etc.
     steps:
       - checkout
       - checkout
@@ -344,10 +344,6 @@ workflows:
       - cross_compile_arm
       - cross_compile_mips
       - cross_compile_mips_le
-      - test_even
-      - test_even_race
-      - test_odd
-      - test_odd_race
       - test_p
       - end_to_end_single
       - end_to_end_multi
