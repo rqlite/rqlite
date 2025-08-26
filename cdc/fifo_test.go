@@ -171,14 +171,28 @@ func Test_DeleteRange(t *testing.T) {
 		t.Fatalf("DeleteRange on empty queue should not error: %v", err)
 	}
 
-	// Enqueue a few items.
+	firstItem := &Event{Index: 1, Data: []byte("first item")}
+	if err := q.Enqueue(firstItem); err != nil {
+		t.Fatalf("Enqueue failed for index %d: %v", firstItem.Index, err)
+	}
+
+	// Delete the first item to make sure it's gone and has no further effect on the queue.
+	if err := q.DeleteRange(firstItem.Index); err != nil {
+		t.Fatalf("DeleteRange failed: %v", err)
+	}
+	// Check that there is still 1 item in the FIFO.
+	testPoll(t, func() bool {
+		return q.Len() == 0
+	}, time.Second)
+
+	// Enqueue a few more items.
 	items := []struct {
 		idx  uint64
 		data []byte
 	}{
-		{1, []byte("one")},
-		{2, []byte("two")},
-		{3, []byte("three")},
+		{2, []byte("one")},
+		{3, []byte("two")},
+		{4, []byte("three")},
 	}
 	for _, item := range items {
 		if err := q.Enqueue(&Event{Index: item.idx, Data: item.data}); err != nil {
@@ -214,7 +228,7 @@ func Test_DeleteRange(t *testing.T) {
 	}
 
 	// Delete a range of items.
-	if err := q.DeleteRange(2); err != nil {
+	if err := q.DeleteRange(3); err != nil {
 		t.Fatalf("DeleteRange failed: %v", err)
 	}
 
@@ -224,7 +238,7 @@ func Test_DeleteRange(t *testing.T) {
 	}, time.Second)
 
 	// Test that deleting up to a range that was already deleted is a no-op.
-	if err := q.DeleteRange(2); err != nil {
+	if err := q.DeleteRange(3); err != nil {
 		t.Fatalf("DeleteRange failed: %v", err)
 	}
 
@@ -234,7 +248,7 @@ func Test_DeleteRange(t *testing.T) {
 	}, time.Second)
 
 	// Finally delete last item.
-	if err := q.DeleteRange(3); err != nil {
+	if err := q.DeleteRange(4); err != nil {
 		t.Fatalf("DeleteRange failed: %v", err)
 	}
 
