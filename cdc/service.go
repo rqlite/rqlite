@@ -450,6 +450,7 @@ func (s *Service) leaderHWMLoop() (chan struct{}, chan struct{}) {
 	go func() {
 		defer close(done)
 
+		hwmPersisted := uint64(0)
 		hwmTicker := time.NewTicker(s.highWatermarkInterval)
 		defer hwmTicker.Stop()
 		for {
@@ -465,6 +466,12 @@ func (s *Service) leaderHWMLoop() (chan struct{}, chan struct{}) {
 				if err := s.clstr.BroadcastHighWatermark(hwm); err != nil {
 					s.logger.Printf("error writing high watermark to store: %v", err)
 				}
+				// While we always broadcast the high watermark, we only
+				// write it to disk and prune the FIFO if it has advanced
+				// since the last time we did so.
+				if hwm <= hwmPersisted {
+					continue
+				}
 				if err := writeHWMToFile(s.hwmFilePath, hwm); err != nil {
 					s.logger.Printf("error writing high watermark to file: %v", err)
 				}
@@ -472,6 +479,7 @@ func (s *Service) leaderHWMLoop() (chan struct{}, chan struct{}) {
 					s.logger.Printf("error deleting events up to high watermark from FIFO: %v", err)
 				}
 				s.hwmLeaderUpdated.Add(1)
+				hwmPersisted = hwm
 			}
 		}
 	}()
@@ -484,29 +492,28 @@ func (s *Service) followerLoop() (chan struct{}, chan struct{}) {
 	stop := make(chan struct{})
 	done := make(chan struct{})
 
-	lastPersisted := uint64(0)
+	hwmPersisted := uint64(0)
 	go func() {
 		defer close(done)
-
 		for {
 			select {
 			case <-stop:
 				return
 			case hwm := <-s.hwmObCh:
-				if hwm > lastPersisted {
-					// Handle high watermark updates from cluster
-					if err := writeHWMToFile(s.hwmFilePath, hwm); err != nil {
-						s.logger.Printf("error writing high watermark to file: %v", err)
-					}
-					// This means all events up to this high watermark have been
-					// successfully sent to the webhook by the cluster. We can
-					// delete all events up and including that point from our FIFO.
-					if err := s.fifo.DeleteRange(hwm); err != nil {
-						s.logger.Printf("error deleting events up to high watermark from FIFO: %v", err)
-					}
-					lastPersisted = hwm
+				// Dedupe high watermark updates and ignore invalid ones.
+				if hwm <= hwmPersisted || hwm == 0 {
+					continue
 				}
-
+				if err := writeHWMToFile(s.hwmFilePath, hwm); err != nil {
+					s.logger.Printf("error writing high watermark to file: %v", err)
+				}
+				// This means all events up to this high watermark have been
+				// successfully sent to the webhook by the cluster. We can
+				// delete all events up and including that point from our FIFO.
+				if err := s.fifo.DeleteRange(hwm); err != nil {
+					s.logger.Printf("error deleting events up to high watermark from FIFO: %v", err)
+				}
+				hwmPersisted = hwm
 				s.highWatermark.Store(hwm)
 				s.hwmFollowerUpdated.Add(1)
 			}
