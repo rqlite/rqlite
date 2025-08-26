@@ -80,7 +80,9 @@ func (n *Node) Close(graceful bool) error {
 	}
 	n.Service.Close()
 	n.Cluster.Close()
-	n.CDC.Stop()
+	if n.CDC != nil {
+		n.CDC.Stop()
+	}
 	return nil
 }
 
