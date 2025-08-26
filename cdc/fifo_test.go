@@ -41,6 +41,17 @@ func Test_NewQueue(t *testing.T) {
 	}
 }
 
+func Test_Queue_Closed(t *testing.T) {
+	q, _, _ := newTestQueue(t)
+	q.Close()
+	if err := q.Enqueue(&Event{Index: 10, Data: []byte("hello")}); err != ErrQueueClosed {
+		t.Fatalf("Enqueue should fail on closed queue")
+	}
+	if err := q.DeleteRange(10); err != ErrQueueClosed {
+		t.Fatalf("DeleteRange should fail on closed queue")
+	}
+}
+
 // Test_EnqueueEvents_Simple tests a single Enqueue operation and receiving the event.
 func Test_EnqueueEvents_Simple(t *testing.T) {
 	q, _, cleanup := newTestQueue(t)

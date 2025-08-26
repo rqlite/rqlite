@@ -130,18 +130,26 @@ func (q *Queue) Enqueue(ev *Event) error {
 		return errors.New("event cannot be nil")
 	}
 
-	req := enqueueReq{idx: ev.Index, item: ev.Data, respChan: make(chan enqueueResp)}
 	select {
 	case <-q.done:
 		return ErrQueueClosed
-	case q.enqueueChan <- req:
+	default:
 	}
+
+	req := enqueueReq{idx: ev.Index, item: ev.Data, respChan: make(chan enqueueResp)}
+	q.enqueueChan <- req
 	resp := <-req.respChan
 	return resp.err
 }
 
 // DeleteRange deletes all items in the queue with indices less than or equal to idx.
 func (q *Queue) DeleteRange(idx uint64) error {
+	select {
+	case <-q.done:
+		return ErrQueueClosed
+	default:
+	}
+
 	req := deleteRangeReq{
 		idx:      idx,
 		respChan: make(chan error),
@@ -152,6 +160,11 @@ func (q *Queue) DeleteRange(idx uint64) error {
 
 // HighestKey returns the index of the highest item ever inserted into the queue.
 func (q *Queue) HighestKey() (uint64, error) {
+	select {
+	case <-q.done:
+		return 0, ErrQueueClosed
+	default:
+	}
 	req := queryReq{respChan: make(chan queryResp)}
 	q.queryChan <- req
 	resp := <-req.respChan
@@ -160,6 +173,12 @@ func (q *Queue) HighestKey() (uint64, error) {
 
 // Empty checks if the queue contains no items.
 func (q *Queue) Empty() (bool, error) {
+	select {
+	case <-q.done:
+		return false, ErrQueueClosed
+	default:
+	}
+
 	req := queryReq{respChan: make(chan queryResp)}
 	q.queryChan <- req
 	resp := <-req.respChan
@@ -176,6 +195,12 @@ func (q *Queue) HasNext() bool {
 
 // Len returns the number of items currently in the queue.
 func (q *Queue) Len() int {
+	select {
+	case <-q.done:
+		return 0
+	default:
+	}
+
 	req := queryReq{respChan: make(chan queryResp)}
 	q.queryChan <- req
 	resp := <-req.respChan
@@ -201,11 +226,7 @@ func (q *Queue) run(highestKey uint64) {
 		return q.db.View(func(tx *bbolt.Tx) error {
 			c := tx.Bucket(bucketName).Cursor()
 			var k, v []byte
-			if nextFrom == 0 {
-				k, v = c.First()
-			} else {
-				k, v = c.Seek(uint64tob(nextFrom))
-			}
+			k, v = c.Seek(uint64tob(nextFrom))
 			if k == nil {
 				nextEv = nil
 				outCh = nil
@@ -219,13 +240,13 @@ func (q *Queue) run(highestKey uint64) {
 		})
 	}
 
-	advanceHead := func() {
+	advanceHead := func() error {
 		// We just emitted nextEv; define the next read position.
 		nextFrom = nextEv.Index + 1
 
 		nextEv = nil
 		outCh = nil
-		_ = q.db.View(func(tx *bbolt.Tx) error {
+		return q.db.View(func(tx *bbolt.Tx) error {
 			c := tx.Bucket(bucketName).Cursor()
 			k, v := c.Seek(uint64tob(nextFrom))
 			if k != nil {
@@ -238,12 +259,16 @@ func (q *Queue) run(highestKey uint64) {
 		})
 	}
 
-	_ = loadHead()
+	if err := loadHead(); err != nil {
+		panic(fmt.Sprintf("failed to load initial head: %v", err))
+	}
 
 	for {
 		select {
 		case outCh <- nextEv:
-			advanceHead()
+			if err := advanceHead(); err != nil {
+				panic(fmt.Sprintf("failed to advance head: %v", err))
+			}
 
 		case req := <-q.enqueueChan:
 			if req.idx <= highestKey {
@@ -267,7 +292,9 @@ func (q *Queue) run(highestKey uint64) {
 			}
 			req.respChan <- enqueueResp{err: err}
 			if err == nil && nextEv == nil {
-				_ = loadHead()
+				if err := loadHead(); err != nil {
+					panic(fmt.Sprintf("failed to load head after enqueue: %v", err))
+				}
 			}
 
 		case req := <-q.deleteRangeChan:
@@ -298,7 +325,9 @@ func (q *Queue) run(highestKey uint64) {
 					nextEv = nil
 					outCh = nil
 				}
-				_ = loadHead()
+				if err := loadHead(); err != nil {
+					panic(fmt.Sprintf("failed to load head after delete: %v", err))
+				}
 			}
 
 		case req := <-q.queryChan:
