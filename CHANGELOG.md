@@ -16,6 +16,7 @@
 - [PR #2257](https://github.com/rqlite/rqlite/pull/2257): Basic CDC system-level test.
 - [PR #2259](https://github.com/rqlite/rqlite/pull/2259): Further improvements to FIFO queue.
 - [PR #2258](https://github.com/rqlite/rqlite/pull/2258): Cluster-level testing of CDC.
+- [PR #2261](https://github.com/rqlite/rqlite/pull/2261): Cluster-level testing of CDC including failure injection.
 
 ## v8.43.3 (August 14th 2025)
 ### Implementation changes and bug fixes
