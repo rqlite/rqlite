@@ -158,6 +158,18 @@ func (q *Queue) DeleteRange(idx uint64) error {
 	return <-req.respChan
 }
 
+func (q *Queue) FirstKey() (uint64, error) {
+	select {
+	case <-q.done:
+		return 0, ErrQueueClosed
+	default:
+	}
+	req := queryReq{respChan: make(chan queryResp)}
+	q.queryChan <- req
+	resp := <-req.respChan
+	return resp.firstKey, resp.err
+}
+
 // HighestKey returns the index of the highest item ever inserted into the queue.
 func (q *Queue) HighestKey() (uint64, error) {
 	select {
@@ -333,14 +345,24 @@ func (q *Queue) run(highestKey uint64) {
 		case req := <-q.queryChan:
 			var isEmpty bool
 			var l int
+			firstKey := uint64(0)
 			err := q.db.View(func(tx *bbolt.Tx) error {
-				st := tx.Bucket(bucketName).Stats()
+				bucket := tx.Bucket(bucketName)
+				st := bucket.Stats()
 				l = st.KeyN
 				isEmpty = (l == 0)
+				if !isEmpty {
+					c := bucket.Cursor()
+					k, _ := c.First()
+					if k != nil {
+						firstKey = btouint64(k)
+					}
+				}
 				return nil
 			})
 			req.respChan <- queryResp{
 				err:        err,
+				firstKey:   firstKey,
 				hasNext:    nextEv != nil,
 				isEmpty:    isEmpty,
 				len:        l,
@@ -386,6 +408,7 @@ type queryReq struct {
 
 type queryResp struct {
 	hasNext    bool
+	firstKey   uint64
 	isEmpty    bool
 	len        int
 	highestKey uint64

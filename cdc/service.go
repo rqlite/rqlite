@@ -197,6 +197,16 @@ func NewService(nodeID, dir string, clstr Cluster, cfg *Config) (*Service, error
 	}
 	srv.fifo = fifo
 
+	// Whatever is the first key in the FIFO is our initial high watermark. We assume
+	// that anything sitting in the queue has not been sent to the webhook. If that is
+	// not the case then an HWM update from other nodes in the cluster will correct it
+	// (and prune the FIFO).
+	higHWM, err := fifo.FirstKey()
+	if err != nil {
+		return nil, fmt.Errorf("failed to read first key from FIFO: %w", err)
+	}
+	srv.highWatermark.Store(higHWM)
+
 	return srv, nil
 }
 
