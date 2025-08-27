@@ -18,9 +18,9 @@ func Test_CDC_SingleNode(t *testing.T) {
 		testEndpoint := cdctest.NewHTTPTestServer()
 		testEndpoint.SetFailRate(failRate)
 		cdcCfg := cdc.DefaultConfig()
-		cdcCfg.TransmitMaxRetries = 50 // Keep retrying for a while.
-		cdcCfg.TransmitMinBackoff = 100 * time.Millisecond
-		cdcCfg.TransmitMaxBackoff = 100 * time.Millisecond
+		cdcCfg.TransmitMaxRetries = 100 // Keep retrying for a while.
+		cdcCfg.TransmitMinBackoff = 50 * time.Millisecond
+		cdcCfg.TransmitMaxBackoff = 50 * time.Millisecond
 		cdcCfg.Endpoint = testEndpoint.URL
 
 		cdcCluster := cdc.NewCDCCluster(node.Store, node.Cluster, node.Client)
@@ -99,9 +99,9 @@ func Test_CDC_MultiNode(t *testing.T) {
 		for _, node := range []*Node{node1, node2, node3} {
 			cdcCfg := cdc.DefaultConfig()
 			cdcCfg.HighWatermarkInterval = 100 * time.Millisecond
-			cdcCfg.TransmitMaxRetries = 50 // Keep retrying for a while.
-			cdcCfg.TransmitMinBackoff = 100 * time.Millisecond
-			cdcCfg.TransmitMaxBackoff = 100 * time.Millisecond
+			cdcCfg.TransmitMaxRetries = 100 // Keep retrying for a while.
+			cdcCfg.TransmitMinBackoff = 50 * time.Millisecond
+			cdcCfg.TransmitMaxBackoff = 50 * time.Millisecond
 			cdcCfg.Endpoint = testEndpoint.URL
 			cdcCluster := cdc.NewCDCCluster(node.Store, node.Cluster, node.Client)
 			cdcService, err := cdc.NewService(node.ID, node.Dir, cdcCluster, cdcCfg)
@@ -135,22 +135,27 @@ func Test_CDC_MultiNode(t *testing.T) {
 		testPoll(t, func() (bool, error) {
 			// 1 create, 1 insert, 1 update, 1 delete
 			return testEndpoint.GetMessageCount() == 4, nil
-		}, 100*time.Millisecond, 5*time.Second)
+		}, 100*time.Millisecond, 10*time.Second)
 
 		hi := testEndpoint.GetHighestMessageIndex()
 		testPoll(t, func() (bool, error) {
 			return node1.CDC.HighWatermark() == hi, nil
-		}, 100*time.Millisecond, 2*time.Second)
+		}, 100*time.Millisecond, 10*time.Second)
 
 		// Wait the highwater mark to be replicated to other nodes.
 		testPoll(t, func() (bool, error) {
 			f := node2.CDC.HighWatermark() == hi && node3.CDC.HighWatermark() == hi
 			return f, nil
-		}, 100*time.Millisecond, 2*time.Second)
+		}, 100*time.Millisecond, 10*time.Second)
 
 		testEndpoint.Reset()
 		if testEndpoint.GetMessageCount() != 0 {
 			t.Fatalf("expected 0 messages after clear, got %d", testEndpoint.GetMessageCount())
+		}
+
+		// Verify that endpoint fails and service retries line up.
+		if exp, got := testEndpoint.GetFailedRequestCount(), int64(node1.CDC.NumEndpointRetries()); exp != got {
+			t.Fatalf("expected %d endpoint retries, got %d", exp, got)
 		}
 
 		// Kill the leader, ensure future changes are still sent to the endpoint.
@@ -167,7 +172,7 @@ func Test_CDC_MultiNode(t *testing.T) {
 		}
 		testPoll(t, func() (bool, error) {
 			return testEndpoint.GetMessageCount() == 1, nil
-		}, 100*time.Millisecond, 2*time.Second)
+		}, 100*time.Millisecond, 10*time.Second)
 		if testEndpoint.GetRequestCount() != 1 {
 			t.Fatalf("expected 1 request, got %d", testEndpoint.GetRequestCount())
 		}
@@ -195,7 +200,7 @@ func Test_CDC_MultiNode(t *testing.T) {
 		node4.Store.EnableCDC(node4.CDC.C(), false)
 		testPoll(t, func() (bool, error) {
 			return node4.CDC.HighWatermark() == testEndpoint.GetHighestMessageIndex(), nil
-		}, 100*time.Millisecond, 5*time.Second)
+		}, 100*time.Millisecond, 10*time.Second)
 	}
 
 	t.Run("NoFail", func(t *testing.T) {
@@ -203,5 +208,11 @@ func Test_CDC_MultiNode(t *testing.T) {
 	})
 	t.Run("Fail_10Percent", func(t *testing.T) {
 		testFn(t, 10)
+	})
+	t.Run("Fail_50Percent", func(t *testing.T) {
+		testFn(t, 50)
+	})
+	t.Run("Fail_90Percent", func(t *testing.T) {
+		testFn(t, 90)
 	})
 }

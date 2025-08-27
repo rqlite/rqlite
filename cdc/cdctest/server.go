@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"sync"
+	"sync/atomic"
 
 	cdcjson "github.com/rqlite/rqlite/v8/cdc/json"
 )
@@ -18,7 +19,9 @@ type HTTPTestServer struct {
 	requests [][]byte
 	messages map[uint64]*cdcjson.CDCMessage
 	mu       sync.Mutex
+
 	failRate int // Percentage of requests to fail (0-100)
+	numFail  atomic.Int64
 
 	DumpRequest bool
 }
@@ -32,9 +35,15 @@ func NewHTTPTestServer() *HTTPTestServer {
 		hts.mu.Lock()
 		defer hts.mu.Unlock()
 
+		if hts.failRate > 0 && (rand.Intn(100) <= hts.failRate) {
+			hts.numFail.Add(1)
+			w.WriteHeader(http.StatusServiceUnavailable)
+			return
+		}
+
 		defer r.Body.Close()
 		body, err := io.ReadAll(r.Body)
-		if err != nil || len(body) == 0 || (hts.failRate > 0 && (rand.Intn(100) <= hts.failRate)) {
+		if err != nil || len(body) == 0 {
 			w.WriteHeader(http.StatusBadRequest)
 			return
 		}
@@ -84,6 +93,11 @@ func (h *HTTPTestServer) GetRequestCount() int {
 	h.mu.Lock()
 	defer h.mu.Unlock()
 	return len(h.requests)
+}
+
+// GetFailedRequestCount returns the number of requests that failed due to simulated failures.
+func (h *HTTPTestServer) GetFailedRequestCount() int64 {
+	return h.numFail.Load()
 }
 
 // GetHighestMessageIndex returns the highest message index received by the server.
