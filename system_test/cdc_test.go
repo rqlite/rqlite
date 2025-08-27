@@ -17,11 +17,12 @@ func Test_CDC_SingleNode(t *testing.T) {
 		// Configure CDC before opening the store.
 		testEndpoint := cdctest.NewHTTPTestServer()
 		testEndpoint.SetFailRate(failRate)
+		testEndpoint.Start()
 		cdcCfg := cdc.DefaultConfig()
+		cdcCfg.Endpoint = testEndpoint.URL
 		cdcCfg.TransmitMaxRetries = 100 // Keep retrying for a while.
 		cdcCfg.TransmitMinBackoff = 50 * time.Millisecond
 		cdcCfg.TransmitMaxBackoff = 50 * time.Millisecond
-		cdcCfg.Endpoint = testEndpoint.URL
 
 		cdcCluster := cdc.NewCDCCluster(node.Store, node.Cluster, node.Client)
 		cdcService, err := cdc.NewService(node.ID, node.Dir, cdcCluster, cdcCfg)
@@ -68,6 +69,54 @@ func Test_CDC_SingleNode(t *testing.T) {
 	})
 }
 
+func Test_CDC_SingleNode_LaterStart(t *testing.T) {
+	node := mustNewLeaderNode("node1")
+	defer node.Deprovision()
+
+	// Configure CDC before opening the store.
+	testEndpoint := cdctest.NewHTTPTestServer()
+	cdcCfg := cdc.DefaultConfig()
+	cdcCfg.Endpoint = testEndpoint.URL
+	cdcCfg.TransmitMaxRetries = 100 // Keep retrying for a while.
+	cdcCfg.TransmitMinBackoff = 50 * time.Millisecond
+	cdcCfg.TransmitMaxBackoff = 50 * time.Millisecond
+
+	cdcCluster := cdc.NewCDCCluster(node.Store, node.Cluster, node.Client)
+	cdcService, err := cdc.NewService(node.ID, node.Dir, cdcCluster, cdcCfg)
+	if err != nil {
+		t.Fatalf("failed to create CDC service: %s", err.Error())
+	}
+	node.CDC = cdcService
+	node.CDC.Start()
+	node.CDC.SetLeader(true)
+
+	node.Store.EnableCDC(node.CDC.C(), false)
+
+	_, err = node.Execute(`CREATE TABLE foo (id integer not null primary key, name text)`)
+	if err != nil {
+		t.Fatalf("failed to create table: %v", err)
+	}
+	_, err = node.Execute(`INSERT INTO foo (id, name) VALUES (1, 'Alice')`)
+	if err != nil {
+		t.Fatalf("failed to insert data: %v", err)
+	}
+	_, err = node.Execute(`UPDATE foo SET name = 'Alice Updated' WHERE id = 1`)
+	if err != nil {
+		t.Fatalf("failed to update data: %v", err)
+	}
+	_, err = node.Execute(`DELETE FROM foo WHERE id = 1`)
+	if err != nil {
+		t.Fatalf("failed to delete data: %v", err)
+	}
+
+	testEndpoint.Start()
+
+	testPoll(t, func() (bool, error) {
+		// 1 create, 1 insert, 1 update, 1 delete
+		return testEndpoint.GetMessageCount() == 4, nil
+	}, 100*time.Millisecond, 5*time.Second)
+}
+
 func Test_CDC_MultiNode(t *testing.T) {
 
 	testFn := func(t *testing.T, failRate int) {
@@ -96,6 +145,7 @@ func Test_CDC_MultiNode(t *testing.T) {
 		testEndpoint := cdctest.NewHTTPTestServer()
 		testEndpoint.DumpRequest = false
 		testEndpoint.SetFailRate(failRate)
+		testEndpoint.Start()
 		for _, node := range []*Node{node1, node2, node3} {
 			cdcCfg := cdc.DefaultConfig()
 			cdcCfg.HighWatermarkInterval = 100 * time.Millisecond

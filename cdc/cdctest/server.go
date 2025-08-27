@@ -31,7 +31,7 @@ func NewHTTPTestServer() *HTTPTestServer {
 	hts := &HTTPTestServer{
 		messages: make(map[uint64]*cdcjson.CDCMessage),
 	}
-	hts.Server = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	hts.Server = httptest.NewUnstartedServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		hts.mu.Lock()
 		defer hts.mu.Unlock()
 
@@ -65,6 +65,10 @@ func NewHTTPTestServer() *HTTPTestServer {
 		w.WriteHeader(http.StatusOK)
 	}))
 	return hts
+}
+
+func (h *HTTPTestServer) Start() {
+	h.Server.Start()
 }
 
 // SetFailRate sets the percentage of requests that should fail (0-100).
