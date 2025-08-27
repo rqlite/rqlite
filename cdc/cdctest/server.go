@@ -3,6 +3,7 @@ package cdctest
 import (
 	"fmt"
 	"io"
+	"math/rand"
 	"net/http"
 	"net/http/httptest"
 	"sync"
@@ -17,6 +18,7 @@ type HTTPTestServer struct {
 	requests [][]byte
 	messages map[uint64]*cdcjson.CDCMessage
 	mu       sync.Mutex
+	failRate int // Percentage of requests to fail (0-100)
 
 	DumpRequest bool
 }
@@ -32,7 +34,7 @@ func NewHTTPTestServer() *HTTPTestServer {
 
 		defer r.Body.Close()
 		body, err := io.ReadAll(r.Body)
-		if err != nil || len(body) == 0 {
+		if err != nil || len(body) == 0 || (hts.failRate > 0 && (rand.Intn(100) <= hts.failRate)) {
 			w.WriteHeader(http.StatusBadRequest)
 			return
 		}
@@ -54,6 +56,18 @@ func NewHTTPTestServer() *HTTPTestServer {
 		w.WriteHeader(http.StatusOK)
 	}))
 	return hts
+}
+
+// SetFailRate sets the percentage of requests that should fail (0-100).
+func (h *HTTPTestServer) SetFailRate(rate int) {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	if rate < 0 {
+		rate = 0
+	} else if rate > 100 {
+		rate = 100
+	}
+	h.failRate = rate
 }
 
 // GetRequests returns a copy of the requests received by the server.
