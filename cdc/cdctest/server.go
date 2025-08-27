@@ -35,7 +35,7 @@ func NewHTTPTestServer() *HTTPTestServer {
 		hts.mu.Lock()
 		defer hts.mu.Unlock()
 
-		if hts.failRate > 0 && (rand.Intn(100) <= hts.failRate) {
+		if hts.failRate > 0 && (rand.Intn(100) < hts.failRate) {
 			hts.numFail.Add(1)
 			w.WriteHeader(http.StatusServiceUnavailable)
 			return
