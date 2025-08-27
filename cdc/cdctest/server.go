@@ -3,9 +3,11 @@ package cdctest
 import (
 	"fmt"
 	"io"
+	"math/rand"
 	"net/http"
 	"net/http/httptest"
 	"sync"
+	"sync/atomic"
 
 	cdcjson "github.com/rqlite/rqlite/v8/cdc/json"
 )
@@ -18,6 +20,9 @@ type HTTPTestServer struct {
 	messages map[uint64]*cdcjson.CDCMessage
 	mu       sync.Mutex
 
+	failRate int // Percentage of requests to fail (0-100)
+	numFail  atomic.Int64
+
 	DumpRequest bool
 }
 
@@ -29,6 +34,12 @@ func NewHTTPTestServer() *HTTPTestServer {
 	hts.Server = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		hts.mu.Lock()
 		defer hts.mu.Unlock()
+
+		if hts.failRate > 0 && (rand.Intn(100) <= hts.failRate) {
+			hts.numFail.Add(1)
+			w.WriteHeader(http.StatusServiceUnavailable)
+			return
+		}
 
 		defer r.Body.Close()
 		body, err := io.ReadAll(r.Body)
@@ -56,6 +67,18 @@ func NewHTTPTestServer() *HTTPTestServer {
 	return hts
 }
 
+// SetFailRate sets the percentage of requests that should fail (0-100).
+func (h *HTTPTestServer) SetFailRate(rate int) {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	if rate < 0 {
+		rate = 0
+	} else if rate > 100 {
+		rate = 100
+	}
+	h.failRate = rate
+}
+
 // GetRequests returns a copy of the requests received by the server.
 func (h *HTTPTestServer) GetRequests() [][]byte {
 	h.mu.Lock()
@@ -70,6 +93,11 @@ func (h *HTTPTestServer) GetRequestCount() int {
 	h.mu.Lock()
 	defer h.mu.Unlock()
 	return len(h.requests)
+}
+
+// GetFailedRequestCount returns the number of requests that failed due to simulated failures.
+func (h *HTTPTestServer) GetFailedRequestCount() int64 {
+	return h.numFail.Load()
 }
 
 // GetHighestMessageIndex returns the highest message index received by the server.

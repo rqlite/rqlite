@@ -146,6 +146,7 @@ type Service struct {
 	// For white box testing
 	hwmLeaderUpdated   atomic.Uint64
 	hwmFollowerUpdated atomic.Uint64
+	endpointRetries    atomic.Uint64
 
 	logger *log.Logger
 }
@@ -254,6 +255,12 @@ func (s *Service) Stop() {
 // is the index of the last event that was successfully sent to the webhook.
 func (s *Service) HighWatermark() uint64 {
 	return s.highWatermark.Load()
+}
+
+// NumEndpointRetries returns the number of retries performed when sending
+// events to the endpoint.
+func (s *Service) NumEndpointRetries() uint64 {
+	return s.endpointRetries.Load()
 }
 
 // IsLeader returns whether the CDC service is running on the Leader.
@@ -429,6 +436,7 @@ func (s *Service) leaderLoop() (chan struct{}, chan struct{}) {
 						}
 					}
 					stats.Add(numRetries, 1)
+					s.endpointRetries.Add(1)
 					time.Sleep(retryDelay)
 				}
 				if sentOK {
