@@ -552,7 +552,7 @@ func (db *DB) Size() (int64, error) {
 		return 0, fmt.Errorf("no rows returned")
 	}
 	if rows[0].Error != "" {
-		return 0, fmt.Errorf(rows[0].Error)
+		return 0, errors.New(rows[0].Error)
 	}
 	return rows[0].Values[0].Parameters[0].GetI(), nil
 }
@@ -1580,7 +1580,7 @@ func (db *DB) memStats() (map[string]int64, error) {
 			return nil, err
 		}
 		if res[0].Error != "" {
-			return nil, fmt.Errorf(res[0].Error)
+			return nil, errors.New(res[0].Error)
 		}
 		ms[p] = res[0].Values[0].Parameters[0].GetI()
 	}
