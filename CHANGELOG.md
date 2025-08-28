@@ -1,4 +1,4 @@
-## v8.43.4 (unreleased)
+## v8.43.4 (August 27th 2025)
 ### Implementation changes and bug fixes
 - [PR #2266](https://github.com/rqlite/rqlite/pull/2266): 'go mod' updates.
 - [PR #2220](https://github.com/rqlite/rqlite/pull/2220): Allow `AppendEntriesRequest` to carry application-specific messages.
