@@ -119,7 +119,6 @@ func requestWithClient(ctx *cli.Context, client *cl.Client, timer bool, stmt str
 	}
 
 	requestData := strings.NewReader(makeJSONBody(stmt))
-
 	if _, err := requestData.Seek(0, io.SeekStart); err != nil {
 		return err
 	}

@@ -18,6 +18,7 @@
 - [PR #2258](https://github.com/rqlite/rqlite/pull/2258): Cluster-level testing of CDC.
 - [PR #2261](https://github.com/rqlite/rqlite/pull/2261): Cluster-level testing of CDC including failure injection.
 - [PR #2262](https://github.com/rqlite/rqlite/pull/2262): Remove redundant persisting HWM to disk.
+- [PR #2266](https://github.com/rqlite/rqlite/pull/2266): rqlite shell now uses Unified Endpoint.  Fixes issue [#257](https://github.com/rqlite/rqlite/issues/257).
 
 ## v8.43.3 (August 14th 2025)
 ### Implementation changes and bug fixes
