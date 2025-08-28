@@ -3,6 +3,7 @@
 - [PR #2263](https://github.com/rqlite/rqlite/pull/2263): Test CDC with later-starting HTTP endpoint.
 - [PR #2267](https://github.com/rqlite/rqlite/pull/2267): Add row-IDs-only to CDC config.
 - [PR #2268](https://github.com/rqlite/rqlite/pull/2268): Upgrade CircleCI environment to Go 1.25.
+- [PR #2270](https://github.com/rqlite/rqlite/pull/2270): Integrate CDC service with `main`.
 
 ## v8.43.4 (August 27th 2025)
 ### Implementation changes and bug fixes

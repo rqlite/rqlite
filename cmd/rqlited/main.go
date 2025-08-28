@@ -21,6 +21,7 @@ import (
 	"github.com/rqlite/rqlite/v8/auth"
 	"github.com/rqlite/rqlite/v8/auto/backup"
 	"github.com/rqlite/rqlite/v8/auto/restore"
+	"github.com/rqlite/rqlite/v8/cdc"
 	"github.com/rqlite/rqlite/v8/cluster"
 	"github.com/rqlite/rqlite/v8/cluster/disco"
 	"github.com/rqlite/rqlite/v8/cmd"
@@ -163,15 +164,27 @@ func main() {
 		log.Fatalf("failed to create cluster service: %s", err.Error())
 	}
 
+	// Create cluster client.
+	clstrClient, err := createClusterClient(cfg, clstrServ)
+	if err != nil {
+		log.Fatalf("failed to create cluster client: %s", err.Error())
+	}
+
+	// Create the CDC service, if requested.
+	if cfg.CDCConfig != "" {
+		if err := createCDC(cfg.CDCConfig); err != nil {
+			log.Fatalf("cannot enable CDC on non-voting node")
+		}
+		if err != nil {
+			log.Fatalf("failed to create CDC Service: %s", err.Error())
+		}
+	}
+
 	// Create the HTTP service.
 	//
 	// We want to start the HTTP server as soon as possible, so the node is responsive and external
 	// systems can see that it's running. We still have to open the Store though, so the node won't
 	// be able to do much until that happens however.
-	clstrClient, err := createClusterClient(cfg, clstrServ)
-	if err != nil {
-		log.Fatalf("failed to create cluster client: %s", err.Error())
-	}
 	httpServ, err := startHTTPService(cfg, str, clstrClient, credStr)
 	if err != nil {
 		log.Fatalf("failed to start HTTP server: %s", err.Error())
@@ -302,6 +315,24 @@ func createExtensionsStore(cfg *Config) (*extensions.Store, error) {
 	}
 
 	return str, nil
+}
+
+func createCDC(cdcCfg string) error {
+	if cfg.RaftNonVoter {
+		return errors.New("cannot enable CDC on non-voting node")
+	}
+	cdcCfg, err := cdc.NewConfig(cdcCfg)
+	if err != nil {
+		return fmt.Errorf("failed to create CDC config: %s", err.Error())
+	}
+	CDCCluster := cdc.NewCDCCluster(str, clstrServ, clstrClient)
+	cdcService, err := cdc.NewService(cfg.NodeID, cfg.DataPath, CDCCluster, cdcCfg)
+	if err != nil {
+		return fmt.Errorf("failed to create CDC Service: %s", err.Error())
+	}
+	if err := str.EnableCDC(cdcService.C(), cdcCfg.RowIDsOnly); err != nil {
+		return fmt.Errorf("failed to enable CDC on Store: %s", err.Error())
+	}
 }
 
 func createStore(cfg *Config, ln *tcp.Layer, extensions []string) (*store.Store, error) {
