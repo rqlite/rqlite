@@ -16,8 +16,8 @@ import (
 // HTTPTestServer is a test server that simulates an HTTP endpoint for receiving CDC messages.
 // It captures incoming requests and stores the messages for later verification.
 type HTTPTestServer struct {
-	ln net.Listener
 	*httptest.Server
+
 	requests [][]byte
 	messages map[uint64]*cdcjson.CDCMessage
 	mu       sync.Mutex
