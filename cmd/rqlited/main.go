@@ -172,10 +172,7 @@ func main() {
 
 	// Create the CDC service, if requested.
 	if cfg.CDCConfig != "" {
-		if err := createCDC(cfg.CDCConfig); err != nil {
-			log.Fatalf("cannot enable CDC on non-voting node")
-		}
-		if err != nil {
+		if err := createCDC(cfg, str, clstrServ,clstrClient ); err != nil {
 			log.Fatalf("failed to create CDC Service: %s", err.Error())
 		}
 	}
@@ -317,11 +314,11 @@ func createExtensionsStore(cfg *Config) (*extensions.Store, error) {
 	return str, nil
 }
 
-func createCDC(cdcCfg string) error {
+func createCDC(cfg *Config, str *store.Store, clstrServ *cluster.Service, clstrClient *cluster.Client) error {
 	if cfg.RaftNonVoter {
-		return errors.New("cannot enable CDC on non-voting node")
+		return fmt.Errorf("cannot enable CDC on non-voting node")
 	}
-	cdcCfg, err := cdc.NewConfig(cdcCfg)
+	cdcCfg, err := cdc.NewConfig(cfg.CDCConfig)
 	if err != nil {
 		return fmt.Errorf("failed to create CDC config: %s", err.Error())
 	}
@@ -333,6 +330,7 @@ func createCDC(cdcCfg string) error {
 	if err := str.EnableCDC(cdcService.C(), cdcCfg.RowIDsOnly); err != nil {
 		return fmt.Errorf("failed to enable CDC on Store: %s", err.Error())
 	}
+	return nil
 }
 
 func createStore(cfg *Config, ln *tcp.Layer, extensions []string) (*store.Store, error) {
