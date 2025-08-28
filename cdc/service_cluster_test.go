@@ -18,6 +18,7 @@ func Test_ClusterBasicDelivery(t *testing.T) {
 
 	// Setup HTTP test server
 	httpServer := cdctest.NewHTTPTestServer()
+	httpServer.Start()
 	defer httpServer.Close()
 
 	// Setup test cluster
@@ -28,7 +29,7 @@ func Test_ClusterBasicDelivery(t *testing.T) {
 
 	for i := range 3 {
 		cfg := DefaultConfig()
-		cfg.Endpoint = httpServer.URL
+		cfg.Endpoint = httpServer.URL()
 		cfg.MaxBatchSz = 1
 		cfg.MaxBatchDelay = 50 * time.Millisecond
 		cfg.HighWatermarkInterval = 100 * time.Millisecond // Short interval for testing
@@ -180,6 +181,7 @@ func Test_ClusterHWMPropagation(t *testing.T) {
 	ResetStats()
 
 	httpServer := cdctest.NewHTTPTestServer()
+	httpServer.Start()
 	defer httpServer.Close()
 
 	cluster := newMockCluster()
@@ -189,7 +191,7 @@ func Test_ClusterHWMPropagation(t *testing.T) {
 
 	for i := 0; i < 3; i++ {
 		cfg := DefaultConfig()
-		cfg.Endpoint = httpServer.URL
+		cfg.Endpoint = httpServer.URL()
 		cfg.MaxBatchSz = 1
 		cfg.MaxBatchDelay = 50 * time.Millisecond
 		cfg.HighWatermarkInterval = 100 * time.Millisecond // Short interval for testing
@@ -276,6 +278,7 @@ func Test_ClusterLeadershipChange(t *testing.T) {
 	ResetStats()
 
 	httpServer := cdctest.NewHTTPTestServer()
+	httpServer.Start()
 	defer httpServer.Close()
 
 	cluster := newMockCluster()
@@ -285,7 +288,7 @@ func Test_ClusterLeadershipChange(t *testing.T) {
 
 	for i := 0; i < 3; i++ {
 		cfg := DefaultConfig()
-		cfg.Endpoint = httpServer.URL
+		cfg.Endpoint = httpServer.URL()
 		cfg.MaxBatchSz = 1
 		cfg.MaxBatchDelay = 50 * time.Millisecond
 		cfg.HighWatermarkInterval = 100 * time.Millisecond // Short interval for testing
@@ -386,6 +389,7 @@ func Test_ClusterHWMDeletion(t *testing.T) {
 
 	// Setup HTTP test server
 	httpServer := cdctest.NewHTTPTestServer()
+	httpServer.Start()
 	defer httpServer.Close()
 
 	// Setup test cluster
@@ -393,7 +397,7 @@ func Test_ClusterHWMDeletion(t *testing.T) {
 
 	// Create a service
 	cfg := DefaultConfig()
-	cfg.Endpoint = httpServer.URL
+	cfg.Endpoint = httpServer.URL()
 	cfg.MaxBatchSz = 1
 	cfg.MaxBatchDelay = 50 * time.Millisecond
 	cfg.HighWatermarkInterval = 100 * time.Millisecond // Short interval for testing
@@ -469,6 +473,7 @@ func Test_ClusterBatchingBehavior(t *testing.T) {
 
 	// Setup HTTP test server
 	httpServer := cdctest.NewHTTPTestServer()
+	httpServer.Start()
 	defer httpServer.Close()
 
 	// Setup test cluster
@@ -476,7 +481,7 @@ func Test_ClusterBatchingBehavior(t *testing.T) {
 
 	// Create a service with larger batch size
 	cfg := DefaultConfig()
-	cfg.Endpoint = httpServer.URL
+	cfg.Endpoint = httpServer.URL()
 	cfg.MaxBatchSz = 3                                 // Batch up to 3 events
 	cfg.MaxBatchDelay = 1 * time.Second                // Long delay to test batching by size
 	cfg.HighWatermarkInterval = 100 * time.Millisecond // Short interval for testing
@@ -583,6 +588,7 @@ func Test_Cluster_100Events(t *testing.T) {
 	ResetStats()
 
 	httpServer := cdctest.NewHTTPTestServer()
+	httpServer.Start()
 	defer httpServer.Close()
 
 	cluster := newMockCluster()
@@ -590,7 +596,7 @@ func Test_Cluster_100Events(t *testing.T) {
 
 	for i := 0; i < 3; i++ {
 		cfg := DefaultConfig()
-		cfg.Endpoint = httpServer.URL
+		cfg.Endpoint = httpServer.URL()
 		cfg.MaxBatchSz = 10
 		cfg.MaxBatchDelay = time.Second
 		cfg.HighWatermarkInterval = 1 * time.Second

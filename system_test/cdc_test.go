@@ -14,12 +14,14 @@ func Test_CDC_SingleNode(t *testing.T) {
 		node := mustNewLeaderNode("node1")
 		defer node.Deprovision()
 
-		// Configure CDC before opening the store.
 		testEndpoint := cdctest.NewHTTPTestServer()
 		testEndpoint.SetFailRate(failRate)
 		testEndpoint.Start()
+		defer testEndpoint.Close()
+
+		// Configure CDC before opening the store.
 		cdcCfg := cdc.DefaultConfig()
-		cdcCfg.Endpoint = testEndpoint.URL
+		cdcCfg.Endpoint = testEndpoint.URL()
 		cdcCfg.TransmitMaxRetries = 100 // Keep retrying for a while.
 		cdcCfg.TransmitMinBackoff = 50 * time.Millisecond
 		cdcCfg.TransmitMaxBackoff = 50 * time.Millisecond
@@ -69,14 +71,17 @@ func Test_CDC_SingleNode(t *testing.T) {
 	})
 }
 
+// Test_CDC_SingleNode_LaterStart verifies that starting the CDC service
+// before the HTTP endpoint is available works as expected.
 func Test_CDC_SingleNode_LaterStart(t *testing.T) {
 	node := mustNewLeaderNode("node1")
 	defer node.Deprovision()
 
-	// Configure CDC before opening the store.
 	testEndpoint := cdctest.NewHTTPTestServer()
+
+	// Configure CDC before opening the store.
 	cdcCfg := cdc.DefaultConfig()
-	cdcCfg.Endpoint = testEndpoint.URL
+	cdcCfg.Endpoint = testEndpoint.URL()
 	cdcCfg.TransmitMaxRetries = 100 // Keep retrying for a while.
 	cdcCfg.TransmitMinBackoff = 50 * time.Millisecond
 	cdcCfg.TransmitMaxBackoff = 50 * time.Millisecond
@@ -110,6 +115,7 @@ func Test_CDC_SingleNode_LaterStart(t *testing.T) {
 	}
 
 	testEndpoint.Start()
+	defer testEndpoint.Close()
 
 	testPoll(t, func() (bool, error) {
 		// 1 create, 1 insert, 1 update, 1 delete
@@ -141,18 +147,19 @@ func Test_CDC_MultiNode(t *testing.T) {
 			t.Fatalf("failed waiting for leader: %s", err.Error())
 		}
 
-		// Configure CDC service for each node.
 		testEndpoint := cdctest.NewHTTPTestServer()
-		testEndpoint.DumpRequest = false
 		testEndpoint.SetFailRate(failRate)
 		testEndpoint.Start()
+		defer testEndpoint.Close()
+
+		// Configure CDC service for each node.
 		for _, node := range []*Node{node1, node2, node3} {
 			cdcCfg := cdc.DefaultConfig()
 			cdcCfg.HighWatermarkInterval = 100 * time.Millisecond
 			cdcCfg.TransmitMaxRetries = 100 // Keep retrying for a while.
 			cdcCfg.TransmitMinBackoff = 50 * time.Millisecond
 			cdcCfg.TransmitMaxBackoff = 50 * time.Millisecond
-			cdcCfg.Endpoint = testEndpoint.URL
+			cdcCfg.Endpoint = testEndpoint.URL()
 			cdcCluster := cdc.NewCDCCluster(node.Store, node.Cluster, node.Client)
 			cdcService, err := cdc.NewService(node.ID, node.Dir, cdcCluster, cdcCfg)
 			if err != nil {
@@ -239,7 +246,7 @@ func Test_CDC_MultiNode(t *testing.T) {
 		}
 		cdcCfg := cdc.DefaultConfig()
 		cdcCfg.HighWatermarkInterval = 100 * time.Millisecond
-		cdcCfg.Endpoint = testEndpoint.URL
+		cdcCfg.Endpoint = testEndpoint.URL()
 		cdcCluster := cdc.NewCDCCluster(node4.Store, node4.Cluster, node4.Client)
 		cdcService, err := cdc.NewService(node4.ID, node4.Dir, cdcCluster, cdcCfg)
 		if err != nil {
