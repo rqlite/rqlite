@@ -39,6 +39,14 @@ func Test_NewQueue(t *testing.T) {
 	if q.HasNext() {
 		t.Fatal("HasNext should return false for a newly created queue")
 	}
+
+	first, err := q.FirstKey()
+	if err != nil {
+		t.Fatalf("FirstKey failed: %v", err)
+	}
+	if first != 0 {
+		t.Fatalf("Expected FirstKey to be 0 for empty queue, got %d", first)
+	}
 }
 
 func Test_Queue_Closed(t *testing.T) {
@@ -311,8 +319,8 @@ func Test_DeleteRange_NeverRead(t *testing.T) {
 	}, time.Second)
 }
 
-// Test_QueueHighestKey tests that HighestKey returns the correct value after various operations.
-func Test_QueueHighestKey(t *testing.T) {
+// Test_Queue_FirstKeyHighestKey tests that Key fetches returns the correct values after various operations.
+func Test_Queue_FirstKeyHighestKey(t *testing.T) {
 	q, path, _ := newTestQueue(t)
 
 	// Enqueue a few items.
@@ -328,6 +336,15 @@ func Test_QueueHighestKey(t *testing.T) {
 		if err := q.Enqueue(&Event{Index: item.idx, Data: item.data}); err != nil {
 			t.Fatalf("Enqueue failed for index %d: %v", item.idx, err)
 		}
+	}
+
+	// Check the first key
+	first, err := q.FirstKey()
+	if err != nil {
+		t.Fatalf("FirstKey failed: %v", err)
+	}
+	if first != 1 {
+		t.Fatalf("Expected first key to be 1, got %d", first)
 	}
 
 	// Check the highest key.

@@ -285,10 +285,8 @@ func main() {
 					nodeID = strings.TrimSpace(input[index+1:])
 				}
 				err = stepdown(client, nodeID, argv)
-			case "SELECT", "PRAGMA":
-				err = queryWithClient(ctx, client, timer, blobArray, consistency, input)
 			default:
-				err = executeWithClient(ctx, client, timer, input)
+				err = requestWithClient(ctx, client, timer, input)
 			}
 			if hcerr, ok := err.(*httpcl.HostChangedError); ok {
 				// If a previous request was executed on a different host, make that change

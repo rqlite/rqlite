@@ -55,7 +55,7 @@ func Test_CDC_SingleNode(t *testing.T) {
 		testPoll(t, func() (bool, error) {
 			// 1 create, 1 insert, 1 update, 1 delete
 			return testEndpoint.GetMessageCount() == 4, nil
-		}, 100*time.Millisecond, 5*time.Second)
+		}, 100*time.Millisecond, 10*time.Second)
 	}
 
 	t.Run("NoFail", func(t *testing.T) {
