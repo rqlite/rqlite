@@ -1,6 +1,7 @@
 ## v8.43.5 (unreleased)
 ### Implementation changes and bug fixes
-- [PR #2267](https://github.com/rqlite/rqlite/pull/2267): Test CDC with later-starting HTTP endpoint.
+- [PR #2263](https://github.com/rqlite/rqlite/pull/2263): Test CDC with later-starting HTTP endpoint.
+- [PR #2267](https://github.com/rqlite/rqlite/pull/2267): Add row-IDs-only to CDC config.
 
 ## v8.43.4 (August 27th 2025)
 ### Implementation changes and bug fixes
