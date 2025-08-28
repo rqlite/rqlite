@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"io"
 	"math/rand"
+	"net"
 	"net/http"
 	"net/http/httptest"
 	"sync"
@@ -16,6 +17,7 @@ import (
 // It captures incoming requests and stores the messages for later verification.
 type HTTPTestServer struct {
 	*httptest.Server
+
 	requests [][]byte
 	messages map[uint64]*cdcjson.CDCMessage
 	mu       sync.Mutex
@@ -31,7 +33,7 @@ func NewHTTPTestServer() *HTTPTestServer {
 	hts := &HTTPTestServer{
 		messages: make(map[uint64]*cdcjson.CDCMessage),
 	}
-	hts.Server = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	hts.Server = httptest.NewUnstartedServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		hts.mu.Lock()
 		defer hts.mu.Unlock()
 
@@ -64,7 +66,24 @@ func NewHTTPTestServer() *HTTPTestServer {
 
 		w.WriteHeader(http.StatusOK)
 	}))
+
+	hts.Listener = mustLocalListen()
 	return hts
+}
+
+// URL returns the URL of the test server.
+func (h *HTTPTestServer) URL() string {
+	return fmt.Sprintf("http://%s", h.Server.Listener.Addr().String())
+}
+
+// Start starts the test server.
+func (h *HTTPTestServer) Start() {
+	h.Server.Start()
+}
+
+// Close stops and closes the test server.
+func (h *HTTPTestServer) Close() {
+	h.Server.Close()
 }
 
 // SetFailRate sets the percentage of requests that should fail (0-100).
@@ -139,4 +158,12 @@ func (h *HTTPTestServer) CheckMessagesExist(n int) bool {
 		}
 	}
 	return true
+}
+
+func mustLocalListen() net.Listener {
+	ln, err := net.ListenTCP("tcp", &net.TCPAddr{IP: net.IPv4(127, 0, 0, 1), Port: 0})
+	if err != nil {
+		panic(err)
+	}
+	return ln
 }
