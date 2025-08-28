@@ -112,7 +112,6 @@ func Test_CDC_SingleNode_LaterStart(t *testing.T) {
 }
 
 func Test_CDC_MultiNode(t *testing.T) {
-
 	testFn := func(t *testing.T, failRate int) {
 		node1 := mustNewLeaderNode("node1")
 		defer node1.Deprovision()
