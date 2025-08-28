@@ -2,6 +2,7 @@
 package main
 
 import (
+	"errors"
 	"flag"
 	"fmt"
 	"os"
@@ -222,9 +223,9 @@ func splitString(s, sep string) []string {
 }
 
 func fmtError(msg string) error {
-	return fmt.Errorf(msg)
+	return errors.New(msg)
 }
 
 func usage(msg string) {
-	fmt.Fprintf(os.Stderr, msg)
+	fmt.Fprintf(os.Stderr, "%s", msg)
 }
