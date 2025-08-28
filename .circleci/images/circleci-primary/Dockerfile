@@ -7,7 +7,7 @@ ARG DEBIAN_FRONTEND=noninteractive
 # System deps and cross-compilers in one layer
 RUN set -eux; \
     apt-get update; \
-    apt-get install -y --no-install-recommends \
+    apt-get install -y \
       ca-certificates curl \
       python3 python3-pip python3-venv \
       musl-tools musl-dev \
