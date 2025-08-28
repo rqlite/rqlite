@@ -35,6 +35,9 @@ type Config struct {
 	// Endpoint is the HTTP endpoint to which the CDC events are sent.
 	Endpoint string `json:"endpoint"`
 
+	// RowIDsOnly indicates whether only the row IDs should be sent in the CDC events.
+	RowIDsOnly bool `json:"row_ids_only,omitempty"`
+
 	// TLS configuration fields for JSON serialization and user configuration.
 	// These follow the same pattern used elsewhere in rqlite.
 
