@@ -172,7 +172,7 @@ func main() {
 
 	// Create the CDC service, if requested.
 	if cfg.CDCConfig != "" {
-		if err := createCDC(cfg, str, clstrServ,clstrClient ); err != nil {
+		if err := createCDC(cfg, str, clstrServ, clstrClient); err != nil {
 			log.Fatalf("failed to create CDC Service: %s", err.Error())
 		}
 	}
