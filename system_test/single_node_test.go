@@ -1736,7 +1736,7 @@ func Test_SingleNodeAutoRestore(t *testing.T) {
 		DBConf: store.NewDBConfig(),
 		Dir:    node.Dir,
 		ID:     "node1",
-	}, raftTn)
+	}, nil, raftTn)
 
 	restoreFile := mustTempFile()
 	copyFile(filepath.Join("testdata", "auto-restore.sqlite"), restoreFile)

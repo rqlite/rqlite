@@ -808,7 +808,7 @@ func mustNodeEncrypted(id, dir string, enableSingle, httpEncrypt bool, mux *tcp.
 		DBConf: dbConf,
 		Dir:    node.Dir,
 		ID:     id,
-	}, raftTn)
+	}, nil, raftTn)
 	node.Store.SnapshotThreshold = SnapshotThreshold
 	node.Store.SnapshotInterval = SnapshotInterval
 	node.Store.ElectionTimeout = ElectionTimeout
