@@ -285,6 +285,7 @@ func (q *Queue) run(highestKey uint64) {
 		case req := <-q.enqueueChan:
 			if req.idx <= highestKey {
 				req.respChan <- enqueueResp{err: nil}
+				stats.Add(numFIFOIgnored, 1)
 				continue
 			}
 			key := uint64tob(req.idx)
