@@ -1732,11 +1732,11 @@ func Test_SingleNodeAutoRestore(t *testing.T) {
 
 	raftLn := node.Mux.Listen(cluster.MuxRaftHeader)
 	raftTn := tcp.NewLayer(raftLn, tcp.NewDialer(cluster.MuxRaftHeader, nil))
-	node.Store = store.New(raftTn, &store.Config{
+	node.Store = store.New(&store.Config{
 		DBConf: store.NewDBConfig(),
 		Dir:    node.Dir,
 		ID:     "node1",
-	})
+	}, raftTn)
 
 	restoreFile := mustTempFile()
 	copyFile(filepath.Join("testdata", "auto-restore.sqlite"), restoreFile)

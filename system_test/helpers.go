@@ -804,11 +804,11 @@ func mustNodeEncrypted(id, dir string, enableSingle, httpEncrypt bool, mux *tcp.
 	if id == "" {
 		id = raftTn.Addr().String()
 	}
-	node.Store = store.New(raftTn, &store.Config{
+	node.Store = store.New(&store.Config{
 		DBConf: dbConf,
 		Dir:    node.Dir,
 		ID:     id,
-	})
+	}, raftTn)
 	node.Store.SnapshotThreshold = SnapshotThreshold
 	node.Store.SnapshotInterval = SnapshotInterval
 	node.Store.ElectionTimeout = ElectionTimeout

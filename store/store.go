@@ -392,7 +392,7 @@ type Config struct {
 }
 
 // New returns a new Store.
-func New(ly Layer, c *Config) *Store {
+func New(c *Config, ly Layer) *Store {
 	logger := c.Logger
 	if logger == nil {
 		logger = log.New(os.Stderr, "[store] ", log.LstdFlags)

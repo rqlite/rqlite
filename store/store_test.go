@@ -3292,11 +3292,11 @@ func mustNewStoreAtPathsLn(id, dataPath, sqlitePath string, fk bool) (*Store, ne
 	cfg.OnDiskPath = sqlitePath
 
 	ly := mustMockLayer("localhost:0")
-	s := New(ly, &Config{
+	s := New(&Config{
 		DBConf: cfg,
 		Dir:    dataPath,
 		ID:     id,
-	})
+	}, ly)
 	if s == nil {
 		panic("failed to create new store")
 	}
