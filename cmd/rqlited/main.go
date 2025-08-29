@@ -339,11 +339,11 @@ func createStore(cfg *Config, ln *tcp.Layer, extensions []string) (*store.Store,
 	dbConf.FKConstraints = cfg.FKConstraints
 	dbConf.Extensions = extensions
 
-	str := store.New(ln, &store.Config{
+	str := store.New(&store.Config{
 		DBConf: dbConf,
 		Dir:    cfg.DataPath,
 		ID:     cfg.NodeID,
-	})
+	}, ln)
 
 	// Set optional parameters on store.
 	str.RaftLogLevel = cfg.RaftLogLevel
