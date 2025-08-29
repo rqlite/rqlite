@@ -868,11 +868,127 @@ func mustNodeEncryptedWithCDC(id, dir string, enableSingle, httpEncrypt bool, mu
 }
 
 func mustNewLeaderNode(id string) *Node {
-	node := mustNewNode(id, true)
+	return mustNewLeaderNodeWithCDC(id, "")
+}
+
+func mustNewLeaderNodeWithCDC(id string, cdcEndpointURL string) *Node {
+	if cdcEndpointURL == "" {
+		// No CDC, use existing path
+		node := mustNewNodeWithCDC(id, true, nil)
+		if _, err := node.WaitForLeader(); err != nil {
+			node.Deprovision()
+			panic("node never became leader")
+		}
+		return node
+	}
+	
+	// CDC enabled path - need to set up CDC before opening store
+	node := mustNewNodeWithCDCEnabled(id, true, cdcEndpointURL)
 	if _, err := node.WaitForLeader(); err != nil {
 		node.Deprovision()
 		panic("node never became leader")
 	}
+	return node
+}
+
+func mustNewNodeWithCDCEnabled(id string, enableSingle bool, cdcEndpointURL string) *Node {
+	dir := mustTempDir(id)
+	var mux *tcp.Mux
+	var raftDialer *tcp.Dialer
+	var clstrDialer *tcp.Dialer
+	mux, _ = mustNewOpenMux("")
+	raftDialer = tcp.NewDialer(cluster.MuxRaftHeader, nil)
+	clstrDialer = tcp.NewDialer(cluster.MuxClusterHeader, nil)
+	go mux.Serve()
+
+	node := &Node{
+		Dir:       dir,
+		PeersPath: filepath.Join(dir, "raft/peers.json"),
+		Mux:       mux,
+	}
+
+	dbConf := store.NewDBConfig()
+	raftLn := mux.Listen(cluster.MuxRaftHeader)
+	raftTn := tcp.NewLayer(raftLn, raftDialer)
+	if id == "" {
+		id = raftTn.Addr().String()
+	}
+
+	// Create a temporary store for CDC service creation
+	tempStore := store.New(&store.Config{
+		DBConf: dbConf,
+		Dir:    node.Dir,
+		ID:     id,
+	}, nil, raftTn)
+
+	credStr := mustNewMockCredentialStore()
+	clstrLn := mux.Listen(cluster.MuxClusterHeader)
+	clstr := cluster.New(clstrLn, tempStore, tempStore, credStr)
+	if err := clstr.Open(); err != nil {
+		panic("failed to open Cluster service")
+	}
+
+	clstrClient := cluster.NewClient(clstrDialer, 30*time.Second)
+	
+	// Create CDC service
+	cdcCluster := cdc.NewCDCCluster(tempStore, clstr, clstrClient)
+	cdcService, err := cdc.NewService(id, dir, cdcCluster, mustCDCConfig(cdcEndpointURL))
+	if err != nil {
+		panic(fmt.Sprintf("failed to create CDC service: %s", err.Error()))
+	}
+
+	// Now create the real store with CDC config
+	node.Store = store.New(&store.Config{
+		DBConf: dbConf,
+		Dir:    node.Dir,
+		ID:     id,
+	}, &store.CDCConfig{
+		Ch:         cdcService.C(),
+		RowIDsOnly: false,
+	}, raftTn)
+	
+	node.Store.SnapshotThreshold = SnapshotThreshold
+	node.Store.SnapshotInterval = SnapshotInterval
+	node.Store.ElectionTimeout = ElectionTimeout
+
+	// Close the temporary cluster and create a new one with the real store
+	clstr.Close()
+	clstr = cluster.New(clstrLn, node.Store, node.Store, credStr)
+	if err := clstr.Open(); err != nil {
+		panic("failed to open Cluster service")
+	}
+	
+	node.Cluster = clstr
+	node.Client = clstrClient
+	node.CDC = cdcService
+	
+	node.Service = httpd.New("localhost:0", node.Store, clstrClient, nil)
+	node.Service.DefaultQueueBatchSz = 8
+	node.Service.DefaultQueueCap = 64
+
+	if err := node.Service.Start(); err != nil {
+		node.Deprovision()
+		panic(fmt.Sprintf("failed to start HTTP server: %s", err.Error()))
+	}
+	node.APIAddr = node.Service.Addr().String()
+	clstr.SetAPIAddr(node.APIAddr)
+
+	if err := node.Store.Open(); err != nil {
+		panic(fmt.Sprintf("failed to open store: %s", err.Error()))
+	}
+	if enableSingle {
+		if err := node.Store.Bootstrap(store.NewServer(node.Store.ID(), node.Store.Addr(), true)); err != nil {
+			panic(fmt.Sprintf("failed to bootstrap store: %s", err.Error()))
+		}
+	}
+
+	node.RaftAddr = node.Store.Addr()
+	node.ID = node.Store.ID()
+	
+	// Start CDC service
+	node.CDC.Start()
+	node.CDC.SetLeader(true)
+
 	return node
 }
 

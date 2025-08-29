@@ -7,34 +7,21 @@ import (
 
 	"github.com/rqlite/rqlite/v8/cdc"
 	"github.com/rqlite/rqlite/v8/cdc/cdctest"
+	"github.com/rqlite/rqlite/v8/store"
 )
 
 func Test_CDC_SingleNode(t *testing.T) {
 	testFn := func(t *testing.T, failRate int) {
-		node := mustNewLeaderNode("node1")
-		defer node.Deprovision()
-
 		testEndpoint := cdctest.NewHTTPTestServer()
 		testEndpoint.SetFailRate(failRate)
 		testEndpoint.Start()
 		defer testEndpoint.Close()
 
-		// Configure CDC before opening the store.
-		cdcCluster := cdc.NewCDCCluster(node.Store, node.Cluster, node.Client)
-		cdcService, err := cdc.NewService(node.ID, node.Dir, cdcCluster, mustCDCConfig(testEndpoint.URL()))
-		if err != nil {
-			t.Fatalf("failed to create CDC service: %s", err.Error())
-		}
-		node.CDC = cdcService
-		node.CDC.Start()
-		node.CDC.SetLeader(true)
+		// Create node with CDC support using helper
+		node := mustNewLeaderNodeWithCDC("node1", testEndpoint.URL())
+		defer node.Deprovision()
 
-		node.Store.SetCDCConfig(&store.CDCConfig{
-			Ch:         node.CDC.C(),
-			RowIDsOnly: false,
-		})
-
-		_, err = node.Execute(`CREATE TABLE foo (id integer not null primary key, name text)`)
+		_, err := node.Execute(`CREATE TABLE foo (id integer not null primary key, name text)`)
 		if err != nil {
 			t.Fatalf("failed to create table: %v", err)
 		}
@@ -71,27 +58,13 @@ func Test_CDC_SingleNode(t *testing.T) {
 // Test_CDC_SingleNode_LaterStart verifies that starting the CDC service
 // before the HTTP endpoint is available works as expected.
 func Test_CDC_SingleNode_LaterStart(t *testing.T) {
-	node := mustNewLeaderNode("node1")
-	defer node.Deprovision()
-
 	testEndpoint := cdctest.NewHTTPTestServer()
 
-	// Configure CDC before opening the store.
-	cdcCluster := cdc.NewCDCCluster(node.Store, node.Cluster, node.Client)
-	cdcService, err := cdc.NewService(node.ID, node.Dir, cdcCluster, mustCDCConfig(testEndpoint.URL()))
-	if err != nil {
-		t.Fatalf("failed to create CDC service: %s", err.Error())
-	}
-	node.CDC = cdcService
-	node.CDC.Start()
-	node.CDC.SetLeader(true)
+	// Create node with CDC support using helper
+	node := mustNewLeaderNodeWithCDC("node1", testEndpoint.URL())
+	defer node.Deprovision()
 
-	node.Store.SetCDCConfig(&store.CDCConfig{
-		Ch:         node.CDC.C(),
-		RowIDsOnly: false,
-	})
-
-	_, err = node.Execute(`CREATE TABLE foo (id integer not null primary key, name text)`)
+	_, err := node.Execute(`CREATE TABLE foo (id integer not null primary key, name text)`)
 	if err != nil {
 		t.Fatalf("failed to create table: %v", err)
 	}
