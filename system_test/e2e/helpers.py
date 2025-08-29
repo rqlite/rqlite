@@ -100,7 +100,7 @@ class Node(object):
                node_cert=None, node_key=None, node_ca_cert=None,
                node_verify_server_name=None, node_no_verify=False,
                auth=None, auto_backup=None, auto_restore=None,
-               dir=None):
+               cdc_config=None, dir=None):
     
     if api_addr is None:
       api_addr = random_addr()
@@ -113,6 +113,7 @@ class Node(object):
     if dir is None:
       dir = tempfile.mkdtemp()
     self.dir = dir
+    self.cdc_config = cdc_config
     self.exe_path = exe_path
     self.peers_path = os.path.join(self.dir, "raft/peers.json")
     self.node_id = node_id
@@ -188,6 +189,8 @@ class Node(object):
                '-raft-snap-int', self.raft_snap_int,
                '-raft-cluster-remove-shutdown=%s' % str(self.raft_cluster_remove_shutdown).lower(),
                '-raft-non-voter=%s' % str(not self.raft_voter).lower()]
+    if self.cdc_config is not None:
+      command += ['-cdc-config', self.cdc_config]
     if self.extensions_path is not None:
       command += ['-extensions-path', self.extensions_path]
     if self.api_adv is not None:
