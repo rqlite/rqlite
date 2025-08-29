@@ -33,6 +33,8 @@ const (
 	numDroppedFailedToSend = "dropped_failed_to_send"
 	numRetries             = "retries"
 	numSent                = "sent_events"
+
+	numFIFOIgnored = "fifo_ignored"
 )
 
 // stats captures stats for the CDC Service.
@@ -50,6 +52,7 @@ func ResetStats() {
 	stats.Add(numDroppedFailedToSend, 0)
 	stats.Add(numRetries, 0)
 	stats.Add(numSent, 0)
+	stats.Add(numFIFOIgnored, 0)
 }
 
 // Cluster is an interface that defines methods for cluster management and communication.

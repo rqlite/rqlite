@@ -1,6 +1,7 @@
 package cdc
 
 import (
+	"expvar"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -120,6 +121,118 @@ func Test_ServiceSingleEvent(t *testing.T) {
 
 	cl.SetLeader(0)
 	waitFn(2*time.Second, 1)
+}
+
+// Test_ServiceRestart_NoDupes tests that when a CDC service is restarted, it does not resend
+// events that were already sent before the restart. This ensures that Raft log replay does not
+// cause duplicate events to be sent.
+func Test_ServiceRestart_NoDupes(t *testing.T) {
+	ResetStats()
+
+	bodyCh := make(chan []byte, 1)
+	testSrv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		defer r.Body.Close()
+		b, _ := io.ReadAll(r.Body)
+		bodyCh <- b
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer testSrv.Close()
+
+	cl := &mockCluster{}
+	cfg := DefaultConfig()
+	cfg.Endpoint = testSrv.URL
+	cfg.MaxBatchSz = 1
+	cfg.MaxBatchDelay = 50 * time.Millisecond
+	tempDir := t.TempDir()
+	svc, err := NewService(
+		"node1",
+		tempDir,
+		cl,
+		cfg,
+	)
+	if err != nil {
+		t.Fatalf("failed to create service: %v", err)
+	}
+	if err := svc.Start(); err != nil {
+		t.Fatalf("failed to start service: %v", err)
+	}
+
+	// Make it the leader.
+	cl.SetLeader(0)
+	// Send one dummy event to the service.
+	ev := &proto.CDCEvent{
+		Op:       proto.CDCEvent_INSERT,
+		Table:    "foo",
+		NewRowId: 2,
+	}
+	evs := &proto.CDCIndexedEventGroup{
+		Index:  100,
+		Events: []*proto.CDCEvent{ev},
+	}
+	svc.C() <- evs
+	testPoll(t, func() bool {
+		return svc.HighWatermark() == evs.Index
+	}, 2*time.Second)
+
+	// Wait for the service to forward the batch.
+	select {
+	case got := <-bodyCh:
+		exp := &cdcjson.CDCMessagesEnvelope{
+			NodeID: "node1",
+			Payload: []*cdcjson.CDCMessage{
+				{
+					Index: evs.Index,
+					Events: []*cdcjson.CDCMessageEvent{
+						{
+							Op:       ev.Op.String(),
+							Table:    ev.Table,
+							NewRowId: ev.NewRowId,
+							OldRowId: ev.OldRowId,
+						},
+					},
+				},
+			},
+		}
+		msg := &cdcjson.CDCMessagesEnvelope{}
+		if err := cdcjson.UnmarshalFromEnvelopeJSON(got, msg); err != nil {
+			t.Fatalf("invalid JSON received: %v", err)
+		}
+		if reflect.DeepEqual(msg, exp) == false {
+			t.Fatalf("unexpected payload: got %v, want %v", msg, exp)
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatalf("timeout waiting for HTTP POST")
+	}
+
+	// Peek into the FIFO, ensure it is behaving correctly.
+	if got, exp := stats.Get(numFIFOIgnored).(*expvar.Int).Value(), int64(0); exp != got {
+		t.Fatalf("expected %d FIFO ignored events, got %d", exp, got)
+	}
+
+	svc.Stop()
+
+	// Start a new service with the same params.
+	svc2, err := NewService(
+		"node1",
+		tempDir,
+		cl,
+		cfg,
+	)
+	if err != nil {
+		t.Fatalf("failed to create service: %v", err)
+	}
+	if err := svc2.Start(); err != nil {
+		t.Fatalf("failed to start service: %v", err)
+	}
+	defer svc2.Stop()
+	cl.SetLeader(0)
+	// Send the same event, ensure it is not forwarded.
+	svc2.C() <- evs
+
+	// Peek into the CDC FIFO.
+	testPoll(t, func() bool {
+		return stats.Get(numFIFOIgnored).(*expvar.Int).Value() == 1
+	}, 2*time.Second)
 }
 
 func Test_ServiceSingleEvent_LogOnly(t *testing.T) {
