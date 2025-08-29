@@ -2,8 +2,7 @@
 """
 Python HTTP server for CDC end-to-end testing.
 
-This module provides a Python equivalent of the Go HTTPTestServer 
-implementation in cdc/cdctest/server.go, designed for end-to-end 
+This module provides an HTTP test server designed for end-to-end 
 testing of CDC functionality.
 """
 
@@ -149,8 +148,7 @@ class HTTPTestServer:
     """
     HTTP test server that simulates an HTTP endpoint for receiving CDC messages.
     
-    This is a Python equivalent of the Go HTTPTestServer implementation,
-    designed for end-to-end testing of CDC functionality.
+    Designed for end-to-end testing of CDC functionality.
     """
     
     def __init__(self):
@@ -280,9 +278,3 @@ class HTTPTestServer:
                 if i not in self.messages:
                     return False
             return True
-
-
-# Compatibility alias to match the Go naming convention
-def NewHTTPTestServer():
-    """Create a new HTTP test server (Go-style function naming)."""
-    return HTTPTestServer()
