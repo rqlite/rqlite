@@ -296,7 +296,6 @@ type Store struct {
 
 	cdcMu       sync.RWMutex
 	cdcStreamer *sql.CDCStreamer // The CDC streamer for change data capture.
-	cdcConfig   *CDCConfig       // The CDC configuration provided at construction.
 
 	dechunkManager *chunking.DechunkerManager
 	cmdProc        *CommandProcessor
@@ -392,16 +391,8 @@ type Config struct {
 	Logger *log.Logger // The logger to use to log stuff.
 }
 
-// CDCConfig represents the Change Data Capture configuration for the Store.
-type CDCConfig struct {
-	// ch is the channel where CDC events will be sent.
-	ch chan<- *proto.CDCIndexedEventGroup
-	// rowIDsOnly indicates whether to capture only row IDs in CDC events.
-	rowIDsOnly bool
-}
-
 // New returns a new Store.
-func New(c *Config, cdcConfig *CDCConfig, ly Layer) *Store {
+func New(c *Config, ly Layer) *Store {
 	logger := c.Logger
 	if logger == nil {
 		logger = log.New(os.Stderr, "[store] ", log.LstdFlags)
@@ -431,7 +422,6 @@ func New(c *Config, cdcConfig *CDCConfig, ly Layer) *Store {
 		leaderObservers: make([]chan<- bool, 0),
 		reqMarshaller:   command.NewRequestMarshaler(),
 		logger:          logger,
-		cdcConfig:       cdcConfig,
 		notifyingNodes:  make(map[string]*Server),
 		ApplyTimeout:    applyTimeout,
 		snapshotCAS:     rsync.NewCheckAndSet(),
@@ -609,19 +599,6 @@ func (s *Store) Open() (retErr error) {
 	s.db, err = openOnDisk(s.dbPath, s.dbDrv, s.dbConf.FKConstraints)
 	if err != nil {
 		return fmt.Errorf("failed to create on-disk database: %s", err)
-	}
-
-	// Initialize CDC if configuration is provided.
-	if s.cdcConfig != nil {
-		s.cdcStreamer = sql.NewCDCStreamer(s.cdcConfig.ch)
-		if err := s.db.RegisterPreUpdateHook(s.cdcStreamer.PreupdateHook, s.cdcConfig.rowIDsOnly); err != nil {
-			return err
-		}
-		if err := s.db.RegisterCommitHook(s.cdcStreamer.CommitHook); err != nil {
-			// Unregister preupdate hook if commit hook registration fails
-			s.db.RegisterPreUpdateHook(nil, false)
-			return err
-		}
 	}
 
 	// Clean up any files from aborted operations. This tries to catch the case where scratch files
