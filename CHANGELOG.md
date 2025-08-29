@@ -8,6 +8,7 @@
 - [PR #2268](https://github.com/rqlite/rqlite/pull/2268): Upgrade CircleCI environment to Go 1.25.
 - [PR #2270](https://github.com/rqlite/rqlite/pull/2270): Integrate CDC service with `main`.
 - [PR #2276](https://github.com/rqlite/rqlite/pull/2276): CDC restart test on single node.
+- [PR #2274](https://github.com/rqlite/rqlite/pull/2274): Initial framework for end-to-end CDC testing.
 
 ## v8.43.4 (August 27th 2025)
 ### Implementation changes and bug fixes
