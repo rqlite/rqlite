@@ -3296,7 +3296,7 @@ func mustNewStoreAtPathsLn(id, dataPath, sqlitePath string, fk bool) (*Store, ne
 		DBConf: cfg,
 		Dir:    dataPath,
 		ID:     id,
-	}, ly)
+	}, ly, nil)
 	if s == nil {
 		panic("failed to create new store")
 	}

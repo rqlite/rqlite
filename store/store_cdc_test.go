@@ -169,3 +169,48 @@ func Test_StoreCDCNotOpen(t *testing.T) {
 		t.Fatalf("expected ErrNotOpen, got: %v", err)
 	}
 }
+
+// Test_StoreNewWithCDCConfig tests that a Store can be created with CDC configuration.
+func Test_StoreNewWithCDCConfig(t *testing.T) {
+	// Create a channel for CDC events
+	ch := make(chan *proto.CDCIndexedEventGroup, 10)
+
+	// Create CDC config
+	cdcConfig := &CDCConfig{
+		ch: ch,
+	}
+
+	// Create store with CDC config
+	cfg := NewDBConfig()
+	ly := mustMockLayer("localhost:0")
+	s := New(&Config{
+		DBConf: cfg,
+		Dir:    t.TempDir(),
+		ID:     "test-node",
+	}, ly, cdcConfig)
+
+	defer s.Close(true)
+	defer ly.Close()
+
+	// Verify that the CDC config was stored
+	if s.cdcConfig == nil {
+		t.Fatalf("expected CDC config to be stored in the store")
+	}
+	if s.cdcConfig.ch == nil {
+		t.Fatalf("expected CDC config channel to be set")
+	}
+
+	// Test that store can still be created with nil CDC config (backward compatibility)
+	s2 := New(&Config{
+		DBConf: cfg,
+		Dir:    t.TempDir(),
+		ID:     "test-node-2",
+	}, ly, nil)
+
+	defer s2.Close(true)
+
+	// Verify that nil CDC config is handled correctly
+	if s2.cdcConfig != nil {
+		t.Fatalf("expected CDC config to be nil when not provided")
+	}
+}
