@@ -177,7 +177,8 @@ func Test_StoreNewWithCDCConfig(t *testing.T) {
 
 	// Create CDC config
 	cdcConfig := &CDCConfig{
-		ch: ch,
+		ch:         ch,
+		rowIDsOnly: true,
 	}
 
 	// Create store with CDC config
@@ -187,7 +188,7 @@ func Test_StoreNewWithCDCConfig(t *testing.T) {
 		DBConf: cfg,
 		Dir:    t.TempDir(),
 		ID:     "test-node",
-	}, ly, cdcConfig)
+	}, cdcConfig, ly)
 
 	defer s.Close(true)
 	defer ly.Close()
@@ -205,12 +206,56 @@ func Test_StoreNewWithCDCConfig(t *testing.T) {
 		DBConf: cfg,
 		Dir:    t.TempDir(),
 		ID:     "test-node-2",
-	}, ly, nil)
+	}, nil, ly)
 
 	defer s2.Close(true)
 
 	// Verify that nil CDC config is handled correctly
 	if s2.cdcConfig != nil {
 		t.Fatalf("expected CDC config to be nil when not provided")
+	}
+}
+
+// Test_StoreWithCDCConfigOpen tests that CDC is properly initialized when Store is opened
+func Test_StoreWithCDCConfigOpen(t *testing.T) {
+	// Create a channel for CDC events
+	ch := make(chan *proto.CDCIndexedEventGroup, 10)
+
+	// Create CDC config
+	cdcConfig := &CDCConfig{
+		ch:         ch,
+		rowIDsOnly: false,
+	}
+
+	// Create and open store with CDC config
+	cfg := NewDBConfig()
+	ly := mustMockLayer("localhost:0")
+	s := New(&Config{
+		DBConf: cfg,
+		Dir:    t.TempDir(),
+		ID:     "test-node",
+	}, cdcConfig, ly)
+
+	defer s.Close(true)
+	defer ly.Close()
+
+	// Open the store - this should initialize CDC
+	if err := s.Open(); err != nil {
+		t.Fatalf("failed to open store: %v", err)
+	}
+
+	// Verify that CDC streamer was created
+	if s.cdcStreamer == nil {
+		t.Fatalf("expected CDC streamer to be initialized")
+	}
+
+	// Bootstrap the store to enable writes
+	if err := s.Bootstrap(NewServer("test-node", ly.Addr().String(), true)); err != nil {
+		t.Fatalf("failed to bootstrap store: %v", err)
+	}
+
+	// Wait for store to be ready
+	if _, err := s.WaitForLeader(10 * time.Second); err != nil {
+		t.Fatalf("failed to wait for leader: %v", err)
 	}
 }

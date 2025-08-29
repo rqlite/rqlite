@@ -396,10 +396,12 @@ type Config struct {
 type CDCConfig struct {
 	// ch is the channel where CDC events will be sent.
 	ch chan<- *proto.CDCIndexedEventGroup
+	// rowIDsOnly indicates whether to capture only row IDs in CDC events.
+	rowIDsOnly bool
 }
 
 // New returns a new Store.
-func New(c *Config, ly Layer, cdcConfig *CDCConfig) *Store {
+func New(c *Config, cdcConfig *CDCConfig, ly Layer) *Store {
 	logger := c.Logger
 	if logger == nil {
 		logger = log.New(os.Stderr, "[store] ", log.LstdFlags)
@@ -607,6 +609,19 @@ func (s *Store) Open() (retErr error) {
 	s.db, err = openOnDisk(s.dbPath, s.dbDrv, s.dbConf.FKConstraints)
 	if err != nil {
 		return fmt.Errorf("failed to create on-disk database: %s", err)
+	}
+
+	// Initialize CDC if configuration is provided.
+	if s.cdcConfig != nil {
+		s.cdcStreamer = sql.NewCDCStreamer(s.cdcConfig.ch)
+		if err := s.db.RegisterPreUpdateHook(s.cdcStreamer.PreupdateHook, s.cdcConfig.rowIDsOnly); err != nil {
+			return err
+		}
+		if err := s.db.RegisterCommitHook(s.cdcStreamer.CommitHook); err != nil {
+			// Unregister preupdate hook if commit hook registration fails
+			s.db.RegisterPreUpdateHook(nil, false)
+			return err
+		}
 	}
 
 	// Clean up any files from aborted operations. This tries to catch the case where scratch files
