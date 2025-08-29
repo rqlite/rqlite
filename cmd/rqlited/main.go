@@ -116,8 +116,45 @@ func main() {
 		log.Fatalf("failed to list extensions: %s", err.Error())
 	}
 
-	// Create the store.
-	str, err := createStore(cfg, raftTn, extensionsPaths)
+	// Get any credential store.
+	credStr, err := credentialStore(cfg)
+	if err != nil {
+		log.Fatalf("failed to get credential store: %s", err.Error())
+	}
+
+	// Prepare CDC configuration if requested
+	var cdcConfig *store.CDCConfig
+	if cfg.CDCConfig != "" {
+		// Create temporary store for CDC service setup
+		tempStr, err := createStore(cfg, raftTn, extensionsPaths)
+		if err != nil {
+			log.Fatalf("failed to create store: %s", err.Error())
+		}
+
+		// Create cluster service temporarily for CDC setup
+		tempClstrServ, err := clusterService(cfg, mux.Listen(cluster.MuxClusterHeader), tempStr, tempStr, credStr)
+		if err != nil {
+			log.Fatalf("failed to create cluster service: %s", err.Error())
+		}
+
+		// Create cluster client for CDC setup
+		tempClstrClient, err := createClusterClient(cfg, tempClstrServ)
+		if err != nil {
+			log.Fatalf("failed to create cluster client: %s", err.Error())
+		}
+
+		// Create CDC configuration
+		cdcConfig, err = createCDCService(cfg, tempStr, tempClstrServ, tempClstrClient)
+		if err != nil {
+			log.Fatalf("failed to create CDC Service: %s", err.Error())
+		}
+
+		// Close temporary cluster service
+		tempClstrServ.Close()
+	}
+
+	// Create the store with CDC configuration
+	str, err := createStoreWithCDC(cfg, raftTn, extensionsPaths, cdcConfig)
 	if err != nil {
 		log.Fatalf("failed to create store: %s", err.Error())
 	}
@@ -152,12 +189,6 @@ func main() {
 		}
 	}
 
-	// Get any credential store.
-	credStr, err := credentialStore(cfg)
-	if err != nil {
-		log.Fatalf("failed to get credential store: %s", err.Error())
-	}
-
 	// Create cluster service now, so nodes will be able to learn information about each other.
 	clstrServ, err := clusterService(cfg, mux.Listen(cluster.MuxClusterHeader), str, str, credStr)
 	if err != nil {
@@ -168,17 +199,6 @@ func main() {
 	clstrClient, err := createClusterClient(cfg, clstrServ)
 	if err != nil {
 		log.Fatalf("failed to create cluster client: %s", err.Error())
-	}
-
-	// Create the CDC service, if requested.
-	if cfg.CDCConfig != "" {
-		cdcConfig, err := createCDCService(cfg, str, clstrServ, clstrClient)
-		if err != nil {
-			log.Fatalf("failed to create CDC Service: %s", err.Error())
-		}
-		if cdcConfig != nil {
-			str.SetCDCConfig(cdcConfig)
-		}
 	}
 
 	// Create the HTTP service.
@@ -345,6 +365,10 @@ func createCDCService(cfg *Config, str *store.Store, clstrServ *cluster.Service,
 }
 
 func createStore(cfg *Config, ln *tcp.Layer, extensions []string) (*store.Store, error) {
+	return createStoreWithCDC(cfg, ln, extensions, nil)
+}
+
+func createStoreWithCDC(cfg *Config, ln *tcp.Layer, extensions []string, cdcConfig *store.CDCConfig) (*store.Store, error) {
 	dbConf := store.NewDBConfig()
 	dbConf.OnDiskPath = cfg.OnDiskPath
 	dbConf.FKConstraints = cfg.FKConstraints
@@ -354,7 +378,7 @@ func createStore(cfg *Config, ln *tcp.Layer, extensions []string) (*store.Store,
 		DBConf: dbConf,
 		Dir:    cfg.DataPath,
 		ID:     cfg.NodeID,
-	}, nil, ln)
+	}, cdcConfig, ln)
 
 	// Set optional parameters on store.
 	str.RaftLogLevel = cfg.RaftLogLevel

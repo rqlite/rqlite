@@ -396,12 +396,6 @@ type CDCConfig struct {
 	RowIDsOnly bool
 }
 
-// SetCDCConfig sets the CDC configuration for the Store. This must be called
-// before the Store is opened for CDC to be enabled.
-func (s *Store) SetCDCConfig(config *CDCConfig) {
-	s.cdcConfig = config
-}
-
 // New returns a new Store.
 func New(c *Config, cdcConfig *CDCConfig, ly Layer) *Store {
 	logger := c.Logger
