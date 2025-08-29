@@ -78,7 +78,7 @@ type Service struct {
 	clstr       Cluster
 
 	// in is the channel from which the CDC events are read.
-	in chan *proto.CDCIndexedEventGroup
+	in <-chan *proto.CDCIndexedEventGroup
 
 	// logOnly indicates whether the CDC service should only log events and not
 	// send them to the configured endpoint. This is mostly useful for testing.
@@ -155,7 +155,7 @@ type Service struct {
 }
 
 // NewService creates a new CDC service.
-func NewService(nodeID, dir string, clstr Cluster, cfg *Config) (*Service, error) {
+func NewService(nodeID, dir string, clstr Cluster, cfg *Config, cdcCh <-chan *proto.CDCIndexedEventGroup) (*Service, error) {
 	// Build the TLS configuration from the config fields
 	tlsConfig, err := cfg.TLSConfig()
 	if err != nil {
@@ -175,7 +175,7 @@ func NewService(nodeID, dir string, clstr Cluster, cfg *Config) (*Service, error
 		dir:                   dir,
 		hwmFilePath:           filepath.Join(dir, hwmFile),
 		clstr:                 clstr,
-		in:                    make(chan *proto.CDCIndexedEventGroup, inChanLen),
+		in:                    cdcCh,
 		logOnly:               cfg.LogOnly,
 		endpoint:              cfg.Endpoint,
 		httpClient:            httpClient,
@@ -212,11 +212,6 @@ func NewService(nodeID, dir string, clstr Cluster, cfg *Config) (*Service, error
 	srv.highWatermark.Store(higHWM)
 
 	return srv, nil
-}
-
-// C returns the channel to which CDC events are sent.
-func (s *Service) C() chan<- *proto.CDCIndexedEventGroup {
-	return s.in
 }
 
 // Start starts the CDC service.

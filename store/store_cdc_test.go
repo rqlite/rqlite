@@ -21,16 +21,19 @@ func Test_StoreEnableCDC(t *testing.T) {
 	if s.cdcStreamer != nil {
 		t.Fatalf("expected CDC streamer to be nil initially")
 	}
-
-	// Create a channel for CDC events
-	ch := make(chan *proto.CDCIndexedEventGroup, 10)
+	if s.CDCChannel() != nil {
+		t.Fatalf("expected CDC channel to be nil initially")
+	}
 
 	// Enable CDC
-	if err := s.EnableCDC(ch, false); err != nil {
+	if err := s.EnableCDC(false); err != nil {
 		t.Fatalf("failed to enable CDC: %v", err)
 	}
 	if s.cdcStreamer == nil {
 		t.Fatalf("expected CDC streamer to be created after EnableCDC")
+	}
+	if s.CDCChannel() == nil {
+		t.Fatalf("expected CDC channel to be created after EnableCDC")
 	}
 
 	// Disable CDC
@@ -52,19 +55,16 @@ func Test_StoreEnableDisableCDC(t *testing.T) {
 		t.Fatalf("failed to open store: %v", err)
 	}
 
-	ch1 := make(chan *proto.CDCIndexedEventGroup, 10)
-	ch2 := make(chan *proto.CDCIndexedEventGroup, 10)
-
-	// Enable CDC with first channel
-	if err := s.EnableCDC(ch1, false); err != nil {
+	// Enable CDC
+	if err := s.EnableCDC(false); err != nil {
 		t.Fatalf("failed to enable CDC: %v", err)
 	}
 	if s.cdcStreamer == nil {
 		t.Fatalf("expected CDC streamer to be created")
 	}
 
-	// Enable CDC with second channel (should return error)
-	if err := s.EnableCDC(ch2, false); err != ErrCDCEnabled {
+	// Enable CDC again (should return error)
+	if err := s.EnableCDC(false); err != ErrCDCEnabled {
 		t.Fatalf("expected ErrCDCEnabled, got: %v", err)
 	}
 	if s.cdcStreamer == nil {
@@ -80,7 +80,7 @@ func Test_StoreEnableDisableCDC(t *testing.T) {
 	}
 
 	// Enable again
-	if err := s.EnableCDC(ch1, false); err != nil {
+	if err := s.EnableCDC(false); err != nil {
 		t.Fatalf("failed to enable CDC again: %v", err)
 	}
 	if s.cdcStreamer == nil {
@@ -92,9 +92,6 @@ func Test_StoreEnableDisableCDC(t *testing.T) {
 func Test_StoreCDC_Events_Single(t *testing.T) {
 	s, ln := mustNewStore(t)
 	defer ln.Close()
-
-	// Create a channel for CDC events
-	cdcChannel := make(chan *proto.CDCIndexedEventGroup, 100)
 
 	if err := s.Open(); err != nil {
 		t.Fatalf("failed to open single-node store: %s", err.Error())
@@ -114,8 +111,14 @@ func Test_StoreCDC_Events_Single(t *testing.T) {
 		t.Fatalf("failed to execute INSERT on single node: %s", err.Error())
 	}
 
-	if err := s.EnableCDC(cdcChannel, false); err != nil {
+	if err := s.EnableCDC(false); err != nil {
 		t.Fatalf("failed to enable CDC: %v", err)
+	}
+	
+	// Get the CDC channel from the store
+	cdcChannel := s.CDCChannel()
+	if cdcChannel == nil {
+		t.Fatalf("CDC channel should not be nil after enabling CDC")
 	}
 	er = executeRequestFromString(`INSERT INTO foo(id, name) VALUES(101, "fiona")`, false, false)
 	_, _, err = s.Execute(er)
@@ -161,11 +164,8 @@ func Test_StoreCDCNotOpen(t *testing.T) {
 	defer s.Close(true)
 	defer ln.Close()
 
-	// Create a channel for CDC events
-	ch := make(chan *proto.CDCIndexedEventGroup, 10)
-
 	// Try to enable CDC on a closed store - should return ErrNotOpen
-	if err := s.EnableCDC(ch, false); err != ErrNotOpen {
+	if err := s.EnableCDC(false); err != ErrNotOpen {
 		t.Fatalf("expected ErrNotOpen, got: %v", err)
 	}
 }

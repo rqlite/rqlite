@@ -295,7 +295,8 @@ type Store struct {
 	db    *sql.SwappableDB // The underlying SQLite store.
 
 	cdcMu       sync.RWMutex
-	cdcStreamer *sql.CDCStreamer // The CDC streamer for change data capture.
+	cdcStreamer *sql.CDCStreamer                      // The CDC streamer for change data capture.
+	cdcCh       chan *proto.CDCIndexedEventGroup      // The CDC channel for events.
 
 	dechunkManager *chunking.DechunkerManager
 	cmdProc        *CommandProcessor
@@ -1766,10 +1767,10 @@ func (s *Store) Database(leader bool) ([]byte, error) {
 }
 
 // EnableCDC enables Change Data Capture on this Store. Events will be streamed
-// to the provided channel. It is the caller's responsibility to ensure that the
+// to the Store's internal CDC channel. It is the caller's responsibility to ensure that the
 // channel is read from, as the CDCStreamer will drop events if the channel is full.
 // The Store must be open for this call to succeed.
-func (s *Store) EnableCDC(out chan<- *proto.CDCIndexedEventGroup, rowIDsOnly bool) error {
+func (s *Store) EnableCDC(rowIDsOnly bool) error {
 	if !s.open.Is() {
 		return ErrNotOpen
 	}
@@ -1780,7 +1781,12 @@ func (s *Store) EnableCDC(out chan<- *proto.CDCIndexedEventGroup, rowIDsOnly boo
 		return ErrCDCEnabled
 	}
 
-	s.cdcStreamer = sql.NewCDCStreamer(out)
+	// Create the CDC channel if it doesn't exist
+	if s.cdcCh == nil {
+		s.cdcCh = make(chan *proto.CDCIndexedEventGroup, 100) // Same size as CDC service
+	}
+
+	s.cdcStreamer = sql.NewCDCStreamer(s.cdcCh)
 	if err := s.db.RegisterPreUpdateHook(s.cdcStreamer.PreupdateHook, rowIDsOnly); err != nil {
 		return err
 	}
@@ -1790,6 +1796,14 @@ func (s *Store) EnableCDC(out chan<- *proto.CDCIndexedEventGroup, rowIDsOnly boo
 		return err
 	}
 	return nil
+}
+
+// CDCChannel returns the channel to which CDC events are sent. This channel
+// is created when EnableCDC is called. Returns nil if CDC is not enabled.
+func (s *Store) CDCChannel() <-chan *proto.CDCIndexedEventGroup {
+	s.cdcMu.RLock()
+	defer s.cdcMu.RUnlock()
+	return s.cdcCh
 }
 
 // DisableCDC disables Change Data Capture on this Store.

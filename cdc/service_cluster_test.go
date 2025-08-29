@@ -26,6 +26,7 @@ func Test_ClusterBasicDelivery(t *testing.T) {
 
 	// Create three services
 	services := make([]*Service, 3)
+	channels := make([]chan *proto.CDCIndexedEventGroup, 3)
 
 	for i := range 3 {
 		cfg := DefaultConfig()
@@ -34,11 +35,15 @@ func Test_ClusterBasicDelivery(t *testing.T) {
 		cfg.MaxBatchDelay = 50 * time.Millisecond
 		cfg.HighWatermarkInterval = 100 * time.Millisecond // Short interval for testing
 
+		// Create a channel for each service
+		channels[i] = make(chan *proto.CDCIndexedEventGroup, 100)
+
 		svc, err := NewService(
 			fmt.Sprintf("node%d", i),
 			t.TempDir(),
 			cluster,
 			cfg,
+			channels[i],
 		)
 		if err != nil {
 			t.Fatalf("failed to create service %d: %v", i, err)
@@ -82,7 +87,7 @@ func Test_ClusterBasicDelivery(t *testing.T) {
 	}
 
 	for _, ev := range events {
-		services[0].C() <- ev
+		channels[0] <- ev
 	}
 
 	// Wait for events to be sent
@@ -106,8 +111,8 @@ func Test_ClusterBasicDelivery(t *testing.T) {
 
 	// Send events to followers
 	for _, ev := range events {
-		services[1].C() <- ev
-		services[2].C() <- ev
+		channels[1] <- ev
+		channels[2] <- ev
 	}
 
 	// Wait a bit to ensure no HTTP requests are made
@@ -136,11 +141,15 @@ func Test_ClusterSimpleHWM(t *testing.T) {
 	cfg.LogOnly = true // Use log-only mode to avoid HTTP complexity
 	cfg.HighWatermarkInterval = 100 * time.Millisecond
 
+	// Create a channel for the service
+	cdcCh := make(chan *proto.CDCIndexedEventGroup, 100)
+
 	svc, err := NewService(
 		"node1",
 		t.TempDir(),
 		cluster,
 		cfg,
+		cdcCh,
 	)
 	if err != nil {
 		t.Fatalf("failed to create service: %v", err)
@@ -166,7 +175,7 @@ func Test_ClusterSimpleHWM(t *testing.T) {
 			},
 		},
 	}
-	svc.C() <- event
+	cdcCh <- event
 
 	// Wait for event to be processed and local HWM updated
 	testPoll(t, func() bool {
@@ -188,6 +197,7 @@ func Test_ClusterHWMPropagation(t *testing.T) {
 
 	// Create three services
 	services := make([]*Service, 3)
+	channels := make([]chan *proto.CDCIndexedEventGroup, 3)
 
 	for i := 0; i < 3; i++ {
 		cfg := DefaultConfig()
@@ -196,11 +206,15 @@ func Test_ClusterHWMPropagation(t *testing.T) {
 		cfg.MaxBatchDelay = 50 * time.Millisecond
 		cfg.HighWatermarkInterval = 100 * time.Millisecond // Short interval for testing
 
+		// Create a channel for each service
+		channels[i] = make(chan *proto.CDCIndexedEventGroup, 100)
+
 		svc, err := NewService(
 			fmt.Sprintf("node%d", i+1),
 			t.TempDir(),
 			cluster,
 			cfg,
+			channels[i],
 		)
 		if err != nil {
 			t.Fatalf("failed to create service %d: %v", i, err)
@@ -243,12 +257,12 @@ func Test_ClusterHWMPropagation(t *testing.T) {
 			},
 		},
 	}
-	for _, svc := range services {
-		go func(ch chan<- *proto.CDCIndexedEventGroup) {
+	for i, ch := range channels {
+		go func(ch chan<- *proto.CDCIndexedEventGroup, serviceIndex int) {
 			for _, ev := range events {
 				ch <- ev
 			}
-		}(svc.C())
+		}(ch, i)
 	}
 
 	// Wait for events to be sent by the Leader
@@ -285,6 +299,7 @@ func Test_ClusterLeadershipChange(t *testing.T) {
 
 	// Create three services
 	services := make([]*Service, 3)
+	channels := make([]chan *proto.CDCIndexedEventGroup, 3)
 
 	for i := 0; i < 3; i++ {
 		cfg := DefaultConfig()
@@ -293,11 +308,15 @@ func Test_ClusterLeadershipChange(t *testing.T) {
 		cfg.MaxBatchDelay = 50 * time.Millisecond
 		cfg.HighWatermarkInterval = 100 * time.Millisecond // Short interval for testing
 
+		// Create a channel for each service
+		channels[i] = make(chan *proto.CDCIndexedEventGroup, 100)
+
 		svc, err := NewService(
 			fmt.Sprintf("node%d", i+1),
 			t.TempDir(),
 			cluster,
 			cfg,
+			channels[i],
 		)
 		if err != nil {
 			t.Fatalf("failed to create service %d: %v", i, err)
@@ -328,7 +347,7 @@ func Test_ClusterLeadershipChange(t *testing.T) {
 			},
 		},
 	}
-	services[1].C() <- event1
+	channels[1] <- event1
 
 	// Wait a bit to ensure no HTTP request is made by non-leader
 	time.Sleep(200 * time.Millisecond)
@@ -363,7 +382,7 @@ func Test_ClusterLeadershipChange(t *testing.T) {
 			},
 		},
 	}
-	services[1].C() <- event2
+	channels[1] <- event2
 
 	// Wait for the second event to be sent
 	testPoll(t, func() bool {
@@ -376,7 +395,7 @@ func Test_ClusterLeadershipChange(t *testing.T) {
 	}, time.Second)
 
 	// Verify that the old leader (service 0) doesn't send any new events
-	services[0].C() <- event2
+	channels[0] <- event2
 	time.Sleep(200 * time.Millisecond)
 	if httpServer.GetRequestCount() != 2 {
 		t.Fatalf("old leader should not send new events after demotion, got %d requests", httpServer.GetRequestCount())
@@ -402,11 +421,15 @@ func Test_ClusterHWMDeletion(t *testing.T) {
 	cfg.MaxBatchDelay = 50 * time.Millisecond
 	cfg.HighWatermarkInterval = 100 * time.Millisecond // Short interval for testing
 
+	// Create a channel for the service
+	cdcCh := make(chan *proto.CDCIndexedEventGroup, 100)
+
 	svc, err := NewService(
 		"node1",
 		t.TempDir(),
 		cluster,
 		cfg,
+		cdcCh,
 	)
 	if err != nil {
 		t.Fatalf("failed to create service: %v", err)
@@ -442,7 +465,7 @@ func Test_ClusterHWMDeletion(t *testing.T) {
 	}
 
 	for _, ev := range events {
-		svc.C() <- ev
+		cdcCh <- ev
 	}
 
 	// Wait for events to be queued in FIFO
@@ -486,11 +509,15 @@ func Test_ClusterBatchingBehavior(t *testing.T) {
 	cfg.MaxBatchDelay = 1 * time.Second                // Long delay to test batching by size
 	cfg.HighWatermarkInterval = 100 * time.Millisecond // Short interval for testing
 
+	// Create a channel for the service
+	cdcCh := make(chan *proto.CDCIndexedEventGroup, 100)
+
 	svc, err := NewService(
 		"node1",
 		t.TempDir(),
 		cluster,
 		cfg,
+		cdcCh,
 	)
 	if err != nil {
 		t.Fatalf("failed to create service: %v", err)
@@ -540,7 +567,7 @@ func Test_ClusterBatchingBehavior(t *testing.T) {
 	}
 
 	for _, ev := range events {
-		svc.C() <- ev
+		cdcCh <- ev
 	}
 
 	// Wait for events to be batched and sent as one request
@@ -593,6 +620,7 @@ func Test_Cluster_100Events(t *testing.T) {
 
 	cluster := newMockCluster()
 	services := make([]*Service, 3)
+	channels := make([]chan *proto.CDCIndexedEventGroup, 3)
 
 	for i := 0; i < 3; i++ {
 		cfg := DefaultConfig()
@@ -601,11 +629,15 @@ func Test_Cluster_100Events(t *testing.T) {
 		cfg.MaxBatchDelay = time.Second
 		cfg.HighWatermarkInterval = 1 * time.Second
 
+		// Create a channel for each service
+		channels[i] = make(chan *proto.CDCIndexedEventGroup, 100)
+
 		svc, err := NewService(
 			fmt.Sprintf("node%d", i),
 			t.TempDir(),
 			cluster,
 			cfg,
+			channels[i],
 		)
 		if err != nil {
 			t.Fatalf("failed to create service %d: %v", i, err)
@@ -642,19 +674,19 @@ func Test_Cluster_100Events(t *testing.T) {
 	numEvents := 100
 	leaderSwitch := make(chan struct{})
 	rns := random.IntN(3, 100)
-	for idx, svc := range services {
-		go func(ch chan<- *proto.CDCIndexedEventGroup) {
+	for idx, ch := range channels {
+		go func(ch chan<- *proto.CDCIndexedEventGroup, serviceIdx int) {
 			// Simulate leadership changing on cluster during processing. While events
 			// may be repeated, none should be lost. These indexes were chosen at random.
 			for i := range numEvents {
-				if idx == 0 {
+				if serviceIdx == 0 {
 					if slices.Contains(rns, i) {
 						leaderSwitch <- struct{}{}
 					}
 				}
 				ch <- makeEvent(int64(i + 1))
 			}
-		}(svc.C())
+		}(ch, idx)
 	}
 
 	go func() {
