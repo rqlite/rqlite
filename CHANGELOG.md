@@ -1,4 +1,7 @@
-## v8.43.5 (unreleased)
+## v9.0.0 (unreleased)
+### New features
+- [PR #2275](https://github.com/rqlite/rqlite/pull/2275): Enable Change-Data-Capture.
+
 ### Implementation changes and bug fixes
 - [PR #2263](https://github.com/rqlite/rqlite/pull/2263): Test CDC with later-starting HTTP endpoint.
 - [PR #2267](https://github.com/rqlite/rqlite/pull/2267): Add row-IDs-only to CDC config.
