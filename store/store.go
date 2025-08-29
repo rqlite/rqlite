@@ -295,8 +295,8 @@ type Store struct {
 	db    *sql.SwappableDB // The underlying SQLite store.
 
 	cdcMu       sync.RWMutex
-	cdcStreamer *sql.CDCStreamer                      // The CDC streamer for change data capture.
-	cdcCh       chan *proto.CDCIndexedEventGroup      // The CDC channel for events.
+	cdcStreamer *sql.CDCStreamer                 // The CDC streamer for change data capture.
+	cdcCh       chan *proto.CDCIndexedEventGroup // The CDC channel for events.
 
 	dechunkManager *chunking.DechunkerManager
 	cmdProc        *CommandProcessor
