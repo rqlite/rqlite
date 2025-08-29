@@ -82,9 +82,6 @@ var (
 	// is not valid.
 	ErrInvalidBackupFormat = errors.New("invalid backup format")
 
-	// ErrCDCEnabled is returned when CDC is already enabled.
-	ErrCDCEnabled = errors.New("CDC already enabled")
-
 	// ErrInvalidVacuumFormat is returned when the requested backup format is not
 	// compatible with vacuum.
 	ErrInvalidVacuum = errors.New("invalid vacuum")
@@ -294,7 +291,6 @@ type Store struct {
 	dbDrv *sql.Driver      // The SQLite database driver.
 	db    *sql.SwappableDB // The underlying SQLite store.
 
-	cdcMu       sync.RWMutex
 	cdcStreamer *sql.CDCStreamer // The CDC streamer for change data capture.
 	cdcConfig   *CDCConfig       // The CDC configuration provided at construction.
 
@@ -394,10 +390,16 @@ type Config struct {
 
 // CDCConfig represents the Change Data Capture configuration for the Store.
 type CDCConfig struct {
-	// ch is the channel where CDC events will be sent.
-	ch chan<- *proto.CDCIndexedEventGroup
-	// rowIDsOnly indicates whether to capture only row IDs in CDC events.
-	rowIDsOnly bool
+	// Ch is the channel where CDC events will be sent.
+	Ch chan<- *proto.CDCIndexedEventGroup
+	// RowIDsOnly indicates whether to capture only row IDs in CDC events.
+	RowIDsOnly bool
+}
+
+// SetCDCConfig sets the CDC configuration for the Store. This must be called
+// before the Store is opened for CDC to be enabled.
+func (s *Store) SetCDCConfig(config *CDCConfig) {
+	s.cdcConfig = config
 }
 
 // New returns a new Store.
@@ -613,8 +615,8 @@ func (s *Store) Open() (retErr error) {
 
 	// Initialize CDC if configuration is provided.
 	if s.cdcConfig != nil {
-		s.cdcStreamer = sql.NewCDCStreamer(s.cdcConfig.ch)
-		if err := s.db.RegisterPreUpdateHook(s.cdcStreamer.PreupdateHook, s.cdcConfig.rowIDsOnly); err != nil {
+		s.cdcStreamer = sql.NewCDCStreamer(s.cdcConfig.Ch)
+		if err := s.db.RegisterPreUpdateHook(s.cdcStreamer.PreupdateHook, s.cdcConfig.RowIDsOnly); err != nil {
 			return err
 		}
 		if err := s.db.RegisterCommitHook(s.cdcStreamer.CommitHook); err != nil {
@@ -1788,53 +1790,6 @@ func (s *Store) Database(leader bool) ([]byte, error) {
 	return s.db.Serialize()
 }
 
-// EnableCDC enables Change Data Capture on this Store. Events will be streamed
-// to the provided channel. It is the caller's responsibility to ensure that the
-// channel is read from, as the CDCStreamer will drop events if the channel is full.
-// The Store must be open for this call to succeed.
-func (s *Store) EnableCDC(out chan<- *proto.CDCIndexedEventGroup, rowIDsOnly bool) error {
-	if !s.open.Is() {
-		return ErrNotOpen
-	}
-
-	s.cdcMu.Lock()
-	defer s.cdcMu.Unlock()
-	if s.cdcStreamer != nil {
-		return ErrCDCEnabled
-	}
-
-	s.cdcStreamer = sql.NewCDCStreamer(out)
-	if err := s.db.RegisterPreUpdateHook(s.cdcStreamer.PreupdateHook, rowIDsOnly); err != nil {
-		return err
-	}
-	if err := s.db.RegisterCommitHook(s.cdcStreamer.CommitHook); err != nil {
-		// Unregister preupdate hook if commit hook registration fails
-		s.db.RegisterPreUpdateHook(nil, false)
-		return err
-	}
-	return nil
-}
-
-// DisableCDC disables Change Data Capture on this Store.
-func (s *Store) DisableCDC() error {
-	s.cdcMu.Lock()
-	defer s.cdcMu.Unlock()
-	if s.cdcStreamer == nil {
-		return nil
-	}
-
-	if s.db != nil {
-		if err := s.db.RegisterPreUpdateHook(nil, false); err != nil {
-			return fmt.Errorf("failed to unregister preupdate hook: %w", err)
-		}
-		if err := s.db.RegisterCommitHook(nil); err != nil {
-			return fmt.Errorf("failed to unregister commit hook: %w", err)
-		}
-	}
-	s.cdcStreamer = nil
-	return nil
-}
-
 // Notify notifies this Store that a node is ready for bootstrapping at the
 // given address. Once the number of known nodes reaches the expected level
 // bootstrapping will be attempted using this Store. "Expected level" includes
@@ -2166,8 +2121,6 @@ func (s *Store) fsmApply(l *raft.Log) (e any) {
 
 	cmd, mutated, r := func() (*proto.Command, bool, any) {
 		// Reset CDC streamer with the current log index before processing if CDC is enabled
-		s.cdcMu.RLock()
-		defer s.cdcMu.RUnlock()
 		if s.cdcStreamer != nil {
 			s.cdcStreamer.Reset(l.Index)
 		}

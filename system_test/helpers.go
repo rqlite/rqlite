@@ -760,10 +760,18 @@ func Remove(n *Node, addr string) error {
 }
 
 func mustNewNode(id string, enableSingle bool) *Node {
-	return mustNewNodeEncrypted(id, enableSingle, false, false)
+	return mustNewNodeWithCDC(id, enableSingle, nil)
+}
+
+func mustNewNodeWithCDC(id string, enableSingle bool, cdcConfig *store.CDCConfig) *Node {
+	return mustNewNodeEncryptedWithCDC(id, enableSingle, false, false, cdcConfig)
 }
 
 func mustNewNodeEncrypted(id string, enableSingle, httpEncrypt, nodeEncrypt bool) *Node {
+	return mustNewNodeEncryptedWithCDC(id, enableSingle, httpEncrypt, nodeEncrypt, nil)
+}
+
+func mustNewNodeEncryptedWithCDC(id string, enableSingle, httpEncrypt, nodeEncrypt bool, cdcConfig *store.CDCConfig) *Node {
 	dir := mustTempDir(id)
 	var mux *tcp.Mux
 	var raftDialer *tcp.Dialer
@@ -778,10 +786,14 @@ func mustNewNodeEncrypted(id string, enableSingle, httpEncrypt, nodeEncrypt bool
 		clstrDialer = tcp.NewDialer(cluster.MuxClusterHeader, nil)
 	}
 	go mux.Serve()
-	return mustNodeEncrypted(id, dir, enableSingle, httpEncrypt, mux, raftDialer, clstrDialer)
+	return mustNodeEncryptedWithCDC(id, dir, enableSingle, httpEncrypt, mux, raftDialer, clstrDialer, cdcConfig)
 }
 
 func mustNodeEncrypted(id, dir string, enableSingle, httpEncrypt bool, mux *tcp.Mux, raftDialer, clstrDialer *tcp.Dialer) *Node {
+	return mustNodeEncryptedWithCDC(id, dir, enableSingle, httpEncrypt, mux, raftDialer, clstrDialer, nil)
+}
+
+func mustNodeEncryptedWithCDC(id, dir string, enableSingle, httpEncrypt bool, mux *tcp.Mux, raftDialer, clstrDialer *tcp.Dialer, cdcConfig *store.CDCConfig) *Node {
 	nodeCertPath := rX509.CertExampleDotComFile(dir)
 	nodeKeyPath := rX509.KeyExampleDotComFile(dir)
 	httpCertPath := nodeCertPath
@@ -808,7 +820,7 @@ func mustNodeEncrypted(id, dir string, enableSingle, httpEncrypt bool, mux *tcp.
 		DBConf: dbConf,
 		Dir:    node.Dir,
 		ID:     id,
-	}, nil, raftTn)
+	}, cdcConfig, raftTn)
 	node.Store.SnapshotThreshold = SnapshotThreshold
 	node.Store.SnapshotInterval = SnapshotInterval
 	node.Store.ElectionTimeout = ElectionTimeout
