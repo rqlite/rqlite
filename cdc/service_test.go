@@ -205,7 +205,7 @@ func Test_ServiceRestart_NoDupes(t *testing.T) {
 	}
 
 	// Peek into the FIFO, ensure it is behaving correctly.
-	if exp, got := stats.Get(numFIFOIgnored).(*expvar.Int).Value(), int64(0); exp != got {
+	if got, exp := stats.Get(numFIFOIgnored).(*expvar.Int).Value(), int64(0); exp != got {
 		t.Fatalf("expected %d FIFO ignored events, got %d", exp, got)
 	}
 
