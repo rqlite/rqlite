@@ -1804,8 +1804,10 @@ func (s *Store) EnableCDC(out chan<- *proto.CDCIndexedEventGroup, rowIDsOnly boo
 	return nil
 }
 
-// DisableCDC disables Change Data Capture on this Store. If CDC is not
-// enabled, this is a no-op.
+// DisableCDC disables Change Data Capture on this Store. Disabling CDC will
+// close the output channel provided when enabling CDC.
+//
+// If CDC is not enabled, this is a no-op.
 func (s *Store) DisableCDC() error {
 	s.cdcMu.Lock()
 	defer s.cdcMu.Unlock()
