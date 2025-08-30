@@ -538,7 +538,7 @@ func (s *Service) writeToFIFO() {
 		select {
 		case o := <-s.in:
 			if o == nil {
-                                // Channel closed, exiting goroutine.
+				// Channel closed, exiting goroutine.
 				return
 			}
 			b, err := command.MarshalCDCIndexedEventGroup(o)
