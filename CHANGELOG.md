@@ -10,7 +10,7 @@
 - [PR #2276](https://github.com/rqlite/rqlite/pull/2276): CDC restart test on single node.
 - [PR #2274](https://github.com/rqlite/rqlite/pull/2274): Initial framework for end-to-end CDC testing.
 - [PR #2278](https://github.com/rqlite/rqlite/pull/2278): Reorder parameters for Store initialization.
-- [PR #2285](https://github.com/rqlite/rqlite/pull/2284): Allow CDC enable on non-open Stores.
+- [PR #2285](https://github.com/rqlite/rqlite/pull/2285): Allow CDC enable on non-open Stores.
 
 ## v8.43.4 (August 27th 2025)
 ### Implementation changes and bug fixes
