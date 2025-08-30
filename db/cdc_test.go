@@ -16,6 +16,9 @@ func Test_NewCDCStreamer(t *testing.T) {
 	if len(streamer.pending.Events) != 0 {
 		t.Fatalf("expected no pending events after commit, got %d", len(streamer.pending.Events))
 	}
+	if err := streamer.Close(); err != nil {
+		t.Fatalf("expected no error on close, got %v", err)
+	}
 }
 
 func Test_NewCDCStreamer_CommitEmpty(t *testing.T) {
@@ -37,6 +40,10 @@ func Test_NewCDCStreamer_CommitEmpty(t *testing.T) {
 	}
 	if len(ch) != 0 {
 		t.Fatalf("expected channel to be empty after commit, got %d", len(ch))
+	}
+
+	if err := streamer.Close(); err != nil {
+		t.Fatalf("expected no error on close, got %v", err)
 	}
 }
 
@@ -69,6 +76,10 @@ func Test_NewCDCStreamer_CommitOne(t *testing.T) {
 	}
 	if !reflect.DeepEqual(change, ev.Events[0]) {
 		t.Fatalf("received event does not match sent event: expected %v, got %v", change, ev.Events[0])
+	}
+
+	if err := streamer.Close(); err != nil {
+		t.Fatalf("expected no error on close, got %v", err)
 	}
 }
 
@@ -114,6 +125,10 @@ func Test_NewCDCStreamer_CommitTwo(t *testing.T) {
 	}
 	if !reflect.DeepEqual(change2, ev.Events[1]) {
 		t.Fatalf("received second event does not match sent event: expected %v, got %v", change2, ev.Events[1])
+	}
+
+	if err := streamer.Close(); err != nil {
+		t.Fatalf("expected no error on close, got %v", err)
 	}
 }
 
@@ -166,5 +181,9 @@ func Test_NewCDCStreamer_ResetThenPreupdate(t *testing.T) {
 	}
 	if !reflect.DeepEqual(change2, ev.Events[0]) {
 		t.Fatalf("received event does not match sent event: expected %v, got %v", change2, ev.Events[0])
+	}
+
+	if err := streamer.Close(); err != nil {
+		t.Fatalf("expected no error on close, got %v", err)
 	}
 }
