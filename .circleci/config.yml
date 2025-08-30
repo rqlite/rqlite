@@ -287,6 +287,19 @@ jobs:
             RQLITED_PATH: /home/circleci/go/bin/rqlited
     resource_class: large
 
+  end_to_end_cdc:
+    docker:
+      - image: << pipeline.parameters.primary_image >>
+    steps:
+      - checkout
+      - restore_and_save_cache
+      - run: go install ./...
+      - run:
+          command: python3 system_test/e2e/cdc.py
+          environment:
+            RQLITED_PATH: /home/circleci/go/bin/rqlited
+    resource_class: large
+
   end_to_end_extensions:
     docker:
       - image: << pipeline.parameters.primary_image >>
@@ -336,4 +349,5 @@ workflows:
       - end_to_end_auto_state_s3
       - end_to_end_auto_state_gcs
       - end_to_end_upgrade
+      - end_to_end_cdc
       - end_to_end_extensions
