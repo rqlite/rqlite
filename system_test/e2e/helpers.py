@@ -18,7 +18,7 @@ import string
 
 TIMEOUT=20
 
-seqRe = re.compile("^{'results': \[\], 'sequence_number': \d+}$")
+seqRe = re.compile(r"^{'results': \[\], 'sequence_number': \d+}$")
 
 # random_addr returns a random IP:port address which is not already in use,
 # and which has not already been returned by this function.

@@ -6,6 +6,7 @@
 
 import os
 import unittest
+import time
 
 from helpers import Node, d_, deprovision_node
 from cdc_test_server import HTTPTestServer
@@ -23,9 +24,10 @@ class TestSingleNode_CDC(unittest.TestCase):
     n.wait_for_leader()
     j = n.execute('CREATE TABLE bar (id INTEGER NOT NULL PRIMARY KEY, name TEXT)')
     self.assertEqual(j, d_("{'results': [{}]}"))
-
     j = n.execute('INSERT INTO bar(name) VALUES("fiona")')
     self.assertEqual(j, d_("{'results': [{'last_insert_id': 1, 'rows_affected': 1}]}"))
+
+    server.wait_message_count(2)
 
     deprovision_node(n)
 

@@ -13,6 +13,7 @@ import threading
 from http.server import BaseHTTPRequestHandler, HTTPServer
 from socketserver import ThreadingMixIn
 from typing import Dict, List, Optional, Any
+import time
 
 
 class CDCMessageEvent:
@@ -117,7 +118,7 @@ class CDCHTTPRequestHandler(BaseHTTPRequestHandler):
         with server.lock:
             # Store the raw request
             server.requests.append(body)
-            
+
             # Parse the CDC envelope
             try:
                 data = json.loads(body.decode('utf-8'))
@@ -134,11 +135,11 @@ class CDCHTTPRequestHandler(BaseHTTPRequestHandler):
             except (json.JSONDecodeError, UnicodeDecodeError, Exception):
                 self.send_error(503, "Service Unavailable")
                 return
-        
+
         # Send success response
         self.send_response(200)
         self.end_headers()
-    
+
     def log_message(self, format, *args):
         """Suppress default HTTP server logging."""
         pass
@@ -150,7 +151,7 @@ class HTTPTestServer:
     
     Designed for end-to-end testing of CDC functionality.
     """
-    
+
     def __init__(self):
         """Initialize the HTTP test server."""
         self.requests: List[bytes] = []
@@ -163,25 +164,35 @@ class HTTPTestServer:
         # Create server with dynamic port allocation
         self.server = None
         self._find_free_port()
-    
+
     @property
     def dump_request(self) -> bool:
         """Get dump_request setting."""
         return self._dump_request
-    
+
     @dump_request.setter
     def dump_request(self, value: bool):
         """Set dump_request setting."""
         self._dump_request = value
         if self.server:
             self.server.dump_request = value
-    
+
+    def _wait_until(self, condition_func, timeout=5.0, interval=0.1):
+        """Poll condition_func until it returns True or timeout occurs."""
+        start_time = time.time()
+        while True:
+            if condition_func():
+                return
+            if time.time() - start_time > timeout:
+                raise TimeoutError("Condition not met within timeout")
+            time.sleep(interval)
+
     def _find_free_port(self):
         """Find a free port and create the HTTP server."""
         with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
             s.bind(('127.0.0.1', 0))
             _, port = s.getsockname()
-        
+
         self.server = ThreadingHTTPServer(('127.0.0.1', port), CDCHTTPRequestHandler)
         # Share server instance data with handler
         self.server.requests = self.requests
@@ -197,7 +208,7 @@ class HTTPTestServer:
             raise RuntimeError("Server not initialized")
         host, port = self.server.server_address
         return f"http://{host}:{port}"
-    
+
     def start(self):
         """Start the test server."""
         if not self.server:
@@ -206,7 +217,7 @@ class HTTPTestServer:
         self.server_thread = threading.Thread(target=self.server.serve_forever)
         self.server_thread.daemon = True
         self.server_thread.start()
-    
+
     def close(self):
         """Stop and close the test server."""
         if self.server:
@@ -220,7 +231,7 @@ class HTTPTestServer:
                 pass
             if hasattr(self, 'server_thread') and self.server_thread.is_alive():
                 self.server_thread.join(timeout=1.0)
-    
+
     def set_fail_rate(self, rate: int):
         """Set the percentage of requests that should fail (0-100)."""
         with self.lock:
@@ -231,29 +242,33 @@ class HTTPTestServer:
             self.fail_rate = rate
             if self.server:
                 self.server.fail_rate = rate
-    
+
     def get_requests(self) -> List[bytes]:
         """Return a copy of the requests received by the server."""
         with self.lock:
             return self.requests.copy()
-    
+
     def get_request_count(self) -> int:
         """Return the number of requests received by the server."""
         with self.lock:
             return len(self.requests)
+
+    def wait_request_count(self, n, timeout=5.0):
+        """Wait until the server has received at least n requests or timeout occurs."""
+        self._wait_until(lambda: self.get_request_count() >= n, timeout=timeout)
     
     def get_failed_request_count(self) -> int:
         """Return the number of requests that failed due to simulated failures."""
         with self.lock:
             return self.num_failed + (self.server.num_failed if self.server else 0)
-    
+
     def get_highest_message_index(self) -> int:
         """Return the highest message index received by the server."""
         with self.lock:
             if not self.messages:
                 return 0
             return max(self.messages.keys())
-    
+
     def reset(self):
         """Delete all received data."""
         with self.lock:
@@ -262,12 +277,16 @@ class HTTPTestServer:
             self.num_failed = 0
             if self.server:
                 self.server.num_failed = 0
-    
+
     def get_message_count(self) -> int:
         """Return the number of unique messages received by the server."""
         with self.lock:
             return len(self.messages)
-    
+
+    def wait_message_count(self, n: int, timeout=5.0):
+        """Wait until the server has received at least n unique messages or timeout occurs."""
+        self._wait_until(lambda: self.get_message_count() >= n, timeout=timeout)
+
     def check_messages_exist(self, n: int) -> bool:
         """
         Check if messages with indices from 1 to n exist in the server's stored messages.
