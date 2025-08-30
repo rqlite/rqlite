@@ -294,9 +294,10 @@ type Store struct {
 	dbDrv *sql.Driver      // The SQLite database driver.
 	db    *sql.SwappableDB // The underlying SQLite store.
 
-	cdcMu       sync.RWMutex
-	cdcStreamer *sql.CDCStreamer
-	cdcIDsOnly  bool
+	cdcMu        sync.RWMutex
+	cdcStreamer  *sql.CDCStreamer
+	cdcIDsOnly   bool
+	cdcActivated bool
 
 	dechunkManager *chunking.DechunkerManager
 	cmdProc        *CommandProcessor
@@ -600,20 +601,6 @@ func (s *Store) Open() (retErr error) {
 	s.db, err = openOnDisk(s.dbPath, s.dbDrv, s.dbConf.FKConstraints)
 	if err != nil {
 		return fmt.Errorf("failed to create on-disk database: %s", err)
-	}
-
-	// Hook up CDC if needed.
-	s.cdcMu.Lock()
-	defer s.cdcMu.Unlock()
-	if s.cdcStreamer != nil {
-		if err := s.db.RegisterPreUpdateHook(s.cdcStreamer.PreupdateHook, s.cdcIDsOnly); err != nil {
-			return err
-		}
-		if err := s.db.RegisterCommitHook(s.cdcStreamer.CommitHook); err != nil {
-			// Unregister preupdate hook if commit hook registration fails
-			s.db.RegisterPreUpdateHook(nil, false)
-			return err
-		}
 	}
 
 	// Clean up any files from aborted operations. This tries to catch the case where scratch files
@@ -1809,18 +1796,6 @@ func (s *Store) EnableCDC(out chan<- *proto.CDCIndexedEventGroup, rowIDsOnly boo
 	}
 	s.cdcStreamer = sql.NewCDCStreamer(out)
 	s.cdcIDsOnly = rowIDsOnly
-
-	if s.open.Is() {
-		if err := s.db.RegisterPreUpdateHook(s.cdcStreamer.PreupdateHook, s.cdcIDsOnly); err != nil {
-			s.cdcStreamer = nil
-			return fmt.Errorf("failed to register preupdate hook: %w", err)
-		}
-		if err := s.db.RegisterCommitHook(s.cdcStreamer.CommitHook); err != nil {
-			s.db.RegisterPreUpdateHook(nil, false)
-			s.cdcStreamer = nil
-			return fmt.Errorf("failed to register commit hook: %w", err)
-		}
-	}
 	return nil
 }
 
@@ -1843,6 +1818,7 @@ func (s *Store) DisableCDC() error {
 	}
 	s.cdcStreamer.Close()
 	s.cdcStreamer = nil
+	s.cdcActivated = false
 	return nil
 }
 
@@ -2179,7 +2155,19 @@ func (s *Store) fsmApply(l *raft.Log) (e any) {
 		// Reset CDC streamer with the current log index before processing if CDC is enabled
 		s.cdcMu.RLock()
 		defer s.cdcMu.RUnlock()
+
 		if s.cdcStreamer != nil {
+			// If CDC is enabled but not yet activated, do so now. By doing it here we keep
+			// CDC activiation in a single place in the code.
+			if !s.cdcActivated {
+				if err := s.db.RegisterPreUpdateHook(s.cdcStreamer.PreupdateHook, s.cdcIDsOnly); err != nil {
+					s.logger.Fatalf("failed to register preupdate hook for CDC: %s", err)
+				}
+				if err := s.db.RegisterCommitHook(s.cdcStreamer.CommitHook); err != nil {
+					s.logger.Fatalf("failed to register commit hook for CDC: %s", err)
+				}
+				s.cdcActivated = true
+			}
 			s.cdcStreamer.Reset(l.Index)
 		}
 		return s.cmdProc.Process(l.Data, s.db)
