@@ -170,7 +170,8 @@ func main() {
 		log.Fatalf("failed to create cluster client: %s", err.Error())
 	}
 
-	// Create the CDC service, if requested.
+	// Create the CDC service, if requested. Do this before opening the Store so the CDC
+	// picks up every change.
 	if cfg.CDCConfig != "" {
 		if err := createCDC(cfg, str, clstrServ, clstrClient); err != nil {
 			log.Fatalf("failed to create CDC Service: %s", err.Error())
