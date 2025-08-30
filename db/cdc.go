@@ -33,6 +33,12 @@ func (s *CDCStreamer) Reset(k uint64) {
 	}
 }
 
+// Close closes the CDCStreamer. It closes the out channel.
+func (s *CDCStreamer) Close() error {
+	close(s.out)
+	return nil
+}
+
 // PreupdateHook is called before the update is applied. It collects
 // the event and adds it to the pending events.
 func (s *CDCStreamer) PreupdateHook(ev *command.CDCEvent) error {

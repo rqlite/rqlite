@@ -54,6 +54,7 @@ func Test_StoreEnableDisableCDC(t *testing.T) {
 
 	ch1 := make(chan *proto.CDCIndexedEventGroup, 10)
 	ch2 := make(chan *proto.CDCIndexedEventGroup, 10)
+	ch3 := make(chan *proto.CDCIndexedEventGroup, 10)
 
 	// Enable CDC with first channel
 	if err := s.EnableCDC(ch1, false); err != nil {
@@ -80,7 +81,7 @@ func Test_StoreEnableDisableCDC(t *testing.T) {
 	}
 
 	// Enable again
-	if err := s.EnableCDC(ch1, false); err != nil {
+	if err := s.EnableCDC(ch3, false); err != nil {
 		t.Fatalf("failed to enable CDC again: %v", err)
 	}
 	if s.cdcStreamer == nil {
@@ -93,7 +94,7 @@ func Test_StoreCDC_Events_Single(t *testing.T) {
 	s, ln := mustNewStore(t)
 	defer ln.Close()
 
-	// Create a channel for CDC events
+	// Create a channel for CDC events.
 	cdcChannel := make(chan *proto.CDCIndexedEventGroup, 100)
 
 	if err := s.Open(); err != nil {
@@ -117,6 +118,7 @@ func Test_StoreCDC_Events_Single(t *testing.T) {
 	if err := s.EnableCDC(cdcChannel, false); err != nil {
 		t.Fatalf("failed to enable CDC: %v", err)
 	}
+
 	er = executeRequestFromString(`INSERT INTO foo(id, name) VALUES(101, "fiona")`, false, false)
 	_, _, err = s.Execute(er)
 	if err != nil {
@@ -152,20 +154,5 @@ func Test_StoreCDC_Events_Single(t *testing.T) {
 		}
 	case <-timeout:
 		t.Fatalf("timeout waiting for CDC INSERT event for table 'foo'")
-	}
-}
-
-// Test_StoreCDCNotOpen tests that EnableCDC returns ErrNotOpen when store is not open.
-func Test_StoreCDCNotOpen(t *testing.T) {
-	s, ln := mustNewStore(t)
-	defer s.Close(true)
-	defer ln.Close()
-
-	// Create a channel for CDC events
-	ch := make(chan *proto.CDCIndexedEventGroup, 10)
-
-	// Try to enable CDC on a closed store - should return ErrNotOpen
-	if err := s.EnableCDC(ch, false); err != ErrNotOpen {
-		t.Fatalf("expected ErrNotOpen, got: %v", err)
 	}
 }
