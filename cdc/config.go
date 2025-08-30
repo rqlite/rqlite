@@ -91,8 +91,8 @@ type Config struct {
 func DefaultConfig() *Config {
 	return &Config{
 		Endpoint:              "http://localhost:8080/cdc",
-		MaxBatchSz:            100,
-		MaxBatchDelay:         time.Second,
+		MaxBatchSz:            10,
+		MaxBatchDelay:         100 * time.Millisecond,
 		HighWatermarkInterval: 5 * time.Second,
 		TransmitTimeout:       5 * time.Second,
 		TransmitRetryPolicy:   LinearRetryPolicy,
@@ -136,6 +136,33 @@ func NewConfig(s string) (*Config, error) {
 	var config Config
 	if err := json.Unmarshal(data, &config); err != nil {
 		return nil, fmt.Errorf("failed to parse config file %q: %w", s, err)
+	}
+
+	// Ensure all fields have sensible values, using defaults where necessary.
+	def := DefaultConfig()
+	if config.Endpoint == "" {
+		config.Endpoint = def.Endpoint
+	}
+	if config.MaxBatchSz == 0 {
+		config.MaxBatchSz = def.MaxBatchSz
+	}
+	if config.MaxBatchDelay == 0 {
+		config.MaxBatchDelay = def.MaxBatchDelay
+	}
+	if config.HighWatermarkInterval == 0 {
+		config.HighWatermarkInterval = def.HighWatermarkInterval
+	}
+	if config.TransmitTimeout == 0 {
+		config.TransmitTimeout = def.TransmitTimeout
+	}
+	if config.TransmitMaxRetries == 0 {
+		config.TransmitMaxRetries = def.TransmitMaxRetries
+	}
+	if config.TransmitMinBackoff == 0 {
+		config.TransmitMinBackoff = def.TransmitMinBackoff
+	}
+	if config.TransmitMaxBackoff == 0 {
+		config.TransmitMaxBackoff = def.TransmitMaxBackoff
 	}
 
 	return &config, nil
