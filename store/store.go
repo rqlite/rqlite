@@ -294,10 +294,10 @@ type Store struct {
 	dbDrv *sql.Driver      // The SQLite database driver.
 	db    *sql.SwappableDB // The underlying SQLite store.
 
-	cdcMu        sync.RWMutex
-	cdcStreamer  *sql.CDCStreamer
-	cdcIDsOnly   bool
-	cdcActivated rsync.AtomicBool
+	cdcMu         sync.RWMutex
+	cdcStreamer   *sql.CDCStreamer
+	cdcIDsOnly    bool
+	cdcRegistered rsync.AtomicBool
 
 	dechunkManager *chunking.DechunkerManager
 	cmdProc        *CommandProcessor
@@ -1193,8 +1193,8 @@ func (s *Store) Stats() (map[string]any, error) {
 			"dropped":  s.observer.GetNumDropped(),
 		},
 		"cdc": map[string]any{
-			"enabled":   s.cdcStreamer != nil,
-			"activated": s.cdcActivated.Is(),
+			"enabled":    s.cdcStreamer != nil,
+			"registered": s.cdcRegistered.Is(),
 		},
 		"apply_timeout":          s.ApplyTimeout.String(),
 		"heartbeat_timeout":      s.HeartbeatTimeout.String(),
@@ -1756,7 +1756,7 @@ func (s *Store) ReadFrom(r io.Reader) (int64, error) {
 
 	// Swapping in a new database unregisters any registered CDC hooks, so signal that it
 	// needs to be reregistered on the next change.
-	s.cdcActivated.Unset()
+	s.cdcRegistered.Unset()
 
 	// Snapshot, so we load the new database into the Raft system.
 	if err := s.snapshotStore.SetFullNeeded(); err != nil {
@@ -1828,7 +1828,7 @@ func (s *Store) DisableCDC() error {
 	}
 	s.cdcStreamer.Close()
 	s.cdcStreamer = nil
-	s.cdcActivated.Unset()
+	s.cdcRegistered.Unset()
 	return nil
 }
 
@@ -2168,15 +2168,15 @@ func (s *Store) fsmApply(l *raft.Log) (e any) {
 
 		if s.cdcStreamer != nil {
 			// If CDC is enabled but not yet activated, do so now. By doing it here we keep
-			// CDC activiation in a single place in the code.
-			if s.cdcActivated.IsNot() {
+			// CDC registration in a single place in the code.
+			if s.cdcRegistered.IsNot() {
 				if err := s.db.RegisterPreUpdateHook(s.cdcStreamer.PreupdateHook, s.cdcIDsOnly); err != nil {
 					s.logger.Fatalf("failed to register preupdate hook for CDC: %s", err)
 				}
 				if err := s.db.RegisterCommitHook(s.cdcStreamer.CommitHook); err != nil {
 					s.logger.Fatalf("failed to register commit hook for CDC: %s", err)
 				}
-				s.cdcActivated.Set()
+				s.cdcRegistered.Set()
 			}
 			s.cdcStreamer.Reset(l.Index)
 		}
@@ -2196,8 +2196,8 @@ func (s *Store) fsmApply(l *raft.Log) (e any) {
 			s.logger.Fatalf("failed to set full snapshot needed: %s", err)
 		}
 		// Swapping in a new database deactivates the CDC hooks, so signal that it
-		// needs to be re-activated on the next commit.
-		s.cdcActivated.Unset()
+		// needs to be reregistered on the next commit.
+		s.cdcRegistered.Unset()
 	}
 	return r
 }
@@ -2433,8 +2433,8 @@ func (s *Store) fsmRestore(rc io.ReadCloser) (retErr error) {
 	}
 	s.dbModifiedTime.Store(lt)
 	// Swapping in a new database deactivates the CDC hooks, so signal that it
-	// needs to be re-activated on the next commit.
-	s.cdcActivated.Unset()
+	// needs to be reregistered on the next commit.
+	s.cdcRegistered.Unset()
 
 	stats.Add(numRestores, 1)
 	s.logger.Printf("node restored in %s", time.Since(startT))
