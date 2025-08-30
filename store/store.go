@@ -1192,7 +1192,10 @@ func (s *Store) Stats() (map[string]any, error) {
 			"observed": s.observer.GetNumObserved(),
 			"dropped":  s.observer.GetNumDropped(),
 		},
-		"cdc_activated":          s.cdcActivated.Is(),
+		"cdc": map[string]any{
+			"enabled":   s.cdcStreamer != nil,
+			"activated": s.cdcActivated.Is(),
+		},
 		"apply_timeout":          s.ApplyTimeout.String(),
 		"heartbeat_timeout":      s.HeartbeatTimeout.String(),
 		"election_timeout":       s.ElectionTimeout.String(),

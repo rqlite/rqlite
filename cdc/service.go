@@ -191,7 +191,7 @@ func NewService(nodeID, dir string, clstr Cluster, cfg *Config) (*Service, error
 		leaderObCh:            make(chan bool, leaderChanLen),
 		hwmObCh:               make(chan uint64, leaderChanLen),
 		done:                  make(chan struct{}),
-		logger:                log.New(os.Stdout, "[cdc-service] ", log.LstdFlags),
+		logger:                log.New(os.Stderr, "[cdc-service] ", log.LstdFlags),
 	}
 	srv.initBatcher()
 
@@ -537,6 +537,10 @@ func (s *Service) writeToFIFO() {
 	for {
 		select {
 		case o := <-s.in:
+			if o == nil {
+				// Channel closed.
+				continue
+			}
 			b, err := command.MarshalCDCIndexedEventGroup(o)
 			if err != nil {
 				s.logger.Printf("error marshalling CDC events: %v", err)
