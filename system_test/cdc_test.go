@@ -2,6 +2,7 @@ package system
 
 import (
 	"fmt"
+	"path/filepath"
 	"testing"
 	"time"
 
@@ -109,6 +110,77 @@ func Test_CDC_SingleNode_LaterStart(t *testing.T) {
 		// 1 create, 1 insert, 1 update, 1 delete
 		return testEndpoint.GetMessageCount() == 4, nil
 	}, 100*time.Millisecond, 5*time.Second)
+}
+
+// Test_CDC_SingleNode_PostLoadBoot verifies that CDC continues to operate
+// after a node is loaded or booted.
+func Test_CDC_SingleNode_PostLoadBoot(t *testing.T) {
+	node := mustNewLeaderNode("node1")
+	defer node.Deprovision()
+
+	testEndpoint := cdctest.NewHTTPTestServer()
+
+	// Configure CDC before opening the store.
+	cdcCluster := cdc.NewCDCCluster(node.Store, node.Cluster, node.Client)
+	cdcService, err := cdc.NewService(node.ID, node.Dir, cdcCluster, mustCDCConfig(testEndpoint.URL()))
+	if err != nil {
+		t.Fatalf("failed to create CDC service: %s", err.Error())
+	}
+	node.CDC = cdcService
+	node.CDC.Start()
+	node.CDC.SetLeader(true)
+
+	node.Store.EnableCDC(node.CDC.C(), false)
+
+	_, err = node.Execute(`CREATE TABLE foo (id integer not null primary key, name text)`)
+	if err != nil {
+		t.Fatalf("failed to create table: %v", err)
+	}
+	_, err = node.Execute(`INSERT INTO foo (id, name) VALUES (1, 'Alice')`)
+	if err != nil {
+		t.Fatalf("failed to insert data: %v", err)
+	}
+	_, err = node.Execute(`UPDATE foo SET name = 'Alice Updated' WHERE id = 1`)
+	if err != nil {
+		t.Fatalf("failed to update data: %v", err)
+	}
+	_, err = node.Execute(`DELETE FROM foo WHERE id = 1`)
+	if err != nil {
+		t.Fatalf("failed to delete data: %v", err)
+	}
+
+	testEndpoint.Start()
+	defer testEndpoint.Close()
+
+	testPoll(t, func() (bool, error) {
+		// 1 create, 1 insert, 1 update, 1 delete
+		return testEndpoint.GetMessageCount() == 4, nil
+	}, 100*time.Millisecond, 5*time.Second)
+
+	// Load the node, and ensure CDC continues to work.
+	if _, err := node.Load(filepath.Join("testdata", "auto-restore.sqlite")); err != nil {
+		t.Fatalf("failed to boot node: %s", err.Error())
+	}
+	_, err = node.Execute(`CREATE TABLE qux1 (id integer not null primary key, name text)`)
+	if err != nil {
+		t.Fatalf("failed to create table: %v", err)
+	}
+	testPoll(t, func() (bool, error) {
+		return testEndpoint.GetMessageCount() == 5, nil
+	}, 100*time.Millisecond, 5*time.Second)
+
+	// Boot the node, and ensure CDC continues to work.
+	if _, err := node.Boot(filepath.Join("testdata", "auto-restore.sqlite")); err != nil {
+		t.Fatalf("failed to boot node: %s", err.Error())
+	}
+	_, err = node.Execute(`CREATE TABLE qux2 (id integer not null primary key, name text)`)
+	if err != nil {
+		t.Fatalf("failed to create table: %v", err)
+	}
+	testPoll(t, func() (bool, error) {
+		return testEndpoint.GetMessageCount() == 6, nil
+	}, 100*time.Millisecond, 5*time.Second)
+
 }
 
 func Test_CDC_MultiNode(t *testing.T) {
