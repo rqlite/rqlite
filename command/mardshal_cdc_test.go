@@ -15,6 +15,8 @@ func Test_MarshalUnmarshal_CDCIndexedEventGroup(t *testing.T) {
 		{
 			name: "full event with all data types",
 			events: &proto.CDCIndexedEventGroup{
+				Index:     12345,
+				Timestamp: 1609459200000000000, // Jan 1, 2021 00:00:00 UTC in nanoseconds
 				Events: []*proto.CDCEvent{
 					{
 						Op:    proto.CDCEvent_INSERT,
@@ -41,11 +43,11 @@ func Test_MarshalUnmarshal_CDCIndexedEventGroup(t *testing.T) {
 		},
 		{
 			name:   "empty events slice",
-			events: &proto.CDCIndexedEventGroup{Events: []*proto.CDCEvent{}},
+			events: &proto.CDCIndexedEventGroup{Events: []*proto.CDCEvent{}, Timestamp: 1640995200000000000}, // Jan 1, 2022 00:00:00 UTC in nanoseconds
 		},
 		{
 			name:   "nil events slice",
-			events: &proto.CDCIndexedEventGroup{Events: nil},
+			events: &proto.CDCIndexedEventGroup{Events: nil, Timestamp: 1672531200000000000}, // Jan 1, 2023 00:00:00 UTC in nanoseconds
 		},
 		{
 			name:   "nil events object",

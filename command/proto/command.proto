@@ -183,6 +183,7 @@ message CDCEvent {
 message CDCIndexedEventGroup {
 	uint64 index = 1;
 	repeated CDCEvent events = 2;
+	uint64 timestamp = 3;
 }
 
 message CDCIndexedEventGroupBatch {

@@ -3,6 +3,7 @@ package db
 import (
 	"reflect"
 	"testing"
+	"time"
 
 	command "github.com/rqlite/rqlite/v8/command/proto"
 )
@@ -181,6 +182,48 @@ func Test_NewCDCStreamer_ResetThenPreupdate(t *testing.T) {
 	}
 	if !reflect.DeepEqual(change2, ev.Events[0]) {
 		t.Fatalf("received event does not match sent event: expected %v, got %v", change2, ev.Events[0])
+	}
+
+	if err := streamer.Close(); err != nil {
+		t.Fatalf("expected no error on close, got %v", err)
+	}
+}
+
+func Test_NewCDCStreamer_TimestampSet(t *testing.T) {
+	ch := make(chan *command.CDCIndexedEventGroup, 10)
+	streamer := NewCDCStreamer(ch)
+
+	streamer.Reset(1234)
+	change := &command.CDCEvent{
+		Table:    "test_table",
+		Op:       command.CDCEvent_INSERT,
+		OldRowId: 100,
+		NewRowId: 200,
+	}
+	if err := streamer.PreupdateHook(change); err != nil {
+		t.Fatalf("expected no error, got %v", err)
+	}
+
+	// Capture time before commit
+	beforeCommit := time.Now().UnixNano()
+	streamer.CommitHook()
+	// Capture time after commit
+	afterCommit := time.Now().UnixNano()
+
+	ev := <-ch
+	if ev.Index != 1234 {
+		t.Fatalf("expected index value to be 1234, got %d", ev.Index)
+	}
+	if len(ev.Events) != 1 {
+		t.Fatalf("expected 1 event, got %d", len(ev.Events))
+	}
+
+	// Check that timestamp was set and is within reasonable bounds
+	if ev.Timestamp == 0 {
+		t.Fatalf("expected timestamp to be set, got 0")
+	}
+	if int64(ev.Timestamp) < beforeCommit || int64(ev.Timestamp) > afterCommit {
+		t.Fatalf("expected timestamp to be between %d and %d, got %d", beforeCommit, afterCommit, ev.Timestamp)
 	}
 
 	if err := streamer.Close(); err != nil {
