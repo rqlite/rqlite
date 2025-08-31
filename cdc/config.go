@@ -143,9 +143,6 @@ func NewConfig(s string) (*Config, error) {
 	if config.Endpoint == "" {
 		config.Endpoint = def.Endpoint
 	}
-	if config.MaxBatchSz == 0 {
-		config.MaxBatchSz = def.MaxBatchSz
-	}
 	if config.MaxBatchDelay == 0 {
 		config.MaxBatchDelay = def.MaxBatchDelay
 	}
@@ -154,9 +151,6 @@ func NewConfig(s string) (*Config, error) {
 	}
 	if config.TransmitTimeout == 0 {
 		config.TransmitTimeout = def.TransmitTimeout
-	}
-	if config.TransmitMaxRetries == 0 {
-		config.TransmitMaxRetries = def.TransmitMaxRetries
 	}
 	if config.TransmitMinBackoff == 0 {
 		config.TransmitMinBackoff = def.TransmitMinBackoff
