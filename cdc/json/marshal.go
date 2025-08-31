@@ -2,6 +2,7 @@ package cdc
 
 import (
 	"encoding/json"
+	"fmt"
 	"time"
 
 	"github.com/rqlite/rqlite/v8/command/proto"
@@ -31,6 +32,37 @@ type CDCMessageEvent struct {
 	After    map[string]any `json:"after,omitempty"`
 }
 
+// cdcRowToMap converts a CDCRow protobuf to a map for JSON serialization.
+// Since column names are not available in the protobuf, we use index-based keys.
+func cdcRowToMap(row *proto.CDCRow) map[string]any {
+	if row == nil || len(row.Values) == 0 {
+		return nil
+	}
+
+	result := make(map[string]any, len(row.Values))
+	for i, value := range row.Values {
+		key := fmt.Sprintf("col_%d", i)
+
+		// Convert CDCValue to its underlying Go type
+		switch v := value.Value.(type) {
+		case *proto.CDCValue_I:
+			result[key] = v.I
+		case *proto.CDCValue_D:
+			result[key] = v.D
+		case *proto.CDCValue_B:
+			result[key] = v.B
+		case *proto.CDCValue_S:
+			result[key] = v.S
+		case *proto.CDCValue_Y:
+			result[key] = v.Y
+		default:
+			// Handle nil or unknown types
+			result[key] = nil
+		}
+	}
+	return result
+}
+
 // MarshalToEnvelopeJSON converts a slice of CDC events to a JSON envelope format.
 func MarshalToEnvelopeJSON(serviceID, nodeID string, ts bool, evs []*proto.CDCIndexedEventGroup) ([]byte, error) {
 	if len(evs) == 0 {
@@ -53,12 +85,24 @@ func MarshalToEnvelopeJSON(serviceID, nodeID string, ts bool, evs []*proto.CDCIn
 		}
 
 		for j, event := range ev.Events {
-			envelope.Payload[i].Events[j] = &CDCMessageEvent{
+			msgEvent := &CDCMessageEvent{
 				Op:       event.Op.String(),
 				Table:    event.Table,
 				NewRowId: event.NewRowId,
 				OldRowId: event.OldRowId,
 			}
+
+			// Populate Before field from old_row data
+			if event.OldRow != nil {
+				msgEvent.Before = cdcRowToMap(event.OldRow)
+			}
+
+			// Populate After field from new_row data
+			if event.NewRow != nil {
+				msgEvent.After = cdcRowToMap(event.NewRow)
+			}
+
+			envelope.Payload[i].Events[j] = msgEvent
 		}
 	}
 
