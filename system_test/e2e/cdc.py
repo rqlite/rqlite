@@ -8,7 +8,7 @@ import os
 import unittest
 import time
 
-from helpers import Node, d_, deprovision_node
+from helpers import Node, Cluster, d_, deprovision_node
 from cdc_test_server import HTTPTestServer
 
 RQLITED_PATH = os.environ['RQLITED_PATH']
@@ -51,21 +51,22 @@ class TestMultiNode_CDC(unittest.TestCase):
     n2.start(join=n0.RaftAddr())
     n2.wait_for_leader()
 
+    cluster = Cluster([n0, n1, n2])
+    leader = cluster.wait_for_leader()
+
     # Send some events
-    j = n0.execute('CREATE TABLE foo (id INTEGER NOT NULL PRIMARY KEY, name TEXT)')
+    j = leader.execute('CREATE TABLE foo (id INTEGER NOT NULL PRIMARY KEY, name TEXT)')
     self.assertEqual(j, d_("{'results': [{}]}"))
-    j = n0.execute('INSERT INTO foo(name) VALUES("alice")')
+    j = leader.execute('INSERT INTO foo(name) VALUES("alice")')
     self.assertEqual(j, d_("{'results': [{'last_insert_id': 1, 'rows_affected': 1}]}"))
-    j = n0.execute('INSERT INTO foo(name) VALUES("bob")')
+    j = leader.execute('INSERT INTO foo(name) VALUES("bob")')
     self.assertEqual(j, d_("{'results': [{'last_insert_id': 2, 'rows_affected': 1}]}"))
 
     # Ensure just the right number of events are sent (3: CREATE TABLE + 2 INSERTs)
     server.wait_message_count(3)
 
     # Clean up
-    deprovision_node(n0)
-    deprovision_node(n1)
-    deprovision_node(n2)
+    cluster.deprovision()
     server.close()
 
   def test_multi_node_events_with_node_failure(self):
@@ -87,42 +88,25 @@ class TestMultiNode_CDC(unittest.TestCase):
     n2.start(join=n0.RaftAddr())
     n2.wait_for_leader()
 
+    cluster = Cluster([n0, n1, n2])
+    leader = cluster.wait_for_leader()
+
     # Send some events
-    j = n0.execute('CREATE TABLE foo (id INTEGER NOT NULL PRIMARY KEY, name TEXT)')
+    j = leader.execute('CREATE TABLE foo (id INTEGER NOT NULL PRIMARY KEY, name TEXT)')
     self.assertEqual(j, d_("{'results': [{}]}"))
-    j = n0.execute('INSERT INTO foo(name) VALUES("alice")')
+    j = leader.execute('INSERT INTO foo(name) VALUES("alice")')
     self.assertEqual(j, d_("{'results': [{'last_insert_id': 1, 'rows_affected': 1}]}"))
-    j = n0.execute('INSERT INTO foo(name) VALUES("bob")')
+    j = leader.execute('INSERT INTO foo(name) VALUES("bob")')
     self.assertEqual(j, d_("{'results': [{'last_insert_id': 2, 'rows_affected': 1}]}"))
 
     # Wait for initial events
     server.wait_message_count(3)
 
-    # Find the current leader and stop it
-    leader = None
-    nodes = [n0, n1, n2]
-    for node in nodes:
-      if node.is_leader():
-        leader = node
-        break
-    
-    if leader is None:
-      raise Exception('No leader found')
-    
+    # Stop the current leader
     leader.stop()
     
-    # Wait for a new leader to be elected
-    new_leader = None
-    deadline = time.time() + 10  # 10 second timeout
-    while new_leader is None:
-      if time.time() > deadline:
-        raise Exception('Timeout waiting for new leader')
-      for node in nodes:
-        if node != leader and node.is_leader():
-          new_leader = node
-          break
-      if new_leader is None:
-        time.sleep(0.1)
+    # Wait for a new leader to be elected (excluding the stopped one)
+    new_leader = cluster.wait_for_leader(node_exc=leader)
 
     # Send a 4th event
     j = new_leader.execute('INSERT INTO foo(name) VALUES("charlie")')
@@ -132,9 +116,7 @@ class TestMultiNode_CDC(unittest.TestCase):
     server.wait_message_count(4)
 
     # Clean up
-    deprovision_node(n0)
-    deprovision_node(n1)
-    deprovision_node(n2)
+    cluster.deprovision()
     server.close()
 
 if __name__ == "__main__":
