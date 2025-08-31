@@ -326,8 +326,8 @@ func Test_CDC_MultiNode(t *testing.T) {
 
 func mustCDCConfig(url string) *cdc.Config {
 	cdcCfg := cdc.DefaultConfig()
+	cdcCfg.MaxBatchSz = 1
 	cdcCfg.HighWatermarkInterval = 100 * time.Millisecond
-	cdcCfg.TransmitMaxRetries = 100 // Keep retrying for a while.
 	cdcCfg.TransmitMinBackoff = 50 * time.Millisecond
 	cdcCfg.TransmitMaxBackoff = 50 * time.Millisecond
 	cdcCfg.Endpoint = url

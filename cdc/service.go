@@ -26,6 +26,8 @@ const (
 	hwmFile       = "hwm.json"
 	leaderChanLen = 5   // Support any fast back-to-back leadership changes.
 	inChanLen     = 100 // Size of the input channel for CDC events.
+
+	retryForever = -1
 )
 
 const (
@@ -181,7 +183,6 @@ func NewService(nodeID, dir string, clstr Cluster, cfg *Config) (*Service, error
 		httpClient:            httpClient,
 		tlsConfig:             tlsConfig,
 		transmitTimeout:       cfg.TransmitTimeout,
-		transmitMaxRetries:    cfg.TransmitMaxRetries,
 		transmitMinBackoff:    cfg.TransmitMinBackoff,
 		transmitMaxBackoff:    cfg.TransmitMaxBackoff,
 		transmitRetryPolicy:   cfg.TransmitRetryPolicy,
@@ -193,6 +194,13 @@ func NewService(nodeID, dir string, clstr Cluster, cfg *Config) (*Service, error
 		done:                  make(chan struct{}),
 		logger:                log.New(os.Stderr, "[cdc-service] ", log.LstdFlags),
 	}
+
+	if cfg.TransmitMaxRetries == nil {
+		srv.transmitMaxRetries = retryForever
+	} else {
+		srv.transmitMaxRetries = *cfg.TransmitMaxRetries
+	}
+
 	srv.initBatcher()
 
 	fifo, err := NewQueue(filepath.Join(dir, cdcDB))
@@ -426,7 +434,7 @@ func (s *Service) leaderLoop() (chan struct{}, chan struct{}) {
 						sentOK = true
 						break
 					}
-					if nAttempts == s.transmitMaxRetries {
+					if s.transmitMaxRetries != retryForever && nAttempts == s.transmitMaxRetries {
 						s.logger.Printf("failed to send batch to endpoint after %d retries, last error: %v", nAttempts, err)
 						stats.Add(numDroppedFailedToSend, int64(len(batch.Objects)))
 						break
