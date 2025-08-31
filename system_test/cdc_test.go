@@ -258,6 +258,7 @@ func Test_CDC_MultiNode(t *testing.T) {
 			return f, nil
 		}, 100*time.Millisecond, 10*time.Second)
 
+		// Reset testing state.
 		testEndpoint.Reset()
 		if testEndpoint.GetMessageCount() != 0 {
 			t.Fatalf("expected 0 messages after clear, got %d", testEndpoint.GetMessageCount())
@@ -326,8 +327,9 @@ func Test_CDC_MultiNode(t *testing.T) {
 
 func mustCDCConfig(url string) *cdc.Config {
 	cdcCfg := cdc.DefaultConfig()
+	cdcCfg.MaxBatchSz = 1
+	cdcCfg.MaxBatchDelay = 10 * time.Millisecond
 	cdcCfg.HighWatermarkInterval = 100 * time.Millisecond
-	cdcCfg.TransmitMaxRetries = 100 // Keep retrying for a while.
 	cdcCfg.TransmitMinBackoff = 50 * time.Millisecond
 	cdcCfg.TransmitMaxBackoff = 50 * time.Millisecond
 	cdcCfg.Endpoint = url

@@ -35,12 +35,12 @@ func Test_NewConfig_ValidURL(t *testing.T) {
 			}
 
 			// Verify other fields have default values
-			defaultConfig := DefaultConfig()
-			if config.MaxBatchSz != defaultConfig.MaxBatchSz {
-				t.Fatalf("Expected MaxBatchSz %d, got %d", defaultConfig.MaxBatchSz, config.MaxBatchSz)
+			defConfig := DefaultConfig()
+			if got, exp := config.MaxBatchSz, defConfig.MaxBatchSz; got != exp {
+				t.Fatalf("Expected MaxBatchSz %d, got %d", exp, got)
 			}
-			if config.MaxBatchDelay != defaultConfig.MaxBatchDelay {
-				t.Fatalf("Expected MaxBatchDelay %v, got %v", defaultConfig.MaxBatchDelay, config.MaxBatchDelay)
+			if config.MaxBatchDelay != DefaultMaxBatchDelay {
+				t.Fatalf("Expected MaxBatchDelay %v, got %v", DefaultMaxBatchDelay, config.MaxBatchDelay)
 			}
 		})
 	}
@@ -58,7 +58,7 @@ func Test_NewConfig_InvalidURL_ValidFile(t *testing.T) {
 		MaxBatchDelay:         5 * time.Second,
 		HighWatermarkInterval: 30 * time.Second,
 		TransmitTimeout:       10 * time.Second,
-		TransmitMaxRetries:    3,
+		TransmitMaxRetries:    intPtr(3),
 		TransmitRetryPolicy:   ExponentialRetryPolicy,
 		TransmitMinBackoff:    2 * time.Second,
 		TransmitMaxBackoff:    2 * time.Minute,
@@ -104,8 +104,8 @@ func Test_NewConfig_InvalidURL_ValidFile(t *testing.T) {
 	if config.TransmitTimeout != testConfig.TransmitTimeout {
 		t.Fatalf("Expected TransmitTimeout %v, got %v", testConfig.TransmitTimeout, config.TransmitTimeout)
 	}
-	if config.TransmitMaxRetries != testConfig.TransmitMaxRetries {
-		t.Fatalf("Expected TransmitMaxRetries %d, got %d", testConfig.TransmitMaxRetries, config.TransmitMaxRetries)
+	if *config.TransmitMaxRetries != *testConfig.TransmitMaxRetries {
+		t.Fatalf("Expected TransmitMaxRetries %d, got %d", *testConfig.TransmitMaxRetries, *config.TransmitMaxRetries)
 	}
 	if config.TransmitRetryPolicy != testConfig.TransmitRetryPolicy {
 		t.Fatalf("Expected TransmitRetryPolicy %d, got %d", testConfig.TransmitRetryPolicy, config.TransmitRetryPolicy)
@@ -195,8 +195,8 @@ func Test_NewConfig_PartialConfig(t *testing.T) {
 	if config.LogOnly != false {
 		t.Fatalf("Expected LogOnly to be false (zero value), got %v", config.LogOnly)
 	}
-	if config.MaxBatchDelay != 0 {
-		t.Fatalf("Expected MaxBatchDelay to be 0 (zero value), got %v", config.MaxBatchDelay)
+	if config.MaxBatchDelay != DefaultMaxBatchDelay {
+		t.Fatalf("Expected MaxBatchDelay to be %v, got %v", DefaultMaxBatchDelay, config.MaxBatchDelay)
 	}
 }
 
@@ -216,7 +216,9 @@ func TestConfig_TLSConfig(t *testing.T) {
 		{
 			name: "insecure skip verify only",
 			config: &Config{
-				InsecureSkipVerify: true,
+				TLS: &TLSConfiguration{
+					InsecureSkipVerify: true,
+				},
 			},
 			wantNil: false,
 			wantErr: false,
@@ -224,7 +226,9 @@ func TestConfig_TLSConfig(t *testing.T) {
 		{
 			name: "server name only",
 			config: &Config{
-				ServerName: "example.com",
+				TLS: &TLSConfiguration{
+					ServerName: "example.com",
+				},
 			},
 			wantNil: false,
 			wantErr: false,
@@ -232,8 +236,9 @@ func TestConfig_TLSConfig(t *testing.T) {
 		{
 			name: "invalid cert/key combination",
 			config: &Config{
-				CertFile: "nonexistent.crt",
-				KeyFile:  "nonexistent.key",
+				TLS: &TLSConfiguration{
+					CertFile: "nonexistent.crt",
+					KeyFile:  "nonexistent.key"},
 			},
 			wantNil: true,
 			wantErr: true,
@@ -271,8 +276,10 @@ func TestNewConfig_WithTLSFields(t *testing.T) {
 	configJSON := `{
 		"endpoint": "https://secure.example.com/cdc",
 		"max_batch_size": 25,
-		"insecure_skip_verify": true,
-		"server_name": "secure.example.com"
+		"tls": {
+		    "insecure_skip_verify": true,
+		    "server_name": "secure.example.com"
+	}
 	}`
 
 	if _, err := tmpFile.WriteString(configJSON); err != nil {
@@ -291,11 +298,11 @@ func TestNewConfig_WithTLSFields(t *testing.T) {
 	if config.MaxBatchSz != 25 {
 		t.Errorf("Expected MaxBatchSz 25, got %d", config.MaxBatchSz)
 	}
-	if !config.InsecureSkipVerify {
+	if !config.TLS.InsecureSkipVerify {
 		t.Error("Expected InsecureSkipVerify to be true")
 	}
-	if config.ServerName != "secure.example.com" {
-		t.Errorf("Expected ServerName 'secure.example.com', got '%s'", config.ServerName)
+	if got, exp := config.TLS.ServerName, "secure.example.com"; got != exp {
+		t.Errorf("Expected ServerName '%s', got '%s'", exp, got)
 	}
 
 	// Test that TLSConfig works with these fields
@@ -309,7 +316,7 @@ func TestNewConfig_WithTLSFields(t *testing.T) {
 	if !tlsConfig.InsecureSkipVerify {
 		t.Error("Expected TLS config InsecureSkipVerify to be true")
 	}
-	if tlsConfig.ServerName != "secure.example.com" {
-		t.Errorf("Expected TLS config ServerName 'secure.example.com', got '%s'", tlsConfig.ServerName)
+	if got, exp := tlsConfig.ServerName, "secure.example.com"; got != exp {
+		t.Errorf("Expected TLS config ServerName '%s', got '%s'", exp, got)
 	}
 }

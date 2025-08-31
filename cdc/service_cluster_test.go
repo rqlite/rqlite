@@ -597,7 +597,6 @@ func Test_Cluster_100Events(t *testing.T) {
 	for i := 0; i < 3; i++ {
 		cfg := DefaultConfig()
 		cfg.Endpoint = httpServer.URL()
-		cfg.MaxBatchSz = 10
 		cfg.MaxBatchDelay = time.Second
 		cfg.HighWatermarkInterval = 1 * time.Second
 

@@ -209,6 +209,11 @@ func Test_ServiceRestart_NoDupes(t *testing.T) {
 		t.Fatalf("expected %d FIFO ignored events, got %d", exp, got)
 	}
 
+	// Wait until the svc has performed a FIFO pruning.
+	testPoll(t, func() bool {
+		return svc.hwmLeaderUpdated.Load() == 1
+	}, 2*time.Second)
+
 	svc.Stop()
 
 	// Start a new service with the same params.
@@ -226,6 +231,7 @@ func Test_ServiceRestart_NoDupes(t *testing.T) {
 	}
 	defer svc2.Stop()
 	cl.SetLeader(0)
+
 	// Send the same event, ensure it is not forwarded.
 	svc2.C() <- evs
 

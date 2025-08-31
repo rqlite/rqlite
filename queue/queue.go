@@ -98,7 +98,10 @@ type Queue[T any] struct {
 	numTimeouts int
 }
 
-// New returns a instance of a Queue
+// New returns a instance of a Queue. t is the maximum time that
+// objects can remain in the queue before being sent, even if
+// the batch size has not been reached. If t is zero, there is no
+// timeout, and batches are sent only when the batch size is reached.
 func New[T any](maxSize, batchSize int, t time.Duration) *Queue[T] {
 	q := &Queue[T]{
 		maxSize:   maxSize,
@@ -211,9 +214,11 @@ func (q *Queue[T]) run() {
 		case s := <-q.batchCh:
 			queuedStmts = append(queuedStmts, s)
 			if len(queuedStmts) == 1 {
-				// First item in queue, start the timer so that if
-				// we don't get in a batch, we'll still write.
-				timer.Reset(q.timeout)
+				if q.timeout != 0 {
+					// First item in queue, start the timer so that if
+					// we don't get in a batch, we'll still write.
+					timer.Reset(q.timeout)
+				}
 			}
 			if len(queuedStmts) == q.batchSize {
 				stopTimer(timer)
