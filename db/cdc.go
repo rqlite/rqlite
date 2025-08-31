@@ -53,15 +53,16 @@ func (s *CDCStreamer) PreupdateHook(ev *command.CDCEvent) error {
 // CommitHook is called after the transaction is committed. It sends the
 // pending events to the out channel and clears the pending events.
 func (s *CDCStreamer) CommitHook() bool {
-	s.pending.Timestamp = uint64(time.Now().UnixNano())
+	toSend := s.pending
 	select {
-	case s.out <- s.pending:
+	case s.out <- toSend:
 	default:
 		stats.Add(cdcDroppedEvents, 1)
 	}
 	s.pending = &command.CDCIndexedEventGroup{
 		Events: make([]*command.CDCEvent, 0),
 	}
+	toSend.Timestamp = uint64(time.Now().UnixNano())
 	return true
 }
 
