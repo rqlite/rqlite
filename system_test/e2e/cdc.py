@@ -51,9 +51,6 @@ class TestMultiNode_CDC(unittest.TestCase):
     n2.start(join=n0.RaftAddr())
     n2.wait_for_leader()
 
-    # Let cluster settle
-    time.sleep(1)
-
     # Send some events
     j = n0.execute('CREATE TABLE foo (id INTEGER NOT NULL PRIMARY KEY, name TEXT)')
     self.assertEqual(j, d_("{'results': [{}]}"))
@@ -90,9 +87,6 @@ class TestMultiNode_CDC(unittest.TestCase):
     n2.start(join=n0.RaftAddr())
     n2.wait_for_leader()
 
-    # Let cluster settle
-    time.sleep(1)
-
     # Send some events
     j = n0.execute('CREATE TABLE foo (id INTEGER NOT NULL PRIMARY KEY, name TEXT)')
     self.assertEqual(j, d_("{'results': [{}]}"))
@@ -104,11 +98,34 @@ class TestMultiNode_CDC(unittest.TestCase):
     # Wait for initial events
     server.wait_message_count(3)
 
-    # Kill one node  
-    n2.stop()
+    # Find the current leader and stop it
+    leader = None
+    nodes = [n0, n1, n2]
+    for node in nodes:
+      if node.is_leader():
+        leader = node
+        break
+    
+    if leader is None:
+      raise Exception('No leader found')
+    
+    leader.stop()
+    
+    # Wait for a new leader to be elected
+    new_leader = None
+    deadline = time.time() + 10  # 10 second timeout
+    while new_leader is None:
+      if time.time() > deadline:
+        raise Exception('Timeout waiting for new leader')
+      for node in nodes:
+        if node != leader and node.is_leader():
+          new_leader = node
+          break
+      if new_leader is None:
+        time.sleep(0.1)
 
     # Send a 4th event
-    j = n0.execute('INSERT INTO foo(name) VALUES("charlie")')
+    j = new_leader.execute('INSERT INTO foo(name) VALUES("charlie")')
     self.assertEqual(j, d_("{'results': [{'last_insert_id': 3, 'rows_affected': 1}]}"))
 
     # Ensure just that event is sent (total should now be 4)
