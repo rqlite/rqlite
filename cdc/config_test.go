@@ -39,8 +39,8 @@ func Test_NewConfig_ValidURL(t *testing.T) {
 			if got, exp := config.MaxBatchSz, defConfig.MaxBatchSz; got != exp {
 				t.Fatalf("Expected MaxBatchSz %d, got %d", exp, got)
 			}
-			if config.MaxBatchDelay != 0 {
-				t.Fatalf("Expected MaxBatchDelay %v, got %v", 0, config.MaxBatchDelay)
+			if config.MaxBatchDelay != DefaultMaxBatchDelay {
+				t.Fatalf("Expected MaxBatchDelay %v, got %v", DefaultMaxBatchDelay, config.MaxBatchDelay)
 			}
 		})
 	}
@@ -195,8 +195,8 @@ func Test_NewConfig_PartialConfig(t *testing.T) {
 	if config.LogOnly != false {
 		t.Fatalf("Expected LogOnly to be false (zero value), got %v", config.LogOnly)
 	}
-	if config.MaxBatchDelay != 0 {
-		t.Fatalf("Expected MaxBatchDelay to be 0 (zero value), got %v", config.MaxBatchDelay)
+	if config.MaxBatchDelay != DefaultMaxBatchDelay {
+		t.Fatalf("Expected MaxBatchDelay to be %v, got %v", DefaultMaxBatchDelay, config.MaxBatchDelay)
 	}
 }
 

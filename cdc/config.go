@@ -25,6 +25,7 @@ const (
 
 const (
 	DefaultMaxBatchSz            = 10
+	DefaultMaxBatchDelay         = 100 * time.Millisecond
 	DefaultHighWatermarkInterval = 1 * time.Second
 	DefaultTransmitTimeout       = 5 * time.Second
 	DefaultTransmitRetryPolicy   = LinearRetryPolicy
@@ -79,8 +80,8 @@ type Config struct {
 
 	// MaxBatchDelay is the maximum delay before sending a rquest to the endpoint, regardless
 	// of the number of events ready for sending. This is used to ensure that we don't wait
-	// too long for a batch to fill up. If it is zero or unspecified, then there is no maximum
-	// delay.
+	// too long for a batch to fill up. If it is unspecified or is zero, the default of
+	// DefaultMaxBatchDelay is used.
 	MaxBatchDelay time.Duration `json:"max_batch_delay"`
 
 	// HighWatermarkInterval is the interval at which the high watermark is broadcast by the
@@ -114,6 +115,7 @@ type Config struct {
 func DefaultConfig() *Config {
 	return &Config{
 		MaxBatchSz:            DefaultMaxBatchSz,
+		MaxBatchDelay:         DefaultMaxBatchDelay,
 		HighWatermarkInterval: DefaultHighWatermarkInterval,
 		TransmitTimeout:       DefaultTransmitTimeout,
 		TransmitRetryPolicy:   DefaultTransmitRetryPolicy,
@@ -163,6 +165,9 @@ func NewConfig(s string) (*Config, error) {
 	// Ensure all fields have sensible values, using defaults where necessary.
 	if config.MaxBatchSz <= 0 {
 		config.MaxBatchSz = DefaultMaxBatchSz
+	}
+	if config.MaxBatchDelay <= 0 {
+		config.MaxBatchDelay = DefaultMaxBatchDelay
 	}
 	if config.HighWatermarkInterval == 0 {
 		config.HighWatermarkInterval = DefaultHighWatermarkInterval
