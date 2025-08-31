@@ -258,6 +258,7 @@ func Test_CDC_MultiNode(t *testing.T) {
 			return f, nil
 		}, 100*time.Millisecond, 10*time.Second)
 
+		// Reset testing state.
 		testEndpoint.Reset()
 		if testEndpoint.GetMessageCount() != 0 {
 			t.Fatalf("expected 0 messages after clear, got %d", testEndpoint.GetMessageCount())
