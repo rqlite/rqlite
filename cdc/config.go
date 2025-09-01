@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net/url"
 	"os"
+	"regexp"
 	"time"
 
 	"github.com/rqlite/rqlite/v8/internal/rtls"
@@ -62,6 +63,11 @@ type Config struct {
 	// CDC consumer. This allows CDC consumers to receive events from multiple rqlite systems
 	// and differentiate between events sent by those systems.
 	ServiceID string `json:"service_id,omitempty"`
+
+	// TableFilter is an optional regular expression that filters which tables changes are
+	// captured for. If unspecified or empty, changes to all tables are captured. If specified,
+	// only changes to tables whose names match the regular expression are captured.
+	TableFilter string `json:"table_filter,omitempty"`
 
 	// LogOnly indicates whether the CDC service should only log events instead of sending
 	// them to the configured endpoint. This is mostly useful for testing and inspection
@@ -136,6 +142,14 @@ func (c *Config) TLSConfig() (*tls.Config, error) {
 	}
 	return rtls.CreateClientConfig(c.TLS.CertFile, c.TLS.KeyFile, c.TLS.CACertFile,
 		c.TLS.ServerName, c.TLS.InsecureSkipVerify)
+}
+
+// TableRegex compiles the table filter regular expression, if one is set.
+func (c *Config) TableRegex() (*regexp.Regexp, error) {
+	if c.TableFilter == "" {
+		return nil, nil
+	}
+	return regexp.Compile(c.TableFilter)
 }
 
 // NewConfig creates a new Config from a string. If the string can be parsed

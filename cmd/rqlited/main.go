@@ -331,7 +331,12 @@ func createCDC(cfg *Config, str *store.Store, clstrServ *cluster.Service, clstrC
 	if err := cdcService.Start(); err != nil {
 		return fmt.Errorf("failed to start CDC Service: %s", err.Error())
 	}
-	if err := str.EnableCDC(cdcService.C(), "", cdcCfg.RowIDsOnly); err != nil {
+
+	tableRe, err := cdcCfg.TableRegex()
+	if err != nil {
+		return fmt.Errorf("CDC table filter is not a valid regular expression: %s", err.Error())
+	}
+	if err := str.EnableCDC(cdcService.C(), tableRe, cdcCfg.RowIDsOnly); err != nil {
 		return fmt.Errorf("failed to enable CDC on Store: %s", err.Error())
 	}
 	return nil

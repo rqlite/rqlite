@@ -1798,7 +1798,7 @@ func (s *Store) Database(leader bool) ([]byte, error) {
 // If the Store is open then CDC will begin immediately. If the Store is not open
 // yet, then CDC will begin when the Store is opened. This function will return
 // an error if CDC is already enabled.
-func (s *Store) EnableCDC(out chan<- *proto.CDCIndexedEventGroup, tableRe string, rowIDsOnly bool) error {
+func (s *Store) EnableCDC(out chan<- *proto.CDCIndexedEventGroup, tableRe *regexp.Regexp, rowIDsOnly bool) error {
 	s.cdcMu.Lock()
 	defer s.cdcMu.Unlock()
 
@@ -1807,13 +1807,7 @@ func (s *Store) EnableCDC(out chan<- *proto.CDCIndexedEventGroup, tableRe string
 	}
 	s.cdcStreamer = sql.NewCDCStreamer(out)
 	s.cdcIDsOnly = rowIDsOnly
-	if tableRe != "" {
-		re, err := regexp.Compile(tableRe)
-		if err != nil {
-			return fmt.Errorf("invalid table name regular expression: %w", err)
-		}
-		s.cdcTableRe = re
-	}
+	s.cdcTableRe = tableRe
 	return nil
 }
 
