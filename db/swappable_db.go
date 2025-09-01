@@ -211,10 +211,10 @@ func (s *SwappableDB) WALSize() (int64, error) {
 }
 
 // RegisterPreUpdateHook registers a pre-update hook on the underlying database.
-func (s *SwappableDB) RegisterPreUpdateHook(hook PreUpdateHookCallback, rowIDsOnly bool) error {
+func (s *SwappableDB) RegisterPreUpdateHook(hook PreUpdateHookCallback, tblRe string, rowIDsOnly bool) error {
 	s.dbMu.RLock()
 	defer s.dbMu.RUnlock()
-	return s.db.RegisterPreUpdateHook(hook, rowIDsOnly)
+	return s.db.RegisterPreUpdateHook(hook, tblRe, rowIDsOnly)
 }
 
 // RegisterPreUpdateHook registers a commit hook on the underlying database.
