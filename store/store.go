@@ -2174,7 +2174,7 @@ func (s *Store) fsmApply(l *raft.Log) (e any) {
 			// If CDC is enabled but not yet activated, do so now. By doing it here we keep
 			// CDC registration in a single place in the code.
 			if s.cdcRegistered.IsNot() {
-				if err := s.db.RegisterPreUpdateHook(s.cdcStreamer.PreupdateHook, nil, s.cdcIDsOnly); err != nil {
+				if err := s.db.RegisterPreUpdateHook(s.cdcStreamer.PreupdateHook, s.cdcTableRe, s.cdcIDsOnly); err != nil {
 					s.logger.Fatalf("failed to register preupdate hook for CDC: %s", err)
 				}
 				if err := s.db.RegisterCommitHook(s.cdcStreamer.CommitHook); err != nil {
