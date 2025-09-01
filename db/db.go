@@ -21,6 +21,7 @@ import (
 	command "github.com/rqlite/rqlite/v8/command/proto"
 	"github.com/rqlite/rqlite/v8/db/humanize"
 	"github.com/rqlite/rqlite/v8/internal/rsum"
+	"github.com/rqlite/rqlite/v8/internal/rsync"
 )
 
 const (
@@ -265,7 +266,7 @@ type PreUpdateHookCallback func(ev *command.CDCEvent) error
 // the callback is removed.
 func (db *DB) RegisterPreUpdateHook(hook PreUpdateHookCallback, tblRe *regexp.Regexp, rowIDsOnly bool) error {
 	// Convert from SQLite hook data to rqlite hook data.
-	tableMatch := NewAtomicMap[string, bool]()
+	tableMatch := rsync.NewAtomicMap[string, bool]()
 	convertFn := func(d sqlite3.SQLitePreUpdateData) (*command.CDCEvent, error) {
 		if tblRe != nil {
 			m, ok := tableMatch.Get(d.TableName)
