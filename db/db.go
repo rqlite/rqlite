@@ -266,7 +266,7 @@ type PreUpdateHookCallback func(ev *command.CDCEvent) error
 func (db *DB) RegisterPreUpdateHook(hook PreUpdateHookCallback, tblRe *regexp.Regexp, rowIDsOnly bool) error {
 	// Convert from SQLite hook data to rqlite hook data.
 	convertFn := func(d sqlite3.SQLitePreUpdateData) (*command.CDCEvent, error) {
-		if tblRe != nil && !tblRe.MatchReader(strings.NewReader(d.TableName)) {
+		if tblRe != nil && !tblRe.MatchString(d.TableName) {
 			return nil, nil
 		}
 
