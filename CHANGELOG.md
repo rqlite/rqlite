@@ -3,6 +3,7 @@
 - [PR #2275](https://github.com/rqlite/rqlite/pull/2275): Enable Change-Data-Capture.
 
 ### Implementation changes and bug fixes
+- [PR #2303](https://github.com/rqlite/rqlite/pull/2303): Add AtomicMap to rsync package.
 - [PR #2263](https://github.com/rqlite/rqlite/pull/2263): Test CDC with later-starting HTTP endpoint.
 - [PR #2267](https://github.com/rqlite/rqlite/pull/2267): Add row-IDs-only to CDC config.
 - [PR #2268](https://github.com/rqlite/rqlite/pull/2268): Upgrade CircleCI environment to Go 1.25.

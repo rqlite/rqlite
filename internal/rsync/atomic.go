@@ -150,3 +150,31 @@ func (s *AtomicString) Load() string {
 	defer s.mu.RUnlock()
 	return s.s
 }
+
+// AtomicMap is a thread-safe map with atomic operations.
+type AtomicMap[K comparable, V any] struct {
+	m  map[K]V
+	mu sync.RWMutex
+}
+
+// NewAtomicMap returns a new AtomicMap.
+func NewAtomicMap[K comparable, V any]() *AtomicMap[K, V] {
+	return &AtomicMap[K, V]{
+		m: make(map[K]V),
+	}
+}
+
+// Get returns the value for the given key and a boolean indicating if the key exists.
+func (m *AtomicMap[K, V]) Get(key K) (V, bool) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	value, exists := m.m[key]
+	return value, exists
+}
+
+// Set stores the value for the given key.
+func (m *AtomicMap[K, V]) Set(key K, value V) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.m[key] = value
+}
