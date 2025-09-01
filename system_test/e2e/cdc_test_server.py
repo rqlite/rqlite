@@ -124,6 +124,13 @@ class CDCHTTPRequestHandler(BaseHTTPRequestHandler):
                 data = json.loads(body.decode('utf-8'))
                 envelope = CDCMessagesEnvelope.from_dict(data)
                 
+                # Check for duplicates if duplicate detection is enabled
+                if getattr(server, 'enable_dupe_detection', False):
+                    for msg in envelope.payload:
+                        if msg.index in server.messages:
+                            self.send_error(409, "Conflict")
+                            return
+                
                 # Store messages by index
                 for msg in envelope.payload:
                     server.messages[msg.index] = msg
@@ -160,6 +167,7 @@ class HTTPTestServer:
         self.fail_rate = 0  # Percentage of requests to fail (0-100)
         self.num_failed = 0
         self._dump_request = False
+        self._enable_dupe_detection = False
         
         # Create server with dynamic port allocation
         self.server = None
@@ -176,6 +184,18 @@ class HTTPTestServer:
         self._dump_request = value
         if self.server:
             self.server.dump_request = value
+
+    @property
+    def enable_dupe_detection(self) -> bool:
+        """Get enable_dupe_detection setting."""
+        return self._enable_dupe_detection
+
+    @enable_dupe_detection.setter
+    def enable_dupe_detection(self, value: bool):
+        """Set enable_dupe_detection setting."""
+        self._enable_dupe_detection = value
+        if self.server:
+            self.server.enable_dupe_detection = value
 
     def _wait_until(self, condition_func, timeout=5.0, interval=0.1):
         """Poll condition_func until it returns True or timeout occurs."""
@@ -201,6 +221,7 @@ class HTTPTestServer:
         self.server.fail_rate = self.fail_rate
         self.server.num_failed = 0
         self.server.dump_request = self._dump_request
+        self.server.enable_dupe_detection = self._enable_dupe_detection
     
     def url(self) -> str:
         """Return the URL of the test server."""
