@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"regexp"
 	"sync"
 	"time"
 
@@ -211,7 +212,7 @@ func (s *SwappableDB) WALSize() (int64, error) {
 }
 
 // RegisterPreUpdateHook registers a pre-update hook on the underlying database.
-func (s *SwappableDB) RegisterPreUpdateHook(hook PreUpdateHookCallback, tblRe string, rowIDsOnly bool) error {
+func (s *SwappableDB) RegisterPreUpdateHook(hook PreUpdateHookCallback, tblRe *regexp.Regexp, rowIDsOnly bool) error {
 	s.dbMu.RLock()
 	defer s.dbMu.RUnlock()
 	return s.db.RegisterPreUpdateHook(hook, tblRe, rowIDsOnly)

@@ -263,20 +263,10 @@ type PreUpdateHookCallback func(ev *command.CDCEvent) error
 // RegisterPreUpdateHook registers a callback that is called before a row is modified
 // in the database. If a callback is already registered, it is replaced. If hook is nil,
 // the callback is removed.
-func (db *DB) RegisterPreUpdateHook(hook PreUpdateHookCallback, tblRe string, rowIDsOnly bool) error {
-	var regex *regexp.Regexp
-	var err error
-	if tblRe != "" {
-		// compile the regex
-		regex, err = regexp.Compile(tblRe)
-		if err != nil {
-			return fmt.Errorf("failed to compile table regex: %w", err)
-		}
-	}
-
+func (db *DB) RegisterPreUpdateHook(hook PreUpdateHookCallback, tblRe *regexp.Regexp, rowIDsOnly bool) error {
 	// Convert from SQLite hook data to rqlite hook data.
 	convertFn := func(d sqlite3.SQLitePreUpdateData) (*command.CDCEvent, error) {
-		if regex != nil && !regex.MatchReader(strings.NewReader(d.TableName)) {
+		if tblRe != nil && !tblRe.MatchReader(strings.NewReader(d.TableName)) {
 			return nil, nil
 		}
 

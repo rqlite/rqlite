@@ -15,6 +15,7 @@ import (
 	"net"
 	"os"
 	"path/filepath"
+	"regexp"
 	"sort"
 	"strconv"
 	"strings"
@@ -297,6 +298,7 @@ type Store struct {
 	cdcMu         sync.RWMutex
 	cdcStreamer   *sql.CDCStreamer
 	cdcIDsOnly    bool
+	cdcTableRe    *regexp.Regexp
 	cdcRegistered rsync.AtomicBool
 
 	dechunkManager *chunking.DechunkerManager
@@ -779,7 +781,7 @@ func (s *Store) Close(wait bool) (retErr error) {
 		s.cdcStreamer.Close()
 	}
 	s.cdcStreamer = nil
-	if err := s.db.RegisterPreUpdateHook(nil, "", false); err != nil {
+	if err := s.db.RegisterPreUpdateHook(nil, nil, false); err != nil {
 		return fmt.Errorf("failed to unregister preupdate hook: %w", err)
 	}
 	if err := s.db.RegisterCommitHook(nil); err != nil {
@@ -1796,14 +1798,22 @@ func (s *Store) Database(leader bool) ([]byte, error) {
 // If the Store is open then CDC will begin immediately. If the Store is not open
 // yet, then CDC will begin when the Store is opened. This function will return
 // an error if CDC is already enabled.
-func (s *Store) EnableCDC(out chan<- *proto.CDCIndexedEventGroup, rowIDsOnly bool) error {
+func (s *Store) EnableCDC(out chan<- *proto.CDCIndexedEventGroup, tableRe string, rowIDsOnly bool) error {
 	s.cdcMu.Lock()
 	defer s.cdcMu.Unlock()
+
 	if s.cdcStreamer != nil {
 		return ErrCDCEnabled
 	}
 	s.cdcStreamer = sql.NewCDCStreamer(out)
 	s.cdcIDsOnly = rowIDsOnly
+	if tableRe != "" {
+		re, err := regexp.Compile(tableRe)
+		if err != nil {
+			return fmt.Errorf("invalid table name regular expression: %w", err)
+		}
+		s.cdcTableRe = re
+	}
 	return nil
 }
 
@@ -1819,7 +1829,7 @@ func (s *Store) DisableCDC() error {
 	}
 
 	if s.db != nil {
-		if err := s.db.RegisterPreUpdateHook(nil, "", false); err != nil {
+		if err := s.db.RegisterPreUpdateHook(nil, nil, false); err != nil {
 			return fmt.Errorf("failed to unregister preupdate hook: %w", err)
 		}
 		if err := s.db.RegisterCommitHook(nil); err != nil {
@@ -2170,7 +2180,7 @@ func (s *Store) fsmApply(l *raft.Log) (e any) {
 			// If CDC is enabled but not yet activated, do so now. By doing it here we keep
 			// CDC registration in a single place in the code.
 			if s.cdcRegistered.IsNot() {
-				if err := s.db.RegisterPreUpdateHook(s.cdcStreamer.PreupdateHook, "", s.cdcIDsOnly); err != nil {
+				if err := s.db.RegisterPreUpdateHook(s.cdcStreamer.PreupdateHook, nil, s.cdcIDsOnly); err != nil {
 					s.logger.Fatalf("failed to register preupdate hook for CDC: %s", err)
 				}
 				if err := s.db.RegisterCommitHook(s.cdcStreamer.CommitHook); err != nil {
