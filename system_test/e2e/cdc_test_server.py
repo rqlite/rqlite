@@ -4,6 +4,12 @@ Python HTTP server for CDC end-to-end testing.
 
 This module provides an HTTP test server designed for end-to-end 
 testing of CDC functionality.
+
+Features:
+- Simulates HTTP endpoint for receiving CDC messages
+- Configurable failure rate for testing retry logic
+- Optional request dumping for debugging
+- Optional duplicate detection (responds with 409 Conflict for duplicate event indexes)
 """
 
 import json
@@ -157,6 +163,16 @@ class HTTPTestServer:
     HTTP test server that simulates an HTTP endpoint for receiving CDC messages.
     
     Designed for end-to-end testing of CDC functionality.
+    
+    Key features:
+    - Stores CDC messages by event index for deduplication testing
+    - Configurable failure rate to simulate network issues
+    - Optional duplicate detection (enable_dupe_detection property)
+    - Thread-safe request handling
+    
+    When duplicate detection is enabled, the server will reject any request
+    containing event indexes that have been previously received, responding
+    with HTTP 409 Conflict.
     """
 
     def __init__(self):
