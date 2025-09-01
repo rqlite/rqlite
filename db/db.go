@@ -270,12 +270,10 @@ func (db *DB) RegisterPreUpdateHook(hook PreUpdateHookCallback, tblRe *regexp.Re
 		if tblRe != nil {
 			m, ok := tableMatch[d.TableName]
 			if !ok {
-				if !tblRe.MatchString(d.TableName) {
-					tableMatch[d.TableName] = false
-					return nil, nil
-				}
-				tableMatch[d.TableName] = true
-			} else if !m {
+				m = tblRe.MatchString(d.TableName)
+				tableMatch[d.TableName] = m
+			}
+			if !m {
 				return nil, nil
 			}
 		}
