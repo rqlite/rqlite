@@ -12,6 +12,7 @@ import (
 	"log"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"sync"
 	"time"
@@ -262,9 +263,13 @@ type PreUpdateHookCallback func(ev *command.CDCEvent) error
 // RegisterPreUpdateHook registers a callback that is called before a row is modified
 // in the database. If a callback is already registered, it is replaced. If hook is nil,
 // the callback is removed.
-func (db *DB) RegisterPreUpdateHook(hook PreUpdateHookCallback, rowIDsOnly bool) error {
+func (db *DB) RegisterPreUpdateHook(hook PreUpdateHookCallback, tblRe *regexp.Regexp, rowIDsOnly bool) error {
 	// Convert from SQLite hook data to rqlite hook data.
 	convertFn := func(d sqlite3.SQLitePreUpdateData) (*command.CDCEvent, error) {
+		if tblRe != nil && !tblRe.MatchString(d.TableName) {
+			return nil, nil
+		}
+
 		ev := &command.CDCEvent{
 			Table:    d.TableName,
 			OldRowId: d.OldRowID,
@@ -320,6 +325,9 @@ func (db *DB) RegisterPreUpdateHook(hook PreUpdateHookCallback, rowIDsOnly bool)
 			if err != nil {
 				stats.Add(numPreupdatesErrors, 1)
 				ev.Error = err.Error()
+			}
+			if ev == nil {
+				return
 			}
 			if err := hook(ev); err != nil {
 				stats.Add(numPreupdatesCBErrors, 1)

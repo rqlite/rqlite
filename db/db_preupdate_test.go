@@ -3,6 +3,7 @@ package db
 import (
 	"os"
 	"reflect"
+	"regexp"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -28,7 +29,7 @@ func Test_Preupdate_Basic(t *testing.T) {
 		count.Add(1)
 		return nil
 	}
-	if err := db.RegisterPreUpdateHook(hook, true); err != nil {
+	if err := db.RegisterPreUpdateHook(hook, nil, true); err != nil {
 		t.Fatalf("error registering preupdate hook")
 	}
 
@@ -78,12 +79,98 @@ func Test_Preupdate_Basic(t *testing.T) {
 	}
 
 	// Unregister the hook, insert a row, and make sure the hook is not triggered.
-	if err := db.RegisterPreUpdateHook(nil, true); err != nil {
+	if err := db.RegisterPreUpdateHook(nil, nil, true); err != nil {
 		t.Fatalf("error unregistering preupdate hook")
 	}
 	mustExecute(db, "INSERT INTO foo(name) VALUES('fiona')")
 	if count.Load() != 13 {
 		t.Fatalf("expected count 8, got %d", count.Load())
+	}
+}
+
+func Test_Preupdate_Basic_Regex(t *testing.T) {
+	path := mustTempPath()
+	defer os.Remove(path)
+	db, err := Open(path, false, false)
+	if err != nil {
+		t.Fatalf("error opening database")
+	}
+	defer db.Close()
+	mustExecute(db, "CREATE TABLE foo (id INTEGER PRIMARY KEY, name TEXT)")
+	mustExecute(db, "CREATE TABLE foobar (id INTEGER PRIMARY KEY, name TEXT)")
+
+	count := &atomic.Int32{}
+	hook := func(ev *command.CDCEvent) error {
+		count.Add(1)
+		return nil
+	}
+	exp := 0
+
+	// Match.
+	exp++
+	if err := db.RegisterPreUpdateHook(hook, nil, true); err != nil {
+		t.Fatalf("error registering preupdate hook")
+	}
+	mustExecute(db, "INSERT INTO foo(name) VALUES('fiona')")
+	if exp, got := exp, count.Load(); exp != int(got) {
+		t.Fatalf("expected count %d, got %d", exp, got)
+	}
+
+	// Match
+	exp++
+	if err := db.RegisterPreUpdateHook(hook, mustRegex("foo"), true); err != nil {
+		t.Fatalf("error registering preupdate hook")
+	}
+	mustExecute(db, "INSERT INTO foo(name) VALUES('fiona')")
+	if exp, got := exp, count.Load(); exp != int(got) {
+		t.Fatalf("expected count %d, got %d", exp, got)
+	}
+
+	// No match
+	if err := db.RegisterPreUpdateHook(hook, mustRegex("foobar"), true); err != nil {
+		t.Fatalf("error registering preupdate hook")
+	}
+	mustExecute(db, "INSERT INTO foo(name) VALUES('fiona')")
+	if exp, got := exp, count.Load(); exp != int(got) {
+		t.Fatalf("expected count %d, got %d", exp, got)
+	}
+
+	// No match
+	if err := db.RegisterPreUpdateHook(hook, mustRegex("^foob.*"), true); err != nil {
+		t.Fatalf("error registering preupdate hook")
+	}
+	mustExecute(db, "INSERT INTO foo(name) VALUES('fiona')")
+	if exp, got := exp, count.Load(); exp != int(got) {
+		t.Fatalf("expected count %d, got %d", exp, got)
+	}
+
+	// Two matches.
+	exp += 2
+	if err := db.RegisterPreUpdateHook(hook, mustRegex("^foo.*"), true); err != nil {
+		t.Fatalf("error registering preupdate hook")
+	}
+	mustExecute(db, "INSERT INTO foo(name) VALUES('fiona')")
+	mustExecute(db, "INSERT INTO foobar(name) VALUES('fiona')")
+	if exp, got := exp, count.Load(); exp != int(got) {
+		t.Fatalf("expected count %d, got %d", exp, got)
+	}
+
+	// No match
+	if err := db.RegisterPreUpdateHook(hook, mustRegex("qux"), true); err != nil {
+		t.Fatalf("error registering preupdate hook")
+	}
+	mustExecute(db, "INSERT INTO foo(name) VALUES('fiona')")
+	if exp, got := exp, count.Load(); exp != int(got) {
+		t.Fatalf("expected count %d, got %d", exp, got)
+	}
+
+	// No match
+	if err := db.RegisterPreUpdateHook(hook, mustRegex(" foo"), true); err != nil {
+		t.Fatalf("error registering preupdate hook")
+	}
+	mustExecute(db, "INSERT INTO foo(name) VALUES('fiona')")
+	if exp, got := exp, count.Load(); exp != int(got) {
+		t.Fatalf("expected count %d, got %d", exp, got)
 	}
 }
 
@@ -104,7 +191,7 @@ func Test_Preupdate_Constraint(t *testing.T) {
 		count.Add(1)
 		return nil
 	}
-	if err := db.RegisterPreUpdateHook(hook, true); err != nil {
+	if err := db.RegisterPreUpdateHook(hook, nil, true); err != nil {
 		t.Fatalf("error registering preupdate hook")
 	}
 
@@ -165,7 +252,7 @@ func Test_Preupdate_RowIDs(t *testing.T) {
 		}
 		return nil
 	}
-	if err := db.RegisterPreUpdateHook(hook, true); err != nil {
+	if err := db.RegisterPreUpdateHook(hook, nil, true); err != nil {
 		t.Fatalf("error registering preupdate hook")
 	}
 	wg.Add(1)
@@ -193,7 +280,7 @@ func Test_Preupdate_RowIDs(t *testing.T) {
 		}
 		return nil
 	}
-	if err := db.RegisterPreUpdateHook(hook, true); err != nil {
+	if err := db.RegisterPreUpdateHook(hook, nil, true); err != nil {
 		t.Fatalf("error registering preupdate hook")
 	}
 	wg.Add(1)
@@ -221,7 +308,7 @@ func Test_Preupdate_RowIDs(t *testing.T) {
 		}
 		return nil
 	}
-	if err := db.RegisterPreUpdateHook(hook, true); err != nil {
+	if err := db.RegisterPreUpdateHook(hook, nil, true); err != nil {
 		t.Fatalf("error registering preupdate hook")
 	}
 	wg.Add(1)
@@ -261,7 +348,7 @@ func Test_Preupdate_Data(t *testing.T) {
 		compareEvents(t, exp, got)
 		return nil
 	}
-	if err := db.RegisterPreUpdateHook(hook, false); err != nil {
+	if err := db.RegisterPreUpdateHook(hook, nil, false); err != nil {
 		t.Fatalf("error registering preupdate hook")
 	}
 	wg.Add(1)
@@ -289,7 +376,7 @@ func Test_Preupdate_Data(t *testing.T) {
 		compareEvents(t, exp, got)
 		return nil
 	}
-	if err := db.RegisterPreUpdateHook(hook, false); err != nil {
+	if err := db.RegisterPreUpdateHook(hook, nil, false); err != nil {
 		t.Fatalf("error registering preupdate hook")
 	}
 	wg.Add(1)
@@ -317,7 +404,7 @@ func Test_Preupdate_Data(t *testing.T) {
 		compareEvents(t, exp, got)
 		return nil
 	}
-	if err := db.RegisterPreUpdateHook(hook, false); err != nil {
+	if err := db.RegisterPreUpdateHook(hook, nil, false); err != nil {
 		t.Fatalf("error registering preupdate hook")
 	}
 	wg.Add(1)
@@ -351,7 +438,7 @@ func Test_Preupdate_Data(t *testing.T) {
 		compareEvents(t, exp, got)
 		return nil
 	}
-	if err := db.RegisterPreUpdateHook(hook, false); err != nil {
+	if err := db.RegisterPreUpdateHook(hook, nil, false); err != nil {
 		t.Fatalf("error registering preupdate hook")
 	}
 	wg.Add(1)
@@ -378,7 +465,7 @@ func Test_Preupdate_Data(t *testing.T) {
 		compareEvents(t, exp, got)
 		return nil
 	}
-	if err := db.RegisterPreUpdateHook(hook, false); err != nil {
+	if err := db.RegisterPreUpdateHook(hook, nil, false); err != nil {
 		t.Fatalf("error registering preupdate hook")
 	}
 	wg.Add(1)
@@ -405,7 +492,7 @@ func Test_Preupdate_Multi(t *testing.T) {
 		defer wg.Done()
 		return nil
 	}
-	if err := db.RegisterPreUpdateHook(hook, false); err != nil {
+	if err := db.RegisterPreUpdateHook(hook, nil, false); err != nil {
 		t.Fatalf("error registering preupdate hook")
 	}
 	wg.Add(2)
@@ -430,7 +517,7 @@ func Test_Preupdate_Tx(t *testing.T) {
 		defer wg.Done()
 		return nil
 	}
-	if err := db.RegisterPreUpdateHook(hook, false); err != nil {
+	if err := db.RegisterPreUpdateHook(hook, nil, false); err != nil {
 		t.Fatalf("error registering preupdate hook")
 	}
 	wg.Add(1)
@@ -492,5 +579,12 @@ func compareEvents(t *testing.T, exp, got *command.CDCEvent) {
 			}
 		}
 	}
+}
 
+func mustRegex(s string) *regexp.Regexp {
+	r, err := regexp.Compile(s)
+	if err != nil {
+		panic(err)
+	}
+	return r
 }

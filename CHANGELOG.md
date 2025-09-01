@@ -14,7 +14,7 @@
 - [PR #2286](https://github.com/rqlite/rqlite/pull/2286): Actually start CDC service.
 - [PR #2287](https://github.com/rqlite/rqlite/pull/2287): Simple CDC end-to-end test.
 - [PR #2288](https://github.com/rqlite/rqlite/pull/2288): Ensure sensible CDC defaults.
-- [PR #2292](https://github.com/rqlite/rqlite/pull/2292): Improve end-to-end CDC testing.
+- [PR #2298](https://github.com/rqlite/rqlite/pull/2298): CDC regex filtering for table names.
 
 ## v8.43.4 (August 27th 2025)
 ### Implementation changes and bug fixes
