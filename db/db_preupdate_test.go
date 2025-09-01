@@ -116,11 +116,12 @@ func Test_Preupdate_Basic_Regex(t *testing.T) {
 		t.Fatalf("expected count %d, got %d", exp, got)
 	}
 
-	// Match
-	exp++
+	// Match it twice to test memoization.
+	exp += 2
 	if err := db.RegisterPreUpdateHook(hook, mustRegex("foo"), true); err != nil {
 		t.Fatalf("error registering preupdate hook")
 	}
+	mustExecute(db, "INSERT INTO foo(name) VALUES('fiona')")
 	mustExecute(db, "INSERT INTO foo(name) VALUES('fiona')")
 	if exp, got := exp, count.Load(); exp != int(got) {
 		t.Fatalf("expected count %d, got %d", exp, got)
