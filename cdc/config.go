@@ -3,12 +3,11 @@ package cdc
 import (
 	"crypto/tls"
 	"encoding/json"
-	"fmt"
 	"net/url"
 	"os"
-	"regexp"
 	"time"
 
+	"github.com/rqlite/rqlite/v8/cdc/regexp"
 	"github.com/rqlite/rqlite/v8/internal/rtls"
 )
 
@@ -75,7 +74,7 @@ type Config struct {
 	// TableFilter is an optional regular expression that filters which tables changes are
 	// captured for. If unspecified or empty, changes to all tables are captured. If specified,
 	// only changes to tables whose names match the regular expression are captured.
-	TableFilter string `json:"table_filter,omitempty"`
+	TableFilter *regexp.Regexp `json:"table_filter,omitempty"`
 
 	// TLS configuration
 	TLS *TLSConfiguration `json:"tls,omitempty"`
@@ -144,14 +143,6 @@ func (c *Config) TLSConfig() (*tls.Config, error) {
 		c.TLS.ServerName, c.TLS.InsecureSkipVerify)
 }
 
-// TableRegex compiles the table filter regular expression, if one is set.
-func (c *Config) TableRegex() (*regexp.Regexp, error) {
-	if c.TableFilter == "" {
-		return nil, nil
-	}
-	return regexp.Compile(c.TableFilter)
-}
-
 // NewConfig creates a new Config from a string. If the string can be parsed
 // as a URL, it creates a default config with the endpoint set to the URL.
 // Otherwise, it treats the string as a file path and attempts to read and
@@ -168,20 +159,15 @@ func NewConfig(s string) (*Config, error) {
 	// Not a URL, treat as file path
 	data, err := os.ReadFile(s)
 	if err != nil {
-		return nil, fmt.Errorf("failed to read config file %q: %w", s, err)
+		return nil, err
 	}
 
 	var config Config
 	if err := json.Unmarshal(data, &config); err != nil {
-		return nil, fmt.Errorf("failed to parse config file %q: %w", s, err)
+		return nil, err
 	}
 
 	// Ensure all fields have sensible values, using defaults where necessary.
-	if config.TableFilter != "" {
-		if _, err := regexp.Compile(config.TableFilter); err != nil {
-			return nil, fmt.Errorf("invalid table filter regular expression %q: %w", config.TableFilter, err)
-		}
-	}
 	if config.MaxBatchSz <= 0 {
 		config.MaxBatchSz = DefaultMaxBatchSz
 	}
