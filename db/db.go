@@ -265,13 +265,13 @@ type PreUpdateHookCallback func(ev *command.CDCEvent) error
 // the callback is removed.
 func (db *DB) RegisterPreUpdateHook(hook PreUpdateHookCallback, tblRe *regexp.Regexp, rowIDsOnly bool) error {
 	// Convert from SQLite hook data to rqlite hook data.
-	tableMatch := make(map[string]bool)
+	tableMatch := NewAtomicMap[string, bool]()
 	convertFn := func(d sqlite3.SQLitePreUpdateData) (*command.CDCEvent, error) {
 		if tblRe != nil {
-			m, ok := tableMatch[d.TableName]
+			m, ok := tableMatch.Get(d.TableName)
 			if !ok {
 				m = tblRe.MatchString(d.TableName)
-				tableMatch[d.TableName] = m
+				tableMatch.Set(d.TableName, m)
 			}
 			if !m {
 				return nil, nil
