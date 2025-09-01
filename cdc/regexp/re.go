@@ -55,23 +55,19 @@ func (r Regexp) MarshalJSON() ([]byte, error) {
 // UnmarshalJSON accepts a JSON string pattern or null.
 // An empty string sets the value to nil.
 func (r *Regexp) UnmarshalJSON(b []byte) error {
-	// null -> unset
-	if string(b) == "null" {
-		r.Regexp = nil
-		return nil
-	}
-	// expect a string
-	var s string
+	var s *string
 	if err := json.Unmarshal(b, &s); err != nil {
 		return fmt.Errorf("regexp must be a JSON string or null: %w", err)
 	}
-	if s == "" {
+
+	if s == nil || *s == "" {
 		r.Regexp = nil
 		return nil
 	}
-	rr, err := regexp.Compile(s)
+
+	rr, err := regexp.Compile(*s)
 	if err != nil {
-		return fmt.Errorf("invalid regexp %q: %w", s, err)
+		return fmt.Errorf("invalid regexp %q: %w", *s, err)
 	}
 	r.Regexp = rr
 	return nil
