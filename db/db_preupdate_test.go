@@ -325,7 +325,7 @@ func Test_Preupdate_Data(t *testing.T) {
 		t.Fatalf("error opening database")
 	}
 	defer db.Close()
-	mustExecute(db, "CREATE TABLE foo (id INTEGER PRIMARY KEY, name TEXT UNIQUE, age float)")
+	mustExecute(db, "CREATE TABLE foo (id INTEGER PRIMARY KEY, name TEXT UNIQUE, age FLOAT)")
 
 	/////////////////////////////////////////////////////////////////
 	// Insert a row, with an explicit ID.
