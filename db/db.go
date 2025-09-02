@@ -12,6 +12,7 @@ import (
 	"log"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"sync"
 	"time"
@@ -20,6 +21,7 @@ import (
 	command "github.com/rqlite/rqlite/v8/command/proto"
 	"github.com/rqlite/rqlite/v8/db/humanize"
 	"github.com/rqlite/rqlite/v8/internal/rsum"
+	"github.com/rqlite/rqlite/v8/internal/rsync"
 )
 
 const (
@@ -262,9 +264,21 @@ type PreUpdateHookCallback func(ev *command.CDCEvent) error
 // RegisterPreUpdateHook registers a callback that is called before a row is modified
 // in the database. If a callback is already registered, it is replaced. If hook is nil,
 // the callback is removed.
-func (db *DB) RegisterPreUpdateHook(hook PreUpdateHookCallback, rowIDsOnly bool) error {
+func (db *DB) RegisterPreUpdateHook(hook PreUpdateHookCallback, tblRe *regexp.Regexp, rowIDsOnly bool) error {
 	// Convert from SQLite hook data to rqlite hook data.
+	tableMatch := rsync.NewAtomicMap[string, bool]()
 	convertFn := func(d sqlite3.SQLitePreUpdateData) (*command.CDCEvent, error) {
+		if tblRe != nil {
+			m, ok := tableMatch.Get(d.TableName)
+			if !ok {
+				m = tblRe.MatchString(d.TableName)
+				tableMatch.Set(d.TableName, m)
+			}
+			if !m {
+				return nil, nil
+			}
+		}
+
 		ev := &command.CDCEvent{
 			Table:    d.TableName,
 			OldRowId: d.OldRowID,
@@ -320,6 +334,9 @@ func (db *DB) RegisterPreUpdateHook(hook PreUpdateHookCallback, rowIDsOnly bool)
 			if err != nil {
 				stats.Add(numPreupdatesErrors, 1)
 				ev.Error = err.Error()
+			}
+			if ev == nil {
+				return
 			}
 			if err := hook(ev); err != nil {
 				stats.Add(numPreupdatesCBErrors, 1)

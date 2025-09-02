@@ -3,11 +3,11 @@ package cdc
 import (
 	"crypto/tls"
 	"encoding/json"
-	"fmt"
 	"net/url"
 	"os"
 	"time"
 
+	"github.com/rqlite/rqlite/v8/cdc/regexp"
 	"github.com/rqlite/rqlite/v8/internal/rtls"
 )
 
@@ -70,6 +70,11 @@ type Config struct {
 
 	// RowIDsOnly indicates whether only the row IDs should be sent in the CDC events.
 	RowIDsOnly bool `json:"row_ids_only,omitempty"`
+
+	// TableFilter is an optional regular expression that filters which tables changes are
+	// captured for. If unspecified or empty, changes to all tables are captured. If specified,
+	// only changes to tables whose names match the regular expression are captured.
+	TableFilter *regexp.Regexp `json:"table_filter,omitempty"`
 
 	// TLS configuration
 	TLS *TLSConfiguration `json:"tls,omitempty"`
@@ -154,12 +159,12 @@ func NewConfig(s string) (*Config, error) {
 	// Not a URL, treat as file path
 	data, err := os.ReadFile(s)
 	if err != nil {
-		return nil, fmt.Errorf("failed to read config file %q: %w", s, err)
+		return nil, err
 	}
 
 	var config Config
 	if err := json.Unmarshal(data, &config); err != nil {
-		return nil, fmt.Errorf("failed to parse config file %q: %w", s, err)
+		return nil, err
 	}
 
 	// Ensure all fields have sensible values, using defaults where necessary.

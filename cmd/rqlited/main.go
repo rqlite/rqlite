@@ -9,6 +9,7 @@ import (
 	"net"
 	"os"
 	"path/filepath"
+	"regexp"
 	"runtime"
 	"strings"
 	"syscall"
@@ -331,7 +332,12 @@ func createCDC(cfg *Config, str *store.Store, clstrServ *cluster.Service, clstrC
 	if err := cdcService.Start(); err != nil {
 		return fmt.Errorf("failed to start CDC Service: %s", err.Error())
 	}
-	if err := str.EnableCDC(cdcService.C(), cdcCfg.RowIDsOnly); err != nil {
+
+	var re *regexp.Regexp
+	if cdcCfg.TableFilter != nil {
+		re = cdcCfg.TableFilter.Regexp
+	}
+	if err := str.EnableCDC(cdcService.C(), re, cdcCfg.RowIDsOnly); err != nil {
 		return fmt.Errorf("failed to enable CDC on Store: %s", err.Error())
 	}
 	return nil

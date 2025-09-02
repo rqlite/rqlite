@@ -30,7 +30,7 @@ func Test_CDC_SingleNode(t *testing.T) {
 		node.CDC.Start()
 		node.CDC.SetLeader(true)
 
-		node.Store.EnableCDC(node.CDC.C(), false)
+		node.Store.EnableCDC(node.CDC.C(), nil, false)
 
 		_, err = node.Execute(`CREATE TABLE foo (id integer not null primary key, name text)`)
 		if err != nil {
@@ -84,7 +84,7 @@ func Test_CDC_SingleNode_LaterStart(t *testing.T) {
 	node.CDC.Start()
 	node.CDC.SetLeader(true)
 
-	node.Store.EnableCDC(node.CDC.C(), false)
+	node.Store.EnableCDC(node.CDC.C(), nil, false)
 
 	_, err = node.Execute(`CREATE TABLE foo (id integer not null primary key, name text)`)
 	if err != nil {
@@ -130,7 +130,7 @@ func Test_CDC_SingleNode_PostLoadBoot(t *testing.T) {
 	node.CDC.Start()
 	node.CDC.SetLeader(true)
 
-	node.Store.EnableCDC(node.CDC.C(), false)
+	node.Store.EnableCDC(node.CDC.C(), nil, false)
 
 	_, err = node.Execute(`CREATE TABLE foo (id integer not null primary key, name text)`)
 	if err != nil {
@@ -220,7 +220,7 @@ func Test_CDC_MultiNode(t *testing.T) {
 			}
 			node.CDC = cdcService
 			node.CDC.Start()
-			node.Store.EnableCDC(node.CDC.C(), false)
+			node.Store.EnableCDC(node.CDC.C(), nil, false)
 		}
 
 		node1.CDC.SetLeader(true)
@@ -305,7 +305,7 @@ func Test_CDC_MultiNode(t *testing.T) {
 		}
 		node4.CDC = cdcService
 		node4.CDC.Start()
-		node4.Store.EnableCDC(node4.CDC.C(), false)
+		node4.Store.EnableCDC(node4.CDC.C(), nil, false)
 		testPoll(t, func() (bool, error) {
 			return node4.CDC.HighWatermark() == testEndpoint.GetHighestMessageIndex(), nil
 		}, 100*time.Millisecond, 10*time.Second)

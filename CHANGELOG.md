@@ -3,6 +3,7 @@
 - [PR #2275](https://github.com/rqlite/rqlite/pull/2275): Enable Change-Data-Capture.
 
 ### Implementation changes and bug fixes
+- [PR #2303](https://github.com/rqlite/rqlite/pull/2303): Add AtomicMap to rsync package.
 - [PR #2263](https://github.com/rqlite/rqlite/pull/2263): Test CDC with later-starting HTTP endpoint.
 - [PR #2267](https://github.com/rqlite/rqlite/pull/2267): Add row-IDs-only to CDC config.
 - [PR #2268](https://github.com/rqlite/rqlite/pull/2268): Upgrade CircleCI environment to Go 1.25.
@@ -16,6 +17,7 @@
 - [PR #2288](https://github.com/rqlite/rqlite/pull/2288): Ensure sensible CDC defaults.
 - [PR #2292](https://github.com/rqlite/rqlite/pull/2292): Improve end-to-end CDC testing.
 - [PR #2297](https://github.com/rqlite/rqlite/pull/2297): Record commit timestamp for CDC events.
+- [PR #2298](https://github.com/rqlite/rqlite/pull/2298), [PR #2299](https://github.com/rqlite/rqlite/pull/2299), [PR #2300](https://github.com/rqlite/rqlite/pull/2301), [PR #2301](https://github.com/rqlite/rqlite/pull/2301): CDC regex filtering for table names.
 
 ## v8.43.4 (August 27th 2025)
 ### Implementation changes and bug fixes
