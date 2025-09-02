@@ -1,6 +1,10 @@
 package db
 
-import command "github.com/rqlite/rqlite/v8/command/proto"
+import (
+	"time"
+
+	command "github.com/rqlite/rqlite/v8/command/proto"
+)
 
 // CDCStreamer is a CDC streamer that collects events and sends them
 // to a channel when the commit hook is called. It is used to stream
@@ -49,6 +53,7 @@ func (s *CDCStreamer) PreupdateHook(ev *command.CDCEvent) error {
 // CommitHook is called after the transaction is committed. It sends the
 // pending events to the out channel and clears the pending events.
 func (s *CDCStreamer) CommitHook() bool {
+	s.pending.CommitTimestamp = time.Now().UnixNano()
 	select {
 	case s.out <- s.pending:
 	default:

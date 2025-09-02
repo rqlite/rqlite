@@ -2,7 +2,6 @@ package cdc
 
 import (
 	"encoding/json"
-	"time"
 
 	"github.com/rqlite/rqlite/v8/command/proto"
 )
@@ -12,13 +11,13 @@ type CDCMessagesEnvelope struct {
 	ServiceID string        `json:"service_id,omitempty"`
 	NodeID    string        `json:"node_id"`
 	Payload   []*CDCMessage `json:"payload"`
-	Timestamp int64         `json:"ts_ns,omitempty"`
 }
 
 // CDCMessage represents a single CDC message containing an index and a list of events.
 type CDCMessage struct {
-	Index  uint64             `json:"index"`
-	Events []*CDCMessageEvent `json:"events"`
+	Index     uint64             `json:"index"`
+	Timestamp int64              `json:"ts_ns,omitempty"`
+	Events    []*CDCMessageEvent `json:"events"`
 }
 
 // CDCMessageEvent represents a single CDC event within a CDC message.
@@ -42,14 +41,14 @@ func MarshalToEnvelopeJSON(serviceID, nodeID string, ts bool, evs []*proto.CDCIn
 		NodeID:    nodeID,
 		Payload:   make([]*CDCMessage, len(evs)),
 	}
-	if ts {
-		envelope.Timestamp = time.Now().UnixNano()
-	}
 
 	for i, ev := range evs {
 		envelope.Payload[i] = &CDCMessage{
 			Index:  ev.Index,
 			Events: make([]*CDCMessageEvent, len(ev.Events)),
+		}
+		if ts {
+			envelope.Payload[i].Timestamp = ev.CommitTimestamp
 		}
 
 		for j, event := range ev.Events {
