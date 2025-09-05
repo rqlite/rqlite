@@ -193,7 +193,7 @@ func (q *Queue[T]) Stats() (map[string]any, error) {
 func (q *Queue[T]) run() {
 	defer close(q.closed)
 
-	queuedStmts := make([]*queuedObjects[T], 0)
+	qObjs := make([]*queuedObjects[T], 0)
 	// Create an initial timer, in the stopped state.
 	timer := time.NewTimer(0)
 	<-timer.C
@@ -201,26 +201,26 @@ func (q *Queue[T]) run() {
 	writeFn := func() {
 		// mergeQueued returns a new object, ownership will pass
 		// implicitly to the other side of sendCh.
-		req := mergeQueued(queuedStmts)
+		req := mergeQueued(qObjs)
 		if req != nil {
 			q.sendCh <- req
 			stats.Add(numObjectsTx, int64(len(req.Objects)))
-			queuedStmts = queuedStmts[:0] // Better on the GC than setting to nil.
+			qObjs = qObjs[:0] // Better on the GC than setting to nil.
 		}
 	}
 
 	for {
 		select {
 		case s := <-q.batchCh:
-			queuedStmts = append(queuedStmts, s)
-			if len(queuedStmts) == 1 {
+			qObjs = append(qObjs, s)
+			if len(qObjs) == 1 {
 				if q.timeout != 0 {
 					// First item in queue, start the timer so that if
 					// we don't get in a batch, we'll still write.
 					timer.Reset(q.timeout)
 				}
 			}
-			if len(queuedStmts) == q.batchSize {
+			if len(qObjs) == q.batchSize {
 				stopTimer(timer)
 				writeFn()
 			}
