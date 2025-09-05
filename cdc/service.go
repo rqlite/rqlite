@@ -191,6 +191,7 @@ func NewService(nodeID, dir string, clstr Cluster, cfg *Config) (*Service, error
 		transmitRetryPolicy:   cfg.TransmitRetryPolicy,
 		maxBatchSz:            cfg.MaxBatchSz,
 		maxBatchDelay:         cfg.MaxBatchDelay,
+		batcher:               queue.New[*proto.CDCIndexedEventGroup](cfg.MaxBatchSz, cfg.MaxBatchSz, cfg.MaxBatchDelay),
 		highWatermarkInterval: cfg.HighWatermarkInterval,
 		leaderObCh:            make(chan bool, leaderChanLen),
 		hwmObCh:               make(chan uint64, leaderChanLen),
@@ -203,8 +204,6 @@ func NewService(nodeID, dir string, clstr Cluster, cfg *Config) (*Service, error
 	} else {
 		srv.transmitMaxRetries = *cfg.TransmitMaxRetries
 	}
-
-	srv.initBatcher()
 
 	fifo, err := NewQueue(filepath.Join(dir, cdcDB))
 	if err != nil {
@@ -322,7 +321,6 @@ func (s *Service) mainLoop() {
 			<-leaderDone
 			leaderStop = nil
 			leaderDone = nil
-			s.initBatcher()
 		}
 	}
 
@@ -372,6 +370,8 @@ func (s *Service) mainLoop() {
 			}
 
 			// Use the highest index in the batch as the key for the FIFO.
+			// XXX this shouldn't be necessary if the batcher preserved order.
+			// XXX Just take the last one. Add ttest to queue to ensure order.
 			idx := uint64(0)
 			for _, e := range req.Objects {
 				if e.Index > idx {
@@ -580,12 +580,4 @@ func (s *Service) writeToBatcher() {
 			return
 		}
 	}
-}
-
-func (s *Service) initBatcher() {
-	if s.batcher != nil {
-		s.batcher.Close()
-		s.batcher = nil
-	}
-	s.batcher = queue.New[*proto.CDCIndexedEventGroup](s.maxBatchSz, s.maxBatchSz, s.maxBatchDelay)
 }
