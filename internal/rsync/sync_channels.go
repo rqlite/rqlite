@@ -22,6 +22,8 @@ func NewSyncChannels() *SyncChannels {
 
 // Register adds a channel to the list of channels to be synchronized.
 func (sc *SyncChannels) Register(ch chan<- chan struct{}) {
+	sc.chsMu.Lock()
+	defer sc.chsMu.Unlock()
 	sc.chs = append(sc.chs, ch)
 }
 
