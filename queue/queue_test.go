@@ -448,3 +448,52 @@ func Test_QueueWriteTimeoutBatch(t *testing.T) {
 		t.Fatalf("timed out waiting for statement")
 	}
 }
+
+type testObj struct {
+	id int
+}
+
+// Test_QueueOrdering ensures that ordering is preserved in the queue.
+func Test_QueueOrdering(t *testing.T) {
+	batchTimeout := 100 * time.Millisecond
+	testTimeout := 3 * batchTimeout
+
+	q := New[*testObj](100, 13, batchTimeout)
+	if q == nil {
+		t.Fatalf("failed to create new Queue")
+	}
+	defer q.Close()
+
+	num := 1063
+	done := make(chan struct{})
+	go func() {
+		expIdx := 0
+		for req := range q.C {
+			for _, r := range req.Objects {
+				if r.id != expIdx {
+					t.Errorf("out of order: exp %d, got %d", expIdx, r.id)
+					return
+				}
+				expIdx++
+			}
+			req.Close()
+			if expIdx == num {
+				close(done)
+				return
+			}
+		}
+	}()
+
+	for i := range num {
+		if _, err := q.Write([]*testObj{{i}}, nil); err != nil {
+			t.Fatalf("failed to write: %s", err.Error())
+		}
+	}
+
+	select {
+	case <-done:
+	case <-time.After(testTimeout):
+		t.Fatalf("timed out waiting for all indexes")
+	}
+
+}
