@@ -369,16 +369,7 @@ func (s *Service) mainLoop() {
 				continue
 			}
 
-			// Use the highest index in the batch as the key for the FIFO.
-			// XXX this shouldn't be necessary if the batcher preserved order.
-			// XXX Just take the last one. Add ttest to queue to ensure order.
-			idx := uint64(0)
-			for _, e := range req.Objects {
-				if e.Index > idx {
-					idx = e.Index
-				}
-			}
-
+			idx := req.Objects[len(req.Objects)-1].Index
 			if err := s.fifo.Enqueue(&Event{Index: idx, Data: b}); err != nil {
 				s.logger.Printf("error writing batch to FIFO: %v", err)
 			}
