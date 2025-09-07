@@ -18,6 +18,7 @@
 - [PR #2292](https://github.com/rqlite/rqlite/pull/2292): Improve end-to-end CDC testing.
 - [PR #2297](https://github.com/rqlite/rqlite/pull/2297): Record commit timestamp for CDC events.
 - [PR #2298](https://github.com/rqlite/rqlite/pull/2298), [PR #2299](https://github.com/rqlite/rqlite/pull/2299), [PR #2300](https://github.com/rqlite/rqlite/pull/2301), [PR #2301](https://github.com/rqlite/rqlite/pull/2301): CDC regex filtering for table names.
+- [PR #2307](https://github.com/rqlite/rqlite/pull/2307): Add SyncChannels synchronization primitive.
 
 ## v8.43.4 (August 27th 2025)
 ### Implementation changes and bug fixes
