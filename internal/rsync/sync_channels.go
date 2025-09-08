@@ -59,10 +59,11 @@ func (sc *SyncChannels) Sync(timeout time.Duration) (int, int, error) {
 		close(done)
 	}()
 
+	var err error
 	select {
 	case <-done:
-		return len(sc.chs), len(sc.chs), nil
 	case <-time.After(timeout):
-		return len(sc.chs), int(nOK.Load()), ErrTimeout
+		err = ErrTimeout
 	}
+	return len(sc.chs), int(nOK.Load()), err
 }
