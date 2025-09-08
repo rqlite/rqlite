@@ -765,6 +765,10 @@ func (tc *mockCluster) RegisterLeaderChange(ch chan<- bool) {
 	tc.leaderChannels = append(tc.leaderChannels, ch)
 }
 
+func (tc *mockCluster) RegisterSnapshotSync(ch chan<- chan struct{}) {
+	// Not implemented for this mock
+}
+
 func (tc *mockCluster) RegisterHWMUpdate(ch chan<- uint64) {
 	tc.mu.Lock()
 	defer tc.mu.Unlock()

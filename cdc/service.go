@@ -66,6 +66,10 @@ type Cluster interface {
 	// a signal when the node detects that the Leader changes.
 	RegisterLeaderChange(c chan<- bool)
 
+	// RegisterSnapshotSync registers a channel to allow synchronization with
+	// Snapshotting.
+	RegisterSnapshotSync(ch chan<- chan struct{})
+
 	// RegisterHWMUpdate registers a channel to receive highwater mark updates.
 	RegisterHWMUpdate(c chan<- uint64)
 
@@ -139,9 +143,12 @@ type Service struct {
 	// This is used to ensure that the high watermark is written periodically,
 	highWatermarkInterval time.Duration
 
-	// Channel to receive notifications of leader changes and store latest state.
+	// Channel to receive notifications of leader changes.
 	leaderObCh chan bool
 	isLeader   rsync.AtomicBool
+
+	// Channel to receive notifications of snapshot requests.
+	snapshotCh chan chan struct{}
 
 	// Channel to receive high watermark updates from the cluster.
 	hwmObCh chan uint64
@@ -194,6 +201,7 @@ func NewService(nodeID, dir string, clstr Cluster, cfg *Config) (*Service, error
 		batcher:               queue.New[*proto.CDCIndexedEventGroup](cfg.MaxBatchSz, cfg.MaxBatchSz, cfg.MaxBatchDelay),
 		highWatermarkInterval: cfg.HighWatermarkInterval,
 		leaderObCh:            make(chan bool, leaderChanLen),
+		snapshotCh:            make(chan chan struct{}),
 		hwmObCh:               make(chan uint64, leaderChanLen),
 		done:                  make(chan struct{}),
 		logger:                log.New(os.Stderr, "[cdc-service] ", log.LstdFlags),
@@ -239,12 +247,14 @@ func (s *Service) Start() (retErr error) {
 		return fmt.Errorf("service already started")
 	}
 
+	s.clstr.RegisterLeaderChange(s.leaderObCh)
+	s.clstr.RegisterSnapshotSync(s.snapshotCh)
+	s.clstr.RegisterHWMUpdate(s.hwmObCh)
+
 	s.wg.Add(2)
 	go s.writeToBatcher()
 	go s.mainLoop()
 
-	s.clstr.RegisterLeaderChange(s.leaderObCh)
-	s.clstr.RegisterHWMUpdate(s.hwmObCh)
 	if s.serviceID == "" {
 		s.logger.Printf("service started with node ID %s", s.nodeID)
 	} else {
@@ -567,6 +577,10 @@ func (s *Service) writeToBatcher() {
 			if _, err := s.batcher.WriteOne(o, nil); err != nil {
 				s.logger.Printf("error writing CDC events to batcher: %v", err)
 			}
+		case ch := <-s.snapshotCh:
+			// Snapshot requested, block until we can proceed.
+			/// XXX flush the batcher then close the channel.
+			close(ch)
 		case <-s.done:
 			return
 		}
