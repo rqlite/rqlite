@@ -312,7 +312,8 @@ type Store struct {
 	snapshotWDone  chan struct{}
 
 	// Snapshotting synchronization
-	snapshotCAS *rsync.CheckAndSet
+	snapshotSync *rsync.SyncChannels
+	snapshotCAS  *rsync.CheckAndSet
 
 	// Latest log entry index actually reflected by the FSM. Due to Raft code
 	// these values are not updated automatically after a Snapshot-restore.
@@ -428,6 +429,7 @@ func New(c *Config, ly Layer) *Store {
 		logger:          logger,
 		notifyingNodes:  make(map[string]*Server),
 		ApplyTimeout:    applyTimeout,
+		snapshotSync:    rsync.NewSyncChannels(),
 		snapshotCAS:     rsync.NewCheckAndSet(),
 		fsmIdx:          &atomic.Uint64{},
 		fsmTarget:       rsync.NewReadyTarget[uint64](),
@@ -728,6 +730,13 @@ func (s *Store) Stepdown(wait bool, id string) error {
 		return ErrNotLeader
 	}
 	return f.Error()
+}
+
+// RegisterSnapshotSync registers a channel that will receive a channel
+// that is closed when a snapshot operation is about to begin. This is used
+// to coordinate activities that should be handled before a snapshot is taken.
+func (s *Store) RegisterSnapshotSync(ch chan<- chan struct{}) {
+	s.snapshotSync.Register(ch)
 }
 
 // RegisterReadyChannel registers a channel that must be closed before the
@@ -2214,6 +2223,10 @@ func (s *Store) fsmApply(l *raft.Log) (e any) {
 func (s *Store) fsmSnapshot() (fSnap raft.FSMSnapshot, retErr error) {
 	if !s.open.Is() {
 		return nil, ErrNotOpen
+	}
+
+	if _, _, err := s.snapshotSync.Sync(time.Second); err != nil {
+		return nil, err
 	}
 
 	if err := s.snapshotCAS.Begin("snapshot"); err != nil {

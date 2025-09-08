@@ -31,6 +31,13 @@ func (c *CDCCluster) RegisterLeaderChange(ch chan<- bool) {
 	c.store.RegisterLeaderChange(ch)
 }
 
+// RegisterSnapshotSync registers the given channel which will receive
+// a channel when the node starts a snapshot. The snapshotting process
+// will be blocked until the received channel is closed.
+func (c *CDCCluster) RegisterSnapshotSync(ch chan<- chan struct{}) {
+	c.store.RegisterSnapshotSync(ch)
+}
+
 // RegisterHWMUpdate registers a channel to receive highwater mark updates.
 func (c *CDCCluster) RegisterHWMUpdate(ch chan<- uint64) {
 	c.clstr.RegisterHWMUpdate(ch)

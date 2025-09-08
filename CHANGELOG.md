@@ -42,6 +42,7 @@
 - [PR #2261](https://github.com/rqlite/rqlite/pull/2261): Cluster-level testing of CDC including failure injection.
 - [PR #2262](https://github.com/rqlite/rqlite/pull/2262): Remove redundant persisting HWM to disk.
 - [PR #2265](https://github.com/rqlite/rqlite/pull/2265): rqlite shell now uses Unified Endpoint.  Fixes issue [#257](https://github.com/rqlite/rqlite/issues/257).
+- [PR #2305](https://github.com/rqlite/rqlite/pull/2305): Move CDC event batching to before writes to BoltDB-backed FIFO.
 
 ## v8.43.3 (August 14th 2025)
 ### Implementation changes and bug fixes
