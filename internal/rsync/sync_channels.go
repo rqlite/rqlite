@@ -2,6 +2,7 @@ package rsync
 
 import (
 	"sync"
+	"sync/atomic"
 	"time"
 )
 
@@ -28,11 +29,15 @@ func (sc *SyncChannels) Register(ch chan<- chan struct{}) {
 }
 
 // Sync sends channel to all registered channels and waits for those channels
-// to close.
-func (sc *SyncChannels) Sync(timeout time.Duration) error {
+// to close. Returns the total number of channels and the number that
+// successfully synchronized before any error or timeout.
+func (sc *SyncChannels) Sync(timeout time.Duration) (int, int, error) {
 	sc.chsMu.Lock()
 	defer sc.chsMu.Unlock()
+	cancel := make(chan struct{})
+	defer close(cancel)
 
+	var nOK atomic.Int32
 	var wg sync.WaitGroup
 	wg.Add(len(sc.chs))
 	for _, ch := range sc.chs {
@@ -40,7 +45,11 @@ func (sc *SyncChannels) Sync(timeout time.Duration) error {
 			defer wg.Done()
 			syncCh := make(chan struct{})
 			ch <- syncCh
-			<-syncCh
+			select {
+			case <-syncCh:
+				nOK.Add(1)
+			case <-cancel:
+			}
 		}(ch)
 	}
 
@@ -52,8 +61,8 @@ func (sc *SyncChannels) Sync(timeout time.Duration) error {
 
 	select {
 	case <-done:
-		return nil
+		return len(sc.chs), len(sc.chs), nil
 	case <-time.After(timeout):
-		return ErrTimeout
+		return len(sc.chs), int(nOK.Load()), ErrTimeout
 	}
 }

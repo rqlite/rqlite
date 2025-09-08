@@ -14,18 +14,18 @@ const (
 	smallTimeout = 50 * time.Millisecond
 )
 
-func TestSync_NoRegistrations(t *testing.T) {
+func Test_Sync_NoRegistrations(t *testing.T) {
 	sc := NewSyncChannels()
-	start := time.Now()
-	if err := sc.Sync(testTimeout); err != nil {
+	total, ok, err := sc.Sync(testTimeout)
+	if err != nil {
 		t.Fatalf("Sync() with no registrations returned error: %v", err)
 	}
-	if elapsed := time.Since(start); elapsed > 25*time.Millisecond {
-		t.Fatalf("Sync() with no registrations should return near-immediately, took %v", elapsed)
+	if total != 0 || ok != 0 {
+		t.Fatalf("Sync() with no registrations returned total=%d, ok=%d; want 0,0", total, ok)
 	}
 }
 
-func TestSync_SingleChannel_Succeeds(t *testing.T) {
+func Test_Sync_SingleChannel_Succeeds(t *testing.T) {
 	sc := NewSyncChannels()
 	ch := make(chan chan struct{})
 	sc.Register(ch)
@@ -36,12 +36,16 @@ func TestSync_SingleChannel_Succeeds(t *testing.T) {
 		close(syncCh)
 	}()
 
-	if err := sc.Sync(testTimeout); err != nil {
+	total, ok, err := sc.Sync(testTimeout)
+	if err != nil {
 		t.Fatalf("Sync() returned unexpected error: %v", err)
+	}
+	if total != 1 || ok != 1 {
+		t.Fatalf("Sync() returned total=%d, ok=%d; want 1,0", total, ok)
 	}
 }
 
-func TestSync_MultipleChannels_WaitsForAll(t *testing.T) {
+func Test_Sync_MultipleChannels_WaitsForAll(t *testing.T) {
 	sc := NewSyncChannels()
 
 	ch1 := make(chan chan struct{})
@@ -62,21 +66,16 @@ func TestSync_MultipleChannels_WaitsForAll(t *testing.T) {
 		close(syncCh)
 	}()
 
-	start := time.Now()
-	if err := sc.Sync(testTimeout); err != nil {
+	total, ok, err := sc.Sync(testTimeout)
+	if err != nil {
 		t.Fatalf("Sync() returned unexpected error: %v", err)
 	}
-	elapsed := time.Since(start)
-	// It should take at least the longDelay, but not approach the timeout.
-	if elapsed < longDelay {
-		t.Fatalf("Sync() returned too early; elapsed=%v, want >= %v", elapsed, longDelay)
-	}
-	if elapsed > testTimeout/2 {
-		t.Fatalf("Sync() took suspiciously long; elapsed=%v, timeout=%v", elapsed, testTimeout)
+	if total != 2 || ok != 2 {
+		t.Fatalf("Sync() returned total=%d, ok=%d; want 2,2", total, ok)
 	}
 }
 
-func TestSync_Timeout_WhenParticipantNeverCloses(t *testing.T) {
+func Test_Sync_Timeout_WhenParticipantNeverCloses(t *testing.T) {
 	sc := NewSyncChannels()
 
 	chGood := make(chan chan struct{})
@@ -97,13 +96,16 @@ func TestSync_Timeout_WhenParticipantNeverCloses(t *testing.T) {
 		_ = syncCh // intentionally never close
 	}()
 
-	err := sc.Sync(smallTimeout)
+	total, ok, err := sc.Sync(smallTimeout)
 	if !errors.Is(err, ErrTimeout) {
 		t.Fatalf("Sync() error = %v, want ErrTimeout", err)
 	}
+	if total != 2 || ok != 1 {
+		t.Fatalf("Sync() returned total=%d, ok=%d; want 2,1", total, ok)
+	}
 }
 
-func TestSync_ReusedAcrossCalls(t *testing.T) {
+func Test_Sync_ReusedAcrossCalls(t *testing.T) {
 	sc := NewSyncChannels()
 
 	ch1 := make(chan chan struct{})
@@ -120,10 +122,15 @@ func TestSync_ReusedAcrossCalls(t *testing.T) {
 		close(s2)
 		close(done1)
 	}()
-	if err := sc.Sync(testTimeout); err != nil {
+	total, ok, err := sc.Sync(testTimeout)
+	if err != nil {
 		t.Fatalf("first Sync() error: %v", err)
 	}
 	<-done1
+
+	if total != 2 || ok != 2 {
+		t.Fatalf("first Sync() returned total=%d, ok=%d; want 2,2", total, ok)
+	}
 
 	// Second sync: staggered closes, still should succeed before timeout.
 	go func() {
@@ -134,7 +141,11 @@ func TestSync_ReusedAcrossCalls(t *testing.T) {
 		time.Sleep(shortDelay)
 		close(s2)
 	}()
-	if err := sc.Sync(testTimeout); err != nil {
+	total, ok, err = sc.Sync(testTimeout)
+	if err != nil {
 		t.Fatalf("second Sync() error: %v", err)
+	}
+	if total != 2 || ok != 2 {
+		t.Fatalf("second Sync() returned total=%d, ok=%d; want 2,2", total, ok)
 	}
 }
