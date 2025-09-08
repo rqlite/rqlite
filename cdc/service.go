@@ -383,6 +383,7 @@ func (s *Service) mainLoop() {
 			if err := s.fifo.Enqueue(&Event{Index: idx, Data: b}); err != nil {
 				s.logger.Printf("error writing batch to FIFO: %v", err)
 			}
+			req.Close()
 
 		case <-s.done:
 			return
