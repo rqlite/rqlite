@@ -578,8 +578,8 @@ func (s *Service) writeToBatcher() {
 				s.logger.Printf("error writing CDC events to batcher: %v", err)
 			}
 		case ch := <-s.snapshotCh:
-			// Snapshot requested, block until we can proceed.
-			/// XXX flush the batcher then close the channel.
+			// XXXX this does not guarantee that all events are written to bolt.
+			s.batcher.Flush()
 			close(ch)
 		case <-s.done:
 			return
