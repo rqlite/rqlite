@@ -20,6 +20,7 @@
 - [PR #2298](https://github.com/rqlite/rqlite/pull/2298), [PR #2299](https://github.com/rqlite/rqlite/pull/2299), [PR #2300](https://github.com/rqlite/rqlite/pull/2301), [PR #2301](https://github.com/rqlite/rqlite/pull/2301): CDC regex filtering for table names.
 - [PR #2307](https://github.com/rqlite/rqlite/pull/2307): Add `SyncChannels` synchronization primitive.
 - [PR #2308](https://github.com/rqlite/rqlite/pull/2308): Correctly implement Batching Queue flushing.
+- [PR #2309](https://github.com/rqlite/rqlite/pull/2309): Correctly implement Batching Queue flushing.
 
 ## v8.43.4 (August 27th 2025)
 ### Implementation changes and bug fixes
