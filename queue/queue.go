@@ -56,24 +56,25 @@ type queuedObjects[T any] struct {
 }
 
 func mergeQueued[T any](qs []*queuedObjects[T]) *Request[T] {
-	var o *Request[T]
-	if len(qs) > 0 {
-		o = &Request[T]{
-			SequenceNumber: qs[0].SequenceNumber,
-			flushChans:     make([]FlushChannel, 0),
-		}
+	if len(qs) == 0 {
+		return nil
+	}
+	var req *Request[T]
+	req = &Request[T]{
+		SequenceNumber: qs[0].SequenceNumber,
+		flushChans:     make([]FlushChannel, 0),
 	}
 
 	for i := range qs {
-		if o.SequenceNumber < qs[i].SequenceNumber {
-			o.SequenceNumber = qs[i].SequenceNumber
+		if req.SequenceNumber < qs[i].SequenceNumber {
+			req.SequenceNumber = qs[i].SequenceNumber
 		}
-		o.Objects = append(o.Objects, qs[i].Objects...)
+		req.Objects = append(req.Objects, qs[i].Objects...)
 		if qs[i].flushChan != nil {
-			o.flushChans = append(o.flushChans, qs[i].flushChan)
+			req.flushChans = append(req.flushChans, qs[i].flushChan)
 		}
 	}
-	return o
+	return req
 }
 
 // Queue is a batching queue with a timeout.
