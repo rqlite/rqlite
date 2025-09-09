@@ -22,7 +22,6 @@ import (
 
 const (
 	cdcDB         = "fifo.db"
-	hwmFile       = "hwm.json"
 	leaderChanLen = 5   // Support any fast back-to-back leadership changes.
 	inChanLen     = 100 // Size of the input channel for CDC events.
 
@@ -187,7 +186,6 @@ func NewService(nodeID, dir string, clstr Cluster, cfg *Config) (*Service, error
 		serviceID:             cfg.ServiceID,
 		nodeID:                nodeID,
 		dir:                   dir,
-		hwmFilePath:           filepath.Join(dir, hwmFile),
 		clstr:                 clstr,
 		in:                    make(chan *proto.CDCIndexedEventGroup, inChanLen),
 		logOnly:               cfg.LogOnly,
