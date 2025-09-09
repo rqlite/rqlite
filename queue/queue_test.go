@@ -152,6 +152,22 @@ func Test_QueueWriteOne(t *testing.T) {
 	}
 }
 
+func Test_QueueWriteOne_FlushEmpty(t *testing.T) {
+	q := New[*command.Statement](1024, 2, 60*time.Second)
+	defer q.Close()
+
+	if err := q.Flush(); err != nil {
+		t.Fatalf("failed to flush: %s", err.Error())
+	}
+
+	select {
+	case req := <-q.C:
+		t.Fatalf("received unexpected request on empty flush: %v", req)
+	case <-time.After(100 * time.Millisecond):
+		// Expected, nothing to receive.
+	}
+}
+
 func Test_QueueWriteOne_Flush(t *testing.T) {
 	q := New[*command.Statement](1024, 2, 60*time.Second)
 	defer q.Close()
