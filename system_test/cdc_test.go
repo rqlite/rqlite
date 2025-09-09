@@ -66,6 +66,62 @@ func Test_CDC_SingleNode(t *testing.T) {
 	})
 }
 
+func Test_CDC_SingleNode_Snapshot(t *testing.T) {
+	testFn := func(t *testing.T, failRate int) {
+		node := mustNewLeaderNode("node1")
+		defer node.Deprovision()
+
+		testEndpoint := cdctest.NewHTTPTestServer()
+		testEndpoint.SetFailRate(failRate)
+		testEndpoint.Start()
+		defer testEndpoint.Close()
+
+		// Configure CDC before opening the store.
+		cdcCluster := cdc.NewCDCCluster(node.Store, node.Cluster, node.Client)
+		cdcService, err := cdc.NewService(node.ID, node.Dir, cdcCluster, mustCDCConfig(testEndpoint.URL()))
+		if err != nil {
+			t.Fatalf("failed to create CDC service: %s", err.Error())
+		}
+		node.CDC = cdcService
+		node.CDC.Start()
+		node.CDC.SetLeader(true)
+
+		node.Store.EnableCDC(node.CDC.C(), nil, false)
+
+		_, err = node.Execute(`CREATE TABLE foo (id integer not null primary key, name text)`)
+		if err != nil {
+			t.Fatalf("failed to create table: %v", err)
+		}
+		_, err = node.Execute(`INSERT INTO foo (id, name) VALUES (1, 'Alice')`)
+		if err != nil {
+			t.Fatalf("failed to insert data: %v", err)
+		}
+
+		// Take a snapshot, to check synchronization between Store and CDC.
+		if err := node.Snapshot(0); err != nil {
+			t.Fatalf("failed to snapshot: %v", err)
+		}
+
+		_, err = node.Execute(`UPDATE foo SET name = 'Alice Updated' WHERE id = 1`)
+		if err != nil {
+			t.Fatalf("failed to update data: %v", err)
+		}
+		_, err = node.Execute(`DELETE FROM foo WHERE id = 1`)
+		if err != nil {
+			t.Fatalf("failed to delete data: %v", err)
+		}
+
+		testPoll(t, func() (bool, error) {
+			// 1 create, 1 insert, 1 update, 1 delete
+			return testEndpoint.GetMessageCount() == 4, nil
+		}, 100*time.Millisecond, 10*time.Second)
+	}
+
+	t.Run("NoFail_Snapshots", func(t *testing.T) {
+		testFn(t, 0)
+	})
+}
+
 // Test_CDC_SingleNode_LaterStart verifies that starting the CDC service
 // before the HTTP endpoint is available works as expected.
 func Test_CDC_SingleNode_LaterStart(t *testing.T) {

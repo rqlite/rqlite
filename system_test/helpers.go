@@ -294,6 +294,11 @@ func (n *Node) Noop(id string) error {
 	return af.Error()
 }
 
+// Snapshot instructs the node to take a snapshot.
+func (n *Node) Snapshot(i uint64) error {
+	return n.Store.Snapshot(i)
+}
+
 // EnableTLSClient enables TLS support for the node's cluster client.
 func (n *Node) EnableTLSClient() {
 	tlsConfig := mustCreateClientTLSConfig(n.NodeCertPath, n.NodeKeyPath, "")

@@ -34,7 +34,7 @@ const (
 	numDroppedFailedToSend = "dropped_failed_to_send"
 	numRetries             = "retries"
 	numSent                = "sent_events"
-
+	numSnapshotSync        = "snapshot_sync"
 	numFIFOIgnored         = "fifo_ignored"
 	cdcNumFIFOWriteIgnored = "cdc_fifo_write_ignored"
 	cdcNumFIFOReadIgnored  = "cdc_fifo_read_ignored"
@@ -55,6 +55,7 @@ func ResetStats() {
 	stats.Add(numDroppedFailedToSend, 0)
 	stats.Add(numRetries, 0)
 	stats.Add(numSent, 0)
+	stats.Add(numSnapshotSync, 0)
 	stats.Add(numFIFOIgnored, 0)
 	stats.Add(cdcNumFIFOWriteIgnored, 0)
 	stats.Add(cdcNumFIFOReadIgnored, 0)
@@ -422,6 +423,7 @@ func (s *Service) writeToBatcher() {
 				s.logger.Printf("error writing CDC events to batcher: %v", err)
 			}
 		case ch := <-s.snapshotCh:
+			stats.Add(numSnapshotSync, 1)
 			evg := &proto.CDCIndexedEventGroup{
 				Flush: true,
 			}
