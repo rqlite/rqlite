@@ -320,7 +320,15 @@ func (q *Queue) run(highestKey uint64) {
 					deletedHead = true
 				}
 
+				// First, collect all keys that need to be deleted. It's not safe to delete
+				// keys when iterating. See https://github.com/etcd-io/bbolt/pull/611.
+				var keysToDelete [][]byte
 				for k, _ := c.First(); k != nil && btouint64(k) <= req.idx; k, _ = c.Next() {
+					keysToDelete = append(keysToDelete, k)
+				}
+
+				// Now, delete the keys.
+				for _, k := range keysToDelete {
 					if derr := b.Delete(k); derr != nil {
 						return derr
 					}
