@@ -184,6 +184,7 @@ message CDCIndexedEventGroup {
 	uint64 index = 1;
 	int64 commit_timestamp = 2;
 	repeated CDCEvent events = 3;
+	bool flush = 4;
 }
 
 message CDCIndexedEventGroupBatch {
