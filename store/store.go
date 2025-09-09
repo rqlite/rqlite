@@ -2231,7 +2231,7 @@ func (s *Store) fsmSnapshot() (fSnap raft.FSMSnapshot, retErr error) {
 	if _, _, err := s.snapshotSync.Sync(time.Second); err != nil {
 		return nil, err
 	}
-	stats.Get(snapshotSyncDuration).(*expvar.Int).Set(time.Since(syncStartTime).Microseconds())
+	stats.Get(snapshotSyncDuration).(*expvar.Int).Set(time.Since(syncStartTime).Milliseconds())
 
 	if err := s.snapshotCAS.Begin("snapshot"); err != nil {
 		return nil, err
