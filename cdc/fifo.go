@@ -324,9 +324,7 @@ func (q *Queue) run(highestKey uint64) {
 				// keys when iterating. See https://github.com/etcd-io/bbolt/pull/611.
 				var keysToDelete [][]byte
 				for k, _ := c.First(); k != nil && btouint64(k) <= req.idx; k, _ = c.Next() {
-					keyCopy := make([]byte, len(k))
-					copy(keyCopy, k)
-					keysToDelete = append(keysToDelete, keyCopy)
+					keysToDelete = append(keysToDelete, k)
 				}
 
 				// Now, delete the keys.
