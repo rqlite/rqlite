@@ -320,7 +320,17 @@ func (q *Queue) run(highestKey uint64) {
 					deletedHead = true
 				}
 
+				var keysToDelete [][]byte
+				// First, collect all keys that need to be deleted.
 				for k, _ := c.First(); k != nil && btouint64(k) <= req.idx; k, _ = c.Next() {
+					// The key slice `k` is only valid during the transaction. We must copy it.
+					keyCopy := make([]byte, len(k))
+					copy(keyCopy, k)
+					keysToDelete = append(keysToDelete, keyCopy)
+				}
+
+				// Now, delete the keys.
+				for _, k := range keysToDelete {
 					if derr := b.Delete(k); derr != nil {
 						return derr
 					}
