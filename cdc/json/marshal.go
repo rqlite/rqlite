@@ -4,6 +4,8 @@ import (
 	"encoding/json"
 
 	"github.com/rqlite/rqlite/v8/command/proto"
+	"google.golang.org/protobuf/encoding/protojson"
+	"google.golang.org/protobuf/reflect/protoregistry"
 )
 
 // CDCMessagesEnvelope is the envelope for CDC messages as transported over HTTP.
@@ -71,4 +73,23 @@ func MarshalToEnvelopeJSON(serviceID, nodeID string, ts bool, evs []*proto.CDCIn
 // UnmarshalFromEnvelopeJSON converts a JSON envelope format into a CDCMessagesEnvelope structure.
 func UnmarshalFromEnvelopeJSON(data []byte, env *CDCMessagesEnvelope) error {
 	return json.Unmarshal(data, env)
+}
+
+var pj = protojson.MarshalOptions{
+	// Control JSON shape:
+	// - UseProtoNames: snake_case field names from .proto instead of lowerCamel JSON names
+	// - EmitUnpopulated: include fields with zero values
+	// - UseEnumNumbers: render enums as integers (false => strings)
+	UseProtoNames:   true,
+	EmitUnpopulated: false,
+	UseEnumNumbers:  false,
+
+	// Resolve google.protobuf.Any to type URLs if you use Any:
+	Resolver: protoregistry.GlobalTypes,
+}
+
+func WriteJSON(m *proto.CDCIndexedEventGroup) ([]byte, error) {
+	// Marshal directly to []byte; write it immediately.
+	// Avoid string conversions (which copy) and avoid extra buffers.
+	return pj.Marshal(m)
 }
