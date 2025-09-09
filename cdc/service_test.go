@@ -123,6 +123,43 @@ func Test_ServiceSingleEvent(t *testing.T) {
 	waitFn(2*time.Second, 1)
 }
 
+func Test_ServiceSingleEvent_Flush(t *testing.T) {
+	ResetStats()
+
+	cl := &mockCluster{}
+
+	cfg := DefaultConfig()
+	cfg.MaxBatchSz = 1
+	cfg.MaxBatchDelay = 50 * time.Millisecond
+	svc, err := NewService(
+		"node1",
+		t.TempDir(),
+		cl,
+		cfg,
+	)
+	if err != nil {
+		t.Fatalf("failed to create service: %v", err)
+	}
+	if err := svc.Start(); err != nil {
+		t.Fatalf("failed to start service: %v", err)
+	}
+	defer svc.Stop()
+
+	// Make it the leader.
+	cl.SetLeader(0)
+
+	// Send one signal event to the service.
+	evs := &proto.CDCIndexedEventGroup{
+		Flush: true,
+	}
+
+	svc.C() <- evs
+
+	testPoll(t, func() bool {
+		return svc.flushRx.Load() == 1
+	}, 1*time.Second)
+}
+
 // Test_ServiceRestart_NoDupes tests that when a CDC service is restarted, it does not resend
 // events that were already sent before the restart. This ensures that Raft log replay does not
 // cause duplicate events to be sent.

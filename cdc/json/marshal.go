@@ -39,26 +39,30 @@ func MarshalToEnvelopeJSON(serviceID, nodeID string, ts bool, evs []*proto.CDCIn
 	envelope := &CDCMessagesEnvelope{
 		ServiceID: serviceID,
 		NodeID:    nodeID,
-		Payload:   make([]*CDCMessage, len(evs)),
+		Payload:   make([]*CDCMessage, 0, len(evs)),
 	}
 
-	for i, ev := range evs {
-		envelope.Payload[i] = &CDCMessage{
+	for _, ev := range evs {
+		if ev.Flush {
+			continue
+		}
+
+		p := &CDCMessage{
 			Index:  ev.Index,
 			Events: make([]*CDCMessageEvent, len(ev.Events)),
 		}
 		if ts {
-			envelope.Payload[i].Timestamp = ev.CommitTimestamp
+			p.Timestamp = ev.CommitTimestamp
 		}
-
 		for j, event := range ev.Events {
-			envelope.Payload[i].Events[j] = &CDCMessageEvent{
+			p.Events[j] = &CDCMessageEvent{
 				Op:       event.Op.String(),
 				Table:    event.Table,
 				NewRowId: event.NewRowId,
 				OldRowId: event.OldRowId,
 			}
 		}
+		envelope.Payload = append(envelope.Payload, p)
 	}
 
 	return json.Marshal(envelope)

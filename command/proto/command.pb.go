@@ -1839,6 +1839,7 @@ type CDCIndexedEventGroup struct {
 	Index           uint64                 `protobuf:"varint,1,opt,name=index,proto3" json:"index,omitempty"`
 	CommitTimestamp int64                  `protobuf:"varint,2,opt,name=commit_timestamp,json=commitTimestamp,proto3" json:"commit_timestamp,omitempty"`
 	Events          []*CDCEvent            `protobuf:"bytes,3,rep,name=events,proto3" json:"events,omitempty"`
+	Flush           bool                   `protobuf:"varint,4,opt,name=flush,proto3" json:"flush,omitempty"`
 	unknownFields   protoimpl.UnknownFields
 	sizeCache       protoimpl.SizeCache
 }
@@ -1892,6 +1893,13 @@ func (x *CDCIndexedEventGroup) GetEvents() []*CDCEvent {
 		return x.Events
 	}
 	return nil
+}
+
+func (x *CDCIndexedEventGroup) GetFlush() bool {
+	if x != nil {
+		return x.Flush
+	}
+	return false
 }
 
 type CDCIndexedEventGroupBatch struct {
@@ -2195,11 +2203,12 @@ const file_command_proto_rawDesc = "" +
 	"\n" +
 	"\x06UPDATE\x10\x02\x12\n" +
 	"\n" +
-	"\x06DELETE\x10\x03\"\x82\x01\n" +
+	"\x06DELETE\x10\x03\"\x98\x01\n" +
 	"\x14CDCIndexedEventGroup\x12\x14\n" +
 	"\x05index\x18\x01 \x01(\x04R\x05index\x12)\n" +
 	"\x10commit_timestamp\x18\x02 \x01(\x03R\x0fcommitTimestamp\x12)\n" +
-	"\x06events\x18\x03 \x03(\v2\x11.command.CDCEventR\x06events\"T\n" +
+	"\x06events\x18\x03 \x03(\v2\x11.command.CDCEventR\x06events\x12\x14\n" +
+	"\x05flush\x18\x04 \x01(\bR\x05flush\"T\n" +
 	"\x19CDCIndexedEventGroupBatch\x127\n" +
 	"\apayload\x18\x01 \x03(\v2\x1d.command.CDCIndexedEventGroupR\apayload\"\xc6\x01\n" +
 	"\x0fUpdateHookEvent\x12\x14\n" +
