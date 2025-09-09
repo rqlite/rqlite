@@ -56,24 +56,25 @@ type queuedObjects[T any] struct {
 }
 
 func mergeQueued[T any](qs []*queuedObjects[T]) *Request[T] {
-	var o *Request[T]
-	if len(qs) > 0 {
-		o = &Request[T]{
-			SequenceNumber: qs[0].SequenceNumber,
-			flushChans:     make([]FlushChannel, 0),
-		}
+	if len(qs) == 0 {
+		return nil
+	}
+	var req *Request[T]
+	req = &Request[T]{
+		SequenceNumber: qs[0].SequenceNumber,
+		flushChans:     make([]FlushChannel, 0),
 	}
 
 	for i := range qs {
-		if o.SequenceNumber < qs[i].SequenceNumber {
-			o.SequenceNumber = qs[i].SequenceNumber
+		if req.SequenceNumber < qs[i].SequenceNumber {
+			req.SequenceNumber = qs[i].SequenceNumber
 		}
-		o.Objects = append(o.Objects, qs[i].Objects...)
+		req.Objects = append(req.Objects, qs[i].Objects...)
 		if qs[i].flushChan != nil {
-			o.flushChans = append(o.flushChans, qs[i].flushChan)
+			req.flushChans = append(req.flushChans, qs[i].flushChan)
 		}
 	}
-	return o
+	return req
 }
 
 // Queue is a batching queue with a timeout.
@@ -89,7 +90,6 @@ type Queue[T any] struct {
 
 	done   chan struct{}
 	closed chan struct{}
-	flush  chan struct{}
 
 	seqMu  sync.Mutex
 	seqNum int64
@@ -111,7 +111,6 @@ func New[T any](maxSize, batchSize int, t time.Duration) *Queue[T] {
 		sendCh:    make(chan *Request[T], 1),
 		done:      make(chan struct{}),
 		closed:    make(chan struct{}),
-		flush:     make(chan struct{}),
 		seqNum:    time.Now().UnixNano(),
 	}
 
@@ -161,7 +160,7 @@ func (q *Queue[T]) WriteOne(object T, c FlushChannel) (int64, error) {
 
 // Flush flushes the queue
 func (q *Queue[T]) Flush() error {
-	q.flush <- struct{}{}
+	q.batchCh <- nil
 	return nil
 }
 
@@ -212,6 +211,13 @@ func (q *Queue[T]) run() {
 	for {
 		select {
 		case s := <-q.batchCh:
+			if s == nil { // flush marker
+				stats.Add(numFlush, 1)
+				stopTimer(timer)
+				writeFn()
+				break
+			}
+
 			qObjs = append(qObjs, s)
 			if len(qObjs) == 1 {
 				if q.timeout != 0 {
@@ -227,10 +233,6 @@ func (q *Queue[T]) run() {
 		case <-timer.C:
 			stats.Add(numTimeout, 1)
 			q.numTimeouts++
-			writeFn()
-		case <-q.flush:
-			stats.Add(numFlush, 1)
-			stopTimer(timer)
 			writeFn()
 		case <-q.done:
 			stopTimer(timer)
