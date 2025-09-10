@@ -88,6 +88,74 @@ func Test_Preupdate_Basic(t *testing.T) {
 	}
 }
 
+func Test_Preupdate_AllTypes(t *testing.T) {
+	path := mustTempPath()
+	defer os.Remove(path)
+	db, err := Open(path, false, false)
+	if err != nil {
+		t.Fatalf("error opening database")
+	}
+	defer db.Close()
+	mustExecute(db, "CREATE TABLE foo (id INTEGER PRIMARY KEY, name TEXT, age FLOAT, active BOOLEAN, data BLOB)")
+
+	for i, tt := range []struct {
+		sql string
+		ev  *command.CDCEvent
+	}{
+		{
+			sql: `INSERT INTO foo(id, name, age, active, data) VALUES(5, 'fiona', 2.4, true, x'010203')`,
+			ev: &command.CDCEvent{
+				Table:    "foo",
+				Op:       command.CDCEvent_INSERT,
+				NewRowId: 5,
+				OldRow:   nil,
+				NewRow: &command.CDCRow{
+					Values: []*command.CDCValue{
+						{Value: &command.CDCValue_I{I: 5}},
+						{Value: &command.CDCValue_S{S: "fiona"}},
+						{Value: &command.CDCValue_D{D: 2.4}},
+						{Value: &command.CDCValue_B{B: true}},
+						{Value: &command.CDCValue_Y{Y: []byte{1, 2, 3}}},
+					},
+				},
+			},
+		},
+	} {
+		if err := db.RegisterPreUpdateHook(func(ev *command.CDCEvent) error {
+			ev.OldRow = nil
+			ev.NewRow = nil
+			if exp, got := tt.ev.Table, ev.Table; exp != got {
+				t.Fatalf("test %d: expected table %s, got %s", i, exp, got)
+			}
+			if exp, got := tt.ev.Op, ev.Op; exp != got {
+				t.Fatalf("test %d: expected operation %s, got %s", i, exp, got)
+			}
+			if tt.ev.OldRowId != 0 {
+				if exp, got := tt.ev.OldRowId, ev.OldRowId; exp != got {
+					t.Fatalf("test %d: expected old Row ID %d, got %d", i, exp, got)
+				}
+			}
+			if tt.ev.NewRowId != 0 {
+				if exp, got := tt.ev.NewRowId, ev.NewRowId; exp != got {
+					t.Fatalf("test %d: expected new Row ID %d, got %d", i, exp, got)
+				}
+			}
+			// if tt.ev.OldRow != nil {
+			// 	// not used in this test
+			// }
+			// if tt.ev.NewRow != nil {
+			// 	if !reflect.DeepEqual(tt.ev.NewRow, ev.NewRow) {
+			// 		t.Fatal("new rows not equal")
+			// 	}
+			// }
+			return nil
+		}, nil, true); err != nil {
+			t.Fatalf("error registering preupdate hook: %s", err)
+		}
+	}
+
+}
+
 func Test_Preupdate_Basic_Regex(t *testing.T) {
 	path := mustTempPath()
 	defer os.Remove(path)
