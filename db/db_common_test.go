@@ -149,6 +149,11 @@ func Test_DB_TableColumnTypes(t *testing.T) {
 		t.Fatalf("failed to create table: %s", err.Error())
 	}
 
+	types, err = db.TableColumnTypes("; DROP TABLE foo")
+	if err == nil {
+		t.Fatalf("expected error when getting column types for non-existent table")
+	}
+
 	types, err = db.TableColumnTypes("foo")
 	if err != nil {
 		t.Fatalf("failed to get column types: %s", err.Error())

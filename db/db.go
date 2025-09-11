@@ -832,7 +832,7 @@ func (db *DB) ConnectionPoolStats(sqlDB *sql.DB) *PoolStats {
 // TableColumnTypes returns the declared types of all columns in the given table.
 func (db *DB) TableColumnTypes(table string) ([]string, error) {
 	rows, err := db.queryStmtWithConn(context.Background(), &command.Statement{
-		Sql:        fmt.Sprintf("PRAGMA table_info(\"%s\")", strings.Replace(table, "\"", "\"\"", -1)),
+		Sql:        fmt.Sprintf("PRAGMA table_info(\"%s\")", strings.ReplaceAll(table, `"`, `\"\"`)),
 		ForceQuery: true,
 	}, false, db.roDB)
 	if err != nil {
@@ -841,7 +841,6 @@ func (db *DB) TableColumnTypes(table string) ([]string, error) {
 	if len(rows.Values) < 1 {
 		return nil, fmt.Errorf("no such table: %s", table)
 	}
-	colNames := make([]string, len(rows.Values))
 	colTypes := make([]string, len(rows.Values))
 	for i, v := range rows.Values {
 		if len(v.Parameters) < 3 {
@@ -850,6 +849,7 @@ func (db *DB) TableColumnTypes(table string) ([]string, error) {
 		colTypes[i] = v.Parameters[2].GetS()
 	}
 	return colTypes, nil
+}
 
 // ExecuteStringStmtWithTimeout executes a single query that modifies the database.
 // It also sets a timeout for the query. This is primarily a convenience function.
