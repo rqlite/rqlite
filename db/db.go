@@ -835,7 +835,6 @@ func (db *DB) TableColumnTypes(table string) ([]string, error) {
 		Sql:        fmt.Sprintf("PRAGMA table_info(%s)", table),
 		ForceQuery: true,
 	}, false, db.roDB)
-
 	if err != nil {
 		return nil, err
 	}
