@@ -1816,7 +1816,7 @@ func (s *Store) EnableCDC(out chan<- *proto.CDCIndexedEventGroup, tableRe *regex
 	if s.cdcStreamer != nil {
 		return ErrCDCEnabled
 	}
-	s.cdcStreamer = sql.NewCDCStreamer(out)
+	s.cdcStreamer = sql.NewCDCStreamer(out, s.db)
 	s.cdcIDsOnly = rowIDsOnly
 	s.cdcTableRe = tableRe
 	return nil

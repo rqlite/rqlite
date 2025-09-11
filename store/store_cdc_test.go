@@ -1,6 +1,7 @@
 package store
 
 import (
+	"slices"
 	"testing"
 	"time"
 
@@ -138,6 +139,9 @@ func Test_StoreCDC_Events_Single(t *testing.T) {
 
 		if ev.Table != "foo" {
 			t.Fatalf("expected table name to be 'foo', got %s", ev.Table)
+		}
+		if !slices.Equal(ev.ColumnNames, []string{"id", "name"}) {
+			t.Fatalf("expected column names to be [id name], got %v", ev.ColumnNames)
 		}
 		if ev.Op != proto.CDCEvent_INSERT {
 			t.Fatalf("expected CDC event operation to be INSERT, got %s", ev.Op)
