@@ -280,46 +280,51 @@ func (db *DB) RegisterPreUpdateHook(hook PreUpdateHookCallback, tblRe *regexp.Re
 		}
 
 		ev := &command.CDCEvent{
-			Table:    d.TableName,
-			OldRowId: d.OldRowID,
-			NewRowId: d.NewRowID,
+			Table: d.TableName,
 		}
 
 		switch d.Op {
 		case sqlite3.SQLITE_INSERT:
 			ev.Op = command.CDCEvent_INSERT
+			ev.NewRowId = d.NewRowID
 		case sqlite3.SQLITE_UPDATE:
 			ev.Op = command.CDCEvent_UPDATE
+			ev.OldRowId = d.OldRowID
+			ev.NewRowId = d.NewRowID
 		case sqlite3.SQLITE_DELETE:
 			ev.Op = command.CDCEvent_DELETE
+			ev.OldRowId = d.OldRowID
 		default:
 			return ev, fmt.Errorf("unknown preupdate hook operation %d", d.Op)
 		}
 
-		if !rowIDsOnly {
-			c := d.Count()
-			if d.Op != sqlite3.SQLITE_INSERT {
-				oldRow := make([]any, c)
-				err := d.Old(oldRow...)
-				if err != nil && ev.Error == "" {
-					return ev, fmt.Errorf("failed to get old row data: %w", err)
-				}
-				ev.OldRow, err = normalizeCDCValues(oldRow)
-				if err != nil && ev.Error == "" {
-					return ev, fmt.Errorf("failed to normalize old row data: %w", err)
-				}
-			}
+		// Are we done?
+		if rowIDsOnly {
+			return ev, nil
+		}
 
-			if d.Op != sqlite3.SQLITE_DELETE {
-				newRow := make([]any, c)
-				err := d.New(newRow...)
-				if err != nil && ev.Error == "" {
-					return ev, fmt.Errorf("failed to get new row data: %w", err)
-				}
-				ev.NewRow, err = normalizeCDCValues(newRow)
-				if err != nil && ev.Error == "" {
-					return ev, fmt.Errorf("failed to normalize new row data: %w", err)
-				}
+		c := d.Count()
+		if d.Op != sqlite3.SQLITE_INSERT {
+			oldRow := make([]any, c)
+			err := d.Old(oldRow...)
+			if err != nil {
+				return ev, fmt.Errorf("failed to get old row data: %w", err)
+			}
+			ev.OldRow, err = normalizeCDCValues(oldRow)
+			if err != nil {
+				return ev, fmt.Errorf("failed to normalize old row data: %w", err)
+			}
+		}
+
+		if d.Op != sqlite3.SQLITE_DELETE {
+			newRow := make([]any, c)
+			err := d.New(newRow...)
+			if err != nil {
+				return ev, fmt.Errorf("failed to get new row data: %w", err)
+			}
+			ev.NewRow, err = normalizeCDCValues(newRow)
+			if err != nil {
+				return ev, fmt.Errorf("failed to normalize new row data: %w", err)
 			}
 		}
 		return ev, nil
