@@ -103,7 +103,7 @@ func Test_Preupdate_AllTypes(t *testing.T) {
 		ev  *command.CDCEvent
 	}{
 		{
-			sql: `INSERT INTO foo(id, name, age, active, data) VALUES(5, 'fiona', 2.4, true, x'010203')`,
+			sql: `INSERT INTO foo(id, name, age, active, data) VALUES(5, "fiona", 2.4, true, x'010203')`,
 			ev: &command.CDCEvent{
 				Table:    "foo",
 				Op:       command.CDCEvent_INSERT,
@@ -114,16 +114,18 @@ func Test_Preupdate_AllTypes(t *testing.T) {
 						{Value: &command.CDCValue_I{I: 5}},
 						{Value: &command.CDCValue_S{S: "fiona"}},
 						{Value: &command.CDCValue_D{D: 2.4}},
-						{Value: &command.CDCValue_B{B: true}},
+						//{Value: &command.CDCValue_B{B: true}},
+						{Value: &command.CDCValue_I{I: 1}},
 						{Value: &command.CDCValue_Y{Y: []byte{1, 2, 3}}},
 					},
 				},
 			},
 		},
 	} {
+		var wg sync.WaitGroup
 		if err := db.RegisterPreUpdateHook(func(ev *command.CDCEvent) error {
-			ev.OldRow = nil
-			ev.NewRow = nil
+			defer wg.Done()
+
 			if exp, got := tt.ev.Table, ev.Table; exp != got {
 				t.Fatalf("test %d: expected table %s, got %s", i, exp, got)
 			}
@@ -140,18 +142,40 @@ func Test_Preupdate_AllTypes(t *testing.T) {
 					t.Fatalf("test %d: expected new Row ID %d, got %d", i, exp, got)
 				}
 			}
-			// if tt.ev.OldRow != nil {
-			// 	// not used in this test
-			// }
-			// if tt.ev.NewRow != nil {
-			// 	if !reflect.DeepEqual(tt.ev.NewRow, ev.NewRow) {
-			// 		t.Fatal("new rows not equal")
-			// 	}
-			// }
+			if tt.ev.OldRow != nil {
+				if ev.OldRow == nil {
+					t.Fatalf("test %d: exp non-nil new row, got nil new row", i)
+				}
+				if len(tt.ev.OldRow.Values) != len(ev.OldRow.Values) {
+					t.Fatalf("test %d: exp %d old values, got %d values", i, len(tt.ev.OldRow.Values), len(ev.OldRow.Values))
+				}
+				if !reflect.DeepEqual(tt.ev.OldRow.Values[i], ev.OldRow.Values[i]) {
+					t.Fatalf("test %d: exp old value at index %d (%v) does not equal got old value at index %d (%v)",
+						i, i, tt.ev.OldRow.Values[i], i, ev.OldRow.Values[i])
+				}
+			}
+			if tt.ev.NewRow != nil {
+				if ev.NewRow == nil {
+					t.Fatalf("test %d: exp non-nil new row, got nil new row", i)
+				}
+				if len(tt.ev.NewRow.Values) != len(ev.NewRow.Values) {
+					t.Fatalf("test %d: exp %d new values, got %d values", i, len(tt.ev.NewRow.Values), len(ev.NewRow.Values))
+				}
+				for i := range tt.ev.NewRow.Values {
+					if !reflect.DeepEqual(tt.ev.NewRow.Values[i], ev.NewRow.Values[i]) {
+						t.Fatalf("test %d: exp new value at index %d (%v) does not equal got new value at index %d (%v)",
+							i, i, tt.ev.NewRow.Values[i], i, ev.NewRow.Values[i])
+					}
+				}
+			}
 			return nil
-		}, nil, true); err != nil {
+		}, nil, false); err != nil {
 			t.Fatalf("error registering preupdate hook: %s", err)
 		}
+
+		wg.Add(1)
+		mustExecute(db, tt.sql)
+		wg.Wait()
 	}
 
 }

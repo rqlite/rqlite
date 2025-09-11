@@ -1837,18 +1837,10 @@ func normalizeCDCValues(row []any) (*command.CDCRow, error) {
 				},
 			}
 		case []byte:
-			if true {
-				cdcRow.Values[i] = &command.CDCValue{
-					Value: &command.CDCValue_S{
-						S: string(val),
-					},
-				}
-			} else {
-				cdcRow.Values[i] = &command.CDCValue{
-					Value: &command.CDCValue_Y{
-						Y: val,
-					},
-				}
+			cdcRow.Values[i] = &command.CDCValue{
+				Value: &command.CDCValue_Y{
+					Y: val,
+				},
 			}
 		case time.Time:
 			rfc3339, err := val.MarshalText()
