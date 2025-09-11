@@ -8,7 +8,8 @@ import (
 	"sync/atomic"
 	"testing"
 
-	command "github.com/rqlite/rqlite/v8/command/proto"
+	"github.com/rqlite/rqlite/v8/command"
+	"github.com/rqlite/rqlite/v8/command/proto"
 )
 
 // Test_Preupdate_Basic tests the basic functionality of the preupdate hook, ensuring
@@ -25,7 +26,7 @@ func Test_Preupdate_Basic(t *testing.T) {
 	mustExecute(db, "CREATE TABLE foo (id INTEGER PRIMARY KEY, name TEXT)")
 
 	count := &atomic.Int32{}
-	hook := func(ev *command.CDCEvent) error {
+	hook := func(ev *proto.CDCEvent) error {
 		count.Add(1)
 		return nil
 	}
@@ -88,6 +89,189 @@ func Test_Preupdate_Basic(t *testing.T) {
 	}
 }
 
+func Test_Preupdate_AllTypes(t *testing.T) {
+	path := mustTempPath()
+	defer os.Remove(path)
+	db, err := Open(path, false, false)
+	if err != nil {
+		t.Fatalf("error opening database")
+	}
+	defer db.Close()
+	mustExecute(db, `CREATE TABLE foo (
+		id INTEGER PRIMARY KEY,
+		name TEXT,
+		employer VARCHAR(255),
+		ssn CHAR(11),
+		age INT,
+		weight FLOAT,
+		dob DATE,
+		active BOOLEAN,
+		data BLOB)`)
+
+	for i, tt := range []struct {
+		sql string
+		ev  *proto.CDCEvent
+	}{
+		{
+			sql: `INSERT INTO foo(id, name, employer, ssn, age, weight, dob, active, data) VALUES(
+			5,
+			"fiona",
+			"Acme",
+			NULL,
+			21,
+			167.3,
+			'1990-01-02',
+			true,
+			x'010203')`,
+			ev: &proto.CDCEvent{
+				Table:    "foo",
+				Op:       proto.CDCEvent_INSERT,
+				NewRowId: 5,
+				NewRow: &proto.CDCRow{
+					Values: []*proto.CDCValue{
+						{Value: &proto.CDCValue_I{I: 5}},
+						{Value: &proto.CDCValue_S{S: "fiona"}},
+						{Value: &proto.CDCValue_S{S: "Acme"}},
+						{Value: nil},
+						{Value: &proto.CDCValue_I{I: 21}},
+						{Value: &proto.CDCValue_D{D: 167.3}},
+						{Value: &proto.CDCValue_S{S: "1990-01-02"}},
+						{Value: &proto.CDCValue_I{I: 1}},
+						{Value: &proto.CDCValue_Y{Y: []byte{1, 2, 3}}},
+					},
+				},
+			},
+		},
+		{
+			sql: `UPDATE foo SET
+			name="fiona2",
+			employer="Acme2",
+			ssn="123-45-6789",
+			age=22,
+			weight=170.1,
+			dob='1991-02-03',
+			active=false,
+			data=x'040506'
+			WHERE id=5`,
+			ev: &proto.CDCEvent{
+				Table:    "foo",
+				Op:       proto.CDCEvent_UPDATE,
+				OldRowId: 5,
+				NewRowId: 5,
+				OldRow: &proto.CDCRow{
+					Values: []*proto.CDCValue{
+						{Value: &proto.CDCValue_I{I: 5}},
+						{Value: &proto.CDCValue_S{S: "fiona"}},
+						{Value: &proto.CDCValue_S{S: "Acme"}},
+						{Value: nil},
+						{Value: &proto.CDCValue_I{I: 21}},
+						{Value: &proto.CDCValue_D{D: 167.3}},
+						{Value: &proto.CDCValue_S{S: "1990-01-02"}},
+						{Value: &proto.CDCValue_I{I: 1}},
+						{Value: &proto.CDCValue_Y{Y: []byte{1, 2, 3}}},
+					},
+				},
+				NewRow: &proto.CDCRow{
+					Values: []*proto.CDCValue{
+						{Value: &proto.CDCValue_I{I: 5}},
+						{Value: &proto.CDCValue_S{S: "fiona2"}},
+						{Value: &proto.CDCValue_S{S: "Acme2"}},
+						{Value: &proto.CDCValue_S{S: "123-45-6789"}},
+						{Value: &proto.CDCValue_I{I: 22}},
+						{Value: &proto.CDCValue_D{D: 170.1}},
+						{Value: &proto.CDCValue_S{S: "1991-02-03"}},
+						{Value: &proto.CDCValue_I{I: 0}},
+						{Value: &proto.CDCValue_Y{Y: []byte{4, 5, 6}}},
+					},
+				},
+			},
+		},
+		{
+			sql: "DELETE FROM foo WHERE id=5",
+			ev: &proto.CDCEvent{
+				Table:    "foo",
+				Op:       proto.CDCEvent_DELETE,
+				OldRowId: 5,
+				OldRow: &proto.CDCRow{
+					Values: []*proto.CDCValue{
+						{Value: &proto.CDCValue_I{I: 5}},
+						{Value: &proto.CDCValue_S{S: "fiona2"}},
+						{Value: &proto.CDCValue_S{S: "Acme2"}},
+						{Value: &proto.CDCValue_S{S: "123-45-6789"}},
+						{Value: &proto.CDCValue_I{I: 22}},
+						{Value: &proto.CDCValue_D{D: 170.1}},
+						{Value: &proto.CDCValue_S{S: "1991-02-03"}},
+						{Value: &proto.CDCValue_I{I: 0}},
+						{Value: &proto.CDCValue_Y{Y: []byte{4, 5, 6}}},
+					},
+				},
+			},
+		},
+	} {
+		var wg sync.WaitGroup
+		if err := db.RegisterPreUpdateHook(func(ev *proto.CDCEvent) error {
+			defer wg.Done()
+
+			if exp, got := tt.ev.Table, ev.Table; exp != got {
+				t.Fatalf("test %d: expected table %s, got %s", i, exp, got)
+			}
+			if exp, got := tt.ev.Op, ev.Op; exp != got {
+				t.Fatalf("test %d: expected operation %s, got %s", i, exp, got)
+			}
+
+			// Old row checks.
+			if tt.ev.OldRowId != 0 {
+				if exp, got := tt.ev.OldRowId, ev.OldRowId; exp != got {
+					t.Fatalf("test %d: expected old Row ID %d, got %d", i, exp, got)
+				}
+			}
+			if tt.ev.OldRow != nil {
+				if ev.OldRow == nil {
+					t.Fatalf("test %d: exp non-nil new row, got nil new row", i)
+				}
+				if len(tt.ev.OldRow.Values) != len(ev.OldRow.Values) {
+					t.Fatalf("test %d: exp %d old values, got %d values", i, len(tt.ev.OldRow.Values), len(ev.OldRow.Values))
+				}
+				for i := range tt.ev.OldRow.Values {
+					if !command.CDCValueEqual(tt.ev.OldRow.Values[i], ev.OldRow.Values[i]) {
+						t.Fatalf("test %d: exp new value at index %d (%v) does not equal got new value at index %d (%v)",
+							i, i, tt.ev.OldRow.Values[i], i, ev.OldRow.Values[i])
+					}
+				}
+			}
+
+			// New row checks.
+			if tt.ev.NewRowId != 0 {
+				if exp, got := tt.ev.NewRowId, ev.NewRowId; exp != got {
+					t.Fatalf("test %d: expected new Row ID %d, got %d", i, exp, got)
+				}
+			}
+			if tt.ev.NewRow != nil {
+				if ev.NewRow == nil {
+					t.Fatalf("test %d: exp non-nil new row, got nil new row", i)
+				}
+				if len(tt.ev.NewRow.Values) != len(ev.NewRow.Values) {
+					t.Fatalf("test %d: exp %d new values, got %d values", i, len(tt.ev.NewRow.Values), len(ev.NewRow.Values))
+				}
+				for i := range tt.ev.NewRow.Values {
+					if !command.CDCValueEqual(tt.ev.NewRow.Values[i], ev.NewRow.Values[i]) {
+						t.Fatalf("test %d: exp new value at index %d (%v) does not equal got new value at index %d (%v)",
+							i, i, tt.ev.NewRow.Values[i], i, ev.NewRow.Values[i])
+					}
+				}
+			}
+			return nil
+		}, nil, false); err != nil {
+			t.Fatalf("error registering preupdate hook: %s", err)
+		}
+
+		wg.Add(1)
+		mustExecute(db, tt.sql)
+		wg.Wait()
+	}
+
+}
+
 func Test_Preupdate_Basic_Regex(t *testing.T) {
 	path := mustTempPath()
 	defer os.Remove(path)
@@ -100,7 +284,7 @@ func Test_Preupdate_Basic_Regex(t *testing.T) {
 	mustExecute(db, "CREATE TABLE foobar (id INTEGER PRIMARY KEY, name TEXT)")
 
 	count := &atomic.Int32{}
-	hook := func(ev *command.CDCEvent) error {
+	hook := func(ev *proto.CDCEvent) error {
 		count.Add(1)
 		return nil
 	}
@@ -188,7 +372,7 @@ func Test_Preupdate_Constraint(t *testing.T) {
 	mustExecute(db, "CREATE TABLE foo (id INTEGER PRIMARY KEY, name TEXT UNIQUE)")
 
 	count := &atomic.Int32{}
-	hook := func(ev *command.CDCEvent) error {
+	hook := func(ev *proto.CDCEvent) error {
 		count.Add(1)
 		return nil
 	}
@@ -233,12 +417,12 @@ func Test_Preupdate_RowIDs(t *testing.T) {
 
 	// Insert a row, with an explicit ID.
 	var wg sync.WaitGroup
-	hook := func(ev *command.CDCEvent) error {
+	hook := func(ev *proto.CDCEvent) error {
 		defer wg.Done()
 		if ev.Table != "foo" {
 			t.Fatalf("expected table foo, got %s", ev.Table)
 		}
-		if ev.Op != command.CDCEvent_INSERT {
+		if ev.Op != proto.CDCEvent_INSERT {
 			t.Fatalf("expected operation insert, got %s", ev.Op)
 		}
 		if exp, got := int64(5), ev.OldRowId; exp != got {
@@ -261,12 +445,12 @@ func Test_Preupdate_RowIDs(t *testing.T) {
 	wg.Wait()
 
 	// Update a row.
-	hook = func(ev *command.CDCEvent) error {
+	hook = func(ev *proto.CDCEvent) error {
 		defer wg.Done()
 		if ev.Table != "foo" {
 			t.Fatalf("expected table foo, got %s", ev.Table)
 		}
-		if ev.Op != command.CDCEvent_UPDATE {
+		if ev.Op != proto.CDCEvent_UPDATE {
 			t.Fatalf("expected operation update, got %s", ev.Op)
 		}
 		if exp, got := int64(5), ev.OldRowId; exp != got {
@@ -289,12 +473,12 @@ func Test_Preupdate_RowIDs(t *testing.T) {
 	wg.Wait()
 
 	// Delete a row.
-	hook = func(ev *command.CDCEvent) error {
+	hook = func(ev *proto.CDCEvent) error {
 		defer wg.Done()
 		if ev.Table != "foo" {
 			t.Fatalf("expected table foo, got %s", ev.Table)
 		}
-		if ev.Op != command.CDCEvent_DELETE {
+		if ev.Op != proto.CDCEvent_DELETE {
 			t.Fatalf("expected operation delete, got %s", ev.Op)
 		}
 		if exp, got := int64(5), ev.OldRowId; exp != got {
@@ -330,19 +514,19 @@ func Test_Preupdate_Data(t *testing.T) {
 	/////////////////////////////////////////////////////////////////
 	// Insert a row, with an explicit ID.
 	var wg sync.WaitGroup
-	hook := func(got *command.CDCEvent) error {
+	hook := func(got *proto.CDCEvent) error {
 		defer wg.Done()
-		exp := &command.CDCEvent{
+		exp := &proto.CDCEvent{
 			Table:    "foo",
-			Op:       command.CDCEvent_INSERT,
+			Op:       proto.CDCEvent_INSERT,
 			OldRowId: 5,
 			NewRowId: 5,
 			OldRow:   nil,
-			NewRow: &command.CDCRow{
-				Values: []*command.CDCValue{
-					{Value: &command.CDCValue_I{I: 5}},
-					{Value: &command.CDCValue_S{S: "fiona"}},
-					{Value: &command.CDCValue_D{D: 2.4}},
+			NewRow: &proto.CDCRow{
+				Values: []*proto.CDCValue{
+					{Value: &proto.CDCValue_I{I: 5}},
+					{Value: &proto.CDCValue_S{S: "fiona"}},
+					{Value: &proto.CDCValue_D{D: 2.4}},
 				},
 			},
 		}
@@ -358,19 +542,19 @@ func Test_Preupdate_Data(t *testing.T) {
 
 	/////////////////////////////////////////////////////////////////
 	// Insert a row with more complex data
-	hook = func(got *command.CDCEvent) error {
+	hook = func(got *proto.CDCEvent) error {
 		defer wg.Done()
-		exp := &command.CDCEvent{
+		exp := &proto.CDCEvent{
 			Table:    "foo",
-			Op:       command.CDCEvent_INSERT,
+			Op:       proto.CDCEvent_INSERT,
 			OldRowId: 20,
 			NewRowId: 20,
 			OldRow:   nil,
-			NewRow: &command.CDCRow{
-				Values: []*command.CDCValue{
-					{Value: &command.CDCValue_I{I: 20}},
-					{Value: &command.CDCValue_S{S: "😃💁 People 大鹿"}},
-					{Value: &command.CDCValue_D{D: 1.23}},
+			NewRow: &proto.CDCRow{
+				Values: []*proto.CDCValue{
+					{Value: &proto.CDCValue_I{I: 20}},
+					{Value: &proto.CDCValue_S{S: "😃💁 People 大鹿"}},
+					{Value: &proto.CDCValue_D{D: 1.23}},
 				},
 			},
 		}
@@ -386,19 +570,19 @@ func Test_Preupdate_Data(t *testing.T) {
 
 	/////////////////////////////////////////////////////////////////
 	// Insert a row, adding subset of columns
-	hook = func(got *command.CDCEvent) error {
+	hook = func(got *proto.CDCEvent) error {
 		defer wg.Done()
-		exp := &command.CDCEvent{
+		exp := &proto.CDCEvent{
 			Table:    "foo",
-			Op:       command.CDCEvent_INSERT,
+			Op:       proto.CDCEvent_INSERT,
 			OldRowId: 6,
 			NewRowId: 6,
 			OldRow:   nil,
-			NewRow: &command.CDCRow{
-				Values: []*command.CDCValue{
-					{Value: &command.CDCValue_I{I: 6}},
-					nil,
-					{Value: &command.CDCValue_D{D: 3.7}},
+			NewRow: &proto.CDCRow{
+				Values: []*proto.CDCValue{
+					{Value: &proto.CDCValue_I{I: 6}},
+					{Value: nil},
+					{Value: &proto.CDCValue_D{D: 3.7}},
 				},
 			},
 		}
@@ -414,25 +598,25 @@ func Test_Preupdate_Data(t *testing.T) {
 
 	/////////////////////////////////////////////////////////////////
 	// Update a row.
-	hook = func(got *command.CDCEvent) error {
+	hook = func(got *proto.CDCEvent) error {
 		defer wg.Done()
-		exp := &command.CDCEvent{
+		exp := &proto.CDCEvent{
 			Table:    "foo",
-			Op:       command.CDCEvent_UPDATE,
+			Op:       proto.CDCEvent_UPDATE,
 			OldRowId: 5,
 			NewRowId: 5,
-			OldRow: &command.CDCRow{
-				Values: []*command.CDCValue{
-					{Value: &command.CDCValue_I{I: 5}},
-					{Value: &command.CDCValue_S{S: "fiona"}},
-					{Value: &command.CDCValue_D{D: 2.4}},
+			OldRow: &proto.CDCRow{
+				Values: []*proto.CDCValue{
+					{Value: &proto.CDCValue_I{I: 5}},
+					{Value: &proto.CDCValue_S{S: "fiona"}},
+					{Value: &proto.CDCValue_D{D: 2.4}},
 				},
 			},
-			NewRow: &command.CDCRow{
-				Values: []*command.CDCValue{
-					{Value: &command.CDCValue_I{I: 5}},
-					{Value: &command.CDCValue_S{S: "fiona2"}},
-					{Value: &command.CDCValue_D{D: 2.4}},
+			NewRow: &proto.CDCRow{
+				Values: []*proto.CDCValue{
+					{Value: &proto.CDCValue_I{I: 5}},
+					{Value: &proto.CDCValue_S{S: "fiona2"}},
+					{Value: &proto.CDCValue_D{D: 2.4}},
 				},
 			},
 		}
@@ -447,18 +631,18 @@ func Test_Preupdate_Data(t *testing.T) {
 	wg.Wait()
 
 	// Delete a row.
-	hook = func(got *command.CDCEvent) error {
+	hook = func(got *proto.CDCEvent) error {
 		defer wg.Done()
-		exp := &command.CDCEvent{
+		exp := &proto.CDCEvent{
 			Table:    "foo",
-			Op:       command.CDCEvent_DELETE,
+			Op:       proto.CDCEvent_DELETE,
 			OldRowId: 5,
 			NewRowId: 5,
-			OldRow: &command.CDCRow{
-				Values: []*command.CDCValue{
-					{Value: &command.CDCValue_I{I: 5}},
-					{Value: &command.CDCValue_S{S: "fiona2"}},
-					{Value: &command.CDCValue_D{D: 2.4}},
+			OldRow: &proto.CDCRow{
+				Values: []*proto.CDCValue{
+					{Value: &proto.CDCValue_I{I: 5}},
+					{Value: &proto.CDCValue_S{S: "fiona2"}},
+					{Value: &proto.CDCValue_D{D: 2.4}},
 				},
 			},
 			NewRow: nil,
@@ -489,7 +673,7 @@ func Test_Preupdate_Multi(t *testing.T) {
 	mustExecute(db, "INSERT INTO foo(id, name) VALUES(2, 'fiona')")
 
 	var wg sync.WaitGroup
-	hook := func(got *command.CDCEvent) error {
+	hook := func(got *proto.CDCEvent) error {
 		defer wg.Done()
 		return nil
 	}
@@ -514,7 +698,7 @@ func Test_Preupdate_Tx(t *testing.T) {
 	mustExecute(db, "CREATE TABLE foo (id INTEGER PRIMARY KEY, name TEXT)")
 
 	var wg sync.WaitGroup
-	hook := func(got *command.CDCEvent) error {
+	hook := func(got *proto.CDCEvent) error {
 		defer wg.Done()
 		return nil
 	}
@@ -528,7 +712,7 @@ func Test_Preupdate_Tx(t *testing.T) {
 	wg.Wait()
 }
 
-func compareEvents(t *testing.T, exp, got *command.CDCEvent) {
+func compareEvents(t *testing.T, exp, got *proto.CDCEvent) {
 	t.Helper()
 	if exp, got := exp.Table, got.Table; exp != got {
 		t.Fatalf("expected table %s, got %s", exp, got)
