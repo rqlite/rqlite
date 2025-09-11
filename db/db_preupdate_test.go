@@ -1,7 +1,6 @@
 package db
 
 import (
-	"fmt"
 	"os"
 	"reflect"
 	"regexp"
@@ -212,7 +211,6 @@ func Test_Preupdate_AllTypes(t *testing.T) {
 		if err := db.RegisterPreUpdateHook(func(ev *command.CDCEvent) error {
 			defer wg.Done()
 
-			fmt.Println("Got event:", ev)
 			if exp, got := tt.ev.Table, ev.Table; exp != got {
 				t.Fatalf("test %d: expected table %s, got %s", i, exp, got)
 			}
