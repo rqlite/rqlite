@@ -22,6 +22,8 @@
 - [PR #2308](https://github.com/rqlite/rqlite/pull/2308): Correctly implement Batching Queue flushing.
 - [PR #2309](https://github.com/rqlite/rqlite/pull/2309): Integrate Store Snapshotting and CDC Service.
 - [PR #2310](https://github.com/rqlite/rqlite/pull/2310): Correct key deletion in BoltDB.
+- [PR #2312](https://github.com/rqlite/rqlite/pull/2312): Upgrade Go dependencies.
+- [PR #2313](https://github.com/rqlite/rqlite/pull/2313): Database layer supports querying just for a table's column types.
 
 ## v8.43.4 (August 27th 2025)
 ### Implementation changes and bug fixes
