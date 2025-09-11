@@ -6,24 +6,31 @@ import (
 	command "github.com/rqlite/rqlite/v8/command/proto"
 )
 
+// ColumnsNameProvider provides column names for a given table.
+type ColumnsNameProvider interface {
+	ColumnNames(table string) ([]string, error)
+}
+
 // CDCStreamer is a CDC streamer that collects events and sends them
 // to a channel when the commit hook is called. It is used to stream
 // changes to a client.
 type CDCStreamer struct {
 	pending *command.CDCIndexedEventGroup
 	out     chan<- *command.CDCIndexedEventGroup
+	db      ColumnsNameProvider
 }
 
 // NewCDCStreamer creates a new CDCStreamer. The out channel is used
 // to send the collected events to the client. It is the caller's
 // responsibility to ensure that the channel is read from, as the
 // CDCStreamer will drop events if the channel is full.
-func NewCDCStreamer(out chan<- *command.CDCIndexedEventGroup) *CDCStreamer {
+func NewCDCStreamer(out chan<- *command.CDCIndexedEventGroup, db ColumnsNameProvider) *CDCStreamer {
 	return &CDCStreamer{
 		pending: &command.CDCIndexedEventGroup{
 			Events: make([]*command.CDCEvent, 0),
 		},
 		out: out,
+		db:  db,
 	}
 }
 
@@ -58,6 +65,18 @@ func (s *CDCStreamer) CommitHook() bool {
 		// CREATE TABLE statements, for example, result in a COMMIT
 		// but do not generate CDC events.
 		return true
+	}
+
+	colNamesCache := make(map[string][]string)
+	for _, ev := range s.pending.Events {
+		if _, ok := colNamesCache[ev.Table]; !ok {
+			names, err := s.db.ColumnNames(ev.Table)
+			if err != nil {
+				continue
+			}
+			colNamesCache[ev.Table] = names
+		}
+		ev.ColumnNames = colNamesCache[ev.Table]
 	}
 
 	s.pending.CommitTimestamp = time.Now().UnixNano()

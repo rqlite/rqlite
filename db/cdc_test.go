@@ -10,7 +10,7 @@ import (
 
 func Test_CDCStreamer_New(t *testing.T) {
 	ch := make(chan *command.CDCIndexedEventGroup, 10)
-	streamer := NewCDCStreamer(ch)
+	streamer := NewCDCStreamer(ch, nil)
 	if streamer == nil {
 		t.Fatalf("expected CDCStreamer to be created, got nil")
 	}
@@ -24,7 +24,12 @@ func Test_CDCStreamer_New(t *testing.T) {
 
 func Test_CDCStreamer_CommitOne(t *testing.T) {
 	ch := make(chan *command.CDCIndexedEventGroup, 10)
-	streamer := NewCDCStreamer(ch)
+	np := &mockColumnNamesProvider{
+		columns: map[string][]string{
+			"test_table": {"id", "name", "value"},
+		},
+	}
+	streamer := NewCDCStreamer(ch, np)
 
 	streamer.Reset(5678)
 	change := &command.CDCEvent{
@@ -173,4 +178,15 @@ func Test_CDCStreamer_ResetThenPreupdate(t *testing.T) {
 	if err := streamer.Close(); err != nil {
 		t.Fatalf("expected no error on close, got %v", err)
 	}
+}
+
+type mockColumnNamesProvider struct {
+	columns map[string][]string
+}
+
+func (m *mockColumnNamesProvider) ColumnNames(table string) ([]string, error) {
+	if cols, ok := m.columns[table]; ok {
+		return cols, nil
+	}
+	return []string{}, nil
 }
