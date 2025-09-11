@@ -251,7 +251,7 @@ func Test_Preupdate_AllTypes(t *testing.T) {
 					t.Fatalf("test %d: exp %d new values, got %d values", i, len(tt.ev.NewRow.Values), len(ev.NewRow.Values))
 				}
 				for i := range tt.ev.NewRow.Values {
-					if !reflect.DeepEqual(tt.ev.NewRow.Values[i], ev.NewRow.Values[i]) {
+					if tt.ev.NewRow.Values[i].GetValue() != ev.NewRow.Values[i].GetValue() {
 						t.Fatalf("test %d: exp new value at index %d (%v) does not equal got new value at index %d (%v)",
 							i, i, tt.ev.NewRow.Values[i], i, ev.NewRow.Values[i])
 					}
