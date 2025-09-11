@@ -280,18 +280,20 @@ func (db *DB) RegisterPreUpdateHook(hook PreUpdateHookCallback, tblRe *regexp.Re
 		}
 
 		ev := &command.CDCEvent{
-			Table:    d.TableName,
-			OldRowId: d.OldRowID,
-			NewRowId: d.NewRowID,
+			Table: d.TableName,
 		}
 
 		switch d.Op {
 		case sqlite3.SQLITE_INSERT:
 			ev.Op = command.CDCEvent_INSERT
+			ev.NewRowId = d.NewRowID
 		case sqlite3.SQLITE_UPDATE:
 			ev.Op = command.CDCEvent_UPDATE
+			ev.OldRowId = d.OldRowID
+			ev.NewRowId = d.NewRowID
 		case sqlite3.SQLITE_DELETE:
 			ev.Op = command.CDCEvent_DELETE
+			ev.OldRowId = d.OldRowID
 		default:
 			return ev, fmt.Errorf("unknown preupdate hook operation %d", d.Op)
 		}
