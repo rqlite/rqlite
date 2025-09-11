@@ -234,8 +234,8 @@ github.com/prometheus/procfs v0.6.0/go.mod h1:cz+aTbrPOrUb4q7XlbU9ygM+/jj0fzG6c1
 github.com/rivo/uniseg v0.2.0/go.mod h1:J6wj4VEh+S6ZtnVlnTBMWIodfgj8LQOQFoIToxlJtxc=
 github.com/rivo/uniseg v0.4.7 h1:WUdvkW8uEhrYfLC4ZzdpI2ztxP1I582+49Oc5Mq64VQ=
 github.com/rivo/uniseg v0.4.7/go.mod h1:FN3SvrM+Zdj16jyLfmOkMNblXMcoc8DfTHruCPUcx88=
-github.com/rqlite/go-sqlite3 v1.41.0 h1:w0I0mSlKFkm4CF8QWoxy5CB3BhN8BbFi4Y4MFdUqVjc=
-github.com/rqlite/go-sqlite3 v1.41.0/go.mod h1:R9H7CatgYBt3c+fSV/5yo2vLh4ZjCB0aMHdkv69fP4A=
+github.com/rqlite/go-sqlite3 v1.42.0 h1:xfOaauBRqJyww/6g2z910/p3gyw/vjb2GgQYKfrZSrU=
+github.com/rqlite/go-sqlite3 v1.42.0/go.mod h1:R9H7CatgYBt3c+fSV/5yo2vLh4ZjCB0aMHdkv69fP4A=
 github.com/rqlite/raft-boltdb/v2 v2.0.0-20230523104317-c08e70f4de48 h1:NZ62M+kT0JqhyFUMc8I4SMmfmD4NGJxhb2ePJQXjryc=
 github.com/rqlite/raft-boltdb/v2 v2.0.0-20230523104317-c08e70f4de48/go.mod h1:CRnsxgy5G8fAf5J+AM0yrsSdxXHKkIYOaq2sm+Q4DYc=
 github.com/rqlite/rqlite-disco-clients v0.0.0-20250205044118-8ada2b350099 h1:5cqkVLdl6sGJSY3kiF2dqaA3bD+8OS5FUdZqO0BxXLU=
