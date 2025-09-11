@@ -79,8 +79,8 @@ func Test_ServiceSingleEvent(t *testing.T) {
 							{
 								Op:       ev.Op.String(),
 								Table:    ev.Table,
-								NewRowId: ev.NewRowId,
-								OldRowId: ev.OldRowId,
+								NewRowID: ev.NewRowId,
+								OldRowID: ev.OldRowId,
 							},
 						},
 					},
@@ -223,8 +223,8 @@ func Test_ServiceRestart_NoDupes(t *testing.T) {
 						{
 							Op:       ev.Op.String(),
 							Table:    ev.Table,
-							NewRowId: ev.NewRowId,
-							OldRowId: ev.OldRowId,
+							NewRowID: ev.NewRowId,
+							OldRowID: ev.OldRowId,
 						},
 					},
 				},
@@ -382,8 +382,8 @@ func Test_ServiceSingleEvent_Retry(t *testing.T) {
 						{
 							Op:       ev.Op.String(),
 							Table:    ev.Table,
-							NewRowId: ev.NewRowId,
-							OldRowId: ev.OldRowId,
+							NewRowID: ev.NewRowId,
+							OldRowID: ev.OldRowId,
 						},
 					},
 				},
@@ -473,8 +473,8 @@ func Test_ServiceMultiEvent(t *testing.T) {
 						{
 							Op:       ev1.Op.String(),
 							Table:    ev1.Table,
-							NewRowId: ev1.NewRowId,
-							OldRowId: ev1.OldRowId,
+							NewRowID: ev1.NewRowId,
+							OldRowID: ev1.OldRowId,
 						},
 					},
 				},
@@ -484,8 +484,8 @@ func Test_ServiceMultiEvent(t *testing.T) {
 						{
 							Op:       ev2.Op.String(),
 							Table:    ev2.Table,
-							NewRowId: ev2.NewRowId,
-							OldRowId: ev2.OldRowId,
+							NewRowID: ev2.NewRowId,
+							OldRowID: ev2.OldRowId,
 						},
 					},
 				},
@@ -587,7 +587,7 @@ func Test_ServiceMultiEvent_Batch(t *testing.T) {
 						{
 							Op:       ev1.Op.String(),
 							Table:    ev1.Table,
-							NewRowId: ev1.NewRowId,
+							NewRowID: ev1.NewRowId,
 						},
 					},
 				},
@@ -597,8 +597,8 @@ func Test_ServiceMultiEvent_Batch(t *testing.T) {
 						{
 							Op:       ev2.Op.String(),
 							Table:    ev2.Table,
-							NewRowId: ev2.NewRowId,
-							OldRowId: ev2.OldRowId,
+							NewRowID: ev2.NewRowId,
+							OldRowID: ev2.OldRowId,
 						},
 					},
 				},
@@ -628,7 +628,7 @@ func Test_ServiceMultiEvent_Batch(t *testing.T) {
 						{
 							Op:       ev3.Op.String(),
 							Table:    ev3.Table,
-							OldRowId: ev3.OldRowId,
+							OldRowID: ev3.OldRowId,
 						},
 					},
 				},

@@ -24,8 +24,8 @@ type CDCMessage struct {
 type CDCMessageEvent struct {
 	Op       string `json:"op"`
 	Table    string `json:"table,omitempty"`
-	NewRowId int64  `json:"new_row_id,omitempty"`
-	OldRowId int64  `json:"old_row_id,omitempty"`
+	NewRowID int64  `json:"new_row_id,omitempty"`
+	OldRowID int64  `json:"old_row_id,omitempty"`
 	Before   []any  `json:"before,omitempty"`
 	After    []any  `json:"after,omitempty"`
 }
@@ -78,8 +78,8 @@ func MarshalToEnvelopeJSON(serviceID, nodeID string, ts bool, evs []*proto.CDCIn
 			p.Events[j] = &CDCMessageEvent{
 				Op:       event.Op.String(),
 				Table:    event.Table,
-				NewRowId: event.NewRowId,
-				OldRowId: event.OldRowId,
+				NewRowID: event.NewRowId,
+				OldRowID: event.OldRowId,
 			}
 
 			if event.OldRow != nil {
