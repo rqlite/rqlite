@@ -846,7 +846,7 @@ func (db *DB) TableColumnTypes(table string) (map[string]string, error) {
 	if len(rows.Values) < 1 {
 		return nil, fmt.Errorf("no such table: %s", table)
 	}
-	colTypes := make(map[string]string)
+	colTypes := make(map[string]string, len(rows.Values))
 	for _, v := range rows.Values {
 		if len(v.Parameters) < 3 {
 			return nil, fmt.Errorf("unexpected result from PRAGMA table_info")
