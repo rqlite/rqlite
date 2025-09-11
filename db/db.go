@@ -307,11 +307,11 @@ func (db *DB) RegisterPreUpdateHook(hook PreUpdateHookCallback, tblRe *regexp.Re
 		if d.Op != sqlite3.SQLITE_INSERT {
 			oldRow := make([]any, c)
 			err := d.Old(oldRow...)
-			if err != nil && ev.Error == "" {
+			if err != nil {
 				return ev, fmt.Errorf("failed to get old row data: %w", err)
 			}
 			ev.OldRow, err = normalizeCDCValues(oldRow)
-			if err != nil && ev.Error == "" {
+			if err != nil {
 				return ev, fmt.Errorf("failed to normalize old row data: %w", err)
 			}
 		}
@@ -319,11 +319,11 @@ func (db *DB) RegisterPreUpdateHook(hook PreUpdateHookCallback, tblRe *regexp.Re
 		if d.Op != sqlite3.SQLITE_DELETE {
 			newRow := make([]any, c)
 			err := d.New(newRow...)
-			if err != nil && ev.Error == "" {
+			if err != nil {
 				return ev, fmt.Errorf("failed to get new row data: %w", err)
 			}
 			ev.NewRow, err = normalizeCDCValues(newRow)
-			if err != nil && ev.Error == "" {
+			if err != nil {
 				return ev, fmt.Errorf("failed to normalize new row data: %w", err)
 			}
 		}
