@@ -1875,7 +1875,9 @@ func normalizeCDCValues(row []any) (*command.CDCRow, error) {
 				},
 			}
 		case nil:
-			continue
+			cdcRow.Values[i] = &command.CDCValue{
+				Value: nil,
+			}
 		default:
 			return nil, fmt.Errorf("unhandled column type: %T %v", val, val)
 		}

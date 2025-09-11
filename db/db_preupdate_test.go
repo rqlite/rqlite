@@ -1,6 +1,7 @@
 package db
 
 import (
+	"fmt"
 	"os"
 	"reflect"
 	"regexp"
@@ -96,27 +97,112 @@ func Test_Preupdate_AllTypes(t *testing.T) {
 		t.Fatalf("error opening database")
 	}
 	defer db.Close()
-	mustExecute(db, "CREATE TABLE foo (id INTEGER PRIMARY KEY, name TEXT, age FLOAT, active BOOLEAN, data BLOB)")
+	mustExecute(db, `CREATE TABLE foo (
+		id INTEGER PRIMARY KEY,
+		name TEXT,
+		employer VARCHAR(255),
+		ssn CHAR(11),
+		age INT,
+		weight FLOAT,
+		dob DATE,
+		active BOOLEAN,
+		data BLOB)`)
 
 	for i, tt := range []struct {
 		sql string
 		ev  *command.CDCEvent
 	}{
 		{
-			sql: `INSERT INTO foo(id, name, age, active, data) VALUES(5, "fiona", 2.4, true, x'010203')`,
+			sql: `INSERT INTO foo(id, name, employer, ssn, age, weight, dob, active, data) VALUES(
+			5,
+			"fiona",
+			"Acme",
+			NULL,
+			21,
+			167.3,
+			'1990-01-02',
+			true,
+			x'010203')`,
 			ev: &command.CDCEvent{
 				Table:    "foo",
 				Op:       command.CDCEvent_INSERT,
 				NewRowId: 5,
-				OldRow:   nil,
 				NewRow: &command.CDCRow{
 					Values: []*command.CDCValue{
 						{Value: &command.CDCValue_I{I: 5}},
 						{Value: &command.CDCValue_S{S: "fiona"}},
-						{Value: &command.CDCValue_D{D: 2.4}},
-						//{Value: &command.CDCValue_B{B: true}},
+						{Value: &command.CDCValue_S{S: "Acme"}},
+						{Value: nil},
+						{Value: &command.CDCValue_I{I: 21}},
+						{Value: &command.CDCValue_D{D: 167.3}},
+						{Value: &command.CDCValue_S{S: "1990-01-02"}},
 						{Value: &command.CDCValue_I{I: 1}},
 						{Value: &command.CDCValue_Y{Y: []byte{1, 2, 3}}},
+					},
+				},
+			},
+		},
+		{
+			sql: `UPDATE foo SET
+			name="fiona2",
+			employer="Acme2",
+			ssn="123-45-6789",
+			age=22,
+			weight=170.1,
+			dob='1991-02-03',
+			active=false,
+			data=x'040506'
+			WHERE id=5`,
+			ev: &command.CDCEvent{
+				Table:    "foo",
+				Op:       command.CDCEvent_UPDATE,
+				OldRowId: 5,
+				NewRowId: 5,
+				OldRow: &command.CDCRow{
+					Values: []*command.CDCValue{
+						{Value: &command.CDCValue_I{I: 5}},
+						{Value: &command.CDCValue_S{S: "fiona"}},
+						{Value: &command.CDCValue_S{S: "Acme"}},
+						{Value: nil},
+						{Value: &command.CDCValue_I{I: 21}},
+						{Value: &command.CDCValue_D{D: 167.3}},
+						{Value: &command.CDCValue_S{S: "1990-01-02"}},
+						{Value: &command.CDCValue_I{I: 1}},
+						{Value: &command.CDCValue_Y{Y: []byte{1, 2, 3}}},
+					},
+				},
+				NewRow: &command.CDCRow{
+					Values: []*command.CDCValue{
+						{Value: &command.CDCValue_I{I: 5}},
+						{Value: &command.CDCValue_S{S: "fiona2"}},
+						{Value: &command.CDCValue_S{S: "Acme2"}},
+						{Value: &command.CDCValue_S{S: "123-45-6789"}},
+						{Value: &command.CDCValue_I{I: 22}},
+						{Value: &command.CDCValue_D{D: 170.1}},
+						{Value: &command.CDCValue_S{S: "1991-02-03"}},
+						{Value: &command.CDCValue_I{I: 0}},
+						{Value: &command.CDCValue_Y{Y: []byte{4, 5, 6}}},
+					},
+				},
+			},
+		},
+		{
+			sql: "DELETE FROM foo WHERE id=5",
+			ev: &command.CDCEvent{
+				Table:    "foo",
+				Op:       command.CDCEvent_DELETE,
+				OldRowId: 5,
+				OldRow: &command.CDCRow{
+					Values: []*command.CDCValue{
+						{Value: &command.CDCValue_I{I: 5}},
+						{Value: &command.CDCValue_S{S: "fiona2"}},
+						{Value: &command.CDCValue_S{S: "Acme2"}},
+						{Value: &command.CDCValue_S{S: "123-45-6789"}},
+						{Value: &command.CDCValue_I{I: 22}},
+						{Value: &command.CDCValue_D{D: 170.1}},
+						{Value: &command.CDCValue_S{S: "1991-02-03"}},
+						{Value: &command.CDCValue_I{I: 0}},
+						{Value: &command.CDCValue_Y{Y: []byte{4, 5, 6}}},
 					},
 				},
 			},
@@ -126,20 +212,18 @@ func Test_Preupdate_AllTypes(t *testing.T) {
 		if err := db.RegisterPreUpdateHook(func(ev *command.CDCEvent) error {
 			defer wg.Done()
 
+			fmt.Println("Got event:", ev)
 			if exp, got := tt.ev.Table, ev.Table; exp != got {
 				t.Fatalf("test %d: expected table %s, got %s", i, exp, got)
 			}
 			if exp, got := tt.ev.Op, ev.Op; exp != got {
 				t.Fatalf("test %d: expected operation %s, got %s", i, exp, got)
 			}
+
+			// Old row checks.
 			if tt.ev.OldRowId != 0 {
 				if exp, got := tt.ev.OldRowId, ev.OldRowId; exp != got {
 					t.Fatalf("test %d: expected old Row ID %d, got %d", i, exp, got)
-				}
-			}
-			if tt.ev.NewRowId != 0 {
-				if exp, got := tt.ev.NewRowId, ev.NewRowId; exp != got {
-					t.Fatalf("test %d: expected new Row ID %d, got %d", i, exp, got)
 				}
 			}
 			if tt.ev.OldRow != nil {
@@ -152,6 +236,13 @@ func Test_Preupdate_AllTypes(t *testing.T) {
 				if !reflect.DeepEqual(tt.ev.OldRow.Values[i], ev.OldRow.Values[i]) {
 					t.Fatalf("test %d: exp old value at index %d (%v) does not equal got old value at index %d (%v)",
 						i, i, tt.ev.OldRow.Values[i], i, ev.OldRow.Values[i])
+				}
+			}
+
+			// New row checks.
+			if tt.ev.NewRowId != 0 {
+				if exp, got := tt.ev.NewRowId, ev.NewRowId; exp != got {
+					t.Fatalf("test %d: expected new Row ID %d, got %d", i, exp, got)
 				}
 			}
 			if tt.ev.NewRow != nil {
