@@ -299,8 +299,10 @@ type Store struct {
 
 	cdcMu         sync.RWMutex
 	cdcStreamer   *sql.CDCStreamer
+	cdcOutCh      chan<- *proto.CDCIndexedEventGroup
 	cdcIDsOnly    bool
 	cdcTableRe    *regexp.Regexp
+	cdcEnabled    rsync.AtomicBool
 	cdcRegistered rsync.AtomicBool
 
 	dechunkManager *chunking.DechunkerManager
@@ -1206,7 +1208,7 @@ func (s *Store) Stats() (map[string]any, error) {
 			"dropped":  s.observer.GetNumDropped(),
 		},
 		"cdc": map[string]any{
-			"enabled":    s.cdcStreamer != nil,
+			"enabled":    s.cdcEnabled.Is(),
 			"registered": s.cdcRegistered.Is(),
 		},
 		"apply_timeout":          s.ApplyTimeout.String(),
@@ -1813,12 +1815,13 @@ func (s *Store) EnableCDC(out chan<- *proto.CDCIndexedEventGroup, tableRe *regex
 	s.cdcMu.Lock()
 	defer s.cdcMu.Unlock()
 
-	if s.cdcStreamer != nil {
+	if s.cdcEnabled.Is() {
 		return ErrCDCEnabled
 	}
-	s.cdcStreamer = sql.NewCDCStreamer(out, s.db)
+	s.cdcOutCh = out
 	s.cdcIDsOnly = rowIDsOnly
 	s.cdcTableRe = tableRe
+	s.cdcEnabled.Set()
 	return nil
 }
 
@@ -1844,6 +1847,7 @@ func (s *Store) DisableCDC() error {
 	s.cdcStreamer.Close()
 	s.cdcStreamer = nil
 	s.cdcRegistered.Unset()
+	s.cdcEnabled.Unset()
 	return nil
 }
 
@@ -2181,7 +2185,11 @@ func (s *Store) fsmApply(l *raft.Log) (e any) {
 		s.cdcMu.RLock()
 		defer s.cdcMu.RUnlock()
 
-		if s.cdcStreamer != nil {
+		if s.cdcEnabled.Is() {
+			if s.cdcStreamer == nil {
+				s.cdcStreamer = sql.NewCDCStreamer(s.cdcOutCh, s.db)
+			}
+
 			// If CDC is enabled but not yet activated, do so now. By doing it here we keep
 			// CDC registration in a single place in the code.
 			if s.cdcRegistered.IsNot() {
