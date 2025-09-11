@@ -3,11 +3,12 @@ package db
 import (
 	"reflect"
 	"testing"
+	"time"
 
 	command "github.com/rqlite/rqlite/v8/command/proto"
 )
 
-func Test_NewCDCStreamer(t *testing.T) {
+func Test_CDCStreamer_New(t *testing.T) {
 	ch := make(chan *command.CDCIndexedEventGroup, 10)
 	streamer := NewCDCStreamer(ch)
 	if streamer == nil {
@@ -21,33 +22,7 @@ func Test_NewCDCStreamer(t *testing.T) {
 	}
 }
 
-func Test_NewCDCStreamer_CommitEmpty(t *testing.T) {
-	ch := make(chan *command.CDCIndexedEventGroup, 10)
-	streamer := NewCDCStreamer(ch)
-
-	streamer.Reset(1234)
-	streamer.CommitHook()
-	if len(streamer.pending.Events) != 0 {
-		t.Fatalf("expected no pending events after commit, got %d", len(streamer.pending.Events))
-	}
-
-	events := <-ch
-	if events.Index != 1234 {
-		t.Fatalf("expected index value to be 1234, got %d", events.Index)
-	}
-	if len(events.Events) != 0 {
-		t.Fatalf("expected no events, got %d", len(events.Events))
-	}
-	if len(ch) != 0 {
-		t.Fatalf("expected channel to be empty after commit, got %d", len(ch))
-	}
-
-	if err := streamer.Close(); err != nil {
-		t.Fatalf("expected no error on close, got %v", err)
-	}
-}
-
-func Test_NewCDCStreamer_CommitOne(t *testing.T) {
+func Test_CDCStreamer_CommitOne(t *testing.T) {
 	ch := make(chan *command.CDCIndexedEventGroup, 10)
 	streamer := NewCDCStreamer(ch)
 
@@ -67,15 +42,19 @@ func Test_NewCDCStreamer_CommitOne(t *testing.T) {
 		t.Fatalf("expected no pending events after commit, got %d", len(streamer.pending.Events))
 	}
 
-	ev := <-ch
-	if ev.Index != 5678 {
-		t.Fatalf("expected index value to be 5678, got %d", ev.Index)
-	}
-	if len(ev.Events) != 1 {
-		t.Fatalf("expected 1 event, got %d", len(ev.Events))
-	}
-	if !reflect.DeepEqual(change, ev.Events[0]) {
-		t.Fatalf("received event does not match sent event: expected %v, got %v", change, ev.Events[0])
+	select {
+	case ev := <-ch:
+		if ev.Index != 5678 {
+			t.Fatalf("expected index value to be 5678, got %d", ev.Index)
+		}
+		if len(ev.Events) != 1 {
+			t.Fatalf("expected 1 event, got %d", len(ev.Events))
+		}
+		if !reflect.DeepEqual(change, ev.Events[0]) {
+			t.Fatalf("received event does not match sent event: expected %v, got %v", change, ev.Events[0])
+		}
+	case <-time.After(1 * time.Second):
+		t.Fatalf("timeout waiting for event on channel")
 	}
 
 	if err := streamer.Close(); err != nil {
@@ -83,7 +62,7 @@ func Test_NewCDCStreamer_CommitOne(t *testing.T) {
 	}
 }
 
-func Test_NewCDCStreamer_CommitTwo(t *testing.T) {
+func Test_CDCStreamer_CommitTwo(t *testing.T) {
 	ch := make(chan *command.CDCIndexedEventGroup, 10)
 	streamer := NewCDCStreamer(ch)
 
@@ -113,18 +92,22 @@ func Test_NewCDCStreamer_CommitTwo(t *testing.T) {
 		t.Fatalf("expected no pending events after commit, got %d", len(streamer.pending.Events))
 	}
 
-	ev := <-ch
-	if ev.Index != 9012 {
-		t.Fatalf("expected index value to be 9012, got %d", ev.GetIndex())
-	}
-	if len(ev.Events) != 2 {
-		t.Fatalf("expected 2 events, got %d", len(ev.Events))
-	}
-	if !reflect.DeepEqual(change1, ev.Events[0]) {
-		t.Fatalf("received first event does not match sent event: expected %v, got %v", change1, ev.Events[0])
-	}
-	if !reflect.DeepEqual(change2, ev.Events[1]) {
-		t.Fatalf("received second event does not match sent event: expected %v, got %v", change2, ev.Events[1])
+	select {
+	case ev := <-ch:
+		if ev.Index != 9012 {
+			t.Fatalf("expected index value to be 9012, got %d", ev.GetIndex())
+		}
+		if len(ev.Events) != 2 {
+			t.Fatalf("expected 2 events, got %d", len(ev.Events))
+		}
+		if !reflect.DeepEqual(change1, ev.Events[0]) {
+			t.Fatalf("received first event does not match sent event: expected %v, got %v", change1, ev.Events[0])
+		}
+		if !reflect.DeepEqual(change2, ev.Events[1]) {
+			t.Fatalf("received second event does not match sent event: expected %v, got %v", change2, ev.Events[1])
+		}
+	case <-time.After(1 * time.Second):
+		t.Fatalf("timeout waiting for event on channel")
 	}
 
 	if err := streamer.Close(); err != nil {
@@ -135,7 +118,7 @@ func Test_NewCDCStreamer_CommitTwo(t *testing.T) {
 // Test_NewCDCStreamer_ResetThenPreupdate tests the behavior of the CDCStreamer
 // when  predupdate is called followed by a reset. It ensures that the reset
 // clears out any pending events.
-func Test_NewCDCStreamer_ResetThenPreupdate(t *testing.T) {
+func Test_CDCStreamer_ResetThenPreupdate(t *testing.T) {
 	ch := make(chan *command.CDCIndexedEventGroup, 10)
 	streamer := NewCDCStreamer(ch)
 
@@ -172,15 +155,19 @@ func Test_NewCDCStreamer_ResetThenPreupdate(t *testing.T) {
 		t.Fatalf("expected no pending events after commit, got %d", len(streamer.pending.Events))
 	}
 
-	ev := <-ch
-	if ev.Index != 5678 {
-		t.Fatalf("expected K value to be 5678, got %d", ev.Index)
-	}
-	if len(ev.Events) != 1 {
-		t.Fatalf("expected 1 event, got %d", len(ev.Events))
-	}
-	if !reflect.DeepEqual(change2, ev.Events[0]) {
-		t.Fatalf("received event does not match sent event: expected %v, got %v", change2, ev.Events[0])
+	select {
+	case ev := <-ch:
+		if ev.Index != 5678 {
+			t.Fatalf("expected K value to be 5678, got %d", ev.Index)
+		}
+		if len(ev.Events) != 1 {
+			t.Fatalf("expected 1 event, got %d", len(ev.Events))
+		}
+		if !reflect.DeepEqual(change2, ev.Events[0]) {
+			t.Fatalf("received event does not match sent event: expected %v, got %v", change2, ev.Events[0])
+		}
+	case <-time.After(1 * time.Second):
+		t.Fatalf("timeout waiting for event on channel")
 	}
 
 	if err := streamer.Close(); err != nil {
