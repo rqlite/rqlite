@@ -2,6 +2,7 @@ package db
 
 import (
 	"reflect"
+	"slices"
 	"testing"
 	"time"
 
@@ -55,6 +56,9 @@ func Test_CDCStreamer_CommitOne(t *testing.T) {
 		if len(ev.Events) != 1 {
 			t.Fatalf("expected 1 event, got %d", len(ev.Events))
 		}
+		if !slices.Equal(ev.Events[0].ColumnNames, []string{"id", "name", "value"}) {
+			t.Fatalf("expected column names to be [id name value], got %v", ev.Events[0].ColumnNames)
+		}
 		if !reflect.DeepEqual(change, ev.Events[0]) {
 			t.Fatalf("received event does not match sent event: expected %v, got %v", change, ev.Events[0])
 		}
@@ -69,7 +73,12 @@ func Test_CDCStreamer_CommitOne(t *testing.T) {
 
 func Test_CDCStreamer_CommitTwo(t *testing.T) {
 	ch := make(chan *command.CDCIndexedEventGroup, 10)
-	streamer := NewCDCStreamer(ch)
+	np := &mockColumnNamesProvider{
+		columns: map[string][]string{
+			"test_table": {"id", "name", "value"},
+		},
+	}
+	streamer := NewCDCStreamer(ch, np)
 
 	streamer.Reset(9012)
 	change1 := &command.CDCEvent{
@@ -108,6 +117,9 @@ func Test_CDCStreamer_CommitTwo(t *testing.T) {
 		if !reflect.DeepEqual(change1, ev.Events[0]) {
 			t.Fatalf("received first event does not match sent event: expected %v, got %v", change1, ev.Events[0])
 		}
+		if !slices.Equal(ev.Events[0].ColumnNames, []string{"id", "name", "value"}) {
+			t.Fatalf("expected column names to be [id name value], got %v", ev.Events[0].ColumnNames)
+		}
 		if !reflect.DeepEqual(change2, ev.Events[1]) {
 			t.Fatalf("received second event does not match sent event: expected %v, got %v", change2, ev.Events[1])
 		}
@@ -125,7 +137,12 @@ func Test_CDCStreamer_CommitTwo(t *testing.T) {
 // clears out any pending events.
 func Test_CDCStreamer_ResetThenPreupdate(t *testing.T) {
 	ch := make(chan *command.CDCIndexedEventGroup, 10)
-	streamer := NewCDCStreamer(ch)
+	np := &mockColumnNamesProvider{
+		columns: map[string][]string{
+			"test_table": {"id", "name", "value"},
+		},
+	}
+	streamer := NewCDCStreamer(ch, np)
 
 	streamer.Reset(1234)
 	change1 := &command.CDCEvent{
@@ -167,6 +184,9 @@ func Test_CDCStreamer_ResetThenPreupdate(t *testing.T) {
 		}
 		if len(ev.Events) != 1 {
 			t.Fatalf("expected 1 event, got %d", len(ev.Events))
+		}
+		if !slices.Equal(ev.Events[0].ColumnNames, []string{"id", "name", "value"}) {
+			t.Fatalf("expected column names to be [id name value], got %v", ev.Events[0].ColumnNames)
 		}
 		if !reflect.DeepEqual(change2, ev.Events[0]) {
 			t.Fatalf("received event does not match sent event: expected %v, got %v", change2, ev.Events[0])
