@@ -835,7 +835,7 @@ func (db *DB) ConnectionPoolStats(sqlDB *sql.DB) *PoolStats {
 }
 
 // TableColumnTypes returns the declared types of all columns in the given table.
-func (db *DB) TableColumnTypes(table string) ([]string, error) {
+func (db *DB) TableColumnTypes(table string) (map[string]string, error) {
 	rows, err := db.queryStmtWithConn(context.Background(), &command.Statement{
 		Sql:        fmt.Sprintf("PRAGMA table_info(\"%s\")", strings.ReplaceAll(table, `"`, `\"\"`)),
 		ForceQuery: true,
@@ -846,12 +846,12 @@ func (db *DB) TableColumnTypes(table string) ([]string, error) {
 	if len(rows.Values) < 1 {
 		return nil, fmt.Errorf("no such table: %s", table)
 	}
-	colTypes := make([]string, len(rows.Values))
-	for i, v := range rows.Values {
+	colTypes := make(map[string]string)
+	for _, v := range rows.Values {
 		if len(v.Parameters) < 3 {
 			return nil, fmt.Errorf("unexpected result from PRAGMA table_info")
 		}
-		colTypes[i] = v.Parameters[2].GetS()
+		colTypes[v.Parameters[1].GetS()] = v.Parameters[2].GetS()
 	}
 	return colTypes, nil
 }
