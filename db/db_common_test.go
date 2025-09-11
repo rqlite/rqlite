@@ -134,6 +134,37 @@ func Test_DB_TableCreationFTS(t *testing.T) {
 	}
 }
 
+func Test_DB_TableColumnTypes(t *testing.T) {
+	db, path := mustCreateOnDiskDatabaseWAL()
+	defer os.Remove(path)
+	defer db.Close()
+
+	types, err := db.TableColumnTypes("foo")
+	if err == nil {
+		t.Fatalf("expected error when getting column types for non-existent table")
+	}
+
+	_, err = db.ExecuteStringStmt("CREATE TABLE foo (id INTEGER NOT NULL PRIMARY KEY, name TEXT, age NUMERIC, height REAL, data BLOB)")
+	if err != nil {
+		t.Fatalf("failed to create table: %s", err.Error())
+	}
+
+	types, err = db.TableColumnTypes("foo")
+	if err != nil {
+		t.Fatalf("failed to get column types: %s", err.Error())
+	}
+
+	expTypes := []string{"INTEGER", "TEXT", "NUMERIC", "REAL", "BLOB"}
+	if len(types) != len(expTypes) {
+		t.Fatalf("unexpected number of column types, expected %d, got %d", len(expTypes), len(types))
+	}
+	for i, et := range expTypes {
+		if types[i] != et {
+			t.Fatalf("unexpected column type at index %d, expected %s, got %s", i, et, types[i])
+		}
+	}
+}
+
 func Test_DB_SQLiteMasterTable(t *testing.T) {
 	db, path := mustCreateOnDiskDatabaseWAL()
 	defer os.Remove(path)
