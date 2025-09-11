@@ -425,9 +425,6 @@ func Test_Preupdate_RowIDs(t *testing.T) {
 		if ev.Op != proto.CDCEvent_INSERT {
 			t.Fatalf("expected operation insert, got %s", ev.Op)
 		}
-		if exp, got := int64(5), ev.OldRowId; exp != got {
-			t.Fatalf("expected old row id %d, got %d", exp, ev.OldRowId)
-		}
 		if exp, got := int64(5), ev.NewRowId; exp != got {
 			t.Fatalf("expected new row id %d, got %d", exp, ev.OldRowId)
 		}
@@ -484,9 +481,6 @@ func Test_Preupdate_RowIDs(t *testing.T) {
 		if exp, got := int64(5), ev.OldRowId; exp != got {
 			t.Fatalf("expected old row id %d, got %d", exp, ev.OldRowId)
 		}
-		if exp, got := int64(5), ev.NewRowId; exp != got {
-			t.Fatalf("expected new row id %d, got %d", exp, ev.OldRowId)
-		}
 
 		if ev.OldRow != nil || ev.NewRow != nil {
 			t.Fatalf("expected no old row and new row data")
@@ -519,7 +513,6 @@ func Test_Preupdate_Data(t *testing.T) {
 		exp := &proto.CDCEvent{
 			Table:    "foo",
 			Op:       proto.CDCEvent_INSERT,
-			OldRowId: 5,
 			NewRowId: 5,
 			OldRow:   nil,
 			NewRow: &proto.CDCRow{
@@ -547,7 +540,6 @@ func Test_Preupdate_Data(t *testing.T) {
 		exp := &proto.CDCEvent{
 			Table:    "foo",
 			Op:       proto.CDCEvent_INSERT,
-			OldRowId: 20,
 			NewRowId: 20,
 			OldRow:   nil,
 			NewRow: &proto.CDCRow{
@@ -575,7 +567,6 @@ func Test_Preupdate_Data(t *testing.T) {
 		exp := &proto.CDCEvent{
 			Table:    "foo",
 			Op:       proto.CDCEvent_INSERT,
-			OldRowId: 6,
 			NewRowId: 6,
 			OldRow:   nil,
 			NewRow: &proto.CDCRow{
@@ -637,7 +628,6 @@ func Test_Preupdate_Data(t *testing.T) {
 			Table:    "foo",
 			Op:       proto.CDCEvent_DELETE,
 			OldRowId: 5,
-			NewRowId: 5,
 			OldRow: &proto.CDCRow{
 				Values: []*proto.CDCValue{
 					{Value: &proto.CDCValue_I{I: 5}},

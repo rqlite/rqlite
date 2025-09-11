@@ -22,12 +22,12 @@ type CDCMessage struct {
 
 // CDCMessageEvent represents a single CDC event within a CDC message.
 type CDCMessageEvent struct {
-	Op       string         `json:"op"`
-	Table    string         `json:"table,omitempty"`
-	NewRowId int64          `json:"new_row_id,omitempty"`
-	OldRowId int64          `json:"old_row_id,omitempty"`
-	Before   map[string]any `json:"before,omitempty"`
-	After    map[string]any `json:"after,omitempty"`
+	Op       string `json:"op"`
+	Table    string `json:"table,omitempty"`
+	NewRowID int64  `json:"new_row_id,omitempty"`
+	OldRowID int64  `json:"old_row_id,omitempty"`
+	Before   []any  `json:"before,omitempty"`
+	After    []any  `json:"after,omitempty"`
 }
 
 // MarshalToEnvelopeJSON converts a slice of CDC events to a JSON envelope format.
@@ -40,6 +40,26 @@ func MarshalToEnvelopeJSON(serviceID, nodeID string, ts bool, evs []*proto.CDCIn
 		ServiceID: serviceID,
 		NodeID:    nodeID,
 		Payload:   make([]*CDCMessage, 0, len(evs)),
+	}
+
+	getV := func(v *proto.CDCValue) any {
+		if v == nil {
+			return nil
+		}
+		switch v.GetValue().(type) {
+		case *proto.CDCValue_D:
+			return v.GetD()
+		case *proto.CDCValue_I:
+			return v.GetI()
+		case *proto.CDCValue_S:
+			return v.GetS()
+		case *proto.CDCValue_B:
+			return v.GetB()
+		case *proto.CDCValue_Y:
+			return v.GetY()
+		default:
+			return nil
+		}
 	}
 
 	for _, ev := range evs {
@@ -58,8 +78,19 @@ func MarshalToEnvelopeJSON(serviceID, nodeID string, ts bool, evs []*proto.CDCIn
 			p.Events[j] = &CDCMessageEvent{
 				Op:       event.Op.String(),
 				Table:    event.Table,
-				NewRowId: event.NewRowId,
-				OldRowId: event.OldRowId,
+				NewRowID: event.NewRowId,
+				OldRowID: event.OldRowId,
+			}
+
+			if event.OldRow != nil {
+				for _, v := range event.OldRow.Values {
+					p.Events[j].Before = append(p.Events[j].Before, getV(v))
+				}
+			}
+			if event.NewRow != nil {
+				for _, v := range event.NewRow.Values {
+					p.Events[j].After = append(p.Events[j].After, getV(v))
+				}
 			}
 		}
 		envelope.Payload = append(envelope.Payload, p)
