@@ -25,6 +25,7 @@
 - [PR #2311](https://github.com/rqlite/rqlite/pull/2311): Test all CDC event types.
 - [PR #2312](https://github.com/rqlite/rqlite/pull/2312): Upgrade Go dependencies.
 - [PR #2313](https://github.com/rqlite/rqlite/pull/2313): Database layer supports querying just for a table's column types.
+- [PR #2314](https://github.com/rqlite/rqlite/pull/2314): Don't generate CDC events for COMMIT-only operations.
 
 ## v8.43.4 (August 27th 2025)
 ### Implementation changes and bug fixes

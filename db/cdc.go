@@ -53,6 +53,13 @@ func (s *CDCStreamer) PreupdateHook(ev *command.CDCEvent) error {
 // CommitHook is called after the transaction is committed. It sends the
 // pending events to the out channel and clears the pending events.
 func (s *CDCStreamer) CommitHook() bool {
+	if len(s.pending.Events) == 0 {
+		// No CDC events to send, but let the transaction proceed.
+		// CREATE TABLE statements, for example, result in a COMMIT
+		// but do not generate CDC events.
+		return true
+	}
+
 	s.pending.CommitTimestamp = time.Now().UnixNano()
 	select {
 	case s.out <- s.pending:
