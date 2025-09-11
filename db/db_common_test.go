@@ -159,13 +159,19 @@ func Test_DB_TableColumnTypes(t *testing.T) {
 		t.Fatalf("failed to get column types: %s", err.Error())
 	}
 
-	expTypes := []string{"INTEGER", "TEXT", "NUMERIC", "REAL", "BLOB"}
+	expTypes := map[string]string{
+		"id":     "INTEGER",
+		"name":   "TEXT",
+		"age":    "NUMERIC",
+		"height": "REAL",
+		"data":   "BLOB",
+	}
 	if len(types) != len(expTypes) {
 		t.Fatalf("unexpected number of column types, expected %d, got %d", len(expTypes), len(types))
 	}
-	for i, et := range expTypes {
-		if types[i] != et {
-			t.Fatalf("unexpected column type at index %d, expected %s, got %s", i, et, types[i])
+	for k, v := range expTypes {
+		if types[k] != v {
+			t.Fatalf("unexpected type for column %s, expected %s, got %s", k, v, types[k])
 		}
 	}
 }
