@@ -108,11 +108,13 @@ func Test_Preupdate_AllTypes(t *testing.T) {
 		active BOOLEAN,
 		data BLOB)`)
 
-	for i, tt := range []struct {
-		sql string
-		ev  *proto.CDCEvent
+	for _, tt := range []struct {
+		name string
+		sql  string
+		ev   *proto.CDCEvent
 	}{
 		{
+			name: "INSERT new row",
 			sql: `INSERT INTO foo(id, name, employer, ssn, age, weight, dob, active, data) VALUES(
 			5,
 			"fiona",
@@ -143,6 +145,45 @@ func Test_Preupdate_AllTypes(t *testing.T) {
 			},
 		},
 		{
+			name: "UPDATE single column",
+			sql: `UPDATE foo SET
+			name="declan"
+			WHERE id=5`,
+			ev: &proto.CDCEvent{
+				Table:    "foo",
+				Op:       proto.CDCEvent_UPDATE,
+				OldRowId: 5,
+				NewRowId: 5,
+				OldRow: &proto.CDCRow{
+					Values: []*proto.CDCValue{
+						{Value: &proto.CDCValue_I{I: 5}},
+						{Value: &proto.CDCValue_S{S: "fiona"}},
+						{Value: &proto.CDCValue_S{S: "Acme"}},
+						{Value: nil},
+						{Value: &proto.CDCValue_I{I: 21}},
+						{Value: &proto.CDCValue_D{D: 167.3}},
+						{Value: &proto.CDCValue_S{S: "1990-01-02"}},
+						{Value: &proto.CDCValue_I{I: 1}},
+						{Value: &proto.CDCValue_Y{Y: []byte{1, 2, 3}}},
+					},
+				},
+				NewRow: &proto.CDCRow{
+					Values: []*proto.CDCValue{
+						{Value: &proto.CDCValue_I{I: 5}},
+						{Value: &proto.CDCValue_S{S: "declan"}},
+						{Value: &proto.CDCValue_S{S: "Acme"}},
+						{Value: nil},
+						{Value: &proto.CDCValue_I{I: 21}},
+						{Value: &proto.CDCValue_D{D: 167.3}},
+						{Value: &proto.CDCValue_S{S: "1990-01-02"}},
+						{Value: &proto.CDCValue_I{I: 1}},
+						{Value: &proto.CDCValue_Y{Y: []byte{1, 2, 3}}},
+					},
+				},
+			},
+		},
+		{
+			name: "UPDATE all columns",
 			sql: `UPDATE foo SET
 			name="fiona2",
 			employer="Acme2",
@@ -161,7 +202,7 @@ func Test_Preupdate_AllTypes(t *testing.T) {
 				OldRow: &proto.CDCRow{
 					Values: []*proto.CDCValue{
 						{Value: &proto.CDCValue_I{I: 5}},
-						{Value: &proto.CDCValue_S{S: "fiona"}},
+						{Value: &proto.CDCValue_S{S: "declan"}},
 						{Value: &proto.CDCValue_S{S: "Acme"}},
 						{Value: nil},
 						{Value: &proto.CDCValue_I{I: 21}},
@@ -187,7 +228,8 @@ func Test_Preupdate_AllTypes(t *testing.T) {
 			},
 		},
 		{
-			sql: "DELETE FROM foo WHERE id=5",
+			name: "DELETE row",
+			sql:  "DELETE FROM foo WHERE id=5",
 			ev: &proto.CDCEvent{
 				Table:    "foo",
 				Op:       proto.CDCEvent_DELETE,
@@ -213,29 +255,29 @@ func Test_Preupdate_AllTypes(t *testing.T) {
 			defer wg.Done()
 
 			if exp, got := tt.ev.Table, ev.Table; exp != got {
-				t.Fatalf("test %d: expected table %s, got %s", i, exp, got)
+				t.Fatalf("test %s: expected table %s, got %s", tt.name, exp, got)
 			}
 			if exp, got := tt.ev.Op, ev.Op; exp != got {
-				t.Fatalf("test %d: expected operation %s, got %s", i, exp, got)
+				t.Fatalf("test %s: expected operation %s, got %s", tt.name, exp, got)
 			}
 
 			// Old row checks.
 			if tt.ev.OldRowId != 0 {
 				if exp, got := tt.ev.OldRowId, ev.OldRowId; exp != got {
-					t.Fatalf("test %d: expected old Row ID %d, got %d", i, exp, got)
+					t.Fatalf("test %s: expected old Row ID %d, got %d", tt.name, exp, got)
 				}
 			}
 			if tt.ev.OldRow != nil {
 				if ev.OldRow == nil {
-					t.Fatalf("test %d: exp non-nil new row, got nil new row", i)
+					t.Fatalf("test %s: exp non-nil new row, got nil new row", tt.name)
 				}
 				if len(tt.ev.OldRow.Values) != len(ev.OldRow.Values) {
-					t.Fatalf("test %d: exp %d old values, got %d values", i, len(tt.ev.OldRow.Values), len(ev.OldRow.Values))
+					t.Fatalf("test %s: exp %d old values, got %d values", tt.name, len(tt.ev.OldRow.Values), len(ev.OldRow.Values))
 				}
 				for i := range tt.ev.OldRow.Values {
 					if !command.CDCValueEqual(tt.ev.OldRow.Values[i], ev.OldRow.Values[i]) {
-						t.Fatalf("test %d: exp new value at index %d (%v) does not equal got new value at index %d (%v)",
-							i, i, tt.ev.OldRow.Values[i], i, ev.OldRow.Values[i])
+						t.Fatalf("test %s: exp new value at index %d (%v) does not equal got new value at index %d (%v)",
+							tt.name, i, tt.ev.OldRow.Values[i], i, ev.OldRow.Values[i])
 					}
 				}
 			}
@@ -243,20 +285,20 @@ func Test_Preupdate_AllTypes(t *testing.T) {
 			// New row checks.
 			if tt.ev.NewRowId != 0 {
 				if exp, got := tt.ev.NewRowId, ev.NewRowId; exp != got {
-					t.Fatalf("test %d: expected new Row ID %d, got %d", i, exp, got)
+					t.Fatalf("test %s: expected new Row ID %d, got %d", tt.name, exp, got)
 				}
 			}
 			if tt.ev.NewRow != nil {
 				if ev.NewRow == nil {
-					t.Fatalf("test %d: exp non-nil new row, got nil new row", i)
+					t.Fatalf("test %s: exp non-nil new row, got nil new row", tt.name)
 				}
 				if len(tt.ev.NewRow.Values) != len(ev.NewRow.Values) {
-					t.Fatalf("test %d: exp %d new values, got %d values", i, len(tt.ev.NewRow.Values), len(ev.NewRow.Values))
+					t.Fatalf("test %s: exp %d new values, got %d values", tt.name, len(tt.ev.NewRow.Values), len(ev.NewRow.Values))
 				}
 				for i := range tt.ev.NewRow.Values {
 					if !command.CDCValueEqual(tt.ev.NewRow.Values[i], ev.NewRow.Values[i]) {
-						t.Fatalf("test %d: exp new value at index %d (%v) does not equal got new value at index %d (%v)",
-							i, i, tt.ev.NewRow.Values[i], i, ev.NewRow.Values[i])
+						t.Fatalf("test %s: exp new value at index %d (%v) does not equal got new value at index %d (%v)",
+							tt.name, i, tt.ev.NewRow.Values[i], i, ev.NewRow.Values[i])
 					}
 				}
 			}
