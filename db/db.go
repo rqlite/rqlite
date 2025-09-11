@@ -832,7 +832,7 @@ func (db *DB) ConnectionPoolStats(sqlDB *sql.DB) *PoolStats {
 // TableColumnTypes returns the declared types of all columns in the given table.
 func (db *DB) TableColumnTypes(table string) ([]string, error) {
 	rows, err := db.queryStmtWithConn(context.Background(), &command.Statement{
-		Sql:        fmt.Sprintf("PRAGMA table_info(%s)", table),
+		Sql:        fmt.Sprintf("PRAGMA table_info(\"%s\")", strings.Replace(table, "\"", "\"\"", -1)),
 		ForceQuery: true,
 	}, false, db.roDB)
 	if err != nil {
