@@ -15,6 +15,10 @@ func CDCValueEqual(v1, v2 *proto.CDCValue) bool {
 		return false
 	}
 
+	if v1.GetValue() == nil && v2.GetValue() == nil {
+		return true
+	}
+
 	switch v1.GetValue().(type) {
 	case *proto.CDCValue_I:
 		v2i, ok := v2.GetValue().(*proto.CDCValue_I)
@@ -49,4 +53,17 @@ func CDCValueEqual(v1, v2 *proto.CDCValue) bool {
 	default:
 		return false
 	}
+}
+
+// CDCValuesEqual returns true if two slices of CDCValue objects are equal.
+func CDCValuesEqual(v1, v2 []*proto.CDCValue) bool {
+	if len(v1) != len(v2) {
+		return false
+	}
+	for i := range v1 {
+		if !CDCValueEqual(v1[i], v2[i]) {
+			return false
+		}
+	}
+	return true
 }
