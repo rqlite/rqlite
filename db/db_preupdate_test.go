@@ -276,8 +276,8 @@ func Test_Preupdate_AllTypes(t *testing.T) {
 				}
 				for i := range tt.ev.OldRow.Values {
 					if !command.CDCValueEqual(tt.ev.OldRow.Values[i], ev.OldRow.Values[i]) {
-						t.Fatalf("test %s: exp new value at index %d (%v) does not equal got new value at index %d (%v)",
-							tt.name, i, tt.ev.OldRow.Values[i], i, ev.OldRow.Values[i])
+t.Fatalf("test %s: exp old value at index %d (%v) does not equal got old value at index %d (%v)",
+	t.name, i, tt.ev.OldRow.Values[i], i, ev.OldRow.Values[i])
 					}
 				}
 			}
