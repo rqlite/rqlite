@@ -581,7 +581,7 @@ func Test_Preupdate_Data(t *testing.T) {
 			NewRow: &proto.CDCRow{
 				Values: []*proto.CDCValue{
 					{Value: &proto.CDCValue_I{I: 6}},
-					nil,
+					{Value: nil},
 					{Value: &proto.CDCValue_D{D: 3.7}},
 				},
 			},
