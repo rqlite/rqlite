@@ -842,14 +842,14 @@ func (db *DB) TableColumnTypes(table string) ([]string, error) {
 		return nil, fmt.Errorf("no such table: %s", table)
 	}
 	colNames := make([]string, len(rows.Values))
+	colTypes := make([]string, len(rows.Values))
 	for i, v := range rows.Values {
 		if len(v.Parameters) < 3 {
 			return nil, fmt.Errorf("unexpected result from PRAGMA table_info")
 		}
-		colNames[i] = v.Parameters[2].GetS()
+		colTypes[i] = v.Parameters[2].GetS()
 	}
-	return colNames, nil
-}
+	return colTypes, nil
 
 // ExecuteStringStmtWithTimeout executes a single query that modifies the database.
 // It also sets a timeout for the query. This is primarily a convenience function.
