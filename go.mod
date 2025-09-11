@@ -3,11 +3,11 @@ module github.com/rqlite/rqlite/v8
 go 1.24.0
 
 require (
-	github.com/aws/aws-sdk-go-v2 v1.38.2
-	github.com/aws/aws-sdk-go-v2/config v1.31.4
-	github.com/aws/aws-sdk-go-v2/credentials v1.18.8
-	github.com/aws/aws-sdk-go-v2/feature/s3/manager v1.19.2
-	github.com/aws/aws-sdk-go-v2/service/s3 v1.87.2
+	github.com/aws/aws-sdk-go-v2 v1.39.0
+	github.com/aws/aws-sdk-go-v2/config v1.31.8
+	github.com/aws/aws-sdk-go-v2/credentials v1.18.12
+	github.com/aws/aws-sdk-go-v2/feature/s3/manager v1.19.6
+	github.com/aws/aws-sdk-go-v2/service/s3 v1.88.1
 	github.com/hashicorp/go-hclog v1.6.3
 	github.com/hashicorp/raft v1.7.3
 	github.com/mattn/go-sqlite3 v1.14.32
@@ -18,25 +18,25 @@ require (
 	github.com/rqlite/rqlite-disco-clients v0.0.0-20250205044118-8ada2b350099
 	github.com/rqlite/sql v0.0.0-20250623131620-453fa49cad04
 	go.etcd.io/bbolt v1.4.3
-	golang.org/x/net v0.43.0
-	google.golang.org/protobuf v1.36.8
+	golang.org/x/net v0.44.0
+	google.golang.org/protobuf v1.36.9
 )
 
 require (
 	github.com/armon/go-metrics v0.5.4 // indirect
 	github.com/aws/aws-sdk-go-v2/aws/protocol/eventstream v1.7.1 // indirect
-	github.com/aws/aws-sdk-go-v2/feature/ec2/imds v1.18.5 // indirect
-	github.com/aws/aws-sdk-go-v2/internal/configsources v1.4.5 // indirect
-	github.com/aws/aws-sdk-go-v2/internal/endpoints/v2 v2.7.5 // indirect
+	github.com/aws/aws-sdk-go-v2/feature/ec2/imds v1.18.7 // indirect
+	github.com/aws/aws-sdk-go-v2/internal/configsources v1.4.7 // indirect
+	github.com/aws/aws-sdk-go-v2/internal/endpoints/v2 v2.7.7 // indirect
 	github.com/aws/aws-sdk-go-v2/internal/ini v1.8.3 // indirect
-	github.com/aws/aws-sdk-go-v2/internal/v4a v1.4.5 // indirect
+	github.com/aws/aws-sdk-go-v2/internal/v4a v1.4.7 // indirect
 	github.com/aws/aws-sdk-go-v2/service/internal/accept-encoding v1.13.1 // indirect
-	github.com/aws/aws-sdk-go-v2/service/internal/checksum v1.8.5 // indirect
-	github.com/aws/aws-sdk-go-v2/service/internal/presigned-url v1.13.5 // indirect
-	github.com/aws/aws-sdk-go-v2/service/internal/s3shared v1.19.5 // indirect
-	github.com/aws/aws-sdk-go-v2/service/sso v1.28.3 // indirect
-	github.com/aws/aws-sdk-go-v2/service/ssooidc v1.34.1 // indirect
-	github.com/aws/aws-sdk-go-v2/service/sts v1.38.1 // indirect
+	github.com/aws/aws-sdk-go-v2/service/internal/checksum v1.8.7 // indirect
+	github.com/aws/aws-sdk-go-v2/service/internal/presigned-url v1.13.7 // indirect
+	github.com/aws/aws-sdk-go-v2/service/internal/s3shared v1.19.7 // indirect
+	github.com/aws/aws-sdk-go-v2/service/sso v1.29.3 // indirect
+	github.com/aws/aws-sdk-go-v2/service/ssooidc v1.34.4 // indirect
+	github.com/aws/aws-sdk-go-v2/service/sts v1.38.4 // indirect
 	github.com/aws/smithy-go v1.23.0 // indirect
 	github.com/coreos/go-semver v0.3.1 // indirect
 	github.com/coreos/go-systemd/v22 v22.6.0 // indirect
@@ -68,17 +68,17 @@ require (
 	go.etcd.io/etcd/client/v3 v3.6.4 // indirect
 	go.uber.org/multierr v1.11.0 // indirect
 	go.uber.org/zap v1.27.0 // indirect
-	golang.org/x/crypto v0.41.0 // indirect
+	golang.org/x/crypto v0.42.0 // indirect
 	golang.org/x/exp v0.0.0-20250819193227-8b4c13bb791b // indirect
-	golang.org/x/sys v0.35.0 // indirect
-	golang.org/x/term v0.34.0 // indirect
-	golang.org/x/text v0.28.0 // indirect
-	google.golang.org/genproto/googleapis/api v0.0.0-20250826171959-ef028d996bc1 // indirect
-	google.golang.org/genproto/googleapis/rpc v0.0.0-20250826171959-ef028d996bc1 // indirect
-	google.golang.org/grpc v1.75.0 // indirect
+	golang.org/x/sys v0.36.0 // indirect
+	golang.org/x/term v0.35.0 // indirect
+	golang.org/x/text v0.29.0 // indirect
+	google.golang.org/genproto/googleapis/api v0.0.0-20250908214217-97024824d090 // indirect
+	google.golang.org/genproto/googleapis/rpc v0.0.0-20250908214217-97024824d090 // indirect
+	google.golang.org/grpc v1.75.1 // indirect
 )
 
 replace (
 	github.com/armon/go-metrics => github.com/hashicorp/go-metrics v0.5.1
-	github.com/mattn/go-sqlite3 => github.com/rqlite/go-sqlite3 v1.40.0
+	github.com/mattn/go-sqlite3 => github.com/rqlite/go-sqlite3 v1.41.0
 )
