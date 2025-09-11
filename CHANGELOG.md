@@ -27,6 +27,7 @@
 - [PR #2313](https://github.com/rqlite/rqlite/pull/2313), [PR #2316](https://github.com/rqlite/rqlite/pull/2316), [PR #2317](https://github.com/rqlite/rqlite/pull/2317): Database layer supports querying just for a table's column types.
 - [PR #2314](https://github.com/rqlite/rqlite/pull/2314): Don't generate CDC events for COMMIT-only operations.
 - [PR #2315](https://github.com/rqlite/rqlite/pull/2315): Include "before" and "after" in CDC events.
+- [PR #2318](https://github.com/rqlite/rqlite/pull/2318): Add ColumnNames() to DB object
 
 ## v8.43.4 (August 27th 2025)
 ### Implementation changes and bug fixes
