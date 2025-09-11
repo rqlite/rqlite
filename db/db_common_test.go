@@ -142,7 +142,7 @@ func Test_DB_ColumnNames(t *testing.T) {
 
 	names, err := db.ColumnNames("foo")
 	if err == nil {
-		t.Fatalf("expected error when getting column types for non-existent table")
+		t.Fatalf("expected error when getting column names for non-existent table")
 	}
 
 	_, err = db.ExecuteStringStmt("CREATE TABLE foo (id INTEGER NOT NULL PRIMARY KEY, name TEXT, age NUMERIC, height REAL, data BLOB)")
@@ -152,12 +152,12 @@ func Test_DB_ColumnNames(t *testing.T) {
 
 	names, err = db.ColumnNames("; DROP TABLE foo")
 	if err == nil {
-		t.Fatalf("expected error when getting column types for non-existent table")
+		t.Fatalf("expected error when getting column names for an invalid table name")
 	}
 
 	names, err = db.ColumnNames("foo")
 	if err != nil {
-		t.Fatalf("failed to get column types: %s", err.Error())
+		t.Fatalf("failed to get column names: %s", err.Error())
 	}
 
 	expNames := []string{"id", "name", "age", "height", "data"}
