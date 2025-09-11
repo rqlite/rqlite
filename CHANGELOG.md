@@ -24,7 +24,7 @@
 - [PR #2310](https://github.com/rqlite/rqlite/pull/2310): Correct key deletion in BoltDB.
 - [PR #2311](https://github.com/rqlite/rqlite/pull/2311): Test all CDC event types.
 - [PR #2312](https://github.com/rqlite/rqlite/pull/2312): Upgrade Go dependencies.
-- [PR #2313](https://github.com/rqlite/rqlite/pull/2313), [PR #2316](https://github.com/rqlite/rqlite/pull/2316): Database layer supports querying just for a table's column types.
+- [PR #2313](https://github.com/rqlite/rqlite/pull/2313), [PR #2316](https://github.com/rqlite/rqlite/pull/2316), [PR #2317](https://github.com/rqlite/rqlite/pull/2317): Database layer supports querying just for a table's column types.
 - [PR #2314](https://github.com/rqlite/rqlite/pull/2314): Don't generate CDC events for COMMIT-only operations.
 - [PR #2315](https://github.com/rqlite/rqlite/pull/2315): Include "before" and "after" in CDC events.
 
