@@ -50,8 +50,8 @@ func Test_CDC_SingleNode(t *testing.T) {
 		}
 
 		testPoll(t, func() (bool, error) {
-			// 1 create, 1 insert, 1 update, 1 delete
-			return testEndpoint.GetMessageCount() == 4, nil
+			// 1 insert, 1 update, 1 delete
+			return testEndpoint.GetMessageCount() == 3, nil
 		}, 100*time.Millisecond, 10*time.Second)
 	}
 
@@ -112,8 +112,8 @@ func Test_CDC_SingleNode_Snapshot(t *testing.T) {
 		}
 
 		testPoll(t, func() (bool, error) {
-			// 1 create, 1 insert, 1 update, 1 delete
-			return testEndpoint.GetMessageCount() == 4, nil
+			// 1 insert, 1 update, 1 delete
+			return testEndpoint.GetMessageCount() == 3, nil
 		}, 100*time.Millisecond, 10*time.Second)
 	}
 
@@ -163,8 +163,8 @@ func Test_CDC_SingleNode_LaterStart(t *testing.T) {
 	defer testEndpoint.Close()
 
 	testPoll(t, func() (bool, error) {
-		// 1 create, 1 insert, 1 update, 1 delete
-		return testEndpoint.GetMessageCount() == 4, nil
+		// 1 insert, 1 update, 1 delete
+		return testEndpoint.GetMessageCount() == 3, nil
 	}, 100*time.Millisecond, 5*time.Second)
 }
 
@@ -209,8 +209,8 @@ func Test_CDC_SingleNode_PostLoadBoot(t *testing.T) {
 	defer testEndpoint.Close()
 
 	testPoll(t, func() (bool, error) {
-		// 1 create, 1 insert, 1 update, 1 delete
-		return testEndpoint.GetMessageCount() == 4, nil
+		// 1 insert, 1 update, 1 delete
+		return testEndpoint.GetMessageCount() == 3, nil
 	}, 100*time.Millisecond, 5*time.Second)
 
 	// Load the node, and ensure CDC continues to work.
@@ -221,8 +221,12 @@ func Test_CDC_SingleNode_PostLoadBoot(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to create table: %v", err)
 	}
+	_, err = node.Execute(`INSERT INTO qux1 (id, name) VALUES (100, 'Declan')`)
+	if err != nil {
+		t.Fatalf("failed to insert data: %v", err)
+	}
 	testPoll(t, func() (bool, error) {
-		return testEndpoint.GetMessageCount() == 5, nil
+		return testEndpoint.GetMessageCount() == 4, nil
 	}, 100*time.Millisecond, 5*time.Second)
 
 	// Boot the node, and ensure CDC continues to work.
@@ -233,8 +237,12 @@ func Test_CDC_SingleNode_PostLoadBoot(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to create table: %v", err)
 	}
+	_, err = node.Execute(`INSERT INTO qux2 (id, name) VALUES (100, 'Carol')`)
+	if err != nil {
+		t.Fatalf("failed to insert data: %v", err)
+	}
 	testPoll(t, func() (bool, error) {
-		return testEndpoint.GetMessageCount() == 6, nil
+		return testEndpoint.GetMessageCount() == 5, nil
 	}, 100*time.Millisecond, 5*time.Second)
 
 }
@@ -299,8 +307,8 @@ func Test_CDC_MultiNode(t *testing.T) {
 		}
 
 		testPoll(t, func() (bool, error) {
-			// 1 create, 1 insert, 1 update, 1 delete
-			return testEndpoint.GetMessageCount() == 4, nil
+			// 1 insert, 1 update, 1 delete
+			return testEndpoint.GetMessageCount() == 3, nil
 		}, 100*time.Millisecond, 10*time.Second)
 
 		hi := testEndpoint.GetHighestMessageIndex()
