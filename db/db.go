@@ -834,11 +834,21 @@ func (db *DB) ConnectionPoolStats(sqlDB *sql.DB) *PoolStats {
 	}
 }
 
+// ColumnNames returns the names of all columns in the given table.
+func (db *DB) ColumnNames(table string) ([]string, error) {
+	rows, err := db.queryStmtWithConn(context.Background(), &command.Statement{
+		Sql: fmt.Sprintf(`SELECT * FROM "%s" LIMIT 0`, strings.ReplaceAll(table, `"`, `\"\"`)),
+	}, false, db.roDB)
+	if err != nil {
+		return nil, err
+	}
+	return rows.Columns, nil
+}
+
 // TableColumnTypes returns the declared types of all columns in the given table.
 func (db *DB) TableColumnTypes(table string) (map[string]string, error) {
 	rows, err := db.queryStmtWithConn(context.Background(), &command.Statement{
-		Sql:        fmt.Sprintf("PRAGMA table_info(\"%s\")", strings.ReplaceAll(table, `"`, `\"\"`)),
-		ForceQuery: true,
+		Sql: fmt.Sprintf("PRAGMA table_info(\"%s\")", strings.ReplaceAll(table, `"`, `\"\"`)),
 	}, false, db.roDB)
 	if err != nil {
 		return nil, err

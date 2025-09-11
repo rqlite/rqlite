@@ -4,6 +4,7 @@ import (
 	"errors"
 	"math/rand/v2"
 	"os"
+	"slices"
 	"strings"
 	"testing"
 
@@ -131,6 +132,37 @@ func Test_DB_TableCreationFTS(t *testing.T) {
 	// Creating an FTS5 table actually affects rows, so just make sure it's not an error.
 	if strings.Contains(asJSON(r), "error") {
 		t.Fatalf("unexpected error for query, expected %s, got %s", `[{}]`, asJSON(r))
+	}
+}
+
+func Test_DB_ColumnNames(t *testing.T) {
+	db, path := mustCreateOnDiskDatabaseWAL()
+	defer os.Remove(path)
+	defer db.Close()
+
+	names, err := db.ColumnNames("foo")
+	if err == nil {
+		t.Fatalf("expected error when getting column types for non-existent table")
+	}
+
+	_, err = db.ExecuteStringStmt("CREATE TABLE foo (id INTEGER NOT NULL PRIMARY KEY, name TEXT, age NUMERIC, height REAL, data BLOB)")
+	if err != nil {
+		t.Fatalf("failed to create table: %s", err.Error())
+	}
+
+	names, err = db.ColumnNames("; DROP TABLE foo")
+	if err == nil {
+		t.Fatalf("expected error when getting column types for non-existent table")
+	}
+
+	names, err = db.ColumnNames("foo")
+	if err != nil {
+		t.Fatalf("failed to get column types: %s", err.Error())
+	}
+
+	expNames := []string{"id", "name", "age", "height", "data"}
+	if !slices.Equal(names, expNames) {
+		t.Fatalf("unexpected column names, expected %v, got %v", expNames, names)
 	}
 }
 
