@@ -27,7 +27,7 @@ class TestSingleNode_CDC(unittest.TestCase):
     j = n.execute('INSERT INTO bar(name) VALUES("fiona")')
     self.assertEqual(j, d_("{'results': [{'last_insert_id': 1, 'rows_affected': 1}]}"))
 
-    server.wait_message_count(2)
+    server.wait_message_count(1)
 
     deprovision_node(n)
 
@@ -62,8 +62,8 @@ class TestMultiNode_CDC(unittest.TestCase):
     j = leader.execute('INSERT INTO foo(name) VALUES("bob")')
     self.assertEqual(j, d_("{'results': [{'last_insert_id': 2, 'rows_affected': 1}]}"))
 
-    # Ensure just the right number of events are sent (3: CREATE TABLE + 2 INSERTs)
-    server.wait_message_count(3)
+    # Ensure just the right number of events are sent (2: 2 INSERTs)
+    server.wait_message_count(2)
 
     # Clean up
     cluster.deprovision()
@@ -100,7 +100,7 @@ class TestMultiNode_CDC(unittest.TestCase):
     self.assertEqual(j, d_("{'results': [{'last_insert_id': 2, 'rows_affected': 1}]}"))
 
     # Wait for initial events
-    server.wait_message_count(3)
+    server.wait_message_count(2)
 
     # Stop the current leader
     leader.stop()
@@ -112,8 +112,8 @@ class TestMultiNode_CDC(unittest.TestCase):
     j = new_leader.execute('INSERT INTO foo(name) VALUES("charlie")')
     self.assertEqual(j, d_("{'results': [{'last_insert_id': 3, 'rows_affected': 1}]}"))
 
-    # Ensure just that event is sent (total should now be 4)
-    server.wait_message_count(4)
+    # Ensure just that event is sent
+    server.wait_message_count(3)
 
     # Clean up
     cluster.deprovision()
