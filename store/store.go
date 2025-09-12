@@ -2187,7 +2187,11 @@ func (s *Store) fsmApply(l *raft.Log) (e any) {
 
 		if s.cdcEnabled.Is() {
 			if s.cdcStreamer == nil {
-				s.cdcStreamer = sql.NewCDCStreamer(s.cdcOutCh, s.db)
+				var err error
+				s.cdcStreamer, err = sql.NewCDCStreamer(s.cdcOutCh, s.db)
+				if err != nil {
+					s.logger.Fatalf("failed to create CDC streamer: %s", err)
+				}
 			}
 
 			// If CDC is enabled but not yet activated, do so now. By doing it here we keep

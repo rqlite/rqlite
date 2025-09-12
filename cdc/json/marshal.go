@@ -28,6 +28,7 @@ type CDCMessageEvent struct {
 	OldRowID int64          `json:"old_row_id,omitempty"`
 	Before   map[string]any `json:"before,omitempty"`
 	After    map[string]any `json:"after,omitempty"`
+	Error    string         `json:"error,omitempty"`
 }
 
 // MarshalToEnvelopeJSON converts a slice of CDC events to a JSON envelope format.
@@ -80,15 +81,32 @@ func MarshalToEnvelopeJSON(serviceID, nodeID string, ts bool, evs []*proto.CDCIn
 				Table:    event.Table,
 				NewRowID: event.NewRowId,
 				OldRowID: event.OldRowId,
+				Error:    event.Error,
+			}
+
+			if p.Events[j].Error != "" {
+				// If there's an error, give up now, we need to let the
+				// consumer know about it.
+				continue
 			}
 
 			if event.OldRow != nil {
+				if len(event.ColumnNames) != len(event.OldRow.Values) {
+					p.Events[j].Error = "mismatched column names and old CDC row column count"
+					continue
+				}
+
 				p.Events[j].Before = make(map[string]any)
 				for k, v := range event.OldRow.Values {
 					p.Events[j].Before[event.ColumnNames[k]] = getV(v)
 				}
 			}
 			if event.NewRow != nil {
+				if len(event.ColumnNames) != len(event.NewRow.Values) {
+					p.Events[j].Error = "mismatched column names and new CDC row column count"
+					continue
+				}
+
 				p.Events[j].After = make(map[string]any)
 				for k, v := range event.NewRow.Values {
 					p.Events[j].After[event.ColumnNames[k]] = getV(v)

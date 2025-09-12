@@ -1,6 +1,7 @@
 package db
 
 import (
+	"fmt"
 	"time"
 
 	command "github.com/rqlite/rqlite/v8/command/proto"
@@ -24,14 +25,21 @@ type CDCStreamer struct {
 // to send the collected events to the client. It is the caller's
 // responsibility to ensure that the channel is read from, as the
 // CDCStreamer will drop events if the channel is full.
-func NewCDCStreamer(out chan<- *command.CDCIndexedEventGroup, db ColumnsNameProvider) *CDCStreamer {
+func NewCDCStreamer(out chan<- *command.CDCIndexedEventGroup, db ColumnsNameProvider) (*CDCStreamer, error) {
+	if out == nil {
+		return nil, fmt.Errorf("nil out channel")
+	}
+	if db == nil {
+		return nil, fmt.Errorf("nil ColumnsNameProvider")
+	}
+
 	return &CDCStreamer{
 		pending: &command.CDCIndexedEventGroup{
 			Events: make([]*command.CDCEvent, 0),
 		},
 		out: out,
 		db:  db,
-	}
+	}, nil
 }
 
 // Reset resets the CDCStreamer. The K value is set to the
@@ -72,6 +80,8 @@ func (s *CDCStreamer) CommitHook() bool {
 		if _, ok := colNamesCache[ev.Table]; !ok {
 			names, err := s.db.ColumnNames(ev.Table)
 			if err != nil {
+				errStr := fmt.Sprintf("failed to get column names for table %s: %v", ev.Table, err)
+				ev.Error = errStr
 				continue
 			}
 			colNamesCache[ev.Table] = names

@@ -11,7 +11,10 @@ import (
 
 func Test_CDCStreamer_New(t *testing.T) {
 	ch := make(chan *command.CDCIndexedEventGroup, 10)
-	streamer := NewCDCStreamer(ch, nil)
+	streamer, err := NewCDCStreamer(ch, &mockColumnNamesProvider{})
+	if err != nil {
+		t.Fatalf("expected no error, got %v", err)
+	}
 	if streamer == nil {
 		t.Fatalf("expected CDCStreamer to be created, got nil")
 	}
@@ -30,7 +33,10 @@ func Test_CDCStreamer_CommitOne(t *testing.T) {
 			"test_table": {"id", "name", "value"},
 		},
 	}
-	streamer := NewCDCStreamer(ch, np)
+	streamer, err := NewCDCStreamer(ch, np)
+	if err != nil {
+		t.Fatalf("error creating CDCStreamer: %v", err)
+	}
 
 	streamer.Reset(5678)
 	change := &command.CDCEvent{
@@ -78,7 +84,10 @@ func Test_CDCStreamer_CommitTwo(t *testing.T) {
 			"test_table": {"id", "name", "value"},
 		},
 	}
-	streamer := NewCDCStreamer(ch, np)
+	streamer, err := NewCDCStreamer(ch, np)
+	if err != nil {
+		t.Fatalf("error creating CDCStreamer: %v", err)
+	}
 
 	streamer.Reset(9012)
 	change1 := &command.CDCEvent{
@@ -142,7 +151,10 @@ func Test_CDCStreamer_ResetThenPreupdate(t *testing.T) {
 			"test_table": {"id", "name", "value"},
 		},
 	}
-	streamer := NewCDCStreamer(ch, np)
+	streamer, err := NewCDCStreamer(ch, np)
+	if err != nil {
+		t.Fatalf("error creating CDCStreamer: %v", err)
+	}
 
 	streamer.Reset(1234)
 	change1 := &command.CDCEvent{
