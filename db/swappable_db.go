@@ -224,3 +224,10 @@ func (s *SwappableDB) RegisterCommitHook(hook CommitHookCallback) error {
 	defer s.dbMu.RUnlock()
 	return s.db.RegisterCommitHook(hook)
 }
+
+// ColumnNames returns the column names for the given table from the underlying database.
+func (s *SwappableDB) ColumnNames(table string) ([]string, error) {
+	s.dbMu.RLock()
+	defer s.dbMu.RUnlock()
+	return s.db.ColumnNames(table)
+}

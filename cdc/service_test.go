@@ -51,9 +51,10 @@ func Test_ServiceSingleEvent(t *testing.T) {
 
 	// Send one dummy event to the service.
 	ev := &proto.CDCEvent{
-		Op:       proto.CDCEvent_INSERT,
-		Table:    "foo",
-		NewRowId: 2,
+		Op:          proto.CDCEvent_INSERT,
+		Table:       "foo",
+		ColumnNames: []string{"id", "name"},
+		NewRowId:    2,
 	}
 	evs := &proto.CDCIndexedEventGroup{
 		Index:  66,
@@ -198,9 +199,10 @@ func Test_ServiceRestart_NoDupes(t *testing.T) {
 	cl.SetLeader(0)
 	// Send one dummy event to the service.
 	ev := &proto.CDCEvent{
-		Op:       proto.CDCEvent_INSERT,
-		Table:    "foo",
-		NewRowId: 2,
+		Op:          proto.CDCEvent_INSERT,
+		Table:       "foo",
+		ColumnNames: []string{"id", "name"},
+		NewRowId:    2,
 	}
 	evs := &proto.CDCIndexedEventGroup{
 		Index:  100,
@@ -304,9 +306,10 @@ func Test_ServiceSingleEvent_LogOnly(t *testing.T) {
 
 	// Send one dummy event to the service.
 	ev := &proto.CDCEvent{
-		Op:       proto.CDCEvent_INSERT,
-		Table:    "foo",
-		NewRowId: 2,
+		Op:          proto.CDCEvent_INSERT,
+		Table:       "foo",
+		ColumnNames: []string{"id", "name"},
+		NewRowId:    2,
 	}
 	evs := &proto.CDCIndexedEventGroup{
 		Index:  1,
@@ -360,9 +363,10 @@ func Test_ServiceSingleEvent_Retry(t *testing.T) {
 
 	// Send one dummy event to the service.
 	ev := &proto.CDCEvent{
-		Op:       proto.CDCEvent_INSERT,
-		Table:    "foo",
-		NewRowId: 2,
+		Op:          proto.CDCEvent_INSERT,
+		Table:       "foo",
+		ColumnNames: []string{"id", "name"},
+		NewRowId:    2,
 	}
 	evs := &proto.CDCIndexedEventGroup{
 		Index:  1,
@@ -440,19 +444,21 @@ func Test_ServiceMultiEvent(t *testing.T) {
 
 	// Create the Events and send them.
 	ev1 := &proto.CDCEvent{
-		Op:       proto.CDCEvent_INSERT,
-		Table:    "foo",
-		NewRowId: 10,
+		Op:          proto.CDCEvent_INSERT,
+		Table:       "foo",
+		ColumnNames: []string{"id", "name"},
+		NewRowId:    10,
 	}
 	evs1 := &proto.CDCIndexedEventGroup{
 		Index:  1,
 		Events: []*proto.CDCEvent{ev1},
 	}
 	ev2 := &proto.CDCEvent{
-		Op:       proto.CDCEvent_UPDATE,
-		Table:    "baz",
-		OldRowId: 20,
-		NewRowId: 30,
+		Op:          proto.CDCEvent_UPDATE,
+		Table:       "baz",
+		ColumnNames: []string{"id", "name"},
+		OldRowId:    20,
+		NewRowId:    30,
 	}
 	evs2 := &proto.CDCIndexedEventGroup{
 		Index:  2,
@@ -543,28 +549,31 @@ func Test_ServiceMultiEvent_Batch(t *testing.T) {
 
 	// Create the Events and send them.
 	ev1 := &proto.CDCEvent{
-		Op:       proto.CDCEvent_INSERT,
-		Table:    "foo",
-		NewRowId: 10,
+		Op:          proto.CDCEvent_INSERT,
+		Table:       "foo",
+		ColumnNames: []string{"id", "name"},
+		NewRowId:    10,
 	}
 	evs1 := &proto.CDCIndexedEventGroup{
 		Index:  1,
 		Events: []*proto.CDCEvent{ev1},
 	}
 	ev2 := &proto.CDCEvent{
-		Op:       proto.CDCEvent_UPDATE,
-		Table:    "baz",
-		OldRowId: 20,
-		NewRowId: 30,
+		Op:          proto.CDCEvent_UPDATE,
+		Table:       "baz",
+		ColumnNames: []string{"id", "name"},
+		OldRowId:    20,
+		NewRowId:    30,
 	}
 	evs2 := &proto.CDCIndexedEventGroup{
 		Index:  2,
 		Events: []*proto.CDCEvent{ev2},
 	}
 	ev3 := &proto.CDCEvent{
-		Op:       proto.CDCEvent_DELETE,
-		Table:    "qux",
-		OldRowId: 40,
+		Op:          proto.CDCEvent_DELETE,
+		Table:       "qux",
+		ColumnNames: []string{"id", "name"},
+		OldRowId:    40,
 	}
 	evs3 := &proto.CDCIndexedEventGroup{
 		Index:  3,
@@ -683,9 +692,10 @@ func Test_ServiceHWMUpdate_Leader(t *testing.T) {
 			Index: 10,
 			Events: []*proto.CDCEvent{
 				{
-					Op:       proto.CDCEvent_INSERT,
-					Table:    "foo",
-					NewRowId: 1,
+					Op:          proto.CDCEvent_INSERT,
+					Table:       "foo",
+					ColumnNames: []string{"id", "name"},
+					NewRowId:    1,
 				},
 			},
 		},
@@ -693,9 +703,10 @@ func Test_ServiceHWMUpdate_Leader(t *testing.T) {
 			Index: 20,
 			Events: []*proto.CDCEvent{
 				{
-					Op:       proto.CDCEvent_INSERT,
-					Table:    "foo",
-					NewRowId: 2,
+					Op:          proto.CDCEvent_INSERT,
+					Table:       "foo",
+					ColumnNames: []string{"id", "name"},
+					NewRowId:    2,
 				},
 			},
 		},
@@ -703,9 +714,10 @@ func Test_ServiceHWMUpdate_Leader(t *testing.T) {
 			Index: 30,
 			Events: []*proto.CDCEvent{
 				{
-					Op:       proto.CDCEvent_INSERT,
-					Table:    "foo",
-					NewRowId: 3,
+					Op:          proto.CDCEvent_INSERT,
+					Table:       "foo",
+					ColumnNames: []string{"id", "name"},
+					NewRowId:    3,
 				},
 			},
 		},
@@ -754,9 +766,10 @@ func Test_ServiceHWMUpdate_Follow(t *testing.T) {
 			Index: 10,
 			Events: []*proto.CDCEvent{
 				{
-					Op:       proto.CDCEvent_INSERT,
-					Table:    "foo",
-					NewRowId: 1,
+					Op:          proto.CDCEvent_INSERT,
+					Table:       "foo",
+					ColumnNames: []string{"id", "name"},
+					NewRowId:    1,
 				},
 			},
 		},

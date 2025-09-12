@@ -2,6 +2,7 @@ package db
 
 import (
 	"reflect"
+	"slices"
 	"testing"
 	"time"
 
@@ -10,7 +11,10 @@ import (
 
 func Test_CDCStreamer_New(t *testing.T) {
 	ch := make(chan *command.CDCIndexedEventGroup, 10)
-	streamer := NewCDCStreamer(ch)
+	streamer, err := NewCDCStreamer(ch, &mockColumnNamesProvider{})
+	if err != nil {
+		t.Fatalf("expected no error, got %v", err)
+	}
 	if streamer == nil {
 		t.Fatalf("expected CDCStreamer to be created, got nil")
 	}
@@ -24,7 +28,15 @@ func Test_CDCStreamer_New(t *testing.T) {
 
 func Test_CDCStreamer_CommitOne(t *testing.T) {
 	ch := make(chan *command.CDCIndexedEventGroup, 10)
-	streamer := NewCDCStreamer(ch)
+	np := &mockColumnNamesProvider{
+		columns: map[string][]string{
+			"test_table": {"id", "name", "value"},
+		},
+	}
+	streamer, err := NewCDCStreamer(ch, np)
+	if err != nil {
+		t.Fatalf("error creating CDCStreamer: %v", err)
+	}
 
 	streamer.Reset(5678)
 	change := &command.CDCEvent{
@@ -50,6 +62,9 @@ func Test_CDCStreamer_CommitOne(t *testing.T) {
 		if len(ev.Events) != 1 {
 			t.Fatalf("expected 1 event, got %d", len(ev.Events))
 		}
+		if !slices.Equal(ev.Events[0].ColumnNames, []string{"id", "name", "value"}) {
+			t.Fatalf("expected column names to be [id name value], got %v", ev.Events[0].ColumnNames)
+		}
 		if !reflect.DeepEqual(change, ev.Events[0]) {
 			t.Fatalf("received event does not match sent event: expected %v, got %v", change, ev.Events[0])
 		}
@@ -64,7 +79,15 @@ func Test_CDCStreamer_CommitOne(t *testing.T) {
 
 func Test_CDCStreamer_CommitTwo(t *testing.T) {
 	ch := make(chan *command.CDCIndexedEventGroup, 10)
-	streamer := NewCDCStreamer(ch)
+	np := &mockColumnNamesProvider{
+		columns: map[string][]string{
+			"test_table": {"id", "name", "value"},
+		},
+	}
+	streamer, err := NewCDCStreamer(ch, np)
+	if err != nil {
+		t.Fatalf("error creating CDCStreamer: %v", err)
+	}
 
 	streamer.Reset(9012)
 	change1 := &command.CDCEvent{
@@ -103,6 +126,9 @@ func Test_CDCStreamer_CommitTwo(t *testing.T) {
 		if !reflect.DeepEqual(change1, ev.Events[0]) {
 			t.Fatalf("received first event does not match sent event: expected %v, got %v", change1, ev.Events[0])
 		}
+		if !slices.Equal(ev.Events[0].ColumnNames, []string{"id", "name", "value"}) {
+			t.Fatalf("expected column names to be [id name value], got %v", ev.Events[0].ColumnNames)
+		}
 		if !reflect.DeepEqual(change2, ev.Events[1]) {
 			t.Fatalf("received second event does not match sent event: expected %v, got %v", change2, ev.Events[1])
 		}
@@ -120,7 +146,15 @@ func Test_CDCStreamer_CommitTwo(t *testing.T) {
 // clears out any pending events.
 func Test_CDCStreamer_ResetThenPreupdate(t *testing.T) {
 	ch := make(chan *command.CDCIndexedEventGroup, 10)
-	streamer := NewCDCStreamer(ch)
+	np := &mockColumnNamesProvider{
+		columns: map[string][]string{
+			"test_table": {"id", "name", "value"},
+		},
+	}
+	streamer, err := NewCDCStreamer(ch, np)
+	if err != nil {
+		t.Fatalf("error creating CDCStreamer: %v", err)
+	}
 
 	streamer.Reset(1234)
 	change1 := &command.CDCEvent{
@@ -163,6 +197,9 @@ func Test_CDCStreamer_ResetThenPreupdate(t *testing.T) {
 		if len(ev.Events) != 1 {
 			t.Fatalf("expected 1 event, got %d", len(ev.Events))
 		}
+		if !slices.Equal(ev.Events[0].ColumnNames, []string{"id", "name", "value"}) {
+			t.Fatalf("expected column names to be [id name value], got %v", ev.Events[0].ColumnNames)
+		}
 		if !reflect.DeepEqual(change2, ev.Events[0]) {
 			t.Fatalf("received event does not match sent event: expected %v, got %v", change2, ev.Events[0])
 		}
@@ -173,4 +210,15 @@ func Test_CDCStreamer_ResetThenPreupdate(t *testing.T) {
 	if err := streamer.Close(); err != nil {
 		t.Fatalf("expected no error on close, got %v", err)
 	}
+}
+
+type mockColumnNamesProvider struct {
+	columns map[string][]string
+}
+
+func (m *mockColumnNamesProvider) ColumnNames(table string) ([]string, error) {
+	if cols, ok := m.columns[table]; ok {
+		return cols, nil
+	}
+	return []string{}, nil
 }

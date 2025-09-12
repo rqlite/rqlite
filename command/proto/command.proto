@@ -174,10 +174,11 @@ message CDCEvent {
 	string error = 1;
 	Operation op = 2;
 	string table = 3;
-	int64 old_row_id = 4;
-	int64 new_row_id = 5;
-	CDCRow old_row = 6;
-	CDCRow new_row = 7;
+	repeated string column_names = 4;
+	int64 old_row_id = 5;
+	int64 new_row_id = 6;
+	CDCRow old_row = 7;
+	CDCRow new_row = 8;
 }
 
 message CDCIndexedEventGroup {

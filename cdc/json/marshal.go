@@ -16,18 +16,19 @@ type CDCMessagesEnvelope struct {
 // CDCMessage represents a single CDC message containing an index and a list of events.
 type CDCMessage struct {
 	Index     uint64             `json:"index"`
-	Timestamp int64              `json:"ts_ns,omitempty"`
+	Timestamp int64              `json:"commit_timestamp,omitempty"`
 	Events    []*CDCMessageEvent `json:"events"`
 }
 
 // CDCMessageEvent represents a single CDC event within a CDC message.
 type CDCMessageEvent struct {
-	Op       string `json:"op"`
-	Table    string `json:"table,omitempty"`
-	NewRowID int64  `json:"new_row_id,omitempty"`
-	OldRowID int64  `json:"old_row_id,omitempty"`
-	Before   []any  `json:"before,omitempty"`
-	After    []any  `json:"after,omitempty"`
+	Op       string         `json:"op"`
+	Table    string         `json:"table,omitempty"`
+	NewRowID int64          `json:"new_row_id,omitempty"`
+	OldRowID int64          `json:"old_row_id,omitempty"`
+	Before   map[string]any `json:"before,omitempty"`
+	After    map[string]any `json:"after,omitempty"`
+	Error    string         `json:"error,omitempty"`
 }
 
 // MarshalToEnvelopeJSON converts a slice of CDC events to a JSON envelope format.
@@ -80,16 +81,35 @@ func MarshalToEnvelopeJSON(serviceID, nodeID string, ts bool, evs []*proto.CDCIn
 				Table:    event.Table,
 				NewRowID: event.NewRowId,
 				OldRowID: event.OldRowId,
+				Error:    event.Error,
+			}
+
+			if p.Events[j].Error != "" {
+				// If there's an error, give up now, we need to let the
+				// consumer know about it.
+				continue
 			}
 
 			if event.OldRow != nil {
-				for _, v := range event.OldRow.Values {
-					p.Events[j].Before = append(p.Events[j].Before, getV(v))
+				if len(event.ColumnNames) != len(event.OldRow.Values) {
+					p.Events[j].Error = "mismatched column names and old CDC row column count"
+					continue
+				}
+
+				p.Events[j].Before = make(map[string]any)
+				for k, v := range event.OldRow.Values {
+					p.Events[j].Before[event.ColumnNames[k]] = getV(v)
 				}
 			}
 			if event.NewRow != nil {
-				for _, v := range event.NewRow.Values {
-					p.Events[j].After = append(p.Events[j].After, getV(v))
+				if len(event.ColumnNames) != len(event.NewRow.Values) {
+					p.Events[j].Error = "mismatched column names and new CDC row column count"
+					continue
+				}
+
+				p.Events[j].After = make(map[string]any)
+				for k, v := range event.NewRow.Values {
+					p.Events[j].After[event.ColumnNames[k]] = getV(v)
 				}
 			}
 		}
