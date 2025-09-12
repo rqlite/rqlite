@@ -21,7 +21,6 @@ func CompressZlib(data []byte) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
-
 	return buf.Bytes(), nil
 }
 
@@ -34,6 +33,5 @@ func DecompressZlib(data []byte) ([]byte, error) {
 		return nil, err
 	}
 	defer r.Close()
-
 	return io.ReadAll(r)
 }

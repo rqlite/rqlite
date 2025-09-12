@@ -395,15 +395,22 @@ func (s *Service) mainLoop() {
 				continue
 			}
 
-			// Compress the marshalled data before enqueuing to FIFO
-			compressedData, err := rarchive.CompressZlib(b)
-			if err != nil {
-				s.logger.Printf("error compressing batch for FIFO: %v", err)
-				continue
+			var dataToEnqueue []byte
+			if s.logOnly {
+				// When logOnly is true, don't compress so logging shows readable data
+				dataToEnqueue = b
+			} else {
+				// Compress the marshalled data before enqueuing to FIFO
+				compressedData, err := rarchive.CompressZlib(b)
+				if err != nil {
+					s.logger.Printf("error compressing batch for FIFO: %v", err)
+					continue
+				}
+				dataToEnqueue = compressedData
 			}
 
 			idx := req.Objects[len(req.Objects)-1].Index
-			if err := s.fifo.Enqueue(&Event{Index: idx, Data: compressedData}); err != nil {
+			if err := s.fifo.Enqueue(&Event{Index: idx, Data: dataToEnqueue}); err != nil {
 				s.logger.Printf("error writing batch to FIFO: %v", err)
 			}
 			req.Close()
@@ -498,14 +505,21 @@ func (s *Service) leaderLoop() (chan struct{}, chan struct{}) {
 					continue
 				}
 
-				// Decompress the data before sending HTTP POST
-				decompressedData, err := rarchive.DecompressZlib(ev.Data)
-				if err != nil {
-					s.logger.Printf("error decompressing batch from FIFO: %v", err)
-					continue
+				var httpData []byte
+				if s.logOnly {
+					// Data is uncompressed when logOnly is true
+					httpData = ev.Data
+				} else {
+					// Decompress the data before sending HTTP POST
+					decompressedData, err := rarchive.DecompressZlib(ev.Data)
+					if err != nil {
+						s.logger.Printf("error decompressing batch from FIFO: %v", err)
+						continue
+					}
+					httpData = decompressedData
 				}
 
-				req, err := http.NewRequest("POST", s.endpoint, bytes.NewReader(decompressedData))
+				req, err := http.NewRequest("POST", s.endpoint, bytes.NewReader(httpData))
 				if err != nil {
 					s.logger.Printf("error creating HTTP request for endpoint: %v", err)
 					continue
@@ -518,7 +532,7 @@ func (s *Service) leaderLoop() (chan struct{}, chan struct{}) {
 				for {
 					nAttempts++
 					if s.logOnly {
-						s.logger.Println(string(decompressedData))
+						s.logger.Println(string(ev.Data))
 						sentOK = true
 						break
 					}
