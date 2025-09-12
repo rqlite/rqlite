@@ -243,11 +243,6 @@ func Test_ServiceRestart_NoDupes(t *testing.T) {
 		t.Fatalf("timeout waiting for HTTP POST")
 	}
 
-	// Peek into the FIFO, ensure it is behaving correctly.
-	if got, exp := stats.Get(numFIFOIgnored).(*expvar.Int).Value(), int64(0); exp != got {
-		t.Fatalf("expected %d FIFO ignored events, got %d", exp, got)
-	}
-
 	// Wait until the svc has performed a FIFO pruning.
 	testPoll(t, func() bool {
 		return svc.hwmLeaderUpdated.Load() == 1
@@ -274,9 +269,9 @@ func Test_ServiceRestart_NoDupes(t *testing.T) {
 	// Send the same event, ensure it is not forwarded.
 	svc2.C() <- evs
 
-	// Peek into the CDC FIFO.
+	// Peek into the CDC behavior.
 	testPoll(t, func() bool {
-		return stats.Get(numFIFOIgnored).(*expvar.Int).Value() == 1
+		return stats.Get(numHWMIgnored).(*expvar.Int).Value() == 1
 	}, 2*time.Second)
 }
 
