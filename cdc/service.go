@@ -428,9 +428,10 @@ func (s *Service) writeToBatcher() {
 			}
 			if _, err := s.batcher.WriteOne(o, nil); err != nil {
 				s.logger.Printf("error writing CDC events to batcher: %v", err)
+			} else if err == nil {
+				stats.Add(numBatcherWrites, 1)
+				stats.Add(numBatcherEventsWrite, int64(len(o.Events)))
 			}
-			stats.Add(numBatcherWrites, 1)
-			stats.Add(numBatcherEventsWrite, int64(len(o.Events)))
 
 		case ch := <-s.snapshotCh:
 			stats.Add(numSnapshotSync, 1)
