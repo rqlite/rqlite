@@ -39,6 +39,7 @@ const (
 	numBatcherWriteIgnored = "batcher_write_ignored"
 	numFIFOEnqueueIgnored  = "fifo_enqueue_ignored"
 	numHWMIgnored          = "hwm_ignored"
+	fifoSize               = "fifo_size"
 )
 
 // stats captures stats for the CDC Service.
@@ -62,6 +63,7 @@ func ResetStats() {
 	stats.Add(numBatcherWriteIgnored, 0)
 	stats.Add(numFIFOEnqueueIgnored, 0)
 	stats.Add(numHWMIgnored, 0)
+	stats.Add(fifoSize, 0)
 }
 
 // Cluster is an interface that defines methods for cluster management and communication.

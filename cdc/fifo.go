@@ -3,6 +3,7 @@ package cdc
 import (
 	"encoding/binary"
 	"errors"
+	"expvar"
 	"fmt"
 	"sync"
 	"time"
@@ -90,6 +91,9 @@ func NewQueue(path string) (*Queue, error) {
 		if innerErr != nil {
 			return fmt.Errorf("failed to get highest key: %w", innerErr)
 		}
+		u := new(expvar.Int)
+		u.Set(int64(bucketSize(tx, bucketName)))
+		stats.Set(fifoSize, u)
 		return nil
 	}); err != nil {
 		db.Close()
@@ -293,6 +297,7 @@ func (q *Queue) run(highestKey uint64) {
 				if err := tx.Bucket(bucketName).Put(key, req.item); err != nil {
 					return err
 				}
+				stats.Add(fifoSize, 1)
 				if req.idx > highestKey {
 					if err := setHighestKey(tx, req.idx); err != nil {
 						return err
@@ -331,6 +336,7 @@ func (q *Queue) run(highestKey uint64) {
 						return derr
 					}
 				}
+				stats.Add(fifoSize, -int64(len(keysToDelete)))
 				return nil
 			})
 			// Ensure cursor moves past deleted range
@@ -355,8 +361,7 @@ func (q *Queue) run(highestKey uint64) {
 			firstKey := uint64(0)
 			err := q.db.View(func(tx *bbolt.Tx) error {
 				bucket := tx.Bucket(bucketName)
-				st := bucket.Stats()
-				l = st.KeyN
+				l = bucketSize(tx, bucketName)
 				isEmpty = (l == 0)
 				if !isEmpty {
 					c := bucket.Cursor()
@@ -420,6 +425,14 @@ type queryResp struct {
 	len        int
 	highestKey uint64
 	err        error
+}
+
+func bucketSize(tx *bbolt.Tx, name []byte) int {
+	b := tx.Bucket(name)
+	if b == nil {
+		return 0
+	}
+	return b.Stats().KeyN
 }
 
 func btouint64(b []byte) uint64 {
