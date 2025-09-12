@@ -1832,9 +1832,6 @@ func (s *Store) EnableCDC(out chan<- *proto.CDCIndexedEventGroup, tableRe *regex
 func (s *Store) DisableCDC() error {
 	s.cdcMu.Lock()
 	defer s.cdcMu.Unlock()
-	if s.cdcStreamer == nil {
-		return nil
-	}
 
 	if s.db != nil {
 		if err := s.db.RegisterPreUpdateHook(nil, nil, false); err != nil {
@@ -1844,7 +1841,9 @@ func (s *Store) DisableCDC() error {
 			return fmt.Errorf("failed to unregister commit hook: %w", err)
 		}
 	}
-	s.cdcStreamer.Close()
+	if s.cdcStreamer != nil {
+		s.cdcStreamer.Close()
+	}
 	s.cdcStreamer = nil
 	s.cdcRegistered.Unset()
 	s.cdcEnabled.Unset()

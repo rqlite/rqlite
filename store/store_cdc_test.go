@@ -30,16 +30,16 @@ func Test_StoreEnableCDC(t *testing.T) {
 	if err := s.EnableCDC(ch, nil, false); err != nil {
 		t.Fatalf("failed to enable CDC: %v", err)
 	}
-	if s.cdcStreamer == nil {
-		t.Fatalf("expected CDC streamer to be created after EnableCDC")
+	if s.cdcEnabled.IsNot() {
+		t.Fatalf("expected CDC to enabled after EnableCDC")
 	}
 
 	// Disable CDC
 	if err := s.DisableCDC(); err != nil {
 		t.Fatalf("failed to disable CDC: %v", err)
 	}
-	if s.cdcStreamer != nil {
-		t.Fatalf("expected CDC streamer to be nil after DisableCDC")
+	if s.cdcEnabled.Is() {
+		t.Fatalf("expected CDC to be disabled after DisableCDC")
 	}
 }
 
@@ -61,32 +61,20 @@ func Test_StoreEnableDisableCDC(t *testing.T) {
 	if err := s.EnableCDC(ch1, nil, false); err != nil {
 		t.Fatalf("failed to enable CDC: %v", err)
 	}
-	if s.cdcStreamer == nil {
-		t.Fatalf("expected CDC streamer to be created")
-	}
 
 	// Enable CDC with second channel (should return error)
 	if err := s.EnableCDC(ch2, nil, false); err != ErrCDCEnabled {
 		t.Fatalf("expected ErrCDCEnabled, got: %v", err)
-	}
-	if s.cdcStreamer == nil {
-		t.Fatalf("expected CDC streamer to still be created")
 	}
 
 	// Disable CDC
 	if err := s.DisableCDC(); err != nil {
 		t.Fatalf("failed to disable CDC: %v", err)
 	}
-	if s.cdcStreamer != nil {
-		t.Fatalf("expected CDC streamer to be nil after disable")
-	}
 
 	// Enable again
 	if err := s.EnableCDC(ch3, nil, false); err != nil {
 		t.Fatalf("failed to enable CDC again: %v", err)
-	}
-	if s.cdcStreamer == nil {
-		t.Fatalf("expected CDC streamer to be created again")
 	}
 }
 
