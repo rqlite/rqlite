@@ -297,12 +297,10 @@ func (q *Queue) run(highestKey uint64) {
 					if err := setHighestKey(tx, req.idx); err != nil {
 						return err
 					}
+					highestKey = req.idx
 				}
 				return nil
 			})
-			if err == nil && req.idx > highestKey {
-				highestKey = req.idx
-			}
 			req.respChan <- enqueueResp{err: err}
 			if err == nil && nextEv == nil {
 				if err := loadHead(); err != nil {

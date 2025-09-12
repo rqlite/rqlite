@@ -266,12 +266,12 @@ func Test_ServiceRestart_NoDupes(t *testing.T) {
 	defer svc2.Stop()
 	cl.SetLeader(0)
 
-	// Send the same event, ensure it is not forwarded.
+	// Send the same event, ensure it is not forwarded because the
+	// FIFO's highest-key-written logic will drop it.
+	currentDrop := stats.Get(numFIFOEnqueueIgnored).(*expvar.Int).Value()
 	svc2.C() <- evs
-
-	// Peek into the CDC behavior.
 	testPoll(t, func() bool {
-		return stats.Get(numHWMIgnored).(*expvar.Int).Value() == 1
+		return stats.Get(numFIFOEnqueueIgnored).(*expvar.Int).Value() == currentDrop+1
 	}, 2*time.Second)
 }
 

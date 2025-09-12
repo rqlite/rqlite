@@ -58,8 +58,9 @@ func ResetStats() {
 	stats.Add(numSnapshotSync, 0)
 	stats.Add(numBatcherWrites, 0)
 	stats.Add(numBatcherEventsWrite, 0)
-	stats.Add(numBatcherWriteIgnored, 0)
 	stats.Add(numBatcherReads, 0)
+	stats.Add(numBatcherWriteIgnored, 0)
+	stats.Add(numFIFOEnqueueIgnored, 0)
 	stats.Add(numHWMIgnored, 0)
 }
 
