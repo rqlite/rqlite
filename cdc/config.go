@@ -30,7 +30,7 @@ const (
 	DefaultTransmitTimeout       = 5 * time.Second
 	DefaultTransmitRetryPolicy   = LinearRetryPolicy
 	DefaultTransmitMinBackoff    = time.Second
-	DefaultTransmitMaxBackoff    = time.Minute
+	DefaultTransmitMaxBackoff    = 30 * time.Second
 )
 
 // TLSConfiguration holds the TLS configuration for the CDC service.
