@@ -25,12 +25,12 @@ const (
 
 const (
 	DefaultMaxBatchSz            = 10
-	DefaultMaxBatchDelay         = 100 * time.Millisecond
+	DefaultMaxBatchDelay         = 200 * time.Millisecond
 	DefaultHighWatermarkInterval = 1 * time.Second
 	DefaultTransmitTimeout       = 5 * time.Second
 	DefaultTransmitRetryPolicy   = LinearRetryPolicy
 	DefaultTransmitMinBackoff    = time.Second
-	DefaultTransmitMaxBackoff    = time.Minute
+	DefaultTransmitMaxBackoff    = 30 * time.Second
 )
 
 // TLSConfiguration holds the TLS configuration for the CDC service.
