@@ -395,10 +395,14 @@ func (s *Service) mainLoop() {
 				continue
 			}
 
-			var dataToEnqueue []byte
 			if s.logOnly {
-				// When logOnly is true, don't compress so logging shows readable data
-				dataToEnqueue = b
+				// When logOnly is true, log the marshalled bytes immediately
+				s.logger.Println(string(b))
+				// Also enqueue uncompressed data to FIFO for high watermark tracking
+				idx := req.Objects[len(req.Objects)-1].Index
+				if err := s.fifo.Enqueue(&Event{Index: idx, Data: b}); err != nil {
+					s.logger.Printf("error writing batch to FIFO: %v", err)
+				}
 			} else {
 				// Compress the marshalled data before enqueuing to FIFO
 				compressedData, err := rarchive.CompressZlib(b)
@@ -406,12 +410,11 @@ func (s *Service) mainLoop() {
 					s.logger.Printf("error compressing batch for FIFO: %v", err)
 					continue
 				}
-				dataToEnqueue = compressedData
-			}
 
-			idx := req.Objects[len(req.Objects)-1].Index
-			if err := s.fifo.Enqueue(&Event{Index: idx, Data: dataToEnqueue}); err != nil {
-				s.logger.Printf("error writing batch to FIFO: %v", err)
+				idx := req.Objects[len(req.Objects)-1].Index
+				if err := s.fifo.Enqueue(&Event{Index: idx, Data: compressedData}); err != nil {
+					s.logger.Printf("error writing batch to FIFO: %v", err)
+				}
 			}
 			req.Close()
 
@@ -532,7 +535,7 @@ func (s *Service) leaderLoop() (chan struct{}, chan struct{}) {
 				for {
 					nAttempts++
 					if s.logOnly {
-						s.logger.Println(string(ev.Data))
+						// Data was already logged in mainLoop, just mark as sent
 						sentOK = true
 						break
 					}
