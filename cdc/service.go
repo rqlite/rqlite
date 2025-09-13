@@ -395,26 +395,16 @@ func (s *Service) mainLoop() {
 				continue
 			}
 
-			if s.logOnly {
-				// When logOnly is true, log the marshalled bytes immediately
-				s.logger.Println(string(b))
-				// Also enqueue uncompressed data to FIFO for high watermark tracking
-				idx := req.Objects[len(req.Objects)-1].Index
-				if err := s.fifo.Enqueue(&Event{Index: idx, Data: b}); err != nil {
-					s.logger.Printf("error writing batch to FIFO: %v", err)
-				}
-			} else {
-				// Compress the marshalled data before enqueuing to FIFO
-				compressedData, err := rarchive.CompressZlib(b)
-				if err != nil {
-					s.logger.Printf("error compressing batch for FIFO: %v", err)
-					continue
-				}
+			// Compress the marshalled data before enqueuing to FIFO
+			compressedData, err := rarchive.CompressZlib(b)
+			if err != nil {
+				s.logger.Printf("error compressing batch for FIFO: %v", err)
+				continue
+			}
 
-				idx := req.Objects[len(req.Objects)-1].Index
-				if err := s.fifo.Enqueue(&Event{Index: idx, Data: compressedData}); err != nil {
-					s.logger.Printf("error writing batch to FIFO: %v", err)
-				}
+			idx := req.Objects[len(req.Objects)-1].Index
+			if err := s.fifo.Enqueue(&Event{Index: idx, Data: compressedData}); err != nil {
+				s.logger.Printf("error writing batch to FIFO: %v", err)
 			}
 			req.Close()
 
@@ -508,21 +498,14 @@ func (s *Service) leaderLoop() (chan struct{}, chan struct{}) {
 					continue
 				}
 
-				var httpData []byte
-				if s.logOnly {
-					// Data is uncompressed when logOnly is true
-					httpData = ev.Data
-				} else {
-					// Decompress the data before sending HTTP POST
-					decompressedData, err := rarchive.DecompressZlib(ev.Data)
-					if err != nil {
-						s.logger.Printf("error decompressing batch from FIFO: %v", err)
-						continue
-					}
-					httpData = decompressedData
+				// Decompress the data.
+				decompressedData, err := rarchive.DecompressZlib(ev.Data)
+				if err != nil {
+					s.logger.Printf("error decompressing batch from FIFO: %v", err)
+					continue
 				}
 
-				req, err := http.NewRequest("POST", s.endpoint, bytes.NewReader(httpData))
+				req, err := http.NewRequest("POST", s.endpoint, bytes.NewReader(decompressedData))
 				if err != nil {
 					s.logger.Printf("error creating HTTP request for endpoint: %v", err)
 					continue
@@ -535,7 +518,7 @@ func (s *Service) leaderLoop() (chan struct{}, chan struct{}) {
 				for {
 					nAttempts++
 					if s.logOnly {
-						// Data was already logged in mainLoop, just mark as sent
+						s.logger.Println(string(decompressedData))
 						sentOK = true
 						break
 					}
