@@ -6,7 +6,7 @@ import (
 	"io"
 )
 
-// Compress compresses the given data using zlib compression.
+// Compress compresses the given data using flate compression.
 func Compress(data []byte) ([]byte, error) {
 	var buf bytes.Buffer
 	w, err := flate.NewWriter(&buf, flate.DefaultCompression)
@@ -27,7 +27,7 @@ func Compress(data []byte) ([]byte, error) {
 	return buf.Bytes(), nil
 }
 
-// Decompress decompresses the given zlib-compressed data.
+// Decompress decompresses the given flate-compressed data.
 func Decompress(data []byte) ([]byte, error) {
 	reader := bytes.NewReader(data)
 
