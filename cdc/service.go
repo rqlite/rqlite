@@ -521,12 +521,7 @@ func (s *Service) leaderLoop() (chan struct{}, chan struct{}) {
 				for {
 					nAttempts++
 					if s.logOnly {
-						d, err := zlib.Decompress(ev.Data)
-						if err != nil {
-							s.logger.Printf("error decompressing data for log output: %v", err)
-							break
-						}
-						s.logger.Println(string(d))
+						s.logger.Println(string(decompressed))
 						sentOK = true
 						break
 					}
