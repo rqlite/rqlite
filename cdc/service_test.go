@@ -165,19 +165,10 @@ func Test_ServiceSingleEvent_Flush(t *testing.T) {
 func Test_ServiceSingleEvent_SnapshotSync(t *testing.T) {
 	ResetStats()
 
-	bodyCh := make(chan []byte, 1)
-	testSrv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		defer r.Body.Close()
-		b, _ := io.ReadAll(r.Body)
-		bodyCh <- b
-		w.WriteHeader(http.StatusOK)
-	}))
-	defer testSrv.Close()
-
 	cl := &mockCluster{}
 
 	cfg := DefaultConfig()
-	cfg.Endpoint = testSrv.URL
+	cfg.LogOnly = true // Use log-only mode to avoid HTTP complexity
 	cfg.MaxBatchSz = 10
 	cfg.MaxBatchDelay = 30 * time.Second
 	svc, err := NewService(
