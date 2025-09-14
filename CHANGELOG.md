@@ -30,6 +30,7 @@
 - [PR #2318](https://github.com/rqlite/rqlite/pull/2318): Add ColumnNames() to DB object.
 - [PR #2319](https://github.com/rqlite/rqlite/pull/2319): CDC "before" and "after" now structured as maps.
 - [PR #2321](https://github.com/rqlite/rqlite/pull/2321): Add metrics to CDC Service.
+- [PR #2323](https://github.com/rqlite/rqlite/pull/2323): Compress data before storing in FIFO.
 
 ## v8.43.4 (August 27th 2025)
 ### Implementation changes and bug fixes

@@ -16,6 +16,7 @@ import (
 	cdcjson "github.com/rqlite/rqlite/v8/cdc/json"
 	"github.com/rqlite/rqlite/v8/command/proto"
 	httpurl "github.com/rqlite/rqlite/v8/http/url"
+	"github.com/rqlite/rqlite/v8/internal/rarchive/zlib"
 	"github.com/rqlite/rqlite/v8/internal/rsync"
 	"github.com/rqlite/rqlite/v8/queue"
 )
@@ -394,8 +395,15 @@ func (s *Service) mainLoop() {
 				continue
 			}
 
+			// Compress the marshalled data before enqueuing to FIFO
+			compressedData, err := zlib.Compress(b)
+			if err != nil {
+				s.logger.Printf("error compressing batch for FIFO: %v", err)
+				continue
+			}
+
 			idx := req.Objects[len(req.Objects)-1].Index
-			if err := s.fifo.Enqueue(&Event{Index: idx, Data: b}); err != nil {
+			if err := s.fifo.Enqueue(&Event{Index: idx, Data: compressedData}); err != nil {
 				s.logger.Printf("error writing batch to FIFO: %v", err)
 			}
 			req.Close()
@@ -490,7 +498,17 @@ func (s *Service) leaderLoop() (chan struct{}, chan struct{}) {
 					continue
 				}
 
-				req, err := http.NewRequest("POST", s.endpoint, bytes.NewReader(ev.Data))
+				// Decompress the data read from FIFO into a byte slice. We need to do this
+				// so the HTTP request can set Content-Length correctly. This makes it easier
+				// for servers to handle the request. Sure, it consumes some memory but
+				// CDC events are typically small and it makes downstream processing easier.
+				decompressed, err := zlib.Decompress(ev.Data)
+				if err != nil {
+					s.logger.Printf("error decompressing data for batch from FIFO: %v", err)
+					continue
+				}
+
+				req, err := http.NewRequest("POST", s.endpoint, bytes.NewReader(decompressed))
 				if err != nil {
 					s.logger.Printf("error creating HTTP request for endpoint: %v", err)
 					continue
@@ -503,7 +521,7 @@ func (s *Service) leaderLoop() (chan struct{}, chan struct{}) {
 				for {
 					nAttempts++
 					if s.logOnly {
-						s.logger.Println(string(ev.Data))
+						s.logger.Println(string(decompressed))
 						sentOK = true
 						break
 					}
@@ -520,6 +538,7 @@ func (s *Service) leaderLoop() (chan struct{}, chan struct{}) {
 						break
 					}
 
+					// OK, need to prep for a retry.
 					if s.transmitRetryPolicy == ExponentialRetryPolicy {
 						retryDelay *= 2
 						if retryDelay > s.transmitMaxBackoff {
