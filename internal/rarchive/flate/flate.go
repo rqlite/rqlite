@@ -9,7 +9,7 @@ import (
 // Compress compresses the given data using flate compression.
 func Compress(data []byte) ([]byte, error) {
 	var buf bytes.Buffer
-	w, err := flate.NewWriter(&buf, flate.DefaultCompression)
+	w, err := flate.NewWriter(&buf, flate.BestCompression)
 	if err != nil {
 		return nil, err
 	}
