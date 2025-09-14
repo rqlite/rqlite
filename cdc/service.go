@@ -383,7 +383,19 @@ func (s *Service) mainLoop() {
 		case req := <-s.batcher.C:
 			stats.Add(numBatcherReads, 1)
 
+			if len(req.Objects) == 1 && req.Objects[0].Flush {
+				// Nothing but a flush request, short-ciruit out.
+				s.flushRx.Add(1)
+				req.Close()
+				break
+			}
+
+			// Get the highest index in this batch, for enqueueing to FIFO.
+			hiIdx := uint64(0)
 			for i := range req.Objects {
+				if req.Objects[i].Index > hiIdx {
+					hiIdx = req.Objects[i].Index
+				}
 				if req.Objects[i].Flush {
 					s.flushRx.Add(1)
 				}
@@ -402,8 +414,7 @@ func (s *Service) mainLoop() {
 				continue
 			}
 
-			idx := req.Objects[len(req.Objects)-1].Index
-			if err := s.fifo.Enqueue(&Event{Index: idx, Data: compressedData}); err != nil {
+			if err := s.fifo.Enqueue(&Event{Index: hiIdx, Data: compressedData}); err != nil {
 				s.logger.Printf("error writing batch to FIFO: %v", err)
 			}
 			req.Close()

@@ -2,6 +2,7 @@ package cdc
 
 import (
 	"expvar"
+	"fmt"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -159,6 +160,69 @@ func Test_ServiceSingleEvent_Flush(t *testing.T) {
 	testPoll(t, func() bool {
 		return svc.flushRx.Load() == 1
 	}, 1*time.Second)
+}
+
+func Test_ServiceSingleEvent_SnapshotSync(t *testing.T) {
+	ResetStats()
+
+	bodyCh := make(chan []byte, 1)
+	testSrv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		defer r.Body.Close()
+		b, _ := io.ReadAll(r.Body)
+		bodyCh <- b
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer testSrv.Close()
+
+	cl := &mockCluster{}
+
+	cfg := DefaultConfig()
+	cfg.Endpoint = testSrv.URL
+	cfg.MaxBatchSz = 10
+	cfg.MaxBatchDelay = 30 * time.Second
+	svc, err := NewService(
+		"node1",
+		t.TempDir(),
+		cl,
+		cfg,
+	)
+	if err != nil {
+		t.Fatalf("failed to create service: %v", err)
+	}
+	if err := svc.Start(); err != nil {
+		t.Fatalf("failed to start service: %v", err)
+	}
+	defer svc.Stop()
+
+	// Make it the leader.
+	cl.SetLeader(0)
+
+	// Send one dummy event to the service.
+	ev := &proto.CDCEvent{
+		Op:          proto.CDCEvent_INSERT,
+		Table:       "foo",
+		ColumnNames: []string{"id", "name"},
+		NewRowId:    2,
+	}
+	evs := &proto.CDCIndexedEventGroup{
+		Index:  66,
+		Events: []*proto.CDCEvent{ev},
+	}
+
+	// Send event, which will just sit there due to hight batching and timeout
+	// settings.
+	svc.C() <- evs
+
+	// Now request a sync which should cause the event to be written to the FIFO.
+	cl.RequestSnapshotSync(1 * time.Second)
+
+	idx, err := svc.fifo.HighestKey()
+	if err != nil {
+		t.Fatalf("failed to get FIFO highest key: %v", err)
+	}
+	if idx != evs.Index {
+		t.Fatalf("expected FIFO highest key to be %d, got %d", evs.Index, idx)
+	}
 }
 
 // Test_ServiceRestart_NoDupes tests that when a CDC service is restarted, it does not resend
@@ -795,6 +859,7 @@ type mockCluster struct {
 	mu             sync.Mutex
 	leaderChannels []chan<- bool
 	hwmChannels    []chan<- uint64
+	snapshotSyncCh chan<- chan struct{}
 	currentLeader  int // index of current leader, -1 if none
 }
 
@@ -811,7 +876,9 @@ func (tc *mockCluster) RegisterLeaderChange(ch chan<- bool) {
 }
 
 func (tc *mockCluster) RegisterSnapshotSync(ch chan<- chan struct{}) {
-	// Not implemented for this mock
+	tc.mu.Lock()
+	defer tc.mu.Unlock()
+	tc.snapshotSyncCh = ch
 }
 
 func (tc *mockCluster) RegisterHWMUpdate(ch chan<- uint64) {
@@ -850,6 +917,21 @@ func (tc *mockCluster) SetLeader(leaderIndex int) {
 			// Non-blocking send to avoid deadlocks
 		}
 	}
+}
+
+// RequestSnapshotSync requests a snapshot sync and waits for completion or timeout
+func (tc *mockCluster) RequestSnapshotSync(timeout time.Duration) error {
+	tc.mu.Lock()
+	defer tc.mu.Unlock()
+
+	respCh := make(chan struct{})
+	tc.snapshotSyncCh <- respCh
+	select {
+	case <-respCh:
+	case <-time.After(timeout):
+		return fmt.Errorf("timeout waiting for snapshot sync")
+	}
+	return nil
 }
 
 // BroadcastHWM sends HWM update to all registered channels
