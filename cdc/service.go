@@ -1,7 +1,6 @@
 package cdc
 
 import (
-	"bytes"
 	"crypto/tls"
 	"expvar"
 	"fmt"
@@ -16,7 +15,7 @@ import (
 	cdcjson "github.com/rqlite/rqlite/v8/cdc/json"
 	"github.com/rqlite/rqlite/v8/command/proto"
 	httpurl "github.com/rqlite/rqlite/v8/http/url"
-	"github.com/rqlite/rqlite/v8/internal/rarchive"
+	"github.com/rqlite/rqlite/v8/internal/rarchive/zlib"
 	"github.com/rqlite/rqlite/v8/internal/rsync"
 	"github.com/rqlite/rqlite/v8/queue"
 )
@@ -396,7 +395,7 @@ func (s *Service) mainLoop() {
 			}
 
 			// Compress the marshalled data before enqueuing to FIFO
-			compressedData, err := rarchive.CompressZlib(b)
+			compressedData, err := zlib.Compress(b)
 			if err != nil {
 				s.logger.Printf("error compressing batch for FIFO: %v", err)
 				continue
@@ -499,13 +498,14 @@ func (s *Service) leaderLoop() (chan struct{}, chan struct{}) {
 				}
 
 				// Decompress the data.
-				decompressedData, err := rarchive.DecompressZlib(ev.Data)
+				zreader, err := zlib.NewReader(ev.Data)
 				if err != nil {
-					s.logger.Printf("error decompressing batch from FIFO: %v", err)
+					s.logger.Printf("error creating zlib reader for batch from FIFO: %v", err)
 					continue
 				}
+				defer zreader.Close()
 
-				req, err := http.NewRequest("POST", s.endpoint, bytes.NewReader(decompressedData))
+				req, err := http.NewRequest("POST", s.endpoint, zreader)
 				if err != nil {
 					s.logger.Printf("error creating HTTP request for endpoint: %v", err)
 					continue
@@ -518,7 +518,12 @@ func (s *Service) leaderLoop() (chan struct{}, chan struct{}) {
 				for {
 					nAttempts++
 					if s.logOnly {
-						s.logger.Println(string(decompressedData))
+						d, err := zlib.Decompress(ev.Data)
+						if err != nil {
+							s.logger.Printf("error decompressing data for log output: %v", err)
+							break
+						}
+						s.logger.Println(string(d))
 						sentOK = true
 						break
 					}
@@ -543,6 +548,10 @@ func (s *Service) leaderLoop() (chan struct{}, chan struct{}) {
 					}
 					stats.Add(numRetries, 1)
 					s.endpointRetries.Add(1)
+					if err := zreader.Reset(ev.Data); err != nil {
+						s.logger.Printf("error resetting zlib reader for batch from FIFO: %v", err)
+						break
+					}
 					time.Sleep(retryDelay)
 				}
 				if sentOK {
