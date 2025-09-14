@@ -31,6 +31,7 @@
 - [PR #2319](https://github.com/rqlite/rqlite/pull/2319): CDC "before" and "after" now structured as maps.
 - [PR #2321](https://github.com/rqlite/rqlite/pull/2321): Add metrics to CDC Service.
 - [PR #2323](https://github.com/rqlite/rqlite/pull/2323), [PR #2324](https://github.com/rqlite/rqlite/pull/2324): Compress data before storing in FIFO.
+- [PR #2325](https://github.com/rqlite/rqlite/pull/2325): Fix event index selection when a Flush event is included.
 
 ## v8.43.4 (August 27th 2025)
 ### Implementation changes and bug fixes
@@ -55,7 +56,6 @@
 - [PR #2262](https://github.com/rqlite/rqlite/pull/2262): Remove redundant persisting HWM to disk.
 - [PR #2265](https://github.com/rqlite/rqlite/pull/2265): rqlite shell now uses Unified Endpoint.  Fixes issue [#257](https://github.com/rqlite/rqlite/issues/257).
 - [PR #2305](https://github.com/rqlite/rqlite/pull/2305): Move CDC event batching to before writes to BoltDB-backed FIFO.
-- [PR #2325](https://github.com/rqlite/rqlite/pull/2325): Fix event index selection when a Flush event is included.
 
 ## v8.43.3 (August 14th 2025)
 ### Implementation changes and bug fixes
