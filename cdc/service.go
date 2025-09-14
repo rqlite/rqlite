@@ -1,6 +1,7 @@
 package cdc
 
 import (
+	"bytes"
 	"crypto/tls"
 	"expvar"
 	"fmt"
@@ -497,14 +498,17 @@ func (s *Service) leaderLoop() (chan struct{}, chan struct{}) {
 					continue
 				}
 
-				zreader, err := zlib.NewReader(ev.Data)
+				// Decompress the data read from FIFO into a byte slice. We need to do this
+				// so the HTTP request can set Content-Length correctly. This makes it easier
+				// for servers to handle the request. Sure, it consumes some memory but
+				// CDC events are typically small and it makes downstream processing easier.
+				decompressed, err := zlib.Decompress(ev.Data)
 				if err != nil {
-					s.logger.Printf("error creating zlib reader for batch from FIFO: %v", err)
+					s.logger.Printf("error decompressing data for batch from FIFO: %v", err)
 					continue
 				}
-				defer zreader.Close()
 
-				req, err := http.NewRequest("POST", s.endpoint, zreader)
+				req, err := http.NewRequest("POST", s.endpoint, bytes.NewReader(decompressed))
 				if err != nil {
 					s.logger.Printf("error creating HTTP request for endpoint: %v", err)
 					continue
@@ -545,10 +549,6 @@ func (s *Service) leaderLoop() (chan struct{}, chan struct{}) {
 						if retryDelay > s.transmitMaxBackoff {
 							retryDelay = s.transmitMaxBackoff
 						}
-					}
-					if err := zreader.Reset(ev.Data); err != nil {
-						s.logger.Printf("error resetting zlib reader for batch from FIFO: %v", err)
-						break
 					}
 					stats.Add(numRetries, 1)
 					s.endpointRetries.Add(1)
