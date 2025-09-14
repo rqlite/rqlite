@@ -31,6 +31,23 @@ class TestSingleNode_CDC(unittest.TestCase):
 
     deprovision_node(n)
 
+  def test_multiple_events(self):
+    server = HTTPTestServer()
+    server.start()
+    url = server.url()
+
+    n = Node(RQLITED_PATH, '0', cdc_config=url)
+    n.start()
+    n.wait_for_leader()
+    j = n.execute('CREATE TABLE bar (id INTEGER NOT NULL PRIMARY KEY, name TEXT)')
+    self.assertEqual(j, d_("{'results': [{}]}"))
+    for i in range(500):
+      j = n.execute('INSERT INTO bar(name) VALUES("fiona")')
+
+    server.wait_message_count(500)
+
+    deprovision_node(n)
+
 class TestMultiNode_CDC(unittest.TestCase):
   def test_multi_node_events(self):
     '''Test that a 3-node cluster sends the right number of CDC events'''
