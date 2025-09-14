@@ -36,6 +36,7 @@ func Decompress(data []byte) ([]byte, error) {
 	return io.ReadAll(r)
 }
 
+// Reader performs zlib decompression.
 type Reader struct {
 	io.Reader
 }
@@ -49,6 +50,7 @@ func NewReader(data []byte) (*Reader, error) {
 	return &Reader{zr}, nil
 }
 
+// Close closes the reader.
 func (r *Reader) Close() error {
 	if closer, ok := r.Reader.(io.Closer); ok {
 		return closer.Close()
@@ -56,6 +58,7 @@ func (r *Reader) Close() error {
 	return nil
 }
 
+// Reset resets the reader with new data.
 func (r *Reader) Reset(data []byte) error {
 	if resetter, ok := r.Reader.(zlib.Resetter); ok {
 		return resetter.Reset(bytes.NewReader(data), nil)
