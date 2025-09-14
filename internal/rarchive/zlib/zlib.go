@@ -57,10 +57,8 @@ func (r *Reader) Close() error {
 }
 
 func (r *Reader) Reset(data []byte) error {
-	if resetter, ok := r.Reader.(interface {
-		Reset(io.Reader) error
-	}); ok {
-		return resetter.Reset(bytes.NewReader(data))
+	if resetter, ok := r.Reader.(zlib.Resetter); ok {
+		return resetter.Reset(bytes.NewReader(data), nil)
 	}
 	return nil
 }

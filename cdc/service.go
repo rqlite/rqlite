@@ -497,7 +497,6 @@ func (s *Service) leaderLoop() (chan struct{}, chan struct{}) {
 					continue
 				}
 
-				// Decompress the data.
 				zreader, err := zlib.NewReader(ev.Data)
 				if err != nil {
 					s.logger.Printf("error creating zlib reader for batch from FIFO: %v", err)
@@ -540,18 +539,19 @@ func (s *Service) leaderLoop() (chan struct{}, chan struct{}) {
 						break
 					}
 
+					// OK, need to prep for a retry.
 					if s.transmitRetryPolicy == ExponentialRetryPolicy {
 						retryDelay *= 2
 						if retryDelay > s.transmitMaxBackoff {
 							retryDelay = s.transmitMaxBackoff
 						}
 					}
-					stats.Add(numRetries, 1)
-					s.endpointRetries.Add(1)
 					if err := zreader.Reset(ev.Data); err != nil {
 						s.logger.Printf("error resetting zlib reader for batch from FIFO: %v", err)
 						break
 					}
+					stats.Add(numRetries, 1)
+					s.endpointRetries.Add(1)
 					time.Sleep(retryDelay)
 				}
 				if sentOK {
