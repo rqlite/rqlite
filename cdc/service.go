@@ -16,7 +16,7 @@ import (
 	cdcjson "github.com/rqlite/rqlite/v8/cdc/json"
 	"github.com/rqlite/rqlite/v8/command/proto"
 	httpurl "github.com/rqlite/rqlite/v8/http/url"
-	"github.com/rqlite/rqlite/v8/internal/rarchive/zlib"
+	"github.com/rqlite/rqlite/v8/internal/rarchive/flate"
 	"github.com/rqlite/rqlite/v8/internal/rsync"
 	"github.com/rqlite/rqlite/v8/queue"
 )
@@ -396,7 +396,7 @@ func (s *Service) mainLoop() {
 			}
 
 			// Compress the marshalled data before enqueuing to FIFO
-			compressedData, err := zlib.Compress(b)
+			compressedData, err := flate.Compress(b)
 			if err != nil {
 				s.logger.Printf("error compressing batch for FIFO: %v", err)
 				continue
@@ -502,7 +502,7 @@ func (s *Service) leaderLoop() (chan struct{}, chan struct{}) {
 				// so the HTTP request can set Content-Length correctly. This makes it easier
 				// for servers to handle the request. Sure, it consumes some memory but
 				// CDC events are typically small and it makes downstream processing easier.
-				decompressed, err := zlib.Decompress(ev.Data)
+				decompressed, err := flate.Decompress(ev.Data)
 				if err != nil {
 					s.logger.Printf("error decompressing data for batch from FIFO: %v", err)
 					continue
