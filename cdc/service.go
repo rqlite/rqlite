@@ -32,7 +32,9 @@ const (
 const (
 	numDroppedFailedToSend = "dropped_failed_to_send"
 	numRetries             = "retries"
-	numSent                = "sent_events"
+	numEventsTxOK          = "num_events_tx_ok"
+	numEventTxFailed       = "num_events_tx_failed"
+	numBytesTx             = "num_bytes_tx"
 	numSnapshotSync        = "snapshot_sync"
 	numBatcherWrites       = "batcher_writes"
 	numBatcherEventsWrite  = "batcher_events_write"
@@ -56,7 +58,9 @@ func ResetStats() {
 	stats.Init()
 	stats.Add(numDroppedFailedToSend, 0)
 	stats.Add(numRetries, 0)
-	stats.Add(numSent, 0)
+	stats.Add(numEventsTxOK, 0)
+	stats.Add(numEventTxFailed, 0)
+	stats.Add(numBytesTx, 0)
 	stats.Add(numSnapshotSync, 0)
 	stats.Add(numBatcherWrites, 0)
 	stats.Add(numBatcherEventsWrite, 0)
@@ -537,12 +541,15 @@ func (s *Service) leaderLoop() (chan struct{}, chan struct{}) {
 						break
 					}
 
+					stats.Add(numBytesTx, int64(len(decompressed)))
 					resp, err := s.httpClient.Do(req)
 					if err == nil && (resp.StatusCode == http.StatusOK || resp.StatusCode == http.StatusAccepted) {
 						resp.Body.Close()
 						sentOK = true
 						break
 					}
+					stats.Add(numEventTxFailed, 1)
+
 					if s.transmitMaxRetries != retryForever && nAttempts == s.transmitMaxRetries {
 						s.logger.Printf("failed to send request to endpoint after %d retries, last error: %v", nAttempts, err)
 						stats.Add(numDroppedFailedToSend, 1)
@@ -562,7 +569,7 @@ func (s *Service) leaderLoop() (chan struct{}, chan struct{}) {
 				}
 				if sentOK {
 					s.highWatermark.Store(ev.Index)
-					stats.Add(numSent, 1)
+					stats.Add(numEventsTxOK, 1)
 				}
 			}
 		}
