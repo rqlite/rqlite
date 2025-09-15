@@ -49,6 +49,7 @@ curl -G 'localhost:4001/db/query?pretty' --data-urlencode 'q=SELECT * FROM foo'
 - **Relational**: Full SQL support via SQLite, including [Full-text search](https://www.sqlite.org/fts5.html), [JSON support](https://www.sqlite.org/json1.html), and more.
 - **Extensible**: [Load SQLite extensions](https://rqlite.io/docs/guides/extensions/) to add capabilities like [Vector Search](https://github.com/asg017/sqlite-vec) and [Crypto](https://github.com/nalgeon/sqlean).
 - **Atomic Requests**: Execute multiple SQL statements atomically within a single API request.
+- **Change Data Capture**: [Stream changes](https://rqlite.io/docs/guides/cdc/) from the SQLite database to an external system.
 
 **Easy operations**
 - **Easy Deployment**: A single binary with no external dependencies. Up and running in seconds.
