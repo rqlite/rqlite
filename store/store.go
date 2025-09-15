@@ -2187,7 +2187,6 @@ func (s *Store) fsmApply(l *raft.Log) (e any) {
 	}()
 
 	if s.dbStale.Is() {
-		s.logger.Printf("deleting existing database file %s as node is now part of a cluster", s.dbPath)
 		// The SQLite file currently sitting underneath the Store starts in a state that
 		// may be from the last time the node ran. We do not delete that database until
 		// it's absolutely necessary so that NONE queries can succeed, even if the node
