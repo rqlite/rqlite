@@ -182,6 +182,39 @@ func Test_SingleNodeOnDiskSQLitePath(t *testing.T) {
 	}
 }
 
+func Test_SingleNodeDBStale(t *testing.T) {
+	s, ln, _ := mustNewStoreSQLitePath(t)
+	defer ln.Close()
+
+	if err := s.Open(); err != nil {
+		t.Fatalf("failed to open single-node store: %s", err.Error())
+	}
+	defer s.Close(true)
+	if !s.DBStale() {
+		t.Fatalf("DB should be stale immediately after open")
+	}
+
+	if err := s.Bootstrap(NewServer(s.ID(), s.Addr(), true)); err != nil {
+		t.Fatalf("failed to bootstrap single-node store: %s", err.Error())
+	}
+	if _, err := s.WaitForLeader(10 * time.Second); err != nil {
+		t.Fatalf("Error waiting for leader: %s", err)
+	}
+
+	// Execute a command, and ensure the database is no longer marked
+	// as statel
+	er := executeRequestFromStrings([]string{
+		`CREATE TABLE foo (id INTEGER NOT NULL PRIMARY KEY, name TEXT)`,
+	}, false, false)
+	_, _, err := s.Execute(er)
+	if err != nil {
+		t.Fatalf("failed to execute on single node: %s", err.Error())
+	}
+	if s.DBStale() {
+		t.Fatalf("DB should not be stale after a write")
+	}
+}
+
 func Test_SingleNodeDBAppliedIndex(t *testing.T) {
 	s, ln, _ := mustNewStoreSQLitePath(t)
 	defer ln.Close()

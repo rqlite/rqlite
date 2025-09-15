@@ -297,6 +297,10 @@ type Store struct {
 	dbDrv *sql.Driver      // The SQLite database driver.
 	db    *sql.SwappableDB // The underlying SQLite store.
 
+	// True if the database handle has not had any Raft-based changes applied yet.
+	// This allows us to serve reads even if Raft is not online yet.
+	dbStale rsync.AtomicBool
+
 	cdcMu         sync.RWMutex
 	cdcStreamer   *sql.CDCStreamer
 	cdcOutCh      chan<- *proto.CDCIndexedEventGroup
@@ -343,8 +347,6 @@ type Store struct {
 	raftStable    raft.StableStore          // Persistent k-v store.
 	boltStore     *rlog.Log                 // Physical store.
 	snapshotStore SnapshotStore             // Snapshot store.
-
-	dbDeleteNeeded rsync.AtomicBool
 
 	// Raft changes observer
 	leaderObserversMu sync.RWMutex
@@ -612,6 +614,7 @@ func (s *Store) Open() (retErr error) {
 	if err != nil {
 		return fmt.Errorf("failed to create on-disk database: %s", err)
 	}
+	s.dbStale.Set()
 
 	// Clean up any files from aborted operations. This tries to catch the case where scratch files
 	// were created in the Raft directory, not cleaned up, and then the node was restarted with an
@@ -1226,7 +1229,7 @@ func (s *Store) Stats() (map[string]any, error) {
 		"request_marshaler":      s.reqMarshaller.Stats(),
 		"nodes":                  nodes,
 		"dir":                    s.raftDir,
-		"db_delete_needed":       s.dbDeleteNeeded.Is(),
+		"db_stale":               s.dbStale.Is(),
 		"dir_size":               dirSz,
 		"dir_size_friendly":      friendlyBytes(uint64(dirSz)),
 		"sqlite3":                dbStatus,
@@ -1807,6 +1810,12 @@ func (s *Store) Database(leader bool) ([]byte, error) {
 	return s.db.Serialize()
 }
 
+// DBStale returns true if the underlying database has not been updated
+// by any Raft-related changes yet.
+func (s *Store) DBStale() bool {
+	return s.dbStale.Is()
+}
+
 // EnableCDC enables Change Data Capture on this Store. Events will be streamed
 // to the provided channel. It is the caller's responsibility to ensure that the
 // channel is read from, as the CDCStreamer will drop events if the channel is full.
@@ -2177,7 +2186,8 @@ func (s *Store) fsmApply(l *raft.Log) (e any) {
 		s.appendedAtTime.Store(l.AppendedAt)
 	}()
 
-	if s.dbDeleteNeeded.Is() {
+	if s.dbStale.Is() {
+		s.logger.Printf("deleting existing database file %s as node is now part of a cluster", s.dbPath)
 		// The SQLite file currently sitting underneath the Store starts in a state that
 		// may be from the last time the node ran. We do not delete that database until
 		// it's absolutely necessary so that NONE queries can succeed, even if the node
@@ -2189,7 +2199,7 @@ func (s *Store) fsmApply(l *raft.Log) (e any) {
 		if err != nil {
 			s.logger.Fatalf("failed to reopen database: %s", err)
 		}
-		s.dbDeleteNeeded.Unset()
+		s.dbStale.Unset()
 	}
 
 	if s.firstLogAppliedT.IsZero() {
@@ -2439,7 +2449,7 @@ func (s *Store) fsmRestore(rc io.ReadCloser) (retErr error) {
 		} else {
 			// A successful restore means the existing database file has been restored
 			// from Raft. Do not attempt to delete and recreate it on the next Apply().
-			s.dbDeleteNeeded.Unset()
+			s.dbStale.Unset()
 		}
 	}()
 	s.logger.Printf("initiating node restore on node ID %s", s.raftID)
