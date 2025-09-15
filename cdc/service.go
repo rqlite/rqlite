@@ -224,8 +224,11 @@ func NewService(nodeID, dir string, clstr Cluster, cfg *Config) (*Service, error
 	if err := os.MkdirAll(srv.dir, 0o755); err != nil {
 		return nil, fmt.Errorf("failed to create CDC service directory: %w", err)
 	}
-	if err := os.Rename(filepath.Join(dir, cdcDB), filepath.Join(srv.dir, cdcDB)); err != nil && !os.IsNotExist(err) {
-		return nil, fmt.Errorf("failed to move existing FIFO DB to CDC service directory: %w", err)
+	cdcDB90Path := filepath.Join(dir, cdcDB)
+	if fileExists(cdcDB90Path) {
+		if err := os.Rename(cdcDB90Path, filepath.Join(srv.dir, cdcDB)); err != nil {
+			return nil, fmt.Errorf("failed to move existing FIFO DB to CDC service directory: %w", err)
+		}
 	}
 
 	fifo, err := NewQueue(filepath.Join(srv.dir, cdcDB))
@@ -661,4 +664,9 @@ func (s *Service) followerLoop() (chan struct{}, chan struct{}) {
 	}()
 
 	return stop, done
+}
+
+func fileExists(path string) bool {
+	_, err := os.Stat(path)
+	return err == nil
 }
