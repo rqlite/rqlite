@@ -2194,6 +2194,12 @@ func (s *Store) fsmApply(l *raft.Log) (e any) {
 		// that the node is part of a cluster, so we must delete the existing database
 		// file and let it be rebuilt from the Raft log.
 		var err error
+		if s.db != nil {
+			if err := s.db.Close(); err != nil {
+				s.logger.Fatalf("failed to close stale database: %s", err)
+			}
+			s.db = nil
+		}
 		s.db, err = openOnDisk(s.dbPath, s.dbDrv, s.dbConf.FKConstraints, true)
 		if err != nil {
 			s.logger.Fatalf("failed to reopen database: %s", err)
