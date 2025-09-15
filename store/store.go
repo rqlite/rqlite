@@ -1226,6 +1226,7 @@ func (s *Store) Stats() (map[string]any, error) {
 		"request_marshaler":      s.reqMarshaller.Stats(),
 		"nodes":                  nodes,
 		"dir":                    s.raftDir,
+		"db_delete_needed":       s.dbDeleteNeeded.Is(),
 		"dir_size":               dirSz,
 		"dir_size_friendly":      friendlyBytes(uint64(dirSz)),
 		"sqlite3":                dbStatus,
