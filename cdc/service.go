@@ -531,7 +531,7 @@ func (s *Service) leaderLoop() (chan struct{}, chan struct{}) {
 				for {
 					nAttempts++
 					if s.endpoint == "stdout" {
-						fmt.Print(string(decompressed))
+						fmt.Println(string(decompressed))
 						sentOK = true
 						break
 					}
