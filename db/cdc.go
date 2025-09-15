@@ -89,7 +89,7 @@ func (s *CDCStreamer) CommitHook() bool {
 		ev.ColumnNames = colNamesCache[ev.Table]
 	}
 
-	s.pending.CommitTimestamp = time.Now().UnixNano()
+	s.pending.CommitTimestamp = time.Now().UnixMilli()
 	select {
 	case s.out <- s.pending:
 	default:
