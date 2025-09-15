@@ -1,4 +1,9 @@
-## v9.0.0 (unreleased)
+## v9.0.0 (September 15th 2025)
+This release introduces Change Data Capture (CDC). When CDC is enabled any changes to the underlying SQLite database are streamed to a HTTP endpoint. Check out the [announcement blog post](https://philipotoole.com/rqlite-9-0-real-time-change-data-capture-for-distributed-sqlite/) for more details.
+
+**Upgrading from the 8.x release**
+Upgrading from the 8.x series is seamless. It is highly recommended that you upgrade to 8.43.4 first, and backup your cluster before upgrading. When ready simply upgrade and restart the node. Rolling upgrades are also supported. You can also downgrade back to an 8.x release if needed.
+
 ### New features
 - [PR #2275](https://github.com/rqlite/rqlite/pull/2275): Enable Change-Data-Capture.
 
