@@ -193,7 +193,7 @@ func NewService(nodeID, dir string, clstr Cluster, cfg *Config) (*Service, error
 	srv := &Service{
 		serviceID:             cfg.ServiceID,
 		nodeID:                nodeID,
-		dir:                   dir,
+		dir:                   filepath.Join(dir, "cdc"),
 		clstr:                 clstr,
 		in:                    make(chan *proto.CDCIndexedEventGroup, inChanLen),
 		endpoint:              cfg.Endpoint,
@@ -220,7 +220,18 @@ func NewService(nodeID, dir string, clstr Cluster, cfg *Config) (*Service, error
 		srv.transmitMaxRetries = *cfg.TransmitMaxRetries
 	}
 
-	fifo, err := NewQueue(filepath.Join(dir, cdcDB))
+	// Ensure the CDC directory exists, and move any existing FIFO DB to its correct location.
+	if err := os.MkdirAll(srv.dir, 0o755); err != nil {
+		return nil, fmt.Errorf("failed to create CDC service directory: %w", err)
+	}
+	cdcDB90Path := filepath.Join(dir, cdcDB)
+	if fileExists(cdcDB90Path) {
+		if err := os.Rename(cdcDB90Path, filepath.Join(srv.dir, cdcDB)); err != nil {
+			return nil, fmt.Errorf("failed to move existing FIFO DB to CDC service directory: %w", err)
+		}
+	}
+
+	fifo, err := NewQueue(filepath.Join(srv.dir, cdcDB))
 	if err != nil {
 		return nil, err
 	}
@@ -653,4 +664,9 @@ func (s *Service) followerLoop() (chan struct{}, chan struct{}) {
 	}()
 
 	return stop, done
+}
+
+func fileExists(path string) bool {
+	_, err := os.Stat(path)
+	return err == nil
 }
