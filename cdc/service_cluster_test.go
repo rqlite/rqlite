@@ -7,9 +7,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/rqlite/rqlite/v8/cdc/cdctest"
-	"github.com/rqlite/rqlite/v8/command/proto"
-	"github.com/rqlite/rqlite/v8/internal/random"
+	"github.com/rqlite/rqlite/v9/cdc/cdctest"
+	"github.com/rqlite/rqlite/v9/command/proto"
+	"github.com/rqlite/rqlite/v9/internal/random"
 )
 
 // Test_ClusterBasicDelivery tests that only the leader sends events to HTTP endpoint

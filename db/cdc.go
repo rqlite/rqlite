@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"time"
 
-	command "github.com/rqlite/rqlite/v8/command/proto"
+	command "github.com/rqlite/rqlite/v9/command/proto"
 )
 
 // ColumnsNameProvider provides column names for a given table.

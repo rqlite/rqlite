@@ -6,8 +6,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/rqlite/rqlite/v8/cluster/proto"
-	"github.com/rqlite/rqlite/v8/cluster/servicetest"
+	"github.com/rqlite/rqlite/v9/cluster/proto"
+	"github.com/rqlite/rqlite/v9/cluster/servicetest"
 	pb "google.golang.org/protobuf/proto"
 )
 

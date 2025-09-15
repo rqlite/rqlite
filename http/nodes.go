@@ -8,7 +8,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/rqlite/rqlite/v8/store"
+	"github.com/rqlite/rqlite/v9/store"
 )
 
 // Node represents a single node in the cluster and can include

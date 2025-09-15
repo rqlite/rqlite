@@ -3,7 +3,7 @@ package command
 import (
 	"bytes"
 
-	"github.com/rqlite/rqlite/v8/command/proto"
+	"github.com/rqlite/rqlite/v9/command/proto"
 )
 
 // CDCValueEqual returns true if two CDCValue objects are equal.

@@ -16,12 +16,12 @@ import (
 	"testing"
 	"time"
 
-	"github.com/rqlite/rqlite/v8/cluster"
-	"github.com/rqlite/rqlite/v8/http"
-	httpd "github.com/rqlite/rqlite/v8/http"
-	"github.com/rqlite/rqlite/v8/internal/random"
-	"github.com/rqlite/rqlite/v8/store"
-	"github.com/rqlite/rqlite/v8/tcp"
+	"github.com/rqlite/rqlite/v9/cluster"
+	"github.com/rqlite/rqlite/v9/http"
+	httpd "github.com/rqlite/rqlite/v9/http"
+	"github.com/rqlite/rqlite/v9/internal/random"
+	"github.com/rqlite/rqlite/v9/store"
+	"github.com/rqlite/rqlite/v9/tcp"
 )
 
 func Test_SingleNodeBasicEndpoint(t *testing.T) {

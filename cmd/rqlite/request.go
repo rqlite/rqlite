@@ -10,7 +10,7 @@ import (
 
 	"github.com/mkideal/cli"
 	"github.com/mkideal/pkg/textutil"
-	cl "github.com/rqlite/rqlite/v8/cmd/rqlite/http"
+	cl "github.com/rqlite/rqlite/v9/cmd/rqlite/http"
 )
 
 // Result represents execute result. It is possible that an execute result

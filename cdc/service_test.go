@@ -11,8 +11,8 @@ import (
 	"testing"
 	"time"
 
-	cdcjson "github.com/rqlite/rqlite/v8/cdc/json"
-	"github.com/rqlite/rqlite/v8/command/proto"
+	cdcjson "github.com/rqlite/rqlite/v9/cdc/json"
+	"github.com/rqlite/rqlite/v9/command/proto"
 )
 
 func Test_ServiceSingleEvent(t *testing.T) {

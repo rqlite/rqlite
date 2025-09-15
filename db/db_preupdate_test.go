@@ -8,8 +8,8 @@ import (
 	"sync/atomic"
 	"testing"
 
-	"github.com/rqlite/rqlite/v8/command"
-	"github.com/rqlite/rqlite/v8/command/proto"
+	"github.com/rqlite/rqlite/v9/command"
+	"github.com/rqlite/rqlite/v9/command/proto"
 )
 
 // Test_Preupdate_Basic tests the basic functionality of the preupdate hook, ensuring

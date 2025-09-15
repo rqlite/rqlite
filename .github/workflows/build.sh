@@ -37,7 +37,7 @@ buildtime=`date +%Y-%m-%dT%T%z`
 
 # Prepare linker flags
 STRIP_SYMBOLS="-w -s"
-LINKER_PKG_PATH=github.com/rqlite/rqlite/v8/cmd
+LINKER_PKG_PATH=github.com/rqlite/rqlite/v9/cmd
 
 declare -A archs
 archs=(

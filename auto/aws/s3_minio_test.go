@@ -6,7 +6,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/rqlite/rqlite/v8/internal/random"
+	"github.com/rqlite/rqlite/v9/internal/random"
 )
 
 func Test_S3Client_MinioUpload(t *testing.T) {

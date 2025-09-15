@@ -11,9 +11,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/rqlite/rqlite/v8/cluster/proto"
-	"github.com/rqlite/rqlite/v8/command/encoding"
-	command "github.com/rqlite/rqlite/v8/command/proto"
+	"github.com/rqlite/rqlite/v9/cluster/proto"
+	"github.com/rqlite/rqlite/v9/command/encoding"
+	command "github.com/rqlite/rqlite/v9/command/proto"
 )
 
 const shortWait = 1 * time.Second

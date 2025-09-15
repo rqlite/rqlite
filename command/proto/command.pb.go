@@ -2234,7 +2234,7 @@ const file_command_proto_rawDesc = "" +
 	"\n" +
 	"\x06DELETE\x10\x03\"0\n" +
 	"\x16AppendEntriesExtension\x12\x16\n" +
-	"\x06cdcHWM\x18\x01 \x01(\x04R\x06cdcHWMB+Z)github.com/rqlite/rqlite/v8/command/protob\x06proto3"
+	"\x06cdcHWM\x18\x01 \x01(\x04R\x06cdcHWMB+Z)github.com/rqlite/rqlite/v9/command/protob\x06proto3"
 
 var (
 	file_command_proto_rawDescOnce sync.Once

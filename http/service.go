@@ -21,15 +21,15 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/rqlite/rqlite/v8/auth"
-	clstrPB "github.com/rqlite/rqlite/v8/cluster/proto"
-	"github.com/rqlite/rqlite/v8/command/encoding"
-	command "github.com/rqlite/rqlite/v8/command/proto"
-	"github.com/rqlite/rqlite/v8/command/sql"
-	"github.com/rqlite/rqlite/v8/db"
-	"github.com/rqlite/rqlite/v8/internal/rtls"
-	"github.com/rqlite/rqlite/v8/queue"
-	"github.com/rqlite/rqlite/v8/store"
+	"github.com/rqlite/rqlite/v9/auth"
+	clstrPB "github.com/rqlite/rqlite/v9/cluster/proto"
+	"github.com/rqlite/rqlite/v9/command/encoding"
+	command "github.com/rqlite/rqlite/v9/command/proto"
+	"github.com/rqlite/rqlite/v9/command/sql"
+	"github.com/rqlite/rqlite/v9/db"
+	"github.com/rqlite/rqlite/v9/internal/rtls"
+	"github.com/rqlite/rqlite/v9/queue"
+	"github.com/rqlite/rqlite/v9/store"
 )
 
 var (

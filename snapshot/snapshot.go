@@ -7,7 +7,7 @@ import (
 	"time"
 
 	"github.com/hashicorp/raft"
-	"github.com/rqlite/rqlite/v8/internal/progress"
+	"github.com/rqlite/rqlite/v9/internal/progress"
 )
 
 // Snapshot represents a snapshot of the database state.

@@ -6,8 +6,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/rqlite/rqlite/v8/cdc"
-	"github.com/rqlite/rqlite/v8/cdc/cdctest"
+	"github.com/rqlite/rqlite/v9/cdc"
+	"github.com/rqlite/rqlite/v9/cdc/cdctest"
 )
 
 func Test_CDC_SingleNode(t *testing.T) {

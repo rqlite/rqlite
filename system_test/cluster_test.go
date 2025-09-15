@@ -11,12 +11,12 @@ import (
 	"testing"
 	"time"
 
-	"github.com/rqlite/rqlite/v8/cluster"
-	"github.com/rqlite/rqlite/v8/db"
-	"github.com/rqlite/rqlite/v8/http"
-	"github.com/rqlite/rqlite/v8/queue"
-	"github.com/rqlite/rqlite/v8/store"
-	"github.com/rqlite/rqlite/v8/tcp"
+	"github.com/rqlite/rqlite/v9/cluster"
+	"github.com/rqlite/rqlite/v9/db"
+	"github.com/rqlite/rqlite/v9/http"
+	"github.com/rqlite/rqlite/v9/queue"
+	"github.com/rqlite/rqlite/v9/store"
+	"github.com/rqlite/rqlite/v9/tcp"
 )
 
 // Test_JoinLeaderNode tests a join operation between a leader and a new node.

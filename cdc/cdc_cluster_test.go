@@ -3,8 +3,8 @@ package cdc
 import (
 	"testing"
 
-	"github.com/rqlite/rqlite/v8/cluster"
-	"github.com/rqlite/rqlite/v8/store"
+	"github.com/rqlite/rqlite/v9/cluster"
+	"github.com/rqlite/rqlite/v9/store"
 )
 
 func Test_NewCDCCluster(t *testing.T) {

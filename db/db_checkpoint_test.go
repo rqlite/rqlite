@@ -7,7 +7,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/rqlite/rqlite/v8/db/wal"
+	"github.com/rqlite/rqlite/v9/db/wal"
 )
 
 // Test_WALDatabaseCheckpointOKNoWrites tests that a checkpoint succeeds

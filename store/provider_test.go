@@ -5,8 +5,8 @@ import (
 	"testing"
 	"time"
 
-	command "github.com/rqlite/rqlite/v8/command/proto"
-	"github.com/rqlite/rqlite/v8/internal/rarchive"
+	command "github.com/rqlite/rqlite/v9/command/proto"
+	"github.com/rqlite/rqlite/v9/internal/rarchive"
 )
 
 func test_SingleNodeProvide(t *testing.T, vacuum, compress bool) {

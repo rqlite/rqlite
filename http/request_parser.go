@@ -6,8 +6,8 @@ import (
 	"fmt"
 	"io"
 
-	command "github.com/rqlite/rqlite/v8/command/proto"
-	"github.com/rqlite/rqlite/v8/db"
+	command "github.com/rqlite/rqlite/v9/command/proto"
+	"github.com/rqlite/rqlite/v9/db"
 )
 
 var (
