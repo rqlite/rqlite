@@ -168,7 +168,7 @@ func Test_ServiceSingleEvent_SnapshotSync(t *testing.T) {
 	cl := &mockCluster{}
 
 	cfg := DefaultConfig()
-	cfg.LogOnly = true // Use log-only mode to avoid HTTP complexity
+	cfg.Endpoint = "stdout" // Use stdout mode to avoid HTTP complexity
 	cfg.MaxBatchSz = 10
 	cfg.MaxBatchDelay = 30 * time.Second
 	svc, err := NewService(
@@ -330,7 +330,7 @@ func Test_ServiceRestart_NoDupes(t *testing.T) {
 	}, 2*time.Second)
 }
 
-func Test_ServiceSingleEvent_LogOnly(t *testing.T) {
+func Test_ServiceSingleEvent_Stdout(t *testing.T) {
 	ResetStats()
 
 	cl := &mockCluster{}
@@ -338,7 +338,7 @@ func Test_ServiceSingleEvent_LogOnly(t *testing.T) {
 	cfg := DefaultConfig()
 	cfg.MaxBatchSz = 1
 	cfg.MaxBatchDelay = 50 * time.Millisecond
-	cfg.LogOnly = true
+	cfg.Endpoint = "stdout"
 	svc, err := NewService(
 		"node1",
 		t.TempDir(),
@@ -717,7 +717,7 @@ func Test_ServiceHWMUpdate_Leader(t *testing.T) {
 	cfg := DefaultConfig()
 	cfg.MaxBatchSz = 1
 	cfg.MaxBatchDelay = 50 * time.Millisecond
-	cfg.LogOnly = true // Use log-only mode to avoid HTTP complexity
+	cfg.Endpoint = "stdout" // Use stdout mode to avoid HTTP complexity
 	svc, err := NewService(
 		"node1",
 		t.TempDir(),
@@ -792,7 +792,7 @@ func Test_ServiceHWMUpdate_Follow(t *testing.T) {
 	cfg := DefaultConfig()
 	cfg.MaxBatchSz = 1
 	cfg.MaxBatchDelay = 50 * time.Millisecond
-	cfg.LogOnly = true // Use log-only mode to avoid HTTP complexity
+	cfg.Endpoint = "stdout" // Use stdout mode to avoid HTTP complexity
 	svc, err := NewService(
 		"node1",
 		t.TempDir(),

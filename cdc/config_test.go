@@ -46,13 +46,34 @@ func Test_NewConfig_ValidURL(t *testing.T) {
 	}
 }
 
+func Test_NewConfig_Stdout(t *testing.T) {
+	config, err := NewConfig("stdout")
+	if err != nil {
+		t.Fatalf("NewConfig returned unexpected error for 'stdout': %v", err)
+	}
+	if config == nil {
+		t.Fatal("NewConfig returned nil config for 'stdout'")
+	}
+	if config.Endpoint != "stdout" {
+		t.Fatalf("Expected endpoint 'stdout', got %q", config.Endpoint)
+	}
+
+	// Verify other fields have default values
+	defConfig := DefaultConfig()
+	if got, exp := config.MaxBatchSz, defConfig.MaxBatchSz; got != exp {
+		t.Fatalf("Expected MaxBatchSz %d, got %d", exp, got)
+	}
+	if config.MaxBatchDelay != DefaultMaxBatchDelay {
+		t.Fatalf("Expected MaxBatchDelay %v, got %v", DefaultMaxBatchDelay, config.MaxBatchDelay)
+	}
+}
+
 func Test_NewConfig_InvalidURL_ValidFile(t *testing.T) {
 	// Create a temporary directory for test files
 	tempDir := t.TempDir()
 
 	// Create a test config
 	testConfig := &Config{
-		LogOnly:               true,
 		Endpoint:              "https://test.example.com/cdc",
 		MaxBatchSz:            50,
 		MaxBatchDelay:         5 * time.Second,
@@ -86,9 +107,6 @@ func Test_NewConfig_InvalidURL_ValidFile(t *testing.T) {
 	}
 
 	// Verify all fields match
-	if config.LogOnly != testConfig.LogOnly {
-		t.Fatalf("Expected LogOnly %v, got %v", testConfig.LogOnly, config.LogOnly)
-	}
 	if config.Endpoint != testConfig.Endpoint {
 		t.Fatalf("Expected Endpoint %q, got %q", testConfig.Endpoint, config.Endpoint)
 	}
@@ -192,9 +210,6 @@ func Test_NewConfig_PartialConfig(t *testing.T) {
 	}
 
 	// Verify unspecified fields have zero values
-	if config.LogOnly != false {
-		t.Fatalf("Expected LogOnly to be false (zero value), got %v", config.LogOnly)
-	}
 	if config.MaxBatchDelay != DefaultMaxBatchDelay {
 		t.Fatalf("Expected MaxBatchDelay to be %v, got %v", DefaultMaxBatchDelay, config.MaxBatchDelay)
 	}

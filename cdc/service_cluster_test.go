@@ -133,7 +133,7 @@ func Test_ClusterSimpleHWM(t *testing.T) {
 	cfg := DefaultConfig()
 	cfg.MaxBatchSz = 1
 	cfg.MaxBatchDelay = 50 * time.Millisecond
-	cfg.LogOnly = true // Use log-only mode to avoid HTTP complexity
+	cfg.Endpoint = "stdout" // Use stdout mode to avoid HTTP complexity
 	cfg.HighWatermarkInterval = 100 * time.Millisecond
 
 	svc, err := NewService(
