@@ -344,6 +344,8 @@ type Store struct {
 	boltStore     *rlog.Log                 // Physical store.
 	snapshotStore SnapshotStore             // Snapshot store.
 
+	dbDeleteNeeded rsync.AtomicBool
+
 	// Raft changes observer
 	leaderObserversMu sync.RWMutex
 	leaderObservers   []chan<- bool
@@ -606,7 +608,7 @@ func (s *Store) Open() (retErr error) {
 			s.dbConf.Extensions, sql.CnkOnCloseModeDisabled)
 	}
 
-	s.db, err = openOnDisk(s.dbPath, s.dbDrv, s.dbConf.FKConstraints)
+	s.db, err = openOnDisk(s.dbPath, s.dbDrv, s.dbConf.FKConstraints, false)
 	if err != nil {
 		return fmt.Errorf("failed to create on-disk database: %s", err)
 	}
@@ -2174,6 +2176,21 @@ func (s *Store) fsmApply(l *raft.Log) (e any) {
 		s.appendedAtTime.Store(l.AppendedAt)
 	}()
 
+	if s.dbDeleteNeeded.Is() {
+		// The SQLite file currently sitting underneath the Store starts in a state that
+		// may be from the last time the node ran. We do not delete that database until
+		// it's absolutely necessary so that NONE queries can succeed, even if the node
+		// is not part of a cluster. But now we're about to apply a log entry, so we know
+		// that the node is part of a cluster, so we must delete the existing database
+		// file and let it be rebuilt from the Raft log.
+		var err error
+		s.db, err = openOnDisk(s.dbPath, s.dbDrv, s.dbConf.FKConstraints, true)
+		if err != nil {
+			s.logger.Fatalf("failed to reopen database: %s", err)
+		}
+		s.dbDeleteNeeded.Unset()
+	}
+
 	if s.firstLogAppliedT.IsZero() {
 		s.firstLogAppliedT = time.Now()
 		s.logger.Printf("first log applied since node start, log at index %d", l.Index)
@@ -2418,6 +2435,10 @@ func (s *Store) fsmRestore(rc io.ReadCloser) (retErr error) {
 	defer func() {
 		if retErr != nil {
 			stats.Add(numRestoresFailed, 1)
+		} else {
+			// A successful restore means the existing database file has been restored
+			// from Raft. Do not attempt to delete and recreate it on the next Apply().
+			s.dbDeleteNeeded.Unset()
 		}
 	}()
 	s.logger.Printf("initiating node restore on node ID %s", s.raftID)
@@ -2760,9 +2781,11 @@ func (s *Store) logBackup() bool {
 }
 
 // openOnDisk opens an on-disk database file at the configured path.
-func openOnDisk(path string, drv *sql.Driver, fkConstraints bool) (*sql.SwappableDB, error) {
-	if err := sql.RemoveFiles(path); err != nil {
-		return nil, err
+func openOnDisk(path string, drv *sql.Driver, fkConstraints, deleteFirst bool) (*sql.SwappableDB, error) {
+	if deleteFirst {
+		if err := sql.RemoveFiles(path); err != nil {
+			return nil, err
+		}
 	}
 	return sql.OpenSwappable(path, drv, fkConstraints, true)
 }
