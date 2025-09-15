@@ -1,6 +1,7 @@
 ## v9.0.1 (September 15th 2025)
 ### Implementation changes and bug fixes
 - [PR #2328](https://github.com/rqlite/rqlite/pull/2328): Store CDC database in dedicated directory.
+- [PR #2329](https://github.com/rqlite/rqlite/pull/2329): Switch go mod to version v9.
 
 ## v9.0.0 (September 15th 2025)
 This release introduces Change Data Capture (CDC). When CDC is enabled any changes to the underlying SQLite database are streamed to a HTTP endpoint. Check out the [announcement blog post](https://philipotoole.com/rqlite-9-0-real-time-change-data-capture-for-distributed-sqlite/) for more details.
