@@ -328,6 +328,95 @@ func Test_MultiNodeSimple(t *testing.T) {
 	testFn2(t, s1)
 }
 
+// Test_MultiNode_RestartNoQuorum tests that a node can serve NONE level queries
+// on start-up even if not a member of the cluster.
+func Test_MultiNode_RestartNoQuorum(t *testing.T) {
+	s0, ln := mustNewStore(t)
+	defer ln.Close()
+
+	if err := s0.Open(); err != nil {
+		t.Fatalf("failed to open single-node store: %s", err.Error())
+	}
+	defer s0.Close(true)
+	if err := s0.Bootstrap(NewServer(s0.ID(), s0.Addr(), true)); err != nil {
+		t.Fatalf("failed to bootstrap single-node store: %s", err.Error())
+	}
+	if _, err := s0.WaitForLeader(10 * time.Second); err != nil {
+		t.Fatalf("Error waiting for leader: %s", err)
+	}
+
+	s1, ln1 := mustNewStore(t)
+	defer ln1.Close()
+
+	if err := s1.Open(); err != nil {
+		t.Fatalf("failed to open single-node store: %s", err.Error())
+	}
+	defer s1.Close(true)
+
+	if err := s0.Join(joinRequest(s1.ID(), s1.Addr(), true)); err != nil {
+		t.Fatalf("failed to join single-node store: %s", err.Error())
+	}
+	if _, err := s1.WaitForLeader(10 * time.Second); err != nil {
+		t.Fatalf("Error waiting for leader: %s", err)
+	}
+
+	// Write some data.
+	er := executeRequestFromStrings([]string{
+		`CREATE TABLE foo (id INTEGER NOT NULL PRIMARY KEY, name TEXT)`,
+		`INSERT INTO foo(id, name) VALUES(1, "fiona")`,
+	}, false, false)
+	_, _, err := s0.Execute(er)
+	if err != nil {
+		t.Fatalf("failed to execute on single node: %s", err.Error())
+	}
+	if _, err := s0.WaitForAppliedFSM(5 * time.Second); err != nil {
+		t.Fatalf("failed to wait for FSM to apply on leader")
+	}
+	if _, err := s1.WaitForAppliedFSM(5 * time.Second); err != nil {
+		t.Fatalf("failed to wait for FSM to apply on follower")
+	}
+
+	// Now, do a NONE consistency query on each node, to actually confirm the data
+	// has been replicated.
+	testFn1 := func(t *testing.T, s *Store) {
+		t.Helper()
+		qr := queryRequestFromString("SELECT * FROM foo", false, false)
+		qr.Level = proto.QueryRequest_QUERY_REQUEST_LEVEL_NONE
+		r, _, err := s.Query(qr)
+		if err != nil {
+			t.Fatalf("failed to query single node: %s", err.Error())
+		}
+		if exp, got := `[{"columns":["id","name"],"types":["integer","text"],"values":[[1,"fiona"]]}]`, asJSON(r); exp != got {
+			t.Fatalf("unexpected results for query\nexp: %s\ngot: %s", exp, got)
+		}
+	}
+	testFn1(t, s0)
+	testFn1(t, s1)
+
+	// Now close both nodes.
+	if err := s0.Close(false); err != nil {
+		t.Fatalf("failed to close node 0: %s", err.Error())
+	}
+	if err := s1.Close(false); err != nil {
+		t.Fatalf("failed to close node 1: %s", err.Error())
+	}
+
+	// Reopen the first one and confirm NONE queries still work
+	// even though it's not connected to the cluster.
+	if err := s0.Open(); err != nil {
+		t.Fatalf("failed to reopen node 0: %s", err.Error())
+	}
+	testFn1(t, s0)
+
+	// A Weak query should fail due to no leader.
+	qr := queryRequestFromString("SELECT * FROM foo", false, false)
+	qr.Level = proto.QueryRequest_QUERY_REQUEST_LEVEL_WEAK
+	_, _, err = s0.Query(qr)
+	if err == nil {
+		t.Fatalf("expected error from non-NONE query without quorum")
+	}
+}
+
 // Test_MultiNodeNode_CommitIndexes tests that the commit indexes are
 // correctly updated as nodes join and leave the cluster, and as
 // commands are committed through the Raft log.

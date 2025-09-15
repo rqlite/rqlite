@@ -1,3 +1,7 @@
+## v9.0.2 (unreleased)
+### Implementation changes and bug fixes
+- [PR #2330](https://github.com/rqlite/rqlite/pull/2330): Support _None_ Read Consistency queries on restart even if node not in cluster.
+
 ## v9.0.1 (September 15th 2025)
 ### Implementation changes and bug fixes
 - [PR #2328](https://github.com/rqlite/rqlite/pull/2328): Store CDC database in dedicated directory.

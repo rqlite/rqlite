@@ -297,6 +297,10 @@ type Store struct {
 	dbDrv *sql.Driver      // The SQLite database driver.
 	db    *sql.SwappableDB // The underlying SQLite store.
 
+	// True if the database handle has not had any Raft-based changes applied yet.
+	// This allows us to serve reads even if Raft is not online yet.
+	dbStale rsync.AtomicBool
+
 	cdcMu         sync.RWMutex
 	cdcStreamer   *sql.CDCStreamer
 	cdcOutCh      chan<- *proto.CDCIndexedEventGroup
@@ -606,10 +610,11 @@ func (s *Store) Open() (retErr error) {
 			s.dbConf.Extensions, sql.CnkOnCloseModeDisabled)
 	}
 
-	s.db, err = openOnDisk(s.dbPath, s.dbDrv, s.dbConf.FKConstraints)
+	s.db, err = openOnDisk(s.dbPath, s.dbDrv, s.dbConf.FKConstraints, false)
 	if err != nil {
 		return fmt.Errorf("failed to create on-disk database: %s", err)
 	}
+	s.dbStale.Set()
 
 	// Clean up any files from aborted operations. This tries to catch the case where scratch files
 	// were created in the Raft directory, not cleaned up, and then the node was restarted with an
@@ -1224,6 +1229,7 @@ func (s *Store) Stats() (map[string]any, error) {
 		"request_marshaler":      s.reqMarshaller.Stats(),
 		"nodes":                  nodes,
 		"dir":                    s.raftDir,
+		"db_stale":               s.dbStale.Is(),
 		"dir_size":               dirSz,
 		"dir_size_friendly":      friendlyBytes(uint64(dirSz)),
 		"sqlite3":                dbStatus,
@@ -1804,6 +1810,12 @@ func (s *Store) Database(leader bool) ([]byte, error) {
 	return s.db.Serialize()
 }
 
+// DBStale returns true if the underlying database has not been updated
+// by any Raft-related changes yet.
+func (s *Store) DBStale() bool {
+	return s.dbStale.Is()
+}
+
 // EnableCDC enables Change Data Capture on this Store. Events will be streamed
 // to the provided channel. It is the caller's responsibility to ensure that the
 // channel is read from, as the CDCStreamer will drop events if the channel is full.
@@ -2174,6 +2186,27 @@ func (s *Store) fsmApply(l *raft.Log) (e any) {
 		s.appendedAtTime.Store(l.AppendedAt)
 	}()
 
+	if s.dbStale.Is() {
+		// The SQLite file currently sitting underneath the Store starts in a state that
+		// may be from the last time the node ran. We do not delete that database until
+		// it's absolutely necessary so that NONE queries can succeed, even if the node
+		// is not part of a cluster. But now we're about to apply a log entry, so we know
+		// that the node is part of a cluster, so we must delete the existing database
+		// file and let it be rebuilt from the Raft log.
+		var err error
+		if s.db != nil {
+			if err := s.db.Close(); err != nil {
+				s.logger.Fatalf("failed to close stale database: %s", err)
+			}
+			s.db = nil
+		}
+		s.db, err = openOnDisk(s.dbPath, s.dbDrv, s.dbConf.FKConstraints, true)
+		if err != nil {
+			s.logger.Fatalf("failed to reopen database: %s", err)
+		}
+		s.dbStale.Unset()
+	}
+
 	if s.firstLogAppliedT.IsZero() {
 		s.firstLogAppliedT = time.Now()
 		s.logger.Printf("first log applied since node start, log at index %d", l.Index)
@@ -2418,6 +2451,10 @@ func (s *Store) fsmRestore(rc io.ReadCloser) (retErr error) {
 	defer func() {
 		if retErr != nil {
 			stats.Add(numRestoresFailed, 1)
+		} else {
+			// A successful restore means the existing database file has been restored
+			// from Raft. Do not attempt to delete and recreate it on the next Apply().
+			s.dbStale.Unset()
 		}
 	}()
 	s.logger.Printf("initiating node restore on node ID %s", s.raftID)
@@ -2760,9 +2797,11 @@ func (s *Store) logBackup() bool {
 }
 
 // openOnDisk opens an on-disk database file at the configured path.
-func openOnDisk(path string, drv *sql.Driver, fkConstraints bool) (*sql.SwappableDB, error) {
-	if err := sql.RemoveFiles(path); err != nil {
-		return nil, err
+func openOnDisk(path string, drv *sql.Driver, fkConstraints, deleteFirst bool) (*sql.SwappableDB, error) {
+	if deleteFirst {
+		if err := sql.RemoveFiles(path); err != nil {
+			return nil, err
+		}
 	}
 	return sql.OpenSwappable(path, drv, fkConstraints, true)
 }
