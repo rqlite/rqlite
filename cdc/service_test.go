@@ -200,9 +200,12 @@ func Test_ServiceSingleEvent_SnapshotSync(t *testing.T) {
 		Events: []*proto.CDCEvent{ev},
 	}
 
-	// Send event, which will just sit there due to hight batching and timeout
-	// settings.
+	// Send event, which will just sit there due to high batching and timeout
+	// settings. Ensure we wait until it's actually written to internal batcher.
 	svc.C() <- evs
+	testPoll(t, func() bool {
+		return svc.writesToBatcher.Load() == 1
+	}, 1*time.Second)
 
 	// Now request a sync which should cause the event to be written to the FIFO.
 	cl.RequestSnapshotSync(1 * time.Second)
