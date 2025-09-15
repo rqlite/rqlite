@@ -16,8 +16,8 @@ import (
 	"strings"
 
 	"github.com/mattn/go-sqlite3"
-	command "github.com/rqlite/rqlite/v8/command/proto"
-	"github.com/rqlite/rqlite/v8/internal/random"
+	command "github.com/rqlite/rqlite/v9/command/proto"
+	"github.com/rqlite/rqlite/v9/internal/random"
 )
 
 const (

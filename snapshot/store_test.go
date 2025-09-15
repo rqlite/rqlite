@@ -7,7 +7,7 @@ import (
 	"testing"
 
 	"github.com/hashicorp/raft"
-	"github.com/rqlite/rqlite/v8/internal/rsync"
+	"github.com/rqlite/rqlite/v9/internal/rsync"
 )
 
 func Test_SnapshotMetaSort(t *testing.T) {

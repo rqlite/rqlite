@@ -9,8 +9,8 @@ import (
 	"testing"
 
 	"github.com/hashicorp/raft"
-	"github.com/rqlite/rqlite/v8/command/encoding"
-	"github.com/rqlite/rqlite/v8/db"
+	"github.com/rqlite/rqlite/v9/command/encoding"
+	"github.com/rqlite/rqlite/v9/db"
 )
 
 func Test_NewSinkCancel(t *testing.T) {

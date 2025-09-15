@@ -25,17 +25,17 @@ import (
 
 	"github.com/hashicorp/go-hclog"
 	"github.com/hashicorp/raft"
-	"github.com/rqlite/rqlite/v8/command"
-	"github.com/rqlite/rqlite/v8/command/chunking"
-	"github.com/rqlite/rqlite/v8/command/proto"
-	sql "github.com/rqlite/rqlite/v8/db"
-	"github.com/rqlite/rqlite/v8/db/humanize"
-	wal "github.com/rqlite/rqlite/v8/db/wal"
-	"github.com/rqlite/rqlite/v8/internal/progress"
-	"github.com/rqlite/rqlite/v8/internal/random"
-	"github.com/rqlite/rqlite/v8/internal/rsync"
-	"github.com/rqlite/rqlite/v8/snapshot"
-	rlog "github.com/rqlite/rqlite/v8/store/log"
+	"github.com/rqlite/rqlite/v9/command"
+	"github.com/rqlite/rqlite/v9/command/chunking"
+	"github.com/rqlite/rqlite/v9/command/proto"
+	sql "github.com/rqlite/rqlite/v9/db"
+	"github.com/rqlite/rqlite/v9/db/humanize"
+	wal "github.com/rqlite/rqlite/v9/db/wal"
+	"github.com/rqlite/rqlite/v9/internal/progress"
+	"github.com/rqlite/rqlite/v9/internal/random"
+	"github.com/rqlite/rqlite/v9/internal/rsync"
+	"github.com/rqlite/rqlite/v9/snapshot"
+	rlog "github.com/rqlite/rqlite/v9/store/log"
 )
 
 var (

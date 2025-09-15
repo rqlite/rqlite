@@ -6,7 +6,7 @@ import (
 	"sync/atomic"
 	"testing"
 
-	command "github.com/rqlite/rqlite/v8/command/proto"
+	command "github.com/rqlite/rqlite/v9/command/proto"
 )
 
 // Test_UpdateHook_Basic tests the basic functionality of the update hook, ensuring

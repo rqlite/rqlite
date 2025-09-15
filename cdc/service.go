@@ -13,12 +13,12 @@ import (
 	"sync/atomic"
 	"time"
 
-	cdcjson "github.com/rqlite/rqlite/v8/cdc/json"
-	"github.com/rqlite/rqlite/v8/command/proto"
-	httpurl "github.com/rqlite/rqlite/v8/http/url"
-	"github.com/rqlite/rqlite/v8/internal/rarchive/flate"
-	"github.com/rqlite/rqlite/v8/internal/rsync"
-	"github.com/rqlite/rqlite/v8/queue"
+	cdcjson "github.com/rqlite/rqlite/v9/cdc/json"
+	"github.com/rqlite/rqlite/v9/command/proto"
+	httpurl "github.com/rqlite/rqlite/v9/http/url"
+	"github.com/rqlite/rqlite/v9/internal/rarchive/flate"
+	"github.com/rqlite/rqlite/v9/internal/rsync"
+	"github.com/rqlite/rqlite/v9/queue"
 )
 
 const (

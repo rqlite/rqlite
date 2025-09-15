@@ -18,10 +18,10 @@ import (
 	"github.com/mkideal/cli"
 	clix "github.com/mkideal/cli/ext"
 	"github.com/peterh/liner"
-	"github.com/rqlite/rqlite/v8/cmd"
-	"github.com/rqlite/rqlite/v8/cmd/rqlite/history"
-	httpcl "github.com/rqlite/rqlite/v8/cmd/rqlite/http"
-	"github.com/rqlite/rqlite/v8/internal/rtls"
+	"github.com/rqlite/rqlite/v9/cmd"
+	"github.com/rqlite/rqlite/v9/cmd/rqlite/history"
+	httpcl "github.com/rqlite/rqlite/v9/cmd/rqlite/http"
+	"github.com/rqlite/rqlite/v9/internal/rtls"
 )
 
 const HOST_ENV_VAR = "RQLITE_HOST"

@@ -11,7 +11,7 @@ import (
 	"testing"
 
 	"github.com/mattn/go-sqlite3"
-	"github.com/rqlite/rqlite/v8/internal/random"
+	"github.com/rqlite/rqlite/v9/internal/random"
 )
 
 func Test_IsDisallowedPragmas(t *testing.T) {

@@ -7,7 +7,7 @@ import (
 	"net/http"
 	"net/url"
 
-	httpcl "github.com/rqlite/rqlite/v8/cmd/rqlite/http"
+	httpcl "github.com/rqlite/rqlite/v9/cmd/rqlite/http"
 )
 
 func removeNode(client *httpcl.Client, id string, argv *argT) error {

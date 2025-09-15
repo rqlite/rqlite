@@ -14,8 +14,8 @@ import (
 	"time"
 
 	"github.com/hashicorp/raft"
-	"github.com/rqlite/rqlite/v8/db"
-	"github.com/rqlite/rqlite/v8/internal/rsync"
+	"github.com/rqlite/rqlite/v9/db"
+	"github.com/rqlite/rqlite/v9/internal/rsync"
 )
 
 const (

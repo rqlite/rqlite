@@ -6,11 +6,11 @@ import (
 	"testing"
 	"time"
 
-	"github.com/rqlite/rqlite/v8/cluster"
-	clstrPB "github.com/rqlite/rqlite/v8/cluster/proto"
-	"github.com/rqlite/rqlite/v8/command/proto"
-	"github.com/rqlite/rqlite/v8/internal/rtls"
-	"github.com/rqlite/rqlite/v8/tcp"
+	"github.com/rqlite/rqlite/v9/cluster"
+	clstrPB "github.com/rqlite/rqlite/v9/cluster/proto"
+	"github.com/rqlite/rqlite/v9/command/proto"
+	"github.com/rqlite/rqlite/v9/internal/rtls"
+	"github.com/rqlite/rqlite/v9/tcp"
 )
 
 const (

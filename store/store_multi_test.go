@@ -10,8 +10,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/rqlite/rqlite/v8/command/proto"
-	"github.com/rqlite/rqlite/v8/db"
+	"github.com/rqlite/rqlite/v9/command/proto"
+	"github.com/rqlite/rqlite/v9/db"
 )
 
 func Test_MultiNode_Leader_Followers(t *testing.T) {
