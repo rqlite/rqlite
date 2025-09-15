@@ -407,6 +407,14 @@ func Test_MultiNode_RestartNoQuorum(t *testing.T) {
 		t.Fatalf("failed to reopen node 0: %s", err.Error())
 	}
 	testFn1(t, s0)
+
+	// A Weak query should fail due to no leader.
+	qr := queryRequestFromString("SELECT * FROM foo", false, false)
+	qr.Level = proto.QueryRequest_QUERY_REQUEST_LEVEL_WEAK
+	_, _, err = s0.Query(qr)
+	if err == nil {
+		t.Fatalf("expected error from non-NONE query without quorum")
+	}
 }
 
 // Test_MultiNodeNode_CommitIndexes tests that the commit indexes are
