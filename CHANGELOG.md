@@ -32,6 +32,7 @@
 - [PR #2321](https://github.com/rqlite/rqlite/pull/2321): Add metrics to CDC Service.
 - [PR #2323](https://github.com/rqlite/rqlite/pull/2323), [PR #2324](https://github.com/rqlite/rqlite/pull/2324): Compress data before storing in FIFO.
 - [PR #2325](https://github.com/rqlite/rqlite/pull/2325): Fix event index selection when a Flush event is included.
+- [PR #2327](https://github.com/rqlite/rqlite/pull/2327): Add stdout support for CDC events and remove LogOnly option.
 
 ## v8.43.4 (August 27th 2025)
 ### Implementation changes and bug fixes

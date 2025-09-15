@@ -100,11 +100,7 @@ type Service struct {
 	// in is the channel from which the CDC events are read.
 	in chan *proto.CDCIndexedEventGroup
 
-	// logOnly indicates whether the CDC service should only log events and not
-	// send them to the configured endpoint. This is mostly useful for testing.
-	logOnly bool
-
-	// endpoint is the HTTP endpoint to which the CDC events are sent.
+	// endpoint is the HTTP endpoint to which the CDC events are sent, or "stdout" for stdout output.
 	endpoint string
 
 	// httpClient is the HTTP client used to send requests to the endpoint.
@@ -200,7 +196,6 @@ func NewService(nodeID, dir string, clstr Cluster, cfg *Config) (*Service, error
 		dir:                   dir,
 		clstr:                 clstr,
 		in:                    make(chan *proto.CDCIndexedEventGroup, inChanLen),
-		logOnly:               cfg.LogOnly,
 		endpoint:              cfg.Endpoint,
 		httpClient:            httpClient,
 		tlsConfig:             tlsConfig,
@@ -537,8 +532,8 @@ func (s *Service) leaderLoop() (chan struct{}, chan struct{}) {
 				sentOK := false
 				for {
 					nAttempts++
-					if s.logOnly {
-						s.logger.Println(string(decompressed))
+					if s.endpoint == "stdout" {
+						fmt.Println(string(decompressed))
 						sentOK = true
 						break
 					}
