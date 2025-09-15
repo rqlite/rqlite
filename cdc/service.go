@@ -170,6 +170,7 @@ type Service struct {
 	hwmFollowerUpdated atomic.Uint64
 	endpointRetries    atomic.Uint64
 	flushRx            atomic.Uint64
+	writesToBatcher    atomic.Uint64
 
 	logger *log.Logger
 }
@@ -446,7 +447,8 @@ func (s *Service) writeToBatcher() {
 			}
 			if _, err := s.batcher.WriteOne(o, nil); err != nil {
 				s.logger.Printf("error writing CDC events to batcher: %v", err)
-			} else if err == nil {
+			} else {
+				s.writesToBatcher.Add(1)
 				stats.Add(numBatcherWrites, 1)
 				stats.Add(numBatcherEventsWrite, int64(len(o.Events)))
 			}
