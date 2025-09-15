@@ -606,7 +606,7 @@ func (s *Store) Open() (retErr error) {
 			s.dbConf.Extensions, sql.CnkOnCloseModeDisabled)
 	}
 
-	s.db, err = openOnDisk(s.dbPath, s.dbDrv, s.dbConf.FKConstraints)
+	s.db, err = createDBOnDisk(s.dbPath, s.dbDrv, s.dbConf.FKConstraints)
 	if err != nil {
 		return fmt.Errorf("failed to create on-disk database: %s", err)
 	}
@@ -2759,8 +2759,10 @@ func (s *Store) logBackup() bool {
 	return s.hcLogLevel() < hclog.Warn
 }
 
-// openOnDisk opens an on-disk database file at the configured path.
-func openOnDisk(path string, drv *sql.Driver, fkConstraints bool) (*sql.SwappableDB, error) {
+// createDBOnDisk opens an on-disk database file at the configured path
+// for the store. If database files already exists at that path, they are
+// removed first.
+func createDBOnDisk(path string, drv *sql.Driver, fkConstraints bool) (*sql.SwappableDB, error) {
 	if err := sql.RemoveFiles(path); err != nil {
 		return nil, err
 	}
