@@ -69,7 +69,7 @@ jobs:
       - checkout
       - restore_and_save_cache
       - run:
-          command: go test -failfast -timeout 20m -race $(go list ./... | sed -n 'n;p')
+          command: go test -v -failfast -timeout 20m -race $(go list ./... | sed -n 'n;p')
           environment:
             GORACE: "halt_on_error=1"
     resource_class: large
@@ -90,7 +90,7 @@ jobs:
       - checkout
       - restore_and_save_cache
       - run:
-          command: go test -failfast -timeout 20m -race $(go list ./... | sed -n 'p;n')
+          command: go test -v -failfast -timeout 20m -race $(go list ./... | sed -n 'p;n')
           environment:
             GORACE: "halt_on_error=1"
     resource_class: large
