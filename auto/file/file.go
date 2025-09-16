@@ -27,6 +27,18 @@ type Options struct {
 
 // NewClient creates a new file storage client.
 func NewClient(dir, file string, opt *Options) (*Client, error) {
+	if err := os.MkdirAll(dir, 0755); err != nil {
+		return nil, fmt.Errorf("failed to create directory %s: %w", dir, err)
+	}
+
+	touchPath := filepath.Join(dir, ".touch")
+	f, err := os.OpenFile(touchPath, os.O_CREATE|os.O_WRONLY, 0644)
+	if err != nil {
+		return nil, fmt.Errorf("failed to test writing to directory %s: %w", dir, err)
+	}
+	f.Close()
+	os.Remove(touchPath)
+
 	return &Client{
 		path:   filepath.Join(dir, file),
 		idPath: filepath.Join(dir, "METADATA"),
