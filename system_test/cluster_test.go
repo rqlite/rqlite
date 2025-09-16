@@ -267,6 +267,9 @@ func Test_MultiNodeCluster_TimeDate(t *testing.T) {
 		t.Fatalf("failed waiting for leader: %s", err.Error())
 	}
 
+	// Send an op through to ensure the new node has applied all previous log entries.
+	node1.Noop("some_id")
+
 	// Check that row is *exactly* the same on each node. This could only happen if time() was
 	// rewritten by the Leader before committing to the Raft log.
 	r1, err := node1.QueryNoneConsistency("SELECT * FROM foo")
@@ -278,7 +281,7 @@ func Test_MultiNodeCluster_TimeDate(t *testing.T) {
 		t.Fatalf("failed to query node 2: %s", err.Error())
 	}
 	if r1 != r2 {
-		t.Fatalf("rows are different on nodes")
+		t.Fatalf("rows are different on nodes: %s %s", r1, r2)
 	}
 }
 
