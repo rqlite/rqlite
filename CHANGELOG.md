@@ -1,3 +1,7 @@
+## v9.0.2 (unreleased)
+### Implementation changes and bug fixes
+- [PR #2331](https://github.com/rqlite/rqlite/pull/2331): Retry acquiring the Snapshot CAS when attempting a backup.
+
 ## v9.0.1 (September 15th 2025)
 ### Implementation changes and bug fixes
 - [PR #2328](https://github.com/rqlite/rqlite/pull/2328): Store CDC database in dedicated directory.

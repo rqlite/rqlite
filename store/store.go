@@ -83,6 +83,9 @@ var (
 	// is not valid.
 	ErrInvalidBackupFormat = errors.New("invalid backup format")
 
+	// ErrBackupCASFailed is returned when we cannot acquire the backup CAS lock.
+	ErrBackupCASFailed = errors.New("failed to acquire backup CAS lock")
+
 	// ErrCDCEnabled is returned when CDC is already enabled.
 	ErrCDCEnabled = errors.New("CDC already enabled")
 
@@ -117,6 +120,8 @@ const (
 	leaderWaitDelay           = 100 * time.Millisecond
 	appliedWaitDelay          = 100 * time.Millisecond
 	commitEquivalenceDelay    = 50 * time.Millisecond
+	backupCASTimeout          = 10 * time.Second
+	backupCASRetryDelay       = 100 * time.Millisecond
 	connectionPoolCount       = 5
 	connectionTimeout         = 10 * time.Second
 	raftLogCacheSize          = 512
@@ -1550,7 +1555,8 @@ func (s *Store) Backup(br *proto.BackupRequest, dst io.Writer) (retErr error) {
 		return ErrNotLeader
 	}
 
-	if br.Format == proto.BackupRequest_BACKUP_REQUEST_FORMAT_BINARY {
+	switch br.Format {
+	case proto.BackupRequest_BACKUP_REQUEST_FORMAT_BINARY:
 		var srcFD *os.File
 		var err error
 		if br.Vacuum {
@@ -1590,8 +1596,8 @@ func (s *Store) Backup(br *proto.BackupRequest, dst io.Writer) (retErr error) {
 			// Block any snapshotting which will allow us to read the SQLite file without
 			// it changing underneath us. Any incoming writes will be sent to the WAL, so
 			// write traffic is not blocked during the backup process.
-			if err := s.snapshotCAS.Begin("backup"); err != nil {
-				return err
+			if err := s.snapshotCAS.BeginWithRetry("backup", backupCASTimeout, backupCASRetryDelay); err != nil {
+				return ErrBackupCASFailed
 			}
 			defer s.snapshotCAS.End()
 
@@ -1615,7 +1621,7 @@ func (s *Store) Backup(br *proto.BackupRequest, dst io.Writer) (retErr error) {
 			_, err = io.Copy(dst, srcFD)
 		}
 		return err
-	} else if br.Format == proto.BackupRequest_BACKUP_REQUEST_FORMAT_SQL {
+	case proto.BackupRequest_BACKUP_REQUEST_FORMAT_SQL:
 		ww := dst
 		if br.Compress {
 			dstGz, err := gzip.NewWriterLevel(dst, gzip.BestSpeed)
@@ -1626,7 +1632,7 @@ func (s *Store) Backup(br *proto.BackupRequest, dst io.Writer) (retErr error) {
 			ww = dstGz
 		}
 		return s.db.Dump(ww, br.Tables...)
-	} else if br.Format == proto.BackupRequest_BACKUP_REQUEST_FORMAT_DELETE {
+	case proto.BackupRequest_BACKUP_REQUEST_FORMAT_DELETE:
 		// Create a temporary database file in DELETE mode
 		tmpFD, err := createTemp(s.dbDir, backupScratchPattern)
 		if err != nil {
