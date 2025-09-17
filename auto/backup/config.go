@@ -7,6 +7,7 @@ import (
 
 	"github.com/rqlite/rqlite/v9/auto"
 	"github.com/rqlite/rqlite/v9/auto/aws"
+	"github.com/rqlite/rqlite/v9/auto/file"
 	"github.com/rqlite/rqlite/v9/auto/gcp"
 )
 
@@ -57,6 +58,16 @@ func NewStorageClient(data []byte) (*Config, StorageClient, error) {
 			Timestamp: cfg.Timestamp,
 		}
 		sc, err = gcp.NewGCSClient(gcsCfg, opts)
+	case auto.StorageTypeFile:
+		fileCfg := &file.Config{}
+		err = json.Unmarshal(cfg.Sub, fileCfg)
+		if err != nil {
+			return nil, nil, err
+		}
+		opts := &file.Options{
+			Timestamp: cfg.Timestamp,
+		}
+		sc, err = file.NewClient(fileCfg.Dir, fileCfg.File, opts)
 	default:
 		return nil, nil, auto.ErrUnsupportedStorageType
 	}

@@ -164,11 +164,11 @@ func (u *Uploader) upload(ctx context.Context) error {
 	if u.lastIndex == 0 {
 		// No last index, so this must be the first upload since this
 		// uploader started. Double-check that we really need to upload.
-		cloudID, err := u.storageClient.CurrentID(ctx)
+		currID, err := u.storageClient.CurrentID(ctx)
 		if err != nil {
 			stats.Add(numSumGetFail, 1)
-			u.logger.Printf("failed to get current sum from %s: %v", u.storageClient, err)
-		} else if cloudID == strconv.FormatUint(li, 10) {
+			u.logger.Printf("failed to get current ID from %s: %v", u.storageClient, err)
+		} else if currID == strconv.FormatUint(li, 10) {
 			stats.Add(numUploadsSkippedID, 1)
 			return nil
 		}

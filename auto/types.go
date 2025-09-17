@@ -58,6 +58,9 @@ const (
 
 	// StorageTypeGCS is the storage type for Google Cloud Storage
 	StorageTypeGCS StorageType = "gcs"
+
+	// StorageTypeFile is the storage type for local file storage
+	StorageTypeFile StorageType = "file"
 )
 
 // UnmarshalJSON unmarshals the storage type from a string and validates it
@@ -69,7 +72,7 @@ func (s *StorageType) UnmarshalJSON(b []byte) error {
 	switch value := v.(type) {
 	case string:
 		*s = StorageType(value)
-		if *s != StorageTypeS3 && *s != StorageTypeGCS {
+		if *s != StorageTypeS3 && *s != StorageTypeGCS && *s != StorageTypeFile {
 			return ErrUnsupportedStorageType
 		}
 		return nil
