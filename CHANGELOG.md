@@ -1,3 +1,7 @@
+## v9.0.3 (unreleased)
+### Implementation changes and bug fixes
+- [PR #2335](https://github.com/rqlite/rqlite/pull/2335): Add basic File Storage client for auto-backups.
+
 ## v9.0.2 (September 16th 2025)
 ### Implementation changes and bug fixes
 - [PR #2331](https://github.com/rqlite/rqlite/pull/2331): Retry acquiring the Snapshot CAS when attempting a backup.
