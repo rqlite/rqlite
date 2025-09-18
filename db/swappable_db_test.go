@@ -2,8 +2,11 @@ package db
 
 import (
 	"os"
+	"syscall"
 	"testing"
 )
+
+var sqliteHeader = []byte("SQLite format 3\x00")
 
 // Test_OpenSwappable_Success tests that OpenSwappable correctly opens a database and returns
 // a valid SwappableDB instance.
@@ -90,6 +93,11 @@ func Test_SwapSuccess(t *testing.T) {
 	if exp, got := `[{"columns":["id","name"],"types":["integer","text"],"values":[[1,"test"]]}]`, asJSON(rows); exp != got {
 		t.Fatalf("unexpected results after swap, expected %s, got %s", exp, got)
 	}
+
+	// Ensure the backup was deleted
+	if _, err := os.Stat(backupDbPath(swappablePath)); err == nil {
+		t.Fatalf("backup file should have been deleted")
+	}
 }
 
 func Test_SwapSuccess_Driver(t *testing.T) {
@@ -162,5 +170,57 @@ func Test_SwapInvalidSQLiteFile(t *testing.T) {
 	err = swappableDB.Swap(invalidSQLiteFilePath, false, false)
 	if err == nil {
 		t.Fatalf("expected an error when swapping with an invalid SQLite file, got nil")
+	}
+}
+
+// Test_SwapRecoveryOnFailure tests that the Swap function recovers the original database
+// when the swap operation fails after the old database has been moved.
+func Test_SwapRecoveryOnFailure(t *testing.T) {
+	// Create original database with some data using regular DB
+	originalPath := mustTempPath()
+	defer os.Remove(originalPath)
+
+	// Now open it as SwappableDB
+	swappableDB, err := OpenSwappable(originalPath, nil, true, true)
+	if err != nil {
+		t.Fatalf("failed to open swappable database: %s", err)
+	}
+	mustExecute(swappableDB.db, "CREATE TABLE original (id INTEGER NOT NULL PRIMARY KEY, name TEXT)")
+	mustExecute(swappableDB.db, `INSERT INTO original(name) VALUES("original_data")`)
+	defer swappableDB.Close()
+
+	// Create a file that would pass the IsValidSQLiteFile check but fail when opened
+	swapPath := mustTempPath()
+	defer os.Remove(swapPath)
+
+	err = syscall.Mkfifo(swapPath, 0666)
+	if err != nil {
+		t.Fatalf("failed to create swap file: %s", err)
+	}
+	defer os.Remove(swapPath)
+
+	// Avoid blocking the thread
+	go func() {
+		os.WriteFile(swapPath, sqliteHeader, 0666)
+	}()
+
+	// Attempt the swap - this should fail during OpenWithDriver and trigger recovery
+	err = swappableDB.Swap(swapPath, false, false)
+	if err == nil {
+		t.Fatalf("expected swap to fail, but it succeeded")
+	}
+
+	// Verify that the original database was recovered and still contains the original data
+	rows, err := swappableDB.QueryStringStmt("SELECT * FROM original")
+	if err != nil {
+		t.Fatalf("failed to query recovered database: %s", err)
+	}
+	if exp, got := `[{"columns":["id","name"],"types":["integer","text"],"values":[[1,"original_data"]]}]`, asJSON(rows); exp != got {
+		t.Fatalf("original data not recovered after failed swap, expected %s, got %s", exp, got)
+	}
+
+	// Verify correct database configuration after recovery
+	if swappableDB.db.FKEnabled() != true || swappableDB.db.WALEnabled() != true {
+		t.Fatalf("database configuration not recovered after failed swap")
 	}
 }
