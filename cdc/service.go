@@ -1,12 +1,9 @@
 package cdc
 
 import (
-	"bytes"
-	"crypto/tls"
 	"expvar"
 	"fmt"
 	"log"
-	"net/http"
 	"os"
 	"path/filepath"
 	"sync"
@@ -15,7 +12,6 @@ import (
 
 	cdcjson "github.com/rqlite/rqlite/v9/cdc/json"
 	"github.com/rqlite/rqlite/v9/command/proto"
-	httpurl "github.com/rqlite/rqlite/v9/http/url"
 	"github.com/rqlite/rqlite/v9/internal/rarchive/flate"
 	"github.com/rqlite/rqlite/v9/internal/rsync"
 	"github.com/rqlite/rqlite/v9/queue"
@@ -100,14 +96,8 @@ type Service struct {
 	// in is the channel from which the CDC events are read.
 	in chan *proto.CDCIndexedEventGroup
 
-	// endpoint is the HTTP endpoint to which the CDC events are sent, or "stdout" for stdout output.
-	endpoint string
-
-	// httpClient is the HTTP client used to send requests to the endpoint.
-	httpClient *http.Client
-
-	// tlsConfig is the TLS configuration used for the HTTP client.
-	tlsConfig *tls.Config
+	// sink is the sink to which the CDC events are sent.
+	sink Sink
 
 	// transmitTimeout is the timeout for transmitting events to the endpoint.
 	transmitTimeout time.Duration
@@ -183,11 +173,15 @@ func NewService(nodeID, dir string, clstr Cluster, cfg *Config) (*Service, error
 		return nil, fmt.Errorf("failed to build TLS config: %w", err)
 	}
 
-	httpClient := &http.Client{
-		Transport: &http.Transport{
-			TLSClientConfig: tlsConfig,
-		},
-		Timeout: cfg.TransmitTimeout,
+	// Create sink based on configuration
+	sinkConfig := SinkConfig{
+		Endpoint:        cfg.Endpoint,
+		TLSConfig:       tlsConfig,
+		TransmitTimeout: cfg.TransmitTimeout,
+	}
+	sink, err := NewSink(sinkConfig)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create sink: %w", err)
 	}
 
 	srv := &Service{
@@ -196,9 +190,7 @@ func NewService(nodeID, dir string, clstr Cluster, cfg *Config) (*Service, error
 		dir:                   filepath.Join(dir, "cdc"),
 		clstr:                 clstr,
 		in:                    make(chan *proto.CDCIndexedEventGroup, inChanLen),
-		endpoint:              cfg.Endpoint,
-		httpClient:            httpClient,
-		tlsConfig:             tlsConfig,
+		sink:                  sink,
 		transmitTimeout:       cfg.TransmitTimeout,
 		transmitMinBackoff:    cfg.TransmitMinBackoff,
 		transmitMaxBackoff:    cfg.TransmitMaxBackoff,
@@ -289,6 +281,9 @@ func (s *Service) Stop() {
 	close(s.done)
 	s.wg.Wait()
 	s.fifo.Close()
+	if s.sink != nil {
+		s.sink.Close()
+	}
 	s.started.Unset()
 }
 
@@ -325,7 +320,7 @@ func (s *Service) Stats() (map[string]any, error) {
 		"dir":            s.dir,
 		"highwater_mark": s.HighWatermark(),
 		"is_leader":      s.IsLeader(),
-		"endpoint":       httpurl.RemoveBasicAuth(s.endpoint),
+		"sink":           s.sink.String(),
 		"fifo": map[string]any{
 			"has_next": s.fifo.HasNext(),
 			"length":   s.fifo.Len(),
@@ -522,37 +517,22 @@ func (s *Service) leaderLoop() (chan struct{}, chan struct{}) {
 				}
 
 				// Decompress the data read from FIFO into a byte slice. We need to do this
-				// so the HTTP request can set Content-Length correctly. This makes it easier
-				// for servers to handle the request. Sure, it consumes some memory but
-				// CDC events are typically small and it makes downstream processing easier.
+				// so the sink can handle the request properly.
 				decompressed, err := flate.Decompress(ev.Data)
 				if err != nil {
 					s.logger.Printf("error decompressing data for batch from FIFO: %v", err)
 					continue
 				}
 
-				req, err := http.NewRequest("POST", s.endpoint, bytes.NewReader(decompressed))
-				if err != nil {
-					s.logger.Printf("error creating HTTP request for endpoint: %v", err)
-					continue
-				}
-				req.Header.Set("Content-Type", "application/json")
-
 				nAttempts := 0
 				retryDelay := s.transmitMinBackoff
 				sentOK := false
 				for {
 					nAttempts++
-					if s.endpoint == "stdout" {
-						fmt.Println(string(decompressed))
-						sentOK = true
-						break
-					}
 
 					stats.Add(numBytesTx, int64(len(decompressed)))
-					resp, err := s.httpClient.Do(req)
-					if err == nil && (resp.StatusCode == http.StatusOK || resp.StatusCode == http.StatusAccepted) {
-						resp.Body.Close()
+					_, err := s.sink.Write(decompressed)
+					if err == nil {
 						sentOK = true
 						break
 					}

@@ -131,6 +131,7 @@ func Test_ServiceSingleEvent_Flush(t *testing.T) {
 	cl := &mockCluster{}
 
 	cfg := DefaultConfig()
+	cfg.Endpoint = "stdout" // Use stdout mode for testing
 	cfg.MaxBatchSz = 1
 	cfg.MaxBatchDelay = 50 * time.Millisecond
 	svc, err := NewService(
