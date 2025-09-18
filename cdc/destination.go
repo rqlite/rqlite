@@ -15,11 +15,8 @@ import (
 
 // Sink defines the interface that all CDC sinks must implement.
 type Sink interface {
-	io.Writer
+	io.WriteCloser
 	fmt.Stringer
-
-	// Close releases resources held by the sink.
-	Close() error
 }
 
 // SinkConfig holds the configuration for creating a sink.
@@ -29,7 +26,7 @@ type SinkConfig struct {
 	TransmitTimeout time.Duration
 }
 
-// StdoutSink implements Sink by writing the batch to os.Stdout.
+// StdoutSink implements Sink by writing to os.Stdout.
 type StdoutSink struct{}
 
 // NewStdoutSink creates a new StdoutSink.

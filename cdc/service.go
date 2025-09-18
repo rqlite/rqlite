@@ -320,7 +320,7 @@ func (s *Service) Stats() (map[string]any, error) {
 		"dir":            s.dir,
 		"highwater_mark": s.HighWatermark(),
 		"is_leader":      s.IsLeader(),
-		"destination":    s.sink.String(),
+		"sink":           s.sink.String(),
 		"fifo": map[string]any{
 			"has_next": s.fifo.HasNext(),
 			"length":   s.fifo.Len(),
