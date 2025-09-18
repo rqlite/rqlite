@@ -110,9 +110,6 @@ func NewDestination(cfg DestinationConfig) (Destination, error) {
 	switch u.Scheme {
 	case "http", "https":
 		return NewHTTPDestination(cfg.Endpoint, cfg.TLSConfig, cfg.TransmitTimeout), nil
-	case "kafka":
-		// future implementation
-		return nil, fmt.Errorf("cdc: kafka not yet supported")
 	default:
 		return nil, fmt.Errorf("cdc: unsupported scheme %q", u.Scheme)
 	}

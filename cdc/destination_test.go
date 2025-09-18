@@ -232,19 +232,3 @@ func TestNewDestination_InvalidURL(t *testing.T) {
 		t.Errorf("Expected URL parse error, got: %v", err)
 	}
 }
-
-func TestNewDestination_Kafka(t *testing.T) {
-	cfg := DestinationConfig{
-		Endpoint: "kafka://localhost:9092",
-	}
-
-	_, err := NewDestination(cfg)
-	if err == nil {
-		t.Error("NewDestination should fail with kafka scheme (not yet supported)")
-	}
-
-	expectedError := "cdc: kafka not yet supported"
-	if err.Error() != expectedError {
-		t.Errorf("Expected error %q, got %q", expectedError, err.Error())
-	}
-}
