@@ -8,18 +8,19 @@ import (
 	"net/url"
 	"strings"
 	"time"
+
+	httpurl "github.com/rqlite/rqlite/v9/http/url"
 )
 
 // Destination defines the interface that all CDC sinks must implement.
 type Destination interface {
-	// SendBatch delivers one batch of already-encoded CDC events.
+	// Send delivers one batch of already-encoded CDC events.
 	// The data is expected to be JSON-encoded (for now).
-	SendBatch(data []byte) error
+	Send(data []byte) error
 
 	// Close releases resources held by the destination.
 	Close() error
 
-	// String returns a string representation of the destination.
 	fmt.Stringer
 }
 
@@ -38,8 +39,8 @@ func NewStdoutDestination() *StdoutDestination {
 	return &StdoutDestination{}
 }
 
-// SendBatch writes the batch data to stdout.
-func (d *StdoutDestination) SendBatch(data []byte) error {
+// Send writes the batch data to stdout.
+func (d *StdoutDestination) Send(data []byte) error {
 	_, err := fmt.Println(string(data))
 	return err
 }
@@ -75,8 +76,8 @@ func NewHTTPDestination(endpoint string, tlsConfig *tls.Config, timeout time.Dur
 	}
 }
 
-// SendBatch sends the batch data to the HTTP endpoint.
-func (d *HTTPDestination) SendBatch(data []byte) error {
+// Send sends the batch data to the HTTP endpoint.
+func (d *HTTPDestination) Send(data []byte) error {
 	req, err := http.NewRequest("POST", d.endpoint, bytes.NewReader(data))
 	if err != nil {
 		return fmt.Errorf("error creating HTTP request: %w", err)
@@ -92,7 +93,6 @@ func (d *HTTPDestination) SendBatch(data []byte) error {
 	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusAccepted {
 		return fmt.Errorf("HTTP request failed with status %d", resp.StatusCode)
 	}
-
 	return nil
 }
 
@@ -104,9 +104,8 @@ func (d *HTTPDestination) Close() error {
 	return nil
 }
 
-// String returns a string representation of the destination.
 func (d *HTTPDestination) String() string {
-	return d.endpoint
+	return httpurl.RemoveBasicAuth(d.endpoint)
 }
 
 // NewDestination creates a new Destination based on the provided configuration.

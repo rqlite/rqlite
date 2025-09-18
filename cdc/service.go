@@ -320,6 +320,7 @@ func (s *Service) Stats() (map[string]any, error) {
 		"dir":            s.dir,
 		"highwater_mark": s.HighWatermark(),
 		"is_leader":      s.IsLeader(),
+		"destination":    s.dest.String(),
 		"fifo": map[string]any{
 			"has_next": s.fifo.HasNext(),
 			"length":   s.fifo.Len(),
@@ -530,7 +531,7 @@ func (s *Service) leaderLoop() (chan struct{}, chan struct{}) {
 					nAttempts++
 
 					stats.Add(numBytesTx, int64(len(decompressed)))
-					err := s.dest.SendBatch(decompressed)
+					err := s.dest.Send(decompressed)
 					if err == nil {
 						sentOK = true
 						break

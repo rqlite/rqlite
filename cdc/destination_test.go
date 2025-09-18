@@ -12,7 +12,7 @@ import (
 	"time"
 )
 
-func TestStdoutDestination_SendBatch(t *testing.T) {
+func TestStdoutDestination_Send(t *testing.T) {
 	dest := NewStdoutDestination()
 
 	// Redirect stdout to capture output
@@ -21,9 +21,9 @@ func TestStdoutDestination_SendBatch(t *testing.T) {
 	os.Stdout = w
 
 	testData := []byte(`{"test": "data"}`)
-	err := dest.SendBatch(testData)
+	err := dest.Send(testData)
 	if err != nil {
-		t.Fatalf("SendBatch failed: %v", err)
+		t.Fatalf("Send failed: %v", err)
 	}
 
 	// Restore stdout and read captured output
@@ -57,7 +57,7 @@ func TestStdoutDestination_String(t *testing.T) {
 	}
 }
 
-func TestHTTPDestination_SendBatch_Success(t *testing.T) {
+func TestHTTPDestination_Send_Success(t *testing.T) {
 	// Create test server
 	var receivedData []byte
 	var receivedContentType string
@@ -72,9 +72,9 @@ func TestHTTPDestination_SendBatch_Success(t *testing.T) {
 	dest := NewHTTPDestination(testSrv.URL, nil, 5*time.Second)
 
 	testData := []byte(`{"test": "data"}`)
-	err := dest.SendBatch(testData)
+	err := dest.Send(testData)
 	if err != nil {
-		t.Fatalf("SendBatch failed: %v", err)
+		t.Fatalf("Send failed: %v", err)
 	}
 
 	if !bytes.Equal(receivedData, testData) {
@@ -86,7 +86,7 @@ func TestHTTPDestination_SendBatch_Success(t *testing.T) {
 	}
 }
 
-func TestHTTPDestination_SendBatch_Accepted(t *testing.T) {
+func TestHTTPDestination_Send_Accepted(t *testing.T) {
 	// Test that 202 Accepted is also considered success
 	testSrv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusAccepted)
@@ -95,13 +95,13 @@ func TestHTTPDestination_SendBatch_Accepted(t *testing.T) {
 
 	dest := NewHTTPDestination(testSrv.URL, nil, 5*time.Second)
 
-	err := dest.SendBatch([]byte(`{"test": "data"}`))
+	err := dest.Send([]byte(`{"test": "data"}`))
 	if err != nil {
-		t.Errorf("SendBatch should succeed with 202 status, got error: %v", err)
+		t.Errorf("Send should succeed with 202 status, got error: %v", err)
 	}
 }
 
-func TestHTTPDestination_SendBatch_HTTPError(t *testing.T) {
+func TestHTTPDestination_Send_HTTPError(t *testing.T) {
 	// Test HTTP error response
 	testSrv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusInternalServerError)
@@ -110,9 +110,9 @@ func TestHTTPDestination_SendBatch_HTTPError(t *testing.T) {
 
 	dest := NewHTTPDestination(testSrv.URL, nil, 5*time.Second)
 
-	err := dest.SendBatch([]byte(`{"test": "data"}`))
+	err := dest.Send([]byte(`{"test": "data"}`))
 	if err == nil {
-		t.Error("SendBatch should fail with 500 status")
+		t.Error("Send should fail with 500 status")
 	}
 
 	expectedError := "HTTP request failed with status 500"
@@ -121,13 +121,13 @@ func TestHTTPDestination_SendBatch_HTTPError(t *testing.T) {
 	}
 }
 
-func TestHTTPDestination_SendBatch_NetworkError(t *testing.T) {
+func TestHTTPDestination_Send_NetworkError(t *testing.T) {
 	// Test network error (invalid URL)
 	dest := NewHTTPDestination("http://invalid-url-that-does-not-exist:9999", nil, 1*time.Second)
 
-	err := dest.SendBatch([]byte(`{"test": "data"}`))
+	err := dest.Send([]byte(`{"test": "data"}`))
 	if err == nil {
-		t.Error("SendBatch should fail with network error")
+		t.Error("Send should fail with network error")
 	}
 
 	if !strings.Contains(err.Error(), "error sending HTTP request") {
@@ -149,9 +149,9 @@ func TestHTTPDestination_WithTLS(t *testing.T) {
 
 	dest := NewHTTPDestination(testSrv.URL, tlsConfig, 5*time.Second)
 
-	err := dest.SendBatch([]byte(`{"test": "data"}`))
+	err := dest.Send([]byte(`{"test": "data"}`))
 	if err != nil {
-		t.Errorf("SendBatch with TLS should succeed, got error: %v", err)
+		t.Errorf("Send with TLS should succeed, got error: %v", err)
 	}
 }
 
