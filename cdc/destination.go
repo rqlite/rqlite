@@ -18,6 +18,9 @@ type Destination interface {
 
 	// Close releases resources held by the destination.
 	Close() error
+
+	// String returns a string representation of the destination.
+	fmt.Stringer
 }
 
 // DestinationConfig holds the configuration for creating a destination.
@@ -44,6 +47,11 @@ func (d *StdoutDestination) SendBatch(data []byte) error {
 // Close releases resources (none for stdout).
 func (d *StdoutDestination) Close() error {
 	return nil
+}
+
+// String returns a string representation of the destination.
+func (d *StdoutDestination) String() string {
+	return "stdout"
 }
 
 // HTTPDestination implements Destination by POSTing batches to the configured endpoint.
@@ -94,6 +102,11 @@ func (d *HTTPDestination) Close() error {
 		d.httpClient.CloseIdleConnections()
 	}
 	return nil
+}
+
+// String returns a string representation of the destination.
+func (d *HTTPDestination) String() string {
+	return d.endpoint
 }
 
 // NewDestination creates a new Destination based on the provided configuration.

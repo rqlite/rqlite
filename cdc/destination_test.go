@@ -49,6 +49,14 @@ func TestStdoutDestination_Close(t *testing.T) {
 	}
 }
 
+func TestStdoutDestination_String(t *testing.T) {
+	dest := NewStdoutDestination()
+	expected := "stdout"
+	if got := dest.String(); got != expected {
+		t.Errorf("Expected %q, got %q", expected, got)
+	}
+}
+
 func TestHTTPDestination_SendBatch_Success(t *testing.T) {
 	// Create test server
 	var receivedData []byte
@@ -152,6 +160,14 @@ func TestHTTPDestination_Close(t *testing.T) {
 	err := dest.Close()
 	if err != nil {
 		t.Errorf("Close should not return error, got: %v", err)
+	}
+}
+
+func TestHTTPDestination_String(t *testing.T) {
+	endpoint := "https://webhook.example.com/cdc"
+	dest := NewHTTPDestination(endpoint, nil, 5*time.Second)
+	if got := dest.String(); got != endpoint {
+		t.Errorf("Expected %q, got %q", endpoint, got)
 	}
 }
 
