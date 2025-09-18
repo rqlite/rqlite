@@ -96,8 +96,8 @@ type Service struct {
 	// in is the channel from which the CDC events are read.
 	in chan *proto.CDCIndexedEventGroup
 
-	// dest is the sink to which the CDC events are sent.
-	dest Sink
+	// sink is the sink to which the CDC events are sent.
+	sink Sink
 
 	// transmitTimeout is the timeout for transmitting events to the endpoint.
 	transmitTimeout time.Duration
@@ -179,7 +179,7 @@ func NewService(nodeID, dir string, clstr Cluster, cfg *Config) (*Service, error
 		TLSConfig:       tlsConfig,
 		TransmitTimeout: cfg.TransmitTimeout,
 	}
-	dest, err := NewSink(sinkConfig)
+	sink, err := NewSink(sinkConfig)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create sink: %w", err)
 	}
@@ -190,7 +190,7 @@ func NewService(nodeID, dir string, clstr Cluster, cfg *Config) (*Service, error
 		dir:                   filepath.Join(dir, "cdc"),
 		clstr:                 clstr,
 		in:                    make(chan *proto.CDCIndexedEventGroup, inChanLen),
-		dest:                  dest,
+		sink:                  sink,
 		transmitTimeout:       cfg.TransmitTimeout,
 		transmitMinBackoff:    cfg.TransmitMinBackoff,
 		transmitMaxBackoff:    cfg.TransmitMaxBackoff,
@@ -281,8 +281,8 @@ func (s *Service) Stop() {
 	close(s.done)
 	s.wg.Wait()
 	s.fifo.Close()
-	if s.dest != nil {
-		s.dest.Close()
+	if s.sink != nil {
+		s.sink.Close()
 	}
 	s.started.Unset()
 }
@@ -320,7 +320,7 @@ func (s *Service) Stats() (map[string]any, error) {
 		"dir":            s.dir,
 		"highwater_mark": s.HighWatermark(),
 		"is_leader":      s.IsLeader(),
-		"destination":    s.dest.String(),
+		"destination":    s.sink.String(),
 		"fifo": map[string]any{
 			"has_next": s.fifo.HasNext(),
 			"length":   s.fifo.Len(),
@@ -517,7 +517,7 @@ func (s *Service) leaderLoop() (chan struct{}, chan struct{}) {
 				}
 
 				// Decompress the data read from FIFO into a byte slice. We need to do this
-				// so the destination can handle the request properly.
+				// so the sink can handle the request properly.
 				decompressed, err := flate.Decompress(ev.Data)
 				if err != nil {
 					s.logger.Printf("error decompressing data for batch from FIFO: %v", err)
@@ -531,7 +531,7 @@ func (s *Service) leaderLoop() (chan struct{}, chan struct{}) {
 					nAttempts++
 
 					stats.Add(numBytesTx, int64(len(decompressed)))
-					_, err := s.dest.Write(decompressed)
+					_, err := s.sink.Write(decompressed)
 					if err == nil {
 						sentOK = true
 						break

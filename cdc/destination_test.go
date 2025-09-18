@@ -13,7 +13,7 @@ import (
 )
 
 func TestStdoutSink_Write(t *testing.T) {
-	dest := NewStdoutSink()
+	sink := NewStdoutSink()
 
 	// Redirect stdout to capture output
 	oldStdout := os.Stdout
@@ -21,7 +21,7 @@ func TestStdoutSink_Write(t *testing.T) {
 	os.Stdout = w
 
 	testData := []byte(`{"test": "data"}`)
-	_, err := dest.Write(testData)
+	_, err := sink.Write(testData)
 	if err != nil {
 		t.Fatalf("Write failed: %v", err)
 	}
@@ -42,17 +42,17 @@ func TestStdoutSink_Write(t *testing.T) {
 }
 
 func TestStdoutSink_Close(t *testing.T) {
-	dest := NewStdoutSink()
-	err := dest.Close()
+	sink := NewStdoutSink()
+	err := sink.Close()
 	if err != nil {
 		t.Errorf("Close should not return error, got: %v", err)
 	}
 }
 
 func TestStdoutSink_String(t *testing.T) {
-	dest := NewStdoutSink()
+	sink := NewStdoutSink()
 	expected := "stdout"
-	if got := dest.String(); got != expected {
+	if got := sink.String(); got != expected {
 		t.Errorf("Expected %q, got %q", expected, got)
 	}
 }
@@ -69,10 +69,10 @@ func TestHTTPSink_Write_Success(t *testing.T) {
 	}))
 	defer testSrv.Close()
 
-	dest := NewHTTPSink(testSrv.URL, nil, 5*time.Second)
+	sink := NewHTTPSink(testSrv.URL, nil, 5*time.Second)
 
 	testData := []byte(`{"test": "data"}`)
-	_, err := dest.Write(testData)
+	_, err := sink.Write(testData)
 	if err != nil {
 		t.Fatalf("Write failed: %v", err)
 	}
@@ -93,9 +93,9 @@ func TestHTTPSink_Write_Accepted(t *testing.T) {
 	}))
 	defer testSrv.Close()
 
-	dest := NewHTTPSink(testSrv.URL, nil, 5*time.Second)
+	sink := NewHTTPSink(testSrv.URL, nil, 5*time.Second)
 
-	_, err := dest.Write([]byte(`{"test": "data"}`))
+	_, err := sink.Write([]byte(`{"test": "data"}`))
 	if err != nil {
 		t.Errorf("Write should succeed with 202 status, got error: %v", err)
 	}
@@ -108,9 +108,9 @@ func TestHTTPSink_Write_HTTPError(t *testing.T) {
 	}))
 	defer testSrv.Close()
 
-	dest := NewHTTPSink(testSrv.URL, nil, 5*time.Second)
+	sink := NewHTTPSink(testSrv.URL, nil, 5*time.Second)
 
-	_, err := dest.Write([]byte(`{"test": "data"}`))
+	_, err := sink.Write([]byte(`{"test": "data"}`))
 	if err == nil {
 		t.Error("Write should fail with 500 status")
 	}
@@ -123,9 +123,9 @@ func TestHTTPSink_Write_HTTPError(t *testing.T) {
 
 func TestHTTPSink_Write_NetworkError(t *testing.T) {
 	// Test network error (invalid URL)
-	dest := NewHTTPSink("http://invalid-url-that-does-not-exist:9999", nil, 1*time.Second)
+	sink := NewHTTPSink("http://invalid-url-that-does-not-exist:9999", nil, 1*time.Second)
 
-	_, err := dest.Write([]byte(`{"test": "data"}`))
+	_, err := sink.Write([]byte(`{"test": "data"}`))
 	if err == nil {
 		t.Error("Write should fail with network error")
 	}
@@ -147,17 +147,17 @@ func TestHTTPSink_WithTLS(t *testing.T) {
 		InsecureSkipVerify: true,
 	}
 
-	dest := NewHTTPSink(testSrv.URL, tlsConfig, 5*time.Second)
+	sink := NewHTTPSink(testSrv.URL, tlsConfig, 5*time.Second)
 
-	_, err := dest.Write([]byte(`{"test": "data"}`))
+	_, err := sink.Write([]byte(`{"test": "data"}`))
 	if err != nil {
 		t.Errorf("Write with TLS should succeed, got error: %v", err)
 	}
 }
 
 func TestHTTPSink_Close(t *testing.T) {
-	dest := NewHTTPSink("http://example.com", nil, 5*time.Second)
-	err := dest.Close()
+	sink := NewHTTPSink("http://example.com", nil, 5*time.Second)
+	err := sink.Close()
 	if err != nil {
 		t.Errorf("Close should not return error, got: %v", err)
 	}
@@ -165,8 +165,8 @@ func TestHTTPSink_Close(t *testing.T) {
 
 func TestHTTPSink_String(t *testing.T) {
 	endpoint := "https://webhook.example.com/cdc"
-	dest := NewHTTPSink(endpoint, nil, 5*time.Second)
-	if got := dest.String(); got != endpoint {
+	sink := NewHTTPSink(endpoint, nil, 5*time.Second)
+	if got := sink.String(); got != endpoint {
 		t.Errorf("Expected %q, got %q", endpoint, got)
 	}
 }
@@ -176,13 +176,13 @@ func TestNewSink_Stdout(t *testing.T) {
 		Endpoint: "stdout",
 	}
 
-	dest, err := NewSink(cfg)
+	sink, err := NewSink(cfg)
 	if err != nil {
 		t.Fatalf("NewSink failed: %v", err)
 	}
 
-	if _, ok := dest.(*StdoutSink); !ok {
-		t.Errorf("Expected StdoutSink, got %T", dest)
+	if _, ok := sink.(*StdoutSink); !ok {
+		t.Errorf("Expected StdoutSink, got %T", sink)
 	}
 }
 
@@ -192,13 +192,13 @@ func TestNewSink_HTTP(t *testing.T) {
 		TransmitTimeout: 10 * time.Second,
 	}
 
-	dest, err := NewSink(cfg)
+	sink, err := NewSink(cfg)
 	if err != nil {
 		t.Fatalf("NewSink failed: %v", err)
 	}
 
-	if _, ok := dest.(*HTTPSink); !ok {
-		t.Errorf("Expected HTTPSink, got %T", dest)
+	if _, ok := sink.(*HTTPSink); !ok {
+		t.Errorf("Expected HTTPSink, got %T", sink)
 	}
 }
 
@@ -208,13 +208,13 @@ func TestNewSink_HTTPS(t *testing.T) {
 		TransmitTimeout: 10 * time.Second,
 	}
 
-	dest, err := NewSink(cfg)
+	sink, err := NewSink(cfg)
 	if err != nil {
 		t.Fatalf("NewSink failed: %v", err)
 	}
 
-	if _, ok := dest.(*HTTPSink); !ok {
-		t.Errorf("Expected HTTPSink, got %T", dest)
+	if _, ok := sink.(*HTTPSink); !ok {
+		t.Errorf("Expected HTTPSink, got %T", sink)
 	}
 }
 

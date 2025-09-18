@@ -52,7 +52,6 @@ func (d *StdoutSink) Close() error {
 	return nil
 }
 
-// String returns a string representation of the destination.
 func (d *StdoutSink) String() string {
 	return "stdout"
 }
