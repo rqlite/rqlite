@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"crypto/tls"
 	"fmt"
+	"io"
 	"net/http"
 	"net/url"
 	"strings"
@@ -12,57 +13,58 @@ import (
 	httpurl "github.com/rqlite/rqlite/v9/http/url"
 )
 
-// Destination defines the interface that all CDC sinks must implement.
-type Destination interface {
-	// Send delivers one batch of already-encoded CDC events.
-	// The data is expected to be JSON-encoded (for now).
-	Send(data []byte) error
-
-	// Close releases resources held by the destination.
-	Close() error
-
+// Sink defines the interface that all CDC sinks must implement.
+type Sink interface {
+	io.Writer
 	fmt.Stringer
+
+	// Close releases resources held by the sink.
+	Close() error
 }
 
-// DestinationConfig holds the configuration for creating a destination.
-type DestinationConfig struct {
+// SinkConfig holds the configuration for creating a sink.
+type SinkConfig struct {
 	Endpoint        string
 	TLSConfig       *tls.Config
 	TransmitTimeout time.Duration
 }
 
-// StdoutDestination implements Destination by writing the batch to os.Stdout.
-type StdoutDestination struct{}
+// StdoutSink implements Sink by writing the batch to os.Stdout.
+type StdoutSink struct{}
 
-// NewStdoutDestination creates a new StdoutDestination.
-func NewStdoutDestination() *StdoutDestination {
-	return &StdoutDestination{}
+// NewStdoutSink creates a new StdoutSink.
+func NewStdoutSink() *StdoutSink {
+	return &StdoutSink{}
 }
 
-// Send writes the batch data to stdout.
-func (d *StdoutDestination) Send(data []byte) error {
-	_, err := fmt.Println(string(data))
-	return err
+// Write writes the data to stdout.
+func (d *StdoutSink) Write(p []byte) (n int, err error) {
+	n, err = fmt.Println(string(p))
+	if err != nil {
+		return 0, err
+	}
+	// fmt.Println adds a newline, but we return the original length
+	return len(p), nil
 }
 
 // Close releases resources (none for stdout).
-func (d *StdoutDestination) Close() error {
+func (d *StdoutSink) Close() error {
 	return nil
 }
 
 // String returns a string representation of the destination.
-func (d *StdoutDestination) String() string {
+func (d *StdoutSink) String() string {
 	return "stdout"
 }
 
-// HTTPDestination implements Destination by POSTing batches to the configured endpoint.
-type HTTPDestination struct {
+// HTTPSink implements Sink by POSTing batches to the configured endpoint.
+type HTTPSink struct {
 	endpoint   string
 	httpClient *http.Client
 }
 
-// NewHTTPDestination creates a new HTTPDestination.
-func NewHTTPDestination(endpoint string, tlsConfig *tls.Config, timeout time.Duration) *HTTPDestination {
+// NewHTTPSink creates a new HTTPSink.
+func NewHTTPSink(endpoint string, tlsConfig *tls.Config, timeout time.Duration) *HTTPSink {
 	httpClient := &http.Client{
 		Transport: &http.Transport{
 			TLSClientConfig: tlsConfig,
@@ -70,48 +72,48 @@ func NewHTTPDestination(endpoint string, tlsConfig *tls.Config, timeout time.Dur
 		Timeout: timeout,
 	}
 
-	return &HTTPDestination{
+	return &HTTPSink{
 		endpoint:   endpoint,
 		httpClient: httpClient,
 	}
 }
 
-// Send sends the batch data to the HTTP endpoint.
-func (d *HTTPDestination) Send(data []byte) error {
-	req, err := http.NewRequest("POST", d.endpoint, bytes.NewReader(data))
+// Write writes the data to the HTTP endpoint.
+func (d *HTTPSink) Write(p []byte) (n int, err error) {
+	req, err := http.NewRequest("POST", d.endpoint, bytes.NewReader(p))
 	if err != nil {
-		return fmt.Errorf("error creating HTTP request: %w", err)
+		return 0, fmt.Errorf("error creating HTTP request: %w", err)
 	}
 	req.Header.Set("Content-Type", "application/json")
 
 	resp, err := d.httpClient.Do(req)
 	if err != nil {
-		return fmt.Errorf("error sending HTTP request: %w", err)
+		return 0, fmt.Errorf("error sending HTTP request: %w", err)
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusAccepted {
-		return fmt.Errorf("HTTP request failed with status %d", resp.StatusCode)
+		return 0, fmt.Errorf("HTTP request failed with status %d", resp.StatusCode)
 	}
-	return nil
+	return len(p), nil
 }
 
 // Close releases resources held by the HTTP client.
-func (d *HTTPDestination) Close() error {
+func (d *HTTPSink) Close() error {
 	if d.httpClient != nil {
 		d.httpClient.CloseIdleConnections()
 	}
 	return nil
 }
 
-func (d *HTTPDestination) String() string {
+func (d *HTTPSink) String() string {
 	return httpurl.RemoveBasicAuth(d.endpoint)
 }
 
-// NewDestination creates a new Destination based on the provided configuration.
-func NewDestination(cfg DestinationConfig) (Destination, error) {
+// NewSink creates a new Sink based on the provided configuration.
+func NewSink(cfg SinkConfig) (Sink, error) {
 	if strings.EqualFold(cfg.Endpoint, "stdout") {
-		return NewStdoutDestination(), nil
+		return NewStdoutSink(), nil
 	}
 
 	u, err := url.Parse(cfg.Endpoint)
@@ -121,7 +123,7 @@ func NewDestination(cfg DestinationConfig) (Destination, error) {
 
 	switch u.Scheme {
 	case "http", "https":
-		return NewHTTPDestination(cfg.Endpoint, cfg.TLSConfig, cfg.TransmitTimeout), nil
+		return NewHTTPSink(cfg.Endpoint, cfg.TLSConfig, cfg.TransmitTimeout), nil
 	default:
 		return nil, fmt.Errorf("cdc: unsupported scheme %q", u.Scheme)
 	}

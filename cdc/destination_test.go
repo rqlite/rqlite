@@ -12,8 +12,8 @@ import (
 	"time"
 )
 
-func TestStdoutDestination_Send(t *testing.T) {
-	dest := NewStdoutDestination()
+func TestStdoutSink_Write(t *testing.T) {
+	dest := NewStdoutSink()
 
 	// Redirect stdout to capture output
 	oldStdout := os.Stdout
@@ -21,9 +21,9 @@ func TestStdoutDestination_Send(t *testing.T) {
 	os.Stdout = w
 
 	testData := []byte(`{"test": "data"}`)
-	err := dest.Send(testData)
+	_, err := dest.Write(testData)
 	if err != nil {
-		t.Fatalf("Send failed: %v", err)
+		t.Fatalf("Write failed: %v", err)
 	}
 
 	// Restore stdout and read captured output
@@ -41,23 +41,23 @@ func TestStdoutDestination_Send(t *testing.T) {
 	}
 }
 
-func TestStdoutDestination_Close(t *testing.T) {
-	dest := NewStdoutDestination()
+func TestStdoutSink_Close(t *testing.T) {
+	dest := NewStdoutSink()
 	err := dest.Close()
 	if err != nil {
 		t.Errorf("Close should not return error, got: %v", err)
 	}
 }
 
-func TestStdoutDestination_String(t *testing.T) {
-	dest := NewStdoutDestination()
+func TestStdoutSink_String(t *testing.T) {
+	dest := NewStdoutSink()
 	expected := "stdout"
 	if got := dest.String(); got != expected {
 		t.Errorf("Expected %q, got %q", expected, got)
 	}
 }
 
-func TestHTTPDestination_Send_Success(t *testing.T) {
+func TestHTTPSink_Write_Success(t *testing.T) {
 	// Create test server
 	var receivedData []byte
 	var receivedContentType string
@@ -69,12 +69,12 @@ func TestHTTPDestination_Send_Success(t *testing.T) {
 	}))
 	defer testSrv.Close()
 
-	dest := NewHTTPDestination(testSrv.URL, nil, 5*time.Second)
+	dest := NewHTTPSink(testSrv.URL, nil, 5*time.Second)
 
 	testData := []byte(`{"test": "data"}`)
-	err := dest.Send(testData)
+	_, err := dest.Write(testData)
 	if err != nil {
-		t.Fatalf("Send failed: %v", err)
+		t.Fatalf("Write failed: %v", err)
 	}
 
 	if !bytes.Equal(receivedData, testData) {
@@ -86,33 +86,33 @@ func TestHTTPDestination_Send_Success(t *testing.T) {
 	}
 }
 
-func TestHTTPDestination_Send_Accepted(t *testing.T) {
+func TestHTTPSink_Write_Accepted(t *testing.T) {
 	// Test that 202 Accepted is also considered success
 	testSrv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusAccepted)
 	}))
 	defer testSrv.Close()
 
-	dest := NewHTTPDestination(testSrv.URL, nil, 5*time.Second)
+	dest := NewHTTPSink(testSrv.URL, nil, 5*time.Second)
 
-	err := dest.Send([]byte(`{"test": "data"}`))
+	_, err := dest.Write([]byte(`{"test": "data"}`))
 	if err != nil {
-		t.Errorf("Send should succeed with 202 status, got error: %v", err)
+		t.Errorf("Write should succeed with 202 status, got error: %v", err)
 	}
 }
 
-func TestHTTPDestination_Send_HTTPError(t *testing.T) {
+func TestHTTPSink_Write_HTTPError(t *testing.T) {
 	// Test HTTP error response
 	testSrv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusInternalServerError)
 	}))
 	defer testSrv.Close()
 
-	dest := NewHTTPDestination(testSrv.URL, nil, 5*time.Second)
+	dest := NewHTTPSink(testSrv.URL, nil, 5*time.Second)
 
-	err := dest.Send([]byte(`{"test": "data"}`))
+	_, err := dest.Write([]byte(`{"test": "data"}`))
 	if err == nil {
-		t.Error("Send should fail with 500 status")
+		t.Error("Write should fail with 500 status")
 	}
 
 	expectedError := "HTTP request failed with status 500"
@@ -121,13 +121,13 @@ func TestHTTPDestination_Send_HTTPError(t *testing.T) {
 	}
 }
 
-func TestHTTPDestination_Send_NetworkError(t *testing.T) {
+func TestHTTPSink_Write_NetworkError(t *testing.T) {
 	// Test network error (invalid URL)
-	dest := NewHTTPDestination("http://invalid-url-that-does-not-exist:9999", nil, 1*time.Second)
+	dest := NewHTTPSink("http://invalid-url-that-does-not-exist:9999", nil, 1*time.Second)
 
-	err := dest.Send([]byte(`{"test": "data"}`))
+	_, err := dest.Write([]byte(`{"test": "data"}`))
 	if err == nil {
-		t.Error("Send should fail with network error")
+		t.Error("Write should fail with network error")
 	}
 
 	if !strings.Contains(err.Error(), "error sending HTTP request") {
@@ -135,7 +135,7 @@ func TestHTTPDestination_Send_NetworkError(t *testing.T) {
 	}
 }
 
-func TestHTTPDestination_WithTLS(t *testing.T) {
+func TestHTTPSink_WithTLS(t *testing.T) {
 	// Create HTTPS test server
 	testSrv := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
@@ -147,85 +147,85 @@ func TestHTTPDestination_WithTLS(t *testing.T) {
 		InsecureSkipVerify: true,
 	}
 
-	dest := NewHTTPDestination(testSrv.URL, tlsConfig, 5*time.Second)
+	dest := NewHTTPSink(testSrv.URL, tlsConfig, 5*time.Second)
 
-	err := dest.Send([]byte(`{"test": "data"}`))
+	_, err := dest.Write([]byte(`{"test": "data"}`))
 	if err != nil {
-		t.Errorf("Send with TLS should succeed, got error: %v", err)
+		t.Errorf("Write with TLS should succeed, got error: %v", err)
 	}
 }
 
-func TestHTTPDestination_Close(t *testing.T) {
-	dest := NewHTTPDestination("http://example.com", nil, 5*time.Second)
+func TestHTTPSink_Close(t *testing.T) {
+	dest := NewHTTPSink("http://example.com", nil, 5*time.Second)
 	err := dest.Close()
 	if err != nil {
 		t.Errorf("Close should not return error, got: %v", err)
 	}
 }
 
-func TestHTTPDestination_String(t *testing.T) {
+func TestHTTPSink_String(t *testing.T) {
 	endpoint := "https://webhook.example.com/cdc"
-	dest := NewHTTPDestination(endpoint, nil, 5*time.Second)
+	dest := NewHTTPSink(endpoint, nil, 5*time.Second)
 	if got := dest.String(); got != endpoint {
 		t.Errorf("Expected %q, got %q", endpoint, got)
 	}
 }
 
-func TestNewDestination_Stdout(t *testing.T) {
-	cfg := DestinationConfig{
+func TestNewSink_Stdout(t *testing.T) {
+	cfg := SinkConfig{
 		Endpoint: "stdout",
 	}
 
-	dest, err := NewDestination(cfg)
+	dest, err := NewSink(cfg)
 	if err != nil {
-		t.Fatalf("NewDestination failed: %v", err)
+		t.Fatalf("NewSink failed: %v", err)
 	}
 
-	if _, ok := dest.(*StdoutDestination); !ok {
-		t.Errorf("Expected StdoutDestination, got %T", dest)
+	if _, ok := dest.(*StdoutSink); !ok {
+		t.Errorf("Expected StdoutSink, got %T", dest)
 	}
 }
 
-func TestNewDestination_HTTP(t *testing.T) {
-	cfg := DestinationConfig{
+func TestNewSink_HTTP(t *testing.T) {
+	cfg := SinkConfig{
 		Endpoint:        "http://example.com",
 		TransmitTimeout: 10 * time.Second,
 	}
 
-	dest, err := NewDestination(cfg)
+	dest, err := NewSink(cfg)
 	if err != nil {
-		t.Fatalf("NewDestination failed: %v", err)
+		t.Fatalf("NewSink failed: %v", err)
 	}
 
-	if _, ok := dest.(*HTTPDestination); !ok {
-		t.Errorf("Expected HTTPDestination, got %T", dest)
+	if _, ok := dest.(*HTTPSink); !ok {
+		t.Errorf("Expected HTTPSink, got %T", dest)
 	}
 }
 
-func TestNewDestination_HTTPS(t *testing.T) {
-	cfg := DestinationConfig{
+func TestNewSink_HTTPS(t *testing.T) {
+	cfg := SinkConfig{
 		Endpoint:        "https://example.com",
 		TransmitTimeout: 10 * time.Second,
 	}
 
-	dest, err := NewDestination(cfg)
+	dest, err := NewSink(cfg)
 	if err != nil {
-		t.Fatalf("NewDestination failed: %v", err)
+		t.Fatalf("NewSink failed: %v", err)
 	}
 
-	if _, ok := dest.(*HTTPDestination); !ok {
-		t.Errorf("Expected HTTPDestination, got %T", dest)
+	if _, ok := dest.(*HTTPSink); !ok {
+		t.Errorf("Expected HTTPSink, got %T", dest)
 	}
 }
 
-func TestNewDestination_UnsupportedScheme(t *testing.T) {
-	cfg := DestinationConfig{
+func TestNewSink_UnsupportedScheme(t *testing.T) {
+	cfg := SinkConfig{
 		Endpoint: "ftp://example.com",
 	}
 
-	_, err := NewDestination(cfg)
+	_, err := NewSink(cfg)
 	if err == nil {
-		t.Error("NewDestination should fail with unsupported scheme")
+		t.Error("NewSink should fail with unsupported scheme")
 	}
 
 	expectedError := `cdc: unsupported scheme "ftp"`
@@ -234,14 +234,14 @@ func TestNewDestination_UnsupportedScheme(t *testing.T) {
 	}
 }
 
-func TestNewDestination_InvalidURL(t *testing.T) {
-	cfg := DestinationConfig{
+func TestNewSink_InvalidURL(t *testing.T) {
+	cfg := SinkConfig{
 		Endpoint: "://invalid-url",
 	}
 
-	_, err := NewDestination(cfg)
+	_, err := NewSink(cfg)
 	if err == nil {
-		t.Error("NewDestination should fail with invalid URL")
+		t.Error("NewSink should fail with invalid URL")
 	}
 
 	if !strings.Contains(err.Error(), "failed to parse endpoint URL") {

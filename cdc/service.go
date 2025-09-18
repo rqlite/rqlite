@@ -96,8 +96,8 @@ type Service struct {
 	// in is the channel from which the CDC events are read.
 	in chan *proto.CDCIndexedEventGroup
 
-	// dest is the destination to which the CDC events are sent.
-	dest Destination
+	// dest is the sink to which the CDC events are sent.
+	dest Sink
 
 	// transmitTimeout is the timeout for transmitting events to the endpoint.
 	transmitTimeout time.Duration
@@ -173,15 +173,15 @@ func NewService(nodeID, dir string, clstr Cluster, cfg *Config) (*Service, error
 		return nil, fmt.Errorf("failed to build TLS config: %w", err)
 	}
 
-	// Create destination based on configuration
-	destConfig := DestinationConfig{
+	// Create sink based on configuration
+	sinkConfig := SinkConfig{
 		Endpoint:        cfg.Endpoint,
 		TLSConfig:       tlsConfig,
 		TransmitTimeout: cfg.TransmitTimeout,
 	}
-	dest, err := NewDestination(destConfig)
+	dest, err := NewSink(sinkConfig)
 	if err != nil {
-		return nil, fmt.Errorf("failed to create destination: %w", err)
+		return nil, fmt.Errorf("failed to create sink: %w", err)
 	}
 
 	srv := &Service{
@@ -531,7 +531,7 @@ func (s *Service) leaderLoop() (chan struct{}, chan struct{}) {
 					nAttempts++
 
 					stats.Add(numBytesTx, int64(len(decompressed)))
-					err := s.dest.Send(decompressed)
+					_, err := s.dest.Write(decompressed)
 					if err == nil {
 						sentOK = true
 						break
