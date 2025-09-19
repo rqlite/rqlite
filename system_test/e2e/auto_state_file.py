@@ -8,6 +8,7 @@ import time
 import tempfile
 import shutil
 import glob
+import gzip
 
 from helpers import Node, deprovision_node, write_random_file, random_string, d_, Cluster
 
@@ -67,10 +68,19 @@ class TestAutoBackup_File(unittest.TestCase):
       cursor.execute("SELECT * FROM foo ORDER BY id")
       rows = cursor.fetchall()
       conn.close()
-      
       self.assertEqual(len(rows), 2)
       self.assertEqual(rows[0], (1, 'alice'))
       self.assertEqual(rows[1], (2, 'bob'))
+
+      # Verify the oldest backup contains only the first entry
+      oldest_backup = min(backup_files, key=os.path.getctime)
+      conn = sqlite3.connect(oldest_backup)
+      cursor = conn.cursor()
+      cursor.execute("SELECT * FROM foo ORDER BY id")
+      rows = cursor.fetchall()
+      conn.close()
+      self.assertEqual(len(rows), 1)
+      self.assertEqual(rows[0], (1, 'alice'))
       
     finally:
       if node:
@@ -206,7 +216,6 @@ class TestAutoBackup_File(unittest.TestCase):
       
       # Try to read as gzipped file first
       try:
-        import gzip
         with gzip.open(latest_backup, 'rb') as f:
           # If we can read it as gzip, decompress to temp file and test
           uncompressed_data = f.read()
