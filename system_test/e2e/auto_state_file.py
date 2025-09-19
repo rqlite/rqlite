@@ -4,13 +4,12 @@ import os
 import json
 import unittest
 import sqlite3
-import time
 import tempfile
 import shutil
 import glob
 import gzip
 
-from helpers import Node, deprovision_node, write_random_file, random_string, d_, Cluster
+from helpers import Node, deprovision_node, write_random_file
 
 RQLITED_PATH = os.environ['RQLITED_PATH']
 
