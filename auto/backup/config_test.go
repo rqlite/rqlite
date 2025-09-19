@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"strings"
 	"testing"
 	"time"
 
@@ -107,6 +108,8 @@ key2=TEST_VAR2`)
 func Test_NewStorageClient(t *testing.T) {
 	gcsCredsFile := mustGCSCredFile(t)
 	defer os.Remove(gcsCredsFile)
+	// Windows-compatible when embedded in JSON.
+	tempDir := strings.ReplaceAll(t.TempDir(), `\`, `\\`)
 
 	testCases := []struct {
 		name           string
@@ -209,7 +212,7 @@ func Test_NewStorageClient(t *testing.T) {
 				"timestamp": true,
 				"interval": "30s",
 				"sub": {
-					"dir": "` + t.TempDir() + `",
+					"dir": "` + tempDir + `",
 					"name": "backup.sqlite"
 				}
 			}`),
@@ -221,7 +224,7 @@ func Test_NewStorageClient(t *testing.T) {
 				Vacuum:     true,
 				Interval:   30 * auto.Duration(time.Second),
 			},
-			expectedClient: mustNewFileClient(t, t.TempDir(), "backup.sqlite"),
+			expectedClient: mustNewFileClient(t, tempDir, "backup.sqlite"),
 			expectedErr:    nil,
 		},
 		{
@@ -234,7 +237,7 @@ func Test_NewStorageClient(t *testing.T) {
 				"timestamp": false,
 				"interval": "1h",
 				"sub": {
-					"dir": "` + t.TempDir() + `",
+					"dir": "` + tempDir + `",
 					"name": "backup.sqlite"
 				}
 			}`),
@@ -246,7 +249,7 @@ func Test_NewStorageClient(t *testing.T) {
 				Vacuum:     false,
 				Interval:   1 * auto.Duration(time.Hour),
 			},
-			expectedClient: mustNewFileClient(t, t.TempDir(), "backup.sqlite"),
+			expectedClient: mustNewFileClient(t, tempDir, "backup.sqlite"),
 			expectedErr:    nil,
 		},
 		{
