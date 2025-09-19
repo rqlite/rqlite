@@ -1,6 +1,7 @@
 ## v9.0.3 (unreleased)
 ### Implementation changes and bug fixes
 - [PR #2335](https://github.com/rqlite/rqlite/pull/2335): Add basic File Storage client for auto-backups.
+- [PR #XXXX](https://github.com/rqlite/rqlite/pull/XXXX): Complete file backend integration with timestamped filenames and S3/GCS parity.
 - [PR #2337](https://github.com/rqlite/rqlite/pull/2337): Refactor CDC outputs to pluggable Destination interface.
 
 ## v9.0.2 (September 16th 2025)
