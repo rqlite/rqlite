@@ -56,10 +56,10 @@ func NewClient(dir, name string, opt *Options) (*Client, error) {
 		return nil, fmt.Errorf("invalid file parameter: %s (must be a simple filename without path separators)", name)
 	}
 
+	// Ensure the destination directory exists and is writable
 	if err := os.MkdirAll(dir, 0755); err != nil {
 		return nil, fmt.Errorf("failed to create directory %s: %w", dir, err)
 	}
-
 	touchPath := filepath.Join(dir, ".touch")
 	f, err := os.OpenFile(touchPath, os.O_CREATE|os.O_WRONLY, 0644)
 	if err != nil {
@@ -110,7 +110,7 @@ func (c *Client) LatestFilePath(ctx context.Context) string {
 
 // String returns a string representation of the client.
 func (c *Client) String() string {
-	return fmt.Sprintf("dir:%s", c.dir)
+	return fmt.Sprintf("dir:%s, file:%s", c.dir, c.name)
 }
 
 // Upload uploads data from the reader to the file storage.
