@@ -4,6 +4,7 @@ import (
 	"context"
 	"os"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -24,9 +25,10 @@ func Test_Uploader_FileStorage_Timestamped(t *testing.T) {
 	uploader := NewUploader(storageClient, dp, interval)
 
 	// Track last index values to force multiple uploads
-	lastIndexValue := uint64(1)
+	lastIndexValue := atomic.Uint64{}
+	lastIndexValue.Store(1)
 	dp.lastIndexFn = func() (uint64, error) {
-		return lastIndexValue, nil
+		return lastIndexValue.Load(), nil
 	}
 
 	ctx, cancel := context.WithCancel(context.Background())
@@ -40,7 +42,7 @@ func Test_Uploader_FileStorage_Timestamped(t *testing.T) {
 	}, 10*time.Millisecond, time.Second)
 
 	// Increment last index to trigger another upload
-	lastIndexValue = 2
+	lastIndexValue.Store(2)
 
 	// Add a small delay to ensure different timestamp
 	time.Sleep(1100 * time.Millisecond)
