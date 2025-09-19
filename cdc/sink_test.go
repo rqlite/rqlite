@@ -12,7 +12,7 @@ import (
 	"time"
 )
 
-func TestStdoutSink_Write(t *testing.T) {
+func Test_StdoutSink_Write(t *testing.T) {
 	sink := NewStdoutSink()
 
 	// Redirect stdout to capture output
@@ -41,7 +41,7 @@ func TestStdoutSink_Write(t *testing.T) {
 	}
 }
 
-func TestStdoutSink_Close(t *testing.T) {
+func Test_StdoutSink_Close(t *testing.T) {
 	sink := NewStdoutSink()
 	err := sink.Close()
 	if err != nil {
@@ -49,7 +49,7 @@ func TestStdoutSink_Close(t *testing.T) {
 	}
 }
 
-func TestStdoutSink_String(t *testing.T) {
+func Test_StdoutSink_String(t *testing.T) {
 	sink := NewStdoutSink()
 	expected := "stdout"
 	if got := sink.String(); got != expected {
@@ -57,7 +57,7 @@ func TestStdoutSink_String(t *testing.T) {
 	}
 }
 
-func TestHTTPSink_Write_Success(t *testing.T) {
+func Test_HTTPSink_Write_Success(t *testing.T) {
 	// Create test server
 	var receivedData []byte
 	var receivedContentType string
@@ -86,7 +86,7 @@ func TestHTTPSink_Write_Success(t *testing.T) {
 	}
 }
 
-func TestHTTPSink_Write_Accepted(t *testing.T) {
+func Test_HTTPSink_Write_Accepted(t *testing.T) {
 	// Test that 202 Accepted is also considered success
 	testSrv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusAccepted)
@@ -101,7 +101,7 @@ func TestHTTPSink_Write_Accepted(t *testing.T) {
 	}
 }
 
-func TestHTTPSink_Write_HTTPError(t *testing.T) {
+func Test_HTTPSink_Write_HTTPError(t *testing.T) {
 	// Test HTTP error response
 	testSrv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusInternalServerError)
@@ -121,7 +121,7 @@ func TestHTTPSink_Write_HTTPError(t *testing.T) {
 	}
 }
 
-func TestHTTPSink_Write_NetworkError(t *testing.T) {
+func Test_HTTPSink_Write_NetworkError(t *testing.T) {
 	// Test network error (invalid URL)
 	sink := NewHTTPSink("http://invalid-url-that-does-not-exist:9999", nil, 1*time.Second)
 
@@ -135,7 +135,7 @@ func TestHTTPSink_Write_NetworkError(t *testing.T) {
 	}
 }
 
-func TestHTTPSink_WithTLS(t *testing.T) {
+func Test_HTTPSink_WithTLS(t *testing.T) {
 	// Create HTTPS test server
 	testSrv := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
@@ -155,7 +155,7 @@ func TestHTTPSink_WithTLS(t *testing.T) {
 	}
 }
 
-func TestHTTPSink_Close(t *testing.T) {
+func Test_HTTPSink_Close(t *testing.T) {
 	sink := NewHTTPSink("http://example.com", nil, 5*time.Second)
 	err := sink.Close()
 	if err != nil {
@@ -163,7 +163,7 @@ func TestHTTPSink_Close(t *testing.T) {
 	}
 }
 
-func TestHTTPSink_String(t *testing.T) {
+func Test_HTTPSink_String(t *testing.T) {
 	endpoint := "https://webhook.example.com/cdc"
 	sink := NewHTTPSink(endpoint, nil, 5*time.Second)
 	if got := sink.String(); got != endpoint {
@@ -171,7 +171,7 @@ func TestHTTPSink_String(t *testing.T) {
 	}
 }
 
-func TestNewSink_Stdout(t *testing.T) {
+func Test_NewSink_Stdout(t *testing.T) {
 	cfg := SinkConfig{
 		Endpoint: "stdout",
 	}
@@ -186,7 +186,7 @@ func TestNewSink_Stdout(t *testing.T) {
 	}
 }
 
-func TestNewSink_HTTP(t *testing.T) {
+func Test_NewSink_HTTP(t *testing.T) {
 	cfg := SinkConfig{
 		Endpoint:        "http://example.com",
 		TransmitTimeout: 10 * time.Second,
@@ -202,7 +202,7 @@ func TestNewSink_HTTP(t *testing.T) {
 	}
 }
 
-func TestNewSink_HTTPS(t *testing.T) {
+func Test_NewSink_HTTPS(t *testing.T) {
 	cfg := SinkConfig{
 		Endpoint:        "https://example.com",
 		TransmitTimeout: 10 * time.Second,
@@ -218,7 +218,7 @@ func TestNewSink_HTTPS(t *testing.T) {
 	}
 }
 
-func TestNewSink_UnsupportedScheme(t *testing.T) {
+func Test_NewSink_UnsupportedScheme(t *testing.T) {
 	cfg := SinkConfig{
 		Endpoint: "ftp://example.com",
 	}
@@ -234,7 +234,7 @@ func TestNewSink_UnsupportedScheme(t *testing.T) {
 	}
 }
 
-func TestNewSink_InvalidURL(t *testing.T) {
+func Test_NewSink_InvalidURL(t *testing.T) {
 	cfg := SinkConfig{
 		Endpoint: "://invalid-url",
 	}
