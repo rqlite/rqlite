@@ -258,6 +258,8 @@ jobs:
       - image: minio/minio
         name: minio
         command: server /data
+    environment:
+        RQLITED_PATH: /home/circleci/go/bin/rqlited
     steps:
       - checkout
       - restore_and_save_cache
@@ -266,14 +268,15 @@ jobs:
       - run: mc mb myminio/minio-bucket
       - run:
           command: python3 system_test/e2e/auto_state_s3.py
-          command: python3 system_test/e2e/auto_state_file.py
-          command: python3 system_test/e2e/auto_state_gcs.py
           environment:
-            RQLITED_PATH: /home/circleci/go/bin/rqlited
             MINIO_ENDPOINT: http://minio:9000
             MINIO_ROOT_USER: minioadmin
             MINIO_ROOT_PASSWORD: minioadmin
             MINIO_BUCKET: minio-bucket
+      - run:
+          command: python3 system_test/e2e/auto_state_file.py
+      -run:
+          command: python3 system_test/e2e/auto_state_gcs.py
     resource_class: large
 
   end_to_end_cdc:
