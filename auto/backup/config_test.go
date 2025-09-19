@@ -10,6 +10,7 @@ import (
 
 	"github.com/rqlite/rqlite/v9/auto"
 	"github.com/rqlite/rqlite/v9/auto/aws"
+	"github.com/rqlite/rqlite/v9/auto/file"
 	"github.com/rqlite/rqlite/v9/auto/gcp"
 )
 
@@ -199,6 +200,56 @@ func Test_NewStorageClient(t *testing.T) {
 			expectedErr:    nil,
 		},
 		{
+			name: "ValidFileConfig",
+			input: []byte(`
+			{
+				"version": 1,
+				"type": "file",
+				"no_compress": true,
+				"timestamp": true,
+				"interval": "30s",
+				"sub": {
+					"dir": "` + t.TempDir() + `",
+					"file": "backup.sqlite"
+				}
+			}`),
+			expectedCfg: &Config{
+				Version:    1,
+				Type:       "file",
+				NoCompress: true,
+				Timestamp:  true,
+				Vacuum:     true,
+				Interval:   30 * auto.Duration(time.Second),
+			},
+			expectedClient: mustNewFileClient(t, t.TempDir(), "backup.sqlite"),
+			expectedErr:    nil,
+		},
+		{
+			name: "ValidFileConfigTimestampFalse",
+			input: []byte(`
+			{
+				"version": 1,
+				"type": "file",
+				"no_compress": false,
+				"timestamp": false,
+				"interval": "1h",
+				"sub": {
+					"dir": "` + t.TempDir() + `",
+					"file": "backup.sqlite"
+				}
+			}`),
+			expectedCfg: &Config{
+				Version:    1,
+				Type:       "file",
+				NoCompress: false,
+				Timestamp:  false,
+				Vacuum:     false,
+				Interval:   1 * auto.Duration(time.Hour),
+			},
+			expectedClient: mustNewFileClient(t, t.TempDir(), "backup.sqlite"),
+			expectedErr:    nil,
+		},
+		{
 			name: "InvalidVersion",
 			input: []byte(`
 			{
@@ -236,11 +287,38 @@ func Test_NewStorageClient(t *testing.T) {
 			expectedCfg: nil,
 			expectedErr: auto.ErrUnsupportedStorageType,
 		},
+		{
+			name: "InvalidFileConfig_PathTraversal",
+			input: []byte(`
+			{
+				"version": 1,
+				"type": "file",
+				"no_compress": false,
+				"timestamp": false,
+				"interval": "1h",
+				"sub": {
+					"dir": "/tmp",
+					"file": "../../../etc/passwd"
+				}
+			}`),
+			expectedCfg:    nil,
+			expectedClient: nil,
+			expectedErr:    nil, // NewStorageClient won't fail, but NewClient will
+		},
 	}
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 			cfg, sc, err := NewStorageClient(tc.input)
+
+			// Special handling for invalid file config - error happens in NewClient, not NewStorageClient
+			if tc.name == "InvalidFileConfig_PathTraversal" {
+				if err == nil {
+					t.Fatalf("Test case %s expected an error from file client creation", tc.name)
+				}
+				return
+			}
+
 			if !errors.Is(err, tc.expectedErr) {
 				t.Fatalf("Test case %s failed, expected error %v, got %v", tc.name, tc.expectedErr, err)
 			}
@@ -256,6 +334,11 @@ func Test_NewStorageClient(t *testing.T) {
 					_, ok := sc.(*gcp.GCSClient)
 					if !ok {
 						t.Fatalf("Test case %s failed, expected GCSClient, got %T", tc.name, sc)
+					}
+				case *file.Client:
+					_, ok := sc.(*file.Client)
+					if !ok {
+						t.Fatalf("Test case %s failed, expected file.Client, got %T", tc.name, sc)
 					}
 				default:
 					t.Fatalf("Test case %s failed, unexpected client type %T", tc.name, sc)
@@ -298,6 +381,15 @@ func mustNewGCSClient(t *testing.T, bucket, name, projectID, credentialsFile str
 	}, nil)
 	if err != nil {
 		t.Fatalf("Failed to create GCS client: %v", err)
+	}
+	return client
+}
+
+func mustNewFileClient(t *testing.T, dir, filename string) *file.Client {
+	t.Helper()
+	client, err := file.NewClient(dir, filename, nil)
+	if err != nil {
+		t.Fatalf("Failed to create file client: %v", err)
 	}
 	return client
 }

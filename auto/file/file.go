@@ -5,8 +5,10 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"log"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 )
 
@@ -22,11 +24,13 @@ type Client struct {
 	file      string
 	metaPath  string
 	timestamp bool
+	logger    *log.Logger
 }
 
 // Options represents options for the file storage client.
 type Options struct {
 	Timestamp bool
+	Logger    *log.Logger
 }
 
 // Metadata represents metadata stored in the metadata file.
@@ -38,6 +42,19 @@ type Metadata struct {
 
 // NewClient creates a new file storage client.
 func NewClient(dir, file string, opt *Options) (*Client, error) {
+	// Validate and clean paths
+	dir = filepath.Clean(dir)
+	if !filepath.IsAbs(dir) && !strings.HasPrefix(dir, ".") {
+		// If not absolute and not relative with ., make it relative to current dir
+		dir = "./" + dir
+	}
+
+	// Validate file parameter for path traversal attacks and directory separators
+	cleanFile := filepath.Clean(file)
+	if strings.Contains(file, string(filepath.Separator)) || strings.Contains(cleanFile, "..") || filepath.IsAbs(cleanFile) || cleanFile != file {
+		return nil, fmt.Errorf("invalid file parameter: %s (must be a simple filename without path separators)", file)
+	}
+
 	if err := os.MkdirAll(dir, 0755); err != nil {
 		return nil, fmt.Errorf("failed to create directory %s: %w", dir, err)
 	}
@@ -54,10 +71,14 @@ func NewClient(dir, file string, opt *Options) (*Client, error) {
 		dir:      dir,
 		file:     file,
 		metaPath: filepath.Join(dir, "METADATA.json"),
+		logger:   log.New(os.Stderr, "[auto-backup-file] ", log.LstdFlags),
 	}
 
 	if opt != nil {
 		c.timestamp = opt.Timestamp
+		if opt.Logger != nil {
+			c.logger = opt.Logger
+		}
 	}
 	return c, nil
 }
@@ -97,43 +118,87 @@ func (c *Client) String() string {
 
 // Upload uploads data from the reader to the file storage.
 func (c *Client) Upload(ctx context.Context, reader io.Reader, id string) (retErr error) {
-	finalPath := filepath.Join(c.dir, c.file)
-	tmpPath := finalPath + ".tmp"
+	// Determine final filename
+	filename := c.file
+	if c.timestamp {
+		// Use millisecond precision for timestamp to avoid collisions
+		ts := time.Now().UTC().Format("20060102150405.000")
+		// Split filename into base name and extension
+		ext := filepath.Ext(filename)
+		base := strings.TrimSuffix(filename, ext)
+		filename = fmt.Sprintf("%s_%s%s", ts, base, ext)
+	}
+
+	finalPath := filepath.Join(c.dir, filename)
+
+	c.logger.Printf("starting upload: raft_id=%s timestamp=%t path=%s", id, c.timestamp, finalPath)
+
+	// Use os.CreateTemp for better atomic temporary file creation
+	tmpFile, err := os.CreateTemp(c.dir, ".upload-*")
+	if err != nil {
+		return fmt.Errorf("failed to create temporary file in %s: %w", c.dir, err)
+	}
+	tmpPath := tmpFile.Name()
+
 	tmpMetaPath := c.metaPath + ".tmp"
+
+	// Cleanup on error
 	defer func() {
+		tmpFile.Close()
 		if retErr != nil {
 			os.Remove(tmpMetaPath)
 			os.Remove(tmpPath)
-		} else {
-			os.Rename(tmpPath, finalPath)
-			os.Rename(tmpMetaPath, c.metaPath)
 		}
 	}()
 
-	if err := os.Remove(c.metaPath); err != nil && !os.IsNotExist(err) {
-		return fmt.Errorf("failed to remove file %s: %w", c.metaPath, err)
-	}
-
-	fd, err := os.OpenFile(tmpPath, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0644)
+	// Write data to temporary file
+	startTime := time.Now()
+	n, err := io.Copy(tmpFile, reader)
 	if err != nil {
-		return fmt.Errorf("failed to open temporary file %s: %w", tmpPath, err)
-	}
-	defer fd.Close()
-
-	_, err = io.Copy(fd, reader)
-	if err != nil {
-		return fmt.Errorf("failed to write to file %s: %w", finalPath, err)
+		return fmt.Errorf("failed to write to temporary file %s: %w", tmpPath, err)
 	}
 
-	b, err := json.Marshal(Metadata{
+	// Fsync to ensure data is written to disk
+	if err := tmpFile.Sync(); err != nil {
+		return fmt.Errorf("failed to sync temporary file %s: %w", tmpPath, err)
+	}
+
+	// Close temp file before rename
+	if err := tmpFile.Close(); err != nil {
+		return fmt.Errorf("failed to close temporary file %s: %w", tmpPath, err)
+	}
+
+	// Write metadata to temporary metadata file
+	metadata := Metadata{
 		ID:        id,
 		Timestamp: time.Now().UnixMilli(),
 		File:      finalPath,
-	})
+	}
+
+	metadataBytes, err := json.Marshal(metadata)
 	if err != nil {
 		return fmt.Errorf("failed to marshal metadata: %w", err)
 	}
-	return os.WriteFile(tmpMetaPath, b, 0644)
+
+	if err := os.WriteFile(tmpMetaPath, metadataBytes, 0644); err != nil {
+		return fmt.Errorf("failed to write temporary metadata file %s: %w", tmpMetaPath, err)
+	}
+
+	// Atomic renames (on same filesystem)
+	if err := os.Rename(tmpPath, finalPath); err != nil {
+		return fmt.Errorf("failed to rename temporary file %s to %s: %w", tmpPath, finalPath, err)
+	}
+
+	if err := os.Rename(tmpMetaPath, c.metaPath); err != nil {
+		// Try to clean up the data file if metadata rename fails
+		os.Remove(finalPath)
+		return fmt.Errorf("failed to rename temporary metadata file %s to %s: %w", tmpMetaPath, c.metaPath, err)
+	}
+
+	elapsed := time.Since(startTime)
+	c.logger.Printf("completed upload: raft_id=%s bytes=%d path=%s elapsed=%v", id, n, finalPath, elapsed)
+
+	return nil
 }
 
 // CurrentID returns the current ID stored in the metadata.
