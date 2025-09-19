@@ -20,7 +20,7 @@ type Config struct {
 // Client represents a file storage client.
 type Client struct {
 	dir       string
-	file      string
+	name      string
 	metaPath  string
 	timestamp bool
 
@@ -40,7 +40,7 @@ type Metadata struct {
 }
 
 // NewClient creates a new file storage client.
-func NewClient(dir, file string, opt *Options) (*Client, error) {
+func NewClient(dir, name string, opt *Options) (*Client, error) {
 	// Validate and clean paths
 	dir = filepath.Clean(dir)
 	if !filepath.IsAbs(dir) {
@@ -48,9 +48,12 @@ func NewClient(dir, file string, opt *Options) (*Client, error) {
 	}
 
 	// Validate file parameter for path traversal attacks and directory separators
-	cleanFile := filepath.Clean(file)
-	if strings.Contains(file, string(filepath.Separator)) || strings.Contains(cleanFile, "..") || filepath.IsAbs(cleanFile) || cleanFile != file {
-		return nil, fmt.Errorf("invalid file parameter: %s (must be a simple filename without path separators)", file)
+	cleanFile := filepath.Clean(name)
+	if strings.Contains(name, string(filepath.Separator)) ||
+		strings.Contains(cleanFile, "..") ||
+		filepath.IsAbs(cleanFile) ||
+		cleanFile != name {
+		return nil, fmt.Errorf("invalid file parameter: %s (must be a simple filename without path separators)", name)
 	}
 
 	if err := os.MkdirAll(dir, 0755); err != nil {
@@ -67,7 +70,7 @@ func NewClient(dir, file string, opt *Options) (*Client, error) {
 
 	c := &Client{
 		dir:      dir,
-		file:     file,
+		name:     name,
 		metaPath: filepath.Join(dir, "METADATA.json"),
 	}
 
@@ -112,7 +115,7 @@ func (c *Client) String() string {
 
 // Upload uploads data from the reader to the file storage.
 func (c *Client) Upload(ctx context.Context, reader io.Reader, id string) (retErr error) {
-	filename := c.file
+	filename := c.name
 	if c.timestamp {
 		if c.now == nil {
 			c.now = func() time.Time {
