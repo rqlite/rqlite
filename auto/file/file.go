@@ -124,13 +124,11 @@ func (c *Client) Upload(ctx context.Context, reader io.Reader, id string) (retEr
 
 	finalPath := filepath.Join(c.dir, filename)
 
-	// Use os.CreateTemp for atomic temporary file creation
 	tmpFile, err := os.CreateTemp(c.dir, ".upload-*")
 	if err != nil {
 		return fmt.Errorf("failed to create temporary file in %s: %w", c.dir, err)
 	}
 	tmpPath := tmpFile.Name()
-
 	tmpMetaPath := c.metaPath + ".tmp"
 
 	// Cleanup on error
@@ -147,13 +145,9 @@ func (c *Client) Upload(ctx context.Context, reader io.Reader, id string) (retEr
 	if err != nil {
 		return fmt.Errorf("failed to write to temporary file %s: %w", tmpPath, err)
 	}
-
-	// Fsync to ensure data is written to disk
 	if err := tmpFile.Sync(); err != nil {
 		return fmt.Errorf("failed to sync temporary file %s: %w", tmpPath, err)
 	}
-
-	// Close temp file before rename
 	if err := tmpFile.Close(); err != nil {
 		return fmt.Errorf("failed to close temporary file %s: %w", tmpPath, err)
 	}
@@ -174,13 +168,11 @@ func (c *Client) Upload(ctx context.Context, reader io.Reader, id string) (retEr
 		return fmt.Errorf("failed to write temporary metadata file %s: %w", tmpMetaPath, err)
 	}
 
-	// Atomic renames (on same filesystem)
 	if err := os.Rename(tmpPath, finalPath); err != nil {
 		return fmt.Errorf("failed to rename temporary file %s to %s: %w", tmpPath, finalPath, err)
 	}
 
 	if err := os.Rename(tmpMetaPath, c.metaPath); err != nil {
-		// Try to clean up the data file if metadata rename fails
 		os.Remove(finalPath)
 		return fmt.Errorf("failed to rename temporary metadata file %s to %s: %w", tmpMetaPath, c.metaPath, err)
 	}
