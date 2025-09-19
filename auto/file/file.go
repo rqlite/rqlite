@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"log"
 	"os"
 	"path/filepath"
 	"strings"
@@ -24,13 +23,13 @@ type Client struct {
 	file      string
 	metaPath  string
 	timestamp bool
-	logger    *log.Logger
+
+	now func() time.Time
 }
 
 // Options represents options for the file storage client.
 type Options struct {
 	Timestamp bool
-	Logger    *log.Logger
 }
 
 // Metadata represents metadata stored in the metadata file.
@@ -70,14 +69,10 @@ func NewClient(dir, file string, opt *Options) (*Client, error) {
 		dir:      dir,
 		file:     file,
 		metaPath: filepath.Join(dir, "METADATA.json"),
-		logger:   log.New(os.Stderr, "[auto-backup-file] ", log.LstdFlags),
 	}
 
 	if opt != nil {
 		c.timestamp = opt.Timestamp
-		if opt.Logger != nil {
-			c.logger = opt.Logger
-		}
 	}
 	return c, nil
 }
@@ -117,22 +112,19 @@ func (c *Client) String() string {
 
 // Upload uploads data from the reader to the file storage.
 func (c *Client) Upload(ctx context.Context, reader io.Reader, id string) (retErr error) {
-	// Determine final filename
 	filename := c.file
 	if c.timestamp {
-		// Use millisecond precision for timestamp to avoid collisions
-		ts := time.Now().UTC().Format("20060102150405.000")
-		// Split filename into base name and extension
-		ext := filepath.Ext(filename)
-		base := strings.TrimSuffix(filename, ext)
-		filename = fmt.Sprintf("%s_%s%s", ts, base, ext)
+		if c.now == nil {
+			c.now = func() time.Time {
+				return time.Now().UTC()
+			}
+		}
+		filename = timestampedPath(filename, c.now())
 	}
 
 	finalPath := filepath.Join(c.dir, filename)
 
-	c.logger.Printf("starting upload: raft_id=%s timestamp=%t path=%s", id, c.timestamp, finalPath)
-
-	// Use os.CreateTemp for better atomic temporary file creation
+	// Use os.CreateTemp for atomic temporary file creation
 	tmpFile, err := os.CreateTemp(c.dir, ".upload-*")
 	if err != nil {
 		return fmt.Errorf("failed to create temporary file in %s: %w", c.dir, err)
@@ -151,8 +143,7 @@ func (c *Client) Upload(ctx context.Context, reader io.Reader, id string) (retEr
 	}()
 
 	// Write data to temporary file
-	startTime := time.Now()
-	n, err := io.Copy(tmpFile, reader)
+	_, err = io.Copy(tmpFile, reader)
 	if err != nil {
 		return fmt.Errorf("failed to write to temporary file %s: %w", tmpPath, err)
 	}
@@ -193,10 +184,6 @@ func (c *Client) Upload(ctx context.Context, reader io.Reader, id string) (retEr
 		os.Remove(finalPath)
 		return fmt.Errorf("failed to rename temporary metadata file %s to %s: %w", tmpMetaPath, c.metaPath, err)
 	}
-
-	elapsed := time.Since(startTime)
-	c.logger.Printf("completed upload: raft_id=%s bytes=%d path=%s elapsed=%v", id, n, finalPath, elapsed)
-
 	return nil
 }
 
@@ -210,6 +197,14 @@ func (c *Client) CurrentID(ctx context.Context) (string, error) {
 		return "", nil
 	}
 	return md.ID, nil
+}
+
+// timestampedPath returns a new path with the given timestamp prepended.
+// If path contains /, the timestamp is prepended to the last segment.
+func timestampedPath(path string, t time.Time) string {
+	parts := strings.Split(path, "/")
+	parts[len(parts)-1] = fmt.Sprintf("%s_%s", t.Format("20060102150405"), parts[len(parts)-1])
+	return strings.Join(parts, "/")
 }
 
 func fileExists(path string) bool {
