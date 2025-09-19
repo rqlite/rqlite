@@ -41,11 +41,11 @@ func Test_Uploader_FileStorage_Timestamped(t *testing.T) {
 		return err == nil && md != nil
 	}, 10*time.Millisecond, time.Second)
 
-	// Increment last index to trigger another upload
-	lastIndexValue.Store(2)
-
 	// Add a small delay to ensure different timestamp
 	time.Sleep(1100 * time.Millisecond)
+
+	// Increment last index to trigger another upload
+	lastIndexValue.Store(2)
 
 	// Wait for second upload
 	testPoll(t, func() bool {
