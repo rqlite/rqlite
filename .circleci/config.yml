@@ -252,7 +252,7 @@ jobs:
             RQLITED_PATH: /home/circleci/go/bin/rqlited
     resource_class: large
 
-  end_to_end_auto_state_s3:
+  end_to_end_auto_state:
     docker:
       - image: << pipeline.parameters.primary_image >>
       - image: minio/minio
@@ -266,38 +266,14 @@ jobs:
       - run: mc mb myminio/minio-bucket
       - run:
           command: python3 system_test/e2e/auto_state_s3.py
+          command: python3 system_test/e2e/auto_state_file.py
+          command: python3 system_test/e2e/auto_state_gcs.py
           environment:
             RQLITED_PATH: /home/circleci/go/bin/rqlited
             MINIO_ENDPOINT: http://minio:9000
             MINIO_ROOT_USER: minioadmin
             MINIO_ROOT_PASSWORD: minioadmin
             MINIO_BUCKET: minio-bucket
-    resource_class: large
-
-  end_to_end_auto_state_file:
-    docker:
-      - image: << pipeline.parameters.primary_image >>
-    steps:
-      - checkout
-      - restore_and_save_cache
-      - run: go install ./...
-      - run:
-          command: python3 system_test/e2e/auto_state_file.py
-          environment:
-            RQLITED_PATH: /home/circleci/go/bin/rqlited
-    resource_class: large
-
-  end_to_end_auto_state_gcs:
-    docker:
-      - image: << pipeline.parameters.primary_image >>
-    steps:
-      - checkout
-      - restore_and_save_cache
-      - run: go install ./...
-      - run:
-          command: python3 system_test/e2e/auto_state_gcs.py
-          environment:
-            RQLITED_PATH: /home/circleci/go/bin/rqlited
     resource_class: large
 
   end_to_end_cdc:
@@ -359,9 +335,7 @@ workflows:
       - end_to_end_multi_adv
       - end_to_end_joining
       - end_to_end_autoclustering
-      - end_to_end_auto_state_s3
-      - end_to_end_auto_state_gcs
-      - end_to_end_auto_state_file
+      - end_to_end_auto_state
       - end_to_end_upgrade
       - end_to_end_cdc
       - end_to_end_extensions
