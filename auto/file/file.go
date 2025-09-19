@@ -14,7 +14,7 @@ import (
 // Config represents configuration for the file storage client.
 type Config struct {
 	Dir  string `json:"dir"`
-	Name string `json:"file"`
+	Name string `json:"name"`
 }
 
 // Client represents a file storage client.

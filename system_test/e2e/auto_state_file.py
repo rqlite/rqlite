@@ -33,7 +33,7 @@ class TestAutoBackup_File(unittest.TestCase):
         "vacuum": False,
         "sub": {
           "dir": backup_dir,
-          "file": "backup.sqlite"
+          "name": "backup.sqlite"
         }
       }
       auto_backup_cfg_file = write_random_file(json.dumps(auto_backup_cfg))
@@ -100,7 +100,7 @@ class TestAutoBackup_File(unittest.TestCase):
         "vacuum": False,
         "sub": {
           "dir": backup_dir,
-          "file": "backup.sqlite"
+          "name": "backup.sqlite"
         }
       }
       auto_backup_cfg_file = write_random_file(json.dumps(auto_backup_cfg))
@@ -178,7 +178,7 @@ class TestAutoBackup_File(unittest.TestCase):
         "vacuum": False,
         "sub": {
           "dir": backup_dir,
-          "file": "backup.sqlite"
+          "name": "backup.sqlite"
         }
       }
       auto_backup_cfg_file = write_random_file(json.dumps(auto_backup_cfg))
@@ -230,16 +230,7 @@ class TestAutoBackup_File(unittest.TestCase):
           os.unlink(temp_sqlite_path)
           
       except (gzip.BadGzipFile, OSError):
-        # If it's not compressed (when no_compress is actually respected as True)
-        # then read it directly
-        conn = sqlite3.connect(latest_backup)
-        cursor = conn.cursor()
-        cursor.execute("SELECT * FROM foo")
-        rows = cursor.fetchall()
-        conn.close()
-        
-        self.assertEqual(len(rows), 1)
-        self.assertEqual(rows[0], (1, 'alice'))
+        self.fail("Backup file is not properly compressed")
       
     finally:
       if node:
