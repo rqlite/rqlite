@@ -63,7 +63,7 @@ func Test_Upload_Success(t *testing.T) {
 	if md.ID != id {
 		t.Fatalf("id mismatch: got %q want %q", md.ID, id)
 	}
-	if md.File != c.LatestFilePath(context.Background()) {
+	if md.Name != c.LatestFilePath(context.Background()) {
 		t.Fatalf("file mismatch")
 	}
 	if md.Timestamp == 0 {

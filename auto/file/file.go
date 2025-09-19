@@ -15,7 +15,7 @@ import (
 // Config represents configuration for the file storage client.
 type Config struct {
 	Dir  string `json:"dir"`
-	File string `json:"file"`
+	Name string `json:"file"`
 }
 
 // Client represents a file storage client.
@@ -37,16 +37,15 @@ type Options struct {
 type Metadata struct {
 	ID        string `json:"id"`
 	Timestamp int64  `json:"timestamp,omitempty"`
-	File      string `json:"file,omitempty"`
+	Name      string `json:"name,omitempty"`
 }
 
 // NewClient creates a new file storage client.
 func NewClient(dir, file string, opt *Options) (*Client, error) {
 	// Validate and clean paths
 	dir = filepath.Clean(dir)
-	if !filepath.IsAbs(dir) && !strings.HasPrefix(dir, ".") {
-		// If not absolute and not relative with ., make it relative to current dir
-		dir = "./" + dir
+	if !filepath.IsAbs(dir) {
+		return nil, fmt.Errorf("directory path must be absolute: %s", dir)
 	}
 
 	// Validate file parameter for path traversal attacks and directory separators
@@ -108,7 +107,7 @@ func (c *Client) LatestFilePath(ctx context.Context) string {
 	if md == nil {
 		return ""
 	}
-	return md.File
+	return md.Name
 }
 
 // String returns a string representation of the client.
@@ -172,7 +171,7 @@ func (c *Client) Upload(ctx context.Context, reader io.Reader, id string) (retEr
 	metadata := Metadata{
 		ID:        id,
 		Timestamp: time.Now().UnixMilli(),
-		File:      finalPath,
+		Name:      finalPath,
 	}
 
 	metadataBytes, err := json.Marshal(metadata)

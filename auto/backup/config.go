@@ -67,7 +67,7 @@ func NewStorageClient(data []byte) (*Config, StorageClient, error) {
 		opts := &file.Options{
 			Timestamp: cfg.Timestamp,
 		}
-		sc, err = file.NewClient(fileCfg.Dir, fileCfg.File, opts)
+		sc, err = file.NewClient(fileCfg.Dir, fileCfg.Name, opts)
 	default:
 		return nil, nil, auto.ErrUnsupportedStorageType
 	}

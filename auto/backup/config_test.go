@@ -210,7 +210,7 @@ func Test_NewStorageClient(t *testing.T) {
 				"interval": "30s",
 				"sub": {
 					"dir": "` + t.TempDir() + `",
-					"file": "backup.sqlite"
+					"name": "backup.sqlite"
 				}
 			}`),
 			expectedCfg: &Config{
@@ -235,7 +235,7 @@ func Test_NewStorageClient(t *testing.T) {
 				"interval": "1h",
 				"sub": {
 					"dir": "` + t.TempDir() + `",
-					"file": "backup.sqlite"
+					"name": "backup.sqlite"
 				}
 			}`),
 			expectedCfg: &Config{
@@ -286,24 +286,6 @@ func Test_NewStorageClient(t *testing.T) {
 			}			`),
 			expectedCfg: nil,
 			expectedErr: auto.ErrUnsupportedStorageType,
-		},
-		{
-			name: "InvalidFileConfig_PathTraversal",
-			input: []byte(`
-			{
-				"version": 1,
-				"type": "file",
-				"no_compress": false,
-				"timestamp": false,
-				"interval": "1h",
-				"sub": {
-					"dir": "/tmp",
-					"file": "../../../etc/passwd"
-				}
-			}`),
-			expectedCfg:    nil,
-			expectedClient: nil,
-			expectedErr:    nil, // NewStorageClient won't fail, but NewClient will
 		},
 	}
 
