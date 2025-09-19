@@ -1,4 +1,4 @@
-## v9.1.0 (unreleased)
+## v9.1.0 (September 19th 2025)
 ### New features
 - [PR #2340](https://github.com/rqlite/rqlite/pull/2340): Support file-based storage for automatic backups, fixes issue [#2332](https://github.com/rqlite/rqlite/issues/2332).
 
