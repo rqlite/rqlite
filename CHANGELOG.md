@@ -1,4 +1,7 @@
-## v9.0.3 (unreleased)
+## v9.1.0 (September 19th 2025)
+### New features
+- [PR #2340](https://github.com/rqlite/rqlite/pull/2340): Support file-based storage for automatic backups, fixes issue [#2332](https://github.com/rqlite/rqlite/issues/2332).
+
 ### Implementation changes and bug fixes
 - [PR #2335](https://github.com/rqlite/rqlite/pull/2335): Add basic File Storage client for auto-backups.
 - [PR #2337](https://github.com/rqlite/rqlite/pull/2337): Refactor CDC outputs to pluggable Destination interface.
