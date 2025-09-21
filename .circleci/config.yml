@@ -267,9 +267,9 @@ jobs:
     steps:
       - checkout
       - restore_and_save_cache
-      - run: mc alias set myminio http://minio:9000 minioadmin minioadmin
       # Build rqlite now, which will give time for minio to come up
       - run: go install ./...
+      - run: mc alias set myminio http://minio:9000 minioadmin minioadmin
       - run: mc mb myminio/minio-bucket
       - run:
           command: python3 system_test/e2e/auto_state_file.py
