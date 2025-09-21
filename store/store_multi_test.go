@@ -1847,7 +1847,6 @@ func Test_MultiNodeExecuteQuery_Linearizable_Concurrent(t *testing.T) {
 		t.Fatalf("failed to execute on leader: %s", err.Error())
 	}
 
-	fmt.Println(">>>>>>>>>>>>>>>Waiting 1 second for cluster to settle")
 	time.Sleep(time.Second)
 
 	// Perform a bunch of linearizable queries concurrently, to stress test
