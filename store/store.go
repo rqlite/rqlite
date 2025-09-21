@@ -2182,7 +2182,7 @@ func (s *Store) fsmApply(l *raft.Log) (e any) {
 
 	if s.firstLogAppliedT.IsZero() {
 		s.firstLogAppliedT = time.Now()
-		s.logger.Printf("first log applied since node start, log at index %d", l.Index)
+		s.logger.Printf("first log applied since node %s started, log at index %d", s.raftID, l.Index)
 	}
 
 	cmd, mutated, r := func() (*proto.Command, bool, any) {

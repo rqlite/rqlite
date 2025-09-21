@@ -1847,13 +1847,15 @@ func Test_MultiNodeExecuteQuery_Linearizable_Concurrent(t *testing.T) {
 		t.Fatalf("failed to execute on leader: %s", err.Error())
 	}
 
+	fmt.Println(">>>>>>>>>>>>>>>Waiting 1 second for cluster to settle")
+	time.Sleep(time.Second)
+
 	// Perform a bunch of linearizable queries concurrently, to stress test
 	// the system. Must be done on Leader.
-
 	count := 100
 	var wg sync.WaitGroup
 	wg.Add(count)
-	for i := 0; i < count; i++ {
+	for range count {
 		go func() {
 			defer wg.Done()
 			qr := queryRequestFromString("SELECT * FROM foo", false, false)
