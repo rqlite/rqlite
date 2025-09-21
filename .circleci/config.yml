@@ -264,6 +264,7 @@ jobs:
         MINIO_ROOT_USER: minioadmin
         MINIO_ROOT_PASSWORD: minioadmin
         MINIO_BUCKET: minio-bucket
+        # All other required env vars for GCS and S3 are set via CircleCI project settings
     steps:
       - checkout
       - restore_and_save_cache
