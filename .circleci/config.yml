@@ -214,27 +214,14 @@ jobs:
   end_to_end_multi:
     docker:
       - image: << pipeline.parameters.primary_image >>
+    environment:
+      RQLITED_PATH: /home/circleci/go/bin/rqlited
     steps:
       - checkout
       - restore_and_save_cache
       - run: go install ./...
-      - run:
-          command: python3 system_test/e2e/multi_node.py
-          environment:
-            RQLITED_PATH: /home/circleci/go/bin/rqlited
-    resource_class: large
-
-  end_to_end_multi_adv:
-    docker:
-      - image: << pipeline.parameters.primary_image >>
-    steps:
-      - checkout
-      - restore_and_save_cache
-      - run: go install ./...
-      - run:
-          command: python3 system_test/e2e/multi_node_adv.py
-          environment:
-            RQLITED_PATH: /home/circleci/go/bin/rqlited
+      - run: python3 system_test/e2e/multi_node.py
+      - run: python3 system_test/e2e/multi_node_adv.py
     resource_class: large
 
   end_to_end_autoclustering:
@@ -336,7 +323,6 @@ workflows:
       - test_odd_race
       - end_to_end_single
       - end_to_end_multi
-      - end_to_end_multi_adv
       - end_to_end_joining
       - end_to_end_autoclustering
       - end_to_end_auto_state
