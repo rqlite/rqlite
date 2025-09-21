@@ -41,6 +41,18 @@ func Test_MultiNode_Leader_Followers(t *testing.T) {
 		t.Fatalf("Error waiting for leader: %s", err)
 	}
 
+	// Send a noop through to ensure that the Configuration changes due to
+	// joining node have gone through the Raft log.
+	if af, err := s0.Noop("don't care"); err != nil || af.Error() != nil {
+		t.Fatalf("failed to noop on single node: %s", err.Error())
+	}
+	if err := s0.WaitForAllFSM(500 * time.Millisecond); err != nil {
+		t.Fatalf("failed to wait for all FSM on leader: %s", err.Error())
+	}
+	if err := s1.WaitForAllFSM(500 * time.Millisecond); err != nil {
+		t.Fatalf("failed to wait for all FSM on follower: %s", err.Error())
+	}
+
 	// Ensure the leader is the same on both nodes.
 	node0, err := s0.Leader()
 	if err != nil {

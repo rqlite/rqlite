@@ -103,6 +103,9 @@ var (
 
 	// ErrNodeNotFound is returned when a node with a given ID is not found in the cluster.
 	ErrNodeNotFound = errors.New("node not found in cluster")
+
+	// ErrClusterNotFound is returned when a cluster should exist but does not.
+	ErrClusterNotFound = errors.New("cluster not found")
 )
 
 const (
@@ -834,8 +837,8 @@ func (s *Store) Close(wait bool) (retErr error) {
 	return nil
 }
 
-// WaitForAppliedFSM waits until the currently applied logs (at the time this
-// function is called) are actually reflected by the FSM, or the timeout expires.
+// WaitForAppliedFSM waits until the log Raft considers Applied (sent
+// to the FSM) has actually been applied to the underlying state machine.
 func (s *Store) WaitForAppliedFSM(timeout time.Duration) (uint64, error) {
 	if timeout == 0 {
 		return 0, nil
@@ -853,6 +856,16 @@ func (s *Store) WaitForFSMIndex(idx uint64, timeout time.Duration) (uint64, erro
 	case <-time.After(timeout):
 		return 0, fmt.Errorf("index %d: %w", idx, ErrWaitForFSMTimeout)
 	}
+}
+
+// WaitForAllFSM waits for the last index in the Raft log to have been
+// applied to the FSM.
+func (s *Store) WaitForAllFSM(timeout time.Duration) error {
+	if timeout == 0 {
+		return nil
+	}
+	_, err := s.WaitForFSMIndex(s.raft.LastIndex(), timeout)
+	return err
 }
 
 // WaitForAllApplied waits for all Raft log entries to be applied to the
@@ -1043,20 +1056,23 @@ func (s *Store) Followers() ([]*Server, error) {
 	if f.Error() != nil {
 		return nil, f.Error()
 	}
+	servers := f.Configuration().Servers
+	if len(servers) == 0 {
+		return nil, ErrClusterNotFound
+	}
 
 	_, id := s.raft.LeaderWithID()
 	if id == "" {
 		return nil, ErrLeaderNotFound
 	}
 
-	rs := f.Configuration().Servers
-	followers := make([]*Server, 0, len(rs)-1)
-	for i := range rs {
-		if rs[i].ID != raft.ServerID(id) && rs[i].Suffrage == raft.Voter {
+	followers := make([]*Server, 0, len(servers)-1)
+	for i := range servers {
+		if servers[i].ID != raft.ServerID(id) && servers[i].Suffrage == raft.Voter {
 			followers = append(followers, &Server{
-				ID:       string(rs[i].ID),
-				Addr:     string(rs[i].Address),
-				Suffrage: rs[i].Suffrage.String(),
+				ID:       string(servers[i].ID),
+				Addr:     string(servers[i].Address),
+				Suffrage: servers[i].Suffrage.String(),
 			})
 		}
 	}
