@@ -938,6 +938,116 @@ func Test_SingleNodeExecuteQuery_Linearizable(t *testing.T) {
 	}
 }
 
+// Test_SingleNodeRequest_Linearizable tests that a Store correctly responds to a
+// simple Request with Linearizable consistency level.
+func Test_SingleNodeRequest_Linearizable(t *testing.T) {
+	s, ln := mustNewStore(t)
+	defer ln.Close()
+
+	if err := s.Open(); err != nil {
+		t.Fatalf("failed to open single-node store: %s", err.Error())
+	}
+	if err := s.Bootstrap(NewServer(s.ID(), s.Addr(), true)); err != nil {
+		t.Fatalf("failed to bootstrap single-node store: %s", err.Error())
+	}
+	defer s.Close(true)
+	_, err := s.WaitForLeader(10 * time.Second)
+	if err != nil {
+		t.Fatalf("Error waiting for leader: %s", err)
+	}
+
+	er := executeRequestFromStrings([]string{
+		`CREATE TABLE foo (id INTEGER NOT NULL PRIMARY KEY, name TEXT)`,
+		`INSERT INTO foo(id, name) VALUES(1, "fiona")`,
+	}, false, false)
+	_, _, err = s.Execute(er)
+	if err != nil {
+		t.Fatalf("failed to execute on single node: %s", err.Error())
+	}
+
+	// Perform the first linearizable request, which should be upgraded to a strong query.
+	eqr := executeQueryRequestFromString("SELECT * FROM foo", proto.QueryRequest_QUERY_REQUEST_LEVEL_LINEARIZABLE, false, false)
+	r, _, err := s.Request(eqr)
+	if err != nil {
+		t.Fatalf("failed to perform linearizable request on single node: %s", err.Error())
+	}
+	if r[0].GetQ() == nil {
+		t.Fatalf("expected query result, got %v", r[0])
+	}
+	if exp, got := `["id","name"]`, asJSON(r[0].GetQ().Columns); exp != got {
+		t.Fatalf("unexpected results for request\nexp: %s\ngot: %s", exp, got)
+	}
+	if exp, got := `[[1,"fiona"]]`, asJSON(r[0].GetQ().Values); exp != got {
+		t.Fatalf("unexpected results for request\nexp: %s\ngot: %s", exp, got)
+	}
+	if s.numLRUpgraded.Load() != 1 {
+		t.Fatalf("expected 1 linearizable upgrade, got %d", s.numLRUpgraded.Load())
+	}
+
+	// Perform the second linearizable request, which should not be upgraded to a strong query.
+	r, _, err = s.Request(eqr)
+	if err != nil {
+		t.Fatalf("failed to perform linearizable request on single node: %s", err.Error())
+	}
+	if r[0].GetQ() == nil {
+		t.Fatalf("expected query result, got %v", r[0])
+	}
+	if exp, got := `["id","name"]`, asJSON(r[0].GetQ().Columns); exp != got {
+		t.Fatalf("unexpected results for request\nexp: %s\ngot: %s", exp, got)
+	}
+	if exp, got := `[[1,"fiona"]]`, asJSON(r[0].GetQ().Values); exp != got {
+		t.Fatalf("unexpected results for request\nexp: %s\ngot: %s", exp, got)
+	}
+	if s.numLRUpgraded.Load() != 1 {
+		t.Fatalf("expected 1 linearizable upgrade, got %d", s.numLRUpgraded.Load())
+	}
+}
+
+// Test_SingleNodeRequest_LinearizableTimeout tests that a Store correctly handles
+// linearizable timeout in Request.
+func Test_SingleNodeRequest_LinearizableTimeout(t *testing.T) {
+	s, ln := mustNewStore(t)
+	defer ln.Close()
+
+	if err := s.Open(); err != nil {
+		t.Fatalf("failed to open single-node store: %s", err.Error())
+	}
+	if err := s.Bootstrap(NewServer(s.ID(), s.Addr(), true)); err != nil {
+		t.Fatalf("failed to bootstrap single-node store: %s", err.Error())
+	}
+	defer s.Close(true)
+	_, err := s.WaitForLeader(10 * time.Second)
+	if err != nil {
+		t.Fatalf("Error waiting for leader: %s", err)
+	}
+
+	er := executeRequestFromStrings([]string{
+		`CREATE TABLE foo (id INTEGER NOT NULL PRIMARY KEY, name TEXT)`,
+		`INSERT INTO foo(id, name) VALUES(1, "fiona")`,
+	}, false, false)
+	_, _, err = s.Execute(er)
+	if err != nil {
+		t.Fatalf("failed to execute on single node: %s", err.Error())
+	}
+
+	// Test with custom linearizable timeout
+	eqr := executeQueryRequestFromString("SELECT * FROM foo", proto.QueryRequest_QUERY_REQUEST_LEVEL_LINEARIZABLE, false, false)
+	eqr.LinearizableTimeout = int64(5 * time.Second) // 5 second timeout
+	r, _, err := s.Request(eqr)
+	if err != nil {
+		t.Fatalf("failed to perform linearizable request with timeout on single node: %s", err.Error())
+	}
+	if r[0].GetQ() == nil {
+		t.Fatalf("expected query result, got %v", r[0])
+	}
+	if exp, got := `["id","name"]`, asJSON(r[0].GetQ().Columns); exp != got {
+		t.Fatalf("unexpected results for request\nexp: %s\ngot: %s", exp, got)
+	}
+	if exp, got := `[[1,"fiona"]]`, asJSON(r[0].GetQ().Values); exp != got {
+		t.Fatalf("unexpected results for request\nexp: %s\ngot: %s", exp, got)
+	}
+}
+
 func Test_SingleNodeExecuteQuery_RETURNING(t *testing.T) {
 	s, ln := mustNewStore(t)
 	defer ln.Close()

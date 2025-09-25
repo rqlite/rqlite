@@ -1477,7 +1477,7 @@ func (s *Store) Request(eqr *proto.ExecuteQueryRequest) ([]*proto.ExecuteQueryRe
 	nRW, _ := s.RORWCount(eqr)
 	isLeader := s.raft.State() == raft.Leader
 
-	if nRW == 0 && eqr.Level != proto.QueryRequest_QUERY_REQUEST_LEVEL_STRONG {
+	if nRW == 0 && eqr.Level != proto.QueryRequest_QUERY_REQUEST_LEVEL_STRONG && eqr.Level != proto.QueryRequest_QUERY_REQUEST_LEVEL_LINEARIZABLE {
 		// It's a little faster just to do a Query of the DB if we know there is no need
 		// for consensus.
 		convertFn := func(qr []*proto.QueryRows) []*proto.ExecuteQueryResponse {
@@ -1498,6 +1498,66 @@ func (s *Store) Request(eqr *proto.ExecuteQueryRequest) ([]*proto.ExecuteQueryRe
 		}
 		qr, err := s.db.Query(eqr.Request, eqr.Timings)
 		return convertFn(qr), 0, err
+	}
+
+	// Handle LINEARIZABLE read consistency level for read-only requests
+	if nRW == 0 && eqr.Level == proto.QueryRequest_QUERY_REQUEST_LEVEL_LINEARIZABLE {
+		convertFn := func(qr []*proto.QueryRows) []*proto.ExecuteQueryResponse {
+			resp := make([]*proto.ExecuteQueryResponse, len(qr))
+			for i := range qr {
+				resp[i] = &proto.ExecuteQueryResponse{
+					Result: &proto.ExecuteQueryResponse_Q{Q: qr[i]},
+				}
+			}
+			return resp
+		}
+
+		// If linearizable consistency is requested, we will need to check the
+		// current term to see if a linearizable read can be served.
+		//
+		// See https://groups.google.com/g/raft-dev/c/4QlyV0aptEQ/m/1JxcmSgRAwAJ
+		// for an extensive discussion of this logic.
+		readTerm := s.raft.CurrentTerm()
+		if eqr.Level == proto.QueryRequest_QUERY_REQUEST_LEVEL_LINEARIZABLE &&
+			readTerm != s.strongReadTerm.Load() {
+			eqr.Level = proto.QueryRequest_QUERY_REQUEST_LEVEL_STRONG
+			s.numLRUpgraded.Add(1)
+		}
+
+		if eqr.Level == proto.QueryRequest_QUERY_REQUEST_LEVEL_LINEARIZABLE {
+			if s.raft.State() != raft.Leader {
+				return nil, 0, ErrNotLeader
+			}
+			if !s.Ready() {
+				return nil, 0, ErrNotReady
+			}
+
+			// Implement the technique from the Raft dissertation, section
+			// 6.4 "Processing read-only queries more efficiently".
+			readIndex := s.raft.CommitIndex()
+			if err := s.VerifyLeader(); err != nil {
+				return nil, 0, err
+			}
+			if s.raft.CurrentTerm() != readTerm {
+				return nil, 0, ErrStaleRead
+			}
+			lt := time.Duration(eqr.LinearizableTimeout)
+			if lt == 0 {
+				lt = linearizableTimeout
+			}
+			if _, err := s.WaitForFSMIndex(readIndex, time.Duration(lt)); err != nil {
+				return nil, 0, err
+			}
+		}
+
+		// If level was upgraded to STRONG, handle via consensus path
+		if eqr.Level == proto.QueryRequest_QUERY_REQUEST_LEVEL_STRONG {
+			// Fall through to consensus path
+		} else {
+			// Execute the query directly
+			qr, err := s.db.Query(eqr.Request, eqr.Timings)
+			return convertFn(qr), 0, err
+		}
 	}
 
 	// At least one write in the request, or STRONG consistency requested, so
