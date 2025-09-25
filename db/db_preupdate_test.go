@@ -145,6 +145,37 @@ func Test_Preupdate_AllTypes(t *testing.T) {
 			},
 		},
 		{
+			name: "INSERT new row, all NULLs",
+			sql: `INSERT INTO foo(id, name, employer, ssn, age, weight, dob, active, data) VALUES(
+			6,
+			NULL,
+			NULL,
+			NULL,
+			NULL,
+			NULL,
+			NULL,
+			NULL,
+			NULL)`,
+			ev: &proto.CDCEvent{
+				Table:    "foo",
+				Op:       proto.CDCEvent_INSERT,
+				NewRowId: 6,
+				NewRow: &proto.CDCRow{
+					Values: []*proto.CDCValue{
+						{Value: &proto.CDCValue_I{I: 6}},
+						{Value: nil},
+						{Value: nil},
+						{Value: nil},
+						{Value: nil},
+						{Value: nil},
+						{Value: nil},
+						{Value: nil},
+						{Value: nil},
+					},
+				},
+			},
+		},
+		{
 			name: "UPDATE single column",
 			sql: `UPDATE foo SET
 			name="declan"
