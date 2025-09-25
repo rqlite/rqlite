@@ -1323,6 +1323,58 @@ func (s *Store) execute(ex *proto.ExecuteRequest) ([]*proto.ExecuteQueryResponse
 	return r.results, af.Index(), r.error
 }
 
+// handleLinearizableRead processes linearizable read consistency level, potentially
+// upgrading it to STRONG, and performing the necessary leader verification and
+// commit index waiting. Returns the potentially modified consistency level.
+func (s *Store) handleLinearizableRead(level proto.QueryRequest_Level, linearizableTimeoutParam int64) (proto.QueryRequest_Level, error) {
+	// If linearizable consistency is requested, we will need to check the
+	// term when heartbeat processing completes to ensure the Leader didn't
+	// change during the processing of a Linearizable read. We also need to
+	// be sure that this node -- if Leader -- has actually committed a log
+	// in *this* term. Currently the Raft library doesn't help us do this,
+	// so we have to do it ourselves, by checking  if at least one Strong
+	// Read has gone through the Raft log in this term. If it hasn't then
+	// we convert the first Linearizable read into a strong read. Subsequent
+	// Linearizable reads will then be able to operate normally in this term.
+	//
+	// See https://groups.google.com/g/raft-dev/c/4QlyV0aptEQ/m/1JxcmSgRAwAJ
+	// for an extensive discussion of this logic.
+	readTerm := s.raft.CurrentTerm()
+	if level == proto.QueryRequest_QUERY_REQUEST_LEVEL_LINEARIZABLE &&
+		readTerm != s.strongReadTerm.Load() {
+		level = proto.QueryRequest_QUERY_REQUEST_LEVEL_STRONG
+		s.numLRUpgraded.Add(1)
+	}
+
+	if level == proto.QueryRequest_QUERY_REQUEST_LEVEL_LINEARIZABLE {
+		if s.raft.State() != raft.Leader {
+			return level, ErrNotLeader
+		}
+		if !s.Ready() {
+			return level, ErrNotReady
+		}
+
+		// Implement the technique from the Raft dissertation, section
+		// 6.4 "Processing read-only queries more efficiently".
+		readIndex := s.raft.CommitIndex()
+		if err := s.VerifyLeader(); err != nil {
+			return level, err
+		}
+		if s.raft.CurrentTerm() != readTerm {
+			return level, ErrStaleRead
+		}
+		lt := time.Duration(linearizableTimeoutParam)
+		if lt == 0 {
+			lt = linearizableTimeout
+		}
+		if _, err := s.WaitForFSMIndex(readIndex, time.Duration(lt)); err != nil {
+			return level, err
+		}
+	}
+
+	return level, nil
+}
+
 // Query executes queries that return rows, and do not modify the database.
 // If the request read consistency level is LINEARIZABLE, that level may be
 // upgraded to STRONG if the Store determines that is necessary to guarantee
@@ -1348,49 +1400,11 @@ func (s *Store) Query(qr *proto.QueryRequest) (rows []*proto.QueryRows, raftInde
 		}
 	}
 
-	// If linearizable consistency is requested, we will need to check the
-	// term when heartbeat processing completes to ensure the Leader didn't
-	// change during the processing of a Linearizable read. We also need to
-	// be sure that this node -- if Leader -- has actually committed a log
-	// in *this* term. Currently the Raft library doesn't help us do this,
-	// so we have to do it ourselves, by checking  if at least one Strong
-	// Read has gone through the Raft log in this term. If it hasn't then
-	// we convert the first Linearizable read into a strong read. Subsequent
-	// Linearizable reads will then be able to operate normally in this term.
-	//
-	// See https://groups.google.com/g/raft-dev/c/4QlyV0aptEQ/m/1JxcmSgRAwAJ
-	// for an extensive discussion of this logic.
-	readTerm := s.raft.CurrentTerm()
-	if qr.Level == proto.QueryRequest_QUERY_REQUEST_LEVEL_LINEARIZABLE &&
-		readTerm != s.strongReadTerm.Load() {
-		qr.Level = proto.QueryRequest_QUERY_REQUEST_LEVEL_STRONG
-		s.numLRUpgraded.Add(1)
-	}
-
-	if qr.Level == proto.QueryRequest_QUERY_REQUEST_LEVEL_LINEARIZABLE {
-		if s.raft.State() != raft.Leader {
-			return nil, 0, ErrNotLeader
-		}
-		if !s.Ready() {
-			return nil, 0, ErrNotReady
-		}
-
-		// Implement the technique from the Raft dissertation, section
-		// 6.4 "Processing read-only queries more efficiently".
-		readIndex := s.raft.CommitIndex()
-		if err := s.VerifyLeader(); err != nil {
-			return nil, 0, err
-		}
-		if s.raft.CurrentTerm() != readTerm {
-			return nil, 0, ErrStaleRead
-		}
-		lt := time.Duration(qr.LinearizableTimeout)
-		if lt == 0 {
-			lt = linearizableTimeout
-		}
-		if _, err := s.WaitForFSMIndex(readIndex, time.Duration(lt)); err != nil {
-			return nil, 0, err
-		}
+	// Handle linearizable read consistency level
+	var err error
+	qr.Level, err = s.handleLinearizableRead(qr.Level, qr.LinearizableTimeout)
+	if err != nil {
+		return nil, 0, err
 	}
 
 	if qr.Level == proto.QueryRequest_QUERY_REQUEST_LEVEL_STRONG {
@@ -1424,7 +1438,7 @@ func (s *Store) Query(qr *proto.QueryRequest) (rows []*proto.QueryRows, raftInde
 			}
 			return nil, 0, af.Error()
 		}
-		s.strongReadTerm.Store(readTerm)
+		s.strongReadTerm.Store(s.raft.CurrentTerm())
 		r := af.Response().(*fsmQueryResponse)
 		return r.rows, af.Index(), r.error
 	}
@@ -1436,7 +1450,7 @@ func (s *Store) Query(qr *proto.QueryRequest) (rows []*proto.QueryRows, raftInde
 		return nil, 0, ErrStaleRead
 	}
 
-	rows, err := s.db.Query(qr.Request, qr.Timings)
+	rows, err = s.db.Query(qr.Request, qr.Timings)
 	return rows, 0, err
 }
 
@@ -1477,7 +1491,7 @@ func (s *Store) Request(eqr *proto.ExecuteQueryRequest) ([]*proto.ExecuteQueryRe
 	nRW, _ := s.RORWCount(eqr)
 	isLeader := s.raft.State() == raft.Leader
 
-	if nRW == 0 && eqr.Level != proto.QueryRequest_QUERY_REQUEST_LEVEL_STRONG {
+	if nRW == 0 && eqr.Level != proto.QueryRequest_QUERY_REQUEST_LEVEL_STRONG && eqr.Level != proto.QueryRequest_QUERY_REQUEST_LEVEL_LINEARIZABLE {
 		// It's a little faster just to do a Query of the DB if we know there is no need
 		// for consensus.
 		convertFn := func(qr []*proto.QueryRows) []*proto.ExecuteQueryResponse {
@@ -1498,6 +1512,35 @@ func (s *Store) Request(eqr *proto.ExecuteQueryRequest) ([]*proto.ExecuteQueryRe
 		}
 		qr, err := s.db.Query(eqr.Request, eqr.Timings)
 		return convertFn(qr), 0, err
+	}
+
+	// Handle LINEARIZABLE read consistency level for read-only requests
+	if nRW == 0 && eqr.Level == proto.QueryRequest_QUERY_REQUEST_LEVEL_LINEARIZABLE {
+		convertFn := func(qr []*proto.QueryRows) []*proto.ExecuteQueryResponse {
+			resp := make([]*proto.ExecuteQueryResponse, len(qr))
+			for i := range qr {
+				resp[i] = &proto.ExecuteQueryResponse{
+					Result: &proto.ExecuteQueryResponse_Q{Q: qr[i]},
+				}
+			}
+			return resp
+		}
+
+		// Handle linearizable read consistency level
+		var err error
+		eqr.Level, err = s.handleLinearizableRead(eqr.Level, eqr.LinearizableTimeout)
+		if err != nil {
+			return nil, 0, err
+		}
+
+		// If level was upgraded to STRONG, handle via consensus path
+		if eqr.Level == proto.QueryRequest_QUERY_REQUEST_LEVEL_STRONG {
+			// Fall through to consensus path
+		} else {
+			// Execute the query directly
+			qr, err := s.db.Query(eqr.Request, eqr.Timings)
+			return convertFn(qr), 0, err
+		}
 	}
 
 	// At least one write in the request, or STRONG consistency requested, so
