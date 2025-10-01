@@ -1450,8 +1450,22 @@ func (s *Store) Request(eqr *proto.ExecuteQueryRequest) ([]*proto.ExecuteQueryRe
 	if !s.open.Is() {
 		return nil, 0, ErrNotOpen
 	}
-	nRW, _ := s.RORWCount(eqr)
+	nRW, nRO := s.RORWCount(eqr)
 	isLeader := s.raft.State() == raft.Leader
+
+	// See the Query() code for a full explanation of this.
+	readTerm := s.raft.CurrentTerm()
+	if eqr.Level == proto.QueryRequest_QUERY_REQUEST_LEVEL_LINEARIZABLE {
+		err := s.waitForLinearizableRead(readTerm, eqr.LinearizableTimeout)
+		if err != nil {
+			if err == ErrStrongReadNeeded {
+				eqr.Level = proto.QueryRequest_QUERY_REQUEST_LEVEL_STRONG
+				s.numLRUpgraded.Add(1)
+			} else {
+				return nil, 0, err
+			}
+		}
+	}
 
 	if nRW == 0 && eqr.Level != proto.QueryRequest_QUERY_REQUEST_LEVEL_STRONG {
 		// It's a little faster just to do a Query of the DB if we know there is no need
@@ -1465,6 +1479,7 @@ func (s *Store) Request(eqr *proto.ExecuteQueryRequest) ([]*proto.ExecuteQueryRe
 			}
 			return resp
 		}
+
 		if eqr.Level == proto.QueryRequest_QUERY_REQUEST_LEVEL_NONE && s.isStaleRead(eqr.Freshness, eqr.FreshnessStrict) {
 			return nil, 0, ErrStaleRead
 		} else if eqr.Level == proto.QueryRequest_QUERY_REQUEST_LEVEL_WEAK {
@@ -1508,6 +1523,13 @@ func (s *Store) Request(eqr *proto.ExecuteQueryRequest) ([]*proto.ExecuteQueryRe
 		return nil, 0, af.Error()
 	}
 	r := af.Response().(*fsmExecuteQueryResponse)
+
+	// If we sent any reads through consensus they were strong reads by definition.
+	// Update our strong read term.
+	if nRO > 0 {
+		s.strongReadTerm.Store(readTerm)
+	}
+
 	return r.results, af.Index(), r.error
 }
 
