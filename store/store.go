@@ -1355,9 +1355,13 @@ func (s *Store) Query(qr *proto.QueryRequest) (rows []*proto.QueryRows, raftInde
 	readTerm := s.raft.CurrentTerm()
 	if qr.Level == proto.QueryRequest_QUERY_REQUEST_LEVEL_LINEARIZABLE {
 		err := s.waitForLinearizableRead(readTerm, qr.LinearizableTimeout)
-		if err == ErrStrongReadNeeded {
-			qr.Level = proto.QueryRequest_QUERY_REQUEST_LEVEL_STRONG
-			s.numLRUpgraded.Add(1)
+		if err != nil {
+			if err == ErrStrongReadNeeded {
+				qr.Level = proto.QueryRequest_QUERY_REQUEST_LEVEL_STRONG
+				s.numLRUpgraded.Add(1)
+			} else {
+				return nil, 0, err
+			}
 		}
 	}
 
