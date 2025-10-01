@@ -887,14 +887,15 @@ func (x *ExecuteResult) GetTime() float64 {
 }
 
 type ExecuteQueryRequest struct {
-	state           protoimpl.MessageState `protogen:"open.v1"`
-	Request         *Request               `protobuf:"bytes,1,opt,name=request,proto3" json:"request,omitempty"`
-	Timings         bool                   `protobuf:"varint,2,opt,name=timings,proto3" json:"timings,omitempty"`
-	Level           QueryRequest_Level     `protobuf:"varint,3,opt,name=level,proto3,enum=command.QueryRequest_Level" json:"level,omitempty"`
-	Freshness       int64                  `protobuf:"varint,4,opt,name=freshness,proto3" json:"freshness,omitempty"`
-	FreshnessStrict bool                   `protobuf:"varint,5,opt,name=freshness_strict,json=freshnessStrict,proto3" json:"freshness_strict,omitempty"`
-	unknownFields   protoimpl.UnknownFields
-	sizeCache       protoimpl.SizeCache
+	state               protoimpl.MessageState `protogen:"open.v1"`
+	Request             *Request               `protobuf:"bytes,1,opt,name=request,proto3" json:"request,omitempty"`
+	Timings             bool                   `protobuf:"varint,2,opt,name=timings,proto3" json:"timings,omitempty"`
+	Level               QueryRequest_Level     `protobuf:"varint,3,opt,name=level,proto3,enum=command.QueryRequest_Level" json:"level,omitempty"`
+	Freshness           int64                  `protobuf:"varint,4,opt,name=freshness,proto3" json:"freshness,omitempty"`
+	FreshnessStrict     bool                   `protobuf:"varint,5,opt,name=freshness_strict,json=freshnessStrict,proto3" json:"freshness_strict,omitempty"`
+	LinearizableTimeout int64                  `protobuf:"varint,6,opt,name=linearizable_timeout,json=linearizableTimeout,proto3" json:"linearizable_timeout,omitempty"`
+	unknownFields       protoimpl.UnknownFields
+	sizeCache           protoimpl.SizeCache
 }
 
 func (x *ExecuteQueryRequest) Reset() {
@@ -960,6 +961,13 @@ func (x *ExecuteQueryRequest) GetFreshnessStrict() bool {
 		return x.FreshnessStrict
 	}
 	return false
+}
+
+func (x *ExecuteQueryRequest) GetLinearizableTimeout() int64 {
+	if x != nil {
+		return x.LinearizableTimeout
+	}
+	return 0
 }
 
 type ExecuteQueryResponse struct {
@@ -2124,13 +2132,14 @@ const file_command_proto_rawDesc = "" +
 	"\x0elast_insert_id\x18\x01 \x01(\x03R\flastInsertId\x12#\n" +
 	"\rrows_affected\x18\x02 \x01(\x03R\frowsAffected\x12\x14\n" +
 	"\x05error\x18\x03 \x01(\tR\x05error\x12\x12\n" +
-	"\x04time\x18\x04 \x01(\x01R\x04time\"\xd7\x01\n" +
+	"\x04time\x18\x04 \x01(\x01R\x04time\"\x8a\x02\n" +
 	"\x13ExecuteQueryRequest\x12*\n" +
 	"\arequest\x18\x01 \x01(\v2\x10.command.RequestR\arequest\x12\x18\n" +
 	"\atimings\x18\x02 \x01(\bR\atimings\x121\n" +
 	"\x05level\x18\x03 \x01(\x0e2\x1b.command.QueryRequest.LevelR\x05level\x12\x1c\n" +
 	"\tfreshness\x18\x04 \x01(\x03R\tfreshness\x12)\n" +
-	"\x10freshness_strict\x18\x05 \x01(\bR\x0ffreshnessStrict\"\x84\x01\n" +
+	"\x10freshness_strict\x18\x05 \x01(\bR\x0ffreshnessStrict\x121\n" +
+	"\x14linearizable_timeout\x18\x06 \x01(\x03R\x13linearizableTimeout\"\x84\x01\n" +
 	"\x14ExecuteQueryResponse\x12\"\n" +
 	"\x01q\x18\x01 \x01(\v2\x12.command.QueryRowsH\x00R\x01q\x12&\n" +
 	"\x01e\x18\x02 \x01(\v2\x16.command.ExecuteResultH\x00R\x01e\x12\x16\n" +
