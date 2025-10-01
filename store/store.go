@@ -63,6 +63,10 @@ var (
 	// requested freshness.
 	ErrStaleRead = errors.New("stale read")
 
+	// ErrStrongReadNeeded is returned if a strong read is required to
+	// guarantee linearizability.
+	ErrStrongReadNeeded = errors.New("strong read required")
+
 	// ErrOpenTimeout is returned when the Store does not apply its initial
 	// logs within the specified time.
 	ErrOpenTimeout = errors.New("timeout waiting for initial logs application")
@@ -1348,48 +1352,16 @@ func (s *Store) Query(qr *proto.QueryRequest) (rows []*proto.QueryRows, raftInde
 		}
 	}
 
-	// If linearizable consistency is requested, we will need to check the
-	// term when heartbeat processing completes to ensure the Leader didn't
-	// change during the processing of a Linearizable read. We also need to
-	// be sure that this node -- if Leader -- has actually committed a log
-	// in *this* term. Currently the Raft library doesn't help us do this,
-	// so we have to do it ourselves, by checking  if at least one Strong
-	// Read has gone through the Raft log in this term. If it hasn't then
-	// we convert the first Linearizable read into a strong read. Subsequent
-	// Linearizable reads will then be able to operate normally in this term.
-	//
-	// See https://groups.google.com/g/raft-dev/c/4QlyV0aptEQ/m/1JxcmSgRAwAJ
-	// for an extensive discussion of this logic.
 	readTerm := s.raft.CurrentTerm()
-	if qr.Level == proto.QueryRequest_QUERY_REQUEST_LEVEL_LINEARIZABLE &&
-		readTerm != s.strongReadTerm.Load() {
-		qr.Level = proto.QueryRequest_QUERY_REQUEST_LEVEL_STRONG
-		s.numLRUpgraded.Add(1)
-	}
-
 	if qr.Level == proto.QueryRequest_QUERY_REQUEST_LEVEL_LINEARIZABLE {
-		if s.raft.State() != raft.Leader {
-			return nil, 0, ErrNotLeader
-		}
-		if !s.Ready() {
-			return nil, 0, ErrNotReady
-		}
-
-		// Implement the technique from the Raft dissertation, section
-		// 6.4 "Processing read-only queries more efficiently".
-		readIndex := s.raft.CommitIndex()
-		if err := s.VerifyLeader(); err != nil {
-			return nil, 0, err
-		}
-		if s.raft.CurrentTerm() != readTerm {
-			return nil, 0, ErrStaleRead
-		}
-		lt := time.Duration(qr.LinearizableTimeout)
-		if lt == 0 {
-			lt = linearizableTimeout
-		}
-		if _, err := s.WaitForFSMIndex(readIndex, time.Duration(lt)); err != nil {
-			return nil, 0, err
+		err := s.waitForLinearizableRead(readTerm, qr.LinearizableTimeout)
+		if err != nil {
+			if err == ErrStrongReadNeeded {
+				qr.Level = proto.QueryRequest_QUERY_REQUEST_LEVEL_STRONG
+				s.numLRUpgraded.Add(1)
+			} else {
+				return nil, 0, err
+			}
 		}
 	}
 
@@ -1424,6 +1396,10 @@ func (s *Store) Query(qr *proto.QueryRequest) (rows []*proto.QueryRows, raftInde
 			}
 			return nil, 0, af.Error()
 		}
+		// It's possible that the term has changed since we read it. But that's OK,
+		// worse case it will just mean another Strong read. It would be worse to
+		// store the current term, which could be later than when the strong read
+		// was performed.
 		s.strongReadTerm.Store(readTerm)
 		r := af.Response().(*fsmQueryResponse)
 		return r.rows, af.Index(), r.error
@@ -1474,8 +1450,22 @@ func (s *Store) Request(eqr *proto.ExecuteQueryRequest) ([]*proto.ExecuteQueryRe
 	if !s.open.Is() {
 		return nil, 0, ErrNotOpen
 	}
-	nRW, _ := s.RORWCount(eqr)
+	nRW, nRO := s.RORWCount(eqr)
 	isLeader := s.raft.State() == raft.Leader
+
+	// See the Query() code for a full explanation of this.
+	readTerm := s.raft.CurrentTerm()
+	if eqr.Level == proto.QueryRequest_QUERY_REQUEST_LEVEL_LINEARIZABLE {
+		err := s.waitForLinearizableRead(readTerm, eqr.LinearizableTimeout)
+		if err != nil {
+			if err == ErrStrongReadNeeded {
+				eqr.Level = proto.QueryRequest_QUERY_REQUEST_LEVEL_STRONG
+				s.numLRUpgraded.Add(1)
+			} else {
+				return nil, 0, err
+			}
+		}
+	}
 
 	if nRW == 0 && eqr.Level != proto.QueryRequest_QUERY_REQUEST_LEVEL_STRONG {
 		// It's a little faster just to do a Query of the DB if we know there is no need
@@ -1489,6 +1479,7 @@ func (s *Store) Request(eqr *proto.ExecuteQueryRequest) ([]*proto.ExecuteQueryRe
 			}
 			return resp
 		}
+
 		if eqr.Level == proto.QueryRequest_QUERY_REQUEST_LEVEL_NONE && s.isStaleRead(eqr.Freshness, eqr.FreshnessStrict) {
 			return nil, 0, ErrStaleRead
 		} else if eqr.Level == proto.QueryRequest_QUERY_REQUEST_LEVEL_WEAK {
@@ -1532,6 +1523,13 @@ func (s *Store) Request(eqr *proto.ExecuteQueryRequest) ([]*proto.ExecuteQueryRe
 		return nil, 0, af.Error()
 	}
 	r := af.Response().(*fsmExecuteQueryResponse)
+
+	// If we sent any reads through consensus they were strong reads by definition.
+	// Update our strong read term.
+	if nRO > 0 {
+		s.strongReadTerm.Store(readTerm)
+	}
+
 	return r.results, af.Index(), r.error
 }
 
@@ -2156,6 +2154,51 @@ func (s *Store) raftConfig() *raft.Config {
 	opts.Level = s.hcLogLevel()
 	config.Logger = hclog.FromStandardLogger(log.New(os.Stderr, "[raft] ", log.LstdFlags), opts)
 	return config
+}
+
+// waitForLinearizableRead performs the preprocessing needed for a
+// linearizable read, or timeouts. Once this function returns without
+// error subsequent reads on the Leader will be linearizable.
+func (s *Store) waitForLinearizableRead(currReadTerm uint64, linearizableTimeoutParam int64) error {
+	// If linearizable consistency is requested, we will need to check the
+	// term when heartbeat processing completes to ensure the Leader didn't
+	// change during the processing of a Linearizable read. We also need to
+	// be sure that this node -- if Leader -- has actually committed a log
+	// in *this* term. Currently the Raft library doesn't help us do this,
+	// so we have to do it ourselves, by checking  if at least one Strong
+	// Read has gone through the Raft log in this term. If it hasn't then
+	// we return an error indicating that a Strong Read is needed.
+	//
+	// See https://groups.google.com/g/raft-dev/c/4QlyV0aptEQ/m/1JxcmSgRAwAJ
+	// for an extensive discussion of this logic.
+	if currReadTerm != s.strongReadTerm.Load() {
+		return ErrStrongReadNeeded
+	}
+
+	if s.raft.State() != raft.Leader {
+		return ErrNotLeader
+	}
+	if !s.Ready() {
+		return ErrNotReady
+	}
+
+	// Implement the technique from the Raft dissertation, section
+	// 6.4 "Processing read-only queries more efficiently".
+	readIndex := s.raft.CommitIndex()
+	if err := s.VerifyLeader(); err != nil {
+		return err
+	}
+	if s.raft.CurrentTerm() != currReadTerm {
+		return ErrStaleRead
+	}
+	lt := time.Duration(linearizableTimeoutParam)
+	if lt == 0 {
+		lt = linearizableTimeout
+	}
+	if _, err := s.WaitForFSMIndex(readIndex, lt); err != nil {
+		return err
+	}
+	return nil
 }
 
 func (s *Store) isStaleRead(freshness int64, strict bool) bool {
