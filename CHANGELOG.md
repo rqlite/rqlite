@@ -1,6 +1,7 @@
 ## v9.1.1 (October 1st 2025)
 ### Implementation changes and bug fixes
 - [PR #2349](https://github.com/rqlite/rqlite/pull/2349): Support Linearizable reads on the Unified Endpoint, fixes issue [#2347](https://github.com/rqlite/rqlite/issues/2347).
+- [PR #2350](https://github.com/rqlite/rqlite/pull/2350): 'go mod' updates.
 
 ## v9.1.0 (September 19th 2025)
 ### New features
