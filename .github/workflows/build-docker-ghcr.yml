@@ -1,4 +1,4 @@
-name: docker-release-build-and-push
+name: docker-ghcr-release-build-and-push
 
 on:
   release:
