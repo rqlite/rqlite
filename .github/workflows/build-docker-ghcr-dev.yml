@@ -1,0 +1,64 @@
+on:
+  push:
+    branches: ['master']
+
+name: Build docker images
+jobs:
+  docker:
+    runs-on: ubuntu-22.04
+    permissions:
+      contents: read
+      packages: write   # required for GHCR via GITHUB_TOKEN
+    steps:
+    - name: Get current date
+      id: get-date
+      run: echo "date=$(date +'%Y-%m-%dT%T%z')" >> "$GITHUB_OUTPUT"
+
+    - name: Checkout repository
+      uses: actions/checkout@v4
+
+    - name: Set up QEMU
+      uses: docker/setup-qemu-action@v3
+
+    - name: Set up Docker Buildx
+      uses: docker/setup-buildx-action@v3
+
+    - name: Log into Docker Hub
+      uses: docker/login-action@v3
+      with:
+        username: ${{ secrets.DOCKER_USERNAME }}
+        password: ${{ secrets.DOCKER_ACCESS_TOKEN }}
+
+    - name: Build and push (multi-arch to Docker Hub)
+      uses: docker/build-push-action@v5
+      with:
+        context: .
+        platforms: linux/amd64
+        build-args: |
+          VERSION=unknown
+          COMMIT=${{ github.sha }}
+          BRANCH=master
+          DATE=${{ steps.get-date.outputs.date }}
+        push: true
+        tags: rqlite/rqlite:dev
+
+    # --- GHCR publish (single-arch dev image) ---
+    - name: Log into GHCR
+      uses: docker/login-action@v3
+      with:
+        registry: ghcr.io
+        username: ${{ github.actor }}
+        password: ${{ secrets.GITHUB_TOKEN }}
+
+    - name: Build and push (linux/amd64 to GHCR)
+      uses: docker/build-push-action@v5
+      with:
+        context: .
+        platforms: linux/amd64
+        build-args: |
+          VERSION=unknown
+          COMMIT=${{ github.sha }}
+          BRANCH=master
+          DATE=${{ steps.get-date.outputs.date }}
+        push: true
+        tags: ghcr.io/${{ github.repository_owner }}/rqlite:dev
