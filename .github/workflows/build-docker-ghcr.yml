@@ -1,9 +1,9 @@
 name: docker-ghcr-release-build-and-push
 
 on:
-  push:
-    branches:
-      - 'master'
+  release:
+    types:
+      - created
 
 env:
   REGISTRY_IMAGE: rqlite/rqlite
@@ -126,7 +126,8 @@ jobs:
         run: |
           # Tags: latest and vX.Y.Z (without the leading 'v' in your current scheme)
           docker buildx imagetools create \
-            -t ${{ env.DH_IMAGE }}:dev \
+            -t ${{ env.DH_IMAGE }}:latest \
+            -t ${{ env.DH_IMAGE }}:${{ env.STRIPPED_VERSION }} \
             $(printf '${{ env.DH_IMAGE }}@sha256:%s ' *)
 
       # New: Copy the same digests into GHCR and tag them identically
@@ -134,5 +135,6 @@ jobs:
         working-directory: /tmp/digests
         run: |
           docker buildx imagetools create \
-            -t ${{ env.GHCR_IMAGE }}:dev \
+            -t ${{ env.GHCR_IMAGE }}:latest \
+            -t ${{ env.GHCR_IMAGE }}:${{ env.STRIPPED_VERSION }} \
             $(printf '${{ env.DH_IMAGE }}@sha256:%s ' *)
