@@ -35,7 +35,10 @@ func (i *IndexFile) WriteValue(v uint64) error {
 	binary.LittleEndian.PutUint64(buf[4:12], v)
 	binary.LittleEndian.PutUint32(buf[12:16], crc32.ChecksumIEEE(buf[:12]))
 	_, err := i.fd.WriteAt(buf[:], 0)
-	return err
+	if err != nil {
+		return err
+	}
+	return i.fd.Truncate(int64(recordSize)) // make size stable after first create
 }
 
 // ReadValue reads the uint64 value from the index file.
