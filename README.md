@@ -7,7 +7,6 @@
 [![Circle CI](https://circleci.com/gh/rqlite/rqlite/tree/master.svg?style=svg)](https://circleci.com/gh/rqlite/rqlite/tree/master)
 [![AppVeyor](https://ci.appveyor.com/api/projects/status/github/rqlite/rqlite?branch=master&svg=true)](https://ci.appveyor.com/project/otoolep/rqlite)
 [![Docker](https://img.shields.io/docker/pulls/rqlite/rqlite?style=plastic)](https://hub.docker.com/r/rqlite/rqlite/)
-[![GHCR](https://img.shields.io/badge/ghcr.io-rqlite%2Frqlite-blue)](https://github.com/orgs/rqlite/packages/container/package/rqlite)
 [![Office Hours](https://img.shields.io/badge/Office%20Hours--yellow.svg)](https://rqlite.io/office-hours)
 [![Slack](https://img.shields.io/badge/Slack--purple.svg)](https://www.rqlite.io/join-slack)
 [![Google Group](https://img.shields.io/badge/Google%20Group--blue.svg)](https://groups.google.com/group/rqlite)
