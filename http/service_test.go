@@ -256,6 +256,10 @@ func Test_HasConsistencyLevelHeaderQuery(t *testing.T) {
 		if qr.Level == command.QueryRequest_QUERY_REQUEST_LEVEL_AUTO {
 			qr.Level = command.QueryRequest_QUERY_REQUEST_LEVEL_WEAK
 		}
+		// Simulate LINEARIZABLE -> STRONG upgrade (when strong read is needed)
+		if qr.Level == command.QueryRequest_QUERY_REQUEST_LEVEL_LINEARIZABLE {
+			qr.Level = command.QueryRequest_QUERY_REQUEST_LEVEL_STRONG
+		}
 		rows := &command.QueryRows{
 			Columns: []string{"id", "name"},
 			Types:   []string{"int", "string"},
@@ -280,7 +284,8 @@ func Test_HasConsistencyLevelHeaderQuery(t *testing.T) {
 		{"none", "none", "none"},
 		{"weak", "weak", "weak"},
 		{"strong", "strong", "strong"},
-		{"auto", "auto", "weak"}, // AUTO is converted to WEAK by mock
+		{"auto", "auto", "weak"},                   // AUTO is converted to WEAK by mock
+		{"linearizable", "linearizable", "strong"}, // LINEARIZABLE may be upgraded to STRONG
 	}
 
 	for _, tt := range tests {
