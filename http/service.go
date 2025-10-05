@@ -265,6 +265,10 @@ const (
 	// it wasn't served by this node.
 	ServedByHTTPHeader = "X-RQLITE-SERVED-BY"
 
+	// ConsistencyLevelHTTPHeader is the HTTP header used to report the
+	// consistency level at which a query was executed.
+	ConsistencyLevelHTTPHeader = "X-RQLITE-CONSISTENCY-LEVEL"
+
 	// AllowOriginHeader is the HTTP header for allowing CORS compliant access from certain origins
 	AllowOriginHeader = "Access-Control-Allow-Origin"
 
@@ -1479,6 +1483,9 @@ func (s *Service) handleQuery(w http.ResponseWriter, r *http.Request, qp QueryPa
 		stats.Add(numRemoteQueries, 1)
 	}
 
+	// Set the consistency level header to indicate the level at which the query was executed.
+	w.Header().Set(ConsistencyLevelHTTPHeader, consistencyLevelToString(qr.Level))
+
 	if resultsErr != nil {
 		resp.Error = resultsErr.Error()
 	} else {
@@ -1564,6 +1571,17 @@ func (s *Service) handleRequest(w http.ResponseWriter, r *http.Request, qp Query
 				addr, resultsErr.Error())
 		}
 		stats.Add(numRemoteRequests, 1)
+	}
+
+	// Set the consistency level header if the request contained any queries.
+	// Check if any of the results are query results (not execute results).
+	if results != nil {
+		for _, result := range results {
+			if result.GetQ() != nil {
+				w.Header().Set(ConsistencyLevelHTTPHeader, consistencyLevelToString(eqr.Level))
+				break
+			}
+		}
 	}
 
 	if resultsErr != nil {
@@ -1963,5 +1981,21 @@ func makeCredentials(r *http.Request) *clstrPB.Credentials {
 	return &clstrPB.Credentials{
 		Username: username,
 		Password: password,
+	}
+}
+
+// consistencyLevelToString converts a proto QueryRequest_Level to a string.
+func consistencyLevelToString(level command.QueryRequest_Level) string {
+	switch level {
+	case command.QueryRequest_QUERY_REQUEST_LEVEL_NONE:
+		return "none"
+	case command.QueryRequest_QUERY_REQUEST_LEVEL_WEAK:
+		return "weak"
+	case command.QueryRequest_QUERY_REQUEST_LEVEL_STRONG:
+		return "strong"
+	case command.QueryRequest_QUERY_REQUEST_LEVEL_LINEARIZABLE:
+		return "linearizable"
+	default:
+		return "weak"
 	}
 }

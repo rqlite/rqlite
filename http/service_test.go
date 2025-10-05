@@ -249,6 +249,154 @@ func Test_HasVersionHeaderUnknown(t *testing.T) {
 	}
 }
 
+func Test_HasConsistencyLevelHeaderQuery(t *testing.T) {
+	m := &MockStore{}
+	m.queryFn = func(qr *command.QueryRequest) ([]*command.QueryRows, uint64, error) {
+		// Simulate the store behavior: AUTO -> WEAK conversion
+		if qr.Level == command.QueryRequest_QUERY_REQUEST_LEVEL_AUTO {
+			qr.Level = command.QueryRequest_QUERY_REQUEST_LEVEL_WEAK
+		}
+		rows := &command.QueryRows{
+			Columns: []string{"id", "name"},
+			Types:   []string{"int", "string"},
+		}
+		return []*command.QueryRows{rows}, 0, nil
+	}
+
+	c := &mockClusterService{}
+	s := New("127.0.0.1:0", m, c, nil)
+	if err := s.Start(); err != nil {
+		t.Fatalf("failed to start service")
+	}
+	defer s.Close()
+
+	// Test different consistency levels
+	tests := []struct {
+		name          string
+		level         string
+		expectedLevel string
+	}{
+		{"default (weak)", "", "weak"},
+		{"none", "none", "none"},
+		{"weak", "weak", "weak"},
+		{"strong", "strong", "strong"},
+		{"auto", "auto", "weak"}, // AUTO is converted to WEAK by mock
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			client := &http.Client{}
+			url := fmt.Sprintf("http://%s/db/query?q=SELECT%%20*%%20FROM%%20foo", s.Addr().String())
+			if tt.level != "" {
+				url += "&level=" + tt.level
+			}
+			resp, err := client.Get(url)
+			if err != nil {
+				t.Fatalf("failed to make request: %s", err)
+			}
+			defer resp.Body.Close()
+
+			got := resp.Header.Get("X-RQLITE-CONSISTENCY-LEVEL")
+			if got != tt.expectedLevel {
+				t.Fatalf("incorrect consistency level in HTTP response header, expected %s, got %s", tt.expectedLevel, got)
+			}
+		})
+	}
+}
+
+func Test_HasConsistencyLevelHeaderRequest(t *testing.T) {
+	m := &MockStore{}
+	m.requestFn = func(eqr *command.ExecuteQueryRequest) ([]*command.ExecuteQueryResponse, uint64, error) {
+		// Simulate the store behavior
+		if eqr.Level == command.QueryRequest_QUERY_REQUEST_LEVEL_AUTO {
+			eqr.Level = command.QueryRequest_QUERY_REQUEST_LEVEL_WEAK
+		}
+
+		// Return a mix of query and execute results
+		results := []*command.ExecuteQueryResponse{
+			{
+				Result: &command.ExecuteQueryResponse_Q{
+					Q: &command.QueryRows{
+						Columns: []string{"id", "name"},
+						Types:   []string{"int", "string"},
+					},
+				},
+			},
+			{
+				Result: &command.ExecuteQueryResponse_E{
+					E: &command.ExecuteResult{
+						LastInsertId: 1,
+						RowsAffected: 1,
+					},
+				},
+			},
+		}
+		return results, 0, nil
+	}
+
+	c := &mockClusterService{}
+	s := New("127.0.0.1:0", m, c, nil)
+	if err := s.Start(); err != nil {
+		t.Fatalf("failed to start service")
+	}
+	defer s.Close()
+
+	// Test with query in request - should have header
+	client := &http.Client{}
+	body := `[["SELECT * FROM foo"], ["INSERT INTO foo(name) VALUES('bar')"]]`
+	url := fmt.Sprintf("http://%s/db/request?level=weak", s.Addr().String())
+	resp, err := client.Post(url, "application/json", strings.NewReader(body))
+	if err != nil {
+		t.Fatalf("failed to make request: %s", err)
+	}
+	defer resp.Body.Close()
+
+	got := resp.Header.Get("X-RQLITE-CONSISTENCY-LEVEL")
+	if got != "weak" {
+		t.Fatalf("incorrect consistency level in HTTP response header, expected weak, got %s", got)
+	}
+}
+
+func Test_NoConsistencyLevelHeaderRequestExecuteOnly(t *testing.T) {
+	m := &MockStore{}
+	m.requestFn = func(eqr *command.ExecuteQueryRequest) ([]*command.ExecuteQueryResponse, uint64, error) {
+		// Return only execute results (no queries)
+		results := []*command.ExecuteQueryResponse{
+			{
+				Result: &command.ExecuteQueryResponse_E{
+					E: &command.ExecuteResult{
+						LastInsertId: 1,
+						RowsAffected: 1,
+					},
+				},
+			},
+		}
+		return results, 0, nil
+	}
+
+	c := &mockClusterService{}
+	s := New("127.0.0.1:0", m, c, nil)
+	if err := s.Start(); err != nil {
+		t.Fatalf("failed to start service")
+	}
+	defer s.Close()
+
+	// Test with execute only - should not have header
+	client := &http.Client{}
+	body := `[["INSERT INTO foo(name) VALUES('bar')"]]`
+	url := fmt.Sprintf("http://%s/db/request", s.Addr().String())
+	resp, err := client.Post(url, "application/json", strings.NewReader(body))
+	if err != nil {
+		t.Fatalf("failed to make request: %s", err)
+	}
+	defer resp.Body.Close()
+
+	got := resp.Header.Get("X-RQLITE-CONSISTENCY-LEVEL")
+	if got != "" {
+		t.Fatalf("consistency level header should not be set for execute-only requests, got %s", got)
+	}
+}
+
 func Test_LeaderAddrsOK(t *testing.T) {
 	m := &MockStore{
 		leaderAddr: "foo:1234",
