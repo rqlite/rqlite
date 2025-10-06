@@ -800,17 +800,8 @@ func (s *Store) Close(wait bool) (retErr error) {
 	defer s.snapshotCAS.End()
 
 	// Clean up any CDC.
-	s.cdcMu.Lock()
-	defer s.cdcMu.Unlock()
-	if s.cdcStreamer != nil {
-		s.cdcStreamer.Close()
-	}
-	s.cdcStreamer = nil
-	if err := s.db.RegisterPreUpdateHook(nil, nil, false); err != nil {
-		return fmt.Errorf("failed to unregister preupdate hook: %w", err)
-	}
-	if err := s.db.RegisterCommitHook(nil); err != nil {
-		return fmt.Errorf("failed to unregister commit hook: %w", err)
+	if err := s.cleanupCDC(); err != nil {
+		return err
 	}
 
 	s.dechunkManager.Close()
@@ -2067,6 +2058,22 @@ func (s *Store) remove(id string) error {
 		return ErrNotLeader
 	}
 	return f.Error()
+}
+
+func (s *Store) cleanupCDC() error {
+	s.cdcMu.Lock()
+	defer s.cdcMu.Unlock()
+	if s.cdcStreamer != nil {
+		s.cdcStreamer.Close()
+	}
+	s.cdcStreamer = nil
+	if err := s.db.RegisterPreUpdateHook(nil, nil, false); err != nil {
+		return fmt.Errorf("failed to unregister preupdate hook: %w", err)
+	}
+	if err := s.db.RegisterCommitHook(nil); err != nil {
+		return fmt.Errorf("failed to unregister commit hook: %w", err)
+	}
+	return nil
 }
 
 // initVacuumTime initializes the last vacuum times in the Config store.
