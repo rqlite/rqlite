@@ -1983,19 +1983,3 @@ func makeCredentials(r *http.Request) *clstrPB.Credentials {
 		Password: password,
 	}
 }
-
-// consistencyLevelToString converts a proto QueryRequest_Level to a string.
-func consistencyLevelToString(level command.QueryRequest_Level) string {
-	switch level {
-	case command.QueryRequest_QUERY_REQUEST_LEVEL_NONE:
-		return "none"
-	case command.QueryRequest_QUERY_REQUEST_LEVEL_WEAK:
-		return "weak"
-	case command.QueryRequest_QUERY_REQUEST_LEVEL_STRONG:
-		return "strong"
-	case command.QueryRequest_QUERY_REQUEST_LEVEL_LINEARIZABLE:
-		return "linearizable"
-	default:
-		return "weak"
-	}
-}
