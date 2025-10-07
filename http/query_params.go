@@ -172,7 +172,7 @@ func (qp QueryParams) Level() proto.QueryRequest_Level {
 
 // BackupFormat returns the requested backup format.
 func (qp QueryParams) BackupFormat() proto.BackupRequest_Format {
-	return command.BackupFormatFromString(strings.ToLower(qp["fmt"]))
+	return command.BackupFormatFromString(qp["fmt"])
 }
 
 // Query returns the requested query.
