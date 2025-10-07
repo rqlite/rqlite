@@ -1,4 +1,4 @@
-## v9.1.3 (unreleasd)
+## v9.1.3 (unreleased)
 ### Implementation changes and bug fixes
 - [PR #2356](https://github.com/rqlite/rqlite/pull/2356): Consistent level-to-string conversions.
 
