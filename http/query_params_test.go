@@ -5,6 +5,8 @@ import (
 	"net/url"
 	"reflect"
 	"testing"
+
+	"github.com/rqlite/rqlite/v9/command/proto"
 )
 
 // Test_NewQueryParams tests the NewQueryParams function for various scenarios.
@@ -97,6 +99,41 @@ func Test_QueryParams_Tables(t *testing.T) {
 
 			result := qp.Tables()
 			if !reflect.DeepEqual(result, tc.expected) {
+				t.Errorf("expected %v, got %v", tc.expected, result)
+			}
+		})
+	}
+}
+
+func Test_QueryParams_Level(t *testing.T) {
+	testCases := []struct {
+		name     string
+		rawQuery string
+		expected proto.QueryRequest_Level
+	}{
+		{"No level parameter", "", proto.QueryRequest_QUERY_REQUEST_LEVEL_WEAK},
+		{"Valid level parameter - none", "level=none", proto.QueryRequest_QUERY_REQUEST_LEVEL_NONE},
+		{"Valid level parameter - nOne", "level=nOne", proto.QueryRequest_QUERY_REQUEST_LEVEL_NONE},
+		{"Valid level parameter - weak", "level=weak", proto.QueryRequest_QUERY_REQUEST_LEVEL_WEAK},
+		{"Valid level parameter - WEAK", "level=WEAK", proto.QueryRequest_QUERY_REQUEST_LEVEL_WEAK},
+		{"Valid level parameter - strong", "level=strong", proto.QueryRequest_QUERY_REQUEST_LEVEL_STRONG},
+		{"Valid level parameter - auto", "level=auto", proto.QueryRequest_QUERY_REQUEST_LEVEL_AUTO},
+		{"Valid level parameter - linearizable", "level=linearizable", proto.QueryRequest_QUERY_REQUEST_LEVEL_LINEARIZABLE},
+		{"Invalid level parameter", "level=invalid", proto.QueryRequest_QUERY_REQUEST_LEVEL_WEAK},
+	}
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			req := &http.Request{
+				URL: &url.URL{
+					RawQuery: tc.rawQuery,
+				},
+			}
+			qp, err := NewQueryParams(req)
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+			result := qp.Level()
+			if result != tc.expected {
 				t.Errorf("expected %v, got %v", tc.expected, result)
 			}
 		})
