@@ -1332,23 +1332,24 @@ func (s *Store) Query(qr *proto.QueryRequest) (rows []*proto.QueryRows, raftInde
 		return nil, 0, ErrNotOpen
 	}
 
-	if qr.Level == proto.ConsistencyLevel_AUTO {
-		qr.Level = proto.ConsistencyLevel_WEAK
+	level := qr.Level
+	if level == proto.ConsistencyLevel_AUTO {
+		level = proto.ConsistencyLevel_WEAK
 		isVoter, err := s.IsVoter()
 		if err != nil {
 			return nil, 0, err
 		}
 		if !isVoter {
-			qr.Level = proto.ConsistencyLevel_NONE
+			level = proto.ConsistencyLevel_NONE
 		}
 	}
 
 	readTerm := s.raft.CurrentTerm()
-	if qr.Level == proto.ConsistencyLevel_LINEARIZABLE {
+	if level == proto.ConsistencyLevel_LINEARIZABLE {
 		err := s.waitForLinearizableRead(readTerm, qr.LinearizableTimeout)
 		if err != nil {
 			if err == ErrStrongReadNeeded {
-				qr.Level = proto.ConsistencyLevel_STRONG
+				level = proto.ConsistencyLevel_STRONG
 				s.numLRUpgraded.Add(1)
 			} else {
 				return nil, 0, err
@@ -1356,7 +1357,7 @@ func (s *Store) Query(qr *proto.QueryRequest) (rows []*proto.QueryRows, raftInde
 		}
 	}
 
-	if qr.Level == proto.ConsistencyLevel_STRONG {
+	if level == proto.ConsistencyLevel_STRONG {
 		if s.raft.State() != raft.Leader {
 			return nil, 0, ErrNotLeader
 		}
@@ -1396,10 +1397,10 @@ func (s *Store) Query(qr *proto.QueryRequest) (rows []*proto.QueryRows, raftInde
 		return r.rows, af.Index(), r.error
 	}
 
-	if qr.Level == proto.ConsistencyLevel_WEAK && s.raft.State() != raft.Leader {
+	if level == proto.ConsistencyLevel_WEAK && s.raft.State() != raft.Leader {
 		return nil, 0, ErrNotLeader
 	}
-	if qr.Level == proto.ConsistencyLevel_NONE && s.isStaleRead(qr.Freshness, qr.FreshnessStrict) {
+	if level == proto.ConsistencyLevel_NONE && s.isStaleRead(qr.Freshness, qr.FreshnessStrict) {
 		return nil, 0, ErrStaleRead
 	}
 
