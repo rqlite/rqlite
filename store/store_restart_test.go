@@ -43,7 +43,7 @@ func Test_OpenStoreCloseStartupSingleNode(t *testing.T) {
 	}
 	testPoll(t, func() bool {
 		qr := queryRequestFromString("SELECT COUNT(*) FROM foo", false, false)
-		qr.Level = command.QueryRequest_QUERY_REQUEST_LEVEL_STRONG
+		qr.Level = command.ConsistencyLevel_STRONG
 		r, _, err := s.Query(qr)
 		return err == nil && asJSON(r) == `[{"columns":["COUNT(*)"],"types":["integer"],"values":[[1]]}]`
 	}, 100*time.Millisecond, 5*time.Second)
@@ -66,7 +66,7 @@ func Test_OpenStoreCloseStartupSingleNode(t *testing.T) {
 	// Insert new records so we have something to snapshot.
 	queryTest := func(s *Store, c int) {
 		qr := queryRequestFromString("SELECT COUNT(*) FROM foo", false, false)
-		qr.Level = command.QueryRequest_QUERY_REQUEST_LEVEL_STRONG
+		qr.Level = command.ConsistencyLevel_STRONG
 		r, _, err := s.Query(qr)
 		if err != nil {
 			t.Fatalf("failed to query single node: %s", err.Error())
@@ -120,7 +120,7 @@ func Test_OpenStoreCloseStartupSingleNode(t *testing.T) {
 	}
 	testPoll(t, func() bool {
 		qr := queryRequestFromString("SELECT COUNT(*) FROM foo", false, false)
-		qr.Level = command.QueryRequest_QUERY_REQUEST_LEVEL_NONE
+		qr.Level = command.ConsistencyLevel_NONE
 		r, _, err := s.Query(qr)
 		return err == nil && asJSON(r) == `[{"columns":["COUNT(*)"],"types":["integer"],"values":[[10]]}]`
 	}, 100*time.Millisecond, 5*time.Second)
@@ -142,7 +142,7 @@ func Test_OpenStoreCloseStartupSingleNode(t *testing.T) {
 
 	testPoll(t, func() bool {
 		qr := queryRequestFromString("SELECT COUNT(*) FROM foo", false, false)
-		qr.Level = command.QueryRequest_QUERY_REQUEST_LEVEL_NONE
+		qr.Level = command.ConsistencyLevel_NONE
 		r, _, err := s.Query(qr)
 		return err == nil && asJSON(r) == `[{"columns":["COUNT(*)"],"types":["integer"],"values":[[11]]}]`
 	}, 100*time.Millisecond, 5*time.Second)
@@ -192,7 +192,7 @@ func test_SnapshotStress(t *testing.T, s *Store) {
 		}
 	}
 	qr := queryRequestFromString("SELECT COUNT(*) FROM foo", false, false)
-	qr.Level = command.QueryRequest_QUERY_REQUEST_LEVEL_STRONG
+	qr.Level = command.ConsistencyLevel_STRONG
 	r, _, err := s.Query(qr)
 	if err != nil {
 		t.Fatalf("failed to query single node: %s", err.Error())
@@ -214,7 +214,7 @@ func test_SnapshotStress(t *testing.T, s *Store) {
 	}
 
 	qr = queryRequestFromString("SELECT COUNT(*) FROM foo", false, false)
-	qr.Level = command.QueryRequest_QUERY_REQUEST_LEVEL_STRONG
+	qr.Level = command.ConsistencyLevel_STRONG
 	r, _, err = s.Query(qr)
 	if err != nil {
 		t.Fatalf("failed to query single node: %s", err.Error())
@@ -308,7 +308,7 @@ func Test_OpenStoreCloseUserSnapshot(t *testing.T) {
 	}
 
 	qr := queryRequestFromString("SELECT * FROM foo", false, false)
-	qr.Level = command.QueryRequest_QUERY_REQUEST_LEVEL_STRONG
+	qr.Level = command.ConsistencyLevel_STRONG
 	r, _, err := s.Query(qr)
 	if err != nil {
 		t.Fatalf("failed to query single node: %s", err.Error())

@@ -165,7 +165,7 @@ func (qp QueryParams) LinearizableTimeout(def time.Duration) time.Duration {
 }
 
 // Level returns the requested consistency level.
-func (qp QueryParams) Level() proto.QueryRequest_Level {
+func (qp QueryParams) Level() proto.ConsistencyLevel {
 	lvl := qp["level"]
 	return command.LevelFromString(strings.ToLower(lvl))
 }

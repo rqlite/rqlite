@@ -1332,23 +1332,23 @@ func (s *Store) Query(qr *proto.QueryRequest) (rows []*proto.QueryRows, raftInde
 		return nil, 0, ErrNotOpen
 	}
 
-	if qr.Level == proto.QueryRequest_QUERY_REQUEST_LEVEL_AUTO {
-		qr.Level = proto.QueryRequest_QUERY_REQUEST_LEVEL_WEAK
+	if qr.Level == proto.ConsistencyLevel_AUTO {
+		qr.Level = proto.ConsistencyLevel_WEAK
 		isVoter, err := s.IsVoter()
 		if err != nil {
 			return nil, 0, err
 		}
 		if !isVoter {
-			qr.Level = proto.QueryRequest_QUERY_REQUEST_LEVEL_NONE
+			qr.Level = proto.ConsistencyLevel_NONE
 		}
 	}
 
 	readTerm := s.raft.CurrentTerm()
-	if qr.Level == proto.QueryRequest_QUERY_REQUEST_LEVEL_LINEARIZABLE {
+	if qr.Level == proto.ConsistencyLevel_LINEARIZABLE {
 		err := s.waitForLinearizableRead(readTerm, qr.LinearizableTimeout)
 		if err != nil {
 			if err == ErrStrongReadNeeded {
-				qr.Level = proto.QueryRequest_QUERY_REQUEST_LEVEL_STRONG
+				qr.Level = proto.ConsistencyLevel_STRONG
 				s.numLRUpgraded.Add(1)
 			} else {
 				return nil, 0, err
@@ -1356,7 +1356,7 @@ func (s *Store) Query(qr *proto.QueryRequest) (rows []*proto.QueryRows, raftInde
 		}
 	}
 
-	if qr.Level == proto.QueryRequest_QUERY_REQUEST_LEVEL_STRONG {
+	if qr.Level == proto.ConsistencyLevel_STRONG {
 		if s.raft.State() != raft.Leader {
 			return nil, 0, ErrNotLeader
 		}
@@ -1396,10 +1396,10 @@ func (s *Store) Query(qr *proto.QueryRequest) (rows []*proto.QueryRows, raftInde
 		return r.rows, af.Index(), r.error
 	}
 
-	if qr.Level == proto.QueryRequest_QUERY_REQUEST_LEVEL_WEAK && s.raft.State() != raft.Leader {
+	if qr.Level == proto.ConsistencyLevel_WEAK && s.raft.State() != raft.Leader {
 		return nil, 0, ErrNotLeader
 	}
-	if qr.Level == proto.QueryRequest_QUERY_REQUEST_LEVEL_NONE && s.isStaleRead(qr.Freshness, qr.FreshnessStrict) {
+	if qr.Level == proto.ConsistencyLevel_NONE && s.isStaleRead(qr.Freshness, qr.FreshnessStrict) {
 		return nil, 0, ErrStaleRead
 	}
 
@@ -1446,11 +1446,11 @@ func (s *Store) Request(eqr *proto.ExecuteQueryRequest) ([]*proto.ExecuteQueryRe
 
 	// See the Query() code for a full explanation of this.
 	readTerm := s.raft.CurrentTerm()
-	if eqr.Level == proto.QueryRequest_QUERY_REQUEST_LEVEL_LINEARIZABLE {
+	if eqr.Level == proto.ConsistencyLevel_LINEARIZABLE {
 		err := s.waitForLinearizableRead(readTerm, eqr.LinearizableTimeout)
 		if err != nil {
 			if err == ErrStrongReadNeeded {
-				eqr.Level = proto.QueryRequest_QUERY_REQUEST_LEVEL_STRONG
+				eqr.Level = proto.ConsistencyLevel_STRONG
 				s.numLRUpgraded.Add(1)
 			} else {
 				return nil, 0, err
@@ -1458,7 +1458,7 @@ func (s *Store) Request(eqr *proto.ExecuteQueryRequest) ([]*proto.ExecuteQueryRe
 		}
 	}
 
-	if nRW == 0 && eqr.Level != proto.QueryRequest_QUERY_REQUEST_LEVEL_STRONG {
+	if nRW == 0 && eqr.Level != proto.ConsistencyLevel_STRONG {
 		// It's a little faster just to do a Query of the DB if we know there is no need
 		// for consensus.
 		convertFn := func(qr []*proto.QueryRows) []*proto.ExecuteQueryResponse {
@@ -1471,9 +1471,9 @@ func (s *Store) Request(eqr *proto.ExecuteQueryRequest) ([]*proto.ExecuteQueryRe
 			return resp
 		}
 
-		if eqr.Level == proto.QueryRequest_QUERY_REQUEST_LEVEL_NONE && s.isStaleRead(eqr.Freshness, eqr.FreshnessStrict) {
+		if eqr.Level == proto.ConsistencyLevel_NONE && s.isStaleRead(eqr.Freshness, eqr.FreshnessStrict) {
 			return nil, 0, ErrStaleRead
-		} else if eqr.Level == proto.QueryRequest_QUERY_REQUEST_LEVEL_WEAK {
+		} else if eqr.Level == proto.ConsistencyLevel_WEAK {
 			if !isLeader {
 				return nil, 0, ErrNotLeader
 			}
