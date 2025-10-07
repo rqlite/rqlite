@@ -1,6 +1,10 @@
 package command
 
-import "github.com/rqlite/rqlite/v9/command/proto"
+import (
+	"strings"
+
+	"github.com/rqlite/rqlite/v9/command/proto"
+)
 
 // LevelToString converts a proto.QueryRequest_Level to a string.
 func LevelToString(l proto.QueryRequest_Level) string {
@@ -22,7 +26,7 @@ func LevelToString(l proto.QueryRequest_Level) string {
 
 // LevelFromString converts a string to a proto.QueryRequest_Level.
 func LevelFromString(s string) proto.QueryRequest_Level {
-	switch s {
+	switch strings.ToLower(s) {
 	case "none":
 		return proto.QueryRequest_QUERY_REQUEST_LEVEL_NONE
 	case "weak":
@@ -35,5 +39,33 @@ func LevelFromString(s string) proto.QueryRequest_Level {
 		return proto.QueryRequest_QUERY_REQUEST_LEVEL_LINEARIZABLE
 	default:
 		return proto.QueryRequest_QUERY_REQUEST_LEVEL_WEAK
+	}
+}
+
+// BackupFormatToString converts a proto.BackupRequest_Format to a string.
+func BackupFormatToString(f proto.BackupRequest_Format) string {
+	switch f {
+	case proto.BackupRequest_BACKUP_REQUEST_FORMAT_BINARY:
+		return "binary"
+	case proto.BackupRequest_BACKUP_REQUEST_FORMAT_SQL:
+		return "sql"
+	case proto.BackupRequest_BACKUP_REQUEST_FORMAT_DELETE:
+		return "delete"
+	default:
+		return "unknown"
+	}
+}
+
+// BackupFormatFromString converts a string to a proto.BackupRequest_Format.
+func BackupFormatFromString(s string) proto.BackupRequest_Format {
+	switch strings.ToLower(s) {
+	case "binary":
+		return proto.BackupRequest_BACKUP_REQUEST_FORMAT_BINARY
+	case "sql":
+		return proto.BackupRequest_BACKUP_REQUEST_FORMAT_SQL
+	case "delete":
+		return proto.BackupRequest_BACKUP_REQUEST_FORMAT_DELETE
+	default:
+		return proto.BackupRequest_BACKUP_REQUEST_FORMAT_BINARY
 	}
 }
