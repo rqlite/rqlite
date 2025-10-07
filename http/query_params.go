@@ -167,7 +167,7 @@ func (qp QueryParams) LinearizableTimeout(def time.Duration) time.Duration {
 // Level returns the requested consistency level.
 func (qp QueryParams) Level() proto.QueryRequest_Level {
 	lvl := qp["level"]
-	return command.LevelFromString(strings.ToLower(lvl))
+	return command.LevelFromString(lvl)
 }
 
 // BackupFormat returns the requested backup format.

@@ -1,6 +1,10 @@
 package command
 
-import "github.com/rqlite/rqlite/v9/command/proto"
+import (
+	"strings"
+
+	"github.com/rqlite/rqlite/v9/command/proto"
+)
 
 // LevelToString converts a proto.QueryRequest_Level to a string.
 func LevelToString(l proto.QueryRequest_Level) string {
@@ -22,7 +26,7 @@ func LevelToString(l proto.QueryRequest_Level) string {
 
 // LevelFromString converts a string to a proto.QueryRequest_Level.
 func LevelFromString(s string) proto.QueryRequest_Level {
-	switch s {
+	switch strings.ToLower(s) {
 	case "none":
 		return proto.QueryRequest_QUERY_REQUEST_LEVEL_NONE
 	case "weak":
