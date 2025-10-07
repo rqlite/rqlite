@@ -1,3 +1,7 @@
+## v9.1.3 (unreleasd)
+### Implementation changes and bug fixes
+- [PR #2356](https://github.com/rqlite/rqlite/pull/2356): Consistent level-to-string conversions.
+
 ## v9.1.2 (October 3rd 2025)
 There are no changes in this release relative to v9.1.1. However this release is the first that mirrors container images to the [GitHub Container Registry](https://docs.github.com/en/packages).
 

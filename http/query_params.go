@@ -8,7 +8,8 @@ import (
 	"strings"
 	"time"
 
-	command "github.com/rqlite/rqlite/v9/command/proto"
+	"github.com/rqlite/rqlite/v9/command"
+	"github.com/rqlite/rqlite/v9/command/proto"
 )
 
 // QueryParams represents the query parameters passed in an HTTP request.
@@ -164,34 +165,21 @@ func (qp QueryParams) LinearizableTimeout(def time.Duration) time.Duration {
 }
 
 // Level returns the requested consistency level.
-func (qp QueryParams) Level() command.QueryRequest_Level {
+func (qp QueryParams) Level() proto.QueryRequest_Level {
 	lvl := qp["level"]
-	switch strings.ToLower(lvl) {
-	case "none":
-		return command.QueryRequest_QUERY_REQUEST_LEVEL_NONE
-	case "weak":
-		return command.QueryRequest_QUERY_REQUEST_LEVEL_WEAK
-	case "strong":
-		return command.QueryRequest_QUERY_REQUEST_LEVEL_STRONG
-	case "auto":
-		return command.QueryRequest_QUERY_REQUEST_LEVEL_AUTO
-	case "linearizable":
-		return command.QueryRequest_QUERY_REQUEST_LEVEL_LINEARIZABLE
-	default:
-		return command.QueryRequest_QUERY_REQUEST_LEVEL_WEAK
-	}
+	return command.LevelFromString(strings.ToLower(lvl))
 }
 
 // BackupFormat returns the requested backup format.
-func (qp QueryParams) BackupFormat() command.BackupRequest_Format {
+func (qp QueryParams) BackupFormat() proto.BackupRequest_Format {
 	f := qp["fmt"]
 	switch f {
 	case "sql":
-		return command.BackupRequest_BACKUP_REQUEST_FORMAT_SQL
+		return proto.BackupRequest_BACKUP_REQUEST_FORMAT_SQL
 	case "delete":
-		return command.BackupRequest_BACKUP_REQUEST_FORMAT_DELETE
+		return proto.BackupRequest_BACKUP_REQUEST_FORMAT_DELETE
 	default:
-		return command.BackupRequest_BACKUP_REQUEST_FORMAT_BINARY
+		return proto.BackupRequest_BACKUP_REQUEST_FORMAT_BINARY
 	}
 }
 
