@@ -33,7 +33,7 @@ func test_SingleNodeProvide(t *testing.T, vacuum, compress bool) {
 		t.Fatalf("failed to execute on single node: %s", err.Error())
 	}
 	qr := queryRequestFromString("SELECT * FROM foo", false, false)
-	qr.Level = command.QueryRequest_QUERY_REQUEST_LEVEL_NONE
+	qr.Level = command.ConsistencyLevel_NONE
 	r, _, err := s0.Query(qr)
 	if err != nil {
 		t.Fatalf("failed to query leader node: %s", err.Error())
@@ -82,7 +82,7 @@ func test_SingleNodeProvide(t *testing.T, vacuum, compress bool) {
 		t.Fatalf("failed to load provided SQLite data: %s", err.Error())
 	}
 	qr = queryRequestFromString("SELECT * FROM foo", false, false)
-	qr.Level = command.QueryRequest_QUERY_REQUEST_LEVEL_STRONG
+	qr.Level = command.ConsistencyLevel_STRONG
 	r, _, err = s1.Query(qr)
 	if err != nil {
 		t.Fatalf("failed to query leader node: %s", err.Error())
@@ -159,7 +159,7 @@ func Test_SingleNodeProvideLastIndex(t *testing.T) {
 
 	// Try various queries and commands which should not change the database.
 	qr := queryRequestFromString("SELECT * FROM foo", false, false)
-	qr.Level = command.QueryRequest_QUERY_REQUEST_LEVEL_STRONG
+	qr.Level = command.ConsistencyLevel_STRONG
 	_, _, err = s.Query(qr)
 	if err != nil {
 		t.Fatalf("failed to query leader node: %s", err.Error())

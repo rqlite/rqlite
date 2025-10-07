@@ -48,7 +48,7 @@ COMMIT;
 		}
 		defer dstDB.Close()
 		qr := queryRequestFromString("SELECT * FROM foo", false, false)
-		qr.Level = proto.QueryRequest_QUERY_REQUEST_LEVEL_NONE
+		qr.Level = proto.ConsistencyLevel_NONE
 		r, _, err := s.Query(qr)
 		if err != nil {
 			t.Fatalf("failed to query single node: %s", err.Error())
@@ -195,7 +195,7 @@ func Test_SingleNodeExplicitVacuumOK(t *testing.T) {
 	}
 	doQuery := func() {
 		qr := queryRequestFromString("SELECT COUNT(*) FROM foo", false, true)
-		qr.Level = proto.QueryRequest_QUERY_REQUEST_LEVEL_STRONG
+		qr.Level = proto.ConsistencyLevel_STRONG
 		r, _, err := s.Query(qr)
 		if err != nil {
 			t.Fatalf("failed to query single node: %s", err.Error())
@@ -280,7 +280,7 @@ func Test_SingleNodeExplicitVacuumOK_Stress(t *testing.T) {
 	}
 	doQuery := func() {
 		qr := queryRequestFromString("SELECT COUNT(*) FROM foo", false, true)
-		qr.Level = proto.QueryRequest_QUERY_REQUEST_LEVEL_STRONG
+		qr.Level = proto.ConsistencyLevel_STRONG
 		r, _, err := s.Query(qr)
 		if err != nil {
 			t.Fatalf("failed to query single node: %s", err.Error())
@@ -520,7 +520,7 @@ func Test_SingleNode_SnapshotWithAutoVac_Stress(t *testing.T) {
 
 	// Query the data, make sure it looks good after all this.
 	qr := queryRequestFromString("SELECT COUNT(*) FROM foo", false, true)
-	qr.Level = proto.QueryRequest_QUERY_REQUEST_LEVEL_STRONG
+	qr.Level = proto.ConsistencyLevel_STRONG
 	r, _, err := s.Query(qr)
 	if err != nil {
 		t.Fatalf("failed to query single node: %s", err.Error())

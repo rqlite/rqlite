@@ -109,17 +109,17 @@ func Test_QueryParams_Level(t *testing.T) {
 	testCases := []struct {
 		name     string
 		rawQuery string
-		expected proto.QueryRequest_Level
+		expected proto.ConsistencyLevel
 	}{
-		{"No level parameter", "", proto.QueryRequest_QUERY_REQUEST_LEVEL_WEAK},
-		{"Valid level parameter - none", "level=none", proto.QueryRequest_QUERY_REQUEST_LEVEL_NONE},
-		{"Valid level parameter - nOne", "level=nOne", proto.QueryRequest_QUERY_REQUEST_LEVEL_NONE},
-		{"Valid level parameter - weak", "level=weak", proto.QueryRequest_QUERY_REQUEST_LEVEL_WEAK},
-		{"Valid level parameter - WEAK", "level=WEAK", proto.QueryRequest_QUERY_REQUEST_LEVEL_WEAK},
-		{"Valid level parameter - strong", "level=strong", proto.QueryRequest_QUERY_REQUEST_LEVEL_STRONG},
-		{"Valid level parameter - auto", "level=auto", proto.QueryRequest_QUERY_REQUEST_LEVEL_AUTO},
-		{"Valid level parameter - linearizable", "level=linearizable", proto.QueryRequest_QUERY_REQUEST_LEVEL_LINEARIZABLE},
-		{"Invalid level parameter", "level=invalid", proto.QueryRequest_QUERY_REQUEST_LEVEL_WEAK},
+		{"No level parameter", "", proto.ConsistencyLevel_WEAK},
+		{"Valid level parameter - none", "level=none", proto.ConsistencyLevel_NONE},
+		{"Valid level parameter - nOne", "level=nOne", proto.ConsistencyLevel_NONE},
+		{"Valid level parameter - weak", "level=weak", proto.ConsistencyLevel_WEAK},
+		{"Valid level parameter - WEAK", "level=WEAK", proto.ConsistencyLevel_WEAK},
+		{"Valid level parameter - strong", "level=strong", proto.ConsistencyLevel_STRONG},
+		{"Valid level parameter - auto", "level=auto", proto.ConsistencyLevel_AUTO},
+		{"Valid level parameter - linearizable", "level=linearizable", proto.ConsistencyLevel_LINEARIZABLE},
+		{"Invalid level parameter", "level=invalid", proto.ConsistencyLevel_WEAK},
 	}
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
