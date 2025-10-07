@@ -54,7 +54,7 @@ func BackupFormatToString(f proto.BackupRequest_Format) string {
 
 // BackupFormatFromString converts a string to a proto.BackupRequest_Format.
 func BackupFormatFromString(s string) proto.BackupRequest_Format {
-	switch s {
+	switch strings.ToLower(s) {
 	case "binary":
 		return proto.BackupRequest_BACKUP_REQUEST_FORMAT_BINARY
 	case "sql":
