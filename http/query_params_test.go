@@ -139,3 +139,36 @@ func Test_QueryParams_Level(t *testing.T) {
 		})
 	}
 }
+
+func Test_QueryParams_BackupFormat(t *testing.T) {
+	testCases := []struct {
+		name     string
+		rawQuery string
+		expected proto.BackupRequest_Format
+	}{
+		{"No format parameter", "", proto.BackupRequest_BACKUP_REQUEST_FORMAT_BINARY},
+		{"Valid format parameter - binary", "fmt=binary", proto.BackupRequest_BACKUP_REQUEST_FORMAT_BINARY},
+		{"Valid format parameter - sql", "fmt=sql", proto.BackupRequest_BACKUP_REQUEST_FORMAT_SQL},
+		{"Valid format parameter - SQL", "fmt=SQL", proto.BackupRequest_BACKUP_REQUEST_FORMAT_SQL},
+		{"Valid format parameter - SqL", "fmt=SqL", proto.BackupRequest_BACKUP_REQUEST_FORMAT_SQL},
+		{"Valid format parameter - delete", "fmt=delete", proto.BackupRequest_BACKUP_REQUEST_FORMAT_DELETE},
+		{"Invalid format parameter", "fmt=invalid", proto.BackupRequest_BACKUP_REQUEST_FORMAT_BINARY},
+	}
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			req := &http.Request{
+				URL: &url.URL{
+					RawQuery: tc.rawQuery,
+				},
+			}
+			qp, err := NewQueryParams(req)
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+			result := qp.BackupFormat()
+			if result != tc.expected {
+				t.Errorf("expected %v, got %v", tc.expected, result)
+			}
+		})
+	}
+}

@@ -172,15 +172,7 @@ func (qp QueryParams) Level() proto.QueryRequest_Level {
 
 // BackupFormat returns the requested backup format.
 func (qp QueryParams) BackupFormat() proto.BackupRequest_Format {
-	f := qp["fmt"]
-	switch f {
-	case "sql":
-		return proto.BackupRequest_BACKUP_REQUEST_FORMAT_SQL
-	case "delete":
-		return proto.BackupRequest_BACKUP_REQUEST_FORMAT_DELETE
-	default:
-		return proto.BackupRequest_BACKUP_REQUEST_FORMAT_BINARY
-	}
+	return command.BackupFormatFromString(strings.ToLower(qp["fmt"]))
 }
 
 // Query returns the requested query.
