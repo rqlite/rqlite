@@ -275,7 +275,7 @@ func Test_NewStorageClient(t *testing.T) {
 			name: "InvalidInterval",
 			input: []byte(`
 			{
-				"version": 2,
+				"version": 1,
 				"type": "s3",
 				"no_compress": false,
 				"interval": "-24h",
