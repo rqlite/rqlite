@@ -272,6 +272,25 @@ func Test_NewStorageClient(t *testing.T) {
 			expectedErr: auto.ErrInvalidVersion,
 		},
 		{
+			name: "InvalidInterval",
+			input: []byte(`
+			{
+				"version": 2,
+				"type": "s3",
+				"no_compress": false,
+				"interval": "-24h",
+				"sub": {
+					"access_key_id": "test_id",
+					"secret_access_key": "test_secret",
+					"region": "us-west-2",
+					"bucket": "test_bucket",
+					"path": "test/path"
+				}
+			}			`),
+			expectedCfg: nil,
+			expectedErr: auto.ErrInvalidInterval,
+		},
+		{
 			name: "UnsupportedType",
 			input: []byte(`
 			{
