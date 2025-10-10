@@ -1322,22 +1322,22 @@ func (s *Store) execute(ex *proto.ExecuteRequest) ([]*proto.ExecuteQueryResponse
 // If the request read consistency level is LINEARIZABLE, that level may be
 // upgraded to STRONG if the Store determines that is necessary to guarantee
 // a linearizable read.
-func (s *Store) Query(qr *proto.QueryRequest) (rows []*proto.QueryRows, raftIndex uint64, retErr error) {
+func (s *Store) Query(qr *proto.QueryRequest) (rows []*proto.QueryRows, level proto.ConsistencyLevel, raftIndex uint64, retErr error) {
 	p := (*PragmaCheckRequest)(qr.Request)
 	if err := p.Check(); err != nil {
-		return nil, 0, err
+		return nil, 0, 0, err
 	}
 
 	if !s.open.Is() {
-		return nil, 0, ErrNotOpen
+		return nil, 0, 0, ErrNotOpen
 	}
 
-	level := qr.Level
+	level = qr.Level
 	if level == proto.ConsistencyLevel_AUTO {
 		level = proto.ConsistencyLevel_WEAK
 		isVoter, err := s.IsVoter()
 		if err != nil {
-			return nil, 0, err
+			return nil, 0, 0, err
 		}
 		if !isVoter {
 			level = proto.ConsistencyLevel_NONE
@@ -1352,23 +1352,23 @@ func (s *Store) Query(qr *proto.QueryRequest) (rows []*proto.QueryRows, raftInde
 				level = proto.ConsistencyLevel_STRONG
 				s.numLRUpgraded.Add(1)
 			} else {
-				return nil, 0, err
+				return nil, 0, 0, err
 			}
 		}
 	}
 
 	if level == proto.ConsistencyLevel_STRONG {
 		if s.raft.State() != raft.Leader {
-			return nil, 0, ErrNotLeader
+			return nil, 0, 0, ErrNotLeader
 		}
 
 		if !s.Ready() {
-			return nil, 0, ErrNotReady
+			return nil, 0, 0, ErrNotReady
 		}
 
 		b, compressed, err := s.tryCompress(qr)
 		if err != nil {
-			return nil, 0, err
+			return nil, 0, 0, err
 		}
 		c := &proto.Command{
 			Type:       proto.Command_COMMAND_TYPE_QUERY,
@@ -1378,15 +1378,15 @@ func (s *Store) Query(qr *proto.QueryRequest) (rows []*proto.QueryRows, raftInde
 
 		b, err = command.Marshal(c)
 		if err != nil {
-			return nil, 0, err
+			return nil, 0, 0, err
 		}
 
 		af := s.raft.Apply(b, s.ApplyTimeout)
 		if af.Error() != nil {
 			if af.Error() == raft.ErrNotLeader || af.Error() == raft.ErrLeadershipLost {
-				return nil, 0, ErrNotLeader
+				return nil, 0, 0, ErrNotLeader
 			}
-			return nil, 0, af.Error()
+			return nil, 0, 0, af.Error()
 		}
 		// It's possible that the term has changed since we read it. But that's OK,
 		// worse case it will just mean another Strong read. It would be worse to
@@ -1394,18 +1394,18 @@ func (s *Store) Query(qr *proto.QueryRequest) (rows []*proto.QueryRows, raftInde
 		// was performed.
 		s.strongReadTerm.Store(readTerm)
 		r := af.Response().(*fsmQueryResponse)
-		return r.rows, af.Index(), r.error
+		return r.rows, level, af.Index(), r.error
 	}
 
 	if level == proto.ConsistencyLevel_WEAK && s.raft.State() != raft.Leader {
-		return nil, 0, ErrNotLeader
+		return nil, 0, 0, ErrNotLeader
 	}
 	if level == proto.ConsistencyLevel_NONE && s.isStaleRead(qr.Freshness, qr.FreshnessStrict) {
-		return nil, 0, ErrStaleRead
+		return nil, 0, 0, ErrStaleRead
 	}
 
 	rows, err := s.db.Query(qr.Request, qr.Timings)
-	return rows, 0, err
+	return rows, level, 0, err
 }
 
 // VerifyLeader checks that the current node is the Raft leader.

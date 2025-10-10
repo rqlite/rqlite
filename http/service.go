@@ -56,7 +56,7 @@ type Database interface {
 	// timings is true, then timing information will be returned. If tx
 	// is true, then all queries will take place while a read transaction
 	// is held on the database.
-	Query(qr *proto.QueryRequest) ([]*proto.QueryRows, uint64, error)
+	Query(qr *proto.QueryRequest) ([]*proto.QueryRows, proto.ConsistencyLevel, uint64, error)
 
 	// Request processes a slice of requests, each of which can be either
 	// an Execute or Query request.
@@ -1448,7 +1448,7 @@ func (s *Service) handleQuery(w http.ResponseWriter, r *http.Request, qp QueryPa
 		LinearizableTimeout: qp.LinearizableTimeout(defaultLinearTimeout).Nanoseconds(),
 	}
 
-	results, raftIndex, resultsErr := s.store.Query(qr)
+	results, _, raftIndex, resultsErr := s.store.Query(qr)
 	if resultsErr != nil && resultsErr == store.ErrNotLeader {
 		if s.DoRedirect(w, r, qp) {
 			return

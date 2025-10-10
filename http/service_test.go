@@ -1610,11 +1610,12 @@ func (m *MockStore) Execute(er *command.ExecuteRequest) ([]*command.ExecuteQuery
 	return nil, 0, nil
 }
 
-func (m *MockStore) Query(qr *command.QueryRequest) ([]*command.QueryRows, uint64, error) {
+func (m *MockStore) Query(qr *command.QueryRequest) ([]*command.QueryRows, command.ConsistencyLevel, uint64, error) {
 	if m.queryFn != nil {
-		return m.queryFn(qr)
+		rows, idx, err := m.queryFn(qr)
+		return rows, command.ConsistencyLevel_NONE, idx, err
 	}
-	return nil, 0, nil
+	return nil, command.ConsistencyLevel_NONE, 0, nil
 }
 
 func (m *MockStore) Request(eqr *command.ExecuteQueryRequest) ([]*command.ExecuteQueryResponse, uint64, error) {
