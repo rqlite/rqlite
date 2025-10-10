@@ -5,6 +5,7 @@
 - [PR #2357](https://github.com/rqlite/rqlite/pull/2357): Case insensitive BackupFormat query param.
 - [PR #2359](https://github.com/rqlite/rqlite/pull/2359): Don't modify supplied Query Level.
 - [PR #2360](https://github.com/rqlite/rqlite/pull/2360): Check for invalid Backup intervals.
+- [PR #2362](https://github.com/rqlite/rqlite/pull/2362): Return actual consistency level from store.Query, fixes issue [#2361](https://github.com/rqlite/rqlite/issues/2361).
 
 ## v9.1.2 (October 3rd 2025)
 There are no changes in this release relative to v9.1.1. However this release is the first that mirrors container images to the [GitHub Container Registry](https://docs.github.com/en/packages).
