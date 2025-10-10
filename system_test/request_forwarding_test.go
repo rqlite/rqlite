@@ -73,7 +73,7 @@ func Test_StoreClientSideBySide(t *testing.T) {
 	}
 
 	// ==============================================================================
-	rows, _, err := node.Store.Query(queryRequestFromString(`SELECT * FROM foo`))
+	rows, _, _, err := node.Store.Query(queryRequestFromString(`SELECT * FROM foo`))
 	if err != nil {
 		t.Fatalf("failed to query on local: %s", err.Error())
 	}
@@ -106,7 +106,7 @@ func Test_StoreClientSideBySide(t *testing.T) {
 	}
 
 	// ==============================================================================
-	rows, _, err = node.Store.Query(queryRequestFromString(`SELECT * FROM bar`))
+	rows, _, _, err = node.Store.Query(queryRequestFromString(`SELECT * FROM bar`))
 	if err != nil {
 		t.Fatalf("failed to query on local: %s", err.Error())
 	}
@@ -139,7 +139,7 @@ func Test_StoreClientSideBySide(t *testing.T) {
 	}
 
 	// ==============================================================================
-	rows, _, err = node.Store.Query(queryRequestFromString(`SELECT * FROM qux`))
+	rows, _, _, err = node.Store.Query(queryRequestFromString(`SELECT * FROM qux`))
 	if err != nil {
 		t.Fatalf("failed to query on local: %s", err.Error())
 	}
