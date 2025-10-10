@@ -246,7 +246,7 @@ func Test_NewServiceTestExecuteQueryAuthNoCredentials(t *testing.T) {
 		t.Fatal(err)
 	}
 	qr := &command.QueryRequest{}
-	_, _, err = cl.Query(qr, s.Addr(), nil, 5*time.Second)
+	_, _, _, err = cl.Query(qr, s.Addr(), nil, 5*time.Second)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -293,12 +293,12 @@ func Test_NewServiceTestExecuteQueryAuth(t *testing.T) {
 		t.Fatal("bob improperly authorized to execute")
 	}
 	qr := &command.QueryRequest{}
-	_, _, err = cl.Query(qr, s.Addr(), makeCredentials("bob", "secret1"), 5*time.Second)
+	_, _, _, err = cl.Query(qr, s.Addr(), makeCredentials("bob", "secret1"), 5*time.Second)
 	if err != nil && err.Error() != "unauthorized" {
 		fmt.Println(err)
 		t.Fatal("bob improperly unauthorized to query")
 	}
-	_, _, err = cl.Query(qr, s.Addr(), makeCredentials("alice", "secret1"), 5*time.Second)
+	_, _, _, err = cl.Query(qr, s.Addr(), makeCredentials("alice", "secret1"), 5*time.Second)
 	if err != nil && err.Error() != "unauthorized" {
 		t.Fatal("alice improperly authorized to query")
 	}

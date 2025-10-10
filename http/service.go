@@ -1448,7 +1448,7 @@ func (s *Service) handleQuery(w http.ResponseWriter, r *http.Request, qp QueryPa
 		LinearizableTimeout: qp.LinearizableTimeout(defaultLinearTimeout).Nanoseconds(),
 	}
 
-	results, raftIndex, resultsErr := s.store.Query(qr)
+	results, _, raftIndex, resultsErr := s.store.Query(qr)
 	if resultsErr != nil && resultsErr == store.ErrNotLeader {
 		if s.DoRedirect(w, r, qp) {
 			return
