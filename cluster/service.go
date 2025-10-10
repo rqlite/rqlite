@@ -98,7 +98,7 @@ type Database interface {
 	Execute(er *command.ExecuteRequest) ([]*command.ExecuteQueryResponse, uint64, error)
 
 	// Query executes a slice of queries, each of which returns rows.
-	Query(qr *command.QueryRequest) ([]*command.QueryRows, uint64, error)
+	Query(qr *command.QueryRequest) ([]*command.QueryRows, command.ConsistencyLevel, uint64, error)
 
 	// Request processes a request that can both executes and queries.
 	Request(rr *command.ExecuteQueryRequest) ([]*command.ExecuteQueryResponse, uint64, error)
@@ -364,7 +364,7 @@ func (s *Service) handleConn(conn net.Conn) {
 			} else if !s.checkCommandPerm(c, auth.PermQuery) {
 				resp.Error = "unauthorized"
 			} else {
-				res, idx, err := s.db.Query(qr)
+				res, _, idx, err := s.db.Query(qr)
 				if err != nil {
 					resp.Error = err.Error()
 				} else {
