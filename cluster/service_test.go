@@ -573,8 +573,9 @@ func (m *mockDatabase) Execute(er *command.ExecuteRequest) ([]*command.ExecuteQu
 	return m.executeFn(er)
 }
 
-func (m *mockDatabase) Query(qr *command.QueryRequest) ([]*command.QueryRows, uint64, error) {
-	return m.queryFn(qr)
+func (m *mockDatabase) Query(qr *command.QueryRequest) ([]*command.QueryRows, command.ConsistencyLevel, uint64, error) {
+	rows, idx, err := m.queryFn(qr)
+	return rows, command.ConsistencyLevel_NONE, idx, err
 }
 
 func (m *mockDatabase) Request(rr *command.ExecuteQueryRequest) ([]*command.ExecuteQueryResponse, uint64, error) {
