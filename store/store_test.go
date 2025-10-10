@@ -3373,6 +3373,93 @@ func Test_StoreQueryRaftIndex(t *testing.T) {
 	}
 }
 
+// Test_StoreQueryReturnedLevel tests that Store.Query returns the actual consistency level used
+func Test_StoreQueryReturnedLevel(t *testing.T) {
+	s, ln := mustNewStore(t)
+	defer ln.Close()
+
+	if err := s.Open(); err != nil {
+		t.Fatalf("failed to open single-node store: %s", err.Error())
+	}
+	defer s.Close(true)
+	if err := s.Bootstrap(NewServer(s.ID(), s.Addr(), true)); err != nil {
+		t.Fatalf("failed to bootstrap single-node store: %s", err.Error())
+	}
+	if _, err := s.WaitForLeader(10 * time.Second); err != nil {
+		t.Fatalf("Error waiting for leader: %s", err)
+	}
+
+	// Create a table
+	er := executeRequestFromString("CREATE TABLE foo (id INTEGER NOT NULL PRIMARY KEY, name TEXT)", false, false)
+	_, _, err := s.Execute(er)
+	if err != nil {
+		t.Fatalf("failed to create table: %s", err.Error())
+	}
+
+	// Execute initial STRONG query to set strongReadTerm
+	strongReq := queryRequestFromString("SELECT * FROM foo", false, false)
+	strongReq.Level = proto.ConsistencyLevel_STRONG
+	_, _, _, err = s.Query(strongReq)
+	if err != nil {
+		t.Fatalf("failed to execute initial STRONG query: %s", err.Error())
+	}
+
+	// Test NONE level
+	req := queryRequestFromString("SELECT * FROM foo", false, false)
+	req.Level = proto.ConsistencyLevel_NONE
+	_, level, _, err := s.Query(req)
+	if err != nil {
+		t.Fatalf("failed to execute NONE query: %s", err.Error())
+	}
+	if level != proto.ConsistencyLevel_NONE {
+		t.Fatalf("expected NONE consistency level, got %s", level)
+	}
+
+	// Test WEAK level
+	req = queryRequestFromString("SELECT * FROM foo", false, false)
+	req.Level = proto.ConsistencyLevel_WEAK
+	_, level, _, err = s.Query(req)
+	if err != nil {
+		t.Fatalf("failed to execute WEAK query: %s", err.Error())
+	}
+	if level != proto.ConsistencyLevel_WEAK {
+		t.Fatalf("expected WEAK consistency level, got %s", level)
+	}
+
+	// Test STRONG level
+	req = queryRequestFromString("SELECT * FROM foo", false, false)
+	req.Level = proto.ConsistencyLevel_STRONG
+	_, level, _, err = s.Query(req)
+	if err != nil {
+		t.Fatalf("failed to execute STRONG query: %s", err.Error())
+	}
+	if level != proto.ConsistencyLevel_STRONG {
+		t.Fatalf("expected STRONG consistency level, got %s", level)
+	}
+
+	// Test LINEARIZABLE level (should stay LINEARIZABLE if no strong read needed)
+	req = queryRequestFromString("SELECT * FROM foo", false, false)
+	req.Level = proto.ConsistencyLevel_LINEARIZABLE
+	_, level, _, err = s.Query(req)
+	if err != nil {
+		t.Fatalf("failed to execute LINEARIZABLE query: %s", err.Error())
+	}
+	if level != proto.ConsistencyLevel_LINEARIZABLE {
+		t.Fatalf("expected LINEARIZABLE consistency level, got %s", level)
+	}
+
+	// Test AUTO level (should be converted to WEAK for a voter)
+	req = queryRequestFromString("SELECT * FROM foo", false, false)
+	req.Level = proto.ConsistencyLevel_AUTO
+	_, level, _, err = s.Query(req)
+	if err != nil {
+		t.Fatalf("failed to execute AUTO query: %s", err.Error())
+	}
+	if level != proto.ConsistencyLevel_WEAK {
+		t.Fatalf("expected AUTO to be converted to WEAK for a voter, got %s", level)
+	}
+}
+
 func Test_State(t *testing.T) {
 	s, ln := mustNewStore(t)
 	defer ln.Close()
