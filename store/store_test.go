@@ -3299,6 +3299,83 @@ func Test_StoreRequestRaftIndex(t *testing.T) {
 	}
 }
 
+// Test_StoreRequestRWCount tests that Store.Request returns the correct number of RW statements
+func Test_StoreRequestRWCount(t *testing.T) {
+	s, ln := mustNewStore(t)
+	defer ln.Close()
+
+	if err := s.Open(); err != nil {
+		t.Fatalf("failed to open single-node store: %s", err.Error())
+	}
+	defer s.Close(true)
+	if err := s.Bootstrap(NewServer(s.ID(), s.Addr(), true)); err != nil {
+		t.Fatalf("failed to bootstrap single-node store: %s", err.Error())
+	}
+	if _, err := s.WaitForLeader(10 * time.Second); err != nil {
+		t.Fatalf("Error waiting for leader: %s", err)
+	}
+
+	// Create a table first
+	createReq := executeQueryRequestFromString(`CREATE TABLE foo (id INTEGER NOT NULL PRIMARY KEY, name TEXT)`, proto.ConsistencyLevel_STRONG, false, false)
+	_, _, _, err := s.Request(createReq)
+	if err != nil {
+		t.Fatalf("failed to create table: %s", err.Error())
+	}
+
+	// Test 1: Single write statement should return nRW=1
+	writeReq := executeQueryRequestFromStrings([]string{
+		`INSERT INTO foo(id, name) VALUES(1, "fiona")`,
+	}, proto.ConsistencyLevel_STRONG, false, false)
+	_, nRW, _, err := s.Request(writeReq)
+	if err != nil {
+		t.Fatalf("failed to execute write request: %s", err.Error())
+	}
+	if nRW != 1 {
+		t.Fatalf("expected nRW=1 for single write statement, got %d", nRW)
+	}
+
+	// Test 2: Multiple write statements should return correct nRW count
+	multiWriteReq := executeQueryRequestFromStrings([]string{
+		`INSERT INTO foo(id, name) VALUES(2, "alice")`,
+		`INSERT INTO foo(id, name) VALUES(3, "bob")`,
+		`UPDATE foo SET name="charlie" WHERE id=1`,
+	}, proto.ConsistencyLevel_STRONG, false, false)
+	_, nRW, _, err = s.Request(multiWriteReq)
+	if err != nil {
+		t.Fatalf("failed to execute multi-write request: %s", err.Error())
+	}
+	if nRW != 3 {
+		t.Fatalf("expected nRW=3 for three write statements, got %d", nRW)
+	}
+
+	// Test 3: Read-only statement should return nRW=0
+	readReq := executeQueryRequestFromStrings([]string{
+		`SELECT * FROM foo`,
+	}, proto.ConsistencyLevel_NONE, false, false)
+	_, nRW, _, err = s.Request(readReq)
+	if err != nil {
+		t.Fatalf("failed to execute read request: %s", err.Error())
+	}
+	if nRW != 0 {
+		t.Fatalf("expected nRW=0 for read-only statement, got %d", nRW)
+	}
+
+	// Test 4: Mixed read-write statements should return correct nRW count
+	mixedReq := executeQueryRequestFromStrings([]string{
+		`SELECT * FROM foo`,
+		`INSERT INTO foo(id, name) VALUES(4, "diana")`,
+		`SELECT * FROM foo WHERE id=4`,
+		`DELETE FROM foo WHERE id=1`,
+	}, proto.ConsistencyLevel_STRONG, false, false)
+	_, nRW, _, err = s.Request(mixedReq)
+	if err != nil {
+		t.Fatalf("failed to execute mixed request: %s", err.Error())
+	}
+	if nRW != 2 {
+		t.Fatalf("expected nRW=2 for two write statements in mixed request, got %d", nRW)
+	}
+}
+
 // Test_StoreQueryRaftIndex tests that Store.Query returns the correct Raft index
 func Test_StoreQueryRaftIndex(t *testing.T) {
 	s, ln := mustNewStore(t)
