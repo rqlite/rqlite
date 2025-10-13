@@ -582,8 +582,8 @@ type CommandRequestResponse struct {
 	state         protoimpl.MessageState        `protogen:"open.v1"`
 	Error         string                        `protobuf:"bytes,1,opt,name=error,proto3" json:"error,omitempty"`
 	Response      []*proto.ExecuteQueryResponse `protobuf:"bytes,2,rep,name=response,proto3" json:"response,omitempty"`
-	NumRW         uint64                        `protobuf:"varint,3,opt,name=numRW,proto3" json:"numRW,omitempty"`
-	RaftIndex     uint64                        `protobuf:"varint,4,opt,name=raftIndex,proto3" json:"raftIndex,omitempty"`
+	RaftIndex     uint64                        `protobuf:"varint,3,opt,name=raftIndex,proto3" json:"raftIndex,omitempty"`
+	NumRW         uint64                        `protobuf:"varint,4,opt,name=numRW,proto3" json:"numRW,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -632,16 +632,16 @@ func (x *CommandRequestResponse) GetResponse() []*proto.ExecuteQueryResponse {
 	return nil
 }
 
-func (x *CommandRequestResponse) GetNumRW() uint64 {
+func (x *CommandRequestResponse) GetRaftIndex() uint64 {
 	if x != nil {
-		return x.NumRW
+		return x.RaftIndex
 	}
 	return 0
 }
 
-func (x *CommandRequestResponse) GetRaftIndex() uint64 {
+func (x *CommandRequestResponse) GetNumRW() uint64 {
 	if x != nil {
-		return x.RaftIndex
+		return x.NumRW
 	}
 	return 0
 }
@@ -1121,9 +1121,9 @@ const file_message_proto_rawDesc = "" +
 	"\traftIndex\x18\x03 \x01(\x04R\traftIndex\"\x9d\x01\n" +
 	"\x16CommandRequestResponse\x12\x14\n" +
 	"\x05error\x18\x01 \x01(\tR\x05error\x129\n" +
-	"\bresponse\x18\x02 \x03(\v2\x1d.command.ExecuteQueryResponseR\bresponse\x12\x14\n" +
-	"\x05numRW\x18\x03 \x01(\x04R\x05numRW\x12\x1c\n" +
-	"\traftIndex\x18\x04 \x01(\x04R\traftIndex\"A\n" +
+	"\bresponse\x18\x02 \x03(\v2\x1d.command.ExecuteQueryResponseR\bresponse\x12\x1c\n" +
+	"\traftIndex\x18\x03 \x01(\x04R\traftIndex\x12\x14\n" +
+	"\x05numRW\x18\x04 \x01(\x04R\x05numRW\"A\n" +
 	"\x15CommandBackupResponse\x12\x14\n" +
 	"\x05error\x18\x01 \x01(\tR\x05error\x12\x12\n" +
 	"\x04data\x18\x02 \x01(\fR\x04data\"+\n" +
