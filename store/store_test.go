@@ -3317,9 +3317,12 @@ func Test_StoreRequestRWCount(t *testing.T) {
 
 	// Create a table first
 	createReq := executeQueryRequestFromString(`CREATE TABLE foo (id INTEGER NOT NULL PRIMARY KEY, name TEXT)`, proto.ConsistencyLevel_STRONG, false, false)
-	_, _, _, err := s.Request(createReq)
+	_, nRWCreate, _, err := s.Request(createReq)
 	if err != nil {
 		t.Fatalf("failed to create table: %s", err.Error())
+	}
+	if nRWCreate != 1 {
+		t.Fatalf("expected nRW=1 for CREATE TABLE statement, got %d", nRWCreate)
 	}
 
 	// Test 1: Single write statement should return nRW=1
