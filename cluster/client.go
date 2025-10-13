@@ -239,7 +239,7 @@ func (c *Client) Query(qr *command.QueryRequest, nodeAddr string, creds *proto.C
 // Request performs an ExecuteQuery on a remote node. If creds is nil, then
 // no credential information will be included in the ExecuteQuery request to the
 // remote node.
-func (c *Client) Request(r *command.ExecuteQueryRequest, nodeAddr string, creds *proto.Credentials, timeout time.Duration, retries int) ([]*command.ExecuteQueryResponse, uint64, error) {
+func (c *Client) Request(r *command.ExecuteQueryRequest, nodeAddr string, creds *proto.Credentials, timeout time.Duration, retries int) ([]*command.ExecuteQueryResponse, uint64, uint64, error) {
 	command := &proto.Command{
 		Type: proto.Command_COMMAND_TYPE_REQUEST,
 		Request: &proto.Command_ExecuteQueryRequest{
@@ -250,19 +250,19 @@ func (c *Client) Request(r *command.ExecuteQueryRequest, nodeAddr string, creds 
 	p, nr, err := c.retry(command, nodeAddr, timeout, retries)
 	stats.Add(numClientRequestRetries, int64(nr))
 	if err != nil {
-		return nil, 0, err
+		return nil, 0, 0, err
 	}
 
 	a := &proto.CommandRequestResponse{}
 	err = pb.Unmarshal(p, a)
 	if err != nil {
-		return nil, 0, err
+		return nil, 0, 0, err
 	}
 
 	if a.Error != "" {
-		return nil, 0, errors.New(a.Error)
+		return nil, 0, 0, errors.New(a.Error)
 	}
-	return a.Response, a.RaftIndex, nil
+	return a.Response, a.NumRW, a.RaftIndex, nil
 }
 
 // Backup retrieves a backup from a remote node and writes to the io.Writer.

@@ -80,7 +80,7 @@ func Test_StoreClientSideBySide(t *testing.T) {
 	if exp, got := `[{"columns":["id","name"],"types":["integer","text"],"values":[[1,"fiona"]]}]`, asJSON(rows); exp != got {
 		t.Fatalf("unexpected results, exp %s, got %s", exp, got)
 	}
-	results, _, err := node.Store.Request(executeQueryRequestFromString(`SELECT * FROM foo`))
+	results, _, _, err := node.Store.Request(executeQueryRequestFromString(`SELECT * FROM foo`))
 	if err != nil {
 		t.Fatalf("failed to request on local: %s", err.Error())
 	}
@@ -94,7 +94,7 @@ func Test_StoreClientSideBySide(t *testing.T) {
 	if exp, got := `[{"columns":["id","name"],"types":["integer","text"],"values":[[1,"fiona"]]}]`, asJSON(rows); exp != got {
 		t.Fatalf("unexpected results, exp %s, got %s", exp, got)
 	}
-	results, idx, err = client.Request(executeQueryRequestFromString(`SELECT * FROM foo`), leaderAddr, NO_CREDS, shortWait, 0)
+	results, _, idx, err = client.Request(executeQueryRequestFromString(`SELECT * FROM foo`), leaderAddr, NO_CREDS, shortWait, 0)
 	if err != nil {
 		t.Fatalf("failed to query via remote: %s", err.Error())
 	}
@@ -113,7 +113,7 @@ func Test_StoreClientSideBySide(t *testing.T) {
 	if exp, got := `[{"columns":["id","name"],"types":["integer","text"],"values":[[1,"fiona"]]}]`, asJSON(rows); exp != got {
 		t.Fatalf("unexpected results, exp %s, got %s", exp, got)
 	}
-	results, _, err = node.Store.Request(executeQueryRequestFromString(`SELECT * FROM bar`))
+	results, _, _, err = node.Store.Request(executeQueryRequestFromString(`SELECT * FROM bar`))
 	if err != nil {
 		t.Fatalf("failed to request on local: %s", err.Error())
 	}
@@ -127,7 +127,7 @@ func Test_StoreClientSideBySide(t *testing.T) {
 	if exp, got := `[{"columns":["id","name"],"types":["integer","text"],"values":[[1,"fiona"]]}]`, asJSON(rows); exp != got {
 		t.Fatalf("unexpected results, exp %s, got %s", exp, got)
 	}
-	results, idx, err = client.Request(executeQueryRequestFromString(`SELECT * FROM bar`), leaderAddr, NO_CREDS, shortWait, noRetries)
+	results, _, idx, err = client.Request(executeQueryRequestFromString(`SELECT * FROM bar`), leaderAddr, NO_CREDS, shortWait, noRetries)
 	if err != nil {
 		t.Fatalf("failed to query via remote: %s", err.Error())
 	}
@@ -146,7 +146,7 @@ func Test_StoreClientSideBySide(t *testing.T) {
 	if exp, got := `[{"error":"no such table: qux"}]`, asJSON(rows); exp != got {
 		t.Fatalf("unexpected results, exp %s, got %s", exp, got)
 	}
-	results, _, err = node.Store.Request(executeQueryRequestFromString(`SELECT * FROM qux`))
+	results, _, _, err = node.Store.Request(executeQueryRequestFromString(`SELECT * FROM qux`))
 	if err != nil {
 		t.Fatalf("failed to request on local: %s", err.Error())
 	}
@@ -163,7 +163,7 @@ func Test_StoreClientSideBySide(t *testing.T) {
 	if exp, got := `[{"error":"no such table: qux"}]`, asJSON(rows); exp != got {
 		t.Fatalf("unexpected results, exp %s, got %s", exp, got)
 	}
-	results, _, err = client.Request(executeQueryRequestFromString(`SELECT * FROM qux`), leaderAddr, NO_CREDS, shortWait, noRetries)
+	results, _, _, err = client.Request(executeQueryRequestFromString(`SELECT * FROM qux`), leaderAddr, NO_CREDS, shortWait, noRetries)
 	if err != nil {
 		t.Fatalf("failed to query via remote: %s", err.Error())
 	}

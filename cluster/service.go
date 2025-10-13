@@ -101,7 +101,7 @@ type Database interface {
 	Query(qr *command.QueryRequest) ([]*command.QueryRows, command.ConsistencyLevel, uint64, error)
 
 	// Request processes a request that can both executes and queries.
-	Request(rr *command.ExecuteQueryRequest) ([]*command.ExecuteQueryResponse, uint64, error)
+	Request(rr *command.ExecuteQueryRequest) ([]*command.ExecuteQueryResponse, uint64, uint64, error)
 
 	// Backup writes a backup of the database to the writer.
 	Backup(br *command.BackupRequest, dst io.Writer) error
@@ -387,12 +387,13 @@ func (s *Service) handleConn(conn net.Conn) {
 			} else if !s.checkCommandPermAll(c, auth.PermQuery, auth.PermExecute) {
 				resp.Error = "unauthorized"
 			} else {
-				res, idx, err := s.db.Request(rr)
+				res, numRW, idx, err := s.db.Request(rr)
 				if err != nil {
 					resp.Error = err.Error()
 				} else {
 					resp.Response = make([]*command.ExecuteQueryResponse, len(res))
 					copy(resp.Response, res)
+					resp.NumRW = numRW
 					resp.RaftIndex = idx
 				}
 			}

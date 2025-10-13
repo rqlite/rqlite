@@ -60,7 +60,7 @@ type Database interface {
 
 	// Request processes a slice of requests, each of which can be either
 	// an Execute or Query request.
-	Request(eqr *proto.ExecuteQueryRequest) ([]*proto.ExecuteQueryResponse, uint64, error)
+	Request(eqr *proto.ExecuteQueryRequest) ([]*proto.ExecuteQueryResponse, uint64, uint64, error)
 
 	// Load loads a SQLite file into the system via Raft consensus.
 	Load(lr *proto.LoadRequest) error
@@ -123,7 +123,7 @@ type Cluster interface {
 	Query(qr *proto.QueryRequest, nodeAddr string, creds *clstrPB.Credentials, timeout time.Duration) ([]*proto.QueryRows, uint64, error)
 
 	// Request performs an ExecuteQuery Request on a remote node.
-	Request(eqr *proto.ExecuteQueryRequest, nodeAddr string, creds *clstrPB.Credentials, timeout time.Duration, retries int) ([]*proto.ExecuteQueryResponse, uint64, error)
+	Request(eqr *proto.ExecuteQueryRequest, nodeAddr string, creds *clstrPB.Credentials, timeout time.Duration, retries int) ([]*proto.ExecuteQueryResponse, uint64, uint64, error)
 
 	// Backup retrieves a backup from a remote node and writes to the io.Writer.
 	Backup(br *proto.BackupRequest, nodeAddr string, creds *clstrPB.Credentials, timeout time.Duration, w io.Writer) error
@@ -1534,7 +1534,7 @@ func (s *Service) handleRequest(w http.ResponseWriter, r *http.Request, qp Query
 		FreshnessStrict: qp.FreshnessStrict(),
 	}
 
-	results, raftIndex, resultsErr := s.store.Request(eqr)
+	results, _, raftIndex, resultsErr := s.store.Request(eqr)
 	if resultsErr != nil && resultsErr == store.ErrNotLeader {
 		if s.DoRedirect(w, r, qp) {
 			return
@@ -1552,7 +1552,7 @@ func (s *Service) handleRequest(w http.ResponseWriter, r *http.Request, qp Query
 		}
 
 		w.Header().Add(ServedByHTTPHeader, addr)
-		results, raftIndex, resultsErr = s.cluster.Request(eqr, addr, makeCredentials(r),
+		results, _, raftIndex, resultsErr = s.cluster.Request(eqr, addr, makeCredentials(r),
 			qp.Timeout(defaultTimeout), qp.Retries(0))
 		if resultsErr != nil {
 			stats.Add(numRemoteRequestsFailed, 1)

@@ -314,7 +314,7 @@ func Test_MultiNodeSimple(t *testing.T) {
 
 	// Write another row using Request
 	rr := executeQueryRequestFromString("INSERT INTO foo(id, name) VALUES(2, 'fiona')", proto.ConsistencyLevel_STRONG, false, false)
-	_, _, err = s0.Request(rr)
+	_, _, _, err = s0.Request(rr)
 	if err != nil {
 		t.Fatalf("failed to execute on single node: %s", err.Error())
 	}
@@ -1418,7 +1418,7 @@ func Test_MultiNodeExecuteQueryFreshness(t *testing.T) {
 	eqr := executeQueryRequestFromString("SELECT * FROM foo", proto.ConsistencyLevel_NONE,
 		false, false)
 	eqr.Freshness = mustParseDuration("1ns").Nanoseconds()
-	_, _, err = s1.Request(eqr)
+	_, _, _, err = s1.Request(eqr)
 	if err == nil {
 		t.Fatalf("freshness violating request didn't return an error")
 	}
@@ -1426,7 +1426,7 @@ func Test_MultiNodeExecuteQueryFreshness(t *testing.T) {
 		t.Fatalf("freshness violating request returned wrong error: %s", err.Error())
 	}
 	eqr.Freshness = 0
-	eqresp, _, err := s1.Request(eqr)
+	eqresp, _, _, err := s1.Request(eqr)
 	if err != nil {
 		t.Fatalf("inactive freshness violating request returned an error")
 	}
