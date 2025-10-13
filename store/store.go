@@ -1433,14 +1433,14 @@ func (s *Store) VerifyLeader() (retErr error) {
 }
 
 // Request processes a request that may contain both Executes and Queries.
-func (s *Store) Request(eqr *proto.ExecuteQueryRequest) ([]*proto.ExecuteQueryResponse, uint64, error) {
+func (s *Store) Request(eqr *proto.ExecuteQueryRequest) ([]*proto.ExecuteQueryResponse, uint64, uint64, error) {
 	p := (*PragmaCheckRequest)(eqr.Request)
 	if err := p.Check(); err != nil {
-		return nil, 0, err
+		return nil, 0, 0, err
 	}
 
 	if !s.open.Is() {
-		return nil, 0, ErrNotOpen
+		return nil, 0, 0, ErrNotOpen
 	}
 	nRW, nRO := s.RORWCount(eqr)
 	isLeader := s.raft.State() == raft.Leader
@@ -1454,7 +1454,7 @@ func (s *Store) Request(eqr *proto.ExecuteQueryRequest) ([]*proto.ExecuteQueryRe
 				eqr.Level = proto.ConsistencyLevel_STRONG
 				s.numLRUpgraded.Add(1)
 			} else {
-				return nil, 0, err
+				return nil, 0, 0, err
 			}
 		}
 	}
@@ -1473,29 +1473,29 @@ func (s *Store) Request(eqr *proto.ExecuteQueryRequest) ([]*proto.ExecuteQueryRe
 		}
 
 		if eqr.Level == proto.ConsistencyLevel_NONE && s.isStaleRead(eqr.Freshness, eqr.FreshnessStrict) {
-			return nil, 0, ErrStaleRead
+			return nil, 0, 0, ErrStaleRead
 		} else if eqr.Level == proto.ConsistencyLevel_WEAK {
 			if !isLeader {
-				return nil, 0, ErrNotLeader
+				return nil, 0, 0, ErrNotLeader
 			}
 		}
 		qr, err := s.db.Query(eqr.Request, eqr.Timings)
-		return convertFn(qr), 0, err
+		return convertFn(qr), uint64(nRW), 0, err
 	}
 
 	// At least one write in the request, or STRONG consistency requested, so
 	// we need to go through consensus. Check that we can do that.
 	if !isLeader {
-		return nil, 0, ErrNotLeader
+		return nil, 0, 0, ErrNotLeader
 	}
 	if !s.Ready() {
-		return nil, 0, ErrNotReady
+		return nil, 0, 0, ErrNotReady
 	}
 
 	// Send the request through consensus.
 	b, compressed, err := s.tryCompress(eqr)
 	if err != nil {
-		return nil, 0, err
+		return nil, 0, 0, err
 	}
 	c := &proto.Command{
 		Type:       proto.Command_COMMAND_TYPE_EXECUTE_QUERY,
@@ -1504,15 +1504,15 @@ func (s *Store) Request(eqr *proto.ExecuteQueryRequest) ([]*proto.ExecuteQueryRe
 	}
 	b, err = command.Marshal(c)
 	if err != nil {
-		return nil, 0, err
+		return nil, 0, 0, err
 	}
 
 	af := s.raft.Apply(b, s.ApplyTimeout)
 	if af.Error() != nil {
 		if af.Error() == raft.ErrNotLeader {
-			return nil, 0, ErrNotLeader
+			return nil, 0, 0, ErrNotLeader
 		}
-		return nil, 0, af.Error()
+		return nil, 0, 0, af.Error()
 	}
 	r := af.Response().(*fsmExecuteQueryResponse)
 
@@ -1522,7 +1522,7 @@ func (s *Store) Request(eqr *proto.ExecuteQueryRequest) ([]*proto.ExecuteQueryRe
 		s.strongReadTerm.Store(readTerm)
 	}
 
-	return r.results, af.Index(), r.error
+	return r.results, uint64(nRW), af.Index(), r.error
 }
 
 // Backup writes a consistent snapshot of the underlying database to dst. This

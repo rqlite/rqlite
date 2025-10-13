@@ -210,7 +210,7 @@ func Test_ClientRequest(t *testing.T) {
 	defer srv.Close()
 
 	c := NewClient(&simpleDialer{}, 0)
-	_, idx, err := c.Request(executeQueryRequestFromString("SELECT * FROM foo"),
+	_, _, idx, err := c.Request(executeQueryRequestFromString("SELECT * FROM foo"),
 		srv.Addr(), nil, time.Second, defaultMaxRetries)
 	if err != nil {
 		t.Fatal(err)

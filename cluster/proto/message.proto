@@ -67,7 +67,8 @@ message CommandQueryResponse {
 message CommandRequestResponse {
     string error = 1;
     repeated command.ExecuteQueryResponse response = 2;
-    uint64 raftIndex = 3;
+    uint64 numRW = 3;
+    uint64 raftIndex = 4;
 }
 
 message CommandBackupResponse {
