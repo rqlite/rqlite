@@ -836,8 +836,10 @@ func (s *Store) Close(wait bool) (retErr error) {
 	if err := s.db.Close(); err != nil {
 		return err
 	}
-	if err := s.appliedIndexFile.Close(); err != nil {
-		return err
+	if s.appliedIndexFile != nil {
+		if err := s.appliedIndexFile.Close(); err != nil {
+			return err
+		}
 	}
 	if err := s.boltStore.Close(); err != nil {
 		return err
@@ -2299,8 +2301,10 @@ func (s *Store) fsmApply(l *raft.Log) (e any) {
 		s.dbAppliedIdx.Store(l.Index)
 		s.appliedTarget.Signal(l.Index)
 		// Write the applied index to the index file
-		if err := s.appliedIndexFile.WriteValue(l.Index); err != nil {
-			s.logger.Printf("failed to write applied index to file: %s", err)
+		if s.appliedIndexFile != nil {
+			if err := s.appliedIndexFile.WriteValue(l.Index); err != nil {
+				s.logger.Printf("failed to write applied index to file: %s", err)
+			}
 		}
 	}
 	switch cmd.Type {
