@@ -626,8 +626,8 @@ func (s *Store) Open() (retErr error) {
 		return fmt.Errorf("failed to create on-disk database: %s", err)
 	}
 
-	// Create the applied index file in the same directory as the SQLite database
-	appliedIndexPath := filepath.Join(s.dbDir, "applied_index")
+	// Create the applied index file in the Raft directory
+	appliedIndexPath := filepath.Join(s.raftDir, "applied_index")
 	s.appliedIdxFile, err = index.NewIndexFile(appliedIndexPath)
 	if err != nil {
 		return fmt.Errorf("failed to create applied index file: %s", err)
