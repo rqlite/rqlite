@@ -310,7 +310,7 @@ type Store struct {
 	dbDrv *sql.Driver      // The SQLite database driver.
 	db    *sql.SwappableDB // The underlying SQLite store.
 
-	appliedIndexFile *index.IndexFile // File to store last applied Raft log index.
+	appliedIdxFile *index.IndexFile // File to store last applied Raft log index.
 
 	cdcMu         sync.RWMutex
 	cdcStreamer   *sql.CDCStreamer
@@ -628,7 +628,7 @@ func (s *Store) Open() (retErr error) {
 
 	// Create the applied index file in the same directory as the SQLite database
 	appliedIndexPath := filepath.Join(s.dbDir, "applied_index")
-	s.appliedIndexFile, err = index.NewIndexFile(appliedIndexPath)
+	s.appliedIdxFile, err = index.NewIndexFile(appliedIndexPath)
 	if err != nil {
 		return fmt.Errorf("failed to create applied index file: %s", err)
 	}
@@ -836,8 +836,8 @@ func (s *Store) Close(wait bool) (retErr error) {
 	if err := s.db.Close(); err != nil {
 		return err
 	}
-	if s.appliedIndexFile != nil {
-		if err := s.appliedIndexFile.Close(); err != nil {
+	if s.appliedIdxFile != nil {
+		if err := s.appliedIdxFile.Close(); err != nil {
 			return err
 		}
 	}
@@ -2300,9 +2300,8 @@ func (s *Store) fsmApply(l *raft.Log) (e any) {
 	if mutated {
 		s.dbAppliedIdx.Store(l.Index)
 		s.appliedTarget.Signal(l.Index)
-		// Write the applied index to the index file
-		if s.appliedIndexFile != nil {
-			if err := s.appliedIndexFile.WriteValue(l.Index); err != nil {
+		if s.appliedIdxFile != nil {
+			if err := s.appliedIdxFile.WriteValue(l.Index); err != nil {
 				s.logger.Printf("failed to write applied index to file: %s", err)
 			}
 		}
