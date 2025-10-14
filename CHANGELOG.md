@@ -1,5 +1,6 @@
 ## v9.1.3 (unreleased)
 ### Implementation changes and bug fixes
+- [PR #2352](https://github.com/rqlite/rqlite/pull/2352): Add support for storing uint64 values directly on disk.
 - [PR #2356](https://github.com/rqlite/rqlite/pull/2356): Consistent level-to-string conversions.
 - [PR #2358](https://github.com/rqlite/rqlite/pull/2358): Factor out Protobuf Consistency levels.
 - [PR #2357](https://github.com/rqlite/rqlite/pull/2357): Case insensitive BackupFormat query param.
