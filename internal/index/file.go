@@ -13,6 +13,9 @@ const (
 )
 
 var (
+	// ErrEmptyFile indicates that the index file is empty.
+	ErrEmptyFile = errors.New("index file is empty")
+
 	// ErrCorrupt indicates that the index file is corrupt.
 	ErrCorrupt = errors.New("index file is corrupt")
 
@@ -57,6 +60,14 @@ func (i *IndexFile) WriteValue(v uint64) error {
 // ReadValue reads the uint64 value from the index file.
 // It returns an error if the file is invalid or corrupted.
 func (i *IndexFile) ReadValue() (uint64, error) {
+	info, err := i.fd.Stat()
+	if err != nil {
+		return 0, err
+	}
+	if info.Size() == 0 {
+		return 0, ErrEmptyFile
+	}
+
 	var buf [recordSize]byte
 	if _, err := i.fd.ReadAt(buf[:], 0); err != nil {
 		return 0, err
