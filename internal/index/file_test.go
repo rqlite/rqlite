@@ -9,8 +9,8 @@ import (
 )
 
 func Test_ReadOnNewFileFails(t *testing.T) {
-	_, idx, cleanup := newTempIndexFile(t)
-	defer cleanup()
+	idx := newTempIndexFile(t)
+	defer idx.Close()
 
 	// File exists but is empty; ReadValue should error.
 	if _, err := idx.ReadValue(); err == nil {
@@ -19,8 +19,8 @@ func Test_ReadOnNewFileFails(t *testing.T) {
 }
 
 func Test_WriteThenRead_RoundTrip(t *testing.T) {
-	_, idx, cleanup := newTempIndexFile(t)
-	defer cleanup()
+	idx := newTempIndexFile(t)
+	defer idx.Close()
 
 	vals := []uint64{0, 1, 42, 1<<63 - 1, ^uint64(0)}
 	for _, v := range vals {
@@ -38,8 +38,8 @@ func Test_WriteThenRead_RoundTrip(t *testing.T) {
 }
 
 func Test_Overwrite(t *testing.T) {
-	path, idx, cleanup := newTempIndexFile(t)
-	defer cleanup()
+	idx := newTempIndexFile(t)
+	defer idx.Close()
 
 	if err := idx.WriteValue(111); err != nil {
 		t.Fatalf("WriteValue: %v", err)
@@ -55,7 +55,7 @@ func Test_Overwrite(t *testing.T) {
 		t.Fatalf("overwrite failed: got %d, want %d", got, 222)
 	}
 	// Ensure file is at least 16 bytes; extra bytes (if any) should not affect read.
-	fi, err := os.Stat(path)
+	fi, err := os.Stat(idx.Path())
 	if err != nil {
 		t.Fatalf("Stat: %v", err)
 	}
@@ -65,8 +65,8 @@ func Test_Overwrite(t *testing.T) {
 }
 
 func Test_CorruptCRC(t *testing.T) {
-	_, idx, cleanup := newTempIndexFile(t)
-	defer cleanup()
+	idx := newTempIndexFile(t)
+	defer idx.Close()
 
 	if err := idx.WriteValue(1234567890); err != nil {
 		t.Fatalf("WriteValue: %v", err)
@@ -89,8 +89,8 @@ func Test_CorruptCRC(t *testing.T) {
 }
 
 func Test_WrongMagic(t *testing.T) {
-	_, idx, cleanup := newTempIndexFile(t)
-	defer cleanup()
+	idx := newTempIndexFile(t)
+	defer idx.Close()
 
 	if err := idx.WriteValue(7); err != nil {
 		t.Fatalf("WriteValue: %v", err)
@@ -161,7 +161,7 @@ func Test_ManualRecordConstruction_MatchesImplementation(t *testing.T) {
 
 func Test_ReadErrorPropagation(t *testing.T) {
 	// Close the file descriptor and ensure ReadValue propagates an error.
-	_, idx, _ := newTempIndexFile(t)
+	idx := newTempIndexFile(t)
 	_ = idx.fd.Close()
 	if _, err := idx.ReadValue(); err == nil {
 		t.Fatalf("ReadValue on closed fd: want error, got nil")
@@ -170,7 +170,7 @@ func Test_ReadErrorPropagation(t *testing.T) {
 
 func Test_WriteErrorPropagation(t *testing.T) {
 	// Close the file descriptor and ensure WriteValue propagates an error.
-	_, idx, _ := newTempIndexFile(t)
+	idx := newTempIndexFile(t)
 	_ = idx.fd.Close()
 	if err := idx.WriteValue(1); err == nil {
 		t.Fatalf("WriteValue on closed fd: want error, got nil")
@@ -188,8 +188,8 @@ func Test_NonExistentPath_OpenFails(t *testing.T) {
 
 func Test_ConcurrentWriteRead_NoOffsetRaces(t *testing.T) {
 	// Smoke test that positional I/O avoids offset interference.
-	_, idx, cleanup := newTempIndexFile(t)
-	defer cleanup()
+	idx := newTempIndexFile(t)
+	defer idx.Close()
 
 	const iterations = 1000
 	done := make(chan struct{})
@@ -229,8 +229,8 @@ func Test_ConcurrentWriteRead_NoOffsetRaces(t *testing.T) {
 
 // Ensure IndexFile implements expected error semantics for ErrBadChecksum on corruption.
 func Test_CorruptionReturnsUnexpectedEOF(t *testing.T) {
-	_, idx, cleanup := newTempIndexFile(t)
-	defer cleanup()
+	idx := newTempIndexFile(t)
+	defer idx.Close()
 
 	if err := idx.WriteValue(5); err != nil {
 		t.Fatalf("WriteValue: %v", err)
@@ -251,14 +251,13 @@ func Test_CorruptionReturnsUnexpectedEOF(t *testing.T) {
 }
 
 // helper to make a new IndexFile in a temp directory
-func newTempIndexFile(t *testing.T) (path string, idx *IndexFile, cleanup func()) {
+func newTempIndexFile(t *testing.T) *IndexFile {
 	t.Helper()
 	dir := t.TempDir()
-	path = filepath.Join(dir, "applied.idx")
+	path := filepath.Join(dir, "applied.idx")
 	idxf, err := NewIndexFile(path)
 	if err != nil {
 		t.Fatalf("NewIndexFile: %v", err)
 	}
-	cleanup = func() { _ = idxf.fd.Close() }
-	return path, idxf, cleanup
+	return idxf
 }

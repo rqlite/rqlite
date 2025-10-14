@@ -35,6 +35,11 @@ func NewIndexFile(path string) (*IndexFile, error) {
 	return &IndexFile{fd: fd}, nil
 }
 
+// Path returns the path of the index file.
+func (i *IndexFile) Path() string {
+	return i.fd.Name()
+}
+
 // WriteValue writes the given uint64 value to the index file.
 // It does not call fsync.
 func (i *IndexFile) WriteValue(v uint64) error {
@@ -54,7 +59,7 @@ func (i *IndexFile) WriteValue(v uint64) error {
 func (i *IndexFile) ReadValue() (uint64, error) {
 	var buf [recordSize]byte
 	if _, err := i.fd.ReadAt(buf[:], 0); err != nil {
-		return 0, err // treat short/err as invalid
+		return 0, err
 	}
 	if binary.LittleEndian.Uint32(buf[0:4]) != magicNumber {
 		return 0, ErrCorrupt
