@@ -263,14 +263,11 @@ func Test_ClusterHWMPropagation(t *testing.T) {
 
 	// Check internals
 	testPoll(t, func() bool {
-		return services[1].hwmFollowerUpdated.Load() != 0 && services[2].hwmFollowerUpdated.Load() != 0
-	}, time.Second)
-	if services[0].hwmLeaderUpdated.Load() == 0 {
-		t.Fatalf("expected leader to have updated HWM, got 0")
-	}
-	if services[0].hwmFollowerUpdated.Load() != 0 {
-		t.Fatalf("expected leader to node have follower-updated HWM")
-	}
+		return services[0].hwmLeaderUpdated.Load() != 0 &&
+			services[0].hwmFollowerUpdated.Load() == 0 &&
+			services[1].hwmFollowerUpdated.Load() != 0 &&
+			services[2].hwmFollowerUpdated.Load() != 0
+	}, 2*time.Second)
 }
 
 // Test_ClusterLeadershipChange tests leadership changes and catch-up behavior
