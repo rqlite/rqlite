@@ -2300,10 +2300,8 @@ func (s *Store) fsmApply(l *raft.Log) (e any) {
 	if mutated {
 		s.dbAppliedIdx.Store(l.Index)
 		s.appliedTarget.Signal(l.Index)
-		if s.appliedIdxFile != nil {
-			if err := s.appliedIdxFile.WriteValue(l.Index); err != nil {
-				s.logger.Printf("failed to write applied index to file: %s", err)
-			}
+		if err := s.appliedIdxFile.WriteValue(l.Index); err != nil {
+			s.logger.Printf("failed to write applied index to file: %s", err)
 		}
 	}
 	switch cmd.Type {
