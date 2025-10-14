@@ -3,7 +3,6 @@ package index
 import (
 	"encoding/binary"
 	"hash/crc32"
-	"io"
 	"os"
 	"path/filepath"
 	"testing"
@@ -228,7 +227,7 @@ func Test_ConcurrentWriteRead_NoOffsetRaces(t *testing.T) {
 	}
 }
 
-// Ensure IndexFile implements expected error semantics for io.ErrUnexpectedEOF on corruption.
+// Ensure IndexFile implements expected error semantics for ErrBadChecksum on corruption.
 func Test_CorruptionReturnsUnexpectedEOF(t *testing.T) {
 	_, idx, cleanup := newTempIndexFile(t)
 	defer cleanup()
@@ -246,8 +245,8 @@ func Test_CorruptionReturnsUnexpectedEOF(t *testing.T) {
 	if err == nil {
 		t.Fatalf("expected error, got nil")
 	}
-	if err != io.ErrUnexpectedEOF {
-		t.Fatalf("expected io.ErrUnexpectedEOF, got %T: %v", err, err)
+	if err != ErrBadChecksum {
+		t.Fatalf("expected ErrBadChecksum, got %T: %v", err, err)
 	}
 }
 

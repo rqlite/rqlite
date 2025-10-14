@@ -2,14 +2,22 @@ package index
 
 import (
 	"encoding/binary"
+	"errors"
 	"hash/crc32"
-	"io"
 	"os"
 )
 
 const (
 	magicNumber uint32 = 0x01415152 // "RAQ\x01"
 	recordSize  uint32 = 16         // bytes
+)
+
+var (
+	// ErrCorrupt indicates that the index file is corrupt.
+	ErrCorrupt = errors.New("index file is corrupt")
+
+	// ErrBadChecksum indicates that the index file has a bad checksum.
+	ErrBadChecksum = errors.New("index file has bad checksum")
 )
 
 // IndexFile represents a file that contains a single uint64 value, with
@@ -49,12 +57,12 @@ func (i *IndexFile) ReadValue() (uint64, error) {
 		return 0, err // treat short/err as invalid
 	}
 	if binary.LittleEndian.Uint32(buf[0:4]) != magicNumber {
-		return 0, io.ErrUnexpectedEOF
+		return 0, ErrCorrupt
 	}
 	want := binary.LittleEndian.Uint32(buf[12:16])
 	got := crc32.ChecksumIEEE(buf[:12])
 	if got != want {
-		return 0, io.ErrUnexpectedEOF
+		return 0, ErrBadChecksum
 	}
 	return binary.LittleEndian.Uint64(buf[4:12]), nil
 }
