@@ -17,6 +17,9 @@ var (
 
 	// ErrUnsupportedStorageType is returned when the storage type is not supported.
 	ErrUnsupportedStorageType = errors.New("unsupported storage type")
+
+	// ErrInvalidInterval is returned when the interval is invalid.
+	ErrInvalidInterval = errors.New("invalid interval")
 )
 
 // Duration is a wrapper around time.Duration that allows us to unmarshal
@@ -36,17 +39,19 @@ func (d *Duration) UnmarshalJSON(b []byte) error {
 	switch value := v.(type) {
 	case float64:
 		*d = Duration(time.Duration(value))
-		return nil
 	case string:
 		tmp, err := time.ParseDuration(value)
 		if err != nil {
 			return err
 		}
 		*d = Duration(tmp)
-		return nil
 	default:
 		return errors.New("invalid duration")
 	}
+	if *d <= 0 {
+		return ErrInvalidInterval
+	}
+	return nil
 }
 
 // StorageType represents the type of storage service used for backups.

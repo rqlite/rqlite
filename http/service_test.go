@@ -1402,14 +1402,14 @@ func Test_ForwardingRedirectExecuteQuery(t *testing.T) {
 	m := &MockStore{
 		leaderAddr: "foo:1234",
 	}
-	m.requestFn = func(er *command.ExecuteQueryRequest) ([]*command.ExecuteQueryResponse, uint64, error) {
-		return nil, 0, store.ErrNotLeader
+	m.requestFn = func(er *command.ExecuteQueryRequest) ([]*command.ExecuteQueryResponse, uint64, uint64, error) {
+		return nil, 0, 0, store.ErrNotLeader
 	}
 
 	c := &mockClusterService{
 		apiAddr: "https://bar:5678",
 	}
-	c.requestFn = func(er *command.ExecuteQueryRequest, addr string, timeout time.Duration) ([]*command.ExecuteQueryResponse, uint64, error) {
+	c.requestFn = func(er *command.ExecuteQueryRequest, addr string, timeout time.Duration) ([]*command.ExecuteQueryResponse, uint64, uint64, error) {
 		resp := &command.ExecuteQueryResponse{
 			Result: &command.ExecuteQueryResponse_E{
 				E: &command.ExecuteResult{
@@ -1418,7 +1418,7 @@ func Test_ForwardingRedirectExecuteQuery(t *testing.T) {
 				},
 			},
 		}
-		return []*command.ExecuteQueryResponse{resp}, 0, nil
+		return []*command.ExecuteQueryResponse{resp}, 0, 0, nil
 	}
 
 	s := New("127.0.0.1:0", m, c, nil)
@@ -1592,7 +1592,7 @@ func Test_DBTimeoutQueryParam(t *testing.T) {
 type MockStore struct {
 	executeFn   func(er *command.ExecuteRequest) ([]*command.ExecuteQueryResponse, uint64, error)
 	queryFn     func(qr *command.QueryRequest) ([]*command.QueryRows, uint64, error)
-	requestFn   func(eqr *command.ExecuteQueryRequest) ([]*command.ExecuteQueryResponse, uint64, error)
+	requestFn   func(eqr *command.ExecuteQueryRequest) ([]*command.ExecuteQueryResponse, uint64, uint64, error)
 	backupFn    func(br *command.BackupRequest, dst io.Writer) error
 	loadFn      func(lr *command.LoadRequest) error
 	snapshotFn  func(n uint64) error
@@ -1610,18 +1610,19 @@ func (m *MockStore) Execute(er *command.ExecuteRequest) ([]*command.ExecuteQuery
 	return nil, 0, nil
 }
 
-func (m *MockStore) Query(qr *command.QueryRequest) ([]*command.QueryRows, uint64, error) {
+func (m *MockStore) Query(qr *command.QueryRequest) ([]*command.QueryRows, command.ConsistencyLevel, uint64, error) {
 	if m.queryFn != nil {
-		return m.queryFn(qr)
+		rows, idx, err := m.queryFn(qr)
+		return rows, command.ConsistencyLevel_NONE, idx, err
 	}
-	return nil, 0, nil
+	return nil, command.ConsistencyLevel_NONE, 0, nil
 }
 
-func (m *MockStore) Request(eqr *command.ExecuteQueryRequest) ([]*command.ExecuteQueryResponse, uint64, error) {
+func (m *MockStore) Request(eqr *command.ExecuteQueryRequest) ([]*command.ExecuteQueryResponse, uint64, uint64, error) {
 	if m.requestFn != nil {
 		return m.requestFn(eqr)
 	}
-	return nil, 0, nil
+	return nil, 0, 0, nil
 }
 
 func (m *MockStore) Join(jr *command.JoinRequest) error {
@@ -1700,7 +1701,7 @@ type mockClusterService struct {
 	apiAddr      string
 	executeFn    func(er *command.ExecuteRequest, addr string, t time.Duration) ([]*command.ExecuteQueryResponse, uint64, error)
 	queryFn      func(qr *command.QueryRequest, addr string, t time.Duration) ([]*command.QueryRows, uint64, error)
-	requestFn    func(eqr *command.ExecuteQueryRequest, nodeAddr string, timeout time.Duration) ([]*command.ExecuteQueryResponse, uint64, error)
+	requestFn    func(eqr *command.ExecuteQueryRequest, nodeAddr string, timeout time.Duration) ([]*command.ExecuteQueryResponse, uint64, uint64, error)
 	backupFn     func(br *command.BackupRequest, addr string, t time.Duration, w io.Writer) error
 	loadFn       func(lr *command.LoadRequest, addr string, t time.Duration) error
 	removeNodeFn func(rn *command.RemoveNodeRequest, nodeAddr string, t time.Duration) error
@@ -1727,11 +1728,11 @@ func (m *mockClusterService) Query(qr *command.QueryRequest, addr string, creds 
 	return nil, 0, nil
 }
 
-func (m *mockClusterService) Request(eqr *command.ExecuteQueryRequest, nodeAddr string, creds *cluster.Credentials, timeout time.Duration, r int) ([]*command.ExecuteQueryResponse, uint64, error) {
+func (m *mockClusterService) Request(eqr *command.ExecuteQueryRequest, nodeAddr string, creds *cluster.Credentials, timeout time.Duration, r int) ([]*command.ExecuteQueryResponse, uint64, uint64, error) {
 	if m.requestFn != nil {
 		return m.requestFn(eqr, nodeAddr, timeout)
 	}
-	return nil, 0, nil
+	return nil, 0, 0, nil
 }
 
 func (m *mockClusterService) Backup(br *command.BackupRequest, addr string, creds *cluster.Credentials, t time.Duration, w io.Writer) error {

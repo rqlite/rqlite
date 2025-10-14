@@ -21,59 +21,59 @@ const (
 	_ = protoimpl.EnforceVersion(protoimpl.MaxVersion - 20)
 )
 
-type QueryRequest_Level int32
+type ConsistencyLevel int32
 
 const (
-	QueryRequest_QUERY_REQUEST_LEVEL_NONE         QueryRequest_Level = 0
-	QueryRequest_QUERY_REQUEST_LEVEL_WEAK         QueryRequest_Level = 1
-	QueryRequest_QUERY_REQUEST_LEVEL_STRONG       QueryRequest_Level = 2
-	QueryRequest_QUERY_REQUEST_LEVEL_AUTO         QueryRequest_Level = 3
-	QueryRequest_QUERY_REQUEST_LEVEL_LINEARIZABLE QueryRequest_Level = 4
+	ConsistencyLevel_NONE         ConsistencyLevel = 0
+	ConsistencyLevel_WEAK         ConsistencyLevel = 1
+	ConsistencyLevel_STRONG       ConsistencyLevel = 2
+	ConsistencyLevel_AUTO         ConsistencyLevel = 3
+	ConsistencyLevel_LINEARIZABLE ConsistencyLevel = 4
 )
 
-// Enum value maps for QueryRequest_Level.
+// Enum value maps for ConsistencyLevel.
 var (
-	QueryRequest_Level_name = map[int32]string{
-		0: "QUERY_REQUEST_LEVEL_NONE",
-		1: "QUERY_REQUEST_LEVEL_WEAK",
-		2: "QUERY_REQUEST_LEVEL_STRONG",
-		3: "QUERY_REQUEST_LEVEL_AUTO",
-		4: "QUERY_REQUEST_LEVEL_LINEARIZABLE",
+	ConsistencyLevel_name = map[int32]string{
+		0: "NONE",
+		1: "WEAK",
+		2: "STRONG",
+		3: "AUTO",
+		4: "LINEARIZABLE",
 	}
-	QueryRequest_Level_value = map[string]int32{
-		"QUERY_REQUEST_LEVEL_NONE":         0,
-		"QUERY_REQUEST_LEVEL_WEAK":         1,
-		"QUERY_REQUEST_LEVEL_STRONG":       2,
-		"QUERY_REQUEST_LEVEL_AUTO":         3,
-		"QUERY_REQUEST_LEVEL_LINEARIZABLE": 4,
+	ConsistencyLevel_value = map[string]int32{
+		"NONE":         0,
+		"WEAK":         1,
+		"STRONG":       2,
+		"AUTO":         3,
+		"LINEARIZABLE": 4,
 	}
 )
 
-func (x QueryRequest_Level) Enum() *QueryRequest_Level {
-	p := new(QueryRequest_Level)
+func (x ConsistencyLevel) Enum() *ConsistencyLevel {
+	p := new(ConsistencyLevel)
 	*p = x
 	return p
 }
 
-func (x QueryRequest_Level) String() string {
+func (x ConsistencyLevel) String() string {
 	return protoimpl.X.EnumStringOf(x.Descriptor(), protoreflect.EnumNumber(x))
 }
 
-func (QueryRequest_Level) Descriptor() protoreflect.EnumDescriptor {
+func (ConsistencyLevel) Descriptor() protoreflect.EnumDescriptor {
 	return file_command_proto_enumTypes[0].Descriptor()
 }
 
-func (QueryRequest_Level) Type() protoreflect.EnumType {
+func (ConsistencyLevel) Type() protoreflect.EnumType {
 	return &file_command_proto_enumTypes[0]
 }
 
-func (x QueryRequest_Level) Number() protoreflect.EnumNumber {
+func (x ConsistencyLevel) Number() protoreflect.EnumNumber {
 	return protoreflect.EnumNumber(x)
 }
 
-// Deprecated: Use QueryRequest_Level.Descriptor instead.
-func (QueryRequest_Level) EnumDescriptor() ([]byte, []int) {
-	return file_command_proto_rawDescGZIP(), []int{3, 0}
+// Deprecated: Use ConsistencyLevel.Descriptor instead.
+func (ConsistencyLevel) EnumDescriptor() ([]byte, []int) {
+	return file_command_proto_rawDescGZIP(), []int{0}
 }
 
 type BackupRequest_Format int32
@@ -566,7 +566,7 @@ type QueryRequest struct {
 	state               protoimpl.MessageState `protogen:"open.v1"`
 	Request             *Request               `protobuf:"bytes,1,opt,name=request,proto3" json:"request,omitempty"`
 	Timings             bool                   `protobuf:"varint,2,opt,name=timings,proto3" json:"timings,omitempty"`
-	Level               QueryRequest_Level     `protobuf:"varint,3,opt,name=level,proto3,enum=command.QueryRequest_Level" json:"level,omitempty"`
+	Level               ConsistencyLevel       `protobuf:"varint,3,opt,name=level,proto3,enum=command.ConsistencyLevel" json:"level,omitempty"`
 	Freshness           int64                  `protobuf:"varint,4,opt,name=freshness,proto3" json:"freshness,omitempty"`
 	FreshnessStrict     bool                   `protobuf:"varint,5,opt,name=freshness_strict,json=freshnessStrict,proto3" json:"freshness_strict,omitempty"`
 	LinearizableTimeout int64                  `protobuf:"varint,6,opt,name=linearizable_timeout,json=linearizableTimeout,proto3" json:"linearizable_timeout,omitempty"`
@@ -618,11 +618,11 @@ func (x *QueryRequest) GetTimings() bool {
 	return false
 }
 
-func (x *QueryRequest) GetLevel() QueryRequest_Level {
+func (x *QueryRequest) GetLevel() ConsistencyLevel {
 	if x != nil {
 		return x.Level
 	}
-	return QueryRequest_QUERY_REQUEST_LEVEL_NONE
+	return ConsistencyLevel_NONE
 }
 
 func (x *QueryRequest) GetFreshness() int64 {
@@ -890,7 +890,7 @@ type ExecuteQueryRequest struct {
 	state               protoimpl.MessageState `protogen:"open.v1"`
 	Request             *Request               `protobuf:"bytes,1,opt,name=request,proto3" json:"request,omitempty"`
 	Timings             bool                   `protobuf:"varint,2,opt,name=timings,proto3" json:"timings,omitempty"`
-	Level               QueryRequest_Level     `protobuf:"varint,3,opt,name=level,proto3,enum=command.QueryRequest_Level" json:"level,omitempty"`
+	Level               ConsistencyLevel       `protobuf:"varint,3,opt,name=level,proto3,enum=command.ConsistencyLevel" json:"level,omitempty"`
 	Freshness           int64                  `protobuf:"varint,4,opt,name=freshness,proto3" json:"freshness,omitempty"`
 	FreshnessStrict     bool                   `protobuf:"varint,5,opt,name=freshness_strict,json=freshnessStrict,proto3" json:"freshness_strict,omitempty"`
 	LinearizableTimeout int64                  `protobuf:"varint,6,opt,name=linearizable_timeout,json=linearizableTimeout,proto3" json:"linearizable_timeout,omitempty"`
@@ -942,11 +942,11 @@ func (x *ExecuteQueryRequest) GetTimings() bool {
 	return false
 }
 
-func (x *ExecuteQueryRequest) GetLevel() QueryRequest_Level {
+func (x *ExecuteQueryRequest) GetLevel() ConsistencyLevel {
 	if x != nil {
 		return x.Level
 	}
-	return QueryRequest_QUERY_REQUEST_LEVEL_NONE
+	return ConsistencyLevel_NONE
 }
 
 func (x *ExecuteQueryRequest) GetFreshness() int64 {
@@ -2101,20 +2101,14 @@ const file_command_proto_rawDesc = "" +
 	"statements\x18\x02 \x03(\v2\x12.command.StatementR\n" +
 	"statements\x12\x1c\n" +
 	"\tdbTimeout\x18\x03 \x01(\x03R\tdbTimeout\x12(\n" +
-	"\x0frollbackOnError\x18\x04 \x01(\bR\x0frollbackOnError\"\xad\x03\n" +
+	"\x0frollbackOnError\x18\x04 \x01(\bR\x0frollbackOnError\"\x81\x02\n" +
 	"\fQueryRequest\x12*\n" +
 	"\arequest\x18\x01 \x01(\v2\x10.command.RequestR\arequest\x12\x18\n" +
-	"\atimings\x18\x02 \x01(\bR\atimings\x121\n" +
-	"\x05level\x18\x03 \x01(\x0e2\x1b.command.QueryRequest.LevelR\x05level\x12\x1c\n" +
+	"\atimings\x18\x02 \x01(\bR\atimings\x12/\n" +
+	"\x05level\x18\x03 \x01(\x0e2\x19.command.ConsistencyLevelR\x05level\x12\x1c\n" +
 	"\tfreshness\x18\x04 \x01(\x03R\tfreshness\x12)\n" +
 	"\x10freshness_strict\x18\x05 \x01(\bR\x0ffreshnessStrict\x121\n" +
-	"\x14linearizable_timeout\x18\x06 \x01(\x03R\x13linearizableTimeout\"\xa7\x01\n" +
-	"\x05Level\x12\x1c\n" +
-	"\x18QUERY_REQUEST_LEVEL_NONE\x10\x00\x12\x1c\n" +
-	"\x18QUERY_REQUEST_LEVEL_WEAK\x10\x01\x12\x1e\n" +
-	"\x1aQUERY_REQUEST_LEVEL_STRONG\x10\x02\x12\x1c\n" +
-	"\x18QUERY_REQUEST_LEVEL_AUTO\x10\x03\x12$\n" +
-	" QUERY_REQUEST_LEVEL_LINEARIZABLE\x10\x04\"<\n" +
+	"\x14linearizable_timeout\x18\x06 \x01(\x03R\x13linearizableTimeout\"<\n" +
 	"\x06Values\x122\n" +
 	"\n" +
 	"parameters\x18\x01 \x03(\v2\x12.command.ParameterR\n" +
@@ -2132,11 +2126,11 @@ const file_command_proto_rawDesc = "" +
 	"\x0elast_insert_id\x18\x01 \x01(\x03R\flastInsertId\x12#\n" +
 	"\rrows_affected\x18\x02 \x01(\x03R\frowsAffected\x12\x14\n" +
 	"\x05error\x18\x03 \x01(\tR\x05error\x12\x12\n" +
-	"\x04time\x18\x04 \x01(\x01R\x04time\"\x8a\x02\n" +
+	"\x04time\x18\x04 \x01(\x01R\x04time\"\x88\x02\n" +
 	"\x13ExecuteQueryRequest\x12*\n" +
 	"\arequest\x18\x01 \x01(\v2\x10.command.RequestR\arequest\x12\x18\n" +
-	"\atimings\x18\x02 \x01(\bR\atimings\x121\n" +
-	"\x05level\x18\x03 \x01(\x0e2\x1b.command.QueryRequest.LevelR\x05level\x12\x1c\n" +
+	"\atimings\x18\x02 \x01(\bR\atimings\x12/\n" +
+	"\x05level\x18\x03 \x01(\x0e2\x19.command.ConsistencyLevelR\x05level\x12\x1c\n" +
 	"\tfreshness\x18\x04 \x01(\x03R\tfreshness\x12)\n" +
 	"\x10freshness_strict\x18\x05 \x01(\bR\x0ffreshnessStrict\x121\n" +
 	"\x14linearizable_timeout\x18\x06 \x01(\x03R\x13linearizableTimeout\"\x84\x01\n" +
@@ -2243,7 +2237,14 @@ const file_command_proto_rawDesc = "" +
 	"\n" +
 	"\x06DELETE\x10\x03\"0\n" +
 	"\x16AppendEntriesExtension\x12\x16\n" +
-	"\x06cdcHWM\x18\x01 \x01(\x04R\x06cdcHWMB+Z)github.com/rqlite/rqlite/v9/command/protob\x06proto3"
+	"\x06cdcHWM\x18\x01 \x01(\x04R\x06cdcHWM*N\n" +
+	"\x10ConsistencyLevel\x12\b\n" +
+	"\x04NONE\x10\x00\x12\b\n" +
+	"\x04WEAK\x10\x01\x12\n" +
+	"\n" +
+	"\x06STRONG\x10\x02\x12\b\n" +
+	"\x04AUTO\x10\x03\x12\x10\n" +
+	"\fLINEARIZABLE\x10\x04B+Z)github.com/rqlite/rqlite/v9/command/protob\x06proto3"
 
 var (
 	file_command_proto_rawDescOnce sync.Once
@@ -2260,7 +2261,7 @@ func file_command_proto_rawDescGZIP() []byte {
 var file_command_proto_enumTypes = make([]protoimpl.EnumInfo, 5)
 var file_command_proto_msgTypes = make([]protoimpl.MessageInfo, 26)
 var file_command_proto_goTypes = []any{
-	(QueryRequest_Level)(0),           // 0: command.QueryRequest.Level
+	(ConsistencyLevel)(0),             // 0: command.ConsistencyLevel
 	(BackupRequest_Format)(0),         // 1: command.BackupRequest.Format
 	(Command_Type)(0),                 // 2: command.Command.Type
 	(CDCEvent_Operation)(0),           // 3: command.CDCEvent.Operation
@@ -2296,12 +2297,12 @@ var file_command_proto_depIdxs = []int32{
 	5,  // 0: command.Statement.parameters:type_name -> command.Parameter
 	6,  // 1: command.Request.statements:type_name -> command.Statement
 	7,  // 2: command.QueryRequest.request:type_name -> command.Request
-	0,  // 3: command.QueryRequest.level:type_name -> command.QueryRequest.Level
+	0,  // 3: command.QueryRequest.level:type_name -> command.ConsistencyLevel
 	5,  // 4: command.Values.parameters:type_name -> command.Parameter
 	9,  // 5: command.QueryRows.values:type_name -> command.Values
 	7,  // 6: command.ExecuteRequest.request:type_name -> command.Request
 	7,  // 7: command.ExecuteQueryRequest.request:type_name -> command.Request
-	0,  // 8: command.ExecuteQueryRequest.level:type_name -> command.QueryRequest.Level
+	0,  // 8: command.ExecuteQueryRequest.level:type_name -> command.ConsistencyLevel
 	10, // 9: command.ExecuteQueryResponse.q:type_name -> command.QueryRows
 	12, // 10: command.ExecuteQueryResponse.e:type_name -> command.ExecuteResult
 	1,  // 11: command.BackupRequest.format:type_name -> command.BackupRequest.Format

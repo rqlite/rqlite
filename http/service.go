@@ -24,7 +24,7 @@ import (
 	"github.com/rqlite/rqlite/v9/auth"
 	clstrPB "github.com/rqlite/rqlite/v9/cluster/proto"
 	"github.com/rqlite/rqlite/v9/command/encoding"
-	command "github.com/rqlite/rqlite/v9/command/proto"
+	"github.com/rqlite/rqlite/v9/command/proto"
 	"github.com/rqlite/rqlite/v9/command/sql"
 	"github.com/rqlite/rqlite/v9/db"
 	"github.com/rqlite/rqlite/v9/internal/rtls"
@@ -50,20 +50,20 @@ type Database interface {
 	// to return rows. If timings is true, then timing information will
 	// be return. If tx is true, then either all queries will be executed
 	// successfully or it will as though none executed.
-	Execute(er *command.ExecuteRequest) ([]*command.ExecuteQueryResponse, uint64, error)
+	Execute(er *proto.ExecuteRequest) ([]*proto.ExecuteQueryResponse, uint64, error)
 
 	// Query executes a slice of queries, each of which returns rows. If
 	// timings is true, then timing information will be returned. If tx
 	// is true, then all queries will take place while a read transaction
 	// is held on the database.
-	Query(qr *command.QueryRequest) ([]*command.QueryRows, uint64, error)
+	Query(qr *proto.QueryRequest) ([]*proto.QueryRows, proto.ConsistencyLevel, uint64, error)
 
 	// Request processes a slice of requests, each of which can be either
 	// an Execute or Query request.
-	Request(eqr *command.ExecuteQueryRequest) ([]*command.ExecuteQueryResponse, uint64, error)
+	Request(eqr *proto.ExecuteQueryRequest) ([]*proto.ExecuteQueryResponse, uint64, uint64, error)
 
 	// Load loads a SQLite file into the system via Raft consensus.
-	Load(lr *command.LoadRequest) error
+	Load(lr *proto.LoadRequest) error
 }
 
 // Store is the interface the Raft-based database must implement.
@@ -80,7 +80,7 @@ type Store interface {
 	Ready() bool
 
 	// Remove removes the node from the cluster.
-	Remove(rn *command.RemoveNodeRequest) error
+	Remove(rn *proto.RemoveNodeRequest) error
 
 	// Committed blocks until the local commit index is greater than or
 	// equal to the Leader index, as checked when the function is called.
@@ -90,7 +90,7 @@ type Store interface {
 	Stats() (map[string]any, error)
 
 	// Backup writes backup of the node state to dst
-	Backup(br *command.BackupRequest, dst io.Writer) error
+	Backup(br *proto.BackupRequest, dst io.Writer) error
 
 	// Snapshot triggers a Raft Snapshot and Log Truncation.
 	Snapshot(n uint64) error
@@ -117,25 +117,25 @@ type Cluster interface {
 	GetNodeMetaer
 
 	// Execute performs an Execute Request on a remote node.
-	Execute(er *command.ExecuteRequest, nodeAddr string, creds *clstrPB.Credentials, timeout time.Duration, retries int) ([]*command.ExecuteQueryResponse, uint64, error)
+	Execute(er *proto.ExecuteRequest, nodeAddr string, creds *clstrPB.Credentials, timeout time.Duration, retries int) ([]*proto.ExecuteQueryResponse, uint64, error)
 
 	// Query performs an Query Request on a remote node.
-	Query(qr *command.QueryRequest, nodeAddr string, creds *clstrPB.Credentials, timeout time.Duration) ([]*command.QueryRows, uint64, error)
+	Query(qr *proto.QueryRequest, nodeAddr string, creds *clstrPB.Credentials, timeout time.Duration) ([]*proto.QueryRows, uint64, error)
 
 	// Request performs an ExecuteQuery Request on a remote node.
-	Request(eqr *command.ExecuteQueryRequest, nodeAddr string, creds *clstrPB.Credentials, timeout time.Duration, retries int) ([]*command.ExecuteQueryResponse, uint64, error)
+	Request(eqr *proto.ExecuteQueryRequest, nodeAddr string, creds *clstrPB.Credentials, timeout time.Duration, retries int) ([]*proto.ExecuteQueryResponse, uint64, uint64, error)
 
 	// Backup retrieves a backup from a remote node and writes to the io.Writer.
-	Backup(br *command.BackupRequest, nodeAddr string, creds *clstrPB.Credentials, timeout time.Duration, w io.Writer) error
+	Backup(br *proto.BackupRequest, nodeAddr string, creds *clstrPB.Credentials, timeout time.Duration, w io.Writer) error
 
 	// Load loads a SQLite database into the node.
-	Load(lr *command.LoadRequest, nodeAddr string, creds *clstrPB.Credentials, timeout time.Duration, retries int) error
+	Load(lr *proto.LoadRequest, nodeAddr string, creds *clstrPB.Credentials, timeout time.Duration, retries int) error
 
 	// RemoveNode removes a node from the cluster.
-	RemoveNode(rn *command.RemoveNodeRequest, nodeAddr string, creds *clstrPB.Credentials, timeout time.Duration) error
+	RemoveNode(rn *proto.RemoveNodeRequest, nodeAddr string, creds *clstrPB.Credentials, timeout time.Duration) error
 
 	// Stepdown triggers leader stepdown on a remote node.
-	Stepdown(sr *command.StepdownRequest, nodeAddr string, creds *clstrPB.Credentials, timeout time.Duration) error
+	Stepdown(sr *proto.StepdownRequest, nodeAddr string, creds *clstrPB.Credentials, timeout time.Duration) error
 
 	// Stats returns stats on the Cluster.
 	Stats() (map[string]any, error)
@@ -155,8 +155,8 @@ type StatusReporter interface {
 // DBResults stores either an Execute result, a Query result, or
 // an ExecuteQuery result.
 type DBResults struct {
-	ExecuteQueryResponse []*command.ExecuteQueryResponse
-	QueryRows            []*command.QueryRows
+	ExecuteQueryResponse []*proto.ExecuteQueryResponse
+	QueryRows            []*proto.QueryRows
 
 	AssociativeJSON bool // Render in associative form
 	BlobsAsArrays   bool // Render BLOB data as byte arrays
@@ -336,7 +336,7 @@ type Service struct {
 	store Store // The Raft-backed database store.
 
 	queueDone chan struct{}
-	stmtQueue *queue.Queue[*command.Statement] // Queue for queued executes
+	stmtQueue *queue.Queue[*proto.Statement] // Queue for queued executes
 
 	cluster Cluster // The Cluster service.
 
@@ -441,7 +441,7 @@ func (s *Service) Start() error {
 	s.closeCh = make(chan struct{})
 	s.queueDone = make(chan struct{})
 
-	s.stmtQueue = queue.New[*command.Statement](s.DefaultQueueCap, s.DefaultQueueBatchSz, s.DefaultQueueTimeout)
+	s.stmtQueue = queue.New[*proto.Statement](s.DefaultQueueCap, s.DefaultQueueBatchSz, s.DefaultQueueTimeout)
 	go s.runQueue()
 	s.logger.Printf("execute queue processing started with capacity %d, batch size %d, timeout %s",
 		s.DefaultQueueCap, s.DefaultQueueBatchSz, s.DefaultQueueTimeout.String())
@@ -599,7 +599,7 @@ func (s *Service) handleRemove(w http.ResponseWriter, r *http.Request, qp QueryP
 		return
 	}
 
-	rn := &command.RemoveNodeRequest{
+	rn := &proto.RemoveNodeRequest{
 		Id: remoteID,
 	}
 
@@ -651,7 +651,7 @@ func (s *Service) handleBackup(w http.ResponseWriter, r *http.Request, qp QueryP
 		return
 	}
 
-	br := &command.BackupRequest{
+	br := &proto.BackupRequest{
 		Format:   qp.BackupFormat(),
 		Leader:   !qp.NoLeader(),
 		Vacuum:   qp.Vacuum(),
@@ -743,7 +743,7 @@ func (s *Service) handleLoad(w http.ResponseWriter, r *http.Request, qp QueryPar
 
 	if db.IsValidSQLiteData(b) {
 		s.logger.Printf("SQLite database file detected as load data")
-		lr := &command.LoadRequest{
+		lr := &proto.LoadRequest{
 			Data: b,
 		}
 
@@ -1129,7 +1129,7 @@ func (s *Service) handleLeader(w http.ResponseWriter, r *http.Request, qp QueryP
 				}
 
 				w.Header().Add(ServedByHTTPHeader, addr)
-				sr := &command.StepdownRequest{
+				sr := &proto.StepdownRequest{
 					Id:   nodeID,
 					Wait: wait,
 				}
@@ -1302,7 +1302,7 @@ func (s *Service) queuedExecute(w http.ResponseWriter, r *http.Request, qp Query
 func (s *Service) execute(w http.ResponseWriter, r *http.Request, qp QueryParams) {
 	resp := NewResponse()
 
-	var stmts []*command.Statement
+	var stmts []*proto.Statement
 	var err error
 	if strings.HasPrefix(r.Header.Get("Content-Type"), "text/plain") {
 		sql, err := io.ReadAll(r.Body)
@@ -1310,7 +1310,7 @@ func (s *Service) execute(w http.ResponseWriter, r *http.Request, qp QueryParams
 			http.Error(w, err.Error(), http.StatusBadRequest)
 			return
 		}
-		stmts = []*command.Statement{
+		stmts = []*proto.Statement{
 			{
 				Sql: string(sql),
 			},
@@ -1330,8 +1330,8 @@ func (s *Service) execute(w http.ResponseWriter, r *http.Request, qp QueryParams
 		}
 	}
 
-	er := &command.ExecuteRequest{
-		Request: &command.Request{
+	er := &proto.ExecuteRequest{
+		Request: &proto.Request{
 			Transaction: qp.Tx(),
 			DbTimeout:   int64(qp.DBTimeout(0)),
 			Statements:  stmts,
@@ -1397,7 +1397,7 @@ func (s *Service) handleQuery(w http.ResponseWriter, r *http.Request, qp QueryPa
 		return
 	}
 
-	var queries []*command.Statement
+	var queries []*proto.Statement
 	var err error
 	if strings.HasPrefix(r.Header.Get("Content-Type"), "text/plain") && r.Method == "POST" {
 		sql, err := io.ReadAll(r.Body)
@@ -1405,7 +1405,7 @@ func (s *Service) handleQuery(w http.ResponseWriter, r *http.Request, qp QueryPa
 			http.Error(w, err.Error(), http.StatusBadRequest)
 			return
 		}
-		queries = []*command.Statement{
+		queries = []*proto.Statement{
 			{
 				Sql: string(sql),
 			},
@@ -1422,7 +1422,7 @@ func (s *Service) handleQuery(w http.ResponseWriter, r *http.Request, qp QueryPa
 
 	// No point rewriting queries if they don't go through the Raft log, since they
 	// will never be replayed from the log anyway.
-	if qp.Level() == command.QueryRequest_QUERY_REQUEST_LEVEL_STRONG {
+	if qp.Level() == proto.ConsistencyLevel_STRONG {
 		if !qp.NoParse() {
 			if err := sql.Process(queries, qp.NoRewriteRandom(), !qp.NoRewriteTime()); err != nil {
 				http.Error(w, fmt.Sprintf("SQL rewrite: %s", err.Error()), http.StatusInternalServerError)
@@ -1435,8 +1435,8 @@ func (s *Service) handleQuery(w http.ResponseWriter, r *http.Request, qp QueryPa
 	resp.Results.AssociativeJSON = qp.Associative()
 	resp.Results.BlobsAsArrays = qp.BlobArray()
 
-	qr := &command.QueryRequest{
-		Request: &command.Request{
+	qr := &proto.QueryRequest{
+		Request: &proto.Request{
 			Transaction: qp.Tx(),
 			DbTimeout:   qp.DBTimeout(0).Nanoseconds(),
 			Statements:  queries,
@@ -1448,7 +1448,7 @@ func (s *Service) handleQuery(w http.ResponseWriter, r *http.Request, qp QueryPa
 		LinearizableTimeout: qp.LinearizableTimeout(defaultLinearTimeout).Nanoseconds(),
 	}
 
-	results, raftIndex, resultsErr := s.store.Query(qr)
+	results, _, raftIndex, resultsErr := s.store.Query(qr)
 	if resultsErr != nil && resultsErr == store.ErrNotLeader {
 		if s.DoRedirect(w, r, qp) {
 			return
@@ -1522,8 +1522,8 @@ func (s *Service) handleRequest(w http.ResponseWriter, r *http.Request, qp Query
 	resp.Results.AssociativeJSON = qp.Associative()
 	resp.Results.BlobsAsArrays = qp.BlobArray()
 
-	eqr := &command.ExecuteQueryRequest{
-		Request: &command.Request{
+	eqr := &proto.ExecuteQueryRequest{
+		Request: &proto.Request{
 			Transaction: qp.Tx(),
 			Statements:  stmts,
 			DbTimeout:   int64(qp.DBTimeout(0)),
@@ -1534,7 +1534,7 @@ func (s *Service) handleRequest(w http.ResponseWriter, r *http.Request, qp Query
 		FreshnessStrict: qp.FreshnessStrict(),
 	}
 
-	results, raftIndex, resultsErr := s.store.Request(eqr)
+	results, _, raftIndex, resultsErr := s.store.Request(eqr)
 	if resultsErr != nil && resultsErr == store.ErrNotLeader {
 		if s.DoRedirect(w, r, qp) {
 			return
@@ -1552,7 +1552,7 @@ func (s *Service) handleRequest(w http.ResponseWriter, r *http.Request, qp Query
 		}
 
 		w.Header().Add(ServedByHTTPHeader, addr)
-		results, raftIndex, resultsErr = s.cluster.Request(eqr, addr, makeCredentials(r),
+		results, _, raftIndex, resultsErr = s.cluster.Request(eqr, addr, makeCredentials(r),
 			qp.Timeout(defaultTimeout), qp.Retries(0))
 		if resultsErr != nil {
 			stats.Add(numRemoteRequestsFailed, 1)
@@ -1746,8 +1746,8 @@ func (s *Service) runQueue() {
 		case <-s.closeCh:
 			return
 		case req := <-s.stmtQueue.C:
-			er := &command.ExecuteRequest{
-				Request: &command.Request{
+			er := &proto.ExecuteRequest{
+				Request: &proto.Request{
 					Statements:  req.Objects,
 					Transaction: s.DefaultQueueTx,
 				},
@@ -1832,7 +1832,7 @@ func (s *Service) addAllowHeaders(w http.ResponseWriter) {
 // addBackupFormatHeader adds the Content-Type header for the backup format.
 func addBackupFormatHeader(w http.ResponseWriter, qp QueryParams) {
 	w.Header().Set("Content-Type", "application/octet-stream")
-	if qp.BackupFormat() == command.BackupRequest_BACKUP_REQUEST_FORMAT_SQL {
+	if qp.BackupFormat() == proto.BackupRequest_BACKUP_REQUEST_FORMAT_SQL {
 		w.Header().Set("Content-Type", "application/sql")
 	}
 }
@@ -1876,9 +1876,9 @@ func (s *Service) writeResponse(w http.ResponseWriter, qp QueryParams, j Respons
 	}
 }
 
-func requestQueries(r *http.Request, qp QueryParams) ([]*command.Statement, error) {
+func requestQueries(r *http.Request, qp QueryParams) ([]*proto.Statement, error) {
 	if r.Method == "GET" {
-		return []*command.Statement{
+		return []*proto.Statement{
 			{
 				Sql: qp.Query(),
 			},
@@ -1937,17 +1937,17 @@ func kubernetesHint() bool {
 	return ok
 }
 
-// queryRequestFromStrings converts a slice of strings into a command.QueryRequest
-func executeRequestFromStrings(s []string, timings, tx bool) *command.ExecuteRequest {
-	stmts := make([]*command.Statement, len(s))
+// queryRequestFromStrings converts a slice of strings into a proto.QueryRequest
+func executeRequestFromStrings(s []string, timings, tx bool) *proto.ExecuteRequest {
+	stmts := make([]*proto.Statement, len(s))
 	for i := range s {
-		stmts[i] = &command.Statement{
+		stmts[i] = &proto.Statement{
 			Sql: s[i],
 		}
 
 	}
-	return &command.ExecuteRequest{
-		Request: &command.Request{
+	return &proto.ExecuteRequest{
+		Request: &proto.Request{
 			Statements:  stmts,
 			Transaction: tx,
 		},

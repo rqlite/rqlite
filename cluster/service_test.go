@@ -564,7 +564,7 @@ func mustNewMockTLSTransport() *mockTransport {
 type mockDatabase struct {
 	executeFn func(er *command.ExecuteRequest) ([]*command.ExecuteQueryResponse, uint64, error)
 	queryFn   func(qr *command.QueryRequest) ([]*command.QueryRows, uint64, error)
-	requestFn func(rr *command.ExecuteQueryRequest) ([]*command.ExecuteQueryResponse, uint64, error)
+	requestFn func(rr *command.ExecuteQueryRequest) ([]*command.ExecuteQueryResponse, uint64, uint64, error)
 	backupFn  func(br *command.BackupRequest, dst io.Writer) error
 	loadFn    func(lr *command.LoadRequest) error
 }
@@ -573,13 +573,14 @@ func (m *mockDatabase) Execute(er *command.ExecuteRequest) ([]*command.ExecuteQu
 	return m.executeFn(er)
 }
 
-func (m *mockDatabase) Query(qr *command.QueryRequest) ([]*command.QueryRows, uint64, error) {
-	return m.queryFn(qr)
+func (m *mockDatabase) Query(qr *command.QueryRequest) ([]*command.QueryRows, command.ConsistencyLevel, uint64, error) {
+	rows, idx, err := m.queryFn(qr)
+	return rows, command.ConsistencyLevel_NONE, idx, err
 }
 
-func (m *mockDatabase) Request(rr *command.ExecuteQueryRequest) ([]*command.ExecuteQueryResponse, uint64, error) {
+func (m *mockDatabase) Request(rr *command.ExecuteQueryRequest) ([]*command.ExecuteQueryResponse, uint64, uint64, error) {
 	if m.requestFn == nil {
-		return []*command.ExecuteQueryResponse{}, 0, nil
+		return []*command.ExecuteQueryResponse{}, 0, 0, nil
 	}
 	return m.requestFn(rr)
 }

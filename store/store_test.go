@@ -164,8 +164,8 @@ func Test_SingleNodeOnDiskSQLitePath(t *testing.T) {
 	}
 
 	qr := queryRequestFromString("SELECT * FROM foo", false, false)
-	qr.Level = proto.QueryRequest_QUERY_REQUEST_LEVEL_NONE
-	r, _, err := s.Query(qr)
+	qr.Level = proto.ConsistencyLevel_NONE
+	r, _, _, err := s.Query(qr)
 	if err != nil {
 		t.Fatalf("failed to query single node: %s", err.Error())
 	}
@@ -225,8 +225,8 @@ func Test_SingleNodeDBAppliedIndex(t *testing.T) {
 
 	// Do a strong query, and ensure DBAppliedIndex is updated.
 	qr := queryRequestFromString("SELECT * FROM foo", false, false)
-	qr.Level = proto.QueryRequest_QUERY_REQUEST_LEVEL_STRONG
-	_, _, err = s.Query(qr)
+	qr.Level = proto.ConsistencyLevel_STRONG
+	_, _, _, err = s.Query(qr)
 	if err != nil {
 		t.Fatalf("failed to query single node: %s", err.Error())
 	}
@@ -236,8 +236,8 @@ func Test_SingleNodeDBAppliedIndex(t *testing.T) {
 
 	// Do a weak query, and ensure DBAppliedIndex is not updated.
 	qr = queryRequestFromString("SELECT * FROM foo", false, false)
-	qr.Level = proto.QueryRequest_QUERY_REQUEST_LEVEL_WEAK
-	_, _, err = s.Query(qr)
+	qr.Level = proto.ConsistencyLevel_WEAK
+	_, _, _, err = s.Query(qr)
 	if err != nil {
 		t.Fatalf("failed to query single node: %s", err.Error())
 	}
@@ -571,7 +571,7 @@ func Test_SingleNodeSnapshot(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to execute on single node: %s", err.Error())
 	}
-	_, _, err = s.Query(queryRequestFromString("SELECT * FROM foo", false, false))
+	_, _, _, err = s.Query(queryRequestFromString("SELECT * FROM foo", false, false))
 	if err != nil {
 		t.Fatalf("failed to query single node: %s", err.Error())
 	}
@@ -605,7 +605,7 @@ func Test_SingleNodeSnapshot(t *testing.T) {
 	}
 
 	// Ensure database is back in the correct state.
-	r, _, err := s.Query(queryRequestFromString("SELECT * FROM foo", false, false))
+	r, _, _, err := s.Query(queryRequestFromString("SELECT * FROM foo", false, false))
 	if err != nil {
 		t.Fatalf("failed to query single node: %s", err.Error())
 	}
@@ -662,7 +662,7 @@ func Test_StoreSingleNodeNotOpen(t *testing.T) {
 	if _, _, err := s.Execute(&proto.ExecuteRequest{}); err != ErrNotOpen {
 		t.Fatalf("wrong error received for non-open store: %s", err)
 	}
-	if _, _, err := s.Query(&proto.QueryRequest{}); err != ErrNotOpen {
+	if _, _, _, err := s.Query(&proto.QueryRequest{}); err != ErrNotOpen {
 		t.Fatalf("wrong error received for non-open store: %s", err)
 	}
 	if err := s.Load(nil); err != ErrNotOpen {
@@ -724,8 +724,8 @@ func Test_OpenStoreCloseSingleNode(t *testing.T) {
 	}
 
 	qr := queryRequestFromString("SELECT * FROM foo", false, false)
-	qr.Level = proto.QueryRequest_QUERY_REQUEST_LEVEL_NONE
-	r, _, err := s.Query(qr)
+	qr.Level = proto.ConsistencyLevel_NONE
+	r, _, _, err := s.Query(qr)
 	if err != nil {
 		t.Fatalf("failed to query single node: %s", err.Error())
 	}
@@ -866,8 +866,8 @@ func Test_SingleNodeExecuteQuery(t *testing.T) {
 	}
 
 	qr := queryRequestFromString("SELECT * FROM foo", false, false)
-	qr.Level = proto.QueryRequest_QUERY_REQUEST_LEVEL_NONE
-	r, _, err := s.Query(qr)
+	qr.Level = proto.ConsistencyLevel_NONE
+	r, _, _, err := s.Query(qr)
 	if err != nil {
 		t.Fatalf("failed to query single node: %s", err.Error())
 	}
@@ -907,8 +907,8 @@ func Test_SingleNodeExecuteQuery_Linearizable(t *testing.T) {
 
 	// Perform the first linearizable query, which should be upgraded to a strong query.
 	qr := queryRequestFromString("SELECT * FROM foo", false, false)
-	qr.Level = proto.QueryRequest_QUERY_REQUEST_LEVEL_LINEARIZABLE
-	r, _, err := s.Query(qr)
+	qr.Level = proto.ConsistencyLevel_LINEARIZABLE
+	r, _, _, err := s.Query(qr)
 	if err != nil {
 		t.Fatalf("failed to perform linearizable query on single node: %s", err.Error())
 	}
@@ -923,7 +923,7 @@ func Test_SingleNodeExecuteQuery_Linearizable(t *testing.T) {
 	}
 
 	// Perform the second linearizable query, which should not be upgraded to a strong query.
-	r, _, err = s.Query(qr)
+	r, _, _, err = s.Query(qr)
 	if err != nil {
 		t.Fatalf("failed to perform linearizable query on single node: %s", err.Error())
 	}
@@ -974,8 +974,8 @@ func Test_SingleNodeExecuteQuery_RETURNING(t *testing.T) {
 	}
 
 	qr := queryRequestFromString("SELECT * FROM foo", false, false)
-	qr.Level = proto.QueryRequest_QUERY_REQUEST_LEVEL_NONE
-	r, _, err := s.Query(qr)
+	qr.Level = proto.ConsistencyLevel_NONE
+	r, _, _, err := s.Query(qr)
 	if err != nil {
 		t.Fatalf("failed to query single node: %s", err.Error())
 	}
@@ -1043,8 +1043,8 @@ func Test_SingleNodeRequest_Linearizable(t *testing.T) {
 	}
 
 	// Perform the first linearizable request, which should be upgraded to a strong query.
-	eqr := executeQueryRequestFromString("SELECT * FROM foo", proto.QueryRequest_QUERY_REQUEST_LEVEL_LINEARIZABLE, false, false)
-	r, _, err := s.Request(eqr)
+	eqr := executeQueryRequestFromString("SELECT * FROM foo", proto.ConsistencyLevel_LINEARIZABLE, false, false)
+	r, _, _, err := s.Request(eqr)
 	if err != nil {
 		t.Fatalf("failed to perform linearizable request on single node: %s", err.Error())
 	}
@@ -1062,7 +1062,7 @@ func Test_SingleNodeRequest_Linearizable(t *testing.T) {
 	}
 
 	// Perform the second linearizable request, which should not be upgraded to a strong query.
-	r, _, err = s.Request(eqr)
+	r, _, _, err = s.Request(eqr)
 	if err != nil {
 		t.Fatalf("failed to perform linearizable request on single node: %s", err.Error())
 	}
@@ -1109,20 +1109,20 @@ func Test_SingleNodeExecuteQueryTx(t *testing.T) {
 	qr := queryRequestFromString("SELECT * FROM foo", false, true)
 	var r []*proto.QueryRows
 
-	qr.Level = proto.QueryRequest_QUERY_REQUEST_LEVEL_NONE
-	_, _, err = s.Query(qr)
+	qr.Level = proto.ConsistencyLevel_NONE
+	_, _, _, err = s.Query(qr)
 	if err != nil {
 		t.Fatalf("failed to query single node: %s", err.Error())
 	}
 
-	qr.Level = proto.QueryRequest_QUERY_REQUEST_LEVEL_WEAK
-	_, _, err = s.Query(qr)
+	qr.Level = proto.ConsistencyLevel_WEAK
+	_, _, _, err = s.Query(qr)
 	if err != nil {
 		t.Fatalf("failed to query single node: %s", err.Error())
 	}
 
-	qr.Level = proto.QueryRequest_QUERY_REQUEST_LEVEL_STRONG
-	r, _, err = s.Query(qr)
+	qr.Level = proto.ConsistencyLevel_STRONG
+	r, _, _, err = s.Query(qr)
 	if err != nil {
 		t.Fatalf("failed to query single node: %s", err.Error())
 	}
@@ -1210,8 +1210,8 @@ func Test_SingleNodeRequest(t *testing.T) {
 	}
 
 	for _, tt := range tests {
-		eqr := executeQueryRequestFromStrings(tt.stmts, proto.QueryRequest_QUERY_REQUEST_LEVEL_WEAK, false, false)
-		r, _, err := s.Request(eqr)
+		eqr := executeQueryRequestFromStrings(tt.stmts, proto.ConsistencyLevel_WEAK, false, false)
+		r, _, _, err := s.Request(eqr)
 		if err != nil {
 			t.Fatalf("failed to execute request on single node: %s", err.Error())
 		}
@@ -1290,8 +1290,8 @@ func Test_SingleNodeRequestTx(t *testing.T) {
 	}
 
 	for _, tt := range tests {
-		eqr := executeQueryRequestFromStrings(tt.stmts, proto.QueryRequest_QUERY_REQUEST_LEVEL_WEAK, false, tt.tx)
-		r, _, err := s.Request(eqr)
+		eqr := executeQueryRequestFromStrings(tt.stmts, proto.ConsistencyLevel_WEAK, false, tt.tx)
+		r, _, _, err := s.Request(eqr)
 		if err != nil {
 			t.Fatalf("failed to execute request on single node: %s", err.Error())
 		}
@@ -1423,7 +1423,7 @@ func Test_SingleNodeRequestParameters(t *testing.T) {
 	}
 
 	for _, tt := range tests {
-		r, _, err := s.Request(tt.request)
+		r, _, _, err := s.Request(tt.request)
 		if err != nil {
 			t.Fatalf("failed to execute request on single node: %s", err.Error())
 		}
@@ -1502,24 +1502,24 @@ func Test_SingleNodeOnDiskFileExecuteQuery(t *testing.T) {
 	}
 
 	qr := queryRequestFromString("SELECT * FROM foo", false, false)
-	qr.Level = proto.QueryRequest_QUERY_REQUEST_LEVEL_NONE
-	r, _, err := s.Query(qr)
+	qr.Level = proto.ConsistencyLevel_NONE
+	r, _, _, err := s.Query(qr)
 	if err != nil {
 		t.Fatalf("failed to query single node: %s", err.Error())
 	}
 	check(r)
 
 	qr = queryRequestFromString("SELECT * FROM foo", false, false)
-	qr.Level = proto.QueryRequest_QUERY_REQUEST_LEVEL_WEAK
-	r, _, err = s.Query(qr)
+	qr.Level = proto.ConsistencyLevel_WEAK
+	r, _, _, err = s.Query(qr)
 	if err != nil {
 		t.Fatalf("failed to query single node: %s", err.Error())
 	}
 	check(r)
 
 	qr = queryRequestFromString("SELECT * FROM foo", false, false)
-	qr.Level = proto.QueryRequest_QUERY_REQUEST_LEVEL_STRONG
-	r, _, err = s.Query(qr)
+	qr.Level = proto.ConsistencyLevel_STRONG
+	r, _, _, err = s.Query(qr)
 	if err != nil {
 		t.Fatalf("failed to query single node: %s", err.Error())
 	}
@@ -1527,8 +1527,8 @@ func Test_SingleNodeOnDiskFileExecuteQuery(t *testing.T) {
 
 	qr = queryRequestFromString("SELECT * FROM foo", false, true)
 	qr.Timings = true
-	qr.Level = proto.QueryRequest_QUERY_REQUEST_LEVEL_NONE
-	r, _, err = s.Query(qr)
+	qr.Level = proto.ConsistencyLevel_NONE
+	r, _, _, err = s.Query(qr)
 	if err != nil {
 		t.Fatalf("failed to query single node: %s", err.Error())
 	}
@@ -1536,8 +1536,8 @@ func Test_SingleNodeOnDiskFileExecuteQuery(t *testing.T) {
 
 	qr = queryRequestFromString("SELECT * FROM foo", true, false)
 	qr.Request.Transaction = true
-	qr.Level = proto.QueryRequest_QUERY_REQUEST_LEVEL_NONE
-	r, _, err = s.Query(qr)
+	qr.Level = proto.ConsistencyLevel_NONE
+	r, _, _, err = s.Query(qr)
 	if err != nil {
 		t.Fatalf("failed to query single node: %s", err.Error())
 	}
@@ -1574,9 +1574,9 @@ func Test_SingleNodeExecuteQueryFreshness(t *testing.T) {
 	}
 
 	qr := queryRequestFromString("SELECT * FROM foo", false, false)
-	qr.Level = proto.QueryRequest_QUERY_REQUEST_LEVEL_NONE
+	qr.Level = proto.ConsistencyLevel_NONE
 	qr.Freshness = mustParseDuration("1ns").Nanoseconds()
-	r, _, err := s0.Query(qr)
+	r, _, _, err := s0.Query(qr)
 	if err != nil {
 		t.Fatalf("failed to query leader node: %s", err.Error())
 	}
@@ -1587,10 +1587,10 @@ func Test_SingleNodeExecuteQueryFreshness(t *testing.T) {
 		t.Fatalf("unexpected results for query\nexp: %s\ngot: %s", exp, got)
 	}
 
-	rr := executeQueryRequestFromString("SELECT * FROM foo", proto.QueryRequest_QUERY_REQUEST_LEVEL_NONE,
+	rr := executeQueryRequestFromString("SELECT * FROM foo", proto.ConsistencyLevel_NONE,
 		false, false)
 	rr.Freshness = mustParseDuration("1ns").Nanoseconds()
-	eqr, _, err := s0.Request(rr)
+	eqr, _, _, err := s0.Request(rr)
 	if err != nil {
 		t.Fatalf("failed to query leader node: %s", err.Error())
 	}
@@ -2008,8 +2008,8 @@ COMMIT;
 
 	// Check that data were loaded correctly.
 	qr := queryRequestFromString("SELECT * FROM foo", false, true)
-	qr.Level = proto.QueryRequest_QUERY_REQUEST_LEVEL_STRONG
-	r, _, err := s.Query(qr)
+	qr.Level = proto.ConsistencyLevel_STRONG
+	r, _, _, err := s.Query(qr)
 	if err != nil {
 		t.Fatalf("failed to query single node: %s", err.Error())
 	}
@@ -2096,8 +2096,8 @@ func Test_SingleNodeLoadTextChinook(t *testing.T) {
 	// Check that data were loaded correctly.
 
 	qr := queryRequestFromString("SELECT count(*) FROM track", false, true)
-	qr.Level = proto.QueryRequest_QUERY_REQUEST_LEVEL_STRONG
-	r, _, err := s.Query(qr)
+	qr.Level = proto.ConsistencyLevel_STRONG
+	r, _, _, err := s.Query(qr)
 	if err != nil {
 		t.Fatalf("failed to query single node: %s", err.Error())
 	}
@@ -2109,8 +2109,8 @@ func Test_SingleNodeLoadTextChinook(t *testing.T) {
 	}
 
 	qr = queryRequestFromString("SELECT count(*) FROM album", false, true)
-	qr.Level = proto.QueryRequest_QUERY_REQUEST_LEVEL_STRONG
-	r, _, err = s.Query(qr)
+	qr.Level = proto.ConsistencyLevel_STRONG
+	r, _, _, err = s.Query(qr)
 	if err != nil {
 		t.Fatalf("failed to query single node: %s", err.Error())
 	}
@@ -2122,8 +2122,8 @@ func Test_SingleNodeLoadTextChinook(t *testing.T) {
 	}
 
 	qr = queryRequestFromString("SELECT count(*) FROM artist", false, true)
-	qr.Level = proto.QueryRequest_QUERY_REQUEST_LEVEL_STRONG
-	r, _, err = s.Query(qr)
+	qr.Level = proto.ConsistencyLevel_STRONG
+	r, _, _, err = s.Query(qr)
 	if err != nil {
 		t.Fatalf("failed to query single node: %s", err.Error())
 	}
@@ -2166,8 +2166,8 @@ COMMIT;
 
 	// Check that data were loaded correctly.
 	qr := queryRequestFromString("SELECT * FROM bar", false, true)
-	qr.Level = proto.QueryRequest_QUERY_REQUEST_LEVEL_STRONG
-	r, _, err := s.Query(qr)
+	qr.Level = proto.ConsistencyLevel_STRONG
+	r, _, _, err := s.Query(qr)
 	if err != nil {
 		t.Fatalf("failed to query single node: %s", err.Error())
 	}
@@ -2194,8 +2194,8 @@ COMMIT;
 
 	// Check that data were loaded correctly.
 	qr = queryRequestFromString("SELECT * FROM foo WHERE id=2", false, true)
-	qr.Level = proto.QueryRequest_QUERY_REQUEST_LEVEL_STRONG
-	r, _, err = s.Query(qr)
+	qr.Level = proto.ConsistencyLevel_STRONG
+	r, _, _, err = s.Query(qr)
 	if err != nil {
 		t.Fatalf("failed to query single node: %s", err.Error())
 	}
@@ -2206,8 +2206,8 @@ COMMIT;
 		t.Fatalf("unexpected results for query\nexp: %s\ngot: %s", exp, got)
 	}
 	qr = queryRequestFromString("SELECT count(*) FROM foo", false, true)
-	qr.Level = proto.QueryRequest_QUERY_REQUEST_LEVEL_STRONG
-	r, _, err = s.Query(qr)
+	qr.Level = proto.ConsistencyLevel_STRONG
+	r, _, _, err = s.Query(qr)
 	if err != nil {
 		t.Fatalf("failed to query single node: %s", err.Error())
 	}
@@ -2220,8 +2220,8 @@ COMMIT;
 
 	// Check preexisting data is gone.
 	qr = queryRequestFromString("SELECT * FROM bar", false, true)
-	qr.Level = proto.QueryRequest_QUERY_REQUEST_LEVEL_STRONG
-	r, _, err = s.Query(qr)
+	qr.Level = proto.ConsistencyLevel_STRONG
+	r, _, _, err = s.Query(qr)
 	if err != nil {
 		t.Fatalf("failed to query single node: %s", err.Error())
 	}
@@ -2261,8 +2261,8 @@ COMMIT;
 
 	// Check that data were loaded correctly.
 	qr := queryRequestFromString("SELECT * FROM bar", false, true)
-	qr.Level = proto.QueryRequest_QUERY_REQUEST_LEVEL_STRONG
-	r, _, err := s.Query(qr)
+	qr.Level = proto.ConsistencyLevel_STRONG
+	r, _, _, err := s.Query(qr)
 	if err != nil {
 		t.Fatalf("failed to query single node: %s", err.Error())
 	}
@@ -2305,7 +2305,7 @@ func Test_SingleNodeAutoRestore(t *testing.T) {
 
 	testPoll(t, s.Ready, 100*time.Millisecond, 2*time.Second)
 	qr := queryRequestFromString("SELECT * FROM foo WHERE id=2", false, true)
-	r, _, err := s.Query(qr)
+	r, _, _, err := s.Query(qr)
 	if err != nil {
 		t.Fatalf("failed to query single node: %s", err.Error())
 	}
@@ -2378,8 +2378,8 @@ COMMIT;
 
 	// Check that data were loaded correctly.
 	qr := queryRequestFromString("SELECT * FROM bar", false, true)
-	qr.Level = proto.QueryRequest_QUERY_REQUEST_LEVEL_STRONG
-	r, _, err := s.Query(qr)
+	qr.Level = proto.ConsistencyLevel_STRONG
+	r, _, _, err := s.Query(qr)
 	if err != nil {
 		t.Fatalf("failed to query single node: %s", err.Error())
 	}
@@ -2414,8 +2414,8 @@ COMMIT;
 
 	// Check that data were loaded correctly.
 	qr = queryRequestFromString("SELECT * FROM foo WHERE id=2", false, true)
-	qr.Level = proto.QueryRequest_QUERY_REQUEST_LEVEL_STRONG
-	r, _, err = s.Query(qr)
+	qr.Level = proto.ConsistencyLevel_STRONG
+	r, _, _, err = s.Query(qr)
 	if err != nil {
 		t.Fatalf("failed to query single node: %s", err.Error())
 	}
@@ -2426,8 +2426,8 @@ COMMIT;
 		t.Fatalf("unexpected results for query\nexp: %s\ngot: %s", exp, got)
 	}
 	qr = queryRequestFromString("SELECT count(*) FROM foo", false, true)
-	qr.Level = proto.QueryRequest_QUERY_REQUEST_LEVEL_STRONG
-	r, _, err = s.Query(qr)
+	qr.Level = proto.ConsistencyLevel_STRONG
+	r, _, _, err = s.Query(qr)
 	if err != nil {
 		t.Fatalf("failed to query single node: %s", err.Error())
 	}
@@ -2440,8 +2440,8 @@ COMMIT;
 
 	// Check preexisting data is gone.
 	qr = queryRequestFromString("SELECT * FROM bar", false, true)
-	qr.Level = proto.QueryRequest_QUERY_REQUEST_LEVEL_STRONG
-	r, _, err = s.Query(qr)
+	qr.Level = proto.ConsistencyLevel_STRONG
+	r, _, _, err = s.Query(qr)
 	if err != nil {
 		t.Fatalf("failed to query single node: %s", err.Error())
 	}
@@ -2460,7 +2460,7 @@ COMMIT;
 		t.Fatalf("Error waiting for leader: %s", err)
 	}
 	qr = queryRequestFromString("SELECT count(*) FROM foo", false, true)
-	r, _, err = s.Query(qr)
+	r, _, _, err = s.Query(qr)
 	if err != nil {
 		t.Fatalf("failed to query single node: %s", err.Error())
 	}
@@ -2744,8 +2744,8 @@ func Test_SingleNode_SnapshotWithAutoOptimize_Stress(t *testing.T) {
 
 	// Query the data, make sure it looks good after all this.
 	qr := queryRequestFromString("SELECT COUNT(*) FROM foo", false, true)
-	qr.Level = proto.QueryRequest_QUERY_REQUEST_LEVEL_STRONG
-	r, _, err := s.Query(qr)
+	qr.Level = proto.ConsistencyLevel_STRONG
+	r, _, _, err := s.Query(qr)
 	if err != nil {
 		t.Fatalf("failed to query single node: %s", err.Error())
 	}
@@ -2764,7 +2764,7 @@ func Test_SingleNode_SnapshotWithAutoOptimize_Stress(t *testing.T) {
 	if _, err := s.WaitForLeader(10 * time.Second); err != nil {
 		t.Fatalf("Error waiting for leader: %s", err)
 	}
-	r, _, err = s.Query(qr)
+	r, _, _, err = s.Query(qr)
 	if err != nil {
 		t.Fatalf("failed to query single node: %s", err.Error())
 	}
@@ -3169,7 +3169,7 @@ func Test_RWROCount(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			rwN, roN := s.RORWCount(executeQueryRequestFromStrings(tt.stmts, proto.QueryRequest_QUERY_REQUEST_LEVEL_NONE, false, false))
+			rwN, roN := s.RORWCount(executeQueryRequestFromStrings(tt.stmts, proto.ConsistencyLevel_NONE, false, false))
 			if rwN != tt.expRW {
 				t.Fatalf("wrong number of RW statements, exp %d, got %d", tt.expRW, rwN)
 			}
@@ -3245,9 +3245,9 @@ func Test_StoreRequestRaftIndex(t *testing.T) {
 	// Test 1: Write request should return a non-zero index
 	writeReq := executeQueryRequestFromStrings([]string{
 		`CREATE TABLE foo (id INTEGER NOT NULL PRIMARY KEY, name TEXT)`,
-	}, proto.QueryRequest_QUERY_REQUEST_LEVEL_STRONG, false, false)
+	}, proto.ConsistencyLevel_STRONG, false, false)
 
-	_, raftIndex, err := s.Request(writeReq)
+	_, _, raftIndex, err := s.Request(writeReq)
 	if err != nil {
 		t.Fatalf("failed to execute write request: %s", err.Error())
 	}
@@ -3258,9 +3258,9 @@ func Test_StoreRequestRaftIndex(t *testing.T) {
 	// Test 2: Read-only request with NONE consistency should return index 0
 	readReq := executeQueryRequestFromStrings([]string{
 		`SELECT * FROM foo`,
-	}, proto.QueryRequest_QUERY_REQUEST_LEVEL_NONE, false, false)
+	}, proto.ConsistencyLevel_NONE, false, false)
 
-	_, readIndex, err := s.Request(readReq)
+	_, _, readIndex, err := s.Request(readReq)
 	if err != nil {
 		t.Fatalf("failed to execute read request: %s", err.Error())
 	}
@@ -3271,9 +3271,9 @@ func Test_StoreRequestRaftIndex(t *testing.T) {
 	// Test 3: Another write request should return a higher index
 	writeReq2 := executeQueryRequestFromStrings([]string{
 		`INSERT INTO foo(id, name) VALUES(1, "test")`,
-	}, proto.QueryRequest_QUERY_REQUEST_LEVEL_STRONG, false, false)
+	}, proto.ConsistencyLevel_STRONG, false, false)
 
-	_, raftIndex2, err := s.Request(writeReq2)
+	_, _, raftIndex2, err := s.Request(writeReq2)
 	if err != nil {
 		t.Fatalf("failed to execute second write request: %s", err.Error())
 	}
@@ -3284,9 +3284,9 @@ func Test_StoreRequestRaftIndex(t *testing.T) {
 	// Test 4: STRONG read should go through Raft and return a non-zero index
 	strongReadReq := executeQueryRequestFromStrings([]string{
 		`SELECT * FROM foo`,
-	}, proto.QueryRequest_QUERY_REQUEST_LEVEL_STRONG, false, false)
+	}, proto.ConsistencyLevel_STRONG, false, false)
 
-	_, strongReadIndex, err := s.Request(strongReadReq)
+	_, _, strongReadIndex, err := s.Request(strongReadReq)
 	if err != nil {
 		t.Fatalf("failed to execute strong read request: %s", err.Error())
 	}
@@ -3296,6 +3296,86 @@ func Test_StoreRequestRaftIndex(t *testing.T) {
 	}
 	if strongReadIndex <= raftIndex2 {
 		t.Fatalf("expected STRONG read Raft index (%d) to be greater than second write index (%d)", strongReadIndex, raftIndex2)
+	}
+}
+
+// Test_StoreRequestRWCount tests that Store.Request returns the correct number of RW statements
+func Test_StoreRequestRWCount(t *testing.T) {
+	s, ln := mustNewStore(t)
+	defer ln.Close()
+
+	if err := s.Open(); err != nil {
+		t.Fatalf("failed to open single-node store: %s", err.Error())
+	}
+	defer s.Close(true)
+	if err := s.Bootstrap(NewServer(s.ID(), s.Addr(), true)); err != nil {
+		t.Fatalf("failed to bootstrap single-node store: %s", err.Error())
+	}
+	if _, err := s.WaitForLeader(10 * time.Second); err != nil {
+		t.Fatalf("Error waiting for leader: %s", err)
+	}
+
+	// Create a table first
+	createReq := executeQueryRequestFromString(`CREATE TABLE foo (id INTEGER NOT NULL PRIMARY KEY, name TEXT)`, proto.ConsistencyLevel_STRONG, false, false)
+	_, nRWCreate, _, err := s.Request(createReq)
+	if err != nil {
+		t.Fatalf("failed to create table: %s", err.Error())
+	}
+	if nRWCreate != 1 {
+		t.Fatalf("expected nRW=1 for CREATE TABLE statement, got %d", nRWCreate)
+	}
+
+	// Test 1: Single write statement should return nRW=1
+	writeReq := executeQueryRequestFromStrings([]string{
+		`INSERT INTO foo(id, name) VALUES(1, "fiona")`,
+	}, proto.ConsistencyLevel_STRONG, false, false)
+	_, nRW, _, err := s.Request(writeReq)
+	if err != nil {
+		t.Fatalf("failed to execute write request: %s", err.Error())
+	}
+	if nRW != 1 {
+		t.Fatalf("expected nRW=1 for single write statement, got %d", nRW)
+	}
+
+	// Test 2: Multiple write statements should return correct nRW count
+	multiWriteReq := executeQueryRequestFromStrings([]string{
+		`INSERT INTO foo(id, name) VALUES(2, "alice")`,
+		`INSERT INTO foo(id, name) VALUES(3, "bob")`,
+		`UPDATE foo SET name="charlie" WHERE id=1`,
+	}, proto.ConsistencyLevel_STRONG, false, false)
+	_, nRW, _, err = s.Request(multiWriteReq)
+	if err != nil {
+		t.Fatalf("failed to execute multi-write request: %s", err.Error())
+	}
+	if nRW != 3 {
+		t.Fatalf("expected nRW=3 for three write statements, got %d", nRW)
+	}
+
+	// Test 3: Read-only statement should return nRW=0
+	readReq := executeQueryRequestFromStrings([]string{
+		`SELECT * FROM foo`,
+	}, proto.ConsistencyLevel_NONE, false, false)
+	_, nRW, _, err = s.Request(readReq)
+	if err != nil {
+		t.Fatalf("failed to execute read request: %s", err.Error())
+	}
+	if nRW != 0 {
+		t.Fatalf("expected nRW=0 for read-only statement, got %d", nRW)
+	}
+
+	// Test 4: Mixed read-write statements should return correct nRW count
+	mixedReq := executeQueryRequestFromStrings([]string{
+		`SELECT * FROM foo`,
+		`INSERT INTO foo(id, name) VALUES(4, "diana")`,
+		`SELECT * FROM foo WHERE id=4`,
+		`DELETE FROM foo WHERE id=1`,
+	}, proto.ConsistencyLevel_STRONG, false, false)
+	_, nRW, _, err = s.Request(mixedReq)
+	if err != nil {
+		t.Fatalf("failed to execute mixed request: %s", err.Error())
+	}
+	if nRW != 2 {
+		t.Fatalf("expected nRW=2 for two write statements in mixed request, got %d", nRW)
 	}
 }
 
@@ -3330,26 +3410,26 @@ func Test_StoreQueryRaftIndex(t *testing.T) {
 
 	// First do a STRONG query to set the strongReadTerm for the current term
 	strongReq := queryRequestFromString("SELECT * FROM foo", false, false)
-	strongReq.Level = proto.QueryRequest_QUERY_REQUEST_LEVEL_STRONG
-	_, _, err = s.Query(strongReq)
+	strongReq.Level = proto.ConsistencyLevel_STRONG
+	_, _, _, err = s.Query(strongReq)
 	if err != nil {
 		t.Fatalf("failed to execute initial STRONG query: %s", err.Error())
 	}
 
 	// Test that NONE, WEAK, and LINEARIZABLE consistency levels return index 0
 	levels := []struct {
-		level proto.QueryRequest_Level
+		level proto.ConsistencyLevel
 		name  string
 	}{
-		{proto.QueryRequest_QUERY_REQUEST_LEVEL_NONE, "NONE"},
-		{proto.QueryRequest_QUERY_REQUEST_LEVEL_WEAK, "WEAK"},
-		{proto.QueryRequest_QUERY_REQUEST_LEVEL_LINEARIZABLE, "LINEARIZABLE"},
+		{proto.ConsistencyLevel_NONE, "NONE"},
+		{proto.ConsistencyLevel_WEAK, "WEAK"},
+		{proto.ConsistencyLevel_LINEARIZABLE, "LINEARIZABLE"},
 	}
 
 	for _, level := range levels {
 		req := queryRequestFromString("SELECT * FROM foo", false, false)
 		req.Level = level.level
-		_, index, err := s.Query(req)
+		_, _, index, err := s.Query(req)
 		if err != nil {
 			t.Fatalf("failed to execute %s query: %s", level.name, err.Error())
 		}
@@ -3360,8 +3440,8 @@ func Test_StoreQueryRaftIndex(t *testing.T) {
 
 	// Test STRONG consistency should return non-zero index
 	strongTestReq := queryRequestFromString("SELECT * FROM foo", false, false)
-	strongTestReq.Level = proto.QueryRequest_QUERY_REQUEST_LEVEL_STRONG
-	_, strongIndex, err := s.Query(strongTestReq)
+	strongTestReq.Level = proto.ConsistencyLevel_STRONG
+	_, _, strongIndex, err := s.Query(strongTestReq)
 	if err != nil {
 		t.Fatalf("failed to execute STRONG query: %s", err.Error())
 	}
@@ -3370,6 +3450,93 @@ func Test_StoreQueryRaftIndex(t *testing.T) {
 	}
 	if strongIndex <= writeIndex {
 		t.Fatalf("expected STRONG query Raft index (%d) to be greater than write index (%d)", strongIndex, writeIndex)
+	}
+}
+
+// Test_StoreQueryReturnedLevel tests that Store.Query returns the actual consistency level used
+func Test_StoreQueryReturnedLevel(t *testing.T) {
+	s, ln := mustNewStore(t)
+	defer ln.Close()
+
+	if err := s.Open(); err != nil {
+		t.Fatalf("failed to open single-node store: %s", err.Error())
+	}
+	defer s.Close(true)
+	if err := s.Bootstrap(NewServer(s.ID(), s.Addr(), true)); err != nil {
+		t.Fatalf("failed to bootstrap single-node store: %s", err.Error())
+	}
+	if _, err := s.WaitForLeader(10 * time.Second); err != nil {
+		t.Fatalf("Error waiting for leader: %s", err)
+	}
+
+	// Create a table
+	er := executeRequestFromString("CREATE TABLE foo (id INTEGER NOT NULL PRIMARY KEY, name TEXT)", false, false)
+	_, _, err := s.Execute(er)
+	if err != nil {
+		t.Fatalf("failed to create table: %s", err.Error())
+	}
+
+	// Execute initial STRONG query to set strongReadTerm
+	strongReq := queryRequestFromString("SELECT * FROM foo", false, false)
+	strongReq.Level = proto.ConsistencyLevel_STRONG
+	_, _, _, err = s.Query(strongReq)
+	if err != nil {
+		t.Fatalf("failed to execute initial STRONG query: %s", err.Error())
+	}
+
+	// Test NONE level
+	req := queryRequestFromString("SELECT * FROM foo", false, false)
+	req.Level = proto.ConsistencyLevel_NONE
+	_, level, _, err := s.Query(req)
+	if err != nil {
+		t.Fatalf("failed to execute NONE query: %s", err.Error())
+	}
+	if level != proto.ConsistencyLevel_NONE {
+		t.Fatalf("expected NONE consistency level, got %s", level)
+	}
+
+	// Test WEAK level
+	req = queryRequestFromString("SELECT * FROM foo", false, false)
+	req.Level = proto.ConsistencyLevel_WEAK
+	_, level, _, err = s.Query(req)
+	if err != nil {
+		t.Fatalf("failed to execute WEAK query: %s", err.Error())
+	}
+	if level != proto.ConsistencyLevel_WEAK {
+		t.Fatalf("expected WEAK consistency level, got %s", level)
+	}
+
+	// Test STRONG level
+	req = queryRequestFromString("SELECT * FROM foo", false, false)
+	req.Level = proto.ConsistencyLevel_STRONG
+	_, level, _, err = s.Query(req)
+	if err != nil {
+		t.Fatalf("failed to execute STRONG query: %s", err.Error())
+	}
+	if level != proto.ConsistencyLevel_STRONG {
+		t.Fatalf("expected STRONG consistency level, got %s", level)
+	}
+
+	// Test LINEARIZABLE level (should stay LINEARIZABLE if no strong read needed)
+	req = queryRequestFromString("SELECT * FROM foo", false, false)
+	req.Level = proto.ConsistencyLevel_LINEARIZABLE
+	_, level, _, err = s.Query(req)
+	if err != nil {
+		t.Fatalf("failed to execute LINEARIZABLE query: %s", err.Error())
+	}
+	if level != proto.ConsistencyLevel_LINEARIZABLE {
+		t.Fatalf("expected LINEARIZABLE consistency level, got %s", level)
+	}
+
+	// Test AUTO level (should be converted to WEAK for a voter)
+	req = queryRequestFromString("SELECT * FROM foo", false, false)
+	req.Level = proto.ConsistencyLevel_AUTO
+	_, level, _, err = s.Query(req)
+	if err != nil {
+		t.Fatalf("failed to execute AUTO query: %s", err.Error())
+	}
+	if level != proto.ConsistencyLevel_WEAK {
+		t.Fatalf("expected AUTO to be converted to WEAK for a voter, got %s", level)
 	}
 }
 
@@ -3574,11 +3741,11 @@ func queryRequestFromStrings(s []string, timings, tx bool) *proto.QueryRequest {
 	}
 }
 
-func executeQueryRequestFromString(s string, lvl proto.QueryRequest_Level, timings, tx bool) *proto.ExecuteQueryRequest {
+func executeQueryRequestFromString(s string, lvl proto.ConsistencyLevel, timings, tx bool) *proto.ExecuteQueryRequest {
 	return executeQueryRequestFromStrings([]string{s}, lvl, timings, tx)
 }
 
-func executeQueryRequestFromStrings(s []string, lvl proto.QueryRequest_Level, timings, tx bool) *proto.ExecuteQueryRequest {
+func executeQueryRequestFromStrings(s []string, lvl proto.ConsistencyLevel, timings, tx bool) *proto.ExecuteQueryRequest {
 	stmts := make([]*proto.Statement, len(s))
 	for i := range s {
 		stmts[i] = &proto.Statement{

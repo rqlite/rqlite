@@ -800,17 +800,8 @@ func (s *Store) Close(wait bool) (retErr error) {
 	defer s.snapshotCAS.End()
 
 	// Clean up any CDC.
-	s.cdcMu.Lock()
-	defer s.cdcMu.Unlock()
-	if s.cdcStreamer != nil {
-		s.cdcStreamer.Close()
-	}
-	s.cdcStreamer = nil
-	if err := s.db.RegisterPreUpdateHook(nil, nil, false); err != nil {
-		return fmt.Errorf("failed to unregister preupdate hook: %w", err)
-	}
-	if err := s.db.RegisterCommitHook(nil); err != nil {
-		return fmt.Errorf("failed to unregister commit hook: %w", err)
+	if err := s.cleanupCDC(); err != nil {
+		return err
 	}
 
 	s.dechunkManager.Close()
@@ -1331,52 +1322,53 @@ func (s *Store) execute(ex *proto.ExecuteRequest) ([]*proto.ExecuteQueryResponse
 // If the request read consistency level is LINEARIZABLE, that level may be
 // upgraded to STRONG if the Store determines that is necessary to guarantee
 // a linearizable read.
-func (s *Store) Query(qr *proto.QueryRequest) (rows []*proto.QueryRows, raftIndex uint64, retErr error) {
+func (s *Store) Query(qr *proto.QueryRequest) (rows []*proto.QueryRows, level proto.ConsistencyLevel, raftIndex uint64, retErr error) {
 	p := (*PragmaCheckRequest)(qr.Request)
 	if err := p.Check(); err != nil {
-		return nil, 0, err
+		return nil, 0, 0, err
 	}
 
 	if !s.open.Is() {
-		return nil, 0, ErrNotOpen
+		return nil, 0, 0, ErrNotOpen
 	}
 
-	if qr.Level == proto.QueryRequest_QUERY_REQUEST_LEVEL_AUTO {
-		qr.Level = proto.QueryRequest_QUERY_REQUEST_LEVEL_WEAK
+	level = qr.Level
+	if level == proto.ConsistencyLevel_AUTO {
+		level = proto.ConsistencyLevel_WEAK
 		isVoter, err := s.IsVoter()
 		if err != nil {
-			return nil, 0, err
+			return nil, 0, 0, err
 		}
 		if !isVoter {
-			qr.Level = proto.QueryRequest_QUERY_REQUEST_LEVEL_NONE
+			level = proto.ConsistencyLevel_NONE
 		}
 	}
 
 	readTerm := s.raft.CurrentTerm()
-	if qr.Level == proto.QueryRequest_QUERY_REQUEST_LEVEL_LINEARIZABLE {
+	if level == proto.ConsistencyLevel_LINEARIZABLE {
 		err := s.waitForLinearizableRead(readTerm, qr.LinearizableTimeout)
 		if err != nil {
 			if err == ErrStrongReadNeeded {
-				qr.Level = proto.QueryRequest_QUERY_REQUEST_LEVEL_STRONG
+				level = proto.ConsistencyLevel_STRONG
 				s.numLRUpgraded.Add(1)
 			} else {
-				return nil, 0, err
+				return nil, 0, 0, err
 			}
 		}
 	}
 
-	if qr.Level == proto.QueryRequest_QUERY_REQUEST_LEVEL_STRONG {
+	if level == proto.ConsistencyLevel_STRONG {
 		if s.raft.State() != raft.Leader {
-			return nil, 0, ErrNotLeader
+			return nil, 0, 0, ErrNotLeader
 		}
 
 		if !s.Ready() {
-			return nil, 0, ErrNotReady
+			return nil, 0, 0, ErrNotReady
 		}
 
 		b, compressed, err := s.tryCompress(qr)
 		if err != nil {
-			return nil, 0, err
+			return nil, 0, 0, err
 		}
 		c := &proto.Command{
 			Type:       proto.Command_COMMAND_TYPE_QUERY,
@@ -1386,15 +1378,15 @@ func (s *Store) Query(qr *proto.QueryRequest) (rows []*proto.QueryRows, raftInde
 
 		b, err = command.Marshal(c)
 		if err != nil {
-			return nil, 0, err
+			return nil, 0, 0, err
 		}
 
 		af := s.raft.Apply(b, s.ApplyTimeout)
 		if af.Error() != nil {
 			if af.Error() == raft.ErrNotLeader || af.Error() == raft.ErrLeadershipLost {
-				return nil, 0, ErrNotLeader
+				return nil, 0, 0, ErrNotLeader
 			}
-			return nil, 0, af.Error()
+			return nil, 0, 0, af.Error()
 		}
 		// It's possible that the term has changed since we read it. But that's OK,
 		// worse case it will just mean another Strong read. It would be worse to
@@ -1402,18 +1394,18 @@ func (s *Store) Query(qr *proto.QueryRequest) (rows []*proto.QueryRows, raftInde
 		// was performed.
 		s.strongReadTerm.Store(readTerm)
 		r := af.Response().(*fsmQueryResponse)
-		return r.rows, af.Index(), r.error
+		return r.rows, level, af.Index(), r.error
 	}
 
-	if qr.Level == proto.QueryRequest_QUERY_REQUEST_LEVEL_WEAK && s.raft.State() != raft.Leader {
-		return nil, 0, ErrNotLeader
+	if level == proto.ConsistencyLevel_WEAK && s.raft.State() != raft.Leader {
+		return nil, 0, 0, ErrNotLeader
 	}
-	if qr.Level == proto.QueryRequest_QUERY_REQUEST_LEVEL_NONE && s.isStaleRead(qr.Freshness, qr.FreshnessStrict) {
-		return nil, 0, ErrStaleRead
+	if level == proto.ConsistencyLevel_NONE && s.isStaleRead(qr.Freshness, qr.FreshnessStrict) {
+		return nil, 0, 0, ErrStaleRead
 	}
 
 	rows, err := s.db.Query(qr.Request, qr.Timings)
-	return rows, 0, err
+	return rows, level, 0, err
 }
 
 // VerifyLeader checks that the current node is the Raft leader.
@@ -1441,33 +1433,33 @@ func (s *Store) VerifyLeader() (retErr error) {
 }
 
 // Request processes a request that may contain both Executes and Queries.
-func (s *Store) Request(eqr *proto.ExecuteQueryRequest) ([]*proto.ExecuteQueryResponse, uint64, error) {
+func (s *Store) Request(eqr *proto.ExecuteQueryRequest) ([]*proto.ExecuteQueryResponse, uint64, uint64, error) {
 	p := (*PragmaCheckRequest)(eqr.Request)
 	if err := p.Check(); err != nil {
-		return nil, 0, err
+		return nil, 0, 0, err
 	}
 
 	if !s.open.Is() {
-		return nil, 0, ErrNotOpen
+		return nil, 0, 0, ErrNotOpen
 	}
 	nRW, nRO := s.RORWCount(eqr)
 	isLeader := s.raft.State() == raft.Leader
 
 	// See the Query() code for a full explanation of this.
 	readTerm := s.raft.CurrentTerm()
-	if eqr.Level == proto.QueryRequest_QUERY_REQUEST_LEVEL_LINEARIZABLE {
+	if eqr.Level == proto.ConsistencyLevel_LINEARIZABLE {
 		err := s.waitForLinearizableRead(readTerm, eqr.LinearizableTimeout)
 		if err != nil {
 			if err == ErrStrongReadNeeded {
-				eqr.Level = proto.QueryRequest_QUERY_REQUEST_LEVEL_STRONG
+				eqr.Level = proto.ConsistencyLevel_STRONG
 				s.numLRUpgraded.Add(1)
 			} else {
-				return nil, 0, err
+				return nil, 0, 0, err
 			}
 		}
 	}
 
-	if nRW == 0 && eqr.Level != proto.QueryRequest_QUERY_REQUEST_LEVEL_STRONG {
+	if nRW == 0 && eqr.Level != proto.ConsistencyLevel_STRONG {
 		// It's a little faster just to do a Query of the DB if we know there is no need
 		// for consensus.
 		convertFn := func(qr []*proto.QueryRows) []*proto.ExecuteQueryResponse {
@@ -1480,30 +1472,30 @@ func (s *Store) Request(eqr *proto.ExecuteQueryRequest) ([]*proto.ExecuteQueryRe
 			return resp
 		}
 
-		if eqr.Level == proto.QueryRequest_QUERY_REQUEST_LEVEL_NONE && s.isStaleRead(eqr.Freshness, eqr.FreshnessStrict) {
-			return nil, 0, ErrStaleRead
-		} else if eqr.Level == proto.QueryRequest_QUERY_REQUEST_LEVEL_WEAK {
+		if eqr.Level == proto.ConsistencyLevel_NONE && s.isStaleRead(eqr.Freshness, eqr.FreshnessStrict) {
+			return nil, 0, 0, ErrStaleRead
+		} else if eqr.Level == proto.ConsistencyLevel_WEAK {
 			if !isLeader {
-				return nil, 0, ErrNotLeader
+				return nil, 0, 0, ErrNotLeader
 			}
 		}
 		qr, err := s.db.Query(eqr.Request, eqr.Timings)
-		return convertFn(qr), 0, err
+		return convertFn(qr), uint64(nRW), 0, err
 	}
 
 	// At least one write in the request, or STRONG consistency requested, so
 	// we need to go through consensus. Check that we can do that.
 	if !isLeader {
-		return nil, 0, ErrNotLeader
+		return nil, 0, 0, ErrNotLeader
 	}
 	if !s.Ready() {
-		return nil, 0, ErrNotReady
+		return nil, 0, 0, ErrNotReady
 	}
 
 	// Send the request through consensus.
 	b, compressed, err := s.tryCompress(eqr)
 	if err != nil {
-		return nil, 0, err
+		return nil, 0, 0, err
 	}
 	c := &proto.Command{
 		Type:       proto.Command_COMMAND_TYPE_EXECUTE_QUERY,
@@ -1512,15 +1504,15 @@ func (s *Store) Request(eqr *proto.ExecuteQueryRequest) ([]*proto.ExecuteQueryRe
 	}
 	b, err = command.Marshal(c)
 	if err != nil {
-		return nil, 0, err
+		return nil, 0, 0, err
 	}
 
 	af := s.raft.Apply(b, s.ApplyTimeout)
 	if af.Error() != nil {
 		if af.Error() == raft.ErrNotLeader {
-			return nil, 0, ErrNotLeader
+			return nil, 0, 0, ErrNotLeader
 		}
-		return nil, 0, af.Error()
+		return nil, 0, 0, af.Error()
 	}
 	r := af.Response().(*fsmExecuteQueryResponse)
 
@@ -1530,7 +1522,7 @@ func (s *Store) Request(eqr *proto.ExecuteQueryRequest) ([]*proto.ExecuteQueryRe
 		s.strongReadTerm.Store(readTerm)
 	}
 
-	return r.results, af.Index(), r.error
+	return r.results, uint64(nRW), af.Index(), r.error
 }
 
 // Backup writes a consistent snapshot of the underlying database to dst. This
@@ -2067,6 +2059,22 @@ func (s *Store) remove(id string) error {
 		return ErrNotLeader
 	}
 	return f.Error()
+}
+
+func (s *Store) cleanupCDC() error {
+	s.cdcMu.Lock()
+	defer s.cdcMu.Unlock()
+	if s.cdcStreamer != nil {
+		s.cdcStreamer.Close()
+	}
+	s.cdcStreamer = nil
+	if err := s.db.RegisterPreUpdateHook(nil, nil, false); err != nil {
+		return fmt.Errorf("failed to unregister preupdate hook: %w", err)
+	}
+	if err := s.db.RegisterCommitHook(nil); err != nil {
+		return fmt.Errorf("failed to unregister commit hook: %w", err)
+	}
+	return nil
 }
 
 // initVacuumTime initializes the last vacuum times in the Config store.
