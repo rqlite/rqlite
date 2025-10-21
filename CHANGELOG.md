@@ -9,7 +9,7 @@
 - [PR #2362](https://github.com/rqlite/rqlite/pull/2362): Return actual consistency level from `store.Query`, fixes issue [#2361](https://github.com/rqlite/rqlite/issues/2361).
 - [PR #2365](https://github.com/rqlite/rqlite/pull/2365): `store.Request` should return the number of statements that were executes, fixes issue [#2364](https://github.com/rqlite/rqlite/issues/2364).
 - [PR #2367](https://github.com/rqlite/rqlite/pull/2367): Store applied index in local file.
-- [PR #2369](https://github.com/rqlite/rqlite/pull/2369): Store applied index in local file.
+- [PR #2369](https://github.com/rqlite/rqlite/pull/2369): Upgrade dependencies.
 
 ## v9.1.2 (October 3rd 2025)
 There are no changes in this release relative to v9.1.1. However this release is the first that mirrors container images to the [GitHub Container Registry](https://docs.github.com/en/packages).
