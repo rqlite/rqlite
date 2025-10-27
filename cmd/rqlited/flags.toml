@@ -44,7 +44,7 @@ cli = "http-addr"
 type = "string"
 short_help = "HTTP server bind address. To enable HTTPS, set X.509 certificate and key"
 long_help = """
-This is the interface rqlite will listen on for API requests. 0.0.0.0 is an acceptable address and will mean that rqlite will listen on all interfaces.
+This is the interface rqlite will listen on for API requests. 0.0.0.0 is an acceptable address and will mean that rqlite will listen on all interfaces. However if you do use 0.0.0.0 you must then set <code>-http-adv-addr</code> to the actual network address (or hostname) the node can be reached on, as rqlite transmits its HTTP API address in certain circumstances.
 """
 default = "localhost:4001"
 
@@ -211,7 +211,7 @@ cli = "raft-addr"
 type = "string"
 short_help = "Raft communication bind address"
 long_help = """
-This is the interface rqlite will listen on for connections from other node, as part of managing Raft consensus. 0.0.0.0 is an acceptable address and will mean that `rqlite` will listen on all interfaces.
+This is the interface rqlite will listen on for connections from other node, as part of managing Raft consensus. 0.0.0.0 is an acceptable address and will mean that `rqlite` will listen on all interfaces. However if you do use 0.0.0.0 you must then set <code>-raft-adv-addr</code> to the actual network address (or hostname) the node can be reached on, as rqlite transmits its Raft network address in certain circumstances.
 """
 default = "localhost:4002"
 
