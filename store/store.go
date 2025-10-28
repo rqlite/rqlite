@@ -557,10 +557,21 @@ func (s *Store) Open() (retErr error) {
 	// without error and also check if the underlying DB file is unchanged since
 	// that snapshot. It shouldn't be changed -- that would require manual
 	// intervention which would potentially break rqlite -- but protect against
-	// it anyway. If it all looks good we can skip restoring the SQLite database
-	// from the Raft snapshot store because the contents are logically the same.
+	// it anyway. This could also happen in certain downgrade-then-upgrade-again
+	// scenarios. Anyway if it all looks good we can skip restoring the SQLite
+	// database from the Raft snapshot store because the contents are logically
+	// the same.
 	removeDBFiles := true
 	if err := func() error {
+		keepCleanMarker := false
+		defer func() {
+			if !keepCleanMarker {
+				if err := removeFile(s.cleanSnapshotPath); err != nil {
+					s.logger.Printf("warning: failed to remove clean snapshot marker file: %s", err)
+				}
+			}
+		}()
+
 		if !pathExists(s.cleanSnapshotPath) {
 			return nil
 		}
@@ -576,6 +587,7 @@ func (s *Store) Open() (retErr error) {
 			return nil
 		}
 		s.logger.Printf("detected successful prior snapshot operation, skipping initial restore")
+		keepCleanMarker = true
 		config.NoSnapshotRestoreOnStart = true
 		removeDBFiles = false
 		return nil
@@ -2999,6 +3011,7 @@ func prettyVoter(v bool) string {
 	return "non-voter"
 }
 
+// removeFile removes the file at the given path if it exists.
 func removeFile(path string) error {
 	if !pathExists(path) {
 		return nil
