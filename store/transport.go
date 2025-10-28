@@ -160,6 +160,7 @@ func (n *NodeTransport) Consumer() <-chan raft.RPC {
 			case rpc := <-srcCh:
 				switch cmd := rpc.Command.(type) {
 				case *raft.InstallSnapshotRequest:
+					/// XXXXX IF THIS HAPPENS WHAT DOES IT DO TO CLEAN SNAPSHOT?
 					if rpc.Reader != nil {
 						rpc.Reader = gzip.NewDecompressor(rpc.Reader)
 					}
