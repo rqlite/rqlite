@@ -104,6 +104,8 @@ type Config struct {
 	RaftApplyTimeout time.Duration
 	// Shutdown Raft if node removed from cluster
 	RaftShutdownOnRemove bool
+	// Do not perform a snapshot on shutdown
+	RaftNoSnapshotOnShutdown bool
 	// Node removes itself from cluster on graceful shutdown
 	RaftClusterRemoveOnShutdown bool
 	// If leader, stepdown before shutting down. Enabled by default
@@ -183,6 +185,7 @@ func Forge(arguments []string) (*flag.FlagSet, *Config, error) {
 	fs.DurationVar(&config.RaftElectionTimeout, "raft-election-timeout", mustParseDuration("1s"), "Raft election timeout")
 	fs.DurationVar(&config.RaftApplyTimeout, "raft-apply-timeout", mustParseDuration("10s"), "Raft apply timeout")
 	fs.BoolVar(&config.RaftShutdownOnRemove, "raft-remove-shutdown", false, "Shutdown Raft if node removed from cluster")
+	fs.BoolVar(&config.RaftNoSnapshotOnShutdown, "raft-no-snapshot-shutdown", false, "Do not perform a snapshot on shutdown")
 	fs.BoolVar(&config.RaftClusterRemoveOnShutdown, "raft-cluster-remove-shutdown", false, "Node removes itself from cluster on graceful shutdown")
 	fs.BoolVar(&config.RaftStepdownOnShutdown, "raft-shutdown-stepdown", true, "If leader, stepdown before shutting down. Enabled by default")
 	fs.DurationVar(&config.RaftReapNodeTimeout, "raft-reap-node-timeout", mustParseDuration("0h"), "Time after which a non-reachable voting node will be reaped. If not set, no reaping takes place")

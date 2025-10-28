@@ -363,6 +363,7 @@ func createStore(cfg *Config, ln *tcp.Layer, extensions []string) (*store.Store,
 
 	// Set optional parameters on store.
 	str.RaftLogLevel = cfg.RaftLogLevel
+	str.NoSnapshotOnClose = cfg.RaftNoSnapshotOnShutdown
 	str.ShutdownOnRemove = cfg.RaftShutdownOnRemove
 	str.SnapshotThreshold = cfg.RaftSnapThreshold
 	str.SnapshotThresholdWALSize = cfg.RaftSnapThresholdWALSize

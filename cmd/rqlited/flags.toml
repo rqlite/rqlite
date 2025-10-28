@@ -452,6 +452,16 @@ This ensures a node doesn't self-elect itself as Leader if it finds itself as th
 default = false
 
 [[flags]]
+name = "RaftNoSnapshotOnShutdown"
+cli = "raft-no-snapshot-shutdown"
+type = "bool"
+short_help = "Do not perform a snapshot on shutdown"
+long_help = """
+Performing a snapshot on a graceful shutdown ensures a fast restart, and it is recommended it be enabled. Set this flag if you wish to disable this snapshot operation.
+"""
+default = false
+
+[[flags]]
 name = "RaftClusterRemoveOnShutdown"
 cli = "raft-cluster-remove-shutdown"
 type = "bool"
