@@ -223,7 +223,7 @@ func Test_SingleNodeDBAppliedIndex(t *testing.T) {
 		t.Fatalf("wrong DB applied index, got: %d, exp %d", got, exp)
 	}
 
-	// Do a strong query, and ensure DBAppliedIndex is updated.
+	// Do a strong query, and ensure DBAppliedIndex is not updated.
 	qr := queryRequestFromString("SELECT * FROM foo", false, false)
 	qr.Level = proto.ConsistencyLevel_STRONG
 	_, _, _, err = s.Query(qr)
@@ -258,7 +258,10 @@ func Test_SingleNodeDBAppliedIndex(t *testing.T) {
 		t.Fatalf("Error waiting for leader: %s", err)
 	}
 	testPoll(t, func() bool {
-		return s.DBAppliedIndex() == uint64(4)
+		// Will be 5 because there will be a restore-from-snapshot
+		// and the snapshot has a last-index of 5 due to the strong
+		// query.
+		return s.DBAppliedIndex() == uint64(5)
 	}, 100*time.Millisecond, 5*time.Second)
 }
 

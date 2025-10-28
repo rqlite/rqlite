@@ -922,7 +922,10 @@ func (s *Store) WaitForCommitIndex(idx uint64, timeout time.Duration) error {
 }
 
 // DBAppliedIndex returns the index of the last Raft log that changed the
-// underlying database. If the index is unknown then 0 is returned.
+// underlying database. This is usually the index of a log entry that
+// actually changed the database, but in the event of a snapshot restore
+// will be last index associated with the snapshot. If the index is unknown
+// then 0 is returned.
 func (s *Store) DBAppliedIndex() uint64 {
 	return s.dbAppliedIdx.Load()
 }
