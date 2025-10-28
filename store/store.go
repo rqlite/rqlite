@@ -2398,7 +2398,7 @@ func (s *Store) fsmSnapshot() (fSnap raft.FSMSnapshot, retErr error) {
 	// SQLite database. This allows us to assume that the database file on disk is
 	// always consistent once a snapshot has been taken successfully. However,
 	// we don't want to leave the database in FULL synchronous mode permanently,
-	// as write performance will suffer, so be sure to turn off again after the snapshot
+	// as write performance will suffer, so be sure to turn off again after the snapshot.
 	if err := s.db.SetSynchronousMode(sql.SynchronousFull); err != nil {
 		return nil, fmt.Errorf("failed to set synchronous mode to FULL for snapshot: %w", err)
 	}
