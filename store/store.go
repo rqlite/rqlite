@@ -2345,8 +2345,14 @@ func (s *Store) fsmSnapshot() (fSnap raft.FSMSnapshot, retErr error) {
 	// always consistent once a snapshot has been taken successfully. However,
 	// we don't want to leave the database in FULL synchronous mode permanently,
 	// as write performance will suffer, so be sure to turn off again after the snapshot
-	s.db.SetSynchronousMode(sql.SynchronousFull)
-	defer s.db.SetSynchronousMode(sql.SynchronousOff)
+	if err := s.db.SetSynchronousMode(sql.SynchronousFull); err != nil {
+		return nil, fmt.Errorf("failed to set synchronous mode to FULL for snapshot: %w", err)
+	}
+	defer func() {
+		if err := s.db.SetSynchronousMode(sql.SynchronousOff); err != nil {
+			s.logger.Fatalf("failed to set synchronous mode to OFF after snapshot: %s", err.Error())
+		}
+	}()
 
 	startT := time.Now()
 	defer func() {
