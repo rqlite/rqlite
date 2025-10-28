@@ -2898,11 +2898,16 @@ func (s *Store) logBackup() bool {
 }
 
 // createDBOnDisk opens an on-disk database file at the configured path
-// for the store. If remove is true, any existing database files
-// at that path are removed first.
+// for the store. The WAL-specific files are always removed as there is
+// no guarantee they are consistent with the main database file. If remove
+// is true, all existing database files at that path are removed first.
 func createDBOnDisk(path string, drv *sql.Driver, remove, fkConstraints bool) (*sql.SwappableDB, error) {
 	if remove {
 		if err := sql.RemoveFiles(path); err != nil {
+			return nil, err
+		}
+	} else {
+		if err := sql.RemoveWALFiles(path); err != nil {
 			return nil, err
 		}
 	}
