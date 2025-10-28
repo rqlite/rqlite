@@ -554,11 +554,37 @@ func (s *Store) Open() (retErr error) {
 	config := s.raftConfig()
 	config.LocalID = raft.ServerID(s.raftID)
 
+	// Now, check if the most recent snapshot operation ran to completion
+	// without error and also check if the underlying DB file is unchanged since
+	// that snapshot. It shouldn't be changed -- that would require manual
+	// intervention which would potentially break rqlite -- but protect against
+	// it anyway.
 	rmDB := removeDBFiles
-	if pathExists(s.cleanSnapshotPath) {
-		s.logger.Printf("clean snapshot detected, skipping initial restore")
+	if err := func() error {
+		if !pathExists(s.cleanSnapshotPath) {
+			return nil
+		}
+		fp := &FileFingerprint{}
+		if err := fp.ReadFromFile(s.cleanSnapshotPath); err != nil {
+			return nil
+		}
+		sz, err := s.db.FileSize()
+		if err != nil {
+			return nil
+		}
+		mt, err := s.db.DBLastModified()
+		if err != nil {
+			return nil
+		}
+		if !fp.Compare(mt, sz) {
+			return nil
+		}
+		s.logger.Printf("detected successful snapshot, skipping initial restore")
 		config.NoSnapshotRestoreOnStart = true
 		rmDB = false
+		return nil
+	}(); err != nil {
+		return fmt.Errorf("failed to check for clean snapshot file: %s", err)
 	}
 
 	// Upgrade any preexisting snapshots.
@@ -2535,7 +2561,24 @@ func (s *Store) fsmSnapshot() (fSnap raft.FSMSnapshot, retErr error) {
 	fs := FSMSnapshot{
 		FSMSnapshot: fsmSnapshot,
 		Finalizer: func() error {
-			return touchFile(s.cleanSnapshotPath)
+			tmpFP := s.cleanSnapshotPath + ".tmp"
+			defer os.Remove(tmpFP)
+			mt, err := s.db.DBLastModified()
+			if err != nil {
+				return fmt.Errorf("failed to get last modified time for snapshot finalizer: %s", err)
+			}
+			sz, err := s.db.FileSize()
+			if err != nil {
+				return fmt.Errorf("failed to get database file size for snapshot finalizer: %s", err)
+			}
+			fp := &FileFingerprint{
+				ModTime: mt,
+				Size:    sz,
+			}
+			if err := fp.WriteToFile(tmpFP); err != nil {
+				return fmt.Errorf("failed to write snapshot fingerprint to temp file: %s", err)
+			}
+			return os.Rename(tmpFP, s.cleanSnapshotPath)
 		},
 		OnFailure: func() {
 			s.logger.Printf("Persisting snapshot did not succeed, full snapshot needed")
@@ -2943,14 +2986,6 @@ func prettyVoter(v bool) string {
 		return "voter"
 	}
 	return "non-voter"
-}
-
-func touchFile(path string) error {
-	fd, err := os.OpenFile(path, os.O_CREATE, 0644)
-	if err != nil {
-		return err
-	}
-	return fd.Close()
 }
 
 func removeFile(path string) error {
