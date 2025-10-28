@@ -568,11 +568,7 @@ func (s *Store) Open() (retErr error) {
 		if err := fp.ReadFromFile(s.cleanSnapshotPath); err != nil {
 			return nil
 		}
-		sz, err := s.db.FileSize()
-		if err != nil {
-			return nil
-		}
-		mt, err := s.db.DBLastModified()
+		mt, sz, err := modTimeSize(s.dbPath)
 		if err != nil {
 			return nil
 		}
@@ -3054,6 +3050,15 @@ func dirSize(path string) (int64, error) {
 		return err
 	})
 	return size, err
+}
+
+// modTimeSize returns the modification time and size of the file at the given path.
+func modTimeSize(path string) (time.Time, int64, error) {
+	info, err := os.Stat(path)
+	if err != nil {
+		return time.Time{}, 0, err
+	}
+	return info.ModTime(), info.Size(), nil
 }
 
 func fullPretty(full bool) string {
