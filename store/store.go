@@ -804,6 +804,15 @@ func (s *Store) Close(wait bool) (retErr error) {
 		// Protect against closing already-closed resource, such as channels.
 		return nil
 	}
+
+	// Snapshot before closing to minimize startup time on next open.
+	if err := s.Snapshot(0); err != nil {
+		if err != raft.ErrNothingNewToSnapshot &&
+			!strings.Contains(err.Error(), "wait until the configuration entry at") {
+			s.logger.Printf("pre-close snapshot failed: %s", err.Error())
+		}
+	}
+
 	if err := s.snapshotCAS.BeginWithRetry("close", 10*time.Millisecond, 10*time.Second); err != nil {
 		return err
 	}
