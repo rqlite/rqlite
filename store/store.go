@@ -651,6 +651,11 @@ func (s *Store) Open() (retErr error) {
 		if err != nil {
 			return fmt.Errorf("failed to read peers file: %s", err.Error())
 		}
+
+		// Recovering a node invalidates any existing SQLite file.
+		if err := removeFile(s.cleanSnapshotPath); err != nil {
+			return nil, fmt.Errorf("failed to remove clean snapshot file during RecoverNode: %w", err)
+		}
 		if err = RecoverNode(s.raftDir, s.dbConf.Extensions, s.logger, s.raftLog,
 			s.boltStore, s.snapshotStore, s.raftTn, config); err != nil {
 			return fmt.Errorf("failed to recover node: %s", err.Error())
