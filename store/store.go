@@ -137,6 +137,7 @@ const (
 	raftLogCacheSize          = 512
 	trailingScale             = 1.25
 	observerChanLen           = 50
+	removeDBFiles             = true
 
 	baseVacuumTimeKey   = "rqlite_base_vacuum"
 	lastVacuumTimeKey   = "rqlite_last_vacuum"
@@ -625,7 +626,7 @@ func (s *Store) Open() (retErr error) {
 			s.dbConf.Extensions, sql.CnkOnCloseModeDisabled)
 	}
 
-	s.db, err = createDBOnDisk(s.dbPath, s.dbDrv, s.dbConf.FKConstraints)
+	s.db, err = createDBOnDisk(s.dbPath, s.dbDrv, removeDBFiles, s.dbConf.FKConstraints)
 	if err != nil {
 		return fmt.Errorf("failed to create on-disk database: %s", err)
 	}
@@ -2890,11 +2891,13 @@ func (s *Store) logBackup() bool {
 }
 
 // createDBOnDisk opens an on-disk database file at the configured path
-// for the store. If database files already exists at that path, they are
-// removed first.
-func createDBOnDisk(path string, drv *sql.Driver, fkConstraints bool) (*sql.SwappableDB, error) {
-	if err := sql.RemoveFiles(path); err != nil {
-		return nil, err
+// for the store. If remove is true, any existing database files
+// at that path are removed first.
+func createDBOnDisk(path string, drv *sql.Driver, remove, fkConstraints bool) (*sql.SwappableDB, error) {
+	if remove {
+		if err := sql.RemoveFiles(path); err != nil {
+			return nil, err
+		}
 	}
 	return sql.OpenSwappable(path, drv, fkConstraints, true)
 }
