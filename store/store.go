@@ -2340,6 +2340,14 @@ func (s *Store) fsmSnapshot() (fSnap raft.FSMSnapshot, retErr error) {
 	}
 	defer s.snapshotCAS.End()
 
+	// We want to guarantee that any snapshot results in a fully-sync'ed to disk
+	// SQLite database. This allows us to assume that the database file on disk is
+	// always consistent once a snapshot has been taken successfully. However,
+	// we don't want to leave the database in FULL synchronous mode permanently,
+	// as write performance will suffer, so be sure to turn off again after the snapshot
+	s.db.SetSynchronousMode(sql.SynchronousFull)
+	defer s.db.SetSynchronousMode(sql.SynchronousOff)
+
 	startT := time.Now()
 	defer func() {
 		if retErr != nil {
@@ -2457,7 +2465,7 @@ func (s *Store) fsmSnapshot() (fSnap raft.FSMSnapshot, retErr error) {
 			}
 			stats.Get(snapshotCreateWALCompactDuration).(*expvar.Int).Set(time.Since(compactStartTime).Milliseconds())
 
-			// Now that we're got a (compacted) copy of the WAL we can truncate the
+			// Now that we've got a (compacted) copy of the WAL we can truncate the
 			// WAL itself. We use TRUNCATE mode so that the next WAL contains just
 			// changes since this snapshot.
 			walSzPre, err := fileSize(s.walPath)
