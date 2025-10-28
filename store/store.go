@@ -1294,7 +1294,6 @@ func (s *Store) Stats() (map[string]any, error) {
 		"apply_timeout":          s.ApplyTimeout.String(),
 		"heartbeat_timeout":      s.HeartbeatTimeout.String(),
 		"election_timeout":       s.ElectionTimeout.String(),
-		"clean_snapshot":         pathExists(s.cleanSnapshotPath),
 		"snapshot_threshold":     s.SnapshotThreshold,
 		"snapshot_interval":      s.SnapshotInterval.String(),
 		"snapshot_cas":           s.snapshotCAS.Stats(),
@@ -2390,7 +2389,7 @@ func (s *Store) fsmSnapshot() (fSnap raft.FSMSnapshot, retErr error) {
 	}
 	defer s.snapshotCAS.End()
 
-	// From now one, assume any snapshot is not successful.
+	// From now on, assume any snapshot is not successful.
 	if err := removeFile(s.cleanSnapshotPath); err != nil {
 		return nil, fmt.Errorf("failed to remove clean snapshot file: %w", err)
 	}
