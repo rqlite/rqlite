@@ -2556,24 +2556,7 @@ func (s *Store) fsmSnapshot() (fSnap raft.FSMSnapshot, retErr error) {
 	fs := FSMSnapshot{
 		FSMSnapshot: fsmSnapshot,
 		Finalizer: func() error {
-			tmpFP := s.cleanSnapshotPath + ".tmp"
-			defer os.Remove(tmpFP)
-			mt, err := s.db.DBLastModified()
-			if err != nil {
-				return fmt.Errorf("failed to get last modified time for snapshot finalizer: %s", err)
-			}
-			sz, err := s.db.FileSize()
-			if err != nil {
-				return fmt.Errorf("failed to get database file size for snapshot finalizer: %s", err)
-			}
-			fp := &FileFingerprint{
-				ModTime: mt,
-				Size:    sz,
-			}
-			if err := fp.WriteToFile(tmpFP); err != nil {
-				return fmt.Errorf("failed to write snapshot fingerprint to temp file: %s", err)
-			}
-			return os.Rename(tmpFP, s.cleanSnapshotPath)
+			return s.createSnapshotFingerprint()
 		},
 		OnFailure: func() {
 			s.logger.Printf("Persisting snapshot did not succeed, full snapshot needed")
@@ -2615,14 +2598,26 @@ func (s *Store) fsmRestore(rc io.ReadCloser) (retErr error) {
 	if err != nil {
 		return fmt.Errorf("error copying restore data: %v", err)
 	}
+	if err := tmpFile.Sync(); err != nil {
+		return fmt.Errorf("error syncing temporary file for restore operation: %v", err)
+	}
 	if err := tmpFile.Close(); err != nil {
 		return fmt.Errorf("error creating temporary file for restore operation: %v", err)
 	}
 
+	// Any existing SQLite file is about to be invalid, so mark that we can't
+	// fast-restart with it.
+	if err := removeFile(s.cleanSnapshotPath); err != nil {
+		return fmt.Errorf("failed to remove clean snapshot file: %w", err)
+	}
 	if err := s.db.Swap(tmpFile.Name(), s.dbConf.FKConstraints, true); err != nil {
 		return fmt.Errorf("error swapping database file: %v", err)
 	}
 	s.logger.Printf("successfully opened database at %s due to restore", s.db.Path())
+	// Installed SQLite database is safe for fast restarts again.
+	if err := s.createSnapshotFingerprint(); err != nil {
+		return fmt.Errorf("failed to create snapshot fingerprint post restore: %s", err)
+	}
 
 	// Take conservative approach and assume that everything has changed, so update
 	// the indexes. It is possible that dbAppliedIdx is now ahead of some other nodes'
@@ -2850,6 +2845,27 @@ func (s *Store) selfLeaderChange(leader bool) {
 			s.logger.Printf("node auto-restored successfully from %s", s.restorePath)
 		}
 	}
+}
+
+func (s *Store) createSnapshotFingerprint() error {
+	tmpFP := s.cleanSnapshotPath + ".tmp"
+	defer os.Remove(tmpFP)
+	mt, err := s.db.DBLastModified()
+	if err != nil {
+		return fmt.Errorf("failed to get last modified time for snapshot finalizer: %s", err)
+	}
+	sz, err := s.db.FileSize()
+	if err != nil {
+		return fmt.Errorf("failed to get database file size for snapshot finalizer: %s", err)
+	}
+	fp := &FileFingerprint{
+		ModTime: mt,
+		Size:    sz,
+	}
+	if err := fp.WriteToFile(tmpFP); err != nil {
+		return fmt.Errorf("failed to write snapshot fingerprint to temp file: %s", err)
+	}
+	return os.Rename(tmpFP, s.cleanSnapshotPath)
 }
 
 func (s *Store) installRestore() error {
