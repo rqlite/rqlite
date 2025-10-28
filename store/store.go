@@ -553,6 +553,13 @@ func (s *Store) Open() (retErr error) {
 	config := s.raftConfig()
 	config.LocalID = raft.ServerID(s.raftID)
 
+	rmDB := removeDBFiles
+	if pathExists(s.cleanSnapshotPath) {
+		s.logger.Printf("clean snapshot detected, skipping initial restore")
+		config.NoSnapshotRestoreOnStart = true
+		rmDB = false
+	}
+
 	// Upgrade any preexisting snapshots.
 	oldSnapshotDir := filepath.Join(s.raftDir, "snapshots")
 	if err := snapshot.Upgrade7To8(oldSnapshotDir, s.snapshotDir, s.logger); err != nil {
@@ -626,7 +633,7 @@ func (s *Store) Open() (retErr error) {
 			s.dbConf.Extensions, sql.CnkOnCloseModeDisabled)
 	}
 
-	s.db, err = createDBOnDisk(s.dbPath, s.dbDrv, removeDBFiles, s.dbConf.FKConstraints)
+	s.db, err = createDBOnDisk(s.dbPath, s.dbDrv, rmDB, s.dbConf.FKConstraints)
 	if err != nil {
 		return fmt.Errorf("failed to create on-disk database: %s", err)
 	}
@@ -812,7 +819,7 @@ func (s *Store) Close(wait bool) (retErr error) {
 
 	// Snapshot before closing to minimize startup time on next open.
 	if err := s.Snapshot(0); err != nil {
-		if err != raft.ErrNothingNewToSnapshot &&
+		if !strings.Contains(err.Error(), "nothing new to snapshot") &&
 			!strings.Contains(err.Error(), "wait until the configuration entry at") {
 			s.logger.Printf("pre-close snapshot failed: %s", err.Error())
 		}
