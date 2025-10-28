@@ -575,7 +575,7 @@ func (s *Store) Open() (retErr error) {
 		if !fp.Compare(mt, sz) {
 			return nil
 		}
-		s.logger.Printf("detected successful snapshot, skipping initial restore")
+		s.logger.Printf("detected successful prior snapshot operation, skipping initial restore")
 		config.NoSnapshotRestoreOnStart = true
 		rmDB = false
 		return nil
