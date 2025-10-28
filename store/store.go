@@ -137,7 +137,6 @@ const (
 	raftLogCacheSize          = 512
 	trailingScale             = 1.25
 	observerChanLen           = 50
-	removeDBFiles             = true
 
 	baseVacuumTimeKey   = "rqlite_base_vacuum"
 	lastVacuumTimeKey   = "rqlite_last_vacuum"
@@ -558,8 +557,9 @@ func (s *Store) Open() (retErr error) {
 	// without error and also check if the underlying DB file is unchanged since
 	// that snapshot. It shouldn't be changed -- that would require manual
 	// intervention which would potentially break rqlite -- but protect against
-	// it anyway.
-	rmDB := removeDBFiles
+	// it anyway. If it all looks good we can skip restoring the SQLite database
+	// from the Raft snapshot store because the contents are logically the same.
+	removeDBFiles := true
 	if err := func() error {
 		if !pathExists(s.cleanSnapshotPath) {
 			return nil
@@ -577,7 +577,7 @@ func (s *Store) Open() (retErr error) {
 		}
 		s.logger.Printf("detected successful prior snapshot operation, skipping initial restore")
 		config.NoSnapshotRestoreOnStart = true
-		rmDB = false
+		removeDBFiles = false
 		return nil
 	}(); err != nil {
 		return fmt.Errorf("failed to check for clean snapshot file: %s", err)
@@ -656,7 +656,7 @@ func (s *Store) Open() (retErr error) {
 			s.dbConf.Extensions, sql.CnkOnCloseModeDisabled)
 	}
 
-	s.db, err = createDBOnDisk(s.dbPath, s.dbDrv, rmDB, s.dbConf.FKConstraints)
+	s.db, err = createDBOnDisk(s.dbPath, s.dbDrv, removeDBFiles, s.dbConf.FKConstraints)
 	if err != nil {
 		return fmt.Errorf("failed to create on-disk database: %s", err)
 	}

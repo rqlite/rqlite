@@ -38,10 +38,22 @@ func Test_FileFingerprint_WriteAndRead(t *testing.T) {
 
 	// Should match original
 	if !loaded.ModTime.Equal(original.ModTime) {
-		t.Errorf("ModTime mismatch: got %v, want %v", loaded.ModTime, original.ModTime)
+		t.Fatalf("ModTime mismatch: got %v, want %v", loaded.ModTime, original.ModTime)
 	}
 	if loaded.Size != original.Size {
-		t.Errorf("Size mismatch: got %d, want %d", loaded.Size, original.Size)
+		t.Fatalf("Size mismatch: got %d, want %d", loaded.Size, original.Size)
+	}
+
+	if !loaded.Compare(original.ModTime, original.Size) {
+		t.Fatalf("Compare returned false for matching values")
+	}
+
+	if loaded.Compare(original.ModTime, original.Size+1) {
+		t.Fatalf("Compare returned true for non-matching size")
+	}
+
+	if loaded.Compare(original.ModTime.Add(time.Second), original.Size) {
+		t.Fatalf("Compare returned true for non-matching mod time")
 	}
 }
 
