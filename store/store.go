@@ -114,6 +114,8 @@ var (
 )
 
 const (
+	appliedIndexName          = "applied_index"
+	cleanSnapshotName         = "clean_snapshot"
 	snapshotsDirName          = "rsnapshots"
 	restoreScratchPattern     = "rqlite-restore-*"
 	bootScatchPattern         = "rqlite-boot-*"
@@ -288,12 +290,13 @@ const (
 
 // Store is a SQLite database, where all changes are made via Raft consensus.
 type Store struct {
-	open          *rsync.AtomicBool
-	raftDir       string
-	raftDBPath    string
-	snapshotDir   string
-	peersPath     string
-	peersInfoPath string
+	open              *rsync.AtomicBool
+	raftDir           string
+	raftDBPath        string
+	snapshotDir       string
+	peersPath         string
+	peersInfoPath     string
+	cleanSnapshotPath string
 
 	restorePath   string
 	restoreDoneCh chan struct{}
@@ -428,40 +431,41 @@ func New(c *Config, ly Layer) *Store {
 	}
 
 	return &Store{
-		open:            rsync.NewAtomicBool(),
-		ly:              ly,
-		raftDir:         c.Dir,
-		raftDBPath:      filepath.Join(c.Dir, raftDBPath),
-		snapshotDir:     filepath.Join(c.Dir, snapshotsDirName),
-		peersPath:       filepath.Join(c.Dir, peersPath),
-		peersInfoPath:   filepath.Join(c.Dir, peersInfoPath),
-		restoreDoneCh:   make(chan struct{}),
-		raftID:          c.ID,
-		dbConf:          c.DBConf,
-		dbPath:          dbPath,
-		walPath:         sql.WALPath(dbPath),
-		dbDir:           filepath.Dir(dbPath),
-		dbDrv:           sql.DefaultDriver(),
-		readyChans:      rsync.NewReadyChannels(),
-		leaderObservers: make([]chan<- bool, 0),
-		reqMarshaller:   command.NewRequestMarshaler(),
-		logger:          logger,
-		notifyingNodes:  make(map[string]*Server),
-		ApplyTimeout:    applyTimeout,
-		snapshotSync:    rsync.NewSyncChannels(),
-		snapshotCAS:     rsync.NewCheckAndSet(),
-		fsmIdx:          &atomic.Uint64{},
-		fsmTarget:       rsync.NewReadyTarget[uint64](),
-		fsmTerm:         &atomic.Uint64{},
-		fsmUpdateTime:   rsync.NewAtomicTime(),
-		appendedAtTime:  rsync.NewAtomicTime(),
-		strongReadTerm:  &atomic.Uint64{},
-		dbModifiedTime:  rsync.NewAtomicTime(),
-		dbAppliedIdx:    &atomic.Uint64{},
-		appliedTarget:   rsync.NewReadyTarget[uint64](),
-		numLRUpgraded:   &atomic.Uint64{},
-		numNoops:        &atomic.Uint64{},
-		numSnapshots:    &atomic.Uint64{},
+		open:              rsync.NewAtomicBool(),
+		ly:                ly,
+		raftDir:           c.Dir,
+		raftDBPath:        filepath.Join(c.Dir, raftDBPath),
+		snapshotDir:       filepath.Join(c.Dir, snapshotsDirName),
+		peersPath:         filepath.Join(c.Dir, peersPath),
+		peersInfoPath:     filepath.Join(c.Dir, peersInfoPath),
+		cleanSnapshotPath: filepath.Join(c.Dir, cleanSnapshotName),
+		restoreDoneCh:     make(chan struct{}),
+		raftID:            c.ID,
+		dbConf:            c.DBConf,
+		dbPath:            dbPath,
+		walPath:           sql.WALPath(dbPath),
+		dbDir:             filepath.Dir(dbPath),
+		dbDrv:             sql.DefaultDriver(),
+		readyChans:        rsync.NewReadyChannels(),
+		leaderObservers:   make([]chan<- bool, 0),
+		reqMarshaller:     command.NewRequestMarshaler(),
+		logger:            logger,
+		notifyingNodes:    make(map[string]*Server),
+		ApplyTimeout:      applyTimeout,
+		snapshotSync:      rsync.NewSyncChannels(),
+		snapshotCAS:       rsync.NewCheckAndSet(),
+		fsmIdx:            &atomic.Uint64{},
+		fsmTarget:         rsync.NewReadyTarget[uint64](),
+		fsmTerm:           &atomic.Uint64{},
+		fsmUpdateTime:     rsync.NewAtomicTime(),
+		appendedAtTime:    rsync.NewAtomicTime(),
+		strongReadTerm:    &atomic.Uint64{},
+		dbModifiedTime:    rsync.NewAtomicTime(),
+		dbAppliedIdx:      &atomic.Uint64{},
+		appliedTarget:     rsync.NewReadyTarget[uint64](),
+		numLRUpgraded:     &atomic.Uint64{},
+		numNoops:          &atomic.Uint64{},
+		numSnapshots:      &atomic.Uint64{},
 	}
 }
 
@@ -627,7 +631,7 @@ func (s *Store) Open() (retErr error) {
 	}
 
 	// Create the applied index file in the Raft directory
-	appliedIndexPath := filepath.Join(s.raftDir, "applied_index")
+	appliedIndexPath := filepath.Join(s.raftDir, appliedIndexName)
 	s.appliedIdxFile, err = index.NewIndexFile(appliedIndexPath)
 	if err != nil {
 		return fmt.Errorf("failed to create applied index file: %s", err)
@@ -1254,6 +1258,7 @@ func (s *Store) Stats() (map[string]any, error) {
 		"apply_timeout":          s.ApplyTimeout.String(),
 		"heartbeat_timeout":      s.HeartbeatTimeout.String(),
 		"election_timeout":       s.ElectionTimeout.String(),
+		"clean_snapshot":         pathExists(s.cleanSnapshotPath),
 		"snapshot_threshold":     s.SnapshotThreshold,
 		"snapshot_interval":      s.SnapshotInterval.String(),
 		"snapshot_cas":           s.snapshotCAS.Stats(),
@@ -2349,6 +2354,11 @@ func (s *Store) fsmSnapshot() (fSnap raft.FSMSnapshot, retErr error) {
 	}
 	defer s.snapshotCAS.End()
 
+	// From now one, assume any snapshot is not successful.
+	if err := removeFile(s.cleanSnapshotPath); err != nil {
+		return nil, fmt.Errorf("failed to remove clean snapshot file: %w", err)
+	}
+
 	// We want to guarantee that any snapshot results in a fully-sync'ed to disk
 	// SQLite database. This allows us to assume that the database file on disk is
 	// always consistent once a snapshot has been taken successfully. However,
@@ -2510,6 +2520,9 @@ func (s *Store) fsmSnapshot() (fSnap raft.FSMSnapshot, retErr error) {
 	stats.Get(snapshotCreateDuration).(*expvar.Int).Set(dur.Milliseconds())
 	fs := FSMSnapshot{
 		FSMSnapshot: fsmSnapshot,
+		Finalizer: func() error {
+			return touchFile(s.cleanSnapshotPath)
+		},
 		OnFailure: func() {
 			s.logger.Printf("Persisting snapshot did not succeed, full snapshot needed")
 			if err := s.snapshotStore.SetFullNeeded(); err != nil {
@@ -2909,6 +2922,21 @@ func prettyVoter(v bool) string {
 		return "voter"
 	}
 	return "non-voter"
+}
+
+func touchFile(path string) error {
+	fd, err := os.OpenFile(path, os.O_CREATE, 0644)
+	if err != nil {
+		return err
+	}
+	return fd.Close()
+}
+
+func removeFile(path string) error {
+	if !pathExists(path) {
+		return nil
+	}
+	return os.Remove(path)
 }
 
 // pathExists returns true if the given path exists.
