@@ -838,6 +838,13 @@ func Test_SingleNode_RETURNING(t *testing.T) {
 	if got, exp := res, `{"results":[{"last_insert_id":1,"rows_affected":1}]}`; got != exp {
 		t.Fatalf("wrong execute results, exp %s, got %s", exp, got)
 	}
+	res, err = node.ExecuteAssoc(`INSERT INTO foo(id, name) VALUES(99, "lisa")`)
+	if err != nil {
+		t.Fatalf(`queued write failed: %s`, err.Error())
+	}
+	if got, exp := res, `{"results":[{"last_insert_id":1,"rows_affected":1}]}`; got != exp {
+		t.Fatalf("wrong execute results, exp %s, got %s", exp, got)
+	}
 
 	// With RETURNING
 	res, err = node.Execute(`INSERT INTO foo(id, name) VALUES(2, "declan") RETURNING *`)
@@ -885,7 +892,6 @@ func Test_SingleNode_RETURNING(t *testing.T) {
 	if got, exp := res, `{"results":[{"types":{"id":"integer","name":"text"},"rows":[{"id":7,"name":"siobhan"}]}]}`; got != exp {
 		t.Fatalf("wrong execute results for RETURNING, exp %s, got %s", exp, got)
 	}
-
 	res, err = node.ExecuteAssoc(`UPDATE foo SET name = 'deirdre' WHERE name = 'siobhan' RETURNING name`)
 	if err != nil {
 		t.Fatalf(`write failed: %s`, err.Error())
