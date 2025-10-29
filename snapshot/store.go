@@ -216,6 +216,19 @@ func (s *Store) List() ([]*raft.SnapshotMeta, error) {
 	return snapMeta, nil
 }
 
+// LatestIndexTerm returns the index and term of the most recent snapshot in the Store.
+func (s *Store) LatestIndexTerm() (uint64, uint64, error) {
+	snapshots, err := s.getSnapshots()
+	if err != nil {
+		return 0, 0, err
+	}
+	if len(snapshots) == 0 {
+		return 0, 0, nil
+	}
+	latest := snapshots[len(snapshots)-1]
+	return latest.Index, latest.Term, nil
+}
+
 // Open opens the snapshot with the given ID. Close() must be called on the snapshot
 // when finished with it.
 func (s *Store) Open(id string) (_ *raft.SnapshotMeta, _ io.ReadCloser, retErr error) {

@@ -86,6 +86,17 @@ func Test_StoreEmpty(t *testing.T) {
 	if _, err := store.Stats(); err != nil {
 		t.Fatalf("Failed to get stats from empty store: %v", err)
 	}
+
+	li, tm, err := store.LatestIndexTerm()
+	if err != nil {
+		t.Fatalf("Failed to get latest index and term from empty store: %v", err)
+	}
+	if li != 0 {
+		t.Fatalf("Expected latest index to be 0, got %d", li)
+	}
+	if tm != 0 {
+		t.Fatalf("Expected latest term to be 0, got %d", tm)
+	}
 }
 
 func Test_StoreCreateCancel(t *testing.T) {
@@ -209,6 +220,17 @@ func Test_StoreList(t *testing.T) {
 	}
 	if snaps[0].ID != "2-1131-1704807720976" {
 		t.Errorf("Expected snapshot ID to be 2-1131-1704807720976, got %s", snaps[0].ID)
+	}
+
+	li, tm, err := store.LatestIndexTerm()
+	if err != nil {
+		t.Fatalf("Failed to get latest index and term from empty store: %v", err)
+	}
+	if li != 1131 {
+		t.Fatalf("Expected latest index to be 1131, got %d", li)
+	}
+	if tm != 2 {
+		t.Fatalf("Expected latest term to be 2, got %d", tm)
 	}
 
 	// Open a snapshot for reading and then attempt to create a Sink. It should fail due
