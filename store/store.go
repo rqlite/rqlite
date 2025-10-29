@@ -873,7 +873,7 @@ func (s *Store) Close(wait bool) (retErr error) {
 		return nil
 	}
 
-	if s.NoSnapshotOnClose {
+	if !s.NoSnapshotOnClose {
 		// Snapshot before closing to minimize startup time on next open.
 		if err := s.Snapshot(0); err != nil {
 			if !strings.Contains(err.Error(), "nothing new to snapshot") &&
