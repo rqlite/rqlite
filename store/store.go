@@ -553,6 +553,25 @@ func (s *Store) Open() (retErr error) {
 	config := s.raftConfig()
 	config.LocalID = raft.ServerID(s.raftID)
 
+	// Upgrade any preexisting snapshots.
+	oldSnapshotDir := filepath.Join(s.raftDir, "snapshots")
+	if err := snapshot.Upgrade7To8(oldSnapshotDir, s.snapshotDir, s.logger); err != nil {
+		return fmt.Errorf("failed to upgrade snapshots: %s", err)
+	}
+
+	// Create store for the Snapshots.
+	snapshotStore, err := snapshot.NewStore(filepath.Join(s.snapshotDir))
+	if err != nil {
+		return fmt.Errorf("failed to create snapshot store: %s", err)
+	}
+	snapshotStore.LogReaping = s.hcLogLevel() < hclog.Warn
+	s.snapshotStore = snapshotStore
+	snaps, err := s.snapshotStore.List()
+	if err != nil {
+		return fmt.Errorf("list snapshots: %s", err)
+	}
+	s.logger.Printf("%d preexisting snapshots present", len(snaps))
+
 	// Now, check if the most recent snapshot operation ran to completion
 	// without error and also check if the underlying DB file is unchanged since
 	// that snapshot. It shouldn't be changed -- that would require manual
@@ -590,29 +609,17 @@ func (s *Store) Open() (retErr error) {
 		keepCleanMarker = true
 		config.NoSnapshotRestoreOnStart = true
 		removeDBFiles = false
+		li, tm, err := snapshotStore.LatestIndexTerm()
+		if err != nil {
+			return fmt.Errorf("failed to retrieve latest snapshot index/term: %s", err)
+		}
+		s.fsmIdx.Store(li)
+		s.fsmTerm.Store(tm)
+		s.dbAppliedIdx.Store(li)
 		return nil
 	}(); err != nil {
 		return fmt.Errorf("failed to check for clean snapshot file: %s", err)
 	}
-
-	// Upgrade any preexisting snapshots.
-	oldSnapshotDir := filepath.Join(s.raftDir, "snapshots")
-	if err := snapshot.Upgrade7To8(oldSnapshotDir, s.snapshotDir, s.logger); err != nil {
-		return fmt.Errorf("failed to upgrade snapshots: %s", err)
-	}
-
-	// Create store for the Snapshots.
-	snapshotStore, err := snapshot.NewStore(filepath.Join(s.snapshotDir))
-	if err != nil {
-		return fmt.Errorf("failed to create snapshot store: %s", err)
-	}
-	snapshotStore.LogReaping = s.hcLogLevel() < hclog.Warn
-	s.snapshotStore = snapshotStore
-	snaps, err := s.snapshotStore.List()
-	if err != nil {
-		return fmt.Errorf("list snapshots: %s", err)
-	}
-	s.logger.Printf("%d preexisting snapshots present", len(snaps))
 
 	// Create the Raft log store and verify it.
 	raftDBSize, err := fileSizeExists(s.raftDBPath)

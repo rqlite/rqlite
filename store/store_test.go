@@ -258,10 +258,7 @@ func Test_SingleNodeDBAppliedIndex(t *testing.T) {
 		t.Fatalf("Error waiting for leader: %s", err)
 	}
 	testPoll(t, func() bool {
-		// Will be 5 because there will be a restore-from-snapshot
-		// and the snapshot has a last-index of 5 due to the strong
-		// query.
-		return s.DBAppliedIndex() == uint64(5)
+		return s.DBAppliedIndex() == uint64(4)
 	}, 100*time.Millisecond, 5*time.Second)
 }
 
