@@ -271,7 +271,7 @@ class TestSingleNodeReadyz(unittest.TestCase):
     self.assertEqual(False, n0.ready(sync=True))
     deprovision_node(n0)
 
-class TestEndToEndSnapshotRestoreSingle(unittest.TestCase):
+class TestEndToEndSnapshotNoRestoreSingle(unittest.TestCase):
   def setUp(self):
     self.n0 = Node(RQLITED_PATH, '0',  raft_snap_threshold=10, raft_snap_int="1s")
     self.n0.start()
@@ -303,14 +303,16 @@ class TestEndToEndSnapshotRestoreSingle(unittest.TestCase):
     j = self.n0.query('SELECT count(*) FROM foo', level='none')
     self.assertEqual(j, d_("{'results': [{'values': [[200]], 'types': ['integer'], 'columns': ['count(*)']}]}"))
 
-    # Restart node, and make sure it comes back with the correct state
+    # Restart node, and make sure it comes back with the correct state. It should skip restoring from
+    # snapshot as it can use the SQLite database directly. This is the "startup optimization".
     self.n0.stop()
     self.n0.start()
     self.n0.wait_for_leader()
     self.n0.wait_for_all_applied()
 
     self.assertEqual(self.n0.num_available_snapshots(), 1)
-    self.assertEqual(self.n0.expvar()['store']['num_restores'], 1)
+    self.assertEqual(self.n0.expvar()['store']['num_restores_start_skipped'], 1)
+    self.assertEqual(self.n0.expvar()['store']['num_restores_start'], 0)
     j = self.n0.query('SELECT count(*) FROM foo', level='none')
     self.assertEqual(j, d_("{'results': [{'values': [[200]], 'types': ['integer'], 'columns': ['count(*)']}]}"))
 
