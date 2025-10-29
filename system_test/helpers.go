@@ -111,6 +111,12 @@ func (n *Node) Execute(stmt string) (string, error) {
 	return n.ExecuteMulti([]string{stmt})
 }
 
+// Execute executes a single statement against the node, requesting associative
+// output.
+func (n *Node) ExecuteAssoc(stmt string) (string, error) {
+	return n.postExecuteAssoc(stmt, "text/plain")
+}
+
 // ExecuteRaw runs a single statement against the node, sending the statement
 // as a plain text string in the body of the request.
 func (n *Node) ExecuteRaw(stmt string) (string, error) {
@@ -518,6 +524,22 @@ func (n *Node) ConfirmRedirect(host string) bool {
 
 func (n *Node) postExecute(stmt, contentType string) (string, error) {
 	resp, err := http.Post("http://"+n.APIAddr+"/db/execute", contentType, strings.NewReader(stmt))
+	if err != nil {
+		return "", err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		return "", fmt.Errorf("execute endpoint returned: %s", resp.Status)
+	}
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return "", err
+	}
+	return string(body), nil
+}
+
+func (n *Node) postExecuteAssoc(stmt, contentType string) (string, error) {
+	resp, err := http.Post("http://"+n.APIAddr+"/db/execute?associative", contentType, strings.NewReader(stmt))
 	if err != nil {
 		return "", err
 	}
