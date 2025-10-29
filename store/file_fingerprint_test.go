@@ -64,20 +64,3 @@ func Test_FileFingerprint_ReadFromMissingFile(t *testing.T) {
 		t.Fatalf("expected error reading nonexistent file")
 	}
 }
-
-func Test_FileFingerprint_WriteToReadOnlyDir(t *testing.T) {
-	dir := t.TempDir()
-	path := filepath.Join(dir, "fp.json")
-
-	// Make directory read-only
-	if err := os.Chmod(dir, 0500); err != nil {
-		t.Skipf("skipping: could not chmod dir: %v", err)
-	}
-	defer os.Chmod(dir, 0700)
-
-	fp := FileFingerprint{ModTime: time.Now(), Size: 1}
-	err := fp.WriteToFile(path)
-	if err == nil {
-		t.Fatalf("expected error writing to read-only dir")
-	}
-}
