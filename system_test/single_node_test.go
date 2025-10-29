@@ -854,6 +854,13 @@ func Test_SingleNode_RETURNING(t *testing.T) {
 	if got, exp := res, `{"results":[{"columns":["id","name"],"types":["integer","text"],"values":[[2,"declan"]]}]}`; got != exp {
 		t.Fatalf("wrong execute results for RETURNING, exp %s, got %s", exp, got)
 	}
+	res, err = node.Execute(`INSERT INTO nonsense(id, name) VALUES(2, "declan") RETURNING *`)
+	if err != nil {
+		t.Fatalf(`write failed: %s`, err.Error())
+	}
+	if got, exp := res, `{"results":[{"error":"no such table: nonsense"}]}`; got != exp {
+		t.Fatalf("wrong execute results for RETURNING, exp %s, got %s", exp, got)
+	}
 
 	// INSERT more data
 	res, err = node.Execute(`INSERT INTO foo(id, name) VALUES(3, "aoife")`)
@@ -897,6 +904,13 @@ func Test_SingleNode_RETURNING(t *testing.T) {
 		t.Fatalf(`write failed: %s`, err.Error())
 	}
 	if got, exp := res, `{"results":[{"types":{"name":"text"},"rows":[{"name":"deirdre"}]}]}`; got != exp {
+		t.Fatalf("wrong execute results for RETURNING, exp %s, got %s", exp, got)
+	}
+	res, err = node.ExecuteAssoc(`UPDATE foo SET name = 'deirdre' WHERE name = 'no one' RETURNING name`)
+	if err != nil {
+		t.Fatalf(`write failed: %s`, err.Error())
+	}
+	if got, exp := res, `{"results":[{"types":{"name":"text"},"rows":[]}]}`; got != exp {
 		t.Fatalf("wrong execute results for RETURNING, exp %s, got %s", exp, got)
 	}
 }
