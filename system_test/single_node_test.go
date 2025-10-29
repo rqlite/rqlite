@@ -842,7 +842,7 @@ func Test_SingleNode_RETURNING(t *testing.T) {
 	if err != nil {
 		t.Fatalf(`queued write failed: %s`, err.Error())
 	}
-	if got, exp := res, `{"results":[{"last_insert_id":1,"rows_affected":1}]}`; got != exp {
+	if got, exp := res, `{"results":[{"last_insert_id":99,"rows_affected":1,"rows":null}]}`; got != exp {
 		t.Fatalf("wrong execute results, exp %s, got %s", exp, got)
 	}
 
