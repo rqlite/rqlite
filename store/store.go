@@ -166,6 +166,8 @@ const (
 	numLoads                          = "num_loads"
 	numRestores                       = "num_restores"
 	numRestoresFailed                 = "num_restores_failed"
+	numRestoresStart                  = "num_restores_start"
+	numRestoresStartSkipped           = "num_restores_start_skipped"
 	numAutoRestores                   = "num_auto_restores"
 	numAutoRestoresSkipped            = "num_auto_restores_skipped"
 	numAutoRestoresFailed             = "num_auto_restores_failed"
@@ -230,6 +232,8 @@ func ResetStats() {
 	stats.Add(numLoads, 0)
 	stats.Add(numRestores, 0)
 	stats.Add(numRestoresFailed, 0)
+	stats.Add(numRestoresStart, 0)
+	stats.Add(numRestoresStartSkipped, 0)
 	stats.Add(numRecoveries, 0)
 	stats.Add(numProviderChecks, 0)
 	stats.Add(numProviderProvides, 0)
@@ -606,8 +610,8 @@ func (s *Store) Open() (retErr error) {
 			return nil
 		}
 		s.logger.Printf("detected successful prior snapshot operation, skipping initial restore")
-		keepCleanMarker = true
 		config.NoSnapshotRestoreOnStart = true
+		keepCleanMarker = true
 		removeDBFiles = false
 		li, tm, err := snapshotStore.LatestIndexTerm()
 		if err != nil {
@@ -619,6 +623,11 @@ func (s *Store) Open() (retErr error) {
 		return nil
 	}(); err != nil {
 		return fmt.Errorf("failed to check for clean snapshot file: %s", err)
+	}
+	if config.NoSnapshotRestoreOnStart {
+		stats.Add(numRestoresStartSkipped, 1)
+	} else {
+		stats.Add(numRestoresStart, 1)
 	}
 
 	// Create the Raft log store and verify it.
