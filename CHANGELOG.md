@@ -1,3 +1,7 @@
+## v9.2.0 (unreleased)
+### New features
+- [PR #2373](https://github.com/rqlite/rqlite/pull/2373): Support Associative form on Execute endpoint, fixes issue [#2372](https://github.com/rqlite/rqlite/issues/2372).
+
 ## v9.1.3 (October 21st 2025)
 ### Implementation changes and bug fixes
 - [PR #2352](https://github.com/rqlite/rqlite/pull/2352): Add support for storing uint64 values directly on disk.
