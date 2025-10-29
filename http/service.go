@@ -1301,6 +1301,8 @@ func (s *Service) queuedExecute(w http.ResponseWriter, r *http.Request, qp Query
 // execute handles queries that modify the database.
 func (s *Service) execute(w http.ResponseWriter, r *http.Request, qp QueryParams) {
 	resp := NewResponse()
+	resp.Results.AssociativeJSON = qp.Associative()
+	resp.Results.BlobsAsArrays = qp.BlobArray()
 
 	var stmts []*proto.Statement
 	var err error
