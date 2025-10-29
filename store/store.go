@@ -654,7 +654,7 @@ func (s *Store) Open() (retErr error) {
 
 		// Recovering a node invalidates any existing SQLite file.
 		if err := removeFile(s.cleanSnapshotPath); err != nil {
-			return nil, fmt.Errorf("failed to remove clean snapshot file during RecoverNode: %w", err)
+			return fmt.Errorf("failed to remove clean snapshot file during RecoverNode: %w", err)
 		}
 		if err = RecoverNode(s.raftDir, s.dbConf.Extensions, s.logger, s.raftLog,
 			s.boltStore, s.snapshotStore, s.raftTn, config); err != nil {
