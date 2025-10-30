@@ -693,15 +693,13 @@ func Test_OpenStoreCloseSingleNode(t *testing.T) {
 		`CREATE TABLE foo (id INTEGER NOT NULL PRIMARY KEY, name TEXT)`,
 		`INSERT INTO foo(id, name) VALUES(1, "fiona")`,
 	}, false, false)
-	_, _, err := s.Execute(er)
+	_, idx, err := s.Execute(er)
 	if err != nil {
 		t.Fatalf("failed to execute on single node: %s", err.Error())
 	}
-
-	fsmIdx, err := s.WaitForAppliedFSM(5 * time.Second)
-	if err != nil {
-		t.Fatalf("failed to wait for fsmIndex: %s", err.Error())
-	}
+	testPoll(t, func() bool {
+		return idx <= s.DBAppliedIndex()
+	}, 100*time.Millisecond, 5*time.Second)
 
 	if err := s.Close(true); err != nil {
 		t.Fatalf("failed to close single-node store: %s", err.Error())
@@ -718,23 +716,17 @@ func Test_OpenStoreCloseSingleNode(t *testing.T) {
 		t.Fatalf("Error waiting for leader: %s", err)
 	}
 
-	// Wait until the log entries have been re-applied after start-up.
-	if _, err := s.WaitForFSMIndex(fsmIdx, 5*time.Second); err != nil {
-		t.Fatalf("error waiting for follower to apply index: %s:", err.Error())
-	}
-
 	qr := queryRequestFromString("SELECT * FROM foo", false, false)
 	qr.Level = proto.ConsistencyLevel_NONE
-	r, _, _, err := s.Query(qr)
-	if err != nil {
-		t.Fatalf("failed to query single node: %s", err.Error())
-	}
-	if exp, got := `["id","name"]`, asJSON(r[0].Columns); exp != got {
-		t.Fatalf("unexpected results for query\nexp: %s\ngot: %s", exp, got)
-	}
-	if exp, got := `[[1,"fiona"]]`, asJSON(r[0].Values); exp != got {
-		t.Fatalf("unexpected results for query\nexp: %s\ngot: %s", exp, got)
-	}
+	testPoll(t, func() bool {
+		r, _, _, err := s.Query(qr)
+		if err != nil {
+			t.Logf("failed to query single node: %s", err.Error())
+			return false
+		}
+		return asJSON(r[0].Columns) == `["id","name"]` && asJSON(r[0].Values) == `[[1,"fiona"]]`
+	}, 100*time.Millisecond, 5*time.Second)
+
 	if err := s.Close(true); err != nil {
 		t.Fatalf("failed to close single-node store: %s", err.Error())
 	}
@@ -1563,15 +1555,13 @@ func Test_SingleNodeExecuteQueryFreshness(t *testing.T) {
 		`CREATE TABLE foo (id INTEGER NOT NULL PRIMARY KEY, name TEXT)`,
 		`INSERT INTO foo(id, name) VALUES(1, "fiona")`,
 	}, false, false)
-	_, _, err := s0.Execute(er)
+	_, idx, err := s0.Execute(er)
 	if err != nil {
 		t.Fatalf("failed to execute on single node: %s", err.Error())
 	}
-
-	_, err = s0.WaitForAppliedFSM(5 * time.Second)
-	if err != nil {
-		t.Fatalf("failed to wait for fsmIndex: %s", err.Error())
-	}
+	testPoll(t, func() bool {
+		return idx <= s0.DBAppliedIndex()
+	}, 100*time.Millisecond, 5*time.Second)
 
 	qr := queryRequestFromString("SELECT * FROM foo", false, false)
 	qr.Level = proto.ConsistencyLevel_NONE

@@ -231,13 +231,14 @@ func Test_MultiNodeSimple(t *testing.T) {
 		`CREATE TABLE foo (id INTEGER NOT NULL PRIMARY KEY, name TEXT)`,
 		`INSERT INTO foo(id, name) VALUES(1, "fiona")`,
 	}, false, false)
-	_, _, err := s0.Execute(er)
+	_, idx, err := s0.Execute(er)
 	if err != nil {
 		t.Fatalf("failed to execute on single node: %s", err.Error())
 	}
-	if _, err := s0.WaitForAppliedFSM(5 * time.Second); err != nil {
-		t.Fatalf("failed to wait for FSM to apply on leader")
-	}
+	testPoll(t, func() bool {
+		return idx <= s0.DBAppliedIndex()
+	}, 100*time.Millisecond, 5*time.Second)
+
 	testPoll(t, func() bool {
 		return s0.DBAppliedIndex() == s1.DBAppliedIndex()
 	}, 250*time.Millisecond, 3*time.Second)
@@ -614,13 +615,14 @@ func Test_MultiNodeDBAppliedIndex(t *testing.T) {
 		`INSERT INTO foo(id, name) VALUES(2, "fiona")`,
 		`INSERT INTO foo(id, name) VALUES(3, "fiona")`,
 	}, false, false)
-	_, _, err = s0.Execute(er)
+	_, idx, err := s0.Execute(er)
 	if err != nil {
 		t.Fatalf("failed to execute on single node: %s", err.Error())
 	}
-	if _, err := s0.WaitForAppliedFSM(5 * time.Second); err != nil {
-		t.Fatalf("failed to wait for FSM to apply on leader")
-	}
+	testPoll(t, func() bool {
+		return idx <= s0.DBAppliedIndex()
+	}, 100*time.Millisecond, 5*time.Second)
+
 	testPoll(t, func() bool {
 		return s0.DBAppliedIndex() == s1.DBAppliedIndex()
 	}, 250*time.Millisecond, 3*time.Second)
@@ -673,13 +675,13 @@ func Test_MultiNodeDBAppliedIndex(t *testing.T) {
 	er = executeRequestFromStrings([]string{
 		`INSERT INTO foo(id, name) VALUES(4, "fiona")`,
 	}, false, false)
-	_, _, err = s0.Execute(er)
+	_, idx, err = s0.Execute(er)
 	if err != nil {
 		t.Fatalf("failed to execute on single node: %s", err.Error())
 	}
-	if _, err := s0.WaitForAppliedFSM(5 * time.Second); err != nil {
-		t.Fatalf("failed to wait for FSM to apply on leader")
-	}
+	testPoll(t, func() bool {
+		return idx <= s0.DBAppliedIndex()
+	}, 100*time.Millisecond, 5*time.Second)
 
 	testPoll(t, func() bool {
 		i := s0.DBAppliedIndex()
@@ -1197,14 +1199,13 @@ func Test_MultiNodeExecuteQuery(t *testing.T) {
 		`CREATE TABLE foo (id INTEGER NOT NULL PRIMARY KEY, name TEXT)`,
 		`INSERT INTO foo(id, name) VALUES(1, "fiona")`,
 	}, false, false)
-	_, _, err := s0.Execute(er)
+	_, idx, err := s0.Execute(er)
 	if err != nil {
 		t.Fatalf("failed to execute on single node: %s", err.Error())
 	}
-	s0FsmIdx, err := s0.WaitForAppliedFSM(5 * time.Second)
-	if err != nil {
-		t.Fatalf("failed to wait for fsmIndex: %s", err.Error())
-	}
+	testPoll(t, func() bool {
+		return idx <= s0.DBAppliedIndex()
+	}, 100*time.Millisecond, 5*time.Second)
 
 	qr := queryRequestFromString("SELECT * FROM foo", false, false)
 	qr.Level = proto.ConsistencyLevel_NONE
@@ -1221,9 +1222,9 @@ func Test_MultiNodeExecuteQuery(t *testing.T) {
 
 	// Wait until the log entries have been applied to the voting follower,
 	// and then query.
-	if _, err := s1.WaitForFSMIndex(s0FsmIdx, 5*time.Second); err != nil {
-		t.Fatalf("error waiting for follower to apply index: %s:", err.Error())
-	}
+	testPoll(t, func() bool {
+		return idx <= s1.DBAppliedIndex()
+	}, 100*time.Millisecond, 5*time.Second)
 
 	qr.Level = proto.ConsistencyLevel_WEAK
 	_, _, _, err = s1.Query(qr)

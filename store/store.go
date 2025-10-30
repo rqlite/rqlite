@@ -847,15 +847,6 @@ func (s *Store) Close(wait bool) (retErr error) {
 	return nil
 }
 
-// WaitForAppliedFSM waits until the log Raft considers Applied (sent
-// to the FSM) has actually been applied to the underlying state machine.
-func (s *Store) WaitForAppliedFSM(timeout time.Duration) (uint64, error) {
-	if timeout == 0 {
-		return 0, nil
-	}
-	return s.WaitForFSMIndex(s.raft.AppliedIndex(), timeout)
-}
-
 // WaitForFSMIndex blocks until a given log index has been applied to our
 // state machine or the timeout expires.
 func (s *Store) WaitForFSMIndex(idx uint64, timeout time.Duration) (uint64, error) {
