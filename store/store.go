@@ -384,7 +384,6 @@ type Store struct {
 	bootstrapped    bool
 	notifyingNodes  map[string]*Server
 
-	NoSnapshotOnClose        bool
 	ShutdownOnRemove         bool
 	SnapshotThreshold        uint64
 	SnapshotThresholdWALSize uint64
@@ -873,17 +872,15 @@ func (s *Store) Close(wait bool) (retErr error) {
 		return nil
 	}
 
-	if !s.NoSnapshotOnClose {
-		// Snapshot before closing to minimize startup time on next open.
-		startT := time.Now()
-		if err := s.Snapshot(0); err != nil {
-			if !strings.Contains(err.Error(), "nothing new to snapshot") &&
-				!strings.Contains(err.Error(), "wait until the configuration entry at") {
-				s.logger.Printf("pre-close snapshot failed: %s", err.Error())
-			}
+	// Snapshot before closing to minimize startup time on next open.
+	startT := time.Now()
+	if err := s.Snapshot(0); err != nil {
+		if !strings.Contains(err.Error(), "nothing new to snapshot") &&
+			!strings.Contains(err.Error(), "wait until the configuration entry at") {
+			s.logger.Printf("pre-close snapshot failed: %s", err.Error())
 		}
-		s.logger.Println("snapshot-on-close took ", time.Since(startT))
 	}
+	s.logger.Println("snapshot-on-close took ", time.Since(startT))
 
 	if err := s.snapshotCAS.BeginWithRetry("close", 10*time.Millisecond, 10*time.Second); err != nil {
 		return err
