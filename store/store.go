@@ -847,35 +847,11 @@ func (s *Store) Close(wait bool) (retErr error) {
 	return nil
 }
 
-// WaitForFSMIndex blocks until a given log index has been applied to our
-// state machine or the timeout expires.
-func (s *Store) WaitForFSMIndex(idx uint64, timeout time.Duration) (uint64, error) {
-	ch := s.fsmTarget.Subscribe(idx)
-	select {
-	case <-ch:
-		return s.fsmIdx.Load(), nil
-	case <-time.After(timeout):
-		return 0, fmt.Errorf("index %d: %w", idx, ErrWaitForFSMTimeout)
-	}
-}
-
 // Barrier blocks until all preceding operations have been applied to the database.
 // Must be called on the Leader or an error will be returned.
 func (s *Store) Barrier() error {
 	f := s.raft.Barrier(s.ApplyTimeout)
 	return f.Error()
-}
-
-// WaitForAppliedIndex blocks until a given log index has been applied,
-// or the timeout expires.
-func (s *Store) WaitForAppliedIndex(idx uint64, timeout time.Duration) error {
-	ch := s.appliedTarget.Subscribe(idx)
-	select {
-	case <-ch:
-		return nil
-	case <-time.After(timeout):
-		return fmt.Errorf("timeout waiting for index %d to be applied", idx)
-	}
 }
 
 // WaitForCommitIndex blocks until the local Raft commit index is equal to
@@ -2204,10 +2180,15 @@ func (s *Store) waitForLinearizableRead(currReadTerm uint64, linearizableTimeout
 	if lt == 0 {
 		lt = linearizableTimeout
 	}
-	if _, err := s.WaitForFSMIndex(readIndex, lt); err != nil {
-		return err
+
+	// Now, wait for it.
+	ch := s.fsmTarget.Subscribe(readIndex)
+	select {
+	case <-ch:
+		return nil
+	case <-time.After(lt):
+		return fmt.Errorf("index %d: %w", readIndex, ErrWaitForFSMTimeout)
 	}
-	return nil
 }
 
 func (s *Store) isStaleRead(freshness int64, strict bool) bool {

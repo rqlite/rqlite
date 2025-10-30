@@ -1250,9 +1250,9 @@ func Test_MultiNodeExecuteQuery(t *testing.T) {
 
 	// Wait until the 3 log entries have been applied to the non-voting follower,
 	// and then query.
-	if err := s2.WaitForAppliedIndex(3, 5*time.Second); err != nil {
-		t.Fatalf("error waiting for follower to apply index: %s:", err.Error())
-	}
+	testPoll(t, func() bool {
+		return 3 <= s2.DBAppliedIndex()
+	}, 100*time.Millisecond, 5*time.Second)
 
 	qr.Level = proto.ConsistencyLevel_WEAK
 	_, _, _, err = s1.Query(qr)
@@ -1327,9 +1327,9 @@ func Test_MultiNodeExecuteQueryFreshness(t *testing.T) {
 
 	// Wait until the 3 log entries have been applied to the follower,
 	// and then query.
-	if err := s1.WaitForAppliedIndex(3, 5*time.Second); err != nil {
-		t.Fatalf("error waiting for follower to apply index: %s:", err.Error())
-	}
+	testPoll(t, func() bool {
+		return 3 <= s1.DBAppliedIndex()
+	}, 100*time.Millisecond, 5*time.Second)
 
 	// "Weak" consistency queries with 1 nanosecond freshness should pass, because freshness
 	// is ignored in this case.

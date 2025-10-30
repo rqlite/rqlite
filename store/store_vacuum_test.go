@@ -282,7 +282,7 @@ func Test_SingleNodeExplicitVacuumOK_Stress(t *testing.T) {
 		qr := queryRequestFromString("SELECT COUNT(*) FROM foo", false, true)
 		qr.Level = proto.ConsistencyLevel_STRONG
 		r, _, _, err := s.Query(qr)
-		return err != nil && asJSON(r) == `[{"columns":["COUNT(*)"],"types":["integer"],"values":[[2500]]}]`
+		return err == nil && asJSON(r) == `[{"columns":["COUNT(*)"],"types":["integer"],"values":[[2500]]}]`
 	}
 
 	if err := s.Open(); err != nil {
