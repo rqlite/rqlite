@@ -140,13 +140,13 @@ func Test_SingleNodeProvideLastIndex(t *testing.T) {
 		`CREATE TABLE foo (id INTEGER NOT NULL PRIMARY KEY, name TEXT)`,
 		`INSERT INTO foo(id, name) VALUES(1, "fiona")`,
 	}, false, false)
-	_, _, err = s.Execute(er)
+	_, idx, err := s.Execute(er)
 	if err != nil {
 		t.Fatalf("failed to execute on single node: %s", err.Error())
 	}
-	if _, err := s.WaitForAppliedFSM(2 * time.Second); err != nil {
-		t.Fatalf("failed to wait for FSM to apply")
-	}
+	testPoll(t, func() bool {
+		return idx <= s.DBAppliedIndex()
+	}, 100*time.Millisecond, 5*time.Second)
 
 	newLI, err := provider.LastIndex()
 	if err != nil {
@@ -164,9 +164,7 @@ func Test_SingleNodeProvideLastIndex(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to query leader node: %s", err.Error())
 	}
-	if _, err := s.WaitForAppliedFSM(2 * time.Second); err != nil {
-		t.Fatalf("failed to wait for FSM to apply")
-	}
+
 	newLI, err = provider.LastIndex()
 	if err != nil {
 		t.Fatalf("failed to get last index: %s", err.Error())
@@ -210,13 +208,14 @@ func Test_SingleNodeProvideLastIndex(t *testing.T) {
 	er = executeRequestFromStrings([]string{
 		`INSERT INTO foo(id, name) VALUES(2, "fiona")`,
 	}, false, false)
-	_, _, err = s.Execute(er)
+	_, idx, err = s.Execute(er)
 	if err != nil {
 		t.Fatalf("failed to execute on single node: %s", err.Error())
 	}
-	if _, err := s.WaitForAppliedFSM(2 * time.Second); err != nil {
-		t.Fatalf("failed to wait for FSM to apply")
-	}
+	testPoll(t, func() bool {
+		return idx <= s.DBAppliedIndex()
+	}, 100*time.Millisecond, 5*time.Second)
+
 	newLI, err = provider.LastIndex()
 	if err != nil {
 		t.Fatalf("failed to get last index: %s", err.Error())
@@ -246,16 +245,18 @@ func Test_SingleNodeProvideLastIndex_Restart(t *testing.T) {
 	tmpFile := mustCreateTempFile()
 	defer os.Remove(tmpFile)
 	provider := NewProvider(s, false, false)
+
 	er := executeRequestFromStrings([]string{
 		`CREATE TABLE foo (id INTEGER NOT NULL PRIMARY KEY, name TEXT)`,
 		`INSERT INTO foo(id, name) VALUES(1, "fiona")`,
 	}, false, false)
-	if _, _, err := s.Execute(er); err != nil {
+	_, idx, err := s.Execute(er)
+	if err != nil {
 		t.Fatalf("failed to execute on single node: %s", err.Error())
 	}
-	if _, err := s.WaitForAppliedFSM(2 * time.Second); err != nil {
-		t.Fatalf("failed to wait for FSM to apply")
-	}
+	testPoll(t, func() bool {
+		return idx <= s.DBAppliedIndex()
+	}, 100*time.Millisecond, 5*time.Second)
 
 	lm, err := provider.LastIndex()
 	if err != nil {

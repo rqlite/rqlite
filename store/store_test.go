@@ -361,70 +361,6 @@ func Test_SingleNode_WaitForCommitIndex(t *testing.T) {
 	}
 }
 
-func Test_SingleNode_WaitForAppliedIndex(t *testing.T) {
-	s, ln := mustNewStore(t)
-	defer ln.Close()
-
-	if err := s.Open(); err != nil {
-		t.Fatalf("failed to open single-node store: %s", err.Error())
-	}
-	defer s.Close(true)
-	if err := s.Bootstrap(NewServer(s.ID(), s.Addr(), true)); err != nil {
-		t.Fatalf("failed to bootstrap single-node store: %s", err.Error())
-	}
-	if _, err := s.WaitForLeader(10 * time.Second); err != nil {
-		t.Fatalf("Error waiting for leader: %s", err)
-	}
-	er := executeRequestFromStrings([]string{
-		`CREATE TABLE foo (id INTEGER NOT NULL PRIMARY KEY, name TEXT)`,
-	}, false, false)
-	_, _, err := s.Execute(er)
-	if err != nil {
-		t.Fatalf("failed to execute on single node: %s", err.Error())
-	}
-
-	// There should be at least 1 entry applied to the FSM
-	if err := s.WaitForAppliedIndex(1, 100*time.Second); err != nil {
-		t.Fatalf("failed to wait for commit index: %s", err.Error())
-	}
-	// It should timeout waiting for the commit index to be way larger.
-	if err := s.WaitForAppliedIndex(1000, 100*time.Millisecond); err == nil {
-		t.Fatalf("should have timed out waiting for commit index")
-	}
-}
-
-func Test_SingleNode_WaitForFSMIndex(t *testing.T) {
-	s, ln := mustNewStore(t)
-	defer ln.Close()
-
-	if err := s.Open(); err != nil {
-		t.Fatalf("failed to open single-node store: %s", err.Error())
-	}
-	defer s.Close(true)
-	if err := s.Bootstrap(NewServer(s.ID(), s.Addr(), true)); err != nil {
-		t.Fatalf("failed to bootstrap single-node store: %s", err.Error())
-	}
-	if _, err := s.WaitForLeader(10 * time.Second); err != nil {
-		t.Fatalf("Error waiting for leader: %s", err)
-	}
-	er := executeRequestFromStrings([]string{
-		`CREATE TABLE foo (id INTEGER NOT NULL PRIMARY KEY, name TEXT)`,
-	}, false, false)
-	_, _, err := s.Execute(er)
-	if err != nil {
-		t.Fatalf("failed to execute on single node: %s", err.Error())
-	}
-
-	// There should be at least 1 entry applied to the FSM
-	if _, err := s.WaitForFSMIndex(1, 100*time.Second); err != nil {
-		t.Fatalf("failed to wait for commit index: %s", err.Error())
-	}
-	// It should timeout waiting for the commit index to be way larger.
-	if _, err := s.WaitForFSMIndex(1000, 100*time.Millisecond); err == nil {
-		t.Fatalf("should have timed out waiting for commit index")
-	}
-}
-
 func Test_SingleNodeTempFileCleanup(t *testing.T) {
 	s, ln := mustNewStore(t)
 	defer ln.Close()
@@ -707,15 +643,13 @@ func Test_OpenStoreCloseSingleNode(t *testing.T) {
 		`CREATE TABLE foo (id INTEGER NOT NULL PRIMARY KEY, name TEXT)`,
 		`INSERT INTO foo(id, name) VALUES(1, "fiona")`,
 	}, false, false)
-	_, _, err := s.Execute(er)
+	_, idx, err := s.Execute(er)
 	if err != nil {
 		t.Fatalf("failed to execute on single node: %s", err.Error())
 	}
-
-	fsmIdx, err := s.WaitForAppliedFSM(2 * time.Second)
-	if err != nil {
-		t.Fatalf("failed to wait for fsmIndex: %s", err.Error())
-	}
+	testPoll(t, func() bool {
+		return idx <= s.DBAppliedIndex()
+	}, 100*time.Millisecond, 5*time.Second)
 
 	if err := s.Close(true); err != nil {
 		t.Fatalf("failed to close single-node store: %s", err.Error())
@@ -732,23 +666,17 @@ func Test_OpenStoreCloseSingleNode(t *testing.T) {
 		t.Fatalf("Error waiting for leader: %s", err)
 	}
 
-	// Wait until the log entries have been re-applied after start-up.
-	if _, err := s.WaitForFSMIndex(fsmIdx, 5*time.Second); err != nil {
-		t.Fatalf("error waiting for follower to apply index: %s:", err.Error())
-	}
-
 	qr := queryRequestFromString("SELECT * FROM foo", false, false)
 	qr.Level = proto.ConsistencyLevel_NONE
-	r, _, _, err := s.Query(qr)
-	if err != nil {
-		t.Fatalf("failed to query single node: %s", err.Error())
-	}
-	if exp, got := `["id","name"]`, asJSON(r[0].Columns); exp != got {
-		t.Fatalf("unexpected results for query\nexp: %s\ngot: %s", exp, got)
-	}
-	if exp, got := `[[1,"fiona"]]`, asJSON(r[0].Values); exp != got {
-		t.Fatalf("unexpected results for query\nexp: %s\ngot: %s", exp, got)
-	}
+	testPoll(t, func() bool {
+		r, _, _, err := s.Query(qr)
+		if err != nil {
+			t.Logf("failed to query single node: %s", err.Error())
+			return false
+		}
+		return asJSON(r[0].Columns) == `["id","name"]` && asJSON(r[0].Values) == `[[1,"fiona"]]`
+	}, 100*time.Millisecond, 5*time.Second)
+
 	if err := s.Close(true); err != nil {
 		t.Fatalf("failed to close single-node store: %s", err.Error())
 	}
@@ -1577,15 +1505,13 @@ func Test_SingleNodeExecuteQueryFreshness(t *testing.T) {
 		`CREATE TABLE foo (id INTEGER NOT NULL PRIMARY KEY, name TEXT)`,
 		`INSERT INTO foo(id, name) VALUES(1, "fiona")`,
 	}, false, false)
-	_, _, err := s0.Execute(er)
+	_, idx, err := s0.Execute(er)
 	if err != nil {
 		t.Fatalf("failed to execute on single node: %s", err.Error())
 	}
-
-	_, err = s0.WaitForAppliedFSM(5 * time.Second)
-	if err != nil {
-		t.Fatalf("failed to wait for fsmIndex: %s", err.Error())
-	}
+	testPoll(t, func() bool {
+		return idx <= s0.DBAppliedIndex()
+	}, 100*time.Millisecond, 5*time.Second)
 
 	qr := queryRequestFromString("SELECT * FROM foo", false, false)
 	qr.Level = proto.ConsistencyLevel_NONE
@@ -2752,9 +2678,6 @@ func Test_SingleNode_SnapshotWithAutoOptimize_Stress(t *testing.T) {
 		go insertFn()
 	}
 	wg.Wait()
-	if s.WaitForAllApplied(5*time.Second) != nil {
-		t.Fatalf("failed to wait for all data to be applied")
-	}
 
 	// Query the data, make sure it looks good after all this.
 	qr := queryRequestFromString("SELECT COUNT(*) FROM foo", false, true)
@@ -2767,7 +2690,7 @@ func Test_SingleNode_SnapshotWithAutoOptimize_Stress(t *testing.T) {
 		t.Fatalf("unexpected results for query\nexp: %s\ngot: %s", exp, got)
 	}
 
-	// Restart the Store, make sure it still works.
+	// Restart the Store, make sure all still looks good.
 	if err := s.Close(true); err != nil {
 		t.Fatalf("failed to close store: %s", err.Error())
 	}

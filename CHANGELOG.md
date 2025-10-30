@@ -5,6 +5,9 @@
 ### Implementation changes and bug fixes
 - [PR #2371](https://github.com/rqlite/rqlite/pull/2371): Fast restarts after clean shutdowns, fixes issue [#1496](https://github.com/rqlite/rqlite/issues/1496).
 
+### Implementation changes and bug fixes
+- [PR #2374](https://github.com/rqlite/rqlite/pull/2374): Remove racy functions which interact with Raft log indexes.
+
 ## v9.1.3 (October 21st 2025)
 ### Implementation changes and bug fixes
 - [PR #2352](https://github.com/rqlite/rqlite/pull/2352): Add support for storing uint64 values directly on disk.
