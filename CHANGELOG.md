@@ -1,9 +1,10 @@
 ## v9.2.0 (unreleased)
 ### New features
-- [PR #2373](https://github.com/rqlite/rqlite/pull/2373): Support Associative form on Execute endpoint, fixes issue [#2372](https://github.com/rqlite/rqlite/issues/2372).
+- [PR #2373](https://github.com/rqlite/rqlite/pull/2373): Support _Associative_ response form on Execute endpoint, fixes issue [#2372](https://github.com/rqlite/rqlite/issues/2372).
 
 ### Implementation changes and bug fixes
 - [PR #2374](https://github.com/rqlite/rqlite/pull/2374): Remove racy functions which interact with Raft log indexes.
+- [PR #2371](https://github.com/rqlite/rqlite/pull/2371): Don't restore snaphot from Raft on startup if possible, fixes issue [#1496](https://github.com/rqlite/rqlite/issues/1496).
 
 ## v9.1.3 (October 21st 2025)
 ### Implementation changes and bug fixes

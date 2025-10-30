@@ -190,7 +190,6 @@ func Test_SingleNodeDBAppliedIndex(t *testing.T) {
 	if err := s.Open(); err != nil {
 		t.Fatalf("failed to open single-node store: %s", err.Error())
 	}
-	defer s.Close(true)
 	if err := s.Bootstrap(NewServer(s.ID(), s.Addr(), true)); err != nil {
 		t.Fatalf("failed to bootstrap single-node store: %s", err.Error())
 	}
@@ -223,7 +222,9 @@ func Test_SingleNodeDBAppliedIndex(t *testing.T) {
 		t.Fatalf("wrong DB applied index, got: %d, exp %d", got, exp)
 	}
 
-	// Do a strong query, and ensure DBAppliedIndex is updated.
+	// Do a strong query, and ensure DBAppliedIndex is not updated,
+	// since strong queries do not modify the database, though they
+	// do go through the Raft log.
 	qr := queryRequestFromString("SELECT * FROM foo", false, false)
 	qr.Level = proto.ConsistencyLevel_STRONG
 	_, _, _, err = s.Query(qr)
@@ -245,6 +246,19 @@ func Test_SingleNodeDBAppliedIndex(t *testing.T) {
 		t.Fatalf("wrong DB applied index, got: %d, exp %d", got, exp)
 	}
 
+	// Modify the database again. The Raft index will be 6 because of
+	// the strong query at index 5.
+	er = executeRequestFromStrings([]string{
+		`INSERT INTO foo(id, name) VALUES(1, "fiona")`,
+	}, false, false)
+	_, _, err = s.Execute(er)
+	if err != nil {
+		t.Fatalf("failed to execute on single node: %s", err.Error())
+	}
+	if got, exp := s.DBAppliedIndex(), uint64(6); exp != got {
+		t.Fatalf("wrong DB applied index, got: %d, exp %d", got, exp)
+	}
+
 	// Restart the node, and ensure DBAppliedIndex is set to the correct value.
 	// It can take a second or two for the apply loop to run.
 	if err := s.Close(true); err != nil {
@@ -258,8 +272,8 @@ func Test_SingleNodeDBAppliedIndex(t *testing.T) {
 		t.Fatalf("Error waiting for leader: %s", err)
 	}
 	testPoll(t, func() bool {
-		return s.DBAppliedIndex() == uint64(4)
-	}, 100*time.Millisecond, 5*time.Second)
+		return s.DBAppliedIndex() == uint64(6) // 6, same as above.
+	}, 100*time.Millisecond, 2*time.Second)
 }
 
 func Test_SingleNodeDBAppliedIndex_SnapshotRestart(t *testing.T) {

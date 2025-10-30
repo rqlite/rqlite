@@ -114,6 +114,8 @@ var (
 )
 
 const (
+	appliedIndexName          = "applied_index"
+	cleanSnapshotName         = "clean_snapshot"
 	snapshotsDirName          = "rsnapshots"
 	restoreScratchPattern     = "rqlite-restore-*"
 	bootScatchPattern         = "rqlite-boot-*"
@@ -164,6 +166,8 @@ const (
 	numLoads                          = "num_loads"
 	numRestores                       = "num_restores"
 	numRestoresFailed                 = "num_restores_failed"
+	numRestoresStart                  = "num_restores_start"
+	numRestoresStartSkipped           = "num_restores_start_skipped"
 	numAutoRestores                   = "num_auto_restores"
 	numAutoRestoresSkipped            = "num_auto_restores_skipped"
 	numAutoRestoresFailed             = "num_auto_restores_failed"
@@ -228,6 +232,8 @@ func ResetStats() {
 	stats.Add(numLoads, 0)
 	stats.Add(numRestores, 0)
 	stats.Add(numRestoresFailed, 0)
+	stats.Add(numRestoresStart, 0)
+	stats.Add(numRestoresStartSkipped, 0)
 	stats.Add(numRecoveries, 0)
 	stats.Add(numProviderChecks, 0)
 	stats.Add(numProviderProvides, 0)
@@ -288,12 +294,13 @@ const (
 
 // Store is a SQLite database, where all changes are made via Raft consensus.
 type Store struct {
-	open          *rsync.AtomicBool
-	raftDir       string
-	raftDBPath    string
-	snapshotDir   string
-	peersPath     string
-	peersInfoPath string
+	open              *rsync.AtomicBool
+	raftDir           string
+	raftDBPath        string
+	snapshotDir       string
+	peersPath         string
+	peersInfoPath     string
+	cleanSnapshotPath string
 
 	restorePath   string
 	restoreDoneCh chan struct{}
@@ -428,40 +435,41 @@ func New(c *Config, ly Layer) *Store {
 	}
 
 	return &Store{
-		open:            rsync.NewAtomicBool(),
-		ly:              ly,
-		raftDir:         c.Dir,
-		raftDBPath:      filepath.Join(c.Dir, raftDBPath),
-		snapshotDir:     filepath.Join(c.Dir, snapshotsDirName),
-		peersPath:       filepath.Join(c.Dir, peersPath),
-		peersInfoPath:   filepath.Join(c.Dir, peersInfoPath),
-		restoreDoneCh:   make(chan struct{}),
-		raftID:          c.ID,
-		dbConf:          c.DBConf,
-		dbPath:          dbPath,
-		walPath:         sql.WALPath(dbPath),
-		dbDir:           filepath.Dir(dbPath),
-		dbDrv:           sql.DefaultDriver(),
-		readyChans:      rsync.NewReadyChannels(),
-		leaderObservers: make([]chan<- bool, 0),
-		reqMarshaller:   command.NewRequestMarshaler(),
-		logger:          logger,
-		notifyingNodes:  make(map[string]*Server),
-		ApplyTimeout:    applyTimeout,
-		snapshotSync:    rsync.NewSyncChannels(),
-		snapshotCAS:     rsync.NewCheckAndSet(),
-		fsmIdx:          &atomic.Uint64{},
-		fsmTarget:       rsync.NewReadyTarget[uint64](),
-		fsmTerm:         &atomic.Uint64{},
-		fsmUpdateTime:   rsync.NewAtomicTime(),
-		appendedAtTime:  rsync.NewAtomicTime(),
-		strongReadTerm:  &atomic.Uint64{},
-		dbModifiedTime:  rsync.NewAtomicTime(),
-		dbAppliedIdx:    &atomic.Uint64{},
-		appliedTarget:   rsync.NewReadyTarget[uint64](),
-		numLRUpgraded:   &atomic.Uint64{},
-		numNoops:        &atomic.Uint64{},
-		numSnapshots:    &atomic.Uint64{},
+		open:              rsync.NewAtomicBool(),
+		ly:                ly,
+		raftDir:           c.Dir,
+		raftDBPath:        filepath.Join(c.Dir, raftDBPath),
+		snapshotDir:       filepath.Join(c.Dir, snapshotsDirName),
+		peersPath:         filepath.Join(c.Dir, peersPath),
+		peersInfoPath:     filepath.Join(c.Dir, peersInfoPath),
+		cleanSnapshotPath: filepath.Join(c.Dir, cleanSnapshotName),
+		restoreDoneCh:     make(chan struct{}),
+		raftID:            c.ID,
+		dbConf:            c.DBConf,
+		dbPath:            dbPath,
+		walPath:           sql.WALPath(dbPath),
+		dbDir:             filepath.Dir(dbPath),
+		dbDrv:             sql.DefaultDriver(),
+		readyChans:        rsync.NewReadyChannels(),
+		leaderObservers:   make([]chan<- bool, 0),
+		reqMarshaller:     command.NewRequestMarshaler(),
+		logger:            logger,
+		notifyingNodes:    make(map[string]*Server),
+		ApplyTimeout:      applyTimeout,
+		snapshotSync:      rsync.NewSyncChannels(),
+		snapshotCAS:       rsync.NewCheckAndSet(),
+		fsmIdx:            &atomic.Uint64{},
+		fsmTarget:         rsync.NewReadyTarget[uint64](),
+		fsmTerm:           &atomic.Uint64{},
+		fsmUpdateTime:     rsync.NewAtomicTime(),
+		appendedAtTime:    rsync.NewAtomicTime(),
+		strongReadTerm:    &atomic.Uint64{},
+		dbModifiedTime:    rsync.NewAtomicTime(),
+		dbAppliedIdx:      &atomic.Uint64{},
+		appliedTarget:     rsync.NewReadyTarget[uint64](),
+		numLRUpgraded:     &atomic.Uint64{},
+		numNoops:          &atomic.Uint64{},
+		numSnapshots:      &atomic.Uint64{},
 	}
 }
 
@@ -567,6 +575,56 @@ func (s *Store) Open() (retErr error) {
 	}
 	s.logger.Printf("%d preexisting snapshots present", len(snaps))
 
+	// Now, check if the most recent snapshot operation ran to completion
+	// without error and also check if the underlying DB file is unchanged since
+	// that snapshot. It shouldn't be changed -- that would require manual
+	// intervention which would potentially break rqlite -- but protect against
+	// it anyway. This could also happen in certain downgrade-then-upgrade-again
+	// scenarios. Anyway if it all looks good we can skip restoring the SQLite
+	// database from the Raft snapshot store because the contents are logically
+	// the same.
+	removeDBFiles := true
+	if err := func() error {
+		defer func() {
+			if removeDBFiles {
+				stats.Add(numRestoresStart, 1)
+				if err := removeFile(s.cleanSnapshotPath); err != nil {
+					s.logger.Printf("warning: failed to remove clean snapshot marker file: %s", err)
+				}
+			}
+		}()
+
+		if !pathExists(s.cleanSnapshotPath) {
+			return nil
+		}
+		fp := &FileFingerprint{}
+		if err := fp.ReadFromFile(s.cleanSnapshotPath); err != nil {
+			return nil
+		}
+		mt, sz, err := modTimeSize(s.dbPath)
+		if err != nil {
+			return nil
+		}
+		if !fp.Compare(mt, sz) {
+			return nil
+		}
+
+		s.logger.Printf("detected successful prior snapshot operation, skipping restore, using existing database file")
+		config.NoSnapshotRestoreOnStart = true
+		removeDBFiles = false
+		li, tm, err := snapshotStore.LatestIndexTerm()
+		if err != nil {
+			return fmt.Errorf("failed to retrieve latest snapshot index/term: %s", err)
+		}
+		s.fsmIdx.Store(li)
+		s.fsmTerm.Store(tm)
+		s.dbAppliedIdx.Store(li)
+		stats.Add(numRestoresStartSkipped, 1)
+		return nil
+	}(); err != nil {
+		return fmt.Errorf("failed to check for clean snapshot file: %s", err)
+	}
+
 	// Create the Raft log store and verify it.
 	raftDBSize, err := fileSizeExists(s.raftDBPath)
 	if err != nil {
@@ -604,6 +662,11 @@ func (s *Store) Open() (retErr error) {
 		if err != nil {
 			return fmt.Errorf("failed to read peers file: %s", err.Error())
 		}
+
+		// Recovering a node invalidates any existing SQLite file.
+		if err := removeFile(s.cleanSnapshotPath); err != nil {
+			return fmt.Errorf("failed to remove clean snapshot file during RecoverNode: %w", err)
+		}
 		if err = RecoverNode(s.raftDir, s.dbConf.Extensions, s.logger, s.raftLog,
 			s.boltStore, s.snapshotStore, s.raftTn, config); err != nil {
 			return fmt.Errorf("failed to recover node: %s", err.Error())
@@ -621,13 +684,13 @@ func (s *Store) Open() (retErr error) {
 			s.dbConf.Extensions, sql.CnkOnCloseModeDisabled)
 	}
 
-	s.db, err = createDBOnDisk(s.dbPath, s.dbDrv, s.dbConf.FKConstraints)
+	s.db, err = createDBOnDisk(s.dbPath, s.dbDrv, removeDBFiles, s.dbConf.FKConstraints)
 	if err != nil {
 		return fmt.Errorf("failed to create on-disk database: %s", err)
 	}
 
 	// Create the applied index file in the Raft directory
-	appliedIndexPath := filepath.Join(s.raftDir, "applied_index")
+	appliedIndexPath := filepath.Join(s.raftDir, appliedIndexName)
 	s.appliedIdxFile, err = index.NewIndexFile(appliedIndexPath)
 	if err != nil {
 		return fmt.Errorf("failed to create applied index file: %s", err)
@@ -804,6 +867,17 @@ func (s *Store) Close(wait bool) (retErr error) {
 		// Protect against closing already-closed resource, such as channels.
 		return nil
 	}
+
+	// Snapshot before closing to minimize startup time on next open.
+	startT := time.Now()
+	if err := s.Snapshot(0); err != nil {
+		if !strings.Contains(err.Error(), "nothing new to snapshot") &&
+			!strings.Contains(err.Error(), "wait until the configuration entry at") {
+			s.logger.Printf("pre-close snapshot failed: %s", err.Error())
+		}
+	}
+	s.logger.Println("snapshot-on-close took ", time.Since(startT))
+
 	if err := s.snapshotCAS.BeginWithRetry("close", 10*time.Millisecond, 10*time.Second); err != nil {
 		return err
 	}
@@ -864,7 +938,10 @@ func (s *Store) WaitForCommitIndex(idx uint64, timeout time.Duration) error {
 }
 
 // DBAppliedIndex returns the index of the last Raft log that changed the
-// underlying database. If the index is unknown then 0 is returned.
+// underlying database. This is usually the index of a log entry that
+// actually changed the database, but in the event of a snapshot restore
+// will be last index associated with the snapshot. If the index is unknown
+// then 0 is returned.
 func (s *Store) DBAppliedIndex() uint64 {
 	return s.dbAppliedIdx.Load()
 }
@@ -2307,6 +2384,25 @@ func (s *Store) fsmSnapshot() (fSnap raft.FSMSnapshot, retErr error) {
 	}
 	defer s.snapshotCAS.End()
 
+	// From now on, assume any snapshot is not successful.
+	if err := removeFile(s.cleanSnapshotPath); err != nil {
+		return nil, fmt.Errorf("failed to remove clean snapshot file: %w", err)
+	}
+
+	// We want to guarantee that any snapshot results in a fully-sync'ed to disk
+	// SQLite database. This allows us to assume that the database file on disk is
+	// always consistent once a snapshot has been taken successfully. However,
+	// we don't want to leave the database in FULL synchronous mode permanently,
+	// as write performance will suffer, so be sure to turn off again after the snapshot.
+	if err := s.db.SetSynchronousMode(sql.SynchronousFull); err != nil {
+		return nil, fmt.Errorf("failed to set synchronous mode to FULL for snapshot: %w", err)
+	}
+	defer func() {
+		if err := s.db.SetSynchronousMode(sql.SynchronousOff); err != nil {
+			s.logger.Fatalf("failed to set synchronous mode to OFF after snapshot: %s", err.Error())
+		}
+	}()
+
 	startT := time.Now()
 	defer func() {
 		if retErr != nil {
@@ -2424,7 +2520,7 @@ func (s *Store) fsmSnapshot() (fSnap raft.FSMSnapshot, retErr error) {
 			}
 			stats.Get(snapshotCreateWALCompactDuration).(*expvar.Int).Set(time.Since(compactStartTime).Milliseconds())
 
-			// Now that we're got a (compacted) copy of the WAL we can truncate the
+			// Now that we've got a (compacted) copy of the WAL we can truncate the
 			// WAL itself. We use TRUNCATE mode so that the next WAL contains just
 			// changes since this snapshot.
 			walSzPre, err := fileSize(s.walPath)
@@ -2454,6 +2550,9 @@ func (s *Store) fsmSnapshot() (fSnap raft.FSMSnapshot, retErr error) {
 	stats.Get(snapshotCreateDuration).(*expvar.Int).Set(dur.Milliseconds())
 	fs := FSMSnapshot{
 		FSMSnapshot: fsmSnapshot,
+		Finalizer: func() error {
+			return s.createSnapshotFingerprint()
+		},
 		OnFailure: func() {
 			s.logger.Printf("Persisting snapshot did not succeed, full snapshot needed")
 			if err := s.snapshotStore.SetFullNeeded(); err != nil {
@@ -2494,14 +2593,26 @@ func (s *Store) fsmRestore(rc io.ReadCloser) (retErr error) {
 	if err != nil {
 		return fmt.Errorf("error copying restore data: %v", err)
 	}
+	if err := tmpFile.Sync(); err != nil {
+		return fmt.Errorf("error syncing temporary file for restore operation: %v", err)
+	}
 	if err := tmpFile.Close(); err != nil {
 		return fmt.Errorf("error creating temporary file for restore operation: %v", err)
 	}
 
+	// Any existing SQLite file is about to be invalid, so mark that we can't
+	// fast-restart with it.
+	if err := removeFile(s.cleanSnapshotPath); err != nil {
+		return fmt.Errorf("failed to remove clean snapshot file: %w", err)
+	}
 	if err := s.db.Swap(tmpFile.Name(), s.dbConf.FKConstraints, true); err != nil {
 		return fmt.Errorf("error swapping database file: %v", err)
 	}
 	s.logger.Printf("successfully opened database at %s due to restore", s.db.Path())
+	// Installed SQLite database is safe for fast restarts again.
+	if err := s.createSnapshotFingerprint(); err != nil {
+		return fmt.Errorf("failed to create snapshot fingerprint post restore: %s", err)
+	}
 
 	// Take conservative approach and assume that everything has changed, so update
 	// the indexes. It is possible that dbAppliedIdx is now ahead of some other nodes'
@@ -2731,6 +2842,27 @@ func (s *Store) selfLeaderChange(leader bool) {
 	}
 }
 
+func (s *Store) createSnapshotFingerprint() error {
+	tmpFP := s.cleanSnapshotPath + ".tmp"
+	defer os.Remove(tmpFP)
+	mt, err := s.db.DBLastModified()
+	if err != nil {
+		return fmt.Errorf("failed to get last modified time for snapshot finalizer: %s", err)
+	}
+	sz, err := s.db.FileSize()
+	if err != nil {
+		return fmt.Errorf("failed to get database file size for snapshot finalizer: %s", err)
+	}
+	fp := &FileFingerprint{
+		ModTime: mt,
+		Size:    sz,
+	}
+	if err := fp.WriteToFile(tmpFP); err != nil {
+		return fmt.Errorf("failed to write snapshot fingerprint to temp file: %s", err)
+	}
+	return os.Rename(tmpFP, s.cleanSnapshotPath)
+}
+
 func (s *Store) installRestore() error {
 	f, err := os.Open(s.restorePath)
 	if err != nil {
@@ -2818,11 +2950,18 @@ func (s *Store) logBackup() bool {
 }
 
 // createDBOnDisk opens an on-disk database file at the configured path
-// for the store. If database files already exists at that path, they are
-// removed first.
-func createDBOnDisk(path string, drv *sql.Driver, fkConstraints bool) (*sql.SwappableDB, error) {
-	if err := sql.RemoveFiles(path); err != nil {
-		return nil, err
+// for the store. The WAL-specific files are always removed as there is
+// no guarantee they are consistent with the main database file. If remove
+// is true, all existing database files at that path are removed first.
+func createDBOnDisk(path string, drv *sql.Driver, remove, fkConstraints bool) (*sql.SwappableDB, error) {
+	if remove {
+		if err := sql.RemoveFiles(path); err != nil {
+			return nil, err
+		}
+	} else {
+		if err := sql.RemoveWALFiles(path); err != nil {
+			return nil, err
+		}
 	}
 	return sql.OpenSwappable(path, drv, fkConstraints, true)
 }
@@ -2853,6 +2992,14 @@ func prettyVoter(v bool) string {
 		return "voter"
 	}
 	return "non-voter"
+}
+
+// removeFile removes the file at the given path if it exists.
+func removeFile(path string) error {
+	if !pathExists(path) {
+		return nil
+	}
+	return os.Remove(path)
 }
 
 // pathExists returns true if the given path exists.
@@ -2914,6 +3061,15 @@ func dirSize(path string) (int64, error) {
 		return err
 	})
 	return size, err
+}
+
+// modTimeSize returns the modification time and size of the file at the given path.
+func modTimeSize(path string) (time.Time, int64, error) {
+	info, err := os.Stat(path)
+	if err != nil {
+		return time.Time{}, 0, err
+	}
+	return info.ModTime(), info.Size(), nil
 }
 
 func fullPretty(full bool) string {

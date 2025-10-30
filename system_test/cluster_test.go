@@ -1895,13 +1895,20 @@ func Test_MultiNodeClusterRecoverFull(t *testing.T) {
 	if _, err := node1.Execute(`INSERT INTO foo(id, name) VALUES(1, "fiona")`); err != nil {
 		t.Fatalf("failed to create table: %s", err.Error())
 	}
-	rows, err := node1.Query(`SELECT COUNT(*) FROM foo`)
-	if err != nil {
-		t.Fatalf("failed to query node: %s", err.Error())
-	}
-	if got, exp := rows, `{"results":[{"columns":["COUNT(*)"],"types":["integer"],"values":[[1]]}]}`; got != exp {
-		t.Fatalf("got incorrect results from node exp: %s got: %s", exp, got)
-	}
+
+	// Ensure every node has the same data. It can take a moment for replication to occur.
+	testPoll(t, func() (bool, error) {
+		for _, n := range []*Node{node1, node2, node3} {
+			rows, err := n.QueryNoneConsistency(`SELECT COUNT(*) FROM foo`)
+			if err != nil {
+				return false, fmt.Errorf("failed to query recovered node: %s", err.Error())
+			}
+			if got, exp := rows, `{"results":[{"columns":["COUNT(*)"],"types":["integer"],"values":[[1]]}]}`; got != exp {
+				return false, nil
+			}
+		}
+		return true, nil
+	}, 10*time.Millisecond, 2*time.Second)
 
 	// Shutdown all nodes
 	if err := node1.Close(true); err != nil {
@@ -1949,7 +1956,7 @@ func Test_MultiNodeClusterRecoverFull(t *testing.T) {
 		}
 	}
 
-	rows, err = node4.Query(`SELECT COUNT(*) FROM foo`)
+	rows, err := node4.Query(`SELECT COUNT(*) FROM foo`)
 	if err != nil {
 		t.Fatalf("failed to query recovered node: %s", err.Error())
 	}

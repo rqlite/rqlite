@@ -478,7 +478,8 @@ func (db *DB) LastModified() (time.Time, error) {
 	return walTime, nil
 }
 
-// DBLastModified returns the last modified time of the database file.
+// DBLastModified returns the last modified time of the main database
+// file.
 func (db *DB) DBLastModified() (time.Time, error) {
 	return lastModified(db.path)
 }
