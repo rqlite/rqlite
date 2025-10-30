@@ -859,15 +859,6 @@ func (s *Store) WaitForFSMIndex(idx uint64, timeout time.Duration) (uint64, erro
 	}
 }
 
-// WaitForAllApplied waits for all Raft log entries to be applied to the
-// underlying database.
-func (s *Store) WaitForAllApplied(timeout time.Duration) error {
-	if timeout == 0 {
-		return nil
-	}
-	return s.WaitForAppliedIndex(s.raft.LastIndex(), timeout)
-}
-
 // Barrier blocks until all preceding operations have been applied to the database.
 // Must be called on the Leader or an error will be returned.
 func (s *Store) Barrier() error {

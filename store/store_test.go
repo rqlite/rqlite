@@ -2728,9 +2728,6 @@ func Test_SingleNode_SnapshotWithAutoOptimize_Stress(t *testing.T) {
 		go insertFn()
 	}
 	wg.Wait()
-	if s.WaitForAllApplied(5*time.Second) != nil {
-		t.Fatalf("failed to wait for all data to be applied")
-	}
 
 	// Query the data, make sure it looks good after all this.
 	qr := queryRequestFromString("SELECT COUNT(*) FROM foo", false, true)
@@ -2743,7 +2740,7 @@ func Test_SingleNode_SnapshotWithAutoOptimize_Stress(t *testing.T) {
 		t.Fatalf("unexpected results for query\nexp: %s\ngot: %s", exp, got)
 	}
 
-	// Restart the Store, make sure it still works.
+	// Restart the Store, make sure all still looks good.
 	if err := s.Close(true); err != nil {
 		t.Fatalf("failed to close store: %s", err.Error())
 	}

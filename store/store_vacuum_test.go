@@ -278,16 +278,11 @@ func Test_SingleNodeExplicitVacuumOK_Stress(t *testing.T) {
 			t.Fatalf("failed to execute on single node: %s", err.Error())
 		}
 	}
-	doQuery := func() {
+	doQuery := func() bool {
 		qr := queryRequestFromString("SELECT COUNT(*) FROM foo", false, true)
 		qr.Level = proto.ConsistencyLevel_STRONG
 		r, _, _, err := s.Query(qr)
-		if err != nil {
-			t.Fatalf("failed to query single node: %s", err.Error())
-		}
-		if exp, got := `[{"columns":["COUNT(*)"],"types":["integer"],"values":[[2500]]}]`, asJSON(r); exp != got {
-			t.Fatalf("unexpected results for query\nexp: %s\ngot: %s", exp, got)
-		}
+		return err != nil && asJSON(r) == `[{"columns":["COUNT(*)"],"types":["integer"],"values":[[2500]]}]`
 	}
 
 	if err := s.Open(); err != nil {
@@ -331,14 +326,10 @@ func Test_SingleNodeExplicitVacuumOK_Stress(t *testing.T) {
 			time.Sleep(time.Second)
 		}
 	}()
-
 	wg.Wait()
-	if s.WaitForAllApplied(5*time.Second) != nil {
-		t.Fatalf("failed to wait for all data to be applied")
-	}
 
-	// Query the data, make sure it looks good after all this.
-	doQuery()
+	// Check query results
+	testPoll(t, doQuery, 100*time.Millisecond, 5*time.Second)
 
 	// Restart the Store, make sure it still works.
 	if err := s.Close(true); err != nil {
@@ -351,7 +342,7 @@ func Test_SingleNodeExplicitVacuumOK_Stress(t *testing.T) {
 	if _, err := s.WaitForLeader(10 * time.Second); err != nil {
 		t.Fatalf("Error waiting for leader: %s", err)
 	}
-	doQuery()
+	testPoll(t, doQuery, 100*time.Millisecond, 5*time.Second)
 }
 
 // Test_SingleNode_SnapshotWithAutoVac tests that a Store correctly operates
@@ -514,13 +505,10 @@ func Test_SingleNode_SnapshotWithAutoVac_Stress(t *testing.T) {
 		go insertFn()
 	}
 	wg.Wait()
-	if s.WaitForAllApplied(5*time.Second) != nil {
-		t.Fatalf("failed to wait for all data to be applied")
-	}
 
 	// Query the data, make sure it looks good after all this.
 	qr := queryRequestFromString("SELECT COUNT(*) FROM foo", false, true)
-	qr.Level = proto.ConsistencyLevel_STRONG
+	qr.Level = proto.ConsistencyLevel_STRONG // Key to ensuring previous logs are applied.
 	r, _, _, err := s.Query(qr)
 	if err != nil {
 		t.Fatalf("failed to query single node: %s", err.Error())
@@ -529,7 +517,7 @@ func Test_SingleNode_SnapshotWithAutoVac_Stress(t *testing.T) {
 		t.Fatalf("unexpected results for query\nexp: %s\ngot: %s", exp, got)
 	}
 
-	// Restart the Store, make sure it still works.
+	// Restart the Store, make sure all looks good.
 	if err := s.Close(true); err != nil {
 		t.Fatalf("failed to close store: %s", err.Error())
 	}
