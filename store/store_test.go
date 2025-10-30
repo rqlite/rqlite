@@ -712,7 +712,7 @@ func Test_OpenStoreCloseSingleNode(t *testing.T) {
 		t.Fatalf("failed to execute on single node: %s", err.Error())
 	}
 
-	fsmIdx, err := s.WaitForAppliedFSM(5 * time.Second)
+	fsmIdx, err := s.WaitForAppliedFSM(2 * time.Second)
 	if err != nil {
 		t.Fatalf("failed to wait for fsmIndex: %s", err.Error())
 	}
