@@ -868,16 +868,6 @@ func (s *Store) WaitForFSMIndex(idx uint64, timeout time.Duration) (uint64, erro
 	}
 }
 
-// WaitForAllFSM waits for the last index in the Raft log to have been
-// applied to the FSM.
-func (s *Store) WaitForAllFSM(timeout time.Duration) error {
-	if timeout == 0 {
-		return nil
-	}
-	_, err := s.WaitForFSMIndex(s.raft.LastIndex(), timeout)
-	return err
-}
-
 // WaitForAllApplied waits for all Raft log entries to be applied to the
 // underlying database.
 func (s *Store) WaitForAllApplied(timeout time.Duration) error {
@@ -885,6 +875,13 @@ func (s *Store) WaitForAllApplied(timeout time.Duration) error {
 		return nil
 	}
 	return s.WaitForAppliedIndex(s.raft.LastIndex(), timeout)
+}
+
+// Barrier blocks until all preceding operations have been applied to the database.
+// Must be called on the Leader or an error will be returned.
+func (s *Store) Barrier() error {
+	f := s.raft.Barrier(s.ApplyTimeout)
+	return f.Error()
 }
 
 // WaitForAppliedIndex blocks until a given log index has been applied,
@@ -912,6 +909,13 @@ func (s *Store) WaitForCommitIndex(idx uint64, timeout time.Duration) error {
 // underlying database. If the index is unknown then 0 is returned.
 func (s *Store) DBAppliedIndex() uint64 {
 	return s.dbAppliedIdx.Load()
+}
+
+// AppliedIndex returns the index of the last Raft log entry sent to the FSM
+// by the Raft system. This does not mean that the log entry has actaully been
+// applied to the database.
+func (s *Store) AppliedIndex() uint64 {
+	return s.raft.AppliedIndex()
 }
 
 // IsLeader is used to determine if the current node is cluster leader
