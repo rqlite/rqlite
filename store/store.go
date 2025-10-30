@@ -585,9 +585,9 @@ func (s *Store) Open() (retErr error) {
 	// the same.
 	removeDBFiles := true
 	if err := func() error {
-		keepCleanMarker := false
 		defer func() {
-			if !keepCleanMarker {
+			if removeDBFiles {
+				stats.Add(numRestoresStart, 1)
 				if err := removeFile(s.cleanSnapshotPath); err != nil {
 					s.logger.Printf("warning: failed to remove clean snapshot marker file: %s", err)
 				}
@@ -608,9 +608,9 @@ func (s *Store) Open() (retErr error) {
 		if !fp.Compare(mt, sz) {
 			return nil
 		}
+
 		s.logger.Printf("detected successful prior snapshot operation, skipping restore, using existing database file")
 		config.NoSnapshotRestoreOnStart = true
-		keepCleanMarker = true
 		removeDBFiles = false
 		li, tm, err := snapshotStore.LatestIndexTerm()
 		if err != nil {
@@ -619,14 +619,10 @@ func (s *Store) Open() (retErr error) {
 		s.fsmIdx.Store(li)
 		s.fsmTerm.Store(tm)
 		s.dbAppliedIdx.Store(li)
+		stats.Add(numRestoresStartSkipped, 1)
 		return nil
 	}(); err != nil {
 		return fmt.Errorf("failed to check for clean snapshot file: %s", err)
-	}
-	if config.NoSnapshotRestoreOnStart {
-		stats.Add(numRestoresStartSkipped, 1)
-	} else {
-		stats.Add(numRestoresStart, 1)
 	}
 
 	// Create the Raft log store and verify it.
