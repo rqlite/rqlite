@@ -1895,7 +1895,7 @@ func Test_MultiNodeClusterRecoverFull(t *testing.T) {
 	if _, err := node1.Execute(`INSERT INTO foo(id, name) VALUES(1, "fiona")`); err != nil {
 		t.Fatalf("failed to create table: %s", err.Error())
 	}
-	rows, err := node1.Query(`SELECT COUNT(*) FROM foo`)
+	rows, err := node1.QueryStrongConsistency(`SELECT COUNT(*) FROM foo`)
 	if err != nil {
 		t.Fatalf("failed to query node: %s", err.Error())
 	}
