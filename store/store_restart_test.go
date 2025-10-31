@@ -52,7 +52,16 @@ func Test_OpenStoreCloseStartupSingleNode(t *testing.T) {
 		t.Fatalf("failed to close single-node store: %s", err.Error())
 	}
 
-	// Re-test adding a snapshot to the mix.
+	// Confirm we started by not restoring from the snapshot.
+	if s.numSnapshotsStart.Load() != 0 {
+		t.Fatalf("expected snapshot start count to be 0, got %d", s.numSnapshotsStart.Load())
+	}
+	if s.numSnapshotsSkipped.Load() != 1 {
+		t.Fatalf("expected snapshot skipped count to be 1, got %d", s.numSnapshotsSkipped.Load())
+	}
+
+	// Re-test adding an explicit snapshot to the mix. Not entirely necessary, since
+	// we snapshot previously on close anyway.
 	if err := s.Open(); err != nil {
 		t.Fatalf("failed to open single-node store: %s", err.Error())
 	}
