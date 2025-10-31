@@ -1,4 +1,8 @@
-## v9.2.0 (unreleased)
+## v9.2.0 (October 31st 2025)
+This release introduces new support for Associative responses when using the `RETURNING` keyword.
+
+**Most importantly this release optimizes the startup process**. Previously rqlite startup times grew linearily with the amount of SQLite data being managed by the rqlite node. If the data set was large (100s MBs and greater) startup times became noticeable. With this release startup times are not dependant on data set size, and even systems with GBs of data will start almost instantly.
+
 ### New features
 - [PR #2373](https://github.com/rqlite/rqlite/pull/2373): Support _Associative_ response form on Execute endpoint, fixes issue [#2372](https://github.com/rqlite/rqlite/issues/2372).
 
