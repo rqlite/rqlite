@@ -2349,7 +2349,7 @@ COMMIT;
 		t.Fatalf("expected %d bytes to be read, got %d", sz, n)
 	}
 	if s.numSnapshots.Load() != numSnapshots+1 {
-		t.Fatalf("expected 1 extra snapshot, got %d", s.numSnapshots)
+		t.Fatalf("expected 1 extra snapshot, got %d", s.numSnapshots.Load())
 	}
 
 	// Check that data were loaded correctly.

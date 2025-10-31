@@ -50,6 +50,10 @@ func Test_NewStore(t *testing.T) {
 	if store.Dir() != dir {
 		t.Errorf("Expected store directory to be %s, got %s", dir, store.Dir())
 	}
+
+	if store.Len() != 0 {
+		t.Errorf("Expected store to have 0 snapshots, got %d", store.Len())
+	}
 }
 
 func Test_StoreEmpty(t *testing.T) {
@@ -97,6 +101,10 @@ func Test_StoreEmpty(t *testing.T) {
 	if tm != 0 {
 		t.Fatalf("Expected latest term to be 0, got %d", tm)
 	}
+
+	if store.Len() != 0 {
+		t.Errorf("Expected store to have 0 snapshots, got %d", store.Len())
+	}
 }
 
 func Test_StoreCreateCancel(t *testing.T) {
@@ -134,6 +142,10 @@ func Test_StoreCreateCancel(t *testing.T) {
 	// Should not be a tmp directory with the name of the sink ID
 	if pathExists(dir + "/" + sink.ID() + tmpSuffix) {
 		t.Errorf("Expected directory with name %s to not exist, but it does", sink.ID())
+	}
+
+	if store.Len() != 0 {
+		t.Errorf("Expected store to have 0 snapshots, got %d", store.Len())
 	}
 }
 
@@ -220,6 +232,10 @@ func Test_StoreList(t *testing.T) {
 	}
 	if snaps[0].ID != "2-1131-1704807720976" {
 		t.Errorf("Expected snapshot ID to be 2-1131-1704807720976, got %s", snaps[0].ID)
+	}
+
+	if store.Len() != 2 {
+		t.Errorf("Expected store to have 2 snapshots, got %d", store.Len())
 	}
 
 	li, tm, err := store.LatestIndexTerm()

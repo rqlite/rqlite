@@ -2,6 +2,7 @@ package store
 
 import (
 	"fmt"
+	"os"
 	"path/filepath"
 	"testing"
 	"time"
@@ -51,7 +52,16 @@ func Test_OpenStoreCloseStartupSingleNode(t *testing.T) {
 		t.Fatalf("failed to close single-node store: %s", err.Error())
 	}
 
-	// Re-test adding a snapshot to the mix.
+	// Confirm we started by not restoring from the snapshot.
+	if s.numSnapshotsStart.Load() != 0 {
+		t.Fatalf("expected snapshot start count to be 0, got %d", s.numSnapshotsStart.Load())
+	}
+	if s.numSnapshotsSkipped.Load() != 1 {
+		t.Fatalf("expected snapshot skipped count to be 1, got %d", s.numSnapshotsSkipped.Load())
+	}
+
+	// Re-test adding an explicit snapshot to the mix. Not entirely necessary, since
+	// we snapshot previously on close anyway.
 	if err := s.Open(); err != nil {
 		t.Fatalf("failed to open single-node store: %s", err.Error())
 	}
@@ -315,5 +325,230 @@ func Test_OpenStoreCloseUserSnapshot(t *testing.T) {
 	}
 	if exp, got := `[{"columns":["id","name"],"types":["integer","text"],"values":[[1,"fiona"]]}]`, asJSON(r); exp != got {
 		t.Fatalf("unexpected results for query\nexp: %s\ngot: %s", exp, got)
+	}
+}
+
+// Test_Store_RestoreNoCleanSnapshot tests that a full restore from snapshot on open works correctly
+// under various conditions that should trigger it.
+func Test_Store_RestoreNoCleanSnapshot(t *testing.T) {
+	testCases := []struct {
+		name     string
+		tamperFn func(t *testing.T, s *Store)
+	}{
+		{
+			name: "NoCleanSnapshot",
+			tamperFn: func(t *testing.T, s *Store) {
+				// Remove clean snapshot marker to force a full restore.
+				if err := os.Remove(s.cleanSnapshotPath); err != nil {
+					t.Fatalf("failed to remove clean snapshot during testing: %s", err.Error())
+				}
+			},
+		},
+		{
+			name: "CorruptCleanSnapshot",
+			tamperFn: func(t *testing.T, s *Store) {
+				// Corrupt the clean snapshot marker to force a full restore.
+				f, err := os.OpenFile(s.cleanSnapshotPath, os.O_WRONLY, 0644)
+				if err != nil {
+					t.Fatalf("failed to open clean snapshot during testing: %s", err.Error())
+				}
+				defer f.Close()
+				if _, err := f.Write([]byte("FOOBAR")); err != nil {
+					t.Fatalf("failed to corrupt clean snapshot: %s", err.Error())
+				}
+			},
+		},
+		{
+			name: "SQLiteBad",
+			tamperFn: func(t *testing.T, s *Store) {
+				// Modify the SQLite file so it doesn't match the clean snapshot expectations.
+				f, err := os.OpenFile(s.dbPath, os.O_WRONLY|os.O_APPEND, 0644)
+				if err != nil {
+					t.Fatalf("failed to open snapshot during testing: %s", err.Error())
+				}
+				defer f.Close()
+				if _, err := f.Write([]byte("CORRUPT")); err != nil {
+					t.Fatalf("failed to corrupt database file: %s", err.Error())
+				}
+			},
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			s, ln := mustNewStore(t)
+			defer ln.Close()
+			if err := s.Open(); err != nil {
+				t.Fatalf("failed to open single-node store: %s", err.Error())
+			}
+			if err := s.Bootstrap(NewServer(s.ID(), s.Addr(), true)); err != nil {
+				t.Fatalf("failed to bootstrap single-node store: %s", err.Error())
+			}
+			defer s.Close(true)
+			if _, err := s.WaitForLeader(10 * time.Second); err != nil {
+				t.Fatalf("Error waiting for leader: %s", err)
+			}
+
+			er := executeRequestFromString(
+				`CREATE TABLE foo (id INTEGER NOT NULL PRIMARY KEY, name TEXT)`,
+				false, false)
+			_, _, err := s.Execute(er)
+			if err != nil {
+				t.Fatalf("failed to execute on single node: %s", err.Error())
+			}
+			_, _, err = s.Execute(executeRequestFromString(`INSERT INTO foo(name) VALUES("fiona")`, false, false))
+			if err != nil {
+				t.Fatalf("failed to execute on single node: %s", err.Error())
+			}
+
+			if err := s.Close(true); err != nil {
+				t.Fatalf("failed to close single-node store: %s", err.Error())
+			}
+
+			tc.tamperFn(t, s)
+
+			if err := s.Open(); err != nil {
+				t.Fatalf("failed to open single-node store: %s", err.Error())
+			}
+			defer s.Close(true)
+			if _, err := s.WaitForLeader(10 * time.Second); err != nil {
+				t.Fatalf("Error waiting for leader: %s", err)
+			}
+
+			qr := queryRequestFromString("SELECT * FROM foo", false, false)
+			qr.Level = command.ConsistencyLevel_STRONG
+			r, _, _, err := s.Query(qr)
+			if err != nil {
+				t.Fatalf("failed to query single node: %s", err.Error())
+			}
+			if exp, got := `[{"columns":["id","name"],"types":["integer","text"],"values":[[1,"fiona"]]}]`, asJSON(r); exp != got {
+				t.Fatalf("unexpected results for query\nexp: %s\ngot: %s", exp, got)
+			}
+
+			if s.numSnapshotsStart.Load() != 1 {
+				t.Fatalf("expected snapshot start count to be 2, got %d", s.numSnapshotsStart.Load())
+			}
+			if s.numSnapshotsSkipped.Load() != 0 {
+				t.Fatalf("expected snapshot skipped count to be 0, got %d", s.numSnapshotsSkipped.Load())
+			}
+		})
+	}
+}
+
+// Test_Store_Restore_NoSnapshotOnClose tests that when no snapshot takes place
+// on close, restore still works from just the Raft log. This tests a node shutting
+// down uncleanly.
+func Test_Store_Restore_NoSnapshotOnClose(t *testing.T) {
+	s, ln := mustNewStore(t)
+	defer ln.Close()
+	s.NoSnapshotOnClose = true
+	if err := s.Open(); err != nil {
+		t.Fatalf("failed to open single-node store: %s", err.Error())
+	}
+	if err := s.Bootstrap(NewServer(s.ID(), s.Addr(), true)); err != nil {
+		t.Fatalf("failed to bootstrap single-node store: %s", err.Error())
+	}
+	defer s.Close(true)
+	if _, err := s.WaitForLeader(10 * time.Second); err != nil {
+		t.Fatalf("Error waiting for leader: %s", err)
+	}
+
+	er := executeRequestFromString(
+		`CREATE TABLE foo (id INTEGER NOT NULL PRIMARY KEY, name TEXT)`,
+		false, false)
+	_, _, err := s.Execute(er)
+	if err != nil {
+		t.Fatalf("failed to execute on single node: %s", err.Error())
+	}
+	_, _, err = s.Execute(executeRequestFromString(`INSERT INTO foo(name) VALUES("fiona")`, false, false))
+	if err != nil {
+		t.Fatalf("failed to execute on single node: %s", err.Error())
+	}
+
+	if err := s.Close(true); err != nil {
+		t.Fatalf("failed to close single-node store: %s", err.Error())
+	}
+
+	if err := s.Open(); err != nil {
+		t.Fatalf("failed to open single-node store: %s", err.Error())
+	}
+	defer s.Close(true)
+	if _, err := s.WaitForLeader(10 * time.Second); err != nil {
+		t.Fatalf("Error waiting for leader: %s", err)
+	}
+
+	qr := queryRequestFromString("SELECT * FROM foo", false, false)
+	qr.Level = command.ConsistencyLevel_STRONG
+	r, _, _, err := s.Query(qr)
+	if err != nil {
+		t.Fatalf("failed to query single node: %s", err.Error())
+	}
+	if exp, got := `[{"columns":["id","name"],"types":["integer","text"],"values":[[1,"fiona"]]}]`, asJSON(r); exp != got {
+		t.Fatalf("unexpected results for query\nexp: %s\ngot: %s", exp, got)
+	}
+}
+
+func Test_Store_Restore_NoSnapshotOnClose_Snapshot(t *testing.T) {
+	s, ln := mustNewStore(t)
+	defer ln.Close()
+	s.NoSnapshotOnClose = true
+	if err := s.Open(); err != nil {
+		t.Fatalf("failed to open single-node store: %s", err.Error())
+	}
+	if err := s.Bootstrap(NewServer(s.ID(), s.Addr(), true)); err != nil {
+		t.Fatalf("failed to bootstrap single-node store: %s", err.Error())
+	}
+	defer s.Close(true)
+	if _, err := s.WaitForLeader(10 * time.Second); err != nil {
+		t.Fatalf("Error waiting for leader: %s", err)
+	}
+
+	er := executeRequestFromString(
+		`CREATE TABLE foo (id INTEGER NOT NULL PRIMARY KEY, name TEXT)`,
+		false, false)
+	_, _, err := s.Execute(er)
+	if err != nil {
+		t.Fatalf("failed to execute on single node: %s", err.Error())
+	}
+
+	// Take a snapshot so that restart will involve not restoring the snapshot,
+	// but still replaying some log entries.
+	if err := s.Snapshot(0); err != nil {
+		t.Fatalf("failed to take snapshot: %s", err.Error())
+	}
+
+	// Insert a Raft log entry after taking the snapshot.
+	_, _, err = s.Execute(executeRequestFromString(`INSERT INTO foo(name) VALUES("fiona")`, false, false))
+	if err != nil {
+		t.Fatalf("failed to execute on single node: %s", err.Error())
+	}
+
+	if err := s.Close(true); err != nil {
+		t.Fatalf("failed to close single-node store: %s", err.Error())
+	}
+
+	if err := s.Open(); err != nil {
+		t.Fatalf("failed to open single-node store: %s", err.Error())
+	}
+	defer s.Close(true)
+	if _, err := s.WaitForLeader(10 * time.Second); err != nil {
+		t.Fatalf("Error waiting for leader: %s", err)
+	}
+
+	qr := queryRequestFromString("SELECT * FROM foo", false, false)
+	qr.Level = command.ConsistencyLevel_STRONG
+	r, _, _, err := s.Query(qr)
+	if err != nil {
+		t.Fatalf("failed to query single node: %s", err.Error())
+	}
+	if exp, got := `[{"columns":["id","name"],"types":["integer","text"],"values":[[1,"fiona"]]}]`, asJSON(r); exp != got {
+		t.Fatalf("unexpected results for query\nexp: %s\ngot: %s", exp, got)
+	}
+
+	if s.numSnapshotsStart.Load() != 0 {
+		t.Fatalf("expected snapshot start count to be 0, got %d", s.numSnapshotsStart.Load())
+	}
+	if s.numSnapshotsSkipped.Load() != 1 {
+		t.Fatalf("expected snapshot skipped count to be 1")
 	}
 }

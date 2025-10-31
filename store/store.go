@@ -343,21 +343,21 @@ type Store struct {
 
 	// Latest log entry index actually reflected by the FSM. Due to Raft code
 	// these values are not updated automatically after a Snapshot-restore.
-	fsmIdx        *atomic.Uint64
+	fsmIdx        atomic.Uint64
 	fsmTarget     *rsync.ReadyTarget[uint64]
-	fsmTerm       *atomic.Uint64
+	fsmTerm       atomic.Uint64
 	fsmUpdateTime *rsync.AtomicTime // This is node-local time.
 
 	// appendedAtTime is the Leader's clock time when that Leader appended the log entry.
 	// The Leader that actually appended the log entry is not necessarily the current Leader.
 	appendedAtTime *rsync.AtomicTime
 
-	strongReadTerm *atomic.Uint64 // Term of most recent Strong Read
+	strongReadTerm atomic.Uint64 // Term of most recent Strong Read
 
 	dbModifiedTime *rsync.AtomicTime // Last time the database file was modified.
 
 	// Latest log entry index which actually changed the database.
-	dbAppliedIdx  *atomic.Uint64
+	dbAppliedIdx  atomic.Uint64
 	appliedTarget *rsync.ReadyTarget[uint64]
 
 	reqMarshaller *command.RequestMarshaler // Request marshaler for writing to log.
@@ -385,6 +385,7 @@ type Store struct {
 	notifyingNodes  map[string]*Server
 
 	ShutdownOnRemove         bool
+	NoSnapshotOnClose        bool
 	SnapshotThreshold        uint64
 	SnapshotThresholdWALSize uint64
 	SnapshotInterval         time.Duration
@@ -404,13 +405,15 @@ type Store struct {
 	numTrailingLogs uint64
 
 	// For whitebox testing
-	numLRUpgraded    *atomic.Uint64
-	numFullSnapshots int
-	numAutoVacuums   int
-	numAutoOptimizes int
-	numIgnoredJoins  int
-	numNoops         *atomic.Uint64
-	numSnapshots     *atomic.Uint64
+	numLRUpgraded       atomic.Uint64
+	numFullSnapshots    int
+	numAutoVacuums      int
+	numAutoOptimizes    int
+	numIgnoredJoins     int
+	numNoops            atomic.Uint64
+	numSnapshots        atomic.Uint64
+	numSnapshotsSkipped atomic.Uint64
+	numSnapshotsStart   atomic.Uint64
 }
 
 // Config represents the configuration of the underlying Store.
@@ -458,18 +461,11 @@ func New(c *Config, ly Layer) *Store {
 		ApplyTimeout:      applyTimeout,
 		snapshotSync:      rsync.NewSyncChannels(),
 		snapshotCAS:       rsync.NewCheckAndSet(),
-		fsmIdx:            &atomic.Uint64{},
 		fsmTarget:         rsync.NewReadyTarget[uint64](),
-		fsmTerm:           &atomic.Uint64{},
 		fsmUpdateTime:     rsync.NewAtomicTime(),
 		appendedAtTime:    rsync.NewAtomicTime(),
-		strongReadTerm:    &atomic.Uint64{},
 		dbModifiedTime:    rsync.NewAtomicTime(),
-		dbAppliedIdx:      &atomic.Uint64{},
 		appliedTarget:     rsync.NewReadyTarget[uint64](),
-		numLRUpgraded:     &atomic.Uint64{},
-		numNoops:          &atomic.Uint64{},
-		numSnapshots:      &atomic.Uint64{},
 	}
 }
 
@@ -585,9 +581,14 @@ func (s *Store) Open() (retErr error) {
 	// the same.
 	removeDBFiles := true
 	if err := func() error {
+		if snapshotStore.Len() == 0 {
+			return nil
+		}
+
 		defer func() {
 			if removeDBFiles {
 				stats.Add(numRestoresStart, 1)
+				s.numSnapshotsStart.Add(1)
 				if err := removeFile(s.cleanSnapshotPath); err != nil {
 					s.logger.Printf("warning: failed to remove clean snapshot marker file: %s", err)
 				}
@@ -620,6 +621,7 @@ func (s *Store) Open() (retErr error) {
 		s.fsmTerm.Store(tm)
 		s.dbAppliedIdx.Store(li)
 		stats.Add(numRestoresStartSkipped, 1)
+		s.numSnapshotsSkipped.Add(1)
 		return nil
 	}(); err != nil {
 		return fmt.Errorf("failed to check for clean snapshot file: %s", err)
@@ -868,15 +870,17 @@ func (s *Store) Close(wait bool) (retErr error) {
 		return nil
 	}
 
-	// Snapshot before closing to minimize startup time on next open.
-	startT := time.Now()
-	if err := s.Snapshot(0); err != nil {
-		if !strings.Contains(err.Error(), "nothing new to snapshot") &&
-			!strings.Contains(err.Error(), "wait until the configuration entry at") {
-			s.logger.Printf("pre-close snapshot failed: %s", err.Error())
+	if !s.NoSnapshotOnClose {
+		// Snapshot before closing to minimize startup time on next open.
+		startT := time.Now()
+		if err := s.Snapshot(0); err != nil {
+			if !strings.Contains(err.Error(), "nothing new to snapshot") &&
+				!strings.Contains(err.Error(), "wait until the configuration entry at") {
+				s.logger.Printf("pre-close snapshot failed: %s", err.Error())
+			}
 		}
+		s.logger.Println("snapshot-on-close took ", time.Since(startT))
 	}
-	s.logger.Println("snapshot-on-close took ", time.Since(startT))
 
 	if err := s.snapshotCAS.BeginWithRetry("close", 10*time.Millisecond, 10*time.Second); err != nil {
 		return err

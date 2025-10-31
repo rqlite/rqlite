@@ -5,6 +5,7 @@
 ### Implementation changes and bug fixes
 - [PR #2374](https://github.com/rqlite/rqlite/pull/2374): Remove racy functions which interact with Raft log indexes.
 - [PR #2371](https://github.com/rqlite/rqlite/pull/2371): Don't restore snaphot from Raft on startup if possible, fixes issue [#1496](https://github.com/rqlite/rqlite/issues/1496).
+- [PR #2375](https://github.com/rqlite/rqlite/pull/2375): Extensive testing of not restoring from Raft on startup.
 
 ## v9.1.3 (October 21st 2025)
 ### Implementation changes and bug fixes
