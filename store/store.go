@@ -404,13 +404,15 @@ type Store struct {
 	numTrailingLogs uint64
 
 	// For whitebox testing
-	numLRUpgraded    *atomic.Uint64
-	numFullSnapshots int
-	numAutoVacuums   int
-	numAutoOptimizes int
-	numIgnoredJoins  int
-	numNoops         *atomic.Uint64
-	numSnapshots     *atomic.Uint64
+	numLRUpgraded       *atomic.Uint64
+	numFullSnapshots    int
+	numAutoVacuums      int
+	numAutoOptimizes    int
+	numIgnoredJoins     int
+	numNoops            *atomic.Uint64
+	numSnapshots        *atomic.Uint64
+	numSnapshotsSkipped *atomic.Uint64
+	numSnapshotsStart   *atomic.Uint64
 }
 
 // Config represents the configuration of the underlying Store.
@@ -435,41 +437,43 @@ func New(c *Config, ly Layer) *Store {
 	}
 
 	return &Store{
-		open:              rsync.NewAtomicBool(),
-		ly:                ly,
-		raftDir:           c.Dir,
-		raftDBPath:        filepath.Join(c.Dir, raftDBPath),
-		snapshotDir:       filepath.Join(c.Dir, snapshotsDirName),
-		peersPath:         filepath.Join(c.Dir, peersPath),
-		peersInfoPath:     filepath.Join(c.Dir, peersInfoPath),
-		cleanSnapshotPath: filepath.Join(c.Dir, cleanSnapshotName),
-		restoreDoneCh:     make(chan struct{}),
-		raftID:            c.ID,
-		dbConf:            c.DBConf,
-		dbPath:            dbPath,
-		walPath:           sql.WALPath(dbPath),
-		dbDir:             filepath.Dir(dbPath),
-		dbDrv:             sql.DefaultDriver(),
-		readyChans:        rsync.NewReadyChannels(),
-		leaderObservers:   make([]chan<- bool, 0),
-		reqMarshaller:     command.NewRequestMarshaler(),
-		logger:            logger,
-		notifyingNodes:    make(map[string]*Server),
-		ApplyTimeout:      applyTimeout,
-		snapshotSync:      rsync.NewSyncChannels(),
-		snapshotCAS:       rsync.NewCheckAndSet(),
-		fsmIdx:            &atomic.Uint64{},
-		fsmTarget:         rsync.NewReadyTarget[uint64](),
-		fsmTerm:           &atomic.Uint64{},
-		fsmUpdateTime:     rsync.NewAtomicTime(),
-		appendedAtTime:    rsync.NewAtomicTime(),
-		strongReadTerm:    &atomic.Uint64{},
-		dbModifiedTime:    rsync.NewAtomicTime(),
-		dbAppliedIdx:      &atomic.Uint64{},
-		appliedTarget:     rsync.NewReadyTarget[uint64](),
-		numLRUpgraded:     &atomic.Uint64{},
-		numNoops:          &atomic.Uint64{},
-		numSnapshots:      &atomic.Uint64{},
+		open:                rsync.NewAtomicBool(),
+		ly:                  ly,
+		raftDir:             c.Dir,
+		raftDBPath:          filepath.Join(c.Dir, raftDBPath),
+		snapshotDir:         filepath.Join(c.Dir, snapshotsDirName),
+		peersPath:           filepath.Join(c.Dir, peersPath),
+		peersInfoPath:       filepath.Join(c.Dir, peersInfoPath),
+		cleanSnapshotPath:   filepath.Join(c.Dir, cleanSnapshotName),
+		restoreDoneCh:       make(chan struct{}),
+		raftID:              c.ID,
+		dbConf:              c.DBConf,
+		dbPath:              dbPath,
+		walPath:             sql.WALPath(dbPath),
+		dbDir:               filepath.Dir(dbPath),
+		dbDrv:               sql.DefaultDriver(),
+		readyChans:          rsync.NewReadyChannels(),
+		leaderObservers:     make([]chan<- bool, 0),
+		reqMarshaller:       command.NewRequestMarshaler(),
+		logger:              logger,
+		notifyingNodes:      make(map[string]*Server),
+		ApplyTimeout:        applyTimeout,
+		snapshotSync:        rsync.NewSyncChannels(),
+		snapshotCAS:         rsync.NewCheckAndSet(),
+		fsmIdx:              &atomic.Uint64{},
+		fsmTarget:           rsync.NewReadyTarget[uint64](),
+		fsmTerm:             &atomic.Uint64{},
+		fsmUpdateTime:       rsync.NewAtomicTime(),
+		appendedAtTime:      rsync.NewAtomicTime(),
+		strongReadTerm:      &atomic.Uint64{},
+		dbModifiedTime:      rsync.NewAtomicTime(),
+		dbAppliedIdx:        &atomic.Uint64{},
+		appliedTarget:       rsync.NewReadyTarget[uint64](),
+		numLRUpgraded:       &atomic.Uint64{},
+		numNoops:            &atomic.Uint64{},
+		numSnapshots:        &atomic.Uint64{},
+		numSnapshotsSkipped: &atomic.Uint64{},
+		numSnapshotsStart:   &atomic.Uint64{},
 	}
 }
 
@@ -588,6 +592,7 @@ func (s *Store) Open() (retErr error) {
 		defer func() {
 			if removeDBFiles {
 				stats.Add(numRestoresStart, 1)
+				s.numSnapshotsStart.Add(1)
 				if err := removeFile(s.cleanSnapshotPath); err != nil {
 					s.logger.Printf("warning: failed to remove clean snapshot marker file: %s", err)
 				}
@@ -620,6 +625,7 @@ func (s *Store) Open() (retErr error) {
 		s.fsmTerm.Store(tm)
 		s.dbAppliedIdx.Store(li)
 		stats.Add(numRestoresStartSkipped, 1)
+		s.numSnapshotsSkipped.Add(1)
 		return nil
 	}(); err != nil {
 		return fmt.Errorf("failed to check for clean snapshot file: %s", err)
