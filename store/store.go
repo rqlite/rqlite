@@ -343,21 +343,21 @@ type Store struct {
 
 	// Latest log entry index actually reflected by the FSM. Due to Raft code
 	// these values are not updated automatically after a Snapshot-restore.
-	fsmIdx        *atomic.Uint64
+	fsmIdx        atomic.Uint64
 	fsmTarget     *rsync.ReadyTarget[uint64]
-	fsmTerm       *atomic.Uint64
+	fsmTerm       atomic.Uint64
 	fsmUpdateTime *rsync.AtomicTime // This is node-local time.
 
 	// appendedAtTime is the Leader's clock time when that Leader appended the log entry.
 	// The Leader that actually appended the log entry is not necessarily the current Leader.
 	appendedAtTime *rsync.AtomicTime
 
-	strongReadTerm *atomic.Uint64 // Term of most recent Strong Read
+	strongReadTerm atomic.Uint64 // Term of most recent Strong Read
 
 	dbModifiedTime *rsync.AtomicTime // Last time the database file was modified.
 
 	// Latest log entry index which actually changed the database.
-	dbAppliedIdx  *atomic.Uint64
+	dbAppliedIdx  atomic.Uint64
 	appliedTarget *rsync.ReadyTarget[uint64]
 
 	reqMarshaller *command.RequestMarshaler // Request marshaler for writing to log.
@@ -404,15 +404,15 @@ type Store struct {
 	numTrailingLogs uint64
 
 	// For whitebox testing
-	numLRUpgraded       *atomic.Uint64
+	numLRUpgraded       atomic.Uint64
 	numFullSnapshots    int
 	numAutoVacuums      int
 	numAutoOptimizes    int
 	numIgnoredJoins     int
-	numNoops            *atomic.Uint64
-	numSnapshots        *atomic.Uint64
-	numSnapshotsSkipped *atomic.Uint64
-	numSnapshotsStart   *atomic.Uint64
+	numNoops            atomic.Uint64
+	numSnapshots        atomic.Uint64
+	numSnapshotsSkipped atomic.Uint64
+	numSnapshotsStart   atomic.Uint64
 }
 
 // Config represents the configuration of the underlying Store.
@@ -437,43 +437,34 @@ func New(c *Config, ly Layer) *Store {
 	}
 
 	return &Store{
-		open:                rsync.NewAtomicBool(),
-		ly:                  ly,
-		raftDir:             c.Dir,
-		raftDBPath:          filepath.Join(c.Dir, raftDBPath),
-		snapshotDir:         filepath.Join(c.Dir, snapshotsDirName),
-		peersPath:           filepath.Join(c.Dir, peersPath),
-		peersInfoPath:       filepath.Join(c.Dir, peersInfoPath),
-		cleanSnapshotPath:   filepath.Join(c.Dir, cleanSnapshotName),
-		restoreDoneCh:       make(chan struct{}),
-		raftID:              c.ID,
-		dbConf:              c.DBConf,
-		dbPath:              dbPath,
-		walPath:             sql.WALPath(dbPath),
-		dbDir:               filepath.Dir(dbPath),
-		dbDrv:               sql.DefaultDriver(),
-		readyChans:          rsync.NewReadyChannels(),
-		leaderObservers:     make([]chan<- bool, 0),
-		reqMarshaller:       command.NewRequestMarshaler(),
-		logger:              logger,
-		notifyingNodes:      make(map[string]*Server),
-		ApplyTimeout:        applyTimeout,
-		snapshotSync:        rsync.NewSyncChannels(),
-		snapshotCAS:         rsync.NewCheckAndSet(),
-		fsmIdx:              &atomic.Uint64{},
-		fsmTarget:           rsync.NewReadyTarget[uint64](),
-		fsmTerm:             &atomic.Uint64{},
-		fsmUpdateTime:       rsync.NewAtomicTime(),
-		appendedAtTime:      rsync.NewAtomicTime(),
-		strongReadTerm:      &atomic.Uint64{},
-		dbModifiedTime:      rsync.NewAtomicTime(),
-		dbAppliedIdx:        &atomic.Uint64{},
-		appliedTarget:       rsync.NewReadyTarget[uint64](),
-		numLRUpgraded:       &atomic.Uint64{},
-		numNoops:            &atomic.Uint64{},
-		numSnapshots:        &atomic.Uint64{},
-		numSnapshotsSkipped: &atomic.Uint64{},
-		numSnapshotsStart:   &atomic.Uint64{},
+		open:              rsync.NewAtomicBool(),
+		ly:                ly,
+		raftDir:           c.Dir,
+		raftDBPath:        filepath.Join(c.Dir, raftDBPath),
+		snapshotDir:       filepath.Join(c.Dir, snapshotsDirName),
+		peersPath:         filepath.Join(c.Dir, peersPath),
+		peersInfoPath:     filepath.Join(c.Dir, peersInfoPath),
+		cleanSnapshotPath: filepath.Join(c.Dir, cleanSnapshotName),
+		restoreDoneCh:     make(chan struct{}),
+		raftID:            c.ID,
+		dbConf:            c.DBConf,
+		dbPath:            dbPath,
+		walPath:           sql.WALPath(dbPath),
+		dbDir:             filepath.Dir(dbPath),
+		dbDrv:             sql.DefaultDriver(),
+		readyChans:        rsync.NewReadyChannels(),
+		leaderObservers:   make([]chan<- bool, 0),
+		reqMarshaller:     command.NewRequestMarshaler(),
+		logger:            logger,
+		notifyingNodes:    make(map[string]*Server),
+		ApplyTimeout:      applyTimeout,
+		snapshotSync:      rsync.NewSyncChannels(),
+		snapshotCAS:       rsync.NewCheckAndSet(),
+		fsmTarget:         rsync.NewReadyTarget[uint64](),
+		fsmUpdateTime:     rsync.NewAtomicTime(),
+		appendedAtTime:    rsync.NewAtomicTime(),
+		dbModifiedTime:    rsync.NewAtomicTime(),
+		appliedTarget:     rsync.NewReadyTarget[uint64](),
 	}
 }
 
