@@ -216,6 +216,15 @@ func (s *Store) List() ([]*raft.SnapshotMeta, error) {
 	return snapMeta, nil
 }
 
+// Len returns the number of snapshots in the Store.
+func (s *Store) Len() int {
+	snapshots, err := s.getSnapshots()
+	if err != nil {
+		return 0
+	}
+	return len(snapshots)
+}
+
 // LatestIndexTerm returns the index and term of the most recent snapshot in the Store.
 func (s *Store) LatestIndexTerm() (uint64, uint64, error) {
 	snapshots, err := s.getSnapshots()

@@ -425,3 +425,121 @@ func Test_Store_RestoreNoCleanSnapshot(t *testing.T) {
 		})
 	}
 }
+
+// Test_Store_Restore_NoSnapshotOnClose tests that when no snapshot takes place
+// on close, restore still works from just the Raft log. This tests a node shutting
+// down uncleanly.
+func Test_Store_Restore_NoSnapshotOnClose(t *testing.T) {
+	s, ln := mustNewStore(t)
+	defer ln.Close()
+	s.NoSnapshotOnClose = true
+	if err := s.Open(); err != nil {
+		t.Fatalf("failed to open single-node store: %s", err.Error())
+	}
+	if err := s.Bootstrap(NewServer(s.ID(), s.Addr(), true)); err != nil {
+		t.Fatalf("failed to bootstrap single-node store: %s", err.Error())
+	}
+	defer s.Close(true)
+	if _, err := s.WaitForLeader(10 * time.Second); err != nil {
+		t.Fatalf("Error waiting for leader: %s", err)
+	}
+
+	er := executeRequestFromString(
+		`CREATE TABLE foo (id INTEGER NOT NULL PRIMARY KEY, name TEXT)`,
+		false, false)
+	_, _, err := s.Execute(er)
+	if err != nil {
+		t.Fatalf("failed to execute on single node: %s", err.Error())
+	}
+	_, _, err = s.Execute(executeRequestFromString(`INSERT INTO foo(name) VALUES("fiona")`, false, false))
+	if err != nil {
+		t.Fatalf("failed to execute on single node: %s", err.Error())
+	}
+
+	if err := s.Close(true); err != nil {
+		t.Fatalf("failed to close single-node store: %s", err.Error())
+	}
+
+	if err := s.Open(); err != nil {
+		t.Fatalf("failed to open single-node store: %s", err.Error())
+	}
+	defer s.Close(true)
+	if _, err := s.WaitForLeader(10 * time.Second); err != nil {
+		t.Fatalf("Error waiting for leader: %s", err)
+	}
+
+	qr := queryRequestFromString("SELECT * FROM foo", false, false)
+	qr.Level = command.ConsistencyLevel_STRONG
+	r, _, _, err := s.Query(qr)
+	if err != nil {
+		t.Fatalf("failed to query single node: %s", err.Error())
+	}
+	if exp, got := `[{"columns":["id","name"],"types":["integer","text"],"values":[[1,"fiona"]]}]`, asJSON(r); exp != got {
+		t.Fatalf("unexpected results for query\nexp: %s\ngot: %s", exp, got)
+	}
+}
+
+func Test_Store_Restore_NoSnapshotOnClose_Snapshot(t *testing.T) {
+	s, ln := mustNewStore(t)
+	defer ln.Close()
+	s.NoSnapshotOnClose = true
+	if err := s.Open(); err != nil {
+		t.Fatalf("failed to open single-node store: %s", err.Error())
+	}
+	if err := s.Bootstrap(NewServer(s.ID(), s.Addr(), true)); err != nil {
+		t.Fatalf("failed to bootstrap single-node store: %s", err.Error())
+	}
+	defer s.Close(true)
+	if _, err := s.WaitForLeader(10 * time.Second); err != nil {
+		t.Fatalf("Error waiting for leader: %s", err)
+	}
+
+	er := executeRequestFromString(
+		`CREATE TABLE foo (id INTEGER NOT NULL PRIMARY KEY, name TEXT)`,
+		false, false)
+	_, _, err := s.Execute(er)
+	if err != nil {
+		t.Fatalf("failed to execute on single node: %s", err.Error())
+	}
+
+	// Take a snapshot so that restart will involve not restoring the snapshot,
+	// but still replaying some log entries.
+	if err := s.Snapshot(0); err != nil {
+		t.Fatalf("failed to take snapshot: %s", err.Error())
+	}
+
+	// Insert a Raft log entry after taking the snapshot.
+	_, _, err = s.Execute(executeRequestFromString(`INSERT INTO foo(name) VALUES("fiona")`, false, false))
+	if err != nil {
+		t.Fatalf("failed to execute on single node: %s", err.Error())
+	}
+
+	if err := s.Close(true); err != nil {
+		t.Fatalf("failed to close single-node store: %s", err.Error())
+	}
+
+	if err := s.Open(); err != nil {
+		t.Fatalf("failed to open single-node store: %s", err.Error())
+	}
+	defer s.Close(true)
+	if _, err := s.WaitForLeader(10 * time.Second); err != nil {
+		t.Fatalf("Error waiting for leader: %s", err)
+	}
+
+	qr := queryRequestFromString("SELECT * FROM foo", false, false)
+	qr.Level = command.ConsistencyLevel_STRONG
+	r, _, _, err := s.Query(qr)
+	if err != nil {
+		t.Fatalf("failed to query single node: %s", err.Error())
+	}
+	if exp, got := `[{"columns":["id","name"],"types":["integer","text"],"values":[[1,"fiona"]]}]`, asJSON(r); exp != got {
+		t.Fatalf("unexpected results for query\nexp: %s\ngot: %s", exp, got)
+	}
+
+	if s.numSnapshotsStart.Load() != 0 {
+		t.Fatalf("expected snapshot start count to be 0, got %d", s.numSnapshotsStart.Load())
+	}
+	if s.numSnapshotsSkipped.Load() != 1 {
+		t.Fatalf("expected snapshot skipped count to be 1")
+	}
+}
