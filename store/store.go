@@ -581,6 +581,10 @@ func (s *Store) Open() (retErr error) {
 	// the same.
 	removeDBFiles := true
 	if err := func() error {
+		if snapshotStore.Len() == 0 {
+			return nil
+		}
+
 		defer func() {
 			if removeDBFiles {
 				stats.Add(numRestoresStart, 1)
