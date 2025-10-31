@@ -31,7 +31,6 @@ import (
 	sql "github.com/rqlite/rqlite/v9/db"
 	"github.com/rqlite/rqlite/v9/db/humanize"
 	wal "github.com/rqlite/rqlite/v9/db/wal"
-	"github.com/rqlite/rqlite/v9/internal/index"
 	"github.com/rqlite/rqlite/v9/internal/progress"
 	"github.com/rqlite/rqlite/v9/internal/random"
 	"github.com/rqlite/rqlite/v9/internal/rsync"
@@ -114,7 +113,6 @@ var (
 )
 
 const (
-	appliedIndexName          = "applied_index"
 	cleanSnapshotName         = "clean_snapshot"
 	snapshotsDirName          = "rsnapshots"
 	restoreScratchPattern     = "rqlite-restore-*"
@@ -317,8 +315,6 @@ type Store struct {
 	dbDrv *sql.Driver      // The SQLite database driver.
 	db    *sql.SwappableDB // The underlying SQLite store.
 
-	appliedIdxFile *index.IndexFile // File to store last applied Raft log index.
-
 	cdcMu         sync.RWMutex
 	cdcStreamer   *sql.CDCStreamer
 	cdcOutCh      chan<- *proto.CDCIndexedEventGroup
@@ -517,6 +513,9 @@ func (s *Store) Open() (retErr error) {
 	s.openT = time.Now()
 	s.logger.Printf("opening store with node ID %s, listening on %s", s.raftID, s.ly.Addr().String())
 
+	// Clean up a never-used file from previous releases.
+	removeFile(filepath.Join(s.raftDir, "applied_index"))
+
 	// Create all the required Raft directories.
 	s.logger.Printf("ensuring data directory exists at %s", s.raftDir)
 	if err := os.MkdirAll(s.raftDir, 0755); err != nil {
@@ -689,13 +688,6 @@ func (s *Store) Open() (retErr error) {
 	s.db, err = createDBOnDisk(s.dbPath, s.dbDrv, removeDBFiles, s.dbConf.FKConstraints)
 	if err != nil {
 		return fmt.Errorf("failed to create on-disk database: %s", err)
-	}
-
-	// Create the applied index file in the Raft directory
-	appliedIndexPath := filepath.Join(s.raftDir, appliedIndexName)
-	s.appliedIdxFile, err = index.NewIndexFile(appliedIndexPath)
-	if err != nil {
-		return fmt.Errorf("failed to create applied index file: %s", err)
 	}
 
 	// Clean up any files from aborted operations. This tries to catch the case where scratch files
@@ -913,11 +905,6 @@ func (s *Store) Close(wait bool) (retErr error) {
 	// Only shutdown Bolt and SQLite when Raft is done.
 	if err := s.db.Close(); err != nil {
 		return err
-	}
-	if s.appliedIdxFile != nil {
-		if err := s.appliedIdxFile.Close(); err != nil {
-			return err
-		}
 	}
 	if err := s.boltStore.Close(); err != nil {
 		return err
@@ -2348,9 +2335,6 @@ func (s *Store) fsmApply(l *raft.Log) (e any) {
 	if mutated {
 		s.dbAppliedIdx.Store(l.Index)
 		s.appliedTarget.Signal(l.Index)
-		if err := s.appliedIdxFile.WriteValue(l.Index); err != nil {
-			s.logger.Printf("failed to write applied index to file: %s", err)
-		}
 	}
 	switch cmd.Type {
 	case proto.Command_COMMAND_TYPE_NOOP:
