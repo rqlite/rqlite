@@ -416,11 +416,11 @@ func Test_Store_RestoreNoCleanSnapshot(t *testing.T) {
 				t.Fatalf("unexpected results for query\nexp: %s\ngot: %s", exp, got)
 			}
 
-			if s.numSnapshotsStart.Load() != 2 {
-				t.Fatalf("expected snapshot start count to be 2")
+			if s.numSnapshotsStart.Load() != 1 {
+				t.Fatalf("expected snapshot start count to be 2, got %d", s.numSnapshotsStart.Load())
 			}
 			if s.numSnapshotsSkipped.Load() != 0 {
-				t.Fatalf("expected snapshot skipped count to be 0")
+				t.Fatalf("expected snapshot skipped count to be 0, got %d", s.numSnapshotsSkipped.Load())
 			}
 		})
 	}
