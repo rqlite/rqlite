@@ -2850,6 +2850,9 @@ func (s *Store) createSnapshotFingerprint() error {
 	}
 
 	sum, dur, err := rsum.CRC32WithTiming(s.dbPath)
+	if err != nil {
+		return fmt.Errorf("failed to compute CRC32 for snapshot finalizer: %s", err)
+	}
 	stats.Get(snapshotCRC32CreateDuration).(*expvar.Int).Set(dur.Milliseconds())
 
 	fp := &FileFingerprint{
