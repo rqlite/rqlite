@@ -14,6 +14,7 @@ func Test_FileFingerprint_WriteAndRead(t *testing.T) {
 	original := FileFingerprint{
 		ModTime: time.Now().UTC().Truncate(time.Second),
 		Size:    123456,
+		CRC32:   78901234,
 	}
 
 	// Write fingerprint
@@ -44,16 +45,26 @@ func Test_FileFingerprint_WriteAndRead(t *testing.T) {
 		t.Fatalf("Size mismatch: got %d, want %d", loaded.Size, original.Size)
 	}
 
-	if !loaded.Compare(original.ModTime, original.Size) {
+	if !loaded.Compare(original.ModTime, original.Size, original.CRC32) {
 		t.Fatalf("Compare returned false for matching values")
 	}
 
-	if loaded.Compare(original.ModTime, original.Size+1) {
+	if loaded.Compare(original.ModTime, original.Size+1, original.CRC32) {
 		t.Fatalf("Compare returned true for non-matching size")
 	}
 
-	if loaded.Compare(original.ModTime.Add(time.Second), original.Size) {
+	if loaded.Compare(original.ModTime.Add(time.Second), original.Size, original.CRC32) {
 		t.Fatalf("Compare returned true for non-matching mod time")
+	}
+
+	if loaded.Compare(original.ModTime, original.Size, original.CRC32+1) {
+		t.Fatalf("Compare returned true for non-matching CRC32")
+	}
+
+	// Test backward compatibility with zero CRC32
+	loaded.CRC32 = 0
+	if !loaded.Compare(original.ModTime, original.Size, original.CRC32+1) {
+		t.Fatalf("Compare returned false for zero CRC32")
 	}
 }
 

@@ -33,6 +33,7 @@ import (
 	wal "github.com/rqlite/rqlite/v9/db/wal"
 	"github.com/rqlite/rqlite/v9/internal/progress"
 	"github.com/rqlite/rqlite/v9/internal/random"
+	"github.com/rqlite/rqlite/v9/internal/rsum"
 	"github.com/rqlite/rqlite/v9/internal/rsync"
 	"github.com/rqlite/rqlite/v9/snapshot"
 	rlog "github.com/rqlite/rqlite/v9/store/log"
@@ -190,6 +191,7 @@ const (
 	numSnapshotPersistsFailed         = "num_snapshot_persists_failed"
 	snapshotPersistDuration           = "snapshot_persist_duration"
 	snapshotPrecompactWALSize         = "snapshot_precompact_wal_size"
+	snapshotCRC32CreateDuration       = "snapshot_crc32_create_duration"
 	snapshotWALSize                   = "snapshot_wal_size"
 	leaderChangesObserved             = "leader_changes_observed"
 	leaderChangesDropped              = "leader_changes_dropped"
@@ -256,6 +258,7 @@ func ResetStats() {
 	stats.Add(numSnapshotPersistsFailed, 0)
 	stats.Add(snapshotPersistDuration, 0)
 	stats.Add(snapshotPrecompactWALSize, 0)
+	stats.Add(snapshotCRC32CreateDuration, 0)
 	stats.Add(snapshotWALSize, 0)
 	stats.Add(leaderChangesObserved, 0)
 	stats.Add(leaderChangesDropped, 0)
@@ -605,11 +608,15 @@ func (s *Store) Open() (retErr error) {
 		if err != nil {
 			return nil
 		}
-		if !fp.Compare(mt, sz) {
+		sum, dur, err := rsum.CRC32WithTiming(s.dbPath)
+		if err != nil {
+			return nil
+		}
+		if !fp.Compare(mt, sz, sum) {
 			return nil
 		}
 
-		s.logger.Printf("detected successful prior snapshot operation, skipping restore, using existing database file")
+		s.logger.Printf("detected successful prior snapshot operation (CRC calculated in %s), skipping restore", dur)
 		config.NoSnapshotRestoreOnStart = true
 		removeDBFiles = false
 		li, tm, err := snapshotStore.LatestIndexTerm()
@@ -2841,9 +2848,17 @@ func (s *Store) createSnapshotFingerprint() error {
 	if err != nil {
 		return fmt.Errorf("failed to get database file size for snapshot finalizer: %s", err)
 	}
+
+	sum, dur, err := rsum.CRC32WithTiming(s.dbPath)
+	if err != nil {
+		return fmt.Errorf("failed to compute CRC32 for snapshot finalizer: %s", err)
+	}
+	stats.Get(snapshotCRC32CreateDuration).(*expvar.Int).Set(dur.Milliseconds())
+
 	fp := &FileFingerprint{
 		ModTime: mt,
 		Size:    sz,
+		CRC32:   sum,
 	}
 	if err := fp.WriteToFile(tmpFP); err != nil {
 		return fmt.Errorf("failed to write snapshot fingerprint to temp file: %s", err)
