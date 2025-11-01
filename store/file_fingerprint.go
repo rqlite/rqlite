@@ -11,6 +11,7 @@ import (
 type FileFingerprint struct {
 	ModTime time.Time `json:"mod_time"`
 	Size    int64     `json:"size"`
+	CRC32   uint32    `json:"crc32"`
 }
 
 // WriteToFile saves the fingerprint to a file and fsyncs it to disk.
@@ -48,6 +49,8 @@ func (f *FileFingerprint) ReadFromFile(path string) error {
 }
 
 // Compare checks if the given modification time and size match the fingerprint.
-func (f *FileFingerprint) Compare(mt time.Time, sz int64) bool {
-	return f.ModTime.Equal(mt) && f.Size == sz
+// If the CRC32 in the fingerprint is zero, it is ignored in the comparison to
+// allow for backward compatibility.
+func (f *FileFingerprint) Compare(mt time.Time, sz int64, crc uint32) bool {
+	return f.ModTime.Equal(mt) && f.Size == sz && (f.CRC32 == crc || f.CRC32 == 0)
 }
