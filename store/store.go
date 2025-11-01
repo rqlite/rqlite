@@ -637,7 +637,7 @@ func (s *Store) Open() (retErr error) {
 			s.snapshotCAS.End()
 		}()
 
-		s.logger.Printf("detected successful prior snapshot operation skipping restore")
+		s.logger.Printf("detected successful prior snapshot operation, skipping restore")
 		config.NoSnapshotRestoreOnStart = true
 		removeDBFiles = false
 		li, tm, err := snapshotStore.LatestIndexTerm()
