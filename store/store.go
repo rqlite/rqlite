@@ -608,15 +608,36 @@ func (s *Store) Open() (retErr error) {
 		if err != nil {
 			return nil
 		}
-		sum, dur, err := rsum.CRC32WithTiming(s.dbPath)
-		if err != nil {
-			return nil
-		}
-		if !fp.Compare(mt, sz, sum) {
+
+		if mt != fp.ModTime || sz != fp.Size {
+			// Basic sanity check didn't pass, full restore needed.
 			return nil
 		}
 
-		s.logger.Printf("detected successful prior snapshot operation (CRC calculated in %s), skipping restore", dur)
+		// The SQLite file is probably OK, so let's proceed. However we need to
+		// verify its checksum matches what we recorded at snapshot time. This is done
+		// asynchronously so as not to block startup. We must also block snapshotting
+		// until this check is complete so the main SQLite file is not touched during
+		// the CRC32 calculation. If the checksum fails to match, we log and exit, as
+		// this indicates a serious data integrity issue. If we're running in a cluster,
+		// the cluster should provide the fault tolerance.
+		if err := s.snapshotCAS.Begin("check-clean-snapshot"); err != nil {
+			return err
+		}
+		go func() {
+			sum, dur, err := rsum.CRC32WithTiming(s.dbPath)
+			if err != nil {
+				s.logger.Fatalf("failed to calculate CRC32 of database file during clean snapshot check: %s", err)
+			}
+			if sum != fp.CRC32 {
+				s.logger.Fatalf("CRC32 checksum mismatch during clean snapshot check - aborting")
+			}
+			s.logger.Printf("clean snapshot check CRC32 matched, calculation took %s", dur)
+			// All good, we can keep going and unblock snapshotting.
+			s.snapshotCAS.End()
+		}()
+
+		s.logger.Printf("detected successful prior snapshot operation skipping restore")
 		config.NoSnapshotRestoreOnStart = true
 		removeDBFiles = false
 		li, tm, err := snapshotStore.LatestIndexTerm()
