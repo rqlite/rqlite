@@ -629,7 +629,7 @@ func (s *Store) Open() (retErr error) {
 			if err != nil {
 				s.logger.Fatalf("failed to calculate CRC32 of database file during clean snapshot check: %s", err)
 			}
-			if sum != fp.CRC32 {
+			if fp.CRC32 != 0 && sum != fp.CRC32 {
 				s.logger.Fatalf("CRC32 checksum mismatch during clean snapshot check - aborting")
 			}
 			s.logger.Printf("clean snapshot check CRC32 matched, calculation took %s", dur)
