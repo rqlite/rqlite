@@ -2860,7 +2860,6 @@ func (s *Store) createSnapshotFingerprint() error {
 	if err := fp.WriteToFile(tmpFP); err != nil {
 		return fmt.Errorf("failed to write snapshot fingerprint to temp file: %s", err)
 	}
-
 	return os.Rename(tmpFP, s.cleanSnapshotPath)
 }
 
