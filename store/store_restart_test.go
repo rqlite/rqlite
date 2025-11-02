@@ -376,7 +376,9 @@ func Test_Store_RestoreNoCleanSnapshot(t *testing.T) {
 			name: "SQLiteModTime",
 			tamperFn: func(t *testing.T, s *Store) {
 				now := time.Now().Add(1 * time.Hour)
-				os.Chtimes(s.dbPath, now, now)
+				if err := os.Chtimes(s.dbPath, now, now); err != nil {
+					t.Fatalf("failed to change mod time of database file: %s", err.Error())
+				}
 			},
 		},
 	}
