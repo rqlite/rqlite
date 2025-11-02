@@ -372,6 +372,13 @@ func Test_Store_RestoreNoCleanSnapshot(t *testing.T) {
 				}
 			},
 		},
+		{
+			name: "SQLiteModTime",
+			tamperFn: func(t *testing.T, s *Store) {
+				now := time.Now().Add(1 * time.Hour)
+				os.Chtimes(s.dbPath, now, now)
+			},
+		},
 	}
 
 	for _, tc := range testCases {
