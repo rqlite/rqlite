@@ -8,6 +8,7 @@ import (
 	"time"
 
 	command "github.com/rqlite/rqlite/v9/command/proto"
+	"github.com/rqlite/rqlite/v9/internal/rsum"
 )
 
 // Test_OpenStoreCloseStartupSingleNode tests various restart scenarios.
@@ -435,13 +436,74 @@ func Test_Store_RestoreNoCleanSnapshot(t *testing.T) {
 			}
 
 			if s.numSnapshotsStart.Load() != 1 {
-				t.Fatalf("expected snapshot start count to be 2, got %d", s.numSnapshotsStart.Load())
+				t.Fatalf("expected snapshot start count to be 1, got %d", s.numSnapshotsStart.Load())
 			}
 			if s.numSnapshotsSkipped.Load() != 0 {
 				t.Fatalf("expected snapshot skipped count to be 0, got %d", s.numSnapshotsSkipped.Load())
 			}
 		})
 	}
+}
+
+func Test_Store_RestoreNoCleanSnapshot_CRCBad(t *testing.T) {
+	s, ln := mustNewStore(t)
+	defer ln.Close()
+
+	if err := s.Open(); err != nil {
+		t.Fatalf("failed to open single-node store: %s", err.Error())
+	}
+	if err := s.Bootstrap(NewServer(s.ID(), s.Addr(), true)); err != nil {
+		t.Fatalf("failed to bootstrap single-node store: %s", err.Error())
+	}
+	if _, err := s.WaitForLeader(10 * time.Second); err != nil {
+		t.Fatalf("Error waiting for leader: %s", err)
+	}
+
+	er := executeRequestFromString(
+		`CREATE TABLE foo (id INTEGER NOT NULL PRIMARY KEY, name TEXT)`,
+		false, false)
+	_, _, err := s.Execute(er)
+	if err != nil {
+		t.Fatalf("failed to execute on single node: %s", err.Error())
+	}
+
+	// Close the store, which will give us a snapshot on shutdown.
+	if err := s.Close(true); err != nil {
+		t.Fatalf("failed to close single-node store: %s", err.Error())
+	}
+
+	// Look inside the Store, and manually verify that the snapshot CRC32
+	// is good.
+	fp := &FileFingerprint{}
+	if err := fp.ReadFromFile(s.cleanSnapshotPath); err != nil {
+		t.Fatalf("failed to read clean snapshot fingerprint: %s", err.Error())
+	}
+	crc32, err := rsum.CRC32(s.dbPath)
+	if err != nil {
+		t.Fatalf("failed to calculate CRC32 of database file: %s", err.Error())
+	}
+	if fp.CRC32 != crc32 {
+		t.Fatalf("expected CRC32 in fingerprint to match database file")
+	}
+
+	// Now corrupt the CRC32 in the fingerprint.
+	fp.CRC32 ^= 0xFFFFFFFF
+	if err := fp.WriteToFile(s.cleanSnapshotPath); err != nil {
+		t.Fatalf("failed to write corrupted clean snapshot fingerprint: %s", err.Error())
+	}
+
+	if err := s.Open(); err != nil {
+		t.Fatalf("failed to re-open single-node store: %s", err.Error())
+	}
+
+	if s.numSnapshotsStart.Load() != 1 {
+		t.Fatalf("expected snapshot start count to be 1, got %d", s.numSnapshotsStart.Load())
+	}
+	if s.numSnapshotsSkipped.Load() != 0 {
+		t.Fatalf("expected snapshot skipped count to be 0, got %d", s.numSnapshotsSkipped.Load())
+	}
+
+	defer s.Close(true)
 }
 
 // Test_Store_Restore_NoSnapshotOnClose tests that when no snapshot takes place
