@@ -1,7 +1,8 @@
 
 ## v9.2.1 (unreleased)
 ### Implementation changes and bug fixes
-[PR #2377](https://github.com/rqlite/rqlite/pull/2377): Calculate, store, and verify main database CRC32 in the _clean snapshot_ marker file.
+- [PR #2377](https://github.com/rqlite/rqlite/pull/2377): Calculate, store, and verify main database CRC32 in the _clean snapshot_ marker file.
+- [PR #2380](https://github.com/rqlite/rqlite/pull/2380): CLI output in alphabetical order where applicable. Fixes issue [#2379](https://github.com/rqlite/rqlite/issues/2379).
 
 ## v9.2.0 (October 31st 2025)
 This release introduces new support for Associative responses when using the `RETURNING` keyword.
