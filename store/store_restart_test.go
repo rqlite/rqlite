@@ -495,6 +495,7 @@ func Test_Store_RestoreNoCleanSnapshot_CRCBad(t *testing.T) {
 	if err := s.Open(); err != nil {
 		t.Fatalf("failed to re-open single-node store: %s", err.Error())
 	}
+	defer s.Close(true)
 
 	if s.numSnapshotsStart.Load() != 1 {
 		t.Fatalf("expected snapshot start count to be 1, got %d", s.numSnapshotsStart.Load())
@@ -502,8 +503,6 @@ func Test_Store_RestoreNoCleanSnapshot_CRCBad(t *testing.T) {
 	if s.numSnapshotsSkipped.Load() != 0 {
 		t.Fatalf("expected snapshot skipped count to be 0, got %d", s.numSnapshotsSkipped.Load())
 	}
-
-	defer s.Close(true)
 }
 
 // Test_Store_Restore_NoSnapshotOnClose tests that when no snapshot takes place
