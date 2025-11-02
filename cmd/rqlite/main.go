@@ -7,10 +7,12 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"maps"
 	"net"
 	"net/http"
 	"net/url"
 	"os"
+	"slices"
 	"sort"
 	"strings"
 	"syscall"
@@ -701,12 +703,8 @@ func cliJSON(ctx *cli.Context, client *httpcl.Client, line, url string) error {
 	pprint = func(indent int, m map[string]any) {
 		const indentation = "  "
 
-		// Collect and sort keys.
-		keys := maps.Keys(m)
-		sort.Strings(keys)
-
 		// Print in key order.
-		for _, k := range keys {
+		for _, k := range slices.Sorted(maps.Keys(m)) {
 			v := m[k]
 			if v == nil {
 				continue
