@@ -7,10 +7,12 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"maps"
 	"net"
 	"net/http"
 	"net/url"
 	"os"
+	"slices"
 	"sort"
 	"strings"
 	"syscall"
@@ -696,11 +698,14 @@ func extensions(ctx *cli.Context, client *httpcl.Client, cmd string, argv *argT)
 // second word.
 func cliJSON(ctx *cli.Context, client *httpcl.Client, line, url string) error {
 	_ = ctx
-	// Recursive JSON printer.
+	// Recursive JSON printer with sorted keys.
 	var pprint func(indent int, m map[string]any)
 	pprint = func(indent int, m map[string]any) {
-		indentation := "  "
-		for k, v := range m {
+		const indentation = "  "
+
+		// Print in key order.
+		for _, k := range slices.Sorted(maps.Keys(m)) {
+			v := m[k]
 			if v == nil {
 				continue
 			}
