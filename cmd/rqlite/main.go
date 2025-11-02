@@ -702,10 +702,7 @@ func cliJSON(ctx *cli.Context, client *httpcl.Client, line, url string) error {
 		const indentation = "  "
 
 		// Collect and sort keys.
-		keys := make([]string, 0, len(m))
-		for k := range m {
-			keys = append(keys, k)
-		}
+		keys := maps.Keys(m)
 		sort.Strings(keys)
 
 		// Print in key order.
