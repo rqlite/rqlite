@@ -696,11 +696,21 @@ func extensions(ctx *cli.Context, client *httpcl.Client, cmd string, argv *argT)
 // second word.
 func cliJSON(ctx *cli.Context, client *httpcl.Client, line, url string) error {
 	_ = ctx
-	// Recursive JSON printer.
+	// Recursive JSON printer with sorted keys.
 	var pprint func(indent int, m map[string]any)
 	pprint = func(indent int, m map[string]any) {
-		indentation := "  "
-		for k, v := range m {
+		const indentation = "  "
+
+		// Collect and sort keys.
+		keys := make([]string, 0, len(m))
+		for k := range m {
+			keys = append(keys, k)
+		}
+		sort.Strings(keys)
+
+		// Print in key order.
+		for _, k := range keys {
+			v := m[k]
 			if v == nil {
 				continue
 			}
