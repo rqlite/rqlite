@@ -445,6 +445,52 @@ func Test_Store_RestoreNoCleanSnapshot(t *testing.T) {
 	}
 }
 
+func Test_Store_RestoreNoCleanSnapshot_CRCNotExist(t *testing.T) {
+	s, ln := mustNewStore(t)
+	defer ln.Close()
+
+	if err := s.Open(); err != nil {
+		t.Fatalf("failed to open single-node store: %s", err.Error())
+	}
+	if err := s.Bootstrap(NewServer(s.ID(), s.Addr(), true)); err != nil {
+		t.Fatalf("failed to bootstrap single-node store: %s", err.Error())
+	}
+	if _, err := s.WaitForLeader(10 * time.Second); err != nil {
+		t.Fatalf("Error waiting for leader: %s", err)
+	}
+
+	er := executeRequestFromString(
+		`CREATE TABLE foo (id INTEGER NOT NULL PRIMARY KEY, name TEXT)`,
+		false, false)
+	_, _, err := s.Execute(er)
+	if err != nil {
+		t.Fatalf("failed to execute on single node: %s", err.Error())
+	}
+
+	// Close the store, which will give us a snapshot on shutdown.
+	if err := s.Close(true); err != nil {
+		t.Fatalf("failed to close single-node store: %s", err.Error())
+	}
+
+	// Look inside the Store, and manually verify that the snapshot CRC32
+	// is good.
+	fp := &FileFingerprint{}
+	if err := fp.ReadFromFile(s.cleanSnapshotPath); err != nil {
+		t.Fatalf("failed to read clean snapshot fingerprint: %s", err.Error())
+	}
+
+	// Now remove the CRC32 from the fingerprint to simulate an older version.
+	fp.CRC32 = 0
+	if err := fp.WriteToFile(s.cleanSnapshotPath); err != nil {
+		t.Fatalf("failed to write corrupted clean snapshot fingerprint: %s", err.Error())
+	}
+
+	if err := s.Open(); err != nil {
+		t.Fatalf("failed to re-open single-node store: %s", err.Error())
+	}
+	defer s.Close(true)
+}
+
 func Test_Store_RestoreNoCleanSnapshot_CRCBad(t *testing.T) {
 	s, ln := mustNewStore(t)
 	defer ln.Close()

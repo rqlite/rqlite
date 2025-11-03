@@ -7,11 +7,12 @@ import (
 )
 
 // FileFingerprint stores a file's modification time and size.
-// It can be written to or read from disk as JSON.
+// It can be written to or read from disk as JSON. Older versions
+// may not have the CRC32 field, so it is optional in comparisons.
 type FileFingerprint struct {
 	ModTime time.Time `json:"mod_time"`
 	Size    int64     `json:"size"`
-	CRC32   uint32    `json:"crc32"`
+	CRC32   uint32    `json:"crc32,omitempty"`
 }
 
 // WriteToFile saves the fingerprint to a file and fsyncs it to disk.

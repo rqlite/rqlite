@@ -632,7 +632,7 @@ func (s *Store) Open() (retErr error) {
 			if err != nil {
 				s.logger.Fatalf("failed to calculate CRC32 of database file during clean snapshot check: %s", err)
 			}
-			if fp.CRC32 != 0 && sum != fp.CRC32 {
+			if fp.CRC32 != 0 && sum != fp.CRC32 { // Handle zero CRC32 for backward compatibility.
 				if s.crcBadHandler != nil {
 					s.crcBadHandler(fp.CRC32, sum)
 				} else {
