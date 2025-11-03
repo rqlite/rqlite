@@ -1,5 +1,5 @@
 
-## v9.2.1 (unreleased)
+## v9.2.1 (November 3rd 2025)
 ### Implementation changes and bug fixes
 - [PR #2377](https://github.com/rqlite/rqlite/pull/2377): Calculate, store, and verify main database CRC32 in the _clean snapshot_ marker file.
 - [PR #2378](https://github.com/rqlite/rqlite/pull/2378): Verify clean snapshot CRC in a goroutine.
