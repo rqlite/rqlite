@@ -544,6 +544,7 @@ func Test_Store_RestoreNoCleanSnapshot_CRCBad(t *testing.T) {
 	if err := s.Open(); err != nil {
 		t.Fatalf("failed to re-open single-node store: %s", err.Error())
 	}
+	defer s.Close(true)
 
 	// Wait for the CRC bad handler to be invoked.
 	select {
