@@ -445,6 +445,49 @@ func Test_Store_RestoreNoCleanSnapshot(t *testing.T) {
 	}
 }
 
+func Test_Store_RestoreNoCleanSnapshot_CRCNotExist(t *testing.T) {
+	s, ln := mustNewStore(t)
+	defer ln.Close()
+
+	if err := s.Open(); err != nil {
+		t.Fatalf("failed to open single-node store: %s", err.Error())
+	}
+	if err := s.Bootstrap(NewServer(s.ID(), s.Addr(), true)); err != nil {
+		t.Fatalf("failed to bootstrap single-node store: %s", err.Error())
+	}
+	if _, err := s.WaitForLeader(10 * time.Second); err != nil {
+		t.Fatalf("Error waiting for leader: %s", err)
+	}
+
+	er := executeRequestFromString(
+		`CREATE TABLE foo (id INTEGER NOT NULL PRIMARY KEY, name TEXT)`,
+		false, false)
+	_, _, err := s.Execute(er)
+	if err != nil {
+		t.Fatalf("failed to execute on single node: %s", err.Error())
+	}
+
+	// Close the store, which will give us a snapshot on shutdown.
+	if err := s.Close(true); err != nil {
+		t.Fatalf("failed to close single-node store: %s", err.Error())
+	}
+
+	// Now remove the CRC32 from the fingerprint to simulate an older version.
+	fp := &FileFingerprint{}
+	if err := fp.ReadFromFile(s.cleanSnapshotPath); err != nil {
+		t.Fatalf("failed to read clean snapshot fingerprint: %s", err.Error())
+	}
+	fp.CRC32 = 0
+	if err := fp.WriteToFile(s.cleanSnapshotPath); err != nil {
+		t.Fatalf("failed to write corrupted clean snapshot fingerprint: %s", err.Error())
+	}
+
+	if err := s.Open(); err != nil {
+		t.Fatalf("failed to re-open single-node store: %s", err.Error())
+	}
+	defer s.Close(true)
+}
+
 func Test_Store_RestoreNoCleanSnapshot_CRCBad(t *testing.T) {
 	s, ln := mustNewStore(t)
 	defer ln.Close()
@@ -492,16 +535,22 @@ func Test_Store_RestoreNoCleanSnapshot_CRCBad(t *testing.T) {
 		t.Fatalf("failed to write corrupted clean snapshot fingerprint: %s", err.Error())
 	}
 
+	// Set a handler to ensure the Store goroutine responds to the bad CRC32.
+	ch := make(chan struct{})
+	s.crcBadHandler = func(_, _ uint32) {
+		close(ch)
+	}
+
 	if err := s.Open(); err != nil {
 		t.Fatalf("failed to re-open single-node store: %s", err.Error())
 	}
 	defer s.Close(true)
 
-	if s.numSnapshotsStart.Load() != 1 {
-		t.Fatalf("expected snapshot start count to be 1, got %d", s.numSnapshotsStart.Load())
-	}
-	if s.numSnapshotsSkipped.Load() != 0 {
-		t.Fatalf("expected snapshot skipped count to be 0, got %d", s.numSnapshotsSkipped.Load())
+	// Wait for the CRC bad handler to be invoked.
+	select {
+	case <-ch:
+	case <-time.After(5 * time.Second):
+		t.Fatalf("timed out waiting for CRC bad handler to be invoked")
 	}
 }
 

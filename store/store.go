@@ -295,13 +295,15 @@ const (
 
 // Store is a SQLite database, where all changes are made via Raft consensus.
 type Store struct {
-	open              *rsync.AtomicBool
-	raftDir           string
-	raftDBPath        string
-	snapshotDir       string
-	peersPath         string
-	peersInfoPath     string
+	open          *rsync.AtomicBool
+	raftDir       string
+	raftDBPath    string
+	snapshotDir   string
+	peersPath     string
+	peersInfoPath string
+
 	cleanSnapshotPath string
+	crcBadHandler     func(fpCRC32, actualCRC32 uint32) // For test purposes.
 
 	restorePath   string
 	restoreDoneCh chan struct{}
@@ -608,15 +610,45 @@ func (s *Store) Open() (retErr error) {
 		if err != nil {
 			return nil
 		}
-		sum, dur, err := rsum.CRC32WithTiming(s.dbPath)
-		if err != nil {
-			return nil
-		}
-		if !fp.Compare(mt, sz, sum) {
+
+		if !mt.Equal(fp.ModTime) || sz != fp.Size {
+			// Basic sanity check didn't pass, full restore needed.
 			return nil
 		}
 
-		s.logger.Printf("detected successful prior snapshot operation (CRC calculated in %s), skipping restore", dur)
+		// The SQLite file is probably OK, so let's proceed. However we need to
+		// verify its checksum matches what we recorded at snapshot time. This is done
+		// asynchronously so as not to block startup. Writes will go into the WAL in
+		// the meantime. We must also block snapshotting until this check is complete
+		// so the main SQLite file is not touched during the CRC32 calculation. If
+		// the checksum fails to match, we log and exit, as this indicates a serious
+		// data integrity issue. If we're running in a cluster, the cluster should
+		// provide the fault tolerance.
+		if err := s.snapshotCAS.Begin("check-clean-snapshot"); err != nil {
+			return err
+		}
+		go func() {
+			// Whatever happens, unblock snapshoting. This is critical because we
+			// locked snapshotting before this goroutine launched.
+			defer s.snapshotCAS.End()
+			if fp.CRC32 == 0 {
+				return
+			}
+			sum, dur, err := rsum.CRC32WithTiming(s.dbPath)
+			if err != nil {
+				s.logger.Fatalf("failed to calculate CRC32 of database file during clean snapshot check: %s", err)
+			}
+			if sum != fp.CRC32 { // Handle zero CRC32 for backward compatibility.
+				if s.crcBadHandler != nil {
+					s.crcBadHandler(fp.CRC32, sum)
+				} else {
+					s.logger.Fatalf("CRC32 checksum mismatch during clean snapshot check - aborting")
+				}
+			}
+			s.logger.Printf("clean snapshot check CRC32 matched, calculation took %s", dur)
+		}()
+
+		s.logger.Printf("detected successful prior snapshot operation, skipping restore")
 		config.NoSnapshotRestoreOnStart = true
 		removeDBFiles = false
 		li, tm, err := snapshotStore.LatestIndexTerm()
