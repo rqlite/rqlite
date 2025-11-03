@@ -492,16 +492,21 @@ func Test_Store_RestoreNoCleanSnapshot_CRCBad(t *testing.T) {
 		t.Fatalf("failed to write corrupted clean snapshot fingerprint: %s", err.Error())
 	}
 
+	// Set a handler to ensure the Store goroutine responds to the bad CRC32.
+	ch := make(chan struct{})
+	s.crcBadHandler = func(_, _ uint32) {
+		close(ch)
+	}
+
 	if err := s.Open(); err != nil {
 		t.Fatalf("failed to re-open single-node store: %s", err.Error())
 	}
-	defer s.Close(true)
 
-	if s.numSnapshotsStart.Load() != 1 {
-		t.Fatalf("expected snapshot start count to be 1, got %d", s.numSnapshotsStart.Load())
-	}
-	if s.numSnapshotsSkipped.Load() != 0 {
-		t.Fatalf("expected snapshot skipped count to be 0, got %d", s.numSnapshotsSkipped.Load())
+	// Wait for the CRC bad handler to be invoked.
+	select {
+	case <-ch:
+	case <-time.After(5 * time.Second):
+		t.Fatalf("timed out waiting for CRC bad handler to be invoked")
 	}
 }
 
