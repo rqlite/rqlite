@@ -628,11 +628,17 @@ func (s *Store) Open() (retErr error) {
 			return err
 		}
 		go func() {
+			// Whatever happens, unblock snapshoting. This is critical because we
+			// locked snapshotting before this goroutine launched.
+			defer s.snapshotCAS.End()
+			if fp.CRC32 == 0 {
+				return
+			}
 			sum, dur, err := rsum.CRC32WithTiming(s.dbPath)
 			if err != nil {
 				s.logger.Fatalf("failed to calculate CRC32 of database file during clean snapshot check: %s", err)
 			}
-			if fp.CRC32 != 0 && sum != fp.CRC32 { // Handle zero CRC32 for backward compatibility.
+			if sum != fp.CRC32 { // Handle zero CRC32 for backward compatibility.
 				if s.crcBadHandler != nil {
 					s.crcBadHandler(fp.CRC32, sum)
 				} else {
@@ -640,8 +646,6 @@ func (s *Store) Open() (retErr error) {
 				}
 			}
 			s.logger.Printf("clean snapshot check CRC32 matched, calculation took %s", dur)
-			// All good, we can keep going and unblock snapshotting.
-			s.snapshotCAS.End()
 		}()
 
 		s.logger.Printf("detected successful prior snapshot operation, skipping restore")
