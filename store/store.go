@@ -628,11 +628,9 @@ func (s *Store) Open() (retErr error) {
 		go func() {
 			sum, dur, err := rsum.CRC32WithTiming(s.dbPath)
 			if err != nil {
-				removeFile(s.cleanSnapshotPath) // Force a full restore next time.
 				s.logger.Fatalf("failed to calculate CRC32 of database file during clean snapshot check: %s", err)
 			}
 			if fp.CRC32 != 0 && sum != fp.CRC32 {
-				removeFile(s.cleanSnapshotPath) // Force a full restore next time.
 				s.logger.Fatalf("CRC32 checksum mismatch during clean snapshot check - aborting")
 			}
 			s.logger.Printf("clean snapshot check CRC32 matched, calculation took %s", dur)
