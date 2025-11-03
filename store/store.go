@@ -598,18 +598,22 @@ func (s *Store) Open() (retErr error) {
 		}()
 
 		if !pathExists(s.cleanSnapshotPath) {
+			s.logger.Printf("no clean snapshot marker file present")
 			return nil
 		}
 		fp := &FileFingerprint{}
 		if err := fp.ReadFromFile(s.cleanSnapshotPath); err != nil {
+			s.logger.Printf("failed to read clean snapshot marker file: %s", err)
 			return nil
 		}
 		mt, sz, err := modTimeSize(s.dbPath)
 		if err != nil {
+			s.logger.Printf("failed to stat database file during clean snapshot check: %s", err)
 			return nil
 		}
 
 		if mt != fp.ModTime || sz != fp.Size {
+			s.logger.Printf("database file modified since clean snapshot marker recorded %s %s %d %d", mt, fp.ModTime, sz, fp.Size)
 			// Basic sanity check didn't pass, full restore needed.
 			return nil
 		}
