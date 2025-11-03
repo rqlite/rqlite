@@ -612,7 +612,7 @@ func (s *Store) Open() (retErr error) {
 			return nil
 		}
 
-		if mt != fp.ModTime || sz != fp.Size {
+		if !mt.Equal(fp.ModTime) || sz != fp.Size {
 			s.logger.Printf("database file modified since clean snapshot marker recorded %s %s %d %d", mt, fp.ModTime, sz, fp.Size)
 			// Basic sanity check didn't pass, full restore needed.
 			return nil
