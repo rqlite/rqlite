@@ -472,14 +472,11 @@ func Test_Store_RestoreNoCleanSnapshot_CRCNotExist(t *testing.T) {
 		t.Fatalf("failed to close single-node store: %s", err.Error())
 	}
 
-	// Look inside the Store, and manually verify that the snapshot CRC32
-	// is good.
+	// Now remove the CRC32 from the fingerprint to simulate an older version.
 	fp := &FileFingerprint{}
 	if err := fp.ReadFromFile(s.cleanSnapshotPath); err != nil {
 		t.Fatalf("failed to read clean snapshot fingerprint: %s", err.Error())
 	}
-
-	// Now remove the CRC32 from the fingerprint to simulate an older version.
 	fp.CRC32 = 0
 	if err := fp.WriteToFile(s.cleanSnapshotPath); err != nil {
 		t.Fatalf("failed to write corrupted clean snapshot fingerprint: %s", err.Error())
