@@ -27,6 +27,14 @@ func Test_DefaultDriver(t *testing.T) {
 		t.Fatalf("OpenWithDriver failed: %s", err.Error())
 	}
 	mustExecute(db, "CREATE TABLE foo (id INTEGER PRIMARY KEY, name TEXT)")
+	q, err := db.QueryStringStmt("SELECT * FROM foo")
+	if err != nil {
+		t.Fatalf("failed to query empty table: %s", err.Error())
+	}
+	if exp, got := `[{"columns":["id","name"],"types":["integer","text"]}]`, asJSON(q); exp != got {
+		t.Fatalf("unexpected results for query, expected %s, got %s", exp, got)
+	}
+
 	if !fileExists(db.WALPath()) {
 		t.Fatalf("WAL file not created")
 	}
@@ -35,6 +43,28 @@ func Test_DefaultDriver(t *testing.T) {
 	}
 	if !fileExists(db.WALPath()) {
 		t.Fatalf("WAL file removed on close")
+	}
+
+	// Now, delete the WAL file, and re-open the database. The SELECT should
+	// fail with "no table", proving the WAL was not checkpointed.
+	if err := os.Remove(db.WALPath()); err != nil {
+		t.Fatalf("Failed to remove WAL file: %s", err.Error())
+	}
+	db, err = OpenWithDriver(d, path, false, true)
+	if err != nil {
+		t.Fatalf("OpenWithDriver failed: %s", err.Error())
+	}
+
+	q, err = db.QueryStringStmt("SELECT * FROM foo")
+	if err != nil {
+		t.Fatalf("failed to query empty table: %s", err.Error())
+	}
+	if exp, got := `[{"error":"no such table: foo"}]`, asJSON(q); exp != got {
+		t.Fatalf("unexpected results for query, expected %s, got %s", exp, got)
+	}
+
+	if err := db.Close(); err != nil {
+		t.Fatalf("Close failed: %s", err.Error())
 	}
 }
 
