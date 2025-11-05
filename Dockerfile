@@ -43,6 +43,10 @@ RUN curl -L `curl -s https://api.github.com/repos/asg017/sqlite-vec/releases/lat
     echo location >> ~/.curlrc && \
     cd asg017* && sh scripts/vendor.sh && echo "#include <sys/types.h>" | cat - sqlite-vec.c > temp && mv temp sqlite-vec.c && make loadable && zip -j /extensions/sqlite-vec.zip dist/vec0.so
 
+RUN curl -L `curl -s https://api.github.com/repos/sqliteai/sqlite-vector/releases/latest | grep "tarball_url" | cut -d '"' -f 4` -o sqliteai-vector.tar.gz && \
+    tar xvfz sqliteai-vector.tar.gz && rm sqliteai-vector.tar.gz && \
+    cd sqliteai* && make && zip -j /extensions/sqliteai-vector.zip dist/vector.so
+
 RUN git clone https://github.com/rqlite/rqlite-sqlite-ext.git
 RUN cd rqlite-sqlite-ext/misc && make && zip /extensions/misc.zip *.so
 RUN cd rqlite-sqlite-ext/icu && gcc -fPIC -shared icu.c -I .. `pkg-config --libs --cflags icu-uc icu-io` -o icu.so && zip /extensions/icu.zip icu.so
