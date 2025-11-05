@@ -174,12 +174,48 @@ func Test_Writer_CompactingScanner(t *testing.T) {
 	copyAndCompactWAL(srcWAL, destWAL)
 	checkRowCount(srcDSN, 3000)
 	checkRowCount(destDSN, 3000)
+
+	for i := 2000; i < 3000; i++ {
+		mustExec(srcConn, fmt.Sprintf("DELETE FROM foo WHERE id=%d", i))
+	}
+	copyAndCompactWAL(srcWAL, destWAL)
+	checkRowCount(destDSN, 2000)
+
+	for i := 1000; i < 2000; i++ {
+		mustExec(srcConn, fmt.Sprintf("DELETE FROM foo WHERE id=%d", i))
+	}
+	copyAndCompactWAL(srcWAL, destWAL)
+	checkRowCount(destDSN, 1000)
+
+	dstConn, err := sql.Open("sqlite3", destDSN)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer dstConn.Close()
+	for i := 1; i < 1000; i++ {
+		srcRow := mustQuery(srcConn, fmt.Sprintf("SELECT name FROM foo WHERE id=%d", i))
+		dstRow := mustQuery(dstConn, fmt.Sprintf("SELECT name FROM foo WHERE id=%d", i))
+		var srcName, dstName string
+		if err := srcRow.Scan(&srcName); err != nil {
+			t.Fatal(err)
+		}
+		if err := dstRow.Scan(&dstName); err != nil {
+			t.Fatal(err)
+		}
+		if srcName != dstName {
+			t.Fatalf("row %d: expected name %q, got %q", i+1, srcName, dstName)
+		}
+	}
 }
 
 func mustExec(db *sql.DB, query string) {
 	if _, err := db.Exec(query); err != nil {
 		panic(err)
 	}
+}
+
+func mustQuery(db *sql.DB, query string) *sql.Row {
+	return db.QueryRow(query)
 }
 
 func mustCreateWAL(t *testing.T, size int) (*sql.DB, string) {
