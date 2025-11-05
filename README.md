@@ -11,9 +11,9 @@
 [![Slack](https://img.shields.io/badge/Slack--purple.svg)](https://www.rqlite.io/join-slack)
 [![Google Group](https://img.shields.io/badge/Google%20Group--blue.svg)](https://groups.google.com/group/rqlite)
 
-[**rqlite**](https://rqlite.io) is a [feature-rich](https://rqlite.io/docs/features/), [rock](https://www.sqlite.org/testing.html)-[solid](https://philipotoole.com/how-is-rqlite-tested/), fault-tolerant, distributed relational database built on [SQLite](https://www.sqlite.org/). It's lightweight, developer-friendly, and exceptionally easy to operate.
+[**rqlite**](https://rqlite.io) is a [feature-rich](https://rqlite.io/docs/features/), [rock](https://www.sqlite.org/testing.html)-[solid](https://philipotoole.com/how-is-rqlite-tested/), fault-tolerant, distributed relational database built on [SQLite](https://www.sqlite.org/). It's lightweight, developer-friendly, and exceptionally easy to operate, offering effortless installation and deployment.
 
-Use rqlite to reliably store your most important data, ensuring it's always available to your applications -- think [etcd](https://etcd.io/), but with relational modeling available. Whether you're deploying **resilient services in the cloud** or **reliable applications at the edge**, rqlite is a solution that offers **effortless installation, deployment, and operation**.
+Use rqlite to reliably store your most important data, ensuring it's always available to your applications -- think [etcd](https://etcd.io/), but with relational modeling available. Whether you're deploying **resilient services in the cloud** or **reliable applications at the edge**, rqlite provides a robust solution for critical data.
 
 <a href="https://rqlite.io"><strong>Website</strong></a> ·
 <a href="https://www.rqlite.io/join-slack"><strong>Slack</strong></a>
