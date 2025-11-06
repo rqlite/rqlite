@@ -1,6 +1,6 @@
 ## v9.2.2 (unreleased)
 ### Implementation changes and bug fixes
-- Add [SQLiteAI SQLite Vector](https://github.com/sqliteai/sqlite-vector) to Docker image.
+- Add [SQLiteAI SQLite Vector](https://github.com/sqliteai/sqlite-vector) extension to Docker image.
 
 ## v9.2.1 (November 3rd 2025)
 ### Implementation changes and bug fixes
