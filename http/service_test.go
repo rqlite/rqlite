@@ -1305,7 +1305,7 @@ func Test_Licenses(t *testing.T) {
 
 	// Check response body contains license text
 	body := mustReadBody(t, resp)
-	if !strings.Contains(body, "dummy license") {
+	if !strings.Contains(body, "MIT License") {
 		t.Fatalf("response body does not contain expected license text, got: %s", body)
 	}
 }
