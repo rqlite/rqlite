@@ -115,6 +115,10 @@ func Test_OpenStoreSingleNode(t *testing.T) {
 	} else if len(followers) != 0 {
 		t.Fatalf("expected no followers, got %d", len(followers))
 	}
+
+	if !s.IsStandalone() {
+		t.Fatalf("store not marked as standalone")
+	}
 }
 
 // Test_SingleNodeOnDiskSQLitePath ensures that basic functionality works when the SQLite

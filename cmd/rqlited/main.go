@@ -253,7 +253,7 @@ func main() {
 		log.Printf("removed this node successfully from cluster before shutdown")
 	}
 
-	if cfg.RaftStepdownOnShutdown {
+	if cfg.RaftStepdownOnShutdown && !str.IsStandalone() {
 		if str.IsLeader() {
 			// Don't log a confusing message if (probably) not Leader
 			log.Printf("stepping down as Leader before shutdown")
