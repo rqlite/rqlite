@@ -544,6 +544,8 @@ func (s *Service) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	case strings.HasPrefix(r.URL.Path, "/readyz"):
 		stats.Add(numReadyz, 1)
 		s.handleReadyz(w, r, params)
+	case r.URL.Path == "/licenses":
+		s.handleLicenses(w, r, params)
 	case r.URL.Path == "/debug/vars":
 		s.handleExpvar(w, r, params)
 	case strings.HasPrefix(r.URL.Path, "/debug/pprof"):
@@ -1215,6 +1217,24 @@ func (s *Service) handleReadyz(w http.ResponseWriter, r *http.Request, qp QueryP
 	}
 	w.WriteHeader(http.StatusOK)
 	w.Write([]byte(okMsg))
+}
+
+// handleLicenses serves the license information.
+func (s *Service) handleLicenses(w http.ResponseWriter, r *http.Request, qp QueryParams) {
+	w.Header().Set("Content-Type", "text/plain; charset=utf-8")
+
+	if !s.CheckRequestPerm(r, auth.PermStatus) {
+		w.WriteHeader(http.StatusUnauthorized)
+		return
+	}
+
+	if r.Method != "GET" {
+		w.WriteHeader(http.StatusMethodNotAllowed)
+		return
+	}
+
+	w.WriteHeader(http.StatusOK)
+	w.Write([]byte(LicenseText))
 }
 
 func (s *Service) handleExecute(w http.ResponseWriter, r *http.Request, qp QueryParams) {

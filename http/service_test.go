@@ -336,6 +336,7 @@ func Test_405Routes(t *testing.T) {
 		{method: "POST", path: "/db/backup"},
 		{method: "POST", path: "/status"},
 		{method: "POST", path: "/nodes"},
+		{method: "POST", path: "/licenses"},
 	}
 
 	m := &MockStore{}
@@ -417,6 +418,7 @@ func Test_401Routes_NoBasicAuth(t *testing.T) {
 		"/nodes",
 		"/leader",
 		"/readyz",
+		"/licenses",
 		"/debug/vars",
 		"/debug/pprof/cmdline",
 		"/debug/pprof/profile",
@@ -1271,6 +1273,101 @@ func Test_Readyz(t *testing.T) {
 	}
 	if cnt.Load() != 2 {
 		t.Fatalf("failed to call committedFn")
+	}
+}
+
+func Test_Licenses(t *testing.T) {
+	m := &MockStore{}
+	c := &mockClusterService{}
+	s := New("127.0.0.1:0", m, c, nil)
+	if err := s.Start(); err != nil {
+		t.Fatalf("failed to start service")
+	}
+	defer s.Close()
+
+	client := &http.Client{}
+	host := fmt.Sprintf("http://%s", s.Addr().String())
+
+	// Test GET request
+	resp, err := client.Get(host + "/licenses")
+	if err != nil {
+		t.Fatalf("failed to make licenses request")
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("failed to get expected StatusOK, got %d", resp.StatusCode)
+	}
+
+	// Check content type
+	if ct := resp.Header.Get("Content-Type"); ct != "text/plain; charset=utf-8" {
+		t.Fatalf("unexpected content type, exp: text/plain; charset=utf-8, got: %s", ct)
+	}
+
+	// Check response body contains license text
+	body := mustReadBody(t, resp)
+	if !strings.Contains(body, "dummy license") {
+		t.Fatalf("response body does not contain expected license text, got: %s", body)
+	}
+}
+
+func Test_LicensesMethodNotAllowed(t *testing.T) {
+	m := &MockStore{}
+	c := &mockClusterService{}
+	s := New("127.0.0.1:0", m, c, nil)
+	if err := s.Start(); err != nil {
+		t.Fatalf("failed to start service")
+	}
+	defer s.Close()
+
+	client := &http.Client{}
+	host := fmt.Sprintf("http://%s", s.Addr().String())
+
+	// Test POST request
+	resp, err := client.Post(host+"/licenses", "text/plain", nil)
+	if err != nil {
+		t.Fatalf("failed to make POST request")
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusMethodNotAllowed {
+		t.Fatalf("expected StatusMethodNotAllowed for POST, got %d", resp.StatusCode)
+	}
+
+	// Test DELETE request
+	req, err := http.NewRequest("DELETE", host+"/licenses", nil)
+	if err != nil {
+		t.Fatalf("failed to create DELETE request")
+	}
+	resp, err = client.Do(req)
+	if err != nil {
+		t.Fatalf("failed to make DELETE request")
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusMethodNotAllowed {
+		t.Fatalf("expected StatusMethodNotAllowed for DELETE, got %d", resp.StatusCode)
+	}
+}
+
+func Test_LicensesAuth(t *testing.T) {
+	c := &mockCredentialStore{HasPermOK: false}
+	m := &MockStore{}
+	n := &mockClusterService{}
+	s := New("127.0.0.1:0", m, n, c)
+	if err := s.Start(); err != nil {
+		t.Fatalf("failed to start service")
+	}
+	defer s.Close()
+
+	client := &http.Client{}
+	host := fmt.Sprintf("http://%s", s.Addr().String())
+
+	// Test unauthorized access
+	resp, err := client.Get(host + "/licenses")
+	if err != nil {
+		t.Fatalf("failed to make request")
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusUnauthorized {
+		t.Fatalf("expected StatusUnauthorized, got %d", resp.StatusCode)
 	}
 }
 
