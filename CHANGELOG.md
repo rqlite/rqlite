@@ -1,6 +1,7 @@
 ## v9.2.2 (unreleased)
 ### Implementation changes and bug fixes
 - [PR #2382](https://github.com/rqlite/rqlite/pull/2382): Add `/licenses` endpoint to HTTP API.
+- [PR #2383](https://github.com/rqlite/rqlite/pull/2383): Add actual licenses.
 - Add [SQLiteAI SQLite Vector](https://github.com/sqliteai/sqlite-vector) extension to Docker image.
 
 ## v9.2.1 (November 3rd 2025)

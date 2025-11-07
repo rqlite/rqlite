@@ -27,6 +27,7 @@ import (
 	"github.com/rqlite/rqlite/v9/command/proto"
 	"github.com/rqlite/rqlite/v9/command/sql"
 	"github.com/rqlite/rqlite/v9/db"
+	"github.com/rqlite/rqlite/v9/http/licenses"
 	"github.com/rqlite/rqlite/v9/internal/rtls"
 	"github.com/rqlite/rqlite/v9/queue"
 	"github.com/rqlite/rqlite/v9/store"
@@ -1234,7 +1235,7 @@ func (s *Service) handleLicenses(w http.ResponseWriter, r *http.Request, qp Quer
 	}
 
 	w.WriteHeader(http.StatusOK)
-	w.Write([]byte(LicenseText))
+	w.Write([]byte(licenses.Text))
 }
 
 func (s *Service) handleExecute(w http.ResponseWriter, r *http.Request, qp QueryParams) {
