@@ -72,6 +72,12 @@ func Test_MultiNode_Leader_Followers(t *testing.T) {
 	if !followers0[0].Equal(followers1[0]) {
 		t.Fatalf("followers mismatch, got: %s, exp: %s", followers1[0].ID, followers0[0].ID)
 	}
+
+	for _, n := range []*Store{s0, s1} {
+		if n.IsStandalone() {
+			t.Fatalf("expected multi-node store to not be standalone")
+		}
+	}
 }
 
 func Test_MultiNode_Leader_VerifyLeader(t *testing.T) {

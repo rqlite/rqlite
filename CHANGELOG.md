@@ -1,3 +1,7 @@
+## v9.2.4 (unreleased)
+### Implementation changes and bug fixes
+- [PR #2384](https://github.com/rqlite/rqlite/pull/2384): Don't attempt stepdown if single node cluster.
+
 ## v9.2.3 (November 7th 2025)
 There no changes in v9.2.3 relative to v9.2.2 in terms of rqlite functionality. This release simply fixes an `arm/v6` and `arm/v7` Docker packaging issue.
 

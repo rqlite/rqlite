@@ -1206,6 +1206,17 @@ func (s *Store) Nodes() ([]*Server, error) {
 	return servers, nil
 }
 
+// IsStandalone returns true if the Store is in a single-node cluster,
+// that single node being itself. If the Store is unable to determine
+// its state, it also returns false.
+func (s *Store) IsStandalone() bool {
+	nodes, err := s.Nodes()
+	if err != nil {
+		return false
+	}
+	return len(nodes) == 1 && nodes[0].ID == s.raftID
+}
+
 // WaitForRemoval blocks until a node with the given ID is removed from the
 // cluster or the timeout expires.
 func (s *Store) WaitForRemoval(id string, timeout time.Duration) error {
