@@ -1,4 +1,4 @@
-## v9.2.2 (unreleased)
+## v9.2.2 (November 4th 2025)
 ### Implementation changes and bug fixes
 - [PR #2382](https://github.com/rqlite/rqlite/pull/2382): Add `/licenses` endpoint to HTTP API.
 - [PR #2383](https://github.com/rqlite/rqlite/pull/2383): Add actual licenses.
