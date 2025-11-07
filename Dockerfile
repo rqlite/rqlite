@@ -11,6 +11,7 @@ RUN apk add --no-cache \
     gettext \
     git \
     icu-dev \
+    linux-headers \
     make \
     musl-dev \
     pkgconf \

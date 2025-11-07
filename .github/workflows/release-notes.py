@@ -16,6 +16,8 @@ To download and run a single rqlite node follow the directions below. It's also 
 If you wish to build rqlite from source, check out [this documentation](https://rqlite.io/docs/install-rqlite/building-from-source/).
 
 ### Docker
+_In addition to Docker Hub, images are also uploaded to [ghcr.io](https://github.com/rqlite/rqlite/pkgs/container/rqlite)._
+
 Run a single node as follows:
 ```
 docker run -p4001:4001 rqlite/rqlite
