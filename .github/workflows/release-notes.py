@@ -20,6 +20,7 @@ Run a single node as follows:
 ```
 docker run -p4001:4001 rqlite/rqlite
 ```
+_Images are also mirrored to [ghcr.io](https://github.com/rqlite/rqlite/pkgs/container/rqlite)._
 
 Check out the [rqlite Docker page](https://hub.docker.com/r/rqlite/rqlite/) for more details on running rqlite via Docker, including how to deploy a cluster.
 
