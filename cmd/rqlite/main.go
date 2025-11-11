@@ -58,14 +58,14 @@ var cliHelp []string
 func init() {
 	cliHelp = []string{
 		`.backup FILE                                  Write database backup to FILE`,
-		`.blobarray on|off                             Display BLOB data as byte arrays`,
+		`.blobarray [on|off]                           Show setting, or set BLOB data display as byte arrays`,
 		`.boot FILE                                    Boot the node using a SQLite file read from FILE`,
 		`.consistency [none|weak|linearizable|strong]  Show or set read consistency level`,
 		`.dump FILE [TABLE,TABLE...]                   Dump the database in SQL text to FILE, optionally limited to TABLEs`,
 		`.exit                                         Exit this program`,
 		`.expvar                                       Show expvar (Go runtime) information for connected node`,
 		`.extensions                                   Show loaded SQLite extensions`,
-		`.forcewrites on|off                           Force all statements to be executed via /db/execute`,
+		`.forcewrites [on|off]                         Show setting, or set all statements to be executed via /db/execute`,
 		`.help                                         Show this message`,
 		`.indexes                                      Show names of all indexes`,
 		`.quit                                         Exit this program`,
@@ -79,7 +79,7 @@ func init() {
 		`.stepdown [NODEID]                            Instruct the leader to stepdown, optionally specifying new Leader node`,
 		`.sysdump FILE                                 Dump system diagnostics to FILE`,
 		`.tables                                       List names of tables`,
-		`.timer on|off                                 Turn query timings on or off`,
+		`.timer [on|off]                               Show setting, or set query timings on or off`,
 	}
 	sort.Strings(cliHelp)
 }
