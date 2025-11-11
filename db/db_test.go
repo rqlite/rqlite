@@ -312,7 +312,15 @@ func Test_QueryReadOnly(t *testing.T) {
 
 	r, err := db.QueryStringStmt("CREATE TABLE foo (id INTEGER NOT NULL PRIMARY KEY, name TEXT)")
 	if err != nil {
-		t.Fatalf("failed to create table: %s", err.Error())
+		t.Fatalf("failed to attempt to create table: %s", err.Error())
+	}
+	if exp, got := `[{"error":"attempt to change database via query operation"}]`, asJSON(r); exp != got {
+		t.Fatalf("unexpected results for query, expected %s, got %s", exp, got)
+	}
+
+	r, err = db.QueryStringStmt("PRAGMA journal_mode=DELETE")
+	if err != nil {
+		t.Fatalf("failed to attempt to change journaling mode: %s", err.Error())
 	}
 	if exp, got := `[{"error":"attempt to change database via query operation"}]`, asJSON(r); exp != got {
 		t.Fatalf("unexpected results for query, expected %s, got %s", exp, got)
