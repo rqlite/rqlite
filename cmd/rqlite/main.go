@@ -203,6 +203,14 @@ func main() {
 			case ".EXTENSIONS":
 				err = extensions(ctx, client, cmd, argv)
 			case ".FORCEWRITES":
+				if index == -1 || index == len(input)-1 {
+					if forceWrites {
+						ctx.String("on\n")
+					} else {
+						ctx.String("off\n")
+					}
+					break
+				}
 				err = toggleFlag(input[index+1:], &forceWrites)
 			case ".TABLES":
 				err = queryWithClient(ctx, client, timer, blobArray, consistency, `SELECT name FROM sqlite_master WHERE type="table"`)
