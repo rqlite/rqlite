@@ -118,7 +118,7 @@ func requestWithClient(ctx *cli.Context, client *cl.Client, timer, forceWrites b
 		RawQuery: queryStr.Encode(),
 	}
 	if forceWrites {
-		u.Path = fmt.Sprintf("%sdb/execute", client.Prefix)
+		u.Path, _ = url.JoinPath(client.Prefix, "db/execute")
 	}
 
 	requestData := strings.NewReader(makeJSONBody(stmt))
