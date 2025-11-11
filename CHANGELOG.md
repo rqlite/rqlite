@@ -1,3 +1,8 @@
+
+## v9.3.0 (unreleased)
+### New features
+- [PR #2385](https://github.com/rqlite/rqlite/pull/2385): CLI supports forcing all statements to be sent to `/db/execute` HTTP API.
+
 ## v9.2.3 (November 7th 2025)
 There no changes in v9.2.3 relative to v9.2.2 in terms of rqlite functionality. This release simply fixes an `arm/v6` and `arm/v7` Docker packaging issue.
 
