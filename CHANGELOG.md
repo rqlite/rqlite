@@ -1,4 +1,7 @@
-## v9.2.4 (unreleased)
+## v9.3.0 (unreleased)
+### New features
+- [PR #2385](https://github.com/rqlite/rqlite/pull/2385): CLI supports forcing all statements to be sent to `/db/execute` HTTP API.
+
 ### Implementation changes and bug fixes
 - [PR #2384](https://github.com/rqlite/rqlite/pull/2384): Don't attempt stepdown if single node cluster.
 

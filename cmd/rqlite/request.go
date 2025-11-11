@@ -108,13 +108,22 @@ func (ur *unifiedResult) toResult() *Result {
 
 // requestWithClient sends SQL statements to the unified /db/request endpoint
 // and handles the response appropriately based on the result type
-func requestWithClient(ctx *cli.Context, client *cl.Client, timer bool, stmt string) error {
+func requestWithClient(ctx *cli.Context, client *cl.Client, timer, forceWrites bool, stmt string) error {
 	queryStr := url.Values{}
 	if timer {
 		queryStr.Set("timings", "")
 	}
+
+	bP := "db/request"
+	if forceWrites {
+		bP = "db/execute"
+	}
+	p, err := url.JoinPath(client.Prefix, bP)
+	if err != nil {
+		return err
+	}
 	u := &url.URL{
-		Path:     fmt.Sprintf("%sdb/request", client.Prefix),
+		Path:     p,
 		RawQuery: queryStr.Encode(),
 	}
 

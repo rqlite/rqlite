@@ -65,6 +65,7 @@ func init() {
 		`.exit                                         Exit this program`,
 		`.expvar                                       Show expvar (Go runtime) information for connected node`,
 		`.extensions                                   Show loaded SQLite extensions`,
+		`.forcewrites on|off                           Force all statements to be executed via /db/execute`,
 		`.help                                         Show this message`,
 		`.indexes                                      Show names of all indexes`,
 		`.quit                                         Exit this program`,
@@ -139,6 +140,7 @@ func main() {
 
 		blobArray := false
 		timer := false
+		forceWrites := false
 		consistency := "weak"
 		prefix := fmt.Sprintf("%s>", address6(argv))
 
@@ -200,6 +202,16 @@ func main() {
 				err = setConsistency(input[index+1:], &consistency)
 			case ".EXTENSIONS":
 				err = extensions(ctx, client, cmd, argv)
+			case ".FORCEWRITES":
+				if index == -1 || index == len(input)-1 {
+					if forceWrites {
+						ctx.String("on\n")
+					} else {
+						ctx.String("off\n")
+					}
+					break
+				}
+				err = toggleFlag(input[index+1:], &forceWrites)
 			case ".TABLES":
 				err = queryWithClient(ctx, client, timer, blobArray, consistency, `SELECT name FROM sqlite_master WHERE type="table"`)
 			case ".INDEXES":
@@ -207,6 +219,14 @@ func main() {
 			case ".SCHEMA":
 				err = queryWithClient(ctx, client, timer, blobArray, consistency, `SELECT sql FROM sqlite_master`)
 			case ".TIMER":
+				if index == -1 || index == len(input)-1 {
+					if timer {
+						ctx.String("on\n")
+					} else {
+						ctx.String("off\n")
+					}
+					break
+				}
 				err = toggleFlag(input[index+1:], &timer)
 			case ".BLOBARRAY":
 				err = toggleFlag(input[index+1:], &blobArray)
@@ -288,7 +308,7 @@ func main() {
 				}
 				err = stepdown(client, nodeID, argv)
 			default:
-				err = requestWithClient(ctx, client, timer, input)
+				err = requestWithClient(ctx, client, timer, forceWrites, input)
 			}
 			if hcerr, ok := err.(*httpcl.HostChangedError); ok {
 				// If a previous request was executed on a different host, make that change
