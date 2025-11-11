@@ -229,6 +229,14 @@ func main() {
 				}
 				err = toggleFlag(input[index+1:], &timer)
 			case ".BLOBARRAY":
+				if index == -1 || index == len(input)-1 {
+					if blobArray {
+						ctx.String("on\n")
+					} else {
+						ctx.String("off\n")
+					}
+					break
+				}
 				err = toggleFlag(input[index+1:], &blobArray)
 			case ".STATUS":
 				err = status(ctx, client, cmd, argv)
