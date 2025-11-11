@@ -113,12 +113,18 @@ func requestWithClient(ctx *cli.Context, client *cl.Client, timer, forceWrites b
 	if timer {
 		queryStr.Set("timings", "")
 	}
-	u := &url.URL{
-		Path:     fmt.Sprintf("%sdb/request", client.Prefix),
-		RawQuery: queryStr.Encode(),
-	}
+
+	bP := "db/request"
 	if forceWrites {
-		u.Path, _ = url.JoinPath(client.Prefix, "db/execute")
+		bP = "db/execute"
+	}
+	p, err := url.JoinPath(client.Prefix, bP)
+	if err != nil {
+		return err
+	}
+	u := &url.URL{
+		Path:     p,
+		RawQuery: queryStr.Encode(),
 	}
 
 	requestData := strings.NewReader(makeJSONBody(stmt))

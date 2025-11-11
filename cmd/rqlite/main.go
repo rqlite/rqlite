@@ -219,6 +219,14 @@ func main() {
 			case ".SCHEMA":
 				err = queryWithClient(ctx, client, timer, blobArray, consistency, `SELECT sql FROM sqlite_master`)
 			case ".TIMER":
+				if index == -1 || index == len(input)-1 {
+					if timer {
+						ctx.String("on\n")
+					} else {
+						ctx.String("off\n")
+					}
+					break
+				}
 				err = toggleFlag(input[index+1:], &timer)
 			case ".BLOBARRAY":
 				err = toggleFlag(input[index+1:], &blobArray)
