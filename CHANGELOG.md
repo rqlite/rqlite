@@ -1,4 +1,4 @@
-## v9.3.0 (unreleased)
+## v9.3.0 (November 12th 2025)
 ### New features
 - [PR #2385](https://github.com/rqlite/rqlite/pull/2385): CLI supports forcing all statements to be sent to `/db/execute` HTTP API.
 
