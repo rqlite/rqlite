@@ -400,7 +400,7 @@ func (db *DB) RegisterUpdateHook(hook UpdateHookCallback) error {
 			stats.Add(numUpdateHooks, 1)
 			ev, err := convertFn(op, dbName, tblName, rowID)
 			if err != nil {
-				stats.Add(numUpdateHooks, 1)
+				stats.Add(numUpdateHooksErrors, 1)
 				ev.Error = err.Error()
 			}
 			if err := hook(ev); err != nil {
