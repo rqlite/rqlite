@@ -79,6 +79,8 @@ func Process(stmts []*proto.Statement, rwrand, rwtime bool) (retErr error) {
 // The function performs a lower-case comparison so it is up to the caller to
 // ensure the statement is lower-cased.
 func ContainsTime(stmt string) bool {
+	// Since this is a simple substring search, it also matches datetime(
+	// and strftime(.
 	targets := []string{"time(", "date(", "julianday(", "unixepoch(", "timediff("}
 	for _, target := range targets {
 		if strings.Contains(stmt, target) {
