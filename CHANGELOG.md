@@ -1,7 +1,7 @@
 ## v9.3.1 (unreleased)
 ### Implementation changes and bug fixes
 - [PR #2390](https://github.com/rqlite/rqlite/pull/2390): Upgrade SQL parser.
-- [PR #2391](https://github.com/rqlite/rqlite/pull/2391): Minor fixes.
+- [PR #2391](https://github.com/rqlite/rqlite/pull/2391): Fix update-hook error stat and clarify SQL time-function processing.
 
 ## v9.3.0 (November 12th 2025)
 ### New features
