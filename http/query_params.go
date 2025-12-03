@@ -104,7 +104,7 @@ func (qp QueryParams) BlobArray() bool {
 	return qp.HasKey("blob_array")
 }
 
-// NoRewrite returns true if the query parameters request no rewriting of queries.
+// NoRewriteRandom returns true if the query parameters request no rewriting of queries.
 func (qp QueryParams) NoRewriteRandom() bool {
 	return qp.HasKey("norwrandom")
 }

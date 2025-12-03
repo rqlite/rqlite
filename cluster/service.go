@@ -106,7 +106,7 @@ type Database interface {
 	// Backup writes a backup of the database to the writer.
 	Backup(br *command.BackupRequest, dst io.Writer) error
 
-	// Loads an entire SQLite file into the database
+	// Load an entire SQLite file into the database
 	Load(lr *command.LoadRequest) error
 }
 

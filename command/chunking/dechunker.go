@@ -124,7 +124,7 @@ func (d *DechunkerManager) Delete(id string) {
 	}
 }
 
-// Closes closes the DechunkerManager and all Dechunkers it manages.
+// Close closes the DechunkerManager and all Dechunkers it manages.
 func (d *DechunkerManager) Close() {
 	d.mu.Lock()
 	defer d.mu.Unlock()

@@ -22,7 +22,7 @@ func IntN(n, l int) []int {
 	return nums
 }
 
-// String returns a random string of n characters long.
+// StringN returns a random string of n characters long.
 func StringN(n int) string {
 	var output strings.Builder
 	output.Grow(n)

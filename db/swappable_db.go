@@ -218,7 +218,7 @@ func (s *SwappableDB) RegisterPreUpdateHook(hook PreUpdateHookCallback, tblRe *r
 	return s.db.RegisterPreUpdateHook(hook, tblRe, rowIDsOnly)
 }
 
-// RegisterPreUpdateHook registers a commit hook on the underlying database.
+// RegisterCommitHook registers a commit hook on the underlying database.
 func (s *SwappableDB) RegisterCommitHook(hook CommitHookCallback) error {
 	s.dbMu.RLock()
 	defer s.dbMu.RUnlock()

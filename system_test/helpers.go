@@ -111,7 +111,7 @@ func (n *Node) Execute(stmt string) (string, error) {
 	return n.ExecuteMulti([]string{stmt})
 }
 
-// Execute executes a single statement against the node, requesting associative
+// ExecuteAssoc executes a single statement against the node, requesting associative
 // output.
 func (n *Node) ExecuteAssoc(stmt string) (string, error) {
 	return n.postExecuteAssoc(stmt, "text/plain")

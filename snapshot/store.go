@@ -594,17 +594,19 @@ func (c *cmpSnapshotMeta) Less(other *cmpSnapshotMeta) bool {
 
 type snapMetaSlice []*raft.SnapshotMeta
 
-// Implement the sort interface for []*fileSnapshotMeta.
+// Len implements the sort interface for snapMetaSlice.
 func (s snapMetaSlice) Len() int {
 	return len(s)
 }
 
+// Less implements the sort interface for snapMetaSlice.
 func (s snapMetaSlice) Less(i, j int) bool {
 	si := (*cmpSnapshotMeta)(s[i])
 	sj := (*cmpSnapshotMeta)(s[j])
 	return si.Less(sj)
 }
 
+// Swap implements the sort interface for snapMetaSlice.
 func (s snapMetaSlice) Swap(i, j int) {
 	s[i], s[j] = s[j], s[i]
 }
