@@ -15,10 +15,10 @@ import (
 	"syscall"
 	"time"
 
-	consul "github.com/rqlite/rqlite-disco-clients/consul"
+	"github.com/rqlite/rqlite-disco-clients/consul"
 	"github.com/rqlite/rqlite-disco-clients/dns"
 	"github.com/rqlite/rqlite-disco-clients/dnssrv"
-	etcd "github.com/rqlite/rqlite-disco-clients/etcd"
+	"github.com/rqlite/rqlite-disco-clients/etcd"
 	"github.com/rqlite/rqlite/v9/auth"
 	"github.com/rqlite/rqlite/v9/auto/backup"
 	"github.com/rqlite/rqlite/v9/auto/restore"

@@ -30,7 +30,7 @@ import (
 	"github.com/rqlite/rqlite/v9/command/proto"
 	sql "github.com/rqlite/rqlite/v9/db"
 	"github.com/rqlite/rqlite/v9/db/humanize"
-	wal "github.com/rqlite/rqlite/v9/db/wal"
+	"github.com/rqlite/rqlite/v9/db/wal"
 	"github.com/rqlite/rqlite/v9/internal/progress"
 	"github.com/rqlite/rqlite/v9/internal/random"
 	"github.com/rqlite/rqlite/v9/internal/rsum"
