@@ -102,7 +102,8 @@ func queryWithClient(ctx *cli.Context, client *cl.Client, timer, blobArray bool,
 		// If the error is HostChangedError, it should be propagated back to the caller to handle
 		// accordingly (change prompt display), but we should still assume that the request succeeded on some
 		// host and not treat it as an error.
-		innerErr, ok := err.(*cl.HostChangedError)
+		var innerErr *cl.HostChangedError
+		ok := errors.As(err, &innerErr)
 		if !ok {
 			return err
 		}
