@@ -106,7 +106,7 @@ func (d *Downloader) Do(ctx context.Context, w io.Writer, timeout time.Duration)
 		if err == nil {
 			stats.Add(numDownloadsOK, 1)
 			if cw != nil {
-				stats.Add(numDownloadBytes, int64(cw.count))
+				stats.Add(numDownloadBytes, cw.count)
 			}
 		} else {
 			stats.Add(numDownloadsFail, 1)

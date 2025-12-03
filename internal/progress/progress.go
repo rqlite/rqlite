@@ -120,9 +120,9 @@ func (cm *CountingMonitor) runOnce() {
 	cm.loggerFn(cm.ctr.Count())
 }
 
-func (m *CountingMonitor) StopAndWait() {
-	m.once.Do(func() {
-		m.cancel()
-		<-m.doneCh
+func (cm *CountingMonitor) StopAndWait() {
+	cm.once.Do(func() {
+		cm.cancel()
+		<-cm.doneCh
 	})
 }

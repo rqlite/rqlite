@@ -38,7 +38,7 @@ func (p *Provider) LastIndex() (uint64, error) {
 	return p.str.DBAppliedIndex(), nil
 }
 
-// Provider writes the SQLite database to the given path. If path exists,
+// Provide writes the SQLite database to the given path. If path exists,
 // it will be overwritten.
 func (p *Provider) Provide(w io.Writer) (retErr error) {
 	stats.Add(numProviderProvides, 1)

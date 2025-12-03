@@ -501,7 +501,7 @@ func Test_ServiceJoinNodeForwarded(t *testing.T) {
 	dbF := mustNewMockDatabase()
 	mgrF := mustNewMockManager()
 	sF := New(tnF, dbF, mgrF, cred)
-	if sL == nil {
+	if sF == nil {
 		t.Fatalf("failed to create cluster service for Follower")
 	}
 	mgrF.joinFn = func(jr *command.JoinRequest) error {

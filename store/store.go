@@ -30,7 +30,7 @@ import (
 	"github.com/rqlite/rqlite/v9/command/proto"
 	sql "github.com/rqlite/rqlite/v9/db"
 	"github.com/rqlite/rqlite/v9/db/humanize"
-	wal "github.com/rqlite/rqlite/v9/db/wal"
+	"github.com/rqlite/rqlite/v9/db/wal"
 	"github.com/rqlite/rqlite/v9/internal/progress"
 	"github.com/rqlite/rqlite/v9/internal/random"
 	"github.com/rqlite/rqlite/v9/internal/rsum"
@@ -94,7 +94,7 @@ var (
 	// ErrCDCEnabled is returned when CDC is already enabled.
 	ErrCDCEnabled = errors.New("CDC already enabled")
 
-	// ErrInvalidVacuumFormat is returned when the requested backup format is not
+	// ErrInvalidVacuum is returned when the requested backup format is not
 	// compatible with vacuum.
 	ErrInvalidVacuum = errors.New("invalid vacuum")
 
@@ -996,7 +996,8 @@ func (s *Store) HasLeader() bool {
 	if !s.open.Is() {
 		return false
 	}
-	return s.raft.Leader() != ""
+	leader, _ := s.raft.LeaderWithID()
+	return leader != ""
 }
 
 // IsVoter returns true if the current node is a voter in the cluster. If there
@@ -1147,7 +1148,7 @@ func (s *Store) Followers() ([]*Server, error) {
 
 	followers := make([]*Server, 0, len(servers)-1)
 	for i := range servers {
-		if servers[i].ID != raft.ServerID(id) && servers[i].Suffrage == raft.Voter {
+		if servers[i].ID != id && servers[i].Suffrage == raft.Voter {
 			followers = append(followers, &Server{
 				ID:       string(servers[i].ID),
 				Addr:     string(servers[i].Address),
@@ -1770,7 +1771,7 @@ func (s *Store) Backup(br *proto.BackupRequest, dst io.Writer) (retErr error) {
 	return ErrInvalidBackupFormat
 }
 
-// Loads an entire SQLite file into the database, sending the request
+// Load loads an entire SQLite file into the database, sending the request
 // through the Raft log.
 func (s *Store) Load(lr *proto.LoadRequest) error {
 	if !s.open.Is() {
