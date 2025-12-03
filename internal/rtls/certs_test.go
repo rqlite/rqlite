@@ -24,7 +24,7 @@ func Test_GenerateCACert(t *testing.T) {
 	}
 
 	key, _ := pem.Decode(keyPEM)
-	if err != nil {
+	if key == nil {
 		t.Fatal("failed to decode key")
 	}
 
