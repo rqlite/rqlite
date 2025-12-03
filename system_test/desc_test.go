@@ -31,7 +31,6 @@ func Test_SingleNode_RETURNING_DescColumn(t *testing.T) {
 	if err != nil {
 		t.Fatalf(`UPDATE with RETURNING failed: %s`, err.Error())
 	}
-	t.Logf("UPDATE with RETURNING result: %s", res)
 	// This should return columns and values, not just rows_affected
 	if got, exp := res, `{"results":[{"columns":["desc"],"types":["text"],"values":[["d1"]]}]}`; got != exp {
 		t.Fatalf("wrong UPDATE with RETURNING result, exp %s, got %s", exp, got)
