@@ -678,7 +678,7 @@ func (s *Store) Open() (retErr error) {
 	if err != nil {
 		return fmt.Errorf("failed to retrieve log store indexes: %s", err)
 	}
-	s.logger.Printf("raft log is %d bytes at open, indexes are: first %d, last %d", raftDBSize, fi, li)
+	s.logger.Printf(raftLogInfoMessage(raftDBSize, fi, li))
 	if fi != 0 && li != 0 {
 		err = s.boltStore.GetLog(fi, &raft.Log{})
 		if err != nil {
@@ -2993,6 +2993,14 @@ func (s *Store) logIncremental() bool {
 
 func (s *Store) logBackup() bool {
 	return s.hcLogLevel() < hclog.Warn
+}
+
+func raftLogInfoMessage(sz int64, fi, li uint64) string {
+	if sz == 0 {
+		return ("raft log is 0 bytes at open, no entries present")
+	}
+	hSz := humanize.Bytes(uint64(sz))
+	return fmt.Sprintf("raft log is %s, first index is %d, last index is %d", hSz, fi, li)
 }
 
 // createDBOnDisk opens an on-disk database file at the configured path
