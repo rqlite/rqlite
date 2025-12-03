@@ -121,7 +121,7 @@ func Test_Server_Sort(t *testing.T) {
 	}
 	expectedOrder := []string{"1", "2", "3"}
 
-	sort.Sort(Servers(servers))
+	sort.Sort(servers)
 
 	for i, server := range servers {
 		if server.ID != expectedOrder[i] {

@@ -278,7 +278,7 @@ func Test_SingleParameterizedRequestNull(t *testing.T) {
 }
 
 func Test_SingleNamedParameterizedRequest(t *testing.T) {
-	if _, err := strconv.ParseInt(string("1.23"), 10, 64); err == nil {
+	if _, err := strconv.ParseInt("1.23", 10, 64); err == nil {
 		// Just be sure that strconv.ParseInt fails on float, since
 		// the internal implementation of ParseRequest relies on it.
 		t.Fatal("strconv.ParseInt should fail on float")

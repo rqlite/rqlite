@@ -14,7 +14,7 @@ func Test_Decompressor(t *testing.T) {
 	testData := []byte("This is a test string, xxxxx -- xxxxxx -- test should compress")
 	var buf bytes.Buffer
 	gzw := gzip.NewWriter(&buf)
-	gzw.Write([]byte(testData))
+	gzw.Write(testData)
 	gzw.Close()
 
 	// Decompress the data
@@ -26,7 +26,7 @@ func Test_Decompressor(t *testing.T) {
 	}
 
 	// Verify the decompressed data matches original data
-	if !bytes.Equal(decompressedBuffer.Bytes(), []byte(testData)) {
+	if !bytes.Equal(decompressedBuffer.Bytes(), testData) {
 		t.Fatalf("decompressed data does not match original")
 	}
 
@@ -84,7 +84,7 @@ func Test_Decompressor_EndToEnd(t *testing.T) {
 		t.Fatalf("failed to decompress: %v", err)
 	}
 
-	if !bytes.Equal(dstBuf.Bytes(), []byte(testData)) {
+	if !bytes.Equal(dstBuf.Bytes(), testData) {
 		t.Fatalf("decompressed data does not match original")
 	}
 }

@@ -1147,7 +1147,7 @@ func (s *Store) Followers() ([]*Server, error) {
 
 	followers := make([]*Server, 0, len(servers)-1)
 	for i := range servers {
-		if servers[i].ID != raft.ServerID(id) && servers[i].Suffrage == raft.Voter {
+		if servers[i].ID != id && servers[i].Suffrage == raft.Voter {
 			followers = append(followers, &Server{
 				ID:       string(servers[i].ID),
 				Addr:     string(servers[i].Address),
