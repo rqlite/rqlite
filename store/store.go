@@ -996,7 +996,8 @@ func (s *Store) HasLeader() bool {
 	if !s.open.Is() {
 		return false
 	}
-	return s.raft.Leader() != ""
+	leader, _ := s.raft.LeaderWithID()
+	return leader != ""
 }
 
 // IsVoter returns true if the current node is a voter in the cluster. If there
