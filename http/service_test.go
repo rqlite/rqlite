@@ -1063,7 +1063,7 @@ func Test_FormRedirectParam(t *testing.T) {
 		t.Fatalf("failed to form redirect: %s", err.Error())
 	}
 
-	if exp, got := "http://foo:4001/db/query?x=y", rd; rd != got {
+	if exp, got := "http://foo:4001/db/query?x=y", rd; exp != got {
 		t.Fatalf("incorrect redirect, exp: %s, got: %s", exp, got)
 	}
 }
