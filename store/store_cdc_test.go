@@ -142,7 +142,6 @@ func Test_StoreCDC_Events_Single(t *testing.T) {
 		}
 		if ev.NewRow.Values[1].GetS() != "fiona" {
 			t.Fatalf("expected new row name value to be 'fiona', got %s", ev.NewRow.Values[1].GetS())
-			break
 		}
 	case <-timeout:
 		t.Fatalf("timeout waiting for CDC INSERT event for table 'foo'")
