@@ -678,7 +678,7 @@ func (s *Store) Open() (retErr error) {
 	if err != nil {
 		return fmt.Errorf("failed to retrieve log store indexes: %s", err)
 	}
-	s.logger.Printf(raftLogInfoMessage(raftDBSize, fi, li))
+	s.logger.Println(raftLogInfoMessage(raftDBSize, fi, li))
 	if fi != 0 && li != 0 {
 		err = s.boltStore.GetLog(fi, &raft.Log{})
 		if err != nil {
