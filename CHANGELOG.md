@@ -1,3 +1,7 @@
+## v9.3.3 (Unreleased)
+### Implementation changes and bug fixes
+- [PR #2396](https://github.com/rqlite/rqlite/pull/2396): Address issues flagged by static analysis. Thanks @The127
+
 ## v9.3.2 (November 25th 2025)
 ### Implementation changes and bug fixes
 - [PR #2392](https://github.com/rqlite/rqlite/pull/2392): Bump golang.org/x/crypto from 0.44.0 to 0.45.0.
