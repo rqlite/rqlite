@@ -368,6 +368,7 @@ func Test_RETURNING_None(t *testing.T) {
 func Test_RETURNING_Some(t *testing.T) {
 	for sql, b := range map[string]bool{
 		`INSERT INTO "names" VALUES (1, 'bob', '123-45-678') RETURNING *`: true,
+		`UPDATE t SET d = 'd1' WHERE d = '' RETURNING *`:                  true,
 		`INSERT INTO "names" VALUES (1, 'bob', 'RETURNING')`:              false,
 		`INSERT INTO "names" VALUES (RANDOM(), 'bob', '123-45-678')`:      false,
 		`SELECT title FROM albums ORDER BY RANDOM()`:                      false,
@@ -406,6 +407,25 @@ func Test_RETURNING_SomeMulti(t *testing.T) {
 	}
 	if exp, got := false, stmts[1].ForceQuery; exp != got {
 		t.Fatalf(`expected %v for SQL "%s", but got %v`, exp, stmts[1].Sql, got)
+	}
+}
+
+func Test_RETURNING_KeywordAsIdent(t *testing.T) {
+	for sql, b := range map[string]bool{
+		`UPDATE t SET desc = 'd1' WHERE desc = '' RETURNING *`: true, // SQLite keyword as column name
+	} {
+
+		stmts := []*proto.Statement{
+			{
+				Sql: sql,
+			},
+		}
+		if err := Process(stmts, false, false); err != nil {
+			t.Fatalf("failed to not rewrite: %s", err)
+		}
+		if exp, got := b, stmts[0].ForceQuery; exp != got {
+			t.Fatalf(`expected %v for SQL "%s", but got %v`, exp, sql, got)
+		}
 	}
 }
 
