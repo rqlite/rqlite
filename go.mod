@@ -16,7 +16,7 @@ require (
 	github.com/peterh/liner v1.2.2
 	github.com/rqlite/raft-boltdb/v2 v2.0.0-20230523104317-c08e70f4de48
 	github.com/rqlite/rqlite-disco-clients v0.0.0-20250205044118-8ada2b350099
-	github.com/rqlite/sql v0.0.0-20251114131613-ef07423e7137
+	github.com/rqlite/sql v0.0.0-20251204023435-65660522892e
 	go.etcd.io/bbolt v1.4.3
 	golang.org/x/net v0.47.0
 	google.golang.org/protobuf v1.36.10

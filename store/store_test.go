@@ -933,6 +933,65 @@ func Test_SingleNodeExecuteQuery_RETURNING(t *testing.T) {
 	}
 }
 
+func Test_SingleNodeExecuteQuery_RETURNING_KeywordAsIdent(t *testing.T) {
+	s, ln := mustNewStore(t)
+	defer ln.Close()
+
+	if err := s.Open(); err != nil {
+		t.Fatalf("failed to open single-node store: %s", err.Error())
+	}
+	if err := s.Bootstrap(NewServer(s.ID(), s.Addr(), true)); err != nil {
+		t.Fatalf("failed to bootstrap single-node store: %s", err.Error())
+	}
+	defer s.Close(true)
+	_, err := s.WaitForLeader(10 * time.Second)
+	if err != nil {
+		t.Fatalf("Error waiting for leader: %s", err)
+	}
+
+	er := executeRequestFromStrings([]string{
+		`CREATE TABLE foo (id INTEGER NOT NULL PRIMARY KEY, desc TEXT)`,
+		`INSERT INTO foo(id, desc) VALUES(1, "fiona")`,
+	}, false, false)
+	_, _, err = s.Execute(er)
+	if err != nil {
+		t.Fatalf("failed to execute on single node: %s", err.Error())
+	}
+
+	er = executeRequestFromString(`INSERT INTO foo(id, desc) VALUES(2, "fiona") RETURNING desc`, false, false)
+	er.Request.Statements[0].ForceQuery = true
+	rows, _, err := s.Execute(er)
+	if err != nil {
+		t.Fatalf("failed to execute with RETURNING on single node: %s", err.Error())
+	}
+	if exp, got := `[{"columns":["desc"],"types":["text"],"values":[["fiona"]]}]`, asJSON(rows); exp != got {
+		t.Fatalf("unexpected results for RETURNING query\nexp: %s\ngot: %s", exp, got)
+	}
+
+	er = executeRequestFromString(`UPDATE foo SET desc = 'declan' where desc = 'fiona' RETURNING *`, false, false)
+	er.Request.Statements[0].ForceQuery = true
+	rows, _, err = s.Execute(er)
+	if err != nil {
+		t.Fatalf("failed to execute with RETURNING on single node: %s", err.Error())
+	}
+	if exp, got := `[{"columns":["id","desc"],"types":["integer","text"],"values":[[1,"declan"],[2,"declan"]]}]`, asJSON(rows); exp != got {
+		t.Fatalf("unexpected results for RETURNING query\nexp: %s\ngot: %s", exp, got)
+	}
+
+	qr := queryRequestFromString("SELECT * FROM foo", false, false)
+	qr.Level = proto.ConsistencyLevel_NONE
+	r, _, _, err := s.Query(qr)
+	if err != nil {
+		t.Fatalf("failed to query single node: %s", err.Error())
+	}
+	if exp, got := `["id","desc"]`, asJSON(r[0].Columns); exp != got {
+		t.Fatalf("unexpected results for query\nexp: %s\ngot: %s", exp, got)
+	}
+	if exp, got := `[[1,"declan"],[2,"declan"]]`, asJSON(r[0].Values); exp != got {
+		t.Fatalf("unexpected results for query\nexp: %s\ngot: %s", exp, got)
+	}
+}
+
 // Test_SingleNodeExecuteQueryFail ensures database level errors are presented by the store.
 func Test_SingleNodeExecuteQueryFail(t *testing.T) {
 	s, ln := mustNewStore(t)

@@ -915,6 +915,33 @@ func Test_SingleNode_RETURNING(t *testing.T) {
 	}
 }
 
+func Test_SingleNode_RETURNING_KeywordAsIdent(t *testing.T) {
+	node := mustNewLeaderNode("leader1")
+	defer node.Deprovision()
+
+	_, err := node.Execute(`CREATE TABLE foo (id integer not null primary key, desc text)`)
+	if err != nil {
+		t.Fatalf(`CREATE TABLE failed: %s`, err.Error())
+	}
+
+	// With RETURNING
+	res, err := node.Execute(`INSERT INTO foo(id, desc) VALUES(1, "declan") RETURNING *`)
+	if err != nil {
+		t.Fatalf(`write failed: %s`, err.Error())
+	}
+	if got, exp := res, `{"results":[{"columns":["id","desc"],"types":["integer","text"],"values":[[1,"declan"]]}]}`; got != exp {
+		t.Fatalf("wrong execute results for RETURNING, exp %s, got %s", exp, got)
+	}
+
+	res, err = node.Execute(`UPDATE foo SET desc = 'fiona' WHERE desc = 'declan' RETURNING *`)
+	if err != nil {
+		t.Fatalf(`write failed: %s`, err.Error())
+	}
+	if got, exp := res, `{"results":[{"columns":["id","desc"],"types":["integer","text"],"values":[[1,"fiona"]]}]}`; got != exp {
+		t.Fatalf("wrong execute results for RETURNING, exp %s, got %s", exp, got)
+	}
+}
+
 func Test_SingleNodeQueued(t *testing.T) {
 	node := mustNewLeaderNode("leader1")
 	defer node.Deprovision()

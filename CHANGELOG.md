@@ -1,6 +1,7 @@
 ## v9.3.3 (Unreleased)
 ### Implementation changes and bug fixes
 - [PR #2396](https://github.com/rqlite/rqlite/pull/2396): Address issues flagged by static analysis. Thanks @The127
+- [PR #2397](https://github.com/rqlite/rqlite/pull/2397): Upgrade SQL parser. Fixes issue [#2374](https://github.com/rqlite/rqlite/issues/2374)
 
 ## v9.3.2 (November 25th 2025)
 ### Implementation changes and bug fixes
