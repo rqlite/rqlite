@@ -58,6 +58,11 @@ FROM alpine:latest
 
 RUN apk add --no-cache icu-libs
 
+# Create the user and group (Alpine syntax).
+# Using 1000 is standard convention for non-root users.
+RUN addgroup -g 1000 rqlite && \
+    adduser -u 1000 -G rqlite -D rqlite
+
 # Copy the init script and rqlite binaries.
 COPY --from=builder /app/docker-entrypoint.sh /bin
 COPY --from=builder /app/rqlited /bin
@@ -66,9 +71,17 @@ COPY --from=builder /app/rqlite /bin
 # Bake in the extensions.
 COPY --from=builder /extensions /opt/extensions/
 
-RUN mkdir -p /rqlite/file
+# Create the directory and fix ownership permissions.
+# This ensures the 'rqlite' user can write to this directory.
+RUN mkdir -p /rqlite/file && \
+    chown -R rqlite:rqlite /rqlite/file
+
 VOLUME /rqlite/file
-EXPOSE 4001 4001
+
+EXPOSE 4001 4002
+
+# Switch to the non-root user.
+USER rqlite
 
 ENTRYPOINT ["docker-entrypoint.sh"]
 CMD ["run"]
