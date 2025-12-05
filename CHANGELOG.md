@@ -1,5 +1,5 @@
 ## v9.3.4 (December 4th 2025)
-There are no changes in v9.3.4 relative to v9.3.3. Instead this releases modifies Docker image creation so that rqlite runs as a non-root user.
+There are no changes in v9.3.4 relative to v9.3.3. Instead this release modifies Docker image creation so that rqlite runs as a non-root user within the container.
 
 ### Implementation changes and bug fixes
 - [PR #2400](https://github.com/rqlite/rqlite/pull/2400): Run `rqlited` as non-root user within Docker. Fixes issue [#2399](https://github.com/rqlite/rqlite/issues/2399)
