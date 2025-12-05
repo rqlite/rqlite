@@ -1,3 +1,7 @@
+## v9.3.5 (unreleased)
+### Implementation changes and bug fixes
+- [PR #2401](https://github.com/rqlite/rqlite/pull/2401): Simplify type and value checks for CDC Comparators.
+
 ## v9.3.4 (December 4th 2025)
 There are no changes in v9.3.4 relative to v9.3.3. Instead this release modifies Docker image creation so that rqlite runs as a non-root user within the container.
 
