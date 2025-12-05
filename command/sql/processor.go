@@ -49,13 +49,21 @@ func Process(stmts []*proto.Statement, rwrand, rwtime bool) (retErr error) {
 	}()
 	for i := range stmts {
 		lowered := strings.ToLower(stmts[i].Sql)
+		hasReturning := ContainsReturning(lowered)
 		if (!rwtime || !ContainsTime(lowered)) &&
 			(!rwrand || !ContainsRandom(lowered)) &&
-			!ContainsReturning(lowered) {
+			!hasReturning {
 			continue
 		}
 		parsed, err := rsql.NewParser(strings.NewReader(stmts[i].Sql)).ParseStatement()
 		if err != nil {
+			// If parsing fails but we detected a RETURNING clause, we still need to
+			// mark this as a query so that the result set can be returned to the client.
+			// This handles cases where the parser fails due to reserved keywords like
+			// "desc" being used as column names.
+			if hasReturning {
+				stmts[i].ForceQuery = true
+			}
 			continue
 		}
 		rewriter := NewRewriter()
