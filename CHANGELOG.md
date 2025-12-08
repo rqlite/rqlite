@@ -1,6 +1,7 @@
 ## v9.3.6 (unreleased)
 ### Implementation changes and bug fixes
 - [PR #2404](https://github.com/rqlite/rqlite/pull/2404): Add basic end-to-end testing of the rqlite shell.
+- [PR #2406](https://github.com/rqlite/rqlite/pull/2406): Explicitly snapshot after a Load operation.
 
 ## v9.3.5 (December 7th 2025)
 ### Implementation changes and bug fixes
