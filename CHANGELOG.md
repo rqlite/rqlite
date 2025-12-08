@@ -1,4 +1,4 @@
-## v9.3.5 (unreleased)
+## v9.3.5 (December 7th 2025)
 ### Implementation changes and bug fixes
 - [PR #2401](https://github.com/rqlite/rqlite/pull/2401): Simplify type and value checks for CDC Comparators.
 - [PR #2403](https://github.com/rqlite/rqlite/pull/2403): Fix `.restore` command in rqlite shell.
