@@ -151,7 +151,7 @@ class Node(object):
       return self.api_addr
 
   def APIPort(self):
-      return int(self.APIAddr().split(":")[1])
+      return int(self.APIAddr().split(":")[-1])
 
   def APIProtoAddr(self):
       return "http://%s" % self.APIAddr()
