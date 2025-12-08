@@ -45,6 +45,9 @@ class TestRqliteShell(unittest.TestCase):
         out = self._shell(self.node.APIPort(), f""".tables""")
         self.assertIn("foo", out)
 
+        out = self._shell(self.node.APIPort(), f""".schema""")
+        self.assertIn("CREATE TABLE foo (id INTEGER NOT NULL PRIMARY KEY, name TEXT)", out)
+
         out = self._shell(self.node.APIPort(), f"""SELECT COUNT(*) FROM foo""")
         self.assertIn("1900", out)
 
