@@ -16,8 +16,8 @@ RQLITE_PATH = os.environ['RQLITE_PATH']
 RQLITED_PATH = os.environ['RQLITED_PATH']
 
 class TestRqliteShell(unittest.TestCase):
-    def _shell(self, port, input):
-        proc = subprocess.run([RQLITE_PATH, '--port', str(port)],input=input,text=True,capture_output=True,check=False)
+    def _shell(self, port, command):
+        proc = subprocess.run([RQLITE_PATH, '--port', str(port)],input=command,text=True,capture_output=True,check=False)
         if proc.returncode != 0:
             raise Exception(f"Shell command failed: {proc.stderr}")
         return proc.stdout
