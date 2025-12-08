@@ -267,9 +267,7 @@ jobs:
         # All other required env vars for GCS and S3 are set via CircleCI project settings
     steps:
       - checkout
-      - restore_and_save_cache
-      # Build rqlite now, which will give time for minio to come up
-      - run: go install ./...
+      - run: sleep 5 # wait for minio to start
       - run: mc alias set myminio http://minio:9000 minioadmin minioadmin
       - run: mc mb myminio/minio-bucket
       - run:
