@@ -601,15 +601,13 @@ func getVersionWithClient(client *http.Client, argv *argT) (string, error) {
 	return version[0], nil
 }
 
-func sendRequest(ctx *cli.Context, makeNewRequest func(string) (*http.Request, error), urlStr string, argv *argT) (*[]byte, error) {
-	// create a byte-based buffer that implements io.Writer
-	var buf []byte
-	w := bytes.NewBuffer(buf)
+func sendRequest(ctx *cli.Context, makeNewRequest func(string) (*http.Request, error), urlStr string, argv *argT) ([]byte, error) {
+	w := bytes.NewBuffer(nil)
 	_, err := sendRequestW(ctx, makeNewRequest, urlStr, argv, w)
 	if err != nil {
 		return nil, err
 	}
-	return &buf, nil
+	return w.Bytes(), nil
 }
 
 func sendRequestW(ctx *cli.Context, makeNewRequest func(string) (*http.Request, error), urlStr string, argv *argT, w io.Writer) (int64, error) {
