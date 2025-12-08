@@ -349,7 +349,7 @@ workflows:
       - test_odd
       - test_odd_race
 
-      - build_binaries
+      - build_binaries_for_e2e
 
       - end_to_end_single:
           requires:
