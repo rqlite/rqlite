@@ -157,7 +157,7 @@ func restore(ctx *cli.Context, filename string, argv *argT) error {
 	}
 
 	restoreRet := &restoreResponse{}
-	if err := parseResponse(response, &restoreRet); err != nil {
+	if err := parseResponse(&response, &restoreRet); err != nil {
 		return err
 	}
 	if !validSQLiteData(restoreFile) {
