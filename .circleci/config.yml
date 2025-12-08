@@ -306,6 +306,20 @@ jobs:
             EXTENSIONS_PATH_MISC: /home/circleci/extensions-misc
     resource_class: large
 
+  end_to_end_shell:
+    docker:
+      - image: << pipeline.parameters.primary_image >>
+    steps:
+      - checkout
+      - restore_and_save_cache
+      - run: go install ./...
+      - run:
+          command: python3 system_test/e2e/shell.py
+          environment:
+            RQLITED_PATH: /home/circleci/go/bin/rqlited
+            RQLITE_PATH: /home/circleci/go/bin/rqlite
+    resource_class: large
+
 workflows:
   version: 2
   build_and_test:
@@ -329,3 +343,4 @@ workflows:
       - end_to_end_upgrade
       - end_to_end_cdc
       - end_to_end_extensions
+      - end_to_end_shell

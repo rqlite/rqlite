@@ -1,3 +1,7 @@
+## v9.3.6 (unreleased)
+### Implementation changes and bug fixes
+- [PR #2404](https://github.com/rqlite/rqlite/pull/2404): Add basic end-to-end testing of the rqlite shell.
+
 ## v9.3.5 (December 7th 2025)
 ### Implementation changes and bug fixes
 - [PR #2401](https://github.com/rqlite/rqlite/pull/2401): Simplify type and value checks for CDC Comparators.
