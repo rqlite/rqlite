@@ -1785,6 +1785,15 @@ func (s *Store) Load(lr *proto.LoadRequest) error {
 	if err := s.load(lr); err != nil {
 		return err
 	}
+
+	// Explicitly snapshot after load to ensure that the "clean snapshot" file
+	// is regenerated. This will ensure a fast restart after a load, if one is
+	// requested. However we don't want to fail the load if the snapshot fails
+	// for any reason.
+if err := s.Snapshot(0); err != nil && err != ErrNothingNewToSnapshot {
+	s.logger.Printf("snapshot after load failed: %s", err.Error())
+}
+
 	stats.Add(numLoads, 1)
 	return nil
 }
