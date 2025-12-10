@@ -23,7 +23,7 @@ class TestRqliteShell(unittest.TestCase):
         return proc.stdout
 
     def setUp(self):
-        self.node = Node(RQLITED_PATH, '0',  raft_snap_threshold=2, raft_snap_int="1s")
+        self.node = Node(RQLITED_PATH, '0')
         self.node.start()
         self.node.wait_for_leader()
 
@@ -33,14 +33,25 @@ class TestRqliteShell(unittest.TestCase):
     def test(self):
         db_path = "system_test/e2e/testdata/shell.db"
 
-        out = self._shell(self.node.APIPort(), f""".ready""")
-        self.assertIn("ready", out)
+        checks = {
+            ".help": "Show",
+            ".ready": "ready",
+            ".consistency": "weak",
+            ".nodes": "api_addr",
+            ".status": "build",
+            ".expvar": "cmdline",
+            ".indexes": "sql",
+            ".schema": "sql",
+        }
+        for cmd, expected in checks.items():
+            out = self._shell(self.node.APIPort(), cmd)
+            self.assertIn(expected, out)
 
         out = self._shell(self.node.APIPort(), f""".tables""")
         self.assertNotIn("foo", out)
 
         out = self._shell(self.node.APIPort(), f""".restore {db_path}""")
-        self.assertIn("Database restored successfully.", out)
+        self.assertIn("Database restored successfully", out)
 
         out = self._shell(self.node.APIPort(), f""".tables""")
         self.assertIn("foo", out)
@@ -57,6 +68,9 @@ class TestRqliteShell(unittest.TestCase):
         out = self._shell(self.node.APIPort(), f"""DROP TABLE foo""")
         out = self._shell(self.node.APIPort(), f"""SELECT COUNT(*) FROM foo""")
         self.assertIn("no such table", out)
+
+        out = self._shell(self.node.APIPort(), f""".boot {db_path}""")
+        self.assertIn("Node booted successfully", out)
 
 if __name__ == "__main__":
   unittest.main(verbosity=2)
