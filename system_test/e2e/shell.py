@@ -23,7 +23,7 @@ class TestRqliteShell(unittest.TestCase):
         return proc.stdout
 
     def setUp(self):
-        self.node = Node(RQLITED_PATH, '0',  raft_snap_threshold=2, raft_snap_int="1s")
+        self.node = Node(RQLITED_PATH, '0')
         self.node.start()
         self.node.wait_for_leader()
 
