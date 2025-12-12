@@ -463,6 +463,11 @@ func Test_DB_ReadOnlyStatements(t *testing.T) {
 			query: "DROP TABLE foo",
 			ro:    false,
 		},
+		{
+			// Interestingly enough, this is considered read-only by SQLite.
+			query: "PRAGMA foreign_keys = ON",
+			ro:    true,
+		},
 	}
 
 	for _, tt := range tests {

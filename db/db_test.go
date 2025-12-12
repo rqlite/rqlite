@@ -602,7 +602,41 @@ func Test_TableCreationFK(t *testing.T) {
 		t.Fatalf("unexpected results for query, expected %s, got %s", exp, got)
 	}
 
-	// Now, do same testing with FK constraints enabled.
+	// Do same test, but this explicitly enable FK constraints after open.
+	dbFKPragma, path := mustCreateOnDiskDatabaseWAL()
+	defer dbFKPragma.Close()
+	defer os.Remove(path)
+
+	_, err = dbFKPragma.ExecuteStringStmt("PRAGMA foreign_keys = ON")
+	if err != nil {
+		t.Fatalf("failed to enable FK constraints via PRAGMA: %s", err.Error())
+	}
+
+	r, err = dbFKPragma.ExecuteStringStmt(createTableFoo)
+	if err != nil {
+		t.Fatalf("failed to create table: %s", err.Error())
+	}
+	if exp, got := `[{}]`, asJSON(r); exp != got {
+		t.Fatalf("unexpected results for query, expected %s, got %s", exp, got)
+	}
+
+	r, err = dbFKPragma.ExecuteStringStmt(createTableBar)
+	if err != nil {
+		t.Fatalf("failed to create table: %s", err.Error())
+	}
+	if exp, got := `[{}]`, asJSON(r); exp != got {
+		t.Fatalf("unexpected results for query, expected %s, got %s", exp, got)
+	}
+
+	r, err = dbFKPragma.ExecuteStringStmt(insertIntoBar)
+	if err != nil {
+		t.Fatalf("failed to insert record: %s", err.Error())
+	}
+	if exp, got := `[{"error":"FOREIGN KEY constraint failed"}]`, asJSON(r); exp != got {
+		t.Fatalf("unexpected results for query, expected %s, got %s", exp, got)
+	}
+
+	// Do same testing with FK constraints enabled at open time.
 	dbFK, path := mustCreateOnDiskDatabaseWALFK()
 	defer dbFK.Close()
 	defer os.Remove(path)
