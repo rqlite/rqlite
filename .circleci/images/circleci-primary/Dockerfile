@@ -1,4 +1,4 @@
-FROM cimg/go:1.25.0
+FROM cimg/go:1.25.5
 
 # Become root for package installs
 USER root
