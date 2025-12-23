@@ -11,6 +11,7 @@ RUN apk add --no-cache \
     gettext \
     git \
     icu-dev \
+    jq \
     linux-headers \
     make \
     musl-dev \
@@ -35,17 +36,26 @@ RUN go build -ldflags=" \
 WORKDIR /extensions
 WORKDIR /app
 
-RUN curl -L `curl -s https://api.github.com/repos/nalgeon/sqlean/releases/latest | grep "tarball_url" | cut -d '"' -f 4` -o sqlean.tar.gz && \
-    tar xvfz sqlean.tar.gz && \
+RUN set -e; \
+    sqlean_url=$(curl -s https://api.github.com/repos/nalgeon/sqlean/releases/latest | jq -r .tarball_url); \
+    echo "Downloading sqlean from: $sqlean_url"; \
+    curl -L "$sqlean_url" -o sqlean.tar.gz
+RUN tar xvfz sqlean.tar.gz && \
     cd nalgeon* && make prepare-dist download-sqlite download-external compile-linux && zip -j /extensions/sqlean.zip dist/sqlean.so
 
-RUN curl -L `curl -s https://api.github.com/repos/asg017/sqlite-vec/releases/latest | grep "tarball_url" | cut -d '"' -f 4` -o sqlite-vec.tar.gz && \
-    tar xvfz sqlite-vec.tar.gz && \
+RUN set -e; \
+    sqlitevec_url=$(curl -s https://api.github.com/repos/asg017/sqlite-vec/releases/latest | jq -r .tarball_url); \
+    echo "Downloading sqlite-vec from: $sqlitevec_url"; \
+    curl -L "$sqlitevec_url" -o sqlite-vec.tar.gz
+RUN tar xvfz sqlite-vec.tar.gz && \
     echo location >> ~/.curlrc && \
     cd asg017* && sh scripts/vendor.sh && echo "#include <sys/types.h>" | cat - sqlite-vec.c > temp && mv temp sqlite-vec.c && make loadable && zip -j /extensions/sqlite-vec.zip dist/vec0.so
 
-RUN curl -L `curl -s https://api.github.com/repos/sqliteai/sqlite-vector/releases/latest | grep "tarball_url" | cut -d '"' -f 4` -o sqliteai-vector.tar.gz && \
-    tar xvfz sqliteai-vector.tar.gz && rm sqliteai-vector.tar.gz && \
+RUN set -e; \
+    sqliteai_vector=$(curl -s https://api.github.com/repos/sqliteai/sqlite-vector/releases/latest | jq -r .tarball_url); \
+    echo "Downloading sqliteai-vector from: $sqliteai_vector"; \
+    curl -L "$sqliteai_vector" -o sqliteai-vector.tar.gz
+RUN tar xvfz sqliteai-vector.tar.gz && rm sqliteai-vector.tar.gz && \
     cd sqliteai* && make && zip -j /extensions/sqliteai-vector.zip dist/vector.so
 
 RUN git clone https://github.com/rqlite/rqlite-sqlite-ext.git
