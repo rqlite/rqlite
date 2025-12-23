@@ -1,4 +1,4 @@
-## v9.3.6 (December 25th 2025)
+## v9.3.6 (December 23rd 2025)
 ### Implementation changes and bug fixes
 - [PR #2404](https://github.com/rqlite/rqlite/pull/2404), [PR #2408](https://github.com/rqlite/rqlite/pull/2408): Add basic end-to-end testing of the rqlite shell.
 - [PR #2412](https://github.com/rqlite/rqlite/pull/2412): Add some unit testing related to Foreign Key control.
