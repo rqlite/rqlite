@@ -469,3 +469,35 @@ func Test_Complex(t *testing.T) {
 		t.Fatalf("failed to rewrite complex statement: %s", err)
 	}
 }
+
+func Test_RETURNING_ParseError(t *testing.T) {
+	// Test case where parsing fails due to reserved keywords (like "desc")
+	// but RETURNING clause is present. The statement should still be marked
+	// as ForceQuery so that results are returned to the client.
+	for sql, expectForceQuery := range map[string]bool{
+		// These fail to parse due to "desc" being a reserved keyword in the parser,
+		// but should still have ForceQuery set because RETURNING is present.
+		`UPDATE t SET desc = 'd1' WHERE desc = '' RETURNING *`:   true,
+		`UPDATE t SET desc = 'd1' WHERE desc = 'd1' RETURNING *`: true,
+		`INSERT INTO t (desc) VALUES ('test') RETURNING *`:       true,
+		`DELETE FROM t WHERE desc = 'test' RETURNING *`:          true,
+		// These parse successfully and should have ForceQuery set
+		`UPDATE t SET d = 'd1' WHERE d = '' RETURNING *`:   true,
+		`UPDATE t SET name = 'x' WHERE id = 1 RETURNING *`: true,
+		// These don't have RETURNING so ForceQuery should be false
+		`UPDATE t SET d = 'd1' WHERE d = ''`: false,
+		`INSERT INTO t (d) VALUES ('test')`:  false,
+	} {
+		stmts := []*proto.Statement{
+			{
+				Sql: sql,
+			},
+		}
+		if err := Process(stmts, false, false); err != nil {
+			t.Fatalf("failed to process SQL: %s", err)
+		}
+		if exp, got := expectForceQuery, stmts[0].ForceQuery; exp != got {
+			t.Fatalf(`expected ForceQuery=%v for SQL "%s", but got %v`, exp, sql, got)
+		}
+	}
+}
