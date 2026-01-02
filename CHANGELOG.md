@@ -1,6 +1,7 @@
 ## v9.3.7 (January 2nd 2026)
 ### Implementation changes and bug fixes
 - [PR #2415](https://github.com/rqlite/rqlite/pull/2415): Upgrade SQLite to 3.51.1.
+- [PR #2416](https://github.com/rqlite/rqlite/pull/2416): Improve FSM Snapshot logging.
 
 ## v9.3.6 (December 23rd 2025)
 ### Implementation changes and bug fixes

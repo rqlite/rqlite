@@ -4,10 +4,13 @@ import (
 	"expvar"
 	"io"
 	"log"
+	"os"
 	"time"
 
 	"github.com/hashicorp/raft"
 )
+
+var fsmSnapshotErrLogger = log.New(os.Stderr, "[fsm-snapshot] ", log.LstdFlags)
 
 // FSM is a wrapper around the Store which implements raft.FSM.
 type FSM struct {
@@ -59,12 +62,10 @@ func (f *FSMSnapshot) Persist(sink raft.SnapshotSink) (retError error) {
 			}
 		} else {
 			stats.Add(numSnapshotPersistsFailed, 1)
-			if f.logger != nil {
-				f.logger.Printf("failed to persist snapshot %s: %v", sink.ID(), retError)
-			}
 		}
 	}()
 	if err := f.FSMSnapshot.Persist(sink); err != nil {
+		fsmSnapshotErrLogger.Printf("failed to persist snapshot %s: %v", sink.ID(), err)
 		return err
 	}
 	if f.Finalizer != nil {
