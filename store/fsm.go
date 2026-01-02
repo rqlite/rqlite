@@ -4,6 +4,7 @@ import (
 	"expvar"
 	"io"
 	"log"
+	"os"
 	"time"
 
 	"github.com/hashicorp/raft"
@@ -47,6 +48,8 @@ type FSMSnapshot struct {
 
 // Persist writes the snapshot to the given sink.
 func (f *FSMSnapshot) Persist(sink raft.SnapshotSink) (retError error) {
+	errLogger := log.New(os.Stderr, "[fsm-snapshot] ", log.LstdFlags)
+
 	startT := time.Now()
 	defer func() {
 		if retError == nil {
@@ -59,12 +62,10 @@ func (f *FSMSnapshot) Persist(sink raft.SnapshotSink) (retError error) {
 			}
 		} else {
 			stats.Add(numSnapshotPersistsFailed, 1)
-			if f.logger != nil {
-				f.logger.Printf("failed to persist snapshot %s: %v", sink.ID(), retError)
-			}
 		}
 	}()
 	if err := f.FSMSnapshot.Persist(sink); err != nil {
+		errLogger.Printf("failed to persist snapshot %s: %v", sink.ID(), retError)
 		return err
 	}
 	if f.Finalizer != nil {

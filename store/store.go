@@ -2784,7 +2784,7 @@ func (s *Store) Snapshot(n uint64) (retError error) {
 	defer func() {
 		if retError != nil && retError != ErrNothingNewToSnapshot {
 			stats.Add(numUserSnapshotsFailed, 1)
-			s.logger.Printf("failed to generate user-requested snapshot: %s", retError.Error())
+			s.logger.Printf("failed to generate application-level snapshot: %s", retError.Error())
 		}
 	}()
 
