@@ -171,7 +171,7 @@ func NewStore(dir string) (*Store, error) {
 // be a problem, since snapshots are taken infrequently in one at a time.
 func (s *Store) Create(version raft.SnapshotVersion, index, term uint64, configuration raft.Configuration,
 	configurationIndex uint64, trans raft.Transport) (retSink raft.SnapshotSink, retErr error) {
-	if err := s.mrsw.BeginWrite(); err != nil {
+	if err := s.mrsw.BeginWrite("create-sink"); err != nil {
 		stats.Add(snapshotCreateMRSWFail, 1)
 		return nil, err
 	}

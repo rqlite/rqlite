@@ -1,6 +1,7 @@
 package rsync
 
 import (
+	"fmt"
 	"sync"
 )
 
@@ -15,14 +16,14 @@ func (e *ErrMRSWConflict) Error() string {
 }
 
 // NewErrMRSWConflict creates a new ErrMRSWConflict with the given message.
-func NewErrMRSWConflict(msg string) error {
-	return &ErrMRSWConflict{msg: msg}
+func NewErrMRSWConflict(m string) error {
+	return &ErrMRSWConflict{msg: m}
 }
 
 // MultiRSW is a simple concurrency control mechanism that allows
 // multiple readers or a single writer to execute a critical section at a time.
 type MultiRSW struct {
-	writerActive bool
+	owner string
 	numReaders   int
 	mu           sync.Mutex
 }
@@ -36,8 +37,8 @@ func NewMultiRSW() *MultiRSW {
 func (r *MultiRSW) BeginRead() error {
 	r.mu.Lock()
 	defer r.mu.Unlock()
-	if r.writerActive {
-		return NewErrMRSWConflict("MSRW conflict")
+	if r.owner != "" {
+		return NewErrMRSWConflict("MSRW conflict owner: " + r.owner)
 	}
 	r.numReaders++
 	return nil
@@ -54,13 +55,16 @@ func (r *MultiRSW) EndRead() {
 }
 
 // BeginWrite attempts to enter the critical section as a writer.
-func (r *MultiRSW) BeginWrite() error {
+func (r *MultiRSW) BeginWrite(owner string) error {
 	r.mu.Lock()
 	defer r.mu.Unlock()
-	if r.writerActive || r.numReaders > 0 {
-		return NewErrMRSWConflict("MSRW conflict")
+	if r.owner != "" {
+		return NewErrMRSWConflict("MSRW conflict owner: " + r.owner)
 	}
-	r.writerActive = true
+	if r.numReaders > 0 {
+		return NewErrMRSWConflict(fmt.Sprintf("MSRW conflict %d readers active", r.numReaders))
+	}
+	r.owner = owner
 	return nil
 }
 
@@ -68,25 +72,28 @@ func (r *MultiRSW) BeginWrite() error {
 func (r *MultiRSW) EndWrite() {
 	r.mu.Lock()
 	defer r.mu.Unlock()
-	if !r.writerActive {
+	if r.owner == "" {
 		panic("write done received but no write is active")
 	}
-	r.writerActive = false
+	r.owner = ""
 }
 
 // UpgradeToWriter attempts to upgrade a read lock to a write lock. The
 // client must be the only reader in order to upgrade, and must already
 // be in a read lock.
-func (r *MultiRSW) UpgradeToWriter() error {
+func (r *MultiRSW) UpgradeToWriter(owner string) error {
 	r.mu.Lock()
 	defer r.mu.Unlock()
-	if r.writerActive || r.numReaders > 1 {
-		return NewErrMRSWConflict("MSRW conflict")
+	if r.owner != "" {
+		return NewErrMRSWConflict("MSRW conflict owner: " + r.owner)
+	}
+	if r.numReaders > 1 {
+		return NewErrMRSWConflict(fmt.Sprintf("MSRW conflict %d readers active", r.numReaders))
 	}
 	if r.numReaders == 0 {
 		panic("upgrade attempted with no readers")
 	}
-	r.writerActive = true
+	r.owner = owner
 	r.numReaders = 0
 	return nil
 }
