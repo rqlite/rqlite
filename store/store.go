@@ -2526,7 +2526,8 @@ func (s *Store) fsmSnapshot() (fSnap raft.FSMSnapshot, retErr error) {
 		}
 		if !meta.Success() {
 			if meta.Moved < meta.Pages {
-				return nil, fmt.Errorf("snapshot can't complete due to FULL Snapshot checkpoint incomplete (will retry)")
+				return nil, fmt.Errorf("snapshot can't complete due to FULL Snapshot checkpoint incomplete (will retry %s)",
+					meta.String())
 			} else if meta.Moved == meta.Pages {
 				// This an edge case where all pages were moved but some reader blocked truncation. The next write
 				// could start overwriting WAL frames at the start of the WAL which would mean we would lose WAL data,
@@ -2603,7 +2604,8 @@ func (s *Store) fsmSnapshot() (fSnap raft.FSMSnapshot, retErr error) {
 			}
 			if !meta.Success() {
 				if meta.Moved < meta.Pages {
-					return nil, fmt.Errorf("snapshot can't complete due to WAL checkpoint incomplete (will retry)")
+					return nil, fmt.Errorf("snapshot can't complete due to Snapshot checkpoint incomplete (will retry %s)",
+						meta.String())
 				} else if meta.Moved > 0 && (meta.Moved == meta.Pages) {
 					// This an edge case where all pages were moved but some reader blocked truncation. The next write
 					// could start overwriting WAL frames at the start of the WAL which would mean we would lose WAL data,
