@@ -154,6 +154,7 @@ const (
 	numSnapshotsIncremental           = "num_snapshots_incremental"
 	numFullCheckpointFailed           = "num_full_checkpoint_failed"
 	numWALCheckpointTruncateFailed    = "num_wal_checkpoint_truncate_failed"
+	numWALCheckpointOrPanic           = "num_wal_checkpoint_or_panic"
 	numAutoVacuums                    = "num_auto_vacuums"
 	numAutoVacuumsFailed              = "num_auto_vacuums_failed"
 	autoVacuumDuration                = "auto_vacuum_duration"
@@ -221,6 +222,7 @@ func ResetStats() {
 	stats.Add(numSnapshotsIncremental, 0)
 	stats.Add(numFullCheckpointFailed, 0)
 	stats.Add(numWALCheckpointTruncateFailed, 0)
+	stats.Add(numWALCheckpointOrPanic, 0)
 	stats.Add(numAutoVacuums, 0)
 	stats.Add(numAutoVacuumsFailed, 0)
 	stats.Add(autoVacuumDuration, 0)
@@ -348,6 +350,8 @@ type Store struct {
 	fsmTarget     *rsync.ReadyTarget[uint64]
 	fsmTerm       atomic.Uint64
 	fsmUpdateTime *rsync.AtomicTime // This is node-local time.
+
+	readerMu sync.RWMutex
 
 	// appendedAtTime is the Leader's clock time when that Leader appended the log entry.
 	// The Leader that actually appended the log entry is not necessarily the current Leader.
@@ -1419,6 +1423,9 @@ func (s *Store) execute(ex *proto.ExecuteRequest) ([]*proto.ExecuteQueryResponse
 // upgraded to STRONG if the Store determines that is necessary to guarantee
 // a linearizable read.
 func (s *Store) Query(qr *proto.QueryRequest) (rows []*proto.QueryRows, level proto.ConsistencyLevel, raftIndex uint64, retErr error) {
+	s.readerMu.RLock()
+	defer s.readerMu.RUnlock()
+
 	p := (*PragmaCheckRequest)(qr.Request)
 	if err := p.Check(); err != nil {
 		return nil, 0, 0, err
@@ -1530,6 +1537,9 @@ func (s *Store) VerifyLeader() (retErr error) {
 
 // Request processes a request that may contain both Executes and Queries.
 func (s *Store) Request(eqr *proto.ExecuteQueryRequest) ([]*proto.ExecuteQueryResponse, uint64, uint64, error) {
+	s.readerMu.RLock()
+	defer s.readerMu.RUnlock()
+
 	p := (*PragmaCheckRequest)(eqr.Request)
 	if err := p.Check(); err != nil {
 		return nil, 0, 0, err
@@ -2516,7 +2526,14 @@ func (s *Store) fsmSnapshot() (fSnap raft.FSMSnapshot, retErr error) {
 			if meta.Moved < meta.Pages {
 				return nil, fmt.Errorf("snapshot can't complete due to FULL Snapshot checkpoint incomplete (will retry)")
 			} else if meta.Moved == meta.Pages {
-				panic("WAL checkpoint reports all pages moved, but unsuccessful FULL Snapshot checkpoint")
+				// This an edge case where all pages were moved but some reader blocked truncation. The next write
+				// could start overwriting WAL frames at the start of the WAL which would mean we would lose WAL data,
+				// so we need to forcibly truncate here. We do this by blocking all readers (writes are already blocked).
+				// This hanlding is due to research into SQLite and not seen as of yet.
+				stats.Add(numWALCheckpointOrPanic, 1)
+				s.readerMu.Lock()
+				s.mustTruncateCheckpoint()
+				s.readerMu.Unlock()
 			}
 		}
 		stats.Get(snapshotCreateChkTruncateDuration).(*expvar.Int).Set(time.Since(chkStartTime).Milliseconds())
@@ -2586,7 +2603,14 @@ func (s *Store) fsmSnapshot() (fSnap raft.FSMSnapshot, retErr error) {
 				if meta.Moved < meta.Pages {
 					return nil, fmt.Errorf("snapshot can't complete due to WAL checkpoint incomplete (will retry)")
 				} else if meta.Moved > 0 && (meta.Moved == meta.Pages) {
-					panic("WAL checkpoint reports all pages moved, but unsuccessful checkpoint")
+					// This an edge case where all pages were moved but some reader blocked truncation. The next write
+					// could start overwriting WAL frames at the start of the WAL which would mean we would lose WAL data,
+					// so we need to forcibly truncate here. We do this by blocking all readers (writes are already blocked).
+					// This hanlding is due to research into SQLite and not seen as of yet.
+					stats.Add(numWALCheckpointOrPanic, 1)
+					s.readerMu.Lock()
+					s.mustTruncateCheckpoint()
+					s.readerMu.Unlock()
 				}
 			}
 			stats.Get(snapshotCreateChkTruncateDuration).(*expvar.Int).Set(time.Since(chkTStartTime).Milliseconds())
@@ -2865,6 +2889,18 @@ func (s *Store) runWALSnapshotting() (closeCh, doneCh chan struct{}) {
 		}
 	}()
 	return closeCh, doneCh
+}
+
+// mustTruncateCheckpoint truncates the checkpointed WAL, panicking on any failure to do so.
+func (s *Store) mustTruncateCheckpoint() {
+	meta, err := s.db.Checkpoint(sql.CheckpointTruncate)
+	if err != nil {
+		panic(fmt.Sprintf("failed to truncate checkpoint WAL: %s", err.Error()))
+	}
+	if !meta.Success() {
+		panic(fmt.Sprintf("failed to truncate checkpoint WAL: checkpoint incomplete, %d of %d pages moved",
+			meta.Moved, meta.Pages))
+	}
 }
 
 // selfLeaderChange is called when this node detects that its leadership
