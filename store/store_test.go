@@ -2547,7 +2547,7 @@ func Test_SingleNodeUserSnapshot_CAS(t *testing.T) {
 	}
 	// Release the lock
 	<-s.snapshotLockCh
-	
+
 	mustNoop(s, "3")
 	if err := s.Snapshot(0); err != nil {
 		t.Fatalf("failed to snapshot single-node store: %s", err.Error())

@@ -350,11 +350,11 @@ type Store struct {
 	readyChans *rsync.ReadyChannels
 
 	// Snapshot coordinator
-	snapshotReqCh    chan *snapshotRequest
-	snapshotClose    chan struct{}
-	snapshotDone     chan struct{}
-	snapshotSync     *rsync.SyncChannels
-	snapshotLockCh   chan struct{} // Channel-based mutex for snapshot coordination
+	snapshotReqCh  chan *snapshotRequest
+	snapshotClose  chan struct{}
+	snapshotDone   chan struct{}
+	snapshotSync   *rsync.SyncChannels
+	snapshotLockCh chan struct{} // Channel-based mutex for snapshot coordination
 
 	// Latest log entry index actually reflected by the FSM. Due to Raft code
 	// these values are not updated automatically after a Snapshot-restore.
@@ -643,7 +643,7 @@ func (s *Store) Open() (retErr error) {
 			// Acquire snapshot lock to prevent snapshots during CRC check
 			s.snapshotLockCh <- struct{}{}
 			defer func() { <-s.snapshotLockCh }()
-			
+
 			if fp.CRC32 == 0 {
 				return
 			}
@@ -2855,7 +2855,7 @@ func (s *Store) Snapshot(n uint64) (retError error) {
 func (s *Store) runSnapshotCoordinator() (closeCh, doneCh chan struct{}) {
 	closeCh = make(chan struct{})
 	doneCh = make(chan struct{})
-	
+
 	// Setup WAL size check ticker
 	ticker := time.NewTicker(time.Hour) // Just need an initialized ticker to start with.
 	ticker.Stop()
@@ -2866,13 +2866,13 @@ func (s *Store) runSnapshotCoordinator() (closeCh, doneCh chan struct{}) {
 	go func() {
 		defer close(doneCh)
 		defer ticker.Stop()
-		
+
 		for {
 			select {
 			case req := <-s.snapshotReqCh:
 				// Process snapshot request
 				s.processSnapshotRequest(req)
-				
+
 			case <-ticker.C:
 				// Check WAL size and trigger snapshot if needed
 				sz, err := fileSizeExists(s.walPath)
@@ -2887,7 +2887,7 @@ func (s *Store) runSnapshotCoordinator() (closeCh, doneCh chan struct{}) {
 					}
 					s.processSnapshotRequest(req)
 				}
-				
+
 			case <-closeCh:
 				return
 			}
@@ -2916,7 +2916,7 @@ func (s *Store) processSnapshotRequest(req *snapshotRequest) {
 		if req.respCh != nil {
 			req.respCh <- err
 		}
-		
+
 	case snapshotRequestTypeWAL:
 		// WAL size triggered snapshot
 		err := s.doUserSnapshot(0)
