@@ -37,6 +37,38 @@ func Test_WALDatabaseCheckpointOKNoWrites(t *testing.T) {
 	}
 }
 
+// Test_WALDatabaseCheckpointOK tests that a checkpoint succeeds
+// with a write.
+func Test_WALDatabaseCheckpointOK(t *testing.T) {
+	path := mustTempFile()
+	defer os.Remove(path)
+
+	db, err := Open(path, false, true)
+	if err != nil {
+		t.Fatalf("failed to open database in WAL mode: %s", err.Error())
+	}
+	defer db.Close()
+
+	_, err = db.ExecuteStringStmt(`CREATE TABLE foo (id INTEGER NOT NULL PRIMARY KEY, name TEXT)`)
+	if err != nil {
+		t.Fatalf("failed to execute on single node: %s", err.Error())
+	}
+
+	meta, err := db.Checkpoint(CheckpointTruncate)
+	if err != nil {
+		t.Fatalf("failed to checkpoint database: %s", err.Error())
+	}
+	if !meta.Success() {
+		t.Fatalf("expected checkpoint to complete successfully")
+	}
+	if meta.Moved != 0 {
+		t.Fatalf("expected MOVED to be 0 since WAL was truncated, got %d", meta.Moved)
+	}
+	if meta.Pages != 0 {
+		t.Fatalf("expected PAGES to be 0 since WAL was truncated, got %d", meta.Pages)
+	}
+}
+
 // Test_WALDatabaseCheckpointOKDelete tests that a checkpoint returns no error
 // even when the database is opened in DELETE mode.
 func Test_WALDatabaseCheckpointOKDelete(t *testing.T) {
@@ -86,9 +118,9 @@ func Test_WALDatabaseCheckpoint_RestartTruncate(t *testing.T) {
 	} else if !meta.Success() {
 		t.Fatalf("expected checkpoint to complete successfully")
 	} else if meta.Moved == 0 {
-		t.Fatalf("expected some pages to be moved during checkpoint")
+		t.Fatalf("expected some pages to be moved during RESTART checkpoint")
 	} else if meta.Pages == 0 {
-		t.Fatalf("expected some pages to be in the WAL during checkpoint")
+		t.Fatalf("expected some pages to be in the WAL during RESTART checkpoint")
 	}
 	walPostBytes := mustReadBytes(db.WALPath())
 	if !bytes.Equal(walPreBytes, walPostBytes) {
