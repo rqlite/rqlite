@@ -1,6 +1,7 @@
 package snapshot
 
 import (
+	"errors"
 	"io"
 	"os"
 	"sort"
@@ -165,7 +166,8 @@ func Test_StoreCreate_CAS(t *testing.T) {
 	}
 
 	// Opening a snapshot should fail due to MRSW
-	if _, _, err := store.Open(sink.ID()); err != rsync.ErrMRSWConflict {
+	var expErr *rsync.ErrMRSWConflict
+	if _, _, err := store.Open(sink.ID()); !errors.As(err, &expErr) {
 		t.Fatalf("wrong error returned: %v", err)
 	}
 
@@ -256,7 +258,8 @@ func Test_StoreList(t *testing.T) {
 		t.Fatalf("Failed to open snapshot: %v", err)
 	}
 	_, err = store.Create(1, 2, 3, makeTestConfiguration("1", "localhost:1"), 1, nil)
-	if err != rsync.ErrMRSWConflict {
+	var expErr *rsync.ErrMRSWConflict
+	if !errors.As(err, &expErr) {
 		t.Fatalf("Expected MRSW conflict, got %v", err)
 	}
 	rc.Close()

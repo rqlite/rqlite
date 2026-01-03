@@ -1,14 +1,23 @@
 package rsync
 
 import (
-	"errors"
 	"sync"
 )
 
-var (
-	// ErrMRSWConflict is returned when a MultiRSW operation fails.
-	ErrMRSWConflict = errors.New("MRSW conflict")
-)
+// ErrMRSWConflict is returned when a MultiRSW operation fails.
+type ErrMRSWConflict struct {
+	msg string
+}
+
+// Error implements the error interface for ErrMRSWConflict.
+func (e *ErrMRSWConflict) Error() string {
+	return e.msg
+}
+
+// NewErrMRSWConflict creates a new ErrMRSWConflict with the given message.
+func NewErrMRSWConflict(msg string) error {
+	return &ErrMRSWConflict{msg: msg}
+}
 
 // MultiRSW is a simple concurrency control mechanism that allows
 // multiple readers or a single writer to execute a critical section at a time.
@@ -28,7 +37,7 @@ func (r *MultiRSW) BeginRead() error {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	if r.writerActive {
-		return ErrMRSWConflict
+		return NewErrMRSWConflict("MSRW conflict")
 	}
 	r.numReaders++
 	return nil
@@ -49,7 +58,7 @@ func (r *MultiRSW) BeginWrite() error {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	if r.writerActive || r.numReaders > 0 {
-		return ErrMRSWConflict
+		return NewErrMRSWConflict("MSRW conflict")
 	}
 	r.writerActive = true
 	return nil
@@ -72,7 +81,7 @@ func (r *MultiRSW) UpgradeToWriter() error {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	if r.writerActive || r.numReaders > 1 {
-		return ErrMRSWConflict
+		return NewErrMRSWConflict("MSRW conflict")
 	}
 	if r.numReaders == 0 {
 		panic("upgrade attempted with no readers")
