@@ -2919,7 +2919,7 @@ func (s *Store) processSnapshotRequest(req *snapshotRequest) {
 	switch req.reqType {
 	case snapshotRequestTypeUser:
 		// User/application triggered snapshot
-		err := s.doUserSnapshot(req.trailingLogs)
+		err := s.triggerRaftSnapshot(req.trailingLogs)
 		if req.respCh != nil {
 			req.respCh <- err
 		}
@@ -2928,8 +2928,9 @@ func (s *Store) processSnapshotRequest(req *snapshotRequest) {
 		// WAL size triggered snapshot - release lock before calling raft.Snapshot
 		// to avoid deadlock when raft calls back to fsmSnapshot
 		<-s.snapshotLockCh
-		err := s.doUserSnapshot(0)
-		s.snapshotLockCh <- struct{}{} // Reacquire for cleanup
+		defer func() { s.snapshotLockCh <- struct{}{} }() // Ensure lock is always reacquired
+		
+		err := s.triggerRaftSnapshot(0)
 		if err != nil {
 			stats.Add(numWALSnapshotsFailed, 1)
 			s.logger.Printf("failed to snapshot due to WAL threshold: %s", err.Error())
@@ -2939,8 +2940,9 @@ func (s *Store) processSnapshotRequest(req *snapshotRequest) {
 	}
 }
 
-// doUserSnapshot performs a user-triggered snapshot by calling raft.Snapshot().
-func (s *Store) doUserSnapshot(n uint64) error {
+// triggerRaftSnapshot triggers a snapshot by calling raft.Snapshot().
+// This is used for both user-triggered and WAL-triggered snapshots.
+func (s *Store) triggerRaftSnapshot(n uint64) error {
 	if n > 0 {
 		cfg := s.raft.ReloadableConfig()
 		defer func() {
