@@ -58,6 +58,9 @@ func (r *MultiRSW) EndRead() {
 func (r *MultiRSW) BeginWrite(owner string) error {
 	r.mu.Lock()
 	defer r.mu.Unlock()
+	if owner == "" {
+		panic("owner cannot be empty")
+	}
 	if r.owner != "" {
 		return NewErrMRSWConflict("MSRW conflict owner: " + r.owner)
 	}
