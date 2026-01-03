@@ -351,6 +351,8 @@ type Store struct {
 	fsmTerm       atomic.Uint64
 	fsmUpdateTime *rsync.AtomicTime // This is node-local time.
 
+	// readerMu allows blocking of all reads. This is used to handle
+	// specific, very rare, edge cases around WAL checkpointing.
 	readerMu sync.RWMutex
 
 	// appendedAtTime is the Leader's clock time when that Leader appended the log entry.
