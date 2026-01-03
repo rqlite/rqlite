@@ -22,8 +22,18 @@ func Test_WALDatabaseCheckpointOKNoWrites(t *testing.T) {
 		t.Fatalf("failed to open database in WAL mode: %s", err.Error())
 	}
 	defer db.Close()
-	if _, err := db.Checkpoint(CheckpointTruncate); err != nil {
+	meta, err := db.Checkpoint(CheckpointTruncate)
+	if err != nil {
 		t.Fatalf("failed to checkpoint database in WAL mode with nonexistent WAL: %s", err.Error())
+	}
+	if meta.Ok != 0 {
+		t.Fatalf("expected OK to be 0, got %d", meta.Ok)
+	}
+	if meta.Moved != 0 {
+		t.Fatalf("expected MOVED to be 0, got %d", meta.Moved)
+	}
+	if meta.Pages != 0 {
+		t.Fatalf("expected PAGES to be 0, got %d", meta.Pages)
 	}
 }
 
@@ -71,8 +81,14 @@ func Test_WALDatabaseCheckpoint_RestartTruncate(t *testing.T) {
 	}
 
 	walPreBytes := mustReadBytes(db.WALPath())
-	if _, err := db.Checkpoint(CheckpointRestart); err != nil {
+	if meta, err := db.Checkpoint(CheckpointRestart); err != nil {
 		t.Fatalf("failed to checkpoint database: %s", err.Error())
+	} else if meta.Ok != 0 {
+		t.Fatalf("expected checkpoint to complete successfully")
+	} else if meta.Moved == 0 {
+		t.Fatalf("expected some pages to be moved during checkpoint")
+	} else if meta.Pages == 0 {
+		t.Fatalf("expected some pages to be in the WAL during checkpoint")
 	}
 	walPostBytes := mustReadBytes(db.WALPath())
 	if !bytes.Equal(walPreBytes, walPostBytes) {
@@ -88,8 +104,12 @@ func Test_WALDatabaseCheckpoint_RestartTruncate(t *testing.T) {
 		t.Fatalf("expected %s, got %s", exp, got)
 	}
 
-	if _, err := db.Checkpoint(CheckpointTruncate); err != nil {
+	if meta, err := db.Checkpoint(CheckpointTruncate); err != nil {
 		t.Fatalf("failed to checkpoint database: %s", err.Error())
+	} else if meta.Ok != 0 {
+		t.Fatalf("expected checkpoint to complete successfully")
+	} else if meta.Moved != 0 {
+		t.Fatalf("expected 0 pages to be moved during checkpoint truncate since nowrite since restart checkpoint")
 	}
 	sz, err := fileSize(db.WALPath())
 	if err != nil {
