@@ -14,20 +14,20 @@ func Test_MultiRSW(t *testing.T) {
 	r.EndRead()
 
 	// Test successful write lock
-	if err := r.BeginWrite(); err != nil {
+	if err := r.BeginWrite("owner1"); err != nil {
 		t.Fatalf("Failed to acquire write lock: %v", err)
 	}
 	r.EndWrite()
 
 	// Test that a write blocks other writers and readers.
-	err := r.BeginWrite()
+	err := r.BeginWrite("owner2")
 	if err != nil {
 		t.Fatalf("Failed to acquire write lock in goroutine: %v", err)
 	}
 	if err := r.BeginRead(); err == nil {
 		t.Fatalf("Expected error when reading during active write, got none")
 	}
-	if err := r.BeginWrite(); err == nil {
+	if err := r.BeginWrite("owner3"); err == nil {
 		t.Fatalf("Expected error when writing during active write, got none")
 	}
 	r.EndWrite()
@@ -37,7 +37,7 @@ func Test_MultiRSW(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to acquire read lock in goroutine: %v", err)
 	}
-	if err := r.BeginWrite(); err == nil {
+	if err := r.BeginWrite("owner4"); err == nil {
 		t.Fatalf("Expected error when writing during active read, got none")
 	}
 	r.EndRead()
@@ -61,7 +61,7 @@ func Test_MultiRSW_Upgrade(t *testing.T) {
 	if err := r.BeginRead(); err != nil {
 		t.Fatalf("Failed to acquire read lock: %v", err)
 	}
-	if err := r.UpgradeToWriter(); err != nil {
+	if err := r.UpgradeToWriter("owner11"); err != nil {
 		t.Fatalf("Failed to upgrade to write lock: %v", err)
 	}
 	r.EndWrite()
@@ -73,7 +73,7 @@ func Test_MultiRSW_Upgrade(t *testing.T) {
 	if err := r.BeginRead(); err != nil {
 		t.Fatalf("Failed to acquire read lock: %v", err)
 	}
-	if err := r.UpgradeToWriter(); err == nil {
+	if err := r.UpgradeToWriter("owner5"); err == nil {
 		t.Fatalf("Expected error when upgrading with multiple readers, got none")
 	}
 	r.EndRead()
@@ -83,19 +83,19 @@ func Test_MultiRSW_Upgrade(t *testing.T) {
 	if err := r.BeginRead(); err != nil {
 		t.Fatalf("Failed to acquire read lock: %v", err)
 	}
-	if err := r.UpgradeToWriter(); err != nil {
+	if err := r.UpgradeToWriter("owner6"); err != nil {
 		t.Fatalf("Failed to upgrade to write lock: %v", err)
 	}
-	if err := r.UpgradeToWriter(); err == nil {
+	if err := r.UpgradeToWriter("owner7"); err == nil {
 		t.Fatalf("Expected error when double-ugrading, got none")
 	}
 	r.EndWrite()
 
 	// Test that upgrades are blocked by other writers
-	if err := r.BeginWrite(); err != nil {
+	if err := r.BeginWrite("owner8"); err != nil {
 		t.Fatalf("Failed to acquire write lock: %v", err)
 	}
-	if err := r.UpgradeToWriter(); err == nil {
+	if err := r.UpgradeToWriter("owner9"); err == nil {
 		t.Fatalf("Expected error when upgrading with an active writer, got none")
 	}
 	r.EndWrite()
