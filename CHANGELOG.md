@@ -2,6 +2,7 @@
 ### Implementation changes and bug fixes
 - [PR #2419](https://github.com/rqlite/rqlite/pull/2419): Improve MSRW Error structure.
 - [PR #2420](https://github.com/rqlite/rqlite/pull/2420): Snapshot Sink sets owner when taking MSRW.
+- [PR #2421](https://github.com/rqlite/rqlite/pull/2421): Log cancelled Snapshot Store LockingSinks.
 
 ## v9.3.7 (January 2nd 2026)
 ### Implementation changes and bug fixes

@@ -64,6 +64,7 @@ type LockingSink struct {
 
 	mu     sync.Mutex
 	closed bool
+	logger *log.Logger
 }
 
 // NewLockingSink returns a new LockingSink.
@@ -71,6 +72,7 @@ func NewLockingSink(sink raft.SnapshotSink, str *Store) *LockingSink {
 	return &LockingSink{
 		SnapshotSink: sink,
 		str:          str,
+		logger:       log.New(os.Stderr, "[snapshot-locking-sink] ", log.LstdFlags),
 	}
 }
 
@@ -88,6 +90,9 @@ func (s *LockingSink) Close() error {
 
 // Cancel cancels the sink, unlocking the Store for creation of a new sink.
 func (s *LockingSink) Cancel() error {
+	defer func() {
+		s.logger.Printf("sink %s canceled", s.ID())
+	}()
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if s.closed {
