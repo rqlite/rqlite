@@ -1,3 +1,7 @@
+## v9.3.8 (unreleased)
+### Implementation changes and bug fixes
+- [PR #2419](https://github.com/rqlite/rqlite/pull/2419): Improve MSRW Error structure.
+
 ## v9.3.7 (January 2nd 2026)
 ### Implementation changes and bug fixes
 - [PR #2415](https://github.com/rqlite/rqlite/pull/2415): Upgrade SQLite to 3.51.1.
