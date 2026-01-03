@@ -2529,14 +2529,25 @@ func Test_SingleNodeUserSnapshot_CAS(t *testing.T) {
 		t.Fatalf("failed to snapshot single-node store: %s", err.Error())
 	}
 
-	if err := s.snapshotCAS.Begin("snapshot-test"); err != nil {
-		t.Fatalf("failed to begin snapshot CAS: %s", err.Error())
-	}
+	// Acquire snapshot lock to block snapshots
+	s.snapshotLockCh <- struct{}{}
 	mustNoop(s, "2")
-	if err := s.Snapshot(0); err == nil {
-		t.Fatalf("expected error snapshotting single-node store with CAS")
+	// Try to snapshot with a timeout - should fail since lock is held
+	done := make(chan error, 1)
+	go func() {
+		done <- s.Snapshot(0)
+	}()
+	select {
+	case err := <-done:
+		if err == nil {
+			t.Fatalf("expected error snapshotting single-node store with lock held")
+		}
+	case <-time.After(2 * time.Second):
+		// This is expected - snapshot is blocked
 	}
-	s.snapshotCAS.End()
+	// Release the lock
+	<-s.snapshotLockCh
+	
 	mustNoop(s, "3")
 	if err := s.Snapshot(0); err != nil {
 		t.Fatalf("failed to snapshot single-node store: %s", err.Error())

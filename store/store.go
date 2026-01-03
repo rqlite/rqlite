@@ -281,6 +281,21 @@ type SnapshotStore interface {
 	Stats() (map[string]any, error)
 }
 
+// snapshotRequestType indicates the type of snapshot being requested.
+type snapshotRequestType int
+
+const (
+	snapshotRequestTypeUser snapshotRequestType = iota // User/application triggered snapshot
+	snapshotRequestTypeWAL                             // WAL size triggered snapshot
+)
+
+// snapshotRequest represents a request to take a snapshot.
+type snapshotRequest struct {
+	reqType      snapshotRequestType
+	trailingLogs uint64       // Number of trailing logs (only for user snapshots)
+	respCh       chan<- error // Response channel for synchronous requests
+}
+
 // ClusterState defines the possible Raft states the current node can be in
 type ClusterState int
 
@@ -334,13 +349,12 @@ type Store struct {
 	// Channels that must be closed for the Store to be considered ready.
 	readyChans *rsync.ReadyChannels
 
-	// Channels for WAL-size triggered snapshotting
-	snapshotWClose chan struct{}
-	snapshotWDone  chan struct{}
-
-	// Snapshotting synchronization
-	snapshotSync *rsync.SyncChannels
-	snapshotCAS  *rsync.CheckAndSet
+	// Snapshot coordinator
+	snapshotReqCh    chan *snapshotRequest
+	snapshotClose    chan struct{}
+	snapshotDone     chan struct{}
+	snapshotSync     *rsync.SyncChannels
+	snapshotLockCh   chan struct{} // Channel-based mutex for snapshot coordination
 
 	// Latest log entry index actually reflected by the FSM. Due to Raft code
 	// these values are not updated automatically after a Snapshot-restore.
@@ -460,8 +474,9 @@ func New(c *Config, ly Layer) *Store {
 		logger:            logger,
 		notifyingNodes:    make(map[string]*Server),
 		ApplyTimeout:      applyTimeout,
+		snapshotReqCh:     make(chan *snapshotRequest),
 		snapshotSync:      rsync.NewSyncChannels(),
-		snapshotCAS:       rsync.NewCheckAndSet(),
+		snapshotLockCh:    make(chan struct{}, 1),
 		fsmTarget:         rsync.NewReadyTarget[uint64](),
 		fsmUpdateTime:     rsync.NewAtomicTime(),
 		appendedAtTime:    rsync.NewAtomicTime(),
@@ -624,13 +639,11 @@ func (s *Store) Open() (retErr error) {
 		// the checksum fails to match, we log and exit, as this indicates a serious
 		// data integrity issue. If we're running in a cluster, the cluster should
 		// provide the fault tolerance.
-		if err := s.snapshotCAS.Begin("check-clean-snapshot"); err != nil {
-			return err
-		}
 		go func() {
-			// Whatever happens, unblock snapshoting. This is critical because we
-			// locked snapshotting before this goroutine launched.
-			defer s.snapshotCAS.End()
+			// Acquire snapshot lock to prevent snapshots during CRC check
+			s.snapshotLockCh <- struct{}{}
+			defer func() { <-s.snapshotLockCh }()
+			
 			if fp.CRC32 == 0 {
 				return
 			}
@@ -769,8 +782,8 @@ func (s *Store) Open() (retErr error) {
 	s.raft.RegisterObserver(s.observer)
 	s.observerClose, s.observerDone = s.observe()
 
-	// WAL-size triggered snapshotting.
-	s.snapshotWClose, s.snapshotWDone = s.runWALSnapshotting()
+	// Start snapshot coordinator.
+	s.snapshotClose, s.snapshotDone = s.runSnapshotCoordinator()
 
 	if err := s.initVacuumTime(); err != nil {
 		return fmt.Errorf("failed to initialize auto-vacuum times: %s", err.Error())
@@ -913,10 +926,14 @@ func (s *Store) Close(wait bool) (retErr error) {
 		s.logger.Println("snapshot-on-close took ", time.Since(startT))
 	}
 
-	if err := s.snapshotCAS.BeginWithRetry("close", 10*time.Millisecond, 10*time.Second); err != nil {
-		return err
+	// Wait for any ongoing snapshot to complete by trying to acquire the lock
+	timeout := time.After(30 * time.Second)
+	select {
+	case s.snapshotLockCh <- struct{}{}:
+		<-s.snapshotLockCh // Release immediately
+	case <-timeout:
+		s.logger.Printf("timeout waiting for snapshot lock during close")
 	}
-	defer s.snapshotCAS.End()
 
 	// Clean up any CDC.
 	if err := s.cleanupCDC(); err != nil {
@@ -928,8 +945,8 @@ func (s *Store) Close(wait bool) (retErr error) {
 	close(s.observerClose)
 	<-s.observerDone
 
-	close(s.snapshotWClose)
-	<-s.snapshotWDone
+	close(s.snapshotClose)
+	<-s.snapshotDone
 
 	f := s.raft.Shutdown()
 	if wait {
@@ -1328,7 +1345,7 @@ func (s *Store) Stats() (map[string]any, error) {
 		"election_timeout":       s.ElectionTimeout.String(),
 		"snapshot_threshold":     s.SnapshotThreshold,
 		"snapshot_interval":      s.SnapshotInterval.String(),
-		"snapshot_cas":           s.snapshotCAS.Stats(),
+		"snapshot_locked":        len(s.snapshotLockCh) > 0,
 		"reap_timeout":           s.ReapTimeout.String(),
 		"reap_read_only_timeout": s.ReapReadOnlyTimeout.String(),
 		"no_freelist_sync":       s.NoFreeListSync,
@@ -1698,10 +1715,13 @@ func (s *Store) Backup(br *proto.BackupRequest, dst io.Writer) (retErr error) {
 			// Block any snapshotting which will allow us to read the SQLite file without
 			// it changing underneath us. Any incoming writes will be sent to the WAL, so
 			// write traffic is not blocked during the backup process.
-			if err := s.snapshotCAS.BeginWithRetry("backup", backupCASTimeout, backupCASRetryDelay); err != nil {
+			timeout := time.After(backupCASTimeout)
+			select {
+			case s.snapshotLockCh <- struct{}{}:
+				defer func() { <-s.snapshotLockCh }()
+			case <-timeout:
 				return ErrBackupCASFailed
 			}
-			defer s.snapshotCAS.End()
 
 			// Now we can copy the SQLite file directly.
 			srcFD, err = os.Open(s.dbPath)
@@ -2412,16 +2432,28 @@ func (s *Store) fsmSnapshot() (fSnap raft.FSMSnapshot, retErr error) {
 		return nil, ErrNotOpen
 	}
 
+	// Acquire snapshot lock to ensure mutual exclusion
+	// Use a timeout to avoid blocking forever
+	timeout := time.After(30 * time.Second)
+	select {
+	case s.snapshotLockCh <- struct{}{}:
+		defer func() { <-s.snapshotLockCh }()
+	case <-timeout:
+		return nil, fmt.Errorf("timeout waiting for snapshot lock")
+	}
+
+	// Now perform the snapshot directly
+	return s.doSnapshot()
+}
+
+// doSnapshot performs the actual snapshot operation. This is the core
+// snapshot logic previously in fsmSnapshot().
+func (s *Store) doSnapshot() (fSnap raft.FSMSnapshot, retErr error) {
 	syncStartTime := time.Now()
 	if _, _, err := s.snapshotSync.Sync(time.Second); err != nil {
 		return nil, err
 	}
 	stats.Get(snapshotSyncDuration).(*expvar.Int).Set(time.Since(syncStartTime).Milliseconds())
-
-	if err := s.snapshotCAS.Begin("snapshot"); err != nil {
-		return nil, err
-	}
-	defer s.snapshotCAS.End()
 
 	// From now on, assume any snapshot is not successful.
 	if err := removeFile(s.cleanSnapshotPath); err != nil {
@@ -2815,9 +2847,16 @@ func (s *Store) Snapshot(n uint64) (retError error) {
 
 // runWALSnapshotting runs the periodic check to see if a snapshot should be
 // triggered due to WAL size.
-func (s *Store) runWALSnapshotting() (closeCh, doneCh chan struct{}) {
+// runSnapshotCoordinator runs the snapshot coordinator goroutine.
+// This goroutine is the single point for all snapshot operations, handling:
+// - FSM snapshots (requested by Raft)
+// - User/application snapshots (backup, explicit requests)
+// - WAL-size triggered snapshots (periodic checks)
+func (s *Store) runSnapshotCoordinator() (closeCh, doneCh chan struct{}) {
 	closeCh = make(chan struct{})
 	doneCh = make(chan struct{})
+	
+	// Setup WAL size check ticker
 	ticker := time.NewTicker(time.Hour) // Just need an initialized ticker to start with.
 	ticker.Stop()
 	if s.SnapshotInterval > 0 && s.SnapshotThresholdWALSize > 0 {
@@ -2827,27 +2866,94 @@ func (s *Store) runWALSnapshotting() (closeCh, doneCh chan struct{}) {
 	go func() {
 		defer close(doneCh)
 		defer ticker.Stop()
+		
 		for {
 			select {
+			case req := <-s.snapshotReqCh:
+				// Process snapshot request
+				s.processSnapshotRequest(req)
+				
 			case <-ticker.C:
+				// Check WAL size and trigger snapshot if needed
 				sz, err := fileSizeExists(s.walPath)
 				if err != nil {
 					s.logger.Printf("failed to check WAL size: %s", err.Error())
 					continue
 				}
 				if uint64(sz) >= s.SnapshotThresholdWALSize {
-					if err := s.Snapshot(0); err != nil {
-						stats.Add(numWALSnapshotsFailed, 1)
-						s.logger.Printf("failed to snapshot due to WAL threshold: %s", err.Error())
+					// Send WAL snapshot request to ourselves
+					req := &snapshotRequest{
+						reqType: snapshotRequestTypeWAL,
 					}
-					stats.Add(numWALSnapshots, 1)
+					s.processSnapshotRequest(req)
 				}
+				
 			case <-closeCh:
 				return
 			}
 		}
 	}()
 	return closeCh, doneCh
+}
+
+// processSnapshotRequest handles a single snapshot request.
+func (s *Store) processSnapshotRequest(req *snapshotRequest) {
+	if !s.open.Is() {
+		if req.respCh != nil {
+			req.respCh <- ErrNotOpen
+		}
+		return
+	}
+
+	// Acquire snapshot lock
+	s.snapshotLockCh <- struct{}{}
+	defer func() { <-s.snapshotLockCh }()
+
+	switch req.reqType {
+	case snapshotRequestTypeUser:
+		// User/application triggered snapshot
+		err := s.doUserSnapshot(req.trailingLogs)
+		if req.respCh != nil {
+			req.respCh <- err
+		}
+		
+	case snapshotRequestTypeWAL:
+		// WAL size triggered snapshot
+		err := s.doUserSnapshot(0)
+		if err != nil {
+			stats.Add(numWALSnapshotsFailed, 1)
+			s.logger.Printf("failed to snapshot due to WAL threshold: %s", err.Error())
+		} else {
+			stats.Add(numWALSnapshots, 1)
+		}
+	}
+}
+
+// doUserSnapshot performs a user-triggered snapshot by calling raft.Snapshot().
+func (s *Store) doUserSnapshot(n uint64) error {
+	if n > 0 {
+		cfg := s.raft.ReloadableConfig()
+		defer func() {
+			cfg.TrailingLogs = s.numTrailingLogs
+			if err := s.raft.ReloadConfig(cfg); err != nil {
+				s.logger.Printf("failed to reload Raft config: %s", err.Error())
+			}
+		}()
+		cfg.TrailingLogs = n
+		if err := s.raft.ReloadConfig(cfg); err != nil {
+			return fmt.Errorf("failed to reload Raft config: %s", err.Error())
+		}
+	}
+	if err := s.raft.Snapshot().Error(); err != nil {
+		if strings.Contains(err.Error(), ErrLoadInProgress.Error()) {
+			return ErrLoadInProgress
+		} else if err == raft.ErrNothingNewToSnapshot {
+			return ErrNothingNewToSnapshot
+		}
+		return err
+	}
+	stats.Add(numUserSnapshots, 1)
+	return nil
 }
 
 // selfLeaderChange is called when this node detects that its leadership
