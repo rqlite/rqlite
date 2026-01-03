@@ -2506,7 +2506,7 @@ func (s *Store) fsmSnapshot() (fSnap raft.FSMSnapshot, retErr error) {
 	var fsmSnapshot raft.FSMSnapshot
 	if fullNeeded {
 		chkStartTime := time.Now()
-		if err := s.db.Checkpoint(sql.CheckpointTruncate); err != nil {
+		if _, err := s.db.Checkpoint(sql.CheckpointTruncate); err != nil {
 			stats.Add(numFullCheckpointFailed, 1)
 			return nil, err
 		}
@@ -2567,7 +2567,7 @@ func (s *Store) fsmSnapshot() (fSnap raft.FSMSnapshot, retErr error) {
 				return nil, err
 			}
 			chkTStartTime := time.Now()
-			if err := s.db.Checkpoint(sql.CheckpointTruncate); err != nil {
+			if _, err := s.db.Checkpoint(sql.CheckpointTruncate); err != nil {
 				stats.Add(numWALCheckpointTruncateFailed, 1)
 				return nil, fmt.Errorf("snapshot can't complete due to WAL checkpoint failure (will retry): %s",
 					err.Error())

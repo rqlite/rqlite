@@ -166,7 +166,7 @@ func Test_WALNotCheckpointedOnClose(t *testing.T) {
 	}
 
 	// Checkpoint to table exists in main database file.
-	if err := db.Checkpoint(CheckpointTruncate); err != nil {
+	if _, err := db.Checkpoint(CheckpointTruncate); err != nil {
 		t.Fatalf("failed to checkpoint database: %s", err.Error())
 	}
 
@@ -299,7 +299,7 @@ func Test_TableCreation(t *testing.T) {
 	testQ()
 
 	// Confirm checkpoint works without error.
-	if err := db.Checkpoint(CheckpointRestart); err != nil {
+	if _, err := db.Checkpoint(CheckpointRestart); err != nil {
 		t.Fatalf("failed to checkpoint database: %s", err.Error())
 	}
 	testQ()
@@ -381,7 +381,7 @@ func Test_DBSums(t *testing.T) {
 		t.Fatalf("WAL sum did not change after insertion")
 	}
 
-	if err := db.Checkpoint(CheckpointRestart); err != nil {
+	if _, err := db.Checkpoint(CheckpointRestart); err != nil {
 		t.Fatalf("failed to checkpoint database: %s", err.Error())
 	}
 
@@ -439,7 +439,7 @@ func Test_DBLastModified(t *testing.T) {
 	// Checkpoint, and check time is later. On some platforms the time resolution isn't that
 	// high, so we sleep so the test won't suffer a false failure.
 	time.Sleep(1 * time.Second)
-	if err := db.Checkpoint(CheckpointRestart); err != nil {
+	if _, err := db.Checkpoint(CheckpointRestart); err != nil {
 		t.Fatalf("failed to checkpoint database: %s", err.Error())
 	}
 	lm3, err := db.LastModified()
@@ -944,14 +944,14 @@ func Test_WALDatabaseCreatedOK(t *testing.T) {
 		t.Fatalf("WAL file exists but is empty")
 	}
 
-	if err := db.Checkpoint(CheckpointTruncate); err != nil {
+	if _, err := db.Checkpoint(CheckpointTruncate); err != nil {
 		t.Fatalf("failed to checkpoint database in WAL mode: %s", err.Error())
 	}
 	if mustFileSize(walPath) != 0 {
 		t.Fatalf("WAL file exists but is non-empty")
 	}
 	// Checkpoint a second time, to ensure it's idempotent.
-	if err := db.Checkpoint(CheckpointTruncate); err != nil {
+	if _, err := db.Checkpoint(CheckpointTruncate); err != nil {
 		t.Fatalf("failed to checkpoint database in WAL mode: %s", err.Error())
 	}
 }
@@ -1081,7 +1081,7 @@ func test_FileCreationOnDisk(t *testing.T, db *DB) {
 
 	// Confirm checkpoint works on all types of on-disk databases. Worst case, this
 	// should be ignored.
-	if err := db.Checkpoint(CheckpointRestart); err != nil {
+	if _, err := db.Checkpoint(CheckpointRestart); err != nil {
 		t.Fatalf("failed to checkpoint database in DELETE mode: %s", err.Error())
 	}
 }
