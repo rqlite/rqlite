@@ -2512,7 +2512,7 @@ func (s *Store) fsmSnapshot() (fSnap raft.FSMSnapshot, retErr error) {
 			return nil, fmt.Errorf("snapshot can't complete due to FULL checkpoint error (will retry): %s",
 				err.Error())
 		}
-		if meta.Ok != 0 {
+		if !meta.Success() {
 			if meta.Moved < meta.Pages {
 				return nil, fmt.Errorf("snapshot can't complete due to FULL checkpoint incomplete (will retry)")
 			} else if meta.Moved == meta.Pages {
@@ -2582,7 +2582,7 @@ func (s *Store) fsmSnapshot() (fSnap raft.FSMSnapshot, retErr error) {
 				return nil, fmt.Errorf("snapshot can't complete due to WAL checkpoint error (will retry): %s",
 					err.Error())
 			}
-			if meta.Ok != 0 {
+			if !meta.Success() {
 				if meta.Moved < meta.Pages {
 					return nil, fmt.Errorf("snapshot can't complete due to WAL checkpoint incomplete (will retry)")
 				} else if meta.Moved == meta.Pages {

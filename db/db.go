@@ -168,9 +168,19 @@ type PoolStats struct {
 
 // CheckpointMeta contains metadata about a WAL checkpoint operation.
 type CheckpointMeta struct {
-	Ok    int
+	Code  int
 	Pages int
 	Moved int
+}
+
+// String returns a string representation of the CheckpointMeta.
+func (cm *CheckpointMeta) String() string {
+	return fmt.Sprintf("Code=%d, Pages=%d, Moved=%d", cm.Code, cm.Pages, cm.Moved)
+}
+
+// Success returns true if the checkpoint completed successfully.
+func (cm *CheckpointMeta) Success() bool {
+	return cm.Code == 0
 }
 
 // Open opens a file-based database using the default driver.
@@ -690,7 +700,7 @@ func (db *DB) CheckpointWithTimeout(mode CheckpointMode, dur time.Duration) (met
 	stats.Add(numCheckpointedPages, int64(nPages))
 	stats.Add(numCheckpointedMoves, int64(nMoved))
 	return &CheckpointMeta{
-		Ok:    ok,
+		Code:  ok,
 		Pages: nPages,
 		Moved: nMoved,
 	}, nil

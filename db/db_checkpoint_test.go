@@ -26,8 +26,8 @@ func Test_WALDatabaseCheckpointOKNoWrites(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to checkpoint database in WAL mode with nonexistent WAL: %s", err.Error())
 	}
-	if meta.Ok != 0 {
-		t.Fatalf("expected OK to be 0, got %d", meta.Ok)
+	if !meta.Success() {
+		t.Fatalf("expected checkpoint to complete successfully")
 	}
 	if meta.Moved != 0 {
 		t.Fatalf("expected MOVED to be 0, got %d", meta.Moved)
@@ -83,7 +83,7 @@ func Test_WALDatabaseCheckpoint_RestartTruncate(t *testing.T) {
 	walPreBytes := mustReadBytes(db.WALPath())
 	if meta, err := db.Checkpoint(CheckpointRestart); err != nil {
 		t.Fatalf("failed to checkpoint database: %s", err.Error())
-	} else if meta.Ok != 0 {
+	} else if !meta.Success() {
 		t.Fatalf("expected checkpoint to complete successfully")
 	} else if meta.Moved == 0 {
 		t.Fatalf("expected some pages to be moved during checkpoint")
@@ -106,7 +106,7 @@ func Test_WALDatabaseCheckpoint_RestartTruncate(t *testing.T) {
 
 	if meta, err := db.Checkpoint(CheckpointTruncate); err != nil {
 		t.Fatalf("failed to checkpoint database: %s", err.Error())
-	} else if meta.Ok != 0 {
+	} else if !meta.Success() {
 		t.Fatalf("expected checkpoint to complete successfully")
 	} else if meta.Moved != 0 {
 		t.Fatalf("expected 0 pages to be moved during checkpoint truncate since nowrite since restart checkpoint")
@@ -172,8 +172,8 @@ func Test_WALDatabaseCheckpoint_RestartTimeout(t *testing.T) {
 	if err != nil {
 		t.Fatal("expected no error due to failure to checkpoint due to COMMIT")
 	}
-	if meta.Ok == 0 {
-		t.Fatal("expected checkpoint not to complete successfully")
+	if meta.Success() {
+		t.Fatal("expected checkpoint to be unsuccessful")
 	}
 
 	// Get some information on the WAL file before the checkpoint. The goal here is
@@ -248,8 +248,8 @@ func Test_WALDatabaseCheckpoint_TruncateTimeout(t *testing.T) {
 	if err != nil {
 		t.Fatal("expected no error due to failure to checkpoint due to COMMIT")
 	}
-	if meta.Ok == 0 {
-		t.Fatal("expected checkpoint not to complete successfully")
+	if meta.Success() {
+		t.Fatal("expected checkpoint to be unsuccessful")
 	}
 
 	postWALBytes := mustReadBytes(db.WALPath())
