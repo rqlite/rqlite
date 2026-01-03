@@ -170,7 +170,7 @@ func Test_WALDatabaseCheckpoint_RestartTimeout(t *testing.T) {
 
 	meta, err := db.CheckpointWithTimeout(CheckpointRestart, 250*time.Millisecond)
 	if err != nil {
-		t.Fatal("expected no error due to failure to checkpoint due to COMMIT")
+		t.Fatal("expected no error when checkpoint times out due to a blocking read transaction")
 	}
 	if meta.Ok == 0 {
 		t.Fatal("expected checkpoint not to complete successfully")
