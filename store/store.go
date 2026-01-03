@@ -474,7 +474,7 @@ func New(c *Config, ly Layer) *Store {
 		logger:            logger,
 		notifyingNodes:    make(map[string]*Server),
 		ApplyTimeout:      applyTimeout,
-		snapshotReqCh:     make(chan *snapshotRequest),
+		snapshotReqCh:     make(chan *snapshotRequest, 10), // Buffered to allow queueing
 		snapshotSync:      rsync.NewSyncChannels(),
 		snapshotLockCh:    make(chan struct{}, 1),
 		fsmTarget:         rsync.NewReadyTarget[uint64](),
@@ -2881,11 +2881,18 @@ func (s *Store) runSnapshotCoordinator() (closeCh, doneCh chan struct{}) {
 					continue
 				}
 				if uint64(sz) >= s.SnapshotThresholdWALSize {
-					// Send WAL snapshot request to ourselves
+					// Send WAL snapshot request through the channel
+					// Use non-blocking send to avoid deadlock
 					req := &snapshotRequest{
 						reqType: snapshotRequestTypeWAL,
 					}
-					s.processSnapshotRequest(req)
+					select {
+					case s.snapshotReqCh <- req:
+						// Request sent, will be processed in next iteration
+					default:
+						// Channel is full, skip this check
+						s.logger.Printf("skipping WAL snapshot check, coordinator busy")
+					}
 				}
 
 			case <-closeCh:
@@ -2918,8 +2925,11 @@ func (s *Store) processSnapshotRequest(req *snapshotRequest) {
 		}
 
 	case snapshotRequestTypeWAL:
-		// WAL size triggered snapshot
+		// WAL size triggered snapshot - release lock before calling raft.Snapshot
+		// to avoid deadlock when raft calls back to fsmSnapshot
+		<-s.snapshotLockCh
 		err := s.doUserSnapshot(0)
+		s.snapshotLockCh <- struct{}{} // Reacquire for cleanup
 		if err != nil {
 			stats.Add(numWALSnapshotsFailed, 1)
 			s.logger.Printf("failed to snapshot due to WAL threshold: %s", err.Error())
