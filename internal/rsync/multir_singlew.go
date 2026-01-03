@@ -23,9 +23,9 @@ func NewErrMRSWConflict(m string) error {
 // MultiRSW is a simple concurrency control mechanism that allows
 // multiple readers or a single writer to execute a critical section at a time.
 type MultiRSW struct {
-	owner string
-	numReaders   int
-	mu           sync.Mutex
+	owner      string
+	numReaders int
+	mu         sync.Mutex
 }
 
 // NewMultiRSW creates a new MultiRSW instance.
