@@ -2506,9 +2506,18 @@ func (s *Store) fsmSnapshot() (fSnap raft.FSMSnapshot, retErr error) {
 	var fsmSnapshot raft.FSMSnapshot
 	if fullNeeded {
 		chkStartTime := time.Now()
-		if _, err := s.db.Checkpoint(sql.CheckpointTruncate); err != nil {
+		meta, err := s.db.Checkpoint(sql.CheckpointTruncate)
+		if err != nil {
 			stats.Add(numFullCheckpointFailed, 1)
-			return nil, err
+			return nil, fmt.Errorf("snapshot can't complete due to FULL checkpoint error (will retry): %s",
+				err.Error())
+		}
+		if meta.Ok != 0 {
+			if meta.Moved < meta.Pages {
+				return nil, fmt.Errorf("snapshot can't complete due to FULL checkpoint incomplete (will retry)")
+			} else if meta.Moved == meta.Pages {
+				panic("WAL checkpoint reports all pages moved, but OK is non-zero")
+			}
 		}
 		stats.Get(snapshotCreateChkTruncateDuration).(*expvar.Int).Set(time.Since(chkStartTime).Milliseconds())
 		dbFD, err := os.Open(s.db.Path())
@@ -2567,10 +2576,18 @@ func (s *Store) fsmSnapshot() (fSnap raft.FSMSnapshot, retErr error) {
 				return nil, err
 			}
 			chkTStartTime := time.Now()
-			if _, err := s.db.Checkpoint(sql.CheckpointTruncate); err != nil {
+			meta, err := s.db.Checkpoint(sql.CheckpointTruncate)
+			if err != nil {
 				stats.Add(numWALCheckpointTruncateFailed, 1)
-				return nil, fmt.Errorf("snapshot can't complete due to WAL checkpoint failure (will retry): %s",
+				return nil, fmt.Errorf("snapshot can't complete due to WAL checkpoint error (will retry): %s",
 					err.Error())
+			}
+			if meta.Ok != 0 {
+				if meta.Moved < meta.Pages {
+					return nil, fmt.Errorf("snapshot can't complete due to WAL checkpoint incomplete (will retry)")
+				} else if meta.Moved == meta.Pages {
+					panic("WAL checkpoint reports all pages moved, but OK is non-zero")
+				}
 			}
 			stats.Get(snapshotCreateChkTruncateDuration).(*expvar.Int).Set(time.Since(chkTStartTime).Milliseconds())
 			stats.Get(snapshotPrecompactWALSize).(*expvar.Int).Set(walSzPre)
