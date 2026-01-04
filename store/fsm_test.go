@@ -81,13 +81,13 @@ func Test_FSMSnapshot_OnRelease_NotInvoked(t *testing.T) {
 func Test_FSMSnapshot_OnRelease_NotSucceeded(t *testing.T) {
 	onReleaseCalled := false
 	invoked := false
-	suceeded := false
+	succeeded := false
 
 	f := FSMSnapshot{
 		OnRelease: func(i, s bool) {
 			onReleaseCalled = true
 			invoked = i
-			suceeded = s
+			succeeded = s
 		},
 		FSMSnapshot: &mockRaftSnapshot{forceErr: true},
 		logger:      nil,
@@ -102,7 +102,7 @@ func Test_FSMSnapshot_OnRelease_NotSucceeded(t *testing.T) {
 	if !invoked {
 		t.Fatalf("OnRelease invoked argument incorrect")
 	}
-	if suceeded {
+	if succeeded {
 		t.Fatalf("OnRelease succeeded argument incorrect")
 	}
 }
