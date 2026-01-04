@@ -1649,6 +1649,9 @@ func (s *Store) Request(eqr *proto.ExecuteQueryRequest) ([]*proto.ExecuteQueryRe
 // will be written directly to that file. Otherwise a temporary file will be created,
 // and that temporary file copied to dst.
 func (s *Store) Backup(br *proto.BackupRequest, dst io.Writer) (retErr error) {
+	s.readerMu.RLock()
+	defer s.readerMu.RUnlock()
+
 	if !s.open.Is() {
 		return ErrNotOpen
 	}
@@ -1922,6 +1925,9 @@ func (s *Store) Vacuum() error {
 // http://sqlite.org/howtocorrupt.html states it is safe to do this
 // as long as the database is not written to during the call.
 func (s *Store) Database(leader bool) ([]byte, error) {
+	s.readerMu.RLock()
+	defer s.readerMu.RUnlock()
+
 	if leader && s.raft.State() != raft.Leader {
 		return nil, ErrNotLeader
 	}
