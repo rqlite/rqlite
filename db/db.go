@@ -1119,7 +1119,7 @@ func (db *DB) Query(req *command.Request, xTime bool) ([]*command.QueryRows, err
 	return db.QueryWithContext(ctx, req, xTime)
 }
 
-// QueryWithContext executes queries that return rows, but don't modify the database,
+// QueryWithContext executes queries that return rows, but don't modify the database.
 func (db *DB) QueryWithContext(ctx context.Context, req *command.Request, xTime bool) ([]*command.QueryRows, error) {
 	stats.Add(numQueries, int64(len(req.Statements)))
 	conn, err := db.roDB.Conn(ctx)
