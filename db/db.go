@@ -1110,19 +1110,23 @@ func (db *DB) QueryStringStmtWithTimeout(query string, tx bool, timeout time.Dur
 
 // Query executes queries that return rows, but don't modify the database.
 func (db *DB) Query(req *command.Request, xTime bool) ([]*command.QueryRows, error) {
-	stats.Add(numQueries, int64(len(req.Statements)))
-	conn, err := db.roDB.Conn(context.Background())
-	if err != nil {
-		return nil, err
-	}
-	defer conn.Close()
-
 	ctx := context.Background()
 	if req.DbTimeout > 0 {
 		var cancel context.CancelFunc
 		ctx, cancel = context.WithTimeout(ctx, time.Duration(req.DbTimeout))
 		defer cancel()
 	}
+	return db.QueryWithContext(ctx, req, xTime)
+}
+
+// QueryWithContext executes queries that return rows, but don't modify the database.
+func (db *DB) QueryWithContext(ctx context.Context, req *command.Request, xTime bool) ([]*command.QueryRows, error) {
+	stats.Add(numQueries, int64(len(req.Statements)))
+	conn, err := db.roDB.Conn(ctx)
+	if err != nil {
+		return nil, err
+	}
+	defer conn.Close()
 	return db.queryWithConn(ctx, req, xTime, conn)
 }
 
