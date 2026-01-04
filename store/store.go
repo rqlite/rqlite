@@ -2637,18 +2637,33 @@ func (s *Store) fsmSnapshot() (fSnap raft.FSMSnapshot, retErr error) {
 	dur := time.Since(startT)
 	stats.Get(snapshotCreateDuration).(*expvar.Int).Set(dur.Milliseconds())
 	fs := FSMSnapshot{
+		Full:        fullNeeded,
 		FSMSnapshot: fsmSnapshot,
 		Finalizer: func() error {
 			return s.createSnapshotFingerprint()
 		},
-		OnFailure: func() {
-			s.logger.Printf("Persisting snapshot did not succeed, full snapshot needed")
-			if err := s.snapshotStore.SetFullNeeded(); err != nil {
-				// If this happens, only recourse is to shut down the node.
-				s.logger.Fatalf("failed to set full snapshot needed: %s", err)
+		OnRelease: func(invoked, succeeded bool) {
+			if !invoked {
+				s.logger.Printf("persisting %s snapshot was not invoked on node ID %s", fPLog, s.raftID)
+			} else if !succeeded {
+				s.logger.Printf("persisting %s snapshot did not succeed on node ID %s", fPLog, s.raftID)
 			}
+
+			// We treat any snapshot that is not successfully persisted for whatever reason as
+			// requiring a full snapshot next time. Truncation could run to complete, the WAL
+			// deleted, but if the snapshot processing doesn't run to completion, the snapshot
+			// store hasn't been updated with the WAL data. It's gone.
+			if !invoked || !succeeded {
+				s.logger.Printf("setting full snapshot needed")
+				if err := s.snapshotStore.SetFullNeeded(); err != nil {
+					// If this happens, only recourse is to shut down the node.
+					s.logger.Fatalf("failed to set full snapshot needed: %s", err)
+				}
+			}
+
 			if walTmpFD != nil {
 				// Incremental snapshotting active, clean up any temp WAL files.
+				// There may be none around, but that's OK.
 				walTmpFD.Close()
 				os.Remove(walTmpFD.Name())
 			}
