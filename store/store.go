@@ -2637,6 +2637,7 @@ func (s *Store) fsmSnapshot() (fSnap raft.FSMSnapshot, retErr error) {
 	dur := time.Since(startT)
 	stats.Get(snapshotCreateDuration).(*expvar.Int).Set(dur.Milliseconds())
 	fs := FSMSnapshot{
+		Full:        fullNeeded,
 		FSMSnapshot: fsmSnapshot,
 		Finalizer: func() error {
 			return s.createSnapshotFingerprint()
