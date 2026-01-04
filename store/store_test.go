@@ -2,6 +2,7 @@ package store
 
 import (
 	"bytes"
+	"context"
 	"crypto/rand"
 	"errors"
 	"fmt"
@@ -2652,7 +2653,7 @@ func Test_SingleNode_WALTriggeredSnapshot(t *testing.T) {
 	}
 }
 
-func Test_SingleNode_SnapshotFailRetry(t *testing.T) {
+func Test_SingleNode_SnapshotFail_Blocked(t *testing.T) {
 	s, ln := mustNewStore(t)
 	defer ln.Close()
 
@@ -2697,6 +2698,115 @@ func Test_SingleNode_SnapshotFailRetry(t *testing.T) {
 
 	if err := s.Snapshot(0); err == nil {
 		t.Fatalf("expected error snapshotting single-node store with stalled query")
+	}
+}
+
+// Test_SingleNode_SnapshotFail_Blocked_Retry tests that a snapshot operation
+// that requires a forced checkpoint and truncation does succeed once the
+// blocking query unblocks.
+func Test_SingleNode_SnapshotFail_Blocked_Retry(t *testing.T) {
+	s, ln := mustNewStore(t)
+	defer ln.Close()
+
+	s.SnapshotThreshold = 8192
+	s.SnapshotInterval = time.Hour
+	s.NoSnapshotOnClose = true
+	if err := s.Open(); err != nil {
+		t.Fatalf("failed to open single-node store: %s", err.Error())
+	}
+	defer s.Close(true)
+	if err := s.Bootstrap(NewServer(s.ID(), s.Addr(), true)); err != nil {
+		t.Fatalf("failed to bootstrap single-node store: %s", err.Error())
+	}
+	if _, err := s.WaitForLeader(10 * time.Second); err != nil {
+		t.Fatalf("Error waiting for leader: %s", err)
+	}
+	er := executeRequestFromString(`CREATE TABLE foo (id INTEGER NOT NULL PRIMARY KEY, name TEXT)`,
+		false, false)
+	_, _, err := s.Execute(er)
+	if err != nil {
+		t.Fatalf("failed to execute on single node: %s", err.Error())
+	}
+
+	er = executeRequestFromString(`INSERT INTO foo(name) VALUES("fiona")`, false, false)
+	_, _, err = s.Execute(er)
+	if err != nil {
+		t.Fatalf("failed to execute on single node: %s", err.Error())
+	}
+
+	ctx, cancelFunc := context.WithCancel(context.Background())
+	go func() {
+		qr := queryRequestFromString("SELECT * FROM foo", false, false)
+		qr.GetRequest().Statements[0].ForceStall = true
+
+		blockingDB, err := db.Open(s.dbPath, false, true)
+		if err != nil {
+			t.Errorf("failed to open blocking DB connection: %s", err.Error())
+		}
+		defer blockingDB.Close()
+
+		_, err = blockingDB.QueryWithContext(ctx, qr.GetRequest(), false)
+		if err != nil {
+			t.Errorf("failed to execute stalled query on blocking DB connection: %s", err.Error())
+		}
+	}()
+	time.Sleep(1 * time.Second)
+
+	success := false
+	var wg sync.WaitGroup
+	wg.Go(func() {
+		if err := s.Snapshot(0); err != nil {
+			t.Errorf("failed to snapshot single-node store with released stalled query: %s", err.Error())
+		} else {
+			success = true
+		}
+	})
+	time.Sleep(1 * time.Second)
+	cancelFunc()
+	wg.Wait()
+	if !success {
+		t.Fatalf("expected snapshot to succeed after blocking query released")
+	}
+
+	// Again, this time with a persistent snapshot.
+	er = executeRequestFromString(`INSERT INTO foo(name) VALUES("fiona")`, false, false)
+	_, _, err = s.Execute(er)
+	if err != nil {
+		t.Fatalf("failed to execute on single node: %s", err.Error())
+	}
+
+	ctx, cancelFunc = context.WithCancel(context.Background())
+	go func() {
+		qr := queryRequestFromString("SELECT * FROM foo", false, false)
+		qr.GetRequest().Statements[0].ForceStall = true
+
+		blockingDB, err := db.Open(s.dbPath, false, true)
+		if err != nil {
+			t.Errorf("failed to open blocking DB connection: %s", err.Error())
+		}
+		defer blockingDB.Close()
+
+		_, err = blockingDB.QueryWithContext(ctx, qr.GetRequest(), false)
+		if err != nil {
+			t.Errorf("failed to execute stalled query on blocking DB connection: %s", err.Error())
+		}
+	}()
+	time.Sleep(1 * time.Second)
+
+	success = false
+	var wg2 sync.WaitGroup
+	wg2.Go(func() {
+		if err := s.Snapshot(0); err != nil {
+			t.Errorf("failed to snapshot single-node store with second released stalled query: %s", err.Error())
+		} else {
+			success = true
+		}
+	})
+	time.Sleep(1 * time.Second)
+	cancelFunc()
+	wg2.Wait()
+	if !success {
+		t.Fatalf("expected snapshot to succeed after blocking query released")
 	}
 }
 
