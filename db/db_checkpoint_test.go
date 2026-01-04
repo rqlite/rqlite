@@ -131,7 +131,7 @@ func Test_WALDatabaseCheckpointFail_Blocked(t *testing.T) {
 		t.Fatalf("failed to checkpoint database: %s", err.Error())
 	}
 	if !meta.Success() {
-t.Fatalf("expected checkpoint to be successful after blocking read was cancelled")
+		t.Fatalf("expected checkpoint to be successful after blocking read was cancelled")
 	}
 }
 
