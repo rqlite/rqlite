@@ -2652,6 +2652,54 @@ func Test_SingleNode_WALTriggeredSnapshot(t *testing.T) {
 	}
 }
 
+func Test_SingleNode_SnapshotFailRetry(t *testing.T) {
+	s, ln := mustNewStore(t)
+	defer ln.Close()
+
+	s.SnapshotThreshold = 8192
+	s.SnapshotInterval = time.Hour
+	s.NoSnapshotOnClose = true
+	if err := s.Open(); err != nil {
+		t.Fatalf("failed to open single-node store: %s", err.Error())
+	}
+	defer s.Close(true)
+	if err := s.Bootstrap(NewServer(s.ID(), s.Addr(), true)); err != nil {
+		t.Fatalf("failed to bootstrap single-node store: %s", err.Error())
+	}
+	if _, err := s.WaitForLeader(10 * time.Second); err != nil {
+		t.Fatalf("Error waiting for leader: %s", err)
+	}
+	er := executeRequestFromString(`CREATE TABLE foo (id INTEGER NOT NULL PRIMARY KEY, name TEXT)`,
+		false, false)
+	_, _, err := s.Execute(er)
+	if err != nil {
+		t.Fatalf("failed to execute on single node: %s", err.Error())
+	}
+
+	er = executeRequestFromString(`INSERT INTO foo(name) VALUES("fiona")`, false, false)
+	_, _, err = s.Execute(er)
+	if err != nil {
+		t.Fatalf("failed to execute on single node: %s", err.Error())
+	}
+
+	go func() {
+		qr := queryRequestFromString("SELECT * FROM foo", false, false)
+		qr.GetRequest().Statements[0].ForceStall = true
+		s.Query(qr)
+	}()
+
+	time.Sleep(2 * time.Second)
+	er = executeRequestFromString(`INSERT INTO foo(name) VALUES("bob")`, false, false)
+	_, _, err = s.Execute(er)
+	if err != nil {
+		t.Fatalf("failed to execute on single node: %s", err.Error())
+	}
+
+	if err := s.Snapshot(0); err == nil {
+		t.Fatalf("expected error snapshotting single-node store with stalled query")
+	}
+}
+
 func Test_OpenStoreSingleNode_OptimizeTimes(t *testing.T) {
 	s0, ln0 := mustNewStore(t)
 	defer s0.Close(true)

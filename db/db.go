@@ -1250,6 +1250,13 @@ func (db *DB) queryStmtWithConn(ctx context.Context, stmt *command.Statement, xT
 			Parameters: params,
 		})
 
+		// Check for slow query, blocked query, etc testing. This field
+		// should never set by production code and is only for fault-injection
+		// testing purposes.
+		if stmt.ForceStall {
+			<-make(chan struct{})
+		}
+
 		// One-time population of any empty types. Best effort, ignore
 		// error.
 		if needsQueryTypes {

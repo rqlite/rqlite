@@ -7,7 +7,9 @@ import (
 	"testing"
 	"time"
 
+	command "github.com/rqlite/rqlite/v9/command/proto"
 	"github.com/rqlite/rqlite/v9/db/wal"
+	"github.com/rqlite/rqlite/v9/internal/rsum"
 )
 
 // Test_WALDatabaseCheckpointOKNoWrites tests that a checkpoint succeeds
@@ -75,6 +77,86 @@ func Test_WALDatabaseCheckpointOK(t *testing.T) {
 	}
 	if !meta.Success() {
 		t.Fatalf("expected checkpoint to complete successfully")
+	}
+}
+
+// Test_WALDatabaseCheckpointOK_NoWALChange tests that a checkpoint
+// that is blocked by a long-running read does not result in a
+// change to the WAL file. This is to show that we can safely retry
+// the truncate checkpoint later.
+func Test_WALDatabaseCheckpointOK_NoWALChange(t *testing.T) {
+	path := mustTempFile()
+	defer os.Remove(path)
+
+	db, err := Open(path, false, true)
+	if err != nil {
+		t.Fatalf("failed to open database in WAL mode: %s", err.Error())
+	}
+	defer db.Close()
+
+	_, err = db.ExecuteStringStmt(`CREATE TABLE foo (id INTEGER NOT NULL PRIMARY KEY, name TEXT)`)
+	if err != nil {
+		t.Fatalf("failed to execute on single node: %s", err.Error())
+	}
+	_, err = db.ExecuteStringStmt(`INSERT INTO foo(name) VALUES("alice")`)
+	if err != nil {
+		t.Fatalf("failed to execute INSERT on single node: %s", err.Error())
+	}
+
+	// Issue a long-running read that should block the checkpoint.
+	qr := &command.Request{
+		Statements: []*command.Statement{
+			{
+				Sql:        "SELECT * FROM foo",
+				ForceStall: true,
+			},
+		},
+	}
+	go func() {
+		db.Query(qr, false)
+	}()
+	time.Sleep(2 * time.Second)
+
+	_, err = db.ExecuteStringStmt(`INSERT INTO foo(name) VALUES("alice")`)
+	if err != nil {
+		t.Fatalf("failed to execute INSERT on single node: %s", err.Error())
+	}
+
+	// Get the hash of the WAL file before the checkpoint.
+	h1, err := rsum.MD5(db.WALPath())
+	if err != nil {
+		t.Fatalf("failed to hash WAL file: %s", err.Error())
+	}
+
+	_, err = db.ExecuteStringStmt(`PRAGMA BUSY_TIMEOUT = 1`)
+	if err != nil {
+		t.Fatalf("failed to execute on single node: %s", err.Error())
+	}
+	meta, err := db.Checkpoint(CheckpointTruncate)
+	if err != nil {
+		t.Fatalf("failed to checkpoint database: %s", err.Error())
+	}
+	if meta.Success() {
+		t.Fatalf("expected checkpoint to be unsuccessful due to blocking read")
+	}
+	if meta.Moved == 0 {
+		t.Fatalf("expected MOVED to be > 0 since some pages should have been moved")
+	}
+	if meta.Pages == 0 {
+		t.Fatalf("expected PAGES to be > 0 since WAL should have pages")
+	}
+	if meta.Moved >= meta.Pages {
+		t.Fatalf("expected MOVED to be < PAGES since checkpoint incomplete")
+	}
+
+	// Check hash again.
+	h2, err := rsum.MD5(db.WALPath())
+	if err != nil {
+		t.Fatalf("failed to hash WAL file: %s", err.Error())
+	}
+
+	if h1 != h2 {
+		t.Fatalf("expected WAL file to be unchanged after incomplete checkpoint")
 	}
 }
 
