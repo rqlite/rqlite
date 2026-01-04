@@ -2637,11 +2637,15 @@ func (s *Store) fsmSnapshot() (fSnap raft.FSMSnapshot, retErr error) {
 		Finalizer: func() error {
 			return s.createSnapshotFingerprint()
 		},
-		OnFailure: func() {
-			s.logger.Printf("persisting snapshot did not succeed on node ID %s, full snapshot needed", s.raftID)
-			if err := s.snapshotStore.SetFullNeeded(); err != nil {
-				// If this happens, only recourse is to shut down the node.
-				s.logger.Fatalf("failed to set full snapshot needed: %s", err)
+		OnRelease: func(invoked, succeeded bool) {
+			if !invoked {
+				s.logger.Printf("persisting snapshot was not invoked on node ID %s", s.raftID)
+			} else if invoked && !succeeded {
+				s.logger.Printf("persisting snapshot did not succeed on node ID %s, full snapshot needed", s.raftID)
+				if err := s.snapshotStore.SetFullNeeded(); err != nil {
+					// If this happens, only recourse is to shut down the node.
+					s.logger.Fatalf("failed to set full snapshot needed: %s", err)
+				}
 			}
 		},
 	}

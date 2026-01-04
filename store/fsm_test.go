@@ -26,10 +26,10 @@ func Test_FSMSnapshot_Finalizer(t *testing.T) {
 }
 
 func Test_FSMSnapshot_OnFailure_NotCalled(t *testing.T) {
-	onFailureCalled := false
+	onReleaseCalled := false
 	f := FSMSnapshot{
-		OnFailure: func() {
-			onFailureCalled = true
+		OnRelease: func(invoked, succeeded bool) {
+			onReleaseCalled = true
 		},
 		FSMSnapshot: &mockRaftSnapshot{},
 		logger:      nil,
@@ -39,23 +39,23 @@ func Test_FSMSnapshot_OnFailure_NotCalled(t *testing.T) {
 		t.Fatalf("unexpected error: %v", err)
 	}
 	f.Release()
-	if onFailureCalled {
-		t.Fatalf("OnFailure was called")
+	if onReleaseCalled {
+		t.Fatalf("OnRelease was called")
 	}
 }
 
 func Test_FSMSnapshot_OnFailure_Called(t *testing.T) {
-	onFailureCalled := false
+	onReleaseCalled := false
 	f := FSMSnapshot{
-		OnFailure: func() {
-			onFailureCalled = true
+		OnRelease: func(invoked, succeeded bool) {
+			onReleaseCalled = true
 		},
 		FSMSnapshot: &mockRaftSnapshot{},
 		logger:      nil,
 	}
 	f.Release()
-	if !onFailureCalled {
-		t.Fatalf("OnFailure was not called")
+	if !onReleaseCalled {
+		t.Fatalf("OnRelease was not called")
 	}
 }
 
