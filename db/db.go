@@ -659,7 +659,7 @@ func (db *DB) BusyTimeout() (rwMs, roMs int, err error) {
 // Checkpoint checkpoints the WAL file. If the WAL file is not enabled, this
 // function is a no-op.
 func (db *DB) Checkpoint(mode CheckpointMode) (*CheckpointMeta, error) {
-	return db.CheckpointWithTimeout(mode, 100)
+	return db.CheckpointWithTimeout(mode, 1000)
 }
 
 // CheckpointWithTimeout performs a WAL checkpoint. If the checkpoint does not
