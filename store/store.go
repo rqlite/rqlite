@@ -2641,14 +2641,24 @@ func (s *Store) fsmSnapshot() (fSnap raft.FSMSnapshot, retErr error) {
 		Finalizer: func() error {
 			return s.createSnapshotFingerprint()
 		},
-		OnFailure: func() {
-			s.logger.Printf("Persisting snapshot did not succeed, full snapshot needed")
-			if err := s.snapshotStore.SetFullNeeded(); err != nil {
-				// If this happens, only recourse is to shut down the node.
-				s.logger.Fatalf("failed to set full snapshot needed: %s", err)
+		OnRelease: func(invoked, succeeded bool) {
+			typ := "incremental"
+			if fullNeeded {
+				typ = "incremental"
 			}
+			if !invoked {
+				s.logger.Printf("persisting %s snapshot was not invoked on node ID %s", typ, s.raftID)
+			} else if !succeeded {
+				s.logger.Printf("persisting %s snapshot did not succeed on node ID %s, full snapshot needed", typ, s.raftID)
+				if err := s.snapshotStore.SetFullNeeded(); err != nil {
+					// If this happens, only recourse is to shut down the node.
+					s.logger.Fatalf("failed to set full snapshot needed: %s", err)
+				}
+			}
+
 			if walTmpFD != nil {
 				// Incremental snapshotting active, clean up any temp WAL files.
+				// There may be none around, but that's OK.
 				walTmpFD.Close()
 				os.Remove(walTmpFD.Name())
 			}

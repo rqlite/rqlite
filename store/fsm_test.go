@@ -1,6 +1,7 @@
 package store
 
 import (
+	"errors"
 	"testing"
 
 	"github.com/hashicorp/raft"
@@ -25,11 +26,16 @@ func Test_FSMSnapshot_Finalizer(t *testing.T) {
 	}
 }
 
-func Test_FSMSnapshot_OnFailure_NotCalled(t *testing.T) {
-	onFailureCalled := false
+func Test_FSMSnapshot_OnRelease_OK(t *testing.T) {
+	onReleaseCalled := false
+	invoked := false
+	succeeded := false
+
 	f := FSMSnapshot{
-		OnFailure: func() {
-			onFailureCalled = true
+		OnRelease: func(i, s bool) {
+			onReleaseCalled = true
+			invoked = i
+			succeeded = s
 		},
 		FSMSnapshot: &mockRaftSnapshot{},
 		logger:      nil,
@@ -39,28 +45,69 @@ func Test_FSMSnapshot_OnFailure_NotCalled(t *testing.T) {
 		t.Fatalf("unexpected error: %v", err)
 	}
 	f.Release()
-	if onFailureCalled {
-		t.Fatalf("OnFailure was called")
+	if !onReleaseCalled {
+		t.Fatalf("OnRelease was not called")
+	}
+	if !invoked {
+		t.Fatalf("OnRelease invoked argument incorrect")
+	}
+	if !succeeded {
+		t.Fatalf("OnRelease succeeded argument incorrect")
 	}
 }
 
-func Test_FSMSnapshot_OnFailure_Called(t *testing.T) {
-	onFailureCalled := false
+func Test_FSMSnapshot_OnRelease_NotInvoked(t *testing.T) {
+	onReleaseCalled := false
+	invoked := false
+
 	f := FSMSnapshot{
-		OnFailure: func() {
-			onFailureCalled = true
+		OnRelease: func(i, s bool) {
+			onReleaseCalled = true
+			invoked = i
 		},
 		FSMSnapshot: &mockRaftSnapshot{},
 		logger:      nil,
 	}
+
 	f.Release()
-	if !onFailureCalled {
-		t.Fatalf("OnFailure was not called")
+	if !onReleaseCalled {
+		t.Fatalf("OnRelease was not called")
+	}
+	if invoked {
+		t.Fatalf("OnRelease invoked argument incorrect")
 	}
 }
 
-type mockSink struct {
+func Test_FSMSnapshot_OnRelease_NotSucceeded(t *testing.T) {
+	onReleaseCalled := false
+	invoked := false
+	suceeded := false
+
+	f := FSMSnapshot{
+		OnRelease: func(i, s bool) {
+			onReleaseCalled = true
+			invoked = i
+			suceeded = s
+		},
+		FSMSnapshot: &mockRaftSnapshot{forceErr: true},
+		logger:      nil,
+	}
+
+	f.Persist(&mockSink{})
+
+	f.Release()
+	if !onReleaseCalled {
+		t.Fatalf("OnRelease was not called")
+	}
+	if !invoked {
+		t.Fatalf("OnRelease invoked argument incorrect")
+	}
+	if suceeded {
+		t.Fatalf("OnRelease succeeded argument incorrect")
+	}
 }
+
+type mockSink struct{}
 
 func (m *mockSink) ID() string {
 	return ""
@@ -79,9 +126,13 @@ func (m *mockSink) Close() error {
 }
 
 type mockRaftSnapshot struct {
+	forceErr bool
 }
 
 func (m *mockRaftSnapshot) Persist(sink raft.SnapshotSink) error {
+	if m.forceErr {
+		return errors.New("forced error")
+	}
 	return nil
 }
 
