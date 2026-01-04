@@ -1,10 +1,13 @@
+## v9.3.9 (unreleased)
+### Implementation changes and bug fixes
+- [PR #2434](https://github.com/rqlite/rqlite/pull/2423): Handle possible WAL checkpoint failure.
+
 ## v9.3.8 (January 3rd 2026)
 ### Implementation changes and bug fixes
 - [PR #2419](https://github.com/rqlite/rqlite/pull/2419): Improve MSRW Error structure.
 - [PR #2420](https://github.com/rqlite/rqlite/pull/2420): Snapshot Sink sets owner when taking MSRW.
 - [PR #2421](https://github.com/rqlite/rqlite/pull/2421): Log cancelled Snapshot Store LockingSinks.
 - [PR #2422](https://github.com/rqlite/rqlite/pull/2422): Upgrade dependencies.
-- [PR #2434](https://github.com/rqlite/rqlite/pull/2423): Handle possible WAL checkpoint failure.
 
 ## v9.3.7 (January 2nd 2026)
 ### Implementation changes and bug fixes
