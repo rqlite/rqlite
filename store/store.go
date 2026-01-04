@@ -2899,7 +2899,15 @@ func (s *Store) runWALSnapshotting() (closeCh, doneCh chan struct{}) {
 // of the WAL which would mean we would lose WAL data, so we need to forcibly truncate here.
 // We do this by blocking all readers (writes are already blocked). This handling is due to
 // research into SQLite and not seen as of yet.
+//
+// Finally, we could still panic here if we timeout trying to truncate. This could happen if
+// a reader external to rqlite just won't let go.
 func (s *Store) mustTruncateCheckpoint() {
+	startT := time.Now()
+	defer func() {
+		s.logger.Printf("forced WAL truncate checkpoint took %s", time.Since(startT))
+	}()
+
 	stats.Add(numWALMustCheckpoint, 1)
 	s.readerMu.Lock()
 	defer s.readerMu.Unlock()
