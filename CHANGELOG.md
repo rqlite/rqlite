@@ -1,3 +1,7 @@
+## v9.3.10 (unreleased)
+### Implementation changes and bug fixes
+- [PR #2427](https://github.com/rqlite/rqlite/pull/2427): Remove any temporary WAL files if persisting a Snapshot fails or is not even invoked.
+
 ## v9.3.9 (January 4th 2026)
 ### Implementation changes and bug fixes
 - [PR #2423](https://github.com/rqlite/rqlite/pull/2423): Handle possible WAL checkpoint failure.
