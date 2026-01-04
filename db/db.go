@@ -659,7 +659,7 @@ func (db *DB) BusyTimeout() (rwMs, roMs int, err error) {
 // Checkpoint checkpoints the WAL file. If the WAL file is not enabled, this
 // function is a no-op.
 func (db *DB) Checkpoint(mode CheckpointMode) (*CheckpointMeta, error) {
-	return db.CheckpointWithTimeout(mode, 0)
+	return db.CheckpointWithTimeout(mode, 100)
 }
 
 // CheckpointWithTimeout performs a WAL checkpoint. If the checkpoint does not
@@ -1204,6 +1204,7 @@ func (db *DB) queryStmtWithConn(ctx context.Context, stmt *command.Statement, xT
 	}()
 	rows := &command.QueryRows{}
 	start := time.Now()
+	forceStall := stmt.ForceStall
 
 	parameters, err := parametersToValues(stmt.Parameters)
 	if err != nil {
@@ -1257,8 +1258,13 @@ func (db *DB) queryStmtWithConn(ctx context.Context, stmt *command.Statement, xT
 		// Check for slow query, blocked query, etc testing. This field
 		// should never set by production code and is only for fault-injection
 		// testing purposes.
-		if stmt.ForceStall {
-			<-make(chan struct{})
+		if forceStall {
+			select {
+			case <-make(chan struct{}):
+			case <-ctx.Done():
+				db.logger.Printf("forced stall on query cancelled: %s", ctx.Err().Error())
+				forceStall = false
+			}
 		}
 
 		// One-time population of any empty types. Best effort, ignore
