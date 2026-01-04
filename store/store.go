@@ -133,6 +133,8 @@ const (
 	backupCASRetryDelay       = 100 * time.Millisecond
 	connectionPoolCount       = 5
 	connectionTimeout         = 10 * time.Second
+	mustWALCheckpointDelay    = 50 * time.Millisecond
+	mustWALCheckpointTimeout  = 5 * time.Minute
 	raftLogCacheSize          = 512
 	trailingScale             = 1.25
 	observerChanLen           = 50
@@ -155,7 +157,7 @@ const (
 	numFullCheckpointFailed           = "num_full_checkpoint_failed"
 	numWALCheckpointTruncateFailed    = "num_wal_checkpoint_truncate_failed"
 	numWALCheckpointIncomplete        = "num_wal_checkpoint_incomplete"
-	numWALCheckpointOrPanic           = "num_wal_checkpoint_or_panic"
+	numWALMustCheckpoint              = "num_wal_must_checkpoint"
 	numAutoVacuums                    = "num_auto_vacuums"
 	numAutoVacuumsFailed              = "num_auto_vacuums_failed"
 	autoVacuumDuration                = "auto_vacuum_duration"
@@ -224,7 +226,7 @@ func ResetStats() {
 	stats.Add(numFullCheckpointFailed, 0)
 	stats.Add(numWALCheckpointTruncateFailed, 0)
 	stats.Add(numWALCheckpointIncomplete, 0)
-	stats.Add(numWALCheckpointOrPanic, 0)
+	stats.Add(numWALMustCheckpoint, 0)
 	stats.Add(numAutoVacuums, 0)
 	stats.Add(numAutoVacuumsFailed, 0)
 	stats.Add(autoVacuumDuration, 0)
@@ -2885,25 +2887,31 @@ func (s *Store) runWALSnapshotting() (closeCh, doneCh chan struct{}) {
 	return closeCh, doneCh
 }
 
-// mustTruncateCheckpoint truncates the checkpointed WAL, panicking on any failure to do so.
+// mustTruncateCheckpoint truncates the checkpointed WAL, retrying until successful or
+// timing out.
 //
 // This should be called if we hit a specifc edge case where all pages were moved but some
 // reader blocked truncation. The next write could start overwriting WAL frames at the start
 // of the WAL which would mean we would lose WAL data, so we need to forcibly truncate here.
-// We do this by blocking all readers (writes are already blocked). This hanlding is due to
+// We do this by blocking all readers (writes are already blocked). This handling is due to
 // research into SQLite and not seen as of yet.
 func (s *Store) mustTruncateCheckpoint() {
-	stats.Add(numWALCheckpointOrPanic, 1)
+	stats.Add(numWALMustCheckpoint, 1)
 	s.readerMu.Lock()
 	defer s.readerMu.Unlock()
 
-	meta, err := s.db.Checkpoint(sql.CheckpointTruncate)
-	if err != nil {
-		panic(fmt.Sprintf("failed to truncate checkpoint WAL: %s", err.Error()))
-	}
-	if !meta.Success() {
-		panic(fmt.Sprintf("failed to truncate checkpoint WAL: checkpoint incomplete, %d of %d pages moved",
-			meta.Moved, meta.Pages))
+	ticker := time.NewTicker(mustWALCheckpointDelay)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-ticker.C:
+			meta, err := s.db.Checkpoint(sql.CheckpointTruncate)
+			if err == nil && meta.Success() {
+				return
+			}
+		case <-time.After(mustWALCheckpointTimeout):
+			panic("timed out trying to truncate checkpointed WAL")
+		}
 	}
 }
 
