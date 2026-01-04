@@ -2,6 +2,7 @@ package db
 
 import (
 	"bytes"
+	"context"
 	"io"
 	"os"
 	"testing"
@@ -77,6 +78,60 @@ func Test_WALDatabaseCheckpointOK(t *testing.T) {
 	}
 	if !meta.Success() {
 		t.Fatalf("expected checkpoint to complete successfully")
+	}
+}
+
+func Test_WALDatabaseCheckpointFail_Blocked(t *testing.T) {
+	path := mustTempFile()
+	defer os.Remove(path)
+
+	db, err := Open(path, false, true)
+	if err != nil {
+		t.Fatalf("failed to open database in WAL mode: %s", err.Error())
+	}
+	defer db.Close()
+
+	_, err = db.ExecuteStringStmt(`CREATE TABLE foo (id INTEGER NOT NULL PRIMARY KEY, name TEXT)`)
+	if err != nil {
+		t.Fatalf("failed to execute on single node: %s", err.Error())
+	}
+	_, err = db.ExecuteStringStmt(`INSERT INTO foo(name) VALUES("alice")`)
+	if err != nil {
+		t.Fatalf("failed to execute INSERT on single node: %s", err.Error())
+	}
+
+	// Issue a long-running read that should block the checkpoint.
+	qr := &command.Request{
+		Statements: []*command.Statement{
+			{
+				Sql:        "SELECT * FROM foo",
+				ForceStall: true,
+			},
+		},
+	}
+	ctx, cancelFunc := context.WithCancel(context.Background())
+	go func() {
+		db.QueryWithContext(ctx, qr, false)
+	}()
+	time.Sleep(2 * time.Second)
+	meta, err := db.Checkpoint(CheckpointTruncate)
+	if err != nil {
+		t.Fatalf("failed to checkpoint database: %s", err.Error())
+	}
+	if meta.Success() {
+		t.Fatalf("expected checkpoint to be unsuccessful due to blocking read")
+	}
+
+	// Cancel the blocking read, and try again.
+	cancelFunc()
+	time.Sleep(2 * time.Second)
+
+	meta, err = db.Checkpoint(CheckpointTruncate)
+	if err != nil {
+		t.Fatalf("failed to checkpoint database: %s", err.Error())
+	}
+	if !meta.Success() {
+		t.Fatalf("expected checkpoint to be successful after blocking read was cancelled")
 	}
 }
 
