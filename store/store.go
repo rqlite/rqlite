@@ -2529,14 +2529,7 @@ func (s *Store) fsmSnapshot() (fSnap raft.FSMSnapshot, retErr error) {
 				return nil, fmt.Errorf("snapshot can't complete due to FULL Snapshot checkpoint incomplete (will retry %s)",
 					meta.String())
 			} else if meta.Moved == meta.Pages {
-				// This an edge case where all pages were moved but some reader blocked truncation. The next write
-				// could start overwriting WAL frames at the start of the WAL which would mean we would lose WAL data,
-				// so we need to forcibly truncate here. We do this by blocking all readers (writes are already blocked).
-				// This hanlding is due to research into SQLite and not seen as of yet.
-				stats.Add(numWALCheckpointOrPanic, 1)
-				s.readerMu.Lock()
 				s.mustTruncateCheckpoint()
-				s.readerMu.Unlock()
 			}
 		}
 		stats.Get(snapshotCreateChkTruncateDuration).(*expvar.Int).Set(time.Since(chkStartTime).Milliseconds())
@@ -2607,14 +2600,7 @@ func (s *Store) fsmSnapshot() (fSnap raft.FSMSnapshot, retErr error) {
 					return nil, fmt.Errorf("snapshot can't complete due to Snapshot checkpoint incomplete (will retry %s)",
 						meta.String())
 				} else if meta.Moved > 0 && (meta.Moved == meta.Pages) {
-					// This an edge case where all pages were moved but some reader blocked truncation. The next write
-					// could start overwriting WAL frames at the start of the WAL which would mean we would lose WAL data,
-					// so we need to forcibly truncate here. We do this by blocking all readers (writes are already blocked).
-					// This hanlding is due to research into SQLite and not seen as of yet.
-					stats.Add(numWALCheckpointOrPanic, 1)
-					s.readerMu.Lock()
 					s.mustTruncateCheckpoint()
-					s.readerMu.Unlock()
 				}
 			}
 			stats.Get(snapshotCreateChkTruncateDuration).(*expvar.Int).Set(time.Since(chkTStartTime).Milliseconds())
@@ -2896,7 +2882,17 @@ func (s *Store) runWALSnapshotting() (closeCh, doneCh chan struct{}) {
 }
 
 // mustTruncateCheckpoint truncates the checkpointed WAL, panicking on any failure to do so.
+//
+// This should be called if we hit a specifc edge case where all pages were moved but some
+// reader blocked truncation. The next write could start overwriting WAL frames at the start
+// of the WAL which would mean we would lose WAL data, so we need to forcibly truncate here.
+// We do this by blocking all readers (writes are already blocked). This hanlding is due to
+// research into SQLite and not seen as of yet.
 func (s *Store) mustTruncateCheckpoint() {
+	stats.Add(numWALCheckpointOrPanic, 1)
+	s.readerMu.Lock()
+	defer s.readerMu.Unlock()
+
 	meta, err := s.db.Checkpoint(sql.CheckpointTruncate)
 	if err != nil {
 		panic(fmt.Sprintf("failed to truncate checkpoint WAL: %s", err.Error()))
