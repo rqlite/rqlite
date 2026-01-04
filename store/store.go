@@ -154,6 +154,7 @@ const (
 	numSnapshotsIncremental           = "num_snapshots_incremental"
 	numFullCheckpointFailed           = "num_full_checkpoint_failed"
 	numWALCheckpointTruncateFailed    = "num_wal_checkpoint_truncate_failed"
+	numWALCheckpointIncomplete        = "num_wal_checkpoint_incomplete"
 	numWALCheckpointOrPanic           = "num_wal_checkpoint_or_panic"
 	numAutoVacuums                    = "num_auto_vacuums"
 	numAutoVacuumsFailed              = "num_auto_vacuums_failed"
@@ -222,6 +223,7 @@ func ResetStats() {
 	stats.Add(numSnapshotsIncremental, 0)
 	stats.Add(numFullCheckpointFailed, 0)
 	stats.Add(numWALCheckpointTruncateFailed, 0)
+	stats.Add(numWALCheckpointIncomplete, 0)
 	stats.Add(numWALCheckpointOrPanic, 0)
 	stats.Add(numAutoVacuums, 0)
 	stats.Add(numAutoVacuumsFailed, 0)
@@ -2526,6 +2528,7 @@ func (s *Store) fsmSnapshot() (fSnap raft.FSMSnapshot, retErr error) {
 		}
 		if !meta.Success() {
 			if meta.Moved < meta.Pages {
+				stats.Add(numWALCheckpointIncomplete, 1)
 				return nil, fmt.Errorf("snapshot can't complete due to FULL Snapshot checkpoint incomplete (will retry %s)",
 					meta.String())
 			} else if meta.Moved == meta.Pages {
@@ -2597,6 +2600,7 @@ func (s *Store) fsmSnapshot() (fSnap raft.FSMSnapshot, retErr error) {
 			}
 			if !meta.Success() {
 				if meta.Moved < meta.Pages {
+					stats.Add(numWALCheckpointIncomplete, 1)
 					return nil, fmt.Errorf("snapshot can't complete due to Snapshot checkpoint incomplete (will retry %s)",
 						meta.String())
 				} else if meta.Moved > 0 && (meta.Moved == meta.Pages) {
