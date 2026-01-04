@@ -2533,9 +2533,8 @@ func (s *Store) fsmSnapshot() (fSnap raft.FSMSnapshot, retErr error) {
 				stats.Add(numWALCheckpointIncomplete, 1)
 				return nil, fmt.Errorf("snapshot can't complete due to FULL Snapshot checkpoint incomplete (will retry %s)",
 					meta.String())
-			} else if meta.Moved == meta.Pages {
-				s.mustTruncateCheckpoint()
 			}
+			s.mustTruncateCheckpoint()
 		}
 		stats.Get(snapshotCreateChkTruncateDuration).(*expvar.Int).Set(time.Since(chkStartTime).Milliseconds())
 		dbFD, err := os.Open(s.db.Path())
@@ -2605,9 +2604,8 @@ func (s *Store) fsmSnapshot() (fSnap raft.FSMSnapshot, retErr error) {
 					stats.Add(numWALCheckpointIncomplete, 1)
 					return nil, fmt.Errorf("snapshot can't complete due to Snapshot checkpoint incomplete (will retry %s)",
 						meta.String())
-				} else if meta.Moved > 0 && (meta.Moved == meta.Pages) {
-					s.mustTruncateCheckpoint()
 				}
+				s.mustTruncateCheckpoint()
 			}
 			stats.Get(snapshotCreateChkTruncateDuration).(*expvar.Int).Set(time.Since(chkTStartTime).Milliseconds())
 			stats.Get(snapshotPrecompactWALSize).(*expvar.Int).Set(walSzPre)

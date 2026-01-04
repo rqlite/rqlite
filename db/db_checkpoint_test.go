@@ -67,6 +67,15 @@ func Test_WALDatabaseCheckpointOK(t *testing.T) {
 	if meta.Pages != 0 {
 		t.Fatalf("expected PAGES to be 0 since WAL was truncated, got %d", meta.Pages)
 	}
+
+	// Ensure idempotency by checkpointing again.
+	meta, err = db.Checkpoint(CheckpointTruncate)
+	if err != nil {
+		t.Fatalf("failed to checkpoint database: %s", err.Error())
+	}
+	if !meta.Success() {
+		t.Fatalf("expected checkpoint to complete successfully")
+	}
 }
 
 // Test_WALDatabaseCheckpointOKDelete tests that a checkpoint returns no error
