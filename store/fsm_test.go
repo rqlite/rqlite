@@ -25,22 +25,29 @@ func Test_FSMSnapshot_Finalizer(t *testing.T) {
 	}
 }
 
-func Test_FSMSnapshot_OnFailure_NotCalled(t *testing.T) {
+func Test_FSMSnapshot_OnRelease_NoInvoke(t *testing.T) {
 	onReleaseCalled := false
+	onReleaseCalledInvoked := false
+	onReleaseCalledSucceeded := false
 	f := FSMSnapshot{
 		OnRelease: func(invoked, succeeded bool) {
 			onReleaseCalled = true
+			onReleaseCalledInvoked = invoked
+			onReleaseCalledSucceeded = succeeded
 		},
 		FSMSnapshot: &mockRaftSnapshot{},
 		logger:      nil,
 	}
 
-	if err := f.Persist(&mockSink{}); err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
 	f.Release()
-	if onReleaseCalled {
-		t.Fatalf("OnRelease was called")
+	if !onReleaseCalled {
+		t.Fatalf("OnRelease was not called")
+	}
+	if onReleaseCalledInvoked {
+		t.Fatalf("invoked is true even though Persist was not called")
+	}
+	if onReleaseCalledSucceeded {
+		t.Fatalf("succeeded is true even though Persist was not called")
 	}
 }
 
@@ -52,6 +59,9 @@ func Test_FSMSnapshot_OnFailure_Called(t *testing.T) {
 		},
 		FSMSnapshot: &mockRaftSnapshot{},
 		logger:      nil,
+	}
+		if err := f.Persist(&mockSink{}); err != nil {
+		t.Fatalf("unexpected error: %v", err)
 	}
 	f.Release()
 	if !onReleaseCalled {
