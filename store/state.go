@@ -210,8 +210,12 @@ func RecoverNode(dataDir string, extensions []string, logger *log.Logger, logs r
 
 	// Create a new snapshot, placing the configuration in as if it was
 	// committed at index 1.
-	if err := db.Checkpoint(sql.CheckpointTruncate); err != nil {
+	meta, err := db.Checkpoint(sql.CheckpointTruncate)
+	if err != nil {
 		return fmt.Errorf("failed to checkpoint database: %s", err)
+	}
+	if !meta.Success() {
+		return fmt.Errorf("database checkpoint was not successful: %s", meta.String())
 	}
 	tmpDBFD, err := os.Open(tmpDBPath)
 	if err != nil {

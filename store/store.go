@@ -133,6 +133,8 @@ const (
 	backupCASRetryDelay       = 100 * time.Millisecond
 	connectionPoolCount       = 5
 	connectionTimeout         = 10 * time.Second
+	mustWALCheckpointDelay    = 50 * time.Millisecond
+	mustWALCheckpointTimeout  = 5 * time.Minute
 	raftLogCacheSize          = 512
 	trailingScale             = 1.25
 	observerChanLen           = 50
@@ -154,6 +156,8 @@ const (
 	numSnapshotsIncremental           = "num_snapshots_incremental"
 	numFullCheckpointFailed           = "num_full_checkpoint_failed"
 	numWALCheckpointTruncateFailed    = "num_wal_checkpoint_truncate_failed"
+	numWALCheckpointIncomplete        = "num_wal_checkpoint_incomplete"
+	numWALMustCheckpoint              = "num_wal_must_checkpoint"
 	numAutoVacuums                    = "num_auto_vacuums"
 	numAutoVacuumsFailed              = "num_auto_vacuums_failed"
 	autoVacuumDuration                = "auto_vacuum_duration"
@@ -221,6 +225,8 @@ func ResetStats() {
 	stats.Add(numSnapshotsIncremental, 0)
 	stats.Add(numFullCheckpointFailed, 0)
 	stats.Add(numWALCheckpointTruncateFailed, 0)
+	stats.Add(numWALCheckpointIncomplete, 0)
+	stats.Add(numWALMustCheckpoint, 0)
 	stats.Add(numAutoVacuums, 0)
 	stats.Add(numAutoVacuumsFailed, 0)
 	stats.Add(autoVacuumDuration, 0)
@@ -348,6 +354,10 @@ type Store struct {
 	fsmTarget     *rsync.ReadyTarget[uint64]
 	fsmTerm       atomic.Uint64
 	fsmUpdateTime *rsync.AtomicTime // This is node-local time.
+
+	// readerMu allows blocking of all reads. This is used to handle
+	// specific, very rare, edge cases around WAL checkpointing.
+	readerMu sync.RWMutex
 
 	// appendedAtTime is the Leader's clock time when that Leader appended the log entry.
 	// The Leader that actually appended the log entry is not necessarily the current Leader.
@@ -1419,6 +1429,9 @@ func (s *Store) execute(ex *proto.ExecuteRequest) ([]*proto.ExecuteQueryResponse
 // upgraded to STRONG if the Store determines that is necessary to guarantee
 // a linearizable read.
 func (s *Store) Query(qr *proto.QueryRequest) (rows []*proto.QueryRows, level proto.ConsistencyLevel, raftIndex uint64, retErr error) {
+	s.readerMu.RLock()
+	defer s.readerMu.RUnlock()
+
 	p := (*PragmaCheckRequest)(qr.Request)
 	if err := p.Check(); err != nil {
 		return nil, 0, 0, err
@@ -1530,6 +1543,9 @@ func (s *Store) VerifyLeader() (retErr error) {
 
 // Request processes a request that may contain both Executes and Queries.
 func (s *Store) Request(eqr *proto.ExecuteQueryRequest) ([]*proto.ExecuteQueryResponse, uint64, uint64, error) {
+	s.readerMu.RLock()
+	defer s.readerMu.RUnlock()
+
 	p := (*PragmaCheckRequest)(eqr.Request)
 	if err := p.Check(); err != nil {
 		return nil, 0, 0, err
@@ -1633,6 +1649,9 @@ func (s *Store) Request(eqr *proto.ExecuteQueryRequest) ([]*proto.ExecuteQueryRe
 // will be written directly to that file. Otherwise a temporary file will be created,
 // and that temporary file copied to dst.
 func (s *Store) Backup(br *proto.BackupRequest, dst io.Writer) (retErr error) {
+	s.readerMu.RLock()
+	defer s.readerMu.RUnlock()
+
 	if !s.open.Is() {
 		return ErrNotOpen
 	}
@@ -1906,6 +1925,9 @@ func (s *Store) Vacuum() error {
 // http://sqlite.org/howtocorrupt.html states it is safe to do this
 // as long as the database is not written to during the call.
 func (s *Store) Database(leader bool) ([]byte, error) {
+	s.readerMu.RLock()
+	defer s.readerMu.RUnlock()
+
 	if leader && s.raft.State() != raft.Leader {
 		return nil, ErrNotLeader
 	}
@@ -2506,9 +2528,19 @@ func (s *Store) fsmSnapshot() (fSnap raft.FSMSnapshot, retErr error) {
 	var fsmSnapshot raft.FSMSnapshot
 	if fullNeeded {
 		chkStartTime := time.Now()
-		if err := s.db.Checkpoint(sql.CheckpointTruncate); err != nil {
+		meta, err := s.db.Checkpoint(sql.CheckpointTruncate)
+		if err != nil {
 			stats.Add(numFullCheckpointFailed, 1)
-			return nil, err
+			return nil, fmt.Errorf("snapshot can't complete due to FULL Snapshot checkpoint error (will retry): %s",
+				err.Error())
+		}
+		if !meta.Success() {
+			if meta.Moved < meta.Pages {
+				stats.Add(numWALCheckpointIncomplete, 1)
+				return nil, fmt.Errorf("snapshot can't complete due to FULL Snapshot checkpoint incomplete (will retry): %s)",
+					meta.String())
+			}
+			s.mustTruncateCheckpoint()
 		}
 		stats.Get(snapshotCreateChkTruncateDuration).(*expvar.Int).Set(time.Since(chkStartTime).Milliseconds())
 		dbFD, err := os.Open(s.db.Path())
@@ -2567,10 +2599,19 @@ func (s *Store) fsmSnapshot() (fSnap raft.FSMSnapshot, retErr error) {
 				return nil, err
 			}
 			chkTStartTime := time.Now()
-			if err := s.db.Checkpoint(sql.CheckpointTruncate); err != nil {
+			meta, err := s.db.Checkpoint(sql.CheckpointTruncate)
+			if err != nil {
 				stats.Add(numWALCheckpointTruncateFailed, 1)
-				return nil, fmt.Errorf("snapshot can't complete due to WAL checkpoint failure (will retry): %s",
+				return nil, fmt.Errorf("snapshot can't complete due to WAL checkpoint error (will retry): %s",
 					err.Error())
+			}
+			if !meta.Success() {
+				if meta.Moved < meta.Pages {
+					stats.Add(numWALCheckpointIncomplete, 1)
+					return nil, fmt.Errorf("snapshot can't complete due to Snapshot checkpoint incomplete (will retry %s)",
+						meta.String())
+				}
+				s.mustTruncateCheckpoint()
 			}
 			stats.Get(snapshotCreateChkTruncateDuration).(*expvar.Int).Set(time.Since(chkTStartTime).Milliseconds())
 			stats.Get(snapshotPrecompactWALSize).(*expvar.Int).Set(walSzPre)
@@ -2848,6 +2889,42 @@ func (s *Store) runWALSnapshotting() (closeCh, doneCh chan struct{}) {
 		}
 	}()
 	return closeCh, doneCh
+}
+
+// mustTruncateCheckpoint truncates the checkpointed WAL, retrying until successful or
+// timing out.
+//
+// This should be called if we hit a specifc edge case where all pages were moved but some
+// reader blocked truncation. The next write could start overwriting WAL frames at the start
+// of the WAL which would mean we would lose WAL data, so we need to forcibly truncate here.
+// We do this by blocking all readers (writes are already blocked). This handling is due to
+// research into SQLite and not seen as of yet.
+//
+// Finally, we could still panic here if we timeout trying to truncate. This could happen if
+// a reader external to rqlite just won't let go.
+func (s *Store) mustTruncateCheckpoint() {
+	startT := time.Now()
+	defer func() {
+		s.logger.Printf("forced WAL truncate checkpoint took %s", time.Since(startT))
+	}()
+
+	stats.Add(numWALMustCheckpoint, 1)
+	s.readerMu.Lock()
+	defer s.readerMu.Unlock()
+
+	ticker := time.NewTicker(mustWALCheckpointDelay)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-ticker.C:
+			meta, err := s.db.Checkpoint(sql.CheckpointTruncate)
+			if err == nil && meta.Success() {
+				return
+			}
+		case <-time.After(mustWALCheckpointTimeout):
+			panic("timed out trying to truncate checkpointed WAL")
+		}
+	}
 }
 
 // selfLeaderChange is called when this node detects that its leadership
