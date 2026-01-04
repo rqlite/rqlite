@@ -2,6 +2,7 @@
 ### Implementation changes and bug fixes
 - [PR #2423](https://github.com/rqlite/rqlite/pull/2423): Handle possible WAL checkpoint failure.
 - [PR #2424](https://github.com/rqlite/rqlite/pull/2424): Add `QueryWithContext()` to DB layer.
+- [PR #2425](https://github.com/rqlite/rqlite/pull/2425): Unit test forced checkpoint and truncation at Store level.
 
 ## v9.3.8 (January 3rd 2026)
 ### Implementation changes and bug fixes
