@@ -2642,10 +2642,7 @@ func (s *Store) fsmSnapshot() (fSnap raft.FSMSnapshot, retErr error) {
 			return s.createSnapshotFingerprint()
 		},
 		OnRelease: func(invoked, succeeded bool) {
-			typ := "incremental"
-			if fullNeeded {
-				typ = "incremental"
-			}
+typ := fullPretty(fullNeeded)
 			if !invoked {
 				s.logger.Printf("persisting %s snapshot was not invoked on node ID %s", typ, s.raftID)
 			} else if !succeeded {
