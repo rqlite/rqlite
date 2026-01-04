@@ -2638,7 +2638,7 @@ func (s *Store) fsmSnapshot() (fSnap raft.FSMSnapshot, retErr error) {
 			return s.createSnapshotFingerprint()
 		},
 		OnFailure: func() {
-			s.logger.Printf("Persisting snapshot did not succeed, full snapshot needed")
+			s.logger.Printf("persisting snapshot did not succeed on node %s, full snapshot needed", s.raftID)
 			if err := s.snapshotStore.SetFullNeeded(); err != nil {
 				// If this happens, only recourse is to shut down the node.
 				s.logger.Fatalf("failed to set full snapshot needed: %s", err)
