@@ -1,4 +1,4 @@
-## v9.3.9 (unreleased)
+## v9.3.9 (January 4th 2026)
 ### Implementation changes and bug fixes
 - [PR #2423](https://github.com/rqlite/rqlite/pull/2423): Handle possible WAL checkpoint failure.
 - [PR #2424](https://github.com/rqlite/rqlite/pull/2424): Add `QueryWithContext()` to DB layer.
