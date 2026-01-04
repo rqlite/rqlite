@@ -2540,6 +2540,8 @@ func (s *Store) fsmSnapshot() (fSnap raft.FSMSnapshot, retErr error) {
 				return nil, fmt.Errorf("snapshot can't complete due to FULL Snapshot checkpoint incomplete (will retry): %s)",
 					meta.String())
 			}
+			s.logger.Printf("full Snapshot checkpoint moved %d/%d pages, but did not truncate WAL, forcing truncate",
+				meta.Moved, meta.Pages)
 			s.mustTruncateCheckpoint()
 		}
 		stats.Get(snapshotCreateChkTruncateDuration).(*expvar.Int).Set(time.Since(chkStartTime).Milliseconds())
@@ -2611,6 +2613,8 @@ func (s *Store) fsmSnapshot() (fSnap raft.FSMSnapshot, retErr error) {
 					return nil, fmt.Errorf("snapshot can't complete due to Snapshot checkpoint incomplete (will retry %s)",
 						meta.String())
 				}
+				s.logger.Printf("incremental Snapshot checkpoint moved %d/%d pages, but did not truncate WAL, forcing truncate",
+					meta.Moved, meta.Pages)
 				s.mustTruncateCheckpoint()
 			}
 			stats.Get(snapshotCreateChkTruncateDuration).(*expvar.Int).Set(time.Since(chkTStartTime).Milliseconds())
