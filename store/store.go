@@ -2625,6 +2625,10 @@ func (s *Store) fsmSnapshot() (fSnap raft.FSMSnapshot, retErr error) {
 		if walTmpFD != nil {
 			name = walTmpFD.Name()
 		}
+		// When it comes to incremental snapshotting of WAL files, we pass the data to the Snapshot
+		// Store and Sink indirectly. We wrap its filepath in an io.Reader, not the file data. The
+		// Snapshotting system knows to check for this. If it finds a filepath in the io.Reader (as
+		// opposed to a reader returning actual file data, it will move the file from here to it.
 		fsmSnapshot = snapshot.NewSnapshot(io.NopCloser(bytes.NewBufferString(name)))
 		stats.Add(numSnapshotsIncremental, 1)
 	}
