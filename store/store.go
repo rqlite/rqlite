@@ -2654,7 +2654,7 @@ func (s *Store) fsmSnapshot() (fSnap raft.FSMSnapshot, retErr error) {
 			// deleted, but if the snapshot processing doesn't run to completion, the snapshot
 			// store hasn't been updated with the WAL data. It's gone.
 			if !invoked || !succeeded {
-				s.logger.Printf("full snapshot needed")
+				s.logger.Printf("setting full snapshot needed")
 				if err := s.snapshotStore.SetFullNeeded(); err != nil {
 					// If this happens, only recourse is to shut down the node.
 					s.logger.Fatalf("failed to set full snapshot needed: %s", err)
