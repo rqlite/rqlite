@@ -2,6 +2,7 @@
 ### Implementation changes and bug fixes
 - [PR #2427](https://github.com/rqlite/rqlite/pull/2427): Remove any temporary WAL files if persisting a Snapshot fails or is not even invoked.
 - [PR #2428](https://github.com/rqlite/rqlite/pull/2428): Move Store-Snapshot unit testing to own source file.
+- [PR #2429](https://github.com/rqlite/rqlite/pull/2429): Improve FSM logging.
 
 ## v9.3.9 (January 4th 2026)
 ### Implementation changes and bug fixes
