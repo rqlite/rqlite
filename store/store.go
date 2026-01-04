@@ -2537,7 +2537,7 @@ func (s *Store) fsmSnapshot() (fSnap raft.FSMSnapshot, retErr error) {
 		if !meta.Success() {
 			if meta.Moved < meta.Pages {
 				stats.Add(numWALCheckpointIncomplete, 1)
-				return nil, fmt.Errorf("snapshot can't complete due to FULL Snapshot checkpoint incomplete (will retry %s)",
+				return nil, fmt.Errorf("snapshot can't complete due to FULL Snapshot checkpoint incomplete (will retry): %s)",
 					meta.String())
 			}
 			s.mustTruncateCheckpoint()
