@@ -2935,7 +2935,7 @@ func (s *Store) mustTruncateCheckpoint() {
 				return
 			}
 		case <-time.After(mustWALCheckpointTimeout):
-			panic("timed out trying to truncate checkpointed WAL")
+			s.logger.Fatal("timed out trying to truncate checkpointed WAL - aborting")
 		}
 	}
 }
