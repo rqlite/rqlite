@@ -1,3 +1,7 @@
+## v9.3.10 (unreleased)
+### Implementation changes and bug fixes
+- [PR #2426](https://github.com/rqlite/rqlite/pull/2426): Improve FSM Snapshot logging.
+
 ## v9.3.9 (January 4th 2026)
 ### Implementation changes and bug fixes
 - [PR #2423](https://github.com/rqlite/rqlite/pull/2423): Handle possible WAL checkpoint failure.
