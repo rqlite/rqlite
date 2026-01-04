@@ -2526,6 +2526,7 @@ func (s *Store) fsmSnapshot() (fSnap raft.FSMSnapshot, retErr error) {
 	}()
 
 	var fsmSnapshot raft.FSMSnapshot
+	var walTmpFD *os.File
 	if fullNeeded {
 		chkStartTime := time.Now()
 		meta, err := s.db.Checkpoint(sql.CheckpointTruncate)
@@ -2553,7 +2554,6 @@ func (s *Store) fsmSnapshot() (fSnap raft.FSMSnapshot, retErr error) {
 		stats.Add(numSnapshotsFull, 1)
 		s.numFullSnapshots++
 	} else {
-		var walTmpFD *os.File
 		if pathExistsWithData(s.walPath) {
 			// Using files is about protecting against large WAL files, even
 			// post-compaction. Large files, if processed entirely in memory, could
@@ -2646,6 +2646,11 @@ func (s *Store) fsmSnapshot() (fSnap raft.FSMSnapshot, retErr error) {
 			if err := s.snapshotStore.SetFullNeeded(); err != nil {
 				// If this happens, only recourse is to shut down the node.
 				s.logger.Fatalf("failed to set full snapshot needed: %s", err)
+			}
+			if walTmpFD != nil {
+				// Incremental snapshotting active, clean up any temp WAL files.
+				walTmpFD.Close()
+				os.Remove(walTmpFD.Name())
 			}
 		},
 	}
