@@ -472,6 +472,7 @@ func Test_MultiNodeSnapshot_ErrorMessage(t *testing.T) {
 func Test_MultiNodeSnapshot_BlockedSnapshot(t *testing.T) {
 	// Fire up first node and write one record.
 	s0, ln := mustNewStore(t)
+	s0.NoSnapshotOnClose = true
 	defer ln.Close()
 	if err := s0.Open(); err != nil {
 		t.Fatalf("failed to open single-node store: %s", err.Error())
