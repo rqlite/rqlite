@@ -213,7 +213,7 @@ func main() {
 				}
 				err = toggleFlag(input[index+1:], &forceWrites)
 			case ".TABLES":
-				err = queryWithClient(ctx, client, timer, blobArray, consistency, `SELECT name FROM sqlite_master WHERE type="table"`)
+				err = queryWithClient(ctx, client, timer, blobArray, consistency, `SELECT name FROM sqlite_master WHERE type="table" ORDER BY name ASC`)
 			case ".INDEXES":
 				err = queryWithClient(ctx, client, timer, blobArray, consistency, `SELECT sql FROM sqlite_master WHERE type="index"`)
 			case ".SCHEMA":
