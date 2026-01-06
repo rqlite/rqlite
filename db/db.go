@@ -1156,28 +1156,7 @@ func (db *DB) queryWithConn(ctx context.Context, req *command.Request, xTime boo
 			continue
 		}
 
-		var rows *command.QueryRows
-		var err error
-
-		readOnly, err := db.StmtReadOnlyWithConn(sql, conn)
-		if err != nil {
-			stats.Add(numQueryErrors, 1)
-			rows = &command.QueryRows{
-				Error: err.Error(),
-			}
-			allRows = append(allRows, rows)
-			continue
-		}
-		if !readOnly {
-			stats.Add(numQueryErrors, 1)
-			rows = &command.QueryRows{
-				Error: "attempt to change database via query operation",
-			}
-			allRows = append(allRows, rows)
-			continue
-		}
-
-		rows, err = db.queryStmtWithConn(ctx, stmt, xTime, queryer)
+		rows, err := db.queryStmtWithConn(ctx, stmt, xTime, queryer)
 		if err != nil {
 			stats.Add(numQueryErrors, 1)
 			rows = &command.QueryRows{
