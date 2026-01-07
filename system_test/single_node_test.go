@@ -942,6 +942,32 @@ func Test_SingleNode_RETURNING_KeywordAsIdent(t *testing.T) {
 	}
 }
 
+func Test_SingleNode_EXPLAIN(t *testing.T) {
+	node := mustNewLeaderNode("leader1")
+	defer node.Deprovision()
+
+	_, err := node.Execute(`CREATE TABLE foo (id integer not null primary key, name text)`)
+	if err != nil {
+		t.Fatalf(`CREATE TABLE failed: %s`, err.Error())
+	}
+
+	res, err := node.Query(`EXPLAIN QUERY PLAN INSERT INTO foo(name) VALUES("declan")`)
+	if err != nil {
+		t.Fatalf(`EXPLAIN failed: %s`, err.Error())
+	}
+	if !strings.Contains(res, "notused") {
+		t.Fatalf("EXPLAIN result does not appear valid: %s", res)
+	}
+
+	res, err = node.Query(`EXPLAIN QUERY PLAN SELECT * FROM foo`)
+	if err != nil {
+		t.Fatalf(`EXPLAIN failed: %s`, err.Error())
+	}
+	if !strings.Contains(res, "notused") {
+		t.Fatalf("EXPLAIN result does not appear valid: %s", res)
+	}
+}
+
 func Test_SingleNodeQueued(t *testing.T) {
 	node := mustNewLeaderNode("leader1")
 	defer node.Deprovision()
