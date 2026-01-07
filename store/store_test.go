@@ -759,6 +759,78 @@ func Test_SingleNodeExecuteQuery_Linearizable(t *testing.T) {
 	}
 }
 
+func Test_SingleNodeExecuteQuery_EXPLAIN(t *testing.T) {
+	s, ln := mustNewStore(t)
+	defer ln.Close()
+
+	if err := s.Open(); err != nil {
+		t.Fatalf("failed to open single-node store: %s", err.Error())
+	}
+	if err := s.Bootstrap(NewServer(s.ID(), s.Addr(), true)); err != nil {
+		t.Fatalf("failed to bootstrap single-node store: %s", err.Error())
+	}
+	defer s.Close(true)
+	_, err := s.WaitForLeader(10 * time.Second)
+	if err != nil {
+		t.Fatalf("Error waiting for leader: %s", err)
+	}
+
+	er := executeRequestFromString(`CREATE TABLE foo (id INTEGER NOT NULL PRIMARY KEY, name TEXT)`,
+		false, false)
+	_, _, err = s.Execute(er)
+	if err != nil {
+		t.Fatalf("failed to execute on single node: %s", err.Error())
+	}
+
+	// Simple read-only statement.
+	eqr := executeQueryRequestFromString("EXPLAIN QUERY PLAN SELECT * FROM foo",
+		proto.ConsistencyLevel_WEAK, false, false)
+	eqr.Request.Statements[0].SqlExplain = true
+	resp, _, _, err := s.Request(eqr)
+	if err != nil {
+		t.Fatalf("failed to perform EXPLAIN SELECT on single node: %s", err.Error())
+	}
+	if !strings.Contains(asJSON(resp), "SCAN foo") { // Simple check that it looks right
+		t.Fatalf("unexpected results for EXPLAIN QUERY PLAN\ngot: %s", asJSON(resp))
+	}
+
+	// SQLite C code considers this a read-write statement so check that
+	// the Store handles this by converting to query.
+	eqr = executeQueryRequestFromString(`EXPLAIN QUERY PLAN INSERT INTO foo(name) VALUES("fiona")`,
+		proto.ConsistencyLevel_WEAK, false, false)
+	eqr.Request.Statements[0].SqlExplain = true
+	resp, _, _, err = s.Request(eqr)
+	if err != nil {
+		t.Fatalf("failed to perform EXPLAIN INSERT on single node: %s", err.Error())
+	}
+	if !strings.Contains(asJSON(resp), "columns") { // Simple check that it looks right
+		t.Fatalf("unexpected results for EXPLAIN QUERY PLAN\ngot: %s", asJSON(resp))
+	}
+
+	// Check that EXPLAIN sent directory to query endpoint also works OK.
+	qr := queryRequestFromString("EXPLAIN QUERY PLAN SELECT * FROM foo", false, false)
+	qr.Level = proto.ConsistencyLevel_WEAK
+	qr.Request.Statements[0].SqlExplain = true
+	rows, _, _, err := s.Query(qr)
+	if err != nil {
+		t.Fatalf("failed to perform EXPLAIN SELECT on single node: %s", err.Error())
+	}
+	if !strings.Contains(asJSON(rows), "SCAN foo") { // Simple check that it looks right
+		t.Fatalf("unexpected results for EXPLAIN QUERY PLAN\ngot: %s", asJSON(resp))
+	}
+
+	qr = queryRequestFromString(`EXPLAIN QUERY PLAN INSERT INTO foo(name) VALUES("fiona")`, false, false)
+	qr.Level = proto.ConsistencyLevel_WEAK
+	qr.Request.Statements[0].SqlExplain = true
+	rows, _, _, err = s.Query(qr)
+	if err != nil {
+		t.Fatalf("failed to perform EXPLAIN SELECT on single node: %s", err.Error())
+	}
+	if !strings.Contains(asJSON(rows), "columns") { // Simple check that it looks right
+		t.Fatalf("unexpected results for EXPLAIN QUERY PLAN\ngot: %s", asJSON(resp))
+	}
+}
+
 func Test_SingleNodeExecuteQuery_RETURNING(t *testing.T) {
 	s, ln := mustNewStore(t)
 	defer ln.Close()

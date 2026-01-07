@@ -58,6 +58,9 @@ func Process(stmts []*proto.Statement, rwrand, rwtime bool) (retErr error) {
 		if err != nil {
 			continue
 		}
+		if _, ok := parsed.(*sql.ExplainStatement); ok {
+			stmts[i].SqlExplain = true
+		}
 		rewriter := NewRewriter()
 		rewriter.RewriteRand = rwrand
 		rewriter.RewriteTime = rwtime
