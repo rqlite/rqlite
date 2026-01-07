@@ -2153,11 +2153,15 @@ func (s *Store) Noop(id string) (raft.ApplyFuture, error) {
 }
 
 // RORWCount returns the number of read-only and read-write statements in the
-// given ExecuteQueryRequest.
+// given ExecuteQueryRequest. EXPLAIN statements are always considered read-only.
 func (s *Store) RORWCount(eqr *proto.ExecuteQueryRequest) (nRW, nRO int) {
 	for _, stmt := range eqr.Request.Statements {
 		sql := stmt.Sql
 		if sql == "" {
+			continue
+		}
+		if stmt.SqlExplain {
+			nRO++
 			continue
 		}
 		ro, err := s.db.StmtReadOnly(sql)

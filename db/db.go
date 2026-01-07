@@ -1168,7 +1168,7 @@ func (db *DB) queryWithConn(ctx context.Context, req *command.Request, xTime boo
 			allRows = append(allRows, rows)
 			continue
 		}
-		if !readOnly {
+		if !readOnly && !stmt.SqlExplain {
 			stats.Add(numQueryErrors, 1)
 			rows = &command.QueryRows{
 				Error: "attempt to change database via query operation",

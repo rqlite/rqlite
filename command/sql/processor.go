@@ -51,13 +51,15 @@ func Process(stmts []*proto.Statement, rwrand, rwtime bool) (retErr error) {
 		lowered := strings.ToLower(stmts[i].Sql)
 		if (!rwtime || !ContainsTime(lowered)) &&
 			(!rwrand || !ContainsRandom(lowered)) &&
-			!ContainsReturning(lowered) {
+			!ContainsReturning(lowered) &&
+			!ContainsExplain(lowered) {
 			continue
 		}
 		parsed, err := rsql.NewParser(strings.NewReader(stmts[i].Sql)).ParseStatement()
 		if err != nil {
 			continue
 		}
+		_, stmts[i].SqlExplain = parsed.(*sql.ExplainStatement)
 		rewriter := NewRewriter()
 		rewriter.RewriteRand = rwrand
 		rewriter.RewriteTime = rwtime
@@ -108,6 +110,13 @@ func ContainsRandom(stmt string) bool {
 // ensure the statement is lower-cased.
 func ContainsReturning(stmt string) bool {
 	return strings.Contains(stmt, "returning ")
+}
+
+// ContainsExplain returns true if the statement contains an EXPLAIN clause.
+// The function performs a lower-case comparison so it is up to the caller to
+// ensure the statement is lower-cased.
+func ContainsExplain(stmt string) bool {
+	return strings.Contains(stmt, "explain ")
 }
 
 // Rewriter rewrites SQL statements.

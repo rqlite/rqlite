@@ -1,3 +1,8 @@
+## v9.3.11 (January 6th 2026)
+### Implementation changes and bug fixes
+- [PR #2438](https://github.com/rqlite/rqlite/pull/2438): Correctly handle `EXPLAIN QUERY PLAN` for mutations. Fixes issue [#2433](https://github.com/rqlite/rqlite/issues/2433).
+- [PR #2436](https://github.com/rqlite/rqlite/pull/2436): Add unit testing for EXPLAIN SELECT at DB level.
+
 ## v9.3.10 (January 5th 2026)
 ### Implementation changes and bug fixes
 - [PR #2427](https://github.com/rqlite/rqlite/pull/2427): Remove any temporary WAL files if persisting a Snapshot fails or is not even invoked.

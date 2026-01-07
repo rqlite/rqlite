@@ -20,6 +20,7 @@ message Statement {
 	repeated Parameter parameters = 2;
 	bool forceQuery = 3;
 	bool forceStall = 4;
+	bool sql_explain = 5;
 }
 
 message Request {

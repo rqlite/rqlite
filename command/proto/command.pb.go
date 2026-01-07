@@ -440,6 +440,7 @@ type Statement struct {
 	Parameters    []*Parameter           `protobuf:"bytes,2,rep,name=parameters,proto3" json:"parameters,omitempty"`
 	ForceQuery    bool                   `protobuf:"varint,3,opt,name=forceQuery,proto3" json:"forceQuery,omitempty"`
 	ForceStall    bool                   `protobuf:"varint,4,opt,name=forceStall,proto3" json:"forceStall,omitempty"`
+	SqlExplain    bool                   `protobuf:"varint,5,opt,name=sql_explain,json=sqlExplain,proto3" json:"sql_explain,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -498,6 +499,13 @@ func (x *Statement) GetForceQuery() bool {
 func (x *Statement) GetForceStall() bool {
 	if x != nil {
 		return x.ForceStall
+	}
+	return false
+}
+
+func (x *Statement) GetSqlExplain() bool {
+	if x != nil {
+		return x.SqlExplain
 	}
 	return false
 }
@@ -2094,7 +2102,7 @@ const file_command_proto_rawDesc = "" +
 	"\x01y\x18\x04 \x01(\fH\x00R\x01y\x12\x0e\n" +
 	"\x01s\x18\x05 \x01(\tH\x00R\x01s\x12\x12\n" +
 	"\x04name\x18\x06 \x01(\tR\x04nameB\a\n" +
-	"\x05value\"\x91\x01\n" +
+	"\x05value\"\xb2\x01\n" +
 	"\tStatement\x12\x10\n" +
 	"\x03sql\x18\x01 \x01(\tR\x03sql\x122\n" +
 	"\n" +
@@ -2105,7 +2113,9 @@ const file_command_proto_rawDesc = "" +
 	"forceQuery\x12\x1e\n" +
 	"\n" +
 	"forceStall\x18\x04 \x01(\bR\n" +
-	"forceStall\"\xa7\x01\n" +
+	"forceStall\x12\x1f\n" +
+	"\vsql_explain\x18\x05 \x01(\bR\n" +
+	"sqlExplain\"\xa7\x01\n" +
 	"\aRequest\x12 \n" +
 	"\vtransaction\x18\x01 \x01(\bR\vtransaction\x122\n" +
 	"\n" +
