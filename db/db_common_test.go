@@ -106,6 +106,60 @@ func Test_DB_TableCreation(t *testing.T) {
 	}
 }
 
+func Test_DB_ExplainSelect(t *testing.T) {
+	db, path := mustCreateOnDiskDatabaseWAL()
+	defer os.Remove(path)
+	defer db.Close()
+
+	// Create a table
+	r, err := db.ExecuteStringStmt("CREATE TABLE foo (id INTEGER NOT NULL PRIMARY KEY, name TEXT)")
+	if err != nil {
+		t.Fatalf("failed to create table: %s", err.Error())
+	}
+	if exp, got := `[{}]`, asJSON(r); exp != got {
+		t.Fatalf("unexpected results for create table, expected %s, got %s", exp, got)
+	}
+
+	// Insert a record
+	r, err = db.ExecuteStringStmt(`INSERT INTO foo(id, name) VALUES(1, "test")`)
+	if err != nil {
+		t.Fatalf("failed to insert record: %s", err.Error())
+	}
+	if exp, got := `[{"last_insert_id":1,"rows_affected":1}]`, asJSON(r); exp != got {
+		t.Fatalf("unexpected results for insert, expected %s, got %s", exp, got)
+	}
+
+	// Execute EXPLAIN SELECT
+	q, err := db.QueryStringStmt("EXPLAIN SELECT * FROM foo")
+	if err != nil {
+		t.Fatalf("failed to execute EXPLAIN SELECT: %s", err.Error())
+	}
+
+	// Check that we got results with expected columns
+	if len(q) == 0 {
+		t.Fatalf("EXPLAIN SELECT returned no results")
+	}
+	if len(q[0].Columns) == 0 {
+		t.Fatalf("EXPLAIN SELECT returned no columns")
+	}
+
+	// Verify that columns include typical EXPLAIN columns (like "addr", "opcode", etc.)
+	columns := q[0].Columns
+	hasAddr := false
+	hasOpcode := false
+	for _, col := range columns {
+		if col == "addr" {
+			hasAddr = true
+		}
+		if col == "opcode" {
+			hasOpcode = true
+		}
+	}
+	if !hasAddr || !hasOpcode {
+		t.Fatalf("EXPLAIN SELECT did not return expected columns (addr, opcode), got: %v", columns)
+	}
+}
+
 func Test_DB_TableCreationFTS(t *testing.T) {
 	db, path := mustCreateOnDiskDatabaseWAL()
 	defer os.Remove(path)
