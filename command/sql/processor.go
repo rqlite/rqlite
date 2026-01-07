@@ -59,9 +59,7 @@ func Process(stmts []*proto.Statement, rwrand, rwtime bool) (retErr error) {
 		if err != nil {
 			continue
 		}
-		if _, ok := parsed.(*sql.ExplainStatement); ok {
-			stmts[i].SqlExplain = true
-		}
+		_, stmts[i].SqlExplain = parsed.(*sql.ExplainStatement)
 		rewriter := NewRewriter()
 		rewriter.RewriteRand = rwrand
 		rewriter.RewriteTime = rwtime
@@ -114,6 +112,9 @@ func ContainsReturning(stmt string) bool {
 	return strings.Contains(stmt, "returning ")
 }
 
+// ContainsExplain returns true if the statement contains an EXPLAIN clause.
+// The function performs a lower-case comparison so it is up to the caller to
+// ensure the statement is lower-cased.
 func ContainsExplain(stmt string) bool {
 	return strings.Contains(stmt, "explain ")
 }
