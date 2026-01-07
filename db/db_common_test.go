@@ -147,6 +147,7 @@ func Test_DB_ExplainSelect(t *testing.T) {
 	columns := q[0].Columns
 	hasAddr := false
 	hasOpcode := false
+	hasComment := false
 	for _, col := range columns {
 		if col == "addr" {
 			hasAddr = true
@@ -154,8 +155,11 @@ func Test_DB_ExplainSelect(t *testing.T) {
 		if col == "opcode" {
 			hasOpcode = true
 		}
+		if col == "comment" {
+			hasComment = true
+		}
 	}
-	if !hasAddr || !hasOpcode {
+	if !hasAddr || !hasOpcode || !hasComment {
 		t.Fatalf("EXPLAIN SELECT did not return expected columns (addr, opcode), got: %v", columns)
 	}
 }
