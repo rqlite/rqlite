@@ -826,9 +826,9 @@ if !strings.Contains(asJSON(rows), "SCAN foo") { // Simple check that it looks r
 	if err != nil {
 		t.Fatalf("failed to perform EXPLAIN SELECT on single node: %s", err.Error())
 	}
-	if !strings.Contains(asJSON(rows), "columns") { // Simple check that it looks right
-		t.Fatalf("unexpected results for EXPLAIN QUERY PLAN\ngot: %s", asJSON(resp))
-	}
+if !strings.Contains(asJSON(rows), "columns") { // Simple check that it looks right
+	t.Fatalf("unexpected results for EXPLAIN QUERY PLAN\ngot: %s", asJSON(rows))
+}
 }
 
 func Test_SingleNodeExecuteQuery_RETURNING(t *testing.T) {
