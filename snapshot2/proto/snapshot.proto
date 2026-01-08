@@ -1,0 +1,30 @@
+syntax = "proto3";
+
+package snapshot;
+
+option go_package = "github.com/rqlite/rqlite/v9/snapshot/proto";
+
+message SnapshotDBFile {
+  string name = 1;
+  uint64 size_bytes = 2;
+}
+
+message SnapshotWALFile {
+  string name = 1;
+  uint64 size_bytes = 2;
+}
+
+message SnapshotInstall {
+  SnapshotDBFile db_file = 2;
+  repeated SnapshotWALFile wal_files = 3;
+}
+
+message SnapshotManifest {
+  uint32 format_version = 1;
+
+  oneof type {
+    SnapshotDBFile db_path = 2;
+    SnapshotWALFile wal_path = 3;
+    SnapshotInstall install = 4;
+  }
+}
