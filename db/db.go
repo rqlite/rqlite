@@ -25,11 +25,12 @@ import (
 )
 
 const (
-	SQLiteHeaderSize = 32
-	bkDelay          = 250
-	durToOpenLog     = 2 * time.Second
-	OptimizeDefault  = 0xFFFE
-	OptimizeAll      = 0x10002
+	SQLiteHeaderSize      = 32
+	bkDelay               = 250 * time.Millisecond
+	checkpointBusyTimeout = 250 * time.Millisecond
+	durToOpenLog          = 2 * time.Second
+	OptimizeDefault       = 0xFFFE
+	OptimizeAll           = 0x10002
 )
 
 const (
@@ -659,7 +660,7 @@ func (db *DB) BusyTimeout() (rwMs, roMs int, err error) {
 // Checkpoint checkpoints the WAL file. If the WAL file is not enabled, this
 // function is a no-op.
 func (db *DB) Checkpoint(mode CheckpointMode) (*CheckpointMeta, error) {
-	return db.CheckpointWithTimeout(mode, 1000)
+	return db.CheckpointWithTimeout(mode, checkpointBusyTimeout)
 }
 
 // CheckpointWithTimeout performs a WAL checkpoint. If the checkpoint does not
@@ -1741,7 +1742,7 @@ func copyDatabaseConnection(dst, src *sqlite3.SQLiteConn) error {
 			break
 		}
 		stats.Add(numBackupSleeps, 1)
-		time.Sleep(bkDelay * time.Millisecond)
+		time.Sleep(bkDelay)
 	}
 	return bk.Finish()
 }
