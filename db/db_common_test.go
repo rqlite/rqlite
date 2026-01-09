@@ -106,6 +106,35 @@ func Test_DB_TableCreation(t *testing.T) {
 	}
 }
 
+func Test_SQL_Comments(t *testing.T) {
+	db, path := mustCreateOnDiskDatabaseWAL()
+	defer os.Remove(path)
+	defer db.Close()
+
+	r, err := db.QueryStringStmt("-----")
+	if err != nil {
+		t.Fatalf("failed to query using a SQL comment: %s", err.Error())
+	}
+	if exp, got := `[{}]`, asJSON(r); exp != got {
+		t.Fatalf("unexpected results for query, expected %s, got %s", exp, got)
+	}
+	r, err = db.QueryStringStmt("-----SELECT * FROM 1")
+	if err != nil {
+		t.Fatalf("failed to query using a SQL comment: %s", err.Error())
+	}
+	if exp, got := `[{}]`, asJSON(r); exp != got {
+		t.Fatalf("unexpected results for query, expected %s, got %s", exp, got)
+	}
+
+	req, err := db.RequestStringStmts([]string{"-----", "SELECT * FROM FOO"})
+	if err != nil {
+		t.Fatalf("failed to request empty statements: %s", err.Error())
+	}
+	if exp, got := `[{},{"error":"no such table: FOO"}]`, asJSON(req); exp != got {
+		t.Fatalf(`unexpected results for request exp: %s got: %s`, exp, got)
+	}
+}
+
 func Test_DB_ExplainSelect(t *testing.T) {
 	db, path := mustCreateOnDiskDatabaseWAL()
 	defer os.Remove(path)
