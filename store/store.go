@@ -2919,6 +2919,7 @@ func (s *Store) checkpointWAL() (retErr error) {
 					s.numFailedSnapshotsInRow)
 				s.mustTruncateCheckpoint()
 				s.numFailedSnapshotsInRow = 0
+				retErr = nil
 			}
 		} else {
 			s.numFailedSnapshotsInRow = 0
