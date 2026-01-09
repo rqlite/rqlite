@@ -111,26 +111,61 @@ func Test_SQL_Comments(t *testing.T) {
 	defer os.Remove(path)
 	defer db.Close()
 
-	r, err := db.QueryStringStmt("-----")
-	if err != nil {
-		t.Fatalf("failed to query using a SQL comment: %s", err.Error())
-	}
-	if exp, got := `[{}]`, asJSON(r); exp != got {
-		t.Fatalf("unexpected results for query, expected %s, got %s", exp, got)
-	}
-	r, err = db.QueryStringStmt("-----SELECT * FROM 1")
-	if err != nil {
-		t.Fatalf("failed to query using a SQL comment: %s", err.Error())
-	}
-	if exp, got := `[{}]`, asJSON(r); exp != got {
-		t.Fatalf("unexpected results for query, expected %s, got %s", exp, got)
+	for _, tt := range []struct {
+		name string
+		sql  string
+		exp  string
+	}{
+		{
+			name: "single line comment",
+			sql:  "-- This is a comment\nCREATE TABLE foo (id INTEGER NOT NULL PRIMARY KEY, name TEXT)",
+			exp:  `[{}]`,
+		},
+		{
+			name: "multi-line comment",
+			sql:  "/* This is a\nmulti-line comment */\nCREATE TABLE bar (id INTEGER NOT NULL PRIMARY KEY, name TEXT)",
+			exp:  `[{}]`,
+		},
+	} {
+		r, err := db.ExecuteStringStmt(tt.sql)
+		if err != nil {
+			t.Fatalf("failed to create table with %s: %s", tt.name, err.Error())
+		}
+		if exp, got := tt.exp, asJSON(r); exp != got {
+			t.Fatalf("unexpected results for query with %s, expected %s, got %s", tt.name, exp, got)
+		}
 	}
 
-	req, err := db.RequestStringStmts([]string{"-----", "SELECT * FROM FOO"})
+	for _, tt := range []struct {
+		name string
+		sql  string
+		exp  string
+	}{
+		{
+			name: "comment only",
+			sql:  "-----",
+			exp:  `[{}]`,
+		},
+		{
+			name: "multi-line comment only",
+			sql:  "/* This is a\nmulti-line comment */",
+			exp:  `[{}]`,
+		},
+	} {
+		r, err := db.QueryStringStmt(tt.sql)
+		if err != nil {
+			t.Fatalf("failed to query with comment %s: %s", tt.name, err.Error())
+		}
+		if exp, got := tt.exp, asJSON(r); exp != got {
+			t.Fatalf("unexpected results for query with %s, expected %s, got %s", tt.name, exp, got)
+		}
+	}
+
+	req, err := db.RequestStringStmts([]string{"-----", "SELECT * FROM qux"})
 	if err != nil {
 		t.Fatalf("failed to request empty statements: %s", err.Error())
 	}
-	if exp, got := `[{},{"error":"no such table: FOO"}]`, asJSON(req); exp != got {
+	if exp, got := `[{},{"error":"no such table: qux"}]`, asJSON(req); exp != got {
 		t.Fatalf(`unexpected results for request exp: %s got: %s`, exp, got)
 	}
 }
