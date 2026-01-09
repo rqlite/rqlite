@@ -2973,7 +2973,10 @@ func (s *Store) mustTruncateCheckpoint() {
 				return
 			}
 		case <-time.After(mustWALCheckpointTimeout):
-			s.logger.Fatal("timed out trying to truncate checkpointed WAL probably due to external long-running read - aborting")
+			msg := fmt.Sprintf("timed out trying to truncate checkpoint WAL after %s,"+
+				" probably due to external long-running read - aborting",
+				mustWALCheckpointTimeout)
+			s.logger.Fatal(msg)
 		}
 	}
 }
