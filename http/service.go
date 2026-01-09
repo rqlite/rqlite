@@ -1444,7 +1444,6 @@ func (s *Service) handleQuery(w http.ResponseWriter, r *http.Request, qp QueryPa
 	stats.Add(numQueryStmtsRx, int64(len(queries)))
 
 	if !qp.NoParse() {
-		fmt.Println("Processing queries:", queries)
 		if err := sql.Process(queries, qp.NoRewriteRandom(), !qp.NoRewriteTime()); err != nil {
 			http.Error(w, fmt.Sprintf("SQL rewrite: %s", err.Error()), http.StatusInternalServerError)
 			return
