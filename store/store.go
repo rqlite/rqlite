@@ -2938,7 +2938,7 @@ func (s *Store) checkpointWAL() (retErr error) {
 			return nil
 		}
 		stats.Add(numWALCheckpointIncomplete, 1)
-		return fmt.Errorf("checkpoint incomplete: %s)", meta.String())
+		return fmt.Errorf("checkpoint incomplete: %s", meta.String())
 	}
 	return nil
 }
