@@ -1,6 +1,7 @@
 ## v9.3.14 (unreleased)
 ### Implementation changes and bug fixes
 - [PR #2444](https://github.com/rqlite/rqlite/pull/2444): Increase WAL Checkpoint busy timeout to 250ms.
+- [PR #2445](https://github.com/rqlite/rqlite/pull/2445): Implement a must-checkpoint-WAL after multiple failures policy.
 
 ## v9.3.13 (January 8th 2026)
 ### Implementation changes and bug fixes
