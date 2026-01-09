@@ -2904,7 +2904,9 @@ func (s *Store) runWALSnapshotting() (closeCh, doneCh chan struct{}) {
 }
 
 // checkpointWAL performs a checkpoint of the WAL, truncating it. If it returns an error
-// the checkpoint operation can be retried at the caller's discretion.
+// the checkpoint operation can be retried at the caller's discretion. If this function
+// encounters an error such that the checkpoint must be retried, it will automatically do
+// that until it is successful (or a timeout fires).
 //
 // This function also implements the policy that if a certain number of checkpoint attempts
 // fail in a row, it will loop until is successful.
@@ -2949,7 +2951,7 @@ func (s *Store) checkpointWAL() (retErr error) {
 // We do this by blocking all readers (writes are already blocked). This handling is due to
 // research into SQLite and not seen as of yet.
 //
-// Finally, we could still timout here while trying to truncate. This could happen if a
+// Finally, we could still timeout here while trying to truncate. This could happen if a
 // reader external to rqlite just won't let go.
 func (s *Store) mustTruncateCheckpoint() {
 	startT := time.Now()
