@@ -1,7 +1,10 @@
+## v9.3.13 (January 8th 2026)
+### Implementation changes and bug fixes
+- [PR #2443](https://github.com/rqlite/rqlite/pull/2443): Don't scan for rows if zero columns returned by query. Fixes issue [#2441](https://github.com/rqlite/rqlite/issues/2441).
+
 ## v9.3.12 (January 8th 2026)
 ### Implementation changes and bug fixes
 - [PR #2442](https://github.com/rqlite/rqlite/pull/2442): Remove inadvertently committed debug statement.
-- [PR #2443](https://github.com/rqlite/rqlite/pull/2443): Don't scan for rows if zero columns returned. Fixes issue [#2441](https://github.com/rqlite/rqlite/issues/2441).
 
 ## v9.3.11 (January 6th 2026)
 ### Implementation changes and bug fixes
