@@ -41,6 +41,14 @@ func dirIsEmpty(dir string) (bool, error) {
 	return len(files) == 0, nil
 }
 
+func fileSize(path string) (int64, error) {
+	info, err := os.Stat(path)
+	if err != nil {
+		return 0, err
+	}
+	return info.Size(), nil
+}
+
 func syncDir(dir string) error {
 	fh, err := os.Open(dir)
 	if err != nil {

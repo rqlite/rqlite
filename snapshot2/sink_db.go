@@ -5,6 +5,7 @@ import (
 	"os"
 	"path/filepath"
 
+	"github.com/rqlite/rqlite/v9/db"
 	"github.com/rqlite/rqlite/v9/internal/rsum"
 	"github.com/rqlite/rqlite/v9/snapshot2/proto"
 )
@@ -36,12 +37,28 @@ func (s *DBSink) Write(p []byte) (n int, err error) {
 }
 
 func (s *DBSink) Close() error {
-	crc32, err := rsum.CRC32(s.file.Name())
+	defer s.file.Close()
+
+	sz, err := fileSize(s.file.Name())
 	if err != nil {
 		return err
 	}
-	if crc32 != s.manifest.Crc32 {
-		return fmt.Errorf("db file checksum mismatch: got %d, want %d", crc32, s.manifest.Crc32)
+	if sz != int64(s.manifest.SizeBytes) {
+		return fmt.Errorf("file size mismatch: got %d, want %d", sz, s.manifest.SizeBytes)
 	}
-	return s.file.Close()
+
+	if !db.IsValidSQLiteFile(s.file.Name()) {
+		return fmt.Errorf("file is not a valid SQLite file")
+	}
+
+	if s.manifest.Crc32 != 0 {
+		crc32, err := rsum.CRC32(s.file.Name())
+		if err != nil {
+			return err
+		}
+		if crc32 != s.manifest.Crc32 {
+			return fmt.Errorf("file checksum mismatch: got %d, want %d", crc32, s.manifest.Crc32)
+		}
+	}
+	return nil
 }
