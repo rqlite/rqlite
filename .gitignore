@@ -55,3 +55,6 @@ _testmain.go
 
 *.exe
 *.test
+
+# IDEs
+*.vscode
