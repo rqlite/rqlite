@@ -1,8 +1,8 @@
 syntax = "proto3";
 
-package snapshot;
+package snapshot2;
 
-option go_package = "github.com/rqlite/rqlite/v9/snapshot/proto";
+option go_package = "github.com/rqlite/rqlite/v9/snapshot2/proto";
 
 message SnapshotDBFile {
   string name = 1;

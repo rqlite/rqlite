@@ -21,94 +21,6 @@ const (
 	_ = protoimpl.EnforceVersion(protoimpl.MaxVersion - 20)
 )
 
-type SnapshotIncremental struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	WalPath       string                 `protobuf:"bytes,1,opt,name=wal_path,json=walPath,proto3" json:"wal_path,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
-}
-
-func (x *SnapshotIncremental) Reset() {
-	*x = SnapshotIncremental{}
-	mi := &file_snapshot_proto_msgTypes[0]
-	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-	ms.StoreMessageInfo(mi)
-}
-
-func (x *SnapshotIncremental) String() string {
-	return protoimpl.X.MessageStringOf(x)
-}
-
-func (*SnapshotIncremental) ProtoMessage() {}
-
-func (x *SnapshotIncremental) ProtoReflect() protoreflect.Message {
-	mi := &file_snapshot_proto_msgTypes[0]
-	if x != nil {
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		if ms.LoadMessageInfo() == nil {
-			ms.StoreMessageInfo(mi)
-		}
-		return ms
-	}
-	return mi.MessageOf(x)
-}
-
-// Deprecated: Use SnapshotIncremental.ProtoReflect.Descriptor instead.
-func (*SnapshotIncremental) Descriptor() ([]byte, []int) {
-	return file_snapshot_proto_rawDescGZIP(), []int{0}
-}
-
-func (x *SnapshotIncremental) GetWalPath() string {
-	if x != nil {
-		return x.WalPath
-	}
-	return ""
-}
-
-type SnapshotFull struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	DbPath        string                 `protobuf:"bytes,1,opt,name=db_path,json=dbPath,proto3" json:"db_path,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
-}
-
-func (x *SnapshotFull) Reset() {
-	*x = SnapshotFull{}
-	mi := &file_snapshot_proto_msgTypes[1]
-	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-	ms.StoreMessageInfo(mi)
-}
-
-func (x *SnapshotFull) String() string {
-	return protoimpl.X.MessageStringOf(x)
-}
-
-func (*SnapshotFull) ProtoMessage() {}
-
-func (x *SnapshotFull) ProtoReflect() protoreflect.Message {
-	mi := &file_snapshot_proto_msgTypes[1]
-	if x != nil {
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		if ms.LoadMessageInfo() == nil {
-			ms.StoreMessageInfo(mi)
-		}
-		return ms
-	}
-	return mi.MessageOf(x)
-}
-
-// Deprecated: Use SnapshotFull.ProtoReflect.Descriptor instead.
-func (*SnapshotFull) Descriptor() ([]byte, []int) {
-	return file_snapshot_proto_rawDescGZIP(), []int{1}
-}
-
-func (x *SnapshotFull) GetDbPath() string {
-	if x != nil {
-		return x.DbPath
-	}
-	return ""
-}
-
 type SnapshotDBFile struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Name          string                 `protobuf:"bytes,1,opt,name=name,proto3" json:"name,omitempty"`
@@ -119,7 +31,7 @@ type SnapshotDBFile struct {
 
 func (x *SnapshotDBFile) Reset() {
 	*x = SnapshotDBFile{}
-	mi := &file_snapshot_proto_msgTypes[2]
+	mi := &file_snapshot_proto_msgTypes[0]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -131,7 +43,7 @@ func (x *SnapshotDBFile) String() string {
 func (*SnapshotDBFile) ProtoMessage() {}
 
 func (x *SnapshotDBFile) ProtoReflect() protoreflect.Message {
-	mi := &file_snapshot_proto_msgTypes[2]
+	mi := &file_snapshot_proto_msgTypes[0]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -144,7 +56,7 @@ func (x *SnapshotDBFile) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SnapshotDBFile.ProtoReflect.Descriptor instead.
 func (*SnapshotDBFile) Descriptor() ([]byte, []int) {
-	return file_snapshot_proto_rawDescGZIP(), []int{2}
+	return file_snapshot_proto_rawDescGZIP(), []int{0}
 }
 
 func (x *SnapshotDBFile) GetName() string {
@@ -171,7 +83,7 @@ type SnapshotWALFile struct {
 
 func (x *SnapshotWALFile) Reset() {
 	*x = SnapshotWALFile{}
-	mi := &file_snapshot_proto_msgTypes[3]
+	mi := &file_snapshot_proto_msgTypes[1]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -183,7 +95,7 @@ func (x *SnapshotWALFile) String() string {
 func (*SnapshotWALFile) ProtoMessage() {}
 
 func (x *SnapshotWALFile) ProtoReflect() protoreflect.Message {
-	mi := &file_snapshot_proto_msgTypes[3]
+	mi := &file_snapshot_proto_msgTypes[1]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -196,7 +108,7 @@ func (x *SnapshotWALFile) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SnapshotWALFile.ProtoReflect.Descriptor instead.
 func (*SnapshotWALFile) Descriptor() ([]byte, []int) {
-	return file_snapshot_proto_rawDescGZIP(), []int{3}
+	return file_snapshot_proto_rawDescGZIP(), []int{1}
 }
 
 func (x *SnapshotWALFile) GetName() string {
@@ -223,7 +135,7 @@ type SnapshotInstall struct {
 
 func (x *SnapshotInstall) Reset() {
 	*x = SnapshotInstall{}
-	mi := &file_snapshot_proto_msgTypes[4]
+	mi := &file_snapshot_proto_msgTypes[2]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -235,7 +147,7 @@ func (x *SnapshotInstall) String() string {
 func (*SnapshotInstall) ProtoMessage() {}
 
 func (x *SnapshotInstall) ProtoReflect() protoreflect.Message {
-	mi := &file_snapshot_proto_msgTypes[4]
+	mi := &file_snapshot_proto_msgTypes[2]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -248,7 +160,7 @@ func (x *SnapshotInstall) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SnapshotInstall.ProtoReflect.Descriptor instead.
 func (*SnapshotInstall) Descriptor() ([]byte, []int) {
-	return file_snapshot_proto_rawDescGZIP(), []int{4}
+	return file_snapshot_proto_rawDescGZIP(), []int{2}
 }
 
 func (x *SnapshotInstall) GetDbFile() *SnapshotDBFile {
@@ -280,7 +192,7 @@ type SnapshotManifest struct {
 
 func (x *SnapshotManifest) Reset() {
 	*x = SnapshotManifest{}
-	mi := &file_snapshot_proto_msgTypes[5]
+	mi := &file_snapshot_proto_msgTypes[3]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -292,7 +204,7 @@ func (x *SnapshotManifest) String() string {
 func (*SnapshotManifest) ProtoMessage() {}
 
 func (x *SnapshotManifest) ProtoReflect() protoreflect.Message {
-	mi := &file_snapshot_proto_msgTypes[5]
+	mi := &file_snapshot_proto_msgTypes[3]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -305,7 +217,7 @@ func (x *SnapshotManifest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SnapshotManifest.ProtoReflect.Descriptor instead.
 func (*SnapshotManifest) Descriptor() ([]byte, []int) {
-	return file_snapshot_proto_rawDescGZIP(), []int{5}
+	return file_snapshot_proto_rawDescGZIP(), []int{3}
 }
 
 func (x *SnapshotManifest) GetFormatVersion() uint32 {
@@ -375,11 +287,7 @@ var File_snapshot_proto protoreflect.FileDescriptor
 
 const file_snapshot_proto_rawDesc = "" +
 	"\n" +
-	"\x0esnapshot.proto\x12\bsnapshot\"0\n" +
-	"\x13SnapshotIncremental\x12\x19\n" +
-	"\bwal_path\x18\x01 \x01(\tR\awalPath\"'\n" +
-	"\fSnapshotFull\x12\x17\n" +
-	"\adb_path\x18\x01 \x01(\tR\x06dbPath\"C\n" +
+	"\x0esnapshot.proto\x12\tsnapshot2\"C\n" +
 	"\x0eSnapshotDBFile\x12\x12\n" +
 	"\x04name\x18\x01 \x01(\tR\x04name\x12\x1d\n" +
 	"\n" +
@@ -387,16 +295,16 @@ const file_snapshot_proto_rawDesc = "" +
 	"\x0fSnapshotWALFile\x12\x12\n" +
 	"\x04name\x18\x01 \x01(\tR\x04name\x12\x1d\n" +
 	"\n" +
-	"size_bytes\x18\x02 \x01(\x04R\tsizeBytes\"|\n" +
-	"\x0fSnapshotInstall\x121\n" +
-	"\adb_file\x18\x02 \x01(\v2\x18.snapshot.SnapshotDBFileR\x06dbFile\x126\n" +
-	"\twal_files\x18\x03 \x03(\v2\x19.snapshot.SnapshotWALFileR\bwalFiles\"\xe5\x01\n" +
+	"size_bytes\x18\x02 \x01(\x04R\tsizeBytes\"~\n" +
+	"\x0fSnapshotInstall\x122\n" +
+	"\adb_file\x18\x02 \x01(\v2\x19.snapshot2.SnapshotDBFileR\x06dbFile\x127\n" +
+	"\twal_files\x18\x03 \x03(\v2\x1a.snapshot2.SnapshotWALFileR\bwalFiles\"\xe8\x01\n" +
 	"\x10SnapshotManifest\x12%\n" +
-	"\x0eformat_version\x18\x01 \x01(\rR\rformatVersion\x123\n" +
-	"\adb_path\x18\x02 \x01(\v2\x18.snapshot.SnapshotDBFileH\x00R\x06dbPath\x126\n" +
-	"\bwal_path\x18\x03 \x01(\v2\x19.snapshot.SnapshotWALFileH\x00R\awalPath\x125\n" +
-	"\ainstall\x18\x04 \x01(\v2\x19.snapshot.SnapshotInstallH\x00R\ainstallB\x06\n" +
-	"\x04typeB,Z*github.com/rqlite/rqlite/v9/snapshot/protob\x06proto3"
+	"\x0eformat_version\x18\x01 \x01(\rR\rformatVersion\x124\n" +
+	"\adb_path\x18\x02 \x01(\v2\x19.snapshot2.SnapshotDBFileH\x00R\x06dbPath\x127\n" +
+	"\bwal_path\x18\x03 \x01(\v2\x1a.snapshot2.SnapshotWALFileH\x00R\awalPath\x126\n" +
+	"\ainstall\x18\x04 \x01(\v2\x1a.snapshot2.SnapshotInstallH\x00R\ainstallB\x06\n" +
+	"\x04typeB-Z+github.com/rqlite/rqlite/v9/snapshot2/protob\x06proto3"
 
 var (
 	file_snapshot_proto_rawDescOnce sync.Once
@@ -410,21 +318,19 @@ func file_snapshot_proto_rawDescGZIP() []byte {
 	return file_snapshot_proto_rawDescData
 }
 
-var file_snapshot_proto_msgTypes = make([]protoimpl.MessageInfo, 6)
+var file_snapshot_proto_msgTypes = make([]protoimpl.MessageInfo, 4)
 var file_snapshot_proto_goTypes = []any{
-	(*SnapshotIncremental)(nil), // 0: snapshot.SnapshotIncremental
-	(*SnapshotFull)(nil),        // 1: snapshot.SnapshotFull
-	(*SnapshotDBFile)(nil),      // 2: snapshot.SnapshotDBFile
-	(*SnapshotWALFile)(nil),     // 3: snapshot.SnapshotWALFile
-	(*SnapshotInstall)(nil),     // 4: snapshot.SnapshotInstall
-	(*SnapshotManifest)(nil),    // 5: snapshot.SnapshotManifest
+	(*SnapshotDBFile)(nil),   // 0: snapshot2.SnapshotDBFile
+	(*SnapshotWALFile)(nil),  // 1: snapshot2.SnapshotWALFile
+	(*SnapshotInstall)(nil),  // 2: snapshot2.SnapshotInstall
+	(*SnapshotManifest)(nil), // 3: snapshot2.SnapshotManifest
 }
 var file_snapshot_proto_depIdxs = []int32{
-	2, // 0: snapshot.SnapshotInstall.db_file:type_name -> snapshot.SnapshotDBFile
-	3, // 1: snapshot.SnapshotInstall.wal_files:type_name -> snapshot.SnapshotWALFile
-	2, // 2: snapshot.SnapshotManifest.db_path:type_name -> snapshot.SnapshotDBFile
-	3, // 3: snapshot.SnapshotManifest.wal_path:type_name -> snapshot.SnapshotWALFile
-	4, // 4: snapshot.SnapshotManifest.install:type_name -> snapshot.SnapshotInstall
+	0, // 0: snapshot2.SnapshotInstall.db_file:type_name -> snapshot2.SnapshotDBFile
+	1, // 1: snapshot2.SnapshotInstall.wal_files:type_name -> snapshot2.SnapshotWALFile
+	0, // 2: snapshot2.SnapshotManifest.db_path:type_name -> snapshot2.SnapshotDBFile
+	1, // 3: snapshot2.SnapshotManifest.wal_path:type_name -> snapshot2.SnapshotWALFile
+	2, // 4: snapshot2.SnapshotManifest.install:type_name -> snapshot2.SnapshotInstall
 	5, // [5:5] is the sub-list for method output_type
 	5, // [5:5] is the sub-list for method input_type
 	5, // [5:5] is the sub-list for extension type_name
@@ -437,7 +343,7 @@ func file_snapshot_proto_init() {
 	if File_snapshot_proto != nil {
 		return
 	}
-	file_snapshot_proto_msgTypes[5].OneofWrappers = []any{
+	file_snapshot_proto_msgTypes[3].OneofWrappers = []any{
 		(*SnapshotManifest_DbPath)(nil),
 		(*SnapshotManifest_WalPath)(nil),
 		(*SnapshotManifest_Install)(nil),
@@ -448,7 +354,7 @@ func file_snapshot_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_snapshot_proto_rawDesc), len(file_snapshot_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   6,
+			NumMessages:   4,
 			NumExtensions: 0,
 			NumServices:   0,
 		},
