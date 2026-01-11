@@ -7,6 +7,46 @@ import (
 	"github.com/rqlite/rqlite/v9/snapshot2/proto"
 )
 
+func Test_DB_WAL_Sinks(t *testing.T) {
+	test_SnapshotSinkDBTests(
+		t,
+		"DBSink",
+		func(dir string, m *proto.SnapshotDBFile) sinker {
+			return NewDBSink(dir, m)
+		}, "testdata/test.db", func() *proto.SnapshotDBFile {
+			return mustCreateSnapshotDBFileFromFile(t, "testdata/test.db", true)
+		})
+
+	test_SnapshotSinkDBTests(
+		t,
+		"WALSink",
+		func(dir string, m *proto.SnapshotWALFile) sinker {
+			return NewWALSink(dir, m)
+		}, "testdata/wal", func() *proto.SnapshotWALFile {
+			return mustCreateSnapshotWALFileFromFile(t, "testdata/wal", true)
+		})
+}
+
+func Test_NewDBSink(t *testing.T) {
+	dir := t.TempDir()
+
+	m := mustCreateSnapshotDBFileFromFile(t, "testdata/test.db", false)
+	sink := NewDBSink(dir, m)
+	if sink == nil {
+		t.Fatalf("expected non-nil sink")
+	}
+}
+
+func Test_NewWALSink(t *testing.T) {
+	dir := t.TempDir()
+
+	m := mustCreateSnapshotWALFileFromFile(t, "testdata/wal", false)
+	sink := NewWALSink(dir, m)
+	if sink == nil {
+		t.Fatalf("expected non-nil sink")
+	}
+}
+
 func test_SnapshotSinkDBTests[M any](t *testing.T, name string, sinkerFn func(dir string, m M) sinker, srcFile string, manifestFn func() M) {
 	t.Run(name+"_Success", func(t *testing.T) {
 		dir := t.TempDir()
@@ -252,46 +292,6 @@ func test_SnapshotSinkDBTests[M any](t *testing.T, name string, sinkerFn func(di
 			t.Fatalf("expected error when closing sink with bad CRC")
 		}
 	})
-}
-
-func Test_DB_WAL_Sinks(t *testing.T) {
-	test_SnapshotSinkDBTests(
-		t,
-		"DBSink",
-		func(dir string, m *proto.SnapshotDBFile) sinker {
-			return NewDBSink(dir, m)
-		}, "testdata/test.db", func() *proto.SnapshotDBFile {
-			return mustCreateSnapshotDBFileFromFile(t, "testdata/test.db", true)
-		})
-
-	test_SnapshotSinkDBTests(
-		t,
-		"WALSink",
-		func(dir string, m *proto.SnapshotWALFile) sinker {
-			return NewWALSink(dir, m)
-		}, "testdata/wal", func() *proto.SnapshotWALFile {
-			return mustCreateSnapshotWALFileFromFile(t, "testdata/wal", true)
-		})
-}
-
-func Test_NewDBSink(t *testing.T) {
-	dir := t.TempDir()
-
-	m := mustCreateSnapshotDBFileFromFile(t, "testdata/test.db", false)
-	sink := NewDBSink(dir, m)
-	if sink == nil {
-		t.Fatalf("expected non-nil sink")
-	}
-}
-
-func Test_NewWALSink(t *testing.T) {
-	dir := t.TempDir()
-
-	m := mustCreateSnapshotWALFileFromFile(t, "testdata/wal", false)
-	sink := NewWALSink(dir, m)
-	if sink == nil {
-		t.Fatalf("expected non-nil sink")
-	}
 }
 
 func mustCreateSnapshotDBFileFromFile(t *testing.T, path string, crc32 bool) *proto.SnapshotDBFile {
