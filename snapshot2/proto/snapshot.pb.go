@@ -25,6 +25,7 @@ type SnapshotDBFile struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Name          string                 `protobuf:"bytes,1,opt,name=name,proto3" json:"name,omitempty"`
 	SizeBytes     uint64                 `protobuf:"varint,2,opt,name=size_bytes,json=sizeBytes,proto3" json:"size_bytes,omitempty"`
+	Crc32         uint32                 `protobuf:"varint,3,opt,name=crc32,proto3" json:"crc32,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -73,10 +74,18 @@ func (x *SnapshotDBFile) GetSizeBytes() uint64 {
 	return 0
 }
 
+func (x *SnapshotDBFile) GetCrc32() uint32 {
+	if x != nil {
+		return x.Crc32
+	}
+	return 0
+}
+
 type SnapshotWALFile struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Name          string                 `protobuf:"bytes,1,opt,name=name,proto3" json:"name,omitempty"`
 	SizeBytes     uint64                 `protobuf:"varint,2,opt,name=size_bytes,json=sizeBytes,proto3" json:"size_bytes,omitempty"`
+	Crc32         uint32                 `protobuf:"varint,3,opt,name=crc32,proto3" json:"crc32,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -121,6 +130,13 @@ func (x *SnapshotWALFile) GetName() string {
 func (x *SnapshotWALFile) GetSizeBytes() uint64 {
 	if x != nil {
 		return x.SizeBytes
+	}
+	return 0
+}
+
+func (x *SnapshotWALFile) GetCrc32() uint32 {
+	if x != nil {
+		return x.Crc32
 	}
 	return 0
 }
@@ -287,15 +303,17 @@ var File_snapshot_proto protoreflect.FileDescriptor
 
 const file_snapshot_proto_rawDesc = "" +
 	"\n" +
-	"\x0esnapshot.proto\x12\tsnapshot2\"C\n" +
+	"\x0esnapshot.proto\x12\tsnapshot2\"Y\n" +
 	"\x0eSnapshotDBFile\x12\x12\n" +
 	"\x04name\x18\x01 \x01(\tR\x04name\x12\x1d\n" +
 	"\n" +
-	"size_bytes\x18\x02 \x01(\x04R\tsizeBytes\"D\n" +
+	"size_bytes\x18\x02 \x01(\x04R\tsizeBytes\x12\x14\n" +
+	"\x05crc32\x18\x03 \x01(\rR\x05crc32\"Z\n" +
 	"\x0fSnapshotWALFile\x12\x12\n" +
 	"\x04name\x18\x01 \x01(\tR\x04name\x12\x1d\n" +
 	"\n" +
-	"size_bytes\x18\x02 \x01(\x04R\tsizeBytes\"~\n" +
+	"size_bytes\x18\x02 \x01(\x04R\tsizeBytes\x12\x14\n" +
+	"\x05crc32\x18\x03 \x01(\rR\x05crc32\"~\n" +
 	"\x0fSnapshotInstall\x122\n" +
 	"\adb_file\x18\x02 \x01(\v2\x19.snapshot2.SnapshotDBFileR\x06dbFile\x127\n" +
 	"\twal_files\x18\x03 \x03(\v2\x1a.snapshot2.SnapshotWALFileR\bwalFiles\"\xe8\x01\n" +

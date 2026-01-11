@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"log"
 	"os"
 	"path/filepath"
 
@@ -18,6 +19,11 @@ const (
 	manifestHdrLen = 4
 )
 
+type sinker interface {
+	Open() error
+	io.WriteCloser
+}
+
 // Sink is a sink for writing snapshot data to a Snapshot store.
 type Sink struct {
 	dir    string
@@ -29,14 +35,17 @@ type Sink struct {
 
 	buf      bytes.Buffer
 	manifest *proto.SnapshotManifest
-	sinkW    io.WriteCloser
+	sinkW    sinker
+
+	logger *log.Logger
 }
 
 // NewSink creates a new Sink object.
 func NewSink(dir string, meta *raft.SnapshotMeta) *Sink {
 	return &Sink{
-		dir:  dir,
-		meta: meta,
+		dir:    dir,
+		meta:   meta,
+		logger: log.New(log.Writer(), "[snapshot-sink] ", log.LstdFlags),
 	}
 }
 
@@ -82,22 +91,24 @@ func (s *Sink) Write(p []byte) (n int, err error) {
 
 		// We have a manifest to figure out what to do with it.
 		if s.manifest.GetDbPath() != nil {
-			// Handle full database snapshot from local node.
-			s.sinkW = NewDBSink(s.snapTmpDirPath, s.manifest)
+			s.sinkW = NewDBSink(s.snapTmpDirPath, s.manifest.GetDbPath())
 		} else if s.manifest.GetWalPath() != nil {
-			// Handle incremental WAL snapshot from local node.
-			s.sinkW = NewWALSink(s.snapTmpDirPath, s.manifest)
+			s.sinkW = NewWALSink(s.snapTmpDirPath, s.manifest.GetWalPath())
 		} else if s.manifest.GetInstall() != nil {
-			// Handle install snapshot from remote node.
-			s.sinkW = NewWInstallSink(s.snapTmpDirPath, s.manifest)
+			s.sinkW = NewInstallSink(s.snapTmpDirPath, s.manifest.GetInstall())
 		} else {
 			return n, fmt.Errorf("unrecognized snapshot manifest")
+		}
+
+		// Prep and preload the sink.
+		if err := s.sinkW.Open(); err != nil {
+			return n, err
 		}
 		s.buf.WriteTo(s.sinkW)
 		return n, nil
 	}
 
-	// We have a manifest, just write directly to the underlying writer.
+	// We have a manifest, just write directly to the underlying sink.
 	return s.sinkW.Write(p)
 }
 
@@ -112,9 +123,9 @@ func (s *Sink) Close() error {
 		return err
 	}
 
-	if err := writeMeta(s.snapTmpDirPath, s.meta); err != nil {
-		return err
-	}
+	// if err := writeMeta(s.snapTmpDirPath, s.meta); err != nil {
+	// 	return err
+	// }
 
 	if err := os.Rename(s.snapTmpDirPath, s.snapDirPath); err != nil {
 		return err
