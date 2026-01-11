@@ -1,3 +1,16 @@
+## v9.3.14 (January 9th 2025)
+### Implementation changes and bug fixes
+- [PR #2444](https://github.com/rqlite/rqlite/pull/2444): Increase WAL Checkpoint busy timeout to 250ms.
+- [PR #2445](https://github.com/rqlite/rqlite/pull/2445): Implement a must-checkpoint-WAL after multiple failures policy.
+
+## v9.3.13 (January 8th 2026)
+### Implementation changes and bug fixes
+- [PR #2443](https://github.com/rqlite/rqlite/pull/2443): Don't scan for rows if zero columns returned by query. Fixes issue [#2441](https://github.com/rqlite/rqlite/issues/2441).
+
+## v9.3.12 (January 8th 2026)
+### Implementation changes and bug fixes
+- [PR #2442](https://github.com/rqlite/rqlite/pull/2442): Remove inadvertently committed debug statement.
+
 ## v9.3.11 (January 6th 2026)
 ### Implementation changes and bug fixes
 - [PR #2438](https://github.com/rqlite/rqlite/pull/2438): Correctly handle `EXPLAIN QUERY PLAN` for mutations. Fixes issue [#2433](https://github.com/rqlite/rqlite/issues/2433).
