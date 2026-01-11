@@ -40,7 +40,8 @@ type Sink struct {
 	logger *log.Logger
 }
 
-// NewSink creates a new Sink object.
+// NewSink creates a new Sink object. It takes the root snapshot directory
+// and the snapshot metadata.
 func NewSink(dir string, meta *raft.SnapshotMeta) *Sink {
 	return &Sink{
 		dir:    dir,
