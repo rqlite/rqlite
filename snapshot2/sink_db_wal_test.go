@@ -254,7 +254,7 @@ func test_SnapshotSinkDBTests[M any](t *testing.T, name string, sinkerFn func(di
 	})
 }
 
-func Test_SinkTests(t *testing.T) {
+func Test_DB_WAL_Sinks(t *testing.T) {
 	test_SnapshotSinkDBTests(
 		t,
 		"DBSink",
