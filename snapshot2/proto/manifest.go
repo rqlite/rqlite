@@ -6,6 +6,7 @@ import (
 	"github.com/rqlite/rqlite/v9/internal/rsum"
 )
 
+// NewSnapshotDBFileFromFile creates a SnapshotDBFile manifest entry from the given file path.
 func NewSnapshotDBFileFromFile(path string, crc32 bool) (*SnapshotDBFile, error) {
 	s := &SnapshotDBFile{}
 	info, err := os.Stat(path)
@@ -24,6 +25,7 @@ func NewSnapshotDBFileFromFile(path string, crc32 bool) (*SnapshotDBFile, error)
 	return s, nil
 }
 
+// NewSnapshotWALFileFromFile creates a SnapshotWALFile manifest entry from the given file path.
 func NewSnapshotWALFileFromFile(path string, crc32 bool) (*SnapshotWALFile, error) {
 	s := &SnapshotWALFile{}
 	info, err := os.Stat(path)
