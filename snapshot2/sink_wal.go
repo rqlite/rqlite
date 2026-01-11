@@ -10,12 +10,14 @@ import (
 	"github.com/rqlite/rqlite/v9/snapshot2/proto"
 )
 
+// WALSink is a sink for writing locally-generated WAL snapshot data to a Snapshot store.
 type WALSink struct {
 	dir      string
 	manifest *proto.SnapshotWALFile
 	file     *os.File
 }
 
+// NewWALSink creates a new WALSink object.
 func NewWALSink(dir string, m *proto.SnapshotWALFile) *WALSink {
 	return &WALSink{
 		dir:      dir,
@@ -23,6 +25,7 @@ func NewWALSink(dir string, m *proto.SnapshotWALFile) *WALSink {
 	}
 }
 
+// Open opens the sink for writing.
 func (s *WALSink) Open() error {
 	f, err := os.Create(filepath.Join(s.dir, "wal"))
 	if err != nil {
@@ -32,11 +35,15 @@ func (s *WALSink) Open() error {
 	return nil
 }
 
+// Write writes data to the sink.
 func (s *WALSink) Write(p []byte) (n int, err error) {
 	return s.file.Write(p)
 }
 
 // Close closes the sink.
+//
+// On Close, the file size and basic validity checks are performed. If
+// the manifest includes a CRC32 checksum, that is also verified.
 func (s *WALSink) Close() error {
 	defer s.file.Close()
 

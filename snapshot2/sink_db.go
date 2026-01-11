@@ -10,12 +10,14 @@ import (
 	"github.com/rqlite/rqlite/v9/snapshot2/proto"
 )
 
+// DBSink is a sink for writing locally-generated DB snapshot data to a Snapshot store.
 type DBSink struct {
 	dir      string
 	manifest *proto.SnapshotDBFile
 	file     *os.File
 }
 
+// NewDBSink creates a new DBSink object.
 func NewDBSink(dir string, m *proto.SnapshotDBFile) *DBSink {
 	return &DBSink{
 		dir:      dir,
@@ -23,6 +25,7 @@ func NewDBSink(dir string, m *proto.SnapshotDBFile) *DBSink {
 	}
 }
 
+// Open opens the sink for writing.
 func (s *DBSink) Open() error {
 	f, err := os.Create(filepath.Join(s.dir, "db.sqlite3"))
 	if err != nil {
@@ -32,10 +35,15 @@ func (s *DBSink) Open() error {
 	return nil
 }
 
+// Write writes data to the sink.
 func (s *DBSink) Write(p []byte) (n int, err error) {
 	return s.file.Write(p)
 }
 
+// Close closes the sink.
+//
+// On Close, the file size and basic validity checks are performed. If
+// the manifest includes a CRC32 checksum, that is also verified.
 func (s *DBSink) Close() error {
 	defer s.file.Close()
 
