@@ -95,3 +95,11 @@ func removeAllPrefix(path, prefix string) error {
 	}
 	return nil
 }
+
+func touchFile(path string) error {
+	fh, err := os.Create(path)
+	if err != nil {
+		return err
+	}
+	return fh.Close()
+}

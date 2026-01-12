@@ -124,9 +124,9 @@ func (s *Sink) Close() error {
 		return err
 	}
 
-	// if err := writeMeta(s.snapTmpDirPath, s.meta); err != nil {
-	// 	return err
-	// }
+	if err := writeMeta(s.snapTmpDirPath, s.meta); err != nil {
+		return err
+	}
 
 	if err := os.Rename(s.snapTmpDirPath, s.snapDirPath); err != nil {
 		return err

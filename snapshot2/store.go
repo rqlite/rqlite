@@ -70,8 +70,7 @@ const (
 // SnapshotMeta represents metadata about a snapshot.
 type SnapshotMeta struct {
 	*raft.SnapshotMeta
-	Filename string
-	Type     SnapshotMetaType
+	Type SnapshotMetaType
 }
 
 // Store stores snapshots in the Raft system.
@@ -295,13 +294,14 @@ func getSnapshots(dir string) ([]*SnapshotMeta, error) {
 			return nil, fmt.Errorf("failed to read meta for snapshot %s: %s", snap.Name(), err)
 		}
 
-		path := filepath.Join(dir, snap.Name(), meta.Filename)
+		path := filepath.Join(dir, snap.Name(), "data")
 		if db.IsValidSQLiteFile(path) {
 			meta.Type = SnapshotMetaTypeFull
 		} else if db.IsValidSQLiteWALFile(path) {
 			meta.Type = SnapshotMetaTypeIncremental
 		} else {
-			return nil, fmt.Errorf("snapshot %s does not contain a valid SQLite or WAL file", snap.Name())
+			return nil, fmt.Errorf("snapshot %s does not contain a valid SQLite or WAL file at %s",
+				snap.Name(), path)
 		}
 		snapMeta = append(snapMeta, meta)
 	}

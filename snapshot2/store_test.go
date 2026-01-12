@@ -1,11 +1,14 @@
 package snapshot2
 
 import (
+	"io"
 	"os"
 	"sort"
 	"testing"
 
 	"github.com/hashicorp/raft"
+	"github.com/rqlite/rqlite/v9/db"
+	"github.com/rqlite/rqlite/v9/snapshot2/proto"
 )
 
 func Test_SnapshotMetaSort(t *testing.T) {
@@ -16,8 +19,7 @@ func Test_SnapshotMetaSort(t *testing.T) {
 				Index: 1017,
 				Term:  2,
 			},
-			Filename: "db.sqlite",
-			Type:     SnapshotMetaTypeFull,
+			Type: SnapshotMetaTypeFull,
 		},
 		{
 			SnapshotMeta: &raft.SnapshotMeta{
@@ -25,8 +27,7 @@ func Test_SnapshotMetaSort(t *testing.T) {
 				Index: 1131,
 				Term:  2,
 			},
-			Filename: "wal",
-			Type:     SnapshotMetaTypeIncremental,
+			Type: SnapshotMetaTypeIncremental,
 		},
 	}
 	sort.Sort(snapMetaSlice(metas))
@@ -157,6 +158,98 @@ func Test_StoreCreateCancel(t *testing.T) {
 	}
 }
 
+func Test_Store_CreateList(t *testing.T) {
+	dir := t.TempDir()
+	store, err := NewStore(dir)
+	if err != nil {
+		t.Fatalf("Failed to create new store: %v", err)
+	}
+
+	snaps, err := store.List()
+	if err != nil {
+		t.Fatalf("Failed to list snapshots: %v", err)
+	}
+	if len(snaps) != 0 {
+		t.Errorf("Expected 0 snapshots, got %d", len(snaps))
+	}
+
+	createSnapshot := func(id string, index, term, cfgIndex uint64, file string) {
+		sink := NewSink(store.Dir(), makeRaftMeta(id, index, term, cfgIndex))
+		if sink == nil {
+			t.Fatalf("Failed to create new sink")
+		}
+		if err := sink.Open(); err != nil {
+			t.Fatalf("Failed to open sink: %v", err)
+		}
+
+		var w io.WriterTo
+		if db.IsValidSQLiteFile(file) {
+			manifest, err := proto.NewSnapshotManifestFromDB(file)
+			if err != nil {
+				t.Fatalf("Failed to create SnapshotDBFile from file: %v", err)
+			}
+			w = manifest
+		} else {
+			manifest, err := proto.NewSnapshotManifestFromWAL(file)
+			if err != nil {
+				t.Fatalf("Failed to create SnapshotDBFile from file: %v", err)
+			}
+			w = manifest
+		}
+
+		n, err := w.WriteTo(sink)
+		if err != nil {
+			t.Fatalf("Failed to write SnapshotManifest to sink: %v", err)
+		}
+		if n == 0 {
+			t.Fatalf("Expected to write some bytes to sink, wrote 0")
+		}
+
+		fd := mustOpenFile(t, file)
+		defer fd.Close()
+		_, err = io.Copy(sink, fd)
+		if err != nil {
+			t.Fatalf("Failed to copy file to sink: %v", err)
+		}
+
+		if err := sink.Close(); err != nil {
+			t.Fatalf("Failed to close sink: %v", err)
+		}
+	}
+
+	createSnapshot("2-1017-1704807719996", 1017, 2, 1, "testdata/db-and-wals/backup.db")
+	createSnapshot("2-1131-1704807720976", 1131, 2, 1, "testdata/db-and-wals/wal-00")
+
+	if store.Len() != 2 {
+		t.Errorf("Expected store to have 2 snapshots, got %d", store.Len())
+	}
+
+	li, tm, err := store.LatestIndexTerm()
+	if err != nil {
+		t.Fatalf("Failed to get latest index and term from empty store: %v", err)
+	}
+	if li != 1131 {
+		t.Fatalf("Expected latest index to be 1131, got %d", li)
+	}
+	if tm != 2 {
+		t.Fatalf("Expected latest term to be 2, got %d", tm)
+	}
+
+	snaps, err = store.List()
+	if err != nil {
+		t.Fatalf("Failed to list snapshots: %v", err)
+	}
+	if len(snaps) != 2 {
+		t.Errorf("Expected 2 snapshots, got %d", len(snaps))
+	}
+	if snaps[0].ID != "2-1017-1704807719996" {
+		t.Errorf("Expected snapshot ID to be 2-1017-1704807719996, got %s", snaps[0].ID)
+	}
+	if snaps[1].ID != "2-1131-1704807720976" {
+		t.Errorf("Expected snapshot ID to be 2-1131-1704807720976, got %s", snaps[1].ID)
+	}
+}
+
 func makeTestConfiguration(i, a string) raft.Configuration {
 	return raft.Configuration{
 		Servers: []raft.Server{
@@ -171,4 +264,24 @@ func makeTestConfiguration(i, a string) raft.Configuration {
 func pathExists(path string) bool {
 	_, err := os.Stat(path)
 	return err == nil
+}
+
+func makeRaftMeta(id string, index, term, cfgIndex uint64) *raft.SnapshotMeta {
+	return &raft.SnapshotMeta{
+		ID:                 id,
+		Index:              index,
+		Term:               term,
+		Configuration:      makeTestConfiguration("1", "localhost:1"),
+		ConfigurationIndex: cfgIndex,
+		Version:            1,
+	}
+}
+
+func mustOpenFile(t *testing.T, path string) *os.File {
+	t.Helper()
+	fd, err := os.Open(path)
+	if err != nil {
+		t.Fatalf("Failed to open file: %v", err)
+	}
+	return fd
 }
