@@ -2,6 +2,7 @@ package snapshot2
 
 import (
 	"encoding/json"
+	"expvar"
 	"fmt"
 	"io"
 	"log"
@@ -15,9 +16,47 @@ import (
 )
 
 const (
-	metaFileName = "meta.json"
-	tmpSuffix    = ".tmp"
+	metaFileName   = "meta.json"
+	tmpSuffix      = ".tmp"
+	fullNeededFile = "FULL_NEEDED"
 )
+
+const (
+	persistSize            = "latest_persist_size"
+	persistDuration        = "latest_persist_duration"
+	upgradeOk              = "upgrade_ok"
+	upgradeFail            = "upgrade_fail"
+	snapshotsReaped        = "snapshots_reaped"
+	snapshotsReapedFail    = "snapshots_reaped_failed"
+	snapshotCreateMRSWFail = "snapshot_create_mrsw_fail"
+	snapshotOpenMRSWFail   = "snapshot_open_mrsw_fail"
+)
+
+var (
+	// ErrSnapshotNotFound is returned when a snapshot cannot be found.
+	ErrSnapshotNotFound = fmt.Errorf("snapshot not found")
+)
+
+// stats captures stats for the Store.
+var stats *expvar.Map
+
+func init() {
+	stats = expvar.NewMap("snapshot")
+	ResetStats()
+}
+
+// ResetStats resets the expvar stats for this module. Mostly for test purposes.
+func ResetStats() {
+	stats.Init()
+	stats.Add(persistSize, 0)
+	stats.Add(persistDuration, 0)
+	stats.Add(upgradeOk, 0)
+	stats.Add(upgradeFail, 0)
+	stats.Add(snapshotsReaped, 0)
+	stats.Add(snapshotsReapedFail, 0)
+	stats.Add(snapshotCreateMRSWFail, 0)
+	stats.Add(snapshotOpenMRSWFail, 0)
+}
 
 type SnapshotMetaType int
 
@@ -37,8 +76,12 @@ type SnapshotMeta struct {
 
 // Store stores snapshots in the Raft system.
 type Store struct {
-	dir    string
-	logger *log.Logger
+	dir            string
+	fullNeededPath string
+	logger         *log.Logger
+
+	reapDisabled bool
+	LogReaping   bool
 }
 
 // NewStore creates a new store.
@@ -48,8 +91,9 @@ func NewStore(dir string) (*Store, error) {
 	}
 
 	str := &Store{
-		dir:    dir,
-		logger: log.New(os.Stderr, "[snapshot-store] ", log.LstdFlags),
+		dir:            dir,
+		fullNeededPath: filepath.Join(dir, fullNeededFile),
+		logger:         log.New(os.Stderr, "[snapshot-store] ", log.LstdFlags),
 	}
 	str.logger.Printf("store initialized using %s", dir)
 
@@ -92,9 +136,124 @@ func (s *Store) List() ([]*raft.SnapshotMeta, error) {
 	return snapMetaSlice(ms).RaftMetaSlice(), nil
 }
 
+// Len returns the number of snapshots in the Store.
+func (s *Store) Len() int {
+	snapshots, err := s.getSnapshots()
+	if err != nil {
+		return 0
+	}
+	return len(snapshots)
+}
+
+// LatestIndexTerm returns the index and term of the most recent
+// snapshot in the Store.
+func (s *Store) LatestIndexTerm() (uint64, uint64, error) {
+	snapshots, err := s.getSnapshots()
+	if err != nil {
+		return 0, 0, err
+	}
+	if len(snapshots) == 0 {
+		return 0, 0, nil
+	}
+	latest := snapshots[len(snapshots)-1]
+	return latest.Index, latest.Term, nil
+}
+
+// Dir returns the directory where the snapshots are stored.
+func (s *Store) Dir() string {
+	return s.dir
+}
+
 // Open opens the snapshot with the given ID for reading.
 func (s *Store) Open(id string) (*raft.SnapshotMeta, io.ReadCloser, error) {
-	return nil, nil, nil
+	if !dirExists(filepath.Join(s.dir, id)) {
+		return nil, nil, ErrSnapshotNotFound
+	}
+
+	meta, err := readMeta(filepath.Join(s.dir, id))
+	if err != nil {
+		return nil, nil, err
+	}
+	fd, err := os.Open(filepath.Join(s.dir, id+".db"))
+	if err != nil {
+		return nil, nil, err
+	}
+	return meta.SnapshotMeta, fd, nil
+}
+
+// Reap reaps all snapshots, except the most recent one. Returns the number of
+// snapshots reaped.
+func (s *Store) Reap() (retN int, retErr error) {
+	defer func() {
+		if retErr != nil {
+			stats.Add(snapshotsReapedFail, 1)
+		} else {
+			stats.Add(snapshotsReaped, int64(retN))
+		}
+	}()
+	if s.reapDisabled {
+		return 0, nil
+	}
+
+	snapshots, err := s.getSnapshots()
+	if err != nil {
+		return 0, err
+	}
+	if len(snapshots) <= 1 {
+		return 0, nil
+	}
+	// Remove all snapshots, and all associated data, except the newest one.
+	n := 0
+	for _, snap := range snapshots[:len(snapshots)-1] {
+		if err := removeAllPrefix(s.dir, snap.ID); err != nil {
+			return n, err
+		}
+		if s.LogReaping {
+			s.logger.Printf("reaped snapshot %s", snap.ID)
+		}
+		n++
+	}
+	return n, nil
+}
+
+// FullNeeded returns true if a full snapshot is needed.
+func (s *Store) FullNeeded() (bool, error) {
+	if fileExists(s.fullNeededPath) {
+		return true, nil
+	}
+	snaps, err := s.getSnapshots()
+	if err != nil {
+		return false, err
+	}
+	return len(snaps) == 0, nil
+}
+
+// SetFullNeeded sets the flag that indicates a full snapshot is needed.
+// This flag will be cleared when a snapshot is successfully persisted.
+func (s *Store) SetFullNeeded() error {
+	f, err := os.Create(s.fullNeededPath)
+	if err != nil {
+		return err
+	}
+	return f.Close()
+}
+
+// Stats returns stats about the Snapshot Store. This function may return
+// an error if the Store is in an inconsistent state. In that case the stats
+// returned may be incomplete or invalid.
+func (s *Store) Stats() (map[string]any, error) {
+	snapshots, err := s.getSnapshots()
+	if err != nil {
+		return nil, err
+	}
+	snapsAsIDs := make([]string, len(snapshots))
+	for i, snap := range snapshots {
+		snapsAsIDs[i] = snap.ID
+	}
+	return map[string]any{
+		"dir":       s.dir,
+		"snapshots": snapsAsIDs,
+	}, nil
 }
 
 // check checks the Store for any inconsistencies, and repairs
@@ -104,8 +263,12 @@ func (s *Store) check() error {
 	return nil
 }
 
+func (s *Store) getSnapshots() ([]*SnapshotMeta, error) {
+	return getSnapshots(s.dir)
+}
+
 // getSnapshots returns the list of snapshots in the given directory,
-// sorted from newest to oldest.
+// sorted from oldest to new.
 func getSnapshots(dir string) ([]*SnapshotMeta, error) {
 	// Get the eligible snapshots
 	snapshots, err := os.ReadDir(dir)
@@ -147,18 +310,6 @@ func getSnapshots(dir string) ([]*SnapshotMeta, error) {
 	return snapMeta, nil
 }
 
-type cmpSnapshotMeta SnapshotMeta
-
-func (c *cmpSnapshotMeta) Less(other *cmpSnapshotMeta) bool {
-	if c.Term != other.Term {
-		return c.Term < other.Term
-	}
-	if c.Index != other.Index {
-		return c.Index < other.Index
-	}
-	return c.ID < other.ID
-}
-
 type snapMetaSlice []*SnapshotMeta
 
 // Len implements the sort interface for snapMetaSlice.
@@ -168,9 +319,15 @@ func (s snapMetaSlice) Len() int {
 
 // Less implements the sort interface for snapMetaSlice.
 func (s snapMetaSlice) Less(i, j int) bool {
-	si := (*cmpSnapshotMeta)(s[i])
-	sj := (*cmpSnapshotMeta)(s[j])
-	return si.Less(sj)
+	si := s[i]
+	sj := s[j]
+	if si.Term != sj.Term {
+		return si.Term < sj.Term
+	}
+	if si.Index != sj.Index {
+		return si.Index < sj.Index
+	}
+	return si.ID < sj.ID
 }
 
 // Swap implements the sort interface for snapMetaSlice.

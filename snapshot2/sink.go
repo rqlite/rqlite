@@ -140,10 +140,12 @@ func (s *Sink) Cancel() error {
 		return nil
 	}
 	s.opened = false
-	if err := s.sinkW.Close(); err != nil {
-		return err
+	if s.sinkW != nil {
+		if err := s.sinkW.Close(); err != nil {
+			return err
+		}
+		s.sinkW = nil
 	}
-	s.sinkW = nil
 	return os.RemoveAll(s.snapTmpDirPath)
 }
 

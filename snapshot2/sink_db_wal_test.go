@@ -13,8 +13,8 @@ func Test_DB_WAL_Sinks(t *testing.T) {
 		"DBSink",
 		func(dir string, m *proto.SnapshotDBFile) sinker {
 			return NewDBSink(dir, m)
-		}, "testdata/test.db", func() *proto.SnapshotDBFile {
-			return mustCreateSnapshotDBFileFromFile(t, "testdata/test.db", true)
+		}, "testdata/db-and-wals/full2.db", func() *proto.SnapshotDBFile {
+			return mustCreateSnapshotDBFileFromFile(t, "testdata/db-and-wals/full2.db", true)
 		})
 
 	test_SnapshotSinkDBTests(
@@ -22,15 +22,15 @@ func Test_DB_WAL_Sinks(t *testing.T) {
 		"WALSink",
 		func(dir string, m *proto.SnapshotWALFile) sinker {
 			return NewWALSink(dir, m)
-		}, "testdata/wal", func() *proto.SnapshotWALFile {
-			return mustCreateSnapshotWALFileFromFile(t, "testdata/wal", true)
+		}, "testdata/db-and-wals/wal-00", func() *proto.SnapshotWALFile {
+			return mustCreateSnapshotWALFileFromFile(t, "testdata/db-and-wals/wal-00", true)
 		})
 }
 
 func Test_NewDBSink(t *testing.T) {
 	dir := t.TempDir()
 
-	m := mustCreateSnapshotDBFileFromFile(t, "testdata/test.db", false)
+	m := mustCreateSnapshotDBFileFromFile(t, "testdata/db-and-wals/full2.db", false)
 	sink := NewDBSink(dir, m)
 	if sink == nil {
 		t.Fatalf("expected non-nil sink")
@@ -40,7 +40,7 @@ func Test_NewDBSink(t *testing.T) {
 func Test_NewWALSink(t *testing.T) {
 	dir := t.TempDir()
 
-	m := mustCreateSnapshotWALFileFromFile(t, "testdata/wal", false)
+	m := mustCreateSnapshotWALFileFromFile(t, "testdata/db-and-wals/wal-00", false)
 	sink := NewWALSink(dir, m)
 	if sink == nil {
 		t.Fatalf("expected non-nil sink")
