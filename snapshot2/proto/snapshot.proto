@@ -5,20 +5,18 @@ package snapshot2;
 option go_package = "github.com/rqlite/rqlite/v9/snapshot2/proto";
 
 message SnapshotDBFile {
-  string name = 1;
-  uint64 size_bytes = 2;
-  uint32 crc32 = 3;
+  uint64 size_bytes = 1;
+  uint32 crc32 = 2;
 }
 
 message SnapshotWALFile {
-  string name = 1;
-  uint64 size_bytes = 2;
-  uint32 crc32 = 3;
+  uint64 size_bytes = 1;
+  uint32 crc32 = 2;
 }
 
 message SnapshotInstall {
-  SnapshotDBFile db_file = 2;
-  repeated SnapshotWALFile wal_files = 3;
+  SnapshotDBFile db_file = 1;
+  repeated SnapshotWALFile wal_files = 2;
 }
 
 message SnapshotManifest {
