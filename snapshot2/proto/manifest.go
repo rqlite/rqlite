@@ -83,6 +83,25 @@ func (s *SnapshotWALFile) WriteTo(w io.Writer) (int64, error) {
 	return int64(n1 + n2), err
 }
 
+// SnapshotInstall represents the files needed to install a snapshot.
+func NewSnapshotInstall(db string, wal ...string) (*SnapshotInstall, error) {
+	dbM, err := NewSnapshotDBFileFromFile(db, true)
+	if err != nil {
+		return nil, err
+	}
+	si := &SnapshotInstall{
+		DbFile: dbM,
+	}
+	for _, w := range wal {
+		walM, err := NewSnapshotWALFileFromFile(w, true)
+		if err != nil {
+			return nil, err
+		}
+		si.WalFiles = append(si.WalFiles, walM)
+	}
+	return si, nil
+}
+
 // NewSnapshotManifestFromDB creates a SnapshotManifest containing a DB file manifest entry.
 func NewSnapshotManifestFromDB(path string) (*SnapshotManifest, error) {
 	dbFile, err := NewSnapshotDBFileFromFile(path, false)
@@ -108,6 +127,21 @@ func NewSnapshotManifestFromWAL(path string) (*SnapshotManifest, error) {
 		FormatVersion: 1,
 		Type: &SnapshotManifest_WalPath{
 			WalPath: walFile,
+		},
+	}
+	return manifest, nil
+}
+
+// NewSnapshotManifestFromInstall creates a SnapshotManifest containing an Install manifest entry.
+func NewSnapshotManifestFromInstall(db string, wal ...string) (*SnapshotManifest, error) {
+	si, err := NewSnapshotInstall(db, wal...)
+	if err != nil {
+		return nil, err
+	}
+	manifest := &SnapshotManifest{
+		FormatVersion: 1,
+		Type: &SnapshotManifest_Install{
+			Install: si,
 		},
 	}
 	return manifest, nil

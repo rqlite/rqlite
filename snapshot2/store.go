@@ -2,6 +2,7 @@ package snapshot2
 
 import (
 	"encoding/json"
+	"errors"
 	"expvar"
 	"fmt"
 	"io"
@@ -34,7 +35,13 @@ const (
 
 var (
 	// ErrSnapshotNotFound is returned when a snapshot cannot be found.
-	ErrSnapshotNotFound = fmt.Errorf("snapshot not found")
+	ErrSnapshotNotFound = errors.New("snapshot not found")
+
+	// ErrDataFileNotFound is returned when a snapshot data file cannot be found.
+	ErrDataFileNotFound = errors.New("snapshot data file not found")
+
+	// ErrTooManyDataFiles is returned when more than one snapshot data file is found.
+	ErrTooManyDataFiles = errors.New("too many snapshot data files found")
 )
 
 // stats captures stats for the Store.
@@ -294,7 +301,10 @@ func getSnapshots(dir string) ([]*SnapshotMeta, error) {
 			return nil, fmt.Errorf("failed to read meta for snapshot %s: %s", snap.Name(), err)
 		}
 
-		path := filepath.Join(dir, snap.Name(), "data")
+		path, err := getSnapshotDataFile(filepath.Join(dir, snap.Name()))
+		if err != nil {
+			return nil, err
+		}
 		if db.IsValidSQLiteFile(path) {
 			meta.Type = SnapshotMetaTypeFull
 		} else if db.IsValidSQLiteWALFile(path) {
@@ -308,6 +318,23 @@ func getSnapshots(dir string) ([]*SnapshotMeta, error) {
 
 	sort.Sort(snapMetaSlice(snapMeta))
 	return snapMeta, nil
+}
+
+// getSnapshotDataFile lists all files in the given snapshot directory
+// that are of the form data.*. There should only be one such file, which
+// is returned. It will be either data.db or data.wal.
+func getSnapshotDataFile(dir string) (string, error) {
+	files, err := filepath.Glob(filepath.Join(dir, "data.*"))
+	if err != nil {
+		return "", err
+	}
+	if len(files) == 0 {
+		return "", ErrDataFileNotFound
+	}
+	if len(files) > 1 {
+		return "", ErrTooManyDataFiles
+	}
+	return files[0], nil
 }
 
 type snapMetaSlice []*SnapshotMeta
