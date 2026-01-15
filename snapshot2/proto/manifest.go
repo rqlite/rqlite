@@ -102,6 +102,24 @@ func NewSnapshotInstall(db string, wal ...string) (*SnapshotInstall, error) {
 	return si, nil
 }
 
+// WriteTo writes the SnapshotInstall to the given writer.
+func (s *SnapshotInstall) WriteTo(w io.Writer) (int64, error) {
+	data, err := pb.Marshal(s)
+	if err != nil {
+		return 0, err
+	}
+
+	var lenBuf [4]byte
+	binary.BigEndian.PutUint32(lenBuf[:], uint32(len(data)))
+
+	n1, err := w.Write(lenBuf[:])
+	if err != nil {
+		return int64(n1), err
+	}
+	n2, err := w.Write(data)
+	return int64(n1 + n2), err
+}
+
 // NewSnapshotManifestFromDB creates a SnapshotManifest containing a DB file manifest entry.
 func NewSnapshotManifestFromDB(path string) (*SnapshotManifest, error) {
 	dbFile, err := NewSnapshotDBFileFromFile(path, false)
@@ -132,8 +150,8 @@ func NewSnapshotManifestFromWAL(path string) (*SnapshotManifest, error) {
 	return manifest, nil
 }
 
-// NewSnapshotManifestFromInstall creates a SnapshotManifest containing an Install manifest entry.
-func NewSnapshotManifestFromInstall(db string, wal ...string) (*SnapshotManifest, error) {
+// NewSnapshotManifestWithInstall creates a SnapshotManifest containing an Install manifest entry.
+func NewSnapshotManifestWithInstall(db string, wal ...string) (*SnapshotManifest, error) {
 	si, err := NewSnapshotInstall(db, wal...)
 	if err != nil {
 		return nil, err

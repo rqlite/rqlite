@@ -1,6 +1,7 @@
 package snapshot2
 
 import (
+	"bytes"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -47,6 +48,29 @@ func fileSize(path string) (int64, error) {
 		return 0, err
 	}
 	return info.Size(), nil
+}
+
+func filesIdentical(path1, path2 string) bool {
+	size1, err := fileSize(path1)
+	if err != nil {
+		return false
+	}
+	size2, err := fileSize(path2)
+	if err != nil {
+		return false
+	}
+	if size1 != size2 {
+		return false
+	}
+	data1, err := os.ReadFile(path1)
+	if err != nil {
+		return false
+	}
+	data2, err := os.ReadFile(path2)
+	if err != nil {
+		return false
+	}
+	return bytes.Equal(data1, data2)
 }
 
 func syncDir(dir string) error {
