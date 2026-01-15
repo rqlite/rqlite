@@ -25,6 +25,10 @@ type sinker interface {
 }
 
 // Sink is a sink for writing snapshot data to a Snapshot store.
+//
+// This sink is adaptive. It can handle multiple types of snapshot data,
+// including full database snapshots, incremental snapshots (WAL files),
+// and snapshot installs (DB file plus WAL files).
 type Sink struct {
 	dir    string
 	meta   *raft.SnapshotMeta

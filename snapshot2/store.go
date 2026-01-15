@@ -170,7 +170,10 @@ func (s *Store) Dir() string {
 	return s.dir
 }
 
-// Open opens the snapshot with the given ID for reading.
+// Open opens the snapshot with the given ID for reading. Open returns an io.ReadCloser
+// which wraps a SnapshotInstall object. This is because the snapshot will be used
+// to either rebuild a node's state after restart, or to send the snapshot to another node,
+// both of which require the DB file and any associated WAL files.
 func (s *Store) Open(id string) (*raft.SnapshotMeta, io.ReadCloser, error) {
 	if !dirExists(filepath.Join(s.dir, id)) {
 		return nil, nil, ErrSnapshotNotFound
@@ -180,6 +183,20 @@ func (s *Store) Open(id string) (*raft.SnapshotMeta, io.ReadCloser, error) {
 	if err != nil {
 		return nil, nil, err
 	}
+
+	switch meta.Type {
+	case SnapshotMetaTypeFull:
+		// Create file object that supports io.ReadCloser. When read
+		// it should return a 4-byte length prefix followed by the manifest
+		// following by the DB file.
+	case SnapshotMetaTypeIncremental:
+		// We need to walk back the directories to form list of WAL files.
+		// We stop when we find a full db file. Then all those files
+		// form the SnapshotInstall object.
+	default:
+		return nil, nil, fmt.Errorf("unknown snapshot type for snapshot %s", id)
+	}
+
 	fd, err := os.Open(filepath.Join(s.dir, id+".db"))
 	if err != nil {
 		return nil, nil, err
