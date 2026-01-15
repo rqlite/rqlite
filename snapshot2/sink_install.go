@@ -192,6 +192,21 @@ func (s *InstallSink) Close() error {
 	return s.closeFile()
 }
 
+// DBFile returns the path to the installed DB file.
+func (s *InstallSink) DBFile() string {
+	return s.dbFile
+}
+
+// WALFiles returns the paths to the installed WAL files.
+func (s *InstallSink) WALFiles() []string {
+	return s.walFiles
+}
+
+// NumWALFiles returns the number of WAL files.
+func (s *InstallSink) NumWALFiles() int {
+	return len(s.walFiles)
+}
+
 func (s *InstallSink) validateManifest() error {
 	if s.manifest == nil || s.manifest.DbFile == nil {
 		return ErrManifestInvalid

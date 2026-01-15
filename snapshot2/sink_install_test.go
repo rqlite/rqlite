@@ -3,7 +3,6 @@ package snapshot2
 import (
 	"io"
 	"os"
-	"path/filepath"
 	"testing"
 
 	"github.com/rqlite/rqlite/v9/snapshot2/proto"
@@ -47,13 +46,15 @@ func Test_InstallSink_SingleDBFile(t *testing.T) {
 	}
 
 	// Verify file exists in target dir.
-	targetPath := filepath.Join(dir, "data.db")
-	if !fileExists(targetPath) {
-		t.Fatalf("expected file %s to exist, but does not", targetPath)
+	if !fileExists(sink.DBFile()) {
+		t.Fatalf("expected file %s to exist, but does not", sink.DBFile())
 	}
 
-	if !filesIdentical("testdata/db-and-wals/full2.db", targetPath) {
-		t.Fatalf("expected file %s to be identical to source", targetPath)
+	if !filesIdentical("testdata/db-and-wals/full2.db", sink.DBFile()) {
+		t.Fatalf("expected file %s to be identical to source", sink.DBFile())
+	}
+	if sink.NumWALFiles() != 0 {
+		t.Fatalf("expected 0 WAL files, got %d", sink.NumWALFiles())
 	}
 }
 
@@ -86,12 +87,14 @@ func Test_InstallSink_SingleDBFile_SingleWALFile(t *testing.T) {
 		t.Fatalf("unexpected error closing sink: %s", err.Error())
 	}
 
-	targetPath := filepath.Join(dir, "data.db")
-	if !filesIdentical("testdata/db-and-wals/full2.db", targetPath) {
-		t.Fatalf("expected file %s to be identical to source", targetPath)
+	if !filesIdentical("testdata/db-and-wals/full2.db", sink.DBFile()) {
+		t.Fatalf("expected file %s to be identical to source", sink.DBFile())
 	}
 
-	targetWALPath := filepath.Join(dir, "data-00000000.wal")
+	if sink.NumWALFiles() != 1 {
+		t.Fatalf("expected 1 WAL file, got %d", sink.NumWALFiles())
+	}
+	targetWALPath := sink.WALFiles()[0]
 	if !filesIdentical("testdata/db-and-wals/wal-00", targetWALPath) {
 		t.Fatalf("expected file %s to be identical to source", targetWALPath)
 	}
@@ -127,16 +130,18 @@ func Test_InstallSink_SingleDBFile_MultiWALFile(t *testing.T) {
 		t.Fatalf("unexpected error closing sink: %s", err.Error())
 	}
 
-	targetPath := filepath.Join(dir, "data.db")
-	if !filesIdentical("testdata/db-and-wals/full2.db", targetPath) {
-		t.Fatalf("expected file %s to be identical to source", targetPath)
+	if !filesIdentical("testdata/db-and-wals/full2.db", sink.DBFile()) {
+		t.Fatalf("expected file %s to be identical to source", sink.DBFile())
 	}
 
-	targetWALPath0 := filepath.Join(dir, "data-00000000.wal")
+	if sink.NumWALFiles() != 2 {
+		t.Fatalf("expected 2 WAL files, got %d", sink.NumWALFiles())
+	}
+	targetWALPath0 := sink.WALFiles()[0]
 	if !filesIdentical("testdata/db-and-wals/wal-00", targetWALPath0) {
 		t.Fatalf("expected file %s to be identical to source", targetWALPath0)
 	}
-	targetWALPath1 := filepath.Join(dir, "data-00000001.wal")
+	targetWALPath1 := sink.WALFiles()[1]
 	if !filesIdentical("testdata/db-and-wals/wal-01", targetWALPath1) {
 		t.Fatalf("expected file %s to be identical to source", targetWALPath1)
 	}
