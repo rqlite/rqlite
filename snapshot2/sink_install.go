@@ -189,6 +189,9 @@ func (s *InstallSink) Close() error {
 		}
 	}
 
+	// This is when we checkpoint all WALs into the SQLite file, and end up
+	// with a single DB file representing the snapshot state.
+
 	return s.closeFile()
 }
 

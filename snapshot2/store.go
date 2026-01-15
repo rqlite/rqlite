@@ -69,8 +69,7 @@ type SnapshotMetaType int
 
 // SnapshotMetaType is an enum
 const (
-	SnapshotMetaTypeUnknown SnapshotMetaType = iota
-	SnapshotMetaTypeFull
+	SnapshotMetaTypeFull = iota
 	SnapshotMetaTypeIncremental
 )
 
