@@ -250,6 +250,52 @@ func Test_Store_CreateList(t *testing.T) {
 	}
 }
 
+// Test_Store_SingleInstall tests that installing a single snapshot works as expected.
+// This tests the scenario where a snapshot is instaled into the store from another
+// node, or rebuilding on restart.
+//
+// The snapshot is created on the fly, not by using Store.Open().
+func Test_Store_SingleInstall(t *testing.T) {
+	dir := t.TempDir()
+	store, err := NewStore(dir)
+	if err != nil {
+		t.Fatalf("Failed to create new store: %v", err)
+	}
+
+	sink, err := store.Create(1, 2, 3, makeTestConfiguration("1", "localhost:1"), 1, nil)
+	if err != nil {
+		t.Fatalf("Failed to create sink: %v", err)
+	}
+	defer sink.Cancel()
+
+	manifest, err := proto.NewSnapshotManifestWithInstall(
+		"testdata/db-and-wals/full2.db",
+		"testdata/db-and-wals/wal-00",
+	)
+	if err != nil {
+		t.Fatalf("unexpected error creating manifest: %s", err.Error())
+	}
+
+	if _, err := manifest.WriteTo(sink); err != nil {
+		t.Fatalf("unexpected error writing manifest to sink: %s", err.Error())
+	}
+
+	for _, filePath := range []string{"testdata/db-and-wals/full2.db", "testdata/db-and-wals/wal-00"} {
+		fd, err := os.Open(filePath)
+		if err != nil {
+			t.Fatalf("unexpected error opening source file %s: %s", filePath, err.Error())
+		}
+		if _, err := io.Copy(sink, fd); err != nil {
+			t.Fatalf("unexpected error copying data to sink: %s", err.Error())
+		}
+		fd.Close()
+	}
+
+	if err := sink.Close(); err != nil {
+		t.Fatalf("unexpected error closing sink: %s", err.Error())
+	}
+}
+
 func makeTestConfiguration(i, a string) raft.Configuration {
 	return raft.Configuration{
 		Servers: []raft.Server{
