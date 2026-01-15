@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 
+	"github.com/rqlite/rqlite/v9/db"
 	"github.com/rqlite/rqlite/v9/snapshot2/proto"
 )
 
@@ -24,6 +25,12 @@ var (
 
 	// ErrManifestInvalid indicates the manifest is invalid.
 	ErrManifestInvalid = errors.New("snapshot install manifest invalid")
+
+	// ErrInvalidSQLiteFile indicates the installed DB file is not a valid SQLite file.
+	ErrInvalidSQLiteFile = errors.New("installed DB file is not a valid SQLite file")
+
+	// ErrInvalidWALFile indicates the installed WAL file is not a valid SQLite WAL file.
+	ErrInvalidWALFile = errors.New("installed WAL file is not a valid SQLite WAL file")
 )
 
 type installPhase int
@@ -45,12 +52,26 @@ type InstallSink struct {
 	f         *os.File
 	remaining uint64
 
+	dbFile   string
+	walFiles []string
+
 	opened bool
 }
 
 // NewInstallSink creates a new InstallSink object.
 func NewInstallSink(dir string, m *proto.SnapshotInstall) *InstallSink {
-	return &InstallSink{dir: dir, manifest: m}
+	s := &InstallSink{
+		dir:      dir,
+		manifest: m,
+		dbFile:   filepath.Join(dir, "data.db"),
+	}
+
+	for i := range m.WalFiles {
+		walPath := filepath.Join(dir, fmt.Sprintf("data-%08d.wal", i))
+		s.walFiles = append(s.walFiles, walPath)
+	}
+	return s
+
 }
 
 // Open opens the sink for writing.
@@ -157,6 +178,17 @@ func (s *InstallSink) Close() error {
 		}
 	}
 
+	if !db.IsValidSQLiteFile(s.dbFile) {
+		_ = s.closeFile()
+		return ErrInvalidSQLiteFile
+	}
+	for i, walPath := range s.walFiles {
+		if !db.IsValidSQLiteWALFile(walPath) {
+			_ = s.closeFile()
+			return fmt.Errorf("WAL file %d invalid: %w", i, ErrInvalidWALFile)
+		}
+	}
+
 	return s.closeFile()
 }
 
@@ -185,10 +217,7 @@ func (s *InstallSink) openCurrent() error {
 			return nil
 		}
 
-		// Do not overwrite the same WAL file name.
-		// Pick a deterministic sequence name; align this with your snapshot-store conventions.
-		path := filepath.Join(s.dir, fmt.Sprintf("data-%08d.wal", s.walIndex))
-		f, err := os.Create(path)
+		f, err := os.Create(s.walFiles[s.walIndex])
 		if err != nil {
 			return err
 		}
