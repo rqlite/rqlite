@@ -28,11 +28,11 @@ func SnapshotResolver(rootDir string, snapshotID string) (dbfile string, walFile
 
 		if snapMeta.Type == SnapshotMetaTypeFull {
 			// Full DB file so, we're done.
-			return filepath.Join(rootDir, snapMeta.ID, "data.db"), nil, nil
+			return filepath.Join(rootDir, snapMeta.ID, dbfileName), walFiles, nil
 		}
 		// Must be incremental. We need to prepend the WAL file name to the list and
 		// keep walking backwards
-		walFile := filepath.Join(rootDir, snapMeta.ID, "wal")
+		walFile := filepath.Join(rootDir, snapMeta.ID, walfileName)
 		walFiles = append([]string{walFile}, walFiles...)
 		continue
 	}

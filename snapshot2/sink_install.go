@@ -220,7 +220,7 @@ func (s *InstallSink) validateManifest() error {
 func (s *InstallSink) openCurrent() error {
 	switch s.phase {
 	case installPhaseDB:
-		path := filepath.Join(s.dir, "data.db")
+		path := filepath.Join(s.dir, dbfileName)
 		f, err := os.Create(path)
 		if err != nil {
 			return err

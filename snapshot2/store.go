@@ -17,6 +17,8 @@ import (
 )
 
 const (
+	dbfileName     = "data.db"
+	walfileName    = "data.wal"
 	metaFileName   = "meta.json"
 	tmpSuffix      = ".tmp"
 	fullNeededFile = "FULL_NEEDED"

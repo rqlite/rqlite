@@ -27,7 +27,7 @@ func NewDBSink(dir string, m *proto.SnapshotDBFile) *DBSink {
 
 // Open opens the sink for writing.
 func (s *DBSink) Open() error {
-	f, err := os.Create(filepath.Join(s.dir, "data.db"))
+	f, err := os.Create(filepath.Join(s.dir, dbfileName))
 	if err != nil {
 		return err
 	}

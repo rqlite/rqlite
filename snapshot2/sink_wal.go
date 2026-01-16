@@ -27,7 +27,7 @@ func NewWALSink(dir string, m *proto.SnapshotWALFile) *WALSink {
 
 // Open opens the sink for writing.
 func (s *WALSink) Open() error {
-	f, err := os.Create(filepath.Join(s.dir, "data.wal"))
+	f, err := os.Create(filepath.Join(s.dir, walfileName))
 	if err != nil {
 		return err
 	}
