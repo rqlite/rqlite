@@ -182,3 +182,53 @@ func (s *SnapshotManifest) WriteTo(w io.Writer) (int64, error) {
 	n2, err := w.Write(data)
 	return int64(n1 + n2), err
 }
+
+// Marshal marshals the SnapshotManifest to a byte slice.
+func (s *SnapshotManifest) Marshal() ([]byte, error) {
+	return pb.Marshal(s)
+}
+
+// Unmarshal unmarshals the SnapshotManifest from a byte slice.
+func (s *SnapshotManifest) Unmarshal(data []byte) error {
+	return pb.Unmarshal(data, s)
+}
+
+// Size returns the size in bytes of the marshaled SnapshotManifest.
+func (s *SnapshotManifest) Size() (int, error) {
+	data, err := s.Marshal()
+	if err != nil {
+		return 0, err
+	}
+	return len(data), nil
+}
+
+// TotalSize returns the total size in bytes of all files described in the manifest.
+// This is the number of bytes which needs to be read to obtain the manifest marshaled
+// as bytes and all associated files.
+func (s *SnapshotManifest) TotalSize() (int64, error) {
+	return 0, nil
+}
+
+// SnapshotManifestReader implements io.ReadCloser for reading a SnapshotManifest
+// and its associated files. It sens the marshaled manifest first, followed by the files
+// as contiguous data.
+type SnapshotManifestReader struct {
+	m *SnapshotManifest
+}
+
+// NewSnapshotManifestReader creates a new SnapshotManifestReader for the given manifest.
+func NewSnapshotManifestReader(m *SnapshotManifest) *SnapshotManifestReader {
+	return &SnapshotManifestReader{
+		m: m,
+	}
+}
+
+// Read reads from the SnapshotManifest and its associated files.
+func (s *SnapshotManifestReader) Read(p []byte) (n int, err error) {
+	return 0, nil
+}
+
+// Close closes the SnapshotManifestReader.
+func (s *SnapshotManifestReader) Close() error {
+	return nil
+}

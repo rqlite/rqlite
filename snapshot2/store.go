@@ -14,6 +14,7 @@ import (
 
 	"github.com/hashicorp/raft"
 	"github.com/rqlite/rqlite/v9/db"
+	"github.com/rqlite/rqlite/v9/snapshot2/proto"
 )
 
 const (
@@ -213,33 +214,37 @@ func (s *Store) Dir() string {
 // to either rebuild a node's state after restart, or to send the snapshot to another node,
 // both of which require the DB file and any associated WAL files.
 func (s *Store) Open(id string) (*raft.SnapshotMeta, io.ReadCloser, error) {
-	if !dirExists(filepath.Join(s.dir, id)) {
-		return nil, nil, ErrSnapshotNotFound
+	dbfile, walFiles, err := ResolveSnapshots(s.dir, id)
+	if err != nil {
+		return nil, nil, err
 	}
-
+	manifest, err := proto.NewSnapshotManifestWithInstall(dbfile, walFiles...)
+	if err != nil {
+		return nil, nil, err
+	}
 	meta, err := readMeta(filepath.Join(s.dir, id))
 	if err != nil {
 		return nil, nil, err
 	}
 
-	switch meta.Type {
-	case SnapshotMetaTypeFull:
-		// Create file object that supports io.ReadCloser. When read
-		// it should return a 4-byte length prefix followed by the manifest
-		// following by the DB file.
-	case SnapshotMetaTypeIncremental:
-		// We need to walk back the directories to form list of WAL files.
-		// We stop when we find a full db file. Then all those files
-		// form the SnapshotInstall object.
-	default:
-		return nil, nil, fmt.Errorf("unknown snapshot type for snapshot %s", id)
+	// Need to make a snapshotMeta on the fly since this snapshot may actually
+	// consist of multiple files (DB + WALs).
+	retMeta := &raft.SnapshotMeta{
+		Version:            meta.Version,
+		ID:                 meta.ID,
+		Index:              meta.Index,
+		Term:               meta.Term,
+		Configuration:      meta.Configuration,
+		ConfigurationIndex: meta.ConfigurationIndex,
 	}
 
-	fd, err := os.Open(filepath.Join(s.dir, id+".db"))
+	sz, err := manifest.TotalSize()
 	if err != nil {
 		return nil, nil, err
 	}
-	return meta.SnapshotMeta, fd, nil
+	retMeta.Size = sz + 4 // +4 for length prefix
+
+	return retMeta, proto.NewSnapshotManifestReader(manifest), nil
 }
 
 // Reap reaps all snapshots, except the most recent one. Returns the number of
