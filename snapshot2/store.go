@@ -75,10 +75,10 @@ const (
 	SnapshotMetaTypeIncremental
 )
 
-// SnapshotResolver resolves a snapshot ID into its constituent DB file and WAL files. At a minimum,
+// ResolveSnapshots resolves a snapshot ID into its constituent DB file and WAL files. At a minimum,
 // a DB file is returned. If the snapshot is incremental, associated WAL files are also returned. The
 // order in the slice is the order in which the WAL files should be applied to the DB file.
-func SnapshotResolver(rootDir string, snapshotID string) (dbfile string, walFiles []string, err error) {
+func ResolveSnapshots(rootDir string, snapshotID string) (dbfile string, walFiles []string, err error) {
 	snapshots, err := getSnapshots(rootDir)
 	if err != nil {
 		return "", nil, err

@@ -8,23 +8,23 @@ import (
 	"github.com/hashicorp/raft"
 )
 
-func Test_SnapshotResolver_EmptyStore(t *testing.T) {
+func Test_ResolveSnapshots_EmptyStore(t *testing.T) {
 	rootDir := t.TempDir()
-	_, _, err := SnapshotResolver(rootDir, "nonexistent-snapshot-store-is-empty")
+	_, _, err := ResolveSnapshots(rootDir, "nonexistent-snapshot-store-is-empty")
 	if err != ErrSnapshotNotFound {
 		t.Fatalf("expected ErrSnapshotNotFound, got: %v", err)
 	}
 }
 
-func Test_SnapshotResolver_SingleFull(t *testing.T) {
+func Test_ResolveSnapshots_SingleFull(t *testing.T) {
 	snapshotID := "full-snapshot-1"
 	rootDir := t.TempDir()
 
 	mustCreateSnapshotFull(t, rootDir, snapshotID, 1, 1)
 
-	dbfile, walFiles, err := SnapshotResolver(rootDir, snapshotID)
+	dbfile, walFiles, err := ResolveSnapshots(rootDir, snapshotID)
 	if err != nil {
-		t.Fatalf("unexpected error from SnapshotResolver: %v", err)
+		t.Fatalf("unexpected error from ResolveSnapshots: %v", err)
 	}
 	if dbfile != filepath.Join(rootDir, snapshotID, dbfileName) {
 		t.Fatalf("expected dbfile %s, got %s", filepath.Join(rootDir, snapshotID, dbfileName), dbfile)
@@ -34,7 +34,7 @@ func Test_SnapshotResolver_SingleFull(t *testing.T) {
 	}
 }
 
-func Test_SnapshotResolver_DoubleFull(t *testing.T) {
+func Test_ResolveSnapshots_DoubleFull(t *testing.T) {
 	snapshotID1 := "full-snapshot-1"
 	snapshotID2 := "full-snapshot-2"
 	rootDir := t.TempDir()
@@ -42,9 +42,9 @@ func Test_SnapshotResolver_DoubleFull(t *testing.T) {
 	mustCreateSnapshotFull(t, rootDir, snapshotID1, 1, 1)
 	mustCreateSnapshotFull(t, rootDir, snapshotID2, 2, 1)
 
-	dbfile, walFiles, err := SnapshotResolver(rootDir, snapshotID2)
+	dbfile, walFiles, err := ResolveSnapshots(rootDir, snapshotID2)
 	if err != nil {
-		t.Fatalf("unexpected error from SnapshotResolver: %v", err)
+		t.Fatalf("unexpected error from ResolveSnapshots: %v", err)
 	}
 	if dbfile != filepath.Join(rootDir, snapshotID2, dbfileName) {
 		t.Fatalf("expected dbfile %s, got %s", filepath.Join(rootDir, snapshotID2, dbfileName), dbfile)
@@ -54,9 +54,9 @@ func Test_SnapshotResolver_DoubleFull(t *testing.T) {
 	}
 
 	// Check the first full snapshot also.
-	dbfile, walFiles, err = SnapshotResolver(rootDir, snapshotID1)
+	dbfile, walFiles, err = ResolveSnapshots(rootDir, snapshotID1)
 	if err != nil {
-		t.Fatalf("unexpected error from SnapshotResolver: %v", err)
+		t.Fatalf("unexpected error from ResolveSnapshots: %v", err)
 	}
 	if dbfile != filepath.Join(rootDir, snapshotID1, dbfileName) {
 		t.Fatalf("expected dbfile %s, got %s", filepath.Join(rootDir, snapshotID1, dbfileName), dbfile)
@@ -66,7 +66,7 @@ func Test_SnapshotResolver_DoubleFull(t *testing.T) {
 	}
 }
 
-func Test_SnapshotResolver_SingleFullSingleInc(t *testing.T) {
+func Test_ResolveSnapshots_SingleFullSingleInc(t *testing.T) {
 	snapshotFullID := "00000-1"
 	snapshotIncID := "00000-2"
 	rootDir := t.TempDir()
@@ -74,9 +74,9 @@ func Test_SnapshotResolver_SingleFullSingleInc(t *testing.T) {
 	mustCreateSnapshotFull(t, rootDir, snapshotFullID, 1, 1)
 	mustCreateSnapshotInc(t, rootDir, snapshotIncID, 2, 1)
 
-	dbfile, walFiles, err := SnapshotResolver(rootDir, snapshotIncID)
+	dbfile, walFiles, err := ResolveSnapshots(rootDir, snapshotIncID)
 	if err != nil {
-		t.Fatalf("unexpected error from SnapshotResolver: %v", err)
+		t.Fatalf("unexpected error from ResolveSnapshots: %v", err)
 	}
 	if dbfile != filepath.Join(rootDir, snapshotFullID, dbfileName) {
 		t.Fatalf("expected dbfile %s, got %s", filepath.Join(rootDir, snapshotFullID, dbfileName), dbfile)
@@ -90,7 +90,7 @@ func Test_SnapshotResolver_SingleFullSingleInc(t *testing.T) {
 	}
 }
 
-func Test_SnapshotResolver_SingleFullDoubleInc(t *testing.T) {
+func Test_ResolveSnapshots_SingleFullDoubleInc(t *testing.T) {
 	snapshotFullID := "00000-1"
 	snapshotIncID1 := "00000-2"
 	snapshotIncID2 := "00000-3"
@@ -100,9 +100,9 @@ func Test_SnapshotResolver_SingleFullDoubleInc(t *testing.T) {
 	mustCreateSnapshotInc(t, rootDir, snapshotIncID1, 2, 1)
 	mustCreateSnapshotInc(t, rootDir, snapshotIncID2, 3, 1)
 
-	dbfile, walFiles, err := SnapshotResolver(rootDir, snapshotIncID2)
+	dbfile, walFiles, err := ResolveSnapshots(rootDir, snapshotIncID2)
 	if err != nil {
-		t.Fatalf("unexpected error from SnapshotResolver: %v", err)
+		t.Fatalf("unexpected error from ResolveSnapshots: %v", err)
 	}
 	if dbfile != filepath.Join(rootDir, snapshotFullID, dbfileName) {
 		t.Fatalf("expected dbfile %s, got %s", filepath.Join(rootDir, snapshotFullID, dbfileName), dbfile)
@@ -120,9 +120,9 @@ func Test_SnapshotResolver_SingleFullDoubleInc(t *testing.T) {
 	}
 
 	// Test also looking for the intermediate incremental snapshot.
-	dbfile, walFiles, err = SnapshotResolver(rootDir, snapshotIncID1)
+	dbfile, walFiles, err = ResolveSnapshots(rootDir, snapshotIncID1)
 	if err != nil {
-		t.Fatalf("unexpected error from SnapshotResolver: %v", err)
+		t.Fatalf("unexpected error from ResolveSnapshots: %v", err)
 	}
 	if dbfile != filepath.Join(rootDir, snapshotFullID, dbfileName) {
 		t.Fatalf("expected dbfile %s, got %s", filepath.Join(rootDir, snapshotFullID, dbfileName), dbfile)
@@ -135,13 +135,13 @@ func Test_SnapshotResolver_SingleFullDoubleInc(t *testing.T) {
 	}
 
 	// Check that looking for a non-existent snapshot fails.
-	_, _, err = SnapshotResolver(rootDir, "non-existent-snapshot")
+	_, _, err = ResolveSnapshots(rootDir, "non-existent-snapshot")
 	if err != ErrSnapshotNotFound {
 		t.Fatalf("expected ErrSnapshotNotFound, got: %v", err)
 	}
 }
 
-func Test_SnapshotResolver_SingleFullDoubleInc_IgnoresEarlier(t *testing.T) {
+func Test_ResolveSnapshots_SingleFullDoubleInc_IgnoresEarlier(t *testing.T) {
 	snapshotFullID0 := "00000-0"
 	snapshotFullID1 := "00000-1"
 	snapshotIncID1 := "00000-2"
@@ -153,9 +153,9 @@ func Test_SnapshotResolver_SingleFullDoubleInc_IgnoresEarlier(t *testing.T) {
 	mustCreateSnapshotInc(t, rootDir, snapshotIncID1, 3, 1)
 	mustCreateSnapshotInc(t, rootDir, snapshotIncID2, 4, 1)
 
-	dbfile, walFiles, err := SnapshotResolver(rootDir, snapshotIncID2)
+	dbfile, walFiles, err := ResolveSnapshots(rootDir, snapshotIncID2)
 	if err != nil {
-		t.Fatalf("unexpected error from SnapshotResolver: %v", err)
+		t.Fatalf("unexpected error from ResolveSnapshots: %v", err)
 	}
 	if dbfile != filepath.Join(rootDir, snapshotFullID1, dbfileName) {
 		t.Fatalf("expected dbfile %s, got %s", filepath.Join(rootDir, snapshotFullID1, dbfileName), dbfile)
@@ -173,7 +173,7 @@ func Test_SnapshotResolver_SingleFullDoubleInc_IgnoresEarlier(t *testing.T) {
 	}
 }
 
-func Test_SnapshotResolver_NoFullInChain(t *testing.T) {
+func Test_ResolveSnapshots_NoFullInChain(t *testing.T) {
 	snapshotIncID1 := "00000-1"
 	snapshotIncID2 := "00000-2"
 	rootDir := t.TempDir()
@@ -181,9 +181,9 @@ func Test_SnapshotResolver_NoFullInChain(t *testing.T) {
 	mustCreateSnapshotInc(t, rootDir, snapshotIncID1, 1, 1)
 	mustCreateSnapshotInc(t, rootDir, snapshotIncID2, 2, 1)
 
-	_, _, err := SnapshotResolver(rootDir, snapshotIncID2)
+	_, _, err := ResolveSnapshots(rootDir, snapshotIncID2)
 	if err == nil {
-		t.Fatalf("expected error from SnapshotResolver, got nil")
+		t.Fatalf("expected error from ResolveSnapshots, got nil")
 	}
 }
 
