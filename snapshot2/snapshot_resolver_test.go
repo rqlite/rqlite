@@ -52,6 +52,18 @@ func Test_SnapshotResolver_DoubleFull(t *testing.T) {
 	if len(walFiles) != 0 {
 		t.Fatalf("expected no wal files, got %v", walFiles)
 	}
+
+	// Check the first full snapshot also.
+	dbfile, walFiles, err = SnapshotResolver(rootDir, snapshotID1)
+	if err != nil {
+		t.Fatalf("unexpected error from SnapshotResolver: %v", err)
+	}
+	if dbfile != filepath.Join(rootDir, snapshotID1, dbfileName) {
+		t.Fatalf("expected dbfile %s, got %s", filepath.Join(rootDir, snapshotID1, dbfileName), dbfile)
+	}
+	if len(walFiles) != 0 {
+		t.Fatalf("expected no wal files, got %v", walFiles)
+	}
 }
 
 func Test_SnapshotResolver_SingleFullSingleInc(t *testing.T) {
@@ -105,6 +117,27 @@ func Test_SnapshotResolver_SingleFullDoubleInc(t *testing.T) {
 	expectedWalFile2 := filepath.Join(rootDir, snapshotIncID2, walfileName)
 	if walFiles[1] != expectedWalFile2 {
 		t.Fatalf("expected wal file %s, got %s", expectedWalFile2, walFiles[1])
+	}
+
+	// Test also looking for the intermediate incremental snapshot.
+	dbfile, walFiles, err = SnapshotResolver(rootDir, snapshotIncID1)
+	if err != nil {
+		t.Fatalf("unexpected error from SnapshotResolver: %v", err)
+	}
+	if dbfile != filepath.Join(rootDir, snapshotFullID, dbfileName) {
+		t.Fatalf("expected dbfile %s, got %s", filepath.Join(rootDir, snapshotFullID, dbfileName), dbfile)
+	}
+	if len(walFiles) != 1 {
+		t.Fatalf("expected 1 wal file, got %v", walFiles)
+	}
+	if walFiles[0] != expectedWalFile1 {
+		t.Fatalf("expected wal file %s, got %s", expectedWalFile1, walFiles[0])
+	}
+
+	// Check that looking for a non-existent snapshot fails.
+	_, _, err = SnapshotResolver(rootDir, "non-existent-snapshot")
+	if err != ErrSnapshotNotFound {
+		t.Fatalf("expected ErrSnapshotNotFound, got: %v", err)
 	}
 }
 
