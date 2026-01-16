@@ -202,11 +202,41 @@ func (s *SnapshotManifest) Size() (int, error) {
 	return len(data), nil
 }
 
+// SizeBE returns the size in bytes of the marshaled SnapshotManifest
+// as a big-endian byte slice.
+func (s *SnapshotManifest) SizeBE() ([]byte, error) {
+	size, err := s.Size()
+	if err != nil {
+		return nil, err
+	}
+	var sizeBuf [4]byte
+	binary.BigEndian.PutUint32(sizeBuf[:], uint32(size))
+	return sizeBuf[:], nil
+}
+
 // TotalSize returns the total size in bytes of all files described in the manifest.
 // This is the number of bytes which needs to be read to obtain the manifest marshaled
 // as bytes and all associated files.
 func (s *SnapshotManifest) TotalSize() (int64, error) {
-	return 0, nil
+	// Start with manifest size.
+	sz, err := s.Size()
+	if err != nil {
+		return 0, err
+	}
+	var total int64 = int64(sz)
+
+	switch t := s.Type.(type) {
+	case *SnapshotManifest_DbPath:
+		total += int64(t.DbPath.SizeBytes)
+	case *SnapshotManifest_WalPath:
+		total += int64(t.WalPath.SizeBytes)
+	case *SnapshotManifest_Install:
+		total += int64(t.Install.DbFile.SizeBytes)
+		for _, w := range t.Install.WalFiles {
+			total += int64(w.SizeBytes)
+		}
+	}
+	return total, nil
 }
 
 // SnapshotManifestReader implements io.ReadCloser for reading a SnapshotManifest

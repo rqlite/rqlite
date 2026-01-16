@@ -242,7 +242,7 @@ func (s *Store) Open(id string) (*raft.SnapshotMeta, io.ReadCloser, error) {
 	if err != nil {
 		return nil, nil, err
 	}
-	retMeta.Size = sz + 4 // +4 for length prefix
+	retMeta.Size = sz + manifestHdrLen // + for length prefix
 
 	return retMeta, proto.NewSnapshotManifestReader(manifest), nil
 }
