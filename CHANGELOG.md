@@ -1,7 +1,7 @@
 ## v9.3.15 (January 16th 2026)
 ### Implementation changes and bug fixes
 - [PR #2447](https://github.com/rqlite/rqlite/pull/2447): Upgrade SQL parser.
-- [PR #2448](https://github.com/rqlite/rqlite/pull/2447): Upgrade SQLite to 3.5.2.
+- [PR #2448](https://github.com/rqlite/rqlite/pull/2448): Upgrade SQLite to 3.51.2.
 
 ## v9.3.14 (January 9th 2026)
 ### Implementation changes and bug fixes
