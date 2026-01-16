@@ -222,29 +222,22 @@ func (s *Store) Open(id string) (*raft.SnapshotMeta, io.ReadCloser, error) {
 	if err != nil {
 		return nil, nil, err
 	}
-	meta, err := readMeta(filepath.Join(s.dir, id))
-	if err != nil {
-		return nil, nil, err
-	}
 
-	// Need to make a snapshotMeta on the fly since this snapshot may actually
-	// consist of multiple files (DB + WALs).
-	retMeta := &raft.SnapshotMeta{
-		Version:            meta.Version,
-		ID:                 meta.ID,
-		Index:              meta.Index,
-		Term:               meta.Term,
-		Configuration:      meta.Configuration,
-		ConfigurationIndex: meta.ConfigurationIndex,
-	}
-
+	// Start with the meta for the requested snaphot. However its size
+	// -- what we send over the network -- is a combo of the manifest and
+	// its files, and the manifest size header.
 	sz, err := manifest.TotalSize()
 	if err != nil {
 		return nil, nil, err
 	}
-	retMeta.Size = sz + manifestHdrLen // + for length prefix
 
-	return retMeta, proto.NewSnapshotManifestReader(manifest), nil
+	meta, err := readMeta(filepath.Join(s.dir, id))
+	if err != nil {
+		return nil, nil, err
+	}
+	meta.Size = sz + manifestHdrLen // + for length prefix
+
+	return meta.SnapshotMeta, proto.NewSnapshotManifestReader(manifest), nil
 }
 
 // Reap reaps all snapshots, except the most recent one. Returns the number of
