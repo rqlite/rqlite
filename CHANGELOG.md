@@ -1,3 +1,7 @@
+## v9.3.15 (unreleased)
+### Implementation changes and bug fixes
+- [PR #2447](https://github.com/rqlite/rqlite/pull/2447): Upgrade SQL parser.
+
 ## v9.3.14 (January 9th 2025)
 ### Implementation changes and bug fixes
 - [PR #2444](https://github.com/rqlite/rqlite/pull/2444): Increase WAL Checkpoint busy timeout to 250ms.
