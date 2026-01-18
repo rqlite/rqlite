@@ -169,7 +169,7 @@ jobs:
           goarch: mips64le
     resource_class: large
 
-  end_to_end_single:
+  build_binaries_for_e2e:
     docker:
       - image: << pipeline.parameters.primary_image >>
     steps:
@@ -177,6 +177,19 @@ jobs:
       - restore_and_save_cache
       - run: go version
       - run: go install ./...
+      - persist_to_workspace:
+          root: /home/circleci
+          paths:
+            - go/bin
+    resource_class: large
+
+  end_to_end_single:
+    docker:
+      - image: << pipeline.parameters.primary_image >>
+    steps:
+      - checkout
+      - attach_workspace:
+          at: /home/circleci
       - run:
           command: python3 system_test/e2e/single_node.py
           environment:
@@ -188,8 +201,8 @@ jobs:
       - image: << pipeline.parameters.primary_image >>
     steps:
       - checkout
-      - restore_and_save_cache
-      - run: go install ./...
+      - attach_workspace:
+          at: /home/circleci
       - run:
           command: |
             cd system_test/e2e
@@ -203,8 +216,8 @@ jobs:
       - image: << pipeline.parameters.primary_image >>
     steps:
       - checkout
-      - restore_and_save_cache
-      - run: go install ./...
+      - attach_workspace:
+          at: /home/circleci
       - run:
           command: python3 system_test/e2e/joining.py
           environment:
@@ -218,8 +231,8 @@ jobs:
       RQLITED_PATH: /home/circleci/go/bin/rqlited
     steps:
       - checkout
-      - restore_and_save_cache
-      - run: go install ./...
+      - attach_workspace:
+          at: /home/circleci
       - run: python3 system_test/e2e/multi_node.py
       - run: python3 system_test/e2e/multi_node_adv.py
     resource_class: large
@@ -231,8 +244,8 @@ jobs:
       - image: gcr.io/etcd-development/etcd:v3.5.1
     steps:
       - checkout
-      - restore_and_save_cache
-      - run: go install ./...
+      - attach_workspace:
+          at: /home/circleci
       - run:
           command: python3 system_test/e2e/auto_clustering.py
           environment:
@@ -254,9 +267,7 @@ jobs:
         # All other required env vars for GCS and S3 are set via CircleCI project settings
     steps:
       - checkout
-      - restore_and_save_cache
-      # Build rqlite now, which will give time for minio to come up
-      - run: go install ./...
+      - run: sleep 5 # wait for minio to start
       - run: mc alias set myminio http://minio:9000 minioadmin minioadmin
       - run: mc mb myminio/minio-bucket
       - run:
@@ -272,8 +283,8 @@ jobs:
       - image: << pipeline.parameters.primary_image >>
     steps:
       - checkout
-      - restore_and_save_cache
-      - run: go install ./...
+      - attach_workspace:
+          at: /home/circleci
       - run:
           command: python3 system_test/e2e/cdc.py
           environment:
@@ -285,8 +296,8 @@ jobs:
       - image: << pipeline.parameters.primary_image >>
     steps:
       - checkout
-      - restore_and_save_cache
-      - run: go install ./...
+      - attach_workspace:
+          at: /home/circleci
       - run: mkdir /home/circleci/extensions
       - run: mkdir /home/circleci/extensions-misc
       - run: gcc -g -fPIC -shared db/testdata/rot13.c -o /home/circleci/extensions/rot13.so
@@ -311,8 +322,8 @@ jobs:
       - image: << pipeline.parameters.primary_image >>
     steps:
       - checkout
-      - restore_and_save_cache
-      - run: go install ./...
+      - attach_workspace:
+          at: /home/circleci
       - run:
           command: python3 system_test/e2e/shell.py
           environment:
@@ -335,12 +346,33 @@ workflows:
       - test_even_race
       - test_odd
       - test_odd_race
-      - end_to_end_single
-      - end_to_end_multi
-      - end_to_end_joining
-      - end_to_end_autoclustering
-      - end_to_end_auto_state
-      - end_to_end_upgrade
-      - end_to_end_cdc
-      - end_to_end_extensions
-      - end_to_end_shell
+
+      - build_binaries_for_e2e
+
+      - end_to_end_single:
+          requires:
+            - build_binaries_for_e2e
+      - end_to_end_multi:
+          requires:
+            - build_binaries_for_e2e
+      - end_to_end_joining:
+          requires:
+            - build_binaries_for_e2e
+      - end_to_end_autoclustering:
+          requires:
+            - build_binaries_for_e2e
+      - end_to_end_auto_state:
+          requires:
+            - build_binaries_for_e2e
+      - end_to_end_upgrade:
+          requires:
+            - build_binaries_for_e2e
+      - end_to_end_cdc:
+          requires:
+            - build_binaries_for_e2e
+      - end_to_end_extensions:
+          requires:
+            - build_binaries_for_e2e
+      - end_to_end_shell:
+          requires:
+            - build_binaries_for_e2e
