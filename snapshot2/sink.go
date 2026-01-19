@@ -25,6 +25,10 @@ type sinker interface {
 	io.WriteCloser
 }
 
+type fullChecker interface {
+	FullNeeded() (bool, error)
+}
+
 // Sink is a sink for writing snapshot data to a Snapshot store.
 //
 // This sink is adaptive. It can handle multiple types of snapshot data,
@@ -42,15 +46,18 @@ type Sink struct {
 	header *proto.SnapshotHeader
 	sinkW  sinker
 
+	fn fullChecker
+
 	logger *log.Logger
 }
 
 // NewSink creates a new Sink object. It takes the root snapshot directory
 // and the snapshot metadata.
-func NewSink(dir string, meta *raft.SnapshotMeta) *Sink {
+func NewSink(dir string, meta *raft.SnapshotMeta, fn fullChecker) *Sink {
 	return &Sink{
 		dir:    dir,
 		meta:   meta,
+		fn:     fn,
 		logger: log.New(log.Writer(), "[snapshot-sink] ", log.LstdFlags),
 	}
 }
@@ -103,6 +110,15 @@ func (s *Sink) Write(p []byte) (n int, err error) {
 			// This is because it must be an incremental snapshot.
 			if len(s.header.WalHeaders) != 1 {
 				return n, ErrTooManyWALs
+			}
+			if s.fn != nil {
+				fullNeeded, err := s.fn.FullNeeded()
+				if err != nil {
+					return n, err
+				}
+				if fullNeeded {
+					return n, fmt.Errorf("full snapshot needed before incremental can be applied")
+				}
 			}
 			s.sinkW = NewIncrementalSink(s.snapTmpDirPath, s.header.WalHeaders[0])
 		} else {

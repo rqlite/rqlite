@@ -127,7 +127,7 @@ func (s *Store) Create(version raft.SnapshotVersion, index, term uint64, configu
 		Term:               term,
 		Configuration:      configuration,
 		ConfigurationIndex: configurationIndex,
-	})
+	}, s)
 	if err := sink.Open(); err != nil {
 		return nil, err
 	}

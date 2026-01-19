@@ -158,6 +158,46 @@ func Test_StoreCreateCancel(t *testing.T) {
 	}
 }
 
+// Test_Store_CreateIncrementalFirst_Fail tests that creating an incremental snapshot
+// in an empty store fails as expected. All Stores mut start with a full snapshot.
+func Test_Store_CreateIncrementalFirst_Fail(t *testing.T) {
+	dir := t.TempDir()
+	store, err := NewStore(dir)
+	if err != nil {
+		t.Fatalf("Failed to create new store: %v", err)
+	}
+	store.SetFullNeeded()
+
+	sink := NewSink(store.Dir(), makeRaftMeta("1234", 45, 1, 40), store)
+	if sink == nil {
+		t.Fatalf("Failed to create new sink")
+	}
+	if err := sink.Open(); err != nil {
+		t.Fatalf("Failed to open sink: %v", err)
+	}
+	defer sink.Cancel()
+
+	// Make the streamer.
+	streamer, err := proto.NewSnapshotStreamer("", "testdata/db-and-wals/wal-00")
+	if err != nil {
+		t.Fatalf("Failed to create SnapshotStreamer: %v", err)
+	}
+	if err := streamer.Open(); err != nil {
+		t.Fatalf("Failed to open SnapshotStreamer: %v", err)
+	}
+	defer func() {
+		if err := streamer.Close(); err != nil {
+			t.Fatalf("Failed to close SnapshotStreamer: %v", err)
+		}
+	}()
+
+	// Copy from streamer into sink.
+	_, err = io.Copy(sink, streamer)
+	if err == nil {
+		t.Fatalf("Expected error when writing incremental snapshot sink in empty store, got nil")
+	}
+}
+
 func Test_Store_CreateThenList(t *testing.T) {
 	dir := t.TempDir()
 	store, err := NewStore(dir)
@@ -173,50 +213,8 @@ func Test_Store_CreateThenList(t *testing.T) {
 		t.Errorf("Expected 0 snapshots, got %d", len(snaps))
 	}
 
-	createSnapshot := func(id string, index, term, cfgIndex uint64, file string) {
-		sink := NewSink(store.Dir(), makeRaftMeta(id, index, term, cfgIndex))
-		if sink == nil {
-			t.Fatalf("Failed to create new sink")
-		}
-		if err := sink.Open(); err != nil {
-			t.Fatalf("Failed to open sink: %v", err)
-		}
-
-		dbFile := ""
-		walFile := []string{}
-		if db.IsValidSQLiteFile(file) {
-			dbFile = file
-		} else {
-			walFile = append(walFile, file)
-		}
-
-		// Make the streamer.
-		streamer, err := proto.NewSnapshotStreamer(dbFile, walFile...)
-		if err != nil {
-			t.Fatalf("Failed to create SnapshotStreamer: %v", err)
-		}
-		if err := streamer.Open(); err != nil {
-			t.Fatalf("Failed to open SnapshotStreamer: %v", err)
-		}
-		defer func() {
-			if err := streamer.Close(); err != nil {
-				t.Fatalf("Failed to close SnapshotStreamer: %v", err)
-			}
-		}()
-
-		// Copy from streamer into sink.
-		_, err = io.Copy(sink, streamer)
-		if err != nil {
-			t.Fatalf("Failed to copy snapshot data to sink: %v", err)
-		}
-
-		if err := sink.Close(); err != nil {
-			t.Fatalf("Failed to close sink: %v", err)
-		}
-	}
-
-	createSnapshot("2-1017-1704807719996", 1017, 2, 1, "testdata/db-and-wals/backup.db")
-	createSnapshot("2-1131-1704807720976", 1131, 2, 1, "testdata/db-and-wals/wal-00")
+	createSnapshotInStore(t, store, "2-1017-1704807719996", 1017, 2, 1, "testdata/db-and-wals/backup.db")
+	createSnapshotInStore(t, store, "2-1131-1704807720976", 1131, 2, 1, "testdata/db-and-wals/wal-00")
 
 	if store.Len() != 2 {
 		t.Errorf("Expected store to have 2 snapshots, got %d", store.Len())
@@ -323,11 +321,46 @@ func makeRaftMeta(id string, index, term, cfgIndex uint64) *raft.SnapshotMeta {
 	}
 }
 
-func mustOpenFile(t *testing.T, path string) *os.File {
+func createSnapshotInStore(t *testing.T, store *Store, id string, index, term, cfgIndex uint64, file string) {
 	t.Helper()
-	fd, err := os.Open(path)
-	if err != nil {
-		t.Fatalf("Failed to open file: %v", err)
+
+	sink := NewSink(store.Dir(), makeRaftMeta(id, index, term, cfgIndex), store)
+	if sink == nil {
+		t.Fatalf("Failed to create new sink")
 	}
-	return fd
+	if err := sink.Open(); err != nil {
+		t.Fatalf("Failed to open sink: %v", err)
+	}
+
+	dbFile := ""
+	walFile := []string{}
+	if db.IsValidSQLiteFile(file) {
+		dbFile = file
+	} else {
+		walFile = append(walFile, file)
+	}
+
+	// Make the streamer.
+	streamer, err := proto.NewSnapshotStreamer(dbFile, walFile...)
+	if err != nil {
+		t.Fatalf("Failed to create SnapshotStreamer: %v", err)
+	}
+	if err := streamer.Open(); err != nil {
+		t.Fatalf("Failed to open SnapshotStreamer: %v", err)
+	}
+	defer func() {
+		if err := streamer.Close(); err != nil {
+			t.Fatalf("Failed to close SnapshotStreamer: %v", err)
+		}
+	}()
+
+	// Copy from streamer into sink.
+	_, err = io.Copy(sink, streamer)
+	if err != nil {
+		t.Fatalf("Failed to copy snapshot data to sink: %v", err)
+	}
+
+	if err := sink.Close(); err != nil {
+		t.Fatalf("Failed to close sink: %v", err)
+	}
 }
