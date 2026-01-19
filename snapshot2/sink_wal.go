@@ -10,23 +10,23 @@ import (
 	"github.com/rqlite/rqlite/v9/snapshot2/proto"
 )
 
-// WALSink is a sink for writing locally-generated WAL snapshot data to a Snapshot store.
-type WALSink struct {
+// IncrementalSink is a sink for writing locally-generated WAL snapshot data to a Snapshot store.
+type IncrementalSink struct {
 	dir    string
 	header *proto.Header
 	file   *os.File
 }
 
-// NewWALSink creates a new WALSink object.
-func NewWALSink(dir string, m *proto.Header) *WALSink {
-	return &WALSink{
+// NewIncrementalSink creates a new IncrementalSink object.
+func NewIncrementalSink(dir string, m *proto.Header) *IncrementalSink {
+	return &IncrementalSink{
 		dir:    dir,
 		header: m,
 	}
 }
 
 // Open opens the sink for writing.
-func (s *WALSink) Open() error {
+func (s *IncrementalSink) Open() error {
 	f, err := os.Create(filepath.Join(s.dir, walfileName))
 	if err != nil {
 		return err
@@ -36,7 +36,7 @@ func (s *WALSink) Open() error {
 }
 
 // Write writes data to the sink.
-func (s *WALSink) Write(p []byte) (n int, err error) {
+func (s *IncrementalSink) Write(p []byte) (n int, err error) {
 	return s.file.Write(p)
 }
 
@@ -44,7 +44,7 @@ func (s *WALSink) Write(p []byte) (n int, err error) {
 //
 // On Close, the file size and basic validity checks are performed. If
 // the header includes a CRC32 checksum, that is also verified.
-func (s *WALSink) Close() error {
+func (s *IncrementalSink) Close() error {
 	defer s.file.Close()
 
 	sz, err := fileSize(s.file.Name())
@@ -69,4 +69,9 @@ func (s *WALSink) Close() error {
 		}
 	}
 	return nil
+}
+
+// WALFile returns the path to the installed WAL file.
+func (s *IncrementalSink) WALFile() string {
+	return s.file.Name()
 }

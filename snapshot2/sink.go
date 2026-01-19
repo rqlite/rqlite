@@ -104,7 +104,7 @@ func (s *Sink) Write(p []byte) (n int, err error) {
 			if len(s.header.WalHeaders) != 1 {
 				return n, ErrTooManyWALs
 			}
-			s.sinkW = NewWALSink(s.snapTmpDirPath, s.header.WalHeaders[0])
+			s.sinkW = NewIncrementalSink(s.snapTmpDirPath, s.header.WalHeaders[0])
 		} else {
 			return n, fmt.Errorf("unrecognized snapshot header")
 		}

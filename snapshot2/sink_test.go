@@ -1,20 +1,23 @@
 package snapshot2
 
 import (
+	"fmt"
 	"io"
 	"os"
 	"testing"
 
+	"github.com/rqlite/rqlite/v9/command/encoding"
+	"github.com/rqlite/rqlite/v9/db"
 	"github.com/rqlite/rqlite/v9/snapshot2/proto"
 )
 
 func Test_NewFullSink(t *testing.T) {
-	install, err := proto.NewSnapshotHeader("testdata/db-and-wals/full2.db")
+	hdr, err := proto.NewSnapshotHeader("testdata/db-and-wals/full2.db")
 	if err != nil {
 		t.Fatalf("unexpected error creating manifest: %s", err.Error())
 	}
 
-	sink := NewFullSink(t.TempDir(), install)
+	sink := NewFullSink(t.TempDir(), hdr)
 	if sink == nil {
 		t.Fatalf("expected non-nil Sink")
 	}
@@ -45,22 +48,15 @@ func Test_FullSink_SingleDBFile(t *testing.T) {
 		t.Fatalf("unexpected error closing sink: %s", err.Error())
 	}
 
-	// Verify file exists in target dir.
-	if !fileExists(sink.DBFile()) {
-		t.Fatalf("expected file %s to exist, but does not", sink.DBFile())
-	}
-
+	// Installed DB file should be byte-for-byte identical to source.
 	if !filesIdentical("testdata/db-and-wals/full2.db", sink.DBFile()) {
 		t.Fatalf("expected file %s to be identical to source", sink.DBFile())
-	}
-	if sink.NumWALFiles() != 0 {
-		t.Fatalf("expected 0 WAL files, got %d", sink.NumWALFiles())
 	}
 }
 
 func Test_FullSink_SingleDBFile_SingleWALFile(t *testing.T) {
 	header, err := proto.NewSnapshotHeader(
-		"testdata/db-and-wals/full2.db",
+		"testdata/db-and-wals/backup.db",
 		"testdata/db-and-wals/wal-00")
 	if err != nil {
 		t.Fatalf("unexpected error creating manifest: %s", err.Error())
@@ -71,7 +67,7 @@ func Test_FullSink_SingleDBFile_SingleWALFile(t *testing.T) {
 		t.Fatalf("unexpected error opening sink: %s", err.Error())
 	}
 
-	for _, filePath := range []string{"testdata/db-and-wals/full2.db", "testdata/db-and-wals/wal-00"} {
+	for _, filePath := range []string{"testdata/db-and-wals/backup.db", "testdata/db-and-wals/wal-00"} {
 		fd, err := os.Open(filePath)
 		if err != nil {
 			t.Fatalf("unexpected error opening source file %s: %s", filePath, err.Error())
@@ -87,22 +83,25 @@ func Test_FullSink_SingleDBFile_SingleWALFile(t *testing.T) {
 		t.Fatalf("unexpected error closing sink: %s", err.Error())
 	}
 
-	if !filesIdentical("testdata/db-and-wals/full2.db", sink.DBFile()) {
-		t.Fatalf("expected file %s to be identical to source", sink.DBFile())
+	// Check the database state inside the Store.
+	dbPath := sink.DBFile()
+	checkDB, err := db.Open(dbPath, false, true)
+	if err != nil {
+		t.Fatalf("failed to open database at %s: %s", dbPath, err)
 	}
-
-	if sink.NumWALFiles() != 1 {
-		t.Fatalf("expected 1 WAL file, got %d", sink.NumWALFiles())
+	defer checkDB.Close()
+	rows, err := checkDB.QueryStringStmt("SELECT COUNT(*) FROM foo")
+	if err != nil {
+		t.Fatalf("failed to query database: %s", err)
 	}
-	targetWALPath := sink.WALFiles()[0]
-	if !filesIdentical("testdata/db-and-wals/wal-00", targetWALPath) {
-		t.Fatalf("expected file %s to be identical to source", targetWALPath)
+	if exp, got := `[{"columns":["COUNT(*)"],"types":["integer"],"values":[[1]]}]`, asJSON(rows); exp != got {
+		t.Fatalf("unexpected results for query exp: %s got: %s", exp, got)
 	}
 }
 
 func Test_FullSink_SingleDBFile_MultiWALFile(t *testing.T) {
 	header, err := proto.NewSnapshotHeader(
-		"testdata/db-and-wals/full2.db",
+		"testdata/db-and-wals/backup.db",
 		"testdata/db-and-wals/wal-00",
 		"testdata/db-and-wals/wal-01")
 	if err != nil {
@@ -114,7 +113,10 @@ func Test_FullSink_SingleDBFile_MultiWALFile(t *testing.T) {
 		t.Fatalf("unexpected error opening sink: %s", err.Error())
 	}
 
-	for _, filePath := range []string{"testdata/db-and-wals/full2.db", "testdata/db-and-wals/wal-00", "testdata/db-and-wals/wal-01"} {
+	for _, filePath := range []string{
+		"testdata/db-and-wals/backup.db",
+		"testdata/db-and-wals/wal-00",
+		"testdata/db-and-wals/wal-01"} {
 		fd, err := os.Open(filePath)
 		if err != nil {
 			t.Fatalf("unexpected error opening source file %s: %s", filePath, err.Error())
@@ -130,19 +132,62 @@ func Test_FullSink_SingleDBFile_MultiWALFile(t *testing.T) {
 		t.Fatalf("unexpected error closing sink: %s", err.Error())
 	}
 
-	if !filesIdentical("testdata/db-and-wals/full2.db", sink.DBFile()) {
-		t.Fatalf("expected file %s to be identical to source", sink.DBFile())
+	// Check the database state inside the Store.
+	dbPath := sink.DBFile()
+	checkDB, err := db.Open(dbPath, false, true)
+	if err != nil {
+		t.Fatalf("failed to open database at %s: %s", dbPath, err)
+	}
+	defer checkDB.Close()
+	rows, err := checkDB.QueryStringStmt("SELECT COUNT(*) FROM foo")
+	if err != nil {
+		t.Fatalf("failed to query database: %s", err)
+	}
+	if exp, got := `[{"columns":["COUNT(*)"],"types":["integer"],"values":[[2]]}]`, asJSON(rows); exp != got {
+		t.Fatalf("unexpected results for query exp: %s got: %s", exp, got)
+	}
+}
+
+func Test_IncrementalSink(t *testing.T) {
+	hdr, err := proto.NewSnapshotHeader("", "testdata/db-and-wals/wal-00")
+	if err != nil {
+		t.Fatalf("unexpected error creating manifest: %s", err.Error())
 	}
 
-	if sink.NumWALFiles() != 2 {
-		t.Fatalf("expected 2 WAL files, got %d", sink.NumWALFiles())
+	sink := NewIncrementalSink(t.TempDir(), hdr.WalHeaders[0])
+	if sink == nil {
+		t.Fatalf("expected non-nil Sink")
 	}
-	targetWALPath0 := sink.WALFiles()[0]
-	if !filesIdentical("testdata/db-and-wals/wal-00", targetWALPath0) {
-		t.Fatalf("expected file %s to be identical to source", targetWALPath0)
+
+	if err := sink.Open(); err != nil {
+		t.Fatalf("unexpected error opening sink: %s", err.Error())
 	}
-	targetWALPath1 := sink.WALFiles()[1]
-	if !filesIdentical("testdata/db-and-wals/wal-01", targetWALPath1) {
-		t.Fatalf("expected file %s to be identical to source", targetWALPath1)
+
+	fd, err := os.Open("testdata/db-and-wals/wal-00")
+	if err != nil {
+		t.Fatalf("unexpected error opening source wal file: %s", err.Error())
 	}
+	defer fd.Close()
+
+	if _, err := io.Copy(sink, fd); err != nil {
+		t.Fatalf("unexpected error copying data to sink: %s", err.Error())
+	}
+
+	if err := sink.Close(); err != nil {
+		t.Fatalf("unexpected error closing sink: %s", err.Error())
+	}
+
+	// Installed WAL file should be byte-for-byte identical to source.
+	if !filesIdentical("testdata/db-and-wals/wal-00", sink.WALFile()) {
+		t.Fatalf("expected file %s to be identical to source", sink.WALFile())
+	}
+}
+
+func asJSON(v any) string {
+	enc := encoding.Encoder{}
+	b, err := enc.JSONMarshal(v)
+	if err != nil {
+		panic(fmt.Sprintf("failed to JSON marshal value: %s", err.Error()))
+	}
+	return string(b)
 }

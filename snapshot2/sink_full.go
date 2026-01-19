@@ -189,25 +189,18 @@ func (s *FullSink) Close() error {
 		}
 	}
 
+	if err := s.closeFile(); err != nil {
+		return err
+	}
+
 	// This is when we checkpoint all WALs into the SQLite file, and end up
 	// with a single DB file representing the snapshot state.
-
-	return s.closeFile()
+	return db.ReplayWAL(s.dbFile, s.walFiles, false)
 }
 
-// DBFile returns the path to the installed DB file.
+// DBFile returns the path to the checkpointed DB file.
 func (s *FullSink) DBFile() string {
 	return s.dbFile
-}
-
-// WALFiles returns the paths to the installed WAL files.
-func (s *FullSink) WALFiles() []string {
-	return s.walFiles
-}
-
-// NumWALFiles returns the number of WAL files.
-func (s *FullSink) NumWALFiles() int {
-	return len(s.walFiles)
 }
 
 func (s *FullSink) validateHeader() error {
