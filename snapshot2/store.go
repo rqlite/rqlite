@@ -419,7 +419,7 @@ func (s *Store) Reap() (retN int, retErr error) {
 	}
 
 	// Remove .tmp suffix from the dir
-	if err := os.Rename(consolidatedSnapPathTmp, newestFullSnapPath); err != nil {
+	if err := os.Rename(consolidatedSnapPathTmp, nonTmpName(consolidatedSnapPathTmp)); err != nil {
 		return retN, err
 	}
 	if err := syncDir(s.dir); err != nil {
