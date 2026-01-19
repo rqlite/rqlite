@@ -117,7 +117,7 @@ func (s *Sink) Write(p []byte) (n int, err error) {
 		return n, nil
 	}
 
-	// We have a manifest, just write directly to the underlying sink.
+	// We have a header, just write directly to the underlying sink.
 	return s.sinkW.Write(p)
 }
 
