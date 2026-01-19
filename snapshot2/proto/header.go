@@ -88,30 +88,14 @@ func (s *SnapshotHeader) Marshal() ([]byte, error) {
 	return pb.Marshal(s)
 }
 
-type streamerState int
-
-const (
-	stateHeaderLen streamerState = iota
-	stateHeader
-	stateDBFile
-	stateWALFiles
-	stateDone
-)
-
 // SnapshotStreamer implements io.ReadCloser for streaming a snapshot's
 // data, including the header and associated files.
 type SnapshotStreamer struct {
 	dbPath   string
 	walPaths []string
-	state    streamerState
 	currWAL  int
 
-	hdr      *SnapshotHeader
-	hdrBuf   []byte
-	hdrBufRC io.Reader
-
-	hdrLenBEBuf   [HeaderSizeLen]byte
-	hdrLenBEBufRC io.Reader
+	hdr *SnapshotHeader
 
 	dbFD   *os.File
 	walFDs []*os.File
@@ -126,7 +110,6 @@ func NewSnapshotStreamer(dbPath string, walPaths ...string) (*SnapshotStreamer, 
 		return nil, err
 	}
 	return &SnapshotStreamer{
-		state:    stateHeaderLen,
 		dbPath:   dbPath,
 		walPaths: walPaths,
 		hdr:      sh,
@@ -151,21 +134,20 @@ func (s *SnapshotStreamer) Open() error {
 		s.walFDs = append(s.walFDs, walFD)
 	}
 
-	// Prepare the header for reading.
-	buf, err := s.hdr.Marshal()
+	// Build the multi-reader which will return data in the correct order.
+
+	hdrBuf, err := s.hdr.Marshal()
 	if err != nil {
 		return err
 	}
-	s.hdrBuf = buf
-	s.hdrBufRC = bytes.NewReader(s.hdrBuf)
+	hdrBufR := bytes.NewReader(hdrBuf)
+	var hdrLenBEBuf [HeaderSizeLen]byte
+	binary.BigEndian.PutUint32(hdrLenBEBuf[:], uint32(len(hdrBuf)))
+	hdrLenBufR := bytes.NewReader(hdrLenBEBuf[:])
 
-	binary.BigEndian.PutUint32(s.hdrLenBEBuf[:], uint32(len(buf)))
-	s.hdrLenBEBufRC = bytes.NewReader(s.hdrLenBEBuf[:])
-
-	// Prepare the database file and WAL files for reading.
 	var readers []io.Reader
-	readers = append(readers, s.hdrLenBEBufRC)
-	readers = append(readers, s.hdrBufRC)
+	readers = append(readers, hdrLenBufR)
+	readers = append(readers, hdrBufR)
 	if s.dbFD != nil {
 		readers = append(readers, s.dbFD)
 	}
@@ -174,6 +156,7 @@ func (s *SnapshotStreamer) Open() error {
 		readers = append(readers, w)
 	}
 	s.multiR = io.MultiReader(readers...)
+
 	return nil
 }
 
