@@ -3,6 +3,7 @@ package proto
 import (
 	"bytes"
 	"encoding/binary"
+	"fmt"
 	"io"
 	"os"
 
@@ -39,7 +40,20 @@ func NewHeaderFromFile(path string, crc32 bool) (*Header, error) {
 }
 
 // NewSnapshotHeader creates a new SnapshotHeader for the given DB and WAL file paths.
+// dbPath may be empty, in which case no DB header is included. walPaths may be empty.
+//
+// This type enforces certain invariants:
+// - At least one of dbPath or walPaths must be non-empty.
+// - If only WALs are provided, then only one WAL is allowed.
 func NewSnapshotHeader(dbPath string, walPaths ...string) (*SnapshotHeader, error) {
+	if dbPath == "" && len(walPaths) == 0 {
+		return nil, fmt.Errorf("at least one of dbPath or walPaths must be provided")
+	}
+
+	if dbPath == "" && len(walPaths) > 1 {
+		return nil, fmt.Errorf("when dbPath is empty, only one WAL path is allowed")
+	}
+
 	dhHeader, err := NewHeaderFromFile(dbPath, true)
 	if err != nil {
 		return nil, err
@@ -89,6 +103,15 @@ func (s *SnapshotHeader) TotalSize() (int64, error) {
 // Marshal marshals the SnapshotHeader to a byte slice.
 func (s *SnapshotHeader) Marshal() ([]byte, error) {
 	return pb.Marshal(s)
+}
+
+// UnmarshalSnapshotHeader unmarshals a SnapshotHeader from the given byte slice.
+func UnmarshalSnapshotHeader(data []byte) (*SnapshotHeader, error) {
+	sh := &SnapshotHeader{}
+	if err := pb.Unmarshal(data, sh); err != nil {
+		return nil, err
+	}
+	return sh, nil
 }
 
 // SnapshotStreamer implements io.ReadCloser for streaming a snapshot's
