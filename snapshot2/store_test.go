@@ -9,7 +9,6 @@ import (
 	"path/filepath"
 	"sort"
 	"testing"
-	"time"
 
 	"github.com/hashicorp/raft"
 	"github.com/rqlite/rqlite/v9/db"
@@ -219,7 +218,7 @@ func Test_Store_CreateThenList(t *testing.T) {
 	}
 
 	createSnapshotInStore(t, store, "2-1017-1704807719996", 1017, 2, 1, "testdata/db-and-wals/backup.db")
-	createSnapshotInStore(t, store, "2-1131-1704807720976", 1131, 2, 1, "testdata/db-and-wals/wal-00")
+	createSnapshotInStore(t, store, "2-1131-1704807720976", 1131, 2, 1, "", "testdata/db-and-wals/wal-00")
 
 	if store.Len() != 2 {
 		t.Errorf("Expected store to have 2 snapshots, got %d", store.Len())
@@ -271,7 +270,7 @@ func Test_Store_EndToEndCycle(t *testing.T) {
 	if exp, got := 1, store0.Len(); exp != got {
 		t.Errorf("Expected store to have %d snapshots, got %d", exp, got)
 	}
-	createSnapshotInStore(t, store0, id2, 200, 2, 1, "testdata/db-and-wals/wal-00")
+	createSnapshotInStore(t, store0, id2, 200, 2, 1, "", "testdata/db-and-wals/wal-00")
 	if exp, got := 2, store0.Len(); exp != got {
 		t.Errorf("Expected store to have %d snapshots, got %d", exp, got)
 	}
@@ -415,7 +414,7 @@ func Test_Store_EndToEndCycle(t *testing.T) {
 	//////////////////////////////////////////////////////////////////////////////////
 	// Write a third snapshot to the first store, another incremental based on the second.
 	id3 := "2-300-1704807900000"
-	createSnapshotInStore(t, store0, id3, 100, 2, 1, "testdata/db-and-wals/wal-01")
+	createSnapshotInStore(t, store0, id3, 100, 2, 1, "", "testdata/db-and-wals/wal-01")
 	if exp, got := 3, store0.Len(); exp != got {
 		t.Errorf("Expected store to have %d snapshots, got %d", exp, got)
 	}
@@ -488,11 +487,6 @@ func Test_Store_EndToEndCycle(t *testing.T) {
 	if exp, got := `[{"columns":["COUNT(*)"],"types":["integer"],"values":[[2]]}]`, asJSON(rows); exp != got {
 		t.Fatalf("unexpected results for query exp: %s got: %s", exp, got)
 	}
-
-	fmt.Println("store0 is at ", store0.Dir())
-	fmt.Println("store1 is at ", store1.Dir())
-
-	time.Sleep(200 * time.Second)
 }
 
 func makeTestConfiguration(i, a string) raft.Configuration {
@@ -522,7 +516,7 @@ func makeRaftMeta(id string, index, term, cfgIndex uint64) *raft.SnapshotMeta {
 	}
 }
 
-func createSnapshotInStore(t *testing.T, store *Store, id string, index, term, cfgIndex uint64, file string) {
+func createSnapshotInStore(t *testing.T, store *Store, id string, index, term, cfgIndex uint64, dbFile string, walFiles ...string) {
 	t.Helper()
 
 	sink := NewSink(store.Dir(), makeRaftMeta(id, index, term, cfgIndex), store)
@@ -533,16 +527,8 @@ func createSnapshotInStore(t *testing.T, store *Store, id string, index, term, c
 		t.Fatalf("Failed to open sink: %v", err)
 	}
 
-	dbFile := ""
-	walFile := []string{}
-	if db.IsValidSQLiteFile(file) {
-		dbFile = file
-	} else {
-		walFile = append(walFile, file)
-	}
-
 	// Make the streamer.
-	streamer, err := proto.NewSnapshotStreamer(dbFile, walFile...)
+	streamer, err := proto.NewSnapshotStreamer(dbFile, walFiles...)
 	if err != nil {
 		t.Fatalf("Failed to create SnapshotStreamer: %v", err)
 	}
