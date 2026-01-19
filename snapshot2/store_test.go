@@ -1,10 +1,15 @@
 package snapshot2
 
 import (
+	"bytes"
+	"encoding/binary"
+	"fmt"
 	"io"
 	"os"
+	"path/filepath"
 	"sort"
 	"testing"
+	"time"
 
 	"github.com/hashicorp/raft"
 	"github.com/rqlite/rqlite/v9/db"
@@ -247,18 +252,247 @@ func Test_Store_CreateThenList(t *testing.T) {
 }
 
 // Test_Store_EndToEndCycle tests an end-to-end cycle of creating a Store,
-// creating sinks, and writing various types of snapshots.
-//
-// The snapshot is created on the fly, not by using Store.Open().
+// creating sinks, and writing various types of snapshots to other Stores.
 func Test_Store_EndToEndCycle(t *testing.T) {
-	dir := t.TempDir()
-	store, err := NewStore(dir)
+	store0, err := NewStore(t.TempDir())
 	if err != nil {
-		t.Fatalf("Failed to create new store: %v", err)
+		t.Fatalf("Failed to create source store: %v", err)
 	}
 
-	createSnapshotInStore(t, store, "2-1017-1704807719996", 1017, 2, 1, "testdata/db-and-wals/backup.db")
+	store1, err := NewStore(t.TempDir())
+	if err != nil {
+		t.Fatalf("Failed to create source store: %v", err)
+	}
 
+	id1 := "2-100-1704807719996"
+	id2 := "2-200-1704807800000"
+
+	createSnapshotInStore(t, store0, id1, 100, 2, 1, "testdata/db-and-wals/backup.db")
+	if exp, got := 1, store0.Len(); exp != got {
+		t.Errorf("Expected store to have %d snapshots, got %d", exp, got)
+	}
+	createSnapshotInStore(t, store0, id2, 200, 2, 1, "testdata/db-and-wals/wal-00")
+	if exp, got := 2, store0.Len(); exp != got {
+		t.Errorf("Expected store to have %d snapshots, got %d", exp, got)
+	}
+
+	snaps, err := store0.List()
+	if err != nil {
+		t.Fatalf("Failed to list snapshots: %v", err)
+	}
+	if len(snaps) != 2 {
+		t.Errorf("Expected 2 snapshots, got %d", len(snaps))
+	}
+	if exp, got := id1, snaps[0].ID; exp != got {
+		t.Errorf("Expected snapshot ID to be %s, got %s", exp, got)
+	}
+	if exp, got := id2, snaps[1].ID; exp != got {
+		t.Errorf("Expected snapshot ID to be %s, got %s", exp, got)
+	}
+
+	//////////////////////////////////////////////////////////////////////////////////
+	// Open the first snapshot, and write it to the second store.
+	meta, rc, err := store0.Open(id1)
+	if err != nil {
+		t.Fatalf("Failed to open snapshot: %v", err)
+	}
+	if meta.ID != id1 && meta.Index != 100 && meta.Term != 2 {
+		t.Errorf("Snapshot metadata does not match expected values")
+	}
+
+	dstSink, err := store1.Create(1, 1000, 2000, makeTestConfiguration("1", "localhost:1"), 1, nil)
+	if err != nil {
+		t.Fatalf("Failed to create sink in destination store: %v", err)
+	}
+	if _, err := io.Copy(dstSink, rc); err != nil {
+		t.Fatalf("Failed to copy snapshot data to destination store: %v", err)
+	}
+	if err := rc.Close(); err != nil {
+		t.Fatalf("Failed to close snapshot reader: %v", err)
+	}
+	if err := dstSink.Close(); err != nil {
+		t.Fatalf("Failed to close sink in destination store: %v", err)
+	}
+
+	// Open the snapshot in the second store, check its contents.
+	snaps, err = store1.List()
+	if err != nil {
+		t.Fatalf("Failed to list snapshots in destination store: %v", err)
+	}
+	if len(snaps) != 1 {
+		t.Errorf("Expected 1 snapshot in destination store, got %d", len(snaps))
+	}
+	meta, rc, err = store1.Open(snaps[0].ID)
+	if err != nil {
+		t.Fatalf("Failed to open snapshot in destination store: %v", err)
+	}
+
+	buf := &bytes.Buffer{}
+	if _, err := io.Copy(buf, rc); err != nil {
+		t.Fatalf("Failed to read snapshot data from destination store: %v", err)
+	}
+	if err := rc.Close(); err != nil {
+		t.Fatalf("Failed to close snapshot reader in destination store: %v", err)
+	}
+
+	dbPath, walPaths := persistStreamerData(t, buf)
+	if len(walPaths) != 0 {
+		t.Fatalf("Expected 0 WAL files, got %d", len(walPaths))
+	}
+	if !filesIdentical(dbPath, "testdata/db-and-wals/backup.db") {
+		t.Fatalf("Database file in snapshot does not match source")
+	}
+
+	//////////////////////////////////////////////////////////////////////////////////
+	// Open the second snapshot, and write it to the second store.
+	meta, rc, err = store0.Open(id2)
+	if err != nil {
+		t.Fatalf("Failed to open snapshot: %v", err)
+	}
+	if meta.ID != id2 && meta.Index != 200 && meta.Term != 2 {
+		t.Errorf("Snapshot metadata does not match expected values")
+	}
+
+	dstSink, err = store1.Create(1, 2000, 3000, makeTestConfiguration("1", "localhost:1"), 1, nil)
+	if err != nil {
+		t.Fatalf("Failed to create sink in destination store: %v", err)
+	}
+	if _, err := io.Copy(dstSink, rc); err != nil {
+		t.Fatalf("Failed to copy snapshot data to destination store: %v", err)
+	}
+	if err := rc.Close(); err != nil {
+		t.Fatalf("Failed to close snapshot reader: %v", err)
+	}
+	if err := dstSink.Close(); err != nil {
+		t.Fatalf("Failed to close sink in destination store: %v", err)
+	}
+
+	// Open the second snapshot in the second store, check its contents. When writing
+	// snapshot with both a database file and one (or more) WAL files from one store to
+	// another, the Sink writing to the second store will checkpoint the WAL files into
+	// the database file. Therefore, when we read back the snapshot from the second store,
+	// we expect to see only a database file, with no associated WAL files.
+	snaps, err = store1.List()
+	if err != nil {
+		t.Fatalf("Failed to list snapshots in destination store: %v", err)
+	}
+	if len(snaps) != 2 {
+		t.Errorf("Expected 1 snapshot in destination store, got %d", len(snaps))
+	}
+	meta, rc, err = store1.Open(snaps[1].ID)
+	if err != nil {
+		t.Fatalf("Failed to open snapshot in destination store: %v", err)
+	}
+
+	buf = &bytes.Buffer{}
+	if _, err := io.Copy(buf, rc); err != nil {
+		t.Fatalf("Failed to read snapshot data from destination store: %v", err)
+	}
+	if err := rc.Close(); err != nil {
+		t.Fatalf("Failed to close snapshot reader in destination store: %v", err)
+	}
+
+	dbPath, walPaths = persistStreamerData(t, buf)
+	if len(walPaths) != 0 {
+		t.Fatalf("Expected 0 WAL files, got %d", len(walPaths))
+	}
+
+	// Check the file, it should have the content of the backup plus the changes
+	// from the checkpointed WAL file.
+	checkDB, err := db.Open(dbPath, false, true)
+	if err != nil {
+		t.Fatalf("failed to open database at %s: %s", dbPath, err)
+	}
+	defer checkDB.Close()
+	rows, err := checkDB.QueryStringStmt("SELECT COUNT(*) FROM foo")
+	if err != nil {
+		t.Fatalf("failed to query database: %s", err)
+	}
+	if exp, got := `[{"columns":["COUNT(*)"],"types":["integer"],"values":[[1]]}]`, asJSON(rows); exp != got {
+		t.Fatalf("unexpected results for query exp: %s got: %s", exp, got)
+	}
+
+	//////////////////////////////////////////////////////////////////////////////////
+	// Write a third snapshot to the first store, another incremental based on the second.
+	id3 := "2-300-1704807900000"
+	createSnapshotInStore(t, store0, id3, 100, 2, 1, "testdata/db-and-wals/wal-01")
+	if exp, got := 3, store0.Len(); exp != got {
+		t.Errorf("Expected store to have %d snapshots, got %d", exp, got)
+	}
+
+	// Double check the first store.
+	if store0.Len() != 3 {
+		t.Errorf("Expected store to have 3 snapshots, got %d", store0.Len())
+	}
+
+	// Open the third snapshot, write it to the second store.
+	meta, rc, err = store0.Open(id3)
+	if err != nil {
+		t.Fatalf("Failed to open snapshot: %v", err)
+	}
+	if meta.ID != id3 && meta.Index != 100 && meta.Term != 2 {
+		t.Errorf("Snapshot metadata does not match expected values")
+	}
+
+	dstSink, err = store1.Create(1, 3000, 4000, makeTestConfiguration("1", "localhost:1"), 1, nil)
+	if err != nil {
+		t.Fatalf("Failed to create sink in destination store: %v", err)
+	}
+	if _, err := io.Copy(dstSink, rc); err != nil {
+		t.Fatalf("Failed to copy snapshot data to destination store: %v", err)
+	}
+	if err := rc.Close(); err != nil {
+		t.Fatalf("Failed to close snapshot reader: %v", err)
+	}
+	if err := dstSink.Close(); err != nil {
+		t.Fatalf("Failed to close sink in destination store: %v", err)
+	}
+
+	// Open the third snapshot in the second store, check its contents.
+	snaps, err = store1.List()
+	if err != nil {
+		t.Fatalf("Failed to list snapshots in destination store: %v", err)
+	}
+	if len(snaps) != 3 {
+		t.Errorf("Expected 3 snapshots in destination store, got %d", len(snaps))
+	}
+	meta, rc, err = store1.Open(snaps[2].ID)
+	if err != nil {
+		t.Fatalf("Failed to open snapshot in destination store: %v", err)
+	}
+
+	buf = &bytes.Buffer{}
+	if _, err := io.Copy(buf, rc); err != nil {
+		t.Fatalf("Failed to read snapshot data from destination store: %v", err)
+	}
+	if err := rc.Close(); err != nil {
+		t.Fatalf("Failed to close snapshot reader in destination store: %v", err)
+	}
+
+	dbPath, walPaths = persistStreamerData(t, buf)
+	if len(walPaths) != 0 {
+		t.Fatalf("Expected 0 WAL files, got %d", len(walPaths))
+	}
+
+	// Check the file, it should have the content of the backup plus the changes
+	// from the two checkpointed WAL files.
+	checkDB, err = db.Open(dbPath, false, true)
+	if err != nil {
+		t.Fatalf("failed to open database at %s: %s", dbPath, err)
+	}
+	defer checkDB.Close()
+	rows, err = checkDB.QueryStringStmt("SELECT COUNT(*) FROM foo")
+	if err != nil {
+		t.Fatalf("failed to query database: %s", err)
+	}
+	if exp, got := `[{"columns":["COUNT(*)"],"types":["integer"],"values":[[2]]}]`, asJSON(rows); exp != got {
+		t.Fatalf("unexpected results for query exp: %s got: %s", exp, got)
+	}
+
+	fmt.Println("store0 is at ", store0.Dir())
+	fmt.Println("store1 is at ", store1.Dir())
+
+	time.Sleep(200 * time.Second)
 }
 
 func makeTestConfiguration(i, a string) raft.Configuration {
@@ -330,4 +564,59 @@ func createSnapshotInStore(t *testing.T, store *Store, id string, index, term, c
 	if err := sink.Close(); err != nil {
 		t.Fatalf("Failed to close sink: %v", err)
 	}
+}
+
+func persistStreamerData(t *testing.T, buf *bytes.Buffer) (string, []string) {
+	t.Helper()
+
+	tmpDir := t.TempDir()
+	dbPath := ""
+	walPaths := []string{}
+
+	// Read header first.
+	hdr := &proto.SnapshotHeader{}
+	hdrSizeBuf := make([]byte, 4)
+	if _, err := buf.Read(hdrSizeBuf); err != nil {
+		t.Fatalf("Failed to read header size: %v", err)
+	}
+	hdrSize := binary.BigEndian.Uint32(hdrSizeBuf)
+	hdrBuf := make([]byte, hdrSize)
+	if _, err := buf.Read(hdrBuf); err != nil {
+		t.Fatalf("Failed to read header: %v", err)
+	}
+	hdr, err := proto.UnmarshalSnapshotHeader(hdrBuf)
+	if err != nil {
+		t.Fatalf("Failed to unmarshal header: %v", err)
+	}
+
+	// Read DB file if present.
+	if hdr.DbHeader != nil {
+		dbPath = tmpDir + "/db-file"
+		dbFile, err := os.Create(dbPath)
+		if err != nil {
+			t.Fatalf("Failed to create DB file: %v", err)
+		}
+		defer dbFile.Close()
+
+		if _, err := io.CopyN(dbFile, buf, int64(hdr.DbHeader.SizeBytes)); err != nil {
+			t.Fatalf("Failed to copy DB file data: %v", err)
+		}
+	}
+
+	// Read WAL files.
+	for i, walHdr := range hdr.WalHeaders {
+		walPath := filepath.Join(tmpDir, fmt.Sprintf("wal-file-%d", i))
+		walFile, err := os.Create(walPath)
+		if err != nil {
+			t.Fatalf("Failed to create WAL file: %v", err)
+		}
+		defer walFile.Close()
+
+		if _, err := io.CopyN(walFile, buf, int64(walHdr.SizeBytes)); err != nil {
+			t.Fatalf("Failed to copy WAL file data: %v", err)
+		}
+		walPaths = append(walPaths, walPath)
+	}
+
+	return dbPath, walPaths
 }
