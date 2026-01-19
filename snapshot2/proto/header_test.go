@@ -73,7 +73,135 @@ func Test_NewSnapshotHeader(t *testing.T) {
 	}
 }
 
-func Test_SnapshotStreamer_EndToEndSize(t *testing.T) {
+func Test_SnapshotStreamer_EndToEndSize_DBOnly(t *testing.T) {
+	tmpDBFile := mustWriteToFile(t, []byte("DB Content"))
+
+	streamer, err := NewSnapshotStreamer(tmpDBFile)
+	if err != nil {
+		t.Fatalf("NewSnapshotStreamer failed: %v", err)
+	}
+	if err := streamer.Open(); err != nil {
+		t.Fatalf("SnapshotStreamer Open failed: %v", err)
+	}
+
+	expectedReadLen, err := streamer.Len()
+	if err != nil {
+		t.Fatalf("Header TotalSize failed: %v", err)
+	}
+	totalRead := 0
+
+	// Read the first four bytes for header size. Do this by creating
+	// a buffer, reading into it, and decoding at a big endian uint32.
+	buf := make([]byte, HeaderSizeLen)
+	n, err := streamer.Read(buf)
+	if err != nil || n != HeaderSizeLen {
+		t.Fatalf("Failed to read header size: %v", err)
+	}
+	totalRead += n
+
+	buf = make([]byte, binary.BigEndian.Uint32(buf))
+	n, err = streamer.Read(buf)
+	if err != nil || n != len(buf) {
+		t.Fatalf("Failed to read header: %v", err)
+	}
+	totalRead += n
+	header, err := UnmarshalSnapshotHeader(buf)
+	if err != nil {
+		t.Fatalf("Failed to unmarshal header: %v", err)
+	}
+
+	// Read the database data into a buf and compare contents
+	dbBuf := make([]byte, header.DbHeader.SizeBytes)
+	n, err = streamer.Read(dbBuf)
+	if err != nil || uint64(n) != header.DbHeader.SizeBytes {
+		t.Fatalf("Failed to read DB data: %v", err)
+	}
+	totalRead += n
+	if string(dbBuf) != "DB Content" {
+		t.Fatalf("DB data does not match expected content")
+	}
+
+	// Ensure we have reached EOF
+	var eofBuf [1]byte
+	if _, err := streamer.Read(eofBuf[:]); err != io.EOF {
+		t.Fatalf("Expected EOF, got: %v", err)
+	}
+
+	if int64(totalRead) != expectedReadLen {
+		t.Fatalf("Total read size %d does not match expected length %d", totalRead, expectedReadLen)
+	}
+
+	// Confirm Close works
+	if err := streamer.Close(); err != nil {
+		t.Fatalf("SnapshotStreamer Close failed: %v", err)
+	}
+}
+
+func Test_SnapshotStreamer_EndToEndSize_WALOnly(t *testing.T) {
+	tmpWALFile := mustWriteToFile(t, []byte("WAL Content"))
+
+	streamer, err := NewSnapshotStreamer("", tmpWALFile)
+	if err != nil {
+		t.Fatalf("NewSnapshotStreamer failed: %v", err)
+	}
+	if err := streamer.Open(); err != nil {
+		t.Fatalf("SnapshotStreamer Open failed: %v", err)
+	}
+
+	expectedReadLen, err := streamer.Len()
+	if err != nil {
+		t.Fatalf("Header TotalSize failed: %v", err)
+	}
+	totalRead := 0
+
+	// Read the first four bytes for header size. Do this by creating
+	// a buffer, reading into it, and decoding at a big endian uint32.
+	buf := make([]byte, HeaderSizeLen)
+	n, err := streamer.Read(buf)
+	if err != nil || n != HeaderSizeLen {
+		t.Fatalf("Failed to read header size: %v", err)
+	}
+	totalRead += n
+
+	buf = make([]byte, binary.BigEndian.Uint32(buf))
+	n, err = streamer.Read(buf)
+	if err != nil || n != len(buf) {
+		t.Fatalf("Failed to read header: %v", err)
+	}
+	totalRead += n
+	header, err := UnmarshalSnapshotHeader(buf)
+	if err != nil {
+		t.Fatalf("Failed to unmarshal header: %v", err)
+	}
+
+	// Read the WAL data into a buf and compare contents
+	walBuf := make([]byte, header.WalHeaders[0].SizeBytes)
+	n, err = streamer.Read(walBuf)
+	if err != nil || uint64(n) != header.WalHeaders[0].SizeBytes {
+		t.Fatalf("Failed to read WAL data: %v", err)
+	}
+	totalRead += n
+	if string(walBuf) != "WAL Content" {
+		t.Fatalf("WAL data does not match expected content")
+	}
+
+	// Ensure we have reached EOF
+	var eofBuf [1]byte
+	if _, err := streamer.Read(eofBuf[:]); err != io.EOF {
+		t.Fatalf("Expected EOF, got: %v", err)
+	}
+
+	if int64(totalRead) != expectedReadLen {
+		t.Fatalf("Total read size %d does not match expected length %d", totalRead, expectedReadLen)
+	}
+
+	// Confirm Close works
+	if err := streamer.Close(); err != nil {
+		t.Fatalf("SnapshotStreamer Close failed: %v", err)
+	}
+}
+
+func Test_SnapshotStreamer_EndToEndSize_DBWAL(t *testing.T) {
 	tmpDBFile := mustWriteToFile(t, []byte("DB Content"))
 	tmpWALFile := mustWriteToFile(t, []byte("WAL Content"))
 
@@ -131,6 +259,94 @@ func Test_SnapshotStreamer_EndToEndSize(t *testing.T) {
 	totalRead += n
 	if string(walBuf) != "WAL Content" {
 		t.Fatalf("WAL data does not match expected content")
+	}
+
+	// Ensure we have reached EOF
+	var eofBuf [1]byte
+	if _, err := streamer.Read(eofBuf[:]); err != io.EOF {
+		t.Fatalf("Expected EOF, got: %v", err)
+	}
+
+	if int64(totalRead) != expectedReadLen {
+		t.Fatalf("Total read size %d does not match expected length %d", totalRead, expectedReadLen)
+	}
+
+	// Confirm Close works
+	if err := streamer.Close(); err != nil {
+		t.Fatalf("SnapshotStreamer Close failed: %v", err)
+	}
+}
+
+func Test_SnapshotStreamer_EndToEndSize_DBWALs(t *testing.T) {
+	tmpDBFile := mustWriteToFile(t, []byte("DB Content"))
+	tmpWALFile0 := mustWriteToFile(t, []byte("WAL Content"))
+	tmpWALFile1 := mustWriteToFile(t, []byte("WAL Content"))
+
+	streamer, err := NewSnapshotStreamer(tmpDBFile, tmpWALFile0, tmpWALFile1)
+	if err != nil {
+		t.Fatalf("NewSnapshotStreamer failed: %v", err)
+	}
+	if err := streamer.Open(); err != nil {
+		t.Fatalf("SnapshotStreamer Open failed: %v", err)
+	}
+
+	expectedReadLen, err := streamer.Len()
+	if err != nil {
+		t.Fatalf("Header TotalSize failed: %v", err)
+	}
+	totalRead := 0
+
+	// Read the first four bytes for header size. Do this by creating
+	// a buffer, reading into it, and decoding at a big endian uint32.
+	buf := make([]byte, HeaderSizeLen)
+	n, err := streamer.Read(buf)
+	if err != nil || n != HeaderSizeLen {
+		t.Fatalf("Failed to read header size: %v", err)
+	}
+	totalRead += n
+
+	buf = make([]byte, binary.BigEndian.Uint32(buf))
+	n, err = streamer.Read(buf)
+	if err != nil || n != len(buf) {
+		t.Fatalf("Failed to read header: %v", err)
+	}
+	totalRead += n
+	header, err := UnmarshalSnapshotHeader(buf)
+	if err != nil {
+		t.Fatalf("Failed to unmarshal header: %v", err)
+	}
+
+	// Read the database data into a buf and compare contents
+	dbBuf := make([]byte, header.DbHeader.SizeBytes)
+	n, err = streamer.Read(dbBuf)
+	if err != nil || uint64(n) != header.DbHeader.SizeBytes {
+		t.Fatalf("Failed to read DB data: %v", err)
+	}
+	totalRead += n
+	if string(dbBuf) != "DB Content" {
+		t.Fatalf("DB data does not match expected content")
+	}
+
+	// Read the WAL data into a buf and compare contents
+	walBuf0 := make([]byte, header.WalHeaders[0].SizeBytes)
+	n, err = streamer.Read(walBuf0)
+	if err != nil || uint64(n) != header.WalHeaders[0].SizeBytes {
+		t.Fatalf("Failed to read WAL data: %v", err)
+	}
+	totalRead += n
+	if string(walBuf0) != "WAL Content" {
+		t.Fatalf("WAL data does not match expected content")
+	}
+
+	// Read the second WAL data into a buf and compare contents
+	walBuf1 := make([]byte, header.WalHeaders[1].SizeBytes)
+	n, err = streamer.Read(walBuf1)
+	if err != nil || uint64(n) != header.WalHeaders[1].SizeBytes {
+		t.Fatalf("Failed to read second WAL data: %v", err)
+	}
+	totalRead += n
+	if string(walBuf1) != "WAL Content" {
+		t.Fatalf("Second WAL data does not match expected content")
 	}
 
 	// Ensure we have reached EOF
