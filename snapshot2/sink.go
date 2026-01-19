@@ -97,7 +97,7 @@ func (s *Sink) Write(p []byte) (n int, err error) {
 
 		// We have a header to figure out what to do with it.
 		if s.header.DbHeader != nil {
-			s.sinkW = NewDBSink(s.snapTmpDirPath, s.header)
+			s.sinkW = NewFullSink(s.snapTmpDirPath, s.header)
 		} else if s.header.WalHeaders != nil {
 			// If we only have WAL headers then we must have only one WAL header.
 			// This is because it must be an incremental snapshot.

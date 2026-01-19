@@ -41,8 +41,8 @@ const (
 	installPhaseDone
 )
 
-// DBSink streams snapshot bytes into files described by SnapshotHeader.
-type DBSink struct {
+// FullSink streams snapshot bytes into files described by SnapshotHeader.
+type FullSink struct {
 	dir    string
 	header *proto.SnapshotHeader
 
@@ -58,9 +58,9 @@ type DBSink struct {
 	opened bool
 }
 
-// NewDBSink creates a new DBSink object.
-func NewDBSink(dir string, hdr *proto.SnapshotHeader) *DBSink {
-	s := &DBSink{
+// NewFullSink creates a new FullSink object.
+func NewFullSink(dir string, hdr *proto.SnapshotHeader) *FullSink {
+	s := &FullSink{
 		dir:    dir,
 		header: hdr,
 		dbFile: filepath.Join(dir, "data.db"),
@@ -75,7 +75,7 @@ func NewDBSink(dir string, hdr *proto.SnapshotHeader) *DBSink {
 }
 
 // Open opens the sink for writing.
-func (s *DBSink) Open() error {
+func (s *FullSink) Open() error {
 	if s.opened {
 		return ErrSinkOpen
 	}
@@ -94,7 +94,7 @@ func (s *DBSink) Open() error {
 }
 
 // Write writes data to the sink.
-func (s *DBSink) Write(p []byte) (int, error) {
+func (s *FullSink) Write(p []byte) (int, error) {
 	if !s.opened {
 		return 0, ErrSinkNotOpen
 	}
@@ -155,7 +155,7 @@ func (s *DBSink) Write(p []byte) (int, error) {
 }
 
 // Close closes the sink. It fails if not all bytes were written.
-func (s *DBSink) Close() error {
+func (s *FullSink) Close() error {
 	if !s.opened {
 		return ErrSinkNotOpen
 	}
@@ -196,28 +196,28 @@ func (s *DBSink) Close() error {
 }
 
 // DBFile returns the path to the installed DB file.
-func (s *DBSink) DBFile() string {
+func (s *FullSink) DBFile() string {
 	return s.dbFile
 }
 
 // WALFiles returns the paths to the installed WAL files.
-func (s *DBSink) WALFiles() []string {
+func (s *FullSink) WALFiles() []string {
 	return s.walFiles
 }
 
 // NumWALFiles returns the number of WAL files.
-func (s *DBSink) NumWALFiles() int {
+func (s *FullSink) NumWALFiles() int {
 	return len(s.walFiles)
 }
 
-func (s *DBSink) validateManifest() error {
+func (s *FullSink) validateManifest() error {
 	if s.header == nil || s.header.DbHeader == nil {
 		return ErrManifestInvalid
 	}
 	return nil
 }
 
-func (s *DBSink) openCurrent() error {
+func (s *FullSink) openCurrent() error {
 	switch s.phase {
 	case installPhaseDB:
 		path := filepath.Join(s.dir, dbfileName)
@@ -251,7 +251,7 @@ func (s *DBSink) openCurrent() error {
 	}
 }
 
-func (s *DBSink) advance() error {
+func (s *FullSink) advance() error {
 	// Close current artifact if open.
 	if err := s.closeFile(); err != nil {
 		return err
@@ -285,7 +285,7 @@ func (s *DBSink) advance() error {
 	}
 }
 
-func (s *DBSink) closeFile() error {
+func (s *FullSink) closeFile() error {
 	if s.f == nil {
 		return nil
 	}

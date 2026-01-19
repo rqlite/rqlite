@@ -8,25 +8,25 @@ import (
 	"github.com/rqlite/rqlite/v9/snapshot2/proto"
 )
 
-func Test_NewDBSink(t *testing.T) {
+func Test_NewFullSink(t *testing.T) {
 	install, err := proto.NewSnapshotHeader("testdata/db-and-wals/full2.db")
 	if err != nil {
 		t.Fatalf("unexpected error creating manifest: %s", err.Error())
 	}
 
-	sink := NewDBSink(t.TempDir(), install)
+	sink := NewFullSink(t.TempDir(), install)
 	if sink == nil {
 		t.Fatalf("expected non-nil Sink")
 	}
 }
 
-func Test_DBSink_SingleDBFile(t *testing.T) {
+func Test_FullSink_SingleDBFile(t *testing.T) {
 	header, err := proto.NewSnapshotHeader("testdata/db-and-wals/full2.db")
 	if err != nil {
 		t.Fatalf("unexpected error creating manifest: %s", err.Error())
 	}
 	dir := t.TempDir()
-	sink := NewDBSink(dir, header)
+	sink := NewFullSink(dir, header)
 	if err := sink.Open(); err != nil {
 		t.Fatalf("unexpected error opening sink: %s", err.Error())
 	}
@@ -58,7 +58,7 @@ func Test_DBSink_SingleDBFile(t *testing.T) {
 	}
 }
 
-func Test_DBSink_SingleDBFile_SingleWALFile(t *testing.T) {
+func Test_FullSink_SingleDBFile_SingleWALFile(t *testing.T) {
 	header, err := proto.NewSnapshotHeader(
 		"testdata/db-and-wals/full2.db",
 		"testdata/db-and-wals/wal-00")
@@ -66,7 +66,7 @@ func Test_DBSink_SingleDBFile_SingleWALFile(t *testing.T) {
 		t.Fatalf("unexpected error creating manifest: %s", err.Error())
 	}
 	dir := t.TempDir()
-	sink := NewDBSink(dir, header)
+	sink := NewFullSink(dir, header)
 	if err := sink.Open(); err != nil {
 		t.Fatalf("unexpected error opening sink: %s", err.Error())
 	}
@@ -100,7 +100,7 @@ func Test_DBSink_SingleDBFile_SingleWALFile(t *testing.T) {
 	}
 }
 
-func Test_DBSink_SingleDBFile_MultiWALFile(t *testing.T) {
+func Test_FullSink_SingleDBFile_MultiWALFile(t *testing.T) {
 	header, err := proto.NewSnapshotHeader(
 		"testdata/db-and-wals/full2.db",
 		"testdata/db-and-wals/wal-00",
@@ -109,7 +109,7 @@ func Test_DBSink_SingleDBFile_MultiWALFile(t *testing.T) {
 		t.Fatalf("unexpected error creating manifest: %s", err.Error())
 	}
 	dir := t.TempDir()
-	sink := NewDBSink(dir, header)
+	sink := NewFullSink(dir, header)
 	if err := sink.Open(); err != nil {
 		t.Fatalf("unexpected error opening sink: %s", err.Error())
 	}
