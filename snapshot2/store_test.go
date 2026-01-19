@@ -587,6 +587,90 @@ func Test_Store_EndToEndCycle(t *testing.T) {
 	}
 }
 
+func Test_Store_Reap(t *testing.T) {
+	dir := t.TempDir()
+	store, err := NewStore(dir)
+	if err != nil {
+		t.Fatalf("Failed to create new store: %v", err)
+	}
+
+	snaps, err := store.List()
+	if err != nil {
+		t.Fatalf("Failed to list snapshots: %v", err)
+	}
+	if len(snaps) != 0 {
+		t.Fatalf("Expected 0 snapshots, got %d", len(snaps))
+	}
+
+	//////////////////////////////////////////////////////////////////////////////////
+	// Reap an empty store. No snapshots should be reaped.
+	n, err := store.Reap()
+	if err != nil {
+		t.Fatalf("Failed to reap snapshots: %v", err)
+	}
+
+	//////////////////////////////////////////////////////////////////////////////////
+	// Reap a store with 1 snapshot. No snapshots should be reaped.
+	createSnapshotInStore(t, store, "2-1017-1704807719996", 1017, 2, 1, "testdata/db-and-wals/backup.db")
+	n, err = store.Reap()
+	if err != nil {
+		t.Fatalf("Failed to reap snapshots: %v", err)
+	}
+	if n != 0 {
+		t.Fatalf("Expected 0 snapshots reaped, got %d", n)
+	}
+
+	//////////////////////////////////////////////////////////////////////////////////
+	// Reap a store with 2 snapshots. Older snapshot should be reaped. Then check the
+	// contents of the remaining snapshot.
+	createSnapshotInStore(t, store, "2-1131-1704807720976", 1131, 2, 1, "", "testdata/db-and-wals/wal-00")
+	n, err = store.Reap()
+	if err != nil {
+		t.Fatalf("Failed to reap snapshots: %v", err)
+	}
+	if exp, got := 1, n; exp != got {
+		t.Fatalf("Expected %d snapshots reaped, got %d", exp, got)
+	}
+
+	snaps, err = store.List()
+	if err != nil {
+		t.Fatalf("Failed to list snapshots in destination store: %v", err)
+	}
+	if len(snaps) != 1 {
+		t.Errorf("Expected 1 snapshot in destination store, got %d", len(snaps))
+	}
+	_, rc, err := store.Open(snaps[0].ID)
+	if err != nil {
+		t.Fatalf("Failed to open snapshot in destination store: %v", err)
+	}
+
+	buf := &bytes.Buffer{}
+	if _, err := io.Copy(buf, rc); err != nil {
+		t.Fatalf("Failed to read snapshot data from destination store: %v", err)
+	}
+	if err := rc.Close(); err != nil {
+		t.Fatalf("Failed to close snapshot reader in destination store: %v", err)
+	}
+
+	dbPath, walPaths := persistStreamerData(t, buf)
+	if len(walPaths) != 0 {
+		t.Fatalf("Expected 0 WAL files, got %d", len(walPaths))
+	}
+
+	checkDB, err := db.Open(dbPath, false, true)
+	if err != nil {
+		t.Fatalf("failed to open database at %s: %s", dbPath, err)
+	}
+	defer checkDB.Close()
+	rows, err := checkDB.QueryStringStmt("SELECT COUNT(*) FROM foo")
+	if err != nil {
+		t.Fatalf("failed to query database: %s", err)
+	}
+	if exp, got := `[{"columns":["COUNT(*)"],"types":["integer"],"values":[[1]]}]`, asJSON(rows); exp != got {
+		t.Fatalf("unexpected results for query exp: %s got: %s", exp, got)
+	}
+}
+
 func makeTestConfiguration(i, a string) raft.Configuration {
 	return raft.Configuration{
 		Servers: []raft.Server{

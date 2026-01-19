@@ -339,6 +339,7 @@ func (s *Store) Reap() (retN int, retErr error) {
 	if err != nil {
 		return retN, err
 	}
+	newestFullSnapPath := filepath.Join(s.dir, newestFullSnap.ID)
 
 	n, err := s.removeOldSnapshots(newestFullSnap.ID)
 	if err != nil {
@@ -353,26 +354,28 @@ func (s *Store) Reap() (retN int, retErr error) {
 		return retN, err
 	}
 	newestSnap := snapshots[len(snapshots)-1]
+	newestSnapPath := filepath.Join(s.dir, newestSnap.ID)
 
 	// About to pass point of no return.
 	touchFile(s.reapingMarkerPath)
+	if err := syncDir(s.dir); err != nil {
+		return retN, err
+	}
 
-	// This is what we do:
+	// This is what we do (noting that we move WAL files, not the DB file, since the DB file may be big):
 	// - rename the newest full snapshot dir to the same name as the newest name but with .tmp suffix
 	// - move the meta file from the newest snapshot into the renamed dir
 	// - move all WAL files from newer incremental snapshots into the renamed dir
 	// - checkpoint all the WAL files into the DB file in the renamed dir
 	// - delete all snapshot dirs except the renamed one
 	// - temove the .tmp suffix from the directory containing the full snapshot
-	newestFullSnapPath := filepath.Join(s.dir, newestFullSnap.ID)
-	newestFullSnapPathTmp := tmpName(newestFullSnapPath)
-	if err := os.Rename(newestFullSnapPath, newestFullSnapPathTmp); err != nil {
+	consolidatedSnapPathTmp := tmpName(newestSnapPath)
+	if err := os.Rename(newestFullSnapPath, consolidatedSnapPathTmp); err != nil {
 		return retN, err
 	}
 
-	// Move meta file
-	newestSnapPath := filepath.Join(s.dir, newestSnap.ID)
-	if err := os.Rename(metaPath(newestSnapPath), metaPath(newestFullSnapPathTmp)); err != nil {
+	// Move meta file from the newest snapshot to the renamed dir
+	if err := os.Rename(metaPath(newestSnapPath), metaPath(consolidatedSnapPathTmp)); err != nil {
 		return retN, err
 	}
 
@@ -384,33 +387,42 @@ func (s *Store) Reap() (retN int, retErr error) {
 		}
 		snapPath := filepath.Join(s.dir, snap.ID)
 		walSrcPath := filepath.Join(snapPath, walfileName)
-		walDstPath := filepath.Join(newestFullSnapPathTmp, walfileName+fmt.Sprintf(".%d", i))
+		walDstPath := filepath.Join(consolidatedSnapPathTmp, walfileName+fmt.Sprintf(".%d", i))
 		walFiles = append(walFiles, walDstPath)
 		if err := os.Rename(walSrcPath, walDstPath); err != nil {
 			return retN, err
 		}
-		retN++
 	}
 
 	// Checkpoint WAL files into DB file
-	dbPath := filepath.Join(newestFullSnapPathTmp, dbfileName)
+	dbPath := filepath.Join(consolidatedSnapPathTmp, dbfileName)
 	if err := db.ReplayWAL(dbPath, walFiles, false); err != nil {
 		return retN, err
 	}
 
 	// Remove all snapshot dirs except the renamed one
-	for _, snap := range snapshots {
-		snapPath := filepath.Join(s.dir, snap.ID)
-		if snapPath == newestFullSnapPathTmp {
+	dirs, err := os.ReadDir(s.dir)
+	if err != nil {
+		return retN, err
+	}
+	for _, dir := range dirs {
+		if !dir.IsDir() {
 			continue
 		}
-		if err := os.RemoveAll(snapPath); err != nil {
+		if isTmpName(dir.Name()) {
+			continue
+		}
+		if err := os.RemoveAll(filepath.Join(s.dir, dir.Name())); err != nil {
 			return retN, err
 		}
+		retN++
 	}
 
 	// Remove .tmp suffix from the dir
-	if err := os.Rename(newestFullSnapPathTmp, newestFullSnapPath); err != nil {
+	if err := os.Rename(consolidatedSnapPathTmp, newestFullSnapPath); err != nil {
+		return retN, err
+	}
+	if err := syncDir(s.dir); err != nil {
 		return retN, err
 	}
 
