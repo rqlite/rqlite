@@ -43,8 +43,9 @@ func NewHeaderFromFile(path string, crc32 bool) (*Header, error) {
 // dbPath may be empty, in which case no DB header is included. walPaths may be empty.
 //
 // This type enforces certain invariants:
-// - At least one of dbPath or walPaths must be non-empty.
-// - If only WALs are provided, then only one WAL is allowed.
+//   - At least one of dbPath or walPaths must be non-empty. This has various uses:
+//   - If only WALs are provided, then only one WAL is allowed. This represents an
+//     incremental snapshot.
 func NewSnapshotHeader(dbPath string, walPaths ...string) (*SnapshotHeader, error) {
 	if dbPath == "" && len(walPaths) == 0 {
 		return nil, fmt.Errorf("at least one of dbPath or walPaths must be provided")
