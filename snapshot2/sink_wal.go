@@ -12,16 +12,16 @@ import (
 
 // WALSink is a sink for writing locally-generated WAL snapshot data to a Snapshot store.
 type WALSink struct {
-	dir      string
-	manifest *proto.SnapshotWALFile
-	file     *os.File
+	dir    string
+	header *proto.Header
+	file   *os.File
 }
 
 // NewWALSink creates a new WALSink object.
-func NewWALSink(dir string, m *proto.SnapshotWALFile) *WALSink {
+func NewWALSink(dir string, m *proto.Header) *WALSink {
 	return &WALSink{
-		dir:      dir,
-		manifest: m,
+		dir:    dir,
+		header: m,
 	}
 }
 
@@ -43,7 +43,7 @@ func (s *WALSink) Write(p []byte) (n int, err error) {
 // Close closes the sink.
 //
 // On Close, the file size and basic validity checks are performed. If
-// the manifest includes a CRC32 checksum, that is also verified.
+// the header includes a CRC32 checksum, that is also verified.
 func (s *WALSink) Close() error {
 	defer s.file.Close()
 
@@ -51,21 +51,21 @@ func (s *WALSink) Close() error {
 	if err != nil {
 		return err
 	}
-	if sz != int64(s.manifest.SizeBytes) {
-		return fmt.Errorf("file size mismatch: got %d, want %d", sz, s.manifest.SizeBytes)
+	if sz != int64(s.header.SizeBytes) {
+		return fmt.Errorf("file size mismatch: got %d, want %d", sz, s.header.SizeBytes)
 	}
 
 	if !db.IsValidSQLiteWALFile(s.file.Name()) {
 		return fmt.Errorf("file is not a valid SQLite WAL file")
 	}
 
-	if s.manifest.Crc32 != 0 {
+	if s.header.Crc32 != 0 {
 		crc32, err := rsum.CRC32(s.file.Name())
 		if err != nil {
 			return err
 		}
-		if crc32 != s.manifest.Crc32 {
-			return fmt.Errorf("file checksum mismatch: got %d, want %d", crc32, s.manifest.Crc32)
+		if crc32 != s.header.Crc32 {
+			return fmt.Errorf("file checksum mismatch: got %d, want %d", crc32, s.header.Crc32)
 		}
 	}
 	return nil

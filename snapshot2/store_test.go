@@ -182,27 +182,23 @@ func Test_Store_CreateList(t *testing.T) {
 			t.Fatalf("Failed to open sink: %v", err)
 		}
 
-		var w io.WriterTo
+		dbFile := ""
+		walFile := ""
 		if db.IsValidSQLiteFile(file) {
-			manifest, err := proto.NewSnapshotManifestFromDB(file)
-			if err != nil {
-				t.Fatalf("Failed to create SnapshotDBFile from file: %v", err)
-			}
-			w = manifest
+			dbFile = file
 		} else {
-			manifest, err := proto.NewSnapshotManifestFromWAL(file)
-			if err != nil {
-				t.Fatalf("Failed to create SnapshotDBFile from file: %v", err)
-			}
-			w = manifest
+			walFile = file
 		}
 
-		n, err := w.WriteTo(sink)
+		streamer, err := proto.NewSnapshotStreamer(dbFile, walFile)
 		if err != nil {
-			t.Fatalf("Failed to write SnapshotManifest to sink: %v", err)
+			t.Fatalf("Failed to create SnapshotStreamer: %v", err)
 		}
-		if n == 0 {
-			t.Fatalf("Expected to write some bytes to sink, wrote 0")
+
+		// Read from streamer into sink.
+		_, err = io.Copy(sink, streamer)
+		if err != nil {
+			t.Fatalf("Failed to copy snapshot data to sink: %v", err)
 		}
 
 		fd := mustOpenFile(t, file)
@@ -268,7 +264,7 @@ func Test_Store_SingleInstall(t *testing.T) {
 	}
 	defer sink.Cancel()
 
-	manifest, err := proto.NewSnapshotManifestWithInstall(
+	streamer, err := proto.NewSnapshotStreamer(
 		"testdata/db-and-wals/full2.db",
 		"testdata/db-and-wals/wal-00",
 	)
@@ -276,8 +272,10 @@ func Test_Store_SingleInstall(t *testing.T) {
 		t.Fatalf("unexpected error creating manifest: %s", err.Error())
 	}
 
-	if _, err := manifest.WriteTo(sink); err != nil {
-		t.Fatalf("unexpected error writing manifest to sink: %s", err.Error())
+	// Read from streamer into sink.
+	_, err = io.Copy(sink, streamer)
+	if err != nil {
+		t.Fatalf("Failed to copy snapshot data to sink: %v", err)
 	}
 
 	for _, filePath := range []string{"testdata/db-and-wals/full2.db", "testdata/db-and-wals/wal-00"} {

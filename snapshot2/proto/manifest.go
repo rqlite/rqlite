@@ -106,7 +106,11 @@ func (s *SnapshotStreamer) Open() error {
 	return nil
 }
 
-// Read reads from the SnapshotStreamer.
+// Read reads from the SnapshotStreamer and its associated files. Calls to Read()
+// return data in the following sequence: 4-byte integer, big-endian, indicating the
+// size of the marshaled header, followed by the marshaled header itself, followed by
+// the DB file (if any), followed by any WAL files. Once all data has been read, Read()
+// returns io.EOF.
 func (s *SnapshotStreamer) Read(p []byte) (n int, err error) {
 	return 0, nil
 }

@@ -23,8 +23,8 @@ var (
 	// ErrIncomplete indicates Close() was called before all bytes were written.
 	ErrIncomplete = errors.New("snapshot install incomplete")
 
-	// ErrManifestInvalid indicates the manifest is invalid.
-	ErrManifestInvalid = errors.New("snapshot install manifest invalid")
+	// ErrManifestInvalid indicates the header is invalid.
+	ErrManifestInvalid = errors.New("snapshot install header invalid")
 
 	// ErrInvalidSQLiteFile indicates the installed DB file is not a valid SQLite file.
 	ErrInvalidSQLiteFile = errors.New("installed DB file is not a valid SQLite file")
@@ -41,10 +41,10 @@ const (
 	installPhaseDone
 )
 
-// InstallSink streams snapshot bytes into files described by SnapshotInstall.
-type InstallSink struct {
-	dir      string
-	manifest *proto.SnapshotInstall
+// DBSink streams snapshot bytes into files described by SnapshotHeader.
+type DBSink struct {
+	dir    string
+	header *proto.SnapshotHeader
 
 	phase    installPhase
 	walIndex int
@@ -58,15 +58,15 @@ type InstallSink struct {
 	opened bool
 }
 
-// NewInstallSink creates a new InstallSink object.
-func NewInstallSink(dir string, m *proto.SnapshotInstall) *InstallSink {
-	s := &InstallSink{
-		dir:      dir,
-		manifest: m,
-		dbFile:   filepath.Join(dir, "data.db"),
+// NewDBSink creates a new DBSink object.
+func NewDBSink(dir string, hdr *proto.SnapshotHeader) *DBSink {
+	s := &DBSink{
+		dir:    dir,
+		header: hdr,
+		dbFile: filepath.Join(dir, "data.db"),
 	}
 
-	for i := range m.WalFiles {
+	for i := range hdr.WalHeaders {
 		walPath := filepath.Join(dir, fmt.Sprintf("data-%08d.wal", i))
 		s.walFiles = append(s.walFiles, walPath)
 	}
@@ -75,7 +75,7 @@ func NewInstallSink(dir string, m *proto.SnapshotInstall) *InstallSink {
 }
 
 // Open opens the sink for writing.
-func (s *InstallSink) Open() error {
+func (s *DBSink) Open() error {
 	if s.opened {
 		return ErrSinkOpen
 	}
@@ -94,7 +94,7 @@ func (s *InstallSink) Open() error {
 }
 
 // Write writes data to the sink.
-func (s *InstallSink) Write(p []byte) (int, error) {
+func (s *DBSink) Write(p []byte) (int, error) {
 	if !s.opened {
 		return 0, ErrSinkNotOpen
 	}
@@ -155,7 +155,7 @@ func (s *InstallSink) Write(p []byte) (int, error) {
 }
 
 // Close closes the sink. It fails if not all bytes were written.
-func (s *InstallSink) Close() error {
+func (s *DBSink) Close() error {
 	if !s.opened {
 		return ErrSinkNotOpen
 	}
@@ -196,28 +196,28 @@ func (s *InstallSink) Close() error {
 }
 
 // DBFile returns the path to the installed DB file.
-func (s *InstallSink) DBFile() string {
+func (s *DBSink) DBFile() string {
 	return s.dbFile
 }
 
 // WALFiles returns the paths to the installed WAL files.
-func (s *InstallSink) WALFiles() []string {
+func (s *DBSink) WALFiles() []string {
 	return s.walFiles
 }
 
 // NumWALFiles returns the number of WAL files.
-func (s *InstallSink) NumWALFiles() int {
+func (s *DBSink) NumWALFiles() int {
 	return len(s.walFiles)
 }
 
-func (s *InstallSink) validateManifest() error {
-	if s.manifest == nil || s.manifest.DbFile == nil {
+func (s *DBSink) validateManifest() error {
+	if s.header == nil || s.header.DbHeader == nil {
 		return ErrManifestInvalid
 	}
 	return nil
 }
 
-func (s *InstallSink) openCurrent() error {
+func (s *DBSink) openCurrent() error {
 	switch s.phase {
 	case installPhaseDB:
 		path := filepath.Join(s.dir, dbfileName)
@@ -226,11 +226,11 @@ func (s *InstallSink) openCurrent() error {
 			return err
 		}
 		s.f = f
-		s.remaining = s.manifest.DbFile.SizeBytes
+		s.remaining = s.header.DbHeader.SizeBytes
 		return nil
 
 	case installPhaseWAL:
-		if s.walIndex >= len(s.manifest.WalFiles) {
+		if s.walIndex >= len(s.header.WalHeaders) {
 			s.phase = installPhaseDone
 			return nil
 		}
@@ -240,7 +240,7 @@ func (s *InstallSink) openCurrent() error {
 			return err
 		}
 		s.f = f
-		s.remaining = s.manifest.WalFiles[s.walIndex].SizeBytes
+		s.remaining = s.header.WalHeaders[s.walIndex].SizeBytes
 		return nil
 
 	case installPhaseDone:
@@ -251,7 +251,7 @@ func (s *InstallSink) openCurrent() error {
 	}
 }
 
-func (s *InstallSink) advance() error {
+func (s *DBSink) advance() error {
 	// Close current artifact if open.
 	if err := s.closeFile(); err != nil {
 		return err
@@ -260,7 +260,7 @@ func (s *InstallSink) advance() error {
 	switch s.phase {
 	case installPhaseDB:
 		// DB complete; move to WAL or done.
-		if len(s.manifest.WalFiles) == 0 {
+		if len(s.header.WalHeaders) == 0 {
 			s.phase = installPhaseDone
 			return nil
 		}
@@ -271,7 +271,7 @@ func (s *InstallSink) advance() error {
 	case installPhaseWAL:
 		// Current WAL complete; move to next WAL or done.
 		s.walIndex++
-		if s.walIndex >= len(s.manifest.WalFiles) {
+		if s.walIndex >= len(s.header.WalHeaders) {
 			s.phase = installPhaseDone
 			return nil
 		}
@@ -285,7 +285,7 @@ func (s *InstallSink) advance() error {
 	}
 }
 
-func (s *InstallSink) closeFile() error {
+func (s *DBSink) closeFile() error {
 	if s.f == nil {
 		return nil
 	}

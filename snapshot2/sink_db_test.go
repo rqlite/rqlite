@@ -8,25 +8,25 @@ import (
 	"github.com/rqlite/rqlite/v9/snapshot2/proto"
 )
 
-func Test_NewInstallSink(t *testing.T) {
-	install, err := proto.NewSnapshotInstall("testdata/db-and-wals/full2.db")
+func Test_NewDBSink(t *testing.T) {
+	install, err := proto.NewSnapshotHeader("testdata/db-and-wals/full2.db")
 	if err != nil {
 		t.Fatalf("unexpected error creating manifest: %s", err.Error())
 	}
 
-	sink := NewInstallSink(t.TempDir(), install)
+	sink := NewDBSink(t.TempDir(), install)
 	if sink == nil {
 		t.Fatalf("expected non-nil Sink")
 	}
 }
 
-func Test_InstallSink_SingleDBFile(t *testing.T) {
-	install, err := proto.NewSnapshotInstall("testdata/db-and-wals/full2.db")
+func Test_DBSink_SingleDBFile(t *testing.T) {
+	header, err := proto.NewSnapshotHeader("testdata/db-and-wals/full2.db")
 	if err != nil {
 		t.Fatalf("unexpected error creating manifest: %s", err.Error())
 	}
 	dir := t.TempDir()
-	sink := NewInstallSink(dir, install)
+	sink := NewDBSink(dir, header)
 	if err := sink.Open(); err != nil {
 		t.Fatalf("unexpected error opening sink: %s", err.Error())
 	}
@@ -58,15 +58,15 @@ func Test_InstallSink_SingleDBFile(t *testing.T) {
 	}
 }
 
-func Test_InstallSink_SingleDBFile_SingleWALFile(t *testing.T) {
-	install, err := proto.NewSnapshotInstall(
+func Test_DBSink_SingleDBFile_SingleWALFile(t *testing.T) {
+	header, err := proto.NewSnapshotHeader(
 		"testdata/db-and-wals/full2.db",
 		"testdata/db-and-wals/wal-00")
 	if err != nil {
 		t.Fatalf("unexpected error creating manifest: %s", err.Error())
 	}
 	dir := t.TempDir()
-	sink := NewInstallSink(dir, install)
+	sink := NewDBSink(dir, header)
 	if err := sink.Open(); err != nil {
 		t.Fatalf("unexpected error opening sink: %s", err.Error())
 	}
@@ -100,8 +100,8 @@ func Test_InstallSink_SingleDBFile_SingleWALFile(t *testing.T) {
 	}
 }
 
-func Test_InstallSink_SingleDBFile_MultiWALFile(t *testing.T) {
-	install, err := proto.NewSnapshotInstall(
+func Test_DBSink_SingleDBFile_MultiWALFile(t *testing.T) {
+	header, err := proto.NewSnapshotHeader(
 		"testdata/db-and-wals/full2.db",
 		"testdata/db-and-wals/wal-00",
 		"testdata/db-and-wals/wal-01")
@@ -109,7 +109,7 @@ func Test_InstallSink_SingleDBFile_MultiWALFile(t *testing.T) {
 		t.Fatalf("unexpected error creating manifest: %s", err.Error())
 	}
 	dir := t.TempDir()
-	sink := NewInstallSink(dir, install)
+	sink := NewDBSink(dir, header)
 	if err := sink.Open(); err != nil {
 		t.Fatalf("unexpected error opening sink: %s", err.Error())
 	}
