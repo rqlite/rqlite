@@ -291,6 +291,7 @@ func Test_Store_EndToEndCycle(t *testing.T) {
 
 	//////////////////////////////////////////////////////////////////////////////////
 	// Open the first snapshot, and write it to the second store.
+	//////////////////////////////////////////////////////////////////////////////////
 	meta, rc, err := store0.Open(id1)
 	if err != nil {
 		t.Fatalf("Failed to open snapshot: %v", err)
@@ -312,6 +313,10 @@ func Test_Store_EndToEndCycle(t *testing.T) {
 	if err := dstSink.Close(); err != nil {
 		t.Fatalf("Failed to close sink in destination store: %v", err)
 	}
+	// Double check the second store.
+	if exp, got := 1, store1.Len(); exp != got {
+		t.Errorf("Expected store to have %d snapshots, got %d", exp, got)
+	}
 
 	// Open the snapshot in the second store, check its contents.
 	snaps, err = store1.List()
@@ -319,7 +324,7 @@ func Test_Store_EndToEndCycle(t *testing.T) {
 		t.Fatalf("Failed to list snapshots in destination store: %v", err)
 	}
 	if len(snaps) != 1 {
-		t.Errorf("Expected 1 snapshot in destination store, got %d", len(snaps))
+		t.Fatalf("Expected 1 snapshot in destination store, got %d", len(snaps))
 	}
 	meta, rc, err = store1.Open(snaps[0].ID)
 	if err != nil {
@@ -344,12 +349,13 @@ func Test_Store_EndToEndCycle(t *testing.T) {
 
 	//////////////////////////////////////////////////////////////////////////////////
 	// Open the second snapshot, and write it to the second store.
+	//////////////////////////////////////////////////////////////////////////////////
 	meta, rc, err = store0.Open(id2)
 	if err != nil {
 		t.Fatalf("Failed to open snapshot: %v", err)
 	}
 	if meta.ID != id2 && meta.Index != 200 && meta.Term != 2 {
-		t.Errorf("Snapshot metadata does not match expected values")
+		t.Fatalf("Snapshot metadata does not match expected values")
 	}
 
 	dstSink, err = store1.Create(1, 2000, 3000, makeTestConfiguration("1", "localhost:1"), 1, nil)
@@ -364,6 +370,10 @@ func Test_Store_EndToEndCycle(t *testing.T) {
 	}
 	if err := dstSink.Close(); err != nil {
 		t.Fatalf("Failed to close sink in destination store: %v", err)
+	}
+	// Double check the second store.
+	if exp, got := 2, store1.Len(); exp != got {
+		t.Fatalf("Expected store to have %d snapshots, got %d", exp, got)
 	}
 
 	// Open the second snapshot in the second store, check its contents. When writing
@@ -413,6 +423,7 @@ func Test_Store_EndToEndCycle(t *testing.T) {
 
 	//////////////////////////////////////////////////////////////////////////////////
 	// Write a third snapshot to the first store, another incremental based on the second.
+	//////////////////////////////////////////////////////////////////////////////////
 	id3 := "2-300-1704807900000"
 	createSnapshotInStore(t, store0, id3, 100, 2, 1, "", "testdata/db-and-wals/wal-01")
 	if exp, got := 3, store0.Len(); exp != got {
@@ -445,6 +456,10 @@ func Test_Store_EndToEndCycle(t *testing.T) {
 	}
 	if err := dstSink.Close(); err != nil {
 		t.Fatalf("Failed to close sink in destination store: %v", err)
+	}
+	// Double check the second store.
+	if exp, got := 3, store1.Len(); exp != got {
+		t.Fatalf("Expected store to have %d snapshots, got %d", exp, got)
 	}
 
 	// Open the third snapshot in the second store, check its contents.
@@ -487,6 +502,113 @@ func Test_Store_EndToEndCycle(t *testing.T) {
 	if exp, got := `[{"columns":["COUNT(*)"],"types":["integer"],"values":[[2]]}]`, asJSON(rows); exp != got {
 		t.Fatalf("unexpected results for query exp: %s got: %s", exp, got)
 	}
+
+	//////////////////////////////////////////////////////////////////////////////////
+	// Write a fourth snapshot to the first store, this time full with both DB and WALs.
+	//////////////////////////////////////////////////////////////////////////////////
+	id4 := "2-400-1704808000000"
+	createSnapshotInStore(t, store0, id4, 400, 2, 1,
+		"testdata/db-and-wals/backup.db",
+		"testdata/db-and-wals/wal-00",
+		"testdata/db-and-wals/wal-01",
+		"testdata/db-and-wals/wal-02")
+
+	// Double check the first store.
+	if store0.Len() != 4 {
+		t.Fatalf("Expected store to have 4 snapshots, got %d", store0.Len())
+	}
+
+	// Open the fourth snapshot, write it to the second store.
+	meta, rc, err = store0.Open(id4)
+	if err != nil {
+		t.Fatalf("Failed to open snapshot: %v", err)
+	}
+	if meta.ID != id4 && meta.Index != 400 && meta.Term != 2 {
+		t.Fatalf("Snapshot metadata does not match expected values")
+	}
+
+	dstSink, err = store1.Create(1, 5000, 6000, makeTestConfiguration("1", "localhost:1"), 1, nil)
+	if err != nil {
+		t.Fatalf("Failed to create sink in destination store: %v", err)
+	}
+	if _, err := io.Copy(dstSink, rc); err != nil {
+		t.Fatalf("Failed to copy snapshot data to destination store: %v", err)
+	}
+	if err := rc.Close(); err != nil {
+		t.Fatalf("Failed to close snapshot reader: %v", err)
+	}
+	if err := dstSink.Close(); err != nil {
+		t.Fatalf("Failed to close sink in destination store: %v", err)
+	}
+	if exp, got := 4, store1.Len(); exp != got {
+		t.Fatalf("Expected store to have %d snapshots, got %d", exp, got)
+	}
+
+	// Open the fourth snapshot, write it to the second store.
+
+	meta, rc, err = store0.Open(id4)
+	if err != nil {
+		t.Fatalf("Failed to open snapshot: %v", err)
+	}
+	if meta.ID != id4 && meta.Index != 400 && meta.Term != 2 {
+		t.Fatalf("Snapshot metadata does not match expected values")
+	}
+
+	dstSink, err = store1.Create(1, 3000, 4000, makeTestConfiguration("1", "localhost:1"), 1, nil)
+	if err != nil {
+		t.Fatalf("Failed to create sink in destination store: %v", err)
+	}
+	if _, err := io.Copy(dstSink, rc); err != nil {
+		t.Fatalf("Failed to copy snapshot data to destination store: %v", err)
+	}
+	if err := rc.Close(); err != nil {
+		t.Fatalf("Failed to close snapshot reader: %v", err)
+	}
+	if err := dstSink.Close(); err != nil {
+		t.Fatalf("Failed to close sink in destination store: %v", err)
+	}
+
+	// Open the fourth snapshot in the second store, check its contents.
+	snaps, err = store1.List()
+	if err != nil {
+		t.Fatalf("Failed to list snapshots in destination store: %v", err)
+	}
+	if exp, got := 4, len(snaps); exp != got {
+		t.Fatalf("Expected %d snapshots in destination store, got %d", exp, got)
+	}
+	meta, rc, err = store1.Open(snaps[3].ID)
+	if err != nil {
+		t.Fatalf("Failed to open snapshot in destination store: %v", err)
+	}
+
+	buf = &bytes.Buffer{}
+	if _, err := io.Copy(buf, rc); err != nil {
+		t.Fatalf("Failed to read snapshot data from destination store: %v", err)
+	}
+	if err := rc.Close(); err != nil {
+		t.Fatalf("Failed to close snapshot reader in destination store: %v", err)
+	}
+
+	dbPath, walPaths = persistStreamerData(t, buf)
+	if len(walPaths) != 0 {
+		t.Fatalf("Expected 0 WAL files, got %d", len(walPaths))
+	}
+
+	// Check the file, it should have the content of the backup plus the changes
+	// from the three checkpointed WAL files.
+	checkDB, err = db.Open(dbPath, false, true)
+	if err != nil {
+		t.Fatalf("failed to open database at %s: %s", dbPath, err)
+	}
+	defer checkDB.Close()
+	rows, err = checkDB.QueryStringStmt("SELECT COUNT(*) FROM foo")
+	if err != nil {
+		t.Fatalf("failed to query database: %s", err)
+	}
+	if exp, got := `[{"columns":["COUNT(*)"],"types":["integer"],"values":[[2]]}]`, asJSON(rows); exp != got {
+		t.Fatalf("unexpected results for query exp: %s got: %s", exp, got)
+	}
+
 }
 
 func makeTestConfiguration(i, a string) raft.Configuration {
