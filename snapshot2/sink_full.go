@@ -23,8 +23,8 @@ var (
 	// ErrIncomplete indicates Close() was called before all bytes were written.
 	ErrIncomplete = errors.New("snapshot install incomplete")
 
-	// ErrManifestInvalid indicates the header is invalid.
-	ErrManifestInvalid = errors.New("snapshot install header invalid")
+	// ErrHeaderInvalid indicates the header is invalid.
+	ErrHeaderInvalid = errors.New("snapshot install header invalid")
 
 	// ErrInvalidSQLiteFile indicates the installed DB file is not a valid SQLite file.
 	ErrInvalidSQLiteFile = errors.New("installed DB file is not a valid SQLite file")
@@ -79,7 +79,7 @@ func (s *FullSink) Open() error {
 	if s.opened {
 		return ErrSinkOpen
 	}
-	if err := s.validateManifest(); err != nil {
+	if err := s.validateHeader(); err != nil {
 		return err
 	}
 	if err := os.MkdirAll(s.dir, 0o755); err != nil {
@@ -210,9 +210,9 @@ func (s *FullSink) NumWALFiles() int {
 	return len(s.walFiles)
 }
 
-func (s *FullSink) validateManifest() error {
+func (s *FullSink) validateHeader() error {
 	if s.header == nil || s.header.DbHeader == nil {
-		return ErrManifestInvalid
+		return ErrHeaderInvalid
 	}
 	return nil
 }
