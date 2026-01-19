@@ -279,11 +279,15 @@ func (s *Store) Dir() string {
 // which wraps a SnapshotInstall object. This is because the snapshot will be used
 // to either rebuild a node's state after restart, or to send the snapshot to another node,
 // both of which require the DB file and any associated WAL files.
-func (s *Store) Open(id string) (*raft.SnapshotMeta, io.ReadCloser, error) {
+func (s *Store) Open(id string) (raftMeta *raft.SnapshotMeta, rc io.ReadCloser, retErr error) {
 	if err := s.mrsw.BeginRead(); err != nil {
 		return nil, nil, err
 	}
-	defer s.mrsw.EndRead()
+	defer func() {
+		if retErr != nil {
+			s.mrsw.EndRead()
+		}
+	}()
 
 	dbfile, walFiles, err := ResolveSnapshots(s.dir, id)
 	if err != nil {
