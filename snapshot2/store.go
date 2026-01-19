@@ -309,12 +309,14 @@ func (s *Store) Open(id string) (*raft.SnapshotMeta, io.ReadCloser, error) {
 
 // Reap reaps all snapshots leaving at most retain snapshots. It
 // consolidates the newest full snapshot with all newer incremental snapshots.
-func (s *Store) Reap() (retN int, retErr error) {
+// It returns the number of snapshots reaped, and the number of WAL files
+// checkpointed as part of the consolidation.
+func (s *Store) Reap() (reapedN, chkN int, retErr error) {
 	defer func() {
 		if retErr != nil {
 			stats.Add(snapshotsReapedFail, 1)
 		} else {
-			stats.Add(snapshotsReaped, int64(retN))
+			stats.Add(snapshotsReaped, int64(reapedN))
 		}
 	}()
 
@@ -322,41 +324,41 @@ func (s *Store) Reap() (retN int, retErr error) {
 	defer s.mrsw.EndWrite()
 
 	if s.reapDisabled {
-		return retN, nil
+		return reapedN, chkN, nil
 	}
 
 	// Anything to do?
 	snapshots, err := s.getSnapshots()
 	if err != nil {
-		return retN, err
+		return reapedN, chkN, err
 	}
 	if len(snapshots) <= 1 {
-		return retN, nil
+		return reapedN, chkN, nil
 	}
 
 	// Find the newest full snapshot
 	newestFullSnap, err := s.newestFullSnapshot()
 	if err != nil {
-		return retN, err
+		return reapedN, chkN, err
 	}
 	newestFullSnapPath := filepath.Join(s.dir, newestFullSnap.ID)
 
 	n, err := s.removeOldSnapshots(newestFullSnap.ID)
 	if err != nil {
-		return retN, err
+		return reapedN, chkN, err
 	}
-	retN += n
+	reapedN += n
 
 	// Now we're cleaned up, we need to consolidate the newest full snapshot
 	// with all newer incremental snapshots. Start with the list of all snapshots.
 	snapshots, err = s.getSnapshots()
 	if err != nil {
-		return retN, err
+		return reapedN, chkN, err
 	}
 
 	if len(snapshots) == 1 {
 		// Nothing to do - only the full snapshot remains since it was the newest.
-		return retN, nil
+		return reapedN, chkN, nil
 	}
 
 	newestSnap := snapshots[len(snapshots)-1]
@@ -365,7 +367,7 @@ func (s *Store) Reap() (retN int, retErr error) {
 	// About to pass point of no return.
 	touchFile(s.reapingMarkerPath)
 	if err := syncDir(s.dir); err != nil {
-		return retN, err
+		return reapedN, chkN, err
 	}
 
 	// This is what we do (noting that we move WAL files, not the DB file, since the DB file may be big):
@@ -377,12 +379,12 @@ func (s *Store) Reap() (retN int, retErr error) {
 	// - temove the .tmp suffix from the directory containing the full snapshot
 	consolidatedSnapPathTmp := tmpName(newestSnapPath)
 	if err := os.Rename(newestFullSnapPath, consolidatedSnapPathTmp); err != nil {
-		return retN, err
+		return reapedN, chkN, err
 	}
 
 	// Move meta file from the newest snapshot to the renamed dir
 	if err := os.Rename(metaPath(newestSnapPath), metaPath(consolidatedSnapPathTmp)); err != nil {
-		return retN, err
+		return reapedN, chkN, err
 	}
 
 	// Move all WAL files
@@ -396,20 +398,21 @@ func (s *Store) Reap() (retN int, retErr error) {
 		walDstPath := filepath.Join(consolidatedSnapPathTmp, walfileName+fmt.Sprintf(".%d", i))
 		walFiles = append(walFiles, walDstPath)
 		if err := os.Rename(walSrcPath, walDstPath); err != nil {
-			return retN, err
+			return reapedN, chkN, err
 		}
 	}
+	chkN += len(walFiles)
 
 	// Checkpoint WAL files into DB file
 	dbPath := filepath.Join(consolidatedSnapPathTmp, dbfileName)
 	if err := db.ReplayWAL(dbPath, walFiles, false); err != nil {
-		return retN, err
+		return reapedN, chkN, err
 	}
 
 	// Remove all snapshot dirs except the renamed one
 	dirs, err := os.ReadDir(s.dir)
 	if err != nil {
-		return retN, err
+		return reapedN, chkN, err
 	}
 	for _, dir := range dirs {
 		if !dir.IsDir() {
@@ -419,25 +422,25 @@ func (s *Store) Reap() (retN int, retErr error) {
 			continue
 		}
 		if err := os.RemoveAll(filepath.Join(s.dir, dir.Name())); err != nil {
-			return retN, err
+			return reapedN, chkN, err
 		}
-		retN++
+		reapedN++
 	}
 
 	// Remove .tmp suffix from the dir
 	if err := os.Rename(consolidatedSnapPathTmp, nonTmpName(consolidatedSnapPathTmp)); err != nil {
-		return retN, err
+		return reapedN, chkN, err
 	}
 	if err := syncDir(s.dir); err != nil {
-		return retN, err
+		return reapedN, chkN, err
 	}
 
 	// Reaping complete, remove marker file.
 	if err := os.Remove(s.reapingMarkerPath); err != nil {
-		return retN, err
+		return reapedN, chkN, err
 	}
 
-	return retN, nil
+	return reapedN, chkN, nil
 }
 
 // FullNeeded returns true if a full snapshot is needed.

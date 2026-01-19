@@ -90,12 +90,15 @@ func Test_StoreEmpty(t *testing.T) {
 		t.Fatalf("Expected ErrSnapshotNotFound, got %v", err)
 	}
 
-	n, err := store.Reap()
+	n, c, err := store.Reap()
 	if err != nil {
 		t.Fatalf("Failed to reap snapshots from empty store: %v", err)
 	}
 	if n != 0 {
 		t.Errorf("Expected no snapshots reaped, got %d", n)
+	}
+	if c != 0 {
+		t.Errorf("Expected no checkpoints made, got %d", c)
 	}
 
 	if _, err := store.Stats(); err != nil {
@@ -585,32 +588,44 @@ func Test_Store_Reap(t *testing.T) {
 
 	//////////////////////////////////////////////////////////////////////////////////
 	// Reap an empty store. No snapshots should be reaped.
-	n, err := store.Reap()
-	if err != nil {
-		t.Fatalf("Failed to reap snapshots: %v", err)
-	}
-
-	//////////////////////////////////////////////////////////////////////////////////
-	// Reap a store with 1 snapshot. No snapshots should be reaped.
-	createSnapshotInStore(t, store, "2-1017-1704807719996", 1017, 2, 1, "testdata/db-and-wals/backup.db")
-	n, err = store.Reap()
+	n, c, err := store.Reap()
 	if err != nil {
 		t.Fatalf("Failed to reap snapshots: %v", err)
 	}
 	if n != 0 {
 		t.Fatalf("Expected 0 snapshots reaped, got %d", n)
 	}
+	if c != 0 {
+		t.Fatalf("Expected 0 checkpoints made, got %d", c)
+	}
+
+	//////////////////////////////////////////////////////////////////////////////////
+	// Reap a store with 1 snapshot. No snapshots should be reaped.
+	createSnapshotInStore(t, store, "2-1017-1704807719996", 1017, 2, 1, "testdata/db-and-wals/backup.db")
+	n, c, err = store.Reap()
+	if err != nil {
+		t.Fatalf("Failed to reap snapshots: %v", err)
+	}
+	if n != 0 {
+		t.Fatalf("Expected 0 snapshots reaped, got %d", n)
+	}
+	if c != 0 {
+		t.Fatalf("Expected 0 checkpoints made, got %d", c)
+	}
 
 	//////////////////////////////////////////////////////////////////////////////////
 	// Reap a store with 2 snapshots. Older snapshot should be reaped. Then check the
 	// contents of the remaining snapshot.
 	createSnapshotInStore(t, store, "2-1131-1704807720976", 1131, 2, 1, "", "testdata/db-and-wals/wal-00")
-	n, err = store.Reap()
+	n, c, err = store.Reap()
 	if err != nil {
 		t.Fatalf("Failed to reap snapshots: %v", err)
 	}
 	if exp, got := 1, n; exp != got {
 		t.Fatalf("Expected %d snapshots reaped, got %d", exp, got)
+	}
+	if exp, got := 1, c; exp != got {
+		t.Fatalf("Expected %d checkpoints made, got %d", exp, got)
 	}
 
 	snaps = mustListSnapshots(t, store)
@@ -652,12 +667,15 @@ func Test_Store_Reap(t *testing.T) {
 		t.Fatalf("Expected %d snapshots in destination store, got %d", exp, got)
 	}
 
-	n, err = store.Reap()
+	n, c, err = store.Reap()
 	if err != nil {
 		t.Fatalf("Failed to reap snapshots: %v", err)
 	}
 	if exp, got := 2, n; exp != got {
 		t.Fatalf("Expected %d snapshots reaped, got %d", exp, got)
+	}
+	if exp, got := 2, c; exp != got {
+		t.Fatalf("Expected %d checkpoints made, got %d", exp, got)
 	}
 
 	snaps = mustListSnapshots(t, store)
@@ -696,12 +714,15 @@ func Test_Store_Reap(t *testing.T) {
 	if len(snaps) != 2 {
 		t.Fatalf("Expected 2 snapshots in destination store, got %d", len(snaps))
 	}
-	n, err = store.Reap()
+	n, c, err = store.Reap()
 	if err != nil {
 		t.Fatalf("Failed to reap snapshots: %v", err)
 	}
 	if exp, got := 1, n; exp != got {
 		t.Fatalf("Expected %d snapshots reaped, got %d", exp, got)
+	}
+	if exp, got := 0, c; exp != got {
+		t.Fatalf("Expected %d checkpoints made, got %d", exp, got)
 	}
 
 	snaps = mustListSnapshots(t, store)
@@ -728,6 +749,51 @@ func Test_Store_Reap(t *testing.T) {
 
 	// dbPath should be a byte-for-byte copy of full2.db
 	if !filesIdentical(dbPath, "testdata/db-and-wals/full2.db") {
+		t.Fatalf("Database file in snapshot does not match source")
+	}
+
+	//////////////////////////////////////////////////////////////////////////////////
+	// Write another full snapshot, and then Reap. Test when there are back-to-back full snapshots.
+	createSnapshotInStore(t, store, "2-6000-1704807720976", 2000, 2, 1, "testdata/db-and-wals/backup.db")
+	snaps = mustListSnapshots(t, store)
+	if len(snaps) != 2 {
+		t.Fatalf("Expected 2 snapshots in destination store, got %d", len(snaps))
+	}
+	n, c, err = store.Reap()
+	if err != nil {
+		t.Fatalf("Failed to reap snapshots: %v", err)
+	}
+	if exp, got := 1, n; exp != got {
+		t.Fatalf("Expected %d snapshots reaped, got %d", exp, got)
+	}
+	if exp, got := 0, c; exp != got {
+		t.Fatalf("Expected %d checkpoints made, got %d", exp, got)
+	}
+
+	snaps = mustListSnapshots(t, store)
+	if len(snaps) != 1 {
+		t.Fatalf("Expected 1 snapshot in destination store, got %d", len(snaps))
+	}
+	_, rc, err = store.Open(snaps[0].ID)
+	if err != nil {
+		t.Fatalf("Failed to open snapshot in destination store: %v", err)
+	}
+
+	buf = &bytes.Buffer{}
+	if _, err := io.Copy(buf, rc); err != nil {
+		t.Fatalf("Failed to read snapshot data from destination store: %v", err)
+	}
+	if err := rc.Close(); err != nil {
+		t.Fatalf("Failed to close snapshot reader in destination store: %v", err)
+	}
+
+	dbPath, walPaths = persistStreamerData(t, buf)
+	if len(walPaths) != 0 {
+		t.Fatalf("Expected 0 WAL files, got %d", len(walPaths))
+	}
+
+	// dbPath should be a byte-for-byte copy of backup.db
+	if !filesIdentical(dbPath, "testdata/db-and-wals/backup.db") {
 		t.Fatalf("Database file in snapshot does not match source")
 	}
 }
