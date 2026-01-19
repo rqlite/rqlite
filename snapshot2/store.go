@@ -217,6 +217,7 @@ func (s *Store) Create(version raft.SnapshotVersion, index, term uint64, configu
 	if err := s.mrsw.BeginRead(); err != nil {
 		return nil, err
 	}
+	defer s.mrsw.EndRead()
 
 	sink := NewSink(s.dir, &raft.SnapshotMeta{
 		Version:            version,
@@ -278,6 +279,7 @@ func (s *Store) Open(id string) (*raft.SnapshotMeta, io.ReadCloser, error) {
 	if err := s.mrsw.BeginRead(); err != nil {
 		return nil, nil, err
 	}
+	defer s.mrsw.EndRead()
 
 	dbfile, walFiles, err := ResolveSnapshots(s.dir, id)
 	if err != nil {
@@ -320,7 +322,9 @@ func (s *Store) Reap() (reapedN, chkN int, retErr error) {
 		}
 	}()
 
-	s.mrsw.BeginWrite("snapshot-reap")
+	if err := s.mrsw.BeginWrite("snapshot-reap"); err != nil {
+		return reapedN, chkN, err
+	}
 	defer s.mrsw.EndWrite()
 
 	if s.reapDisabled {
