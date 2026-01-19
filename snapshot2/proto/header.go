@@ -141,6 +141,7 @@ func (s *SnapshotStreamer) Open() error {
 		return err
 	}
 	hdrBufR := bytes.NewReader(hdrBuf)
+
 	var hdrLenBEBuf [HeaderSizeLen]byte
 	binary.BigEndian.PutUint32(hdrLenBEBuf[:], uint32(len(hdrBuf)))
 	hdrLenBufR := bytes.NewReader(hdrLenBEBuf[:])
