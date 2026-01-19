@@ -243,7 +243,11 @@ func (s *SnapshotManifest) TotalSize() (int64, error) {
 // and its associated files. It sens the marshaled manifest first, followed by the files
 // as contiguous data.
 type SnapshotManifestReader struct {
-	m *SnapshotManifest
+	m        *SnapshotManifest
+	bPm      []byte
+	dbFile   *os.File
+	walFiles []*os.File
+	readPos  int64
 }
 
 // NewSnapshotManifestReader creates a new SnapshotManifestReader for the given manifest.
@@ -253,7 +257,22 @@ func NewSnapshotManifestReader(m *SnapshotManifest) *SnapshotManifestReader {
 	}
 }
 
-// Read reads from the SnapshotManifest and its associated files.
+func (s *SnapshotManifestReader) Open() error {
+	// Marshal the manifest
+	buf, err := s.m.Marshal()
+	if err != nil {
+		return err
+	}
+	s.bPm = buf
+
+	return nil
+}
+
+// Read reads from the SnapshotManifest and its associated files. Calls to Read()
+// return data in the following sequence: 4-byte integer, big-endian, indicating the
+// size of the marshaled manifest, followed by the marshaled manifest itself, followed by
+// the DB file (if any), followed by any WAL files (if any). Once all data has been read,
+// Read() returns io.EOF.
 func (s *SnapshotManifestReader) Read(p []byte) (n int, err error) {
 	return 0, nil
 }
