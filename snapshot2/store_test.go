@@ -669,6 +669,65 @@ func Test_Store_Reap(t *testing.T) {
 	if exp, got := `[{"columns":["COUNT(*)"],"types":["integer"],"values":[[1]]}]`, asJSON(rows); exp != got {
 		t.Fatalf("unexpected results for query exp: %s got: %s", exp, got)
 	}
+
+	//////////////////////////////////////////////////////////////////////////////////
+	// Write two more WAL files, and then Reap.
+	createSnapshotInStore(t, store, "2-1400-1704807720976", 1400, 2, 1, "", "testdata/db-and-wals/wal-01")
+	createSnapshotInStore(t, store, "2-1500-1704807720976", 1500, 2, 1, "", "testdata/db-and-wals/wal-02")
+	snaps, err = store.List()
+	if err != nil {
+		t.Fatalf("Failed to list snapshots in destination store: %v", err)
+	}
+	if exp, got := 3, len(snaps); exp != got {
+		t.Fatalf("Expected %d snapshots in destination store, got %d", exp, got)
+	}
+
+	n, err = store.Reap()
+	if err != nil {
+		t.Fatalf("Failed to reap snapshots: %v", err)
+	}
+	if exp, got := 2, n; exp != got {
+		t.Fatalf("Expected %d snapshots reaped, got %d", exp, got)
+	}
+
+	snaps, err = store.List()
+	if err != nil {
+		t.Fatalf("Failed to list snapshots in destination store: %v", err)
+	}
+	if len(snaps) != 1 {
+		t.Errorf("Expected 1 snapshot in destination store, got %d", len(snaps))
+	}
+	_, rc, err = store.Open(snaps[0].ID)
+	if err != nil {
+		t.Fatalf("Failed to open snapshot in destination store: %v", err)
+	}
+
+	buf = &bytes.Buffer{}
+	if _, err := io.Copy(buf, rc); err != nil {
+		t.Fatalf("Failed to read snapshot data from destination store: %v", err)
+	}
+	if err := rc.Close(); err != nil {
+		t.Fatalf("Failed to close snapshot reader in destination store: %v", err)
+	}
+
+	dbPath, walPaths = persistStreamerData(t, buf)
+	if len(walPaths) != 0 {
+		t.Fatalf("Expected 0 WAL files, got %d", len(walPaths))
+	}
+
+	checkDB, err = db.Open(dbPath, false, true)
+	if err != nil {
+		t.Fatalf("failed to open database at %s: %s", dbPath, err)
+	}
+	defer checkDB.Close()
+	rows, err = checkDB.QueryStringStmt("SELECT COUNT(*) FROM foo")
+	if err != nil {
+		t.Fatalf("failed to query database: %s", err)
+	}
+	if exp, got := `[{"columns":["COUNT(*)"],"types":["integer"],"values":[[3]]}]`, asJSON(rows); exp != got {
+		t.Fatalf("unexpected results for query exp: %s got: %s", exp, got)
+	}
+
 }
 
 func makeTestConfiguration(i, a string) raft.Configuration {
