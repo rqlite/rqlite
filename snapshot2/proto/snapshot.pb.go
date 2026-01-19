@@ -21,7 +21,7 @@ const (
 	_ = protoimpl.EnforceVersion(protoimpl.MaxVersion - 20)
 )
 
-type SnapshotDBFile struct {
+type Header struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	SizeBytes     uint64                 `protobuf:"varint,1,opt,name=size_bytes,json=sizeBytes,proto3" json:"size_bytes,omitempty"`
 	Crc32         uint32                 `protobuf:"varint,2,opt,name=crc32,proto3" json:"crc32,omitempty"`
@@ -29,20 +29,20 @@ type SnapshotDBFile struct {
 	sizeCache     protoimpl.SizeCache
 }
 
-func (x *SnapshotDBFile) Reset() {
-	*x = SnapshotDBFile{}
+func (x *Header) Reset() {
+	*x = Header{}
 	mi := &file_snapshot_proto_msgTypes[0]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
 
-func (x *SnapshotDBFile) String() string {
+func (x *Header) String() string {
 	return protoimpl.X.MessageStringOf(x)
 }
 
-func (*SnapshotDBFile) ProtoMessage() {}
+func (*Header) ProtoMessage() {}
 
-func (x *SnapshotDBFile) ProtoReflect() protoreflect.Message {
+func (x *Header) ProtoReflect() protoreflect.Message {
 	mi := &file_snapshot_proto_msgTypes[0]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
@@ -54,47 +54,48 @@ func (x *SnapshotDBFile) ProtoReflect() protoreflect.Message {
 	return mi.MessageOf(x)
 }
 
-// Deprecated: Use SnapshotDBFile.ProtoReflect.Descriptor instead.
-func (*SnapshotDBFile) Descriptor() ([]byte, []int) {
+// Deprecated: Use Header.ProtoReflect.Descriptor instead.
+func (*Header) Descriptor() ([]byte, []int) {
 	return file_snapshot_proto_rawDescGZIP(), []int{0}
 }
 
-func (x *SnapshotDBFile) GetSizeBytes() uint64 {
+func (x *Header) GetSizeBytes() uint64 {
 	if x != nil {
 		return x.SizeBytes
 	}
 	return 0
 }
 
-func (x *SnapshotDBFile) GetCrc32() uint32 {
+func (x *Header) GetCrc32() uint32 {
 	if x != nil {
 		return x.Crc32
 	}
 	return 0
 }
 
-type SnapshotWALFile struct {
+type SnapshotHeader struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
-	SizeBytes     uint64                 `protobuf:"varint,1,opt,name=size_bytes,json=sizeBytes,proto3" json:"size_bytes,omitempty"`
-	Crc32         uint32                 `protobuf:"varint,2,opt,name=crc32,proto3" json:"crc32,omitempty"`
+	FormatVersion uint32                 `protobuf:"varint,1,opt,name=format_version,json=formatVersion,proto3" json:"format_version,omitempty"`
+	DbHeader      *Header                `protobuf:"bytes,2,opt,name=db_header,json=dbHeader,proto3" json:"db_header,omitempty"`
+	WalHeaders    []*Header              `protobuf:"bytes,3,rep,name=wal_headers,json=walHeaders,proto3" json:"wal_headers,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
 
-func (x *SnapshotWALFile) Reset() {
-	*x = SnapshotWALFile{}
+func (x *SnapshotHeader) Reset() {
+	*x = SnapshotHeader{}
 	mi := &file_snapshot_proto_msgTypes[1]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
 
-func (x *SnapshotWALFile) String() string {
+func (x *SnapshotHeader) String() string {
 	return protoimpl.X.MessageStringOf(x)
 }
 
-func (*SnapshotWALFile) ProtoMessage() {}
+func (*SnapshotHeader) ProtoMessage() {}
 
-func (x *SnapshotWALFile) ProtoReflect() protoreflect.Message {
+func (x *SnapshotHeader) ProtoReflect() protoreflect.Message {
 	mi := &file_snapshot_proto_msgTypes[1]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
@@ -106,205 +107,46 @@ func (x *SnapshotWALFile) ProtoReflect() protoreflect.Message {
 	return mi.MessageOf(x)
 }
 
-// Deprecated: Use SnapshotWALFile.ProtoReflect.Descriptor instead.
-func (*SnapshotWALFile) Descriptor() ([]byte, []int) {
+// Deprecated: Use SnapshotHeader.ProtoReflect.Descriptor instead.
+func (*SnapshotHeader) Descriptor() ([]byte, []int) {
 	return file_snapshot_proto_rawDescGZIP(), []int{1}
 }
 
-func (x *SnapshotWALFile) GetSizeBytes() uint64 {
-	if x != nil {
-		return x.SizeBytes
-	}
-	return 0
-}
-
-func (x *SnapshotWALFile) GetCrc32() uint32 {
-	if x != nil {
-		return x.Crc32
-	}
-	return 0
-}
-
-type SnapshotInstall struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	DbFile        *SnapshotDBFile        `protobuf:"bytes,1,opt,name=db_file,json=dbFile,proto3" json:"db_file,omitempty"`
-	WalFiles      []*SnapshotWALFile     `protobuf:"bytes,2,rep,name=wal_files,json=walFiles,proto3" json:"wal_files,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
-}
-
-func (x *SnapshotInstall) Reset() {
-	*x = SnapshotInstall{}
-	mi := &file_snapshot_proto_msgTypes[2]
-	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-	ms.StoreMessageInfo(mi)
-}
-
-func (x *SnapshotInstall) String() string {
-	return protoimpl.X.MessageStringOf(x)
-}
-
-func (*SnapshotInstall) ProtoMessage() {}
-
-func (x *SnapshotInstall) ProtoReflect() protoreflect.Message {
-	mi := &file_snapshot_proto_msgTypes[2]
-	if x != nil {
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		if ms.LoadMessageInfo() == nil {
-			ms.StoreMessageInfo(mi)
-		}
-		return ms
-	}
-	return mi.MessageOf(x)
-}
-
-// Deprecated: Use SnapshotInstall.ProtoReflect.Descriptor instead.
-func (*SnapshotInstall) Descriptor() ([]byte, []int) {
-	return file_snapshot_proto_rawDescGZIP(), []int{2}
-}
-
-func (x *SnapshotInstall) GetDbFile() *SnapshotDBFile {
-	if x != nil {
-		return x.DbFile
-	}
-	return nil
-}
-
-func (x *SnapshotInstall) GetWalFiles() []*SnapshotWALFile {
-	if x != nil {
-		return x.WalFiles
-	}
-	return nil
-}
-
-type SnapshotManifest struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	FormatVersion uint32                 `protobuf:"varint,1,opt,name=format_version,json=formatVersion,proto3" json:"format_version,omitempty"`
-	// Types that are valid to be assigned to Type:
-	//
-	//	*SnapshotManifest_DbPath
-	//	*SnapshotManifest_WalPath
-	//	*SnapshotManifest_Install
-	Type          isSnapshotManifest_Type `protobuf_oneof:"type"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
-}
-
-func (x *SnapshotManifest) Reset() {
-	*x = SnapshotManifest{}
-	mi := &file_snapshot_proto_msgTypes[3]
-	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-	ms.StoreMessageInfo(mi)
-}
-
-func (x *SnapshotManifest) String() string {
-	return protoimpl.X.MessageStringOf(x)
-}
-
-func (*SnapshotManifest) ProtoMessage() {}
-
-func (x *SnapshotManifest) ProtoReflect() protoreflect.Message {
-	mi := &file_snapshot_proto_msgTypes[3]
-	if x != nil {
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		if ms.LoadMessageInfo() == nil {
-			ms.StoreMessageInfo(mi)
-		}
-		return ms
-	}
-	return mi.MessageOf(x)
-}
-
-// Deprecated: Use SnapshotManifest.ProtoReflect.Descriptor instead.
-func (*SnapshotManifest) Descriptor() ([]byte, []int) {
-	return file_snapshot_proto_rawDescGZIP(), []int{3}
-}
-
-func (x *SnapshotManifest) GetFormatVersion() uint32 {
+func (x *SnapshotHeader) GetFormatVersion() uint32 {
 	if x != nil {
 		return x.FormatVersion
 	}
 	return 0
 }
 
-func (x *SnapshotManifest) GetType() isSnapshotManifest_Type {
+func (x *SnapshotHeader) GetDbHeader() *Header {
 	if x != nil {
-		return x.Type
+		return x.DbHeader
 	}
 	return nil
 }
 
-func (x *SnapshotManifest) GetDbPath() *SnapshotDBFile {
+func (x *SnapshotHeader) GetWalHeaders() []*Header {
 	if x != nil {
-		if x, ok := x.Type.(*SnapshotManifest_DbPath); ok {
-			return x.DbPath
-		}
+		return x.WalHeaders
 	}
 	return nil
 }
-
-func (x *SnapshotManifest) GetWalPath() *SnapshotWALFile {
-	if x != nil {
-		if x, ok := x.Type.(*SnapshotManifest_WalPath); ok {
-			return x.WalPath
-		}
-	}
-	return nil
-}
-
-func (x *SnapshotManifest) GetInstall() *SnapshotInstall {
-	if x != nil {
-		if x, ok := x.Type.(*SnapshotManifest_Install); ok {
-			return x.Install
-		}
-	}
-	return nil
-}
-
-type isSnapshotManifest_Type interface {
-	isSnapshotManifest_Type()
-}
-
-type SnapshotManifest_DbPath struct {
-	DbPath *SnapshotDBFile `protobuf:"bytes,2,opt,name=db_path,json=dbPath,proto3,oneof"`
-}
-
-type SnapshotManifest_WalPath struct {
-	WalPath *SnapshotWALFile `protobuf:"bytes,3,opt,name=wal_path,json=walPath,proto3,oneof"`
-}
-
-type SnapshotManifest_Install struct {
-	Install *SnapshotInstall `protobuf:"bytes,4,opt,name=install,proto3,oneof"`
-}
-
-func (*SnapshotManifest_DbPath) isSnapshotManifest_Type() {}
-
-func (*SnapshotManifest_WalPath) isSnapshotManifest_Type() {}
-
-func (*SnapshotManifest_Install) isSnapshotManifest_Type() {}
 
 var File_snapshot_proto protoreflect.FileDescriptor
 
 const file_snapshot_proto_rawDesc = "" +
 	"\n" +
-	"\x0esnapshot.proto\x12\tsnapshot2\"E\n" +
-	"\x0eSnapshotDBFile\x12\x1d\n" +
+	"\x0esnapshot.proto\x12\tsnapshot2\"=\n" +
+	"\x06Header\x12\x1d\n" +
 	"\n" +
 	"size_bytes\x18\x01 \x01(\x04R\tsizeBytes\x12\x14\n" +
-	"\x05crc32\x18\x02 \x01(\rR\x05crc32\"F\n" +
-	"\x0fSnapshotWALFile\x12\x1d\n" +
-	"\n" +
-	"size_bytes\x18\x01 \x01(\x04R\tsizeBytes\x12\x14\n" +
-	"\x05crc32\x18\x02 \x01(\rR\x05crc32\"~\n" +
-	"\x0fSnapshotInstall\x122\n" +
-	"\adb_file\x18\x01 \x01(\v2\x19.snapshot2.SnapshotDBFileR\x06dbFile\x127\n" +
-	"\twal_files\x18\x02 \x03(\v2\x1a.snapshot2.SnapshotWALFileR\bwalFiles\"\xe8\x01\n" +
-	"\x10SnapshotManifest\x12%\n" +
-	"\x0eformat_version\x18\x01 \x01(\rR\rformatVersion\x124\n" +
-	"\adb_path\x18\x02 \x01(\v2\x19.snapshot2.SnapshotDBFileH\x00R\x06dbPath\x127\n" +
-	"\bwal_path\x18\x03 \x01(\v2\x1a.snapshot2.SnapshotWALFileH\x00R\awalPath\x126\n" +
-	"\ainstall\x18\x04 \x01(\v2\x1a.snapshot2.SnapshotInstallH\x00R\ainstallB\x06\n" +
-	"\x04typeB-Z+github.com/rqlite/rqlite/v9/snapshot2/protob\x06proto3"
+	"\x05crc32\x18\x02 \x01(\rR\x05crc32\"\x9b\x01\n" +
+	"\x0eSnapshotHeader\x12%\n" +
+	"\x0eformat_version\x18\x01 \x01(\rR\rformatVersion\x12.\n" +
+	"\tdb_header\x18\x02 \x01(\v2\x11.snapshot2.HeaderR\bdbHeader\x122\n" +
+	"\vwal_headers\x18\x03 \x03(\v2\x11.snapshot2.HeaderR\n" +
+	"walHeadersB-Z+github.com/rqlite/rqlite/v9/snapshot2/protob\x06proto3"
 
 var (
 	file_snapshot_proto_rawDescOnce sync.Once
@@ -318,24 +160,19 @@ func file_snapshot_proto_rawDescGZIP() []byte {
 	return file_snapshot_proto_rawDescData
 }
 
-var file_snapshot_proto_msgTypes = make([]protoimpl.MessageInfo, 4)
+var file_snapshot_proto_msgTypes = make([]protoimpl.MessageInfo, 2)
 var file_snapshot_proto_goTypes = []any{
-	(*SnapshotDBFile)(nil),   // 0: snapshot2.SnapshotDBFile
-	(*SnapshotWALFile)(nil),  // 1: snapshot2.SnapshotWALFile
-	(*SnapshotInstall)(nil),  // 2: snapshot2.SnapshotInstall
-	(*SnapshotManifest)(nil), // 3: snapshot2.SnapshotManifest
+	(*Header)(nil),         // 0: snapshot2.Header
+	(*SnapshotHeader)(nil), // 1: snapshot2.SnapshotHeader
 }
 var file_snapshot_proto_depIdxs = []int32{
-	0, // 0: snapshot2.SnapshotInstall.db_file:type_name -> snapshot2.SnapshotDBFile
-	1, // 1: snapshot2.SnapshotInstall.wal_files:type_name -> snapshot2.SnapshotWALFile
-	0, // 2: snapshot2.SnapshotManifest.db_path:type_name -> snapshot2.SnapshotDBFile
-	1, // 3: snapshot2.SnapshotManifest.wal_path:type_name -> snapshot2.SnapshotWALFile
-	2, // 4: snapshot2.SnapshotManifest.install:type_name -> snapshot2.SnapshotInstall
-	5, // [5:5] is the sub-list for method output_type
-	5, // [5:5] is the sub-list for method input_type
-	5, // [5:5] is the sub-list for extension type_name
-	5, // [5:5] is the sub-list for extension extendee
-	0, // [0:5] is the sub-list for field type_name
+	0, // 0: snapshot2.SnapshotHeader.db_header:type_name -> snapshot2.Header
+	0, // 1: snapshot2.SnapshotHeader.wal_headers:type_name -> snapshot2.Header
+	2, // [2:2] is the sub-list for method output_type
+	2, // [2:2] is the sub-list for method input_type
+	2, // [2:2] is the sub-list for extension type_name
+	2, // [2:2] is the sub-list for extension extendee
+	0, // [0:2] is the sub-list for field type_name
 }
 
 func init() { file_snapshot_proto_init() }
@@ -343,18 +180,13 @@ func file_snapshot_proto_init() {
 	if File_snapshot_proto != nil {
 		return
 	}
-	file_snapshot_proto_msgTypes[3].OneofWrappers = []any{
-		(*SnapshotManifest_DbPath)(nil),
-		(*SnapshotManifest_WalPath)(nil),
-		(*SnapshotManifest_Install)(nil),
-	}
 	type x struct{}
 	out := protoimpl.TypeBuilder{
 		File: protoimpl.DescBuilder{
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_snapshot_proto_rawDesc), len(file_snapshot_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   4,
+			NumMessages:   2,
 			NumExtensions: 0,
 			NumServices:   0,
 		},

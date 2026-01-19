@@ -181,15 +181,17 @@ func (s *Store) Open(id string) (*raft.SnapshotMeta, io.ReadCloser, error) {
 	if err != nil {
 		return nil, nil, err
 	}
-	manifest, err := proto.NewSnapshotManifestWithInstall(dbfile, walFiles...)
+
+	streamer, err := proto.NewSnapshotStreamer(dbfile, walFiles...)
 	if err != nil {
 		return nil, nil, err
 	}
 
-	// Start with the meta for the requested snaphot. However its size
-	// -- what we send over the network -- is a combo of the manifest and
-	// its files, and the manifest size header.
-	sz, err := manifest.TotalSize()
+	if err := streamer.Open(); err != nil {
+		return nil, nil, err
+	}
+
+	sz, err := streamer.Len()
 	if err != nil {
 		return nil, nil, err
 	}
@@ -198,9 +200,9 @@ func (s *Store) Open(id string) (*raft.SnapshotMeta, io.ReadCloser, error) {
 	if err != nil {
 		return nil, nil, err
 	}
-	meta.Size = sz + manifestHdrLen // + for length prefix
+	meta.Size = sz
 
-	return meta.SnapshotMeta, proto.NewSnapshotManifestReader(manifest), nil
+	return meta.SnapshotMeta, streamer, nil
 }
 
 // Reap reaps all snapshots, except the most recent one. Returns the number of

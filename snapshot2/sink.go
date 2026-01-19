@@ -15,10 +15,6 @@ import (
 	pb "google.golang.org/protobuf/proto"
 )
 
-const (
-	manifestHdrLen = 4
-)
-
 type sinker interface {
 	Open() error
 	io.WriteCloser
@@ -37,9 +33,9 @@ type Sink struct {
 	snapDirPath    string
 	snapTmpDirPath string
 
-	buf      bytes.Buffer
-	manifest *proto.SnapshotManifest
-	sinkW    sinker
+	buf    bytes.Buffer
+	header *proto.SnapshotHeader
+	sinkW  sinker
 
 	logger *log.Logger
 }
@@ -78,8 +74,8 @@ func (s *Sink) ID() string {
 // Write writes snapshot data to the sink.
 func (s *Sink) Write(p []byte) (n int, err error) {
 
-	// If we don't yet have a manifest, try to decode one.
-	if s.manifest == nil {
+	// If we don't yet have a header, try to decode one.
+	if s.header == nil {
 		n, err := s.buf.Write(p)
 		if err != nil {
 			return n, err
@@ -89,20 +85,18 @@ func (s *Sink) Write(p []byte) (n int, err error) {
 			return n, err
 		}
 
-		if s.manifest == nil {
+		if s.header == nil {
 			// Still waiting for more data to form a complete header.
 			return n, nil
 		}
 
-		// We have a manifest to figure out what to do with it.
-		if s.manifest.GetDbPath() != nil {
-			s.sinkW = NewDBSink(s.snapTmpDirPath, s.manifest.GetDbPath())
-		} else if s.manifest.GetWalPath() != nil {
-			s.sinkW = NewWALSink(s.snapTmpDirPath, s.manifest.GetWalPath())
-		} else if s.manifest.GetInstall() != nil {
-			s.sinkW = NewInstallSink(s.snapTmpDirPath, s.manifest.GetInstall())
+		// We have a header to figure out what to do with it.
+		if s.header.DbHeader != nil {
+			s.sinkW = NewDBSink(s.snapTmpDirPath, s.header.DbHeader)
+		} else if s.header.WalHeaders != nil {
+			s.sinkW = NewWALSink(s.snapTmpDirPath, s.header.WalHeaders)
 		} else {
-			return n, fmt.Errorf("unrecognized snapshot manifest")
+			return n, fmt.Errorf("unrecognized snapshot header")
 		}
 
 		// Prep and preload the sink.
@@ -153,34 +147,35 @@ func (s *Sink) Cancel() error {
 	return os.RemoveAll(s.snapTmpDirPath)
 }
 
-// processHeader processes the header data in the buffer to extract the manifest.
-// When the manifest is successfully extracted, the Sink's manifest pointer is set.
-// There may still be remaining data in the buffer after the manifest is formed and
-// it is up to the caller to handle that data appropriately. Howveer the buffer
+// processHeader processes the header data in the buffer to extract the header.
+// When the header is successfully extracted, the Sink's header pointer is set.
+// There may still be remaining data in the buffer after the header is formed and
+// it is up to the caller to handle that data appropriately. However the buffer
 // will contain only unprocessed data after this function returns.
 func (s *Sink) processHeader() error {
-	if s.buf.Len() < manifestHdrLen {
+	hdrPrefixSz := proto.HeaderSizeLen
+	if s.buf.Len() < hdrPrefixSz {
 		// Not enough data to read length prefix.
 		return nil
 	}
 
 	// Read length prefix encoded big endian
-	lenBytes := binary.BigEndian.Uint32(s.buf.Bytes()[:manifestHdrLen])
-	if uint32(s.buf.Len()) < manifestHdrLen+lenBytes {
-		// Not enough data to read complete manifest.
+	numHdrBytes := binary.BigEndian.Uint32(s.buf.Bytes()[:hdrPrefixSz])
+	if uint32(s.buf.Len()) < numHdrBytes {
+		// Not enough data to read complete header.
 		return nil
 	}
 
-	// We have enough data to read the manifest.
-	manifestBytes := s.buf.Bytes()[manifestHdrLen : manifestHdrLen+lenBytes]
-	manifest := &proto.SnapshotManifest{}
-	if err := pb.Unmarshal(manifestBytes, manifest); err != nil {
-		return fmt.Errorf("failed to unmarshal snapshot manifest: %v", err)
+	// We have enough data to read the header.
+	headerBytes := s.buf.Bytes()[hdrPrefixSz:numHdrBytes]
+	header := &proto.SnapshotHeader{}
+	if err := pb.Unmarshal(headerBytes, header); err != nil {
+		return fmt.Errorf("failed to unmarshal snapshot header: %v", err)
 	}
-	s.manifest = manifest
+	s.header = header
 
 	// Remove processed data from buffer.
-	remainingBytes := s.buf.Bytes()[manifestHdrLen+lenBytes:]
+	remainingBytes := s.buf.Bytes()[hdrPrefixSz+int(numHdrBytes):]
 	s.buf.Reset()
 	s.buf.Write(remainingBytes)
 	return nil
