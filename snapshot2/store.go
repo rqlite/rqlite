@@ -207,7 +207,7 @@ func NewStore(dir string) (*Store, error) {
 
 // Create creates a new snapshot sink for the given parameters.
 func (s *Store) Create(version raft.SnapshotVersion, index, term uint64, configuration raft.Configuration,
-	configurationIndex uint64, trans raft.Transport) (raft.SnapshotSink, error) {
+	configurationIndex uint64, trans raft.Transport) (retSink raft.SnapshotSink, retErr error) {
 	if exists, err := s.snapshotExists(snapshotName(term, index)); err != nil {
 		return nil, err
 	} else if exists {
@@ -217,7 +217,11 @@ func (s *Store) Create(version raft.SnapshotVersion, index, term uint64, configu
 	if err := s.mrsw.BeginRead(); err != nil {
 		return nil, err
 	}
-	defer s.mrsw.EndRead()
+	defer func() {
+		if retErr != nil {
+			s.mrsw.EndWrite()
+		}
+	}()
 
 	sink := NewSink(s.dir, &raft.SnapshotMeta{
 		Version:            version,
