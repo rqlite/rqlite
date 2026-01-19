@@ -246,52 +246,19 @@ func Test_Store_CreateThenList(t *testing.T) {
 	}
 }
 
-// Test_Store_SingleInstall tests that installing a single snapshot works as expected.
-// This tests the scenario where a snapshot is instaled into the store from another
-// node, or rebuilding on restart.
+// Test_Store_EndToEndCycle tests an end-to-end cycle of creating a Store,
+// creating sinks, and writing various types of snapshots.
 //
 // The snapshot is created on the fly, not by using Store.Open().
-func Test_Store_SingleInstall(t *testing.T) {
+func Test_Store_EndToEndCycle(t *testing.T) {
 	dir := t.TempDir()
 	store, err := NewStore(dir)
 	if err != nil {
 		t.Fatalf("Failed to create new store: %v", err)
 	}
 
-	sink, err := store.Create(1, 2, 3, makeTestConfiguration("1", "localhost:1"), 1, nil)
-	if err != nil {
-		t.Fatalf("Failed to create sink: %v", err)
-	}
-	defer sink.Cancel()
+	createSnapshotInStore(t, store, "2-1017-1704807719996", 1017, 2, 1, "testdata/db-and-wals/backup.db")
 
-	streamer, err := proto.NewSnapshotStreamer(
-		"testdata/db-and-wals/full2.db",
-		"testdata/db-and-wals/wal-00",
-	)
-	if err != nil {
-		t.Fatalf("unexpected error creating manifest: %s", err.Error())
-	}
-
-	// Read from streamer into sink.
-	_, err = io.Copy(sink, streamer)
-	if err != nil {
-		t.Fatalf("Failed to copy snapshot data to sink: %v", err)
-	}
-
-	for _, filePath := range []string{"testdata/db-and-wals/full2.db", "testdata/db-and-wals/wal-00"} {
-		fd, err := os.Open(filePath)
-		if err != nil {
-			t.Fatalf("unexpected error opening source file %s: %s", filePath, err.Error())
-		}
-		if _, err := io.Copy(sink, fd); err != nil {
-			t.Fatalf("unexpected error copying data to sink: %s", err.Error())
-		}
-		fd.Close()
-	}
-
-	if err := sink.Close(); err != nil {
-		t.Fatalf("unexpected error closing sink: %s", err.Error())
-	}
 }
 
 func makeTestConfiguration(i, a string) raft.Configuration {
