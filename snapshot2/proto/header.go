@@ -15,6 +15,8 @@ const (
 	HeaderSizeLen = 4
 )
 
+// NewHeaderFromFile creates a new Header for the given file path. If crc32 is true,
+// the CRC32 checksum of the file is calculated and included in the Header.
 func NewHeaderFromFile(path string, crc32 bool) (*Header, error) {
 	if path == "" {
 		return nil, nil
@@ -36,6 +38,7 @@ func NewHeaderFromFile(path string, crc32 bool) (*Header, error) {
 	return h, nil
 }
 
+// NewSnapshotHeader creates a new SnapshotHeader for the given DB and WAL file paths.
 func NewSnapshotHeader(dbPath string, walPaths ...string) (*SnapshotHeader, error) {
 	dhHeader, err := NewHeaderFromFile(dbPath, true)
 	if err != nil {
