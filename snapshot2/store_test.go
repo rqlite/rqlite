@@ -686,6 +686,50 @@ func Test_Store_Reap(t *testing.T) {
 	if exp, got := `[{"columns":["COUNT(*)"],"types":["integer"],"values":[[3]]}]`, rows; exp != got {
 		t.Fatalf("unexpected results for query exp: %s got: %s", exp, got)
 	}
+
+	//////////////////////////////////////////////////////////////////////////////////
+	// Write a full snapshot, and then Reap. Reaping when there are multiple snapshots
+	// but the latest is full should just remove all snapshots, but not doing any moving
+	// or checkpointing.
+	createSnapshotInStore(t, store, "2-2000-1704807720976", 2000, 2, 1, "testdata/db-and-wals/full2.db")
+	snaps = mustListSnapshots(t, store)
+	if len(snaps) != 2 {
+		t.Fatalf("Expected 2 snapshots in destination store, got %d", len(snaps))
+	}
+	n, err = store.Reap()
+	if err != nil {
+		t.Fatalf("Failed to reap snapshots: %v", err)
+	}
+	if exp, got := 1, n; exp != got {
+		t.Fatalf("Expected %d snapshots reaped, got %d", exp, got)
+	}
+
+	snaps = mustListSnapshots(t, store)
+	if len(snaps) != 1 {
+		t.Fatalf("Expected 1 snapshot in destination store, got %d", len(snaps))
+	}
+	_, rc, err = store.Open(snaps[0].ID)
+	if err != nil {
+		t.Fatalf("Failed to open snapshot in destination store: %v", err)
+	}
+
+	buf = &bytes.Buffer{}
+	if _, err := io.Copy(buf, rc); err != nil {
+		t.Fatalf("Failed to read snapshot data from destination store: %v", err)
+	}
+	if err := rc.Close(); err != nil {
+		t.Fatalf("Failed to close snapshot reader in destination store: %v", err)
+	}
+
+	dbPath, walPaths = persistStreamerData(t, buf)
+	if len(walPaths) != 0 {
+		t.Fatalf("Expected 0 WAL files, got %d", len(walPaths))
+	}
+
+	// dbPath should be a byte-for-byte copy of full2.db
+	if !filesIdentical(dbPath, "testdata/db-and-wals/full2.db") {
+		t.Fatalf("Database file in snapshot does not match source")
+	}
 }
 
 func makeTestConfiguration(i, a string) raft.Configuration {

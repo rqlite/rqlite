@@ -353,6 +353,12 @@ func (s *Store) Reap() (retN int, retErr error) {
 	if err != nil {
 		return retN, err
 	}
+
+	if len(snapshots) == 1 {
+		// Nothing to do - only the full snapshot remains since it was the newest.
+		return retN, nil
+	}
+
 	newestSnap := snapshots[len(snapshots)-1]
 	newestSnapPath := filepath.Join(s.dir, newestSnap.ID)
 
