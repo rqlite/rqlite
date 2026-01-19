@@ -171,13 +171,13 @@ func (s *Sink) processHeader() error {
 
 	// Read length prefix encoded big endian
 	numHdrBytes := binary.BigEndian.Uint32(s.buf.Bytes()[:hdrPrefixSz])
-	if uint32(s.buf.Len()) < numHdrBytes {
+	if s.buf.Len() < hdrPrefixSz+int(numHdrBytes) {
 		// Not enough data to read complete header.
 		return nil
 	}
 
 	// We have enough data to read the header.
-	headerBytes := s.buf.Bytes()[hdrPrefixSz:numHdrBytes]
+	headerBytes := s.buf.Bytes()[hdrPrefixSz : hdrPrefixSz+int(numHdrBytes)]
 	header := &proto.SnapshotHeader{}
 	if err := pb.Unmarshal(headerBytes, header); err != nil {
 		return fmt.Errorf("failed to unmarshal snapshot header: %v", err)

@@ -158,7 +158,7 @@ func Test_StoreCreateCancel(t *testing.T) {
 	}
 }
 
-func Test_Store_CreateList(t *testing.T) {
+func Test_Store_CreateThenList(t *testing.T) {
 	dir := t.TempDir()
 	store, err := NewStore(dir)
 	if err != nil {
@@ -183,29 +183,31 @@ func Test_Store_CreateList(t *testing.T) {
 		}
 
 		dbFile := ""
-		walFile := ""
+		walFile := []string{}
 		if db.IsValidSQLiteFile(file) {
 			dbFile = file
 		} else {
-			walFile = file
+			walFile = append(walFile, file)
 		}
 
-		streamer, err := proto.NewSnapshotStreamer(dbFile, walFile)
+		// Make the streamer.
+		streamer, err := proto.NewSnapshotStreamer(dbFile, walFile...)
 		if err != nil {
 			t.Fatalf("Failed to create SnapshotStreamer: %v", err)
 		}
+		if err := streamer.Open(); err != nil {
+			t.Fatalf("Failed to open SnapshotStreamer: %v", err)
+		}
+		defer func() {
+			if err := streamer.Close(); err != nil {
+				t.Fatalf("Failed to close SnapshotStreamer: %v", err)
+			}
+		}()
 
-		// Read from streamer into sink.
+		// Copy from streamer into sink.
 		_, err = io.Copy(sink, streamer)
 		if err != nil {
 			t.Fatalf("Failed to copy snapshot data to sink: %v", err)
-		}
-
-		fd := mustOpenFile(t, file)
-		defer fd.Close()
-		_, err = io.Copy(sink, fd)
-		if err != nil {
-			t.Fatalf("Failed to copy file to sink: %v", err)
 		}
 
 		if err := sink.Close(); err != nil {
