@@ -407,16 +407,12 @@ func Test_Store_EndToEndCycle(t *testing.T) {
 
 	// Check the file, it should have the content of the backup plus the changes
 	// from the checkpointed WAL file.
-	checkDB, err := db.Open(dbPath, false, true)
-	if err != nil {
-		t.Fatalf("failed to open database at %s: %s", dbPath, err)
-	}
-	defer checkDB.Close()
-	rows, err := checkDB.QueryStringStmt("SELECT COUNT(*) FROM foo")
+
+	rows := mustQueryDB(t, dbPath, "SELECT COUNT(*) FROM foo")
 	if err != nil {
 		t.Fatalf("failed to query database: %s", err)
 	}
-	if exp, got := `[{"columns":["COUNT(*)"],"types":["integer"],"values":[[1]]}]`, asJSON(rows); exp != got {
+	if exp, got := `[{"columns":["COUNT(*)"],"types":["integer"],"values":[[1]]}]`, rows; exp != got {
 		t.Fatalf("unexpected results for query exp: %s got: %s", exp, got)
 	}
 
@@ -489,16 +485,12 @@ func Test_Store_EndToEndCycle(t *testing.T) {
 
 	// Check the file, it should have the content of the backup plus the changes
 	// from the two checkpointed WAL files.
-	checkDB, err = db.Open(dbPath, false, true)
-	if err != nil {
-		t.Fatalf("failed to open database at %s: %s", dbPath, err)
-	}
-	defer checkDB.Close()
-	rows, err = checkDB.QueryStringStmt("SELECT COUNT(*) FROM foo")
+
+	rows = mustQueryDB(t, dbPath, "SELECT COUNT(*) FROM foo")
 	if err != nil {
 		t.Fatalf("failed to query database: %s", err)
 	}
-	if exp, got := `[{"columns":["COUNT(*)"],"types":["integer"],"values":[[2]]}]`, asJSON(rows); exp != got {
+	if exp, got := `[{"columns":["COUNT(*)"],"types":["integer"],"values":[[2]]}]`, rows; exp != got {
 		t.Fatalf("unexpected results for query exp: %s got: %s", exp, got)
 	}
 
@@ -573,16 +565,8 @@ func Test_Store_EndToEndCycle(t *testing.T) {
 
 	// Check the file, it should have the content of the backup plus the changes
 	// from the three checkpointed WAL files.
-	checkDB, err = db.Open(dbPath, false, true)
-	if err != nil {
-		t.Fatalf("failed to open database at %s: %s", dbPath, err)
-	}
-	defer checkDB.Close()
-	rows, err = checkDB.QueryStringStmt("SELECT COUNT(*) FROM foo")
-	if err != nil {
-		t.Fatalf("failed to query database: %s", err)
-	}
-	if exp, got := `[{"columns":["COUNT(*)"],"types":["integer"],"values":[[3]]}]`, asJSON(rows); exp != got {
+	rows = mustQueryDB(t, dbPath, "SELECT COUNT(*) FROM foo")
+	if exp, got := `[{"columns":["COUNT(*)"],"types":["integer"],"values":[[3]]}]`, rows; exp != got {
 		t.Fatalf("unexpected results for query exp: %s got: %s", exp, got)
 	}
 }
@@ -594,12 +578,9 @@ func Test_Store_Reap(t *testing.T) {
 		t.Fatalf("Failed to create new store: %v", err)
 	}
 
-	snaps, err := store.List()
-	if err != nil {
-		t.Fatalf("Failed to list snapshots: %v", err)
-	}
+	snaps := mustListSnapshots(t, store)
 	if len(snaps) != 0 {
-		t.Fatalf("Expected 0 snapshots, got %d", len(snaps))
+		t.Fatalf("Expected 0 snapshots in destination store, got %d", len(snaps))
 	}
 
 	//////////////////////////////////////////////////////////////////////////////////
@@ -632,12 +613,9 @@ func Test_Store_Reap(t *testing.T) {
 		t.Fatalf("Expected %d snapshots reaped, got %d", exp, got)
 	}
 
-	snaps, err = store.List()
-	if err != nil {
-		t.Fatalf("Failed to list snapshots in destination store: %v", err)
-	}
+	snaps = mustListSnapshots(t, store)
 	if len(snaps) != 1 {
-		t.Errorf("Expected 1 snapshot in destination store, got %d", len(snaps))
+		t.Fatalf("Expected 1 snapshot in destination store, got %d", len(snaps))
 	}
 	_, rc, err := store.Open(snaps[0].ID)
 	if err != nil {
@@ -657,16 +635,8 @@ func Test_Store_Reap(t *testing.T) {
 		t.Fatalf("Expected 0 WAL files, got %d", len(walPaths))
 	}
 
-	checkDB, err := db.Open(dbPath, false, true)
-	if err != nil {
-		t.Fatalf("failed to open database at %s: %s", dbPath, err)
-	}
-	defer checkDB.Close()
-	rows, err := checkDB.QueryStringStmt("SELECT COUNT(*) FROM foo")
-	if err != nil {
-		t.Fatalf("failed to query database: %s", err)
-	}
-	if exp, got := `[{"columns":["COUNT(*)"],"types":["integer"],"values":[[1]]}]`, asJSON(rows); exp != got {
+	rows := mustQueryDB(t, dbPath, "SELECT COUNT(*) FROM foo")
+	if exp, got := `[{"columns":["COUNT(*)"],"types":["integer"],"values":[[1]]}]`, rows; exp != got {
 		t.Fatalf("unexpected results for query exp: %s got: %s", exp, got)
 	}
 
@@ -690,12 +660,9 @@ func Test_Store_Reap(t *testing.T) {
 		t.Fatalf("Expected %d snapshots reaped, got %d", exp, got)
 	}
 
-	snaps, err = store.List()
-	if err != nil {
-		t.Fatalf("Failed to list snapshots in destination store: %v", err)
-	}
+	snaps = mustListSnapshots(t, store)
 	if len(snaps) != 1 {
-		t.Errorf("Expected 1 snapshot in destination store, got %d", len(snaps))
+		t.Fatalf("Expected 1 snapshot in destination store, got %d", len(snaps))
 	}
 	_, rc, err = store.Open(snaps[0].ID)
 	if err != nil {
@@ -715,19 +682,10 @@ func Test_Store_Reap(t *testing.T) {
 		t.Fatalf("Expected 0 WAL files, got %d", len(walPaths))
 	}
 
-	checkDB, err = db.Open(dbPath, false, true)
-	if err != nil {
-		t.Fatalf("failed to open database at %s: %s", dbPath, err)
-	}
-	defer checkDB.Close()
-	rows, err = checkDB.QueryStringStmt("SELECT COUNT(*) FROM foo")
-	if err != nil {
-		t.Fatalf("failed to query database: %s", err)
-	}
-	if exp, got := `[{"columns":["COUNT(*)"],"types":["integer"],"values":[[3]]}]`, asJSON(rows); exp != got {
+	rows = mustQueryDB(t, dbPath, "SELECT COUNT(*) FROM foo")
+	if exp, got := `[{"columns":["COUNT(*)"],"types":["integer"],"values":[[3]]}]`, rows; exp != got {
 		t.Fatalf("unexpected results for query exp: %s got: %s", exp, got)
 	}
-
 }
 
 func makeTestConfiguration(i, a string) raft.Configuration {
@@ -846,4 +804,27 @@ func persistStreamerData(t *testing.T, buf *bytes.Buffer) (string, []string) {
 	}
 
 	return dbPath, walPaths
+}
+
+func mustListSnapshots(t *testing.T, store *Store) []*raft.SnapshotMeta {
+	t.Helper()
+	snaps, err := store.List()
+	if err != nil {
+		t.Fatalf("Failed to list snapshots: %v", err)
+	}
+	return snaps
+}
+
+func mustQueryDB(t *testing.T, dbPath, query string) string {
+	t.Helper()
+	checkDB, err := db.Open(dbPath, false, true)
+	if err != nil {
+		t.Fatalf("failed to open database at %s: %s", dbPath, err)
+	}
+	defer checkDB.Close()
+	rows, err := checkDB.QueryStringStmt(query)
+	if err != nil {
+		t.Fatalf("failed to query database: %s", err)
+	}
+	return asJSON(rows)
 }
