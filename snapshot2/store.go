@@ -120,6 +120,12 @@ func NewStore(dir string) (*Store, error) {
 // Create creates a new snapshot sink for the given parameters.
 func (s *Store) Create(version raft.SnapshotVersion, index, term uint64, configuration raft.Configuration,
 	configurationIndex uint64, trans raft.Transport) (raft.SnapshotSink, error) {
+	if exists, err := s.snapshotExists(snapshotName(term, index)); err != nil {
+		return nil, err
+	} else if exists {
+		return nil, fmt.Errorf("snapshot with index %d and term %d already exists", index, term)
+	}
+
 	sink := NewSink(s.dir, &raft.SnapshotMeta{
 		Version:            version,
 		ID:                 snapshotName(term, index),
@@ -289,6 +295,19 @@ func (s *Store) check() error {
 
 func (s *Store) getSnapshots() ([]*SnapshotMeta, error) {
 	return getSnapshots(s.dir)
+}
+
+func (s *Store) snapshotExists(id string) (bool, error) {
+	snapshots, err := s.getSnapshots()
+	if err != nil {
+		return false, err
+	}
+	for _, snap := range snapshots {
+		if snap.ID == id {
+			return true, nil
+		}
+	}
+	return false, nil
 }
 
 // getSnapshots returns the list of snapshots in the given directory,

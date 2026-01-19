@@ -170,7 +170,6 @@ func Test_Store_CreateIncrementalFirst_Fail(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to create new store: %v", err)
 	}
-	store.SetFullNeeded()
 
 	sink := NewSink(store.Dir(), makeRaftMeta("1234", 45, 1, 40), store)
 	if sink == nil {
