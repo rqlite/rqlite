@@ -219,7 +219,7 @@ func (s *Store) Create(version raft.SnapshotVersion, index, term uint64, configu
 	}
 	defer func() {
 		if retErr != nil {
-			s.mrsw.EndWrite()
+			s.mrsw.EndRead()
 		}
 	}()
 
@@ -593,7 +593,7 @@ func (s *Store) newestFullSnapshot() (*SnapshotMeta, error) {
 	snapshotMetas := snapMetaSlice(snapshots)
 	sort.Sort(sort.Reverse(snapshotMetas))
 
-	for _, snapMeta := range snapshots {
+	for _, snapMeta := range snapshotMetas {
 		if snapMeta.Type == SnapshotMetaTypeFull {
 			return snapMeta, nil
 		}
