@@ -363,7 +363,7 @@ func (c *SnapshotCatalog) Scan(dir string) (SnapshotSet, error) {
 
 	var snapshots []*Snapshot
 	for _, entry := range entries {
-		if !entry.IsDir() {
+		if !entry.IsDir() || isTmpName(entry.Name()) {
 			continue
 		}
 
