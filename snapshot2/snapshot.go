@@ -8,6 +8,7 @@ import (
 	"sort"
 
 	"github.com/hashicorp/raft"
+	"github.com/rqlite/rqlite/v9/db"
 )
 
 // Snapshot represents a single snapshot stored on disk.
@@ -401,8 +402,14 @@ func (c *SnapshotCatalog) loadSnapshot(path string, id string) (*Snapshot, error
 	dataWALPath := filepath.Join(path, "data.wal")
 	if fileExists(dataDBPath) {
 		snapshot.typ = SnapshotTypeFull
+		if !db.IsValidSQLiteFile(dataDBPath) {
+			return nil, fmt.Errorf("data.db in snapshot directory %q is not a valid SQLite database file", path)
+		}
 	} else if fileExists(dataWALPath) {
 		snapshot.typ = SnapshotTypeIncremental
+		if !db.IsValidSQLiteWALFile(dataWALPath) {
+			return nil, fmt.Errorf("data.wal in snapshot directory %q is not a valid SQLite WAL file", path)
+		}
 	} else {
 		return nil, fmt.Errorf("missing data file in snapshot directory %q", path)
 	}
