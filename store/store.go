@@ -2573,17 +2573,19 @@ func (s *Store) fsmSnapshot() (fSnap raft.FSMSnapshot, retErr error) {
 			if err != nil {
 				return nil, err
 			}
-			defer walTmpFD.Close()
+			cleanupWalTmp := true
+			defer func() {
+				if cleanupWalTmp {
+					walTmpFD.Close()
+					os.Remove(walTmpFD.Name())
+				}
+			}()
 			walWriter, err := wal.NewWriter(scanner)
 			if err != nil {
-				walTmpFD.Close()
-				os.Remove(walTmpFD.Name())
 				return nil, err
 			}
 			walSzPost, err := walWriter.WriteTo(walTmpFD)
 			if err != nil {
-				walTmpFD.Close()
-				os.Remove(walTmpFD.Name())
 				return nil, err
 			}
 			stats.Get(snapshotCreateWALCompactDuration).(*expvar.Int).Set(time.Since(compactStartTime).Milliseconds())
@@ -2593,21 +2595,20 @@ func (s *Store) fsmSnapshot() (fSnap raft.FSMSnapshot, retErr error) {
 			// changes since this snapshot.
 			walSzPre, err := fileSize(s.walPath)
 			if err != nil {
-				walTmpFD.Close()
-				os.Remove(walTmpFD.Name())
 				return nil, err
 			}
 			chkTStartTime := time.Now()
 			if err := s.checkpointWAL(); err != nil {
 				stats.Add(numWALCheckpointTruncateFailed, 1)
-				walTmpFD.Close()
-				os.Remove(walTmpFD.Name())
 				return nil, fmt.Errorf("incremental snapshot can't complete due to WAL checkpoint error (will retry): %s",
 					err.Error())
 			}
 			stats.Get(snapshotCreateChkTruncateDuration).(*expvar.Int).Set(time.Since(chkTStartTime).Milliseconds())
 			stats.Get(snapshotPrecompactWALSize).(*expvar.Int).Set(walSzPre)
 			stats.Get(snapshotWALSize).(*expvar.Int).Set(walSzPost)
+
+			// Transfer cleanup responsibility to OnRelease callback on success path.
+			cleanupWalTmp = false
 		}
 		name := ""
 		if walTmpFD != nil {
