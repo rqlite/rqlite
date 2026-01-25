@@ -327,7 +327,7 @@ type Store struct {
 	dbDrv *sql.Driver      // The SQLite database driver.
 	db    *sql.SwappableDB // The underlying SQLite store.
 
-	cdcMu         sync.RWMutex
+	cdcMu         sync.Mutex
 	cdcStreamer   *sql.CDCStreamer
 	cdcOutCh      chan<- *proto.CDCIndexedEventGroup
 	cdcIDsOnly    bool
@@ -2383,8 +2383,8 @@ func (s *Store) fsmApply(l *raft.Log) (e any) {
 
 	cmd, mutated, r := func() (*proto.Command, bool, any) {
 		// Reset CDC streamer with the current log index before processing if CDC is enabled
-		s.cdcMu.RLock()
-		defer s.cdcMu.RUnlock()
+		s.cdcMu.Lock()
+		defer s.cdcMu.Unlock()
 
 		if s.cdcEnabled.Is() {
 			if s.cdcStreamer == nil {
@@ -2593,11 +2593,15 @@ func (s *Store) fsmSnapshot() (fSnap raft.FSMSnapshot, retErr error) {
 			// changes since this snapshot.
 			walSzPre, err := fileSize(s.walPath)
 			if err != nil {
+				walTmpFD.Close()
+				os.Remove(walTmpFD.Name())
 				return nil, err
 			}
 			chkTStartTime := time.Now()
 			if err := s.checkpointWAL(); err != nil {
 				stats.Add(numWALCheckpointTruncateFailed, 1)
+				walTmpFD.Close()
+				os.Remove(walTmpFD.Name())
 				return nil, fmt.Errorf("incremental snapshot can't complete due to WAL checkpoint error (will retry): %s",
 					err.Error())
 			}
@@ -2966,6 +2970,8 @@ func (s *Store) mustTruncateCheckpoint() {
 
 	ticker := time.NewTicker(mustWALCheckpointDelay)
 	defer ticker.Stop()
+	timer := time.NewTimer(mustWALCheckpointTimeout)
+	defer timer.Stop()
 	for {
 		select {
 		case <-ticker.C:
@@ -2973,7 +2979,7 @@ func (s *Store) mustTruncateCheckpoint() {
 			if err == nil && meta.Success() {
 				return
 			}
-		case <-time.After(mustWALCheckpointTimeout):
+		case <-timer.C:
 			msg := fmt.Sprintf("timed out trying to truncate checkpoint WAL after %s,"+
 				" probably due to external long-running read - aborting",
 				mustWALCheckpointTimeout)
