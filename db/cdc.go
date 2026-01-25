@@ -45,6 +45,9 @@ func NewCDCStreamer(out chan<- *command.CDCIndexedEventGroup, db ColumnsNameProv
 // Reset resets the CDCStreamer. The K value is set to the
 // current K value, and all pending events are cleared. This is used
 // to reset the CDCStreamer before a new transaction is started.
+//
+// It is the caller's responsibility to ensure that any pending events
+// are processed before calling Reset.
 func (s *CDCStreamer) Reset(k uint64) {
 	s.pending = &command.CDCIndexedEventGroup{
 		Events: make([]*command.CDCEvent, 0),
