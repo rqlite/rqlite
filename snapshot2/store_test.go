@@ -412,9 +412,6 @@ func Test_Store_EndToEndCycle(t *testing.T) {
 	// from the checkpointed WAL file.
 
 	rows := mustQueryDB(t, dbPath, "SELECT COUNT(*) FROM foo")
-	if err != nil {
-		t.Fatalf("failed to query database: %s", err)
-	}
 	if exp, got := `[{"columns":["COUNT(*)"],"types":["integer"],"values":[[1]]}]`, rows; exp != got {
 		t.Fatalf("unexpected results for query exp: %s got: %s", exp, got)
 	}
@@ -490,9 +487,6 @@ func Test_Store_EndToEndCycle(t *testing.T) {
 	// from the two checkpointed WAL files.
 
 	rows = mustQueryDB(t, dbPath, "SELECT COUNT(*) FROM foo")
-	if err != nil {
-		t.Fatalf("failed to query database: %s", err)
-	}
 	if exp, got := `[{"columns":["COUNT(*)"],"types":["integer"],"values":[[2]]}]`, rows; exp != got {
 		t.Fatalf("unexpected results for query exp: %s got: %s", exp, got)
 	}
