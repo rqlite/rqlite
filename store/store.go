@@ -327,7 +327,7 @@ type Store struct {
 	dbDrv *sql.Driver      // The SQLite database driver.
 	db    *sql.SwappableDB // The underlying SQLite store.
 
-	cdcMu         sync.RWMutex
+	cdcMu         sync.Mutex
 	cdcStreamer   *sql.CDCStreamer
 	cdcOutCh      chan<- *proto.CDCIndexedEventGroup
 	cdcIDsOnly    bool
@@ -2382,11 +2382,11 @@ func (s *Store) fsmApply(l *raft.Log) (e any) {
 	}
 
 	cmd, mutated, r := func() (*proto.Command, bool, any) {
-		// Reset CDC streamer with the current log index before processing if CDC is enabled
-		s.cdcMu.RLock()
-		defer s.cdcMu.RUnlock()
-
 		if s.cdcEnabled.Is() {
+			// Lazy initialization of the CDCStreamer so we're sure the Store is fully open
+			// and operating before we start CDC processing.
+			s.cdcMu.Lock()
+			defer s.cdcMu.Unlock()
 			if s.cdcStreamer == nil {
 				var err error
 				s.cdcStreamer, err = sql.NewCDCStreamer(s.cdcOutCh, s.db)
@@ -2573,17 +2573,19 @@ func (s *Store) fsmSnapshot() (fSnap raft.FSMSnapshot, retErr error) {
 			if err != nil {
 				return nil, err
 			}
-			defer walTmpFD.Close()
+			cleanupWalTmp := true
+			defer func() {
+				if cleanupWalTmp {
+					walTmpFD.Close()
+					os.Remove(walTmpFD.Name())
+				}
+			}()
 			walWriter, err := wal.NewWriter(scanner)
 			if err != nil {
-				walTmpFD.Close()
-				os.Remove(walTmpFD.Name())
 				return nil, err
 			}
 			walSzPost, err := walWriter.WriteTo(walTmpFD)
 			if err != nil {
-				walTmpFD.Close()
-				os.Remove(walTmpFD.Name())
 				return nil, err
 			}
 			stats.Get(snapshotCreateWALCompactDuration).(*expvar.Int).Set(time.Since(compactStartTime).Milliseconds())
@@ -2604,6 +2606,9 @@ func (s *Store) fsmSnapshot() (fSnap raft.FSMSnapshot, retErr error) {
 			stats.Get(snapshotCreateChkTruncateDuration).(*expvar.Int).Set(time.Since(chkTStartTime).Milliseconds())
 			stats.Get(snapshotPrecompactWALSize).(*expvar.Int).Set(walSzPre)
 			stats.Get(snapshotWALSize).(*expvar.Int).Set(walSzPost)
+
+			// Transfer cleanup responsibility to OnRelease callback on success path.
+			cleanupWalTmp = false
 		}
 		name := ""
 		if walTmpFD != nil {
@@ -2966,6 +2971,8 @@ func (s *Store) mustTruncateCheckpoint() {
 
 	ticker := time.NewTicker(mustWALCheckpointDelay)
 	defer ticker.Stop()
+	timer := time.NewTimer(mustWALCheckpointTimeout)
+	defer timer.Stop()
 	for {
 		select {
 		case <-ticker.C:
@@ -2973,7 +2980,7 @@ func (s *Store) mustTruncateCheckpoint() {
 			if err == nil && meta.Success() {
 				return
 			}
-		case <-time.After(mustWALCheckpointTimeout):
+		case <-timer.C:
 			msg := fmt.Sprintf("timed out trying to truncate checkpoint WAL after %s,"+
 				" probably due to external long-running read - aborting",
 				mustWALCheckpointTimeout)
