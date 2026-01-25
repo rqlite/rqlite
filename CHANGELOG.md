@@ -1,3 +1,7 @@
+## v9.3.16 (unreleased)
+### Implementation changes and bug fixes
+- [PR #2449](https://github.com/rqlite/rqlite/pull/2449): Minor fixes to Store layer.
+
 ## v9.3.15 (January 16th 2026)
 ### Implementation changes and bug fixes
 - [PR #2447](https://github.com/rqlite/rqlite/pull/2447): Upgrade SQL parser.
