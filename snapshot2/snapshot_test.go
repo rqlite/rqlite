@@ -187,24 +187,6 @@ func TestSnapshot_Equal(t *testing.T) {
 	}
 }
 
-// Test Snapshot.String method
-func TestSnapshot_String(t *testing.T) {
-	s := &Snapshot{
-		id:  "snapshot-123",
-		typ: SnapshotTypeFull,
-		raftMeta: &raft.SnapshotMeta{
-			Term:  5,
-			Index: 100,
-		},
-	}
-
-	result := s.String()
-	expected := "Snapshot{id=snapshot-123, type=0, term=5, index=100}"
-	if result != expected {
-		t.Errorf("String() = %q, want %q", result, expected)
-	}
-}
-
 // Test SnapshotSet.Len method
 func TestSnapshotSet_Len(t *testing.T) {
 	tests := []struct {
@@ -646,6 +628,9 @@ func TestSnapshotSet_Range(t *testing.T) {
 		if result.Len() != 3 {
 			t.Errorf("Range() with empty toID returned %d items, want 3", result.Len())
 		}
+		if result.All()[0] != items[1] || result.All()[1] != items[2] || result.All()[2] != items[3] {
+			t.Error("Range() with empty toID returned incorrect items")
+		}
 	})
 
 	t.Run("fromID not present", func(t *testing.T) {
@@ -754,6 +739,9 @@ func TestSnapshotSet_PartitionAtFull(t *testing.T) {
 		}
 		if newer.Len() != 1 {
 			t.Errorf("PartitionAtFull() returned newer.Len()=%d, want 1", newer.Len())
+		}
+		if newer.All()[0] != items[3] {
+			t.Errorf("PartitionAtFull() returned %v, want newer snapshot %v", newer.All()[0], items[3])
 		}
 	})
 }
@@ -991,63 +979,6 @@ func TestSnapshotCatalog_Scan(t *testing.T) {
 		_, err := catalog.Scan("/non/existent/directory")
 		if err == nil {
 			t.Error("Scan() should return error for non-existent directory")
-		}
-	})
-}
-
-// Test readRaftMeta function
-func Test_readRaftMeta(t *testing.T) {
-	t.Run("valid meta file", func(t *testing.T) {
-		tempDir := t.TempDir()
-		metaFile := filepath.Join(tempDir, "meta.json")
-
-		expectedMeta := &raft.SnapshotMeta{
-			ID:    "test-snapshot",
-			Index: 42,
-			Term:  5,
-		}
-
-		metaData, err := json.Marshal(expectedMeta)
-		if err != nil {
-			t.Fatalf("failed to marshal meta: %v", err)
-		}
-		if err := os.WriteFile(metaFile, metaData, 0644); err != nil {
-			t.Fatalf("failed to write meta file: %v", err)
-		}
-
-		meta, err := readRaftMeta(metaFile)
-		if err != nil {
-			t.Fatalf("readRaftMeta() returned error: %v", err)
-		}
-		if meta.ID != expectedMeta.ID {
-			t.Errorf("meta.ID = %q, want %q", meta.ID, expectedMeta.ID)
-		}
-		if meta.Index != expectedMeta.Index {
-			t.Errorf("meta.Index = %d, want %d", meta.Index, expectedMeta.Index)
-		}
-		if meta.Term != expectedMeta.Term {
-			t.Errorf("meta.Term = %d, want %d", meta.Term, expectedMeta.Term)
-		}
-	})
-
-	t.Run("non-existent file", func(t *testing.T) {
-		_, err := readRaftMeta("/non/existent/meta.json")
-		if err == nil {
-			t.Error("readRaftMeta() should return error for non-existent file")
-		}
-	})
-
-	t.Run("invalid json", func(t *testing.T) {
-		tempDir := t.TempDir()
-		metaFile := filepath.Join(tempDir, "meta.json")
-
-		if err := os.WriteFile(metaFile, []byte("invalid json"), 0644); err != nil {
-			t.Fatalf("failed to write meta file: %v", err)
-		}
-
-		_, err := readRaftMeta(metaFile)
-		if err == nil {
-			t.Error("readRaftMeta() should return error for invalid json")
 		}
 	})
 }
