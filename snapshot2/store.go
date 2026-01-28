@@ -9,7 +9,6 @@ import (
 	"log"
 	"os"
 	"path/filepath"
-	"sort"
 	"sync"
 	"time"
 
@@ -169,6 +168,8 @@ type Store struct {
 	reapingMarkerPath string
 	logger            *log.Logger
 
+	catalog *SnapshotCatalog
+
 	// Multi-reader single-writer lock for the Store, which must be held
 	// if snaphots are deleted i.e. repead. Simply creating or reading
 	// a snapshot requires only a read lock.
@@ -188,6 +189,7 @@ func NewStore(dir string) (*Store, error) {
 		dir:               dir,
 		fullNeededPath:    filepath.Join(dir, fullNeededFile),
 		reapingMarkerPath: filepath.Join(dir, reapingMarkerFile),
+		catalog:           &SnapshotCatalog{},
 		mrsw:              *rsync.NewMultiRSW(),
 		logger:            log.New(os.Stderr, "[snapshot-store] ", log.LstdFlags),
 	}
@@ -238,36 +240,42 @@ func (s *Store) Create(version raft.SnapshotVersion, index, term uint64, configu
 	return NewLockingSink(sink, s), nil
 }
 
-// List returns the list of available snapshots.
+// List returns the list of available snapshots in the Store,
+// ordered from newest to oldest.
 func (s *Store) List() ([]*raft.SnapshotMeta, error) {
-	ms, err := getSnapshots(s.dir)
+	sset, err := s.catalog.Scan(s.dir)
 	if err != nil {
 		return nil, err
 	}
-	return snapMetaSlice(ms).RaftMetaSlice(), nil
+	metas := sset.RaftMetas()
+	// reverse the order to be from newest to oldest
+	for i, j := 0, len(metas)-1; i < j; i, j = i+1, j-1 {
+		metas[i], metas[j] = metas[j], metas[i]
+	}
+	return metas, nil
 }
 
 // Len returns the number of snapshots in the Store.
 func (s *Store) Len() int {
-	snapshots, err := s.getSnapshots()
+	sset, err := s.catalog.Scan(s.dir)
 	if err != nil {
 		return 0
 	}
-	return len(snapshots)
+	return sset.Len()
 }
 
 // LatestIndexTerm returns the index and term of the most recent
 // snapshot in the Store.
 func (s *Store) LatestIndexTerm() (uint64, uint64, error) {
-	snapshots, err := s.getSnapshots()
+	sset, err := s.catalog.Scan(s.dir)
 	if err != nil {
 		return 0, 0, err
 	}
-	if len(snapshots) == 0 {
-		return 0, 0, nil
+	newest, ok := sset.Newest()
+	if !ok {
+		return 0, 0, ErrSnapshotNotFound
 	}
-	latest := snapshots[len(snapshots)-1]
-	return latest.Index, latest.Term, nil
+	return newest.raftMeta.Index, newest.raftMeta.Term, nil
 }
 
 // Dir returns the directory where the snapshots are stored.
@@ -502,10 +510,6 @@ func (s *Store) check() error {
 	return nil
 }
 
-func (s *Store) getSnapshots() ([]*SnapshotMeta, error) {
-	return getSnapshots(s.dir)
-}
-
 func (s *Store) snapshotExists(id string) (bool, error) {
 	snapshots, err := s.getSnapshots()
 	if err != nil {
@@ -517,53 +521,6 @@ func (s *Store) snapshotExists(id string) (bool, error) {
 		}
 	}
 	return false, nil
-}
-
-// getSnapshots returns the list of snapshots in the given directory,
-// sorted from oldest to new.
-func getSnapshots(dir string) ([]*SnapshotMeta, error) {
-	// Get the eligible snapshots
-	snapshots, err := os.ReadDir(dir)
-	if err != nil {
-		return nil, err
-	}
-
-	// Populate the metadata
-	var snapMeta []*SnapshotMeta
-	for _, snap := range snapshots {
-		// Snapshots are stored in directories, ignore any files.
-		if !snap.IsDir() {
-			continue
-		}
-
-		// Ignore any temporary snapshots
-		if isTmpName(snap.Name()) {
-			continue
-		}
-
-		// Read the meta data
-		meta, err := readMeta(filepath.Join(dir, snap.Name()))
-		if err != nil {
-			return nil, fmt.Errorf("failed to read meta for snapshot %s: %s", snap.Name(), err)
-		}
-
-		path, err := getSnapshotDataFile(filepath.Join(dir, snap.Name()))
-		if err != nil {
-			return nil, err
-		}
-		if db.IsValidSQLiteFile(path) {
-			meta.Type = SnapshotMetaTypeFull
-		} else if db.IsValidSQLiteWALFile(path) {
-			meta.Type = SnapshotMetaTypeIncremental
-		} else {
-			return nil, fmt.Errorf("snapshot %s does not contain a valid SQLite or WAL file at %s",
-				snap.Name(), path)
-		}
-		snapMeta = append(snapMeta, meta)
-	}
-
-	sort.Sort(snapMetaSlice(snapMeta))
-	return snapMeta, nil
 }
 
 // getSnapshotDataFile lists all files in the given snapshot directory
@@ -581,24 +538,6 @@ func getSnapshotDataFile(dir string) (string, error) {
 		return "", ErrTooManyDataFiles
 	}
 	return files[0], nil
-}
-
-func (s *Store) newestFullSnapshot() (*SnapshotMeta, error) {
-	snapshots, err := s.getSnapshots()
-	if err != nil {
-		return nil, err
-	}
-
-	// Walk from newest to oldest.
-	snapshotMetas := snapMetaSlice(snapshots)
-	sort.Sort(sort.Reverse(snapshotMetas))
-
-	for _, snapMeta := range snapshotMetas {
-		if snapMeta.Type == SnapshotMetaTypeFull {
-			return snapMeta, nil
-		}
-	}
-	return nil, ErrSnapshotNotFound
 }
 
 // removeOldSnapshots removes all snapshots older than the given snapshot ID,
@@ -622,43 +561,6 @@ func (s *Store) removeOldSnapshots(keepID string) (int, error) {
 		n++
 	}
 	return n, nil
-}
-
-type snapMetaSlice []*SnapshotMeta
-
-// Len implements the sort interface for snapMetaSlice.
-func (s snapMetaSlice) Len() int {
-	return len(s)
-}
-
-// Less implements the sort interface for snapMetaSlice.
-func (s snapMetaSlice) Less(i, j int) bool {
-	si := s[i]
-	sj := s[j]
-	if si.Term != sj.Term {
-		return si.Term < sj.Term
-	}
-	if si.Index != sj.Index {
-		return si.Index < sj.Index
-	}
-	return si.ID < sj.ID
-}
-
-// Swap implements the sort interface for snapMetaSlice.
-func (s snapMetaSlice) Swap(i, j int) {
-	s[i], s[j] = s[j], s[i]
-}
-
-// RaftMetaSlice converts the snapMetaSlice to a slice of raft.SnapshotMeta.
-func (s snapMetaSlice) RaftMetaSlice() []*raft.SnapshotMeta {
-	if s == nil {
-		return nil
-	}
-	r := make([]*raft.SnapshotMeta, len(s))
-	for i, sm := range s {
-		r[i] = sm.SnapshotMeta
-	}
-	return r
 }
 
 // snapshotName generates a name for the snapshot.
