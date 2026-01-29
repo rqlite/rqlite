@@ -52,11 +52,16 @@ RUN tar xvfz sqlite-vec.tar.gz && \
     cd asg017* && sh scripts/vendor.sh && echo "#include <sys/types.h>" | cat - sqlite-vec.c > temp && mv temp sqlite-vec.c && make loadable && zip -j /extensions/sqlite-vec.zip dist/vec0.so
 
 RUN set -e; \
-    sqliteai_vector=$(curl -s https://api.github.com/repos/sqliteai/sqlite-vector/releases/latest | jq -r .tarball_url); \
-    echo "Downloading sqliteai-vector from: $sqliteai_vector"; \
-    curl -L "$sqliteai_vector" -o sqliteai-vector.tar.gz
-RUN tar xvfz sqliteai-vector.tar.gz && rm sqliteai-vector.tar.gz && \
-    cd sqliteai* && make && zip -j /extensions/sqliteai-vector.zip dist/vector.so
+    if [ "$TARGETOS" = "linux" ] && [ "$TARGETARCH" = "386" ]; then \
+        echo "Skipping sqliteai-vector entirely on $TARGETOS/$TARGETARCH"; \
+    else \
+        sqliteai_vector=$(curl -s https://api.github.com/repos/sqliteai/sqlite-vector/releases/latest | jq -r .tarball_url); \
+        echo "Downloading sqliteai-vector from: $sqliteai_vector"; \
+        curl -L "$sqliteai_vector" -o sqliteai-vector.tar.gz; \
+        tar xvfz sqliteai-vector.tar.gz; \
+        rm sqliteai-vector.tar.gz; \
+        cd sqliteai* && make && zip -j /extensions/sqliteai-vector.zip dist/vector.so; \
+    fi
 
 RUN git clone https://github.com/rqlite/rqlite-sqlite-ext.git
 RUN cd rqlite-sqlite-ext/misc && make && zip /extensions/misc.zip *.so
