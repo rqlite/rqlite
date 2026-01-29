@@ -161,7 +161,7 @@ jobs:
       - name: Create GHCR manifest
         working-directory: /tmp/all-digests/ghcr
         run: |
-          DESC="The lightweight, fault-tolerant database built on SQLite."
+          DESC="rqlite is a lightweight, fault-tolerant database built on SQLite. It's designed to keep your data highly available with minimal effort."
           docker buildx imagetools create \
             --annotation "index:org.opencontainers.image.description=$DESC" \
             -t ${{ env.GHCR_IMAGE }}:dev \
