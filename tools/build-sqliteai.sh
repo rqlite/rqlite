@@ -19,12 +19,6 @@ log "Starting sqliteai-vector build"
 log "Output directory: $OUTPUT_DIR"
 log "TARGETOS=${TARGETOS:-<unset>} TARGETARCH=${TARGETARCH:-<unset>}"
 
-# Skip on linux/386
-if [ "$TARGETOS" = "linux" ] && [ "$TARGETARCH" = "386" ]; then
-    log "Skipping sqliteai-vector entirely on ${TARGETOS}/${TARGETARCH}"
-    exit 0
-fi
-
 # Create output directory if it doesn't exist
 mkdir -p "$OUTPUT_DIR"
 
