@@ -1,3 +1,6 @@
+## v9.3.17 (January 28th 2026)
+There are no changes in this release relative to v9.3.16. This release simply fixes a `linux/386` Docker packaging issue.
+
 ## v9.3.16 (January 28th 2026)
 ### Implementation changes and bug fixes
 - [PR #2450](https://github.com/rqlite/rqlite/pull/2450): Upgrade SQL parser.
