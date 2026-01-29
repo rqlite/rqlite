@@ -1,3 +1,6 @@
+## v9.3.18 (January 28th 2026)
+There are no changes in this release relative to v9.3.17. This release simply removes support for building `linux/386` Docker images.
+
 ## v9.3.17 (January 28th 2026)
 There are no changes in this release relative to v9.3.16. This release simply fixes a `linux/386` Docker packaging issue.
 
