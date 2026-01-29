@@ -30,7 +30,7 @@ mkdir -p "$OUTPUT_DIR"
 
 log "[1/7] Fetch latest release metadata from GitHub"
 meta_json="$(mktemp)"
-if ! curl -fsSL "https://api.github.com/repos/sqliteai/sqlite-vector/releases/latest" -o "$meta_json"; then
+if ! curl --retry 3 --retry-delay 2 -fsSL "https://api.github.com/repos/sqliteai/sqlite-vector/releases/latest" -o "$meta_json"; then
     log "FAIL [1/7] curl GitHub API (releases/latest)"
     exit 1
 fi
