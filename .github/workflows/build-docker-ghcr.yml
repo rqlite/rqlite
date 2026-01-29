@@ -128,12 +128,6 @@ jobs:
           pattern: digests-*
           merge-multiple: true
       
-      - name: Separate digests by registry
-        run: |
-          mkdir -p /tmp/digests-dh /tmp/digests-ghcr
-          cp /tmp/all-digests/* /tmp/digests-dh/ || true
-          cp /tmp/all-digests/* /tmp/digests-ghcr/ || true
-      
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
