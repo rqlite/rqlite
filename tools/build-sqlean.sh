@@ -22,7 +22,7 @@ sqlean_url=$(curl -s https://api.github.com/repos/nalgeon/sqlean/releases/latest
 log "Downloading sqlean from: $sqlean_url"
 
 log "[2/4] Download tarball"
-curl -L "$sqlean_url" -o sqlean.tar.gz
+curl --retry 3 --retry-delay 2 -L "$sqlean_url" -o sqlean.tar.gz
 
 log "[3/4] Extract and build"
 tar xvfz sqlean.tar.gz
