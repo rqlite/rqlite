@@ -92,19 +92,17 @@ jobs:
 
       - name: Export digests
         run: |
-          mkdir -p /tmp/digests-dh /tmp/digests-ghcr
+          mkdir -p digests/dh digests/ghcr
           digest_dh="${{ steps.build-dh.outputs.digest }}"
           digest_ghcr="${{ steps.build-ghcr.outputs.digest }}"
-          touch "/tmp/digests-dh/${digest_dh#sha256:}"
-          touch "/tmp/digests-ghcr/${digest_ghcr#sha256:}"
+          touch "digests/dh/${digest_dh#sha256:}"
+          touch "digests/ghcr/${digest_ghcr#sha256:}"
 
       - name: Upload digests
         uses: actions/upload-artifact@v4
         with:
           name: digests-${{ env.PLATFORM_PAIR }}
-          path: |
-            /tmp/digests-dh/*
-            /tmp/digests-ghcr/*
+          path: digests/**
           if-no-files-found: error
           retention-days: 1
 
@@ -158,14 +156,14 @@ jobs:
           password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Create Docker Hub manifest
-        working-directory: /tmp/digests-dh
+        working-directory: /tmp/all-digests/dh
         run: |
           docker buildx imagetools create \
             -t ${{ env.DH_IMAGE }}:dev \
             $(printf '${{ env.DH_IMAGE }}@sha256:%s ' *)
 
       - name: Create GHCR manifest
-        working-directory: /tmp/digests-ghcr
+        working-directory: /tmp/all-digests/ghcr
         run: |
           docker buildx imagetools create \
             -t ${{ env.GHCR_IMAGE }}:dev \
