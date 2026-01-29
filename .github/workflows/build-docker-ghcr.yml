@@ -129,11 +129,21 @@ jobs:
             -t ${{ env.DH_IMAGE }}:${{ env.STRIPPED_VERSION }} \
             $(printf '${{ env.DH_IMAGE }}@sha256:%s ' *)
 
-      # New: Copy the same digests into GHCR and tag them identically
-      - name: Create GHCR manifests (copy from Docker Hub)
-        working-directory: /tmp/digests
+      # Copy manifests from Docker Hub to GHCR
+      - name: Copy multi-arch image from Docker Hub to GHCR
         run: |
-          docker buildx imagetools create \
-            -t ${{ env.GHCR_IMAGE }}:latest \
-            -t ${{ env.GHCR_IMAGE }}:${{ env.STRIPPED_VERSION }} \
-            $(printf '${{ env.DH_IMAGE }}@sha256:%s ' *)
+          # Use skopeo to copy the multi-arch manifest list from Docker Hub to GHCR
+          docker run --rm \
+            -v ${HOME}/.docker/config.json:/root/.docker/config.json:ro \
+            quay.io/skopeo/stable:latest \
+            copy --all \
+            docker://${{ env.DH_IMAGE }}:${{ env.STRIPPED_VERSION }} \
+            docker://${{ env.GHCR_IMAGE }}:${{ env.STRIPPED_VERSION }}
+
+          docker run --rm \
+            -v ${HOME}/.docker/config.json:/root/.docker/config.json:ro \
+            quay.io/skopeo/stable:latest \
+            copy --all \
+            docker://${{ env.DH_IMAGE }}:latest \
+            docker://${{ env.GHCR_IMAGE }}:latest
+
