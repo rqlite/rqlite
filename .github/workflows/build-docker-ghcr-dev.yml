@@ -50,8 +50,20 @@ jobs:
           username: ${{ secrets.DOCKER_USERNAME }}
           password: ${{ secrets.DOCKER_ACCESS_TOKEN }}
 
-      - name: Build and push by digest
-        id: build
+      - name: Login to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Compute GHCR image name
+        run: |
+          owner=$(echo "${{ github.repository_owner }}" | tr '[:upper:]' '[:lower:]')
+          echo "GHCR_IMAGE=ghcr.io/${owner}/rqlite" >> $GITHUB_ENV
+
+      - name: Build and push by digest to Docker Hub
+        id: build-dh
         uses: docker/build-push-action@v6
         with:
           context: .
@@ -64,17 +76,35 @@ jobs:
             BRANCH=master
             DATE=${{ env.date }}
 
-      - name: Export digest
-        run: |
-          mkdir -p /tmp/digests
-          digest="${{ steps.build.outputs.digest }}"
-          touch "/tmp/digests/${digest#sha256:}"
+      - name: Build and push by digest to GHCR
+        id: build-ghcr
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          platforms: ${{ matrix.platform }}
+          labels: ${{ steps.meta.outputs.labels }}
+          outputs: type=image,name=${{ env.GHCR_IMAGE }},push-by-digest=true,name-canonical=true,push=true
+          build-args: |
+            VERSION=dev
+            COMMIT=${{ github.sha }}
+            BRANCH=master
+            DATE=${{ env.date }}
 
-      - name: Upload digest
+      - name: Export digests
+        run: |
+          mkdir -p /tmp/digests-dh /tmp/digests-ghcr
+          digest_dh="${{ steps.build-dh.outputs.digest }}"
+          digest_ghcr="${{ steps.build-ghcr.outputs.digest }}"
+          touch "/tmp/digests-dh/${digest_dh#sha256:}"
+          touch "/tmp/digests-ghcr/${digest_ghcr#sha256:}"
+
+      - name: Upload digests
         uses: actions/upload-artifact@v4
         with:
           name: digests-${{ env.PLATFORM_PAIR }}
-          path: /tmp/digests/*
+          path: |
+            /tmp/digests-dh/*
+            /tmp/digests-ghcr/*
           if-no-files-found: error
           retention-days: 1
 
@@ -95,9 +125,15 @@ jobs:
       - name: Download digests
         uses: actions/download-artifact@v4
         with:
-          path: /tmp/digests
+          path: /tmp/all-digests
           pattern: digests-*
           merge-multiple: true
+
+      - name: Separate digests by registry
+        run: |
+          mkdir -p /tmp/digests-dh /tmp/digests-ghcr
+          cp /tmp/all-digests/* /tmp/digests-dh/ || true
+          cp /tmp/all-digests/* /tmp/digests-ghcr/ || true
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
@@ -122,18 +158,15 @@ jobs:
           password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Create Docker Hub manifest
-        working-directory: /tmp/digests
+        working-directory: /tmp/digests-dh
         run: |
           docker buildx imagetools create \
             -t ${{ env.DH_IMAGE }}:dev \
             $(printf '${{ env.DH_IMAGE }}@sha256:%s ' *)
 
-      - name: Copy multi-arch image from Docker Hub to GHCR
+      - name: Create GHCR manifest
+        working-directory: /tmp/digests-ghcr
         run: |
-          docker run --rm \
-            -v ${HOME}/.docker/config.json:/root/.docker/config.json:ro \
-            quay.io/skopeo/stable:latest \
-            copy --all \
-            docker://${{ env.DH_IMAGE }}:dev \
-            docker://${{ env.GHCR_IMAGE }}:dev
-
+          docker buildx imagetools create \
+            -t ${{ env.GHCR_IMAGE }}:dev \
+            $(printf '${{ env.GHCR_IMAGE }}@sha256:%s ' *)
