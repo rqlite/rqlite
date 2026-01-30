@@ -76,7 +76,7 @@ func NewStateReader(rc io.ReadCloser) *StateReader {
 	}
 }
 
-// Persist writes the snapshot to the given sink.
+// Persist writes the State to the given sink.
 func (s *StateReader) Persist(sink raft.SnapshotSink) error {
 	defer s.rc.Close()
 	startT := time.Now()
@@ -99,7 +99,7 @@ func (s *StateReader) Persist(sink raft.SnapshotSink) error {
 	return err
 }
 
-// Release releases the snapshot.
+// Release releases the StateReader.
 func (s *StateReader) Release() {
 	// Ensure that the source data for the snapshot is closed regardless of
 	// whether the snapshot is persisted or not.
