@@ -1,10 +1,57 @@
 package snapshot
 
 import (
+	"encoding/json"
+	"os"
+	"path/filepath"
 	"testing"
 
 	"github.com/hashicorp/raft"
 )
+
+func createTestSnapshot(t *testing.T, baseDir, snapshotID string, term uint64, index uint64) {
+	t.Helper()
+	snapshotDir := filepath.Join(baseDir, snapshotID)
+	if err := os.MkdirAll(snapshotDir, 0755); err != nil {
+		t.Fatalf("failed to create snapshot directory: %v", err)
+	}
+
+	meta := &raft.SnapshotMeta{
+		Term:  term,
+		Index: index,
+	}
+
+	metaPath := filepath.Join(snapshotDir, "meta.json")
+	fh, err := os.Create(metaPath)
+	if err != nil {
+		t.Fatalf("failed to create meta.json: %v", err)
+	}
+	defer fh.Close()
+
+	enc := json.NewEncoder(fh)
+	if err := enc.Encode(meta); err != nil {
+		t.Fatalf("failed to encode meta.json: %v", err)
+	}
+}
+
+func createTestSnapshotDir(t *testing.T, baseDir, snapshotID string) {
+	t.Helper()
+	snapshotDir := filepath.Join(baseDir, snapshotID)
+	if err := os.MkdirAll(snapshotDir, 0755); err != nil {
+		t.Fatalf("failed to create snapshot directory: %v", err)
+	}
+}
+
+func createTestFile(t *testing.T, baseDir, filename, content string) {
+	t.Helper()
+	filePath := filepath.Join(baseDir, filename)
+	if err := os.MkdirAll(filepath.Dir(filePath), 0755); err != nil {
+		t.Fatalf("failed to create parent directory: %v", err)
+	}
+	if err := os.WriteFile(filePath, []byte(content), 0644); err != nil {
+		t.Fatalf("failed to write file: %v", err)
+	}
+}
 
 // Test Snapshot.Less method
 func TestSnapshot_Less(t *testing.T) {
@@ -493,6 +540,168 @@ func TestSnapshotSet_Range(t *testing.T) {
 		result = ss.Range("snapshot-2", "snapshot-2")
 		if result.Len() != 0 {
 			t.Errorf("Range() with toID equal to fromID returned %d items, want 0", result.Len())
+		}
+	})
+}
+
+// Test SnapshotCatalog.Scan method
+func TestSnapshotCatalog_Scan(t *testing.T) {
+	t.Run("empty directory", func(t *testing.T) {
+		tmpDir := t.TempDir()
+
+		catalog := &SnapshotCatalog{}
+		ss, err := catalog.Scan(tmpDir)
+		if err != nil {
+			t.Fatalf("Scan() returned error for empty directory: %v", err)
+		}
+		if ss.Len() != 0 {
+			t.Errorf("Scan() returned %d snapshots, want 0", ss.Len())
+		}
+	})
+
+	t.Run("single snapshot", func(t *testing.T) {
+		tmpDir := t.TempDir()
+		createTestSnapshot(t, tmpDir, "snapshot-1-2-100", 1, 2)
+
+		catalog := &SnapshotCatalog{}
+		ss, err := catalog.Scan(tmpDir)
+		if err != nil {
+			t.Fatalf("Scan() returned error: %v", err)
+		}
+		if ss.Len() != 1 {
+			t.Fatalf("Scan() returned %d snapshots, want 1", ss.Len())
+		}
+
+		oldest, ok := ss.Oldest()
+		if !ok {
+			t.Fatal("Oldest() returned false")
+		}
+		if oldest.id != "snapshot-1-2-100" {
+			t.Errorf("snapshot id = %q, want %q", oldest.id, "snapshot-1-2-100")
+		}
+		if oldest.raftMeta.Term != 1 {
+			t.Errorf("snapshot term = %d, want 1", oldest.raftMeta.Term)
+		}
+		if oldest.raftMeta.Index != 2 {
+			t.Errorf("snapshot index = %d, want 2", oldest.raftMeta.Index)
+		}
+
+		snewest, ok := ss.Newest()
+		if !ok {
+			t.Fatal("Newest() returned false")
+		}
+		if snewest != oldest {
+			t.Error("Newest() snapshot does not match Oldest() snapshot in single-snapshot set")
+		}
+	})
+
+	t.Run("multiple snapshots ordered correctly", func(t *testing.T) {
+		tmpDir := t.TempDir()
+		createTestSnapshot(t, tmpDir, "snapshot-1-10-100", 1, 10)
+		createTestSnapshot(t, tmpDir, "snapshot-2-5-200", 2, 5)
+		createTestSnapshot(t, tmpDir, "snapshot-1-5-300", 1, 5)
+
+		catalog := &SnapshotCatalog{}
+		ss, err := catalog.Scan(tmpDir)
+		if err != nil {
+			t.Fatalf("Scan() returned error: %v", err)
+		}
+		if ss.Len() != 3 {
+			t.Fatalf("Scan() returned %d snapshots, want 3", ss.Len())
+		}
+
+		items := ss.All()
+		if items[0].raftMeta.Term != 1 || items[0].raftMeta.Index != 5 {
+			t.Errorf("first snapshot = term %d, index %d, want term 1, index 5",
+				items[0].raftMeta.Term, items[0].raftMeta.Index)
+		}
+		if items[1].raftMeta.Term != 1 || items[1].raftMeta.Index != 10 {
+			t.Errorf("second snapshot = term %d, index %d, want term 1, index 10",
+				items[1].raftMeta.Term, items[1].raftMeta.Index)
+		}
+		if items[2].raftMeta.Term != 2 || items[2].raftMeta.Index != 5 {
+			t.Errorf("third snapshot = term %d, index %d, want term 2, index 5",
+				items[2].raftMeta.Term, items[2].raftMeta.Index)
+		}
+
+		// test oldest and newest
+		oldest, ok := ss.Oldest()
+		if !ok {
+			t.Fatal("Oldest() returned false")
+		}
+		if oldest.raftMeta.Term != 1 || oldest.raftMeta.Index != 5 {
+			t.Errorf("Oldest() = term %d, index %d, want term 1, index 5",
+				oldest.raftMeta.Term, oldest.raftMeta.Index)
+		}
+
+		newest, ok := ss.Newest()
+		if !ok {
+			t.Fatal("Newest() returned false")
+		}
+		if newest.raftMeta.Term != 2 || newest.raftMeta.Index != 5 {
+			t.Errorf("Newest() = term %d, index %d, want term 2, index 5",
+				newest.raftMeta.Term, newest.raftMeta.Index)
+		}
+	})
+
+	t.Run("ignores regular files", func(t *testing.T) {
+		tmpDir := t.TempDir()
+		createTestSnapshot(t, tmpDir, "snapshot-1-2-100", 1, 2)
+		createTestFile(t, tmpDir, "regular-file.txt", "some content")
+
+		catalog := &SnapshotCatalog{}
+		ss, err := catalog.Scan(tmpDir)
+		if err != nil {
+			t.Fatalf("Scan() returned error: %v", err)
+		}
+		if ss.Len() != 1 {
+			t.Errorf("Scan() returned %d snapshots, want 1", ss.Len())
+		}
+	})
+
+	t.Run("ignores tmp directories", func(t *testing.T) {
+		tmpDir := t.TempDir()
+		createTestSnapshot(t, tmpDir, "snapshot-1-2-100", 1, 2)
+		createTestSnapshot(t, tmpDir, "snapshot-temp.tmp", 1, 3)
+
+		catalog := &SnapshotCatalog{}
+		ss, err := catalog.Scan(tmpDir)
+		if err != nil {
+			t.Fatalf("Scan() returned error: %v", err)
+		}
+		if ss.Len() != 1 {
+			t.Errorf("Scan() returned %d snapshots, want 1 (tmp dir should be ignored)", ss.Len())
+		}
+	})
+
+	t.Run("error on missing meta.json", func(t *testing.T) {
+		tmpDir := t.TempDir()
+		createTestSnapshotDir(t, tmpDir, "snapshot-1-2-100")
+
+		catalog := &SnapshotCatalog{}
+		_, err := catalog.Scan(tmpDir)
+		if err == nil {
+			t.Fatal("Scan() should return error for missing meta.json")
+		}
+	})
+
+	t.Run("error on malformed meta.json", func(t *testing.T) {
+		tmpDir := t.TempDir()
+		createTestSnapshotDir(t, tmpDir, "snapshot-1-2-100")
+		createTestFile(t, tmpDir, "snapshot-1-2-100/meta.json", "invalid json {")
+
+		catalog := &SnapshotCatalog{}
+		_, err := catalog.Scan(tmpDir)
+		if err == nil {
+			t.Fatal("Scan() should return error for malformed meta.json")
+		}
+	})
+
+	t.Run("error on non-existent directory", func(t *testing.T) {
+		catalog := &SnapshotCatalog{}
+		_, err := catalog.Scan("/non/existent/directory")
+		if err == nil {
+			t.Fatal("Scan() should return error for non-existent directory")
 		}
 	})
 }
