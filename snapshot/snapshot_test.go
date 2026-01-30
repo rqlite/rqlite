@@ -16,10 +16,11 @@ func createTestSnapshot(t *testing.T, baseDir, snapshotID string, term uint64, i
 		t.Fatalf("failed to create snapshot directory: %v", err)
 	}
 
-	meta := &raft.SnapshotMeta{
-		Term:  term,
-		Index: index,
-	}
+meta := &raft.SnapshotMeta{
+	ID:    snapshotID,
+	Term:  term,
+	Index: index,
+}
 
 	metaPath := filepath.Join(snapshotDir, "meta.json")
 	fh, err := os.Create(metaPath)
