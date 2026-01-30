@@ -130,20 +130,22 @@ func TestSnapshot_Less(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			s1 := &Snapshot{
-				id: tt.s1ID,
-				raftMeta: &raft.SnapshotMeta{
-					Term:  tt.s1Term,
-					Index: tt.s1Index,
-				},
-			}
-			s2 := &Snapshot{
-				id: tt.s2ID,
-				raftMeta: &raft.SnapshotMeta{
-					Term:  tt.s2Term,
-					Index: tt.s2Index,
-				},
-			}
+s1 := &Snapshot{
+	id: tt.s1ID,
+	raftMeta: &raft.SnapshotMeta{
+		ID:    tt.s1ID,
+		Term:  tt.s1Term,
+		Index: tt.s1Index,
+	},
+}
+s2 := &Snapshot{
+	id: tt.s2ID,
+	raftMeta: &raft.SnapshotMeta{
+		ID:    tt.s2ID,
+		Term:  tt.s2Term,
+		Index: tt.s2Index,
+	},
+}
 
 			result := s1.Less(s2)
 			if result != tt.expected {
