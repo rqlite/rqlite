@@ -10,22 +10,22 @@ import (
 	"github.com/rqlite/rqlite/v9/internal/progress"
 )
 
-// Snapshot represents a snapshot of the database state.
-type Snapshot struct {
+// StateReader represents a snapshot of the database state.
+type StateReader struct {
 	rc     io.ReadCloser
 	logger *log.Logger
 }
 
-// NewSnapshot creates a new snapshot.
-func NewSnapshot(rc io.ReadCloser) *Snapshot {
-	return &Snapshot{
+// NewStateReader creates a new snapshot.
+func NewStateReader(rc io.ReadCloser) *StateReader {
+	return &StateReader{
 		rc:     rc,
 		logger: log.New(log.Writer(), "[snapshot] ", log.LstdFlags),
 	}
 }
 
 // Persist writes the snapshot to the given sink.
-func (s *Snapshot) Persist(sink raft.SnapshotSink) error {
+func (s *StateReader) Persist(sink raft.SnapshotSink) error {
 	defer s.rc.Close()
 	startT := time.Now()
 
@@ -48,7 +48,7 @@ func (s *Snapshot) Persist(sink raft.SnapshotSink) error {
 }
 
 // Release releases the snapshot.
-func (s *Snapshot) Release() {
+func (s *StateReader) Release() {
 	// Ensure that the source data for the snapshot is closed regardless of
 	// whether the snapshot is persisted or not.
 	s.rc.Close()

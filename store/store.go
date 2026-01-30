@@ -2545,7 +2545,7 @@ func (s *Store) fsmSnapshot() (fSnap raft.FSMSnapshot, retErr error) {
 		if err != nil {
 			return nil, err
 		}
-		fsmSnapshot = snapshot.NewSnapshot(dbFD)
+		fsmSnapshot = snapshot.NewStateReader(dbFD)
 		stats.Add(numSnapshotsFull, 1)
 		s.numFullSnapshots++
 	} else {
@@ -2613,7 +2613,7 @@ func (s *Store) fsmSnapshot() (fSnap raft.FSMSnapshot, retErr error) {
 		// Store and Sink indirectly. We wrap its filepath in an io.Reader, not the file data. The
 		// Snapshotting system knows to check for this. If it finds a filepath in the io.Reader (as
 		// opposed to a reader returning actual file data, it will move the file from here to it.
-		fsmSnapshot = snapshot.NewSnapshot(io.NopCloser(bytes.NewBufferString(name)))
+		fsmSnapshot = snapshot.NewStateReader(io.NopCloser(bytes.NewBufferString(name)))
 		stats.Add(numSnapshotsIncremental, 1)
 	}
 

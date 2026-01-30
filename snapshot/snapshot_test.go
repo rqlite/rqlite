@@ -8,7 +8,7 @@ import (
 
 func Test_SnapshotNew(t *testing.T) {
 	// Create a new snapshot
-	s := NewSnapshot(nil)
+	s := NewStateReader(nil)
 	if s == nil {
 		t.Errorf("expected snapshot to be created")
 	}
@@ -18,7 +18,7 @@ func Test_SnapshotNew(t *testing.T) {
 // given a nil data buffer.
 func Test_SnapshotPersist_NilData(t *testing.T) {
 	compactedBuf := bytes.NewBuffer(nil)
-	s := NewSnapshot(io.NopCloser(compactedBuf))
+	s := NewStateReader(io.NopCloser(compactedBuf))
 	if s == nil {
 		t.Errorf("expected snapshot to be created")
 	}
@@ -35,7 +35,7 @@ func Test_SnapshotPersist_NilData(t *testing.T) {
 
 func Test_SnapshotPersist_SimpleData(t *testing.T) {
 	compactedBuf := bytes.NewBuffer([]byte("hello world"))
-	s := NewSnapshot(io.NopCloser(compactedBuf))
+	s := NewStateReader(io.NopCloser(compactedBuf))
 	if s == nil {
 		t.Errorf("expected snapshot to be created")
 	}
