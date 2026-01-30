@@ -36,6 +36,18 @@ func (s *Snapshot) Less(other *Snapshot) bool {
 	return s.id < other.id
 }
 
+// LessThanMeta reports whether this snapshot is older than the given metadata.
+// Ordering is defined by (Term, Index, ID).
+func (s *Snapshot) LessThanMeta(meta *raft.SnapshotMeta) bool {
+	if s.raftMeta.Term != meta.Term {
+		return s.raftMeta.Term < meta.Term
+	}
+	if s.raftMeta.Index != meta.Index {
+		return s.raftMeta.Index < meta.Index
+	}
+	return s.id < meta.ID
+}
+
 // Equal reports whether this snapshot is identical to the other snapshot.
 func (s *Snapshot) Equal(other *Snapshot) bool {
 	return s.raftMeta.Term == other.raftMeta.Term &&
@@ -46,6 +58,26 @@ func (s *Snapshot) Equal(other *Snapshot) bool {
 // String returns a string representation of the snapshot.
 func (s *Snapshot) String() string {
 	return fmt.Sprintf("Snapshot{id=%s, term=%d, index=%d}", s.id, s.raftMeta.Term, s.raftMeta.Index)
+}
+
+// ID returns the snapshot ID.
+func (s *Snapshot) ID() string {
+	return s.id
+}
+
+// Path returns the snapshot directory path.
+func (s *Snapshot) Path() string {
+	return s.path
+}
+
+// Meta returns the Raft snapshot metadata.
+func (s *Snapshot) Meta() *raft.SnapshotMeta {
+	return s.raftMeta
+}
+
+// DBPath returns the path to the database file for this snapshot.
+func (s *Snapshot) DBPath() string {
+	return s.path + ".db"
 }
 
 // SnapshotSet represents an ordered collection of snapshots from a single Store
@@ -255,7 +287,7 @@ func (c *SnapshotCatalog) Scan(dir string) (SnapshotSet, error) {
 }
 
 func (c *SnapshotCatalog) loadSnapshot(path string, id string) (*Snapshot, error) {
-	meta, err := readRaftMeta(metaPath(path))
+	meta, err := readMeta(metaPath(path))
 	if err != nil {
 		return nil, fmt.Errorf("reading meta.json: %w", err)
 	}
@@ -267,7 +299,7 @@ func (c *SnapshotCatalog) loadSnapshot(path string, id string) (*Snapshot, error
 	}, nil
 }
 
-func readRaftMeta(path string) (*raft.SnapshotMeta, error) {
+func readMeta(path string) (*raft.SnapshotMeta, error) {
 	fh, err := os.Open(path)
 	if err != nil {
 		return nil, err
@@ -279,4 +311,8 @@ func readRaftMeta(path string) (*raft.SnapshotMeta, error) {
 		return nil, err
 	}
 	return meta, nil
+}
+
+func metaPath(dir string) string {
+	return filepath.Join(dir, "meta.json")
 }

@@ -231,6 +231,103 @@ func TestSnapshot_Equal(t *testing.T) {
 	}
 }
 
+// Test Snapshot.LessThanMeta method
+func TestSnapshot_LessThanMeta(t *testing.T) {
+	tests := []struct {
+		name     string
+		snapTerm uint64
+		snapIdx  uint64
+		snapID   string
+		metaTerm uint64
+		metaIdx  uint64
+		metaID   string
+		expected bool
+	}{
+		{
+			name:     "less by term",
+			snapTerm: 1,
+			snapIdx:  10,
+			snapID:   "snap-a",
+			metaTerm: 2,
+			metaIdx:  5,
+			metaID:   "snap-b",
+			expected: true,
+		},
+		{
+			name:     "greater by term",
+			snapTerm: 2,
+			snapIdx:  10,
+			snapID:   "snap-a",
+			metaTerm: 1,
+			metaIdx:  20,
+			metaID:   "snap-b",
+			expected: false,
+		},
+		{
+			name:     "less by index",
+			snapTerm: 1,
+			snapIdx:  5,
+			snapID:   "snap-a",
+			metaTerm: 1,
+			metaIdx:  10,
+			metaID:   "snap-b",
+			expected: true,
+		},
+		{
+			name:     "greater by index",
+			snapTerm: 1,
+			snapIdx:  15,
+			snapID:   "snap-a",
+			metaTerm: 1,
+			metaIdx:  10,
+			metaID:   "snap-b",
+			expected: false,
+		},
+		{
+			name:     "less by id",
+			snapTerm: 1,
+			snapIdx:  10,
+			snapID:   "snap-a",
+			metaTerm: 1,
+			metaIdx:  10,
+			metaID:   "snap-b",
+			expected: true,
+		},
+		{
+			name:     "greater by id",
+			snapTerm: 1,
+			snapIdx:  10,
+			snapID:   "snap-z",
+			metaTerm: 1,
+			metaIdx:  10,
+			metaID:   "snap-b",
+			expected: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			snap := &Snapshot{
+				id: tt.snapID,
+				raftMeta: &raft.SnapshotMeta{
+					Term:  tt.snapTerm,
+					Index: tt.snapIdx,
+				},
+			}
+			meta := &raft.SnapshotMeta{
+				Term:  tt.metaTerm,
+				Index: tt.metaIdx,
+				ID:    tt.metaID,
+			}
+
+			result := snap.LessThanMeta(meta)
+			if result != tt.expected {
+				t.Errorf("LessThanMeta() = %v, want %v", result, tt.expected)
+			}
+		})
+	}
+}
+
 // Test SnapshotSet.Len method
 func TestSnapshotSet_Len(t *testing.T) {
 	tests := []struct {
