@@ -221,7 +221,7 @@ func RecoverNode(dataDir string, extensions []string, logger *log.Logger, logs r
 	if err != nil {
 		return fmt.Errorf("failed to open temporary database file: %s", err)
 	}
-	fsmSnapshot := snapshot.NewSnapshot(tmpDBFD) // tmpDBPath contains full state now.
+	fsmSnapshot := snapshot.NewStateReader(tmpDBFD) // tmpDBPath contains full state now.
 	sink, err := snaps.Create(1, lastIndex, lastTerm, conf, 1, tn)
 	if err != nil {
 		return fmt.Errorf("failed to create snapshot: %v", err)

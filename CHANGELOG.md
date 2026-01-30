@@ -1,3 +1,7 @@
+## v9.3.19 (unreleased)
+### Implementation changes and bug fixes
+- [PR #2451](https://github.com/rqlite/rqlite/pull/2451): Rename `Snapshot` type to `StateReader` in snapshot package.
+
 ## v9.3.18 (January 28th 2026)
 There are no changes in this release relative to v9.3.17. This release removes support for publishing `linux/386` Docker images.
 
