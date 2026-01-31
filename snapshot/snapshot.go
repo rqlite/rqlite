@@ -282,6 +282,8 @@ func (c *SnapshotCatalog) loadSnapshot(path string, id string) (*Snapshot, error
 		return nil, fmt.Errorf("reading meta.json: %w", err)
 	}
 
+	// Ensure the snapshot ID in metadata matches the directory-based ID.
+	meta.ID = id
 	return &Snapshot{
 		id:       id,
 		path:     path,
