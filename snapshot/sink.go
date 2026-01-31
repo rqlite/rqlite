@@ -148,7 +148,7 @@ func (s *Sink) processSnapshotData() (retErr error) {
 			// We have no snapshots yet, so the incoming data must be a valid SQLite file.
 			return fmt.Errorf("data for first snapshot must be a valid SQLite file")
 		}
-	} else if snapSet.Len() > 0 {
+	} else {
 		// Confirm that existing snapshot is "less" than the incoming snapshot -- in other
 		// words that it is from a point earlier in life of the Raft log.
 		snapPrev, _ := snapSet.Newest()
