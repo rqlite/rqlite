@@ -136,7 +136,7 @@ func (s *Sink) processSnapshotData() (retErr error) {
 
 	// Check the state of the store before processing this new snapshot. This
 	// allows us to perform some sanity checks on the incoming snapshot data.
-	snapSet, err := s.str.catalog.Scan(s.str.Dir())
+	snapSet, err := s.str.getSnapshots()
 	if err != nil {
 		return err
 	}
@@ -212,7 +212,7 @@ func (s *Sink) processSnapshotData() (retErr error) {
 
 	// Now check if we need to replay any WAL file into the previous SQLite file. This is
 	// the final step of any snapshot process.
-	snapSet, err = s.str.catalog.Scan(s.str.Dir())
+	snapSet, err = s.str.getSnapshots()
 	if err != nil {
 		return err
 	}

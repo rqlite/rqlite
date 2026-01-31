@@ -206,7 +206,7 @@ func (s *Store) Create(version raft.SnapshotVersion, index, term uint64, configu
 // List returns a list of all the snapshots in the Store. In practice, this will at most be
 // a list of 1, and that will be the newest snapshot available.
 func (s *Store) List() ([]*raft.SnapshotMeta, error) {
-	snapSet, err := s.catalog.Scan(s.dir)
+	snapSet, err := s.getSnapshots()
 	if err != nil {
 		return nil, err
 	}
@@ -220,7 +220,7 @@ func (s *Store) List() ([]*raft.SnapshotMeta, error) {
 
 // Len returns the number of snapshots in the Store.
 func (s *Store) Len() int {
-	snapSet, err := s.catalog.Scan(s.dir)
+	snapSet, err := s.getSnapshots()
 	if err != nil {
 		return 0
 	}
@@ -229,7 +229,7 @@ func (s *Store) Len() int {
 
 // LatestIndexTerm returns the index and term of the most recent snapshot in the Store.
 func (s *Store) LatestIndexTerm() (uint64, uint64, error) {
-	snapSet, err := s.catalog.Scan(s.dir)
+	snapSet, err := s.getSnapshots()
 	if err != nil {
 		return 0, 0, err
 	}
@@ -269,7 +269,7 @@ func (s *Store) FullNeeded() (bool, error) {
 	if fileExists(s.fullNeededPath) {
 		return true, nil
 	}
-	snapSet, err := s.catalog.Scan(s.dir)
+	snapSet, err := s.getSnapshots()
 	if err != nil {
 		return false, err
 	}
@@ -290,7 +290,7 @@ func (s *Store) SetFullNeeded() error {
 // an error if the Store is in an inconsistent state. In that case the stats
 // returned may be incomplete or invalid.
 func (s *Store) Stats() (map[string]any, error) {
-	snapSet, err := s.catalog.Scan(s.dir)
+	snapSet, err := s.getSnapshots()
 	if err != nil {
 		return nil, err
 	}
@@ -323,7 +323,7 @@ func (s *Store) Reap() (retN int, retErr error) {
 		return 0, nil
 	}
 
-	snapSet, err := s.catalog.Scan(s.dir)
+	snapSet, err := s.getSnapshots()
 	if err != nil {
 		return 0, err
 	}
@@ -367,7 +367,7 @@ func (s *Store) check() (retError error) {
 		return err
 	}
 
-	snapSet, err := s.catalog.Scan(s.dir)
+	snapSet, err := s.getSnapshots()
 	if err != nil {
 		return err
 	}
@@ -422,7 +422,7 @@ func (s *Store) check() (retError error) {
 
 // getDBPath returns the path to the database file for the most recent snapshot.
 func (s *Store) getDBPath() (string, error) {
-	snapshots, err := s.catalog.Scan(s.dir)
+	snapshots, err := s.getSnapshots()
 	if err != nil {
 		return "", err
 	}
@@ -434,6 +434,11 @@ func (s *Store) getDBPath() (string, error) {
 		return "", fmt.Errorf("failed to get newest snapshot")
 	}
 	return filepath.Join(s.dir, newest.ID()+".db"), nil
+}
+
+// getSnapshots returns the set of snapshots in the Store.
+func (s *Store) getSnapshots() (SnapshotSet, error) {
+	return s.catalog.Scan(s.dir)
 }
 
 // unsetFullNeeded removes the flag that indicates a full snapshot is needed.
