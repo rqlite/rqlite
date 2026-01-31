@@ -229,28 +229,23 @@ func (ss SnapshotSet) indexOf(id string) int {
 // SnapshotCatalog is responsible for discovering and materializing snapshots
 // from a Store directory.
 //
-// SnapshotCatalog performs the filesystem scan, interprets the on-disk layout,
-// loads meta.json, determines each snapshot’s declared kind, and produces a
-// SnapshotSet ordered from oldest to newest. SnapshotCatalog is the sole place
-// where “what constitutes a snapshot directory” and “how to classify it” are
-// defined.
+// SnapshotCatalog performs the filesystem scan, interprets the on-disk layout
+// for snapshot directories, loads meta.json for each discovered snapshot, and
+// produces a SnapshotSet ordered from oldest to newest.
 //
-// SnapshotCatalog does not mutate on-disk state. Inconsistent or invalid snapshot
-// directories should be reported via structured errors so that Store.check() can
-// decide whether to repair, quarantine, or remove them.
+// SnapshotCatalog does not mutate on-disk state. Any errors encountered while
+// reading the snapshot store or loading metadata are returned to the caller.
 type SnapshotCatalog struct{}
 
 // Scan scans the snapshot store directory and returns a SnapshotSet.
 //
-// Scan identifies all snapshot directories under the given root, interprets
-// their layout, loads metadata, determines declared snapshot kind, and orders
-// the resulting snapshots from oldest to newest according to the store’s
-// ordering rules.
+// Scan identifies all snapshot directories under the given root, loads their
+// metadata from meta.json, and orders the resulting snapshots from oldest to
+// newest according to the store’s ordering rules.
 //
-// If Scan encounters an invalid snapshot directory (e.g., missing data file,
-// multiple data files, unreadable metadata, or a mismatch between declared kind
-// and observed file format), it returns an error describing the inconsistency.
-// Scan does not attempt to repair or modify on-disk state.
+// If Scan encounters an error while reading the snapshot store directory or
+// loading metadata for a snapshot, it returns that error. Scan does not attempt
+// to repair or modify on-disk state.
 func (c *SnapshotCatalog) Scan(dir string) (SnapshotSet, error) {
 	entries, err := os.ReadDir(dir)
 	if err != nil {
