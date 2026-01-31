@@ -185,11 +185,11 @@ func (s *Sink) processSnapshotData() (retErr error) {
 			}
 		} else if db.IsValidSQLiteWALFile(fdName) {
 			// With WAL data incoming, then we must have a valid SQLite file from the previous snapshot.
-			snapPrev, ok := snapSet.Newest()
-			if !ok {
-				return fmt.Errorf("no previous snapshot found for WAL file")
+			snapPrevDB, err := s.str.getDBPath()
+			if err != nil {
+				return err
 			}
-			snapPrevDB := snapPrev.DBPath()
+
 			if !db.IsValidSQLiteFile(snapPrevDB) {
 				return fmt.Errorf("previous snapshot data is not a SQLite file: %s", snapPrevDB)
 			}
