@@ -420,6 +420,22 @@ func (s *Store) check() (retError error) {
 	return nil
 }
 
+// getDBPath returns the path to the database file for the most recent snapshot.
+func (s *Store) getDBPath() (string, error) {
+	snapshots, err := s.catalog.Scan(s.dir)
+	if err != nil {
+		return "", err
+	}
+	if snapshots.Len() == 0 {
+		return "", nil
+	}
+	newest, ok := snapshots.Newest()
+	if !ok {
+		return "", fmt.Errorf("failed to get newest snapshot")
+	}
+	return filepath.Join(s.dir, newest.ID()+".db"), nil
+}
+
 // unsetFullNeeded removes the flag that indicates a full snapshot is needed.
 func (s *Store) unsetFullNeeded() error {
 	err := os.Remove(s.fullNeededPath)

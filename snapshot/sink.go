@@ -104,15 +104,10 @@ func (s *Sink) Close() error {
 	}
 
 	// Get size of SQLite file and set in meta.
-	snapSet, err := s.str.catalog.Scan(s.str.Dir())
+	dbPath, err := s.str.getDBPath()
 	if err != nil {
 		return err
 	}
-	snap, ok := snapSet.Newest()
-	if !ok {
-		return fmt.Errorf("no snapshot found after finalize")
-	}
-	dbPath := snap.DBPath()
 	fi, err := os.Stat(dbPath)
 	if err != nil {
 		return err
