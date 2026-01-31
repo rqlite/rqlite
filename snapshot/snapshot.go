@@ -306,5 +306,5 @@ func readMeta(path string) (*raft.SnapshotMeta, error) {
 }
 
 func metaPath(dir string) string {
-	return filepath.Join(dir, "meta.json")
+	return filepath.Join(dir, metaFileName)
 }
