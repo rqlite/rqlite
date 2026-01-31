@@ -138,7 +138,8 @@ type Store struct {
 	fullNeededPath string
 	logger         *log.Logger
 
-	mrsw *rsync.MultiRSW
+	catalog *SnapshotCatalog
+	mrsw    *rsync.MultiRSW
 
 	LogReaping   bool
 	reapDisabled bool // For testing purposes
@@ -154,6 +155,7 @@ func NewStore(dir string) (*Store, error) {
 		dir:            dir,
 		fullNeededPath: filepath.Join(dir, fullNeededFile),
 		logger:         log.New(os.Stderr, "[snapshot-store] ", log.LstdFlags),
+		catalog:        &SnapshotCatalog{},
 		mrsw:           rsync.NewMultiRSW(),
 	}
 	str.logger.Printf("store initialized using %s", dir)
@@ -204,43 +206,39 @@ func (s *Store) Create(version raft.SnapshotVersion, index, term uint64, configu
 // List returns a list of all the snapshots in the Store. In practice, this will at most be
 // a list of 1, and that will be the newest snapshot available.
 func (s *Store) List() ([]*raft.SnapshotMeta, error) {
-	snapshots, err := s.getSnapshots()
+	snapSet, err := s.getSnapshots()
 	if err != nil {
 		return nil, err
 	}
 
 	var snapMeta []*raft.SnapshotMeta
-	if len(snapshots) > 0 {
-		snapshotDir := filepath.Join(s.dir, snapshots[len(snapshots)-1].ID)
-		meta, err := readMeta(snapshotDir)
-		if err != nil {
-			return nil, err
-		}
-		snapMeta = append(snapMeta, meta) // Insert it.
+	if snap, ok := snapSet.Newest(); ok {
+		snapMeta = append(snapMeta, snap.Meta())
 	}
 	return snapMeta, nil
 }
 
 // Len returns the number of snapshots in the Store.
 func (s *Store) Len() int {
-	snapshots, err := s.getSnapshots()
+	snapSet, err := s.getSnapshots()
 	if err != nil {
 		return 0
 	}
-	return len(snapshots)
+	return snapSet.Len()
 }
 
 // LatestIndexTerm returns the index and term of the most recent snapshot in the Store.
 func (s *Store) LatestIndexTerm() (uint64, uint64, error) {
-	snapshots, err := s.getSnapshots()
+	snapSet, err := s.getSnapshots()
 	if err != nil {
 		return 0, 0, err
 	}
-	if len(snapshots) == 0 {
+	snap, ok := snapSet.Newest()
+	if !ok {
 		return 0, 0, nil
 	}
-	latest := snapshots[len(snapshots)-1]
-	return latest.Index, latest.Term, nil
+	meta := snap.Meta()
+	return meta.Index, meta.Term, nil
 }
 
 // Open opens the snapshot with the given ID. Close() must be called on the snapshot
@@ -255,7 +253,7 @@ func (s *Store) Open(id string) (_ *raft.SnapshotMeta, _ io.ReadCloser, retErr e
 			s.mrsw.EndRead()
 		}
 	}()
-	meta, err := readMeta(filepath.Join(s.dir, id))
+	meta, err := readMeta(metaPath(filepath.Join(s.dir, id)))
 	if err != nil {
 		return nil, nil, err
 	}
@@ -271,11 +269,11 @@ func (s *Store) FullNeeded() (bool, error) {
 	if fileExists(s.fullNeededPath) {
 		return true, nil
 	}
-	snaps, err := s.getSnapshots()
+	snapSet, err := s.getSnapshots()
 	if err != nil {
 		return false, err
 	}
-	return len(snaps) == 0, nil
+	return snapSet.Len() == 0, nil
 }
 
 // SetFullNeeded sets the flag that indicates a full snapshot is needed.
@@ -292,14 +290,12 @@ func (s *Store) SetFullNeeded() error {
 // an error if the Store is in an inconsistent state. In that case the stats
 // returned may be incomplete or invalid.
 func (s *Store) Stats() (map[string]any, error) {
-	snapshots, err := s.getSnapshots()
+	snapSet, err := s.getSnapshots()
 	if err != nil {
 		return nil, err
 	}
-	snapsAsIDs := make([]string, len(snapshots))
-	for i, snap := range snapshots {
-		snapsAsIDs[i] = snap.ID
-	}
+	snapsAsIDs := snapSet.IDs()
+
 	dbPath, err := s.getDBPath()
 	if err != nil {
 		return nil, err
@@ -327,21 +323,23 @@ func (s *Store) Reap() (retN int, retErr error) {
 		return 0, nil
 	}
 
-	snapshots, err := s.getSnapshots()
+	snapSet, err := s.getSnapshots()
 	if err != nil {
 		return 0, err
 	}
-	if len(snapshots) <= 1 {
+	if snapSet.Len() <= 1 {
 		return 0, nil
 	}
+
 	// Remove all snapshots, and all associated data, except the newest one.
+	snapshots := snapSet.All()
 	n := 0
 	for _, snap := range snapshots[:len(snapshots)-1] {
-		if err := removeAllPrefix(s.dir, snap.ID); err != nil {
+		if err := removeAllPrefix(s.dir, snap.ID()); err != nil {
 			return n, err
 		}
 		if s.LogReaping {
-			s.logger.Printf("reaped snapshot %s", snap.ID)
+			s.logger.Printf("reaped snapshot %s", snap.ID())
 		}
 		n++
 	}
@@ -369,35 +367,38 @@ func (s *Store) check() (retError error) {
 		return err
 	}
 
-	snapshots, err := s.getSnapshots()
+	snapSet, err := s.getSnapshots()
 	if err != nil {
 		return err
 	}
-	if len(snapshots) == 0 {
+	if snapSet.Len() == 0 {
 		// Nothing to do!
 		return nil
-	} else if len(snapshots) == 1 {
+	}
+
+	snapshots := snapSet.All()
+	if len(snapshots) == 1 {
 		// We only have one snapshot. Confirm we have a valid SQLite file
 		// for that snapshot.
 		snap := snapshots[0]
-		snapDB := filepath.Join(s.dir, snap.ID+".db")
+		snapDB := filepath.Join(s.dir, snap.ID()+".db")
 		if !db.IsValidSQLiteFile(snapDB) {
-			return fmt.Errorf("sole snapshot data is not a valid SQLite file: %s", snap.ID)
+			return fmt.Errorf("sole snapshot data is not a valid SQLite file: %s", snap.ID())
 		}
 	} else {
 		// Do we have a valid SQLite file for the most recent snapshot?
 		snap := snapshots[len(snapshots)-1]
-		snapDB := filepath.Join(s.dir, snap.ID+".db")
-		snapDir := filepath.Join(s.dir, snap.ID)
+		snapDB := filepath.Join(s.dir, snap.ID()+".db")
+		snapDir := filepath.Join(s.dir, snap.ID())
 		if db.IsValidSQLiteFile(snapDB) {
 			// Replay any WAL file into it.
 			return db.CheckpointRemove(snapDB)
 		}
 		// We better have a SQLite file for the previous snapshot.
 		snapPrev := snapshots[len(snapshots)-2]
-		snapPrevDB := filepath.Join(s.dir, snapPrev.ID+".db")
+		snapPrevDB := filepath.Join(s.dir, snapPrev.ID()+".db")
 		if !db.IsValidSQLiteFile(snapPrevDB) {
-			return fmt.Errorf("previous snapshot data is not a SQLite file: %s", snapPrev.ID)
+			return fmt.Errorf("previous snapshot data is not a SQLite file: %s", snapPrev.ID())
 		}
 		// Rename the previous SQLite file to the current snapshot, and then replay any WAL file into it.
 		if err := os.Rename(snapPrevDB, snapDB); err != nil {
@@ -419,22 +420,25 @@ func (s *Store) check() (retError error) {
 	return nil
 }
 
-// getSnapshots returns a list of all snapshots in the store, sorted
-// from oldest to newest.
-func (s *Store) getSnapshots() ([]*raft.SnapshotMeta, error) {
-	return getSnapshots(s.dir)
-}
-
 // getDBPath returns the path to the database file for the most recent snapshot.
 func (s *Store) getDBPath() (string, error) {
 	snapshots, err := s.getSnapshots()
 	if err != nil {
 		return "", err
 	}
-	if len(snapshots) == 0 {
+	if snapshots.Len() == 0 {
 		return "", nil
 	}
-	return filepath.Join(s.dir, snapshots[len(snapshots)-1].ID+".db"), nil
+	newest, ok := snapshots.Newest()
+	if !ok {
+		return "", fmt.Errorf("failed to get newest snapshot")
+	}
+	return filepath.Join(s.dir, newest.ID()+".db"), nil
+}
+
+// getSnapshots returns the set of snapshots in the Store.
+func (s *Store) getSnapshots() (SnapshotSet, error) {
+	return s.catalog.Scan(s.dir)
 }
 
 // unsetFullNeeded removes the flag that indicates a full snapshot is needed.
@@ -534,27 +538,6 @@ func removeAllPrefix(path, prefix string) error {
 	return nil
 }
 
-// metaPath returns the path to the meta file in the given directory.
-func metaPath(dir string) string {
-	return filepath.Join(dir, metaFileName)
-}
-
-// readMeta is used to read the meta data in a given snapshot directory.
-func readMeta(dir string) (*raft.SnapshotMeta, error) {
-	fh, err := os.Open(metaPath(dir))
-	if err != nil {
-		return nil, err
-	}
-	defer fh.Close()
-
-	meta := &raft.SnapshotMeta{}
-	dec := json.NewDecoder(fh)
-	if err := dec.Decode(meta); err != nil {
-		return nil, err
-	}
-	return meta, nil
-}
-
 // writeMeta is used to write the meta data in a given snapshot directory.
 func writeMeta(dir string, meta *raft.SnapshotMeta) error {
 	fh, err := os.Create(metaPath(dir))
@@ -576,42 +559,11 @@ func writeMeta(dir string, meta *raft.SnapshotMeta) error {
 }
 
 func updateMetaSize(dir string, sz int64) error {
-	meta, err := readMeta(dir)
+	meta, err := readMeta(metaPath(dir))
 	if err != nil {
 		return err
 	}
 
 	meta.Size = sz
 	return writeMeta(dir, meta)
-}
-
-type cmpSnapshotMeta raft.SnapshotMeta
-
-func (c *cmpSnapshotMeta) Less(other *cmpSnapshotMeta) bool {
-	if c.Term != other.Term {
-		return c.Term < other.Term
-	}
-	if c.Index != other.Index {
-		return c.Index < other.Index
-	}
-	return c.ID < other.ID
-}
-
-type snapMetaSlice []*raft.SnapshotMeta
-
-// Len implements the sort interface for snapMetaSlice.
-func (s snapMetaSlice) Len() int {
-	return len(s)
-}
-
-// Less implements the sort interface for snapMetaSlice.
-func (s snapMetaSlice) Less(i, j int) bool {
-	si := (*cmpSnapshotMeta)(s[i])
-	sj := (*cmpSnapshotMeta)(s[j])
-	return si.Less(sj)
-}
-
-// Swap implements the sort interface for snapMetaSlice.
-func (s snapMetaSlice) Swap(i, j int) {
-	s[i], s[j] = s[j], s[i]
 }

@@ -73,8 +73,10 @@ func (s *Sink) Cancel() error {
 		return nil
 	}
 	s.opened = false
-	if err := s.dataFD.Close(); err != nil {
-		return err
+	if s.dataFD != nil {
+		if err := s.dataFD.Close(); err != nil {
+			return err
+		}
 	}
 	s.dataFD = nil
 	return RemoveAllTmpSnapshotData(s.str.Dir())
@@ -136,24 +138,23 @@ func (s *Sink) processSnapshotData() (retErr error) {
 
 	// Check the state of the store before processing this new snapshot. This
 	// allows us to perform some sanity checks on the incoming snapshot data.
-	snapshots, err := s.str.getSnapshots()
+	snapSet, err := s.str.getSnapshots()
 	if err != nil {
 		return err
 	}
 
-	if len(snapshots) == 0 {
+	if snapSet.Len() == 0 {
 		if !db.IsValidSQLiteFile(s.dataFD.Name()) {
 			// We have no snapshots yet, so the incoming data must be a valid SQLite file.
 			return fmt.Errorf("data for first snapshot must be a valid SQLite file")
 		}
-	} else if len(snapshots) > 0 {
+	} else if snapSet.Len() > 0 {
 		// Confirm that existing snapshot is "less" than the incoming snapshot -- in other
 		// words that it is from a point earlier in life of the Raft log.
-		cmpSnapPrev := (*cmpSnapshotMeta)(snapshots[len(snapshots)-1])
-		cmpSnapNew := (*cmpSnapshotMeta)(s.meta)
-		if !cmpSnapPrev.Less(cmpSnapNew) {
+		snapPrev, _ := snapSet.Newest()
+		if !snapPrev.LessThanMeta(s.meta) {
 			return fmt.Errorf("incoming snapshot %s is not later than most recent existing snapshot %s",
-				cmpSnapNew.ID, cmpSnapPrev.ID)
+				s.meta.ID, snapPrev.ID())
 		}
 	}
 
@@ -174,6 +175,10 @@ func (s *Sink) processSnapshotData() (retErr error) {
 			if err != nil {
 				return err
 			}
+			// Double check size read from file.
+			if len(b) != int(dataSz) {
+				return fmt.Errorf("invalid data file contents size: %d", len(b))
+			}
 			if fileExists(string(b)) {
 				if err := os.Rename(string(b), fdName); err != nil {
 					return err
@@ -186,8 +191,11 @@ func (s *Sink) processSnapshotData() (retErr error) {
 			}
 		} else if db.IsValidSQLiteWALFile(fdName) {
 			// With WAL data incoming, then we must have a valid SQLite file from the previous snapshot.
-			snapPrev := snapshots[len(snapshots)-1]
-			snapPrevDB := filepath.Join(s.str.Dir(), snapPrev.ID+".db")
+			snapPrevDB, err := s.str.getDBPath()
+			if err != nil {
+				return err
+			}
+
 			if !db.IsValidSQLiteFile(snapPrevDB) {
 				return fmt.Errorf("previous snapshot data is not a SQLite file: %s", snapPrevDB)
 			}
@@ -210,16 +218,17 @@ func (s *Sink) processSnapshotData() (retErr error) {
 
 	// Now check if we need to replay any WAL file into the previous SQLite file. This is
 	// the final step of any snapshot process.
-	snapshots, err = s.str.getSnapshots()
+	snapSet, err = s.str.getSnapshots()
 	if err != nil {
 		return err
 	}
+	snapshots := snapSet.All()
 	if len(snapshots) >= 2 {
 		snapPrev := snapshots[len(snapshots)-2]
 		snapNew := snapshots[len(snapshots)-1]
-		snapPrevDB := filepath.Join(s.str.Dir(), snapPrev.ID+".db")
-		snapNewDB := filepath.Join(s.str.Dir(), snapNew.ID+".db")
-		snapNewWAL := filepath.Join(s.str.Dir(), snapNew.ID+".db-wal")
+		snapPrevDB := filepath.Join(s.str.Dir(), snapPrev.ID()+".db")
+		snapNewDB := filepath.Join(s.str.Dir(), snapNew.ID()+".db")
+		snapNewWAL := filepath.Join(s.str.Dir(), snapNew.ID()+".db-wal")
 
 		if db.IsValidSQLiteWALFile(snapNewWAL) || dataSz == 0 {
 			// One of two things have happened. Either the snapshot data is empty, in which
