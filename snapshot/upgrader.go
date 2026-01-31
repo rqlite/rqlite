@@ -61,7 +61,7 @@ func Upgrade7To8(old, new string, logger *log.Logger) (retErr error) {
 		}
 
 		if dirExists(new) {
-			logger.Printf("new snapshot directory %s exists", old)
+			logger.Printf("new snapshot directory %s exists", new)
 			if err := os.RemoveAll(old); err != nil {
 				return fmt.Errorf("failed to remove old snapshot directory %s: %s", old, err)
 			}

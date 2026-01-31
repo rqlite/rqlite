@@ -20,7 +20,7 @@ import (
 func RemoveAllTmpSnapshotData(dir string) error {
 	files, err := os.ReadDir(dir)
 	if err != nil {
-		return nil
+		return err
 	}
 	for _, d := range files {
 		// If the directory is a temporary directory, remove it.

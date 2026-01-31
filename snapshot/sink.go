@@ -73,8 +73,10 @@ func (s *Sink) Cancel() error {
 		return nil
 	}
 	s.opened = false
-	if err := s.dataFD.Close(); err != nil {
-		return err
+	if s.dataFD != nil {
+		if err := s.dataFD.Close(); err != nil {
+			return err
+		}
 	}
 	s.dataFD = nil
 	return RemoveAllTmpSnapshotData(s.str.Dir())
@@ -172,6 +174,10 @@ func (s *Sink) processSnapshotData() (retErr error) {
 			b, err := os.ReadFile(fdName)
 			if err != nil {
 				return err
+			}
+			// Double check size read from file.
+			if len(b) != int(dataSz) {
+				return fmt.Errorf("invalid data file contents size: %d", len(b))
 			}
 			if fileExists(string(b)) {
 				if err := os.Rename(string(b), fdName); err != nil {
