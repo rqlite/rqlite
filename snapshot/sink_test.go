@@ -318,15 +318,10 @@ func Test_SinkCreateFullThenWALSnapshots(t *testing.T) {
 	createSnapshot("snap-9abc", 8, 7, 6, "testdata/db-and-wals/empty-file")
 
 	// Check the database state inside the Store.
-	snapSet, err := store.catalog.Scan(store.Dir())
+	dbPath, err := store.getDBPath()
 	if err != nil {
 		t.Fatalf("Failed to scan snapshots: %v", err)
 	}
-	snap, ok := snapSet.Newest()
-	if !ok {
-		t.Fatal("No snapshots found in store")
-	}
-	dbPath := snap.DBPath()
 	if filepath.Base(dbPath) != "snap-9abc.db" {
 		t.Fatalf("Unexpected DB file name: %s", dbPath)
 	}

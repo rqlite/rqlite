@@ -220,8 +220,8 @@ func (s *Sink) processSnapshotData() (retErr error) {
 	if len(snapshots) >= 2 {
 		snapPrev := snapshots[len(snapshots)-2]
 		snapNew := snapshots[len(snapshots)-1]
-		snapPrevDB := snapPrev.DBPath()
-		snapNewDB := snapNew.DBPath()
+		snapPrevDB := filepath.Join(s.str.Dir(), snapPrev.ID()+".db")
+		snapNewDB := filepath.Join(s.str.Dir(), snapNew.ID()+".db")
 		snapNewWAL := filepath.Join(s.str.Dir(), snapNew.ID()+".db-wal")
 
 		if db.IsValidSQLiteWALFile(snapNewWAL) || dataSz == 0 {
