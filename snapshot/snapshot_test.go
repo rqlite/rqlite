@@ -16,11 +16,11 @@ func createTestSnapshot(t *testing.T, baseDir, snapshotID string, term uint64, i
 		t.Fatalf("failed to create snapshot directory: %v", err)
 	}
 
-meta := &raft.SnapshotMeta{
-	ID:    snapshotID,
-	Term:  term,
-	Index: index,
-}
+	meta := &raft.SnapshotMeta{
+		ID:    snapshotID,
+		Term:  term,
+		Index: index,
+	}
 
 	metaPath := filepath.Join(snapshotDir, "meta.json")
 	fh, err := os.Create(metaPath)
@@ -130,22 +130,22 @@ func TestSnapshot_Less(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-s1 := &Snapshot{
-	id: tt.s1ID,
-	raftMeta: &raft.SnapshotMeta{
-		ID:    tt.s1ID,
-		Term:  tt.s1Term,
-		Index: tt.s1Index,
-	},
-}
-s2 := &Snapshot{
-	id: tt.s2ID,
-	raftMeta: &raft.SnapshotMeta{
-		ID:    tt.s2ID,
-		Term:  tt.s2Term,
-		Index: tt.s2Index,
-	},
-}
+			s1 := &Snapshot{
+				id: tt.s1ID,
+				raftMeta: &raft.SnapshotMeta{
+					ID:    tt.s1ID,
+					Term:  tt.s1Term,
+					Index: tt.s1Index,
+				},
+			}
+			s2 := &Snapshot{
+				id: tt.s2ID,
+				raftMeta: &raft.SnapshotMeta{
+					ID:    tt.s2ID,
+					Term:  tt.s2Term,
+					Index: tt.s2Index,
+				},
+			}
 
 			result := s1.Less(s2)
 			if result != tt.expected {
@@ -211,22 +211,22 @@ func TestSnapshot_Equal(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-s1 := &Snapshot{
-	id: tt.s1ID,
-	raftMeta: &raft.SnapshotMeta{
-		ID:    tt.s1ID,
-		Term:  tt.s1Term,
-		Index: tt.s1Index,
-	},
-}
-s2 := &Snapshot{
-	id: tt.s2ID,
-	raftMeta: &raft.SnapshotMeta{
-		ID:    tt.s2ID,
-		Term:  tt.s2Term,
-		Index: tt.s2Index,
-	},
-}
+			s1 := &Snapshot{
+				id: tt.s1ID,
+				raftMeta: &raft.SnapshotMeta{
+					ID:    tt.s1ID,
+					Term:  tt.s1Term,
+					Index: tt.s1Index,
+				},
+			}
+			s2 := &Snapshot{
+				id: tt.s2ID,
+				raftMeta: &raft.SnapshotMeta{
+					ID:    tt.s2ID,
+					Term:  tt.s2Term,
+					Index: tt.s2Index,
+				},
+			}
 
 			result := s1.Equal(s2)
 			if result != tt.expected {
