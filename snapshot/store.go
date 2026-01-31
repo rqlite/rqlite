@@ -296,9 +296,9 @@ func (s *Store) Stats() (map[string]any, error) {
 	}
 	snapsAsIDs := snapSet.IDs()
 
-	var dbPath string
-	if snap, ok := snapSet.Newest(); ok {
-		dbPath = snap.DBPath()
+	dbPath, err := s.getDBPath()
+	if err != nil {
+		return nil, err
 	}
 	return map[string]any{
 		"dir":       s.dir,
@@ -381,22 +381,25 @@ func (s *Store) check() (retError error) {
 		// We only have one snapshot. Confirm we have a valid SQLite file
 		// for that snapshot.
 		snap := snapshots[0]
-		snapDB := snap.DBPath()
+		snapDB := filepath.Join(s.dir, snap.ID()+".db")
+		if err != nil {
+			return err
+		}
 		if !db.IsValidSQLiteFile(snapDB) {
 			return fmt.Errorf("sole snapshot data is not a valid SQLite file: %s", snap.ID())
 		}
 	} else {
 		// Do we have a valid SQLite file for the most recent snapshot?
 		snap := snapshots[len(snapshots)-1]
-		snapDB := snap.DBPath()
-		snapDir := snap.Path()
+		snapDB := filepath.Join(s.dir, snap.ID()+".db")
+		snapDir := filepath.Join(s.dir, snap.ID())
 		if db.IsValidSQLiteFile(snapDB) {
 			// Replay any WAL file into it.
 			return db.CheckpointRemove(snapDB)
 		}
 		// We better have a SQLite file for the previous snapshot.
 		snapPrev := snapshots[len(snapshots)-2]
-		snapPrevDB := snapPrev.DBPath()
+		snapPrevDB := filepath.Join(s.dir, snapPrev.ID()+".db")
 		if !db.IsValidSQLiteFile(snapPrevDB) {
 			return fmt.Errorf("previous snapshot data is not a SQLite file: %s", snapPrev.ID())
 		}

@@ -75,11 +75,6 @@ func (s *Snapshot) Meta() *raft.SnapshotMeta {
 	return s.raftMeta
 }
 
-// DBPath returns the path to the database file for this snapshot.
-func (s *Snapshot) DBPath() string {
-	return s.path + ".db"
-}
-
 // SnapshotSet represents an ordered collection of snapshots from a single Store
 // directory.
 //
