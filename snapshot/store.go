@@ -382,9 +382,6 @@ func (s *Store) check() (retError error) {
 		// for that snapshot.
 		snap := snapshots[0]
 		snapDB := filepath.Join(s.dir, snap.ID()+".db")
-		if err != nil {
-			return err
-		}
 		if !db.IsValidSQLiteFile(snapDB) {
 			return fmt.Errorf("sole snapshot data is not a valid SQLite file: %s", snap.ID())
 		}
