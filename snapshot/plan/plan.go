@@ -1,5 +1,10 @@
 package plan
 
+import (
+	"encoding/json"
+	"os"
+)
+
 // OpType represents the type of a filesystem operation.
 type OpType string
 
@@ -40,6 +45,28 @@ type Plan struct {
 // New returns a new, empty Plan.
 func New() *Plan {
 	return &Plan{}
+}
+
+// ReadFromFile reads a plan from the specified file.
+func ReadFromFile(path string) (*Plan, error) {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return nil, err
+	}
+	p := New()
+	if err := json.Unmarshal(data, p); err != nil {
+		return nil, err
+	}
+	return p, nil
+}
+
+// WriteToFile writes the plan to the specified file in JSON format.
+func (p *Plan) WriteToFile(path string) error {
+	data, err := json.Marshal(p)
+	if err != nil {
+		return err
+	}
+	return os.WriteFile(path, data, 0644)
 }
 
 // Len returns the number of operations in the plan.

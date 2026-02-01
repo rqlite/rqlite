@@ -3,6 +3,7 @@ package plan
 import (
 	"encoding/json"
 	"errors"
+	"os"
 	"reflect"
 	"testing"
 )
@@ -171,4 +172,31 @@ func TestJSONSerialization(t *testing.T) {
 
 	// pretty print p to stdout
 	t.Logf("Serialized Plan: %s", data)
+}
+
+func TestFilePersistence(t *testing.T) {
+	p := New()
+	p.AddRename("a", "b")
+	p.AddRemove("c")
+	p.AddCheckpoint("db", []string{"w1"})
+
+	tmpFile, err := os.CreateTemp("", "plan_test")
+	if err != nil {
+		t.Fatalf("failed to create temp file: %v", err)
+	}
+	defer os.Remove(tmpFile.Name())
+	tmpFile.Close()
+
+	if err := p.WriteToFile(tmpFile.Name()); err != nil {
+		t.Fatalf("WriteToFile failed: %v", err)
+	}
+
+	p2, err := ReadFromFile(tmpFile.Name())
+	if err != nil {
+		t.Fatalf("ReadFromFile failed: %v", err)
+	}
+
+	if !reflect.DeepEqual(p.Ops, p2.Ops) {
+		t.Errorf("plans do not match after file roundtrip.\nOriginal: %+v\nRead: %+v", p.Ops, p2.Ops)
+	}
 }
