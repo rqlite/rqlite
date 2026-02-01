@@ -6,6 +6,7 @@ import (
 	"context"
 	"database/sql"
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"io"
 	"net/url"
@@ -25,6 +26,16 @@ const (
 	ModeReadOnly = true
 	// ModeReadWrite is the mode to open a database in read-write mode.
 	ModeReadWrite = false
+)
+
+var (
+	// ErrWALReplayDirectoryMismatch is returned when the WAL file(s) are not in the same
+	// directory as the database file.
+	ErrWALReplayDirectoryMismatch = errors.New("WAL file(s) not in same directory as database file")
+
+	// ErrWALAlreadyExists is returned when attempting to replay WAL files but a WAL file
+	// already exists alongside the database file.
+	ErrWALAlreadyExists = errors.New("cannot replay WAL files: existing WAL file present")
 )
 
 // SynchronousMode is SQLite synchronous mode.
@@ -357,11 +368,17 @@ func RemoveFiles(path string) error {
 // If deleteMode is true, the database file will be in DELETE mode after the replay
 // operation, otherwise it will be in WAL mode. In either case no WAL-related files
 // will be present.
+//
+// If any WAL file is already present alongside the database file, an error is returned.
 func ReplayWAL(path string, wals []string, deleteMode bool) error {
 	for _, wal := range wals {
 		if filepath.Dir(wal) != filepath.Dir(path) {
 			return ErrWALReplayDirectoryMismatch
 		}
+	}
+
+	if fileExists(path + "-wal") {
+		return ErrWALAlreadyExists
 	}
 
 	if !IsValidSQLiteFile(path) {
