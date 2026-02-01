@@ -80,3 +80,33 @@ func (p *Plan) AddCheckpoint(db string, wals []string) {
 		WALs: wals,
 	})
 }
+
+// Visitor is the interface that must be implemented to traverse the plan.
+type Visitor interface {
+	Rename(src, dst string) error
+	Remove(path string) error
+	RemoveAll(path string) error
+	Checkpoint(db string, wals []string) error
+}
+
+// Execute traverses the plan, calling the appropriate method on the visitor for each operation.
+// It stops and returns the first error encountered.
+func (p *Plan) Execute(v Visitor) error {
+	for _, op := range p.Ops {
+		var err error
+		switch op.Type {
+		case OpRename:
+			err = v.Rename(op.Src, op.Dst)
+		case OpRemove:
+			err = v.Remove(op.Src)
+		case OpRemoveAll:
+			err = v.RemoveAll(op.Src)
+		case OpCheckpoint:
+			err = v.Checkpoint(op.DB, op.WALs)
+		}
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
