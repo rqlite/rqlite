@@ -1,5 +1,6 @@
 ## v9.3.19 (unreleased)
 ### Implementation changes and bug fixes
+- [PR #2456](https://github.com/rqlite/rqlite/pull/2456): Further error checking when replaying WALs.
 - [PR #2454](https://github.com/rqlite/rqlite/pull/2454): Move Snapshot utils to dedicated source file.
 - [PR #2453](https://github.com/rqlite/rqlite/pull/2453): Simplify Snapshot Sink logic.
 - [PR #2452](https://github.com/rqlite/rqlite/pull/2452): Integrate `SnapshotSet` into Snapshot Store.
