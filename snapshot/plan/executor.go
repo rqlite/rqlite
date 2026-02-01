@@ -2,6 +2,8 @@ package plan
 
 import (
 	"os"
+
+	"github.com/rqlite/rqlite/v9/db"
 )
 
 // Executor implements the Visitor interface to execute filesystem operations.
@@ -43,6 +45,16 @@ func (e *Executor) RemoveAll(path string) error {
 }
 
 // Checkpoint is a no-op placeholder.
-func (e *Executor) Checkpoint(db string, wals []string) error {
-	return nil
+func (e *Executor) Checkpoint(dbPath string, wals []string) error {
+	existingWals := []string{}
+	for _, wal := range wals {
+		if _, err := os.Stat(wal); err == nil {
+			existingWals = append(existingWals, wal)
+		}
+	}
+
+	if len(existingWals) == 0 {
+		return nil
+	}
+	return db.ReplayWAL(dbPath, existingWals, false)
 }
