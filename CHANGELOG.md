@@ -1,5 +1,6 @@
 ## v9.3.19 (unreleased)
 ### Implementation changes and bug fixes
+- [PR #2453](https://github.com/rqlite/rqlite/pull/2453): Simplify Snapshot Sink logic.
 - [PR #2452](https://github.com/rqlite/rqlite/pull/2452): Integrate `SnapshotSet` into Snapshot Store.
 - [PR #2451](https://github.com/rqlite/rqlite/pull/2451): Rename `Snapshot` type to `StateReader` in snapshot package.
 

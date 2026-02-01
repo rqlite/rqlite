@@ -92,9 +92,8 @@ type SnapshotSet struct {
 	items []*Snapshot
 }
 
-// Len returns the number of snapshots in the set.
-//
-// SnapshotSet is ordered from oldest to newest.
+// Len returns the number of snapshots in the set. The value return will always
+// be non-negative.
 func (ss SnapshotSet) Len() int {
 	return len(ss.items)
 }
@@ -107,8 +106,6 @@ func (ss SnapshotSet) All() []*Snapshot {
 }
 
 // IDs returns the snapshot IDs in the set, ordered from oldest to newest.
-//
-// This is a convenience projection for callers that only need IDs.
 func (ss SnapshotSet) IDs() []string {
 	ids := make([]string, len(ss.items))
 	for i, snapshot := range ss.items {
