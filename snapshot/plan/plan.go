@@ -130,6 +130,8 @@ func (p *Plan) Execute(v Visitor) error {
 			err = v.RemoveAll(op.Src)
 		case OpCheckpoint:
 			err = v.Checkpoint(op.DB, op.WALs)
+		default:
+			panic("unknown operation type")
 		}
 		if err != nil {
 			return err
