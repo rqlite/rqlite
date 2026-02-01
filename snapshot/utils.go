@@ -31,11 +31,15 @@ func isTmpName(name string) bool {
 	return filepath.Ext(name) == tmpSuffix
 }
 
+// fileExists returns true if a file exists at path
+// and it is not a directory.
 func fileExists(path string) bool {
-info, err := os.Stat(path)
+	info, err := os.Stat(path)
 	return err == nil && !info.IsDir()
 }
 
+// dirExist returns true if an actual directory exists
+// at the given path.
 func dirExists(path string) bool {
 	stat, err := os.Stat(path)
 	return err == nil && stat.IsDir()
