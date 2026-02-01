@@ -32,8 +32,8 @@ func isTmpName(name string) bool {
 }
 
 func fileExists(path string) bool {
-	_, err := os.Stat(path)
-	return !os.IsNotExist(err)
+info, err := os.Stat(path)
+	return err == nil && !info.IsDir()
 }
 
 func dirExists(path string) bool {
