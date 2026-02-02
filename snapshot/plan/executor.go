@@ -44,7 +44,8 @@ func (e *Executor) RemoveAll(path string) error {
 	return os.RemoveAll(path)
 }
 
-// Checkpoint is a no-op placeholder.
+// Checkpoint performs a WAL checkpoint the given WAL files into the database
+// at dbPath.
 func (e *Executor) Checkpoint(dbPath string, wals []string) error {
 	existingWals := []string{}
 	for _, wal := range wals {

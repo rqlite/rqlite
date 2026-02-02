@@ -167,11 +167,8 @@ func TestJSONSerialization(t *testing.T) {
 	}
 
 	if !reflect.DeepEqual(p.Ops, p2.Ops) {
-		t.Errorf("plans do not match.\nOriginal: %+v\nDecoded: %+v", p.Ops, p2.Ops)
+		t.Fatalf("plans do not match.\nOriginal: %+v\nDecoded: %+v", p.Ops, p2.Ops)
 	}
-
-	// pretty print p to stdout
-	t.Logf("Serialized Plan: %s", data)
 }
 
 func TestFilePersistence(t *testing.T) {
@@ -197,6 +194,6 @@ func TestFilePersistence(t *testing.T) {
 	}
 
 	if !reflect.DeepEqual(p.Ops, p2.Ops) {
-		t.Errorf("plans do not match after file roundtrip.\nOriginal: %+v\nRead: %+v", p.Ops, p2.Ops)
+		t.Fatalf("plans do not match after file roundtrip.\nOriginal: %+v\nRead: %+v", p.Ops, p2.Ops)
 	}
 }

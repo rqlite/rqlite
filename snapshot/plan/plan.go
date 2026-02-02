@@ -2,6 +2,7 @@ package plan
 
 import (
 	"encoding/json"
+	"fmt"
 	"os"
 )
 
@@ -131,7 +132,7 @@ func (p *Plan) Execute(v Visitor) error {
 		case OpCheckpoint:
 			err = v.Checkpoint(op.DB, op.WALs)
 		default:
-			panic("unknown operation type")
+			err = fmt.Errorf("unknown operation type: %s", op.Type)
 		}
 		if err != nil {
 			return err
