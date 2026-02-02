@@ -156,6 +156,40 @@ func TestExecutor_Checkpoint(t *testing.T) {
 			t.Fatalf("Expected 2 checkpointed WALs, got %d", n)
 		}
 	})
+
+	// Test checkpointing when one WAL has already been checkpointed but the plan
+	// still includes it. This could happen if we crash after checkpointing one WAL
+	// but before we checkpointe the second.
+	t.Run("multiple WAL one checkpointed", func(t *testing.T) {
+		tmpDir := t.TempDir()
+
+		dstDB := filepath.Join(tmpDir, "main.db")
+		copyFile("testdata/main.db", dstDB)
+		wal0 := filepath.Join(tmpDir, "wal-00")
+		copyFile("testdata/wal-00", wal0)
+		wal1 := filepath.Join(tmpDir, "wal-01")
+		copyFile("testdata/wal-01", wal1)
+
+		e := NewExecutor()
+
+		n, err := e.Checkpoint(dstDB, []string{wal0})
+		if err != nil {
+			t.Fatalf("Checkpoint with single WAL failed: %v", err)
+		}
+		if n != 1 {
+			t.Fatalf("Expected 1 checkpointed WAL, got %d", n)
+		}
+
+		// wal0 has been checkpointed and removed.
+
+		n, err = e.Checkpoint(dstDB, []string{wal0, wal1})
+		if err != nil {
+			t.Fatalf("Checkpoint with one WAL previously checkpointed %v", err)
+		}
+		if n != 1 {
+			t.Fatalf("Expected 1 checkpointed WAL, got %d", n)
+		}
+	})
 }
 
 func copyFile(src, dst string) error {
