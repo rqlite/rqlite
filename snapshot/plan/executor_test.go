@@ -36,10 +36,10 @@ func TestExecutor_Rename(t *testing.T) {
 		t.Fatalf("Rename idempotency failed: %v", err)
 	}
 
-	// Test Idempotency: Rename non-existent file to non-existent destination -> should fail
+	// Test Idempotency: Rename non-existent file to existing destination -> should succeed
 	nonExist := filepath.Join(tmpDir, "nonexist")
 	if err := e.Rename(nonExist, dst); err != nil {
-		// Should succeed because dst exists
+		t.Fatalf("Rename non-existent file to existing destination should succeed: %v", err)
 	}
 
 	// Now test renaming non-existent to another non-existent

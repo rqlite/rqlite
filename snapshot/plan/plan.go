@@ -45,7 +45,7 @@ type Plan struct {
 
 // New returns a new, empty Plan.
 func New() *Plan {
-	return &Plan{}
+	return &Plan{Ops: []Operation{}}
 }
 
 // ReadFromFile reads a plan from the specified file.
