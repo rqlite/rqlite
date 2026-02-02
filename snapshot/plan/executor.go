@@ -48,8 +48,11 @@ func (e *Executor) RemoveAll(path string) error {
 // database at dbPath.
 //
 // If any WAL file does not exist, it is skipped. If no WAL files
-// exist, no checkpoint is performed. The number of checkpointed
+// exist, no checkpoint is attempted. The number of checkpointed
 // WAL files is returned.
+//
+// If any WAL files do exist, but the dbPath does not, an error is
+// returned.
 func (e *Executor) Checkpoint(dbPath string, wals []string) (int, error) {
 	existingWals := []string{}
 	for _, wal := range wals {
@@ -60,6 +63,11 @@ func (e *Executor) Checkpoint(dbPath string, wals []string) (int, error) {
 	n := len(existingWals)
 	if n == 0 {
 		return 0, nil
+	}
+
+	_, err := os.Stat(dbPath)
+	if err != nil {
+		return 0, err
 	}
 
 	return n, db.ReplayWAL(dbPath, existingWals, false)
