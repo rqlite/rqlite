@@ -137,6 +137,19 @@ func TestExecutor_Checkpoint(t *testing.T) {
 		}
 	})
 
+	t.Run("single WAL DB missing", func(t *testing.T) {
+		tmpDir := t.TempDir()
+
+		wal := filepath.Join(tmpDir, "wal-00")
+		mustCopyFile("testdata/wal-00", wal)
+
+		e := NewExecutor()
+		_, err := e.Checkpoint("non-existing", []string{wal})
+		if err == nil {
+			t.Fatalf("Checkpoint with single WAL and missing DB should fail")
+		}
+	})
+
 	t.Run("multiple WAL", func(t *testing.T) {
 		tmpDir := t.TempDir()
 
