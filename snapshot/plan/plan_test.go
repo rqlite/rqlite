@@ -65,9 +65,9 @@ func (m *MockVisitor) RemoveAll(path string) error {
 	return m.Err
 }
 
-func (m *MockVisitor) Checkpoint(db string, wals []string) error {
+func (m *MockVisitor) Checkpoint(db string, wals []string) (int, error) {
 	m.Calls = append(m.Calls, "checkpoint "+db)
-	return m.Err
+	return 0, m.Err
 }
 
 func TestExecute_Success(t *testing.T) {
@@ -118,10 +118,10 @@ func (f *FailVisitor) check() error {
 	return nil
 }
 
-func (f *FailVisitor) Rename(src, dst string) error              { return f.check() }
-func (f *FailVisitor) Remove(path string) error                  { return f.check() }
-func (f *FailVisitor) RemoveAll(path string) error               { return f.check() }
-func (f *FailVisitor) Checkpoint(db string, wals []string) error { return f.check() }
+func (f *FailVisitor) Rename(src, dst string) error                     { return f.check() }
+func (f *FailVisitor) Remove(path string) error                         { return f.check() }
+func (f *FailVisitor) RemoveAll(path string) error                      { return f.check() }
+func (f *FailVisitor) Checkpoint(db string, wals []string) (int, error) { return 0, f.check() }
 
 func TestExecute_StopsOnError(t *testing.T) {
 	p := New()

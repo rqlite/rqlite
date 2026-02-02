@@ -114,7 +114,7 @@ type Visitor interface {
 	Rename(src, dst string) error
 	Remove(path string) error
 	RemoveAll(path string) error
-	Checkpoint(db string, wals []string) error
+	Checkpoint(db string, wals []string) (int, error)
 }
 
 // Execute traverses the plan, calling the appropriate method on the visitor for each operation.
@@ -130,7 +130,7 @@ func (p *Plan) Execute(v Visitor) error {
 		case OpRemoveAll:
 			err = v.RemoveAll(op.Src)
 		case OpCheckpoint:
-			err = v.Checkpoint(op.DB, op.WALs)
+			_, err = v.Checkpoint(op.DB, op.WALs)
 		default:
 			err = fmt.Errorf("unknown operation type: %s", op.Type)
 		}
