@@ -839,13 +839,32 @@ func Test_WALReplayOK_Complex(t *testing.T) {
 }
 
 func Test_WALReplayFailures(t *testing.T) {
-	dbDir := t.TempDir()
-	walDir := t.TempDir()
+	t.Run("directory mismatch", func(t *testing.T) {
+		dbDir := t.TempDir()
+		walDir := t.TempDir()
 
-	err := ReplayWAL(filepath.Join(dbDir, "foo.db"), []string{filepath.Join(walDir, "foo.db-wal")}, false)
-	if err != ErrWALReplayDirectoryMismatch {
-		t.Fatalf("expected %s, got %s", ErrWALReplayDirectoryMismatch, err.Error())
-	}
+		err := ReplayWAL(filepath.Join(dbDir, "foo.db"), []string{filepath.Join(walDir, "foo.db-wal")}, false)
+		if err != ErrWALReplayDirectoryMismatch {
+			t.Fatalf("expected %s, got %s", ErrWALReplayDirectoryMismatch, err.Error())
+		}
+	})
+	t.Run("wal already exists", func(t *testing.T) {
+		dbDir := t.TempDir()
+		dbPath := filepath.Join(dbDir, "foo.db")
+		walPath := dbPath + "-wal"
+		someOtherWALPath := filepath.Join(dbDir, "someother-wal")
+
+		// Create some other WAL file to ensure we don't get error about missing WAL.
+		os.WriteFile(someOtherWALPath, []byte("not a real wal"), 0644)
+
+		os.WriteFile(dbPath, []byte("not a real db"), 0644)
+		os.WriteFile(walPath, []byte("not a real wal"), 0644)
+
+		err := ReplayWAL(dbPath, []string{someOtherWALPath}, false)
+		if err != ErrWALAlreadyExists {
+			t.Fatalf("expected %s, got %s", ErrWALAlreadyExists, err.Error())
+		}
+	})
 }
 
 func mustGzip(dst, src string) {

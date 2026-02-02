@@ -63,10 +63,6 @@ const (
 )
 
 var (
-	// ErrWALReplayDirectoryMismatch is returned when the WAL file(s) are not in the same
-	// directory as the database file.
-	ErrWALReplayDirectoryMismatch = errors.New("WAL file(s) not in same directory as database file")
-
 	// ErrQueryTimeout is returned when a query times out.
 	ErrQueryTimeout = errors.New("query timeout")
 
