@@ -102,3 +102,66 @@ func TestExecutor_RemoveAll(t *testing.T) {
 		t.Fatalf("RemoveAll idempotency failed: %v", err)
 	}
 }
+
+func TestExecutor_Checkpoint(t *testing.T) {
+	t.Run("no WALs", func(t *testing.T) {
+		tmpDir := t.TempDir()
+		dstDB := filepath.Join(tmpDir, "full.db")
+		copyFile("testdata/full.db", dstDB)
+
+		e := NewExecutor()
+		n, err := e.Checkpoint(dstDB, nil)
+		if err != nil {
+			t.Fatalf("Checkpoint with no WALs failed: %v", err)
+		}
+		if n != 0 {
+			t.Fatalf("Expected 0 checkpointed WALs, got %d", n)
+		}
+	})
+
+	t.Run("single WAL", func(t *testing.T) {
+		tmpDir := t.TempDir()
+
+		dstDB := filepath.Join(tmpDir, "main.db")
+		copyFile("testdata/main.db", dstDB)
+		wal := filepath.Join(tmpDir, "wal-00")
+		copyFile("testdata/wal-00", wal)
+
+		e := NewExecutor()
+		n, err := e.Checkpoint(dstDB, []string{wal})
+		if err != nil {
+			t.Fatalf("Checkpoint with single WAL failed: %v", err)
+		}
+		if n != 1 {
+			t.Fatalf("Expected 1 checkpointed WAL, got %d", n)
+		}
+	})
+
+	t.Run("multiple WAL", func(t *testing.T) {
+		tmpDir := t.TempDir()
+
+		dstDB := filepath.Join(tmpDir, "main.db")
+		copyFile("testdata/main.db", dstDB)
+		wal0 := filepath.Join(tmpDir, "wal-00")
+		copyFile("testdata/wal-00", wal0)
+		wal1 := filepath.Join(tmpDir, "wal-01")
+		copyFile("testdata/wal-01", wal1)
+
+		e := NewExecutor()
+		n, err := e.Checkpoint(dstDB, []string{wal0, wal1})
+		if err != nil {
+			t.Fatalf("Checkpoint with multiple WALs failed: %v", err)
+		}
+		if n != 2 {
+			t.Fatalf("Expected 2 checkpointed WALs, got %d", n)
+		}
+	})
+}
+
+func copyFile(src, dst string) error {
+	input, err := os.ReadFile(src)
+	if err != nil {
+		return err
+	}
+	return os.WriteFile(dst, input, 0644)
+}

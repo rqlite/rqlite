@@ -44,18 +44,23 @@ func (e *Executor) RemoveAll(path string) error {
 	return os.RemoveAll(path)
 }
 
-// Checkpoint performs a WAL checkpoint the given WAL files into the database
-// at dbPath.
-func (e *Executor) Checkpoint(dbPath string, wals []string) error {
+// Checkpoint performs a WAL checkpoint the given WAL files into the
+// database at dbPath.
+//
+// If any WAL file does not exist, it is skipped. If no WAL files
+// exist, no checkpoint is performed. The number of checkpointed
+// WAL files is returned.
+func (e *Executor) Checkpoint(dbPath string, wals []string) (int, error) {
 	existingWals := []string{}
 	for _, wal := range wals {
 		if _, err := os.Stat(wal); err == nil {
 			existingWals = append(existingWals, wal)
 		}
 	}
-
-	if len(existingWals) == 0 {
-		return nil
+	n := len(existingWals)
+	if n == 0 {
+		return 0, nil
 	}
-	return db.ReplayWAL(dbPath, existingWals, false)
+
+	return n, db.ReplayWAL(dbPath, existingWals, false)
 }
