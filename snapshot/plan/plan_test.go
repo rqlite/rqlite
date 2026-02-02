@@ -93,10 +93,16 @@ func TestExecute_Success(t *testing.T) {
 
 func TestExecute_Error(t *testing.T) {
 	p := New()
-	p.AddRemove("first") // Should succeed (mock only fails on return, but here we want to test error propagation)
-	// We need a way to fail on specific call or just fail always.
-	// For simplicity, let's just make the mock fail always and verify it stops at first op if we only add one.
-	// Or better, let's make a mock that fails on specific count.
+	p.AddRemove("first")
+
+	v := &MockVisitor{Err: errors.New("visitor error")}
+	err := p.Execute(v)
+	if err == nil {
+		t.Fatal("expected error, got nil")
+	}
+	if exp, got := "visitor error", err.Error(); exp != got {
+		t.Fatalf(`expected "%s", got %s`, exp, got)
+	}
 }
 
 type FailVisitor struct {
