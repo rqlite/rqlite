@@ -106,8 +106,8 @@ func TestExecutor_RemoveAll(t *testing.T) {
 func TestExecutor_Checkpoint(t *testing.T) {
 	t.Run("no WALs", func(t *testing.T) {
 		tmpDir := t.TempDir()
-		dstDB := filepath.Join(tmpDir, "full.db")
-		copyFile("testdata/full.db", dstDB)
+		dstDB := filepath.Join(tmpDir, "main.db")
+		mustCopyFile("testdata/main.db", dstDB)
 
 		e := NewExecutor()
 		n, err := e.Checkpoint(dstDB, nil)
@@ -123,9 +123,9 @@ func TestExecutor_Checkpoint(t *testing.T) {
 		tmpDir := t.TempDir()
 
 		dstDB := filepath.Join(tmpDir, "main.db")
-		copyFile("testdata/main.db", dstDB)
+		mustCopyFile("testdata/main.db", dstDB)
 		wal := filepath.Join(tmpDir, "wal-00")
-		copyFile("testdata/wal-00", wal)
+		mustCopyFile("testdata/wal-00", wal)
 
 		e := NewExecutor()
 		n, err := e.Checkpoint(dstDB, []string{wal})
@@ -141,11 +141,11 @@ func TestExecutor_Checkpoint(t *testing.T) {
 		tmpDir := t.TempDir()
 
 		dstDB := filepath.Join(tmpDir, "main.db")
-		copyFile("testdata/main.db", dstDB)
+		mustCopyFile("testdata/main.db", dstDB)
 		wal0 := filepath.Join(tmpDir, "wal-00")
-		copyFile("testdata/wal-00", wal0)
+		mustCopyFile("testdata/wal-00", wal0)
 		wal1 := filepath.Join(tmpDir, "wal-01")
-		copyFile("testdata/wal-01", wal1)
+		mustCopyFile("testdata/wal-01", wal1)
 
 		e := NewExecutor()
 		n, err := e.Checkpoint(dstDB, []string{wal0, wal1})
@@ -164,11 +164,11 @@ func TestExecutor_Checkpoint(t *testing.T) {
 		tmpDir := t.TempDir()
 
 		dstDB := filepath.Join(tmpDir, "main.db")
-		copyFile("testdata/main.db", dstDB)
+		mustCopyFile("testdata/main.db", dstDB)
 		wal0 := filepath.Join(tmpDir, "wal-00")
-		copyFile("testdata/wal-00", wal0)
+		mustCopyFile("testdata/wal-00", wal0)
 		wal1 := filepath.Join(tmpDir, "wal-01")
-		copyFile("testdata/wal-01", wal1)
+		mustCopyFile("testdata/wal-01", wal1)
 
 		e := NewExecutor()
 
@@ -192,10 +192,12 @@ func TestExecutor_Checkpoint(t *testing.T) {
 	})
 }
 
-func copyFile(src, dst string) error {
+func mustCopyFile(src, dst string) {
 	input, err := os.ReadFile(src)
 	if err != nil {
-		return err
+		panic("failed to read file")
 	}
-	return os.WriteFile(dst, input, 0644)
+	if err := os.WriteFile(dst, input, 0644); err != nil {
+		panic("failed to write file")
+	}
 }
