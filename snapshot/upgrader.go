@@ -46,30 +46,30 @@ func Upgrade7To8(old, new string, logger *log.Logger) (retErr error) {
 		}
 	}
 
-	if dirExists(old) {
-		oldIsEmpty, err := dirIsEmpty(old)
-		if err != nil {
-			return fmt.Errorf("failed to check if old snapshot directory %s is empty: %s", old, err)
-		}
-
-		if oldIsEmpty {
-			logger.Printf("old snapshot directory %s is empty, nothing to upgrade", old)
-			if err := os.RemoveAll(old); err != nil {
-				return fmt.Errorf("failed to remove empty old snapshot directory %s: %s", old, err)
-			}
-			return nil
-		}
-
-		if dirExists(new) {
-			logger.Printf("new snapshot directory %s exists", new)
-			if err := os.RemoveAll(old); err != nil {
-				return fmt.Errorf("failed to remove old snapshot directory %s: %s", old, err)
-			}
-			logger.Printf("removed old snapshot directory %s as no upgrade is needed", old)
-			return nil
-		}
-	} else {
+	if !dirExists(old) {
 		logger.Printf("old v7 snapshot directory does not exist at %s, nothing to upgrade", old)
+		return nil
+	}
+
+	oldIsEmpty, err := dirIsEmpty(old)
+	if err != nil {
+		return fmt.Errorf("failed to check if old snapshot directory %s is empty: %s", old, err)
+	}
+
+	if oldIsEmpty {
+		logger.Printf("old snapshot directory %s is empty, nothing to upgrade", old)
+		if err := os.RemoveAll(old); err != nil {
+			return fmt.Errorf("failed to remove empty old snapshot directory %s: %s", old, err)
+		}
+		return nil
+	}
+
+	if dirExists(new) {
+		logger.Printf("new snapshot directory %s exists", new)
+		if err := os.RemoveAll(old); err != nil {
+			return fmt.Errorf("failed to remove old snapshot directory %s: %s", old, err)
+		}
+		logger.Printf("removed old snapshot directory %s as no upgrade is needed", old)
 		return nil
 	}
 
