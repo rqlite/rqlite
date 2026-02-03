@@ -79,6 +79,49 @@ Consistency levels: none, weak, linearizable, strong (leader-only reads)
 - `go.etcd.io/bbolt` - BoltDB for Raft log storage
 - `google.golang.org/protobuf` - Protocol buffer messages
 
+## API and Consistency Model
+
+### HTTP Endpoints
+- `/db/execute` - Write operations (INSERT, UPDATE, DELETE)
+- `/db/query` - Read operations (SELECT)
+- `/db/request` - Unified endpoint accepting both reads and writes
+
+### Read Consistency Levels (via `level` query parameter)
+- **weak** (default) - Fast, checks local leadership state, may have ~1s staleness
+- **linearizable** - Verifies leadership via quorum heartbeat, ensures up-to-date reads
+- **none** - Direct local reads, fastest but may be stale; use `freshness` param to bound staleness
+- **strong** - Query goes through Raft log, slowest, mainly for testing
+
+### Write Modes
+- **Standard** - Waits for Raft consensus before returning
+- **Queued** (`?queue`) - Returns immediately, batched automatically, orders of magnitude faster
+- **Bulk** - Multiple statements in single request/Raft entry for better throughput
+
+### Non-deterministic Function Handling
+Functions like `RANDOM()`, `datetime('now')` are rewritten before Raft log storage to ensure identical results across all replicas. Disable with `?norwrandom` or `?norwtime`.
+
+## Clustering
+
+- Raft quorum requires `(N/2)+1` nodes (3-node cluster tolerates 1 failure, 5-node tolerates 2)
+- Auto-discovery via DNS, DNS-SRV, Consul, or etcd
+- Manual clustering via `-join` flag or `-bootstrap-expect N` for simultaneous startup
+- **Read-only nodes** (`-raft-non-voter`): Receive replication but don't vote, scale read throughput
+
+## Operational Features
+
+- **Hot backup**: `/db/backup` endpoint, supports SQL dump (`?fmt=sql`) and compression (`?compress`)
+- **Auto-backup**: Periodic backups to S3, GCS, MinIO, or local filesystem
+- **Restore**: `/boot` (fast, single-node) or `/db/load` (works on clusters)
+- **CDC**: Streams INSERT/UPDATE/DELETE to webhooks with at-least-once delivery
+- **Extensions**: Load SQLite extensions via `-extensions-path`
+
+## Performance Notes
+
+- Disk I/O (Raft fsync) is the primary bottleneck
+- Queued writes dramatically improve throughput with small durability tradeoff
+- SQLite runs in WAL mode with `SYNCHRONOUS=off` (Raft provides durability)
+- Snapshot tuning: `-raft-snap` (entries), `-raft-snap-wal-size` (WAL size threshold)
+
 ## Code Style Guidelines
 
 - Always run `go fmt` on modified Go source files
