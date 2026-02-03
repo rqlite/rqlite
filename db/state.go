@@ -342,6 +342,17 @@ func CheckpointRemove(path string) error {
 	if err := db.SetSynchronousMode(SynchronousFull); err != nil {
 		return fmt.Errorf("failed to set synchronous mode to FULL: %w", err)
 	}
+
+	// Explicitly checkpoint the WAL to be absolutely sure.
+	meta, err := db.Checkpoint(CheckpointTruncate)
+	if err != nil {
+		return fmt.Errorf("failed to checkpoint WAL: %w", err)
+	}
+	if !meta.Success() {
+		return fmt.Errorf("checkpoint not successful: %v", meta)
+	}
+
+	// Now close the database which checkpoint and removs the WAL and SHM files.
 	return db.Close()
 }
 

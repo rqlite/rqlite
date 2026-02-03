@@ -513,12 +513,14 @@ func (db *DB) WALSum() (string, error) {
 	return rsum.MD5(db.walPath)
 }
 
-// Close closes the underlying database connection.
+// Close closes the underlying database connection. Close the read-only
+// connection first so if there is any clean-up -- perhaps a checkpoint
+// on close -- it can be done by the read-write connection.
 func (db *DB) Close() error {
-	if err := db.rwDB.Close(); err != nil {
+	if err := db.roDB.Close(); err != nil {
 		return err
 	}
-	return db.roDB.Close()
+	return db.rwDB.Close()
 }
 
 // Stats returns status and diagnostics for the database.
