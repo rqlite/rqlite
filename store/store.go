@@ -2587,7 +2587,7 @@ func (s *Store) fsmSnapshot() (fSnap raft.FSMSnapshot, retErr error) {
 				return nil, err
 			}
 			stats.Get(snapshotCreateWALCompactDuration).(*expvar.Int).Set(time.Since(compactStartTime).Milliseconds())
-if err := walTmpFD.Sync(); err != nil {
+			if err := walTmpFD.Sync(); err != nil {
 				walTmpFD.Close()
 				os.Remove(walTmpFD.Name())
 				return nil, fmt.Errorf("failed to sync compacted WAL file: %w", err)
