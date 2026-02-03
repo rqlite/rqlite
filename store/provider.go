@@ -1,6 +1,7 @@
 package store
 
 import (
+	"context"
 	"io"
 	"time"
 
@@ -55,7 +56,7 @@ func (p *Provider) Provide(w io.Writer) (retErr error) {
 	}
 	nRetries := 0
 	for {
-		err := p.str.Backup(br, w)
+		err := p.str.Backup(context.Background(), br, w)
 		if err == nil {
 			break
 		}

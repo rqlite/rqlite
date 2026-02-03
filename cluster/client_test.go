@@ -1,6 +1,7 @@
 package cluster
 
 import (
+	"context"
 	"encoding/binary"
 	"io"
 	"net"
@@ -129,7 +130,7 @@ func Test_ClientExecute(t *testing.T) {
 	defer srv.Close()
 
 	c := NewClient(&simpleDialer{}, 0)
-	_, idx, err := c.Execute(executeRequestFromString("INSERT INTO foo (id) VALUES (1)"),
+	_, idx, err := c.Execute(context.Background(), executeRequestFromString("INSERT INTO foo (id) VALUES (1)"),
 		srv.Addr(), nil, time.Second, defaultMaxRetries)
 	if err != nil {
 		t.Fatal(err)
@@ -171,7 +172,7 @@ func Test_ClientQuery(t *testing.T) {
 	defer srv.Close()
 
 	c := NewClient(&simpleDialer{}, 0)
-	_, _, err := c.Query(queryRequestFromString("SELECT * FROM foo"),
+	_, _, err := c.Query(context.Background(), queryRequestFromString("SELECT * FROM foo"),
 		srv.Addr(), nil, time.Second)
 	if err != nil {
 		t.Fatal(err)
@@ -210,7 +211,7 @@ func Test_ClientRequest(t *testing.T) {
 	defer srv.Close()
 
 	c := NewClient(&simpleDialer{}, 0)
-	_, _, idx, err := c.Request(executeQueryRequestFromString("SELECT * FROM foo"),
+	_, _, idx, err := c.Request(context.Background(), executeQueryRequestFromString("SELECT * FROM foo"),
 		srv.Addr(), nil, time.Second, defaultMaxRetries)
 	if err != nil {
 		t.Fatal(err)
@@ -255,7 +256,7 @@ func Test_ClientRemoveNode(t *testing.T) {
 	req := &command.RemoveNodeRequest{
 		Id: "node1",
 	}
-	err := c.RemoveNode(req, srv.Addr(), nil, time.Second)
+	err := c.RemoveNode(context.Background(), req, srv.Addr(), nil, time.Second)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -291,7 +292,7 @@ func Test_ClientRemoveNodeTimeout(t *testing.T) {
 	req := &command.RemoveNodeRequest{
 		Id: "node1",
 	}
-	err := c.RemoveNode(req, srv.Addr(), nil, time.Second)
+	err := c.RemoveNode(context.Background(), req, srv.Addr(), nil, time.Second)
 	if err == nil || !strings.Contains(err.Error(), "i/o timeout") {
 		t.Fatalf("failed to receive expected error, got: %T %s", err, err)
 	}

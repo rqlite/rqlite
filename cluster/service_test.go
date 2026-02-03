@@ -1,6 +1,7 @@
 package cluster
 
 import (
+	"context"
 	"crypto/tls"
 	"fmt"
 	"io"
@@ -241,12 +242,12 @@ func Test_NewServiceTestExecuteQueryAuthNoCredentials(t *testing.T) {
 		t.Fatalf("failed to set cluster client local parameters: %s", err)
 	}
 	er := &command.ExecuteRequest{}
-	_, _, err := cl.Execute(er, s.Addr(), nil, 5*time.Second, defaultMaxRetries)
+	_, _, err := cl.Execute(context.Background(), er, s.Addr(), nil, 5*time.Second, defaultMaxRetries)
 	if err != nil {
 		t.Fatal(err)
 	}
 	qr := &command.QueryRequest{}
-	_, _, err = cl.Query(qr, s.Addr(), nil, 5*time.Second)
+	_, _, err = cl.Query(context.Background(), qr, s.Addr(), nil, 5*time.Second)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -284,21 +285,21 @@ func Test_NewServiceTestExecuteQueryAuth(t *testing.T) {
 		t.Fatalf("failed to set cluster client local parameters: %s", err)
 	}
 	er := &command.ExecuteRequest{}
-	_, _, err := cl.Execute(er, s.Addr(), makeCredentials("alice", "secret1"), 5*time.Second, defaultMaxRetries)
+	_, _, err := cl.Execute(context.Background(), er, s.Addr(), makeCredentials("alice", "secret1"), 5*time.Second, defaultMaxRetries)
 	if err != nil {
 		t.Fatal("alice improperly unauthorized to execute")
 	}
-	_, _, err = cl.Execute(er, s.Addr(), makeCredentials("bob", "secret1"), 5*time.Second, defaultMaxRetries)
+	_, _, err = cl.Execute(context.Background(), er, s.Addr(), makeCredentials("bob", "secret1"), 5*time.Second, defaultMaxRetries)
 	if err == nil {
 		t.Fatal("bob improperly authorized to execute")
 	}
 	qr := &command.QueryRequest{}
-	_, _, err = cl.Query(qr, s.Addr(), makeCredentials("bob", "secret1"), 5*time.Second)
+	_, _, err = cl.Query(context.Background(), qr, s.Addr(), makeCredentials("bob", "secret1"), 5*time.Second)
 	if err != nil && err.Error() != "unauthorized" {
 		fmt.Println(err)
 		t.Fatal("bob improperly unauthorized to query")
 	}
-	_, _, err = cl.Query(qr, s.Addr(), makeCredentials("alice", "secret1"), 5*time.Second)
+	_, _, err = cl.Query(context.Background(), qr, s.Addr(), makeCredentials("alice", "secret1"), 5*time.Second)
 	if err != nil && err.Error() != "unauthorized" {
 		t.Fatal("alice improperly authorized to query")
 	}
@@ -569,30 +570,30 @@ type mockDatabase struct {
 	loadFn    func(lr *command.LoadRequest) error
 }
 
-func (m *mockDatabase) Execute(er *command.ExecuteRequest) ([]*command.ExecuteQueryResponse, uint64, error) {
+func (m *mockDatabase) Execute(ctx context.Context, er *command.ExecuteRequest) ([]*command.ExecuteQueryResponse, uint64, error) {
 	return m.executeFn(er)
 }
 
-func (m *mockDatabase) Query(qr *command.QueryRequest) ([]*command.QueryRows, command.ConsistencyLevel, uint64, error) {
+func (m *mockDatabase) Query(ctx context.Context, qr *command.QueryRequest) ([]*command.QueryRows, command.ConsistencyLevel, uint64, error) {
 	rows, idx, err := m.queryFn(qr)
 	return rows, command.ConsistencyLevel_NONE, idx, err
 }
 
-func (m *mockDatabase) Request(rr *command.ExecuteQueryRequest) ([]*command.ExecuteQueryResponse, uint64, uint64, error) {
+func (m *mockDatabase) Request(ctx context.Context, rr *command.ExecuteQueryRequest) ([]*command.ExecuteQueryResponse, uint64, uint64, error) {
 	if m.requestFn == nil {
 		return []*command.ExecuteQueryResponse{}, 0, 0, nil
 	}
 	return m.requestFn(rr)
 }
 
-func (m *mockDatabase) Backup(br *command.BackupRequest, dst io.Writer) error {
+func (m *mockDatabase) Backup(ctx context.Context, br *command.BackupRequest, dst io.Writer) error {
 	if m.backupFn == nil {
 		return nil
 	}
 	return m.backupFn(br, dst)
 }
 
-func (m *mockDatabase) Load(lr *command.LoadRequest) error {
+func (m *mockDatabase) Load(ctx context.Context, lr *command.LoadRequest) error {
 	if m.loadFn == nil {
 		return nil
 	}
@@ -618,7 +619,7 @@ type MockManager struct {
 	commitIndex  uint64
 }
 
-func (m *MockManager) Remove(rn *command.RemoveNodeRequest) error {
+func (m *MockManager) Remove(ctx context.Context, rn *command.RemoveNodeRequest) error {
 	if m.removeNodeFn == nil {
 		return nil
 	}

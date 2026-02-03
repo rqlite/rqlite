@@ -2,6 +2,7 @@ package http
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -1700,14 +1701,14 @@ type MockStore struct {
 	notReady    bool // Default value is true, easier to test.
 }
 
-func (m *MockStore) Execute(er *command.ExecuteRequest) ([]*command.ExecuteQueryResponse, uint64, error) {
+func (m *MockStore) Execute(ctx context.Context, er *command.ExecuteRequest) ([]*command.ExecuteQueryResponse, uint64, error) {
 	if m.executeFn != nil {
 		return m.executeFn(er)
 	}
 	return nil, 0, nil
 }
 
-func (m *MockStore) Query(qr *command.QueryRequest) ([]*command.QueryRows, command.ConsistencyLevel, uint64, error) {
+func (m *MockStore) Query(ctx context.Context, qr *command.QueryRequest) ([]*command.QueryRows, command.ConsistencyLevel, uint64, error) {
 	if m.queryFn != nil {
 		rows, idx, err := m.queryFn(qr)
 		return rows, command.ConsistencyLevel_NONE, idx, err
@@ -1715,7 +1716,7 @@ func (m *MockStore) Query(qr *command.QueryRequest) ([]*command.QueryRows, comma
 	return nil, command.ConsistencyLevel_NONE, 0, nil
 }
 
-func (m *MockStore) Request(eqr *command.ExecuteQueryRequest) ([]*command.ExecuteQueryResponse, uint64, uint64, error) {
+func (m *MockStore) Request(ctx context.Context, eqr *command.ExecuteQueryRequest) ([]*command.ExecuteQueryResponse, uint64, uint64, error) {
 	if m.requestFn != nil {
 		return m.requestFn(eqr)
 	}
@@ -1730,7 +1731,7 @@ func (m *MockStore) Notify(nr *command.NotifyRequest) error {
 	return nil
 }
 
-func (m *MockStore) Remove(rn *command.RemoveNodeRequest) error {
+func (m *MockStore) Remove(ctx context.Context, rn *command.RemoveNodeRequest) error {
 	return nil
 }
 
@@ -1759,14 +1760,14 @@ func (m *MockStore) Nodes() ([]*store.Server, error) {
 	return nil, nil
 }
 
-func (m *MockStore) Backup(br *command.BackupRequest, w io.Writer) error {
+func (m *MockStore) Backup(ctx context.Context, br *command.BackupRequest, w io.Writer) error {
 	if m.backupFn == nil {
 		return nil
 	}
 	return m.backupFn(br, w)
 }
 
-func (m *MockStore) Load(lr *command.LoadRequest) error {
+func (m *MockStore) Load(ctx context.Context, lr *command.LoadRequest) error {
 	if m.loadFn != nil {
 		return m.loadFn(lr)
 	}
@@ -1811,42 +1812,42 @@ func (m *mockClusterService) GetNodeMeta(a string, r int, t time.Duration) (*clu
 	}, nil
 }
 
-func (m *mockClusterService) Execute(er *command.ExecuteRequest, addr string, creds *cluster.Credentials, t time.Duration, r int) ([]*command.ExecuteQueryResponse, uint64, error) {
+func (m *mockClusterService) Execute(ctx context.Context, er *command.ExecuteRequest, addr string, creds *cluster.Credentials, t time.Duration, r int) ([]*command.ExecuteQueryResponse, uint64, error) {
 	if m.executeFn != nil {
 		return m.executeFn(er, addr, t)
 	}
 	return nil, 0, nil
 }
 
-func (m *mockClusterService) Query(qr *command.QueryRequest, addr string, creds *cluster.Credentials, t time.Duration) ([]*command.QueryRows, uint64, error) {
+func (m *mockClusterService) Query(ctx context.Context, qr *command.QueryRequest, addr string, creds *cluster.Credentials, t time.Duration) ([]*command.QueryRows, uint64, error) {
 	if m.queryFn != nil {
 		return m.queryFn(qr, addr, t)
 	}
 	return nil, 0, nil
 }
 
-func (m *mockClusterService) Request(eqr *command.ExecuteQueryRequest, nodeAddr string, creds *cluster.Credentials, timeout time.Duration, r int) ([]*command.ExecuteQueryResponse, uint64, uint64, error) {
+func (m *mockClusterService) Request(ctx context.Context, eqr *command.ExecuteQueryRequest, nodeAddr string, creds *cluster.Credentials, timeout time.Duration, r int) ([]*command.ExecuteQueryResponse, uint64, uint64, error) {
 	if m.requestFn != nil {
 		return m.requestFn(eqr, nodeAddr, timeout)
 	}
 	return nil, 0, 0, nil
 }
 
-func (m *mockClusterService) Backup(br *command.BackupRequest, addr string, creds *cluster.Credentials, t time.Duration, w io.Writer) error {
+func (m *mockClusterService) Backup(ctx context.Context, br *command.BackupRequest, addr string, creds *cluster.Credentials, t time.Duration, w io.Writer) error {
 	if m.backupFn != nil {
 		return m.backupFn(br, addr, t, w)
 	}
 	return nil
 }
 
-func (m *mockClusterService) Load(lr *command.LoadRequest, nodeAddr string, creds *cluster.Credentials, timeout time.Duration, r int) error {
+func (m *mockClusterService) Load(ctx context.Context, lr *command.LoadRequest, nodeAddr string, creds *cluster.Credentials, timeout time.Duration, r int) error {
 	if m.loadFn != nil {
 		return m.loadFn(lr, nodeAddr, timeout)
 	}
 	return nil
 }
 
-func (m *mockClusterService) RemoveNode(rn *command.RemoveNodeRequest, addr string, creds *cluster.Credentials, t time.Duration) error {
+func (m *mockClusterService) RemoveNode(ctx context.Context, rn *command.RemoveNodeRequest, addr string, creds *cluster.Credentials, t time.Duration) error {
 	if m.removeNodeFn != nil {
 		return m.removeNodeFn(rn, addr, t)
 	}

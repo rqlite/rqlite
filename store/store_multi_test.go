@@ -1,6 +1,7 @@
 package store
 
 import (
+	"context"
 	"errors"
 	"expvar"
 	"path/filepath"
@@ -237,7 +238,7 @@ func Test_MultiNodeSimple(t *testing.T) {
 		`CREATE TABLE foo (id INTEGER NOT NULL PRIMARY KEY, name TEXT)`,
 		`INSERT INTO foo(id, name) VALUES(1, "fiona")`,
 	}, false, false)
-	_, idx, err := s0.Execute(er)
+	_, idx, err := s0.Execute(context.Background(), er)
 	if err != nil {
 		t.Fatalf("failed to execute on single node: %s", err.Error())
 	}
@@ -277,7 +278,7 @@ func Test_MultiNodeSimple(t *testing.T) {
 		t.Helper()
 		qr := queryRequestFromString("SELECT * FROM foo", false, false)
 		qr.Level = proto.ConsistencyLevel_NONE
-		r, _, _, err := s.Query(qr)
+		r, _, _, err := s.Query(context.Background(), qr)
 		if err != nil {
 			t.Fatalf("failed to query single node: %s", err.Error())
 		}
@@ -312,7 +313,7 @@ func Test_MultiNodeSimple(t *testing.T) {
 
 	// Write another row using Request
 	rr := executeQueryRequestFromString("INSERT INTO foo(id, name) VALUES(2, 'fiona')", proto.ConsistencyLevel_STRONG, false, false)
-	_, _, _, err = s0.Request(rr)
+	_, _, _, err = s0.Request(context.Background(), rr)
 	if err != nil {
 		t.Fatalf("failed to execute on single node: %s", err.Error())
 	}
@@ -326,7 +327,7 @@ func Test_MultiNodeSimple(t *testing.T) {
 		t.Helper()
 		qr := queryRequestFromString("SELECT COUNT(*) FROM foo", false, false)
 		qr.Level = proto.ConsistencyLevel_NONE
-		r, _, _, err := s.Query(qr)
+		r, _, _, err := s.Query(context.Background(), qr)
 		if err != nil {
 			t.Fatalf("failed to query single node: %s", err.Error())
 		}
@@ -485,7 +486,7 @@ func Test_MultiNodeSnapshot_BlockedSnapshot(t *testing.T) {
 		t.Fatalf("Error waiting for leader: %s", err)
 	}
 	er := executeRequestFromString(`CREATE TABLE foo (id INTEGER NOT NULL PRIMARY KEY, name TEXT)`, false, false)
-	_, _, err := s0.Execute(er)
+	_, _, err := s0.Execute(context.Background(), er)
 	if err != nil {
 		t.Fatalf("failed to execute on single node: %s", err.Error())
 	}
@@ -498,7 +499,7 @@ func Test_MultiNodeSnapshot_BlockedSnapshot(t *testing.T) {
 			stmts = append(stmts, `INSERT INTO foo(name) VALUES("fiona")`)
 		}
 		er = executeRequestFromStrings(stmts, false, false)
-		_, _, err = s.Execute(er)
+		_, _, err = s.Execute(context.Background(), er)
 		if err != nil {
 			t.Fatalf("failed to execute on single node: %s", err.Error())
 		}
@@ -545,7 +546,7 @@ func Test_MultiNodeSnapshot_BlockedSnapshot(t *testing.T) {
 	// Should be two records in database.
 	qr := queryRequestFromString("SELECT COUNT(*) FROM foo", false, false)
 	qr.Level = proto.ConsistencyLevel_STRONG
-	r, _, _, err := s0.Query(qr)
+	r, _, _, err := s0.Query(context.Background(), qr)
 	if err != nil {
 		t.Fatalf("failed to query single node: %s", err.Error())
 	}
@@ -622,7 +623,7 @@ func Test_MultiNodeDBAppliedIndex(t *testing.T) {
 		`INSERT INTO foo(id, name) VALUES(2, "fiona")`,
 		`INSERT INTO foo(id, name) VALUES(3, "fiona")`,
 	}, false, false)
-	_, idx, err := s0.Execute(er)
+	_, idx, err := s0.Execute(context.Background(), er)
 	if err != nil {
 		t.Fatalf("failed to execute on single node: %s", err.Error())
 	}
@@ -682,7 +683,7 @@ func Test_MultiNodeDBAppliedIndex(t *testing.T) {
 	er = executeRequestFromStrings([]string{
 		`INSERT INTO foo(id, name) VALUES(4, "fiona")`,
 	}, false, false)
-	_, idx, err = s0.Execute(er)
+	_, idx, err = s0.Execute(context.Background(), er)
 	if err != nil {
 		t.Fatalf("failed to execute on single node: %s", err.Error())
 	}
@@ -758,7 +759,7 @@ func Test_MultiNodeJoinRemove(t *testing.T) {
 	}
 
 	// Remove a node.
-	if err := s0.Remove(removeNodeRequest(s1.ID())); err != nil {
+	if err := s0.Remove(context.Background(), removeNodeRequest(s1.ID())); err != nil {
 		t.Fatalf("failed to remove %s from cluster: %s", s1.ID(), err.Error())
 	}
 
@@ -1060,7 +1061,7 @@ func Test_MultiNodeStoreAutoRestoreBootstrap(t *testing.T) {
 	}
 
 	qr := queryRequestFromString("SELECT * FROM foo WHERE id=2", false, true)
-	r, _, _, err := s0.Query(qr)
+	r, _, _, err := s0.Query(context.Background(), qr)
 	if err != nil {
 		t.Fatalf("failed to query single node: %s", err.Error())
 	}
@@ -1148,7 +1149,7 @@ func Test_MultiNodeJoinNonVoterRemove(t *testing.T) {
 	}
 
 	// Remove the non-voter.
-	if err := s0.Remove(removeNodeRequest(s1.ID())); err != nil {
+	if err := s0.Remove(context.Background(), removeNodeRequest(s1.ID())); err != nil {
 		t.Fatalf("failed to remove %s from cluster: %s", s1.ID(), err.Error())
 	}
 
@@ -1206,7 +1207,7 @@ func Test_MultiNodeExecuteQuery(t *testing.T) {
 		`CREATE TABLE foo (id INTEGER NOT NULL PRIMARY KEY, name TEXT)`,
 		`INSERT INTO foo(id, name) VALUES(1, "fiona")`,
 	}, false, false)
-	_, idx, err := s0.Execute(er)
+	_, idx, err := s0.Execute(context.Background(), er)
 	if err != nil {
 		t.Fatalf("failed to execute on single node: %s", err.Error())
 	}
@@ -1216,7 +1217,7 @@ func Test_MultiNodeExecuteQuery(t *testing.T) {
 
 	qr := queryRequestFromString("SELECT * FROM foo", false, false)
 	qr.Level = proto.ConsistencyLevel_NONE
-	r, _, _, err := s0.Query(qr)
+	r, _, _, err := s0.Query(context.Background(), qr)
 	if err != nil {
 		t.Fatalf("failed to query leader node: %s", err.Error())
 	}
@@ -1234,17 +1235,17 @@ func Test_MultiNodeExecuteQuery(t *testing.T) {
 	}, 100*time.Millisecond, 5*time.Second)
 
 	qr.Level = proto.ConsistencyLevel_WEAK
-	_, _, _, err = s1.Query(qr)
+	_, _, _, err = s1.Query(context.Background(), qr)
 	if err == nil {
 		t.Fatalf("successfully queried non-leader node")
 	}
 	qr.Level = proto.ConsistencyLevel_STRONG
-	_, _, _, err = s1.Query(qr)
+	_, _, _, err = s1.Query(context.Background(), qr)
 	if err == nil {
 		t.Fatalf("successfully queried non-leader node")
 	}
 	qr.Level = proto.ConsistencyLevel_NONE
-	r, _, _, err = s1.Query(qr)
+	r, _, _, err = s1.Query(context.Background(), qr)
 	if err != nil {
 		t.Fatalf("failed to query follower node: %s", err.Error())
 	}
@@ -1262,17 +1263,17 @@ func Test_MultiNodeExecuteQuery(t *testing.T) {
 	}, 100*time.Millisecond, 5*time.Second)
 
 	qr.Level = proto.ConsistencyLevel_WEAK
-	_, _, _, err = s1.Query(qr)
+	_, _, _, err = s1.Query(context.Background(), qr)
 	if err == nil {
 		t.Fatalf("successfully queried non-voting node with Weak")
 	}
 	qr.Level = proto.ConsistencyLevel_STRONG
-	_, _, _, err = s1.Query(qr)
+	_, _, _, err = s1.Query(context.Background(), qr)
 	if err == nil {
 		t.Fatalf("successfully queried non-voting node with Strong")
 	}
 	qr.Level = proto.ConsistencyLevel_NONE
-	r, _, _, err = s1.Query(qr)
+	r, _, _, err = s1.Query(context.Background(), qr)
 	if err != nil {
 		t.Fatalf("failed to query non-voting node: %s", err.Error())
 	}
@@ -1314,14 +1315,14 @@ func Test_MultiNodeExecuteQueryFreshness(t *testing.T) {
 		`CREATE TABLE foo (id INTEGER NOT NULL PRIMARY KEY, name TEXT)`,
 		`INSERT INTO foo(id, name) VALUES(1, "fiona")`,
 	}, false, false)
-	_, _, err := s0.Execute(er)
+	_, _, err := s0.Execute(context.Background(), er)
 	if err != nil {
 		t.Fatalf("failed to execute on single node: %s", err.Error())
 	}
 
 	qr := queryRequestFromString("SELECT * FROM foo", false, false)
 	qr.Level = proto.ConsistencyLevel_NONE
-	r, _, _, err := s0.Query(qr)
+	r, _, _, err := s0.Query(context.Background(), qr)
 	if err != nil {
 		t.Fatalf("failed to query leader node: %s", err.Error())
 	}
@@ -1342,14 +1343,14 @@ func Test_MultiNodeExecuteQueryFreshness(t *testing.T) {
 	// is ignored in this case.
 	qr.Level = proto.ConsistencyLevel_WEAK
 	qr.Freshness = mustParseDuration("1ns").Nanoseconds()
-	_, _, _, err = s0.Query(qr)
+	_, _, _, err = s0.Query(context.Background(), qr)
 	if err != nil {
 		t.Fatalf("Failed to ignore freshness if level is Weak: %s", err.Error())
 	}
 	qr.Level = proto.ConsistencyLevel_STRONG
 	// "Strong" consistency queries with 1 nanosecond freshness should pass, because freshness
 	// is ignored in this case.
-	_, _, _, err = s0.Query(qr)
+	_, _, _, err = s0.Query(context.Background(), qr)
 	if err != nil {
 		t.Fatalf("Failed to ignore freshness if level is Strong: %s", err.Error())
 	}
@@ -1360,7 +1361,7 @@ func Test_MultiNodeExecuteQueryFreshness(t *testing.T) {
 	// "None" consistency queries should still work.
 	qr.Level = proto.ConsistencyLevel_NONE
 	qr.Freshness = 0
-	r, _, _, err = s1.Query(qr)
+	r, _, _, err = s1.Query(context.Background(), qr)
 	if err != nil {
 		t.Fatalf("failed to query follower node: %s", err.Error())
 	}
@@ -1378,7 +1379,7 @@ func Test_MultiNodeExecuteQueryFreshness(t *testing.T) {
 	// one nanosecond *should* have passed since leader died (surely!).
 	qr.Level = proto.ConsistencyLevel_NONE
 	qr.Freshness = mustParseDuration("1ns").Nanoseconds()
-	_, _, _, err = s1.Query(qr)
+	_, _, _, err = s1.Query(context.Background(), qr)
 	if err == nil {
 		t.Fatalf("freshness violating query didn't return an error")
 	}
@@ -1388,7 +1389,7 @@ func Test_MultiNodeExecuteQueryFreshness(t *testing.T) {
 
 	// Freshness of 0 is ignored.
 	qr.Freshness = 0
-	r, _, _, err = s1.Query(qr)
+	r, _, _, err = s1.Query(context.Background(), qr)
 	if err != nil {
 		t.Fatalf("failed to query follower node: %s", err.Error())
 	}
@@ -1402,7 +1403,7 @@ func Test_MultiNodeExecuteQueryFreshness(t *testing.T) {
 	// "None" consistency queries with 1 hour freshness should pass, because it should
 	// not be that long since the leader died.
 	qr.Freshness = mustParseDuration("1h").Nanoseconds()
-	r, _, _, err = s1.Query(qr)
+	r, _, _, err = s1.Query(context.Background(), qr)
 	if err != nil {
 		t.Fatalf("failed to query follower node: %s", err.Error())
 	}
@@ -1417,7 +1418,7 @@ func Test_MultiNodeExecuteQueryFreshness(t *testing.T) {
 	eqr := executeQueryRequestFromString("SELECT * FROM foo", proto.ConsistencyLevel_NONE,
 		false, false)
 	eqr.Freshness = mustParseDuration("1ns").Nanoseconds()
-	_, _, _, err = s1.Request(eqr)
+	_, _, _, err = s1.Request(context.Background(), eqr)
 	if err == nil {
 		t.Fatalf("freshness violating request didn't return an error")
 	}
@@ -1425,7 +1426,7 @@ func Test_MultiNodeExecuteQueryFreshness(t *testing.T) {
 		t.Fatalf("freshness violating request returned wrong error: %s", err.Error())
 	}
 	eqr.Freshness = 0
-	eqresp, _, _, err := s1.Request(eqr)
+	eqresp, _, _, err := s1.Request(context.Background(), eqr)
 	if err != nil {
 		t.Fatalf("inactive freshness violating request returned an error")
 	}
@@ -1510,7 +1511,7 @@ func Test_MultiNodeStoreLogTruncation(t *testing.T) {
 		`INSERT INTO foo(id, name) VALUES(5, "fiona")`,
 	}
 	for i := range queries {
-		_, _, err := s0.Execute(executeRequestFromString(queries[i], false, false))
+		_, _, err := s0.Execute(context.Background(), executeRequestFromString(queries[i], false, false))
 		if err != nil {
 			t.Fatalf("failed to execute on single node: %s", err.Error())
 		}
@@ -1524,7 +1525,7 @@ func Test_MultiNodeStoreLogTruncation(t *testing.T) {
 
 	// Do one more execute, to ensure there is at least one log not snapshot.
 	// Without this, there is no guarantee fsmIndex will be set on s1.
-	_, _, err := s0.Execute(executeRequestFromString(`INSERT INTO foo(id, name) VALUES(6, "fiona")`, false, false))
+	_, _, err := s0.Execute(context.Background(), executeRequestFromString(`INSERT INTO foo(id, name) VALUES(6, "fiona")`, false, false))
 	if err != nil {
 		t.Fatalf("failed to execute on single node: %s", err.Error())
 	}
@@ -1549,7 +1550,7 @@ func Test_MultiNodeStoreLogTruncation(t *testing.T) {
 	testPoll(t, func() bool {
 		qr := queryRequestFromString("SELECT count(*) FROM foo", false, true)
 		qr.Level = proto.ConsistencyLevel_NONE
-		r, _, _, err := s1.Query(qr)
+		r, _, _, err := s1.Query(context.Background(), qr)
 		if err != nil {
 			t.Fatalf("failed to query single node: %s", err.Error())
 		}
@@ -1606,7 +1607,7 @@ func Test_MultiNodeExecuteQuery_Linearizable_AllUp(t *testing.T) {
 		`CREATE TABLE foo (id INTEGER NOT NULL PRIMARY KEY, name TEXT)`,
 		`INSERT INTO foo(id, name) VALUES(1, "fiona")`,
 	}, false, false)
-	_, _, err := s0.Execute(er)
+	_, _, err := s0.Execute(context.Background(), er)
 	if err != nil {
 		t.Fatalf("failed to execute on leader: %s", err.Error())
 	}
@@ -1619,7 +1620,7 @@ func Test_MultiNodeExecuteQuery_Linearizable_AllUp(t *testing.T) {
 		}
 		qr := queryRequestFromString("SELECT * FROM foo", false, false)
 		qr.Level = proto.ConsistencyLevel_LINEARIZABLE
-		r, _, _, err := s.Query(qr)
+		r, _, _, err := s.Query(context.Background(), qr)
 		if err != nil {
 			// if this node is not the leader, it will return an error
 			if !s.IsLeader() {
@@ -1689,7 +1690,7 @@ func Test_MultiNodeExecuteQuery_Linearizable_Quorum(t *testing.T) {
 		`CREATE TABLE foo (id INTEGER NOT NULL PRIMARY KEY, name TEXT)`,
 		`INSERT INTO foo(id, name) VALUES(1, "fiona")`,
 	}, false, false)
-	_, _, err := s0.Execute(er)
+	_, _, err := s0.Execute(context.Background(), er)
 	if err != nil {
 		t.Fatalf("failed to execute on leader: %s", err.Error())
 	}
@@ -1707,7 +1708,7 @@ func Test_MultiNodeExecuteQuery_Linearizable_Quorum(t *testing.T) {
 		}
 		qr := queryRequestFromString("SELECT * FROM foo", false, false)
 		qr.Level = proto.ConsistencyLevel_LINEARIZABLE
-		r, _, _, err := s.Query(qr)
+		r, _, _, err := s.Query(context.Background(), qr)
 		if err != nil {
 			// if this node is not the leader, it will return an error
 			if !s.IsLeader() {
@@ -1777,7 +1778,7 @@ func Test_MultiNodeExecuteQuery_Linearizable_NoQuorum(t *testing.T) {
 		`CREATE TABLE foo (id INTEGER NOT NULL PRIMARY KEY, name TEXT)`,
 		`INSERT INTO foo(id, name) VALUES(1, "fiona")`,
 	}, false, false)
-	_, _, err := s0.Execute(er)
+	_, _, err := s0.Execute(context.Background(), er)
 	if err != nil {
 		t.Fatalf("failed to execute on leader: %s", err.Error())
 	}
@@ -1795,7 +1796,7 @@ func Test_MultiNodeExecuteQuery_Linearizable_NoQuorum(t *testing.T) {
 	qr := queryRequestFromString("SELECT * FROM foo", false, false)
 	qr.Level = proto.ConsistencyLevel_LINEARIZABLE
 
-	_, _, _, err = s0.Query(qr)
+	_, _, _, err = s0.Query(context.Background(), qr)
 	if err == nil {
 		t.Fatalf("expected query to fail, but it did not")
 	}
@@ -1853,7 +1854,7 @@ func Test_MultiNodeExecuteQuery_Linearizable_Concurrent(t *testing.T) {
 		`CREATE TABLE foo (id INTEGER NOT NULL PRIMARY KEY, name TEXT)`,
 		`INSERT INTO foo(id, name) VALUES(1, "fiona")`,
 	}, false, false)
-	_, _, err := s0.Execute(er)
+	_, _, err := s0.Execute(context.Background(), er)
 	if err != nil {
 		t.Fatalf("failed to execute on leader: %s", err.Error())
 	}
@@ -1870,7 +1871,7 @@ func Test_MultiNodeExecuteQuery_Linearizable_Concurrent(t *testing.T) {
 			defer wg.Done()
 			qr := queryRequestFromString("SELECT * FROM foo", false, false)
 			qr.Level = proto.ConsistencyLevel_LINEARIZABLE
-			r, _, _, err := s0.Query(qr)
+			r, _, _, err := s0.Query(context.Background(), qr)
 			if err != nil {
 				t.Errorf("expected query to succeed, but it did not: %s", err.Error())
 			}

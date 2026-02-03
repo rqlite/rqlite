@@ -3,6 +3,7 @@ package cluster
 import (
 	"bytes"
 	"compress/gzip"
+	"context"
 	"encoding/binary"
 	"expvar"
 	"fmt"
@@ -95,19 +96,19 @@ type Dialer interface {
 // Database is the interface any queryable system must implement
 type Database interface {
 	// Execute executes a slice of SQL statements.
-	Execute(er *command.ExecuteRequest) ([]*command.ExecuteQueryResponse, uint64, error)
+	Execute(ctx context.Context, er *command.ExecuteRequest) ([]*command.ExecuteQueryResponse, uint64, error)
 
 	// Query executes a slice of queries, each of which returns rows.
-	Query(qr *command.QueryRequest) ([]*command.QueryRows, command.ConsistencyLevel, uint64, error)
+	Query(ctx context.Context, qr *command.QueryRequest) ([]*command.QueryRows, command.ConsistencyLevel, uint64, error)
 
 	// Request processes a request that can both executes and queries.
-	Request(rr *command.ExecuteQueryRequest) ([]*command.ExecuteQueryResponse, uint64, uint64, error)
+	Request(ctx context.Context, rr *command.ExecuteQueryRequest) ([]*command.ExecuteQueryResponse, uint64, uint64, error)
 
 	// Backup writes a backup of the database to the writer.
-	Backup(br *command.BackupRequest, dst io.Writer) error
+	Backup(ctx context.Context, br *command.BackupRequest, dst io.Writer) error
 
 	// Load an entire SQLite file into the database
-	Load(lr *command.LoadRequest) error
+	Load(ctx context.Context, lr *command.LoadRequest) error
 }
 
 // Manager is the interface node-management systems must implement
@@ -119,7 +120,7 @@ type Manager interface {
 	CommitIndex() (uint64, error)
 
 	// Remove removes the node, given by id, from the cluster
-	Remove(rn *command.RemoveNodeRequest) error
+	Remove(ctx context.Context, rn *command.RemoveNodeRequest) error
 
 	// Notify notifies this node that a remote node is ready
 	// for bootstrapping.
@@ -341,7 +342,7 @@ func (s *Service) handleConn(conn net.Conn) {
 			} else if !s.checkCommandPerm(c, auth.PermExecute) {
 				resp.Error = "unauthorized"
 			} else {
-				res, idx, err := s.db.Execute(er)
+				res, idx, err := s.db.Execute(context.Background(), er)
 				if err != nil {
 					resp.Error = err.Error()
 				} else {
@@ -364,7 +365,7 @@ func (s *Service) handleConn(conn net.Conn) {
 			} else if !s.checkCommandPerm(c, auth.PermQuery) {
 				resp.Error = "unauthorized"
 			} else {
-				res, _, idx, err := s.db.Query(qr)
+				res, _, idx, err := s.db.Query(context.Background(), qr)
 				if err != nil {
 					resp.Error = err.Error()
 				} else {
@@ -387,7 +388,7 @@ func (s *Service) handleConn(conn net.Conn) {
 			} else if !s.checkCommandPermAll(c, auth.PermQuery, auth.PermExecute) {
 				resp.Error = "unauthorized"
 			} else {
-				res, numRW, idx, err := s.db.Request(rr)
+				res, numRW, idx, err := s.db.Request(context.Background(), rr)
 				if err != nil {
 					resp.Error = err.Error()
 				} else {
@@ -412,7 +413,7 @@ func (s *Service) handleConn(conn net.Conn) {
 				resp.Error = "unauthorized"
 			} else {
 				buf := new(bytes.Buffer)
-				if err := s.db.Backup(br, buf); err != nil {
+				if err := s.db.Backup(context.Background(), br, buf); err != nil {
 					resp.Error = err.Error()
 				} else {
 					resp.Data = buf.Bytes()
@@ -458,7 +459,7 @@ func (s *Service) handleConn(conn net.Conn) {
 			// can easily detect the end of the stream, as well as saving
 			// space on the wire.
 			br.Compress = true
-			if err := s.db.Backup(br, conn); err != nil {
+			if err := s.db.Backup(context.Background(), br, conn); err != nil {
 				s.logger.Printf("failed to stream backup: %s", err.Error())
 				return
 			}
@@ -473,7 +474,7 @@ func (s *Service) handleConn(conn net.Conn) {
 			} else if !s.checkCommandPerm(c, auth.PermLoad) {
 				resp.Error = "unauthorized"
 			} else {
-				if err := s.db.Load(lr); err != nil {
+				if err := s.db.Load(context.Background(), lr); err != nil {
 					resp.Error = fmt.Sprintf("remote node failed to load: %s", err.Error())
 				}
 			}
@@ -500,7 +501,7 @@ func (s *Service) handleConn(conn net.Conn) {
 			} else if !s.checkCommandPerm(c, auth.PermRemove) {
 				resp.Error = "unauthorized"
 			} else {
-				if err := s.mgr.Remove(rn); err != nil {
+				if err := s.mgr.Remove(context.Background(), rn); err != nil {
 					resp.Error = err.Error()
 				}
 			}
