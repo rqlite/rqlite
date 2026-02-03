@@ -1,4 +1,4 @@
-## v9.3.19 (unreleased)
+## v9.3.19 (February 2nd 2026)
 ### Implementation changes and bug fixes
 - [PR #2460](https://github.com/rqlite/rqlite/pull/2460): Upgrade dependencies.
 - [PR #2459](https://github.com/rqlite/rqlite/pull/2459): More testing of zero-length WAL snapshotting.
