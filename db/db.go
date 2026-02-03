@@ -1694,8 +1694,7 @@ func (db *DB) memStats() (map[string]int64, error) {
 }
 
 func checkpointDB(rwDB *sql.DB, mode CheckpointMode) (ok, pages, moved int, err error) {
-	err = rwDB.QueryRow(checkpointPRAGMAs[mode]).Scan(&ok, &pages, &moved)
-	return
+	return rwDB.QueryRow(checkpointPRAGMAs[mode]).Scan(&ok, &pages, &moved)
 }
 
 func createEQQueryResponse(rows *command.QueryRows, err error) *command.ExecuteQueryResponse {
