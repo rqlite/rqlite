@@ -363,7 +363,7 @@ func CheckpointRemove(path string) error {
 		return fmt.Errorf("failed to close database after checkpoint: %w", err)
 	}
 
-	// Confirm to the caller that the WAL file is gone.
+	// Confirm that the WAL file is gone.
 	if fileExists(path + "-wal") {
 		return ErrWALStillExists
 	}
