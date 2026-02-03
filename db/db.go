@@ -693,12 +693,17 @@ func (db *DB) CheckpointWithTimeout(mode CheckpointMode, dur time.Duration) (met
 		}()
 	}
 
+	// Temporarily move to Synchronous=FULL for the duration of the checkpoint.
+	currMode, err := db.GetSynchronousMode()
+	if err != nil {
+		return nil, fmt.Errorf("failed to get current synchronous mode: %s", err.Error())
+	}
 	if err := db.SetSynchronousMode(SynchronousFull); err != nil {
 		return nil, fmt.Errorf("failed to set synchronous mode to FULL: %s", err.Error())
 	}
 	defer func() {
-		if err := db.SetSynchronousMode(SynchronousOff); err != nil {
-			db.logger.Printf("failed to reset synchronous mode to OFF: %s", err.Error())
+		if err := db.SetSynchronousMode(currMode); err != nil {
+			db.logger.Fatalf("failed to reset synchronous mode to %s: %s", currMode, err.Error())
 		}
 	}()
 

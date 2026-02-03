@@ -1,6 +1,7 @@
 ## v9.3.20 (unreleased)
 ### Implementation changes and bug fixes
 - [PR #2461](https://github.com/rqlite/rqlite/pull/2461): Switch to `Synchronous=FULL` mode when checkpointing database.
+- [PR #2462](https://github.com/rqlite/rqlite/pull/2462): Ensure checkpointing doesn't permanently change Synchronous mode.
 
 ## v9.3.19 (February 2nd 2026)
 ### Implementation changes and bug fixes
