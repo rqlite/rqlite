@@ -456,6 +456,7 @@ func snapshotName(term, index uint64) string {
 }
 
 // writeMeta is used to write the meta data in a given snapshot directory.
+// This function will sync the meta file to disk.
 func writeMeta(dir string, meta *raft.SnapshotMeta) error {
 	fh, err := os.Create(metaPath(dir))
 	if err != nil {
