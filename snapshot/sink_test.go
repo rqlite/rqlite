@@ -279,6 +279,12 @@ func Test_SinkWALSnapshotEmptyStoreFail(t *testing.T) {
 // Test_SinkCreateFullThenWALSnapshots performs detailed testing of the
 // snapshot creation process. It is critical that snapshots are created
 // correctly, so this test is thorough.
+//
+// It includes testing of multiple WAL snapshots being created on top
+// of a full snapshot, and ensures that the final database state is
+// correct. It also includes testing of snapshotting an empty WAL file,
+// which could happen if a Raft snapshot is taken but there are no changes
+// to the database.
 func Test_SinkCreateFullThenWALSnapshots(t *testing.T) {
 	store := mustStore(t)
 	createSnapshot := func(id string, index, term, cfgIndex uint64, file string) {
@@ -315,14 +321,15 @@ func Test_SinkCreateFullThenWALSnapshots(t *testing.T) {
 	createSnapshot("snap-3456", 5, 4, 3, "testdata/db-and-wals/wal-01")
 	createSnapshot("snap-4567", 6, 5, 4, "testdata/db-and-wals/wal-02")
 	createSnapshot("snap-5678", 7, 6, 5, "testdata/db-and-wals/wal-03")
-	createSnapshot("snap-9abc", 8, 7, 6, "testdata/db-and-wals/empty-file")
+	createSnapshot("snap-9abc", 8, 7, 6, "testdata/db-and-wals/empty-wal")
+	createSnapshot("snap-dead", 9, 8, 7, "testdata/db-and-wals/empty-wal")
 
 	// Check the database state inside the Store.
 	dbPath, err := store.getDBPath()
 	if err != nil {
 		t.Fatalf("Failed to get DB path: %v", err)
 	}
-	if filepath.Base(dbPath) != "snap-9abc.db" {
+	if filepath.Base(dbPath) != "snap-dead.db" {
 		t.Fatalf("Unexpected DB file name: %s", dbPath)
 	}
 	checkDB, err := db.Open(dbPath, false, true)

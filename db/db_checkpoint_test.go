@@ -71,6 +71,15 @@ func Test_WALDatabaseCheckpointOK(t *testing.T) {
 		t.Fatalf("expected PAGES to be 0 since WAL was truncated, got %d", meta.Pages)
 	}
 
+	// Confirm that the WAL file is zero bytes long.
+	sz, err := fileSize(db.WALPath())
+	if err != nil {
+		t.Fatalf("failed to get WAL file size: %s", err.Error())
+	}
+	if sz != 0 {
+		t.Fatalf("expected WAL file size to be 0 after checkpoint truncate, got %d", sz)
+	}
+
 	// Ensure idempotency by checkpointing again.
 	meta, err = db.Checkpoint(CheckpointTruncate)
 	if err != nil {
