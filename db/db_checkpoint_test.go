@@ -88,6 +88,15 @@ func Test_WALDatabaseCheckpointOK(t *testing.T) {
 	if !meta.Success() {
 		t.Fatalf("expected checkpoint to complete successfully")
 	}
+
+	// Ensure that the database remains in Synchronous=OFF mode.
+	syncMode, err := db.GetSynchronousMode()
+	if err != nil {
+		t.Fatalf("failed to get synchronous mode: %s", err.Error())
+	}
+	if syncMode != SynchronousOff {
+		t.Fatalf("expected synchronous mode to be OFF, got %s", syncMode)
+	}
 }
 
 func Test_WALDatabaseCheckpointFail_Blocked(t *testing.T) {
