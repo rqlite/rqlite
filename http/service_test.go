@@ -2,6 +2,7 @@ package http
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -1720,6 +1721,18 @@ func (m *MockStore) Request(eqr *command.ExecuteQueryRequest) ([]*command.Execut
 		return m.requestFn(eqr)
 	}
 	return nil, 0, 0, nil
+}
+
+func (m *MockStore) ExecuteWithContext(ctx context.Context, er *command.ExecuteRequest) ([]*command.ExecuteQueryResponse, uint64, error) {
+	return m.Execute(er)
+}
+
+func (m *MockStore) QueryWithContext(ctx context.Context, qr *command.QueryRequest) ([]*command.QueryRows, command.ConsistencyLevel, uint64, error) {
+	return m.Query(qr)
+}
+
+func (m *MockStore) RequestWithContext(ctx context.Context, eqr *command.ExecuteQueryRequest) ([]*command.ExecuteQueryResponse, uint64, uint64, error) {
+	return m.Request(eqr)
 }
 
 func (m *MockStore) Join(jr *command.JoinRequest) error {

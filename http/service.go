@@ -55,15 +55,24 @@ type Database interface {
 	// successfully or it will as though none executed.
 	Execute(er *proto.ExecuteRequest) ([]*proto.ExecuteQueryResponse, uint64, error)
 
+	// ExecuteWithContext is like Execute but accepts a context for tracing.
+	ExecuteWithContext(ctx context.Context, er *proto.ExecuteRequest) ([]*proto.ExecuteQueryResponse, uint64, error)
+
 	// Query executes a slice of queries, each of which returns rows. If
 	// timings is true, then timing information will be returned. If tx
 	// is true, then all queries will take place while a read transaction
 	// is held on the database.
 	Query(qr *proto.QueryRequest) ([]*proto.QueryRows, proto.ConsistencyLevel, uint64, error)
 
+	// QueryWithContext is like Query but accepts a context for tracing.
+	QueryWithContext(ctx context.Context, qr *proto.QueryRequest) ([]*proto.QueryRows, proto.ConsistencyLevel, uint64, error)
+
 	// Request processes a slice of requests, each of which can be either
 	// an Execute or Query request.
 	Request(eqr *proto.ExecuteQueryRequest) ([]*proto.ExecuteQueryResponse, uint64, uint64, error)
+
+	// RequestWithContext is like Request but accepts a context for tracing.
+	RequestWithContext(ctx context.Context, eqr *proto.ExecuteQueryRequest) ([]*proto.ExecuteQueryResponse, uint64, uint64, error)
 
 	// Load loads a SQLite file into the system via Raft consensus.
 	Load(lr *proto.LoadRequest) error
@@ -788,7 +797,7 @@ func (s *Service) handleLoad(w http.ResponseWriter, r *http.Request, qp QueryPar
 		er := executeRequestFromStrings(queries, qp.Timings(), false)
 		er.Request.RollbackOnError = true
 
-		response, _, err := s.store.Execute(er)
+		response, _, err := s.store.ExecuteWithContext(r.Context(), er)
 		if err != nil {
 			if err == store.ErrNotLeader {
 				if s.DoRedirect(w, r, qp) {
@@ -1375,7 +1384,7 @@ func (s *Service) execute(w http.ResponseWriter, r *http.Request, qp QueryParams
 		Timings: qp.Timings(),
 	}
 
-	results, raftIndex, resultsErr := s.store.Execute(er)
+	results, raftIndex, resultsErr := s.store.ExecuteWithContext(r.Context(), er)
 	if resultsErr != nil && resultsErr == store.ErrNotLeader {
 		if s.DoRedirect(w, r, qp) {
 			return
@@ -1480,7 +1489,7 @@ func (s *Service) handleQuery(w http.ResponseWriter, r *http.Request, qp QueryPa
 		LinearizableTimeout: qp.LinearizableTimeout(defaultLinearTimeout).Nanoseconds(),
 	}
 
-	results, _, raftIndex, resultsErr := s.store.Query(qr)
+	results, _, raftIndex, resultsErr := s.store.QueryWithContext(r.Context(), qr)
 	if resultsErr != nil && resultsErr == store.ErrNotLeader {
 		if s.DoRedirect(w, r, qp) {
 			return
@@ -1566,7 +1575,7 @@ func (s *Service) handleRequest(w http.ResponseWriter, r *http.Request, qp Query
 		FreshnessStrict: qp.FreshnessStrict(),
 	}
 
-	results, _, raftIndex, resultsErr := s.store.Request(eqr)
+	results, _, raftIndex, resultsErr := s.store.RequestWithContext(r.Context(), eqr)
 	if resultsErr != nil && resultsErr == store.ErrNotLeader {
 		if s.DoRedirect(w, r, qp) {
 			return

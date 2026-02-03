@@ -6,6 +6,7 @@ package store
 import (
 	"bytes"
 	"compress/gzip"
+	"context"
 	"encoding/binary"
 	"errors"
 	"expvar"
@@ -37,6 +38,9 @@ import (
 	"github.com/rqlite/rqlite/v9/internal/rsync"
 	"github.com/rqlite/rqlite/v9/snapshot"
 	rlog "github.com/rqlite/rqlite/v9/store/log"
+
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/attribute"
 )
 
 var (
@@ -204,6 +208,9 @@ const (
 	nodesReapedOK                     = "nodes_reaped_ok"
 	nodesReapedFailed                 = "nodes_reaped_failed"
 )
+
+// tracer is the OpenTelemetry tracer for the store package.
+var tracer = otel.Tracer("github.com/rqlite/rqlite/store")
 
 // stats captures stats for the Store.
 var stats *expvar.Map
@@ -1380,27 +1387,49 @@ func (s *Store) Stats() (map[string]any, error) {
 
 // Execute executes queries that return no rows, but do modify the database.
 func (s *Store) Execute(ex *proto.ExecuteRequest) ([]*proto.ExecuteQueryResponse, uint64, error) {
+	return s.ExecuteWithContext(context.Background(), ex)
+}
+
+// ExecuteWithContext executes queries that return no rows, but do modify the database.
+func (s *Store) ExecuteWithContext(ctx context.Context, ex *proto.ExecuteRequest) ([]*proto.ExecuteQueryResponse, uint64, error) {
+	ctx, span := tracer.Start(ctx, "Store.Execute")
+	defer span.End()
+	if ex.Request != nil {
+		span.SetAttributes(
+			attribute.Int("store.statements", len(ex.Request.Statements)),
+			attribute.Bool("store.transaction", ex.Request.Transaction),
+		)
+	}
+
 	p := (*PragmaCheckRequest)(ex.Request)
 	if err := p.Check(); err != nil {
+		span.RecordError(err)
 		return nil, 0, err
 	}
 
 	if !s.open.Is() {
+		span.RecordError(ErrNotOpen)
 		return nil, 0, ErrNotOpen
 	}
 
 	if s.raft.State() != raft.Leader {
+		span.RecordError(ErrNotLeader)
 		return nil, 0, ErrNotLeader
 	}
 	if !s.Ready() {
+		span.RecordError(ErrNotReady)
 		return nil, 0, ErrNotReady
 	}
-	return s.execute(ex)
+	return s.execute(ctx, ex)
 }
 
-func (s *Store) execute(ex *proto.ExecuteRequest) ([]*proto.ExecuteQueryResponse, uint64, error) {
+func (s *Store) execute(ctx context.Context, ex *proto.ExecuteRequest) ([]*proto.ExecuteQueryResponse, uint64, error) {
+	_, span := tracer.Start(ctx, "Store.execute.raft")
+	defer span.End()
+
 	b, compressed, err := s.tryCompress(ex)
 	if err != nil {
+		span.RecordError(err)
 		return nil, 0, err
 	}
 
@@ -1412,14 +1441,17 @@ func (s *Store) execute(ex *proto.ExecuteRequest) ([]*proto.ExecuteQueryResponse
 
 	b, err = command.Marshal(c)
 	if err != nil {
+		span.RecordError(err)
 		return nil, 0, err
 	}
 
 	af := s.raft.Apply(b, s.ApplyTimeout)
 	if af.Error() != nil {
 		if af.Error() == raft.ErrNotLeader {
+			span.RecordError(ErrNotLeader)
 			return nil, 0, ErrNotLeader
 		}
+		span.RecordError(af.Error())
 		return nil, 0, af.Error()
 	}
 	r := af.Response().(*fsmExecuteQueryResponse)
@@ -1431,15 +1463,31 @@ func (s *Store) execute(ex *proto.ExecuteRequest) ([]*proto.ExecuteQueryResponse
 // upgraded to STRONG if the Store determines that is necessary to guarantee
 // a linearizable read.
 func (s *Store) Query(qr *proto.QueryRequest) (rows []*proto.QueryRows, level proto.ConsistencyLevel, raftIndex uint64, retErr error) {
+	return s.QueryWithContext(context.Background(), qr)
+}
+
+// QueryWithContext executes queries that return rows, and do not modify the database.
+func (s *Store) QueryWithContext(ctx context.Context, qr *proto.QueryRequest) (rows []*proto.QueryRows, level proto.ConsistencyLevel, raftIndex uint64, retErr error) {
+	ctx, span := tracer.Start(ctx, "Store.Query")
+	defer span.End()
+	if qr.Request != nil {
+		span.SetAttributes(
+			attribute.Int("store.statements", len(qr.Request.Statements)),
+			attribute.String("store.consistency", qr.Level.String()),
+		)
+	}
+
 	s.readerMu.RLock()
 	defer s.readerMu.RUnlock()
 
 	p := (*PragmaCheckRequest)(qr.Request)
 	if err := p.Check(); err != nil {
+		span.RecordError(err)
 		return nil, 0, 0, err
 	}
 
 	if !s.open.Is() {
+		span.RecordError(ErrNotOpen)
 		return nil, 0, 0, ErrNotOpen
 	}
 
@@ -1448,12 +1496,14 @@ func (s *Store) Query(qr *proto.QueryRequest) (rows []*proto.QueryRows, level pr
 		level = proto.ConsistencyLevel_WEAK
 		isVoter, err := s.IsVoter()
 		if err != nil {
+			span.RecordError(err)
 			return nil, 0, 0, err
 		}
 		if !isVoter {
 			level = proto.ConsistencyLevel_NONE
 		}
 	}
+	span.SetAttributes(attribute.String("store.effective_consistency", level.String()))
 
 	readTerm := s.raft.CurrentTerm()
 	if level == proto.ConsistencyLevel_LINEARIZABLE {
@@ -1463,6 +1513,7 @@ func (s *Store) Query(qr *proto.QueryRequest) (rows []*proto.QueryRows, level pr
 				level = proto.ConsistencyLevel_STRONG
 				s.numLRUpgraded.Add(1)
 			} else {
+				span.RecordError(err)
 				return nil, 0, 0, err
 			}
 		}
@@ -1470,15 +1521,18 @@ func (s *Store) Query(qr *proto.QueryRequest) (rows []*proto.QueryRows, level pr
 
 	if level == proto.ConsistencyLevel_STRONG {
 		if s.raft.State() != raft.Leader {
+			span.RecordError(ErrNotLeader)
 			return nil, 0, 0, ErrNotLeader
 		}
 
 		if !s.Ready() {
+			span.RecordError(ErrNotReady)
 			return nil, 0, 0, ErrNotReady
 		}
 
 		b, compressed, err := s.tryCompress(qr)
 		if err != nil {
+			span.RecordError(err)
 			return nil, 0, 0, err
 		}
 		c := &proto.Command{
@@ -1489,14 +1543,17 @@ func (s *Store) Query(qr *proto.QueryRequest) (rows []*proto.QueryRows, level pr
 
 		b, err = command.Marshal(c)
 		if err != nil {
+			span.RecordError(err)
 			return nil, 0, 0, err
 		}
 
 		af := s.raft.Apply(b, s.ApplyTimeout)
 		if af.Error() != nil {
 			if af.Error() == raft.ErrNotLeader || af.Error() == raft.ErrLeadershipLost {
+				span.RecordError(ErrNotLeader)
 				return nil, 0, 0, ErrNotLeader
 			}
+			span.RecordError(af.Error())
 			return nil, 0, 0, af.Error()
 		}
 		// It's possible that the term has changed since we read it. But that's OK,
@@ -1509,13 +1566,18 @@ func (s *Store) Query(qr *proto.QueryRequest) (rows []*proto.QueryRows, level pr
 	}
 
 	if level == proto.ConsistencyLevel_WEAK && s.raft.State() != raft.Leader {
+		span.RecordError(ErrNotLeader)
 		return nil, 0, 0, ErrNotLeader
 	}
 	if level == proto.ConsistencyLevel_NONE && s.isStaleRead(qr.Freshness, qr.FreshnessStrict) {
+		span.RecordError(ErrStaleRead)
 		return nil, 0, 0, ErrStaleRead
 	}
 
-	rows, err := s.db.Query(qr.Request, qr.Timings)
+	rows, err := s.db.QueryWithContext(ctx, qr.Request, qr.Timings)
+	if err != nil {
+		span.RecordError(err)
+	}
 	return rows, level, 0, err
 }
 
@@ -1545,18 +1607,38 @@ func (s *Store) VerifyLeader() (retErr error) {
 
 // Request processes a request that may contain both Executes and Queries.
 func (s *Store) Request(eqr *proto.ExecuteQueryRequest) ([]*proto.ExecuteQueryResponse, uint64, uint64, error) {
+	return s.RequestWithContext(context.Background(), eqr)
+}
+
+// RequestWithContext processes a request that can contain both queries and statements.
+func (s *Store) RequestWithContext(ctx context.Context, eqr *proto.ExecuteQueryRequest) ([]*proto.ExecuteQueryResponse, uint64, uint64, error) {
+	ctx, span := tracer.Start(ctx, "Store.Request")
+	defer span.End()
+	if eqr.Request != nil {
+		span.SetAttributes(
+			attribute.Int("store.statements", len(eqr.Request.Statements)),
+			attribute.String("store.consistency", eqr.Level.String()),
+		)
+	}
+
 	s.readerMu.RLock()
 	defer s.readerMu.RUnlock()
 
 	p := (*PragmaCheckRequest)(eqr.Request)
 	if err := p.Check(); err != nil {
+		span.RecordError(err)
 		return nil, 0, 0, err
 	}
 
 	if !s.open.Is() {
+		span.RecordError(ErrNotOpen)
 		return nil, 0, 0, ErrNotOpen
 	}
 	nRW, nRO := s.RORWCount(eqr)
+	span.SetAttributes(
+		attribute.Int("store.read_statements", nRO),
+		attribute.Int("store.write_statements", nRW),
+	)
 	isLeader := s.raft.State() == raft.Leader
 
 	// See the Query() code for a full explanation of this.
@@ -1568,6 +1650,7 @@ func (s *Store) Request(eqr *proto.ExecuteQueryRequest) ([]*proto.ExecuteQueryRe
 				eqr.Level = proto.ConsistencyLevel_STRONG
 				s.numLRUpgraded.Add(1)
 			} else {
+				span.RecordError(err)
 				return nil, 0, 0, err
 			}
 		}
@@ -1587,28 +1670,36 @@ func (s *Store) Request(eqr *proto.ExecuteQueryRequest) ([]*proto.ExecuteQueryRe
 		}
 
 		if eqr.Level == proto.ConsistencyLevel_NONE && s.isStaleRead(eqr.Freshness, eqr.FreshnessStrict) {
+			span.RecordError(ErrStaleRead)
 			return nil, 0, 0, ErrStaleRead
 		} else if eqr.Level == proto.ConsistencyLevel_WEAK {
 			if !isLeader {
+				span.RecordError(ErrNotLeader)
 				return nil, 0, 0, ErrNotLeader
 			}
 		}
-		qr, err := s.db.Query(eqr.Request, eqr.Timings)
+		qr, err := s.db.QueryWithContext(ctx, eqr.Request, eqr.Timings)
+		if err != nil {
+			span.RecordError(err)
+		}
 		return convertFn(qr), uint64(nRW), 0, err
 	}
 
 	// At least one write in the request, or STRONG consistency requested, so
 	// we need to go through consensus. Check that we can do that.
 	if !isLeader {
+		span.RecordError(ErrNotLeader)
 		return nil, 0, 0, ErrNotLeader
 	}
 	if !s.Ready() {
+		span.RecordError(ErrNotReady)
 		return nil, 0, 0, ErrNotReady
 	}
 
 	// Send the request through consensus.
 	b, compressed, err := s.tryCompress(eqr)
 	if err != nil {
+		span.RecordError(err)
 		return nil, 0, 0, err
 	}
 	c := &proto.Command{
@@ -1618,14 +1709,17 @@ func (s *Store) Request(eqr *proto.ExecuteQueryRequest) ([]*proto.ExecuteQueryRe
 	}
 	b, err = command.Marshal(c)
 	if err != nil {
+		span.RecordError(err)
 		return nil, 0, 0, err
 	}
 
 	af := s.raft.Apply(b, s.ApplyTimeout)
 	if af.Error() != nil {
 		if af.Error() == raft.ErrNotLeader {
+			span.RecordError(ErrNotLeader)
 			return nil, 0, 0, ErrNotLeader
 		}
+		span.RecordError(af.Error())
 		return nil, 0, 0, af.Error()
 	}
 	r := af.Response().(*fsmExecuteQueryResponse)

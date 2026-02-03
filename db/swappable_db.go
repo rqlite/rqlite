@@ -1,6 +1,7 @@
 package db
 
 import (
+	"context"
 	"fmt"
 	"io"
 	"os"
@@ -97,6 +98,27 @@ func (s *SwappableDB) Query(q *command.Request, xTime bool) ([]*command.QueryRow
 	s.dbMu.RLock()
 	defer s.dbMu.RUnlock()
 	return s.db.Query(q, xTime)
+}
+
+// ExecuteWithContext calls ExecuteWithContext on the underlying database.
+func (s *SwappableDB) ExecuteWithContext(ctx context.Context, ex *command.Request, xTime bool) ([]*command.ExecuteQueryResponse, error) {
+	s.dbMu.RLock()
+	defer s.dbMu.RUnlock()
+	return s.db.ExecuteWithContext(ctx, ex, xTime)
+}
+
+// QueryWithContext calls QueryWithContext on the underlying database.
+func (s *SwappableDB) QueryWithContext(ctx context.Context, q *command.Request, xTime bool) ([]*command.QueryRows, error) {
+	s.dbMu.RLock()
+	defer s.dbMu.RUnlock()
+	return s.db.QueryWithContext(ctx, q, xTime)
+}
+
+// RequestWithContext calls RequestWithContext on the underlying database.
+func (s *SwappableDB) RequestWithContext(ctx context.Context, req *command.Request, xTime bool) ([]*command.ExecuteQueryResponse, error) {
+	s.dbMu.RLock()
+	defer s.dbMu.RUnlock()
+	return s.db.RequestWithContext(ctx, req, xTime)
 }
 
 // QueryStringStmt calls QueryStringStmt on the underlying database.

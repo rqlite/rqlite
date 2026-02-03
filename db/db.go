@@ -22,6 +22,9 @@ import (
 	"github.com/rqlite/rqlite/v9/db/humanize"
 	"github.com/rqlite/rqlite/v9/internal/rsum"
 	"github.com/rqlite/rqlite/v9/internal/rsync"
+
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/attribute"
 )
 
 const (
@@ -89,6 +92,9 @@ var (
 
 // DBVersion is the SQLite version.
 var DBVersion string
+
+// tracer is the OpenTelemetry tracer for the db package.
+var tracer = otel.Tracer("github.com/rqlite/rqlite/db")
 
 // stats captures stats for the DB layer.
 var stats *expvar.Map
@@ -932,14 +938,28 @@ func (db *DB) ExecuteStringStmt(query string) ([]*command.ExecuteQueryResponse, 
 
 // Execute executes queries that modify the database.
 func (db *DB) Execute(req *command.Request, xTime bool) ([]*command.ExecuteQueryResponse, error) {
+	return db.ExecuteWithContext(context.Background(), req, xTime)
+}
+
+// ExecuteWithContext executes queries that modify the database with the given context.
+func (db *DB) ExecuteWithContext(ctx context.Context, req *command.Request, xTime bool) ([]*command.ExecuteQueryResponse, error) {
+	ctx, span := tracer.Start(ctx, "DB.Execute")
+	defer span.End()
+	if req != nil {
+		span.SetAttributes(
+			attribute.Int("db.statements", len(req.Statements)),
+			attribute.Bool("db.transaction", req.Transaction),
+		)
+	}
+
 	stats.Add(numExecutions, int64(len(req.Statements)))
-	conn, err := db.rwDB.Conn(context.Background())
+	conn, err := db.rwDB.Conn(ctx)
 	if err != nil {
+		span.RecordError(err)
 		return nil, err
 	}
 	defer conn.Close()
 
-	ctx := context.Background()
 	if req.DbTimeout > 0 {
 		var cancel context.CancelFunc
 		ctx, cancel = context.WithTimeout(ctx, time.Duration(req.DbTimeout))
@@ -1129,20 +1149,29 @@ func (db *DB) QueryStringStmtWithTimeout(query string, tx bool, timeout time.Dur
 
 // Query executes queries that return rows, but don't modify the database.
 func (db *DB) Query(req *command.Request, xTime bool) ([]*command.QueryRows, error) {
-	ctx := context.Background()
+	return db.QueryWithContext(context.Background(), req, xTime)
+}
+
+// QueryWithContext executes queries that return rows, but don't modify the database.
+func (db *DB) QueryWithContext(ctx context.Context, req *command.Request, xTime bool) ([]*command.QueryRows, error) {
+	ctx, span := tracer.Start(ctx, "DB.Query")
+	defer span.End()
+	if req != nil {
+		span.SetAttributes(
+			attribute.Int("db.statements", len(req.Statements)),
+			attribute.Bool("db.transaction", req.Transaction),
+		)
+	}
+
+	stats.Add(numQueries, int64(len(req.Statements)))
 	if req.DbTimeout > 0 {
 		var cancel context.CancelFunc
 		ctx, cancel = context.WithTimeout(ctx, time.Duration(req.DbTimeout))
 		defer cancel()
 	}
-	return db.QueryWithContext(ctx, req, xTime)
-}
-
-// QueryWithContext executes queries that return rows, but don't modify the database.
-func (db *DB) QueryWithContext(ctx context.Context, req *command.Request, xTime bool) ([]*command.QueryRows, error) {
-	stats.Add(numQueries, int64(len(req.Statements)))
 	conn, err := db.roDB.Conn(ctx)
 	if err != nil {
+		span.RecordError(err)
 		return nil, err
 	}
 	defer conn.Close()
@@ -1336,14 +1365,28 @@ func (db *DB) RequestStringStmtsWithTimeout(stmts []string, timeout time.Duratio
 
 // Request processes a request that can contain both executes and queries.
 func (db *DB) Request(req *command.Request, xTime bool) ([]*command.ExecuteQueryResponse, error) {
+	return db.RequestWithContext(context.Background(), req, xTime)
+}
+
+// RequestWithContext processes a request that can contain both executes and queries.
+func (db *DB) RequestWithContext(ctx context.Context, req *command.Request, xTime bool) ([]*command.ExecuteQueryResponse, error) {
+	ctx, span := tracer.Start(ctx, "DB.Request")
+	defer span.End()
+	if req != nil {
+		span.SetAttributes(
+			attribute.Int("db.statements", len(req.Statements)),
+			attribute.Bool("db.transaction", req.Transaction),
+		)
+	}
+
 	stats.Add(numRequests, int64(len(req.Statements)))
-	conn, err := db.rwDB.Conn(context.Background())
+	conn, err := db.rwDB.Conn(ctx)
 	if err != nil {
+		span.RecordError(err)
 		return nil, err
 	}
 	defer conn.Close()
 
-	ctx := context.Background()
 	if req.DbTimeout > 0 {
 		var cancel context.CancelFunc
 		ctx, cancel = context.WithTimeout(ctx, time.Duration(req.DbTimeout))
