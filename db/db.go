@@ -943,12 +943,6 @@ func (db *DB) Execute(req *command.Request, xTime bool) ([]*command.ExecuteQuery
 
 // ExecuteWithContext executes queries that modify the database, using the given context.
 func (db *DB) ExecuteWithContext(ctx context.Context, req *command.Request, xTime bool) ([]*command.ExecuteQueryResponse, error) {
-	// Apply DbTimeout from request if set
-	if req.DbTimeout > 0 {
-		var cancel context.CancelFunc
-		ctx, cancel = context.WithTimeout(ctx, time.Duration(req.DbTimeout))
-		defer cancel()
-	}
 	stats.Add(numExecutions, int64(len(req.Statements)))
 	conn, err := db.rwDB.Conn(ctx)
 	if err != nil {
