@@ -162,6 +162,7 @@ func ValidateExtension(path string) error {
 }
 
 // MakeDSN returns a SQLite DSN for the given path, with the given options.
+// The returned DSN always sets Synchronous=OFF.
 func MakeDSN(path string, readOnly, fkEnabled, walEnabled bool) string {
 	opts := url.Values{}
 	if readOnly {
@@ -336,6 +337,7 @@ func CheckpointRemove(path string) error {
 	if err != nil {
 		return err
 	}
+	db.SetSynchronousMode(SynchronousFull)
 	return db.Close()
 }
 

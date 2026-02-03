@@ -690,6 +690,15 @@ func (db *DB) CheckpointWithTimeout(mode CheckpointMode, dur time.Duration) (met
 		}()
 	}
 
+	if err := db.SetSynchronousMode(SynchronousFull); err != nil {
+		return nil, fmt.Errorf("failed to set synchronous mode to FULL: %s", err.Error())
+	}
+	defer func() {
+		if err := db.SetSynchronousMode(SynchronousOff); err != nil {
+			db.logger.Printf("failed to reset synchronous mode to OFF: %s", err.Error())
+		}
+	}()
+
 	ok, nPages, nMoved, err := checkpointDB(db.rwDB, mode)
 	if err != nil {
 		return nil, fmt.Errorf("error checkpointing WAL: %s", err.Error())
