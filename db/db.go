@@ -700,7 +700,7 @@ func (db *DB) CheckpointWithTimeout(mode CheckpointMode, dur time.Duration) (met
 	}
 	defer func() {
 		if err := db.SetSynchronousMode(currMode); err != nil {
-			db.logger.Printf("failed to reset synchronous mode to %s: %s", currMode, err.Error())
+			db.logger.Fatalf("failed to reset synchronous mode to %s: %s", currMode, err.Error())
 		}
 	}()
 
