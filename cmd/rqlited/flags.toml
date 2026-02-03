@@ -566,3 +566,43 @@ short_help = "Path to file for trace profiling information"
 long_help = """
 """
 default = ""
+
+[[flags]]
+name = "OtelEnabled"
+cli = "otel-enabled"
+type = "bool"
+short_help = "Enable OpenTelemetry tracing"
+long_help = """
+When enabled, rqlite will export traces to an OpenTelemetry collector via OTLP gRPC.
+"""
+default = false
+
+[[flags]]
+name = "OtelEndpoint"
+cli = "otel-endpoint"
+type = "string"
+short_help = "OpenTelemetry collector OTLP gRPC endpoint"
+long_help = """
+The endpoint of the OpenTelemetry collector to send traces to. This should be in host:port format.
+"""
+default = "localhost:4317"
+
+[[flags]]
+name = "OtelServiceName"
+cli = "otel-service-name"
+type = "string"
+short_help = "Service name for OpenTelemetry traces"
+long_help = """
+The service name that will appear in traces. This helps identify traces from this rqlite instance.
+"""
+default = "rqlite"
+
+[[flags]]
+name = "OtelInsecure"
+cli = "otel-insecure"
+type = "bool"
+short_help = "Use insecure connection to OpenTelemetry collector"
+long_help = """
+When enabled, the connection to the OpenTelemetry collector will not use TLS. This is typically used for local development with a collector running on localhost.
+"""
+default = true

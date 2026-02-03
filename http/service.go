@@ -31,6 +31,8 @@ import (
 	"github.com/rqlite/rqlite/v9/internal/rtls"
 	"github.com/rqlite/rqlite/v9/queue"
 	"github.com/rqlite/rqlite/v9/store"
+
+	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
 )
 
 var (
@@ -368,6 +370,8 @@ type Service struct {
 
 	BuildInfo map[string]any
 
+	OtelEnabled bool // Whether OpenTelemetry tracing is enabled
+
 	logger *log.Logger
 }
 
@@ -390,8 +394,17 @@ func New(addr string, store Store, cluster Cluster, credentials CredentialStore)
 
 // Start starts the service.
 func (s *Service) Start() error {
+	// Wrap handler with OTel instrumentation if tracing is enabled
+	var handler http.Handler = s
+	if s.OtelEnabled {
+		handler = otelhttp.NewHandler(s, "rqlite",
+			otelhttp.WithSpanNameFormatter(func(operation string, r *http.Request) string {
+				return fmt.Sprintf("%s %s", r.Method, r.URL.Path)
+			}),
+		)
+	}
 	s.httpServer = http.Server{
-		Handler: s,
+		Handler: handler,
 	}
 
 	var ln net.Listener

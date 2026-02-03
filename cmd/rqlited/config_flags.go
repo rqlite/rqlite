@@ -128,6 +128,14 @@ type Config struct {
 	MemProfile string
 	// Path to file for trace profiling information
 	TraceProfile string
+	// Enable OpenTelemetry tracing
+	OtelEnabled bool
+	// OpenTelemetry collector OTLP gRPC endpoint
+	OtelEndpoint string
+	// Service name for OpenTelemetry traces
+	OtelServiceName string
+	// Use insecure connection to OpenTelemetry collector
+	OtelInsecure bool
 }
 
 // Forge sets up and parses command-line flags.
@@ -195,6 +203,10 @@ func Forge(arguments []string) (*flag.FlagSet, *Config, error) {
 	fs.StringVar(&config.CPUProfile, "cpu-profile", "", "Path to file for CPU profiling information")
 	fs.StringVar(&config.MemProfile, "mem-profile", "", "Path to file for memory profiling information")
 	fs.StringVar(&config.TraceProfile, "trace-profile", "", "Path to file for trace profiling information")
+	fs.BoolVar(&config.OtelEnabled, "otel-enabled", false, "Enable OpenTelemetry tracing")
+	fs.StringVar(&config.OtelEndpoint, "otel-endpoint", "localhost:4317", "OpenTelemetry collector OTLP gRPC endpoint")
+	fs.StringVar(&config.OtelServiceName, "otel-service-name", "rqlite", "Service name for OpenTelemetry traces")
+	fs.BoolVar(&config.OtelInsecure, "otel-insecure", true, "Use insecure connection to OpenTelemetry collector")
 	fs.Usage = func() {
 		usage("\nrqlite is a lightweight, distributed relational database, which uses SQLite as its\nstorage engine. It provides an easy-to-use, fault-tolerant store for relational data.\n\nVisit https://www.rqlite.io to learn more.\n\nUsage: rqlited [flags] <data directory>\n")
 		fs.PrintDefaults()
