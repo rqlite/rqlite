@@ -36,11 +36,11 @@ func Test_SingleNodeSnapshot(t *testing.T) {
 		`CREATE TABLE foo (id INTEGER NOT NULL PRIMARY KEY, name TEXT)`,
 		`INSERT INTO foo(id, name) VALUES(1, "fiona")`,
 	}
-	_, _, err := s.Execute(executeRequestFromStrings(queries, false, false))
+	_, _, err := s.Execute(context.Background(), executeRequestFromStrings(queries, false, false))
 	if err != nil {
 		t.Fatalf("failed to execute on single node: %s", err.Error())
 	}
-	_, _, _, err = s.Query(queryRequestFromString("SELECT * FROM foo", false, false))
+	_, _, _, err = s.Query(context.Background(), queryRequestFromString("SELECT * FROM foo", false, false))
 	if err != nil {
 		t.Fatalf("failed to query single node: %s", err.Error())
 	}
@@ -74,7 +74,7 @@ func Test_SingleNodeSnapshot(t *testing.T) {
 	}
 
 	// Ensure database is back in the correct state.
-	r, _, _, err := s.Query(queryRequestFromString("SELECT * FROM foo", false, false))
+	r, _, _, err := s.Query(context.Background(), queryRequestFromString("SELECT * FROM foo", false, false))
 	if err != nil {
 		t.Fatalf("failed to query single node: %s", err.Error())
 	}
@@ -181,14 +181,14 @@ func Test_SingleNode_WALTriggeredSnapshot(t *testing.T) {
 	}
 	er := executeRequestFromString(`CREATE TABLE foo (id INTEGER NOT NULL PRIMARY KEY, name TEXT)`,
 		false, false)
-	_, _, err := s.Execute(er)
+	_, _, err := s.Execute(context.Background(), er)
 	if err != nil {
 		t.Fatalf("failed to execute on single node: %s", err.Error())
 	}
 	nSnaps := stats.Get(numWALSnapshots).String()
 
 	for i := 0; i < 100; i++ {
-		_, _, err := s.Execute(executeRequestFromString(`INSERT INTO foo(name) VALUES("fiona")`, false, false))
+		_, _, err := s.Execute(context.Background(), executeRequestFromString(`INSERT INTO foo(name) VALUES("fiona")`, false, false))
 		if err != nil {
 			t.Fatalf("failed to execute INSERT on single node: %s", err.Error())
 		}
@@ -247,13 +247,13 @@ func Test_SingleNode_SnapshotFail_Blocked(t *testing.T) {
 	}
 	er := executeRequestFromString(`CREATE TABLE foo (id INTEGER NOT NULL PRIMARY KEY, name TEXT)`,
 		false, false)
-	_, _, err := s.Execute(er)
+	_, _, err := s.Execute(context.Background(), er)
 	if err != nil {
 		t.Fatalf("failed to execute on single node: %s", err.Error())
 	}
 
 	er = executeRequestFromString(`INSERT INTO foo(name) VALUES("fiona")`, false, false)
-	_, _, err = s.Execute(er)
+	_, _, err = s.Execute(context.Background(), er)
 	if err != nil {
 		t.Fatalf("failed to execute on single node: %s", err.Error())
 	}
@@ -277,7 +277,7 @@ func Test_SingleNode_SnapshotFail_Blocked(t *testing.T) {
 	time.Sleep(1 * time.Second)
 
 	er = executeRequestFromString(`INSERT INTO foo(name) VALUES("bob")`, false, false)
-	_, _, err = s.Execute(er)
+	_, _, err = s.Execute(context.Background(), er)
 	if err != nil {
 		t.Fatalf("failed to execute on single node: %s", err.Error())
 	}
@@ -313,13 +313,13 @@ func Test_SingleNode_SnapshotFail_Blocked_Retry(t *testing.T) {
 	}
 	er := executeRequestFromString(`CREATE TABLE foo (id INTEGER NOT NULL PRIMARY KEY, name TEXT)`,
 		false, false)
-	_, _, err := s.Execute(er)
+	_, _, err := s.Execute(context.Background(), er)
 	if err != nil {
 		t.Fatalf("failed to execute on single node: %s", err.Error())
 	}
 
 	er = executeRequestFromString(`INSERT INTO foo(name) VALUES("fiona")`, false, false)
-	_, _, err = s.Execute(er)
+	_, _, err = s.Execute(context.Background(), er)
 	if err != nil {
 		t.Fatalf("failed to execute on single node: %s", err.Error())
 	}
@@ -360,7 +360,7 @@ func Test_SingleNode_SnapshotFail_Blocked_Retry(t *testing.T) {
 
 	// Again, this time with a persistent snapshot.
 	er = executeRequestFromString(`INSERT INTO foo(name) VALUES("fiona")`, false, false)
-	_, _, err = s.Execute(er)
+	_, _, err = s.Execute(context.Background(), er)
 	if err != nil {
 		t.Fatalf("failed to execute on single node: %s", err.Error())
 	}
@@ -421,14 +421,14 @@ func Test_SingleNode_SnapshotWithAutoOptimize_Stress(t *testing.T) {
 	// Create a table
 	er := executeRequestFromString(`CREATE TABLE foo (id INTEGER NOT NULL PRIMARY KEY, name TEXT)`,
 		false, false)
-	_, _, err := s.Execute(er)
+	_, _, err := s.Execute(context.Background(), er)
 	if err != nil {
 		t.Fatalf("failed to execute on single node: %s", err.Error())
 	}
 
 	// Create an index on name
 	er = executeRequestFromString(`CREATE INDEX foo_name ON foo(name)`, false, false)
-	_, _, err = s.Execute(er)
+	_, _, err = s.Execute(context.Background(), er)
 	if err != nil {
 		t.Fatalf("failed to execute on single node: %s", err.Error())
 	}
@@ -439,7 +439,7 @@ func Test_SingleNode_SnapshotWithAutoOptimize_Stress(t *testing.T) {
 	insertFn := func() {
 		defer wg.Done()
 		for i := 0; i < 500; i++ {
-			_, _, err := s.Execute(executeRequestFromString(fmt.Sprintf(`INSERT INTO foo(name) VALUES("%s")`, random.String()), false, false))
+			_, _, err := s.Execute(context.Background(), executeRequestFromString(fmt.Sprintf(`INSERT INTO foo(name) VALUES("%s")`, random.String()), false, false))
 			if err != nil {
 				t.Errorf("failed to execute INSERT on single node: %s", err.Error())
 			}
@@ -453,7 +453,7 @@ func Test_SingleNode_SnapshotWithAutoOptimize_Stress(t *testing.T) {
 	// Query the data, make sure it looks good after all this.
 	qr := queryRequestFromString("SELECT COUNT(*) FROM foo", false, true)
 	qr.Level = proto.ConsistencyLevel_STRONG
-	r, _, _, err := s.Query(qr)
+	r, _, _, err := s.Query(context.Background(), qr)
 	if err != nil {
 		t.Fatalf("failed to query single node: %s", err.Error())
 	}
@@ -472,7 +472,7 @@ func Test_SingleNode_SnapshotWithAutoOptimize_Stress(t *testing.T) {
 	if _, err := s.WaitForLeader(10 * time.Second); err != nil {
 		t.Fatalf("Error waiting for leader: %s", err)
 	}
-	r, _, _, err = s.Query(qr)
+	r, _, _, err = s.Query(context.Background(), qr)
 	if err != nil {
 		t.Fatalf("failed to query single node: %s", err.Error())
 	}
@@ -504,7 +504,7 @@ func Test_SingleNode_DatabaseFileModified(t *testing.T) {
 	// Insert a record and trigger a snapshot to get a full snapshot.
 	er := executeRequestFromString(`CREATE TABLE foo (id INTEGER NOT NULL PRIMARY KEY, name TEXT)`,
 		false, false)
-	_, _, err := s.Execute(er)
+	_, _, err := s.Execute(context.Background(), er)
 	if err != nil {
 		t.Fatalf("failed to execute on single node: %s", err.Error())
 	}
@@ -517,7 +517,7 @@ func Test_SingleNode_DatabaseFileModified(t *testing.T) {
 
 	insertSnap := func() {
 		t.Helper()
-		_, _, err := s.Execute(executeRequestFromString(`INSERT INTO foo(name) VALUES("fiona")`, false, false))
+		_, _, err := s.Execute(context.Background(), executeRequestFromString(`INSERT INTO foo(name) VALUES("fiona")`, false, false))
 		if err != nil {
 			t.Fatalf("failed to execute INSERT on single node: %s", err.Error())
 		}
@@ -602,7 +602,7 @@ func Test_SingleNodeDBAppliedIndex_SnapshotRestart(t *testing.T) {
 	er := executeRequestFromStrings([]string{
 		`CREATE TABLE foo (id INTEGER NOT NULL PRIMARY KEY, name TEXT)`,
 	}, false, false)
-	_, _, err := s.Execute(er)
+	_, _, err := s.Execute(context.Background(), er)
 	if err != nil {
 		t.Fatalf("failed to execute on single node: %s", err.Error())
 	}

@@ -3,6 +3,7 @@ package cluster
 import (
 	"bytes"
 	"compress/gzip"
+	"context"
 	"encoding/binary"
 	"errors"
 	"fmt"
@@ -49,7 +50,7 @@ func Test_ServiceExecute(t *testing.T) {
 		}
 		return nil, 0, errors.New("execute failed")
 	}
-	_, _, err := c.Execute(executeRequestFromString("some SQL"), s.Addr(), NO_CREDS, longWait, defaultMaxRetries)
+	_, _, err := c.Execute(context.Background(), executeRequestFromString("some SQL"), s.Addr(), NO_CREDS, longWait, defaultMaxRetries)
 	if err == nil {
 		t.Fatalf("client failed to report error")
 	}
@@ -71,7 +72,7 @@ func Test_ServiceExecute(t *testing.T) {
 		}
 		return []*command.ExecuteQueryResponse{response}, 0, nil
 	}
-	res, _, err := c.Execute(executeRequestFromString("some SQL"), s.Addr(), NO_CREDS, longWait, defaultMaxRetries)
+	res, _, err := c.Execute(context.Background(), executeRequestFromString("some SQL"), s.Addr(), NO_CREDS, longWait, defaultMaxRetries)
 	if err != nil {
 		t.Fatalf("failed to execute query: %s", err.Error())
 	}
@@ -90,7 +91,7 @@ func Test_ServiceExecute(t *testing.T) {
 		}
 		return []*command.ExecuteQueryResponse{response}, 0, nil
 	}
-	res, _, err = c.Execute(executeRequestFromString("some SQL"), s.Addr(), NO_CREDS, longWait, defaultMaxRetries)
+	res, _, err = c.Execute(context.Background(), executeRequestFromString("some SQL"), s.Addr(), NO_CREDS, longWait, defaultMaxRetries)
 	if err != nil {
 		t.Fatalf("failed to execute: %s", err.Error())
 	}
@@ -102,7 +103,7 @@ func Test_ServiceExecute(t *testing.T) {
 		time.Sleep(longWait)
 		return nil, 0, nil
 	}
-	_, _, err = c.Execute(executeRequestFromString("some SQL"), s.Addr(), NO_CREDS, shortWait, defaultMaxRetries)
+	_, _, err = c.Execute(context.Background(), executeRequestFromString("some SQL"), s.Addr(), NO_CREDS, shortWait, defaultMaxRetries)
 	if err == nil {
 		t.Fatalf("failed to receive expected error")
 	}
@@ -145,7 +146,7 @@ func Test_ServiceQuery(t *testing.T) {
 		}
 		return nil, 0, errors.New("query failed")
 	}
-	_, _, err := c.Query(queryRequestFromString("SELECT * FROM foo"), s.Addr(), NO_CREDS, longWait)
+	_, _, err := c.Query(context.Background(), queryRequestFromString("SELECT * FROM foo"), s.Addr(), NO_CREDS, longWait)
 	if err == nil {
 		t.Fatalf("client failed to report error")
 	}
@@ -163,7 +164,7 @@ func Test_ServiceQuery(t *testing.T) {
 		}
 		return []*command.QueryRows{rows}, 0, nil
 	}
-	res, _, err := c.Query(queryRequestFromString("SELECT * FROM foo"), s.Addr(), NO_CREDS, longWait)
+	res, _, err := c.Query(context.Background(), queryRequestFromString("SELECT * FROM foo"), s.Addr(), NO_CREDS, longWait)
 	if err != nil {
 		t.Fatalf("failed to query: %s", err.Error())
 	}
@@ -180,7 +181,7 @@ func Test_ServiceQuery(t *testing.T) {
 		}
 		return []*command.QueryRows{rows}, 0, nil
 	}
-	res, _, err = c.Query(queryRequestFromString("SELECT * FROM foo"), s.Addr(), NO_CREDS, longWait)
+	res, _, err = c.Query(context.Background(), queryRequestFromString("SELECT * FROM foo"), s.Addr(), NO_CREDS, longWait)
 	if err != nil {
 		t.Fatalf("failed to query: %s", err.Error())
 	}
@@ -192,7 +193,7 @@ func Test_ServiceQuery(t *testing.T) {
 		time.Sleep(longWait)
 		return nil, 0, nil
 	}
-	_, _, err = c.Query(queryRequestFromString("some SQL"), s.Addr(), NO_CREDS, shortWait)
+	_, _, err = c.Query(context.Background(), queryRequestFromString("some SQL"), s.Addr(), NO_CREDS, shortWait)
 	if err == nil {
 		t.Fatalf("failed to receive expected error")
 	}
@@ -256,7 +257,7 @@ func Test_ServiceQueryLarge(t *testing.T) {
 		}
 		return []*command.QueryRows{rows}, 0, nil
 	}
-	res, _, err := c.Query(queryRequestFromString("SELECT * FROM foo"), s.Addr(), NO_CREDS, longWait)
+	res, _, err := c.Query(context.Background(), queryRequestFromString("SELECT * FROM foo"), s.Addr(), NO_CREDS, longWait)
 	if err != nil {
 		t.Fatalf("failed to query: %s", err.Error())
 	}
@@ -303,7 +304,7 @@ func Test_ServiceBackup(t *testing.T) {
 	}
 
 	buf := new(bytes.Buffer)
-	err := c.Backup(backupRequestBinary(true), s.Addr(), NO_CREDS, longWait, buf)
+	err := c.Backup(context.Background(), backupRequestBinary(true), s.Addr(), NO_CREDS, longWait, buf)
 	if err != nil {
 		t.Fatalf("failed to backup database: %s", err.Error())
 	}
@@ -351,7 +352,7 @@ func Test_ServiceLoad(t *testing.T) {
 		return nil
 	}
 
-	err := c.Load(loadRequest(testData), s.Addr(), NO_CREDS, longWait, defaultMaxRetries)
+	err := c.Load(context.Background(), loadRequest(testData), s.Addr(), NO_CREDS, longWait, defaultMaxRetries)
 	if err != nil {
 		t.Fatalf("failed to load database: %s", err.Error())
 	}
@@ -398,7 +399,7 @@ func Test_ServiceRemoveNode(t *testing.T) {
 		return nil
 	}
 
-	err := c.RemoveNode(removeNodeRequest(expNodeID), s.Addr(), NO_CREDS, longWait)
+	err := c.RemoveNode(context.Background(), removeNodeRequest(expNodeID), s.Addr(), NO_CREDS, longWait)
 	if err != nil {
 		t.Fatalf("failed to remove node: %s", err.Error())
 	}

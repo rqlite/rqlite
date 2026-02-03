@@ -1,6 +1,7 @@
 package cluster
 
 import (
+	"context"
 	"log"
 	"os"
 	"time"
@@ -60,7 +61,7 @@ func (r *Remover) Do(id string, confirm bool) error {
 			}
 
 			r.log.Printf("removing node %s from cluster via leader at %s", id, laddr)
-			if innerErr = r.client.RemoveNode(rn, laddr, r.creds, r.timeout); innerErr != nil {
+			if innerErr = r.client.RemoveNode(context.Background(), rn, laddr, r.creds, r.timeout); innerErr != nil {
 				r.log.Printf("failed to remove node %s from cluster via leader at %s: %s", id, laddr, innerErr)
 				return innerErr
 			}

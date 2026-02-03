@@ -1,6 +1,7 @@
 package store
 
 import (
+	"context"
 	"slices"
 	"testing"
 	"time"
@@ -99,7 +100,7 @@ func Test_StoreCDC_Events_Single(t *testing.T) {
 	}
 
 	er := executeRequestFromString(`CREATE TABLE foo (id INTEGER NOT NULL PRIMARY KEY, name TEXT)`, false, false)
-	_, _, err = s.Execute(er)
+	_, _, err = s.Execute(context.Background(), er)
 	if err != nil {
 		t.Fatalf("failed to execute INSERT on single node: %s", err.Error())
 	}
@@ -109,7 +110,7 @@ func Test_StoreCDC_Events_Single(t *testing.T) {
 	}
 
 	er = executeRequestFromString(`INSERT INTO foo(id, name) VALUES(101, "fiona")`, false, false)
-	_, _, err = s.Execute(er)
+	_, _, err = s.Execute(context.Background(), er)
 	if err != nil {
 		t.Fatalf("failed to execute INSERT on single node: %s", err.Error())
 	}

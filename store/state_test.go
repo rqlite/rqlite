@@ -1,6 +1,7 @@
 package store
 
 import (
+	"context"
 	"fmt"
 	"path/filepath"
 	"testing"
@@ -222,7 +223,7 @@ func Test_Store_HasData(t *testing.T) {
 	er := executeRequestFromStrings([]string{
 		`CREATE TABLE foo (id INTEGER NOT NULL PRIMARY KEY, name TEXT)`,
 	}, false, false)
-	_, _, err = s.Execute(er)
+	_, _, err = s.Execute(context.Background(), er)
 	if err != nil {
 		t.Fatalf("failed to execute on single node: %s", err.Error())
 	}
@@ -258,7 +259,7 @@ func Test_SingleNodeRecoverNoChange(t *testing.T) {
 		t.Helper()
 		qr := queryRequestFromString("SELECT * FROM foo", false, false)
 		qr.Level = proto.ConsistencyLevel_NONE
-		r, _, _, err := s.Query(qr)
+		r, _, _, err := s.Query(context.Background(), qr)
 		if err != nil {
 			t.Fatalf("failed to query single node: %s", err.Error())
 		}
@@ -274,7 +275,7 @@ func Test_SingleNodeRecoverNoChange(t *testing.T) {
 		`CREATE TABLE foo (id INTEGER NOT NULL PRIMARY KEY, name TEXT)`,
 		`INSERT INTO foo(id, name) VALUES(1, "fiona")`,
 	}, false, false)
-	_, _, err := s.Execute(er)
+	_, _, err := s.Execute(context.Background(), er)
 	if err != nil {
 		t.Fatalf("failed to execute on single node: %s", err.Error())
 	}
@@ -326,7 +327,7 @@ func Test_SingleNodeRecoverNetworkChange(t *testing.T) {
 	queryTest := func(s *Store) {
 		qr := queryRequestFromString("SELECT * FROM foo", false, false)
 		qr.Level = proto.ConsistencyLevel_NONE
-		r, _, _, err := s.Query(qr)
+		r, _, _, err := s.Query(context.Background(), qr)
 		if err != nil {
 			t.Fatalf("failed to query single node: %s", err.Error())
 		}
@@ -342,7 +343,7 @@ func Test_SingleNodeRecoverNetworkChange(t *testing.T) {
 		`CREATE TABLE foo (id INTEGER NOT NULL PRIMARY KEY, name TEXT)`,
 		`INSERT INTO foo(id, name) VALUES(1, "fiona")`,
 	}, false, false)
-	_, _, err := s0.Execute(er)
+	_, _, err := s0.Execute(context.Background(), er)
 	if err != nil {
 		t.Fatalf("failed to execute on single node: %s", err.Error())
 	}
@@ -406,7 +407,7 @@ func Test_SingleNodeRecoverNetworkChangeSnapshot(t *testing.T) {
 		t.Helper()
 		qr := queryRequestFromString("SELECT COUNT(*) FROM foo", false, false)
 		qr.Level = proto.ConsistencyLevel_STRONG
-		r, _, _, err := s.Query(qr)
+		r, _, _, err := s.Query(context.Background(), qr)
 		if err != nil {
 			t.Fatalf("failed to query single node: %s", err.Error())
 		}
@@ -422,7 +423,7 @@ func Test_SingleNodeRecoverNetworkChangeSnapshot(t *testing.T) {
 		`CREATE TABLE foo (id INTEGER NOT NULL PRIMARY KEY, name TEXT)`,
 		`INSERT INTO foo(id, name) VALUES(1, "fiona")`,
 	}, false, false)
-	_, _, err := s0.Execute(er)
+	_, _, err := s0.Execute(context.Background(), er)
 	if err != nil {
 		t.Fatalf("failed to execute on single node: %s", err.Error())
 	}
@@ -432,7 +433,7 @@ func Test_SingleNodeRecoverNetworkChangeSnapshot(t *testing.T) {
 		er := executeRequestFromStrings([]string{
 			`INSERT INTO foo(name) VALUES("fiona")`,
 		}, false, false)
-		if _, _, err := s0.Execute(er); err != nil {
+		if _, _, err := s0.Execute(context.Background(), er); err != nil {
 			t.Fatalf("failed to execute on single node: %s", err.Error())
 		}
 	}

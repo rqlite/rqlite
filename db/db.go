@@ -932,19 +932,23 @@ func (db *DB) ExecuteStringStmt(query string) ([]*command.ExecuteQueryResponse, 
 
 // Execute executes queries that modify the database.
 func (db *DB) Execute(req *command.Request, xTime bool) ([]*command.ExecuteQueryResponse, error) {
-	stats.Add(numExecutions, int64(len(req.Statements)))
-	conn, err := db.rwDB.Conn(context.Background())
-	if err != nil {
-		return nil, err
-	}
-	defer conn.Close()
-
 	ctx := context.Background()
 	if req.DbTimeout > 0 {
 		var cancel context.CancelFunc
 		ctx, cancel = context.WithTimeout(ctx, time.Duration(req.DbTimeout))
 		defer cancel()
 	}
+	return db.ExecuteWithContext(ctx, req, xTime)
+}
+
+// ExecuteWithContext executes queries that modify the database, using the given context.
+func (db *DB) ExecuteWithContext(ctx context.Context, req *command.Request, xTime bool) ([]*command.ExecuteQueryResponse, error) {
+	stats.Add(numExecutions, int64(len(req.Statements)))
+	conn, err := db.rwDB.Conn(ctx)
+	if err != nil {
+		return nil, err
+	}
+	defer conn.Close()
 	return db.executeWithConn(ctx, req, xTime, conn)
 }
 
@@ -1140,6 +1144,7 @@ func (db *DB) Query(req *command.Request, xTime bool) ([]*command.QueryRows, err
 
 // QueryWithContext executes queries that return rows, but don't modify the database.
 func (db *DB) QueryWithContext(ctx context.Context, req *command.Request, xTime bool) ([]*command.QueryRows, error) {
+	// Assume any desired timeout or deadline has already been applied to ctx by the caller.
 	stats.Add(numQueries, int64(len(req.Statements)))
 	conn, err := db.roDB.Conn(ctx)
 	if err != nil {
@@ -1336,19 +1341,24 @@ func (db *DB) RequestStringStmtsWithTimeout(stmts []string, timeout time.Duratio
 
 // Request processes a request that can contain both executes and queries.
 func (db *DB) Request(req *command.Request, xTime bool) ([]*command.ExecuteQueryResponse, error) {
-	stats.Add(numRequests, int64(len(req.Statements)))
-	conn, err := db.rwDB.Conn(context.Background())
-	if err != nil {
-		return nil, err
-	}
-	defer conn.Close()
-
 	ctx := context.Background()
 	if req.DbTimeout > 0 {
 		var cancel context.CancelFunc
 		ctx, cancel = context.WithTimeout(ctx, time.Duration(req.DbTimeout))
 		defer cancel()
 	}
+	return db.RequestWithContext(ctx, req, xTime)
+}
+
+// RequestWithContext processes a request that can contain both executes and queries,
+// using the given context.
+func (db *DB) RequestWithContext(ctx context.Context, req *command.Request, xTime bool) ([]*command.ExecuteQueryResponse, error) {
+	stats.Add(numRequests, int64(len(req.Statements)))
+	conn, err := db.rwDB.Conn(ctx)
+	if err != nil {
+		return nil, err
+	}
+	defer conn.Close()
 
 	eq := execerQueryer(conn)
 	var tx *sql.Tx

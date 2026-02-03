@@ -1,6 +1,7 @@
 package store
 
 import (
+	"context"
 	"os"
 	"testing"
 	"time"
@@ -28,13 +29,13 @@ func test_SingleNodeProvide(t *testing.T, vacuum, compress bool) {
 		`CREATE TABLE foo (id INTEGER NOT NULL PRIMARY KEY, name TEXT)`,
 		`INSERT INTO foo(id, name) VALUES(1, "fiona")`,
 	}, false, false)
-	_, _, err := s0.Execute(er)
+	_, _, err := s0.Execute(context.Background(), er)
 	if err != nil {
 		t.Fatalf("failed to execute on single node: %s", err.Error())
 	}
 	qr := queryRequestFromString("SELECT * FROM foo", false, false)
 	qr.Level = command.ConsistencyLevel_NONE
-	r, _, _, err := s0.Query(qr)
+	r, _, _, err := s0.Query(context.Background(), qr)
 	if err != nil {
 		t.Fatalf("failed to query leader node: %s", err.Error())
 	}
@@ -77,13 +78,13 @@ func test_SingleNodeProvide(t *testing.T, vacuum, compress bool) {
 		s1file = unCompressedFile
 	}
 
-	err = s1.Load(loadRequestFromFile(s1file))
+	err = s1.Load(context.Background(), loadRequestFromFile(s1file))
 	if err != nil {
 		t.Fatalf("failed to load provided SQLite data: %s", err.Error())
 	}
 	qr = queryRequestFromString("SELECT * FROM foo", false, false)
 	qr.Level = command.ConsistencyLevel_STRONG
-	r, _, _, err = s1.Query(qr)
+	r, _, _, err = s1.Query(context.Background(), qr)
 	if err != nil {
 		t.Fatalf("failed to query leader node: %s", err.Error())
 	}
@@ -140,7 +141,7 @@ func Test_SingleNodeProvideLastIndex(t *testing.T) {
 		`CREATE TABLE foo (id INTEGER NOT NULL PRIMARY KEY, name TEXT)`,
 		`INSERT INTO foo(id, name) VALUES(1, "fiona")`,
 	}, false, false)
-	_, idx, err := s.Execute(er)
+	_, idx, err := s.Execute(context.Background(), er)
 	if err != nil {
 		t.Fatalf("failed to execute on single node: %s", err.Error())
 	}
@@ -160,7 +161,7 @@ func Test_SingleNodeProvideLastIndex(t *testing.T) {
 	// Try various queries and commands which should not change the database.
 	qr := queryRequestFromString("SELECT * FROM foo", false, false)
 	qr.Level = command.ConsistencyLevel_STRONG
-	_, _, _, err = s.Query(qr)
+	_, _, _, err = s.Query(context.Background(), qr)
 	if err != nil {
 		t.Fatalf("failed to query leader node: %s", err.Error())
 	}
@@ -191,7 +192,7 @@ func Test_SingleNodeProvideLastIndex(t *testing.T) {
 	er = executeRequestFromStrings([]string{
 		`INSERT INTO foo(id, name) VALUES(1, "fiona")`, // Constraint violation.
 	}, false, false)
-	_, _, err = s.Execute(er)
+	_, _, err = s.Execute(context.Background(), er)
 	if err != nil {
 		t.Fatalf("failed to execute on single node: %s", err.Error())
 	}
@@ -208,7 +209,7 @@ func Test_SingleNodeProvideLastIndex(t *testing.T) {
 	er = executeRequestFromStrings([]string{
 		`INSERT INTO foo(id, name) VALUES(2, "fiona")`,
 	}, false, false)
-	_, idx, err = s.Execute(er)
+	_, idx, err = s.Execute(context.Background(), er)
 	if err != nil {
 		t.Fatalf("failed to execute on single node: %s", err.Error())
 	}
@@ -250,7 +251,7 @@ func Test_SingleNodeProvideLastIndex_Restart(t *testing.T) {
 		`CREATE TABLE foo (id INTEGER NOT NULL PRIMARY KEY, name TEXT)`,
 		`INSERT INTO foo(id, name) VALUES(1, "fiona")`,
 	}, false, false)
-	_, idx, err := s.Execute(er)
+	_, idx, err := s.Execute(context.Background(), er)
 	if err != nil {
 		t.Fatalf("failed to execute on single node: %s", err.Error())
 	}

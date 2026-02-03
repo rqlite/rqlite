@@ -6,6 +6,7 @@ package store
 import (
 	"bytes"
 	"compress/gzip"
+	"context"
 	"encoding/binary"
 	"errors"
 	"expvar"
@@ -1379,7 +1380,7 @@ func (s *Store) Stats() (map[string]any, error) {
 }
 
 // Execute executes queries that return no rows, but do modify the database.
-func (s *Store) Execute(ex *proto.ExecuteRequest) ([]*proto.ExecuteQueryResponse, uint64, error) {
+func (s *Store) Execute(ctx context.Context, ex *proto.ExecuteRequest) ([]*proto.ExecuteQueryResponse, uint64, error) {
 	p := (*PragmaCheckRequest)(ex.Request)
 	if err := p.Check(); err != nil {
 		return nil, 0, err
@@ -1387,6 +1388,11 @@ func (s *Store) Execute(ex *proto.ExecuteRequest) ([]*proto.ExecuteQueryResponse
 
 	if !s.open.Is() {
 		return nil, 0, ErrNotOpen
+	}
+
+	// Check if context is already canceled
+	if err := ctx.Err(); err != nil {
+		return nil, 0, err
 	}
 
 	if s.raft.State() != raft.Leader {
@@ -1430,7 +1436,7 @@ func (s *Store) execute(ex *proto.ExecuteRequest) ([]*proto.ExecuteQueryResponse
 // If the request read consistency level is LINEARIZABLE, that level may be
 // upgraded to STRONG if the Store determines that is necessary to guarantee
 // a linearizable read.
-func (s *Store) Query(qr *proto.QueryRequest) (rows []*proto.QueryRows, level proto.ConsistencyLevel, raftIndex uint64, retErr error) {
+func (s *Store) Query(ctx context.Context, qr *proto.QueryRequest) (rows []*proto.QueryRows, level proto.ConsistencyLevel, raftIndex uint64, retErr error) {
 	s.readerMu.RLock()
 	defer s.readerMu.RUnlock()
 
@@ -1441,6 +1447,11 @@ func (s *Store) Query(qr *proto.QueryRequest) (rows []*proto.QueryRows, level pr
 
 	if !s.open.Is() {
 		return nil, 0, 0, ErrNotOpen
+	}
+
+	// Check if context is already canceled
+	if err := ctx.Err(); err != nil {
+		return nil, 0, 0, err
 	}
 
 	level = qr.Level
@@ -1515,7 +1526,7 @@ func (s *Store) Query(qr *proto.QueryRequest) (rows []*proto.QueryRows, level pr
 		return nil, 0, 0, ErrStaleRead
 	}
 
-	rows, err := s.db.Query(qr.Request, qr.Timings)
+	rows, err := s.db.QueryWithContext(ctx, qr.Request, qr.Timings)
 	return rows, level, 0, err
 }
 
@@ -1544,7 +1555,7 @@ func (s *Store) VerifyLeader() (retErr error) {
 }
 
 // Request processes a request that may contain both Executes and Queries.
-func (s *Store) Request(eqr *proto.ExecuteQueryRequest) ([]*proto.ExecuteQueryResponse, uint64, uint64, error) {
+func (s *Store) Request(ctx context.Context, eqr *proto.ExecuteQueryRequest) ([]*proto.ExecuteQueryResponse, uint64, uint64, error) {
 	s.readerMu.RLock()
 	defer s.readerMu.RUnlock()
 
@@ -1556,6 +1567,12 @@ func (s *Store) Request(eqr *proto.ExecuteQueryRequest) ([]*proto.ExecuteQueryRe
 	if !s.open.Is() {
 		return nil, 0, 0, ErrNotOpen
 	}
+
+	// Check if context is already canceled
+	if err := ctx.Err(); err != nil {
+		return nil, 0, 0, err
+	}
+
 	nRW, nRO := s.RORWCount(eqr)
 	isLeader := s.raft.State() == raft.Leader
 
@@ -1593,7 +1610,7 @@ func (s *Store) Request(eqr *proto.ExecuteQueryRequest) ([]*proto.ExecuteQueryRe
 				return nil, 0, 0, ErrNotLeader
 			}
 		}
-		qr, err := s.db.Query(eqr.Request, eqr.Timings)
+		qr, err := s.db.QueryWithContext(ctx, eqr.Request, eqr.Timings)
 		return convertFn(qr), uint64(nRW), 0, err
 	}
 
@@ -1650,12 +1667,17 @@ func (s *Store) Request(eqr *proto.ExecuteQueryRequest) ([]*proto.ExecuteQueryRe
 // is made. If compression false, and dst is an os.File, then the vacuumed copy
 // will be written directly to that file. Otherwise a temporary file will be created,
 // and that temporary file copied to dst.
-func (s *Store) Backup(br *proto.BackupRequest, dst io.Writer) (retErr error) {
+func (s *Store) Backup(ctx context.Context, br *proto.BackupRequest, dst io.Writer) (retErr error) {
 	s.readerMu.RLock()
 	defer s.readerMu.RUnlock()
 
 	if !s.open.Is() {
 		return ErrNotOpen
+	}
+
+	// Check if context is already canceled
+	if err := ctx.Err(); err != nil {
+		return err
 	}
 
 	if br.Vacuum && br.Format != proto.BackupRequest_BACKUP_REQUEST_FORMAT_BINARY {
@@ -1794,9 +1816,14 @@ func (s *Store) Backup(br *proto.BackupRequest, dst io.Writer) (retErr error) {
 
 // Load loads an entire SQLite file into the database, sending the request
 // through the Raft log.
-func (s *Store) Load(lr *proto.LoadRequest) error {
+func (s *Store) Load(ctx context.Context, lr *proto.LoadRequest) error {
 	if !s.open.Is() {
 		return ErrNotOpen
+	}
+
+	// Check if context is already canceled
+	if err := ctx.Err(); err != nil {
+		return err
 	}
 
 	if !s.Ready() {
@@ -2115,10 +2142,16 @@ func (s *Store) Join(jr *proto.JoinRequest) error {
 }
 
 // Remove removes a node from the store.
-func (s *Store) Remove(rn *proto.RemoveNodeRequest) error {
+func (s *Store) Remove(ctx context.Context, rn *proto.RemoveNodeRequest) error {
 	if !s.open.Is() {
 		return ErrNotOpen
 	}
+
+	// Check if context is already canceled
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+
 	id := rn.Id
 
 	s.logger.Printf("received request to remove node %s", id)

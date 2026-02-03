@@ -51,20 +51,20 @@ type Database interface {
 	// to return rows. If timings is true, then timing information will
 	// be return. If tx is true, then either all queries will be executed
 	// successfully or it will as though none executed.
-	Execute(er *proto.ExecuteRequest) ([]*proto.ExecuteQueryResponse, uint64, error)
+	Execute(ctx context.Context, er *proto.ExecuteRequest) ([]*proto.ExecuteQueryResponse, uint64, error)
 
 	// Query executes a slice of queries, each of which returns rows. If
 	// timings is true, then timing information will be returned. If tx
 	// is true, then all queries will take place while a read transaction
 	// is held on the database.
-	Query(qr *proto.QueryRequest) ([]*proto.QueryRows, proto.ConsistencyLevel, uint64, error)
+	Query(ctx context.Context, qr *proto.QueryRequest) ([]*proto.QueryRows, proto.ConsistencyLevel, uint64, error)
 
 	// Request processes a slice of requests, each of which can be either
 	// an Execute or Query request.
-	Request(eqr *proto.ExecuteQueryRequest) ([]*proto.ExecuteQueryResponse, uint64, uint64, error)
+	Request(ctx context.Context, eqr *proto.ExecuteQueryRequest) ([]*proto.ExecuteQueryResponse, uint64, uint64, error)
 
 	// Load loads a SQLite file into the system via Raft consensus.
-	Load(lr *proto.LoadRequest) error
+	Load(ctx context.Context, lr *proto.LoadRequest) error
 }
 
 // Store is the interface the Raft-based database must implement.
@@ -81,7 +81,7 @@ type Store interface {
 	Ready() bool
 
 	// Remove removes the node from the cluster.
-	Remove(rn *proto.RemoveNodeRequest) error
+	Remove(ctx context.Context, rn *proto.RemoveNodeRequest) error
 
 	// Committed blocks until the local commit index is greater than or
 	// equal to the Leader index, as checked when the function is called.
@@ -91,7 +91,7 @@ type Store interface {
 	Stats() (map[string]any, error)
 
 	// Backup writes backup of the node state to dst
-	Backup(br *proto.BackupRequest, dst io.Writer) error
+	Backup(ctx context.Context, br *proto.BackupRequest, dst io.Writer) error
 
 	// Snapshot triggers a Raft Snapshot and Log Truncation.
 	Snapshot(n uint64) error
@@ -118,22 +118,22 @@ type Cluster interface {
 	GetNodeMetaer
 
 	// Execute performs an Execute Request on a remote node.
-	Execute(er *proto.ExecuteRequest, nodeAddr string, creds *clstrPB.Credentials, timeout time.Duration, retries int) ([]*proto.ExecuteQueryResponse, uint64, error)
+	Execute(ctx context.Context, er *proto.ExecuteRequest, nodeAddr string, creds *clstrPB.Credentials, timeout time.Duration, retries int) ([]*proto.ExecuteQueryResponse, uint64, error)
 
 	// Query performs an Query Request on a remote node.
-	Query(qr *proto.QueryRequest, nodeAddr string, creds *clstrPB.Credentials, timeout time.Duration) ([]*proto.QueryRows, uint64, error)
+	Query(ctx context.Context, qr *proto.QueryRequest, nodeAddr string, creds *clstrPB.Credentials, timeout time.Duration) ([]*proto.QueryRows, uint64, error)
 
 	// Request performs an ExecuteQuery Request on a remote node.
-	Request(eqr *proto.ExecuteQueryRequest, nodeAddr string, creds *clstrPB.Credentials, timeout time.Duration, retries int) ([]*proto.ExecuteQueryResponse, uint64, uint64, error)
+	Request(ctx context.Context, eqr *proto.ExecuteQueryRequest, nodeAddr string, creds *clstrPB.Credentials, timeout time.Duration, retries int) ([]*proto.ExecuteQueryResponse, uint64, uint64, error)
 
 	// Backup retrieves a backup from a remote node and writes to the io.Writer.
-	Backup(br *proto.BackupRequest, nodeAddr string, creds *clstrPB.Credentials, timeout time.Duration, w io.Writer) error
+	Backup(ctx context.Context, br *proto.BackupRequest, nodeAddr string, creds *clstrPB.Credentials, timeout time.Duration, w io.Writer) error
 
 	// Load loads a SQLite database into the node.
-	Load(lr *proto.LoadRequest, nodeAddr string, creds *clstrPB.Credentials, timeout time.Duration, retries int) error
+	Load(ctx context.Context, lr *proto.LoadRequest, nodeAddr string, creds *clstrPB.Credentials, timeout time.Duration, retries int) error
 
 	// RemoveNode removes a node from the cluster.
-	RemoveNode(rn *proto.RemoveNodeRequest, nodeAddr string, creds *clstrPB.Credentials, timeout time.Duration) error
+	RemoveNode(ctx context.Context, rn *proto.RemoveNodeRequest, nodeAddr string, creds *clstrPB.Credentials, timeout time.Duration) error
 
 	// Stepdown triggers leader stepdown on a remote node.
 	Stepdown(sr *proto.StepdownRequest, nodeAddr string, creds *clstrPB.Credentials, timeout time.Duration) error
@@ -606,7 +606,7 @@ func (s *Service) handleRemove(w http.ResponseWriter, r *http.Request, qp QueryP
 		Id: remoteID,
 	}
 
-	err = s.store.Remove(rn)
+	err = s.store.Remove(r.Context(), rn)
 	if err != nil {
 		if err == store.ErrNotLeader {
 			if s.DoRedirect(w, r, qp) {
@@ -625,7 +625,7 @@ func (s *Service) handleRemove(w http.ResponseWriter, r *http.Request, qp QueryP
 			}
 
 			w.Header().Add(ServedByHTTPHeader, addr)
-			removeErr := s.cluster.RemoveNode(rn, addr, makeCredentials(r), qp.Timeout(defaultTimeout))
+			removeErr := s.cluster.RemoveNode(r.Context(), rn, addr, makeCredentials(r), qp.Timeout(defaultTimeout))
 			if removeErr != nil {
 				if removeErr.Error() == "unauthorized" {
 					http.Error(w, "remote remove node not authorized", http.StatusUnauthorized)
@@ -663,7 +663,7 @@ func (s *Service) handleBackup(w http.ResponseWriter, r *http.Request, qp QueryP
 	}
 	addBackupFormatHeader(w, qp)
 
-	err := s.store.Backup(br, w)
+	err := s.store.Backup(r.Context(), br, w)
 	if err != nil {
 		if err == store.ErrNotLeader {
 			if s.DoRedirect(w, r, qp) {
@@ -682,7 +682,7 @@ func (s *Service) handleBackup(w http.ResponseWriter, r *http.Request, qp QueryP
 			}
 
 			w.Header().Add(ServedByHTTPHeader, addr)
-			backupErr := s.cluster.Backup(br, addr, makeCredentials(r), qp.Timeout(defaultTimeout), w)
+			backupErr := s.cluster.Backup(r.Context(), br, addr, makeCredentials(r), qp.Timeout(defaultTimeout), w)
 			if backupErr != nil {
 				if backupErr.Error() == "unauthorized" {
 					http.Error(w, "remote backup not authorized", http.StatusUnauthorized)
@@ -750,7 +750,7 @@ func (s *Service) handleLoad(w http.ResponseWriter, r *http.Request, qp QueryPar
 			Data: b,
 		}
 
-		err := s.store.Load(lr)
+		err := s.store.Load(r.Context(), lr)
 		if err != nil && err != store.ErrNotLeader {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
@@ -760,7 +760,7 @@ func (s *Service) handleLoad(w http.ResponseWriter, r *http.Request, qp QueryPar
 			}
 
 			w.Header().Add(ServedByHTTPHeader, ldrAddr)
-			loadErr := s.cluster.Load(lr, ldrAddr, makeCredentials(r), qp.Timeout(defaultTimeout), qp.Retries(0))
+			loadErr := s.cluster.Load(r.Context(), lr, ldrAddr, makeCredentials(r), qp.Timeout(defaultTimeout), qp.Retries(0))
 			if loadErr != nil {
 				handleRemoteErr(loadErr)
 				return
@@ -775,7 +775,7 @@ func (s *Service) handleLoad(w http.ResponseWriter, r *http.Request, qp QueryPar
 		er := executeRequestFromStrings(queries, qp.Timings(), false)
 		er.Request.RollbackOnError = true
 
-		response, _, err := s.store.Execute(er)
+		response, _, err := s.store.Execute(r.Context(), er)
 		if err != nil {
 			if err == store.ErrNotLeader {
 				if s.DoRedirect(w, r, qp) {
@@ -784,7 +784,7 @@ func (s *Service) handleLoad(w http.ResponseWriter, r *http.Request, qp QueryPar
 
 				w.Header().Add(ServedByHTTPHeader, ldrAddr)
 				var exErr error
-				response, _, exErr = s.cluster.Execute(er, ldrAddr, makeCredentials(r),
+				response, _, exErr = s.cluster.Execute(r.Context(), er, ldrAddr, makeCredentials(r),
 					qp.Timeout(defaultTimeout), qp.Retries(0))
 				if exErr != nil {
 					handleRemoteErr(exErr)
@@ -1362,7 +1362,7 @@ func (s *Service) execute(w http.ResponseWriter, r *http.Request, qp QueryParams
 		Timings: qp.Timings(),
 	}
 
-	results, raftIndex, resultsErr := s.store.Execute(er)
+	results, raftIndex, resultsErr := s.store.Execute(r.Context(), er)
 	if resultsErr != nil && resultsErr == store.ErrNotLeader {
 		if s.DoRedirect(w, r, qp) {
 			return
@@ -1380,7 +1380,7 @@ func (s *Service) execute(w http.ResponseWriter, r *http.Request, qp QueryParams
 		}
 
 		w.Header().Add(ServedByHTTPHeader, addr)
-		results, raftIndex, resultsErr = s.cluster.Execute(er, addr, makeCredentials(r),
+		results, raftIndex, resultsErr = s.cluster.Execute(r.Context(), er, addr, makeCredentials(r),
 			qp.Timeout(defaultTimeout), qp.Retries(0))
 		if resultsErr != nil {
 			stats.Add(numRemoteExecutionsFailed, 1)
@@ -1467,7 +1467,7 @@ func (s *Service) handleQuery(w http.ResponseWriter, r *http.Request, qp QueryPa
 		LinearizableTimeout: qp.LinearizableTimeout(defaultLinearTimeout).Nanoseconds(),
 	}
 
-	results, _, raftIndex, resultsErr := s.store.Query(qr)
+	results, _, raftIndex, resultsErr := s.store.Query(r.Context(), qr)
 	if resultsErr != nil && resultsErr == store.ErrNotLeader {
 		if s.DoRedirect(w, r, qp) {
 			return
@@ -1485,7 +1485,7 @@ func (s *Service) handleQuery(w http.ResponseWriter, r *http.Request, qp QueryPa
 		}
 
 		w.Header().Add(ServedByHTTPHeader, addr)
-		results, raftIndex, resultsErr = s.cluster.Query(qr, addr, makeCredentials(r), qp.Timeout(defaultTimeout))
+		results, raftIndex, resultsErr = s.cluster.Query(r.Context(), qr, addr, makeCredentials(r), qp.Timeout(defaultTimeout))
 		if resultsErr != nil {
 			stats.Add(numRemoteQueriesFailed, 1)
 			if resultsErr.Error() == "unauthorized" {
@@ -1553,7 +1553,7 @@ func (s *Service) handleRequest(w http.ResponseWriter, r *http.Request, qp Query
 		FreshnessStrict: qp.FreshnessStrict(),
 	}
 
-	results, _, raftIndex, resultsErr := s.store.Request(eqr)
+	results, _, raftIndex, resultsErr := s.store.Request(r.Context(), eqr)
 	if resultsErr != nil && resultsErr == store.ErrNotLeader {
 		if s.DoRedirect(w, r, qp) {
 			return
@@ -1571,7 +1571,7 @@ func (s *Service) handleRequest(w http.ResponseWriter, r *http.Request, qp Query
 		}
 
 		w.Header().Add(ServedByHTTPHeader, addr)
-		results, _, raftIndex, resultsErr = s.cluster.Request(eqr, addr, makeCredentials(r),
+		results, _, raftIndex, resultsErr = s.cluster.Request(r.Context(), eqr, addr, makeCredentials(r),
 			qp.Timeout(defaultTimeout), qp.Retries(0))
 		if resultsErr != nil {
 			stats.Add(numRemoteRequestsFailed, 1)
@@ -1777,7 +1777,7 @@ func (s *Service) runQueue() {
 			// a "checkpoint" through the queue.
 			if er.Request.Statements != nil {
 				for {
-					_, _, err = s.store.Execute(er)
+					_, _, err = s.store.Execute(context.Background(), er)
 					if err == nil {
 						// Success!
 						break
@@ -1790,7 +1790,7 @@ func (s *Service) runQueue() {
 								req.SequenceNumber, s.Addr().String())
 							stats.Add(numQueuedExecutionsNoLeader, 1)
 						} else {
-							_, _, err = s.cluster.Execute(er, ldr.Addr, nil, defaultTimeout, 0)
+							_, _, err = s.cluster.Execute(context.Background(), er, ldr.Addr, nil, defaultTimeout, 0)
 							if err != nil {
 								s.logger.Printf("execute queue write failed for sequence number %d on node %s: %s",
 									req.SequenceNumber, s.Addr().String(), err.Error())

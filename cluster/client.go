@@ -2,6 +2,7 @@ package cluster
 
 import (
 	"compress/gzip"
+	"context"
 	"crypto/tls"
 	"encoding/binary"
 	"errors"
@@ -181,7 +182,10 @@ func (c *Client) GetCommitIndex(nodeAddr string, retries int, timeout time.Durat
 // Execute performs an Execute on a remote node. If creds is nil, then
 // no credential information will be included in the Execute request to the
 // remote node.
-func (c *Client) Execute(er *command.ExecuteRequest, nodeAddr string, creds *proto.Credentials, timeout time.Duration, retries int) ([]*command.ExecuteQueryResponse, uint64, error) {
+func (c *Client) Execute(ctx context.Context, er *command.ExecuteRequest, nodeAddr string, creds *proto.Credentials, timeout time.Duration, retries int) ([]*command.ExecuteQueryResponse, uint64, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, 0, err
+	}
 	command := &proto.Command{
 		Type: proto.Command_COMMAND_TYPE_EXECUTE,
 		Request: &proto.Command_ExecuteRequest{
@@ -210,7 +214,10 @@ func (c *Client) Execute(er *command.ExecuteRequest, nodeAddr string, creds *pro
 // Query performs a Query on a remote node. If creds is nil, then
 // no credential information will be included in the Query request to the
 // remote node.
-func (c *Client) Query(qr *command.QueryRequest, nodeAddr string, creds *proto.Credentials, timeout time.Duration) ([]*command.QueryRows, uint64, error) {
+func (c *Client) Query(ctx context.Context, qr *command.QueryRequest, nodeAddr string, creds *proto.Credentials, timeout time.Duration) ([]*command.QueryRows, uint64, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, 0, err
+	}
 	command := &proto.Command{
 		Type: proto.Command_COMMAND_TYPE_QUERY,
 		Request: &proto.Command_QueryRequest{
@@ -239,7 +246,10 @@ func (c *Client) Query(qr *command.QueryRequest, nodeAddr string, creds *proto.C
 // Request performs an ExecuteQuery on a remote node. If creds is nil, then
 // no credential information will be included in the ExecuteQuery request to the
 // remote node.
-func (c *Client) Request(r *command.ExecuteQueryRequest, nodeAddr string, creds *proto.Credentials, timeout time.Duration, retries int) ([]*command.ExecuteQueryResponse, uint64, uint64, error) {
+func (c *Client) Request(ctx context.Context, r *command.ExecuteQueryRequest, nodeAddr string, creds *proto.Credentials, timeout time.Duration, retries int) ([]*command.ExecuteQueryResponse, uint64, uint64, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, 0, 0, err
+	}
 	command := &proto.Command{
 		Type: proto.Command_COMMAND_TYPE_REQUEST,
 		Request: &proto.Command_ExecuteQueryRequest{
@@ -268,7 +278,10 @@ func (c *Client) Request(r *command.ExecuteQueryRequest, nodeAddr string, creds 
 // Backup retrieves a backup from a remote node and writes to the io.Writer.
 // If creds is nil, then no credential information will be included in the
 // Backup request to the remote node.
-func (c *Client) Backup(br *command.BackupRequest, nodeAddr string, creds *proto.Credentials, timeout time.Duration, w io.Writer) error {
+func (c *Client) Backup(ctx context.Context, br *command.BackupRequest, nodeAddr string, creds *proto.Credentials, timeout time.Duration, w io.Writer) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
 	conn, err := c.dial(nodeAddr)
 	if err != nil {
 		return err
@@ -322,7 +335,10 @@ func (c *Client) Backup(br *command.BackupRequest, nodeAddr string, creds *proto
 
 // Load loads a SQLite file into the database. If creds is nil, then no
 // credential information will be included in the Load request to the remote node.
-func (c *Client) Load(lr *command.LoadRequest, nodeAddr string, creds *proto.Credentials, timeout time.Duration, retries int) error {
+func (c *Client) Load(ctx context.Context, lr *command.LoadRequest, nodeAddr string, creds *proto.Credentials, timeout time.Duration, retries int) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
 	command := &proto.Command{
 		Type: proto.Command_COMMAND_TYPE_LOAD,
 		Request: &proto.Command_LoadRequest{
@@ -351,7 +367,10 @@ func (c *Client) Load(lr *command.LoadRequest, nodeAddr string, creds *proto.Cre
 // RemoveNode removes a node from the cluster. If creds is nil, then no
 // credential information will be included in the RemoveNode request to the
 // remote node.
-func (c *Client) RemoveNode(rn *command.RemoveNodeRequest, nodeAddr string, creds *proto.Credentials, timeout time.Duration) error {
+func (c *Client) RemoveNode(ctx context.Context, rn *command.RemoveNodeRequest, nodeAddr string, creds *proto.Credentials, timeout time.Duration) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
 	conn, err := c.dial(nodeAddr)
 	if err != nil {
 		return err
