@@ -92,6 +92,9 @@ func (s *Sink) Close() error {
 	}
 	s.opened = false
 
+	if err := s.dataFD.Sync(); err != nil {
+		return err
+	}
 	if err := s.dataFD.Close(); err != nil {
 		return err
 	}
@@ -209,6 +212,9 @@ func (s *Sink) processSnapshotData() (retErr error) {
 
 	// Indicate snapshot data been successfully persisted to disk by renaming
 	// the temp directory to a non-temporary name.
+	if err := syncDirMaybe(s.snapTmpDirPath); err != nil {
+		return err
+	}
 	if err := os.Rename(s.snapTmpDirPath, s.snapDirPath); err != nil {
 		return err
 	}

@@ -2587,6 +2587,11 @@ func (s *Store) fsmSnapshot() (fSnap raft.FSMSnapshot, retErr error) {
 				return nil, err
 			}
 			stats.Get(snapshotCreateWALCompactDuration).(*expvar.Int).Set(time.Since(compactStartTime).Milliseconds())
+			if err := walTmpFD.Sync(); err != nil {
+				walTmpFD.Close()
+				os.Remove(walTmpFD.Name())
+				return nil, fmt.Errorf("failed to sync compacted WAL file: %s", err)
+			}
 
 			// Now that we've got a (compacted) copy of the WAL we can truncate the
 			// WAL itself. We use TRUNCATE mode so that the next WAL contains just

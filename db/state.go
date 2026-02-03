@@ -337,7 +337,9 @@ func CheckpointRemove(path string) error {
 	if err != nil {
 		return err
 	}
-	db.SetSynchronousMode(SynchronousFull)
+	if err := db.SetSynchronousMode(SynchronousFull); err != nil {
+		return fmt.Errorf("failed to set synchronous mode to FULL: %s", err.Error())
+	}
 	return db.Close()
 }
 
