@@ -521,7 +521,6 @@ func Test_CheckpointRemove(t *testing.T) {
 		t.Fatalf("failed to open database in WAL mode: %s", err.Error())
 	}
 	dbEmpty.Close()
-
 	if err := CheckpointRemove(emptyPath); err != nil {
 		t.Fatalf("failed to checkpoint empty database in WAL mode: %s", err.Error())
 	}
@@ -549,6 +548,7 @@ func Test_CheckpointRemove(t *testing.T) {
 	if err := db.Close(); err != nil {
 		t.Fatalf("failed to close database: %s", err.Error())
 	}
+
 	if err := CheckpointRemove(path); err != nil {
 		t.Fatalf("failed to checkpoint database in WAL mode: %s", err.Error())
 	}
