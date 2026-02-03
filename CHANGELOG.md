@@ -1,5 +1,6 @@
 ## v9.3.19 (unreleased)
 ### Implementation changes and bug fixes
+- [PR #2460](https://github.com/rqlite/rqlite/pull/2460): Upgrade dependencies.
 - [PR #2459](https://github.com/rqlite/rqlite/pull/2459): More testing of zero-length WAL snapshotting.
 - [PR #2457](https://github.com/rqlite/rqlite/pull/2457): Simplify v7 to v8 upgrade logic.
 - [PR #2456](https://github.com/rqlite/rqlite/pull/2456): Further error checking when replaying WALs.
