@@ -337,6 +337,8 @@ func CheckpointRemove(path string) error {
 	if err != nil {
 		return err
 	}
+
+	// Ensure changes are flushed to disk.
 	if err := db.SetSynchronousMode(SynchronousFull); err != nil {
 		return fmt.Errorf("failed to set synchronous mode to FULL: %w", err)
 	}
