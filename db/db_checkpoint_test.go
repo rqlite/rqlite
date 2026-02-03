@@ -99,6 +99,44 @@ func Test_WALDatabaseCheckpointOK(t *testing.T) {
 	}
 }
 
+func Test_WALDatabaseCheckpoint_SyncModeRestore(t *testing.T) {
+	path := mustTempFile()
+	defer os.Remove(path)
+
+	db, err := Open(path, false, true)
+	if err != nil {
+		t.Fatalf("failed to open database in WAL mode: %s", err.Error())
+	}
+	defer db.Close()
+
+	// Set a non-default sync mode.
+	if err := db.SetSynchronousMode(SynchronousNormal); err != nil {
+		t.Fatalf("failed to set synchronous mode to NORMAL: %s", err.Error())
+	}
+
+	// Perform a checkpoint.
+	_, err = db.ExecuteStringStmt(`CREATE TABLE foo (id INTEGER NOT NULL PRIMARY KEY, name TEXT)`)
+	if err != nil {
+		t.Fatalf("failed to execute on single node: %s", err.Error())
+	}
+	meta, err := db.Checkpoint(CheckpointTruncate)
+	if err != nil {
+		t.Fatalf("failed to checkpoint database: %s", err.Error())
+	}
+	if !meta.Success() {
+		t.Fatalf("expected checkpoint to complete successfully")
+	}
+
+	// Ensure that the database sync mode is restored.
+	syncMode, err := db.GetSynchronousMode()
+	if err != nil {
+		t.Fatalf("failed to get synchronous mode: %s", err.Error())
+	}
+	if syncMode != SynchronousNormal {
+		t.Fatalf("expected synchronous mode to be NORMAL, got %s", syncMode)
+	}
+}
+
 func Test_WALDatabaseCheckpointFail_Blocked(t *testing.T) {
 	path := mustTempFile()
 	defer os.Remove(path)
