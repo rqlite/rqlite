@@ -521,11 +521,18 @@ func Test_CheckpointRemove(t *testing.T) {
 		t.Fatalf("failed to open database in WAL mode: %s", err.Error())
 	}
 	dbEmpty.Close()
+	if !fileExists(emptyPath + "-wal") {
+		t.Fatalf("empty WAL file not present")
+	}
+
 	if err := CheckpointRemove(emptyPath); err != nil {
 		t.Fatalf("failed to checkpoint empty database in WAL mode: %s", err.Error())
 	}
+	if fileExists(emptyPath + "-wal") {
+		t.Fatalf("empty WAL file still present")
+	}
 
-	// WAL-mode database with WAL files.
+	// WAL-mode database with non-empty WAL files.
 	path := mustTempFile()
 	defer os.Remove(path)
 	db, err := Open(path, false, true)

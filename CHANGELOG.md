@@ -1,3 +1,7 @@
+## v9.3.21 (unreleased)
+### Implementation changes and bug fixes
+- [PR #2465](https://github.com/rqlite/rqlite/pull/2465): Further improvements to SQLite WAL checkpointing.
+
 ## v9.3.20 (February 3rd 2026)
 ### Implementation changes and bug fixes
 - [PR #2461](https://github.com/rqlite/rqlite/pull/2461): Switch to `Synchronous=FULL` mode when checkpointing database. Possible fix for [#2458](https://github.com/rqlite/rqlite/issues/2458).

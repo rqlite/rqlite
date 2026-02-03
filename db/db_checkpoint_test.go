@@ -14,9 +14,8 @@ import (
 )
 
 // Test_WALDatabaseCheckpointOKNoWrites tests that a checkpoint succeeds
-// even when data has been written to the database.
+// even when no data has been written to the database.
 func Test_WALDatabaseCheckpointOKNoWrites(t *testing.T) {
-	t.Skip()
 	path := mustTempFile()
 	defer os.Remove(path)
 

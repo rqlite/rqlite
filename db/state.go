@@ -36,6 +36,10 @@ var (
 	// ErrWALAlreadyExists is returned when attempting to replay WAL files but a WAL file
 	// already exists alongside the database file.
 	ErrWALAlreadyExists = errors.New("cannot replay WAL files: existing WAL file present")
+
+	// ErrWALStilExists is returned when a WAL file still exists after checkpointing and
+	// closing the database.
+	ErrWALStillExists = errors.New("WAL file still exists after checkpointing and closing the database")
 )
 
 // SynchronousMode is SQLite synchronous mode.
@@ -321,8 +325,10 @@ func EnsureWALMode(path string) error {
 	return db.Close()
 }
 
-// CheckpointRemove checkpoints any WAL files into the database file at the given
-// given path. Checkpointing a database in DELETE mode is an error.
+// CheckpointRemove checkpoints any WAL file into the database file at the given
+// given path. The function confirms that the WAL file has been removed before returning.
+//
+// Checkpointing a database in DELETE mode is an error.
 func CheckpointRemove(path string) error {
 	d, err := IsDELETEModeEnabledSQLiteFile(path)
 	if err != nil {
@@ -337,10 +343,31 @@ func CheckpointRemove(path string) error {
 	if err != nil {
 		return err
 	}
+
+	// Ensure changes are flushed to disk.
 	if err := db.SetSynchronousMode(SynchronousFull); err != nil {
 		return fmt.Errorf("failed to set synchronous mode to FULL: %w", err)
 	}
-	return db.Close()
+
+	// Explicitly checkpoint the WAL to be absolutely sure.
+	meta, err := db.Checkpoint(CheckpointTruncate)
+	if err != nil {
+		return fmt.Errorf("failed to checkpoint WAL: %w", err)
+	}
+	if !meta.Success() {
+		return fmt.Errorf("checkpoint not successful: %v", meta)
+	}
+
+	// Now close the database which checkpoint and removes the WAL and SHM files.
+	if err := db.Close(); err != nil {
+		return fmt.Errorf("failed to close database after checkpoint: %w", err)
+	}
+
+	// Confirm that the WAL file is gone.
+	if fileExists(path + "-wal") {
+		return ErrWALStillExists
+	}
+	return nil
 }
 
 // RemoveWALFiles removes the WAL and SHM files associated with the given path,
