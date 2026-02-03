@@ -162,6 +162,7 @@ func ValidateExtension(path string) error {
 }
 
 // MakeDSN returns a SQLite DSN for the given path, with the given options.
+// The returned DSN always sets Synchronous=OFF.
 func MakeDSN(path string, readOnly, fkEnabled, walEnabled bool) string {
 	opts := url.Values{}
 	if readOnly {
@@ -321,7 +322,8 @@ func EnsureWALMode(path string) error {
 }
 
 // CheckpointRemove checkpoints any WAL files into the database file at the given
-// given path. Checkpointing a database in DELETE mode is an error.
+// given path. Checkpointing a database in DELETE mode is an error. The database
+// file is left in FULL synchronous mode.
 func CheckpointRemove(path string) error {
 	d, err := IsDELETEModeEnabledSQLiteFile(path)
 	if err != nil {
@@ -336,6 +338,7 @@ func CheckpointRemove(path string) error {
 	if err != nil {
 		return err
 	}
+	db.SetSynchronousMode(SynchronousFull)
 	return db.Close()
 }
 
