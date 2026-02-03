@@ -1353,12 +1353,6 @@ func (db *DB) Request(req *command.Request, xTime bool) ([]*command.ExecuteQuery
 // RequestWithContext processes a request that can contain both executes and queries,
 // using the given context.
 func (db *DB) RequestWithContext(ctx context.Context, req *command.Request, xTime bool) ([]*command.ExecuteQueryResponse, error) {
-	// Apply DbTimeout from request if set
-	if req.DbTimeout > 0 {
-		var cancel context.CancelFunc
-		ctx, cancel = context.WithTimeout(ctx, time.Duration(req.DbTimeout))
-		defer cancel()
-	}
 	stats.Add(numRequests, int64(len(req.Statements)))
 	conn, err := db.rwDB.Conn(ctx)
 	if err != nil {
