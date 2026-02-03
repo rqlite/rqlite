@@ -322,8 +322,7 @@ func EnsureWALMode(path string) error {
 }
 
 // CheckpointRemove checkpoints any WAL files into the database file at the given
-// given path. Checkpointing a database in DELETE mode is an error. The database
-// file is left in FULL synchronous mode.
+// given path. Checkpointing a database in DELETE mode is an error.
 func CheckpointRemove(path string) error {
 	d, err := IsDELETEModeEnabledSQLiteFile(path)
 	if err != nil {
