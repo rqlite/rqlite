@@ -42,7 +42,7 @@ rm -f "$meta_json"
 log "tarball_url=$sqliteai_vector"
 
 log "[3/7] Download tarball"
-if ! curl -fL --retry 3 --retry-delay 2 "$sqliteai_vector" -o sqliteai-vector.tar.gz; then
+if ! curl -fL --retry 5 --retry-delay 5 "$sqliteai_vector" -o sqliteai-vector.tar.gz; then
     log "FAIL [3/7] curl tarball"
     exit 1
 fi
