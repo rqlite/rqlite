@@ -1,4 +1,4 @@
-## v9.3.21 (unreleased)
+## v9.3.21 (February 4th 2026)
 ### Implementation changes and bug fixes
 - [PR #2465](https://github.com/rqlite/rqlite/pull/2465): Further improvements to SQLite WAL checkpointing.
 - [PR #2467](https://github.com/rqlite/rqlite/pull/2467): Add `context.Context` to core layers of rqlite code.
