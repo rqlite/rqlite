@@ -1454,6 +1454,13 @@ func (s *Store) Query(ctx context.Context, qr *proto.QueryRequest) (rows []*prot
 		return nil, 0, 0, err
 	}
 
+	// Apply db_timeout to context if specified
+	if qr.Request.DbTimeout > 0 {
+		var cancel context.CancelFunc
+		ctx, cancel = context.WithTimeout(ctx, time.Duration(qr.Request.DbTimeout))
+		defer cancel()
+	}
+
 	level = qr.Level
 	if level == proto.ConsistencyLevel_AUTO {
 		level = proto.ConsistencyLevel_WEAK
