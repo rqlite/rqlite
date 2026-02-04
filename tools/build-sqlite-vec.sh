@@ -22,7 +22,7 @@ sqlitevec_url=$(curl -s https://api.github.com/repos/asg017/sqlite-vec/releases/
 log "Downloading sqlite-vec from: $sqlitevec_url"
 
 log "[2/5] Download tarball"
-curl --retry 3 --retry-delay 2 -L "$sqlitevec_url" -o sqlite-vec.tar.gz
+curl --retry 5 --retry-delay 5 -L "$sqlitevec_url" -o sqlite-vec.tar.gz
 
 log "[3/5] Extract tarball"
 tar xvfz sqlite-vec.tar.gz
