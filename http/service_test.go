@@ -1795,6 +1795,10 @@ func (m *MockStore) Stepdown(wait bool, id string) error {
 	return nil
 }
 
+func (m *MockStore) LeaderAddr() (string, error) {
+	return m.leaderAddr, nil
+}
+
 type mockClusterService struct {
 	apiAddr      string
 	executeFn    func(er *command.ExecuteRequest, addr string, t time.Duration) ([]*command.ExecuteQueryResponse, uint64, error)

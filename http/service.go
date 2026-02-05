@@ -29,6 +29,7 @@ import (
 	"github.com/rqlite/rqlite/v9/db"
 	"github.com/rqlite/rqlite/v9/http/licenses"
 	"github.com/rqlite/rqlite/v9/internal/rtls"
+	"github.com/rqlite/rqlite/v9/proxy"
 	"github.com/rqlite/rqlite/v9/queue"
 	"github.com/rqlite/rqlite/v9/store"
 )
@@ -105,6 +106,9 @@ type Store interface {
 	// the cluster. If id is non-empty, leadership will be transferred to the
 	// node with the given ID.
 	Stepdown(wait bool, id string) error
+
+	// LeaderAddr returns the Raft address of the current leader.
+	LeaderAddr() (string, error)
 }
 
 // GetNodeMetaer is the interface that wraps the GetNodeMeta method.
@@ -335,6 +339,7 @@ type Service struct {
 	ln         net.Listener // Service listener
 
 	store Store // The Raft-backed database store.
+	proxy *proxy.Proxy
 
 	queueDone chan struct{}
 	stmtQueue *queue.Queue[*proto.Statement] // Queue for queued executes
@@ -374,9 +379,11 @@ type Service struct {
 // New returns an uninitialized HTTP service. If credentials is nil, then
 // the service performs no authentication and authorization checks.
 func New(addr string, store Store, cluster Cluster, credentials CredentialStore) *Service {
+	lg := log.New(os.Stderr, "[http] ", log.LstdFlags)
 	return &Service{
 		addr:                addr,
 		store:               store,
+		proxy:               proxy.New(store, cluster, lg),
 		DefaultQueueCap:     1024,
 		DefaultQueueBatchSz: 128,
 		DefaultQueueTimeout: 100 * time.Millisecond,
@@ -384,7 +391,7 @@ func New(addr string, store Store, cluster Cluster, credentials CredentialStore)
 		start:               time.Now(),
 		statuses:            make(map[string]StatusReporter),
 		credentialStore:     credentials,
-		logger:              log.New(os.Stderr, "[http] ", log.LstdFlags),
+		logger:              lg,
 	}
 }
 
@@ -606,35 +613,19 @@ func (s *Service) handleRemove(w http.ResponseWriter, r *http.Request, qp QueryP
 		Id: remoteID,
 	}
 
-	err = s.store.Remove(r.Context(), rn)
+	err = s.proxy.Remove(r.Context(), rn, makeCredentials(r), qp.Timeout(defaultTimeout), qp.Redirect())
 	if err != nil {
-		if err == store.ErrNotLeader {
-			if s.DoRedirect(w, r, qp) {
-				return
-			}
-
-			addr, err := s.LeaderAddr()
-			if err != nil {
-				if errors.Is(err, ErrLeaderNotFound) {
-					stats.Add(numLeaderNotFound, 1)
-					http.Error(w, ErrLeaderNotFound.Error(), http.StatusServiceUnavailable)
-					return
-				}
-				http.Error(w, fmt.Sprintf("leader address: %s", err.Error()), http.StatusInternalServerError)
-				return
-			}
-
-			w.Header().Add(ServedByHTTPHeader, addr)
-			removeErr := s.cluster.RemoveNode(r.Context(), rn, addr, makeCredentials(r), qp.Timeout(defaultTimeout))
-			if removeErr != nil {
-				if removeErr.Error() == "unauthorized" {
-					http.Error(w, "remote remove node not authorized", http.StatusUnauthorized)
-				} else {
-					http.Error(w, removeErr.Error(), http.StatusInternalServerError)
-				}
-				return
-			}
-			stats.Add(numRemoteRemoveNode, 1)
+		if errors.Is(err, proxy.ErrNotLeader) {
+			s.DoRedirect(w, r, qp)
+			return
+		}
+		if errors.Is(err, proxy.ErrLeaderNotFound) {
+			stats.Add(numLeaderNotFound, 1)
+			http.Error(w, proxy.ErrLeaderNotFound.Error(), http.StatusServiceUnavailable)
+			return
+		}
+		if errors.Is(err, proxy.ErrUnauthorized) {
+			http.Error(w, "remote remove node not authorized", http.StatusUnauthorized)
 			return
 		}
 		http.Error(w, err.Error(), http.StatusInternalServerError)
@@ -663,37 +654,22 @@ func (s *Service) handleBackup(w http.ResponseWriter, r *http.Request, qp QueryP
 	}
 	addBackupFormatHeader(w, qp)
 
-	err := s.store.Backup(r.Context(), br, w)
+	err := s.proxy.Backup(r.Context(), br, w, makeCredentials(r), qp.Timeout(defaultTimeout), qp.Redirect())
 	if err != nil {
-		if err == store.ErrNotLeader {
-			if s.DoRedirect(w, r, qp) {
-				return
-			}
-
-			addr, err := s.LeaderAddr()
-			if err != nil {
-				if errors.Is(err, ErrLeaderNotFound) {
-					stats.Add(numLeaderNotFound, 1)
-					http.Error(w, ErrLeaderNotFound.Error(), http.StatusServiceUnavailable)
-					return
-				}
-				http.Error(w, fmt.Sprintf("leader address: %s", err.Error()), http.StatusInternalServerError)
-				return
-			}
-
-			w.Header().Add(ServedByHTTPHeader, addr)
-			backupErr := s.cluster.Backup(r.Context(), br, addr, makeCredentials(r), qp.Timeout(defaultTimeout), w)
-			if backupErr != nil {
-				if backupErr.Error() == "unauthorized" {
-					http.Error(w, "remote backup not authorized", http.StatusUnauthorized)
-				} else {
-					http.Error(w, backupErr.Error(), http.StatusInternalServerError)
-				}
-				return
-			}
-			stats.Add(numRemoteBackups, 1)
+		if errors.Is(err, proxy.ErrNotLeader) {
+			s.DoRedirect(w, r, qp)
 			return
-		} else if err == store.ErrInvalidVacuum {
+		}
+		if errors.Is(err, proxy.ErrLeaderNotFound) {
+			stats.Add(numLeaderNotFound, 1)
+			http.Error(w, proxy.ErrLeaderNotFound.Error(), http.StatusServiceUnavailable)
+			return
+		}
+		if errors.Is(err, proxy.ErrUnauthorized) {
+			http.Error(w, "remote backup not authorized", http.StatusUnauthorized)
+			return
+		}
+		if err == store.ErrInvalidVacuum {
 			http.Error(w, err.Error(), http.StatusBadRequest)
 			return
 		}
@@ -716,24 +692,21 @@ func (s *Service) handleLoad(w http.ResponseWriter, r *http.Request, qp QueryPar
 		return
 	}
 
-	// Determine some perhaps-needed details.
-	ldrAddr, err := s.LeaderAddr()
-	if err != nil {
-		if errors.Is(err, ErrLeaderNotFound) {
+	handleProxyErr := func(err error) bool {
+		if errors.Is(err, proxy.ErrNotLeader) {
+			s.DoRedirect(w, r, qp)
+			return true
+		}
+		if errors.Is(err, proxy.ErrLeaderNotFound) {
 			stats.Add(numLeaderNotFound, 1)
-			http.Error(w, ErrLeaderNotFound.Error(), http.StatusServiceUnavailable)
-			return
+			http.Error(w, proxy.ErrLeaderNotFound.Error(), http.StatusServiceUnavailable)
+			return true
 		}
-		http.Error(w, fmt.Sprintf("leader address: %s", err.Error()), http.StatusInternalServerError)
-		return
-	}
-
-	handleRemoteErr := func(err error) {
-		if err.Error() == "unauthorized" {
+		if errors.Is(err, proxy.ErrUnauthorized) {
 			http.Error(w, "remote load not authorized", http.StatusUnauthorized)
-		} else {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return true
 		}
+		return false
 	}
 
 	resp := NewResponse()
@@ -750,24 +723,13 @@ func (s *Service) handleLoad(w http.ResponseWriter, r *http.Request, qp QueryPar
 			Data: b,
 		}
 
-		err := s.store.Load(r.Context(), lr)
-		if err != nil && err != store.ErrNotLeader {
+		err := s.proxy.Load(r.Context(), lr, makeCredentials(r), qp.Timeout(defaultTimeout), qp.Retries(0), qp.Redirect())
+		if err != nil {
+			if handleProxyErr(err) {
+				return
+			}
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
-		} else if err != nil && err == store.ErrNotLeader {
-			if s.DoRedirect(w, r, qp) {
-				return
-			}
-
-			w.Header().Add(ServedByHTTPHeader, ldrAddr)
-			loadErr := s.cluster.Load(r.Context(), lr, ldrAddr, makeCredentials(r), qp.Timeout(defaultTimeout), qp.Retries(0))
-			if loadErr != nil {
-				handleRemoteErr(loadErr)
-				return
-			}
-			stats.Add(numRemoteLoads, 1)
-			// Allow this if block to exit, so response remains as before request
-			// forwarding was put in place.
 		}
 	} else {
 		// No JSON structure expected for this API, just a bunch of SQL statements.
@@ -775,30 +737,14 @@ func (s *Service) handleLoad(w http.ResponseWriter, r *http.Request, qp QueryPar
 		er := executeRequestFromStrings(queries, qp.Timings(), false)
 		er.Request.RollbackOnError = true
 
-		response, _, err := s.store.Execute(r.Context(), er)
-		if err != nil {
-			if err == store.ErrNotLeader {
-				if s.DoRedirect(w, r, qp) {
-					return
-				}
-
-				w.Header().Add(ServedByHTTPHeader, ldrAddr)
-				var exErr error
-				response, _, exErr = s.cluster.Execute(r.Context(), er, ldrAddr, makeCredentials(r),
-					qp.Timeout(defaultTimeout), qp.Retries(0))
-				if exErr != nil {
-					handleRemoteErr(exErr)
-					return
-				}
-				resp.Results.ExecuteQueryResponse = response
-				stats.Add(numRemoteLoads, 1)
-			} else {
-				// Local execute failed for some reason other than not
-				// being the leader. Nothing we can do here.
-				resp.Error = err.Error()
+		response, _, resultsErr := s.proxy.Execute(r.Context(), er, makeCredentials(r),
+			qp.Timeout(defaultTimeout), qp.Retries(0), qp.Redirect())
+		if resultsErr != nil {
+			if handleProxyErr(resultsErr) {
+				return
 			}
+			resp.Error = resultsErr.Error()
 		} else {
-			// Successful local execute.
 			resp.Results.ExecuteQueryResponse = response
 		}
 		resp.end = time.Now()
@@ -1114,39 +1060,18 @@ func (s *Service) handleLeader(w http.ResponseWriter, r *http.Request, qp QueryP
 			nodeID = reqBody.ID
 		}
 
-		if err := s.store.Stepdown(wait, nodeID); err != nil {
-			if err == store.ErrNotLeader {
-				if s.DoRedirect(w, r, qp) {
-					return
-				}
-
-				addr, err := s.LeaderAddr()
-				if err != nil {
-					if errors.Is(err, ErrLeaderNotFound) {
-						stats.Add(numLeaderNotFound, 1)
-						http.Error(w, ErrLeaderNotFound.Error(), http.StatusServiceUnavailable)
-						return
-					}
-					http.Error(w, fmt.Sprintf("leader address: %s", err.Error()), http.StatusInternalServerError)
-					return
-				}
-
-				w.Header().Add(ServedByHTTPHeader, addr)
-				sr := &proto.StepdownRequest{
-					Id:   nodeID,
-					Wait: wait,
-				}
-				stepdownErr := s.cluster.Stepdown(sr, addr, makeCredentials(r), qp.Timeout(defaultTimeout))
-				if stepdownErr != nil {
-					if stepdownErr.Error() == "unauthorized" {
-						http.Error(w, "remote stepdown not authorized", http.StatusUnauthorized)
-					} else {
-						http.Error(w, stepdownErr.Error(), http.StatusInternalServerError)
-					}
-					return
-				}
-				stats.Add(numRemoteStepdowns, 1)
-				w.WriteHeader(http.StatusOK)
+		if err := s.proxy.Stepdown(wait, nodeID, makeCredentials(r), qp.Timeout(defaultTimeout), qp.Redirect()); err != nil {
+			if errors.Is(err, proxy.ErrNotLeader) {
+				s.DoRedirect(w, r, qp)
+				return
+			}
+			if errors.Is(err, proxy.ErrLeaderNotFound) {
+				stats.Add(numLeaderNotFound, 1)
+				http.Error(w, proxy.ErrLeaderNotFound.Error(), http.StatusServiceUnavailable)
+				return
+			}
+			if errors.Is(err, proxy.ErrUnauthorized) {
+				http.Error(w, "remote stepdown not authorized", http.StatusUnauthorized)
 				return
 			}
 
@@ -1362,36 +1287,22 @@ func (s *Service) execute(w http.ResponseWriter, r *http.Request, qp QueryParams
 		Timings: qp.Timings(),
 	}
 
-	results, raftIndex, resultsErr := s.store.Execute(r.Context(), er)
-	if resultsErr != nil && resultsErr == store.ErrNotLeader {
-		if s.DoRedirect(w, r, qp) {
+	results, raftIndex, resultsErr := s.proxy.Execute(r.Context(), er, makeCredentials(r),
+		qp.Timeout(defaultTimeout), qp.Retries(0), qp.Redirect())
+	if resultsErr != nil {
+		if errors.Is(resultsErr, proxy.ErrNotLeader) {
+			s.DoRedirect(w, r, qp)
 			return
 		}
-
-		addr, err := s.LeaderAddr()
-		if err != nil {
-			if errors.Is(err, ErrLeaderNotFound) {
-				stats.Add(numLeaderNotFound, 1)
-				http.Error(w, ErrLeaderNotFound.Error(), http.StatusServiceUnavailable)
-				return
-			}
-			http.Error(w, fmt.Sprintf("leader address: %s", err.Error()), http.StatusInternalServerError)
+		if errors.Is(resultsErr, proxy.ErrLeaderNotFound) {
+			stats.Add(numLeaderNotFound, 1)
+			http.Error(w, proxy.ErrLeaderNotFound.Error(), http.StatusServiceUnavailable)
 			return
 		}
-
-		w.Header().Add(ServedByHTTPHeader, addr)
-		results, raftIndex, resultsErr = s.cluster.Execute(r.Context(), er, addr, makeCredentials(r),
-			qp.Timeout(defaultTimeout), qp.Retries(0))
-		if resultsErr != nil {
-			stats.Add(numRemoteExecutionsFailed, 1)
-			if resultsErr.Error() == "unauthorized" {
-				http.Error(w, "remote Execute not authorized", http.StatusUnauthorized)
-				return
-			}
-			resultsErr = fmt.Errorf("node failed to process Execute on remote node at %s: %s",
-				addr, resultsErr.Error())
+		if errors.Is(resultsErr, proxy.ErrUnauthorized) {
+			http.Error(w, "remote Execute not authorized", http.StatusUnauthorized)
+			return
 		}
-		stats.Add(numRemoteExecutions, 1)
 	}
 
 	if resultsErr != nil {
@@ -1467,35 +1378,22 @@ func (s *Service) handleQuery(w http.ResponseWriter, r *http.Request, qp QueryPa
 		LinearizableTimeout: qp.LinearizableTimeout(defaultLinearTimeout).Nanoseconds(),
 	}
 
-	results, _, raftIndex, resultsErr := s.store.Query(r.Context(), qr)
-	if resultsErr != nil && resultsErr == store.ErrNotLeader {
-		if s.DoRedirect(w, r, qp) {
+	results, raftIndex, resultsErr := s.proxy.Query(r.Context(), qr, makeCredentials(r),
+		qp.Timeout(defaultTimeout), qp.Redirect())
+	if resultsErr != nil {
+		if errors.Is(resultsErr, proxy.ErrNotLeader) {
+			s.DoRedirect(w, r, qp)
 			return
 		}
-
-		addr, err := s.LeaderAddr()
-		if err != nil {
-			if errors.Is(err, ErrLeaderNotFound) {
-				stats.Add(numLeaderNotFound, 1)
-				http.Error(w, ErrLeaderNotFound.Error(), http.StatusServiceUnavailable)
-				return
-			}
-			http.Error(w, fmt.Sprintf("leader address: %s", err.Error()), http.StatusInternalServerError)
+		if errors.Is(resultsErr, proxy.ErrLeaderNotFound) {
+			stats.Add(numLeaderNotFound, 1)
+			http.Error(w, proxy.ErrLeaderNotFound.Error(), http.StatusServiceUnavailable)
 			return
 		}
-
-		w.Header().Add(ServedByHTTPHeader, addr)
-		results, raftIndex, resultsErr = s.cluster.Query(r.Context(), qr, addr, makeCredentials(r), qp.Timeout(defaultTimeout))
-		if resultsErr != nil {
-			stats.Add(numRemoteQueriesFailed, 1)
-			if resultsErr.Error() == "unauthorized" {
-				http.Error(w, "remote query not authorized", http.StatusUnauthorized)
-				return
-			}
-			resultsErr = fmt.Errorf("node failed to process Query on remote node at %s: %s",
-				addr, resultsErr.Error())
+		if errors.Is(resultsErr, proxy.ErrUnauthorized) {
+			http.Error(w, "remote query not authorized", http.StatusUnauthorized)
+			return
 		}
-		stats.Add(numRemoteQueries, 1)
 	}
 
 	if resultsErr != nil {
@@ -1553,36 +1451,22 @@ func (s *Service) handleRequest(w http.ResponseWriter, r *http.Request, qp Query
 		FreshnessStrict: qp.FreshnessStrict(),
 	}
 
-	results, _, raftIndex, resultsErr := s.store.Request(r.Context(), eqr)
-	if resultsErr != nil && resultsErr == store.ErrNotLeader {
-		if s.DoRedirect(w, r, qp) {
+	results, _, raftIndex, resultsErr := s.proxy.Request(r.Context(), eqr, makeCredentials(r),
+		qp.Timeout(defaultTimeout), qp.Retries(0), qp.Redirect())
+	if resultsErr != nil {
+		if errors.Is(resultsErr, proxy.ErrNotLeader) {
+			s.DoRedirect(w, r, qp)
 			return
 		}
-
-		addr, err := s.LeaderAddr()
-		if err != nil {
-			if errors.Is(err, ErrLeaderNotFound) {
-				stats.Add(numLeaderNotFound, 1)
-				http.Error(w, ErrLeaderNotFound.Error(), http.StatusServiceUnavailable)
-				return
-			}
-			http.Error(w, fmt.Sprintf("leader address: %s", err.Error()), http.StatusInternalServerError)
+		if errors.Is(resultsErr, proxy.ErrLeaderNotFound) {
+			stats.Add(numLeaderNotFound, 1)
+			http.Error(w, proxy.ErrLeaderNotFound.Error(), http.StatusServiceUnavailable)
 			return
 		}
-
-		w.Header().Add(ServedByHTTPHeader, addr)
-		results, _, raftIndex, resultsErr = s.cluster.Request(r.Context(), eqr, addr, makeCredentials(r),
-			qp.Timeout(defaultTimeout), qp.Retries(0))
-		if resultsErr != nil {
-			stats.Add(numRemoteRequestsFailed, 1)
-			if resultsErr.Error() == "unauthorized" {
-				http.Error(w, "remote Request not authorized", http.StatusUnauthorized)
-				return
-			}
-			resultsErr = fmt.Errorf("node failed to process Request on remote node at %s: %s",
-				addr, resultsErr.Error())
+		if errors.Is(resultsErr, proxy.ErrUnauthorized) {
+			http.Error(w, "remote Request not authorized", http.StatusUnauthorized)
+			return
 		}
-		stats.Add(numRemoteRequests, 1)
 	}
 
 	if resultsErr != nil {
@@ -1777,35 +1661,25 @@ func (s *Service) runQueue() {
 			// a "checkpoint" through the queue.
 			if er.Request.Statements != nil {
 				for {
-					_, _, err = s.store.Execute(context.Background(), er)
+					_, _, err = s.proxy.Execute(context.Background(), er, nil, defaultTimeout, 0, false)
 					if err == nil {
 						// Success!
 						break
 					}
 
-					if err == store.ErrNotLeader {
-						ldr, err := s.store.Leader()
-						if err != nil || ldr.Addr == "" {
-							s.logger.Printf("execute queue can't find leader for sequence number %d on node %s",
-								req.SequenceNumber, s.Addr().String())
-							stats.Add(numQueuedExecutionsNoLeader, 1)
+					if errors.Is(err, proxy.ErrLeaderNotFound) {
+						s.logger.Printf("execute queue can't find leader for sequence number %d on node %s",
+							req.SequenceNumber, s.Addr().String())
+						stats.Add(numQueuedExecutionsNoLeader, 1)
+					} else {
+						s.logger.Printf("execute queue write failed for sequence number %d on node %s: %s",
+							req.SequenceNumber, s.Addr().String(), err.Error())
+						if err.Error() == "leadership lost while committing log" {
+							stats.Add(numQueuedExecutionsLeadershipLost, 1)
+						} else if err.Error() == "not leader" {
+							stats.Add(numQueuedExecutionsNotLeader, 1)
 						} else {
-							_, _, err = s.cluster.Execute(context.Background(), er, ldr.Addr, nil, defaultTimeout, 0)
-							if err != nil {
-								s.logger.Printf("execute queue write failed for sequence number %d on node %s: %s",
-									req.SequenceNumber, s.Addr().String(), err.Error())
-								if err.Error() == "leadership lost while committing log" {
-									stats.Add(numQueuedExecutionsLeadershipLost, 1)
-								} else if err.Error() == "not leader" {
-									stats.Add(numQueuedExecutionsNotLeader, 1)
-								} else {
-									stats.Add(numQueuedExecutionsUnknownError, 1)
-								}
-							} else {
-								// Success!
-								stats.Add(numRemoteExecutions, 1)
-								break
-							}
+							stats.Add(numQueuedExecutionsUnknownError, 1)
 						}
 					}
 
