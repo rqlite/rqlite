@@ -46,32 +46,8 @@ type ResultsError interface {
 	IsAuthorized() bool
 }
 
-// Database is the interface any queryable system must implement
-type Database interface {
-	// Execute executes a slice of queries, each of which is not expected
-	// to return rows. If timings is true, then timing information will
-	// be return. If tx is true, then either all queries will be executed
-	// successfully or it will as though none executed.
-	Execute(ctx context.Context, er *proto.ExecuteRequest) ([]*proto.ExecuteQueryResponse, uint64, error)
-
-	// Query executes a slice of queries, each of which returns rows. If
-	// timings is true, then timing information will be returned. If tx
-	// is true, then all queries will take place while a read transaction
-	// is held on the database.
-	Query(ctx context.Context, qr *proto.QueryRequest) ([]*proto.QueryRows, proto.ConsistencyLevel, uint64, error)
-
-	// Request processes a slice of requests, each of which can be either
-	// an Execute or Query request.
-	Request(ctx context.Context, eqr *proto.ExecuteQueryRequest) ([]*proto.ExecuteQueryResponse, uint64, uint64, error)
-
-	// Load loads a SQLite file into the system via Raft consensus.
-	Load(ctx context.Context, lr *proto.LoadRequest) error
-}
-
 // Store is the interface the Raft-based database must implement.
 type Store interface {
-	Database
-
 	// Leader returns the Leader of the cluster
 	Leader() (*store.Server, error)
 
@@ -81,18 +57,12 @@ type Store interface {
 	// Ready returns whether the Store is ready to service requests.
 	Ready() bool
 
-	// Remove removes the node from the cluster.
-	Remove(ctx context.Context, rn *proto.RemoveNodeRequest) error
-
 	// Committed blocks until the local commit index is greater than or
 	// equal to the Leader index, as checked when the function is called.
 	Committed(timeout time.Duration) (uint64, error)
 
 	// Stats returns stats on the Store.
 	Stats() (map[string]any, error)
-
-	// Backup writes backup of the node state to dst
-	Backup(ctx context.Context, br *proto.BackupRequest, dst io.Writer) error
 
 	// Snapshot triggers a Raft Snapshot and Log Truncation.
 	Snapshot(n uint64) error
@@ -101,14 +71,6 @@ type Store interface {
 	// the Raft system. It then triggers a Raft snapshot, which will then make
 	// Raft aware of the new data.
 	ReadFrom(r io.Reader) (int64, error)
-
-	// Stepdown forces this node to relinquish leadership to another node in
-	// the cluster. If id is non-empty, leadership will be transferred to the
-	// node with the given ID.
-	Stepdown(wait bool, id string) error
-
-	// LeaderAddr returns the Raft address of the current leader.
-	LeaderAddr() (string, error)
 }
 
 // GetNodeMetaer is the interface that wraps the GetNodeMeta method.
@@ -120,27 +82,6 @@ type GetNodeMetaer interface {
 // Cluster is the interface node API services must provide
 type Cluster interface {
 	GetNodeMetaer
-
-	// Execute performs an Execute Request on a remote node.
-	Execute(ctx context.Context, er *proto.ExecuteRequest, nodeAddr string, creds *clstrPB.Credentials, timeout time.Duration, retries int) ([]*proto.ExecuteQueryResponse, uint64, error)
-
-	// Query performs an Query Request on a remote node.
-	Query(ctx context.Context, qr *proto.QueryRequest, nodeAddr string, creds *clstrPB.Credentials, timeout time.Duration) ([]*proto.QueryRows, uint64, error)
-
-	// Request performs an ExecuteQuery Request on a remote node.
-	Request(ctx context.Context, eqr *proto.ExecuteQueryRequest, nodeAddr string, creds *clstrPB.Credentials, timeout time.Duration, retries int) ([]*proto.ExecuteQueryResponse, uint64, uint64, error)
-
-	// Backup retrieves a backup from a remote node and writes to the io.Writer.
-	Backup(ctx context.Context, br *proto.BackupRequest, nodeAddr string, creds *clstrPB.Credentials, timeout time.Duration, w io.Writer) error
-
-	// Load loads a SQLite database into the node.
-	Load(ctx context.Context, lr *proto.LoadRequest, nodeAddr string, creds *clstrPB.Credentials, timeout time.Duration, retries int) error
-
-	// RemoveNode removes a node from the cluster.
-	RemoveNode(ctx context.Context, rn *proto.RemoveNodeRequest, nodeAddr string, creds *clstrPB.Credentials, timeout time.Duration) error
-
-	// Stepdown triggers leader stepdown on a remote node.
-	Stepdown(sr *proto.StepdownRequest, nodeAddr string, creds *clstrPB.Credentials, timeout time.Duration) error
 
 	// Stats returns stats on the Cluster.
 	Stats() (map[string]any, error)

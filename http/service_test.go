@@ -23,7 +23,7 @@ import (
 	"github.com/rqlite/rqlite/v9/store"
 )
 
-func newTestService(store Store, cluster Cluster, cred CredentialStore) *Service {
+func newTestService(store *MockStore, cluster *mockClusterService, cred CredentialStore) *Service {
 	p := proxy.New(store, cluster, nil)
 	return New("127.0.0.1:0", store, cluster, cred, p)
 }
