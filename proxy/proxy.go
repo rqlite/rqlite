@@ -74,7 +74,7 @@ func (p *Proxy) Execute(ctx context.Context, er *proto.ExecuteRequest, creds *cl
 	timeout time.Duration, retries int, noForward bool) ([]*proto.ExecuteQueryResponse, uint64, error) {
 
 	results, raftIndex, err := p.store.Execute(ctx, er)
-	if err != nil && err == store.ErrNotLeader {
+if err == store.ErrNotLeader {
 		if noForward {
 			return nil, 0, ErrNotLeader
 		}
