@@ -31,6 +31,7 @@ import (
 	httpd "github.com/rqlite/rqlite/v9/http"
 	"github.com/rqlite/rqlite/v9/internal/rarchive"
 	"github.com/rqlite/rqlite/v9/internal/rtls"
+	"github.com/rqlite/rqlite/v9/proxy"
 	"github.com/rqlite/rqlite/v9/store"
 	"github.com/rqlite/rqlite/v9/tcp"
 )
@@ -421,8 +422,9 @@ func createDiscoService(cfg *Config, str *store.Store) (*disco.Service, error) {
 }
 
 func startHTTPService(cfg *Config, str *store.Store, cltr *cluster.Client, credStr *auth.CredentialsStore) (*httpd.Service, error) {
-	// Create HTTP server and load authentication information.
-	s := httpd.New(cfg.HTTPAddr, str, cltr, credStr)
+	// Create proxy and HTTP server, and load authentication information.
+	p := proxy.New(str, cltr, log.New(os.Stderr, "[proxy] ", log.LstdFlags))
+	s := httpd.New(cfg.HTTPAddr, str, cltr, credStr, p)
 
 	s.CACertFile = cfg.HTTPx509CACert
 	s.CertFile = cfg.HTTPx509Cert

@@ -378,12 +378,11 @@ type Service struct {
 
 // New returns an uninitialized HTTP service. If credentials is nil, then
 // the service performs no authentication and authorization checks.
-func New(addr string, store Store, cluster Cluster, credentials CredentialStore) *Service {
-	lg := log.New(os.Stderr, "[http] ", log.LstdFlags)
+func New(addr string, store Store, cluster Cluster, credentials CredentialStore, p *proxy.Proxy) *Service {
 	return &Service{
 		addr:                addr,
 		store:               store,
-		proxy:               proxy.New(store, cluster, lg),
+		proxy:               p,
 		DefaultQueueCap:     1024,
 		DefaultQueueBatchSz: 128,
 		DefaultQueueTimeout: 100 * time.Millisecond,
@@ -391,7 +390,7 @@ func New(addr string, store Store, cluster Cluster, credentials CredentialStore)
 		start:               time.Now(),
 		statuses:            make(map[string]StatusReporter),
 		credentialStore:     credentials,
-		logger:              lg,
+		logger:              log.New(os.Stderr, "[http] ", log.LstdFlags),
 	}
 }
 

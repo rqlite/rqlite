@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"io"
 	"io/fs"
+	"log"
 	"net"
 	"net/http"
 	"net/url"
@@ -24,6 +25,7 @@ import (
 	"github.com/rqlite/rqlite/v9/command/encoding"
 	"github.com/rqlite/rqlite/v9/command/proto"
 	httpd "github.com/rqlite/rqlite/v9/http"
+	"github.com/rqlite/rqlite/v9/proxy"
 	"github.com/rqlite/rqlite/v9/store"
 	"github.com/rqlite/rqlite/v9/tcp"
 	rX509 "github.com/rqlite/rqlite/v9/testdata/x509"
@@ -849,7 +851,8 @@ func mustNodeEncrypted(id, dir string, enableSingle, httpEncrypt bool, mux *tcp.
 
 	clstrClient := cluster.NewClient(clstrDialer, 30*time.Second)
 	node.Client = clstrClient
-	node.Service = httpd.New("localhost:0", node.Store, clstrClient, nil)
+	p := proxy.New(node.Store, clstrClient, log.New(os.Stderr, "[proxy] ", log.LstdFlags))
+	node.Service = httpd.New("localhost:0", node.Store, clstrClient, nil, p)
 	if httpEncrypt {
 		node.Service.CertFile = node.HTTPCertPath
 		node.Service.KeyFile = node.HTTPKeyPath
