@@ -866,8 +866,9 @@ func mustNodeEncrypted(id, dir string, enableSingle, httpEncrypt bool, mux *tcp.
 	}
 	node.APIAddr = node.Service.Addr().String()
 
-	// Set API address in Cluster service
+	// Set API address in Cluster service and proxy
 	clstr.SetAPIAddr(node.APIAddr)
+	pxy.SetAPIAddr(node.APIAddr)
 
 	if err := node.Store.Open(); err != nil {
 		panic(fmt.Sprintf("failed to open store: %s", err.Error()))

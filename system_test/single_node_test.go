@@ -1874,8 +1874,9 @@ func Test_SingleNodeAutoRestore(t *testing.T) {
 	}
 	node.APIAddr = node.Service.Addr().String()
 
-	// Finally, set API address in Cluster service
+	// Finally, set API address in Cluster service and proxy
 	clstr.SetAPIAddr(node.APIAddr)
+	pxy.SetAPIAddr(node.APIAddr)
 
 	if _, err := node.WaitForLeader(); err != nil {
 		t.Fatalf("node never became leader")

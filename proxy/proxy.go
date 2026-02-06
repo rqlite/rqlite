@@ -9,6 +9,7 @@ import (
 	"errors"
 	"expvar"
 	"io"
+	"sync"
 	"time"
 
 	clstrPB "github.com/rqlite/rqlite/v9/cluster/proto"
@@ -91,6 +92,9 @@ type Cluster interface {
 type Proxy struct {
 	store   Store
 	cluster Cluster
+
+	mu      sync.RWMutex
+	apiAddr string
 }
 
 // New returns a new Proxy instance.
@@ -99,6 +103,20 @@ func New(store Store, cluster Cluster) *Proxy {
 		store:   store,
 		cluster: cluster,
 	}
+}
+
+// SetAPIAddr sets the API address the proxy is aware of.
+func (p *Proxy) SetAPIAddr(addr string) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	p.apiAddr = addr
+}
+
+// GetAPIAddr returns the previously-set API address.
+func (p *Proxy) GetAPIAddr() string {
+	p.mu.RLock()
+	defer p.mu.RUnlock()
+	return p.apiAddr
 }
 
 // Execute executes statements that modify the database. If the local store
