@@ -25,7 +25,7 @@ import (
 )
 
 func newTestService(store *MockStore, cluster *mockClusterService, cred CredentialStore) *Service {
-	p := proxy.New(store, cluster, nil)
+	p := proxy.New(store, cluster)
 	return New("127.0.0.1:0", store, cluster, cred, p)
 }
 
@@ -1878,7 +1878,7 @@ func Test_Leader_GET(t *testing.T) {
 	cluster := &mockClusterService{apiAddr: "http://127.0.0.1:4001"}
 	cred := &mockCredentialStore{HasPermOK: true}
 
-	s := New("127.0.0.1:4001", store, cluster, cred, proxy.New(store, cluster, nil))
+	s := New("127.0.0.1:4001", store, cluster, cred, proxy.New(store, cluster))
 
 	// Test GET request
 	req, err := http.NewRequest("GET", "/leader", nil)
@@ -1913,7 +1913,7 @@ func Test_Leader_POST(t *testing.T) {
 	cluster := &mockClusterService{apiAddr: "http://127.0.0.1:4001"}
 	cred := &mockCredentialStore{HasPermOK: true}
 
-	s := New("127.0.0.1:4001", store, cluster, cred, proxy.New(store, cluster, nil))
+	s := New("127.0.0.1:4001", store, cluster, cred, proxy.New(store, cluster))
 
 	// Test POST request without wait
 	req, err := http.NewRequest("POST", "/leader", nil)
@@ -1976,7 +1976,7 @@ func Test_LeaderPOST_ForwardToLeader(t *testing.T) {
 	}
 	cred := &mockCredentialStore{HasPermOK: true}
 
-	s := New("127.0.0.1:4001", store, cluster, cred, proxy.New(store, cluster, nil))
+	s := New("127.0.0.1:4001", store, cluster, cred, proxy.New(store, cluster))
 
 	req, err := http.NewRequest("POST", "/leader", nil)
 	if err != nil {
@@ -2009,7 +2009,7 @@ func Test_LeaderPOST_ForwardError(t *testing.T) {
 	}
 	cred := &mockCredentialStore{HasPermOK: true}
 
-	s := New("127.0.0.1:4001", store, cluster, cred, proxy.New(store, cluster, nil))
+	s := New("127.0.0.1:4001", store, cluster, cred, proxy.New(store, cluster))
 
 	req, err := http.NewRequest("POST", "/leader", nil)
 	if err != nil {
@@ -2032,7 +2032,7 @@ func Test_LeaderMethodNotAllowed(t *testing.T) {
 	cluster := &mockClusterService{apiAddr: "http://127.0.0.1:4001"}
 	cred := &mockCredentialStore{HasPermOK: true}
 
-	s := New("127.0.0.1:4001", store, cluster, cred, proxy.New(store, cluster, nil))
+	s := New("127.0.0.1:4001", store, cluster, cred, proxy.New(store, cluster))
 
 	req, err := http.NewRequest("DELETE", "/leader", nil)
 	if err != nil {
@@ -2062,7 +2062,7 @@ func Test_Leader_POST_JSON_TargetNode(t *testing.T) {
 	cluster := &mockClusterService{apiAddr: "http://127.0.0.1:4001"}
 	cred := &mockCredentialStore{HasPermOK: true}
 
-	s := New("127.0.0.1:4001", store, cluster, cred, proxy.New(store, cluster, nil))
+	s := New("127.0.0.1:4001", store, cluster, cred, proxy.New(store, cluster))
 
 	// Test with JSON body specifying target node
 	reqBody := `{"id": "node1"}`
@@ -2105,7 +2105,7 @@ func Test_Leader_POST_JSON_EmptyID(t *testing.T) {
 	cluster := &mockClusterService{apiAddr: "http://127.0.0.1:4001"}
 	cred := &mockCredentialStore{HasPermOK: true}
 
-	s := New("127.0.0.1:4001", store, cluster, cred, proxy.New(store, cluster, nil))
+	s := New("127.0.0.1:4001", store, cluster, cred, proxy.New(store, cluster))
 
 	// Test with JSON body but empty ID (should behave like no JSON)
 	reqBody := `{"id": ""}`
@@ -2135,7 +2135,7 @@ func Test_Leader_POST_JSON_InvalidJSON(t *testing.T) {
 	cluster := &mockClusterService{apiAddr: "http://127.0.0.1:4001"}
 	cred := &mockCredentialStore{HasPermOK: true}
 
-	s := New("127.0.0.1:4001", store, cluster, cred, proxy.New(store, cluster, nil))
+	s := New("127.0.0.1:4001", store, cluster, cred, proxy.New(store, cluster))
 
 	// Test with invalid JSON
 	reqBody := `{"id": "node1"`
@@ -2175,7 +2175,7 @@ func Test_Leader_POST_JSON_ForwardToLeader(t *testing.T) {
 	}
 	cred := &mockCredentialStore{HasPermOK: true}
 
-	s := New("127.0.0.1:4001", store, cluster, cred, proxy.New(store, cluster, nil))
+	s := New("127.0.0.1:4001", store, cluster, cred, proxy.New(store, cluster))
 
 	// Test forwarding with target node ID
 	reqBody := `{"id": "node1"}`
@@ -2608,7 +2608,7 @@ func newSQLAnalyzeHost(t *testing.T) string {
 		leaderAddr: "foo:1234",
 	}
 	c := &mockClusterService{}
-	s := New("127.0.0.1:0", m, c, nil)
+	s := newTestService(m, c, nil)
 	if err := s.Start(); err != nil {
 		t.Fatalf("failed to start service: %v", err)
 	}

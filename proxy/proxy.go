@@ -9,6 +9,7 @@ import (
 	"errors"
 	"io"
 	"log"
+	"os"
 	"time"
 
 	clstrPB "github.com/rqlite/rqlite/v9/cluster/proto"
@@ -59,11 +60,11 @@ type Proxy struct {
 }
 
 // New returns a new Proxy instance.
-func New(store Store, cluster Cluster, logger *log.Logger) *Proxy {
+func New(store Store, cluster Cluster) *Proxy {
 	return &Proxy{
 		store:   store,
 		cluster: cluster,
-		logger:  logger,
+		logger:  log.New(os.Stderr, "[proxy] ", log.LstdFlags),
 	}
 }
 

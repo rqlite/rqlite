@@ -4,8 +4,6 @@ import (
 	"context"
 	"errors"
 	"io"
-	"log"
-	"os"
 	"testing"
 	"time"
 
@@ -143,7 +141,7 @@ func (m *mockCluster) Stepdown(sr *proto.StepdownRequest, nodeAddr string, creds
 }
 
 func newTestProxy(s Store, c Cluster) *Proxy {
-	return New(s, c, log.New(os.Stderr, "[proxy-test] ", log.LstdFlags))
+	return New(s, c)
 }
 
 func Test_Execute_LocalSuccess(t *testing.T) {
