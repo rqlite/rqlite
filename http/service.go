@@ -324,6 +324,7 @@ func ResetStats() {
 	stats.Add(numLoadAborted, 0)
 	stats.Add(numBoot, 0)
 	stats.Add(numSnapshots, 0)
+	stats.Add(numSQLAnalyze, 0)
 	stats.Add(numAuthOK, 0)
 	stats.Add(numAuthFail, 0)
 	stats.Add(numTLSCertFetched, 0)
@@ -645,6 +646,66 @@ func (s *Service) handleRemove(w http.ResponseWriter, r *http.Request, qp QueryP
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
+}
+
+// handleSQLAnalyze handles requests to analyze and show SQL rewriting.
+func (s *Service) handleSQLAnalyze(w http.ResponseWriter, r *http.Request, qp QueryParams) {
+	w.Header().Set("Content-Type", "application/json; charset=utf-8")
+
+	if !s.CheckRequestPerm(r, auth.PermQuery) {
+		w.WriteHeader(http.StatusUnauthorized)
+		return
+	}
+
+	if r.Method != "POST" {
+		w.WriteHeader(http.StatusMethodNotAllowed)
+		return
+	}
+
+	stmts, err := ParseRequest(r.Body)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	analyzeStmt := func(sqlStr string, rwRand, rwTime bool) (res sqlAnalyzeStmtResult, retErr error) {
+		defer func() {
+			if r := recover(); r != nil {
+				retErr = fmt.Errorf("panic during SQL analysis: %v", r)
+			}
+		}()
+		res.Original = sqlStr
+
+		parsed, err := rsql.NewParser(strings.NewReader(sqlStr)).ParseStatement()
+		if err != nil {
+			res.Error = err.Error()
+			return res, nil
+		}
+
+		rewriter := sql.NewRewriter()
+		rewriter.RewriteRand = rwRand
+		rewriter.RewriteTime = rwTime
+		rwStmt, _, _, err := rewriter.Do(parsed)
+		if err != nil {
+			res.Error = err.Error()
+			return res, nil
+		}
+
+		res.Rewritten = rwStmt.String()
+		return res, nil
+	}
+
+	results := make([]sqlAnalyzeStmtResult, len(stmts))
+	for i, stmt := range stmts {
+		r, err := analyzeStmt(stmt.Sql, !qp.NoRewriteRandom(), !qp.NoRewriteTime())
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		results[i] = r
+	}
+	resp := &sqlAnalyzeResponse{Results: results, start: time.Now()}
+	s.writeResponse(w, qp, resp)
 }
 
 // handleBackup returns the consistent database snapshot.
@@ -1950,12 +2011,9 @@ func getSubJSON(jsonBlob []byte, keyString string) (json.RawMessage, error) {
 }
 
 type sqlAnalyzeStmtResult struct {
-	Original        string `json:"original"`
-	Rewritten       string `json:"rewritten,omitempty"`
-	RewrittenRandom bool   `json:"rewritten_random,omitempty"`
-	RewrittenTime   bool   `json:"rewritten_time,omitempty"`
-	IsQuery         bool   `json:"is_query,omitempty"`
-	Error           string `json:"error,omitempty"`
+	Original  string `json:"original"`
+	Rewritten string `json:"rewritten,omitempty"`
+	Error     string `json:"error,omitempty"`
 }
 
 type sqlAnalyzeResponse struct {
@@ -1966,73 +2024,6 @@ type sqlAnalyzeResponse struct {
 
 func (r *sqlAnalyzeResponse) SetTime() {
 	r.Time = time.Since(r.start).Seconds()
-}
-
-// handleSQLAnalyze handles requests to analyze and show SQL rewriting.
-func (s *Service) handleSQLAnalyze(w http.ResponseWriter, r *http.Request, qp QueryParams) {
-	w.Header().Set("Content-Type", "application/json; charset=utf-8")
-
-	if !s.CheckRequestPerm(r, auth.PermQuery) {
-		w.WriteHeader(http.StatusUnauthorized)
-		return
-	}
-
-	if r.Method != "POST" {
-		w.WriteHeader(http.StatusMethodNotAllowed)
-		return
-	}
-
-	stmts, err := ParseRequest(r.Body)
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
-		return
-	}
-
-	analyzeStmt := func(sqlStr string, rwRand, rwTime bool) (res sqlAnalyzeStmtResult, retErr error) {
-		defer func() {
-			if r := recover(); r != nil {
-				retErr = fmt.Errorf("panic during SQL analysis: %v", r)
-			}
-		}()
-		res.Original = sqlStr
-
-		parsed, err := rsql.NewParser(strings.NewReader(sqlStr)).ParseStatement()
-		if err != nil {
-			res.Error = err.Error()
-			return res, nil
-		}
-
-		rewriter := sql.NewRewriter()
-		rewriter.RewriteRand = rwRand
-		rewriter.RewriteTime = rwTime
-		rwStmt, modified, returning, err := rewriter.Do(parsed)
-		if err != nil {
-			res.Error = err.Error()
-			return res, nil
-		}
-
-		res.Rewritten = rwStmt.String()
-		if modified {
-			lowered := strings.ToLower(sqlStr)
-			res.RewrittenRandom = sql.ContainsRandom(lowered)
-			res.RewrittenTime = sql.ContainsTime(lowered)
-		}
-		res.IsQuery = returning
-		return res, nil
-	}
-
-	results := make([]sqlAnalyzeStmtResult, len(stmts))
-	for i, stmt := range stmts {
-		r, err := analyzeStmt(stmt.Sql, !qp.NoRewriteRandom(), !qp.NoRewriteTime())
-		if err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
-			return
-		}
-		results[i] = r
-	}
-
-	resp := &sqlAnalyzeResponse{Results: results, start: time.Now()}
-	s.writeResponse(w, qp, resp)
 }
 
 func prettyEnabled(e bool) string {
