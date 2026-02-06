@@ -16,8 +16,6 @@ import (
 	"testing"
 	"time"
 
-	"log"
-
 	"github.com/rqlite/rqlite/v9/cluster"
 	"github.com/rqlite/rqlite/v9/http"
 	httpd "github.com/rqlite/rqlite/v9/http"
@@ -1868,7 +1866,7 @@ func Test_SingleNodeAutoRestore(t *testing.T) {
 
 	clstrDialer := tcp.NewDialer(cluster.MuxClusterHeader, nil)
 	clstrClient := cluster.NewClient(clstrDialer, 30*time.Second)
-	p := proxy.New(node.Store, clstrClient, log.New(os.Stderr, "[proxy] ", log.LstdFlags))
+	p := proxy.New(node.Store, clstrClient)
 	node.Service = httpd.New("localhost:0", node.Store, clstrClient, nil, p)
 
 	if err := node.Service.Start(); err != nil {

@@ -9,7 +9,6 @@ import (
 	"fmt"
 	"io"
 	"io/fs"
-	"log"
 	"net"
 	"net/http"
 	"net/url"
@@ -851,7 +850,7 @@ func mustNodeEncrypted(id, dir string, enableSingle, httpEncrypt bool, mux *tcp.
 
 	clstrClient := cluster.NewClient(clstrDialer, 30*time.Second)
 	node.Client = clstrClient
-	p := proxy.New(node.Store, clstrClient, log.New(os.Stderr, "[proxy] ", log.LstdFlags))
+	p := proxy.New(node.Store, clstrClient)
 	node.Service = httpd.New("localhost:0", node.Store, clstrClient, nil, p)
 	if httpEncrypt {
 		node.Service.CertFile = node.HTTPCertPath
