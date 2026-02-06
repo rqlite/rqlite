@@ -1,3 +1,10 @@
+## v9.4.0 (February 6th 2026)
+### New features
+- [PR #2469](https://github.com/rqlite/rqlite/pull/2469): Add `/db/sql` API to demonstrate SQL rewriting. See the [docs](https://rqlite.io/docs/api/non-deterministic/) for more details.
+
+### Implementation changes and bug fixes
+- [PR #2470](https://github.com/rqlite/rqlite/pull/2470): Upgrade SQL parser.
+
 ## v9.3.21 (February 4th 2026)
 ### Implementation changes and bug fixes
 - [PR #2465](https://github.com/rqlite/rqlite/pull/2465): Further improvements to SQLite WAL checkpointing.
