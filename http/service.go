@@ -302,11 +302,11 @@ type Service struct {
 
 // New returns an uninitialized HTTP service. If credentials is nil, then
 // the service performs no authentication and authorization checks.
-func New(addr string, store Store, cluster Cluster, p *proxy.Proxy, credentials CredentialStore) *Service {
+func New(addr string, store Store, cluster Cluster, pxy *proxy.Proxy, credentials CredentialStore) *Service {
 	return &Service{
 		addr:                addr,
 		store:               store,
-		proxy:               p,
+		proxy:               pxy,
 		DefaultQueueCap:     1024,
 		DefaultQueueBatchSz: 128,
 		DefaultQueueTimeout: 100 * time.Millisecond,
