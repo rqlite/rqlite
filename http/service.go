@@ -31,6 +31,7 @@ import (
 	"github.com/rqlite/rqlite/v9/internal/rtls"
 	"github.com/rqlite/rqlite/v9/queue"
 	"github.com/rqlite/rqlite/v9/store"
+	rsql "github.com/rqlite/sql"
 )
 
 var (
@@ -248,6 +249,7 @@ const (
 	numLoadAborted                    = "loads_aborted"
 	numBoot                           = "boot"
 	numSnapshots                      = "user_snapshots"
+	numSQLAnalyze                     = "sql_analyze"
 	numAuthOK                         = "auth_ok"
 	numAuthFail                       = "auth_fail"
 	numTLSCertFetched                 = "tls_cert_fetched"
@@ -322,6 +324,7 @@ func ResetStats() {
 	stats.Add(numLoadAborted, 0)
 	stats.Add(numBoot, 0)
 	stats.Add(numSnapshots, 0)
+	stats.Add(numSQLAnalyze, 0)
 	stats.Add(numAuthOK, 0)
 	stats.Add(numAuthFail, 0)
 	stats.Add(numTLSCertFetched, 0)
@@ -527,6 +530,9 @@ func (s *Service) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	case strings.HasPrefix(r.URL.Path, "/db/load"):
 		stats.Add(numLoad, 1)
 		s.handleLoad(w, r, params)
+	case strings.HasPrefix(r.URL.Path, "/db/sql"):
+		stats.Add(numSQLAnalyze, 1)
+		s.handleSQLAnalyze(w, r, params)
 	case r.URL.Path == "/boot":
 		stats.Add(numBoot, 1)
 		s.handleBoot(w, r)
@@ -640,6 +646,77 @@ func (s *Service) handleRemove(w http.ResponseWriter, r *http.Request, qp QueryP
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
+}
+
+// handleSQLAnalyze handles requests to analyze and show SQL rewriting.
+func (s *Service) handleSQLAnalyze(w http.ResponseWriter, r *http.Request, qp QueryParams) {
+	w.Header().Set("Content-Type", "application/json; charset=utf-8")
+
+	if !s.CheckRequestPerm(r, auth.PermQuery) {
+		w.WriteHeader(http.StatusUnauthorized)
+		return
+	}
+
+	if r.Method != "GET" && r.Method != "POST" {
+		w.WriteHeader(http.StatusMethodNotAllowed)
+		return
+	}
+
+	var stmts []*proto.Statement
+	if r.Method == "GET" {
+		q := qp.Query()
+		if q == "" {
+			http.Error(w, "query not specified", http.StatusBadRequest)
+			return
+		}
+		stmts = []*proto.Statement{{Sql: q}}
+	} else {
+		var err error
+		stmts, err = ParseRequest(r.Body)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+	}
+
+	analyzeStmt := func(sqlStr string, rwRand, rwTime bool) (res sqlAnalyzeStmtResult, retErr error) {
+		defer func() {
+			if r := recover(); r != nil {
+				retErr = fmt.Errorf("panic during SQL analysis: %v", r)
+			}
+		}()
+		res.Original = sqlStr
+
+		parsed, err := rsql.NewParser(strings.NewReader(sqlStr)).ParseStatement()
+		if err != nil {
+			res.Error = err.Error()
+			return res, nil
+		}
+
+		rewriter := sql.NewRewriter()
+		rewriter.RewriteRand = rwRand
+		rewriter.RewriteTime = rwTime
+		rwStmt, _, _, err := rewriter.Do(parsed)
+		if err != nil {
+			res.Error = err.Error()
+			return res, nil
+		}
+
+		res.Rewritten = rwStmt.String()
+		return res, nil
+	}
+
+	results := make([]sqlAnalyzeStmtResult, len(stmts))
+	for i, stmt := range stmts {
+		r, err := analyzeStmt(stmt.Sql, !qp.NoRewriteRandom(), !qp.NoRewriteTime())
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		results[i] = r
+	}
+	resp := &sqlAnalyzeResponse{Results: results, start: time.Now()}
+	s.writeResponse(w, qp, resp)
 }
 
 // handleBackup returns the consistent database snapshot.
@@ -1942,6 +2019,22 @@ func getSubJSON(jsonBlob []byte, keyString string) (json.RawMessage, error) {
 	}
 
 	return finalObjBytes, nil
+}
+
+type sqlAnalyzeStmtResult struct {
+	Original  string `json:"original"`
+	Rewritten string `json:"rewritten,omitempty"`
+	Error     string `json:"error,omitempty"`
+}
+
+type sqlAnalyzeResponse struct {
+	Results []sqlAnalyzeStmtResult `json:"results"`
+	Time    float64                `json:"time,omitempty"`
+	start   time.Time
+}
+
+func (r *sqlAnalyzeResponse) SetTime() {
+	r.Time = time.Since(r.start).Seconds()
 }
 
 func prettyEnabled(e bool) string {

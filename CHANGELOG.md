@@ -1,3 +1,7 @@
+## v9.4.0 (unreleased)
+### Implementation changes and bug fixes
+- [PR #2469](https://github.com/rqlite/rqlite/pull/2469): Add `db/sql` API to demonstrate SQL rewriting.
+
 ## v9.3.21 (February 4th 2026)
 ### Implementation changes and bug fixes
 - [PR #2465](https://github.com/rqlite/rqlite/pull/2465): Further improvements to SQLite WAL checkpointing.
