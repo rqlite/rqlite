@@ -851,7 +851,7 @@ func mustNodeEncrypted(id, dir string, enableSingle, httpEncrypt bool, mux *tcp.
 	clstrClient := cluster.NewClient(clstrDialer, 30*time.Second)
 	node.Client = clstrClient
 	p := proxy.New(node.Store, clstrClient)
-	node.Service = httpd.New("localhost:0", node.Store, clstrClient, nil, p)
+	node.Service = httpd.New("localhost:0", node.Store, clstrClient, p, nil)
 	if httpEncrypt {
 		node.Service.CertFile = node.HTTPCertPath
 		node.Service.KeyFile = node.HTTPKeyPath

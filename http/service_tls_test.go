@@ -20,7 +20,7 @@ import (
 func Test_TLSServiceInsecure(t *testing.T) {
 	m := &MockStore{}
 	c := &mockClusterService{}
-	s := New("127.0.0.1:0", m, c, nil, proxy.New(m, c))
+	s := New("127.0.0.1:0", m, c, proxy.New(m, c), nil)
 
 	cert, key, err := rtls.GenerateSelfSignedCert(pkix.Name{CommonName: "rqlite"}, time.Hour, 2048)
 	if err != nil {
@@ -105,7 +105,7 @@ func Test_TLSServiceInsecure(t *testing.T) {
 func Test_TLSServiceSecure(t *testing.T) {
 	m := &MockStore{}
 	c := &mockClusterService{}
-	s := New("127.0.0.1:0", m, c, nil, proxy.New(m, c))
+	s := New("127.0.0.1:0", m, c, proxy.New(m, c), nil)
 
 	cert, key, err := rtls.GenerateSelfSignedCertIPSAN(pkix.Name{CommonName: "rqlite.io"}, time.Hour, 2048, net.ParseIP("127.0.0.1"))
 	if err != nil {
@@ -206,7 +206,7 @@ func Test_TLSServiceSecureMutual(t *testing.T) {
 	// Create and start the HTTP service.
 	m := &MockStore{}
 	c := &mockClusterService{}
-	s := New("127.0.0.1:0", m, c, nil, proxy.New(m, c))
+	s := New("127.0.0.1:0", m, c, proxy.New(m, c), nil)
 	s.CertFile = mustWriteTempFile(t, certServer)
 	s.KeyFile = mustWriteTempFile(t, keyServer)
 	s.CACertFile = mustWriteTempFile(t, caCertPEM) // Enables client verification by HTTP server
