@@ -31,6 +31,7 @@ import (
 	"github.com/rqlite/rqlite/v9/internal/rtls"
 	"github.com/rqlite/rqlite/v9/queue"
 	"github.com/rqlite/rqlite/v9/store"
+	rsql "github.com/rqlite/sql"
 )
 
 var (
@@ -248,6 +249,7 @@ const (
 	numLoadAborted                    = "loads_aborted"
 	numBoot                           = "boot"
 	numSnapshots                      = "user_snapshots"
+	numSQLAnalyze                     = "sql_analyze"
 	numAuthOK                         = "auth_ok"
 	numAuthFail                       = "auth_fail"
 	numTLSCertFetched                 = "tls_cert_fetched"
@@ -527,6 +529,9 @@ func (s *Service) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	case strings.HasPrefix(r.URL.Path, "/db/load"):
 		stats.Add(numLoad, 1)
 		s.handleLoad(w, r, params)
+	case strings.HasPrefix(r.URL.Path, "/db/sql"):
+		stats.Add(numSQLAnalyze, 1)
+		s.handleSQLAnalyze(w, r, params)
 	case r.URL.Path == "/boot":
 		stats.Add(numBoot, 1)
 		s.handleBoot(w, r)
@@ -1942,6 +1947,90 @@ func getSubJSON(jsonBlob []byte, keyString string) (json.RawMessage, error) {
 	}
 
 	return finalObjBytes, nil
+}
+
+// handleSQLAnalyze handles requests to analyze and show SQL rewriting.
+func (s *Service) handleSQLAnalyze(w http.ResponseWriter, r *http.Request, qp QueryParams) {
+	w.Header().Set("Content-Type", "application/json; charset=utf-8")
+
+	if !s.CheckRequestPerm(r, auth.PermQuery) {
+		w.WriteHeader(http.StatusUnauthorized)
+		return
+	}
+
+	if r.Method != "POST" {
+		w.WriteHeader(http.StatusMethodNotAllowed)
+		return
+	}
+
+	stmts, err := ParseRequest(r.Body)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	type stmtResult struct {
+		Original        string `json:"original"`
+		Rewritten       string `json:"rewritten,omitempty"`
+		RewrittenRandom bool   `json:"rewritten_random,omitempty"`
+		RewrittenTime   bool   `json:"rewritten_time,omitempty"`
+		IsQuery         bool   `json:"is_query,omitempty"`
+		Error           string `json:"error,omitempty"`
+	}
+
+	type response struct {
+		Results []stmtResult `json:"results"`
+		Time    float64      `json:"time,omitempty"`
+	}
+
+	start := time.Now()
+	results := make([]stmtResult, len(stmts))
+	for i, stmt := range stmts {
+		results[i].Original = stmt.Sql
+
+		parsed, err := rsql.NewParser(strings.NewReader(stmt.Sql)).ParseStatement()
+		if err != nil {
+			results[i].Error = err.Error()
+			continue
+		}
+
+		rewriter := sql.NewRewriter()
+		rewriter.RewriteRand = !qp.NoRewriteRandom()
+		rewriter.RewriteTime = !qp.NoRewriteTime()
+		rwStmt, modified, returning, err := rewriter.Do(parsed)
+		if err != nil {
+			results[i].Error = err.Error()
+			continue
+		}
+
+		results[i].Rewritten = rwStmt.String()
+		if modified {
+			lowered := strings.ToLower(stmt.Sql)
+			results[i].RewrittenRandom = sql.ContainsRandom(lowered)
+			results[i].RewrittenTime = sql.ContainsTime(lowered)
+		}
+		results[i].IsQuery = returning
+	}
+
+	resp := response{Results: results}
+	if qp.Timings() {
+		resp.Time = time.Since(start).Seconds()
+	}
+
+	var b []byte
+	if qp.Pretty() {
+		b, err = json.MarshalIndent(resp, "", "    ")
+	} else {
+		b, err = json.Marshal(resp)
+	}
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	_, err = w.Write(b)
+	if err != nil {
+		s.logger.Println("writing response failed:", err.Error())
+	}
 }
 
 func prettyEnabled(e bool) string {
