@@ -20,6 +20,7 @@ import (
 	"github.com/rqlite/rqlite/v9/http"
 	httpd "github.com/rqlite/rqlite/v9/http"
 	"github.com/rqlite/rqlite/v9/internal/random"
+	"github.com/rqlite/rqlite/v9/proxy"
 	"github.com/rqlite/rqlite/v9/store"
 	"github.com/rqlite/rqlite/v9/tcp"
 )
@@ -1865,15 +1866,17 @@ func Test_SingleNodeAutoRestore(t *testing.T) {
 
 	clstrDialer := tcp.NewDialer(cluster.MuxClusterHeader, nil)
 	clstrClient := cluster.NewClient(clstrDialer, 30*time.Second)
-	node.Service = httpd.New("localhost:0", node.Store, clstrClient, nil)
+	pxy := proxy.New(node.Store, clstrClient)
+	node.Service = httpd.New("localhost:0", node.Store, clstrClient, pxy, nil)
 
 	if err := node.Service.Start(); err != nil {
 		t.Fatalf("failed to start HTTP server: %s", err.Error())
 	}
 	node.APIAddr = node.Service.Addr().String()
 
-	// Finally, set API address in Cluster service
+	// Finally, set API address in Cluster service and proxy
 	clstr.SetAPIAddr(node.APIAddr)
+	pxy.SetAPIAddr(node.APIAddr)
 
 	if _, err := node.WaitForLeader(); err != nil {
 		t.Fatalf("node never became leader")

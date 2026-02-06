@@ -31,6 +31,7 @@ import (
 	httpd "github.com/rqlite/rqlite/v9/http"
 	"github.com/rqlite/rqlite/v9/internal/rarchive"
 	"github.com/rqlite/rqlite/v9/internal/rtls"
+	"github.com/rqlite/rqlite/v9/proxy"
 	"github.com/rqlite/rqlite/v9/store"
 	"github.com/rqlite/rqlite/v9/tcp"
 )
@@ -180,12 +181,16 @@ func main() {
 		}
 	}
 
+	// Create the proxy and set its API address.
+	pxy := proxy.New(str, clstrClient)
+	pxy.SetAPIAddr(cfg.HTTPAdv)
+
 	// Create the HTTP service.
 	//
 	// We want to start the HTTP server as soon as possible, so the node is responsive and external
 	// systems can see that it's running. We still have to open the Store though, so the node won't
 	// be able to do much until that happens however.
-	httpServ, err := startHTTPService(cfg, str, clstrClient, credStr)
+	httpServ, err := startHTTPService(cfg, str, clstrClient, credStr, pxy)
 	if err != nil {
 		log.Fatalf("failed to start HTTP server: %s", err.Error())
 	}
@@ -420,9 +425,9 @@ func createDiscoService(cfg *Config, str *store.Store) (*disco.Service, error) {
 	return disco.NewService(c, str, disco.VoterSuffrage(!cfg.RaftNonVoter)), nil
 }
 
-func startHTTPService(cfg *Config, str *store.Store, cltr *cluster.Client, credStr *auth.CredentialsStore) (*httpd.Service, error) {
+func startHTTPService(cfg *Config, str *store.Store, cltr *cluster.Client, credStr *auth.CredentialsStore, pxy *proxy.Proxy) (*httpd.Service, error) {
 	// Create HTTP server and load authentication information.
-	s := httpd.New(cfg.HTTPAddr, str, cltr, credStr)
+	s := httpd.New(cfg.HTTPAddr, str, cltr, pxy, credStr)
 
 	s.CACertFile = cfg.HTTPx509CACert
 	s.CertFile = cfg.HTTPx509Cert
