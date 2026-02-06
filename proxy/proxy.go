@@ -7,6 +7,7 @@ package proxy
 import (
 	"context"
 	"errors"
+	"expvar"
 	"io"
 	"time"
 
@@ -26,6 +27,42 @@ var (
 	// ErrUnauthorized is returned when the remote node rejects credentials.
 	ErrUnauthorized = errors.New("unauthorized")
 )
+
+// stats captures stats for the HTTP service.
+var stats *expvar.Map
+
+const (
+	numRemoteRemoveNode       = "remote_remove_node"
+	numRemoteBackups          = "remote_backups"
+	numRemoteLoads            = "remote_loads"
+	numRemoteStepdowns        = "remote_stepdowns"
+	numRemoteExecutions       = "remote_executions"
+	numRemoteExecutionsFailed = "remote_executions_failed"
+	numRemoteQueries          = "remote_queries"
+	numRemoteQueriesFailed    = "remote_queries_failed"
+	numRemoteRequests         = "remote_requests"
+	numRemoteRequestsFailed   = "remote_requests_failed"
+)
+
+func init() {
+	stats = expvar.NewMap("proxy")
+	ResetStats()
+}
+
+// ResetStats resets the expvar stats for this module. Mostly for test purposes.
+func ResetStats() {
+	stats.Init()
+	stats.Add(numRemoteRemoveNode, 0)
+	stats.Add(numRemoteBackups, 0)
+	stats.Add(numRemoteLoads, 0)
+	stats.Add(numRemoteStepdowns, 0)
+	stats.Add(numRemoteExecutions, 0)
+	stats.Add(numRemoteExecutionsFailed, 0)
+	stats.Add(numRemoteQueries, 0)
+	stats.Add(numRemoteQueriesFailed, 0)
+	stats.Add(numRemoteRequests, 0)
+	stats.Add(numRemoteRequestsFailed, 0)
+}
 
 // Store defines the local database operations needed by the proxy.
 type Store interface {

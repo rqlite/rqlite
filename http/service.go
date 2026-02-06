@@ -177,16 +177,6 @@ const (
 	numQueryStmtsRx                   = "query_stmts_rx"
 	numRequests                       = "requests"
 	numRequestStmtsRx                 = "request_stmts_rx"
-	numRemoteExecutions               = "remote_executions"
-	numRemoteExecutionsFailed         = "remote_executions_failed"
-	numRemoteQueries                  = "remote_queries"
-	numRemoteQueriesFailed            = "remote_queries_failed"
-	numRemoteRequests                 = "remote_requests"
-	numRemoteRequestsFailed           = "remote_requests_failed"
-	numRemoteBackups                  = "remote_backups"
-	numRemoteLoads                    = "remote_loads"
-	numRemoteRemoveNode               = "remote_remove_node"
-	numRemoteStepdowns                = "remote_stepdowns"
 	numReadyz                         = "num_readyz"
 	numStatus                         = "num_status"
 	numBackups                        = "backups"
@@ -252,16 +242,6 @@ func ResetStats() {
 	stats.Add(numQueryStmtsRx, 0)
 	stats.Add(numRequests, 0)
 	stats.Add(numRequestStmtsRx, 0)
-	stats.Add(numRemoteExecutions, 0)
-	stats.Add(numRemoteExecutionsFailed, 0)
-	stats.Add(numRemoteQueries, 0)
-	stats.Add(numRemoteQueriesFailed, 0)
-	stats.Add(numRemoteRequests, 0)
-	stats.Add(numRemoteRequestsFailed, 0)
-	stats.Add(numRemoteBackups, 0)
-	stats.Add(numRemoteLoads, 0)
-	stats.Add(numRemoteRemoveNode, 0)
-	stats.Add(numRemoteStepdowns, 0)
 	stats.Add(numReadyz, 0)
 	stats.Add(numStatus, 0)
 	stats.Add(numBackups, 0)
