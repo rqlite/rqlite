@@ -118,8 +118,10 @@ func (p *Proxy) Execute(ctx context.Context, er *proto.ExecuteRequest, creds *cl
 		}
 		results, raftIndex, err = p.cluster.Execute(ctx, er, addr, creds, timeout, retries)
 		if err != nil {
+			stats.Add(numRemoteExecutionsFailed, 1)
 			return nil, 0, wrapIfUnauthorized(err)
 		}
+		stats.Add(numRemoteExecutions, 1)
 	}
 	return results, raftIndex, err
 }
@@ -141,8 +143,10 @@ func (p *Proxy) Query(ctx context.Context, qr *proto.QueryRequest, creds *clstrP
 		}
 		results, raftIndex, err = p.cluster.Query(ctx, qr, addr, creds, timeout)
 		if err != nil {
+			stats.Add(numRemoteQueriesFailed, 1)
 			return nil, 0, wrapIfUnauthorized(err)
 		}
+		stats.Add(numRemoteQueries, 1)
 	}
 	return results, raftIndex, err
 }
@@ -164,8 +168,10 @@ func (p *Proxy) Request(ctx context.Context, eqr *proto.ExecuteQueryRequest, cre
 		}
 		results, seq, raftIndex, err = p.cluster.Request(ctx, eqr, addr, creds, timeout, retries)
 		if err != nil {
+			stats.Add(numRemoteRequestsFailed, 1)
 			return nil, 0, 0, wrapIfUnauthorized(err)
 		}
+		stats.Add(numRemoteRequests, 1)
 	}
 	return results, seq, raftIndex, err
 }
@@ -189,6 +195,7 @@ func (p *Proxy) Backup(ctx context.Context, br *proto.BackupRequest, dst io.Writ
 		if err != nil {
 			return wrapIfUnauthorized(err)
 		}
+		stats.Add(numRemoteBackups, 1)
 	}
 	return err
 }
@@ -212,6 +219,7 @@ func (p *Proxy) Load(ctx context.Context, lr *proto.LoadRequest, creds *clstrPB.
 		if err != nil {
 			return wrapIfUnauthorized(err)
 		}
+		stats.Add(numRemoteLoads, 1)
 	}
 	return err
 }
@@ -235,6 +243,7 @@ func (p *Proxy) Remove(ctx context.Context, rn *proto.RemoveNodeRequest, creds *
 		if err != nil {
 			return wrapIfUnauthorized(err)
 		}
+		stats.Add(numRemoteRemoveNode, 1)
 	}
 	return err
 }
@@ -262,6 +271,7 @@ func (p *Proxy) Stepdown(wait bool, id string, creds *clstrPB.Credentials,
 		if err != nil {
 			return wrapIfUnauthorized(err)
 		}
+		stats.Add(numRemoteStepdowns, 1)
 	}
 	return err
 }
