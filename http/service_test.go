@@ -24,11 +24,6 @@ import (
 	"github.com/rqlite/rqlite/v9/store"
 )
 
-func newTestService(store *MockStore, cluster *mockClusterService, cred CredentialStore) *Service {
-	p := proxy.New(store, cluster)
-	return New("127.0.0.1:0", store, cluster, cred, p)
-}
-
 func Test_ResponseJSONMarshal(t *testing.T) {
 	resp := NewResponse()
 	b, err := json.Marshal(resp)
@@ -107,7 +102,7 @@ func Test_NewService(t *testing.T) {
 	store := &MockStore{}
 	cluster := &mockClusterService{}
 	cred := &mockCredentialStore{HasPermOK: true}
-	s := newTestService(store, cluster, cred)
+	s := New("127.0.0.1:0", store, cluster, cred, proxy.New(store, cluster))
 	if s == nil {
 		t.Fatalf("failed to create new service")
 	}
@@ -119,7 +114,7 @@ func Test_NewService(t *testing.T) {
 func Test_HasVersionHeader(t *testing.T) {
 	m := &MockStore{}
 	c := &mockClusterService{}
-	s := newTestService(m, c, nil)
+	s := New("127.0.0.1:0", m, c, nil, proxy.New(m, c))
 	if err := s.Start(); err != nil {
 		t.Fatalf("failed to start service")
 	}
@@ -143,7 +138,7 @@ func Test_HasVersionHeader(t *testing.T) {
 func Test_HasAllowOriginHeader(t *testing.T) {
 	m := &MockStore{}
 	c := &mockClusterService{}
-	s := newTestService(m, c, nil)
+	s := New("127.0.0.1:0", m, c, nil, proxy.New(m, c))
 	if err := s.Start(); err != nil {
 		t.Fatalf("failed to start service")
 	}
@@ -172,7 +167,7 @@ func Test_HasAllowOriginHeader(t *testing.T) {
 func Test_Options(t *testing.T) {
 	m := &MockStore{}
 	c := &mockClusterService{}
-	s := newTestService(m, c, nil)
+	s := New("127.0.0.1:0", m, c, nil, proxy.New(m, c))
 	if err := s.Start(); err != nil {
 		t.Fatalf("failed to start service")
 	}
@@ -197,7 +192,7 @@ func Test_Options(t *testing.T) {
 func Test_HasContentTypeJSON(t *testing.T) {
 	m := &MockStore{}
 	c := &mockClusterService{}
-	s := newTestService(m, c, nil)
+	s := New("127.0.0.1:0", m, c, nil, proxy.New(m, c))
 	if err := s.Start(); err != nil {
 		t.Fatalf("failed to start service")
 	}
@@ -218,7 +213,7 @@ func Test_HasContentTypeJSON(t *testing.T) {
 func Test_HasContentTypeOctetStream(t *testing.T) {
 	m := &MockStore{}
 	c := &mockClusterService{}
-	s := newTestService(m, c, nil)
+	s := New("127.0.0.1:0", m, c, nil, proxy.New(m, c))
 	if err := s.Start(); err != nil {
 		t.Fatalf("failed to start service")
 	}
@@ -239,7 +234,7 @@ func Test_HasContentTypeOctetStream(t *testing.T) {
 func Test_HasVersionHeaderUnknown(t *testing.T) {
 	m := &MockStore{}
 	c := &mockClusterService{}
-	s := newTestService(m, c, nil)
+	s := New("127.0.0.1:0", m, c, nil, proxy.New(m, c))
 	if err := s.Start(); err != nil {
 		t.Fatalf("failed to start service")
 	}
@@ -264,7 +259,7 @@ func Test_LeaderAddrsOK(t *testing.T) {
 	c := &mockClusterService{
 		apiAddr: "http://bar:5678",
 	}
-	s := newTestService(m, c, nil)
+	s := New("127.0.0.1:0", m, c, nil, proxy.New(m, c))
 	if err := s.Start(); err != nil {
 		t.Fatalf("failed to start service")
 	}
@@ -287,7 +282,7 @@ func Test_LeaderAddrsOK(t *testing.T) {
 func Test_LeaderAddrsFail(t *testing.T) {
 	m := &MockStore{}
 	c := &mockClusterService{}
-	s := newTestService(m, c, nil)
+	s := New("127.0.0.1:0", m, c, nil, proxy.New(m, c))
 	if err := s.Start(); err != nil {
 		t.Fatalf("failed to start service")
 	}
@@ -302,7 +297,7 @@ func Test_LeaderAddrsFail(t *testing.T) {
 func Test_404Routes(t *testing.T) {
 	m := &MockStore{}
 	c := &mockClusterService{}
-	s := newTestService(m, c, nil)
+	s := New("127.0.0.1:0", m, c, nil, proxy.New(m, c))
 	if err := s.Start(); err != nil {
 		t.Fatalf("failed to start service")
 	}
@@ -349,7 +344,7 @@ func Test_405Routes(t *testing.T) {
 
 	m := &MockStore{}
 	c := &mockClusterService{}
-	s := newTestService(m, c, nil)
+	s := New("127.0.0.1:0", m, c, nil, proxy.New(m, c))
 	if err := s.Start(); err != nil {
 		t.Fatalf("failed to start service")
 	}
@@ -383,7 +378,7 @@ func Test_405Routes(t *testing.T) {
 func Test_400Routes(t *testing.T) {
 	m := &MockStore{}
 	c := &mockClusterService{}
-	s := newTestService(m, c, nil)
+	s := New("127.0.0.1:0", m, c, nil, proxy.New(m, c))
 	if err := s.Start(); err != nil {
 		t.Fatalf("failed to start service")
 	}
@@ -406,7 +401,7 @@ func Test_401Routes_NoBasicAuth(t *testing.T) {
 
 	m := &MockStore{}
 	n := &mockClusterService{}
-	s := newTestService(m, n, c)
+	s := New("127.0.0.1:0", m, n, c, proxy.New(m, n))
 	if err := s.Start(); err != nil {
 		t.Fatalf("failed to start service")
 	}
@@ -447,7 +442,7 @@ func Test_401Routes_BasicAuthBadPassword(t *testing.T) {
 
 	m := &MockStore{}
 	n := &mockClusterService{}
-	s := newTestService(m, n, c)
+	s := New("127.0.0.1:0", m, n, c, proxy.New(m, n))
 	if err := s.Start(); err != nil {
 		t.Fatalf("failed to start service")
 	}
@@ -492,7 +487,7 @@ func Test_401Routes_BasicAuthBadPerm(t *testing.T) {
 
 	m := &MockStore{}
 	n := &mockClusterService{}
-	s := newTestService(m, n, c)
+	s := New("127.0.0.1:0", m, n, c, proxy.New(m, n))
 	if err := s.Start(); err != nil {
 		t.Fatalf("failed to start service")
 	}
@@ -538,7 +533,7 @@ func Test_401Routes_BasicAuthBadPerm(t *testing.T) {
 func Test_BackupOK(t *testing.T) {
 	m := &MockStore{}
 	c := &mockClusterService{}
-	s := newTestService(m, c, nil)
+	s := New("127.0.0.1:0", m, c, nil, proxy.New(m, c))
 	if err := s.Start(); err != nil {
 		t.Fatalf("failed to start service")
 	}
@@ -562,7 +557,7 @@ func Test_BackupOK(t *testing.T) {
 func Test_BackupVacuumOK(t *testing.T) {
 	m := &MockStore{}
 	c := &mockClusterService{}
-	s := newTestService(m, c, nil)
+	s := New("127.0.0.1:0", m, c, nil, proxy.New(m, c))
 	if err := s.Start(); err != nil {
 		t.Fatalf("failed to start service")
 	}
@@ -597,7 +592,7 @@ func Test_BackupVacuumOK(t *testing.T) {
 func Test_SnapshotOK(t *testing.T) {
 	m := &MockStore{}
 	c := &mockClusterService{}
-	s := newTestService(m, c, nil)
+	s := New("127.0.0.1:0", m, c, nil, proxy.New(m, c))
 	if err := s.Start(); err != nil {
 		t.Fatalf("failed to start service")
 	}
@@ -633,7 +628,7 @@ func Test_BackupFlagsNoLeaderRedirect(t *testing.T) {
 		apiAddr: "http://1.2.3.4:999",
 	}
 
-	s := newTestService(m, c, nil)
+	s := New("127.0.0.1:0", m, c, nil, proxy.New(m, c))
 
 	if err := s.Start(); err != nil {
 		t.Fatalf("failed to start service")
@@ -667,7 +662,7 @@ func Test_BackupFlagsNoLeaderRemoteFetch(t *testing.T) {
 		apiAddr: "http://1.2.3.4:999",
 	}
 
-	s := newTestService(m, c, nil)
+	s := New("127.0.0.1:0", m, c, nil, proxy.New(m, c))
 
 	if err := s.Start(); err != nil {
 		t.Fatalf("failed to start service")
@@ -709,7 +704,7 @@ func Test_BackupFlagsNoLeaderOK(t *testing.T) {
 		apiAddr: "http://1.2.3.4:999",
 	}
 
-	s := newTestService(m, c, nil)
+	s := New("127.0.0.1:0", m, c, nil, proxy.New(m, c))
 
 	if err := s.Start(); err != nil {
 		t.Fatalf("failed to start service")
@@ -740,7 +735,7 @@ func Test_BackupFlagsInvalid(t *testing.T) {
 		apiAddr: "http://1.2.3.4:999",
 	}
 
-	s := newTestService(m, c, nil)
+	s := New("127.0.0.1:0", m, c, nil, proxy.New(m, c))
 
 	if err := s.Start(); err != nil {
 		t.Fatalf("failed to start service")
@@ -768,7 +763,7 @@ func Test_BackupFlagsInvalid(t *testing.T) {
 func Test_BackupDeleteOK(t *testing.T) {
 	m := &MockStore{}
 	c := &mockClusterService{}
-	s := newTestService(m, c, nil)
+	s := New("127.0.0.1:0", m, c, nil, proxy.New(m, c))
 	if err := s.Start(); err != nil {
 		t.Fatalf("failed to start service")
 	}
@@ -803,7 +798,7 @@ func Test_BackupDeleteOK(t *testing.T) {
 func Test_BackupTablesOK(t *testing.T) {
 	m := &MockStore{}
 	c := &mockClusterService{}
-	s := newTestService(m, c, nil)
+	s := New("127.0.0.1:0", m, c, nil, proxy.New(m, c))
 	if err := s.Start(); err != nil {
 		t.Fatalf("failed to start service")
 	}
@@ -849,7 +844,7 @@ func Test_LoadOK(t *testing.T) {
 		leaderAddr: "foo:1234",
 	}
 	c := &mockClusterService{}
-	s := newTestService(m, c, nil)
+	s := New("127.0.0.1:0", m, c, nil, proxy.New(m, c))
 	if err := s.Start(); err != nil {
 		t.Fatalf("failed to start service")
 	}
@@ -878,7 +873,7 @@ func Test_LoadFlagsNoLeader(t *testing.T) {
 		apiAddr: "http://1.2.3.4:999",
 	}
 
-	s := newTestService(m, c, nil)
+	s := New("127.0.0.1:0", m, c, nil, proxy.New(m, c))
 
 	if err := s.Start(); err != nil {
 		t.Fatalf("failed to start service")
@@ -931,7 +926,7 @@ func Test_LoadRemoteError(t *testing.T) {
 		apiAddr: "http://1.2.3.4:999",
 	}
 
-	s := newTestService(m, c, nil)
+	s := New("127.0.0.1:0", m, c, nil, proxy.New(m, c))
 
 	if err := s.Start(); err != nil {
 		t.Fatalf("failed to start service")
@@ -980,7 +975,7 @@ func Test_Boot(t *testing.T) {
 		apiAddr: "http://1.2.3.4:999",
 	}
 
-	s := newTestService(m, c, nil)
+	s := New("127.0.0.1:0", m, c, nil, proxy.New(m, c))
 	if err := s.Start(); err != nil {
 		t.Fatalf("failed to start service")
 	}
@@ -1026,7 +1021,7 @@ func Test_RegisterStatus(t *testing.T) {
 	m := &MockStore{}
 	c := &mockClusterService{}
 
-	s := newTestService(m, c, nil)
+	s := New("127.0.0.1:0", m, c, nil, proxy.New(m, c))
 
 	if err := s.RegisterStatus("foo", stats); err != nil {
 		t.Fatalf("failed to register statusReporter: %s", err.Error())
@@ -1045,7 +1040,7 @@ func Test_FormRedirect(t *testing.T) {
 		apiAddr: "http://foo:4001",
 	}
 
-	s := newTestService(m, c, nil)
+	s := New("127.0.0.1:0", m, c, nil, proxy.New(m, c))
 	req := mustNewHTTPRequest("http://qux:4001")
 
 	rd, err := s.FormRedirect(req)
@@ -1064,7 +1059,7 @@ func Test_FormRedirectParam(t *testing.T) {
 	c := &mockClusterService{
 		apiAddr: "http://foo:4001",
 	}
-	s := newTestService(m, c, nil)
+	s := New("127.0.0.1:0", m, c, nil, proxy.New(m, c))
 	req := mustNewHTTPRequest("http://qux:4001/db/query?x=y")
 
 	rd, err := s.FormRedirect(req)
@@ -1085,7 +1080,7 @@ func Test_FormRedirectHTTPS(t *testing.T) {
 		apiAddr: "https://foo:4001",
 	}
 
-	s := newTestService(m, c, nil)
+	s := New("127.0.0.1:0", m, c, nil, proxy.New(m, c))
 	req := mustNewHTTPRequest("http://qux:4001")
 
 	rd, err := s.FormRedirect(req)
@@ -1104,7 +1099,7 @@ func Test_DoRedirect(t *testing.T) {
 	c := &mockClusterService{
 		apiAddr: "https://foo:4001",
 	}
-	s := newTestService(m, c, nil)
+	s := New("127.0.0.1:0", m, c, nil, proxy.New(m, c))
 	req := mustNewHTTPRequest("http://qux:4001")
 	qp := mustGetQueryParams(req)
 
@@ -1134,7 +1129,7 @@ func Test_Nodes(t *testing.T) {
 	c := &mockClusterService{
 		apiAddr: "https://bar:5678",
 	}
-	s := newTestService(m, c, nil)
+	s := New("127.0.0.1:0", m, c, nil, proxy.New(m, c))
 	if err := s.Start(); err != nil {
 		t.Fatalf("failed to start service")
 	}
@@ -1154,7 +1149,7 @@ func Test_Nodes(t *testing.T) {
 func Test_RootRedirectToStatus(t *testing.T) {
 	m := &MockStore{}
 	c := &mockClusterService{}
-	s := newTestService(m, c, nil)
+	s := New("127.0.0.1:0", m, c, nil, proxy.New(m, c))
 	if err := s.Start(); err != nil {
 		t.Fatalf("failed to start service")
 	}
@@ -1195,7 +1190,7 @@ func Test_Readyz(t *testing.T) {
 	c := &mockClusterService{
 		apiAddr: "https://bar:5678",
 	}
-	s := newTestService(m, c, nil)
+	s := New("127.0.0.1:0", m, c, nil, proxy.New(m, c))
 	if err := s.Start(); err != nil {
 		t.Fatalf("failed to start service")
 	}
@@ -1288,7 +1283,7 @@ func Test_Readyz(t *testing.T) {
 func Test_Licenses(t *testing.T) {
 	m := &MockStore{}
 	c := &mockClusterService{}
-	s := newTestService(m, c, nil)
+	s := New("127.0.0.1:0", m, c, nil, proxy.New(m, c))
 	if err := s.Start(); err != nil {
 		t.Fatalf("failed to start service")
 	}
@@ -1322,7 +1317,7 @@ func Test_Licenses(t *testing.T) {
 func Test_LicensesMethodNotAllowed(t *testing.T) {
 	m := &MockStore{}
 	c := &mockClusterService{}
-	s := newTestService(m, c, nil)
+	s := New("127.0.0.1:0", m, c, nil, proxy.New(m, c))
 	if err := s.Start(); err != nil {
 		t.Fatalf("failed to start service")
 	}
@@ -1360,7 +1355,7 @@ func Test_LicensesAuth(t *testing.T) {
 	c := &mockCredentialStore{HasPermOK: false}
 	m := &MockStore{}
 	n := &mockClusterService{}
-	s := newTestService(m, n, c)
+	s := New("127.0.0.1:0", m, n, c, proxy.New(m, n))
 	if err := s.Start(); err != nil {
 		t.Fatalf("failed to start service")
 	}
@@ -1399,7 +1394,7 @@ func Test_ForwardingRedirectQuery(t *testing.T) {
 		return []*command.QueryRows{rows}, 0, nil
 	}
 
-	s := newTestService(m, c, nil)
+	s := New("127.0.0.1:0", m, c, nil, proxy.New(m, c))
 	if err := s.Start(); err != nil {
 		t.Fatalf("failed to start service")
 	}
@@ -1463,7 +1458,7 @@ func Test_ForwardingRedirectExecute(t *testing.T) {
 		return []*command.ExecuteQueryResponse{result}, 0, nil
 	}
 
-	s := newTestService(m, c, nil)
+	s := New("127.0.0.1:0", m, c, nil, proxy.New(m, c))
 	if err := s.Start(); err != nil {
 		t.Fatalf("failed to start service")
 	}
@@ -1527,7 +1522,7 @@ func Test_ForwardingRedirectExecuteQuery(t *testing.T) {
 		return []*command.ExecuteQueryResponse{resp}, 0, 0, nil
 	}
 
-	s := newTestService(m, c, nil)
+	s := New("127.0.0.1:0", m, c, nil, proxy.New(m, c))
 	if err := s.Start(); err != nil {
 		t.Fatalf("failed to start service")
 	}
@@ -2608,7 +2603,7 @@ func newSQLAnalyzeHost(t *testing.T) string {
 		leaderAddr: "foo:1234",
 	}
 	c := &mockClusterService{}
-	s := newTestService(m, c, nil)
+	s := New("127.0.0.1:0", m, c, nil, proxy.New(m, c))
 	if err := s.Start(); err != nil {
 		t.Fatalf("failed to start service: %v", err)
 	}
