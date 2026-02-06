@@ -71,7 +71,7 @@ func (p *Proxy) Execute(ctx context.Context, er *proto.ExecuteRequest, creds *cl
 	timeout time.Duration, retries int, noForward bool) ([]*proto.ExecuteQueryResponse, uint64, error) {
 
 	results, raftIndex, err := p.store.Execute(ctx, er)
-	if err == store.ErrNotLeader {
+	if errors.Is(err, store.ErrNotLeader) {
 		if noForward {
 			return nil, 0, ErrNotLeader
 		}
@@ -94,7 +94,7 @@ func (p *Proxy) Query(ctx context.Context, qr *proto.QueryRequest, creds *clstrP
 	timeout time.Duration, noForward bool) ([]*proto.QueryRows, uint64, error) {
 
 	results, _, raftIndex, err := p.store.Query(ctx, qr)
-	if err != nil && err == store.ErrNotLeader {
+	if errors.Is(err, store.ErrNotLeader) {
 		if noForward {
 			return nil, 0, ErrNotLeader
 		}
@@ -117,7 +117,7 @@ func (p *Proxy) Request(ctx context.Context, eqr *proto.ExecuteQueryRequest, cre
 	timeout time.Duration, retries int, noForward bool) ([]*proto.ExecuteQueryResponse, uint64, uint64, error) {
 
 	results, seq, raftIndex, err := p.store.Request(ctx, eqr)
-	if err != nil && err == store.ErrNotLeader {
+	if errors.Is(err, store.ErrNotLeader) {
 		if noForward {
 			return nil, 0, 0, ErrNotLeader
 		}
@@ -140,7 +140,7 @@ func (p *Proxy) Backup(ctx context.Context, br *proto.BackupRequest, dst io.Writ
 	timeout time.Duration, noForward bool) error {
 
 	err := p.store.Backup(ctx, br, dst)
-	if err != nil && err == store.ErrNotLeader {
+	if errors.Is(err, store.ErrNotLeader) {
 		if noForward {
 			return ErrNotLeader
 		}
@@ -163,7 +163,7 @@ func (p *Proxy) Load(ctx context.Context, lr *proto.LoadRequest, creds *clstrPB.
 	timeout time.Duration, retries int, noForward bool) error {
 
 	err := p.store.Load(ctx, lr)
-	if err != nil && err == store.ErrNotLeader {
+	if errors.Is(err, store.ErrNotLeader) {
 		if noForward {
 			return ErrNotLeader
 		}
@@ -186,7 +186,7 @@ func (p *Proxy) Remove(ctx context.Context, rn *proto.RemoveNodeRequest, creds *
 	timeout time.Duration, noForward bool) error {
 
 	err := p.store.Remove(ctx, rn)
-	if err != nil && err == store.ErrNotLeader {
+	if errors.Is(err, store.ErrNotLeader) {
 		if noForward {
 			return ErrNotLeader
 		}
@@ -209,7 +209,7 @@ func (p *Proxy) Stepdown(wait bool, id string, creds *clstrPB.Credentials,
 	timeout time.Duration, noForward bool) error {
 
 	err := p.store.Stepdown(wait, id)
-	if err != nil && err == store.ErrNotLeader {
+	if errors.Is(err, store.ErrNotLeader) {
 		if noForward {
 			return ErrNotLeader
 		}
