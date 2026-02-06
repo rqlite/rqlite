@@ -123,163 +123,169 @@ func (p *Proxy) GetAPIAddr() string {
 // returns ErrNotLeader and noForward is false, the request is forwarded to
 // the current leader.
 func (p *Proxy) Execute(ctx context.Context, er *proto.ExecuteRequest, creds *clstrPB.Credentials,
-	timeout time.Duration, retries int, noForward bool) ([]*proto.ExecuteQueryResponse, uint64, error) {
+	timeout time.Duration, retries int, noForward bool) ([]*proto.ExecuteQueryResponse, uint64, string, error) {
 
 	results, raftIndex, err := p.store.Execute(ctx, er)
 	if errors.Is(err, store.ErrNotLeader) {
 		if noForward {
-			return nil, 0, ErrNotLeader
+			return nil, 0, "", ErrNotLeader
 		}
 		addr, addrErr := p.leaderAddr()
 		if addrErr != nil {
-			return nil, 0, addrErr
+			return nil, 0, "", addrErr
 		}
 		results, raftIndex, err = p.cluster.Execute(ctx, er, addr, creds, timeout, retries)
 		if err != nil {
 			stats.Add(numRemoteExecutionsFailed, 1)
-			return nil, 0, wrapIfUnauthorized(err)
+			return nil, 0, "", wrapIfUnauthorized(err)
 		}
 		stats.Add(numRemoteExecutions, 1)
+		return results, raftIndex, addr, nil
 	}
-	return results, raftIndex, err
+	return results, raftIndex, p.GetAPIAddr(), err
 }
 
 // Query executes read-only queries. If the local store returns ErrNotLeader
 // and noForward is false, the request is forwarded to the current leader.
 // The ConsistencyLevel return value from Store.Query is dropped.
 func (p *Proxy) Query(ctx context.Context, qr *proto.QueryRequest, creds *clstrPB.Credentials,
-	timeout time.Duration, noForward bool) ([]*proto.QueryRows, uint64, error) {
+	timeout time.Duration, noForward bool) ([]*proto.QueryRows, uint64, string, error) {
 
 	results, _, raftIndex, err := p.store.Query(ctx, qr)
 	if errors.Is(err, store.ErrNotLeader) {
 		if noForward {
-			return nil, 0, ErrNotLeader
+			return nil, 0, "", ErrNotLeader
 		}
 		addr, addrErr := p.leaderAddr()
 		if addrErr != nil {
-			return nil, 0, addrErr
+			return nil, 0, "", addrErr
 		}
 		results, raftIndex, err = p.cluster.Query(ctx, qr, addr, creds, timeout)
 		if err != nil {
 			stats.Add(numRemoteQueriesFailed, 1)
-			return nil, 0, wrapIfUnauthorized(err)
+			return nil, 0, "", wrapIfUnauthorized(err)
 		}
 		stats.Add(numRemoteQueries, 1)
+		return results, raftIndex, addr, nil
 	}
-	return results, raftIndex, err
+	return results, raftIndex, p.GetAPIAddr(), err
 }
 
 // Request processes a unified execute-query request. If the local store
 // returns ErrNotLeader and noForward is false, the request is forwarded
 // to the current leader.
 func (p *Proxy) Request(ctx context.Context, eqr *proto.ExecuteQueryRequest, creds *clstrPB.Credentials,
-	timeout time.Duration, retries int, noForward bool) ([]*proto.ExecuteQueryResponse, uint64, uint64, error) {
+	timeout time.Duration, retries int, noForward bool) ([]*proto.ExecuteQueryResponse, uint64, uint64, string, error) {
 
 	results, seq, raftIndex, err := p.store.Request(ctx, eqr)
 	if errors.Is(err, store.ErrNotLeader) {
 		if noForward {
-			return nil, 0, 0, ErrNotLeader
+			return nil, 0, 0, "", ErrNotLeader
 		}
 		addr, addrErr := p.leaderAddr()
 		if addrErr != nil {
-			return nil, 0, 0, addrErr
+			return nil, 0, 0, "", addrErr
 		}
 		results, seq, raftIndex, err = p.cluster.Request(ctx, eqr, addr, creds, timeout, retries)
 		if err != nil {
 			stats.Add(numRemoteRequestsFailed, 1)
-			return nil, 0, 0, wrapIfUnauthorized(err)
+			return nil, 0, 0, "", wrapIfUnauthorized(err)
 		}
 		stats.Add(numRemoteRequests, 1)
+		return results, seq, raftIndex, addr, nil
 	}
-	return results, seq, raftIndex, err
+	return results, seq, raftIndex, p.GetAPIAddr(), err
 }
 
 // Backup writes a backup of the database. If the local store returns
 // ErrNotLeader and noForward is false, the request is forwarded to
 // the current leader.
 func (p *Proxy) Backup(ctx context.Context, br *proto.BackupRequest, dst io.Writer, creds *clstrPB.Credentials,
-	timeout time.Duration, noForward bool) error {
+	timeout time.Duration, noForward bool) (string, error) {
 
 	err := p.store.Backup(ctx, br, dst)
 	if errors.Is(err, store.ErrNotLeader) {
 		if noForward {
-			return ErrNotLeader
+			return "", ErrNotLeader
 		}
 		addr, addrErr := p.leaderAddr()
 		if addrErr != nil {
-			return addrErr
+			return "", addrErr
 		}
 		err = p.cluster.Backup(ctx, br, addr, creds, timeout, dst)
 		if err != nil {
-			return wrapIfUnauthorized(err)
+			return "", wrapIfUnauthorized(err)
 		}
 		stats.Add(numRemoteBackups, 1)
+		return addr, nil
 	}
-	return err
+	return p.GetAPIAddr(), err
 }
 
 // Load loads a SQLite file into the cluster. If the local store returns
 // ErrNotLeader and noForward is false, the request is forwarded to
 // the current leader.
 func (p *Proxy) Load(ctx context.Context, lr *proto.LoadRequest, creds *clstrPB.Credentials,
-	timeout time.Duration, retries int, noForward bool) error {
+	timeout time.Duration, retries int, noForward bool) (string, error) {
 
 	err := p.store.Load(ctx, lr)
 	if errors.Is(err, store.ErrNotLeader) {
 		if noForward {
-			return ErrNotLeader
+			return "", ErrNotLeader
 		}
 		addr, addrErr := p.leaderAddr()
 		if addrErr != nil {
-			return addrErr
+			return "", addrErr
 		}
 		err = p.cluster.Load(ctx, lr, addr, creds, timeout, retries)
 		if err != nil {
-			return wrapIfUnauthorized(err)
+			return "", wrapIfUnauthorized(err)
 		}
 		stats.Add(numRemoteLoads, 1)
+		return addr, nil
 	}
-	return err
+	return p.GetAPIAddr(), err
 }
 
 // Remove removes a node from the cluster. If the local store returns
 // ErrNotLeader and noForward is false, the request is forwarded to
 // the current leader.
 func (p *Proxy) Remove(ctx context.Context, rn *proto.RemoveNodeRequest, creds *clstrPB.Credentials,
-	timeout time.Duration, noForward bool) error {
+	timeout time.Duration, noForward bool) (string, error) {
 
 	err := p.store.Remove(ctx, rn)
 	if errors.Is(err, store.ErrNotLeader) {
 		if noForward {
-			return ErrNotLeader
+			return "", ErrNotLeader
 		}
 		addr, addrErr := p.leaderAddr()
 		if addrErr != nil {
-			return addrErr
+			return "", addrErr
 		}
 		err = p.cluster.RemoveNode(ctx, rn, addr, creds, timeout)
 		if err != nil {
-			return wrapIfUnauthorized(err)
+			return "", wrapIfUnauthorized(err)
 		}
 		stats.Add(numRemoteRemoveNode, 1)
+		return addr, nil
 	}
-	return err
+	return p.GetAPIAddr(), err
 }
 
 // Stepdown triggers leader stepdown. If the local store returns
 // ErrNotLeader and noForward is false, the request is forwarded to
 // the current leader.
 func (p *Proxy) Stepdown(wait bool, id string, creds *clstrPB.Credentials,
-	timeout time.Duration, noForward bool) error {
+	timeout time.Duration, noForward bool) (string, error) {
 
 	err := p.store.Stepdown(wait, id)
 	if errors.Is(err, store.ErrNotLeader) {
 		if noForward {
-			return ErrNotLeader
+			return "", ErrNotLeader
 		}
 		addr, addrErr := p.leaderAddr()
 		if addrErr != nil {
-			return addrErr
+			return "", addrErr
 		}
 		sr := &proto.StepdownRequest{
 			Id:   id,
@@ -287,11 +293,12 @@ func (p *Proxy) Stepdown(wait bool, id string, creds *clstrPB.Credentials,
 		}
 		err = p.cluster.Stepdown(sr, addr, creds, timeout)
 		if err != nil {
-			return wrapIfUnauthorized(err)
+			return "", wrapIfUnauthorized(err)
 		}
 		stats.Add(numRemoteStepdowns, 1)
+		return addr, nil
 	}
-	return err
+	return p.GetAPIAddr(), err
 }
 
 // leaderAddr returns the Raft address of the current leader. Returns

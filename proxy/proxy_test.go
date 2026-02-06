@@ -154,7 +154,7 @@ func Test_Execute_LocalSuccess(t *testing.T) {
 	}
 	p := newTestProxy(s, &mockCluster{})
 
-	results, idx, err := p.Execute(context.Background(), &proto.ExecuteRequest{}, nil, time.Second, 0, false)
+	results, idx, addr, err := p.Execute(context.Background(), &proto.ExecuteRequest{}, nil, time.Second, 0, false)
 	if err != nil {
 		t.Fatalf("unexpected error: %s", err)
 	}
@@ -163,6 +163,9 @@ func Test_Execute_LocalSuccess(t *testing.T) {
 	}
 	if len(results) != 1 {
 		t.Fatalf("expected 1 result, got %d", len(results))
+	}
+	if addr != "" {
+		t.Fatalf("expected empty addr, got %s", addr)
 	}
 }
 
@@ -175,7 +178,7 @@ func Test_Execute_NotLeader_NoForward(t *testing.T) {
 	}
 	p := newTestProxy(s, &mockCluster{})
 
-	_, _, err := p.Execute(context.Background(), &proto.ExecuteRequest{}, nil, time.Second, 0, true)
+	_, _, _, err := p.Execute(context.Background(), &proto.ExecuteRequest{}, nil, time.Second, 0, true)
 	if !errors.Is(err, ErrNotLeader) {
 		t.Fatalf("expected ErrNotLeader, got %v", err)
 	}
@@ -202,7 +205,7 @@ func Test_Execute_NotLeader_Forward(t *testing.T) {
 	}
 	p := newTestProxy(s, c)
 
-	results, idx, err := p.Execute(context.Background(), &proto.ExecuteRequest{}, nil, time.Second, 0, false)
+	results, idx, addr, err := p.Execute(context.Background(), &proto.ExecuteRequest{}, nil, time.Second, 0, false)
 	if err != nil {
 		t.Fatalf("unexpected error: %s", err)
 	}
@@ -211,6 +214,9 @@ func Test_Execute_NotLeader_Forward(t *testing.T) {
 	}
 	if len(results) != 1 {
 		t.Fatalf("expected 1 result, got %d", len(results))
+	}
+	if addr != "leader:4002" {
+		t.Fatalf("expected addr leader:4002, got %s", addr)
 	}
 }
 
@@ -226,7 +232,7 @@ func Test_Execute_LeaderNotFound(t *testing.T) {
 	}
 	p := newTestProxy(s, &mockCluster{})
 
-	_, _, err := p.Execute(context.Background(), &proto.ExecuteRequest{}, nil, time.Second, 0, false)
+	_, _, _, err := p.Execute(context.Background(), &proto.ExecuteRequest{}, nil, time.Second, 0, false)
 	if !errors.Is(err, ErrLeaderNotFound) {
 		t.Fatalf("expected ErrLeaderNotFound, got %v", err)
 	}
@@ -249,7 +255,7 @@ func Test_Execute_Unauthorized(t *testing.T) {
 	}
 	p := newTestProxy(s, c)
 
-	_, _, err := p.Execute(context.Background(), &proto.ExecuteRequest{}, nil, time.Second, 0, false)
+	_, _, _, err := p.Execute(context.Background(), &proto.ExecuteRequest{}, nil, time.Second, 0, false)
 	if !errors.Is(err, ErrUnauthorized) {
 		t.Fatalf("expected ErrUnauthorized, got %v", err)
 	}
@@ -272,7 +278,7 @@ func Test_Execute_ClusterOtherError(t *testing.T) {
 	}
 	p := newTestProxy(s, c)
 
-	_, _, err := p.Execute(context.Background(), &proto.ExecuteRequest{}, nil, time.Second, 0, false)
+	_, _, _, err := p.Execute(context.Background(), &proto.ExecuteRequest{}, nil, time.Second, 0, false)
 	if err == nil || err.Error() != "some other error" {
 		t.Fatalf("expected 'some other error', got %v", err)
 	}
@@ -288,7 +294,7 @@ func Test_Execute_StoreOtherError(t *testing.T) {
 	}
 	p := newTestProxy(s, &mockCluster{})
 
-	_, _, err := p.Execute(context.Background(), &proto.ExecuteRequest{}, nil, time.Second, 0, false)
+	_, _, _, err := p.Execute(context.Background(), &proto.ExecuteRequest{}, nil, time.Second, 0, false)
 	if err != storeErr {
 		t.Fatalf("expected store error, got %v", err)
 	}
@@ -304,7 +310,7 @@ func Test_Query_LocalSuccess(t *testing.T) {
 	}
 	p := newTestProxy(s, &mockCluster{})
 
-	results, idx, err := p.Query(context.Background(), &proto.QueryRequest{}, nil, time.Second, false)
+	results, idx, addr, err := p.Query(context.Background(), &proto.QueryRequest{}, nil, time.Second, false)
 	if err != nil {
 		t.Fatalf("unexpected error: %s", err)
 	}
@@ -313,6 +319,9 @@ func Test_Query_LocalSuccess(t *testing.T) {
 	}
 	if len(results) != 1 {
 		t.Fatalf("expected 1 result, got %d", len(results))
+	}
+	if addr != "" {
+		t.Fatalf("expected empty addr, got %s", addr)
 	}
 }
 
@@ -325,7 +334,7 @@ func Test_Query_NotLeader_NoForward(t *testing.T) {
 	}
 	p := newTestProxy(s, &mockCluster{})
 
-	_, _, err := p.Query(context.Background(), &proto.QueryRequest{}, nil, time.Second, true)
+	_, _, _, err := p.Query(context.Background(), &proto.QueryRequest{}, nil, time.Second, true)
 	if !errors.Is(err, ErrNotLeader) {
 		t.Fatalf("expected ErrNotLeader, got %v", err)
 	}
@@ -352,7 +361,7 @@ func Test_Query_NotLeader_Forward(t *testing.T) {
 	}
 	p := newTestProxy(s, c)
 
-	results, idx, err := p.Query(context.Background(), &proto.QueryRequest{}, nil, time.Second, false)
+	results, idx, addr, err := p.Query(context.Background(), &proto.QueryRequest{}, nil, time.Second, false)
 	if err != nil {
 		t.Fatalf("unexpected error: %s", err)
 	}
@@ -361,6 +370,9 @@ func Test_Query_NotLeader_Forward(t *testing.T) {
 	}
 	if len(results) != 1 {
 		t.Fatalf("expected 1 result, got %d", len(results))
+	}
+	if addr != "leader:4002" {
+		t.Fatalf("expected addr leader:4002, got %s", addr)
 	}
 }
 
@@ -381,7 +393,7 @@ func Test_Query_Unauthorized(t *testing.T) {
 	}
 	p := newTestProxy(s, c)
 
-	_, _, err := p.Query(context.Background(), &proto.QueryRequest{}, nil, time.Second, false)
+	_, _, _, err := p.Query(context.Background(), &proto.QueryRequest{}, nil, time.Second, false)
 	if !errors.Is(err, ErrUnauthorized) {
 		t.Fatalf("expected ErrUnauthorized, got %v", err)
 	}
@@ -397,7 +409,7 @@ func Test_Request_LocalSuccess(t *testing.T) {
 	}
 	p := newTestProxy(s, &mockCluster{})
 
-	results, seq, idx, err := p.Request(context.Background(), &proto.ExecuteQueryRequest{}, nil, time.Second, 0, false)
+	results, seq, idx, addr, err := p.Request(context.Background(), &proto.ExecuteQueryRequest{}, nil, time.Second, 0, false)
 	if err != nil {
 		t.Fatalf("unexpected error: %s", err)
 	}
@@ -410,6 +422,9 @@ func Test_Request_LocalSuccess(t *testing.T) {
 	if len(results) != 1 {
 		t.Fatalf("expected 1 result, got %d", len(results))
 	}
+	if addr != "" {
+		t.Fatalf("expected empty addr, got %s", addr)
+	}
 }
 
 func Test_Request_NotLeader_NoForward(t *testing.T) {
@@ -421,7 +436,7 @@ func Test_Request_NotLeader_NoForward(t *testing.T) {
 	}
 	p := newTestProxy(s, &mockCluster{})
 
-	_, _, _, err := p.Request(context.Background(), &proto.ExecuteQueryRequest{}, nil, time.Second, 0, true)
+	_, _, _, _, err := p.Request(context.Background(), &proto.ExecuteQueryRequest{}, nil, time.Second, 0, true)
 	if !errors.Is(err, ErrNotLeader) {
 		t.Fatalf("expected ErrNotLeader, got %v", err)
 	}
@@ -445,7 +460,7 @@ func Test_Request_NotLeader_Forward(t *testing.T) {
 	}
 	p := newTestProxy(s, c)
 
-	results, seq, idx, err := p.Request(context.Background(), &proto.ExecuteQueryRequest{}, nil, time.Second, 0, false)
+	results, seq, idx, addr, err := p.Request(context.Background(), &proto.ExecuteQueryRequest{}, nil, time.Second, 0, false)
 	if err != nil {
 		t.Fatalf("unexpected error: %s", err)
 	}
@@ -457,6 +472,9 @@ func Test_Request_NotLeader_Forward(t *testing.T) {
 	}
 	if len(results) != 1 {
 		t.Fatalf("expected 1 result, got %d", len(results))
+	}
+	if addr != "leader:4002" {
+		t.Fatalf("expected addr leader:4002, got %s", addr)
 	}
 }
 
@@ -477,7 +495,7 @@ func Test_Request_Unauthorized(t *testing.T) {
 	}
 	p := newTestProxy(s, c)
 
-	_, _, _, err := p.Request(context.Background(), &proto.ExecuteQueryRequest{}, nil, time.Second, 0, false)
+	_, _, _, _, err := p.Request(context.Background(), &proto.ExecuteQueryRequest{}, nil, time.Second, 0, false)
 	if !errors.Is(err, ErrUnauthorized) {
 		t.Fatalf("expected ErrUnauthorized, got %v", err)
 	}
@@ -492,9 +510,12 @@ func Test_Backup_LocalSuccess(t *testing.T) {
 	}
 	p := newTestProxy(s, &mockCluster{})
 
-	err := p.Backup(context.Background(), &proto.BackupRequest{}, nil, nil, time.Second, false)
+	addr, err := p.Backup(context.Background(), &proto.BackupRequest{}, nil, nil, time.Second, false)
 	if err != nil {
 		t.Fatalf("unexpected error: %s", err)
+	}
+	if addr != "" {
+		t.Fatalf("expected empty addr, got %s", addr)
 	}
 }
 
@@ -507,7 +528,7 @@ func Test_Backup_NotLeader_NoForward(t *testing.T) {
 	}
 	p := newTestProxy(s, &mockCluster{})
 
-	err := p.Backup(context.Background(), &proto.BackupRequest{}, nil, nil, time.Second, true)
+	_, err := p.Backup(context.Background(), &proto.BackupRequest{}, nil, nil, time.Second, true)
 	if !errors.Is(err, ErrNotLeader) {
 		t.Fatalf("expected ErrNotLeader, got %v", err)
 	}
@@ -533,9 +554,12 @@ func Test_Backup_NotLeader_Forward(t *testing.T) {
 	}
 	p := newTestProxy(s, c)
 
-	err := p.Backup(context.Background(), &proto.BackupRequest{}, nil, nil, time.Second, false)
+	addr, err := p.Backup(context.Background(), &proto.BackupRequest{}, nil, nil, time.Second, false)
 	if err != nil {
 		t.Fatalf("unexpected error: %s", err)
+	}
+	if addr != "leader:4002" {
+		t.Fatalf("expected addr leader:4002, got %s", addr)
 	}
 }
 
@@ -556,7 +580,7 @@ func Test_Backup_Unauthorized(t *testing.T) {
 	}
 	p := newTestProxy(s, c)
 
-	err := p.Backup(context.Background(), &proto.BackupRequest{}, nil, nil, time.Second, false)
+	_, err := p.Backup(context.Background(), &proto.BackupRequest{}, nil, nil, time.Second, false)
 	if !errors.Is(err, ErrUnauthorized) {
 		t.Fatalf("expected ErrUnauthorized, got %v", err)
 	}
@@ -571,9 +595,12 @@ func Test_Load_LocalSuccess(t *testing.T) {
 	}
 	p := newTestProxy(s, &mockCluster{})
 
-	err := p.Load(context.Background(), &proto.LoadRequest{}, nil, time.Second, 0, false)
+	addr, err := p.Load(context.Background(), &proto.LoadRequest{}, nil, time.Second, 0, false)
 	if err != nil {
 		t.Fatalf("unexpected error: %s", err)
+	}
+	if addr != "" {
+		t.Fatalf("expected empty addr, got %s", addr)
 	}
 }
 
@@ -586,7 +613,7 @@ func Test_Load_NotLeader_NoForward(t *testing.T) {
 	}
 	p := newTestProxy(s, &mockCluster{})
 
-	err := p.Load(context.Background(), &proto.LoadRequest{}, nil, time.Second, 0, true)
+	_, err := p.Load(context.Background(), &proto.LoadRequest{}, nil, time.Second, 0, true)
 	if !errors.Is(err, ErrNotLeader) {
 		t.Fatalf("expected ErrNotLeader, got %v", err)
 	}
@@ -612,9 +639,12 @@ func Test_Load_NotLeader_Forward(t *testing.T) {
 	}
 	p := newTestProxy(s, c)
 
-	err := p.Load(context.Background(), &proto.LoadRequest{}, nil, time.Second, 0, false)
+	addr, err := p.Load(context.Background(), &proto.LoadRequest{}, nil, time.Second, 0, false)
 	if err != nil {
 		t.Fatalf("unexpected error: %s", err)
+	}
+	if addr != "leader:4002" {
+		t.Fatalf("expected addr leader:4002, got %s", addr)
 	}
 }
 
@@ -635,7 +665,7 @@ func Test_Load_Unauthorized(t *testing.T) {
 	}
 	p := newTestProxy(s, c)
 
-	err := p.Load(context.Background(), &proto.LoadRequest{}, nil, time.Second, 0, false)
+	_, err := p.Load(context.Background(), &proto.LoadRequest{}, nil, time.Second, 0, false)
 	if !errors.Is(err, ErrUnauthorized) {
 		t.Fatalf("expected ErrUnauthorized, got %v", err)
 	}
@@ -646,9 +676,12 @@ func Test_Remove_LocalSuccess(t *testing.T) {
 	s := &mockStore{}
 	p := newTestProxy(s, &mockCluster{})
 
-	err := p.Remove(context.Background(), &proto.RemoveNodeRequest{Id: "node1"}, nil, time.Second, false)
+	addr, err := p.Remove(context.Background(), &proto.RemoveNodeRequest{Id: "node1"}, nil, time.Second, false)
 	if err != nil {
 		t.Fatalf("unexpected error: %s", err)
+	}
+	if addr != "" {
+		t.Fatalf("expected empty addr, got %s", addr)
 	}
 }
 
@@ -661,7 +694,7 @@ func Test_Remove_NotLeader_NoForward(t *testing.T) {
 	}
 	p := newTestProxy(s, &mockCluster{})
 
-	err := p.Remove(context.Background(), &proto.RemoveNodeRequest{Id: "node1"}, nil, time.Second, true)
+	_, err := p.Remove(context.Background(), &proto.RemoveNodeRequest{Id: "node1"}, nil, time.Second, true)
 	if !errors.Is(err, ErrNotLeader) {
 		t.Fatalf("expected ErrNotLeader, got %v", err)
 	}
@@ -687,9 +720,12 @@ func Test_Remove_NotLeader_Forward(t *testing.T) {
 	}
 	p := newTestProxy(s, c)
 
-	err := p.Remove(context.Background(), &proto.RemoveNodeRequest{Id: "node1"}, nil, time.Second, false)
+	addr, err := p.Remove(context.Background(), &proto.RemoveNodeRequest{Id: "node1"}, nil, time.Second, false)
 	if err != nil {
 		t.Fatalf("unexpected error: %s", err)
+	}
+	if addr != "leader:4002" {
+		t.Fatalf("expected addr leader:4002, got %s", addr)
 	}
 }
 
@@ -698,9 +734,12 @@ func Test_Stepdown_LocalSuccess(t *testing.T) {
 	s := &mockStore{}
 	p := newTestProxy(s, &mockCluster{})
 
-	err := p.Stepdown(true, "node1", nil, time.Second, false)
+	addr, err := p.Stepdown(true, "node1", nil, time.Second, false)
 	if err != nil {
 		t.Fatalf("unexpected error: %s", err)
+	}
+	if addr != "" {
+		t.Fatalf("expected empty addr, got %s", addr)
 	}
 }
 
@@ -713,7 +752,7 @@ func Test_Stepdown_NotLeader_NoForward(t *testing.T) {
 	}
 	p := newTestProxy(s, &mockCluster{})
 
-	err := p.Stepdown(true, "", nil, time.Second, true)
+	_, err := p.Stepdown(true, "", nil, time.Second, true)
 	if !errors.Is(err, ErrNotLeader) {
 		t.Fatalf("expected ErrNotLeader, got %v", err)
 	}
@@ -745,9 +784,12 @@ func Test_Stepdown_NotLeader_Forward(t *testing.T) {
 	}
 	p := newTestProxy(s, c)
 
-	err := p.Stepdown(true, "node1", nil, time.Second, false)
+	addr, err := p.Stepdown(true, "node1", nil, time.Second, false)
 	if err != nil {
 		t.Fatalf("unexpected error: %s", err)
+	}
+	if addr != "leader:4002" {
+		t.Fatalf("expected addr leader:4002, got %s", addr)
 	}
 }
 
@@ -768,7 +810,7 @@ func Test_Stepdown_Unauthorized(t *testing.T) {
 	}
 	p := newTestProxy(s, c)
 
-	err := p.Stepdown(true, "", nil, time.Second, false)
+	_, err := p.Stepdown(true, "", nil, time.Second, false)
 	if !errors.Is(err, ErrUnauthorized) {
 		t.Fatalf("expected ErrUnauthorized, got %v", err)
 	}
@@ -787,7 +829,7 @@ func Test_LeaderAddrError(t *testing.T) {
 	}
 	p := newTestProxy(s, &mockCluster{})
 
-	_, _, err := p.Execute(context.Background(), &proto.ExecuteRequest{}, nil, time.Second, 0, false)
+	_, _, _, err := p.Execute(context.Background(), &proto.ExecuteRequest{}, nil, time.Second, 0, false)
 	if err != leaderErr {
 		t.Fatalf("expected leader error, got %v", err)
 	}

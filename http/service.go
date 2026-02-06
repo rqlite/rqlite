@@ -539,7 +539,7 @@ func (s *Service) handleRemove(w http.ResponseWriter, r *http.Request, qp QueryP
 		Id: remoteID,
 	}
 
-	err = s.proxy.Remove(r.Context(), rn, makeCredentials(r), qp.Timeout(defaultTimeout), qp.Redirect())
+	addr, err := s.proxy.Remove(r.Context(), rn, makeCredentials(r), qp.Timeout(defaultTimeout), qp.Redirect())
 	if err != nil {
 		if errors.Is(err, proxy.ErrNotLeader) {
 			s.DoRedirect(w, r, qp)
@@ -557,6 +557,7 @@ func (s *Service) handleRemove(w http.ResponseWriter, r *http.Request, qp QueryP
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
+	w.Header().Set(ServedByHTTPHeader, addr)
 }
 
 // handleSQLAnalyze handles requests to analyze and show SQL rewriting.
@@ -651,7 +652,7 @@ func (s *Service) handleBackup(w http.ResponseWriter, r *http.Request, qp QueryP
 	}
 	addBackupFormatHeader(w, qp)
 
-	err := s.proxy.Backup(r.Context(), br, w, makeCredentials(r), qp.Timeout(defaultTimeout), qp.Redirect())
+	addr, err := s.proxy.Backup(r.Context(), br, w, makeCredentials(r), qp.Timeout(defaultTimeout), qp.Redirect())
 	if err != nil {
 		if errors.Is(err, proxy.ErrNotLeader) {
 			s.DoRedirect(w, r, qp)
@@ -673,6 +674,7 @@ func (s *Service) handleBackup(w http.ResponseWriter, r *http.Request, qp QueryP
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
+	w.Header().Set(ServedByHTTPHeader, addr)
 
 	s.lastBackup = time.Now()
 }
@@ -720,7 +722,7 @@ func (s *Service) handleLoad(w http.ResponseWriter, r *http.Request, qp QueryPar
 			Data: b,
 		}
 
-		err := s.proxy.Load(r.Context(), lr, makeCredentials(r), qp.Timeout(defaultTimeout), qp.Retries(0), qp.Redirect())
+		addr, err := s.proxy.Load(r.Context(), lr, makeCredentials(r), qp.Timeout(defaultTimeout), qp.Retries(0), qp.Redirect())
 		if err != nil {
 			if handleProxyErr(err) {
 				return
@@ -728,13 +730,14 @@ func (s *Service) handleLoad(w http.ResponseWriter, r *http.Request, qp QueryPar
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
+		w.Header().Set(ServedByHTTPHeader, addr)
 	} else {
 		// No JSON structure expected for this API, just a bunch of SQL statements.
 		queries := []string{string(b)}
 		er := executeRequestFromStrings(queries, qp.Timings(), false)
 		er.Request.RollbackOnError = true
 
-		response, _, resultsErr := s.proxy.Execute(r.Context(), er, makeCredentials(r),
+		response, _, addr, resultsErr := s.proxy.Execute(r.Context(), er, makeCredentials(r),
 			qp.Timeout(defaultTimeout), qp.Retries(0), qp.Redirect())
 		if resultsErr != nil {
 			if handleProxyErr(resultsErr) {
@@ -742,6 +745,7 @@ func (s *Service) handleLoad(w http.ResponseWriter, r *http.Request, qp QueryPar
 			}
 			resp.Error = resultsErr.Error()
 		} else {
+			w.Header().Set(ServedByHTTPHeader, addr)
 			resp.Results.ExecuteQueryResponse = response
 		}
 		resp.end = time.Now()
@@ -1057,7 +1061,8 @@ func (s *Service) handleLeader(w http.ResponseWriter, r *http.Request, qp QueryP
 			nodeID = reqBody.ID
 		}
 
-		if err := s.proxy.Stepdown(wait, nodeID, makeCredentials(r), qp.Timeout(defaultTimeout), qp.Redirect()); err != nil {
+		addr, err := s.proxy.Stepdown(wait, nodeID, makeCredentials(r), qp.Timeout(defaultTimeout), qp.Redirect())
+		if err != nil {
 			if errors.Is(err, proxy.ErrNotLeader) {
 				s.DoRedirect(w, r, qp)
 				return
@@ -1079,6 +1084,7 @@ func (s *Service) handleLeader(w http.ResponseWriter, r *http.Request, qp QueryP
 			http.Error(w, fmt.Sprintf("stepdown: %s", err.Error()), statusCode)
 			return
 		}
+		w.Header().Set(ServedByHTTPHeader, addr)
 		w.WriteHeader(http.StatusOK)
 
 	default:
@@ -1284,7 +1290,7 @@ func (s *Service) execute(w http.ResponseWriter, r *http.Request, qp QueryParams
 		Timings: qp.Timings(),
 	}
 
-	results, raftIndex, resultsErr := s.proxy.Execute(r.Context(), er, makeCredentials(r),
+	results, raftIndex, addr, resultsErr := s.proxy.Execute(r.Context(), er, makeCredentials(r),
 		qp.Timeout(defaultTimeout), qp.Retries(0), qp.Redirect())
 	if resultsErr != nil {
 		if errors.Is(resultsErr, proxy.ErrNotLeader) {
@@ -1305,6 +1311,7 @@ func (s *Service) execute(w http.ResponseWriter, r *http.Request, qp QueryParams
 	if resultsErr != nil {
 		resp.Error = resultsErr.Error()
 	} else {
+		w.Header().Set(ServedByHTTPHeader, addr)
 		resp.Results.ExecuteQueryResponse = results
 		if qp.RaftIndex() {
 			resp.RaftIndex = raftIndex
@@ -1375,7 +1382,7 @@ func (s *Service) handleQuery(w http.ResponseWriter, r *http.Request, qp QueryPa
 		LinearizableTimeout: qp.LinearizableTimeout(defaultLinearTimeout).Nanoseconds(),
 	}
 
-	results, raftIndex, resultsErr := s.proxy.Query(r.Context(), qr, makeCredentials(r),
+	results, raftIndex, addr, resultsErr := s.proxy.Query(r.Context(), qr, makeCredentials(r),
 		qp.Timeout(defaultTimeout), qp.Redirect())
 	if resultsErr != nil {
 		if errors.Is(resultsErr, proxy.ErrNotLeader) {
@@ -1396,6 +1403,7 @@ func (s *Service) handleQuery(w http.ResponseWriter, r *http.Request, qp QueryPa
 	if resultsErr != nil {
 		resp.Error = resultsErr.Error()
 	} else {
+		w.Header().Set(ServedByHTTPHeader, addr)
 		resp.Results.QueryRows = results
 		if qp.RaftIndex() {
 			resp.RaftIndex = raftIndex
@@ -1448,7 +1456,7 @@ func (s *Service) handleRequest(w http.ResponseWriter, r *http.Request, qp Query
 		FreshnessStrict: qp.FreshnessStrict(),
 	}
 
-	results, _, raftIndex, resultsErr := s.proxy.Request(r.Context(), eqr, makeCredentials(r),
+	results, _, raftIndex, addr, resultsErr := s.proxy.Request(r.Context(), eqr, makeCredentials(r),
 		qp.Timeout(defaultTimeout), qp.Retries(0), qp.Redirect())
 	if resultsErr != nil {
 		if errors.Is(resultsErr, proxy.ErrNotLeader) {
@@ -1469,6 +1477,7 @@ func (s *Service) handleRequest(w http.ResponseWriter, r *http.Request, qp Query
 	if resultsErr != nil {
 		resp.Error = resultsErr.Error()
 	} else {
+		w.Header().Set(ServedByHTTPHeader, addr)
 		resp.Results.ExecuteQueryResponse = results
 		if qp.RaftIndex() {
 			resp.RaftIndex = raftIndex
@@ -1658,7 +1667,7 @@ func (s *Service) runQueue() {
 			// a "checkpoint" through the queue.
 			if er.Request.Statements != nil {
 				for {
-					_, _, err = s.proxy.Execute(context.Background(), er, nil, defaultTimeout, 0, false)
+					_, _, _, err = s.proxy.Execute(context.Background(), er, nil, defaultTimeout, 0, false)
 					if err == nil {
 						// Success!
 						break
