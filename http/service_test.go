@@ -501,6 +501,7 @@ func Test_401Routes_BasicAuthBadPerm(t *testing.T) {
 		"/db/backup",
 		"/db/request",
 		"/db/load",
+		"/db/sql",
 		"/boot",
 		"/snapshot",
 		"/status",
@@ -2248,33 +2249,97 @@ func mustParseDuration(d string) time.Duration {
 	}
 }
 
-func Test_SQLAnalyze_Random(t *testing.T) {
+// newSQLAnalyzeHost creates a test HTTP service and returns the host URL.
+// The service is automatically cleaned up when the test finishes.
+func newSQLAnalyzeHost(t *testing.T) string {
+	t.Helper()
 	m := &MockStore{
 		leaderAddr: "foo:1234",
 	}
 	c := &mockClusterService{}
 	s := New("127.0.0.1:0", m, c, nil)
 	if err := s.Start(); err != nil {
-		t.Fatalf("failed to start service")
+		t.Fatalf("failed to start service: %v", err)
 	}
-	defer s.Close()
+	t.Cleanup(func() { s.Close() })
+	return fmt.Sprintf("http://%s", s.Addr().String())
+}
 
+func Test_SQLAnalyze_InvalidJSON(t *testing.T) {
+	host := newSQLAnalyzeHost(t)
 	client := &http.Client{}
+
+	resp, err := client.Post(host+"/db/sql", "application/json",
+		strings.NewReader(`not json`))
+	if err != nil {
+		t.Fatalf("failed to make request: %s", err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusBadRequest {
+		t.Fatalf("expected StatusBadRequest for invalid JSON, got %d", resp.StatusCode)
+	}
+}
+
+func Test_SQLAnalyze_Unauthorized(t *testing.T) {
+	c := &mockCredentialStore{HasPermOK: false}
+	m := &MockStore{
+		leaderAddr: "foo:1234",
+	}
+	n := &mockClusterService{}
+	s := New("127.0.0.1:0", m, n, c)
+	if err := s.Start(); err != nil {
+		t.Fatalf("failed to start service: %v", err)
+	}
+	t.Cleanup(func() { s.Close() })
 	host := fmt.Sprintf("http://%s", s.Addr().String())
 
-	// Test RANDOM() is replaced with an integer
+	client := &http.Client{}
+	req, err := http.NewRequest("POST", host+"/db/sql", strings.NewReader(`["SELECT 1"]`))
+	if err != nil {
+		t.Fatalf("failed to create request: %s", err)
+	}
+	req.Header.Set("Content-Type", "application/json")
+	req.SetBasicAuth("username1", "password1")
+
+	resp, err := client.Do(req)
+	if err != nil {
+		t.Fatalf("failed to make request: %s", err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusUnauthorized {
+		t.Fatalf("expected StatusUnauthorized, got %d", resp.StatusCode)
+	}
+}
+
+// mustGetFirstResult is a helper to extract the first result from a JSON response.
+func mustGetFirstResult(t *testing.T, body string) map[string]any {
+	t.Helper()
+	var result map[string]any
+	if err := json.Unmarshal([]byte(body), &result); err != nil {
+		t.Fatalf("failed to unmarshal response: %s", err)
+	}
+	results, ok := result["results"].([]any)
+	if !ok || len(results) < 1 {
+		t.Fatalf("expected at least 1 result, got %v", result)
+	}
+	return results[0].(map[string]any)
+}
+
+func Test_SQLAnalyze_Random(t *testing.T) {
+	host := newSQLAnalyzeHost(t)
+	client := &http.Client{}
+
 	resp, err := client.Post(host+"/db/sql", "application/json",
 		strings.NewReader(`["INSERT INTO foo VALUES(RANDOM())"]`))
 	if err != nil {
-		t.Fatalf("failed to make sql analyze request: %s", err)
+		t.Fatalf("failed to make request: %s", err)
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusOK {
 		t.Fatalf("expected StatusOK, got %d", resp.StatusCode)
 	}
 
-	body := mustReadBody(t, resp)
-	r := mustGetFirstResult(t, body)
+	r := mustGetFirstResult(t, mustReadBody(t, resp))
 
 	if r["original"] != "INSERT INTO foo VALUES(RANDOM())" {
 		t.Fatalf("unexpected original: %v", r["original"])
@@ -2285,36 +2350,23 @@ func Test_SQLAnalyze_Random(t *testing.T) {
 
 	// RANDOM() should be replaced with an integer (positive or negative)
 	rewritten := r["rewritten"].(string)
-	randomIntPattern := regexp.MustCompile(`VALUES \(-?\d+\)`)
-	if !randomIntPattern.MatchString(rewritten) {
+	if !regexp.MustCompile(`VALUES \(-?\d+\)`).MatchString(rewritten) {
 		t.Fatalf("expected RANDOM() to be replaced with integer, got: %s", rewritten)
 	}
 }
 
 func Test_SQLAnalyze_RandomBlob(t *testing.T) {
-	m := &MockStore{
-		leaderAddr: "foo:1234",
-	}
-	c := &mockClusterService{}
-	s := New("127.0.0.1:0", m, c, nil)
-	if err := s.Start(); err != nil {
-		t.Fatalf("failed to start service")
-	}
-	defer s.Close()
-
+	host := newSQLAnalyzeHost(t)
 	client := &http.Client{}
-	host := fmt.Sprintf("http://%s", s.Addr().String())
 
-	// Test RANDOMBLOB(16) is replaced with a hex blob literal
 	resp, err := client.Post(host+"/db/sql", "application/json",
 		strings.NewReader(`["INSERT INTO foo VALUES(RANDOMBLOB(16))"]`))
 	if err != nil {
-		t.Fatalf("failed to make sql analyze request: %s", err)
+		t.Fatalf("failed to make request: %s", err)
 	}
 	defer resp.Body.Close()
 
-	body := mustReadBody(t, resp)
-	r := mustGetFirstResult(t, body)
+	r := mustGetFirstResult(t, mustReadBody(t, resp))
 
 	if r["original"] != "INSERT INTO foo VALUES(RANDOMBLOB(16))" {
 		t.Fatalf("unexpected original: %v", r["original"])
@@ -2325,28 +2377,17 @@ func Test_SQLAnalyze_RandomBlob(t *testing.T) {
 
 	// RANDOMBLOB(16) should be replaced with x'...' containing 32 hex chars (16 bytes)
 	rewritten := r["rewritten"].(string)
-	blobPattern := regexp.MustCompile(`VALUES \(x'[A-F0-9]{32}'\)`)
-	if !blobPattern.MatchString(rewritten) {
+	if !regexp.MustCompile(`VALUES \(x'[A-F0-9]{32}'\)`).MatchString(rewritten) {
 		t.Fatalf("expected RANDOMBLOB(16) to be replaced with 32-char hex blob, got: %s", rewritten)
 	}
 }
 
 func Test_SQLAnalyze_TimeFunctions(t *testing.T) {
-	m := &MockStore{
-		leaderAddr: "foo:1234",
-	}
-	c := &mockClusterService{}
-	s := New("127.0.0.1:0", m, c, nil)
-	if err := s.Start(); err != nil {
-		t.Fatalf("failed to start service")
-	}
-	defer s.Close()
-
+	host := newSQLAnalyzeHost(t)
 	client := &http.Client{}
-	host := fmt.Sprintf("http://%s", s.Addr().String())
 
 	// Julian day pattern: a decimal number like 2461077.397825
-	julianDayPattern := regexp.MustCompile(`\d{7}\.\d+`)
+	julianDayPattern := `\d{7}\.\d+`
 
 	testCases := []struct {
 		name     string
@@ -2369,16 +2410,15 @@ func Test_SQLAnalyze_TimeFunctions(t *testing.T) {
 			}
 			defer resp.Body.Close()
 
-			body := mustReadBody(t, resp)
-			r := mustGetFirstResult(t, body)
+			r := mustGetFirstResult(t, mustReadBody(t, resp))
 
 			if r["rewritten_time"] != true {
 				t.Fatalf("expected rewritten_time to be true")
 			}
 
-			rewritten := r["rewritten"].(string)
 			// Check that 'now' was replaced with a Julian day number
-			funcPattern := regexp.MustCompile(tc.funcName + `\(` + julianDayPattern.String() + `\)`)
+			rewritten := r["rewritten"].(string)
+			funcPattern := regexp.MustCompile(tc.funcName + `\(` + julianDayPattern + `\)`)
 			if !funcPattern.MatchString(rewritten) {
 				t.Fatalf("expected %s('now') to be replaced with Julian day, got: %s", tc.funcName, rewritten)
 			}
@@ -2387,20 +2427,9 @@ func Test_SQLAnalyze_TimeFunctions(t *testing.T) {
 }
 
 func Test_SQLAnalyze_Strftime(t *testing.T) {
-	m := &MockStore{
-		leaderAddr: "foo:1234",
-	}
-	c := &mockClusterService{}
-	s := New("127.0.0.1:0", m, c, nil)
-	if err := s.Start(); err != nil {
-		t.Fatalf("failed to start service")
-	}
-	defer s.Close()
-
+	host := newSQLAnalyzeHost(t)
 	client := &http.Client{}
-	host := fmt.Sprintf("http://%s", s.Addr().String())
 
-	// Test strftime where 'now' is the second argument
 	resp, err := client.Post(host+"/db/sql", "application/json",
 		strings.NewReader(`["INSERT INTO foo VALUES(strftime('%Y-%m-%d', 'now'))"]`))
 	if err != nil {
@@ -2408,36 +2437,23 @@ func Test_SQLAnalyze_Strftime(t *testing.T) {
 	}
 	defer resp.Body.Close()
 
-	body := mustReadBody(t, resp)
-	r := mustGetFirstResult(t, body)
+	r := mustGetFirstResult(t, mustReadBody(t, resp))
 
 	if r["rewritten_time"] != true {
 		t.Fatalf("expected rewritten_time to be true")
 	}
 
-	rewritten := r["rewritten"].(string)
 	// strftime('%Y-%m-%d', 'now') -> strftime('%Y-%m-%d', JULIAN_DAY)
-	strftimePattern := regexp.MustCompile(`strftime\('%Y-%m-%d', \d{7}\.\d+\)`)
-	if !strftimePattern.MatchString(rewritten) {
+	rewritten := r["rewritten"].(string)
+	if !regexp.MustCompile(`strftime\('%Y-%m-%d', \d{7}\.\d+\)`).MatchString(rewritten) {
 		t.Fatalf("expected strftime 'now' to be replaced with Julian day, got: %s", rewritten)
 	}
 }
 
 func Test_SQLAnalyze_Timediff(t *testing.T) {
-	m := &MockStore{
-		leaderAddr: "foo:1234",
-	}
-	c := &mockClusterService{}
-	s := New("127.0.0.1:0", m, c, nil)
-	if err := s.Start(); err != nil {
-		t.Fatalf("failed to start service")
-	}
-	defer s.Close()
-
+	host := newSQLAnalyzeHost(t)
 	client := &http.Client{}
-	host := fmt.Sprintf("http://%s", s.Addr().String())
 
-	// Test timediff with 'now' as first argument
 	resp, err := client.Post(host+"/db/sql", "application/json",
 		strings.NewReader(`["INSERT INTO foo VALUES(timediff('now', '2020-01-01'))"]`))
 	if err != nil {
@@ -2445,34 +2461,22 @@ func Test_SQLAnalyze_Timediff(t *testing.T) {
 	}
 	defer resp.Body.Close()
 
-	body := mustReadBody(t, resp)
-	r := mustGetFirstResult(t, body)
+	r := mustGetFirstResult(t, mustReadBody(t, resp))
 
 	if r["rewritten_time"] != true {
 		t.Fatalf("expected rewritten_time to be true")
 	}
 
-	rewritten := r["rewritten"].(string)
 	// timediff('now', '2020-01-01') -> timediff(JULIAN_DAY, '2020-01-01')
-	timediffPattern := regexp.MustCompile(`timediff\(\d{7}\.\d+, '2020-01-01'\)`)
-	if !timediffPattern.MatchString(rewritten) {
+	rewritten := r["rewritten"].(string)
+	if !regexp.MustCompile(`timediff\(\d{7}\.\d+, '2020-01-01'\)`).MatchString(rewritten) {
 		t.Fatalf("expected timediff 'now' to be replaced with Julian day, got: %s", rewritten)
 	}
 }
 
 func Test_SQLAnalyze_OrderByRandom(t *testing.T) {
-	m := &MockStore{
-		leaderAddr: "foo:1234",
-	}
-	c := &mockClusterService{}
-	s := New("127.0.0.1:0", m, c, nil)
-	if err := s.Start(); err != nil {
-		t.Fatalf("failed to start service")
-	}
-	defer s.Close()
-
+	host := newSQLAnalyzeHost(t)
 	client := &http.Client{}
-	host := fmt.Sprintf("http://%s", s.Addr().String())
 
 	// ORDER BY RANDOM() should NOT be rewritten (per documentation)
 	resp, err := client.Post(host+"/db/sql", "application/json",
@@ -2482,36 +2486,23 @@ func Test_SQLAnalyze_OrderByRandom(t *testing.T) {
 	}
 	defer resp.Body.Close()
 
-	body := mustReadBody(t, resp)
-	r := mustGetFirstResult(t, body)
+	r := mustGetFirstResult(t, mustReadBody(t, resp))
 
-	// rewritten_random should not be set (or false) since ORDER BY RANDOM() is not rewritten
 	if r["rewritten_random"] == true {
 		t.Fatalf("ORDER BY RANDOM() should not be rewritten")
 	}
 
-	rewritten := r["rewritten"].(string)
 	// RANDOM() should still be present in the output
+	rewritten := r["rewritten"].(string)
 	if !strings.Contains(rewritten, "RANDOM()") {
 		t.Fatalf("expected RANDOM() to remain in ORDER BY clause, got: %s", rewritten)
 	}
 }
 
 func Test_SQLAnalyze_NoRewriteRandom(t *testing.T) {
-	m := &MockStore{
-		leaderAddr: "foo:1234",
-	}
-	c := &mockClusterService{}
-	s := New("127.0.0.1:0", m, c, nil)
-	if err := s.Start(); err != nil {
-		t.Fatalf("failed to start service")
-	}
-	defer s.Close()
-
+	host := newSQLAnalyzeHost(t)
 	client := &http.Client{}
-	host := fmt.Sprintf("http://%s", s.Addr().String())
 
-	// Test with norwrandom flag - RANDOM() should not be rewritten
 	resp, err := client.Post(host+"/db/sql?norwrandom", "application/json",
 		strings.NewReader(`["INSERT INTO foo VALUES(RANDOM())"]`))
 	if err != nil {
@@ -2519,8 +2510,7 @@ func Test_SQLAnalyze_NoRewriteRandom(t *testing.T) {
 	}
 	defer resp.Body.Close()
 
-	body := mustReadBody(t, resp)
-	r := mustGetFirstResult(t, body)
+	r := mustGetFirstResult(t, mustReadBody(t, resp))
 
 	if r["rewritten_random"] == true {
 		t.Fatalf("expected rewritten_random to be false when norwrandom set")
@@ -2533,20 +2523,9 @@ func Test_SQLAnalyze_NoRewriteRandom(t *testing.T) {
 }
 
 func Test_SQLAnalyze_NoRewriteTime(t *testing.T) {
-	m := &MockStore{
-		leaderAddr: "foo:1234",
-	}
-	c := &mockClusterService{}
-	s := New("127.0.0.1:0", m, c, nil)
-	if err := s.Start(); err != nil {
-		t.Fatalf("failed to start service")
-	}
-	defer s.Close()
-
+	host := newSQLAnalyzeHost(t)
 	client := &http.Client{}
-	host := fmt.Sprintf("http://%s", s.Addr().String())
 
-	// Test with norwtime flag - time functions should not be rewritten
 	resp, err := client.Post(host+"/db/sql?norwtime", "application/json",
 		strings.NewReader(`["INSERT INTO foo VALUES(datetime('now'))"]`))
 	if err != nil {
@@ -2554,8 +2533,7 @@ func Test_SQLAnalyze_NoRewriteTime(t *testing.T) {
 	}
 	defer resp.Body.Close()
 
-	body := mustReadBody(t, resp)
-	r := mustGetFirstResult(t, body)
+	r := mustGetFirstResult(t, mustReadBody(t, resp))
 
 	if r["rewritten_time"] == true {
 		t.Fatalf("expected rewritten_time to be false when norwtime set")
@@ -2568,20 +2546,9 @@ func Test_SQLAnalyze_NoRewriteTime(t *testing.T) {
 }
 
 func Test_SQLAnalyze_ParseError(t *testing.T) {
-	m := &MockStore{
-		leaderAddr: "foo:1234",
-	}
-	c := &mockClusterService{}
-	s := New("127.0.0.1:0", m, c, nil)
-	if err := s.Start(); err != nil {
-		t.Fatalf("failed to start service")
-	}
-	defer s.Close()
-
+	host := newSQLAnalyzeHost(t)
 	client := &http.Client{}
-	host := fmt.Sprintf("http://%s", s.Addr().String())
 
-	// Test with invalid SQL
 	resp, err := client.Post(host+"/db/sql", "application/json",
 		strings.NewReader(`["SLECT * FORM foo"]`))
 	if err != nil {
@@ -2593,8 +2560,7 @@ func Test_SQLAnalyze_ParseError(t *testing.T) {
 		t.Fatalf("expected StatusOK even for parse errors, got %d", resp.StatusCode)
 	}
 
-	body := mustReadBody(t, resp)
-	r := mustGetFirstResult(t, body)
+	r := mustGetFirstResult(t, mustReadBody(t, resp))
 
 	if r["error"] == nil || r["error"] == "" {
 		t.Fatalf("expected error field to be set for invalid SQL")
@@ -2605,18 +2571,8 @@ func Test_SQLAnalyze_ParseError(t *testing.T) {
 }
 
 func Test_SQLAnalyze_MethodNotAllowed(t *testing.T) {
-	m := &MockStore{
-		leaderAddr: "foo:1234",
-	}
-	c := &mockClusterService{}
-	s := New("127.0.0.1:0", m, c, nil)
-	if err := s.Start(); err != nil {
-		t.Fatalf("failed to start service")
-	}
-	defer s.Close()
-
+	host := newSQLAnalyzeHost(t)
 	client := &http.Client{}
-	host := fmt.Sprintf("http://%s", s.Addr().String())
 
 	resp, err := client.Get(host + "/db/sql")
 	if err != nil {
@@ -2629,20 +2585,9 @@ func Test_SQLAnalyze_MethodNotAllowed(t *testing.T) {
 }
 
 func Test_SQLAnalyze_MultipleStatements(t *testing.T) {
-	m := &MockStore{
-		leaderAddr: "foo:1234",
-	}
-	c := &mockClusterService{}
-	s := New("127.0.0.1:0", m, c, nil)
-	if err := s.Start(); err != nil {
-		t.Fatalf("failed to start service")
-	}
-	defer s.Close()
-
+	host := newSQLAnalyzeHost(t)
 	client := &http.Client{}
-	host := fmt.Sprintf("http://%s", s.Addr().String())
 
-	// Test multiple statements in one request
 	resp, err := client.Post(host+"/db/sql", "application/json",
 		strings.NewReader(`["INSERT INTO foo VALUES(RANDOM())", "INSERT INTO bar VALUES(datetime('now'))"]`))
 	if err != nil {
@@ -2672,20 +2617,6 @@ func Test_SQLAnalyze_MultipleStatements(t *testing.T) {
 	if r1["rewritten_time"] != true {
 		t.Fatalf("expected second statement to have rewritten_time=true")
 	}
-}
-
-// mustGetFirstResult is a helper to extract the first result from a JSON response
-func mustGetFirstResult(t *testing.T, body string) map[string]any {
-	t.Helper()
-	var result map[string]any
-	if err := json.Unmarshal([]byte(body), &result); err != nil {
-		t.Fatalf("failed to unmarshal response: %s", err)
-	}
-	results, ok := result["results"].([]any)
-	if !ok || len(results) < 1 {
-		t.Fatalf("expected at least 1 result, got %v", result)
-	}
-	return results[0].(map[string]any)
 }
 
 func mustGetQueryParams(req *http.Request) QueryParams {

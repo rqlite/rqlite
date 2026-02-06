@@ -1949,6 +1949,25 @@ func getSubJSON(jsonBlob []byte, keyString string) (json.RawMessage, error) {
 	return finalObjBytes, nil
 }
 
+type sqlAnalyzeStmtResult struct {
+	Original        string `json:"original"`
+	Rewritten       string `json:"rewritten,omitempty"`
+	RewrittenRandom bool   `json:"rewritten_random,omitempty"`
+	RewrittenTime   bool   `json:"rewritten_time,omitempty"`
+	IsQuery         bool   `json:"is_query,omitempty"`
+	Error           string `json:"error,omitempty"`
+}
+
+type sqlAnalyzeResponse struct {
+	Results []sqlAnalyzeStmtResult `json:"results"`
+	Time    float64                `json:"time,omitempty"`
+	start   time.Time
+}
+
+func (r *sqlAnalyzeResponse) SetTime() {
+	r.Time = time.Since(r.start).Seconds()
+}
+
 // handleSQLAnalyze handles requests to analyze and show SQL rewriting.
 func (s *Service) handleSQLAnalyze(w http.ResponseWriter, r *http.Request, qp QueryParams) {
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")
@@ -1969,68 +1988,51 @@ func (s *Service) handleSQLAnalyze(w http.ResponseWriter, r *http.Request, qp Qu
 		return
 	}
 
-	type stmtResult struct {
-		Original        string `json:"original"`
-		Rewritten       string `json:"rewritten,omitempty"`
-		RewrittenRandom bool   `json:"rewritten_random,omitempty"`
-		RewrittenTime   bool   `json:"rewritten_time,omitempty"`
-		IsQuery         bool   `json:"is_query,omitempty"`
-		Error           string `json:"error,omitempty"`
-	}
+	analyzeStmt := func(sqlStr string, rwRand, rwTime bool) (res sqlAnalyzeStmtResult, retErr error) {
+		defer func() {
+			if r := recover(); r != nil {
+				retErr = fmt.Errorf("panic during SQL analysis: %v", r)
+			}
+		}()
+		res.Original = sqlStr
 
-	type response struct {
-		Results []stmtResult `json:"results"`
-		Time    float64      `json:"time,omitempty"`
-	}
-
-	start := time.Now()
-	results := make([]stmtResult, len(stmts))
-	for i, stmt := range stmts {
-		results[i].Original = stmt.Sql
-
-		parsed, err := rsql.NewParser(strings.NewReader(stmt.Sql)).ParseStatement()
+		parsed, err := rsql.NewParser(strings.NewReader(sqlStr)).ParseStatement()
 		if err != nil {
-			results[i].Error = err.Error()
-			continue
+			res.Error = err.Error()
+			return res, nil
 		}
 
 		rewriter := sql.NewRewriter()
-		rewriter.RewriteRand = !qp.NoRewriteRandom()
-		rewriter.RewriteTime = !qp.NoRewriteTime()
+		rewriter.RewriteRand = rwRand
+		rewriter.RewriteTime = rwTime
 		rwStmt, modified, returning, err := rewriter.Do(parsed)
 		if err != nil {
-			results[i].Error = err.Error()
-			continue
+			res.Error = err.Error()
+			return res, nil
 		}
 
-		results[i].Rewritten = rwStmt.String()
+		res.Rewritten = rwStmt.String()
 		if modified {
-			lowered := strings.ToLower(stmt.Sql)
-			results[i].RewrittenRandom = sql.ContainsRandom(lowered)
-			results[i].RewrittenTime = sql.ContainsTime(lowered)
+			lowered := strings.ToLower(sqlStr)
+			res.RewrittenRandom = sql.ContainsRandom(lowered)
+			res.RewrittenTime = sql.ContainsTime(lowered)
 		}
-		results[i].IsQuery = returning
+		res.IsQuery = returning
+		return res, nil
 	}
 
-	resp := response{Results: results}
-	if qp.Timings() {
-		resp.Time = time.Since(start).Seconds()
+	results := make([]sqlAnalyzeStmtResult, len(stmts))
+	for i, stmt := range stmts {
+		r, err := analyzeStmt(stmt.Sql, !qp.NoRewriteRandom(), !qp.NoRewriteTime())
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		results[i] = r
 	}
 
-	var b []byte
-	if qp.Pretty() {
-		b, err = json.MarshalIndent(resp, "", "    ")
-	} else {
-		b, err = json.Marshal(resp)
-	}
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
-	}
-	_, err = w.Write(b)
-	if err != nil {
-		s.logger.Println("writing response failed:", err.Error())
-	}
+	resp := &sqlAnalyzeResponse{Results: results, start: time.Now()}
+	s.writeResponse(w, qp, resp)
 }
 
 func prettyEnabled(e bool) string {
