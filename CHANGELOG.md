@@ -1,6 +1,6 @@
 ## v9.4.1 (unreleased)
 ### Implementation changes and bug fixes
-- [PR #2468](https://github.com/rqlite/rqlite/pull/2468): Add _proxy_ later between HTTP layer and Store.
+- [PR #2468](https://github.com/rqlite/rqlite/pull/2468): Add _proxy_ layer between HTTP layer and Store.
 
 ## v9.4.0 (February 6th 2026)
 ### New features
