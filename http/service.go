@@ -657,15 +657,26 @@ func (s *Service) handleSQLAnalyze(w http.ResponseWriter, r *http.Request, qp Qu
 		return
 	}
 
-	if r.Method != "POST" {
+	if r.Method != "GET" && r.Method != "POST" {
 		w.WriteHeader(http.StatusMethodNotAllowed)
 		return
 	}
 
-	stmts, err := ParseRequest(r.Body)
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
-		return
+	var stmts []*proto.Statement
+	if r.Method == "GET" {
+		q := qp.Query()
+		if q == "" {
+			http.Error(w, "query not specified", http.StatusBadRequest)
+			return
+		}
+		stmts = []*proto.Statement{{Sql: q}}
+	} else {
+		var err error
+		stmts, err = ParseRequest(r.Body)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
 	}
 
 	analyzeStmt := func(sqlStr string, rwRand, rwTime bool) (res sqlAnalyzeStmtResult, retErr error) {

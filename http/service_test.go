@@ -2432,13 +2432,56 @@ func Test_SQLAnalyze_MethodNotAllowed(t *testing.T) {
 	host := newSQLAnalyzeHost(t)
 	client := &http.Client{}
 
-	resp, err := client.Get(host + "/db/sql")
+	req, err := http.NewRequest("DELETE", host+"/db/sql", nil)
+	if err != nil {
+		t.Fatalf("failed to create request: %s", err)
+	}
+	resp, err := client.Do(req)
 	if err != nil {
 		t.Fatalf("failed to make request: %s", err)
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusMethodNotAllowed {
 		t.Fatalf("expected StatusMethodNotAllowed, got %d", resp.StatusCode)
+	}
+}
+
+func Test_SQLAnalyze_GET(t *testing.T) {
+	host := newSQLAnalyzeHost(t)
+	client := &http.Client{}
+
+	resp, err := client.Get(host + "/db/sql?q=" + url.QueryEscape("INSERT INTO foo VALUES(RANDOM())"))
+	if err != nil {
+		t.Fatalf("failed to make request: %s", err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("expected StatusOK, got %d", resp.StatusCode)
+	}
+
+	r := mustGetFirstResult(t, mustReadBody(t, resp))
+
+	if r["original"] != "INSERT INTO foo VALUES(RANDOM())" {
+		t.Fatalf("unexpected original: %v", r["original"])
+	}
+
+	rewritten := r["rewritten"].(string)
+	if !regexp.MustCompile(`VALUES \(-?\d+\)`).MatchString(rewritten) {
+		t.Fatalf("expected RANDOM() to be replaced with integer, got: %s", rewritten)
+	}
+}
+
+func Test_SQLAnalyze_GET_NoQuery(t *testing.T) {
+	host := newSQLAnalyzeHost(t)
+	client := &http.Client{}
+
+	resp, err := client.Get(host + "/db/sql")
+	if err != nil {
+		t.Fatalf("failed to make request: %s", err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusBadRequest {
+		t.Fatalf("expected StatusBadRequest for missing query, got %d", resp.StatusCode)
 	}
 }
 
