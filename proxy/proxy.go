@@ -245,6 +245,9 @@ func (p *Proxy) leaderAddr() (string, error) {
 // wrapIfUnauthorized wraps an error as ErrUnauthorized if the error
 // message is "unauthorized", allowing callers to use errors.Is().
 func wrapIfUnauthorized(err error) error {
+	if err == nil {
+		return nil
+	}
 	if err.Error() == "unauthorized" {
 		return ErrUnauthorized
 	}
