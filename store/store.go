@@ -37,6 +37,7 @@ import (
 	"github.com/rqlite/rqlite/v9/internal/rsum"
 	"github.com/rqlite/rqlite/v9/internal/rsync"
 	"github.com/rqlite/rqlite/v9/snapshot"
+	snapshotProto "github.com/rqlite/rqlite/v9/snapshot/proto"
 	rlog "github.com/rqlite/rqlite/v9/store/log"
 )
 
@@ -403,6 +404,7 @@ type Store struct {
 	SnapshotThreshold        uint64
 	SnapshotThresholdWALSize uint64
 	SnapshotInterval         time.Duration
+	SnapshotReapThreshold    int
 	LeaderLeaseTimeout       time.Duration
 	HeartbeatTimeout         time.Duration
 	ElectionTimeout          time.Duration
@@ -581,6 +583,9 @@ func (s *Store) Open() (retErr error) {
 		return fmt.Errorf("failed to create snapshot store: %s", err)
 	}
 	snapshotStore.LogReaping = s.hcLogLevel() < hclog.Warn
+	if s.SnapshotReapThreshold > 0 {
+		snapshotStore.SetReapThreshold(s.SnapshotReapThreshold)
+	}
 	s.snapshotStore = snapshotStore
 	snaps, err := s.snapshotStore.List()
 	if err != nil {
@@ -2581,11 +2586,14 @@ func (s *Store) fsmSnapshot() (fSnap raft.FSMSnapshot, retErr error) {
 				err.Error())
 		}
 		stats.Get(snapshotCreateChkTruncateDuration).(*expvar.Int).Set(time.Since(chkStartTime).Milliseconds())
-		dbFD, err := os.Open(s.db.Path())
+		streamer, err := snapshotProto.NewSnapshotStreamer(s.db.Path())
 		if err != nil {
 			return nil, err
 		}
-		fsmSnapshot = snapshot.NewStateReader(dbFD)
+		if err := streamer.Open(); err != nil {
+			return nil, err
+		}
+		fsmSnapshot = snapshot.NewStateReader(streamer)
 		stats.Add(numSnapshotsFull, 1)
 		s.numFullSnapshots++
 	} else {
@@ -2650,16 +2658,31 @@ func (s *Store) fsmSnapshot() (fSnap raft.FSMSnapshot, retErr error) {
 			stats.Get(snapshotPrecompactWALSize).(*expvar.Int).Set(walSzPre)
 			stats.Get(snapshotWALSize).(*expvar.Int).Set(walSzPost)
 		}
-		name := ""
-		if walTmpFD != nil {
-			name = walTmpFD.Name()
+		if walTmpFD == nil {
+			// No WAL data for an incremental snapshot. Fall back to a full
+			// snapshot of the (unchanged) database.
+			streamer, err := snapshotProto.NewSnapshotStreamer(s.db.Path())
+			if err != nil {
+				return nil, err
+			}
+			if err := streamer.Open(); err != nil {
+				return nil, err
+			}
+			fsmSnapshot = snapshot.NewStateReader(streamer)
+			fullNeeded = true
+			stats.Add(numSnapshotsFull, 1)
+			s.numFullSnapshots++
+		} else {
+			streamer, err := snapshotProto.NewSnapshotStreamer("", walTmpFD.Name())
+			if err != nil {
+				return nil, err
+			}
+			if err := streamer.Open(); err != nil {
+				return nil, err
+			}
+			fsmSnapshot = snapshot.NewStateReader(streamer)
+			stats.Add(numSnapshotsIncremental, 1)
 		}
-		// When it comes to incremental snapshotting of WAL files, we pass the data to the Snapshot
-		// Store and Sink indirectly. We wrap its filepath in an io.Reader, not the file data. The
-		// Snapshotting system knows to check for this. If it finds a filepath in the io.Reader (as
-		// opposed to a reader returning actual file data, it will move the file from here to it.
-		fsmSnapshot = snapshot.NewStateReader(io.NopCloser(bytes.NewBufferString(name)))
-		stats.Add(numSnapshotsIncremental, 1)
 	}
 
 	stats.Add(numSnapshots, 1)
@@ -2717,24 +2740,18 @@ func (s *Store) fsmRestore(rc io.ReadCloser) (retErr error) {
 	s.logger.Printf("initiating node restore on node ID %s", s.raftID)
 	startT := time.Now()
 
-	// Create a scatch file to write the restore data to.
+	// Create a scratch file path, then extract the database from the
+	// protobuf-framed snapshot stream into it.
 	tmpFile, err := createTemp(s.dbDir, restoreScratchPattern)
 	if err != nil {
 		return fmt.Errorf("error creating temporary file for restore operation: %v", err)
 	}
-	defer os.Remove(tmpFile.Name())
-	defer tmpFile.Close()
+	tmpPath := tmpFile.Name()
+	tmpFile.Close()
+	defer os.Remove(tmpPath)
 
-	// Copy it from the reader to the temporary file.
-	_, err = io.Copy(tmpFile, rc)
-	if err != nil {
-		return fmt.Errorf("error copying restore data: %v", err)
-	}
-	if err := tmpFile.Sync(); err != nil {
-		return fmt.Errorf("error syncing temporary file for restore operation: %v", err)
-	}
-	if err := tmpFile.Close(); err != nil {
-		return fmt.Errorf("error creating temporary file for restore operation: %v", err)
+	if _, err := snapshot.ExtractDatabase(rc, tmpPath); err != nil {
+		return fmt.Errorf("error extracting database from snapshot: %v", err)
 	}
 
 	// Any existing SQLite file is about to be invalid, so mark that we can't
@@ -2742,7 +2759,7 @@ func (s *Store) fsmRestore(rc io.ReadCloser) (retErr error) {
 	if err := removeFile(s.cleanSnapshotPath); err != nil {
 		return fmt.Errorf("failed to remove clean snapshot file: %w", err)
 	}
-	if err := s.db.Swap(tmpFile.Name(), s.dbConf.FKConstraints, true); err != nil {
+	if err := s.db.Swap(tmpPath, s.dbConf.FKConstraints, true); err != nil {
 		return fmt.Errorf("error swapping database file: %v", err)
 	}
 	s.logger.Printf("successfully opened database at %s due to restore", s.db.Path())

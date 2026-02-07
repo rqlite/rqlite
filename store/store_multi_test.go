@@ -474,6 +474,7 @@ func Test_MultiNodeSnapshot_BlockedSnapshot(t *testing.T) {
 	// Fire up first node and write one record.
 	s0, ln := mustNewStore(t)
 	s0.NoSnapshotOnClose = true
+	s0.SnapshotReapThreshold = 2
 	defer ln.Close()
 	if err := s0.Open(); err != nil {
 		t.Fatalf("failed to open single-node store: %s", err.Error())
@@ -560,7 +561,7 @@ func Test_MultiNodeSnapshot_BlockedSnapshot(t *testing.T) {
 	}
 
 	// Look inside the latest snapshot store and ensure it has the right data.
-	files, err := filepath.Glob(filepath.Join(s0.snapshotDir, "*.db"))
+	files, err := filepath.Glob(filepath.Join(s0.snapshotDir, "*", "data.db"))
 	if err != nil {
 		t.Fatalf("failed to list snapshot files: %s", err.Error())
 	}

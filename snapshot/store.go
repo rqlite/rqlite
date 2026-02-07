@@ -285,6 +285,13 @@ func (s *Store) Dir() string {
 	return s.dir
 }
 
+// SetReapThreshold sets the minimum number of snapshots that must
+// exist before auto-reap is triggered after a successful persist.
+func (s *Store) SetReapThreshold(n int) {
+	s.reapThreshold = n
+}
+
+
 // Open opens the snapshot with the given ID for reading. Open returns an io.ReadCloser
 // which wraps a SnapshotInstall object. This is because the snapshot will be used
 // to either rebuild a node's state after restart, or to send the snapshot to another node,
@@ -582,6 +589,21 @@ func (s *Store) check() error {
 	}
 
 	return nil
+}
+
+// LatestIndexTerm returns the index and term of the most recent snapshot
+// in the given directory. If no snapshots are found, it returns 0, 0, nil.
+func LatestIndexTerm(dir string) (uint64, uint64, error) {
+	cat := &SnapshotCatalog{}
+	sset, err := cat.Scan(dir)
+	if err != nil {
+		return 0, 0, err
+	}
+	newest, ok := sset.Newest()
+	if !ok {
+		return 0, 0, nil
+	}
+	return newest.raftMeta.Index, newest.raftMeta.Term, nil
 }
 
 // getSnapshots returns the set of snapshots in the Store.
