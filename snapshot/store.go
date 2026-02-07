@@ -25,6 +25,8 @@ const (
 	tmpSuffix      = ".tmp"
 	fullNeededFile = "FULL_NEEDED"
 	reapPlanFile   = "REAP_PLAN"
+
+	defaultReapThreshold = 8
 )
 
 const (
@@ -105,6 +107,7 @@ func NewLockingSink(sink raft.SnapshotSink, str *Store) *LockingSink {
 }
 
 // Close closes the sink, unlocking the Store for creation of a new sink.
+// After a successful close, the Store is checked to see if reaping is needed.
 func (s *LockingSink) Close() error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -112,8 +115,13 @@ func (s *LockingSink) Close() error {
 		return nil
 	}
 	s.closed = true
-	defer s.str.mrsw.EndRead()
-	return s.SnapshotSink.Close()
+
+	err := s.SnapshotSink.Close()
+	s.str.mrsw.EndRead()
+	if err == nil {
+		s.str.reapIfNeeded()
+	}
+	return err
 }
 
 // Cancel cancels the sink, unlocking the Store for creation of a new sink.
@@ -172,8 +180,9 @@ type Store struct {
 	// Multi-reader single-writer lock for the Store, which must be held
 	// if snaphots are deleted i.e. repead. Simply creating or reading
 	// a snapshot requires only a read lock.
-	mrsw         rsync.MultiRSW
-	reapDisabled bool
+	mrsw          rsync.MultiRSW
+	reapDisabled  bool
+	reapThreshold int
 
 	LogReaping bool
 }
@@ -189,6 +198,7 @@ func NewStore(dir string) (*Store, error) {
 		fullNeededPath: filepath.Join(dir, fullNeededFile),
 		catalog:        &SnapshotCatalog{},
 		mrsw:           *rsync.NewMultiRSW(),
+		reapThreshold:  defaultReapThreshold,
 		logger:         log.New(os.Stderr, "[snapshot-store] ", log.LstdFlags),
 	}
 	str.logger.Printf("store initialized using %s", dir)
@@ -470,6 +480,31 @@ func (s *Store) executeReapPlan(p *plan.Plan, planPath string) (int, int, error)
 	s.logger.Printf("reap complete: %d snapshots reaped, %d WALs checkpointed",
 		p.NReaped, p.NCheckpointed)
 	return p.NReaped, p.NCheckpointed, nil
+}
+
+// reapIfNeeded checks the snapshot count and triggers a reap if the
+// threshold has been reached. It is called after a snapshot is
+// successfully persisted.
+func (s *Store) reapIfNeeded() {
+	if s.reapDisabled {
+		return
+	}
+	if s.Len() < s.reapThreshold {
+		return
+	}
+
+	n, c, err := s.Reap()
+	if err != nil {
+		var mrsw *rsync.ErrMRSWConflict
+		if errors.As(err, &mrsw) {
+			s.logger.Printf("reap skipped, store is busy: %s", err)
+			return
+		}
+		s.logger.Fatalf("reap failed: %s", err)
+	}
+	if s.LogReaping {
+		s.logger.Printf("auto-reap complete: %d snapshots reaped, %d WALs checkpointed", n, c)
+	}
 }
 
 func copyRaftMeta(m *raft.SnapshotMeta) *raft.SnapshotMeta {
