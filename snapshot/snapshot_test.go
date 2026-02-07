@@ -102,7 +102,7 @@ func Test_Snapshot_Less(t *testing.T) {
 
 			result := s1.Less(s2)
 			if result != tt.expected {
-				t.Errorf("Less() = %v, want %v", result, tt.expected)
+				t.Fatalf("Less() = %v, want %v", result, tt.expected)
 			}
 		})
 	}
@@ -181,7 +181,7 @@ func Test_Snapshot_Equal(t *testing.T) {
 
 			result := s1.Equal(s2)
 			if result != tt.expected {
-				t.Errorf("Equal() = %v, want %v", result, tt.expected)
+				t.Fatalf("Equal() = %v, want %v", result, tt.expected)
 			}
 		})
 	}
@@ -210,7 +210,7 @@ func Test_SnapshotSet_Len(t *testing.T) {
 			ss := SnapshotSet{items: items}
 
 			if got := ss.Len(); got != tt.itemsLen {
-				t.Errorf("Len() = %v, want %v", got, tt.itemsLen)
+				t.Fatalf("Len() = %v, want %v", got, tt.itemsLen)
 			}
 		})
 	}
@@ -231,7 +231,7 @@ func Test_SnapshotSet_All(t *testing.T) {
 	}
 	for i, snap := range result {
 		if snap != items[i] {
-			t.Errorf("All()[%d] = %v, want %v", i, snap, items[i])
+			t.Fatalf("All()[%d] = %v, want %v", i, snap, items[i])
 		}
 	}
 }
@@ -253,7 +253,7 @@ func Test_SnapshotSet_IDs(t *testing.T) {
 	}
 	for i, id := range result {
 		if id != expected[i] {
-			t.Errorf("IDs()[%d] = %q, want %q", i, id, expected[i])
+			t.Fatalf("IDs()[%d] = %q, want %q", i, id, expected[i])
 		}
 	}
 }
@@ -273,7 +273,7 @@ func Test_SnapshotSet_RaftMetas(t *testing.T) {
 	}
 	for i, meta := range result {
 		if meta != items[i].raftMeta {
-			t.Errorf("RaftMetas()[%d] = %v, want %v", i, meta, items[i].raftMeta)
+			t.Fatalf("RaftMetas()[%d] = %v, want %v", i, meta, items[i].raftMeta)
 		}
 	}
 }
@@ -304,7 +304,7 @@ func Test_SnapshotSet_Oldest(t *testing.T) {
 			t.Error("Oldest() returned ok=false for non-empty set")
 		}
 		if snap != items[0] {
-			t.Errorf("Oldest() = %v, want %v", snap, items[0])
+			t.Fatalf("Oldest() = %v, want %v", snap, items[0])
 		}
 	})
 }
@@ -335,7 +335,7 @@ func Test_SnapshotSet_Newest(t *testing.T) {
 			t.Error("Newest() returned ok=false for non-empty set")
 		}
 		if snap != items[2] {
-			t.Errorf("Newest() = %v, want %v", snap, items[2])
+			t.Fatalf("Newest() = %v, want %v", snap, items[2])
 		}
 	})
 }
@@ -370,7 +370,7 @@ func Test_SnapshotSet_NewestFull(t *testing.T) {
 			t.Error("NewestFull() returned ok=false when full snapshot exists")
 		}
 		if snap != items[0] {
-			t.Errorf("NewestFull() = %v, want %v", snap, items[0])
+			t.Fatalf("NewestFull() = %v, want %v", snap, items[0])
 		}
 	})
 
@@ -388,7 +388,7 @@ func Test_SnapshotSet_NewestFull(t *testing.T) {
 			t.Error("NewestFull() returned ok=false when full snapshots exist")
 		}
 		if snap != items[2] {
-			t.Errorf("NewestFull() = %v, want %v", snap, items[2])
+			t.Fatalf("NewestFull() = %v, want %v", snap, items[2])
 		}
 	})
 }
@@ -423,7 +423,7 @@ func Test_SnapshotSet_NewestIncremental(t *testing.T) {
 			t.Error("NewestIncremental() returned ok=false when incremental snapshot exists")
 		}
 		if snap != items[1] {
-			t.Errorf("NewestIncremental() = %v, want %v", snap, items[1])
+			t.Fatalf("NewestIncremental() = %v, want %v", snap, items[1])
 		}
 	})
 
@@ -441,7 +441,7 @@ func Test_SnapshotSet_NewestIncremental(t *testing.T) {
 			t.Error("NewestIncremental() returned ok=false when incremental snapshots exist")
 		}
 		if snap != items[3] {
-			t.Errorf("NewestIncremental() = %v, want %v", snap, items[3])
+			t.Fatalf("NewestIncremental() = %v, want %v", snap, items[3])
 		}
 	})
 }
@@ -458,18 +458,18 @@ func Test_SnapshotSet_Fulls(t *testing.T) {
 
 	fulls := ss.Fulls()
 	if fulls.Len() != 2 {
-		t.Errorf("Fulls() returned %d items, want 2", fulls.Len())
+		t.Fatalf("Fulls() returned %d items, want 2", fulls.Len())
 	}
 	if fulls.dir != "/test" {
-		t.Errorf("Fulls().dir = %q, want %q", fulls.dir, "/test")
+		t.Fatalf("Fulls().dir = %q, want %q", fulls.dir, "/test")
 	}
 
 	fullItems := fulls.All()
 	if fullItems[0] != items[0] {
-		t.Errorf("Fulls()[0] = %v, want %v", fullItems[0], items[0])
+		t.Fatalf("Fulls()[0] = %v, want %v", fullItems[0], items[0])
 	}
 	if fullItems[1] != items[2] {
-		t.Errorf("Fulls()[1] = %v, want %v", fullItems[1], items[2])
+		t.Fatalf("Fulls()[1] = %v, want %v", fullItems[1], items[2])
 	}
 }
 
@@ -485,18 +485,18 @@ func Test_SnapshotSet_Incrementals(t *testing.T) {
 
 	incrementals := ss.Incrementals()
 	if incrementals.Len() != 2 {
-		t.Errorf("Incrementals() returned %d items, want 2", incrementals.Len())
+		t.Fatalf("Incrementals() returned %d items, want 2", incrementals.Len())
 	}
 	if incrementals.dir != "/test" {
-		t.Errorf("Incrementals().dir = %q, want %q", incrementals.dir, "/test")
+		t.Fatalf("Incrementals().dir = %q, want %q", incrementals.dir, "/test")
 	}
 
 	incItems := incrementals.All()
 	if incItems[0] != items[1] {
-		t.Errorf("Incrementals()[0] = %v, want %v", incItems[0], items[1])
+		t.Fatalf("Incrementals()[0] = %v, want %v", incItems[0], items[1])
 	}
 	if incItems[1] != items[3] {
-		t.Errorf("Incrementals()[1] = %v, want %v", incItems[1], items[3])
+		t.Fatalf("Incrementals()[1] = %v, want %v", incItems[1], items[3])
 	}
 }
 
@@ -515,7 +515,7 @@ func Test_SnapshotSet_WithID(t *testing.T) {
 			t.Error("WithID() returned ok=false for existing id")
 		}
 		if snap != items[1] {
-			t.Errorf("WithID() = %v, want %v", snap, items[1])
+			t.Fatalf("WithID() = %v, want %v", snap, items[1])
 		}
 	})
 
@@ -543,7 +543,7 @@ func Test_SnapshotSet_BeforeID(t *testing.T) {
 	t.Run("middle id", func(t *testing.T) {
 		before := ss.BeforeID("snapshot-3")
 		if before.Len() != 2 {
-			t.Errorf("BeforeID() returned %d items, want 2", before.Len())
+			t.Fatalf("BeforeID() returned %d items, want 2", before.Len())
 		}
 		beforeItems := before.All()
 		if beforeItems[0] != items[0] || beforeItems[1] != items[1] {
@@ -554,14 +554,14 @@ func Test_SnapshotSet_BeforeID(t *testing.T) {
 	t.Run("first id", func(t *testing.T) {
 		before := ss.BeforeID("snapshot-1")
 		if before.Len() != 0 {
-			t.Errorf("BeforeID() for first id returned %d items, want 0", before.Len())
+			t.Fatalf("BeforeID() for first id returned %d items, want 0", before.Len())
 		}
 	})
 
 	t.Run("non-existing id", func(t *testing.T) {
 		before := ss.BeforeID("snapshot-999")
 		if before.Len() != 0 {
-			t.Errorf("BeforeID() for non-existing id returned %d items, want 0", before.Len())
+			t.Fatalf("BeforeID() for non-existing id returned %d items, want 0", before.Len())
 		}
 	})
 }
@@ -579,7 +579,7 @@ func Test_SnapshotSet_AfterID(t *testing.T) {
 	t.Run("middle id", func(t *testing.T) {
 		after := ss.AfterID("snapshot-2")
 		if after.Len() != 2 {
-			t.Errorf("AfterID() returned %d items, want 2", after.Len())
+			t.Fatalf("AfterID() returned %d items, want 2", after.Len())
 		}
 		afterItems := after.All()
 		if afterItems[0] != items[2] || afterItems[1] != items[3] {
@@ -590,14 +590,14 @@ func Test_SnapshotSet_AfterID(t *testing.T) {
 	t.Run("last id", func(t *testing.T) {
 		after := ss.AfterID("snapshot-4")
 		if after.Len() != 0 {
-			t.Errorf("AfterID() for last id returned %d items, want 0", after.Len())
+			t.Fatalf("AfterID() for last id returned %d items, want 0", after.Len())
 		}
 	})
 
 	t.Run("non-existing id", func(t *testing.T) {
 		after := ss.AfterID("snapshot-999")
 		if after.Len() != 0 {
-			t.Errorf("AfterID() for non-existing id returned %d items, want 0", after.Len())
+			t.Fatalf("AfterID() for non-existing id returned %d items, want 0", after.Len())
 		}
 	})
 }
@@ -615,7 +615,7 @@ func Test_SnapshotSet_Range(t *testing.T) {
 	t.Run("valid range", func(t *testing.T) {
 		result := ss.Range("snapshot-2", "snapshot-4")
 		if result.Len() != 2 {
-			t.Errorf("Range() returned %d items, want 2", result.Len())
+			t.Fatalf("Range() returned %d items, want 2", result.Len())
 		}
 		rangeItems := result.All()
 		if rangeItems[0] != items[1] || rangeItems[1] != items[2] {
@@ -626,7 +626,7 @@ func Test_SnapshotSet_Range(t *testing.T) {
 	t.Run("empty toID means to end", func(t *testing.T) {
 		result := ss.Range("snapshot-2", "")
 		if result.Len() != 3 {
-			t.Errorf("Range() with empty toID returned %d items, want 3", result.Len())
+			t.Fatalf("Range() with empty toID returned %d items, want 3", result.Len())
 		}
 		if result.All()[0] != items[1] || result.All()[1] != items[2] || result.All()[2] != items[3] {
 			t.Error("Range() with empty toID returned incorrect items")
@@ -636,26 +636,26 @@ func Test_SnapshotSet_Range(t *testing.T) {
 	t.Run("fromID not present", func(t *testing.T) {
 		result := ss.Range("snapshot-999", "snapshot-4")
 		if result.Len() != 0 {
-			t.Errorf("Range() with non-existing fromID returned %d items, want 0", result.Len())
+			t.Fatalf("Range() with non-existing fromID returned %d items, want 0", result.Len())
 		}
 	})
 
 	t.Run("toID not present", func(t *testing.T) {
 		result := ss.Range("snapshot-2", "snapshot-999")
 		if result.Len() != 0 {
-			t.Errorf("Range() with non-existing toID returned %d items, want 0", result.Len())
+			t.Fatalf("Range() with non-existing toID returned %d items, want 0", result.Len())
 		}
 	})
 
 	t.Run("toID at or before fromID", func(t *testing.T) {
 		result := ss.Range("snapshot-3", "snapshot-2")
 		if result.Len() != 0 {
-			t.Errorf("Range() with toID before fromID returned %d items, want 0", result.Len())
+			t.Fatalf("Range() with toID before fromID returned %d items, want 0", result.Len())
 		}
 
 		result = ss.Range("snapshot-2", "snapshot-2")
 		if result.Len() != 0 {
-			t.Errorf("Range() with toID equal to fromID returned %d items, want 0", result.Len())
+			t.Fatalf("Range() with toID equal to fromID returned %d items, want 0", result.Len())
 		}
 	})
 }
@@ -671,10 +671,10 @@ func Test_SnapshotSet_PartitionAtFull(t *testing.T) {
 
 		full, newer := ss.PartitionAtFull()
 		if full.Len() != 0 {
-			t.Errorf("PartitionAtFull() with no full snapshots returned full.Len()=%d, want 0", full.Len())
+			t.Fatalf("PartitionAtFull() with no full snapshots returned full.Len()=%d, want 0", full.Len())
 		}
 		if newer.Len() != 0 {
-			t.Errorf("PartitionAtFull() with no full snapshots returned newer.Len()=%d, want 0", newer.Len())
+			t.Fatalf("PartitionAtFull() with no full snapshots returned newer.Len()=%d, want 0", newer.Len())
 		}
 	})
 
@@ -687,13 +687,13 @@ func Test_SnapshotSet_PartitionAtFull(t *testing.T) {
 
 		full, newer := ss.PartitionAtFull()
 		if full.Len() != 1 {
-			t.Errorf("PartitionAtFull() returned full.Len()=%d, want 1", full.Len())
+			t.Fatalf("PartitionAtFull() returned full.Len()=%d, want 1", full.Len())
 		}
 		if full.All()[0] != items[1] {
-			t.Errorf("PartitionAtFull() returned incorrect full snapshot")
+			t.Fatalf("PartitionAtFull() returned incorrect full snapshot")
 		}
 		if newer.Len() != 0 {
-			t.Errorf("PartitionAtFull() returned newer.Len()=%d, want 0", newer.Len())
+			t.Fatalf("PartitionAtFull() returned newer.Len()=%d, want 0", newer.Len())
 		}
 	})
 
@@ -707,13 +707,13 @@ func Test_SnapshotSet_PartitionAtFull(t *testing.T) {
 
 		full, newer := ss.PartitionAtFull()
 		if full.Len() != 1 {
-			t.Errorf("PartitionAtFull() returned full.Len()=%d, want 1", full.Len())
+			t.Fatalf("PartitionAtFull() returned full.Len()=%d, want 1", full.Len())
 		}
 		if full.All()[0] != items[0] {
-			t.Errorf("PartitionAtFull() returned incorrect full snapshot")
+			t.Fatalf("PartitionAtFull() returned incorrect full snapshot")
 		}
 		if newer.Len() != 2 {
-			t.Errorf("PartitionAtFull() returned newer.Len()=%d, want 2", newer.Len())
+			t.Fatalf("PartitionAtFull() returned newer.Len()=%d, want 2", newer.Len())
 		}
 		newerItems := newer.All()
 		if newerItems[0] != items[1] || newerItems[1] != items[2] {
@@ -732,16 +732,16 @@ func Test_SnapshotSet_PartitionAtFull(t *testing.T) {
 
 		full, newer := ss.PartitionAtFull()
 		if full.Len() != 1 {
-			t.Errorf("PartitionAtFull() returned full.Len()=%d, want 1", full.Len())
+			t.Fatalf("PartitionAtFull() returned full.Len()=%d, want 1", full.Len())
 		}
 		if full.All()[0] != items[2] {
-			t.Errorf("PartitionAtFull() returned %v, want newest full snapshot %v", full.All()[0], items[2])
+			t.Fatalf("PartitionAtFull() returned %v, want newest full snapshot %v", full.All()[0], items[2])
 		}
 		if newer.Len() != 1 {
-			t.Errorf("PartitionAtFull() returned newer.Len()=%d, want 1", newer.Len())
+			t.Fatalf("PartitionAtFull() returned newer.Len()=%d, want 1", newer.Len())
 		}
 		if newer.All()[0] != items[3] {
-			t.Errorf("PartitionAtFull() returned %v, want newer snapshot %v", newer.All()[0], items[3])
+			t.Fatalf("PartitionAtFull() returned %v, want newer snapshot %v", newer.All()[0], items[3])
 		}
 	})
 }
@@ -771,7 +771,7 @@ func Test_SnapshotSet_ValidateIncrementalChain(t *testing.T) {
 
 		err := ss.ValidateIncrementalChain()
 		if err != nil {
-			t.Errorf("ValidateIncrementalChain() returned unexpected error: %v", err)
+			t.Fatalf("ValidateIncrementalChain() returned unexpected error: %v", err)
 		}
 	})
 
@@ -783,7 +783,7 @@ func Test_SnapshotSet_ValidateIncrementalChain(t *testing.T) {
 
 		err := ss.ValidateIncrementalChain()
 		if err != nil {
-			t.Errorf("ValidateIncrementalChain() with only full snapshot returned error: %v", err)
+			t.Fatalf("ValidateIncrementalChain() with only full snapshot returned error: %v", err)
 		}
 	})
 
@@ -798,7 +798,7 @@ func Test_SnapshotSet_ValidateIncrementalChain(t *testing.T) {
 
 		err := ss.ValidateIncrementalChain()
 		if err != nil {
-			t.Errorf("ValidateIncrementalChain() returned unexpected error: %v", err)
+			t.Fatalf("ValidateIncrementalChain() returned unexpected error: %v", err)
 		}
 	})
 }
@@ -814,7 +814,7 @@ func Test_SnapshotCatalog_Scan(t *testing.T) {
 			t.Fatalf("Scan() on empty directory returned error: %v", err)
 		}
 		if ss.Len() != 0 {
-			t.Errorf("Scan() on empty directory returned %d snapshots, want 0", ss.Len())
+			t.Fatalf("Scan() on empty directory returned %d snapshots, want 0", ss.Len())
 		}
 	})
 
@@ -828,18 +828,18 @@ func Test_SnapshotCatalog_Scan(t *testing.T) {
 			t.Fatalf("Scan() returned error: %v", err)
 		}
 		if ss.Len() != 1 {
-			t.Errorf("Scan() returned %d snapshots, want 1", ss.Len())
+			t.Fatalf("Scan() returned %d snapshots, want 1", ss.Len())
 		}
 
 		snap := ss.All()[0]
 		if snap.id != "snapshot-1" {
-			t.Errorf("snapshot id = %q, want %q", snap.id, "snapshot-1")
+			t.Fatalf("snapshot id = %q, want %q", snap.id, "snapshot-1")
 		}
 		if snap.typ != SnapshotTypeFull {
-			t.Errorf("snapshot type = %v, want %v", snap.typ, SnapshotTypeFull)
+			t.Fatalf("snapshot type = %v, want %v", snap.typ, SnapshotTypeFull)
 		}
 		if snap.raftMeta.Index != 1 || snap.raftMeta.Term != 1 {
-			t.Errorf("snapshot metadata incorrect: term=%d, index=%d", snap.raftMeta.Term, snap.raftMeta.Index)
+			t.Fatalf("snapshot metadata incorrect: term=%d, index=%d", snap.raftMeta.Term, snap.raftMeta.Index)
 		}
 	})
 
@@ -853,12 +853,12 @@ func Test_SnapshotCatalog_Scan(t *testing.T) {
 			t.Fatalf("Scan() returned error: %v", err)
 		}
 		if ss.Len() != 1 {
-			t.Errorf("Scan() returned %d snapshots, want 1", ss.Len())
+			t.Fatalf("Scan() returned %d snapshots, want 1", ss.Len())
 		}
 
 		snap := ss.All()[0]
 		if snap.typ != SnapshotTypeIncremental {
-			t.Errorf("snapshot type = %v, want %v", snap.typ, SnapshotTypeIncremental)
+			t.Fatalf("snapshot type = %v, want %v", snap.typ, SnapshotTypeIncremental)
 		}
 	})
 
@@ -876,19 +876,19 @@ func Test_SnapshotCatalog_Scan(t *testing.T) {
 			t.Fatalf("Scan() returned error: %v", err)
 		}
 		if ss.Len() != 3 {
-			t.Errorf("Scan() returned %d snapshots, want 3", ss.Len())
+			t.Fatalf("Scan() returned %d snapshots, want 3", ss.Len())
 		}
 
 		// Check ordering: should be sorted by (Term, Index, ID)
 		snapshots := ss.All()
 		if snapshots[0].id != "snapshot-1" {
-			t.Errorf("snapshots[0].id = %q, want %q", snapshots[0].id, "snapshot-1")
+			t.Fatalf("snapshots[0].id = %q, want %q", snapshots[0].id, "snapshot-1")
 		}
 		if snapshots[1].id != "snapshot-2" {
-			t.Errorf("snapshots[1].id = %q, want %q", snapshots[1].id, "snapshot-2")
+			t.Fatalf("snapshots[1].id = %q, want %q", snapshots[1].id, "snapshot-2")
 		}
 		if snapshots[2].id != "snapshot-3" {
-			t.Errorf("snapshots[2].id = %q, want %q", snapshots[2].id, "snapshot-3")
+			t.Fatalf("snapshots[2].id = %q, want %q", snapshots[2].id, "snapshot-3")
 		}
 	})
 
@@ -908,7 +908,7 @@ func Test_SnapshotCatalog_Scan(t *testing.T) {
 			t.Fatalf("Scan() returned error: %v", err)
 		}
 		if ss.Len() != 1 {
-			t.Errorf("Scan() returned %d snapshots, want 1 (should skip .tmp)", ss.Len())
+			t.Fatalf("Scan() returned %d snapshots, want 1 (should skip .tmp)", ss.Len())
 		}
 	})
 
@@ -928,7 +928,7 @@ func Test_SnapshotCatalog_Scan(t *testing.T) {
 			t.Fatalf("Scan() returned error: %v", err)
 		}
 		if ss.Len() != 1 {
-			t.Errorf("Scan() returned %d snapshots, want 1 (should skip regular files)", ss.Len())
+			t.Fatalf("Scan() returned %d snapshots, want 1 (should skip regular files)", ss.Len())
 		}
 	})
 
@@ -979,6 +979,182 @@ func Test_SnapshotCatalog_Scan(t *testing.T) {
 		_, err := catalog.Scan("/non/existent/directory")
 		if err == nil {
 			t.Error("Scan() should return error for non-existent directory")
+		}
+	})
+}
+
+// Test SnapshotSet.ResolveFiles method
+func TestSnapshotSet_ResolveFiles(t *testing.T) {
+	t.Run("non-existent ID", func(t *testing.T) {
+		rootDir := t.TempDir()
+		catalog := &SnapshotCatalog{}
+		mustCreateSnapshotFull(t, rootDir, "snap-1", 1, 1)
+
+		ss, err := catalog.Scan(rootDir)
+		if err != nil {
+			t.Fatalf("Scan() returned error: %v", err)
+		}
+
+		_, _, err = ss.ResolveFiles("no-such-id")
+		if err != ErrSnapshotNotFound {
+			t.Fatalf("expected ErrSnapshotNotFound, got %v", err)
+		}
+	})
+
+	t.Run("single full snapshot", func(t *testing.T) {
+		rootDir := t.TempDir()
+		catalog := &SnapshotCatalog{}
+		mustCreateSnapshotFull(t, rootDir, "snap-1", 1, 1)
+
+		ss, err := catalog.Scan(rootDir)
+		if err != nil {
+			t.Fatalf("Scan() returned error: %v", err)
+		}
+
+		dbFile, walFiles, err := ss.ResolveFiles("snap-1")
+		if err != nil {
+			t.Fatalf("ResolveFiles() returned error: %v", err)
+		}
+		if exp := filepath.Join(rootDir, "snap-1", dbfileName); dbFile != exp {
+			t.Fatalf("dbFile = %q, want %q", dbFile, exp)
+		}
+		if len(walFiles) != 0 {
+			t.Fatalf("expected 0 WAL files, got %d", len(walFiles))
+		}
+	})
+
+	t.Run("full then one incremental", func(t *testing.T) {
+		rootDir := t.TempDir()
+		catalog := &SnapshotCatalog{}
+		mustCreateSnapshotFull(t, rootDir, "snap-1", 1, 1)
+		mustCreateSnapshotInc(t, rootDir, "snap-2", 2, 1)
+
+		ss, err := catalog.Scan(rootDir)
+		if err != nil {
+			t.Fatalf("Scan() returned error: %v", err)
+		}
+
+		// Resolve the full snapshot — no WALs.
+		dbFile, walFiles, err := ss.ResolveFiles("snap-1")
+		if err != nil {
+			t.Fatalf("ResolveFiles(snap-1) returned error: %v", err)
+		}
+		if exp := filepath.Join(rootDir, "snap-1", dbfileName); dbFile != exp {
+			t.Fatalf("dbFile = %q, want %q", dbFile, exp)
+		}
+		if len(walFiles) != 0 {
+			t.Fatalf("expected 0 WAL files, got %d", len(walFiles))
+		}
+
+		// Resolve the incremental — DB from full, one WAL.
+		dbFile, walFiles, err = ss.ResolveFiles("snap-2")
+		if err != nil {
+			t.Fatalf("ResolveFiles(snap-2) returned error: %v", err)
+		}
+		if exp := filepath.Join(rootDir, "snap-1", dbfileName); dbFile != exp {
+			t.Fatalf("dbFile = %q, want %q", dbFile, exp)
+		}
+		if len(walFiles) != 1 {
+			t.Fatalf("expected 1 WAL file, got %d", len(walFiles))
+		}
+		if exp := filepath.Join(rootDir, "snap-2", walfileName); walFiles[0] != exp {
+			t.Fatalf("walFiles[0] = %q, want %q", walFiles[0], exp)
+		}
+	})
+
+	t.Run("full then multiple incrementals", func(t *testing.T) {
+		rootDir := t.TempDir()
+		catalog := &SnapshotCatalog{}
+		mustCreateSnapshotFull(t, rootDir, "snap-1", 1, 1)
+		mustCreateSnapshotInc(t, rootDir, "snap-2", 2, 1)
+		mustCreateSnapshotInc(t, rootDir, "snap-3", 3, 1)
+
+		ss, err := catalog.Scan(rootDir)
+		if err != nil {
+			t.Fatalf("Scan() returned error: %v", err)
+		}
+
+		// Resolve middle incremental — one WAL.
+		dbFile, walFiles, err := ss.ResolveFiles("snap-2")
+		if err != nil {
+			t.Fatalf("ResolveFiles(snap-2) returned error: %v", err)
+		}
+		if exp := filepath.Join(rootDir, "snap-1", dbfileName); dbFile != exp {
+			t.Fatalf("dbFile = %q, want %q", dbFile, exp)
+		}
+		if len(walFiles) != 1 {
+			t.Fatalf("expected 1 WAL file, got %d", len(walFiles))
+		}
+
+		// Resolve latest incremental — two WALs in order.
+		dbFile, walFiles, err = ss.ResolveFiles("snap-3")
+		if err != nil {
+			t.Fatalf("ResolveFiles(snap-3) returned error: %v", err)
+		}
+		if exp := filepath.Join(rootDir, "snap-1", dbfileName); dbFile != exp {
+			t.Fatalf("dbFile = %q, want %q", dbFile, exp)
+		}
+		if len(walFiles) != 2 {
+			t.Fatalf("expected 2 WAL files, got %d", len(walFiles))
+		}
+		if exp := filepath.Join(rootDir, "snap-2", walfileName); walFiles[0] != exp {
+			t.Fatalf("walFiles[0] = %q, want %q", walFiles[0], exp)
+		}
+		if exp := filepath.Join(rootDir, "snap-3", walfileName); walFiles[1] != exp {
+			t.Fatalf("walFiles[1] = %q, want %q", walFiles[1], exp)
+		}
+	})
+
+	t.Run("two fulls with incrementals uses nearest full", func(t *testing.T) {
+		rootDir := t.TempDir()
+		catalog := &SnapshotCatalog{}
+		mustCreateSnapshotFull(t, rootDir, "snap-1", 1, 1)
+		mustCreateSnapshotInc(t, rootDir, "snap-2", 2, 1)
+		mustCreateSnapshotFull(t, rootDir, "snap-3", 3, 1)
+		mustCreateSnapshotInc(t, rootDir, "snap-4", 4, 1)
+
+		ss, err := catalog.Scan(rootDir)
+		if err != nil {
+			t.Fatalf("Scan() returned error: %v", err)
+		}
+
+		// snap-4 should resolve against snap-3 (nearest full), not snap-1.
+		dbFile, walFiles, err := ss.ResolveFiles("snap-4")
+		if err != nil {
+			t.Fatalf("ResolveFiles(snap-4) returned error: %v", err)
+		}
+		if exp := filepath.Join(rootDir, "snap-3", dbfileName); dbFile != exp {
+			t.Fatalf("dbFile = %q, want %q", dbFile, exp)
+		}
+		if len(walFiles) != 1 {
+			t.Fatalf("expected 1 WAL file, got %d", len(walFiles))
+		}
+		if exp := filepath.Join(rootDir, "snap-4", walfileName); walFiles[0] != exp {
+			t.Fatalf("walFiles[0] = %q, want %q", walFiles[0], exp)
+		}
+	})
+
+	t.Run("incremental with no preceding full", func(t *testing.T) {
+		// Construct a SnapshotSet directly with only an incremental snapshot.
+		ss := SnapshotSet{
+			dir: "/test",
+			items: []*Snapshot{
+				{id: "snap-1", typ: SnapshotTypeIncremental, path: "/test/snap-1",
+					raftMeta: &raft.SnapshotMeta{Term: 1, Index: 1}},
+			},
+		}
+
+		_, _, err := ss.ResolveFiles("snap-1")
+		if err == nil {
+			t.Fatal("expected error when no full snapshot precedes incremental, got nil")
+		}
+	})
+
+	t.Run("empty set", func(t *testing.T) {
+		ss := SnapshotSet{}
+		_, _, err := ss.ResolveFiles("anything")
+		if err != ErrSnapshotNotFound {
+			t.Fatalf("expected ErrSnapshotNotFound, got %v", err)
 		}
 	})
 }
