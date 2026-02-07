@@ -10,7 +10,7 @@ import (
 )
 
 // Test Snapshot.Less method
-func TestSnapshot_Less(t *testing.T) {
+func Test_Snapshot_Less(t *testing.T) {
 	tests := []struct {
 		name     string
 		s1Term   uint64
@@ -109,7 +109,7 @@ func TestSnapshot_Less(t *testing.T) {
 }
 
 // Test Snapshot.Equal method
-func TestSnapshot_Equal(t *testing.T) {
+func Test_Snapshot_Equal(t *testing.T) {
 	tests := []struct {
 		name     string
 		s1Term   uint64
@@ -188,7 +188,7 @@ func TestSnapshot_Equal(t *testing.T) {
 }
 
 // Test SnapshotSet.Len method
-func TestSnapshotSet_Len(t *testing.T) {
+func Test_SnapshotSet_Len(t *testing.T) {
 	tests := []struct {
 		name     string
 		itemsLen int
@@ -217,7 +217,7 @@ func TestSnapshotSet_Len(t *testing.T) {
 }
 
 // Test SnapshotSet.All method
-func TestSnapshotSet_All(t *testing.T) {
+func Test_SnapshotSet_All(t *testing.T) {
 	items := []*Snapshot{
 		{id: "snapshot-1", raftMeta: &raft.SnapshotMeta{Term: 1, Index: 1}},
 		{id: "snapshot-2", raftMeta: &raft.SnapshotMeta{Term: 1, Index: 2}},
@@ -237,7 +237,7 @@ func TestSnapshotSet_All(t *testing.T) {
 }
 
 // Test SnapshotSet.IDs method
-func TestSnapshotSet_IDs(t *testing.T) {
+func Test_SnapshotSet_IDs(t *testing.T) {
 	items := []*Snapshot{
 		{id: "snapshot-1", raftMeta: &raft.SnapshotMeta{Term: 1, Index: 1}},
 		{id: "snapshot-2", raftMeta: &raft.SnapshotMeta{Term: 1, Index: 2}},
@@ -259,7 +259,7 @@ func TestSnapshotSet_IDs(t *testing.T) {
 }
 
 // Test SnapshotSet.RaftMetas method
-func TestSnapshotSet_RaftMetas(t *testing.T) {
+func Test_SnapshotSet_RaftMetas(t *testing.T) {
 	items := []*Snapshot{
 		{id: "snapshot-1", raftMeta: &raft.SnapshotMeta{Term: 1, Index: 1}},
 		{id: "snapshot-2", raftMeta: &raft.SnapshotMeta{Term: 1, Index: 2}},
@@ -279,7 +279,7 @@ func TestSnapshotSet_RaftMetas(t *testing.T) {
 }
 
 // Test SnapshotSet.Oldest method
-func TestSnapshotSet_Oldest(t *testing.T) {
+func Test_SnapshotSet_Oldest(t *testing.T) {
 	t.Run("empty set", func(t *testing.T) {
 		ss := SnapshotSet{items: []*Snapshot{}}
 		snap, ok := ss.Oldest()
@@ -310,7 +310,7 @@ func TestSnapshotSet_Oldest(t *testing.T) {
 }
 
 // Test SnapshotSet.Newest method
-func TestSnapshotSet_Newest(t *testing.T) {
+func Test_SnapshotSet_Newest(t *testing.T) {
 	t.Run("empty set", func(t *testing.T) {
 		ss := SnapshotSet{items: []*Snapshot{}}
 		snap, ok := ss.Newest()
@@ -341,7 +341,7 @@ func TestSnapshotSet_Newest(t *testing.T) {
 }
 
 // Test SnapshotSet.NewestFull method
-func TestSnapshotSet_NewestFull(t *testing.T) {
+func Test_SnapshotSet_NewestFull(t *testing.T) {
 	t.Run("no full snapshots", func(t *testing.T) {
 		items := []*Snapshot{
 			{id: "snapshot-1", typ: SnapshotTypeIncremental, raftMeta: &raft.SnapshotMeta{Term: 1, Index: 1}},
@@ -394,7 +394,7 @@ func TestSnapshotSet_NewestFull(t *testing.T) {
 }
 
 // Test SnapshotSet.NewestIncremental method
-func TestSnapshotSet_NewestIncremental(t *testing.T) {
+func Test_SnapshotSet_NewestIncremental(t *testing.T) {
 	t.Run("no incremental snapshots", func(t *testing.T) {
 		items := []*Snapshot{
 			{id: "snapshot-1", typ: SnapshotTypeFull, raftMeta: &raft.SnapshotMeta{Term: 1, Index: 1}},
@@ -447,7 +447,7 @@ func TestSnapshotSet_NewestIncremental(t *testing.T) {
 }
 
 // Test SnapshotSet.Fulls method
-func TestSnapshotSet_Fulls(t *testing.T) {
+func Test_SnapshotSet_Fulls(t *testing.T) {
 	items := []*Snapshot{
 		{id: "snapshot-1", typ: SnapshotTypeFull, raftMeta: &raft.SnapshotMeta{Term: 1, Index: 1}},
 		{id: "snapshot-2", typ: SnapshotTypeIncremental, raftMeta: &raft.SnapshotMeta{Term: 1, Index: 2}},
@@ -474,7 +474,7 @@ func TestSnapshotSet_Fulls(t *testing.T) {
 }
 
 // Test SnapshotSet.Incrementals method
-func TestSnapshotSet_Incrementals(t *testing.T) {
+func Test_SnapshotSet_Incrementals(t *testing.T) {
 	items := []*Snapshot{
 		{id: "snapshot-1", typ: SnapshotTypeFull, raftMeta: &raft.SnapshotMeta{Term: 1, Index: 1}},
 		{id: "snapshot-2", typ: SnapshotTypeIncremental, raftMeta: &raft.SnapshotMeta{Term: 1, Index: 2}},
@@ -501,7 +501,7 @@ func TestSnapshotSet_Incrementals(t *testing.T) {
 }
 
 // Test SnapshotSet.WithID method
-func TestSnapshotSet_WithID(t *testing.T) {
+func Test_SnapshotSet_WithID(t *testing.T) {
 	items := []*Snapshot{
 		{id: "snapshot-1", raftMeta: &raft.SnapshotMeta{Term: 1, Index: 1}},
 		{id: "snapshot-2", raftMeta: &raft.SnapshotMeta{Term: 1, Index: 2}},
@@ -531,7 +531,7 @@ func TestSnapshotSet_WithID(t *testing.T) {
 }
 
 // Test SnapshotSet.BeforeID method
-func TestSnapshotSet_BeforeID(t *testing.T) {
+func Test_SnapshotSet_BeforeID(t *testing.T) {
 	items := []*Snapshot{
 		{id: "snapshot-1", raftMeta: &raft.SnapshotMeta{Term: 1, Index: 1}},
 		{id: "snapshot-2", raftMeta: &raft.SnapshotMeta{Term: 1, Index: 2}},
@@ -567,7 +567,7 @@ func TestSnapshotSet_BeforeID(t *testing.T) {
 }
 
 // Test SnapshotSet.AfterID method
-func TestSnapshotSet_AfterID(t *testing.T) {
+func Test_SnapshotSet_AfterID(t *testing.T) {
 	items := []*Snapshot{
 		{id: "snapshot-1", raftMeta: &raft.SnapshotMeta{Term: 1, Index: 1}},
 		{id: "snapshot-2", raftMeta: &raft.SnapshotMeta{Term: 1, Index: 2}},
@@ -603,7 +603,7 @@ func TestSnapshotSet_AfterID(t *testing.T) {
 }
 
 // Test SnapshotSet.Range method
-func TestSnapshotSet_Range(t *testing.T) {
+func Test_SnapshotSet_Range(t *testing.T) {
 	items := []*Snapshot{
 		{id: "snapshot-1", raftMeta: &raft.SnapshotMeta{Term: 1, Index: 1}},
 		{id: "snapshot-2", raftMeta: &raft.SnapshotMeta{Term: 1, Index: 2}},
@@ -661,7 +661,7 @@ func TestSnapshotSet_Range(t *testing.T) {
 }
 
 // Test SnapshotSet.PartitionAtFull method
-func TestSnapshotSet_PartitionAtFull(t *testing.T) {
+func Test_SnapshotSet_PartitionAtFull(t *testing.T) {
 	t.Run("no full snapshots", func(t *testing.T) {
 		items := []*Snapshot{
 			{id: "snapshot-1", typ: SnapshotTypeIncremental, raftMeta: &raft.SnapshotMeta{Term: 1, Index: 1}},
@@ -747,7 +747,7 @@ func TestSnapshotSet_PartitionAtFull(t *testing.T) {
 }
 
 // Test SnapshotSet.ValidateIncrementalChain method
-func TestSnapshotSet_ValidateIncrementalChain(t *testing.T) {
+func Test_SnapshotSet_ValidateIncrementalChain(t *testing.T) {
 	t.Run("no full snapshot", func(t *testing.T) {
 		items := []*Snapshot{
 			{id: "snapshot-1", typ: SnapshotTypeIncremental, raftMeta: &raft.SnapshotMeta{Term: 1, Index: 1}},
@@ -804,7 +804,7 @@ func TestSnapshotSet_ValidateIncrementalChain(t *testing.T) {
 }
 
 // Test SnapshotCatalog.Scan method with filesystem
-func TestSnapshotCatalog_Scan(t *testing.T) {
+func Test_SnapshotCatalog_Scan(t *testing.T) {
 	t.Run("empty directory", func(t *testing.T) {
 		rootDir := t.TempDir()
 		catalog := &SnapshotCatalog{}

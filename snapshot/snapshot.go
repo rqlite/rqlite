@@ -324,7 +324,37 @@ func (ss SnapshotSet) ValidateIncrementalChain() error {
 // a DB file is returned. If the snapshot is incremental, associated WAL files are also returned. The
 // order in the slice is the order in which the WAL files should be applied to the DB file.
 func (ss SnapshotSet) ResolveFiles(id string) (dbFile string, walFiles []string, err error) {
-	return ", ", nil, fmt.Errorf("ResolveFiles not implemented yet")
+	idx := ss.indexOf(id)
+	if idx < 0 {
+		return "", nil, ErrSnapshotNotFound
+	}
+
+	snap := ss.items[idx]
+
+	// If the requested snapshot is full, just return its DB file.
+	if snap.typ == SnapshotTypeFull {
+		return filepath.Join(snap.path, dbfileName), nil, nil
+	}
+
+	// The requested snapshot is incremental. Walk backward to find the
+	// nearest full snapshot, add that file to the list, and then walk forward again to
+	// add all incremental snapshots WAL files up to and including the requested snapshot.
+	fullIdx := -1
+	for i := idx - 1; i >= 0; i-- {
+		if ss.items[i].typ == SnapshotTypeFull {
+			fullIdx = i
+			break
+		}
+	}
+	if fullIdx < 0 {
+		return "", nil, fmt.Errorf("no full snapshot found before incremental snapshot %s", id)
+	}
+
+	dbFile = filepath.Join(ss.items[fullIdx].path, dbfileName)
+	for i := fullIdx + 1; i <= idx; i++ {
+		walFiles = append(walFiles, filepath.Join(ss.items[i].path, walfileName))
+	}
+	return dbFile, walFiles, nil
 }
 
 // indexOf returns the index of the snapshot with the given ID.
