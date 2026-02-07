@@ -1,0 +1,236 @@
+package proto
+
+import (
+	"encoding/binary"
+	"io"
+	"os"
+	"testing"
+
+	"github.com/rqlite/rqlite/v9/internal/rsum"
+)
+
+func Test_NewHeaderFromFile(t *testing.T) {
+	content := []byte("Hello, World!")
+	tmpFile := mustWriteToFile(t, content)
+
+	t.Run("without CRC32", func(t *testing.T) {
+		header, err := NewHeaderFromFile(tmpFile, false)
+		if err != nil {
+			t.Fatalf("NewHeaderFromFile failed: %v", err)
+		}
+		if header.SizeBytes != uint64(len(content)) {
+			t.Errorf("Expected SizeBytes %d, got %d", len(content), header.SizeBytes)
+		}
+		if header.Crc32 != 0 {
+			t.Errorf("Expected Crc32 0, got %d", header.Crc32)
+		}
+	})
+
+	t.Run("with CRC32", func(t *testing.T) {
+		header, err := NewHeaderFromFile(tmpFile, true)
+		if err != nil {
+			t.Fatalf("NewHeaderFromFile failed: %v", err)
+		}
+		expectedCRC, err := rsum.CRC32(tmpFile)
+		if err != nil {
+			t.Fatalf("rsum.CRC32 failed: %v", err)
+		}
+		if header.Crc32 != expectedCRC {
+			t.Errorf("Expected Crc32 %d, got %d", expectedCRC, header.Crc32)
+		}
+	})
+}
+
+func Test_NewHeaderFromFile_Fail(t *testing.T) {
+	_, err := NewHeaderFromFile("non-existent", false)
+	if err == nil {
+		t.Fatalf("Expected error for non-existent file, got nil")
+	}
+}
+
+func Test_NewSnapshotHeader(t *testing.T) {
+	if _, err := NewSnapshotHeader(""); err == nil {
+		t.Fatalf("Expected error when both dbPath and walPaths are empty, got nil")
+	}
+
+	tmpDBFile := mustWriteToFile(t, []byte("DB Content"))
+	tmpWALFile1 := mustWriteToFile(t, []byte("WAL Content 1"))
+	tmpWALFile2 := mustWriteToFile(t, []byte("WAL Content 2"))
+
+	if _, err := NewSnapshotHeader(tmpDBFile); err != nil {
+		t.Fatalf("NewSnapshotHeader failed with single DB file: %v", err)
+	}
+	if _, err := NewSnapshotHeader(tmpDBFile, tmpWALFile1); err != nil {
+		t.Fatalf("NewSnapshotHeader failed with DB and single WAL file: %v", err)
+	}
+	if _, err := NewSnapshotHeader(tmpDBFile, tmpWALFile1, tmpWALFile2); err != nil {
+		t.Fatalf("NewSnapshotHeader failed with DB and multiple WAL files: %v", err)
+	}
+	if _, err := NewSnapshotHeader("", tmpWALFile1); err != nil {
+		t.Fatalf("NewSnapshotHeader failed with single WAL file: %v", err)
+	}
+
+	if _, err := NewSnapshotHeader("", tmpWALFile1, tmpWALFile2); err == nil {
+		t.Fatalf("Expected error when dbPath is empty and multiple WAL files are provided, got nil")
+	}
+}
+
+func Test_SnapshotStreamer_EndToEndSize(t *testing.T) {
+	cases := []struct {
+		name     string
+		dbData   string
+		walDatas []string
+	}{
+		{
+			name:   "DBOnly",
+			dbData: "DB Content",
+		},
+		{
+			name:     "WALOnly",
+			walDatas: []string{"WAL Content"},
+		},
+		{
+			name:     "DBWAL",
+			dbData:   "DB Content",
+			walDatas: []string{"WAL Content"},
+		},
+		{
+			name:     "DBWALs",
+			dbData:   "DB Content",
+			walDatas: []string{"WAL Content", "More WAL Content"},
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			runSnapshotStreamerEndToEnd(t, tc.dbData, tc.walDatas)
+		})
+	}
+}
+
+func runSnapshotStreamerEndToEnd(t *testing.T, dbData string, walDatas []string) {
+	t.Helper()
+
+	var dbPath string
+	if dbData != "" {
+		dbPath = mustWriteToFile(t, []byte(dbData))
+	}
+
+	walPaths := make([]string, 0, len(walDatas))
+	for _, wd := range walDatas {
+		walPaths = append(walPaths, mustWriteToFile(t, []byte(wd)))
+	}
+
+	streamer, err := NewSnapshotStreamer(dbPath, walPaths...)
+	if err != nil {
+		t.Fatalf("NewSnapshotStreamer failed: %v", err)
+	}
+	if err := streamer.Open(); err != nil {
+		t.Fatalf("SnapshotStreamer Open failed: %v", err)
+	}
+	defer func() {
+		if err := streamer.Close(); err != nil {
+			t.Fatalf("SnapshotStreamer Close failed: %v", err)
+		}
+	}()
+
+	expectedReadLen, err := streamer.Len()
+	if err != nil {
+		t.Fatalf("SnapshotStreamer Len failed: %v", err)
+	}
+
+	totalRead := 0
+
+	// Read and decode header size.
+	sizeBuf := make([]byte, HeaderSizeLen)
+	n, err := io.ReadFull(streamer, sizeBuf)
+	if err != nil {
+		t.Fatalf("Failed to read header size: %v", err)
+	}
+	totalRead += n
+
+	hdrLen := int(binary.BigEndian.Uint32(sizeBuf))
+	hdrBuf := make([]byte, hdrLen)
+	n, err = io.ReadFull(streamer, hdrBuf)
+	if err != nil {
+		t.Fatalf("Failed to read header: %v", err)
+	}
+	totalRead += n
+
+	header, err := UnmarshalSnapshotHeader(hdrBuf)
+	if err != nil {
+		t.Fatalf("Failed to unmarshal header: %v", err)
+	}
+
+	// Read DB payload (if present).
+	if dbData != "" {
+		if header.DbHeader == nil {
+			t.Fatalf("Expected DbHeader, got nil")
+		}
+
+		dbBuf := make([]byte, header.DbHeader.SizeBytes)
+		n, err = io.ReadFull(streamer, dbBuf)
+		if err != nil {
+			t.Fatalf("Failed to read DB data: %v", err)
+		}
+		totalRead += n
+
+		if string(dbBuf) != dbData {
+			t.Fatalf("DB data does not match expected content")
+		}
+	} else {
+		if header.DbHeader != nil {
+			t.Fatalf("Expected DbHeader to be nil")
+		}
+	}
+
+	// Read WAL payloads (if present).
+	if len(walDatas) != 0 {
+		if len(header.WalHeaders) != len(walDatas) {
+			t.Fatalf("Expected %d WAL headers, got %d", len(walDatas), len(header.WalHeaders))
+		}
+
+		for i, expected := range walDatas {
+			walBuf := make([]byte, header.WalHeaders[i].SizeBytes)
+			n, err = io.ReadFull(streamer, walBuf)
+			if err != nil {
+				t.Fatalf("Failed to read WAL data %d: %v", i, err)
+			}
+			totalRead += n
+
+			if string(walBuf) != expected {
+				t.Fatalf("WAL data %d does not match expected content", i)
+			}
+		}
+	} else {
+		if len(header.WalHeaders) != 0 {
+			t.Fatalf("Expected 0 WAL headers, got %d", len(header.WalHeaders))
+		}
+	}
+
+	// Ensure EOF.
+	var eofBuf [1]byte
+	if _, err := streamer.Read(eofBuf[:]); err != io.EOF {
+		t.Fatalf("Expected EOF, got: %v", err)
+	}
+
+	if int64(totalRead) != expectedReadLen {
+		t.Fatalf("Total read size %d does not match expected length %d", totalRead, expectedReadLen)
+	}
+}
+
+func mustWriteToFile(t *testing.T, data []byte) string {
+	t.Helper()
+
+	tmpFile, err := os.CreateTemp(t.TempDir(), "testfile")
+	if err != nil {
+		t.Fatalf("Failed to create temp file: %v", err)
+	}
+	if _, err := tmpFile.Write(data); err != nil {
+		t.Fatalf("Failed to write to temp file: %v", err)
+	}
+	if err := tmpFile.Close(); err != nil {
+		t.Fatalf("Failed to close temp file: %v", err)
+	}
+	return tmpFile.Name()
+}

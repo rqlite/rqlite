@@ -1,0 +1,16 @@
+syntax = "proto3";
+
+package snapshot;
+
+option go_package = "github.com/rqlite/rqlite/v9/snapshot/proto";
+
+message Header {
+  uint64 size_bytes = 1;
+  uint32 crc32 = 2;
+}
+
+message SnapshotHeader {
+  uint32 format_version = 1;
+  Header db_header = 2;
+  repeated Header wal_headers = 3;
+}
