@@ -221,8 +221,5 @@ func writeMeta(dir string, meta *raft.SnapshotMeta) error {
 		return fmt.Errorf("failed to encode meta: %v", err)
 	}
 
-	if err := fh.Sync(); err != nil {
-		return err
-	}
-	return fh.Close()
+	return fh.Sync()
 }
