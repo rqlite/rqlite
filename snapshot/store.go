@@ -290,7 +290,6 @@ func (s *Store) SetReapThreshold(n int) {
 	s.reapThreshold = n
 }
 
-
 // Open opens the snapshot with the given ID for reading. Open returns an io.ReadCloser
 // which wraps a SnapshotInstall object. This is because the snapshot will be used
 // to either rebuild a node's state after restart, or to send the snapshot to another node,
