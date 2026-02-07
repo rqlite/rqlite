@@ -205,6 +205,46 @@ func TestExecutor_Checkpoint(t *testing.T) {
 	})
 }
 
+func TestExecutor_WriteMeta(t *testing.T) {
+	e := NewExecutor()
+	tmpDir := t.TempDir()
+	dir := filepath.Join(tmpDir, "snap")
+	if err := os.Mkdir(dir, 0755); err != nil {
+		t.Fatalf("failed to create dir: %v", err)
+	}
+
+	data := []byte(`{"id":"test-snap","index":100,"term":2}`)
+
+	// Write meta.
+	if err := e.WriteMeta(dir, data); err != nil {
+		t.Fatalf("WriteMeta failed: %v", err)
+	}
+
+	// Verify file was written.
+	got, err := os.ReadFile(filepath.Join(dir, "meta.json"))
+	if err != nil {
+		t.Fatalf("failed to read meta.json: %v", err)
+	}
+	if string(got) != string(data) {
+		t.Fatalf("meta.json content mismatch: got %s, want %s", got, data)
+	}
+
+	// Test idempotency: write again with different data.
+	data2 := []byte(`{"id":"test-snap","index":200,"term":3}`)
+	if err := e.WriteMeta(dir, data2); err != nil {
+		t.Fatalf("WriteMeta overwrite failed: %v", err)
+	}
+	got, _ = os.ReadFile(filepath.Join(dir, "meta.json"))
+	if string(got) != string(data2) {
+		t.Fatalf("meta.json not overwritten: got %s, want %s", got, data2)
+	}
+
+	// Test idempotency: dir doesn't exist (already renamed by a later plan step).
+	if err := e.WriteMeta(filepath.Join(tmpDir, "nonexistent"), data); err != nil {
+		t.Fatalf("WriteMeta should succeed when dir doesn't exist: %v", err)
+	}
+}
+
 func mustCopyFile(src, dst string) {
 	input, err := os.ReadFile(src)
 	if err != nil {

@@ -24,9 +24,10 @@ func TestAddOperations(t *testing.T) {
 	p.AddRemove("c")
 	p.AddRemoveAll("d")
 	p.AddCheckpoint("db", []string{"w1", "w2"})
+	p.AddWriteMeta("dir", []byte(`{"id":"test"}`))
 
-	if p.Len() != 4 {
-		t.Fatalf("expected length 4, got %d", p.Len())
+	if p.Len() != 5 {
+		t.Fatalf("expected length 5, got %d", p.Len())
 	}
 
 	ops := p.Ops
@@ -41,6 +42,9 @@ func TestAddOperations(t *testing.T) {
 	}
 	if ops[3].Type != OpCheckpoint || ops[3].DB != "db" || len(ops[3].WALs) != 2 {
 		t.Errorf("unexpected op 3: %+v", ops[3])
+	}
+	if ops[4].Type != OpWriteMeta || ops[4].Dst != "dir" || string(ops[4].Data) != `{"id":"test"}` {
+		t.Errorf("unexpected op 4: %+v", ops[4])
 	}
 }
 
@@ -70,24 +74,33 @@ func (m *MockVisitor) Checkpoint(db string, wals []string) (int, error) {
 	return 0, m.Err
 }
 
+func (m *MockVisitor) WriteMeta(dir string, data []byte) error {
+	m.Calls = append(m.Calls, "write_meta "+dir)
+	return m.Err
+}
+
 func TestExecute_Success(t *testing.T) {
 	p := New()
 	p.AddRename("src", "dst")
 	p.AddRemove("file")
+	p.AddWriteMeta("snap", []byte(`{}`))
 
 	v := &MockVisitor{}
 	if err := p.Execute(v); err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
-	if len(v.Calls) != 2 {
-		t.Fatalf("expected 2 calls, got %d", len(v.Calls))
+	if len(v.Calls) != 3 {
+		t.Fatalf("expected 3 calls, got %d", len(v.Calls))
 	}
 	if v.Calls[0] != "rename src->dst" {
 		t.Errorf("unexpected call 0: %s", v.Calls[0])
 	}
 	if v.Calls[1] != "remove file" {
 		t.Errorf("unexpected call 1: %s", v.Calls[1])
+	}
+	if v.Calls[2] != "write_meta snap" {
+		t.Errorf("unexpected call 2: %s", v.Calls[2])
 	}
 }
 
@@ -122,6 +135,7 @@ func (f *FailVisitor) Rename(src, dst string) error                     { return
 func (f *FailVisitor) Remove(path string) error                         { return f.check() }
 func (f *FailVisitor) RemoveAll(path string) error                      { return f.check() }
 func (f *FailVisitor) Checkpoint(db string, wals []string) (int, error) { return 0, f.check() }
+func (f *FailVisitor) WriteMeta(dir string, data []byte) error          { return f.check() }
 
 func TestExecute_StopsOnError(t *testing.T) {
 	p := New()
@@ -160,7 +174,10 @@ func TestJSONSerialization(t *testing.T) {
 	p.AddRemove("d")
 	p.AddRemoveAll("e")
 	p.AddCheckpoint("db", []string{"w1", "w2"})
+	p.AddWriteMeta("snap", []byte(`{"id":"snap-1"}`))
 	p.AddRemoveAll("f")
+	p.NReaped = 3
+	p.NCheckpointed = 2
 
 	data, err := json.Marshal(p)
 	if err != nil {
@@ -175,6 +192,12 @@ func TestJSONSerialization(t *testing.T) {
 	if !reflect.DeepEqual(p.Ops, p2.Ops) {
 		t.Fatalf("plans do not match.\nOriginal: %+v\nDecoded: %+v", p.Ops, p2.Ops)
 	}
+	if p2.NReaped != 3 {
+		t.Fatalf("expected NReaped=3, got %d", p2.NReaped)
+	}
+	if p2.NCheckpointed != 2 {
+		t.Fatalf("expected NCheckpointed=2, got %d", p2.NCheckpointed)
+	}
 }
 
 func TestFilePersistence(t *testing.T) {
@@ -182,6 +205,9 @@ func TestFilePersistence(t *testing.T) {
 	p.AddRename("a", "b")
 	p.AddRemove("c")
 	p.AddCheckpoint("db", []string{"w1"})
+	p.AddWriteMeta("snap", []byte(`{"id":"snap-1"}`))
+	p.NReaped = 1
+	p.NCheckpointed = 1
 
 	tmpFile, err := os.CreateTemp("", "plan_test")
 	if err != nil {
@@ -190,7 +216,7 @@ func TestFilePersistence(t *testing.T) {
 	defer os.Remove(tmpFile.Name())
 	tmpFile.Close()
 
-	if err := p.WriteToFile(tmpFile.Name()); err != nil {
+	if err := WriteToFile(p, tmpFile.Name()); err != nil {
 		t.Fatalf("WriteToFile failed: %v", err)
 	}
 
@@ -201,5 +227,8 @@ func TestFilePersistence(t *testing.T) {
 
 	if !reflect.DeepEqual(p.Ops, p2.Ops) {
 		t.Fatalf("plans do not match after file roundtrip.\nOriginal: %+v\nRead: %+v", p.Ops, p2.Ops)
+	}
+	if p2.NReaped != 1 || p2.NCheckpointed != 1 {
+		t.Fatalf("expected NReaped=1, NCheckpointed=1, got %d, %d", p2.NReaped, p2.NCheckpointed)
 	}
 }

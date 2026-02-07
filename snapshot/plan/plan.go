@@ -6,41 +6,51 @@ import (
 	"os"
 )
 
-// OpType represents the type of a filesystem operation.
+// OpType represents the type of a snapshot store operation.
 type OpType string
 
 const (
-	// OpRename represents a file rename operation.
+	// OpRename represents a file or directory rename operation.
 	OpRename OpType = "rename"
 
 	// OpRemove represents a file removal operation.
 	OpRemove OpType = "remove"
 
-	// OpRemoveAll represents a directory removal operation.
+	// OpRemoveAll represents a recursive directory removal operation.
 	OpRemoveAll OpType = "remove_all"
 
 	// OpCheckpoint represents a WAL checkpoint operation.
 	OpCheckpoint OpType = "checkpoint"
+
+	// OpWriteMeta represents writing snapshot metadata to a directory.
+	OpWriteMeta OpType = "write_meta"
 )
 
-// Operation represents a single filesystem operation.
+// Operation represents a single snapshot store operation.
 type Operation struct {
 	Type OpType `json:"type"`
 
 	// Src is the source path for Rename, or the path to remove for Remove and RemoveAll.
 	Src string `json:"src,omitempty"`
 
-	// Dst is the destination path for Rename.
+	// Dst is the destination path for Rename, or the directory for WriteMeta.
 	Dst string `json:"dst,omitempty"`
 
 	// Fields for Checkpoint
 	WALs []string `json:"wals,omitempty"`
 	DB   string   `json:"db,omitempty"`
+
+	// Data holds the raw content for WriteMeta.
+	Data json.RawMessage `json:"data,omitempty"`
 }
 
-// Plan represents an ordered sequence of filesystem operations.
+// Plan represents an ordered sequence of operations on a snapshot store.
+// It is the unit of crash-safe, idempotent execution for destructive
+// maintenance operations such as reaping.
 type Plan struct {
-	Ops []Operation `json:"ops"`
+	Ops           []Operation `json:"ops"`
+	NReaped       int         `json:"n_reaped,omitempty"`
+	NCheckpointed int         `json:"n_checkpointed,omitempty"`
 }
 
 // New returns a new, empty Plan.
@@ -62,12 +72,15 @@ func ReadFromFile(path string) (*Plan, error) {
 }
 
 // WriteToFile writes the plan to the specified file in JSON format.
-func (p *Plan) WriteToFile(path string) error {
+func WriteToFile(p *Plan, path string) error {
 	data, err := json.Marshal(p)
 	if err != nil {
 		return err
 	}
-	return os.WriteFile(path, data, 0644)
+	if err := os.WriteFile(path, data, 0644); err != nil {
+		return err
+	}
+	return syncFile(path)
 }
 
 // Len returns the number of operations in the plan.
@@ -109,12 +122,24 @@ func (p *Plan) AddCheckpoint(db string, wals []string) {
 	})
 }
 
-// Visitor is the interface that must be implemented to traverse the plan.
+// AddWriteMeta adds a metadata write operation to the plan. The data
+// is stored as raw JSON so the plan package remains decoupled from the
+// concrete metadata type.
+func (p *Plan) AddWriteMeta(dir string, data []byte) {
+	p.Ops = append(p.Ops, Operation{
+		Type: OpWriteMeta,
+		Dst:  dir,
+		Data: json.RawMessage(data),
+	})
+}
+
+// Visitor is the interface that must be implemented to execute a plan.
 type Visitor interface {
 	Rename(src, dst string) error
 	Remove(path string) error
 	RemoveAll(path string) error
 	Checkpoint(db string, wals []string) (int, error)
+	WriteMeta(dir string, data []byte) error
 }
 
 // Execute traverses the plan, calling the appropriate method on the visitor for each operation.
@@ -131,6 +156,8 @@ func (p *Plan) Execute(v Visitor) error {
 			err = v.RemoveAll(op.Src)
 		case OpCheckpoint:
 			_, err = v.Checkpoint(op.DB, op.WALs)
+		case OpWriteMeta:
+			err = v.WriteMeta(op.Dst, op.Data)
 		default:
 			err = fmt.Errorf("unknown operation type: %s", op.Type)
 		}
@@ -139,4 +166,14 @@ func (p *Plan) Execute(v Visitor) error {
 		}
 	}
 	return nil
+}
+
+// syncFile syncs the given file to disk.
+func syncFile(path string) error {
+	fd, err := os.Open(path)
+	if err != nil {
+		return err
+	}
+	defer fd.Close()
+	return fd.Sync()
 }

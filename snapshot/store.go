@@ -14,16 +14,17 @@ import (
 
 	"github.com/hashicorp/raft"
 	"github.com/rqlite/rqlite/v9/internal/rsync"
+	"github.com/rqlite/rqlite/v9/snapshot/plan"
 	"github.com/rqlite/rqlite/v9/snapshot/proto"
 )
 
 const (
-	dbfileName        = "data.db"
-	walfileName       = "data.wal"
-	metaFileName      = "meta.json"
-	tmpSuffix         = ".tmp"
-	fullNeededFile    = "FULL_NEEDED"
-	reapingMarkerFile = "REAPING"
+	dbfileName     = "data.db"
+	walfileName    = "data.wal"
+	metaFileName   = "meta.json"
+	tmpSuffix      = ".tmp"
+	fullNeededFile = "FULL_NEEDED"
+	reapPlanFile   = "REAP_PLAN"
 )
 
 const (
@@ -162,10 +163,9 @@ func (l *LockingStreamer) Close() error {
 
 // Store stores snapshots in the Raft system.
 type Store struct {
-	dir               string
-	fullNeededPath    string
-	reapingMarkerPath string
-	logger            *log.Logger
+	dir            string
+	fullNeededPath string
+	logger         *log.Logger
 
 	catalog *SnapshotCatalog
 
@@ -185,12 +185,11 @@ func NewStore(dir string) (*Store, error) {
 	}
 
 	str := &Store{
-		dir:               dir,
-		fullNeededPath:    filepath.Join(dir, fullNeededFile),
-		reapingMarkerPath: filepath.Join(dir, reapingMarkerFile),
-		catalog:           &SnapshotCatalog{},
-		mrsw:              *rsync.NewMultiRSW(),
-		logger:            log.New(os.Stderr, "[snapshot-store] ", log.LstdFlags),
+		dir:            dir,
+		fullNeededPath: filepath.Join(dir, fullNeededFile),
+		catalog:        &SnapshotCatalog{},
+		mrsw:           *rsync.NewMultiRSW(),
+		logger:         log.New(os.Stderr, "[snapshot-store] ", log.LstdFlags),
 	}
 	str.logger.Printf("store initialized using %s", dir)
 
@@ -324,38 +323,158 @@ func (s *Store) Open(id string) (raftMeta *raft.SnapshotMeta, rc io.ReadCloser, 
 }
 
 // Reap reaps snapshots. Reaping is the process of deleting old snapshots that are no
-// longer needed. Reaping is a destructive operation, and is non-reversible. It it
-// is interrupted, it more be completed later before the snapshot store is usabl
+// longer needed. Reaping is a destructive operation, and is non-reversible. If it
+// is interrupted, it must be completed later before the snapshot store is usable
 // again.
 //
 // What does Reaping do? It starts by identifying the most recent full snapshot. It
 // then deletes all snapshots older than that snapshot, since they are not needed.
 //
 // Next, if there are no snapshots newer than that snapshot, then the reaping process
-// is complete as there is nothign else to do. However, if there are snapshots newer
-// than that snapshot they must be increemental snapshots, and they must be based on
-// that full snapshot. In that case, the reaping process replays those incremental
-// snapshots on top of the full snapshot, to create a new full snapshot that is up to date.
+// is complete as there is nothing else to do. However, if there are snapshots newer
+// than that snapshot they must be incremental snapshots, and they must be based on
+// that full snapshot. In that case, the reaping process consolidates those incremental
+// snapshots into the full snapshot, creating a single up-to-date full snapshot.
 //
-// It does this as follows. It renames the full snapshot directory to a temporary name,
-// using that is the same index and term as the most recent incremental snapshat. It also
-// however uses a current timestamp, to ensure that the new full snapshot is newer than
-// the most recent incremental snapshot. It then replays each incremental snapshot on top of
-// replays (moves and checkpoints each WAL into the temp directory). Finally, it strip the
-// temp extension from the new full snapshot directory, thereby installing it. Finally, it
-// deletes all snapshots older than the new full snapshot, which should be all of th
-// snapshots that were just replayed.
+// It does this by checkpointing each incremental WAL file into the full snapshot's
+// database file, removing the incremental snapshot directories and any older snapshot
+// directories, writing new metadata reflecting the newest incremental's index and term,
+// and finally renaming the full snapshot directory to a new name with a current timestamp.
 //
-// Because this is a critcal operation which must run to completion even in interrupted
-// it uses a plan-then-execute approach. It first plans and then serialized the plan
-// to disk at the path REAP_PLAN. Then it executes the plan. If the process is interrupted\
-// during execution, it can be restarted, and it will pick up the plan from disk and continue
-// executing it.
+// Because this is a critical operation which must run to completion even if interrupted,
+// it uses a plan-then-execute approach. The entire sequence of operations is captured in
+// a Plan, which is serialized to disk at the path REAP_PLAN. The plan is then executed.
+// If the process is interrupted during execution, the plan can be re-read and re-executed
+// on restart, since all operations are idempotent.
 //
-// It returns the number of snapshots reaped, and the number of WAL files/ checkpointed as
+// It returns the number of snapshots reaped, and the number of WAL files checkpointed as
 // part of the consolidation.
 func (s *Store) Reap() (int, int, error) {
-	return 0, 0, nil
+	if err := s.mrsw.BeginWrite("reap"); err != nil {
+		return 0, 0, err
+	}
+	defer s.mrsw.EndWrite()
+
+	planPath := filepath.Join(s.dir, reapPlanFile)
+
+	// Check for existing reap plan (crash recovery).
+	if fileExists(planPath) {
+		s.logger.Printf("found existing reap plan at %s, resuming", planPath)
+		p, err := plan.ReadFromFile(planPath)
+		if err != nil {
+			return 0, 0, fmt.Errorf("reading reap plan: %w", err)
+		}
+		return s.executeReapPlan(p, planPath)
+	}
+
+	// Scan store.
+	snapSet, err := s.getSnapshots()
+	if err != nil {
+		return 0, 0, err
+	}
+
+	// Nothing to do for empty stores.
+	if snapSet.Len() == 0 {
+		return 0, 0, nil
+	}
+
+	// Find the newest full snapshot and everything newer than it.
+	fullSet, newerSet := snapSet.PartitionAtFull()
+	if fullSet.Len() == 0 {
+		return 0, 0, fmt.Errorf("no full snapshot found")
+	}
+
+	full, _ := fullSet.Newest()
+
+	// Single full snapshot with nothing newer — nothing to do.
+	if snapSet.Len() == 1 {
+		return 0, 0, nil
+	}
+
+	olderSet := snapSet.BeforeID(full.id)
+
+	p := plan.New()
+
+	if newerSet.Len() == 0 {
+		// No incrementals after the newest full.
+		// Just remove all snapshots older than the full.
+		for _, snap := range olderSet.All() {
+			p.AddRemoveAll(snap.path)
+			p.NReaped++
+		}
+	} else {
+		// There are incrementals after the newest full.
+		// Consolidate by checkpointing the associated WALs into the full snapshot.
+		newestInc, _ := newerSet.Newest()
+		newID := snapshotName(newestInc.raftMeta.Term, newestInc.raftMeta.Index)
+		finalDir := filepath.Join(s.dir, newID)
+
+		newMeta := copyRaftMeta(newestInc.raftMeta)
+		newMeta.ID = newID
+		metaJSON, err := json.Marshal(newMeta)
+		if err != nil {
+			return 0, 0, fmt.Errorf("marshaling consolidated meta: %w", err)
+		}
+
+		// 1. Checkpoint all incremental WAL files into the full's DB.
+		//    WAL files reside in different directories; the executor
+		//    handles cross-directory moves during checkpointing.
+		var walFiles []string
+		for _, snap := range newerSet.All() {
+			walFiles = append(walFiles, filepath.Join(snap.path, walfileName))
+		}
+		p.AddCheckpoint(filepath.Join(full.path, dbfileName), walFiles)
+		p.NCheckpointed = len(walFiles)
+
+		// 2. Remove all incremental snapshot dirs.
+		for _, snap := range newerSet.All() {
+			p.AddRemoveAll(snap.path)
+		}
+		p.NReaped = newerSet.Len()
+
+		// 3. Remove all older-than-full dirs.
+		for _, snap := range olderSet.All() {
+			p.AddRemoveAll(snap.path)
+			p.NReaped++
+		}
+
+		// 4. Write new metadata into the full snapshot dir.
+		p.AddWriteMeta(full.path, metaJSON)
+
+		// 5. Rename to final name with current timestamp.
+		p.AddRename(full.path, finalDir)
+	}
+
+	// Persist the plan to disk for crash recovery.
+	if err := plan.WriteToFile(p, planPath); err != nil {
+		return 0, 0, fmt.Errorf("writing reap plan: %w", err)
+	}
+
+	return s.executeReapPlan(p, planPath)
+}
+
+// executeReapPlan executes a reap plan and cleans up.
+func (s *Store) executeReapPlan(p *plan.Plan, planPath string) (int, int, error) {
+	executor := plan.NewExecutor()
+	if err := p.Execute(executor); err != nil {
+		return 0, 0, fmt.Errorf("executing reap plan: %w", err)
+	}
+
+	if err := syncDirMaybe(s.dir); err != nil {
+		return 0, 0, fmt.Errorf("syncing store dir: %w", err)
+	}
+
+	// Clean up the plan file.
+	os.Remove(planPath)
+
+	s.logger.Printf("reap complete: %d snapshots reaped, %d WALs checkpointed",
+		p.NReaped, p.NCheckpointed)
+	return p.NReaped, p.NCheckpointed, nil
+}
+
+func copyRaftMeta(m *raft.SnapshotMeta) *raft.SnapshotMeta {
+	c := *m
+	return &c
 }
 
 // FullNeeded returns true if a full snapshot is needed.
@@ -396,31 +515,43 @@ func (s *Store) Stats() (map[string]any, error) {
 
 // check checks the Store for any inconsistencies, and repairs
 // any inconsistencies it finds. Inconsistencies can happen
-// if the system crashes during snapshotting.
+// if the system crashes during snapshotting or reaping.
 func (s *Store) check() error {
+	// Remove any leftover temporary directories from interrupted
+	// snapshot creation.
+	entries, err := os.ReadDir(s.dir)
+	if err != nil {
+		return fmt.Errorf("reading store directory: %w", err)
+	}
+	for _, e := range entries {
+		if e.IsDir() && isTmpName(e.Name()) {
+			tmpPath := filepath.Join(s.dir, e.Name())
+			s.logger.Printf("removing leftover temporary directory %s", tmpPath)
+			if err := os.RemoveAll(tmpPath); err != nil {
+				return fmt.Errorf("removing temporary directory %s: %w", tmpPath, err)
+			}
+		}
+	}
+
+	// Resume an interrupted reap if a plan file exists.
+	planPath := filepath.Join(s.dir, reapPlanFile)
+	if fileExists(planPath) {
+		s.logger.Printf("found interrupted reap plan at %s, resuming", planPath)
+		p, err := plan.ReadFromFile(planPath)
+		if err != nil {
+			return fmt.Errorf("reading reap plan: %w", err)
+		}
+		if _, _, err := s.executeReapPlan(p, planPath); err != nil {
+			return fmt.Errorf("executing interrupted reap plan: %w", err)
+		}
+	}
+
 	return nil
 }
 
 // getSnapshots returns the set of snapshots in the Store.
 func (s *Store) getSnapshots() (SnapshotSet, error) {
 	return s.catalog.Scan(s.dir)
-}
-
-// getSnapshotDataFile lists all files in the given snapshot directory
-// that are of the form data.*. There should only be one such file, which
-// is returned. It will be either data.db or data.wal.
-func getSnapshotDataFile(dir string) (string, error) {
-	files, err := filepath.Glob(filepath.Join(dir, "data.*"))
-	if err != nil {
-		return "", err
-	}
-	if len(files) == 0 {
-		return "", ErrDataFileNotFound
-	}
-	if len(files) > 1 {
-		return "", ErrTooManyDataFiles
-	}
-	return files[0], nil
 }
 
 // snapshotName generates a name for the snapshot.

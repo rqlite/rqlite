@@ -3,6 +3,7 @@ package snapshot
 import (
 	"bytes"
 	"encoding/binary"
+	"encoding/json"
 	"fmt"
 	"io"
 	"os"
@@ -11,6 +12,7 @@ import (
 
 	"github.com/hashicorp/raft"
 	"github.com/rqlite/rqlite/v9/db"
+	"github.com/rqlite/rqlite/v9/snapshot/plan"
 	"github.com/rqlite/rqlite/v9/snapshot/proto"
 )
 
@@ -522,7 +524,6 @@ func Test_Store_EndToEndCycle(t *testing.T) {
 }
 
 func Test_Store_Reap(t *testing.T) {
-	t.Skip("Reap() not yet implemented")
 	dir := t.TempDir()
 	store, err := NewStore(dir)
 	if err != nil {
@@ -743,6 +744,152 @@ func Test_Store_Reap(t *testing.T) {
 	// dbPath should be a byte-for-byte copy of backup.db
 	if !filesIdentical(dbPath, "testdata/db-and-wals/backup.db") {
 		t.Fatalf("Database file in snapshot does not match source")
+	}
+}
+
+func Test_Store_Check_RemovesTmpDirs(t *testing.T) {
+	dir := t.TempDir()
+	store, err := NewStore(dir)
+	if err != nil {
+		t.Fatalf("Failed to create store: %v", err)
+	}
+
+	// Create a real snapshot.
+	createSnapshotInStore(t, store, "2-1017-1704807719996", 1017, 2, 1, "testdata/db-and-wals/backup.db")
+	if store.Len() != 1 {
+		t.Fatalf("Expected 1 snapshot, got %d", store.Len())
+	}
+
+	// Create a leftover .tmp directory (simulating interrupted snapshot creation).
+	tmpDir := filepath.Join(dir, "2-9999-9999999999999.tmp")
+	if err := os.MkdirAll(tmpDir, 0755); err != nil {
+		t.Fatalf("Failed to create tmp dir: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(tmpDir, "data.db"), []byte("junk"), 0644); err != nil {
+		t.Fatalf("Failed to write file in tmp dir: %v", err)
+	}
+
+	// Re-open the store — check() should clean up the .tmp directory.
+	store2, err := NewStore(dir)
+	if err != nil {
+		t.Fatalf("Failed to re-open store: %v", err)
+	}
+
+	// The .tmp directory should be gone.
+	if pathExists(tmpDir) {
+		t.Fatalf("Expected .tmp directory to be removed, but it still exists")
+	}
+
+	// The real snapshot should still be there.
+	if store2.Len() != 1 {
+		t.Fatalf("Expected 1 snapshot after check, got %d", store2.Len())
+	}
+}
+
+func Test_Store_Check_ResumesReapPlan(t *testing.T) {
+	dir := t.TempDir()
+	store, err := NewStore(dir)
+	if err != nil {
+		t.Fatalf("Failed to create store: %v", err)
+	}
+
+	// Create a full snapshot and an incremental snapshot.
+	createSnapshotInStore(t, store, "2-1017-1704807719996", 1017, 2, 1, "testdata/db-and-wals/backup.db")
+	createSnapshotInStore(t, store, "2-1131-1704807720976", 1131, 2, 1, "", "testdata/db-and-wals/wal-00")
+
+	if store.Len() != 2 {
+		t.Fatalf("Expected 2 snapshots, got %d", store.Len())
+	}
+
+	// Reap — this should consolidate into 1 snapshot.
+	n, c, err := store.Reap()
+	if err != nil {
+		t.Fatalf("Reap failed: %v", err)
+	}
+	if n != 1 || c != 1 {
+		t.Fatalf("Expected 1 reaped and 1 checkpointed, got %d reaped and %d checkpointed", n, c)
+	}
+	if store.Len() != 1 {
+		t.Fatalf("Expected 1 snapshot after reap, got %d", store.Len())
+	}
+
+	// Now set up a second store with a "pending" reap plan: create snapshots,
+	// write a REAP_PLAN file manually, then re-open the store.
+	dir2 := t.TempDir()
+	store2, err := NewStore(dir2)
+	if err != nil {
+		t.Fatalf("Failed to create store2: %v", err)
+	}
+	createSnapshotInStore(t, store2, "2-1017-1704807719996", 1017, 2, 1, "testdata/db-and-wals/backup.db")
+	createSnapshotInStore(t, store2, "2-1131-1704807720976", 1131, 2, 1, "", "testdata/db-and-wals/wal-00")
+	if store2.Len() != 2 {
+		t.Fatalf("Expected 2 snapshots in store2, got %d", store2.Len())
+	}
+
+	// Build a reap plan (simulating what Reap() would write before execution).
+	snaps := mustListSnapshots(t, store2)
+	fullID := snaps[1].ID // older = full
+	incID := snaps[0].ID  // newer = incremental
+	fullPath := filepath.Join(dir2, fullID)
+	incPath := filepath.Join(dir2, incID)
+
+	p := plan.New()
+	walFile := filepath.Join(incPath, walfileName)
+	p.AddCheckpoint(filepath.Join(fullPath, dbfileName), []string{walFile})
+	p.NCheckpointed = 1
+	p.AddRemoveAll(incPath)
+	p.NReaped = 1
+
+	newMeta := copyRaftMeta(snaps[0])
+	newID := snapshotName(snaps[0].Term, snaps[0].Index)
+	newMeta.ID = newID
+	metaJSON, err := json.Marshal(newMeta)
+	if err != nil {
+		t.Fatalf("Failed to marshal meta: %v", err)
+	}
+	p.AddWriteMeta(fullPath, metaJSON)
+	p.AddRename(fullPath, filepath.Join(dir2, newID))
+
+	planPath := filepath.Join(dir2, reapPlanFile)
+	if err := plan.WriteToFile(p, planPath); err != nil {
+		t.Fatalf("Failed to write plan: %v", err)
+	}
+
+	// Re-open the store — check() should detect and execute the reap plan.
+	store3, err := NewStore(dir2)
+	if err != nil {
+		t.Fatalf("Failed to re-open store2: %v", err)
+	}
+
+	// The plan file should be gone.
+	if fileExists(planPath) {
+		t.Fatalf("Expected REAP_PLAN to be removed after check")
+	}
+
+	// Should have exactly 1 snapshot remaining.
+	if store3.Len() != 1 {
+		t.Fatalf("Expected 1 snapshot after check resumed reap, got %d", store3.Len())
+	}
+
+	// Verify the snapshot contents are correct (checkpointed).
+	snaps = mustListSnapshots(t, store3)
+	_, rc, err := store3.Open(snaps[0].ID)
+	if err != nil {
+		t.Fatalf("Failed to open snapshot: %v", err)
+	}
+	buf := &bytes.Buffer{}
+	if _, err := io.Copy(buf, rc); err != nil {
+		t.Fatalf("Failed to read snapshot: %v", err)
+	}
+	rc.Close()
+
+	dbPath, walPaths := persistStreamerData(t, buf)
+	if len(walPaths) != 0 {
+		t.Fatalf("Expected 0 WAL files, got %d", len(walPaths))
+	}
+	rows := mustQueryDB(t, dbPath, "SELECT COUNT(*) FROM foo")
+	if exp, got := `[{"columns":["COUNT(*)"],"types":["integer"],"values":[[1]]}]`, rows; exp != got {
+		t.Fatalf("unexpected query result: exp %s got %s", exp, got)
 	}
 }
 
