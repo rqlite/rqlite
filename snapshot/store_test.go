@@ -22,11 +22,11 @@ func Test_NewStore(t *testing.T) {
 	}
 
 	if store.Dir() != dir {
-		t.Errorf("Expected store directory to be %s, got %s", dir, store.Dir())
+		t.Fatalf("Expected store directory to be %s, got %s", dir, store.Dir())
 	}
 
 	if store.Len() != 0 {
-		t.Errorf("Expected store to have 0 snapshots, got %d", store.Len())
+		t.Fatalf("Expected store to have 0 snapshots, got %d", store.Len())
 	}
 }
 
@@ -39,13 +39,13 @@ func Test_StoreEmpty(t *testing.T) {
 		t.Fatalf("Failed to list snapshots: %v", err)
 	}
 	if len(snaps) != 0 {
-		t.Errorf("Expected no snapshots, got %d", len(snaps))
+		t.Fatalf("Expected no snapshots, got %d", len(snaps))
 	}
 
 	if fn, err := store.FullNeeded(); err != nil {
 		t.Fatalf("Failed to check if full snapshot needed: %v", err)
 	} else if !fn {
-		t.Errorf("Expected full snapshot needed, but it is not")
+		t.Fatalf("Expected full snapshot needed, but it is not")
 	}
 
 	_, _, err = store.Open("nonexistent")
@@ -58,10 +58,10 @@ func Test_StoreEmpty(t *testing.T) {
 		t.Fatalf("Failed to reap snapshots from empty store: %v", err)
 	}
 	if n != 0 {
-		t.Errorf("Expected no snapshots reaped, got %d", n)
+		t.Fatalf("Expected no snapshots reaped, got %d", n)
 	}
 	if c != 0 {
-		t.Errorf("Expected no checkpoints made, got %d", c)
+		t.Fatalf("Expected no checkpoints made, got %d", c)
 	}
 
 	if _, err := store.Stats(); err != nil {
@@ -80,7 +80,7 @@ func Test_StoreEmpty(t *testing.T) {
 	}
 
 	if store.Len() != 0 {
-		t.Errorf("Expected store to have 0 snapshots, got %d", store.Len())
+		t.Fatalf("Expected store to have 0 snapshots, got %d", store.Len())
 	}
 }
 
@@ -96,21 +96,21 @@ func Test_StoreCreateCancel(t *testing.T) {
 		t.Fatalf("Failed to create sink: %v", err)
 	}
 	if sink.ID() == "" {
-		t.Errorf("Expected sink ID to not be empty, got empty string")
+		t.Fatalf("Expected sink ID to not be empty, got empty string")
 	}
 
 	tmpSnapDir := dir + "/" + sink.ID() + tmpSuffix
 
 	// Should be a tmp directory with the name of the sink ID
 	if !pathExists(tmpSnapDir) {
-		t.Errorf("Expected directory with name %s, but it does not exist", sink.ID())
+		t.Fatalf("Expected directory with name %s, but it does not exist", sink.ID())
 	}
 
 	// Test writing to the sink
 	if n, err := sink.Write([]byte("hello")); err != nil {
 		t.Fatalf("Failed to write to sink: %v", err)
 	} else if n != 5 {
-		t.Errorf("Expected 5 bytes written, got %d", n)
+		t.Fatalf("Expected 5 bytes written, got %d", n)
 	}
 
 	// Test canceling the sink
@@ -120,11 +120,11 @@ func Test_StoreCreateCancel(t *testing.T) {
 
 	// Should not be a tmp directory with the name of the sink ID
 	if pathExists(tmpSnapDir) {
-		t.Errorf("Expected directory with name %s to not exist, but it does", sink.ID())
+		t.Fatalf("Expected directory with name %s to not exist, but it does", sink.ID())
 	}
 
 	if store.Len() != 0 {
-		t.Errorf("Expected store to have 0 snapshots, got %d", store.Len())
+		t.Fatalf("Expected store to have 0 snapshots, got %d", store.Len())
 	}
 }
 
@@ -179,14 +179,14 @@ func Test_Store_CreateThenList(t *testing.T) {
 		t.Fatalf("Failed to list snapshots: %v", err)
 	}
 	if len(snaps) != 0 {
-		t.Errorf("Expected 0 snapshots, got %d", len(snaps))
+		t.Fatalf("Expected 0 snapshots, got %d", len(snaps))
 	}
 
 	createSnapshotInStore(t, store, "2-1017-1704807719996", 1017, 2, 1, "testdata/db-and-wals/backup.db")
 	createSnapshotInStore(t, store, "2-1131-1704807720976", 1131, 2, 1, "", "testdata/db-and-wals/wal-00")
 
 	if store.Len() != 2 {
-		t.Errorf("Expected store to have 2 snapshots, got %d", store.Len())
+		t.Fatalf("Expected store to have 2 snapshots, got %d", store.Len())
 	}
 
 	li, tm, err := store.LatestIndexTerm()
@@ -205,13 +205,13 @@ func Test_Store_CreateThenList(t *testing.T) {
 		t.Fatalf("Failed to list snapshots: %v", err)
 	}
 	if len(snaps) != 2 {
-		t.Errorf("Expected 2 snapshots, got %d", len(snaps))
+		t.Fatalf("Expected 2 snapshots, got %d", len(snaps))
 	}
 	if snaps[0].ID != "2-1017-1704807719996" {
-		t.Errorf("Expected snapshot ID to be 2-1017-1704807719996, got %s", snaps[0].ID)
+		t.Fatalf("Expected snapshot ID to be 2-1017-1704807719996, got %s", snaps[0].ID)
 	}
 	if snaps[1].ID != "2-1131-1704807720976" {
-		t.Errorf("Expected snapshot ID to be 2-1131-1704807720976, got %s", snaps[1].ID)
+		t.Fatalf("Expected snapshot ID to be 2-1131-1704807720976, got %s", snaps[1].ID)
 	}
 }
 
@@ -233,11 +233,11 @@ func Test_Store_EndToEndCycle(t *testing.T) {
 
 	createSnapshotInStore(t, store0, id1, 100, 2, 1, "testdata/db-and-wals/backup.db")
 	if exp, got := 1, store0.Len(); exp != got {
-		t.Errorf("Expected store to have %d snapshots, got %d", exp, got)
+		t.Fatalf("Expected store to have %d snapshots, got %d", exp, got)
 	}
 	createSnapshotInStore(t, store0, id2, 200, 2, 1, "", "testdata/db-and-wals/wal-00")
 	if exp, got := 2, store0.Len(); exp != got {
-		t.Errorf("Expected store to have %d snapshots, got %d", exp, got)
+		t.Fatalf("Expected store to have %d snapshots, got %d", exp, got)
 	}
 
 	snaps, err := store0.List()
@@ -245,13 +245,13 @@ func Test_Store_EndToEndCycle(t *testing.T) {
 		t.Fatalf("Failed to list snapshots: %v", err)
 	}
 	if len(snaps) != 2 {
-		t.Errorf("Expected 2 snapshots, got %d", len(snaps))
+		t.Fatalf("Expected 2 snapshots, got %d", len(snaps))
 	}
 	if exp, got := id1, snaps[0].ID; exp != got {
-		t.Errorf("Expected snapshot ID to be %s, got %s", exp, got)
+		t.Fatalf("Expected snapshot ID to be %s, got %s", exp, got)
 	}
 	if exp, got := id2, snaps[1].ID; exp != got {
-		t.Errorf("Expected snapshot ID to be %s, got %s", exp, got)
+		t.Fatalf("Expected snapshot ID to be %s, got %s", exp, got)
 	}
 
 	//////////////////////////////////////////////////////////////////////////////////
@@ -262,7 +262,7 @@ func Test_Store_EndToEndCycle(t *testing.T) {
 		t.Fatalf("Failed to open snapshot: %v", err)
 	}
 	if meta.ID != id1 && meta.Index != 100 && meta.Term != 2 {
-		t.Errorf("Snapshot metadata does not match expected values")
+		t.Fatalf("Snapshot metadata does not match expected values")
 	}
 
 	dstSink, err := store1.Create(1, 1000, 2000, makeTestConfiguration("1", "localhost:1"), 1, nil)
@@ -280,7 +280,7 @@ func Test_Store_EndToEndCycle(t *testing.T) {
 	}
 	// Double check the second store.
 	if exp, got := 1, store1.Len(); exp != got {
-		t.Errorf("Expected store to have %d snapshots, got %d", exp, got)
+		t.Fatalf("Expected store to have %d snapshots, got %d", exp, got)
 	}
 
 	// Open the snapshot in the second store, check its contents.
@@ -351,7 +351,7 @@ func Test_Store_EndToEndCycle(t *testing.T) {
 		t.Fatalf("Failed to list snapshots in destination store: %v", err)
 	}
 	if len(snaps) != 2 {
-		t.Errorf("Expected 1 snapshot in destination store, got %d", len(snaps))
+		t.Fatalf("Expected 1 snapshot in destination store, got %d", len(snaps))
 	}
 	meta, rc, err = store1.Open(snaps[1].ID)
 	if err != nil {
@@ -385,12 +385,12 @@ func Test_Store_EndToEndCycle(t *testing.T) {
 	id3 := "2-300-1704807900000"
 	createSnapshotInStore(t, store0, id3, 100, 2, 1, "", "testdata/db-and-wals/wal-01")
 	if exp, got := 3, store0.Len(); exp != got {
-		t.Errorf("Expected store to have %d snapshots, got %d", exp, got)
+		t.Fatalf("Expected store to have %d snapshots, got %d", exp, got)
 	}
 
 	// Double check the first store.
 	if store0.Len() != 3 {
-		t.Errorf("Expected store to have 3 snapshots, got %d", store0.Len())
+		t.Fatalf("Expected store to have 3 snapshots, got %d", store0.Len())
 	}
 
 	// Open the third snapshot, write it to the second store.
@@ -399,7 +399,7 @@ func Test_Store_EndToEndCycle(t *testing.T) {
 		t.Fatalf("Failed to open snapshot: %v", err)
 	}
 	if meta.ID != id3 && meta.Index != 100 && meta.Term != 2 {
-		t.Errorf("Snapshot metadata does not match expected values")
+		t.Fatalf("Snapshot metadata does not match expected values")
 	}
 
 	dstSink, err = store1.Create(1, 3000, 4000, makeTestConfiguration("1", "localhost:1"), 1, nil)
@@ -426,7 +426,7 @@ func Test_Store_EndToEndCycle(t *testing.T) {
 		t.Fatalf("Failed to list snapshots in destination store: %v", err)
 	}
 	if len(snaps) != 3 {
-		t.Errorf("Expected 3 snapshots in destination store, got %d", len(snaps))
+		t.Fatalf("Expected 3 snapshots in destination store, got %d", len(snaps))
 	}
 	meta, rc, err = store1.Open(snaps[2].ID)
 	if err != nil {
