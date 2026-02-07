@@ -982,3 +982,38 @@ func TestSnapshotCatalog_Scan(t *testing.T) {
 		}
 	})
 }
+
+func mustCopyFile(t *testing.T, src, dest string) {
+	data, err := os.ReadFile(src)
+	if err != nil {
+		t.Fatalf("failed to read file %s: %v", src, err)
+	}
+	if err := os.WriteFile(dest, data, 0644); err != nil {
+		t.Fatalf("failed to write file %s: %v", dest, err)
+	}
+}
+
+func mustCreateSnapshotFull(t *testing.T, rootDir, snapshotID string, idx, term uint64) {
+	mustCreateSnapshot(t, rootDir, snapshotID, "testdata/db-and-wals/full2.db", dbfileName, idx, term)
+}
+
+func mustCreateSnapshotInc(t *testing.T, rootDir, snapshotID string, idx, term uint64) {
+	mustCreateSnapshot(t, rootDir, snapshotID, "testdata/db-and-wals/wal-00", walfileName, idx, term)
+}
+
+func mustCreateSnapshot(t *testing.T, rootDir string, snapshotID, srcName, dstName string, idx, term uint64) {
+	snapshotDir := filepath.Join(rootDir, snapshotID)
+	if err := os.MkdirAll(snapshotDir, 0755); err != nil {
+		t.Fatalf("failed to create snapshot dir: %v", err)
+	}
+
+	mustCopyFile(t, srcName, filepath.Join(snapshotDir, dstName))
+	meta := &raft.SnapshotMeta{
+		ID:    snapshotID,
+		Index: idx,
+		Term:  term,
+	}
+	if err := writeMeta(snapshotDir, meta); err != nil {
+		t.Fatalf("failed to write snapshot meta: %v", err)
+	}
+}

@@ -11,7 +11,7 @@ import (
 	"path/filepath"
 
 	"github.com/hashicorp/raft"
-	"github.com/rqlite/rqlite/v9/snapshot2/proto"
+	"github.com/rqlite/rqlite/v9/snapshot/proto"
 	pb "google.golang.org/protobuf/proto"
 )
 

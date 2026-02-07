@@ -13,9 +13,8 @@ import (
 	"time"
 
 	"github.com/hashicorp/raft"
-	"github.com/rqlite/rqlite/v9/db"
 	"github.com/rqlite/rqlite/v9/internal/rsync"
-	"github.com/rqlite/rqlite/v9/snapshot2/proto"
+	"github.com/rqlite/rqlite/v9/snapshot/proto"
 )
 
 const (
@@ -210,12 +209,6 @@ func NewStore(dir string) (*Store, error) {
 // Create creates a new snapshot sink for the given parameters.
 func (s *Store) Create(version raft.SnapshotVersion, index, term uint64, configuration raft.Configuration,
 	configurationIndex uint64, trans raft.Transport) (retSink raft.SnapshotSink, retErr error) {
-	if exists, err := s.snapshotExists(snapshotName(term, index)); err != nil {
-		return nil, err
-	} else if exists {
-		return nil, fmt.Errorf("snapshot with index %d and term %d already exists", index, term)
-	}
-
 	if err := s.mrsw.BeginRead(); err != nil {
 		return nil, err
 	}
@@ -297,7 +290,12 @@ func (s *Store) Open(id string) (raftMeta *raft.SnapshotMeta, rc io.ReadCloser, 
 		}
 	}()
 
-	dbfile, walFiles, err := ResolveSnapshots(s.dir, id)
+	snapSet, err := s.getSnapshots()
+	if err != nil {
+		return nil, nil, err
+	}
+
+	dbfile, walFiles, err := snapSet.ResolveFiles(id)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -325,142 +323,9 @@ func (s *Store) Open(id string) (raftMeta *raft.SnapshotMeta, rc io.ReadCloser, 
 	return meta.SnapshotMeta, NewLockingStreamer(streamer, s), nil
 }
 
-// Reap reaps all snapshots leaving at most retain snapshots. It
-// consolidates the newest full snapshot with all newer incremental snapshots.
-// It returns the number of snapshots reaped, and the number of WAL files
-// checkpointed as part of the consolidation.
+// Reap reaps snapshots
 func (s *Store) Reap() (reapedN, chkN int, retErr error) {
-	defer func() {
-		if retErr != nil {
-			stats.Add(snapshotsReapedFail, 1)
-		} else {
-			stats.Add(snapshotsReaped, int64(reapedN))
-		}
-	}()
-
-	if err := s.mrsw.BeginWrite("snapshot-reap"); err != nil {
-		return reapedN, chkN, err
-	}
-	defer s.mrsw.EndWrite()
-
-	if s.reapDisabled {
-		return reapedN, chkN, nil
-	}
-
-	// Anything to do?
-	snapshots, err := s.getSnapshots()
-	if err != nil {
-		return reapedN, chkN, err
-	}
-	if len(snapshots) <= 1 {
-		return reapedN, chkN, nil
-	}
-
-	// Find the newest full snapshot
-	newestFullSnap, err := s.newestFullSnapshot()
-	if err != nil {
-		return reapedN, chkN, err
-	}
-	newestFullSnapPath := filepath.Join(s.dir, newestFullSnap.ID)
-
-	n, err := s.removeOldSnapshots(newestFullSnap.ID)
-	if err != nil {
-		return reapedN, chkN, err
-	}
-	reapedN += n
-
-	// Now we're cleaned up, we need to consolidate the newest full snapshot
-	// with all newer incremental snapshots. Start with the list of all snapshots.
-	snapshots, err = s.getSnapshots()
-	if err != nil {
-		return reapedN, chkN, err
-	}
-
-	if len(snapshots) == 1 {
-		// Nothing to do - only the full snapshot remains since it was the newest.
-		return reapedN, chkN, nil
-	}
-
-	newestSnap := snapshots[len(snapshots)-1]
-	newestSnapPath := filepath.Join(s.dir, newestSnap.ID)
-
-	// About to pass point of no return.
-	touchFile(s.reapingMarkerPath)
-	if err := syncDir(s.dir); err != nil {
-		return reapedN, chkN, err
-	}
-
-	// This is what we do (noting that we move WAL files, not the DB file, since the DB file may be big):
-	// - rename the newest full snapshot dir to the same name as the newest name but with .tmp suffix
-	// - move the meta file from the newest snapshot into the renamed dir
-	// - move all WAL files from newer incremental snapshots into the renamed dir
-	// - checkpoint all the WAL files into the DB file in the renamed dir
-	// - delete all snapshot dirs except the renamed one
-	// - temove the .tmp suffix from the directory containing the full snapshot
-	consolidatedSnapPathTmp := tmpName(newestSnapPath)
-	if err := os.Rename(newestFullSnapPath, consolidatedSnapPathTmp); err != nil {
-		return reapedN, chkN, err
-	}
-
-	// Move meta file from the newest snapshot to the renamed dir
-	if err := os.Rename(metaPath(newestSnapPath), metaPath(consolidatedSnapPathTmp)); err != nil {
-		return reapedN, chkN, err
-	}
-
-	// Move all WAL files
-	walFiles := []string{}
-	for i, snap := range snapshots {
-		if snap.Type != SnapshotMetaTypeIncremental {
-			continue
-		}
-		snapPath := filepath.Join(s.dir, snap.ID)
-		walSrcPath := filepath.Join(snapPath, walfileName)
-		walDstPath := filepath.Join(consolidatedSnapPathTmp, walfileName+fmt.Sprintf(".%d", i))
-		walFiles = append(walFiles, walDstPath)
-		if err := os.Rename(walSrcPath, walDstPath); err != nil {
-			return reapedN, chkN, err
-		}
-	}
-	chkN += len(walFiles)
-
-	// Checkpoint WAL files into DB file
-	dbPath := filepath.Join(consolidatedSnapPathTmp, dbfileName)
-	if err := db.ReplayWAL(dbPath, walFiles, false); err != nil {
-		return reapedN, chkN, err
-	}
-
-	// Remove all snapshot dirs except the renamed one
-	dirs, err := os.ReadDir(s.dir)
-	if err != nil {
-		return reapedN, chkN, err
-	}
-	for _, dir := range dirs {
-		if !dir.IsDir() {
-			continue
-		}
-		if isTmpName(dir.Name()) {
-			continue
-		}
-		if err := os.RemoveAll(filepath.Join(s.dir, dir.Name())); err != nil {
-			return reapedN, chkN, err
-		}
-		reapedN++
-	}
-
-	// Remove .tmp suffix from the dir
-	if err := os.Rename(consolidatedSnapPathTmp, nonTmpName(consolidatedSnapPathTmp)); err != nil {
-		return reapedN, chkN, err
-	}
-	if err := syncDir(s.dir); err != nil {
-		return reapedN, chkN, err
-	}
-
-	// Reaping complete, remove marker file.
-	if err := os.Remove(s.reapingMarkerPath); err != nil {
-		return reapedN, chkN, err
-	}
-
-	return reapedN, chkN, nil
+	return 0, 0, nil
 }
 
 // FullNeeded returns true if a full snapshot is needed.
@@ -472,7 +337,7 @@ func (s *Store) FullNeeded() (bool, error) {
 	if err != nil {
 		return false, err
 	}
-	return len(snaps) == 0, nil
+	return snaps.Len() == 0, nil
 }
 
 // SetFullNeeded sets the flag that indicates a full snapshot is needed.
@@ -493,13 +358,9 @@ func (s *Store) Stats() (map[string]any, error) {
 	if err != nil {
 		return nil, err
 	}
-	snapsAsIDs := make([]string, len(snapshots))
-	for i, snap := range snapshots {
-		snapsAsIDs[i] = snap.ID
-	}
 	return map[string]any{
 		"dir":       s.dir,
-		"snapshots": snapsAsIDs,
+		"snapshots": snapshots.IDs(),
 	}, nil
 }
 
@@ -510,17 +371,9 @@ func (s *Store) check() error {
 	return nil
 }
 
-func (s *Store) snapshotExists(id string) (bool, error) {
-	snapshots, err := s.getSnapshots()
-	if err != nil {
-		return false, err
-	}
-	for _, snap := range snapshots {
-		if snap.ID == id {
-			return true, nil
-		}
-	}
-	return false, nil
+// getSnapshots returns the set of snapshots in the Store.
+func (s *Store) getSnapshots() (SnapshotSet, error) {
+	return s.catalog.Scan(s.dir)
 }
 
 // getSnapshotDataFile lists all files in the given snapshot directory
@@ -538,29 +391,6 @@ func getSnapshotDataFile(dir string) (string, error) {
 		return "", ErrTooManyDataFiles
 	}
 	return files[0], nil
-}
-
-// removeOldSnapshots removes all snapshots older than the given snapshot ID,
-// returning the number removed. It is up to the caller to ensure that the given
-// Store write lock is held.
-func (s *Store) removeOldSnapshots(keepID string) (int, error) {
-	snapshots, err := s.getSnapshots()
-	if err != nil {
-		return 0, err
-	}
-
-	n := 0
-	for _, snap := range snapshots {
-		if snap.ID >= keepID {
-			return n, nil
-		}
-		snapDir := filepath.Join(s.dir, snap.ID)
-		if err := os.RemoveAll(snapDir); err != nil {
-			return 0, fmt.Errorf("failed to remove old snapshot %s: %s", snap.ID, err)
-		}
-		n++
-	}
-	return n, nil
 }
 
 // snapshotName generates a name for the snapshot.

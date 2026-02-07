@@ -320,6 +320,13 @@ func (ss SnapshotSet) ValidateIncrementalChain() error {
 	return nil
 }
 
+// ResolveFiles resolves a snapshot ID into its constituent DB file and WAL files. At a minimum,
+// a DB file is returned. If the snapshot is incremental, associated WAL files are also returned. The
+// order in the slice is the order in which the WAL files should be applied to the DB file.
+func (ss SnapshotSet) ResolveFiles(id string) (dbFile string, walFiles []string, err error) {
+	return ", ", nil, fmt.Errorf("ResolveFiles not implemented yet")
+}
+
 // indexOf returns the index of the snapshot with the given ID.
 // If no snapshot is found, it returns -1.
 func (ss SnapshotSet) indexOf(id string) int {

@@ -7,49 +7,12 @@ import (
 	"io"
 	"os"
 	"path/filepath"
-	"sort"
 	"testing"
 
 	"github.com/hashicorp/raft"
 	"github.com/rqlite/rqlite/v9/db"
-	"github.com/rqlite/rqlite/v9/snapshot2/proto"
+	"github.com/rqlite/rqlite/v9/snapshot/proto"
 )
-
-func Test_SnapshotMetaSort(t *testing.T) {
-	metas := []*SnapshotMeta{
-		{
-			SnapshotMeta: &raft.SnapshotMeta{
-				ID:    "2-1017-1704807719996",
-				Index: 1017,
-				Term:  2,
-			},
-			Type: SnapshotMetaTypeFull,
-		},
-		{
-			SnapshotMeta: &raft.SnapshotMeta{
-				ID:    "2-1131-1704807720976",
-				Index: 1131,
-				Term:  2,
-			},
-			Type: SnapshotMetaTypeIncremental,
-		},
-	}
-	sort.Sort(snapMetaSlice(metas))
-	if metas[0].ID != "2-1017-1704807719996" {
-		t.Errorf("Expected first snapshot ID to be 2-1017-1704807719996, got %s", metas[0].ID)
-	}
-	if metas[1].ID != "2-1131-1704807720976" {
-		t.Errorf("Expected second snapshot ID to be 2-1131-1704807720976, got %s", metas[1].ID)
-	}
-
-	sort.Sort(sort.Reverse(snapMetaSlice(metas)))
-	if metas[0].ID != "2-1131-1704807720976" {
-		t.Errorf("Expected first snapshot ID to be 2-1131-1704807720976, got %s", metas[0].ID)
-	}
-	if metas[1].ID != "2-1017-1704807719996" {
-		t.Errorf("Expected second snapshot ID to be 2-1017-1704807719996, got %s", metas[1].ID)
-	}
-}
 
 func Test_NewStore(t *testing.T) {
 	dir := t.TempDir()

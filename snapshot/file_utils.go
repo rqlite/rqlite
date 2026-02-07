@@ -1,6 +1,7 @@
 package snapshot
 
 import (
+	"bytes"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -98,4 +99,16 @@ func removeAllPrefix(path, prefix string) error {
 		}
 	}
 	return nil
+}
+
+func filesIdentical(path1, path2 string) bool {
+	b1, err := os.ReadFile(path1)
+	if err != nil {
+		return false
+	}
+	b2, err := os.ReadFile(path2)
+	if err != nil {
+		return false
+	}
+	return bytes.Equal(b1, b2)
 }
