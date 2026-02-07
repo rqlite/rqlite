@@ -197,11 +197,11 @@ func Test_Store_CreateThenList(t *testing.T) {
 	if len(snaps) != 2 {
 		t.Fatalf("Expected 2 snapshots, got %d", len(snaps))
 	}
-	if snaps[0].ID != "2-1017-1704807719996" {
-		t.Fatalf("Expected snapshot ID to be 2-1017-1704807719996, got %s", snaps[0].ID)
+	if snaps[0].ID != "2-1131-1704807720976" {
+		t.Fatalf("Expected snapshot ID to be 2-1131-1704807720976, got %s", snaps[0].ID)
 	}
-	if snaps[1].ID != "2-1131-1704807720976" {
-		t.Fatalf("Expected snapshot ID to be 2-1131-1704807720976, got %s", snaps[1].ID)
+	if snaps[1].ID != "2-1017-1704807719996" {
+		t.Fatalf("Expected snapshot ID to be 2-1017-1704807719996, got %s", snaps[1].ID)
 	}
 }
 
@@ -237,10 +237,10 @@ func Test_Store_EndToEndCycle(t *testing.T) {
 	if len(snaps) != 2 {
 		t.Fatalf("Expected 2 snapshots, got %d", len(snaps))
 	}
-	if exp, got := id1, snaps[0].ID; exp != got {
+	if exp, got := id2, snaps[0].ID; exp != got {
 		t.Fatalf("Expected snapshot ID to be %s, got %s", exp, got)
 	}
-	if exp, got := id2, snaps[1].ID; exp != got {
+	if exp, got := id1, snaps[1].ID; exp != got {
 		t.Fatalf("Expected snapshot ID to be %s, got %s", exp, got)
 	}
 
@@ -343,7 +343,7 @@ func Test_Store_EndToEndCycle(t *testing.T) {
 	if len(snaps) != 2 {
 		t.Fatalf("Expected 1 snapshot in destination store, got %d", len(snaps))
 	}
-	meta, rc, err = store1.Open(snaps[1].ID)
+	meta, rc, err = store1.Open(snaps[0].ID)
 	if err != nil {
 		t.Fatalf("Failed to open snapshot in destination store: %v", err)
 	}
@@ -418,7 +418,7 @@ func Test_Store_EndToEndCycle(t *testing.T) {
 	if len(snaps) != 3 {
 		t.Fatalf("Expected 3 snapshots in destination store, got %d", len(snaps))
 	}
-	meta, rc, err = store1.Open(snaps[2].ID)
+	meta, rc, err = store1.Open(snaps[0].ID)
 	if err != nil {
 		t.Fatalf("Failed to open snapshot in destination store: %v", err)
 	}
@@ -495,7 +495,7 @@ func Test_Store_EndToEndCycle(t *testing.T) {
 	if exp, got := 4, len(snaps); exp != got {
 		t.Fatalf("Expected %d snapshots in destination store, got %d", exp, got)
 	}
-	meta, rc, err = store1.Open(snaps[3].ID)
+	meta, rc, err = store1.Open(snaps[0].ID)
 	if err != nil {
 		t.Fatalf("Failed to open snapshot in destination store: %v", err)
 	}
