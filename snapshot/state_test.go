@@ -1,185 +1,223 @@
 package snapshot
 
 import (
-	"bytes"
-	"io"
 	"os"
+	"path/filepath"
 	"testing"
+
+	"github.com/hashicorp/raft"
 )
 
-func Test_RemoveAllTmpSnapshotData(t *testing.T) {
-	dir := t.TempDir()
-	if err := RemoveAllTmpSnapshotData(dir); err != nil {
-		t.Fatalf("Failed to remove all tmp snapshot data: %v", err)
+func Test_ResolveSnapshots_EmptyStore(t *testing.T) {
+	rootDir := t.TempDir()
+	_, _, err := ResolveSnapshots(rootDir, "nonexistent-snapshot-store-is-empty")
+	if err != ErrSnapshotNotFound {
+		t.Fatalf("expected ErrSnapshotNotFound, got: %v", err)
 	}
-	if !pathExists(dir) {
-		t.Fatalf("Expected dir to exist, but it does not")
-	}
-	directories, err := os.ReadDir(dir)
+}
+
+func Test_ResolveSnapshots_SingleFull(t *testing.T) {
+	snapshotID := "full-snapshot-1"
+	rootDir := t.TempDir()
+
+	mustCreateSnapshotFull(t, rootDir, snapshotID, 1, 1)
+
+	dbfile, walFiles, err := ResolveSnapshots(rootDir, snapshotID)
 	if err != nil {
-		t.Fatalf("Failed to read dir: %v", err)
+		t.Fatalf("unexpected error from ResolveSnapshots: %v", err)
 	}
-	if len(directories) != 0 {
-		t.Fatalf("Expected dir to be empty, got %d files", len(directories))
+	if dbfile != filepath.Join(rootDir, snapshotID, dbfileName) {
+		t.Fatalf("expected dbfile %s, got %s", filepath.Join(rootDir, snapshotID, dbfileName), dbfile)
 	}
-
-	mustTouchDir(t, dir+"/dir")
-	mustTouchFile(t, dir+"/file")
-	if err := RemoveAllTmpSnapshotData(dir); err != nil {
-		t.Fatalf("Failed to remove all tmp snapshot data: %v", err)
-	}
-	if !pathExists(dir + "/dir") {
-		t.Fatalf("Expected dir to exist, but it does not")
-	}
-	if !pathExists(dir + "/file") {
-		t.Fatalf("Expected file to exist, but it does not")
-	}
-
-	mustTouchDir(t, dir+"/snapshot1234.tmp")
-	mustTouchFile(t, dir+"/snapshot1234.db")
-	mustTouchFile(t, dir+"/snapshot1234.db-wal")
-	mustTouchFile(t, dir+"/snapshot1234-5678")
-	if err := RemoveAllTmpSnapshotData(dir); err != nil {
-		t.Fatalf("Failed to remove all tmp snapshot data: %v", err)
-	}
-	if !pathExists(dir + "/dir") {
-		t.Fatalf("Expected dir to exist, but it does not")
-	}
-	if !pathExists(dir + "/file") {
-		t.Fatalf("Expected file to exist, but it does not")
-	}
-	if pathExists(dir + "/snapshot1234.tmp") {
-		t.Fatalf("Expected snapshot1234.tmp to not exist, but it does")
-	}
-	if pathExists(dir + "/snapshot1234.db") {
-		t.Fatalf("Expected snapshot1234.db to not exist, but it does")
-	}
-	if pathExists(dir + "/snapshot1234.db-wal") {
-		t.Fatalf("Expected snapshot1234.db-wal to not exist, but it does")
-	}
-	if pathExists(dir + "/snapshot1234-5678") {
-		t.Fatalf("Expected /snapshot1234-5678 to not exist, but it does")
-	}
-
-	mustTouchFile(t, dir+"/snapshotABCD.tmp")
-	if err := RemoveAllTmpSnapshotData(dir); err != nil {
-		t.Fatalf("Failed to remove all tmp snapshot data: %v", err)
-	}
-	if !pathExists(dir + "/snapshotABCD.tmp") {
-		t.Fatalf("Expected /snapshotABCD.tmp to exist, but it does not")
+	if len(walFiles) != 0 {
+		t.Fatalf("expected no wal files, got %v", walFiles)
 	}
 }
 
-func Test_LatestIndexTerm(t *testing.T) {
-	store := mustStore(t)
-	li, tm, err := LatestIndexTerm(store.dir)
+func Test_ResolveSnapshots_DoubleFull(t *testing.T) {
+	snapshotID1 := "full-snapshot-1"
+	snapshotID2 := "full-snapshot-2"
+	rootDir := t.TempDir()
+
+	mustCreateSnapshotFull(t, rootDir, snapshotID1, 1, 1)
+	mustCreateSnapshotFull(t, rootDir, snapshotID2, 2, 1)
+
+	dbfile, walFiles, err := ResolveSnapshots(rootDir, snapshotID2)
 	if err != nil {
-		t.Fatalf("Failed to get latest index: %v", err)
+		t.Fatalf("unexpected error from ResolveSnapshots: %v", err)
 	}
-	if li != 0 {
-		t.Fatalf("Expected latest index to be 0, got %d", li)
+	if dbfile != filepath.Join(rootDir, snapshotID2, dbfileName) {
+		t.Fatalf("expected dbfile %s, got %s", filepath.Join(rootDir, snapshotID2, dbfileName), dbfile)
 	}
-	if tm != 0 {
-		t.Fatalf("Expected latest term to be 0, got %d", tm)
-	}
-
-	expLi := uint64(3)
-	expTm := uint64(2)
-	sink := NewSink(store, makeRaftMeta("snap-1234", expLi, expTm, 1))
-	if sink == nil {
-		t.Fatalf("Failed to create new sink")
-	}
-	if err := sink.Open(); err != nil {
-		t.Fatalf("Failed to open sink: %v", err)
+	if len(walFiles) != 0 {
+		t.Fatalf("expected no wal files, got %v", walFiles)
 	}
 
-	sqliteFile := mustOpenFile(t, "testdata/db-and-wals/backup.db")
-	defer sqliteFile.Close()
-	n, err := io.Copy(sink, sqliteFile)
+	// Check the first full snapshot also.
+	dbfile, walFiles, err = ResolveSnapshots(rootDir, snapshotID1)
 	if err != nil {
-		t.Fatalf("Failed to copy SQLite file: %v", err)
+		t.Fatalf("unexpected error from ResolveSnapshots: %v", err)
 	}
-	sqliteFile.Close() // Reaping will fail on Windows if file is not closed.
-	if n != mustGetFileSize(t, "testdata/db-and-wals/backup.db") {
-		t.Fatalf("Unexpected number of bytes copied: %d", n)
+	if dbfile != filepath.Join(rootDir, snapshotID1, dbfileName) {
+		t.Fatalf("expected dbfile %s, got %s", filepath.Join(rootDir, snapshotID1, dbfileName), dbfile)
 	}
-	if err := sink.Close(); err != nil {
-		t.Fatalf("Failed to close sink: %v", err)
+	if len(walFiles) != 0 {
+		t.Fatalf("expected no wal files, got %v", walFiles)
 	}
+}
 
-	li, tm, err = LatestIndexTerm(store.dir)
+func Test_ResolveSnapshots_SingleFullSingleInc(t *testing.T) {
+	snapshotFullID := "00000-1"
+	snapshotIncID := "00000-2"
+	rootDir := t.TempDir()
+
+	mustCreateSnapshotFull(t, rootDir, snapshotFullID, 1, 1)
+	mustCreateSnapshotInc(t, rootDir, snapshotIncID, 2, 1)
+
+	dbfile, walFiles, err := ResolveSnapshots(rootDir, snapshotIncID)
 	if err != nil {
-		t.Fatalf("Failed to get latest index: %v", err)
+		t.Fatalf("unexpected error from ResolveSnapshots: %v", err)
 	}
-	if li != expLi {
-		t.Fatalf("Expected latest index to be %d, got %d", expLi, li)
+	if dbfile != filepath.Join(rootDir, snapshotFullID, dbfileName) {
+		t.Fatalf("expected dbfile %s, got %s", filepath.Join(rootDir, snapshotFullID, dbfileName), dbfile)
 	}
-	if tm != expTm {
-		t.Fatalf("Expected latest term to be %d, got %d", expTm, tm)
+	if len(walFiles) != 1 {
+		t.Fatalf("expected 1 wal file, got %v", walFiles)
 	}
-}
-
-func Test_StateReaderNew(t *testing.T) {
-	// Create a new StateReader
-	s := NewStateReader(nil)
-	if s == nil {
-		t.Errorf("expected snapshot to be created")
+	expectedWalFile := filepath.Join(rootDir, snapshotIncID, walfileName)
+	if walFiles[0] != expectedWalFile {
+		t.Fatalf("expected wal file %s, got %s", expectedWalFile, walFiles[0])
 	}
 }
 
-// Test_StateReaderPersist_NilData tests that Persist does not error when
-// given a nil data buffer.
-func Test_StateReaderPersist_NilData(t *testing.T) {
-	compactedBuf := bytes.NewBuffer(nil)
-	s := NewStateReader(io.NopCloser(compactedBuf))
-	if s == nil {
-		t.Errorf("expected snapshot to be created")
-	}
+func Test_ResolveSnapshots_SingleFullDoubleInc(t *testing.T) {
+	snapshotFullID := "00000-1"
+	snapshotIncID1 := "00000-2"
+	snapshotIncID2 := "00000-3"
+	rootDir := t.TempDir()
 
-	mrs := &mockRaftSink{}
-	err := s.Persist(mrs)
+	mustCreateSnapshotFull(t, rootDir, snapshotFullID, 1, 1)
+	mustCreateSnapshotInc(t, rootDir, snapshotIncID1, 2, 1)
+	mustCreateSnapshotInc(t, rootDir, snapshotIncID2, 3, 1)
+
+	dbfile, walFiles, err := ResolveSnapshots(rootDir, snapshotIncID2)
 	if err != nil {
-		t.Errorf("expected no error, got %v", err)
+		t.Fatalf("unexpected error from ResolveSnapshots: %v", err)
 	}
-	if len(mrs.buf.Bytes()) != 0 {
-		t.Errorf("expected %d, got %d", 0, len(mrs.buf.Bytes()))
+	if dbfile != filepath.Join(rootDir, snapshotFullID, dbfileName) {
+		t.Fatalf("expected dbfile %s, got %s", filepath.Join(rootDir, snapshotFullID, dbfileName), dbfile)
 	}
-}
+	if len(walFiles) != 2 {
+		t.Fatalf("expected 2 wal files, got %v", walFiles)
+	}
+	expectedWalFile1 := filepath.Join(rootDir, snapshotIncID1, walfileName)
+	if walFiles[0] != expectedWalFile1 {
+		t.Fatalf("expected wal file %s, got %s", expectedWalFile1, walFiles[0])
+	}
+	expectedWalFile2 := filepath.Join(rootDir, snapshotIncID2, walfileName)
+	if walFiles[1] != expectedWalFile2 {
+		t.Fatalf("expected wal file %s, got %s", expectedWalFile2, walFiles[1])
+	}
 
-func Test_StateReaderPersist_SimpleData(t *testing.T) {
-	compactedBuf := bytes.NewBuffer([]byte("hello world"))
-	s := NewStateReader(io.NopCloser(compactedBuf))
-	if s == nil {
-		t.Errorf("expected snapshot to be created")
-	}
-
-	mrs := &mockRaftSink{}
-	err := s.Persist(mrs)
+	// Test also looking for the intermediate incremental snapshot.
+	dbfile, walFiles, err = ResolveSnapshots(rootDir, snapshotIncID1)
 	if err != nil {
-		t.Errorf("expected no error, got %v", err)
+		t.Fatalf("unexpected error from ResolveSnapshots: %v", err)
 	}
-	if mrs.buf.String() != "hello world" {
-		t.Errorf("expected %s, got %s", "hello world", mrs.buf.String())
+	if dbfile != filepath.Join(rootDir, snapshotFullID, dbfileName) {
+		t.Fatalf("expected dbfile %s, got %s", filepath.Join(rootDir, snapshotFullID, dbfileName), dbfile)
+	}
+	if len(walFiles) != 1 {
+		t.Fatalf("expected 1 wal file, got %v", walFiles)
+	}
+	if walFiles[0] != expectedWalFile1 {
+		t.Fatalf("expected wal file %s, got %s", expectedWalFile1, walFiles[0])
+	}
+
+	// Check that looking for a non-existent snapshot fails.
+	_, _, err = ResolveSnapshots(rootDir, "non-existent-snapshot")
+	if err != ErrSnapshotNotFound {
+		t.Fatalf("expected ErrSnapshotNotFound, got: %v", err)
 	}
 }
 
-type mockRaftSink struct {
-	buf bytes.Buffer
+func Test_ResolveSnapshots_SingleFullDoubleInc_IgnoresEarlier(t *testing.T) {
+	snapshotFullID0 := "00000-0"
+	snapshotFullID1 := "00000-1"
+	snapshotIncID1 := "00000-2"
+	snapshotIncID2 := "00000-3"
+	rootDir := t.TempDir()
+
+	mustCreateSnapshotFull(t, rootDir, snapshotFullID0, 1, 1)
+	mustCreateSnapshotFull(t, rootDir, snapshotFullID1, 2, 1)
+	mustCreateSnapshotInc(t, rootDir, snapshotIncID1, 3, 1)
+	mustCreateSnapshotInc(t, rootDir, snapshotIncID2, 4, 1)
+
+	dbfile, walFiles, err := ResolveSnapshots(rootDir, snapshotIncID2)
+	if err != nil {
+		t.Fatalf("unexpected error from ResolveSnapshots: %v", err)
+	}
+	if dbfile != filepath.Join(rootDir, snapshotFullID1, dbfileName) {
+		t.Fatalf("expected dbfile %s, got %s", filepath.Join(rootDir, snapshotFullID1, dbfileName), dbfile)
+	}
+	if len(walFiles) != 2 {
+		t.Fatalf("expected 2 wal files, got %v", walFiles)
+	}
+	expectedWalFile1 := filepath.Join(rootDir, snapshotIncID1, walfileName)
+	if walFiles[0] != expectedWalFile1 {
+		t.Fatalf("expected wal file %s, got %s", expectedWalFile1, walFiles[0])
+	}
+	expectedWalFile2 := filepath.Join(rootDir, snapshotIncID2, walfileName)
+	if walFiles[1] != expectedWalFile2 {
+		t.Fatalf("expected wal file %s, got %s", expectedWalFile2, walFiles[1])
+	}
 }
 
-func (mrs *mockRaftSink) Write(p []byte) (n int, err error) {
-	return mrs.buf.Write(p)
+func Test_ResolveSnapshots_NoFullInChain(t *testing.T) {
+	snapshotIncID1 := "00000-1"
+	snapshotIncID2 := "00000-2"
+	rootDir := t.TempDir()
+
+	mustCreateSnapshotInc(t, rootDir, snapshotIncID1, 1, 1)
+	mustCreateSnapshotInc(t, rootDir, snapshotIncID2, 2, 1)
+
+	_, _, err := ResolveSnapshots(rootDir, snapshotIncID2)
+	if err == nil {
+		t.Fatalf("expected error from ResolveSnapshots, got nil")
+	}
 }
 
-func (mrs *mockRaftSink) Close() error {
-	return nil
+func mustCopyFile(t *testing.T, src, dest string) {
+	data, err := os.ReadFile(src)
+	if err != nil {
+		t.Fatalf("failed to read file %s: %v", src, err)
+	}
+	if err := os.WriteFile(dest, data, 0644); err != nil {
+		t.Fatalf("failed to write file %s: %v", dest, err)
+	}
 }
 
-// implement cancel
-func (mrs *mockRaftSink) Cancel() error {
-	return nil
+func mustCreateSnapshotFull(t *testing.T, rootDir, snapshotID string, idx, term uint64) {
+	mustCreateSnapshot(t, rootDir, snapshotID, "testdata/db-and-wals/full2.db", dbfileName, idx, term)
 }
 
-func (mrs *mockRaftSink) ID() string {
-	return ""
+func mustCreateSnapshotInc(t *testing.T, rootDir, snapshotID string, idx, term uint64) {
+	mustCreateSnapshot(t, rootDir, snapshotID, "testdata/db-and-wals/wal-00", walfileName, idx, term)
+}
+
+func mustCreateSnapshot(t *testing.T, rootDir string, snapshotID, srcName, dstName string, idx, term uint64) {
+	snapshotDir := filepath.Join(rootDir, snapshotID)
+	if err := os.MkdirAll(snapshotDir, 0755); err != nil {
+		t.Fatalf("failed to create snapshot dir: %v", err)
+	}
+
+	mustCopyFile(t, srcName, filepath.Join(snapshotDir, dstName))
+	meta := &raft.SnapshotMeta{
+		ID:    snapshotID,
+		Index: idx,
+		Term:  term,
+	}
+	if err := writeMeta(snapshotDir, meta); err != nil {
+		t.Fatalf("failed to write snapshot meta: %v", err)
+	}
 }

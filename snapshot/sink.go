@@ -1,34 +1,64 @@
 package snapshot
 
 import (
+	"bytes"
+	"encoding/binary"
+	"encoding/json"
 	"fmt"
+	"io"
+	"log"
 	"os"
 	"path/filepath"
 
 	"github.com/hashicorp/raft"
-	"github.com/rqlite/rqlite/v9/db"
+	"github.com/rqlite/rqlite/v9/snapshot2/proto"
+	pb "google.golang.org/protobuf/proto"
 )
 
-const (
-	maxFilenameLen = 255
+var (
+	// ErrTooManyWALs indicates that the snapshot contains more WAL files than expected.
+	ErrTooManyWALs = fmt.Errorf("too many WAL files")
 )
+
+type sinker interface {
+	Open() error
+	io.WriteCloser
+}
+
+type fullChecker interface {
+	FullNeeded() (bool, error)
+}
 
 // Sink is a sink for writing snapshot data to a Snapshot store.
+//
+// This sink is adaptive. It can handle multiple types of snapshot data,
+// including full database snapshots, incremental snapshots (WAL files),
+// and snapshot installs (DB file plus WAL files).
 type Sink struct {
-	str  *Store
-	meta *raft.SnapshotMeta
+	dir    string
+	meta   *raft.SnapshotMeta
+	opened bool
 
 	snapDirPath    string
 	snapTmpDirPath string
-	dataFD         *os.File
-	opened         bool
+
+	buf    bytes.Buffer
+	header *proto.SnapshotHeader
+	sinkW  sinker
+
+	fn fullChecker
+
+	logger *log.Logger
 }
 
-// NewSink creates a new Sink object.
-func NewSink(str *Store, meta *raft.SnapshotMeta) *Sink {
+// NewSink creates a new Sink object. It takes the root snapshot directory
+// and the snapshot metadata.
+func NewSink(dir string, meta *raft.SnapshotMeta, fn fullChecker) *Sink {
 	return &Sink{
-		str:  str,
-		meta: meta,
+		dir:    dir,
+		meta:   meta,
+		fn:     fn,
+		logger: log.New(log.Writer(), "[snapshot-sink] ", log.LstdFlags),
 	}
 }
 
@@ -40,219 +70,159 @@ func (s *Sink) Open() error {
 	s.opened = true
 
 	// Make temp snapshot directory
-	s.snapDirPath = filepath.Join(s.str.Dir(), s.meta.ID)
+	s.snapDirPath = filepath.Join(s.dir, s.meta.ID)
 	s.snapTmpDirPath = tmpName(s.snapDirPath)
 	if err := os.MkdirAll(s.snapTmpDirPath, 0755); err != nil {
 		return err
 	}
-
-	dataPath := filepath.Join(s.snapTmpDirPath, s.meta.ID+".data")
-	dataFD, err := os.Create(dataPath)
-	if err != nil {
-		return err
-	}
-	s.dataFD = dataFD
 	return nil
 }
 
-// Write writes snapshot data to the sink. The snapshot is not in place
-// until Close is called.
-func (s *Sink) Write(p []byte) (n int, err error) {
-	return s.dataFD.Write(p)
-}
-
-// ID returns the ID of the snapshot being written.
+// ID returns the ID of the snapshot.
 func (s *Sink) ID() string {
 	return s.meta.ID
 }
 
-// Cancel cancels the snapshot. Cancel must be called if the snapshot is not
-// going to be closed.
-func (s *Sink) Cancel() error {
-	if !s.opened {
-		return nil
-	}
-	s.opened = false
-	if s.dataFD != nil {
-		if err := s.dataFD.Close(); err != nil {
-			return err
+// Write writes snapshot data to the sink.
+func (s *Sink) Write(p []byte) (n int, err error) {
+
+	// If we don't yet have a header, try to decode one.
+	if s.header == nil {
+		n, err := s.buf.Write(p)
+		if err != nil {
+			return n, err
 		}
+
+		if err := s.processHeader(); err != nil {
+			return n, err
+		}
+
+		if s.header == nil {
+			// Still waiting for more data to form a complete header.
+			return n, nil
+		}
+
+		// We have a header to figure out what to do with it.
+		if s.header.DbHeader != nil {
+			s.sinkW = NewFullSink(s.snapTmpDirPath, s.header)
+		} else if s.header.WalHeaders != nil {
+			// If we only have WAL headers then we must have only one WAL header.
+			// This is because it must be an incremental snapshot.
+			if len(s.header.WalHeaders) != 1 {
+				return n, ErrTooManyWALs
+			}
+			if s.fn != nil {
+				fullNeeded, err := s.fn.FullNeeded()
+				if err != nil {
+					return n, err
+				}
+				if fullNeeded {
+					return n, fmt.Errorf("full snapshot needed before incremental can be applied")
+				}
+			}
+			s.sinkW = NewIncrementalSink(s.snapTmpDirPath, s.header.WalHeaders[0])
+		} else {
+			return n, fmt.Errorf("unrecognized snapshot header")
+		}
+
+		// Prep and preload the sink.
+		if err := s.sinkW.Open(); err != nil {
+			return n, err
+		}
+		s.buf.WriteTo(s.sinkW)
+		return n, nil
 	}
-	s.dataFD = nil
-	return RemoveAllTmpSnapshotData(s.str.Dir())
+
+	// We have a header, just write directly to the underlying sink.
+	return s.sinkW.Write(p)
 }
 
-// Close closes the sink, and finalizes creation of the snapshot. It is critical
-// that Close is called, or the snapshot will not be in place. It is OK to call
-// Close without every calling Write. In that case the Snapshot will be finalized
-// as usual, but will effectively be the same as the previously created snapshot.
+// Close closes the sink.
 func (s *Sink) Close() error {
 	if !s.opened {
 		return nil
 	}
 	s.opened = false
 
-	if err := s.dataFD.Sync(); err != nil {
-		return err
-	}
-	if err := s.dataFD.Close(); err != nil {
+	if err := s.sinkW.Close(); err != nil {
 		return err
 	}
 
-	// Write meta data
-	if err := s.writeMeta(s.snapTmpDirPath); err != nil {
+	if err := writeMeta(s.snapTmpDirPath, s.meta); err != nil {
 		return err
 	}
 
-	if err := s.processSnapshotData(); err != nil {
-		return err
-	}
-
-	// Get size of SQLite file and set in meta.
-	dbPath, err := s.str.getDBPath()
-	if err != nil {
-		return err
-	}
-	fi, err := os.Stat(dbPath)
-	if err != nil {
-		return err
-	}
-	if err := updateMetaSize(s.snapDirPath, fi.Size()); err != nil {
-		return fmt.Errorf("failed to update snapshot meta size: %s", err.Error())
-	}
-
-	if err := s.str.unsetFullNeeded(); err != nil {
-		return err
-	}
-
-	_, err = s.str.Reap()
-	return err
-}
-
-func (s *Sink) processSnapshotData() (retErr error) {
-	defer func() {
-		if retErr != nil {
-			err := RemoveAllTmpSnapshotData(s.str.Dir())
-			if err != nil {
-				s.str.logger.Printf("failed to remove temporary snapshot data: %s", err.Error())
-			}
-		}
-	}()
-
-	// Check the state of the store before processing this new snapshot. This
-	// allows us to perform some sanity checks on the incoming snapshot data.
-	snapSet, err := s.str.getSnapshots()
-	if err != nil {
-		return err
-	}
-
-	if snapSet.Len() == 0 {
-		if !db.IsValidSQLiteFile(s.dataFD.Name()) {
-			// We have no snapshots yet, so the incoming data must be a valid SQLite file.
-			return fmt.Errorf("data for first snapshot must be a valid SQLite file")
-		}
-	} else {
-		// Confirm that existing snapshot is "less" than the incoming snapshot -- in other
-		// words that it is from a point earlier in life of the Raft log.
-		snapPrev, _ := snapSet.Newest()
-		if !snapPrev.LessThanMeta(s.meta) {
-			return fmt.Errorf("incoming snapshot %s is not later than most recent existing snapshot %s",
-				s.meta.ID, snapPrev.ID())
-		}
-	}
-
-	dataSz, err := fileSize(s.dataFD.Name())
-	if err != nil {
-		return err
-	}
-
-	// Writing zero data for a snapshot is acceptable, and indicates the snapshot
-	// is empty. This could happen if lots of entries were written to the Raft log,
-	// which would trigger a Raft snapshot, but those entries didn't actually change
-	// the database. Otherwise, the data must be a valid SQLite file or WAL file.
-	if dataSz != 0 {
-		fdName := s.dataFD.Name()
-		if dataSz <= maxFilenameLen {
-			// It might contain the path of a file that we're to move here.
-			b, err := os.ReadFile(fdName)
-			if err != nil {
-				return err
-			}
-			// Double check size read from file.
-			if len(b) != int(dataSz) {
-				return fmt.Errorf("invalid data file contents size: %d", len(b))
-			}
-			if fileExists(string(b)) {
-				if err := os.Rename(string(b), fdName); err != nil {
-					return err
-				}
-			}
-		}
-		if db.IsValidSQLiteFile(fdName) {
-			if err := os.Rename(fdName, filepath.Join(s.str.Dir(), s.meta.ID+".db")); err != nil {
-				return err
-			}
-		} else if db.IsValidSQLiteWALFile(fdName) {
-			// With WAL data incoming, then we must have a valid SQLite file from the previous snapshot.
-			snapPrevDB, err := s.str.getDBPath()
-			if err != nil {
-				return err
-			}
-
-			if !db.IsValidSQLiteFile(snapPrevDB) {
-				return fmt.Errorf("previous snapshot data is not a SQLite file: %s", snapPrevDB)
-			}
-			if err := os.Rename(fdName, filepath.Join(s.str.Dir(), s.meta.ID+".db-wal")); err != nil {
-				return err
-			}
-		} else {
-			return fmt.Errorf("invalid snapshot data file: %s", fdName)
-		}
-	}
-
-	// Indicate snapshot data been successfully persisted to disk by renaming
-	// the temp directory to a non-temporary name.
-	if err := syncDirMaybe(s.snapTmpDirPath); err != nil {
-		return err
-	}
 	if err := os.Rename(s.snapTmpDirPath, s.snapDirPath); err != nil {
 		return err
 	}
-	if err := syncDirMaybe(s.str.Dir()); err != nil {
-		return err
-	}
-
-	// Now check if we need to replay any WAL file into the previous SQLite file. This is
-	// the final step of any snapshot process.
-	snapSet, err = s.str.getSnapshots()
-	if err != nil {
-		return err
-	}
-	snapshots := snapSet.All()
-	if len(snapshots) >= 2 {
-		snapPrev := snapshots[len(snapshots)-2]
-		snapNew := snapshots[len(snapshots)-1]
-		snapPrevDB := filepath.Join(s.str.Dir(), snapPrev.ID()+".db")
-		snapNewDB := filepath.Join(s.str.Dir(), snapNew.ID()+".db")
-		snapNewWAL := filepath.Join(s.str.Dir(), snapNew.ID()+".db-wal")
-
-		if db.IsValidSQLiteWALFile(snapNewWAL) || dataSz == 0 {
-			// One of two things have happened. Either the snapshot data is empty, in which
-			// case we can just make the existing SQLite file the new snapshot, or the snapshot
-			// data is a valid WAL file, in which case we need to replay it into the existing
-			// SQLite file.
-			if err := os.Rename(snapPrevDB, snapNewDB); err != nil {
-				return err
-			}
-			// Ensure any WAL files are processed and removed.
-			if err := db.CheckpointRemove(snapNewDB); err != nil {
-				return fmt.Errorf("failed to checkpoint WAL file: %s", err.Error())
-			}
-		}
-	}
-	return syncDirMaybe(s.str.Dir())
+	return syncDirMaybe(s.snapDirPath)
 }
 
-func (s *Sink) writeMeta(dir string) error {
-	return writeMeta(dir, s.meta)
+// Cancel cancels the sink.
+func (s *Sink) Cancel() error {
+	if !s.opened {
+		return nil
+	}
+	s.opened = false
+	if s.sinkW != nil {
+		if err := s.sinkW.Close(); err != nil {
+			return err
+		}
+		s.sinkW = nil
+	}
+	return os.RemoveAll(s.snapTmpDirPath)
+}
+
+// processHeader processes the header data in the buffer to extract the header.
+// When the header is successfully extracted, the Sink's header pointer is set.
+// There may still be remaining data in the buffer after the header is formed and
+// it is up to the caller to handle that data appropriately. However the buffer
+// will contain only unprocessed data after this function returns.
+func (s *Sink) processHeader() error {
+	hdrPrefixSz := proto.HeaderSizeLen
+	if s.buf.Len() < hdrPrefixSz {
+		// Not enough data to read length prefix.
+		return nil
+	}
+
+	// Read length prefix encoded big endian
+	numHdrBytes := binary.BigEndian.Uint32(s.buf.Bytes()[:hdrPrefixSz])
+	if s.buf.Len() < hdrPrefixSz+int(numHdrBytes) {
+		// Not enough data to read complete header.
+		return nil
+	}
+
+	// We have enough data to read the header.
+	headerBytes := s.buf.Bytes()[hdrPrefixSz : hdrPrefixSz+int(numHdrBytes)]
+	header := &proto.SnapshotHeader{}
+	if err := pb.Unmarshal(headerBytes, header); err != nil {
+		return fmt.Errorf("failed to unmarshal snapshot header: %v", err)
+	}
+	s.header = header
+
+	// Remove processed data from buffer.
+	remainingBytes := s.buf.Bytes()[hdrPrefixSz+int(numHdrBytes):]
+	s.buf.Reset()
+	s.buf.Write(remainingBytes)
+	return nil
+}
+
+// writeMeta is used to write the meta data in a given snapshot directory.
+func writeMeta(dir string, meta *raft.SnapshotMeta) error {
+	fh, err := os.Create(metaPath(dir))
+	if err != nil {
+		return fmt.Errorf("error creating meta file: %v", err)
+	}
+	defer fh.Close()
+
+	// Write out as JSON
+	enc := json.NewEncoder(fh)
+	if err = enc.Encode(meta); err != nil {
+		return fmt.Errorf("failed to encode meta: %v", err)
+	}
+
+	if err := fh.Sync(); err != nil {
+		return err
+	}
+	return fh.Close()
 }
