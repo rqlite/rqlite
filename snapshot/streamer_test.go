@@ -1,4 +1,4 @@
-package proto
+package snapshot
 
 import (
 	"encoding/binary"
@@ -11,7 +11,7 @@ import (
 
 func Test_NewHeaderFromFile(t *testing.T) {
 	content := []byte("Hello, World!")
-	tmpFile := mustWriteToFile(t, content)
+	tmpFile := mustWriteToTempFile(t, content)
 
 	t.Run("without CRC32", func(t *testing.T) {
 		header, err := NewHeaderFromFile(tmpFile, false)
@@ -53,9 +53,9 @@ func Test_NewSnapshotHeader(t *testing.T) {
 		t.Fatalf("Expected error when both dbPath and walPaths are empty, got nil")
 	}
 
-	tmpDBFile := mustWriteToFile(t, []byte("DB Content"))
-	tmpWALFile1 := mustWriteToFile(t, []byte("WAL Content 1"))
-	tmpWALFile2 := mustWriteToFile(t, []byte("WAL Content 2"))
+	tmpDBFile := mustWriteToTempFile(t, []byte("DB Content"))
+	tmpWALFile1 := mustWriteToTempFile(t, []byte("WAL Content 1"))
+	tmpWALFile2 := mustWriteToTempFile(t, []byte("WAL Content 2"))
 
 	if _, err := NewSnapshotHeader(tmpDBFile); err != nil {
 		t.Fatalf("NewSnapshotHeader failed with single DB file: %v", err)
@@ -113,12 +113,12 @@ func runSnapshotStreamerEndToEnd(t *testing.T, dbData string, walDatas []string)
 
 	var dbPath string
 	if dbData != "" {
-		dbPath = mustWriteToFile(t, []byte(dbData))
+		dbPath = mustWriteToTempFile(t, []byte(dbData))
 	}
 
 	walPaths := make([]string, 0, len(walDatas))
 	for _, wd := range walDatas {
-		walPaths = append(walPaths, mustWriteToFile(t, []byte(wd)))
+		walPaths = append(walPaths, mustWriteToTempFile(t, []byte(wd)))
 	}
 
 	streamer, err := NewSnapshotStreamer(dbPath, walPaths...)
@@ -219,7 +219,7 @@ func runSnapshotStreamerEndToEnd(t *testing.T, dbData string, walDatas []string)
 	}
 }
 
-func mustWriteToFile(t *testing.T, data []byte) string {
+func mustWriteToTempFile(t *testing.T, data []byte) string {
 	t.Helper()
 
 	tmpFile, err := os.CreateTemp(t.TempDir(), "testfile")

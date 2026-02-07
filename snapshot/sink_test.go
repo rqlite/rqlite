@@ -8,11 +8,10 @@ import (
 
 	"github.com/rqlite/rqlite/v9/command/encoding"
 	"github.com/rqlite/rqlite/v9/db"
-	"github.com/rqlite/rqlite/v9/snapshot/proto"
 )
 
 func Test_NewFullSink(t *testing.T) {
-	hdr, err := proto.NewSnapshotHeader("testdata/db-and-wals/full2.db")
+	hdr, err := NewSnapshotHeader("testdata/db-and-wals/full2.db")
 	if err != nil {
 		t.Fatalf("unexpected error creating manifest: %s", err.Error())
 	}
@@ -24,7 +23,7 @@ func Test_NewFullSink(t *testing.T) {
 }
 
 func Test_FullSink_SingleDBFile(t *testing.T) {
-	header, err := proto.NewSnapshotHeader("testdata/db-and-wals/full2.db")
+	header, err := NewSnapshotHeader("testdata/db-and-wals/full2.db")
 	if err != nil {
 		t.Fatalf("unexpected error creating manifest: %s", err.Error())
 	}
@@ -55,7 +54,7 @@ func Test_FullSink_SingleDBFile(t *testing.T) {
 }
 
 func Test_FullSink_SingleDBFile_SingleWALFile(t *testing.T) {
-	header, err := proto.NewSnapshotHeader(
+	header, err := NewSnapshotHeader(
 		"testdata/db-and-wals/backup.db",
 		"testdata/db-and-wals/wal-00")
 	if err != nil {
@@ -100,7 +99,7 @@ func Test_FullSink_SingleDBFile_SingleWALFile(t *testing.T) {
 }
 
 func Test_FullSink_SingleDBFile_MultiWALFile(t *testing.T) {
-	header, err := proto.NewSnapshotHeader(
+	header, err := NewSnapshotHeader(
 		"testdata/db-and-wals/backup.db",
 		"testdata/db-and-wals/wal-00",
 		"testdata/db-and-wals/wal-01")
@@ -149,7 +148,7 @@ func Test_FullSink_SingleDBFile_MultiWALFile(t *testing.T) {
 }
 
 func Test_IncrementalSink(t *testing.T) {
-	hdr, err := proto.NewSnapshotHeader("", "testdata/db-and-wals/wal-00")
+	hdr, err := NewSnapshotHeader("", "testdata/db-and-wals/wal-00")
 	if err != nil {
 		t.Fatalf("unexpected error creating manifest: %s", err.Error())
 	}

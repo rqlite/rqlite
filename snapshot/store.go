@@ -15,7 +15,6 @@ import (
 	"github.com/hashicorp/raft"
 	"github.com/rqlite/rqlite/v9/internal/rsync"
 	"github.com/rqlite/rqlite/v9/snapshot/plan"
-	"github.com/rqlite/rqlite/v9/snapshot/proto"
 )
 
 const (
@@ -316,7 +315,7 @@ func (s *Store) Open(id string) (raftMeta *raft.SnapshotMeta, rc io.ReadCloser, 
 		return nil, nil, err
 	}
 
-	streamer, err := proto.NewSnapshotStreamer(dbfile, walFiles...)
+	streamer, err := NewSnapshotStreamer(dbfile, walFiles...)
 	if err != nil {
 		return nil, nil, err
 	}

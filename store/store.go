@@ -37,7 +37,6 @@ import (
 	"github.com/rqlite/rqlite/v9/internal/rsum"
 	"github.com/rqlite/rqlite/v9/internal/rsync"
 	"github.com/rqlite/rqlite/v9/snapshot"
-	snapshotProto "github.com/rqlite/rqlite/v9/snapshot/proto"
 	rlog "github.com/rqlite/rqlite/v9/store/log"
 )
 
@@ -2586,7 +2585,7 @@ func (s *Store) fsmSnapshot() (fSnap raft.FSMSnapshot, retErr error) {
 				err.Error())
 		}
 		stats.Get(snapshotCreateChkTruncateDuration).(*expvar.Int).Set(time.Since(chkStartTime).Milliseconds())
-		streamer, err := snapshotProto.NewSnapshotStreamer(s.db.Path())
+		streamer, err := snapshot.NewSnapshotStreamer(s.db.Path())
 		if err != nil {
 			return nil, err
 		}
@@ -2661,7 +2660,7 @@ func (s *Store) fsmSnapshot() (fSnap raft.FSMSnapshot, retErr error) {
 		if walTmpFD == nil {
 			// No WAL data for an incremental snapshot. Fall back to a full
 			// snapshot of the (unchanged) database.
-			streamer, err := snapshotProto.NewSnapshotStreamer(s.db.Path())
+			streamer, err := snapshot.NewSnapshotStreamer(s.db.Path())
 			if err != nil {
 				return nil, err
 			}
@@ -2673,7 +2672,7 @@ func (s *Store) fsmSnapshot() (fSnap raft.FSMSnapshot, retErr error) {
 			stats.Add(numSnapshotsFull, 1)
 			s.numFullSnapshots++
 		} else {
-			streamer, err := snapshotProto.NewSnapshotStreamer("", walTmpFD.Name())
+			streamer, err := snapshot.NewSnapshotStreamer("", walTmpFD.Name())
 			if err != nil {
 				return nil, err
 			}

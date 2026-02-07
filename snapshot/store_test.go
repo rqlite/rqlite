@@ -13,7 +13,6 @@ import (
 	"github.com/hashicorp/raft"
 	"github.com/rqlite/rqlite/v9/db"
 	"github.com/rqlite/rqlite/v9/snapshot/plan"
-	"github.com/rqlite/rqlite/v9/snapshot/proto"
 )
 
 func Test_NewStore(t *testing.T) {
@@ -139,7 +138,7 @@ func Test_Store_CreateIncrementalFirst_Fail(t *testing.T) {
 	defer sink.Cancel()
 
 	// Make the streamer.
-	streamer, err := proto.NewSnapshotStreamer("", "testdata/db-and-wals/wal-00")
+	streamer, err := NewSnapshotStreamer("", "testdata/db-and-wals/wal-00")
 	if err != nil {
 		t.Fatalf("Failed to create SnapshotStreamer: %v", err)
 	}
@@ -932,7 +931,7 @@ func createSnapshotInStore(t *testing.T, store *Store, id string, index, term, c
 	}
 
 	// Make the streamer.
-	streamer, err := proto.NewSnapshotStreamer(dbFile, walFiles...)
+	streamer, err := NewSnapshotStreamer(dbFile, walFiles...)
 	if err != nil {
 		t.Fatalf("Failed to create SnapshotStreamer: %v", err)
 	}
@@ -964,7 +963,6 @@ func persistStreamerData(t *testing.T, buf *bytes.Buffer) (string, []string) {
 	walPaths := []string{}
 
 	// Read header first.
-	hdr := &proto.SnapshotHeader{}
 	hdrSizeBuf := make([]byte, 4)
 	if _, err := buf.Read(hdrSizeBuf); err != nil {
 		t.Fatalf("Failed to read header size: %v", err)
@@ -974,7 +972,7 @@ func persistStreamerData(t *testing.T, buf *bytes.Buffer) (string, []string) {
 	if _, err := buf.Read(hdrBuf); err != nil {
 		t.Fatalf("Failed to read header: %v", err)
 	}
-	hdr, err := proto.UnmarshalSnapshotHeader(hdrBuf)
+	hdr, err := UnmarshalSnapshotHeader(hdrBuf)
 	if err != nil {
 		t.Fatalf("Failed to unmarshal header: %v", err)
 	}

@@ -15,7 +15,6 @@ import (
 	sql "github.com/rqlite/rqlite/v9/db"
 	"github.com/rqlite/rqlite/v9/internal/random"
 	"github.com/rqlite/rqlite/v9/snapshot"
-	snapshotProto "github.com/rqlite/rqlite/v9/snapshot/proto"
 	rlog "github.com/rqlite/rqlite/v9/store/log"
 )
 
@@ -218,7 +217,7 @@ func RecoverNode(dataDir string, extensions []string, logger *log.Logger, logs r
 	if !meta.Success() {
 		return fmt.Errorf("database checkpoint was not successful: %s", meta.String())
 	}
-	streamer, err := snapshotProto.NewSnapshotStreamer(tmpDBPath)
+	streamer, err := snapshot.NewSnapshotStreamer(tmpDBPath)
 	if err != nil {
 		return fmt.Errorf("failed to create snapshot streamer: %s", err)
 	}

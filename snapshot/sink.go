@@ -179,7 +179,7 @@ func (s *Sink) Cancel() error {
 // it is up to the caller to handle that data appropriately. However the buffer
 // will contain only unprocessed data after this function returns.
 func (s *Sink) processHeader() error {
-	hdrPrefixSz := proto.HeaderSizeLen
+	hdrPrefixSz := HeaderSizeLen
 	if s.buf.Len() < hdrPrefixSz {
 		// Not enough data to read length prefix.
 		return nil

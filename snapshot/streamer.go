@@ -1,4 +1,4 @@
-package proto
+package snapshot
 
 import (
 	"bytes"
@@ -8,21 +8,22 @@ import (
 	"os"
 
 	"github.com/rqlite/rqlite/v9/internal/rsum"
+	"github.com/rqlite/rqlite/v9/snapshot/proto"
 	pb "google.golang.org/protobuf/proto"
 )
 
 const (
-	// HeaderLen is the length in bytes of the SnapshotHeader length prefix.
+	// HeaderSizeLen is the length in bytes of the SnapshotHeader length prefix.
 	HeaderSizeLen = 4
 )
 
 // NewHeaderFromFile creates a new Header for the given file path. If crc32 is true,
 // the CRC32 checksum of the file is calculated and included in the Header.
-func NewHeaderFromFile(path string, crc32 bool) (*Header, error) {
+func NewHeaderFromFile(path string, crc32 bool) (*proto.Header, error) {
 	if path == "" {
 		return nil, fmt.Errorf("path must be non-empty")
 	}
-	h := &Header{}
+	h := &proto.Header{}
 	info, err := os.Stat(path)
 	if err != nil {
 		return nil, err
@@ -46,7 +47,7 @@ func NewHeaderFromFile(path string, crc32 bool) (*Header, error) {
 //   - At least one of dbPath or walPaths must be non-empty.
 //   - If only WALs are provided, then only one WAL is allowed. This represents an
 //     incremental snapshot.
-func NewSnapshotHeader(dbPath string, walPaths ...string) (*SnapshotHeader, error) {
+func NewSnapshotHeader(dbPath string, walPaths ...string) (*proto.SnapshotHeader, error) {
 	if dbPath == "" && len(walPaths) == 0 {
 		return nil, fmt.Errorf("at least one of dbPath or walPaths must be provided")
 	}
@@ -56,14 +57,14 @@ func NewSnapshotHeader(dbPath string, walPaths ...string) (*SnapshotHeader, erro
 	}
 
 	var err error
-	var dbHeader *Header
+	var dbHeader *proto.Header
 	if dbPath != "" {
 		dbHeader, err = NewHeaderFromFile(dbPath, true)
 		if err != nil {
 			return nil, err
 		}
 	}
-	sh := &SnapshotHeader{
+	sh := &proto.SnapshotHeader{
 		FormatVersion: 1,
 		DbHeader:      dbHeader,
 	}
@@ -77,25 +78,29 @@ func NewSnapshotHeader(dbPath string, walPaths ...string) (*SnapshotHeader, erro
 	return sh, nil
 }
 
-// Size returns the size in bytes of the marshaled SnapshotHeader.
-func (s *SnapshotHeader) Size() (int, error) {
+// marshalSnapshotHeader marshals the SnapshotHeader to a byte slice.
+func marshalSnapshotHeader(s *proto.SnapshotHeader) ([]byte, error) {
+	return pb.Marshal(s)
+}
+
+// UnmarshalSnapshotHeader unmarshals a SnapshotHeader from the given byte slice.
+func UnmarshalSnapshotHeader(data []byte) (*proto.SnapshotHeader, error) {
+	sh := &proto.SnapshotHeader{}
+	if err := pb.Unmarshal(data, sh); err != nil {
+		return nil, err
+	}
+	return sh, nil
+}
+
+// snapshotHeaderPayloadSize returns the total size of the marshaled header and
+// of all files described by the header. This is the number of bytes which needs
+// to be read to obtain the header marshaled as bytes and all associated file data.
+func snapshotHeaderPayloadSize(s *proto.SnapshotHeader) (int64, error) {
 	data, err := pb.Marshal(s)
 	if err != nil {
 		return 0, err
 	}
-	return len(data), nil
-}
-
-// PayloadSize returns the total size of the marshaled header and of all files
-// described by the header. This is the number of bytes which needs to be
-// read to obtain the header marshaled as bytes and all associated file data.
-func (s *SnapshotHeader) PayloadSize() (int64, error) {
-	// Start with header size.
-	sz, err := s.Size()
-	if err != nil {
-		return 0, err
-	}
-	var total int64 = int64(sz)
+	var total int64 = int64(len(data))
 
 	if s.DbHeader != nil {
 		total += int64(s.DbHeader.SizeBytes)
@@ -106,20 +111,6 @@ func (s *SnapshotHeader) PayloadSize() (int64, error) {
 	return total, nil
 }
 
-// Marshal marshals the SnapshotHeader to a byte slice.
-func (s *SnapshotHeader) Marshal() ([]byte, error) {
-	return pb.Marshal(s)
-}
-
-// UnmarshalSnapshotHeader unmarshals a SnapshotHeader from the given byte slice.
-func UnmarshalSnapshotHeader(data []byte) (*SnapshotHeader, error) {
-	sh := &SnapshotHeader{}
-	if err := pb.Unmarshal(data, sh); err != nil {
-		return nil, err
-	}
-	return sh, nil
-}
-
 // SnapshotStreamer implements io.ReadCloser for streaming a snapshot's
 // data, including the header and associated files.
 type SnapshotStreamer struct {
@@ -127,7 +118,7 @@ type SnapshotStreamer struct {
 	walPaths []string
 	currWAL  int
 
-	hdr *SnapshotHeader
+	hdr *proto.SnapshotHeader
 
 	dbFD   *os.File
 	walFDs []*os.File
@@ -179,7 +170,7 @@ func (s *SnapshotStreamer) Open() (retErr error) {
 
 	// Build the multi-reader which will return data in the correct order.
 
-	hdrBuf, err := s.hdr.Marshal()
+	hdrBuf, err := marshalSnapshotHeader(s.hdr)
 	if err != nil {
 		return err
 	}
@@ -231,7 +222,7 @@ func (s *SnapshotStreamer) Close() error {
 // Len returns the total number of bytes that will be read from the SnapshotStreamer
 // before EOF is reached.
 func (s *SnapshotStreamer) Len() (int64, error) {
-	sz, err := s.hdr.PayloadSize()
+	sz, err := snapshotHeaderPayloadSize(s.hdr)
 	if err != nil {
 		return 0, err
 	}
