@@ -323,8 +323,38 @@ func (s *Store) Open(id string) (raftMeta *raft.SnapshotMeta, rc io.ReadCloser, 
 	return meta.SnapshotMeta, NewLockingStreamer(streamer, s), nil
 }
 
-// Reap reaps snapshots
-func (s *Store) Reap() (reapedN, chkN int, retErr error) {
+// Reap reaps snapshots. Reaping is the process of deleting old snapshots that are no
+// longer needed. Reaping is a destructive operation, and is non-reversible. It it
+// is interrupted, it more be completed later before the snapshot store is usabl
+// again.
+//
+// What does Reaping do? It starts by identifying the most recent full snapshot. It
+// then deletes all snapshots older than that snapshot, since they are not needed.
+//
+// Next, if there are no snapshots newer than that snapshot, then the reaping process
+// is complete as there is nothign else to do. However, if there are snapshots newer
+// than that snapshot they must be increemental snapshots, and they must be based on
+// that full snapshot. In that case, the reaping process replays those incremental
+// snapshots on top of the full snapshot, to create a new full snapshot that is up to date.
+//
+// It does this as follows. It renames the full snapshot directory to a temporary name,
+// using that is the same index and term as the most recent incremental snapshat. It also
+// however uses a current timestamp, to ensure that the new full snapshot is newer than
+// the most recent incremental snapshot. It then replays each incremental snapshot on top of
+// replays (moves and checkpoints each WAL into the temp directory). Finally, it strip the
+// temp extension from the new full snapshot directory, thereby installing it. Finally, it
+// deletes all snapshots older than the new full snapshot, which should be all of th
+// snapshots that were just replayed.
+//
+// Because this is a critcal operation which must run to completion even in interrupted
+// it uses a plan-then-execute approach. It first plans and then serialized the plan
+// to disk at the path REAP_PLAN. Then it executes the plan. If the process is interrupted\
+// during execution, it can be restarted, and it will pick up the plan from disk and continue
+// executing it.
+//
+// It returns the number of snapshots reaped, and the number of WAL files/ checkpointed as
+// part of the consolidation.
+func (s *Store) Reap() (int, int, error) {
 	return 0, 0, nil
 }
 
