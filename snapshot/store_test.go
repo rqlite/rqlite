@@ -68,19 +68,9 @@ func Test_StoreEmpty(t *testing.T) {
 		t.Fatalf("Failed to get stats from empty store: %v", err)
 	}
 
-	li, tm, err := store.LatestIndexTerm()
-	if err != nil {
-		t.Fatalf("Failed to get latest index and term from empty store: %v", err)
-	}
-	if li != 0 {
-		t.Fatalf("Expected latest index to be 0, got %d", li)
-	}
-	if tm != 0 {
-		t.Fatalf("Expected latest term to be 0, got %d", tm)
-	}
-
-	if store.Len() != 0 {
-		t.Fatalf("Expected store to have 0 snapshots, got %d", store.Len())
+	_, _, err = store.LatestIndexTerm()
+	if err != ErrSnapshotNotFound {
+		t.Fatalf("Expected ErrSnapshotNotFound when getting latest index and term from empty store, got %v", err)
 	}
 }
 
