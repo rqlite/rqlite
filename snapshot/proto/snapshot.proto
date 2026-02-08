@@ -13,4 +13,5 @@ message SnapshotHeader {
   uint32 format_version = 1;
   Header db_header = 2;
   repeated Header wal_headers = 3;
+  string wal_file = 4;
 }

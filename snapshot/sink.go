@@ -121,6 +121,11 @@ func (s *Sink) Write(p []byte) (n int, err error) {
 				}
 			}
 			s.sinkW = NewIncrementalSink(s.snapTmpDirPath, s.header.WalHeaders[0])
+		} else if s.header.WalFile != "" {
+			// We have a path to a WAL file, which indicates we are to move this file directly
+			// to the Store. This is an optimized path for snapshotting where the WAL data
+			// is available locally.
+			s.sinkW = NewIncrementalFileSink(s.snapTmpDirPath, s.header.WalFile)
 		} else {
 			return n, fmt.Errorf("unrecognized snapshot header")
 		}

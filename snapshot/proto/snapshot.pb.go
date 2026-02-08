@@ -78,6 +78,7 @@ type SnapshotHeader struct {
 	FormatVersion uint32                 `protobuf:"varint,1,opt,name=format_version,json=formatVersion,proto3" json:"format_version,omitempty"`
 	DbHeader      *Header                `protobuf:"bytes,2,opt,name=db_header,json=dbHeader,proto3" json:"db_header,omitempty"`
 	WalHeaders    []*Header              `protobuf:"bytes,3,rep,name=wal_headers,json=walHeaders,proto3" json:"wal_headers,omitempty"`
+	WalFile       string                 `protobuf:"bytes,4,opt,name=wal_file,json=walFile,proto3" json:"wal_file,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -133,6 +134,13 @@ func (x *SnapshotHeader) GetWalHeaders() []*Header {
 	return nil
 }
 
+func (x *SnapshotHeader) GetWalFile() string {
+	if x != nil {
+		return x.WalFile
+	}
+	return ""
+}
+
 var File_snapshot_proto protoreflect.FileDescriptor
 
 const file_snapshot_proto_rawDesc = "" +
@@ -141,12 +149,13 @@ const file_snapshot_proto_rawDesc = "" +
 	"\x06Header\x12\x1d\n" +
 	"\n" +
 	"size_bytes\x18\x01 \x01(\x04R\tsizeBytes\x12\x14\n" +
-	"\x05crc32\x18\x02 \x01(\rR\x05crc32\"\x99\x01\n" +
+	"\x05crc32\x18\x02 \x01(\rR\x05crc32\"\xb4\x01\n" +
 	"\x0eSnapshotHeader\x12%\n" +
 	"\x0eformat_version\x18\x01 \x01(\rR\rformatVersion\x12-\n" +
 	"\tdb_header\x18\x02 \x01(\v2\x10.snapshot.HeaderR\bdbHeader\x121\n" +
 	"\vwal_headers\x18\x03 \x03(\v2\x10.snapshot.HeaderR\n" +
-	"walHeadersB,Z*github.com/rqlite/rqlite/v9/snapshot/protob\x06proto3"
+	"walHeaders\x12\x19\n" +
+	"\bwal_file\x18\x04 \x01(\tR\awalFileB,Z*github.com/rqlite/rqlite/v9/snapshot/protob\x06proto3"
 
 var (
 	file_snapshot_proto_rawDescOnce sync.Once
