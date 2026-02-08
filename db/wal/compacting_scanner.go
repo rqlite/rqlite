@@ -6,6 +6,7 @@ import (
 	"expvar"
 	"fmt"
 	"io"
+	"maps"
 	"sort"
 	"time"
 )
@@ -199,9 +200,7 @@ func (c *CompactingScanner) scan() error {
 		waitingForCommit = false
 
 		// At the end of each transaction, copy frame information to main map.
-		for k, v := range txFrames {
-			frames[k] = v
-		}
+		maps.Copy(frames, txFrames)
 		txFrames = make(map[uint32]*cFrame)
 	}
 	if waitingForCommit {
