@@ -5,6 +5,7 @@ import (
 	"errors"
 	"expvar"
 	"fmt"
+	"slices"
 	"sync"
 	"time"
 
@@ -249,7 +250,7 @@ func (q *Queue) run(highestKey uint64) {
 				return nil
 			}
 			e := &Event{Index: btouint64(k)}
-			e.Data = append([]byte(nil), v...)
+			e.Data = slices.Clone(v)
 			nextEv = e
 			outCh = q.eventsChan
 			return nil
@@ -267,7 +268,7 @@ func (q *Queue) run(highestKey uint64) {
 			k, v := c.Seek(uint64tob(nextFrom))
 			if k != nil {
 				e := &Event{Index: btouint64(k)}
-				e.Data = append([]byte(nil), v...)
+				e.Data = slices.Clone(v)
 				nextEv = e
 				outCh = q.eventsChan
 			}
