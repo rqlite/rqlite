@@ -1069,6 +1069,9 @@ func (db *DB) executeStmtWithConn(ctx context.Context, stmt *command.Statement, 
 			}
 			return response, err
 		}
+		if ctx.Err() != nil {
+			return response, ctx.Err()
+		}
 		if result == nil {
 			return response, nil
 		}
