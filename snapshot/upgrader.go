@@ -9,6 +9,7 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
+	"strings"
 
 	"github.com/hashicorp/raft"
 	"github.com/rqlite/rqlite/v9/db"
@@ -168,6 +169,93 @@ func Upgrade7To8(old, new string, logger *log.Logger) (retErr error) {
 	logger.Printf("upgraded snapshot directory %s to %s", old, new)
 	stats.Add(upgradeOk, 1)
 
+	return nil
+}
+
+// Upgrade8To10 upgrades a v8/v9-format snapshot directory to v10 format, in place.
+// In v8 format, the SQLite database file is stored at the root of the snapshot
+// directory as '<id>.db', alongside a snapshot metadata directory '<id>/meta.json'.
+// In v10 format, the database file is stored inside the snapshot directory as
+// '<id>/data.db'. If no v8-format snapshots are found, the function is a no-op.
+func Upgrade8To10(dir string, logger *log.Logger) (retErr error) {
+	defer func() {
+		if retErr != nil {
+			stats.Add(upgradeFail, 1)
+		}
+	}()
+
+	if !dirExists(dir) {
+		return nil
+	}
+
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		return fmt.Errorf("failed to read snapshot directory %s: %s", dir, err)
+	}
+
+	var upgraded int
+	for _, entry := range entries {
+		if entry.IsDir() || filepath.Ext(entry.Name()) != ".db" {
+			continue
+		}
+
+		id := strings.TrimSuffix(entry.Name(), ".db")
+		snapDir := filepath.Join(dir, id)
+
+		// Verify the matching snapshot directory exists with meta.json.
+		if !dirExists(snapDir) || !fileExists(filepath.Join(snapDir, metaFileName)) {
+			continue
+		}
+
+		dbSrc := filepath.Join(dir, entry.Name())
+		dbDst := filepath.Join(snapDir, dbfileName)
+
+		// If data.db already exists inside the snapshot directory, the move
+		// completed on a previous attempt but cleanup was interrupted.
+		if fileExists(dbDst) {
+			logger.Printf("snapshot %s already contains %s, removing root-level %s", id, dbfileName, entry.Name())
+			if err := os.Remove(dbSrc); err != nil {
+				return fmt.Errorf("failed to remove %s: %s", dbSrc, err)
+			}
+			upgraded++
+			continue
+		}
+
+		if !db.IsValidSQLiteFile(dbSrc) {
+			return fmt.Errorf("v8 snapshot database file %s is not a valid SQLite file", dbSrc)
+		}
+
+		logger.Printf("upgrading v8 snapshot %s: moving %s to %s", id, entry.Name(), dbDst)
+		if err := os.Rename(dbSrc, dbDst); err != nil {
+			return fmt.Errorf("failed to move %s to %s: %s", dbSrc, dbDst, err)
+		}
+
+		// Clean up any leftover SQLite WAL/SHM files at root level.
+		for _, suffix := range []string{"-wal", "-shm"} {
+			p := dbSrc + suffix
+			if fileExists(p) {
+				if err := os.Remove(p); err != nil {
+					return fmt.Errorf("failed to remove %s: %s", p, err)
+				}
+			}
+		}
+
+		if err := syncDirMaybe(snapDir); err != nil {
+			return fmt.Errorf("failed to sync snapshot directory %s: %s", snapDir, err)
+		}
+		upgraded++
+	}
+
+	if upgraded == 0 {
+		return nil
+	}
+
+	if err := syncDirMaybe(dir); err != nil {
+		return fmt.Errorf("failed to sync snapshot store directory %s: %s", dir, err)
+	}
+
+	logger.Printf("upgraded %d snapshot(s) in %s from v8 to v10 format", upgraded, dir)
+	stats.Add(upgradeOk, 1)
 	return nil
 }
 
