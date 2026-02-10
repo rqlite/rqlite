@@ -130,6 +130,9 @@ func Test_Upgrade8To10_NothingToDo(t *testing.T) {
 	if dirExists(oldEmpty) {
 		t.Fatal("expected empty old directory to be removed")
 	}
+	if dirExists(newEmpty) {
+		t.Fatal("expected new directory to not be created for empty old")
+	}
 
 	// Old directory with only v10-format snapshots (no .db at root) has nothing to upgrade.
 	oldV10 := filepath.Join(t.TempDir(), "snapshots")
@@ -140,6 +143,19 @@ func Test_Upgrade8To10_NothingToDo(t *testing.T) {
 	mustCreateV10Snapshot(t, oldV10, "2-18-1686659761026", 18, 2)
 	if err := Upgrade8To10(oldV10, newV10, logger); err != nil {
 		t.Fatalf("failed to upgrade directory with only v10 snapshots: %s", err)
+	}
+	// New directory should not be created since there were no v8 snapshots.
+	if dirExists(newV10) {
+		t.Fatal("expected new directory to not be created when no v8 snapshots found")
+	}
+	// Old directory should remain untouched; catalog should still see its snapshot.
+	catalog := &SnapshotCatalog{}
+	sset, err := catalog.Scan(oldV10)
+	if err != nil {
+		t.Fatalf("catalog scan of old v10 dir failed: %s", err)
+	}
+	if sset.Len() != 1 {
+		t.Fatalf("expected 1 snapshot in old v10 dir, got %d", sset.Len())
 	}
 }
 
@@ -153,10 +169,11 @@ func Test_Upgrade8To10_NewAlreadyExists(t *testing.T) {
 	}
 	mustCreateV8Snapshot(t, oldDir, "2-18-1686659761026", 18, 2)
 
-	// Pre-create new directory (simulates already-upgraded state).
+	// Pre-create new directory with a v10 snapshot (simulates already-upgraded state).
 	if err := os.MkdirAll(newDir, 0755); err != nil {
 		t.Fatalf("failed to create new dir: %s", err)
 	}
+	mustCreateV10Snapshot(t, newDir, "2-18-1686659761026", 18, 2)
 
 	if err := Upgrade8To10(oldDir, newDir, logger); err != nil {
 		t.Fatalf("failed to upgrade: %s", err)
@@ -165,6 +182,23 @@ func Test_Upgrade8To10_NewAlreadyExists(t *testing.T) {
 	// Old should be removed since new already exists.
 	if dirExists(oldDir) {
 		t.Fatal("expected old directory to be removed")
+	}
+
+	// Catalog should see the pre-existing snapshot in newDir.
+	catalog := &SnapshotCatalog{}
+	sset, err := catalog.Scan(newDir)
+	if err != nil {
+		t.Fatalf("catalog scan failed: %s", err)
+	}
+	if sset.Len() != 1 {
+		t.Fatalf("expected 1 snapshot, got %d", sset.Len())
+	}
+	snap := sset.All()[0]
+	if snap.id != "2-18-1686659761026" {
+		t.Fatalf("expected snapshot ID 2-18-1686659761026, got %s", snap.id)
+	}
+	if snap.typ != SnapshotTypeFull {
+		t.Fatalf("expected full snapshot, got type %v", snap.typ)
 	}
 }
 
@@ -205,7 +239,30 @@ func Test_Upgrade8To10_OK(t *testing.T) {
 		t.Fatal("expected meta.json in snapshot directory after upgrade")
 	}
 
-	// Verify the store can open the upgraded snapshot.
+	// Verify via SnapshotCatalog that the new directory is a valid v10 store.
+	catalog := &SnapshotCatalog{}
+	sset, err := catalog.Scan(newDir)
+	if err != nil {
+		t.Fatalf("catalog scan failed: %s", err)
+	}
+	if sset.Len() != 1 {
+		t.Fatalf("expected catalog to find 1 snapshot, got %d", sset.Len())
+	}
+	snap := sset.All()[0]
+	if snap.id != snapshotID {
+		t.Fatalf("expected snapshot ID %s, got %s", snapshotID, snap.id)
+	}
+	if snap.typ != SnapshotTypeFull {
+		t.Fatalf("expected full snapshot, got type %v", snap.typ)
+	}
+	if snap.raftMeta.Index != 18 {
+		t.Fatalf("expected raft index 18, got %d", snap.raftMeta.Index)
+	}
+	if snap.raftMeta.Term != 2 {
+		t.Fatalf("expected raft term 2, got %d", snap.raftMeta.Term)
+	}
+
+	// Verify the store can also open the upgraded snapshot.
 	store, err := NewStore(newDir)
 	if err != nil {
 		t.Fatalf("failed to create store: %s", err)
@@ -250,20 +307,27 @@ func Test_Upgrade8To10_MultiplePicksNewest(t *testing.T) {
 		t.Fatal("expected old directory to be removed")
 	}
 
-	// Only the newest snapshot should be in the new directory.
-	store, err := NewStore(newDir)
+	// Verify via SnapshotCatalog that only the newest snapshot was migrated.
+	catalog := &SnapshotCatalog{}
+	sset, err := catalog.Scan(newDir)
 	if err != nil {
-		t.Fatalf("failed to create store: %s", err)
+		t.Fatalf("catalog scan failed: %s", err)
 	}
-	if store.Len() != 1 {
-		t.Fatalf("expected 1 snapshot (newest only), got %d", store.Len())
+	if sset.Len() != 1 {
+		t.Fatalf("expected catalog to find 1 snapshot, got %d", sset.Len())
 	}
-	snaps, err := store.List()
-	if err != nil {
-		t.Fatalf("failed to list snapshots: %s", err)
+	snap := sset.All()[0]
+	if snap.id != "2-20-2000000000000" {
+		t.Fatalf("expected newest snapshot ID 2-20-2000000000000, got %s", snap.id)
 	}
-	if snaps[0].ID != "2-20-2000000000000" {
-		t.Fatalf("expected newest snapshot ID, got %s", snaps[0].ID)
+	if snap.typ != SnapshotTypeFull {
+		t.Fatalf("expected full snapshot, got type %v", snap.typ)
+	}
+	if snap.raftMeta.Index != 20 {
+		t.Fatalf("expected raft index 20, got %d", snap.raftMeta.Index)
+	}
+	if snap.raftMeta.Term != 2 {
+		t.Fatalf("expected raft term 2, got %d", snap.raftMeta.Term)
 	}
 }
 
@@ -288,12 +352,27 @@ func Test_Upgrade8To10_Idempotent(t *testing.T) {
 		t.Fatalf("second upgrade failed: %s", err)
 	}
 
-	store, err := NewStore(newDir)
+	// Verify via SnapshotCatalog after both calls.
+	catalog := &SnapshotCatalog{}
+	sset, err := catalog.Scan(newDir)
 	if err != nil {
-		t.Fatalf("failed to create store: %s", err)
+		t.Fatalf("catalog scan failed: %s", err)
 	}
-	if store.Len() != 1 {
-		t.Fatalf("expected 1 snapshot, got %d", store.Len())
+	if sset.Len() != 1 {
+		t.Fatalf("expected catalog to find 1 snapshot, got %d", sset.Len())
+	}
+	snap := sset.All()[0]
+	if snap.id != snapshotID {
+		t.Fatalf("expected snapshot ID %s, got %s", snapshotID, snap.id)
+	}
+	if snap.typ != SnapshotTypeFull {
+		t.Fatalf("expected full snapshot, got type %v", snap.typ)
+	}
+	if snap.raftMeta.Index != 18 {
+		t.Fatalf("expected raft index 18, got %d", snap.raftMeta.Index)
+	}
+	if snap.raftMeta.Term != 2 {
+		t.Fatalf("expected raft term 2, got %d", snap.raftMeta.Term)
 	}
 }
 
@@ -325,12 +404,27 @@ func Test_Upgrade8To10_InterruptedTmpCleanup(t *testing.T) {
 		t.Fatal("expected old directory to be removed")
 	}
 
-	store, err := NewStore(newDir)
+	// Verify via SnapshotCatalog.
+	catalog := &SnapshotCatalog{}
+	sset, err := catalog.Scan(newDir)
 	if err != nil {
-		t.Fatalf("failed to create store: %s", err)
+		t.Fatalf("catalog scan failed: %s", err)
 	}
-	if store.Len() != 1 {
-		t.Fatalf("expected 1 snapshot, got %d", store.Len())
+	if sset.Len() != 1 {
+		t.Fatalf("expected catalog to find 1 snapshot, got %d", sset.Len())
+	}
+	snap := sset.All()[0]
+	if snap.id != snapshotID {
+		t.Fatalf("expected snapshot ID %s, got %s", snapshotID, snap.id)
+	}
+	if snap.typ != SnapshotTypeFull {
+		t.Fatalf("expected full snapshot, got type %v", snap.typ)
+	}
+	if snap.raftMeta.Index != 18 {
+		t.Fatalf("expected raft index 18, got %d", snap.raftMeta.Index)
+	}
+	if snap.raftMeta.Term != 2 {
+		t.Fatalf("expected raft term 2, got %d", snap.raftMeta.Term)
 	}
 }
 
