@@ -116,66 +116,97 @@ func Test_Upgrade_EmptyOK(t *testing.T) {
 func Test_Upgrade8To10_NothingToDo(t *testing.T) {
 	logger := log.New(os.Stderr, "[snapshot-store-upgrader-test] ", 0)
 
-	// Nonexistent directory is a no-op.
-	if err := Upgrade8To10("/does/not/exist", logger); err != nil {
-		t.Fatalf("failed to upgrade nonexistent directory: %s", err)
+	// Nonexistent old directory is a no-op.
+	if err := Upgrade8To10("/does/not/exist", "/does/not/exist/either", logger); err != nil {
+		t.Fatalf("failed to upgrade nonexistent directories: %s", err)
 	}
 
-	// Empty directory is a no-op.
-	dir := t.TempDir()
-	if err := Upgrade8To10(dir, logger); err != nil {
+	// Empty old directory is removed and is a no-op.
+	oldEmpty := t.TempDir()
+	newEmpty := filepath.Join(t.TempDir(), "rsnapshots")
+	if err := Upgrade8To10(oldEmpty, newEmpty, logger); err != nil {
 		t.Fatalf("failed to upgrade empty directory: %s", err)
 	}
+	if dirExists(oldEmpty) {
+		t.Fatal("expected empty old directory to be removed")
+	}
 
-	// Directory with only v10-format snapshots is a no-op.
-	v10Dir := t.TempDir()
-	mustCreateV10Snapshot(t, v10Dir, "2-18-1686659761026", 18, 2)
-	if err := Upgrade8To10(v10Dir, logger); err != nil {
-		t.Fatalf("failed to upgrade already-v10 directory: %s", err)
+	// Old directory with only v10-format snapshots (no .db at root) has nothing to upgrade.
+	oldV10 := filepath.Join(t.TempDir(), "snapshots")
+	newV10 := filepath.Join(t.TempDir(), "rsnapshots")
+	if err := os.MkdirAll(oldV10, 0755); err != nil {
+		t.Fatalf("failed to create dir: %s", err)
 	}
-	// Verify the v10 snapshot is still intact.
-	store, err := NewStore(v10Dir)
-	if err != nil {
-		t.Fatalf("failed to create store from v10 dir: %s", err)
+	mustCreateV10Snapshot(t, oldV10, "2-18-1686659761026", 18, 2)
+	if err := Upgrade8To10(oldV10, newV10, logger); err != nil {
+		t.Fatalf("failed to upgrade directory with only v10 snapshots: %s", err)
 	}
-	if store.Len() != 1 {
-		t.Fatalf("expected 1 snapshot, got %d", store.Len())
+}
+
+func Test_Upgrade8To10_NewAlreadyExists(t *testing.T) {
+	logger := log.New(os.Stderr, "[snapshot-store-upgrader-test] ", 0)
+	oldDir := filepath.Join(t.TempDir(), "snapshots")
+	newDir := filepath.Join(t.TempDir(), "rsnapshots")
+
+	if err := os.MkdirAll(oldDir, 0755); err != nil {
+		t.Fatalf("failed to create old dir: %s", err)
+	}
+	mustCreateV8Snapshot(t, oldDir, "2-18-1686659761026", 18, 2)
+
+	// Pre-create new directory (simulates already-upgraded state).
+	if err := os.MkdirAll(newDir, 0755); err != nil {
+		t.Fatalf("failed to create new dir: %s", err)
+	}
+
+	if err := Upgrade8To10(oldDir, newDir, logger); err != nil {
+		t.Fatalf("failed to upgrade: %s", err)
+	}
+
+	// Old should be removed since new already exists.
+	if dirExists(oldDir) {
+		t.Fatal("expected old directory to be removed")
 	}
 }
 
 func Test_Upgrade8To10_OK(t *testing.T) {
 	logger := log.New(os.Stderr, "[snapshot-store-upgrader-test] ", 0)
-	dir := t.TempDir()
+	oldDir := filepath.Join(t.TempDir(), "snapshots")
+	newDir := filepath.Join(t.TempDir(), "rsnapshots")
 
+	if err := os.MkdirAll(oldDir, 0755); err != nil {
+		t.Fatalf("failed to create old dir: %s", err)
+	}
 	snapshotID := "2-18-1686659761026"
-	mustCreateV8Snapshot(t, dir, snapshotID, 18, 2)
+	mustCreateV8Snapshot(t, oldDir, snapshotID, 18, 2)
 
-	// Verify v8 layout: .db at root, meta.json in subdirectory, no data.db in subdirectory.
-	if !fileExists(filepath.Join(dir, snapshotID+".db")) {
+	// Verify v8 layout before upgrade.
+	if !fileExists(filepath.Join(oldDir, snapshotID+".db")) {
 		t.Fatal("expected .db file at root")
 	}
-	if !fileExists(filepath.Join(dir, snapshotID, metaFileName)) {
+	if !fileExists(filepath.Join(oldDir, snapshotID, metaFileName)) {
 		t.Fatal("expected meta.json in snapshot directory")
-	}
-	if fileExists(filepath.Join(dir, snapshotID, dbfileName)) {
-		t.Fatal("did not expect data.db in snapshot directory before upgrade")
 	}
 
 	// Upgrade.
-	if err := Upgrade8To10(dir, logger); err != nil {
+	if err := Upgrade8To10(oldDir, newDir, logger); err != nil {
 		t.Fatalf("failed to upgrade: %s", err)
 	}
 
-	// Verify v10 layout: no .db at root, data.db inside snapshot directory.
-	if fileExists(filepath.Join(dir, snapshotID+".db")) {
-		t.Fatal("expected .db file at root to be removed after upgrade")
+	// Old should be removed.
+	if dirExists(oldDir) {
+		t.Fatal("expected old directory to be removed after upgrade")
 	}
-	if !fileExists(filepath.Join(dir, snapshotID, dbfileName)) {
+
+	// Verify v10 layout in new directory.
+	if !fileExists(filepath.Join(newDir, snapshotID, dbfileName)) {
 		t.Fatal("expected data.db in snapshot directory after upgrade")
+	}
+	if !fileExists(filepath.Join(newDir, snapshotID, metaFileName)) {
+		t.Fatal("expected meta.json in snapshot directory after upgrade")
 	}
 
 	// Verify the store can open the upgraded snapshot.
-	store, err := NewStore(dir)
+	store, err := NewStore(newDir)
 	if err != nil {
 		t.Fatalf("failed to create store: %s", err)
 	}
@@ -199,62 +230,65 @@ func Test_Upgrade8To10_OK(t *testing.T) {
 	}
 }
 
-func Test_Upgrade8To10_Multiple(t *testing.T) {
+func Test_Upgrade8To10_MultiplePicksNewest(t *testing.T) {
 	logger := log.New(os.Stderr, "[snapshot-store-upgrader-test] ", 0)
-	dir := t.TempDir()
+	oldDir := filepath.Join(t.TempDir(), "snapshots")
+	newDir := filepath.Join(t.TempDir(), "rsnapshots")
 
-	id1 := "1-10-1000000000000"
-	id2 := "2-20-2000000000000"
-	mustCreateV8Snapshot(t, dir, id1, 10, 1)
-	mustCreateV8Snapshot(t, dir, id2, 20, 2)
+	if err := os.MkdirAll(oldDir, 0755); err != nil {
+		t.Fatalf("failed to create old dir: %s", err)
+	}
+	mustCreateV8Snapshot(t, oldDir, "1-10-1000000000000", 10, 1)
+	mustCreateV8Snapshot(t, oldDir, "2-20-2000000000000", 20, 2)
 
-	if err := Upgrade8To10(dir, logger); err != nil {
+	if err := Upgrade8To10(oldDir, newDir, logger); err != nil {
 		t.Fatalf("failed to upgrade: %s", err)
 	}
 
-	// Both should be upgraded.
-	for _, id := range []string{id1, id2} {
-		if fileExists(filepath.Join(dir, id+".db")) {
-			t.Fatalf("expected .db file at root removed for %s", id)
-		}
-		if !fileExists(filepath.Join(dir, id, dbfileName)) {
-			t.Fatalf("expected data.db in snapshot directory for %s", id)
-		}
+	// Old should be removed.
+	if dirExists(oldDir) {
+		t.Fatal("expected old directory to be removed")
 	}
 
-	store, err := NewStore(dir)
+	// Only the newest snapshot should be in the new directory.
+	store, err := NewStore(newDir)
 	if err != nil {
 		t.Fatalf("failed to create store: %s", err)
 	}
-	if store.Len() != 2 {
-		t.Fatalf("expected 2 snapshots, got %d", store.Len())
+	if store.Len() != 1 {
+		t.Fatalf("expected 1 snapshot (newest only), got %d", store.Len())
+	}
+	snaps, err := store.List()
+	if err != nil {
+		t.Fatalf("failed to list snapshots: %s", err)
+	}
+	if snaps[0].ID != "2-20-2000000000000" {
+		t.Fatalf("expected newest snapshot ID, got %s", snaps[0].ID)
 	}
 }
 
-func Test_Upgrade8To10_CrashRecovery(t *testing.T) {
+func Test_Upgrade8To10_Idempotent(t *testing.T) {
 	logger := log.New(os.Stderr, "[snapshot-store-upgrader-test] ", 0)
-	dir := t.TempDir()
+	oldDir := filepath.Join(t.TempDir(), "snapshots")
+	newDir := filepath.Join(t.TempDir(), "rsnapshots")
 
+	if err := os.MkdirAll(oldDir, 0755); err != nil {
+		t.Fatalf("failed to create old dir: %s", err)
+	}
 	snapshotID := "2-18-1686659761026"
+	mustCreateV8Snapshot(t, oldDir, snapshotID, 18, 2)
 
-	// Simulate a crash where the rename completed but the root .db was not removed:
-	// both <id>.db at root and <id>/data.db exist.
-	mustCreateV8Snapshot(t, dir, snapshotID, 18, 2)
-	mustCopyFileT(t, filepath.Join(dir, snapshotID+".db"), filepath.Join(dir, snapshotID, dbfileName))
-
-	if err := Upgrade8To10(dir, logger); err != nil {
-		t.Fatalf("failed to upgrade: %s", err)
+	// First upgrade succeeds.
+	if err := Upgrade8To10(oldDir, newDir, logger); err != nil {
+		t.Fatalf("first upgrade failed: %s", err)
 	}
 
-	// Root .db should be cleaned up.
-	if fileExists(filepath.Join(dir, snapshotID+".db")) {
-		t.Fatal("expected .db file at root to be removed")
-	}
-	if !fileExists(filepath.Join(dir, snapshotID, dbfileName)) {
-		t.Fatal("expected data.db in snapshot directory")
+	// Second call: old is gone, new exists — should be a no-op.
+	if err := Upgrade8To10(oldDir, newDir, logger); err != nil {
+		t.Fatalf("second upgrade failed: %s", err)
 	}
 
-	store, err := NewStore(dir)
+	store, err := NewStore(newDir)
 	if err != nil {
 		t.Fatalf("failed to create store: %s", err)
 	}
@@ -263,22 +297,35 @@ func Test_Upgrade8To10_CrashRecovery(t *testing.T) {
 	}
 }
 
-func Test_Upgrade8To10_Idempotent(t *testing.T) {
+func Test_Upgrade8To10_InterruptedTmpCleanup(t *testing.T) {
 	logger := log.New(os.Stderr, "[snapshot-store-upgrader-test] ", 0)
-	dir := t.TempDir()
+	oldDir := filepath.Join(t.TempDir(), "snapshots")
+	newDir := filepath.Join(t.TempDir(), "rsnapshots")
 
+	if err := os.MkdirAll(oldDir, 0755); err != nil {
+		t.Fatalf("failed to create old dir: %s", err)
+	}
 	snapshotID := "2-18-1686659761026"
-	mustCreateV8Snapshot(t, dir, snapshotID, 18, 2)
+	mustCreateV8Snapshot(t, oldDir, snapshotID, 18, 2)
 
-	// Upgrade twice.
-	if err := Upgrade8To10(dir, logger); err != nil {
-		t.Fatalf("first upgrade failed: %s", err)
-	}
-	if err := Upgrade8To10(dir, logger); err != nil {
-		t.Fatalf("second upgrade failed: %s", err)
+	// Simulate a leftover .tmp directory from a previous interrupted upgrade.
+	tmpDir := tmpName(newDir)
+	if err := os.MkdirAll(tmpDir, 0755); err != nil {
+		t.Fatalf("failed to create tmp dir: %s", err)
 	}
 
-	store, err := NewStore(dir)
+	if err := Upgrade8To10(oldDir, newDir, logger); err != nil {
+		t.Fatalf("upgrade failed: %s", err)
+	}
+
+	if dirExists(tmpDir) {
+		t.Fatal("expected leftover tmp directory to be removed")
+	}
+	if dirExists(oldDir) {
+		t.Fatal("expected old directory to be removed")
+	}
+
+	store, err := NewStore(newDir)
 	if err != nil {
 		t.Fatalf("failed to create store: %s", err)
 	}

@@ -116,7 +116,7 @@ var (
 
 const (
 	cleanSnapshotName         = "clean_snapshot"
-	snapshotsDirName          = "rsnapshots"
+	snapshotsDirName          = "wsnapshots"
 	restoreScratchPattern     = "rqlite-restore-*"
 	bootScatchPattern         = "rqlite-boot-*"
 	backupScratchPattern      = "rqlite-backup-*"
@@ -571,9 +571,13 @@ func (s *Store) Open() (retErr error) {
 	config.LocalID = raft.ServerID(s.raftID)
 
 	// Upgrade any preexisting snapshots.
-	oldSnapshotDir := filepath.Join(s.raftDir, "snapshots")
-	if err := snapshot.Upgrade7To8(oldSnapshotDir, s.snapshotDir, s.logger); err != nil {
-		return fmt.Errorf("failed to upgrade snapshots: %s", err)
+	old7SnapshotDir := filepath.Join(s.raftDir, "snapshots")
+	if err := snapshot.Upgrade7To8(old7SnapshotDir, "rsnapshots", s.logger); err != nil {
+		return fmt.Errorf("failed to upgrade v7 snapshots: %s", err)
+	}
+	old8SnapshotDir := filepath.Join(s.raftDir, "rsnapshots")
+	if err := snapshot.Upgrade8To10(old8SnapshotDir, s.snapshotDir, s.logger); err != nil {
+		return fmt.Errorf("failed to upgrade v8 snapshots: %s", err)
 	}
 
 	// Create store for the Snapshots.
