@@ -28,8 +28,18 @@ Check out the [rqlite Docker page](https://hub.docker.com/r/rqlite/rqlite/) for 
 ### Linux
 _Builds for a variety of CPU architectures are available. See the Assets section below._
 
-To download and start rqlite, execute the following in a shell.
+The easiest way to install rqlite on Linux:
+```
+curl -fsSL https://rqlite.io/install.sh -o install.sh
+sh install.sh
+```
+To install a specific version:
+```
+curl -fsSL https://rqlite.io/install.sh -o install.sh
+RQLITE_VERSION={release} sh install.sh
+```
 
+Or download and extract manually:
 ```
 curl -L https://github.com/rqlite/rqlite/releases/download/{release}/rqlite-{release}-linux-amd64.tar.gz -o rqlite-{release}-linux-amd64.tar.gz
 tar xvfz rqlite-{release}-linux-amd64.tar.gz
