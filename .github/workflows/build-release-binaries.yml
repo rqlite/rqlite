@@ -37,7 +37,7 @@ jobs:
         run: sudo apt-get install -y rpm
 
       - name: Build deb and rpm packages
-        run: package/build-packages.sh ${{ github.event.release.tag_name }}
+        run: tools/package/build-packages.sh ${{ github.event.release.tag_name }}
 
       - name: Upload Release Assets
         run: |
