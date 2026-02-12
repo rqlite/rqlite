@@ -36,15 +36,7 @@ sh install.sh
 To install a specific version:
 ```
 curl -fsSL https://rqlite.io/install.sh -o install.sh
-RQLITE_VERSION={release} sh install.sh
-```
-
-Or download and extract manually:
-```
-curl -L https://github.com/rqlite/rqlite/releases/download/{release}/rqlite-{release}-linux-amd64.tar.gz -o rqlite-{release}-linux-amd64.tar.gz
-tar xvfz rqlite-{release}-linux-amd64.tar.gz
-cd rqlite-{release}-linux-amd64
-./rqlited data/
+RQLITE_VERSION={release} INSTALL_DIR={location} sh install.sh
 ```
 
 ### Packages
