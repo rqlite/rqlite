@@ -26,7 +26,7 @@ PKG_VERSION="${VERSION#v}"
 declare -A DEB_ARCH=( ["amd64"]="amd64"   ["arm64"]="arm64" )
 declare -A RPM_ARCH=( ["amd64"]="x86_64"  ["arm64"]="aarch64" )
 
-BINARIES="rqlited rqlite rqbench"
+BINARIES=(rqlited rqlite rqbench)
 
 # ---------------------------------------------------------------------------
 # Locate binary directory produced by build.sh
@@ -81,14 +81,12 @@ EOF
     chmod 0755 "$staging/DEBIAN/prerm"
 
     # Binaries
-    for bin in $BINARIES; do
-        cp "$src_dir/$bin" "$staging/usr/bin/$bin"
-        chmod 0755 "$staging/usr/bin/$bin"
+    for bin in "${BINARIES[@]}"; do
+        install -m 0755 "$src_dir/$bin" "$staging/usr/bin/$bin"
     done
 
     # Systemd unit
-    cp "$SCRIPT_DIR/rqlited.service" "$staging/lib/systemd/system/rqlited.service"
-    chmod 0644 "$staging/lib/systemd/system/rqlited.service"
+    install -m 0644 "$SCRIPT_DIR/rqlited.service" "$staging/lib/systemd/system/rqlited.service"
 
     # Build
     local deb_name="rqlite_${PKG_VERSION}_${deb_arch}.deb"
@@ -138,19 +136,14 @@ rqlite is a lightweight, user-friendly, distributed relational database
 built on SQLite with Raft consensus.
 
 %install
-mkdir -p %{buildroot}/usr/bin
-mkdir -p %{buildroot}/lib/systemd/system
-mkdir -p %{buildroot}/var/lib/rqlite
+install -d -m 0755 %{buildroot}/usr/bin
+install -d -m 0755 %{buildroot}/lib/systemd/system
+install -d -m 0755 %{buildroot}/var/lib/rqlite
 
-cp ${abs_src_dir}/rqlited   %{buildroot}/usr/bin/rqlited
-cp ${abs_src_dir}/rqlite    %{buildroot}/usr/bin/rqlite
-cp ${abs_src_dir}/rqbench   %{buildroot}/usr/bin/rqbench
-chmod 0755 %{buildroot}/usr/bin/rqlited
-chmod 0755 %{buildroot}/usr/bin/rqlite
-chmod 0755 %{buildroot}/usr/bin/rqbench
-
-cp ${abs_script_dir}/rqlited.service %{buildroot}/lib/systemd/system/rqlited.service
-chmod 0644 %{buildroot}/lib/systemd/system/rqlited.service
+install -m 0755 "${abs_src_dir}/rqlited" %{buildroot}/usr/bin/rqlited
+install -m 0755 "${abs_src_dir}/rqlite"  %{buildroot}/usr/bin/rqlite
+install -m 0755 "${abs_src_dir}/rqbench" %{buildroot}/usr/bin/rqbench
+install -m 0644 "${abs_script_dir}/rqlited.service" %{buildroot}/lib/systemd/system/rqlited.service
 
 %files
 /usr/bin/rqlited
