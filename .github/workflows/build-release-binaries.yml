@@ -33,15 +33,22 @@ jobs:
       - name: Build the release binaries
         run: .github/workflows/build.sh ${{ github.event.release.tag_name }}
 
+      - name: Install rpm build tools
+        run: sudo apt-get install -y rpm
+
+      - name: Build deb and rpm packages
+        run: package/build-packages.sh ${{ github.event.release.tag_name }}
+
       - name: Upload Release Assets
         run: |
-          for tarball in *.tar.gz; do
+          for asset in *.tar.gz *.deb *.rpm; do
+            [ -f "$asset" ] || continue
             curl \
               -X POST \
               -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
               -H "Content-type: application/octet-stream" \
-              --data-binary @$tarball \
-              "https://uploads.github.com/repos/rqlite/rqlite/releases/${{ github.event.release.id }}/assets?name=$tarball"
+              --data-binary @$asset \
+              "https://uploads.github.com/repos/rqlite/rqlite/releases/${{ github.event.release.id }}/assets?name=$asset"
           done
 
       - name: Update the release notes

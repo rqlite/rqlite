@@ -37,6 +37,21 @@ cd rqlite-{release}-linux-amd64
 ./rqlited data/
 ```
 
+### Packages
+_.deb and .rpm packages for amd64 and arm64 are available in the Assets section below._
+
+Install on Debian/Ubuntu:
+```
+sudo dpkg -i rqlite_{version}_amd64.deb
+sudo systemctl start rqlited
+```
+
+Install on RHEL/Fedora:
+```
+sudo rpm -i rqlite-{version}-1.x86_64.rpm
+sudo systemctl start rqlited
+```
+
 ### macOS
 Install via [Homebrew](https://formulae.brew.sh/formula/rqlite).
 
@@ -70,7 +85,8 @@ def main():
     token = sys.argv[1]
     release_id = sys.argv[2]
     tag = sys.argv[3]
-    set_release_notes(token, release_id, release_template.format(release=tag))
+    version = tag.lstrip('v')
+    set_release_notes(token, release_id, release_template.format(release=tag, version=version))
 
 if __name__ == "__main__":
     main()
