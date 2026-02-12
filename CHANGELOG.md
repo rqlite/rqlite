@@ -1,4 +1,4 @@
-## v9.4.1 (unreleased)
+## v9.4.1 (February 11th 2026)
 ### Implementation changes and bug fixes
 - [PR #2468](https://github.com/rqlite/rqlite/pull/2468): Add _proxy_ layer between HTTP layer and Store.
 - [PR #2472](https://github.com/rqlite/rqlite/pull/2472): Use `maps` and `slices` packages where possible.
