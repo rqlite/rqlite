@@ -25,8 +25,9 @@ type sinker interface {
 	io.WriteCloser
 }
 
-type fullChecker interface {
+type fullController interface {
 	FullNeeded() (bool, error)
+	UnsetFullNeeded() error
 }
 
 // Sink is a sink for writing snapshot data to a Snapshot store.
@@ -46,18 +47,18 @@ type Sink struct {
 	header *proto.SnapshotHeader
 	sinkW  sinker
 
-	fn fullChecker
+	fc fullController
 
 	logger *log.Logger
 }
 
 // NewSink creates a new Sink object. It takes the root snapshot directory
 // and the snapshot metadata.
-func NewSink(dir string, meta *raft.SnapshotMeta, fn fullChecker) *Sink {
+func NewSink(dir string, meta *raft.SnapshotMeta, fc fullController) *Sink {
 	return &Sink{
 		dir:    dir,
 		meta:   meta,
-		fn:     fn,
+		fc:     fc,
 		logger: log.New(log.Writer(), "[snapshot-sink] ", log.LstdFlags),
 	}
 }
@@ -111,8 +112,8 @@ func (s *Sink) Write(p []byte) (n int, err error) {
 			if len(s.header.WalHeaders) != 1 {
 				return n, ErrTooManyWALs
 			}
-			if s.fn != nil {
-				fullNeeded, err := s.fn.FullNeeded()
+			if s.fc != nil {
+				fullNeeded, err := s.fc.FullNeeded()
 				if err != nil {
 					return n, err
 				}
@@ -168,8 +169,11 @@ func (s *Sink) Close() error {
 		return err
 	}
 
-	// XXX REMOVE FULL NEEDED FLAG HERE IF NECESSARY.
-
+	if s.fc != nil {
+		if err := s.fc.UnsetFullNeeded(); err != nil {
+			return err
+		}
+	}
 	return syncDirMaybe(s.dir)
 }
 
