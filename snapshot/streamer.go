@@ -206,17 +206,20 @@ func (s *SnapshotStreamer) Read(p []byte) (n int, err error) {
 
 // Close closes the SnapshotStreamer.
 func (s *SnapshotStreamer) Close() error {
+	var firstErr error
 	if s.dbFD != nil {
 		if err := s.dbFD.Close(); err != nil {
-			return err
+			firstErr = err
 		}
 	}
 	for _, w := range s.walFDs {
 		if err := w.Close(); err != nil {
-			return err
+			if firstErr == nil {
+				firstErr = err
+			}
 		}
 	}
-	return nil
+	return firstErr
 }
 
 // Len returns the total number of bytes that will be read from the SnapshotStreamer
