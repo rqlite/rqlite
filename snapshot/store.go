@@ -559,6 +559,15 @@ func (s *Store) SetFullNeeded() error {
 	return syncDirMaybe(s.dir)
 }
 
+// UnsetFullNeeded removes the flag that indicates a full snapshot is
+// needed.
+func (s *Store) UnsetFullNeeded() error {
+	if err := os.Remove(s.fullNeededPath); err != nil {
+		return err
+	}
+	return syncDirMaybe(s.dir)
+}
+
 // Stats returns stats about the Snapshot Store. This function may return
 // an error if the Store is in an inconsistent state. In that case the stats
 // returned may be incomplete or invalid.
