@@ -134,8 +134,8 @@ func (s *Sink) Write(p []byte) (n int, err error) {
 		if err := s.sinkW.Open(); err != nil {
 			return n, err
 		}
-		s.buf.WriteTo(s.sinkW)
-		return n, nil
+		n64, err := s.buf.WriteTo(s.sinkW)
+		return n + int(n64), err
 	}
 
 	// We have a header, just write directly to the underlying sink.
