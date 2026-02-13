@@ -1,6 +1,9 @@
-## v9.4.1 (unreleased)
+## v9.4.1 (February 11th 2026)
 ### Implementation changes and bug fixes
 - [PR #2468](https://github.com/rqlite/rqlite/pull/2468): Add _proxy_ layer between HTTP layer and Store.
+- [PR #2472](https://github.com/rqlite/rqlite/pull/2472): Use `maps` and `slices` packages where possible.
+- [PR #2473](https://github.com/rqlite/rqlite/pull/2473): Check if DB context contains an error and return it if so.
+- [PR #2474](https://github.com/rqlite/rqlite/pull/2474): Add deb and RPM packaging.
 
 ## v9.4.0 (February 6th 2026)
 ### New features

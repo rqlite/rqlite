@@ -7,6 +7,7 @@ import (
 	"net"
 	"net/http"
 	"net/http/httptest"
+	"slices"
 	"sync"
 	"sync/atomic"
 
@@ -102,9 +103,7 @@ func (h *HTTPTestServer) SetFailRate(rate int) {
 func (h *HTTPTestServer) GetRequests() [][]byte {
 	h.mu.Lock()
 	defer h.mu.Unlock()
-	result := make([][]byte, len(h.requests))
-	copy(result, h.requests)
-	return result
+	return slices.Clone(h.requests)
 }
 
 // GetRequestCount returns the number of requests received by the server.

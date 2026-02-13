@@ -992,7 +992,10 @@ func (db *DB) executeWithConn(ctx context.Context, req *command.Request, xTime b
 			return false
 		}
 		if req.RollbackOnError {
-			db.executeStmtWithConn(ctx, &command.Statement{Sql: "ROLLBACK"}, false, eqer, time.Duration(req.DbTimeout))
+			// Use a background context here since the original context may have been canceled or hit its deadline,
+			// and we want to ensure the rollback goes through.
+			db.executeStmtWithConn(context.Background(), &command.Statement{Sql: "ROLLBACK"}, false, eqer,
+				time.Duration(req.DbTimeout))
 			return false
 		}
 		return true
@@ -1068,6 +1071,9 @@ func (db *DB) executeStmtWithConn(ctx context.Context, stmt *command.Statement, 
 				Error: err.Error(),
 			}
 			return response, err
+		}
+		if ctx.Err() != nil {
+			return response, ctx.Err()
 		}
 		if result == nil {
 			return response, nil

@@ -11,6 +11,7 @@ import (
 	"log"
 	"net"
 	"os"
+	"slices"
 	"strconv"
 	"sync"
 	"time"
@@ -346,8 +347,7 @@ func (s *Service) handleConn(conn net.Conn) {
 				if err != nil {
 					resp.Error = err.Error()
 				} else {
-					resp.Response = make([]*command.ExecuteQueryResponse, len(res))
-					copy(resp.Response, res)
+					resp.Response = slices.Clone(res)
 					resp.RaftIndex = idx
 				}
 			}
@@ -369,8 +369,7 @@ func (s *Service) handleConn(conn net.Conn) {
 				if err != nil {
 					resp.Error = err.Error()
 				} else {
-					resp.Rows = make([]*command.QueryRows, len(res))
-					copy(resp.Rows, res)
+					resp.Rows = slices.Clone(res)
 					resp.RaftIndex = idx
 				}
 			}
@@ -392,8 +391,7 @@ func (s *Service) handleConn(conn net.Conn) {
 				if err != nil {
 					resp.Error = err.Error()
 				} else {
-					resp.Response = make([]*command.ExecuteQueryResponse, len(res))
-					copy(resp.Response, res)
+					resp.Response = slices.Clone(res)
 					resp.NumRW = numRW
 					resp.RaftIndex = idx
 				}
