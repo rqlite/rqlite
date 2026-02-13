@@ -79,12 +79,6 @@ const (
 	SnapshotMetaTypeIncremental
 )
 
-// SnapshotMeta represents metadata about a snapshot.
-type SnapshotMeta struct {
-	*raft.SnapshotMeta
-	Type SnapshotMetaType
-}
-
 // LockingSink is a wrapper around a Sink holds the MSRW lock
 // while the Sink is in use.
 type LockingSink struct {
@@ -343,13 +337,13 @@ func (s *Store) Open(id string) (raftMeta *raft.SnapshotMeta, rc io.ReadCloser, 
 		return nil, nil, err
 	}
 
-	meta, err := readMeta(filepath.Join(s.dir, id))
+	meta, err := readRaftMeta(filepath.Join(s.dir, id))
 	if err != nil {
 		return nil, nil, err
 	}
 	meta.Size = sz
 
-	return meta.SnapshotMeta, NewLockingStreamer(streamer, s), nil
+	return meta, NewLockingStreamer(streamer, s), nil
 }
 
 // Reap reaps snapshots. Reaping is the process of deleting old snapshots that are no
@@ -550,7 +544,6 @@ func (s *Store) FullNeeded() (bool, error) {
 }
 
 // SetFullNeeded sets the flag that indicates a full snapshot is needed.
-// This flag will be cleared when a snapshot is successfully persisted.
 func (s *Store) SetFullNeeded() error {
 	f, err := os.Create(s.fullNeededPath)
 	if err != nil {
@@ -651,20 +644,4 @@ func snapshotName(term, index uint64) string {
 // metaPath returns the path to the meta file in the given directory.
 func metaPath(dir string) string {
 	return filepath.Join(dir, metaFileName)
-}
-
-// readMeta is used to read the meta data in a given snapshot directory.
-func readMeta(dir string) (*SnapshotMeta, error) {
-	fh, err := os.Open(metaPath(dir))
-	if err != nil {
-		return nil, err
-	}
-	defer fh.Close()
-
-	meta := &SnapshotMeta{}
-	dec := json.NewDecoder(fh)
-	if err := dec.Decode(meta); err != nil {
-		return nil, err
-	}
-	return meta, nil
 }

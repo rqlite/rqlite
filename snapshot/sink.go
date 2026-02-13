@@ -167,6 +167,9 @@ func (s *Sink) Close() error {
 	if err := os.Rename(s.snapTmpDirPath, s.snapDirPath); err != nil {
 		return err
 	}
+
+	// XXX REMOVE FULL NEEDED FLAG HERE IF NECESSARY.
+
 	return syncDirMaybe(s.dir)
 }
 
