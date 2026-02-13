@@ -244,6 +244,11 @@ func (s *Store) Create(version raft.SnapshotVersion, index, term uint64, configu
 // List returns the list of available snapshots in the Store,
 // ordered from newest to oldest.
 func (s *Store) List() ([]*raft.SnapshotMeta, error) {
+	if err := s.mrsw.BeginRead(); err != nil {
+		return nil, err
+	}
+	defer s.mrsw.EndRead()
+
 	sset, err := s.catalog.Scan(s.dir)
 	if err != nil {
 		return nil, err
@@ -258,6 +263,11 @@ func (s *Store) List() ([]*raft.SnapshotMeta, error) {
 
 // Len returns the number of snapshots in the Store.
 func (s *Store) Len() int {
+	if err := s.mrsw.BeginRead(); err != nil {
+		return 0
+	}
+	defer s.mrsw.EndRead()
+
 	sset, err := s.catalog.Scan(s.dir)
 	if err != nil {
 		return 0
@@ -268,6 +278,11 @@ func (s *Store) Len() int {
 // LatestIndexTerm returns the index and term of the most recent
 // snapshot in the Store.
 func (s *Store) LatestIndexTerm() (uint64, uint64, error) {
+	if err := s.mrsw.BeginRead(); err != nil {
+		return 0, 0, err
+	}
+	defer s.mrsw.EndRead()
+
 	sset, err := s.catalog.Scan(s.dir)
 	if err != nil {
 		return 0, 0, err
@@ -522,6 +537,11 @@ func (s *Store) FullNeeded() (bool, error) {
 	if fileExists(s.fullNeededPath) {
 		return true, nil
 	}
+	if err := s.mrsw.BeginRead(); err != nil {
+		return false, err
+	}
+	defer s.mrsw.EndRead()
+
 	snaps, err := s.getSnapshots()
 	if err != nil {
 		return false, err
@@ -536,13 +556,25 @@ func (s *Store) SetFullNeeded() error {
 	if err != nil {
 		return err
 	}
-	return f.Close()
+	if err := f.Sync(); err != nil {
+		f.Close()
+		return err
+	}
+	if err := f.Close(); err != nil {
+		return err
+	}
+	return syncDirMaybe(s.dir)
 }
 
 // Stats returns stats about the Snapshot Store. This function may return
 // an error if the Store is in an inconsistent state. In that case the stats
 // returned may be incomplete or invalid.
 func (s *Store) Stats() (map[string]any, error) {
+	if err := s.mrsw.BeginRead(); err != nil {
+		return nil, err
+	}
+	defer s.mrsw.EndRead()
+
 	snapshots, err := s.getSnapshots()
 	if err != nil {
 		return nil, err

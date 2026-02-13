@@ -2,7 +2,6 @@ package snapshot
 
 import (
 	"compress/gzip"
-	"encoding/json"
 	"fmt"
 	"io"
 	"log"
@@ -332,14 +331,8 @@ func getNewest8Snapshot(dir string) (string, *raft.SnapshotMeta, error) {
 			continue
 		}
 
-		fh, err := os.Open(mp)
+		meta, err := readRaftMeta(mp)
 		if err != nil {
-			return "", nil, err
-		}
-		defer fh.Close()
-
-		meta := &raft.SnapshotMeta{}
-		if err := json.NewDecoder(fh).Decode(meta); err != nil {
 			return "", nil, err
 		}
 		snapshots = append(snapshots, meta)
@@ -363,20 +356,13 @@ func getNewest7Snapshot(dir string) (*raft.SnapshotMeta, error) {
 		if !entry.IsDir() {
 			continue
 		}
-		metaPath := filepath.Join(dir, entry.Name(), metaFileName)
-		if !fileExists(metaPath) {
+		mp := filepath.Join(dir, entry.Name(), metaFileName)
+		if !fileExists(mp) {
 			continue
 		}
 
-		fh, err := os.Open(metaPath)
+		meta, err := readRaftMeta(mp)
 		if err != nil {
-			return nil, err
-		}
-		defer fh.Close()
-
-		meta := &raft.SnapshotMeta{}
-		dec := json.NewDecoder(fh)
-		if err := dec.Decode(meta); err != nil {
 			return nil, err
 		}
 		snapshots = append(snapshots, meta)

@@ -134,8 +134,10 @@ func (s *Sink) Write(p []byte) (n int, err error) {
 		if err := s.sinkW.Open(); err != nil {
 			return n, err
 		}
-		n64, err := s.buf.WriteTo(s.sinkW)
-		return n + int(n64), err
+		if _, err := s.buf.WriteTo(s.sinkW); err != nil {
+			return n, err
+		}
+		return n, nil
 	}
 
 	// We have a header, just write directly to the underlying sink.
@@ -149,6 +151,11 @@ func (s *Sink) Close() error {
 	}
 	s.opened = false
 
+	if s.sinkW == nil {
+		// Header was never fully received; clean up the temp directory.
+		return os.RemoveAll(s.snapTmpDirPath)
+	}
+
 	if err := s.sinkW.Close(); err != nil {
 		return err
 	}
@@ -160,7 +167,7 @@ func (s *Sink) Close() error {
 	if err := os.Rename(s.snapTmpDirPath, s.snapDirPath); err != nil {
 		return err
 	}
-	return syncDirMaybe(s.snapDirPath)
+	return syncDirMaybe(s.dir)
 }
 
 // Cancel cancels the sink.

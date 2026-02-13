@@ -85,6 +85,9 @@ func ExtractDatabase(r io.Reader, dstPath string) (int64, error) {
 		if err := db.ReplayWAL(dstPath, walFiles, false); err != nil {
 			return totalRead, fmt.Errorf("checkpointing WALs: %w", err)
 		}
+		for _, wf := range walFiles {
+			os.Remove(wf)
+		}
 	}
 
 	return totalRead, nil

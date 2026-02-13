@@ -47,6 +47,10 @@ func (s *IncrementalSink) Write(p []byte) (n int, err error) {
 func (s *IncrementalSink) Close() error {
 	defer s.file.Close()
 
+	if err := s.file.Sync(); err != nil {
+		return err
+	}
+
 	sz, err := fileSize(s.file.Name())
 	if err != nil {
 		return err
