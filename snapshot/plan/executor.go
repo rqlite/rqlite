@@ -113,5 +113,5 @@ func (e *Executor) WriteMeta(dir string, data []byte) error {
 		return err
 	}
 	defer fh.Close()
-	return fh.Sync()
+	return syncFileMaybe(fh.Name())
 }
