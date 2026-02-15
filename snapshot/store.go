@@ -305,7 +305,7 @@ func (s *Store) SetReapThreshold(n int) {
 // both of which require the DB file and any associated WAL files.
 func (s *Store) Open(id string) (raftMeta *raft.SnapshotMeta, rc io.ReadCloser, retErr error) {
 	if err := s.mrsw.BeginRead(); err != nil {
-		return nil, nil, err
+		return nil, nil, fmt.Errorf("acquiring read lock: %w", err)
 	}
 	defer func() {
 		if retErr != nil {
@@ -315,31 +315,34 @@ func (s *Store) Open(id string) (raftMeta *raft.SnapshotMeta, rc io.ReadCloser, 
 
 	snapSet, err := s.getSnapshots()
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, fmt.Errorf("scanning snapshots: %w", err)
+	}
+	if snapSet.Len() == 0 {
+		return nil, nil, ErrSnapshotNotFound
 	}
 
 	dbfile, walFiles, err := snapSet.ResolveFiles(id)
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, fmt.Errorf("resolving files for snapshot %s: %w", id, err)
 	}
 
 	streamer, err := NewSnapshotStreamer(dbfile, walFiles...)
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, fmt.Errorf("creating streamer for snapshot %s: %w", id, err)
 	}
 
 	if err := streamer.Open(); err != nil {
-		return nil, nil, err
+		return nil, nil, fmt.Errorf("opening streamer for snapshot %s: %w", id, err)
 	}
 
 	sz, err := streamer.Len()
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, fmt.Errorf("computing stream length for snapshot %s: %w", id, err)
 	}
 
-	meta, err := readRaftMeta(filepath.Join(s.dir, id))
+	meta, err := readRaftMeta(metaPath(filepath.Join(s.dir, id)))
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, fmt.Errorf("reading metadata for snapshot %s: %w", id, err)
 	}
 	meta.Size = sz
 

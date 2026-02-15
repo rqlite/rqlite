@@ -231,6 +231,8 @@ func Test_Store_EndToEndCycle(t *testing.T) {
 		t.Fatalf("Expected store to have %d snapshots, got %d", exp, got)
 	}
 
+	// Check that the snapshots are listed in the correct order, with the snapshots
+	// ordered from newest to oldest.
 	snaps, err := store0.List()
 	if err != nil {
 		t.Fatalf("Failed to list snapshots: %v", err)
@@ -246,7 +248,7 @@ func Test_Store_EndToEndCycle(t *testing.T) {
 	}
 
 	//////////////////////////////////////////////////////////////////////////////////
-	// Open the first snapshot, and write it to the second store.
+	// Open the first-created snapshot, and write it to the second store.
 	//////////////////////////////////////////////////////////////////////////////////
 	meta, rc, err := store0.Open(id1)
 	if err != nil {
