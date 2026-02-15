@@ -42,12 +42,6 @@ const (
 var (
 	// ErrSnapshotNotFound is returned when a snapshot cannot be found.
 	ErrSnapshotNotFound = errors.New("snapshot not found")
-
-	// ErrDataFileNotFound is returned when a snapshot data file cannot be found.
-	ErrDataFileNotFound = errors.New("snapshot data file not found")
-
-	// ErrTooManyDataFiles is returned when more than one snapshot data file is found.
-	ErrTooManyDataFiles = errors.New("too many snapshot data files found")
 )
 
 // stats captures stats for the Store.

@@ -86,7 +86,6 @@ func (s *Sink) ID() string {
 
 // Write writes snapshot data to the sink.
 func (s *Sink) Write(p []byte) (n int, err error) {
-
 	// If we don't yet have a header, try to decode one.
 	if s.header == nil {
 		n, err := s.buf.Write(p)
