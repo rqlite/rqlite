@@ -1160,6 +1160,7 @@ func TestSnapshotSet_ResolveFiles(t *testing.T) {
 }
 
 func mustCopyFile(t *testing.T, src, dest string) {
+	t.Helper()
 	data, err := os.ReadFile(src)
 	if err != nil {
 		t.Fatalf("failed to read file %s: %v", src, err)

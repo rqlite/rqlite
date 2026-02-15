@@ -182,6 +182,37 @@ func Test_IncrementalSink(t *testing.T) {
 	}
 }
 
+func Test_IncrementalFileSink(t *testing.T) {
+	tempDir := t.TempDir()
+	srcPath := "testdata/db-and-wals/wal-01"
+	tmpSrcPath := tempDir + "/wal-00" // Becuase the file will be moved.
+	mustCopyFile(t, srcPath, tmpSrcPath)
+
+	sink := NewIncrementalFileSink(tempDir, tmpSrcPath)
+	if sink == nil {
+		t.Fatalf("expected non-nil Sink")
+	}
+
+	if err := sink.Open(); err != nil {
+		t.Fatalf("unexpected error opening sink: %s", err.Error())
+	}
+
+	// Write to the sink should return an error since the IncrementalFileSink does
+	// not support writing.
+	if _, err := sink.Write([]byte("test data")); err == nil {
+		t.Fatalf("expected error writing to IncrementalFileSink, got nil")
+	}
+
+	if err := sink.Close(); err != nil {
+		t.Fatalf("unexpected error closing sink: %s", err.Error())
+	}
+
+	// Installed WAL file should be byte-for-byte identical to source.
+	if !filesIdentical(srcPath, sink.WALFile()) {
+		t.Fatalf("expected file %s to be identical to source", sink.WALFile())
+	}
+}
+
 func asJSON(v any) string {
 	enc := encoding.Encoder{}
 	b, err := enc.JSONMarshal(v)
