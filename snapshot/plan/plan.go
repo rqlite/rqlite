@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"runtime"
 )
 
 // OpType represents the type of a snapshot store operation.
@@ -80,7 +81,7 @@ func WriteToFile(p *Plan, path string) error {
 	if err := os.WriteFile(path, data, 0644); err != nil {
 		return err
 	}
-	return syncFile(path)
+	return syncFileMaybe(path)
 }
 
 // Len returns the number of operations in the plan.
@@ -168,8 +169,12 @@ func (p *Plan) Execute(v Visitor) error {
 	return nil
 }
 
-// syncFile syncs the given file to disk.
-func syncFile(path string) error {
+// syncFile syncs the given file to disk. Skipped on Windows as it is
+// not supported.
+func syncFileMaybe(path string) error {
+	if runtime.GOOS == "windows" {
+		return nil
+	}
 	fd, err := os.Open(path)
 	if err != nil {
 		return err
