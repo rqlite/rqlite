@@ -560,8 +560,11 @@ func (s *Store) SetFullNeeded() error {
 }
 
 // UnsetFullNeeded removes the flag that indicates a full snapshot is
-// needed.
+// needed. If the flag is not set, this is a no-op.
 func (s *Store) UnsetFullNeeded() error {
+	if !fileExists(s.fullNeededPath) {
+		return nil
+	}
 	if err := os.Remove(s.fullNeededPath); err != nil {
 		return err
 	}
