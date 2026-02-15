@@ -977,22 +977,25 @@ func persistStreamerData(t *testing.T, buf *bytes.Buffer) (string, []string) {
 		t.Fatalf("Failed to unmarshal header: %v", err)
 	}
 
-	// Read DB file if present.
-	if hdr.DbHeader != nil {
-		dbPath = tmpDir + "/db-file"
-		dbFile, err := os.Create(dbPath)
-		if err != nil {
-			t.Fatalf("Failed to create DB file: %v", err)
-		}
-		defer dbFile.Close()
+	full := hdr.GetFull()
+	if full == nil {
+		t.Fatalf("Expected Full snapshot payload")
+	}
 
-		if _, err := io.CopyN(dbFile, buf, int64(hdr.DbHeader.SizeBytes)); err != nil {
-			t.Fatalf("Failed to copy DB file data: %v", err)
-		}
+	// Read DB file.
+	dbPath = tmpDir + "/db-file"
+	dbFile, err := os.Create(dbPath)
+	if err != nil {
+		t.Fatalf("Failed to create DB file: %v", err)
+	}
+	defer dbFile.Close()
+
+	if _, err := io.CopyN(dbFile, buf, int64(full.DbHeader.SizeBytes)); err != nil {
+		t.Fatalf("Failed to copy DB file data: %v", err)
 	}
 
 	// Read WAL files.
-	for i, walHdr := range hdr.WalHeaders {
+	for i, walHdr := range full.WalHeaders {
 		walPath := filepath.Join(tmpDir, fmt.Sprintf("wal-file-%d", i))
 		walFile, err := os.Create(walPath)
 		if err != nil {

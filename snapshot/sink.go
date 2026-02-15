@@ -11,13 +11,9 @@ import (
 	"path/filepath"
 
 	"github.com/hashicorp/raft"
+	"github.com/rqlite/rqlite/v9/db"
 	"github.com/rqlite/rqlite/v9/snapshot/proto"
 	pb "google.golang.org/protobuf/proto"
-)
-
-var (
-	// ErrTooManyWALs indicates that the snapshot contains more WAL files than expected.
-	ErrTooManyWALs = fmt.Errorf("too many WAL files")
 )
 
 type sinker interface {
@@ -46,6 +42,10 @@ type Sink struct {
 	buf    bytes.Buffer
 	header *proto.SnapshotHeader
 	sinkW  sinker
+
+	// localWALPath is set when the header indicates an IncrementalFileSnapshot.
+	// In this case, no data follows the header; the WAL file is moved on Close.
+	localWALPath string
 
 	fc fullController
 
@@ -103,15 +103,11 @@ func (s *Sink) Write(p []byte) (n int, err error) {
 			return n, nil
 		}
 
-		// We have a header to figure out what to do with it.
-		if s.header.DbHeader != nil {
-			s.sinkW = NewFullSink(s.snapTmpDirPath, s.header)
-		} else if s.header.WalHeaders != nil {
-			// If we only have WAL headers then we must have only one WAL header.
-			// This is because it must be an incremental snapshot.
-			if len(s.header.WalHeaders) != 1 {
-				return n, ErrTooManyWALs
-			}
+		// We have a header, figure out what to do with it.
+		switch p := s.header.Payload.(type) {
+		case *proto.SnapshotHeader_Full:
+			s.sinkW = NewFullSink(s.snapTmpDirPath, p.Full)
+		case *proto.SnapshotHeader_Incremental:
 			if s.fc != nil {
 				fullNeeded, err := s.fc.FullNeeded()
 				if err != nil {
@@ -121,17 +117,28 @@ func (s *Sink) Write(p []byte) (n int, err error) {
 					return n, fmt.Errorf("full snapshot needed before incremental can be applied")
 				}
 			}
-			s.sinkW = NewIncrementalSink(s.snapTmpDirPath, s.header.WalHeaders[0])
-		} else if s.header.WalFile != "" {
-			// We have a path to a WAL file, which indicates we are to move this file directly
-			// to the Store. This is an optimized path for snapshotting where the WAL data
-			// is available locally.
-			s.sinkW = NewIncrementalFileSink(s.snapTmpDirPath, s.header.WalFile)
-		} else {
-			return n, fmt.Errorf("unrecognized snapshot header")
+			s.sinkW = NewIncrementalSink(s.snapTmpDirPath, p.Incremental.WalHeader)
+		case *proto.SnapshotHeader_IncrementalFile:
+			if s.fc != nil {
+				fullNeeded, err := s.fc.FullNeeded()
+				if err != nil {
+					return n, err
+				}
+				if fullNeeded {
+					return n, fmt.Errorf("full snapshot needed before incremental can be applied")
+				}
+			}
+			// No data follows this header type. Any leftover bytes are an error.
+			if s.buf.Len() > 0 {
+				return n, fmt.Errorf("unexpected data after incremental file header")
+			}
+			s.localWALPath = p.IncrementalFile.WalPath
+			return n, nil
+		default:
+			return n, fmt.Errorf("unrecognized snapshot header payload")
 		}
 
-		// Prep and preload the sink.
+		// Prep and preload the streaming sink.
 		if err := s.sinkW.Open(); err != nil {
 			return n, err
 		}
@@ -142,6 +149,10 @@ func (s *Sink) Write(p []byte) (n int, err error) {
 	}
 
 	// We have a header, just write directly to the underlying sink.
+	if s.sinkW == nil {
+		// IncrementalFile path — no data expected after header.
+		return 0, fmt.Errorf("unexpected data after incremental file header")
+	}
 	return s.sinkW.Write(p)
 }
 
@@ -152,13 +163,24 @@ func (s *Sink) Close() error {
 	}
 	s.opened = false
 
-	if s.sinkW == nil {
+	if s.sinkW == nil && s.localWALPath == "" {
 		// Header was never fully received; clean up the temp directory.
 		return os.RemoveAll(s.snapTmpDirPath)
 	}
 
-	if err := s.sinkW.Close(); err != nil {
-		return err
+	if s.localWALPath != "" {
+		// IncrementalFileSnapshot: move the local WAL file into the snapshot directory.
+		dstPath := filepath.Join(s.snapTmpDirPath, walfileName)
+		if err := os.Rename(s.localWALPath, dstPath); err != nil {
+			return err
+		}
+		if !db.IsValidSQLiteWALFile(dstPath) {
+			return fmt.Errorf("file is not a valid SQLite WAL file")
+		}
+	} else {
+		if err := s.sinkW.Close(); err != nil {
+			return err
+		}
 	}
 
 	if err := writeMeta(s.snapTmpDirPath, s.meta); err != nil {

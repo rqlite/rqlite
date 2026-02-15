@@ -9,9 +9,24 @@ message Header {
   uint32 crc32 = 2;
 }
 
+message FullSnapshot {
+  Header db_header = 1;
+  repeated Header wal_headers = 2;
+}
+
+message IncrementalSnapshot {
+  Header wal_header = 1;
+}
+
+message IncrementalFileSnapshot {
+  string wal_path = 1;
+}
+
 message SnapshotHeader {
   uint32 format_version = 1;
-  Header db_header = 2;
-  repeated Header wal_headers = 3;
-  string wal_file = 4;
+  oneof payload {
+    FullSnapshot full = 2;
+    IncrementalSnapshot incremental = 3;
+    IncrementalFileSnapshot incremental_file = 4;
+  }
 }

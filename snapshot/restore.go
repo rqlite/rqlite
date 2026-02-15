@@ -38,16 +38,19 @@ func ExtractDatabase(r io.Reader, dstPath string) (int64, error) {
 		return totalRead, fmt.Errorf("unmarshaling header: %w", err)
 	}
 
-	// Extract DB file.
-	if hdr.DbHeader == nil {
+	// The snapshot must be a full snapshot to extract a database.
+	full := hdr.GetFull()
+	if full == nil {
 		return totalRead, fmt.Errorf("snapshot has no database")
 	}
+
+	// Extract DB file.
 	dbFile, err := os.Create(dstPath)
 	if err != nil {
 		return totalRead, err
 	}
 
-	nr, err := io.CopyN(dbFile, r, int64(hdr.DbHeader.SizeBytes))
+	nr, err := io.CopyN(dbFile, r, int64(full.DbHeader.SizeBytes))
 	totalRead += nr
 	if err != nil {
 		dbFile.Close()
@@ -62,10 +65,10 @@ func ExtractDatabase(r io.Reader, dstPath string) (int64, error) {
 	}
 
 	// Extract and checkpoint any WAL files.
-	if len(hdr.WalHeaders) > 0 {
+	if len(full.WalHeaders) > 0 {
 		dir := filepath.Dir(dstPath)
 		var walFiles []string
-		for i, wh := range hdr.WalHeaders {
+		for i, wh := range full.WalHeaders {
 			walPath := filepath.Join(dir, fmt.Sprintf("restore-wal-%d.tmp", i))
 			wf, err := os.Create(walPath)
 			if err != nil {

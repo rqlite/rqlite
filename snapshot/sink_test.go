@@ -1,9 +1,12 @@
 package snapshot
 
 import (
+	"bytes"
+	"encoding/binary"
 	"fmt"
 	"io"
 	"os"
+	"path/filepath"
 	"testing"
 
 	"github.com/rqlite/rqlite/v9/command/encoding"
@@ -16,7 +19,7 @@ func Test_NewFullSink(t *testing.T) {
 		t.Fatalf("unexpected error creating manifest: %s", err.Error())
 	}
 
-	sink := NewFullSink(t.TempDir(), hdr)
+	sink := NewFullSink(t.TempDir(), hdr.GetFull())
 	if sink == nil {
 		t.Fatalf("expected non-nil Sink")
 	}
@@ -28,7 +31,7 @@ func Test_FullSink_SingleDBFile(t *testing.T) {
 		t.Fatalf("unexpected error creating manifest: %s", err.Error())
 	}
 	dir := t.TempDir()
-	sink := NewFullSink(dir, header)
+	sink := NewFullSink(dir, header.GetFull())
 	if err := sink.Open(); err != nil {
 		t.Fatalf("unexpected error opening sink: %s", err.Error())
 	}
@@ -61,7 +64,7 @@ func Test_FullSink_SingleDBFile_SingleWALFile(t *testing.T) {
 		t.Fatalf("unexpected error creating manifest: %s", err.Error())
 	}
 	dir := t.TempDir()
-	sink := NewFullSink(dir, header)
+	sink := NewFullSink(dir, header.GetFull())
 	if err := sink.Open(); err != nil {
 		t.Fatalf("unexpected error opening sink: %s", err.Error())
 	}
@@ -107,7 +110,7 @@ func Test_FullSink_SingleDBFile_MultiWALFile(t *testing.T) {
 		t.Fatalf("unexpected error creating manifest: %s", err.Error())
 	}
 	dir := t.TempDir()
-	sink := NewFullSink(dir, header)
+	sink := NewFullSink(dir, header.GetFull())
 	if err := sink.Open(); err != nil {
 		t.Fatalf("unexpected error opening sink: %s", err.Error())
 	}
@@ -153,7 +156,7 @@ func Test_IncrementalSink(t *testing.T) {
 		t.Fatalf("unexpected error creating manifest: %s", err.Error())
 	}
 
-	sink := NewIncrementalSink(t.TempDir(), hdr.WalHeaders[0])
+	sink := NewIncrementalSink(t.TempDir(), hdr.GetIncremental().WalHeader)
 	if sink == nil {
 		t.Fatalf("expected non-nil Sink")
 	}
@@ -185,22 +188,40 @@ func Test_IncrementalSink(t *testing.T) {
 func Test_IncrementalFileSink(t *testing.T) {
 	tempDir := t.TempDir()
 	srcPath := "testdata/db-and-wals/wal-01"
-	tmpSrcPath := tempDir + "/wal-00" // Becuase the file will be moved.
+	tmpSrcPath := filepath.Join(tempDir, "wal-00") // Because the file will be moved.
 	mustCopyFile(t, srcPath, tmpSrcPath)
 
-	sink := NewIncrementalFileSink(tempDir, tmpSrcPath)
-	if sink == nil {
-		t.Fatalf("expected non-nil Sink")
+	hdr, err := NewIncrementalFileSnapshotHeader(tmpSrcPath)
+	if err != nil {
+		t.Fatalf("unexpected error creating header: %s", err.Error())
+	}
+	hdrBytes, err := marshalSnapshotHeader(hdr)
+	if err != nil {
+		t.Fatalf("unexpected error marshaling header: %s", err.Error())
 	}
 
+	// Build the framed message: 4-byte length prefix + header bytes.
+	var frameBuf bytes.Buffer
+	lenBuf := make([]byte, HeaderSizeLen)
+	binary.BigEndian.PutUint32(lenBuf, uint32(len(hdrBytes)))
+	frameBuf.Write(lenBuf)
+	frameBuf.Write(hdrBytes)
+
+	snapDir := t.TempDir()
+	meta := makeRaftMeta("test-incremental-file", 100, 1, 1)
+	sink := NewSink(snapDir, meta, nil)
 	if err := sink.Open(); err != nil {
 		t.Fatalf("unexpected error opening sink: %s", err.Error())
 	}
 
-	// Write to the sink should return an error since the IncrementalFileSink does
-	// not support writing.
-	if _, err := sink.Write([]byte("test data")); err == nil {
-		t.Fatalf("expected error writing to IncrementalFileSink, got nil")
+	// Write the framed header to the sink.
+	if _, err := sink.Write(frameBuf.Bytes()); err != nil {
+		t.Fatalf("unexpected error writing header to sink: %s", err.Error())
+	}
+
+	// Additional writes should fail since no data follows an IncrementalFileSnapshot.
+	if _, err := sink.Write([]byte("extra data")); err == nil {
+		t.Fatalf("expected error writing extra data after incremental file header, got nil")
 	}
 
 	if err := sink.Close(); err != nil {
@@ -208,8 +229,9 @@ func Test_IncrementalFileSink(t *testing.T) {
 	}
 
 	// Installed WAL file should be byte-for-byte identical to source.
-	if !filesIdentical(srcPath, sink.WALFile()) {
-		t.Fatalf("expected file %s to be identical to source", sink.WALFile())
+	walFile := filepath.Join(snapDir, meta.ID, walfileName)
+	if !filesIdentical(srcPath, walFile) {
+		t.Fatalf("expected WAL file %s to be identical to source", walFile)
 	}
 }
 

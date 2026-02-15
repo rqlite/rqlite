@@ -43,10 +43,13 @@ func NewHeaderFromFile(path string, crc32 bool) (*proto.Header, error) {
 // NewSnapshotHeader creates a new SnapshotHeader for the given DB and WAL file paths.
 // dbPath may be empty, in which case no DB header is included. walPaths may be empty.
 //
-// This type enforces certain invariants:
+// This function enforces certain invariants:
 //   - At least one of dbPath or walPaths must be non-empty.
 //   - If only WALs are provided, then only one WAL is allowed. This represents an
 //     incremental snapshot.
+//
+// When dbPath is non-empty, the header payload is FullSnapshot. When only a single
+// WAL path is provided, the payload is IncrementalSnapshot.
 func NewSnapshotHeader(dbPath string, walPaths ...string) (*proto.SnapshotHeader, error) {
 	if dbPath == "" && len(walPaths) == 0 {
 		return nil, fmt.Errorf("at least one of dbPath or walPaths must be provided")
@@ -56,26 +59,55 @@ func NewSnapshotHeader(dbPath string, walPaths ...string) (*proto.SnapshotHeader
 		return nil, fmt.Errorf("when dbPath is empty, only one WAL path is allowed")
 	}
 
-	var err error
-	var dbHeader *proto.Header
-	if dbPath != "" {
-		dbHeader, err = NewHeaderFromFile(dbPath, true)
-		if err != nil {
-			return nil, err
-		}
-	}
 	sh := &proto.SnapshotHeader{
 		FormatVersion: 1,
-		DbHeader:      dbHeader,
 	}
-	for _, w := range walPaths {
-		wh, err := NewHeaderFromFile(w, true)
+
+	if dbPath != "" {
+		dbHeader, err := NewHeaderFromFile(dbPath, true)
 		if err != nil {
 			return nil, err
 		}
-		sh.WalHeaders = append(sh.WalHeaders, wh)
+		full := &proto.FullSnapshot{
+			DbHeader: dbHeader,
+		}
+		for _, w := range walPaths {
+			wh, err := NewHeaderFromFile(w, true)
+			if err != nil {
+				return nil, err
+			}
+			full.WalHeaders = append(full.WalHeaders, wh)
+		}
+		sh.Payload = &proto.SnapshotHeader_Full{Full: full}
+	} else {
+		wh, err := NewHeaderFromFile(walPaths[0], true)
+		if err != nil {
+			return nil, err
+		}
+		sh.Payload = &proto.SnapshotHeader_Incremental{
+			Incremental: &proto.IncrementalSnapshot{
+				WalHeader: wh,
+			},
+		}
 	}
 	return sh, nil
+}
+
+// NewIncrementalFileSnapshotHeader creates a new SnapshotHeader for a local
+// WAL file that should be moved (not streamed) into the snapshot directory.
+// No data follows this header when written to a Sink.
+func NewIncrementalFileSnapshotHeader(walPath string) (*proto.SnapshotHeader, error) {
+	if walPath == "" {
+		return nil, fmt.Errorf("walPath must be non-empty")
+	}
+	return &proto.SnapshotHeader{
+		FormatVersion: 1,
+		Payload: &proto.SnapshotHeader_IncrementalFile{
+			IncrementalFile: &proto.IncrementalFileSnapshot{
+				WalPath: walPath,
+			},
+		},
+	}, nil
 }
 
 // marshalSnapshotHeader marshals the SnapshotHeader to a byte slice.
@@ -102,11 +134,20 @@ func snapshotHeaderPayloadSize(s *proto.SnapshotHeader) (int64, error) {
 	}
 	var total int64 = int64(len(data))
 
-	if s.DbHeader != nil {
-		total += int64(s.DbHeader.SizeBytes)
-	}
-	for _, w := range s.WalHeaders {
-		total += int64(w.SizeBytes)
+	switch p := s.Payload.(type) {
+	case *proto.SnapshotHeader_Full:
+		if p.Full.DbHeader != nil {
+			total += int64(p.Full.DbHeader.SizeBytes)
+		}
+		for _, w := range p.Full.WalHeaders {
+			total += int64(w.SizeBytes)
+		}
+	case *proto.SnapshotHeader_Incremental:
+		if p.Incremental.WalHeader != nil {
+			total += int64(p.Incremental.WalHeader.SizeBytes)
+		}
+	case *proto.SnapshotHeader_IncrementalFile:
+		// No file data follows this header type.
 	}
 	return total, nil
 }

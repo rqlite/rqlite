@@ -41,10 +41,10 @@ const (
 	installPhaseDone
 )
 
-// FullSink streams snapshot bytes into files described by SnapshotHeader.
+// FullSink streams snapshot bytes into files described by a FullSnapshot header.
 type FullSink struct {
 	dir    string
-	header *proto.SnapshotHeader
+	header *proto.FullSnapshot
 
 	phase    installPhase
 	walIndex int
@@ -59,7 +59,7 @@ type FullSink struct {
 }
 
 // NewFullSink creates a new FullSink object.
-func NewFullSink(dir string, hdr *proto.SnapshotHeader) *FullSink {
+func NewFullSink(dir string, hdr *proto.FullSnapshot) *FullSink {
 	s := &FullSink{
 		dir:    dir,
 		header: hdr,
@@ -71,7 +71,6 @@ func NewFullSink(dir string, hdr *proto.SnapshotHeader) *FullSink {
 		s.walFiles = append(s.walFiles, walPath)
 	}
 	return s
-
 }
 
 // Open opens the sink for writing.

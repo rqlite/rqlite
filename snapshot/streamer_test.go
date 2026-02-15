@@ -57,19 +57,45 @@ func Test_NewSnapshotHeader(t *testing.T) {
 	tmpWALFile1 := mustWriteToTempFile(t, []byte("WAL Content 1"))
 	tmpWALFile2 := mustWriteToTempFile(t, []byte("WAL Content 2"))
 
-	if _, err := NewSnapshotHeader(tmpDBFile); err != nil {
+	// DB only → FullSnapshot
+	hdr, err := NewSnapshotHeader(tmpDBFile)
+	if err != nil {
 		t.Fatalf("NewSnapshotHeader failed with single DB file: %v", err)
 	}
-	if _, err := NewSnapshotHeader(tmpDBFile, tmpWALFile1); err != nil {
-		t.Fatalf("NewSnapshotHeader failed with DB and single WAL file: %v", err)
-	}
-	if _, err := NewSnapshotHeader(tmpDBFile, tmpWALFile1, tmpWALFile2); err != nil {
-		t.Fatalf("NewSnapshotHeader failed with DB and multiple WAL files: %v", err)
-	}
-	if _, err := NewSnapshotHeader("", tmpWALFile1); err != nil {
-		t.Fatalf("NewSnapshotHeader failed with single WAL file: %v", err)
+	if hdr.GetFull() == nil {
+		t.Fatalf("Expected Full payload for DB-only header")
 	}
 
+	// DB + single WAL → FullSnapshot
+	hdr, err = NewSnapshotHeader(tmpDBFile, tmpWALFile1)
+	if err != nil {
+		t.Fatalf("NewSnapshotHeader failed with DB and single WAL file: %v", err)
+	}
+	if hdr.GetFull() == nil {
+		t.Fatalf("Expected Full payload for DB+WAL header")
+	}
+
+	// DB + multiple WALs → FullSnapshot
+	hdr, err = NewSnapshotHeader(tmpDBFile, tmpWALFile1, tmpWALFile2)
+	if err != nil {
+		t.Fatalf("NewSnapshotHeader failed with DB and multiple WAL files: %v", err)
+	}
+	if full := hdr.GetFull(); full == nil {
+		t.Fatalf("Expected Full payload for DB+WALs header")
+	} else if len(full.WalHeaders) != 2 {
+		t.Fatalf("Expected 2 WAL headers, got %d", len(full.WalHeaders))
+	}
+
+	// Single WAL → IncrementalSnapshot
+	hdr, err = NewSnapshotHeader("", tmpWALFile1)
+	if err != nil {
+		t.Fatalf("NewSnapshotHeader failed with single WAL file: %v", err)
+	}
+	if hdr.GetIncremental() == nil {
+		t.Fatalf("Expected Incremental payload for WAL-only header")
+	}
+
+	// Multiple WALs without DB → error
 	if _, err := NewSnapshotHeader("", tmpWALFile1, tmpWALFile2); err == nil {
 		t.Fatalf("Expected error when dbPath is empty and multiple WAL files are provided, got nil")
 	}
@@ -162,13 +188,13 @@ func runSnapshotStreamerEndToEnd(t *testing.T, dbData string, walDatas []string)
 		t.Fatalf("Failed to unmarshal header: %v", err)
 	}
 
-	// Read DB payload (if present).
-	if dbData != "" {
-		if header.DbHeader == nil {
-			t.Fatalf("Expected DbHeader, got nil")
+	// Read payloads based on header type.
+	if full := header.GetFull(); full != nil {
+		if dbData == "" {
+			t.Fatalf("Got Full payload but expected no DB data")
 		}
 
-		dbBuf := make([]byte, header.DbHeader.SizeBytes)
+		dbBuf := make([]byte, full.DbHeader.SizeBytes)
 		n, err = io.ReadFull(streamer, dbBuf)
 		if err != nil {
 			t.Fatalf("Failed to read DB data: %v", err)
@@ -178,20 +204,12 @@ func runSnapshotStreamerEndToEnd(t *testing.T, dbData string, walDatas []string)
 		if string(dbBuf) != dbData {
 			t.Fatalf("DB data does not match expected content")
 		}
-	} else {
-		if header.DbHeader != nil {
-			t.Fatalf("Expected DbHeader to be nil")
-		}
-	}
 
-	// Read WAL payloads (if present).
-	if len(walDatas) != 0 {
-		if len(header.WalHeaders) != len(walDatas) {
-			t.Fatalf("Expected %d WAL headers, got %d", len(walDatas), len(header.WalHeaders))
+		if len(full.WalHeaders) != len(walDatas) {
+			t.Fatalf("Expected %d WAL headers, got %d", len(walDatas), len(full.WalHeaders))
 		}
-
 		for i, expected := range walDatas {
-			walBuf := make([]byte, header.WalHeaders[i].SizeBytes)
+			walBuf := make([]byte, full.WalHeaders[i].SizeBytes)
 			n, err = io.ReadFull(streamer, walBuf)
 			if err != nil {
 				t.Fatalf("Failed to read WAL data %d: %v", i, err)
@@ -202,10 +220,26 @@ func runSnapshotStreamerEndToEnd(t *testing.T, dbData string, walDatas []string)
 				t.Fatalf("WAL data %d does not match expected content", i)
 			}
 		}
-	} else {
-		if len(header.WalHeaders) != 0 {
-			t.Fatalf("Expected 0 WAL headers, got %d", len(header.WalHeaders))
+	} else if inc := header.GetIncremental(); inc != nil {
+		if dbData != "" {
+			t.Fatalf("Got Incremental payload but expected DB data")
 		}
+		if len(walDatas) != 1 {
+			t.Fatalf("Expected exactly 1 WAL for Incremental, got %d", len(walDatas))
+		}
+
+		walBuf := make([]byte, inc.WalHeader.SizeBytes)
+		n, err = io.ReadFull(streamer, walBuf)
+		if err != nil {
+			t.Fatalf("Failed to read WAL data: %v", err)
+		}
+		totalRead += n
+
+		if string(walBuf) != walDatas[0] {
+			t.Fatalf("WAL data does not match expected content")
+		}
+	} else {
+		t.Fatalf("Unexpected payload type in header")
 	}
 
 	// Ensure EOF.
