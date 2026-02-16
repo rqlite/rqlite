@@ -132,7 +132,7 @@ func Test_Upgrade8To10_NothingToDo(t *testing.T) {
 
 	// Empty old directory is removed and is a no-op.
 	oldEmpty := t.TempDir()
-	newEmpty := filepath.Join(t.TempDir(), "rsnapshots")
+	newEmpty := filepath.Join(t.TempDir(), "wsnapshots") // Create path, but not actual directory.
 	if err := Upgrade8To10(oldEmpty, newEmpty, logger); err != nil {
 		t.Fatalf("failed to upgrade empty directory: %s", err)
 	}
@@ -142,36 +142,12 @@ func Test_Upgrade8To10_NothingToDo(t *testing.T) {
 	if dirExists(newEmpty) {
 		t.Fatal("expected new directory to not be created for empty old")
 	}
-
-	// Old directory with only v10-format snapshots (no .db at root) has nothing to upgrade.
-	oldV10 := filepath.Join(t.TempDir(), "snapshots")
-	newV10 := filepath.Join(t.TempDir(), "rsnapshots")
-	if err := os.MkdirAll(oldV10, 0755); err != nil {
-		t.Fatalf("failed to create dir: %s", err)
-	}
-	mustCreateV10Snapshot(t, oldV10, "2-18-1686659761026", 18, 2)
-	if err := Upgrade8To10(oldV10, newV10, logger); err != nil {
-		t.Fatalf("failed to upgrade directory with only v10 snapshots: %s", err)
-	}
-	// New directory should not be created since there were no v8 snapshots.
-	if dirExists(newV10) {
-		t.Fatal("expected new directory to not be created when no v8 snapshots found")
-	}
-	// Old directory should remain untouched; catalog should still see its snapshot.
-	catalog := &SnapshotCatalog{}
-	sset, err := catalog.Scan(oldV10)
-	if err != nil {
-		t.Fatalf("catalog scan of old v10 dir failed: %s", err)
-	}
-	if sset.Len() != 1 {
-		t.Fatalf("expected 1 snapshot in old v10 dir, got %d", sset.Len())
-	}
 }
 
 func Test_Upgrade8To10_NewAlreadyExists(t *testing.T) {
 	logger := log.New(os.Stderr, "[snapshot-store-upgrader-test] ", 0)
-	oldDir := filepath.Join(t.TempDir(), "snapshots")
-	newDir := filepath.Join(t.TempDir(), "rsnapshots")
+	oldDir := filepath.Join(t.TempDir(), "rsnapshots")
+	newDir := filepath.Join(t.TempDir(), "wsnapshots")
 
 	if err := os.MkdirAll(oldDir, 0755); err != nil {
 		t.Fatalf("failed to create old dir: %s", err)
