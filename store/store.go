@@ -2676,11 +2676,8 @@ func (s *Store) fsmSnapshot() (fSnap raft.FSMSnapshot, retErr error) {
 			stats.Add(numSnapshotsFull, 1)
 			s.numFullSnapshots++
 		} else {
-			streamer, err := snapshot.NewSnapshotStreamer("", walTmpFD.Name())
+			streamer, err := snapshot.NewSnapshotPathStreamer(walTmpFD.Name())
 			if err != nil {
-				return nil, err
-			}
-			if err := streamer.Open(); err != nil {
 				return nil, err
 			}
 			fsmSnapshot = snapshot.NewStateReader(streamer)
