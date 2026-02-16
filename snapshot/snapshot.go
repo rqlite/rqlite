@@ -444,13 +444,13 @@ func (c *SnapshotCatalog) loadSnapshot(path string, id string) (*Snapshot, error
 		raftMeta: meta,
 	}
 
-	dataDBPath := filepath.Join(path, "data.db")
-	dataWALPath := filepath.Join(path, "data.wal")
+	dataDBPath := filepath.Join(path, dbfileName)
+	dataWALPath := filepath.Join(path, walfileName)
 	dataNoopPath := filepath.Join(path, noopfileName)
 	if fileExists(dataDBPath) {
 		snapshot.typ = SnapshotTypeFull
 		if !db.IsValidSQLiteFile(dataDBPath) {
-			return nil, fmt.Errorf("data.db in snapshot directory %q is not a valid SQLite database file", path)
+			return nil, fmt.Errorf("%s in snapshot directory %q is not a valid SQLite database file", dbfileName, path)
 		}
 	} else if fileExists(dataWALPath) {
 		snapshot.typ = SnapshotTypeIncremental
