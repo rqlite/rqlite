@@ -574,16 +574,16 @@ func (s *Store) Open() (retErr error) {
 
 	// Upgrade any preexisting snapshots.
 	old7SnapshotDir := filepath.Join(s.raftDir, "snapshots")
-	if err := snapshot.Upgrade7To8(old7SnapshotDir, "rsnapshots", s.logger); err != nil {
+	old8SnapshotDir := filepath.Join(s.raftDir, "rsnapshots")
+	if err := snapshot.Upgrade7To8(old7SnapshotDir, old8SnapshotDir, s.logger); err != nil {
 		return fmt.Errorf("failed to upgrade v7 snapshots: %s", err)
 	}
-	old8SnapshotDir := filepath.Join(s.raftDir, "rsnapshots")
 	if err := snapshot.Upgrade8To10(old8SnapshotDir, s.snapshotDir, s.logger); err != nil {
 		return fmt.Errorf("failed to upgrade v8 snapshots: %s", err)
 	}
 
 	// Create store for the Snapshots.
-	snapshotStore, err := snapshot.NewStore(filepath.Join(s.snapshotDir))
+	snapshotStore, err := snapshot.NewStore(s.snapshotDir)
 	if err != nil {
 		return fmt.Errorf("failed to create snapshot store: %s", err)
 	}

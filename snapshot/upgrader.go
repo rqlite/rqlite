@@ -165,7 +165,7 @@ func Upgrade7To8(old, new string, logger *log.Logger) (retErr error) {
 	if err := removeDirSync(old); err != nil {
 		return fmt.Errorf("failed to remove old snapshot directory %s: %s", old, err)
 	}
-	logger.Printf("upgraded snapshot directory %s to %s", old, new)
+	logger.Printf("upgraded v7 snapshot directory %s to %s", old, new)
 	stats.Add(upgradeOk, 1)
 
 	return nil
@@ -280,7 +280,6 @@ func Upgrade8To10(old, new string, logger *log.Logger) (retErr error) {
 	if !db.IsValidSQLiteFile(newDBPath) {
 		return fmt.Errorf("migrated SQLite file %s is not valid", newDBPath)
 	}
-	logger.Printf("copied v8 snapshot database %s to %s", oldDBPath, newDBPath)
 
 	// Move the upgraded snapshot directory into place.
 	if err := os.Rename(newTmpDir, new); err != nil {
@@ -294,7 +293,7 @@ func Upgrade8To10(old, new string, logger *log.Logger) (retErr error) {
 	if err := removeDirSync(old); err != nil {
 		return fmt.Errorf("failed to remove old snapshot directory %s: %s", old, err)
 	}
-	logger.Printf("upgraded snapshot directory %s to %s", old, new)
+	logger.Printf("upgraded v8 snapshot directory %s to %s", old, new)
 	stats.Add(upgradeOk, 1)
 
 	return nil

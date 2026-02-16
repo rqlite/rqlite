@@ -1333,7 +1333,6 @@ func Test_SingleNodeUpgrades_NoSnapshots(t *testing.T) {
 // Test_SingleNodeUpgrades_Snapshots upgrade from a data created by earlier releases, but which
 // do have snapshots.
 func Test_SingleNodeUpgrades_Snapshots(t *testing.T) {
-	t.Skip("skip until snapshot upgrader is updated for new format")
 	versions := []string{
 		"v7.20.3-data-with-snapshots",
 	}
