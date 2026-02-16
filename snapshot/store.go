@@ -66,14 +66,6 @@ func ResetStats() {
 	stats.Add(snapshotOpenMRSWFail, 0)
 }
 
-type SnapshotMetaType int
-
-// SnapshotMetaType is an enum
-const (
-	SnapshotMetaTypeFull = iota
-	SnapshotMetaTypeIncremental
-)
-
 // LockingSink is a wrapper around a Sink holds the MSRW lock
 // while the Sink is in use.
 type LockingSink struct {

@@ -78,8 +78,6 @@ const (
 	SnapshotTypeIncremental
 
 	// SnapshotTypeNoop indicates a snapshot directory containing data.noop.
-	// A noop snapshot is created when a snapshot is triggered but no WAL
-	// data is available. It contributes no files to ResolveFiles.
 	SnapshotTypeNoop
 )
 
