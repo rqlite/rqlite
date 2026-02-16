@@ -76,6 +76,11 @@ const (
 
 	// SnapshotTypeIncremental indicates a snapshot directory containing data.wal.
 	SnapshotTypeIncremental
+
+	// SnapshotTypeNoop indicates a snapshot directory containing data.noop.
+	// A noop snapshot is created when a snapshot is triggered but no WAL
+	// data is available. It contributes no files to ResolveFiles.
+	SnapshotTypeNoop
 )
 
 // SnapshotSet represents an ordered collection of snapshots from a single Store
@@ -313,8 +318,8 @@ func (ss SnapshotSet) ValidateIncrementalChain() error {
 
 	for i := fullIdx + 1; i < len(ss.items); i++ {
 		snap := ss.items[i]
-		if snap.typ != SnapshotTypeIncremental {
-			return fmt.Errorf("snapshot %s is not incremental after newest full snapshot %s", snap.id, fullID)
+		if snap.typ != SnapshotTypeIncremental && snap.typ != SnapshotTypeNoop {
+			return fmt.Errorf("snapshot %s is not incremental or noop after newest full snapshot %s", snap.id, fullID)
 		}
 	}
 	return nil
@@ -336,9 +341,10 @@ func (ss SnapshotSet) ResolveFiles(id string) (dbFile string, walFiles []string,
 		return filepath.Join(snap.path, dbfileName), nil, nil
 	}
 
-	// The requested snapshot is incremental. Walk backward to find the
+	// The requested snapshot is incremental or noop. Walk backward to find the
 	// nearest full snapshot, add that file to the list, and then walk forward again to
-	// add all incremental snapshots WAL files up to and including the requested snapshot.
+	// add all incremental snapshots' WAL files up to and including the requested snapshot.
+	// Noop snapshots contribute no WAL files.
 	fullIdx := -1
 	for i := idx - 1; i >= 0; i-- {
 		if ss.items[i].typ == SnapshotTypeFull {
@@ -347,12 +353,15 @@ func (ss SnapshotSet) ResolveFiles(id string) (dbFile string, walFiles []string,
 		}
 	}
 	if fullIdx < 0 {
-		return "", nil, fmt.Errorf("no full snapshot found before incremental snapshot %s", id)
+		return "", nil, fmt.Errorf("no full snapshot found before snapshot %s", id)
 	}
 
 	dbFile = filepath.Join(ss.items[fullIdx].path, dbfileName)
 	for i := fullIdx + 1; i <= idx; i++ {
-		walFiles = append(walFiles, filepath.Join(ss.items[i].path, walfileName))
+		if ss.items[i].typ == SnapshotTypeIncremental {
+			walFiles = append(walFiles, filepath.Join(ss.items[i].path, walfileName))
+		}
+		// Noop snapshots contribute no WAL files.
 	}
 	return dbFile, walFiles, nil
 }
@@ -437,6 +446,7 @@ func (c *SnapshotCatalog) loadSnapshot(path string, id string) (*Snapshot, error
 
 	dataDBPath := filepath.Join(path, "data.db")
 	dataWALPath := filepath.Join(path, "data.wal")
+	dataNoopPath := filepath.Join(path, noopfileName)
 	if fileExists(dataDBPath) {
 		snapshot.typ = SnapshotTypeFull
 		if !db.IsValidSQLiteFile(dataDBPath) {
@@ -447,6 +457,8 @@ func (c *SnapshotCatalog) loadSnapshot(path string, id string) (*Snapshot, error
 		if !db.IsValidSQLiteWALFile(dataWALPath) {
 			return nil, fmt.Errorf("data.wal in snapshot directory %q is not a valid SQLite WAL file", path)
 		}
+	} else if fileExists(dataNoopPath) {
+		snapshot.typ = SnapshotTypeNoop
 	} else {
 		return nil, fmt.Errorf("missing data file in snapshot directory %q", path)
 	}

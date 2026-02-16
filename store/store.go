@@ -156,6 +156,7 @@ const (
 	numWALSnapshotsFailed             = "num_wal_snapshots_failed"
 	numSnapshotsFull                  = "num_snapshots_full"
 	numSnapshotsIncremental           = "num_snapshots_incremental"
+	numSnapshotsIncrementalNoop       = "num_snapshots_incremental_noop"
 	numFullCheckpointFailed           = "num_full_checkpoint_failed"
 	numWALCheckpointTruncateFailed    = "num_wal_checkpoint_truncate_failed"
 	numWALCheckpointIncomplete        = "num_wal_checkpoint_incomplete"
@@ -225,6 +226,7 @@ func ResetStats() {
 	stats.Add(numWALSnapshotsFailed, 0)
 	stats.Add(numSnapshotsFull, 0)
 	stats.Add(numSnapshotsIncremental, 0)
+	stats.Add(numSnapshotsIncrementalNoop, 0)
 	stats.Add(numFullCheckpointFailed, 0)
 	stats.Add(numWALCheckpointTruncateFailed, 0)
 	stats.Add(numWALCheckpointIncomplete, 0)
@@ -2660,21 +2662,30 @@ func (s *Store) fsmSnapshot() (fSnap raft.FSMSnapshot, retErr error) {
 			stats.Get(snapshotCreateChkTruncateDuration).(*expvar.Int).Set(time.Since(chkTStartTime).Milliseconds())
 			stats.Get(snapshotPrecompactWALSize).(*expvar.Int).Set(walSzPre)
 			stats.Get(snapshotWALSize).(*expvar.Int).Set(walSzPost)
+
+			// When it comes to incremental snapshotting of WAL files, we pass the data to the Snapshot
+			// Store and Sink indirectly. We wrap its filepath in an io.Reader, not the file data. The
+			// Snapshotting system knows to check for this. If it finds a filepath in the io.Reader (as
+			// opposed to a reader returning actual file data, it will move the file from here to it.
+			streamer, err := snapshot.NewSnapshotPathStreamer(walTmpFD.Name())
+			if err != nil {
+				return nil, err
+			}
+			fsmSnapshot = snapshot.NewStateReader(streamer)
+			stats.Add(numSnapshotsIncremental, 1)
+		} else {
+			// No WAL data. We support this because Snapshotting the Raft system is supported even if there
+			// has been no changes to the database. Why? Well, in theory the Raft log could be full of
+			// cluster membership changes, and they don't change the database. This is just an example.
+			// The point is that store must be able to snapshot even if there have been no changes to the
+			// database, and that means supporting snapshots with no WAL data.
+			streamer, err := snapshot.NewSnapshotNoopStreamer()
+			if err != nil {
+				return nil, err
+			}
+			fsmSnapshot = snapshot.NewStateReader(streamer)
+			stats.Add(numSnapshotsIncrementalNoop, 1)
 		}
-		name := ""
-		if walTmpFD != nil {
-			name = walTmpFD.Name()
-		}
-		// When it comes to incremental snapshotting of WAL files, we pass the data to the Snapshot
-		// Store and Sink indirectly. We wrap its filepath in an io.Reader, not the file data. The
-		// Snapshotting system knows to check for this. If it finds a filepath in the io.Reader (as
-		// opposed to a reader returning actual file data, it will move the file from here to it.
-		streamer, err := snapshot.NewSnapshotPathStreamer(name)
-		if err != nil {
-			return nil, err
-		}
-		fsmSnapshot = snapshot.NewStateReader(streamer)
-		stats.Add(numSnapshotsIncremental, 1)
 	}
 
 	stats.Add(numSnapshots, 1)

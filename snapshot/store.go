@@ -20,6 +20,7 @@ import (
 const (
 	dbfileName     = "data.db"
 	walfileName    = "data.wal"
+	noopfileName   = "data.noop"
 	metaFileName   = "meta.json"
 	tmpSuffix      = ".tmp"
 	fullNeededFile = "FULL_NEEDED"
@@ -440,11 +441,17 @@ func (s *Store) Reap() (int, int, error) {
 		// 1. Checkpoint all incremental WAL files into the full's DB.
 		//    WAL files reside in different directories; the executor
 		//    handles cross-directory moves during checkpointing.
+		//    Noop snapshots have no WAL files and are skipped.
 		var walFiles []string
 		for _, snap := range newerSet.All() {
+			if snap.typ == SnapshotTypeNoop {
+				continue
+			}
 			walFiles = append(walFiles, filepath.Join(snap.path, walfileName))
 		}
-		p.AddCheckpoint(filepath.Join(full.path, dbfileName), walFiles)
+		if len(walFiles) > 0 {
+			p.AddCheckpoint(filepath.Join(full.path, dbfileName), walFiles)
+		}
 		p.NCheckpointed = len(walFiles)
 
 		// 2. Remove all incremental snapshot dirs.

@@ -22,11 +22,14 @@ message IncrementalFileSnapshot {
   string wal_path = 1;
 }
 
+message NoopSnapshot {}
+
 message SnapshotHeader {
   uint32 format_version = 1;
   oneof payload {
     FullSnapshot full = 2;
     IncrementalSnapshot incremental = 3;
     IncrementalFileSnapshot incremental_file = 4;
+    NoopSnapshot noop = 5;
   }
 }

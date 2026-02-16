@@ -748,6 +748,214 @@ func Test_Store_Reap(t *testing.T) {
 	}
 }
 
+func Test_Store_OpenNoopSnapshot(t *testing.T) {
+	dir := t.TempDir()
+	store, err := NewStore(dir)
+	if err != nil {
+		t.Fatalf("Failed to create new store: %v", err)
+	}
+
+	fullID := "2-1017-1704807719996"
+	noopID := "2-1131-1704807720976"
+
+	// Create a full snapshot then a noop.
+	createSnapshotInStore(t, store, fullID, 1017, 2, 1, "testdata/db-and-wals/backup.db")
+	createNoopSnapshotInStore(t, store, noopID, 1131, 2, 1)
+	if exp, got := 2, store.Len(); exp != got {
+		t.Fatalf("Expected %d snapshots, got %d", exp, got)
+	}
+
+	// Open the noop snapshot — should resolve back to the full's DB.
+	meta, rc, err := store.Open(noopID)
+	if err != nil {
+		t.Fatalf("Failed to open noop snapshot: %v", err)
+	}
+	if meta.ID != noopID {
+		t.Fatalf("Expected meta ID %s, got %s", noopID, meta.ID)
+	}
+
+	buf := &bytes.Buffer{}
+	if _, err := io.Copy(buf, rc); err != nil {
+		t.Fatalf("Failed to read snapshot data: %v", err)
+	}
+	if err := rc.Close(); err != nil {
+		t.Fatalf("Failed to close snapshot reader: %v", err)
+	}
+
+	// The streamed data should be a full snapshot containing just the DB.
+	dbPath, walPaths := persistStreamerData(t, buf)
+	if len(walPaths) != 0 {
+		t.Fatalf("Expected 0 WAL files, got %d", len(walPaths))
+	}
+	if !filesIdentical(dbPath, "testdata/db-and-wals/backup.db") {
+		t.Fatalf("Database file in opened noop snapshot does not match source")
+	}
+}
+
+func Test_Store_OpenNoopSnapshot_WithIncremental(t *testing.T) {
+	dir := t.TempDir()
+	store, err := NewStore(dir)
+	if err != nil {
+		t.Fatalf("Failed to create new store: %v", err)
+	}
+
+	fullID := "2-1017-1704807719996"
+	incID := "2-1131-1704807720976"
+	noopID := "2-1200-1704807721976"
+
+	// Create full -> incremental -> noop.
+	createSnapshotInStore(t, store, fullID, 1017, 2, 1, "testdata/db-and-wals/backup.db")
+	createSnapshotInStore(t, store, incID, 1131, 2, 1, "", "testdata/db-and-wals/wal-00")
+	createNoopSnapshotInStore(t, store, noopID, 1200, 2, 1)
+	if exp, got := 3, store.Len(); exp != got {
+		t.Fatalf("Expected %d snapshots, got %d", exp, got)
+	}
+
+	// Open the noop — should get the full's DB plus the incremental's WAL.
+	meta, rc, err := store.Open(noopID)
+	if err != nil {
+		t.Fatalf("Failed to open noop snapshot: %v", err)
+	}
+	if meta.ID != noopID {
+		t.Fatalf("Expected meta ID %s, got %s", noopID, meta.ID)
+	}
+
+	buf := &bytes.Buffer{}
+	if _, err := io.Copy(buf, rc); err != nil {
+		t.Fatalf("Failed to read snapshot data: %v", err)
+	}
+	if err := rc.Close(); err != nil {
+		t.Fatalf("Failed to close snapshot reader: %v", err)
+	}
+
+	dbPath, walPaths := persistStreamerData(t, buf)
+	if len(walPaths) != 1 {
+		t.Fatalf("Expected 1 WAL file, got %d", len(walPaths))
+	}
+
+	// The DB should be the full's backup.db, and the WAL should be wal-00.
+	if !filesIdentical(dbPath, "testdata/db-and-wals/backup.db") {
+		t.Fatalf("Database file does not match source backup.db")
+	}
+	if !filesIdentical(walPaths[0], "testdata/db-and-wals/wal-00") {
+		t.Fatalf("WAL file does not match source wal-00")
+	}
+}
+
+func Test_Store_Reap_WithNoops(t *testing.T) {
+	dir := t.TempDir()
+	store, err := NewStore(dir)
+	if err != nil {
+		t.Fatalf("Failed to create new store: %v", err)
+	}
+
+	// Create a full snapshot, then an incremental, then a noop.
+	createSnapshotInStore(t, store, "2-1017-1704807719996", 1017, 2, 1, "testdata/db-and-wals/backup.db")
+	createSnapshotInStore(t, store, "2-1131-1704807720976", 1131, 2, 1, "", "testdata/db-and-wals/wal-00")
+	createNoopSnapshotInStore(t, store, "2-1200-1704807721976", 1200, 2, 1)
+
+	if exp, got := 3, store.Len(); exp != got {
+		t.Fatalf("Expected %d snapshots, got %d", exp, got)
+	}
+
+	// Reap should consolidate: checkpoint the WAL from the incremental,
+	// skip the noop (no WAL), remove both newer dirs.
+	n, c, err := store.Reap()
+	if err != nil {
+		t.Fatalf("Failed to reap snapshots: %v", err)
+	}
+	if exp, got := 2, n; exp != got {
+		t.Fatalf("Expected %d snapshots reaped, got %d", exp, got)
+	}
+	if exp, got := 1, c; exp != got {
+		t.Fatalf("Expected %d checkpoints made, got %d", exp, got)
+	}
+
+	snaps := mustListSnapshots(t, store)
+	if len(snaps) != 1 {
+		t.Fatalf("Expected 1 snapshot after reap, got %d", len(snaps))
+	}
+
+	// Verify the remaining snapshot is correct — should have the WAL checkpointed.
+	_, rc, err := store.Open(snaps[0].ID)
+	if err != nil {
+		t.Fatalf("Failed to open snapshot: %v", err)
+	}
+	buf := &bytes.Buffer{}
+	if _, err := io.Copy(buf, rc); err != nil {
+		t.Fatalf("Failed to read snapshot data: %v", err)
+	}
+	if err := rc.Close(); err != nil {
+		t.Fatalf("Failed to close snapshot reader: %v", err)
+	}
+
+	dbPath, walPaths := persistStreamerData(t, buf)
+	if len(walPaths) != 0 {
+		t.Fatalf("Expected 0 WAL files, got %d", len(walPaths))
+	}
+
+	rows := mustQueryDB(t, dbPath, "SELECT COUNT(*) FROM foo")
+	if exp, got := `[{"columns":["COUNT(*)"],"types":["integer"],"values":[[1]]}]`, rows; exp != got {
+		t.Fatalf("unexpected results for query exp: %s got: %s", exp, got)
+	}
+}
+
+func Test_Store_Reap_OnlyNoops(t *testing.T) {
+	dir := t.TempDir()
+	store, err := NewStore(dir)
+	if err != nil {
+		t.Fatalf("Failed to create new store: %v", err)
+	}
+
+	// Create a full snapshot followed by only noop snapshots.
+	createSnapshotInStore(t, store, "2-1017-1704807719996", 1017, 2, 1, "testdata/db-and-wals/backup.db")
+	createNoopSnapshotInStore(t, store, "2-1131-1704807720976", 1131, 2, 1)
+	createNoopSnapshotInStore(t, store, "2-1200-1704807721976", 1200, 2, 1)
+
+	if exp, got := 3, store.Len(); exp != got {
+		t.Fatalf("Expected %d snapshots, got %d", exp, got)
+	}
+
+	// Reap should remove the noop dirs, no checkpointing needed.
+	n, c, err := store.Reap()
+	if err != nil {
+		t.Fatalf("Failed to reap snapshots: %v", err)
+	}
+	if exp, got := 2, n; exp != got {
+		t.Fatalf("Expected %d snapshots reaped, got %d", exp, got)
+	}
+	if exp, got := 0, c; exp != got {
+		t.Fatalf("Expected %d checkpoints made, got %d", exp, got)
+	}
+
+	snaps := mustListSnapshots(t, store)
+	if len(snaps) != 1 {
+		t.Fatalf("Expected 1 snapshot after reap, got %d", len(snaps))
+	}
+
+	// Verify the remaining snapshot is the original full, unchanged.
+	_, rc, err := store.Open(snaps[0].ID)
+	if err != nil {
+		t.Fatalf("Failed to open snapshot: %v", err)
+	}
+	buf := &bytes.Buffer{}
+	if _, err := io.Copy(buf, rc); err != nil {
+		t.Fatalf("Failed to read snapshot data: %v", err)
+	}
+	if err := rc.Close(); err != nil {
+		t.Fatalf("Failed to close snapshot reader: %v", err)
+	}
+
+	dbPath, walPaths := persistStreamerData(t, buf)
+	if len(walPaths) != 0 {
+		t.Fatalf("Expected 0 WAL files, got %d", len(walPaths))
+	}
+
+	if !filesIdentical(dbPath, "testdata/db-and-wals/backup.db") {
+		t.Fatalf("Database file in snapshot does not match source")
+	}
+}
+
 func Test_Store_Check_RemovesTmpDirs(t *testing.T) {
 	dir := t.TempDir()
 	store, err := NewStore(dir)
@@ -950,6 +1158,38 @@ func createSnapshotInStore(t *testing.T, store *Store, id string, index, term, c
 	_, err = io.Copy(sink, streamer)
 	if err != nil {
 		t.Fatalf("Failed to copy snapshot data to sink: %v", err)
+	}
+
+	if err := sink.Close(); err != nil {
+		t.Fatalf("Failed to close sink: %v", err)
+	}
+}
+
+func createNoopSnapshotInStore(t *testing.T, store *Store, id string, index, term, cfgIndex uint64) {
+	t.Helper()
+
+	sink := NewSink(store.Dir(), makeRaftMeta(id, index, term, cfgIndex), store)
+	if sink == nil {
+		t.Fatalf("Failed to create new sink")
+	}
+	if err := sink.Open(); err != nil {
+		t.Fatalf("Failed to open sink: %v", err)
+	}
+
+	// Make the noop streamer.
+	streamer, err := NewSnapshotNoopStreamer()
+	if err != nil {
+		t.Fatalf("Failed to create SnapshotNoopStreamer: %v", err)
+	}
+	defer func() {
+		if err := streamer.Close(); err != nil {
+			t.Fatalf("Failed to close SnapshotNoopStreamer: %v", err)
+		}
+	}()
+
+	// Copy from streamer into sink.
+	if _, err = io.Copy(sink, streamer); err != nil {
+		t.Fatalf("Failed to copy noop snapshot data to sink: %v", err)
 	}
 
 	if err := sink.Close(); err != nil {

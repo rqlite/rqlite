@@ -1159,6 +1159,146 @@ func TestSnapshotSet_ResolveFiles(t *testing.T) {
 	})
 }
 
+// Test SnapshotCatalog.Scan recognizes noop snapshots
+func Test_SnapshotCatalog_Scan_Noop(t *testing.T) {
+	rootDir := t.TempDir()
+	catalog := &SnapshotCatalog{}
+	mustCreateSnapshotNoop(t, rootDir, "snapshot-1", 1, 1)
+
+	ss, err := catalog.Scan(rootDir)
+	if err != nil {
+		t.Fatalf("Scan() returned error: %v", err)
+	}
+	if ss.Len() != 1 {
+		t.Fatalf("Scan() returned %d snapshots, want 1", ss.Len())
+	}
+
+	snap := ss.All()[0]
+	if snap.typ != SnapshotTypeNoop {
+		t.Fatalf("snapshot type = %v, want %v", snap.typ, SnapshotTypeNoop)
+	}
+}
+
+// Test ValidateIncrementalChain allows noop snapshots after full
+func Test_SnapshotSet_ValidateIncrementalChain_WithNoop(t *testing.T) {
+	t.Run("full then noop", func(t *testing.T) {
+		items := []*Snapshot{
+			{id: "snapshot-1", typ: SnapshotTypeFull, raftMeta: &raft.SnapshotMeta{Term: 1, Index: 1}},
+			{id: "snapshot-2", typ: SnapshotTypeNoop, raftMeta: &raft.SnapshotMeta{Term: 1, Index: 2}},
+		}
+		ss := SnapshotSet{items: items}
+		if err := ss.ValidateIncrementalChain(); err != nil {
+			t.Fatalf("ValidateIncrementalChain() returned unexpected error: %v", err)
+		}
+	})
+
+	t.Run("full then incremental then noop", func(t *testing.T) {
+		items := []*Snapshot{
+			{id: "snapshot-1", typ: SnapshotTypeFull, raftMeta: &raft.SnapshotMeta{Term: 1, Index: 1}},
+			{id: "snapshot-2", typ: SnapshotTypeIncremental, raftMeta: &raft.SnapshotMeta{Term: 1, Index: 2}},
+			{id: "snapshot-3", typ: SnapshotTypeNoop, raftMeta: &raft.SnapshotMeta{Term: 1, Index: 3}},
+		}
+		ss := SnapshotSet{items: items}
+		if err := ss.ValidateIncrementalChain(); err != nil {
+			t.Fatalf("ValidateIncrementalChain() returned unexpected error: %v", err)
+		}
+	})
+
+	t.Run("full then noop then incremental", func(t *testing.T) {
+		items := []*Snapshot{
+			{id: "snapshot-1", typ: SnapshotTypeFull, raftMeta: &raft.SnapshotMeta{Term: 1, Index: 1}},
+			{id: "snapshot-2", typ: SnapshotTypeNoop, raftMeta: &raft.SnapshotMeta{Term: 1, Index: 2}},
+			{id: "snapshot-3", typ: SnapshotTypeIncremental, raftMeta: &raft.SnapshotMeta{Term: 1, Index: 3}},
+		}
+		ss := SnapshotSet{items: items}
+		if err := ss.ValidateIncrementalChain(); err != nil {
+			t.Fatalf("ValidateIncrementalChain() returned unexpected error: %v", err)
+		}
+	})
+}
+
+// Test ResolveFiles with noop snapshots
+func Test_SnapshotSet_ResolveFiles_WithNoop(t *testing.T) {
+	t.Run("full then noop resolves to just db", func(t *testing.T) {
+		rootDir := t.TempDir()
+		catalog := &SnapshotCatalog{}
+		mustCreateSnapshotFull(t, rootDir, "snap-1", 1, 1)
+		mustCreateSnapshotNoop(t, rootDir, "snap-2", 2, 1)
+
+		ss, err := catalog.Scan(rootDir)
+		if err != nil {
+			t.Fatalf("Scan() returned error: %v", err)
+		}
+
+		dbFile, walFiles, err := ss.ResolveFiles("snap-2")
+		if err != nil {
+			t.Fatalf("ResolveFiles() returned error: %v", err)
+		}
+		if exp := filepath.Join(rootDir, "snap-1", dbfileName); dbFile != exp {
+			t.Fatalf("dbFile = %q, want %q", dbFile, exp)
+		}
+		if len(walFiles) != 0 {
+			t.Fatalf("expected 0 WAL files for noop, got %d", len(walFiles))
+		}
+	})
+
+	t.Run("full then incremental then noop", func(t *testing.T) {
+		rootDir := t.TempDir()
+		catalog := &SnapshotCatalog{}
+		mustCreateSnapshotFull(t, rootDir, "snap-1", 1, 1)
+		mustCreateSnapshotInc(t, rootDir, "snap-2", 2, 1)
+		mustCreateSnapshotNoop(t, rootDir, "snap-3", 3, 1)
+
+		ss, err := catalog.Scan(rootDir)
+		if err != nil {
+			t.Fatalf("Scan() returned error: %v", err)
+		}
+
+		// Resolve the noop — should get DB from full and WAL from incremental.
+		dbFile, walFiles, err := ss.ResolveFiles("snap-3")
+		if err != nil {
+			t.Fatalf("ResolveFiles() returned error: %v", err)
+		}
+		if exp := filepath.Join(rootDir, "snap-1", dbfileName); dbFile != exp {
+			t.Fatalf("dbFile = %q, want %q", dbFile, exp)
+		}
+		if len(walFiles) != 1 {
+			t.Fatalf("expected 1 WAL file, got %d", len(walFiles))
+		}
+		if exp := filepath.Join(rootDir, "snap-2", walfileName); walFiles[0] != exp {
+			t.Fatalf("walFiles[0] = %q, want %q", walFiles[0], exp)
+		}
+	})
+
+	t.Run("full then noop then incremental", func(t *testing.T) {
+		rootDir := t.TempDir()
+		catalog := &SnapshotCatalog{}
+		mustCreateSnapshotFull(t, rootDir, "snap-1", 1, 1)
+		mustCreateSnapshotNoop(t, rootDir, "snap-2", 2, 1)
+		mustCreateSnapshotInc(t, rootDir, "snap-3", 3, 1)
+
+		ss, err := catalog.Scan(rootDir)
+		if err != nil {
+			t.Fatalf("Scan() returned error: %v", err)
+		}
+
+		// Resolve the incremental — should skip noop, get DB from full and WAL from incremental.
+		dbFile, walFiles, err := ss.ResolveFiles("snap-3")
+		if err != nil {
+			t.Fatalf("ResolveFiles() returned error: %v", err)
+		}
+		if exp := filepath.Join(rootDir, "snap-1", dbfileName); dbFile != exp {
+			t.Fatalf("dbFile = %q, want %q", dbFile, exp)
+		}
+		if len(walFiles) != 1 {
+			t.Fatalf("expected 1 WAL file, got %d", len(walFiles))
+		}
+		if exp := filepath.Join(rootDir, "snap-3", walfileName); walFiles[0] != exp {
+			t.Fatalf("walFiles[0] = %q, want %q", walFiles[0], exp)
+		}
+	})
+}
+
 func mustCopyFile(t *testing.T, src, dest string) {
 	t.Helper()
 	data, err := os.ReadFile(src)
@@ -1176,6 +1316,30 @@ func mustCreateSnapshotFull(t *testing.T, rootDir, snapshotID string, idx, term 
 
 func mustCreateSnapshotInc(t *testing.T, rootDir, snapshotID string, idx, term uint64) {
 	mustCreateSnapshot(t, rootDir, snapshotID, "testdata/db-and-wals/wal-00", walfileName, idx, term)
+}
+
+func mustCreateSnapshotNoop(t *testing.T, rootDir, snapshotID string, idx, term uint64) {
+	t.Helper()
+	snapshotDir := filepath.Join(rootDir, snapshotID)
+	if err := os.MkdirAll(snapshotDir, 0755); err != nil {
+		t.Fatalf("failed to create snapshot dir: %v", err)
+	}
+	// Create the data.noop sentinel file.
+	noopPath := filepath.Join(snapshotDir, noopfileName)
+	f, err := os.Create(noopPath)
+	if err != nil {
+		t.Fatalf("failed to create data.noop: %v", err)
+	}
+	f.Close()
+
+	meta := &raft.SnapshotMeta{
+		ID:    snapshotID,
+		Index: idx,
+		Term:  term,
+	}
+	if err := writeMeta(snapshotDir, meta); err != nil {
+		t.Fatalf("failed to write snapshot meta: %v", err)
+	}
 }
 
 func mustCreateSnapshot(t *testing.T, rootDir string, snapshotID, srcName, dstName string, idx, term uint64) {

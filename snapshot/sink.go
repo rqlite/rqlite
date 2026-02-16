@@ -47,6 +47,10 @@ type Sink struct {
 	// In this case, no data follows the header; the WAL file is moved on Close.
 	localWALPath string
 
+	// isNoop is set when the header indicates a NoopSnapshot.
+	// No data follows the header; a data.noop sentinel file is created on Close.
+	isNoop bool
+
 	fc fullController
 
 	logger *log.Logger
@@ -133,6 +137,22 @@ func (s *Sink) Write(p []byte) (n int, err error) {
 			}
 			s.localWALPath = p.IncrementalFile.WalPath
 			return n, nil
+		case *proto.SnapshotHeader_Noop:
+			if s.fc != nil {
+				fullNeeded, err := s.fc.FullNeeded()
+				if err != nil {
+					return n, err
+				}
+				if fullNeeded {
+					return n, fmt.Errorf("full snapshot needed before noop can be applied")
+				}
+			}
+			// No data follows this header type. Any leftover bytes are an error.
+			if s.buf.Len() > 0 {
+				return n, fmt.Errorf("unexpected data after noop header")
+			}
+			s.isNoop = true
+			return n, nil
 		default:
 			return n, fmt.Errorf("unrecognized snapshot header payload")
 		}
@@ -149,7 +169,10 @@ func (s *Sink) Write(p []byte) (n int, err error) {
 
 	// We have a header, just write directly to the underlying sink.
 	if s.sinkW == nil {
-		// IncrementalFile path — no data expected after header.
+		// IncrementalFile or Noop path — no data expected after header.
+		if s.isNoop {
+			return 0, fmt.Errorf("unexpected data after noop header")
+		}
 		return 0, fmt.Errorf("unexpected data after incremental file header")
 	}
 	return s.sinkW.Write(p)
@@ -162,12 +185,22 @@ func (s *Sink) Close() error {
 	}
 	s.opened = false
 
-	if s.sinkW == nil && s.localWALPath == "" {
+	if s.sinkW == nil && s.localWALPath == "" && !s.isNoop {
 		// Header was never fully received; clean up the temp directory.
 		return os.RemoveAll(s.snapTmpDirPath)
 	}
 
-	if s.localWALPath != "" {
+	if s.isNoop {
+		// NoopSnapshot: create the data.noop sentinel file.
+		noopPath := filepath.Join(s.snapTmpDirPath, noopfileName)
+		f, err := os.Create(noopPath)
+		if err != nil {
+			return err
+		}
+		if err := f.Close(); err != nil {
+			return err
+		}
+	} else if s.localWALPath != "" {
 		// IncrementalFileSnapshot: move the local WAL file into the snapshot directory.
 		dstPath := filepath.Join(s.snapTmpDirPath, walfileName)
 		if err := os.Rename(s.localWALPath, dstPath); err != nil {
