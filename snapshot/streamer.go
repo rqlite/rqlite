@@ -153,7 +153,12 @@ func snapshotHeaderPayloadSize(s *proto.SnapshotHeader) (int64, error) {
 }
 
 // SnapshotStreamer implements io.ReadCloser for streaming a snapshot's
-// data, including the header and associated files.
+// data, including the header and associated files. The expected sequence
+// of data returned by Read() is
+//   - 4-byte integer, big-endian, indicating the size of the marshaled header
+//   - the marshaled header itself
+//   - the DB file (if any)
+//   - any WAL files
 type SnapshotStreamer struct {
 	dbPath   string
 	walPaths []string
@@ -271,4 +276,58 @@ func (s *SnapshotStreamer) Len() (int64, error) {
 		return 0, err
 	}
 	return HeaderSizeLen + int64(sz), nil
+}
+
+// SnapshotPathStreamer implements io.ReadCloser for streaming a snapshot's
+// data, where the snapshot data is a single WAL file. It creates the SnapshotHeader
+// on the fly based on the provided WAL file path, and then streams the header
+// to readers. The path is set in the field in the Header, and no more data
+// follows the header. Instead the client is expected to read the header,
+// determine the file path, and then move the file directly.
+type SnapshotPathStreamer struct {
+	walPath string
+	hdr     *proto.SnapshotHeader
+	multiR  io.Reader
+}
+
+// NewSnapshotPathStreamer creates a new SnapshotPathStreamer for the given WAL file path.
+func NewSnapshotPathStreamer(walPath string) (*SnapshotPathStreamer, error) {
+	sh, err := NewIncrementalFileSnapshotHeader(walPath)
+	if err != nil {
+		return nil, err
+	}
+
+	hdrBuf, err := marshalSnapshotHeader(sh)
+	if err != nil {
+		return nil, err
+	}
+	hdrBufR := bytes.NewReader(hdrBuf)
+	var hdrLenBEBuf [HeaderSizeLen]byte
+	binary.BigEndian.PutUint32(hdrLenBEBuf[:], uint32(len(hdrBuf)))
+	hdrLenBufR := bytes.NewReader(hdrLenBEBuf[:])
+
+	var readers []io.Reader
+	readers = append(readers, hdrLenBufR)
+	readers = append(readers, hdrBufR)
+	multiR := io.MultiReader(readers...)
+
+	return &SnapshotPathStreamer{
+		walPath: walPath,
+		hdr:     sh,
+		multiR:  multiR,
+	}, nil
+}
+
+// Read reads from the SnapshotPathStreamer. The data returned by Read() is
+// the 4-byte integer, big-endian, indicating the size of the marshaled header,
+// followed by the marshaled header itself. No more data follows the header,
+// and once the header has been fully read, Read() returns io.EOF.
+func (s *SnapshotPathStreamer) Read(p []byte) (n int, err error) {
+	return s.multiR.Read(p)
+}
+
+// Close closes the SnapshotPathStreamer. Since no files are opened by this struct,
+// Close() is a no-op.
+func (s *SnapshotPathStreamer) Close() error {
+	return nil
 }
