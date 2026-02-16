@@ -38,9 +38,11 @@ class TestUpgrade_v7(unittest.TestCase):
     self.cluster = Cluster([n0, n1, n2])
     l = self.cluster.wait_for_leader()
 
-    # Check that each node upgraded a snapshot.
+    # Check that each node performed the upgrade. The upgrade will first upgrade to v8 format
+    # and then upgrade to v10 format (v9 is the same as v8 in terms of data format). Hence
+    # we expect to see 2 upgrades counted in the expvar for each node.
     for n in self.cluster.nodes:
-      self.assertEqual(n.expvar()['snapshot']['upgrade_ok'], 1)
+      self.assertEqual(n.expvar()['snapshot']['upgrade_ok'], 2)
 
     # Check that each node has the right data.
     for n in self.cluster.nodes:
