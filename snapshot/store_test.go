@@ -908,9 +908,10 @@ func Test_Store_Reap_OnlyNoops(t *testing.T) {
 	}
 
 	// Create a full snapshot followed by only noop snapshots.
-	createSnapshotInStore(t, store, "2-1017-1704807719996", 1017, 2, 1, "testdata/db-and-wals/backup.db")
-	createNoopSnapshotInStore(t, store, "2-1131-1704807720976", 1131, 2, 1)
-	createNoopSnapshotInStore(t, store, "2-1200-1704807721976", 1200, 2, 1)
+	id1, id2, id3 := "2-1017-1704807719996", "2-1131-1704807720976", "2-1200-1704807721976"
+	createSnapshotInStore(t, store, id1, 1017, 2, 1, "testdata/db-and-wals/backup.db")
+	createNoopSnapshotInStore(t, store, id2, 1131, 2, 1)
+	createNoopSnapshotInStore(t, store, id3, 1200, 2, 1)
 
 	if exp, got := 3, store.Len(); exp != got {
 		t.Fatalf("Expected %d snapshots, got %d", exp, got)
@@ -931,6 +932,11 @@ func Test_Store_Reap_OnlyNoops(t *testing.T) {
 	snaps := mustListSnapshots(t, store)
 	if len(snaps) != 1 {
 		t.Fatalf("Expected 1 snapshot after reap, got %d", len(snaps))
+	}
+
+	// Confirm that the new ID is greater than the latest previous ID.
+	if snaps[0].ID <= id3 {
+		t.Fatalf("Expected new snapshot ID to be greater than %s, got %s", id3, snaps[0].ID)
 	}
 
 	// Verify the remaining snapshot is the original full, unchanged.

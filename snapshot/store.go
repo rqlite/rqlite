@@ -421,6 +421,10 @@ func (s *Store) Reap() (int, int, error) {
 		// Consolidate by checkpointing the associated WALs into the full snapshot.
 		newestInc, _ := newerSet.Newest()
 		newID := snapshotName(newestInc.raftMeta.Term, newestInc.raftMeta.Index)
+
+		// The end result of the Reaping process will be a new full snapshot with
+		// a new ID. That ID is generated from the newest snapshot's index and term,
+		// and the current timestamp.
 		finalDir := filepath.Join(s.dir, newID)
 
 		newMeta := copyRaftMeta(newestInc.raftMeta)
@@ -461,7 +465,7 @@ func (s *Store) Reap() (int, int, error) {
 		// 4. Write new metadata into the full snapshot dir.
 		p.AddWriteMeta(full.path, metaJSON)
 
-		// 5. Rename to final name with current timestamp.
+		// 5. Rename to new snapshot name
 		p.AddRename(full.path, finalDir)
 	}
 
