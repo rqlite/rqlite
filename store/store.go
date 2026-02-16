@@ -2661,28 +2661,20 @@ func (s *Store) fsmSnapshot() (fSnap raft.FSMSnapshot, retErr error) {
 			stats.Get(snapshotPrecompactWALSize).(*expvar.Int).Set(walSzPre)
 			stats.Get(snapshotWALSize).(*expvar.Int).Set(walSzPost)
 		}
-		if walTmpFD == nil {
-			// No WAL data for an incremental snapshot. Fall back to a full
-			// snapshot of the (unchanged) database.
-			streamer, err := snapshot.NewSnapshotStreamer(s.db.Path())
-			if err != nil {
-				return nil, err
-			}
-			if err := streamer.Open(); err != nil {
-				return nil, err
-			}
-			fsmSnapshot = snapshot.NewStateReader(streamer)
-			fullNeeded = true
-			stats.Add(numSnapshotsFull, 1)
-			s.numFullSnapshots++
-		} else {
-			streamer, err := snapshot.NewSnapshotPathStreamer(walTmpFD.Name())
-			if err != nil {
-				return nil, err
-			}
-			fsmSnapshot = snapshot.NewStateReader(streamer)
-			stats.Add(numSnapshotsIncremental, 1)
+		name := ""
+		if walTmpFD != nil {
+			name = walTmpFD.Name()
 		}
+		// When it comes to incremental snapshotting of WAL files, we pass the data to the Snapshot
+		// Store and Sink indirectly. We wrap its filepath in an io.Reader, not the file data. The
+		// Snapshotting system knows to check for this. If it finds a filepath in the io.Reader (as
+		// opposed to a reader returning actual file data, it will move the file from here to it.
+		streamer, err := snapshot.NewSnapshotPathStreamer(name)
+		if err != nil {
+			return nil, err
+		}
+		fsmSnapshot = snapshot.NewStateReader(streamer)
+		stats.Add(numSnapshotsIncremental, 1)
 	}
 
 	stats.Add(numSnapshots, 1)
