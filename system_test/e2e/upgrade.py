@@ -4,15 +4,16 @@ import os, unittest, time
 from helpers import Node, Cluster, d_, deprovision_node, copy_dir_to_temp, poll_query
 
 RQLITED_PATH = os.environ['RQLITED_PATH']
-TIMEOUT=20
+TIMEOUT=10
 
 class TestUpgrade_v7(unittest.TestCase):
   '''Test that a v7 cluster can be upgraded to this version code'''
   def poll_query(self, node, query, exp):
     t = 0
+    j = None
     while True:
       if t > TIMEOUT:
-        raise Exception('timeout waiting for node %s to return correct results' % node.node_id)
+        raise Exception('timeout waiting for node %s to return correct results (got %s)' % (node.node_id, j))
       j = node.query(query, level='none')
       if j == exp:
         break
@@ -76,9 +77,10 @@ class TestUpgrade_v9(unittest.TestCase):
   '''Test that a v8 cluster can be upgraded to this version code'''
   def poll_query(self, node, query, exp):
     t = 0
+    j = None
     while True:
       if t > TIMEOUT:
-        raise Exception('timeout waiting for node %s to return correct results' % node.node_id)
+        raise Exception('timeout waiting for node %s to return correct results (got %s)' % (node.node_id, j))
       j = node.query(query, level='none')
       if j == exp:
         break
@@ -104,13 +106,14 @@ class TestUpgrade_v9(unittest.TestCase):
     self.cluster = Cluster([n0, n1, n2])
     l = self.cluster.wait_for_leader()
 
-    # Check that each node performed the upgrade.
-    for n in self.cluster.nodes:
-      self.assertEqual(n.expvar()['snapshot']['upgrade_ok'], 1)
+    # Only node 1 has a snapshot to upgrade.
+    self.assertEqual(n0.expvar()['snapshot']['upgrade_ok'], 1)
+    self.assertEqual(n1.expvar()['snapshot']['upgrade_ok'], 0)
+    self.assertEqual(n2.expvar()['snapshot']['upgrade_ok'], 0)
 
     # Check that each node has the right data.
     for n in self.cluster.nodes:
-      self.poll_query(n, 'SELECT COUNT(*) FROM foo', d_("{'results': [{'values': [[20]], 'types': ['integer'], 'columns': ['COUNT(*)']}]}"))
+      self.poll_query(n, 'SELECT COUNT(*) FROM foo', d_("{'results': [{'values': [[10]], 'types': ['integer'], 'columns': ['COUNT(*)']}]}"))
 
     # Check that writes work OK post upgrade and subsequent snapshots.
     for i in range(100):
@@ -119,7 +122,7 @@ class TestUpgrade_v9(unittest.TestCase):
 
     # Check that each node has the right data.
     for n in self.cluster.nodes:
-      self.poll_query(n, 'SELECT COUNT(*) FROM foo', d_("{'results': [{'values': [[120]], 'types': ['integer'], 'columns': ['COUNT(*)']}]}"))
+      self.poll_query(n, 'SELECT COUNT(*) FROM foo', d_("{'results': [{'values': [[110]], 'types': ['integer'], 'columns': ['COUNT(*)']}]}"))
 
   def tearDown(self):
     self.cluster.deprovision()
