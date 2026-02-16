@@ -310,7 +310,9 @@ class TestEndToEndSnapshotNoRestoreSingle(unittest.TestCase):
     self.n0.wait_for_leader()
     self.n0.wait_for_all_applied()
 
-    self.assertEqual(self.n0.num_available_snapshots(), 1)
+    # The new snapshot store accumulates incremental snapshots and only reaps
+    # when the threshold is reached, so the count at startup is not predictable.
+    self.assertGreaterEqual(self.n0.num_available_snapshots(), 1)
     self.assertEqual(self.n0.expvar()['store']['num_restores_start_skipped'], 1)
     self.assertEqual(self.n0.expvar()['store']['num_restores_start'], 0)
     j = self.n0.query('SELECT count(*) FROM foo', level='none')
