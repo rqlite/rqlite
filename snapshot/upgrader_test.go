@@ -26,24 +26,29 @@ func Test_Upgrade_NothingToDo(t *testing.T) {
 }
 
 func Test_Upgrade_OK(t *testing.T) {
-	t.Skip("upgrader tests deferred until new snapshot store is complete")
 	logger := log.New(os.Stderr, "[snapshot-store-upgrader] ", 0)
 	v7Snapshot := "testdata/upgrade/v7.20.3-snapshots"
 	v7SnapshotID := "2-18-1686659761026"
-	oldTemp := filepath.Join(t.TempDir(), "snapshots")
-	newTemp := filepath.Join(t.TempDir(), "rsnapshots")
+	oldTemp7 := filepath.Join(t.TempDir(), "snapshots")
+	newTemp8 := filepath.Join(t.TempDir(), "rsnapshots")
+	newTemp10 := filepath.Join(t.TempDir(), "wsnapshots")
 
 	// Copy directory because successful test runs will delete it.
-	copyDir(v7Snapshot, oldTemp)
+	copyDir(v7Snapshot, oldTemp7)
 
 	// Upgrade it.
-	if err := Upgrade7To8(oldTemp, newTemp, logger); err != nil {
+	if err := Upgrade7To8(oldTemp7, newTemp8, logger); err != nil {
 		t.Fatalf("failed to upgrade empty directories: %s", err)
+	}
+
+	// Upgrade it again to v10.
+	if err := Upgrade8To10(newTemp8, newTemp10, logger); err != nil {
+		t.Fatalf("failed to upgrade to v10: %s", err)
 	}
 
 	// Create new SnapshotStore from the upgraded directory, to verify its
 	// contents.
-	store, err := NewStore(newTemp)
+	store, err := NewStore(newTemp10)
 	if err != nil {
 		t.Fatalf("failed to create new snapshot store: %s", err)
 	}
