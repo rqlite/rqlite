@@ -1,11 +1,11 @@
 ## v10.0.0 (unreleased)
 _Not ready for production use._
 
-This release introduces a major improvement to the Raft _Snapshot and Log Truncation_ process. Previously the Snapshotting process would be blocked on the Leader if the Leader was streaming a previously-taken Snapshot to a Follower. In most cases this wasn't an issue, as the Snapshotting process would be retried later. However in the event of a continuously slow Follower which continually needed Snapshots, this eventually starved the Leader of the ability to Snapshot.
+This release introduces a major improvement to the Raft [_Snapshot and Log Truncation_](https://youtu.be/8XbxQ1Epi5w?t=492) process. Previously the Snapshotting process would be blocked on the Leader if the Leader was streaming a previously-taken Snapshot to a Follower. In most cases this wasn't an issue, as the Snapshotting process would be retried later. However in the event of a continuously slow Follower which continually needed Snapshots, this eventually starved the Leader of the ability to Snapshot.
 
 There are no breaking API changes in this release, nor any changes to how clustering operates.
 
-Upgrading to this release from a v7 release (or later) is seamless and been extensively tested. Rolling upgrades are also supported. However it is strongly recommended you backup your cluster before upgrading it. Downgrading from v10 is not supported, and that is why the major release number has been incremted.
+Upgrading to this release from a v7 release (or later) is seamless and been extensively tested. Rolling upgrades are also supported. However it is strongly recommended you [backup your rqlite system](https://rqlite.io/docs/guides/backup/) before upgrading it. Downgrading from v10 is not supported, and that is why the major release number has been incremted.
 
 ### Implementation changes and bug fixes
 - [PR #2471](https://github.com/rqlite/rqlite/pull/2471): Move to non-blocking Snapshotting store.
