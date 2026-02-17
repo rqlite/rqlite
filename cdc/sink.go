@@ -10,7 +10,7 @@ import (
 	"strings"
 	"time"
 
-	httpurl "github.com/rqlite/rqlite/v9/http/url"
+	httpurl "github.com/rqlite/rqlite/v10/http/url"
 )
 
 // Sink defines the interface that all CDC sinks must implement.

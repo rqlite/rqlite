@@ -7,7 +7,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/rqlite/rqlite/v9/internal/random"
+	"github.com/rqlite/rqlite/v10/internal/random"
 )
 
 const (

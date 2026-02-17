@@ -3,7 +3,7 @@ package json
 import (
 	"encoding/json"
 
-	"github.com/rqlite/rqlite/v9/command/proto"
+	"github.com/rqlite/rqlite/v10/command/proto"
 )
 
 // CDCMessagesEnvelope is the envelope for CDC messages as transported over HTTP.

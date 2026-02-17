@@ -4,7 +4,7 @@ import (
 	"os"
 	"testing"
 
-	"github.com/rqlite/rqlite/v9/cmd/rqlite/http"
+	"github.com/rqlite/rqlite/v10/cmd/rqlite/http"
 )
 
 func TestParseHostEnv(t *testing.T) {

@@ -11,7 +11,7 @@ import (
 	"sync"
 	"sync/atomic"
 
-	cdcjson "github.com/rqlite/rqlite/v9/cdc/json"
+	cdcjson "github.com/rqlite/rqlite/v10/cdc/json"
 )
 
 // HTTPTestServer is a test server that simulates an HTTP endpoint for receiving CDC messages.

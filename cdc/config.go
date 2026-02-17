@@ -7,8 +7,8 @@ import (
 	"os"
 	"time"
 
-	"github.com/rqlite/rqlite/v9/cdc/regexp"
-	"github.com/rqlite/rqlite/v9/internal/rtls"
+	"github.com/rqlite/rqlite/v10/cdc/regexp"
+	"github.com/rqlite/rqlite/v10/internal/rtls"
 )
 
 // RetryPolicy defines the retry policy for transmitting events to the endpoint.

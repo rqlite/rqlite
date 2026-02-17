@@ -3,7 +3,7 @@ package store
 import (
 	"testing"
 
-	"github.com/rqlite/rqlite/v9/command/proto"
+	"github.com/rqlite/rqlite/v10/command/proto"
 )
 
 func Test_ExecuteQueryResponsesMutation(t *testing.T) {

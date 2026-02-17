@@ -6,7 +6,7 @@ import (
 	"reflect"
 	"testing"
 
-	"github.com/rqlite/rqlite/v9/command/proto"
+	"github.com/rqlite/rqlite/v10/command/proto"
 )
 
 // Test_NewQueryParams tests the NewQueryParams function for various scenarios.

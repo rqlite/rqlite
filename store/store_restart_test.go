@@ -8,8 +8,8 @@ import (
 	"testing"
 	"time"
 
-	command "github.com/rqlite/rqlite/v9/command/proto"
-	"github.com/rqlite/rqlite/v9/internal/rsum"
+	command "github.com/rqlite/rqlite/v10/command/proto"
+	"github.com/rqlite/rqlite/v10/internal/rsum"
 )
 
 // Test_OpenStoreCloseStartupSingleNode tests various restart scenarios.

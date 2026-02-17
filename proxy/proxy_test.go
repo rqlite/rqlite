@@ -7,9 +7,9 @@ import (
 	"testing"
 	"time"
 
-	clstrPB "github.com/rqlite/rqlite/v9/cluster/proto"
-	"github.com/rqlite/rqlite/v9/command/proto"
-	"github.com/rqlite/rqlite/v9/store"
+	clstrPB "github.com/rqlite/rqlite/v10/cluster/proto"
+	"github.com/rqlite/rqlite/v10/command/proto"
+	"github.com/rqlite/rqlite/v10/store"
 )
 
 // mockStore implements Store for testing.

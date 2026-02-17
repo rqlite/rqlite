@@ -12,8 +12,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/rqlite/rqlite/v9/internal/rtls"
-	"github.com/rqlite/rqlite/v9/proxy"
+	"github.com/rqlite/rqlite/v10/internal/rtls"
+	"github.com/rqlite/rqlite/v10/proxy"
 	"golang.org/x/net/http2"
 )
 

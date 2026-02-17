@@ -11,7 +11,7 @@ import (
 	"strings"
 
 	"github.com/hashicorp/raft"
-	"github.com/rqlite/rqlite/v9/db"
+	"github.com/rqlite/rqlite/v10/db"
 )
 
 const (

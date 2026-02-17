@@ -5,7 +5,7 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/rqlite/rqlite/v9/db"
+	"github.com/rqlite/rqlite/v10/db"
 )
 
 // Executor implements the Visitor interface to execute snapshot store operations.

@@ -5,9 +5,9 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/rqlite/rqlite/v9/db"
-	"github.com/rqlite/rqlite/v9/internal/rsum"
-	"github.com/rqlite/rqlite/v9/snapshot/proto"
+	"github.com/rqlite/rqlite/v10/db"
+	"github.com/rqlite/rqlite/v10/internal/rsum"
+	"github.com/rqlite/rqlite/v10/snapshot/proto"
 )
 
 // IncrementalSink is a sink for writing locally-generated WAL snapshot data to a Snapshot store.

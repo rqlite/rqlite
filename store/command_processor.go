@@ -6,10 +6,10 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/rqlite/rqlite/v9/command"
-	"github.com/rqlite/rqlite/v9/command/chunking"
-	"github.com/rqlite/rqlite/v9/command/proto"
-	sql "github.com/rqlite/rqlite/v9/db"
+	"github.com/rqlite/rqlite/v10/command"
+	"github.com/rqlite/rqlite/v10/command/chunking"
+	"github.com/rqlite/rqlite/v10/command/proto"
+	sql "github.com/rqlite/rqlite/v10/db"
 )
 
 // ExecuteQueryResponses is a slice of ExecuteQueryResponse, which detects mutations.

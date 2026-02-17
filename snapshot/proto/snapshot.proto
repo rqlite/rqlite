@@ -2,7 +2,7 @@ syntax = "proto3";
 
 package snapshot;
 
-option go_package = "github.com/rqlite/rqlite/v9/snapshot/proto";
+option go_package = "github.com/rqlite/rqlite/v10/snapshot/proto";
 
 message Header {
   uint64 size_bytes = 1;

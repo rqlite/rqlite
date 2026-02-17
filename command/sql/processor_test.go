@@ -4,7 +4,7 @@ import (
 	"regexp"
 	"testing"
 
-	"github.com/rqlite/rqlite/v9/command/proto"
+	"github.com/rqlite/rqlite/v10/command/proto"
 )
 
 func Test_ContainsTime(t *testing.T) {

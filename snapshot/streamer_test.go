@@ -6,7 +6,7 @@ import (
 	"os"
 	"testing"
 
-	"github.com/rqlite/rqlite/v9/internal/rsum"
+	"github.com/rqlite/rqlite/v10/internal/rsum"
 )
 
 func Test_NewHeaderFromFile(t *testing.T) {

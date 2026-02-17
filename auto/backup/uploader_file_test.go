@@ -8,7 +8,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/rqlite/rqlite/v9/auto/file"
+	"github.com/rqlite/rqlite/v10/auto/file"
 )
 
 func Test_Uploader_FileStorage_Timestamped(t *testing.T) {

@@ -4,9 +4,9 @@ import (
 	"bytes"
 	"compress/gzip"
 
-	"github.com/rqlite/rqlite/v9/internal/rarchive/flate"
-	"github.com/rqlite/rqlite/v9/internal/rarchive/zlib"
-	"github.com/rqlite/rqlite/v9/testdata/chinook"
+	"github.com/rqlite/rqlite/v10/internal/rarchive/flate"
+	"github.com/rqlite/rqlite/v10/internal/rarchive/zlib"
+	"github.com/rqlite/rqlite/v10/testdata/chinook"
 )
 
 func main() {

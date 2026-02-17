@@ -3,7 +3,7 @@ package command
 import (
 	"strings"
 
-	"github.com/rqlite/rqlite/v9/command/proto"
+	"github.com/rqlite/rqlite/v10/command/proto"
 )
 
 // LevelToString converts a proto.ConsistencyLevel to a string.

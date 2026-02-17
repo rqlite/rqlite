@@ -6,7 +6,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/rqlite/rqlite/v9/command/proto"
+	"github.com/rqlite/rqlite/v10/command/proto"
 )
 
 // Test_StoreEnableCDC tests that CDC can be enabled and disabled on the Store.
