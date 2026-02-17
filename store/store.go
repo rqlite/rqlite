@@ -2501,9 +2501,12 @@ func (s *Store) fsmSnapshot() (fSnap raft.FSMSnapshot, retErr error) {
 	}
 	defer s.snapshotCAS.End()
 
-	// From now on, assume any snapshot is not successful.
-	if err := removeFile(s.cleanSnapshotPath); err != nil {
-		return nil, fmt.Errorf("failed to remove clean snapshot file: %w", err)
+	// Record the database mod time before any work. If it hasn't changed by the
+	// time the snapshot is persisted, the existing fingerprint is still valid and
+	// we can skip the expensive CRC32 recomputation.
+	dbModTimeAtStart, err := s.db.DBLastModified()
+	if err != nil {
+		return nil, fmt.Errorf("failed to get database mod time at snapshot start: %w", err)
 	}
 
 	// We want to guarantee that any snapshot results in a fully-sync'ed to disk
@@ -2691,12 +2694,25 @@ func (s *Store) fsmSnapshot() (fSnap raft.FSMSnapshot, retErr error) {
 	stats.Add(numSnapshots, 1)
 	dur := time.Since(startT)
 	stats.Get(snapshotCreateDuration).(*expvar.Int).Set(dur.Milliseconds())
+
+	// If the database wasn't modified during this snapshot (no VACUUM, OPTIMIZE,
+	// checkpoint, etc.) then the existing fingerprint file is still valid and we
+	// can skip the expensive CRC32 recomputation.
+	var finalizer func() error
+	dbModTimeAtEnd, err := s.db.DBLastModified()
+	if err != nil {
+		return nil, fmt.Errorf("failed to get database mod time at snapshot end: %w", err)
+	}
+	if !dbModTimeAtStart.Equal(dbModTimeAtEnd) {
+		finalizer = func() error {
+			return s.createSnapshotFingerprint()
+		}
+	}
+
 	fs := FSMSnapshot{
 		Full:        fullNeeded,
 		FSMSnapshot: fsmSnapshot,
-		Finalizer: func() error {
-			return s.createSnapshotFingerprint()
-		},
+		Finalizer:   finalizer,
 		OnRelease: func(invoked, succeeded bool) {
 			if !invoked {
 				s.logger.Printf("persisting %s snapshot was not invoked on node ID %s", fPLog, s.raftID)
