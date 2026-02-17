@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -168,6 +167,7 @@ func Test_SingleNode_WALTriggeredSnapshot(t *testing.T) {
 	s.SnapshotThreshold = 8192
 	s.SnapshotInterval = 500 * time.Millisecond
 	s.SnapshotThresholdWALSize = 4096
+	s.SnapshotReapThreshold = 2
 
 	if err := s.Open(); err != nil {
 		t.Fatalf("failed to open single-node store: %s", err.Error())
@@ -218,13 +218,11 @@ func Test_SingleNode_WALTriggeredSnapshot(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to read snapshot store dir: %s", err.Error())
 	}
-	if len(files) != 2 {
-		t.Fatalf("wrong number of snapshot store files: %d", len(files))
+	if len(files) != 1 {
+		t.Fatalf("wrong number of snapshot store entries: %d", len(files))
 	}
-	for _, f := range files {
-		if !strings.Contains(f.Name(), snaps[0].ID) {
-			t.Fatalf("wrong snapshot store file: %s", f.Name())
-		}
+	if files[0].Name() != snaps[0].ID {
+		t.Fatalf("snapshot store entry name %s does not match snapshot ID %s", files[0].Name(), snaps[0].ID)
 	}
 }
 

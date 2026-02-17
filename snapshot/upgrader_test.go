@@ -8,6 +8,8 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+
+	"github.com/hashicorp/raft"
 )
 
 func Test_Upgrade_NothingToDo(t *testing.T) {
@@ -27,20 +29,26 @@ func Test_Upgrade_OK(t *testing.T) {
 	logger := log.New(os.Stderr, "[snapshot-store-upgrader] ", 0)
 	v7Snapshot := "testdata/upgrade/v7.20.3-snapshots"
 	v7SnapshotID := "2-18-1686659761026"
-	oldTemp := filepath.Join(t.TempDir(), "snapshots")
-	newTemp := filepath.Join(t.TempDir(), "rsnapshots")
+	oldTemp7 := filepath.Join(t.TempDir(), "snapshots")
+	newTemp8 := filepath.Join(t.TempDir(), "rsnapshots")
+	newTemp10 := filepath.Join(t.TempDir(), "wsnapshots")
 
 	// Copy directory because successful test runs will delete it.
-	copyDir(v7Snapshot, oldTemp)
+	copyDir(v7Snapshot, oldTemp7)
 
 	// Upgrade it.
-	if err := Upgrade7To8(oldTemp, newTemp, logger); err != nil {
+	if err := Upgrade7To8(oldTemp7, newTemp8, logger); err != nil {
 		t.Fatalf("failed to upgrade empty directories: %s", err)
+	}
+
+	// Upgrade it again to v10.
+	if err := Upgrade8To10(newTemp8, newTemp10, logger); err != nil {
+		t.Fatalf("failed to upgrade to v10: %s", err)
 	}
 
 	// Create new SnapshotStore from the upgraded directory, to verify its
 	// contents.
-	store, err := NewStore(newTemp)
+	store, err := NewStore(newTemp10)
 	if err != nil {
 		t.Fatalf("failed to create new snapshot store: %s", err)
 	}
@@ -70,20 +78,25 @@ func Test_Upgrade_EmptyOK(t *testing.T) {
 	logger := log.New(os.Stderr, "[snapshot-store-upgrader] ", 0)
 	v7Snapshot := "testdata/upgrade/v7.20.3-empty-snapshots"
 	v7SnapshotID := "2-18-1686659761026"
-	oldTemp := filepath.Join(t.TempDir(), "snapshots")
-	newTemp := filepath.Join(t.TempDir(), "rsnapshots")
+	oldTemp7 := filepath.Join(t.TempDir(), "snapshots")
+	newTemp8 := filepath.Join(t.TempDir(), "rsnapshots")
+	newTemp10 := filepath.Join(t.TempDir(), "wsnapshots")
 
 	// Copy directory because successful test runs will delete it.
-	copyDir(v7Snapshot, oldTemp)
+	copyDir(v7Snapshot, oldTemp7)
 
 	// Upgrade it.
-	if err := Upgrade7To8(oldTemp, newTemp, logger); err != nil {
+	if err := Upgrade7To8(oldTemp7, newTemp8, logger); err != nil {
 		t.Fatalf("failed to upgrade empty directories: %s", err)
+	}
+	// Upgrade it again to v10.
+	if err := Upgrade8To10(newTemp8, newTemp10, logger); err != nil {
+		t.Fatalf("failed to upgrade to v10: %s", err)
 	}
 
 	// Create new SnapshotStore from the upgraded directory, to verify its
 	// contents.
-	store, err := NewStore(newTemp)
+	store, err := NewStore(newTemp10)
 	if err != nil {
 		t.Fatalf("failed to create new snapshot store: %s", err)
 	}
@@ -106,6 +119,347 @@ func Test_Upgrade_EmptyOK(t *testing.T) {
 	rc.Close() // Removing test resources, when running on Windows, will fail otherwise.
 	if exp, got := v7SnapshotID, meta.ID; exp != got {
 		t.Fatalf("expected meta ID %s, got %s", exp, got)
+	}
+}
+
+func Test_Upgrade8To10_NothingToDo(t *testing.T) {
+	logger := log.New(os.Stderr, "[snapshot-store-upgrader-test] ", 0)
+
+	// Nonexistent old directory is a no-op.
+	if err := Upgrade8To10("/does/not/exist", "/does/not/exist/either", logger); err != nil {
+		t.Fatalf("failed to upgrade nonexistent directories: %s", err)
+	}
+
+	// Empty old directory is removed and is a no-op.
+	oldEmpty := t.TempDir()
+	newEmpty := filepath.Join(t.TempDir(), "wsnapshots") // Create path, but not actual directory.
+	if err := Upgrade8To10(oldEmpty, newEmpty, logger); err != nil {
+		t.Fatalf("failed to upgrade empty directory: %s", err)
+	}
+	if dirExists(oldEmpty) {
+		t.Fatal("expected empty old directory to be removed")
+	}
+	if dirExists(newEmpty) {
+		t.Fatal("expected new directory to not be created for empty old")
+	}
+}
+
+func Test_Upgrade8To10_NewAlreadyExists(t *testing.T) {
+	logger := log.New(os.Stderr, "[snapshot-store-upgrader-test] ", 0)
+	oldDir := filepath.Join(t.TempDir(), "rsnapshots")
+	newDir := filepath.Join(t.TempDir(), "wsnapshots")
+
+	if err := os.MkdirAll(oldDir, 0755); err != nil {
+		t.Fatalf("failed to create old dir: %s", err)
+	}
+	mustCreateV8Snapshot(t, oldDir, "2-18-1686659761026", 18, 2)
+
+	// Pre-create new directory with a v10 snapshot (simulates already-upgraded state).
+	if err := os.MkdirAll(newDir, 0755); err != nil {
+		t.Fatalf("failed to create new dir: %s", err)
+	}
+	mustCreateV10Snapshot(t, newDir, "2-18-1686659761026", 18, 2)
+
+	if err := Upgrade8To10(oldDir, newDir, logger); err != nil {
+		t.Fatalf("failed to upgrade: %s", err)
+	}
+
+	// Old should be removed since new already exists.
+	if dirExists(oldDir) {
+		t.Fatal("expected old directory to be removed")
+	}
+
+	// Catalog should see the pre-existing snapshot in newDir.
+	catalog := &SnapshotCatalog{}
+	sset, err := catalog.Scan(newDir)
+	if err != nil {
+		t.Fatalf("catalog scan failed: %s", err)
+	}
+	if sset.Len() != 1 {
+		t.Fatalf("expected 1 snapshot, got %d", sset.Len())
+	}
+	snap := sset.All()[0]
+	if snap.id != "2-18-1686659761026" {
+		t.Fatalf("expected snapshot ID 2-18-1686659761026, got %s", snap.id)
+	}
+	if snap.typ != SnapshotTypeFull {
+		t.Fatalf("expected full snapshot, got type %v", snap.typ)
+	}
+}
+
+func Test_Upgrade8To10_OK(t *testing.T) {
+	logger := log.New(os.Stderr, "[snapshot-store-upgrader-test] ", 0)
+	oldDir := filepath.Join(t.TempDir(), "snapshots")
+	newDir := filepath.Join(t.TempDir(), "rsnapshots")
+
+	if err := os.MkdirAll(oldDir, 0755); err != nil {
+		t.Fatalf("failed to create old dir: %s", err)
+	}
+	snapshotID := "2-18-1686659761026"
+	mustCreateV8Snapshot(t, oldDir, snapshotID, 18, 2)
+
+	// Verify v8 layout before upgrade.
+	if !fileExists(filepath.Join(oldDir, snapshotID+".db")) {
+		t.Fatal("expected .db file at root")
+	}
+	if !fileExists(filepath.Join(oldDir, snapshotID, metaFileName)) {
+		t.Fatal("expected meta.json in snapshot directory")
+	}
+
+	// Upgrade.
+	if err := Upgrade8To10(oldDir, newDir, logger); err != nil {
+		t.Fatalf("failed to upgrade: %s", err)
+	}
+
+	// Old should be removed.
+	if dirExists(oldDir) {
+		t.Fatal("expected old directory to be removed after upgrade")
+	}
+
+	// Verify v10 layout in new directory.
+	if !fileExists(filepath.Join(newDir, snapshotID, dbfileName)) {
+		t.Fatal("expected data.db in snapshot directory after upgrade")
+	}
+	if !fileExists(filepath.Join(newDir, snapshotID, metaFileName)) {
+		t.Fatal("expected meta.json in snapshot directory after upgrade")
+	}
+
+	// Verify via SnapshotCatalog that the new directory is a valid v10 store.
+	catalog := &SnapshotCatalog{}
+	sset, err := catalog.Scan(newDir)
+	if err != nil {
+		t.Fatalf("catalog scan failed: %s", err)
+	}
+	if sset.Len() != 1 {
+		t.Fatalf("expected catalog to find 1 snapshot, got %d", sset.Len())
+	}
+	snap := sset.All()[0]
+	if snap.id != snapshotID {
+		t.Fatalf("expected snapshot ID %s, got %s", snapshotID, snap.id)
+	}
+	if snap.typ != SnapshotTypeFull {
+		t.Fatalf("expected full snapshot, got type %v", snap.typ)
+	}
+	if snap.raftMeta.Index != 18 {
+		t.Fatalf("expected raft index 18, got %d", snap.raftMeta.Index)
+	}
+	if snap.raftMeta.Term != 2 {
+		t.Fatalf("expected raft term 2, got %d", snap.raftMeta.Term)
+	}
+
+	// Verify the store can also open the upgraded snapshot.
+	store, err := NewStore(newDir)
+	if err != nil {
+		t.Fatalf("failed to create store: %s", err)
+	}
+	snaps, err := store.List()
+	if err != nil {
+		t.Fatalf("failed to list snapshots: %s", err)
+	}
+	if len(snaps) != 1 {
+		t.Fatalf("expected 1 snapshot, got %d", len(snaps))
+	}
+	if snaps[0].ID != snapshotID {
+		t.Fatalf("expected snapshot ID %s, got %s", snapshotID, snaps[0].ID)
+	}
+	meta, rc, err := store.Open(snaps[0].ID)
+	if err != nil {
+		t.Fatalf("failed to open snapshot: %s", err)
+	}
+	rc.Close()
+	if meta.ID != snapshotID {
+		t.Fatalf("expected meta ID %s, got %s", snapshotID, meta.ID)
+	}
+}
+
+func Test_Upgrade8To10_MultiplePicksNewest(t *testing.T) {
+	logger := log.New(os.Stderr, "[snapshot-store-upgrader-test] ", 0)
+	oldDir := filepath.Join(t.TempDir(), "snapshots")
+	newDir := filepath.Join(t.TempDir(), "rsnapshots")
+
+	if err := os.MkdirAll(oldDir, 0755); err != nil {
+		t.Fatalf("failed to create old dir: %s", err)
+	}
+	mustCreateV8Snapshot(t, oldDir, "1-10-1000000000000", 10, 1)
+	mustCreateV8Snapshot(t, oldDir, "2-20-2000000000000", 20, 2)
+
+	if err := Upgrade8To10(oldDir, newDir, logger); err != nil {
+		t.Fatalf("failed to upgrade: %s", err)
+	}
+
+	// Old should be removed.
+	if dirExists(oldDir) {
+		t.Fatal("expected old directory to be removed")
+	}
+
+	// Verify via SnapshotCatalog that only the newest snapshot was migrated.
+	catalog := &SnapshotCatalog{}
+	sset, err := catalog.Scan(newDir)
+	if err != nil {
+		t.Fatalf("catalog scan failed: %s", err)
+	}
+	if sset.Len() != 1 {
+		t.Fatalf("expected catalog to find 1 snapshot, got %d", sset.Len())
+	}
+	snap := sset.All()[0]
+	if snap.id != "2-20-2000000000000" {
+		t.Fatalf("expected newest snapshot ID 2-20-2000000000000, got %s", snap.id)
+	}
+	if snap.typ != SnapshotTypeFull {
+		t.Fatalf("expected full snapshot, got type %v", snap.typ)
+	}
+	if snap.raftMeta.Index != 20 {
+		t.Fatalf("expected raft index 20, got %d", snap.raftMeta.Index)
+	}
+	if snap.raftMeta.Term != 2 {
+		t.Fatalf("expected raft term 2, got %d", snap.raftMeta.Term)
+	}
+}
+
+func Test_Upgrade8To10_Idempotent(t *testing.T) {
+	logger := log.New(os.Stderr, "[snapshot-store-upgrader-test] ", 0)
+	oldDir := filepath.Join(t.TempDir(), "snapshots")
+	newDir := filepath.Join(t.TempDir(), "rsnapshots")
+
+	if err := os.MkdirAll(oldDir, 0755); err != nil {
+		t.Fatalf("failed to create old dir: %s", err)
+	}
+	snapshotID := "2-18-1686659761026"
+	mustCreateV8Snapshot(t, oldDir, snapshotID, 18, 2)
+
+	// First upgrade succeeds.
+	if err := Upgrade8To10(oldDir, newDir, logger); err != nil {
+		t.Fatalf("first upgrade failed: %s", err)
+	}
+
+	// Second call: old is gone, new exists — should be a no-op.
+	if err := Upgrade8To10(oldDir, newDir, logger); err != nil {
+		t.Fatalf("second upgrade failed: %s", err)
+	}
+
+	// Verify via SnapshotCatalog after both calls.
+	catalog := &SnapshotCatalog{}
+	sset, err := catalog.Scan(newDir)
+	if err != nil {
+		t.Fatalf("catalog scan failed: %s", err)
+	}
+	if sset.Len() != 1 {
+		t.Fatalf("expected catalog to find 1 snapshot, got %d", sset.Len())
+	}
+	snap := sset.All()[0]
+	if snap.id != snapshotID {
+		t.Fatalf("expected snapshot ID %s, got %s", snapshotID, snap.id)
+	}
+	if snap.typ != SnapshotTypeFull {
+		t.Fatalf("expected full snapshot, got type %v", snap.typ)
+	}
+	if snap.raftMeta.Index != 18 {
+		t.Fatalf("expected raft index 18, got %d", snap.raftMeta.Index)
+	}
+	if snap.raftMeta.Term != 2 {
+		t.Fatalf("expected raft term 2, got %d", snap.raftMeta.Term)
+	}
+}
+
+func Test_Upgrade8To10_InterruptedTmpCleanup(t *testing.T) {
+	logger := log.New(os.Stderr, "[snapshot-store-upgrader-test] ", 0)
+	oldDir := filepath.Join(t.TempDir(), "snapshots")
+	newDir := filepath.Join(t.TempDir(), "rsnapshots")
+
+	if err := os.MkdirAll(oldDir, 0755); err != nil {
+		t.Fatalf("failed to create old dir: %s", err)
+	}
+	snapshotID := "2-18-1686659761026"
+	mustCreateV8Snapshot(t, oldDir, snapshotID, 18, 2)
+
+	// Simulate a leftover .tmp directory from a previous interrupted upgrade.
+	tmpDir := tmpName(newDir)
+	if err := os.MkdirAll(tmpDir, 0755); err != nil {
+		t.Fatalf("failed to create tmp dir: %s", err)
+	}
+
+	if err := Upgrade8To10(oldDir, newDir, logger); err != nil {
+		t.Fatalf("upgrade failed: %s", err)
+	}
+
+	if dirExists(tmpDir) {
+		t.Fatal("expected leftover tmp directory to be removed")
+	}
+	if dirExists(oldDir) {
+		t.Fatal("expected old directory to be removed")
+	}
+
+	// Verify via SnapshotCatalog.
+	catalog := &SnapshotCatalog{}
+	sset, err := catalog.Scan(newDir)
+	if err != nil {
+		t.Fatalf("catalog scan failed: %s", err)
+	}
+	if sset.Len() != 1 {
+		t.Fatalf("expected catalog to find 1 snapshot, got %d", sset.Len())
+	}
+	snap := sset.All()[0]
+	if snap.id != snapshotID {
+		t.Fatalf("expected snapshot ID %s, got %s", snapshotID, snap.id)
+	}
+	if snap.typ != SnapshotTypeFull {
+		t.Fatalf("expected full snapshot, got type %v", snap.typ)
+	}
+	if snap.raftMeta.Index != 18 {
+		t.Fatalf("expected raft index 18, got %d", snap.raftMeta.Index)
+	}
+	if snap.raftMeta.Term != 2 {
+		t.Fatalf("expected raft term 2, got %d", snap.raftMeta.Term)
+	}
+}
+
+// mustCreateV8Snapshot creates a v8-format snapshot in dir: <id>.db at root
+// and <id>/meta.json in a subdirectory.
+func mustCreateV8Snapshot(t *testing.T, dir, snapshotID string, idx, term uint64) {
+	t.Helper()
+	snapDir := filepath.Join(dir, snapshotID)
+	if err := os.MkdirAll(snapDir, 0755); err != nil {
+		t.Fatalf("failed to create snapshot dir: %v", err)
+	}
+	meta := &raft.SnapshotMeta{
+		ID:    snapshotID,
+		Index: idx,
+		Term:  term,
+	}
+	if err := writeMeta(snapDir, meta); err != nil {
+		t.Fatalf("failed to write meta: %v", err)
+	}
+	// Place the SQLite DB file at the root level as <id>.db (v8 format).
+	mustCopyFileT(t, "testdata/db-and-wals/full2.db", filepath.Join(dir, snapshotID+".db"))
+}
+
+// mustCreateV10Snapshot creates a v10-format snapshot in dir: <id>/meta.json
+// and <id>/data.db.
+func mustCreateV10Snapshot(t *testing.T, dir, snapshotID string, idx, term uint64) {
+	t.Helper()
+	snapDir := filepath.Join(dir, snapshotID)
+	if err := os.MkdirAll(snapDir, 0755); err != nil {
+		t.Fatalf("failed to create snapshot dir: %v", err)
+	}
+	meta := &raft.SnapshotMeta{
+		ID:    snapshotID,
+		Index: idx,
+		Term:  term,
+	}
+	if err := writeMeta(snapDir, meta); err != nil {
+		t.Fatalf("failed to write meta: %v", err)
+	}
+	mustCopyFileT(t, "testdata/db-and-wals/full2.db", filepath.Join(snapDir, dbfileName))
+}
+
+func mustCopyFileT(t *testing.T, src, dst string) {
+	t.Helper()
+	data, err := os.ReadFile(src)
+	if err != nil {
+		t.Fatalf("failed to read %s: %v", src, err)
+	}
+	if err := os.WriteFile(dst, data, 0644); err != nil {
+		t.Fatalf("failed to write %s: %v", dst, err)
 	}
 }
 

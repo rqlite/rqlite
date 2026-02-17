@@ -8,19 +8,33 @@ import (
 	"sort"
 
 	"github.com/hashicorp/raft"
+	"github.com/rqlite/rqlite/v9/db"
 )
 
 // Snapshot represents a single snapshot stored on disk.
-//
 // A Snapshot corresponds to exactly one directory under the Store root. The
 // directory name is the snapshot ID (typically derived from term, index, and a
 // timestamp).
 //
 // Snapshot is a lightweight, self-contained view of the on-disk snapshot
-// directory. It exposes commonly needed derived properties.
+// directory. It exposes commonly needed derived properties (paths, declared
+// kind, and Raft metadata), and it centralizes validation of the directory’s
+// layout.
+//
+// The snapshot kind is declared by the presence of exactly one data file in the
+// directory:
+//
+//   - data.db  declares a full snapshot (SQLite database file)
+//   - data.wal declares an incremental snapshot (SQLite WAL file)
+//
+// Implementations may optionally validate that the file content matches the
+// declared kind (e.g., via SQLite header inspection). Any disagreement between
+// declared kind and observed content should be treated as store corruption and
+// surfaced as a structured error suitable for repair or quarantine logic.
 type Snapshot struct {
 	id       string
 	path     string
+	typ      SnapshotType
 	raftMeta *raft.SnapshotMeta
 }
 
@@ -36,18 +50,6 @@ func (s *Snapshot) Less(other *Snapshot) bool {
 	return s.id < other.id
 }
 
-// LessThanMeta reports whether this snapshot is older than the given metadata.
-// Ordering is defined by (Term, Index, ID).
-func (s *Snapshot) LessThanMeta(meta *raft.SnapshotMeta) bool {
-	if s.raftMeta.Term != meta.Term {
-		return s.raftMeta.Term < meta.Term
-	}
-	if s.raftMeta.Index != meta.Index {
-		return s.raftMeta.Index < meta.Index
-	}
-	return s.id < meta.ID
-}
-
 // Equal reports whether this snapshot is identical to the other snapshot.
 func (s *Snapshot) Equal(other *Snapshot) bool {
 	return s.raftMeta.Term == other.raftMeta.Term &&
@@ -57,23 +59,27 @@ func (s *Snapshot) Equal(other *Snapshot) bool {
 
 // String returns a string representation of the snapshot.
 func (s *Snapshot) String() string {
-	return fmt.Sprintf("Snapshot{id=%s, term=%d, index=%d}", s.id, s.raftMeta.Term, s.raftMeta.Index)
+	return fmt.Sprintf("Snapshot{id=%s, type=%v, term=%d, index=%d}", s.id, s.typ, s.raftMeta.Term, s.raftMeta.Index)
 }
 
-// ID returns the snapshot ID.
-func (s *Snapshot) ID() string {
-	return s.id
-}
+// SnapshotType describes the declared kind of a Snapshot.
+//
+// SnapshotType is derived from on-disk layout rather than persisted in meta.json.
+// It is primarily a classification for selection, ordering, and maintenance
+// operations (e.g., determining the newest full snapshot and its incremental
+// successors).
+type SnapshotType int
 
-// Path returns the snapshot directory path.
-func (s *Snapshot) Path() string {
-	return s.path
-}
+const (
+	// SnapshotTypeFull indicates a snapshot directory containing data.db.
+	SnapshotTypeFull SnapshotType = iota
 
-// Meta returns the Raft snapshot metadata.
-func (s *Snapshot) Meta() *raft.SnapshotMeta {
-	return s.raftMeta
-}
+	// SnapshotTypeIncremental indicates a snapshot directory containing data.wal.
+	SnapshotTypeIncremental
+
+	// SnapshotTypeNoop indicates a snapshot directory containing data.noop.
+	SnapshotTypeNoop
+)
 
 // SnapshotSet represents an ordered collection of snapshots from a single Store
 // directory.
@@ -92,8 +98,9 @@ type SnapshotSet struct {
 	items []*Snapshot
 }
 
-// Len returns the number of snapshots in the set. The value return will always
-// be non-negative.
+// Len returns the number of snapshots in the set.
+//
+// SnapshotSet is ordered from oldest to newest.
 func (ss SnapshotSet) Len() int {
 	return len(ss.items)
 }
@@ -106,6 +113,8 @@ func (ss SnapshotSet) All() []*Snapshot {
 }
 
 // IDs returns the snapshot IDs in the set, ordered from oldest to newest.
+//
+// This is a convenience projection for callers that only need IDs.
 func (ss SnapshotSet) IDs() []string {
 	ids := make([]string, len(ss.items))
 	for i, snapshot := range ss.items {
@@ -142,6 +151,55 @@ func (ss SnapshotSet) Newest() (*Snapshot, bool) {
 		return nil, false
 	}
 	return ss.items[len(ss.items)-1], true
+}
+
+// NewestFull returns the newest full snapshot in the set.
+func (ss SnapshotSet) NewestFull() (*Snapshot, bool) {
+	for i := len(ss.items) - 1; i >= 0; i-- {
+		if ss.items[i].typ == SnapshotTypeFull {
+			return ss.items[i], true
+		}
+	}
+	return nil, false
+}
+
+// NewestIncremental returns the newest incremental snapshot in the set.
+func (ss SnapshotSet) NewestIncremental() (*Snapshot, bool) {
+	for i := len(ss.items) - 1; i >= 0; i-- {
+		if ss.items[i].typ == SnapshotTypeIncremental {
+			return ss.items[i], true
+		}
+	}
+	return nil, false
+}
+
+// Fulls returns a SnapshotSet containing only full snapshots, preserving order.
+func (ss SnapshotSet) Fulls() SnapshotSet {
+	var fulls []*Snapshot
+	for _, snapshot := range ss.items {
+		if snapshot.typ == SnapshotTypeFull {
+			fulls = append(fulls, snapshot)
+		}
+	}
+	return SnapshotSet{
+		dir:   ss.dir,
+		items: fulls,
+	}
+}
+
+// Incrementals returns a SnapshotSet containing only incremental snapshots,
+// preserving order.
+func (ss SnapshotSet) Incrementals() SnapshotSet {
+	var incrementals []*Snapshot
+	for _, snapshot := range ss.items {
+		if snapshot.typ == SnapshotTypeIncremental {
+			incrementals = append(incrementals, snapshot)
+		}
+	}
+	return SnapshotSet{
+		dir:   ss.dir,
+		items: incrementals,
+	}
 }
 
 // WithID returns the snapshot with the given ID if present.
@@ -212,6 +270,100 @@ func (ss SnapshotSet) Range(fromID, toID string) SnapshotSet {
 	return SnapshotSet{dir: ss.dir, items: ss.items[fromIdx:toIdx]}
 }
 
+// PartitionAtFull returns two SnapshotSets: the newest full snapshot and all
+// snapshots newer than it.
+//
+// If a full snapshot exists, the first return value contains exactly that newest
+// full snapshot, and the second contains all snapshots strictly newer than it.
+//
+// If no full snapshot exists, both return values are empty.
+func (ss SnapshotSet) PartitionAtFull() (full SnapshotSet, newer SnapshotSet) {
+	fullIdx := -1
+	for i := len(ss.items) - 1; i >= 0; i-- {
+		if ss.items[i].typ == SnapshotTypeFull {
+			fullIdx = i
+			break
+		}
+	}
+	if fullIdx < 0 {
+		empty := SnapshotSet{dir: ss.dir, items: []*Snapshot{}}
+		return empty, empty
+	}
+
+	full = SnapshotSet{dir: ss.dir, items: ss.items[fullIdx : fullIdx+1]}
+	newer = SnapshotSet{dir: ss.dir, items: ss.items[fullIdx+1:]}
+	return full, newer
+}
+
+// ValidateIncrementalChain checks that all snapshots newer than the newest full
+// snapshot are incremental snapshots.
+//
+// If the set contains no full snapshot, ValidateIncrementalChain returns an
+// error indicating the chain cannot be validated.
+func (ss SnapshotSet) ValidateIncrementalChain() error {
+	fullIdx := -1
+	var fullID string
+	for i := len(ss.items) - 1; i >= 0; i-- {
+		if ss.items[i].typ == SnapshotTypeFull {
+			fullIdx = i
+			fullID = ss.items[i].id
+			break
+		}
+	}
+	if fullIdx < 0 {
+		return fmt.Errorf("no full snapshot present; cannot validate incremental chain")
+	}
+
+	for i := fullIdx + 1; i < len(ss.items); i++ {
+		snap := ss.items[i]
+		if snap.typ != SnapshotTypeIncremental && snap.typ != SnapshotTypeNoop {
+			return fmt.Errorf("snapshot %s is not incremental or noop after newest full snapshot %s", snap.id, fullID)
+		}
+	}
+	return nil
+}
+
+// ResolveFiles resolves a snapshot ID into its constituent DB file and WAL files. At a minimum,
+// a DB file is returned. If the snapshot is incremental, associated WAL files are also returned. The
+// order in the slice is the order in which the WAL files should be applied to the DB file.
+func (ss SnapshotSet) ResolveFiles(id string) (dbFile string, walFiles []string, err error) {
+	idx := ss.indexOf(id)
+	if idx < 0 {
+		return "", nil, ErrSnapshotNotFound
+	}
+
+	snap := ss.items[idx]
+
+	// If the requested snapshot is full, just return its DB file.
+	if snap.typ == SnapshotTypeFull {
+		return filepath.Join(snap.path, dbfileName), nil, nil
+	}
+
+	// The requested snapshot is incremental or noop. Walk backward to find the
+	// nearest full snapshot, add that file to the list, and then walk forward again to
+	// add all incremental snapshots' WAL files up to and including the requested snapshot.
+	// Noop snapshots contribute no WAL files.
+	fullIdx := -1
+	for i := idx - 1; i >= 0; i-- {
+		if ss.items[i].typ == SnapshotTypeFull {
+			fullIdx = i
+			break
+		}
+	}
+	if fullIdx < 0 {
+		return "", nil, fmt.Errorf("no full snapshot found before snapshot %s", id)
+	}
+
+	dbFile = filepath.Join(ss.items[fullIdx].path, dbfileName)
+	for i := fullIdx + 1; i <= idx; i++ {
+		if ss.items[i].typ == SnapshotTypeIncremental {
+			walFiles = append(walFiles, filepath.Join(ss.items[i].path, walfileName))
+		}
+		// Noop snapshots contribute no WAL files.
+	}
+	return dbFile, walFiles, nil
+}
+
 // indexOf returns the index of the snapshot with the given ID.
 // If no snapshot is found, it returns -1.
 func (ss SnapshotSet) indexOf(id string) int {
@@ -226,23 +378,28 @@ func (ss SnapshotSet) indexOf(id string) int {
 // SnapshotCatalog is responsible for discovering and materializing snapshots
 // from a Store directory.
 //
-// SnapshotCatalog performs the filesystem scan, interprets the on-disk layout
-// for snapshot directories, loads meta.json for each discovered snapshot, and
-// produces a SnapshotSet ordered from oldest to newest.
+// SnapshotCatalog performs the filesystem scan, interprets the on-disk layout,
+// loads meta.json, determines each snapshot’s declared kind, and produces a
+// SnapshotSet ordered from oldest to newest. SnapshotCatalog is the sole place
+// where “what constitutes a snapshot directory” and “how to classify it” are
+// defined.
 //
-// SnapshotCatalog does not mutate on-disk state. Any errors encountered while
-// reading the snapshot store or loading metadata are returned to the caller.
+// SnapshotCatalog does not mutate on-disk state. Inconsistent or invalid snapshot
+// directories should be reported via structured errors so that Store.check() can
+// decide whether to repair, quarantine, or remove them.
 type SnapshotCatalog struct{}
 
 // Scan scans the snapshot store directory and returns a SnapshotSet.
 //
-// Scan identifies all snapshot directories under the given root, loads their
-// metadata from meta.json, and orders the resulting snapshots from oldest to
-// newest according to the store’s ordering rules.
+// Scan identifies all snapshot directories under the given root, interprets
+// their layout, loads metadata, determines declared snapshot kind, and orders
+// the resulting snapshots from oldest to newest according to the store’s
+// ordering rules.
 //
-// If Scan encounters an error while reading the snapshot store directory or
-// loading metadata for a snapshot, it returns that error. Scan does not attempt
-// to repair or modify on-disk state.
+// If Scan encounters an invalid snapshot directory (e.g., missing data file,
+// multiple data files, unreadable metadata, or a mismatch between declared kind
+// and observed file format), it returns an error describing the inconsistency.
+// Scan does not attempt to repair or modify on-disk state.
 func (c *SnapshotCatalog) Scan(dir string) (SnapshotSet, error) {
 	entries, err := os.ReadDir(dir)
 	if err != nil {
@@ -274,22 +431,39 @@ func (c *SnapshotCatalog) Scan(dir string) (SnapshotSet, error) {
 }
 
 func (c *SnapshotCatalog) loadSnapshot(path string, id string) (*Snapshot, error) {
-	meta, err := readMeta(metaPath(path))
+	meta, err := readRaftMeta(metaPath(path))
 	if err != nil {
 		return nil, fmt.Errorf("reading meta.json: %w", err)
 	}
 
-	if meta.ID != id {
-		return nil, fmt.Errorf("snapshot ID mismatch: expected %q, got %q", id, meta.ID)
-	}
-	return &Snapshot{
+	snapshot := &Snapshot{
 		id:       id,
 		path:     path,
 		raftMeta: meta,
-	}, nil
+	}
+
+	dataDBPath := filepath.Join(path, dbfileName)
+	dataWALPath := filepath.Join(path, walfileName)
+	dataNoopPath := filepath.Join(path, noopfileName)
+	if fileExists(dataDBPath) {
+		snapshot.typ = SnapshotTypeFull
+		if !db.IsValidSQLiteFile(dataDBPath) {
+			return nil, fmt.Errorf("%s in snapshot directory %q is not a valid SQLite database file", dbfileName, path)
+		}
+	} else if fileExists(dataWALPath) {
+		snapshot.typ = SnapshotTypeIncremental
+		if !db.IsValidSQLiteWALFile(dataWALPath) {
+			return nil, fmt.Errorf("data.wal in snapshot directory %q is not a valid SQLite WAL file", path)
+		}
+	} else if fileExists(dataNoopPath) {
+		snapshot.typ = SnapshotTypeNoop
+	} else {
+		return nil, fmt.Errorf("missing data file in snapshot directory %q", path)
+	}
+	return snapshot, nil
 }
 
-func readMeta(path string) (*raft.SnapshotMeta, error) {
+func readRaftMeta(path string) (*raft.SnapshotMeta, error) {
 	fh, err := os.Open(path)
 	if err != nil {
 		return nil, err
@@ -301,8 +475,4 @@ func readMeta(path string) (*raft.SnapshotMeta, error) {
 		return nil, err
 	}
 	return meta, nil
-}
-
-func metaPath(dir string) string {
-	return filepath.Join(dir, metaFileName)
 }

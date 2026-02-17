@@ -1,0 +1,35 @@
+syntax = "proto3";
+
+package snapshot;
+
+option go_package = "github.com/rqlite/rqlite/v9/snapshot/proto";
+
+message Header {
+  uint64 size_bytes = 1;
+  uint32 crc32 = 2;
+}
+
+message FullSnapshot {
+  Header db_header = 1;
+  repeated Header wal_headers = 2;
+}
+
+message IncrementalSnapshot {
+  Header wal_header = 1;
+}
+
+message IncrementalFileSnapshot {
+  string wal_path = 1;
+}
+
+message NoopSnapshot {}
+
+message SnapshotHeader {
+  uint32 format_version = 1;
+  oneof payload {
+    FullSnapshot full = 2;
+    IncrementalSnapshot incremental = 3;
+    IncrementalFileSnapshot incremental_file = 4;
+    NoopSnapshot noop = 5;
+  }
+}

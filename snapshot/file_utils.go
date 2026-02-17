@@ -1,10 +1,10 @@
 package snapshot
 
 import (
+	"bytes"
 	"os"
 	"path/filepath"
 	"runtime"
-	"strings"
 )
 
 func fileSize(path string) (int64, error) {
@@ -21,10 +21,6 @@ func parentDir(dir string) string {
 
 func tmpName(path string) string {
 	return path + tmpSuffix
-}
-
-func nonTmpName(path string) string {
-	return strings.TrimSuffix(path, tmpSuffix)
 }
 
 func isTmpName(name string) bool {
@@ -86,16 +82,14 @@ func syncDirMaybe(dir string) error {
 	return syncDir(dir)
 }
 
-// removeAllPrefix removes all files in the given directory that have the given prefix.
-func removeAllPrefix(path, prefix string) error {
-	files, err := filepath.Glob(filepath.Join(path, prefix) + "*")
+func filesIdentical(path1, path2 string) bool {
+	b1, err := os.ReadFile(path1)
 	if err != nil {
-		return err
+		return false
 	}
-	for _, f := range files {
-		if err := os.RemoveAll(f); err != nil {
-			return err
-		}
+	b2, err := os.ReadFile(path2)
+	if err != nil {
+		return false
 	}
-	return nil
+	return bytes.Equal(b1, b2)
 }

@@ -1335,6 +1335,7 @@ func Test_SingleNodeUpgrades_NoSnapshots(t *testing.T) {
 func Test_SingleNodeUpgrades_Snapshots(t *testing.T) {
 	versions := []string{
 		"v7.20.3-data-with-snapshots",
+		"v9.4.1-data-with-snapshots",
 	}
 
 	upgradeFrom := func(dir string) {

@@ -148,9 +148,9 @@ func RecoverNode(dataDir string, extensions []string, logger *log.Logger, logs r
 				return fmt.Errorf("failed to open snapshot %s: %s", snapID, err)
 			}
 			defer rc.Close()
-			_, err = copyFromReaderToFile(tmpDBPath, rc)
+			_, err = snapshot.ExtractDatabase(rc, tmpDBPath)
 			if err != nil {
-				return fmt.Errorf("failed to copy snapshot %s to temporary database: %s", snapID, err)
+				return fmt.Errorf("failed to extract snapshot %s to temporary database: %s", snapID, err)
 			}
 			snapshotIndex = snapshots[0].Index
 			snapshotTerm = snapshots[0].Term
@@ -217,11 +217,14 @@ func RecoverNode(dataDir string, extensions []string, logger *log.Logger, logs r
 	if !meta.Success() {
 		return fmt.Errorf("database checkpoint was not successful: %s", meta.String())
 	}
-	tmpDBFD, err := os.Open(tmpDBPath)
+	streamer, err := snapshot.NewSnapshotStreamer(tmpDBPath)
 	if err != nil {
-		return fmt.Errorf("failed to open temporary database file: %s", err)
+		return fmt.Errorf("failed to create snapshot streamer: %s", err)
 	}
-	fsmSnapshot := snapshot.NewStateReader(tmpDBFD) // tmpDBPath contains full state now.
+	if err := streamer.Open(); err != nil {
+		return fmt.Errorf("failed to open snapshot streamer: %s", err)
+	}
+	fsmSnapshot := snapshot.NewStateReader(streamer) // tmpDBPath contains full state now.
 	sink, err := snaps.Create(1, lastIndex, lastTerm, conf, 1, tn)
 	if err != nil {
 		return fmt.Errorf("failed to create snapshot: %v", err)
