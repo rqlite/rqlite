@@ -1,7 +1,7 @@
 ## v10.0.0 (unreleased)
 _Not ready for production use._
 
-This release introduces a major improvement to the Raft _Snapshot and Log Truncation_ process. Previously the Snapshotting process would be blocked on the Leader if the Leader was streaming a previously-taken Snapshot to the Follower. In most cases this wasn't an issue, as the Snapshotting process would be retried later. However in the event of a continuously slow Follower which continually needed Snapshots, this eventually starved the Leader of the ability to Snapshot.
+This release introduces a major improvement to the Raft _Snapshot and Log Truncation_ process. Previously the Snapshotting process would be blocked on the Leader if the Leader was streaming a previously-taken Snapshot to a Follower. In most cases this wasn't an issue, as the Snapshotting process would be retried later. However in the event of a continuously slow Follower which continually needed Snapshots, this eventually starved the Leader of the ability to Snapshot.
 
 There are no breaking API changes in this release, nor any changes to how clustering operates.
 
