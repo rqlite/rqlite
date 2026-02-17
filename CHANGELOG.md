@@ -5,7 +5,7 @@ This release introduces a major improvement to the Raft [_Snapshot and Log Trunc
 
 There are no breaking API changes in this release, nor any changes to how clustering operates.
 
-Upgrading to this release from a v7 release (or later) is seamless and been extensively tested. Rolling upgrades are also supported. However it is strongly recommended you [backup your rqlite system](https://rqlite.io/docs/guides/backup/) before upgrading it. Downgrading from v10 is not supported, and that is why the major release number has been incremented.
+Upgrading to this release from a v7 release (or later) is seamless and been extensively tested. Rolling upgrades are also supported. However it is strongly recommended you [backup your rqlite system](https://rqlite.io/docs/guides/backup/) before upgrading it. **Downgrading from v10 is not supported**, and that is why the major release number has been incremented.
 
 ### Implementation changes and bug fixes
 - [PR #2471](https://github.com/rqlite/rqlite/pull/2471): Move to non-blocking Snapshotting store.
