@@ -11,8 +11,8 @@ import (
 	"testing"
 
 	"github.com/hashicorp/raft"
-	"github.com/rqlite/rqlite/v9/db"
-	"github.com/rqlite/rqlite/v9/snapshot/plan"
+	"github.com/rqlite/rqlite/v10/db"
+	"github.com/rqlite/rqlite/v10/snapshot/plan"
 )
 
 func Test_NewStore(t *testing.T) {

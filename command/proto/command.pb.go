@@ -2265,7 +2265,7 @@ const file_command_proto_rawDesc = "" +
 	"\n" +
 	"\x06STRONG\x10\x02\x12\b\n" +
 	"\x04AUTO\x10\x03\x12\x10\n" +
-	"\fLINEARIZABLE\x10\x04B+Z)github.com/rqlite/rqlite/v9/command/protob\x06proto3"
+	"\fLINEARIZABLE\x10\x04B+Z)github.com/rqlite/rqlite/v10/command/protob\x06proto3"
 
 var (
 	file_command_proto_rawDescOnce sync.Once

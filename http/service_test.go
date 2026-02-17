@@ -18,10 +18,10 @@ import (
 	"testing"
 	"time"
 
-	cluster "github.com/rqlite/rqlite/v9/cluster/proto"
-	command "github.com/rqlite/rqlite/v9/command/proto"
-	"github.com/rqlite/rqlite/v9/proxy"
-	"github.com/rqlite/rqlite/v9/store"
+	cluster "github.com/rqlite/rqlite/v10/cluster/proto"
+	command "github.com/rqlite/rqlite/v10/command/proto"
+	"github.com/rqlite/rqlite/v10/proxy"
+	"github.com/rqlite/rqlite/v10/store"
 )
 
 func Test_ResponseJSONMarshal(t *testing.T) {

@@ -13,12 +13,12 @@ import (
 	"testing"
 	"time"
 
-	"github.com/rqlite/rqlite/v9/command/encoding"
-	"github.com/rqlite/rqlite/v9/command/proto"
-	"github.com/rqlite/rqlite/v9/db"
-	"github.com/rqlite/rqlite/v9/internal/random"
-	"github.com/rqlite/rqlite/v9/internal/rarchive"
-	"github.com/rqlite/rqlite/v9/testdata/chinook"
+	"github.com/rqlite/rqlite/v10/command/encoding"
+	"github.com/rqlite/rqlite/v10/command/proto"
+	"github.com/rqlite/rqlite/v10/db"
+	"github.com/rqlite/rqlite/v10/internal/random"
+	"github.com/rqlite/rqlite/v10/internal/rarchive"
+	"github.com/rqlite/rqlite/v10/testdata/chinook"
 )
 
 // Test_NonOpenStore tests that a non-open Store handles public methods correctly.

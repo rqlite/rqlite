@@ -396,7 +396,7 @@ const file_snapshot_proto_rawDesc = "" +
 	"\vincremental\x18\x03 \x01(\v2\x1d.snapshot.IncrementalSnapshotH\x00R\vincremental\x12N\n" +
 	"\x10incremental_file\x18\x04 \x01(\v2!.snapshot.IncrementalFileSnapshotH\x00R\x0fincrementalFile\x12,\n" +
 	"\x04noop\x18\x05 \x01(\v2\x16.snapshot.NoopSnapshotH\x00R\x04noopB\t\n" +
-	"\apayloadB,Z*github.com/rqlite/rqlite/v9/snapshot/protob\x06proto3"
+	"\apayloadB,Z*github.com/rqlite/rqlite/v10/snapshot/protob\x06proto3"
 
 var (
 	file_snapshot_proto_rawDescOnce sync.Once

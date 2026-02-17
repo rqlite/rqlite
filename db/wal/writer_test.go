@@ -9,7 +9,7 @@ import (
 	"testing"
 
 	_ "github.com/mattn/go-sqlite3"
-	"github.com/rqlite/rqlite/v9/internal/random"
+	"github.com/rqlite/rqlite/v10/internal/random"
 )
 
 func Test_Writer_FullScanner(t *testing.T) {

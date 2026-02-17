@@ -3,8 +3,8 @@ package cdc
 import (
 	"time"
 
-	"github.com/rqlite/rqlite/v9/cluster"
-	"github.com/rqlite/rqlite/v9/store"
+	"github.com/rqlite/rqlite/v10/cluster"
+	"github.com/rqlite/rqlite/v10/store"
 )
 
 // CDCCluster is a concrete implementation of the Cluster interface that bridges

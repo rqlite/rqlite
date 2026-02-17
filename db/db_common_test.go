@@ -8,7 +8,7 @@ import (
 	"strings"
 	"testing"
 
-	command "github.com/rqlite/rqlite/v9/command/proto"
+	command "github.com/rqlite/rqlite/v10/command/proto"
 )
 
 func Test_DB_BusyTimeout(t *testing.T) {

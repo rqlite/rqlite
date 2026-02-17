@@ -13,8 +13,8 @@ import (
 	"time"
 
 	"github.com/hashicorp/raft"
-	"github.com/rqlite/rqlite/v9/internal/rsync"
-	"github.com/rqlite/rqlite/v9/snapshot/plan"
+	"github.com/rqlite/rqlite/v10/internal/rsync"
+	"github.com/rqlite/rqlite/v10/snapshot/plan"
 )
 
 const (

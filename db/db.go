@@ -18,10 +18,10 @@ import (
 	"time"
 
 	"github.com/mattn/go-sqlite3"
-	command "github.com/rqlite/rqlite/v9/command/proto"
-	"github.com/rqlite/rqlite/v9/db/humanize"
-	"github.com/rqlite/rqlite/v9/internal/rsum"
-	"github.com/rqlite/rqlite/v9/internal/rsync"
+	command "github.com/rqlite/rqlite/v10/command/proto"
+	"github.com/rqlite/rqlite/v10/db/humanize"
+	"github.com/rqlite/rqlite/v10/internal/rsum"
+	"github.com/rqlite/rqlite/v10/internal/rsync"
 )
 
 const (

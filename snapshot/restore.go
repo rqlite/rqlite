@@ -7,7 +7,7 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/rqlite/rqlite/v9/db"
+	"github.com/rqlite/rqlite/v10/db"
 )
 
 // ExtractDatabase reads a protobuf-framed snapshot stream and writes

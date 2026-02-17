@@ -5,7 +5,7 @@ import (
 	"io"
 	"time"
 
-	"github.com/rqlite/rqlite/v9/command/proto"
+	"github.com/rqlite/rqlite/v10/command/proto"
 )
 
 // Provider implements the uploader Provider interface, allowing the

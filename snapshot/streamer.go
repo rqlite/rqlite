@@ -7,8 +7,8 @@ import (
 	"io"
 	"os"
 
-	"github.com/rqlite/rqlite/v9/internal/rsum"
-	"github.com/rqlite/rqlite/v9/snapshot/proto"
+	"github.com/rqlite/rqlite/v10/internal/rsum"
+	"github.com/rqlite/rqlite/v10/snapshot/proto"
 	pb "google.golang.org/protobuf/proto"
 )
 

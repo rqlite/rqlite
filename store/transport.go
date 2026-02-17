@@ -10,7 +10,7 @@ import (
 	"time"
 
 	"github.com/hashicorp/raft"
-	"github.com/rqlite/rqlite/v9/store/gzip"
+	"github.com/rqlite/rqlite/v10/store/gzip"
 )
 
 // Layer is the interface expected by the Store for network communication

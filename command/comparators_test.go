@@ -3,7 +3,7 @@ package command
 import (
 	"testing"
 
-	"github.com/rqlite/rqlite/v9/command/proto"
+	"github.com/rqlite/rqlite/v10/command/proto"
 )
 
 func Test_CDCValueComparator(t *testing.T) {

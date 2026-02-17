@@ -8,9 +8,9 @@ import (
 	"testing"
 	"time"
 
-	command "github.com/rqlite/rqlite/v9/command/proto"
-	"github.com/rqlite/rqlite/v9/db/wal"
-	"github.com/rqlite/rqlite/v9/internal/rsum"
+	command "github.com/rqlite/rqlite/v10/command/proto"
+	"github.com/rqlite/rqlite/v10/db/wal"
+	"github.com/rqlite/rqlite/v10/internal/rsum"
 )
 
 // Test_WALDatabaseCheckpointOKNoWrites tests that a checkpoint succeeds

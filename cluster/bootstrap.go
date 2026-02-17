@@ -9,9 +9,9 @@ import (
 	"sync"
 	"time"
 
-	"github.com/rqlite/rqlite/v9/cluster/proto"
-	command "github.com/rqlite/rqlite/v9/command/proto"
-	"github.com/rqlite/rqlite/v9/internal/random"
+	"github.com/rqlite/rqlite/v10/cluster/proto"
+	command "github.com/rqlite/rqlite/v10/command/proto"
+	"github.com/rqlite/rqlite/v10/internal/random"
 )
 
 var (

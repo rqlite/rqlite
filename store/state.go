@@ -10,12 +10,12 @@ import (
 	"time"
 
 	"github.com/hashicorp/raft"
-	"github.com/rqlite/rqlite/v9/command/chunking"
-	"github.com/rqlite/rqlite/v9/command/proto"
-	sql "github.com/rqlite/rqlite/v9/db"
-	"github.com/rqlite/rqlite/v9/internal/random"
-	"github.com/rqlite/rqlite/v9/snapshot"
-	rlog "github.com/rqlite/rqlite/v9/store/log"
+	"github.com/rqlite/rqlite/v10/command/chunking"
+	"github.com/rqlite/rqlite/v10/command/proto"
+	sql "github.com/rqlite/rqlite/v10/db"
+	"github.com/rqlite/rqlite/v10/internal/random"
+	"github.com/rqlite/rqlite/v10/snapshot"
+	rlog "github.com/rqlite/rqlite/v10/store/log"
 )
 
 // PragmaCheckRequest is a type that wraps a proto.Request and checks

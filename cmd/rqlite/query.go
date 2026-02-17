@@ -9,7 +9,7 @@ import (
 
 	"github.com/mkideal/cli"
 	"github.com/mkideal/pkg/textutil"
-	cl "github.com/rqlite/rqlite/v9/cmd/rqlite/http"
+	cl "github.com/rqlite/rqlite/v10/cmd/rqlite/http"
 )
 
 // Rows represents query result

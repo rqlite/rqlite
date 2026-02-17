@@ -6,8 +6,8 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/rqlite/rqlite/v9/db"
-	"github.com/rqlite/rqlite/v9/snapshot/proto"
+	"github.com/rqlite/rqlite/v10/db"
+	"github.com/rqlite/rqlite/v10/snapshot/proto"
 )
 
 var (

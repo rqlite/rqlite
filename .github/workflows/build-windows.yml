@@ -29,7 +29,7 @@ jobs:
         $env:CGO_ENABLED=1
         $env:CC=gcc
         $env:STRIP_SYMBOLS = "-w -s"
-        $env:LINKER_PKG_PATH = "github.com/rqlite/rqlite/v9/cmd"
+        $env:LINKER_PKG_PATH = "github.com/rqlite/rqlite/v10/cmd"
         $env:LDFLAGS = "-X $env:LINKER_PKG_PATH.CompilerCommand=$env:CC -X $env:LINKER_PKG_PATH.Version=${{ github.event.release.tag_name }} -X $env:LINKER_PKG_PATH.Branch=master -X $env:LINKER_PKG_PATH.Commit=$(git rev-parse HEAD) -X $env:LINKER_PKG_PATH.Buildtime=$(Get-Date -Format o)"
         go build -a -ldflags="$env:LDFLAGS $env:STRIP_SYMBOLS" ./cmd/rqlited
 

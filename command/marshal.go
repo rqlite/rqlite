@@ -7,7 +7,7 @@ import (
 	"fmt"
 	"io"
 
-	"github.com/rqlite/rqlite/v9/command/proto"
+	"github.com/rqlite/rqlite/v10/command/proto"
 	pb "google.golang.org/protobuf/proto"
 )
 

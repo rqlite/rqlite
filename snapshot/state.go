@@ -7,7 +7,7 @@ import (
 	"time"
 
 	"github.com/hashicorp/raft"
-	"github.com/rqlite/rqlite/v9/internal/progress"
+	"github.com/rqlite/rqlite/v10/internal/progress"
 )
 
 // StateReader represents a snapshot of the database state.

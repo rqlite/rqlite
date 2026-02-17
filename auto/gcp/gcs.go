@@ -18,7 +18,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/rqlite/rqlite/v9/auto/gcp/jws"
+	"github.com/rqlite/rqlite/v10/auto/gcp/jws"
 )
 
 var (

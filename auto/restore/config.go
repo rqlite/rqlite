@@ -6,9 +6,9 @@ import (
 	"os"
 	"time"
 
-	"github.com/rqlite/rqlite/v9/auto"
-	"github.com/rqlite/rqlite/v9/auto/aws"
-	"github.com/rqlite/rqlite/v9/auto/gcp"
+	"github.com/rqlite/rqlite/v10/auto"
+	"github.com/rqlite/rqlite/v10/auto/aws"
+	"github.com/rqlite/rqlite/v10/auto/gcp"
 )
 
 // Config is the config file format for the upload service

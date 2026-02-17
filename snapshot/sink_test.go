@@ -9,8 +9,8 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/rqlite/rqlite/v9/command/encoding"
-	"github.com/rqlite/rqlite/v9/db"
+	"github.com/rqlite/rqlite/v10/command/encoding"
+	"github.com/rqlite/rqlite/v10/db"
 )
 
 func Test_NewFullSink(t *testing.T) {

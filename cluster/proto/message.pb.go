@@ -7,7 +7,7 @@
 package proto
 
 import (
-	proto "github.com/rqlite/rqlite/v9/command/proto"
+	proto "github.com/rqlite/rqlite/v10/command/proto"
 	protoreflect "google.golang.org/protobuf/reflect/protoreflect"
 	protoimpl "google.golang.org/protobuf/runtime/protoimpl"
 	reflect "reflect"
@@ -1144,7 +1144,7 @@ const file_message_proto_rawDesc = "" +
 	"\anode_id\x18\x01 \x01(\tR\x06nodeId\x12%\n" +
 	"\x0ehighwater_mark\x18\x02 \x01(\x04R\rhighwaterMark\"3\n" +
 	"\x1bHighwaterMarkUpdateResponse\x12\x14\n" +
-	"\x05error\x18\x01 \x01(\tR\x05errorB+Z)github.com/rqlite/rqlite/v9/cluster/protob\x06proto3"
+	"\x05error\x18\x01 \x01(\tR\x05errorB+Z)github.com/rqlite/rqlite/v10/cluster/protob\x06proto3"
 
 var (
 	file_message_proto_rawDescOnce sync.Once

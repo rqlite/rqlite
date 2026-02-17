@@ -9,7 +9,7 @@ import (
 	"sync"
 	"time"
 
-	command "github.com/rqlite/rqlite/v9/command/proto"
+	command "github.com/rqlite/rqlite/v10/command/proto"
 )
 
 // SwappableDB is a wrapper around DB that allows the underlying database to be swapped out

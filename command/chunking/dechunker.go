@@ -8,7 +8,7 @@ import (
 	"os"
 	"sync"
 
-	"github.com/rqlite/rqlite/v9/command/proto"
+	"github.com/rqlite/rqlite/v10/command/proto"
 )
 
 // Dechunker is a writer that writes chunks to a file and returns the file path when
