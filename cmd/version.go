@@ -4,7 +4,7 @@ package cmd
 // Make sure the build process (linker flags) are updated, as well as go.mod.
 var (
 	// Version of rqlite.
-	Version = "9"
+	Version = "10"
 
 	// Commit this code was built at.
 	Commit = "unknown"
