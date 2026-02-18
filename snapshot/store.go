@@ -222,9 +222,9 @@ func (s *Store) Create(version raft.SnapshotVersion, index, term uint64, configu
 	return NewLockingSink(sink, s), nil
 }
 
-// List returns the list of available snapshots in the Store,
+// ListAll returns the list of all available snapshots in the Store,
 // ordered from newest to oldest.
-func (s *Store) List() ([]*raft.SnapshotMeta, error) {
+func (s *Store) ListAll() ([]*raft.SnapshotMeta, error) {
 	if err := s.mrsw.BeginRead(); err != nil {
 		return nil, err
 	}
@@ -240,6 +240,19 @@ func (s *Store) List() ([]*raft.SnapshotMeta, error) {
 		metas[i], metas[j] = metas[j], metas[i]
 	}
 	return metas, nil
+}
+
+// List returns the most recent snapshot in the Store, if any exist.
+// It satisfies the raft.SnapshotStore interface.
+func (s *Store) List() ([]*raft.SnapshotMeta, error) {
+	metas, err := s.ListAll()
+	if err != nil {
+		return nil, err
+	}
+	if len(metas) == 0 {
+		return metas, nil
+	}
+	return metas[:1], nil
 }
 
 // Len returns the number of snapshots in the Store.

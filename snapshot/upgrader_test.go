@@ -53,7 +53,7 @@ func Test_Upgrade_OK(t *testing.T) {
 		t.Fatalf("failed to create new snapshot store: %s", err)
 	}
 
-	snapshots, err := store.List()
+	snapshots, err := store.ListAll()
 	if err != nil {
 		t.Fatalf("failed to list snapshots: %s", err)
 	}
@@ -101,7 +101,7 @@ func Test_Upgrade_EmptyOK(t *testing.T) {
 		t.Fatalf("failed to create new snapshot store: %s", err)
 	}
 
-	snapshots, err := store.List()
+	snapshots, err := store.ListAll()
 	if err != nil {
 		t.Fatalf("failed to list snapshots: %s", err)
 	}
@@ -252,7 +252,7 @@ func Test_Upgrade8To10_OK(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to create store: %s", err)
 	}
-	snaps, err := store.List()
+	snaps, err := store.ListAll()
 	if err != nil {
 		t.Fatalf("failed to list snapshots: %s", err)
 	}
