@@ -15,6 +15,7 @@ Upgrading to this release from a v7 release (or later) is seamless and been exte
 - [PR #2476](https://github.com/rqlite/rqlite/pull/2476): Move to v10 rqlite modules.
 - [PR #2478](https://github.com/rqlite/rqlite/pull/2478): Remove redundant interrupted-reap check.
 - [PR #2479](https://github.com/rqlite/rqlite/pull/2479): Rename snapshot Store `List()` to `ListAll()`.
+- [PR #2477](https://github.com/rqlite/rqlite/pull/2477): Use Plan-and-Execute to upgrade v8 to v10 Snapshot stores.
 
 ## v9.4.1 (February 11th 2026)
 ### Implementation changes and bug fixes
