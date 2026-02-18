@@ -125,7 +125,7 @@ func TestExecute_Success(t *testing.T) {
 
 func TestExecute_MkdirAllAndCopyFile(t *testing.T) {
 	p := New()
-	tmpDirPath := filepath.Join(t.TempDir(), "plan_test_dir")
+	tmpDirPath := filepath.Join(t.TempDir(), "aaaa", "bbbb", "cccc")
 	p.AddMkdirAll(tmpDirPath)
 	p.AddCopyFile("src", "dst")
 
