@@ -1146,7 +1146,7 @@ func Test_Nodes(t *testing.T) {
 	}
 }
 
-func Test_RootRedirectToStatus(t *testing.T) {
+func Test_RootRedirectToUI(t *testing.T) {
 	m := &MockStore{}
 	c := &mockClusterService{}
 	s := New("127.0.0.1:0", m, c, proxy.New(m, c), nil)
@@ -1167,7 +1167,7 @@ func Test_RootRedirectToStatus(t *testing.T) {
 	if resp.StatusCode != http.StatusFound {
 		t.Fatalf("failed to get expected StatusFound for root, got %d", resp.StatusCode)
 	}
-	if resp.Header["Location"][0] != "/status" {
+	if resp.Header["Location"][0] != "/ui/" {
 		t.Fatalf("received incorrect redirect path")
 	}
 
@@ -1178,7 +1178,7 @@ func Test_RootRedirectToStatus(t *testing.T) {
 	if resp.StatusCode != http.StatusFound {
 		t.Fatalf("failed to get expected StatusFound for root, got %d", resp.StatusCode)
 	}
-	if resp.Header["Location"][0] != "/status" {
+	if resp.Header["Location"][0] != "/ui/" {
 		t.Fatalf("received incorrect redirect path")
 	}
 }
@@ -1366,6 +1366,134 @@ func Test_LicensesAuth(t *testing.T) {
 
 	// Test unauthorized access
 	resp, err := client.Get(host + "/licenses")
+	if err != nil {
+		t.Fatalf("failed to make request")
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusUnauthorized {
+		t.Fatalf("expected StatusUnauthorized, got %d", resp.StatusCode)
+	}
+}
+
+func Test_UIIndex(t *testing.T) {
+	m := &MockStore{}
+	c := &mockClusterService{}
+	s := New("127.0.0.1:0", m, c, proxy.New(m, c), nil)
+	if err := s.Start(); err != nil {
+		t.Fatalf("failed to start service")
+	}
+	defer s.Close()
+
+	client := &http.Client{}
+	host := fmt.Sprintf("http://%s", s.Addr().String())
+
+	resp, err := client.Get(host + "/ui/")
+	if err != nil {
+		t.Fatalf("failed to make UI request")
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("expected StatusOK for /ui/, got %d", resp.StatusCode)
+	}
+
+	ct := resp.Header.Get("Content-Type")
+	if !strings.Contains(ct, "text/html") {
+		t.Fatalf("expected text/html content type, got %s", ct)
+	}
+
+	body := mustReadBody(t, resp)
+	if !strings.Contains(body, "rqlite") {
+		t.Fatalf("response body does not contain 'rqlite'")
+	}
+}
+
+func Test_UIStaticAssets(t *testing.T) {
+	m := &MockStore{}
+	c := &mockClusterService{}
+	s := New("127.0.0.1:0", m, c, proxy.New(m, c), nil)
+	if err := s.Start(); err != nil {
+		t.Fatalf("failed to start service")
+	}
+	defer s.Close()
+
+	client := &http.Client{}
+	host := fmt.Sprintf("http://%s", s.Addr().String())
+
+	resp, err := client.Get(host + "/ui/static/css/style.css")
+	if err != nil {
+		t.Fatalf("failed to make CSS request")
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("expected StatusOK for style.css, got %d", resp.StatusCode)
+	}
+}
+
+func Test_UIRedirectSlash(t *testing.T) {
+	m := &MockStore{}
+	c := &mockClusterService{}
+	s := New("127.0.0.1:0", m, c, proxy.New(m, c), nil)
+	if err := s.Start(); err != nil {
+		t.Fatalf("failed to start service")
+	}
+	defer s.Close()
+
+	client := &http.Client{
+		CheckRedirect: func(req *http.Request, via []*http.Request) error {
+			return http.ErrUseLastResponse
+		},
+	}
+	host := fmt.Sprintf("http://%s", s.Addr().String())
+
+	resp, err := client.Get(host + "/ui")
+	if err != nil {
+		t.Fatalf("failed to make /ui request")
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusMovedPermanently {
+		t.Fatalf("expected StatusMovedPermanently for /ui, got %d", resp.StatusCode)
+	}
+	if resp.Header.Get("Location") != "/ui/" {
+		t.Fatalf("expected redirect to /ui/, got %s", resp.Header.Get("Location"))
+	}
+}
+
+func Test_UIMethodNotAllowed(t *testing.T) {
+	m := &MockStore{}
+	c := &mockClusterService{}
+	s := New("127.0.0.1:0", m, c, proxy.New(m, c), nil)
+	if err := s.Start(); err != nil {
+		t.Fatalf("failed to start service")
+	}
+	defer s.Close()
+
+	client := &http.Client{}
+	host := fmt.Sprintf("http://%s", s.Addr().String())
+
+	resp, err := client.Post(host+"/ui/", "text/plain", nil)
+	if err != nil {
+		t.Fatalf("failed to make POST request")
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusMethodNotAllowed {
+		t.Fatalf("expected StatusMethodNotAllowed for POST /ui/, got %d", resp.StatusCode)
+	}
+}
+
+func Test_UIAuth(t *testing.T) {
+	c := &mockCredentialStore{HasPermOK: false}
+	m := &MockStore{}
+	n := &mockClusterService{}
+	s := New("127.0.0.1:0", m, n, proxy.New(m, n), c)
+	if err := s.Start(); err != nil {
+		t.Fatalf("failed to start service")
+	}
+	defer s.Close()
+
+	client := &http.Client{}
+	host := fmt.Sprintf("http://%s", s.Addr().String())
+
+	resp, err := client.Get(host + "/ui/")
 	if err != nil {
 		t.Fatalf("failed to make request")
 	}
