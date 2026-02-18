@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"os"
+	"path/filepath"
 	"reflect"
 	"testing"
 )
@@ -124,7 +125,8 @@ func TestExecute_Success(t *testing.T) {
 
 func TestExecute_MkdirAllAndCopyFile(t *testing.T) {
 	p := New()
-	p.AddMkdirAll("/tmp/dir")
+	tmpDirPath := filepath.Join(t.TempDir(), "plan_test_dir")
+	p.AddMkdirAll(tmpDirPath)
 	p.AddCopyFile("src", "dst")
 
 	v := &MockVisitor{}
@@ -135,7 +137,7 @@ func TestExecute_MkdirAllAndCopyFile(t *testing.T) {
 	if len(v.Calls) != 2 {
 		t.Fatalf("expected 2 calls, got %d", len(v.Calls))
 	}
-	if v.Calls[0] != "mkdir_all /tmp/dir" {
+	if v.Calls[0] != "mkdir_all "+tmpDirPath {
 		t.Errorf("unexpected call 0: %s", v.Calls[0])
 	}
 	if v.Calls[1] != "copy_file src->dst" {
