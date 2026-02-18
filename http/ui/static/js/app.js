@@ -471,8 +471,8 @@
         { key: "api_addr", label: "API Address" },
         { key: "addr", label: "Raft Address" },
         { key: "voter", label: "Voter" },
-        { key: "reachable", label: "Reachable" },
-        { key: "leader", label: "Leader" }
+        { key: "leader", label: "Leader" },
+        { key: "reachable", label: "Reachable" }
     ];
     var lastNodesData = [];
     var nodesSortKey = "id";
@@ -532,8 +532,8 @@
             }
             html += "<td>" + escapeHTML(node.addr) + "</td>";
             html += "<td>" + (node.voter ? "Yes" : "No") + "</td>";
-            html += '<td><span class="status-dot ' + (node.reachable ? 'reachable' : 'unreachable') + '" title="' + (node.reachable ? 'Reachable' : 'Unreachable') + '"></span></td>';
             html += "<td>" + (node.leader ? "Yes" : "No") + "</td>";
+            html += '<td><span class="status-dot ' + (node.reachable ? 'reachable' : 'unreachable') + '" title="' + (node.reachable ? 'Reachable' : 'Unreachable') + '"></span></td>';
             html += "</tr>";
         });
         html += "</tbody></table>";
