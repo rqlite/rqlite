@@ -366,6 +366,7 @@
         var oss = data.os || {};
         var rt = data.runtime || {};
         var cluster = data.cluster || {};
+        var snapStore = store.snapshot_store || {};
 
         var sections = [
             {
@@ -435,6 +436,15 @@
                     ["Address", cluster.addr],
                     ["API Address", cluster.api_addr],
                     ["HTTPS", cluster.https]
+                ]
+            },
+            {
+                title: "Snapshots",
+                rows: [
+                    ["Interval", store.snapshot_interval],
+                    ["Threshold", store.snapshot_threshold],
+                    ["Count", Array.isArray(snapStore.snapshots) ? snapStore.snapshots.length : undefined],
+                    ["Snapshots", Array.isArray(snapStore.snapshots) ? (snapStore.snapshots.length > 0 ? snapStore.snapshots.join(", ") : "None") : undefined]
                 ]
             },
             {
