@@ -2,6 +2,7 @@ package plan
 
 import (
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 
@@ -114,4 +115,42 @@ func (e *Executor) WriteMeta(dir string, data []byte) error {
 	}
 	defer fh.Close()
 	return syncFileMaybe(fh.Name())
+}
+
+// MkdirAll creates a directory and all necessary parents. It is idempotent:
+// if the directory already exists, it returns nil.
+func (e *Executor) MkdirAll(path string) error {
+	return os.MkdirAll(path, 0755)
+}
+
+// CopyFile copies a file from src to dst. It is idempotent: if dst already
+// exists and src does not (i.e. the copy was completed but a subsequent step
+// failed), it returns nil.
+func (e *Executor) CopyFile(src, dst string) error {
+	srcFd, err := os.Open(src)
+	if err != nil {
+		if os.IsNotExist(err) {
+			if _, statErr := os.Stat(dst); statErr == nil {
+				return nil
+			}
+		}
+		return err
+	}
+	defer srcFd.Close()
+
+	fi, err := srcFd.Stat()
+	if err != nil {
+		return err
+	}
+
+	dstFd, err := os.OpenFile(dst, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, fi.Mode())
+	if err != nil {
+		return err
+	}
+	defer dstFd.Close()
+
+	if _, err := io.Copy(dstFd, srcFd); err != nil {
+		return err
+	}
+	return dstFd.Sync()
 }

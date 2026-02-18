@@ -25,6 +25,12 @@ const (
 
 	// OpWriteMeta represents writing snapshot metadata to a directory.
 	OpWriteMeta OpType = "write_meta"
+
+	// OpMkdirAll represents a recursive directory creation operation.
+	OpMkdirAll OpType = "mkdir_all"
+
+	// OpCopyFile represents a file copy operation.
+	OpCopyFile OpType = "copy_file"
 )
 
 // Operation represents a single snapshot store operation.
@@ -73,15 +79,21 @@ func ReadFromFile(path string) (*Plan, error) {
 }
 
 // WriteToFile writes the plan to the specified file in JSON format.
+// The write is atomic: data is first written to a temporary file
+// (path + ".tmp"), synced, and then renamed to the final path.
 func WriteToFile(p *Plan, path string) error {
 	data, err := json.Marshal(p)
 	if err != nil {
 		return err
 	}
-	if err := os.WriteFile(path, data, 0644); err != nil {
+	tmpPath := path + ".tmp"
+	if err := os.WriteFile(tmpPath, data, 0644); err != nil {
 		return err
 	}
-	return syncFileMaybe(path)
+	if err := syncFileMaybe(tmpPath); err != nil {
+		return err
+	}
+	return os.Rename(tmpPath, path)
 }
 
 // Len returns the number of operations in the plan.
@@ -134,6 +146,23 @@ func (p *Plan) AddWriteMeta(dir string, data []byte) {
 	})
 }
 
+// AddMkdirAll adds a recursive directory creation operation to the plan.
+func (p *Plan) AddMkdirAll(path string) {
+	p.Ops = append(p.Ops, Operation{
+		Type: OpMkdirAll,
+		Dst:  path,
+	})
+}
+
+// AddCopyFile adds a file copy operation to the plan.
+func (p *Plan) AddCopyFile(src, dst string) {
+	p.Ops = append(p.Ops, Operation{
+		Type: OpCopyFile,
+		Src:  src,
+		Dst:  dst,
+	})
+}
+
 // Visitor is the interface that must be implemented to execute a plan.
 type Visitor interface {
 	Rename(src, dst string) error
@@ -141,6 +170,8 @@ type Visitor interface {
 	RemoveAll(path string) error
 	Checkpoint(db string, wals []string) (int, error)
 	WriteMeta(dir string, data []byte) error
+	MkdirAll(path string) error
+	CopyFile(src, dst string) error
 }
 
 // Execute traverses the plan, calling the appropriate method on the visitor for each operation.
@@ -159,6 +190,10 @@ func (p *Plan) Execute(v Visitor) error {
 			_, err = v.Checkpoint(op.DB, op.WALs)
 		case OpWriteMeta:
 			err = v.WriteMeta(op.Dst, op.Data)
+		case OpMkdirAll:
+			err = v.MkdirAll(op.Dst)
+		case OpCopyFile:
+			err = v.CopyFile(op.Src, op.Dst)
 		default:
 			err = fmt.Errorf("unknown operation type: %s", op.Type)
 		}

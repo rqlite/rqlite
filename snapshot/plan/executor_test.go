@@ -245,6 +245,87 @@ func TestExecutor_WriteMeta(t *testing.T) {
 	}
 }
 
+func TestExecutor_MkdirAll(t *testing.T) {
+	e := NewExecutor()
+	tmpDir := t.TempDir()
+	dir := filepath.Join(tmpDir, "a", "b", "c")
+
+	// Create nested directory.
+	if err := e.MkdirAll(dir); err != nil {
+		t.Fatalf("MkdirAll failed: %v", err)
+	}
+
+	// Verify directory exists.
+	info, err := os.Stat(dir)
+	if err != nil {
+		t.Fatalf("directory does not exist: %v", err)
+	}
+	if !info.IsDir() {
+		t.Fatalf("expected a directory")
+	}
+
+	// Test idempotency: MkdirAll again -> should succeed.
+	if err := e.MkdirAll(dir); err != nil {
+		t.Fatalf("MkdirAll idempotency failed: %v", err)
+	}
+}
+
+func TestExecutor_CopyFile(t *testing.T) {
+	e := NewExecutor()
+	tmpDir := t.TempDir()
+
+	src := filepath.Join(tmpDir, "src")
+	dst := filepath.Join(tmpDir, "dst")
+	content := []byte("hello world")
+
+	// Create source file with specific permissions.
+	if err := os.WriteFile(src, content, 0600); err != nil {
+		t.Fatalf("failed to create source file: %v", err)
+	}
+
+	// Copy file.
+	if err := e.CopyFile(src, dst); err != nil {
+		t.Fatalf("CopyFile failed: %v", err)
+	}
+
+	// Verify copy.
+	got, err := os.ReadFile(dst)
+	if err != nil {
+		t.Fatalf("failed to read destination file: %v", err)
+	}
+	if string(got) != string(content) {
+		t.Fatalf("content mismatch: got %q, want %q", got, content)
+	}
+
+	// Verify permissions are preserved.
+	srcInfo, _ := os.Stat(src)
+	dstInfo, _ := os.Stat(dst)
+	if srcInfo.Mode().Perm() != dstInfo.Mode().Perm() {
+		t.Fatalf("permissions mismatch: src %v, dst %v", srcInfo.Mode().Perm(), dstInfo.Mode().Perm())
+	}
+
+	// Test idempotency: remove src, CopyFile again -> should succeed.
+	os.Remove(src)
+	if err := e.CopyFile(src, dst); err != nil {
+		t.Fatalf("CopyFile idempotency failed: %v", err)
+	}
+
+	// Verify dst still has the content.
+	got, err = os.ReadFile(dst)
+	if err != nil {
+		t.Fatalf("failed to read destination after idempotent call: %v", err)
+	}
+	if string(got) != string(content) {
+		t.Fatalf("content changed after idempotent call: got %q, want %q", got, content)
+	}
+
+	// Test error: both src and dst missing.
+	os.Remove(dst)
+	if err := e.CopyFile(src, dst); err == nil {
+		t.Fatalf("CopyFile should fail when both src and dst are missing")
+	}
+}
+
 func mustCopyFile(src, dst string) {
 	input, err := os.ReadFile(src)
 	if err != nil {

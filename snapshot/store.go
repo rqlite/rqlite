@@ -613,8 +613,11 @@ func (s *Store) check() error {
 		}
 	}
 
-	// Resume an interrupted reap if a plan file exists.
+	// Remove incomplete plan file from an interrupted write.
 	planPath := filepath.Join(s.dir, reapPlanFile)
+	os.Remove(tmpName(planPath))
+
+	// Resume an interrupted reap if a plan file exists.
 	if fileExists(planPath) {
 		s.logger.Printf("found interrupted reap plan at %s, resuming", planPath)
 		p, err := plan.ReadFromFile(planPath)

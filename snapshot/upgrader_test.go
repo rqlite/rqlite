@@ -1,6 +1,7 @@
 package snapshot
 
 import (
+	"encoding/json"
 	"fmt"
 	"io"
 	"io/fs"
@@ -10,6 +11,7 @@ import (
 	"testing"
 
 	"github.com/hashicorp/raft"
+	"github.com/rqlite/rqlite/v10/snapshot/plan"
 )
 
 func Test_Upgrade_NothingToDo(t *testing.T) {
@@ -361,10 +363,11 @@ func Test_Upgrade8To10_Idempotent(t *testing.T) {
 	}
 }
 
-func Test_Upgrade8To10_InterruptedTmpCleanup(t *testing.T) {
+func Test_Upgrade8To10_ResumesPlan(t *testing.T) {
 	logger := log.New(os.Stderr, "[snapshot-store-upgrader-test] ", 0)
-	oldDir := filepath.Join(t.TempDir(), "snapshots")
-	newDir := filepath.Join(t.TempDir(), "rsnapshots")
+	parentDir := t.TempDir()
+	oldDir := filepath.Join(parentDir, "snapshots")
+	newDir := filepath.Join(parentDir, "rsnapshots")
 
 	if err := os.MkdirAll(oldDir, 0755); err != nil {
 		t.Fatalf("failed to create old dir: %s", err)
@@ -372,18 +375,43 @@ func Test_Upgrade8To10_InterruptedTmpCleanup(t *testing.T) {
 	snapshotID := "2-18-1686659761026"
 	mustCreateV8Snapshot(t, oldDir, snapshotID, 18, 2)
 
-	// Simulate a leftover .tmp directory from a previous interrupted upgrade.
-	tmpDir := tmpName(newDir)
-	if err := os.MkdirAll(tmpDir, 0755); err != nil {
-		t.Fatalf("failed to create tmp dir: %s", err)
+	// Build a real plan (same as Upgrade8To10 would build) and persist it.
+	newTmpDir := tmpName(newDir)
+	newSnapshotDir := filepath.Join(newTmpDir, snapshotID)
+	oldDBPath := filepath.Join(oldDir, snapshotID+".db")
+	newDBPath := filepath.Join(newSnapshotDir, dbfileName)
+
+	snapMeta := &raft.SnapshotMeta{
+		ID:    snapshotID,
+		Index: 18,
+		Term:  2,
+	}
+	metaJSON, err := json.Marshal(snapMeta)
+	if err != nil {
+		t.Fatalf("failed to marshal meta: %v", err)
 	}
 
+	p := plan.New()
+	p.AddMkdirAll(newTmpDir)
+	p.AddMkdirAll(newSnapshotDir)
+	p.AddWriteMeta(newSnapshotDir, metaJSON)
+	p.AddCopyFile(oldDBPath, newDBPath)
+	p.AddRename(newTmpDir, newDir)
+	p.AddRemoveAll(oldDir)
+
+	planPath := filepath.Join(parentDir, upgrade8To10Plan)
+	if err := plan.WriteToFile(p, planPath); err != nil {
+		t.Fatalf("failed to write plan: %v", err)
+	}
+
+	// Call Upgrade8To10 — it should detect the plan and resume.
 	if err := Upgrade8To10(oldDir, newDir, logger); err != nil {
 		t.Fatalf("upgrade failed: %s", err)
 	}
 
-	if dirExists(tmpDir) {
-		t.Fatal("expected leftover tmp directory to be removed")
+	// Plan file should be cleaned up.
+	if fileExists(planPath) {
+		t.Fatal("expected plan file to be removed after successful upgrade")
 	}
 	if dirExists(oldDir) {
 		t.Fatal("expected old directory to be removed")
