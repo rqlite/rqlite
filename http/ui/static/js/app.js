@@ -564,10 +564,11 @@
     var backupBtn = document.getElementById("backup-btn");
     var backupStatusDiv = document.getElementById("backup-status");
 
-    // Enable/disable tables field based on format selection.
+    // Show/hide tables field based on format selection.
+    var tablesField = document.getElementById("tables-field");
     backupFormat.addEventListener("change", function () {
         var isSql = backupFormat.value === "sql";
-        backupTables.disabled = !isSql;
+        tablesField.style.display = isSql ? "" : "none";
         if (!isSql) backupTables.value = "";
     });
 
