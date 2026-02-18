@@ -2,6 +2,7 @@ package snapshot
 
 import (
 	"compress/gzip"
+	"encoding/json"
 	"fmt"
 	"io"
 	"log"
@@ -12,10 +13,12 @@ import (
 
 	"github.com/hashicorp/raft"
 	"github.com/rqlite/rqlite/v10/db"
+	"github.com/rqlite/rqlite/v10/snapshot/plan"
 )
 
 const (
-	v7StateFile = "state.bin"
+	v7StateFile      = "state.bin"
+	upgrade8To10Plan = "UPGRADE_8_10_PLAN"
 )
 
 // Upgrade7To8 writes a copy of the 7.x-format Snapshot directory at 'old' to a
@@ -177,29 +180,33 @@ func Upgrade7To8(old, new string, logger *log.Logger) (retErr error) {
 // metadata directory '<id>/meta.json'. In v10 format, the database file is stored
 // inside the snapshot directory as '<id>/data.db'. If the upgrade is successful,
 // the 'old' directory is removed before the function returns.
+//
+// The upgrade is crash-safe and idempotent: a plan file (UPGRADE_8_10_PLAN) is
+// persisted to the parent directory of 'new' before execution begins. If the
+// process is interrupted, a subsequent call will detect and resume the plan.
 func Upgrade8To10(old, new string, logger *log.Logger) (retErr error) {
 	defer func() {
 		if retErr != nil {
 			stats.Add(upgradeFail, 1)
 		}
 	}()
-	newTmpDir := tmpName(new)
-	defer func() {
-		if retErr != nil {
-			if err := os.RemoveAll(newTmpDir); err != nil && !os.IsNotExist(err) {
-				logger.Printf("failed to remove temporary upgraded snapshot directory at %s due to outer error (%s) cleanup: %s",
-					newTmpDir, retErr, err)
-			}
-		}
-	}()
 
-	// If a temporary version of the new snapshot exists, remove it. This implies a
-	// previous upgrade attempt was interrupted. We will need to start over.
-	if dirExists(newTmpDir) {
-		logger.Printf("detected temporary upgraded snapshot directory at %s, removing it", newTmpDir)
-		if err := os.RemoveAll(newTmpDir); err != nil {
-			return fmt.Errorf("failed to remove temporary upgraded snapshot directory %s: %s", newTmpDir, err)
+	planPath := filepath.Join(filepath.Dir(new), upgrade8To10Plan)
+
+	// Check for existing plan (crash recovery).
+	if fileExists(planPath) {
+		logger.Printf("found existing upgrade plan at %s, resuming", planPath)
+		p, err := plan.ReadFromFile(planPath)
+		if err != nil {
+			return fmt.Errorf("reading upgrade plan: %w", err)
 		}
+		if err := p.Execute(plan.NewExecutor()); err != nil {
+			return fmt.Errorf("executing resumed upgrade plan: %w", err)
+		}
+		os.Remove(planPath)
+		logger.Printf("resumed and completed upgrade of v8 snapshot directory to %s", new)
+		stats.Add(upgradeOk, 1)
+		return nil
 	}
 
 	if !dirExists(old) {
@@ -239,60 +246,37 @@ func Upgrade8To10(old, new string, logger *log.Logger) (retErr error) {
 		return nil
 	}
 
-	// Start the upgrade process: build the v10 layout in a temp directory.
-	if err := os.MkdirAll(newTmpDir, 0755); err != nil {
-		return fmt.Errorf("failed to create temporary snapshot directory %s: %s", newTmpDir, err)
-	}
-
+	// Build the upgrade plan.
+	newTmpDir := tmpName(new)
 	newSnapshotDir := filepath.Join(newTmpDir, snapID)
-	if err := os.MkdirAll(newSnapshotDir, 0755); err != nil {
-		return fmt.Errorf("failed to create new snapshot directory %s: %s", newSnapshotDir, err)
-	}
-
-	if err := writeMeta(newSnapshotDir, snapMeta); err != nil {
-		return fmt.Errorf("failed to write new snapshot meta file to %s: %s", newSnapshotDir, err)
-	}
-
-	// Copy the SQLite database file into the new snapshot directory as data.db.
 	oldDBPath := filepath.Join(old, snapID+".db")
 	newDBPath := filepath.Join(newSnapshotDir, dbfileName)
-	if err := func() error {
-		src, err := os.Open(oldDBPath)
-		if err != nil {
-			return fmt.Errorf("failed to open old SQLite file %s: %s", oldDBPath, err)
-		}
-		defer src.Close()
 
-		dst, err := os.Create(newDBPath)
-		if err != nil {
-			return fmt.Errorf("failed to create new SQLite file %s: %s", newDBPath, err)
-		}
-		defer dst.Close()
-
-		if _, err := io.Copy(dst, src); err != nil {
-			return fmt.Errorf("failed to copy SQLite file %s to %s: %s", oldDBPath, newDBPath, err)
-		}
-		return dst.Sync()
-	}(); err != nil {
-		return err
+	metaJSON, err := json.Marshal(snapMeta)
+	if err != nil {
+		return fmt.Errorf("failed to marshal snapshot meta: %w", err)
 	}
 
-	if !db.IsValidSQLiteFile(newDBPath) {
-		return fmt.Errorf("migrated SQLite file %s is not valid", newDBPath)
+	p := plan.New()
+	p.AddMkdirAll(newTmpDir)
+	p.AddMkdirAll(newSnapshotDir)
+	p.AddWriteMeta(newSnapshotDir, metaJSON)
+	p.AddCopyFile(oldDBPath, newDBPath)
+	p.AddRename(newTmpDir, new)
+	p.AddRemoveAll(old)
+
+	// Persist the plan for crash recovery.
+	if err := plan.WriteToFile(p, planPath); err != nil {
+		return fmt.Errorf("writing upgrade plan: %w", err)
 	}
 
-	// Move the upgraded snapshot directory into place.
-	if err := os.Rename(newTmpDir, new); err != nil {
-		return fmt.Errorf("failed to move temporary snapshot directory %s to %s: %s", newTmpDir, new, err)
-	}
-	if err := syncDirParentMaybe(new); err != nil {
-		return fmt.Errorf("failed to sync parent directory of new snapshot directory %s: %s", new, err)
+	// Execute the plan.
+	if err := p.Execute(plan.NewExecutor()); err != nil {
+		return fmt.Errorf("executing upgrade plan: %w", err)
 	}
 
-	// We're done! Remove old.
-	if err := removeDirSync(old); err != nil {
-		return fmt.Errorf("failed to remove old snapshot directory %s: %s", old, err)
-	}
+	// Clean up the plan file.
+	os.Remove(planPath)
 	logger.Printf("upgraded v8 snapshot directory %s to %s", old, new)
 	stats.Add(upgradeOk, 1)
 

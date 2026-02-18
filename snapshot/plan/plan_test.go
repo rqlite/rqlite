@@ -25,9 +25,11 @@ func TestAddOperations(t *testing.T) {
 	p.AddRemoveAll("d")
 	p.AddCheckpoint("db", []string{"w1", "w2"})
 	p.AddWriteMeta("dir", []byte(`{"id":"test"}`))
+	p.AddMkdirAll("newdir")
+	p.AddCopyFile("src", "dst")
 
-	if p.Len() != 5 {
-		t.Fatalf("expected length 5, got %d", p.Len())
+	if p.Len() != 7 {
+		t.Fatalf("expected length 7, got %d", p.Len())
 	}
 
 	ops := p.Ops
@@ -45,6 +47,12 @@ func TestAddOperations(t *testing.T) {
 	}
 	if ops[4].Type != OpWriteMeta || ops[4].Dst != "dir" || string(ops[4].Data) != `{"id":"test"}` {
 		t.Errorf("unexpected op 4: %+v", ops[4])
+	}
+	if ops[5].Type != OpMkdirAll || ops[5].Dst != "newdir" {
+		t.Errorf("unexpected op 5: %+v", ops[5])
+	}
+	if ops[6].Type != OpCopyFile || ops[6].Src != "src" || ops[6].Dst != "dst" {
+		t.Errorf("unexpected op 6: %+v", ops[6])
 	}
 }
 
@@ -79,6 +87,16 @@ func (m *MockVisitor) WriteMeta(dir string, data []byte) error {
 	return m.Err
 }
 
+func (m *MockVisitor) MkdirAll(path string) error {
+	m.Calls = append(m.Calls, "mkdir_all "+path)
+	return m.Err
+}
+
+func (m *MockVisitor) CopyFile(src, dst string) error {
+	m.Calls = append(m.Calls, "copy_file "+src+"->"+dst)
+	return m.Err
+}
+
 func TestExecute_Success(t *testing.T) {
 	p := New()
 	p.AddRename("src", "dst")
@@ -101,6 +119,27 @@ func TestExecute_Success(t *testing.T) {
 	}
 	if v.Calls[2] != "write_meta snap" {
 		t.Errorf("unexpected call 2: %s", v.Calls[2])
+	}
+}
+
+func TestExecute_MkdirAllAndCopyFile(t *testing.T) {
+	p := New()
+	p.AddMkdirAll("/tmp/dir")
+	p.AddCopyFile("src", "dst")
+
+	v := &MockVisitor{}
+	if err := p.Execute(v); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if len(v.Calls) != 2 {
+		t.Fatalf("expected 2 calls, got %d", len(v.Calls))
+	}
+	if v.Calls[0] != "mkdir_all /tmp/dir" {
+		t.Errorf("unexpected call 0: %s", v.Calls[0])
+	}
+	if v.Calls[1] != "copy_file src->dst" {
+		t.Errorf("unexpected call 1: %s", v.Calls[1])
 	}
 }
 
@@ -136,6 +175,8 @@ func (f *FailVisitor) Remove(path string) error                         { return
 func (f *FailVisitor) RemoveAll(path string) error                      { return f.check() }
 func (f *FailVisitor) Checkpoint(db string, wals []string) (int, error) { return 0, f.check() }
 func (f *FailVisitor) WriteMeta(dir string, data []byte) error          { return f.check() }
+func (f *FailVisitor) MkdirAll(path string) error                       { return f.check() }
+func (f *FailVisitor) CopyFile(src, dst string) error                   { return f.check() }
 
 func TestExecute_StopsOnError(t *testing.T) {
 	p := New()
@@ -175,6 +216,8 @@ func TestJSONSerialization(t *testing.T) {
 	p.AddRemoveAll("e")
 	p.AddCheckpoint("db", []string{"w1", "w2"})
 	p.AddWriteMeta("snap", []byte(`{"id":"snap-1"}`))
+	p.AddMkdirAll("newdir")
+	p.AddCopyFile("x", "y")
 	p.AddRemoveAll("f")
 	p.NReaped = 3
 	p.NCheckpointed = 2
