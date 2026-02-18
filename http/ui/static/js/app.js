@@ -271,17 +271,27 @@
     // Status is the default tab, so load immediately.
     loadStatus();
 
+    var rawJsonWrapper = document.getElementById("raw-json-wrapper");
+    var copyJsonBtn = document.getElementById("copy-json-btn");
+
     rawJsonBtn.addEventListener("click", function () {
-        if (rawJsonPre.classList.contains("hidden")) {
-            rawJsonPre.classList.remove("hidden");
+        if (rawJsonWrapper.classList.contains("hidden")) {
+            rawJsonWrapper.classList.remove("hidden");
             rawJsonBtn.textContent = "Hide Raw JSON";
             if (lastStatusData) {
                 rawJsonPre.textContent = JSON.stringify(lastStatusData, null, 2);
             }
         } else {
-            rawJsonPre.classList.add("hidden");
+            rawJsonWrapper.classList.add("hidden");
             rawJsonBtn.textContent = "Show Raw JSON";
         }
+    });
+
+    copyJsonBtn.addEventListener("click", function () {
+        navigator.clipboard.writeText(rawJsonPre.textContent).then(function () {
+            copyJsonBtn.textContent = "\u2714";
+            setTimeout(function () { copyJsonBtn.textContent = "\u2398"; }, 1500);
+        });
     });
 
     showNonVoters.addEventListener("change", function () {
@@ -301,7 +311,7 @@
             renderStatus(lastStatusData);
             updateNodeInfo(lastStatusData);
             renderNodes(responses[1].data);
-            if (!rawJsonPre.classList.contains("hidden")) {
+            if (!rawJsonWrapper.classList.contains("hidden")) {
                 rawJsonPre.textContent = JSON.stringify(lastStatusData, null, 2);
             }
             // Update last-updated timestamp
