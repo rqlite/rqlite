@@ -371,16 +371,6 @@ func (s *Store) Reap() (int, int, error) {
 
 	planPath := filepath.Join(s.dir, reapPlanFile)
 
-	// Check for existing reap plan (crash recovery).
-	if fileExists(planPath) {
-		s.logger.Printf("found existing reap plan at %s, resuming", planPath)
-		p, err := plan.ReadFromFile(planPath)
-		if err != nil {
-			return 0, 0, fmt.Errorf("reading reap plan: %w", err)
-		}
-		return s.executeReapPlan(p, planPath)
-	}
-
 	// Scan store.
 	snapSet, err := s.getSnapshots()
 	if err != nil {
