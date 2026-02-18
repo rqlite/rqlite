@@ -35,7 +35,7 @@ func Test_StoreEmpty(t *testing.T) {
 	dir := t.TempDir()
 	store, _ := NewStore(dir)
 
-	snaps, err := store.List()
+	snaps, err := store.ListAll()
 	if err != nil {
 		t.Fatalf("Failed to list snapshots: %v", err)
 	}
@@ -165,7 +165,7 @@ func Test_Store_CreateThenList(t *testing.T) {
 		t.Fatalf("Failed to create new store: %v", err)
 	}
 
-	snaps, err := store.List()
+	snaps, err := store.ListAll()
 	if err != nil {
 		t.Fatalf("Failed to list snapshots: %v", err)
 	}
@@ -191,7 +191,7 @@ func Test_Store_CreateThenList(t *testing.T) {
 		t.Fatalf("Expected latest term to be 2, got %d", tm)
 	}
 
-	snaps, err = store.List()
+	snaps, err = store.ListAll()
 	if err != nil {
 		t.Fatalf("Failed to list snapshots: %v", err)
 	}
@@ -203,6 +203,52 @@ func Test_Store_CreateThenList(t *testing.T) {
 	}
 	if snaps[1].ID != "2-1017-1704807719996" {
 		t.Fatalf("Expected snapshot ID to be 2-1017-1704807719996, got %s", snaps[1].ID)
+	}
+}
+
+func Test_Store_List(t *testing.T) {
+	dir := t.TempDir()
+	store, err := NewStore(dir)
+	if err != nil {
+		t.Fatalf("Failed to create new store: %v", err)
+	}
+
+	// List on empty store should return empty slice.
+	snaps, err := store.List()
+	if err != nil {
+		t.Fatalf("Failed to list snapshots: %v", err)
+	}
+	if len(snaps) != 0 {
+		t.Fatalf("Expected 0 snapshots, got %d", len(snaps))
+	}
+
+	// Create a single snapshot, List should return it.
+	createSnapshotInStore(t, store, "2-1017-1704807719996", 1017, 2, 1, "testdata/db-and-wals/backup.db")
+	snaps, err = store.List()
+	if err != nil {
+		t.Fatalf("Failed to list snapshots: %v", err)
+	}
+	if len(snaps) != 1 {
+		t.Fatalf("Expected 1 snapshot, got %d", len(snaps))
+	}
+	if snaps[0].ID != "2-1017-1704807719996" {
+		t.Fatalf("Expected snapshot ID to be 2-1017-1704807719996, got %s", snaps[0].ID)
+	}
+
+	// Create a second snapshot, List should return only the newest.
+	createSnapshotInStore(t, store, "2-1131-1704807720976", 1131, 2, 1, "", "testdata/db-and-wals/wal-00")
+	if store.Len() != 2 {
+		t.Fatalf("Expected store to have 2 snapshots, got %d", store.Len())
+	}
+	snaps, err = store.List()
+	if err != nil {
+		t.Fatalf("Failed to list snapshots: %v", err)
+	}
+	if len(snaps) != 1 {
+		t.Fatalf("Expected 1 snapshot, got %d", len(snaps))
+	}
+	if snaps[0].ID != "2-1131-1704807720976" {
+		t.Fatalf("Expected snapshot ID to be 2-1131-1704807720976, got %s", snaps[0].ID)
 	}
 }
 
@@ -233,7 +279,7 @@ func Test_Store_EndToEndCycle(t *testing.T) {
 
 	// Check that the snapshots are listed in the correct order, with the snapshots
 	// ordered from newest to oldest.
-	snaps, err := store0.List()
+	snaps, err := store0.ListAll()
 	if err != nil {
 		t.Fatalf("Failed to list snapshots: %v", err)
 	}
@@ -277,7 +323,7 @@ func Test_Store_EndToEndCycle(t *testing.T) {
 	}
 
 	// Open the snapshot in the second store, check its contents.
-	snaps, err = store1.List()
+	snaps, err = store1.ListAll()
 	if err != nil {
 		t.Fatalf("Failed to list snapshots in destination store: %v", err)
 	}
@@ -339,7 +385,7 @@ func Test_Store_EndToEndCycle(t *testing.T) {
 	// another, the Sink writing to the second store will checkpoint the WAL files into
 	// the database file. Therefore, when we read back the snapshot from the second store,
 	// we expect to see only a database file, with no associated WAL files.
-	snaps, err = store1.List()
+	snaps, err = store1.ListAll()
 	if err != nil {
 		t.Fatalf("Failed to list snapshots in destination store: %v", err)
 	}
@@ -414,7 +460,7 @@ func Test_Store_EndToEndCycle(t *testing.T) {
 	}
 
 	// Open the third snapshot in the second store, check its contents.
-	snaps, err = store1.List()
+	snaps, err = store1.ListAll()
 	if err != nil {
 		t.Fatalf("Failed to list snapshots in destination store: %v", err)
 	}
@@ -491,7 +537,7 @@ func Test_Store_EndToEndCycle(t *testing.T) {
 	// Open the fourth snapshot in the second store, check its contents. Because
 	// the snapshot contains both a DB file and WAL files, the Sink in the second
 	// store will checkpoint the WAL files into the DB file.
-	snaps, err = store1.List()
+	snaps, err = store1.ListAll()
 	if err != nil {
 		t.Fatalf("Failed to list snapshots in destination store: %v", err)
 	}
@@ -609,7 +655,7 @@ func Test_Store_Reap(t *testing.T) {
 	// Write two more WAL files, and then Reap.
 	createSnapshotInStore(t, store, "2-1400-1704807720976", 1400, 2, 1, "", "testdata/db-and-wals/wal-01")
 	createSnapshotInStore(t, store, "2-1500-1704807720976", 1500, 2, 1, "", "testdata/db-and-wals/wal-02")
-	snaps, err = store.List()
+	snaps, err = store.ListAll()
 	if err != nil {
 		t.Fatalf("Failed to list snapshots in destination store: %v", err)
 	}
@@ -1262,7 +1308,7 @@ func persistStreamerData(t *testing.T, buf *bytes.Buffer) (string, []string) {
 
 func mustListSnapshots(t *testing.T, store *Store) []*raft.SnapshotMeta {
 	t.Helper()
-	snaps, err := store.List()
+	snaps, err := store.ListAll()
 	if err != nil {
 		t.Fatalf("Failed to list snapshots: %v", err)
 	}

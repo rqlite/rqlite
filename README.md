@@ -57,7 +57,7 @@ curl -G 'localhost:4001/db/query?pretty' --data-urlencode 'q=SELECT * FROM foo'
 - **Effortless Backups**: Hot [backups](https://rqlite.io/docs/guides/backup/), including [automatic backups to AWS S3, MinIO, and Google Cloud](https://rqlite.io/docs/guides/backup/#automatic-backups), as well as [restore directly from SQLite](https://rqlite.io/docs/guides/backup/#restoring-from-sqlite) and [Cloud-based storage](https://rqlite.io/docs/guides/backup/#restoring-from-cloud-storage).
 
 **Developer experience**
-- **Simple APIs**: Easy-to-use [HTTP API](https://rqlite.io/docs/api/). A [CLI](https://rqlite.io/docs/cli/) and [client libraries](https://rqlite.io/docs/api/client-libraries/) are also available.
+- **Simple APIs**: Easy-to-use [HTTP API](https://rqlite.io/docs/api/). A built-in console app, [CLI](https://rqlite.io/docs/cli/) and [client libraries](https://rqlite.io/docs/api/client-libraries/) are also available.
 - **Robust Security**: [End-to-end encryption with TLS](https://rqlite.io/docs/guides/security/) and rich authentication/authorization controls.
 - **Tunable Consistency**: Customize [read consistency](https://rqlite.io/docs/api/read-consistency/) and [durability](https://rqlite.io/docs/api/queued-writes/) to match your application's needs.
 

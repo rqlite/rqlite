@@ -3,13 +3,18 @@ _Not ready for production use._
 
 This release introduces a major improvement to the Raft [_Snapshot and Log Truncation_](https://youtu.be/8XbxQ1Epi5w?t=492) process. Previously the Snapshotting process would be blocked on the Leader if the Leader was streaming a previously-taken Snapshot to a Follower. In most cases this wasn't an issue, as the Snapshotting process would be retried later. However in the event of a continuously slow Follower which continually needed Snapshots, this eventually starved the Leader of the ability to Snapshot. With v10 this is no longer the case and Snapshotting on the Leader is now decoupled from streaming pre-existing Snapshots to other nodes.
 
-There are no breaking API changes in this release, nor any changes to how clustering operates.
+There are no breaking API changes in this release, nor any changes to how clustering operates. This release also introduces a new built-in console app, making it more convenient to work with an rqlite system.
 
 Upgrading to this release from a v7 release (or later) is seamless and been extensively tested. Rolling upgrades are also supported. However it is strongly recommended you [backup your rqlite system](https://rqlite.io/docs/guides/backup/) before upgrading it. **Downgrading from v10 is not supported**, and that is why the major release number has been incremented. If you do need to downgrade then backup your v10 system and use that backup to deploy a new pre-v10 system.
+
+### New features
+- [PR #2480](https://github.com/rqlite/rqlite/pull/2480), [PR #2482](https://github.com/rqlite/rqlite/pull/2482): Add built-in UI for working with rqlite, including running queries. UI is served at `/ui`.
 
 ### Implementation changes and bug fixes
 - [PR #2471](https://github.com/rqlite/rqlite/pull/2471): Move to non-blocking Snapshotting store.
 - [PR #2476](https://github.com/rqlite/rqlite/pull/2476): Move to v10 rqlite modules.
+- [PR #2478](https://github.com/rqlite/rqlite/pull/2478): Remove redundant interrupted-reap check.
+- [PR #2479](https://github.com/rqlite/rqlite/pull/2479): Rename snapshot Store `List()` to `ListAll()`.
 
 ## v9.4.1 (February 11th 2026)
 ### Implementation changes and bug fixes
