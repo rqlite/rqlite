@@ -404,7 +404,8 @@
                     ["Page Size", sqlite.mem_stats ? sqlite.mem_stats.page_size : undefined],
                     ["Page Count", sqlite.mem_stats ? sqlite.mem_stats.page_count : undefined],
                     ["RW Connections (in-use / idle)", connRW.in_use !== undefined ? connRW.in_use + " / " + connRW.idle : undefined],
-                    ["RO Connections (in-use / idle)", connRO.in_use !== undefined ? connRO.in_use + " / " + connRO.idle : undefined]
+                    ["RO Connections (in-use / idle)", connRO.in_use !== undefined ? connRO.in_use + " / " + connRO.idle : undefined],
+                    ["Extensions", Array.isArray(sqlite.extensions) ? (sqlite.extensions.length > 0 ? sqlite.extensions.join(", ") : "None") : undefined]
                 ]
             },
             {
