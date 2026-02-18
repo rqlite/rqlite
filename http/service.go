@@ -263,6 +263,8 @@ type Service struct {
 	addr       string       // Bind address of the HTTP service.
 	ln         net.Listener // Service listener
 
+	uiHandler http.Handler
+
 	store Store // The Raft-backed database store.
 	proxy *proxy.Proxy
 
@@ -297,8 +299,6 @@ type Service struct {
 	credentialStore CredentialStore
 
 	BuildInfo map[string]any
-
-	uiHandler http.Handler
 
 	logger *log.Logger
 }
@@ -1185,7 +1185,7 @@ func (s *Service) handleLicenses(w http.ResponseWriter, r *http.Request, qp Quer
 
 // handleUI serves the built-in web UI.
 func (s *Service) handleUI(w http.ResponseWriter, r *http.Request) {
-	if !s.CheckRequestPerm(r, auth.PermStatus) {
+	if !s.CheckRequestPerm(r, auth.PermUI) {
 		w.WriteHeader(http.StatusUnauthorized)
 		return
 	}
