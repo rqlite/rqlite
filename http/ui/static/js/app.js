@@ -47,12 +47,20 @@
         }
     }
 
-    // Loaded on startup since Status is the default tab.
-
     // --- Tabs ---
 
     var tabs = document.querySelectorAll(".tab");
     var tabContents = document.querySelectorAll(".tab-content");
+    var homeLink = document.getElementById("home-link");
+
+    function showStatus() {
+        tabs.forEach(function (t) { t.classList.remove("active"); });
+        tabContents.forEach(function (tc) { tc.classList.remove("active"); });
+        document.getElementById("status").classList.add("active");
+        loadStatus();
+    }
+
+    homeLink.addEventListener("click", showStatus);
 
     tabs.forEach(function (tab) {
         tab.addEventListener("click", function () {
@@ -61,10 +69,6 @@
             tabContents.forEach(function (tc) { tc.classList.remove("active"); });
             tab.classList.add("active");
             document.getElementById(target).classList.add("active");
-
-            if (target === "status") {
-                loadStatus();
-            }
         });
     });
 
