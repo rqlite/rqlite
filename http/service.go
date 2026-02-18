@@ -321,7 +321,7 @@ func New(addr string, store Store, cluster Cluster, pxy *proxy.Proxy, credential
 		credentialStore:     credentials,
 		logger:              log.New(os.Stderr, "[http] ", log.LstdFlags),
 	}
-	s.uiHandler = http.StripPrefix("/ui/", http.FileServer(http.FS(ui.Assets)))
+	s.uiHandler = http.StripPrefix("/ui/", http.FileServerFS(ui.Assets))
 	return s
 }
 
