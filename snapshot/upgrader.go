@@ -193,6 +193,9 @@ func Upgrade8To10(old, new string, logger *log.Logger) (retErr error) {
 
 	planPath := filepath.Join(filepath.Dir(new), upgrade8To10Plan)
 
+	// Remove incomplete plan file from an interrupted write.
+	os.Remove(planPath + ".tmp")
+
 	// Check for existing plan (crash recovery).
 	if fileExists(planPath) {
 		logger.Printf("found existing upgrade plan at %s, resuming", planPath)

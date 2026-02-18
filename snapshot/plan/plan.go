@@ -79,15 +79,21 @@ func ReadFromFile(path string) (*Plan, error) {
 }
 
 // WriteToFile writes the plan to the specified file in JSON format.
+// The write is atomic: data is first written to a temporary file
+// (path + ".tmp"), synced, and then renamed to the final path.
 func WriteToFile(p *Plan, path string) error {
 	data, err := json.Marshal(p)
 	if err != nil {
 		return err
 	}
-	if err := os.WriteFile(path, data, 0644); err != nil {
+	tmpPath := path + ".tmp"
+	if err := os.WriteFile(tmpPath, data, 0644); err != nil {
 		return err
 	}
-	return syncFileMaybe(path)
+	if err := syncFileMaybe(tmpPath); err != nil {
+		return err
+	}
+	return os.Rename(tmpPath, path)
 }
 
 // Len returns the number of operations in the plan.

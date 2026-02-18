@@ -138,7 +138,12 @@ func (e *Executor) CopyFile(src, dst string) error {
 	}
 	defer srcFd.Close()
 
-	dstFd, err := os.Create(dst)
+	fi, err := srcFd.Stat()
+	if err != nil {
+		return err
+	}
+
+	dstFd, err := os.OpenFile(dst, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, fi.Mode())
 	if err != nil {
 		return err
 	}

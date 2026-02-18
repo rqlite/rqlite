@@ -278,8 +278,8 @@ func TestExecutor_CopyFile(t *testing.T) {
 	dst := filepath.Join(tmpDir, "dst")
 	content := []byte("hello world")
 
-	// Create source file.
-	if err := os.WriteFile(src, content, 0644); err != nil {
+	// Create source file with specific permissions.
+	if err := os.WriteFile(src, content, 0600); err != nil {
 		t.Fatalf("failed to create source file: %v", err)
 	}
 
@@ -295,6 +295,13 @@ func TestExecutor_CopyFile(t *testing.T) {
 	}
 	if string(got) != string(content) {
 		t.Fatalf("content mismatch: got %q, want %q", got, content)
+	}
+
+	// Verify permissions are preserved.
+	srcInfo, _ := os.Stat(src)
+	dstInfo, _ := os.Stat(dst)
+	if srcInfo.Mode().Perm() != dstInfo.Mode().Perm() {
+		t.Fatalf("permissions mismatch: src %v, dst %v", srcInfo.Mode().Perm(), dstInfo.Mode().Perm())
 	}
 
 	// Test idempotency: remove src, CopyFile again -> should succeed.
