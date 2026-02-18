@@ -10,6 +10,7 @@ Upgrading to this release from a v7 release (or later) is seamless and been exte
 ### Implementation changes and bug fixes
 - [PR #2471](https://github.com/rqlite/rqlite/pull/2471): Move to non-blocking Snapshotting store.
 - [PR #2476](https://github.com/rqlite/rqlite/pull/2476): Move to v10 rqlite modules.
+- [PR #2478](https://github.com/rqlite/rqlite/pull/2478): Remove redundant interrupted-reap check.
 
 ## v9.4.1 (February 11th 2026)
 ### Implementation changes and bug fixes
