@@ -1,0 +1,83 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>rqlite</title>
+    <link rel="stylesheet" href="/ui/static/css/style.css">
+</head>
+<body>
+    <header>
+        <div class="header-content">
+            <h1><svg class="logo" viewBox="0 0 46.214 44.45" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink"><image width="46.214" height="44.45" preserveAspectRatio="none" xlink:href="data:image/png;base64,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"/></svg> rqlite</h1>
+            <nav>
+                <button class="tab active" data-tab="status">Status</button>
+                <button class="tab" data-tab="query">Query</button>
+                <button class="tab" data-tab="backup">Backup</button>
+            </nav>
+            <div id="node-info" class="node-info"><span id="node-id-text"></span><br><span id="raft-state-badge"></span></div>
+        </div>
+    </header>
+    <main>
+        <section id="query" class="tab-content">
+            <div class="query-input">
+                <textarea id="sql-input" placeholder="Enter SQL statement..." rows="4" spellcheck="false"></textarea>
+                <div class="query-actions">
+                    <button id="execute-btn">Execute</button>
+                    <span class="hint">Ctrl+Enter to execute</span>
+                </div>
+            </div>
+            <div id="query-history" class="query-history"></div>
+            <div id="query-results"></div>
+        </section>
+        <section id="status" class="tab-content active">
+            <div class="status-controls">
+                <label><input type="checkbox" id="auto-refresh"> Auto-refresh (5s)</label>
+                <span id="last-updated" class="last-updated"></span>
+            </div>
+            <div id="status-cards" class="cards"></div>
+            <div class="nodes-header">
+                <h3>Nodes</h3>
+                <label class="nodes-option"><input type="checkbox" id="show-nonvoters"> Include non-voters</label>
+            </div>
+            <div id="nodes-table"></div>
+            <div id="detail-sections"></div>
+            <div class="raw-json-toggle">
+                <button id="raw-json-btn" class="toggle-btn">Show Raw JSON</button>
+            </div>
+            <pre id="raw-json" class="raw-json hidden"></pre>
+        </section>
+        <section id="backup" class="tab-content">
+            <div class="backup-panel">
+                <h3>Download Backup</h3>
+                <div class="backup-form">
+                    <div class="backup-field">
+                        <label for="backup-format">Format</label>
+                        <select id="backup-format">
+                            <option value="">SQLite (WAL mode)</option>
+                            <option value="delete">SQLite (DELETE mode)</option>
+                            <option value="sql">SQL text dump</option>
+                        </select>
+                    </div>
+                    <div class="backup-field" id="tables-field">
+                        <label for="backup-tables">Tables (SQL dump only)</label>
+                        <input type="text" id="backup-tables" placeholder="e.g. users,customers" disabled>
+                    </div>
+                    <div class="backup-options">
+                        <label><input type="checkbox" id="backup-vacuum"> Vacuum</label>
+                        <label><input type="checkbox" id="backup-compress"> Compress (gzip)</label>
+                        <label><input type="checkbox" id="backup-noleader"> From this node (no leader forwarding)</label>
+                    </div>
+                    <div class="backup-actions">
+                        <button id="backup-btn">Download Backup</button>
+                    </div>
+                    <div id="backup-status"></div>
+                </div>
+            </div>
+        </section>
+    </main>
+    <footer>Copyright <span id="footer-year"></span> <a href="https://rqlite.io" target="_blank" rel="noopener">rqlite.io</a></footer>
+    <script>document.getElementById("footer-year").textContent = new Date().getFullYear();</script>
+    <script src="/ui/static/js/app.js"></script>
+</body>
+</html>

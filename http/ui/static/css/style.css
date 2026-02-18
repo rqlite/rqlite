@@ -1,0 +1,705 @@
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    background: #f5f5f5;
+    color: #333;
+    line-height: 1.5;
+}
+
+header {
+    background: #30638E;
+    color: #fff;
+    padding: 0 1rem;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.15);
+}
+
+.header-content {
+    max-width: 960px;
+    margin: 0 auto;
+    display: flex;
+    align-items: center;
+    gap: 2rem;
+}
+
+header h1 {
+    font-size: 1.25rem;
+    font-weight: 600;
+    padding: 0.75rem 0;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.logo {
+    height: 1.75rem;
+    width: auto;
+}
+
+.node-info {
+    margin-left: auto;
+    text-align: right;
+    font-size: 0.6875rem;
+    color: rgba(255,255,255,0.7);
+    line-height: 1.3;
+    white-space: nowrap;
+}
+
+.raft-state-badge {
+    display: inline-block;
+    font-size: 0.625rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    padding: 0.125rem 0.5rem;
+    border-radius: 3px;
+    margin-bottom: 0.125rem;
+}
+
+.raft-state-badge.leader {
+    background: rgba(76,175,80,0.25);
+    color: #a5d6a7;
+}
+
+.raft-state-badge.follower {
+    background: rgba(100,181,246,0.25);
+    color: #90caf9;
+}
+
+.raft-state-badge.candidate {
+    background: rgba(255,167,38,0.25);
+    color: #ffcc80;
+}
+
+nav {
+    display: flex;
+    gap: 0;
+}
+
+.tab {
+    background: none;
+    border: none;
+    color: #aaa;
+    padding: 0.75rem 1rem;
+    cursor: pointer;
+    font-size: 0.875rem;
+    border-bottom: 2px solid transparent;
+    transition: color 0.2s, border-color 0.2s;
+}
+
+.tab:hover {
+    color: #ddd;
+}
+
+.tab.active {
+    color: #fff;
+    border-bottom-color: #fff;
+}
+
+main {
+    max-width: 960px;
+    margin: 1.5rem auto;
+    padding: 0 1rem;
+}
+
+.tab-content {
+    display: none;
+}
+
+.tab-content.active {
+    display: block;
+}
+
+footer {
+    text-align: center;
+    padding: 2rem 1rem 1rem;
+    font-size: 0.75rem;
+    color: #999;
+}
+
+footer a {
+    color: #999;
+    text-decoration: none;
+}
+
+footer a:hover {
+    color: #30638E;
+    text-decoration: underline;
+}
+
+/* Query Tab */
+.query-input {
+    margin-bottom: 1rem;
+}
+
+#sql-input {
+    width: 100%;
+    padding: 0.75rem;
+    font-family: "SF Mono", "Fira Code", "Fira Mono", Menlo, Consolas, monospace;
+    font-size: 0.875rem;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+    resize: vertical;
+    background: #fff;
+    line-height: 1.5;
+}
+
+#sql-input:focus {
+    outline: none;
+    border-color: #30638E;
+    box-shadow: 0 0 0 2px rgba(48,99,142,0.2);
+}
+
+.query-actions {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    margin-top: 0.5rem;
+}
+
+#execute-btn {
+    background: #30638E;
+    color: #fff;
+    border: none;
+    padding: 0.5rem 1.5rem;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 0.875rem;
+    transition: background 0.2s;
+}
+
+#execute-btn:hover {
+    background: #3d7bb0;
+}
+
+#execute-btn:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+}
+
+.hint {
+    color: #999;
+    font-size: 0.75rem;
+}
+
+/* Query History */
+.query-history {
+    margin-top: 0.5rem;
+}
+
+.query-history-label {
+    font-size: 0.75rem;
+    color: #999;
+    margin-bottom: 0.25rem;
+}
+
+.query-history-list {
+    list-style: none;
+    background: #fff;
+    border: 1px solid #eee;
+    border-radius: 4px;
+    max-height: 150px;
+    overflow-y: auto;
+}
+
+.query-history-list li {
+    padding: 0.375rem 0.75rem;
+    font-family: "SF Mono", "Fira Code", "Fira Mono", Menlo, Consolas, monospace;
+    font-size: 0.75rem;
+    cursor: pointer;
+    border-bottom: 1px solid #f0f0f0;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    color: #555;
+}
+
+.query-history-list li:last-child {
+    border-bottom: none;
+}
+
+.query-history-list li:hover {
+    background: #f0f6fb;
+    color: #30638E;
+}
+
+.query-history-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+}
+
+.query-history-clear {
+    background: none;
+    border: none;
+    font-size: 0.6875rem;
+    color: #999;
+    cursor: pointer;
+    padding: 0;
+}
+
+.query-history-clear:hover {
+    color: #d32f2f;
+}
+
+/* Results */
+#query-results {
+    margin-top: 1rem;
+}
+
+.result-table {
+    width: 100%;
+    border-collapse: collapse;
+    background: #fff;
+    border-radius: 4px;
+    overflow: hidden;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.08);
+    font-size: 0.875rem;
+}
+
+.result-table th {
+    background: #f0f0f0;
+    text-align: left;
+    padding: 0.5rem 0.75rem;
+    font-weight: 600;
+    border-bottom: 2px solid #ddd;
+}
+
+.result-table td {
+    padding: 0.5rem 0.75rem;
+    border-bottom: 1px solid #eee;
+    font-family: "SF Mono", "Fira Code", "Fira Mono", Menlo, Consolas, monospace;
+    font-size: 0.8125rem;
+}
+
+.result-table tr:nth-child(even) {
+    background: #fafafa;
+}
+
+.result-table td.null-value {
+    color: #999;
+    font-style: italic;
+}
+
+.result-message {
+    background: #fff;
+    padding: 0.75rem 1rem;
+    border-radius: 4px;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.08);
+    font-size: 0.875rem;
+}
+
+.result-message.success {
+    border-left: 3px solid #4caf50;
+}
+
+.result-error {
+    background: #fff;
+    padding: 0.75rem 1rem;
+    border-radius: 4px;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.08);
+    border-left: 3px solid #f44336;
+    color: #d32f2f;
+    font-size: 0.875rem;
+}
+
+.result-timing {
+    color: #999;
+    font-size: 0.75rem;
+    margin-top: 0.25rem;
+}
+
+/* Status Tab */
+.status-controls {
+    margin-bottom: 1rem;
+}
+
+.status-controls {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+}
+
+.status-controls label {
+    font-size: 0.875rem;
+    cursor: pointer;
+    user-select: none;
+}
+
+.last-updated {
+    font-size: 0.75rem;
+    color: #999;
+}
+
+.cards {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+    gap: 0.75rem;
+    margin-bottom: 1.5rem;
+}
+
+.card {
+    background: #fff;
+    padding: 0.75rem 1rem;
+    border-radius: 4px;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.08);
+}
+
+.card.raft-leader {
+    border-left: 3px solid #4caf50;
+}
+
+.card.raft-follower {
+    border-left: 3px solid #42a5f5;
+}
+
+.card.raft-candidate {
+    border-left: 3px solid #ffa726;
+}
+
+.card .label {
+    font-size: 0.75rem;
+    color: #999;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+}
+
+.card .value {
+    font-size: 1rem;
+    font-weight: 600;
+    margin-top: 0.125rem;
+    word-break: break-all;
+}
+
+h3 {
+    font-size: 0.875rem;
+    font-weight: 600;
+    margin-bottom: 0.5rem;
+    color: #666;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+}
+
+.nodes-header {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    margin-bottom: 0.5rem;
+}
+
+.nodes-header h3 {
+    margin-bottom: 0;
+}
+
+.nodes-option {
+    font-size: 0.8125rem;
+    cursor: pointer;
+    user-select: none;
+    color: #666;
+    display: flex;
+    align-items: center;
+    gap: 0.25rem;
+}
+
+#nodes-table {
+    overflow-x: auto;
+}
+
+#nodes-table table {
+    width: 100%;
+    border-collapse: collapse;
+    background: #fff;
+    border-radius: 4px;
+    overflow: hidden;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.08);
+    font-size: 0.875rem;
+}
+
+#nodes-table th {
+    background: #f0f0f0;
+    text-align: left;
+    padding: 0.5rem 0.75rem;
+    font-weight: 600;
+    border-bottom: 2px solid #ddd;
+}
+
+#nodes-table td {
+    padding: 0.5rem 0.75rem;
+    border-bottom: 1px solid #eee;
+}
+
+#nodes-table tr:nth-child(even) {
+    background: #fafafa;
+}
+
+.status-dot {
+    display: inline-block;
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+}
+
+.status-dot.reachable {
+    background: #4caf50;
+    box-shadow: 0 0 4px rgba(76,175,80,0.5);
+}
+
+.status-dot.unreachable {
+    background: #e53935;
+    box-shadow: 0 0 4px rgba(229,57,53,0.3);
+}
+
+#nodes-table th.sortable {
+    cursor: pointer;
+    user-select: none;
+}
+
+#nodes-table th.sortable:hover {
+    background: #e8e8e8;
+}
+
+.status-error {
+    background: #fff;
+    padding: 0.75rem 1rem;
+    border-radius: 4px;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.08);
+    border-left: 3px solid #f44336;
+    color: #d32f2f;
+    font-size: 0.875rem;
+    margin-bottom: 1rem;
+}
+
+/* Detail Sections */
+#detail-sections {
+    margin-top: 1.5rem;
+}
+
+.detail-section {
+    background: #fff;
+    border-radius: 4px;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.08);
+    margin-bottom: 0.5rem;
+    overflow: hidden;
+}
+
+.detail-section-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0.625rem 1rem;
+    cursor: pointer;
+    user-select: none;
+    font-size: 0.875rem;
+    font-weight: 600;
+    color: #333;
+    transition: background 0.15s;
+}
+
+.detail-section-header:hover {
+    background: #f8f8f8;
+}
+
+.detail-section-header .arrow {
+    font-size: 0.75rem;
+    color: #999;
+    transition: transform 0.2s;
+}
+
+.detail-section.open .arrow {
+    transform: rotate(90deg);
+}
+
+.detail-section-body {
+    display: none;
+    border-top: 1px solid #eee;
+}
+
+.detail-section.open .detail-section-body {
+    display: block;
+}
+
+.detail-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.8125rem;
+}
+
+.detail-table td {
+    padding: 0.375rem 1rem;
+    border-bottom: 1px solid #f0f0f0;
+    vertical-align: top;
+}
+
+.detail-table tr:last-child td {
+    border-bottom: none;
+}
+
+.detail-table td:first-child {
+    color: #666;
+    white-space: nowrap;
+    width: 40%;
+    font-weight: 500;
+}
+
+.detail-table td:last-child {
+    font-family: "SF Mono", "Fira Code", "Fira Mono", Menlo, Consolas, monospace;
+    word-break: break-all;
+}
+
+/* Raw JSON */
+.raw-json-toggle {
+    margin-top: 1.5rem;
+    text-align: center;
+}
+
+.toggle-btn {
+    background: none;
+    border: 1px solid #ddd;
+    padding: 0.375rem 1rem;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 0.8125rem;
+    color: #666;
+    transition: border-color 0.2s, color 0.2s;
+}
+
+.toggle-btn:hover {
+    border-color: #30638E;
+    color: #30638E;
+}
+
+.raw-json {
+    background: #fff;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+    padding: 1rem;
+    font-family: "SF Mono", "Fira Code", "Fira Mono", Menlo, Consolas, monospace;
+    font-size: 0.75rem;
+    line-height: 1.4;
+    overflow-x: auto;
+    margin-top: 0.75rem;
+    max-height: 600px;
+    overflow-y: auto;
+    white-space: pre;
+}
+
+.hidden {
+    display: none;
+}
+
+/* Links in tables */
+#nodes-table a {
+    color: #30638E;
+    text-decoration: none;
+}
+
+#nodes-table a:hover {
+    text-decoration: underline;
+}
+
+/* Backup Tab */
+.backup-panel {
+    background: #fff;
+    border-radius: 4px;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.08);
+    padding: 1.25rem;
+    max-width: 520px;
+}
+
+.backup-panel h3 {
+    margin-bottom: 1rem;
+}
+
+.backup-form {
+    display: flex;
+    flex-direction: column;
+    gap: 0.875rem;
+}
+
+.backup-field {
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+}
+
+.backup-field label {
+    font-size: 0.8125rem;
+    font-weight: 500;
+    color: #555;
+}
+
+.backup-field select,
+.backup-field input[type="text"] {
+    padding: 0.5rem 0.625rem;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+    font-size: 0.875rem;
+    background: #fff;
+}
+
+.backup-field select:focus,
+.backup-field input[type="text"]:focus {
+    outline: none;
+    border-color: #30638E;
+    box-shadow: 0 0 0 2px rgba(48,99,142,0.2);
+}
+
+.backup-field input:disabled {
+    background: #f5f5f5;
+    color: #999;
+}
+
+.backup-options {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+}
+
+.backup-options label {
+    font-size: 0.8125rem;
+    cursor: pointer;
+    user-select: none;
+    display: flex;
+    align-items: center;
+    gap: 0.375rem;
+}
+
+.backup-actions {
+    margin-top: 0.25rem;
+}
+
+#backup-btn {
+    background: #30638E;
+    color: #fff;
+    border: none;
+    padding: 0.5rem 1.5rem;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 0.875rem;
+    transition: background 0.2s;
+}
+
+#backup-btn:hover {
+    background: #3d7bb0;
+}
+
+#backup-btn:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+}
+
+#backup-status {
+    font-size: 0.8125rem;
+}
+
+#backup-status .success {
+    color: #388e3c;
+}
+
+#backup-status .error {
+    color: #d32f2f;
+}

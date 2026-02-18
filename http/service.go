@@ -28,6 +28,7 @@ import (
 	"github.com/rqlite/rqlite/v10/command/sql"
 	"github.com/rqlite/rqlite/v10/db"
 	"github.com/rqlite/rqlite/v10/http/licenses"
+	"github.com/rqlite/rqlite/v10/http/ui"
 	"github.com/rqlite/rqlite/v10/internal/rtls"
 	"github.com/rqlite/rqlite/v10/proxy"
 	"github.com/rqlite/rqlite/v10/queue"
@@ -297,13 +298,15 @@ type Service struct {
 
 	BuildInfo map[string]any
 
+	uiHandler http.Handler
+
 	logger *log.Logger
 }
 
 // New returns an uninitialized HTTP service. If credentials is nil, then
 // the service performs no authentication and authorization checks.
 func New(addr string, store Store, cluster Cluster, pxy *proxy.Proxy, credentials CredentialStore) *Service {
-	return &Service{
+	s := &Service{
 		addr:                addr,
 		store:               store,
 		proxy:               pxy,
@@ -316,6 +319,8 @@ func New(addr string, store Store, cluster Cluster, pxy *proxy.Proxy, credential
 		credentialStore:     credentials,
 		logger:              log.New(os.Stderr, "[http] ", log.LstdFlags),
 	}
+	s.uiHandler = http.StripPrefix("/ui/", http.FileServer(http.FS(ui.Assets)))
+	return s
 }
 
 // Start starts the service.
@@ -427,9 +432,21 @@ func (s *Service) AllowOrigin() string {
 func (s *Service) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	s.addBuildVersion(w)
 	s.addAllowHeaders(w)
+	if s.credentialStore != nil {
+		w.Header().Set("WWW-Authenticate", `Basic realm="rqlite"`)
+	}
 
 	if r.Method == http.MethodOptions {
 		w.WriteHeader(http.StatusOK)
+		return
+	}
+
+	if strings.HasPrefix(r.URL.Path, "/ui") {
+		if r.URL.Path == "/ui" {
+			http.Redirect(w, r, "/ui/", http.StatusMovedPermanently)
+			return
+		}
+		s.handleUI(w, r)
 		return
 	}
 
@@ -441,7 +458,7 @@ func (s *Service) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 	switch {
 	case r.URL.Path == "/" || r.URL.Path == "":
-		http.Redirect(w, r, "/status", http.StatusFound)
+		http.Redirect(w, r, "/ui/", http.StatusFound)
 	case strings.HasPrefix(r.URL.Path, "/db/execute"):
 		stats.Add(numExecutions, 1)
 		s.handleExecute(w, r, params)
@@ -1164,6 +1181,19 @@ func (s *Service) handleLicenses(w http.ResponseWriter, r *http.Request, qp Quer
 
 	w.WriteHeader(http.StatusOK)
 	w.Write([]byte(licenses.Text))
+}
+
+// handleUI serves the built-in web UI.
+func (s *Service) handleUI(w http.ResponseWriter, r *http.Request) {
+	if !s.CheckRequestPerm(r, auth.PermStatus) {
+		w.WriteHeader(http.StatusUnauthorized)
+		return
+	}
+	if r.Method != http.MethodGet && r.Method != http.MethodHead {
+		w.WriteHeader(http.StatusMethodNotAllowed)
+		return
+	}
+	s.uiHandler.ServeHTTP(w, r)
 }
 
 func (s *Service) handleExecute(w http.ResponseWriter, r *http.Request, qp QueryParams) {
