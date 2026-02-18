@@ -3,7 +3,7 @@ _Not ready for production use._
 
 This release introduces a major improvement to the Raft [_Snapshot and Log Truncation_](https://youtu.be/8XbxQ1Epi5w?t=492) process. Previously the Snapshotting process would be blocked on the Leader if the Leader was streaming a previously-taken Snapshot to a Follower. In most cases this wasn't an issue, as the Snapshotting process would be retried later. However in the event of a continuously slow Follower which continually needed Snapshots, this eventually starved the Leader of the ability to Snapshot. With v10 this is no longer the case and Snapshotting on the Leader is now decoupled from streaming pre-existing Snapshots to other nodes.
 
-There are no breaking API changes in this release, nor any changes to how clustering operates.
+There are no breaking API changes in this release, nor any changes to how clustering operates. This release also introduces a new built-in console app, making it more convenient to work with an rqlite system.
 
 Upgrading to this release from a v7 release (or later) is seamless and been extensively tested. Rolling upgrades are also supported. However it is strongly recommended you [backup your rqlite system](https://rqlite.io/docs/guides/backup/) before upgrading it. **Downgrading from v10 is not supported**, and that is why the major release number has been incremented. If you do need to downgrade then backup your v10 system and use that backup to deploy a new pre-v10 system.
 
