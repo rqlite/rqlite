@@ -279,7 +279,9 @@ func Upgrade8To10(old, new string, logger *log.Logger) (retErr error) {
 	}
 
 	// Clean up the plan file.
-	os.Remove(planPath)
+	if err := os.Remove(planPath); err != nil && !os.IsNotExist(err) {
+		logger.Printf("failed to remove upgrade plan file %s: %v", planPath, err)
+	}
 	logger.Printf("upgraded v8 snapshot directory %s to %s", old, new)
 	stats.Add(upgradeOk, 1)
 
