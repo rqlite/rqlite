@@ -161,6 +161,7 @@ var stats *expvar.Map
 
 const (
 	numLeaderNotFound                 = "leader_not_found"
+	numUI                             = "ui"
 	numExecutions                     = "executions"
 	numExecuteStmtsRx                 = "execute_stmts_rx"
 	numQueuedExecutions               = "queued_executions"
@@ -226,6 +227,7 @@ func init() {
 func ResetStats() {
 	stats.Init()
 	stats.Add(numLeaderNotFound, 0)
+	stats.Add(numUI, 0)
 	stats.Add(numExecutions, 0)
 	stats.Add(numExecuteStmtsRx, 0)
 	stats.Add(numQueuedExecutions, 0)
@@ -441,15 +443,6 @@ func (s *Service) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if strings.HasPrefix(r.URL.Path, "/ui") {
-		if r.URL.Path == "/ui" {
-			http.Redirect(w, r, "/ui/", http.StatusMovedPermanently)
-			return
-		}
-		s.handleUI(w, r)
-		return
-	}
-
 	params, err := NewQueryParams(r)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
@@ -459,6 +452,13 @@ func (s *Service) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	switch {
 	case r.URL.Path == "/" || r.URL.Path == "":
 		http.Redirect(w, r, "/ui/", http.StatusFound)
+	case strings.HasPrefix(r.URL.Path, "/ui"):
+		if r.URL.Path == "/ui" {
+			http.Redirect(w, r, "/ui/", http.StatusMovedPermanently)
+			return
+		}
+		stats.Add(numUI, 1)
+		s.handleUI(w, r)
 	case strings.HasPrefix(r.URL.Path, "/db/execute"):
 		stats.Add(numExecutions, 1)
 		s.handleExecute(w, r, params)
