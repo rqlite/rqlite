@@ -135,7 +135,7 @@ func (s *Sink) Write(p []byte) (n int, err error) {
 			if s.buf.Len() > 0 {
 				return n, fmt.Errorf("unexpected data after incremental file header")
 			}
-			s.localWALPath = p.IncrementalFile.WalPath
+			s.localWALPath = p.IncrementalFile.WalPaths[0]
 			return n, nil
 		case *proto.SnapshotHeader_Noop:
 			if s.fc != nil {

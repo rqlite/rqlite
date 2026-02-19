@@ -283,8 +283,8 @@ func Test_SnapshotPathStreamer(t *testing.T) {
 		t.Fatalf("Expected IncrementalFile payload, got nil")
 	}
 
-	if inc.WalPath != "testdata/db-and-wals/wal-00" {
-		t.Fatalf("Expected WAL path 'testdata/db-and-wals/wal-00', got '%s'", inc.WalPath)
+	if len(inc.WalPaths) != 1 || inc.WalPaths[0] != "testdata/db-and-wals/wal-00" {
+		t.Fatalf("Expected WalPaths ['testdata/db-and-wals/wal-00'], got %v", inc.WalPaths)
 	}
 
 	// Check that there is no more data to read after the header.

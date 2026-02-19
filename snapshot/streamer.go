@@ -104,7 +104,7 @@ func NewIncrementalFileSnapshotHeader(walPath string) (*proto.SnapshotHeader, er
 		FormatVersion: 1,
 		Payload: &proto.SnapshotHeader_IncrementalFile{
 			IncrementalFile: &proto.IncrementalFileSnapshot{
-				WalPath: walPath,
+				WalPaths: []string{walPath},
 			},
 		},
 	}, nil
