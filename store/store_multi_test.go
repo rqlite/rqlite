@@ -423,6 +423,96 @@ func Test_MultiNodeNode_CommitIndexes(t *testing.T) {
 	}
 }
 
+// Test_MultiNodeSnapshot_Joins performs some stress testing of snapshots and then joining
+// when there are multiple unreaped Snapshots which will be sent to the joining node.
+func Test_MultiNodeSnapshot_Joins(t *testing.T) {
+	// Fire up first node and create a table.
+	s0, ln := mustNewStore(t)
+	s0.NoSnapshotOnClose = true
+
+	// Effectively disable automatic snapshotting.
+	s0.SnapshotReapThreshold = 24
+	s0.SnapshotThreshold = 10000
+	s0.SnapshotThresholdWALSize = 1000000000
+
+	defer ln.Close()
+	if err := s0.Open(); err != nil {
+		t.Fatalf("failed to open single-node store: %s", err.Error())
+	}
+	defer s0.Close(true)
+	if err := s0.Bootstrap(NewServer(s0.ID(), s0.Addr(), true)); err != nil {
+		t.Fatalf("failed to bootstrap single-node store: %s", err.Error())
+	}
+	if _, err := s0.WaitForLeader(10 * time.Second); err != nil {
+		t.Fatalf("Error waiting for leader: %s", err)
+	}
+	er := executeRequestFromString(`CREATE TABLE foo (id INTEGER NOT NULL PRIMARY KEY, name TEXT)`, false, false)
+	_, _, err := s0.Execute(context.Background(), er)
+	if err != nil {
+		t.Fatalf("failed to execute on single node: %s", err.Error())
+	}
+
+	// Convenience function to insert a record.
+	insertRecord := func(s *Store, n int) {
+		t.Helper()
+		stmts := make([]string, 0, n)
+		for i := 0; i < n; i++ {
+			stmts = append(stmts, `INSERT INTO foo(name) VALUES("fiona")`)
+		}
+		er = executeRequestFromStrings(stmts, false, false)
+		_, _, err = s.Execute(context.Background(), er)
+		if err != nil {
+			t.Fatalf("failed to execute on single node: %s", err.Error())
+		}
+	}
+
+	// Snapshot and insert.
+	for i := 0; i < 20; i++ {
+		if err := s0.Snapshot(0); err != nil {
+			t.Fatalf("failed to snapshot single-node store: %s", err.Error())
+		}
+		insertRecord(s0, 100)
+	}
+
+	qr := queryRequestFromString("SELECT COUNT(*) FROM foo", false, false)
+	qr.Level = proto.ConsistencyLevel_STRONG
+	r, _, _, err := s0.Query(context.Background(), qr)
+	if err != nil {
+		t.Fatalf("failed to query single node: %s", err.Error())
+	}
+	if exp, got := `[{"columns":["COUNT(*)"],"types":["integer"],"values":[[2000]]}]`, asJSON(r); exp != got {
+		t.Fatalf("unexpected results for query\nexp: %s\ngot: %s", exp, got)
+	}
+
+	// Fire up second node.
+	s1, ln1 := mustNewStore(t)
+	defer ln1.Close()
+	if err := s1.Open(); err != nil {
+		t.Fatalf("failed to open single-node store: %s", err.Error())
+	}
+	defer s1.Close(true)
+	if err := s0.Join(joinRequest(s1.ID(), s1.Addr(), true)); err != nil {
+		t.Fatalf("failed to join single-node store: %s", err.Error())
+	}
+	if _, err := s1.WaitForLeader(10 * time.Second); err != nil {
+		t.Fatalf("Error waiting for leader: %s", err)
+	}
+
+	// Check that the joining node eventually gets the records.
+	testPoll(t, func() bool {
+		qr := queryRequestFromString("SELECT COUNT(*) FROM foo", false, true)
+		qr.Level = proto.ConsistencyLevel_NONE
+		r, _, _, err := s1.Query(context.Background(), qr)
+		if err != nil {
+			t.Fatalf("failed to query single node: %s", err.Error())
+		}
+		if exp, got := `[{"columns":["COUNT(*)"],"types":["integer"],"values":[[2000]]}]`, asJSON(r); exp != got {
+			return false
+		}
+		return true
+	}, 100*time.Millisecond, 5*time.Second)
+}
+
 // Test_MultiNodeSnapshot_ErrorMessage tests that a snapshot fails with a specific
 // error message when the snapshot is attempted too soon after joining a cluster.
 // Hashicorp Raft doesn't expose a typed error, so we have to check the error
@@ -467,9 +557,18 @@ func Test_MultiNodeSnapshot_ErrorMessage(t *testing.T) {
 	}
 }
 
-// Test_MultiNodeSnapshot_BlockedSnapshot ensures that if a Snapshot is blocked by the
-// Raft subsystem, the Store will revert to FullNeeded. If it didn't do this a WAL file
-// could be missed, and the Snapshot Store be placed in an invalid state.
+// Test_MultiNodeSnapshot_BlockedSnapshot ensures that if a Snapshot is blocked by the Raft
+// subsystem after a WAL has been checkpointed into the main DB, then the snapshot store is
+// put into FullNeeded state. This is because otherwise that WAL file would be missing
+// from the series that was sent to the Store, and this would result in a divergence betwee
+// the main DB and that stored in the Snapshot store.
+//
+// This is an edge case, discovered by examining the Hashicorp Raft code, see:
+// https://github.com/hashicorp/raft/blob/9e3b7155dd6f45b128d0679f22df32229319e81f/snapshot.go#L165
+//
+// This is very unlikely to be an issue in practise unless a snapshot is attempted immediately after
+// a node joins a cluster, but before any other write traffic was sent to the cluster. All other error
+// cases would be due to truly unexpected errors. In any event, check that FullNeeded is set.
 func Test_MultiNodeSnapshot_BlockedSnapshot(t *testing.T) {
 	// Fire up first node and write one record.
 	s0, ln := mustNewStore(t)
