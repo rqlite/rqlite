@@ -43,9 +43,9 @@ type Sink struct {
 	header *proto.SnapshotHeader
 	sinkW  sinker
 
-	// localWALPath is set when the header indicates an IncrementalFileSnapshot.
-	// In this case, no data follows the header; the WAL file is moved on Close.
-	localWALPath string
+	// localWALPaths is set when the header indicates an IncrementalFileSnapshot.
+	// In this case, no data follows the header; the WAL files are moved on Close.
+	localWALPaths []string
 
 	// isNoop is set when the header indicates a NoopSnapshot.
 	// No data follows the header; a data.noop sentinel file is created on Close.
@@ -135,7 +135,7 @@ func (s *Sink) Write(p []byte) (n int, err error) {
 			if s.buf.Len() > 0 {
 				return n, fmt.Errorf("unexpected data after incremental file header")
 			}
-			s.localWALPath = p.IncrementalFile.WalPaths[0]
+			s.localWALPaths = p.IncrementalFile.WalPaths
 			return n, nil
 		case *proto.SnapshotHeader_Noop:
 			if s.fc != nil {
@@ -185,7 +185,7 @@ func (s *Sink) Close() error {
 	}
 	s.opened = false
 
-	if s.sinkW == nil && s.localWALPath == "" && !s.isNoop {
+	if s.sinkW == nil && len(s.localWALPaths) == 0 && !s.isNoop {
 		// Header was never fully received; clean up the temp directory.
 		return os.RemoveAll(s.snapTmpDirPath)
 	}
@@ -200,14 +200,16 @@ func (s *Sink) Close() error {
 		if err := f.Close(); err != nil {
 			return err
 		}
-	} else if s.localWALPath != "" {
-		// IncrementalFileSnapshot: move the local WAL file into the snapshot directory.
-		dstPath := filepath.Join(s.snapTmpDirPath, walfileName)
-		if err := os.Rename(s.localWALPath, dstPath); err != nil {
-			return err
-		}
-		if !db.IsValidSQLiteWALFile(dstPath) {
-			return fmt.Errorf("file is not a valid SQLite WAL file")
+	} else if len(s.localWALPaths) > 0 {
+		// IncrementalFileSnapshot: move each local WAL file into the snapshot directory.
+		for i, srcPath := range s.localWALPaths {
+			dstPath := filepath.Join(s.snapTmpDirPath, walFileName(i+1))
+			if err := os.Rename(srcPath, dstPath); err != nil {
+				return err
+			}
+			if !db.IsValidSQLiteWALFile(dstPath) {
+				return fmt.Errorf("%s is not a valid SQLite WAL file", walFileName(i+1))
+			}
 		}
 	} else {
 		if err := s.sinkW.Close(); err != nil {

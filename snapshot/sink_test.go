@@ -229,7 +229,7 @@ func Test_IncrementalFileSink(t *testing.T) {
 	}
 
 	// Installed WAL file should be byte-for-byte identical to source.
-	walFile := filepath.Join(snapDir, meta.ID, walfileName)
+	walFile := filepath.Join(snapDir, meta.ID, walFileName(1))
 	if !filesIdentical(srcPath, walFile) {
 		t.Fatalf("expected WAL file %s to be identical to source", walFile)
 	}
