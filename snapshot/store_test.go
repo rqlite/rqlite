@@ -827,8 +827,8 @@ func Test_Store_ReapBlocked(t *testing.T) {
 
 	createSnapshotInStore(t, store, "2-1017-1704807719996", 1017, 2, 1, "testdata/db-and-wals/backup.db")
 
-	// Open the snapshot and hold on to it. Then attempt to Reap, showing that the Reap is blocked
-	// until the snapshot is closed.
+	// Open the snapshot and hold on to it. Then attempt to Reap, showing that the Reap
+	// fails because a snapshot is open.
 	_, snapshot, err := store.Open("2-1017-1704807719996")
 	if err != nil {
 		t.Fatalf("Failed to open snapshot: %v", err)
