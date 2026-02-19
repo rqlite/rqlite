@@ -1057,7 +1057,7 @@ func TestSnapshotSet_ResolveFiles(t *testing.T) {
 		if len(walFiles) != 1 {
 			t.Fatalf("expected 1 WAL file, got %d", len(walFiles))
 		}
-		if exp := filepath.Join(rootDir, "snap-2", walfileName); walFiles[0] != exp {
+		if exp := filepath.Join(rootDir, "snap-2", walFileName(1)); walFiles[0] != exp {
 			t.Fatalf("walFiles[0] = %q, want %q", walFiles[0], exp)
 		}
 	})
@@ -1097,10 +1097,10 @@ func TestSnapshotSet_ResolveFiles(t *testing.T) {
 		if len(walFiles) != 2 {
 			t.Fatalf("expected 2 WAL files, got %d", len(walFiles))
 		}
-		if exp := filepath.Join(rootDir, "snap-2", walfileName); walFiles[0] != exp {
+		if exp := filepath.Join(rootDir, "snap-2", walFileName(1)); walFiles[0] != exp {
 			t.Fatalf("walFiles[0] = %q, want %q", walFiles[0], exp)
 		}
-		if exp := filepath.Join(rootDir, "snap-3", walfileName); walFiles[1] != exp {
+		if exp := filepath.Join(rootDir, "snap-3", walFileName(1)); walFiles[1] != exp {
 			t.Fatalf("walFiles[1] = %q, want %q", walFiles[1], exp)
 		}
 	})
@@ -1129,7 +1129,7 @@ func TestSnapshotSet_ResolveFiles(t *testing.T) {
 		if len(walFiles) != 1 {
 			t.Fatalf("expected 1 WAL file, got %d", len(walFiles))
 		}
-		if exp := filepath.Join(rootDir, "snap-4", walfileName); walFiles[0] != exp {
+		if exp := filepath.Join(rootDir, "snap-4", walFileName(1)); walFiles[0] != exp {
 			t.Fatalf("walFiles[0] = %q, want %q", walFiles[0], exp)
 		}
 	})
@@ -1265,7 +1265,7 @@ func Test_SnapshotSet_ResolveFiles_WithNoop(t *testing.T) {
 		if len(walFiles) != 1 {
 			t.Fatalf("expected 1 WAL file, got %d", len(walFiles))
 		}
-		if exp := filepath.Join(rootDir, "snap-2", walfileName); walFiles[0] != exp {
+		if exp := filepath.Join(rootDir, "snap-2", walFileName(1)); walFiles[0] != exp {
 			t.Fatalf("walFiles[0] = %q, want %q", walFiles[0], exp)
 		}
 	})
@@ -1293,7 +1293,7 @@ func Test_SnapshotSet_ResolveFiles_WithNoop(t *testing.T) {
 		if len(walFiles) != 1 {
 			t.Fatalf("expected 1 WAL file, got %d", len(walFiles))
 		}
-		if exp := filepath.Join(rootDir, "snap-3", walfileName); walFiles[0] != exp {
+		if exp := filepath.Join(rootDir, "snap-3", walFileName(1)); walFiles[0] != exp {
 			t.Fatalf("walFiles[0] = %q, want %q", walFiles[0], exp)
 		}
 	})
@@ -1315,7 +1315,7 @@ func mustCreateSnapshotFull(t *testing.T, rootDir, snapshotID string, idx, term 
 }
 
 func mustCreateSnapshotInc(t *testing.T, rootDir, snapshotID string, idx, term uint64) {
-	mustCreateSnapshot(t, rootDir, snapshotID, "testdata/db-and-wals/wal-00", walfileName, idx, term)
+	mustCreateSnapshot(t, rootDir, snapshotID, "testdata/db-and-wals/wal-00", walFileName(1), idx, term)
 }
 
 func mustCreateSnapshotNoop(t *testing.T, rootDir, snapshotID string, idx, term uint64) {
