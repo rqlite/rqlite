@@ -206,6 +206,30 @@ func Test_Store_CreateThenList(t *testing.T) {
 	}
 }
 
+func Test_Store_OpenThenCreate(t *testing.T) {
+	dir := t.TempDir()
+	store, err := NewStore(dir)
+	if err != nil {
+		t.Fatalf("Failed to create new store: %v", err)
+	}
+
+	createSnapshotInStore(t, store, "2-1017-1704807719996", 1017, 2, 1, "testdata/db-and-wals/backup.db")
+
+	// Open the snapshot and hold on to it. Then create a sink, showing that the operations
+	// don't block each other.
+	_, snapshot, err := store.Open("2-1017-1704807719996")
+	if err != nil {
+		t.Fatalf("Failed to open snapshot: %v", err)
+	}
+	defer snapshot.Close()
+
+	sink, err := store.Create(1, 1000, 2000, makeTestConfiguration("1", "localhost:1"), 1, nil)
+	if err != nil {
+		t.Fatalf("Failed to create sink: %v", err)
+	}
+	defer sink.Cancel()
+}
+
 func Test_Store_List(t *testing.T) {
 	dir := t.TempDir()
 	store, err := NewStore(dir)
@@ -791,6 +815,28 @@ func Test_Store_Reap(t *testing.T) {
 	// dbPath should be a byte-for-byte copy of backup.db
 	if !filesIdentical(dbPath, "testdata/db-and-wals/backup.db") {
 		t.Fatalf("Database file in snapshot does not match source")
+	}
+}
+
+func Test_Store_ReapBlocked(t *testing.T) {
+	dir := t.TempDir()
+	store, err := NewStore(dir)
+	if err != nil {
+		t.Fatalf("Failed to create new store: %v", err)
+	}
+
+	createSnapshotInStore(t, store, "2-1017-1704807719996", 1017, 2, 1, "testdata/db-and-wals/backup.db")
+
+	// Open the snapshot and hold on to it. Then attempt to Reap, showing that the Reap
+	// fails because a snapshot is open.
+	_, snapshot, err := store.Open("2-1017-1704807719996")
+	if err != nil {
+		t.Fatalf("Failed to open snapshot: %v", err)
+	}
+	defer snapshot.Close()
+
+	if _, _, err := store.Reap(); err == nil {
+		t.Fatalf("Expected Reap to fail due to open snapshot, but it succeeded")
 	}
 }
 
