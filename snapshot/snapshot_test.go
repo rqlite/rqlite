@@ -1358,3 +1358,221 @@ func mustCreateSnapshot(t *testing.T, rootDir string, snapshotID, srcName, dstNa
 		t.Fatalf("failed to write snapshot meta: %v", err)
 	}
 }
+
+// mustCreateSnapshotIncMulti creates an incremental snapshot directory with
+// multiple WAL files named 00000001.wal, 00000002.wal, etc.
+func mustCreateSnapshotIncMulti(t *testing.T, rootDir, snapshotID string, idx, term uint64, walSrcs ...string) {
+	t.Helper()
+	snapshotDir := filepath.Join(rootDir, snapshotID)
+	if err := os.MkdirAll(snapshotDir, 0755); err != nil {
+		t.Fatalf("failed to create snapshot dir: %v", err)
+	}
+	for i, src := range walSrcs {
+		mustCopyFile(t, src, filepath.Join(snapshotDir, walFileName(i+1)))
+	}
+	meta := &raft.SnapshotMeta{
+		ID:    snapshotID,
+		Index: idx,
+		Term:  term,
+	}
+	if err := writeMeta(snapshotDir, meta); err != nil {
+		t.Fatalf("failed to write snapshot meta: %v", err)
+	}
+}
+
+// Test SnapshotCatalog.Scan with multi-WAL incremental snapshots
+func Test_SnapshotCatalog_Scan_MultiWAL(t *testing.T) {
+	t.Run("two WAL files", func(t *testing.T) {
+		rootDir := t.TempDir()
+		catalog := &SnapshotCatalog{}
+		mustCreateSnapshotIncMulti(t, rootDir, "snap-1", 1, 1,
+			"testdata/db-and-wals/wal-00", "testdata/db-and-wals/wal-01")
+
+		ss, err := catalog.Scan(rootDir)
+		if err != nil {
+			t.Fatalf("Scan() returned error: %v", err)
+		}
+		if ss.Len() != 1 {
+			t.Fatalf("Scan() returned %d snapshots, want 1", ss.Len())
+		}
+
+		snap := ss.All()[0]
+		if snap.typ != SnapshotTypeIncremental {
+			t.Fatalf("snapshot type = %v, want %v", snap.typ, SnapshotTypeIncremental)
+		}
+		if len(snap.walFiles) != 2 {
+			t.Fatalf("expected 2 WAL files, got %d", len(snap.walFiles))
+		}
+	})
+
+	t.Run("three WAL files", func(t *testing.T) {
+		rootDir := t.TempDir()
+		catalog := &SnapshotCatalog{}
+		mustCreateSnapshotIncMulti(t, rootDir, "snap-1", 1, 1,
+			"testdata/db-and-wals/wal-00", "testdata/db-and-wals/wal-01", "testdata/db-and-wals/wal-02")
+
+		ss, err := catalog.Scan(rootDir)
+		if err != nil {
+			t.Fatalf("Scan() returned error: %v", err)
+		}
+		if ss.Len() != 1 {
+			t.Fatalf("Scan() returned %d snapshots, want 1", ss.Len())
+		}
+
+		snap := ss.All()[0]
+		if snap.typ != SnapshotTypeIncremental {
+			t.Fatalf("snapshot type = %v, want %v", snap.typ, SnapshotTypeIncremental)
+		}
+		if len(snap.walFiles) != 3 {
+			t.Fatalf("expected 3 WAL files, got %d", len(snap.walFiles))
+		}
+	})
+
+	t.Run("WAL files with data.db is rejected", func(t *testing.T) {
+		rootDir := t.TempDir()
+		catalog := &SnapshotCatalog{}
+
+		// Create a snapshot directory with both a DB and a WAL file.
+		snapshotDir := filepath.Join(rootDir, "snap-1")
+		if err := os.MkdirAll(snapshotDir, 0755); err != nil {
+			t.Fatalf("failed to create snapshot dir: %v", err)
+		}
+		mustCopyFile(t, "testdata/db-and-wals/full2.db", filepath.Join(snapshotDir, dbfileName))
+		mustCopyFile(t, "testdata/db-and-wals/wal-00", filepath.Join(snapshotDir, walFileName(1)))
+		meta := &raft.SnapshotMeta{ID: "snap-1", Index: 1, Term: 1}
+		if err := writeMeta(snapshotDir, meta); err != nil {
+			t.Fatalf("failed to write meta: %v", err)
+		}
+
+		_, err := catalog.Scan(rootDir)
+		if err == nil {
+			t.Fatal("expected error when snapshot has both WAL and DB files, got nil")
+		}
+	})
+}
+
+// Test ResolveFiles with multi-WAL incremental snapshots
+func Test_SnapshotSet_ResolveFiles_MultiWAL(t *testing.T) {
+	t.Run("full then two-WAL incremental", func(t *testing.T) {
+		rootDir := t.TempDir()
+		catalog := &SnapshotCatalog{}
+		mustCreateSnapshotFull(t, rootDir, "snap-1", 1, 1)
+		mustCreateSnapshotIncMulti(t, rootDir, "snap-2", 2, 1,
+			"testdata/db-and-wals/wal-00", "testdata/db-and-wals/wal-01")
+
+		ss, err := catalog.Scan(rootDir)
+		if err != nil {
+			t.Fatalf("Scan() returned error: %v", err)
+		}
+
+		dbFile, walFiles, err := ss.ResolveFiles("snap-2")
+		if err != nil {
+			t.Fatalf("ResolveFiles() returned error: %v", err)
+		}
+		if exp := filepath.Join(rootDir, "snap-1", dbfileName); dbFile != exp {
+			t.Fatalf("dbFile = %q, want %q", dbFile, exp)
+		}
+		if len(walFiles) != 2 {
+			t.Fatalf("expected 2 WAL files, got %d", len(walFiles))
+		}
+		if exp := filepath.Join(rootDir, "snap-2", walFileName(1)); walFiles[0] != exp {
+			t.Fatalf("walFiles[0] = %q, want %q", walFiles[0], exp)
+		}
+		if exp := filepath.Join(rootDir, "snap-2", walFileName(2)); walFiles[1] != exp {
+			t.Fatalf("walFiles[1] = %q, want %q", walFiles[1], exp)
+		}
+	})
+
+	t.Run("full then three-WAL incremental", func(t *testing.T) {
+		rootDir := t.TempDir()
+		catalog := &SnapshotCatalog{}
+		mustCreateSnapshotFull(t, rootDir, "snap-1", 1, 1)
+		mustCreateSnapshotIncMulti(t, rootDir, "snap-2", 2, 1,
+			"testdata/db-and-wals/wal-00", "testdata/db-and-wals/wal-01", "testdata/db-and-wals/wal-02")
+
+		ss, err := catalog.Scan(rootDir)
+		if err != nil {
+			t.Fatalf("Scan() returned error: %v", err)
+		}
+
+		dbFile, walFiles, err := ss.ResolveFiles("snap-2")
+		if err != nil {
+			t.Fatalf("ResolveFiles() returned error: %v", err)
+		}
+		if exp := filepath.Join(rootDir, "snap-1", dbfileName); dbFile != exp {
+			t.Fatalf("dbFile = %q, want %q", dbFile, exp)
+		}
+		if len(walFiles) != 3 {
+			t.Fatalf("expected 3 WAL files, got %d", len(walFiles))
+		}
+		for i := 0; i < 3; i++ {
+			if exp := filepath.Join(rootDir, "snap-2", walFileName(i+1)); walFiles[i] != exp {
+				t.Fatalf("walFiles[%d] = %q, want %q", i, walFiles[i], exp)
+			}
+		}
+	})
+
+	t.Run("full then single-WAL inc then two-WAL inc", func(t *testing.T) {
+		rootDir := t.TempDir()
+		catalog := &SnapshotCatalog{}
+		mustCreateSnapshotFull(t, rootDir, "snap-1", 1, 1)
+		mustCreateSnapshotInc(t, rootDir, "snap-2", 2, 1)
+		mustCreateSnapshotIncMulti(t, rootDir, "snap-3", 3, 1,
+			"testdata/db-and-wals/wal-01", "testdata/db-and-wals/wal-02")
+
+		ss, err := catalog.Scan(rootDir)
+		if err != nil {
+			t.Fatalf("Scan() returned error: %v", err)
+		}
+
+		// Resolve snap-3: should get DB from snap-1, WAL from snap-2 (1 file),
+		// and WALs from snap-3 (2 files) = 3 total WAL files.
+		dbFile, walFiles, err := ss.ResolveFiles("snap-3")
+		if err != nil {
+			t.Fatalf("ResolveFiles() returned error: %v", err)
+		}
+		if exp := filepath.Join(rootDir, "snap-1", dbfileName); dbFile != exp {
+			t.Fatalf("dbFile = %q, want %q", dbFile, exp)
+		}
+		if len(walFiles) != 3 {
+			t.Fatalf("expected 3 WAL files, got %d", len(walFiles))
+		}
+		// First WAL from snap-2 (single-WAL incremental).
+		if exp := filepath.Join(rootDir, "snap-2", walFileName(1)); walFiles[0] != exp {
+			t.Fatalf("walFiles[0] = %q, want %q", walFiles[0], exp)
+		}
+		// Next two WALs from snap-3 (multi-WAL incremental).
+		if exp := filepath.Join(rootDir, "snap-3", walFileName(1)); walFiles[1] != exp {
+			t.Fatalf("walFiles[1] = %q, want %q", walFiles[1], exp)
+		}
+		if exp := filepath.Join(rootDir, "snap-3", walFileName(2)); walFiles[2] != exp {
+			t.Fatalf("walFiles[2] = %q, want %q", walFiles[2], exp)
+		}
+	})
+
+	t.Run("full then two-WAL inc then noop", func(t *testing.T) {
+		rootDir := t.TempDir()
+		catalog := &SnapshotCatalog{}
+		mustCreateSnapshotFull(t, rootDir, "snap-1", 1, 1)
+		mustCreateSnapshotIncMulti(t, rootDir, "snap-2", 2, 1,
+			"testdata/db-and-wals/wal-00", "testdata/db-and-wals/wal-01")
+		mustCreateSnapshotNoop(t, rootDir, "snap-3", 3, 1)
+
+		ss, err := catalog.Scan(rootDir)
+		if err != nil {
+			t.Fatalf("Scan() returned error: %v", err)
+		}
+
+		// Resolve the noop — should get DB from full, 2 WALs from incremental.
+		dbFile, walFiles, err := ss.ResolveFiles("snap-3")
+		if err != nil {
+			t.Fatalf("ResolveFiles() returned error: %v", err)
+		}
+		if exp := filepath.Join(rootDir, "snap-1", dbfileName); dbFile != exp {
+			t.Fatalf("dbFile = %q, want %q", dbFile, exp)
+		}
+		if len(walFiles) != 2 {
+			t.Fatalf("expected 2 WAL files, got %d", len(walFiles))
+		}
+	})
+}
