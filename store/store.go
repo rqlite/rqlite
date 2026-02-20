@@ -2544,16 +2544,7 @@ func (s *Store) fsmSnapshot() (fSnap raft.FSMSnapshot, retErr error) {
 	if avn, err := s.autoVacNeeded(time.Now()); err != nil {
 		return nil, err
 	} else if avn {
-		vacStart := time.Now()
-		if err := s.Vacuum(); err != nil {
-			stats.Add(numAutoVacuumsFailed, 1)
-			return nil, err
-		}
-		s.logger.Printf("database vacuumed in %s", time.Since(vacStart))
-		stats.Get(autoVacuumDuration).(*expvar.Int).Set(time.Since(vacStart).Milliseconds())
-		stats.Add(numAutoVacuums, 1)
-		s.numAutoVacuums++
-		if err := s.setKeyTime(lastVacuumTimeKey, time.Now()); err != nil {
+		if err := s.doAutoVac(); err != nil {
 			return nil, err
 		}
 	}
@@ -2562,16 +2553,7 @@ func (s *Store) fsmSnapshot() (fSnap raft.FSMSnapshot, retErr error) {
 	if aon, err := s.autoOptimizeNeeded(time.Now()); err != nil {
 		return nil, err
 	} else if aon {
-		optStart := time.Now()
-		if err := s.db.Optimize(); err != nil {
-			stats.Add(numAutoOptimizesFailed, 1)
-			return nil, err
-		}
-		s.logger.Printf("database optimized in %s", time.Since(optStart))
-		stats.Get(autoOptimizeDuration).(*expvar.Int).Set(time.Since(optStart).Milliseconds())
-		stats.Add(numAutoOptimizes, 1)
-		s.numAutoOptimizes++
-		if err := s.setKeyTime(lastOptimizeTimeKey, time.Now()); err != nil {
+		if err := s.doAutoOptimize(); err != nil {
 			return nil, err
 		}
 	}
@@ -2611,11 +2593,7 @@ func (s *Store) fsmSnapshot() (fSnap raft.FSMSnapshot, retErr error) {
 		if pathExistsWithData(s.walPath) {
 			// Using files is about protecting against large WAL files, even
 			// post-compaction. Large files, if processed entirely in memory, could
-			// cause excessive memory usage. Here we compact the WAL to a new file,
-			// and then tell the Store where it is. The Snapshot Store then moves it
-			// from here to itself. Compacting the WAL isn't strictly necessary, but
-			// usually reduces the size of the WAL which will be moved to, and processed
-			// by, the Snapshot Store.
+			// cause excessive memory usage.
 			compactStartTime := time.Now()
 			walFD, err := os.Open(s.walPath)
 			if err != nil {
@@ -2634,7 +2612,7 @@ func (s *Store) fsmSnapshot() (fSnap raft.FSMSnapshot, retErr error) {
 			if err != nil {
 				return nil, err
 			}
-			walTmpPath := filepath.Join(s.walStagingDir, fmt.Sprintf("%020d.wal", time.Now().UnixNano()))
+			walTmpPath := filepath.Join(s.walStagingDir, fmt.Sprintf("%024d.wal", time.Now().UnixNano()))
 			walTmpFD, err = os.Create(walTmpPath)
 			if err != nil {
 				return nil, err
@@ -2669,6 +2647,7 @@ func (s *Store) fsmSnapshot() (fSnap raft.FSMSnapshot, retErr error) {
 			}
 			chkTStartTime := time.Now()
 			if err := s.checkpointWAL(); err != nil {
+				removeFileOrFatal(walTmpFD)
 				stats.Add(numWALCheckpointTruncateFailed, 1)
 				return nil, fmt.Errorf("incremental snapshot can't complete due to WAL checkpoint error (will retry): %s",
 					err.Error())
@@ -3152,6 +3131,19 @@ func (s *Store) autoVacNeeded(t time.Time) (bool, error) {
 	return t.Sub(bt) > s.AutoVacInterval, nil
 }
 
+func (s *Store) doAutoVac() error {
+	vacStart := time.Now()
+	if err := s.Vacuum(); err != nil {
+		stats.Add(numAutoVacuumsFailed, 1)
+		return err
+	}
+	s.logger.Printf("database vacuumed in %s", time.Since(vacStart))
+	stats.Get(autoVacuumDuration).(*expvar.Int).Set(time.Since(vacStart).Milliseconds())
+	stats.Add(numAutoVacuums, 1)
+	s.numAutoVacuums++
+	return s.setKeyTime(lastVacuumTimeKey, time.Now())
+}
+
 func (s *Store) autoOptimizeNeeded(t time.Time) (bool, error) {
 	if s.AutoOptimizeInterval == 0 {
 		return false, nil
@@ -3166,6 +3158,19 @@ func (s *Store) autoOptimizeNeeded(t time.Time) (bool, error) {
 		return false, err
 	}
 	return t.Sub(bt) > s.AutoOptimizeInterval, nil
+}
+
+func (s *Store) doAutoOptimize() error {
+	optStart := time.Now()
+	if err := s.db.Optimize(); err != nil {
+		stats.Add(numAutoOptimizesFailed, 1)
+		return err
+	}
+	s.logger.Printf("database optimized in %s", time.Since(optStart))
+	stats.Get(autoOptimizeDuration).(*expvar.Int).Set(time.Since(optStart).Milliseconds())
+	stats.Add(numAutoOptimizes, 1)
+	s.numAutoOptimizes++
+	return s.setKeyTime(lastOptimizeTimeKey, time.Now())
 }
 
 // dbModified returns true if the database appears to have been modified
