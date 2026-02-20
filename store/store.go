@@ -2658,6 +2658,10 @@ func (s *Store) fsmSnapshot() (fSnap raft.FSMSnapshot, retErr error) {
 				removeFileOrFatal(walTmpFD)
 				return nil, fmt.Errorf("failed to sync compacted WAL file: %w", err)
 			}
+			if err := syncDir(s.walStagingDir); err != nil {
+				removeFileOrFatal(walTmpFD)
+				return nil, fmt.Errorf("failed to sync WAL staging directory: %w", err)
+			}
 
 			// Now that we've got a (compacted) copy of the WAL we can truncate the
 			// WAL itself. We use TRUNCATE mode so that the next WAL contains just
@@ -3314,6 +3318,15 @@ func dirSize(path string) (int64, error) {
 		return err
 	})
 	return size, err
+}
+
+func syncDir(dir string) error {
+	fh, err := os.Open(dir)
+	if err != nil {
+		return err
+	}
+	defer fh.Close()
+	return fh.Sync()
 }
 
 // modTimeSize returns the modification time and size of the file at the given path.
