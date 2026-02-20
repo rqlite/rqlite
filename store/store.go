@@ -17,6 +17,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"runtime"
 	"sort"
 	"strconv"
 	"strings"
@@ -2654,7 +2655,7 @@ func (s *Store) fsmSnapshot() (fSnap raft.FSMSnapshot, retErr error) {
 				removeFileOrFatal(walTmpFD)
 				return nil, fmt.Errorf("failed to sync compacted WAL file: %w", err)
 			}
-			if err := syncDir(s.walStagingDir); err != nil {
+			if err := syncDirMaybe(s.walStagingDir); err != nil {
 				removeFileOrFatal(walTmpFD)
 				return nil, fmt.Errorf("failed to sync WAL staging directory: %w", err)
 			}
@@ -3315,7 +3316,10 @@ func dirSize(path string) (int64, error) {
 	return size, err
 }
 
-func syncDir(dir string) error {
+func syncDirMaybe(dir string) error {
+	if runtime.GOOS == "windows" {
+		return nil
+	}
 	fh, err := os.Open(dir)
 	if err != nil {
 		return err
