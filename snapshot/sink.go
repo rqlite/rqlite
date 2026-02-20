@@ -9,6 +9,7 @@ import (
 	"log"
 	"os"
 	"path/filepath"
+	"sort"
 
 	"github.com/hashicorp/raft"
 	"github.com/rqlite/rqlite/v10/db"
@@ -43,9 +44,9 @@ type Sink struct {
 	header *proto.SnapshotHeader
 	sinkW  sinker
 
-	// localWALPaths is set when the header indicates an IncrementalFileSnapshot.
-	// In this case, no data follows the header; the WAL files are moved on Close.
-	localWALPaths []string
+	// localWALDir is set when the header indicates an IncrementalFileSnapshot.
+	// In this case, no data follows the header; the WAL directory is moved on Close.
+	localWALDir string
 
 	// isNoop is set when the header indicates a NoopSnapshot.
 	// No data follows the header; a data.noop sentinel file is created on Close.
@@ -135,7 +136,7 @@ func (s *Sink) Write(p []byte) (n int, err error) {
 			if s.buf.Len() > 0 {
 				return n, fmt.Errorf("unexpected data after incremental file header")
 			}
-			s.localWALPaths = p.IncrementalFile.WalPaths
+			s.localWALDir = p.IncrementalFile.WalDirPath
 			return n, nil
 		case *proto.SnapshotHeader_Noop:
 			if s.fc != nil {
@@ -185,7 +186,7 @@ func (s *Sink) Close() error {
 	}
 	s.opened = false
 
-	if s.sinkW == nil && len(s.localWALPaths) == 0 && !s.isNoop {
+	if s.sinkW == nil && s.localWALDir == "" && !s.isNoop {
 		// Header was never fully received; clean up the temp directory.
 		return os.RemoveAll(s.snapTmpDirPath)
 	}
@@ -200,9 +201,21 @@ func (s *Sink) Close() error {
 		if err := f.Close(); err != nil {
 			return err
 		}
-	} else if len(s.localWALPaths) > 0 {
-		// IncrementalFileSnapshot: move each local WAL file into the snapshot directory.
-		for i, srcPath := range s.localWALPaths {
+	} else if s.localWALDir != "" {
+		// IncrementalFileSnapshot: atomically move the WAL directory into the
+		// snapshot directory, then redistribute the WAL files.
+		movedDir := filepath.Join(s.snapTmpDirPath, "wal-incoming")
+		if err := os.Rename(s.localWALDir, movedDir); err != nil {
+			return err
+		}
+
+		walMatches, err := filepath.Glob(filepath.Join(movedDir, "*"+walfileSuffix))
+		if err != nil {
+			return fmt.Errorf("globbing for WAL files in moved directory: %w", err)
+		}
+		sort.Strings(walMatches)
+
+		for i, srcPath := range walMatches {
 			dstPath := filepath.Join(s.snapTmpDirPath, walFileName(i+1))
 			if err := os.Rename(srcPath, dstPath); err != nil {
 				return err
@@ -210,6 +223,10 @@ func (s *Sink) Close() error {
 			if !db.IsValidSQLiteWALFile(dstPath) {
 				return fmt.Errorf("%s is not a valid SQLite WAL file", walFileName(i+1))
 			}
+		}
+
+		if err := os.Remove(movedDir); err != nil {
+			return err
 		}
 	} else {
 		if err := s.sinkW.Close(); err != nil {

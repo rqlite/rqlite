@@ -186,12 +186,16 @@ func Test_IncrementalSink(t *testing.T) {
 }
 
 func Test_IncrementalFileSink(t *testing.T) {
-	tempDir := t.TempDir()
 	srcPath := "testdata/db-and-wals/wal-01"
-	tmpSrcPath := filepath.Join(tempDir, "wal-00") // Because the file will be moved.
-	mustCopyFile(t, srcPath, tmpSrcPath)
 
-	hdr, err := NewIncrementalFileSnapshotHeader(tmpSrcPath)
+	// Create a directory containing the WAL file (mimics what the store does).
+	walDir := filepath.Join(t.TempDir(), "wal-dir")
+	if err := os.Mkdir(walDir, 0755); err != nil {
+		t.Fatalf("unexpected error creating WAL dir: %s", err.Error())
+	}
+	mustCopyFile(t, srcPath, filepath.Join(walDir, "wal-0001.wal"))
+
+	hdr, err := NewIncrementalFileSnapshotHeader(walDir)
 	if err != nil {
 		t.Fatalf("unexpected error creating header: %s", err.Error())
 	}
@@ -236,16 +240,18 @@ func Test_IncrementalFileSink(t *testing.T) {
 }
 
 func Test_IncrementalFileSink_TwoFiles(t *testing.T) {
-	tempDir := t.TempDir()
 	srcPaths := []string{"testdata/db-and-wals/wal-00", "testdata/db-and-wals/wal-01"}
-	var tmpPaths []string
+
+	// Create a directory containing the WAL files.
+	walDir := filepath.Join(t.TempDir(), "wal-dir")
+	if err := os.Mkdir(walDir, 0755); err != nil {
+		t.Fatalf("unexpected error creating WAL dir: %s", err.Error())
+	}
 	for i, src := range srcPaths {
-		dst := filepath.Join(tempDir, fmt.Sprintf("wal-%d", i))
-		mustCopyFile(t, src, dst)
-		tmpPaths = append(tmpPaths, dst)
+		mustCopyFile(t, src, filepath.Join(walDir, fmt.Sprintf("wal-%04d.wal", i)))
 	}
 
-	hdr, err := NewIncrementalFileSnapshotHeader(tmpPaths...)
+	hdr, err := NewIncrementalFileSnapshotHeader(walDir)
 	if err != nil {
 		t.Fatalf("unexpected error creating header: %s", err.Error())
 	}
@@ -285,16 +291,18 @@ func Test_IncrementalFileSink_TwoFiles(t *testing.T) {
 }
 
 func Test_IncrementalFileSink_ThreeFiles(t *testing.T) {
-	tempDir := t.TempDir()
 	srcPaths := []string{"testdata/db-and-wals/wal-00", "testdata/db-and-wals/wal-01", "testdata/db-and-wals/wal-02"}
-	var tmpPaths []string
+
+	// Create a directory containing the WAL files.
+	walDir := filepath.Join(t.TempDir(), "wal-dir")
+	if err := os.Mkdir(walDir, 0755); err != nil {
+		t.Fatalf("unexpected error creating WAL dir: %s", err.Error())
+	}
 	for i, src := range srcPaths {
-		dst := filepath.Join(tempDir, fmt.Sprintf("wal-%d", i))
-		mustCopyFile(t, src, dst)
-		tmpPaths = append(tmpPaths, dst)
+		mustCopyFile(t, src, filepath.Join(walDir, fmt.Sprintf("wal-%04d.wal", i)))
 	}
 
-	hdr, err := NewIncrementalFileSnapshotHeader(tmpPaths...)
+	hdr, err := NewIncrementalFileSnapshotHeader(walDir)
 	if err != nil {
 		t.Fatalf("unexpected error creating header: %s", err.Error())
 	}

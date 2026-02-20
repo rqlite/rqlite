@@ -171,7 +171,7 @@ func (x *IncrementalSnapshot) GetWalHeader() *Header {
 
 type IncrementalFileSnapshot struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
-	WalPaths      []string               `protobuf:"bytes,1,rep,name=wal_paths,json=walPaths,proto3" json:"wal_paths,omitempty"`
+	WalDirPath    string                 `protobuf:"bytes,1,opt,name=wal_dir_path,json=walDirPath,proto3" json:"wal_dir_path,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -206,11 +206,11 @@ func (*IncrementalFileSnapshot) Descriptor() ([]byte, []int) {
 	return file_snapshot_proto_rawDescGZIP(), []int{3}
 }
 
-func (x *IncrementalFileSnapshot) GetWalPaths() []string {
+func (x *IncrementalFileSnapshot) GetWalDirPath() string {
 	if x != nil {
-		return x.WalPaths
+		return x.WalDirPath
 	}
-	return nil
+	return ""
 }
 
 type NoopSnapshot struct {
@@ -386,9 +386,10 @@ const file_snapshot_proto_rawDesc = "" +
 	"walHeaders\"F\n" +
 	"\x13IncrementalSnapshot\x12/\n" +
 	"\n" +
-	"wal_header\x18\x01 \x01(\v2\x10.snapshot.HeaderR\twalHeader\"6\n" +
-	"\x17IncrementalFileSnapshot\x12\x1b\n" +
-	"\twal_paths\x18\x01 \x03(\tR\bwalPaths\"\x0e\n" +
+	"wal_header\x18\x01 \x01(\v2\x10.snapshot.HeaderR\twalHeader\";\n" +
+	"\x17IncrementalFileSnapshot\x12 \n" +
+	"\fwal_dir_path\x18\x01 \x01(\tR\n" +
+	"walDirPath\"\x0e\n" +
 	"\fNoopSnapshot\"\xb1\x02\n" +
 	"\x0eSnapshotHeader\x12%\n" +
 	"\x0eformat_version\x18\x01 \x01(\rR\rformatVersion\x12,\n" +

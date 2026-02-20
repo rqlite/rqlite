@@ -254,7 +254,8 @@ func runSnapshotStreamerEndToEnd(t *testing.T, dbData string, walDatas []string)
 }
 
 func Test_SnapshotPathStreamer(t *testing.T) {
-	streamer, err := NewSnapshotPathStreamer("testdata/db-and-wals/wal-00")
+	walDir := t.TempDir()
+	streamer, err := NewSnapshotPathStreamer(walDir)
 	if err != nil {
 		t.Fatalf("NewSnapshotPathStreamer failed: %v", err)
 	}
@@ -283,8 +284,8 @@ func Test_SnapshotPathStreamer(t *testing.T) {
 		t.Fatalf("Expected IncrementalFile payload, got nil")
 	}
 
-	if len(inc.WalPaths) != 1 || inc.WalPaths[0] != "testdata/db-and-wals/wal-00" {
-		t.Fatalf("Expected WalPaths ['testdata/db-and-wals/wal-00'], got %v", inc.WalPaths)
+	if inc.WalDirPath != walDir {
+		t.Fatalf("Expected WalDirPath %q, got %q", walDir, inc.WalDirPath)
 	}
 
 	// Check that there is no more data to read after the header.
@@ -293,96 +294,6 @@ func Test_SnapshotPathStreamer(t *testing.T) {
 		t.Fatalf("Expected EOF after reading header, got: %v", err)
 	}
 
-	if err := streamer.Close(); err != nil {
-		t.Fatalf("Failed to close SnapshotPathStreamer: %v", err)
-	}
-}
-
-func Test_SnapshotPathStreamer_TwoFiles(t *testing.T) {
-	walPaths := []string{"testdata/db-and-wals/wal-00", "testdata/db-and-wals/wal-01"}
-	streamer, err := NewSnapshotPathStreamer(walPaths...)
-	if err != nil {
-		t.Fatalf("NewSnapshotPathStreamer failed: %v", err)
-	}
-
-	sizeBuf := make([]byte, HeaderSizeLen)
-	if _, err = io.ReadFull(streamer, sizeBuf); err != nil {
-		t.Fatalf("Failed to read header size: %v", err)
-	}
-
-	hdrLen := int(binary.BigEndian.Uint32(sizeBuf))
-	hdrBuf := make([]byte, hdrLen)
-	if _, err = io.ReadFull(streamer, hdrBuf); err != nil {
-		t.Fatalf("Failed to read header: %v", err)
-	}
-
-	pb, err := UnmarshalSnapshotHeader(hdrBuf)
-	if err != nil {
-		t.Fatalf("Failed to unmarshal header: %v", err)
-	}
-
-	inc := pb.GetIncrementalFile()
-	if inc == nil {
-		t.Fatalf("Expected IncrementalFile payload, got nil")
-	}
-	if len(inc.WalPaths) != 2 {
-		t.Fatalf("Expected 2 WalPaths, got %d", len(inc.WalPaths))
-	}
-	for i, exp := range walPaths {
-		if inc.WalPaths[i] != exp {
-			t.Fatalf("WalPaths[%d] = %q, want %q", i, inc.WalPaths[i], exp)
-		}
-	}
-
-	var eofBuf [1]byte
-	if _, err := streamer.Read(eofBuf[:]); err != io.EOF {
-		t.Fatalf("Expected EOF after reading header, got: %v", err)
-	}
-	if err := streamer.Close(); err != nil {
-		t.Fatalf("Failed to close SnapshotPathStreamer: %v", err)
-	}
-}
-
-func Test_SnapshotPathStreamer_ThreeFiles(t *testing.T) {
-	walPaths := []string{"testdata/db-and-wals/wal-00", "testdata/db-and-wals/wal-01", "testdata/db-and-wals/wal-02"}
-	streamer, err := NewSnapshotPathStreamer(walPaths...)
-	if err != nil {
-		t.Fatalf("NewSnapshotPathStreamer failed: %v", err)
-	}
-
-	sizeBuf := make([]byte, HeaderSizeLen)
-	if _, err = io.ReadFull(streamer, sizeBuf); err != nil {
-		t.Fatalf("Failed to read header size: %v", err)
-	}
-
-	hdrLen := int(binary.BigEndian.Uint32(sizeBuf))
-	hdrBuf := make([]byte, hdrLen)
-	if _, err = io.ReadFull(streamer, hdrBuf); err != nil {
-		t.Fatalf("Failed to read header: %v", err)
-	}
-
-	pb, err := UnmarshalSnapshotHeader(hdrBuf)
-	if err != nil {
-		t.Fatalf("Failed to unmarshal header: %v", err)
-	}
-
-	inc := pb.GetIncrementalFile()
-	if inc == nil {
-		t.Fatalf("Expected IncrementalFile payload, got nil")
-	}
-	if len(inc.WalPaths) != 3 {
-		t.Fatalf("Expected 3 WalPaths, got %d", len(inc.WalPaths))
-	}
-	for i, exp := range walPaths {
-		if inc.WalPaths[i] != exp {
-			t.Fatalf("WalPaths[%d] = %q, want %q", i, inc.WalPaths[i], exp)
-		}
-	}
-
-	var eofBuf [1]byte
-	if _, err := streamer.Read(eofBuf[:]); err != io.EOF {
-		t.Fatalf("Expected EOF after reading header, got: %v", err)
-	}
 	if err := streamer.Close(); err != nil {
 		t.Fatalf("Failed to close SnapshotPathStreamer: %v", err)
 	}
