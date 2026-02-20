@@ -115,31 +115,31 @@ var (
 )
 
 const (
-	cleanSnapshotName         = "clean_snapshot"
-	snapshotsDirName          = "wsnapshots"
-	restoreScratchPattern     = "rqlite-restore-*"
-	bootScatchPattern         = "rqlite-boot-*"
-	backupScratchPattern      = "rqlite-backup-*"
-	walSnapshotScratchPattern = "rqlite-wal-snapshot-*"
-	raftDBPath                = "raft.db" // Changing this will break backwards compatibility.
-	peersPath                 = "raft/peers.json"
-	peersInfoPath             = "raft/peers.info"
-	applyTimeout              = 10 * time.Second
-	sqliteFile                = "db.sqlite"
-	linearizableTimeout       = 1 * time.Second
-	leaderWaitDelay           = 100 * time.Millisecond
-	appliedWaitDelay          = 100 * time.Millisecond
-	commitEquivalenceDelay    = 50 * time.Millisecond
-	backupCASTimeout          = 10 * time.Second
-	backupCASRetryDelay       = 100 * time.Millisecond
-	connectionPoolCount       = 5
-	connectionTimeout         = 10 * time.Second
-	mustWALCheckpointDelay    = 50 * time.Millisecond
-	mustWALCheckpointTimeout  = 5 * time.Minute
-	raftLogCacheSize          = 512
-	trailingScale             = 1.25
-	observerChanLen           = 50
-	maxFailedSnapshotsInRow   = 5
+	cleanSnapshotName        = "clean_snapshot"
+	snapshotsDirName         = "wsnapshots"
+	walStagingDirName        = "wal-staging"
+	restoreScratchPattern    = "rqlite-restore-*"
+	bootScatchPattern        = "rqlite-boot-*"
+	backupScratchPattern     = "rqlite-backup-*"
+	raftDBPath               = "raft.db" // Changing this will break backwards compatibility.
+	peersPath                = "raft/peers.json"
+	peersInfoPath            = "raft/peers.info"
+	applyTimeout             = 10 * time.Second
+	sqliteFile               = "db.sqlite"
+	linearizableTimeout      = 1 * time.Second
+	leaderWaitDelay          = 100 * time.Millisecond
+	appliedWaitDelay         = 100 * time.Millisecond
+	commitEquivalenceDelay   = 50 * time.Millisecond
+	backupCASTimeout         = 10 * time.Second
+	backupCASRetryDelay      = 100 * time.Millisecond
+	connectionPoolCount      = 5
+	connectionTimeout        = 10 * time.Second
+	mustWALCheckpointDelay   = 50 * time.Millisecond
+	mustWALCheckpointTimeout = 5 * time.Minute
+	raftLogCacheSize         = 512
+	trailingScale            = 1.25
+	observerChanLen          = 50
+	maxFailedSnapshotsInRow  = 5
 
 	baseVacuumTimeKey   = "rqlite_base_vacuum"
 	lastVacuumTimeKey   = "rqlite_last_vacuum"
@@ -309,6 +309,7 @@ type Store struct {
 	raftDir       string
 	raftDBPath    string
 	snapshotDir   string
+	walStagingDir string
 	peersPath     string
 	peersInfoPath string
 
@@ -456,6 +457,7 @@ func New(c *Config, ly Layer) *Store {
 		raftDir:           c.Dir,
 		raftDBPath:        filepath.Join(c.Dir, raftDBPath),
 		snapshotDir:       filepath.Join(c.Dir, snapshotsDirName),
+		walStagingDir:     filepath.Join(c.Dir, walStagingDirName),
 		peersPath:         filepath.Join(c.Dir, peersPath),
 		peersInfoPath:     filepath.Join(c.Dir, peersInfoPath),
 		cleanSnapshotPath: filepath.Join(c.Dir, cleanSnapshotName),
@@ -751,11 +753,13 @@ func (s *Store) Open() (retErr error) {
 	// Clean up any files from aborted operations. This tries to catch the case where scratch files
 	// were created in the Raft directory, not cleaned up, and then the node was restarted with an
 	// explicit SQLite path set.
+	if err := os.RemoveAll(s.walStagingDir); err != nil {
+		return fmt.Errorf("failed to remove pre-existing WAL staging directory: %s", err.Error())
+	}
 	for _, pattern := range []string{
 		restoreScratchPattern,
 		bootScatchPattern,
-		backupScratchPattern,
-		walSnapshotScratchPattern} {
+		backupScratchPattern} {
 		for _, dir := range []string{s.raftDir, s.dbDir} {
 			files, err := filepath.Glob(filepath.Join(dir, pattern))
 			if err != nil {
@@ -2222,6 +2226,15 @@ func (s *Store) RORWCount(eqr *proto.ExecuteQueryRequest) (nRW, nRO int) {
 	return
 }
 
+// StagedWALs returns the list of WAL files in the staging directory.
+func (s *Store) StagedWALs() ([]string, error) {
+	files, err := filepath.Glob(filepath.Join(s.walStagingDir, "*.wal"))
+	if err != nil {
+		return nil, fmt.Errorf("failed to list staged WAL files: %s", err.Error())
+	}
+	return files, nil
+}
+
 // remove removes the node, with the given ID, from the cluster.
 func (s *Store) remove(id string) error {
 	f := s.raft.RemoveServer(raft.ServerID(id), 0, 0)
@@ -2617,40 +2630,36 @@ func (s *Store) fsmSnapshot() (fSnap raft.FSMSnapshot, retErr error) {
 				return nil, err
 			}
 
-			// Write the compacted WAL to a temp file inside a temp directory.
-			// The Snapshot Sink will atomically move this directory.
-			walTmpDir, err := os.MkdirTemp(s.dbDir, walSnapshotScratchPattern)
+			// Write the compacted WAL to the WAL staging directory. The Snapshotting process
+			// will atomically move this entire directory. If it fails to do so, then this WAL
+			// file wil be packaged as part of the next Snapshot and the next WAL file.
+			err = ensureDirExists(s.walStagingDir)
 			if err != nil {
 				return nil, err
 			}
-			walTmpPath := filepath.Join(walTmpDir, fmt.Sprintf("%020d.wal", time.Now().UnixNano()))
+			walTmpPath := filepath.Join(s.walStagingDir, fmt.Sprintf("%020d.wal", time.Now().UnixNano()))
 			walTmpFD, err = os.Create(walTmpPath)
 			if err != nil {
-				os.RemoveAll(walTmpDir)
 				return nil, err
 			}
 			if err := os.Chmod(walTmpPath, 0644); err != nil {
 				walTmpFD.Close()
-				os.RemoveAll(walTmpDir)
 				return nil, err
 			}
 			defer walTmpFD.Close()
 			walWriter, err := wal.NewWriter(scanner)
 			if err != nil {
 				walTmpFD.Close()
-				os.RemoveAll(walTmpDir)
 				return nil, err
 			}
 			walSzPost, err := walWriter.WriteTo(walTmpFD)
 			if err != nil {
 				walTmpFD.Close()
-				os.RemoveAll(walTmpDir)
 				return nil, err
 			}
 			stats.Get(snapshotCreateWALCompactDuration).(*expvar.Int).Set(time.Since(compactStartTime).Milliseconds())
 			if err := walTmpFD.Sync(); err != nil {
 				walTmpFD.Close()
-				os.RemoveAll(walTmpDir)
 				return nil, fmt.Errorf("failed to sync compacted WAL file: %w", err)
 			}
 
@@ -2675,7 +2684,7 @@ func (s *Store) fsmSnapshot() (fSnap raft.FSMSnapshot, retErr error) {
 			// path to the Snapshot Store and Sink indirectly via the header. The Snapshotting
 			// system knows to check for this. It will atomically move the directory into the
 			// snapshot directory and redistribute the WAL files within it.
-			streamer, err := snapshot.NewSnapshotPathStreamer(walTmpDir)
+			streamer, err := snapshot.NewSnapshotPathStreamer(s.walStagingDir)
 			if err != nil {
 				return nil, err
 			}
@@ -2710,25 +2719,6 @@ func (s *Store) fsmSnapshot() (fSnap raft.FSMSnapshot, retErr error) {
 				s.logger.Printf("persisting %s snapshot was not invoked on node ID %s", fPLog, s.raftID)
 			} else if !succeeded {
 				s.logger.Printf("persisting %s snapshot did not succeed on node ID %s", fPLog, s.raftID)
-			}
-
-			// We treat any snapshot that is not successfully persisted for whatever reason as
-			// requiring a full snapshot next time. Truncation could run to complete, the WAL
-			// deleted, but if the snapshot processing doesn't run to completion, the snapshot
-			// store hasn't been updated with the WAL data. It's gone.
-			if !invoked || !succeeded {
-				s.logger.Printf("setting full snapshot needed")
-				if err := s.snapshotStore.SetFullNeeded(); err != nil {
-					// If this happens, only recourse is to shut down the node.
-					s.logger.Fatalf("failed to set full snapshot needed: %s", err)
-				}
-			}
-
-			if walTmpFD != nil {
-				// Incremental snapshotting active, clean up any temp WAL files.
-				// There may be none around, but that's OK.
-				walTmpFD.Close()
-				os.Remove(walTmpFD.Name())
 			}
 		},
 	}
@@ -3237,15 +3227,6 @@ func createTemp(dir, pattern string) (*os.File, error) {
 	return fd, nil
 }
 
-func copyFromReaderToFile(path string, r io.Reader) (int64, error) {
-	fd, err := os.Create(path)
-	if err != nil {
-		return 0, err
-	}
-	defer fd.Close()
-	return io.Copy(fd, r)
-}
-
 // prettyVoter converts bool to "voter" or "non-voter"
 func prettyVoter(v bool) string {
 	if v {
@@ -3284,6 +3265,13 @@ func pathExistsWithData(p string) bool {
 func dirExists(path string) bool {
 	stat, err := os.Stat(path)
 	return err == nil && stat.IsDir()
+}
+
+func ensureDirExists(path string) error {
+	if dirExists(path) {
+		return nil
+	}
+	return os.MkdirAll(path, 0755)
 }
 
 func fileSize(path string) (int64, error) {
