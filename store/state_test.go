@@ -349,10 +349,10 @@ func Test_SingleNodeRecoverNetworkChange(t *testing.T) {
 	}
 	queryTest(s0)
 
-	// id := s0.ID()
-	// if err := s0.Close(true); err != nil {
-	// 	t.Fatalf("failed to close single-node store: %s", err.Error())
-	// }
+	id := s0.ID()
+	if err := s0.Close(true); err != nil {
+		t.Fatalf("failed to close single-node store: %s", err.Error())
+	}
 
 	// Create a new node, at the same path. Will presumably have a different
 	// Raft network address, since they are randomly assigned.
