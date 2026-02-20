@@ -212,6 +212,10 @@ func (s *Sink) Close() error {
 		if err != nil {
 			return fmt.Errorf("globbing for WAL files in moved directory: %w", err)
 		}
+		if len(walMatches) > 1 {
+			s.logger.Printf("found %d WAL files in moved directory, processing multi-WAL snapshot",
+				len(walMatches))
+		}
 
 		for _, srcPath := range walMatches {
 			name := filepath.Base(srcPath)
