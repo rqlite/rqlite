@@ -29,7 +29,6 @@ _rqlited_completions() {
       ;;
     '-extensions-path' | \
     '-trace-profile' | \
-    '-on-disk-path' | \
     '-auto-restore' | \
     '-disco-confie' | \
     '-http-ca-cert' | \
@@ -45,7 +44,7 @@ _rqlited_completions() {
       while read -r; do COMPREPLY+=("$REPLY"); done < <(compgen -A file -- "$cur")
       ;;
     *)
-      while read -r; do COMPREPLY+=("$REPLY"); done < <(compgen -W "$(_rqlited_completions_filter "-auth -auto-backup -auto-optimize-int -auto-restore -auto-vacuum-int -bootstrap-expect -bootstrap-expect-timeout -cluster-connect-timeout -cpu-profile -disco-confie -disco-key -disco-mode -extensions-path -fk -http-addr -http-adv-addr -http-allow-origin -http-ca-cert -http-cert -http-key -http-verify-client -join -join-as -join-attempts -join-interval -mem-profile -node-ca-cert -node-cert -node-id -node-key -node-no-verify -node-verify-client -node-verify-server-name -on-disk-path -raft-addr -raft-adv-addr -raft-apply-timeout -raft-cluster-remove-shutdown -raft-election-timeout -raft-leader-lease-timeout -raft-log-level -raft-non-voter -raft-reap-node-timeout -raft-reap-read-only-node-timeout -raft-remove-shutdown -raft-shutdown-stepdown -raft-snap -raft-snap-int -raft-snap-wal-size -raft-timeout duration -trace-profile -version -write-queue-batch-size -write-queue-capacity -write-queue-timeout -write-queue-tx")" -- "$cur")
+      while read -r; do COMPREPLY+=("$REPLY"); done < <(compgen -W "$(_rqlited_completions_filter "-auth -auto-backup -auto-optimize-int -auto-restore -auto-vacuum-int -bootstrap-expect -bootstrap-expect-timeout -cluster-connect-timeout -cpu-profile -disco-confie -disco-key -disco-mode -extensions-path -fk -http-addr -http-adv-addr -http-allow-origin -http-ca-cert -http-cert -http-key -http-verify-client -join -join-as -join-attempts -join-interval -mem-profile -node-ca-cert -node-cert -node-id -node-key -node-no-verify -node-verify-client -node-verify-server-name -raft-addr -raft-adv-addr -raft-apply-timeout -raft-cluster-remove-shutdown -raft-election-timeout -raft-leader-lease-timeout -raft-log-level -raft-non-voter -raft-reap-node-timeout -raft-reap-read-only-node-timeout -raft-remove-shutdown -raft-shutdown-stepdown -raft-snap -raft-snap-int -raft-snap-wal-size -raft-timeout duration -trace-profile -version -write-queue-batch-size -write-queue-capacity -write-queue-timeout -write-queue-tx")" -- "$cur")
       ;;
 
   esac

@@ -76,8 +76,6 @@ type Config struct {
 	DiscoKey string
 	// Set discovery config, or path to cluster discovery config file
 	DiscoConfig string
-	// Path for SQLite on-disk database file. If not set, use a file in data directory
-	OnDiskPath string
 	// Enable SQLite foreign key constraints
 	FKConstraints bool
 	// Period between automatic VACUUMs. It not set, not enabled
@@ -169,7 +167,6 @@ func Forge(arguments []string) (*flag.FlagSet, *Config, error) {
 	fs.StringVar(&config.DiscoMode, "disco-mode", "", "Choose clustering discovery mode. If not set, no node discovery is performed")
 	fs.StringVar(&config.DiscoKey, "disco-key", "rqlite", "Key prefix for cluster discovery service")
 	fs.StringVar(&config.DiscoConfig, "disco-config", "", "Set discovery config, or path to cluster discovery config file")
-	fs.StringVar(&config.OnDiskPath, "on-disk-path", "", "Path for SQLite on-disk database file. If not set, use a file in data directory")
 	fs.BoolVar(&config.FKConstraints, "fk", false, "Enable SQLite foreign key constraints")
 	fs.DurationVar(&config.AutoVacInterval, "auto-vacuum-int", mustParseDuration("0s"), "Period between automatic VACUUMs. It not set, not enabled")
 	fs.DurationVar(&config.AutoOptimizeInterval, "auto-optimize-int", mustParseDuration("24h"), "Period between automatic 'PRAGMA optimize'. Set to 0h to disable")

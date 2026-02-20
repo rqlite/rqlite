@@ -313,16 +313,6 @@ long_help = """
 default = ""
 
 [[flags]]
-name = "OnDiskPath"
-cli = "on-disk-path"
-type = "string"
-short_help = "Path for SQLite on-disk database file. If not set, use a file in data directory"
-long_help = """
-Generally speaking you shouldn't need to set this. Your system is easiest to manage if you let rqlite manage the SQLite database. However this can be useful under certain performance-sensitive scenarious.
-"""
-default = ""
-
-[[flags]]
 name = "FKConstraints"
 cli = "fk"
 type = "bool"

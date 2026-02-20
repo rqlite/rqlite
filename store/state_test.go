@@ -349,14 +349,15 @@ func Test_SingleNodeRecoverNetworkChange(t *testing.T) {
 	}
 	queryTest(s0)
 
-	id := s0.ID()
-	if err := s0.Close(true); err != nil {
-		t.Fatalf("failed to close single-node store: %s", err.Error())
-	}
+	// id := s0.ID()
+	// if err := s0.Close(true); err != nil {
+	// 	t.Fatalf("failed to close single-node store: %s", err.Error())
+	// }
 
 	// Create a new node, at the same path. Will presumably have a different
 	// Raft network address, since they are randomly assigned.
-	sR, srLn := mustNewStoreAtPathsLn(id, s0.Path(), "", true)
+	sR, srLn := mustNewStore(t)
+
 	defer srLn.Close()
 	if IsNewNode(sR.Path()) {
 		t.Fatalf("store detected incorrectly as new")
@@ -451,7 +452,8 @@ func Test_SingleNodeRecoverNetworkChangeSnapshot(t *testing.T) {
 
 	// Create a new node, at the same path. Will presumably have a different
 	// Raft network address, since they are randomly assigned.
-	sR, srLn := mustNewStoreAtPathsLn(id, s0.Path(), "", true)
+	sR, srLn := mustNewStore(t)
+
 	if IsNewNode(sR.Path()) {
 		t.Fatalf("store detected incorrectly as new")
 	}
