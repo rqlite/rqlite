@@ -12,7 +12,6 @@ import (
 	"time"
 
 	"github.com/rqlite/rqlite/v10/command/proto"
-	"github.com/rqlite/rqlite/v10/db"
 )
 
 func Test_MultiNode_Leader_Followers(t *testing.T) {
@@ -580,7 +579,7 @@ func Test_MultiNodeSnapshot_BlockedSnapshot(t *testing.T) {
 	// Fire up first node and write one record.
 	s0, ln := mustNewStore(t)
 	s0.NoSnapshotOnClose = true
-	s0.SnapshotReapThreshold = 2
+	s0.SnapshotReapThreshold = 20
 	defer ln.Close()
 	if err := s0.Open(); err != nil {
 		t.Fatalf("failed to open single-node store: %s", err.Error())
@@ -669,27 +668,33 @@ func Test_MultiNodeSnapshot_BlockedSnapshot(t *testing.T) {
 		t.Fatalf("failed to snapshot single-node store: %s", err.Error())
 	}
 
-	// Look inside the latest snapshot store and ensure it has the right data.
-	files, err = filepath.Glob(filepath.Join(s0.snapshotDir, "*", "data.db"))
-	if err != nil {
-		t.Fatalf("failed to list snapshot files: %s", err.Error())
+	// Fire up third node, which will join and catch up via the snapshot.
+	s2, ln2 := mustNewStore(t)
+	defer ln2.Close()
+	if err := s2.Open(); err != nil {
+		t.Fatalf("failed to open single-node store: %s", err.Error())
 	}
-	if len(files) != 1 {
-		t.Fatalf("expected one snapshot file, got %d", len(files))
+	defer s2.Close(true)
+	if err := s0.Join(joinRequest(s2.ID(), s2.Addr(), true)); err != nil {
+		t.Fatalf("failed to join single-node store: %s", err.Error())
 	}
-	db, err := db.Open(files[0], false, true)
-	if err != nil {
-		t.Fatalf("failed to open snapshot database: %s", err.Error())
+	if _, err := s2.WaitForLeader(10 * time.Second); err != nil {
+		t.Fatalf("Error waiting for leader: %s", err)
 	}
-	defer db.Close()
-	qr = queryRequestFromString("SELECT COUNT(*) FROM foo", false, false)
-	rows, err := db.Query(qr.Request, false)
-	if err != nil {
-		t.Fatalf("failed to query snapshot database: %s", err.Error())
-	}
-	if exp, got := `[{"columns":["COUNT(*)"],"types":["integer"],"values":[[1001]]}]`, asJSON(rows); exp != got {
-		t.Fatalf("unexpected results for query\nexp: %s\ngot: %s", exp, got)
-	}
+
+	// Check that the joining node eventually gets the right records.
+	testPoll(t, func() bool {
+		qr := queryRequestFromString("SELECT COUNT(*) FROM foo", false, true)
+		qr.Level = proto.ConsistencyLevel_NONE
+		r, _, _, err := s2.Query(context.Background(), qr)
+		if err != nil {
+			t.Fatalf("failed to query single node: %s", err.Error())
+		}
+		if exp, got := `[{"columns":["COUNT(*)"],"types":["integer"],"values":[[1001]]}]`, asJSON(r); exp != got {
+			return false
+		}
+		return true
+	}, 100*time.Millisecond, 5*time.Second)
 }
 
 func Test_MultiNodeDBAppliedIndex(t *testing.T) {
