@@ -28,7 +28,7 @@ import (
 	"github.com/rqlite/rqlite/v10/command/sql"
 	"github.com/rqlite/rqlite/v10/db"
 	"github.com/rqlite/rqlite/v10/http/licenses"
-	"github.com/rqlite/rqlite/v10/http/ui"
+	"github.com/rqlite/rqlite/v10/http/console"
 	"github.com/rqlite/rqlite/v10/internal/rtls"
 	"github.com/rqlite/rqlite/v10/proxy"
 	"github.com/rqlite/rqlite/v10/queue"
