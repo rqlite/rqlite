@@ -27,8 +27,8 @@ import (
 	"github.com/rqlite/rqlite/v10/command/proto"
 	"github.com/rqlite/rqlite/v10/command/sql"
 	"github.com/rqlite/rqlite/v10/db"
+	"github.com/rqlite/rqlite/v10/http/console"
 	"github.com/rqlite/rqlite/v10/http/licenses"
-	"github.com/rqlite/rqlite/v10/http/ui"
 	"github.com/rqlite/rqlite/v10/internal/rtls"
 	"github.com/rqlite/rqlite/v10/proxy"
 	"github.com/rqlite/rqlite/v10/queue"
@@ -321,7 +321,7 @@ func New(addr string, store Store, cluster Cluster, pxy *proxy.Proxy, credential
 		credentialStore:     credentials,
 		logger:              log.New(os.Stderr, "[http] ", log.LstdFlags),
 	}
-	s.uiHandler = http.StripPrefix("/ui/", http.FileServerFS(ui.Assets))
+	s.uiHandler = http.StripPrefix("/console/", http.FileServerFS(ui.Assets))
 	return s
 }
 
@@ -451,10 +451,10 @@ func (s *Service) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 	switch {
 	case r.URL.Path == "/" || r.URL.Path == "":
-		http.Redirect(w, r, "/ui/", http.StatusFound)
-	case strings.HasPrefix(r.URL.Path, "/ui"):
-		if r.URL.Path == "/ui" {
-			http.Redirect(w, r, "/ui/", http.StatusMovedPermanently)
+		http.Redirect(w, r, "/console/", http.StatusFound)
+	case strings.HasPrefix(r.URL.Path, "/console"):
+		if r.URL.Path == "/console" {
+			http.Redirect(w, r, "/console/", http.StatusMovedPermanently)
 			return
 		}
 		stats.Add(numUI, 1)

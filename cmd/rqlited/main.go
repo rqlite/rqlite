@@ -230,7 +230,7 @@ func main() {
 	log.Printf("node HTTP API available at %s", cfg.HTTPURL())
 	h, p, _ := net.SplitHostPort(cfg.HTTPAdv)
 	log.Printf("connect using the command-line tool via 'rqlite -H %s -p %s'", h, p)
-	log.Printf("visit the rqlite UI for this node at %s/ui/", cfg.HTTPURL())
+	log.Printf("visit the rqlite console for this node at %s/console/", cfg.HTTPURL())
 
 	// Start any requested auto-backups
 	backupSrv, err := startAutoBackups(mainCtx, cfg, str)
