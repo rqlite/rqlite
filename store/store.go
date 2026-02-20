@@ -2643,9 +2643,6 @@ func (s *Store) fsmSnapshot() (fSnap raft.FSMSnapshot, retErr error) {
 				return nil, err
 			}
 			defer walTmpFD.Close()
-			if err := os.Chmod(walTmpPath, 0644); err != nil {
-				return nil, err
-			}
 			walWriter, err := wal.NewWriter(scanner)
 			if err != nil {
 				return nil, err
