@@ -1447,11 +1447,11 @@ func Test_UIRedirectSlash(t *testing.T) {
 
 	resp, err := client.Get(host + "/console")
 	if err != nil {
-		t.Fatalf("failed to make /ui request")
+		t.Fatalf("failed to make /console request")
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusMovedPermanently {
-		t.Fatalf("expected StatusMovedPermanently for /ui, got %d", resp.StatusCode)
+		t.Fatalf("expected StatusMovedPermanently for /console, got %d", resp.StatusCode)
 	}
 	if resp.Header.Get("Location") != "/console/" {
 		t.Fatalf("expected redirect to /console/, got %s", resp.Header.Get("Location"))
