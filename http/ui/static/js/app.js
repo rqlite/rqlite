@@ -546,7 +546,7 @@
             html += "<td>" + escapeHTML(node.id) + "</td>";
             var apiURL = node.api_addr || "";
             if (apiURL) {
-                var uiURL = apiURL.replace(/\/$/, "") + "/ui/";
+                var uiURL = apiURL.replace(/\/$/, "") + "/console/";
                 html += '<td><a href="' + escapeHTML(uiURL) + '">' + escapeHTML(apiURL) + '</a></td>';
             } else {
                 html += "<td>N/A</td>";
