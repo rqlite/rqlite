@@ -2645,14 +2645,17 @@ func (s *Store) fsmSnapshot() (fSnap raft.FSMSnapshot, retErr error) {
 			defer walTmpFD.Close()
 			walWriter, err := wal.NewWriter(scanner)
 			if err != nil {
+				removeFileOrFatal(walTmpPath)
 				return nil, err
 			}
 			walSzPost, err := walWriter.WriteTo(walTmpFD)
 			if err != nil {
+				removeFileOrFatal(walTmpPath)
 				return nil, err
 			}
 			stats.Get(snapshotCreateWALCompactDuration).(*expvar.Int).Set(time.Since(compactStartTime).Milliseconds())
 			if err := walTmpFD.Sync(); err != nil {
+				removeFileOrFatal(walTmpPath)
 				return nil, fmt.Errorf("failed to sync compacted WAL file: %w", err)
 			}
 
@@ -3234,6 +3237,12 @@ func removeFile(path string) error {
 		return nil
 	}
 	return os.Remove(path)
+}
+
+func removeFileOrFatal(path string) {
+	if err := removeFile(path); err != nil {
+		log.Fatalf("failed to remove file at %s: %s", path, err.Error())
+	}
 }
 
 // pathExists returns true if the given path exists.
