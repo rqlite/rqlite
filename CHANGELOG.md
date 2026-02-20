@@ -24,6 +24,7 @@ Upgrading to this release from a v7 release (or later) is seamless and been exte
 - [PR #2488](https://github.com/rqlite/rqlite/pull/2488): Move to Castagnoli CRC32 polynomial.
 - [PR #2489](https://github.com/rqlite/rqlite/pull/2489): Add `CRC32Writer` for calculating CRCs concurrently with writing.
 - [PR #2490](https://github.com/rqlite/rqlite/pull/2490): Store handles WAL file from previous failed snapshot.
+- [PR #2491](https://github.com/rqlite/rqlite/pull/2491): Don't recalculate snapshot fingerprint on Noop Snapshot.
 
 ## v9.4.1 (February 11th 2026)
 ### Implementation changes and bug fixes

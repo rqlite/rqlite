@@ -2510,11 +2510,6 @@ func (s *Store) fsmSnapshot() (fSnap raft.FSMSnapshot, retErr error) {
 	}
 	defer s.snapshotCAS.End()
 
-	// From now on, assume any snapshot is not successful.
-	if err := removeFile(s.cleanSnapshotPath); err != nil {
-		return nil, fmt.Errorf("failed to remove clean snapshot file: %w", err)
-	}
-
 	// We want to guarantee that any snapshot results in a fully-sync'ed to disk
 	// SQLite database. This allows us to assume that the database file on disk is
 	// always consistent once a snapshot has been taken successfully. However,
@@ -2592,6 +2587,7 @@ func (s *Store) fsmSnapshot() (fSnap raft.FSMSnapshot, retErr error) {
 
 	var fsmSnapshot raft.FSMSnapshot
 	var walTmpFD *os.File
+	finalizer := s.createSnapshotFingerprint
 	if fullNeeded {
 		chkStartTime := time.Now()
 		if err := s.checkpointWAL(); err != nil {
@@ -2701,6 +2697,7 @@ func (s *Store) fsmSnapshot() (fSnap raft.FSMSnapshot, retErr error) {
 				return nil, err
 			}
 			fsmSnapshot = snapshot.NewStateReader(streamer)
+			finalizer = func() error { return nil } // SQLite database is not changing, so don't waste cycles on fingerprinting.
 			stats.Add(numSnapshotsIncrementalNoop, 1)
 		}
 	}
@@ -2711,9 +2708,7 @@ func (s *Store) fsmSnapshot() (fSnap raft.FSMSnapshot, retErr error) {
 	fs := FSMSnapshot{
 		Full:        fullNeeded,
 		FSMSnapshot: fsmSnapshot,
-		Finalizer: func() error {
-			return s.createSnapshotFingerprint()
-		},
+		Finalizer:   finalizer,
 		OnRelease: func(invoked, succeeded bool) {
 			if !invoked {
 				s.logger.Printf("persisting %s snapshot was not invoked on node ID %s", fPLog, s.raftID)
