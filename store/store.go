@@ -2645,17 +2645,17 @@ func (s *Store) fsmSnapshot() (fSnap raft.FSMSnapshot, retErr error) {
 			defer walTmpFD.Close()
 			walWriter, err := wal.NewWriter(scanner)
 			if err != nil {
-				removeFileOrFatal(walTmpPath)
+				removeFileOrFatal(walTmpFD)
 				return nil, err
 			}
 			walSzPost, err := walWriter.WriteTo(walTmpFD)
 			if err != nil {
-				removeFileOrFatal(walTmpPath)
+				removeFileOrFatal(walTmpFD)
 				return nil, err
 			}
 			stats.Get(snapshotCreateWALCompactDuration).(*expvar.Int).Set(time.Since(compactStartTime).Milliseconds())
 			if err := walTmpFD.Sync(); err != nil {
-				removeFileOrFatal(walTmpPath)
+				removeFileOrFatal(walTmpFD)
 				return nil, fmt.Errorf("failed to sync compacted WAL file: %w", err)
 			}
 
@@ -3239,9 +3239,12 @@ func removeFile(path string) error {
 	return os.Remove(path)
 }
 
-func removeFileOrFatal(path string) {
-	if err := removeFile(path); err != nil {
-		log.Fatalf("failed to remove file at %s: %s", path, err.Error())
+func removeFileOrFatal(fd *os.File) {
+	if err := fd.Close(); err != nil {
+		log.Fatalf("failed to close file at %s before removal: %s", fd.Name(), err.Error())
+	}
+	if err := removeFile(fd.Name()); err != nil {
+		log.Fatalf("failed to remove file at %s: %s", fd.Name(), err.Error())
 	}
 }
 
