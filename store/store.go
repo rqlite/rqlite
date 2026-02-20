@@ -2697,7 +2697,7 @@ func (s *Store) fsmSnapshot() (fSnap raft.FSMSnapshot, retErr error) {
 				return nil, err
 			}
 			fsmSnapshot = snapshot.NewStateReader(streamer)
-			finalizer = nil // SQLite database is not changing, so don't waste cycles on fingerprinting.
+			finalizer = func() error { return nil } // SQLite database is not changing, so don't waste cycles on fingerprinting.
 			stats.Add(numSnapshotsIncrementalNoop, 1)
 		}
 	}
