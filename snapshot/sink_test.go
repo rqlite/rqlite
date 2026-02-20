@@ -186,12 +186,17 @@ func Test_IncrementalSink(t *testing.T) {
 }
 
 func Test_IncrementalFileSink(t *testing.T) {
-	tempDir := t.TempDir()
 	srcPath := "testdata/db-and-wals/wal-01"
-	tmpSrcPath := filepath.Join(tempDir, "wal-00") // Because the file will be moved.
-	mustCopyFile(t, srcPath, tmpSrcPath)
+	walName := "00000000000000000001.wal"
 
-	hdr, err := NewIncrementalFileSnapshotHeader(tmpSrcPath)
+	// Create a directory containing the WAL file (mimics what the store does).
+	walDir := filepath.Join(t.TempDir(), "wal-dir")
+	if err := os.Mkdir(walDir, 0755); err != nil {
+		t.Fatalf("unexpected error creating WAL dir: %s", err.Error())
+	}
+	mustCopyFile(t, srcPath, filepath.Join(walDir, walName))
+
+	hdr, err := NewIncrementalFileSnapshotHeader(walDir)
 	if err != nil {
 		t.Fatalf("unexpected error creating header: %s", err.Error())
 	}
@@ -229,9 +234,113 @@ func Test_IncrementalFileSink(t *testing.T) {
 	}
 
 	// Installed WAL file should be byte-for-byte identical to source.
-	walFile := filepath.Join(snapDir, meta.ID, walfileName)
+	walFile := filepath.Join(snapDir, meta.ID, walName)
 	if !filesIdentical(srcPath, walFile) {
 		t.Fatalf("expected WAL file %s to be identical to source", walFile)
+	}
+}
+
+func Test_IncrementalFileSink_TwoFiles(t *testing.T) {
+	srcPaths := []string{"testdata/db-and-wals/wal-00", "testdata/db-and-wals/wal-01"}
+	walNames := []string{"00000000000000000001.wal", "00000000000000000002.wal"}
+
+	// Create a directory containing the WAL files.
+	walDir := filepath.Join(t.TempDir(), "wal-dir")
+	if err := os.Mkdir(walDir, 0755); err != nil {
+		t.Fatalf("unexpected error creating WAL dir: %s", err.Error())
+	}
+	for i, src := range srcPaths {
+		mustCopyFile(t, src, filepath.Join(walDir, walNames[i]))
+	}
+
+	hdr, err := NewIncrementalFileSnapshotHeader(walDir)
+	if err != nil {
+		t.Fatalf("unexpected error creating header: %s", err.Error())
+	}
+	hdrBytes, err := marshalSnapshotHeader(hdr)
+	if err != nil {
+		t.Fatalf("unexpected error marshaling header: %s", err.Error())
+	}
+
+	var frameBuf bytes.Buffer
+	lenBuf := make([]byte, HeaderSizeLen)
+	binary.BigEndian.PutUint32(lenBuf, uint32(len(hdrBytes)))
+	frameBuf.Write(lenBuf)
+	frameBuf.Write(hdrBytes)
+
+	snapDir := t.TempDir()
+	meta := makeRaftMeta("test-incremental-file-2", 100, 1, 1)
+	sink := NewSink(snapDir, meta, nil)
+	if err := sink.Open(); err != nil {
+		t.Fatalf("unexpected error opening sink: %s", err.Error())
+	}
+
+	if _, err := sink.Write(frameBuf.Bytes()); err != nil {
+		t.Fatalf("unexpected error writing header to sink: %s", err.Error())
+	}
+
+	if err := sink.Close(); err != nil {
+		t.Fatalf("unexpected error closing sink: %s", err.Error())
+	}
+
+	// Each installed WAL file should be byte-for-byte identical to its source.
+	for i, src := range srcPaths {
+		walFile := filepath.Join(snapDir, meta.ID, walNames[i])
+		if !filesIdentical(src, walFile) {
+			t.Fatalf("expected WAL file %s to be identical to source %s", walFile, src)
+		}
+	}
+}
+
+func Test_IncrementalFileSink_ThreeFiles(t *testing.T) {
+	srcPaths := []string{"testdata/db-and-wals/wal-00", "testdata/db-and-wals/wal-01", "testdata/db-and-wals/wal-02"}
+	walNames := []string{"00000000000000000001.wal", "00000000000000000002.wal", "00000000000000000003.wal"}
+
+	// Create a directory containing the WAL files.
+	walDir := filepath.Join(t.TempDir(), "wal-dir")
+	if err := os.Mkdir(walDir, 0755); err != nil {
+		t.Fatalf("unexpected error creating WAL dir: %s", err.Error())
+	}
+	for i, src := range srcPaths {
+		mustCopyFile(t, src, filepath.Join(walDir, walNames[i]))
+	}
+
+	hdr, err := NewIncrementalFileSnapshotHeader(walDir)
+	if err != nil {
+		t.Fatalf("unexpected error creating header: %s", err.Error())
+	}
+	hdrBytes, err := marshalSnapshotHeader(hdr)
+	if err != nil {
+		t.Fatalf("unexpected error marshaling header: %s", err.Error())
+	}
+
+	var frameBuf bytes.Buffer
+	lenBuf := make([]byte, HeaderSizeLen)
+	binary.BigEndian.PutUint32(lenBuf, uint32(len(hdrBytes)))
+	frameBuf.Write(lenBuf)
+	frameBuf.Write(hdrBytes)
+
+	snapDir := t.TempDir()
+	meta := makeRaftMeta("test-incremental-file-3", 100, 1, 1)
+	sink := NewSink(snapDir, meta, nil)
+	if err := sink.Open(); err != nil {
+		t.Fatalf("unexpected error opening sink: %s", err.Error())
+	}
+
+	if _, err := sink.Write(frameBuf.Bytes()); err != nil {
+		t.Fatalf("unexpected error writing header to sink: %s", err.Error())
+	}
+
+	if err := sink.Close(); err != nil {
+		t.Fatalf("unexpected error closing sink: %s", err.Error())
+	}
+
+	// Each installed WAL file should be byte-for-byte identical to its source.
+	for i, src := range srcPaths {
+		walFile := filepath.Join(snapDir, meta.ID, walNames[i])
+		if !filesIdentical(src, walFile) {
+			t.Fatalf("expected WAL file %s to be identical to source %s", walFile, src)
+		}
 	}
 }
 

@@ -19,7 +19,8 @@ import (
 
 const (
 	dbfileName     = "data.db"
-	walfileName    = "data.wal"
+	walfileName    = "data.wal" // Used by the streaming IncrementalSink only.
+	walfileSuffix  = ".wal"
 	noopfileName   = "data.noop"
 	metaFileName   = "meta.json"
 	tmpSuffix      = ".tmp"

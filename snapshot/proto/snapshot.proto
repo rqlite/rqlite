@@ -19,7 +19,7 @@ message IncrementalSnapshot {
 }
 
 message IncrementalFileSnapshot {
-  repeated string wal_paths = 1;
+  string wal_dir_path = 1;
 }
 
 message NoopSnapshot {}
