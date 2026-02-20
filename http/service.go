@@ -5,12 +5,17 @@ import (
 	"bufio"
 	"context"
 	"crypto/tls"
+	"crypto/x509"
+	"embed"
 	"encoding/json"
 	"errors"
 	"expvar"
 	"fmt"
 	"io"
+	"io/fs"
+	"io/ioutil"
 	"log"
+	"mime"
 	"net"
 	"net/http"
 	"net/http/pprof"
@@ -501,6 +506,8 @@ func (s *Service) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		s.handleExpvar(w, r, params)
 	case strings.HasPrefix(r.URL.Path, "/debug/pprof"):
 		s.handlePprof(w, r)
+	case strings.HasPrefix(r.URL.Path, "/ui"):
+		s.handleUI(w, r)
 	default:
 		w.WriteHeader(http.StatusNotFound)
 	}
@@ -1557,6 +1564,47 @@ func (s *Service) handlePprof(w http.ResponseWriter, r *http.Request) {
 	default:
 		pprof.Index(w, r)
 	}
+}
+
+// Pattern should start with "all:" prefix in order to
+// include files and directories beginning with "." or "_".
+//go:embed all:ui/out/*
+var staticAssets embed.FS
+
+// handleUI serves UI assets(html, javascript, css) over HTTP.
+func (s *Service) handleUI(w http.ResponseWriter, r *http.Request) {
+	// If the request path is `/ui/menu/query-runner`, one of the two files below will be served.
+	// 1. `ui/out/query-runner` (normarlizedFilePath)
+	// 2. `ui/out/query-runner/index.html` (indexFilePath)
+	normalizedFilePath := strings.Replace(r.URL.Path, "/ui", "ui/out", 1)
+	normalizedFilePath = strings.TrimRight(normalizedFilePath, "/")
+	indexFilePath := normalizedFilePath + "/index.html"
+
+	targetPaths := []string{normalizedFilePath, indexFilePath}
+	for _, path := range targetPaths {
+		fileInfo, err := fs.Stat(staticAssets, path)
+		if err != nil || fileInfo.IsDir() {
+			continue
+		}
+
+		file, err := staticAssets.ReadFile(path)
+		if err != nil {
+			continue
+		}
+
+		// Mime type has to be set manually.
+		splittedPath := strings.Split(path, ".")
+		mimeType := mime.TypeByExtension("." + splittedPath[len(splittedPath)-1])
+		if mimeType != "" {
+			w.Header().Add("Content-Type", mimeType)
+		}
+
+		w.Write(file)
+		return
+	}
+
+	// If no file exists, redirect to the main menu.
+	http.Redirect(w, r, "/ui/menu/query-runner/", http.StatusMovedPermanently)
 }
 
 // Addr returns the address on which the Service is listening
