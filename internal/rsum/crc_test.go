@@ -16,7 +16,8 @@ func Test_CRC32Success(t *testing.T) {
 	}
 
 	// Manually calculate the expected checksum
-	h := crc32.NewIEEE()
+	castagnoliTable := crc32.MakeTable(crc32.Castagnoli)
+	h := crc32.New(castagnoliTable)
 	h.Write([]byte(testContent))
 	expectedChecksum := h.Sum32()
 

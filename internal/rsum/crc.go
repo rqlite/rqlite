@@ -7,6 +7,8 @@ import (
 	"time"
 )
 
+var castagnoliTable = crc32.MakeTable(crc32.Castagnoli)
+
 // CRC32 calculates the CRC32 checksum of the file at the given path.
 func CRC32(path string) (uint32, error) {
 	f, err := os.Open(path)
@@ -15,7 +17,7 @@ func CRC32(path string) (uint32, error) {
 	}
 	defer f.Close()
 
-	h := crc32.NewIEEE()
+	h := crc32.New(castagnoliTable)
 	if _, err := io.Copy(h, f); err != nil {
 		return 0, err
 	}
