@@ -353,7 +353,6 @@ func createCDC(cfg *Config, str *store.Store, clstrServ *cluster.Service, clstrC
 
 func createStore(cfg *Config, ln *tcp.Layer, extensions []string) (*store.Store, error) {
 	dbConf := store.NewDBConfig()
-	dbConf.OnDiskPath = cfg.OnDiskPath
 	dbConf.FKConstraints = cfg.FKConstraints
 	dbConf.Extensions = extensions
 

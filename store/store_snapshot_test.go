@@ -578,7 +578,7 @@ func Test_SingleNode_DatabaseFileModified(t *testing.T) {
 }
 
 func Test_SingleNodeDBAppliedIndex_SnapshotRestart(t *testing.T) {
-	s, ln, _ := mustNewStoreSQLitePath(t)
+	s, ln := mustNewStore(t)
 	defer ln.Close()
 
 	// Open the store, ensure DBAppliedIndex is at initial value.
