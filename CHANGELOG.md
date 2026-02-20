@@ -21,7 +21,7 @@ Upgrading to this release from a v7 release (or later) is seamless and been exte
 - [PR #2484](https://github.com/rqlite/rqlite/pull/2484): Update `IncrementalFileSnapshot` to support multiple WAL files.
 - [PR #2485](https://github.com/rqlite/rqlite/pull/2485): Snapshot sink and catalog support for multi-WAL incremental snapshots.
 - [PR #2486](https://github.com/rqlite/rqlite/pull/2486): Remove explicit SQLite path control.
-- [PR #2486](https://github.com/rqlite/rqlite/pull/2486): Move to Castagnoli CRC32 polynomial.
+- [PR #2488](https://github.com/rqlite/rqlite/pull/2488): Move to Castagnoli CRC32 polynomial.
 
 ## v9.4.1 (February 11th 2026)
 ### Implementation changes and bug fixes
