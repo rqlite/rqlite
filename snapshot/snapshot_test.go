@@ -2,6 +2,7 @@ package snapshot
 
 import (
 	"encoding/json"
+	"fmt"
 	"os"
 	"path/filepath"
 	"testing"
@@ -1057,7 +1058,7 @@ func TestSnapshotSet_ResolveFiles(t *testing.T) {
 		if len(walFiles) != 1 {
 			t.Fatalf("expected 1 WAL file, got %d", len(walFiles))
 		}
-		if exp := filepath.Join(rootDir, "snap-2", walFileName(1)); walFiles[0] != exp {
+		if exp := filepath.Join(rootDir, "snap-2", testWALName(1)); walFiles[0] != exp {
 			t.Fatalf("walFiles[0] = %q, want %q", walFiles[0], exp)
 		}
 	})
@@ -1097,10 +1098,10 @@ func TestSnapshotSet_ResolveFiles(t *testing.T) {
 		if len(walFiles) != 2 {
 			t.Fatalf("expected 2 WAL files, got %d", len(walFiles))
 		}
-		if exp := filepath.Join(rootDir, "snap-2", walFileName(1)); walFiles[0] != exp {
+		if exp := filepath.Join(rootDir, "snap-2", testWALName(1)); walFiles[0] != exp {
 			t.Fatalf("walFiles[0] = %q, want %q", walFiles[0], exp)
 		}
-		if exp := filepath.Join(rootDir, "snap-3", walFileName(1)); walFiles[1] != exp {
+		if exp := filepath.Join(rootDir, "snap-3", testWALName(1)); walFiles[1] != exp {
 			t.Fatalf("walFiles[1] = %q, want %q", walFiles[1], exp)
 		}
 	})
@@ -1129,7 +1130,7 @@ func TestSnapshotSet_ResolveFiles(t *testing.T) {
 		if len(walFiles) != 1 {
 			t.Fatalf("expected 1 WAL file, got %d", len(walFiles))
 		}
-		if exp := filepath.Join(rootDir, "snap-4", walFileName(1)); walFiles[0] != exp {
+		if exp := filepath.Join(rootDir, "snap-4", testWALName(1)); walFiles[0] != exp {
 			t.Fatalf("walFiles[0] = %q, want %q", walFiles[0], exp)
 		}
 	})
@@ -1265,7 +1266,7 @@ func Test_SnapshotSet_ResolveFiles_WithNoop(t *testing.T) {
 		if len(walFiles) != 1 {
 			t.Fatalf("expected 1 WAL file, got %d", len(walFiles))
 		}
-		if exp := filepath.Join(rootDir, "snap-2", walFileName(1)); walFiles[0] != exp {
+		if exp := filepath.Join(rootDir, "snap-2", testWALName(1)); walFiles[0] != exp {
 			t.Fatalf("walFiles[0] = %q, want %q", walFiles[0], exp)
 		}
 	})
@@ -1293,10 +1294,16 @@ func Test_SnapshotSet_ResolveFiles_WithNoop(t *testing.T) {
 		if len(walFiles) != 1 {
 			t.Fatalf("expected 1 WAL file, got %d", len(walFiles))
 		}
-		if exp := filepath.Join(rootDir, "snap-3", walFileName(1)); walFiles[0] != exp {
+		if exp := filepath.Join(rootDir, "snap-3", testWALName(1)); walFiles[0] != exp {
 			t.Fatalf("walFiles[0] = %q, want %q", walFiles[0], exp)
 		}
 	})
+}
+
+// testWALName returns a WAL filename for use in tests. In production, WAL files
+// are named with nanosecond timestamps; this helper uses a simple numeric name.
+func testWALName(i int) string {
+	return fmt.Sprintf("%020d.wal", i)
 }
 
 func mustCopyFile(t *testing.T, src, dest string) {
@@ -1315,7 +1322,7 @@ func mustCreateSnapshotFull(t *testing.T, rootDir, snapshotID string, idx, term 
 }
 
 func mustCreateSnapshotInc(t *testing.T, rootDir, snapshotID string, idx, term uint64) {
-	mustCreateSnapshot(t, rootDir, snapshotID, "testdata/db-and-wals/wal-00", walFileName(1), idx, term)
+	mustCreateSnapshot(t, rootDir, snapshotID, "testdata/db-and-wals/wal-00", testWALName(1), idx, term)
 }
 
 func mustCreateSnapshotNoop(t *testing.T, rootDir, snapshotID string, idx, term uint64) {
@@ -1368,7 +1375,7 @@ func mustCreateSnapshotIncMulti(t *testing.T, rootDir, snapshotID string, idx, t
 		t.Fatalf("failed to create snapshot dir: %v", err)
 	}
 	for i, src := range walSrcs {
-		mustCopyFile(t, src, filepath.Join(snapshotDir, walFileName(i+1)))
+		mustCopyFile(t, src, filepath.Join(snapshotDir, testWALName(i+1)))
 	}
 	meta := &raft.SnapshotMeta{
 		ID:    snapshotID,
@@ -1438,7 +1445,7 @@ func Test_SnapshotCatalog_Scan_MultiWAL(t *testing.T) {
 			t.Fatalf("failed to create snapshot dir: %v", err)
 		}
 		mustCopyFile(t, "testdata/db-and-wals/full2.db", filepath.Join(snapshotDir, dbfileName))
-		mustCopyFile(t, "testdata/db-and-wals/wal-00", filepath.Join(snapshotDir, walFileName(1)))
+		mustCopyFile(t, "testdata/db-and-wals/wal-00", filepath.Join(snapshotDir, testWALName(1)))
 		meta := &raft.SnapshotMeta{ID: "snap-1", Index: 1, Term: 1}
 		if err := writeMeta(snapshotDir, meta); err != nil {
 			t.Fatalf("failed to write meta: %v", err)
@@ -1475,10 +1482,10 @@ func Test_SnapshotSet_ResolveFiles_MultiWAL(t *testing.T) {
 		if len(walFiles) != 2 {
 			t.Fatalf("expected 2 WAL files, got %d", len(walFiles))
 		}
-		if exp := filepath.Join(rootDir, "snap-2", walFileName(1)); walFiles[0] != exp {
+		if exp := filepath.Join(rootDir, "snap-2", testWALName(1)); walFiles[0] != exp {
 			t.Fatalf("walFiles[0] = %q, want %q", walFiles[0], exp)
 		}
-		if exp := filepath.Join(rootDir, "snap-2", walFileName(2)); walFiles[1] != exp {
+		if exp := filepath.Join(rootDir, "snap-2", testWALName(2)); walFiles[1] != exp {
 			t.Fatalf("walFiles[1] = %q, want %q", walFiles[1], exp)
 		}
 	})
@@ -1506,7 +1513,7 @@ func Test_SnapshotSet_ResolveFiles_MultiWAL(t *testing.T) {
 			t.Fatalf("expected 3 WAL files, got %d", len(walFiles))
 		}
 		for i := 0; i < 3; i++ {
-			if exp := filepath.Join(rootDir, "snap-2", walFileName(i+1)); walFiles[i] != exp {
+			if exp := filepath.Join(rootDir, "snap-2", testWALName(i+1)); walFiles[i] != exp {
 				t.Fatalf("walFiles[%d] = %q, want %q", i, walFiles[i], exp)
 			}
 		}
@@ -1538,14 +1545,14 @@ func Test_SnapshotSet_ResolveFiles_MultiWAL(t *testing.T) {
 			t.Fatalf("expected 3 WAL files, got %d", len(walFiles))
 		}
 		// First WAL from snap-2 (single-WAL incremental).
-		if exp := filepath.Join(rootDir, "snap-2", walFileName(1)); walFiles[0] != exp {
+		if exp := filepath.Join(rootDir, "snap-2", testWALName(1)); walFiles[0] != exp {
 			t.Fatalf("walFiles[0] = %q, want %q", walFiles[0], exp)
 		}
 		// Next two WALs from snap-3 (multi-WAL incremental).
-		if exp := filepath.Join(rootDir, "snap-3", walFileName(1)); walFiles[1] != exp {
+		if exp := filepath.Join(rootDir, "snap-3", testWALName(1)); walFiles[1] != exp {
 			t.Fatalf("walFiles[1] = %q, want %q", walFiles[1], exp)
 		}
-		if exp := filepath.Join(rootDir, "snap-3", walFileName(2)); walFiles[2] != exp {
+		if exp := filepath.Join(rootDir, "snap-3", testWALName(2)); walFiles[2] != exp {
 			t.Fatalf("walFiles[2] = %q, want %q", walFiles[2], exp)
 		}
 	})

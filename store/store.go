@@ -2627,8 +2627,14 @@ func (s *Store) fsmSnapshot() (fSnap raft.FSMSnapshot, retErr error) {
 			if err != nil {
 				return nil, err
 			}
-			walTmpFD, err = createTemp(walTmpDir, "wal-*.wal")
+			walTmpPath := filepath.Join(walTmpDir, fmt.Sprintf("%020d.wal", time.Now().UnixNano()))
+			walTmpFD, err = os.Create(walTmpPath)
 			if err != nil {
+				os.RemoveAll(walTmpDir)
+				return nil, err
+			}
+			if err := os.Chmod(walTmpPath, 0644); err != nil {
+				walTmpFD.Close()
 				os.RemoveAll(walTmpDir)
 				return nil, err
 			}

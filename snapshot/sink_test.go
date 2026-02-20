@@ -187,13 +187,14 @@ func Test_IncrementalSink(t *testing.T) {
 
 func Test_IncrementalFileSink(t *testing.T) {
 	srcPath := "testdata/db-and-wals/wal-01"
+	walName := "00000000000000000001.wal"
 
 	// Create a directory containing the WAL file (mimics what the store does).
 	walDir := filepath.Join(t.TempDir(), "wal-dir")
 	if err := os.Mkdir(walDir, 0755); err != nil {
 		t.Fatalf("unexpected error creating WAL dir: %s", err.Error())
 	}
-	mustCopyFile(t, srcPath, filepath.Join(walDir, "wal-0001.wal"))
+	mustCopyFile(t, srcPath, filepath.Join(walDir, walName))
 
 	hdr, err := NewIncrementalFileSnapshotHeader(walDir)
 	if err != nil {
@@ -233,7 +234,7 @@ func Test_IncrementalFileSink(t *testing.T) {
 	}
 
 	// Installed WAL file should be byte-for-byte identical to source.
-	walFile := filepath.Join(snapDir, meta.ID, walFileName(1))
+	walFile := filepath.Join(snapDir, meta.ID, walName)
 	if !filesIdentical(srcPath, walFile) {
 		t.Fatalf("expected WAL file %s to be identical to source", walFile)
 	}
@@ -241,6 +242,7 @@ func Test_IncrementalFileSink(t *testing.T) {
 
 func Test_IncrementalFileSink_TwoFiles(t *testing.T) {
 	srcPaths := []string{"testdata/db-and-wals/wal-00", "testdata/db-and-wals/wal-01"}
+	walNames := []string{"00000000000000000001.wal", "00000000000000000002.wal"}
 
 	// Create a directory containing the WAL files.
 	walDir := filepath.Join(t.TempDir(), "wal-dir")
@@ -248,7 +250,7 @@ func Test_IncrementalFileSink_TwoFiles(t *testing.T) {
 		t.Fatalf("unexpected error creating WAL dir: %s", err.Error())
 	}
 	for i, src := range srcPaths {
-		mustCopyFile(t, src, filepath.Join(walDir, fmt.Sprintf("wal-%04d.wal", i)))
+		mustCopyFile(t, src, filepath.Join(walDir, walNames[i]))
 	}
 
 	hdr, err := NewIncrementalFileSnapshotHeader(walDir)
@@ -283,7 +285,7 @@ func Test_IncrementalFileSink_TwoFiles(t *testing.T) {
 
 	// Each installed WAL file should be byte-for-byte identical to its source.
 	for i, src := range srcPaths {
-		walFile := filepath.Join(snapDir, meta.ID, walFileName(i+1))
+		walFile := filepath.Join(snapDir, meta.ID, walNames[i])
 		if !filesIdentical(src, walFile) {
 			t.Fatalf("expected WAL file %s to be identical to source %s", walFile, src)
 		}
@@ -292,6 +294,7 @@ func Test_IncrementalFileSink_TwoFiles(t *testing.T) {
 
 func Test_IncrementalFileSink_ThreeFiles(t *testing.T) {
 	srcPaths := []string{"testdata/db-and-wals/wal-00", "testdata/db-and-wals/wal-01", "testdata/db-and-wals/wal-02"}
+	walNames := []string{"00000000000000000001.wal", "00000000000000000002.wal", "00000000000000000003.wal"}
 
 	// Create a directory containing the WAL files.
 	walDir := filepath.Join(t.TempDir(), "wal-dir")
@@ -299,7 +302,7 @@ func Test_IncrementalFileSink_ThreeFiles(t *testing.T) {
 		t.Fatalf("unexpected error creating WAL dir: %s", err.Error())
 	}
 	for i, src := range srcPaths {
-		mustCopyFile(t, src, filepath.Join(walDir, fmt.Sprintf("wal-%04d.wal", i)))
+		mustCopyFile(t, src, filepath.Join(walDir, walNames[i]))
 	}
 
 	hdr, err := NewIncrementalFileSnapshotHeader(walDir)
@@ -334,7 +337,7 @@ func Test_IncrementalFileSink_ThreeFiles(t *testing.T) {
 
 	// Each installed WAL file should be byte-for-byte identical to its source.
 	for i, src := range srcPaths {
-		walFile := filepath.Join(snapDir, meta.ID, walFileName(i+1))
+		walFile := filepath.Join(snapDir, meta.ID, walNames[i])
 		if !filesIdentical(src, walFile) {
 			t.Fatalf("expected WAL file %s to be identical to source %s", walFile, src)
 		}

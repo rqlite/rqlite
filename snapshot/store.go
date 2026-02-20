@@ -30,12 +30,6 @@ const (
 	defaultReapThreshold = 8
 )
 
-// walFileName returns the filename for the i-th WAL file in a snapshot directory.
-// WAL files are 1-indexed: the first WAL is 00000001.wal, the second is 00000002.wal, etc.
-func walFileName(i int) string {
-	return fmt.Sprintf("%08d.wal", i)
-}
-
 const (
 	persistSize            = "latest_persist_size"
 	persistDuration        = "latest_persist_duration"

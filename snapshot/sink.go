@@ -9,7 +9,6 @@ import (
 	"log"
 	"os"
 	"path/filepath"
-	"sort"
 
 	"github.com/hashicorp/raft"
 	"github.com/rqlite/rqlite/v10/db"
@@ -213,15 +212,15 @@ func (s *Sink) Close() error {
 		if err != nil {
 			return fmt.Errorf("globbing for WAL files in moved directory: %w", err)
 		}
-		sort.Strings(walMatches)
 
-		for i, srcPath := range walMatches {
-			dstPath := filepath.Join(s.snapTmpDirPath, walFileName(i+1))
+		for _, srcPath := range walMatches {
+			name := filepath.Base(srcPath)
+			dstPath := filepath.Join(s.snapTmpDirPath, name)
 			if err := os.Rename(srcPath, dstPath); err != nil {
 				return err
 			}
 			if !db.IsValidSQLiteWALFile(dstPath) {
-				return fmt.Errorf("%s is not a valid SQLite WAL file", walFileName(i+1))
+				return fmt.Errorf("%s is not a valid SQLite WAL file", name)
 			}
 		}
 
