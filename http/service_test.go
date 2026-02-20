@@ -1167,7 +1167,7 @@ func Test_RootRedirectToUI(t *testing.T) {
 	if resp.StatusCode != http.StatusFound {
 		t.Fatalf("failed to get expected StatusFound for root, got %d", resp.StatusCode)
 	}
-	if resp.Header["Location"][0] != "/ui/" {
+	if resp.Header["Location"][0] != "/console/" {
 		t.Fatalf("received incorrect redirect path")
 	}
 
@@ -1178,7 +1178,7 @@ func Test_RootRedirectToUI(t *testing.T) {
 	if resp.StatusCode != http.StatusFound {
 		t.Fatalf("failed to get expected StatusFound for root, got %d", resp.StatusCode)
 	}
-	if resp.Header["Location"][0] != "/ui/" {
+	if resp.Header["Location"][0] != "/console/" {
 		t.Fatalf("received incorrect redirect path")
 	}
 }
@@ -1387,13 +1387,13 @@ func Test_UIIndex(t *testing.T) {
 	client := &http.Client{}
 	host := fmt.Sprintf("http://%s", s.Addr().String())
 
-	resp, err := client.Get(host + "/ui/")
+	resp, err := client.Get(host + "/console/")
 	if err != nil {
 		t.Fatalf("failed to make UI request")
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusOK {
-		t.Fatalf("expected StatusOK for /ui/, got %d", resp.StatusCode)
+		t.Fatalf("expected StatusOK for /console/, got %d", resp.StatusCode)
 	}
 
 	ct := resp.Header.Get("Content-Type")
@@ -1419,7 +1419,7 @@ func Test_UIStaticAssets(t *testing.T) {
 	client := &http.Client{}
 	host := fmt.Sprintf("http://%s", s.Addr().String())
 
-	resp, err := client.Get(host + "/ui/static/css/style.css")
+	resp, err := client.Get(host + "/console/static/css/style.css")
 	if err != nil {
 		t.Fatalf("failed to make CSS request")
 	}
@@ -1445,7 +1445,7 @@ func Test_UIRedirectSlash(t *testing.T) {
 	}
 	host := fmt.Sprintf("http://%s", s.Addr().String())
 
-	resp, err := client.Get(host + "/ui")
+	resp, err := client.Get(host + "/console")
 	if err != nil {
 		t.Fatalf("failed to make /ui request")
 	}
@@ -1453,8 +1453,8 @@ func Test_UIRedirectSlash(t *testing.T) {
 	if resp.StatusCode != http.StatusMovedPermanently {
 		t.Fatalf("expected StatusMovedPermanently for /ui, got %d", resp.StatusCode)
 	}
-	if resp.Header.Get("Location") != "/ui/" {
-		t.Fatalf("expected redirect to /ui/, got %s", resp.Header.Get("Location"))
+	if resp.Header.Get("Location") != "/console/" {
+		t.Fatalf("expected redirect to /console/, got %s", resp.Header.Get("Location"))
 	}
 }
 
@@ -1470,13 +1470,13 @@ func Test_UIMethodNotAllowed(t *testing.T) {
 	client := &http.Client{}
 	host := fmt.Sprintf("http://%s", s.Addr().String())
 
-	resp, err := client.Post(host+"/ui/", "text/plain", nil)
+	resp, err := client.Post(host+"/console/", "text/plain", nil)
 	if err != nil {
 		t.Fatalf("failed to make POST request")
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusMethodNotAllowed {
-		t.Fatalf("expected StatusMethodNotAllowed for POST /ui/, got %d", resp.StatusCode)
+		t.Fatalf("expected StatusMethodNotAllowed for POST /console/, got %d", resp.StatusCode)
 	}
 }
 
@@ -1493,7 +1493,7 @@ func Test_UIAuth(t *testing.T) {
 	client := &http.Client{}
 	host := fmt.Sprintf("http://%s", s.Addr().String())
 
-	resp, err := client.Get(host + "/ui/")
+	resp, err := client.Get(host + "/console/")
 	if err != nil {
 		t.Fatalf("failed to make request")
 	}
