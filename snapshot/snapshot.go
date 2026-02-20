@@ -36,6 +36,10 @@ type Snapshot struct {
 	path     string
 	typ      SnapshotType
 	raftMeta *raft.SnapshotMeta
+
+	// walFiles holds the sorted list of WAL file paths within the snapshot
+	// directory. It is populated only for SnapshotTypeIncremental snapshots.
+	walFiles []string
 }
 
 // Less reports whether this snapshot is older than the other snapshot.
@@ -357,7 +361,7 @@ func (ss SnapshotSet) ResolveFiles(id string) (dbFile string, walFiles []string,
 	dbFile = filepath.Join(ss.items[fullIdx].path, dbfileName)
 	for i := fullIdx + 1; i <= idx; i++ {
 		if ss.items[i].typ == SnapshotTypeIncremental {
-			walFiles = append(walFiles, filepath.Join(ss.items[i].path, walfileName))
+			walFiles = append(walFiles, ss.items[i].walFiles...)
 		}
 		// Noop snapshots contribute no WAL files.
 	}
@@ -443,19 +447,41 @@ func (c *SnapshotCatalog) loadSnapshot(path string, id string) (*Snapshot, error
 	}
 
 	dataDBPath := filepath.Join(path, dbfileName)
-	dataWALPath := filepath.Join(path, walfileName)
 	dataNoopPath := filepath.Join(path, noopfileName)
-	if fileExists(dataDBPath) {
+
+	// Discover any WAL files in the directory.
+	walMatches, err := filepath.Glob(filepath.Join(path, "*"+walfileSuffix))
+	if err != nil {
+		return nil, fmt.Errorf("globbing for WAL files in %q: %w", path, err)
+	}
+	sort.Strings(walMatches)
+
+	hasDB := fileExists(dataDBPath)
+	hasNoop := fileExists(dataNoopPath)
+	hasWALs := len(walMatches) > 0
+
+	// Enforce constraint: a snapshot containing WAL files must only contain WAL files.
+	if hasWALs && hasDB {
+		return nil, fmt.Errorf("snapshot directory %q contains both WAL files and %s", path, dbfileName)
+	}
+	if hasWALs && hasNoop {
+		return nil, fmt.Errorf("snapshot directory %q contains both WAL files and %s", path, noopfileName)
+	}
+
+	if hasDB {
 		snapshot.typ = SnapshotTypeFull
 		if !db.IsValidSQLiteFile(dataDBPath) {
 			return nil, fmt.Errorf("%s in snapshot directory %q is not a valid SQLite database file", dbfileName, path)
 		}
-	} else if fileExists(dataWALPath) {
+	} else if hasWALs {
 		snapshot.typ = SnapshotTypeIncremental
-		if !db.IsValidSQLiteWALFile(dataWALPath) {
-			return nil, fmt.Errorf("data.wal in snapshot directory %q is not a valid SQLite WAL file", path)
+		for _, wp := range walMatches {
+			if !db.IsValidSQLiteWALFile(wp) {
+				return nil, fmt.Errorf("%s in snapshot directory %q is not a valid SQLite WAL file", filepath.Base(wp), path)
+			}
 		}
-	} else if fileExists(dataNoopPath) {
+		snapshot.walFiles = walMatches
+	} else if hasNoop {
 		snapshot.typ = SnapshotTypeNoop
 	} else {
 		return nil, fmt.Errorf("missing data file in snapshot directory %q", path)

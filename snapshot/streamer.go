@@ -94,17 +94,17 @@ func NewSnapshotHeader(dbPath string, walPaths ...string) (*proto.SnapshotHeader
 }
 
 // NewIncrementalFileSnapshotHeader creates a new SnapshotHeader for a local
-// WAL file that should be moved (not streamed) into the snapshot directory.
-// No data follows this header when written to a Sink.
-func NewIncrementalFileSnapshotHeader(walPath string) (*proto.SnapshotHeader, error) {
-	if walPath == "" {
-		return nil, fmt.Errorf("walPath must be non-empty")
+// directory containing WAL files that should be moved (not streamed) into
+// the snapshot directory. No data follows this header when written to a Sink.
+func NewIncrementalFileSnapshotHeader(walDirPath string) (*proto.SnapshotHeader, error) {
+	if walDirPath == "" {
+		return nil, fmt.Errorf("walDirPath must be non-empty")
 	}
 	return &proto.SnapshotHeader{
 		FormatVersion: 1,
 		Payload: &proto.SnapshotHeader_IncrementalFile{
 			IncrementalFile: &proto.IncrementalFileSnapshot{
-				WalPaths: []string{walPath},
+				WalDirPath: walDirPath,
 			},
 		},
 	}, nil
@@ -293,20 +293,20 @@ func (s *SnapshotStreamer) Len() (int64, error) {
 }
 
 // SnapshotPathStreamer implements io.ReadCloser for streaming a snapshot's
-// data, where the snapshot data is a single WAL file. It creates the SnapshotHeader
-// on the fly based on the provided WAL file path, and then streams the header
-// to readers. The path is set in the field in the Header, and no more data
-// follows the header. Instead the client is expected to read the header,
-// determine the file path, and then move the file directly.
+// data, where the snapshot data is a directory containing WAL files. It creates
+// the SnapshotHeader on the fly based on the provided directory path, and then
+// streams the header to readers. The path is set in the header, and no more
+// data follows the header. Instead the client is expected to read the header,
+// determine the directory path, and then move the directory directly.
 type SnapshotPathStreamer struct {
-	walPath string
-	hdr     *proto.SnapshotHeader
-	multiR  io.Reader
+	walDirPath string
+	hdr        *proto.SnapshotHeader
+	multiR     io.Reader
 }
 
-// NewSnapshotPathStreamer creates a new SnapshotPathStreamer for the given WAL file path.
-func NewSnapshotPathStreamer(walPath string) (*SnapshotPathStreamer, error) {
-	sh, err := NewIncrementalFileSnapshotHeader(walPath)
+// NewSnapshotPathStreamer creates a new SnapshotPathStreamer for the given WAL directory path.
+func NewSnapshotPathStreamer(walDirPath string) (*SnapshotPathStreamer, error) {
+	sh, err := NewIncrementalFileSnapshotHeader(walDirPath)
 	if err != nil {
 		return nil, err
 	}
@@ -326,9 +326,9 @@ func NewSnapshotPathStreamer(walPath string) (*SnapshotPathStreamer, error) {
 	multiR := io.MultiReader(readers...)
 
 	return &SnapshotPathStreamer{
-		walPath: walPath,
-		hdr:     sh,
-		multiR:  multiR,
+		walDirPath: walDirPath,
+		hdr:        sh,
+		multiR:     multiR,
 	}, nil
 }
 

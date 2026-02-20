@@ -17,6 +17,7 @@ Upgrading to this release from a v7 release (or later) is seamless and been exte
 - [PR #2479](https://github.com/rqlite/rqlite/pull/2479): Rename snapshot Store `List()` to `ListAll()`.
 - [PR #2477](https://github.com/rqlite/rqlite/pull/2477): Use Plan-and-Execute to upgrade v8 to v10 Snapshot stores.
 - [PR #2484](https://github.com/rqlite/rqlite/pull/2484): Update `IncrementalFileSnapshot` to support multiple WAL files.
+- [PR #2485](https://github.com/rqlite/rqlite/pull/2485): Snapshot sink and catalog support for multi-WAL incremental snapshots.
 
 ## v9.4.1 (February 11th 2026)
 ### Implementation changes and bug fixes

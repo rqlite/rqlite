@@ -2621,28 +2621,40 @@ func (s *Store) fsmSnapshot() (fSnap raft.FSMSnapshot, retErr error) {
 				return nil, err
 			}
 
-			// Write the compacted WAL to a temp file.
-			walTmpFD, err = createTemp(s.dbDir, walSnapshotScratchPattern)
+			// Write the compacted WAL to a temp file inside a temp directory.
+			// The Snapshot Sink will atomically move this directory.
+			walTmpDir, err := os.MkdirTemp(s.dbDir, walSnapshotScratchPattern)
 			if err != nil {
+				return nil, err
+			}
+			walTmpPath := filepath.Join(walTmpDir, fmt.Sprintf("%020d.wal", time.Now().UnixNano()))
+			walTmpFD, err = os.Create(walTmpPath)
+			if err != nil {
+				os.RemoveAll(walTmpDir)
+				return nil, err
+			}
+			if err := os.Chmod(walTmpPath, 0644); err != nil {
+				walTmpFD.Close()
+				os.RemoveAll(walTmpDir)
 				return nil, err
 			}
 			defer walTmpFD.Close()
 			walWriter, err := wal.NewWriter(scanner)
 			if err != nil {
 				walTmpFD.Close()
-				os.Remove(walTmpFD.Name())
+				os.RemoveAll(walTmpDir)
 				return nil, err
 			}
 			walSzPost, err := walWriter.WriteTo(walTmpFD)
 			if err != nil {
 				walTmpFD.Close()
-				os.Remove(walTmpFD.Name())
+				os.RemoveAll(walTmpDir)
 				return nil, err
 			}
 			stats.Get(snapshotCreateWALCompactDuration).(*expvar.Int).Set(time.Since(compactStartTime).Milliseconds())
 			if err := walTmpFD.Sync(); err != nil {
 				walTmpFD.Close()
-				os.Remove(walTmpFD.Name())
+				os.RemoveAll(walTmpDir)
 				return nil, fmt.Errorf("failed to sync compacted WAL file: %w", err)
 			}
 
@@ -2663,11 +2675,11 @@ func (s *Store) fsmSnapshot() (fSnap raft.FSMSnapshot, retErr error) {
 			stats.Get(snapshotPrecompactWALSize).(*expvar.Int).Set(walSzPre)
 			stats.Get(snapshotWALSize).(*expvar.Int).Set(walSzPost)
 
-			// When it comes to incremental snapshotting of WAL files, we pass the data to the Snapshot
-			// Store and Sink indirectly. We wrap its filepath in an io.Reader, not the file data. The
-			// Snapshotting system knows to check for this. If it finds a filepath in the io.Reader (as
-			// opposed to a reader returning actual file data, it will move the file from here to it.
-			streamer, err := snapshot.NewSnapshotPathStreamer(walTmpFD.Name())
+			// When it comes to incremental snapshotting of WAL files, we pass the WAL directory
+			// path to the Snapshot Store and Sink indirectly via the header. The Snapshotting
+			// system knows to check for this. It will atomically move the directory into the
+			// snapshot directory and redistribute the WAL files within it.
+			streamer, err := snapshot.NewSnapshotPathStreamer(walTmpDir)
 			if err != nil {
 				return nil, err
 			}

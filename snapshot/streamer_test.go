@@ -254,7 +254,8 @@ func runSnapshotStreamerEndToEnd(t *testing.T, dbData string, walDatas []string)
 }
 
 func Test_SnapshotPathStreamer(t *testing.T) {
-	streamer, err := NewSnapshotPathStreamer("testdata/db-and-wals/wal-00")
+	walDir := t.TempDir()
+	streamer, err := NewSnapshotPathStreamer(walDir)
 	if err != nil {
 		t.Fatalf("NewSnapshotPathStreamer failed: %v", err)
 	}
@@ -283,8 +284,8 @@ func Test_SnapshotPathStreamer(t *testing.T) {
 		t.Fatalf("Expected IncrementalFile payload, got nil")
 	}
 
-	if len(inc.WalPaths) != 1 || inc.WalPaths[0] != "testdata/db-and-wals/wal-00" {
-		t.Fatalf("Expected WalPaths ['testdata/db-and-wals/wal-00'], got %v", inc.WalPaths)
+	if inc.WalDirPath != walDir {
+		t.Fatalf("Expected WalDirPath %q, got %q", walDir, inc.WalDirPath)
 	}
 
 	// Check that there is no more data to read after the header.
