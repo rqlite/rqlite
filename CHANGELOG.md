@@ -27,6 +27,7 @@ Upgrading to this release from a v7 release (or later) is seamless and been exte
 - [PR #2491](https://github.com/rqlite/rqlite/pull/2491): Don't recalculate snapshot fingerprint on Noop Snapshot.
 - [PR #2492](https://github.com/rqlite/rqlite/pull/2492): Various snapshotting fixes and improvements, including specifically for Windows.
 - [PR #2493](https://github.com/rqlite/rqlite/pull/2493): Upgrade SQL parser.
+- [PR #2494](https://github.com/rqlite/rqlite/pull/2494): Rename `snapshot.ExtractDatabase` to `snapshot.Restore`.
 
 ## v9.4.1 (February 11th 2026)
 ### Implementation changes and bug fixes

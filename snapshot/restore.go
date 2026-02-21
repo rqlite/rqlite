@@ -10,11 +10,11 @@ import (
 	"github.com/rqlite/rqlite/v10/db"
 )
 
-// ExtractDatabase reads a protobuf-framed snapshot stream and writes
+// Restore reads a protobuf-framed snapshot stream and writes
 // the resulting SQLite database to dstPath. If the stream contains
 // WAL files, they are checkpointed into the database. It returns the
 // number of bytes read from the stream.
-func ExtractDatabase(r io.Reader, dstPath string) (int64, error) {
+func Restore(r io.Reader, dstPath string) (int64, error) {
 	var totalRead int64
 
 	// Read header length (4 bytes, big-endian).

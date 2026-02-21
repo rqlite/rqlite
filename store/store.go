@@ -2726,8 +2726,8 @@ func (s *Store) fsmRestore(rc io.ReadCloser) (retErr error) {
 	tmpFile.Close()
 	defer os.Remove(tmpPath)
 
-	if _, err := snapshot.ExtractDatabase(rc, tmpPath); err != nil {
-		return fmt.Errorf("error extracting database from snapshot: %v", err)
+	if _, err := snapshot.Restore(rc, tmpPath); err != nil {
+		return fmt.Errorf("error restoring database from snapshot: %v", err)
 	}
 
 	// Any existing SQLite file is about to be invalid, so mark that we can't

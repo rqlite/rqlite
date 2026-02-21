@@ -148,9 +148,9 @@ func RecoverNode(dataDir string, extensions []string, logger *log.Logger, logs r
 				return fmt.Errorf("failed to open snapshot %s: %s", snapID, err)
 			}
 			defer rc.Close()
-			_, err = snapshot.ExtractDatabase(rc, tmpDBPath)
+			_, err = snapshot.Restore(rc, tmpDBPath)
 			if err != nil {
-				return fmt.Errorf("failed to extract snapshot %s to temporary database: %s", snapID, err)
+				return fmt.Errorf("failed to restore snapshot %s to temporary database: %s", snapID, err)
 			}
 			snapshotIndex = snapshots[0].Index
 			snapshotTerm = snapshots[0].Term
