@@ -29,6 +29,7 @@ Upgrading to this release from a v7 release (or later) is seamless and been exte
 - [PR #2493](https://github.com/rqlite/rqlite/pull/2493): Upgrade SQL parser.
 - [PR #2494](https://github.com/rqlite/rqlite/pull/2494): Rename `snapshot.ExtractDatabase` to `snapshot.Restore`.
 - [PR #2495](https://github.com/rqlite/rqlite/pull/2495): Use zstd compression for snapshot transfer.
+- [PR #2496](https://github.com/rqlite/rqlite/pull/2496): Add snapshot transfer compression enable flag. Defaults to on.
 
 ## v9.4.1 (February 11th 2026)
 ### Implementation changes and bug fixes

@@ -11,7 +11,7 @@ func Test_NewTransport(t *testing.T) {
 }
 
 func Test_NewNodeTransport(t *testing.T) {
-	nt := NewNodeTransport(nil)
+	nt := NewNodeTransport(nil, false)
 	if nt == nil {
 		t.Fatal("failed to create new NodeTransport")
 	}

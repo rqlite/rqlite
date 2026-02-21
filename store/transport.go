@@ -56,6 +56,7 @@ func (t *Transport) Addr() net.Addr {
 // custom configuration of the InstallSnapshot method.
 type NodeTransport struct {
 	*raft.NetworkTransport
+	compress bool
 
 	aeMu                   sync.RWMutex
 	appendEntriesTxHandler func(req *raft.AppendEntriesRequest) error
@@ -69,9 +70,10 @@ type NodeTransport struct {
 }
 
 // NewNodeTransport returns an initialized NodeTransport.
-func NewNodeTransport(transport *raft.NetworkTransport) *NodeTransport {
+func NewNodeTransport(transport *raft.NetworkTransport, compress bool) *NodeTransport {
 	return &NodeTransport{
 		NetworkTransport:   transport,
+		compress:           compress,
 		commandCommitIndex: &atomic.Uint64{},
 		leaderCommitIndex:  &atomic.Uint64{},
 		done:               make(chan struct{}),
@@ -128,12 +130,16 @@ func (n *NodeTransport) Close() error {
 // the ReadCloser and streamed to the client.
 func (n *NodeTransport) InstallSnapshot(id raft.ServerID, target raft.ServerAddress, args *raft.InstallSnapshotRequest,
 	resp *raft.InstallSnapshotResponse, data io.Reader) error {
-	zstdData, err := zstd.NewCompressor(data, args.Size, zstd.DefaultBufferSize)
-	if err != nil {
-		return err
+	r := data
+	if n.compress {
+		zstdData, err := zstd.NewCompressor(data, args.Size, zstd.DefaultBufferSize)
+		if err != nil {
+			return err
+		}
+		r = zstdData
+		defer zstdData.Close()
 	}
-	defer zstdData.Close()
-	return n.NetworkTransport.InstallSnapshot(id, target, args, resp, zstdData)
+	return n.NetworkTransport.InstallSnapshot(id, target, args, resp, r)
 }
 
 // AppendEntries sends the appropriate RPC to the target node.
@@ -160,7 +166,7 @@ func (n *NodeTransport) Consumer() <-chan raft.RPC {
 			case rpc := <-srcCh:
 				switch cmd := rpc.Command.(type) {
 				case *raft.InstallSnapshotRequest:
-					if rpc.Reader != nil {
+					if rpc.Reader != nil && n.compress {
 						rpc.Reader = zstd.NewDecompressor(rpc.Reader)
 					}
 				case *raft.AppendEntriesRequest:
@@ -194,5 +200,6 @@ func (n *NodeTransport) Stats() map[string]any {
 	return map[string]any{
 		"command_commit_index": n.CommandCommitIndex(),
 		"leader_commit_index":  n.LeaderCommitIndex(),
+		"compress":             n.compress,
 	}
 }
