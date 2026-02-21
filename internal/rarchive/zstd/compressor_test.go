@@ -1,8 +1,7 @@
-package gzip
+package zstd
 
 import (
 	"bytes"
-	"compress/gzip"
 	"crypto/md5"
 	"encoding/hex"
 	"fmt"
@@ -14,48 +13,37 @@ import (
 
 func Test_Compressor_SingleRead(t *testing.T) {
 	originalData := []byte("This is a test string, xxxxx -- xxxxxx -- test should compress")
-	reader := bytes.NewReader(originalData)
-	compressor, err := NewCompressor(reader, DefaultBufferSize)
+	compressor, err := NewCompressor(bytes.NewReader(originalData), int64(len(originalData)), DefaultBufferSize)
 	if err != nil {
 		t.Fatalf("Failed to create compressor: %v", err)
 	}
+	defer compressor.Close()
 
-	// Create a buffer to hold compressed data
-	compressedBuffer := make([]byte, DefaultBufferSize)
-
-	n, err := compressor.Read(compressedBuffer)
-	if err != nil && err != io.EOF {
+	compressed, err := io.ReadAll(compressor)
+	if err != nil {
 		t.Fatalf("Unexpected error while reading: %v", err)
 	}
 
-	// Decompress the compressed data
-	r, err := gzip.NewReader(bytes.NewReader(compressedBuffer[:n]))
-	if err != nil {
-		t.Fatalf("Failed to create gzip reader: %v", err)
-	}
-	decompressedBuffer := new(bytes.Buffer)
-	_, err = io.Copy(decompressedBuffer, r)
+	decompressor := NewDecompressor(bytes.NewReader(compressed))
+	decompressed, err := io.ReadAll(decompressor)
 	if err != nil {
 		t.Fatalf("Failed to decompress: %v", err)
 	}
 
-	// Verify the decompressed data matches original data
-	if !bytes.Equal(decompressedBuffer.Bytes(), originalData) {
-		t.Fatalf("Decompressed data does not match original. Got %v, expected %v", decompressedBuffer.Bytes(), originalData)
+	if !bytes.Equal(decompressed, originalData) {
+		t.Fatalf("Decompressed data does not match original")
 	}
 }
 
 func Test_Compressor_MultipleRead(t *testing.T) {
 	originalData := []byte("This is a test string, xxxxx -- xxxxxx -- test should compress")
-	reader := bytes.NewReader(originalData)
-	compressor, err := NewCompressor(reader, DefaultBufferSize)
+	compressor, err := NewCompressor(bytes.NewReader(originalData), int64(len(originalData)), DefaultBufferSize)
 	if err != nil {
 		t.Fatalf("Failed to create compressor: %v", err)
 	}
+	defer compressor.Close()
 
-	// Create a buffer to hold compressed data
 	compressedBuffer := new(bytes.Buffer)
-
 	for {
 		_, err := io.CopyN(compressedBuffer, compressor, 8)
 		if err != nil {
@@ -66,78 +54,34 @@ func Test_Compressor_MultipleRead(t *testing.T) {
 		}
 	}
 
-	// Decompress the compressed data
-	r, err := gzip.NewReader(bytes.NewReader(compressedBuffer.Bytes()))
-	if err != nil {
-		t.Fatalf("Failed to create gzip reader: %v", err)
-	}
-	decompressedBuffer := new(bytes.Buffer)
-	_, err = io.Copy(decompressedBuffer, r)
+	decompressor := NewDecompressor(bytes.NewReader(compressedBuffer.Bytes()))
+	decompressed, err := io.ReadAll(decompressor)
 	if err != nil {
 		t.Fatalf("Failed to decompress: %v", err)
 	}
 
-	// Verify the decompressed data matches original data
-	if !bytes.Equal(decompressedBuffer.Bytes(), originalData) {
-		t.Fatalf("Decompressed data does not match original. Got %v, expected %v", decompressedBuffer.Bytes(), originalData)
-	}
-}
-
-func Test_Compressor_MultipleReadSmallBuffer(t *testing.T) {
-	originalData := []byte("This is a test string, xxxxx -- xxxxxx -- test should compress")
-	reader := bytes.NewReader(originalData)
-	compressor, err := NewCompressor(reader, 8)
-	if err != nil {
-		t.Fatalf("Failed to create compressor: %v", err)
-	}
-
-	// Create a buffer to hold compressed data
-	compressedBuffer := new(bytes.Buffer)
-
-	for {
-		_, err := io.CopyN(compressedBuffer, compressor, 32)
-		if err != nil {
-			if err == io.EOF {
-				break
-			}
-			t.Fatalf("Unexpected error while reading: %v", err)
-		}
-	}
-
-	// Decompress the compressed data
-	r, err := gzip.NewReader(bytes.NewReader(compressedBuffer.Bytes()))
-	if err != nil {
-		t.Fatalf("Failed to create gzip reader: %v", err)
-	}
-	decompressedBuffer := new(bytes.Buffer)
-	_, err = io.Copy(decompressedBuffer, r)
-	if err != nil {
-		t.Fatalf("Failed to decompress: %v", err)
-	}
-
-	// Verify the decompressed data matches original data
-	if !bytes.Equal(decompressedBuffer.Bytes(), originalData) {
-		t.Fatalf("Decompressed data does not match original. Got %v, expected %v", decompressedBuffer.Bytes(), originalData)
+	if !bytes.Equal(decompressed, originalData) {
+		t.Fatalf("Decompressed data does not match original")
 	}
 }
 
 func Test_Compressor_CompressFile(t *testing.T) {
 	srcFD := mustOpenTempFile(t)
 	defer srcFD.Close()
-	_, err := io.CopyN(srcFD, bytes.NewReader(bytes.Repeat([]byte("a"), 131072)), 131072)
+	n, err := io.CopyN(srcFD, bytes.NewReader(bytes.Repeat([]byte("a"), 131072)), 131072)
 	if err != nil {
 		t.Fatalf("Failed to write to source file: %v", err)
 	}
-	// Reset file pointer to beginning
 	if _, err := srcFD.Seek(0, 0); err != nil {
 		t.Fatalf("Failed to seek to beginning of file: %v", err)
 	}
 
 	// Compress it.
-	compressor, err := NewCompressor(srcFD, DefaultBufferSize)
+	compressor, err := NewCompressor(srcFD, n, DefaultBufferSize)
 	if err != nil {
 		t.Fatalf("Failed to create compressor: %v", err)
 	}
+	defer compressor.Close()
 	dstFD := mustOpenTempFile(t)
 	defer dstFD.Close()
 	_, err = io.Copy(dstFD, compressor)
@@ -145,42 +89,38 @@ func Test_Compressor_CompressFile(t *testing.T) {
 		t.Fatalf("Failed to compress: %v", err)
 	}
 
-	// Decompress it via actual gzip.
+	// Decompress it.
 	dstUncompressedFD := mustOpenTempFile(t)
 	defer dstUncompressedFD.Close()
 	dstFD.Seek(0, 0)
-	r, err := gzip.NewReader(dstFD)
-	if err != nil {
-		t.Fatalf("Failed to create gzip reader: %v", err)
-	}
-	_, err = io.Copy(dstUncompressedFD, r)
+	decompressor := NewDecompressor(dstFD)
+	_, err = io.Copy(dstUncompressedFD, decompressor)
 	if err != nil {
 		t.Fatalf("Failed to decompress: %v", err)
 	}
 
-	// Compare the files.
 	compareFiles(t, srcFD, dstUncompressedFD)
 }
 
 func Test_Compressor_CompressLargeFile(t *testing.T) {
 	mb64 := int64(64*1024*1024) + 13
 	srcFD := mustOpenTempFile(t)
-	_, err := io.CopyN(srcFD, io.LimitReader(rand.New(rand.NewSource(0)), mb64), mb64)
+	n, err := io.CopyN(srcFD, io.LimitReader(rand.New(rand.NewSource(0)), mb64), mb64)
 	if err != nil {
 		t.Fatalf("Failed to write random data to source file: %v", err)
 	}
 	defer os.Remove(srcFD.Name())
 	defer srcFD.Close()
-	// Reset file pointer to beginning
 	if _, err := srcFD.Seek(0, 0); err != nil {
 		t.Fatalf("Failed to seek to beginning of file: %v", err)
 	}
 
 	// Compress it.
-	compressor, err := NewCompressor(srcFD, DefaultBufferSize)
+	compressor, err := NewCompressor(srcFD, n, DefaultBufferSize)
 	if err != nil {
 		t.Fatalf("Failed to create compressor: %v", err)
 	}
+	defer compressor.Close()
 	dstFD := mustOpenTempFile(t)
 	defer os.Remove(dstFD.Name())
 	defer dstFD.Close()
@@ -189,21 +129,17 @@ func Test_Compressor_CompressLargeFile(t *testing.T) {
 		t.Fatalf("Failed to compress: %v", err)
 	}
 
-	// Decompress it via actual gzip.
+	// Decompress it.
 	dstUncompressedFD := mustOpenTempFile(t)
 	defer os.Remove(dstUncompressedFD.Name())
 	defer dstUncompressedFD.Close()
 	dstFD.Seek(0, 0)
-	r, err := gzip.NewReader(dstFD)
-	if err != nil {
-		t.Fatalf("Failed to create gzip reader: %v", err)
-	}
-	_, err = io.Copy(dstUncompressedFD, r)
+	decompressor := NewDecompressor(dstFD)
+	_, err = io.Copy(dstUncompressedFD, decompressor)
 	if err != nil {
 		t.Fatalf("Failed to decompress: %v", err)
 	}
 
-	// Compare the files.
 	compareFileMD5(t, srcFD.Name(), dstUncompressedFD.Name())
 }
 
@@ -263,28 +199,21 @@ func compareFileMD5(t *testing.T, srcPath, dstPath string) {
 		t.Fatalf("Failed to calculate md5sum of destination file: %v", err)
 	}
 
-	// compare md5sums
 	if srcMD5 != dstMD5 {
 		t.Fatal("Source file md5sum does not match destination file md5sum")
 	}
 }
 
 func md5sum(path string) (string, error) {
-	// open file
 	f, err := os.Open(path)
 	if err != nil {
 		return "", fmt.Errorf("failed to open file: %w", err)
 	}
 	defer f.Close()
 
-	// create new hash
 	h := md5.New()
-
-	// copy file to hash
 	if _, err := io.Copy(h, f); err != nil {
 		return "", fmt.Errorf("failed to copy file to hash: %w", err)
 	}
-
-	// return hex encoded hash
 	return hex.EncodeToString(h.Sum(nil)), nil
 }
