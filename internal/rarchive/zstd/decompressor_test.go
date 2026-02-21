@@ -11,14 +11,15 @@ import (
 func Test_Decompressor(t *testing.T) {
 	testData := []byte("This is a test string, xxxxx -- xxxxxx -- test should compress")
 
-	// Compress using our Compressor (writes length prefix + zstd payload)
-	compressor := NewCompressor(bytes.NewReader(testData))
+	// Compress using our Compressor (writes size header + zstd payload).
+	compressor := NewCompressor(bytes.NewReader(testData), int64(len(testData)))
+	defer compressor.Close()
 	var buf bytes.Buffer
 	if _, err := io.Copy(&buf, compressor); err != nil {
 		t.Fatalf("failed to compress: %v", err)
 	}
 
-	// Decompress the data
+	// Decompress the data.
 	decompressor := NewDecompressor(&buf)
 	decompressedBuffer := new(bytes.Buffer)
 	_, err := io.Copy(decompressedBuffer, decompressor)
@@ -26,12 +27,11 @@ func Test_Decompressor(t *testing.T) {
 		t.Fatalf("failed to decompress: %v", err)
 	}
 
-	// Verify the decompressed data matches original data
 	if !bytes.Equal(decompressedBuffer.Bytes(), testData) {
 		t.Fatalf("decompressed data does not match original")
 	}
 
-	// Check that future reads return io.EOF
+	// Check that future reads return io.EOF.
 	_, err = decompressor.Read(make([]byte, 1))
 	if !errors.Is(err, io.EOF) {
 		t.Fatalf("expected io.EOF, got %v", err)
@@ -47,9 +47,8 @@ func Test_Decompressor_EndToEnd(t *testing.T) {
 	defer ln.Close()
 
 	testData := []byte("This is a test string, xxxxx -- xxxxxx -- test should compress")
-	srcBuf := bytes.NewBuffer(testData)
 
-	// Accept connections on the listener
+	// Accept connections on the listener.
 	go func() {
 		for {
 			conn, err := ln.Accept()
@@ -59,22 +58,23 @@ func Test_Decompressor_EndToEnd(t *testing.T) {
 				}
 				t.Errorf("failed to accept connection: %v", err)
 			}
-			compressor := NewCompressor(srcBuf)
+			compressor := NewCompressor(bytes.NewBuffer(testData), int64(len(testData)))
 			if _, err := io.Copy(conn, compressor); err != nil {
 				t.Errorf("failed to copy data: %v", err)
 			}
+			compressor.Close()
 			conn.Close()
 		}
 	}()
 
-	// Connect to the listener
+	// Connect to the listener.
 	conn, err := net.Dial("tcp", ln.Addr().String())
 	if err != nil {
 		t.Fatalf("failed to connect to listener: %v", err)
 	}
 	defer conn.Close()
 
-	// Decompress the data
+	// Decompress the data.
 	decompressor := NewDecompressor(conn)
 	dstBuf := new(bytes.Buffer)
 	_, err = io.Copy(dstBuf, decompressor)

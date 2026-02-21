@@ -128,7 +128,7 @@ func (n *NodeTransport) Close() error {
 // the ReadCloser and streamed to the client.
 func (n *NodeTransport) InstallSnapshot(id raft.ServerID, target raft.ServerAddress, args *raft.InstallSnapshotRequest,
 	resp *raft.InstallSnapshotResponse, data io.Reader) error {
-	zstdData := zstd.NewCompressor(data)
+	zstdData := zstd.NewCompressor(data, args.Size)
 	defer zstdData.Close()
 	return n.NetworkTransport.InstallSnapshot(id, target, args, resp, zstdData)
 }

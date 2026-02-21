@@ -9,15 +9,15 @@ import (
 )
 
 // Decompressor reads zstd-compressed data from an io.Reader and provides
-// decompressed data via its own Read method. It expects the compressed
-// stream to be prefixed with a uint64 (big-endian) payload size, as
-// written by the corresponding Compressor. The payload size is used to
-// limit reads from the source to exactly the compressed frame, preventing
-// the zstd decoder from blocking while probing for a subsequent frame on
-// a network stream.
+// decompressed data via its own Read method. It expects the stream to be
+// prefixed with a uint64 (big-endian) uncompressed size, as written by
+// the corresponding Compressor. The size is used to limit the number of
+// decompressed bytes returned, so that the zstd decoder is never asked
+// to probe for a subsequent frame (which would block on a network stream).
 type Decompressor struct {
-	cr  *progress.CountingReader
-	dec *zstd.Decoder
+	cr     *progress.CountingReader
+	dec    *zstd.Decoder
+	reader io.Reader // LimitReader over the decoder output
 
 	nRx int64
 	nTx int64
@@ -39,31 +39,32 @@ func (d *Decompressor) Read(p []byte) (nn int, err error) {
 	if d.cr == nil {
 		return 0, io.EOF
 	}
-	if d.dec == nil {
-		// Read the 8-byte length prefix to learn the compressed payload size.
+	if d.reader == nil {
+		// Read the 8-byte header to learn the uncompressed payload size.
 		var hdr [8]byte
 		if _, err := io.ReadFull(d.cr, hdr[:]); err != nil {
 			return 0, err
 		}
-		compressedSize := binary.BigEndian.Uint64(hdr[:])
+		uncompressedSize := int64(binary.BigEndian.Uint64(hdr[:]))
 
-		// Limit the source to exactly the compressed payload so the
-		// decoder cannot block probing for a subsequent frame.
-		limited := io.LimitReader(d.cr, int64(compressedSize))
-
-		d.dec, err = zstd.NewReader(limited, zstd.WithDecoderConcurrency(1))
+		d.dec, err = zstd.NewReader(d.cr, zstd.WithDecoderConcurrency(1))
 		if err != nil {
 			return 0, err
 		}
+
+		// Limit decompressed output so we never ask the decoder to
+		// probe for the next frame after this one is exhausted.
+		d.reader = io.LimitReader(d.dec, uncompressedSize)
 	}
 
-	n, err := d.dec.Read(p)
+	n, err := d.reader.Read(p)
 	d.nRx += int64(n)
 
 	if err == io.EOF {
 		d.dec.Close()
 		d.cr = nil
 		d.dec = nil
+		d.reader = nil
 	}
 	return n, err
 }

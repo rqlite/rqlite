@@ -13,15 +13,14 @@ import (
 
 func Test_Compressor_SingleRead(t *testing.T) {
 	originalData := []byte("This is a test string, xxxxx -- xxxxxx -- test should compress")
-	compressor := NewCompressor(bytes.NewReader(originalData))
+	compressor := NewCompressor(bytes.NewReader(originalData), int64(len(originalData)))
+	defer compressor.Close()
 
-	// Read all compressed output (length prefix + payload)
 	compressed, err := io.ReadAll(compressor)
 	if err != nil {
 		t.Fatalf("Unexpected error while reading: %v", err)
 	}
 
-	// Decompress using our Decompressor
 	decompressor := NewDecompressor(bytes.NewReader(compressed))
 	decompressed, err := io.ReadAll(decompressor)
 	if err != nil {
@@ -35,7 +34,8 @@ func Test_Compressor_SingleRead(t *testing.T) {
 
 func Test_Compressor_MultipleRead(t *testing.T) {
 	originalData := []byte("This is a test string, xxxxx -- xxxxxx -- test should compress")
-	compressor := NewCompressor(bytes.NewReader(originalData))
+	compressor := NewCompressor(bytes.NewReader(originalData), int64(len(originalData)))
+	defer compressor.Close()
 
 	compressedBuffer := new(bytes.Buffer)
 	for {
@@ -62,7 +62,7 @@ func Test_Compressor_MultipleRead(t *testing.T) {
 func Test_Compressor_CompressFile(t *testing.T) {
 	srcFD := mustOpenTempFile(t)
 	defer srcFD.Close()
-	_, err := io.CopyN(srcFD, bytes.NewReader(bytes.Repeat([]byte("a"), 131072)), 131072)
+	n, err := io.CopyN(srcFD, bytes.NewReader(bytes.Repeat([]byte("a"), 131072)), 131072)
 	if err != nil {
 		t.Fatalf("Failed to write to source file: %v", err)
 	}
@@ -71,7 +71,8 @@ func Test_Compressor_CompressFile(t *testing.T) {
 	}
 
 	// Compress it.
-	compressor := NewCompressor(srcFD)
+	compressor := NewCompressor(srcFD, n)
+	defer compressor.Close()
 	dstFD := mustOpenTempFile(t)
 	defer dstFD.Close()
 	_, err = io.Copy(dstFD, compressor)
@@ -79,7 +80,7 @@ func Test_Compressor_CompressFile(t *testing.T) {
 		t.Fatalf("Failed to compress: %v", err)
 	}
 
-	// Decompress it using our Decompressor.
+	// Decompress it.
 	dstUncompressedFD := mustOpenTempFile(t)
 	defer dstUncompressedFD.Close()
 	dstFD.Seek(0, 0)
@@ -95,7 +96,7 @@ func Test_Compressor_CompressFile(t *testing.T) {
 func Test_Compressor_CompressLargeFile(t *testing.T) {
 	mb64 := int64(64*1024*1024) + 13
 	srcFD := mustOpenTempFile(t)
-	_, err := io.CopyN(srcFD, io.LimitReader(rand.New(rand.NewSource(0)), mb64), mb64)
+	n, err := io.CopyN(srcFD, io.LimitReader(rand.New(rand.NewSource(0)), mb64), mb64)
 	if err != nil {
 		t.Fatalf("Failed to write random data to source file: %v", err)
 	}
@@ -106,7 +107,8 @@ func Test_Compressor_CompressLargeFile(t *testing.T) {
 	}
 
 	// Compress it.
-	compressor := NewCompressor(srcFD)
+	compressor := NewCompressor(srcFD, n)
+	defer compressor.Close()
 	dstFD := mustOpenTempFile(t)
 	defer os.Remove(dstFD.Name())
 	defer dstFD.Close()
@@ -115,7 +117,7 @@ func Test_Compressor_CompressLargeFile(t *testing.T) {
 		t.Fatalf("Failed to compress: %v", err)
 	}
 
-	// Decompress it using our Decompressor.
+	// Decompress it.
 	dstUncompressedFD := mustOpenTempFile(t)
 	defer os.Remove(dstUncompressedFD.Name())
 	defer dstUncompressedFD.Close()
