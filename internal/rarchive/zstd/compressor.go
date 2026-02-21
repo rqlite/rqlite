@@ -9,7 +9,7 @@ import (
 )
 
 // DefaultBufferSize is the default buffer size used by the Compressor.
-const DefaultBufferSize = 65536
+const DefaultBufferSize = 262144
 
 // Compressor reads from an io.Reader, compresses the data using zstd, and
 // provides the compressed output via its own Read method. The output is
