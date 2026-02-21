@@ -10,6 +10,7 @@ require (
 	github.com/aws/aws-sdk-go-v2/service/s3 v1.96.0
 	github.com/hashicorp/go-hclog v1.6.3
 	github.com/hashicorp/raft v1.7.3
+	github.com/klauspost/compress v1.18.4
 	github.com/mattn/go-sqlite3 v1.14.33
 	github.com/mkideal/cli v0.2.7
 	github.com/mkideal/pkg v0.1.3

@@ -10,7 +10,7 @@ import (
 	"time"
 
 	"github.com/hashicorp/raft"
-	"github.com/rqlite/rqlite/v10/store/gzip"
+	"github.com/rqlite/rqlite/v10/internal/rarchive/zstd"
 )
 
 // Layer is the interface expected by the Store for network communication
@@ -128,12 +128,9 @@ func (n *NodeTransport) Close() error {
 // the ReadCloser and streamed to the client.
 func (n *NodeTransport) InstallSnapshot(id raft.ServerID, target raft.ServerAddress, args *raft.InstallSnapshotRequest,
 	resp *raft.InstallSnapshotResponse, data io.Reader) error {
-	gzipData, err := gzip.NewCompressor(data, gzip.DefaultBufferSize)
-	if err != nil {
-		return err
-	}
-	defer gzipData.Close()
-	return n.NetworkTransport.InstallSnapshot(id, target, args, resp, gzipData)
+	zstdData := zstd.NewCompressor(data)
+	defer zstdData.Close()
+	return n.NetworkTransport.InstallSnapshot(id, target, args, resp, zstdData)
 }
 
 // AppendEntries sends the appropriate RPC to the target node.
@@ -161,7 +158,7 @@ func (n *NodeTransport) Consumer() <-chan raft.RPC {
 				switch cmd := rpc.Command.(type) {
 				case *raft.InstallSnapshotRequest:
 					if rpc.Reader != nil {
-						rpc.Reader = gzip.NewDecompressor(rpc.Reader)
+						rpc.Reader = zstd.NewDecompressor(rpc.Reader)
 					}
 				case *raft.AppendEntriesRequest:
 					n.aeMu.RLock()

@@ -1,8 +1,7 @@
-package gzip
+package zstd
 
 import (
 	"bytes"
-	"compress/gzip"
 	"errors"
 	"io"
 	"net"
@@ -10,12 +9,14 @@ import (
 )
 
 func Test_Decompressor(t *testing.T) {
-	// Write some gzipped data to a buffer
 	testData := []byte("This is a test string, xxxxx -- xxxxxx -- test should compress")
+
+	// Compress using our Compressor (writes length prefix + zstd payload)
+	compressor := NewCompressor(bytes.NewReader(testData))
 	var buf bytes.Buffer
-	gzw := gzip.NewWriter(&buf)
-	gzw.Write(testData)
-	gzw.Close()
+	if _, err := io.Copy(&buf, compressor); err != nil {
+		t.Fatalf("failed to compress: %v", err)
+	}
 
 	// Decompress the data
 	decompressor := NewDecompressor(&buf)
@@ -58,10 +59,7 @@ func Test_Decompressor_EndToEnd(t *testing.T) {
 				}
 				t.Errorf("failed to accept connection: %v", err)
 			}
-			compressor, err := NewCompressor(srcBuf, DefaultBufferSize)
-			if err != nil {
-				t.Errorf("failed to create compressor: %v", err)
-			}
+			compressor := NewCompressor(srcBuf)
 			if _, err := io.Copy(conn, compressor); err != nil {
 				t.Errorf("failed to copy data: %v", err)
 			}
