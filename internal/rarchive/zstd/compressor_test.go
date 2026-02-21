@@ -13,7 +13,7 @@ import (
 
 func Test_Compressor_SingleRead(t *testing.T) {
 	originalData := []byte("This is a test string, xxxxx -- xxxxxx -- test should compress")
-	compressor := NewCompressor(bytes.NewReader(originalData), int64(len(originalData)))
+	compressor := NewCompressor(bytes.NewReader(originalData), int64(len(originalData)), DefaultBufferSize)
 	defer compressor.Close()
 
 	compressed, err := io.ReadAll(compressor)
@@ -34,7 +34,7 @@ func Test_Compressor_SingleRead(t *testing.T) {
 
 func Test_Compressor_MultipleRead(t *testing.T) {
 	originalData := []byte("This is a test string, xxxxx -- xxxxxx -- test should compress")
-	compressor := NewCompressor(bytes.NewReader(originalData), int64(len(originalData)))
+	compressor := NewCompressor(bytes.NewReader(originalData), int64(len(originalData)), DefaultBufferSize)
 	defer compressor.Close()
 
 	compressedBuffer := new(bytes.Buffer)
@@ -71,7 +71,7 @@ func Test_Compressor_CompressFile(t *testing.T) {
 	}
 
 	// Compress it.
-	compressor := NewCompressor(srcFD, n)
+	compressor := NewCompressor(srcFD, n, DefaultBufferSize)
 	defer compressor.Close()
 	dstFD := mustOpenTempFile(t)
 	defer dstFD.Close()
@@ -107,7 +107,7 @@ func Test_Compressor_CompressLargeFile(t *testing.T) {
 	}
 
 	// Compress it.
-	compressor := NewCompressor(srcFD, n)
+	compressor := NewCompressor(srcFD, n, DefaultBufferSize)
 	defer compressor.Close()
 	dstFD := mustOpenTempFile(t)
 	defer os.Remove(dstFD.Name())

@@ -12,7 +12,7 @@ func Test_Decompressor(t *testing.T) {
 	testData := []byte("This is a test string, xxxxx -- xxxxxx -- test should compress")
 
 	// Compress using our Compressor (writes size header + zstd payload).
-	compressor := NewCompressor(bytes.NewReader(testData), int64(len(testData)))
+	compressor := NewCompressor(bytes.NewReader(testData), int64(len(testData)), DefaultBufferSize)
 	defer compressor.Close()
 	var buf bytes.Buffer
 	if _, err := io.Copy(&buf, compressor); err != nil {
@@ -58,7 +58,7 @@ func Test_Decompressor_EndToEnd(t *testing.T) {
 				}
 				t.Errorf("failed to accept connection: %v", err)
 			}
-			compressor := NewCompressor(bytes.NewBuffer(testData), int64(len(testData)))
+			compressor := NewCompressor(bytes.NewBuffer(testData), int64(len(testData)), DefaultBufferSize)
 			if _, err := io.Copy(conn, compressor); err != nil {
 				t.Errorf("failed to copy data: %v", err)
 			}

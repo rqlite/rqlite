@@ -29,8 +29,10 @@ type Compressor struct {
 
 // NewCompressor returns an instantiated Compressor that reads from r and
 // compresses the data using zstd. The uncompressedSize parameter is written
-// as an 8-byte big-endian header before the compressed stream.
-func NewCompressor(r io.Reader, uncompressedSize int64) *Compressor {
+// as an 8-byte big-endian header before the compressed stream. bufSz
+// controls how many bytes are read from r per Read call; use
+// DefaultBufferSize if unsure.
+func NewCompressor(r io.Reader, uncompressedSize int64, bufSz int) *Compressor {
 	buf := new(bytes.Buffer)
 
 	// Write the uncompressed size header into the buffer so it is
@@ -42,7 +44,7 @@ func NewCompressor(r io.Reader, uncompressedSize int64) *Compressor {
 	enc, _ := zstd.NewWriter(buf, zstd.WithEncoderLevel(zstd.SpeedFastest))
 	return &Compressor{
 		r:     r,
-		bufSz: DefaultBufferSize,
+		bufSz: bufSz,
 		buf:   buf,
 		enc:   enc,
 	}
