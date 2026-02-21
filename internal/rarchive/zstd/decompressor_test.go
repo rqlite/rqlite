@@ -12,7 +12,10 @@ func Test_Decompressor(t *testing.T) {
 	testData := []byte("This is a test string, xxxxx -- xxxxxx -- test should compress")
 
 	// Compress using our Compressor (writes size header + zstd payload).
-	compressor := NewCompressor(bytes.NewReader(testData), int64(len(testData)), DefaultBufferSize)
+	compressor, err := NewCompressor(bytes.NewReader(testData), int64(len(testData)), DefaultBufferSize)
+	if err != nil {
+		t.Fatalf("failed to create compressor: %v", err)
+	}
 	defer compressor.Close()
 	var buf bytes.Buffer
 	if _, err := io.Copy(&buf, compressor); err != nil {
@@ -22,7 +25,7 @@ func Test_Decompressor(t *testing.T) {
 	// Decompress the data.
 	decompressor := NewDecompressor(&buf)
 	decompressedBuffer := new(bytes.Buffer)
-	_, err := io.Copy(decompressedBuffer, decompressor)
+	_, err = io.Copy(decompressedBuffer, decompressor)
 	if err != nil {
 		t.Fatalf("failed to decompress: %v", err)
 	}
@@ -58,7 +61,12 @@ func Test_Decompressor_EndToEnd(t *testing.T) {
 				}
 				t.Errorf("failed to accept connection: %v", err)
 			}
-			compressor := NewCompressor(bytes.NewBuffer(testData), int64(len(testData)), DefaultBufferSize)
+			compressor, err := NewCompressor(bytes.NewBuffer(testData), int64(len(testData)), DefaultBufferSize)
+			if err != nil {
+				t.Errorf("failed to create compressor: %v", err)
+				conn.Close()
+				continue
+			}
 			if _, err := io.Copy(conn, compressor); err != nil {
 				t.Errorf("failed to copy data: %v", err)
 			}

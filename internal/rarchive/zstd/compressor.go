@@ -32,7 +32,7 @@ type Compressor struct {
 // as an 8-byte big-endian header before the compressed stream. bufSz
 // controls how many bytes are read from r per Read call; use
 // DefaultBufferSize if unsure.
-func NewCompressor(r io.Reader, uncompressedSize int64, bufSz int) *Compressor {
+func NewCompressor(r io.Reader, uncompressedSize int64, bufSz int) (*Compressor, error) {
 	buf := new(bytes.Buffer)
 
 	// Write the uncompressed size header into the buffer so it is
@@ -41,13 +41,16 @@ func NewCompressor(r io.Reader, uncompressedSize int64, bufSz int) *Compressor {
 	binary.BigEndian.PutUint64(hdr[:], uint64(uncompressedSize))
 	buf.Write(hdr[:])
 
-	enc, _ := zstd.NewWriter(buf, zstd.WithEncoderLevel(zstd.SpeedFastest))
+	enc, err := zstd.NewWriter(buf, zstd.WithEncoderLevel(zstd.SpeedFastest))
+	if err != nil {
+		return nil, err
+	}
 	return &Compressor{
 		r:     r,
 		bufSz: bufSz,
 		buf:   buf,
 		enc:   enc,
-	}
+	}, nil
 }
 
 // Read reads compressed data (header + zstd payload).
