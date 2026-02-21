@@ -1,11 +1,15 @@
 package zstd
 
 import (
+	"bytes"
 	"encoding/binary"
 	"io"
 
 	"github.com/klauspost/compress/zstd"
 )
+
+// DefaultBufferSize is the default buffer size used by the Compressor.
+const DefaultBufferSize = 65536
 
 // Compressor reads from an io.Reader, compresses the data using zstd, and
 // provides the compressed output via its own Read method. The output is
@@ -14,7 +18,10 @@ import (
 // decompressed bytes it returns, so that it never asks the zstd decoder
 // to probe for a subsequent frame (which would block on a network stream).
 type Compressor struct {
-	pr *io.PipeReader
+	r     io.Reader
+	bufSz int
+	buf   *bytes.Buffer
+	enc   *zstd.Encoder
 
 	nRx int64
 	nTx int64
@@ -24,40 +31,53 @@ type Compressor struct {
 // compresses the data using zstd. The uncompressedSize parameter is written
 // as an 8-byte big-endian header before the compressed stream.
 func NewCompressor(r io.Reader, uncompressedSize int64) *Compressor {
-	pr, pw := io.Pipe()
+	buf := new(bytes.Buffer)
 
-	enc, _ := zstd.NewWriter(pw, zstd.WithEncoderLevel(zstd.SpeedFastest))
+	// Write the uncompressed size header into the buffer so it is
+	// returned on the first Read call.
+	var hdr [8]byte
+	binary.BigEndian.PutUint64(hdr[:], uint64(uncompressedSize))
+	buf.Write(hdr[:])
 
-	c := &Compressor{
-		pr: pr,
+	enc, _ := zstd.NewWriter(buf, zstd.WithEncoderLevel(zstd.SpeedFastest))
+	return &Compressor{
+		r:     r,
+		bufSz: DefaultBufferSize,
+		buf:   buf,
+		enc:   enc,
 	}
-
-	go func() {
-		// Write the uncompressed size header.
-		var hdr [8]byte
-		binary.BigEndian.PutUint64(hdr[:], uint64(uncompressedSize))
-		if _, err := pw.Write(hdr[:]); err != nil {
-			pw.CloseWithError(err)
-			return
-		}
-
-		// Stream compressed data.
-		_, err := io.Copy(enc, r)
-		enc.Close()
-		pw.CloseWithError(err)
-	}()
-
-	return c
 }
 
 // Read reads compressed data (header + zstd payload).
-func (c *Compressor) Read(p []byte) (int, error) {
-	n, err := c.pr.Read(p)
-	c.nTx += int64(n)
-	return n, err
+func (c *Compressor) Read(p []byte) (n int, err error) {
+	if c.buf.Len() == 0 && c.enc != nil {
+		nn, err := io.CopyN(c.enc, c.r, int64(c.bufSz))
+		c.nRx += nn
+		if err != nil {
+			// Source exhausted or errored — finalize the frame.
+			if err := c.Close(); err != nil {
+				return 0, err
+			}
+			if err != io.EOF {
+				return 0, err
+			}
+		} else if nn > 0 {
+			if err := c.enc.Flush(); err != nil {
+				return 0, err
+			}
+		}
+	}
+	return c.buf.Read(p)
 }
 
-// Close closes the Compressor, releasing resources.
+// Close closes the Compressor.
 func (c *Compressor) Close() error {
-	return c.pr.Close()
+	if c.enc == nil {
+		return nil
+	}
+	if err := c.enc.Close(); err != nil {
+		return err
+	}
+	c.enc = nil
+	return nil
 }
