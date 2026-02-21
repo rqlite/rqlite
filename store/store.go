@@ -416,6 +416,7 @@ type Store struct {
 	NoFreeListSync           bool
 	AutoVacInterval          time.Duration
 	AutoOptimizeInterval     time.Duration
+	NoCompressTransport      bool
 
 	// Node-reaping configuration
 	ReapTimeout         time.Duration
@@ -563,7 +564,7 @@ func (s *Store) Open() (retErr error) {
 
 	// Create Raft-compatible network layer.
 	nt := raft.NewNetworkTransport(NewTransport(s.ly), connectionPoolCount, connectionTimeout, nil)
-	s.raftTn = NewNodeTransport(nt)
+	s.raftTn = NewNodeTransport(nt, !s.NoCompressTransport)
 
 	// Don't allow control over trailing logs directly, just implement a policy.
 	s.numTrailingLogs = uint64(float64(s.SnapshotThreshold) * trailingScale)
