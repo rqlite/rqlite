@@ -2726,7 +2726,7 @@ func (s *Store) fsmRestore(rc io.ReadCloser) (retErr error) {
 	tmpFile.Close()
 	defer os.Remove(tmpPath)
 
-	if _, err := snapshot.ExtractDatabase(rc, tmpPath); err != nil {
+	if _, err := snapshot.Restore(rc, tmpPath); err != nil {
 		return fmt.Errorf("error extracting database from snapshot: %v", err)
 	}
 
