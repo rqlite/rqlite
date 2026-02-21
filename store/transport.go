@@ -200,5 +200,6 @@ func (n *NodeTransport) Stats() map[string]any {
 	return map[string]any{
 		"command_commit_index": n.CommandCommitIndex(),
 		"leader_commit_index":  n.LeaderCommitIndex(),
+		"compress":             n.compress,
 	}
 }
