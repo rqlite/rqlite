@@ -483,7 +483,7 @@ func Test_IncrementalFileSink_BadCRC(t *testing.T) {
 	mustCopyFile(t, srcPath, walPath)
 
 	// Write a bogus CRC32 value.
-	if err := rsum.WriteCRC32SumFile(walPath+crcSuffix, 0xdeadbeef); err != nil {
+	if err := rsum.WriteCRC32SumFile(walPath+crcSuffix, 0xdeadbeef, rsum.Sync); err != nil {
 		t.Fatalf("unexpected error writing bogus CRC file: %s", err.Error())
 	}
 
@@ -527,7 +527,7 @@ func mustWriteCRC32File(t *testing.T, path string) {
 	if err != nil {
 		t.Fatalf("failed to compute CRC32 for %s: %v", path, err)
 	}
-	if err := rsum.WriteCRC32SumFile(path+crcSuffix, sum); err != nil {
+	if err := rsum.WriteCRC32SumFile(path+crcSuffix, sum, rsum.Sync); err != nil {
 		t.Fatalf("failed to write CRC32 sum file for %s: %v", path, err)
 	}
 }

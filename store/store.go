@@ -2631,7 +2631,7 @@ func (s *Store) fsmSnapshot() (fSnap raft.FSMSnapshot, retErr error) {
 				removeFileOrFatal(compactWALFd)
 				return nil, err
 			}
-			if err := rsum.WriteCRC32SumFile(compactWALPath+crcSuffix, crcCompactWAL.Sum32()); err != nil {
+			if err := rsum.WriteCRC32SumFile(compactWALPath+crcSuffix, crcCompactWAL.Sum32(), rsum.Sync); err != nil {
 				removeFileOrFatal(compactWALFd)
 				return nil, fmt.Errorf("failed to write CRC32 sum file: %w", err)
 			}

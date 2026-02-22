@@ -112,7 +112,7 @@ func Test_WriteCRC32SumFileRoundTrip(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "checksum")
 	var sum uint32 = 0x1a2b3c4d
 
-	if err := WriteCRC32SumFile(path, sum); err != nil {
+	if err := WriteCRC32SumFile(path, sum, Sync); err != nil {
 		t.Fatalf("WriteCRC32SumFile failed: %v", err)
 	}
 
@@ -138,7 +138,7 @@ func Test_WriteCRC32SumFileRoundTrip(t *testing.T) {
 func Test_WriteCRC32SumFileZero(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "checksum")
 
-	if err := WriteCRC32SumFile(path, 0); err != nil {
+	if err := WriteCRC32SumFile(path, 0, Sync); err != nil {
 		t.Fatalf("WriteCRC32SumFile failed: %v", err)
 	}
 
@@ -182,7 +182,7 @@ func Test_CompareCRC32SumFileMatch(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := WriteCRC32SumFile(crcPath, sum); err != nil {
+	if err := WriteCRC32SumFile(crcPath, sum, Sync); err != nil {
 		t.Fatal(err)
 	}
 
@@ -204,7 +204,7 @@ func Test_CompareCRC32SumFileMismatch(t *testing.T) {
 		t.Fatal(err)
 	}
 	// Write a wrong checksum.
-	if err := WriteCRC32SumFile(crcPath, 0xdeadbeef); err != nil {
+	if err := WriteCRC32SumFile(crcPath, 0xdeadbeef, Sync); err != nil {
 		t.Fatal(err)
 	}
 
@@ -239,7 +239,7 @@ func Test_CompareCRC32SumFileMissingData(t *testing.T) {
 	crcPath := filepath.Join(dir, "data.bin.crc32")
 
 	// Write a valid CRC file but no data file.
-	if err := WriteCRC32SumFile(crcPath, 0x12345678); err != nil {
+	if err := WriteCRC32SumFile(crcPath, 0x12345678, Sync); err != nil {
 		t.Fatal(err)
 	}
 

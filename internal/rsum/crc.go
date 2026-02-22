@@ -11,6 +11,17 @@ import (
 
 var castagnoliTable = crc32.MakeTable(crc32.Castagnoli)
 
+// SyncState represents whether a file should be synced after writing.
+type SyncState bool
+
+var (
+	// Sync indicates that the file should be synced after writing.
+	Sync SyncState = true
+
+	// NoSync indicates that the file should not be synced after writing.
+	NoSync SyncState = false
+)
+
 // CRC32 calculates the CRC32 checksum of the file at the given path.
 func CRC32(path string) (uint32, error) {
 	f, err := os.Open(path)
@@ -66,8 +77,23 @@ func (c *CRC32Writer) Sum32() uint32 {
 
 // WriteCRC32SumFile writes the given CRC32 checksum to path as an 8-character
 // lowercase hex string (e.g. "1a2b3c4d").
-func WriteCRC32SumFile(path string, sum uint32) error {
-	return os.WriteFile(path, []byte(fmt.Sprintf("%08x", sum)), 0644)
+func WriteCRC32SumFile(path string, sum uint32, sync SyncState) error {
+	fd, err := os.Create(path)
+	if err != nil {
+		return err
+	}
+	defer fd.Close()
+
+	_, err = fmt.Fprintf(fd, "%08x", sum)
+	if err != nil {
+		return err
+	}
+	if sync {
+		if err := fd.Sync(); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 // ReadCRC32SumFile reads a CRC32 checksum previously written by WriteCRC32SumFile.
