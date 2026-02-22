@@ -235,9 +235,12 @@ func (s *Sink) Close() error {
 			if err := os.Rename(srcPath, dstPath); err != nil {
 				return err
 			}
+			if err := os.Rename(srcPath+crcSuffix, dstPath+crcSuffix); err != nil {
+				return err
+			}
 		}
 
-		if err := os.RemoveAll(movedDir); err != nil {
+		if err := os.Remove(movedDir); err != nil {
 			return err
 		}
 	} else {
