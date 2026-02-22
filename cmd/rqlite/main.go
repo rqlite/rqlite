@@ -14,6 +14,7 @@ import (
 	"os"
 	"slices"
 	"sort"
+	"strconv"
 	"strings"
 	"syscall"
 
@@ -74,7 +75,7 @@ func init() {
 		`.restore FILE                                 Load using SQLite file or SQL dump contained in FILE`,
 		`.nodes [all]                                  Show connection status of voting nodes. 'all' to show all nodes`,
 		`.schema                                       Show CREATE statements for all tables`,
-		`.snapshot                                     Request a Raft snapshot and log truncation on connected node`,
+		`.snapshot [TRAILINGLOGS]                      Request a Raft snapshot and log truncation on connected node`,
 		`.status                                       Show status and diagnostic information for connected node`,
 		`.stepdown [NODEID]                            Instruct the leader to stepdown, optionally specifying new Leader node`,
 		`.sysdump FILE                                 Dump system diagnostics to FILE`,
@@ -308,7 +309,18 @@ func main() {
 			case ".QUIT", "QUIT", "EXIT", ".EXIT":
 				break FOR_READ
 			case ".SNAPSHOT":
-				err = snapshot(client, argv)
+				trailingLogs := 0
+				if index != -1 && index < len(input)-1 {
+					trailingLogsStr := strings.TrimSpace(input[index+1:])
+					if trailingLogsStr != "" {
+						trailingLogs, err = strconv.Atoi(trailingLogsStr)
+						if err != nil || trailingLogs < 0 {
+							err = fmt.Errorf("invalid trailing logs value: %s", trailingLogsStr)
+							break
+						}
+					}
+				}
+				err = snapshot(client, argv, trailingLogs)
 			case ".STEPDOWN":
 				nodeID := ""
 				if index != -1 && index < len(input)-1 {
@@ -410,8 +422,8 @@ func expvar(ctx *cli.Context, client *httpcl.Client, cmd, line string, argv *arg
 	return cliJSON(ctx, client, line, url)
 }
 
-func snapshot(client *httpcl.Client, argv *argT) error {
-	url := fmt.Sprintf("%s://%s/snapshot", argv.Protocol, address6(argv))
+func snapshot(client *httpcl.Client, argv *argT, trailingLogs int) error {
+	url := fmt.Sprintf("%s://%s/snapshot?trailing_logs=%d", argv.Protocol, address6(argv), trailingLogs)
 	req, err := http.NewRequest("POST", url, nil)
 	if err != nil {
 		return err
