@@ -2,6 +2,7 @@ package rsync
 
 import (
 	"testing"
+	"time"
 )
 
 func Test_MultiRSW(t *testing.T) {
@@ -99,4 +100,127 @@ func Test_MultiRSW_Upgrade(t *testing.T) {
 		t.Fatalf("Expected error when upgrading with an active writer, got none")
 	}
 	r.EndWrite()
+}
+
+func Test_MultiRSW_BeginWriteBlocking_NoContention(t *testing.T) {
+	r := NewMultiRSW()
+	done := make(chan struct{})
+
+	// Should acquire immediately when nothing is active.
+	if err := r.BeginWriteBlocking("owner1", done); err != nil {
+		t.Fatalf("BeginWriteBlocking failed with no contention: %v", err)
+	}
+	r.EndWrite()
+}
+
+func Test_MultiRSW_BeginWriteBlocking_WaitsForReaders(t *testing.T) {
+	r := NewMultiRSW()
+	done := make(chan struct{})
+
+	// Acquire two read locks.
+	if err := r.BeginRead(); err != nil {
+		t.Fatalf("BeginRead failed: %v", err)
+	}
+	if err := r.BeginRead(); err != nil {
+		t.Fatalf("BeginRead failed: %v", err)
+	}
+
+	// BeginWriteBlocking should block until readers drain.
+	acquired := make(chan struct{})
+	go func() {
+		if err := r.BeginWriteBlocking("owner1", done); err != nil {
+			t.Errorf("BeginWriteBlocking failed: %v", err)
+			return
+		}
+		close(acquired)
+	}()
+
+	// Should not have acquired yet.
+	select {
+	case <-acquired:
+		t.Fatal("Write acquired while readers active")
+	case <-time.After(100 * time.Millisecond):
+	}
+
+	// Release one reader — still blocked.
+	r.EndRead()
+	select {
+	case <-acquired:
+		t.Fatal("Write acquired with 1 reader remaining")
+	case <-time.After(100 * time.Millisecond):
+	}
+
+	// Release the last reader — should acquire.
+	r.EndRead()
+	select {
+	case <-acquired:
+	case <-time.After(time.Second):
+		t.Fatal("BeginWriteBlocking did not acquire after all readers exited")
+	}
+	r.EndWrite()
+}
+
+func Test_MultiRSW_BeginWriteBlocking_WaitsForWriter(t *testing.T) {
+	r := NewMultiRSW()
+	done := make(chan struct{})
+
+	if err := r.BeginWrite("owner1"); err != nil {
+		t.Fatalf("BeginWrite failed: %v", err)
+	}
+
+	acquired := make(chan struct{})
+	go func() {
+		if err := r.BeginWriteBlocking("owner2", done); err != nil {
+			t.Errorf("BeginWriteBlocking failed: %v", err)
+			return
+		}
+		close(acquired)
+	}()
+
+	// Should not have acquired yet.
+	select {
+	case <-acquired:
+		t.Fatal("Write acquired while another writer active")
+	case <-time.After(100 * time.Millisecond):
+	}
+
+	// Release the writer — blocking call should acquire.
+	r.EndWrite()
+	select {
+	case <-acquired:
+	case <-time.After(time.Second):
+		t.Fatal("BeginWriteBlocking did not acquire after writer released")
+	}
+	r.EndWrite()
+}
+
+func Test_MultiRSW_BeginWriteBlocking_Cancelled(t *testing.T) {
+	r := NewMultiRSW()
+	done := make(chan struct{})
+
+	// Hold a read lock so the blocking write can't proceed.
+	if err := r.BeginRead(); err != nil {
+		t.Fatalf("BeginRead failed: %v", err)
+	}
+
+	errCh := make(chan error, 1)
+	go func() {
+		errCh <- r.BeginWriteBlocking("owner1", done)
+	}()
+
+	// Give it a moment to start waiting.
+	time.Sleep(100 * time.Millisecond)
+
+	// Cancel via done channel.
+	close(done)
+	select {
+	case err := <-errCh:
+		if err == nil {
+			t.Fatal("Expected error from cancelled BeginWriteBlocking")
+		}
+	case <-time.After(time.Second):
+		t.Fatal("BeginWriteBlocking did not return after cancellation")
+	}
+
+	r.EndRead()
 }

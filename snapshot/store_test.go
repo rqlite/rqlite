@@ -9,6 +9,7 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+	"time"
 
 	"github.com/hashicorp/raft"
 	"github.com/rqlite/rqlite/v10/db"
@@ -21,6 +22,7 @@ func Test_NewStore(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to create new store: %v", err)
 	}
+	defer store.Close()
 
 	if store.Dir() != dir {
 		t.Fatalf("Expected store directory to be %s, got %s", dir, store.Dir())
@@ -34,6 +36,7 @@ func Test_NewStore(t *testing.T) {
 func Test_StoreEmpty(t *testing.T) {
 	dir := t.TempDir()
 	store, _ := NewStore(dir)
+	defer store.Close()
 
 	snaps, err := store.ListAll()
 	if err != nil {
@@ -81,6 +84,7 @@ func Test_StoreCreateCancel(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to create new store: %v", err)
 	}
+	defer store.Close()
 
 	sink, err := store.Create(1, 2, 3, makeTestConfiguration("1", "localhost:1"), 1, nil)
 	if err != nil {
@@ -127,6 +131,7 @@ func Test_Store_CreateIncrementalFirst_Fail(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to create new store: %v", err)
 	}
+	defer store.Close()
 
 	sink := NewSink(store.Dir(), makeRaftMeta("1234", 45, 1, 40), store)
 	if sink == nil {
@@ -164,6 +169,7 @@ func Test_Store_CreateThenList(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to create new store: %v", err)
 	}
+	defer store.Close()
 
 	snaps, err := store.ListAll()
 	if err != nil {
@@ -212,6 +218,7 @@ func Test_Store_OpenThenCreate(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to create new store: %v", err)
 	}
+	defer store.Close()
 
 	createSnapshotInStore(t, store, "2-1017-1704807719996", 1017, 2, 1, "testdata/db-and-wals/backup.db")
 
@@ -236,6 +243,7 @@ func Test_Store_List(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to create new store: %v", err)
 	}
+	defer store.Close()
 
 	// List on empty store should return empty slice.
 	snaps, err := store.List()
@@ -283,11 +291,13 @@ func Test_Store_EndToEndCycle(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to create source store: %v", err)
 	}
+	defer store0.Close()
 
 	store1, err := NewStore(t.TempDir())
 	if err != nil {
 		t.Fatalf("Failed to create source store: %v", err)
 	}
+	defer store1.Close()
 
 	id1 := "2-100-1704807719996"
 	id2 := "2-200-1704807800000"
@@ -600,6 +610,7 @@ func Test_Store_Reap(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to create new store: %v", err)
 	}
+	defer store.Close()
 
 	snaps := mustListSnapshots(t, store)
 	if len(snaps) != 0 {
@@ -824,6 +835,7 @@ func Test_Store_ReapBlocked(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to create new store: %v", err)
 	}
+	defer store.Close()
 
 	createSnapshotInStore(t, store, "2-1017-1704807719996", 1017, 2, 1, "testdata/db-and-wals/backup.db")
 
@@ -846,6 +858,7 @@ func Test_Store_OpenNoopSnapshot(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to create new store: %v", err)
 	}
+	defer store.Close()
 
 	fullID := "2-1017-1704807719996"
 	noopID := "2-1131-1704807720976"
@@ -890,6 +903,7 @@ func Test_Store_OpenNoopSnapshot_WithIncremental(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to create new store: %v", err)
 	}
+	defer store.Close()
 
 	fullID := "2-1017-1704807719996"
 	incID := "2-1131-1704807720976"
@@ -940,6 +954,7 @@ func Test_Store_Reap_WithNoops(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to create new store: %v", err)
 	}
+	defer store.Close()
 
 	// Create a full snapshot, then an incremental, then a noop.
 	createSnapshotInStore(t, store, "2-1017-1704807719996", 1017, 2, 1, "testdata/db-and-wals/backup.db")
@@ -998,6 +1013,7 @@ func Test_Store_Reap_OnlyNoops(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to create new store: %v", err)
 	}
+	defer store.Close()
 
 	// Create a full snapshot followed by only noop snapshots.
 	id1, id2, id3 := "2-1017-1704807719996", "2-1131-1704807720976", "2-1200-1704807721976"
@@ -1060,6 +1076,7 @@ func Test_Store_Check_RemovesTmpDirs(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to create store: %v", err)
 	}
+	defer store.Close()
 
 	// Create a real snapshot.
 	createSnapshotInStore(t, store, "2-1017-1704807719996", 1017, 2, 1, "testdata/db-and-wals/backup.db")
@@ -1081,6 +1098,7 @@ func Test_Store_Check_RemovesTmpDirs(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to re-open store: %v", err)
 	}
+	defer store2.Close()
 
 	// The .tmp directory should be gone.
 	if pathExists(tmpDir) {
@@ -1099,6 +1117,7 @@ func Test_Store_Check_ResumesReapPlan(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to create store: %v", err)
 	}
+	defer store.Close()
 
 	// Create a full snapshot and an incremental snapshot.
 	createSnapshotInStore(t, store, "2-1017-1704807719996", 1017, 2, 1, "testdata/db-and-wals/backup.db")
@@ -1127,6 +1146,7 @@ func Test_Store_Check_ResumesReapPlan(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to create store2: %v", err)
 	}
+	defer store2.Close()
 	createSnapshotInStore(t, store2, "2-1017-1704807719996", 1017, 2, 1, "testdata/db-and-wals/backup.db")
 	createSnapshotInStore(t, store2, "2-1131-1704807720976", 1131, 2, 1, "", "testdata/db-and-wals/wal-00")
 	if store2.Len() != 2 {
@@ -1167,6 +1187,7 @@ func Test_Store_Check_ResumesReapPlan(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to re-open store2: %v", err)
 	}
+	defer store3.Close()
 
 	// The plan file should be gone.
 	if fileExists(planPath) {
@@ -1197,6 +1218,113 @@ func Test_Store_Check_ResumesReapPlan(t *testing.T) {
 	rows := mustQueryDB(t, dbPath, "SELECT COUNT(*) FROM foo")
 	if exp, got := `[{"columns":["COUNT(*)"],"types":["integer"],"values":[[1]]}]`, rows; exp != got {
 		t.Fatalf("unexpected query result: exp %s got %s", exp, got)
+	}
+}
+
+func Test_Store_ReaperGoroutine(t *testing.T) {
+	dir := t.TempDir()
+	store, err := NewStore(dir)
+	if err != nil {
+		t.Fatalf("Failed to create new store: %v", err)
+	}
+	defer store.Close()
+
+	store.LogReaping = true
+	store.SetReapThreshold(2)
+
+	// Create a full snapshot and an incremental snapshot (count=2, threshold=2).
+	createSnapshotInStore(t, store, "2-1017-1704807719996", 1017, 2, 1, "testdata/db-and-wals/backup.db")
+	createSnapshotInStore(t, store, "2-1131-1704807720976", 1131, 2, 1, "", "testdata/db-and-wals/wal-00")
+
+	if exp, got := 2, store.Len(); exp != got {
+		t.Fatalf("Expected %d snapshots, got %d", exp, got)
+	}
+
+	// Signal the reaper and wait for it to reap.
+	store.signalReap()
+
+	// Poll until reaping completes (the goroutine runs asynchronously).
+	deadline := time.Now().Add(5 * time.Second)
+	for time.Now().Before(deadline) {
+		if store.Len() == 1 {
+			return
+		}
+		time.Sleep(50 * time.Millisecond)
+	}
+	t.Fatalf("Expected 1 snapshot after auto-reap, got %d", store.Len())
+}
+
+func Test_Store_ReaperBlockingWrite(t *testing.T) {
+	dir := t.TempDir()
+	store, err := NewStore(dir)
+	if err != nil {
+		t.Fatalf("Failed to create new store: %v", err)
+	}
+	defer store.Close()
+
+	store.LogReaping = true
+	store.SetReapThreshold(2)
+
+	// Create 2 snapshots: 1 full + 1 incremental (meets threshold).
+	createSnapshotInStore(t, store, "2-100-1704807719996", 100, 2, 1, "testdata/db-and-wals/backup.db")
+	createSnapshotInStore(t, store, "2-200-1704807720976", 200, 2, 1, "", "testdata/db-and-wals/wal-00")
+
+	if exp, got := 2, store.snapshotCount(); exp != got {
+		t.Fatalf("Expected %d snapshots, got %d", exp, got)
+	}
+
+	// Open a snapshot to hold a read lock (simulating a slow follower).
+	_, rc, err := store.Open("2-200-1704807720976")
+	if err != nil {
+		t.Fatalf("Failed to open snapshot: %v", err)
+	}
+
+	// Signal the reaper — the blocking write should wait for the reader.
+	store.signalReap()
+
+	// Give the reaper goroutine a moment to start waiting.
+	time.Sleep(200 * time.Millisecond)
+
+	// Reaping should not have completed yet (reader still held).
+	if store.snapshotCount() != 2 {
+		t.Fatal("Reap completed while reader still active")
+	}
+
+	// Close the held snapshot — this releases the read lock, unblocking the reaper.
+	rc.Close()
+
+	// Wait for reaping to complete.
+	deadline := time.Now().Add(5 * time.Second)
+	for time.Now().Before(deadline) {
+		if store.Len() == 1 {
+			break
+		}
+		time.Sleep(50 * time.Millisecond)
+	}
+
+	if exp, got := 1, store.Len(); exp != got {
+		t.Fatalf("Expected %d snapshot after reap, got %d", exp, got)
+	}
+}
+
+func Test_Store_Close(t *testing.T) {
+	dir := t.TempDir()
+	store, err := NewStore(dir)
+	if err != nil {
+		t.Fatalf("Failed to create new store: %v", err)
+	}
+
+	// Close should return without hanging.
+	done := make(chan struct{})
+	go func() {
+		store.Close()
+		close(done)
+	}()
+
+	select {
+	case <-done:
+	case <-time.After(5 * time.Second):
+		t.Fatal("Store.Close() did not return in time")
 	}
 }
 

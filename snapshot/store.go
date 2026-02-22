@@ -89,7 +89,7 @@ func NewLockingSink(sink raft.SnapshotSink, str *Store) *LockingSink {
 }
 
 // Close closes the sink, unlocking the Store for creation of a new sink.
-// After a successful close, the Store is checked to see if reaping is needed.
+// After a successful close, the reaper goroutine is signaled.
 func (s *LockingSink) Close() error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -101,7 +101,7 @@ func (s *LockingSink) Close() error {
 	err := s.SnapshotSink.Close()
 	s.str.mrsw.EndRead()
 	if err == nil {
-		s.str.reapIfNeeded()
+		s.str.signalReap()
 	}
 	return err
 }
@@ -162,9 +162,13 @@ type Store struct {
 	// Multi-reader single-writer lock for the Store, which must be held
 	// if snaphots are deleted i.e. repead. Simply creating or reading
 	// a snapshot requires only a read lock.
-	mrsw          rsync.MultiRSW
+	mrsw          *rsync.MultiRSW
 	reapDisabled  bool
 	reapThreshold int
+
+	reapSignal chan struct{} // buffered(1), signaled by LockingSink.Close()
+	done       chan struct{} // closed to stop the reaper goroutine
+	wg         sync.WaitGroup
 
 	LogReaping bool
 }
@@ -179,8 +183,10 @@ func NewStore(dir string) (*Store, error) {
 		dir:            dir,
 		fullNeededPath: filepath.Join(dir, fullNeededFile),
 		catalog:        &SnapshotCatalog{},
-		mrsw:           *rsync.NewMultiRSW(),
+		mrsw:           rsync.NewMultiRSW(),
 		reapThreshold:  defaultReapThreshold,
+		reapSignal:     make(chan struct{}, 1),
+		done:           make(chan struct{}),
 		logger:         log.New(os.Stderr, "[snapshot-store] ", log.LstdFlags),
 	}
 	str.logger.Printf("store initialized using %s", dir)
@@ -194,6 +200,10 @@ func NewStore(dir string) (*Store, error) {
 			return nil, fmt.Errorf("check failed: %s", err)
 		}
 	}
+
+	str.wg.Add(1)
+	go str.reapLoop()
+
 	return str, nil
 }
 
@@ -383,7 +393,21 @@ func (s *Store) Reap() (int, int, error) {
 		return 0, 0, err
 	}
 	defer s.mrsw.EndWrite()
+	return s.reapLocked()
+}
 
+// reapBlocking is like Reap but blocks until the write lock can be acquired.
+// The done channel can be used to cancel the wait.
+func (s *Store) reapBlocking() (int, int, error) {
+	if err := s.mrsw.BeginWriteBlocking("reap", s.done); err != nil {
+		return 0, 0, err
+	}
+	defer s.mrsw.EndWrite()
+	return s.reapLocked()
+}
+
+// reapLocked performs the actual reap. The caller must hold the write lock.
+func (s *Store) reapLocked() (int, int, error) {
 	planPath := filepath.Join(s.dir, reapPlanFile)
 
 	// Scan store.
@@ -501,28 +525,73 @@ func (s *Store) executeReapPlan(p *plan.Plan, planPath string) (int, int, error)
 	return p.NReaped, p.NCheckpointed, nil
 }
 
-// reapIfNeeded checks the snapshot count and triggers a reap if the
-// threshold has been reached. It is called after a snapshot is
-// successfully persisted.
-func (s *Store) reapIfNeeded() {
-	if s.reapDisabled {
-		return
-	}
-	if s.Len() < s.reapThreshold {
-		return
-	}
+// Close shuts down the reaper goroutine and waits for it to exit.
+func (s *Store) Close() error {
+	close(s.done)
+	s.wg.Wait()
+	return nil
+}
 
-	n, c, err := s.Reap()
+// signalReap sends a non-blocking signal to the reaper goroutine.
+func (s *Store) signalReap() {
+	select {
+	case s.reapSignal <- struct{}{}:
+	default:
+	}
+}
+
+// snapshotCount returns the number of non-tmp snapshot subdirectories.
+// This is a lightweight heuristic that does not require any lock.
+func (s *Store) snapshotCount() int {
+	entries, err := os.ReadDir(s.dir)
 	if err != nil {
-		var mrsw *rsync.ErrMRSWConflict
-		if errors.As(err, &mrsw) {
-			s.logger.Printf("reap skipped, store is busy: %s", err)
+		return 0
+	}
+	n := 0
+	for _, e := range entries {
+		if e.IsDir() && !isTmpName(e.Name()) {
+			n++
+		}
+	}
+	return n
+}
+
+// reapLoop is the reaper goroutine. It waits for signals from LockingSink.Close()
+// and reaps snapshots when the count exceeds the threshold. It uses a blocking
+// write lock acquisition so it will wait for active readers to finish rather
+// than failing.
+func (s *Store) reapLoop() {
+	defer s.wg.Done()
+	for {
+		select {
+		case <-s.reapSignal:
+		case <-s.done:
 			return
 		}
-		s.logger.Fatalf("reap failed: %s", err)
-	}
-	if s.LogReaping {
-		s.logger.Printf("auto-reap complete: %d snapshots reaped, %d WALs checkpointed", n, c)
+
+		if s.reapDisabled {
+			continue
+		}
+
+		count := s.snapshotCount()
+		if count < s.reapThreshold {
+			continue
+		}
+
+		n, c, err := s.reapBlocking()
+		if err != nil {
+			select {
+			case <-s.done:
+				return // shutting down
+			default:
+			}
+			s.logger.Printf("reap failed: %s", err)
+			stats.Add(snapshotsReapedFail, 1)
+			continue
+		}
+		if s.LogReaping {
+			s.logger.Printf("auto-reap complete: %d snapshots reaped, %d WALs checkpointed", n, c)
+		}
 	}
 }
 
