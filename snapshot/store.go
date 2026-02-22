@@ -361,6 +361,13 @@ func (s *Store) Open(id string) (raftMeta *raft.SnapshotMeta, rc io.ReadCloser, 
 	return meta, NewLockingStreamer(streamer, s), nil
 }
 
+// Close shuts down the reaper goroutine and waits for it to exit.
+func (s *Store) Close() error {
+	close(s.reapDoneCh)
+	s.wg.Wait()
+	return nil
+}
+
 // Reap reaps snapshots. Reaping is the process of deleting old snapshots that are no
 // longer needed. Reaping is a destructive operation, and is non-reversible. If it
 // is interrupted, it must be completed later before the snapshot store is usable
@@ -515,13 +522,6 @@ func (s *Store) executeReapPlan(p *plan.Plan, planPath string) (int, int, error)
 	return p.NReaped, p.NCheckpointed, nil
 }
 
-// Close shuts down the reaper goroutine and waits for it to exit.
-func (s *Store) Close() error {
-	close(s.reapDoneCh)
-	s.wg.Wait()
-	return nil
-}
-
 // signalReap sends a non-blocking signal to the reaper goroutine.
 func (s *Store) signalReap() {
 	select {
@@ -551,7 +551,6 @@ func (s *Store) snapshotCount() int {
 // write lock acquisition so it will wait for active readers to finish rather
 // than failing.
 func (s *Store) reapLoop() {
-	defer s.wg.Done()
 	for {
 		select {
 		case <-s.reapCh:
