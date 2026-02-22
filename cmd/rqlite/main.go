@@ -314,8 +314,8 @@ func main() {
 					trailingLogsStr := strings.TrimSpace(input[index+1:])
 					if trailingLogsStr != "" {
 						trailingLogs, err = strconv.Atoi(trailingLogsStr)
-						if err != nil {
-							err = fmt.Errorf("invalid trailing logs value: %v", err)
+						if err != nil || trailingLogs < 0 {
+							err = fmt.Errorf("invalid trailing logs value: %s", trailingLogsStr)
 							break
 						}
 					}
