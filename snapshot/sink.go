@@ -226,7 +226,7 @@ func (s *Sink) Close() error {
 			if err != nil {
 				return fmt.Errorf("comparing CRC32 sum for %s: %w", srcPath, err)
 			}
-			if ok {
+			if !ok {
 				return fmt.Errorf("CRC32 sum mismatch for %s", srcPath)
 			}
 

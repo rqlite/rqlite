@@ -170,6 +170,85 @@ func Test_ReadCRC32SumFileInvalid(t *testing.T) {
 	}
 }
 
+func Test_CompareCRC32SumFileMatch(t *testing.T) {
+	dir := t.TempDir()
+	dataPath := filepath.Join(dir, "data.bin")
+	crcPath := filepath.Join(dir, "data.bin.crc32")
+
+	if err := os.WriteFile(dataPath, []byte("hello world"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	sum, err := CRC32(dataPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := WriteCRC32SumFile(crcPath, sum); err != nil {
+		t.Fatal(err)
+	}
+
+	ok, err := CompareCRC32SumFile(dataPath, crcPath)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if !ok {
+		t.Fatal("expected checksums to match, got mismatch")
+	}
+}
+
+func Test_CompareCRC32SumFileMismatch(t *testing.T) {
+	dir := t.TempDir()
+	dataPath := filepath.Join(dir, "data.bin")
+	crcPath := filepath.Join(dir, "data.bin.crc32")
+
+	if err := os.WriteFile(dataPath, []byte("hello world"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	// Write a wrong checksum.
+	if err := WriteCRC32SumFile(crcPath, 0xdeadbeef); err != nil {
+		t.Fatal(err)
+	}
+
+	ok, err := CompareCRC32SumFile(dataPath, crcPath)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if ok {
+		t.Fatal("expected checksums to mismatch, got match")
+	}
+}
+
+func Test_CompareCRC32SumFileMissingCRC(t *testing.T) {
+	dir := t.TempDir()
+	dataPath := filepath.Join(dir, "data.bin")
+	crcPath := filepath.Join(dir, "data.bin.crc32")
+
+	if err := os.WriteFile(dataPath, []byte("hello world"), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	// CRC file does not exist.
+	_, err := CompareCRC32SumFile(dataPath, crcPath)
+	if err == nil {
+		t.Fatal("expected error for missing CRC file, got nil")
+	}
+}
+
+func Test_CompareCRC32SumFileMissingData(t *testing.T) {
+	dir := t.TempDir()
+	dataPath := filepath.Join(dir, "data.bin")
+	crcPath := filepath.Join(dir, "data.bin.crc32")
+
+	// Write a valid CRC file but no data file.
+	if err := WriteCRC32SumFile(crcPath, 0x12345678); err != nil {
+		t.Fatal(err)
+	}
+
+	_, err := CompareCRC32SumFile(dataPath, crcPath)
+	if err == nil {
+		t.Fatal("expected error for missing data file, got nil")
+	}
+}
+
 // mustWriteTempFile writes the given bytes to a temporary file, and returns the
 // path to the file. If there is an error, it panics. The file will be automatically
 // deleted when the test ends.
