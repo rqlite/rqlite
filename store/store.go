@@ -291,6 +291,9 @@ type SnapshotStore interface {
 
 	// Stats returns stats about the Snapshot Store.
 	Stats() (map[string]any, error)
+
+	// Close shuts down background goroutines in the snapshot store.
+	Close() error
 }
 
 // ClusterState defines the possible Raft states the current node can be in
@@ -964,6 +967,11 @@ func (s *Store) Close(wait bool) (retErr error) {
 		}
 	}
 	if err := s.raftTn.Close(); err != nil {
+		return err
+	}
+
+	// Stop the snapshot store reaper goroutine now that Raft is down.
+	if err := s.snapshotStore.Close(); err != nil {
 		return err
 	}
 

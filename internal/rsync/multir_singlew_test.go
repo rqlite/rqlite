@@ -2,6 +2,7 @@ package rsync
 
 import (
 	"testing"
+	"time"
 )
 
 func Test_MultiRSW(t *testing.T) {
@@ -97,6 +98,87 @@ func Test_MultiRSW_Upgrade(t *testing.T) {
 	}
 	if err := r.UpgradeToWriter("owner9"); err == nil {
 		t.Fatalf("Expected error when upgrading with an active writer, got none")
+	}
+	r.EndWrite()
+}
+
+func Test_MultiRSW_BeginWriteBlocking_NoContention(t *testing.T) {
+	r := NewMultiRSW()
+
+	// Should acquire immediately when nothing is active.
+	r.BeginWriteBlocking("owner1")
+	r.EndWrite()
+}
+
+func Test_MultiRSW_BeginWriteBlocking_WaitsForReaders(t *testing.T) {
+	r := NewMultiRSW()
+
+	// Acquire two read locks.
+	if err := r.BeginRead(); err != nil {
+		t.Fatalf("BeginRead failed: %v", err)
+	}
+	if err := r.BeginRead(); err != nil {
+		t.Fatalf("BeginRead failed: %v", err)
+	}
+
+	// BeginWriteBlocking should block until readers drain.
+	acquired := make(chan struct{})
+	go func() {
+		r.BeginWriteBlocking("owner1")
+		close(acquired)
+	}()
+
+	// Should not have acquired yet.
+	select {
+	case <-acquired:
+		t.Fatal("Write acquired while readers active")
+	case <-time.After(100 * time.Millisecond):
+	}
+
+	// Release one reader — still blocked.
+	r.EndRead()
+	select {
+	case <-acquired:
+		t.Fatal("Write acquired with 1 reader remaining")
+	case <-time.After(100 * time.Millisecond):
+	}
+
+	// Release the last reader — should acquire.
+	r.EndRead()
+	select {
+	case <-acquired:
+	case <-time.After(time.Second):
+		t.Fatal("BeginWriteBlocking did not acquire after all readers exited")
+	}
+	r.EndWrite()
+}
+
+func Test_MultiRSW_BeginWriteBlocking_WaitsForWriter(t *testing.T) {
+	r := NewMultiRSW()
+
+	if err := r.BeginWrite("owner1"); err != nil {
+		t.Fatalf("BeginWrite failed: %v", err)
+	}
+
+	acquired := make(chan struct{})
+	go func() {
+		r.BeginWriteBlocking("owner2")
+		close(acquired)
+	}()
+
+	// Should not have acquired yet.
+	select {
+	case <-acquired:
+		t.Fatal("Write acquired while another writer active")
+	case <-time.After(100 * time.Millisecond):
+	}
+
+	// Release the writer — blocking call should acquire.
+	r.EndWrite()
+	select {
+	case <-acquired:
+	case <-time.After(time.Second):
+		t.Fatal("BeginWriteBlocking did not acquire after writer released")
 	}
 	r.EndWrite()
 }
