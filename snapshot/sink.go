@@ -222,7 +222,9 @@ func (s *Sink) Close() error {
 			if !db.IsValidSQLiteWALFile(srcPath) {
 				return fmt.Errorf("%s is not a valid SQLite WAL file", srcPath)
 			}
-			ok, err := rsum.CompareCRC32SumFile(srcPath, srcPath+crcSuffix)
+
+			srcCRCPath := srcPath + crcSuffix
+			ok, err := rsum.CompareCRC32SumFile(srcPath, srcCRCPath)
 			if err != nil {
 				return fmt.Errorf("comparing CRC32 sum for %s: %w", srcPath, err)
 			}
@@ -235,7 +237,7 @@ func (s *Sink) Close() error {
 			if err := os.Rename(srcPath, dstPath); err != nil {
 				return err
 			}
-			if err := os.Rename(srcPath+crcSuffix, dstPath+crcSuffix); err != nil {
+			if err := os.Rename(srcCRCPath, dstPath+crcSuffix); err != nil {
 				return err
 			}
 		}
