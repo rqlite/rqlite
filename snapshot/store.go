@@ -21,6 +21,7 @@ const (
 	dbfileName     = "data.db"
 	walfileName    = "data.wal" // Used by the streaming IncrementalSink only.
 	walfileSuffix  = ".wal"
+	crcSuffix      = ".crc32"
 	noopfileName   = "data.noop"
 	metaFileName   = "meta.json"
 	tmpSuffix      = ".tmp"

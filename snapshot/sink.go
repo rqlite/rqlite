@@ -12,6 +12,7 @@ import (
 
 	"github.com/hashicorp/raft"
 	"github.com/rqlite/rqlite/v10/db"
+	"github.com/rqlite/rqlite/v10/internal/rsum"
 	"github.com/rqlite/rqlite/v10/snapshot/proto"
 	pb "google.golang.org/protobuf/proto"
 )
@@ -218,17 +219,25 @@ func (s *Sink) Close() error {
 		}
 
 		for _, srcPath := range walMatches {
+			if !db.IsValidSQLiteWALFile(srcPath) {
+				return fmt.Errorf("%s is not a valid SQLite WAL file", srcPath)
+			}
+			ok, err := rsum.CompareCRC32SumFile(srcPath, srcPath+crcSuffix)
+			if err != nil {
+				return fmt.Errorf("comparing CRC32 sum for %s: %w", srcPath, err)
+			}
+			if ok {
+				return fmt.Errorf("CRC32 sum mismatch for %s", srcPath)
+			}
+
 			name := filepath.Base(srcPath)
 			dstPath := filepath.Join(s.snapTmpDirPath, name)
 			if err := os.Rename(srcPath, dstPath); err != nil {
 				return err
 			}
-			if !db.IsValidSQLiteWALFile(dstPath) {
-				return fmt.Errorf("%s is not a valid SQLite WAL file", name)
-			}
 		}
 
-		if err := os.Remove(movedDir); err != nil {
+		if err := os.RemoveAll(movedDir); err != nil {
 			return err
 		}
 	} else {

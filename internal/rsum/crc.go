@@ -82,3 +82,19 @@ func ReadCRC32SumFile(path string) (uint32, error) {
 	}
 	return sum, nil
 }
+
+// CompareCRC32SumFile calculates the CRC32 checksum of the file at dataPath and
+// compares it to the expected checksum read from crcPath. Returns true if they
+// match, false if they don't, or an error if there was a problem reading the
+// files or calculating the checksum.
+func CompareCRC32SumFile(dataPath, crcPath string) (bool, error) {
+	expectedSum, err := ReadCRC32SumFile(crcPath)
+	if err != nil {
+		return false, fmt.Errorf("reading CRC32 sum file: %w", err)
+	}
+	actualSum, err := CRC32(dataPath)
+	if err != nil {
+		return false, fmt.Errorf("calculating CRC32 of data file: %w", err)
+	}
+	return expectedSum == actualSum, nil
+}

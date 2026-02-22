@@ -116,6 +116,7 @@ var (
 )
 
 const (
+	crcSuffix                = ".crc32"
 	cleanSnapshotName        = "clean_snapshot"
 	snapshotsDirName         = "wsnapshots"
 	walStagingDirName        = "wal-staging"
@@ -2570,7 +2571,7 @@ func (s *Store) fsmSnapshot() (fSnap raft.FSMSnapshot, retErr error) {
 	}()
 
 	var fsmSnapshot raft.FSMSnapshot
-	var walTmpFD *os.File
+	var compactWALFd *os.File
 	finalizer := s.createSnapshotFingerprint
 	if fullNeeded {
 		chkStartTime := time.Now()
@@ -2613,29 +2614,34 @@ func (s *Store) fsmSnapshot() (fSnap raft.FSMSnapshot, retErr error) {
 			if err != nil {
 				return nil, err
 			}
-			walTmpPath := filepath.Join(s.walStagingDir, fmt.Sprintf("%024d.wal", time.Now().UnixNano()))
-			walTmpFD, err = os.Create(walTmpPath)
+			compactWALPath := filepath.Join(s.walStagingDir, fmt.Sprintf("%024d.wal", time.Now().UnixNano()))
+			compactWALFd, err = os.Create(compactWALPath)
 			if err != nil {
 				return nil, err
 			}
-			defer walTmpFD.Close()
+			defer compactWALFd.Close()
 			walWriter, err := wal.NewWriter(scanner)
 			if err != nil {
-				removeFileOrFatal(walTmpFD)
+				removeFileOrFatal(compactWALFd)
 				return nil, err
 			}
-			walSzPost, err := walWriter.WriteTo(walTmpFD)
+			crcCompactWAL := rsum.NewCRC32Writer(compactWALFd)
+			walSzPost, err := walWriter.WriteTo(crcCompactWAL)
 			if err != nil {
-				removeFileOrFatal(walTmpFD)
+				removeFileOrFatal(compactWALFd)
 				return nil, err
+			}
+			if err := rsum.WriteCRC32SumFile(compactWALPath+crcSuffix, crcCompactWAL.Sum32()); err != nil {
+				removeFileOrFatal(compactWALFd)
+				return nil, fmt.Errorf("failed to write CRC32 sum file: %w", err)
 			}
 			stats.Get(snapshotCreateWALCompactDuration).(*expvar.Int).Set(time.Since(compactStartTime).Milliseconds())
-			if err := walTmpFD.Sync(); err != nil {
-				removeFileOrFatal(walTmpFD)
+			if err := compactWALFd.Sync(); err != nil {
+				removeFileOrFatal(compactWALFd)
 				return nil, fmt.Errorf("failed to sync compacted WAL file: %w", err)
 			}
 			if err := syncDirMaybe(s.walStagingDir); err != nil {
-				removeFileOrFatal(walTmpFD)
+				removeFileOrFatal(compactWALFd)
 				return nil, fmt.Errorf("failed to sync WAL staging directory: %w", err)
 			}
 
@@ -2644,11 +2650,12 @@ func (s *Store) fsmSnapshot() (fSnap raft.FSMSnapshot, retErr error) {
 			// changes since this snapshot.
 			walSzPre, err := fileSize(s.walPath)
 			if err != nil {
+				removeFileOrFatal(compactWALFd)
 				return nil, err
 			}
 			chkTStartTime := time.Now()
 			if err := s.checkpointWAL(); err != nil {
-				removeFileOrFatal(walTmpFD)
+				removeFileOrFatal(compactWALFd)
 				stats.Add(numWALCheckpointTruncateFailed, 1)
 				return nil, fmt.Errorf("incremental snapshot can't complete due to WAL checkpoint error (will retry): %s",
 					err.Error())
