@@ -67,6 +67,13 @@ func removeDirSync(dir string) error {
 
 // syncDirParentMaybe syncs the parent directory of the given
 // directory, but only on non-Windows platforms.
+//
+// A note on the syncDir* functions. This is the same approach
+// that Hashicorp Raft uses in its implementation. Since the
+// os.Rename() is atomic, the lack of directory-level sync
+// means the rename may be rolled back after a power loss on
+// Windows. This is OK. The main thing is the rename will
+// have either happened or it will not have.
 func syncDirParentMaybe(dir string) error {
 	if runtime.GOOS == "windows" {
 		return nil
