@@ -166,8 +166,8 @@ type Store struct {
 	reapDisabled  bool
 	reapThreshold int
 
-	reapSignal chan struct{} // buffered(1), signaled by LockingSink.Close()
-	done       chan struct{} // closed to stop the reaper goroutine
+	reapCh     chan struct{}
+	reapDoneCh chan struct{}
 	wg         sync.WaitGroup
 
 	LogReaping bool
@@ -185,8 +185,8 @@ func NewStore(dir string) (*Store, error) {
 		catalog:        &SnapshotCatalog{},
 		mrsw:           rsync.NewMultiRSW(),
 		reapThreshold:  defaultReapThreshold,
-		reapSignal:     make(chan struct{}, 1),
-		done:           make(chan struct{}),
+		reapCh:         make(chan struct{}, 1),
+		reapDoneCh:     make(chan struct{}),
 		logger:         log.New(os.Stderr, "[snapshot-store] ", log.LstdFlags),
 	}
 	str.logger.Printf("store initialized using %s", dir)
@@ -201,8 +201,8 @@ func NewStore(dir string) (*Store, error) {
 		}
 	}
 
-	str.wg.Add(1)
-	go str.reapLoop()
+	// Kick off the reaper goroutine.
+	str.wg.Go(str.reapLoop)
 
 	return str, nil
 }
@@ -361,6 +361,13 @@ func (s *Store) Open(id string) (raftMeta *raft.SnapshotMeta, rc io.ReadCloser, 
 	return meta, NewLockingStreamer(streamer, s), nil
 }
 
+// Close shuts down the reaper goroutine and waits for it to exit.
+func (s *Store) Close() error {
+	close(s.reapDoneCh)
+	s.wg.Wait()
+	return nil
+}
+
 // Reap reaps snapshots. Reaping is the process of deleting old snapshots that are no
 // longer needed. Reaping is a destructive operation, and is non-reversible. If it
 // is interrupted, it must be completed later before the snapshot store is usable
@@ -393,21 +400,11 @@ func (s *Store) Reap() (int, int, error) {
 		return 0, 0, err
 	}
 	defer s.mrsw.EndWrite()
-	return s.reapLocked()
+	return s.reap()
 }
 
-// reapBlocking is like Reap but blocks until the write lock can be acquired.
-// The done channel can be used to cancel the wait.
-func (s *Store) reapBlocking() (int, int, error) {
-	if err := s.mrsw.BeginWriteBlocking("reap", s.done); err != nil {
-		return 0, 0, err
-	}
-	defer s.mrsw.EndWrite()
-	return s.reapLocked()
-}
-
-// reapLocked performs the actual reap. The caller must hold the write lock.
-func (s *Store) reapLocked() (int, int, error) {
+// reap performs the actual reap. The caller must hold the write lock.
+func (s *Store) reap() (int, int, error) {
 	planPath := filepath.Join(s.dir, reapPlanFile)
 
 	// Scan store.
@@ -525,17 +522,10 @@ func (s *Store) executeReapPlan(p *plan.Plan, planPath string) (int, int, error)
 	return p.NReaped, p.NCheckpointed, nil
 }
 
-// Close shuts down the reaper goroutine and waits for it to exit.
-func (s *Store) Close() error {
-	close(s.done)
-	s.wg.Wait()
-	return nil
-}
-
 // signalReap sends a non-blocking signal to the reaper goroutine.
 func (s *Store) signalReap() {
 	select {
-	case s.reapSignal <- struct{}{}:
+	case s.reapCh <- struct{}{}:
 	default:
 	}
 }
@@ -561,11 +551,10 @@ func (s *Store) snapshotCount() int {
 // write lock acquisition so it will wait for active readers to finish rather
 // than failing.
 func (s *Store) reapLoop() {
-	defer s.wg.Done()
 	for {
 		select {
-		case <-s.reapSignal:
-		case <-s.done:
+		case <-s.reapCh:
+		case <-s.reapDoneCh:
 			return
 		}
 
@@ -578,13 +567,12 @@ func (s *Store) reapLoop() {
 			continue
 		}
 
-		n, c, err := s.reapBlocking()
+		n, c, err := func() (int, int, error) {
+			s.mrsw.BeginWriteBlocking("reap")
+			defer s.mrsw.EndWrite()
+			return s.reap()
+		}()
 		if err != nil {
-			select {
-			case <-s.done:
-				return // shutting down
-			default:
-			}
 			s.logger.Printf("reap failed: %s", err)
 			stats.Add(snapshotsReapedFail, 1)
 			continue

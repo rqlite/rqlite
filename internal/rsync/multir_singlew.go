@@ -78,43 +78,18 @@ func (r *MultiRSW) BeginWrite(owner string) error {
 }
 
 // BeginWriteBlocking enters the critical section as a writer, blocking until
-// neither a writer nor any readers are active. The done channel can be used
-// to cancel the wait; if done is closed before the lock is acquired, an
-// ErrMRSWConflict is returned.
-func (r *MultiRSW) BeginWriteBlocking(owner string, done <-chan struct{}) error {
+// neither a writer nor any readers are active.
+func (r *MultiRSW) BeginWriteBlocking(owner string) {
 	if owner == "" {
 		panic("owner cannot be empty")
 	}
 
-	// Goroutine to wake us via Broadcast if done is closed while
-	// we are blocked in cond.Wait().
-	stop := make(chan struct{})
-	defer close(stop)
-	go func() {
-		select {
-		case <-done:
-			r.cond.Broadcast()
-		case <-stop:
-		}
-	}()
-
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	for r.owner != "" || r.numReaders > 0 {
-		select {
-		case <-done:
-			return NewErrMRSWConflict("MSRW write wait cancelled")
-		default:
-		}
 		r.cond.Wait()
 	}
-	select {
-	case <-done:
-		return NewErrMRSWConflict("MSRW write wait cancelled")
-	default:
-	}
 	r.owner = owner
-	return nil
 }
 
 // EndWrite exits the critical section as a writer.

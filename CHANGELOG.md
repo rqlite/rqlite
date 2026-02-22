@@ -31,7 +31,8 @@ Upgrading to this release from a v7 release (or later) is seamless and been exte
 - [PR #2494](https://github.com/rqlite/rqlite/pull/2494): Rename `snapshot.ExtractDatabase` to `snapshot.Restore`.
 - [PR #2495](https://github.com/rqlite/rqlite/pull/2495): Use zstd compression for snapshot transfer.
 - [PR #2496](https://github.com/rqlite/rqlite/pull/2496): Add snapshot transfer compression enable flag. Defaults to on.
-- [PR #2498](https://github.com/rqlite/rqlite/pull/2498): Calculate and store WAL CRCs during incremental snapshotting
+- [PR #2498](https://github.com/rqlite/rqlite/pull/2498): Calculate and store WAL CRCs during incremental snapshotting.
+- [PR #2499](https://github.com/rqlite/rqlite/pull/2499): Ensure Snapshot Reaping doesn't starve.
 
 ## v9.4.1 (February 11th 2026)
 ### Implementation changes and bug fixes
