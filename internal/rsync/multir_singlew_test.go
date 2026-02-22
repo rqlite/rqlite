@@ -104,18 +104,14 @@ func Test_MultiRSW_Upgrade(t *testing.T) {
 
 func Test_MultiRSW_BeginWriteBlocking_NoContention(t *testing.T) {
 	r := NewMultiRSW()
-	done := make(chan struct{})
 
 	// Should acquire immediately when nothing is active.
-	if err := r.BeginWriteBlocking("owner1", done); err != nil {
-		t.Fatalf("BeginWriteBlocking failed with no contention: %v", err)
-	}
+	r.BeginWriteBlocking("owner1")
 	r.EndWrite()
 }
 
 func Test_MultiRSW_BeginWriteBlocking_WaitsForReaders(t *testing.T) {
 	r := NewMultiRSW()
-	done := make(chan struct{})
 
 	// Acquire two read locks.
 	if err := r.BeginRead(); err != nil {
@@ -128,10 +124,7 @@ func Test_MultiRSW_BeginWriteBlocking_WaitsForReaders(t *testing.T) {
 	// BeginWriteBlocking should block until readers drain.
 	acquired := make(chan struct{})
 	go func() {
-		if err := r.BeginWriteBlocking("owner1", done); err != nil {
-			t.Errorf("BeginWriteBlocking failed: %v", err)
-			return
-		}
+		r.BeginWriteBlocking("owner1")
 		close(acquired)
 	}()
 
@@ -162,7 +155,6 @@ func Test_MultiRSW_BeginWriteBlocking_WaitsForReaders(t *testing.T) {
 
 func Test_MultiRSW_BeginWriteBlocking_WaitsForWriter(t *testing.T) {
 	r := NewMultiRSW()
-	done := make(chan struct{})
 
 	if err := r.BeginWrite("owner1"); err != nil {
 		t.Fatalf("BeginWrite failed: %v", err)
@@ -170,10 +162,7 @@ func Test_MultiRSW_BeginWriteBlocking_WaitsForWriter(t *testing.T) {
 
 	acquired := make(chan struct{})
 	go func() {
-		if err := r.BeginWriteBlocking("owner2", done); err != nil {
-			t.Errorf("BeginWriteBlocking failed: %v", err)
-			return
-		}
+		r.BeginWriteBlocking("owner2")
 		close(acquired)
 	}()
 
@@ -194,33 +183,3 @@ func Test_MultiRSW_BeginWriteBlocking_WaitsForWriter(t *testing.T) {
 	r.EndWrite()
 }
 
-func Test_MultiRSW_BeginWriteBlocking_Cancelled(t *testing.T) {
-	r := NewMultiRSW()
-	done := make(chan struct{})
-
-	// Hold a read lock so the blocking write can't proceed.
-	if err := r.BeginRead(); err != nil {
-		t.Fatalf("BeginRead failed: %v", err)
-	}
-
-	errCh := make(chan error, 1)
-	go func() {
-		errCh <- r.BeginWriteBlocking("owner1", done)
-	}()
-
-	// Give it a moment to start waiting.
-	time.Sleep(100 * time.Millisecond)
-
-	// Cancel via done channel.
-	close(done)
-	select {
-	case err := <-errCh:
-		if err == nil {
-			t.Fatal("Expected error from cancelled BeginWriteBlocking")
-		}
-	case <-time.After(time.Second):
-		t.Fatal("BeginWriteBlocking did not return after cancellation")
-	}
-
-	r.EndRead()
-}

@@ -201,8 +201,8 @@ func NewStore(dir string) (*Store, error) {
 		}
 	}
 
-	str.wg.Add(1)
-	go str.reapLoop()
+	// Kick off the reaper goroutine.
+	str.wg.Go(str.reapLoop)
 
 	return str, nil
 }
@@ -397,11 +397,8 @@ func (s *Store) Reap() (int, int, error) {
 }
 
 // reapBlocking is like Reap but blocks until the write lock can be acquired.
-// The done channel can be used to cancel the wait.
 func (s *Store) reapBlocking() (int, int, error) {
-	if err := s.mrsw.BeginWriteBlocking("reap", s.done); err != nil {
-		return 0, 0, err
-	}
+	s.mrsw.BeginWriteBlocking("reap")
 	defer s.mrsw.EndWrite()
 	return s.reapLocked()
 }
@@ -580,11 +577,6 @@ func (s *Store) reapLoop() {
 
 		n, c, err := s.reapBlocking()
 		if err != nil {
-			select {
-			case <-s.done:
-				return // shutting down
-			default:
-			}
 			s.logger.Printf("reap failed: %s", err)
 			stats.Add(snapshotsReapedFail, 1)
 			continue
