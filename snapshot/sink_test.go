@@ -11,6 +11,7 @@ import (
 
 	"github.com/rqlite/rqlite/v10/command/encoding"
 	"github.com/rqlite/rqlite/v10/db"
+	"github.com/rqlite/rqlite/v10/internal/rsum"
 )
 
 func Test_NewFullSink(t *testing.T) {
@@ -195,6 +196,7 @@ func Test_IncrementalFileSink(t *testing.T) {
 		t.Fatalf("unexpected error creating WAL dir: %s", err.Error())
 	}
 	mustCopyFile(t, srcPath, filepath.Join(walDir, walName))
+	mustWriteCRC32File(t, filepath.Join(walDir, walName))
 
 	hdr, err := NewIncrementalFileSnapshotHeader(walDir)
 	if err != nil {
@@ -251,6 +253,7 @@ func Test_IncrementalFileSink_TwoFiles(t *testing.T) {
 	}
 	for i, src := range srcPaths {
 		mustCopyFile(t, src, filepath.Join(walDir, walNames[i]))
+		mustWriteCRC32File(t, filepath.Join(walDir, walNames[i]))
 	}
 
 	hdr, err := NewIncrementalFileSnapshotHeader(walDir)
@@ -303,6 +306,7 @@ func Test_IncrementalFileSink_ThreeFiles(t *testing.T) {
 	}
 	for i, src := range srcPaths {
 		mustCopyFile(t, src, filepath.Join(walDir, walNames[i]))
+		mustWriteCRC32File(t, filepath.Join(walDir, walNames[i]))
 	}
 
 	hdr, err := NewIncrementalFileSnapshotHeader(walDir)
@@ -420,6 +424,111 @@ func Test_NoopSink_FullNeeded(t *testing.T) {
 	// Store is empty, so FullNeeded should be true — noop should be rejected.
 	if _, err := sink.Write(frameBuf.Bytes()); err == nil {
 		t.Fatalf("expected error writing noop to empty store, got nil")
+	}
+}
+
+func Test_IncrementalFileSink_MissingCRC(t *testing.T) {
+	srcPath := "testdata/db-and-wals/wal-01"
+	walName := "00000000000000000001.wal"
+
+	// Create a directory containing the WAL file but NO .crc32 file.
+	walDir := filepath.Join(t.TempDir(), "wal-dir")
+	if err := os.Mkdir(walDir, 0755); err != nil {
+		t.Fatalf("unexpected error creating WAL dir: %s", err.Error())
+	}
+	mustCopyFile(t, srcPath, filepath.Join(walDir, walName))
+
+	hdr, err := NewIncrementalFileSnapshotHeader(walDir)
+	if err != nil {
+		t.Fatalf("unexpected error creating header: %s", err.Error())
+	}
+	hdrBytes, err := marshalSnapshotHeader(hdr)
+	if err != nil {
+		t.Fatalf("unexpected error marshaling header: %s", err.Error())
+	}
+
+	var frameBuf bytes.Buffer
+	lenBuf := make([]byte, HeaderSizeLen)
+	binary.BigEndian.PutUint32(lenBuf, uint32(len(hdrBytes)))
+	frameBuf.Write(lenBuf)
+	frameBuf.Write(hdrBytes)
+
+	snapDir := t.TempDir()
+	meta := makeRaftMeta("test-incremental-file-missing-crc", 100, 1, 1)
+	sink := NewSink(snapDir, meta, nil)
+	if err := sink.Open(); err != nil {
+		t.Fatalf("unexpected error opening sink: %s", err.Error())
+	}
+
+	if _, err := sink.Write(frameBuf.Bytes()); err != nil {
+		t.Fatalf("unexpected error writing header to sink: %s", err.Error())
+	}
+
+	// Close should fail because the .crc32 file is missing.
+	if err := sink.Close(); err == nil {
+		t.Fatalf("expected error closing sink with missing CRC file, got nil")
+	}
+}
+
+func Test_IncrementalFileSink_BadCRC(t *testing.T) {
+	srcPath := "testdata/db-and-wals/wal-01"
+	walName := "00000000000000000001.wal"
+
+	// Create a directory containing the WAL file and a .crc32 file with the wrong value.
+	walDir := filepath.Join(t.TempDir(), "wal-dir")
+	if err := os.Mkdir(walDir, 0755); err != nil {
+		t.Fatalf("unexpected error creating WAL dir: %s", err.Error())
+	}
+	walPath := filepath.Join(walDir, walName)
+	mustCopyFile(t, srcPath, walPath)
+
+	// Write a bogus CRC32 value.
+	if err := rsum.WriteCRC32SumFile(walPath+crcSuffix, 0xdeadbeef, rsum.Sync); err != nil {
+		t.Fatalf("unexpected error writing bogus CRC file: %s", err.Error())
+	}
+
+	hdr, err := NewIncrementalFileSnapshotHeader(walDir)
+	if err != nil {
+		t.Fatalf("unexpected error creating header: %s", err.Error())
+	}
+	hdrBytes, err := marshalSnapshotHeader(hdr)
+	if err != nil {
+		t.Fatalf("unexpected error marshaling header: %s", err.Error())
+	}
+
+	var frameBuf bytes.Buffer
+	lenBuf := make([]byte, HeaderSizeLen)
+	binary.BigEndian.PutUint32(lenBuf, uint32(len(hdrBytes)))
+	frameBuf.Write(lenBuf)
+	frameBuf.Write(hdrBytes)
+
+	snapDir := t.TempDir()
+	meta := makeRaftMeta("test-incremental-file-bad-crc", 100, 1, 1)
+	sink := NewSink(snapDir, meta, nil)
+	if err := sink.Open(); err != nil {
+		t.Fatalf("unexpected error opening sink: %s", err.Error())
+	}
+
+	if _, err := sink.Write(frameBuf.Bytes()); err != nil {
+		t.Fatalf("unexpected error writing header to sink: %s", err.Error())
+	}
+
+	// Close should fail because the CRC32 checksum doesn't match.
+	if err := sink.Close(); err == nil {
+		t.Fatalf("expected error closing sink with bad CRC, got nil")
+	}
+}
+
+// mustWriteCRC32File computes the CRC32 checksum for the file at path and writes
+// the corresponding .crc32 file alongside it.
+func mustWriteCRC32File(t *testing.T, path string) {
+	t.Helper()
+	sum, err := rsum.CRC32(path)
+	if err != nil {
+		t.Fatalf("failed to compute CRC32 for %s: %v", path, err)
+	}
+	if err := rsum.WriteCRC32SumFile(path+crcSuffix, sum, rsum.Sync); err != nil {
+		t.Fatalf("failed to write CRC32 sum file for %s: %v", path, err)
 	}
 }
 

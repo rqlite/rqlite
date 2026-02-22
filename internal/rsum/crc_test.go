@@ -112,7 +112,7 @@ func Test_WriteCRC32SumFileRoundTrip(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "checksum")
 	var sum uint32 = 0x1a2b3c4d
 
-	if err := WriteCRC32SumFile(path, sum); err != nil {
+	if err := WriteCRC32SumFile(path, sum, Sync); err != nil {
 		t.Fatalf("WriteCRC32SumFile failed: %v", err)
 	}
 
@@ -138,7 +138,7 @@ func Test_WriteCRC32SumFileRoundTrip(t *testing.T) {
 func Test_WriteCRC32SumFileZero(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "checksum")
 
-	if err := WriteCRC32SumFile(path, 0); err != nil {
+	if err := WriteCRC32SumFile(path, 0, Sync); err != nil {
 		t.Fatalf("WriteCRC32SumFile failed: %v", err)
 	}
 
@@ -167,6 +167,85 @@ func Test_ReadCRC32SumFileInvalid(t *testing.T) {
 	_, err := ReadCRC32SumFile(path)
 	if err == nil {
 		t.Error("expected error for invalid checksum file, got none")
+	}
+}
+
+func Test_CompareCRC32SumFileMatch(t *testing.T) {
+	dir := t.TempDir()
+	dataPath := filepath.Join(dir, "data.bin")
+	crcPath := filepath.Join(dir, "data.bin.crc32")
+
+	if err := os.WriteFile(dataPath, []byte("hello world"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	sum, err := CRC32(dataPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := WriteCRC32SumFile(crcPath, sum, Sync); err != nil {
+		t.Fatal(err)
+	}
+
+	ok, err := CompareCRC32SumFile(dataPath, crcPath)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if !ok {
+		t.Fatal("expected checksums to match, got mismatch")
+	}
+}
+
+func Test_CompareCRC32SumFileMismatch(t *testing.T) {
+	dir := t.TempDir()
+	dataPath := filepath.Join(dir, "data.bin")
+	crcPath := filepath.Join(dir, "data.bin.crc32")
+
+	if err := os.WriteFile(dataPath, []byte("hello world"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	// Write a wrong checksum.
+	if err := WriteCRC32SumFile(crcPath, 0xdeadbeef, Sync); err != nil {
+		t.Fatal(err)
+	}
+
+	ok, err := CompareCRC32SumFile(dataPath, crcPath)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if ok {
+		t.Fatal("expected checksums to mismatch, got match")
+	}
+}
+
+func Test_CompareCRC32SumFileMissingCRC(t *testing.T) {
+	dir := t.TempDir()
+	dataPath := filepath.Join(dir, "data.bin")
+	crcPath := filepath.Join(dir, "data.bin.crc32")
+
+	if err := os.WriteFile(dataPath, []byte("hello world"), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	// CRC file does not exist.
+	_, err := CompareCRC32SumFile(dataPath, crcPath)
+	if err == nil {
+		t.Fatal("expected error for missing CRC file, got nil")
+	}
+}
+
+func Test_CompareCRC32SumFileMissingData(t *testing.T) {
+	dir := t.TempDir()
+	dataPath := filepath.Join(dir, "data.bin")
+	crcPath := filepath.Join(dir, "data.bin.crc32")
+
+	// Write a valid CRC file but no data file.
+	if err := WriteCRC32SumFile(crcPath, 0x12345678, Sync); err != nil {
+		t.Fatal(err)
+	}
+
+	_, err := CompareCRC32SumFile(dataPath, crcPath)
+	if err == nil {
+		t.Fatal("expected error for missing data file, got nil")
 	}
 }
 

@@ -11,6 +11,17 @@ import (
 
 var castagnoliTable = crc32.MakeTable(crc32.Castagnoli)
 
+// SyncState represents whether a file should be synced after writing.
+type SyncState bool
+
+var (
+	// Sync indicates that the file should be synced after writing.
+	Sync SyncState = true
+
+	// NoSync indicates that the file should not be synced after writing.
+	NoSync SyncState = false
+)
+
 // CRC32 calculates the CRC32 checksum of the file at the given path.
 func CRC32(path string) (uint32, error) {
 	f, err := os.Open(path)
@@ -66,8 +77,23 @@ func (c *CRC32Writer) Sum32() uint32 {
 
 // WriteCRC32SumFile writes the given CRC32 checksum to path as an 8-character
 // lowercase hex string (e.g. "1a2b3c4d").
-func WriteCRC32SumFile(path string, sum uint32) error {
-	return os.WriteFile(path, []byte(fmt.Sprintf("%08x", sum)), 0644)
+func WriteCRC32SumFile(path string, sum uint32, sync SyncState) error {
+	fd, err := os.Create(path)
+	if err != nil {
+		return err
+	}
+	defer fd.Close()
+
+	_, err = fmt.Fprintf(fd, "%08x", sum)
+	if err != nil {
+		return err
+	}
+	if sync {
+		if err := fd.Sync(); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 // ReadCRC32SumFile reads a CRC32 checksum previously written by WriteCRC32SumFile.
@@ -81,4 +107,20 @@ func ReadCRC32SumFile(path string) (uint32, error) {
 		return 0, fmt.Errorf("invalid checksum file: %w", err)
 	}
 	return sum, nil
+}
+
+// CompareCRC32SumFile calculates the CRC32 checksum of the file at dataPath and
+// compares it to the expected checksum read from crcPath. Returns true if they
+// match, false if they don't, or an error if there was a problem reading the
+// files or calculating the checksum.
+func CompareCRC32SumFile(dataPath, crcPath string) (bool, error) {
+	expectedSum, err := ReadCRC32SumFile(crcPath)
+	if err != nil {
+		return false, fmt.Errorf("reading CRC32 sum file: %w", err)
+	}
+	actualSum, err := CRC32(dataPath)
+	if err != nil {
+		return false, fmt.Errorf("calculating CRC32 of data file: %w", err)
+	}
+	return expectedSum == actualSum, nil
 }
