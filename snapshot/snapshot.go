@@ -80,9 +80,6 @@ const (
 
 	// SnapshotTypeIncremental indicates a snapshot directory containing data.wal.
 	SnapshotTypeIncremental
-
-	// SnapshotTypeNoop indicates a snapshot directory containing data.noop.
-	SnapshotTypeNoop
 )
 
 // SnapshotSet represents an ordered collection of snapshots from a single Store
@@ -320,8 +317,8 @@ func (ss SnapshotSet) ValidateIncrementalChain() error {
 
 	for i := fullIdx + 1; i < len(ss.items); i++ {
 		snap := ss.items[i]
-		if snap.typ != SnapshotTypeIncremental && snap.typ != SnapshotTypeNoop {
-			return fmt.Errorf("snapshot %s is not incremental or noop after newest full snapshot %s", snap.id, fullID)
+		if snap.typ != SnapshotTypeIncremental {
+			return fmt.Errorf("snapshot %s is not incremental after newest full snapshot %s", snap.id, fullID)
 		}
 	}
 	return nil
@@ -343,10 +340,9 @@ func (ss SnapshotSet) ResolveFiles(id string) (dbFile string, walFiles []string,
 		return filepath.Join(snap.path, dbfileName), nil, nil
 	}
 
-	// The requested snapshot is incremental or noop. Walk backward to find the
+	// The requested snapshot is incremental. Walk backward to find the
 	// nearest full snapshot, add that file to the list, and then walk forward again to
 	// add all incremental snapshots' WAL files up to and including the requested snapshot.
-	// Noop snapshots contribute no WAL files.
 	fullIdx := -1
 	for i := idx - 1; i >= 0; i-- {
 		if ss.items[i].typ == SnapshotTypeFull {
@@ -360,10 +356,7 @@ func (ss SnapshotSet) ResolveFiles(id string) (dbFile string, walFiles []string,
 
 	dbFile = filepath.Join(ss.items[fullIdx].path, dbfileName)
 	for i := fullIdx + 1; i <= idx; i++ {
-		if ss.items[i].typ == SnapshotTypeIncremental {
-			walFiles = append(walFiles, ss.items[i].walFiles...)
-		}
-		// Noop snapshots contribute no WAL files.
+		walFiles = append(walFiles, ss.items[i].walFiles...)
 	}
 	return dbFile, walFiles, nil
 }
@@ -447,7 +440,6 @@ func (c *SnapshotCatalog) loadSnapshot(path string, id string) (*Snapshot, error
 	}
 
 	dataDBPath := filepath.Join(path, dbfileName)
-	dataNoopPath := filepath.Join(path, noopfileName)
 
 	// Discover any WAL files in the directory.
 	walMatches, err := filepath.Glob(filepath.Join(path, "*"+walfileSuffix))
@@ -457,15 +449,11 @@ func (c *SnapshotCatalog) loadSnapshot(path string, id string) (*Snapshot, error
 	sort.Strings(walMatches)
 
 	hasDB := fileExists(dataDBPath)
-	hasNoop := fileExists(dataNoopPath)
 	hasWALs := len(walMatches) > 0
 
 	// Enforce constraint: a snapshot containing WAL files must only contain WAL files.
 	if hasWALs && hasDB {
 		return nil, fmt.Errorf("snapshot directory %q contains both WAL files and %s", path, dbfileName)
-	}
-	if hasWALs && hasNoop {
-		return nil, fmt.Errorf("snapshot directory %q contains both WAL files and %s", path, noopfileName)
 	}
 
 	if hasDB {
@@ -481,8 +469,6 @@ func (c *SnapshotCatalog) loadSnapshot(path string, id string) (*Snapshot, error
 			}
 		}
 		snapshot.walFiles = walMatches
-	} else if hasNoop {
-		snapshot.typ = SnapshotTypeNoop
 	} else {
 		return nil, fmt.Errorf("missing data file in snapshot directory %q", path)
 	}

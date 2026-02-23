@@ -299,60 +299,6 @@ func Test_SnapshotPathStreamer(t *testing.T) {
 	}
 }
 
-func Test_SnapshotNoopStreamer(t *testing.T) {
-	streamer, err := NewSnapshotNoopStreamer()
-	if err != nil {
-		t.Fatalf("NewSnapshotNoopStreamer failed: %v", err)
-	}
-
-	// Read and decode header size.
-	sizeBuf := make([]byte, HeaderSizeLen)
-	_, err = io.ReadFull(streamer, sizeBuf)
-	if err != nil {
-		t.Fatalf("Failed to read header size: %v", err)
-	}
-
-	hdrLen := int(binary.BigEndian.Uint32(sizeBuf))
-	hdrBuf := make([]byte, hdrLen)
-	_, err = io.ReadFull(streamer, hdrBuf)
-	if err != nil {
-		t.Fatalf("Failed to read header: %v", err)
-	}
-
-	pb, err := UnmarshalSnapshotHeader(hdrBuf)
-	if err != nil {
-		t.Fatalf("Failed to unmarshal header from SnapshotNoopStreamer: %v", err)
-	}
-
-	noop := pb.GetNoop()
-	if noop == nil {
-		t.Fatalf("Expected Noop payload, got nil")
-	}
-
-	// Check that there is no more data to read after the header.
-	var eofBuf [1]byte
-	if _, err := streamer.Read(eofBuf[:]); err != io.EOF {
-		t.Fatalf("Expected EOF after reading header, got: %v", err)
-	}
-
-	if err := streamer.Close(); err != nil {
-		t.Fatalf("Failed to close SnapshotNoopStreamer: %v", err)
-	}
-}
-
-func Test_NewNoopSnapshotHeader(t *testing.T) {
-	hdr := NewNoopSnapshotHeader()
-	if hdr == nil {
-		t.Fatalf("Expected non-nil header")
-	}
-	if hdr.GetNoop() == nil {
-		t.Fatalf("Expected Noop payload, got nil")
-	}
-	if hdr.FormatVersion != 1 {
-		t.Fatalf("Expected FormatVersion 1, got %d", hdr.FormatVersion)
-	}
-}
-
 func mustWriteToTempFile(t *testing.T, data []byte) string {
 	t.Helper()
 

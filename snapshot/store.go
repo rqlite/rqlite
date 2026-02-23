@@ -22,7 +22,6 @@ const (
 	walfileName    = "data.wal" // Used by the streaming IncrementalSink only.
 	walfileSuffix  = ".wal"
 	crcSuffix      = ".crc32"
-	noopfileName   = "data.noop"
 	metaFileName   = "meta.json"
 	tmpSuffix      = ".tmp"
 	fullNeededFile = "FULL_NEEDED"
@@ -463,12 +462,8 @@ func (s *Store) reap() (int, int, error) {
 		// 1. Checkpoint all incremental WAL files into the full's DB.
 		//    WAL files reside in different directories; the executor
 		//    handles cross-directory moves during checkpointing.
-		//    Noop snapshots have no WAL files and are skipped.
 		var walFiles []string
 		for _, snap := range newerSet.All() {
-			if snap.typ == SnapshotTypeNoop {
-				continue
-			}
 			walFiles = append(walFiles, filepath.Join(snap.path, walfileName))
 		}
 		if len(walFiles) > 0 {

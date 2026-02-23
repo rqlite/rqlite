@@ -33,6 +33,7 @@ Upgrading to this release from a v7 release (or later) is seamless and been exte
 - [PR #2496](https://github.com/rqlite/rqlite/pull/2496): Add snapshot transfer compression enable flag. Defaults to on.
 - [PR #2498](https://github.com/rqlite/rqlite/pull/2498): Calculate and store WAL CRCs during incremental snapshotting.
 - [PR #2499](https://github.com/rqlite/rqlite/pull/2499): Ensure Snapshot Reaping doesn't starve.
+- [PR #2501](https://github.com/rqlite/rqlite/pull/2501): Remove Noop Snapshot support, return error when no WAL data available.
 
 ## v9.4.1 (February 11th 2026)
 ### Implementation changes and bug fixes

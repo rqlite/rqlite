@@ -110,18 +110,6 @@ func NewIncrementalFileSnapshotHeader(walDirPath string) (*proto.SnapshotHeader,
 	}, nil
 }
 
-// NewNoopSnapshotHeader creates a new SnapshotHeader for a noop snapshot.
-// A noop snapshot is created when a snapshot is triggered but no WAL data
-// is available. No data follows this header when written to a Sink.
-func NewNoopSnapshotHeader() *proto.SnapshotHeader {
-	return &proto.SnapshotHeader{
-		FormatVersion: 1,
-		Payload: &proto.SnapshotHeader_Noop{
-			Noop: &proto.NoopSnapshot{},
-		},
-	}
-}
-
 // marshalSnapshotHeader marshals the SnapshotHeader to a byte slice.
 func marshalSnapshotHeader(s *proto.SnapshotHeader) ([]byte, error) {
 	return pb.Marshal(s)
@@ -159,8 +147,6 @@ func snapshotHeaderPayloadSize(s *proto.SnapshotHeader) (int64, error) {
 			total += int64(p.Incremental.WalHeader.SizeBytes)
 		}
 	case *proto.SnapshotHeader_IncrementalFile:
-		// No file data follows this header type.
-	case *proto.SnapshotHeader_Noop:
 		// No file data follows this header type.
 	}
 	return total, nil
@@ -343,51 +329,5 @@ func (s *SnapshotPathStreamer) Read(p []byte) (n int, err error) {
 // Close closes the SnapshotPathStreamer. Since no files are opened by this struct,
 // Close() is a no-op.
 func (s *SnapshotPathStreamer) Close() error {
-	return nil
-}
-
-// SnapshotNoopStreamer implements io.ReadCloser for streaming a noop snapshot.
-// A noop snapshot contains only the header (no file data). It is used when a
-// snapshot is triggered but no WAL data is available.
-type SnapshotNoopStreamer struct {
-	hdr    *proto.SnapshotHeader
-	multiR io.Reader
-}
-
-// NewSnapshotNoopStreamer creates a new SnapshotNoopStreamer.
-func NewSnapshotNoopStreamer() (*SnapshotNoopStreamer, error) {
-	sh := NewNoopSnapshotHeader()
-
-	hdrBuf, err := marshalSnapshotHeader(sh)
-	if err != nil {
-		return nil, err
-	}
-	hdrBufR := bytes.NewReader(hdrBuf)
-	var hdrLenBEBuf [HeaderSizeLen]byte
-	binary.BigEndian.PutUint32(hdrLenBEBuf[:], uint32(len(hdrBuf)))
-	hdrLenBufR := bytes.NewReader(hdrLenBEBuf[:])
-
-	var readers []io.Reader
-	readers = append(readers, hdrLenBufR)
-	readers = append(readers, hdrBufR)
-	multiR := io.MultiReader(readers...)
-
-	return &SnapshotNoopStreamer{
-		hdr:    sh,
-		multiR: multiR,
-	}, nil
-}
-
-// Read reads from the SnapshotNoopStreamer. The data returned by Read() is
-// the 4-byte integer, big-endian, indicating the size of the marshaled header,
-// followed by the marshaled header itself. No more data follows the header,
-// and once the header has been fully read, Read() returns io.EOF.
-func (s *SnapshotNoopStreamer) Read(p []byte) (n int, err error) {
-	return s.multiR.Read(p)
-}
-
-// Close closes the SnapshotNoopStreamer. Since no files are opened by this
-// struct, Close() is a no-op.
-func (s *SnapshotNoopStreamer) Close() error {
 	return nil
 }
