@@ -113,6 +113,11 @@ var (
 
 	// ErrClusterNotFound is returned when a cluster should exist but does not.
 	ErrClusterNotFound = errors.New("cluster not found")
+
+	// ErrNoWALToSnapshot is returned when a snapshot is requested but there is no
+	// WAL data to snapshot. This can happen when the Raft log contains only entries
+	// that don't modify the database (e.g. cluster membership changes).
+	ErrNoWALToSnapshot = errors.New("no WAL data available for snapshot")
 )
 
 const (
@@ -158,7 +163,6 @@ const (
 	numWALSnapshotsFailed             = "num_wal_snapshots_failed"
 	numSnapshotsFull                  = "num_snapshots_full"
 	numSnapshotsIncremental           = "num_snapshots_incremental"
-	numSnapshotsIncrementalNoop       = "num_snapshots_incremental_noop"
 	numFullCheckpointFailed           = "num_full_checkpoint_failed"
 	numWALCheckpointTruncateFailed    = "num_wal_checkpoint_truncate_failed"
 	numWALCheckpointIncomplete        = "num_wal_checkpoint_incomplete"
@@ -228,7 +232,6 @@ func ResetStats() {
 	stats.Add(numWALSnapshotsFailed, 0)
 	stats.Add(numSnapshotsFull, 0)
 	stats.Add(numSnapshotsIncremental, 0)
-	stats.Add(numSnapshotsIncrementalNoop, 0)
 	stats.Add(numFullCheckpointFailed, 0)
 	stats.Add(numWALCheckpointTruncateFailed, 0)
 	stats.Add(numWALCheckpointIncomplete, 0)
@@ -2537,7 +2540,7 @@ func (s *Store) fsmSnapshot() (fSnap raft.FSMSnapshot, retErr error) {
 
 	startT := time.Now()
 	defer func() {
-		if retErr != nil {
+		if retErr != nil && retErr != ErrNoWALToSnapshot {
 			stats.Add(numSnapshotsFailed, 1)
 		}
 		lt, err := s.db.DBLastModified()
@@ -2683,18 +2686,10 @@ func (s *Store) fsmSnapshot() (fSnap raft.FSMSnapshot, retErr error) {
 			fsmSnapshot = snapshot.NewStateReader(streamer)
 			stats.Add(numSnapshotsIncremental, 1)
 		} else {
-			// No WAL data. We support this because Snapshotting the Raft system is supported even if there
-			// has been no changes to the database. Why? Well, in theory the Raft log could be full of
-			// cluster membership changes, and they don't change the database. This is just an example.
-			// The point is that store must be able to snapshot even if there have been no changes to the
-			// database, and that means supporting snapshots with no WAL data.
-			streamer, err := snapshot.NewSnapshotNoopStreamer()
-			if err != nil {
-				return nil, err
-			}
-			fsmSnapshot = snapshot.NewStateReader(streamer)
-			finalizer = func() error { return nil } // SQLite database is not changing, so don't waste cycles on fingerprinting.
-			stats.Add(numSnapshotsIncrementalNoop, 1)
+			// No WAL data available. This can happen when the Raft log contains only
+			// entries that don't modify the database (e.g. cluster membership changes).
+			// Return an error so Raft knows there is nothing to snapshot.
+			return nil, ErrNoWALToSnapshot
 		}
 	}
 
@@ -2889,7 +2884,7 @@ func (s *Store) observe() (closeCh, doneCh chan struct{}) {
 // is reset to the value set at Store creation.
 func (s *Store) Snapshot(n uint64) (retError error) {
 	defer func() {
-		if retError != nil && retError != ErrNothingNewToSnapshot {
+		if retError != nil && retError != ErrNothingNewToSnapshot && retError != ErrNoWALToSnapshot {
 			stats.Add(numUserSnapshotsFailed, 1)
 			s.logger.Printf("failed to generate application-level snapshot: %s", retError.Error())
 		}
@@ -2911,6 +2906,8 @@ func (s *Store) Snapshot(n uint64) (retError error) {
 	if err := s.raft.Snapshot().Error(); err != nil {
 		if strings.Contains(err.Error(), ErrLoadInProgress.Error()) {
 			return ErrLoadInProgress
+		} else if strings.Contains(err.Error(), ErrNoWALToSnapshot.Error()) {
+			return ErrNoWALToSnapshot
 		} else if err == raft.ErrNothingNewToSnapshot {
 			return ErrNothingNewToSnapshot
 		}

@@ -71,7 +71,13 @@ func Test_OpenStoreCloseStartupSingleNode(t *testing.T) {
 		t.Fatalf("Error waiting for leader: %s", err)
 	}
 
-	mustNoop(s, "1234") // Ensures there is something to snapshot.
+	er = executeRequestFromStrings([]string{
+		`UPDATE foo SET name='fiona-updated' WHERE id=1`,
+	}, false, false)
+	_, _, err = s.Execute(context.Background(), er)
+	if err != nil {
+		t.Fatalf("failed to execute on single node: %s", err.Error())
+	}
 	if err := s.Snapshot(0); err != nil {
 		t.Fatalf("failed to take user-requested snapshot: %s", err.Error())
 	}
@@ -114,6 +120,15 @@ func Test_OpenStoreCloseStartupSingleNode(t *testing.T) {
 	}
 	queryTest(s, 10)
 
+	// Write data so there is WAL data to snapshot.
+	er = executeRequestFromStrings([]string{
+		`INSERT INTO foo(name) VALUES("snapshot-trigger")`,
+	}, false, false)
+	_, _, err = s.Execute(context.Background(), er)
+	if err != nil {
+		t.Fatalf("failed to execute on single node: %s", err.Error())
+	}
+
 	// Trigger another snapshot.
 	if err := s.Snapshot(0); err != nil {
 		t.Fatalf("failed to take user-requested snapshot: %s", err.Error())
@@ -134,7 +149,7 @@ func Test_OpenStoreCloseStartupSingleNode(t *testing.T) {
 		qr := queryRequestFromString("SELECT COUNT(*) FROM foo", false, false)
 		qr.Level = command.ConsistencyLevel_NONE
 		r, _, _, err := s.Query(context.Background(), qr)
-		return err == nil && asJSON(r) == `[{"columns":["COUNT(*)"],"types":["integer"],"values":[[10]]}]`
+		return err == nil && asJSON(r) == `[{"columns":["COUNT(*)"],"types":["integer"],"values":[[11]]}]`
 	}, 100*time.Millisecond, 5*time.Second)
 	if err := s.Close(true); err != nil {
 		t.Fatalf("failed to close single-node store: %s", err.Error())
@@ -156,7 +171,7 @@ func Test_OpenStoreCloseStartupSingleNode(t *testing.T) {
 		qr := queryRequestFromString("SELECT COUNT(*) FROM foo", false, false)
 		qr.Level = command.ConsistencyLevel_NONE
 		r, _, _, err := s.Query(context.Background(), qr)
-		return err == nil && asJSON(r) == `[{"columns":["COUNT(*)"],"types":["integer"],"values":[[11]]}]`
+		return err == nil && asJSON(r) == `[{"columns":["COUNT(*)"],"types":["integer"],"values":[[12]]}]`
 	}, 100*time.Millisecond, 5*time.Second)
 
 	if err := s.Close(true); err != nil {

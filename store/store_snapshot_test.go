@@ -99,7 +99,13 @@ func Test_SingleNodeUserSnapshot_CAS(t *testing.T) {
 		t.Fatalf("Error waiting for leader: %s", err)
 	}
 
-	mustNoop(s, "1")
+	er := executeRequestFromStrings([]string{
+		`CREATE TABLE foo (id INTEGER NOT NULL PRIMARY KEY, name TEXT)`,
+	}, false, false)
+	_, _, err := s.Execute(context.Background(), er)
+	if err != nil {
+		t.Fatalf("failed to execute on single node: %s", err.Error())
+	}
 	if err := s.Snapshot(0); err != nil {
 		t.Fatalf("failed to snapshot single-node store: %s", err.Error())
 	}
@@ -107,12 +113,24 @@ func Test_SingleNodeUserSnapshot_CAS(t *testing.T) {
 	if err := s.snapshotCAS.Begin("snapshot-test"); err != nil {
 		t.Fatalf("failed to begin snapshot CAS: %s", err.Error())
 	}
-	mustNoop(s, "2")
+	er = executeRequestFromStrings([]string{
+		`INSERT INTO foo(id, name) VALUES(1, "fiona")`,
+	}, false, false)
+	_, _, err = s.Execute(context.Background(), er)
+	if err != nil {
+		t.Fatalf("failed to execute on single node: %s", err.Error())
+	}
 	if err := s.Snapshot(0); err == nil {
 		t.Fatalf("expected error snapshotting single-node store with CAS")
 	}
 	s.snapshotCAS.End()
-	mustNoop(s, "3")
+	er = executeRequestFromStrings([]string{
+		`INSERT INTO foo(id, name) VALUES(2, "declan")`,
+	}, false, false)
+	_, _, err = s.Execute(context.Background(), er)
+	if err != nil {
+		t.Fatalf("failed to execute on single node: %s", err.Error())
+	}
 	if err := s.Snapshot(0); err != nil {
 		t.Fatalf("failed to snapshot single-node store: %s", err.Error())
 	}
@@ -132,7 +150,13 @@ func Test_SingleNodeUserSnapshot_Sync(t *testing.T) {
 		t.Fatalf("Error waiting for leader: %s", err)
 	}
 
-	mustNoop(s, "1")
+	er := executeRequestFromStrings([]string{
+		`CREATE TABLE foo (id INTEGER NOT NULL PRIMARY KEY, name TEXT)`,
+	}, false, false)
+	_, _, err := s.Execute(context.Background(), er)
+	if err != nil {
+		t.Fatalf("failed to execute on single node: %s", err.Error())
+	}
 	if err := s.Snapshot(0); err != nil {
 		t.Fatalf("failed to snapshot single-node store: %s", err.Error())
 	}
@@ -146,7 +170,13 @@ func Test_SingleNodeUserSnapshot_Sync(t *testing.T) {
 		called = true
 		close(c)
 	}()
-	mustNoop(s, "2")
+	er = executeRequestFromStrings([]string{
+		`INSERT INTO foo(id, name) VALUES(1, "fiona")`,
+	}, false, false)
+	_, _, err = s.Execute(context.Background(), er)
+	if err != nil {
+		t.Fatalf("failed to execute on single node: %s", err.Error())
+	}
 	if err := s.Snapshot(0); err != nil {
 		t.Fatalf("failed to snapshot single-node store with sync: %s", err.Error())
 	}
@@ -155,9 +185,56 @@ func Test_SingleNodeUserSnapshot_Sync(t *testing.T) {
 	}
 
 	// Register a channel, but don't close it, which should cause a timeout.
-	mustNoop(s, "3")
+	er = executeRequestFromStrings([]string{
+		`INSERT INTO foo(id, name) VALUES(2, "declan")`,
+	}, false, false)
+	_, _, err = s.Execute(context.Background(), er)
+	if err != nil {
+		t.Fatalf("failed to execute on single node: %s", err.Error())
+	}
 	if err := s.Snapshot(0); err == nil {
 		t.Fatalf("snapshotting succeeded, expected failure due to sync timeout")
+	}
+}
+
+// Test_SingleNode_ErrNoWALToSnapshot tests that Snapshot returns ErrNoWALToSnapshot
+// when there is no WAL data to snapshot. This happens when the only new Raft log
+// entries since the last snapshot don't modify the database (e.g. Noop commands).
+func Test_SingleNode_ErrNoWALToSnapshot(t *testing.T) {
+	s, ln := mustNewStore(t)
+	defer ln.Close()
+
+	if err := s.Open(); err != nil {
+		t.Fatalf("failed to open single-node store: %s", err.Error())
+	}
+	defer s.Close(true)
+	if err := s.Bootstrap(NewServer(s.ID(), s.Addr(), true)); err != nil {
+		t.Fatalf("failed to bootstrap single-node store: %s", err.Error())
+	}
+	if _, err := s.WaitForLeader(10 * time.Second); err != nil {
+		t.Fatalf("Error waiting for leader: %s", err)
+	}
+
+	// Write some data to the database and take a snapshot. This should succeed.
+	er := executeRequestFromStrings([]string{
+		`CREATE TABLE foo (id INTEGER NOT NULL PRIMARY KEY, name TEXT)`,
+		`INSERT INTO foo(id, name) VALUES(1, "fiona")`,
+	}, false, false)
+	_, _, err := s.Execute(context.Background(), er)
+	if err != nil {
+		t.Fatalf("failed to execute on single node: %s", err.Error())
+	}
+	if err := s.Snapshot(0); err != nil {
+		t.Fatalf("failed to snapshot single-node store: %s", err.Error())
+	}
+
+	// Write a Noop to the Raft log — this creates a new log entry but doesn't
+	// change the database, so there is no WAL data.
+	mustNoop(s, "test-noop")
+
+	// Snapshot should now return ErrNoWALToSnapshot because there is no WAL.
+	if err := s.Snapshot(0); err != ErrNoWALToSnapshot {
+		t.Fatalf("expected ErrNoWALToSnapshot, got: %v", err)
 	}
 }
 
