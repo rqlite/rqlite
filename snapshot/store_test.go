@@ -124,7 +124,7 @@ func Test_StoreCreateCancel(t *testing.T) {
 }
 
 // Test_Store_CreateIncrementalFirst_Fail tests that creating an incremental snapshot
-// in an empty store fails as expected. All Stores mut start with a full snapshot.
+// in an empty store fails as expected. All Stores must start with a full snapshot.
 func Test_Store_CreateIncrementalFirst_Fail(t *testing.T) {
 	dir := t.TempDir()
 	store, err := NewStore(dir)
@@ -142,19 +142,20 @@ func Test_Store_CreateIncrementalFirst_Fail(t *testing.T) {
 	}
 	defer sink.Cancel()
 
-	// Make the streamer.
-	streamer, err := NewSnapshotStreamer("", "testdata/db-and-wals/wal-00")
+	// Create an incremental file snapshot.
+	walDir := filepath.Join(t.TempDir(), "wal-dir")
+	if err := os.Mkdir(walDir, 0755); err != nil {
+		t.Fatalf("Failed to create WAL dir: %v", err)
+	}
+	walName := "00000000000000000001.wal"
+	mustCopyFile(t, "testdata/db-and-wals/wal-00", filepath.Join(walDir, walName))
+	mustWriteCRC32File(t, filepath.Join(walDir, walName))
+
+	streamer, err := NewSnapshotPathStreamer(walDir)
 	if err != nil {
-		t.Fatalf("Failed to create SnapshotStreamer: %v", err)
+		t.Fatalf("Failed to create SnapshotPathStreamer: %v", err)
 	}
-	if err := streamer.Open(); err != nil {
-		t.Fatalf("Failed to open SnapshotStreamer: %v", err)
-	}
-	defer func() {
-		if err := streamer.Close(); err != nil {
-			t.Fatalf("Failed to close SnapshotStreamer: %v", err)
-		}
-	}()
+	defer streamer.Close()
 
 	// Copy from streamer into sink.
 	_, err = io.Copy(sink, streamer)
@@ -943,9 +944,15 @@ func Test_Store_Check_ResumesReapPlan(t *testing.T) {
 	incPath := filepath.Join(dir2, incID)
 
 	p := plan.New()
-	walFile := filepath.Join(incPath, walfileName)
-	p.AddCheckpoint(filepath.Join(fullPath, dbfileName), []string{walFile})
-	p.NCheckpointed = 1
+	walMatches, err := filepath.Glob(filepath.Join(incPath, "*"+walfileSuffix))
+	if err != nil {
+		t.Fatalf("Failed to glob for WAL files: %v", err)
+	}
+	if len(walMatches) == 0 {
+		t.Fatalf("Expected at least one WAL file in incremental snapshot")
+	}
+	p.AddCheckpoint(filepath.Join(fullPath, dbfileName), walMatches)
+	p.NCheckpointed = len(walMatches)
 	p.AddRemoveAll(incPath)
 	p.NReaped = 1
 
@@ -1148,24 +1155,45 @@ func createSnapshotInStore(t *testing.T, store *Store, id string, index, term, c
 		t.Fatalf("Failed to open sink: %v", err)
 	}
 
-	// Make the streamer.
-	streamer, err := NewSnapshotStreamer(dbFile, walFiles...)
-	if err != nil {
-		t.Fatalf("Failed to create SnapshotStreamer: %v", err)
-	}
-	if err := streamer.Open(); err != nil {
-		t.Fatalf("Failed to open SnapshotStreamer: %v", err)
-	}
-	defer func() {
-		if err := streamer.Close(); err != nil {
-			t.Fatalf("Failed to close SnapshotStreamer: %v", err)
+	if dbFile != "" {
+		// Full snapshot via SnapshotStreamer.
+		streamer, err := NewSnapshotStreamer(dbFile, walFiles...)
+		if err != nil {
+			t.Fatalf("Failed to create SnapshotStreamer: %v", err)
 		}
-	}()
+		if err := streamer.Open(); err != nil {
+			t.Fatalf("Failed to open SnapshotStreamer: %v", err)
+		}
+		defer func() {
+			if err := streamer.Close(); err != nil {
+				t.Fatalf("Failed to close SnapshotStreamer: %v", err)
+			}
+		}()
 
-	// Copy from streamer into sink.
-	_, err = io.Copy(sink, streamer)
-	if err != nil {
-		t.Fatalf("Failed to copy snapshot data to sink: %v", err)
+		if _, err = io.Copy(sink, streamer); err != nil {
+			t.Fatalf("Failed to copy snapshot data to sink: %v", err)
+		}
+	} else {
+		// Incremental snapshot via SnapshotPathStreamer.
+		walDir := filepath.Join(t.TempDir(), "wal-dir")
+		if err := os.Mkdir(walDir, 0755); err != nil {
+			t.Fatalf("Failed to create WAL dir: %v", err)
+		}
+		for i, src := range walFiles {
+			name := fmt.Sprintf("%020d.wal", i+1)
+			mustCopyFile(t, src, filepath.Join(walDir, name))
+			mustWriteCRC32File(t, filepath.Join(walDir, name))
+		}
+
+		streamer, err := NewSnapshotPathStreamer(walDir)
+		if err != nil {
+			t.Fatalf("Failed to create SnapshotPathStreamer: %v", err)
+		}
+		defer streamer.Close()
+
+		if _, err = io.Copy(sink, streamer); err != nil {
+			t.Fatalf("Failed to copy snapshot data to sink: %v", err)
+		}
 	}
 
 	if err := sink.Close(); err != nil {

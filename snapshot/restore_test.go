@@ -90,27 +90,6 @@ func Test_Restore_DBAndWALs(t *testing.T) {
 	}
 }
 
-func Test_Restore_IncrementalSnapshot(t *testing.T) {
-	// Restore requires a full snapshot; an incremental stream should fail.
-	streamer, err := NewSnapshotStreamer("", "testdata/db-and-wals/wal-00")
-	if err != nil {
-		t.Fatalf("NewSnapshotStreamer failed: %v", err)
-	}
-	if err := streamer.Open(); err != nil {
-		t.Fatalf("Open failed: %v", err)
-	}
-	defer streamer.Close()
-
-	dstPath := filepath.Join(t.TempDir(), "restored.db")
-	_, err = Restore(streamer, dstPath)
-	if err == nil {
-		t.Fatal("expected error restoring from incremental snapshot")
-	}
-	if !strings.Contains(err.Error(), "no database") {
-		t.Fatalf("expected 'no database' error, got: %v", err)
-	}
-}
-
 func Test_Restore_EmptyReader(t *testing.T) {
 	dstPath := filepath.Join(t.TempDir(), "restored.db")
 	_, err := Restore(bytes.NewReader(nil), dstPath)
