@@ -182,4 +182,3 @@ func Test_MultiRSW_BeginWriteBlocking_WaitsForWriter(t *testing.T) {
 	}
 	r.EndWrite()
 }
-
