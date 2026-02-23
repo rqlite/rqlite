@@ -71,6 +71,7 @@ func Test_OpenStoreCloseStartupSingleNode(t *testing.T) {
 		t.Fatalf("Error waiting for leader: %s", err)
 	}
 
+	// Ensures there is something to snapshot.
 	er = executeRequestFromStrings([]string{
 		`UPDATE foo SET name='fiona-updated' WHERE id=1`,
 	}, false, false)

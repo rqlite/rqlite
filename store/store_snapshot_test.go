@@ -99,6 +99,7 @@ func Test_SingleNodeUserSnapshot_CAS(t *testing.T) {
 		t.Fatalf("Error waiting for leader: %s", err)
 	}
 
+	// Ensures there is something to snapshot.
 	er := executeRequestFromStrings([]string{
 		`CREATE TABLE foo (id INTEGER NOT NULL PRIMARY KEY, name TEXT)`,
 	}, false, false)
@@ -113,6 +114,8 @@ func Test_SingleNodeUserSnapshot_CAS(t *testing.T) {
 	if err := s.snapshotCAS.Begin("snapshot-test"); err != nil {
 		t.Fatalf("failed to begin snapshot CAS: %s", err.Error())
 	}
+
+	// Ensures there is something to snapshot.
 	er = executeRequestFromStrings([]string{
 		`INSERT INTO foo(id, name) VALUES(1, "fiona")`,
 	}, false, false)
