@@ -32,7 +32,7 @@ const (
 const (
 	persistSize            = "latest_persist_size"
 	persistDuration        = "latest_persist_duration"
-	autoReapDuration       = "latest_auto_reap_duration"
+	autoReapDuration       = "latest_autoreap_duration"
 	upgradeOk              = "upgrade_ok"
 	upgradeFail            = "upgrade_fail"
 	snapshotsReaped        = "snapshots_reaped"
