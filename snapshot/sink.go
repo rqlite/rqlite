@@ -107,17 +107,6 @@ func (s *Sink) Write(p []byte) (n int, err error) {
 		switch p := s.header.Payload.(type) {
 		case *proto.SnapshotHeader_Full:
 			s.sinkW = NewFullSink(s.snapTmpDirPath, p.Full)
-		case *proto.SnapshotHeader_Incremental:
-			if s.fc != nil {
-				fullNeeded, err := s.fc.FullNeeded()
-				if err != nil {
-					return n, err
-				}
-				if fullNeeded {
-					return n, fmt.Errorf("full snapshot needed before incremental can be applied")
-				}
-			}
-			s.sinkW = NewIncrementalSink(s.snapTmpDirPath, p.Incremental.WalHeader)
 		case *proto.SnapshotHeader_IncrementalFile:
 			if s.fc != nil {
 				fullNeeded, err := s.fc.FullNeeded()

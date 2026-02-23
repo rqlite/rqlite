@@ -14,10 +14,6 @@ message FullSnapshot {
   repeated Header wal_headers = 2;
 }
 
-message IncrementalSnapshot {
-  Header wal_header = 1;
-}
-
 message IncrementalFileSnapshot {
   string wal_dir_path = 1;
 }
@@ -26,7 +22,6 @@ message SnapshotHeader {
   uint32 format_version = 1;
   oneof payload {
     FullSnapshot full = 2;
-    IncrementalSnapshot incremental = 3;
-    IncrementalFileSnapshot incremental_file = 4;
+    IncrementalFileSnapshot incremental_file = 3;
   }
 }

@@ -151,41 +151,6 @@ func Test_FullSink_SingleDBFile_MultiWALFile(t *testing.T) {
 	}
 }
 
-func Test_IncrementalSink(t *testing.T) {
-	hdr, err := NewSnapshotHeader("", "testdata/db-and-wals/wal-00")
-	if err != nil {
-		t.Fatalf("unexpected error creating manifest: %s", err.Error())
-	}
-
-	sink := NewIncrementalSink(t.TempDir(), hdr.GetIncremental().WalHeader)
-	if sink == nil {
-		t.Fatalf("expected non-nil Sink")
-	}
-
-	if err := sink.Open(); err != nil {
-		t.Fatalf("unexpected error opening sink: %s", err.Error())
-	}
-
-	fd, err := os.Open("testdata/db-and-wals/wal-00")
-	if err != nil {
-		t.Fatalf("unexpected error opening source wal file: %s", err.Error())
-	}
-	defer fd.Close()
-
-	if _, err := io.Copy(sink, fd); err != nil {
-		t.Fatalf("unexpected error copying data to sink: %s", err.Error())
-	}
-
-	if err := sink.Close(); err != nil {
-		t.Fatalf("unexpected error closing sink: %s", err.Error())
-	}
-
-	// Installed WAL file should be byte-for-byte identical to source.
-	if !filesIdentical("testdata/db-and-wals/wal-00", sink.WALFile()) {
-		t.Fatalf("expected file %s to be identical to source", sink.WALFile())
-	}
-}
-
 func Test_IncrementalFileSink(t *testing.T) {
 	srcPath := "testdata/db-and-wals/wal-01"
 	walName := "00000000000000000001.wal"

@@ -19,7 +19,6 @@ import (
 
 const (
 	dbfileName     = "data.db"
-	walfileName    = "data.wal" // Used by the streaming IncrementalSink only.
 	walfileSuffix  = ".wal"
 	crcSuffix      = ".crc32"
 	metaFileName   = "meta.json"
@@ -464,7 +463,7 @@ func (s *Store) reap() (int, int, error) {
 		//    handles cross-directory moves during checkpointing.
 		var walFiles []string
 		for _, snap := range newerSet.All() {
-			walFiles = append(walFiles, filepath.Join(snap.path, walfileName))
+			walFiles = append(walFiles, snap.walFiles...)
 		}
 		if len(walFiles) > 0 {
 			p.AddCheckpoint(filepath.Join(full.path, dbfileName), walFiles)

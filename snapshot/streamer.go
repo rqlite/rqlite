@@ -41,55 +41,32 @@ func NewHeaderFromFile(path string, crc32 bool) (*proto.Header, error) {
 }
 
 // NewSnapshotHeader creates a new SnapshotHeader for the given DB and WAL file paths.
-// dbPath may be empty, in which case no DB header is included. walPaths may be empty.
-//
-// This function enforces certain invariants:
-//   - At least one of dbPath or walPaths must be non-empty.
-//   - If only WALs are provided, then only one WAL is allowed. This represents an
-//     incremental snapshot.
-//
-// When dbPath is non-empty, the header payload is FullSnapshot. When only a single
-// WAL path is provided, the payload is IncrementalSnapshot.
+// dbPath must be non-empty. walPaths may be empty. The header payload is always
+// FullSnapshot.
 func NewSnapshotHeader(dbPath string, walPaths ...string) (*proto.SnapshotHeader, error) {
-	if dbPath == "" && len(walPaths) == 0 {
-		return nil, fmt.Errorf("at least one of dbPath or walPaths must be provided")
-	}
-
-	if dbPath == "" && len(walPaths) > 1 {
-		return nil, fmt.Errorf("when dbPath is empty, only one WAL path is allowed")
+	if dbPath == "" {
+		return nil, fmt.Errorf("dbPath must be non-empty")
 	}
 
 	sh := &proto.SnapshotHeader{
 		FormatVersion: 1,
 	}
 
-	if dbPath != "" {
-		dbHeader, err := NewHeaderFromFile(dbPath, true)
-		if err != nil {
-			return nil, err
-		}
-		full := &proto.FullSnapshot{
-			DbHeader: dbHeader,
-		}
-		for _, w := range walPaths {
-			wh, err := NewHeaderFromFile(w, true)
-			if err != nil {
-				return nil, err
-			}
-			full.WalHeaders = append(full.WalHeaders, wh)
-		}
-		sh.Payload = &proto.SnapshotHeader_Full{Full: full}
-	} else {
-		wh, err := NewHeaderFromFile(walPaths[0], true)
-		if err != nil {
-			return nil, err
-		}
-		sh.Payload = &proto.SnapshotHeader_Incremental{
-			Incremental: &proto.IncrementalSnapshot{
-				WalHeader: wh,
-			},
-		}
+	dbHeader, err := NewHeaderFromFile(dbPath, true)
+	if err != nil {
+		return nil, err
 	}
+	full := &proto.FullSnapshot{
+		DbHeader: dbHeader,
+	}
+	for _, w := range walPaths {
+		wh, err := NewHeaderFromFile(w, true)
+		if err != nil {
+			return nil, err
+		}
+		full.WalHeaders = append(full.WalHeaders, wh)
+	}
+	sh.Payload = &proto.SnapshotHeader_Full{Full: full}
 	return sh, nil
 }
 
@@ -141,10 +118,6 @@ func snapshotHeaderPayloadSize(s *proto.SnapshotHeader) (int64, error) {
 		}
 		for _, w := range p.Full.WalHeaders {
 			total += int64(w.SizeBytes)
-		}
-	case *proto.SnapshotHeader_Incremental:
-		if p.Incremental.WalHeader != nil {
-			total += int64(p.Incremental.WalHeader.SizeBytes)
 		}
 	case *proto.SnapshotHeader_IncrementalFile:
 		// No file data follows this header type.
