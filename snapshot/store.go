@@ -32,6 +32,7 @@ const (
 const (
 	persistSize            = "latest_persist_size"
 	persistDuration        = "latest_persist_duration"
+	autoReapDuration       = "latest_auto_reap_duration"
 	upgradeOk              = "upgrade_ok"
 	upgradeFail            = "upgrade_fail"
 	snapshotsReaped        = "snapshots_reaped"
@@ -58,6 +59,7 @@ func ResetStats() {
 	stats.Init()
 	stats.Add(persistSize, 0)
 	stats.Add(persistDuration, 0)
+	stats.Add(autoReapDuration, 0)
 	stats.Add(upgradeOk, 0)
 	stats.Add(upgradeFail, 0)
 	stats.Add(snapshotsReaped, 0)
@@ -558,6 +560,12 @@ func (s *Store) reapLoop() {
 		}
 
 		n, c, err := func() (int, int, error) {
+			startTime := time.Now()
+			defer func() {
+				dur := time.Since(startTime)
+				stats.Get(autoReapDuration).(*expvar.Int).Set(dur.Milliseconds())
+			}()
+
 			s.mrsw.BeginWriteBlocking("reap")
 			defer s.mrsw.EndWrite()
 			return s.reap()
