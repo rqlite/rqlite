@@ -509,9 +509,6 @@ func (s *Store) executeReapPlan(p *plan.Plan, planPath string) (int, int, error)
 
 	// Clean up the plan file.
 	os.Remove(planPath)
-
-	s.logger.Printf("reap complete: %d snapshots reaped, %d WALs checkpointed",
-		p.NReaped, p.NCheckpointed)
 	return p.NReaped, p.NCheckpointed, nil
 }
 
@@ -571,7 +568,7 @@ func (s *Store) reapLoop() {
 			continue
 		}
 		if s.LogReaping {
-			s.logger.Printf("auto-reap complete: %d snapshots reaped, %d WALs checkpointed", n, c)
+			s.logger.Printf("reap complete: %d snapshots reaped, %d WALs checkpointed", n, c)
 		}
 	}
 }
