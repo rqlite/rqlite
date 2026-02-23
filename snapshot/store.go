@@ -228,7 +228,6 @@ func (s *Store) Create(version raft.SnapshotVersion, index, term uint64, configu
 	if err := sink.Open(); err != nil {
 		return nil, err
 	}
-	s.logger.Printf("created new snapshot sink: index=%d, term=%d", index, term)
 	return NewLockingSink(sink, s), nil
 }
 
