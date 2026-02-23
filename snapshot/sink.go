@@ -11,8 +11,6 @@ import (
 	"path/filepath"
 
 	"github.com/hashicorp/raft"
-	"github.com/rqlite/rqlite/v10/db"
-	"github.com/rqlite/rqlite/v10/internal/rsum"
 	"github.com/rqlite/rqlite/v10/snapshot/proto"
 	pb "google.golang.org/protobuf/proto"
 )
@@ -159,45 +157,18 @@ func (s *Sink) Close() error {
 
 	if s.localWALDir != "" {
 		// IncrementalFileSnapshot: atomically move the WAL directory into the
-		// snapshot directory, then redistribute the WAL files.
+		// snapshot directory, then validate and redistribute the WAL files.
 		movedDir := filepath.Join(s.snapTmpDirPath, "wal-incoming")
 		if err := os.Rename(s.localWALDir, movedDir); err != nil {
 			return err
 		}
-
-		walMatches, err := filepath.Glob(filepath.Join(movedDir, "*"+walfileSuffix))
-		if err != nil {
-			return fmt.Errorf("globbing for WAL files in moved directory: %w", err)
+		sd := NewStagingDir(movedDir)
+		if err := sd.Validate(); err != nil {
+			return err
 		}
-		if len(walMatches) > 1 {
-			s.logger.Printf("found %d WAL files in moved directory, processing multi-WAL snapshot",
-				len(walMatches))
+		if err := sd.MoveWALFilesTo(s.snapTmpDirPath); err != nil {
+			return err
 		}
-
-		for _, srcPath := range walMatches {
-			if !db.IsValidSQLiteWALFile(srcPath) {
-				return fmt.Errorf("%s is not a valid SQLite WAL file", srcPath)
-			}
-
-			srcCRCPath := srcPath + crcSuffix
-			ok, err := rsum.CompareCRC32SumFile(srcPath, srcCRCPath)
-			if err != nil {
-				return fmt.Errorf("comparing CRC32 sum for %s: %w", srcPath, err)
-			}
-			if !ok {
-				return fmt.Errorf("CRC32 sum mismatch for %s", srcPath)
-			}
-
-			name := filepath.Base(srcPath)
-			dstPath := filepath.Join(s.snapTmpDirPath, name)
-			if err := os.Rename(srcPath, dstPath); err != nil {
-				return err
-			}
-			if err := os.Rename(srcCRCPath, dstPath+crcSuffix); err != nil {
-				return err
-			}
-		}
-
 		if err := os.Remove(movedDir); err != nil {
 			return err
 		}

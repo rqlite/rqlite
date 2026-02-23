@@ -121,7 +121,6 @@ var (
 )
 
 const (
-	crcSuffix                = ".crc32"
 	cleanSnapshotName        = "clean_snapshot"
 	snapshotsDirName         = "wsnapshots"
 	walStagingDirName        = "wal-staging"
@@ -2242,11 +2241,7 @@ func (s *Store) RORWCount(eqr *proto.ExecuteQueryRequest) (nRW, nRO int) {
 
 // StagedWALs returns the list of WAL files in the staging directory.
 func (s *Store) StagedWALs() ([]string, error) {
-	files, err := filepath.Glob(filepath.Join(s.walStagingDir, "*.wal"))
-	if err != nil {
-		return nil, fmt.Errorf("failed to list staged WAL files: %s", err.Error())
-	}
-	return files, nil
+	return snapshot.NewStagingDir(s.walStagingDir).WALFiles()
 }
 
 // remove removes the node, with the given ID, from the cluster.
@@ -2582,7 +2577,6 @@ func (s *Store) fsmSnapshot() (fSnap raft.FSMSnapshot, retErr error) {
 	}()
 
 	var fsmSnapshot raft.FSMSnapshot
-	var compactWALFd *os.File
 	finalizer := s.createSnapshotFingerprint
 	if fullNeeded {
 		chkStartTime := time.Now()
@@ -2621,52 +2615,36 @@ func (s *Store) fsmSnapshot() (fSnap raft.FSMSnapshot, retErr error) {
 			// Write the compacted WAL to the WAL staging directory. The Snapshotting process
 			// will atomically move this entire directory. If it fails to do so, then this WAL
 			// file wil be packaged as part of the next Snapshot and the next WAL file.
-			err = ensureDirExists(s.walStagingDir)
+			sd := snapshot.NewStagingDir(s.walStagingDir)
+			if err := os.MkdirAll(sd.Path(), 0755); err != nil {
+				return nil, err
+			}
+			walWriter, _, err := sd.CreateWAL()
 			if err != nil {
 				return nil, err
 			}
-			compactWALPath := filepath.Join(s.walStagingDir, fmt.Sprintf("%024d.wal", time.Now().UnixNano()))
-			compactWALFd, err = os.Create(compactWALPath)
+			ww, err := wal.NewWriter(scanner)
 			if err != nil {
 				return nil, err
 			}
-			defer compactWALFd.Close()
-			walWriter, err := wal.NewWriter(scanner)
+			walSzPost, err := ww.WriteTo(walWriter)
 			if err != nil {
-				removeFileOrFatal(compactWALFd)
 				return nil, err
 			}
-			crcCompactWAL := rsum.NewCRC32Writer(compactWALFd)
-			walSzPost, err := walWriter.WriteTo(crcCompactWAL)
-			if err != nil {
-				removeFileOrFatal(compactWALFd)
+			if err := walWriter.Close(); err != nil {
 				return nil, err
-			}
-			if err := rsum.WriteCRC32SumFile(compactWALPath+crcSuffix, crcCompactWAL.Sum32(), rsum.Sync); err != nil {
-				removeFileOrFatal(compactWALFd)
-				return nil, fmt.Errorf("failed to write CRC32 sum file: %w", err)
 			}
 			stats.Get(snapshotCreateWALCompactDuration).(*expvar.Int).Set(time.Since(compactStartTime).Milliseconds())
-			if err := compactWALFd.Sync(); err != nil {
-				removeFileOrFatal(compactWALFd)
-				return nil, fmt.Errorf("failed to sync compacted WAL file: %w", err)
-			}
-			if err := syncDirMaybe(s.walStagingDir); err != nil {
-				removeFileOrFatal(compactWALFd)
-				return nil, fmt.Errorf("failed to sync WAL staging directory: %w", err)
-			}
 
 			// Now that we've got a (compacted) copy of the WAL we can truncate the
 			// WAL itself. We use TRUNCATE mode so that the next WAL contains just
 			// changes since this snapshot.
 			walSzPre, err := fileSize(s.walPath)
 			if err != nil {
-				removeFileOrFatal(compactWALFd)
 				return nil, err
 			}
 			chkTStartTime := time.Now()
 			if err := s.checkpointWAL(); err != nil {
-				removeFileOrFatal(compactWALFd)
 				stats.Add(numWALCheckpointTruncateFailed, 1)
 				return nil, fmt.Errorf("incremental snapshot can't complete due to WAL checkpoint error (will retry): %s",
 					err.Error())
@@ -2679,7 +2657,7 @@ func (s *Store) fsmSnapshot() (fSnap raft.FSMSnapshot, retErr error) {
 			// path to the Snapshot Store and Sink indirectly via the header. The Snapshotting
 			// system knows to check for this. It will atomically move the directory into the
 			// snapshot directory and redistribute the WAL files within it.
-			streamer, err := snapshot.NewSnapshotPathStreamer(s.walStagingDir)
+			streamer, err := snapshot.NewSnapshotPathStreamer(sd.Path())
 			if err != nil {
 				return nil, err
 			}
