@@ -35,6 +35,7 @@ Upgrading to this release from a v7 release (or later) is seamless and been exte
 - [PR #2499](https://github.com/rqlite/rqlite/pull/2499): Ensure Snapshot Reaping doesn't starve.
 - [PR #2501](https://github.com/rqlite/rqlite/pull/2501): Remove Noop Snapshot support, return error when no WAL data available.
 - [PR #2502](https://github.com/rqlite/rqlite/pull/2502): Remove Incremental snapshot type.
+- [PR #2503](https://github.com/rqlite/rqlite/pull/2503): Measure Snapshot auto-reap duration.
 
 ## v9.4.1 (February 11th 2026)
 ### Implementation changes and bug fixes
