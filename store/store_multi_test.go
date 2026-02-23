@@ -1166,14 +1166,9 @@ func Test_MultiNodeStoreAutoRestoreBootstrap(t *testing.T) {
 		t.Fatalf("failed to get leader: %s", err.Error())
 	}
 
-	// Ultimately there is a hard-to-control timing issue here. Knowing
-	// exactly when the leader has applied the restore is difficult, so
-	// just wait a bit.
-	time.Sleep(2 * time.Second)
-
-	if !s0.Ready() {
-		t.Fatalf("node is not ready")
-	}
+	// Poll until the node is ready, which indicates the auto-restore
+	// has completed and the restoreDoneCh has been closed.
+	testPoll(t, s0.Ready, 250*time.Millisecond, 10*time.Second)
 
 	qr := queryRequestFromString("SELECT * FROM foo WHERE id=2", false, true)
 	r, _, _, err := s0.Query(context.Background(), qr)
