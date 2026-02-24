@@ -157,7 +157,7 @@ func (s *Sink) Close() error {
 
 	if s.localWALDir != "" {
 		// IncrementalFileSnapshot: atomically move the WAL directory into the
-		// snapshot directory, then validate and redistribute the WAL files.
+		// snapshot directory and redistribute the WAL files.
 		movedDir := filepath.Join(s.snapTmpDirPath, "wal-incoming")
 		if err := os.Rename(s.localWALDir, movedDir); err != nil {
 			return err
