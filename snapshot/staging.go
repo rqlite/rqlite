@@ -62,10 +62,9 @@ func (s *StagingDir) CreateWAL() (*WALWriter, string, error) {
 	}
 	crcW := rsum.NewCRC32Writer(fd)
 	w := &WALWriter{
-		fd:      fd,
-		crcW:    crcW,
-		walPath: walPath,
-		dir:     s.dir,
+		fd:   fd,
+		crcW: crcW,
+		dir:  s.dir,
 	}
 	return w, walPath, nil
 }
@@ -143,11 +142,10 @@ func (s *StagingDir) Sync() error {
 // directory. If writing fails the caller should call Cancel to remove
 // the partial WAL file. Cancel is a no-op after a successful Close.
 type WALWriter struct {
-	fd      *os.File
-	crcW    *rsum.CRC32Writer
-	walPath string
-	dir     string
-	closed  bool
+	fd     *os.File
+	crcW   *rsum.CRC32Writer
+	dir    string
+	closed bool
 }
 
 // Write writes data to the WAL file and updates the running CRC32 checksum.
@@ -158,7 +156,8 @@ func (w *WALWriter) Write(p []byte) (int, error) {
 // Close finalizes the WAL file: writes the .crc32 sidecar, syncs the
 // WAL file, closes the file descriptor, and syncs the directory.
 func (w *WALWriter) Close() error {
-	if err := rsum.WriteCRC32SumFile(w.walPath+crcSuffix, w.crcW.Sum32(), rsum.Sync); err != nil {
+	walPath := w.fd.Name()
+	if err := rsum.WriteCRC32SumFile(walPath+crcSuffix, w.crcW.Sum32(), rsum.Sync); err != nil {
 		return fmt.Errorf("failed to write CRC32 sum file: %w", err)
 	}
 	if err := w.fd.Sync(); err != nil {
@@ -178,6 +177,7 @@ func (w *WALWriter) Cancel() {
 		return
 	}
 	w.fd.Close()
-	os.Remove(w.walPath)
-	os.Remove(w.walPath + crcSuffix)
+	walPath := w.fd.Name()
+	os.Remove(walPath)
+	os.Remove(walPath + crcSuffix)
 }
