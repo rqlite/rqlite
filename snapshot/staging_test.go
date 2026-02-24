@@ -17,10 +17,7 @@ func Test_StagingDir_CreateWALAndValidate(t *testing.T) {
 	}
 
 	// Copy a real WAL file through the writer so it produces a valid SQLite WAL.
-	srcData, err := os.ReadFile("testdata/db-and-wals/wal-01")
-	if err != nil {
-		t.Fatalf("failed to read source WAL: %v", err)
-	}
+	srcData := mustReadFile(t, "testdata/db-and-wals/wal-01")
 
 	w, walPath, err := sd.CreateWAL()
 	if err != nil {
@@ -34,11 +31,11 @@ func Test_StagingDir_CreateWALAndValidate(t *testing.T) {
 	}
 
 	// WAL file and CRC sidecar should exist.
-	if _, err := os.Stat(walPath); err != nil {
-		t.Fatalf("WAL file does not exist: %v", err)
+	if !fileExists(walPath) {
+		t.Fatalf("WAL file does not exist: %v", walPath)
 	}
-	if _, err := os.Stat(walPath + crcSuffix); err != nil {
-		t.Fatalf("CRC file does not exist: %v", err)
+	if !fileExists(walPath + crcSuffix) {
+		t.Fatalf("CRC file does not exist: %v", walPath+crcSuffix)
 	}
 
 	// Validate should pass.
@@ -62,10 +59,7 @@ func Test_StagingDir_WALFiles(t *testing.T) {
 
 	// Create two WAL files.
 	for _, src := range []string{"testdata/db-and-wals/wal-00", "testdata/db-and-wals/wal-01"} {
-		srcData, err := os.ReadFile(src)
-		if err != nil {
-			t.Fatalf("failed to read source: %v", err)
-		}
+		srcData := mustReadFile(t, src)
 		w, _, err := sd.CreateWAL()
 		if err != nil {
 			t.Fatalf("CreateWAL: %v", err)
@@ -92,10 +86,7 @@ func Test_StagingDir_ValidateFailsCRCMismatch(t *testing.T) {
 	sd := NewStagingDir(dir)
 
 	// Write a valid WAL file.
-	srcData, err := os.ReadFile("testdata/db-and-wals/wal-01")
-	if err != nil {
-		t.Fatalf("failed to read source WAL: %v", err)
-	}
+	srcData := mustReadFile(t, "testdata/db-and-wals/wal-01")
 	w, walPath, err := sd.CreateWAL()
 	if err != nil {
 		t.Fatalf("CreateWAL: %v", err)
@@ -123,10 +114,7 @@ func Test_StagingDir_ValidateFailsMissingCRC(t *testing.T) {
 
 	// Copy a WAL file manually without a CRC sidecar.
 	walPath := filepath.Join(dir, "00000000000000000001.wal")
-	srcData, err := os.ReadFile("testdata/db-and-wals/wal-01")
-	if err != nil {
-		t.Fatalf("failed to read source WAL: %v", err)
-	}
+	srcData := mustReadFile(t, "testdata/db-and-wals/wal-01")
 	if err := os.WriteFile(walPath, srcData, 0644); err != nil {
 		t.Fatalf("failed to write WAL file: %v", err)
 	}
@@ -144,10 +132,7 @@ func Test_StagingDir_MoveWALFilesTo(t *testing.T) {
 	// Create two WAL files.
 	var walPaths []string
 	for _, src := range []string{"testdata/db-and-wals/wal-00", "testdata/db-and-wals/wal-01"} {
-		srcData, err := os.ReadFile(src)
-		if err != nil {
-			t.Fatalf("failed to read source: %v", err)
-		}
+		srcData := mustReadFile(t, src)
 		w, walPath, err := sd.CreateWAL()
 		if err != nil {
 			t.Fatalf("CreateWAL: %v", err)
@@ -161,6 +146,19 @@ func Test_StagingDir_MoveWALFilesTo(t *testing.T) {
 		}
 	}
 
+	// Moving to a non-existent directory should fail.
+	if err := sd.MoveWALFilesTo(filepath.Join(dstDir, "nonexistent")); err == nil {
+		t.Fatal("expected MoveWALFilesTo to fail with non-existent destination")
+	}
+
+	// Moving to a path that exists, but is not a directory, should fail.
+	nonDirPath := filepath.Join(t.TempDir(), "not-a-dir")
+	mustTouchFile(t, nonDirPath)
+	if err := sd.MoveWALFilesTo(nonDirPath); err == nil {
+		t.Fatal("expected MoveWALFilesTo to fail with non-directory destination")
+	}
+
+	// Now, move the files.
 	if err := sd.MoveWALFilesTo(dstDir); err != nil {
 		t.Fatalf("MoveWALFilesTo: %v", err)
 	}
@@ -178,11 +176,11 @@ func Test_StagingDir_MoveWALFilesTo(t *testing.T) {
 	for _, wp := range walPaths {
 		name := filepath.Base(wp)
 		dstWAL := filepath.Join(dstDir, name)
-		if _, err := os.Stat(dstWAL); err != nil {
-			t.Fatalf("moved WAL file %s does not exist: %v", name, err)
+		if !fileExists(dstWAL) {
+			t.Fatalf("moved WAL file %s does not exist", name)
 		}
-		if _, err := os.Stat(dstWAL + crcSuffix); err != nil {
-			t.Fatalf("moved CRC file for %s does not exist: %v", name, err)
+		if !fileExists(dstWAL + crcSuffix) {
+			t.Fatalf("moved CRC file for %s does not exist", name)
 		}
 	}
 }
@@ -197,10 +195,7 @@ func Test_StagingDir_ValidateMultipleWALs(t *testing.T) {
 		"testdata/db-and-wals/wal-01",
 		"testdata/db-and-wals/wal-02",
 	} {
-		srcData, err := os.ReadFile(src)
-		if err != nil {
-			t.Fatalf("failed to read source: %v", err)
-		}
+		srcData := mustReadFile(t, src)
 		w, _, err := sd.CreateWAL()
 		if err != nil {
 			t.Fatalf("CreateWAL: %v", err)
@@ -217,12 +212,10 @@ func Test_StagingDir_ValidateMultipleWALs(t *testing.T) {
 	if err != nil {
 		t.Fatalf("WALFiles: %v", err)
 	}
-	if len(files) != 3 {
-		t.Fatalf("expected 3 WAL files, got %d", len(files))
-	}
-
-	if err := sd.Validate(); err != nil {
-		t.Fatalf("Validate with 3 valid WALs: %v", err)
+	if exp, got := 3, len(files); exp != got {
+		t.Fatalf("expected %d WAL files, got %d", exp, got)
+	} else if err := sd.Validate(); err != nil {
+		t.Fatalf("Validate with %d valid WALs: %v", exp, err)
 	}
 }
 
@@ -252,8 +245,8 @@ func Test_WALWriter_CancelActive(t *testing.T) {
 	if err != nil {
 		t.Fatalf("WALFiles: %v", err)
 	}
-	if len(files) != 0 {
-		t.Fatalf("expected 0 WAL files after Cancel, got %d", len(files))
+	if exp, got := 0, len(files); exp != got {
+		t.Fatalf("expected %d WAL files after Cancel, got %d", exp, got)
 	}
 }
 
@@ -280,10 +273,26 @@ func Test_WALWriter_CancelAfterClose(t *testing.T) {
 	// Cancel after Close should be a no-op — files must survive.
 	w.Cancel()
 
-	if _, err := os.Stat(walPath); err != nil {
-		t.Fatalf("WAL file should still exist after Cancel on closed writer: %v", err)
+	if !fileExists(walPath) {
+		t.Fatalf("WAL file should still exist after Cancel on closed writer")
 	}
-	if _, err := os.Stat(walPath + crcSuffix); err != nil {
-		t.Fatalf("CRC file should still exist after Cancel on closed writer: %v", err)
+	if !fileExists(walPath + crcSuffix) {
+		t.Fatalf("CRC file should still exist after Cancel on closed writer")
+	}
+}
+
+func mustReadFile(t *testing.T, path string) []byte {
+	t.Helper()
+	srcData, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("failed to read source: %v", err)
+	}
+	return srcData
+}
+
+func mustTouchFile(t *testing.T, path string) {
+	t.Helper()
+	if err := os.WriteFile(path, []byte("data"), 0644); err != nil {
+		t.Fatalf("failed to write file: %v", err)
 	}
 }

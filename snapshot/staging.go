@@ -30,7 +30,7 @@ type StagingDir struct {
 func NewStagingDir(dir string) *StagingDir {
 	return &StagingDir{
 		dir:    dir,
-		logger: log.New(log.Writer(), "[staging-dir] ", log.LstdFlags),
+		logger: log.New(log.Writer(), "[snapshot-staging] ", log.LstdFlags),
 	}
 }
 
@@ -89,7 +89,7 @@ func (s *StagingDir) Validate() error {
 		return err
 	}
 	if len(walFiles) > 1 {
-		s.logger.Printf("found %d WAL files in staging directory, processing multi-WAL snapshot",
+		s.logger.Printf("found %d WAL files in staging directory, validating multi-WAL snapshot",
 			len(walFiles))
 	}
 	for _, walPath := range walFiles {
@@ -109,8 +109,11 @@ func (s *StagingDir) Validate() error {
 }
 
 // MoveWALFilesTo renames each .wal + .crc32 pair from the staging
-// directory into dst.
+// directory into dst. dst must be a directory and must exist.
 func (s *StagingDir) MoveWALFilesTo(dst string) error {
+	if !dirExists(dst) {
+		return fmt.Errorf("destination %s does not exist or is not a directory", dst)
+	}
 	walFiles, err := s.WALFiles()
 	if err != nil {
 		return err

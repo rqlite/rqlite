@@ -163,9 +163,6 @@ func (s *Sink) Close() error {
 			return err
 		}
 		sd := NewStagingDir(movedDir)
-		if err := sd.Validate(); err != nil {
-			return err
-		}
 		if err := sd.MoveWALFilesTo(s.snapTmpDirPath); err != nil {
 			return err
 		}

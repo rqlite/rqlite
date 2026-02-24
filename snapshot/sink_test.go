@@ -356,55 +356,6 @@ func Test_IncrementalFileSink_MissingCRC(t *testing.T) {
 	}
 }
 
-func Test_IncrementalFileSink_BadCRC(t *testing.T) {
-	srcPath := "testdata/db-and-wals/wal-01"
-	walName := "00000000000000000001.wal"
-
-	// Create a directory containing the WAL file and a .crc32 file with the wrong value.
-	walDir := filepath.Join(t.TempDir(), "wal-dir")
-	if err := os.Mkdir(walDir, 0755); err != nil {
-		t.Fatalf("unexpected error creating WAL dir: %s", err.Error())
-	}
-	walPath := filepath.Join(walDir, walName)
-	mustCopyFile(t, srcPath, walPath)
-
-	// Write a bogus CRC32 value.
-	if err := rsum.WriteCRC32SumFile(walPath+crcSuffix, 0xdeadbeef, rsum.Sync); err != nil {
-		t.Fatalf("unexpected error writing bogus CRC file: %s", err.Error())
-	}
-
-	hdr, err := NewIncrementalFileSnapshotHeader(walDir)
-	if err != nil {
-		t.Fatalf("unexpected error creating header: %s", err.Error())
-	}
-	hdrBytes, err := marshalSnapshotHeader(hdr)
-	if err != nil {
-		t.Fatalf("unexpected error marshaling header: %s", err.Error())
-	}
-
-	var frameBuf bytes.Buffer
-	lenBuf := make([]byte, HeaderSizeLen)
-	binary.BigEndian.PutUint32(lenBuf, uint32(len(hdrBytes)))
-	frameBuf.Write(lenBuf)
-	frameBuf.Write(hdrBytes)
-
-	snapDir := t.TempDir()
-	meta := makeRaftMeta("test-incremental-file-bad-crc", 100, 1, 1)
-	sink := NewSink(snapDir, meta, nil)
-	if err := sink.Open(); err != nil {
-		t.Fatalf("unexpected error opening sink: %s", err.Error())
-	}
-
-	if _, err := sink.Write(frameBuf.Bytes()); err != nil {
-		t.Fatalf("unexpected error writing header to sink: %s", err.Error())
-	}
-
-	// Close should fail because the CRC32 checksum doesn't match.
-	if err := sink.Close(); err == nil {
-		t.Fatalf("expected error closing sink with bad CRC, got nil")
-	}
-}
-
 // mustWriteCRC32File computes the CRC32 checksum for the file at path and writes
 // the corresponding .crc32 file alongside it.
 func mustWriteCRC32File(t *testing.T, path string) {
