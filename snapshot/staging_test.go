@@ -225,3 +225,65 @@ func Test_StagingDir_ValidateMultipleWALs(t *testing.T) {
 		t.Fatalf("Validate with 3 valid WALs: %v", err)
 	}
 }
+
+func Test_WALWriter_CancelActive(t *testing.T) {
+	dir := t.TempDir()
+	sd := NewStagingDir(dir)
+
+	w, walPath, err := sd.CreateWAL()
+	if err != nil {
+		t.Fatalf("CreateWAL: %v", err)
+	}
+
+	// Write some data but don't Close.
+	if _, err := w.Write([]byte("partial data")); err != nil {
+		t.Fatalf("Write: %v", err)
+	}
+
+	// Cancel should remove the partial WAL file.
+	w.Cancel()
+
+	if _, err := os.Stat(walPath); !os.IsNotExist(err) {
+		t.Fatalf("expected WAL file to be removed after Cancel, got err: %v", err)
+	}
+
+	// Staging directory should have no WAL files.
+	files, err := sd.WALFiles()
+	if err != nil {
+		t.Fatalf("WALFiles: %v", err)
+	}
+	if len(files) != 0 {
+		t.Fatalf("expected 0 WAL files after Cancel, got %d", len(files))
+	}
+}
+
+func Test_WALWriter_CancelAfterClose(t *testing.T) {
+	dir := t.TempDir()
+	sd := NewStagingDir(dir)
+
+	srcData, err := os.ReadFile("testdata/db-and-wals/wal-01")
+	if err != nil {
+		t.Fatalf("failed to read source WAL: %v", err)
+	}
+
+	w, walPath, err := sd.CreateWAL()
+	if err != nil {
+		t.Fatalf("CreateWAL: %v", err)
+	}
+	if _, err := w.Write(srcData); err != nil {
+		t.Fatalf("Write: %v", err)
+	}
+	if err := w.Close(); err != nil {
+		t.Fatalf("Close: %v", err)
+	}
+
+	// Cancel after Close should be a no-op — files must survive.
+	w.Cancel()
+
+	if _, err := os.Stat(walPath); err != nil {
+		t.Fatalf("WAL file should still exist after Cancel on closed writer: %v", err)
+	}
+	if _, err := os.Stat(walPath + crcSuffix); err != nil {
+		t.Fatalf("CRC file should still exist after Cancel on closed writer: %v", err)
+	}
+}

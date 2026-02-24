@@ -2,7 +2,6 @@ package snapshot
 
 import (
 	"fmt"
-	"io"
 	"log"
 	"os"
 	"path/filepath"
@@ -37,18 +36,28 @@ func (s *StagingDir) Path() string {
 }
 
 // CreateWAL creates a new timestamped .wal file in the staging directory
-// and returns an io.WriteCloser that computes a CRC32 checksum on the fly.
-// The returned path is the absolute path to the new WAL file. On Close the
-// writer writes the .crc32 sidecar, syncs the WAL file, and syncs the
-// directory.
-func (s *StagingDir) CreateWAL() (io.WriteCloser, string, error) {
+// and returns a WALWriter that computes a CRC32 checksum on the fly.
+// The returned path is the absolute path to the new WAL file.
+//
+// On success the caller must call Close, which writes the .crc32 sidecar,
+// syncs the WAL file, and syncs the directory.
+//
+// If writing fails, the caller must call Cancel to remove the partial WAL
+// file. Cancel is a no-op after a successful Close. A typical pattern is:
+//
+//	w, path, err := sd.CreateWAL()
+//	if err != nil { ... }
+//	defer w.Cancel()
+//	// ... write data ...
+//	if err := w.Close(); err != nil { ... }
+func (s *StagingDir) CreateWAL() (*WALWriter, string, error) {
 	walPath := filepath.Join(s.dir, fmt.Sprintf("%024d.wal", time.Now().UnixNano()))
 	fd, err := os.Create(walPath)
 	if err != nil {
 		return nil, "", err
 	}
 	crcW := rsum.NewCRC32Writer(fd)
-	w := &walFileWriter{
+	w := &WALWriter{
 		fd:      fd,
 		crcW:    crcW,
 		walPath: walPath,
@@ -121,21 +130,27 @@ func (s *StagingDir) Sync() error {
 	return syncDirMaybe(s.dir)
 }
 
-// walFileWriter is an io.WriteCloser that wraps a WAL file descriptor,
-// computing a running CRC32 checksum. On Close it writes the .crc32
-// sidecar file, syncs the WAL file, and syncs the containing directory.
-type walFileWriter struct {
+// WALWriter wraps a WAL file descriptor, computing a running CRC32
+// checksum over all data written through it. On Close it writes the
+// .crc32 sidecar file, syncs the WAL file, and syncs the containing
+// directory. If writing fails the caller should call Cancel to remove
+// the partial WAL file. Cancel is a no-op after a successful Close.
+type WALWriter struct {
 	fd      *os.File
 	crcW    *rsum.CRC32Writer
 	walPath string
 	dir     string
+	closed  bool
 }
 
-func (w *walFileWriter) Write(p []byte) (int, error) {
+// Write writes data to the WAL file and updates the running CRC32 checksum.
+func (w *WALWriter) Write(p []byte) (int, error) {
 	return w.crcW.Write(p)
 }
 
-func (w *walFileWriter) Close() error {
+// Close finalizes the WAL file: writes the .crc32 sidecar, syncs the
+// WAL file, closes the file descriptor, and syncs the directory.
+func (w *WALWriter) Close() error {
 	if err := rsum.WriteCRC32SumFile(w.walPath+crcSuffix, w.crcW.Sum32(), rsum.Sync); err != nil {
 		return fmt.Errorf("failed to write CRC32 sum file: %w", err)
 	}
@@ -145,5 +160,17 @@ func (w *walFileWriter) Close() error {
 	if err := w.fd.Close(); err != nil {
 		return fmt.Errorf("failed to close WAL file: %w", err)
 	}
+	w.closed = true
 	return syncDirMaybe(w.dir)
+}
+
+// Cancel removes the partial WAL file from the staging directory. It is
+// a no-op if Close has already been called successfully.
+func (w *WALWriter) Cancel() {
+	if w.closed {
+		return
+	}
+	w.fd.Close()
+	os.Remove(w.walPath)
+	os.Remove(w.walPath + crcSuffix)
 }

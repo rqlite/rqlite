@@ -2623,15 +2623,14 @@ func (s *Store) fsmSnapshot() (fSnap raft.FSMSnapshot, retErr error) {
 			if err != nil {
 				return nil, err
 			}
+			defer walWriter.Cancel() // Noop if already closed, but ensures cleanup on error paths.
+
 			ww, err := wal.NewWriter(scanner)
 			if err != nil {
 				return nil, err
 			}
 			walSzPost, err := ww.WriteTo(walWriter)
 			if err != nil {
-				return nil, err
-			}
-			if err := walWriter.Close(); err != nil {
 				return nil, err
 			}
 			stats.Get(snapshotCreateWALCompactDuration).(*expvar.Int).Set(time.Since(compactStartTime).Milliseconds())
@@ -2652,6 +2651,12 @@ func (s *Store) fsmSnapshot() (fSnap raft.FSMSnapshot, retErr error) {
 			stats.Get(snapshotCreateChkTruncateDuration).(*expvar.Int).Set(time.Since(chkTStartTime).Milliseconds())
 			stats.Get(snapshotPrecompactWALSize).(*expvar.Int).Set(walSzPre)
 			stats.Get(snapshotWALSize).(*expvar.Int).Set(walSzPost)
+
+			// Now that the database has been truncated successfully, the WAL file in the staging directory
+			// should be marked valid.
+			if err := walWriter.Close(); err != nil {
+				return nil, err
+			}
 
 			// When it comes to incremental snapshotting of WAL files, we pass the WAL directory
 			// path to the Snapshot Store and Sink indirectly via the header. The Snapshotting
