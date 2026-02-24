@@ -227,7 +227,7 @@ jobs:
   end_to_end_autoclustering:
     docker:
       - image: << pipeline.parameters.primary_image >>
-      - image: hashicorp/consul
+      - image: hashicorp/consul:1.22.3
       - image: gcr.io/etcd-development/etcd:v3.5.1
     steps:
       - checkout
