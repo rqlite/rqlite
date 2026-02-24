@@ -760,7 +760,8 @@ func (s *Store) Open() (retErr error) {
 
 	// Clean up any files from aborted operations. This tries to catch the case where scratch files
 	// were created in the Raft directory, not cleaned up, and then the node was restarted with an
-	// explicit SQLite path set.
+	// explicit SQLite path set. The only way a Staging Directory should be present is if a snapshot
+	// operation was in progress and the node crashed.
 	if err := os.RemoveAll(s.walStagingDir); err != nil {
 		return fmt.Errorf("failed to remove pre-existing WAL staging directory: %s", err.Error())
 	}
@@ -2597,83 +2598,92 @@ func (s *Store) fsmSnapshot() (fSnap raft.FSMSnapshot, retErr error) {
 		stats.Add(numSnapshotsFull, 1)
 		s.numFullSnapshots++
 	} else {
-		if pathExistsWithData(s.walPath) {
-			// Using files is about protecting against large WAL files, even
-			// post-compaction. Large files, if processed entirely in memory, could
-			// cause excessive memory usage.
-			compactStartTime := time.Now()
-			walFD, err := os.Open(s.walPath)
-			if err != nil {
-				return nil, err
-			}
-			defer walFD.Close()
-			scanner, err := wal.NewFastCompactingScanner(walFD)
-			if err != nil {
-				return nil, err
-			}
-
-			// Write the compacted WAL to the WAL staging directory. The Snapshotting process
-			// will atomically move this entire directory. If it fails to do so, then this WAL
-			// file wil be packaged as part of the next Snapshot and the next WAL file.
-			sd := snapshot.NewStagingDir(s.walStagingDir)
-			if err := os.MkdirAll(sd.Path(), 0755); err != nil {
-				return nil, err
-			}
-			walWriter, _, err := sd.CreateWAL()
-			if err != nil {
-				return nil, err
-			}
-			defer walWriter.Cancel() // Noop if already closed, but ensures cleanup on error paths.
-
-			ww, err := wal.NewWriter(scanner)
-			if err != nil {
-				return nil, err
-			}
-			walSzPost, err := ww.WriteTo(walWriter)
-			if err != nil {
-				return nil, err
-			}
-			stats.Get(snapshotCreateWALCompactDuration).(*expvar.Int).Set(time.Since(compactStartTime).Milliseconds())
-
-			// Now that we've got a (compacted) copy of the WAL we can truncate the
-			// WAL itself. We use TRUNCATE mode so that the next WAL contains just
-			// changes since this snapshot.
-			walSzPre, err := fileSize(s.walPath)
-			if err != nil {
-				return nil, err
-			}
-			chkTStartTime := time.Now()
-			if err := s.checkpointWAL(); err != nil {
-				stats.Add(numWALCheckpointTruncateFailed, 1)
-				return nil, fmt.Errorf("incremental snapshot can't complete due to WAL checkpoint error (will retry): %s",
-					err.Error())
-			}
-			stats.Get(snapshotCreateChkTruncateDuration).(*expvar.Int).Set(time.Since(chkTStartTime).Milliseconds())
-			stats.Get(snapshotPrecompactWALSize).(*expvar.Int).Set(walSzPre)
-			stats.Get(snapshotWALSize).(*expvar.Int).Set(walSzPost)
-
-			// Now that the database has been truncated successfully, the WAL file in the staging directory
-			// should be marked valid.
-			if err := walWriter.Close(); err != nil {
-				return nil, err
-			}
-
-			// When it comes to incremental snapshotting of WAL files, we pass the WAL directory
-			// path to the Snapshot Store and Sink indirectly via the header. The Snapshotting
-			// system knows to check for this. It will atomically move the directory into the
-			// snapshot directory and redistribute the WAL files within it.
-			streamer, err := snapshot.NewSnapshotPathStreamer(sd.Path())
-			if err != nil {
-				return nil, err
-			}
-			fsmSnapshot = snapshot.NewStateReader(streamer)
-			stats.Add(numSnapshotsIncremental, 1)
-		} else {
+		if !pathExists(s.walPath) {
 			// No WAL data available. This can happen when the Raft log contains only
 			// entries that don't modify the database (e.g. cluster membership changes).
 			// Return an error so Raft knows there is nothing to snapshot.
 			return nil, ErrNoWALToSnapshot
 		}
+
+		// Using files is about protecting against large WAL files, even
+		// post-compaction. Large files, if processed entirely in memory, could
+		// cause excessive memory usage.
+		compactStartTime := time.Now()
+		walFD, err := os.Open(s.walPath)
+		if err != nil {
+			return nil, err
+		}
+		defer walFD.Close()
+		scanner, err := wal.NewFastCompactingScanner(walFD)
+		if err != nil {
+			return nil, err
+		}
+
+		// Write the compacted WAL to the WAL staging directory. The Snapshotting process
+		// will atomically move this entire directory. If it fails to do so, then this WAL
+		// file wil be packaged as part of the next Snapshot and the next WAL file.
+		if err := ensureDirExists(s.walStagingDir); err != nil {
+			return nil, err
+		}
+		sd := snapshot.NewStagingDir(s.walStagingDir)
+		walWriter, _, err := sd.CreateWAL()
+		if err != nil {
+			return nil, err
+		}
+		defer walWriter.Cancel() // Noop if already closed, but ensures cleanup on error paths.
+
+		ww, err := wal.NewWriter(scanner)
+		if err != nil {
+			return nil, err
+		}
+		walSzPost, err := ww.WriteTo(walWriter)
+		if err != nil {
+			return nil, err
+		}
+		stats.Get(snapshotCreateWALCompactDuration).(*expvar.Int).Set(time.Since(compactStartTime).Milliseconds())
+
+		// Now that we've got a (compacted) copy of the WAL we can truncate the
+		// WAL itself. We use TRUNCATE mode so that the next WAL contains just
+		// changes since this snapshot. If the truncation errors the the WAL
+		// Writer will be canceled, and this entire snapshot will be retried.
+		// If we crash before this point, the Staging Directory is deleted on
+		// startup, so it will be as though the snapshot never happened.
+		walSzPre, err := fileSize(s.walPath)
+		if err != nil {
+			return nil, err
+		}
+		chkTStartTime := time.Now()
+		if err := s.checkpointWAL(); err != nil {
+			stats.Add(numWALCheckpointTruncateFailed, 1)
+			return nil, fmt.Errorf("incremental snapshot can't complete due to WAL checkpoint error (will retry): %s",
+				err.Error())
+		}
+		stats.Get(snapshotCreateChkTruncateDuration).(*expvar.Int).Set(time.Since(chkTStartTime).Milliseconds())
+		stats.Get(snapshotPrecompactWALSize).(*expvar.Int).Set(walSzPre)
+		stats.Get(snapshotWALSize).(*expvar.Int).Set(walSzPost)
+
+		// Now that the database has been truncated successfully, the WAL file in the Staging directory
+		// should be marked valid. If we here, on restart we delete the Staging directory, but the since
+		// the Snapshot didn't get to complete, the database fingerprint will not be updated, so on
+		// restart the database will be replaced by that in the Snapshot. But by marking the WAL file
+		// as valid, if the snapshotting processes errors later (Persist fails for example), we can
+		// continue to use the compacted WALfile in the Staging directory for the next snapshot attempt,
+		// which will be faster than performing a full snapshot. The next Snapshot will comprise of two
+		// WAL files in that case.
+		if err := walWriter.Close(); err != nil {
+			return nil, err
+		}
+
+		// When it comes to incremental snapshotting of WAL files, we pass the WAL directory
+		// path to the Snapshot Store and Sink indirectly via the header. The Snapshotting
+		// system knows to check for this. It will atomically move the directory into the
+		// snapshot directory and redistribute the WAL files within it.
+		streamer, err := snapshot.NewSnapshotPathStreamer(sd.Path())
+		if err != nil {
+			return nil, err
+		}
+		fsmSnapshot = snapshot.NewStateReader(streamer)
+		stats.Add(numSnapshotsIncremental, 1)
 	}
 
 	stats.Add(numSnapshots, 1)
