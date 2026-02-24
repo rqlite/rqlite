@@ -2580,6 +2580,10 @@ func (s *Store) fsmSnapshot() (fSnap raft.FSMSnapshot, retErr error) {
 	var fsmSnapshot raft.FSMSnapshot
 	finalizer := s.createSnapshotFingerprint
 	if fullNeeded {
+		// We need to start the snapshoting process over again, starting with a full copy of the SQLite
+		// database. This happens when a node is snapshotting for the very first time, or in certain
+		// crash scenarios where we've truncated the WAL into the database, but haven't successfully
+		// completed a snapshot, so the database is modified but the WAL is not present to be snapshotted.
 		chkStartTime := time.Now()
 		if err := s.checkpointWAL(); err != nil {
 			stats.Add(numFullCheckpointFailed, 1)
@@ -2663,21 +2667,20 @@ func (s *Store) fsmSnapshot() (fSnap raft.FSMSnapshot, retErr error) {
 		stats.Get(snapshotWALSize).(*expvar.Int).Set(walSzPost)
 
 		// Now that the database has been truncated successfully, the WAL file in the Staging directory
-		// should be marked valid. If we here, on restart we delete the Staging directory, but the since
+		// should be marked valid. If we crash here, on restart we delete the Staging directory, but since
 		// the Snapshot didn't get to complete, the database fingerprint will not be updated, so on
 		// restart the database will be replaced by that in the Snapshot. But by marking the WAL file
 		// as valid, if the snapshotting processes errors later (Persist fails for example), we can
 		// continue to use the compacted WALfile in the Staging directory for the next snapshot attempt,
-		// which will be faster than performing a full snapshot. The next Snapshot will comprise of two
-		// WAL files in that case.
+		// which will be faster than performing a full snapshot. All this means that we avoid breaking the
+		// series of incremental snapshots. The next Snapshot will comprise of two WAL files in that case.
 		if err := walWriter.Close(); err != nil {
 			return nil, err
 		}
 
-		// When it comes to incremental snapshotting of WAL files, we pass the WAL directory
-		// path to the Snapshot Store and Sink indirectly via the header. The Snapshotting
-		// system knows to check for this. It will atomically move the directory into the
-		// snapshot directory and redistribute the WAL files within it.
+		// When it comes to incremental snapshotting of WAL files, we pass the WAL directory path to the
+		// Snapshot Store indirectly via the header. The Snapshotting system knows to check for this. It
+		// will atomically move the directory into the snapshot directory and process the WAL files.
 		streamer, err := snapshot.NewSnapshotPathStreamer(sd.Path())
 		if err != nil {
 			return nil, err
