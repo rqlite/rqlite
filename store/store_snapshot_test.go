@@ -235,7 +235,8 @@ func Test_SingleNode_ErrNoWALToSnapshot(t *testing.T) {
 	// change the database, so there is no WAL data.
 	mustNoop(s, "test-noop")
 
-	// Snapshot should now return ErrNoWALToSnapshot because there is no WAL.
+	// Snapshot should now return ErrNoWALToSnapshot because there is no data
+	// in the WAL to snapshot.
 	if err := s.Snapshot(0); err != ErrNoWALToSnapshot {
 		t.Fatalf("expected ErrNoWALToSnapshot, got: %v", err)
 	}
