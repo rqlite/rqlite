@@ -2609,9 +2609,10 @@ func (s *Store) fsmSnapshot() (fSnap raft.FSMSnapshot, retErr error) {
 			return nil, ErrNoWALToSnapshot
 		}
 
-		// Using files is about protecting against large WAL files, even
-		// post-compaction. Large files, if processed entirely in memory, could
-		// cause excessive memory usage.
+		// We've got a WAL file, let's start processing it. Checkpointing isn't strictly
+		// necessary but it keeps the size of the WAL file down when moved and stored
+		// in the Snapshot Store. It also means smaller data transfers if a snapshot
+		// is transferred to another node.
 		compactStartTime := time.Now()
 		walFD, err := os.Open(s.walPath)
 		if err != nil {
