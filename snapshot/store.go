@@ -19,10 +19,9 @@ import (
 
 const (
 	dbfileName     = "data.db"
-	walfileSuffix  = ".wal"
-	crcSuffix      = ".crc32"
 	metaFileName   = "meta.json"
 	tmpSuffix      = ".tmp"
+	walfileSuffix  = ".wal"
 	fullNeededFile = "FULL_NEEDED"
 	reapPlanFile   = "REAP_PLAN"
 

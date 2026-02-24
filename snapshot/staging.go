@@ -11,6 +11,10 @@ import (
 	"github.com/rqlite/rqlite/v10/internal/rsum"
 )
 
+const (
+	crcSuffix = ".crc32"
+)
+
 // StagingDir represents a WAL staging directory containing timestamped
 // .wal files paired with .crc32 checksum sidecar files. It encapsulates
 // the naming conventions, validation, and file-management operations
