@@ -714,11 +714,11 @@ func Test_SingleNodeDBAppliedIndex_SnapshotRestart(t *testing.T) {
 	}
 }
 
-// Test_SingleNodeSnapshot_FSM_ReleaseOnly tests that the Store responds correctly
-// if Persist is never called, only Release. Because this is such a critically
-// important piece of code, it looks into the internals of the Store during the
-// test.
-func Test_SingleNodeSnapshot_FSM_ReleaseOnly(t *testing.T) {
+// Test_SingleNodeSnapshot_FSMFailures tests that the Store responds correctly
+// under certain FSM failure scenarios related to snapshotting. The code under
+// test is critically important, so the test looks inside the Store to check
+// that it is in the expected state after each failure scenario.
+func Test_SingleNodeSnapshot_FSMFailures(t *testing.T) {
 	s, ln := mustNewStore(t)
 	defer ln.Close()
 
@@ -738,10 +738,7 @@ func Test_SingleNodeSnapshot_FSM_ReleaseOnly(t *testing.T) {
 		`CREATE TABLE foo (id INTEGER NOT NULL PRIMARY KEY, name TEXT)`,
 		`INSERT INTO foo(name) VALUES("fiona")`,
 	}
-	_, _, err := s.Execute(context.Background(), executeRequestFromStrings(queries, false, false))
-	if err != nil {
-		t.Fatalf("failed to execute on single node: %s", err.Error())
-	}
+	mustExecute(t, s, queries)
 
 	// Snap the node.
 	fsm := NewFSM(s)
@@ -768,10 +765,7 @@ func Test_SingleNodeSnapshot_FSM_ReleaseOnly(t *testing.T) {
 	queries = []string{
 		`INSERT INTO foo(name) VALUES("fiona")`,
 	}
-	_, _, err = s.Execute(context.Background(), executeRequestFromStrings(queries, false, false))
-	if err != nil {
-		t.Fatalf("failed to execute on single node: %s", err.Error())
-	}
+	mustExecute(t, s, queries)
 	fn, err = s.snapshotStore.FullNeeded()
 	if err != nil {
 		t.Fatalf("failed to check FullNeeded: %s", err.Error())
@@ -809,10 +803,7 @@ func Test_SingleNodeSnapshot_FSM_ReleaseOnly(t *testing.T) {
 	queries = []string{
 		`INSERT INTO foo(name) VALUES("fiona")`,
 	}
-	_, _, err = s.Execute(context.Background(), executeRequestFromStrings(queries, false, false))
-	if err != nil {
-		t.Fatalf("failed to execute on single node: %s", err.Error())
-	}
+	mustExecute(t, s, queries)
 
 	// Snap the node again, this time have the Sink return an error.
 	f, err = fsm.Snapshot()
@@ -845,10 +836,7 @@ func Test_SingleNodeSnapshot_FSM_ReleaseOnly(t *testing.T) {
 	queries = []string{
 		`INSERT INTO foo(name) VALUES("fiona")`,
 	}
-	_, _, err = s.Execute(context.Background(), executeRequestFromStrings(queries, false, false))
-	if err != nil {
-		t.Fatalf("failed to execute on single node: %s", err.Error())
-	}
+	mustExecute(t, s, queries)
 	if err := s.Snapshot(0); err != nil {
 		t.Fatalf("failed to snapshot store: %s", err.Error())
 	}
@@ -873,7 +861,6 @@ func Test_SingleNodeSnapshot_FSM_ReleaseOnly(t *testing.T) {
 	if err := s.Open(); err != nil {
 		t.Fatalf("failed to open single-node store: %s", err.Error())
 	}
-	defer s.Close(true)
 	if _, err := s.WaitForLeader(10 * time.Second); err != nil {
 		t.Fatalf("Error waiting for leader: %s", err)
 	}
@@ -887,4 +874,33 @@ func Test_SingleNodeSnapshot_FSM_ReleaseOnly(t *testing.T) {
 	if exp, got := `[{"columns":["COUNT(*)"],"types":["integer"],"values":[[4]]}]`, asJSON(rows); exp != got {
 		t.Fatalf("unexpected results for query\nexp: %s\ngot: %s", exp, got)
 	}
+}
+
+type mockSnapshotSink struct {
+	*os.File
+	writeErr error
+}
+
+func (m *mockSnapshotSink) Write(p []byte) (n int, err error) {
+	if m.writeErr != nil {
+		return 0, m.writeErr
+	}
+	return m.File.Write(p)
+}
+
+func (m *mockSnapshotSink) ID() string {
+	return "1"
+}
+
+func (m *mockSnapshotSink) Cancel() error {
+	return nil
+}
+
+func mustExecute(t *testing.T, s *Store, queries []string) []*proto.ExecuteQueryResponse {
+	t.Helper()
+	rows, _, err := s.Execute(context.Background(), executeRequestFromStrings(queries, false, false))
+	if err != nil {
+		t.Fatalf("failed to execute on single node: %s", err.Error())
+	}
+	return rows
 }
