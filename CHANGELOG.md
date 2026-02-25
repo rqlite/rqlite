@@ -36,7 +36,7 @@ Upgrading to this release from a v7 release (or later) is seamless and been exte
 - [PR #2501](https://github.com/rqlite/rqlite/pull/2501): Remove Noop Snapshot support, return error when no WAL data available.
 - [PR #2502](https://github.com/rqlite/rqlite/pull/2502): Remove Incremental snapshot type.
 - [PR #2503](https://github.com/rqlite/rqlite/pull/2503): Measure Snapshot auto-reap duration.
-- [PR #2504](https://github.com/rqlite/rqlite/pull/2504): Encapsulate WAL Staging Directory logic in a type.
+- [PR #2504](https://github.com/rqlite/rqlite/pull/2504), [PR #2507](https://github.com/rqlite/rqlite/pull/2507): Encapsulate WAL Staging Directory logic in a type.
 - [PR #2505](https://github.com/rqlite/rqlite/pull/2505): Test Store snapshotting with fault injection.
 
 ## v9.4.1 (February 11th 2026)
