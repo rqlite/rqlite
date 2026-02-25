@@ -5,6 +5,7 @@ import (
 	"log"
 	"os"
 	"path/filepath"
+	"sync/atomic"
 	"time"
 
 	"github.com/rqlite/rqlite/v10/db"
@@ -13,6 +14,10 @@ import (
 
 const (
 	crcSuffix = ".crc32"
+)
+
+var (
+	stagingSeq atomic.Uint64
 )
 
 // StagingDir represents a WAL staging directory containing timestamped
@@ -55,7 +60,8 @@ func (s *StagingDir) Path() string {
 //	// ... write data ...
 //	if err := w.Close(); err != nil { ... }
 func (s *StagingDir) CreateWAL() (*WALWriter, string, error) {
-	walPath := filepath.Join(s.dir, fmt.Sprintf("%024d.wal", time.Now().UnixNano()))
+	walPath := filepath.Join(s.dir, fmt.Sprintf("%024d-%06d.wal",
+		time.Now().UnixNano(), stagingSeq.Add(1)))
 	fd, err := os.Create(walPath)
 	if err != nil {
 		return nil, "", err
