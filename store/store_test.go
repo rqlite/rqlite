@@ -3147,18 +3147,6 @@ func mustNewStoreFK(t *testing.T) (*Store, net.Listener) {
 	return mustNewStoreAtPathsLn(random.String(), t.TempDir(), true)
 }
 
-type mockSnapshotSink struct {
-	*os.File
-}
-
-func (m *mockSnapshotSink) ID() string {
-	return "1"
-}
-
-func (m *mockSnapshotSink) Cancel() error {
-	return nil
-}
-
 type mockLayer struct {
 	ln net.Listener
 }
