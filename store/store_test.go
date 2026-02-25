@@ -3149,6 +3149,14 @@ func mustNewStoreFK(t *testing.T) (*Store, net.Listener) {
 
 type mockSnapshotSink struct {
 	*os.File
+	writeErr error
+}
+
+func (m *mockSnapshotSink) Write(p []byte) (n int, err error) {
+	if m.writeErr != nil {
+		return 0, m.writeErr
+	}
+	return m.File.Write(p)
 }
 
 func (m *mockSnapshotSink) ID() string {

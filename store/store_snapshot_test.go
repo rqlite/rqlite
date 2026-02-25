@@ -39,9 +39,12 @@ func Test_SingleNodeSnapshot(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to execute on single node: %s", err.Error())
 	}
-	_, _, _, err = s.Query(context.Background(), queryRequestFromString("SELECT * FROM foo", false, false))
+	rows, _, _, err := s.Query(context.Background(), queryRequestFromString("SELECT * FROM foo", false, false))
 	if err != nil {
 		t.Fatalf("failed to query single node: %s", err.Error())
+	}
+	if exp, got := `[{"columns":["id","name"],"types":["integer","text"],"values":[[1,"fiona"]]}]`, asJSON(rows); exp != got {
+		t.Fatalf("unexpected results for query\nexp: %s\ngot: %s", exp, got)
 	}
 
 	// Snap the node and write to disk.
@@ -57,7 +60,7 @@ func Test_SingleNodeSnapshot(t *testing.T) {
 		t.Fatalf("failed to create snapshot file: %s", err.Error())
 	}
 	defer snapFile.Close()
-	sink := &mockSnapshotSink{snapFile}
+	sink := &mockSnapshotSink{snapFile, nil}
 	if err := f.Persist(sink); err != nil {
 		t.Fatalf("failed to persist snapshot to disk: %s", err.Error())
 	}
@@ -708,5 +711,180 @@ func Test_SingleNodeDBAppliedIndex_SnapshotRestart(t *testing.T) {
 	}
 	if got, exp := s.DBAppliedIndex(), uint64(3); exp != got {
 		t.Fatalf("wrong DB applied index after restart, got: %d, exp %d", got, exp)
+	}
+}
+
+// Test_SingleNodeSnapshot_FSM_ReleaseOnly tests that the Store responds correctly
+// if Persist is never called, only Release. Because this is such a critically
+// important piece of code, it looks into the internals of the Store during the
+// test.
+func Test_SingleNodeSnapshot_FSM_ReleaseOnly(t *testing.T) {
+	s, ln := mustNewStore(t)
+	defer ln.Close()
+
+	if err := s.Open(); err != nil {
+		t.Fatalf("failed to open single-node store: %s", err.Error())
+	}
+	defer s.Close(true)
+	s.NoSnapshotOnClose = true
+	if err := s.Bootstrap(NewServer(s.ID(), s.Addr(), true)); err != nil {
+		t.Fatalf("failed to bootstrap single-node store: %s", err.Error())
+	}
+	if _, err := s.WaitForLeader(10 * time.Second); err != nil {
+		t.Fatalf("Error waiting for leader: %s", err)
+	}
+
+	queries := []string{
+		`CREATE TABLE foo (id INTEGER NOT NULL PRIMARY KEY, name TEXT)`,
+		`INSERT INTO foo(name) VALUES("fiona")`,
+	}
+	_, _, err := s.Execute(context.Background(), executeRequestFromStrings(queries, false, false))
+	if err != nil {
+		t.Fatalf("failed to execute on single node: %s", err.Error())
+	}
+
+	// Snap the node.
+	fsm := NewFSM(s)
+	f, err := fsm.Snapshot()
+	if err != nil {
+		t.Fatalf("failed to snapshot node: %s", err.Error())
+	}
+
+	// Do nothing with the Snapshot, just release it, Store should remain in
+	// FullNeeded more.
+	f.Release()
+	fn, err := s.snapshotStore.FullNeeded()
+	if err != nil {
+		t.Fatalf("failed to check FullNeeded: %s", err.Error())
+	}
+	if !fn {
+		t.Fatal("expected Snapshot Store to require full snapshot")
+	}
+
+	// Next, successfully snapshot and insert more data.
+	if err := s.Snapshot(0); err != nil {
+		t.Fatalf("failed to snapshot store: %s", err.Error())
+	}
+	queries = []string{
+		`INSERT INTO foo(name) VALUES("fiona")`,
+	}
+	_, _, err = s.Execute(context.Background(), executeRequestFromStrings(queries, false, false))
+	if err != nil {
+		t.Fatalf("failed to execute on single node: %s", err.Error())
+	}
+	fn, err = s.snapshotStore.FullNeeded()
+	if err != nil {
+		t.Fatalf("failed to check FullNeeded: %s", err.Error())
+	}
+	if fn {
+		t.Fatal("expected Snapshot Store to not require full snapshot")
+	}
+
+	// Snap the node again.
+	f, err = fsm.Snapshot()
+	if err != nil {
+		t.Fatalf("failed to snapshot node: %s", err.Error())
+	}
+
+	// Confirm staged WALs exist.
+	wals, err := s.StagedWALs()
+	if err != nil {
+		t.Fatalf("failed to get staged WALs: %s", err.Error())
+	}
+	if exp, got := 1, len(wals); exp != got {
+		t.Fatalf("unexpected number of staged WALs\nexp: %d\ngot: %d", exp, got)
+	}
+
+	// Do nothing with the Snapshot, just release it, Store should keep the
+	// Staged WALs intact.
+	f.Release()
+	wals, err = s.StagedWALs()
+	if err != nil {
+		t.Fatalf("failed to get staged WALs: %s", err.Error())
+	}
+	if exp, got := 1, len(wals); exp != got {
+		t.Fatalf("unexpected number of staged WALs\nexp: %d\ngot: %d", exp, got)
+	}
+
+	queries = []string{
+		`INSERT INTO foo(name) VALUES("fiona")`,
+	}
+	_, _, err = s.Execute(context.Background(), executeRequestFromStrings(queries, false, false))
+	if err != nil {
+		t.Fatalf("failed to execute on single node: %s", err.Error())
+	}
+
+	// Snap the node again, this time have the Sink return an error.
+	f, err = fsm.Snapshot()
+	if err != nil {
+		t.Fatalf("failed to snapshot node: %s", err.Error())
+	}
+
+	snapDir := t.TempDir()
+	snapFile, err := os.Create(filepath.Join(snapDir, "snapshot"))
+	if err != nil {
+		t.Fatalf("failed to create snapshot file: %s", err.Error())
+	}
+	defer snapFile.Close()
+	sink := &mockSnapshotSink{snapFile, fmt.Errorf("mock write error")}
+	if err := f.Persist(sink); err == nil {
+		t.Fatalf("expected error when persisting snapshot to disk, got nil")
+	}
+
+	// Release it, check that we have the right number of WALs staged.
+	f.Release()
+	wals, err = s.StagedWALs()
+	if err != nil {
+		t.Fatalf("failed to get staged WALs: %s", err.Error())
+	}
+	if exp, got := 2, len(wals); exp != got {
+		t.Fatalf("unexpected number of staged WALs\nexp: %d\ngot: %d", exp, got)
+	}
+
+	// Finish by successfully snapping the node.
+	queries = []string{
+		`INSERT INTO foo(name) VALUES("fiona")`,
+	}
+	_, _, err = s.Execute(context.Background(), executeRequestFromStrings(queries, false, false))
+	if err != nil {
+		t.Fatalf("failed to execute on single node: %s", err.Error())
+	}
+	if err := s.Snapshot(0); err != nil {
+		t.Fatalf("failed to snapshot store: %s", err.Error())
+	}
+
+	rows, _, _, err := s.Query(context.Background(), queryRequestFromString("SELECT COUNT(*) FROM foo", false, false))
+	if err != nil {
+		t.Fatalf("failed to query single node: %s", err.Error())
+	}
+	if exp, got := `[{"columns":["COUNT(*)"],"types":["integer"],"values":[[4]]}]`, asJSON(rows); exp != got {
+		t.Fatalf("unexpected results for query\nexp: %s\ngot: %s", exp, got)
+	}
+
+	// Now remove the "clean snapshot" marker so that the node will restore from the
+	// Snapshot we just took, and ensure the data is still correct after restoration.
+	if err := os.Remove(s.cleanSnapshotPath); err != nil {
+		t.Fatalf("failed to remove clean snapshot marker: %s", err.Error())
+	}
+
+	if err := s.Close(true); err != nil {
+		t.Fatalf("failed to close single-node store: %s", err.Error())
+	}
+	if err := s.Open(); err != nil {
+		t.Fatalf("failed to open single-node store: %s", err.Error())
+	}
+	defer s.Close(true)
+	if _, err := s.WaitForLeader(10 * time.Second); err != nil {
+		t.Fatalf("Error waiting for leader: %s", err)
+	}
+
+	query := queryRequestFromString("SELECT COUNT(*) FROM foo", false, false)
+	query.Level = proto.ConsistencyLevel_STRONG
+	rows, _, _, err = s.Query(context.Background(), query)
+	if err != nil {
+		t.Fatalf("failed to query single node: %s", err.Error())
+	}
+	if exp, got := `[{"columns":["COUNT(*)"],"types":["integer"],"values":[[4]]}]`, asJSON(rows); exp != got {
+		t.Fatalf("unexpected results for query\nexp: %s\ngot: %s", exp, got)
 	}
 }
