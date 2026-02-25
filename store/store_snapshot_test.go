@@ -888,6 +888,10 @@ func (m *mockSnapshotSink) Write(p []byte) (n int, err error) {
 	return m.File.Write(p)
 }
 
+func (m *mockSnapshotSink) Close() error {
+	return m.File.Close()
+}
+
 func (m *mockSnapshotSink) ID() string {
 	return "1"
 }
