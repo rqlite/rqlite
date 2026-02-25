@@ -60,8 +60,7 @@ func (s *StagingDir) Path() string {
 //	// ... write data ...
 //	if err := w.Close(); err != nil { ... }
 func (s *StagingDir) CreateWAL() (*WALWriter, string, error) {
-	walPath := filepath.Join(s.dir, fmt.Sprintf("%024d-%06d.wal",
-		time.Now().UnixNano(), stagingSeq.Add(1)))
+	walPath := filepath.Join(s.dir, s.nextWALName())
 	fd, err := os.Create(walPath)
 	if err != nil {
 		return nil, "", err
@@ -140,6 +139,10 @@ func (s *StagingDir) MoveWALFilesTo(dst string) error {
 // Sync syncs the staging directory file descriptor.
 func (s *StagingDir) Sync() error {
 	return syncDirMaybe(s.dir)
+}
+
+func (s *StagingDir) nextWALName() string {
+	return fmt.Sprintf("%024d-%06d.wal", time.Now().UnixNano(), stagingSeq.Add(1))
 }
 
 // WALWriter wraps a WAL file descriptor, computing a running CRC32
