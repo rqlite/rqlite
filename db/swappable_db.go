@@ -12,6 +12,8 @@ import (
 	command "github.com/rqlite/rqlite/v10/command/proto"
 )
 
+var ErrDbDataLost = fmt.Errorf("database data lost")
+
 // SwappableDB is a wrapper around DB that allows the underlying database to be swapped out
 // in a thread-safe manner.
 type SwappableDB struct {
@@ -37,10 +39,14 @@ func OpenSwappable(dbPath string, drv *Driver, fkEnabled, wal bool) (*SwappableD
 	}, nil
 }
 
+func backupDbPath(path string) string {
+	return path + ".bak"
+}
+
 // Swap swaps the underlying database with that at the given path. The Swap operation
 // may fail on some platforms if the file at path is open by another process. It is
 // the caller's responsibility to ensure the file at path is not in use.
-func (s *SwappableDB) Swap(path string, fkConstraints, walEnabled bool) error {
+func (s *SwappableDB) Swap(path string, fkConstraints, walEnabled bool) (retErr error) {
 	if !IsValidSQLiteFile(path) {
 		return fmt.Errorf("invalid SQLite data")
 	}
@@ -50,9 +56,28 @@ func (s *SwappableDB) Swap(path string, fkConstraints, walEnabled bool) error {
 	if err := s.db.Close(); err != nil {
 		return fmt.Errorf("failed to close: %s", err)
 	}
-	if err := RemoveFiles(s.db.Path()); err != nil {
-		return fmt.Errorf("failed to remove files: %s", err)
+
+	oldDbPath := backupDbPath(s.db.Path())
+	oldFkConstraints := s.db.FKEnabled()
+	oldWalEnabled := s.db.WALEnabled()
+	if err := RenameFiles(s.db.Path(), oldDbPath); err != nil {
+		return fmt.Errorf("failed to rename old database: %s", err)
 	}
+	defer RemoveFiles(oldDbPath)
+	defer func() {
+		if retErr == nil {
+			return
+		}
+		if err := RenameFiles(oldDbPath, s.db.Path()); err != nil {
+			retErr = fmt.Errorf("%w: failed to swap database (%v) and failed to recover original database (%v)", ErrDbDataLost, retErr, err)
+		}
+		db, err := OpenWithDriver(s.drv, s.db.Path(), oldFkConstraints, oldWalEnabled)
+		if err != nil {
+			retErr = fmt.Errorf("%w: failed to swap database (%v) and failed to recover original database (%v)", ErrDbDataLost, retErr, err)
+		}
+		s.db = db
+	}()
+
 	if err := os.Rename(path, s.db.Path()); err != nil {
 		return fmt.Errorf("failed to rename database: %s", err)
 	}
