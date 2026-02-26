@@ -889,7 +889,7 @@ func (m *mockSnapshotSink) Write(p []byte) (n int, err error) {
 	if m.fd != nil {
 		return m.fd.Write(p)
 	}
-    return len(p), nil
+	return len(p), nil
 }
 
 func (m *mockSnapshotSink) Close() error {
