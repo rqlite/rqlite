@@ -60,7 +60,7 @@ func Test_SingleNodeSnapshot(t *testing.T) {
 		t.Fatalf("failed to create snapshot file: %s", err.Error())
 	}
 	defer snapFile.Close()
-	sink := &mockSnapshotSink{snapFile, nil}
+	sink := &mockSnapshotSink{snapFile, nil, nil}
 	if err := f.Persist(sink); err != nil {
 		t.Fatalf("failed to persist snapshot to disk: %s", err.Error())
 	}
@@ -817,7 +817,7 @@ func Test_SingleNodeSnapshot_FSMFailures(t *testing.T) {
 		t.Fatalf("failed to create snapshot file: %s", err.Error())
 	}
 	defer snapFile.Close()
-	sink := &mockSnapshotSink{snapFile, fmt.Errorf("mock write error")}
+	sink := &mockSnapshotSink{snapFile, fmt.Errorf("mock write error"), nil}
 	if err := f.Persist(sink); err == nil {
 		t.Fatalf("expected error when persisting snapshot to disk, got nil")
 	}
@@ -877,19 +877,31 @@ func Test_SingleNodeSnapshot_FSMFailures(t *testing.T) {
 }
 
 type mockSnapshotSink struct {
-	*os.File
+	fd       *os.File
 	writeErr error
+	closeErr error
 }
 
 func (m *mockSnapshotSink) Write(p []byte) (n int, err error) {
 	if m.writeErr != nil {
 		return 0, m.writeErr
 	}
-	return m.File.Write(p)
+	if m.fd != nil {
+		return m.fd.Write(p)
+	}
+	return len(p), nil
 }
 
 func (m *mockSnapshotSink) Close() error {
-	return m.File.Close()
+	var err error
+	if m.fd != nil {
+		// Close the underlying resource anyway so tests can terminate.
+		err = m.fd.Close()
+	}
+	if m.closeErr != nil {
+		err = m.closeErr
+	}
+	return err
 }
 
 func (m *mockSnapshotSink) ID() string {
