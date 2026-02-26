@@ -18,7 +18,7 @@ func Test_FSMSnapshot_Finalizer(t *testing.T) {
 		logger:      nil,
 	}
 
-	if err := f.Persist(&mockSink{}); err != nil {
+	if err := f.Persist(&mockSnapshotSink{}); err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 	if !finalizerCalled {
@@ -41,7 +41,7 @@ func Test_FSMSnapshot_OnRelease_OK(t *testing.T) {
 		logger:      nil,
 	}
 
-	if err := f.Persist(&mockSink{}); err != nil {
+	if err := f.Persist(&mockSnapshotSink{}); err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 	f.Release()
@@ -93,7 +93,7 @@ func Test_FSMSnapshot_OnRelease_NotSucceeded(t *testing.T) {
 		logger:      nil,
 	}
 
-	f.Persist(&mockSink{})
+	f.Persist(&mockSnapshotSink{})
 
 	f.Release()
 	if !onReleaseCalled {
@@ -105,24 +105,6 @@ func Test_FSMSnapshot_OnRelease_NotSucceeded(t *testing.T) {
 	if succeeded {
 		t.Fatalf("OnRelease succeeded argument incorrect")
 	}
-}
-
-type mockSink struct{}
-
-func (m *mockSink) ID() string {
-	return ""
-}
-
-func (m *mockSink) Cancel() error {
-	return nil
-}
-
-func (m *mockSink) Write(p []byte) (n int, err error) {
-	return 0, nil
-}
-
-func (m *mockSink) Close() error {
-	return nil
 }
 
 type mockRaftSnapshot struct {

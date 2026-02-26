@@ -877,7 +877,7 @@ func Test_SingleNodeSnapshot_FSMFailures(t *testing.T) {
 }
 
 type mockSnapshotSink struct {
-	*os.File
+	fd       *os.File
 	writeErr error
 }
 
@@ -885,11 +885,17 @@ func (m *mockSnapshotSink) Write(p []byte) (n int, err error) {
 	if m.writeErr != nil {
 		return 0, m.writeErr
 	}
-	return m.File.Write(p)
+	if m.fd != nil {
+		return m.fd.Write(p)
+	}
+	return 0, nil
 }
 
 func (m *mockSnapshotSink) Close() error {
-	return m.File.Close()
+	if m.fd != nil {
+		return m.fd.Close()
+	}
+	return nil
 }
 
 func (m *mockSnapshotSink) ID() string {
