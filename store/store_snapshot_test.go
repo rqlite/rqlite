@@ -60,7 +60,7 @@ func Test_SingleNodeSnapshot(t *testing.T) {
 		t.Fatalf("failed to create snapshot file: %s", err.Error())
 	}
 	defer snapFile.Close()
-	sink := &mockSnapshotSink{snapFile, nil}
+	sink := &mockSnapshotSink{snapFile, nil, nil}
 	if err := f.Persist(sink); err != nil {
 		t.Fatalf("failed to persist snapshot to disk: %s", err.Error())
 	}
@@ -817,7 +817,7 @@ func Test_SingleNodeSnapshot_FSMFailures(t *testing.T) {
 		t.Fatalf("failed to create snapshot file: %s", err.Error())
 	}
 	defer snapFile.Close()
-	sink := &mockSnapshotSink{snapFile, fmt.Errorf("mock write error")}
+	sink := &mockSnapshotSink{snapFile, fmt.Errorf("mock write error"), nil}
 	if err := f.Persist(sink); err == nil {
 		t.Fatalf("expected error when persisting snapshot to disk, got nil")
 	}
@@ -874,11 +874,16 @@ func Test_SingleNodeSnapshot_FSMFailures(t *testing.T) {
 	if exp, got := `[{"columns":["COUNT(*)"],"types":["integer"],"values":[[4]]}]`, asJSON(rows); exp != got {
 		t.Fatalf("unexpected results for query\nexp: %s\ngot: %s", exp, got)
 	}
+
+	// Final scenario, check that FullNeeded is not neesetded, write some data
+	// to generate WAL, create a Sink which fails at close time, and then
+	// confirm that the Store goes back to FullNeeded.
 }
 
 type mockSnapshotSink struct {
 	fd       *os.File
 	writeErr error
+	closeErr error
 }
 
 func (m *mockSnapshotSink) Write(p []byte) (n int, err error) {
@@ -892,10 +897,15 @@ func (m *mockSnapshotSink) Write(p []byte) (n int, err error) {
 }
 
 func (m *mockSnapshotSink) Close() error {
+	var err error
 	if m.fd != nil {
-		return m.fd.Close()
+		// Close the underlying resource anyway so tests can terminate.
+		err = m.fd.Close()
 	}
-	return nil
+	if m.closeErr != nil {
+		err = m.closeErr
+	}
+	return err
 }
 
 func (m *mockSnapshotSink) ID() string {
