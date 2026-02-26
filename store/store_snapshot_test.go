@@ -878,6 +878,35 @@ func Test_SingleNodeSnapshot_FSMFailures(t *testing.T) {
 	// Final scenario, check that FullNeeded is not neesetded, write some data
 	// to generate WAL, create a Sink which fails at close time, and then
 	// confirm that the Store goes back to FullNeeded.
+	fn, err = s.snapshotStore.FullNeeded()
+	if err != nil {
+		t.Fatalf("failed to check FullNeeded: %s", err.Error())
+	}
+	if fn {
+		t.Fatal("expected Snapshot Store to not require full snapshot")
+	}
+
+	queries = []string{
+		`INSERT INTO foo(name) VALUES("fiona")`,
+	}
+	mustExecute(t, s, queries)
+
+	// Snap the node again, this time have the Sink return an error on close
+	f, err = fsm.Snapshot()
+	if err != nil {
+		t.Fatalf("failed to snapshot node: %s", err.Error())
+	}
+
+	snapDir = t.TempDir()
+	snapFile, err = os.Create(filepath.Join(snapDir, "snapshot"))
+	if err != nil {
+		t.Fatalf("failed to create snapshot file: %s", err.Error())
+	}
+	defer snapFile.Close()
+	sink = &mockSnapshotSink{snapFile, nil, fmt.Errorf("mock close error")}
+	if err := f.Persist(sink); err == nil {
+		t.Fatalf("expected error when persisting snapshot to disk, got nil")
+	}
 }
 
 type mockSnapshotSink struct {
