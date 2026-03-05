@@ -57,6 +57,7 @@ message QueryRows {
 	repeated Values values = 3;
 	string error = 4;
 	double time = 5;
+	int32 error_code = 6;
 }
 
 message ExecuteRequest {
@@ -69,6 +70,7 @@ message ExecuteResult {
 	int64 rows_affected = 2;
 	string error = 3;
 	double time = 4;
+	int32 error_code = 5;
 }
 
 message ExecuteQueryRequest {

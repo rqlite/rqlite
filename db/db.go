@@ -1067,8 +1067,11 @@ func (db *DB) executeStmtWithConn(ctx context.Context, stmt *command.Statement, 
 	} else {
 		result, err := eq.ExecContext(ctx, stmt.Sql, parameters...)
 		if err != nil {
-			response.Result = &command.ExecuteQueryResponse_Error{
-				Error: err.Error(),
+			response.Result = &command.ExecuteQueryResponse_E{
+				E: &command.ExecuteResult{
+					Error:     err.Error(),
+					ErrorCode: sqliteErrorCode(err),
+				},
 			}
 			return response, err
 		}
@@ -1247,6 +1250,7 @@ func (db *DB) queryStmtWithConn(ctx context.Context, stmt *command.Statement, xT
 	if err != nil {
 		stats.Add(numQueryErrors, 1)
 		rows.Error = err.Error()
+		rows.ErrorCode = sqliteErrorCode(err)
 		return rows, err
 	}
 	defer rs.Close()
@@ -2022,4 +2026,14 @@ func rewriteContextTimeout(err, retErr error) error {
 		return retErr
 	}
 	return err
+}
+
+// sqliteErrorCode extracts the SQLite extended error code from an error,
+// returning 0 if the error is not a SQLite error.
+func sqliteErrorCode(err error) int32 {
+	var sqErr sqlite3.Error
+	if errors.As(err, &sqErr) {
+		return int32(sqErr.ExtendedCode)
+	}
+	return 0
 }

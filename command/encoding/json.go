@@ -20,24 +20,27 @@ type Result struct {
 	LastInsertID int64   `json:"last_insert_id,omitempty"`
 	RowsAffected int64   `json:"rows_affected,omitempty"`
 	Error        string  `json:"error,omitempty"`
+	ErrorCode    int32   `json:"error_code,omitempty"`
 	Time         float64 `json:"time,omitempty"`
 }
 
 // Rows represents the outcome of an operation that returns query data.
 type Rows struct {
-	Columns []string `json:"columns,omitempty"`
-	Types   []string `json:"types,omitempty"`
-	Values  [][]any  `json:"values,omitempty"`
-	Error   string   `json:"error,omitempty"`
-	Time    float64  `json:"time,omitempty"`
+	Columns   []string `json:"columns,omitempty"`
+	Types     []string `json:"types,omitempty"`
+	Values    [][]any  `json:"values,omitempty"`
+	Error     string   `json:"error,omitempty"`
+	ErrorCode int32    `json:"error_code,omitempty"`
+	Time      float64  `json:"time,omitempty"`
 }
 
 // AssociativeRows represents the outcome of an operation that returns query data.
 type AssociativeRows struct {
-	Types map[string]string `json:"types,omitempty"`
-	Rows  []map[string]any  `json:"rows"`
-	Error string            `json:"error,omitempty"`
-	Time  float64           `json:"time,omitempty"`
+	Types     map[string]string `json:"types,omitempty"`
+	Rows      []map[string]any  `json:"rows"`
+	Error     string            `json:"error,omitempty"`
+	ErrorCode int32             `json:"error_code,omitempty"`
+	Time      float64           `json:"time,omitempty"`
 }
 
 // ResultWithRows represents the outcome of an operation that changes rows, but also
@@ -101,6 +104,7 @@ func NewResultFromExecuteResult(e *proto.ExecuteResult) (*Result, error) {
 		LastInsertID: e.LastInsertId,
 		RowsAffected: e.RowsAffected,
 		Error:        e.Error,
+		ErrorCode:    e.ErrorCode,
 		Time:         e.Time,
 	}, nil
 }
@@ -116,11 +120,12 @@ func NewRowsFromQueryRows(q *proto.QueryRows, bytesAsArray bool) (*Rows, error) 
 		return nil, err
 	}
 	return &Rows{
-		Columns: q.Columns,
-		Types:   q.Types,
-		Values:  values,
-		Error:   q.Error,
-		Time:    q.Time,
+		Columns:   q.Columns,
+		Types:     q.Types,
+		Values:    values,
+		Error:     q.Error,
+		ErrorCode: q.ErrorCode,
+		Time:      q.Time,
 	}, nil
 }
 
@@ -150,10 +155,11 @@ func NewAssociativeRowsFromQueryRows(q *proto.QueryRows, bytesAsArray bool) (*As
 	}
 
 	return &AssociativeRows{
-		Types: types,
-		Rows:  rows,
-		Error: q.Error,
-		Time:  q.Time,
+		Types:     types,
+		Rows:      rows,
+		Error:     q.Error,
+		ErrorCode: q.ErrorCode,
+		Time:      q.Time,
 	}, nil
 }
 
