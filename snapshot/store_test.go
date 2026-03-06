@@ -263,6 +263,9 @@ func Test_Store_OpenMetaCheck(t *testing.T) {
 	if meta2.Size == 0 {
 		t.Fatalf("Expected snapshot size to be greater than 0, got %d", meta2.Size)
 	}
+	if meta2.Size <= meta1.Size {
+		t.Fatalf("Expected second snapshot size to be greater than first snapshot size, got %d and %d", meta2.Size, meta1.Size)
+	}
 }
 
 func Test_Store_OpenThenCreate(t *testing.T) {
