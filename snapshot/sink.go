@@ -48,17 +48,26 @@ type Sink struct {
 
 	fc fullController
 
+	// fatalFn is called when Close encounters an error during an incremental
+	// snapshot. In production this terminates the process to avoid data
+	// corruption; in tests it can be set to nil so errors propagate normally.
+	fatalFn func(error)
+
 	logger *log.Logger
 }
 
 // NewSink creates a new Sink object. It takes the root snapshot directory
 // and the snapshot metadata.
 func NewSink(dir string, meta *raft.SnapshotMeta, fc fullController) *Sink {
+	logger := log.New(log.Writer(), "[snapshot-sink] ", log.LstdFlags)
 	return &Sink{
-		dir:    dir,
-		meta:   meta,
-		fc:     fc,
-		logger: log.New(log.Writer(), "[snapshot-sink] ", log.LstdFlags),
+		dir:  dir,
+		meta: meta,
+		fc:   fc,
+		fatalFn: func(err error) {
+			logger.Fatalf("failure during incremental snapshot, exiting process to avoid data corruption: %v", err)
+		},
+		logger: logger,
 	}
 }
 
@@ -183,8 +192,8 @@ func (s *Sink) Close() (retErr error) {
 	}
 
 	defer func() {
-		if retErr != nil && s.localWALDir != "" {
-			s.logger.Fatalf("failure during incremental snapshot, exiting process to avoid data corruption: %v", retErr)
+		if retErr != nil && s.localWALDir != "" && s.fatalFn != nil {
+			s.fatalFn(retErr)
 		}
 	}()
 
