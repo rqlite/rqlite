@@ -342,6 +342,7 @@ func Test_IncrementalFileSink_MissingCRC(t *testing.T) {
 	snapDir := t.TempDir()
 	meta := makeRaftMeta("test-incremental-file-missing-crc", 100, 1, 1)
 	sink := NewSink(snapDir, meta, nil)
+	sink.fatalFn = nil // disable hard exit so error propagates to caller
 	if err := sink.Open(); err != nil {
 		t.Fatalf("unexpected error opening sink: %s", err.Error())
 	}

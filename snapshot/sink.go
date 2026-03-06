@@ -48,17 +48,26 @@ type Sink struct {
 
 	fc fullController
 
+	// fatalFn is called when Close encounters an error during an incremental
+	// snapshot. In production this terminates the process to avoid data
+	// corruption; in tests it can be set to nil so errors propagate normally.
+	fatalFn func(error)
+
 	logger *log.Logger
 }
 
 // NewSink creates a new Sink object. It takes the root snapshot directory
 // and the snapshot metadata.
 func NewSink(dir string, meta *raft.SnapshotMeta, fc fullController) *Sink {
+	logger := log.New(log.Writer(), "[snapshot-sink] ", log.LstdFlags)
 	return &Sink{
-		dir:    dir,
-		meta:   meta,
-		fc:     fc,
-		logger: log.New(log.Writer(), "[snapshot-sink] ", log.LstdFlags),
+		dir:  dir,
+		meta: meta,
+		fc:   fc,
+		fatalFn: func(err error) {
+			logger.Fatalf("failure during incremental snapshot, exiting process to avoid data corruption: %v", err)
+		},
+		logger: logger,
 	}
 }
 
@@ -84,6 +93,11 @@ func (s *Sink) ID() string {
 }
 
 // Write writes snapshot data to the sink.
+//
+// If the sink is handling a Full snapshot, this function writes the data to
+// the Snapshot store as it is received. If the sink is handling an IncrementalFile
+// snapshot, this function expects no data to be written after the header, and
+// simply records the path to the WAL directory for processing on Close.
 func (s *Sink) Write(p []byte) (n int, err error) {
 	// If we don't yet have a header, try to decode one.
 	if s.header == nil {
@@ -144,7 +158,29 @@ func (s *Sink) Write(p []byte) (n int, err error) {
 }
 
 // Close closes the sink.
-func (s *Sink) Close() error {
+//
+// If the sink is handling a Full snapshot, this function closes the underlying
+// streaming sink, writes the snapshot metadata, and moves the temp snapshot
+// directory into place. Once it returns successfully a new snapshot has been
+// installed.
+//
+// If the sink is handling an IncrementalFile snapshot, this function moves the
+// WAL directory into the snapshot directory, writes the snapshot metadata, and
+// moves the temp snapshot directory into place. In this context Close breaks the
+// series of WAL files, so if there is an error during this process it means that
+// future WAL files cannot be applied to the snapshot. This is a critical failure
+// and we have two ways of responding to it: require a FullSnapshot next time round
+// or just hard exit. On startup the node will recover from the last successfully
+// installed snapshot, and the end result will be the same. However the experience
+// is better if we hard exit. Why? Because requiring a full snapshot will mean a
+// longer pause of write traffic, while a hard restart will mean the node will go
+// down, indicating to the rest of the cluster it has failed. Assuming the cluster
+// still has quorum, this means writes won't be blocked during the restart.
+//
+// Ultimately it's a judgment call. This entire error scenario shouldn't happen
+// unless there is some kind of disk or permissions failure, in which case the node
+// is likely in bad shape anyway.
+func (s *Sink) Close() (retErr error) {
 	if !s.opened {
 		return nil
 	}
@@ -155,37 +191,43 @@ func (s *Sink) Close() error {
 		return os.RemoveAll(s.snapTmpDirPath)
 	}
 
+	defer func() {
+		if retErr != nil && s.localWALDir != "" && s.fatalFn != nil {
+			s.fatalFn(retErr)
+		}
+	}()
+
 	if s.localWALDir != "" {
 		// IncrementalFileSnapshot: atomically move the WAL directory into the
 		// snapshot directory, then redistribute the WAL files.
 		movedDir := filepath.Join(s.snapTmpDirPath, "wal-incoming")
 		if err := os.Rename(s.localWALDir, movedDir); err != nil {
-			return err
+			return fmt.Errorf("failed to move WAL directory into snapshot directory: %v", err)
 		}
 		sd := NewStagingDir(movedDir)
 		if err := sd.MoveWALFilesTo(s.snapTmpDirPath); err != nil {
-			return err
+			return fmt.Errorf("failed to move WAL files into snapshot directory: %v", err)
 		}
 		if err := os.Remove(movedDir); err != nil {
-			return err
+			return fmt.Errorf("failed to remove temporary WAL directory: %v", err)
 		}
 	} else {
 		if err := s.sinkW.Close(); err != nil {
-			return err
+			return fmt.Errorf("failed to close sink: %v", err)
 		}
 	}
 
 	if err := writeMeta(s.snapTmpDirPath, s.meta); err != nil {
-		return err
+		return fmt.Errorf("failed to write meta: %v", err)
 	}
 
 	if err := os.Rename(s.snapTmpDirPath, s.snapDirPath); err != nil {
-		return err
+		return fmt.Errorf("failed to rename snapshot directory: %v", err)
 	}
 
 	if s.fc != nil {
 		if err := s.fc.UnsetFullNeeded(); err != nil {
-			return err
+			return fmt.Errorf("failed to unset full needed: %v", err)
 		}
 	}
 	return syncDirMaybe(s.dir)

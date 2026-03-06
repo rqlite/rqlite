@@ -790,7 +790,7 @@ func Test_SingleNodeSnapshot_FSMFailures(t *testing.T) {
 	}
 
 	// Do nothing with the Snapshot, just release it, Store should keep the
-	// Staged WALs intact.
+	// Staged WALs intact for packaging with the *next* snapshot.
 	f.Release()
 	wals, err = s.StagedWALs()
 	if err != nil {
@@ -851,6 +851,7 @@ func Test_SingleNodeSnapshot_FSMFailures(t *testing.T) {
 
 	// Now remove the "clean snapshot" marker so that the node will restore from the
 	// Snapshot we just took, and ensure the data is still correct after restoration.
+	// This is how we check that the snapshot sitting in the Store is correct.
 	if err := os.Remove(s.cleanSnapshotPath); err != nil {
 		t.Fatalf("failed to remove clean snapshot marker: %s", err.Error())
 	}
