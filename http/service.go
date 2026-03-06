@@ -1410,6 +1410,7 @@ func (s *Service) handleQuery(w http.ResponseWriter, r *http.Request, qp QueryPa
 		Freshness:           qp.Freshness().Nanoseconds(),
 		FreshnessStrict:     qp.FreshnessStrict(),
 		LinearizableTimeout: qp.LinearizableTimeout(defaultLinearTimeout).Nanoseconds(),
+		QualifyColumns:      qp.QualifyColumns(),
 	}
 
 	results, raftIndex, addr, resultsErr := s.proxy.Query(r.Context(), qr, makeCredentials(r),
@@ -1484,6 +1485,7 @@ func (s *Service) handleRequest(w http.ResponseWriter, r *http.Request, qp Query
 		Level:           qp.Level(),
 		Freshness:       qp.Freshness().Nanoseconds(),
 		FreshnessStrict: qp.FreshnessStrict(),
+		QualifyColumns:  qp.QualifyColumns(),
 	}
 
 	results, _, raftIndex, addr, resultsErr := s.proxy.Request(r.Context(), eqr, makeCredentials(r),

@@ -1557,6 +1557,9 @@ func (s *Store) Query(ctx context.Context, qr *proto.QueryRequest) (rows []*prot
 		return nil, 0, 0, ErrStaleRead
 	}
 
+	if qr.QualifyColumns {
+		ctx = sql.NewContextWithQualifyColumns(ctx)
+	}
 	rows, err := s.db.QueryWithContext(ctx, qr.Request, qr.Timings)
 	return rows, level, 0, err
 }
@@ -1640,6 +1643,9 @@ func (s *Store) Request(ctx context.Context, eqr *proto.ExecuteQueryRequest) ([]
 			if !isLeader {
 				return nil, 0, 0, ErrNotLeader
 			}
+		}
+		if eqr.QualifyColumns {
+			ctx = sql.NewContextWithQualifyColumns(ctx)
 		}
 		qr, err := s.db.QueryWithContext(ctx, eqr.Request, eqr.Timings)
 		return convertFn(qr), uint64(nRW), 0, err
