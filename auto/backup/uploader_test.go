@@ -184,19 +184,17 @@ func Test_UploaderOKThenFail(t *testing.T) {
 	uploadCount := 0
 	var err error
 
-	var wg sync.WaitGroup
-	wg.Add(2)
+	ch := make(chan struct{})
 	sc := &mockStorageClient{
 		uploadFn: func(ctx context.Context, reader io.Reader, id string) error {
 			uploadCount++
 			if uploadCount > 2 {
 				// uploadFn can be called again before the cancel kicks in.
-				// This would push waitGroup into negative numbers and panic.
 				return nil
 			}
-			defer wg.Done()
 
 			if uploadCount == 2 {
+				defer close(ch)
 				return fmt.Errorf("failed to upload")
 			}
 
@@ -217,7 +215,7 @@ func Test_UploaderOKThenFail(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 
 	done := uploader.Start(ctx, nil)
-	wg.Wait()
+	<-ch
 	cancel()
 	<-done
 	if exp, got := "my upload data", string(uploadedData); exp != got {
