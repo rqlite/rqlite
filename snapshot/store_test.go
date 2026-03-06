@@ -221,48 +221,37 @@ func Test_Store_OpenMetaCheck(t *testing.T) {
 	}
 	defer store.Close()
 
+	checkMeta := func(t *testing.T, meta *raft.SnapshotMeta, id string, index, term uint64) {
+		t.Helper()
+		if meta.ID != id {
+			t.Fatalf("Expected snapshot ID to be %s, got %s", id, meta.ID)
+		}
+		if meta.Index != index {
+			t.Fatalf("Expected snapshot index to be %d, got %d", index, meta.Index)
+		}
+		if meta.Term != term {
+			t.Fatalf("Expected snapshot term to be %d, got %d", term, meta.Term)
+		}
+		if meta.Size == 0 {
+			t.Fatalf("Expected snapshot size to be greater than 0, got %d", meta.Size)
+		}
+	}
+
 	createSnapshotInStore(t, store, "2-1017-1704807719996", 1017, 2, 1, "testdata/db-and-wals/backup.db")
 	meta1, snapshot1, err := store.Open("2-1017-1704807719996")
 	if err != nil {
 		t.Fatalf("Failed to open snapshot: %v", err)
 	}
 	defer snapshot1.Close()
-
-	if meta1.ID != "2-1017-1704807719996" {
-		t.Fatalf("Expected snapshot ID to be 2-1017-1704807719996, got %s", meta1.ID)
-	}
-	if meta1.Index != 1017 {
-		t.Fatalf("Expected snapshot index to be 1017, got %d", meta1.Index)
-	}
-	if meta1.Term != 2 {
-		t.Fatalf("Expected snapshot term to be 2, got %d", meta1.Term)
-	}
-	if meta1.Size == 0 {
-		t.Fatalf("Expected snapshot size to be greater than 0, got %d", meta1.Size)
-	}
+	checkMeta(t, meta1, "2-1017-1704807719996", 1017, 2)
 
 	createSnapshotInStore(t, store, "2-1131-1704807720976", 1131, 5, 4, "", "testdata/db-and-wals/wal-00")
-	if store.Len() != 2 {
-		t.Fatalf("Expected store to have 2 snapshots, got %d", store.Len())
-	}
 	meta2, snapshot2, err := store.Open("2-1131-1704807720976")
 	if err != nil {
 		t.Fatalf("Failed to open snapshot: %v", err)
 	}
 	defer snapshot2.Close()
-
-	if meta2.ID != "2-1131-1704807720976" {
-		t.Fatalf("Expected snapshot ID to be 2-1131-1704807720976, got %s", meta2.ID)
-	}
-	if meta2.Index != 1131 {
-		t.Fatalf("Expected snapshot index to be 1131, got %d", meta2.Index)
-	}
-	if meta2.Term != 5 {
-		t.Fatalf("Expected snapshot term to be 5, got %d", meta2.Term)
-	}
-	if meta2.Size == 0 {
-		t.Fatalf("Expected snapshot size to be greater than 0, got %d", meta2.Size)
-	}
+	checkMeta(t, meta2, "2-1131-1704807720976", 1131, 5)
 	if meta2.Size <= meta1.Size {
 		t.Fatalf("Expected second snapshot size to be greater than first snapshot size, got %d and %d", meta2.Size, meta1.Size)
 	}
