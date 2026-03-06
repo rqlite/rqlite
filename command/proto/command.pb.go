@@ -851,6 +851,9 @@ type ExecuteResult struct {
 	ErrorCode     int32                  `protobuf:"varint,5,opt,name=error_code,json=errorCode,proto3" json:"error_code,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
+	// ErrorV2 is populated by the db layer for SQLite errors.
+	// Not part of protobuf serialization — pending protoc regeneration.
+	ErrorV2 *SQLiteError `json:"-"`
 }
 
 func (x *ExecuteResult) Reset() {
@@ -916,6 +919,13 @@ func (x *ExecuteResult) GetErrorCode() int32 {
 		return x.ErrorCode
 	}
 	return 0
+}
+
+func (x *ExecuteResult) GetErrorV2() *SQLiteError {
+	if x != nil {
+		return x.ErrorV2
+	}
+	return nil
 }
 
 type ExecuteQueryRequest struct {

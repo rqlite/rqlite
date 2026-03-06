@@ -51,13 +51,19 @@ message Values {
 	repeated Parameter parameters = 1;
 }
 
+message SQLiteError {
+	int32 code = 1;
+	int32 extended_code = 2;
+	int32 system_errno = 3;
+	string message = 4;
+}
+
 message QueryRows {
 	repeated string columns = 1;
 	repeated string types = 2;
 	repeated Values values = 3;
 	string error = 4;
 	double time = 5;
-	int32 error_code = 6;
 }
 
 message ExecuteRequest {
@@ -70,7 +76,7 @@ message ExecuteResult {
 	int64 rows_affected = 2;
 	string error = 3;
 	double time = 4;
-	int32 error_code = 5;
+	SQLiteError error_v2 = 5;
 }
 
 message ExecuteQueryRequest {
