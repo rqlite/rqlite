@@ -12,8 +12,8 @@ import (
 )
 
 const (
-	defaultBatchThreshold = 50
-	defaultSizeThreshold  = 1024
+	defaultBatchThreshold = 512
+	defaultSizeThreshold  = 4096
 )
 
 // Requester is the interface objects must support to be marshaled
@@ -205,7 +205,7 @@ func UnmarshalSubCommand(c *proto.Command, m pb.Message) error {
 // gzCompress compresses the given byte slice.
 func gzCompress(b []byte) ([]byte, error) {
 	var buf bytes.Buffer
-	gzw, err := gzip.NewWriterLevel(&buf, gzip.BestCompression)
+	gzw, err := gzip.NewWriterLevel(&buf, gzip.DefaultCompression)
 	if err != nil {
 		return nil, fmt.Errorf("gzip new writer: %s", err)
 	}
