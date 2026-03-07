@@ -211,7 +211,7 @@ cli = "compress-snap-transport"
 type = "bool"
 short_help = "Enable compression when transferring snapshots between nodes"
 long_help = """
-By default rqlite does not compress snapshots when transferring them between nodes. For high bandwitdh networks this is the correct choice. Setting this flag will enable zstd compression, which may improve transfer speed on lower-bandwitdh networks. If you set this flag on any node in a cluster, you must set it to the same value on every node in the cluster.
+By default rqlite does not compress snapshots when transferring them between nodes. For high bandwidth networks this is the correct choice. Setting this flag will enable zstd compression, which may improve transfer speed on lower-bandwidth networks. If you set this flag on any node in a cluster, you must set it to the same value on every node in the cluster.
 """
 default = false
 
