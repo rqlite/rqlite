@@ -323,12 +323,9 @@ func (s *FullSink) closeFile() error {
 		return nil
 	}
 	if err := s.f.Sync(); err != nil {
-		s.f.Close()
-		s.f = nil
 		return err
 	}
 	if err := s.f.Close(); err != nil {
-		s.f = nil
 		return err
 	}
 	s.f = nil
