@@ -19,7 +19,7 @@ const (
 
 // NewHeaderFromFile creates a new Header for the given file path. If crc32 is true,
 // the CRC32 checksum of the file is calculated and included in the Header.
-func NewHeaderFromFile(path string, crc32 bool) (*proto.Header, error) {
+func NewHeaderFromFile(path string, crc32 uint32) (*proto.Header, error) {
 	if path == "" {
 		return nil, fmt.Errorf("path must be non-empty")
 	}
@@ -29,14 +29,7 @@ func NewHeaderFromFile(path string, crc32 bool) (*proto.Header, error) {
 		return nil, err
 	}
 	h.SizeBytes = uint64(info.Size())
-
-	if crc32 {
-		crc, err := rsum.CRC32(path)
-		if err != nil {
-			return nil, err
-		}
-		h.Crc32 = crc
-	}
+	h.Crc32 = crc32
 	return h, nil
 }
 
@@ -52,7 +45,11 @@ func NewSnapshotHeader(dbPath string, walPaths ...string) (*proto.SnapshotHeader
 		FormatVersion: 1,
 	}
 
-	dbHeader, err := NewHeaderFromFile(dbPath, true)
+	crc32, err := rsum.ReadCRC32SumFile(dbPath + crcSuffix)
+	if err != nil {
+		return nil, err
+	}
+	dbHeader, err := NewHeaderFromFile(dbPath, crc32)
 	if err != nil {
 		return nil, err
 	}
@@ -60,7 +57,11 @@ func NewSnapshotHeader(dbPath string, walPaths ...string) (*proto.SnapshotHeader
 		DbHeader: dbHeader,
 	}
 	for _, w := range walPaths {
-		wh, err := NewHeaderFromFile(w, true)
+		crc32, err := rsum.ReadCRC32SumFile(w + crcSuffix)
+		if err != nil {
+			return nil, err
+		}
+		wh, err := NewHeaderFromFile(w, crc32)
 		if err != nil {
 			return nil, err
 		}

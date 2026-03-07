@@ -5,44 +5,25 @@ import (
 	"io"
 	"os"
 	"testing"
-
-	"github.com/rqlite/rqlite/v10/internal/rsum"
 )
 
 func Test_NewHeaderFromFile(t *testing.T) {
 	content := []byte("Hello, World!")
 	tmpFile := mustWriteToTempFile(t, content)
 
-	t.Run("without CRC32", func(t *testing.T) {
-		header, err := NewHeaderFromFile(tmpFile, false)
-		if err != nil {
-			t.Fatalf("NewHeaderFromFile failed: %v", err)
-		}
-		if header.SizeBytes != uint64(len(content)) {
-			t.Errorf("Expected SizeBytes %d, got %d", len(content), header.SizeBytes)
-		}
-		if header.Crc32 != 0 {
-			t.Errorf("Expected Crc32 0, got %d", header.Crc32)
-		}
-	})
-
 	t.Run("with CRC32", func(t *testing.T) {
-		header, err := NewHeaderFromFile(tmpFile, true)
+		header, err := NewHeaderFromFile(tmpFile, 1234)
 		if err != nil {
 			t.Fatalf("NewHeaderFromFile failed: %v", err)
 		}
-		expectedCRC, err := rsum.CRC32(tmpFile)
-		if err != nil {
-			t.Fatalf("rsum.CRC32 failed: %v", err)
-		}
-		if header.Crc32 != expectedCRC {
-			t.Errorf("Expected Crc32 %d, got %d", expectedCRC, header.Crc32)
+		if header.Crc32 != 1234 {
+			t.Errorf("Expected Crc32 %d, got %d", 1234, header.Crc32)
 		}
 	})
 }
 
 func Test_NewHeaderFromFile_Fail(t *testing.T) {
-	_, err := NewHeaderFromFile("non-existent", false)
+	_, err := NewHeaderFromFile("non-existent", 1234)
 	if err == nil {
 		t.Fatalf("Expected error for non-existent file, got nil")
 	}
