@@ -103,13 +103,14 @@ func (c *CRC32WriteCloser) Write(p []byte) (int, error) {
 // Close closes the underlying writer and the sum writer.
 func (c *CRC32WriteCloser) Close() error {
 	sum := c.crcW.Sum32()
-	if err := WriteCRC32Sum(c.sumW, sum); err != nil {
-		return err
+	err := WriteCRC32Sum(c.sumW, sum)
+	if closeErr := c.sumW.Close(); err == nil {
+		err = closeErr
 	}
-	if err := c.sumW.Close(); err != nil {
-		return err
+	if closeErr := c.w.Close(); err == nil {
+		err = closeErr
 	}
-	return c.w.Close()
+	return err
 }
 
 // WriteCRC32Sum writes the given CRC32 checksum to w as an 8-character lowercase
@@ -122,9 +123,17 @@ func WriteCRC32Sum(w io.Writer, sum uint32) error {
 // ReadCRC32Sum reads a CRC32 checksum from r, expecting it to be an 8-character
 // lowercase hex string (e.g. "1a2b3c4d").
 func ReadCRC32Sum(r io.Reader) (uint32, error) {
+	p := make([]byte, 8)
+	if _, err := io.ReadFull(r, p); err != nil {
+		if err == io.ErrUnexpectedEOF {
+			return 0, fmt.Errorf("invalid checksum length: %w", err)
+		}
+		return 0, fmt.Errorf("failed to read checksum: %w", err)
+	}
+
 	var sum uint32
-	if _, err := fmt.Fscanf(r, "%08x", &sum); err != nil {
-		return 0, fmt.Errorf("invalid checksum: %w", err)
+	if _, err := fmt.Sscanf(string(p), "%08x", &sum); err != nil {
+		return 0, fmt.Errorf("invalid checksum format: %w", err)
 	}
 	return sum, nil
 }
