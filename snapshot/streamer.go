@@ -40,9 +40,9 @@ func NewHeaderFromFile(path string, crc32 bool) (*proto.Header, error) {
 	return h, nil
 }
 
-// NewHeaderFromHashedFile creates a new Header using a pre-loaded HashedFile.
-// The file size is read from disk; the CRC32 comes from the HashedFile.
-func NewHeaderFromHashedFile(hf *HashedFile) (*proto.Header, error) {
+// NewHeaderFromChecksummedFile creates a new Header using a pre-loaded ChecksummedFile.
+// The file size is read from disk; the CRC32 comes from the ChecksummedFile.
+func NewHeaderFromChecksummedFile(hf *ChecksummedFile) (*proto.Header, error) {
 	if hf.Path == "" {
 		return nil, fmt.Errorf("path must be non-empty")
 	}
@@ -56,10 +56,10 @@ func NewHeaderFromHashedFile(hf *HashedFile) (*proto.Header, error) {
 	}, nil
 }
 
-// NewHashedSnapshotHeader creates a new SnapshotHeader using pre-loaded HashedFile values.
+// NewChecksummedSnapshotHeader creates a new SnapshotHeader using pre-loaded ChecksummedFile values.
 // dbFile must have a non-empty Path. walFiles may be empty. The header payload is always
 // FullSnapshot.
-func NewHashedSnapshotHeader(dbFile *HashedFile, walFiles ...*HashedFile) (*proto.SnapshotHeader, error) {
+func NewChecksummedSnapshotHeader(dbFile *ChecksummedFile, walFiles ...*ChecksummedFile) (*proto.SnapshotHeader, error) {
 	if dbFile.Path == "" {
 		return nil, fmt.Errorf("dbFile.Path must be non-empty")
 	}
@@ -68,7 +68,7 @@ func NewHashedSnapshotHeader(dbFile *HashedFile, walFiles ...*HashedFile) (*prot
 		FormatVersion: 1,
 	}
 
-	dbHeader, err := NewHeaderFromHashedFile(dbFile)
+	dbHeader, err := NewHeaderFromChecksummedFile(dbFile)
 	if err != nil {
 		return nil, err
 	}
@@ -76,7 +76,7 @@ func NewHashedSnapshotHeader(dbFile *HashedFile, walFiles ...*HashedFile) (*prot
 		DbHeader: dbHeader,
 	}
 	for _, w := range walFiles {
-		wh, err := NewHeaderFromHashedFile(w)
+		wh, err := NewHeaderFromChecksummedFile(w)
 		if err != nil {
 			return nil, err
 		}
@@ -204,10 +204,10 @@ func NewSnapshotStreamer(dbPath string, walPaths ...string) (*SnapshotStreamer, 
 	}, nil
 }
 
-// NewHashedSnapshotStreamer creates a new SnapshotStreamer using pre-loaded HashedFile values,
+// NewChecksummedSnapshotStreamer creates a new SnapshotStreamer using pre-loaded ChecksummedFile values,
 // avoiding redundant CRC32 computation for files that already have checksums on disk.
-func NewHashedSnapshotStreamer(dbFile *HashedFile, walFiles ...*HashedFile) (*SnapshotStreamer, error) {
-	sh, err := NewHashedSnapshotHeader(dbFile, walFiles...)
+func NewChecksummedSnapshotStreamer(dbFile *ChecksummedFile, walFiles ...*ChecksummedFile) (*SnapshotStreamer, error) {
+	sh, err := NewChecksummedSnapshotHeader(dbFile, walFiles...)
 	if err != nil {
 		return nil, err
 	}

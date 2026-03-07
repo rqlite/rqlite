@@ -10,7 +10,7 @@ import (
 	"github.com/hashicorp/raft"
 )
 
-func Test_NewHashedFileFromFiles(t *testing.T) {
+func Test_NewChecksummedFileFromFiles(t *testing.T) {
 	t.Run("valid sidecar", func(t *testing.T) {
 		dir := t.TempDir()
 		dataPath := filepath.Join(dir, "data.db")
@@ -21,9 +21,9 @@ func Test_NewHashedFileFromFiles(t *testing.T) {
 		}
 		mustWriteCRC32File(t, dataPath)
 
-		hf, err := NewHashedFileFromFiles(dataPath, crcPath)
+		hf, err := NewChecksummedFileFromFiles(dataPath, crcPath)
 		if err != nil {
-			t.Fatalf("NewHashedFileFromFiles failed: %v", err)
+			t.Fatalf("NewChecksummedFileFromFiles failed: %v", err)
 		}
 		if hf.Path != dataPath {
 			t.Fatalf("expected Path %s, got %s", dataPath, hf.Path)
@@ -42,14 +42,14 @@ func Test_NewHashedFileFromFiles(t *testing.T) {
 			t.Fatalf("failed to write data file: %v", err)
 		}
 
-		_, err := NewHashedFileFromFiles(dataPath, crcPath)
+		_, err := NewChecksummedFileFromFiles(dataPath, crcPath)
 		if err == nil {
 			t.Fatal("expected error for missing sidecar")
 		}
 	})
 }
 
-func Test_HashedFile_Check(t *testing.T) {
+func Test_ChecksummedFile_Check(t *testing.T) {
 	t.Run("matching CRC", func(t *testing.T) {
 		dir := t.TempDir()
 		dataPath := filepath.Join(dir, "data.db")
@@ -58,9 +58,9 @@ func Test_HashedFile_Check(t *testing.T) {
 		}
 		mustWriteCRC32File(t, dataPath)
 
-		hf, err := NewHashedFileFromFiles(dataPath, dataPath+crcSuffix)
+		hf, err := NewChecksummedFileFromFiles(dataPath, dataPath+crcSuffix)
 		if err != nil {
-			t.Fatalf("NewHashedFileFromFiles failed: %v", err)
+			t.Fatalf("NewChecksummedFileFromFiles failed: %v", err)
 		}
 
 		ok, err := hf.Check()
@@ -80,9 +80,9 @@ func Test_HashedFile_Check(t *testing.T) {
 		}
 		mustWriteCRC32File(t, dataPath)
 
-		hf, err := NewHashedFileFromFiles(dataPath, dataPath+crcSuffix)
+		hf, err := NewChecksummedFileFromFiles(dataPath, dataPath+crcSuffix)
 		if err != nil {
-			t.Fatalf("NewHashedFileFromFiles failed: %v", err)
+			t.Fatalf("NewChecksummedFileFromFiles failed: %v", err)
 		}
 
 		// Modify the file so the CRC no longer matches.
@@ -100,7 +100,7 @@ func Test_HashedFile_Check(t *testing.T) {
 	})
 
 	t.Run("missing data file", func(t *testing.T) {
-		hf := &HashedFile{Path: "/nonexistent/file", CRC32: 12345}
+		hf := &ChecksummedFile{Path: "/nonexistent/file", CRC32: 12345}
 		_, err := hf.Check()
 		if err == nil {
 			t.Fatal("expected error for missing data file")

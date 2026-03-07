@@ -219,7 +219,7 @@ func runSnapshotStreamerEndToEnd(t *testing.T, dbData string, walDatas []string)
 	}
 }
 
-func Test_NewHashedSnapshotStreamer_EndToEnd(t *testing.T) {
+func Test_NewChecksummedSnapshotStreamer_EndToEnd(t *testing.T) {
 	dbData := "DB Content"
 	walData := "WAL Content"
 
@@ -236,12 +236,12 @@ func Test_NewHashedSnapshotStreamer_EndToEnd(t *testing.T) {
 		t.Fatalf("CRC32 failed: %v", err)
 	}
 
-	dbFile := &HashedFile{Path: dbPath, CRC32: dbCRC}
-	walFile := &HashedFile{Path: walPath, CRC32: walCRC}
+	dbFile := &ChecksummedFile{Path: dbPath, CRC32: dbCRC}
+	walFile := &ChecksummedFile{Path: walPath, CRC32: walCRC}
 
-	streamer, err := NewHashedSnapshotStreamer(dbFile, walFile)
+	streamer, err := NewChecksummedSnapshotStreamer(dbFile, walFile)
 	if err != nil {
-		t.Fatalf("NewHashedSnapshotStreamer failed: %v", err)
+		t.Fatalf("NewChecksummedSnapshotStreamer failed: %v", err)
 	}
 	if err := streamer.Open(); err != nil {
 		t.Fatalf("Open failed: %v", err)

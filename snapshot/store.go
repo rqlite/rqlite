@@ -340,7 +340,7 @@ func (s *Store) Open(id string) (raftMeta *raft.SnapshotMeta, rc io.ReadCloser, 
 		return nil, nil, fmt.Errorf("resolving files for snapshot %s: %w", id, err)
 	}
 
-	streamer, err := NewHashedSnapshotStreamer(dbFile, walFiles...)
+	streamer, err := NewChecksummedSnapshotStreamer(dbFile, walFiles...)
 	if err != nil {
 		return nil, nil, fmt.Errorf("creating streamer for snapshot %s: %w", id, err)
 	}
