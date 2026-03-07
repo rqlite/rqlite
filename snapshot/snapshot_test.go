@@ -10,6 +10,104 @@ import (
 	"github.com/hashicorp/raft"
 )
 
+func Test_NewHashedFileFromFiles(t *testing.T) {
+	t.Run("valid sidecar", func(t *testing.T) {
+		dir := t.TempDir()
+		dataPath := filepath.Join(dir, "data.db")
+		crcPath := filepath.Join(dir, "data.db.crc32")
+
+		if err := os.WriteFile(dataPath, []byte("hello"), 0644); err != nil {
+			t.Fatalf("failed to write data file: %v", err)
+		}
+		mustWriteCRC32File(t, dataPath)
+
+		hf, err := NewHashedFileFromFiles(dataPath, crcPath)
+		if err != nil {
+			t.Fatalf("NewHashedFileFromFiles failed: %v", err)
+		}
+		if hf.Path != dataPath {
+			t.Fatalf("expected Path %s, got %s", dataPath, hf.Path)
+		}
+		if hf.CRC32 == 0 {
+			t.Fatal("expected non-zero CRC32")
+		}
+	})
+
+	t.Run("missing sidecar", func(t *testing.T) {
+		dir := t.TempDir()
+		dataPath := filepath.Join(dir, "data.db")
+		crcPath := filepath.Join(dir, "data.db.crc32")
+
+		if err := os.WriteFile(dataPath, []byte("hello"), 0644); err != nil {
+			t.Fatalf("failed to write data file: %v", err)
+		}
+
+		_, err := NewHashedFileFromFiles(dataPath, crcPath)
+		if err == nil {
+			t.Fatal("expected error for missing sidecar")
+		}
+	})
+}
+
+func Test_HashedFile_Check(t *testing.T) {
+	t.Run("matching CRC", func(t *testing.T) {
+		dir := t.TempDir()
+		dataPath := filepath.Join(dir, "data.db")
+		if err := os.WriteFile(dataPath, []byte("hello"), 0644); err != nil {
+			t.Fatalf("failed to write data file: %v", err)
+		}
+		mustWriteCRC32File(t, dataPath)
+
+		hf, err := NewHashedFileFromFiles(dataPath, dataPath+crcSuffix)
+		if err != nil {
+			t.Fatalf("NewHashedFileFromFiles failed: %v", err)
+		}
+
+		ok, err := hf.Check()
+		if err != nil {
+			t.Fatalf("Check failed: %v", err)
+		}
+		if !ok {
+			t.Fatal("expected Check to return true for matching CRC")
+		}
+	})
+
+	t.Run("mismatched CRC", func(t *testing.T) {
+		dir := t.TempDir()
+		dataPath := filepath.Join(dir, "data.db")
+		if err := os.WriteFile(dataPath, []byte("hello"), 0644); err != nil {
+			t.Fatalf("failed to write data file: %v", err)
+		}
+		mustWriteCRC32File(t, dataPath)
+
+		hf, err := NewHashedFileFromFiles(dataPath, dataPath+crcSuffix)
+		if err != nil {
+			t.Fatalf("NewHashedFileFromFiles failed: %v", err)
+		}
+
+		// Modify the file so the CRC no longer matches.
+		if err := os.WriteFile(dataPath, []byte("modified"), 0644); err != nil {
+			t.Fatalf("failed to modify data file: %v", err)
+		}
+
+		ok, err := hf.Check()
+		if err != nil {
+			t.Fatalf("Check failed: %v", err)
+		}
+		if ok {
+			t.Fatal("expected Check to return false for mismatched CRC")
+		}
+	})
+
+	t.Run("missing data file", func(t *testing.T) {
+		hf := HashedFile{Path: "/nonexistent/file", CRC32: 12345}
+		_, err := hf.Check()
+		if err == nil {
+			t.Fatal("expected error for missing data file")
+		}
+	})
+}
+
 // Test Snapshot.Less method
 func Test_Snapshot_Less(t *testing.T) {
 	tests := []struct {
@@ -1186,12 +1284,15 @@ func mustCreateSnapshotInc(t *testing.T, rootDir, snapshotID string, idx, term u
 }
 
 func mustCreateSnapshot(t *testing.T, rootDir string, snapshotID, srcName, dstName string, idx, term uint64) {
+	t.Helper()
 	snapshotDir := filepath.Join(rootDir, snapshotID)
 	if err := os.MkdirAll(snapshotDir, 0755); err != nil {
 		t.Fatalf("failed to create snapshot dir: %v", err)
 	}
 
-	mustCopyFile(t, srcName, filepath.Join(snapshotDir, dstName))
+	dstPath := filepath.Join(snapshotDir, dstName)
+	mustCopyFile(t, srcName, dstPath)
+	mustWriteCRC32File(t, dstPath)
 	meta := &raft.SnapshotMeta{
 		ID:    snapshotID,
 		Index: idx,
@@ -1211,7 +1312,9 @@ func mustCreateSnapshotIncMulti(t *testing.T, rootDir, snapshotID string, idx, t
 		t.Fatalf("failed to create snapshot dir: %v", err)
 	}
 	for i, src := range walSrcs {
-		mustCopyFile(t, src, filepath.Join(snapshotDir, testWALName(i+1)))
+		dstPath := filepath.Join(snapshotDir, testWALName(i+1))
+		mustCopyFile(t, src, dstPath)
+		mustWriteCRC32File(t, dstPath)
 	}
 	meta := &raft.SnapshotMeta{
 		ID:    snapshotID,

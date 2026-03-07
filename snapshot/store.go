@@ -465,7 +465,9 @@ func (s *Store) reap() (int, int, error) {
 		//    handles cross-directory moves during checkpointing.
 		var walFiles []string
 		for _, snap := range newerSet.All() {
-			walFiles = append(walFiles, snap.walFiles...)
+			for _, wf := range snap.walFiles {
+				walFiles = append(walFiles, wf.Path)
+			}
 		}
 		dbPath := filepath.Join(full.path, dbfileName)
 		if len(walFiles) > 0 {

@@ -265,6 +265,7 @@ func Upgrade8To10(old, new string, logger *log.Logger) (retErr error) {
 	p.AddMkdirAll(newSnapshotDir)
 	p.AddWriteMeta(newSnapshotDir, metaJSON)
 	p.AddCopyFile(oldDBPath, newDBPath)
+	p.AddCalcCRC32(newDBPath, newDBPath+crcSuffix)
 	p.AddRename(newTmpDir, new)
 	p.AddRemoveAll(old)
 
