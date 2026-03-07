@@ -2707,7 +2707,7 @@ func (s *Store) fsmSnapshot() (fSnap raft.FSMSnapshot, retErr error) {
 				s.logger.Printf("persisting %s snapshot did not succeed on node ID %s", fPLog, s.raftID)
 				// In this situation the snapshot was processed, but the processing did not succeed.
 				// If this happened while handling a full snapshot, then the system will automatically
-				// try a full snapshot next time round. If, instead, this happened while processing an'
+				// try a full snapshot next time round. If, instead, this happened while processing an
 				// incremental snapshot, then it depends on whether the WAL Staging directory is still
 				// around. If it is, we don't have a broken series of WALs and we can retry an incremental
 				// again next time. Otherwise the chain has been broken and we must fall back to full.

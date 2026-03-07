@@ -622,7 +622,7 @@ func writeBytesWithLength(conn net.Conn, p []byte) error {
 // gzCompress compresses the given byte slice.
 func gzCompress(b []byte) ([]byte, error) {
 	var buf bytes.Buffer
-	gzw, err := gzip.NewWriterLevel(&buf, gzip.BestCompression)
+	gzw, err := gzip.NewWriterLevel(&buf, gzip.DefaultCompression)
 	if err != nil {
 		return nil, fmt.Errorf("gzip new writer: %s", err)
 	}
