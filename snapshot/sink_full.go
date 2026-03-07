@@ -204,7 +204,6 @@ func (s *FullSink) Close() error {
 	if err != nil {
 		return fmt.Errorf("computing CRC32 of DB file: %w", err)
 	}
-	stats.Get(snapshotFullCRC32CreateDuration).(*expvar.Int).Set(dur.Milliseconds())
 	if dbCRC != s.header.DbHeader.Crc32 {
 		return fmt.Errorf("CRC32 mismatch for DB file: got %08x, expected %08x", dbCRC, s.header.DbHeader.Crc32)
 	}
