@@ -221,6 +221,15 @@ class TestSingleNode_SnapshotRequest(unittest.TestCase):
     n.snapshot()
     self.assertEqual(n.expvar()['http']['user_snapshots'], 1)
 
+class TestSingleNode_ReapRequest(unittest.TestCase):
+  def test_reap_request(self):
+    ''' Test that a node performs a reap when requested'''
+    n = Node(RQLITED_PATH, '0')
+    n.start()
+    n.wait_for_leader()
+    n.reap()
+    self.assertEqual(n.expvar()['http']['user_reaps'], 1)
+
 class TestSingleNodeLoadRestart(unittest.TestCase):
   ''' Test that a node can load a SQLite data set in binary format'''
   def test_load_binary(self):

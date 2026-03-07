@@ -607,6 +607,10 @@ class Node(object):
     r = requests.post(self._snapshot_url(),params=reqParams)
     raise_for_status(r)
 
+  def reap(self):
+    r = requests.post(self._reap_url())
+    raise_for_status(r)
+
   def redirect_addr(self):
     r = requests.post(self._execute_url(redirect=True), data=json.dumps(['nonsense']), allow_redirects=False)
     raise_for_status(r)
@@ -668,6 +672,8 @@ class Node(object):
     return 'http://' + self.APIAddr() + '/boot'
   def _snapshot_url(self):
     return 'http://' + self.APIAddr() + '/snapshot'
+  def _reap_url(self):
+    return 'http://' + self.APIAddr() + '/reap'
   def _remove_url(self):
     return 'http://' + self.APIAddr() + '/remove'
   def __eq__(self, other):
