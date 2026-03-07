@@ -17,7 +17,6 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
-	"runtime"
 	"sort"
 	"strconv"
 	"strings"
@@ -3279,15 +3278,6 @@ func removeFile(path string) error {
 	return os.Remove(path)
 }
 
-func removeFileOrFatal(fd *os.File) {
-	if err := fd.Close(); err != nil {
-		log.Fatalf("failed to close file at %s before removal: %s", fd.Name(), err.Error())
-	}
-	if err := removeFile(fd.Name()); err != nil {
-		log.Fatalf("failed to remove file at %s: %s", fd.Name(), err.Error())
-	}
-}
-
 // pathExists returns true if the given path exists.
 func pathExists(p string) bool {
 	if _, err := os.Lstat(p); err != nil && os.IsNotExist(err) {
@@ -3354,18 +3344,6 @@ func dirSize(path string) (int64, error) {
 		return err
 	})
 	return size, err
-}
-
-func syncDirMaybe(dir string) error {
-	if runtime.GOOS == "windows" {
-		return nil
-	}
-	fh, err := os.Open(dir)
-	if err != nil {
-		return err
-	}
-	defer fh.Close()
-	return fh.Sync()
 }
 
 // modTimeSize returns the modification time and size of the file at the given path.
