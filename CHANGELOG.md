@@ -47,6 +47,7 @@ Upgrading to this release from a v7 release (or later) is seamless and been exte
 - [PR #2521](https://github.com/rqlite/rqlite/pull/2521): Calculate and check CRCs during reaping.
 - [PR #2524](https://github.com/rqlite/rqlite/pull/2524): Use `AtomicBool` for Snapshot reap-disabled state.
 - [PR #2527](https://github.com/rqlite/rqlite/pull/2527): Read CRC32 values from sidecar files when opening snapshots.
+- [PR #2528](https://github.com/rqlite/rqlite/pull/2528): Full Snapshot Sink validates data against CRC32s in header.
 
 ## v9.4.1 (February 11th 2026)
 ### Implementation changes and bug fixes
