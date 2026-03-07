@@ -40,6 +40,7 @@ Upgrading to this release from a v7 release (or later) is seamless and been exte
 - [PR #2505](https://github.com/rqlite/rqlite/pull/2505), [PR #2508](https://github.com/rqlite/rqlite/pull/2508): Test Store snapshotting with fault injection.
 - [PR #2512](https://github.com/rqlite/rqlite/pull/2512): Exit on failure to close Incremental Snapshot sink.
 - [PR #2514](https://github.com/rqlite/rqlite/pull/2514): Increase thresholds for Raft log entry compression.
+- [PR #2518](https://github.com/rqlite/rqlite/pull/2518): Add CRC32-related utilities.
 
 ## v9.4.1 (February 11th 2026)
 ### Implementation changes and bug fixes
