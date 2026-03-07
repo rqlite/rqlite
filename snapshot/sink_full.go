@@ -4,6 +4,7 @@ import (
 	"errors"
 	"expvar"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"time"
@@ -52,16 +53,11 @@ type FullSink struct {
 	phase    installPhase
 	walIndex int
 
-	f         *os.File
+	f         io.WriteCloser
 	remaining uint64
 
 	dbFile   string
 	walFiles []string
-
-	// For calculating CRC32 of the DB file as we write it, and then writing the
-	// sum file at the end.
-	crcW  *rsum.CRC32Writer
-	dbCRC uint32
 
 	opened bool
 }
@@ -138,11 +134,7 @@ func (s *FullSink) Write(p []byte) (int, error) {
 
 		var n int
 		var err error
-		if s.crcW != nil {
-			n, err = s.crcW.Write(chunk)
-		} else {
-			n, err = s.f.Write(chunk)
-		}
+		n, err = s.f.Write(chunk)
 		total += n
 		s.remaining -= uint64(n)
 
@@ -206,7 +198,10 @@ func (s *FullSink) Close() error {
 		return err
 	}
 
-	sum := s.dbCRC
+	sum, err := rsum.ReadCRC32SumFile(s.dbFile + crcSuffix)
+	if err != nil {
+		return fmt.Errorf("reading CRC32 sum file: %w", err)
+	}
 	if len(s.walFiles) > 0 {
 		// This is when we checkpoint all WALs into the SQLite file, and end up
 		// with a single DB file representing the snapshot state.
@@ -245,12 +240,16 @@ func (s *FullSink) openCurrent() error {
 	switch s.phase {
 	case installPhaseDB:
 		path := filepath.Join(s.dir, dbfileName)
-		f, err := os.Create(path)
+		dbFD, err := os.Create(path)
 		if err != nil {
 			return err
 		}
-		s.f = f
-		s.crcW = rsum.NewCRC32Writer(f)
+		sumFD, err := os.Create(path + crcSuffix)
+		if err != nil {
+			dbFD.Close()
+			return err
+		}
+		s.f = rsum.NewCRC32WriteCloser(dbFD, sumFD)
 		s.remaining = s.header.DbHeader.SizeBytes
 		return nil
 
@@ -313,10 +312,6 @@ func (s *FullSink) advance() error {
 func (s *FullSink) closeFile() error {
 	if s.f == nil {
 		return nil
-	}
-	if s.crcW != nil {
-		s.dbCRC = s.crcW.Sum32()
-		s.crcW = nil
 	}
 	err := s.f.Close()
 	s.f = nil
