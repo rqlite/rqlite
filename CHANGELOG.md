@@ -7,7 +7,9 @@ This release also introduces a new built-in console app, making it more convenie
 
 There are no breaking API changes in this release, nor any changes to how clustering operates. However the command line option `-on-disk-path` has been removed as it provided little benefit, but made it too easy for operators to inadvertently corrupt a rqlite node.
 
-Upgrading to this release from a v7 release (or later) is seamless and been extensively tested. Rolling upgrades are also supported. However it is strongly recommended you [backup your rqlite system](https://rqlite.io/docs/guides/backup/) before upgrading it. **Downgrading from v10 is not supported**, and that is why the major release number has been incremented. If you do need to downgrade then backup your v10 system and use that backup to deploy a new pre-v10 system.
+Upgrading to this release from a v7 release (or later) is seamless and been extensively tested. Rolling upgrades are also supported, but **joining a v10 node to a v9 (or earlier) cluster is not supported**. However it is strongly recommended you [backup your rqlite system](https://rqlite.io/docs/guides/backup/) before upgrading it.
+
+**Downgrading from v10 is not supported**, and that is why the major release number has been incremented. If you do need to downgrade then backup your v10 system and use that backup to deploy a new pre-v10 system.
 
 ### New features
 - [PR #2480](https://github.com/rqlite/rqlite/pull/2480), [PR #2482](https://github.com/rqlite/rqlite/pull/2482), [PR #2487](https://github.com/rqlite/rqlite/pull/2487): Add built-in web application for working with rqlite, including running queries. Application is served at `/console`.
