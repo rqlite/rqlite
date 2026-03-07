@@ -35,8 +35,11 @@ func Test_NewSnapshotHeader(t *testing.T) {
 	}
 
 	tmpDBFile := mustWriteToTempFile(t, []byte("DB Content"))
+	mustWriteCRC32File(t, tmpDBFile)
 	tmpWALFile1 := mustWriteToTempFile(t, []byte("WAL Content 1"))
+	mustWriteCRC32File(t, tmpWALFile1)
 	tmpWALFile2 := mustWriteToTempFile(t, []byte("WAL Content 2"))
+	mustWriteCRC32File(t, tmpWALFile2)
 
 	// DB only → FullSnapshot
 	hdr, err := NewSnapshotHeader(tmpDBFile)
@@ -108,11 +111,14 @@ func runSnapshotStreamerEndToEnd(t *testing.T, dbData string, walDatas []string)
 	var dbPath string
 	if dbData != "" {
 		dbPath = mustWriteToTempFile(t, []byte(dbData))
+		mustWriteCRC32File(t, dbPath)
 	}
 
 	walPaths := make([]string, 0, len(walDatas))
 	for _, wd := range walDatas {
-		walPaths = append(walPaths, mustWriteToTempFile(t, []byte(wd)))
+		walPath := mustWriteToTempFile(t, []byte(wd))
+		mustWriteCRC32File(t, walPath)
+		walPaths = append(walPaths, walPath)
 	}
 
 	streamer, err := NewSnapshotStreamer(dbPath, walPaths...)
