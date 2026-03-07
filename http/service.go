@@ -852,7 +852,7 @@ func (s *Service) handleReap(w http.ResponseWriter, r *http.Request) {
 	}
 
 	resp := map[string]int{
-		"snapshots_reaped":      n,
+		"snapshots_reaped":  n,
 		"wals_checkpointed": c,
 	}
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")
