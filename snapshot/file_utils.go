@@ -58,15 +58,6 @@ func syncFile(path string) error {
 	return fh.Sync()
 }
 
-func syncFiles(paths ...string) error {
-	for _, path := range paths {
-		if err := syncFile(path); err != nil {
-			return err
-		}
-	}
-	return nil
-}
-
 func syncDir(dir string) error {
 	fh, err := os.Open(dir)
 	if err != nil {
