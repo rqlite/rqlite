@@ -100,7 +100,7 @@ func Test_HashedFile_Check(t *testing.T) {
 	})
 
 	t.Run("missing data file", func(t *testing.T) {
-		hf := HashedFile{Path: "/nonexistent/file", CRC32: 12345}
+		hf := &HashedFile{Path: "/nonexistent/file", CRC32: 12345}
 		_, err := hf.Check()
 		if err == nil {
 			t.Fatal("expected error for missing data file")
@@ -1114,8 +1114,8 @@ func TestSnapshotSet_ResolveFiles(t *testing.T) {
 		if err != nil {
 			t.Fatalf("ResolveFiles() returned error: %v", err)
 		}
-		if exp := filepath.Join(rootDir, "snap-1", dbfileName); dbFile != exp {
-			t.Fatalf("dbFile = %q, want %q", dbFile, exp)
+		if exp := filepath.Join(rootDir, "snap-1", dbfileName); dbFile.Path != exp {
+			t.Fatalf("dbFile.Path = %q, want %q", dbFile.Path, exp)
 		}
 		if len(walFiles) != 0 {
 			t.Fatalf("expected 0 WAL files, got %d", len(walFiles))
@@ -1138,8 +1138,8 @@ func TestSnapshotSet_ResolveFiles(t *testing.T) {
 		if err != nil {
 			t.Fatalf("ResolveFiles(snap-1) returned error: %v", err)
 		}
-		if exp := filepath.Join(rootDir, "snap-1", dbfileName); dbFile != exp {
-			t.Fatalf("dbFile = %q, want %q", dbFile, exp)
+		if exp := filepath.Join(rootDir, "snap-1", dbfileName); dbFile.Path != exp {
+			t.Fatalf("dbFile.Path = %q, want %q", dbFile.Path, exp)
 		}
 		if len(walFiles) != 0 {
 			t.Fatalf("expected 0 WAL files, got %d", len(walFiles))
@@ -1150,14 +1150,14 @@ func TestSnapshotSet_ResolveFiles(t *testing.T) {
 		if err != nil {
 			t.Fatalf("ResolveFiles(snap-2) returned error: %v", err)
 		}
-		if exp := filepath.Join(rootDir, "snap-1", dbfileName); dbFile != exp {
-			t.Fatalf("dbFile = %q, want %q", dbFile, exp)
+		if exp := filepath.Join(rootDir, "snap-1", dbfileName); dbFile.Path != exp {
+			t.Fatalf("dbFile.Path = %q, want %q", dbFile.Path, exp)
 		}
 		if len(walFiles) != 1 {
 			t.Fatalf("expected 1 WAL file, got %d", len(walFiles))
 		}
-		if exp := filepath.Join(rootDir, "snap-2", testWALName(1)); walFiles[0] != exp {
-			t.Fatalf("walFiles[0] = %q, want %q", walFiles[0], exp)
+		if exp := filepath.Join(rootDir, "snap-2", testWALName(1)); walFiles[0].Path != exp {
+			t.Fatalf("walFiles[0].Path = %q, want %q", walFiles[0].Path, exp)
 		}
 	})
 
@@ -1178,8 +1178,8 @@ func TestSnapshotSet_ResolveFiles(t *testing.T) {
 		if err != nil {
 			t.Fatalf("ResolveFiles(snap-2) returned error: %v", err)
 		}
-		if exp := filepath.Join(rootDir, "snap-1", dbfileName); dbFile != exp {
-			t.Fatalf("dbFile = %q, want %q", dbFile, exp)
+		if exp := filepath.Join(rootDir, "snap-1", dbfileName); dbFile.Path != exp {
+			t.Fatalf("dbFile.Path = %q, want %q", dbFile.Path, exp)
 		}
 		if len(walFiles) != 1 {
 			t.Fatalf("expected 1 WAL file, got %d", len(walFiles))
@@ -1190,17 +1190,17 @@ func TestSnapshotSet_ResolveFiles(t *testing.T) {
 		if err != nil {
 			t.Fatalf("ResolveFiles(snap-3) returned error: %v", err)
 		}
-		if exp := filepath.Join(rootDir, "snap-1", dbfileName); dbFile != exp {
-			t.Fatalf("dbFile = %q, want %q", dbFile, exp)
+		if exp := filepath.Join(rootDir, "snap-1", dbfileName); dbFile.Path != exp {
+			t.Fatalf("dbFile.Path = %q, want %q", dbFile.Path, exp)
 		}
 		if len(walFiles) != 2 {
 			t.Fatalf("expected 2 WAL files, got %d", len(walFiles))
 		}
-		if exp := filepath.Join(rootDir, "snap-2", testWALName(1)); walFiles[0] != exp {
-			t.Fatalf("walFiles[0] = %q, want %q", walFiles[0], exp)
+		if exp := filepath.Join(rootDir, "snap-2", testWALName(1)); walFiles[0].Path != exp {
+			t.Fatalf("walFiles[0].Path = %q, want %q", walFiles[0].Path, exp)
 		}
-		if exp := filepath.Join(rootDir, "snap-3", testWALName(1)); walFiles[1] != exp {
-			t.Fatalf("walFiles[1] = %q, want %q", walFiles[1], exp)
+		if exp := filepath.Join(rootDir, "snap-3", testWALName(1)); walFiles[1].Path != exp {
+			t.Fatalf("walFiles[1].Path = %q, want %q", walFiles[1].Path, exp)
 		}
 	})
 
@@ -1222,14 +1222,14 @@ func TestSnapshotSet_ResolveFiles(t *testing.T) {
 		if err != nil {
 			t.Fatalf("ResolveFiles(snap-4) returned error: %v", err)
 		}
-		if exp := filepath.Join(rootDir, "snap-3", dbfileName); dbFile != exp {
-			t.Fatalf("dbFile = %q, want %q", dbFile, exp)
+		if exp := filepath.Join(rootDir, "snap-3", dbfileName); dbFile.Path != exp {
+			t.Fatalf("dbFile.Path = %q, want %q", dbFile.Path, exp)
 		}
 		if len(walFiles) != 1 {
 			t.Fatalf("expected 1 WAL file, got %d", len(walFiles))
 		}
-		if exp := filepath.Join(rootDir, "snap-4", testWALName(1)); walFiles[0] != exp {
-			t.Fatalf("walFiles[0] = %q, want %q", walFiles[0], exp)
+		if exp := filepath.Join(rootDir, "snap-4", testWALName(1)); walFiles[0].Path != exp {
+			t.Fatalf("walFiles[0].Path = %q, want %q", walFiles[0].Path, exp)
 		}
 	})
 
@@ -1415,17 +1415,17 @@ func Test_SnapshotSet_ResolveFiles_MultiWAL(t *testing.T) {
 		if err != nil {
 			t.Fatalf("ResolveFiles() returned error: %v", err)
 		}
-		if exp := filepath.Join(rootDir, "snap-1", dbfileName); dbFile != exp {
-			t.Fatalf("dbFile = %q, want %q", dbFile, exp)
+		if exp := filepath.Join(rootDir, "snap-1", dbfileName); dbFile.Path != exp {
+			t.Fatalf("dbFile.Path = %q, want %q", dbFile.Path, exp)
 		}
 		if len(walFiles) != 2 {
 			t.Fatalf("expected 2 WAL files, got %d", len(walFiles))
 		}
-		if exp := filepath.Join(rootDir, "snap-2", testWALName(1)); walFiles[0] != exp {
-			t.Fatalf("walFiles[0] = %q, want %q", walFiles[0], exp)
+		if exp := filepath.Join(rootDir, "snap-2", testWALName(1)); walFiles[0].Path != exp {
+			t.Fatalf("walFiles[0].Path = %q, want %q", walFiles[0].Path, exp)
 		}
-		if exp := filepath.Join(rootDir, "snap-2", testWALName(2)); walFiles[1] != exp {
-			t.Fatalf("walFiles[1] = %q, want %q", walFiles[1], exp)
+		if exp := filepath.Join(rootDir, "snap-2", testWALName(2)); walFiles[1].Path != exp {
+			t.Fatalf("walFiles[1].Path = %q, want %q", walFiles[1].Path, exp)
 		}
 	})
 
@@ -1445,15 +1445,15 @@ func Test_SnapshotSet_ResolveFiles_MultiWAL(t *testing.T) {
 		if err != nil {
 			t.Fatalf("ResolveFiles() returned error: %v", err)
 		}
-		if exp := filepath.Join(rootDir, "snap-1", dbfileName); dbFile != exp {
-			t.Fatalf("dbFile = %q, want %q", dbFile, exp)
+		if exp := filepath.Join(rootDir, "snap-1", dbfileName); dbFile.Path != exp {
+			t.Fatalf("dbFile.Path = %q, want %q", dbFile.Path, exp)
 		}
 		if len(walFiles) != 3 {
 			t.Fatalf("expected 3 WAL files, got %d", len(walFiles))
 		}
 		for i := 0; i < 3; i++ {
-			if exp := filepath.Join(rootDir, "snap-2", testWALName(i+1)); walFiles[i] != exp {
-				t.Fatalf("walFiles[%d] = %q, want %q", i, walFiles[i], exp)
+			if exp := filepath.Join(rootDir, "snap-2", testWALName(i+1)); walFiles[i].Path != exp {
+				t.Fatalf("walFiles[%d].Path = %q, want %q", i, walFiles[i].Path, exp)
 			}
 		}
 	})
@@ -1477,22 +1477,22 @@ func Test_SnapshotSet_ResolveFiles_MultiWAL(t *testing.T) {
 		if err != nil {
 			t.Fatalf("ResolveFiles() returned error: %v", err)
 		}
-		if exp := filepath.Join(rootDir, "snap-1", dbfileName); dbFile != exp {
-			t.Fatalf("dbFile = %q, want %q", dbFile, exp)
+		if exp := filepath.Join(rootDir, "snap-1", dbfileName); dbFile.Path != exp {
+			t.Fatalf("dbFile.Path = %q, want %q", dbFile.Path, exp)
 		}
 		if len(walFiles) != 3 {
 			t.Fatalf("expected 3 WAL files, got %d", len(walFiles))
 		}
 		// First WAL from snap-2 (single-WAL incremental).
-		if exp := filepath.Join(rootDir, "snap-2", testWALName(1)); walFiles[0] != exp {
-			t.Fatalf("walFiles[0] = %q, want %q", walFiles[0], exp)
+		if exp := filepath.Join(rootDir, "snap-2", testWALName(1)); walFiles[0].Path != exp {
+			t.Fatalf("walFiles[0].Path = %q, want %q", walFiles[0].Path, exp)
 		}
 		// Next two WALs from snap-3 (multi-WAL incremental).
-		if exp := filepath.Join(rootDir, "snap-3", testWALName(1)); walFiles[1] != exp {
-			t.Fatalf("walFiles[1] = %q, want %q", walFiles[1], exp)
+		if exp := filepath.Join(rootDir, "snap-3", testWALName(1)); walFiles[1].Path != exp {
+			t.Fatalf("walFiles[1].Path = %q, want %q", walFiles[1].Path, exp)
 		}
-		if exp := filepath.Join(rootDir, "snap-3", testWALName(2)); walFiles[2] != exp {
-			t.Fatalf("walFiles[2] = %q, want %q", walFiles[2], exp)
+		if exp := filepath.Join(rootDir, "snap-3", testWALName(2)); walFiles[2].Path != exp {
+			t.Fatalf("walFiles[2].Path = %q, want %q", walFiles[2].Path, exp)
 		}
 	})
 

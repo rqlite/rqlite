@@ -219,6 +219,112 @@ func runSnapshotStreamerEndToEnd(t *testing.T, dbData string, walDatas []string)
 	}
 }
 
+func Test_NewHashedSnapshotStreamer_EndToEnd(t *testing.T) {
+	dbData := "DB Content"
+	walData := "WAL Content"
+
+	dbPath := mustWriteToTempFile(t, []byte(dbData))
+	walPath := mustWriteToTempFile(t, []byte(walData))
+
+	// Pre-compute CRC32 values (simulating sidecar file loading).
+	dbCRC, err := rsum.CRC32(dbPath)
+	if err != nil {
+		t.Fatalf("CRC32 failed: %v", err)
+	}
+	walCRC, err := rsum.CRC32(walPath)
+	if err != nil {
+		t.Fatalf("CRC32 failed: %v", err)
+	}
+
+	dbFile := &HashedFile{Path: dbPath, CRC32: dbCRC}
+	walFile := &HashedFile{Path: walPath, CRC32: walCRC}
+
+	streamer, err := NewHashedSnapshotStreamer(dbFile, walFile)
+	if err != nil {
+		t.Fatalf("NewHashedSnapshotStreamer failed: %v", err)
+	}
+	if err := streamer.Open(); err != nil {
+		t.Fatalf("Open failed: %v", err)
+	}
+	defer streamer.Close()
+
+	expectedLen, err := streamer.Len()
+	if err != nil {
+		t.Fatalf("Len failed: %v", err)
+	}
+
+	totalRead := 0
+
+	// Read header size.
+	sizeBuf := make([]byte, HeaderSizeLen)
+	n, err := io.ReadFull(streamer, sizeBuf)
+	if err != nil {
+		t.Fatalf("Failed to read header size: %v", err)
+	}
+	totalRead += n
+
+	hdrLen := int(binary.BigEndian.Uint32(sizeBuf))
+	hdrBuf := make([]byte, hdrLen)
+	n, err = io.ReadFull(streamer, hdrBuf)
+	if err != nil {
+		t.Fatalf("Failed to read header: %v", err)
+	}
+	totalRead += n
+
+	header, err := UnmarshalSnapshotHeader(hdrBuf)
+	if err != nil {
+		t.Fatalf("Failed to unmarshal header: %v", err)
+	}
+
+	full := header.GetFull()
+	if full == nil {
+		t.Fatalf("Expected Full payload")
+	}
+
+	// Verify CRC32 values are set in the header.
+	if full.DbHeader.Crc32 != dbCRC {
+		t.Fatalf("DB CRC32 = %d, want %d", full.DbHeader.Crc32, dbCRC)
+	}
+	if len(full.WalHeaders) != 1 {
+		t.Fatalf("Expected 1 WAL header, got %d", len(full.WalHeaders))
+	}
+	if full.WalHeaders[0].Crc32 != walCRC {
+		t.Fatalf("WAL CRC32 = %d, want %d", full.WalHeaders[0].Crc32, walCRC)
+	}
+
+	// Read DB data.
+	dbBuf := make([]byte, full.DbHeader.SizeBytes)
+	n, err = io.ReadFull(streamer, dbBuf)
+	if err != nil {
+		t.Fatalf("Failed to read DB data: %v", err)
+	}
+	totalRead += n
+	if string(dbBuf) != dbData {
+		t.Fatalf("DB data mismatch")
+	}
+
+	// Read WAL data.
+	walBuf := make([]byte, full.WalHeaders[0].SizeBytes)
+	n, err = io.ReadFull(streamer, walBuf)
+	if err != nil {
+		t.Fatalf("Failed to read WAL data: %v", err)
+	}
+	totalRead += n
+	if string(walBuf) != walData {
+		t.Fatalf("WAL data mismatch")
+	}
+
+	// Verify EOF.
+	var eofBuf [1]byte
+	if _, err := streamer.Read(eofBuf[:]); err != io.EOF {
+		t.Fatalf("Expected EOF, got: %v", err)
+	}
+
+	if int64(totalRead) != expectedLen {
+		t.Fatalf("Total read %d != expected %d", totalRead, expectedLen)
+	}
+}
+
 func Test_SnapshotPathStreamer(t *testing.T) {
 	walDir := t.TempDir()
 	streamer, err := NewSnapshotPathStreamer(walDir)

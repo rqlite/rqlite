@@ -20,17 +20,17 @@ type HashedFile struct {
 
 // NewHashedFileFromFiles creates a HashedFile by reading the CRC32 checksum
 // from the sidecar file at crcPath and associating it with dataPath.
-func NewHashedFileFromFiles(dataPath, crcPath string) (HashedFile, error) {
+func NewHashedFileFromFiles(dataPath, crcPath string) (*HashedFile, error) {
 	sum, err := rsum.ReadCRC32SumFile(crcPath)
 	if err != nil {
-		return HashedFile{}, fmt.Errorf("reading CRC32 sidecar %s: %w", crcPath, err)
+		return nil, fmt.Errorf("reading CRC32 sidecar %s: %w", crcPath, err)
 	}
-	return HashedFile{Path: dataPath, CRC32: sum}, nil
+	return &HashedFile{Path: dataPath, CRC32: sum}, nil
 }
 
 // Check computes the CRC32 of the file at Path and returns whether it
 // matches the stored CRC32 value.
-func (hf HashedFile) Check() (bool, error) {
+func (hf *HashedFile) Check() (bool, error) {
 	actual, err := rsum.CRC32(hf.Path)
 	if err != nil {
 		return false, err
@@ -65,11 +65,11 @@ type Snapshot struct {
 	raftMeta *raft.SnapshotMeta
 
 	// dbFile is the DB file and its CRC32. Populated for full snapshots.
-	dbFile HashedFile
+	dbFile *HashedFile
 
 	// walFiles holds the sorted WAL files and their CRC32s.
 	// Populated for incremental snapshots.
-	walFiles []HashedFile
+	walFiles []*HashedFile
 }
 
 // Less reports whether this snapshot is older than the other snapshot.
@@ -357,17 +357,17 @@ func (ss SnapshotSet) ValidateIncrementalChain() error {
 // ResolveFiles resolves a snapshot ID into its constituent DB file and WAL files. At a minimum,
 // a DB file is returned. If the snapshot is incremental, associated WAL files are also returned. The
 // order in the slice is the order in which the WAL files should be applied to the DB file.
-func (ss SnapshotSet) ResolveFiles(id string) (dbFile string, walFiles []string, err error) {
+func (ss SnapshotSet) ResolveFiles(id string) (dbFile *HashedFile, walFiles []*HashedFile, err error) {
 	idx := ss.indexOf(id)
 	if idx < 0 {
-		return "", nil, ErrSnapshotNotFound
+		return nil, nil, ErrSnapshotNotFound
 	}
 
 	snap := ss.items[idx]
 
 	// If the requested snapshot is full, just return its DB file.
 	if snap.typ == SnapshotTypeFull {
-		return snap.dbFile.Path, nil, nil
+		return snap.dbFile, nil, nil
 	}
 
 	// The requested snapshot is incremental. Walk backward to find the
@@ -381,14 +381,12 @@ func (ss SnapshotSet) ResolveFiles(id string) (dbFile string, walFiles []string,
 		}
 	}
 	if fullIdx < 0 {
-		return "", nil, fmt.Errorf("no full snapshot found before snapshot %s", id)
+		return nil, nil, fmt.Errorf("no full snapshot found before snapshot %s", id)
 	}
 
-	dbFile = ss.items[fullIdx].dbFile.Path
+	dbFile = ss.items[fullIdx].dbFile
 	for i := fullIdx + 1; i <= idx; i++ {
-		for _, wf := range ss.items[i].walFiles {
-			walFiles = append(walFiles, wf.Path)
-		}
+		walFiles = append(walFiles, ss.items[i].walFiles...)
 	}
 	return dbFile, walFiles, nil
 }
