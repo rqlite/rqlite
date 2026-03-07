@@ -12,25 +12,25 @@ import (
 	"github.com/rqlite/rqlite/v10/internal/rsum"
 )
 
-// HashedFile pairs a file path with its CRC32 checksum.
-type HashedFile struct {
+// ChecksummedFile pairs a file path with its CRC32 checksum.
+type ChecksummedFile struct {
 	Path  string
 	CRC32 uint32
 }
 
-// NewHashedFileFromFiles creates a HashedFile by reading the CRC32 checksum
+// NewChecksummedFileFromFiles creates a ChecksummedFile by reading the CRC32 checksum
 // from the sidecar file at crcPath and associating it with dataPath.
-func NewHashedFileFromFiles(dataPath, crcPath string) (HashedFile, error) {
+func NewChecksummedFileFromFiles(dataPath, crcPath string) (*ChecksummedFile, error) {
 	sum, err := rsum.ReadCRC32SumFile(crcPath)
 	if err != nil {
-		return HashedFile{}, fmt.Errorf("reading CRC32 sidecar %s: %w", crcPath, err)
+		return nil, fmt.Errorf("reading CRC32 sidecar %s: %w", crcPath, err)
 	}
-	return HashedFile{Path: dataPath, CRC32: sum}, nil
+	return &ChecksummedFile{Path: dataPath, CRC32: sum}, nil
 }
 
 // Check computes the CRC32 of the file at Path and returns whether it
 // matches the stored CRC32 value.
-func (hf HashedFile) Check() (bool, error) {
+func (hf *ChecksummedFile) Check() (bool, error) {
 	actual, err := rsum.CRC32(hf.Path)
 	if err != nil {
 		return false, err
@@ -65,11 +65,11 @@ type Snapshot struct {
 	raftMeta *raft.SnapshotMeta
 
 	// dbFile is the DB file and its CRC32. Populated for full snapshots.
-	dbFile HashedFile
+	dbFile *ChecksummedFile
 
 	// walFiles holds the sorted WAL files and their CRC32s.
 	// Populated for incremental snapshots.
-	walFiles []HashedFile
+	walFiles []*ChecksummedFile
 }
 
 // Less reports whether this snapshot is older than the other snapshot.
@@ -357,17 +357,17 @@ func (ss SnapshotSet) ValidateIncrementalChain() error {
 // ResolveFiles resolves a snapshot ID into its constituent DB file and WAL files. At a minimum,
 // a DB file is returned. If the snapshot is incremental, associated WAL files are also returned. The
 // order in the slice is the order in which the WAL files should be applied to the DB file.
-func (ss SnapshotSet) ResolveFiles(id string) (dbFile string, walFiles []string, err error) {
+func (ss SnapshotSet) ResolveFiles(id string) (dbFile *ChecksummedFile, walFiles []*ChecksummedFile, err error) {
 	idx := ss.indexOf(id)
 	if idx < 0 {
-		return "", nil, ErrSnapshotNotFound
+		return nil, nil, ErrSnapshotNotFound
 	}
 
 	snap := ss.items[idx]
 
 	// If the requested snapshot is full, just return its DB file.
 	if snap.typ == SnapshotTypeFull {
-		return snap.dbFile.Path, nil, nil
+		return snap.dbFile, nil, nil
 	}
 
 	// The requested snapshot is incremental. Walk backward to find the
@@ -381,14 +381,12 @@ func (ss SnapshotSet) ResolveFiles(id string) (dbFile string, walFiles []string,
 		}
 	}
 	if fullIdx < 0 {
-		return "", nil, fmt.Errorf("no full snapshot found before snapshot %s", id)
+		return nil, nil, fmt.Errorf("no full snapshot found before snapshot %s", id)
 	}
 
-	dbFile = ss.items[fullIdx].dbFile.Path
+	dbFile = ss.items[fullIdx].dbFile
 	for i := fullIdx + 1; i <= idx; i++ {
-		for _, wf := range ss.items[i].walFiles {
-			walFiles = append(walFiles, wf.Path)
-		}
+		walFiles = append(walFiles, ss.items[i].walFiles...)
 	}
 	return dbFile, walFiles, nil
 }
@@ -493,7 +491,7 @@ func (c *SnapshotCatalog) loadSnapshot(path string, id string) (*Snapshot, error
 		if !db.IsValidSQLiteFile(dataDBPath) {
 			return nil, fmt.Errorf("%s in snapshot directory %q is not a valid SQLite database file", dbfileName, path)
 		}
-		hf, err := NewHashedFileFromFiles(dataDBPath, dataDBPath+crcSuffix)
+		hf, err := NewChecksummedFileFromFiles(dataDBPath, dataDBPath+crcSuffix)
 		if err != nil {
 			return nil, fmt.Errorf("loading CRC32 for %s in %q: %w", dbfileName, path, err)
 		}
@@ -504,7 +502,7 @@ func (c *SnapshotCatalog) loadSnapshot(path string, id string) (*Snapshot, error
 			if !db.IsValidSQLiteWALFile(wp) {
 				return nil, fmt.Errorf("%s in snapshot directory %q is not a valid SQLite WAL file", filepath.Base(wp), path)
 			}
-			hf, err := NewHashedFileFromFiles(wp, wp+crcSuffix)
+			hf, err := NewChecksummedFileFromFiles(wp, wp+crcSuffix)
 			if err != nil {
 				return nil, fmt.Errorf("loading CRC32 for %s in %q: %w", filepath.Base(wp), path, err)
 			}

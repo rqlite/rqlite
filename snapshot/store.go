@@ -335,12 +335,12 @@ func (s *Store) Open(id string) (raftMeta *raft.SnapshotMeta, rc io.ReadCloser, 
 		return nil, nil, ErrSnapshotNotFound
 	}
 
-	dbfile, walFiles, err := snapSet.ResolveFiles(id)
+	dbFile, walFiles, err := snapSet.ResolveFiles(id)
 	if err != nil {
 		return nil, nil, fmt.Errorf("resolving files for snapshot %s: %w", id, err)
 	}
 
-	streamer, err := NewSnapshotStreamer(dbfile, walFiles...)
+	streamer, err := NewChecksummedSnapshotStreamer(dbFile, walFiles...)
 	if err != nil {
 		return nil, nil, fmt.Errorf("creating streamer for snapshot %s: %w", id, err)
 	}

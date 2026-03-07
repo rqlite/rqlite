@@ -40,6 +40,52 @@ func NewHeaderFromFile(path string, crc32 bool) (*proto.Header, error) {
 	return h, nil
 }
 
+// NewHeaderFromChecksummedFile creates a new Header using a pre-loaded ChecksummedFile.
+// The file size is read from disk; the CRC32 comes from the ChecksummedFile.
+func NewHeaderFromChecksummedFile(hf *ChecksummedFile) (*proto.Header, error) {
+	if hf.Path == "" {
+		return nil, fmt.Errorf("path must be non-empty")
+	}
+	info, err := os.Stat(hf.Path)
+	if err != nil {
+		return nil, err
+	}
+	return &proto.Header{
+		SizeBytes: uint64(info.Size()),
+		Crc32:     hf.CRC32,
+	}, nil
+}
+
+// NewChecksummedSnapshotHeader creates a new SnapshotHeader using pre-loaded ChecksummedFile values.
+// dbFile must have a non-empty Path. walFiles may be empty. The header payload is always
+// FullSnapshot.
+func NewChecksummedSnapshotHeader(dbFile *ChecksummedFile, walFiles ...*ChecksummedFile) (*proto.SnapshotHeader, error) {
+	if dbFile.Path == "" {
+		return nil, fmt.Errorf("dbFile.Path must be non-empty")
+	}
+
+	sh := &proto.SnapshotHeader{
+		FormatVersion: 1,
+	}
+
+	dbHeader, err := NewHeaderFromChecksummedFile(dbFile)
+	if err != nil {
+		return nil, err
+	}
+	full := &proto.FullSnapshot{
+		DbHeader: dbHeader,
+	}
+	for _, w := range walFiles {
+		wh, err := NewHeaderFromChecksummedFile(w)
+		if err != nil {
+			return nil, err
+		}
+		full.WalHeaders = append(full.WalHeaders, wh)
+	}
+	sh.Payload = &proto.SnapshotHeader_Full{Full: full}
+	return sh, nil
+}
+
 // NewSnapshotHeader creates a new SnapshotHeader for the given DB and WAL file paths.
 // dbPath must be non-empty. walPaths may be empty. The header payload is always
 // FullSnapshot.
@@ -153,6 +199,24 @@ func NewSnapshotStreamer(dbPath string, walPaths ...string) (*SnapshotStreamer, 
 	}
 	return &SnapshotStreamer{
 		dbPath:   dbPath,
+		walPaths: walPaths,
+		hdr:      sh,
+	}, nil
+}
+
+// NewChecksummedSnapshotStreamer creates a new SnapshotStreamer using pre-loaded ChecksummedFile values,
+// avoiding redundant CRC32 computation for files that already have checksums on disk.
+func NewChecksummedSnapshotStreamer(dbFile *ChecksummedFile, walFiles ...*ChecksummedFile) (*SnapshotStreamer, error) {
+	sh, err := NewChecksummedSnapshotHeader(dbFile, walFiles...)
+	if err != nil {
+		return nil, err
+	}
+	walPaths := make([]string, len(walFiles))
+	for i, w := range walFiles {
+		walPaths[i] = w.Path
+	}
+	return &SnapshotStreamer{
+		dbPath:   dbFile.Path,
 		walPaths: walPaths,
 		hdr:      sh,
 	}, nil
