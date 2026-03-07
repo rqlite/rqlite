@@ -575,8 +575,7 @@ func (s *Store) Open() (retErr error) {
 	// Don't allow control over trailing logs directly, just implement a policy.
 	s.numTrailingLogs = uint64(float64(s.SnapshotThreshold) * trailingScale)
 
-	config := s.raftConfig()
-	config.LocalID = raft.ServerID(s.raftID)
+	raftConfig := s.raftConfig()
 
 	// Upgrade any preexisting snapshots.
 	old7SnapshotDir := filepath.Join(s.raftDir, "snapshots")
@@ -678,7 +677,7 @@ func (s *Store) Open() (retErr error) {
 		}()
 
 		s.logger.Printf("detected successful prior snapshot operation, skipping restore")
-		config.NoSnapshotRestoreOnStart = true
+		raftConfig.NoSnapshotRestoreOnStart = true
 		removeDBFiles = false
 		li, tm, err := snapshotStore.LatestIndexTerm()
 		if err != nil {
@@ -783,7 +782,7 @@ func (s *Store) Open() (retErr error) {
 	}
 
 	// Instantiate the Raft system.
-	ra, err := raft.NewRaft(config, NewFSM(s), s.raftLog, s.raftStable, s.snapshotStore, s.raftTn)
+	ra, err := raft.NewRaft(raftConfig, NewFSM(s), s.raftLog, s.raftStable, s.snapshotStore, s.raftTn)
 	if err != nil {
 		return fmt.Errorf("creating the raft system failed: %s", err)
 	}
@@ -1330,6 +1329,7 @@ func (s *Store) Stats() (map[string]any, error) {
 	}
 	raftStats["bolt"] = s.boltStore.Stats()
 	raftStats["transport"] = s.raftTn.Stats()
+	raftStats["config"] = RaftConfigAsJSON(s.raftConfig())
 
 	dirSz, err := dirSize(s.raftDir)
 	if err != nil {
@@ -2332,6 +2332,7 @@ func (s *Store) clearKeyTime(key string) error {
 // raftConfig returns a new Raft config for the store.
 func (s *Store) raftConfig() *raft.Config {
 	config := raft.DefaultConfig()
+	config.LocalID = raft.ServerID(s.raftID)
 	config.ShutdownOnRemove = s.ShutdownOnRemove
 	config.LogLevel = s.RaftLogLevel
 	if s.SnapshotThreshold != 0 {

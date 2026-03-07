@@ -18,6 +18,41 @@ import (
 	rlog "github.com/rqlite/rqlite/v10/store/log"
 )
 
+// RaftConfigAsJSON returns a JSON-serializable representation of a raft.Config.
+func RaftConfigAsJSON(config *raft.Config) any {
+	// create a temp struct
+
+	type raftConfigJSON struct {
+		LocalID                  string `json:"LocalID"`
+		HeartbeatTimeout         int64  `json:"HeartbeatTimeout"`
+		ElectionTimeout          int64  `json:"ElectionTimeout"`
+		LeaderLeaseTimeout       int64  `json:"LeaderLeaseTimeout"`
+		CommitTimeout            int64  `json:"CommitTimeout"`
+		SnapshotInterval         int64  `json:"SnapshotInterval"`
+		SnapshotThreshold        uint64 `json:"SnapshotThreshold"`
+		MaxAppendEntries         int    `json:"MaxAppendEntries"`
+		ShutdownOnRemove         bool   `json:"ShutdownOnRemove"`
+		LogLevel                 string `json:"LogLevel"`
+		NoSnapshotRestoreOnStart bool   `json:"NoSnapshotRestoreOnStart"`
+	}
+
+	// populate the temp struct with values from the raft.Config
+	rcj := raftConfigJSON{
+		LocalID:                  string(config.LocalID),
+		HeartbeatTimeout:         config.HeartbeatTimeout.Nanoseconds(),
+		ElectionTimeout:          config.ElectionTimeout.Nanoseconds(),
+		LeaderLeaseTimeout:       config.LeaderLeaseTimeout.Nanoseconds(),
+		CommitTimeout:            config.CommitTimeout.Nanoseconds(),
+		SnapshotInterval:         config.SnapshotInterval.Nanoseconds(),
+		SnapshotThreshold:        config.SnapshotThreshold,
+		MaxAppendEntries:         config.MaxAppendEntries,
+		ShutdownOnRemove:         config.ShutdownOnRemove,
+		LogLevel:                 config.LogLevel,
+		NoSnapshotRestoreOnStart: config.NoSnapshotRestoreOnStart,
+	}
+	return rcj
+}
+
 // PragmaCheckRequest is a type that wraps a proto.Request and checks
 // whether a request contains any disallowed pragmas.
 type PragmaCheckRequest proto.Request
