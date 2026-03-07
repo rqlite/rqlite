@@ -10,7 +10,6 @@ import (
 	"testing"
 
 	"github.com/rqlite/rqlite/v10/command/encoding"
-	"github.com/rqlite/rqlite/v10/db"
 	"github.com/rqlite/rqlite/v10/internal/rsum"
 )
 
@@ -89,23 +88,9 @@ func Test_FullSink_SingleDBFile_SingleWALFile(t *testing.T) {
 		t.Fatalf("unexpected error closing sink: %s", err.Error())
 	}
 
-	// Check the database state inside the Store.
-	dbPath := sink.DBFile()
-	checkDB, err := db.Open(dbPath, false, true)
-	if err != nil {
-		t.Fatalf("failed to open database at %s: %s", dbPath, err)
-	}
-	defer checkDB.Close()
-	rows, err := checkDB.QueryStringStmt("SELECT COUNT(*) FROM foo")
-	if err != nil {
-		t.Fatalf("failed to query database: %s", err)
-	}
-	if exp, got := `[{"columns":["COUNT(*)"],"types":["integer"],"values":[[1]]}]`, asJSON(rows); exp != got {
-		t.Fatalf("unexpected results for query exp: %s got: %s", exp, got)
-	}
-
-	// CRC file should exist and match the post-checkpoint DB file.
+	// DB and WAL files should be present with valid CRC sidecars.
 	mustVerifyCRC32File(t, sink.DBFile())
+	mustVerifyCRC32File(t, filepath.Join(dir, "data-00000000.wal"))
 }
 
 func Test_FullSink_SingleDBFile_MultiWALFile(t *testing.T) {
@@ -141,23 +126,10 @@ func Test_FullSink_SingleDBFile_MultiWALFile(t *testing.T) {
 		t.Fatalf("unexpected error closing sink: %s", err.Error())
 	}
 
-	// Check the database state inside the Store.
-	dbPath := sink.DBFile()
-	checkDB, err := db.Open(dbPath, false, true)
-	if err != nil {
-		t.Fatalf("failed to open database at %s: %s", dbPath, err)
-	}
-	defer checkDB.Close()
-	rows, err := checkDB.QueryStringStmt("SELECT COUNT(*) FROM foo")
-	if err != nil {
-		t.Fatalf("failed to query database: %s", err)
-	}
-	if exp, got := `[{"columns":["COUNT(*)"],"types":["integer"],"values":[[2]]}]`, asJSON(rows); exp != got {
-		t.Fatalf("unexpected results for query exp: %s got: %s", exp, got)
-	}
-
-	// CRC file should exist and match the post-checkpoint DB file.
+	// DB and WAL files should be present with valid CRC sidecars.
 	mustVerifyCRC32File(t, sink.DBFile())
+	mustVerifyCRC32File(t, filepath.Join(dir, "data-00000000.wal"))
+	mustVerifyCRC32File(t, filepath.Join(dir, "data-00000001.wal"))
 }
 
 func Test_IncrementalFileSink(t *testing.T) {

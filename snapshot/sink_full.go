@@ -208,7 +208,8 @@ func (s *FullSink) Close() error {
 		return fmt.Errorf("CRC32 mismatch for DB file: got %08x, expected %08x", dbCRC, s.header.DbHeader.Crc32)
 	}
 
-	// Verify the CRC32 of each received WAL file against the header.
+	// Verify the CRC32 of each received WAL file against the header,
+	// and write a CRC32 sidecar for each verified WAL.
 	for i, walPath := range s.walFiles {
 		walCRC, err := rsum.CRC32(walPath)
 		if err != nil {
@@ -217,25 +218,14 @@ func (s *FullSink) Close() error {
 		if walCRC != s.header.WalHeaders[i].Crc32 {
 			return fmt.Errorf("CRC32 mismatch for WAL file %d: got %08x, expected %08x", i, walCRC, s.header.WalHeaders[i].Crc32)
 		}
-	}
-
-	if len(s.walFiles) > 0 {
-		// Checkpoint all WALs into the SQLite file, ending up with a single
-		// DB file representing the snapshot state.
-		if err := db.ReplayWAL(s.dbFile, s.walFiles, false); err != nil {
-			return fmt.Errorf("replaying WAL files: %w", err)
-		}
-
-		// WAL replay modified the DB file, so recompute the CRC.
-		dbCRC, _, err = rsum.CRC32WithTiming(s.dbFile)
-		if err != nil {
-			return fmt.Errorf("computing CRC32 of replayed DB file: %w", err)
+		if err := rsum.WriteCRC32SumFile(walPath+crcSuffix, walCRC, rsum.Sync); err != nil {
+			return fmt.Errorf("writing CRC32 sidecar for WAL file %d: %w", i, err)
 		}
 	}
 
-	// Write the final CRC32 sidecar for the DB file.
+	// Write the CRC32 sidecar for the DB file.
 	if err := rsum.WriteCRC32SumFile(s.dbFile+crcSuffix, dbCRC, rsum.Sync); err != nil {
-		return fmt.Errorf("writing CRC32 sidecar: %w", err)
+		return fmt.Errorf("writing CRC32 sidecar for DB file: %w", err)
 	}
 	stats.Get(snapshotFullCRC32CreateDuration).(*expvar.Int).Set(int64(time.Since(start).Milliseconds()))
 	return nil

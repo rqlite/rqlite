@@ -48,11 +48,11 @@ func (hf *ChecksummedFile) Check() (bool, error) {
 // kind, and Raft metadata), and it centralizes validation of the directory’s
 // layout.
 //
-// The snapshot kind is declared by the presence of exactly one data file in the
-// directory:
-//
-//   - data.db  declares a full snapshot (SQLite database file)
-//   - data.wal declares an incremental snapshot (SQLite WAL file)
+// The snapshot kind is declared by the presence of certain files.
+//   - a snapshot containing a data.db file is declared as a full snapshot. It
+//     may be accompanied by 0 or more WAL files.
+//   - a snapshot containing one or more data.wal files and no data.db file is
+//     declared as an incremental snapshot.
 //
 // Implementations may optionally validate that the file content matches the
 // declared kind (e.g., via SQLite header inspection). Any disagreement between
@@ -68,7 +68,7 @@ type Snapshot struct {
 	dbFile *ChecksummedFile
 
 	// walFiles holds the sorted WAL files and their CRC32s.
-	// Populated for incremental snapshots.
+	// Populated for both full and incremental snapshots.
 	walFiles []*ChecksummedFile
 }
 
@@ -365,14 +365,14 @@ func (ss SnapshotSet) ResolveFiles(id string) (dbFile *ChecksummedFile, walFiles
 
 	snap := ss.items[idx]
 
-	// If the requested snapshot is full, just return its DB file.
+	// If the requested snapshot is full, return its DB file and any WAL files.
 	if snap.typ == SnapshotTypeFull {
-		return snap.dbFile, nil, nil
+		return snap.dbFile, snap.walFiles, nil
 	}
 
 	// The requested snapshot is incremental. Walk backward to find the
-	// nearest full snapshot, add that file to the list, and then walk forward again to
-	// add all incremental snapshots' WAL files up to and including the requested snapshot.
+	// nearest full snapshot, then collect WAL files from the full snapshot
+	// and all incremental snapshots up to and including the requested one.
 	fullIdx := -1
 	for i := idx - 1; i >= 0; i-- {
 		if ss.items[i].typ == SnapshotTypeFull {
@@ -385,7 +385,7 @@ func (ss SnapshotSet) ResolveFiles(id string) (dbFile *ChecksummedFile, walFiles
 	}
 
 	dbFile = ss.items[fullIdx].dbFile
-	for i := fullIdx + 1; i <= idx; i++ {
+	for i := fullIdx; i <= idx; i++ {
 		walFiles = append(walFiles, ss.items[i].walFiles...)
 	}
 	return dbFile, walFiles, nil
@@ -481,9 +481,8 @@ func (c *SnapshotCatalog) loadSnapshot(path string, id string) (*Snapshot, error
 	hasDB := fileExists(dataDBPath)
 	hasWALs := len(walMatches) > 0
 
-	// Enforce constraint: a snapshot containing WAL files must only contain WAL files.
-	if hasWALs && hasDB {
-		return nil, fmt.Errorf("snapshot directory %q contains both WAL files and %s", path, dbfileName)
+	if !hasDB && !hasWALs {
+		return nil, fmt.Errorf("missing data file in snapshot directory %q", path)
 	}
 
 	if hasDB {
@@ -496,20 +495,19 @@ func (c *SnapshotCatalog) loadSnapshot(path string, id string) (*Snapshot, error
 			return nil, fmt.Errorf("loading CRC32 for %s in %q: %w", dbfileName, path, err)
 		}
 		snapshot.dbFile = hf
-	} else if hasWALs {
-		snapshot.typ = SnapshotTypeIncremental
-		for _, wp := range walMatches {
-			if !db.IsValidSQLiteWALFile(wp) {
-				return nil, fmt.Errorf("%s in snapshot directory %q is not a valid SQLite WAL file", filepath.Base(wp), path)
-			}
-			hf, err := NewChecksummedFileFromFiles(wp, wp+crcSuffix)
-			if err != nil {
-				return nil, fmt.Errorf("loading CRC32 for %s in %q: %w", filepath.Base(wp), path, err)
-			}
-			snapshot.walFiles = append(snapshot.walFiles, hf)
-		}
 	} else {
-		return nil, fmt.Errorf("missing data file in snapshot directory %q", path)
+		snapshot.typ = SnapshotTypeIncremental
+	}
+
+	for _, wp := range walMatches {
+		if !db.IsValidSQLiteWALFile(wp) {
+			return nil, fmt.Errorf("%s in snapshot directory %q is not a valid SQLite WAL file", filepath.Base(wp), path)
+		}
+		hf, err := NewChecksummedFileFromFiles(wp, wp+crcSuffix)
+		if err != nil {
+			return nil, fmt.Errorf("loading CRC32 for %s in %q: %w", filepath.Base(wp), path, err)
+		}
+		snapshot.walFiles = append(snapshot.walFiles, hf)
 	}
 	return snapshot, nil
 }
