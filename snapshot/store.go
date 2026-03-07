@@ -171,7 +171,7 @@ type Store struct {
 	reapDoneCh chan struct{}
 	wg         sync.WaitGroup
 
-	LogReaping      bool
+	LogReaping       bool
 	NoCRCCheckOnReap bool
 }
 
