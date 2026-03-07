@@ -9,7 +9,34 @@ import (
 
 	"github.com/hashicorp/raft"
 	"github.com/rqlite/rqlite/v10/db"
+	"github.com/rqlite/rqlite/v10/internal/rsum"
 )
+
+// HashedFile pairs a file path with its CRC32 checksum.
+type HashedFile struct {
+	Path  string
+	CRC32 uint32
+}
+
+// NewHashedFileFromFiles creates a HashedFile by reading the CRC32 checksum
+// from the sidecar file at crcPath and associating it with dataPath.
+func NewHashedFileFromFiles(dataPath, crcPath string) (HashedFile, error) {
+	sum, err := rsum.ReadCRC32SumFile(crcPath)
+	if err != nil {
+		return HashedFile{}, fmt.Errorf("reading CRC32 sidecar %s: %w", crcPath, err)
+	}
+	return HashedFile{Path: dataPath, CRC32: sum}, nil
+}
+
+// Check computes the CRC32 of the file at Path and returns whether it
+// matches the stored CRC32 value.
+func (hf HashedFile) Check() (bool, error) {
+	actual, err := rsum.CRC32(hf.Path)
+	if err != nil {
+		return false, err
+	}
+	return actual == hf.CRC32, nil
+}
 
 // Snapshot represents a single snapshot stored on disk.
 // A Snapshot corresponds to exactly one directory under the Store root. The
@@ -37,9 +64,12 @@ type Snapshot struct {
 	typ      SnapshotType
 	raftMeta *raft.SnapshotMeta
 
-	// walFiles holds the sorted list of WAL file paths within the snapshot
-	// directory. It is populated only for SnapshotTypeIncremental snapshots.
-	walFiles []string
+	// dbFile is the DB file and its CRC32. Populated for full snapshots.
+	dbFile HashedFile
+
+	// walFiles holds the sorted WAL files and their CRC32s.
+	// Populated for incremental snapshots.
+	walFiles []HashedFile
 }
 
 // Less reports whether this snapshot is older than the other snapshot.
@@ -337,7 +367,7 @@ func (ss SnapshotSet) ResolveFiles(id string) (dbFile string, walFiles []string,
 
 	// If the requested snapshot is full, just return its DB file.
 	if snap.typ == SnapshotTypeFull {
-		return filepath.Join(snap.path, dbfileName), nil, nil
+		return snap.dbFile.Path, nil, nil
 	}
 
 	// The requested snapshot is incremental. Walk backward to find the
@@ -354,9 +384,11 @@ func (ss SnapshotSet) ResolveFiles(id string) (dbFile string, walFiles []string,
 		return "", nil, fmt.Errorf("no full snapshot found before snapshot %s", id)
 	}
 
-	dbFile = filepath.Join(ss.items[fullIdx].path, dbfileName)
+	dbFile = ss.items[fullIdx].dbFile.Path
 	for i := fullIdx + 1; i <= idx; i++ {
-		walFiles = append(walFiles, ss.items[i].walFiles...)
+		for _, wf := range ss.items[i].walFiles {
+			walFiles = append(walFiles, wf.Path)
+		}
 	}
 	return dbFile, walFiles, nil
 }
@@ -461,14 +493,23 @@ func (c *SnapshotCatalog) loadSnapshot(path string, id string) (*Snapshot, error
 		if !db.IsValidSQLiteFile(dataDBPath) {
 			return nil, fmt.Errorf("%s in snapshot directory %q is not a valid SQLite database file", dbfileName, path)
 		}
+		hf, err := NewHashedFileFromFiles(dataDBPath, dataDBPath+crcSuffix)
+		if err != nil {
+			return nil, fmt.Errorf("loading CRC32 for %s in %q: %w", dbfileName, path, err)
+		}
+		snapshot.dbFile = hf
 	} else if hasWALs {
 		snapshot.typ = SnapshotTypeIncremental
 		for _, wp := range walMatches {
 			if !db.IsValidSQLiteWALFile(wp) {
 				return nil, fmt.Errorf("%s in snapshot directory %q is not a valid SQLite WAL file", filepath.Base(wp), path)
 			}
+			hf, err := NewHashedFileFromFiles(wp, wp+crcSuffix)
+			if err != nil {
+				return nil, fmt.Errorf("loading CRC32 for %s in %q: %w", filepath.Base(wp), path, err)
+			}
+			snapshot.walFiles = append(snapshot.walFiles, hf)
 		}
-		snapshot.walFiles = walMatches
 	} else {
 		return nil, fmt.Errorf("missing data file in snapshot directory %q", path)
 	}
