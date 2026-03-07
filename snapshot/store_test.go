@@ -882,6 +882,60 @@ func Test_Store_Reap(t *testing.T) {
 	}
 }
 
+func Test_Store_ReapCorruptDB(t *testing.T) {
+	dir := t.TempDir()
+	store, err := NewStore(dir)
+	if err != nil {
+		t.Fatalf("Failed to create new store: %v", err)
+	}
+	defer store.Close()
+
+	// Create a full snapshot, then an incremental.
+	createSnapshotInStore(t, store, "2-1017-1704807719996", 1017, 2, 1, "testdata/db-and-wals/backup.db")
+	createSnapshotInStore(t, store, "2-1131-1704807720976", 1131, 2, 1, "", "testdata/db-and-wals/wal-00")
+
+	// Corrupt the full snapshot's DB file.
+	dbPath := filepath.Join(store.Dir(), "2-1017-1704807719996", dbfileName)
+	if err := os.WriteFile(dbPath, []byte("corrupted"), 0644); err != nil {
+		t.Fatalf("Failed to corrupt DB file: %v", err)
+	}
+
+	// Reap should fail due to CRC mismatch.
+	_, _, err = store.Reap()
+	if err == nil {
+		t.Fatal("Expected Reap to fail due to corrupted DB, but it succeeded")
+	}
+}
+
+func Test_Store_ReapCorruptWAL(t *testing.T) {
+	dir := t.TempDir()
+	store, err := NewStore(dir)
+	if err != nil {
+		t.Fatalf("Failed to create new store: %v", err)
+	}
+	defer store.Close()
+
+	// Create a full snapshot, then an incremental.
+	createSnapshotInStore(t, store, "2-1017-1704807719996", 1017, 2, 1, "testdata/db-and-wals/backup.db")
+	createSnapshotInStore(t, store, "2-1131-1704807720976", 1131, 2, 1, "", "testdata/db-and-wals/wal-00")
+
+	// Find and corrupt the WAL file in the incremental snapshot.
+	walPattern := filepath.Join(store.Dir(), "2-1131-1704807720976", "*.wal")
+	matches, err := filepath.Glob(walPattern)
+	if err != nil || len(matches) == 0 {
+		t.Fatalf("Failed to find WAL file: %v", err)
+	}
+	if err := os.WriteFile(matches[0], []byte("corrupted"), 0644); err != nil {
+		t.Fatalf("Failed to corrupt WAL file: %v", err)
+	}
+
+	// Reap should fail due to CRC mismatch.
+	_, _, err = store.Reap()
+	if err == nil {
+		t.Fatal("Expected Reap to fail due to corrupted WAL, but it succeeded")
+	}
+}
+
 func Test_Store_ReapBlocked(t *testing.T) {
 	dir := t.TempDir()
 	store, err := NewStore(dir)
