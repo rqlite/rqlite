@@ -49,6 +49,24 @@ func dirIsEmpty(dir string) (bool, error) {
 	return len(files) == 0, nil
 }
 
+func syncFile(path string) error {
+	fh, err := os.OpenFile(path, os.O_RDWR, 0)
+	if err != nil {
+		return err
+	}
+	defer fh.Close()
+	return fh.Sync()
+}
+
+func syncFiles(paths ...string) error {
+	for _, path := range paths {
+		if err := syncFile(path); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 func syncDir(dir string) error {
 	fh, err := os.Open(dir)
 	if err != nil {
