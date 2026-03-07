@@ -123,7 +123,7 @@ func HasData(dir string) (bool, error) {
 	if !dirExists(dir) {
 		return false, nil
 	}
-	sstr, err := snapshot.NewStore(filepath.Join(dir, snapshotsDirName))
+	sstr, err := snapshot.NewStore(filepath.Join(dir, snapshotsDirName), true)
 	if err != nil {
 		return false, err
 	}

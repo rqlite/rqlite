@@ -44,6 +44,10 @@ const (
 var (
 	// ErrSnapshotNotFound is returned when a snapshot cannot be found.
 	ErrSnapshotNotFound = errors.New("snapshot not found")
+
+	// ErrStoreNotReady is returned when the Store is still performing
+	// its startup integrity check.
+	ErrStoreNotReady = errors.New("snapshot store not ready")
 )
 
 // stats captures stats for the Store.
@@ -171,12 +175,20 @@ type Store struct {
 	reapDoneCh chan struct{}
 	wg         sync.WaitGroup
 
+	// readyCh is closed when the startup integrity check completes
+	// successfully. Methods that access snapshot data return
+	// ErrStoreNotReady until this channel is closed.
+	readyCh chan struct{}
+
 	LogReaping       bool
 	NoCRCCheckOnReap bool
 }
 
-// NewStore creates a new store.
-func NewStore(dir string) (*Store, error) {
+// NewStore creates a new store. If wait is true, NewStore blocks until the
+// startup integrity check completes and returns a ready store. If wait is
+// false, the check runs in the background and methods return
+// ErrStoreNotReady until it finishes.
+func NewStore(dir string, wait bool) (*Store, error) {
 	if err := os.MkdirAll(dir, 0755); err != nil {
 		return nil, err
 	}
@@ -189,6 +201,7 @@ func NewStore(dir string) (*Store, error) {
 		reapThreshold:  defaultReapThreshold,
 		reapCh:         make(chan struct{}, 1),
 		reapDoneCh:     make(chan struct{}),
+		readyCh:        make(chan struct{}),
 		logger:         log.New(os.Stderr, "[snapshot-store] ", log.LstdFlags),
 	}
 	str.logger.Printf("store initialized using %s", dir)
@@ -203,15 +216,32 @@ func NewStore(dir string) (*Store, error) {
 		}
 	}
 
+	// Kick off the startup integrity check in a goroutine. The store
+	// will return ErrStoreNotReady until the check completes. If the
+	// check finds corruption, the process is terminated.
+	str.wg.Go(str.startupCheck)
+
 	// Kick off the reaper goroutine.
 	str.wg.Go(str.reapLoop)
 
+	if wait {
+		str.WaitForReady()
+	}
+
 	return str, nil
+}
+
+// WaitForReady blocks until the startup integrity check has completed.
+func (s *Store) WaitForReady() {
+	<-s.readyCh
 }
 
 // Create creates a new snapshot sink for the given parameters.
 func (s *Store) Create(version raft.SnapshotVersion, index, term uint64, configuration raft.Configuration,
 	configurationIndex uint64, trans raft.Transport) (retSink raft.SnapshotSink, retErr error) {
+	if err := s.ready(); err != nil {
+		return nil, err
+	}
 	if err := s.mrsw.BeginRead(); err != nil {
 		return nil, err
 	}
@@ -238,6 +268,9 @@ func (s *Store) Create(version raft.SnapshotVersion, index, term uint64, configu
 // ListAll returns the list of all available snapshots in the Store,
 // ordered from newest to oldest.
 func (s *Store) ListAll() ([]*raft.SnapshotMeta, error) {
+	if err := s.ready(); err != nil {
+		return nil, err
+	}
 	if err := s.mrsw.BeginRead(); err != nil {
 		return nil, err
 	}
@@ -270,6 +303,9 @@ func (s *Store) List() ([]*raft.SnapshotMeta, error) {
 
 // Len returns the number of snapshots in the Store.
 func (s *Store) Len() int {
+	if err := s.ready(); err != nil {
+		return 0
+	}
 	if err := s.mrsw.BeginRead(); err != nil {
 		return 0
 	}
@@ -285,6 +321,9 @@ func (s *Store) Len() int {
 // LatestIndexTerm returns the index and term of the most recent
 // snapshot in the Store.
 func (s *Store) LatestIndexTerm() (uint64, uint64, error) {
+	if err := s.ready(); err != nil {
+		return 0, 0, err
+	}
 	if err := s.mrsw.BeginRead(); err != nil {
 		return 0, 0, err
 	}
@@ -317,6 +356,9 @@ func (s *Store) SetReapThreshold(n int) {
 // to either rebuild a node's state after restart, or to send the snapshot to another node,
 // both of which require the DB file and any associated WAL files.
 func (s *Store) Open(id string) (raftMeta *raft.SnapshotMeta, rc io.ReadCloser, retErr error) {
+	if err := s.ready(); err != nil {
+		return nil, nil, err
+	}
 	if err := s.mrsw.BeginRead(); err != nil {
 		return nil, nil, fmt.Errorf("acquiring read lock: %w", err)
 	}
@@ -397,6 +439,9 @@ func (s *Store) Close() error {
 // It returns the number of snapshots reaped, and the number of WAL files checkpointed as
 // part of the consolidation.
 func (s *Store) Reap() (int, int, error) {
+	if err := s.ready(); err != nil {
+		return 0, 0, err
+	}
 	if err := s.mrsw.BeginWrite("reap"); err != nil {
 		return 0, 0, err
 	}
@@ -570,6 +615,14 @@ func (s *Store) snapshotCount() int {
 // write lock acquisition so it will wait for active readers to finish rather
 // than failing.
 func (s *Store) reapLoop() {
+	// Wait for the startup integrity check to complete before
+	// processing any reap signals.
+	select {
+	case <-s.readyCh:
+	case <-s.reapDoneCh:
+		return
+	}
+
 	for {
 		select {
 		case <-s.reapCh:
@@ -615,6 +668,9 @@ func copyRaftMeta(m *raft.SnapshotMeta) *raft.SnapshotMeta {
 
 // FullNeeded returns true if a full snapshot is needed.
 func (s *Store) FullNeeded() (bool, error) {
+	if err := s.ready(); err != nil {
+		return false, err
+	}
 	if fileExists(s.fullNeededPath) {
 		return true, nil
 	}
@@ -662,6 +718,9 @@ func (s *Store) UnsetFullNeeded() error {
 // an error if the Store is in an inconsistent state. In that case the stats
 // returned may be incomplete or invalid.
 func (s *Store) Stats() (map[string]any, error) {
+	if err := s.ready(); err != nil {
+		return nil, err
+	}
 	if err := s.mrsw.BeginRead(); err != nil {
 		return nil, err
 	}
@@ -680,6 +739,50 @@ func (s *Store) Stats() (map[string]any, error) {
 // check checks the Store for any inconsistencies, and repairs
 // any inconsistencies it finds. Inconsistencies can happen
 // if the system crashes during snapshotting or reaping.
+// ready returns ErrStoreNotReady if the startup integrity check has not
+// yet completed, or nil if the store is ready.
+func (s *Store) ready() error {
+	select {
+	case <-s.readyCh:
+		return nil
+	default:
+		return ErrStoreNotReady
+	}
+}
+
+// startupCheck verifies the CRC32 integrity of all snapshot data files.
+// It is run in a goroutine at startup. On success it closes readyCh,
+// making the store available. On failure it logs the error and
+// terminates the process.
+func (s *Store) startupCheck() {
+	snapSet, err := s.getSnapshots()
+	if err != nil {
+		s.logger.Fatalf("startup integrity check failed to scan snapshots: %s", err)
+	}
+
+	for _, snap := range snapSet.All() {
+		switch snap.typ {
+		case SnapshotTypeFull:
+			if ok, err := snap.dbFile.Check(); err != nil {
+				s.logger.Fatalf("startup integrity check failed for %s: %s", snap.dbFile.Path, err)
+			} else if !ok {
+				s.logger.Fatalf("startup integrity check CRC32 mismatch for %s", snap.dbFile.Path)
+			}
+		case SnapshotTypeIncremental:
+			for _, wf := range snap.walFiles {
+				if ok, err := wf.Check(); err != nil {
+					s.logger.Fatalf("startup integrity check failed for %s: %s", wf.Path, err)
+				} else if !ok {
+					s.logger.Fatalf("startup integrity check CRC32 mismatch for %s", wf.Path)
+				}
+			}
+		}
+	}
+
+	s.logger.Printf("startup integrity check complete, %d snapshots verified", snapSet.Len())
+	close(s.readyCh)
+}
+
 func (s *Store) check() error {
 	// Remove any leftover temporary directories from interrupted
 	// snapshot creation.
