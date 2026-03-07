@@ -53,12 +53,15 @@ type FullSink struct {
 	walIndex int
 
 	f         *os.File
-	crcW      *rsum.CRC32Writer
 	remaining uint64
 
 	dbFile   string
-	dbCRC    uint32
 	walFiles []string
+
+	// For calculating CRC32 of the DB file as we write it, and then writing the
+	// sum file at the end.
+	crcW  *rsum.CRC32Writer
+	dbCRC uint32
 
 	opened bool
 }
