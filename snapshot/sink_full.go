@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"time"
 
 	"github.com/rqlite/rqlite/v10/db"
 	"github.com/rqlite/rqlite/v10/internal/rsum"
@@ -198,7 +199,8 @@ func (s *FullSink) Close() error {
 	}
 
 	// Verify the CRC32 of the received DB file against the header.
-	dbCRC, dur, err := rsum.CRC32WithTiming(s.dbFile)
+	start := time.Now()
+	dbCRC, _, err := rsum.CRC32WithTiming(s.dbFile)
 	if err != nil {
 		return fmt.Errorf("computing CRC32 of DB file: %w", err)
 	}
@@ -226,17 +228,17 @@ func (s *FullSink) Close() error {
 		}
 
 		// WAL replay modified the DB file, so recompute the CRC.
-		dbCRC, dur, err = rsum.CRC32WithTiming(s.dbFile)
+		dbCRC, _, err = rsum.CRC32WithTiming(s.dbFile)
 		if err != nil {
 			return fmt.Errorf("computing CRC32 of replayed DB file: %w", err)
 		}
-		stats.Get(snapshotFullCRC32CreateDuration).(*expvar.Int).Set(dur.Milliseconds())
 	}
 
 	// Write the final CRC32 sidecar for the DB file.
 	if err := rsum.WriteCRC32SumFile(s.dbFile+crcSuffix, dbCRC, rsum.Sync); err != nil {
 		return fmt.Errorf("writing CRC32 sidecar: %w", err)
 	}
+	stats.Get(snapshotFullCRC32CreateDuration).(*expvar.Int).Set(int64(time.Since(start).Milliseconds()))
 	return nil
 }
 
