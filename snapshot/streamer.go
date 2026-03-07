@@ -61,7 +61,7 @@ func NewHeaderFromHashedFile(hf *HashedFile) (*proto.Header, error) {
 // FullSnapshot.
 func NewHashedSnapshotHeader(dbFile *HashedFile, walFiles ...*HashedFile) (*proto.SnapshotHeader, error) {
 	if dbFile.Path == "" {
-		return nil, fmt.Errorf("dbPath must be non-empty")
+return nil, fmt.Errorf("dbFile.Path must be non-empty")
 	}
 
 	sh := &proto.SnapshotHeader{
