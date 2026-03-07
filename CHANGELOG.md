@@ -13,6 +13,7 @@ Upgrading to this release from a v7 release (or later) is seamless and been exte
 - [PR #2480](https://github.com/rqlite/rqlite/pull/2480), [PR #2482](https://github.com/rqlite/rqlite/pull/2482), [PR #2487](https://github.com/rqlite/rqlite/pull/2487): Add built-in web application for working with rqlite, including running queries. Application is served at `/console`.
 - [PR #2497](https://github.com/rqlite/rqlite/pull/2497): rqlite shell supports specifying trailing logs for a `.snapshot` operation.
 - [PR #2520](https://github.com/rqlite/rqlite/pull/2520): Support user-triggered Snapshot reaping, including add an associated rqlite shell command.
+- [PR #2525](https://github.com/rqlite/rqlite/pull/2525): Add on/off control for inter-node snapshot transfer compression. Compression is off by default.
 
 ### Implementation changes and bug fixes
 - [PR #2471](https://github.com/rqlite/rqlite/pull/2471): Move to non-blocking Snapshotting store.

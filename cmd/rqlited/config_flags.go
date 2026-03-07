@@ -54,6 +54,8 @@ type Config struct {
 	NodeVerifyServerName string
 	// Unique ID for node. If not set, set to advertised Raft address
 	NodeID string
+	// Enable compression when transferring snapshots between nodes
+	CompressSnapTransport bool
 	// Raft communication bind address
 	RaftAddr string
 	// Advertised Raft communication address. If not set, same as Raft bind address
@@ -156,6 +158,7 @@ func Forge(arguments []string) (*flag.FlagSet, *Config, error) {
 	fs.BoolVar(&config.NodeVerifyClient, "node-verify-client", false, "Enable mutual TLS for node-to-node communication")
 	fs.StringVar(&config.NodeVerifyServerName, "node-verify-server-name", "", "Hostname to verify on certificate returned by a node")
 	fs.StringVar(&config.NodeID, "node-id", "", "Unique ID for node. If not set, set to advertised Raft address")
+	fs.BoolVar(&config.CompressSnapTransport, "compress-snap-transport", false, "Enable compression when transferring snapshots between nodes")
 	fs.StringVar(&config.RaftAddr, "raft-addr", "localhost:4002", "Raft communication bind address")
 	fs.StringVar(&config.RaftAdv, "raft-adv-addr", "", "Advertised Raft communication address. If not set, same as Raft bind address")
 	fs.StringVar(&config.JoinAddrs, "join", "", "Comma-delimited list of nodes, in host:port form, through which a cluster can be joined")
