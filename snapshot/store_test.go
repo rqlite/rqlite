@@ -708,6 +708,10 @@ func Test_Store_Reap(t *testing.T) {
 	if len(snaps) != 1 {
 		t.Fatalf("Expected 1 snapshot in destination store, got %d", len(snaps))
 	}
+
+	// Verify CRC32 sidecar was recomputed after checkpoint.
+	mustVerifyCRC32File(t, filepath.Join(store.Dir(), snaps[0].ID, dbfileName))
+
 	_, rc, err := store.Open(snaps[0].ID)
 	if err != nil {
 		t.Fatalf("Failed to open snapshot in destination store: %v", err)
@@ -758,6 +762,10 @@ func Test_Store_Reap(t *testing.T) {
 	if len(snaps) != 1 {
 		t.Fatalf("Expected 1 snapshot in destination store, got %d", len(snaps))
 	}
+
+	// Verify CRC32 sidecar was recomputed after checkpoint.
+	mustVerifyCRC32File(t, filepath.Join(store.Dir(), snaps[0].ID, dbfileName))
+
 	_, rc, err = store.Open(snaps[0].ID)
 	if err != nil {
 		t.Fatalf("Failed to open snapshot in destination store: %v", err)

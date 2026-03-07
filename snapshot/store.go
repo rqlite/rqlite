@@ -467,10 +467,14 @@ func (s *Store) reap() (int, int, error) {
 		for _, snap := range newerSet.All() {
 			walFiles = append(walFiles, snap.walFiles...)
 		}
+		dbPath := filepath.Join(full.path, dbfileName)
 		if len(walFiles) > 0 {
-			p.AddCheckpoint(filepath.Join(full.path, dbfileName), walFiles)
+			p.AddCheckpoint(dbPath, walFiles)
 		}
 		p.NCheckpointed = len(walFiles)
+
+		// 1b. Recompute CRC32 sidecar for the checkpointed DB file.
+		p.AddCalcCRC32(dbPath, dbPath+crcSuffix)
 
 		// 2. Remove all incremental snapshot dirs.
 		for _, snap := range newerSet.All() {
