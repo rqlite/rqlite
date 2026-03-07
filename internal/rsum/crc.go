@@ -75,6 +75,60 @@ func (c *CRC32Writer) Sum32() uint32 {
 	return c.h.Sum32()
 }
 
+// CRC32WriteCloser wraps an io.WriteCloser, computing a running CRC32 (Castagnoli)
+// checksum over all data written through it, and also writing the final checksum
+// to a separate io.WriteCloser when closed.
+type CRC32WriteCloser struct {
+	w    io.WriteCloser
+	sumW io.WriteCloser
+	crcW *CRC32Writer
+}
+
+// NewCRC32WriteCloser creates a new CRC32WriteCloser that writes data to w while
+// computing a running CRC32 checksum. The underlying writer must also be an
+// io.Closer.
+func NewCRC32WriteCloser(w io.WriteCloser, sumW io.WriteCloser) *CRC32WriteCloser {
+	return &CRC32WriteCloser{
+		w:    w,
+		sumW: sumW,
+		crcW: NewCRC32Writer(w),
+	}
+}
+
+// Write writes p to the underlying writer and updates the CRC32 checksum.
+func (c *CRC32WriteCloser) Write(p []byte) (int, error) {
+	return c.crcW.Write(p)
+}
+
+// Close closes the underlying writer and the sum writer.
+func (c *CRC32WriteCloser) Close() error {
+	sum := c.crcW.Sum32()
+	if err := WriteCRC32Sum(c.sumW, sum); err != nil {
+		return err
+	}
+	if err := c.sumW.Close(); err != nil {
+		return err
+	}
+	return c.w.Close()
+}
+
+// WriteCRC32Sum writes the given CRC32 checksum to w as an 8-character lowercase
+// hex string (e.g. "1a2b3c4d").
+func WriteCRC32Sum(w io.Writer, sum uint32) error {
+	_, err := fmt.Fprintf(w, "%08x", sum)
+	return err
+}
+
+// ReadCRC32Sum reads a CRC32 checksum from r, expecting it to be an 8-character
+// lowercase hex string (e.g. "1a2b3c4d").
+func ReadCRC32Sum(r io.Reader) (uint32, error) {
+	var sum uint32
+	if _, err := fmt.Fscanf(r, "%08x", &sum); err != nil {
+		return 0, fmt.Errorf("invalid checksum: %w", err)
+	}
+	return sum, nil
+}
+
 // WriteCRC32SumFile writes the given CRC32 checksum to path as an 8-character
 // lowercase hex string (e.g. "1a2b3c4d").
 func WriteCRC32SumFile(path string, sum uint32, sync SyncState) error {
