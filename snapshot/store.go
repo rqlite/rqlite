@@ -164,7 +164,7 @@ type Store struct {
 	// if snaphots are deleted i.e. repead. Simply creating or reading
 	// a snapshot requires only a read lock.
 	mrsw          *rsync.MultiRSW
-	reapDisabled  bool
+	reapDisabled  *rsync.AtomicBool
 	reapThreshold int
 
 	reapCh     chan struct{}
@@ -186,6 +186,7 @@ func NewStore(dir string) (*Store, error) {
 		fullNeededPath: filepath.Join(dir, fullNeededFile),
 		catalog:        &SnapshotCatalog{},
 		mrsw:           rsync.NewMultiRSW(),
+		reapDisabled:   &rsync.AtomicBool{},
 		reapThreshold:  defaultReapThreshold,
 		reapCh:         make(chan struct{}, 1),
 		reapDoneCh:     make(chan struct{}),
@@ -577,7 +578,7 @@ func (s *Store) reapLoop() {
 			return
 		}
 
-		if s.reapDisabled {
+		if s.reapDisabled.Is() {
 			continue
 		}
 
