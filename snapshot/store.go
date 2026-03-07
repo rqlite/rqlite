@@ -171,8 +171,7 @@ type Store struct {
 	reapDoneCh chan struct{}
 	wg         sync.WaitGroup
 
-	LogReaping       bool
-	NoCRCCheckOnReap bool
+	LogReaping bool
 }
 
 // NewStore creates a new store.
@@ -457,32 +456,6 @@ func (s *Store) reap() (int, int, error) {
 		}
 	} else if len(walFiles) > 0 {
 		// Consolidate by checkpointing all WAL files into the full snapshot's DB.
-
-		// Verify CRC integrity of all files before any destructive operations.
-		if !s.NoCRCCheckOnReap {
-			if ok, err := full.dbFile.Check(); err != nil {
-				return 0, 0, fmt.Errorf("checking CRC32 of full snapshot DB: %w", err)
-			} else if !ok {
-				return 0, 0, fmt.Errorf("CRC32 mismatch for full snapshot DB %s", full.dbFile.Path)
-			}
-			for _, wf := range full.walFiles {
-				if ok, err := wf.Check(); err != nil {
-					return 0, 0, fmt.Errorf("checking CRC32 of WAL file %s: %w", wf.Path, err)
-				} else if !ok {
-					return 0, 0, fmt.Errorf("CRC32 mismatch for WAL file %s", wf.Path)
-				}
-			}
-			for _, snap := range newerSet.All() {
-				for _, wf := range snap.walFiles {
-					if ok, err := wf.Check(); err != nil {
-						return 0, 0, fmt.Errorf("checking CRC32 of WAL file %s: %w", wf.Path, err)
-					} else if !ok {
-						return 0, 0, fmt.Errorf("CRC32 mismatch for WAL file %s", wf.Path)
-					}
-				}
-			}
-		}
-
 		// Determine the newest snapshot to derive the new ID.
 		var newest *Snapshot
 		if newerSet.Len() > 0 {
