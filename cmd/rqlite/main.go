@@ -310,7 +310,7 @@ func main() {
 			case ".QUIT", "QUIT", "EXIT", ".EXIT":
 				break FOR_READ
 			case ".REAP":
-				err = reap(client, argv)
+				err = reap(ctx, client, argv)
 			case ".SNAPSHOT":
 				trailingLogs := 0
 				if index != -1 && index < len(input)-1 {
@@ -425,7 +425,7 @@ func expvar(ctx *cli.Context, client *httpcl.Client, cmd, line string, argv *arg
 	return cliJSON(ctx, client, line, url)
 }
 
-func reap(client *httpcl.Client, argv *argT) error {
+func reap(ctx *cli.Context, client *httpcl.Client, argv *argT) error {
 	url := fmt.Sprintf("%s://%s/reap", argv.Protocol, address6(argv))
 	req, err := http.NewRequest("POST", url, nil)
 	if err != nil {
@@ -447,6 +447,13 @@ func reap(client *httpcl.Client, argv *argT) error {
 	if resp.StatusCode != http.StatusOK {
 		return fmt.Errorf("server responded with %s", resp.Status)
 	}
+
+	var result map[string]int
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		return fmt.Errorf("failed to decode response: %s", err)
+	}
+	ctx.String("snapshots reaped: %d, WALs checkpointed: %d\n",
+		result["snapshots_reaped"], result["wals_checkpointed"])
 	return nil
 }
 
