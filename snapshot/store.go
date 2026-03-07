@@ -29,15 +29,16 @@ const (
 )
 
 const (
-	persistSize            = "latest_persist_size"
-	persistDuration        = "latest_persist_duration"
-	autoReapDuration       = "latest_autoreap_duration"
-	upgradeOk              = "upgrade_ok"
-	upgradeFail            = "upgrade_fail"
-	snapshotsReaped        = "snapshots_reaped"
-	snapshotsReapedFail    = "snapshots_reaped_failed"
-	snapshotCreateMRSWFail = "snapshot_create_mrsw_fail"
-	snapshotOpenMRSWFail   = "snapshot_open_mrsw_fail"
+	persistSize                     = "latest_persist_size"
+	persistDuration                 = "latest_persist_duration"
+	autoReapDuration                = "latest_autoreap_duration"
+	upgradeOk                       = "upgrade_ok"
+	upgradeFail                     = "upgrade_fail"
+	snapshotsReaped                 = "snapshots_reaped"
+	snapshotsReapedFail             = "snapshots_reaped_failed"
+	snapshotCreateMRSWFail          = "snapshot_create_mrsw_fail"
+	snapshotOpenMRSWFail            = "snapshot_open_mrsw_fail"
+	snapshotFullCRC32CreateDuration = "snapshot_full_crc32_create_duration"
 )
 
 var (
@@ -65,6 +66,7 @@ func ResetStats() {
 	stats.Add(snapshotsReapedFail, 0)
 	stats.Add(snapshotCreateMRSWFail, 0)
 	stats.Add(snapshotOpenMRSWFail, 0)
+	stats.Add(snapshotFullCRC32CreateDuration, 0)
 }
 
 // LockingSink is a wrapper around a Sink holds the MSRW lock

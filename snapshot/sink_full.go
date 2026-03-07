@@ -2,11 +2,14 @@ package snapshot
 
 import (
 	"errors"
+	"expvar"
 	"fmt"
 	"os"
 	"path/filepath"
+	"time"
 
 	"github.com/rqlite/rqlite/v10/db"
+	"github.com/rqlite/rqlite/v10/internal/rsum"
 	"github.com/rqlite/rqlite/v10/snapshot/proto"
 )
 
@@ -50,9 +53,11 @@ type FullSink struct {
 	walIndex int
 
 	f         *os.File
+	crcW      *rsum.CRC32Writer
 	remaining uint64
 
 	dbFile   string
+	dbCRC    uint32
 	walFiles []string
 
 	opened bool
@@ -128,7 +133,13 @@ func (s *FullSink) Write(p []byte) (int, error) {
 		k := min(uint64(len(p)), s.remaining)
 		chunk := p[:int(k)]
 
-		n, err := s.f.Write(chunk)
+		var n int
+		var err error
+		if s.crcW != nil {
+			n, err = s.crcW.Write(chunk)
+		} else {
+			n, err = s.f.Write(chunk)
+		}
 		total += n
 		s.remaining -= uint64(n)
 
@@ -192,9 +203,27 @@ func (s *FullSink) Close() error {
 		return err
 	}
 
-	// This is when we checkpoint all WALs into the SQLite file, and end up
-	// with a single DB file representing the snapshot state.
-	return db.ReplayWAL(s.dbFile, s.walFiles, false)
+	sum := s.dbCRC
+	if len(s.walFiles) > 0 {
+		// This is when we checkpoint all WALs into the SQLite file, and end up
+		// with a single DB file representing the snapshot state.
+		if err := db.ReplayWAL(s.dbFile, s.walFiles, false); err != nil {
+			return fmt.Errorf("replaying WAL files: %w", err)
+		}
+
+		// WAL replay modified the DB file, so recompute the CRC.
+		var dur time.Duration
+		var err error
+		sum, dur, err = rsum.CRC32WithTiming(s.dbFile)
+		if err != nil {
+			return fmt.Errorf("calculating CRC32 of installed DB file: %w", err)
+		}
+		stats.Get(snapshotFullCRC32CreateDuration).(*expvar.Int).Set(dur.Milliseconds())
+	}
+	if err := rsum.WriteCRC32SumFile(s.dbFile+crcSuffix, sum, true); err != nil {
+		return fmt.Errorf("writing CRC32 sum file: %w", err)
+	}
+	return nil
 }
 
 // DBFile returns the path to the checkpointed DB file.
@@ -218,6 +247,7 @@ func (s *FullSink) openCurrent() error {
 			return err
 		}
 		s.f = f
+		s.crcW = rsum.NewCRC32Writer(f)
 		s.remaining = s.header.DbHeader.SizeBytes
 		return nil
 
@@ -280,6 +310,10 @@ func (s *FullSink) advance() error {
 func (s *FullSink) closeFile() error {
 	if s.f == nil {
 		return nil
+	}
+	if s.crcW != nil {
+		s.dbCRC = s.crcW.Sum32()
+		s.crcW = nil
 	}
 	err := s.f.Close()
 	s.f = nil
