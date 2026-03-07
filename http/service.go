@@ -69,6 +69,10 @@ type Store interface {
 	// Snapshot triggers a Raft Snapshot and Log Truncation.
 	Snapshot(n uint64) error
 
+	// Reap reaps old snapshots, returning the number of snapshots reaped
+	// and WAL files checkpointed.
+	Reap() (int, int, error)
+
 	// ReadFrom reads and loads a SQLite database into the node, initially bypassing
 	// the Raft system. It then triggers a Raft snapshot, which will then make
 	// Raft aware of the new data.
@@ -186,6 +190,7 @@ const (
 	numLoadAborted                    = "loads_aborted"
 	numBoot                           = "boot"
 	numSnapshots                      = "user_snapshots"
+	numReaps                          = "user_reaps"
 	numSQLAnalyze                     = "sql_analyze"
 	numAuthOK                         = "auth_ok"
 	numAuthFail                       = "auth_fail"
@@ -252,6 +257,7 @@ func ResetStats() {
 	stats.Add(numLoadAborted, 0)
 	stats.Add(numBoot, 0)
 	stats.Add(numSnapshots, 0)
+	stats.Add(numReaps, 0)
 	stats.Add(numSQLAnalyze, 0)
 	stats.Add(numAuthOK, 0)
 	stats.Add(numAuthFail, 0)
@@ -483,6 +489,9 @@ func (s *Service) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	case r.URL.Path == "/snapshot":
 		stats.Add(numSnapshots, 1)
 		s.handleSnapshot(w, r, params)
+	case r.URL.Path == "/reap":
+		stats.Add(numReaps, 1)
+		s.handleReap(w, r)
 	case strings.HasPrefix(r.URL.Path, "/remove"):
 		s.handleRemove(w, r, params)
 	case strings.HasPrefix(r.URL.Path, "/status"):
@@ -821,6 +830,34 @@ func (s *Service) handleSnapshot(w http.ResponseWriter, r *http.Request, qp Quer
 		}
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
+	}
+}
+
+// handleReap handles a reap request.
+func (s *Service) handleReap(w http.ResponseWriter, r *http.Request) {
+	if !s.CheckRequestPerm(r, auth.PermSnapshot) {
+		w.WriteHeader(http.StatusUnauthorized)
+		return
+	}
+
+	if r.Method != "POST" {
+		w.WriteHeader(http.StatusMethodNotAllowed)
+		return
+	}
+
+	n, c, err := s.store.Reap()
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	resp := map[string]int{
+		"snapshots_reaped":      n,
+		"wals_checkpointed": c,
+	}
+	w.Header().Set("Content-Type", "application/json; charset=utf-8")
+	if err := json.NewEncoder(w).Encode(resp); err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
 	}
 }
 

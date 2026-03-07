@@ -75,6 +75,7 @@ func init() {
 		`.restore FILE                                 Load using SQLite file or SQL dump contained in FILE`,
 		`.nodes [all]                                  Show connection status of voting nodes. 'all' to show all nodes`,
 		`.schema                                       Show CREATE statements for all tables`,
+		`.reap                                         Request a snapshot reap on connected node`,
 		`.snapshot [TRAILINGLOGS]                      Request a Raft snapshot and log truncation on connected node`,
 		`.status                                       Show status and diagnostic information for connected node`,
 		`.stepdown [NODEID]                            Instruct the leader to stepdown, optionally specifying new Leader node`,
@@ -308,6 +309,8 @@ func main() {
 				ctx.String("%s\n", strings.Join(cliHelp, "\n"))
 			case ".QUIT", "QUIT", "EXIT", ".EXIT":
 				break FOR_READ
+			case ".REAP":
+				err = reap(client, argv)
 			case ".SNAPSHOT":
 				trailingLogs := 0
 				if index != -1 && index < len(input)-1 {
@@ -420,6 +423,31 @@ func nodes(ctx *cli.Context, client *httpcl.Client, cmd, line string, argv *argT
 func expvar(ctx *cli.Context, client *httpcl.Client, cmd, line string, argv *argT) error {
 	url := fmt.Sprintf("%s://%s/debug/vars", argv.Protocol, address6(argv))
 	return cliJSON(ctx, client, line, url)
+}
+
+func reap(client *httpcl.Client, argv *argT) error {
+	url := fmt.Sprintf("%s://%s/reap", argv.Protocol, address6(argv))
+	req, err := http.NewRequest("POST", url, nil)
+	if err != nil {
+		return err
+	}
+	if argv.Credentials != "" {
+		creds := strings.Split(argv.Credentials, ":")
+		if len(creds) != 2 {
+			return fmt.Errorf("invalid Basic Auth credentials format")
+		}
+		req.SetBasicAuth(creds[0], creds[1])
+	}
+
+	resp, err := client.Do(req)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		return fmt.Errorf("server responded with %s", resp.Status)
+	}
+	return nil
 }
 
 func snapshot(client *httpcl.Client, argv *argT, trailingLogs int) error {
