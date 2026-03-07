@@ -18,7 +18,7 @@ import (
 
 func Test_NewStore(t *testing.T) {
 	dir := t.TempDir()
-	store, err := NewStore(dir)
+	store, err := NewStore(dir, true)
 	if err != nil {
 		t.Fatalf("Failed to create new store: %v", err)
 	}
@@ -35,7 +35,7 @@ func Test_NewStore(t *testing.T) {
 
 func Test_StoreEmpty(t *testing.T) {
 	dir := t.TempDir()
-	store, _ := NewStore(dir)
+	store, _ := NewStore(dir, true)
 	defer store.Close()
 
 	snaps, err := store.ListAll()
@@ -80,7 +80,7 @@ func Test_StoreEmpty(t *testing.T) {
 
 func Test_StoreCreateCancel(t *testing.T) {
 	dir := t.TempDir()
-	store, err := NewStore(dir)
+	store, err := NewStore(dir, true)
 	if err != nil {
 		t.Fatalf("Failed to create new store: %v", err)
 	}
@@ -127,7 +127,7 @@ func Test_StoreCreateCancel(t *testing.T) {
 // in an empty store fails as expected. All Stores must start with a full snapshot.
 func Test_Store_CreateIncrementalFirst_Fail(t *testing.T) {
 	dir := t.TempDir()
-	store, err := NewStore(dir)
+	store, err := NewStore(dir, true)
 	if err != nil {
 		t.Fatalf("Failed to create new store: %v", err)
 	}
@@ -166,7 +166,7 @@ func Test_Store_CreateIncrementalFirst_Fail(t *testing.T) {
 
 func Test_Store_CreateThenList(t *testing.T) {
 	dir := t.TempDir()
-	store, err := NewStore(dir)
+	store, err := NewStore(dir, true)
 	if err != nil {
 		t.Fatalf("Failed to create new store: %v", err)
 	}
@@ -215,7 +215,7 @@ func Test_Store_CreateThenList(t *testing.T) {
 
 func Test_Store_OpenMetaCheck(t *testing.T) {
 	dir := t.TempDir()
-	store, err := NewStore(dir)
+	store, err := NewStore(dir, true)
 	if err != nil {
 		t.Fatalf("Failed to create new store: %v", err)
 	}
@@ -259,7 +259,7 @@ func Test_Store_OpenMetaCheck(t *testing.T) {
 
 func Test_Store_OpenThenCreate(t *testing.T) {
 	dir := t.TempDir()
-	store, err := NewStore(dir)
+	store, err := NewStore(dir, true)
 	if err != nil {
 		t.Fatalf("Failed to create new store: %v", err)
 	}
@@ -284,7 +284,7 @@ func Test_Store_OpenThenCreate(t *testing.T) {
 
 func Test_Store_List(t *testing.T) {
 	dir := t.TempDir()
-	store, err := NewStore(dir)
+	store, err := NewStore(dir, true)
 	if err != nil {
 		t.Fatalf("Failed to create new store: %v", err)
 	}
@@ -332,13 +332,13 @@ func Test_Store_List(t *testing.T) {
 // Test_Store_EndToEndCycle tests an end-to-end cycle of creating a Store,
 // creating sinks, and writing various types of snapshots to other Stores.
 func Test_Store_EndToEndCycle(t *testing.T) {
-	store0, err := NewStore(t.TempDir())
+	store0, err := NewStore(t.TempDir(), true)
 	if err != nil {
 		t.Fatalf("Failed to create source store: %v", err)
 	}
 	defer store0.Close()
 
-	store1, err := NewStore(t.TempDir())
+	store1, err := NewStore(t.TempDir(), true)
 	if err != nil {
 		t.Fatalf("Failed to create source store: %v", err)
 	}
@@ -651,7 +651,7 @@ func Test_Store_EndToEndCycle(t *testing.T) {
 
 func Test_Store_Reap(t *testing.T) {
 	dir := t.TempDir()
-	store, err := NewStore(dir)
+	store, err := NewStore(dir, true)
 	if err != nil {
 		t.Fatalf("Failed to create new store: %v", err)
 	}
@@ -884,7 +884,7 @@ func Test_Store_Reap(t *testing.T) {
 
 func Test_Store_ReapCorruptDB(t *testing.T) {
 	dir := t.TempDir()
-	store, err := NewStore(dir)
+	store, err := NewStore(dir, true)
 	if err != nil {
 		t.Fatalf("Failed to create new store: %v", err)
 	}
@@ -909,7 +909,7 @@ func Test_Store_ReapCorruptDB(t *testing.T) {
 
 func Test_Store_ReapCorruptWAL(t *testing.T) {
 	dir := t.TempDir()
-	store, err := NewStore(dir)
+	store, err := NewStore(dir, true)
 	if err != nil {
 		t.Fatalf("Failed to create new store: %v", err)
 	}
@@ -938,7 +938,7 @@ func Test_Store_ReapCorruptWAL(t *testing.T) {
 
 func Test_Store_ReapBlocked(t *testing.T) {
 	dir := t.TempDir()
-	store, err := NewStore(dir)
+	store, err := NewStore(dir, true)
 	if err != nil {
 		t.Fatalf("Failed to create new store: %v", err)
 	}
@@ -961,7 +961,7 @@ func Test_Store_ReapBlocked(t *testing.T) {
 
 func Test_Store_Check_RemovesTmpDirs(t *testing.T) {
 	dir := t.TempDir()
-	store, err := NewStore(dir)
+	store, err := NewStore(dir, true)
 	if err != nil {
 		t.Fatalf("Failed to create store: %v", err)
 	}
@@ -983,7 +983,7 @@ func Test_Store_Check_RemovesTmpDirs(t *testing.T) {
 	}
 
 	// Re-open the store — check() should clean up the .tmp directory.
-	store2, err := NewStore(dir)
+	store2, err := NewStore(dir, true)
 	if err != nil {
 		t.Fatalf("Failed to re-open store: %v", err)
 	}
@@ -1002,7 +1002,7 @@ func Test_Store_Check_RemovesTmpDirs(t *testing.T) {
 
 func Test_Store_Check_ResumesReapPlan(t *testing.T) {
 	dir := t.TempDir()
-	store, err := NewStore(dir)
+	store, err := NewStore(dir, true)
 	if err != nil {
 		t.Fatalf("Failed to create store: %v", err)
 	}
@@ -1031,7 +1031,7 @@ func Test_Store_Check_ResumesReapPlan(t *testing.T) {
 	// Now set up a second store with a "pending" reap plan: create snapshots,
 	// write a REAP_PLAN file manually, then re-open the store.
 	dir2 := t.TempDir()
-	store2, err := NewStore(dir2)
+	store2, err := NewStore(dir2, true)
 	if err != nil {
 		t.Fatalf("Failed to create store2: %v", err)
 	}
@@ -1057,8 +1057,10 @@ func Test_Store_Check_ResumesReapPlan(t *testing.T) {
 	if len(walMatches) == 0 {
 		t.Fatalf("Expected at least one WAL file in incremental snapshot")
 	}
-	p.AddCheckpoint(filepath.Join(fullPath, dbfileName), walMatches)
+	dbPath := filepath.Join(fullPath, dbfileName)
+	p.AddCheckpoint(dbPath, walMatches)
 	p.NCheckpointed = len(walMatches)
+	p.AddCalcCRC32(dbPath, dbPath+crcSuffix)
 	p.AddRemoveAll(incPath)
 	p.NReaped = 1
 
@@ -1078,7 +1080,7 @@ func Test_Store_Check_ResumesReapPlan(t *testing.T) {
 	}
 
 	// Re-open the store — check() should detect and execute the reap plan.
-	store3, err := NewStore(dir2)
+	store3, err := NewStore(dir2, true)
 	if err != nil {
 		t.Fatalf("Failed to re-open store2: %v", err)
 	}
@@ -1118,7 +1120,7 @@ func Test_Store_Check_ResumesReapPlan(t *testing.T) {
 
 func Test_Store_ReaperGoroutine(t *testing.T) {
 	dir := t.TempDir()
-	store, err := NewStore(dir)
+	store, err := NewStore(dir, true)
 	if err != nil {
 		t.Fatalf("Failed to create new store: %v", err)
 	}
@@ -1151,7 +1153,7 @@ func Test_Store_ReaperGoroutine(t *testing.T) {
 
 func Test_Store_ReaperBlockingWrite(t *testing.T) {
 	dir := t.TempDir()
-	store, err := NewStore(dir)
+	store, err := NewStore(dir, true)
 	if err != nil {
 		t.Fatalf("Failed to create new store: %v", err)
 	}
@@ -1204,7 +1206,7 @@ func Test_Store_ReaperBlockingWrite(t *testing.T) {
 
 func Test_Store_Close(t *testing.T) {
 	dir := t.TempDir()
-	store, err := NewStore(dir)
+	store, err := NewStore(dir, true)
 	if err != nil {
 		t.Fatalf("Failed to create new store: %v", err)
 	}

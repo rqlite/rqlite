@@ -50,7 +50,7 @@ func Test_Upgrade_OK(t *testing.T) {
 
 	// Create new SnapshotStore from the upgraded directory, to verify its
 	// contents.
-	store, err := NewStore(newTemp10)
+	store, err := NewStore(newTemp10, true)
 	if err != nil {
 		t.Fatalf("failed to create new snapshot store: %s", err)
 	}
@@ -98,7 +98,7 @@ func Test_Upgrade_EmptyOK(t *testing.T) {
 
 	// Create new SnapshotStore from the upgraded directory, to verify its
 	// contents.
-	store, err := NewStore(newTemp10)
+	store, err := NewStore(newTemp10, true)
 	if err != nil {
 		t.Fatalf("failed to create new snapshot store: %s", err)
 	}
@@ -250,7 +250,7 @@ func Test_Upgrade8To10_OK(t *testing.T) {
 	}
 
 	// Verify the store can also open the upgraded snapshot.
-	store, err := NewStore(newDir)
+	store, err := NewStore(newDir, true)
 	if err != nil {
 		t.Fatalf("failed to create store: %s", err)
 	}

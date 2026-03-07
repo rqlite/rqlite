@@ -592,7 +592,7 @@ func (s *Store) Open() (retErr error) {
 	}
 
 	// Create store for the Snapshots.
-	snapshotStore, err := snapshot.NewStore(s.snapshotDir)
+	snapshotStore, err := snapshot.NewStore(s.snapshotDir, false)
 	if err != nil {
 		return fmt.Errorf("failed to create snapshot store: %s", err)
 	}
