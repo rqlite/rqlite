@@ -1249,6 +1249,52 @@ func TestSnapshotSet_ResolveFiles(t *testing.T) {
 		}
 	})
 
+	t.Run("full with WALs", func(t *testing.T) {
+		rootDir := t.TempDir()
+		catalog := &SnapshotCatalog{}
+		mustCreateSnapshotFullWithWALs(t, rootDir, "snap-1", 1, 1, "testdata/db-and-wals/wal-00")
+
+		ss, err := catalog.Scan(rootDir)
+		if err != nil {
+			t.Fatalf("Scan() returned error: %v", err)
+		}
+
+		dbFile, walFiles, err := ss.ResolveFiles("snap-1")
+		if err != nil {
+			t.Fatalf("ResolveFiles() returned error: %v", err)
+		}
+		if exp := filepath.Join(rootDir, "snap-1", dbfileName); dbFile.Path != exp {
+			t.Fatalf("dbFile.Path = %q, want %q", dbFile.Path, exp)
+		}
+		if len(walFiles) != 1 {
+			t.Fatalf("expected 1 WAL file, got %d", len(walFiles))
+		}
+	})
+
+	t.Run("full with WALs then incremental", func(t *testing.T) {
+		rootDir := t.TempDir()
+		catalog := &SnapshotCatalog{}
+		mustCreateSnapshotFullWithWALs(t, rootDir, "snap-1", 1, 1, "testdata/db-and-wals/wal-00")
+		mustCreateSnapshotInc(t, rootDir, "snap-2", 2, 1)
+
+		ss, err := catalog.Scan(rootDir)
+		if err != nil {
+			t.Fatalf("Scan() returned error: %v", err)
+		}
+
+		dbFile, walFiles, err := ss.ResolveFiles("snap-2")
+		if err != nil {
+			t.Fatalf("ResolveFiles() returned error: %v", err)
+		}
+		if exp := filepath.Join(rootDir, "snap-1", dbfileName); dbFile.Path != exp {
+			t.Fatalf("dbFile.Path = %q, want %q", dbFile.Path, exp)
+		}
+		// Should include the full's WAL + the incremental's WAL = 2 total.
+		if len(walFiles) != 2 {
+			t.Fatalf("expected 2 WAL files, got %d", len(walFiles))
+		}
+	})
+
 	t.Run("empty set", func(t *testing.T) {
 		ss := SnapshotSet{}
 		_, _, err := ss.ResolveFiles("anything")
@@ -1277,6 +1323,30 @@ func mustCopyFile(t *testing.T, src, dest string) {
 
 func mustCreateSnapshotFull(t *testing.T, rootDir, snapshotID string, idx, term uint64) {
 	mustCreateSnapshot(t, rootDir, snapshotID, "testdata/db-and-wals/full2.db", dbfileName, idx, term)
+}
+
+func mustCreateSnapshotFullWithWALs(t *testing.T, rootDir, snapshotID string, idx, term uint64, walSrcs ...string) {
+	t.Helper()
+	snapshotDir := filepath.Join(rootDir, snapshotID)
+	if err := os.MkdirAll(snapshotDir, 0755); err != nil {
+		t.Fatalf("failed to create snapshot dir: %v", err)
+	}
+	dbPath := filepath.Join(snapshotDir, dbfileName)
+	mustCopyFile(t, "testdata/db-and-wals/full2.db", dbPath)
+	mustWriteCRC32File(t, dbPath)
+	for i, src := range walSrcs {
+		walPath := filepath.Join(snapshotDir, testWALName(i+1))
+		mustCopyFile(t, src, walPath)
+		mustWriteCRC32File(t, walPath)
+	}
+	meta := &raft.SnapshotMeta{
+		ID:    snapshotID,
+		Index: idx,
+		Term:  term,
+	}
+	if err := writeMeta(snapshotDir, meta); err != nil {
+		t.Fatalf("failed to write snapshot meta: %v", err)
+	}
 }
 
 func mustCreateSnapshotInc(t *testing.T, rootDir, snapshotID string, idx, term uint64) {
@@ -1374,25 +1444,30 @@ func Test_SnapshotCatalog_Scan_MultiWAL(t *testing.T) {
 		}
 	})
 
-	t.Run("WAL files with data.db is rejected", func(t *testing.T) {
+	t.Run("DB with WAL files is full", func(t *testing.T) {
 		rootDir := t.TempDir()
 		catalog := &SnapshotCatalog{}
 
 		// Create a snapshot directory with both a DB and a WAL file.
-		snapshotDir := filepath.Join(rootDir, "snap-1")
-		if err := os.MkdirAll(snapshotDir, 0755); err != nil {
-			t.Fatalf("failed to create snapshot dir: %v", err)
+		mustCreateSnapshotFullWithWALs(t, rootDir, "snap-1", 1, 1, "testdata/db-and-wals/wal-00")
+
+		ss, err := catalog.Scan(rootDir)
+		if err != nil {
+			t.Fatalf("Scan() returned error: %v", err)
 		}
-		mustCopyFile(t, "testdata/db-and-wals/full2.db", filepath.Join(snapshotDir, dbfileName))
-		mustCopyFile(t, "testdata/db-and-wals/wal-00", filepath.Join(snapshotDir, testWALName(1)))
-		meta := &raft.SnapshotMeta{ID: "snap-1", Index: 1, Term: 1}
-		if err := writeMeta(snapshotDir, meta); err != nil {
-			t.Fatalf("failed to write meta: %v", err)
+		if ss.Len() != 1 {
+			t.Fatalf("Scan() returned %d snapshots, want 1", ss.Len())
 		}
 
-		_, err := catalog.Scan(rootDir)
-		if err == nil {
-			t.Fatal("expected error when snapshot has both WAL and DB files, got nil")
+		snap := ss.All()[0]
+		if snap.typ != SnapshotTypeFull {
+			t.Fatalf("snapshot type = %v, want %v", snap.typ, SnapshotTypeFull)
+		}
+		if snap.dbFile == nil {
+			t.Fatal("expected dbFile to be set")
+		}
+		if len(snap.walFiles) != 1 {
+			t.Fatalf("expected 1 WAL file, got %d", len(snap.walFiles))
 		}
 	})
 }

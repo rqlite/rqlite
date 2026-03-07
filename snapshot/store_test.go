@@ -459,17 +459,15 @@ func Test_Store_EndToEndCycle(t *testing.T) {
 		t.Fatalf("Expected store to have %d snapshots, got %d", exp, got)
 	}
 
-	// Open the second snapshot in the second store, check its contents. When writing
-	// snapshot with both a database file and one (or more) WAL files from one store to
-	// another, the Sink writing to the second store will checkpoint the WAL files into
-	// the database file. Therefore, when we read back the snapshot from the second store,
-	// we expect to see only a database file, with no associated WAL files.
+	// Open the second snapshot in the second store, check its contents. The
+	// FullSink no longer replays WAL files, so we expect to see both a database
+	// file and the WAL file.
 	snaps, err = store1.ListAll()
 	if err != nil {
 		t.Fatalf("Failed to list snapshots in destination store: %v", err)
 	}
 	if len(snaps) != 2 {
-		t.Fatalf("Expected 1 snapshot in destination store, got %d", len(snaps))
+		t.Fatalf("Expected 2 snapshots in destination store, got %d", len(snaps))
 	}
 	meta, rc, err = store1.Open(snaps[0].ID)
 	if err != nil {
@@ -485,13 +483,14 @@ func Test_Store_EndToEndCycle(t *testing.T) {
 	}
 
 	dbPath, walPaths = persistStreamerData(t, buf)
-	if len(walPaths) != 0 {
-		t.Fatalf("Expected 0 WAL files, got %d", len(walPaths))
+	if len(walPaths) != 1 {
+		t.Fatalf("Expected 1 WAL file, got %d", len(walPaths))
 	}
 
-	// Check the file, it should have the content of the backup plus the changes
-	// from the checkpointed WAL file.
-
+	// Replay the WAL into the DB and check the result.
+	if err := db.ReplayWAL(dbPath, walPaths, false); err != nil {
+		t.Fatalf("Failed to replay WAL: %v", err)
+	}
 	rows := mustQueryDB(t, dbPath, "SELECT COUNT(*) FROM foo")
 	if exp, got := `[{"columns":["COUNT(*)"],"types":["integer"],"values":[[1]]}]`, rows; exp != got {
 		t.Fatalf("unexpected results for query exp: %s got: %s", exp, got)
@@ -560,13 +559,14 @@ func Test_Store_EndToEndCycle(t *testing.T) {
 	}
 
 	dbPath, walPaths = persistStreamerData(t, buf)
-	if len(walPaths) != 0 {
-		t.Fatalf("Expected 0 WAL files, got %d", len(walPaths))
+	if len(walPaths) != 1 {
+		t.Fatalf("Expected 1 WAL file, got %d", len(walPaths))
 	}
 
-	// Check the file, it should have the content of the backup plus the changes
-	// from the two checkpointed WAL files.
-
+	// Replay the WAL and check the result.
+	if err := db.ReplayWAL(dbPath, walPaths, false); err != nil {
+		t.Fatalf("Failed to replay WAL: %v", err)
+	}
 	rows = mustQueryDB(t, dbPath, "SELECT COUNT(*) FROM foo")
 	if exp, got := `[{"columns":["COUNT(*)"],"types":["integer"],"values":[[2]]}]`, rows; exp != got {
 		t.Fatalf("unexpected results for query exp: %s got: %s", exp, got)
@@ -613,9 +613,8 @@ func Test_Store_EndToEndCycle(t *testing.T) {
 		t.Fatalf("Expected store to have %d snapshots, got %d", exp, got)
 	}
 
-	// Open the fourth snapshot in the second store, check its contents. Because
-	// the snapshot contains both a DB file and WAL files, the Sink in the second
-	// store will checkpoint the WAL files into the DB file.
+	// Open the fourth snapshot in the second store, check its contents. The
+	// FullSink preserves WAL files alongside the DB file.
 	snaps, err = store1.ListAll()
 	if err != nil {
 		t.Fatalf("Failed to list snapshots in destination store: %v", err)
@@ -637,12 +636,14 @@ func Test_Store_EndToEndCycle(t *testing.T) {
 	}
 
 	dbPath, walPaths = persistStreamerData(t, buf)
-	if len(walPaths) != 0 {
-		t.Fatalf("Expected 0 WAL files, got %d", len(walPaths))
+	if len(walPaths) != 3 {
+		t.Fatalf("Expected 3 WAL files, got %d", len(walPaths))
 	}
 
-	// Check the file, it should have the content of the backup plus the changes
-	// from the three checkpointed WAL files.
+	// Replay the WALs and check the result.
+	if err := db.ReplayWAL(dbPath, walPaths, false); err != nil {
+		t.Fatalf("Failed to replay WALs: %v", err)
+	}
 	rows = mustQueryDB(t, dbPath, "SELECT COUNT(*) FROM foo")
 	if exp, got := `[{"columns":["COUNT(*)"],"types":["integer"],"values":[[3]]}]`, rows; exp != got {
 		t.Fatalf("unexpected results for query exp: %s got: %s", exp, got)

@@ -437,16 +437,26 @@ func (s *Store) reap() (int, int, error) {
 
 	p := plan.New()
 
-	if newerSet.Len() == 0 {
-		// No incrementals after the newest full.
-		// Just remove all snapshots older than the full.
+	// Collect all WAL files: from the full snapshot itself and from any
+	// incremental snapshots that follow it.
+	var walFiles []string
+	for _, wf := range full.walFiles {
+		walFiles = append(walFiles, wf.Path)
+	}
+	for _, snap := range newerSet.All() {
+		for _, wf := range snap.walFiles {
+			walFiles = append(walFiles, wf.Path)
+		}
+	}
+
+	if newerSet.Len() == 0 && len(walFiles) == 0 {
+		// No WALs to checkpoint and no incrementals — just remove older snapshots.
 		for _, snap := range olderSet.All() {
 			p.AddRemoveAll(snap.path)
 			p.NReaped++
 		}
-	} else {
-		// There are incrementals after the newest full.
-		// Consolidate by checkpointing the associated WALs into the full snapshot.
+	} else if len(walFiles) > 0 {
+		// Consolidate by checkpointing all WAL files into the full snapshot's DB.
 
 		// Verify CRC integrity of all files before any destructive operations.
 		if !s.NoCRCCheckOnReap {
@@ -454,6 +464,13 @@ func (s *Store) reap() (int, int, error) {
 				return 0, 0, fmt.Errorf("checking CRC32 of full snapshot DB: %w", err)
 			} else if !ok {
 				return 0, 0, fmt.Errorf("CRC32 mismatch for full snapshot DB %s", full.dbFile.Path)
+			}
+			for _, wf := range full.walFiles {
+				if ok, err := wf.Check(); err != nil {
+					return 0, 0, fmt.Errorf("checking CRC32 of WAL file %s: %w", wf.Path, err)
+				} else if !ok {
+					return 0, 0, fmt.Errorf("CRC32 mismatch for WAL file %s", wf.Path)
+				}
 			}
 			for _, snap := range newerSet.All() {
 				for _, wf := range snap.walFiles {
@@ -466,55 +483,50 @@ func (s *Store) reap() (int, int, error) {
 			}
 		}
 
-		newestInc, _ := newerSet.Newest()
-		newID := snapshotName(newestInc.raftMeta.Term, newestInc.raftMeta.Index)
+		// Determine the newest snapshot to derive the new ID.
+		var newest *Snapshot
+		if newerSet.Len() > 0 {
+			newest, _ = newerSet.Newest()
+		} else {
+			newest = full
+		}
+		newID := snapshotName(newest.raftMeta.Term, newest.raftMeta.Index)
 
 		// The end result of the Reaping process will be a new full snapshot with
 		// a new ID. That ID is generated from the newest snapshot's index and term,
 		// and the current timestamp.
 		finalDir := filepath.Join(s.dir, newID)
 
-		newMeta := copyRaftMeta(newestInc.raftMeta)
+		newMeta := copyRaftMeta(newest.raftMeta)
 		newMeta.ID = newID
 		metaJSON, err := json.Marshal(newMeta)
 		if err != nil {
 			return 0, 0, fmt.Errorf("marshaling consolidated meta: %w", err)
 		}
-
-		// 1. Checkpoint all incremental WAL files into the full's DB.
-		//    WAL files reside in different directories; the executor
-		//    handles cross-directory moves during checkpointing.
-		var walFiles []string
-		for _, snap := range newerSet.All() {
-			for _, wf := range snap.walFiles {
-				walFiles = append(walFiles, wf.Path)
-			}
-		}
+		// 1. Checkpoint all WAL files into the full snapshot's DB.
 		dbPath := filepath.Join(full.path, dbfileName)
-		if len(walFiles) > 0 {
-			p.AddCheckpoint(dbPath, walFiles)
-		}
+		p.AddCheckpoint(dbPath, walFiles)
 		p.NCheckpointed = len(walFiles)
 
-		// 1b. Recompute CRC32 sidecar for the checkpointed DB file.
+		// 2. Recompute CRC32 sidecar for the checkpointed DB file.
 		p.AddCalcCRC32(dbPath, dbPath+crcSuffix)
 
-		// 2. Remove all incremental snapshot dirs.
+		// 3. Remove all incremental snapshot dirs.
 		for _, snap := range newerSet.All() {
 			p.AddRemoveAll(snap.path)
 		}
 		p.NReaped = newerSet.Len()
 
-		// 3. Remove all older-than-full dirs.
+		// 4. Remove all older-than-full dirs.
 		for _, snap := range olderSet.All() {
 			p.AddRemoveAll(snap.path)
 			p.NReaped++
 		}
 
-		// 4. Write new metadata into the full snapshot dir.
+		// 5. Write new metadata into the full snapshot dir.
 		p.AddWriteMeta(full.path, metaJSON)
 
-		// 5. Rename to new snapshot name
+		// 6. Rename to new snapshot name.
 		p.AddRename(full.path, finalDir)
 	}
 
