@@ -294,6 +294,10 @@ type SnapshotStore interface {
 	// Stats returns stats about the Snapshot Store.
 	Stats() (map[string]any, error)
 
+	// Reap reaps old snapshots, returning the number of snapshots reaped
+	// and WAL files checkpointed.
+	Reap() (int, int, error)
+
 	// Close shuts down background goroutines in the snapshot store.
 	Close() error
 }
@@ -2927,6 +2931,12 @@ func (s *Store) Snapshot(n uint64) (retError error) {
 	}
 	stats.Add(numUserSnapshots, 1)
 	return nil
+}
+
+// Reap reaps old snapshots, returning the number of snapshots reaped
+// and WAL files checkpointed.
+func (s *Store) Reap() (int, int, error) {
+	return s.snapshotStore.Reap()
 }
 
 // runWALSnapshotting runs the periodic check to see if a snapshot should be

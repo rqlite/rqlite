@@ -306,6 +306,11 @@ func (n *Node) Snapshot(i uint64) error {
 	return n.Store.Snapshot(i)
 }
 
+// Reap instructs the node to reap old snapshots.
+func (n *Node) Reap() (int, int, error) {
+	return n.Store.Reap()
+}
+
 // EnableTLSClient enables TLS support for the node's cluster client.
 func (n *Node) EnableTLSClient() {
 	tlsConfig := mustCreateClientTLSConfig(n.NodeCertPath, n.NodeKeyPath, "")

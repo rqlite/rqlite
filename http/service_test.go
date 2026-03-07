@@ -420,6 +420,8 @@ func Test_401Routes_NoBasicAuth(t *testing.T) {
 		"/status",
 		"/nodes",
 		"/leader",
+		"/snapshot",
+		"/reap",
 		"/readyz",
 		"/licenses",
 		"/debug/vars",
@@ -460,6 +462,8 @@ func Test_401Routes_BasicAuthBadPassword(t *testing.T) {
 		"/status",
 		"/nodes",
 		"/leader",
+		"/snapshot",
+		"/reap",
 		"/readyz",
 		"/debug/vars",
 		"/debug/pprof/cmdline",
@@ -508,6 +512,8 @@ func Test_401Routes_BasicAuthBadPerm(t *testing.T) {
 		"/status",
 		"/nodes",
 		"/leader",
+		"/snapshot",
+		"/reap",
 		"/readyz",
 		"/debug/vars",
 		"/debug/pprof/cmdline",
@@ -619,6 +625,46 @@ func Test_SnapshotOK(t *testing.T) {
 	wg.Wait()
 	if resp.StatusCode != http.StatusOK {
 		t.Fatalf("failed to get expected StatusOK for Snapshot, got %d", resp.StatusCode)
+	}
+}
+
+func Test_ReapOK(t *testing.T) {
+	m := &MockStore{}
+	c := &mockClusterService{}
+	s := New("127.0.0.1:0", m, c, proxy.New(m, c), nil)
+	if err := s.Start(); err != nil {
+		t.Fatalf("failed to start service")
+	}
+	defer s.Close()
+
+	var wg sync.WaitGroup
+	wg.Add(1)
+	m.reapFn = func() (int, int, error) {
+		defer wg.Done()
+		return 3, 2, nil
+	}
+
+	client := &http.Client{}
+	host := fmt.Sprintf("http://%s", s.Addr().String())
+	resp, err := client.Post(host+"/reap", "", nil)
+	if err != nil {
+		t.Fatalf("failed to make Reap request")
+	}
+
+	wg.Wait()
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("failed to get expected StatusOK for Reap, got %d", resp.StatusCode)
+	}
+
+	var result map[string]int
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		t.Fatalf("failed to decode Reap response: %s", err)
+	}
+	if result["snapshots_reaped"] != 3 {
+		t.Fatalf("expected 3 snapshots reaped, got %d", result["snapshots_reaped"])
+	}
+	if result["wals_checkpointed"] != 2 {
+		t.Fatalf("expected 2 WALs checkpointed, got %d", result["wals_checkpointed"])
 	}
 }
 
@@ -2470,6 +2516,7 @@ type MockStore struct {
 	backupFn    func(br *command.BackupRequest, dst io.Writer) error
 	loadFn      func(lr *command.LoadRequest) error
 	snapshotFn  func(n uint64) error
+	reapFn      func() (int, int, error)
 	readFromFn  func(r io.Reader) (int64, error)
 	committedFn func(timeout time.Duration) (uint64, error)
 	stepdownFn  func(wait bool, id string) error
@@ -2555,6 +2602,13 @@ func (m *MockStore) Snapshot(n uint64) error {
 		return m.snapshotFn(n)
 	}
 	return nil
+}
+
+func (m *MockStore) Reap() (int, int, error) {
+	if m.reapFn != nil {
+		return m.reapFn()
+	}
+	return 0, 0, nil
 }
 
 func (m *MockStore) ReadFrom(r io.Reader) (int64, error) {

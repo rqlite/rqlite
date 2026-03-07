@@ -396,6 +396,7 @@ func Test_Upgrade8To10_ResumesPlan(t *testing.T) {
 	p.AddMkdirAll(newSnapshotDir)
 	p.AddWriteMeta(newSnapshotDir, metaJSON)
 	p.AddCopyFile(oldDBPath, newDBPath)
+	p.AddCalcCRC32(newDBPath, newDBPath+crcSuffix)
 	p.AddRename(newTmpDir, newDir)
 	p.AddRemoveAll(oldDir)
 
@@ -477,7 +478,9 @@ func mustCreateV10Snapshot(t *testing.T, dir, snapshotID string, idx, term uint6
 	if err := writeMeta(snapDir, meta); err != nil {
 		t.Fatalf("failed to write meta: %v", err)
 	}
-	mustCopyFileT(t, "testdata/db-and-wals/full2.db", filepath.Join(snapDir, dbfileName))
+	dbPath := filepath.Join(snapDir, dbfileName)
+	mustCopyFileT(t, "testdata/db-and-wals/full2.db", dbPath)
+	mustWriteCRC32File(t, dbPath)
 }
 
 func mustCopyFileT(t *testing.T, src, dst string) {

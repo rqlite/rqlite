@@ -171,7 +171,8 @@ type Store struct {
 	reapDoneCh chan struct{}
 	wg         sync.WaitGroup
 
-	LogReaping bool
+	LogReaping       bool
+	NoCRCCheckOnReap bool
 }
 
 // NewStore creates a new store.
@@ -445,6 +446,25 @@ func (s *Store) reap() (int, int, error) {
 	} else {
 		// There are incrementals after the newest full.
 		// Consolidate by checkpointing the associated WALs into the full snapshot.
+
+		// Verify CRC integrity of all files before any destructive operations.
+		if !s.NoCRCCheckOnReap {
+			if ok, err := full.dbFile.Check(); err != nil {
+				return 0, 0, fmt.Errorf("checking CRC32 of full snapshot DB: %w", err)
+			} else if !ok {
+				return 0, 0, fmt.Errorf("CRC32 mismatch for full snapshot DB %s", full.dbFile.Path)
+			}
+			for _, snap := range newerSet.All() {
+				for _, wf := range snap.walFiles {
+					if ok, err := wf.Check(); err != nil {
+						return 0, 0, fmt.Errorf("checking CRC32 of WAL file %s: %w", wf.Path, err)
+					} else if !ok {
+						return 0, 0, fmt.Errorf("CRC32 mismatch for WAL file %s", wf.Path)
+					}
+				}
+			}
+		}
+
 		newestInc, _ := newerSet.Newest()
 		newID := snapshotName(newestInc.raftMeta.Term, newestInc.raftMeta.Index)
 
@@ -465,12 +485,18 @@ func (s *Store) reap() (int, int, error) {
 		//    handles cross-directory moves during checkpointing.
 		var walFiles []string
 		for _, snap := range newerSet.All() {
-			walFiles = append(walFiles, snap.walFiles...)
+			for _, wf := range snap.walFiles {
+				walFiles = append(walFiles, wf.Path)
+			}
 		}
+		dbPath := filepath.Join(full.path, dbfileName)
 		if len(walFiles) > 0 {
-			p.AddCheckpoint(filepath.Join(full.path, dbfileName), walFiles)
+			p.AddCheckpoint(dbPath, walFiles)
 		}
 		p.NCheckpointed = len(walFiles)
+
+		// 1b. Recompute CRC32 sidecar for the checkpointed DB file.
+		p.AddCalcCRC32(dbPath, dbPath+crcSuffix)
 
 		// 2. Remove all incremental snapshot dirs.
 		for _, snap := range newerSet.All() {
