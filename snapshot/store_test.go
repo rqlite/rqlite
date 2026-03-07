@@ -362,8 +362,8 @@ func Test_Store_EndToEndCycle(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to list snapshots: %v", err)
 	}
-	if len(snaps) != 2 {
-		t.Fatalf("Expected 2 snapshots, got %d", len(snaps))
+	if exp, got := 2, len(snaps); exp != got {
+		t.Fatalf("Expected %d snapshots, got %d", exp, got)
 	}
 	if exp, got := id2, snaps[0].ID; exp != got {
 		t.Fatalf("Expected snapshot ID to be %s, got %s", exp, got)
@@ -406,8 +406,8 @@ func Test_Store_EndToEndCycle(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to list snapshots in destination store: %v", err)
 	}
-	if len(snaps) != 1 {
-		t.Fatalf("Expected 1 snapshot in destination store, got %d", len(snaps))
+	if exp, got := 1, len(snaps); exp != got {
+		t.Fatalf("Expected %d snapshot in destination store, got %d", exp, got)
 	}
 	meta, rc, err = store1.Open(snaps[0].ID)
 	if err != nil {
@@ -423,8 +423,8 @@ func Test_Store_EndToEndCycle(t *testing.T) {
 	}
 
 	dbPath, walPaths := persistStreamerData(t, buf)
-	if len(walPaths) != 0 {
-		t.Fatalf("Expected 0 WAL files, got %d", len(walPaths))
+	if exp, got := 0, len(walPaths); exp != got {
+		t.Fatalf("Expected %d WAL files, got %d", exp, got)
 	}
 	if !filesIdentical(dbPath, "testdata/db-and-wals/backup.db") {
 		t.Fatalf("Database file in snapshot does not match source")
@@ -459,15 +459,13 @@ func Test_Store_EndToEndCycle(t *testing.T) {
 		t.Fatalf("Expected store to have %d snapshots, got %d", exp, got)
 	}
 
-	// Open the second snapshot in the second store, check its contents. The
-	// FullSink no longer replays WAL files, so we expect to see both a database
-	// file and the WAL file.
+	// Open the second snapshot in the second store, check its contents.
 	snaps, err = store1.ListAll()
 	if err != nil {
 		t.Fatalf("Failed to list snapshots in destination store: %v", err)
 	}
-	if len(snaps) != 2 {
-		t.Fatalf("Expected 2 snapshots in destination store, got %d", len(snaps))
+	if exp, got := 2, len(snaps); exp != got {
+		t.Fatalf("Expected %d snapshots in destination store, got %d", exp, got)
 	}
 	meta, rc, err = store1.Open(snaps[0].ID)
 	if err != nil {
@@ -483,8 +481,8 @@ func Test_Store_EndToEndCycle(t *testing.T) {
 	}
 
 	dbPath, walPaths = persistStreamerData(t, buf)
-	if len(walPaths) != 1 {
-		t.Fatalf("Expected 1 WAL file, got %d", len(walPaths))
+	if exp, got := 1, len(walPaths); exp != got {
+		t.Fatalf("Expected %d WAL file, got %d", exp, got)
 	}
 
 	// Replay the WAL into the DB and check the result.
