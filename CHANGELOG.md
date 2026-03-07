@@ -42,6 +42,7 @@ Upgrading to this release from a v7 release (or later) is seamless and been exte
 - [PR #2514](https://github.com/rqlite/rqlite/pull/2514): Increase thresholds for Raft log entry compression.
 - [PR #2518](https://github.com/rqlite/rqlite/pull/2518): Add CRC32-related utilities.
 - [PR #2519](https://github.com/rqlite/rqlite/pull/2519): Make Raft Config clearer.
+- [PR #2520](https://github.com/rqlite/rqlite/pull/2520): Support user-triggered Snapshot reaping.
 
 ## v9.4.1 (February 11th 2026)
 ### Implementation changes and bug fixes
