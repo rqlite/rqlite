@@ -1410,10 +1410,16 @@ func (db *DB) RequestWithContext(ctx context.Context, req *command.Request, xTim
 		ro, err := db.StmtReadOnlyWithConn(ss, conn)
 		if err != nil {
 			eqResponse = append(eqResponse, &command.ExecuteQueryResponse{
-				Result: &command.ExecuteQueryResponse_Error{
-					Error: err.Error(),
+				Result: &command.ExecuteQueryResponse_E{
+					E: &command.ExecuteResult{
+						Error:   err.Error(),
+						ErrorV2: sqliteErrorV2(err),
+					},
 				},
 			})
+			if abortOnError(err) {
+				break
+			}
 			continue
 		}
 

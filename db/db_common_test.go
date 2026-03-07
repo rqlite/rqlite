@@ -165,7 +165,7 @@ func Test_SQL_Comments(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to request empty statements: %s", err.Error())
 	}
-	if exp, got := `[{},{"error":"no such table: qux"}]`, asJSON(req); exp != got {
+	if exp, got := `[{},{"error":"no such table: qux","error_v2":{"code":1,"extended_code":1,"system_errno":0,"message":"no such table: qux"}}]`, asJSON(req); exp != got {
 		t.Fatalf(`unexpected results for request exp: %s got: %s`, exp, got)
 	}
 }
@@ -1655,7 +1655,7 @@ func Test_DB_SimpleRequest(t *testing.T) {
 				`SELECT COUNT(*) FROM foo`,
 				`SELECT * FROM bar`,
 			},
-			exp: `[{"last_insert_id":4,"rows_affected":1},{"columns":["COUNT(*)"],"types":["integer"],"values":[[4]]},{"error":"no such table: bar"}]`,
+			exp: `[{"last_insert_id":4,"rows_affected":1},{"columns":["COUNT(*)"],"types":["integer"],"values":[[4]]},{"error":"no such table: bar","error_v2":{"code":1,"extended_code":1,"system_errno":0,"message":"no such table: bar"}}]`,
 		},
 	}
 

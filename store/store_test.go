@@ -1096,7 +1096,7 @@ func Test_SingleNodeRequest(t *testing.T) {
 				`SELECT COUNT(*) FROM foo WHERE name='fiona'`,
 				`SELECT * FROM foo WHERE name='declan'`,
 			},
-			expected:    `[{"last_insert_id":88,"rows_affected":1,"rows":null},{"error":"near \"nonsense\": syntax error"},{"types":{"COUNT(*)":"integer"},"rows":[{"COUNT(*)":3}]},{"types":{"id":"integer","name":"text"},"rows":[{"id":66,"name":"declan"}]}]`,
+			expected:    `[{"last_insert_id":88,"rows_affected":1,"rows":null},{"error":"near \"nonsense\": syntax error","error_v2":{"code":1,"extended_code":1,"system_errno":0,"message":"near \"nonsense\": syntax error"},"rows":null},{"types":{"COUNT(*)":"integer"},"rows":[{"COUNT(*)":3}]},{"types":{"id":"integer","name":"text"},"rows":[{"id":66,"name":"declan"}]}]`,
 			associative: true,
 		},
 	}
