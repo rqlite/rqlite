@@ -1329,6 +1329,7 @@ func (s *Store) Stats() (map[string]any, error) {
 	}
 	raftStats["bolt"] = s.boltStore.Stats()
 	raftStats["transport"] = s.raftTn.Stats()
+	raftStats["config"] = RaftConfigAsJSON(s.raftConfig())
 
 	dirSz, err := dirSize(s.raftDir)
 	if err != nil {
