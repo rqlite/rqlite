@@ -55,6 +55,9 @@ func Test_FullSink_SingleDBFile(t *testing.T) {
 	if !filesIdentical("testdata/db-and-wals/full2.db", sink.DBFile()) {
 		t.Fatalf("expected file %s to be identical to source", sink.DBFile())
 	}
+
+	// CRC file should exist and match the installed DB file.
+	mustVerifyCRC32File(t, sink.DBFile())
 }
 
 func Test_FullSink_SingleDBFile_SingleWALFile(t *testing.T) {
@@ -100,6 +103,9 @@ func Test_FullSink_SingleDBFile_SingleWALFile(t *testing.T) {
 	if exp, got := `[{"columns":["COUNT(*)"],"types":["integer"],"values":[[1]]}]`, asJSON(rows); exp != got {
 		t.Fatalf("unexpected results for query exp: %s got: %s", exp, got)
 	}
+
+	// CRC file should exist and match the post-checkpoint DB file.
+	mustVerifyCRC32File(t, sink.DBFile())
 }
 
 func Test_FullSink_SingleDBFile_MultiWALFile(t *testing.T) {
@@ -149,6 +155,9 @@ func Test_FullSink_SingleDBFile_MultiWALFile(t *testing.T) {
 	if exp, got := `[{"columns":["COUNT(*)"],"types":["integer"],"values":[[2]]}]`, asJSON(rows); exp != got {
 		t.Fatalf("unexpected results for query exp: %s got: %s", exp, got)
 	}
+
+	// CRC file should exist and match the post-checkpoint DB file.
+	mustVerifyCRC32File(t, sink.DBFile())
 }
 
 func Test_IncrementalFileSink(t *testing.T) {
@@ -367,6 +376,19 @@ func mustWriteCRC32File(t *testing.T, path string) {
 	}
 	if err := rsum.WriteCRC32SumFile(path+crcSuffix, sum, rsum.Sync); err != nil {
 		t.Fatalf("failed to write CRC32 sum file for %s: %v", path, err)
+	}
+}
+
+// mustVerifyCRC32File checks that a .crc32 file exists alongside the data file
+// at path and that its checksum matches the data file's actual CRC32.
+func mustVerifyCRC32File(t *testing.T, path string) {
+	t.Helper()
+	ok, err := rsum.CompareCRC32SumFile(path, path+crcSuffix)
+	if err != nil {
+		t.Fatalf("failed to compare CRC32 for %s: %v", path, err)
+	}
+	if !ok {
+		t.Fatalf("CRC32 mismatch for %s", path)
 	}
 }
 
