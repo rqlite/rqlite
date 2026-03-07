@@ -173,23 +173,23 @@ func (s *FullSink) Close() error {
 		// Allow finalization if we're exactly at boundary.
 		if s.f != nil && s.remaining == 0 {
 			if err := s.advance(); err != nil {
-				_ = s.closeFile()
+				s.closeFile()
 				return err
 			}
 		}
 		if s.phase != installPhaseDone {
-			_ = s.closeFile()
+			s.closeFile()
 			return ErrIncomplete
 		}
 	}
 
 	if !db.IsValidSQLiteFile(s.dbFile) {
-		_ = s.closeFile()
+		s.closeFile()
 		return ErrInvalidSQLiteFile
 	}
 	for i, walPath := range s.walFiles {
 		if !db.IsValidSQLiteWALFile(walPath) {
-			_ = s.closeFile()
+			s.closeFile()
 			return fmt.Errorf("WAL file %d invalid: %w", i, ErrInvalidWALFile)
 		}
 	}
@@ -198,10 +198,6 @@ func (s *FullSink) Close() error {
 		return err
 	}
 
-	sum, err := rsum.ReadCRC32SumFile(s.dbFile + crcSuffix)
-	if err != nil {
-		return fmt.Errorf("reading CRC32 sum file: %w", err)
-	}
 	if len(s.walFiles) > 0 {
 		// This is when we checkpoint all WALs into the SQLite file, and end up
 		// with a single DB file representing the snapshot state.
@@ -212,15 +208,16 @@ func (s *FullSink) Close() error {
 		// WAL replay modified the DB file, so recompute the CRC.
 		var dur time.Duration
 		var err error
-		sum, dur, err = rsum.CRC32WithTiming(s.dbFile)
+		sum, dur, err := rsum.CRC32WithTiming(s.dbFile)
 		if err != nil {
 			return fmt.Errorf("calculating CRC32 of installed DB file: %w", err)
 		}
 		stats.Get(snapshotFullCRC32CreateDuration).(*expvar.Int).Set(dur.Milliseconds())
+		if err := rsum.WriteCRC32SumFile(s.dbFile+crcSuffix, sum, true); err != nil {
+			return fmt.Errorf("writing CRC32 sum file: %w", err)
+		}
 	}
-	if err := rsum.WriteCRC32SumFile(s.dbFile+crcSuffix, sum, true); err != nil {
-		return fmt.Errorf("writing CRC32 sum file: %w", err)
-	}
+
 	return nil
 }
 
