@@ -455,28 +455,9 @@ func (s *Store) reap() (int, int, error) {
 			p.NReaped++
 		}
 	} else if len(walFiles) > 0 {
-		// Consolidate by checkpointing all WAL files into the full snapshot's DB.
-		// Determine the newest snapshot to derive the new ID.
-		var newest *Snapshot
-		if newerSet.Len() > 0 {
-			newest, _ = newerSet.Newest()
-		} else {
-			newest = full
-		}
-		newID := snapshotName(newest.raftMeta.Term, newest.raftMeta.Index)
-
-		// The end result of the Reaping process will be a new full snapshot with
-		// a new ID. That ID is generated from the newest snapshot's index and term,
-		// and the current timestamp.
-		finalDir := filepath.Join(s.dir, newID)
-
-		newMeta := copyRaftMeta(newest.raftMeta)
-		newMeta.ID = newID
-		metaJSON, err := json.Marshal(newMeta)
-		if err != nil {
-			return 0, 0, fmt.Errorf("marshaling consolidated meta: %w", err)
-		}
-		// 1. Checkpoint all WAL files into the full snapshot's DB.
+		// 1. Checkpoint all WAL files into the full snapshot's DB. We do it this way
+		// because presumably the full snapshot DB is so it generally makes sense to
+		// move the WAL files to it.
 		dbPath := filepath.Join(full.path, dbfileName)
 		p.AddCheckpoint(dbPath, walFiles)
 		p.NCheckpointed = len(walFiles)
@@ -484,22 +465,40 @@ func (s *Store) reap() (int, int, error) {
 		// 2. Recompute CRC32 sidecar for the checkpointed DB file.
 		p.AddCalcCRC32(dbPath, dbPath+crcSuffix)
 
-		// 3. Remove all incremental snapshot dirs.
+		// 3. Remove all incremental snapshot dirs since we have just checkpointed
+		// associated WAL files into the full database.
 		for _, snap := range newerSet.All() {
 			p.AddRemoveAll(snap.path)
 		}
 		p.NReaped = newerSet.Len()
 
-		// 4. Remove all older-than-full dirs.
+		// 4. Remove all older-than-full dirs. They are not needed any longer.
 		for _, snap := range olderSet.All() {
 			p.AddRemoveAll(snap.path)
 			p.NReaped++
 		}
 
-		// 5. Write new metadata into the full snapshot dir.
+		// 5. Write new metadata into the full snapshot dir, overwriting the existing
+		// metadata.
+		var newest *Snapshot
+		if newerSet.Len() > 0 {
+			newest, _ = newerSet.Newest()
+		} else {
+			newest = full
+		}
+		newID := snapshotName(newest.raftMeta.Term, newest.raftMeta.Index)
+		newMeta := copyRaftMeta(newest.raftMeta)
+		newMeta.ID = newID
+		metaJSON, err := json.Marshal(newMeta)
+		if err != nil {
+			return 0, 0, fmt.Errorf("marshaling consolidated meta: %w", err)
+		}
 		p.AddWriteMeta(full.path, metaJSON)
 
-		// 6. Rename to new snapshot name.
+		// 6. Rename to new snapshot name. The end result of the Reaping process
+		// will be a new full snapshot with a new ID. That ID is generated from
+		// the newest snapshot's index and term, and the current timestamp.
+		finalDir := filepath.Join(s.dir, newID)
 		p.AddRename(full.path, finalDir)
 	}
 
