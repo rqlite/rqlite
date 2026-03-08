@@ -50,6 +50,7 @@ Upgrading to this release from a v7 release (or later) is seamless and been exte
 - [PR #2527](https://github.com/rqlite/rqlite/pull/2527): Read CRC32 values from sidecar files when opening snapshots.
 - [PR #2528](https://github.com/rqlite/rqlite/pull/2528): Full Snapshot Sink validates data against CRC32s in header.
 - [PR #2529](https://github.com/rqlite/rqlite/pull/2529): Full Snapshots may contain WAL files.
+- [PR #2531](https://github.com/rqlite/rqlite/pull/2531): Log autoreap duration.
 
 ## v9.4.1 (February 11th 2026)
 ### Implementation changes and bug fixes
