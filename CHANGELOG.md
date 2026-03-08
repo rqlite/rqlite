@@ -58,6 +58,7 @@ Upgrading to this release from a v7 release (or later) is seamless and been exte
 - [PR #2531](https://github.com/rqlite/rqlite/pull/2531): Log autoreap duration.
 - [PR #2532](https://github.com/rqlite/rqlite/pull/2532): Change `-raft-timeout` flag to `-raft-heartbeat-timeout`.
 - [PR #2533](https://github.com/rqlite/rqlite/pull/2533): Fix code in `db` package which hits an error, but was actually returning `nil`. Fixes issue [#2530](https://github.com/rqlite/rqlite/issues/2530).
+- [PR #2534](https://github.com/rqlite/rqlite/pull/2534): Upgrade `rqlite/go-sqlite3` to v1.45.0.
 
 ## v9.4.1 (February 11th 2026)
 ### Implementation changes and bug fixes
