@@ -98,6 +98,8 @@ type Config struct {
 	RaftLeaderLeaseTimeout time.Duration
 	// Raft heartbeat timeout
 	RaftHeartbeatTimeout time.Duration
+	// Raft commit timeout
+	RaftCommitTimeout time.Duration
 	// Raft election timeout
 	RaftElectionTimeout time.Duration
 	// Raft apply timeout
@@ -179,7 +181,8 @@ func Forge(arguments []string) (*flag.FlagSet, *Config, error) {
 	fs.Uint64Var(&config.RaftSnapThresholdWALSize, "raft-snap-wal-size", 4194304, "SQLite WAL file size in bytes which triggers Raft snapshot. Set to 0 to disable")
 	fs.DurationVar(&config.RaftSnapInterval, "raft-snap-int", mustParseDuration("10s"), "Snapshot threshold check interval")
 	fs.DurationVar(&config.RaftLeaderLeaseTimeout, "raft-leader-lease-timeout", mustParseDuration("0s"), "Raft leader lease timeout. Use 0s for Raft default")
-	fs.DurationVar(&config.RaftHeartbeatTimeout, "raft-timeout", mustParseDuration("1s"), "Raft heartbeat timeout")
+	fs.DurationVar(&config.RaftHeartbeatTimeout, "raft-heartbeat-timeout", mustParseDuration("1s"), "Raft heartbeat timeout")
+	fs.DurationVar(&config.RaftCommitTimeout, "raft-commit-timeout", mustParseDuration("50ms"), "Raft commit timeout")
 	fs.DurationVar(&config.RaftElectionTimeout, "raft-election-timeout", mustParseDuration("1s"), "Raft election timeout")
 	fs.DurationVar(&config.RaftApplyTimeout, "raft-apply-timeout", mustParseDuration("10s"), "Raft apply timeout")
 	fs.BoolVar(&config.RaftShutdownOnRemove, "raft-remove-shutdown", false, "Shutdown Raft if node removed from cluster")
