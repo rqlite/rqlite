@@ -156,6 +156,7 @@ func (l *LockingStreamer) Close() error {
 type Store struct {
 	dir            string
 	fullNeededPath string
+	reapPlanPath   string
 	logger         *log.Logger
 
 	catalog *SnapshotCatalog
@@ -183,6 +184,7 @@ func NewStore(dir string) (*Store, error) {
 	str := &Store{
 		dir:            dir,
 		fullNeededPath: filepath.Join(dir, fullNeededFile),
+		reapPlanPath:   filepath.Join(dir, reapPlanFile),
 		catalog:        &SnapshotCatalog{},
 		mrsw:           rsync.NewMultiRSW(),
 		reapDisabled:   &rsync.AtomicBool{},
@@ -406,8 +408,6 @@ func (s *Store) Reap() (int, int, error) {
 
 // reap performs the actual reap. The caller must hold the write lock.
 func (s *Store) reap() (int, int, error) {
-	planPath := filepath.Join(s.dir, reapPlanFile)
-
 	// Scan store.
 	snapSet, err := s.getSnapshots()
 	if err != nil {
@@ -503,11 +503,11 @@ func (s *Store) reap() (int, int, error) {
 	}
 
 	// Persist the plan to disk for crash recovery.
-	if err := plan.WriteToFile(p, planPath); err != nil {
+	if err := plan.WriteToFile(p, s.reapPlanPath); err != nil {
 		return 0, 0, fmt.Errorf("writing reap plan: %w", err)
 	}
 
-	return s.executeReapPlan(p, planPath)
+	return s.executeReapPlan(p, s.reapPlanPath)
 }
 
 // executeReapPlan executes a reap plan and cleans up.
@@ -667,8 +667,24 @@ func (s *Store) Stats() (map[string]any, error) {
 // any inconsistencies it finds. Inconsistencies can happen
 // if the system crashes during snapshotting or reaping.
 func (s *Store) check() error {
-	// Remove any leftover temporary directories from interrupted
-	// snapshot creation.
+	// Remove incomplete plan file from an interrupted write.
+	os.Remove(tmpName(s.reapPlanPath))
+
+	// Resume an interrupted reap if a plan file exists. Only then should
+	// we remove any leftover temporary directories, since they may be needed
+	// for the reap to complete.
+	if fileExists(s.reapPlanPath) {
+		s.logger.Printf("found interrupted reap plan at %s, resuming", s.reapPlanPath)
+		p, err := plan.ReadFromFile(s.reapPlanPath)
+		if err != nil {
+			return fmt.Errorf("reading reap plan: %w", err)
+		}
+		if _, _, err := s.executeReapPlan(p, s.reapPlanPath); err != nil {
+			return fmt.Errorf("executing interrupted reap plan: %w", err)
+		}
+	}
+
+	// Anything remaining that is temporary can now be removed.
 	entries, err := os.ReadDir(s.dir)
 	if err != nil {
 		return fmt.Errorf("reading store directory: %w", err)
@@ -682,23 +698,6 @@ func (s *Store) check() error {
 			}
 		}
 	}
-
-	// Remove incomplete plan file from an interrupted write.
-	planPath := filepath.Join(s.dir, reapPlanFile)
-	os.Remove(tmpName(planPath))
-
-	// Resume an interrupted reap if a plan file exists.
-	if fileExists(planPath) {
-		s.logger.Printf("found interrupted reap plan at %s, resuming", planPath)
-		p, err := plan.ReadFromFile(planPath)
-		if err != nil {
-			return fmt.Errorf("reading reap plan: %w", err)
-		}
-		if _, _, err := s.executeReapPlan(p, planPath); err != nil {
-			return fmt.Errorf("executing interrupted reap plan: %w", err)
-		}
-	}
-
 	return nil
 }
 
