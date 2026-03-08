@@ -456,8 +456,8 @@ func (s *Store) reap() (int, int, error) {
 		}
 	} else if len(walFiles) > 0 {
 		// 1. Checkpoint all WAL files into the full snapshot's DB. We do it this way
-		// because presumably the full snapshot DB is so it generally makes sense to
-		// move the WAL files to it.
+		// because presumably the full snapshot DB is the largest file and it generally
+		// makes sense to move the WAL files to it.
 		dbPath := filepath.Join(full.path, dbfileName)
 		p.AddCheckpoint(dbPath, walFiles)
 		p.NCheckpointed = len(walFiles)
