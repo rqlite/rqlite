@@ -10,6 +10,21 @@ import (
 	"github.com/rqlite/rqlite/v10/internal/progress"
 )
 
+// LatestIndexTerm returns the index and term of the most recent snapshot
+// in the given directory. If no snapshots are found, it returns 0, 0, nil.
+func LatestIndexTerm(dir string) (uint64, uint64, error) {
+	cat := &SnapshotCatalog{}
+	sset, err := cat.Scan(dir)
+	if err != nil {
+		return 0, 0, err
+	}
+	newest, ok := sset.Newest()
+	if !ok {
+		return 0, 0, nil
+	}
+	return newest.raftMeta.Index, newest.raftMeta.Term, nil
+}
+
 // StateReader represents a snapshot of the database state.
 type StateReader struct {
 	rc     io.ReadCloser
