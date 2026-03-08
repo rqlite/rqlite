@@ -424,7 +424,7 @@ default = "1s"
 
 [[flags]]
 name = "RaftCommitTimeout"
-cli = "raft-Commit-timeout"
+cli = "raft-commit-timeout"
 type = "time.Duration"
 short_help = "Raft commit timeout"
 long_help = """

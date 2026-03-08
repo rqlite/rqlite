@@ -182,7 +182,7 @@ func Forge(arguments []string) (*flag.FlagSet, *Config, error) {
 	fs.DurationVar(&config.RaftSnapInterval, "raft-snap-int", mustParseDuration("10s"), "Snapshot threshold check interval")
 	fs.DurationVar(&config.RaftLeaderLeaseTimeout, "raft-leader-lease-timeout", mustParseDuration("0s"), "Raft leader lease timeout. Use 0s for Raft default")
 	fs.DurationVar(&config.RaftHeartbeatTimeout, "raft-heartbeat-timeout", mustParseDuration("1s"), "Raft heartbeat timeout")
-	fs.DurationVar(&config.RaftCommitTimeout, "raft-Commit-timeout", mustParseDuration("50ms"), "Raft commit timeout")
+	fs.DurationVar(&config.RaftCommitTimeout, "raft-commit-timeout", mustParseDuration("50ms"), "Raft commit timeout")
 	fs.DurationVar(&config.RaftElectionTimeout, "raft-election-timeout", mustParseDuration("1s"), "Raft election timeout")
 	fs.DurationVar(&config.RaftApplyTimeout, "raft-apply-timeout", mustParseDuration("10s"), "Raft apply timeout")
 	fs.BoolVar(&config.RaftShutdownOnRemove, "raft-remove-shutdown", false, "Shutdown Raft if node removed from cluster")
