@@ -408,6 +408,17 @@ func (s *Store) Reap() (int, int, error) {
 
 // reap performs the actual reap. The caller must hold the write lock.
 func (s *Store) reap() (int, int, error) {
+	// If a reap plan file exists, that means a previous reap must have encountered a error.
+	// Let's make sure it is completed before we start a new reap.
+	if fileExists(s.reapPlanPath) {
+		s.logger.Printf("found interrupted reap plan at %s, resuming", s.reapPlanPath)
+		p, err := plan.ReadFromFile(s.reapPlanPath)
+		if err != nil {
+			return 0, 0, fmt.Errorf("reading reap plan: %w", err)
+		}
+		return s.executeReapPlan(p, s.reapPlanPath)
+	}
+
 	// Scan store.
 	snapSet, err := s.getSnapshots()
 	if err != nil {
