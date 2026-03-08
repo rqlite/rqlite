@@ -908,6 +908,65 @@ func Test_PartialFailTransaction(t *testing.T) {
 	}
 }
 
+// Test_PartialFailTransactionReturning tests that a transaction is rolled back
+// when a statement with a RETURNING clause fails.
+func Test_PartialFailTransactionReturning(t *testing.T) {
+	db, path := mustCreateOnDiskDatabaseWAL()
+	defer db.Close()
+	defer os.Remove(path)
+
+	_, err := db.ExecuteStringStmt("CREATE TABLE foo (id INTEGER NOT NULL PRIMARY KEY, name TEXT UNIQUE)")
+	if err != nil {
+		t.Fatalf("failed to create table: %s", err.Error())
+	}
+	_, err = db.ExecuteStringStmt("CREATE TABLE bar (counter INTEGER NOT NULL)")
+	if err != nil {
+		t.Fatalf("failed to create table: %s", err.Error())
+	}
+	_, err = db.ExecuteStringStmt("INSERT INTO bar (counter) VALUES (0)")
+	if err != nil {
+		t.Fatalf("failed to insert record: %s", err.Error())
+	}
+
+	// First insert succeeds.
+	_, err = db.ExecuteStringStmt(`INSERT INTO foo(name) VALUES("test")`)
+	if err != nil {
+		t.Fatalf("failed to insert record: %s", err.Error())
+	}
+
+	// Now try a transaction where the first statement (with RETURNING) fails
+	// due to a UNIQUE constraint, and the second statement updates a counter.
+	// The entire transaction should be rolled back.
+	req := &command.Request{
+		Transaction: true,
+		Statements: []*command.Statement{
+			{
+				Sql:        `INSERT INTO foo(name) VALUES("test") RETURNING id, name`,
+				ForceQuery: true,
+			},
+			{
+				Sql: `UPDATE bar SET counter = counter + 1`,
+			},
+		},
+	}
+	r, err := db.Execute(req, false)
+	if err != nil {
+		t.Fatalf("failed to execute: %s", err.Error())
+	}
+	if exp, got := `[{"error":"UNIQUE constraint failed: foo.name"}]`, asJSON(r); exp != got {
+		t.Fatalf("unexpected results for execute\nexp: %s\ngot: %s", exp, got)
+	}
+
+	// Verify the counter was NOT incremented (transaction rolled back).
+	ro, err := db.QueryStringStmt(`SELECT counter FROM bar`)
+	if err != nil {
+		t.Fatalf("failed to query table: %s", err.Error())
+	}
+	if exp, got := `[{"columns":["counter"],"types":["integer"],"values":[[0]]}]`, asJSON(ro); exp != got {
+		t.Fatalf("unexpected results for query\nexp: %s\ngot: %s", exp, got)
+	}
+}
+
 // Test_WALDatabaseCreatedOK tests that a WAL file is created, and that
 // a checkpoint succeeds
 func Test_WALDatabaseCreatedOK(t *testing.T) {
