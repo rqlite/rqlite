@@ -408,7 +408,7 @@ func (s *Store) Reap() (int, int, error) {
 
 // reap performs the actual reap. The caller must hold the write lock.
 func (s *Store) reap() (int, int, error) {
-	// If a reap plan file exists, that means a previous reap must have encountered a error.
+	// If a reap plan file exists, that means a previous reap must have encountered an error.
 	// Let's make sure it is completed before we start a new reap.
 	if fileExists(s.reapPlanPath) {
 		s.logger.Printf("found interrupted reap plan at %s, resuming", s.reapPlanPath)
@@ -678,10 +678,10 @@ func (s *Store) Stats() (map[string]any, error) {
 // any inconsistencies it finds. Inconsistencies can happen
 // if the system crashes during snapshotting or reaping.
 func (s *Store) check() error {
-	// Remove incomplete plan file from an interrupted write.
+	// Remove any incomplete plan file from an interrupted plan write.
 	os.Remove(tmpName(s.reapPlanPath))
 
-	// Resume an interrupted reap if a plan file exists. Only then should
+	// Resume an interrupted reap if such a plan file exists. Only then should
 	// we remove any leftover temporary directories, since they may be needed
 	// for the reap to complete.
 	if fileExists(s.reapPlanPath) {
@@ -695,7 +695,7 @@ func (s *Store) check() error {
 		}
 	}
 
-	// Anything remaining that is temporary can now be removed.
+	// Anything remaining is truly temporary and can now be cleaned up.
 	entries, err := os.ReadDir(s.dir)
 	if err != nil {
 		return fmt.Errorf("reading store directory: %w", err)
