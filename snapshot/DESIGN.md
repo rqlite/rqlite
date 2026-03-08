@@ -6,13 +6,25 @@ The `snapshot` package implements rqlite's custom Raft snapshot store. It satisf
 
 In a Raft-based system the snapshot store is the ground truth. If the Raft log is truncated up to index N, the snapshot store must be able to produce a complete database state at index N. Everything in this package exists to maintain that invariant.
 
-## Background: Why Incremental Snapshots?
+## Background: Why a Custom Snapshot Store?
+
+### The Problem with Full Snapshots
 
 Prior to rqlite 8.0, every Raft snapshot was a full copy of the SQLite database. This worked well for small databases but became progressively more expensive as data grew — snapshot cost scaled with total database size, not with the volume of recent writes. For multi-gigabyte databases, the memory and I/O overhead became prohibitive.
 
 rqlite 8.0 introduced **incremental snapshots** based on SQLite's Write-Ahead Log (WAL). Instead of copying the entire database, rqlite snapshots only the WAL file — a record of changes since the last snapshot. The cost of snapshotting now depends only on how much data was written since the last snapshot, independent of total database size.
 
 This means the snapshot store must manage two kinds of snapshots and be able to combine them to reconstruct database state at any snapshotted point in time.
+
+### Non-Blocking Snapshot Reads
+
+A critical requirement — and a primary motivation for this custom store design in v10 — is that **reading a snapshot must not block the leader from creating new snapshots**.
+
+In a Raft cluster, when a follower falls behind (e.g. due to a slow disk or network partition), the leader sends it a snapshot so the follower can catch up. With hashicorp/raft's built-in snapshot store, this transfer holds a lock that prevents the leader from taking new snapshots while the transfer is in progress. Under sustained write load with a slow follower, this creates a cascading failure: the leader cannot snapshot, the Raft log grows unboundedly, and write latency spikes as the system stalls.
+
+This store solves the problem through its MRSW (multi-reader single-writer) lock design. Snapshot creation (`Create`) and snapshot reads (`Open`) both acquire only a **read lock**. This means the leader can continue creating new snapshots while simultaneously streaming an older snapshot to a lagging follower. Only reaping — which consolidates and deletes old snapshots — requires the exclusive write lock, and it runs in the background when no readers are active.
+
+The result is that a slow node catching up via snapshot transfer no longer degrades the leader's ability to keep snapshotting and truncating its Raft log, even under heavy write load.
 
 ## Core Concepts
 
