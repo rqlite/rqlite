@@ -20,7 +20,7 @@ This means the snapshot store must manage two kinds of snapshots and be able to 
 
 A critical requirement — and a primary motivation for this custom store design in v10 — is that **reading a snapshot must not block the leader from creating new snapshots**.
 
-In a Raft cluster, when a follower falls behind (e.g. due to a slow disk or network partition), the leader sends it a snapshot so the follower can catch up. With hashicorp/raft's built-in snapshot store, this transfer holds a lock that prevents the leader from taking new snapshots while the transfer is in progress. Under sustained write load with a slow follower, this creates a cascading failure: the leader cannot snapshot, the Raft log grows unboundedly, and write latency spikes as the system stalls.
+In a Raft cluster, when a follower falls behind (e.g. due to a slow disk or network partition), the leader sends it a snapshot so the follower can catch up. In v9 snapshot stores, this transfer holds a lock that prevents the leader from taking new snapshots while the transfer is in progress. Under sustained write load with a slow follower, this creates a cascading failure: the leader cannot snapshot, the Raft log grows unboundedly, and write latency spikes as the system stalls.
 
 This store solves the problem through its MRSW (multi-reader single-writer) lock design. Snapshot creation (`Create`) and snapshot reads (`Open`) both acquire only a **read lock**. This means the leader can continue creating new snapshots while simultaneously streaming an older snapshot to a lagging follower. Only reaping — which consolidates and deletes old snapshots — requires the exclusive write lock, and it runs in the background when no readers are active.
 
