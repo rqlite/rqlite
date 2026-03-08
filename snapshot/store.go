@@ -162,7 +162,7 @@ type Store struct {
 	catalog *SnapshotCatalog
 
 	// Multi-reader single-writer lock for the Store, which must be held
-	// if snaphots are deleted i.e. repead. Simply creating or reading
+	// if snapshots are deleted i.e. reaped. Simply creating or reading
 	// a snapshot requires only a read lock.
 	mrsw          *rsync.MultiRSW
 	reapDisabled  *rsync.AtomicBool
@@ -545,71 +545,6 @@ func (s *Store) signalReap() {
 	}
 }
 
-// snapshotCount returns the number of non-tmp snapshot subdirectories.
-// This is a lightweight heuristic that does not require any lock.
-func (s *Store) snapshotCount() int {
-	entries, err := os.ReadDir(s.dir)
-	if err != nil {
-		return 0
-	}
-	n := 0
-	for _, e := range entries {
-		if e.IsDir() && !isTmpName(e.Name()) {
-			n++
-		}
-	}
-	return n
-}
-
-// reapLoop is the reaper goroutine. It waits for signals from LockingSink.Close()
-// and reaps snapshots when the count exceeds the threshold. It uses a blocking
-// write lock acquisition so it will wait for active readers to finish rather
-// than failing.
-func (s *Store) reapLoop() {
-	for {
-		select {
-		case <-s.reapCh:
-		case <-s.reapDoneCh:
-			return
-		}
-
-		if s.reapDisabled.Is() {
-			continue
-		}
-
-		count := s.snapshotCount()
-		if count < s.reapThreshold {
-			continue
-		}
-
-		startTime := time.Now()
-		n, c, err := func() (int, int, error) {
-			defer func() {
-				dur := time.Since(startTime)
-				stats.Get(autoReapDuration).(*expvar.Int).Set(dur.Milliseconds())
-			}()
-
-			s.mrsw.BeginWriteBlocking("reap")
-			defer s.mrsw.EndWrite()
-			return s.reap()
-		}()
-		if err != nil {
-			s.logger.Printf("reap failed: %s", err)
-			stats.Add(snapshotsReapedFail, 1)
-			continue
-		}
-		if s.LogReaping {
-			dur := time.Since(startTime)
-			s.logger.Printf("autoreap complete in %s: %d snapshots reaped, %d WALs checkpointed", dur, n, c)
-		}
-	}
-}
-
-func copyRaftMeta(m *raft.SnapshotMeta) *raft.SnapshotMeta {
-	c := *m
-	return &c
-}
-
 // FullNeeded returns true if a full snapshot is needed.
 func (s *Store) FullNeeded() (bool, error) {
 	if fileExists(s.fullNeededPath) {
@@ -674,6 +609,66 @@ func (s *Store) Stats() (map[string]any, error) {
 	}, nil
 }
 
+// snapshotCount returns the number of non-tmp snapshot subdirectories.
+// This is a lightweight heuristic that does not require any lock.
+func (s *Store) snapshotCount() int {
+	entries, err := os.ReadDir(s.dir)
+	if err != nil {
+		return 0
+	}
+	n := 0
+	for _, e := range entries {
+		if e.IsDir() && !isTmpName(e.Name()) {
+			n++
+		}
+	}
+	return n
+}
+
+// reapLoop is the reaper goroutine. It waits for signals from LockingSink.Close()
+// and reaps snapshots when the count exceeds the threshold. It uses a blocking
+// write lock acquisition so it will wait for active readers to finish rather
+// than failing.
+func (s *Store) reapLoop() {
+	for {
+		select {
+		case <-s.reapCh:
+		case <-s.reapDoneCh:
+			return
+		}
+
+		if s.reapDisabled.Is() {
+			continue
+		}
+
+		count := s.snapshotCount()
+		if count < s.reapThreshold {
+			continue
+		}
+
+		startTime := time.Now()
+		n, c, err := func() (int, int, error) {
+			defer func() {
+				dur := time.Since(startTime)
+				stats.Get(autoReapDuration).(*expvar.Int).Set(dur.Milliseconds())
+			}()
+
+			s.mrsw.BeginWriteBlocking("reap")
+			defer s.mrsw.EndWrite()
+			return s.reap()
+		}()
+		if err != nil {
+			s.logger.Printf("reap failed: %s", err)
+			stats.Add(snapshotsReapedFail, 1)
+			continue
+		}
+		if s.LogReaping {
+			dur := time.Since(startTime)
+			s.logger.Printf("autoreap complete in %s: %d snapshots reaped, %d WALs checkpointed", dur, n, c)
+		}
+	}
+}
+
 // check checks the Store for any inconsistencies, and repairs
 // any inconsistencies it finds. Inconsistencies can happen
 // if the system crashes during snapshotting or reaping.
@@ -712,24 +707,14 @@ func (s *Store) check() error {
 	return nil
 }
 
-// LatestIndexTerm returns the index and term of the most recent snapshot
-// in the given directory. If no snapshots are found, it returns 0, 0, nil.
-func LatestIndexTerm(dir string) (uint64, uint64, error) {
-	cat := &SnapshotCatalog{}
-	sset, err := cat.Scan(dir)
-	if err != nil {
-		return 0, 0, err
-	}
-	newest, ok := sset.Newest()
-	if !ok {
-		return 0, 0, nil
-	}
-	return newest.raftMeta.Index, newest.raftMeta.Term, nil
-}
-
 // getSnapshots returns the set of snapshots in the Store.
 func (s *Store) getSnapshots() (SnapshotSet, error) {
 	return s.catalog.Scan(s.dir)
+}
+
+func copyRaftMeta(m *raft.SnapshotMeta) *raft.SnapshotMeta {
+	c := *m
+	return &c
 }
 
 // snapshotName generates a name for the snapshot.
