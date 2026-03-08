@@ -469,8 +469,8 @@ func (s *Store) reap() (int, int, error) {
 		// associated WAL files into the full database.
 		for _, snap := range newerSet.All() {
 			p.AddRemoveAll(snap.path)
+			p.NReaped++
 		}
-		p.NReaped = newerSet.Len()
 
 		// 4. Remove all older-than-full dirs. They are not needed any longer.
 		for _, snap := range olderSet.All() {
