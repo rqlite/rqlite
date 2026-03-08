@@ -4,7 +4,9 @@ This release introduces a major improvement to the Raft [_Snapshot and Log Trunc
 
 This release also introduces a new built-in console app, making it more convenient to work with an rqlite system. 
 
-There are no breaking API changes in this release, nor any changes to how clustering operates. However the command line option `-on-disk-path` has been removed as it provided little benefit, but made it too easy for operators to inadvertently corrupt a rqlite node.
+There are no breaking API changes in this release, nor any changes to how clustering operates. However there have been some command line option changes:
+ - `-on-disk-path` has been removed as it provided little benefit, but made it too easy for operators to inadvertently corrupt a rqlite node.
+ - `-raft-timeout` has been renamed to `-raft-heartbeat-timeout` to better reflect its purpose.
 
 Upgrading to this release from a v7 release (or later) is seamless and been extensively tested. Rolling upgrades are also supported, but **joining a v10 node to a v9 (or earlier) cluster is not supported**. However it is strongly recommended you [backup your rqlite system](https://rqlite.io/docs/guides/backup/) before upgrading it.
 
@@ -15,6 +17,7 @@ Upgrading to this release from a v7 release (or later) is seamless and been exte
 - [PR #2497](https://github.com/rqlite/rqlite/pull/2497): rqlite shell supports specifying trailing logs for a `.snapshot` operation.
 - [PR #2520](https://github.com/rqlite/rqlite/pull/2520): Support user-triggered Snapshot reaping, including add an associated rqlite shell command.
 - [PR #2525](https://github.com/rqlite/rqlite/pull/2525): Add on/off control for inter-node snapshot transfer compression. Compression is off by default.
+- [PR #2532](https://github.com/rqlite/rqlite/pull/2532): Add `-raft-commit-timeout` to allow control of this Raft config option.
 
 ### Implementation changes and bug fixes
 - [PR #2471](https://github.com/rqlite/rqlite/pull/2471): Move to non-blocking Snapshotting store.
@@ -51,6 +54,7 @@ Upgrading to this release from a v7 release (or later) is seamless and been exte
 - [PR #2528](https://github.com/rqlite/rqlite/pull/2528): Full Snapshot Sink validates data against CRC32s in header.
 - [PR #2529](https://github.com/rqlite/rqlite/pull/2529): Full Snapshots may contain WAL files.
 - [PR #2531](https://github.com/rqlite/rqlite/pull/2531): Log autoreap duration.
+- [PR #2532](https://github.com/rqlite/rqlite/pull/2532): Change `-raft-timeoout` flag to `-raft-heartbeat-timeout`.
 
 ## v9.4.1 (February 11th 2026)
 ### Implementation changes and bug fixes
