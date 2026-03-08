@@ -371,6 +371,7 @@ func createStore(cfg *Config, ln *tcp.Layer, extensions []string) (*store.Store,
 	str.LeaderLeaseTimeout = cfg.RaftLeaderLeaseTimeout
 	str.HeartbeatTimeout = cfg.RaftHeartbeatTimeout
 	str.ElectionTimeout = cfg.RaftElectionTimeout
+	str.CommitTimeout = cfg.RaftCommitTimeout
 	str.ApplyTimeout = cfg.RaftApplyTimeout
 	str.BootstrapExpect = cfg.BootstrapExpect
 	str.ReapTimeout = cfg.RaftReapNodeTimeout

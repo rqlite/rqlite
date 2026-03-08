@@ -420,6 +420,7 @@ type Store struct {
 	LeaderLeaseTimeout       time.Duration
 	HeartbeatTimeout         time.Duration
 	ElectionTimeout          time.Duration
+	CommitTimeout            time.Duration
 	ApplyTimeout             time.Duration
 	RaftLogLevel             string
 	NoFreeListSync           bool
@@ -1366,6 +1367,7 @@ func (s *Store) Stats() (map[string]any, error) {
 		"apply_timeout":          s.ApplyTimeout.String(),
 		"heartbeat_timeout":      s.HeartbeatTimeout.String(),
 		"election_timeout":       s.ElectionTimeout.String(),
+		"commit_timeout":         s.CommitTimeout.String(),
 		"snapshot_threshold":     s.SnapshotThreshold,
 		"snapshot_interval":      s.SnapshotInterval.String(),
 		"snapshot_cas":           s.snapshotCAS.Stats(),
@@ -2353,6 +2355,9 @@ func (s *Store) raftConfig() *raft.Config {
 	}
 	if s.ElectionTimeout != 0 {
 		config.ElectionTimeout = s.ElectionTimeout
+	}
+	if s.CommitTimeout != 0 {
+		config.CommitTimeout = s.CommitTimeout
 	}
 	opts := hclog.DefaultOptions
 	opts.Name = ""
