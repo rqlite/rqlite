@@ -414,13 +414,23 @@ default = "0s"
 
 [[flags]]
 name = "RaftHeartbeatTimeout"
-cli = "raft-timeout"
+cli = "raft-heartbeat-timeout"
 type = "time.Duration"
 short_help = "Raft heartbeat timeout"
 long_help = """
 Specifies the time a Follower will wait without contact from a Leader before the Follower initiates an election.
 """
 default = "1s"
+
+[[flags]]
+name = "RaftCommitTimeout"
+cli = "raft-commit-timeout"
+type = "time.Duration"
+short_help = "Raft commit timeout"
+long_help = """
+Specifies the time without an Apply operation before the leader sends an AppendEntry RPC to followers, to ensure a timely commit of log entries.
+"""
+default = "50ms"
 
 [[flags]]
 name = "RaftElectionTimeout"
