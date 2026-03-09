@@ -5,6 +5,7 @@ import (
 	"context"
 	"io"
 	"os"
+	"sync"
 	"testing"
 	"time"
 
@@ -515,6 +516,105 @@ func Test_WALDatabaseCheckpoint_TruncateTimeout(t *testing.T) {
 	}
 	if mustFileSize(db.WALPath()) != 0 {
 		t.Fatalf("wal file should be zero length after checkpoint truncate")
+	}
+}
+
+func Test_WALDatabaseCheckpointTruncateOK(t *testing.T) {
+	path := mustTempFile()
+	defer os.Remove(path)
+
+	db, err := Open(path, false, true)
+	if err != nil {
+		t.Fatalf("failed to open database in WAL mode: %s", err.Error())
+	}
+	defer db.Close()
+
+	_, err = db.ExecuteStringStmt(`CREATE TABLE foo (id INTEGER NOT NULL PRIMARY KEY, name TEXT)`)
+	if err != nil {
+		t.Fatalf("failed to execute on single node: %s", err.Error())
+	}
+
+	err = db.CheckpointTruncateWithTimeout(100 * time.Millisecond)
+	if err != nil {
+		t.Fatalf("failed to checkpoint database: %s", err.Error())
+	}
+
+	// Confirm that the WAL file is zero bytes long.
+	sz, err := fileSize(db.WALPath())
+	if err != nil {
+		t.Fatalf("failed to get WAL file size: %s", err.Error())
+	}
+	if sz != 0 {
+		t.Fatalf("expected WAL file size to be 0 after checkpoint truncate, got %d", sz)
+	}
+
+	// Ensure idempotency by checkpointing again.
+	err = db.CheckpointTruncateWithTimeout(100 * time.Millisecond)
+	if err != nil {
+		t.Fatalf("failed to checkpoint database: %s", err.Error())
+	}
+
+	// Ensure that the database remains in Synchronous=OFF mode.
+	syncMode, err := db.GetSynchronousMode()
+	if err != nil {
+		t.Fatalf("failed to get synchronous mode: %s", err.Error())
+	}
+	if syncMode != SynchronousOff {
+		t.Fatalf("expected synchronous mode to be OFF, got %s", syncMode)
+	}
+}
+
+func Test_WALDatabaseCheckpointTruncateFail_Blocked(t *testing.T) {
+	path := mustTempFile()
+	defer os.Remove(path)
+
+	db, err := Open(path, false, true)
+	if err != nil {
+		t.Fatalf("failed to open database in WAL mode: %s", err.Error())
+	}
+	defer db.Close()
+
+	_, err = db.ExecuteStringStmt(`CREATE TABLE foo (id INTEGER NOT NULL PRIMARY KEY, name TEXT)`)
+	if err != nil {
+		t.Fatalf("failed to execute on single node: %s", err.Error())
+	}
+	_, err = db.ExecuteStringStmt(`INSERT INTO foo(name) VALUES("alice")`)
+	if err != nil {
+		t.Fatalf("failed to execute INSERT on single node: %s", err.Error())
+	}
+
+	// Issue a long-running read that should block the checkpoint.
+	qr := &command.Request{
+		Statements: []*command.Statement{
+			{
+				Sql:        "SELECT * FROM foo",
+				ForceStall: true,
+			},
+		},
+	}
+	ctx, cancelFunc := context.WithCancel(context.Background())
+	go func() {
+		db.QueryWithContext(ctx, qr, false)
+	}()
+	err = db.CheckpointTruncateWithTimeout(100 * time.Millisecond)
+	if err == nil {
+		t.Fatalf("expected checkpoint to fail due to blocking read")
+	}
+
+	// Now, start the checkpoint again, but this time with a longer timeout.
+	// Kick it off in a goroutine, and then cancel the blocking read after a short delay,
+	// and confirm that the checkpoint succeeds.
+	var blockErr error
+	var wg sync.WaitGroup
+	wg.Go(func() {
+		blockErr = db.CheckpointTruncateWithTimeout(5 * time.Second)
+	})
+
+	time.Sleep(2 * time.Second)
+	cancelFunc()
+	wg.Wait()
+	if blockErr != nil {
+		t.Fatalf("expected checkpoint to succeed after blocking read was cancelled, got error: %s", blockErr.Error())
 	}
 }
 

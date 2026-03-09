@@ -135,6 +135,7 @@ const (
 	leaderWaitDelay        = 100 * time.Millisecond
 	appliedWaitDelay       = 100 * time.Millisecond
 	commitEquivalenceDelay = 50 * time.Millisecond
+	truncateTimeout        = 5 * time.Minute
 	backupCASTimeout       = 10 * time.Second
 	backupCASRetryDelay    = 100 * time.Millisecond
 	connectionPoolCount    = 5
@@ -158,11 +159,6 @@ const (
 	numWALSnapshotsFailed             = "num_wal_snapshots_failed"
 	numSnapshotsFull                  = "num_snapshots_full"
 	numSnapshotsIncremental           = "num_snapshots_incremental"
-	numFullCheckpointFailed           = "num_full_checkpoint_failed"
-	numWALCheckpointTruncateFailed    = "num_wal_checkpoint_truncate_failed"
-	numWALCheckpointAllMovedFailed    = "num_wal_checkpoint_all_moved_failed"
-	numWALCheckpointIncomplete        = "num_wal_checkpoint_incomplete"
-	numWALMustCheckpoint              = "num_wal_must_checkpoint"
 	numAutoVacuums                    = "num_auto_vacuums"
 	numAutoVacuumsFailed              = "num_auto_vacuums_failed"
 	autoVacuumDuration                = "auto_vacuum_duration"
@@ -228,11 +224,6 @@ func ResetStats() {
 	stats.Add(numWALSnapshotsFailed, 0)
 	stats.Add(numSnapshotsFull, 0)
 	stats.Add(numSnapshotsIncremental, 0)
-	stats.Add(numFullCheckpointFailed, 0)
-	stats.Add(numWALCheckpointTruncateFailed, 0)
-	stats.Add(numWALCheckpointAllMovedFailed, 0)
-	stats.Add(numWALCheckpointIncomplete, 0)
-	stats.Add(numWALMustCheckpoint, 0)
 	stats.Add(numAutoVacuums, 0)
 	stats.Add(numAutoVacuumsFailed, 0)
 	stats.Add(autoVacuumDuration, 0)
@@ -2592,10 +2583,8 @@ func (s *Store) fsmSnapshot() (fSnap raft.FSMSnapshot, retErr error) {
 		// crash scenarios where we've truncated the WAL into the database, but haven't successfully
 		// completed a snapshot, so the database is modified but the WAL is not present to be snapshotted.
 		chkStartTime := time.Now()
-		if err := s.checkpointWAL(); err != nil {
-			stats.Add(numFullCheckpointFailed, 1)
-			return nil, fmt.Errorf("full snapshot can't complete due to WAL checkpoint error (will retry): %s",
-				err.Error())
+		if err := s.db.CheckpointTruncateWithTimeout(truncateTimeout); err != nil {
+			s.logger.Fatalf("failed to checkpoint and truncate database for snapshot: %s", err.Error())
 		}
 		stats.Get(snapshotCreateChkTruncateDuration).(*expvar.Int).Set(time.Since(chkStartTime).Milliseconds())
 		streamer, err := snapshot.NewSnapshotStreamer(s.db.Path())
@@ -2665,10 +2654,8 @@ func (s *Store) fsmSnapshot() (fSnap raft.FSMSnapshot, retErr error) {
 			return nil, err
 		}
 		chkTStartTime := time.Now()
-		if err := s.checkpointWAL(); err != nil {
-			stats.Add(numWALCheckpointTruncateFailed, 1)
-			return nil, fmt.Errorf("incremental snapshot can't complete due to WAL checkpoint error (will retry): %s",
-				err.Error())
+		if err := s.db.CheckpointTruncateWithTimeout(truncateTimeout); err != nil {
+			s.logger.Fatalf("failed to checkpoint and truncate database for snapshot: %s", err.Error())
 		}
 		stats.Get(snapshotCreateChkTruncateDuration).(*expvar.Int).Set(time.Since(chkTStartTime).Milliseconds())
 		stats.Get(snapshotPrecompactWALSize).(*expvar.Int).Set(walSzPre)
@@ -2976,25 +2963,6 @@ func (s *Store) runWALSnapshotting() (closeCh, doneCh chan struct{}) {
 		}
 	}()
 	return closeCh, doneCh
-}
-
-// checkpointWAL performs a checkpoint of the WAL, truncating it. If it returns an error
-// the checkpoint operation can be retried at the caller's discretion.
-func (s *Store) checkpointWAL() (retErr error) {
-	meta, err := s.db.Checkpoint(sql.CheckpointTruncate)
-	if err != nil {
-		return err
-	}
-	if !meta.Success() {
-		if meta.Pages == meta.Moved {
-			s.logger.Printf("checkpoint moved all pages (%d/%d), but failed to truncate WAL",
-				meta.Moved, meta.Pages)
-			stats.Add(numWALCheckpointAllMovedFailed, 1)
-		}
-		stats.Add(numWALCheckpointIncomplete, 1)
-		return fmt.Errorf("checkpoint incomplete: %s", meta.String())
-	}
-	return nil
 }
 
 // selfLeaderChange is called when this node detects that its leadership
