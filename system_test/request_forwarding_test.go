@@ -168,7 +168,7 @@ func Test_StoreClientSideBySide(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to query via remote: %s", err.Error())
 	}
-	if exp, got := `[{"error":"no such table: qux"}]`, asJSON(results); exp != got {
+	if exp, got := `[{"error":"no such table: qux","error_v2":{"code":1,"extended_code":1,"system_errno":0,"message":"no such table: qux"}}]`, asJSON(results); exp != got {
 		t.Fatalf("unexpected results, exp %s, got %s", exp, got)
 	}
 }

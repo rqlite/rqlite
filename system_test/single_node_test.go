@@ -859,7 +859,7 @@ func Test_SingleNode_RETURNING(t *testing.T) {
 	if err != nil {
 		t.Fatalf(`write failed: %s`, err.Error())
 	}
-	if got, exp := res, `{"results":[{"error":"no such table: nonsense","error_v2":{"code":1,"extended_code":1,"system_errno":0,"message":"no such table: nonsense"}}]}`; got != exp {
+	if got, exp := res, `{"results":[{"error":"no such table: nonsense"}]}`; got != exp {
 		t.Fatalf("wrong execute results for RETURNING, exp %s, got %s", exp, got)
 	}
 
