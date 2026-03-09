@@ -2976,11 +2976,11 @@ func (s *Store) checkpointWAL() (retErr error) {
 		}
 		if !meta.Success() {
 			if meta.Pages == meta.Moved {
-				s.logger.Printf("checkpoint moved all pages (%d/%d), but failed to truncate WAL",
+				s.logger.Printf("checkpoint moved all pages (%d/%d), but failed to truncate WAL (will retry)",
 					meta.Moved, meta.Pages)
 				stats.Add(numWALCheckpointAllMovedFailed, 1)
-				return false
 			}
+			return false
 		}
 		return true
 	}
