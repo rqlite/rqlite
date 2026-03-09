@@ -2991,7 +2991,7 @@ func (s *Store) checkpointWAL() (retErr error) {
 	}
 
 	for {
-		time.Sleep(100 * time.Millisecond)
+		time.Sleep(10 * time.Millisecond)
 		if success = chkFn(); success {
 			return nil
 		}
