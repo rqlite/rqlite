@@ -61,6 +61,10 @@ Upgrading to this release from a v7 release (or later) is seamless and been exte
 - [PR #2534](https://github.com/rqlite/rqlite/pull/2534): Upgrade `rqlite/go-sqlite3` to v1.45.0.
 - [PR #2536](https://github.com/rqlite/rqlite/pull/2536): Various improvements to Snapshot reaping.
 
+## v9.4.2 (March 9th 2026)
+### Implementation changes and bug fixes
+- [PR #2533](https://github.com/rqlite/rqlite/pull/2533): Fix code in `db` package which hits an error, but was actually returning `nil`. Fixes issue [#2530](https://github.com/rqlite/rqlite/issues/2530).
+
 ## v9.4.1 (February 11th 2026)
 ### Implementation changes and bug fixes
 - [PR #2468](https://github.com/rqlite/rqlite/pull/2468): Add _proxy_ layer between HTTP layer and Store.
