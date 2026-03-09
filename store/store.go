@@ -120,31 +120,28 @@ var (
 )
 
 const (
-	cleanSnapshotName        = "clean_snapshot"
-	snapshotsDirName         = "wsnapshots"
-	walStagingDirName        = "wal-staging"
-	restoreScratchPattern    = "rqlite-restore-*"
-	bootScatchPattern        = "rqlite-boot-*"
-	backupScratchPattern     = "rqlite-backup-*"
-	raftDBPath               = "raft.db" // Changing this will break backwards compatibility.
-	peersPath                = "raft/peers.json"
-	peersInfoPath            = "raft/peers.info"
-	applyTimeout             = 10 * time.Second
-	sqliteFile               = "db.sqlite"
-	linearizableTimeout      = 1 * time.Second
-	leaderWaitDelay          = 100 * time.Millisecond
-	appliedWaitDelay         = 100 * time.Millisecond
-	commitEquivalenceDelay   = 50 * time.Millisecond
-	backupCASTimeout         = 10 * time.Second
-	backupCASRetryDelay      = 100 * time.Millisecond
-	connectionPoolCount      = 5
-	connectionTimeout        = 10 * time.Second
-	mustWALCheckpointDelay   = 50 * time.Millisecond
-	mustWALCheckpointTimeout = 5 * time.Minute
-	raftLogCacheSize         = 512
-	trailingScale            = 1.25
-	observerChanLen          = 50
-	maxFailedSnapshotsInRow  = 5
+	cleanSnapshotName      = "clean_snapshot"
+	snapshotsDirName       = "wsnapshots"
+	walStagingDirName      = "wal-staging"
+	restoreScratchPattern  = "rqlite-restore-*"
+	bootScatchPattern      = "rqlite-boot-*"
+	backupScratchPattern   = "rqlite-backup-*"
+	raftDBPath             = "raft.db" // Changing this will break backwards compatibility.
+	peersPath              = "raft/peers.json"
+	peersInfoPath          = "raft/peers.info"
+	applyTimeout           = 10 * time.Second
+	sqliteFile             = "db.sqlite"
+	linearizableTimeout    = 1 * time.Second
+	leaderWaitDelay        = 100 * time.Millisecond
+	appliedWaitDelay       = 100 * time.Millisecond
+	commitEquivalenceDelay = 50 * time.Millisecond
+	backupCASTimeout       = 10 * time.Second
+	backupCASRetryDelay    = 100 * time.Millisecond
+	connectionPoolCount    = 5
+	connectionTimeout      = 10 * time.Second
+	raftLogCacheSize       = 512
+	trailingScale          = 1.25
+	observerChanLen        = 50
 
 	baseVacuumTimeKey   = "rqlite_base_vacuum"
 	lastVacuumTimeKey   = "rqlite_last_vacuum"
