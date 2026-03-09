@@ -596,6 +596,7 @@ func Test_WALDatabaseCheckpointTruncateFail_Blocked(t *testing.T) {
 	go func() {
 		db.QueryWithContext(ctx, qr, false)
 	}()
+	time.Sleep(2 * time.Second)
 	err = db.CheckpointTruncateWithTimeout(100 * time.Millisecond)
 	if err == nil {
 		t.Fatalf("expected checkpoint to fail due to blocking read")
