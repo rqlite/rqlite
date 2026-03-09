@@ -39,6 +39,7 @@ const (
 	numCheckpointErrors       = "checkpoint_errors"
 	numCheckpointedPages      = "checkpointed_pages"
 	numCheckpointedMoves      = "checkpointed_moves"
+	numCheckpointRetries      = "checkpoint_retries"
 	checkpointDuration        = "checkpoint_duration_ms"
 	numExecutions             = "executions"
 	numExecutionErrors        = "execution_errors"
@@ -107,6 +108,7 @@ func ResetStats() {
 	stats.Add(numCheckpointErrors, 0)
 	stats.Add(numCheckpointedPages, 0)
 	stats.Add(numCheckpointedMoves, 0)
+	stats.Add(numCheckpointRetries, 0)
 	stats.Add(checkpointDuration, 0)
 	stats.Add(numExecutions, 0)
 	stats.Add(numExecutionErrors, 0)
@@ -662,6 +664,80 @@ func (db *DB) BusyTimeout() (rwMs, roMs int, err error) {
 // for the duration of the checkpoint, restoring it to its previous value afterwards.
 func (db *DB) Checkpoint(mode CheckpointMode) (*CheckpointMeta, error) {
 	return db.CheckpointWithTimeout(mode, checkpointBusyTimeout)
+}
+
+// CheckpointTruncateWithTimeout performs a checkpoint in TRUNCATE mode. If the
+// checkpoint does not run to completion within the given duration, an error is returned.
+func (db *DB) CheckpointTruncateWithTimeout(dur time.Duration) error {
+	// Set a low busy timeout so we get old quickly if the checkpoint is blocked.
+	rwBt, _, err := db.BusyTimeout()
+	if err != nil {
+		return fmt.Errorf("failed to get busy_timeout on checkpointing connection: %s", err.Error())
+	}
+	if err := db.SetBusyTimeout(int(dur.Milliseconds()), -1); err != nil {
+		return fmt.Errorf("failed to set busy_timeout on checkpointing connection: %s", err.Error())
+	}
+	defer func() {
+		// Reset back to default
+		if err := db.SetBusyTimeout(rwBt, -1); err != nil {
+			db.logger.Printf("failed to reset busy_timeout on checkpointing connection: %s", err.Error())
+		}
+	}()
+
+	// Temporarily move to Synchronous=FULL for the duration of the checkpoint.
+	currMode, err := db.GetSynchronousMode()
+	if err != nil {
+		return fmt.Errorf("failed to get current synchronous mode: %s", err.Error())
+	}
+	if err := db.SetSynchronousMode(SynchronousFull); err != nil {
+		return fmt.Errorf("failed to set synchronous mode to FULL: %s", err.Error())
+	}
+	defer func() {
+		if err := db.SetSynchronousMode(currMode); err != nil {
+			db.logger.Fatalf("failed to reset synchronous mode to %s: %s", currMode, err.Error())
+		}
+	}()
+
+	fn := func() (bool, error) {
+		ok, nPages, nMoved, err := checkpointDB(db.rwDB, CheckpointTruncate)
+		if err != nil {
+			return false, fmt.Errorf("error checkpointing WAL: %s", err.Error())
+		}
+		if ok != 0 || (nPages > nMoved) {
+			return false, nil
+		}
+		stats.Add(numCheckpointedPages, int64(nPages))
+		stats.Add(numCheckpointedMoves, int64(nMoved))
+		return true, nil
+	}
+
+	success, err := fn()
+	if err != nil {
+		return err
+	}
+	if success {
+		return nil
+	}
+
+	db.logger.Printf("checkpoint truncate did not complete immediately, retrying every %s for up to %s", bkDelay, dur)
+	ticker := time.NewTicker(bkDelay)
+	defer ticker.Stop()
+	timeout := time.After(dur)
+	for {
+		select {
+		case <-ticker.C:
+			stats.Add(numCheckpointRetries, 1)
+			success, err := fn()
+			if err != nil {
+				return err
+			}
+			if success {
+				return nil
+			}
+		case <-timeout:
+			return fmt.Errorf("checkpoint did not complete within %s", dur)
+		}
+	}
 }
 
 // CheckpointWithTimeout performs a WAL checkpoint. If the checkpoint does not

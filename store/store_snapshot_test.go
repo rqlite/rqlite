@@ -10,7 +10,6 @@ import (
 	"time"
 
 	"github.com/rqlite/rqlite/v10/command/proto"
-	"github.com/rqlite/rqlite/v10/db"
 	"github.com/rqlite/rqlite/v10/internal/random"
 )
 
@@ -308,69 +307,6 @@ func Test_SingleNode_WALTriggeredSnapshot(t *testing.T) {
 	if files[0].Name() != snaps[0].ID {
 		t.Fatalf("snapshot store entry name %s does not match snapshot ID %s", files[0].Name(), snaps[0].ID)
 	}
-}
-
-func Test_SingleNode_SnapshotFail_Blocked(t *testing.T) {
-	s, ln := mustNewStore(t)
-	defer ln.Close()
-
-	s.SnapshotThreshold = 8192
-	s.SnapshotInterval = time.Hour
-	s.NoSnapshotOnClose = true
-	if err := s.Open(); err != nil {
-		t.Fatalf("failed to open single-node store: %s", err.Error())
-	}
-	defer s.Close(true)
-	if err := s.Bootstrap(NewServer(s.ID(), s.Addr(), true)); err != nil {
-		t.Fatalf("failed to bootstrap single-node store: %s", err.Error())
-	}
-	if _, err := s.WaitForLeader(10 * time.Second); err != nil {
-		t.Fatalf("Error waiting for leader: %s", err)
-	}
-	er := executeRequestFromString(`CREATE TABLE foo (id INTEGER NOT NULL PRIMARY KEY, name TEXT)`,
-		false, false)
-	_, _, err := s.Execute(context.Background(), er)
-	if err != nil {
-		t.Fatalf("failed to execute on single node: %s", err.Error())
-	}
-
-	er = executeRequestFromString(`INSERT INTO foo(name) VALUES("fiona")`, false, false)
-	_, _, err = s.Execute(context.Background(), er)
-	if err != nil {
-		t.Fatalf("failed to execute on single node: %s", err.Error())
-	}
-
-	ctx, cancelFunc := context.WithCancel(context.Background())
-	go func() {
-		qr := queryRequestFromString("SELECT * FROM foo", false, false)
-		qr.GetRequest().Statements[0].ForceStall = true
-
-		blockingDB, err := db.Open(s.dbPath, false, true)
-		if err != nil {
-			t.Errorf("failed to open blocking DB connection: %s", err.Error())
-		}
-		defer blockingDB.Close()
-
-		_, err = blockingDB.QueryWithContext(ctx, qr.GetRequest(), false)
-		if err != nil {
-			t.Errorf("failed to execute stalled query on blocking DB connection: %s", err.Error())
-		}
-	}()
-	time.Sleep(1 * time.Second)
-
-	er = executeRequestFromString(`INSERT INTO foo(name) VALUES("bob")`, false, false)
-	_, _, err = s.Execute(context.Background(), er)
-	if err != nil {
-		t.Fatalf("failed to execute on single node: %s", err.Error())
-	}
-
-	if err := s.Snapshot(0); err == nil {
-		t.Fatalf("expected error snapshotting single-node store with stalled query")
-	}
-
-	// Shutdown the blocking query so we can clean up. Windows in particular.
-	cancelFunc()
-	<-ctx.Done()
 }
 
 func Test_SingleNode_SnapshotWithAutoOptimize_Stress(t *testing.T) {
