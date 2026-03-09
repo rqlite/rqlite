@@ -60,6 +60,7 @@ Upgrading to this release from a v7 release (or later) is seamless and been exte
 - [PR #2533](https://github.com/rqlite/rqlite/pull/2533): Fix code in `db` package which hits an error, but was actually returning `nil`. Fixes issue [#2530](https://github.com/rqlite/rqlite/issues/2530).
 - [PR #2534](https://github.com/rqlite/rqlite/pull/2534): Upgrade `rqlite/go-sqlite3` to v1.45.0.
 - [PR #2536](https://github.com/rqlite/rqlite/pull/2536): Various improvements to Snapshot reaping.
+- [PR #2538](https://github.com/rqlite/rqlite/pull/2538): Remove `mustTruncate` as it can result in a deadlock.
 
 ## v9.4.3 (March 9th 2026)
 ### Implementation changes and bug fixes
