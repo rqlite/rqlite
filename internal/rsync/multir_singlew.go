@@ -72,7 +72,7 @@ func (r *MultiRSW) EndRead() {
 	}
 }
 
-// BeginWrite attempts to enter the critical section as a writer. if a writer
+// BeginWrite attempts to enter the critical section as a writer. If a writer
 // is active or any readers are active, an error is returned.
 func (r *MultiRSW) BeginWrite(owner string) error {
 	r.mu.Lock()
