@@ -1043,7 +1043,7 @@ func (db *DB) executeStmtWithConn(ctx context.Context, stmt *command.Statement, 
 		response.Result = &command.ExecuteQueryResponse_Error{
 			Error: err.Error(),
 		}
-		return response, nil
+		return response, err
 	}
 
 	if timeout > 0 {
@@ -1059,7 +1059,7 @@ func (db *DB) executeStmtWithConn(ctx context.Context, stmt *command.Statement, 
 			response.Result = &command.ExecuteQueryResponse_Error{
 				Error: err.Error(),
 			}
-			return response, nil
+			return response, err
 		}
 		response.Result = &command.ExecuteQueryResponse_Q{
 			Q: rows,
