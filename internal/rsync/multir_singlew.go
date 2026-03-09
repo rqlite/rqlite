@@ -36,7 +36,8 @@ func NewMultiRSW() *MultiRSW {
 	return r
 }
 
-// BeginRead attempts to enter the critical section as a reader.
+// BeginRead attempts to enter the critical section as a reader. If a writer is
+// active, an error is returned.
 func (r *MultiRSW) BeginRead() error {
 	r.mu.Lock()
 	defer r.mu.Unlock()
@@ -45,6 +46,17 @@ func (r *MultiRSW) BeginRead() error {
 	}
 	r.numReaders++
 	return nil
+}
+
+// BeginReadBlocking enters the critical section as a reader, blocking until
+// no writer is active.
+func (r *MultiRSW) BeginReadBlocking() {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	for r.owner != "" {
+		r.cond.Wait()
+	}
+	r.numReaders++
 }
 
 // EndRead exits the critical section as a reader.
@@ -60,7 +72,8 @@ func (r *MultiRSW) EndRead() {
 	}
 }
 
-// BeginWrite attempts to enter the critical section as a writer.
+// BeginWrite attempts to enter the critical section as a writer. if a writer
+// is active or any readers are active, an error is returned.
 func (r *MultiRSW) BeginWrite(owner string) error {
 	r.mu.Lock()
 	defer r.mu.Unlock()

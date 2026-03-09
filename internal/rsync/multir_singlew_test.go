@@ -102,6 +102,59 @@ func Test_MultiRSW_Upgrade(t *testing.T) {
 	r.EndWrite()
 }
 
+func Test_MultiRSW_BeginReadBlocking_NoContention(t *testing.T) {
+	r := NewMultiRSW()
+
+	// Should acquire immediately when nothing is active.
+	r.BeginReadBlocking()
+	r.EndRead()
+}
+
+func Test_MultiRSW_BeginReadBlocking_NoContentionReaders(t *testing.T) {
+	r := NewMultiRSW()
+
+	// Acquire a read lock.
+	if err := r.BeginRead(); err != nil {
+		t.Fatalf("BeginRead failed: %v", err)
+	}
+
+	// Read should not be blocked by other readers.
+	r.BeginReadBlocking()
+	r.EndRead()
+}
+
+func Test_MultiRSW_BeginReadBlocking_WaitsForWriter(t *testing.T) {
+	r := NewMultiRSW()
+
+	// Acquire a write lock.
+	if err := r.BeginWrite("owner1"); err != nil {
+		t.Fatalf("BeginWrite failed: %v", err)
+	}
+
+	// BeginReadBlocking should block until writer releases.
+	acquired := make(chan struct{})
+	go func() {
+		r.BeginReadBlocking()
+		close(acquired)
+	}()
+
+	// Should not have acquired yet.
+	select {
+	case <-acquired:
+		t.Fatal("Read acquired while writer active")
+	case <-time.After(100 * time.Millisecond):
+	}
+
+	// Release the writer — should acquire.
+	r.EndWrite()
+	select {
+	case <-acquired:
+	case <-time.After(time.Second):
+		t.Fatal("BeginReadBlocking did not acquire after writer released")
+	}
+	r.EndRead()
+}
+
 func Test_MultiRSW_BeginWriteBlocking_NoContention(t *testing.T) {
 	r := NewMultiRSW()
 
