@@ -27,6 +27,7 @@ import (
 const (
 	SQLiteHeaderSize      = 32
 	bkDelay               = 250 * time.Millisecond
+	checkpointBusyDelay   = 10 * time.Millisecond
 	checkpointBusyTimeout = 250 * time.Millisecond
 	durToOpenLog          = 2 * time.Second
 	OptimizeDefault       = 0xFFFE
@@ -719,8 +720,8 @@ func (db *DB) CheckpointTruncateWithTimeout(dur time.Duration) error {
 		return nil
 	}
 
-	db.logger.Printf("checkpoint truncate did not complete immediately, retrying every %s for up to %s", bkDelay, dur)
-	ticker := time.NewTicker(bkDelay)
+	db.logger.Printf("checkpoint truncate did not complete immediately, retrying every %s for up to %s", checkpointBusyDelay, dur)
+	ticker := time.NewTicker(checkpointBusyDelay)
 	defer ticker.Stop()
 	timeout := time.After(dur)
 	for {
