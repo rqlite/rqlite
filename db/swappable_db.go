@@ -157,10 +157,10 @@ func (s *SwappableDB) StmtReadOnly(sql string) (bool, error) {
 }
 
 // Checkpoint calls Checkpoint on the underlying database.
-func (s *SwappableDB) Checkpoint(mode CheckpointMode) (*CheckpointMeta, error) {
+func (s *SwappableDB) CheckpointUntilDone(mode CheckpointMode) error {
 	s.dbMu.RLock()
 	defer s.dbMu.RUnlock()
-	return s.db.Checkpoint(mode)
+	return s.db.CheckpointUntilDone(mode)
 }
 
 // Optimize calls Optimize on the underlying database.

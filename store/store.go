@@ -2981,20 +2981,7 @@ func (s *Store) runWALSnapshotting() (closeCh, doneCh chan struct{}) {
 // checkpointWAL performs a checkpoint of the WAL, truncating it. If it returns an error
 // the checkpoint operation can be retried at the caller's discretion.
 func (s *Store) checkpointWAL() (retErr error) {
-	meta, err := s.db.Checkpoint(sql.CheckpointTruncate)
-	if err != nil {
-		return err
-	}
-	if !meta.Success() {
-		if meta.Pages == meta.Moved {
-			s.logger.Printf("checkpoint moved all pages (%d/%d), but failed to truncate WAL",
-				meta.Moved, meta.Pages)
-			stats.Add(numWALCheckpointAllMovedFailed, 1)
-		}
-		stats.Add(numWALCheckpointIncomplete, 1)
-		return fmt.Errorf("checkpoint incomplete: %s", meta.String())
-	}
-	return nil
+	return s.db.CheckpointUntilDone(sql.CheckpointTruncate)
 }
 
 // selfLeaderChange is called when this node detects that its leadership

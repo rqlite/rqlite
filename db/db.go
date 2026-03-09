@@ -664,6 +664,62 @@ func (db *DB) Checkpoint(mode CheckpointMode) (*CheckpointMeta, error) {
 	return db.CheckpointWithTimeout(mode, checkpointBusyTimeout)
 }
 
+// CheckpointUntilDone checkpoints the WAL file, blocking until the checkpoint is complete.
+func (db *DB) CheckpointUntilDone(mode CheckpointMode) error {
+	// Temporarily move to Synchronous=FULL for the duration of the checkpoint.
+	currMode, err := db.GetSynchronousMode()
+	if err != nil {
+		return fmt.Errorf("failed to get current synchronous mode: %s", err.Error())
+	}
+	if err := db.SetSynchronousMode(SynchronousFull); err != nil {
+		return fmt.Errorf("failed to set synchronous mode to FULL: %s", err.Error())
+	}
+	defer func() {
+		if err := db.SetSynchronousMode(currMode); err != nil {
+			db.logger.Fatalf("failed to reset synchronous mode to %s: %s", currMode, err.Error())
+		}
+	}()
+
+	rwBt, _, err := db.BusyTimeout()
+	if err != nil {
+		return fmt.Errorf("failed to get busy_timeout on checkpointing connection: %s", err.Error())
+	}
+	if err := db.SetBusyTimeout(1, -1); err != nil {
+		return fmt.Errorf("failed to set busy_timeout on checkpointing connection: %s", err.Error())
+	}
+	defer func() {
+		// Reset back to default
+		if err := db.SetBusyTimeout(rwBt, -1); err != nil {
+			db.logger.Printf("failed to reset busy_timeout on checkpointing connection: %s", err.Error())
+		}
+	}()
+
+	fn := func() bool {
+		ok, nPages, nMoved, err := checkpointDB(db.rwDB, mode)
+		if err != nil {
+			return false
+		}
+		if ok != 0 {
+			return false
+		}
+		if nPages > nMoved {
+			return false
+		}
+		return true
+	}
+
+	if fn() {
+		return nil
+	}
+
+	for {
+		time.Sleep(10 * time.Millisecond)
+		if fn() {
+			return nil
+		}
+	}
+}
+
 // CheckpointWithTimeout performs a WAL checkpoint. If the checkpoint does not
 // run to completion within the given duration, an error is returned. If the
 // duration is 0, the busy timeout is not modified before executing the
