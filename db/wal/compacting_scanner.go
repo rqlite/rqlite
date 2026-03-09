@@ -118,7 +118,9 @@ func (c *CompactingScanner) Next() (*Frame, error) {
 }
 
 // Bytes returns a byte slice containing the entire contents of the compacted WAL file.
-// The byte slice is suitable for writing to a new WAL file.
+// The byte slice is suitable for writing to a new WAL file. For large WAL files, this
+// may consume a lot of memory, so it should be used with care. It's mostly intended for
+// use in testing, where the WAL files are small.
 func (c *CompactingScanner) Bytes() ([]byte, error) {
 	startT := time.Now()
 	pageSz := int(c.header.PageSize)

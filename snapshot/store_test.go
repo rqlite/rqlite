@@ -362,8 +362,8 @@ func Test_Store_EndToEndCycle(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to list snapshots: %v", err)
 	}
-	if len(snaps) != 2 {
-		t.Fatalf("Expected 2 snapshots, got %d", len(snaps))
+	if exp, got := 2, len(snaps); exp != got {
+		t.Fatalf("Expected %d snapshots, got %d", exp, got)
 	}
 	if exp, got := id2, snaps[0].ID; exp != got {
 		t.Fatalf("Expected snapshot ID to be %s, got %s", exp, got)
@@ -406,8 +406,8 @@ func Test_Store_EndToEndCycle(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to list snapshots in destination store: %v", err)
 	}
-	if len(snaps) != 1 {
-		t.Fatalf("Expected 1 snapshot in destination store, got %d", len(snaps))
+	if exp, got := 1, len(snaps); exp != got {
+		t.Fatalf("Expected %d snapshot in destination store, got %d", exp, got)
 	}
 	meta, rc, err = store1.Open(snaps[0].ID)
 	if err != nil {
@@ -423,8 +423,8 @@ func Test_Store_EndToEndCycle(t *testing.T) {
 	}
 
 	dbPath, walPaths := persistStreamerData(t, buf)
-	if len(walPaths) != 0 {
-		t.Fatalf("Expected 0 WAL files, got %d", len(walPaths))
+	if exp, got := 0, len(walPaths); exp != got {
+		t.Fatalf("Expected %d WAL files, got %d", exp, got)
 	}
 	if !filesIdentical(dbPath, "testdata/db-and-wals/backup.db") {
 		t.Fatalf("Database file in snapshot does not match source")
@@ -459,17 +459,13 @@ func Test_Store_EndToEndCycle(t *testing.T) {
 		t.Fatalf("Expected store to have %d snapshots, got %d", exp, got)
 	}
 
-	// Open the second snapshot in the second store, check its contents. When writing
-	// snapshot with both a database file and one (or more) WAL files from one store to
-	// another, the Sink writing to the second store will checkpoint the WAL files into
-	// the database file. Therefore, when we read back the snapshot from the second store,
-	// we expect to see only a database file, with no associated WAL files.
+	// Open the second snapshot in the second store, check its contents.
 	snaps, err = store1.ListAll()
 	if err != nil {
 		t.Fatalf("Failed to list snapshots in destination store: %v", err)
 	}
-	if len(snaps) != 2 {
-		t.Fatalf("Expected 1 snapshot in destination store, got %d", len(snaps))
+	if exp, got := 2, len(snaps); exp != got {
+		t.Fatalf("Expected %d snapshots in destination store, got %d", exp, got)
 	}
 	meta, rc, err = store1.Open(snaps[0].ID)
 	if err != nil {
@@ -485,13 +481,14 @@ func Test_Store_EndToEndCycle(t *testing.T) {
 	}
 
 	dbPath, walPaths = persistStreamerData(t, buf)
-	if len(walPaths) != 0 {
-		t.Fatalf("Expected 0 WAL files, got %d", len(walPaths))
+	if exp, got := 1, len(walPaths); exp != got {
+		t.Fatalf("Expected %d WAL file, got %d", exp, got)
 	}
 
-	// Check the file, it should have the content of the backup plus the changes
-	// from the checkpointed WAL file.
-
+	// Replay the WAL into the DB and check the result.
+	if err := db.ReplayWAL(dbPath, walPaths, false); err != nil {
+		t.Fatalf("Failed to replay WAL: %v", err)
+	}
 	rows := mustQueryDB(t, dbPath, "SELECT COUNT(*) FROM foo")
 	if exp, got := `[{"columns":["COUNT(*)"],"types":["integer"],"values":[[1]]}]`, rows; exp != got {
 		t.Fatalf("unexpected results for query exp: %s got: %s", exp, got)
@@ -560,13 +557,14 @@ func Test_Store_EndToEndCycle(t *testing.T) {
 	}
 
 	dbPath, walPaths = persistStreamerData(t, buf)
-	if len(walPaths) != 0 {
-		t.Fatalf("Expected 0 WAL files, got %d", len(walPaths))
+	if len(walPaths) != 1 {
+		t.Fatalf("Expected 1 WAL file, got %d", len(walPaths))
 	}
 
-	// Check the file, it should have the content of the backup plus the changes
-	// from the two checkpointed WAL files.
-
+	// Replay the WAL and check the result.
+	if err := db.ReplayWAL(dbPath, walPaths, false); err != nil {
+		t.Fatalf("Failed to replay WAL: %v", err)
+	}
 	rows = mustQueryDB(t, dbPath, "SELECT COUNT(*) FROM foo")
 	if exp, got := `[{"columns":["COUNT(*)"],"types":["integer"],"values":[[2]]}]`, rows; exp != got {
 		t.Fatalf("unexpected results for query exp: %s got: %s", exp, got)
@@ -613,9 +611,8 @@ func Test_Store_EndToEndCycle(t *testing.T) {
 		t.Fatalf("Expected store to have %d snapshots, got %d", exp, got)
 	}
 
-	// Open the fourth snapshot in the second store, check its contents. Because
-	// the snapshot contains both a DB file and WAL files, the Sink in the second
-	// store will checkpoint the WAL files into the DB file.
+	// Open the fourth snapshot in the second store, check its contents. The
+	// FullSink preserves WAL files alongside the DB file.
 	snaps, err = store1.ListAll()
 	if err != nil {
 		t.Fatalf("Failed to list snapshots in destination store: %v", err)
@@ -637,12 +634,14 @@ func Test_Store_EndToEndCycle(t *testing.T) {
 	}
 
 	dbPath, walPaths = persistStreamerData(t, buf)
-	if len(walPaths) != 0 {
-		t.Fatalf("Expected 0 WAL files, got %d", len(walPaths))
+	if len(walPaths) != 3 {
+		t.Fatalf("Expected 3 WAL files, got %d", len(walPaths))
 	}
 
-	// Check the file, it should have the content of the backup plus the changes
-	// from the three checkpointed WAL files.
+	// Replay the WALs and check the result.
+	if err := db.ReplayWAL(dbPath, walPaths, false); err != nil {
+		t.Fatalf("Failed to replay WALs: %v", err)
+	}
 	rows = mustQueryDB(t, dbPath, "SELECT COUNT(*) FROM foo")
 	if exp, got := `[{"columns":["COUNT(*)"],"types":["integer"],"values":[[3]]}]`, rows; exp != got {
 		t.Fatalf("unexpected results for query exp: %s got: %s", exp, got)
@@ -708,6 +707,10 @@ func Test_Store_Reap(t *testing.T) {
 	if len(snaps) != 1 {
 		t.Fatalf("Expected 1 snapshot in destination store, got %d", len(snaps))
 	}
+
+	// Verify CRC32 sidecar was recomputed after checkpoint.
+	mustVerifyCRC32File(t, filepath.Join(store.Dir(), snaps[0].ID, dbfileName))
+
 	_, rc, err := store.Open(snaps[0].ID)
 	if err != nil {
 		t.Fatalf("Failed to open snapshot in destination store: %v", err)
@@ -758,6 +761,10 @@ func Test_Store_Reap(t *testing.T) {
 	if len(snaps) != 1 {
 		t.Fatalf("Expected 1 snapshot in destination store, got %d", len(snaps))
 	}
+
+	// Verify CRC32 sidecar was recomputed after checkpoint.
+	mustVerifyCRC32File(t, filepath.Join(store.Dir(), snaps[0].ID, dbfileName))
+
 	_, rc, err = store.Open(snaps[0].ID)
 	if err != nil {
 		t.Fatalf("Failed to open snapshot in destination store: %v", err)
@@ -871,6 +878,60 @@ func Test_Store_Reap(t *testing.T) {
 	// dbPath should be a byte-for-byte copy of backup.db
 	if !filesIdentical(dbPath, "testdata/db-and-wals/backup.db") {
 		t.Fatalf("Database file in snapshot does not match source")
+	}
+}
+
+func Test_Store_ReapCorruptDB(t *testing.T) {
+	dir := t.TempDir()
+	store, err := NewStore(dir)
+	if err != nil {
+		t.Fatalf("Failed to create new store: %v", err)
+	}
+	defer store.Close()
+
+	// Create a full snapshot, then an incremental.
+	createSnapshotInStore(t, store, "2-1017-1704807719996", 1017, 2, 1, "testdata/db-and-wals/backup.db")
+	createSnapshotInStore(t, store, "2-1131-1704807720976", 1131, 2, 1, "", "testdata/db-and-wals/wal-00")
+
+	// Corrupt the full snapshot's DB file.
+	dbPath := filepath.Join(store.Dir(), "2-1017-1704807719996", dbfileName)
+	if err := os.WriteFile(dbPath, []byte("corrupted"), 0644); err != nil {
+		t.Fatalf("Failed to corrupt DB file: %v", err)
+	}
+
+	// Reap should fail due to CRC mismatch.
+	_, _, err = store.Reap()
+	if err == nil {
+		t.Fatal("Expected Reap to fail due to corrupted DB, but it succeeded")
+	}
+}
+
+func Test_Store_ReapCorruptWAL(t *testing.T) {
+	dir := t.TempDir()
+	store, err := NewStore(dir)
+	if err != nil {
+		t.Fatalf("Failed to create new store: %v", err)
+	}
+	defer store.Close()
+
+	// Create a full snapshot, then an incremental.
+	createSnapshotInStore(t, store, "2-1017-1704807719996", 1017, 2, 1, "testdata/db-and-wals/backup.db")
+	createSnapshotInStore(t, store, "2-1131-1704807720976", 1131, 2, 1, "", "testdata/db-and-wals/wal-00")
+
+	// Find and corrupt the WAL file in the incremental snapshot.
+	walPattern := filepath.Join(store.Dir(), "2-1131-1704807720976", "*.wal")
+	matches, err := filepath.Glob(walPattern)
+	if err != nil || len(matches) == 0 {
+		t.Fatalf("Failed to find WAL file: %v", err)
+	}
+	if err := os.WriteFile(matches[0], []byte("corrupted"), 0644); err != nil {
+		t.Fatalf("Failed to corrupt WAL file: %v", err)
+	}
+
+	// Reap should fail due to CRC mismatch.
+	_, _, err = store.Reap()
+	if err == nil {
+		t.Fatal("Expected Reap to fail due to corrupted WAL, but it succeeded")
 	}
 }
 

@@ -4,6 +4,8 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+
+	"github.com/rqlite/rqlite/v10/internal/rsum"
 )
 
 func TestExecutor_Rename(t *testing.T) {
@@ -324,6 +326,70 @@ func TestExecutor_CopyFile(t *testing.T) {
 	if err := e.CopyFile(src, dst); err == nil {
 		t.Fatalf("CopyFile should fail when both src and dst are missing")
 	}
+}
+
+func TestExecutor_CalcCRC32(t *testing.T) {
+	e := NewExecutor()
+	tmpDir := t.TempDir()
+
+	dataPath := filepath.Join(tmpDir, "data.db")
+	crcPath := filepath.Join(tmpDir, "data.db.crc32")
+	content := []byte("hello world")
+
+	// Create data file.
+	if err := os.WriteFile(dataPath, content, 0644); err != nil {
+		t.Fatalf("failed to create data file: %v", err)
+	}
+
+	// Calculate CRC32.
+	if err := e.CalcCRC32(dataPath, crcPath); err != nil {
+		t.Fatalf("CalcCRC32 failed: %v", err)
+	}
+
+	// Verify the CRC file exists and contains the correct checksum.
+	ok, err := compareCRC32(dataPath, crcPath)
+	if err != nil {
+		t.Fatalf("failed to compare CRC32: %v", err)
+	}
+	if !ok {
+		t.Fatalf("CRC32 mismatch")
+	}
+
+	// Test idempotency: call again, should succeed and produce same result.
+	if err := e.CalcCRC32(dataPath, crcPath); err != nil {
+		t.Fatalf("CalcCRC32 idempotency failed: %v", err)
+	}
+	ok, err = compareCRC32(dataPath, crcPath)
+	if err != nil {
+		t.Fatalf("failed to compare CRC32 after idempotent call: %v", err)
+	}
+	if !ok {
+		t.Fatalf("CRC32 mismatch after idempotent call")
+	}
+
+	// Test idempotency: modify the data file, recalculate, verify new CRC.
+	if err := os.WriteFile(dataPath, []byte("different content"), 0644); err != nil {
+		t.Fatalf("failed to modify data file: %v", err)
+	}
+	if err := e.CalcCRC32(dataPath, crcPath); err != nil {
+		t.Fatalf("CalcCRC32 after modification failed: %v", err)
+	}
+	ok, err = compareCRC32(dataPath, crcPath)
+	if err != nil {
+		t.Fatalf("failed to compare CRC32 after modification: %v", err)
+	}
+	if !ok {
+		t.Fatalf("CRC32 mismatch after modification")
+	}
+
+	// Test error: data file does not exist.
+	if err := e.CalcCRC32(filepath.Join(tmpDir, "nonexistent"), crcPath); err == nil {
+		t.Fatalf("CalcCRC32 should fail when data file does not exist")
+	}
+}
+
+func compareCRC32(dataPath, crcPath string) (bool, error) {
+	return rsum.CompareCRC32SumFile(dataPath, crcPath)
 }
 
 func mustCopyFile(src, dst string) {

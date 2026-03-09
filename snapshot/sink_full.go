@@ -2,11 +2,14 @@ package snapshot
 
 import (
 	"errors"
+	"expvar"
 	"fmt"
 	"os"
 	"path/filepath"
+	"time"
 
 	"github.com/rqlite/rqlite/v10/db"
+	"github.com/rqlite/rqlite/v10/internal/rsum"
 	"github.com/rqlite/rqlite/v10/snapshot/proto"
 )
 
@@ -128,7 +131,9 @@ func (s *FullSink) Write(p []byte) (int, error) {
 		k := min(uint64(len(p)), s.remaining)
 		chunk := p[:int(k)]
 
-		n, err := s.f.Write(chunk)
+		var n int
+		var err error
+		n, err = s.f.Write(chunk)
 		total += n
 		s.remaining -= uint64(n)
 
@@ -153,7 +158,8 @@ func (s *FullSink) Write(p []byte) (int, error) {
 	return total, nil
 }
 
-// Close closes the sink. It fails if not all bytes were written.
+// Close closes the sink. It fails if not all bytes were written, or if the
+// CRC32 of the received data does not match the header.
 func (s *FullSink) Close() error {
 	if !s.opened {
 		return ErrSinkNotOpen
@@ -167,23 +173,23 @@ func (s *FullSink) Close() error {
 		// Allow finalization if we're exactly at boundary.
 		if s.f != nil && s.remaining == 0 {
 			if err := s.advance(); err != nil {
-				_ = s.closeFile()
+				s.closeFile()
 				return err
 			}
 		}
 		if s.phase != installPhaseDone {
-			_ = s.closeFile()
+			s.closeFile()
 			return ErrIncomplete
 		}
 	}
 
 	if !db.IsValidSQLiteFile(s.dbFile) {
-		_ = s.closeFile()
+		s.closeFile()
 		return ErrInvalidSQLiteFile
 	}
 	for i, walPath := range s.walFiles {
 		if !db.IsValidSQLiteWALFile(walPath) {
-			_ = s.closeFile()
+			s.closeFile()
 			return fmt.Errorf("WAL file %d invalid: %w", i, ErrInvalidWALFile)
 		}
 	}
@@ -192,9 +198,37 @@ func (s *FullSink) Close() error {
 		return err
 	}
 
-	// This is when we checkpoint all WALs into the SQLite file, and end up
-	// with a single DB file representing the snapshot state.
-	return db.ReplayWAL(s.dbFile, s.walFiles, false)
+	// Verify the CRC32 of the received DB file against the header.
+	start := time.Now()
+	dbCRC, _, err := rsum.CRC32WithTiming(s.dbFile)
+	if err != nil {
+		return fmt.Errorf("computing CRC32 of DB file: %w", err)
+	}
+	if dbCRC != s.header.DbHeader.Crc32 {
+		return fmt.Errorf("CRC32 mismatch for DB file: got %08x, expected %08x", dbCRC, s.header.DbHeader.Crc32)
+	}
+
+	// Verify the CRC32 of each received WAL file against the header,
+	// and write a CRC32 sidecar for each verified WAL.
+	for i, walPath := range s.walFiles {
+		walCRC, err := rsum.CRC32(walPath)
+		if err != nil {
+			return fmt.Errorf("computing CRC32 of WAL file %d: %w", i, err)
+		}
+		if walCRC != s.header.WalHeaders[i].Crc32 {
+			return fmt.Errorf("CRC32 mismatch for WAL file %d: got %08x, expected %08x", i, walCRC, s.header.WalHeaders[i].Crc32)
+		}
+		if err := rsum.WriteCRC32SumFile(walPath+crcSuffix, walCRC, rsum.Sync); err != nil {
+			return fmt.Errorf("writing CRC32 sidecar for WAL file %d: %w", i, err)
+		}
+	}
+
+	// Write the CRC32 sidecar for the DB file.
+	if err := rsum.WriteCRC32SumFile(s.dbFile+crcSuffix, dbCRC, rsum.Sync); err != nil {
+		return fmt.Errorf("writing CRC32 sidecar for DB file: %w", err)
+	}
+	stats.Get(snapshotFullCRC32CreateDuration).(*expvar.Int).Set(int64(time.Since(start).Milliseconds()))
+	return nil
 }
 
 // DBFile returns the path to the checkpointed DB file.
@@ -212,8 +246,7 @@ func (s *FullSink) validateHeader() error {
 func (s *FullSink) openCurrent() error {
 	switch s.phase {
 	case installPhaseDB:
-		path := filepath.Join(s.dir, dbfileName)
-		f, err := os.Create(path)
+		f, err := os.Create(filepath.Join(s.dir, dbfileName))
 		if err != nil {
 			return err
 		}
@@ -226,7 +259,6 @@ func (s *FullSink) openCurrent() error {
 			s.phase = installPhaseDone
 			return nil
 		}
-
 		f, err := os.Create(s.walFiles[s.walIndex])
 		if err != nil {
 			return err
@@ -281,7 +313,12 @@ func (s *FullSink) closeFile() error {
 	if s.f == nil {
 		return nil
 	}
-	err := s.f.Close()
+	if err := s.f.Sync(); err != nil {
+		return err
+	}
+	if err := s.f.Close(); err != nil {
+		return err
+	}
 	s.f = nil
-	return err
+	return nil
 }

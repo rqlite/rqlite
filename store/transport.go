@@ -56,7 +56,7 @@ func (t *Transport) Addr() net.Addr {
 // custom configuration of the InstallSnapshot method.
 type NodeTransport struct {
 	*raft.NetworkTransport
-	compress bool
+	compressSnap bool
 
 	aeMu                   sync.RWMutex
 	appendEntriesTxHandler func(req *raft.AppendEntriesRequest) error
@@ -70,10 +70,10 @@ type NodeTransport struct {
 }
 
 // NewNodeTransport returns an initialized NodeTransport.
-func NewNodeTransport(transport *raft.NetworkTransport, compress bool) *NodeTransport {
+func NewNodeTransport(transport *raft.NetworkTransport, compressSnap bool) *NodeTransport {
 	return &NodeTransport{
 		NetworkTransport:   transport,
-		compress:           compress,
+		compressSnap:       compressSnap,
 		commandCommitIndex: &atomic.Uint64{},
 		leaderCommitIndex:  &atomic.Uint64{},
 		done:               make(chan struct{}),
@@ -131,7 +131,7 @@ func (n *NodeTransport) Close() error {
 func (n *NodeTransport) InstallSnapshot(id raft.ServerID, target raft.ServerAddress, args *raft.InstallSnapshotRequest,
 	resp *raft.InstallSnapshotResponse, data io.Reader) error {
 	r := data
-	if n.compress {
+	if n.compressSnap {
 		zstdData, err := zstd.NewCompressor(data, args.Size, zstd.DefaultBufferSize)
 		if err != nil {
 			return err
@@ -166,7 +166,7 @@ func (n *NodeTransport) Consumer() <-chan raft.RPC {
 			case rpc := <-srcCh:
 				switch cmd := rpc.Command.(type) {
 				case *raft.InstallSnapshotRequest:
-					if rpc.Reader != nil && n.compress {
+					if rpc.Reader != nil && n.compressSnap {
 						rpc.Reader = zstd.NewDecompressor(rpc.Reader)
 					}
 				case *raft.AppendEntriesRequest:
@@ -200,6 +200,6 @@ func (n *NodeTransport) Stats() map[string]any {
 	return map[string]any{
 		"command_commit_index": n.CommandCommitIndex(),
 		"leader_commit_index":  n.LeaderCommitIndex(),
-		"compress":             n.compress,
+		"compress_snap":        n.compressSnap,
 	}
 }

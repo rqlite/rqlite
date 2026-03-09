@@ -17,7 +17,6 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
-	"runtime"
 	"sort"
 	"strconv"
 	"strings"
@@ -294,6 +293,10 @@ type SnapshotStore interface {
 	// Stats returns stats about the Snapshot Store.
 	Stats() (map[string]any, error)
 
+	// Reap reaps old snapshots, returning the number of snapshots reaped
+	// and WAL files checkpointed.
+	Reap() (int, int, error)
+
 	// Close shuts down background goroutines in the snapshot store.
 	Close() error
 }
@@ -417,12 +420,13 @@ type Store struct {
 	LeaderLeaseTimeout       time.Duration
 	HeartbeatTimeout         time.Duration
 	ElectionTimeout          time.Duration
+	CommitTimeout            time.Duration
 	ApplyTimeout             time.Duration
 	RaftLogLevel             string
 	NoFreeListSync           bool
 	AutoVacInterval          time.Duration
 	AutoOptimizeInterval     time.Duration
-	NoCompressTransport      bool
+	CompressSnapTransport    bool
 
 	// Node-reaping configuration
 	ReapTimeout         time.Duration
@@ -570,13 +574,12 @@ func (s *Store) Open() (retErr error) {
 
 	// Create Raft-compatible network layer.
 	nt := raft.NewNetworkTransport(NewTransport(s.ly), connectionPoolCount, connectionTimeout, nil)
-	s.raftTn = NewNodeTransport(nt, !s.NoCompressTransport)
+	s.raftTn = NewNodeTransport(nt, s.CompressSnapTransport)
 
 	// Don't allow control over trailing logs directly, just implement a policy.
 	s.numTrailingLogs = uint64(float64(s.SnapshotThreshold) * trailingScale)
 
-	config := s.raftConfig()
-	config.LocalID = raft.ServerID(s.raftID)
+	raftConfig := s.raftConfig()
 
 	// Upgrade any preexisting snapshots.
 	old7SnapshotDir := filepath.Join(s.raftDir, "snapshots")
@@ -678,7 +681,7 @@ func (s *Store) Open() (retErr error) {
 		}()
 
 		s.logger.Printf("detected successful prior snapshot operation, skipping restore")
-		config.NoSnapshotRestoreOnStart = true
+		raftConfig.NoSnapshotRestoreOnStart = true
 		removeDBFiles = false
 		li, tm, err := snapshotStore.LatestIndexTerm()
 		if err != nil {
@@ -783,7 +786,7 @@ func (s *Store) Open() (retErr error) {
 	}
 
 	// Instantiate the Raft system.
-	ra, err := raft.NewRaft(config, NewFSM(s), s.raftLog, s.raftStable, s.snapshotStore, s.raftTn)
+	ra, err := raft.NewRaft(raftConfig, NewFSM(s), s.raftLog, s.raftStable, s.snapshotStore, s.raftTn)
 	if err != nil {
 		return fmt.Errorf("creating the raft system failed: %s", err)
 	}
@@ -1330,6 +1333,7 @@ func (s *Store) Stats() (map[string]any, error) {
 	}
 	raftStats["bolt"] = s.boltStore.Stats()
 	raftStats["transport"] = s.raftTn.Stats()
+	raftStats["config"] = RaftConfigAsJSON(s.raftConfig())
 
 	dirSz, err := dirSize(s.raftDir)
 	if err != nil {
@@ -1363,6 +1367,7 @@ func (s *Store) Stats() (map[string]any, error) {
 		"apply_timeout":          s.ApplyTimeout.String(),
 		"heartbeat_timeout":      s.HeartbeatTimeout.String(),
 		"election_timeout":       s.ElectionTimeout.String(),
+		"commit_timeout":         s.CommitTimeout.String(),
 		"snapshot_threshold":     s.SnapshotThreshold,
 		"snapshot_interval":      s.SnapshotInterval.String(),
 		"snapshot_cas":           s.snapshotCAS.Stats(),
@@ -2338,6 +2343,7 @@ func (s *Store) clearKeyTime(key string) error {
 // raftConfig returns a new Raft config for the store.
 func (s *Store) raftConfig() *raft.Config {
 	config := raft.DefaultConfig()
+	config.LocalID = raft.ServerID(s.raftID)
 	config.ShutdownOnRemove = s.ShutdownOnRemove
 	config.LogLevel = s.RaftLogLevel
 	if s.SnapshotThreshold != 0 {
@@ -2355,6 +2361,9 @@ func (s *Store) raftConfig() *raft.Config {
 	}
 	if s.ElectionTimeout != 0 {
 		config.ElectionTimeout = s.ElectionTimeout
+	}
+	if s.CommitTimeout != 0 {
+		config.CommitTimeout = s.CommitTimeout
 	}
 	opts := hclog.DefaultOptions
 	opts.Name = ""
@@ -2934,6 +2943,12 @@ func (s *Store) Snapshot(n uint64) (retError error) {
 	return nil
 }
 
+// Reap reaps old snapshots, returning the number of snapshots reaped
+// and WAL files checkpointed.
+func (s *Store) Reap() (int, int, error) {
+	return s.snapshotStore.Reap()
+}
+
 // runWALSnapshotting runs the periodic check to see if a snapshot should be
 // triggered due to WAL size.
 func (s *Store) runWALSnapshotting() (closeCh, doneCh chan struct{}) {
@@ -3274,15 +3289,6 @@ func removeFile(path string) error {
 	return os.Remove(path)
 }
 
-func removeFileOrFatal(fd *os.File) {
-	if err := fd.Close(); err != nil {
-		log.Fatalf("failed to close file at %s before removal: %s", fd.Name(), err.Error())
-	}
-	if err := removeFile(fd.Name()); err != nil {
-		log.Fatalf("failed to remove file at %s: %s", fd.Name(), err.Error())
-	}
-}
-
 // pathExists returns true if the given path exists.
 func pathExists(p string) bool {
 	if _, err := os.Lstat(p); err != nil && os.IsNotExist(err) {
@@ -3349,18 +3355,6 @@ func dirSize(path string) (int64, error) {
 		return err
 	})
 	return size, err
-}
-
-func syncDirMaybe(dir string) error {
-	if runtime.GOOS == "windows" {
-		return nil
-	}
-	fh, err := os.Open(dir)
-	if err != nil {
-		return err
-	}
-	defer fh.Close()
-	return fh.Sync()
 }
 
 // modTimeSize returns the modification time and size of the file at the given path.

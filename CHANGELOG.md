@@ -1,17 +1,25 @@
 ## v10.0.0 (unreleased)
-_Not ready for production use._
 
 This release introduces a major improvement to the Raft [_Snapshot and Log Truncation_](https://youtu.be/8XbxQ1Epi5w?t=492) process. Previously the Snapshotting process would be blocked on the Leader if the Leader was streaming a previously-taken Snapshot to a Follower. In most cases this wasn't an issue, as the Snapshotting process would be retried later. However in the event of a continuously slow Follower which continually needed Snapshots, this eventually starved the Leader of the ability to Snapshot. With v10 this is no longer the case and Snapshotting on the Leader is now decoupled from streaming pre-existing Snapshots to other nodes.
 
 This release also introduces a new built-in console app, making it more convenient to work with an rqlite system. 
 
-There are no breaking API changes in this release, nor any changes to how clustering operates. However the command line option `-on-disk-path` has been removed as it provided little benefit, but made it too easy for operators to inadvertently corrupt a rqlite node.
+There are no breaking API changes in this release, nor any changes to how clustering operates. However there have been some command line option changes:
+ - `-on-disk-path` has been removed as it provided little benefit, but made it too easy for operators to inadvertently corrupt a rqlite node.
+ - `-raft-timeout` has been renamed to `-raft-heartbeat-timeout` to better reflect its purpose.
 
-Upgrading to this release from a v7 release (or later) is seamless and been extensively tested. Rolling upgrades are also supported. However it is strongly recommended you [backup your rqlite system](https://rqlite.io/docs/guides/backup/) before upgrading it. **Downgrading from v10 is not supported**, and that is why the major release number has been incremented. If you do need to downgrade then backup your v10 system and use that backup to deploy a new pre-v10 system.
+ **Upgrading to v10**
+
+Upgrading to this release from a v7 release (or later) is seamless and been extensively tested. Rolling upgrades are also supported, but **joining a new v10 node to a v9 (or earlier) cluster is not supported**. Upgrade your cluster to v10 first before adding any new nodes. As always, it is strongly recommended you [backup your rqlite system](https://rqlite.io/docs/guides/backup/) before upgrading it.
+
+**Downgrading from v10 is not supported**, and that is why the major release number has been incremented. If you do need to downgrade then backup your v10 system and use that backup to deploy a new pre-v10 system.
 
 ### New features
 - [PR #2480](https://github.com/rqlite/rqlite/pull/2480), [PR #2482](https://github.com/rqlite/rqlite/pull/2482), [PR #2487](https://github.com/rqlite/rqlite/pull/2487): Add built-in web application for working with rqlite, including running queries. Application is served at `/console`.
 - [PR #2497](https://github.com/rqlite/rqlite/pull/2497): rqlite shell supports specifying trailing logs for a `.snapshot` operation.
+- [PR #2520](https://github.com/rqlite/rqlite/pull/2520): Support user-triggered Snapshot reaping, including add an associated rqlite shell command.
+- [PR #2525](https://github.com/rqlite/rqlite/pull/2525): Add on/off control for inter-node snapshot transfer compression. Compression is off by default.
+- [PR #2532](https://github.com/rqlite/rqlite/pull/2532): Add `-raft-commit-timeout` to allow control of this Raft config option.
 
 ### Implementation changes and bug fixes
 - [PR #2471](https://github.com/rqlite/rqlite/pull/2471): Move to non-blocking Snapshotting store.
@@ -40,6 +48,18 @@ Upgrading to this release from a v7 release (or later) is seamless and been exte
 - [PR #2505](https://github.com/rqlite/rqlite/pull/2505), [PR #2508](https://github.com/rqlite/rqlite/pull/2508): Test Store snapshotting with fault injection.
 - [PR #2512](https://github.com/rqlite/rqlite/pull/2512): Exit on failure to close Incremental Snapshot sink.
 - [PR #2514](https://github.com/rqlite/rqlite/pull/2514): Increase thresholds for Raft log entry compression.
+- [PR #2518](https://github.com/rqlite/rqlite/pull/2518): Add CRC32-related utilities.
+- [PR #2519](https://github.com/rqlite/rqlite/pull/2519): Make Raft Config clearer.
+- [PR #2521](https://github.com/rqlite/rqlite/pull/2521): Calculate and check CRCs during reaping.
+- [PR #2524](https://github.com/rqlite/rqlite/pull/2524): Use `AtomicBool` for Snapshot reap-disabled state.
+- [PR #2527](https://github.com/rqlite/rqlite/pull/2527): Read CRC32 values from sidecar files when opening snapshots.
+- [PR #2528](https://github.com/rqlite/rqlite/pull/2528): Full Snapshot Sink validates data against CRC32s in header.
+- [PR #2529](https://github.com/rqlite/rqlite/pull/2529): Full Snapshots may contain WAL files.
+- [PR #2531](https://github.com/rqlite/rqlite/pull/2531): Log autoreap duration.
+- [PR #2532](https://github.com/rqlite/rqlite/pull/2532): Change `-raft-timeout` flag to `-raft-heartbeat-timeout`.
+- [PR #2533](https://github.com/rqlite/rqlite/pull/2533): Fix code in `db` package which hits an error, but was actually returning `nil`. Fixes issue [#2530](https://github.com/rqlite/rqlite/issues/2530).
+- [PR #2534](https://github.com/rqlite/rqlite/pull/2534): Upgrade `rqlite/go-sqlite3` to v1.45.0.
+- [PR #2536](https://github.com/rqlite/rqlite/pull/2536): Various improvements to Snapshot reaping.
 
 ## v9.4.1 (February 11th 2026)
 ### Implementation changes and bug fixes
