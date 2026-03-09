@@ -65,6 +65,10 @@ Upgrading to this release from a v7 release (or later) is seamless and been exte
 - [PR #2541](https://github.com/rqlite/rqlite/pull/2541): Add Read-blocking to MRSW sync primitive.
 - [PR #2544](https://github.com/rqlite/rqlite/pull/2544): Ensure the checkpoint-truncate runs to completion, or exit.
 
+## v9.4.4 (March 9th 2026)
+### Implementation changes and bug fixes
+- [PR #2544](https://github.com/rqlite/rqlite/pull/2544): Ensure the checkpoint-truncate runs to completion, or exit. Fixes issue [#2537](https://github.com/rqlite/rqlite/issues/2537).
+
 ## v9.4.3 (March 9th 2026)
 ### Implementation changes and bug fixes
 - [b94b538](https://github.com/rqlite/rqlite/commit/b94b538451622d1f04bebc19aa580297457f439f): Remove `mustTruncate` as it can result in a deadlock. It was introduced in v9.3.14, but has been shown to be flawed. See [issue #2537](https://github.com/rqlite/rqlite/issues/2537).
