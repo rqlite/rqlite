@@ -293,7 +293,6 @@ func (c *Config) CheckDirPaths() error {
 type BuildInfo struct {
 	Version       string
 	Commit        string
-	Branch        string
 	SQLiteVersion string
 }
 
@@ -305,9 +304,9 @@ func ParseFlags(name, desc string, build *BuildInfo) (*Config, error) {
 	}
 
 	if config.ShowVersion {
-		msg := fmt.Sprintf("%s %s %s %s %s sqlite%s (commit %s, branch %s, compiler %s)",
+		msg := fmt.Sprintf("%s %s %s %s %s sqlite%s (commit %s, compiler %s)",
 			name, build.Version, runtime.GOOS, runtime.GOARCH, runtime.Version(), build.SQLiteVersion,
-			build.Commit, build.Branch, runtime.Compiler)
+			build.Commit, runtime.Compiler)
 		errorExit(0, msg)
 	}
 

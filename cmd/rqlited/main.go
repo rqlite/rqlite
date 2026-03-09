@@ -68,7 +68,6 @@ func main() {
 	cfg, err := ParseFlags(name, desc, &BuildInfo{
 		Version:       cmd.Version,
 		Commit:        cmd.Commit,
-		Branch:        cmd.Branch,
 		SQLiteVersion: db.DBVersion,
 	})
 	if err != nil {
@@ -77,8 +76,8 @@ func main() {
 	fmt.Print(logo)
 
 	// Configure logging and pump out initial message.
-	log.Printf("%s starting, version %s, SQLite %s, commit %s, branch %s, compiler (toolchain) %s, compiler (command) %s",
-		name, cmd.Version, db.DBVersion, cmd.Commit, cmd.Branch, runtime.Compiler, cmd.CompilerCommand)
+	log.Printf("%s starting, version %s, SQLite %s, commit %s, compiler (toolchain) %s, compiler (command) %s",
+		name, cmd.Version, db.DBVersion, cmd.Commit, runtime.Compiler, cmd.CompilerCommand)
 	log.Printf("%s, target architecture is %s, operating system target is %s", runtime.Version(),
 		runtime.GOARCH, runtime.GOOS)
 	log.Printf("launch command: %s", strings.Join(os.Args, " "))
@@ -441,7 +440,6 @@ func startHTTPService(cfg *Config, str *store.Store, cltr *cluster.Client, credS
 	s.DefaultQueueTx = cfg.WriteQueueTx
 	s.BuildInfo = map[string]any{
 		"commit":             cmd.Commit,
-		"branch":             cmd.Branch,
 		"version":            cmd.Version,
 		"compiler_toolchain": runtime.Compiler,
 		"compiler_command":   cmd.CompilerCommand,

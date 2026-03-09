@@ -96,8 +96,8 @@ func main() {
 		}
 
 		if argv.Version {
-			ctx.String("Version %s, commit %s, branch %s, built on %s\n", cmd.Version,
-				cmd.Commit, cmd.Branch, cmd.Buildtime)
+			ctx.String("Version %s, commit %s, built on %s\n", cmd.Version,
+				cmd.Commit, cmd.Buildtime)
 			return nil
 		}
 
