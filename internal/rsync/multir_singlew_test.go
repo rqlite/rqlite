@@ -117,6 +117,7 @@ func Test_MultiRSW_BeginReadBlocking_NoContentionReaders(t *testing.T) {
 	if err := r.BeginRead(); err != nil {
 		t.Fatalf("BeginRead failed: %v", err)
 	}
+	defer r.EndRead()
 
 	// Read should not be blocked by other readers.
 	r.BeginReadBlocking()
