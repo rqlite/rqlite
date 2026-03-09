@@ -3,6 +3,7 @@ package rsum
 import (
 	"bytes"
 	"hash/crc32"
+	"io"
 	"os"
 	"path/filepath"
 	"testing"
@@ -105,6 +106,49 @@ func Test_CRC32WriterEmpty(t *testing.T) {
 
 	if got, want := cw.Sum32(), uint32(0); got != want {
 		t.Errorf("empty checksum = %d, want %d", got, want)
+	}
+}
+
+func Test_CRC32WriteCloser(t *testing.T) {
+	testContent := []byte("test content")
+	sumBuf := bytes.Buffer{}
+	var dataBuf bytes.Buffer
+
+	// Create writer under test.
+	cwc := NewCRC32WriteCloser(newNoopWriteCloser(&dataBuf), newNoopWriteCloser(&sumBuf))
+	if cwc == nil {
+		t.Fatal("NewCRC32WriteCloser returned nil")
+	}
+
+	n, err := cwc.Write(testContent)
+	if err != nil {
+		t.Fatalf("CRC32WriteCloser write failed: %v", err)
+	}
+	if n != len(testContent) {
+		t.Fatalf("expected to write %d bytes, wrote %d", len(testContent), n)
+	}
+
+	// Underlying writer should have received the data.
+	if !bytes.Equal(dataBuf.Bytes(), testContent) {
+		t.Fatalf("underlying writer got %q, want %q", dataBuf.Bytes(), testContent)
+	}
+
+	// Closing should write the checksum to sumBuf.
+	if err := cwc.Close(); err != nil {
+		t.Fatalf("closing data writer failed: %v", err)
+	}
+
+	// Checksum should match a direct computation.
+	h := crc32.New(crc32.MakeTable(crc32.Castagnoli))
+	h.Write(testContent)
+	expectedSum := h.Sum32()
+
+	calcSum, err := ReadCRC32Sum(&sumBuf)
+	if err != nil {
+		t.Fatalf("ReadCRC32Sum failed: %v", err)
+	}
+	if calcSum != expectedSum {
+		t.Fatalf("checksum = %08x, want %08x", calcSum, expectedSum)
 	}
 }
 
@@ -263,4 +307,16 @@ func mustWriteTempFile(t *testing.T, b []byte) string {
 		panic("failed to write to temp file")
 	}
 	return f.Name()
+}
+
+type noopWriteCloser struct {
+	io.Writer
+}
+
+func (n noopWriteCloser) Close() error {
+	return nil
+}
+
+func newNoopWriteCloser(w io.Writer) io.WriteCloser {
+	return noopWriteCloser{w}
 }

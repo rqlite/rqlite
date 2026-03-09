@@ -98,6 +98,11 @@ func (m *MockVisitor) CopyFile(src, dst string) error {
 	return m.Err
 }
 
+func (m *MockVisitor) CalcCRC32(dataPath, crcPath string) error {
+	m.Calls = append(m.Calls, "calc_crc32 "+dataPath+"->"+crcPath)
+	return m.Err
+}
+
 func TestExecute_Success(t *testing.T) {
 	p := New()
 	p.AddRename("src", "dst")
@@ -179,6 +184,7 @@ func (f *FailVisitor) Checkpoint(db string, wals []string) (int, error) { return
 func (f *FailVisitor) WriteMeta(dir string, data []byte) error          { return f.check() }
 func (f *FailVisitor) MkdirAll(path string) error                       { return f.check() }
 func (f *FailVisitor) CopyFile(src, dst string) error                   { return f.check() }
+func (f *FailVisitor) CalcCRC32(dataPath, crcPath string) error         { return f.check() }
 
 func TestExecute_StopsOnError(t *testing.T) {
 	p := New()

@@ -371,12 +371,14 @@ func createStore(cfg *Config, ln *tcp.Layer, extensions []string) (*store.Store,
 	str.LeaderLeaseTimeout = cfg.RaftLeaderLeaseTimeout
 	str.HeartbeatTimeout = cfg.RaftHeartbeatTimeout
 	str.ElectionTimeout = cfg.RaftElectionTimeout
+	str.CommitTimeout = cfg.RaftCommitTimeout
 	str.ApplyTimeout = cfg.RaftApplyTimeout
 	str.BootstrapExpect = cfg.BootstrapExpect
 	str.ReapTimeout = cfg.RaftReapNodeTimeout
 	str.ReapReadOnlyTimeout = cfg.RaftReapReadOnlyNodeTimeout
 	str.AutoVacInterval = cfg.AutoVacInterval
 	str.AutoOptimizeInterval = cfg.AutoOptimizeInterval
+	str.CompressSnapTransport = cfg.CompressSnapTransport
 
 	if store.IsNewNode(cfg.DataPath) {
 		log.Printf("no preexisting node state detected in %s, node may be bootstrapping", cfg.DataPath)
