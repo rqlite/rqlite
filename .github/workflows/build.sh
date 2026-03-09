@@ -30,7 +30,6 @@ machine=`uname -m`
 if [ "$machine" == "x86_64" ]; then
     machine="amd64"
 fi
-branch=master
 commit=`git rev-parse HEAD`
 kernel=`uname -s`
 buildtime=`date +%Y-%m-%dT%T%z`
@@ -58,7 +57,7 @@ for arch in "${!archs[@]}"; do
   for compiler in $compilers; do
     echo "Building for $arch using $compiler..."
 
-    LDFLAGS="$STRIP_SYMBOLS -X $LINKER_PKG_PATH.CompilerCommand=$compiler -X $LINKER_PKG_PATH.Version=$VERSION -X $LINKER_PKG_PATH.Branch=$branch -X $LINKER_PKG_PATH.Commit=$commit -X $LINKER_PKG_PATH.Buildtime=$buildtime"
+    LDFLAGS="$STRIP_SYMBOLS -X $LINKER_PKG_PATH.CompilerCommand=$compiler -X $LINKER_PKG_PATH.Version=$VERSION -X $LINKER_PKG_PATH.Commit=$commit -X $LINKER_PKG_PATH.Buildtime=$buildtime"
     CGO_ENABLED=1 GOARCH=$arch CC=$compiler go install -a -ldflags="$LDFLAGS" ./...
 
     # Special case for musl-gcc, keep legacy naming.

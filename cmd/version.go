@@ -9,9 +9,6 @@ var (
 	// Commit this code was built at.
 	Commit = "unknown"
 
-	// Branch the code was built from.
-	Branch = "unknown"
-
 	// Buildtime is the timestamp when the build took place.
 	Buildtime = "unknown"
 
