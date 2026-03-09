@@ -369,10 +369,6 @@ type Store struct {
 	fsmTerm       atomic.Uint64
 	fsmUpdateTime *rsync.AtomicTime // This is node-local time.
 
-	// readerMu allows blocking of all reads. This is used to handle
-	// specific, very rare, edge cases around WAL checkpointing.
-	readerMu sync.RWMutex
-
 	// appendedAtTime is the Leader's clock time when that Leader appended the log entry.
 	// The Leader that actually appended the log entry is not necessarily the current Leader.
 	appendedAtTime *rsync.AtomicTime
@@ -1464,9 +1460,6 @@ func (s *Store) execute(ex *proto.ExecuteRequest) ([]*proto.ExecuteQueryResponse
 // upgraded to STRONG if the Store determines that is necessary to guarantee
 // a linearizable read.
 func (s *Store) Query(ctx context.Context, qr *proto.QueryRequest) (rows []*proto.QueryRows, level proto.ConsistencyLevel, raftIndex uint64, retErr error) {
-	s.readerMu.RLock()
-	defer s.readerMu.RUnlock()
-
 	p := (*PragmaCheckRequest)(qr.Request)
 	if err := p.Check(); err != nil {
 		return nil, 0, 0, err
@@ -1590,9 +1583,6 @@ func (s *Store) VerifyLeader() (retErr error) {
 
 // Request processes a request that may contain both Executes and Queries.
 func (s *Store) Request(ctx context.Context, eqr *proto.ExecuteQueryRequest) ([]*proto.ExecuteQueryResponse, uint64, uint64, error) {
-	s.readerMu.RLock()
-	defer s.readerMu.RUnlock()
-
 	p := (*PragmaCheckRequest)(eqr.Request)
 	if err := p.Check(); err != nil {
 		return nil, 0, 0, err
@@ -1702,9 +1692,6 @@ func (s *Store) Request(ctx context.Context, eqr *proto.ExecuteQueryRequest) ([]
 // will be written directly to that file. Otherwise a temporary file will be created,
 // and that temporary file copied to dst.
 func (s *Store) Backup(ctx context.Context, br *proto.BackupRequest, dst io.Writer) (retErr error) {
-	s.readerMu.RLock()
-	defer s.readerMu.RUnlock()
-
 	if !s.open.Is() {
 		return ErrNotOpen
 	}
@@ -1988,9 +1975,6 @@ func (s *Store) Vacuum() error {
 // http://sqlite.org/howtocorrupt.html states it is safe to do this
 // as long as the database is not written to during the call.
 func (s *Store) Database(leader bool) ([]byte, error) {
-	s.readerMu.RLock()
-	defer s.readerMu.RUnlock()
-
 	if leader && s.raft.State() != raft.Leader {
 		return nil, ErrNotLeader
 	}
@@ -2980,21 +2964,38 @@ func (s *Store) runWALSnapshotting() (closeCh, doneCh chan struct{}) {
 
 // checkpointWAL performs a checkpoint of the WAL, truncating it. If it returns an error
 // the checkpoint operation can be retried at the caller's discretion.
+//
+// If the checkpointing fails due to SQLITE_BUSY or SQLITE_LOCKED, this function will retry
+// indefinitely until it succeeds, with a 100ms sleep between attempts.
 func (s *Store) checkpointWAL() (retErr error) {
-	meta, err := s.db.Checkpoint(sql.CheckpointTruncate)
-	if err != nil {
-		return err
-	}
-	if !meta.Success() {
-		if meta.Pages == meta.Moved {
-			s.logger.Printf("checkpoint moved all pages (%d/%d), but failed to truncate WAL",
-				meta.Moved, meta.Pages)
-			stats.Add(numWALCheckpointAllMovedFailed, 1)
+	chkFn := func() bool {
+		meta, err := s.db.Checkpoint(sql.CheckpointTruncate)
+		if err != nil {
+			s.logger.Printf("checkpoint error: %s", err.Error())
+			return false
 		}
-		stats.Add(numWALCheckpointIncomplete, 1)
-		return fmt.Errorf("checkpoint incomplete: %s", meta.String())
+		if !meta.Success() {
+			if meta.Pages == meta.Moved {
+				s.logger.Printf("checkpoint moved all pages (%d/%d), but failed to truncate WAL",
+					meta.Moved, meta.Pages)
+				stats.Add(numWALCheckpointAllMovedFailed, 1)
+				return false
+			}
+		}
+		return true
 	}
-	return nil
+
+	success := chkFn()
+	if success {
+		return nil
+	}
+
+	for {
+		time.Sleep(100 * time.Millisecond)
+		if success = chkFn(); success {
+			return nil
+		}
+	}
 }
 
 // selfLeaderChange is called when this node detects that its leadership
