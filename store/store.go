@@ -163,6 +163,7 @@ const (
 	numSnapshotsIncremental           = "num_snapshots_incremental"
 	numFullCheckpointFailed           = "num_full_checkpoint_failed"
 	numWALCheckpointTruncateFailed    = "num_wal_checkpoint_truncate_failed"
+	numWALCheckpointAllMovedFailed    = "num_wal_checkpoint_all_moved_failed"
 	numWALCheckpointIncomplete        = "num_wal_checkpoint_incomplete"
 	numWALMustCheckpoint              = "num_wal_must_checkpoint"
 	numAutoVacuums                    = "num_auto_vacuums"
@@ -232,6 +233,7 @@ func ResetStats() {
 	stats.Add(numSnapshotsIncremental, 0)
 	stats.Add(numFullCheckpointFailed, 0)
 	stats.Add(numWALCheckpointTruncateFailed, 0)
+	stats.Add(numWALCheckpointAllMovedFailed, 0)
 	stats.Add(numWALCheckpointIncomplete, 0)
 	stats.Add(numWALMustCheckpoint, 0)
 	stats.Add(numAutoVacuums, 0)
@@ -360,9 +362,8 @@ type Store struct {
 	snapshotWDone  chan struct{}
 
 	// Snapshotting synchronization and and management
-	snapshotSync            *rsync.SyncChannels
-	snapshotCAS             *rsync.CheckAndSet
-	numFailedSnapshotsInRow int
+	snapshotSync *rsync.SyncChannels
+	snapshotCAS  *rsync.CheckAndSet
 
 	// Latest log entry index actually reflected by the FSM. Due to Raft code
 	// these values are not updated automatically after a Snapshot-restore.
@@ -2981,82 +2982,22 @@ func (s *Store) runWALSnapshotting() (closeCh, doneCh chan struct{}) {
 }
 
 // checkpointWAL performs a checkpoint of the WAL, truncating it. If it returns an error
-// the checkpoint operation can be retried at the caller's discretion. If this function
-// encounters an error such that the checkpoint must be retried, it will automatically do
-// that until it is successful (or a timeout fires).
-//
-// This function also implements the policy that if a certain number of checkpoint attempts
-// fail in a row, it will loop until is successful.
+// the checkpoint operation can be retried at the caller's discretion.
 func (s *Store) checkpointWAL() (retErr error) {
-	defer func() {
-		if retErr != nil {
-			s.numFailedSnapshotsInRow++
-			if s.numFailedSnapshotsInRow == maxFailedSnapshotsInRow {
-				s.logger.Printf("too many failed snapshots in a row (%d), forcing WAL checkpoint truncate",
-					s.numFailedSnapshotsInRow)
-				s.mustTruncateCheckpoint()
-				s.numFailedSnapshotsInRow = 0
-				retErr = nil
-			}
-		} else {
-			s.numFailedSnapshotsInRow = 0
-		}
-	}()
-
 	meta, err := s.db.Checkpoint(sql.CheckpointTruncate)
 	if err != nil {
 		return err
 	}
 	if !meta.Success() {
 		if meta.Pages == meta.Moved {
-			s.logger.Printf("checkpoint moved %d/%d pages, but did not truncate WAL, forcing truncate",
+			s.logger.Printf("checkpoint moved all pages (%d/%d), but failed to truncate WAL",
 				meta.Moved, meta.Pages)
-			s.mustTruncateCheckpoint()
-			return nil
+			stats.Add(numWALCheckpointAllMovedFailed, 1)
 		}
 		stats.Add(numWALCheckpointIncomplete, 1)
 		return fmt.Errorf("checkpoint incomplete: %s", meta.String())
 	}
 	return nil
-}
-
-// mustTruncateCheckpoint truncates the checkpointed WAL, retrying until successful or
-// timing out.
-//
-// This should be called if we hit a specifc edge case where all pages were moved but some
-// reader blocked truncation. The next write could start overwriting WAL frames at the start
-// of the WAL which would mean we would lose WAL data, so we need to forcibly truncate here.
-// We do this by blocking all readers (writes are already blocked). This handling is due to
-// research into SQLite and not seen as of yet.
-//
-// Finally, we could still timeout here while trying to truncate. This could happen if a
-// reader external to rqlite just won't let go.
-func (s *Store) mustTruncateCheckpoint() {
-	startT := time.Now()
-	defer func() {
-		s.logger.Printf("forced WAL truncate checkpoint took %s", time.Since(startT))
-	}()
-
-	stats.Add(numWALMustCheckpoint, 1)
-	s.readerMu.Lock()
-	defer s.readerMu.Unlock()
-
-	ticker := time.NewTicker(mustWALCheckpointDelay)
-	defer ticker.Stop()
-	for {
-		select {
-		case <-ticker.C:
-			meta, err := s.db.Checkpoint(sql.CheckpointTruncate)
-			if err == nil && meta.Success() {
-				return
-			}
-		case <-time.After(mustWALCheckpointTimeout):
-			msg := fmt.Sprintf("timed out trying to truncate checkpoint WAL after %s,"+
-				" probably due to external long-running read - aborting",
-				mustWALCheckpointTimeout)
-			s.logger.Fatal(msg)
-		}
-	}
 }
 
 // selfLeaderChange is called when this node detects that its leadership
