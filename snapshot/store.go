@@ -229,6 +229,11 @@ func (s *Store) Create(version raft.SnapshotVersion, index, term uint64, configu
 // ListAll returns the list of all available snapshots in the Store,
 // ordered from newest to oldest.
 func (s *Store) ListAll() ([]*raft.SnapshotMeta, error) {
+	if err := s.mrsw.BeginRead(); err != nil {
+		return nil, err
+	}
+	defer s.mrsw.EndRead()
+
 	sset, err := s.catalog.Scan(s.dir)
 	if err != nil {
 		return nil, err
@@ -256,6 +261,11 @@ func (s *Store) List() ([]*raft.SnapshotMeta, error) {
 
 // Len returns the number of snapshots in the Store.
 func (s *Store) Len() int {
+	if err := s.mrsw.BeginRead(); err != nil {
+		return 0
+	}
+	defer s.mrsw.EndRead()
+
 	sset, err := s.catalog.Scan(s.dir)
 	if err != nil {
 		return 0
@@ -534,11 +544,8 @@ func (s *Store) FullNeeded() (bool, error) {
 		return true, nil
 	}
 
-	snaps, err := s.getSnapshots()
-	if err != nil {
-		return false, err
-	}
-	return snaps.Len() == 0, nil
+	nSnaps := s.snapshotCount()
+	return nSnaps == 0, nil
 }
 
 // SetFullNeeded sets the flag that indicates a full snapshot is needed.
