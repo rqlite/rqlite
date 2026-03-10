@@ -39,6 +39,7 @@ const (
 // object before the Config object is used. It is OK to call more than
 // once.
 func (c *Config) Validate() error {
+	c.DataPath = strings.TrimSpace(c.DataPath)
 	if c.DataPath == "" {
 		return fmt.Errorf("data directory path is required")
 	}
