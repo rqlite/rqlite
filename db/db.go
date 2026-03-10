@@ -39,7 +39,6 @@ const (
 	numCheckpoints            = "checkpoints"
 	numCheckpointErrors       = "checkpoint_errors"
 	numCheckpointedMoves      = "checkpointed_moves"
-	numCheckpointRetries      = "checkpoint_retries"
 	checkpointDuration        = "checkpoint_duration_ms"
 	numExecutions             = "executions"
 	numExecutionErrors        = "execution_errors"
@@ -107,7 +106,6 @@ func ResetStats() {
 	stats.Add(numCheckpoints, 0)
 	stats.Add(numCheckpointErrors, 0)
 	stats.Add(numCheckpointedMoves, 0)
-	stats.Add(numCheckpointRetries, 0)
 	stats.Add(checkpointDuration, 0)
 	stats.Add(numExecutions, 0)
 	stats.Add(numExecutionErrors, 0)
