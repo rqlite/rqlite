@@ -1,3 +1,15 @@
+## v9.4.4 (March 9th 2026)
+### Implementation changes and bug fixes
+- [PR #2544](https://github.com/rqlite/rqlite/pull/2544): Ensure the checkpoint-truncate runs to completion, or exit. Fixes issue [#2537](https://github.com/rqlite/rqlite/issues/2537).
+
+## v9.4.3 (March 9th 2026)
+### Implementation changes and bug fixes
+- [b94b538](https://github.com/rqlite/rqlite/commit/b94b538451622d1f04bebc19aa580297457f439f): Remove `mustTruncate` as it can result in a deadlock. It was introduced in v9.3.14, but has been shown to be flawed. See [issue #2537](https://github.com/rqlite/rqlite/issues/2537).
+
+## v9.4.2 (March 9th 2026)
+### Implementation changes and bug fixes
+- [PR #2533](https://github.com/rqlite/rqlite/pull/2533): Fix code in `db` package which hits an error, but was actually returning `nil`. Fixes issue [#2530](https://github.com/rqlite/rqlite/issues/2530).
+
 ## v9.4.1 (February 11th 2026)
 ### Implementation changes and bug fixes
 - [PR #2468](https://github.com/rqlite/rqlite/pull/2468): Add _proxy_ layer between HTTP layer and Store.
