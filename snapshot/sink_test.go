@@ -8,6 +8,7 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+	"time"
 
 	"github.com/rqlite/rqlite/v10/command/encoding"
 	"github.com/rqlite/rqlite/v10/internal/rsum"
@@ -162,7 +163,7 @@ func Test_IncrementalFileSink(t *testing.T) {
 
 	snapDir := t.TempDir()
 	meta := makeRaftMeta("test-incremental-file", 100, 1, 1)
-	sink := NewSink(snapDir, meta, nil)
+	sink := NewSink(snapDir, meta, nil, nil)
 	if err := sink.Open(); err != nil {
 		t.Fatalf("unexpected error opening sink: %s", err.Error())
 	}
@@ -219,7 +220,7 @@ func Test_IncrementalFileSink_TwoFiles(t *testing.T) {
 
 	snapDir := t.TempDir()
 	meta := makeRaftMeta("test-incremental-file-2", 100, 1, 1)
-	sink := NewSink(snapDir, meta, nil)
+	sink := NewSink(snapDir, meta, nil, nil)
 	if err := sink.Open(); err != nil {
 		t.Fatalf("unexpected error opening sink: %s", err.Error())
 	}
@@ -272,7 +273,7 @@ func Test_IncrementalFileSink_ThreeFiles(t *testing.T) {
 
 	snapDir := t.TempDir()
 	meta := makeRaftMeta("test-incremental-file-3", 100, 1, 1)
-	sink := NewSink(snapDir, meta, nil)
+	sink := NewSink(snapDir, meta, nil, nil)
 	if err := sink.Open(); err != nil {
 		t.Fatalf("unexpected error opening sink: %s", err.Error())
 	}
@@ -322,7 +323,7 @@ func Test_IncrementalFileSink_MissingCRC(t *testing.T) {
 
 	snapDir := t.TempDir()
 	meta := makeRaftMeta("test-incremental-file-missing-crc", 100, 1, 1)
-	sink := NewSink(snapDir, meta, nil)
+	sink := NewSink(snapDir, meta, nil, nil)
 	sink.fatalFn = nil // disable hard exit so error propagates to caller
 	if err := sink.Open(); err != nil {
 		t.Fatalf("unexpected error opening sink: %s", err.Error())
@@ -335,6 +336,54 @@ func Test_IncrementalFileSink_MissingCRC(t *testing.T) {
 	// Close should fail because the .crc32 file is missing.
 	if err := sink.Close(); err == nil {
 		t.Fatalf("expected error closing sink with missing CRC file, got nil")
+	}
+}
+
+func Test_Sink_CloseCh(t *testing.T) {
+	header, err := NewSnapshotHeader("testdata/db-and-wals/full2.db")
+	if err != nil {
+		t.Fatalf("unexpected error creating header: %s", err.Error())
+	}
+	hdrBytes, err := marshalSnapshotHeader(header)
+	if err != nil {
+		t.Fatalf("unexpected error marshaling header: %s", err.Error())
+	}
+
+	var frameBuf bytes.Buffer
+	lenBuf := make([]byte, HeaderSizeLen)
+	binary.BigEndian.PutUint32(lenBuf, uint32(len(hdrBytes)))
+	frameBuf.Write(lenBuf)
+	frameBuf.Write(hdrBytes)
+
+	closeCh := make(chan struct{}, 1)
+	snapDir := t.TempDir()
+	meta := makeRaftMeta("test-close-ch", 100, 1, 1)
+	sink := NewSink(snapDir, meta, nil, closeCh)
+	if err := sink.Open(); err != nil {
+		t.Fatalf("unexpected error opening sink: %s", err.Error())
+	}
+
+	// Write framed header + DB payload.
+	if _, err := sink.Write(frameBuf.Bytes()); err != nil {
+		t.Fatalf("unexpected error writing header to sink: %s", err.Error())
+	}
+	fd, err := os.Open("testdata/db-and-wals/full2.db")
+	if err != nil {
+		t.Fatalf("unexpected error opening source db file: %s", err.Error())
+	}
+	defer fd.Close()
+	if _, err := io.Copy(sink, fd); err != nil {
+		t.Fatalf("unexpected error copying data to sink: %s", err.Error())
+	}
+
+	if err := sink.Close(); err != nil {
+		t.Fatalf("unexpected error closing sink: %s", err.Error())
+	}
+
+	select {
+	case <-closeCh:
+	case <-time.After(time.Second):
+		t.Fatal("expected signal on closeCh after successful Close")
 	}
 }
 

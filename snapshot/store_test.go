@@ -133,7 +133,7 @@ func Test_Store_CreateIncrementalFirst_Fail(t *testing.T) {
 	}
 	defer store.Close()
 
-	sink := NewSink(store.Dir(), makeRaftMeta("1234", 45, 1, 40), store)
+	sink := NewSink(store.Dir(), makeRaftMeta("1234", 45, 1, 40), store, nil)
 	if sink == nil {
 		t.Fatalf("Failed to create new sink")
 	}
@@ -1252,7 +1252,7 @@ func makeRaftMeta(id string, index, term, cfgIndex uint64) *raft.SnapshotMeta {
 func createSnapshotInStore(t *testing.T, store *Store, id string, index, term, cfgIndex uint64, dbFile string, walFiles ...string) {
 	t.Helper()
 
-	sink := NewSink(store.Dir(), makeRaftMeta(id, index, term, cfgIndex), store)
+	sink := NewSink(store.Dir(), makeRaftMeta(id, index, term, cfgIndex), store, nil)
 	if sink == nil {
 		t.Fatalf("Failed to create new sink")
 	}
