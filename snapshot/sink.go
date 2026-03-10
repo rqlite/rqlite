@@ -21,7 +21,6 @@ type sinker interface {
 }
 
 type fullController interface {
-	FullNeeded() (bool, error)
 	UnsetFullNeeded() error
 }
 
@@ -120,15 +119,6 @@ func (s *Sink) Write(p []byte) (n int, err error) {
 		case *proto.SnapshotHeader_Full:
 			s.sinkW = NewFullSink(s.snapTmpDirPath, p.Full)
 		case *proto.SnapshotHeader_IncrementalFile:
-			if s.fc != nil {
-				fullNeeded, err := s.fc.FullNeeded()
-				if err != nil {
-					return n, err
-				}
-				if fullNeeded {
-					return n, fmt.Errorf("full snapshot needed before incremental can be applied")
-				}
-			}
 			// No data follows this header type. Any leftover bytes are an error.
 			if s.buf.Len() > 0 {
 				return n, fmt.Errorf("unexpected data after incremental file header")
