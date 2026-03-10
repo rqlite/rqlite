@@ -307,6 +307,10 @@ func (s *Store) SetReapThreshold(n int) {
 // which wraps a SnapshotInstall object. This is because the snapshot will be used
 // to either rebuild a node's state after restart, or to send the snapshot to another node,
 // both of which require the DB file and any associated WAL files.
+//
+// A sink does not need to lock the Store because either the Snapshot directory it
+// creates will be visible or not. Reaping will not see it until it is fully created,
+// and Listing it will not return it until it is fully created too.
 func (s *Store) Open(id string) (raftMeta *raft.SnapshotMeta, rc io.ReadCloser, retErr error) {
 	if err := s.mrsw.BeginRead(); err != nil {
 		return nil, nil, fmt.Errorf("acquiring read lock: %w", err)
