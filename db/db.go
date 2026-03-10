@@ -695,7 +695,7 @@ func (db *DB) CheckpointTruncateWithTimeout(dur time.Duration) error {
 	}
 	defer func() {
 		if err := db.SetSynchronousMode(currMode); err != nil {
-			db.logger.Fatalf("failed to reset synchronous mode to %s: %s", currMode, err.Error())
+			return fmt.Errorf("failed to reset synchronous mode to %s: %s", currMode, err.Error())
 		}
 	}()
 
