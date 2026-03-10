@@ -543,10 +543,6 @@ func (s *Store) FullNeeded() (bool, error) {
 	if fileExists(s.fullNeededPath) {
 		return true, nil
 	}
-	if err := s.mrsw.BeginRead(); err != nil {
-		return false, err
-	}
-	defer s.mrsw.EndRead()
 
 	snaps, err := s.getSnapshots()
 	if err != nil {
@@ -556,6 +552,8 @@ func (s *Store) FullNeeded() (bool, error) {
 }
 
 // SetFullNeeded sets the flag that indicates a full snapshot is needed.
+// Doesn't take the read lock since it's just creating a file, and the
+// presence of the file is what matters.
 func (s *Store) SetFullNeeded() error {
 	f, err := os.Create(s.fullNeededPath)
 	if err != nil {
@@ -572,7 +570,9 @@ func (s *Store) SetFullNeeded() error {
 }
 
 // UnsetFullNeeded removes the flag that indicates a full snapshot is
-// needed. If the flag is not set, this is a no-op.
+// needed. If the flag is not set, this is a no-op. Doesn't take the
+// read lock since it's just removing a file, and the presence of the
+// file is what matters.
 func (s *Store) UnsetFullNeeded() error {
 	if !fileExists(s.fullNeededPath) {
 		return nil
