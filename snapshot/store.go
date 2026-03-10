@@ -100,7 +100,6 @@ func (s *LockingSink) Close() error {
 	s.closed = true
 
 	err := s.SnapshotSink.Close()
-	s.str.mrsw.EndRead()
 	if err == nil {
 		s.str.signalReap()
 	}
@@ -118,7 +117,6 @@ func (s *LockingSink) Cancel() error {
 		return nil
 	}
 	s.closed = true
-	defer s.str.mrsw.EndRead()
 	return s.SnapshotSink.Cancel()
 }
 
@@ -214,15 +212,6 @@ func NewStore(dir string) (*Store, error) {
 // Create creates a new snapshot sink for the given parameters.
 func (s *Store) Create(version raft.SnapshotVersion, index, term uint64, configuration raft.Configuration,
 	configurationIndex uint64, trans raft.Transport) (retSink raft.SnapshotSink, retErr error) {
-	if err := s.mrsw.BeginRead(); err != nil {
-		return nil, err
-	}
-	defer func() {
-		if retErr != nil {
-			s.mrsw.EndRead()
-		}
-	}()
-
 	sink := NewSink(s.dir, &raft.SnapshotMeta{
 		Version:            version,
 		ID:                 snapshotName(term, index),
@@ -318,6 +307,10 @@ func (s *Store) SetReapThreshold(n int) {
 // which wraps a SnapshotInstall object. This is because the snapshot will be used
 // to either rebuild a node's state after restart, or to send the snapshot to another node,
 // both of which require the DB file and any associated WAL files.
+//
+// A sink does not need to lock the Store because either the Snapshot directory it
+// creates will be visible or not. Reaping will not see it until it is fully created,
+// and Listing it will not return it until it is fully created too.
 func (s *Store) Open(id string) (raftMeta *raft.SnapshotMeta, rc io.ReadCloser, retErr error) {
 	if err := s.mrsw.BeginRead(); err != nil {
 		return nil, nil, fmt.Errorf("acquiring read lock: %w", err)
@@ -550,19 +543,14 @@ func (s *Store) FullNeeded() (bool, error) {
 	if fileExists(s.fullNeededPath) {
 		return true, nil
 	}
-	if err := s.mrsw.BeginRead(); err != nil {
-		return false, err
-	}
-	defer s.mrsw.EndRead()
 
-	snaps, err := s.getSnapshots()
-	if err != nil {
-		return false, err
-	}
-	return snaps.Len() == 0, nil
+	nSnaps := s.snapshotCount()
+	return nSnaps == 0, nil
 }
 
 // SetFullNeeded sets the flag that indicates a full snapshot is needed.
+// Doesn't take the read lock since it's just creating a file, and the
+// presence of the file is what matters.
 func (s *Store) SetFullNeeded() error {
 	f, err := os.Create(s.fullNeededPath)
 	if err != nil {
@@ -579,7 +567,9 @@ func (s *Store) SetFullNeeded() error {
 }
 
 // UnsetFullNeeded removes the flag that indicates a full snapshot is
-// needed. If the flag is not set, this is a no-op.
+// needed. If the flag is not set, this is a no-op. Doesn't take the
+// read lock since it's just removing a file, and the presence of the
+// file is what matters.
 func (s *Store) UnsetFullNeeded() error {
 	if !fileExists(s.fullNeededPath) {
 		return nil
