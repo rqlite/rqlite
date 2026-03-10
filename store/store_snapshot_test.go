@@ -277,11 +277,14 @@ func Test_SingleNode_WALTriggeredSnapshot(t *testing.T) {
 		}
 	}
 
-	// Ensure WAL-triggered snapshots take place.
+	// Ensure WAL-triggered snapshots take place. The WAL-check ticker
+	// fires after a jittered interval (between SnapshotInterval and
+	// 2*SnapshotInterval), and the snapshot itself takes time, so allow
+	// a generous timeout.
 	f := func() bool {
 		return stats.Get(numWALSnapshots).String() != nSnaps
 	}
-	testPoll(t, f, 100*time.Millisecond, 2*time.Second)
+	testPoll(t, f, 100*time.Millisecond, 5*time.Second)
 
 	// Sanity-check the contents of the Store. There should be two
 	// files -- a SQLite database file, and a directory named after
