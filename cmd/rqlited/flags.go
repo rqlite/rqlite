@@ -39,6 +39,9 @@ const (
 // object before the Config object is used. It is OK to call more than
 // once.
 func (c *Config) Validate() error {
+	if c.DataPath == "" {
+		return fmt.Errorf("data directory path is required")
+	}
 	dataPath, err := filepath.Abs(c.DataPath)
 	if err != nil {
 		return fmt.Errorf("failed to determine absolute data path: %s", err.Error())

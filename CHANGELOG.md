@@ -67,6 +67,7 @@ Upgrading to this release from a v7 release (or later) is seamless and been exte
 - [PR #2549](https://github.com/rqlite/rqlite/pull/2549): Rely solely on SQLite busy handling to wait for checkpoint-truncate.
 - [PR #2550](https://github.com/rqlite/rqlite/pull/2550): Snapshot Sink doesn't need to lock Snapshot Store.
 - [PR #2551](https://github.com/rqlite/rqlite/pull/2551): Filter out `NULL` SQL when processing rqlite shell command `.schema`.
+- [PR #2552](https://github.com/rqlite/rqlite/pull/2552): Don't inadvertently fallback to current directory if no data path supplied.
 
 ## v9.4.5 (March 9th 2026)
 ### Implementation changes and bug fixes
