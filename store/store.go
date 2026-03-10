@@ -1659,7 +1659,9 @@ func (s *Store) Request(ctx context.Context, eqr *proto.ExecuteQueryRequest) ([]
 	}
 
 	// Enforce throttling since we're probably about to make changes to the database.
-	s.throttler.Delay(ctx)
+	if err := s.throttler.Delay(ctx); err != nil {
+		return nil, 0, 0, err
+	}
 
 	// Send the request through consensus.
 	b, compressed, err := s.tryCompress(eqr)
