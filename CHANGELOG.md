@@ -64,6 +64,7 @@ Upgrading to this release from a v7 release (or later) is seamless and been exte
 - [PR #2539](https://github.com/rqlite/rqlite/pull/2539): Remove reference to _branch_ in version information as it's not reliable.
 - [PR #2541](https://github.com/rqlite/rqlite/pull/2541): Add Read-blocking to MRSW sync primitive.
 - [PR #2544](https://github.com/rqlite/rqlite/pull/2544): Ensure the checkpoint-truncate runs to completion, or exit.
+- [PR #2550](https://github.com/rqlite/rqlite/pull/2550): Rely solely on SQLite busy handling to wait for checkpoint-truncate.
 
 ## v9.4.4 (March 9th 2026)
 ### Implementation changes and bug fixes
