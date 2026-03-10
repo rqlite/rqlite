@@ -100,7 +100,6 @@ func (s *LockingSink) Close() error {
 	s.closed = true
 
 	err := s.SnapshotSink.Close()
-	s.str.mrsw.EndRead()
 	if err == nil {
 		s.str.signalReap()
 	}
@@ -118,7 +117,6 @@ func (s *LockingSink) Cancel() error {
 		return nil
 	}
 	s.closed = true
-	defer s.str.mrsw.EndRead()
 	return s.SnapshotSink.Cancel()
 }
 
@@ -214,15 +212,6 @@ func NewStore(dir string) (*Store, error) {
 // Create creates a new snapshot sink for the given parameters.
 func (s *Store) Create(version raft.SnapshotVersion, index, term uint64, configuration raft.Configuration,
 	configurationIndex uint64, trans raft.Transport) (retSink raft.SnapshotSink, retErr error) {
-	if err := s.mrsw.BeginRead(); err != nil {
-		return nil, err
-	}
-	defer func() {
-		if retErr != nil {
-			s.mrsw.EndRead()
-		}
-	}()
-
 	sink := NewSink(s.dir, &raft.SnapshotMeta{
 		Version:            version,
 		ID:                 snapshotName(term, index),
