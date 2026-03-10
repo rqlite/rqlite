@@ -38,6 +38,7 @@ import (
 	"github.com/rqlite/rqlite/v10/internal/rsync"
 	"github.com/rqlite/rqlite/v10/snapshot"
 	rlog "github.com/rqlite/rqlite/v10/store/log"
+	"github.com/rqlite/rqlite/v10/store/throttler"
 )
 
 var (
@@ -393,6 +394,12 @@ type Store struct {
 	firstLogAppliedT time.Time // Time first log is applied
 	openT            time.Time // Timestamp when Store opens.
 
+	// Throttler for controlling the rate of incoming requests that modify the database.
+	// This is used to avoid overwhelming the system when it's under heavy load. It's
+	// preferable to throttle incoming requests when needed rather than just suddenly
+	// falling over.
+	throttler *throttler.Throttler
+
 	logger *log.Logger
 
 	notifyMu        sync.Mutex
@@ -472,6 +479,7 @@ func New(c *Config, ly Layer) *Store {
 		readyChans:        rsync.NewReadyChannels(),
 		leaderObservers:   make([]chan<- bool, 0),
 		reqMarshaller:     command.NewRequestMarshaler(),
+		throttler:         throttler.DefaultThrottler(),
 		logger:            logger,
 		notifyingNodes:    make(map[string]*Server),
 		ApplyTimeout:      applyTimeout,
@@ -1399,6 +1407,8 @@ func (s *Store) Stats() (map[string]any, error) {
 
 // Execute executes queries that return no rows, but do modify the database.
 func (s *Store) Execute(ctx context.Context, ex *proto.ExecuteRequest) ([]*proto.ExecuteQueryResponse, uint64, error) {
+	s.throttler.Delay(ctx)
+
 	p := (*PragmaCheckRequest)(ex.Request)
 	if err := p.Check(); err != nil {
 		return nil, 0, err
@@ -1647,6 +1657,9 @@ func (s *Store) Request(ctx context.Context, eqr *proto.ExecuteQueryRequest) ([]
 	if !s.Ready() {
 		return nil, 0, 0, ErrNotReady
 	}
+
+	// Enforce throttling since we're probably about to make changes to the database.
+	s.throttler.Delay(ctx)
 
 	// Send the request through consensus.
 	b, compressed, err := s.tryCompress(eqr)
