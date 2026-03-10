@@ -219,7 +219,7 @@ func main() {
 			case ".INDEXES":
 				err = queryWithClient(ctx, client, timer, blobArray, consistency, `SELECT sql FROM sqlite_master WHERE type="index"`)
 			case ".SCHEMA":
-				err = queryWithClient(ctx, client, timer, blobArray, consistency, `SELECT sql FROM sqlite_master`)
+				err = queryWithClient(ctx, client, timer, blobArray, consistency, `SELECT sql FROM sqlite_master WHERE sql IS NOT NULL ORDER BY rowid ASC`)
 			case ".TIMER":
 				if index == -1 || index == len(input)-1 {
 					if timer {
