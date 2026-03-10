@@ -704,7 +704,7 @@ func (db *DB) CheckpointTruncateWithTimeout(dur time.Duration) error {
 		if err != nil {
 			return false, fmt.Errorf("error checkpointing WAL: %s", err.Error())
 		}
-		if ok != 0 || (nPages > nMoved) {
+		if ok != 0 {
 			return false, nil
 		}
 		stats.Add(numCheckpointedPages, int64(nPages))
