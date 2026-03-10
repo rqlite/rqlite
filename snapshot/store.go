@@ -261,11 +261,6 @@ func (s *Store) List() ([]*raft.SnapshotMeta, error) {
 
 // Len returns the number of snapshots in the Store.
 func (s *Store) Len() int {
-	if err := s.mrsw.BeginRead(); err != nil {
-		return 0
-	}
-	defer s.mrsw.EndRead()
-
 	sset, err := s.catalog.Scan(s.dir)
 	if err != nil {
 		return 0
