@@ -102,6 +102,20 @@ func WithBasicAuth(creds string) ConfigFunc {
 	}
 }
 
+// GetDirect sends a GET request to the exact URL provided, with authentication
+// but without host override or failover. Use this when you need to target a
+// specific node rather than any node in the cluster.
+func (c *Client) GetDirect(u string) (resp *http.Response, err error) {
+	req, err := http.NewRequest(http.MethodGet, u, nil)
+	if err != nil {
+		return nil, err
+	}
+	if err := c.setBasicAuth(req); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
 // Get sends GET requests to one of the hosts known to the client.
 func (c *Client) Get(u string) (resp *http.Response, err error) {
 	up, err := url.Parse(u)

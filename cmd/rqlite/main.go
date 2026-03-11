@@ -673,7 +673,7 @@ func urlsToWriter(client *httpcl.Client, urls []string, w io.Writer) error {
 			w.Write([]byte("\n=========================================\n"))
 			w.Write([]byte(fmt.Sprintf("URL: %s\n", u)))
 
-			resp, err := client.Get(u)
+			resp, err := client.GetDirect(u)
 			if err != nil {
 				if _, err := w.Write([]byte(fmt.Sprintf("Status: %s\n\n", err))); err != nil {
 					return err
