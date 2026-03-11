@@ -170,12 +170,6 @@ func (c *Client) doRequest(method string, url *url.URL, body io.Reader, headers 
 		url.Host = host
 		urlStr := url.String()
 
-		if seeker, ok := body.(io.Seeker); ok && triedHosts > 0 {
-			if _, err := seeker.Seek(0, io.SeekStart); err != nil {
-				return nil, err
-			}
-		}
-
 		resp, err := c.requestFollowRedirect(method, urlStr, body, headers)
 
 		// Found a responsive node
@@ -208,12 +202,6 @@ func (c *Client) nextHost() {
 func (c *Client) requestFollowRedirect(method string, urlStr string, body io.Reader, headers http.Header) (*http.Response, error) {
 	nRedirects := 0
 	for {
-		if seeker, ok := body.(io.Seeker); ok && nRedirects > 0 {
-			if _, err := seeker.Seek(0, io.SeekStart); err != nil {
-				return nil, err
-			}
-		}
-
 		req, err := http.NewRequest(method, urlStr, body)
 		if err != nil {
 			return nil, err
