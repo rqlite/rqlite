@@ -13,30 +13,38 @@ func TestUnifiedResult_isQueryResult(t *testing.T) {
 		{
 			name: "query result with columns",
 			result: unifiedResult{
-				Columns: []string{"id", "name"},
-				Types:   []string{"integer", "text"},
-				Values:  [][]any{{1, "test"}},
+				TableData: TableData{
+					Columns: []string{"id", "name"},
+					Types:   []string{"integer", "text"},
+					Values:  [][]any{{1, "test"}},
+				},
 			},
 			expected: true,
 		},
 		{
 			name: "query result with columns only",
 			result: unifiedResult{
-				Columns: []string{"id", "name"},
+				TableData: TableData{
+					Columns: []string{"id", "name"},
+				},
 			},
 			expected: true,
 		},
 		{
 			name: "query result with types only",
 			result: unifiedResult{
-				Types: []string{"integer", "text"},
+				TableData: TableData{
+					Types: []string{"integer", "text"},
+				},
 			},
 			expected: true,
 		},
 		{
 			name: "query result with values only",
 			result: unifiedResult{
-				Values: [][]any{{1, "test"}},
+				TableData: TableData{
+					Values: [][]any{{1, "test"}},
+				},
 			},
 			expected: true,
 		},
@@ -74,11 +82,13 @@ func TestUnifiedResult_isQueryResult(t *testing.T) {
 
 func TestUnifiedResult_toRows(t *testing.T) {
 	result := unifiedResult{
-		Columns: []string{"id", "name"},
-		Types:   []string{"integer", "text"},
-		Values:  [][]any{{1, "test"}},
-		Time:    0.001,
-		Error:   "",
+		TableData: TableData{
+			Columns: []string{"id", "name"},
+			Types:   []string{"integer", "text"},
+			Values:  [][]any{{1, "test"}},
+		},
+		Time:  0.001,
+		Error: "",
 	}
 
 	rows := result.toRows()
@@ -122,10 +132,12 @@ func TestUnifiedResult_toResult(t *testing.T) {
 func TestComplexQueryDetection(t *testing.T) {
 	// Simulate response for CTE query
 	cteResult := unifiedResult{
-		Columns: []string{"x"},
-		Types:   []string{"integer"},
-		Values:  [][]any{{1}},
-		Time:    0.001,
+		TableData: TableData{
+			Columns: []string{"x"},
+			Types:   []string{"integer"},
+			Values:  [][]any{{1}},
+		},
+		Time: 0.001,
 	}
 
 	if !cteResult.isQueryResult() {
