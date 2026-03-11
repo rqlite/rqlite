@@ -108,7 +108,25 @@ func (c *Client) Get(u string) (resp *http.Response, err error) {
 	if err != nil {
 		return nil, err
 	}
-	return c.doRequest(http.MethodGet, up, nil)
+	return c.doRequest(http.MethodGet, up, nil, nil)
+}
+
+// Post sends POST requests to one of the hosts known to the client.
+func (c *Client) Post(u string, body io.Reader) (resp *http.Response, err error) {
+	up, err := url.Parse(u)
+	if err != nil {
+		return nil, err
+	}
+	return c.doRequest(http.MethodPost, up, body, nil)
+}
+
+// PostWithHeaders sends POST requests with custom headers to one of the hosts known to the client.
+func (c *Client) PostWithHeaders(u string, body io.Reader, headers http.Header) (resp *http.Response, err error) {
+	up, err := url.Parse(u)
+	if err != nil {
+		return nil, err
+	}
+	return c.doRequest(http.MethodPost, up, body, headers)
 }
 
 // Delete sends DELETE requests to one of the hosts known to the client.
@@ -117,27 +135,34 @@ func (c *Client) Delete(u string, body io.Reader) (resp *http.Response, err erro
 	if err != nil {
 		return nil, err
 	}
-	return c.doRequest(http.MethodDelete, up, body)
+	return c.doRequest(http.MethodDelete, up, body, nil)
 }
 
 // Query sends GET requests to one of the hosts known to the client.
 func (c *Client) Query(url *url.URL) (*http.Response, error) {
-	return c.doRequest(http.MethodGet, url, nil)
+	return c.doRequest(http.MethodGet, url, nil, nil)
 }
 
 // Execute sends POST requests to one of the hosts known to the client
 func (c *Client) Execute(url *url.URL, body io.Reader) (*http.Response, error) {
-	return c.doRequest(http.MethodPost, url, body)
+	return c.doRequest(http.MethodPost, url, body, nil)
 }
 
-func (c *Client) doRequest(method string, url *url.URL, body io.Reader) (*http.Response, error) {
+func (c *Client) doRequest(method string, url *url.URL, body io.Reader, headers http.Header) (*http.Response, error) {
 	triedHosts := 0
 	for triedHosts < len(c.hosts) {
 		host := c.hosts[c.currentHost]
 		url.Scheme = c.scheme
 		url.Host = host
 		urlStr := url.String()
-		resp, err := c.requestFollowRedirect(method, urlStr, body)
+
+		if seeker, ok := body.(io.Seeker); ok && triedHosts > 0 {
+			if _, err := seeker.Seek(0, io.SeekStart); err != nil {
+				return nil, err
+			}
+		}
+
+		resp, err := c.requestFollowRedirect(method, urlStr, body, headers)
 
 		// Found a responsive node
 		if err == nil {
@@ -166,12 +191,21 @@ func (c *Client) nextHost() {
 	c.currentHost = (c.currentHost + 1) % len(c.hosts)
 }
 
-func (c *Client) requestFollowRedirect(method string, urlStr string, body io.Reader) (*http.Response, error) {
+func (c *Client) requestFollowRedirect(method string, urlStr string, body io.Reader, headers http.Header) (*http.Response, error) {
 	nRedirects := 0
 	for {
+		if seeker, ok := body.(io.Seeker); ok && nRedirects > 0 {
+			if _, err := seeker.Seek(0, io.SeekStart); err != nil {
+				return nil, err
+			}
+		}
+
 		req, err := http.NewRequest(method, urlStr, body)
 		if err != nil {
 			return nil, err
+		}
+		for k, v := range headers {
+			req.Header[k] = v
 		}
 		err = c.setBasicAuth(req)
 		if err != nil {

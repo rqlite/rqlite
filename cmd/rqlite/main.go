@@ -10,7 +10,6 @@ import (
 	"maps"
 	"net"
 	"net/http"
-	"net/url"
 	"os"
 	"slices"
 	"sort"
@@ -28,8 +27,6 @@ import (
 )
 
 const HOST_ENV_VAR = "RQLITE_HOST"
-
-const maxRedirect = 21
 
 type Node struct {
 	ApiAddr string `json:"api_addr"`
@@ -124,8 +121,14 @@ func main() {
 			return nil
 		}
 
+		hosts := createHostList(argv)
+		client := httpcl.NewClient(httpClient, hosts,
+			httpcl.WithScheme(argv.Protocol),
+			httpcl.WithBasicAuth(argv.Credentials),
+			httpcl.WithPrefix(argv.Prefix))
+
 		connectionStr := fmt.Sprintf("%s://%s", argv.Protocol, address6(argv))
-		version, err := getVersionWithClient(httpClient, argv)
+		version, err := getVersion(client)
 		if err != nil {
 			msg := err.Error()
 			if errors.Is(err, syscall.ECONNREFUSED) {
@@ -159,12 +162,6 @@ func main() {
 			}
 			hr.Close()
 		}
-
-		hosts := createHostList(argv)
-		client := httpcl.NewClient(httpClient, hosts,
-			httpcl.WithScheme(argv.Protocol),
-			httpcl.WithBasicAuth(argv.Credentials),
-			httpcl.WithPrefix(argv.Prefix))
 
 	FOR_READ:
 		for {
@@ -203,17 +200,9 @@ func main() {
 				}
 				err = setConsistency(input[index+1:], &consistency)
 			case ".EXTENSIONS":
-				err = extensions(ctx, client, cmd, argv)
+				err = extensions(ctx, client)
 			case ".FORCEWRITES":
-				if index == -1 || index == len(input)-1 {
-					if forceWrites {
-						ctx.String("on\n")
-					} else {
-						ctx.String("off\n")
-					}
-					break
-				}
-				err = toggleFlag(input[index+1:], &forceWrites)
+				err = handleToggle(ctx, input, index, &forceWrites)
 			case ".TABLES":
 				err = queryWithClient(ctx, client, timer, blobArray, consistency, `SELECT name FROM sqlite_master WHERE type="table" ORDER BY name ASC`)
 			case ".INDEXES":
@@ -221,96 +210,61 @@ func main() {
 			case ".SCHEMA":
 				err = queryWithClient(ctx, client, timer, blobArray, consistency, `SELECT sql FROM sqlite_master WHERE sql IS NOT NULL ORDER BY rowid ASC`)
 			case ".TIMER":
-				if index == -1 || index == len(input)-1 {
-					if timer {
-						ctx.String("on\n")
-					} else {
-						ctx.String("off\n")
-					}
-					break
-				}
-				err = toggleFlag(input[index+1:], &timer)
+				err = handleToggle(ctx, input, index, &timer)
 			case ".BLOBARRAY":
-				if index == -1 || index == len(input)-1 {
-					if blobArray {
-						ctx.String("on\n")
-					} else {
-						ctx.String("off\n")
-					}
-					break
-				}
-				err = toggleFlag(input[index+1:], &blobArray)
+				err = handleToggle(ctx, input, index, &blobArray)
 			case ".STATUS":
-				err = status(ctx, client, cmd, argv)
+				err = status(ctx, client, input)
 			case ".READY":
-				err = ready(ctx, client, argv)
+				err = ready(ctx, client)
 			case ".NODES":
-				if index == -1 || index == len(input)-1 {
-					err = nodes(ctx, client, cmd, input, argv, false)
-					break
-				}
-				err = nodes(ctx, client, cmd, input, argv, true)
+				err = nodes(ctx, client, index != -1 && index < len(input)-1)
 			case ".EXPVAR":
-				err = expvar(ctx, client, cmd, input, argv)
+				err = expvar(ctx, client, input)
 			case ".REMOVE":
-				err = removeNode(client, input[index+1:], argv)
+				err = removeNode(client, input[index+1:])
 			case ".BACKUP":
-				if index == -1 || index == len(input)-1 {
-					err = fmt.Errorf("please specify an output file for the backup")
-					break
+				arg, argErr := requireArg(input, index, "please specify an output file for the backup")
+				if argErr != nil {
+					err = argErr
+				} else {
+					err = backup(ctx, client, arg)
 				}
-				err = backup(ctx, input[index+1:], argv)
 			case ".RESTORE":
-				if index == -1 || index == len(input)-1 {
-					err = fmt.Errorf("please specify an input file to restore from")
-					break
+				arg, argErr := requireArg(input, index, "please specify an input file to restore from")
+				if argErr != nil {
+					err = argErr
+				} else {
+					err = restore(ctx, client, arg)
 				}
-				err = restore(ctx, input[index+1:], argv)
 			case ".BOOT":
-				if index == -1 || index == len(input)-1 {
-					err = fmt.Errorf("please specify an input file to boot with")
-					break
+				arg, argErr := requireArg(input, index, "please specify an input file to boot with")
+				if argErr != nil {
+					err = argErr
+				} else {
+					err = boot(ctx, client, arg)
 				}
-				err = boot(ctx, input[index+1:], argv)
 			case ".SYSDUMP":
-				if index == -1 || index == len(input)-1 {
-					err = fmt.Errorf("please specify an output file for the sysdump")
-					break
+				arg, argErr := requireArg(input, index, "please specify an output file for the sysdump")
+				if argErr != nil {
+					err = argErr
+				} else {
+					err = sysdump(client, arg)
 				}
-				err = sysdump(ctx, httpClient, input[index+1:], argv)
 			case ".DUMP":
-				if index == -1 || index == len(input)-1 {
-					err = fmt.Errorf("please specify an output file for the SQL text")
-					break
+				arg, argErr := requireArg(input, index, "please specify an output file for the SQL text")
+				if argErr != nil {
+					err = argErr
+				} else {
+					filename, tables := parseDumpArgs(arg)
+					err = dump(ctx, client, filename, tables)
 				}
-				args := strings.Fields(input[index+1:])
-				if len(args) == 0 {
-					err = fmt.Errorf("please specify an output file for the SQL text")
-					break
-				}
-				filename := args[0]
-				var tables []string
-				if len(args) > 1 {
-					// Join all remaining arguments as table specification and split by comma
-					tablesStr := strings.Join(args[1:], " ")
-					tables = strings.Split(tablesStr, ",")
-					// Trim whitespace from table names and filter empty ones
-					var cleanTables []string
-					for _, table := range tables {
-						table = strings.TrimSpace(table)
-						if table != "" {
-							cleanTables = append(cleanTables, table)
-						}
-					}
-					tables = cleanTables
-				}
-				err = dump(ctx, filename, tables, argv)
 			case ".HELP":
 				ctx.String("%s\n", strings.Join(cliHelp, "\n"))
 			case ".QUIT", "QUIT", "EXIT", ".EXIT":
 				break FOR_READ
 			case ".REAP":
-				err = reap(ctx, client, argv)
+				err = reap(ctx, client)
 			case ".SNAPSHOT":
 				trailingLogs := 0
 				if index != -1 && index < len(input)-1 {
@@ -323,13 +277,13 @@ func main() {
 						}
 					}
 				}
-				err = snapshot(client, argv, trailingLogs)
+				err = snapshot(client, trailingLogs)
 			case ".STEPDOWN":
 				nodeID := ""
 				if index != -1 && index < len(input)-1 {
 					nodeID = strings.TrimSpace(input[index+1:])
 				}
-				err = stepdown(client, nodeID, argv)
+				err = stepdown(client, nodeID)
 			default:
 				err = requestWithClient(ctx, client, timer, forceWrites, input)
 			}
@@ -359,12 +313,53 @@ func main() {
 	})
 }
 
+func handleToggle(ctx *cli.Context, input string, index int, flag *bool) error {
+	if index == -1 || index == len(input)-1 {
+		if *flag {
+			ctx.String("on\n")
+		} else {
+			ctx.String("off\n")
+		}
+		return nil
+	}
+	return toggleFlag(input[index+1:], flag)
+}
+
 func toggleFlag(op string, flag *bool) error {
 	if op != "on" && op != "off" {
 		return fmt.Errorf("invalid option '%s'. Use 'on' or 'off' (default)", op)
 	}
 	*flag = (op == "on")
 	return nil
+}
+
+func requireArg(input string, index int, msg string) (string, error) {
+	if index == -1 || index == len(input)-1 {
+		return "", errors.New(msg)
+	}
+	return input[index+1:], nil
+}
+
+func parseDumpArgs(arg string) (string, []string) {
+	args := strings.Fields(arg)
+	if len(args) == 0 {
+		return arg, nil
+	}
+	filename := args[0]
+	if len(args) <= 1 {
+		return filename, nil
+	}
+	// Join all remaining arguments as table specification and split by comma
+	tablesStr := strings.Join(args[1:], " ")
+	parts := strings.Split(tablesStr, ",")
+	var tables []string
+	for _, table := range parts {
+		table = strings.TrimSpace(table)
+		if table != "" {
+			tables = append(tables, table)
+		}
+	}
+	return filename, tables
 }
 
 func setConsistency(r string, c *string) error {
@@ -383,67 +378,51 @@ func makeJSONBody(line string) string {
 	return string(data)
 }
 
-func status(ctx *cli.Context, client *httpcl.Client, line string, argv *argT) error {
-	url := fmt.Sprintf("%s://%s/status", argv.Protocol, address6(argv))
-	return cliJSON(ctx, client, line, url)
+func status(ctx *cli.Context, client *httpcl.Client, line string) error {
+	u := fmt.Sprintf("%sstatus", client.Prefix)
+	return cliJSON(ctx, client, line, u)
 }
 
-func ready(ctx *cli.Context, client *httpcl.Client, argv *argT) error {
-	u := url.URL{
-		Scheme: argv.Protocol,
-		Host:   address6(argv),
-		Path:   fmt.Sprintf("%sreadyz", argv.Prefix),
-	}
-	urlStr := u.String()
-
-	resp, err := client.Get(urlStr)
+func ready(ctx *cli.Context, client *httpcl.Client) error {
+	u := fmt.Sprintf("%sreadyz", client.Prefix)
+	resp, err := client.Get(u)
 	if err != nil {
 		return err
 	}
+	defer resp.Body.Close()
+
 	if resp.StatusCode == 200 {
 		ctx.String("ready\n")
 	} else {
 		ctx.String("not ready\n")
 	}
-
 	return nil
 }
 
-// nodes returns the status of nodes in the cluster. If all is true, then
-// non-voting nodes are included in the response.
-func nodes(ctx *cli.Context, client *httpcl.Client, cmd, line string, argv *argT, all bool) error {
-	path := "nodes"
+func nodes(ctx *cli.Context, client *httpcl.Client, all bool) error {
+	u := fmt.Sprintf("%snodes", client.Prefix)
 	if all {
-		path = "nodes?nonvoters"
+		u += "?nonvoters"
 	}
-	url := fmt.Sprintf("%s://%s/%s", argv.Protocol, address6(argv), path)
-	return cliJSON(ctx, client, "", url)
+	return cliJSON(ctx, client, "", u)
 }
 
-func expvar(ctx *cli.Context, client *httpcl.Client, cmd, line string, argv *argT) error {
-	url := fmt.Sprintf("%s://%s/debug/vars", argv.Protocol, address6(argv))
-	return cliJSON(ctx, client, line, url)
+func expvar(ctx *cli.Context, client *httpcl.Client, line string) error {
+	u := fmt.Sprintf("%sdebug/vars", client.Prefix)
+	return cliJSON(ctx, client, line, u)
 }
 
-func reap(ctx *cli.Context, client *httpcl.Client, argv *argT) error {
-	url := fmt.Sprintf("%s://%s/reap", argv.Protocol, address6(argv))
-	req, err := http.NewRequest("POST", url, nil)
-	if err != nil {
-		return err
-	}
-	if argv.Credentials != "" {
-		creds := strings.Split(argv.Credentials, ":")
-		if len(creds) != 2 {
-			return fmt.Errorf("invalid Basic Auth credentials format")
-		}
-		req.SetBasicAuth(creds[0], creds[1])
-	}
-
-	resp, err := client.Do(req)
+func reap(ctx *cli.Context, client *httpcl.Client) error {
+	u := fmt.Sprintf("%sreap", client.Prefix)
+	resp, err := client.Post(u, nil)
 	if err != nil {
 		return err
 	}
 	defer resp.Body.Close()
+
+	if resp.StatusCode == http.StatusUnauthorized {
+		return fmt.Errorf("unauthorized")
+	}
 	if resp.StatusCode != http.StatusOK {
 		return fmt.Errorf("server responded with %s", resp.Status)
 	}
@@ -457,76 +436,54 @@ func reap(ctx *cli.Context, client *httpcl.Client, argv *argT) error {
 	return nil
 }
 
-func snapshot(client *httpcl.Client, argv *argT, trailingLogs int) error {
-	url := fmt.Sprintf("%s://%s/snapshot?trailing_logs=%d", argv.Protocol, address6(argv), trailingLogs)
-	req, err := http.NewRequest("POST", url, nil)
-	if err != nil {
-		return err
-	}
-	if argv.Credentials != "" {
-		creds := strings.Split(argv.Credentials, ":")
-		if len(creds) != 2 {
-			return fmt.Errorf("invalid Basic Auth credentials format")
-		}
-		req.SetBasicAuth(creds[0], creds[1])
-	}
-
-	resp, err := client.Do(req)
+func snapshot(client *httpcl.Client, trailingLogs int) error {
+	u := fmt.Sprintf("%ssnapshot?trailing_logs=%d", client.Prefix, trailingLogs)
+	resp, err := client.Post(u, nil)
 	if err != nil {
 		return err
 	}
 	defer resp.Body.Close()
+
+	if resp.StatusCode == http.StatusUnauthorized {
+		return fmt.Errorf("unauthorized")
+	}
 	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusNoContent {
 		return fmt.Errorf("server responded with %s", resp.Status)
 	}
 	return nil
 }
 
-func stepdown(client *httpcl.Client, nodeID string, argv *argT) error {
-	url := fmt.Sprintf("%s://%s/leader?wait=true", argv.Protocol, address6(argv))
+func stepdown(client *httpcl.Client, nodeID string) error {
+	u := fmt.Sprintf("%sleader?wait=true", client.Prefix)
 
 	var body io.Reader
+	var headers http.Header
 	if nodeID != "" {
-		// Create JSON body with node ID
-		reqBody := map[string]string{"id": nodeID}
-		jsonBody, err := json.Marshal(reqBody)
+		jsonBody, err := json.Marshal(map[string]string{"id": nodeID})
 		if err != nil {
 			return err
 		}
 		body = bytes.NewReader(jsonBody)
+		headers = http.Header{"Content-Type": {"application/json"}}
 	}
 
-	req, err := http.NewRequest("POST", url, body)
-	if err != nil {
-		return err
-	}
-
-	if nodeID != "" {
-		req.Header.Set("Content-Type", "application/json")
-	}
-
-	if argv.Credentials != "" {
-		creds := strings.Split(argv.Credentials, ":")
-		if len(creds) != 2 {
-			return fmt.Errorf("invalid Basic Auth credentials format")
-		}
-		req.SetBasicAuth(creds[0], creds[1])
-	}
-
-	resp, err := client.Do(req)
+	resp, err := client.PostWithHeaders(u, body, headers)
 	if err != nil {
 		return err
 	}
 	defer resp.Body.Close()
+
+	if resp.StatusCode == http.StatusUnauthorized {
+		return fmt.Errorf("unauthorized")
+	}
 	if resp.StatusCode != http.StatusOK {
 		return fmt.Errorf("server responded with %s", resp.Status)
 	}
 	return nil
 }
 
-func sysdump(ctx *cli.Context, client *http.Client, filename string, argv *argT) error {
-	_ = ctx
-	nodes, err := getNodes(client, argv)
+func sysdump(client *httpcl.Client, filename string) error {
+	nodes, err := getNodes(client)
 	if err != nil {
 		return err
 	}
@@ -547,49 +504,30 @@ func sysdump(ctx *cli.Context, client *http.Client, filename string, argv *argT)
 			fmt.Sprintf("%s/readyz", n.ApiAddr),
 			fmt.Sprintf("%s/debug/vars", n.ApiAddr),
 		}
-		if err := urlsToWriter(client, urls, f, argv); err != nil {
+		if err := urlsToWriter(client, urls, f); err != nil {
 			f.WriteString(fmt.Sprintf("Error sysdumping %s: %s\n", n.ApiAddr, err.Error()))
 		}
 	}
 	return nil
 }
 
-func getNodes(client *http.Client, argv *argT) (Nodes, error) {
-	u := url.URL{
-		Scheme: argv.Protocol,
-		Host:   address6(argv),
-		Path:   fmt.Sprintf("%snodes", argv.Prefix),
-	}
-	urlStr := u.String()
-
-	req, err := http.NewRequest("GET", urlStr, nil)
-	if err != nil {
-		return nil, err
-	}
-	if argv.Credentials != "" {
-		creds := strings.Split(argv.Credentials, ":")
-		if len(creds) != 2 {
-			return nil, fmt.Errorf("invalid Basic Auth credentials format")
-		}
-		req.SetBasicAuth(creds[0], creds[1])
-	}
-
-	resp, err := client.Do(req)
-	if err != nil {
-		return nil, err
-	}
-
-	response, err := io.ReadAll(resp.Body)
+func getNodes(client *httpcl.Client) (Nodes, error) {
+	u := fmt.Sprintf("%snodes", client.Prefix)
+	resp, err := client.Get(u)
 	if err != nil {
 		return nil, err
 	}
 	defer resp.Body.Close()
 
-	var nodes Nodes
-	if err := parseResponse(&response, &nodes); err != nil {
+	response, err := io.ReadAll(resp.Body)
+	if err != nil {
 		return nil, err
 	}
 
+	var nodes Nodes
+	if err := parseResponse(response, &nodes); err != nil {
+		return nil, err
+	}
 	return nodes, nil
 }
 
@@ -616,30 +554,13 @@ func getHTTPClient(argv *argT) (*http.Client, error) {
 	return &client, nil
 }
 
-func getVersionWithClient(client *http.Client, argv *argT) (string, error) {
-	u := url.URL{
-		Scheme: argv.Protocol,
-		Host:   address6(argv),
-		Path:   fmt.Sprintf("%s/status", argv.Prefix),
-	}
-	urlStr := u.String()
-
-	req, err := http.NewRequest("GET", urlStr, nil)
+func getVersion(client *httpcl.Client) (string, error) {
+	u := fmt.Sprintf("%sstatus", client.Prefix)
+	resp, err := client.Get(u)
 	if err != nil {
 		return "", err
 	}
-	if argv.Credentials != "" {
-		creds := strings.Split(argv.Credentials, ":")
-		if len(creds) != 2 {
-			return "", fmt.Errorf("invalid Basic Auth credentials format")
-		}
-		req.SetBasicAuth(creds[0], creds[1])
-	}
-
-	resp, err := client.Do(req)
-	if err != nil {
-		return "", err
-	}
+	defer resp.Body.Close()
 
 	version, ok := resp.Header["X-Rqlite-Version"]
 	if !ok || len(version) != 1 {
@@ -648,90 +569,15 @@ func getVersionWithClient(client *http.Client, argv *argT) (string, error) {
 	return version[0], nil
 }
 
-func sendRequest(ctx *cli.Context, makeNewRequest func(string) (*http.Request, error), urlStr string, argv *argT) ([]byte, error) {
-	w := bytes.NewBuffer(nil)
-	_, err := sendRequestW(ctx, makeNewRequest, urlStr, argv, w)
-	if err != nil {
-		return nil, err
-	}
-	return w.Bytes(), nil
-}
-
-func sendRequestW(ctx *cli.Context, makeNewRequest func(string) (*http.Request, error), urlStr string, argv *argT, w io.Writer) (int64, error) {
-	_ = ctx
-	url := urlStr
-	tlsConfig, err := rtls.CreateClientConfig(argv.ClientCert, argv.ClientKey, argv.CACert, rtls.NoServerName, argv.Insecure)
-	if err != nil {
-		return 0, err
-	}
-	tlsConfig.NextProtos = nil // CLI refuses to connect otherwise.
-	client := http.Client{Transport: &http.Transport{
-		TLSClientConfig: tlsConfig,
-		Proxy:           http.ProxyFromEnvironment,
-	}}
-
-	// Explicitly handle redirects.
-	client.CheckRedirect = func(req *http.Request, via []*http.Request) error {
-		return http.ErrUseLastResponse
-	}
-
-	nRedirect := 0
-	for {
-		req, err := makeNewRequest(url)
-		if err != nil {
-			return 0, err
-		}
-
-		if argv.Credentials != "" {
-			creds := strings.Split(argv.Credentials, ":")
-			if len(creds) != 2 {
-				return 0, fmt.Errorf("invalid Basic Auth credentials format")
-			}
-			req.SetBasicAuth(creds[0], creds[1])
-		}
-
-		resp, err := client.Do(req)
-		if err != nil {
-			return 0, err
-		}
-
-		n, err := io.Copy(w, resp.Body)
-		if err != nil {
-			return n, err
-		}
-		resp.Body.Close()
-
-		if resp.StatusCode == http.StatusUnauthorized {
-			return 0, fmt.Errorf("unauthorized")
-		}
-
-		if resp.StatusCode == http.StatusMovedPermanently {
-			nRedirect++
-			if nRedirect > maxRedirect {
-				return 0, fmt.Errorf("maximum leader redirect limit exceeded")
-			}
-			url = resp.Header["Location"][0]
-			continue
-		}
-
-		if resp.StatusCode != http.StatusOK {
-			return 0, fmt.Errorf("server responded with: %s", resp.Status)
-		}
-
-		return n, nil
-	}
-}
-
-func parseResponse(response *[]byte, ret any) error {
-	decoder := json.NewDecoder(strings.NewReader(string(*response)))
+func parseResponse(response []byte, ret any) error {
+	decoder := json.NewDecoder(bytes.NewReader(response))
 	decoder.UseNumber()
 	return decoder.Decode(ret)
 }
 
-func extensions(ctx *cli.Context, client *httpcl.Client, cmd string, argv *argT) error {
-	_ = cmd
-	url := fmt.Sprintf("%s://%s/status?key=extensions", argv.Protocol, address6(argv))
-	resp, err := client.Get(url)
+func extensions(ctx *cli.Context, client *httpcl.Client) error {
+	u := fmt.Sprintf("%sstatus?key=extensions", client.Prefix)
+	resp, err := client.Get(u)
 	if err != nil {
 		return err
 	}
@@ -749,9 +595,7 @@ func extensions(ctx *cli.Context, client *httpcl.Client, cmd string, argv *argT)
 	}
 
 	ret := make(map[string]any)
-	decoder := json.NewDecoder(strings.NewReader(string(body)))
-	decoder.UseNumber()
-	if err := decoder.Decode(&ret); err != nil {
+	if err := parseResponse(body, &ret); err != nil {
 		return err
 	}
 
@@ -769,36 +613,8 @@ func extensions(ctx *cli.Context, client *httpcl.Client, cmd string, argv *argT)
 // cliJSON fetches JSON from a URL, and displays it at the CLI. If line contains more
 // than one word, then the JSON is filtered to only show the key specified in the
 // second word.
-func cliJSON(ctx *cli.Context, client *httpcl.Client, line, url string) error {
-	_ = ctx
-	// Recursive JSON printer with sorted keys.
-	var pprint func(indent int, m map[string]any)
-	pprint = func(indent int, m map[string]any) {
-		const indentation = "  "
-
-		// Print in key order.
-		for _, k := range slices.Sorted(maps.Keys(m)) {
-			v := m[k]
-			if v == nil {
-				continue
-			}
-			switch w := v.(type) {
-			case map[string]any:
-				for i := 0; i < indent; i++ {
-					fmt.Print(indentation)
-				}
-				fmt.Printf("%s:\n", k)
-				pprint(indent+1, w)
-			default:
-				for i := 0; i < indent; i++ {
-					fmt.Print(indentation)
-				}
-				fmt.Printf("%s: %v\n", k, v)
-			}
-		}
-	}
-
-	resp, err := client.Get(url)
+func cliJSON(ctx *cli.Context, client *httpcl.Client, line, u string) error {
+	resp, err := client.Get(u)
 	if err != nil {
 		return err
 	}
@@ -814,9 +630,7 @@ func cliJSON(ctx *cli.Context, client *httpcl.Client, line, url string) error {
 	}
 
 	ret := make(map[string]any)
-	decoder := json.NewDecoder(strings.NewReader(string(body)))
-	decoder.UseNumber()
-	if err := decoder.Decode(&ret); err != nil {
+	if err := parseResponse(body, &ret); err != nil {
 		return err
 	}
 
@@ -825,30 +639,41 @@ func cliJSON(ctx *cli.Context, client *httpcl.Client, line, url string) error {
 	if len(parts) >= 2 {
 		ret = map[string]any{parts[1]: ret[parts[1]]}
 	}
-	pprint(0, ret)
+	pprintJSON(0, ret)
 
 	return nil
 }
 
-func urlsToWriter(client *http.Client, urls []string, w io.Writer, argv *argT) error {
-	for i := range urls {
+func pprintJSON(indent int, m map[string]any) {
+	const indentation = "  "
+	for _, k := range slices.Sorted(maps.Keys(m)) {
+		v := m[k]
+		if v == nil {
+			continue
+		}
+		switch w := v.(type) {
+		case map[string]any:
+			for i := 0; i < indent; i++ {
+				fmt.Print(indentation)
+			}
+			fmt.Printf("%s:\n", k)
+			pprintJSON(indent+1, w)
+		default:
+			for i := 0; i < indent; i++ {
+				fmt.Print(indentation)
+			}
+			fmt.Printf("%s: %v\n", k, v)
+		}
+	}
+}
+
+func urlsToWriter(client *httpcl.Client, urls []string, w io.Writer) error {
+	for _, u := range urls {
 		err := func() error {
 			w.Write([]byte("\n=========================================\n"))
-			w.Write([]byte(fmt.Sprintf("URL: %s\n", urls[i])))
+			w.Write([]byte(fmt.Sprintf("URL: %s\n", u)))
 
-			req, err := http.NewRequest("GET", urls[i], nil)
-			if err != nil {
-				return err
-			}
-			if argv.Credentials != "" {
-				creds := strings.Split(argv.Credentials, ":")
-				if len(creds) != 2 {
-					return fmt.Errorf("invalid Basic Auth credentials format")
-				}
-				req.SetBasicAuth(creds[0], creds[1])
-			}
-
-			resp, err := client.Do(req)
+			resp, err := client.Get(u)
 			if err != nil {
 				if _, err := w.Write([]byte(fmt.Sprintf("Status: %s\n\n", err))); err != nil {
 					return err

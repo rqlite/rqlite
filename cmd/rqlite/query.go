@@ -12,45 +12,47 @@ import (
 	cl "github.com/rqlite/rqlite/v10/cmd/rqlite/http"
 )
 
-// Rows represents query result
-type Rows struct {
-	Columns []string `json:"columns"`
-	Types   []string `json:"types"`
-	Values  [][]any  `json:"values"`
-	Time    float64  `json:"time"`
-	Error   string   `json:"error,omitempty"`
+// TableData holds tabular result data and implements the textutil.Table interface.
+type TableData struct {
+	Columns []string `json:"columns,omitempty"`
+	Types   []string `json:"types,omitempty"`
+	Values  [][]any  `json:"values,omitempty"`
 }
 
-// RowCount implements textutil.Table interface
-func (r *Rows) RowCount() int {
-	return len(r.Values) + 1
+func (t *TableData) RowCount() int {
+	return len(t.Values) + 1
 }
 
-// ColCount implements textutil.Table interface
-func (r *Rows) ColCount() int {
-	return len(r.Columns)
+func (t *TableData) ColCount() int {
+	return len(t.Columns)
 }
 
-// Get implements textutil.Table interface
-func (r *Rows) Get(i, j int) string {
+func (t *TableData) Get(i, j int) string {
 	if i == 0 {
-		if j >= len(r.Columns) {
+		if j >= len(t.Columns) {
 			return ""
 		}
-		return r.Columns[j]
+		return t.Columns[j]
 	}
 
-	if r.Values == nil {
+	if t.Values == nil {
 		return "NULL"
 	}
 
-	if i-1 >= len(r.Values) {
+	if i-1 >= len(t.Values) {
 		return "NULL"
 	}
-	if j >= len(r.Values[i-1]) {
+	if j >= len(t.Values[i-1]) {
 		return "NULL"
 	}
-	return fmt.Sprintf("%v", r.Values[i-1][j])
+	return fmt.Sprintf("%v", t.Values[i-1][j])
+}
+
+// Rows represents query result
+type Rows struct {
+	TableData
+	Time  float64 `json:"time"`
+	Error string  `json:"error,omitempty"`
 }
 
 func (r *Rows) validate() error {
@@ -122,7 +124,7 @@ func queryWithClient(ctx *cli.Context, client *cl.Client, timer, blobArray bool,
 
 	// Parse response and write results
 	ret := &queryResponse{}
-	if err := parseResponse(&response, &ret); err != nil {
+	if err := parseResponse(response, &ret); err != nil {
 		return err
 	}
 	if ret.Error != "" {
