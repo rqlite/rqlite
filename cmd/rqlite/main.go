@@ -69,6 +69,7 @@ func init() {
 		`.help                                         Show this message`,
 		`.indexes                                      Show names of all indexes`,
 		`.leader                                       Show the current cluster leader`,
+		`.mode [column|csv|json|line]                  Show or set output mode for query results`,
 		`.nodes [all]                                  Show connection status of voting nodes. 'all' to show all nodes`,
 		`.output FILE                                  Send output to FILE, or stdout if FILE is omitted`,
 		`.quit                                         Exit this program`,
@@ -154,6 +155,7 @@ func main() {
 		forceWrites := false
 		changes := false
 		consistency := "weak"
+		mode := "column"
 		prefix := fmt.Sprintf("%s>", address6(argv))
 
 		var output io.Writer = os.Stdout
@@ -222,11 +224,11 @@ func main() {
 			case ".FORCEWRITES":
 				err = handleToggle(ctx, input, index, &forceWrites)
 			case ".TABLES":
-				err = queryWithClient(output, client, timer, blobArray, consistency, `SELECT name FROM sqlite_master WHERE type="table" ORDER BY name ASC`)
+				err = queryWithClient(output, client, timer, blobArray, consistency, mode, `SELECT name FROM sqlite_master WHERE type="table" ORDER BY name ASC`)
 			case ".INDEXES":
-				err = queryWithClient(output, client, timer, blobArray, consistency, `SELECT sql FROM sqlite_master WHERE type="index"`)
+				err = queryWithClient(output, client, timer, blobArray, consistency, mode, `SELECT sql FROM sqlite_master WHERE type="index"`)
 			case ".SCHEMA":
-				err = queryWithClient(output, client, timer, blobArray, consistency, `SELECT sql FROM sqlite_master WHERE sql IS NOT NULL ORDER BY rowid ASC`)
+				err = queryWithClient(output, client, timer, blobArray, consistency, mode, `SELECT sql FROM sqlite_master WHERE sql IS NOT NULL ORDER BY rowid ASC`)
 			case ".TIMER":
 				err = handleToggle(ctx, input, index, &timer)
 			case ".BLOBARRAY":
@@ -237,6 +239,12 @@ func main() {
 				err = ready(ctx, client)
 			case ".LEADER":
 				err = leader(ctx, client)
+			case ".MODE":
+				if index == -1 || index == len(input)-1 {
+					ctx.String("%s\n", mode)
+					break
+				}
+				err = setMode(input[index+1:], &mode)
 			case ".NODES":
 				err = nodes(ctx, client, index != -1 && index < len(input)-1)
 			case ".EXPVAR":
@@ -290,7 +298,7 @@ func main() {
 				if argErr != nil {
 					err = argErr
 				} else {
-					err = readFile(ctx, output, client, timer, forceWrites, changes, arg)
+					err = readFile(ctx, output, client, timer, forceWrites, changes, mode, arg)
 				}
 			case ".OUTPUT":
 				if index == -1 || index == len(input)-1 {
@@ -329,6 +337,7 @@ func main() {
 				ctx.String("  changes: %s\n", onOff(changes))
 				ctx.String("  consistency: %s\n", consistency)
 				ctx.String("  forcewrites: %s\n", onOff(forceWrites))
+				ctx.String("  mode: %s\n", mode)
 				ctx.String("  output: %s\n", outputName)
 				ctx.String("  timer: %s\n", onOff(timer))
 			case ".SNAPSHOT":
@@ -351,7 +360,7 @@ func main() {
 				}
 				err = stepdown(client, nodeID)
 			default:
-				err = requestWithClient(output, client, timer, forceWrites, changes, input)
+				err = requestWithClient(output, client, timer, forceWrites, changes, mode, input)
 			}
 			if hcerr, ok := err.(*httpcl.HostChangedError); ok {
 				// If a previous request was executed on a different host, make that change
@@ -433,6 +442,16 @@ func parseDumpArgs(arg string) (string, []string) {
 		}
 	}
 	return filename, tables
+}
+
+func setMode(m string, mode *string) error {
+	switch m {
+	case "column", "csv", "json", "line":
+		*mode = m
+		return nil
+	default:
+		return fmt.Errorf("invalid mode '%s'. Use 'column', 'csv', 'json', or 'line'", m)
+	}
 }
 
 func setConsistency(r string, c *string) error {
@@ -594,7 +613,7 @@ func stepdown(client *httpcl.Client, nodeID string) error {
 	return nil
 }
 
-func readFile(ctx *cli.Context, output io.Writer, client *httpcl.Client, timer, forceWrites, changes bool, filename string) error {
+func readFile(ctx *cli.Context, output io.Writer, client *httpcl.Client, timer, forceWrites, changes bool, mode, filename string) error {
 	f, err := os.Open(filename)
 	if err != nil {
 		return err
@@ -608,7 +627,7 @@ func readFile(ctx *cli.Context, output io.Writer, client *httpcl.Client, timer, 
 		if line == "" || strings.HasPrefix(line, "--") {
 			continue
 		}
-		err := requestWithClient(output, client, timer, forceWrites, changes, line)
+		err := requestWithClient(output, client, timer, forceWrites, changes, mode, line)
 		if hcerr, ok := err.(*httpcl.HostChangedError); ok {
 			lastHostChanged = hcerr
 		} else if err != nil {

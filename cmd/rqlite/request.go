@@ -8,7 +8,6 @@ import (
 	"net/url"
 	"strings"
 
-	"github.com/mkideal/pkg/textutil"
 	cl "github.com/rqlite/rqlite/v10/cmd/rqlite/http"
 )
 
@@ -69,7 +68,7 @@ func (ur *unifiedResult) toResult() *Result {
 
 // requestWithClient sends SQL statements to the unified /db/request endpoint
 // and handles the response appropriately based on the result type
-func requestWithClient(output io.Writer, client *cl.Client, timer, forceWrites, changes bool, stmt string) error {
+func requestWithClient(output io.Writer, client *cl.Client, timer, forceWrites, changes bool, mode, stmt string) error {
 	queryStr := url.Values{}
 	if timer {
 		queryStr.Set("timings", "")
@@ -142,7 +141,7 @@ func requestWithClient(output io.Writer, client *cl.Client, timer, forceWrites, 
 		if err := rows.validate(); err != nil {
 			return err
 		}
-		textutil.WriteTable(output, rows, headerRender)
+		writeTable(output, &rows.TableData, mode)
 		if timer {
 			fmt.Fprintf(output, "Run Time: %f seconds\n", result.Time)
 		}
@@ -163,7 +162,7 @@ func requestWithClient(output io.Writer, client *cl.Client, timer, forceWrites, 
 				fmt.Fprintf(output, "last insert ID: %d\n", executeResult.LastInsertID)
 			}
 		} else {
-			textutil.WriteTable(output, executeResult, headerRender)
+			writeTable(output, &executeResult.TableData, mode)
 		}
 	}
 
