@@ -119,6 +119,8 @@ type Store struct {
 	reapDoneCh chan struct{}
 	wg         sync.WaitGroup
 
+	observers *observerSet
+
 	LogReaping bool
 }
 
@@ -138,6 +140,7 @@ func NewStore(dir string) (*Store, error) {
 		reapThreshold:  defaultReapThreshold,
 		reapCh:         make(chan struct{}, 1),
 		reapDoneCh:     make(chan struct{}),
+		observers:      newObserverSet(),
 		logger:         log.New(os.Stderr, "[snapshot-store] ", log.LstdFlags),
 	}
 	str.logger.Printf("store initialized using %s", dir)
@@ -306,6 +309,16 @@ func (s *Store) Open(id string) (raftMeta *raft.SnapshotMeta, rc io.ReadCloser, 
 	return meta, NewLockingStreamer(streamer, s), nil
 }
 
+// RegisterObserver registers an observer to receive observations.
+func (s *Store) RegisterObserver(o *Observer) {
+	s.observers.register(o)
+}
+
+// DeregisterObserver removes a previously registered observer.
+func (s *Store) DeregisterObserver(o *Observer) {
+	s.observers.deregister(o)
+}
+
 // Close shuts down the reaper goroutine and waits for it to exit.
 func (s *Store) Close() error {
 	close(s.reapDoneCh)
@@ -349,7 +362,23 @@ func (s *Store) Reap() (int, int, error) {
 }
 
 // reap performs the actual reap. The caller must hold the write lock.
+// On success, registered observers are notified.
 func (s *Store) reap() (int, int, error) {
+	startTime := time.Now()
+	n, c, err := s.reapInternal()
+	if err != nil {
+		return n, c, err
+	}
+	s.observers.notify(ReapObservation{
+		SnapshotsReaped: n,
+		WALsReaped:      c,
+		Duration:        time.Since(startTime),
+	})
+	return n, c, nil
+}
+
+// reapInternal performs the actual reap logic. The caller must hold the write lock.
+func (s *Store) reapInternal() (int, int, error) {
 	// If a reap plan file exists, that means a previous reap must have encountered an error.
 	// Let's make sure it is completed before we start a new reap.
 	if fileExists(s.reapPlanPath) {
