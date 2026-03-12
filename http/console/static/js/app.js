@@ -26,9 +26,28 @@
         return div.innerHTML.replace(/"/g, "&quot;").replace(/'/g, "&#39;");
     }
 
-    // --- Node Info (header) ---
+    // --- Dark Mode ---
 
-    var nodeInfoDiv = document.getElementById("node-info");
+    var THEME_KEY = "rqlite_theme";
+    var themeToggle = document.getElementById("theme-toggle");
+
+    function applyTheme(theme) {
+        document.documentElement.setAttribute("data-theme", theme);
+        themeToggle.textContent = theme === "dark" ? "\u2600" : "\u263E";
+        themeToggle.title = theme === "dark" ? "Switch to light mode" : "Switch to dark mode";
+    }
+
+    var savedTheme = localStorage.getItem(THEME_KEY) || "light";
+    applyTheme(savedTheme);
+
+    themeToggle.addEventListener("click", function () {
+        var current = document.documentElement.getAttribute("data-theme") || "light";
+        var next = current === "dark" ? "light" : "dark";
+        localStorage.setItem(THEME_KEY, next);
+        applyTheme(next);
+    });
+
+    // --- Node Info (header) ---
 
     var nodeIdText = document.getElementById("node-id-text");
     var raftStateBadge = document.getElementById("raft-state-badge");
@@ -87,6 +106,15 @@
         }
     });
 
+    // --- Auto-grow textarea ---
+
+    function autoGrow() {
+        sqlInput.style.height = "auto";
+        sqlInput.style.height = sqlInput.scrollHeight + "px";
+    }
+
+    sqlInput.addEventListener("input", autoGrow);
+
     // --- Query History ---
 
     var historyDiv = document.getElementById("query-history");
@@ -137,6 +165,7 @@
                 var i = parseInt(li.getAttribute("data-index"), 10);
                 sqlInput.value = history[i];
                 sqlInput.focus();
+                autoGrow();
             });
         });
 
@@ -152,6 +181,9 @@
 
     renderHistory();
 
+    // --- Last query results (for export) ---
+    var lastQueryResults = null;
+
     function executeQuery() {
         var sql = sqlInput.value.trim();
         if (!sql) return;
@@ -163,9 +195,11 @@
 
         apiRequest("POST", "/db/request?timings", [sql])
             .then(function (resp) {
+                lastQueryResults = resp.data;
                 renderResults(resp.data);
             })
             .catch(function (err) {
+                lastQueryResults = null;
                 resultsDiv.innerHTML = '<div class="result-error">' + escapeHTML(err.message) + '</div>';
             })
             .finally(function () {
@@ -180,11 +214,12 @@
         }
 
         var html = "";
-        data.results.forEach(function (result) {
+        data.results.forEach(function (result, idx) {
             if (result.error) {
                 html += '<div class="result-error">' + escapeHTML(result.error) + '</div>';
             } else if (isQueryResult(result)) {
                 html += renderTable(result);
+                html += renderExportButtons(idx);
             } else {
                 html += renderWriteResult(result);
             }
@@ -194,6 +229,16 @@
         });
         resultsDiv.innerHTML = html;
     }
+
+    // Event delegation for export buttons
+    resultsDiv.addEventListener("click", function (e) {
+        var btn = e.target;
+        if (btn.classList.contains("export-csv") || btn.classList.contains("export-json")) {
+            var format = btn.classList.contains("export-csv") ? "csv" : "json";
+            var resultIndex = parseInt(btn.getAttribute("data-result-index"), 10);
+            copyResultAs(format, resultIndex, btn);
+        }
+    });
 
     // Match the rqlite CLI logic: if columns, types, or values is present, it's a query result.
     function isQueryResult(result) {
@@ -211,7 +256,7 @@
         html += "</tr></thead><tbody>";
 
         if (values.length === 0) {
-            html += '<tr><td colspan="' + columns.length + '" style="text-align:center;color:#999;">No rows returned</td></tr>';
+            html += '<tr><td colspan="' + columns.length + '" style="text-align:center;color:var(--text-muted);">No rows returned</td></tr>';
         } else {
             values.forEach(function (row) {
                 html += "<tr>";
@@ -227,6 +272,59 @@
         }
         html += "</tbody></table>";
         return html;
+    }
+
+    function renderExportButtons(resultIndex) {
+        return '<div class="result-export">' +
+            '<button class="export-csv" data-result-index="' + resultIndex + '">Copy CSV</button>' +
+            '<button class="export-json" data-result-index="' + resultIndex + '">Copy JSON</button>' +
+            '</div>';
+    }
+
+    function copyResultAs(format, resultIndex, btn) {
+        if (!lastQueryResults || !lastQueryResults.results || !lastQueryResults.results[resultIndex]) return;
+        var result = lastQueryResults.results[resultIndex];
+        var columns = result.columns || [];
+        var values = result.values || [];
+        var text;
+
+        if (format === "csv") {
+            var lines = [];
+            lines.push(columns.map(csvEscape).join(","));
+            values.forEach(function (row) {
+                var cells = [];
+                for (var j = 0; j < columns.length; j++) {
+                    var val = j < row.length ? row[j] : null;
+                    cells.push(val === null || val === undefined ? "NULL" : csvEscape(String(val)));
+                }
+                lines.push(cells.join(","));
+            });
+            text = lines.join("\n");
+        } else {
+            var rows = [];
+            values.forEach(function (row) {
+                var obj = {};
+                columns.forEach(function (col, j) {
+                    obj[col] = j < row.length ? row[j] : null;
+                });
+                rows.push(obj);
+            });
+            text = JSON.stringify(rows, null, 2);
+        }
+
+        navigator.clipboard.writeText(text).then(function () {
+            var orig = btn.textContent;
+            btn.textContent = "Copied!";
+            setTimeout(function () { btn.textContent = orig; }, 1500);
+        });
+    }
+
+    function csvEscape(val) {
+        var s = String(val);
+        if (s.indexOf(",") !== -1 || s.indexOf('"') !== -1 || s.indexOf("\n") !== -1) {
+            return '"' + s.replace(/"/g, '""') + '"';
+        }
+        return s;
     }
 
     function renderWriteResult(result) {
@@ -474,7 +572,7 @@
                 var val = row[1];
                 var display;
                 if (val === undefined || val === null) {
-                    display = '<span style="color:#999">N/A</span>';
+                    display = '<span style="color:var(--text-muted)">N/A</span>';
                 } else if (typeof val === "boolean") {
                     display = escapeHTML(val ? "Yes" : "No");
                 } else {

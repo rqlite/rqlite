@@ -2,7 +2,6 @@ package main
 
 import (
 	"bytes"
-	"crypto/tls"
 	"errors"
 	"fmt"
 	"io"
@@ -12,6 +11,7 @@ import (
 	"strings"
 
 	"github.com/mkideal/cli"
+	httpcl "github.com/rqlite/rqlite/v10/cmd/rqlite/http"
 )
 
 type restoreResponse struct {
@@ -30,31 +30,28 @@ type statusResponse struct {
 	Store *store `json:"store"`
 }
 
-func makeBackupRequest(urlStr string) (*http.Request, error) {
-	req, err := http.NewRequest("GET", urlStr, nil)
-	if err != nil {
-		return nil, err
-	}
-	return req, nil
-}
-
-func backup(ctx *cli.Context, filename string, argv *argT) error {
-	queryStr := url.Values{}
-	u := url.URL{
-		Scheme:   argv.Protocol,
-		Host:     address6(argv),
-		Path:     fmt.Sprintf("%sdb/backup", argv.Prefix),
-		RawQuery: queryStr.Encode(),
-	}
-
+func backup(ctx *cli.Context, client *httpcl.Client, filename string) error {
 	fd, err := os.OpenFile(filename, os.O_CREATE|os.O_WRONLY, 0644)
 	if err != nil {
 		return err
 	}
 	defer fd.Close()
 
-	_, err = sendRequestW(ctx, makeBackupRequest, u.String(), argv, fd)
+	u := fmt.Sprintf("%sdb/backup", client.Prefix)
+	resp, err := client.Get(u)
 	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode == http.StatusUnauthorized {
+		return fmt.Errorf("unauthorized")
+	}
+	if resp.StatusCode != http.StatusOK {
+		return fmt.Errorf("server responded with: %s", resp.Status)
+	}
+
+	if _, err := io.Copy(fd, resp.Body); err != nil {
 		return err
 	}
 
@@ -62,27 +59,34 @@ func backup(ctx *cli.Context, filename string, argv *argT) error {
 	return nil
 }
 
-func dump(ctx *cli.Context, filename string, tables []string, argv *argT) error {
-	queryStr := url.Values{}
-	queryStr.Set("fmt", "sql")
-	if len(tables) > 0 {
-		queryStr.Set("tables", strings.Join(tables, ","))
-	}
-	u := url.URL{
-		Scheme:   argv.Protocol,
-		Host:     address6(argv),
-		Path:     fmt.Sprintf("%sdb/backup", argv.Prefix),
-		RawQuery: queryStr.Encode(),
-	}
-
+func dump(ctx *cli.Context, client *httpcl.Client, filename string, tables []string) error {
 	fd, err := os.OpenFile(filename, os.O_CREATE|os.O_WRONLY, 0644)
 	if err != nil {
 		return err
 	}
 	defer fd.Close()
 
-	_, err = sendRequestW(ctx, makeBackupRequest, u.String(), argv, fd)
+	queryStr := url.Values{}
+	queryStr.Set("fmt", "sql")
+	if len(tables) > 0 {
+		queryStr.Set("tables", strings.Join(tables, ","))
+	}
+	u := fmt.Sprintf("%sdb/backup?%s", client.Prefix, queryStr.Encode())
+
+	resp, err := client.Get(u)
 	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode == http.StatusUnauthorized {
+		return fmt.Errorf("unauthorized")
+	}
+	if resp.StatusCode != http.StatusOK {
+		return fmt.Errorf("server responded with: %s", resp.Status)
+	}
+
+	if _, err := io.Copy(fd, resp.Body); err != nil {
 		return err
 	}
 
@@ -108,23 +112,8 @@ func validSQLiteData(b []byte) bool {
 	return len(b) > 13 && string(b[0:13]) == "SQLite format"
 }
 
-func makeRestoreRequest(b []byte) func(string) (*http.Request, error) {
-	header := "text/plain"
-	if validSQLiteData(b) {
-		header = "application/octet-stream"
-	}
-	return func(urlStr string) (*http.Request, error) {
-		req, err := http.NewRequest("POST", urlStr, bytes.NewReader(b))
-		req.Header.Set("Content-Type", header)
-		if err != nil {
-			return nil, err
-		}
-		return req, nil
-	}
-}
-
-func restore(ctx *cli.Context, filename string, argv *argT) error {
-	statusRet, err := checkStatus(ctx, argv)
+func restore(ctx *cli.Context, client *httpcl.Client, filename string) error {
+	statusRet, err := checkStatus(client)
 	if err != nil {
 		return err
 	}
@@ -135,7 +124,6 @@ func restore(ctx *cli.Context, filename string, argv *argT) error {
 	}
 
 	if !validSQLiteData(restoreFile) {
-		// It is cheaper to append the actual pragma command to the restore file
 		fkEnabled := statusRet.Store.SqliteStatus.FkConstraint == "enabled"
 		if fkEnabled {
 			restoreFile = append(restoreFile, []byte("PRAGMA foreign_keys=ON;")...)
@@ -144,20 +132,33 @@ func restore(ctx *cli.Context, filename string, argv *argT) error {
 		}
 	}
 
-	queryStr := url.Values{}
-	restoreURL := url.URL{
-		Scheme:   argv.Protocol,
-		Host:     address6(argv),
-		Path:     fmt.Sprintf("%sdb/load", argv.Prefix),
-		RawQuery: queryStr.Encode(),
+	contentType := "text/plain"
+	if validSQLiteData(restoreFile) {
+		contentType = "application/octet-stream"
 	}
-	response, err := sendRequest(ctx, makeRestoreRequest(restoreFile), restoreURL.String(), argv)
+
+	u := fmt.Sprintf("%sdb/load", client.Prefix)
+	headers := http.Header{"Content-Type": {contentType}}
+	resp, err := client.PostWithHeaders(u, bytes.NewReader(restoreFile), headers)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode == http.StatusUnauthorized {
+		return fmt.Errorf("unauthorized")
+	}
+	if resp.StatusCode != http.StatusOK {
+		return fmt.Errorf("server responded with: %s", resp.Status)
+	}
+
+	response, err := io.ReadAll(resp.Body)
 	if err != nil {
 		return err
 	}
 
 	restoreRet := &restoreResponse{}
-	if err := parseResponse(&response, &restoreRet); err != nil {
+	if err := parseResponse(response, &restoreRet); err != nil {
 		return err
 	}
 	if !validSQLiteData(restoreFile) {
@@ -176,49 +177,34 @@ func restore(ctx *cli.Context, filename string, argv *argT) error {
 	return nil
 }
 
-func boot(ctx *cli.Context, filename string, argv *argT) error {
-	if _, err := checkStatus(ctx, argv); err != nil {
+func boot(ctx *cli.Context, client *httpcl.Client, filename string) error {
+	if _, err := checkStatus(client); err != nil {
 		return err
 	}
 
-	client := http.Client{Transport: &http.Transport{
-		Proxy:           http.ProxyFromEnvironment,
-		TLSClientConfig: &tls.Config{InsecureSkipVerify: argv.Insecure},
-	}}
-
-	// File is OK?
 	if !validSQLiteFile(filename) {
 		return fmt.Errorf("%s is not a valid SQLite file", filename)
 	}
 
-	// Do the boot.
 	fd, err := os.Open(filename)
 	if err != nil {
 		return err
 	}
 	defer fd.Close()
 
-	bootURL := fmt.Sprintf("%s://%s/boot", argv.Protocol, address6(argv))
-	req, err := http.NewRequest("POST", bootURL, fd)
-	if err != nil {
-		return err
-	}
-	if argv.Credentials != "" {
-		creds := strings.Split(argv.Credentials, ":")
-		if len(creds) != 2 {
-			return fmt.Errorf("invalid Basic Auth credentials format")
-		}
-		req.SetBasicAuth(creds[0], creds[1])
-	}
-
-	resp, err := client.Do(req)
+	u := fmt.Sprintf("%sboot", client.Prefix)
+	resp, err := client.Post(u, fd)
 	if err != nil {
 		return err
 	}
 	defer resp.Body.Close()
+
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
 		return err
+	}
+	if resp.StatusCode == http.StatusUnauthorized {
+		return fmt.Errorf("unauthorized")
 	}
 	if resp.StatusCode != http.StatusOK {
 		errMsg := fmt.Sprintf("boot failed, status code: %s", resp.Status)
@@ -232,41 +218,24 @@ func boot(ctx *cli.Context, filename string, argv *argT) error {
 	return nil
 }
 
-func checkStatus(ctx *cli.Context, argv *argT) (*statusResponse, error) {
-	_ = ctx
-	statusURL := fmt.Sprintf("%s://%s/status", argv.Protocol, address6(argv))
-	client := http.Client{Transport: &http.Transport{
-		Proxy:           http.ProxyFromEnvironment,
-		TLSClientConfig: &tls.Config{InsecureSkipVerify: argv.Insecure},
-	}}
-
-	req, err := http.NewRequest("GET", statusURL, nil)
+func checkStatus(client *httpcl.Client) (*statusResponse, error) {
+	u := fmt.Sprintf("%sstatus", client.Prefix)
+	resp, err := client.Get(u)
 	if err != nil {
 		return nil, err
 	}
-	if argv.Credentials != "" {
-		creds := strings.Split(argv.Credentials, ":")
-		if len(creds) != 2 {
-			return nil, fmt.Errorf("invalid Basic Auth credentials format")
-		}
-		req.SetBasicAuth(creds[0], creds[1])
-	}
+	defer resp.Body.Close()
 
-	statusResp, err := client.Do(req)
-	if err != nil {
-		return nil, err
-	}
-	defer statusResp.Body.Close()
-	if statusResp.StatusCode == http.StatusUnauthorized {
+	if resp.StatusCode == http.StatusUnauthorized {
 		return nil, fmt.Errorf("unauthorized")
 	}
 
-	body, err := io.ReadAll(statusResp.Body)
+	body, err := io.ReadAll(resp.Body)
 	if err != nil {
 		return nil, err
 	}
 	statusRet := &statusResponse{}
-	if err := parseResponse(&body, &statusRet); err != nil {
+	if err := parseResponse(body, &statusRet); err != nil {
 		return nil, err
 	}
 	if statusRet.Store == nil {

@@ -69,57 +69,6 @@ func ResetStats() {
 	stats.Add(snapshotFullCRC32CreateDuration, 0)
 }
 
-// LockingSink is a wrapper around a Sink holds the MSRW lock
-// while the Sink is in use.
-type LockingSink struct {
-	raft.SnapshotSink
-	str *Store
-
-	mu     sync.Mutex
-	closed bool
-	logger *log.Logger
-}
-
-// NewLockingSink returns a new LockingSink.
-func NewLockingSink(sink raft.SnapshotSink, str *Store) *LockingSink {
-	return &LockingSink{
-		SnapshotSink: sink,
-		str:          str,
-		logger:       log.New(os.Stderr, "[snapshot-locking-sink] ", log.LstdFlags),
-	}
-}
-
-// Close closes the sink, unlocking the Store for creation of a new sink.
-// After a successful close, the reaper goroutine is signaled.
-func (s *LockingSink) Close() error {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	if s.closed {
-		return nil
-	}
-	s.closed = true
-
-	err := s.SnapshotSink.Close()
-	if err == nil {
-		s.str.signalReap()
-	}
-	return err
-}
-
-// Cancel cancels the sink, unlocking the Store for creation of a new sink.
-func (s *LockingSink) Cancel() error {
-	defer func() {
-		s.logger.Printf("sink %s canceled", s.ID())
-	}()
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	if s.closed {
-		return nil
-	}
-	s.closed = true
-	return s.SnapshotSink.Cancel()
-}
-
 // LockingStreamer is a snapshot which holds the Snapshot Store MRSW read-lok
 // while it is open.
 type LockingStreamer struct {
@@ -222,11 +171,11 @@ func (s *Store) Create(version raft.SnapshotVersion, index, term uint64, configu
 		Term:               term,
 		Configuration:      configuration,
 		ConfigurationIndex: configurationIndex,
-	}, s)
+	}, s, s.reapCh)
 	if err := sink.Open(); err != nil {
 		return nil, err
 	}
-	return NewLockingSink(sink, s), nil
+	return sink, nil
 }
 
 // ListAll returns the list of all available snapshots in the Store,
@@ -644,7 +593,7 @@ func (s *Store) snapshotCount() int {
 	return n
 }
 
-// reapLoop is the reaper goroutine. It waits for signals from LockingSink.Close()
+// reapLoop is the reaper goroutine. It waits for signals from Sink.Close()
 // and reaps snapshots when the count exceeds the threshold. It uses a blocking
 // write lock acquisition so it will wait for active readers to finish rather
 // than failing.

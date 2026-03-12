@@ -8,53 +8,17 @@ import (
 	"net/url"
 	"strings"
 
-	"github.com/mkideal/cli"
-	"github.com/mkideal/pkg/textutil"
 	cl "github.com/rqlite/rqlite/v10/cmd/rqlite/http"
 )
 
 // Result represents execute result. It is possible that an execute result
 // returns Rows (for example, if RETURNING clause is used in an INSERT statement).
 type Result struct {
-	LastInsertID int      `json:"last_insert_id,omitempty"`
-	RowsAffected int      `json:"rows_affected,omitempty"`
-	Columns      []string `json:"columns,omitempty"`
-	Types        []string `json:"types,omitempty"`
-	Values       [][]any  `json:"values,omitempty"`
-	Time         float64  `json:"time,omitempty"`
-	Error        string   `json:"error,omitempty"`
-}
-
-// RowCount implements textutil.Table interface
-func (r *Result) RowCount() int {
-	return len(r.Values) + 1
-}
-
-// ColCount implements textutil.Table interface
-func (r *Result) ColCount() int {
-	return len(r.Columns)
-}
-
-// Get implements textutil.Table interface
-func (r *Result) Get(i, j int) string {
-	if i == 0 {
-		if j >= len(r.Columns) {
-			return ""
-		}
-		return r.Columns[j]
-	}
-
-	if r.Values == nil {
-		return "NULL"
-	}
-
-	if i-1 >= len(r.Values) {
-		return "NULL"
-	}
-	if j >= len(r.Values[i-1]) {
-		return "NULL"
-	}
-	return fmt.Sprintf("%v", r.Values[i-1][j])
+	TableData
+	LastInsertID int     `json:"last_insert_id,omitempty"`
+	RowsAffected int     `json:"rows_affected,omitempty"`
+	Time         float64 `json:"time,omitempty"`
+	Error        string  `json:"error,omitempty"`
 }
 
 // unifiedResponse represents the response structure from the /db/request endpoint
@@ -66,10 +30,7 @@ type unifiedResponse struct {
 
 // unifiedResult represents a single result item that can be either query or execute
 type unifiedResult struct {
-	// Query result fields
-	Columns []string `json:"columns,omitempty"`
-	Types   []string `json:"types,omitempty"`
-	Values  [][]any  `json:"values,omitempty"`
+	TableData
 
 	// Execute result fields
 	LastInsertID int `json:"last_insert_id,omitempty"`
@@ -88,17 +49,16 @@ func (ur *unifiedResult) isQueryResult() bool {
 // toRows converts a unified result to Rows format for display
 func (ur *unifiedResult) toRows() *Rows {
 	return &Rows{
-		Columns: ur.Columns,
-		Types:   ur.Types,
-		Values:  ur.Values,
-		Time:    ur.Time,
-		Error:   ur.Error,
+		TableData: ur.TableData,
+		Time:      ur.Time,
+		Error:     ur.Error,
 	}
 }
 
 // toResult converts a unified result to Result format for display
 func (ur *unifiedResult) toResult() *Result {
 	return &Result{
+		TableData:    ur.TableData,
 		LastInsertID: ur.LastInsertID,
 		RowsAffected: ur.RowsAffected,
 		Time:         ur.Time,
@@ -108,7 +68,7 @@ func (ur *unifiedResult) toResult() *Result {
 
 // requestWithClient sends SQL statements to the unified /db/request endpoint
 // and handles the response appropriately based on the result type
-func requestWithClient(ctx *cli.Context, client *cl.Client, timer, forceWrites bool, stmt string) error {
+func requestWithClient(output io.Writer, client *cl.Client, timer, forceWrites, changes bool, mode, stmt string) error {
 	queryStr := url.Values{}
 	if timer {
 		queryStr.Set("timings", "")
@@ -158,7 +118,7 @@ func requestWithClient(ctx *cli.Context, client *cl.Client, timer, forceWrites b
 
 	// Parse unified response
 	ret := &unifiedResponse{}
-	if err := parseResponse(&response, &ret); err != nil {
+	if err := parseResponse(response, &ret); err != nil {
 		return err
 	}
 	if ret.Error != "" {
@@ -170,7 +130,7 @@ func requestWithClient(ctx *cli.Context, client *cl.Client, timer, forceWrites b
 
 	result := ret.Results[0]
 	if result.Error != "" {
-		ctx.String("Error: %s\n", result.Error)
+		fmt.Fprintf(output, "Error: %s\n", result.Error)
 		return hcr
 	}
 
@@ -181,9 +141,9 @@ func requestWithClient(ctx *cli.Context, client *cl.Client, timer, forceWrites b
 		if err := rows.validate(); err != nil {
 			return err
 		}
-		textutil.WriteTable(ctx, rows, headerRender)
+		writeTable(output, &rows.TableData, mode)
 		if timer {
-			fmt.Printf("Run Time: %f seconds\n", result.Time)
+			fmt.Fprintf(output, "Run Time: %f seconds\n", result.Time)
 		}
 	} else {
 		// Display as execute result
@@ -194,12 +154,15 @@ func requestWithClient(ctx *cli.Context, client *cl.Client, timer, forceWrites b
 				rowString = "rows"
 			}
 			if timer {
-				ctx.String("%d %s affected (%f sec)\n", executeResult.RowsAffected, rowString, executeResult.Time)
+				fmt.Fprintf(output, "%d %s affected (%f sec)\n", executeResult.RowsAffected, rowString, executeResult.Time)
 			} else {
-				ctx.String("%d %s affected\n", executeResult.RowsAffected, rowString)
+				fmt.Fprintf(output, "%d %s affected\n", executeResult.RowsAffected, rowString)
+			}
+			if changes {
+				fmt.Fprintf(output, "last insert ID: %d\n", executeResult.LastInsertID)
 			}
 		} else {
-			textutil.WriteTable(ctx, executeResult, headerRender)
+			writeTable(output, &executeResult.TableData, mode)
 		}
 	}
 

@@ -1,56 +1,59 @@
 package main
 
 import (
+	"encoding/csv"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
 	"net/http"
 	"net/url"
 
-	"github.com/mkideal/cli"
 	"github.com/mkideal/pkg/textutil"
 	cl "github.com/rqlite/rqlite/v10/cmd/rqlite/http"
 )
 
-// Rows represents query result
-type Rows struct {
-	Columns []string `json:"columns"`
-	Types   []string `json:"types"`
-	Values  [][]any  `json:"values"`
-	Time    float64  `json:"time"`
-	Error   string   `json:"error,omitempty"`
+// TableData holds tabular result data and implements the textutil.Table interface.
+type TableData struct {
+	Columns []string `json:"columns,omitempty"`
+	Types   []string `json:"types,omitempty"`
+	Values  [][]any  `json:"values,omitempty"`
 }
 
-// RowCount implements textutil.Table interface
-func (r *Rows) RowCount() int {
-	return len(r.Values) + 1
+func (t *TableData) RowCount() int {
+	return len(t.Values) + 1
 }
 
-// ColCount implements textutil.Table interface
-func (r *Rows) ColCount() int {
-	return len(r.Columns)
+func (t *TableData) ColCount() int {
+	return len(t.Columns)
 }
 
-// Get implements textutil.Table interface
-func (r *Rows) Get(i, j int) string {
+func (t *TableData) Get(i, j int) string {
 	if i == 0 {
-		if j >= len(r.Columns) {
+		if j >= len(t.Columns) {
 			return ""
 		}
-		return r.Columns[j]
+		return t.Columns[j]
 	}
 
-	if r.Values == nil {
+	if t.Values == nil {
 		return "NULL"
 	}
 
-	if i-1 >= len(r.Values) {
+	if i-1 >= len(t.Values) {
 		return "NULL"
 	}
-	if j >= len(r.Values[i-1]) {
+	if j >= len(t.Values[i-1]) {
 		return "NULL"
 	}
-	return fmt.Sprintf("%v", r.Values[i-1][j])
+	return fmt.Sprintf("%v", t.Values[i-1][j])
+}
+
+// Rows represents query result
+type Rows struct {
+	TableData
+	Time  float64 `json:"time"`
+	Error string  `json:"error,omitempty"`
 }
 
 func (r *Rows) validate() error {
@@ -75,13 +78,86 @@ func (render headerRenderStyle) CellRender(row, col int, cell string, cw *textut
 
 var headerRender = &headerRenderStyle{}
 
+// writeTable formats and writes TableData to the writer in the given mode.
+func writeTable(w io.Writer, t *TableData, mode string) {
+	switch mode {
+	case "csv":
+		writeCSV(w, t)
+	case "json":
+		writeJSON(w, t)
+	case "line":
+		writeLine(w, t)
+	default:
+		textutil.WriteTable(w, t, headerRender)
+	}
+}
+
+func writeCSV(w io.Writer, t *TableData) {
+	cw := csv.NewWriter(w)
+	cw.Write(t.Columns)
+	for _, row := range t.Values {
+		record := make([]string, len(t.Columns))
+		for j := range t.Columns {
+			if j < len(row) && row[j] != nil {
+				record[j] = fmt.Sprintf("%v", row[j])
+			} else {
+				record[j] = "NULL"
+			}
+		}
+		cw.Write(record)
+	}
+	cw.Flush()
+}
+
+func writeJSON(w io.Writer, t *TableData) {
+	rows := make([]map[string]any, 0, len(t.Values))
+	for _, row := range t.Values {
+		m := make(map[string]any, len(t.Columns))
+		for j, col := range t.Columns {
+			if j < len(row) {
+				m[col] = row[j]
+			} else {
+				m[col] = nil
+			}
+		}
+		rows = append(rows, m)
+	}
+	data, err := json.MarshalIndent(rows, "", "  ")
+	if err != nil {
+		fmt.Fprintf(w, "Error: %s\n", err)
+		return
+	}
+	fmt.Fprintf(w, "%s\n", data)
+}
+
+func writeLine(w io.Writer, t *TableData) {
+	maxWidth := 0
+	for _, col := range t.Columns {
+		if len(col) > maxWidth {
+			maxWidth = len(col)
+		}
+	}
+	for i, row := range t.Values {
+		if i > 0 {
+			fmt.Fprintln(w)
+		}
+		for j, col := range t.Columns {
+			val := "NULL"
+			if j < len(row) && row[j] != nil {
+				val = fmt.Sprintf("%v", row[j])
+			}
+			fmt.Fprintf(w, "%*s = %s\n", maxWidth, col, val)
+		}
+	}
+}
+
 type queryResponse struct {
 	Results []*Rows `json:"results"`
 	Error   string  `json:"error,omitempty"`
 	Time    float64 `json:"time"`
 }
 
-func queryWithClient(ctx *cli.Context, client *cl.Client, timer, blobArray bool, consistency, query string) error {
+func queryWithClient(output io.Writer, client *cl.Client, timer, blobArray bool, consistency, mode, query string) error {
 	queryStr := url.Values{}
 	queryStr.Set("level", consistency)
 	queryStr.Set("q", query)
@@ -122,7 +198,7 @@ func queryWithClient(ctx *cli.Context, client *cl.Client, timer, blobArray bool,
 
 	// Parse response and write results
 	ret := &queryResponse{}
-	if err := parseResponse(&response, &ret); err != nil {
+	if err := parseResponse(response, &ret); err != nil {
 		return err
 	}
 	if ret.Error != "" {
@@ -136,10 +212,10 @@ func queryWithClient(ctx *cli.Context, client *cl.Client, timer, blobArray bool,
 	if err := result.validate(); err != nil {
 		return err
 	}
-	textutil.WriteTable(ctx, result, headerRender)
+	writeTable(output, &result.TableData, mode)
 
 	if timer {
-		fmt.Printf("Run Time: %f seconds\n", result.Time)
+		fmt.Fprintf(output, "Run Time: %f seconds\n", result.Time)
 	}
 	return hcr
 }
