@@ -30,8 +30,15 @@ import (
 const HOST_ENV_VAR = "RQLITE_HOST"
 
 type Node struct {
-	ApiAddr string `json:"api_addr"`
-	_       json.RawMessage
+	Addr      string  `json:"addr"`
+	ApiAddr   string  `json:"api_addr"`
+	ID        string  `json:"id"`
+	Leader    bool    `json:"leader"`
+	Reachable bool    `json:"reachable"`
+	Time      float64 `json:"time"`
+	TimeS     string  `json:"time_s"`
+	Version   string  `json:"version"`
+	Voter     bool    `json:"voter"`
 }
 
 type Nodes map[string]Node
@@ -505,22 +512,30 @@ func leader(ctx *cli.Context, client *httpcl.Client) error {
 		return fmt.Errorf("server responded with %s: %s", resp.Status, body)
 	}
 
-	allNodes := make(map[string]any)
+	// Parse into typed struct to find the leader safely.
+	var allNodes Nodes
 	if err := parseResponse(body, &allNodes); err != nil {
 		return err
 	}
 
-	for id, v := range allNodes {
-		node, ok := v.(map[string]any)
-		if !ok {
-			continue
-		}
-		if isLeader, ok := node["leader"].(bool); ok && isLeader {
-			pprintJSON(0, map[string]any{id: node})
-			return nil
+	leaderID := ""
+	for id, node := range allNodes {
+		if node.Leader {
+			leaderID = id
+			break
 		}
 	}
-	return fmt.Errorf("no leader found")
+	if leaderID == "" {
+		return fmt.Errorf("no leader found")
+	}
+
+	// Re-parse as untyped map for display, filtered to just the leader.
+	var rawNodes map[string]any
+	if err := parseResponse(body, &rawNodes); err != nil {
+		return err
+	}
+	pprintJSON(0, map[string]any{leaderID: rawNodes[leaderID]})
+	return nil
 }
 
 func nodes(ctx *cli.Context, client *httpcl.Client, all bool) error {
