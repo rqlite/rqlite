@@ -15,7 +15,7 @@ Upgrading from v7 or later is seamless and has been extensively tested. v10 supp
 **Downgrading from v10 is not supported.** If you need to downgrade, back up your v10 system and use that backup to deploy a new pre-v10 system.
 
 ### New features
-- [PR #2480](https://github.com/rqlite/rqlite/pull/2480), [PR #2482](https://github.com/rqlite/rqlite/pull/2482), [PR #2487](https://github.com/rqlite/rqlite/pull/2487): Add built-in web application for working with rqlite, including running queries. Application is served at `/console`.
+- [PR #2480](https://github.com/rqlite/rqlite/pull/2480), [PR #2482](https://github.com/rqlite/rqlite/pull/2482), [PR #2487](https://github.com/rqlite/rqlite/pull/2487), [PR #2559](https://github.com/rqlite/rqlite/pull/2559): Add built-in web application for working with rqlite, including running queries. Application is served at `/console`.
 - [PR #2497](https://github.com/rqlite/rqlite/pull/2497): rqlite shell supports specifying trailing logs for a `.snapshot` operation.
 - [PR #2520](https://github.com/rqlite/rqlite/pull/2520): Support user-triggered Snapshot reaping, including add an associated rqlite shell command.
 - [PR #2525](https://github.com/rqlite/rqlite/pull/2525): Add on/off control for inter-node snapshot transfer compression. Compression is off by default.

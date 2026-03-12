@@ -37,7 +37,7 @@
         themeToggle.title = theme === "dark" ? "Switch to light mode" : "Switch to dark mode";
     }
 
-    var savedTheme = localStorage.getItem(THEME_KEY) || "dark";
+    var savedTheme = localStorage.getItem(THEME_KEY) || "light";
     applyTheme(savedTheme);
 
     themeToggle.addEventListener("click", function () {
