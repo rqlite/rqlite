@@ -228,21 +228,17 @@
             }
         });
         resultsDiv.innerHTML = html;
-
-        // Attach export button handlers
-        resultsDiv.querySelectorAll(".export-csv").forEach(function (btn) {
-            btn.addEventListener("click", function () {
-                var i = parseInt(btn.getAttribute("data-result-index"), 10);
-                copyResultAs("csv", i, btn);
-            });
-        });
-        resultsDiv.querySelectorAll(".export-json").forEach(function (btn) {
-            btn.addEventListener("click", function () {
-                var i = parseInt(btn.getAttribute("data-result-index"), 10);
-                copyResultAs("json", i, btn);
-            });
-        });
     }
+
+    // Event delegation for export buttons
+    resultsDiv.addEventListener("click", function (e) {
+        var btn = e.target;
+        if (btn.classList.contains("export-csv") || btn.classList.contains("export-json")) {
+            var format = btn.classList.contains("export-csv") ? "csv" : "json";
+            var resultIndex = parseInt(btn.getAttribute("data-result-index"), 10);
+            copyResultAs(format, resultIndex, btn);
+        }
+    });
 
     // Match the rqlite CLI logic: if columns, types, or values is present, it's a query result.
     function isQueryResult(result) {
