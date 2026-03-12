@@ -301,18 +301,11 @@ func main() {
 					err = readFile(ctx, output, client, timer, forceWrites, changes, mode, arg)
 				}
 			case ".OUTPUT":
-				if index == -1 || index == len(input)-1 {
-					// No argument: reset to stdout
-					if outputFile != nil {
-						outputFile.Close()
-						outputFile = nil
-					}
-					output = os.Stdout
-					outputName = "stdout"
-					break
+				arg := ""
+				if index != -1 && index < len(input)-1 {
+					arg = input[index+1:]
 				}
-				arg := input[index+1:]
-				if arg == "stdout" {
+				if arg == "" || arg == "stdout" {
 					if outputFile != nil {
 						outputFile.Close()
 						outputFile = nil
