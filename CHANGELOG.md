@@ -20,6 +20,7 @@ Upgrading from v7 or later is seamless and has been extensively tested. v10 supp
 - [PR #2520](https://github.com/rqlite/rqlite/pull/2520): Support user-triggered Snapshot reaping, including add an associated rqlite shell command.
 - [PR #2525](https://github.com/rqlite/rqlite/pull/2525): Add on/off control for inter-node snapshot transfer compression. Compression is off by default.
 - [PR #2532](https://github.com/rqlite/rqlite/pull/2532): Add `-raft-commit-timeout` to allow control of this Raft config option.
+- [PR #2558](https://github.com/rqlite/rqlite/pull/2558): Add new commands to the rqlite shell.
 
 ### Implementation changes and bug fixes
 - [PR #2471](https://github.com/rqlite/rqlite/pull/2471): Move to non-blocking Snapshotting store.
