@@ -309,7 +309,7 @@ func (s *Store) Open(id string) (raftMeta *raft.SnapshotMeta, rc io.ReadCloser, 
 	return meta, NewLockingStreamer(streamer, s), nil
 }
 
-// RegisterObserver registers an observer to receive reap observations.
+// RegisterObserver registers an observer to receive observations.
 func (s *Store) RegisterObserver(o *Observer) {
 	s.observers.register(o)
 }
