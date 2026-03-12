@@ -2,17 +2,18 @@ package snapshot
 
 import (
 	"testing"
+	"time"
 )
 
-func Test_ObserverNonBlocking(t *testing.T) {
+func Test_Observer(t *testing.T) {
 	ch := make(chan ReapObservation, 2)
-	obs := NewObserver(ch, false, nil)
+	obs := NewObserver(ch, nil)
 
 	set := newObserverSet()
 	set.register(obs)
 
-	set.notify(ReapObservation{SnapshotsReaped: 3, WALsReaped: 1, Duration: 42})
-	set.notify(ReapObservation{SnapshotsReaped: 5, WALsReaped: 2, Duration: 100})
+	set.notify(ReapObservation{SnapshotsReaped: 3, WALsReaped: 1, Duration: 42 * time.Millisecond})
+	set.notify(ReapObservation{SnapshotsReaped: 5, WALsReaped: 2, Duration: 100 * time.Millisecond})
 
 	if obs.GetNumObserved() != 2 {
 		t.Fatalf("expected 2 observed, got %d", obs.GetNumObserved())
@@ -22,24 +23,24 @@ func Test_ObserverNonBlocking(t *testing.T) {
 	}
 
 	o := <-ch
-	if o.SnapshotsReaped != 3 || o.WALsReaped != 1 || o.Duration != 42 {
+	if o.SnapshotsReaped != 3 || o.WALsReaped != 1 || o.Duration != 42*time.Millisecond {
 		t.Fatalf("unexpected first observation: %+v", o)
 	}
 	o = <-ch
-	if o.SnapshotsReaped != 5 || o.WALsReaped != 2 || o.Duration != 100 {
+	if o.SnapshotsReaped != 5 || o.WALsReaped != 2 || o.Duration != 100*time.Millisecond {
 		t.Fatalf("unexpected second observation: %+v", o)
 	}
 }
 
 func Test_ObserverDropsWhenFull(t *testing.T) {
 	ch := make(chan ReapObservation, 1)
-	obs := NewObserver(ch, false, nil)
+	obs := NewObserver(ch, nil)
 
 	set := newObserverSet()
 	set.register(obs)
 
-	set.notify(ReapObservation{SnapshotsReaped: 1, WALsReaped: 0, Duration: 10})
-	set.notify(ReapObservation{SnapshotsReaped: 2, WALsReaped: 0, Duration: 20})
+	set.notify(ReapObservation{SnapshotsReaped: 1, WALsReaped: 0, Duration: 10 * time.Millisecond})
+	set.notify(ReapObservation{SnapshotsReaped: 2, WALsReaped: 0, Duration: 20 * time.Millisecond})
 
 	if obs.GetNumObserved() != 1 {
 		t.Fatalf("expected 1 observed, got %d", obs.GetNumObserved())
@@ -54,15 +55,15 @@ func Test_ObserverWithFilter(t *testing.T) {
 	filter := func(o *ReapObservation) bool {
 		return o.SnapshotsReaped > 0
 	}
-	obs := NewObserver(ch, false, filter)
+	obs := NewObserver(ch, filter)
 
 	set := newObserverSet()
 	set.register(obs)
 
 	// This should be filtered out (0 snapshots reaped).
-	set.notify(ReapObservation{SnapshotsReaped: 0, WALsReaped: 5, Duration: 10})
+	set.notify(ReapObservation{SnapshotsReaped: 0, WALsReaped: 5, Duration: 10 * time.Millisecond})
 	// This should pass the filter.
-	set.notify(ReapObservation{SnapshotsReaped: 2, WALsReaped: 1, Duration: 50})
+	set.notify(ReapObservation{SnapshotsReaped: 2, WALsReaped: 1, Duration: 50 * time.Millisecond})
 
 	if obs.GetNumObserved() != 1 {
 		t.Fatalf("expected 1 observed, got %d", obs.GetNumObserved())
@@ -79,13 +80,13 @@ func Test_ObserverWithFilter(t *testing.T) {
 
 func Test_ObserverDeregister(t *testing.T) {
 	ch := make(chan ReapObservation, 10)
-	obs := NewObserver(ch, false, nil)
+	obs := NewObserver(ch, nil)
 
 	set := newObserverSet()
 	set.register(obs)
 	set.deregister(obs)
 
-	set.notify(ReapObservation{SnapshotsReaped: 1, WALsReaped: 0, Duration: 10})
+	set.notify(ReapObservation{SnapshotsReaped: 1, WALsReaped: 0, Duration: 10 * time.Millisecond})
 
 	if obs.GetNumObserved() != 0 {
 		t.Fatalf("expected 0 observed after deregister, got %d", obs.GetNumObserved())
@@ -98,14 +99,14 @@ func Test_ObserverDeregister(t *testing.T) {
 func Test_ObserverMultipleObservers(t *testing.T) {
 	ch1 := make(chan ReapObservation, 10)
 	ch2 := make(chan ReapObservation, 10)
-	obs1 := NewObserver(ch1, false, nil)
-	obs2 := NewObserver(ch2, false, nil)
+	obs1 := NewObserver(ch1, nil)
+	obs2 := NewObserver(ch2, nil)
 
 	set := newObserverSet()
 	set.register(obs1)
 	set.register(obs2)
 
-	set.notify(ReapObservation{SnapshotsReaped: 4, WALsReaped: 2, Duration: 77})
+	set.notify(ReapObservation{SnapshotsReaped: 4, WALsReaped: 2, Duration: 77 * time.Millisecond})
 
 	if obs1.GetNumObserved() != 1 {
 		t.Fatalf("expected 1 observed for obs1, got %d", obs1.GetNumObserved())

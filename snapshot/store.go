@@ -372,7 +372,7 @@ func (s *Store) reap() (int, int, error) {
 	s.observers.notify(ReapObservation{
 		SnapshotsReaped: n,
 		WALsReaped:      c,
-		Duration:        time.Since(startTime).Milliseconds(),
+		Duration:        time.Since(startTime),
 	})
 	return n, c, nil
 }

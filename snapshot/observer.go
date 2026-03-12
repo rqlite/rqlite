@@ -3,13 +3,14 @@ package snapshot
 import (
 	"sync"
 	"sync/atomic"
+	"time"
 )
 
 // ReapObservation is sent to registered observers after a successful reap.
 type ReapObservation struct {
 	SnapshotsReaped int
 	WALsReaped      int
-	Duration        int64 // milliseconds
+	Duration        time.Duration
 }
 
 // FilterFn is a function that can be used to filter observations. If it
@@ -17,14 +18,12 @@ type ReapObservation struct {
 type FilterFn func(o *ReapObservation) bool
 
 // Observer is used to observe reap events. It holds a channel to receive
-// ReapObservation events, a blocking flag, and an optional filter function.
+// ReapObservation events and an optional filter function. Observations
+// are always sent in a non-blocking manner; if the channel is full the
+// observation is dropped.
 type Observer struct {
 	// channel receives observations.
 	channel chan ReapObservation
-
-	// blocking, if true, will cause the observer to block when the
-	// channel is full. Otherwise, observations are dropped.
-	blocking bool
 
 	// filter is an optional function to filter observations.
 	filter FilterFn
@@ -35,16 +34,14 @@ type Observer struct {
 	numDropped  uint64
 }
 
-// NewObserver creates a new observer. If blocking is true, the observer
-// will block when the channel is full. Otherwise, observations are
-// dropped. The filter function, if non-nil, is called for each
-// observation and only observations for which the function returns true
-// are sent to the channel.
-func NewObserver(channel chan ReapObservation, blocking bool, filter FilterFn) *Observer {
+// NewObserver creates a new observer. The filter function, if non-nil,
+// is called for each observation and only observations for which the
+// function returns true are sent to the channel. If the channel is full,
+// observations are dropped.
+func NewObserver(channel chan ReapObservation, filter FilterFn) *Observer {
 	return &Observer{
-		channel:  channel,
-		blocking: blocking,
-		filter:   filter,
+		channel: channel,
+		filter:  filter,
 	}
 }
 
@@ -54,27 +51,22 @@ func (o *Observer) GetNumObserved() uint64 {
 }
 
 // GetNumDropped returns the number of observations dropped because the
-// channel was full and blocking was false.
+// channel was full.
 func (o *Observer) GetNumDropped() uint64 {
 	return atomic.LoadUint64(&o.numDropped)
 }
 
-// observe sends an observation to this observer, respecting filter and
-// blocking settings. Returns true if the observation was sent.
+// observe sends an observation to this observer in a non-blocking manner,
+// respecting the filter setting.
 func (o *Observer) observe(obs ReapObservation) {
 	if o.filter != nil && !o.filter(&obs) {
 		return
 	}
-	if o.blocking {
-		o.channel <- obs
+	select {
+	case o.channel <- obs:
 		atomic.AddUint64(&o.numObserved, 1)
-	} else {
-		select {
-		case o.channel <- obs:
-			atomic.AddUint64(&o.numObserved, 1)
-		default:
-			atomic.AddUint64(&o.numDropped, 1)
-		}
+	default:
+		atomic.AddUint64(&o.numDropped, 1)
 	}
 }
 
