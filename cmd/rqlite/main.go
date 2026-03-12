@@ -2,6 +2,7 @@
 package main
 
 import (
+	"bufio"
 	"bytes"
 	"encoding/json"
 	"errors"
@@ -29,8 +30,15 @@ import (
 const HOST_ENV_VAR = "RQLITE_HOST"
 
 type Node struct {
-	ApiAddr string `json:"api_addr"`
-	_       json.RawMessage
+	Addr      string  `json:"addr"`
+	ApiAddr   string  `json:"api_addr"`
+	ID        string  `json:"id"`
+	Leader    bool    `json:"leader"`
+	Reachable bool    `json:"reachable"`
+	Time      float64 `json:"time"`
+	TimeS     string  `json:"time_s"`
+	Version   string  `json:"version"`
+	Voter     bool    `json:"voter"`
 }
 
 type Nodes map[string]Node
@@ -58,6 +66,7 @@ func init() {
 		`.backup FILE                                  Write database backup to FILE`,
 		`.blobarray [on|off]                           Show setting, or set BLOB data display as byte arrays`,
 		`.boot FILE                                    Boot the node using a SQLite file read from FILE`,
+		`.changes [on|off]                             Show setting, or set display of last insert ID after writes`,
 		`.consistency [none|weak|linearizable|strong]  Show or set read consistency level`,
 		`.dump FILE [TABLE,TABLE...]                   Dump the database in SQL text to FILE, optionally limited to TABLEs`,
 		`.exit                                         Exit this program`,
@@ -66,13 +75,18 @@ func init() {
 		`.forcewrites [on|off]                         Show setting, or set all statements to be executed via /db/execute`,
 		`.help                                         Show this message`,
 		`.indexes                                      Show names of all indexes`,
+		`.leader                                       Show the current cluster leader`,
+		`.mode [column|csv|json|line]                  Show or set output mode for query results`,
+		`.nodes [all]                                  Show connection status of voting nodes. 'all' to show all nodes`,
+		`.output FILE                                  Send output to FILE, or stdout if FILE is omitted`,
 		`.quit                                         Exit this program`,
+		`.read FILE                                    Read and execute SQL statements from FILE`,
 		`.ready                                        Show ready status for connected node`,
 		`.remove NODEID                                Remove node NODEID from the cluster`,
 		`.restore FILE                                 Load using SQLite file or SQL dump contained in FILE`,
-		`.nodes [all]                                  Show connection status of voting nodes. 'all' to show all nodes`,
 		`.schema                                       Show CREATE statements for all tables`,
 		`.reap                                         Request a snapshot reap on connected node`,
+		`.show                                         Show the current values for various settings`,
 		`.snapshot [TRAILINGLOGS]                      Request a Raft snapshot and log truncation on connected node`,
 		`.status                                       Show status and diagnostic information for connected node`,
 		`.stepdown [NODEID]                            Instruct the leader to stepdown, optionally specifying new Leader node`,
@@ -146,8 +160,19 @@ func main() {
 		blobArray := false
 		timer := false
 		forceWrites := false
+		changes := false
 		consistency := "weak"
+		mode := "column"
 		prefix := fmt.Sprintf("%s>", address6(argv))
+
+		var output io.Writer = os.Stdout
+		var outputFile *os.File
+		outputName := "stdout"
+		defer func() {
+			if outputFile != nil {
+				outputFile.Close()
+			}
+		}()
 
 		// Set up line editing with liner
 		line := liner.NewLiner()
@@ -193,6 +218,8 @@ func main() {
 			}
 			cmd = strings.ToUpper(cmd)
 			switch cmd {
+			case ".CHANGES":
+				err = handleToggle(ctx, input, index, &changes)
 			case ".CONSISTENCY":
 				if index == -1 || index == len(input)-1 {
 					ctx.String("%s\n", consistency)
@@ -204,11 +231,11 @@ func main() {
 			case ".FORCEWRITES":
 				err = handleToggle(ctx, input, index, &forceWrites)
 			case ".TABLES":
-				err = queryWithClient(ctx, client, timer, blobArray, consistency, `SELECT name FROM sqlite_master WHERE type="table" ORDER BY name ASC`)
+				err = queryWithClient(output, client, timer, blobArray, consistency, mode, `SELECT name FROM sqlite_master WHERE type="table" ORDER BY name ASC`)
 			case ".INDEXES":
-				err = queryWithClient(ctx, client, timer, blobArray, consistency, `SELECT sql FROM sqlite_master WHERE type="index"`)
+				err = queryWithClient(output, client, timer, blobArray, consistency, mode, `SELECT sql FROM sqlite_master WHERE type="index"`)
 			case ".SCHEMA":
-				err = queryWithClient(ctx, client, timer, blobArray, consistency, `SELECT sql FROM sqlite_master WHERE sql IS NOT NULL ORDER BY rowid ASC`)
+				err = queryWithClient(output, client, timer, blobArray, consistency, mode, `SELECT sql FROM sqlite_master WHERE sql IS NOT NULL ORDER BY rowid ASC`)
 			case ".TIMER":
 				err = handleToggle(ctx, input, index, &timer)
 			case ".BLOBARRAY":
@@ -217,6 +244,14 @@ func main() {
 				err = status(ctx, client, input)
 			case ".READY":
 				err = ready(ctx, client)
+			case ".LEADER":
+				err = leader(ctx, client)
+			case ".MODE":
+				if index == -1 || index == len(input)-1 {
+					ctx.String("%s\n", mode)
+					break
+				}
+				err = setMode(input[index+1:], &mode)
 			case ".NODES":
 				err = nodes(ctx, client, index != -1 && index < len(input)-1)
 			case ".EXPVAR":
@@ -265,6 +300,46 @@ func main() {
 				break FOR_READ
 			case ".REAP":
 				err = reap(ctx, client)
+			case ".READ":
+				arg, argErr := requireArg(input, index, "please specify an input file to read from")
+				if argErr != nil {
+					err = argErr
+				} else {
+					err = readFile(ctx, output, client, timer, forceWrites, changes, mode, arg)
+				}
+			case ".OUTPUT":
+				arg := ""
+				if index != -1 && index < len(input)-1 {
+					arg = input[index+1:]
+				}
+				if arg == "" || arg == "stdout" {
+					if outputFile != nil {
+						outputFile.Close()
+						outputFile = nil
+					}
+					output = os.Stdout
+					outputName = "stdout"
+				} else {
+					f, openErr := os.Create(arg)
+					if openErr != nil {
+						err = openErr
+						break
+					}
+					if outputFile != nil {
+						outputFile.Close()
+					}
+					outputFile = f
+					output = f
+					outputName = arg
+				}
+			case ".SHOW":
+				ctx.String("  blobarray: %s\n", onOff(blobArray))
+				ctx.String("  changes: %s\n", onOff(changes))
+				ctx.String("  consistency: %s\n", consistency)
+				ctx.String("  forcewrites: %s\n", onOff(forceWrites))
+				ctx.String("  mode: %s\n", mode)
+				ctx.String("  output: %s\n", outputName)
+				ctx.String("  timer: %s\n", onOff(timer))
 			case ".SNAPSHOT":
 				trailingLogs := 0
 				if index != -1 && index < len(input)-1 {
@@ -285,7 +360,7 @@ func main() {
 				}
 				err = stepdown(client, nodeID)
 			default:
-				err = requestWithClient(ctx, client, timer, forceWrites, input)
+				err = requestWithClient(output, client, timer, forceWrites, changes, mode, input)
 			}
 			if hcerr, ok := err.(*httpcl.HostChangedError); ok {
 				// If a previous request was executed on a different host, make that change
@@ -311,6 +386,13 @@ func main() {
 		ctx.String("bye~\n")
 		return nil
 	})
+}
+
+func onOff(b bool) string {
+	if b {
+		return "on"
+	}
+	return "off"
 }
 
 func handleToggle(ctx *cli.Context, input string, index int, flag *bool) error {
@@ -362,6 +444,16 @@ func parseDumpArgs(arg string) (string, []string) {
 	return filename, tables
 }
 
+func setMode(m string, mode *string) error {
+	switch m {
+	case "column", "csv", "json", "line":
+		*mode = m
+		return nil
+	default:
+		return fmt.Errorf("invalid mode '%s'. Use 'column', 'csv', 'json', or 'line'", m)
+	}
+}
+
 func setConsistency(r string, c *string) error {
 	if r != "strong" && r != "weak" && r != "linearizable" && r != "none" {
 		return fmt.Errorf("invalid consistency '%s'. Use 'none', 'weak', 'linearizable', or 'strong'", r)
@@ -396,6 +488,53 @@ func ready(ctx *cli.Context, client *httpcl.Client) error {
 	} else {
 		ctx.String("not ready\n")
 	}
+	return nil
+}
+
+func leader(ctx *cli.Context, client *httpcl.Client) error {
+	u := fmt.Sprintf("%snodes", client.Prefix)
+	resp, err := client.Get(u)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode == http.StatusUnauthorized {
+		return fmt.Errorf("unauthorized")
+	}
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return err
+	}
+
+	if resp.StatusCode != http.StatusOK {
+		return fmt.Errorf("server responded with %s: %s", resp.Status, body)
+	}
+
+	// Parse into typed struct to find the leader safely.
+	var allNodes Nodes
+	if err := parseResponse(body, &allNodes); err != nil {
+		return err
+	}
+
+	leaderID := ""
+	for id, node := range allNodes {
+		if node.Leader {
+			leaderID = id
+			break
+		}
+	}
+	if leaderID == "" {
+		return fmt.Errorf("no leader found")
+	}
+
+	// Re-parse as untyped map for display, filtered to just the leader.
+	var rawNodes map[string]any
+	if err := parseResponse(body, &rawNodes); err != nil {
+		return err
+	}
+	pprintJSON(0, map[string]any{leaderID: rawNodes[leaderID]})
 	return nil
 }
 
@@ -480,6 +619,33 @@ func stepdown(client *httpcl.Client, nodeID string) error {
 		return fmt.Errorf("server responded with %s", resp.Status)
 	}
 	return nil
+}
+
+func readFile(ctx *cli.Context, output io.Writer, client *httpcl.Client, timer, forceWrites, changes bool, mode, filename string) error {
+	f, err := os.Open(filename)
+	if err != nil {
+		return err
+	}
+	defer f.Close()
+
+	var lastHostChanged error
+	scanner := bufio.NewScanner(f)
+	for scanner.Scan() {
+		line := strings.TrimSpace(scanner.Text())
+		if line == "" || strings.HasPrefix(line, "--") {
+			continue
+		}
+		err := requestWithClient(output, client, timer, forceWrites, changes, mode, line)
+		if hcerr, ok := err.(*httpcl.HostChangedError); ok {
+			lastHostChanged = hcerr
+		} else if err != nil {
+			ctx.String("%s %v\n", ctx.Color().Red("ERR!"), err)
+		}
+	}
+	if err := scanner.Err(); err != nil {
+		return err
+	}
+	return lastHostChanged
 }
 
 func sysdump(client *httpcl.Client, filename string) error {
