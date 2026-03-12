@@ -8,7 +8,6 @@ import (
 	"net/url"
 	"strings"
 
-	"github.com/mkideal/cli"
 	"github.com/mkideal/pkg/textutil"
 	cl "github.com/rqlite/rqlite/v10/cmd/rqlite/http"
 )
@@ -70,7 +69,7 @@ func (ur *unifiedResult) toResult() *Result {
 
 // requestWithClient sends SQL statements to the unified /db/request endpoint
 // and handles the response appropriately based on the result type
-func requestWithClient(ctx *cli.Context, client *cl.Client, timer, forceWrites bool, stmt string) error {
+func requestWithClient(output io.Writer, client *cl.Client, timer, forceWrites, changes bool, stmt string) error {
 	queryStr := url.Values{}
 	if timer {
 		queryStr.Set("timings", "")
@@ -132,7 +131,7 @@ func requestWithClient(ctx *cli.Context, client *cl.Client, timer, forceWrites b
 
 	result := ret.Results[0]
 	if result.Error != "" {
-		ctx.String("Error: %s\n", result.Error)
+		fmt.Fprintf(output, "Error: %s\n", result.Error)
 		return hcr
 	}
 
@@ -143,9 +142,9 @@ func requestWithClient(ctx *cli.Context, client *cl.Client, timer, forceWrites b
 		if err := rows.validate(); err != nil {
 			return err
 		}
-		textutil.WriteTable(ctx, rows, headerRender)
+		textutil.WriteTable(output, rows, headerRender)
 		if timer {
-			fmt.Printf("Run Time: %f seconds\n", result.Time)
+			fmt.Fprintf(output, "Run Time: %f seconds\n", result.Time)
 		}
 	} else {
 		// Display as execute result
@@ -156,12 +155,15 @@ func requestWithClient(ctx *cli.Context, client *cl.Client, timer, forceWrites b
 				rowString = "rows"
 			}
 			if timer {
-				ctx.String("%d %s affected (%f sec)\n", executeResult.RowsAffected, rowString, executeResult.Time)
+				fmt.Fprintf(output, "%d %s affected (%f sec)\n", executeResult.RowsAffected, rowString, executeResult.Time)
 			} else {
-				ctx.String("%d %s affected\n", executeResult.RowsAffected, rowString)
+				fmt.Fprintf(output, "%d %s affected\n", executeResult.RowsAffected, rowString)
+			}
+			if changes {
+				fmt.Fprintf(output, "last insert ID: %d\n", executeResult.LastInsertID)
 			}
 		} else {
-			textutil.WriteTable(ctx, executeResult, headerRender)
+			textutil.WriteTable(output, executeResult, headerRender)
 		}
 	}
 

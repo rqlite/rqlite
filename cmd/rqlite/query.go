@@ -7,7 +7,6 @@ import (
 	"net/http"
 	"net/url"
 
-	"github.com/mkideal/cli"
 	"github.com/mkideal/pkg/textutil"
 	cl "github.com/rqlite/rqlite/v10/cmd/rqlite/http"
 )
@@ -83,7 +82,7 @@ type queryResponse struct {
 	Time    float64 `json:"time"`
 }
 
-func queryWithClient(ctx *cli.Context, client *cl.Client, timer, blobArray bool, consistency, query string) error {
+func queryWithClient(output io.Writer, client *cl.Client, timer, blobArray bool, consistency, query string) error {
 	queryStr := url.Values{}
 	queryStr.Set("level", consistency)
 	queryStr.Set("q", query)
@@ -138,10 +137,10 @@ func queryWithClient(ctx *cli.Context, client *cl.Client, timer, blobArray bool,
 	if err := result.validate(); err != nil {
 		return err
 	}
-	textutil.WriteTable(ctx, result, headerRender)
+	textutil.WriteTable(output, result, headerRender)
 
 	if timer {
-		fmt.Printf("Run Time: %f seconds\n", result.Time)
+		fmt.Fprintf(output, "Run Time: %f seconds\n", result.Time)
 	}
 	return hcr
 }
