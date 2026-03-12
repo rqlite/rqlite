@@ -121,3 +121,11 @@ func Test_ObserverMultipleObservers(t *testing.T) {
 		t.Fatalf("unexpected observations: %+v, %+v", o1, o2)
 	}
 }
+
+func Test_ObserverRegisterNil(t *testing.T) {
+	set := newObserverSet()
+	set.register(nil)
+
+	// Should not panic.
+	set.notify(ReapObservation{SnapshotsReaped: 1, WALsReaped: 0, Duration: 10 * time.Millisecond})
+}

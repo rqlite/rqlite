@@ -83,8 +83,11 @@ func newObserverSet() *observerSet {
 	}
 }
 
-// register adds an observer to the set.
+// register adds an observer to the set. If o is nil, the call is a no-op.
 func (s *observerSet) register(o *Observer) {
+	if o == nil {
+		return
+	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.observers[o] = struct{}{}
