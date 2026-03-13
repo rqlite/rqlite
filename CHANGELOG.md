@@ -73,6 +73,7 @@ Upgrading from v7 or later is seamless and has been extensively tested. v10 supp
 - [PR #2557](https://github.com/rqlite/rqlite/pull/2557): Refactor the rqlite shell for ease of development.
 - [PR #2554](https://github.com/rqlite/rqlite/pull/2554): Support registering for Snapshot Reap operations.
 - [PR #2553](https://github.com/rqlite/rqlite/pull/2553): Integrate Throttler with Store. No actual throttling effective yet.
+- [PR #2562](https://github.com/rqlite/rqlite/pull/2562): ABL via `go fix`.
 
 ## v9.4.5 (March 9th 2026)
 ### Implementation changes and bug fixes
