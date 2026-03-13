@@ -13,30 +13,43 @@ import (
 	"github.com/rqlite/rqlite/v10/db/wal"
 )
 
-func Test_WALManager_NewNil(t *testing.T) {
+func Test_WALManager_NewNoFile(t *testing.T) {
 	dir := t.TempDir()
-	wm, err := NewWALManager(filepath.Join(dir, "nonexistent-wal"))
-	if err != nil {
-		t.Fatal(err)
-	}
-	if wm != nil {
-		t.Fatal("expected nil WALManager for nonexistent file")
+	_, err := NewWALManager(filepath.Join(dir, "nonexistent-wal"))
+	if err == nil {
+		t.Fatal("expected error for nonexistent file")
 	}
 }
 
-func Test_WALManager_NewEmpty(t *testing.T) {
+func Test_WALManager_NewJunkFile(t *testing.T) {
 	dir := t.TempDir()
-	path := filepath.Join(dir, "empty-wal")
-	if err := os.WriteFile(path, nil, 0644); err != nil {
+	path := filepath.Join(dir, "junk-wal")
+	if err := os.WriteFile(path, []byte("this is not a WAL file"), 0644); err != nil {
 		t.Fatal(err)
 	}
-	wm, err := NewWALManager(path)
+	_, err := NewWALManager(path)
+	if err == nil {
+		t.Fatal("expected error for junk file")
+	}
+}
+
+func Test_WALManager_NewValidWAL(t *testing.T) {
+	dir := t.TempDir()
+	dbPath := filepath.Join(dir, "test.db")
+
+	db := mustOpenDB(t, dbPath)
+	defer db.Close()
+	mustDBExec(t, db, "CREATE TABLE foo (id INTEGER PRIMARY KEY, name TEXT)")
+	mustDBExec(t, db, "INSERT INTO foo (name) VALUES ('test')")
+
+	wm, err := NewWALManager(dbPath + "-wal")
 	if err != nil {
 		t.Fatal(err)
 	}
-	if wm != nil {
-		t.Fatal("expected nil WALManager for empty file")
+	if wm == nil {
+		t.Fatal("expected non-nil WALManager for valid WAL file")
 	}
+	wm.Close()
 }
 
 func Test_WALManager_SuccessPath(t *testing.T) {

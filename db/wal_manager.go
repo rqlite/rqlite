@@ -41,19 +41,11 @@ type WALManager struct {
 	pageSize uint32
 }
 
-// NewWALManager creates a new WALManager for the WAL file at path. If the file
-// does not exist or is empty, nil is returned with no error, indicating there
-// is nothing to manage.
+// NewWALManager creates a new WALManager for the WAL file at path. The file
+// must exist and be a valid SQLite WAL file.
 func NewWALManager(path string) (*WALManager, error) {
-	fi, err := os.Stat(path)
-	if err != nil {
-		if os.IsNotExist(err) {
-			return nil, nil
-		}
-		return nil, err
-	}
-	if fi.Size() == 0 {
-		return nil, nil
+	if !IsValidSQLiteWALFile(path) {
+		return nil, fmt.Errorf("not a valid SQLite WAL file: %s", path)
 	}
 
 	f, err := os.Open(path)
