@@ -307,7 +307,7 @@ func Test_WALDatabaseCheckpoint_RestartTruncate(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to execute on single node: %s", err.Error())
 	}
-	for i := 0; i < 50; i++ {
+	for range 50 {
 		_, err := db.ExecuteStringStmt(`INSERT INTO foo(name) VALUES("fiona")`)
 		if err != nil {
 			t.Fatalf("failed to execute INSERT on single node: %s", err.Error())
@@ -378,7 +378,7 @@ func Test_WALDatabaseCheckpoint_RestartTimeout(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to execute on single node: %s", err.Error())
 	}
-	for i := 0; i < 50; i++ {
+	for range 50 {
 		_, err := db.ExecuteStringStmt(`INSERT INTO foo(name) VALUES("fiona")`)
 		if err != nil {
 			t.Fatalf("failed to execute INSERT on single node: %s", err.Error())
@@ -453,7 +453,7 @@ func Test_WALDatabaseCheckpoint_TruncateTimeout(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to execute on single node: %s", err.Error())
 	}
-	for i := 0; i < 50; i++ {
+	for range 50 {
 		_, err := db.ExecuteStringStmt(`INSERT INTO foo(name) VALUES("fiona")`)
 		if err != nil {
 			t.Fatalf("failed to execute INSERT on single node: %s", err.Error())

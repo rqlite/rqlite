@@ -189,7 +189,7 @@ func Test_ClusterHWMPropagation(t *testing.T) {
 	// Create three services
 	services := make([]*Service, 3)
 
-	for i := 0; i < 3; i++ {
+	for i := range 3 {
 		cfg := DefaultConfig()
 		cfg.Endpoint = httpServer.URL()
 		cfg.MaxBatchSz = 1
@@ -283,7 +283,7 @@ func Test_ClusterLeadershipChange(t *testing.T) {
 	// Create three services
 	services := make([]*Service, 3)
 
-	for i := 0; i < 3; i++ {
+	for i := range 3 {
 		cfg := DefaultConfig()
 		cfg.Endpoint = httpServer.URL()
 		cfg.MaxBatchSz = 1
@@ -591,7 +591,7 @@ func Test_Cluster_100Events(t *testing.T) {
 	cluster := newMockCluster()
 	services := make([]*Service, 3)
 
-	for i := 0; i < 3; i++ {
+	for i := range 3 {
 		cfg := DefaultConfig()
 		cfg.Endpoint = httpServer.URL()
 		cfg.MaxBatchDelay = time.Second

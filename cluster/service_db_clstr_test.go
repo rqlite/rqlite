@@ -232,7 +232,7 @@ func Test_ServiceQueryLarge(t *testing.T) {
 	}
 
 	var b strings.Builder
-	for i := 0; i < 100000; i++ {
+	for range 100000 {
 		b.WriteString("bar")
 	}
 	if b.Len() < 64000 {

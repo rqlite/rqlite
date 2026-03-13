@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"io"
 	"log"
+	"maps"
 	"net/http"
 	"net/url"
 	"os"
@@ -206,9 +207,7 @@ func (c *Client) requestFollowRedirect(method string, urlStr string, body io.Rea
 		if err != nil {
 			return nil, err
 		}
-		for k, v := range headers {
-			req.Header[k] = v
-		}
+		maps.Copy(req.Header, headers)
 		err = c.setBasicAuth(req)
 		if err != nil {
 			return nil, err

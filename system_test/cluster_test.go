@@ -210,7 +210,7 @@ func Test_MultiNodeClusterRANDOM(t *testing.T) {
 	}
 
 	// Send a few Noops through to ensure SQLite database has been updated on each node.
-	for i := 0; i < 5; i++ {
+	for range 5 {
 		node1.Noop("some_id")
 	}
 
@@ -327,7 +327,7 @@ func Test_MultiNodeClusterRETURNING(t *testing.T) {
 	}
 
 	// Send a few Noops through to ensure SQLite database has been updated on each node.
-	for i := 0; i < 3; i++ {
+	for range 3 {
 		node1.Noop("some_id")
 	}
 
@@ -919,7 +919,7 @@ func Test_MultiNodeClusterQueuedWrites(t *testing.T) {
 	wg.Add(numLoops)
 	go func() {
 		defer wg.Done()
-		for i := 0; i < writesPerLoop; i++ {
+		for range writesPerLoop {
 			if _, err := node1.Execute(`INSERT INTO foo(name) VALUES("fiona")`); err != nil {
 				t.Errorf("failed to insert records: %s", err.Error())
 			}
@@ -927,7 +927,7 @@ func Test_MultiNodeClusterQueuedWrites(t *testing.T) {
 	}()
 	go func() {
 		defer wg.Done()
-		for i := 0; i < writesPerLoop; i++ {
+		for range writesPerLoop {
 			if _, err := node2.Execute(`INSERT INTO foo(name) VALUES("fiona")`); err != nil {
 				t.Errorf("failed to insert records: %s", err.Error())
 			}
@@ -1706,7 +1706,7 @@ func Test_MultiNodeCluster_DisconnectedNonVoter(t *testing.T) {
 	}
 
 	// Send a few Noops through to ensure SQLite database has been updated on each node.
-	for i := 0; i < 3; i++ {
+	for range 3 {
 		leader.Noop("some_id")
 	}
 
@@ -2250,7 +2250,7 @@ func Test_MultiNodeCluster_Boot(t *testing.T) {
 	}
 
 	// Send a few Noops through to ensure SQLite database has been updated on each node.
-	for i := 0; i < 5; i++ {
+	for range 5 {
 		node1.Noop("some_id")
 	}
 

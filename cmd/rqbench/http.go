@@ -43,7 +43,7 @@ func (h *HTTPTester) String() string {
 // Prepare prepares the tester for execution.
 func (h *HTTPTester) Prepare(stmt string, bSz int, tx bool) error {
 	s := make([]string, bSz)
-	for i := 0; i < len(s); i++ {
+	for i := range s {
 		s[i] = stmt
 	}
 

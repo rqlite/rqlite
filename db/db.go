@@ -13,6 +13,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"slices"
 	"strings"
 	"sync"
 	"time"
@@ -1586,7 +1587,7 @@ func (db *DB) Dump(w io.Writer, tableNames ...string) error {
 			stmt = v.Parameters[2].GetS()
 		}
 
-		if _, err := w.Write([]byte(fmt.Sprintf("%s;\n", stmt))); err != nil {
+		if _, err := w.Write(fmt.Appendf(nil, "%s;\n", stmt)); err != nil {
 			return err
 		}
 
@@ -1629,7 +1630,7 @@ func (db *DB) Dump(w io.Writer, tableNames ...string) error {
 	for _, v := range row.Values {
 		// For indexes, triggers, and views, we could add more sophisticated filtering
 		// based on the table they relate to, but for now include all of them
-		if _, err := w.Write([]byte(fmt.Sprintf("%s;\n", v.Parameters[2].GetS()))); err != nil {
+		if _, err := w.Write(fmt.Appendf(nil, "%s;\n", v.Parameters[2].GetS())); err != nil {
 			return err
 		}
 	}
@@ -2026,12 +2027,7 @@ func isTextType(t string) bool {
 }
 
 func containsEmptyType(slice []string) bool {
-	for _, str := range slice {
-		if str == "" {
-			return true
-		}
-	}
-	return false
+	return slices.Contains(slice, "")
 }
 
 func fileExists(path string) bool {

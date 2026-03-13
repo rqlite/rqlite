@@ -178,7 +178,7 @@ func Test_NewStorageClient(t *testing.T) {
 		},
 		{
 			name: "ValidGCSConfig",
-			input: []byte(fmt.Sprintf(`{
+			input: fmt.Appendf(nil, `{
 				           "version": 1,
 				           "type": "gcs",
 				           "no_compress": true,
@@ -190,7 +190,7 @@ func Test_NewStorageClient(t *testing.T) {
 				               "project_id": "test_project",
 				               "credentials_path": %q
 				           }
-				       }`, gcsCredsFile)),
+				       }`, gcsCredsFile),
 			expectedCfg: &Config{
 				Version:    1,
 				Type:       "gcs",

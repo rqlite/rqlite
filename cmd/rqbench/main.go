@@ -99,7 +99,7 @@ type Tester interface {
 func run(t Tester, n int) (time.Duration, error) {
 	var dur time.Duration
 
-	for i := 0; i < n; i++ {
+	for i := range n {
 		d, err := t.Once()
 		if err != nil {
 			return 0, err

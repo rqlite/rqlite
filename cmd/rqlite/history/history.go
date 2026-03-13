@@ -30,7 +30,7 @@ func Dedupe(s []string) []string {
 	}
 
 	o := make([]string, 0, len(s))
-	for si := 0; si < len(s); si++ {
+	for si := range s {
 		if si == 0 || s[si] != o[len(o)-1] {
 			o = append(o, s[si])
 		}
@@ -45,7 +45,7 @@ func Filter(s []string) []string {
 		return nil
 	}
 	o := make([]string, 0, len(s))
-	for si := 0; si < len(s); si++ {
+	for si := range s {
 		if s[si] == "" || len(strings.Fields(s[si])) == 0 {
 			continue
 		}

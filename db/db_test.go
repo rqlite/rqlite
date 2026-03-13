@@ -487,7 +487,7 @@ func Test_DBOptimize(t *testing.T) {
 	if exp, got := `[{}]`, asJSON(r); exp != got {
 		t.Fatalf("unexpected results for query, expected %s, got %s", exp, got)
 	}
-	for i := 0; i < 100; i++ {
+	for range 100 {
 		_, err = db.ExecuteStringStmt(`INSERT INTO foo(first) VALUES("alice")`)
 		if err != nil {
 			t.Fatalf("error executing insertion into table: %s", err.Error())
@@ -543,7 +543,7 @@ func Test_DBOptimize(t *testing.T) {
 	if exp, got := `[{"last_insert_id":100,"rows_affected":1}]`, asJSON(r); exp != got { // 100 because of the 100 records already in the table.
 		t.Fatalf("unexpected results for query, expected %s, got %s", exp, got)
 	}
-	for i := 0; i < 100; i++ {
+	for range 100 {
 		_, err = db.ExecuteStringStmt(`INSERT INTO foo(last) VALUES("bob")`)
 		if err != nil {
 			t.Fatalf("error executing insertion into table: %s", err.Error())
@@ -683,7 +683,7 @@ func Test_ConcurrentQueries(t *testing.T) {
 		t.Fatalf("unexpected results for query\nexp: %s\ngot: %s", exp, got)
 	}
 
-	for i := 0; i < 5000; i++ {
+	for i := range 5000 {
 		r, err = db.ExecuteStringStmt(`INSERT INTO foo(name) VALUES("fiona")`)
 		if err != nil {
 			t.Fatalf("failed to insert record: %s", err.Error())
@@ -694,10 +694,8 @@ func Test_ConcurrentQueries(t *testing.T) {
 	}
 
 	var wg sync.WaitGroup
-	for i := 0; i < 32; i++ {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
+	for range 32 {
+		wg.Go(func() {
 			ro, err := db.QueryStringStmt(`SELECT COUNT(*) FROM foo`)
 			if err != nil {
 				t.Logf("failed to query table: %s", err.Error())
@@ -705,7 +703,7 @@ func Test_ConcurrentQueries(t *testing.T) {
 			if exp, got := `[{"columns":["COUNT(*)"],"types":["integer"],"values":[[5000]]}]`, asJSON(ro); exp != got {
 				t.Logf("unexpected results for query\nexp: %s\ngot: %s", exp, got)
 			}
-		}()
+		})
 	}
 	wg.Wait()
 }
@@ -1303,7 +1301,7 @@ func Test_ParallelOperationsInMemory(t *testing.T) {
 
 	var qWg sync.WaitGroup
 	qWg.Add(3)
-	for i := 0; i < 3; i++ {
+	for i := range 3 {
 		go func(j int) {
 			defer qWg.Done()
 			var n int
@@ -1348,7 +1346,7 @@ func mustSetupDBForTimeoutTests(t *testing.T, n int) (*DB, string) {
 		},
 	}
 
-	for i := 0; i < n; i++ {
+	for i := range n {
 		args := []any{
 			random.String(),
 			fmt.Sprint(i),
