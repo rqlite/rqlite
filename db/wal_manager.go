@@ -41,44 +41,58 @@ type WALManager struct {
 	pageSize uint32
 }
 
-// NewWALManager creates a new WALManager for the WAL file at path. The file
-// must exist and be a valid SQLite WAL file.
-func NewWALManager(path string) (*WALManager, error) {
-	if !IsValidSQLiteWALFile(path) {
-		return nil, fmt.Errorf("not a valid SQLite WAL file: %s", path)
+// NewWALManager creates a new WALManager for the WAL file at path. The WAL
+// file does not need to exist at construction time; it will be opened and
+// validated on the first call to Checkpoint.
+func NewWALManager(path string) *WALManager {
+	return &WALManager{
+		path: path,
+	}
+}
+
+// init opens and validates the WAL file on the first Checkpoint call.
+func (m *WALManager) init() error {
+	if m.f != nil {
+		return nil
 	}
 
-	f, err := os.Open(path)
+	if !IsValidSQLiteWALFile(m.path) {
+		return fmt.Errorf("not a valid SQLite WAL file: %s", m.path)
+	}
+
+	f, err := os.Open(m.path)
 	if err != nil {
-		return nil, err
+		return err
 	}
 
 	salt, err := readSaltAt(f)
 	if err != nil {
 		f.Close()
-		return nil, fmt.Errorf("read WAL salt: %w", err)
+		return fmt.Errorf("read WAL salt: %w", err)
 	}
 
 	pageSize, err := readPageSizeAt(f)
 	if err != nil {
 		f.Close()
-		return nil, fmt.Errorf("read WAL page size: %w", err)
+		return fmt.Errorf("read WAL page size: %w", err)
 	}
 
-	return &WALManager{
-		path:     path,
-		f:        f,
-		salt:     salt,
-		pageSize: pageSize,
-	}, nil
+	m.f = f
+	m.salt = salt
+	m.pageSize = pageSize
+	return nil
 }
 
 // Checkpoint performs a FULL WAL checkpoint and returns a WALWriter that
 // streams the new WAL frames since the last call. The busy flag is true if
 // not all frames could be copied back to the database file due to reader
 // locks. The caller must fully consume the WALWriter before calling
-// Checkpoint again.
+// Checkpoint again. The WAL file must exist when Checkpoint is called.
 func (m *WALManager) Checkpoint(db *sql.DB) (*WALWriter, bool, error) {
+	if err := m.init(); err != nil {
+		return nil, false, err
+	}
+
 	prevSalt := m.salt
 
 	salt, err := readSaltAt(m.f)

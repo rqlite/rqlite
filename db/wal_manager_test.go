@@ -15,7 +15,9 @@ import (
 
 func Test_WALManager_NewNoFile(t *testing.T) {
 	dir := t.TempDir()
-	_, err := NewWALManager(filepath.Join(dir, "nonexistent-wal"))
+	wm := NewWALManager(filepath.Join(dir, "nonexistent-wal"))
+	// Error occurs on first Checkpoint, not construction.
+	_, _, err := wm.Checkpoint(nil)
 	if err == nil {
 		t.Fatal("expected error for nonexistent file")
 	}
@@ -27,7 +29,9 @@ func Test_WALManager_NewJunkFile(t *testing.T) {
 	if err := os.WriteFile(path, []byte("this is not a WAL file"), 0644); err != nil {
 		t.Fatal(err)
 	}
-	_, err := NewWALManager(path)
+	wm := NewWALManager(path)
+	// Error occurs on first Checkpoint, not construction.
+	_, _, err := wm.Checkpoint(nil)
 	if err == nil {
 		t.Fatal("expected error for junk file")
 	}
@@ -42,14 +46,17 @@ func Test_WALManager_NewValidWAL(t *testing.T) {
 	mustDBExec(t, db, "CREATE TABLE foo (id INTEGER PRIMARY KEY, name TEXT)")
 	mustDBExec(t, db, "INSERT INTO foo (name) VALUES ('test')")
 
-	wm, err := NewWALManager(dbPath + "-wal")
+	wm := NewWALManager(dbPath + "-wal")
+	defer wm.Close()
+
+	// First Checkpoint triggers init; should succeed for a valid WAL.
+	w, _, err := wm.Checkpoint(db)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if wm == nil {
-		t.Fatal("expected non-nil WALManager for valid WAL file")
+	if w.Empty() {
+		t.Fatal("expected non-empty WALWriter for valid WAL file")
 	}
-	wm.Close()
 }
 
 func Test_WALManager_SuccessPath(t *testing.T) {
@@ -66,13 +73,7 @@ func Test_WALManager_SuccessPath(t *testing.T) {
 	}
 
 	walPath := dbPath + "-wal"
-	wm, err := NewWALManager(walPath)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if wm == nil {
-		t.Fatal("expected non-nil WALManager")
-	}
+	wm := NewWALManager(walPath)
 	defer wm.Close()
 
 	// First checkpoint: should get all frames.
@@ -141,13 +142,7 @@ func Test_WALManager_BusyPath(t *testing.T) {
 	}
 
 	walPath := dbPath + "-wal"
-	wm, err := NewWALManager(walPath)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if wm == nil {
-		t.Fatal("expected non-nil WALManager")
-	}
+	wm := NewWALManager(walPath)
 	defer wm.Close()
 
 	// Open a read-only connection and hold a cursor open to block the
@@ -213,13 +208,7 @@ func Test_WALManager_SaltChange(t *testing.T) {
 	}
 
 	walPath := dbPath + "-wal"
-	wm, err := NewWALManager(walPath)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if wm == nil {
-		t.Fatal("expected non-nil WALManager")
-	}
+	wm := NewWALManager(walPath)
 	defer wm.Close()
 
 	// First checkpoint: success, advances offset.
