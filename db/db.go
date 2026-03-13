@@ -78,12 +78,15 @@ const (
 	CheckpointRestart CheckpointMode = iota
 	// CheckpointTruncate instructs the checkpoint to run in truncate mode.
 	CheckpointTruncate
+	// CheckpointFull instructs the checkpoint to run in full mode.
+	CheckpointFull
 )
 
 var (
 	checkpointPRAGMAs = map[CheckpointMode]string{
 		CheckpointRestart:  "PRAGMA wal_checkpoint(RESTART)",
 		CheckpointTruncate: "PRAGMA wal_checkpoint(TRUNCATE)",
+		CheckpointFull:     "PRAGMA wal_checkpoint(FULL)",
 	}
 )
 
