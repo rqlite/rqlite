@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"database/sql"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"testing"
@@ -291,10 +292,10 @@ func mustVerifyWAL(t *testing.T, b []byte) {
 	count := 0
 	for {
 		_, err := s.Next()
+		if err == io.EOF {
+			break
+		}
 		if err != nil {
-			if err.Error() == "EOF" {
-				break
-			}
 			t.Fatalf("invalid WAL frame %d: %v", count, err)
 		}
 		count++
