@@ -81,6 +81,13 @@ func (s *SwappableDB) Close() error {
 	return s.db.Close()
 }
 
+// Checkpoint calls Checkpoint on the underlying WAL manager.
+func (s *SwappableDB) Checkpoint() (*WALWriter, bool, error) {
+	s.dbMu.RLock()
+	defer s.dbMu.RUnlock()
+	return s.wm.Checkpoint()
+}
+
 // Stats returns the underlying database's stats.
 func (s *SwappableDB) Stats() (map[string]any, error) {
 	s.dbMu.RLock()
