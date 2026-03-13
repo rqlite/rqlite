@@ -18,8 +18,8 @@ const (
 // return code but reports that all frames were checkpointed. This should not
 // be possible and indicates unexpected SQLite behavior.
 type ErrCheckpointInvariant struct {
-	RC    int
-	PnLog int
+	RC     int
+	PnLog  int
 	PnCkpt int
 }
 

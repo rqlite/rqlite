@@ -127,6 +127,54 @@ func Test_SectionScanner_PartialRange(t *testing.T) {
 	}
 }
 
+func Test_SectionScanner_NotAWAL(t *testing.T) {
+	tests := []struct {
+		name string
+		data []byte
+	}{
+		{"empty", []byte{}},
+		{"too short", []byte("hello")},
+		{"wrong magic", make([]byte, WALHeaderSize)},
+		{"random garbage", bytes.Repeat([]byte{0xDE, 0xAD}, WALHeaderSize)},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			_, err := NewSectionScanner(bytes.NewReader(tc.data), WALHeaderSize, WALHeaderSize)
+			if err == nil {
+				t.Fatal("expected error for invalid WAL data")
+			}
+		})
+	}
+}
+
+func Test_SectionScanner_BadOffsets(t *testing.T) {
+	b, err := os.ReadFile("testdata/wal-reader/ok/wal")
+	if err != nil {
+		t.Fatal(err)
+	}
+	r := bytes.NewReader(b)
+
+	// Frame size for this WAL is 24 + 4096 = 4120.
+	tests := []struct {
+		name  string
+		start int64
+		end   int64
+	}{
+		{"start after end", 8272, 4152},
+		{"start misaligned", WALHeaderSize + 1, int64(len(b))},
+		{"end misaligned", WALHeaderSize, int64(len(b)) - 1},
+		{"both misaligned", 100, 200},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			_, err := NewSectionScanner(r, tc.start, tc.end)
+			if err == nil {
+				t.Fatal("expected error for bad offsets")
+			}
+		})
+	}
+}
+
 func Test_SectionScanner_Empty(t *testing.T) {
 	b, err := os.ReadFile("testdata/wal-reader/ok/wal")
 	if err != nil {

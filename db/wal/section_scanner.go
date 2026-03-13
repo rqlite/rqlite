@@ -51,6 +51,19 @@ func NewSectionScanner(r io.ReaderAt, start, end int64) (*SectionScanner, error)
 	}
 
 	pageSize := binary.BigEndian.Uint32(hdr[8:])
+	frameSize := int64(WALFrameHeaderSize) + int64(pageSize)
+
+	if start > end {
+		return nil, fmt.Errorf("start offset (%d) is past end offset (%d)", start, end)
+	}
+	if start != end {
+		if (start-WALHeaderSize)%frameSize != 0 {
+			return nil, fmt.Errorf("start offset %d is not frame-aligned", start)
+		}
+		if (end-WALHeaderSize)%frameSize != 0 {
+			return nil, fmt.Errorf("end offset %d is not frame-aligned", end)
+		}
+	}
 
 	return &SectionScanner{
 		r: r,
