@@ -15,25 +15,39 @@ import (
 
 func Test_WALManager_NewNoFile(t *testing.T) {
 	dir := t.TempDir()
-	wm := NewWALManager(filepath.Join(dir, "nonexistent-wal"))
-	// Error occurs on first Checkpoint, not construction.
-	_, _, err := wm.Checkpoint(nil)
+	dbPath := filepath.Join(dir, "test.db")
+
+	db := mustOpenRqliteDB(t, dbPath)
+	defer db.Close()
+	mustExecSQL(t, db, "CREATE TABLE foo (id INTEGER PRIMARY KEY, name TEXT)")
+
+	// Remove the WAL file so init() fails.
+	os.Remove(db.WALPath())
+
+	wm := NewWALManager(db)
+	_, _, err := wm.Checkpoint()
 	if err == nil {
-		t.Fatal("expected error for nonexistent file")
+		t.Fatal("expected error for nonexistent WAL file")
 	}
 }
 
 func Test_WALManager_NewJunkFile(t *testing.T) {
 	dir := t.TempDir()
-	path := filepath.Join(dir, "junk-wal")
-	if err := os.WriteFile(path, []byte("this is not a WAL file"), 0644); err != nil {
+	dbPath := filepath.Join(dir, "test.db")
+
+	db := mustOpenRqliteDB(t, dbPath)
+	defer db.Close()
+	mustExecSQL(t, db, "CREATE TABLE foo (id INTEGER PRIMARY KEY, name TEXT)")
+
+	// Overwrite the WAL file with junk.
+	if err := os.WriteFile(db.WALPath(), []byte("this is not a WAL file"), 0644); err != nil {
 		t.Fatal(err)
 	}
-	wm := NewWALManager(path)
-	// Error occurs on first Checkpoint, not construction.
-	_, _, err := wm.Checkpoint(nil)
+
+	wm := NewWALManager(db)
+	_, _, err := wm.Checkpoint()
 	if err == nil {
-		t.Fatal("expected error for junk file")
+		t.Fatal("expected error for junk WAL file")
 	}
 }
 
@@ -41,16 +55,15 @@ func Test_WALManager_NewValidWAL(t *testing.T) {
 	dir := t.TempDir()
 	dbPath := filepath.Join(dir, "test.db")
 
-	db := mustOpenDB(t, dbPath)
+	db := mustOpenRqliteDB(t, dbPath)
 	defer db.Close()
-	mustDBExec(t, db, "CREATE TABLE foo (id INTEGER PRIMARY KEY, name TEXT)")
-	mustDBExec(t, db, "INSERT INTO foo (name) VALUES ('test')")
+	mustExecSQL(t, db, "CREATE TABLE foo (id INTEGER PRIMARY KEY, name TEXT)")
+	mustExecSQL(t, db, "INSERT INTO foo (name) VALUES ('test')")
 
-	wm := NewWALManager(dbPath + "-wal")
+	wm := NewWALManager(db)
 	defer wm.Close()
 
-	// First Checkpoint triggers init; should succeed for a valid WAL.
-	w, _, err := wm.Checkpoint(db)
+	w, _, err := wm.Checkpoint()
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -63,21 +76,20 @@ func Test_WALManager_SuccessPath(t *testing.T) {
 	dir := t.TempDir()
 	dbPath := filepath.Join(dir, "test.db")
 
-	db := mustOpenDB(t, dbPath)
+	db := mustOpenRqliteDB(t, dbPath)
 	defer db.Close()
-	mustDBExec(t, db, "CREATE TABLE foo (id INTEGER PRIMARY KEY, name TEXT)")
+	mustExecSQL(t, db, "CREATE TABLE foo (id INTEGER PRIMARY KEY, name TEXT)")
 
 	// Insert first batch of rows.
 	for i := 0; i < 50; i++ {
-		mustDBExec(t, db, fmt.Sprintf("INSERT INTO foo (name) VALUES ('row%d')", i))
+		mustExecSQL(t, db, fmt.Sprintf("INSERT INTO foo (name) VALUES ('row%d')", i))
 	}
 
-	walPath := dbPath + "-wal"
-	wm := NewWALManager(walPath)
+	wm := NewWALManager(db)
 	defer wm.Close()
 
 	// First checkpoint: should get all frames.
-	w, busy, err := wm.Checkpoint(db)
+	w, busy, err := wm.Checkpoint()
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -99,11 +111,11 @@ func Test_WALManager_SuccessPath(t *testing.T) {
 
 	// Insert second batch.
 	for i := 50; i < 100; i++ {
-		mustDBExec(t, db, fmt.Sprintf("INSERT INTO foo (name) VALUES ('row%d')", i))
+		mustExecSQL(t, db, fmt.Sprintf("INSERT INTO foo (name) VALUES ('row%d')", i))
 	}
 
 	// Second checkpoint: should get only new frames (smaller output).
-	w, busy, err = wm.Checkpoint(db)
+	w, busy, err = wm.Checkpoint()
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -132,20 +144,19 @@ func Test_WALManager_BusyPath(t *testing.T) {
 	dir := t.TempDir()
 	dbPath := filepath.Join(dir, "test.db")
 
-	rwDB := mustOpenDB(t, dbPath)
-	defer rwDB.Close()
-	mustDBExec(t, rwDB, "CREATE TABLE foo (id INTEGER PRIMARY KEY, name TEXT)")
+	db := mustOpenRqliteDB(t, dbPath)
+	defer db.Close()
+	mustExecSQL(t, db, "CREATE TABLE foo (id INTEGER PRIMARY KEY, name TEXT)")
 
 	// Insert rows so there's data in the WAL.
 	for i := 0; i < 50; i++ {
-		mustDBExec(t, rwDB, fmt.Sprintf("INSERT INTO foo (name) VALUES ('row%d')", i))
+		mustExecSQL(t, db, fmt.Sprintf("INSERT INTO foo (name) VALUES ('row%d')", i))
 	}
 
-	walPath := dbPath + "-wal"
-	wm := NewWALManager(walPath)
+	wm := NewWALManager(db)
 	defer wm.Close()
 
-	// Open a read-only connection and hold a cursor open to block the
+	// Open a separate read-only connection and hold a cursor open to block the
 	// checkpoint. The cursor must not be fully consumed — go-sqlite3
 	// releases the WAL read lock when the statement finishes stepping.
 	roDSN := fmt.Sprintf("file:%s?mode=ro", dbPath)
@@ -164,12 +175,12 @@ func Test_WALManager_BusyPath(t *testing.T) {
 
 	// Insert more rows while the reader holds a snapshot at the old end-mark.
 	for i := 50; i < 100; i++ {
-		mustDBExec(t, rwDB, fmt.Sprintf("INSERT INTO foo (name) VALUES ('row%d')", i))
+		mustExecSQL(t, db, fmt.Sprintf("INSERT INTO foo (name) VALUES ('row%d')", i))
 	}
 
 	// Checkpoint should report busy because the reader's open cursor
 	// prevents FULL checkpoint from completing.
-	w, busy, err := wm.Checkpoint(rwDB)
+	w, busy, err := wm.Checkpoint()
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -185,7 +196,7 @@ func Test_WALManager_BusyPath(t *testing.T) {
 	rows.Close()
 
 	// Checkpoint again should succeed.
-	w, busy, err = wm.Checkpoint(rwDB)
+	w, busy, err = wm.Checkpoint()
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -198,21 +209,20 @@ func Test_WALManager_SaltChange(t *testing.T) {
 	dir := t.TempDir()
 	dbPath := filepath.Join(dir, "test.db")
 
-	db := mustOpenDB(t, dbPath)
+	db := mustOpenRqliteDB(t, dbPath)
 	defer db.Close()
-	mustDBExec(t, db, "CREATE TABLE foo (id INTEGER PRIMARY KEY, name TEXT)")
+	mustExecSQL(t, db, "CREATE TABLE foo (id INTEGER PRIMARY KEY, name TEXT)")
 
 	// Insert rows and create WALManager.
 	for i := 0; i < 50; i++ {
-		mustDBExec(t, db, fmt.Sprintf("INSERT INTO foo (name) VALUES ('row%d')", i))
+		mustExecSQL(t, db, fmt.Sprintf("INSERT INTO foo (name) VALUES ('row%d')", i))
 	}
 
-	walPath := dbPath + "-wal"
-	wm := NewWALManager(walPath)
+	wm := NewWALManager(db)
 	defer wm.Close()
 
 	// First checkpoint: success, advances offset.
-	w1, _, err := wm.Checkpoint(db)
+	w1, _, err := wm.Checkpoint()
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -224,17 +234,17 @@ func Test_WALManager_SaltChange(t *testing.T) {
 
 	// Force a WAL reset by doing a TRUNCATE checkpoint, then writing new data.
 	// TRUNCATE resets the WAL, which changes the salt.
-	if _, err := db.Exec("PRAGMA wal_checkpoint(TRUNCATE)"); err != nil {
+	if _, err := db.Checkpoint(CheckpointTruncate); err != nil {
 		t.Fatal(err)
 	}
 
 	// Insert new rows. This will cause SQLite to write a new WAL with new salt.
 	for i := 100; i < 150; i++ {
-		mustDBExec(t, db, fmt.Sprintf("INSERT INTO foo (name) VALUES ('row%d')", i))
+		mustExecSQL(t, db, fmt.Sprintf("INSERT INTO foo (name) VALUES ('row%d')", i))
 	}
 
 	// Checkpoint should detect salt change and deliver all frames.
-	w2, _, err := wm.Checkpoint(db)
+	w2, _, err := wm.Checkpoint()
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -250,26 +260,21 @@ func Test_WALManager_SaltChange(t *testing.T) {
 	t.Logf("first WAL size: %d, second WAL size after salt change: %d", firstSize, len(secondWAL))
 }
 
-// mustOpenDB opens a SQLite database in WAL mode with auto-checkpoint disabled.
-// It returns the raw *sql.DB for use with WALManager.Checkpoint.
-func mustOpenDB(t *testing.T, path string) *sql.DB {
+// mustOpenRqliteDB opens a rqlite DB in WAL mode. Auto-checkpoint is
+// disabled by Open().
+func mustOpenRqliteDB(t *testing.T, path string) *DB {
 	t.Helper()
-	dsn := fmt.Sprintf("file:%s?_journal_mode=WAL&_synchronous=OFF", path)
-	db, err := sql.Open("sqlite3", dsn)
+	db, err := Open(path, false, true)
 	if err != nil {
-		t.Fatal(err)
-	}
-	// Force a connection to be created so the database file exists.
-	if _, err := db.Exec("PRAGMA wal_autocheckpoint=0"); err != nil {
 		t.Fatal(err)
 	}
 	return db
 }
 
-// mustDBExec executes a SQL statement and fails the test on error.
-func mustDBExec(t *testing.T, db *sql.DB, query string) {
+// mustExecSQL executes a SQL statement via the DB's read-write connection.
+func mustExecSQL(t *testing.T, db *DB, query string) {
 	t.Helper()
-	if _, err := db.Exec(query); err != nil {
+	if _, err := db.rwDB.Exec(query); err != nil {
 		t.Fatalf("exec %q: %v", query, err)
 	}
 }

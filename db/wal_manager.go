@@ -1,17 +1,17 @@
 package db
 
 import (
-	"database/sql"
 	"encoding/binary"
 	"fmt"
 	"io"
 	"os"
+	"time"
 
 	"github.com/rqlite/rqlite/v10/db/wal"
 )
 
 const (
-	walMgrBusyTimeout = 100 // milliseconds
+	walMgrBusyTimeout = 100 * time.Millisecond
 )
 
 // ErrCheckpointInvariant is returned when a FULL checkpoint returns a non-zero
@@ -34,19 +34,19 @@ func (e ErrCheckpointInvariant) Error() string {
 //
 // WALManager is not safe for concurrent use.
 type WALManager struct {
-	path     string
+	db       *DB
 	f        *os.File
 	salt     [2]uint32
 	offset   int64
 	pageSize uint32
 }
 
-// NewWALManager creates a new WALManager for the WAL file at path. The WAL
+// NewWALManager creates a new WALManager for the given database. The WAL
 // file does not need to exist at construction time; it will be opened and
 // validated on the first call to Checkpoint.
-func NewWALManager(path string) *WALManager {
+func NewWALManager(db *DB) *WALManager {
 	return &WALManager{
-		path: path,
+		db: db,
 	}
 }
 
@@ -56,11 +56,12 @@ func (m *WALManager) init() error {
 		return nil
 	}
 
-	if !IsValidSQLiteWALFile(m.path) {
-		return fmt.Errorf("not a valid SQLite WAL file: %s", m.path)
+	walPath := m.db.WALPath()
+	if !IsValidSQLiteWALFile(walPath) {
+		return fmt.Errorf("not a valid SQLite WAL file: %s", walPath)
 	}
 
-	f, err := os.Open(m.path)
+	f, err := os.Open(walPath)
 	if err != nil {
 		return err
 	}
@@ -88,7 +89,7 @@ func (m *WALManager) init() error {
 // not all frames could be copied back to the database file due to reader
 // locks. The caller must fully consume the WALWriter before calling
 // Checkpoint again. The WAL file must exist when Checkpoint is called.
-func (m *WALManager) Checkpoint(db *sql.DB) (*WALWriter, bool, error) {
+func (m *WALManager) Checkpoint() (*WALWriter, bool, error) {
 	if err := m.init(); err != nil {
 		return nil, false, err
 	}
@@ -101,23 +102,12 @@ func (m *WALManager) Checkpoint(db *sql.DB) (*WALWriter, bool, error) {
 	}
 	m.salt = salt
 
-	// Set a short busy timeout for the checkpoint.
-	var origTimeout int
-	if err := db.QueryRow("PRAGMA busy_timeout").Scan(&origTimeout); err != nil {
-		return nil, false, fmt.Errorf("get busy_timeout: %w", err)
-	}
-	if _, err := db.Exec(fmt.Sprintf("PRAGMA busy_timeout=%d", walMgrBusyTimeout)); err != nil {
-		return nil, false, fmt.Errorf("set busy_timeout: %w", err)
-	}
-	defer func() {
-		db.Exec(fmt.Sprintf("PRAGMA busy_timeout=%d", origTimeout))
-	}()
-
-	rc, pnLog, pnCkpt, err := checkpointDB(db, CheckpointFull)
+	meta, err := m.db.CheckpointWithTimeout(CheckpointFull, walMgrBusyTimeout)
 	if err != nil {
 		return nil, false, fmt.Errorf("checkpoint: %w", err)
 	}
 
+	rc, pnLog, pnCkpt := meta.Code, meta.Pages, meta.Moved
 	if rc != 0 && pnCkpt == pnLog {
 		return nil, false, ErrCheckpointInvariant{RC: rc, PnLog: pnLog, PnCkpt: pnCkpt}
 	}
