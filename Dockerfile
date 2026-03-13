@@ -24,13 +24,13 @@ COPY . /app
 # Build rqlite.
 WORKDIR /app
 ENV CGO_ENABLED=1
-RUN go build -ldflags=" \
+RUN go build -tags sqlite_column_metadata -ldflags=" \
     -w -s -X github.com/rqlite/rqlite/v10/cmd.CompilerCommand=musl-gcc \
     -X github.com/rqlite/rqlite/v10/cmd.Version=${VERSION} \
     -X github.com/rqlite/rqlite/v10/cmd.Branch=${BRANCH} \
     -X github.com/rqlite/rqlite/v10/cmd.Commit=${COMMIT} \
     -X github.com/rqlite/rqlite/v10/cmd.Buildtime=${DATE}" ./cmd/rqlited/. && \
-    go build -ldflags="-w -s" ./cmd/rqlite/.
+    go build -tags sqlite_column_metadata -ldflags="-w -s" ./cmd/rqlite/.
 
 # Build the extensions, start by creating the extensions directory.
 WORKDIR /extensions
