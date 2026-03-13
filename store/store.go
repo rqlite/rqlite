@@ -31,7 +31,6 @@ import (
 	"github.com/rqlite/rqlite/v10/command/proto"
 	sql "github.com/rqlite/rqlite/v10/db"
 	"github.com/rqlite/rqlite/v10/db/humanize"
-	"github.com/rqlite/rqlite/v10/db/wal"
 	"github.com/rqlite/rqlite/v10/internal/progress"
 	"github.com/rqlite/rqlite/v10/internal/random"
 	"github.com/rqlite/rqlite/v10/internal/rsum"
@@ -2625,14 +2624,12 @@ func (s *Store) fsmSnapshot() (fSnap raft.FSMSnapshot, retErr error) {
 		// in the Snapshot Store. It also means smaller data transfers if a snapshot
 		// is transferred to another node.
 		compactStartTime := time.Now()
-		walFD, err := os.Open(s.walPath)
+		walW, busy, err := s.db.Checkpoint()
 		if err != nil {
 			return nil, err
 		}
-		defer walFD.Close()
-		scanner, err := wal.NewFastCompactingScanner(walFD)
-		if err != nil {
-			return nil, err
+		if busy {
+			return nil, fmt.Errorf("database is busy during checkpoint for snapshot - will retry")
 		}
 
 		// Write the compacted WAL to the WAL staging directory. The Snapshotting process
@@ -2648,11 +2645,7 @@ func (s *Store) fsmSnapshot() (fSnap raft.FSMSnapshot, retErr error) {
 		}
 		defer walWriter.Cancel() // Noop if already closed, but ensures cleanup on error paths.
 
-		ww, err := wal.NewWriter(scanner)
-		if err != nil {
-			return nil, err
-		}
-		walSzPost, err := ww.WriteTo(walWriter)
+		walSzPost, err := walW.WriteTo(walWriter)
 		if err != nil {
 			return nil, err
 		}
@@ -2669,9 +2662,6 @@ func (s *Store) fsmSnapshot() (fSnap raft.FSMSnapshot, retErr error) {
 			return nil, err
 		}
 		chkTStartTime := time.Now()
-		if err := s.db.CheckpointTruncateWithTimeout(truncateTimeout); err != nil {
-			s.logger.Fatalf("failed to checkpoint and truncate database for snapshot: %s", err.Error())
-		}
 		stats.Get(snapshotCreateChkTruncateDuration).(*expvar.Int).Set(time.Since(chkTStartTime).Milliseconds())
 		stats.Get(snapshotPrecompactWALSize).(*expvar.Int).Set(walSzPre)
 		stats.Get(snapshotWALSize).(*expvar.Int).Set(walSzPost)

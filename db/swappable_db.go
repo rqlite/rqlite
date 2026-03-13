@@ -16,6 +16,7 @@ import (
 // in a thread-safe manner.
 type SwappableDB struct {
 	db   *DB
+	wm   *WALManager
 	drv  *Driver
 	dbMu sync.RWMutex
 }
@@ -33,6 +34,7 @@ func OpenSwappable(dbPath string, drv *Driver, fkEnabled, wal bool) (*SwappableD
 	}
 	return &SwappableDB{
 		db:  db,
+		wm:  NewWALManager(db),
 		drv: drv,
 	}, nil
 }
@@ -47,6 +49,9 @@ func (s *SwappableDB) Swap(path string, fkConstraints, walEnabled bool) error {
 
 	s.dbMu.Lock()
 	defer s.dbMu.Unlock()
+	if err := s.wm.Close(); err != nil {
+		return fmt.Errorf("failed to close WAL manager: %s", err)
+	}
 	if err := s.db.Close(); err != nil {
 		return fmt.Errorf("failed to close: %s", err)
 	}
@@ -62,14 +67,25 @@ func (s *SwappableDB) Swap(path string, fkConstraints, walEnabled bool) error {
 		return fmt.Errorf("open SQLite file failed: %s", err)
 	}
 	s.db = db
+	s.wm = NewWALManager(db)
 	return nil
 }
 
-// Close closes the underlying database.
+// Close closes the WAL manager and the underlying database.
 func (s *SwappableDB) Close() error {
 	s.dbMu.RLock()
 	defer s.dbMu.RUnlock()
+	if err := s.wm.Close(); err != nil {
+		return err
+	}
 	return s.db.Close()
+}
+
+// Checkpoint calls Checkpoint on the underlying WAL manager.
+func (s *SwappableDB) Checkpoint() (*WALWriter, bool, error) {
+	s.dbMu.RLock()
+	defer s.dbMu.RUnlock()
+	return s.wm.Checkpoint()
 }
 
 // Stats returns the underlying database's stats.
