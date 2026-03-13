@@ -17,8 +17,12 @@ func Test_SectionScanner_AllFrames(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	r := bytes.NewReader(b)
-	s, err := NewSectionScanner(r, WALHeaderSize, int64(len(b)))
+	// The test WAL has 3 frames:
+	//   Frame 1: pgno=1, commit=0
+	//   Frame 2: pgno=2, commit=2
+	//   Frame 3: pgno=2, commit=2
+	// After compaction: pgno=1 (from frame 1), pgno=2 (from frame 3).
+	s, err := NewSectionScanner(bytes.NewReader(b), WALHeaderSize, int64(len(b)))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -27,64 +31,7 @@ func Test_SectionScanner_AllFrames(t *testing.T) {
 		t.Fatal("expected non-empty scanner")
 	}
 
-	// Verify the scanner yields the same frames as FullScanner.
-	fs, err := NewFullScanner(bytes.NewReader(b))
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	for i := 0; ; i++ {
-		expF, expErr := fs.Next()
-		gotF, gotErr := s.Next()
-		if expErr == io.EOF && gotErr == io.EOF {
-			break
-		}
-		if expErr != nil {
-			t.Fatalf("full scanner error on frame %d: %v", i, expErr)
-		}
-		if gotErr != nil {
-			t.Fatalf("section scanner error on frame %d: %v", i, gotErr)
-		}
-		if expF.Pgno != gotF.Pgno {
-			t.Fatalf("frame %d: pgno mismatch: %d != %d", i, expF.Pgno, gotF.Pgno)
-		}
-		if expF.Commit != gotF.Commit {
-			t.Fatalf("frame %d: commit mismatch: %d != %d", i, expF.Commit, gotF.Commit)
-		}
-		if !bytes.Equal(expF.Data, gotF.Data) {
-			t.Fatalf("frame %d: data mismatch", i)
-		}
-	}
-}
-
-func Test_SectionScanner_PartialRange(t *testing.T) {
-	b, err := os.ReadFile("testdata/wal-reader/ok/wal")
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	// The test WAL has 3 frames with page size 4096.
-	// Frame size = WALFrameHeaderSize(24) + 4096 = 4120
-	// Frame 1: offset 32
-	// Frame 2: offset 4152
-	// Frame 3: offset 8272
-	// End:     offset 12392
-	const frameSize = WALFrameHeaderSize + 4096
-
-	// Read only frames 2-3.
-	start := int64(WALHeaderSize + frameSize) // skip frame 1
-	end := int64(len(b))
-
-	s, err := NewSectionScanner(bytes.NewReader(b), start, end)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	if s.Empty() {
-		t.Fatal("expected non-empty scanner")
-	}
-
-	// Get all frames from FullScanner for reference.
+	// Get all frames from FullScanner for data reference.
 	fs, err := NewFullScanner(bytes.NewReader(b))
 	if err != nil {
 		t.Fatal(err)
@@ -100,25 +47,93 @@ func Test_SectionScanner_PartialRange(t *testing.T) {
 		}
 		allFrames = append(allFrames, f)
 	}
-	if len(allFrames) != 3 {
-		t.Fatalf("expected 3 frames in test WAL, got %d", len(allFrames))
+
+	// Compacted output: 2 frames.
+	f1, err := s.Next()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if f1.Pgno != 1 {
+		t.Fatalf("expected pgno=1, got %d", f1.Pgno)
+	}
+	if !bytes.Equal(f1.Data, allFrames[0].Data) {
+		t.Fatal("pgno=1 data mismatch")
 	}
 
-	// SectionScanner should yield frames 2 and 3 (indices 1, 2).
-	for i := 1; i < 3; i++ {
-		f, err := s.Next()
+	f2, err := s.Next()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if f2.Pgno != 2 {
+		t.Fatalf("expected pgno=2, got %d", f2.Pgno)
+	}
+	// pgno=2 should have data from frame 3 (the latest version).
+	if !bytes.Equal(f2.Data, allFrames[2].Data) {
+		t.Fatal("pgno=2 data should match frame 3 (latest)")
+	}
+
+	_, err = s.Next()
+	if err != io.EOF {
+		t.Fatalf("expected EOF, got %v", err)
+	}
+}
+
+func Test_SectionScanner_PartialRange(t *testing.T) {
+	b, err := os.ReadFile("testdata/wal-reader/ok/wal")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// The test WAL has 3 frames with page size 4096.
+	// Frame size = WALFrameHeaderSize(24) + 4096 = 4120
+	// Frame 1: offset 32,   pgno=1, commit=0
+	// Frame 2: offset 4152, pgno=2, commit=2
+	// Frame 3: offset 8272, pgno=2, commit=2
+	// End:     offset 12392
+	//
+	// Frames 2-3 both have pgno=2. After compaction: 1 frame (pgno=2
+	// from frame 3, the latest).
+	const frameSize = WALFrameHeaderSize + 4096
+
+	start := int64(WALHeaderSize + frameSize) // skip frame 1
+	end := int64(len(b))
+
+	s, err := NewSectionScanner(bytes.NewReader(b), start, end)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if s.Empty() {
+		t.Fatal("expected non-empty scanner")
+	}
+
+	// Get frame 3 data from FullScanner for reference.
+	fs, err := NewFullScanner(bytes.NewReader(b))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var allFrames []*Frame
+	for {
+		f, err := fs.Next()
+		if err == io.EOF {
+			break
+		}
 		if err != nil {
-			t.Fatalf("error reading frame %d: %v", i, err)
+			t.Fatal(err)
 		}
-		if f.Pgno != allFrames[i].Pgno {
-			t.Fatalf("frame %d: pgno mismatch: %d != %d", i, f.Pgno, allFrames[i].Pgno)
-		}
-		if f.Commit != allFrames[i].Commit {
-			t.Fatalf("frame %d: commit mismatch: %d != %d", i, f.Commit, allFrames[i].Commit)
-		}
-		if !bytes.Equal(f.Data, allFrames[i].Data) {
-			t.Fatalf("frame %d: data mismatch", i)
-		}
+		allFrames = append(allFrames, f)
+	}
+
+	// Compacted output: 1 frame (pgno=2 from frame 3).
+	f, err := s.Next()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if f.Pgno != 2 {
+		t.Fatalf("expected pgno=2, got %d", f.Pgno)
+	}
+	if !bytes.Equal(f.Data, allFrames[2].Data) {
+		t.Fatal("pgno=2 data should match frame 3 (latest)")
 	}
 
 	_, err = s.Next()
@@ -222,8 +237,9 @@ func Test_SectionScanner_WriterRoundTrip(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	// Output should be a valid WAL: header + 2 frames.
-	expectedSize := int64(WALHeaderSize + 2*frameSize)
+	// Frames 2-3 are both pgno=2. After compaction: 1 frame.
+	// Output should be a valid WAL: header + 1 frame.
+	expectedSize := int64(WALHeaderSize + 1*frameSize)
 	if n != expectedSize {
 		t.Fatalf("expected %d bytes written, got %d", expectedSize, n)
 	}
@@ -245,8 +261,8 @@ func Test_SectionScanner_WriterRoundTrip(t *testing.T) {
 		}
 		count++
 	}
-	if count != 2 {
-		t.Fatalf("expected 2 frames in output, got %d", count)
+	if count != 1 {
+		t.Fatalf("expected 1 frame in output, got %d", count)
 	}
 }
 

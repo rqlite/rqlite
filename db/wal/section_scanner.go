@@ -4,25 +4,31 @@ import (
 	"encoding/binary"
 	"fmt"
 	"io"
+	"maps"
+	"sort"
 )
 
-// SectionScanner implements WALIterator to iterate over WAL frames within a
-// byte range [start, end). It reads frames directly without checksum
-// verification, since the WAL file is trusted and the Writer recomputes
-// checksums when producing output.
+// SectionScanner implements WALIterator to iterate over compacted WAL frames
+// within a byte range [start, end). It scans all frames in the range, keeps
+// only the latest version of each page (respecting transaction boundaries),
+// and returns them in file offset order. Frame checksums are not verified
+// since the WAL file is trusted; the Writer recomputes checksums when
+// producing output.
 type SectionScanner struct {
 	r        io.ReaderAt
 	header   *WALHeader
 	pageSize uint32
 	start    int64
 	end      int64
-	offset   int64
+
+	frames cFrames
+	fIdx   int
 }
 
-// NewSectionScanner creates a new SectionScanner that reads frames from the
-// byte range [start, end) of the WAL accessible via r. The start and end
-// offsets must be aligned to frame boundaries. The WAL header is always read
-// from offset 0.
+// NewSectionScanner creates a new SectionScanner that reads and compacts
+// frames from the byte range [start, end) of the WAL accessible via r. The
+// start and end offsets must be aligned to frame boundaries. The WAL header
+// is always read from offset 0.
 func NewSectionScanner(r io.ReaderAt, start, end int64) (*SectionScanner, error) {
 	hdr := make([]byte, WALHeaderSize)
 	if _, err := r.ReadAt(hdr, 0); err != nil {
@@ -65,7 +71,7 @@ func NewSectionScanner(r io.ReaderAt, start, end int64) (*SectionScanner, error)
 		}
 	}
 
-	return &SectionScanner{
+	s := &SectionScanner{
 		r: r,
 		header: &WALHeader{
 			Magic:     magic,
@@ -80,8 +86,12 @@ func NewSectionScanner(r io.ReaderAt, start, end int64) (*SectionScanner, error)
 		pageSize: pageSize,
 		start:    start,
 		end:      end,
-		offset:   start,
-	}, nil
+	}
+
+	if err := s.scan(); err != nil {
+		return nil, err
+	}
+	return s, nil
 }
 
 // Header returns the WAL header.
@@ -89,36 +99,79 @@ func (s *SectionScanner) Header() (*WALHeader, error) {
 	return s.header, nil
 }
 
-// Next returns the next frame in the section. Returns io.EOF when all frames
-// in the range have been read.
+// Next returns the next compacted frame. Returns io.EOF when all frames
+// have been read.
 func (s *SectionScanner) Next() (*Frame, error) {
-	if s.offset >= s.end {
+	if s.fIdx >= len(s.frames) {
 		return nil, io.EOF
 	}
 
-	frmHdr := make([]byte, WALFrameHeaderSize)
-	if _, err := s.r.ReadAt(frmHdr, s.offset); err != nil {
-		return nil, fmt.Errorf("read frame header at offset %d: %w", s.offset, err)
-	}
-
+	cf := s.frames[s.fIdx]
 	data := make([]byte, s.pageSize)
-	if _, err := s.r.ReadAt(data, s.offset+WALFrameHeaderSize); err != nil {
-		return nil, fmt.Errorf("read frame data at offset %d: %w", s.offset+WALFrameHeaderSize, err)
+	if _, err := s.r.ReadAt(data, cf.Offset+WALFrameHeaderSize); err != nil {
+		return nil, fmt.Errorf("read frame data at offset %d: %w", cf.Offset+WALFrameHeaderSize, err)
 	}
-
-	pgno := binary.BigEndian.Uint32(frmHdr[0:])
-	commit := binary.BigEndian.Uint32(frmHdr[4:])
-
-	s.offset += int64(WALFrameHeaderSize) + int64(s.pageSize)
+	s.fIdx++
 
 	return &Frame{
-		Pgno:   pgno,
-		Commit: commit,
+		Pgno:   cf.Pgno,
+		Commit: cf.Commit,
 		Data:   data,
 	}, nil
 }
 
 // Empty reports whether the scanner has zero frames to deliver.
 func (s *SectionScanner) Empty() bool {
-	return s.start >= s.end
+	return len(s.frames) == 0
+}
+
+// scan reads all frame headers in [start, end) and builds a compacted frame
+// list, keeping only the latest version of each page. Only committed
+// transactions are included.
+func (s *SectionScanner) scan() error {
+	if s.start >= s.end {
+		return nil
+	}
+
+	frmHdr := make([]byte, WALFrameHeaderSize)
+	frameSize := int64(WALFrameHeaderSize) + int64(s.pageSize)
+
+	waitingForCommit := false
+	txFrames := make(map[uint32]*cFrame)
+	frames := make(map[uint32]*cFrame)
+
+	for offset := s.start; offset < s.end; offset += frameSize {
+		if _, err := s.r.ReadAt(frmHdr, offset); err != nil {
+			return fmt.Errorf("read frame header at offset %d: %w", offset, err)
+		}
+
+		pgno := binary.BigEndian.Uint32(frmHdr[0:])
+		commit := binary.BigEndian.Uint32(frmHdr[4:])
+
+		txFrames[pgno] = &cFrame{
+			Pgno:   pgno,
+			Commit: commit,
+			Offset: offset,
+		}
+
+		if commit == 0 {
+			waitingForCommit = true
+			continue
+		}
+		waitingForCommit = false
+
+		maps.Copy(frames, txFrames)
+		txFrames = make(map[uint32]*cFrame)
+	}
+
+	if waitingForCommit {
+		return ErrOpenTransaction
+	}
+
+	s.frames = make(cFrames, 0, len(frames))
+	for _, frame := range frames {
+		s.frames = append(s.frames, frame)
+	}
+	sort.Sort(s.frames)
+	return nil
 }
