@@ -29,7 +29,6 @@ import (
 	"github.com/rqlite/rqlite/v10/command"
 	"github.com/rqlite/rqlite/v10/command/chunking"
 	"github.com/rqlite/rqlite/v10/command/proto"
-	"github.com/rqlite/rqlite/v10/db"
 	sql "github.com/rqlite/rqlite/v10/db"
 	"github.com/rqlite/rqlite/v10/db/humanize"
 	"github.com/rqlite/rqlite/v10/db/wal"
@@ -330,8 +329,6 @@ type Store struct {
 	walPath string    // Path to WAL file.
 	dbDir   string    // Path to directory containing SQLite file.
 
-	walManager *db.WALManager
-
 	dbDrv *sql.Driver      // The SQLite database driver.
 	db    *sql.SwappableDB // The underlying SQLite store.
 
@@ -477,7 +474,6 @@ func New(c *Config, ly Layer) *Store {
 		dbConf:            c.DBConf,
 		dbPath:            dbPath,
 		walPath:           sql.WALPath(dbPath),
-		walManager:        db.NewWALManager(sql.WALPath(dbPath)),
 		dbDir:             filepath.Dir(dbPath),
 		dbDrv:             sql.DefaultDriver(),
 		readyChans:        rsync.NewReadyChannels(),
