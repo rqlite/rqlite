@@ -998,13 +998,33 @@ type execerQueryer interface {
 	QueryContext(ctx context.Context, query string, args ...any) (*sql.Rows, error)
 }
 
-func (db *DB) executeWithConn(ctx context.Context, req *command.Request, xTime bool, conn *sql.Conn) ([]*command.ExecuteQueryResponse, error) {
+// stmtResult holds the outcome of executing a single statement. The response
+// is always appended to the results slice. A non-nil err signals the runner
+// to abort the transaction (or issue a ROLLBACK if rollbackOnError is set).
+type stmtResult struct {
+	response *command.ExecuteQueryResponse
+	err      error
+}
+
+// runStatements runs each statement in req through the given callback,
+// wrapping in a transaction if req.Transaction is set. On error inside a
+// transaction, the transaction is rolled back and iteration stops. If
+// rollbackOnError is true and there is no explicit transaction, a bare
+// ROLLBACK is issued on first error and iteration stops.
+func (db *DB) runStatements(
+	ctx context.Context,
+	conn *sql.Conn,
+	req *command.Request,
+	rollbackOnError bool,
+	txStat string,
+	onStmt func(stmt *command.Statement, eq execerQueryer) stmtResult,
+) ([]*command.ExecuteQueryResponse, error) {
 	var err error
 
-	eqer := execerQueryer(conn)
+	eq := execerQueryer(conn)
 	var tx *sql.Tx
 	if req.Transaction {
-		stats.Add(numETx, 1)
+		stats.Add(txStat, 1)
 		tx, err = conn.BeginTx(ctx, nil)
 		if err != nil {
 			return nil, err
@@ -1014,55 +1034,51 @@ func (db *DB) executeWithConn(ctx context.Context, req *command.Request, xTime b
 				tx.Rollback() // Will be ignored if tx is committed
 			}
 		}()
-		eqer = tx
+		eq = tx
 	}
 
 	var allResults []*command.ExecuteQueryResponse
-
-	// handleError sets the error field on the given result. It returns
-	// whether the caller should continue processing or break.
-	handleError := func(result *command.ExecuteQueryResponse, err error) bool {
-		stats.Add(numExecutionErrors, 1)
-		result.Result = &command.ExecuteQueryResponse_Error{
-			Error: err.Error(),
-		}
-		allResults = append(allResults, result)
-		if tx != nil {
-			tx.Rollback()
-			tx = nil
-			return false
-		}
-		if req.RollbackOnError {
-			// Use a background context here since the original context may have been canceled or hit its deadline,
-			// and we want to ensure the rollback goes through.
-			db.executeStmtWithConn(context.Background(), &command.Statement{Sql: "ROLLBACK"}, false, eqer,
-				time.Duration(req.DbTimeout))
-			return false
-		}
-		return true
-	}
-
-	// Execute each statement.
 	for _, stmt := range req.Statements {
-		ss := stmt.Sql
-		if ss == "" {
+		if stmt.Sql == "" {
 			continue
 		}
 
-		result, err := db.executeStmtWithConn(ctx, stmt, xTime, eqer, time.Duration(req.DbTimeout))
-		if err != nil {
-			if handleError(result, err) {
-				continue
+		sr := onStmt(stmt, eq)
+		allResults = append(allResults, sr.response)
+
+		if sr.err != nil {
+			if tx != nil {
+				tx.Rollback()
+				tx = nil
+				break
 			}
-			break
+			if rollbackOnError {
+				// Use a background context here since the original context may have been
+				// canceled or hit its deadline, and we want to ensure the rollback goes through.
+				db.executeStmtWithConn(context.Background(), &command.Statement{Sql: "ROLLBACK"}, false, eq,
+					time.Duration(req.DbTimeout))
+				break
+			}
+			// Outside a transaction with no rollbackOnError: continue to next statement.
 		}
-		allResults = append(allResults, result)
 	}
 
 	if tx != nil {
 		err = tx.Commit()
 	}
 	return allResults, err
+}
+
+func (db *DB) executeWithConn(ctx context.Context, req *command.Request, xTime bool, conn *sql.Conn) ([]*command.ExecuteQueryResponse, error) {
+	return db.runStatements(ctx, conn, req, req.RollbackOnError, numETx,
+		func(stmt *command.Statement, eq execerQueryer) stmtResult {
+			result, err := db.executeStmtWithConn(ctx, stmt, xTime, eq, time.Duration(req.DbTimeout))
+			if err != nil {
+				stats.Add(numExecutionErrors, 1)
+			}
+			return stmtResult{response: result, err: err}
+		},
+	)
 }
 
 func (db *DB) executeStmtWithConn(ctx context.Context, stmt *command.Statement, xTime bool, eq execerQueryer, timeout time.Duration) (res *command.ExecuteQueryResponse, retErr error) {
@@ -1407,65 +1423,28 @@ func (db *DB) RequestWithContext(ctx context.Context, req *command.Request, xTim
 	}
 	defer conn.Close()
 
-	eq := execerQueryer(conn)
-	var tx *sql.Tx
-	if req.Transaction {
-		stats.Add(numRTx, 1)
-		tx, err = conn.BeginTx(ctx, nil)
-		if err != nil {
-			return nil, err
-		}
-		defer tx.Rollback() // Will be ignored if tx is committed
-		eq = tx
-	}
-
-	// abortOnError indicates whether the caller should continue
-	// processing or break.
-	abortOnError := func(err error) bool {
-		if err != nil && tx != nil {
-			tx.Rollback()
-			tx = nil
-			return true
-		}
-		return false
-	}
-
-	var eqResponse []*command.ExecuteQueryResponse
-	for _, stmt := range req.Statements {
-		ss := stmt.Sql
-		if ss == "" {
-			continue
-		}
-
-		ro, err := db.StmtReadOnlyWithConn(ss, conn)
-		if err != nil {
-			eqResponse = append(eqResponse, &command.ExecuteQueryResponse{
-				Result: &command.ExecuteQueryResponse_Error{
-					Error: err.Error(),
-				},
-			})
-			continue
-		}
-
-		if ro {
-			rows, opErr := db.queryStmtWithConn(ctx, stmt, xTime, eq)
-			eqResponse = append(eqResponse, createEQQueryResponse(rows, opErr))
-			if abortOnError(opErr) {
-				break
+	return db.runStatements(ctx, conn, req, false, numRTx,
+		func(stmt *command.Statement, eq execerQueryer) stmtResult {
+			ro, err := db.StmtReadOnlyWithConn(stmt.Sql, conn)
+			if err != nil {
+				return stmtResult{
+					response: &command.ExecuteQueryResponse{
+						Result: &command.ExecuteQueryResponse_Error{Error: err.Error()},
+					},
+					err: nil, // read-only check failure is non-fatal, continue
+				}
 			}
-		} else {
+			if ro {
+				rows, opErr := db.queryStmtWithConn(ctx, stmt, xTime, eq)
+				return stmtResult{
+					response: createEQQueryResponse(rows, opErr),
+					err:      opErr,
+				}
+			}
 			result, opErr := db.executeStmtWithConn(ctx, stmt, xTime, eq, time.Duration(req.DbTimeout))
-			eqResponse = append(eqResponse, result)
-			if abortOnError(opErr) {
-				break
-			}
-		}
-	}
-
-	if tx != nil {
-		err = tx.Commit()
-	}
-	return eqResponse, err
+			return stmtResult{response: result, err: opErr}
+		},
+	)
 }
 
 // Backup writes a consistent snapshot of the database to the given file.
