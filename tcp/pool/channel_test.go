@@ -200,7 +200,7 @@ func TestPoolConcurrent2(t *testing.T) {
 
 	wg.Add(10)
 	go func() {
-		for i := 0; i < 10; i++ {
+		for i := range 10 {
 			go func(i int) {
 				conn, _ := p.Get()
 				time.Sleep(rand.N(100 * time.Millisecond))
@@ -210,7 +210,7 @@ func TestPoolConcurrent2(t *testing.T) {
 		}
 	}()
 
-	for i := 0; i < 10; i++ {
+	for i := range 10 {
 		wg.Add(1)
 		go func(i int) {
 			conn, _ := p.Get()
@@ -228,11 +228,9 @@ func TestPoolConcurrent3(t *testing.T) {
 
 	var wg sync.WaitGroup
 
-	wg.Add(1)
-	go func() {
+	wg.Go(func() {
 		p.Close()
-		wg.Done()
-	}()
+	})
 
 	if conn, err := p.Get(); err == nil {
 		conn.Close()

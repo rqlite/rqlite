@@ -243,7 +243,7 @@ func Test_ReassemblyOfLargeData(t *testing.T) {
 	chunkSize := len(largeData) / numChunks
 
 	// Write the chunks to the Dechunker.
-	for i := 0; i < numChunks; i++ {
+	for i := range numChunks {
 		start := i * chunkSize
 		end := start + chunkSize
 

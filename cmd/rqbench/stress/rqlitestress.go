@@ -66,7 +66,7 @@ func createSchema() error {
 func createRandomMappings(count int) ([]byte, error) {
 	str := strings.Builder{}
 	str.WriteString(`[["INSERT INTO mappings (name) values `)
-	for i := 0; i < count; i++ {
+	for i := range count {
 		str.WriteString(fmt.Sprintf(`('randomlyInsertedString%d')`, rand.Uint64()))
 		if i != count-1 {
 			str.WriteString(",")
@@ -108,9 +108,9 @@ func runMain() error {
 		}
 	}()
 
-	for j := 0; j < iterateCount; j++ {
+	for range iterateCount {
 		var maxTime, sumTime time.Duration
-		for k := 0; k < latencyCount; k++ {
+		for range latencyCount {
 			now := time.Now()
 			if _, err := createRandomMappings(batchSize); err != nil {
 				return err

@@ -726,8 +726,8 @@ func Test_WALReplayOK_Complex(t *testing.T) {
 			os.Remove(p)
 		}
 	}()
-	for i := 0; i < 20; i++ {
-		for j := 0; j < 2000; j++ {
+	for i := range 20 {
+		for range 2000 {
 			if _, err := srcDB.ExecuteStringStmt(fmt.Sprintf(`INSERT INTO foo(name) VALUES("fiona-%d")`, i)); err != nil {
 				t.Fatalf("error executing insertion into table: %s", err.Error())
 			}
@@ -776,7 +776,7 @@ func Test_WALReplayOK_Complex(t *testing.T) {
 
 	//////////////////////////////////////////////////////////////////////////
 	// Create a bunch of new tables, copy the WAL afterwards.
-	for i := 0; i < 20; i++ {
+	for i := range 20 {
 		createTable := fmt.Sprintf("CREATE TABLE bar%d (id INTEGER NOT NULL PRIMARY KEY, name TEXT)", i)
 		if _, err := srcDB.ExecuteStringStmt(createTable); err != nil {
 			t.Fatalf("failed to create table: %s", err.Error())

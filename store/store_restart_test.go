@@ -97,7 +97,7 @@ func Test_OpenStoreCloseStartupSingleNode(t *testing.T) {
 			t.Fatalf("unexpected results for query\nexp: %s\ngot: %s", exp, got)
 		}
 	}
-	for i := 0; i < 9; i++ {
+	for range 9 {
 		er := executeRequestFromStrings([]string{
 			`INSERT INTO foo(name) VALUES("fiona")`,
 		}, false, false)
@@ -210,7 +210,7 @@ func test_SnapshotStress(t *testing.T, s *Store) {
 	}
 
 	// Write a bunch of rows, ensure they are all there.
-	for i := 0; i < 1000; i++ {
+	for i := range 1000 {
 		er := executeRequestFromString(
 			fmt.Sprintf(`INSERT INTO foo(name) VALUES("fiona-%d")`, i),
 			false, false)

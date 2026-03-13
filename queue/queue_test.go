@@ -338,7 +338,7 @@ func Test_QueueWriteBatchSizeMulti(t *testing.T) {
 	defer q.Close()
 
 	// Write a batch size and wait for it.
-	for i := 0; i < 5; i++ {
+	for range 5 {
 		if _, err := q.Write(testStmtsFoo, nil); err != nil {
 			t.Fatalf("failed to write: %s", err.Error())
 		}
@@ -356,7 +356,7 @@ func Test_QueueWriteBatchSizeMulti(t *testing.T) {
 	}
 
 	// Write one more than a batch size, should still get a batch.
-	for i := 0; i < 6; i++ {
+	for range 6 {
 		if _, err := q.Write(testStmtsBar, nil); err != nil {
 			t.Fatalf("failed to write: %s", err.Error())
 		}

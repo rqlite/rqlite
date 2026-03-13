@@ -105,7 +105,7 @@ func Test_Writer_CompactingScanner(t *testing.T) {
 
 	writeRows := func(db *sql.DB, n int) {
 		// Write n random rows to the src database, this data will appear in the WAL.
-		for i := 0; i < n; i++ {
+		for range n {
 			mustExec(db, fmt.Sprintf(`INSERT INTO foo (name) VALUES ('%s')`, random.String()))
 		}
 		mustExec(srcConn, "PRAGMA wal_checkpoint(FULL)")
@@ -231,7 +231,7 @@ func mustCreateWAL(t *testing.T, size int) (*sql.DB, string) {
 	mustExec(rwDB, "PRAGMA synchronous=OFF")
 	mustExec(rwDB, "CREATE TABLE test (id INTEGER PRIMARY KEY, name TEXT)")
 	for {
-		for i := 0; i < 10; i++ {
+		for range 10 {
 			mustExec(rwDB, "INSERT INTO test (name) VALUES ('name')")
 		}
 		// break if dir+test.db-wal is bigger than size

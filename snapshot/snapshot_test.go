@@ -1526,7 +1526,7 @@ func Test_SnapshotSet_ResolveFiles_MultiWAL(t *testing.T) {
 		if len(walFiles) != 3 {
 			t.Fatalf("expected 3 WAL files, got %d", len(walFiles))
 		}
-		for i := 0; i < 3; i++ {
+		for i := range 3 {
 			if exp := filepath.Join(rootDir, "snap-2", testWALName(i+1)); walFiles[i].Path != exp {
 				t.Fatalf("walFiles[%d].Path = %q, want %q", i, walFiles[i].Path, exp)
 			}

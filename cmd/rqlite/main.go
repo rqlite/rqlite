@@ -819,13 +819,13 @@ func pprintJSON(indent int, m map[string]any) {
 		}
 		switch w := v.(type) {
 		case map[string]any:
-			for i := 0; i < indent; i++ {
+			for range indent {
 				fmt.Print(indentation)
 			}
 			fmt.Printf("%s:\n", k)
 			pprintJSON(indent+1, w)
 		default:
-			for i := 0; i < indent; i++ {
+			for range indent {
 				fmt.Print(indentation)
 			}
 			fmt.Printf("%s: %v\n", k, v)
@@ -837,18 +837,18 @@ func urlsToWriter(client *httpcl.Client, urls []string, w io.Writer) error {
 	for _, u := range urls {
 		err := func() error {
 			w.Write([]byte("\n=========================================\n"))
-			w.Write([]byte(fmt.Sprintf("URL: %s\n", u)))
+			w.Write(fmt.Appendf(nil, "URL: %s\n", u))
 
 			resp, err := client.GetDirect(u)
 			if err != nil {
-				if _, err := w.Write([]byte(fmt.Sprintf("Status: %s\n\n", err))); err != nil {
+				if _, err := w.Write(fmt.Appendf(nil, "Status: %s\n\n", err)); err != nil {
 					return err
 				}
 				return nil
 			}
 			defer resp.Body.Close()
 
-			if _, err := w.Write([]byte(fmt.Sprintf("Status: %s\n\n", resp.Status))); err != nil {
+			if _, err := w.Write(fmt.Appendf(nil, "Status: %s\n\n", resp.Status)); err != nil {
 				return err
 			}
 

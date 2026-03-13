@@ -430,7 +430,7 @@ func Test_SingleNodeRecoverNetworkChangeSnapshot(t *testing.T) {
 	}
 	queryTest(s0, 1)
 
-	for i := 0; i < 9; i++ {
+	for range 9 {
 		er := executeRequestFromStrings([]string{
 			`INSERT INTO foo(name) VALUES("fiona")`,
 		}, false, false)

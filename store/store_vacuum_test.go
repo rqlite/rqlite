@@ -223,7 +223,7 @@ func Test_SingleNodeExplicitVacuumOK(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to execute on single node: %s", err.Error())
 	}
-	for i := 0; i < 100; i++ {
+	for range 100 {
 		_, _, err := s.Execute(context.Background(), executeRequestFromString(`INSERT INTO foo(name) VALUES("fiona")`, false, false))
 		if err != nil {
 			t.Fatalf("failed to execute INSERT on single node: %s", err.Error())
@@ -310,19 +310,19 @@ func Test_SingleNodeExplicitVacuumOK_Stress(t *testing.T) {
 	wg.Add(6)
 	insertFn := func() {
 		defer wg.Done()
-		for i := 0; i < 500; i++ {
+		for range 500 {
 			_, _, err := s.Execute(context.Background(), executeRequestFromString(`INSERT INTO foo(name) VALUES("fiona")`, false, false))
 			if err != nil {
 				t.Errorf("failed to execute INSERT on single node: %s", err.Error())
 			}
 		}
 	}
-	for i := 0; i < 5; i++ {
+	for range 5 {
 		go insertFn()
 	}
 	go func() {
 		defer wg.Done()
-		for i := 0; i < 10; i++ {
+		for range 10 {
 			doVacuum()
 			time.Sleep(time.Second)
 		}
@@ -370,7 +370,7 @@ func Test_SingleNode_SnapshotWithAutoVac(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to execute on single node: %s", err.Error())
 	}
-	for i := 0; i < 100; i++ {
+	for range 100 {
 		_, _, err := s.Execute(context.Background(), executeRequestFromString(`INSERT INTO foo(name) VALUES("fiona")`, false, false))
 		if err != nil {
 			t.Fatalf("failed to execute INSERT on single node: %s", err.Error())
@@ -495,14 +495,14 @@ func Test_SingleNode_SnapshotWithAutoVac_Stress(t *testing.T) {
 	wg.Add(5)
 	insertFn := func() {
 		defer wg.Done()
-		for i := 0; i < 500; i++ {
+		for range 500 {
 			_, _, err := s.Execute(context.Background(), executeRequestFromString(`INSERT INTO foo(name) VALUES("fiona")`, false, false))
 			if err != nil {
 				t.Errorf("failed to execute INSERT on single node: %s", err.Error())
 			}
 		}
 	}
-	for i := 0; i < 5; i++ {
+	for range 5 {
 		go insertFn()
 	}
 	wg.Wait()

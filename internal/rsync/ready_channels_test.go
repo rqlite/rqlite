@@ -20,7 +20,7 @@ func Test_Ready_AllClosedChannels(t *testing.T) {
 
 	// Create and close multiple channels
 	numChannels := 5
-	for i := 0; i < numChannels; i++ {
+	for range numChannels {
 		ch := make(chan struct{})
 		close(ch)
 		rc.Register(ch)
@@ -37,7 +37,7 @@ func Test_Ready_SomeClosedChannels(t *testing.T) {
 
 	// Create multiple channels but do not close them
 	numChannels := 5
-	for i := 0; i < numChannels; i++ {
+	for range numChannels {
 		ch := make(chan struct{})
 		rc.Register(ch)
 	}
@@ -55,7 +55,7 @@ func Test_Ready_ChannelsFullCycle(t *testing.T) {
 	channels := make([]chan struct{}, numChannels)
 
 	// Register channels
-	for i := 0; i < numChannels; i++ {
+	for i := range numChannels {
 		ch := make(chan struct{})
 		channels[i] = ch
 		rc.Register(ch)
@@ -91,19 +91,17 @@ func TestReadyIsThreadSafe(t *testing.T) {
 	channels := make([]chan struct{}, numChannels)
 
 	// Register channels
-	for i := 0; i < numChannels; i++ {
+	for i := range numChannels {
 		ch := make(chan struct{})
 		channels[i] = ch
 		rc.Register(ch)
 	}
 
 	// Start goroutines that call Ready() concurrently
-	for i := 0; i < 100; i++ {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
+	for range 100 {
+		wg.Go(func() {
 			_ = rc.Ready()
-		}()
+		})
 	}
 
 	// Close all channels

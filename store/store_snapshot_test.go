@@ -270,7 +270,7 @@ func Test_SingleNode_WALTriggeredSnapshot(t *testing.T) {
 	}
 	nSnaps := stats.Get(numWALSnapshots).String()
 
-	for i := 0; i < 100; i++ {
+	for range 100 {
 		_, _, err := s.Execute(context.Background(), executeRequestFromString(`INSERT INTO foo(name) VALUES("fiona")`, false, false))
 		if err != nil {
 			t.Fatalf("failed to execute INSERT on single node: %s", err.Error())
@@ -350,14 +350,14 @@ func Test_SingleNode_SnapshotWithAutoOptimize_Stress(t *testing.T) {
 	wg.Add(5)
 	insertFn := func() {
 		defer wg.Done()
-		for i := 0; i < 500; i++ {
+		for range 500 {
 			_, _, err := s.Execute(context.Background(), executeRequestFromString(fmt.Sprintf(`INSERT INTO foo(name) VALUES("%s")`, random.String()), false, false))
 			if err != nil {
 				t.Errorf("failed to execute INSERT on single node: %s", err.Error())
 			}
 		}
 	}
-	for i := 0; i < 5; i++ {
+	for range 5 {
 		go insertFn()
 	}
 	wg.Wait()

@@ -18,13 +18,11 @@ func Test_CloseOrTimeout_Closed(t *testing.T) {
 func Test_CloseOrTimeout_Close(t *testing.T) {
 	ch := make(chan struct{})
 	var wg sync.WaitGroup
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
+	wg.Go(func() {
 		if err := CloseOrTimeout(ch, time.Second); err != nil {
 			t.Error(err)
 		}
-	}()
+	})
 	close(ch)
 	wg.Wait()
 }

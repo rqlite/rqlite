@@ -51,11 +51,9 @@ func Test_ReadyTargetSignal_SubscribeSignalled(t *testing.T) {
 
 	ch1 := rt.Subscribe(1)
 	var wg sync.WaitGroup
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
+	wg.Go(func() {
 		<-ch1
-	}()
+	})
 
 	rt.Signal(2)
 	wg.Wait()
@@ -68,12 +66,10 @@ func Test_ReadyTargetSignal_SubscribeSignalled_Double(t *testing.T) {
 	ch1 := rt.Subscribe(1)
 	ch2 := rt.Subscribe(2)
 	var wg sync.WaitGroup
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
+	wg.Go(func() {
 		<-ch1
 		<-ch2
-	}()
+	})
 
 	rt.Signal(2)
 	wg.Wait()
@@ -125,11 +121,9 @@ func Test_ReadyTargetSignal_Subscribe_DoubleNotSignalled(t *testing.T) {
 
 	ch1 := rt.Subscribe(1)
 	var wg1 sync.WaitGroup
-	wg1.Add(1)
-	go func() {
-		defer wg1.Done()
+	wg1.Go(func() {
 		<-ch1
-	}()
+	})
 
 	ch2 := rt.Subscribe(3)
 	var wg2 sync.WaitGroup
@@ -158,11 +152,9 @@ func Test_ReadyTargetSignal_SubscribeSignalled_Earlier(t *testing.T) {
 
 	ch1 := rt.Subscribe(1)
 	var wg sync.WaitGroup
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
+	wg.Go(func() {
 		<-ch1
-	}()
+	})
 
 	rt.Signal(2)
 	wg.Wait()

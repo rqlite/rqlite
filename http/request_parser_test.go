@@ -35,7 +35,7 @@ func Test_EmptyRequests_Parameterized(t *testing.T) {
 
 func Test_SingleSimpleRequest(t *testing.T) {
 	s := "SELECT * FROM FOO"
-	b := []byte(fmt.Sprintf(`["%s"]`, s))
+	b := fmt.Appendf(nil, `["%s"]`, s)
 
 	stmts, err := ParseRequest(bytes.NewReader(b))
 	if err != nil {
@@ -55,7 +55,7 @@ func Test_SingleSimpleRequest(t *testing.T) {
 
 func Test_SingleSimpleInvalidRequest(t *testing.T) {
 	s := "SELECT * FROM FOO"
-	b := []byte(fmt.Sprintf(`["%s"`, s))
+	b := fmt.Appendf(nil, `["%s"`, s)
 
 	_, err := ParseRequest(bytes.NewReader(b))
 	if err != ErrInvalidJSON {
@@ -66,7 +66,7 @@ func Test_SingleSimpleInvalidRequest(t *testing.T) {
 func Test_DoubleSimpleRequest(t *testing.T) {
 	s0 := "SELECT * FROM FOO"
 	s1 := "SELECT * FROM BAR"
-	b := []byte(fmt.Sprintf(`["%s", "%s"]`, s0, s1))
+	b := fmt.Appendf(nil, `["%s", "%s"]`, s0, s1)
 
 	stmts, err := ParseRequest(bytes.NewReader(b))
 	if err != nil {
@@ -94,7 +94,7 @@ func Test_SingleParameterizedRequest(t *testing.T) {
 	s := "SELECT * FROM ? WHERE bar=?"
 	p0 := "FOO"
 	p1 := 1
-	b := []byte(fmt.Sprintf(`[["%s", "%s", %d]]`, s, p0, p1))
+	b := fmt.Appendf(nil, `[["%s", "%s", %d]]`, s, p0, p1)
 
 	stmts, err := ParseRequest(bytes.NewReader(b))
 	if err != nil {
@@ -123,7 +123,7 @@ func Test_SingleParameterizedRequestLargeNumber(t *testing.T) {
 	s := "SELECT * FROM ? WHERE bar=?"
 	p0 := "FOO"
 	p1 := int64(1676555296046783000)
-	b := []byte(fmt.Sprintf(`[["%s", "%s", %d]]`, s, p0, p1))
+	b := fmt.Appendf(nil, `[["%s", "%s", %d]]`, s, p0, p1)
 
 	stmts, err := ParseRequest(bytes.NewReader(b))
 	if err != nil {
@@ -152,7 +152,7 @@ func Test_SingleParameterizedRequestHexValue(t *testing.T) {
 	s := "SELECT * FROM ? WHERE bar=?"
 	p0 := "FOO"
 	p1 := []byte{0x01, 0x02, 0x03}
-	b := []byte(fmt.Sprintf(`[["%s", "%s", "x'010203'"]]`, s, p0))
+	b := fmt.Appendf(nil, `[["%s", "%s", "x'010203'"]]`, s, p0)
 
 	stmts, err := ParseRequest(bytes.NewReader(b))
 	if err != nil {
@@ -181,7 +181,7 @@ func Test_SingleParameterizedRequestHexValue_Falback(t *testing.T) {
 	s := "SELECT * FROM ? WHERE bar=?"
 	p0 := "FOO"
 	p1 := "x'010203"
-	b := []byte(fmt.Sprintf(`[["%s", "%s", "%s"]]`, s, p0, p1))
+	b := fmt.Appendf(nil, `[["%s", "%s", "%s"]]`, s, p0, p1)
 
 	stmts, err := ParseRequest(bytes.NewReader(b))
 	if err != nil {
@@ -210,7 +210,7 @@ func Test_SingleParameterizedRequestByteArray(t *testing.T) {
 	s := "SELECT * FROM ? WHERE bar=?"
 	p0 := "FOO"
 	p1 := []byte{0x01, 0x02, 0x03}
-	b := []byte(fmt.Sprintf(`[["%s", "%s", %s]]`, s, p0, byteSliceToStringArray(p1)))
+	b := fmt.Appendf(nil, `[["%s", "%s", %s]]`, s, p0, byteSliceToStringArray(p1))
 
 	stmts, err := ParseRequest(bytes.NewReader(b))
 	if err != nil {
@@ -239,11 +239,11 @@ func Test_SingleParameterizedRequestByteArray_Invalid(t *testing.T) {
 	s := "SELECT * FROM ? WHERE bar=?"
 	p0 := "FOO"
 
-	b := []byte(fmt.Sprintf(`[["%s", "%s", [7889,2,3]]]`, s, p0))
+	b := fmt.Appendf(nil, `[["%s", "%s", [7889,2,3]]]`, s, p0)
 	if _, err := ParseRequest(bytes.NewReader(b)); !errors.Is(err, ErrUnsupportedType) {
 		t.Fatalf("unexpected error for invalid byte array")
 	}
-	b = []byte(fmt.Sprintf(`[["%s", "%s", [-4,2,3]]]`, s, p0))
+	b = fmt.Appendf(nil, `[["%s", "%s", [-4,2,3]]]`, s, p0)
 	if _, err := ParseRequest(bytes.NewReader(b)); !errors.Is(err, ErrUnsupportedType) {
 		t.Fatalf("unexpected error for invalid byte array")
 	}
@@ -252,7 +252,7 @@ func Test_SingleParameterizedRequestByteArray_Invalid(t *testing.T) {
 func Test_SingleParameterizedRequestNull(t *testing.T) {
 	s := "INSERT INTO test(name, value) VALUES(?, ?)"
 	p0 := "fiona"
-	b := []byte(fmt.Sprintf(`[["%s", "%s", null]]`, s, p0))
+	b := fmt.Appendf(nil, `[["%s", "%s", null]]`, s, p0)
 
 	stmts, err := ParseRequest(bytes.NewReader(b))
 	if err != nil {
@@ -285,7 +285,7 @@ func Test_SingleNamedParameterizedRequest(t *testing.T) {
 	}
 
 	s := "SELECT * FROM foo WHERE bar=:bar AND qux=:qux"
-	b := []byte(fmt.Sprintf(`[["%s", %s]]`, s, mustJSONMarshal(map[string]any{"bar": 3, "qux": "some string", "baz": 3.1457})))
+	b := fmt.Appendf(nil, `[["%s", %s]]`, s, mustJSONMarshal(map[string]any{"bar": 3, "qux": "some string", "baz": 3.1457}))
 
 	stmts, err := ParseRequest(bytes.NewReader(b))
 	if err != nil {
@@ -330,7 +330,7 @@ func Test_SingleNamedParameterizedRequest(t *testing.T) {
 
 func Test_SingleNamedParameterizedRequestNils(t *testing.T) {
 	s := "SELECT * FROM foo WHERE bar=:bar AND qux=:qux"
-	b := []byte(fmt.Sprintf(`[["%s", %s]]`, s, mustJSONMarshal(map[string]any{"bar": 666, "qux": "some string", "baz": nil})))
+	b := fmt.Appendf(nil, `[["%s", %s]]`, s, mustJSONMarshal(map[string]any{"bar": 666, "qux": "some string", "baz": nil}))
 
 	stmts, err := ParseRequest(bytes.NewReader(b))
 	if err != nil {
@@ -375,7 +375,7 @@ func Test_SingleNamedParameterizedRequestNils(t *testing.T) {
 
 func Test_SingleParameterizedRequestNoParams(t *testing.T) {
 	s := "SELECT * FROM foo"
-	b := []byte(fmt.Sprintf(`[["%s"]]`, s))
+	b := fmt.Appendf(nil, `[["%s"]]`, s)
 
 	stmts, err := ParseRequest(bytes.NewReader(b))
 	if err != nil {
@@ -398,7 +398,7 @@ func Test_SingleParameterizedRequestNoParamsMixed(t *testing.T) {
 	s1 := "SELECT * FROM foo"
 	s2 := "SELECT * FROM foo WHERE name=?"
 	p2 := "bar"
-	b := []byte(fmt.Sprintf(`[["%s"], ["%s", "%s"]]`, s1, s2, p2))
+	b := fmt.Appendf(nil, `[["%s"], ["%s", "%s"]]`, s1, s2, p2)
 
 	stmts, err := ParseRequest(bytes.NewReader(b))
 	if err != nil {
@@ -428,7 +428,7 @@ func Test_SingleParameterizedRequestNoParamsMixed(t *testing.T) {
 
 func Test_SingleSimpleParameterizedRequest(t *testing.T) {
 	s := "SELECT * FROM ? ?"
-	b := []byte(fmt.Sprintf(`[["%s"]]`, s))
+	b := fmt.Appendf(nil, `[["%s"]]`, s)
 
 	stmts, err := ParseRequest(bytes.NewReader(b))
 	if err != nil {
@@ -451,7 +451,7 @@ func Test_SingleInvalidParameterizedRequest(t *testing.T) {
 	s := "SELECT * FROM ? ?"
 	p0 := "FOO"
 	p1 := 1
-	b := []byte(fmt.Sprintf(`[["%s", "%s", %d]`, s, p0, p1))
+	b := fmt.Appendf(nil, `[["%s", "%s", %d]`, s, p0, p1)
 
 	_, err := ParseRequest(bytes.NewReader(b))
 	if err != ErrInvalidJSON {
