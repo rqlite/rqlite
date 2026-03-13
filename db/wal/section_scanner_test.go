@@ -11,7 +11,7 @@ import (
 	_ "github.com/mattn/go-sqlite3"
 )
 
-func Test_SectionScanner_AllFrames(t *testing.T) {
+func Test_CompactingSectionScanner_AllFrames(t *testing.T) {
 	b, err := os.ReadFile("testdata/wal-reader/ok/wal")
 	if err != nil {
 		t.Fatal(err)
@@ -22,7 +22,7 @@ func Test_SectionScanner_AllFrames(t *testing.T) {
 	//   Frame 2: pgno=2, commit=2
 	//   Frame 3: pgno=2, commit=2
 	// After compaction: pgno=1 (from frame 1), pgno=2 (from frame 3).
-	s, err := NewSectionScanner(bytes.NewReader(b), WALHeaderSize, int64(len(b)))
+	s, err := NewCompactingSectionScanner(bytes.NewReader(b), WALHeaderSize, int64(len(b)))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -78,7 +78,7 @@ func Test_SectionScanner_AllFrames(t *testing.T) {
 	}
 }
 
-func Test_SectionScanner_PartialRange(t *testing.T) {
+func Test_CompactingSectionScanner_PartialRange(t *testing.T) {
 	b, err := os.ReadFile("testdata/wal-reader/ok/wal")
 	if err != nil {
 		t.Fatal(err)
@@ -98,7 +98,7 @@ func Test_SectionScanner_PartialRange(t *testing.T) {
 	start := int64(WALHeaderSize + frameSize) // skip frame 1
 	end := int64(len(b))
 
-	s, err := NewSectionScanner(bytes.NewReader(b), start, end)
+	s, err := NewCompactingSectionScanner(bytes.NewReader(b), start, end)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -142,7 +142,7 @@ func Test_SectionScanner_PartialRange(t *testing.T) {
 	}
 }
 
-func Test_SectionScanner_NotAWAL(t *testing.T) {
+func Test_CompactingSectionScanner_NotAWAL(t *testing.T) {
 	tests := []struct {
 		name string
 		data []byte
@@ -154,7 +154,7 @@ func Test_SectionScanner_NotAWAL(t *testing.T) {
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			_, err := NewSectionScanner(bytes.NewReader(tc.data), WALHeaderSize, WALHeaderSize)
+			_, err := NewCompactingSectionScanner(bytes.NewReader(tc.data), WALHeaderSize, WALHeaderSize)
 			if err == nil {
 				t.Fatal("expected error for invalid WAL data")
 			}
@@ -162,7 +162,7 @@ func Test_SectionScanner_NotAWAL(t *testing.T) {
 	}
 }
 
-func Test_SectionScanner_BadOffsets(t *testing.T) {
+func Test_CompactingSectionScanner_BadOffsets(t *testing.T) {
 	b, err := os.ReadFile("testdata/wal-reader/ok/wal")
 	if err != nil {
 		t.Fatal(err)
@@ -182,7 +182,7 @@ func Test_SectionScanner_BadOffsets(t *testing.T) {
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			_, err := NewSectionScanner(r, tc.start, tc.end)
+			_, err := NewCompactingSectionScanner(r, tc.start, tc.end)
 			if err == nil {
 				t.Fatal("expected error for bad offsets")
 			}
@@ -190,13 +190,13 @@ func Test_SectionScanner_BadOffsets(t *testing.T) {
 	}
 }
 
-func Test_SectionScanner_Empty(t *testing.T) {
+func Test_CompactingSectionScanner_Empty(t *testing.T) {
 	b, err := os.ReadFile("testdata/wal-reader/ok/wal")
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	s, err := NewSectionScanner(bytes.NewReader(b), WALHeaderSize, WALHeaderSize)
+	s, err := NewCompactingSectionScanner(bytes.NewReader(b), WALHeaderSize, WALHeaderSize)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -211,18 +211,18 @@ func Test_SectionScanner_Empty(t *testing.T) {
 	}
 }
 
-func Test_SectionScanner_WriterRoundTrip(t *testing.T) {
+func Test_CompactingSectionScanner_WriterRoundTrip(t *testing.T) {
 	b, err := os.ReadFile("testdata/wal-reader/ok/wal")
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	// Write frames 2-3 through SectionScanner -> Writer -> buffer.
+	// Write frames 2-3 through CompactingSectionScanner -> Writer -> buffer.
 	const frameSize = WALFrameHeaderSize + 4096
 	start := int64(WALHeaderSize + frameSize)
 	end := int64(len(b))
 
-	s, err := NewSectionScanner(bytes.NewReader(b), start, end)
+	s, err := NewCompactingSectionScanner(bytes.NewReader(b), start, end)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -266,7 +266,7 @@ func Test_SectionScanner_WriterRoundTrip(t *testing.T) {
 	}
 }
 
-func Test_SectionScanner_WriterRoundTrip_SQLite(t *testing.T) {
+func Test_CompactingSectionScanner_WriterRoundTrip_SQLite(t *testing.T) {
 	// Create a real SQLite database with WAL data.
 	srcDir := t.TempDir()
 	srcDSN := fmt.Sprintf("file:%s", srcDir+"/src.db?_journal_mode=WAL&_synchronous=OFF")
@@ -295,13 +295,13 @@ func Test_SectionScanner_WriterRoundTrip_SQLite(t *testing.T) {
 	destWAL := destDir + "/dest.db-wal"
 	mustCopyFile(destDB, srcDB)
 
-	// Write the entire WAL via SectionScanner+Writer to the dest WAL.
+	// Write the entire WAL via CompactingSectionScanner+Writer to the dest WAL.
 	walBytes, err := os.ReadFile(srcWAL)
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	s, err := NewSectionScanner(bytes.NewReader(walBytes), WALHeaderSize, int64(len(walBytes)))
+	s, err := NewCompactingSectionScanner(bytes.NewReader(walBytes), WALHeaderSize, int64(len(walBytes)))
 	if err != nil {
 		t.Fatal(err)
 	}

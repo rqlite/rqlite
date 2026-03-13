@@ -159,7 +159,7 @@ type WALWriter struct {
 // WriteTo writes a complete WAL file containing the frames in this writer's
 // range to dst.
 func (w *WALWriter) WriteTo(dst io.Writer) (int64, error) {
-	scanner, err := wal.NewSectionScanner(w.f, w.start, w.end)
+	scanner, err := wal.NewCompactingSectionScanner(w.f, w.start, w.end)
 	if err != nil {
 		return 0, fmt.Errorf("create section scanner: %w", err)
 	}

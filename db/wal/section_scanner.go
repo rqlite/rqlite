@@ -8,13 +8,13 @@ import (
 	"sort"
 )
 
-// SectionScanner implements WALIterator to iterate over compacted WAL frames
+// CompactingSectionScanner implements WALIterator to iterate over compacted WAL frames
 // within a byte range [start, end). It scans all frames in the range, keeps
 // only the latest version of each page (respecting transaction boundaries),
 // and returns them in file offset order. Frame checksums are not verified
 // since the WAL file is trusted; the Writer recomputes checksums when
 // producing output.
-type SectionScanner struct {
+type CompactingSectionScanner struct {
 	r        io.ReaderAt
 	header   *WALHeader
 	pageSize uint32
@@ -25,11 +25,11 @@ type SectionScanner struct {
 	fIdx   int
 }
 
-// NewSectionScanner creates a new SectionScanner that reads and compacts
+// NewCompactingSectionScanner creates a new CompactingSectionScanner that reads and compacts
 // frames from the byte range [start, end) of the WAL accessible via r. The
 // start and end offsets must be aligned to frame boundaries. The WAL header
 // is always read from offset 0.
-func NewSectionScanner(r io.ReaderAt, start, end int64) (*SectionScanner, error) {
+func NewCompactingSectionScanner(r io.ReaderAt, start, end int64) (*CompactingSectionScanner, error) {
 	hdr := make([]byte, WALHeaderSize)
 	if _, err := r.ReadAt(hdr, 0); err != nil {
 		return nil, fmt.Errorf("read WAL header: %w", err)
@@ -71,7 +71,7 @@ func NewSectionScanner(r io.ReaderAt, start, end int64) (*SectionScanner, error)
 		}
 	}
 
-	s := &SectionScanner{
+	s := &CompactingSectionScanner{
 		r: r,
 		header: &WALHeader{
 			Magic:     magic,
@@ -95,13 +95,13 @@ func NewSectionScanner(r io.ReaderAt, start, end int64) (*SectionScanner, error)
 }
 
 // Header returns the WAL header.
-func (s *SectionScanner) Header() (*WALHeader, error) {
+func (s *CompactingSectionScanner) Header() (*WALHeader, error) {
 	return s.header, nil
 }
 
 // Next returns the next compacted frame. Returns io.EOF when all frames
 // have been read.
-func (s *SectionScanner) Next() (*Frame, error) {
+func (s *CompactingSectionScanner) Next() (*Frame, error) {
 	if s.fIdx >= len(s.frames) {
 		return nil, io.EOF
 	}
@@ -121,14 +121,14 @@ func (s *SectionScanner) Next() (*Frame, error) {
 }
 
 // Empty reports whether the scanner has zero frames to deliver.
-func (s *SectionScanner) Empty() bool {
+func (s *CompactingSectionScanner) Empty() bool {
 	return len(s.frames) == 0
 }
 
 // scan reads all frame headers in [start, end) and builds a compacted frame
 // list, keeping only the latest version of each page. Only committed
 // transactions are included.
-func (s *SectionScanner) scan() error {
+func (s *CompactingSectionScanner) scan() error {
 	if s.start >= s.end {
 		return nil
 	}
