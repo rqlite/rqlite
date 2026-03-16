@@ -36,11 +36,21 @@ func NewCheckpointManager(db *DB) (*CheckpointManager, error) {
 	}, nil
 }
 
-// Checkpoint performs a checkpoint(TRUNCATE) of the database, writing a compacted
-// copy of the WAL to the given writer. The checkpoint operation will block for at
-// most the given timeout duration. If the checkpoint operation fails to complete
-// within the timeout, an error is returned.
+// Checkpoint performs a checkpoint(TRUNCATE) of the database
+//
+// If w is non-nil Checkpoint writes a compacted copy of the WAL to the given writer
+// before performing the checkpoint. The checkpoint operation will block for at most
+// the given timeout duration. If the checkpoint operation fails to complete within
+// the timeout, an error is returned.
+//
+// If ErrDatabaseCheckpointFailed is returned, the checkpoint operation failed at the
+// database level, and the caller should assume the database is in an unknown state.
 func (cm *CheckpointManager) Checkpoint(w io.Writer, timeout time.Duration) (int64, error) {
+	if w == nil {
+		// Short-circuit if no writer provided, just checkpoint and truncate the database.
+		return 0, cm.db.CheckpointTruncateWithTimeout(timeout)
+	}
+
 	walFD, err := os.Open(cm.walPath)
 	if err != nil {
 		return 0, err
