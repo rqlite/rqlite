@@ -287,6 +287,11 @@ type SnapshotStore interface {
 	Close() error
 }
 
+// Checkpointer is the interface systems which can checkpoint databases must implement.
+type Checkpointer interface {
+	Checkpoint(w io.Writer, timeout time.Duration) (int64, error)
+}
+
 // ClusterState defines the possible Raft states the current node can be in
 type ClusterState int
 
@@ -324,8 +329,9 @@ type Store struct {
 	walPath string    // Path to WAL file.
 	dbDir   string    // Path to directory containing SQLite file.
 
-	dbDrv *sql.Driver      // The SQLite database driver.
-	db    *sql.SwappableDB // The underlying SQLite store.
+	dbDrv        *sql.Driver      // The SQLite database driver.
+	db           *sql.SwappableDB // The underlying SQLite store.
+	checkpointer Checkpointer
 
 	cdcMu         sync.RWMutex
 	cdcStreamer   *sql.CDCStreamer
@@ -752,6 +758,7 @@ func (s *Store) Open() (retErr error) {
 	if err != nil {
 		return fmt.Errorf("failed to create on-disk database: %s", err)
 	}
+	s.checkpointer = s.db
 
 	// Clean up any files from aborted operations. This tries to catch the case where scratch files
 	// were created in the Raft directory, not cleaned up, and then the node was restarted with an
@@ -2592,8 +2599,8 @@ func (s *Store) fsmSnapshot() (fSnap raft.FSMSnapshot, retErr error) {
 		// database. This happens when a node is snapshotting for the very first time, or in certain
 		// crash scenarios where we've truncated the WAL into the database, but haven't successfully
 		// completed a snapshot, so the database is modified but the WAL is not present to be snapshotted.
-		if err := s.db.CheckpointTruncateWithTimeout(truncateTimeout); err != nil {
-			s.logger.Fatalf("failed to checkpoint and truncate database for snapshot: %s", err.Error())
+		if _, err := s.checkpointer.Checkpoint(nil, truncateTimeout); err != nil {
+			s.logger.Fatalf("failed to checkpoint and truncate database for Full snapshot: %s", err.Error())
 		}
 		streamer, err := snapshot.NewSnapshotStreamer(s.db.Path())
 		if err != nil {
@@ -2626,9 +2633,10 @@ func (s *Store) fsmSnapshot() (fSnap raft.FSMSnapshot, retErr error) {
 		}
 		defer walWriter.Cancel() // Noop if already closed, but ensures cleanup on error paths.
 
-		if _, err := s.db.Checkpoint(walWriter, truncateTimeout); err != nil {
+		if _, err := s.checkpointer.Checkpoint(walWriter, truncateTimeout); err != nil {
 			if errors.Is(err, sql.ErrDatabaseCheckpointFailed) {
-				s.logger.Fatalf("failed to checkpoint and truncate database for snapshot: %s", err.Error())
+				s.logger.Fatalf("failed to checkpoint and truncate database for incremental snapshot: %s",
+					err.Error())
 			}
 			return nil, err
 		}
