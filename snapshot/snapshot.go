@@ -124,6 +124,16 @@ func (s Type) String() string {
 	}
 }
 
+// IsFull reports whether the snapshot type is Full.
+func (s Type) IsFull() bool {
+	return s == Full
+}
+
+// IsIncremental reports whether the snapshot type is Incremental.
+func (s Type) IsIncremental() bool {
+	return s == Incremental
+}
+
 // SnapshotSet represents an ordered collection of snapshots from a single Store
 // directory.
 //

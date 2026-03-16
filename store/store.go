@@ -2586,14 +2586,13 @@ func (s *Store) fsmSnapshot() (fSnap raft.FSMSnapshot, retErr error) {
 	if err != nil {
 		return nil, err
 	}
-	fullNeeded := dueNext == snapshot.Full
 	defer func() {
 		s.numSnapshots.Add(1)
 	}()
 
 	var fsmSnapshot raft.FSMSnapshot
 	finalizer := s.createSnapshotFingerprint
-	if fullNeeded {
+	if dueNext.IsFull() {
 		// We need to start the snapshoting process over again, starting with a full copy of the SQLite
 		// database. This happens when a node is snapshotting for the very first time, or in certain
 		// crash scenarios where we've truncated the WAL into the database, but haven't successfully
@@ -2667,7 +2666,7 @@ func (s *Store) fsmSnapshot() (fSnap raft.FSMSnapshot, retErr error) {
 	dur := time.Since(startT)
 	stats.Get(snapshotCreateDuration).(*expvar.Int).Set(dur.Milliseconds())
 	fs := FSMSnapshot{
-		DueNext:     dueNext,
+		Type:        dueNext,
 		FSMSnapshot: fsmSnapshot,
 		Finalizer:   finalizer,
 		OnRelease: func(invoked, succeeded bool) {
@@ -2692,7 +2691,7 @@ func (s *Store) fsmSnapshot() (fSnap raft.FSMSnapshot, retErr error) {
 			}
 		},
 	}
-	if fullNeeded || s.logIncremental() {
+	if dueNext.IsFull() || s.logIncremental() {
 		s.logger.Printf("%s snapshot created in %s on node ID %s", dueNext, dur, s.raftID)
 		fs.logger = s.logger
 	}
