@@ -21,8 +21,8 @@ type sinker interface {
 }
 
 type snapshotTypeController interface {
-	DueNext() (SnapshotType, error)
-	SetDueNext(SnapshotType) error
+	DueNext() (Type, error)
+	SetDueNext(Type) error
 }
 
 // Sink is a sink for writing snapshot data to a Snapshot store.
@@ -131,7 +131,7 @@ func (s *Sink) Write(p []byte) (n int, err error) {
 				if err != nil {
 					return n, err
 				}
-				if dueNext == SnapshotTypeFull {
+				if dueNext == Full {
 					return n, fmt.Errorf("full snapshot needed before incremental can be applied")
 				}
 			}
@@ -232,7 +232,7 @@ func (s *Sink) Close() (retErr error) {
 	}
 
 	if s.stc != nil {
-		if err := s.stc.SetDueNext(SnapshotTypeIncremental); err != nil {
+		if err := s.stc.SetDueNext(Incremental); err != nil {
 			return fmt.Errorf("failed to set due next to incremental: %v", err)
 		}
 	}

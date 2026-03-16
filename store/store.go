@@ -271,10 +271,10 @@ type SnapshotStore interface {
 	raft.SnapshotStore
 
 	// DueNext returns the type of snapshot due next.
-	DueNext() (snapshot.SnapshotType, error)
+	DueNext() (snapshot.Type, error)
 
 	// SetDueNext sets the type of snapshot due next.
-	SetDueNext(snapshot.SnapshotType) error
+	SetDueNext(snapshot.Type) error
 
 	// Stats returns stats about the Snapshot Store.
 	Stats() (map[string]any, error)
@@ -1972,7 +1972,7 @@ func (s *Store) ReadFrom(r io.Reader) (int64, error) {
 	s.cdcRegistered.Unset()
 
 	// Snapshot, so we load the new database into the Raft system.
-	if err := s.snapshotStore.SetDueNext(snapshot.SnapshotTypeFull); err != nil {
+	if err := s.snapshotStore.SetDueNext(snapshot.Full); err != nil {
 		s.logger.Fatalf("failed to set full snapshot needed: %s", err)
 	}
 	if err := s.Snapshot(1); err != nil {
@@ -2504,7 +2504,7 @@ func (s *Store) fsmApply(l *raft.Log) (e any) {
 		s.numNoops.Add(1)
 	case proto.Command_COMMAND_TYPE_LOAD:
 		// Swapping in a new database invalidates any existing snapshot.
-		if err := s.snapshotStore.SetDueNext(snapshot.SnapshotTypeFull); err != nil {
+		if err := s.snapshotStore.SetDueNext(snapshot.Full); err != nil {
 			s.logger.Fatalf("failed to set full snapshot needed: %s", err)
 		}
 		// Swapping in a new database deactivates the CDC hooks, so signal that it
@@ -2557,7 +2557,7 @@ func (s *Store) fsmSnapshot() (fSnap raft.FSMSnapshot, retErr error) {
 		lt, err := s.db.DBLastModified()
 		if err != nil {
 			s.logger.Printf("failed to get last modified time: %s", err)
-			s.snapshotStore.SetDueNext(snapshot.SnapshotTypeFull)
+			s.snapshotStore.SetDueNext(snapshot.Full)
 		} else {
 			s.dbModifiedTime.Store(lt)
 		}
@@ -2586,7 +2586,7 @@ func (s *Store) fsmSnapshot() (fSnap raft.FSMSnapshot, retErr error) {
 	if err != nil {
 		return nil, err
 	}
-	fullNeeded := dueNext == snapshot.SnapshotTypeFull
+	fullNeeded := dueNext == snapshot.Full
 	defer func() {
 		s.numSnapshots.Add(1)
 	}()
@@ -2685,7 +2685,7 @@ func (s *Store) fsmSnapshot() (fSnap raft.FSMSnapshot, retErr error) {
 				// around. If it is, we don't have a broken series of WALs and we can retry an incremental
 				// again next time. Otherwise the chain has been broken and we must fall back to full.
 				if !dirExists(s.walStagingDir) {
-					if err := s.snapshotStore.SetDueNext(snapshot.SnapshotTypeFull); err != nil {
+					if err := s.snapshotStore.SetDueNext(snapshot.Full); err != nil {
 						s.logger.Fatalf("failed to set full needed after snapshot processing failure: %s", err)
 					}
 				}
@@ -3097,15 +3097,15 @@ func (s *Store) doAutoOptimize() error {
 	return s.setKeyTime(lastOptimizeTimeKey, time.Now())
 }
 
-func (s *Store) snapshotDueNext() (snapshot.SnapshotType, error) {
+func (s *Store) snapshotDueNext() (snapshot.Type, error) {
 	dueNext, err := s.snapshotStore.DueNext()
 	if err != nil {
-		return snapshot.SnapshotTypeFull, err
+		return snapshot.Full, err
 	}
-	if dueNext == snapshot.SnapshotTypeFull || s.dbModified() {
-		return snapshot.SnapshotTypeFull, nil
+	if dueNext == snapshot.Full || s.dbModified() {
+		return snapshot.Full, nil
 	}
-	return snapshot.SnapshotTypeIncremental, nil
+	return snapshot.Incremental, nil
 }
 
 // dbModified returns true if the database appears to have been modified

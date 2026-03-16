@@ -126,7 +126,7 @@ func Test_OpenStoreSingleNode_VacuumFullNeeded(t *testing.T) {
 	}
 	if dn, err := s.snapshotStore.DueNext(); err != nil {
 		t.Fatalf("failed to check snapshot due next: %s", err.Error())
-	} else if dn != snapshot.SnapshotTypeIncremental {
+	} else if dn != snapshot.Incremental {
 		t.Fatalf("expected incremental snapshot due next, got %s", dn)
 	}
 	if err := s.Vacuum(); err != nil {
@@ -134,7 +134,7 @@ func Test_OpenStoreSingleNode_VacuumFullNeeded(t *testing.T) {
 	}
 	if dn, err := s.snapshotStore.DueNext(); err != nil {
 		t.Fatalf("failed to check snapshot due next: %s", err.Error())
-	} else if dn != snapshot.SnapshotTypeIncremental {
+	} else if dn != snapshot.Incremental {
 		t.Fatalf("expected incremental snapshot due next, got %s", dn)
 	}
 }
@@ -242,7 +242,7 @@ func Test_SingleNodeExplicitVacuumOK(t *testing.T) {
 	doQuery()
 	if dn, err := s.snapshotStore.DueNext(); err != nil {
 		t.Fatalf("failed to check snapshot due next: %s", err.Error())
-	} else if dn != snapshot.SnapshotTypeIncremental {
+	} else if dn != snapshot.Incremental {
 		t.Fatalf("expected incremental snapshot due next post explicit VACUUM, got %s", dn)
 	}
 
@@ -384,7 +384,7 @@ func Test_SingleNode_SnapshotWithAutoVac(t *testing.T) {
 	}
 	if dn, err := s.snapshotStore.DueNext(); err != nil {
 		t.Fatalf("failed to check snapshot due next: %s", err.Error())
-	} else if dn != snapshot.SnapshotTypeIncremental {
+	} else if dn != snapshot.Incremental {
 		t.Fatalf("expected incremental snapshot due next, got %s", dn)
 	}
 

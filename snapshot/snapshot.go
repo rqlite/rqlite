@@ -61,7 +61,7 @@ func (hf *ChecksummedFile) Check() (bool, error) {
 type Snapshot struct {
 	id       string
 	path     string
-	typ      SnapshotType
+	typ      Type
 	raftMeta *raft.SnapshotMeta
 
 	// dbFile is the DB file and its CRC32. Populated for full snapshots.
@@ -96,28 +96,28 @@ func (s *Snapshot) String() string {
 	return fmt.Sprintf("Snapshot{id=%s, type=%v, term=%d, index=%d}", s.id, s.typ, s.raftMeta.Term, s.raftMeta.Index)
 }
 
-// SnapshotType describes the declared kind of a Snapshot.
+// Type describes the declared kind of a Snapshot.
 //
-// SnapshotType is derived from on-disk layout rather than persisted in meta.json.
+// Type is derived from on-disk layout rather than persisted in meta.json.
 // It is primarily a classification for selection, ordering, and maintenance
 // operations (e.g., determining the newest full snapshot and its incremental
 // successors).
-type SnapshotType int
+type Type int
 
 const (
-	// SnapshotTypeFull indicates a snapshot directory containing data.db.
-	SnapshotTypeFull SnapshotType = iota
+	// Full indicates a snapshot directory containing data.db.
+	Full Type = iota
 
-	// SnapshotTypeIncremental indicates a snapshot directory containing data.wal.
-	SnapshotTypeIncremental
+	// Incremental indicates a snapshot directory containing data.wal.
+	Incremental
 )
 
 // String returns a human-readable representation of the snapshot type.
-func (s SnapshotType) String() string {
+func (s Type) String() string {
 	switch s {
-	case SnapshotTypeFull:
+	case Full:
 		return "full"
-	case SnapshotTypeIncremental:
+	case Incremental:
 		return "incremental"
 	default:
 		return "unknown"
@@ -199,7 +199,7 @@ func (ss SnapshotSet) Newest() (*Snapshot, bool) {
 // NewestFull returns the newest full snapshot in the set.
 func (ss SnapshotSet) NewestFull() (*Snapshot, bool) {
 	for i := len(ss.items) - 1; i >= 0; i-- {
-		if ss.items[i].typ == SnapshotTypeFull {
+		if ss.items[i].typ == Full {
 			return ss.items[i], true
 		}
 	}
@@ -209,7 +209,7 @@ func (ss SnapshotSet) NewestFull() (*Snapshot, bool) {
 // NewestIncremental returns the newest incremental snapshot in the set.
 func (ss SnapshotSet) NewestIncremental() (*Snapshot, bool) {
 	for i := len(ss.items) - 1; i >= 0; i-- {
-		if ss.items[i].typ == SnapshotTypeIncremental {
+		if ss.items[i].typ == Incremental {
 			return ss.items[i], true
 		}
 	}
@@ -220,7 +220,7 @@ func (ss SnapshotSet) NewestIncremental() (*Snapshot, bool) {
 func (ss SnapshotSet) Fulls() SnapshotSet {
 	var fulls []*Snapshot
 	for _, snapshot := range ss.items {
-		if snapshot.typ == SnapshotTypeFull {
+		if snapshot.typ == Full {
 			fulls = append(fulls, snapshot)
 		}
 	}
@@ -235,7 +235,7 @@ func (ss SnapshotSet) Fulls() SnapshotSet {
 func (ss SnapshotSet) Incrementals() SnapshotSet {
 	var incrementals []*Snapshot
 	for _, snapshot := range ss.items {
-		if snapshot.typ == SnapshotTypeIncremental {
+		if snapshot.typ == Incremental {
 			incrementals = append(incrementals, snapshot)
 		}
 	}
@@ -323,7 +323,7 @@ func (ss SnapshotSet) Range(fromID, toID string) SnapshotSet {
 func (ss SnapshotSet) PartitionAtFull() (full SnapshotSet, newer SnapshotSet) {
 	fullIdx := -1
 	for i := len(ss.items) - 1; i >= 0; i-- {
-		if ss.items[i].typ == SnapshotTypeFull {
+		if ss.items[i].typ == Full {
 			fullIdx = i
 			break
 		}
@@ -347,7 +347,7 @@ func (ss SnapshotSet) ValidateIncrementalChain() error {
 	fullIdx := -1
 	var fullID string
 	for i := len(ss.items) - 1; i >= 0; i-- {
-		if ss.items[i].typ == SnapshotTypeFull {
+		if ss.items[i].typ == Full {
 			fullIdx = i
 			fullID = ss.items[i].id
 			break
@@ -359,7 +359,7 @@ func (ss SnapshotSet) ValidateIncrementalChain() error {
 
 	for i := fullIdx + 1; i < len(ss.items); i++ {
 		snap := ss.items[i]
-		if snap.typ != SnapshotTypeIncremental {
+		if snap.typ != Incremental {
 			return fmt.Errorf("snapshot %s is not incremental after newest full snapshot %s", snap.id, fullID)
 		}
 	}
@@ -378,7 +378,7 @@ func (ss SnapshotSet) ResolveFiles(id string) (dbFile *ChecksummedFile, walFiles
 	snap := ss.items[idx]
 
 	// If the requested snapshot is full, return its DB file and any WAL files.
-	if snap.typ == SnapshotTypeFull {
+	if snap.typ == Full {
 		return snap.dbFile, snap.walFiles, nil
 	}
 
@@ -387,7 +387,7 @@ func (ss SnapshotSet) ResolveFiles(id string) (dbFile *ChecksummedFile, walFiles
 	// and all incremental snapshots up to and including the requested one.
 	fullIdx := -1
 	for i := idx - 1; i >= 0; i-- {
-		if ss.items[i].typ == SnapshotTypeFull {
+		if ss.items[i].typ == Full {
 			fullIdx = i
 			break
 		}
@@ -498,7 +498,7 @@ func (c *SnapshotCatalog) loadSnapshot(path string, id string) (*Snapshot, error
 	}
 
 	if hasDB {
-		snapshot.typ = SnapshotTypeFull
+		snapshot.typ = Full
 		if !db.IsValidSQLiteFile(dataDBPath) {
 			return nil, fmt.Errorf("%s in snapshot directory %q is not a valid SQLite database file", dbfileName, path)
 		}
@@ -508,7 +508,7 @@ func (c *SnapshotCatalog) loadSnapshot(path string, id string) (*Snapshot, error
 		}
 		snapshot.dbFile = hf
 	} else {
-		snapshot.typ = SnapshotTypeIncremental
+		snapshot.typ = Incremental
 	}
 
 	for _, wp := range walMatches {

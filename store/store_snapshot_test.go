@@ -585,7 +585,7 @@ func Test_SingleNodeSnapshot_FSMFailures(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to check DueNext: %s", err.Error())
 	}
-	if dn != snapshot.SnapshotTypeFull {
+	if dn != snapshot.Full {
 		t.Fatalf("expected full snapshot due next, got %s", dn)
 	}
 
@@ -601,7 +601,7 @@ func Test_SingleNodeSnapshot_FSMFailures(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to check DueNext: %s", err.Error())
 	}
-	if dn != snapshot.SnapshotTypeIncremental {
+	if dn != snapshot.Incremental {
 		t.Fatalf("expected incremental snapshot due next, got %s", dn)
 	}
 

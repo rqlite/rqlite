@@ -517,23 +517,23 @@ func (s *Store) signalReap() {
 }
 
 // DueNext returns the type of snapshot due next.
-func (s *Store) DueNext() (SnapshotType, error) {
+func (s *Store) DueNext() (Type, error) {
 	if fileExists(s.fullNeededPath) {
-		return SnapshotTypeFull, nil
+		return Full, nil
 	}
 
 	nSnaps := s.snapshotCount()
 	if nSnaps == 0 {
-		return SnapshotTypeFull, nil
+		return Full, nil
 	}
-	return SnapshotTypeIncremental, nil
+	return Incremental, nil
 }
 
-// SetDueNext sets the type of snapshot due next. Setting SnapshotTypeFull
-// creates a flag file; setting SnapshotTypeIncremental removes it.
-func (s *Store) SetDueNext(t SnapshotType) error {
+// SetDueNext sets the type of snapshot due next. Setting Full
+// creates a flag file; setting Incremental removes it.
+func (s *Store) SetDueNext(t Type) error {
 	switch t {
-	case SnapshotTypeFull:
+	case Full:
 		f, err := os.Create(s.fullNeededPath)
 		if err != nil {
 			return err
@@ -546,7 +546,7 @@ func (s *Store) SetDueNext(t SnapshotType) error {
 			return err
 		}
 		return syncDirMaybe(s.dir)
-	case SnapshotTypeIncremental:
+	case Incremental:
 		if !fileExists(s.fullNeededPath) {
 			return nil
 		}

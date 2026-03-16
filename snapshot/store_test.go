@@ -48,7 +48,7 @@ func Test_StoreEmpty(t *testing.T) {
 
 	if dn, err := store.DueNext(); err != nil {
 		t.Fatalf("Failed to check snapshot due next: %v", err)
-	} else if dn != SnapshotTypeFull {
+	} else if dn != Full {
 		t.Fatalf("Expected full snapshot due next, got %s", dn)
 	}
 

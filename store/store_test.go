@@ -2075,7 +2075,7 @@ COMMIT;
 	if err != nil {
 		t.Fatalf("failed to check snapshot due next: %s", err.Error())
 	}
-	if dn != snapshot.SnapshotTypeFull {
+	if dn != snapshot.Full {
 		t.Fatalf("expected full snapshot due next, got %s", dn)
 	}
 

@@ -41,7 +41,7 @@ func (f *FSM) Restore(rc io.ReadCloser) error {
 // FSMSnapshot is a wrapper around raft.FSMSnapshot which adds an optional
 // Finalizer, instrumentation, and logging.
 type FSMSnapshot struct {
-	DueNext   snapshot.SnapshotType
+	DueNext   snapshot.Type
 	Finalizer func() error
 	OnRelease func(invoked, succeeded bool)
 
