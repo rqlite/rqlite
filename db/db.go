@@ -35,34 +35,34 @@ const (
 )
 
 const (
-	openDuration              = "open_duration_ms"
-	numCheckpoints            = "checkpoints"
-	numCheckpointErrors       = "checkpoint_errors"
-	numCheckpointedMoves      = "checkpointed_moves"
-	checkpointDuration        = "checkpoint_duration_ms"
-	createCompactWALDuration  = "create_compact_wal_duration_ms"
-	preCompactWALSize         = "precompact_wal_size"
-	compactedWALSize          = "compacted_wal_size"
-	numExecutions             = "executions"
-	numExecutionErrors        = "execution_errors"
-	numExecutionsForceQueries = "executions_force_queries"
-	numQueries                = "queries"
-	numQueryErrors            = "query_errors"
-	numRequests               = "requests"
-	numETx                    = "execute_transactions"
-	numQTx                    = "query_transactions"
-	numRTx                    = "request_transactions"
-	numBackupStepErrors       = "backup_step_errors"
-	numBackupStepDones        = "backup_step_dones"
-	numBackupSleeps           = "backup_sleeps"
-	numPreupdates             = "preupdates"
-	numPreupdatesErrors       = "preupdates_errors"
-	numPreupdatesCBErrors     = "preupdates_callback_errors"
-	numUpdateHooks            = "update_hooks"
-	numUpdateHooksCBErrors    = "update_hooks_callback_errors"
-	numUpdateHooksErrors      = "update_hooks_errors"
-	numCommitHooks            = "commit_hooks"
-	cdcDroppedEvents          = "dropped_cdc_events"
+	openDuration               = "open_duration_ms"
+	numCheckpoints             = "checkpoints"
+	numCheckpointErrors        = "checkpoint_errors"
+	numCheckpointedMoves       = "checkpointed_moves"
+	checkpointDuration         = "checkpoint_duration_ms"
+	createCompactedWALDuration = "create_compacted_wal_duration_ms"
+	preCompactWALSize          = "precompact_wal_size"
+	compactedWALSize           = "compacted_wal_size"
+	numExecutions              = "executions"
+	numExecutionErrors         = "execution_errors"
+	numExecutionsForceQueries  = "executions_force_queries"
+	numQueries                 = "queries"
+	numQueryErrors             = "query_errors"
+	numRequests                = "requests"
+	numETx                     = "execute_transactions"
+	numQTx                     = "query_transactions"
+	numRTx                     = "request_transactions"
+	numBackupStepErrors        = "backup_step_errors"
+	numBackupStepDones         = "backup_step_dones"
+	numBackupSleeps            = "backup_sleeps"
+	numPreupdates              = "preupdates"
+	numPreupdatesErrors        = "preupdates_errors"
+	numPreupdatesCBErrors      = "preupdates_callback_errors"
+	numUpdateHooks             = "update_hooks"
+	numUpdateHooksCBErrors     = "update_hooks_callback_errors"
+	numUpdateHooksErrors       = "update_hooks_errors"
+	numCommitHooks             = "commit_hooks"
+	cdcDroppedEvents           = "dropped_cdc_events"
 )
 
 var (
@@ -110,7 +110,7 @@ func ResetStats() {
 	stats.Add(numCheckpointErrors, 0)
 	stats.Add(numCheckpointedMoves, 0)
 	stats.Add(checkpointDuration, 0)
-	stats.Add(createCompactWALDuration, 0)
+	stats.Add(createCompactedWALDuration, 0)
 	stats.Add(preCompactWALSize, 0)
 	stats.Add(compactedWALSize, 0)
 	stats.Add(numExecutions, 0)

@@ -60,7 +60,7 @@ func (cm *CheckpointManager) Checkpoint(w io.Writer, timeout time.Duration) (int
 	if err != nil {
 		return 0, err
 	}
-	stats.Get(createCompactWALDuration).(*expvar.Int).Set(time.Since(compactStartTime).Milliseconds())
+	stats.Get(createCompactedWALDuration).(*expvar.Int).Set(time.Since(compactStartTime).Milliseconds())
 
 	walSzPre, err := fileSize(cm.walPath)
 	if err != nil {
