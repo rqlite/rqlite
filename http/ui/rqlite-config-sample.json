@@ -1,0 +1,12 @@
+[
+  {
+    "username": "bob",
+    "password": "secret1",
+    "perms": ["all"]
+  },
+  {
+    "username": "soonoo",
+    "password": "soonoo",
+    "perms": ["query", "status"]
+  }
+]
