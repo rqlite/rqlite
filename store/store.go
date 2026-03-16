@@ -324,9 +324,8 @@ type Store struct {
 	walPath string    // Path to WAL file.
 	dbDir   string    // Path to directory containing SQLite file.
 
-	dbDrv         *sql.Driver      // The SQLite database driver.
-	db            *sql.SwappableDB // The underlying SQLite store.
-	checkPointMgr *sql.CheckpointManager
+	dbDrv *sql.Driver      // The SQLite database driver.
+	db    *sql.SwappableDB // The underlying SQLite store.
 
 	cdcMu         sync.RWMutex
 	cdcStreamer   *sql.CDCStreamer
@@ -752,10 +751,6 @@ func (s *Store) Open() (retErr error) {
 	s.db, err = createDBOnDisk(s.dbPath, s.dbDrv, removeDBFiles, s.dbConf.FKConstraints)
 	if err != nil {
 		return fmt.Errorf("failed to create on-disk database: %s", err)
-	}
-	s.checkPointMgr, err = s.db.CheckpointManager()
-	if err != nil {
-		return fmt.Errorf("failed to create checkpoint manager: %s", err)
 	}
 
 	// Clean up any files from aborted operations. This tries to catch the case where scratch files
@@ -2631,7 +2626,7 @@ func (s *Store) fsmSnapshot() (fSnap raft.FSMSnapshot, retErr error) {
 		}
 		defer walWriter.Cancel() // Noop if already closed, but ensures cleanup on error paths.
 
-		if _, err := s.checkPointMgr.Checkpoint(walWriter, truncateTimeout); err != nil {
+		if _, err := s.db.Checkpoint(walWriter, truncateTimeout); err != nil {
 			if errors.Is(err, sql.ErrDatabaseCheckpointFailed) {
 				s.logger.Fatalf("failed to checkpoint and truncate database for snapshot: %s", err.Error())
 			}

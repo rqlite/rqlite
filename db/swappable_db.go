@@ -15,9 +15,10 @@ import (
 // SwappableDB is a wrapper around DB that allows the underlying database to be swapped out
 // in a thread-safe manner.
 type SwappableDB struct {
-	db   *DB
-	drv  *Driver
-	dbMu sync.RWMutex
+	db            *DB
+	drv           *Driver
+	checkpointMgr *CheckpointManager
+	dbMu          sync.RWMutex
 }
 
 // OpenSwappable returns a new SwappableDB instance, which opens the database at the given path,
@@ -31,9 +32,14 @@ func OpenSwappable(dbPath string, drv *Driver, fkEnabled, wal bool) (*SwappableD
 	if err != nil {
 		return nil, err
 	}
+	mgr, err := NewCheckpointManager(db)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create checkpoint manager: %s", err)
+	}
 	return &SwappableDB{
-		db:  db,
-		drv: drv,
+		db:            db,
+		drv:           drv,
+		checkpointMgr: mgr,
 	}, nil
 }
 
@@ -62,6 +68,14 @@ func (s *SwappableDB) Swap(path string, fkConstraints, walEnabled bool) error {
 		return fmt.Errorf("open SQLite file failed: %s", err)
 	}
 	s.db = db
+	if err := s.checkpointMgr.Close(); err != nil {
+		return fmt.Errorf("failed to close checkpoint manager: %s", err)
+	}
+	mgr, err := NewCheckpointManager(db)
+	if err != nil {
+		return fmt.Errorf("failed to recreate checkpoint manager: %s", err)
+	}
+	s.checkpointMgr = mgr
 	return nil
 }
 
@@ -255,9 +269,9 @@ func (s *SwappableDB) ColumnNames(table string) ([]string, error) {
 	return s.db.ColumnNames(table)
 }
 
-// CheckpointManager returns a CheckpointManager for the underlying database.
-func (s *SwappableDB) CheckpointManager() (*CheckpointManager, error) {
+// Checkpoint performs a checkpoint of the underlying database.
+func (s *SwappableDB) Checkpoint(w io.Writer, timeout time.Duration) (int64, error) {
 	s.dbMu.RLock()
 	defer s.dbMu.RUnlock()
-	return NewCheckpointManager(s.db)
+	return s.checkpointMgr.Checkpoint(w, timeout)
 }
