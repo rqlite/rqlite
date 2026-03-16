@@ -254,3 +254,10 @@ func (s *SwappableDB) ColumnNames(table string) ([]string, error) {
 	defer s.dbMu.RUnlock()
 	return s.db.ColumnNames(table)
 }
+
+// CheckpointManager returns a CheckpointManager for the underlying database.
+func (s *SwappableDB) CheckpointManager() *CheckpointManager {
+	s.dbMu.RLock()
+	defer s.dbMu.RUnlock()
+	return NewCheckpointManager(s.db)
+}

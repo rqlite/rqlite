@@ -28,7 +28,6 @@ import (
 const (
 	SQLiteHeaderSize      = 32
 	bkDelay               = 250 * time.Millisecond
-	checkpointBusyDelay   = 10 * time.Millisecond
 	checkpointBusyTimeout = 250 * time.Millisecond
 	durToOpenLog          = 2 * time.Second
 	OptimizeDefault       = 0xFFFE
@@ -41,6 +40,9 @@ const (
 	numCheckpointErrors       = "checkpoint_errors"
 	numCheckpointedMoves      = "checkpointed_moves"
 	checkpointDuration        = "checkpoint_duration_ms"
+	createCompactWALDuration  = "create_compact_wal_duration_ms"
+	preCompactWALSize         = "precompact_wal_size"
+	compactedWALSize          = "compacted_wal_size"
 	numExecutions             = "executions"
 	numExecutionErrors        = "execution_errors"
 	numExecutionsForceQueries = "executions_force_queries"
@@ -108,6 +110,9 @@ func ResetStats() {
 	stats.Add(numCheckpointErrors, 0)
 	stats.Add(numCheckpointedMoves, 0)
 	stats.Add(checkpointDuration, 0)
+	stats.Add(createCompactWALDuration, 0)
+	stats.Add(preCompactWALSize, 0)
+	stats.Add(compactedWALSize, 0)
 	stats.Add(numExecutions, 0)
 	stats.Add(numExecutionErrors, 0)
 	stats.Add(numExecutionsForceQueries, 0)
@@ -669,7 +674,17 @@ func (db *DB) Checkpoint(mode CheckpointMode) (*CheckpointMeta, error) {
 // duration of the call. If all readers release their locks within dur,
 // the WAL is truncated and nil is returned. If readers hold locks for
 // the entire duration, an error is returned.
-func (db *DB) CheckpointTruncateWithTimeout(dur time.Duration) error {
+func (db *DB) CheckpointTruncateWithTimeout(dur time.Duration) (err error) {
+	start := time.Now()
+	defer func() {
+		if err != nil {
+			stats.Add(numCheckpointErrors, 1)
+		} else {
+			stats.Get(checkpointDuration).(*expvar.Int).Set(time.Since(start).Milliseconds())
+			stats.Add(numCheckpoints, 1)
+		}
+	}()
+
 	rwBt, _, err := db.BusyTimeout()
 	if err != nil {
 		return fmt.Errorf("failed to get busy_timeout: %s", err.Error())
