@@ -112,7 +112,6 @@ func Test_CheckpointManager_Checkpoint_OK(t *testing.T) {
 	if exp, got := `[{"columns":["COUNT(*)"],"types":["integer"],"values":[[2]]}]`, asJSON(rows); exp != got {
 		t.Fatalf("unexpected query result: got %s, want %s", got, exp)
 	}
-
 }
 
 func Test_CheckpointManager_Checkpoint_Blocked(t *testing.T) {
