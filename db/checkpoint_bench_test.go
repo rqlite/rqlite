@@ -143,4 +143,3 @@ func BenchmarkCheckpointNoWriter(b *testing.B) {
 		})
 	}
 }
-
