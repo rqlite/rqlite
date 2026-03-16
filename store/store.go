@@ -753,7 +753,10 @@ func (s *Store) Open() (retErr error) {
 	if err != nil {
 		return fmt.Errorf("failed to create on-disk database: %s", err)
 	}
-	s.checkPointMgr = s.db.CheckpointManager()
+	s.checkPointMgr, err = s.db.CheckpointManager()
+	if err != nil {
+		return fmt.Errorf("failed to create checkpoint manager: %s", err)
+	}
 
 	// Clean up any files from aborted operations. This tries to catch the case where scratch files
 	// were created in the Raft directory, not cleaned up, and then the node was restarted with an

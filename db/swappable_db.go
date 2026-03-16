@@ -256,7 +256,7 @@ func (s *SwappableDB) ColumnNames(table string) ([]string, error) {
 }
 
 // CheckpointManager returns a CheckpointManager for the underlying database.
-func (s *SwappableDB) CheckpointManager() *CheckpointManager {
+func (s *SwappableDB) CheckpointManager() (*CheckpointManager, error) {
 	s.dbMu.RLock()
 	defer s.dbMu.RUnlock()
 	return NewCheckpointManager(s.db)

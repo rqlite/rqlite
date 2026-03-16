@@ -27,13 +27,13 @@ type CheckpointManager struct {
 }
 
 // NewCheckpointManager returns a new CheckpointManager for the given database.
-func NewCheckpointManager(db *DB) *CheckpointManager {
+func NewCheckpointManager(db *DB) (*CheckpointManager, error) {
 	return &CheckpointManager{
 		db:      db,
 		dbPath:  db.Path(),
 		walPath: db.WALPath(),
 		logger:  log.New(log.Writer(), "[db-checkpoint] ", log.LstdFlags),
-	}
+	}, nil
 }
 
 // Checkpoint performs a checkpoint(TRUNCATE) of the database, writing a compacted
