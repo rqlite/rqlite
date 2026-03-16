@@ -2582,11 +2582,10 @@ func (s *Store) fsmSnapshot() (fSnap raft.FSMSnapshot, retErr error) {
 		}
 	}
 
-	fullNeeded, err := s.snapshotStore.FullNeeded()
+	fullNeeded, err := s.fullSnapshotNeeded()
 	if err != nil {
 		return nil, err
 	}
-	fullNeeded = fullNeeded || s.dbModified()
 	fPLog := fullPretty(fullNeeded)
 	defer func() {
 		s.numSnapshots.Add(1)
@@ -3096,6 +3095,14 @@ func (s *Store) doAutoOptimize() error {
 	stats.Add(numAutoOptimizes, 1)
 	s.numAutoOptimizes++
 	return s.setKeyTime(lastOptimizeTimeKey, time.Now())
+}
+
+func (s *Store) fullSnapshotNeeded() (bool, error) {
+	fullNeeded, err := s.snapshotStore.FullNeeded()
+	if err != nil {
+		return false, err
+	}
+	return fullNeeded || s.dbModified(), nil
 }
 
 // dbModified returns true if the database appears to have been modified
