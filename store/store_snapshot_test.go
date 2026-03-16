@@ -11,6 +11,7 @@ import (
 
 	"github.com/rqlite/rqlite/v10/command/proto"
 	"github.com/rqlite/rqlite/v10/internal/random"
+	"github.com/rqlite/rqlite/v10/snapshot"
 )
 
 // Test_SingleNodeSnapshot tests that the Store correctly takes a snapshot
@@ -578,14 +579,14 @@ func Test_SingleNodeSnapshot_FSMFailures(t *testing.T) {
 	}
 
 	// Do nothing with the Snapshot, just release it, Store should remain in
-	// FullNeeded more.
+	// full due next mode.
 	f.Release()
-	fn, err := s.snapshotStore.FullNeeded()
+	dn, err := s.snapshotStore.DueNext()
 	if err != nil {
-		t.Fatalf("failed to check FullNeeded: %s", err.Error())
+		t.Fatalf("failed to check DueNext: %s", err.Error())
 	}
-	if !fn {
-		t.Fatal("expected Snapshot Store to require full snapshot")
+	if dn != snapshot.SnapshotTypeFull {
+		t.Fatalf("expected full snapshot due next, got %s", dn)
 	}
 
 	// Next, successfully snapshot and insert more data.
@@ -596,12 +597,12 @@ func Test_SingleNodeSnapshot_FSMFailures(t *testing.T) {
 		`INSERT INTO foo(name) VALUES("fiona")`,
 	}
 	mustExecute(t, s, queries)
-	fn, err = s.snapshotStore.FullNeeded()
+	dn, err = s.snapshotStore.DueNext()
 	if err != nil {
-		t.Fatalf("failed to check FullNeeded: %s", err.Error())
+		t.Fatalf("failed to check DueNext: %s", err.Error())
 	}
-	if fn {
-		t.Fatal("expected Snapshot Store to not require full snapshot")
+	if dn != snapshot.SnapshotTypeIncremental {
+		t.Fatalf("expected incremental snapshot due next, got %s", dn)
 	}
 
 	// Snap the node again.

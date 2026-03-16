@@ -112,6 +112,18 @@ const (
 	SnapshotTypeIncremental
 )
 
+// String returns a human-readable representation of the snapshot type.
+func (s SnapshotType) String() string {
+	switch s {
+	case SnapshotTypeFull:
+		return "full"
+	case SnapshotTypeIncremental:
+		return "incremental"
+	default:
+		return "unknown"
+	}
+}
+
 // SnapshotSet represents an ordered collection of snapshots from a single Store
 // directory.
 //

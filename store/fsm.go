@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/hashicorp/raft"
+	"github.com/rqlite/rqlite/v10/snapshot"
 )
 
 var fsmSnapshotErrLogger = log.New(os.Stderr, "[fsm-snapshot] ", log.LstdFlags)
@@ -40,7 +41,7 @@ func (f *FSM) Restore(rc io.ReadCloser) error {
 // FSMSnapshot is a wrapper around raft.FSMSnapshot which adds an optional
 // Finalizer, instrumentation, and logging.
 type FSMSnapshot struct {
-	Full      bool
+	DueNext   snapshot.SnapshotType
 	Finalizer func() error
 	OnRelease func(invoked, succeeded bool)
 
@@ -52,7 +53,7 @@ type FSMSnapshot struct {
 
 // Persist writes the snapshot to the given sink.
 func (f *FSMSnapshot) Persist(sink raft.SnapshotSink) (retError error) {
-	fpLog := fullPretty(f.Full)
+	fpLog := f.DueNext.String()
 	f.persistInvoked = true
 
 	startT := time.Now()

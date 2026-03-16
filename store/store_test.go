@@ -18,6 +18,7 @@ import (
 	"github.com/rqlite/rqlite/v10/db"
 	"github.com/rqlite/rqlite/v10/internal/random"
 	"github.com/rqlite/rqlite/v10/internal/rarchive"
+	"github.com/rqlite/rqlite/v10/snapshot"
 	"github.com/rqlite/rqlite/v10/testdata/chinook"
 )
 
@@ -2070,12 +2071,12 @@ COMMIT;
 	}
 
 	// Loading a database should mark that the snapshot store needs a Full Snapshot
-	fn, err := s.snapshotStore.FullNeeded()
+	dn, err := s.snapshotStore.DueNext()
 	if err != nil {
-		t.Fatalf("failed to check if snapshot store needs a full snapshot: %s", err.Error())
+		t.Fatalf("failed to check snapshot due next: %s", err.Error())
 	}
-	if !fn {
-		t.Fatalf("expected snapshot store to need a full snapshot")
+	if dn != snapshot.SnapshotTypeFull {
+		t.Fatalf("expected full snapshot due next, got %s", dn)
 	}
 
 	// Check that data were loaded correctly.
