@@ -73,3 +73,8 @@ func (cm *CheckpointManager) Checkpoint(w io.Writer, timeout time.Duration) (int
 	}
 	return n, nil
 }
+
+// Close closes the CheckpointManager.
+func (cm *CheckpointManager) Close() error {
+	return nil
+}
