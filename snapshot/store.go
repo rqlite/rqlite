@@ -555,7 +555,7 @@ func (s *Store) SetDueNext(t Type) error {
 		}
 		return syncDirMaybe(s.dir)
 	default:
-		return fmt.Errorf("unknown snapshot type: %d", t)
+return fmt.Errorf("unknown snapshot type: %s", t)
 	}
 }
 
