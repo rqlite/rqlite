@@ -89,6 +89,30 @@ func Test_CheckpointManager_Checkpoint_OK(t *testing.T) {
 	if exp, got := `[{"columns":["id","name"],"types":["integer","text"],"values":[[1,"alice"]]}]`, asJSON(rows); exp != got {
 		t.Fatalf("unexpected query result: got %s, want %s", got, exp)
 	}
+
+	// Check back-to-back checkpointing.
+	_, err = db.ExecuteStringStmt(`INSERT INTO foo(name) VALUES("bob")`)
+	if err != nil {
+		t.Fatalf("failed to execute INSERT on single node: %s", err.Error())
+	}
+	n, err = cm.Checkpoint(&buf, 5*time.Second)
+	if err != nil {
+		t.Fatalf("failed to checkpoint: %s", err.Error())
+	}
+	if n == 0 {
+		t.Fatal("expected compacted WAL bytes written to be > 0")
+	}
+	if buf.Len() == 0 {
+		t.Fatal("expected data to be written to writer")
+	}
+	rows, err = db.QueryStringStmt("SELECT COUNT(*) FROM foo")
+	if err != nil {
+		t.Fatalf("failed to query database: %s", err.Error())
+	}
+	if exp, got := `[{"columns":["COUNT(*)"],"types":["integer"],"values":[[2]]}]`, asJSON(rows); exp != got {
+		t.Fatalf("unexpected query result: got %s, want %s", got, exp)
+	}
+
 }
 
 func Test_CheckpointManager_Checkpoint_Blocked(t *testing.T) {
