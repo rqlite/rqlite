@@ -28,7 +28,6 @@ import (
 const (
 	SQLiteHeaderSize      = 32
 	bkDelay               = 250 * time.Millisecond
-	checkpointBusyDelay   = 10 * time.Millisecond
 	checkpointBusyTimeout = 250 * time.Millisecond
 	durToOpenLog          = 2 * time.Second
 	OptimizeDefault       = 0xFFFE
@@ -36,31 +35,34 @@ const (
 )
 
 const (
-	openDuration              = "open_duration_ms"
-	numCheckpoints            = "checkpoints"
-	numCheckpointErrors       = "checkpoint_errors"
-	numCheckpointedMoves      = "checkpointed_moves"
-	checkpointDuration        = "checkpoint_duration_ms"
-	numExecutions             = "executions"
-	numExecutionErrors        = "execution_errors"
-	numExecutionsForceQueries = "executions_force_queries"
-	numQueries                = "queries"
-	numQueryErrors            = "query_errors"
-	numRequests               = "requests"
-	numETx                    = "execute_transactions"
-	numQTx                    = "query_transactions"
-	numRTx                    = "request_transactions"
-	numBackupStepErrors       = "backup_step_errors"
-	numBackupStepDones        = "backup_step_dones"
-	numBackupSleeps           = "backup_sleeps"
-	numPreupdates             = "preupdates"
-	numPreupdatesErrors       = "preupdates_errors"
-	numPreupdatesCBErrors     = "preupdates_callback_errors"
-	numUpdateHooks            = "update_hooks"
-	numUpdateHooksCBErrors    = "update_hooks_callback_errors"
-	numUpdateHooksErrors      = "update_hooks_errors"
-	numCommitHooks            = "commit_hooks"
-	cdcDroppedEvents          = "dropped_cdc_events"
+	openDuration               = "open_duration_ms"
+	numCheckpoints             = "checkpoints"
+	numCheckpointErrors        = "checkpoint_errors"
+	numCheckpointedMoves       = "checkpointed_moves"
+	checkpointDuration         = "checkpoint_duration_ms"
+	createCompactedWALDuration = "create_compacted_wal_duration_ms"
+	preCompactWALSize          = "precompact_wal_size"
+	compactedWALSize           = "compacted_wal_size"
+	numExecutions              = "executions"
+	numExecutionErrors         = "execution_errors"
+	numExecutionsForceQueries  = "executions_force_queries"
+	numQueries                 = "queries"
+	numQueryErrors             = "query_errors"
+	numRequests                = "requests"
+	numETx                     = "execute_transactions"
+	numQTx                     = "query_transactions"
+	numRTx                     = "request_transactions"
+	numBackupStepErrors        = "backup_step_errors"
+	numBackupStepDones         = "backup_step_dones"
+	numBackupSleeps            = "backup_sleeps"
+	numPreupdates              = "preupdates"
+	numPreupdatesErrors        = "preupdates_errors"
+	numPreupdatesCBErrors      = "preupdates_callback_errors"
+	numUpdateHooks             = "update_hooks"
+	numUpdateHooksCBErrors     = "update_hooks_callback_errors"
+	numUpdateHooksErrors       = "update_hooks_errors"
+	numCommitHooks             = "commit_hooks"
+	cdcDroppedEvents           = "dropped_cdc_events"
 )
 
 var (
@@ -108,6 +110,9 @@ func ResetStats() {
 	stats.Add(numCheckpointErrors, 0)
 	stats.Add(numCheckpointedMoves, 0)
 	stats.Add(checkpointDuration, 0)
+	stats.Add(createCompactedWALDuration, 0)
+	stats.Add(preCompactWALSize, 0)
+	stats.Add(compactedWALSize, 0)
 	stats.Add(numExecutions, 0)
 	stats.Add(numExecutionErrors, 0)
 	stats.Add(numExecutionsForceQueries, 0)
@@ -669,7 +674,17 @@ func (db *DB) Checkpoint(mode CheckpointMode) (*CheckpointMeta, error) {
 // duration of the call. If all readers release their locks within dur,
 // the WAL is truncated and nil is returned. If readers hold locks for
 // the entire duration, an error is returned.
-func (db *DB) CheckpointTruncateWithTimeout(dur time.Duration) error {
+func (db *DB) CheckpointTruncateWithTimeout(dur time.Duration) (err error) {
+	start := time.Now()
+	defer func() {
+		if err != nil {
+			stats.Add(numCheckpointErrors, 1)
+		} else {
+			stats.Get(checkpointDuration).(*expvar.Int).Set(time.Since(start).Milliseconds())
+			stats.Add(numCheckpoints, 1)
+		}
+	}()
+
 	rwBt, _, err := db.BusyTimeout()
 	if err != nil {
 		return fmt.Errorf("failed to get busy_timeout: %s", err.Error())

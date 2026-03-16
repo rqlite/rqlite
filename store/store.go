@@ -31,7 +31,6 @@ import (
 	"github.com/rqlite/rqlite/v10/command/proto"
 	sql "github.com/rqlite/rqlite/v10/db"
 	"github.com/rqlite/rqlite/v10/db/humanize"
-	"github.com/rqlite/rqlite/v10/db/wal"
 	"github.com/rqlite/rqlite/v10/internal/progress"
 	"github.com/rqlite/rqlite/v10/internal/random"
 	"github.com/rqlite/rqlite/v10/internal/rsum"
@@ -152,58 +151,56 @@ const (
 )
 
 const (
-	numSnapshots                      = "num_snapshots"
-	numSnapshotsFailed                = "num_snapshots_failed"
-	numUserSnapshots                  = "num_user_snapshots"
-	numUserSnapshotsFailed            = "num_user_snapshots_failed"
-	numWALSnapshots                   = "num_wal_snapshots"
-	numWALSnapshotsFailed             = "num_wal_snapshots_failed"
-	numSnapshotsFull                  = "num_snapshots_full"
-	numSnapshotsIncremental           = "num_snapshots_incremental"
-	numAutoVacuums                    = "num_auto_vacuums"
-	numAutoVacuumsFailed              = "num_auto_vacuums_failed"
-	autoVacuumDuration                = "auto_vacuum_duration"
-	numAutoOptimizes                  = "num_auto_optimizes"
-	numAutoOptimizesFailed            = "num_auto_optimizes_failed"
-	autoOptimizeDuration              = "auto_optimize_duration"
-	numBoots                          = "num_boots"
-	numBackups                        = "num_backups"
-	numLoads                          = "num_loads"
-	numRestores                       = "num_restores"
-	numRestoresFailed                 = "num_restores_failed"
-	numRestoresStart                  = "num_restores_start"
-	numRestoresStartSkipped           = "num_restores_start_skipped"
-	numAutoRestores                   = "num_auto_restores"
-	numAutoRestoresSkipped            = "num_auto_restores_skipped"
-	numAutoRestoresFailed             = "num_auto_restores_failed"
-	numRecoveries                     = "num_recoveries"
-	numProviderChecks                 = "num_provider_checks"
-	numProviderProvides               = "num_provider_provides"
-	numProviderProvidesFail           = "num_provider_provides_fail"
-	numUncompressedCommands           = "num_uncompressed_commands"
-	numCompressedCommands             = "num_compressed_commands"
-	numJoins                          = "num_joins"
-	numIgnoredJoins                   = "num_ignored_joins"
-	numRemovedBeforeJoins             = "num_removed_before_joins"
-	numDBStatsErrors                  = "num_db_stats_errors"
-	numVerifyLeader                   = "num_verify_leader"
-	numVerifyLeaderFailed             = "num_verify_leader_failed"
-	verifyLeaderDuration              = "verify_leader_duration"
-	snapshotCreateDuration            = "snapshot_create_duration"
-	snapshotCreateChkTruncateDuration = "snapshot_create_chk_truncate_duration"
-	snapshotCreateWALCompactDuration  = "snapshot_create_wal_compact_duration"
-	snapshotSyncDuration              = "snapshot_sync_duration"
-	numSnapshotPersists               = "num_snapshot_persists"
-	numSnapshotPersistsFailed         = "num_snapshot_persists_failed"
-	snapshotPersistDuration           = "snapshot_persist_duration"
-	snapshotPrecompactWALSize         = "snapshot_precompact_wal_size"
-	snapshotCRC32CreateDuration       = "snapshot_crc32_create_duration"
-	snapshotWALSize                   = "snapshot_wal_size"
-	leaderChangesObserved             = "leader_changes_observed"
-	leaderChangesDropped              = "leader_changes_dropped"
-	failedHeartbeatObserved           = "failed_heartbeat_observed"
-	nodesReapedOK                     = "nodes_reaped_ok"
-	nodesReapedFailed                 = "nodes_reaped_failed"
+	numSnapshots                = "num_snapshots"
+	numSnapshotsFailed          = "num_snapshots_failed"
+	numUserSnapshots            = "num_user_snapshots"
+	numUserSnapshotsFailed      = "num_user_snapshots_failed"
+	numWALSnapshots             = "num_wal_snapshots"
+	numWALSnapshotsFailed       = "num_wal_snapshots_failed"
+	numSnapshotsFull            = "num_snapshots_full"
+	numSnapshotsIncremental     = "num_snapshots_incremental"
+	numAutoVacuums              = "num_auto_vacuums"
+	numAutoVacuumsFailed        = "num_auto_vacuums_failed"
+	autoVacuumDuration          = "auto_vacuum_duration"
+	numAutoOptimizes            = "num_auto_optimizes"
+	numAutoOptimizesFailed      = "num_auto_optimizes_failed"
+	autoOptimizeDuration        = "auto_optimize_duration"
+	numBoots                    = "num_boots"
+	numBackups                  = "num_backups"
+	numLoads                    = "num_loads"
+	numRestores                 = "num_restores"
+	numRestoresFailed           = "num_restores_failed"
+	numRestoresStart            = "num_restores_start"
+	numRestoresStartSkipped     = "num_restores_start_skipped"
+	numAutoRestores             = "num_auto_restores"
+	numAutoRestoresSkipped      = "num_auto_restores_skipped"
+	numAutoRestoresFailed       = "num_auto_restores_failed"
+	numRecoveries               = "num_recoveries"
+	numProviderChecks           = "num_provider_checks"
+	numProviderProvides         = "num_provider_provides"
+	numProviderProvidesFail     = "num_provider_provides_fail"
+	numUncompressedCommands     = "num_uncompressed_commands"
+	numCompressedCommands       = "num_compressed_commands"
+	numJoins                    = "num_joins"
+	numIgnoredJoins             = "num_ignored_joins"
+	numRemovedBeforeJoins       = "num_removed_before_joins"
+	numDBStatsErrors            = "num_db_stats_errors"
+	numVerifyLeader             = "num_verify_leader"
+	numVerifyLeaderFailed       = "num_verify_leader_failed"
+	verifyLeaderDuration        = "verify_leader_duration"
+	snapshotCreateDuration      = "snapshot_create_duration"
+	snapshotSyncDuration        = "snapshot_sync_duration"
+	numSnapshotPersists         = "num_snapshot_persists"
+	numSnapshotPersistsFailed   = "num_snapshot_persists_failed"
+	snapshotPersistDuration     = "snapshot_persist_duration"
+	snapshotPrecompactWALSize   = "snapshot_precompact_wal_size"
+	snapshotCRC32CreateDuration = "snapshot_crc32_create_duration"
+	snapshotWALSize             = "snapshot_wal_size"
+	leaderChangesObserved       = "leader_changes_observed"
+	leaderChangesDropped        = "leader_changes_dropped"
+	failedHeartbeatObserved     = "failed_heartbeat_observed"
+	nodesReapedOK               = "nodes_reaped_ok"
+	nodesReapedFailed           = "nodes_reaped_failed"
 )
 
 // stats captures stats for the Store.
@@ -255,8 +252,6 @@ func ResetStats() {
 	stats.Add(numVerifyLeaderFailed, 0)
 	stats.Add(verifyLeaderDuration, 0)
 	stats.Add(snapshotCreateDuration, 0)
-	stats.Add(snapshotCreateChkTruncateDuration, 0)
-	stats.Add(snapshotCreateWALCompactDuration, 0)
 	stats.Add(snapshotSyncDuration, 0)
 	stats.Add(numSnapshotPersists, 0)
 	stats.Add(numSnapshotPersistsFailed, 0)
@@ -2597,11 +2592,9 @@ func (s *Store) fsmSnapshot() (fSnap raft.FSMSnapshot, retErr error) {
 		// database. This happens when a node is snapshotting for the very first time, or in certain
 		// crash scenarios where we've truncated the WAL into the database, but haven't successfully
 		// completed a snapshot, so the database is modified but the WAL is not present to be snapshotted.
-		chkStartTime := time.Now()
 		if err := s.db.CheckpointTruncateWithTimeout(truncateTimeout); err != nil {
 			s.logger.Fatalf("failed to checkpoint and truncate database for snapshot: %s", err.Error())
 		}
-		stats.Get(snapshotCreateChkTruncateDuration).(*expvar.Int).Set(time.Since(chkStartTime).Milliseconds())
 		streamer, err := snapshot.NewSnapshotStreamer(s.db.Path())
 		if err != nil {
 			return nil, err
@@ -2620,21 +2613,6 @@ func (s *Store) fsmSnapshot() (fSnap raft.FSMSnapshot, retErr error) {
 			return nil, ErrNoWALToSnapshot
 		}
 
-		// We've got a WAL file, let's start processing it. Compacting isn't strictly
-		// necessary but it keeps the size of the WAL file down when moved and stored
-		// in the Snapshot Store. It also means smaller data transfers if a snapshot
-		// is transferred to another node.
-		compactStartTime := time.Now()
-		walFD, err := os.Open(s.walPath)
-		if err != nil {
-			return nil, err
-		}
-		defer walFD.Close()
-		scanner, err := wal.NewFastCompactingScanner(walFD)
-		if err != nil {
-			return nil, err
-		}
-
 		// Write the compacted WAL to the WAL staging directory. The Snapshotting process
 		// will atomically move this entire directory. If it fails to do so, then this WAL
 		// file wil be packaged as part of the next Snapshot and the next WAL file.
@@ -2648,33 +2626,12 @@ func (s *Store) fsmSnapshot() (fSnap raft.FSMSnapshot, retErr error) {
 		}
 		defer walWriter.Cancel() // Noop if already closed, but ensures cleanup on error paths.
 
-		ww, err := wal.NewWriter(scanner)
-		if err != nil {
+		if _, err := s.db.Checkpoint(walWriter, truncateTimeout); err != nil {
+			if errors.Is(err, sql.ErrDatabaseCheckpointFailed) {
+				s.logger.Fatalf("failed to checkpoint and truncate database for snapshot: %s", err.Error())
+			}
 			return nil, err
 		}
-		walSzPost, err := ww.WriteTo(walWriter)
-		if err != nil {
-			return nil, err
-		}
-		stats.Get(snapshotCreateWALCompactDuration).(*expvar.Int).Set(time.Since(compactStartTime).Milliseconds())
-
-		// Now that we've got a (compacted) copy of the WAL we can truncate the
-		// WAL itself. We use TRUNCATE mode so that the next WAL contains just
-		// changes since this snapshot. If the truncation errors the the WAL
-		// Writer will be canceled, and this entire snapshot will be retried.
-		// If we crash before this point, the Staging Directory is deleted on
-		// startup, so it will be as though the snapshot never happened.
-		walSzPre, err := fileSize(s.walPath)
-		if err != nil {
-			return nil, err
-		}
-		chkTStartTime := time.Now()
-		if err := s.db.CheckpointTruncateWithTimeout(truncateTimeout); err != nil {
-			s.logger.Fatalf("failed to checkpoint and truncate database for snapshot: %s", err.Error())
-		}
-		stats.Get(snapshotCreateChkTruncateDuration).(*expvar.Int).Set(time.Since(chkTStartTime).Milliseconds())
-		stats.Get(snapshotPrecompactWALSize).(*expvar.Int).Set(walSzPre)
-		stats.Get(snapshotWALSize).(*expvar.Int).Set(walSzPost)
 
 		// Now that the database has been truncated successfully, the WAL file in the Staging directory
 		// should be marked valid. If we crash here, on restart we delete the Staging directory, but since
