@@ -10,6 +10,7 @@ import (
 	"github.com/rqlite/rqlite/v10/command/proto"
 	"github.com/rqlite/rqlite/v10/db"
 	"github.com/rqlite/rqlite/v10/internal/rarchive"
+	"github.com/rqlite/rqlite/v10/snapshot"
 )
 
 // Test_SingleNodeBackupBinary tests that requesting a binary-formatted
@@ -123,18 +124,18 @@ func Test_OpenStoreSingleNode_VacuumFullNeeded(t *testing.T) {
 	if err := s.Snapshot(0); err != nil {
 		t.Fatalf("failed to snapshot store: %s", err.Error())
 	}
-	if fn, err := s.snapshotStore.FullNeeded(); err != nil {
-		t.Fatalf("failed to determine full snapshot needed: %s", err.Error())
-	} else if fn {
-		t.Fatalf("full snapshot marked as needed")
+	if dn, err := s.snapshotStore.DueNext(); err != nil {
+		t.Fatalf("failed to check snapshot due next: %s", err.Error())
+	} else if dn != snapshot.Incremental {
+		t.Fatalf("expected incremental snapshot due next, got %s", dn)
 	}
 	if err := s.Vacuum(); err != nil {
 		t.Fatalf("failed to vacuum database: %s", err.Error())
 	}
-	if fn, err := s.snapshotStore.FullNeeded(); err != nil {
-		t.Fatalf("failed to determine full snapshot needed: %s", err.Error())
-	} else if fn {
-		t.Fatalf("full snapshot marked as needed")
+	if dn, err := s.snapshotStore.DueNext(); err != nil {
+		t.Fatalf("failed to check snapshot due next: %s", err.Error())
+	} else if dn != snapshot.Incremental {
+		t.Fatalf("expected incremental snapshot due next, got %s", dn)
 	}
 }
 
@@ -239,10 +240,10 @@ func Test_SingleNodeExplicitVacuumOK(t *testing.T) {
 	// VACUUM, and then query the data, make sure it looks good.
 	doVacuum()
 	doQuery()
-	if fn, err := s.snapshotStore.FullNeeded(); err != nil {
-		t.Fatalf("failed to check if snapshot store needs a full snapshot: %s", err.Error())
-	} else if fn {
-		t.Fatalf("expected snapshot store to not need a full snapshot post explicit VACUUM")
+	if dn, err := s.snapshotStore.DueNext(); err != nil {
+		t.Fatalf("failed to check snapshot due next: %s", err.Error())
+	} else if dn != snapshot.Incremental {
+		t.Fatalf("expected incremental snapshot due next post explicit VACUUM, got %s", dn)
 	}
 
 	// The next snapshot will be incremental.
@@ -381,10 +382,10 @@ func Test_SingleNode_SnapshotWithAutoVac(t *testing.T) {
 	if err := s.Snapshot(0); err != nil {
 		t.Fatalf("failed to snapshot single-node store: %s", err.Error())
 	}
-	if fn, err := s.snapshotStore.FullNeeded(); err != nil {
-		t.Fatalf("failed to check if snapshot store needs a full snapshot: %s", err.Error())
-	} else if fn {
-		t.Fatalf("expected snapshot store to not need a full snapshot")
+	if dn, err := s.snapshotStore.DueNext(); err != nil {
+		t.Fatalf("failed to check snapshot due next: %s", err.Error())
+	} else if dn != snapshot.Incremental {
+		t.Fatalf("expected incremental snapshot due next, got %s", dn)
 	}
 
 	// Enable auto-vacuuming. Need to go under the covers to init the vacuum times.

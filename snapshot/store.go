@@ -516,46 +516,47 @@ func (s *Store) signalReap() {
 	}
 }
 
-// FullNeeded returns true if a full snapshot is needed.
-func (s *Store) FullNeeded() (bool, error) {
+// DueNext returns the type of snapshot due next.
+func (s *Store) DueNext() (Type, error) {
 	if fileExists(s.fullNeededPath) {
-		return true, nil
+		return Full, nil
 	}
 
 	nSnaps := s.snapshotCount()
-	return nSnaps == 0, nil
+	if nSnaps == 0 {
+		return Full, nil
+	}
+	return Incremental, nil
 }
 
-// SetFullNeeded sets the flag that indicates a full snapshot is needed.
-// Doesn't take the read lock since it's just creating a file, and the
-// presence of the file is what matters.
-func (s *Store) SetFullNeeded() error {
-	f, err := os.Create(s.fullNeededPath)
-	if err != nil {
-		return err
+// SetDueNext sets the type of snapshot due next. Setting Full
+// creates a flag file; setting Incremental removes it.
+func (s *Store) SetDueNext(t Type) error {
+	switch t {
+	case Full:
+		f, err := os.Create(s.fullNeededPath)
+		if err != nil {
+			return err
+		}
+		if err := f.Sync(); err != nil {
+			f.Close()
+			return err
+		}
+		if err := f.Close(); err != nil {
+			return err
+		}
+		return syncDirMaybe(s.dir)
+	case Incremental:
+		if !fileExists(s.fullNeededPath) {
+			return nil
+		}
+		if err := os.Remove(s.fullNeededPath); err != nil {
+			return err
+		}
+		return syncDirMaybe(s.dir)
+	default:
+		return fmt.Errorf("unknown snapshot type: %s", t)
 	}
-	if err := f.Sync(); err != nil {
-		f.Close()
-		return err
-	}
-	if err := f.Close(); err != nil {
-		return err
-	}
-	return syncDirMaybe(s.dir)
-}
-
-// UnsetFullNeeded removes the flag that indicates a full snapshot is
-// needed. If the flag is not set, this is a no-op. Doesn't take the
-// read lock since it's just removing a file, and the presence of the
-// file is what matters.
-func (s *Store) UnsetFullNeeded() error {
-	if !fileExists(s.fullNeededPath) {
-		return nil
-	}
-	if err := os.Remove(s.fullNeededPath); err != nil {
-		return err
-	}
-	return syncDirMaybe(s.dir)
 }
 
 // Stats returns stats about the Snapshot Store. This function may return

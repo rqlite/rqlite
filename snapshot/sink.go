@@ -20,9 +20,9 @@ type sinker interface {
 	io.WriteCloser
 }
 
-type fullController interface {
-	FullNeeded() (bool, error)
-	UnsetFullNeeded() error
+type snapshotTypeController interface {
+	DueNext() (Type, error)
+	SetDueNext(Type) error
 }
 
 // Sink is a sink for writing snapshot data to a Snapshot store.
@@ -46,7 +46,7 @@ type Sink struct {
 	// In this case, no data follows the header; the WAL directory is moved on Close.
 	localWALDir string
 
-	fc fullController
+	stc snapshotTypeController
 
 	// closeCh, when non-nil, receives a non-blocking signal after a
 	// successful Close.
@@ -63,12 +63,12 @@ type Sink struct {
 // NewSink creates a new Sink object. It takes the root snapshot directory
 // and the snapshot metadata. closeCh, if non-nil, will receive a non-blocking
 // signal after a successful Close.
-func NewSink(dir string, meta *raft.SnapshotMeta, fc fullController, closeCh chan<- struct{}) *Sink {
+func NewSink(dir string, meta *raft.SnapshotMeta, stc snapshotTypeController, closeCh chan<- struct{}) *Sink {
 	logger := log.New(log.Writer(), "[snapshot-sink] ", log.LstdFlags)
 	return &Sink{
 		dir:     dir,
 		meta:    meta,
-		fc:      fc,
+		stc:     stc,
 		closeCh: closeCh,
 		fatalFn: func(err error) {
 			logger.Fatalf("failure during incremental snapshot, exiting process to avoid data corruption: %v", err)
@@ -126,12 +126,12 @@ func (s *Sink) Write(p []byte) (n int, err error) {
 		case *proto.SnapshotHeader_Full:
 			s.sinkW = NewFullSink(s.snapTmpDirPath, p.Full)
 		case *proto.SnapshotHeader_IncrementalFile:
-			if s.fc != nil {
-				fullNeeded, err := s.fc.FullNeeded()
+			if s.stc != nil {
+				dueNext, err := s.stc.DueNext()
 				if err != nil {
 					return n, err
 				}
-				if fullNeeded {
+				if dueNext == Full {
 					return n, fmt.Errorf("full snapshot needed before incremental can be applied")
 				}
 			}
@@ -231,9 +231,9 @@ func (s *Sink) Close() (retErr error) {
 		return fmt.Errorf("failed to rename snapshot directory: %v", err)
 	}
 
-	if s.fc != nil {
-		if err := s.fc.UnsetFullNeeded(); err != nil {
-			return fmt.Errorf("failed to unset full needed: %v", err)
+	if s.stc != nil {
+		if err := s.stc.SetDueNext(Incremental); err != nil {
+			return fmt.Errorf("failed to set due next to incremental: %v", err)
 		}
 	}
 	if err := syncDirMaybe(s.dir); err != nil {

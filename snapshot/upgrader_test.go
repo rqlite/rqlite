@@ -184,7 +184,7 @@ func Test_Upgrade8To10_NewAlreadyExists(t *testing.T) {
 	if snap.id != "2-18-1686659761026" {
 		t.Fatalf("expected snapshot ID 2-18-1686659761026, got %s", snap.id)
 	}
-	if snap.typ != SnapshotTypeFull {
+	if snap.typ != Full {
 		t.Fatalf("expected full snapshot, got type %v", snap.typ)
 	}
 }
@@ -239,7 +239,7 @@ func Test_Upgrade8To10_OK(t *testing.T) {
 	if snap.id != snapshotID {
 		t.Fatalf("expected snapshot ID %s, got %s", snapshotID, snap.id)
 	}
-	if snap.typ != SnapshotTypeFull {
+	if snap.typ != Full {
 		t.Fatalf("expected full snapshot, got type %v", snap.typ)
 	}
 	if snap.raftMeta.Index != 18 {
@@ -307,7 +307,7 @@ func Test_Upgrade8To10_MultiplePicksNewest(t *testing.T) {
 	if snap.id != "2-20-2000000000000" {
 		t.Fatalf("expected newest snapshot ID 2-20-2000000000000, got %s", snap.id)
 	}
-	if snap.typ != SnapshotTypeFull {
+	if snap.typ != Full {
 		t.Fatalf("expected full snapshot, got type %v", snap.typ)
 	}
 	if snap.raftMeta.Index != 20 {
@@ -352,7 +352,7 @@ func Test_Upgrade8To10_Idempotent(t *testing.T) {
 	if snap.id != snapshotID {
 		t.Fatalf("expected snapshot ID %s, got %s", snapshotID, snap.id)
 	}
-	if snap.typ != SnapshotTypeFull {
+	if snap.typ != Full {
 		t.Fatalf("expected full snapshot, got type %v", snap.typ)
 	}
 	if snap.raftMeta.Index != 18 {
@@ -431,7 +431,7 @@ func Test_Upgrade8To10_ResumesPlan(t *testing.T) {
 	if snap.id != snapshotID {
 		t.Fatalf("expected snapshot ID %s, got %s", snapshotID, snap.id)
 	}
-	if snap.typ != SnapshotTypeFull {
+	if snap.typ != Full {
 		t.Fatalf("expected full snapshot, got type %v", snap.typ)
 	}
 	if snap.raftMeta.Index != 18 {

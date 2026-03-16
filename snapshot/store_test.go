@@ -46,10 +46,10 @@ func Test_StoreEmpty(t *testing.T) {
 		t.Fatalf("Expected no snapshots, got %d", len(snaps))
 	}
 
-	if fn, err := store.FullNeeded(); err != nil {
-		t.Fatalf("Failed to check if full snapshot needed: %v", err)
-	} else if !fn {
-		t.Fatalf("Expected full snapshot needed, but it is not")
+	if dn, err := store.DueNext(); err != nil {
+		t.Fatalf("Failed to check snapshot due next: %v", err)
+	} else if dn != Full {
+		t.Fatalf("Expected full snapshot due next, got %s", dn)
 	}
 
 	_, _, err = store.Open("nonexistent")
