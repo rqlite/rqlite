@@ -41,6 +41,9 @@ func NewCompactingSectionScanner(r io.ReadSeeker, start, end int64, fullScan boo
 	pageSize := walReader.pageSize
 	frameSize := int64(WALFrameHeaderSize) + int64(pageSize)
 
+	if fullScan && start != WALHeaderSize {
+		return nil, fmt.Errorf("fullScan requires start offset to be %d, got %d", WALHeaderSize, start)
+	}
 	if start > end {
 		return nil, fmt.Errorf("start offset (%d) is past end offset (%d)", start, end)
 	}

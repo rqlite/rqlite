@@ -191,6 +191,29 @@ func Test_CompactingSectionScanner_BadOffsets(t *testing.T) {
 	}
 }
 
+func Test_CompactingSectionScanner_FullScanRequiresHeaderStart(t *testing.T) {
+	b, err := os.ReadFile("testdata/wal-reader/ok/wal")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	const frameSize = WALFrameHeaderSize + 4096
+	start := int64(WALHeaderSize + frameSize)
+	end := int64(len(b))
+
+	// fullScan=true with start != WALHeaderSize must fail.
+	_, err = NewCompactingSectionScanner(bytes.NewReader(b), start, end, true)
+	if err == nil {
+		t.Fatal("expected error for fullScan with non-header start offset")
+	}
+
+	// fullScan=true with start == WALHeaderSize must succeed.
+	_, err = NewCompactingSectionScanner(bytes.NewReader(b), WALHeaderSize, end, true)
+	if err != nil {
+		t.Fatal(err)
+	}
+}
+
 func Test_CompactingSectionScanner_Empty(t *testing.T) {
 	b, err := os.ReadFile("testdata/wal-reader/ok/wal")
 	if err != nil {
