@@ -2,10 +2,16 @@ package wal
 
 import (
 	"encoding/binary"
+	"errors"
 	"fmt"
 	"io"
 	"maps"
 	"sort"
+)
+
+var (
+	// ErrOpenTransaction is returned when the final frame in the WAL file is not a committing frame.
+	ErrOpenTransaction = errors.New("open transaction at end of WAL file")
 )
 
 // CompactingSectionScanner implements WALIterator to iterate over compacted WAL

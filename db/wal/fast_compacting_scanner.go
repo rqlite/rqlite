@@ -1,15 +1,9 @@
 package wal
 
 import (
-	"errors"
 	"expvar"
 	"io"
 	"time"
-)
-
-var (
-	// ErrOpenTransaction is returned when the final frame in the WAL file is not a committing frame.
-	ErrOpenTransaction = errors.New("open transaction at end of WAL file")
 )
 
 // NewFastCompactingScanner creates a new CompactingSectionScanner that scans the
