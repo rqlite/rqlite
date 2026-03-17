@@ -623,4 +623,3 @@ func Test_CompactingSectionScanner_Writer_FullCycle(t *testing.T) {
 		t.Fatalf("failed to iterate rows: %s", err)
 	}
 }
-
