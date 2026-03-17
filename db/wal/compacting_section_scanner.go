@@ -8,11 +8,11 @@ import (
 	"sort"
 )
 
-// CompactingSectionScanner implements WALIterator to iterate over compacted WAL frames
-// within a byte range [start, end). It scans all frames in the range, keeps
-// only the latest version of each page (respecting transaction boundaries),
-// and returns them in file offset order. If fullScan is false, frame checksums
-// are not verified since the WAL file is trusted.
+// CompactingSectionScanner implements WALIterator to iterate over compacted WAL
+// frames within a byte range [start, end). It scans all frames in the range, keeps
+// only the latest version of each page (respecting transaction boundaries), and
+// returns them in file offset order. If fullScan is false, frame checksums are
+// not verified since the WAL file is trusted.
 type CompactingSectionScanner struct {
 	readSeeker io.ReadSeeker
 	walReader  *Reader
@@ -25,9 +25,9 @@ type CompactingSectionScanner struct {
 	fIdx   int
 }
 
-// NewCompactingSectionScanner creates a new CompactingSectionScanner that reads and compacts
-// frames from the byte range [start, end) of the WAL accessible via r. The
-// start and end offsets must be aligned to frame boundaries. The WAL header
+// NewCompactingSectionScanner creates a new CompactingSectionScanner that reads
+// and compacts frames from the byte range [start, end) of the WAL accessible via
+// r. The start and end offsets must be aligned to frame boundaries. The WAL header
 // is always read from offset 0. If fullScan is true, the scanner will perform
 // a checksum on each frame. If fullScan is false, the scanner will only scan
 // the file sufficiently to find the last valid frame for each page.
@@ -167,8 +167,8 @@ func (s *CompactingSectionScanner) Bytes() ([]byte, error) {
 }
 
 // scan reads all frame headers in [start, end) and builds a compacted frame
-// list, keeping only the latest version of each page. Only committed
-// transactions are included.
+// list, keeping only the latest version of each page. Only committed transactions
+// are included.
 func (s *CompactingSectionScanner) scan() error {
 	if s.start >= s.end {
 		return nil
