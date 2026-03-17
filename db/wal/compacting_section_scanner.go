@@ -31,6 +31,9 @@ type CompactingSectionScanner struct {
 // is always read from offset 0. If fullScan is true, the scanner will perform
 // a checksum on each frame. If fullScan is false, the scanner will only scan
 // the file sufficiently to find the last valid frame for each page.
+//
+// Scanning stops at the first invalid frame (e.g. salt mismatch, checksum
+// failure, or partial read), even if the end offset has not been reached.
 func NewCompactingSectionScanner(r io.ReadSeeker, start, end int64, fullScan bool) (*CompactingSectionScanner, error) {
 	walReader := NewReader(r)
 	if err := walReader.ReadHeader(); err != nil {
