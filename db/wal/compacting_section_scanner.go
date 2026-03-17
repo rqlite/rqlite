@@ -228,3 +228,15 @@ func (s *CompactingSectionScanner) scan() error {
 	sort.Sort(s.frames)
 	return nil
 }
+
+type cFrame struct {
+	Pgno   uint32
+	Commit uint32
+	Offset int64
+}
+
+type cFrames []*cFrame
+
+func (c cFrames) Len() int           { return len(c) }
+func (c cFrames) Less(i, j int) bool { return c[i].Offset < c[j].Offset }
+func (c cFrames) Swap(i, j int)      { c[i], c[j] = c[j], c[i] }
