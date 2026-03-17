@@ -12,8 +12,7 @@ import (
 // within a byte range [start, end). It scans all frames in the range, keeps
 // only the latest version of each page (respecting transaction boundaries),
 // and returns them in file offset order. If fullScan is false, frame checksums
-// are not verified since the WAL file is trusted; the Writer recomputes checksums
-// when producing output.
+// are not verified since the WAL file is trusted.
 type CompactingSectionScanner struct {
 	readSeeker io.ReadSeeker
 	walReader  *Reader
