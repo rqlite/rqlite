@@ -235,6 +235,82 @@ func Test_CompactingSectionScanner_Empty(t *testing.T) {
 	}
 }
 
+func Test_CompactingSectionScanner_OpenTransaction(t *testing.T) {
+	b, err := os.ReadFile("testdata/wal-reader/ok/wal")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// The test WAL has 3 frames with page size 4096:
+	//   Frame 1: pgno=1, commit=0
+	//   Frame 2: pgno=2, commit=2
+	//   Frame 3: pgno=2, commit=2
+	// A section containing only frame 1 (commit=0) is an open transaction.
+	const frameSize = WALFrameHeaderSize + 4096
+	start := int64(WALHeaderSize)
+	end := int64(WALHeaderSize + frameSize)
+
+	_, err = NewCompactingSectionScanner(bytes.NewReader(b), start, end, false)
+	if err != ErrOpenTransaction {
+		t.Fatalf("expected ErrOpenTransaction, got %v", err)
+	}
+}
+
+func Test_CompactingSectionScanner_Bytes_PartialSection(t *testing.T) {
+	b, err := os.ReadFile("testdata/wal-reader/ok/wal")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Scan frames 2-3 only (both pgno=2, compacts to 1 frame).
+	const frameSize = WALFrameHeaderSize + 4096
+	start := int64(WALHeaderSize + frameSize)
+	end := int64(len(b))
+
+	s, err := NewCompactingSectionScanner(bytes.NewReader(b), start, end, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Bytes() output should match Writer output for the same section.
+	var writerBuf bytes.Buffer
+	w, err := NewWriter(s)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := w.WriteTo(&writerBuf); err != nil {
+		t.Fatal(err)
+	}
+
+	bytesBuf, err := s.Bytes()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !bytes.Equal(bytesBuf, writerBuf.Bytes()) {
+		t.Fatal("Bytes() output does not match Writer output for partial section")
+	}
+
+	// Verify the output is a valid WAL by reading it back.
+	fs, err := NewFullScanner(bytes.NewReader(bytesBuf))
+	if err != nil {
+		t.Fatal(err)
+	}
+	count := 0
+	for {
+		_, err := fs.Next()
+		if err == io.EOF {
+			break
+		}
+		if err != nil {
+			t.Fatalf("FullScanner failed on frame %d: %v", count, err)
+		}
+		count++
+	}
+	if count != 1 {
+		t.Fatalf("expected 1 frame in output, got %d", count)
+	}
+}
+
 func Test_CompactingSectionScanner_WriterRoundTrip(t *testing.T) {
 	b, err := os.ReadFile("testdata/wal-reader/ok/wal")
 	if err != nil {
