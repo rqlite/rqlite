@@ -214,7 +214,7 @@ func (s *CompactingSectionScanner) scan() error {
 		waitingForCommit = false
 
 		maps.Copy(frames, txFrames)
-		txFrames = make(map[uint32]*cFrame)
+		clear(txFrames)
 	}
 
 	if waitingForCommit {
