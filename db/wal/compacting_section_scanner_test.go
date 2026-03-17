@@ -312,6 +312,7 @@ func Test_CompactingSectionScanner_WriterRoundTrip_SQLite(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	defer destF.Close()
 	w, err := NewWriter(s)
 	if err != nil {
 		t.Fatal(err)
@@ -319,7 +320,6 @@ func Test_CompactingSectionScanner_WriterRoundTrip_SQLite(t *testing.T) {
 	if _, err := w.WriteTo(destF); err != nil {
 		t.Fatal(err)
 	}
-	destF.Close()
 
 	// Open the dest database and verify data is present.
 	destDSN := fmt.Sprintf("file:%s", destDB)
