@@ -27,14 +27,6 @@ func (c cFrames) Swap(i, j int)      { c[i], c[j] = c[j], c[i] }
 // NewFastCompactingScanner creates a new CompactingSectionScanner that scans the
 // entire WAL file without checksum verification.
 func NewFastCompactingScanner(r io.ReadSeeker) (*CompactingSectionScanner, error) {
-	return NewCompactingScanner(r, false)
-}
-
-// NewCompactingScanner creates a new CompactingSectionScanner that scans the entire
-// WAL file. If fullScan is true, the scanner will perform a checksum on each frame.
-// If fullScan is false, the scanner will only scan the file sufficiently to find the
-// last valid frame for each page.
-func NewCompactingScanner(r io.ReadSeeker, fullScan bool) (*CompactingSectionScanner, error) {
 	end, err := r.Seek(0, io.SeekEnd)
 	if err != nil {
 		return nil, err
@@ -44,7 +36,7 @@ func NewCompactingScanner(r io.ReadSeeker, fullScan bool) (*CompactingSectionSca
 	}
 
 	startT := time.Now()
-	s, err := NewCompactingSectionScanner(r, WALHeaderSize, end, fullScan)
+	s, err := NewCompactingSectionScanner(r, WALHeaderSize, end, false)
 	if err != nil {
 		return nil, err
 	}

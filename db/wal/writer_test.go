@@ -122,7 +122,11 @@ func Test_Writer_CompactingScanner(t *testing.T) {
 			t.Fatal(err)
 		}
 		defer destF.Close()
-		s, err := NewCompactingScanner(srcF, true)
+		fi, err := srcF.Stat()
+		if err != nil {
+			t.Fatal(err)
+		}
+		s, err := NewCompactingSectionScanner(srcF, WALHeaderSize, fi.Size(), true)
 		if err != nil {
 			t.Fatal(err)
 		}
