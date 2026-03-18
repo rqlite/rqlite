@@ -77,6 +77,7 @@ Upgrading from v7 or later is seamless and has been extensively tested. v10 supp
 - [PR #2563](https://github.com/rqlite/rqlite/pull/2563), [PR #2564](https://github.com/rqlite/rqlite/pull/2564): Factor WAL Checkpointing into a Manager.
 - [PR #2565](https://github.com/rqlite/rqlite/pull/2565), [PR #2566](https://github.com/rqlite/rqlite/pull/2566): Move to enumerated type when returning "full needed" state.
 - [PR #2567](https://github.com/rqlite/rqlite/pull/2567): Add WAL Section-level Scanner.
+- [PR #2568](https://github.com/rqlite/rqlite/pull/2568): Upgrade to SQLite 3.51.3.
 
 ## v9.4.5 (March 9th 2026)
 ### Implementation changes and bug fixes
