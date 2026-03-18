@@ -57,11 +57,17 @@ type Reader struct {
 
 	salt1, salt2     uint32
 	chksum1, chksum2 uint32
+
+	// scratch buffer for reading frame headers, reused across ReadFrame calls
+	frmHdr []byte
 }
 
 // NewReader returns a new instance of Reader.
 func NewReader(r io.ReadSeeker) *Reader {
-	return &Reader{r: r}
+	return &Reader{
+		r:      r,
+		frmHdr: make([]byte, WALFrameHeaderSize),
+	}
 }
 
 // PageSize returns the page size from the header. Must call ReadHeader() first.
@@ -129,7 +135,7 @@ func (r *Reader) ReadFrame(data []byte) (pgno, commit uint32, err error) {
 	}
 
 	// Read WAL frame header.
-	hdr := make([]byte, WALFrameHeaderSize)
+	hdr := r.frmHdr
 	if _, err := io.ReadFull(r.r, hdr); err == io.ErrUnexpectedEOF {
 		return 0, 0, io.EOF
 	} else if err != nil {

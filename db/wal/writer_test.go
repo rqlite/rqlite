@@ -50,7 +50,6 @@ func Test_Writer_FullScanner_LargeWAL(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	t.Log("WAL size:", len(b))
 
 	s, err := NewFullScanner(bytes.NewReader(b))
 	if err != nil {
@@ -123,7 +122,11 @@ func Test_Writer_CompactingScanner(t *testing.T) {
 			t.Fatal(err)
 		}
 		defer destF.Close()
-		s, err := NewCompactingScanner(srcF, true)
+		fi, err := srcF.Stat()
+		if err != nil {
+			t.Fatal(err)
+		}
+		s, err := NewCompactingSectionScanner(srcF, WALHeaderSize, fi.Size(), true)
 		if err != nil {
 			t.Fatal(err)
 		}
