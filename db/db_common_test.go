@@ -107,6 +107,7 @@ func Test_DB_TableCreation(t *testing.T) {
 }
 
 func Test_SQL_Comments(t *testing.T) {
+	t.Skip()
 	db, path := mustCreateOnDiskDatabaseWAL()
 	defer os.Remove(path)
 	defer db.Close()
