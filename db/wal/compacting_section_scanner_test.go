@@ -382,17 +382,13 @@ func Test_CompactingSectionScanner_WriterRoundTrip_SQLite(t *testing.T) {
 	mustExec(srcConn, "CREATE TABLE foo (id INTEGER PRIMARY KEY, name TEXT)")
 
 	// Insert rows to generate WAL frames.
-	for i := 0; i < 100; i++ {
+	for i := range 100 {
 		mustExec(srcConn, fmt.Sprintf("INSERT INTO foo (name) VALUES ('row%d')", i))
 	}
 
-	// Checkpoint to flush pages to the main database file, but keep the WAL.
-	mustExec(srcConn, "PRAGMA wal_checkpoint(FULL)")
-
-	// Copy the main database file (which now has the checkpointed data).
+	// Copy the main database file, which hasn't been checkpointed into.
 	destDir := t.TempDir()
 	destDB := destDir + "/dest.db"
-	destWAL := destDir + "/dest.db-wal"
 	mustCopyFile(destDB, srcDB)
 
 	// Write the entire WAL via CompactingSectionScanner+Writer to the dest WAL.
@@ -406,6 +402,10 @@ func Test_CompactingSectionScanner_WriterRoundTrip_SQLite(t *testing.T) {
 		t.Fatal(err)
 	}
 
+	// Now write the compacted WAL to disk, and have that checkpointed into the database copy. This
+	// checks that the compacted WAL checkpointed into the same main database results in the same
+	// data being present in the database.
+	destWAL := destDir + "/dest.db-wal"
 	destF, err := os.Create(destWAL)
 	if err != nil {
 		t.Fatal(err)
