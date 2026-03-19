@@ -87,12 +87,20 @@ func main() {
 	startProfile(cfg.CPUProfile, cfg.MemProfile, cfg.TraceProfile)
 
 	// Initialize OpenTelemetry tracing.
-	otelShutdown, err := rqotel.Setup(rqotel.Config{
-		Enabled: cfg.OTelTracesEnabled,
-		NodeID:  cfg.NodeID,
-		Version: cmd.Version,
-		Writer:  os.Stderr,
-	})
+	otelCfg := rqotel.Config{
+		Enabled:      cfg.OTelTracesEnabled,
+		NodeID:       cfg.NodeID,
+		Version:      cmd.Version,
+		OTLPEndpoint: cfg.OTelEndpoint,
+		OTLPInsecure: cfg.OTelInsecure,
+		SampleRate:   cfg.OTelSampleRate,
+	}
+	// Write to stderr if stdout mode is explicitly requested, or if no OTLP endpoint is set
+	// (preserving the original behavior of -otel-traces writing to stderr).
+	if cfg.OTelStdout || cfg.OTelEndpoint == "" {
+		otelCfg.Writer = os.Stderr
+	}
+	otelShutdown, err := rqotel.Setup(otelCfg)
 	if err != nil {
 		log.Fatalf("failed to initialize OpenTelemetry: %s", err.Error())
 	}
