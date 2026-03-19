@@ -2,6 +2,7 @@ package http
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"io"
 	"sort"
@@ -53,7 +54,7 @@ func (n *Node) Test(gm GetNodeMetaer, leaderAddr string, retries int, timeout ti
 	done := make(chan struct{})
 	go func() {
 		defer close(done)
-		meta, err := gm.GetNodeMeta(n.Addr, retries, timeout)
+		meta, err := gm.GetNodeMeta(context.Background(), n.Addr, retries, timeout)
 		if err != nil {
 			n.SetError(err.Error())
 			return

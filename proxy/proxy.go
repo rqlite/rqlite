@@ -85,7 +85,7 @@ type Cluster interface {
 	Backup(ctx context.Context, br *proto.BackupRequest, nodeAddr string, creds *clstrPB.Credentials, timeout time.Duration, w io.Writer) error
 	Load(ctx context.Context, lr *proto.LoadRequest, nodeAddr string, creds *clstrPB.Credentials, timeout time.Duration, retries int) error
 	RemoveNode(ctx context.Context, rn *proto.RemoveNodeRequest, nodeAddr string, creds *clstrPB.Credentials, timeout time.Duration) error
-	Stepdown(sr *proto.StepdownRequest, nodeAddr string, creds *clstrPB.Credentials, timeout time.Duration) error
+	Stepdown(ctx context.Context, sr *proto.StepdownRequest, nodeAddr string, creds *clstrPB.Credentials, timeout time.Duration) error
 }
 
 // Proxy handles try-local-then-forward-to-leader logic.
@@ -275,7 +275,7 @@ func (p *Proxy) Remove(ctx context.Context, rn *proto.RemoveNodeRequest, creds *
 // Stepdown triggers leader stepdown. If the local store returns
 // ErrNotLeader and noForward is false, the request is forwarded to
 // the current leader.
-func (p *Proxy) Stepdown(wait bool, id string, creds *clstrPB.Credentials,
+func (p *Proxy) Stepdown(ctx context.Context, wait bool, id string, creds *clstrPB.Credentials,
 	timeout time.Duration, noForward bool) (string, error) {
 
 	err := p.store.Stepdown(wait, id)
@@ -291,7 +291,7 @@ func (p *Proxy) Stepdown(wait bool, id string, creds *clstrPB.Credentials,
 			Id:   id,
 			Wait: wait,
 		}
-		err = p.cluster.Stepdown(sr, addr, creds, timeout)
+		err = p.cluster.Stepdown(ctx, sr, addr, creds, timeout)
 		if err != nil {
 			return "", wrapIfUnauthorized(err)
 		}

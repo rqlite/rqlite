@@ -2640,7 +2640,7 @@ type mockClusterService struct {
 	stepdownFn   func(sr *command.StepdownRequest, nodeAddr string, t time.Duration) error
 }
 
-func (m *mockClusterService) GetNodeMeta(a string, r int, t time.Duration) (*cluster.NodeMeta, error) {
+func (m *mockClusterService) GetNodeMeta(ctx context.Context, a string, r int, t time.Duration) (*cluster.NodeMeta, error) {
 	return &cluster.NodeMeta{
 		Url: m.apiAddr,
 	}, nil
@@ -2688,7 +2688,7 @@ func (m *mockClusterService) RemoveNode(ctx context.Context, rn *command.RemoveN
 	return nil
 }
 
-func (m *mockClusterService) Stepdown(sr *command.StepdownRequest, addr string, creds *cluster.Credentials, t time.Duration) error {
+func (m *mockClusterService) Stepdown(ctx context.Context, sr *command.StepdownRequest, addr string, creds *cluster.Credentials, t time.Duration) error {
 	if m.stepdownFn != nil {
 		return m.stepdownFn(sr, addr, t)
 	}

@@ -217,7 +217,7 @@ func (b *Bootstrapper) Boot(ctx context.Context, id, raftAddr string, suf Suffra
 				// de novo. For that to happen it needs to now let the other nodes know it is here.
 				// If this is a new cluster, some node will then reach the bootstrap-expect value
 				// first, form the cluster, beating all other nodes to it.
-				if err := b.notify(targets, id, raftAddr); err != nil {
+				if err := b.notify(ctx, targets, id, raftAddr); err != nil {
 					b.logger.Printf("failed to notify all targets: %s (%s, will retry)", targets,
 						err.Error())
 				} else {
@@ -235,13 +235,13 @@ func (b *Bootstrapper) Status() BootStatus {
 	return b.bootStatus
 }
 
-func (b *Bootstrapper) notify(targets []string, id, raftAddr string) error {
+func (b *Bootstrapper) notify(ctx context.Context, targets []string, id, raftAddr string) error {
 	nr := &command.NotifyRequest{
 		Address: raftAddr,
 		Id:      id,
 	}
 	for _, t := range targets {
-		if err := b.client.Notify(nr, t, b.creds, requestTimeout); err != nil {
+		if err := b.client.Notify(ctx, nr, t, b.creds, requestTimeout); err != nil {
 			return fmt.Errorf("failed to notify node at %s: %s", t, err)
 		}
 	}

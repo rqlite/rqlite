@@ -76,7 +76,7 @@ func Test_NewServiceSetGetNodeMeta(t *testing.T) {
 	if v := c.GetLocalVersion(); v != "2.0.0" {
 		t.Fatalf("failed to get correct local version, exp %s, got %s", "2.0.0", v)
 	}
-	meta, err := c.GetNodeMeta(s.Addr(), noRetries, 5*time.Second)
+	meta, err := c.GetNodeMeta(context.Background(), s.Addr(), noRetries, 5*time.Second)
 	if err != nil {
 		t.Fatalf("failed to get node API address: %s", err)
 	}
@@ -90,7 +90,7 @@ func Test_NewServiceSetGetNodeMeta(t *testing.T) {
 	s.EnableHTTPS(true)
 
 	// Test fetch via network.
-	meta, err = c.GetNodeMeta(s.Addr(), noRetries, 5*time.Second)
+	meta, err = c.GetNodeMeta(context.Background(), s.Addr(), noRetries, 5*time.Second)
 	if err != nil {
 		t.Fatalf("failed to get node API address: %s", err)
 	}
@@ -139,7 +139,7 @@ func Test_NewServiceSetGetNodeMetaLocal(t *testing.T) {
 	if err := c.SetLocal(s.Addr(), s); err != nil {
 		t.Fatalf("failed to set cluster client local parameters: %s", err)
 	}
-	meta, err := c.GetNodeMeta(s.Addr(), noRetries, 5*time.Second)
+	meta, err := c.GetNodeMeta(context.Background(), s.Addr(), noRetries, 5*time.Second)
 	if err != nil {
 		t.Fatalf("failed to get node API address locally: %s", err)
 	}
@@ -168,7 +168,7 @@ func Test_NewServiceSetGetNodeMetaTLS(t *testing.T) {
 
 	// Test by connecting to itself.
 	c := NewClient(ml, 30*time.Second)
-	meta, err := c.GetNodeMeta(s.Addr(), noRetries, 5*time.Second)
+	meta, err := c.GetNodeMeta(context.Background(), s.Addr(), noRetries, 5*time.Second)
 	if err != nil {
 		t.Fatalf("failed to get node API address: %s", err)
 	}
@@ -178,7 +178,7 @@ func Test_NewServiceSetGetNodeMetaTLS(t *testing.T) {
 	}
 
 	s.EnableHTTPS(true)
-	meta, err = c.GetNodeMeta(s.Addr(), noRetries, 5*time.Second)
+	meta, err = c.GetNodeMeta(context.Background(), s.Addr(), noRetries, 5*time.Second)
 	if err != nil {
 		t.Fatalf("failed to get node API address: %s", err)
 	}
@@ -207,7 +207,7 @@ func Test_NewServiceGetCommitIndex(t *testing.T) {
 	// Test fetch via network.
 	mgr.commitIndex = 1234
 	c := NewClient(ml, 30*time.Second)
-	idx, err := c.GetCommitIndex(s.Addr(), noRetries, 5*time.Second)
+	idx, err := c.GetCommitIndex(context.Background(), s.Addr(), noRetries, 5*time.Second)
 	if err != nil {
 		t.Fatalf("failed to get node API address: %s", err)
 	}
@@ -340,7 +340,7 @@ func Test_NewServiceNotify(t *testing.T) {
 
 	// Test by connecting to itself.
 	c := NewClient(ml, 30*time.Second)
-	err := c.Notify(nr, s.Addr(), nil, 5*time.Second)
+	err := c.Notify(context.Background(), nr, s.Addr(), nil, 5*time.Second)
 	if err != nil {
 		t.Fatalf("failed to notify node: %s", err)
 	}
@@ -350,7 +350,7 @@ func Test_NewServiceNotify(t *testing.T) {
 
 	// Test when auth is enabled
 	credStr.HasPermOK = false
-	err = c.Notify(nr, s.Addr(), nil, 5*time.Second)
+	err = c.Notify(context.Background(), nr, s.Addr(), nil, 5*time.Second)
 	if err == nil {
 		t.Fatal("should have failed to notify node due to lack of auth")
 	}
@@ -402,7 +402,7 @@ func Test_NewServiceJoin(t *testing.T) {
 
 	// Test by connecting to itself.
 	c := NewClient(ml, 30*time.Second)
-	err := c.Join(jr, s.Addr(), nil, 5*time.Second)
+	err := c.Join(context.Background(), jr, s.Addr(), nil, 5*time.Second)
 	if err != nil {
 		t.Fatalf("failed to join node: %s", err)
 	}
@@ -412,7 +412,7 @@ func Test_NewServiceJoin(t *testing.T) {
 
 	// Test when auth is enabled
 	credStr.HasPermOK = false
-	err = c.Join(jr, s.Addr(), nil, 5*time.Second)
+	err = c.Join(context.Background(), jr, s.Addr(), nil, 5*time.Second)
 	if err == nil {
 		t.Fatal("should have failed to join node due to lack of auth")
 	}
@@ -443,7 +443,7 @@ func Test_ServiceHandleHighwaterMarkUpdate(t *testing.T) {
 	c.SetLocal("test-node", nil)
 
 	// Use the client to send a highwater mark update
-	responses, err := c.BroadcastHWM(987654, 0, 5*time.Second, s.Addr())
+	responses, err := c.BroadcastHWM(context.Background(), 987654, 0, 5*time.Second, s.Addr())
 	if err != nil {
 		t.Fatalf("failed to broadcast highwater mark update: %s", err)
 	}
@@ -483,7 +483,7 @@ func Test_ServiceRegisterHWMUpdate(t *testing.T) {
 
 	// Use the client to send a highwater mark update
 	testHWM := uint64(123456)
-	responses, err := c.BroadcastHWM(testHWM, 0, 5*time.Second, s.Addr())
+	responses, err := c.BroadcastHWM(context.Background(), testHWM, 0, 5*time.Second, s.Addr())
 	if err != nil {
 		t.Fatalf("failed to broadcast highwater mark update: %s", err)
 	}
