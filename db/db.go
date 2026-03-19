@@ -18,11 +18,16 @@ import (
 	"sync"
 	"time"
 
+	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/codes"
+	"go.opentelemetry.io/otel/trace"
+
 	"github.com/mattn/go-sqlite3"
 	command "github.com/rqlite/rqlite/v10/command/proto"
 	"github.com/rqlite/rqlite/v10/db/humanize"
 	"github.com/rqlite/rqlite/v10/internal/rsum"
 	"github.com/rqlite/rqlite/v10/internal/rsync"
+	rqotel "github.com/rqlite/rqlite/v10/otel"
 )
 
 const (
@@ -1000,13 +1005,30 @@ func (db *DB) Execute(req *command.Request, xTime bool) ([]*command.ExecuteQuery
 
 // ExecuteWithContext executes queries that modify the database, using the given context.
 func (db *DB) ExecuteWithContext(ctx context.Context, req *command.Request, xTime bool) ([]*command.ExecuteQueryResponse, error) {
+	ctx, span := rqotel.Tracer().Start(ctx, "db.Execute",
+		trace.WithSpanKind(trace.SpanKindInternal),
+		trace.WithAttributes(
+			attribute.String("db.system", "sqlite"),
+			attribute.Int("db.statement.count", len(req.Statements)),
+		),
+	)
+	defer span.End()
+	if len(req.Statements) > 0 && req.Statements[0].Sql != "" {
+		span.SetAttributes(attribute.String("db.statement", req.Statements[0].Sql))
+	}
+
 	stats.Add(numExecutions, int64(len(req.Statements)))
 	conn, err := db.rwDB.Conn(ctx)
 	if err != nil {
+		span.SetStatus(codes.Error, err.Error())
 		return nil, err
 	}
 	defer conn.Close()
-	return db.executeWithConn(ctx, req, xTime, conn)
+	results, err := db.executeWithConn(ctx, req, xTime, conn)
+	if err != nil {
+		span.SetStatus(codes.Error, err.Error())
+	}
+	return results, err
 }
 
 type execerQueryer interface {
@@ -1207,14 +1229,31 @@ func (db *DB) Query(req *command.Request, xTime bool) ([]*command.QueryRows, err
 
 // QueryWithContext executes queries that return rows, but don't modify the database.
 func (db *DB) QueryWithContext(ctx context.Context, req *command.Request, xTime bool) ([]*command.QueryRows, error) {
+	ctx, span := rqotel.Tracer().Start(ctx, "db.Query",
+		trace.WithSpanKind(trace.SpanKindInternal),
+		trace.WithAttributes(
+			attribute.String("db.system", "sqlite"),
+			attribute.Int("db.statement.count", len(req.Statements)),
+		),
+	)
+	defer span.End()
+	if len(req.Statements) > 0 && req.Statements[0].Sql != "" {
+		span.SetAttributes(attribute.String("db.statement", req.Statements[0].Sql))
+	}
+
 	// Assume any desired timeout or deadline has already been applied to ctx by the caller.
 	stats.Add(numQueries, int64(len(req.Statements)))
 	conn, err := db.roDB.Conn(ctx)
 	if err != nil {
+		span.SetStatus(codes.Error, err.Error())
 		return nil, err
 	}
 	defer conn.Close()
-	return db.queryWithConn(ctx, req, xTime, conn)
+	rows, err := db.queryWithConn(ctx, req, xTime, conn)
+	if err != nil {
+		span.SetStatus(codes.Error, err.Error())
+	}
+	return rows, err
 }
 
 type queryer interface {
