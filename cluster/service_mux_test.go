@@ -1,6 +1,7 @@
 package cluster
 
 import (
+	"context"
 	"crypto/tls"
 	"fmt"
 	"net"
@@ -31,7 +32,7 @@ func Test_NewServiceSetGetNodeAPIAddrMuxed(t *testing.T) {
 
 	c := NewClient(mustNewDialer(1, false, false), 30*time.Second)
 
-	meta, err := c.GetNodeMeta(s.Addr(), noRetries, 5*time.Second)
+	meta, err := c.GetNodeMeta(context.Background(), s.Addr(), noRetries, 5*time.Second)
 	if err != nil {
 		t.Fatalf("failed to get node API address: %s", err)
 	}
@@ -66,7 +67,7 @@ func Test_NewServiceSetGetNodeAPIAddrMuxedTLS(t *testing.T) {
 
 	c := NewClient(mustNewDialer(1, true, true), 30*time.Second)
 
-	meta, err := c.GetNodeMeta(s.Addr(), noRetries, 5*time.Second)
+	meta, err := c.GetNodeMeta(context.Background(), s.Addr(), noRetries, 5*time.Second)
 	if err != nil {
 		t.Fatalf("failed to get node API address: %s", err)
 	}

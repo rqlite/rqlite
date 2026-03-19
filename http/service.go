@@ -82,7 +82,7 @@ type Store interface {
 // GetNodeMetaer is the interface that wraps the GetNodeMeta method.
 // GetNodeMeta returns the HTTP API URL for the node at the given Raft address.
 type GetNodeMetaer interface {
-	GetNodeMeta(addr string, retries int, timeout time.Duration) (*clstrPB.NodeMeta, error)
+	GetNodeMeta(ctx context.Context, addr string, retries int, timeout time.Duration) (*clstrPB.NodeMeta, error)
 }
 
 // Cluster is the interface node API services must provide
@@ -1115,7 +1115,7 @@ func (s *Service) handleLeader(w http.ResponseWriter, r *http.Request, qp QueryP
 			nodeID = reqBody.ID
 		}
 
-		addr, err := s.proxy.Stepdown(wait, nodeID, makeCredentials(r), qp.Timeout(defaultTimeout), qp.Redirect())
+		addr, err := s.proxy.Stepdown(r.Context(), wait, nodeID, makeCredentials(r), qp.Timeout(defaultTimeout), qp.Redirect())
 		if err != nil {
 			if errors.Is(err, proxy.ErrNotLeader) {
 				s.DoRedirect(w, r, qp)
@@ -1176,7 +1176,7 @@ func (s *Service) handleReadyz(w http.ResponseWriter, r *http.Request, qp QueryP
 		return
 	}
 
-	_, err = s.cluster.GetNodeMeta(lAddr, qp.Retries(0), qp.Timeout(defaultTimeout))
+	_, err = s.cluster.GetNodeMeta(r.Context(), lAddr, qp.Retries(0), qp.Timeout(defaultTimeout))
 	if err != nil {
 		w.WriteHeader(http.StatusServiceUnavailable)
 		w.Write(fmt.Appendf(nil, "[+]node ok\n[+]leader not contactable: %s", err.Error()))
@@ -1705,7 +1705,7 @@ func (s *Service) LeaderAPIAddr() string {
 		return ""
 	}
 
-	meta, err := s.cluster.GetNodeMeta(ldr.Addr, 0, defaultTimeout)
+	meta, err := s.cluster.GetNodeMeta(context.Background(), ldr.Addr, 0, defaultTimeout)
 	if err != nil {
 		return ""
 	}

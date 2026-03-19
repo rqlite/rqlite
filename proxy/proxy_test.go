@@ -88,7 +88,7 @@ type mockCluster struct {
 	backupFn     func(ctx context.Context, br *proto.BackupRequest, nodeAddr string, creds *clstrPB.Credentials, timeout time.Duration, w io.Writer) error
 	loadFn       func(ctx context.Context, lr *proto.LoadRequest, nodeAddr string, creds *clstrPB.Credentials, timeout time.Duration, retries int) error
 	removeNodeFn func(ctx context.Context, rn *proto.RemoveNodeRequest, nodeAddr string, creds *clstrPB.Credentials, timeout time.Duration) error
-	stepdownFn   func(sr *proto.StepdownRequest, nodeAddr string, creds *clstrPB.Credentials, timeout time.Duration) error
+	stepdownFn   func(ctx context.Context, sr *proto.StepdownRequest, nodeAddr string, creds *clstrPB.Credentials, timeout time.Duration) error
 }
 
 func (m *mockCluster) Execute(ctx context.Context, er *proto.ExecuteRequest, nodeAddr string, creds *clstrPB.Credentials, timeout time.Duration, retries int) ([]*proto.ExecuteQueryResponse, uint64, error) {
@@ -133,9 +133,9 @@ func (m *mockCluster) RemoveNode(ctx context.Context, rn *proto.RemoveNodeReques
 	return nil
 }
 
-func (m *mockCluster) Stepdown(sr *proto.StepdownRequest, nodeAddr string, creds *clstrPB.Credentials, timeout time.Duration) error {
+func (m *mockCluster) Stepdown(ctx context.Context, sr *proto.StepdownRequest, nodeAddr string, creds *clstrPB.Credentials, timeout time.Duration) error {
 	if m.stepdownFn != nil {
-		return m.stepdownFn(sr, nodeAddr, creds, timeout)
+		return m.stepdownFn(ctx, sr, nodeAddr, creds, timeout)
 	}
 	return nil
 }
@@ -734,7 +734,7 @@ func Test_Stepdown_LocalSuccess(t *testing.T) {
 	s := &mockStore{}
 	p := newTestProxy(s, &mockCluster{})
 
-	addr, err := p.Stepdown(true, "node1", nil, time.Second, false)
+	addr, err := p.Stepdown(context.Background(), true, "node1", nil, time.Second, false)
 	if err != nil {
 		t.Fatalf("unexpected error: %s", err)
 	}
@@ -752,7 +752,7 @@ func Test_Stepdown_NotLeader_NoForward(t *testing.T) {
 	}
 	p := newTestProxy(s, &mockCluster{})
 
-	_, err := p.Stepdown(true, "", nil, time.Second, true)
+	_, err := p.Stepdown(context.Background(), true, "", nil, time.Second, true)
 	if !errors.Is(err, ErrNotLeader) {
 		t.Fatalf("expected ErrNotLeader, got %v", err)
 	}
@@ -769,7 +769,7 @@ func Test_Stepdown_NotLeader_Forward(t *testing.T) {
 		},
 	}
 	c := &mockCluster{
-		stepdownFn: func(sr *proto.StepdownRequest, nodeAddr string, creds *clstrPB.Credentials, timeout time.Duration) error {
+		stepdownFn: func(ctx context.Context, sr *proto.StepdownRequest, nodeAddr string, creds *clstrPB.Credentials, timeout time.Duration) error {
 			if nodeAddr != "leader:4002" {
 				t.Fatalf("expected forwarding to leader:4002, got %s", nodeAddr)
 			}
@@ -784,7 +784,7 @@ func Test_Stepdown_NotLeader_Forward(t *testing.T) {
 	}
 	p := newTestProxy(s, c)
 
-	addr, err := p.Stepdown(true, "node1", nil, time.Second, false)
+	addr, err := p.Stepdown(context.Background(), true, "node1", nil, time.Second, false)
 	if err != nil {
 		t.Fatalf("unexpected error: %s", err)
 	}
@@ -804,13 +804,13 @@ func Test_Stepdown_Unauthorized(t *testing.T) {
 		},
 	}
 	c := &mockCluster{
-		stepdownFn: func(sr *proto.StepdownRequest, nodeAddr string, creds *clstrPB.Credentials, timeout time.Duration) error {
+		stepdownFn: func(ctx context.Context, sr *proto.StepdownRequest, nodeAddr string, creds *clstrPB.Credentials, timeout time.Duration) error {
 			return errors.New("unauthorized")
 		},
 	}
 	p := newTestProxy(s, c)
 
-	_, err := p.Stepdown(true, "", nil, time.Second, false)
+	_, err := p.Stepdown(context.Background(), true, "", nil, time.Second, false)
 	if !errors.Is(err, ErrUnauthorized) {
 		t.Fatalf("expected ErrUnauthorized, got %v", err)
 	}

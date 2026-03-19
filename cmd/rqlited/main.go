@@ -252,7 +252,7 @@ func main() {
 		remover := cluster.NewRemover(clstrClient, 5*time.Second, str)
 		remover.SetCredentials(cluster.CredentialsFor(credStr, cfg.JoinAs))
 		log.Printf("initiating removal of this node from cluster before shutdown")
-		if err := remover.Do(cfg.NodeID, true); err != nil {
+		if err := remover.Do(context.Background(), cfg.NodeID, true); err != nil {
 			log.Fatalf("failed to remove this node from cluster before shutdown: %s", err.Error())
 		}
 		log.Printf("removed this node successfully from cluster before shutdown")

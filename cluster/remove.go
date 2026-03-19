@@ -47,13 +47,16 @@ func (r *Remover) SetCredentials(creds *proto.Credentials) {
 }
 
 // Do executes the node-removal operation.
-func (r *Remover) Do(id string, confirm bool) error {
+func (r *Remover) Do(ctx context.Context, id string, confirm bool) error {
 	rn := &command.RemoveNodeRequest{
 		Id: id,
 	}
 
 	nRetries := 0
 	for {
+		if err := ctx.Err(); err != nil {
+			return err
+		}
 		err := func() error {
 			laddr, innerErr := r.control.WaitForLeader(r.timeout)
 			if innerErr != nil {
@@ -61,7 +64,7 @@ func (r *Remover) Do(id string, confirm bool) error {
 			}
 
 			r.log.Printf("removing node %s from cluster via leader at %s", id, laddr)
-			if innerErr = r.client.RemoveNode(context.Background(), rn, laddr, r.creds, r.timeout); innerErr != nil {
+			if innerErr = r.client.RemoveNode(ctx, rn, laddr, r.creds, r.timeout); innerErr != nil {
 				r.log.Printf("failed to remove node %s from cluster via leader at %s: %s", id, laddr, innerErr)
 				return innerErr
 			}

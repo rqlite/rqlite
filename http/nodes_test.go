@@ -2,6 +2,7 @@ package http
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
 	"strings"
@@ -250,7 +251,7 @@ func newMockGetAddresser(apiAddr, version string, err error) *mockGetAddresser {
 }
 
 // GetNodeMeta is the mock implementation of the GetNodeMeta method.
-func (m *mockGetAddresser) GetNodeMeta(addr string, retries int, timeout time.Duration) (*proto.NodeMeta, error) {
+func (m *mockGetAddresser) GetNodeMeta(ctx context.Context, addr string, retries int, timeout time.Duration) (*proto.NodeMeta, error) {
 	md := &proto.NodeMeta{
 		Url:     m.apiAddr,
 		Version: m.version,

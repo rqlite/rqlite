@@ -1,6 +1,7 @@
 package cdc
 
 import (
+	"context"
 	"time"
 
 	"github.com/rqlite/rqlite/v10/cluster"
@@ -58,6 +59,6 @@ func (c *CDCCluster) BroadcastHighWatermark(value uint64) error {
 	const timeout = 5 * time.Second
 
 	// Broadcast to all cluster nodes
-	_, err = c.client.BroadcastHWM(value, retries, timeout, nodeAddrs...)
+	_, err = c.client.BroadcastHWM(context.Background(), value, retries, timeout, nodeAddrs...)
 	return err
 }

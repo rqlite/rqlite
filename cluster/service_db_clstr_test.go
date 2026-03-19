@@ -449,7 +449,7 @@ func Test_ServiceJoinNode(t *testing.T) {
 	req := &command.JoinRequest{
 		Address: expNodeAddr,
 	}
-	err := c.Join(req, s.Addr(), nil, longWait)
+	err := c.Join(context.Background(), req, s.Addr(), nil, longWait)
 	if err != nil {
 		t.Fatalf("failed to join node: %s", err.Error())
 	}
@@ -518,7 +518,7 @@ func Test_ServiceJoinNodeForwarded(t *testing.T) {
 	req := &command.JoinRequest{
 		Address: "some client",
 	}
-	err := c.Join(req, sF.Addr(), nil, longWait)
+	err := c.Join(context.Background(), req, sF.Addr(), nil, longWait)
 	if err != nil {
 		t.Fatalf("failed to join node: %s", err.Error())
 	}

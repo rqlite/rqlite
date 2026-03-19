@@ -339,7 +339,7 @@ func (n *Node) Notify(id, raftAddr string) error {
 		Id:      n.Store.ID(),
 		Address: n.RaftAddr,
 	}
-	return n.Client.Notify(nr, raftAddr, nil, 5*time.Second)
+	return n.Client.Notify(context.Background(), nr, raftAddr, nil, 5*time.Second)
 }
 
 // Nodes returns the Nodes endpoint output for node.
