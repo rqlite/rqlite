@@ -21,6 +21,10 @@ import (
 	"sync/atomic"
 	"time"
 
+	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/codes"
+	"go.opentelemetry.io/otel/trace"
+
 	"github.com/rqlite/rqlite/v10/auth"
 	clstrPB "github.com/rqlite/rqlite/v10/cluster/proto"
 	"github.com/rqlite/rqlite/v10/command/encoding"
@@ -30,6 +34,7 @@ import (
 	"github.com/rqlite/rqlite/v10/http/console"
 	"github.com/rqlite/rqlite/v10/http/licenses"
 	"github.com/rqlite/rqlite/v10/internal/rtls"
+	rqotel "github.com/rqlite/rqlite/v10/otel"
 	"github.com/rqlite/rqlite/v10/proxy"
 	"github.com/rqlite/rqlite/v10/queue"
 	"github.com/rqlite/rqlite/v10/store"
@@ -438,6 +443,16 @@ func (s *Service) AllowOrigin() string {
 
 // ServeHTTP allows Service to serve HTTP requests.
 func (s *Service) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	ctx, span := rqotel.Tracer().Start(r.Context(), "HTTP "+r.Method+" "+r.URL.Path,
+		trace.WithSpanKind(trace.SpanKindServer),
+		trace.WithAttributes(
+			attribute.String("http.method", r.Method),
+			attribute.String("http.target", r.URL.Path),
+		),
+	)
+	defer span.End()
+	r = r.WithContext(ctx)
+
 	s.addBuildVersion(w)
 	s.addAllowHeaders(w)
 	if s.credentialStore != nil {
@@ -446,12 +461,15 @@ func (s *Service) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 	if r.Method == http.MethodOptions {
 		w.WriteHeader(http.StatusOK)
+		span.SetAttributes(attribute.Int("http.status_code", http.StatusOK))
 		return
 	}
 
 	params, err := NewQueryParams(r)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
+		span.SetStatus(codes.Error, err.Error())
+		span.SetAttributes(attribute.Int("http.status_code", http.StatusBadRequest))
 		return
 	}
 
