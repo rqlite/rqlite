@@ -265,7 +265,7 @@ func Test_LeaderAddrsOK(t *testing.T) {
 	}
 	defer s.Close()
 
-	addr, err := s.LeaderAddr()
+	addr, err := s.LeaderAddr(t.Context())
 	if err != nil {
 		t.Fatalf("failed to get leader address")
 	}
@@ -273,7 +273,7 @@ func Test_LeaderAddrsOK(t *testing.T) {
 		t.Fatalf("incorrect leader address, got: %s", addr)
 	}
 
-	addr = s.LeaderAPIAddr()
+	addr = s.LeaderAPIAddr(t.Context())
 	if addr != "http://bar:5678" {
 		t.Fatalf("incorrect leader API address, got: %s", addr)
 	}
@@ -288,7 +288,7 @@ func Test_LeaderAddrsFail(t *testing.T) {
 	}
 	defer s.Close()
 
-	_, err := s.LeaderAddr()
+	_, err := s.LeaderAddr(t.Context())
 	if err != ErrLeaderNotFound {
 		t.Fatalf("failed to get expected ErrLeaderNotFound")
 	}

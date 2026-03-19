@@ -54,6 +54,10 @@ storage engine. It provides an easy-to-use, fault-tolerant store for relational 
 
 Visit https://www.rqlite.io to learn more.`
 
+const (
+	shutdownTimeout = 10 * time.Second
+)
+
 func init() {
 	log.SetFlags(log.LstdFlags)
 	log.SetOutput(os.Stderr)
@@ -252,7 +256,9 @@ func main() {
 		remover := cluster.NewRemover(clstrClient, 5*time.Second, str)
 		remover.SetCredentials(cluster.CredentialsFor(credStr, cfg.JoinAs))
 		log.Printf("initiating removal of this node from cluster before shutdown")
-		if err := remover.Do(context.Background(), cfg.NodeID, true); err != nil {
+		shutdownCtx, cancel := context.WithTimeout(context.Background(), shutdownTimeout)
+		defer cancel()
+		if err := remover.Do(shutdownCtx, cfg.NodeID, true); err != nil {
 			log.Fatalf("failed to remove this node from cluster before shutdown: %s", err.Error())
 		}
 		log.Printf("removed this node successfully from cluster before shutdown")

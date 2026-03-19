@@ -1165,7 +1165,7 @@ func (s *Service) handleReadyz(w http.ResponseWriter, r *http.Request, qp QueryP
 		return
 	}
 
-	lAddr, err := s.LeaderAddr()
+	lAddr, err := s.LeaderAddr(r.Context())
 	if err != nil {
 		if errors.Is(err, ErrLeaderNotFound) {
 			w.WriteHeader(http.StatusServiceUnavailable)
@@ -1261,7 +1261,7 @@ func (s *Service) queuedExecute(w http.ResponseWriter, r *http.Request, qp Query
 	// Perform a leader check, unless disabled. This prevents generating queued writes on
 	// a node that does not appear to be connected to a cluster (even a single-node cluster).
 	if !qp.NoLeader() {
-		_, err := s.LeaderAddr()
+		_, err := s.LeaderAddr(r.Context())
 		if err != nil {
 			if errors.Is(err, ErrLeaderNotFound) {
 				stats.Add(numLeaderNotFound, 1)
@@ -1620,7 +1620,7 @@ func (s *Service) DoRedirect(w http.ResponseWriter, r *http.Request, qp QueryPar
 
 // FormRedirect returns the value for the "Location" header for a 301 response.
 func (s *Service) FormRedirect(r *http.Request) (string, error) {
-	leaderAPIAddr := s.LeaderAPIAddr()
+	leaderAPIAddr := s.LeaderAPIAddr(r.Context())
 	if leaderAPIAddr == "" {
 		stats.Add(numLeaderNotFound, 1)
 		return "", ErrLeaderNotFound
@@ -1687,7 +1687,7 @@ func (s *Service) CheckRequestPermAll(r *http.Request, perms ...string) (b bool)
 }
 
 // LeaderAddr returns the Raft address of the leader, as known by this node.
-func (s *Service) LeaderAddr() (string, error) {
+func (s *Service) LeaderAddr(ctx context.Context) (string, error) {
 	ldr, err := s.store.Leader()
 	if err != nil {
 		return "", err
@@ -1699,13 +1699,13 @@ func (s *Service) LeaderAddr() (string, error) {
 }
 
 // LeaderAPIAddr returns the HTTP API address of the leader, as known by this node.
-func (s *Service) LeaderAPIAddr() string {
+func (s *Service) LeaderAPIAddr(ctx context.Context) string {
 	ldr, err := s.store.Leader()
 	if err != nil {
 		return ""
 	}
 
-	meta, err := s.cluster.GetNodeMeta(context.Background(), ldr.Addr, 0, defaultTimeout)
+	meta, err := s.cluster.GetNodeMeta(ctx, ldr.Addr, 0, defaultTimeout)
 	if err != nil {
 		return ""
 	}
