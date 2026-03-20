@@ -889,6 +889,14 @@ func Test_Store_Reap(t *testing.T) {
 		t.Fatalf("Failed to reap snapshots: %v", err)
 	}
 
+	// We reap one snapshot, but checkpoint two WALs.
+	if exp, got := 1, n; exp != got {
+		t.Fatalf("Expected %d snapshots reaped, got %d", exp, got)
+	}
+	if exp, got := 2, c; exp != got {
+		t.Fatalf("Expected %d checkpoints made, got %d", exp, got)
+	}
+
 	snaps = mustListSnapshots(t, store)
 	if len(snaps) != 1 {
 		t.Fatalf("Expected 1 snapshot in destination store, got %d", len(snaps))
