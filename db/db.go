@@ -1271,6 +1271,11 @@ func (db *DB) queryWithConn(ctx context.Context, req *command.Request, xTime boo
 				Error: err.Error(),
 			}
 		}
+		if shouldQualifyColumns(ctx) && rows != nil && rows.Error == "" {
+			if qErr := db.qualifyRowColumns(conn, stmt.Sql, rows); qErr != nil {
+				db.logger.Printf("qualify columns: %s", qErr.Error())
+			}
+		}
 		allRows = append(allRows, rows)
 	}
 
@@ -1465,6 +1470,11 @@ func (db *DB) RequestWithContext(ctx context.Context, req *command.Request, xTim
 
 		if ro {
 			rows, opErr := db.queryStmtWithConn(ctx, stmt, xTime, eq)
+			if shouldQualifyColumns(ctx) && rows != nil && rows.Error == "" {
+				if qErr := db.qualifyRowColumns(conn, stmt.Sql, rows); qErr != nil {
+					db.logger.Printf("qualify columns: %s", qErr.Error())
+				}
+			}
 			eqResponse = append(eqResponse, createEQQueryResponse(rows, opErr))
 			if abortOnError(opErr) {
 				break
