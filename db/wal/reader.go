@@ -126,9 +126,9 @@ func (r *Reader) ReadHeader() error {
 }
 
 // ReadFrame returns the next page number and commit offset from the WAL. If
-// data is not nil, then the page data is read into the buffer. If data is nil,
-// then the page data is skipped. ReadFrame Returns io.EOF at the end of the valid
-// WAL.
+// data is not nil, then the page data is read into the buffer and the checksum
+// is verified. If data is nil, then the page data is skipped and no checksum
+// verification is performed. Returns io.EOF at the end of the valid WAL.
 func (r *Reader) ReadFrame(data []byte) (pgno, commit uint32, err error) {
 	if data != nil && len(data) != int(r.pageSize) {
 		return 0, 0, fmt.Errorf("WALReader.ReadFrame(): buffer size (%d) must match page size (%d)", len(data), r.pageSize)
