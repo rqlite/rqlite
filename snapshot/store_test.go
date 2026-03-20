@@ -735,7 +735,7 @@ func Test_Store_Reap(t *testing.T) {
 	}
 
 	//////////////////////////////////////////////////////////////////////////////////
-	// Write two more WAL files, and then Reap.
+	// Write two more incremental snapshots, and then Reap.
 	createSnapshotInStore(t, store, "2-1400-1704807720976", 1400, 2, 1, "", "testdata/db-and-wals/wal-01")
 	createSnapshotInStore(t, store, "2-1500-1704807720976", 1500, 2, 1, "", "testdata/db-and-wals/wal-02")
 	snaps, err = store.ListAll()
@@ -879,6 +879,43 @@ func Test_Store_Reap(t *testing.T) {
 	if !filesIdentical(dbPath, "testdata/db-and-wals/backup.db") {
 		t.Fatalf("Database file in snapshot does not match source")
 	}
+
+	// Write an incremental snapshot but this time include two WAL files to test when
+	// the incoming staging directory had multiple WALs.
+	createSnapshotInStore(t, store, "2-6000-1804807720976", 3000, 2, 1, "", "testdata/db-and-wals/wal-00", "testdata/db-and-wals/wal-01")
+
+	n, c, err = store.Reap()
+	if err != nil {
+		t.Fatalf("Failed to reap snapshots: %v", err)
+	}
+
+	snaps = mustListSnapshots(t, store)
+	if len(snaps) != 1 {
+		t.Fatalf("Expected 1 snapshot in destination store, got %d", len(snaps))
+	}
+	_, rc, err = store.Open(snaps[0].ID)
+	if err != nil {
+		t.Fatalf("Failed to open snapshot in destination store: %v", err)
+	}
+
+	buf = &bytes.Buffer{}
+	if _, err := io.Copy(buf, rc); err != nil {
+		t.Fatalf("Failed to read snapshot data from destination store: %v", err)
+	}
+	if err := rc.Close(); err != nil {
+		t.Fatalf("Failed to close snapshot reader in destination store: %v", err)
+	}
+
+	dbPath, walPaths = persistStreamerData(t, buf)
+	if len(walPaths) != 0 {
+		t.Fatalf("Expected 0 WAL files, got %d", len(walPaths))
+	}
+
+	rows = mustQueryDB(t, dbPath, "SELECT COUNT(*) FROM foo")
+	if exp, got := `[{"columns":["COUNT(*)"],"types":["integer"],"values":[[2]]}]`, rows; exp != got {
+		t.Fatalf("unexpected results for query exp: %s got: %s", exp, got)
+	}
+
 }
 
 func Test_Store_ReapCorruptDB(t *testing.T) {
