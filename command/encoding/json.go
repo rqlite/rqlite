@@ -15,12 +15,21 @@ var (
 	ErrTypesColumnsLengthViolation = errors.New("types and columns are different lengths")
 )
 
+// SQLiteError represents a structured SQLite error for JSON API responses.
+type SQLiteError struct {
+	Code         int32  `json:"code"`
+	ExtendedCode int32  `json:"extended_code"`
+	SystemErrno  int32  `json:"system_errno"`
+	Message      string `json:"message"`
+}
+
 // Result represents the outcome of an operation that changes rows.
 type Result struct {
-	LastInsertID int64   `json:"last_insert_id,omitempty"`
-	RowsAffected int64   `json:"rows_affected,omitempty"`
-	Error        string  `json:"error,omitempty"`
-	Time         float64 `json:"time,omitempty"`
+	LastInsertID int64        `json:"last_insert_id,omitempty"`
+	RowsAffected int64        `json:"rows_affected,omitempty"`
+	Error        string       `json:"error,omitempty"`
+	ErrorV2      *SQLiteError `json:"error_v2,omitempty"`
+	Time         float64      `json:"time,omitempty"`
 }
 
 // Rows represents the outcome of an operation that returns query data.
@@ -101,6 +110,7 @@ func NewResultFromExecuteResult(e *proto.ExecuteResult) (*Result, error) {
 		LastInsertID: e.LastInsertId,
 		RowsAffected: e.RowsAffected,
 		Error:        e.Error,
+		ErrorV2:      newSQLiteError(e.ErrorV2),
 		Time:         e.Time,
 	}, nil
 }
@@ -330,5 +340,19 @@ func jsonMarshal(i any, f marshalFunc, assoc, bytesAsArray bool) ([]byte, error)
 		return f(values)
 	default:
 		return f(v)
+	}
+}
+
+// newSQLiteError converts a proto SQLiteError to a JSON SQLiteError.
+// Returns nil if the input is nil.
+func newSQLiteError(e *proto.SQLiteError) *SQLiteError {
+	if e == nil {
+		return nil
+	}
+	return &SQLiteError{
+		Code:         e.Code,
+		ExtendedCode: e.ExtendedCode,
+		SystemErrno:  e.SystemErrno,
+		Message:      e.Message,
 	}
 }

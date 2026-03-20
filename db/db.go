@@ -1039,8 +1039,10 @@ func (db *DB) executeWithConn(ctx context.Context, req *command.Request, xTime b
 	// whether the caller should continue processing or break.
 	handleError := func(result *command.ExecuteQueryResponse, err error) bool {
 		stats.Add(numExecutionErrors, 1)
-		result.Result = &command.ExecuteQueryResponse_Error{
-			Error: err.Error(),
+		if result.Result == nil {
+			result.Result = &command.ExecuteQueryResponse_Error{
+				Error: err.Error(),
+			}
 		}
 		allResults = append(allResults, result)
 		if tx != nil {
@@ -1084,10 +1086,16 @@ func (db *DB) executeWithConn(ctx context.Context, req *command.Request, xTime b
 func (db *DB) executeStmtWithConn(ctx context.Context, stmt *command.Statement, xTime bool, eq execerQueryer, timeout time.Duration) (res *command.ExecuteQueryResponse, retErr error) {
 	defer func() {
 		if retErr != nil {
+			origErr := retErr
 			retErr = rewriteContextTimeout(retErr, ErrExecuteTimeout)
 			if res != nil {
-				res.Result = &command.ExecuteQueryResponse_Error{
-					Error: retErr.Error(),
+				// Only overwrite the result if the error was rewritten (e.g., timeout),
+				// or if no result was set yet. Otherwise, preserve the structured
+				// error (e.g., ExecuteResult with ErrorV2) already set by the handler.
+				if retErr != origErr || res.Result == nil {
+					res.Result = &command.ExecuteQueryResponse_Error{
+						Error: retErr.Error(),
+					}
 				}
 			}
 		}
@@ -1124,8 +1132,11 @@ func (db *DB) executeStmtWithConn(ctx context.Context, stmt *command.Statement, 
 	} else {
 		result, err := eq.ExecContext(ctx, stmt.Sql, parameters...)
 		if err != nil {
-			response.Result = &command.ExecuteQueryResponse_Error{
-				Error: err.Error(),
+			response.Result = &command.ExecuteQueryResponse_E{
+				E: &command.ExecuteResult{
+					Error:   err.Error(),
+					ErrorV2: sqliteErrorV2(err),
+				},
 			}
 			return response, err
 		}
@@ -1456,10 +1467,16 @@ func (db *DB) RequestWithContext(ctx context.Context, req *command.Request, xTim
 		ro, err := db.StmtReadOnlyWithConn(ss, conn)
 		if err != nil {
 			eqResponse = append(eqResponse, &command.ExecuteQueryResponse{
-				Result: &command.ExecuteQueryResponse_Error{
-					Error: err.Error(),
+				Result: &command.ExecuteQueryResponse_E{
+					E: &command.ExecuteResult{
+						Error:   err.Error(),
+						ErrorV2: sqliteErrorV2(err),
+					},
 				},
 			})
+			if abortOnError(err) {
+				break
+			}
 			continue
 		}
 
@@ -2074,4 +2091,19 @@ func rewriteContextTimeout(err, retErr error) error {
 		return retErr
 	}
 	return err
+}
+
+// sqliteErrorV2 extracts a full structured SQLite error from an error,
+// returning nil if the error is not a SQLite error.
+func sqliteErrorV2(err error) *command.SQLiteError {
+	var sqErr sqlite3.Error
+	if errors.As(err, &sqErr) {
+		return &command.SQLiteError{
+			Code:         int32(sqErr.Code),
+			ExtendedCode: int32(sqErr.ExtendedCode),
+			SystemErrno:  int32(sqErr.SystemErrno),
+			Message:      sqErr.Error(),
+		}
+	}
+	return nil
 }
