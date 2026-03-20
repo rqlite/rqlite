@@ -82,6 +82,7 @@ There are no breaking API changes in this release, nor any changes to how cluste
 - [PR #2565](https://github.com/rqlite/rqlite/pull/2565), [PR #2566](https://github.com/rqlite/rqlite/pull/2566): Move to enumerated type when returning "full needed" state.
 - [PR #2567](https://github.com/rqlite/rqlite/pull/2567): Add WAL Section-level Scanner.
 - [PR #2569](https://github.com/rqlite/rqlite/pull/2569), [PR #2570](https://github.com/rqlite/rqlite/pull/2570): Add `context.Context` to the cluster layer.
+- [PR #2573](https://github.com/rqlite/rqlite/pull/2573): More Snapshot-reaping unit testing.
 
 ## v9.4.5 (March 9th 2026)
 ### Implementation changes and bug fixes
