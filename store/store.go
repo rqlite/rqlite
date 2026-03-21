@@ -35,6 +35,11 @@ import (
 	"github.com/rqlite/rqlite/v10/internal/random"
 	"github.com/rqlite/rqlite/v10/internal/rsum"
 	"github.com/rqlite/rqlite/v10/internal/rsync"
+	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/codes"
+	"go.opentelemetry.io/otel/trace"
+
+	rqotel "github.com/rqlite/rqlite/v10/otel"
 	"github.com/rqlite/rqlite/v10/snapshot"
 	rlog "github.com/rqlite/rqlite/v10/store/log"
 	"github.com/rqlite/rqlite/v10/store/throttler"
@@ -1409,15 +1414,25 @@ func (s *Store) Stats() (map[string]any, error) {
 
 // Execute executes queries that return no rows, but do modify the database.
 func (s *Store) Execute(ctx context.Context, ex *proto.ExecuteRequest) ([]*proto.ExecuteQueryResponse, uint64, error) {
+	if !s.open.Is() {
+		return nil, 0, ErrNotOpen
+	}
+
+	ctx, span := rqotel.Tracer().Start(ctx, "store.Execute",
+		trace.WithSpanKind(trace.SpanKindInternal),
+		trace.WithAttributes(
+			attribute.Bool("rqlite.is_leader", s.raft.State() == raft.Leader),
+			attribute.Int("rqlite.num_statements", len(ex.Request.Statements)),
+		),
+	)
+	defer span.End()
+
 	s.throttler.Delay(ctx)
 
 	p := (*PragmaCheckRequest)(ex.Request)
 	if err := p.Check(); err != nil {
+		span.SetStatus(codes.Error, err.Error())
 		return nil, 0, err
-	}
-
-	if !s.open.Is() {
-		return nil, 0, ErrNotOpen
 	}
 
 	// Check if context is already canceled
@@ -1431,10 +1446,16 @@ func (s *Store) Execute(ctx context.Context, ex *proto.ExecuteRequest) ([]*proto
 	if !s.Ready() {
 		return nil, 0, ErrNotReady
 	}
-	return s.execute(ex)
+	results, idx, err := s.execute(ctx, ex)
+	if err != nil {
+		span.SetStatus(codes.Error, err.Error())
+	} else {
+		span.SetAttributes(attribute.Int64("rqlite.raft.applied_index", int64(idx)))
+	}
+	return results, idx, err
 }
 
-func (s *Store) execute(ex *proto.ExecuteRequest) ([]*proto.ExecuteQueryResponse, uint64, error) {
+func (s *Store) execute(ctx context.Context, ex *proto.ExecuteRequest) ([]*proto.ExecuteQueryResponse, uint64, error) {
 	b, compressed, err := s.tryCompress(ex)
 	if err != nil {
 		return nil, 0, err
@@ -1451,13 +1472,20 @@ func (s *Store) execute(ex *proto.ExecuteRequest) ([]*proto.ExecuteQueryResponse
 		return nil, 0, err
 	}
 
+	_, raftSpan := rqotel.Tracer().Start(ctx, "store.raft.Apply",
+		trace.WithSpanKind(trace.SpanKindInternal),
+	)
 	af := s.raft.Apply(b, s.ApplyTimeout)
 	if af.Error() != nil {
+		raftSpan.SetStatus(codes.Error, af.Error().Error())
+		raftSpan.End()
 		if af.Error() == raft.ErrNotLeader {
 			return nil, 0, ErrNotLeader
 		}
 		return nil, 0, af.Error()
 	}
+	raftSpan.SetAttributes(attribute.Int64("rqlite.raft.applied_index", int64(af.Index())))
+	raftSpan.End()
 	r := af.Response().(*fsmExecuteQueryResponse)
 	return r.results, af.Index(), r.error
 }
@@ -1467,16 +1495,31 @@ func (s *Store) execute(ex *proto.ExecuteRequest) ([]*proto.ExecuteQueryResponse
 // upgraded to STRONG if the Store determines that is necessary to guarantee
 // a linearizable read.
 func (s *Store) Query(ctx context.Context, qr *proto.QueryRequest) (rows []*proto.QueryRows, level proto.ConsistencyLevel, raftIndex uint64, retErr error) {
+	if !s.open.Is() {
+		return nil, 0, 0, ErrNotOpen
+	}
+
+	ctx, span := rqotel.Tracer().Start(ctx, "store.Query",
+		trace.WithSpanKind(trace.SpanKindInternal),
+		trace.WithAttributes(
+			attribute.Bool("rqlite.is_leader", s.raft.State() == raft.Leader),
+			attribute.String("rqlite.consistency_level", qr.Level.String()),
+			attribute.Int("rqlite.num_statements", len(qr.Request.Statements)),
+		),
+	)
+	defer func() {
+		if retErr != nil {
+			span.SetStatus(codes.Error, retErr.Error())
+		}
+		span.End()
+	}()
+
 	s.readerMu.RLock()
 	defer s.readerMu.RUnlock()
 
 	p := (*PragmaCheckRequest)(qr.Request)
 	if err := p.Check(); err != nil {
 		return nil, 0, 0, err
-	}
-
-	if !s.open.Is() {
-		return nil, 0, 0, ErrNotOpen
 	}
 
 	// Check if context is already canceled
@@ -1592,17 +1635,32 @@ func (s *Store) VerifyLeader() (retErr error) {
 }
 
 // Request processes a request that may contain both Executes and Queries.
-func (s *Store) Request(ctx context.Context, eqr *proto.ExecuteQueryRequest) ([]*proto.ExecuteQueryResponse, uint64, uint64, error) {
+func (s *Store) Request(ctx context.Context, eqr *proto.ExecuteQueryRequest) (resp []*proto.ExecuteQueryResponse, numRW uint64, raftIdx uint64, retErr error) {
+	if !s.open.Is() {
+		return nil, 0, 0, ErrNotOpen
+	}
+
+	ctx, span := rqotel.Tracer().Start(ctx, "store.Request",
+		trace.WithSpanKind(trace.SpanKindInternal),
+		trace.WithAttributes(
+			attribute.Bool("rqlite.is_leader", s.raft.State() == raft.Leader),
+			attribute.String("rqlite.consistency_level", eqr.Level.String()),
+			attribute.Int("rqlite.num_statements", len(eqr.Request.Statements)),
+		),
+	)
+	defer func() {
+		if retErr != nil {
+			span.SetStatus(codes.Error, retErr.Error())
+		}
+		span.End()
+	}()
+
 	s.readerMu.RLock()
 	defer s.readerMu.RUnlock()
 
 	p := (*PragmaCheckRequest)(eqr.Request)
 	if err := p.Check(); err != nil {
 		return nil, 0, 0, err
-	}
-
-	if !s.open.Is() {
-		return nil, 0, 0, ErrNotOpen
 	}
 
 	// Check if context is already canceled

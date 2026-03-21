@@ -128,6 +128,16 @@ type Config struct {
 	CPUProfile string
 	// Path to file for memory profiling information
 	MemProfile string
+	// Enable OpenTelemetry tracing
+	OTelTracesEnabled bool
+	// OpenTelemetry OTLP gRPC endpoint (e.g. localhost:4317)
+	OTelEndpoint string
+	// Disable TLS for OTLP gRPC connection
+	OTelInsecure bool
+	// OpenTelemetry trace sample rate (0.0-1.0). 0 means sample everything
+	OTelSampleRate float64
+	// Write traces to stderr in addition to OTLP
+	OTelStdout bool
 	// Path to file for trace profiling information
 	TraceProfile string
 }
@@ -197,6 +207,10 @@ func Forge(arguments []string) (*flag.FlagSet, *Config, error) {
 	fs.BoolVar(&config.WriteQueueTx, "write-queue-tx", false, "Use a transaction when processing a queued write")
 	fs.StringVar(&config.CPUProfile, "cpu-profile", "", "Path to file for CPU profiling information")
 	fs.StringVar(&config.MemProfile, "mem-profile", "", "Path to file for memory profiling information")
+	fs.BoolVar(&config.OTelTracesEnabled, "otel-traces", false, "Enable OpenTelemetry tracing")
+	fs.StringVar(&config.OTelEndpoint, "otel-endpoint", "", "OpenTelemetry OTLP gRPC endpoint (e.g. localhost:4317)")
+	fs.BoolVar(&config.OTelInsecure, "otel-insecure", false, "Disable TLS for OTLP gRPC connection")
+	fs.BoolVar(&config.OTelStdout, "otel-stdout", false, "Write traces to stderr in addition to OTLP")
 	fs.StringVar(&config.TraceProfile, "trace-profile", "", "Path to file for trace profiling information")
 	fs.Usage = func() {
 		usage("\nrqlite is a lightweight, distributed relational database, which uses SQLite as its\nstorage engine. It provides an easy-to-use, fault-tolerant store for relational data.\n\nVisit https://www.rqlite.io to learn more.\n\nUsage: rqlited [flags] <data directory>\n")
