@@ -209,6 +209,27 @@ func Test_CompactingFrameScanner_Empty(t *testing.T) {
 	}
 }
 
+func Test_CompactingFrameScanner_OpenTransaction(t *testing.T) {
+	b, err := os.ReadFile("testdata/wal-reader/ok/wal")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// The test WAL has 3 frames with page size 4096:
+	//   Frame 0: pgno=1, commit=0
+	//   Frame 1: pgno=2, commit=2
+	//   Frame 2: pgno=2, commit=2
+	// Truncate to just the header + frame 0 (commit=0) to simulate
+	// a WAL that ends with an open transaction.
+	const frameSize = WALFrameHeaderSize + 4096
+	truncated := b[:WALHeaderSize+frameSize]
+
+	_, err = NewCompactingFrameScanner(bytes.NewReader(truncated), 0, false)
+	if err != ErrOpenTransaction {
+		t.Fatalf("expected ErrOpenTransaction, got %v", err)
+	}
+}
+
 func Test_CompactingFrameScanner_Bytes_PartialSection(t *testing.T) {
 	b, err := os.ReadFile("testdata/wal-reader/ok/wal")
 	if err != nil {
