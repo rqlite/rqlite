@@ -126,7 +126,7 @@ func Test_Writer_CompactingScanner(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		s, err := NewCompactingSectionScanner(srcF, WALHeaderSize, fi.Size(), true)
+		s, err := NewCompactingFrameScanner(srcF, WALHeaderSize, fi.Size(), true)
 		if err != nil {
 			t.Fatal(err)
 		}

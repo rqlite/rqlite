@@ -14,12 +14,12 @@ var (
 	ErrOpenTransaction = errors.New("open transaction at end of WAL file")
 )
 
-// CompactingSectionScanner implements WALIterator to iterate over compacted WAL
+// CompactingFrameScanner implements WALIterator to iterate over compacted WAL
 // frames within a byte range [start, end). It scans all frames in the range, keeps
 // only the latest version of each page (respecting transaction boundaries), and
 // returns them in file offset order. If fullScan is false, frame checksums are
 // not verified since the WAL file is trusted.
-type CompactingSectionScanner struct {
+type CompactingFrameScanner struct {
 	readSeeker io.ReadSeeker
 	walReader  *Reader
 	header     *WALHeader
@@ -31,7 +31,7 @@ type CompactingSectionScanner struct {
 	fIdx   int
 }
 
-// NewCompactingSectionScanner creates a new CompactingSectionScanner that reads
+// NewCompactingFrameScanner creates a new CompactingFrameScanner that reads
 // and compacts frames from the byte range [start, end) of the WAL accessible via
 // r. The start and end offsets must be aligned to frame boundaries. The WAL header
 // is always read from offset 0.
@@ -45,7 +45,7 @@ type CompactingSectionScanner struct {
 //
 // Scanning stops at the first invalid frame (e.g. salt mismatch, checksum failure if
 // applicable, or partial read), even if the end offset has not been reached.
-func NewCompactingSectionScanner(r io.ReadSeeker, start, end int64, fullScan bool) (*CompactingSectionScanner, error) {
+func NewCompactingFrameScanner(r io.ReadSeeker, start, end int64, fullScan bool) (*CompactingFrameScanner, error) {
 	walReader := NewReader(r)
 	if err := walReader.ReadHeader(); err != nil {
 		return nil, err
@@ -69,7 +69,7 @@ func NewCompactingSectionScanner(r io.ReadSeeker, start, end int64, fullScan boo
 		}
 	}
 
-	s := &CompactingSectionScanner{
+	s := &CompactingFrameScanner{
 		readSeeker: r,
 		walReader:  walReader,
 		header: &WALHeader{
@@ -94,13 +94,13 @@ func NewCompactingSectionScanner(r io.ReadSeeker, start, end int64, fullScan boo
 }
 
 // Header returns the WAL header.
-func (s *CompactingSectionScanner) Header() (*WALHeader, error) {
+func (s *CompactingFrameScanner) Header() (*WALHeader, error) {
 	return s.header, nil
 }
 
 // Next returns the next compacted frame. Returns io.EOF when all frames
 // have been read.
-func (s *CompactingSectionScanner) Next() (*Frame, error) {
+func (s *CompactingFrameScanner) Next() (*Frame, error) {
 	if s.fIdx >= len(s.frames) {
 		return nil, io.EOF
 	}
@@ -123,7 +123,7 @@ func (s *CompactingSectionScanner) Next() (*Frame, error) {
 }
 
 // Empty reports whether the scanner has zero frames to deliver.
-func (s *CompactingSectionScanner) Empty() bool {
+func (s *CompactingFrameScanner) Empty() bool {
 	return len(s.frames) == 0
 }
 
@@ -131,7 +131,7 @@ func (s *CompactingSectionScanner) Empty() bool {
 // The byte slice is suitable for writing to a new WAL file. For large WAL files, this
 // may consume a lot of memory, so it should be used with care. It's mostly intended for
 // use in testing, where the WAL files are small.
-func (s *CompactingSectionScanner) Bytes() ([]byte, error) {
+func (s *CompactingFrameScanner) Bytes() ([]byte, error) {
 	pageSz := int(s.header.PageSize)
 	buf := make([]byte, WALHeaderSize+(len(s.frames)*WALFrameHeaderSize)+len(s.frames)*pageSz)
 	s.header.Copy(buf)
@@ -180,7 +180,7 @@ func (s *CompactingSectionScanner) Bytes() ([]byte, error) {
 // scan reads all frame headers in [start, end) and builds a compacted frame
 // list, keeping only the latest version of each page. Only committed transactions
 // are included.
-func (s *CompactingSectionScanner) scan() error {
+func (s *CompactingFrameScanner) scan() error {
 	if s.start >= s.end {
 		return nil
 	}
