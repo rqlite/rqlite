@@ -70,7 +70,7 @@ func (cm *CheckpointManager) Checkpoint(w io.Writer, timeout time.Duration) (int
 		if err != nil {
 			return 0, err
 		}
-		cm.nextFrameIdx = 1
+cm.nextFrameIdx = 0
 		cm.salt = nil
 		return 0, nil
 	}
