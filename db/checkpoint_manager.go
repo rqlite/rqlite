@@ -25,10 +25,10 @@ var (
 
 // CheckpointManager manages checkpointing database across checkpoints.
 //
-// A key goal of the CheckpointManager is to ensure that an checkpoint attempt
+// A key goal of the CheckpointManager is to ensure that a checkpoint attempt
 // is not excessively blocked by a concurrent read. If a read is blocking a
 // checkpoint the manager manages its state so that a failed checkpoint is
-// handled gracefully during by the next checkpoint attempt.
+// handled gracefully by the next checkpoint attempt.
 type CheckpointManager struct {
 	db      *DB
 	dbPath  string
