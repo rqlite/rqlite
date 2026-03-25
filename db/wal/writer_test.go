@@ -3,7 +3,6 @@ package wal
 import (
 	"bytes"
 	"database/sql"
-	"encoding/binary"
 	"fmt"
 	"io"
 	"os"
@@ -123,11 +122,7 @@ func Test_Writer_CompactingScanner(t *testing.T) {
 			t.Fatal(err)
 		}
 		defer destF.Close()
-		fi, err := srcF.Stat()
-		if err != nil {
-			t.Fatal(err)
-		}
-		s, err := NewCompactingFrameScanner(srcF, 0, walFrameCountFromFile(srcF, fi.Size()), true)
+		s, err := NewCompactingFrameScanner(srcF, 0, true)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -248,33 +243,6 @@ func mustCreateWAL(t *testing.T, size int) (*sql.DB, string) {
 		}
 	}
 	return rwDB, dir + "/test.db-wal"
-}
-
-// walFrameCount returns the number of frames in a WAL byte slice by reading
-// the page size from the header.
-func walFrameCount(b []byte) int64 {
-	pageSize := int64(binary.BigEndian.Uint32(b[8:12]))
-	frameSize := int64(WALFrameHeaderSize) + pageSize
-	return (int64(len(b)) - WALHeaderSize) / frameSize
-}
-
-// walFrameCountFromFile returns the number of frames in a WAL file given an
-// io.ReadSeeker positioned anywhere and the total file size. The seek position
-// is restored after reading the header.
-func walFrameCountFromFile(r io.ReadSeeker, fileSize int64) int64 {
-	if _, err := r.Seek(0, io.SeekStart); err != nil {
-		panic(err)
-	}
-	hdr := make([]byte, WALHeaderSize)
-	if _, err := io.ReadFull(r, hdr); err != nil {
-		panic(err)
-	}
-	if _, err := r.Seek(0, io.SeekStart); err != nil {
-		panic(err)
-	}
-	pageSize := int64(binary.BigEndian.Uint32(hdr[8:12]))
-	frameSize := int64(WALFrameHeaderSize) + pageSize
-	return (fileSize - WALHeaderSize) / frameSize
 }
 
 func mustCopyFile(dst, src string) {

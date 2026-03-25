@@ -23,7 +23,7 @@ func Test_CompactingFrameScanner_AllFrames(t *testing.T) {
 	//   Frame 1: pgno=2, commit=2
 	//   Frame 2: pgno=2, commit=2
 	// After compaction: pgno=1 (from frame 0), pgno=2 (from frame 2).
-	s, err := NewCompactingFrameScanner(bytes.NewReader(b), 0, 3, false)
+	s, err := NewCompactingFrameScanner(bytes.NewReader(b), 0, false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -92,7 +92,7 @@ func Test_CompactingFrameScanner_PartialRange(t *testing.T) {
 	//
 	// Frames 1-2 both have pgno=2. After compaction: 1 frame (pgno=2
 	// from frame 2, the latest).
-	s, err := NewCompactingFrameScanner(bytes.NewReader(b), 1, 3, false)
+	s, err := NewCompactingFrameScanner(bytes.NewReader(b), 1, false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -148,7 +148,7 @@ func Test_CompactingFrameScanner_NotAWAL(t *testing.T) {
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			_, err := NewCompactingFrameScanner(bytes.NewReader(tc.data), 0, 0, false)
+			_, err := NewCompactingFrameScanner(bytes.NewReader(tc.data), 0, false)
 			if err == nil {
 				t.Fatal("expected error for invalid WAL data")
 			}
@@ -156,28 +156,15 @@ func Test_CompactingFrameScanner_NotAWAL(t *testing.T) {
 	}
 }
 
-func Test_CompactingFrameScanner_BadFrameIndices(t *testing.T) {
+func Test_CompactingFrameScanner_NegativeStartFrame(t *testing.T) {
 	b, err := os.ReadFile("testdata/wal-reader/ok/wal")
 	if err != nil {
 		t.Fatal(err)
 	}
-	r := bytes.NewReader(b)
 
-	tests := []struct {
-		name       string
-		startFrame int64
-		endFrame   int64
-	}{
-		{"start after end", 2, 1},
-		{"negative start", -1, 3},
-	}
-	for _, tc := range tests {
-		t.Run(tc.name, func(t *testing.T) {
-			_, err := NewCompactingFrameScanner(r, tc.startFrame, tc.endFrame, false)
-			if err == nil {
-				t.Fatal("expected error for bad frame indices")
-			}
-		})
+	_, err = NewCompactingFrameScanner(bytes.NewReader(b), -1, false)
+	if err == nil {
+		t.Fatal("expected error for negative startFrame")
 	}
 }
 
@@ -188,13 +175,13 @@ func Test_CompactingFrameScanner_FullScanRequiresFrameZero(t *testing.T) {
 	}
 
 	// fullScan=true with startFrame != 0 must fail.
-	_, err = NewCompactingFrameScanner(bytes.NewReader(b), 1, 3, true)
+	_, err = NewCompactingFrameScanner(bytes.NewReader(b), 1, true)
 	if err == nil {
 		t.Fatal("expected error for fullScan with non-zero startFrame")
 	}
 
 	// fullScan=true with startFrame == 0 must succeed.
-	_, err = NewCompactingFrameScanner(bytes.NewReader(b), 0, 3, true)
+	_, err = NewCompactingFrameScanner(bytes.NewReader(b), 0, true)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -206,7 +193,8 @@ func Test_CompactingFrameScanner_Empty(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	s, err := NewCompactingFrameScanner(bytes.NewReader(b), 0, 0, false)
+	// Start past all frames in the WAL (which has 3 frames).
+	s, err := NewCompactingFrameScanner(bytes.NewReader(b), 100, false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -221,23 +209,6 @@ func Test_CompactingFrameScanner_Empty(t *testing.T) {
 	}
 }
 
-func Test_CompactingFrameScanner_OpenTransaction(t *testing.T) {
-	b, err := os.ReadFile("testdata/wal-reader/ok/wal")
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	// The test WAL has 3 frames with page size 4096:
-	//   Frame 0: pgno=1, commit=0
-	//   Frame 1: pgno=2, commit=2
-	//   Frame 2: pgno=2, commit=2
-	// A range containing only frame 0 (commit=0) is an open transaction.
-	_, err = NewCompactingFrameScanner(bytes.NewReader(b), 0, 1, false)
-	if err != ErrOpenTransaction {
-		t.Fatalf("expected ErrOpenTransaction, got %v", err)
-	}
-}
-
 func Test_CompactingFrameScanner_Bytes_PartialSection(t *testing.T) {
 	b, err := os.ReadFile("testdata/wal-reader/ok/wal")
 	if err != nil {
@@ -245,7 +216,7 @@ func Test_CompactingFrameScanner_Bytes_PartialSection(t *testing.T) {
 	}
 
 	// Scan frames 1-2 only (both pgno=2, compacts to 1 frame).
-	s, err := NewCompactingFrameScanner(bytes.NewReader(b), 1, 3, false)
+	s, err := NewCompactingFrameScanner(bytes.NewReader(b), 1, false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -296,7 +267,7 @@ func Test_CompactingFrameScanner_WriterRoundTrip(t *testing.T) {
 	}
 
 	// Write frames 1-2 through CompactingFrameScanner -> Writer -> buffer.
-	s, err := NewCompactingFrameScanner(bytes.NewReader(b), 1, 3, false)
+	s, err := NewCompactingFrameScanner(bytes.NewReader(b), 1, false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -372,8 +343,7 @@ func Test_CompactingFrameScanner_WriterRoundTrip_SQLite(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	nFrames := walFrameCount(walBytes)
-	s, err := NewCompactingFrameScanner(bytes.NewReader(walBytes), 0, nFrames, false)
+	s, err := NewCompactingFrameScanner(bytes.NewReader(walBytes), 0, false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -418,7 +388,7 @@ func Test_CompactingFrameScanner_Scan_FullScan(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	s, err := NewCompactingFrameScanner(bytes.NewReader(b), 0, 3, true)
+	s, err := NewCompactingFrameScanner(bytes.NewReader(b), 0, true)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -463,7 +433,7 @@ func Test_CompactingFrameScanner_Scan_Commit0(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	s, err := NewCompactingFrameScanner(bytes.NewReader(b), 0, walFrameCount(b), false)
+	s, err := NewCompactingFrameScanner(bytes.NewReader(b), 0, false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -508,7 +478,7 @@ func Test_CompactingFrameScanner_Bytes(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	s, err := NewCompactingFrameScanner(bytes.NewReader(b), 0, walFrameCount(b), false)
+	s, err := NewCompactingFrameScanner(bytes.NewReader(b), 0, false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -552,11 +522,7 @@ func Test_CompactingFrameScanner_Bytes_FullCycle(t *testing.T) {
 	}
 	defer walFD.Close()
 
-	fi, err := walFD.Stat()
-	if err != nil {
-		t.Fatal(err)
-	}
-	s, err := NewCompactingFrameScanner(walFD, 0, walFrameCountFromFile(walFD, fi.Size()), false)
+	s, err := NewCompactingFrameScanner(walFD, 0, false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -627,11 +593,7 @@ func Test_CompactingFrameScanner_Writer_FullCycle(t *testing.T) {
 	}
 	defer walFD.Close()
 
-	fi, err := walFD.Stat()
-	if err != nil {
-		t.Fatal(err)
-	}
-	s, err := NewCompactingFrameScanner(walFD, 0, walFrameCountFromFile(walFD, fi.Size()), false)
+	s, err := NewCompactingFrameScanner(walFD, 0, false)
 	if err != nil {
 		t.Fatal(err)
 	}

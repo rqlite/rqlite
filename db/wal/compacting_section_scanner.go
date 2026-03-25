@@ -15,26 +15,27 @@ var (
 )
 
 // CompactingFrameScanner implements WALIterator to iterate over compacted WAL
-// frames within a frame range [startFrame, endFrame). It scans all frames in the
-// range, keeps only the latest version of each page (respecting transaction
-// boundaries), and returns them in file offset order. If fullScan is false, frame
-// checksums are not verified since the WAL file is trusted.
+// frames starting from a given frame index. It scans all valid frames from the
+// start position to the end of the WAL (or the first invalid frame), keeps only
+// the latest version of each page (respecting transaction boundaries), and
+// returns them in file offset order. If fullScan is false, frame checksums are
+// not verified since the WAL file is trusted.
 type CompactingFrameScanner struct {
 	readSeeker io.ReadSeeker
 	walReader  *Reader
 	header     *WALHeader
 	fullScan   bool
 	start      int64
-	end        int64
 
 	frames cFrames
 	fIdx   int
 }
 
 // NewCompactingFrameScanner creates a new CompactingFrameScanner that reads
-// and compacts frames in the 0-based frame range [startFrame, endFrame) of the
-// WAL accessible via r. The WAL header is always read from offset 0 and is used
-// to determine the page size (and therefore the frame size) for offset calculation.
+// and compacts frames starting at the 0-based startFrame index, scanning to
+// the end of the WAL or the first invalid frame. The WAL header is always read
+// from offset 0 and is used to determine the page size (and therefore the frame
+// size) for offset calculation.
 //
 // If fullScan is true, the scanner will perform a checksum validation on each frame.
 // fullScan requires startFrame to be 0 so that running checksums can be validated
@@ -47,8 +48,8 @@ type CompactingFrameScanner struct {
 // faster for large WAL files, since it avoids reading the page data for each frame.
 //
 // Scanning stops at the first invalid frame (e.g. salt mismatch, checksum failure if
-// applicable, or partial read), even if endFrame has not been reached.
-func NewCompactingFrameScanner(r io.ReadSeeker, startFrame, endFrame int64, fullScan bool) (*CompactingFrameScanner, error) {
+// applicable, or partial read).
+func NewCompactingFrameScanner(r io.ReadSeeker, startFrame int64, fullScan bool) (*CompactingFrameScanner, error) {
 	walReader := NewReader(r)
 	if err := walReader.ReadHeader(); err != nil {
 		return nil, err
@@ -63,12 +64,6 @@ func NewCompactingFrameScanner(r io.ReadSeeker, startFrame, endFrame int64, full
 	if startFrame < 0 {
 		return nil, fmt.Errorf("startFrame (%d) must not be negative", startFrame)
 	}
-	if startFrame > endFrame {
-		return nil, fmt.Errorf("startFrame (%d) is past endFrame (%d)", startFrame, endFrame)
-	}
-
-	start := WALHeaderSize + startFrame*frameSize
-	end := WALHeaderSize + endFrame*frameSize
 
 	s := &CompactingFrameScanner{
 		readSeeker: r,
@@ -84,8 +79,7 @@ func NewCompactingFrameScanner(r io.ReadSeeker, startFrame, endFrame int64, full
 			Checksum2: walReader.chksum2,
 		},
 		fullScan: fullScan,
-		start:    start,
-		end:      end,
+		start:    WALHeaderSize + startFrame*frameSize,
 	}
 
 	if err := s.scan(); err != nil {
@@ -178,15 +172,11 @@ func (s *CompactingFrameScanner) Bytes() ([]byte, error) {
 	return buf, nil
 }
 
-// scan reads all frame headers in [start, end) and builds a compacted frame
-// list, keeping only the latest version of each page. Only committed transactions
-// are included.
+// scan reads all valid frame headers from start to the end of the WAL and
+// builds a compacted frame list, keeping only the latest version of each page.
+// Only committed transactions are included.
 func (s *CompactingFrameScanner) scan() error {
-	if s.start >= s.end {
-		return nil
-	}
-
-	// Seek to the start of the section.
+	// Seek to the start position.
 	if _, err := s.readSeeker.Seek(s.start, io.SeekStart); err != nil {
 		return fmt.Errorf("seek to start offset %d: %w", s.start, err)
 	}
@@ -209,9 +199,6 @@ func (s *CompactingFrameScanner) scan() error {
 		}
 
 		offset := s.start + s.walReader.Offset() - WALHeaderSize
-		if offset >= s.end {
-			break
-		}
 
 		txFrames[pgno] = &cFrame{
 			Pgno:   pgno,
