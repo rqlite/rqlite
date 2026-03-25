@@ -34,7 +34,8 @@ type CompactingSectionScanner struct {
 // NewCompactingSectionScanner creates a new CompactingSectionScanner that reads
 // and compacts frames from the byte range [start, end) of the WAL accessible via
 // r. The start and end offsets must be aligned to frame boundaries. The WAL header
-// is always read from offset 0.
+// is always read from offset 0 of r, regardless of the value of start, and is used
+// to determine the page size.
 //
 // If fullScan is true, the scanner will perform a checksum validation on each frame.
 // If fullScan is false, the scanner will only scan the file sufficiently to find the
