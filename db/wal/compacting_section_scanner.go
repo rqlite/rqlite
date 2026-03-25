@@ -15,10 +15,10 @@ var (
 )
 
 // CompactingFrameScanner implements WALIterator to iterate over compacted WAL
-// frames within a byte range [start, end). It scans all frames in the range, keeps
-// only the latest version of each page (respecting transaction boundaries), and
-// returns them in file offset order. If fullScan is false, frame checksums are
-// not verified since the WAL file is trusted.
+// frames within a frame range [startFrame, endFrame). It scans all frames in the
+// range, keeps only the latest version of each page (respecting transaction
+// boundaries), and returns them in file offset order. If fullScan is false, frame
+// checksums are not verified since the WAL file is trusted.
 type CompactingFrameScanner struct {
 	readSeeker io.ReadSeeker
 	walReader  *Reader
@@ -32,11 +32,14 @@ type CompactingFrameScanner struct {
 }
 
 // NewCompactingFrameScanner creates a new CompactingFrameScanner that reads
-// and compacts frames from the byte range [start, end) of the WAL accessible via
-// r. The start and end offsets must be aligned to frame boundaries. The WAL header
-// is always read from offset 0.
+// and compacts frames in the 0-based frame range [startFrame, endFrame) of the
+// WAL accessible via r. The WAL header is always read from offset 0 and is used
+// to determine the page size (and therefore the frame size) for offset calculation.
 //
 // If fullScan is true, the scanner will perform a checksum validation on each frame.
+// fullScan requires startFrame to be 0 so that running checksums can be validated
+// from the beginning of the WAL.
+//
 // If fullScan is false, the scanner will only scan the file sufficiently to find the
 // last valid frame for each page via a simple salt1 and salt2 match, without performing
 // a full checksum validation. This is suitable when the WAL file is trusted (e.g. it's
@@ -44,8 +47,8 @@ type CompactingFrameScanner struct {
 // faster for large WAL files, since it avoids reading the page data for each frame.
 //
 // Scanning stops at the first invalid frame (e.g. salt mismatch, checksum failure if
-// applicable, or partial read), even if the end offset has not been reached.
-func NewCompactingFrameScanner(r io.ReadSeeker, start, end int64, fullScan bool) (*CompactingFrameScanner, error) {
+// applicable, or partial read), even if endFrame has not been reached.
+func NewCompactingFrameScanner(r io.ReadSeeker, startFrame, endFrame int64, fullScan bool) (*CompactingFrameScanner, error) {
 	walReader := NewReader(r)
 	if err := walReader.ReadHeader(); err != nil {
 		return nil, err
@@ -54,20 +57,18 @@ func NewCompactingFrameScanner(r io.ReadSeeker, start, end int64, fullScan bool)
 	pageSize := walReader.pageSize
 	frameSize := int64(WALFrameHeaderSize) + int64(pageSize)
 
-	if fullScan && start != WALHeaderSize {
-		return nil, fmt.Errorf("fullScan requires start offset to be %d, got %d", WALHeaderSize, start)
+	if fullScan && startFrame != 0 {
+		return nil, fmt.Errorf("fullScan requires startFrame to be 0, got %d", startFrame)
 	}
-	if start > end {
-		return nil, fmt.Errorf("start offset (%d) is past end offset (%d)", start, end)
+	if startFrame < 0 {
+		return nil, fmt.Errorf("startFrame (%d) must not be negative", startFrame)
 	}
-	if start != end {
-		if (start-WALHeaderSize)%frameSize != 0 {
-			return nil, fmt.Errorf("start offset %d is not frame-aligned", start)
-		}
-		if (end-WALHeaderSize)%frameSize != 0 {
-			return nil, fmt.Errorf("end offset %d is not frame-aligned", end)
-		}
+	if startFrame > endFrame {
+		return nil, fmt.Errorf("startFrame (%d) is past endFrame (%d)", startFrame, endFrame)
 	}
+
+	start := WALHeaderSize + startFrame*frameSize
+	end := WALHeaderSize + endFrame*frameSize
 
 	s := &CompactingFrameScanner{
 		readSeeker: r,
