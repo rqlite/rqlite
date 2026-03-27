@@ -135,7 +135,7 @@ const (
 	leaderWaitDelay        = 100 * time.Millisecond
 	appliedWaitDelay       = 100 * time.Millisecond
 	commitEquivalenceDelay = 50 * time.Millisecond
-	truncateTimeout        = 5 * time.Minute
+	truncateTimeout        = 250 * time.Millisecond
 	backupCASTimeout       = 10 * time.Second
 	backupCASRetryDelay    = 100 * time.Millisecond
 	connectionPoolCount    = 5
@@ -2598,7 +2598,9 @@ func (s *Store) fsmSnapshot() (fSnap raft.FSMSnapshot, retErr error) {
 		// crash scenarios where we've truncated the WAL into the database, but haven't successfully
 		// completed a snapshot, so the database is modified but the WAL is not present to be snapshotted.
 		if _, err := s.checkpointer.Checkpoint(nil, truncateTimeout); err != nil {
-			s.logger.Fatalf("failed to checkpoint and truncate database for Full snapshot: %s", err.Error())
+			// A failed FULL snapshot is always retryable, since we're looking to capture
+			// the entire database. So return the error and Raft will retry.
+			return nil, err
 		}
 		streamer, err := snapshot.NewSnapshotStreamer(s.db.Path())
 		if err != nil {
@@ -2632,7 +2634,11 @@ func (s *Store) fsmSnapshot() (fSnap raft.FSMSnapshot, retErr error) {
 		defer walWriter.Cancel() // Noop if already closed, but ensures cleanup on error paths.
 
 		if _, err := s.checkpointer.Checkpoint(walWriter, truncateTimeout); err != nil {
-			if errors.Is(err, sql.ErrDatabaseCheckpointInvariant) {
+			var re sql.RetryableError
+			if errors.As(err, &re) && !re.Retryable() {
+				// A non-retryable error at this point means the underlying system is in a state
+				// that further incremental snapshots won't handle. We could revert to full but
+				// a nonretryable error is that time shouldn't actually happen.
 				s.logger.Fatalf("failed to checkpoint and truncate database for incremental snapshot: %s",
 					err.Error())
 			}

@@ -2,7 +2,6 @@ package db
 
 import (
 	"encoding/binary"
-	"errors"
 	"expvar"
 	"fmt"
 	"io"
@@ -13,16 +12,36 @@ import (
 	"github.com/rqlite/rqlite/v10/db/wal"
 )
 
-var (
-	// ErrDatabaseCheckpointBusy is returned when a checkpoint operation is blocked by
-	// a concurrent read operation, fails to complete within the specified timeout, but
-	// leaves the database in a state where a future checkpoint attempt may be safely
-	// attempted.
-	ErrDatabaseCheckpointBusy = errors.New("database checkpoint busy")
+// RetryableError is an error that indicates whether the failed operation
+// can be safely retried.
+type RetryableError interface {
+	error
+	Retryable() bool
+}
 
-	// ErrDatabaseCheckpointInvariant is returned when a checkpoint operation
-	// fails due to misuse or incorrect usage.
-	ErrDatabaseCheckpointInvariant = errors.New("database checkpoint invariant violation")
+// CheckpointBusyError is returned when a checkpoint operation is blocked by
+// a concurrent read operation, fails to complete within the specified timeout,
+// but leaves the database in a state where a future checkpoint attempt may be
+// safely retried.
+type CheckpointBusyError struct {
+	msg string
+}
+
+func (e *CheckpointBusyError) Error() string { return e.msg }
+func (e *CheckpointBusyError) Retryable() bool { return true }
+
+// CheckpointInvariantError is returned when a checkpoint operation fails due
+// to an internal invariant violation. This is not retryable.
+type CheckpointInvariantError struct {
+	msg string
+}
+
+func (e *CheckpointInvariantError) Error() string { return e.msg }
+func (e *CheckpointInvariantError) Retryable() bool { return false }
+
+var (
+	ErrDatabaseCheckpointBusy      = &CheckpointBusyError{msg: "database checkpoint busy"}
+	ErrDatabaseCheckpointInvariant = &CheckpointInvariantError{msg: "database checkpoint invariant violation"}
 )
 
 // CheckpointManager manages checkpointing database across checkpoints.
