@@ -27,7 +27,7 @@ type CheckpointBusyError struct {
 	msg string
 }
 
-func (e *CheckpointBusyError) Error() string { return e.msg }
+func (e *CheckpointBusyError) Error() string   { return e.msg }
 func (e *CheckpointBusyError) Retryable() bool { return true }
 
 // CheckpointInvariantError is returned when a checkpoint operation fails due
@@ -36,7 +36,7 @@ type CheckpointInvariantError struct {
 	msg string
 }
 
-func (e *CheckpointInvariantError) Error() string { return e.msg }
+func (e *CheckpointInvariantError) Error() string   { return e.msg }
 func (e *CheckpointInvariantError) Retryable() bool { return false }
 
 var (
