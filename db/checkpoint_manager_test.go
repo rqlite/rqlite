@@ -208,8 +208,8 @@ func Test_CheckpointManager_Checkpoint_Blocked(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected checkpoint to fail due to blocking read")
 	}
-	if err != ErrDatabaseCheckpointFailed {
-		t.Fatalf("expected ErrDatabaseCheckpointFailed, got %s", err.Error())
+	if err != ErrDatabaseCheckpointBusy {
+		t.Fatalf("expected ErrDatabaseCheckpointBusy, got %s", err.Error())
 	}
 }
 
