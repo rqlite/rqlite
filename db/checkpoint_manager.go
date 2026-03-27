@@ -14,13 +14,15 @@ import (
 )
 
 var (
-	// ErrDatabaseCheckpointFailed is returned when a checkpoint operation
-	// fails to complete at the database level.
-	ErrDatabaseCheckpointFailed = errors.New("database checkpoint failed")
+	// ErrDatabaseCheckpointBusy is returned when a checkpoint operation is blocked by
+	// a concurrent read operation, fails to complete within the specified timeout, but
+	// leaves the database in a state where a future checkpoint attempt may be safely
+	// attempted.
+	ErrDatabaseCheckpointBusy = errors.New("database checkpoint busy")
 
-	// ErrDatabaseCheckpointMisuse is returned when a checkpoint operation
+	// ErrDatabaseCheckpointInvariant is returned when a checkpoint operation
 	// fails due to misuse or incorrect usage.
-	ErrDatabaseCheckpointMisuse = errors.New("database checkpoint misuse")
+	ErrDatabaseCheckpointInvariant = errors.New("database checkpoint invariant violation")
 )
 
 // CheckpointManager manages checkpointing database across checkpoints.
@@ -60,9 +62,6 @@ func NewCheckpointManager(db *DB) (*CheckpointManager, error) {
 // before performing the checkpoint. The checkpoint operation will block for at most
 // the given timeout duration. If the checkpoint operation fails to complete within
 // the timeout, an error is returned.
-//
-// If ErrDatabaseCheckpointFailed is returned, the checkpoint operation failed at the
-// database level, and the caller should assume the database is in an unknown state.
 func (cm *CheckpointManager) Checkpoint(w io.Writer, timeout time.Duration) (int64, error) {
 	if w == nil {
 		// Short-circuit if no writer provided, just checkpoint and truncate the database.
@@ -147,9 +146,7 @@ func (cm *CheckpointManager) Checkpoint(w io.Writer, timeout time.Duration) (int
 			// this checkpoint as failed, nothing about our state needs to be updated.
 			// Next time we will retry the checkpoint from the same offset and attempt to
 			// move all pages.
-			cm.logger.Fatalf("just exit during testing for now (case 1)") // XXXXX FIX AND TEST
-
-			return 0, fmt.Errorf("truncate checkpoint failed to move all pages")
+			return 0, ErrDatabaseCheckpointBusy
 		} else if pnCkpt == pnLog {
 			// In this case, the checkpoint failed, all pages were moved, but the WAL
 			// file not truncated. We can use the WAL data, but it requires special
@@ -162,9 +159,9 @@ func (cm *CheckpointManager) Checkpoint(w io.Writer, timeout time.Duration) (int
 			// of the file. The only way to tell will be to check the salt values on the
 			// next checkpoint attempt.
 			cm.nextFrameIdx = int64(pnCkpt)
-			cm.logger.Fatalf("just exit during testing for now (case 2)") //// FIX AND TEST
+			return 0, nil
 		} else {
-			return 0, ErrDatabaseCheckpointMisuse
+			return 0, ErrDatabaseCheckpointInvariant
 		}
 	}
 
