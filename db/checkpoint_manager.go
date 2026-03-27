@@ -125,9 +125,6 @@ func (cm *CheckpointManager) Checkpoint(w io.Writer, timeout time.Duration) (int
 		return 0, err
 	}
 	stats.Get(preCompactWALSize).(*expvar.Int).Set(walSzPre)
-	if err := cm.db.CheckpointTruncateWithTimeout(timeout); err != nil {
-		return 0, ErrDatabaseCheckpointFailed
-	}
 
 	/////////////////////////////////////////////////////////////////////////////////
 	// Now, attempt to perform a TRUNCATE checkpoint of the database.
