@@ -2632,7 +2632,7 @@ func (s *Store) fsmSnapshot() (fSnap raft.FSMSnapshot, retErr error) {
 		defer walWriter.Cancel() // Noop if already closed, but ensures cleanup on error paths.
 
 		if _, err := s.checkpointer.Checkpoint(walWriter, truncateTimeout); err != nil {
-			if errors.Is(err, sql.ErrDatabaseCheckpointFailed) {
+			if errors.Is(err, sql.ErrDatabaseCheckpointInvariant) {
 				s.logger.Fatalf("failed to checkpoint and truncate database for incremental snapshot: %s",
 					err.Error())
 			}
