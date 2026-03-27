@@ -168,8 +168,8 @@ func (cm *CheckpointManager) Checkpoint(w io.Writer, timeout time.Duration) (int
 	if pnCkpt < pnLog {
 		// In this case future writes to the WAL will be appended, so just treat
 		// this checkpoint as failed, nothing about our state needs to be updated.
-		// Next time we will retry the checkpoint from the same offset and attempt to
-		// move all pages.
+		// Next time we will retry the checkpoint from the same offset and attempt
+		// to move all pages.
 		return 0, ErrDatabaseCheckpointBusy
 	} else if pnCkpt == pnLog {
 		// In this case, the checkpoint failed, all pages were moved, but the WAL
