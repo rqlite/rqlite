@@ -178,6 +178,10 @@ func Test_CheckpointManager_Checkpoint_Blocked_Read(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to execute on single node: %s", err.Error())
 	}
+
+	// Insert a row or the long-running read I'm a about to kick off would just complete
+	// and the checkpoint would complete. After all a SELECT * on an empty table would not
+	// read any WAL frames, so the checkpoint would not be blocked.
 	_, err = db.ExecuteStringStmt(`INSERT INTO foo(name) VALUES("alice")`)
 	if err != nil {
 		t.Fatalf("failed to execute INSERT on single node: %s", err.Error())
