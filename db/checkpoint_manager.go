@@ -159,36 +159,33 @@ func (cm *CheckpointManager) Checkpoint(w io.Writer, timeout time.Duration) (int
 	}
 
 	rc, pnLog, pnCkpt := meta.Code, meta.Pages, meta.Moved
-	if rc != 0 {
-		if pnCkpt < pnLog {
-			// In this case future writes to the WAL will be appended, so just treat
-			// this checkpoint as failed, nothing about our state needs to be updated.
-			// Next time we will retry the checkpoint from the same offset and attempt to
-			// move all pages.
-			return 0, ErrDatabaseCheckpointBusy
-		} else if pnCkpt == pnLog {
-			// In this case, the checkpoint failed, all pages were moved, but the WAL
-			// file not truncated. We can use the WAL data, but it requires special
-			// handling.
-			//
-			// This needs to be handled carefully because we do not know where the next
-			// WAL frame will be written. That is only revealed when the next write takes
-			// place. It might be written to the end of WAL file, or SQLite might reset
-			// the WAL, which would cause the next WAL frame to be written at the beginning
-			// of the file. The only way to tell will be to check the salt values on the
-			// next checkpoint attempt.
-			cm.nextFrameIdx = int64(pnCkpt)
-			return 0, nil
-		} else {
-			return 0, ErrDatabaseCheckpointInvariant
-		}
+	if rc == 0 {
+		// WAL was reset. Next write will start at the beginning of the WAL file.
+		cm.nextFrameIdx = 0
+		cm.salt = nil
+		return n, nil
 	}
-
-	// Revert to start of WAL since truncate completed.
-	cm.nextFrameIdx = 0
-	cm.salt = nil
-
-	return n, nil
+	if pnCkpt < pnLog {
+		// In this case future writes to the WAL will be appended, so just treat
+		// this checkpoint as failed, nothing about our state needs to be updated.
+		// Next time we will retry the checkpoint from the same offset and attempt to
+		// move all pages.
+		return 0, ErrDatabaseCheckpointBusy
+	} else if pnCkpt == pnLog {
+		// In this case, the checkpoint failed, all pages were moved, but the WAL
+		// file not truncated. We can use the WAL data, but it requires special
+		// handling.
+		//
+		// This needs to be handled carefully because we do not know where the next
+		// WAL frame will be written. That is only revealed when the next write takes
+		// place. It might be written to the end of WAL file, or SQLite might reset
+		// the WAL, which would cause the next WAL frame to be written at the beginning
+		// of the file. The only way to tell will be to check the salt values on the
+		// next checkpoint attempt.
+		cm.nextFrameIdx = int64(pnCkpt)
+		return 0, nil
+	}
+	return 0, ErrDatabaseCheckpointInvariant
 }
 
 // Close closes the CheckpointManager.
