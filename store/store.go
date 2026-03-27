@@ -2639,6 +2639,7 @@ func (s *Store) fsmSnapshot() (fSnap raft.FSMSnapshot, retErr error) {
 				// A non-retryable error at this point means the underlying system is in a state
 				// that further incremental snapshots won't handle. We could revert to full but
 				// a nonretryable error is that time shouldn't actually happen.
+				walWriter.Cancel()
 				s.logger.Fatalf("failed to checkpoint and truncate database for incremental snapshot: %s",
 					err.Error())
 			}
