@@ -12,8 +12,13 @@ import (
 	"sync"
 	"time"
 
+	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/codes"
+	"go.opentelemetry.io/otel/trace"
+
 	clstrPB "github.com/rqlite/rqlite/v10/cluster/proto"
 	"github.com/rqlite/rqlite/v10/command/proto"
+	rqotel "github.com/rqlite/rqlite/v10/otel"
 	"github.com/rqlite/rqlite/v10/store"
 )
 
@@ -124,6 +129,8 @@ func (p *Proxy) GetAPIAddr() string {
 // the current leader.
 func (p *Proxy) Execute(ctx context.Context, er *proto.ExecuteRequest, creds *clstrPB.Credentials,
 	timeout time.Duration, retries int, noForward bool) ([]*proto.ExecuteQueryResponse, uint64, string, error) {
+	ctx, span := rqotel.Tracer().Start(ctx, "proxy.Execute", trace.WithSpanKind(trace.SpanKindInternal))
+	defer span.End()
 
 	results, raftIndex, err := p.store.Execute(ctx, er)
 	if errors.Is(err, store.ErrNotLeader) {
@@ -134,13 +141,18 @@ func (p *Proxy) Execute(ctx context.Context, er *proto.ExecuteRequest, creds *cl
 		if addrErr != nil {
 			return nil, 0, "", addrErr
 		}
+		span.SetAttributes(attribute.String("rqlite.forwarded_to", addr))
 		results, raftIndex, err = p.cluster.Execute(ctx, er, addr, creds, timeout, retries)
 		if err != nil {
 			stats.Add(numRemoteExecutionsFailed, 1)
+			span.SetStatus(codes.Error, err.Error())
 			return nil, 0, "", wrapIfUnauthorized(err)
 		}
 		stats.Add(numRemoteExecutions, 1)
 		return results, raftIndex, addr, nil
+	}
+	if err != nil {
+		span.SetStatus(codes.Error, err.Error())
 	}
 	return results, raftIndex, p.GetAPIAddr(), err
 }
@@ -150,6 +162,8 @@ func (p *Proxy) Execute(ctx context.Context, er *proto.ExecuteRequest, creds *cl
 // The ConsistencyLevel return value from Store.Query is dropped.
 func (p *Proxy) Query(ctx context.Context, qr *proto.QueryRequest, creds *clstrPB.Credentials,
 	timeout time.Duration, noForward bool) ([]*proto.QueryRows, uint64, string, error) {
+	ctx, span := rqotel.Tracer().Start(ctx, "proxy.Query", trace.WithSpanKind(trace.SpanKindInternal))
+	defer span.End()
 
 	results, _, raftIndex, err := p.store.Query(ctx, qr)
 	if errors.Is(err, store.ErrNotLeader) {
@@ -160,13 +174,18 @@ func (p *Proxy) Query(ctx context.Context, qr *proto.QueryRequest, creds *clstrP
 		if addrErr != nil {
 			return nil, 0, "", addrErr
 		}
+		span.SetAttributes(attribute.String("rqlite.forwarded_to", addr))
 		results, raftIndex, err = p.cluster.Query(ctx, qr, addr, creds, timeout)
 		if err != nil {
 			stats.Add(numRemoteQueriesFailed, 1)
+			span.SetStatus(codes.Error, err.Error())
 			return nil, 0, "", wrapIfUnauthorized(err)
 		}
 		stats.Add(numRemoteQueries, 1)
 		return results, raftIndex, addr, nil
+	}
+	if err != nil {
+		span.SetStatus(codes.Error, err.Error())
 	}
 	return results, raftIndex, p.GetAPIAddr(), err
 }
@@ -176,6 +195,8 @@ func (p *Proxy) Query(ctx context.Context, qr *proto.QueryRequest, creds *clstrP
 // to the current leader.
 func (p *Proxy) Request(ctx context.Context, eqr *proto.ExecuteQueryRequest, creds *clstrPB.Credentials,
 	timeout time.Duration, retries int, noForward bool) ([]*proto.ExecuteQueryResponse, uint64, uint64, string, error) {
+	ctx, span := rqotel.Tracer().Start(ctx, "proxy.Request", trace.WithSpanKind(trace.SpanKindInternal))
+	defer span.End()
 
 	results, seq, raftIndex, err := p.store.Request(ctx, eqr)
 	if errors.Is(err, store.ErrNotLeader) {
@@ -186,13 +207,18 @@ func (p *Proxy) Request(ctx context.Context, eqr *proto.ExecuteQueryRequest, cre
 		if addrErr != nil {
 			return nil, 0, 0, "", addrErr
 		}
+		span.SetAttributes(attribute.String("rqlite.forwarded_to", addr))
 		results, seq, raftIndex, err = p.cluster.Request(ctx, eqr, addr, creds, timeout, retries)
 		if err != nil {
 			stats.Add(numRemoteRequestsFailed, 1)
+			span.SetStatus(codes.Error, err.Error())
 			return nil, 0, 0, "", wrapIfUnauthorized(err)
 		}
 		stats.Add(numRemoteRequests, 1)
 		return results, seq, raftIndex, addr, nil
+	}
+	if err != nil {
+		span.SetStatus(codes.Error, err.Error())
 	}
 	return results, seq, raftIndex, p.GetAPIAddr(), err
 }

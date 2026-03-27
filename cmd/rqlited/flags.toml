@@ -569,6 +569,55 @@ If set then memory profile information will be written to a file at the given pa
 default = ""
 
 [[flags]]
+name = "OTelTracesEnabled"
+cli = "otel-traces"
+type = "bool"
+short_help = "Enable OpenTelemetry tracing"
+long_help = """
+When enabled, rqlite will emit OpenTelemetry trace spans for HTTP requests and internal operations. By default traces are written to stderr in JSON format. Use -otel-endpoint to send traces via OTLP gRPC.
+"""
+default = false
+
+[[flags]]
+name = "OTelEndpoint"
+cli = "otel-endpoint"
+type = "string"
+short_help = "OpenTelemetry OTLP gRPC endpoint (e.g. localhost:4317)"
+long_help = """
+When set, traces are exported via OTLP gRPC to the specified endpoint using a BatchSpanProcessor. Requires -otel-traces to be set.
+"""
+default = ""
+
+[[flags]]
+name = "OTelInsecure"
+cli = "otel-insecure"
+type = "bool"
+short_help = "Disable TLS for OTLP gRPC connection"
+long_help = """
+"""
+default = false
+
+[[flags]]
+name = "OTelSampleRate"
+cli = "otel-sample-rate"
+type = "float64"
+short_help = "OpenTelemetry trace sample rate (0.0-1.0). 0 means sample everything"
+long_help = """
+Controls the fraction of traces that are sampled. Uses ParentBased sampler so child spans follow the parent's decision.
+"""
+default = 0
+
+[[flags]]
+name = "OTelStdout"
+cli = "otel-stdout"
+type = "bool"
+short_help = "Write traces to stderr in addition to OTLP"
+long_help = """
+When set alongside -otel-endpoint, traces are also written to stderr in JSON format.
+"""
+default = false
+
+[[flags]]
 name = "TraceProfile"
 cli = "trace-profile"
 type = "string"

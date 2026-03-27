@@ -31,6 +31,7 @@ import (
 	httpd "github.com/rqlite/rqlite/v10/http"
 	"github.com/rqlite/rqlite/v10/internal/rarchive"
 	"github.com/rqlite/rqlite/v10/internal/rtls"
+	rqotel "github.com/rqlite/rqlite/v10/otel"
 	"github.com/rqlite/rqlite/v10/proxy"
 	"github.com/rqlite/rqlite/v10/store"
 	"github.com/rqlite/rqlite/v10/tcp"
@@ -88,6 +89,25 @@ func main() {
 
 	// Start requested profiling.
 	startProfile(cfg.CPUProfile, cfg.MemProfile, cfg.TraceProfile)
+
+	// Initialize OpenTelemetry tracing.
+	otelCfg := rqotel.Config{
+		Enabled:      cfg.OTelTracesEnabled,
+		NodeID:       cfg.NodeID,
+		Version:      cmd.Version,
+		OTLPEndpoint: cfg.OTelEndpoint,
+		OTLPInsecure: cfg.OTelInsecure,
+		SampleRate:   cfg.OTelSampleRate,
+	}
+	// Write to stderr if stdout mode is explicitly requested, or if no OTLP endpoint is set
+	// (preserving the original behavior of -otel-traces writing to stderr).
+	if cfg.OTelStdout || cfg.OTelEndpoint == "" {
+		otelCfg.Writer = os.Stderr
+	}
+	otelShutdown, err := rqotel.Setup(otelCfg)
+	if err != nil {
+		log.Fatalf("failed to initialize OpenTelemetry: %s", err.Error())
+	}
 
 	// Create internode network mux and configure.
 	muxLn, err := net.Listen("tcp", cfg.RaftAddr)
@@ -274,6 +294,14 @@ func main() {
 	if err := str.Close(true); err != nil {
 		log.Printf("failed to close store: %s", err.Error())
 	}
+
+	// Flush any remaining traces before exiting.
+	otelCtx, otelCancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer otelCancel()
+	if err := otelShutdown(otelCtx); err != nil {
+		log.Printf("failed to shutdown OpenTelemetry: %s", err.Error())
+	}
+
 	stopProfile()
 	log.Println("rqlite server stopped")
 }
