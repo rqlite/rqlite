@@ -3,10 +3,13 @@ package wal
 import (
 	"encoding/binary"
 	"errors"
+	"expvar"
 	"fmt"
 	"io"
 	"maps"
+	"math"
 	"sort"
+	"time"
 )
 
 var (
@@ -27,8 +30,9 @@ type CompactingFrameScanner struct {
 	fullScan   bool
 	start      int64
 
-	frames cFrames
-	fIdx   int
+	frames      cFrames
+	framesInput int64
+	fIdx        int
 }
 
 // NewCompactingFrameScanner creates a new CompactingFrameScanner that reads
@@ -82,8 +86,16 @@ func NewCompactingFrameScanner(r io.ReadSeeker, startFrame int64, fullScan bool)
 		start:    WALHeaderSize + startFrame*frameSize,
 	}
 
+	startT := time.Now()
 	if err := s.scan(); err != nil {
+		stats.Add(compactScanErrors, 1)
 		return nil, err
+	}
+	stats.Get(compactScanDuration).(*expvar.Int).Set(time.Since(startT).Milliseconds())
+	stats.Get(compactFramesOutput).(*expvar.Int).Set(int64(len(s.frames)))
+	if len(s.frames) > 0 {
+		r := math.Round(float64(s.framesInput)/float64(len(s.frames))*10) / 10
+		stats.Get(compactFramesRatio).(*expvar.Float).Set(r)
 	}
 	return s, nil
 }
@@ -189,7 +201,6 @@ func (s *CompactingFrameScanner) scan() error {
 	waitingForCommit := false
 	txFrames := make(map[uint32]*cFrame)
 	frames := make(map[uint32]*cFrame)
-
 	for {
 		pgno, commit, err := s.walReader.ReadFrame(buf)
 		if err == io.EOF {
@@ -197,6 +208,7 @@ func (s *CompactingFrameScanner) scan() error {
 		} else if err != nil {
 			return err
 		}
+		s.framesInput++
 
 		offset := s.start + s.walReader.Offset() - WALHeaderSize
 
@@ -215,6 +227,7 @@ func (s *CompactingFrameScanner) scan() error {
 		maps.Copy(frames, txFrames)
 		clear(txFrames)
 	}
+	stats.Get(compactFramesInput).(*expvar.Int).Set(s.framesInput)
 
 	if waitingForCommit {
 		return ErrOpenTransaction

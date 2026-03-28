@@ -2,8 +2,10 @@ package wal
 
 import (
 	"encoding/binary"
+	"expvar"
 	"fmt"
 	"io"
+	"time"
 )
 
 // WALHeader represents the header of a WAL file.
@@ -80,6 +82,11 @@ func NewWriter(r WALIterator) (*Writer, error) {
 
 // WriteTo writes the frames from the WALIterator to the given io.Writer.
 func (w *Writer) WriteTo(ww io.Writer) (n int64, retErr error) {
+	startT := time.Now()
+	defer func() {
+		stats.Get(compactWriteDuration).(*expvar.Int).Set(time.Since(startT).Milliseconds())
+	}()
+
 	nn, err := w.writeWALHeader(ww)
 	if err != nil {
 		return nn, err

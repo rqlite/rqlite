@@ -40,9 +40,14 @@ const (
 	numCheckpointErrors        = "checkpoint_errors"
 	numCheckpointedMoves       = "checkpointed_moves"
 	checkpointDuration         = "checkpoint_duration_ms"
-	createCompactedWALDuration = "create_compacted_wal_duration_ms"
-	preCompactWALSize          = "precompact_wal_size"
-	compactedWALSize           = "compacted_wal_size"
+	createCompactedWALDuration   = "create_compacted_wal_duration_ms"
+	preCompactWALSize            = "precompact_wal_size"
+	compactedWALSize             = "compacted_wal_size"
+	numCheckpointTotal           = "checkpoint_total"
+	numCheckpointBusyErrors      = "checkpoint_busy_errors"
+	numCheckpointInvariantErrors = "checkpoint_invariant_errors"
+	numCheckpointPartial         = "checkpoint_partial"
+	numCheckpointWALTruncated    = "checkpoint_wal_truncated"
 	numExecutions              = "executions"
 	numExecutionErrors         = "execution_errors"
 	numExecutionsForceQueries  = "executions_force_queries"
@@ -113,6 +118,11 @@ func ResetStats() {
 	stats.Add(createCompactedWALDuration, 0)
 	stats.Add(preCompactWALSize, 0)
 	stats.Add(compactedWALSize, 0)
+	stats.Add(numCheckpointTotal, 0)
+	stats.Add(numCheckpointBusyErrors, 0)
+	stats.Add(numCheckpointInvariantErrors, 0)
+	stats.Add(numCheckpointPartial, 0)
+	stats.Add(numCheckpointWALTruncated, 0)
 	stats.Add(numExecutions, 0)
 	stats.Add(numExecutionErrors, 0)
 	stats.Add(numExecutionsForceQueries, 0)

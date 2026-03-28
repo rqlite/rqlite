@@ -16,16 +16,19 @@ const (
 )
 
 const (
-	compactScanDuration  = "compact_index_duration_ms"
-	compactLoadDuration  = "compact_load_duration_ms"
-	compactLoadPageCount = "compact_load_page_count"
+	compactScanDuration  = "compact_scan_duration_ms"
+	compactWriteDuration = "compact_write_duration_ms"
+	compactFramesInput   = "compact_frames_input"
+	compactFramesOutput  = "compact_frames_output"
+	compactScanErrors    = "compact_scan_errors"
+	compactFramesRatio   = "compact_frames_ratio"
 )
 
 // stats captures stats for the DB layer.
 var stats *expvar.Map
 
 func init() {
-	stats = expvar.NewMap("wal")
+	stats = expvar.NewMap("db-wal")
 	ResetStats()
 }
 
@@ -33,8 +36,11 @@ func init() {
 func ResetStats() {
 	stats.Init()
 	stats.Add(compactScanDuration, 0)
-	stats.Add(compactLoadDuration, 0)
-	stats.Add(compactLoadPageCount, 0)
+	stats.Add(compactWriteDuration, 0)
+	stats.Add(compactFramesInput, 0)
+	stats.Add(compactFramesOutput, 0)
+	stats.Add(compactScanErrors, 0)
+	stats.Set(compactFramesRatio, new(expvar.Float))
 }
 
 // Reader wraps an io.Reader and parses SQLite WAL frames.
