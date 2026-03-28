@@ -757,7 +757,8 @@ func (c *Client) dialWithOption(nodeAddr string, forceNew bool) (net.Conn, error
 func (c *Client) retry(ctx context.Context, command *proto.Command, nodeAddr string, timeout time.Duration, maxRetries int) ([]byte, int, error) {
 	var p []byte
 	var errOuter error
-	nRetries := max(1, maxRetries)
+	effectiveRetries := max(1, maxRetries)
+	nRetries := 0
 
 	for {
 		if err := ctx.Err(); err != nil {
@@ -792,7 +793,7 @@ func (c *Client) retry(ctx context.Context, command *proto.Command, nodeAddr str
 		// We do this because it's possible that the remote node restarted and all the connections
 		// in the pool are stale, but we just don't know it. This is a last-ditch effort to get a
 		// successful response before giving up.
-		if nRetries == maxRetries {
+		if nRetries == effectiveRetries {
 			nRetries++
 			conn, err := c.dialWithOption(nodeAddr, true)
 			if err != nil {
