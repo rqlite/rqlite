@@ -85,6 +85,7 @@ There are no breaking API changes in this release, nor any changes to how cluste
 - [PR #2573](https://github.com/rqlite/rqlite/pull/2573): More Snapshot-reaping unit testing.
 - [PR #2576](https://github.com/rqlite/rqlite/pull/2576): Compact by frame index not offset.
 - [PR #2580](https://github.com/rqlite/rqlite/pull/2580): Update expiry dates for test x509 certs. rqlite development just keeps going.
+- [PR #2578](https://github.com/rqlite/rqlite/pull/2578): Integrate new checkpoint and WAL manager strategy.
 
 ## v9.4.5 (March 9th 2026)
 ### Implementation changes and bug fixes
