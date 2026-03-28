@@ -441,7 +441,8 @@ class TestEndToEndConnectionPools(unittest.TestCase):
 
     # Transfer leadership back to the original leader.
     l1.stepdown(id=l0.node_id)
-    self.cluster.wait_for_leader(node_exc=l1)
+    n = self.cluster.wait_for_leader(node_exc=l1)
+    self.assertEqual(n.node_id, l0.node_id)
 
     # Now, the followers have connection pools, but the connections within are stale.
     # Ensure the followers detect this and use a fresh connection to the leader.
