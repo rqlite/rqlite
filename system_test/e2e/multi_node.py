@@ -400,7 +400,7 @@ class TestRequestForwarding(unittest.TestCase):
       self.assertEqual(j, d_("{'results': [{'columns': ['COUNT(*)'], 'types': ['integer'], 'values': [[2002]]}]}"))
 
 class TestEndToEndConnectionPools(unittest.TestCase):
-  '''Test state connection pools don't get in the way of inter-node requests'''
+  '''Tests that stale connection pools don't get in the way of inter-node requests'''
 
   def setUp(self):
     n0 = Node(RQLITED_PATH, '0')
