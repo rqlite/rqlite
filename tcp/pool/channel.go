@@ -64,6 +64,22 @@ func (c *channelPool) Get() (net.Conn, error) {
 	}
 }
 
+// New creates a new connection via the factory, bypassing any idle connections
+// in the pool. The returned connection is wrapped so that Close() will attempt
+// to return it to the pool.
+func (c *channelPool) New() (net.Conn, error) {
+	_, factory := c.getConnsAndFactory()
+	if factory == nil {
+		return nil, ErrClosed
+	}
+	conn, err := factory()
+	if err != nil {
+		return nil, err
+	}
+	atomic.AddInt64(&c.nOpenConns, 1)
+	return c.wrapConn(conn), nil
+}
+
 // Close closes every connection in the pool.
 func (c *channelPool) Close() {
 	c.mu.Lock()
