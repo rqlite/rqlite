@@ -630,11 +630,10 @@ func (s *Store) reapLoop() {
 			continue
 		}
 
-		startTime := time.Now()
+		startT := time.Now()
 		n, c, err := func() (int, int, error) {
 			defer func() {
-				dur := time.Since(startTime)
-				stats.Get(autoReapDuration).(*expvar.Int).Set(dur.Milliseconds())
+				stats.Get(autoReapDuration).(*expvar.Int).Set(time.Since(startT).Milliseconds())
 			}()
 
 			s.mrsw.BeginWriteBlocking("reap")
@@ -647,8 +646,8 @@ func (s *Store) reapLoop() {
 			continue
 		}
 		if s.LogReaping {
-			dur := time.Since(startTime)
-			s.logger.Printf("autoreap complete in %s: %d snapshots reaped, %d WALs checkpointed", dur, n, c)
+			s.logger.Printf("autoreap complete in %s: %d snapshots reaped, %d WALs checkpointed",
+				time.Since(startT), n, c)
 		}
 	}
 }
