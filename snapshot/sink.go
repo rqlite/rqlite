@@ -198,8 +198,15 @@ func (s *Sink) Close() (retErr error) {
 	}
 
 	defer func() {
-		if retErr != nil && s.localWALDir != "" && s.fatalFn != nil {
-			s.fatalFn(retErr)
+		if retErr != nil {
+			stats.Add(sinkErrors, 1)
+			if s.localWALDir != "" && s.fatalFn != nil {
+				s.fatalFn(retErr)
+			}
+		} else if s.localWALDir != "" {
+			stats.Add(sinkIncrementalTotal, 1)
+		} else {
+			stats.Add(sinkFullTotal, 1)
 		}
 	}()
 
