@@ -84,6 +84,7 @@ There are no breaking API changes in this release, nor any changes to how cluste
 - [PR #2569](https://github.com/rqlite/rqlite/pull/2569), [PR #2570](https://github.com/rqlite/rqlite/pull/2570): Add `context.Context` to the cluster layer.
 - [PR #2573](https://github.com/rqlite/rqlite/pull/2573): More Snapshot-reaping unit testing.
 - [PR #2576](https://github.com/rqlite/rqlite/pull/2576): Compact by frame index not offset.
+- [PR #2580](https://github.com/rqlite/rqlite/pull/2580): Update expiry dates for test x509 certs. rqlite development just keeps going.
 
 ## v9.4.5 (March 9th 2026)
 ### Implementation changes and bug fixes
