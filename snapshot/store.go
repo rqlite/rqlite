@@ -25,7 +25,7 @@ const (
 	fullNeededFile = "FULL_NEEDED"
 	reapPlanFile   = "REAP_PLAN"
 
-	defaultReapThreshold = 8
+	defaultReapThreshold = 4
 )
 
 const (
