@@ -37,7 +37,7 @@ const (
 	sinkErrors           = "sink_errors"
 	sinkFullCRC32Dur     = "sink_full_crc32_duration_ms"
 
-	reapDuration      = "reap_duration_ms"
+	autoReapDuration  = "auto_reap_duration_ms"
 	reapTotal         = "reap_total"
 	reapErrors        = "reap_errors"
 	reapSnapshots     = "reap_snapshots"
@@ -70,7 +70,7 @@ func ResetStats() {
 	stats.Add(sinkIncrementalTotal, 0)
 	stats.Add(sinkErrors, 0)
 	stats.Add(sinkFullCRC32Dur, 0)
-	stats.Add(reapDuration, 0)
+	stats.Add(autoReapDuration, 0)
 	stats.Add(reapTotal, 0)
 	stats.Add(reapErrors, 0)
 	stats.Add(reapSnapshots, 0)
@@ -634,7 +634,7 @@ func (s *Store) reapLoop() {
 		n, c, err := func() (int, int, error) {
 			defer func() {
 				dur := time.Since(startTime)
-				stats.Get(reapDuration).(*expvar.Int).Set(dur.Milliseconds())
+				stats.Get(autoReapDuration).(*expvar.Int).Set(dur.Milliseconds())
 			}()
 
 			s.mrsw.BeginWriteBlocking("reap")
