@@ -11,6 +11,7 @@ import (
 	"net"
 	"os"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/rqlite/rqlite/v10/auth"
@@ -81,6 +82,9 @@ type Client struct {
 
 	poolMu sync.RWMutex
 	pools  map[string]pool.Pool
+
+	// Whitebox testing
+	numForcedNewConns atomic.Int32
 }
 
 // NewClient returns a client instance for talking to a remote node.
@@ -800,6 +804,7 @@ func (c *Client) retry(ctx context.Context, command *proto.Command, nodeAddr str
 				return nil, nRetries, err
 			}
 			defer conn.Close()
+			c.numForcedNewConns.Add(1)
 			stats.Add(numClientForceNewConn, 1)
 
 			if err := writeCommand(conn, command, timeout); err != nil {

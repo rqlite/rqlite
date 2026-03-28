@@ -363,6 +363,9 @@ func Test_ClientRetry_SuccessFirstAttempt(t *testing.T) {
 	if err != nil {
 		t.Fatalf("expected success on first attempt, got: %s", err)
 	}
+	if c.numForcedNewConns.Load() != 0 {
+		t.Fatalf("expected no forced new connections, got %d", c.numForcedNewConns.Load())
+	}
 }
 
 func Test_ClientRetry_FailAllPoolThenFreshSucceeds(t *testing.T) {
@@ -404,6 +407,9 @@ func Test_ClientRetry_FailAllPoolThenFreshSucceeds(t *testing.T) {
 	if err != nil {
 		t.Fatalf("expected fresh connection to succeed, got: %s", err)
 	}
+	if exp, got := int32(1), c.numForcedNewConns.Load(); exp != got {
+		t.Fatalf("expected %d forced new connection, got %d", exp, got)
+	}
 }
 
 func Test_ClientRetry_AllAttemptsFail(t *testing.T) {
@@ -421,6 +427,9 @@ func Test_ClientRetry_AllAttemptsFail(t *testing.T) {
 		srv.Addr(), nil, time.Second, 0)
 	if err == nil {
 		t.Fatal("expected error when all attempts fail")
+	}
+	if exp, got := int32(1), c.numForcedNewConns.Load(); exp != got {
+		t.Fatalf("expected %d forced new connection, got %d", exp, got)
 	}
 }
 
@@ -460,6 +469,9 @@ func Test_ClientRetry_SuccessMidPool(t *testing.T) {
 	if err != nil {
 		t.Fatalf("expected success on 3rd pool attempt, got: %s", err)
 	}
+	if exp, got := int32(0), c.numForcedNewConns.Load(); exp != got {
+		t.Fatalf("expected %d forced new connection, got %d", exp, got)
+	}
 }
 
 func Test_ClientRetry_ZeroMaxRetries_NoInfiniteLoop(t *testing.T) {
@@ -484,6 +496,9 @@ func Test_ClientRetry_ZeroMaxRetries_NoInfiniteLoop(t *testing.T) {
 	}
 	if ctx.Err() != nil {
 		t.Fatal("retry loop did not terminate before context timeout — possible infinite loop")
+	}
+	if exp, got := int32(1), c.numForcedNewConns.Load(); exp != got {
+		t.Fatalf("expected %d forced new connection, got %d", exp, got)
 	}
 }
 
