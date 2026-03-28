@@ -423,7 +423,7 @@ class TestEndToEndConnectionPools(unittest.TestCase):
   def test(self):
     # Route a dummy query through each follower to populate their connection pools.
     for f in self.cluster.followers():
-      j = f.query('SELECT 1')
+      j = f.query('SELECT 1', level="strong")
       self.assertEqual(j, d_("{'results': [{'values': [[1]], 'types': ['integer'], 'columns': ['1']}]}"))
 
     # Stop the leader and then wait for a new leader. Ensure remaining follower
@@ -432,7 +432,7 @@ class TestEndToEndConnectionPools(unittest.TestCase):
     l0.stop()
     l1 =  self.cluster.wait_for_leader(node_exc=l0)
     for f in self.cluster.followers():
-      j = f.query('SELECT 1')
+      j = f.query('SELECT 1', level="strong")
       self.assertEqual(j, d_("{'results': [{'values': [[1]], 'types': ['integer'], 'columns': ['1']}]}"))
 
     # Restart the node that was the leader.
@@ -447,7 +447,7 @@ class TestEndToEndConnectionPools(unittest.TestCase):
     # Now, the followers have connection pools, but the connections within are stale.
     # Ensure the followers detect this and use a fresh connection to the leader.
     for f in self.cluster.followers():
-      j = f.query('SELECT 1')
+      j = f.query('SELECT 1', level="strong")
       self.assertEqual(j, d_("{'results': [{'values': [[1]], 'types': ['integer'], 'columns': ['1']}]}"))
       self.assertEqual(f.expvar()['cluster']['num_client_force_new_conn'], 1)
 
