@@ -41,16 +41,26 @@ func NewChannelPool(maxCap int, factory Factory) (Pool, error) {
 // connection available in the pool, a new connection will be created via the
 // Factory() method. Do not call Get() on a closed pool.
 func (c *channelPool) Get() (net.Conn, error) {
+	conns, factory := c.getConnsAndFactory()
+	if conns == nil {
+		return nil, ErrClosed
+	}
+
 	// Wrap our connections with our custom net.Conn implementation (wrapConn
 	// method) that puts the connection back to the pool if it's closed.
 	select {
-	case conn := <-c.conns:
+	case conn := <-conns:
 		if conn == nil {
 			return nil, ErrClosed
 		}
 		return c.wrapConn(conn), nil
 	default:
-		return c.newConn()
+		conn, err := factory()
+		if err != nil {
+			return nil, err
+		}
+		atomic.AddInt64(&c.nOpenConns, 1)
+		return c.wrapConn(conn), nil
 	}
 }
 
@@ -58,7 +68,16 @@ func (c *channelPool) Get() (net.Conn, error) {
 // in the pool. The returned connection is wrapped so that Close() will attempt
 // to return it to the pool.
 func (c *channelPool) New() (net.Conn, error) {
-	return c.newConn()
+	_, factory := c.getConnsAndFactory()
+	if factory == nil {
+		return nil, ErrClosed
+	}
+	conn, err := factory()
+	if err != nil {
+		return nil, err
+	}
+	atomic.AddInt64(&c.nOpenConns, 1)
+	return c.wrapConn(conn), nil
 }
 
 // Close closes every connection in the pool.
@@ -127,19 +146,6 @@ func (c *channelPool) getConnsAndFactory() (chan net.Conn, Factory) {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
 	return c.conns, c.factory
-}
-
-func (c *channelPool) newConn() (net.Conn, error) {
-	factory := c.factory
-	if factory == nil {
-		return nil, ErrClosed
-	}
-	conn, err := factory()
-	if err != nil {
-		return nil, err
-	}
-	atomic.AddInt64(&c.nOpenConns, 1)
-	return c.wrapConn(conn), nil
 }
 
 // wrapConn wraps a standard net.Conn to a poolConn net.Conn.
