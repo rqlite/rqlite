@@ -310,7 +310,7 @@ func Test_Query_LocalSuccess(t *testing.T) {
 	}
 	p := newTestProxy(s, &mockCluster{})
 
-	results, idx, addr, err := p.Query(context.Background(), &proto.QueryRequest{}, nil, time.Second, false)
+	results, idx, addr, err := p.Query(context.Background(), &proto.QueryRequest{}, nil, time.Second, 0, false)
 	if err != nil {
 		t.Fatalf("unexpected error: %s", err)
 	}
@@ -334,7 +334,7 @@ func Test_Query_NotLeader_NoForward(t *testing.T) {
 	}
 	p := newTestProxy(s, &mockCluster{})
 
-	_, _, _, err := p.Query(context.Background(), &proto.QueryRequest{}, nil, time.Second, true)
+	_, _, _, err := p.Query(context.Background(), &proto.QueryRequest{}, nil, time.Second, 0, true)
 	if !errors.Is(err, ErrNotLeader) {
 		t.Fatalf("expected ErrNotLeader, got %v", err)
 	}
@@ -361,7 +361,7 @@ func Test_Query_NotLeader_Forward(t *testing.T) {
 	}
 	p := newTestProxy(s, c)
 
-	results, idx, addr, err := p.Query(context.Background(), &proto.QueryRequest{}, nil, time.Second, false)
+	results, idx, addr, err := p.Query(context.Background(), &proto.QueryRequest{}, nil, time.Second, 0, false)
 	if err != nil {
 		t.Fatalf("unexpected error: %s", err)
 	}
@@ -393,7 +393,7 @@ func Test_Query_Unauthorized(t *testing.T) {
 	}
 	p := newTestProxy(s, c)
 
-	_, _, _, err := p.Query(context.Background(), &proto.QueryRequest{}, nil, time.Second, false)
+	_, _, _, err := p.Query(context.Background(), &proto.QueryRequest{}, nil, time.Second, 0, false)
 	if !errors.Is(err, ErrUnauthorized) {
 		t.Fatalf("expected ErrUnauthorized, got %v", err)
 	}

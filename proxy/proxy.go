@@ -45,10 +45,6 @@ const (
 	numRemoteRequestsFailed   = "remote_requests_failed"
 )
 
-const (
-	noRetries = 0
-)
-
 func init() {
 	stats = expvar.NewMap("proxy")
 	ResetStats()
@@ -153,7 +149,7 @@ func (p *Proxy) Execute(ctx context.Context, er *proto.ExecuteRequest, creds *cl
 // and noForward is false, the request is forwarded to the current leader.
 // The ConsistencyLevel return value from Store.Query is dropped.
 func (p *Proxy) Query(ctx context.Context, qr *proto.QueryRequest, creds *clstrPB.Credentials,
-	timeout time.Duration, noForward bool) ([]*proto.QueryRows, uint64, string, error) {
+	timeout time.Duration, retries int, noForward bool) ([]*proto.QueryRows, uint64, string, error) {
 
 	results, _, raftIndex, err := p.store.Query(ctx, qr)
 	if errors.Is(err, store.ErrNotLeader) {
@@ -164,7 +160,7 @@ func (p *Proxy) Query(ctx context.Context, qr *proto.QueryRequest, creds *clstrP
 		if addrErr != nil {
 			return nil, 0, "", addrErr
 		}
-		results, raftIndex, err = p.cluster.Query(ctx, qr, addr, creds, timeout, noRetries)
+		results, raftIndex, err = p.cluster.Query(ctx, qr, addr, creds, timeout, retries)
 		if err != nil {
 			stats.Add(numRemoteQueriesFailed, 1)
 			return nil, 0, "", wrapIfUnauthorized(err)

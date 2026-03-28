@@ -1450,7 +1450,7 @@ func (s *Service) handleQuery(w http.ResponseWriter, r *http.Request, qp QueryPa
 	}
 
 	results, raftIndex, addr, resultsErr := s.proxy.Query(r.Context(), qr, makeCredentials(r),
-		qp.Timeout(defaultTimeout), qp.Redirect())
+		qp.Timeout(defaultTimeout), qp.Retries(0), qp.Redirect())
 	if resultsErr != nil {
 		if errors.Is(resultsErr, proxy.ErrNotLeader) {
 			s.DoRedirect(w, r, qp)
