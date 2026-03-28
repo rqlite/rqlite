@@ -3,7 +3,6 @@ package db
 import (
 	"bytes"
 	"context"
-	"os"
 	"testing"
 	"time"
 
@@ -12,7 +11,7 @@ import (
 
 func Test_CheckpointManager_Create(t *testing.T) {
 	path := mustTempFile()
-	defer os.Remove(path)
+	defer RemoveFiles(path)
 
 	db, err := Open(path, false, true)
 	if err != nil {
@@ -34,7 +33,7 @@ func Test_CheckpointManager_Create(t *testing.T) {
 
 func Test_CheckpointManager_Checkpoint_OK(t *testing.T) {
 	path := mustTempFile()
-	defer os.Remove(path)
+	defer RemoveFiles(path)
 
 	db, err := Open(path, false, true)
 	if err != nil {
@@ -116,7 +115,7 @@ func Test_CheckpointManager_Checkpoint_OK(t *testing.T) {
 
 func Test_CheckpointManager_Checkpoint_NoWriter_OK(t *testing.T) {
 	path := mustTempFile()
-	defer os.Remove(path)
+	defer RemoveFiles(path)
 
 	db, err := Open(path, false, true)
 	if err != nil {
@@ -162,9 +161,74 @@ func Test_CheckpointManager_Checkpoint_NoWriter_OK(t *testing.T) {
 	}
 }
 
-func Test_CheckpointManager_Checkpoint_Blocked(t *testing.T) {
+// Test_CheckpointManager_Checkpoint_Blocked_Read tests that if a checkpoint is
+// blocked by a long-running read of the WAL file which holds WAL frames other
+// than the last page, the checkpoint fails with ErrDatabaseCheckpointBusy
+func Test_CheckpointManager_Checkpoint_Blocked_Read(t *testing.T) {
 	path := mustTempFile()
-	defer os.Remove(path)
+	defer RemoveFiles(path)
+
+	db, err := Open(path, false, true)
+	if err != nil {
+		t.Fatalf("failed to open database in WAL mode: %s", err.Error())
+	}
+	defer db.Close()
+
+	_, err = db.ExecuteStringStmt(`CREATE TABLE foo (id INTEGER NOT NULL PRIMARY KEY, name TEXT)`)
+	if err != nil {
+		t.Fatalf("failed to execute on single node: %s", err.Error())
+	}
+
+	// Insert a row or the long-running read I'm a about to kick off would just complete
+	// and the checkpoint would complete. After all a SELECT * on an empty table would not
+	// read any WAL frames, so the checkpoint would not be blocked.
+	_, err = db.ExecuteStringStmt(`INSERT INTO foo(name) VALUES("alice")`)
+	if err != nil {
+		t.Fatalf("failed to execute INSERT on single node: %s", err.Error())
+	}
+
+	// Issue a long-running read that should block the checkpoint.
+	qr := &command.Request{
+		Statements: []*command.Statement{
+			{
+				Sql:        "SELECT * FROM foo",
+				ForceStall: true,
+			},
+		},
+	}
+	ctx, cancelFunc := context.WithCancel(context.Background())
+	defer cancelFunc()
+	go func() {
+		db.QueryWithContext(ctx, qr, false)
+	}()
+	// Wait for read to kick in.
+	time.Sleep(2 * time.Second)
+
+	// Now, add more pages to the WAL.
+	_, err = db.ExecuteStringStmt(`INSERT INTO foo(name) VALUES("alice")`)
+	if err != nil {
+		t.Fatalf("failed to execute INSERT on single node: %s", err.Error())
+	}
+
+	cm, err := NewCheckpointManager(db)
+	if err != nil {
+		t.Fatalf("failed to create checkpoint manager: %s", err.Error())
+	}
+	defer cm.Close()
+
+	var buf bytes.Buffer
+	_, err = cm.Checkpoint(&buf, 100*time.Millisecond)
+	if err != ErrDatabaseCheckpointBusy {
+		t.Fatalf("expected checkpoint to fail with ErrDatabaseCheckpointBusy, got %v", err)
+	}
+}
+
+// Test_CheckpointManager_Checkpoint_Blocked_ReadLastPage tests that if a checkpoint is
+// blocked by a long-running read of the last page of the WAL file, the checkpoint
+// still succeeds.
+func Test_CheckpointManager_Checkpoint_Blocked_ReadLastPage(t *testing.T) {
+	path := mustTempFile()
+	defer RemoveFiles(path)
 
 	db, err := Open(path, false, true)
 	if err != nil {
@@ -205,17 +269,14 @@ func Test_CheckpointManager_Checkpoint_Blocked(t *testing.T) {
 
 	var buf bytes.Buffer
 	_, err = cm.Checkpoint(&buf, 100*time.Millisecond)
-	if err == nil {
-		t.Fatal("expected checkpoint to fail due to blocking read")
-	}
-	if err != ErrDatabaseCheckpointFailed {
-		t.Fatalf("expected ErrDatabaseCheckpointFailed, got %s", err.Error())
+	if err != nil {
+		t.Fatalf("unexpected error checkpoint: %s", err.Error())
 	}
 }
 
 func Test_CheckpointManager_Close(t *testing.T) {
 	path := mustTempFile()
-	defer os.Remove(path)
+	defer RemoveFiles(path)
 
 	db, err := Open(path, false, true)
 	if err != nil {
