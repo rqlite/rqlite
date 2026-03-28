@@ -607,6 +607,11 @@ class Node(object):
     r = requests.post(self._snapshot_url(),params=reqParams)
     raise_for_status(r)
 
+  def stepdown(self, id=None):
+    body = {"id": id}
+    r = requests.post(self._leader_url(), data=json.dumps(body))
+    raise_for_status(r)
+
   def reap(self):
     r = requests.post(self._reap_url())
     raise_for_status(r)
@@ -674,6 +679,8 @@ class Node(object):
     return 'http://' + self.APIAddr() + '/snapshot'
   def _reap_url(self):
     return 'http://' + self.APIAddr() + '/reap'
+  def _leader_url(self):
+    return 'http://' + self.APIAddr() + '/leader'
   def _remove_url(self):
     return 'http://' + self.APIAddr() + '/remove'
   def __eq__(self, other):
