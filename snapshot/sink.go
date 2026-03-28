@@ -205,7 +205,7 @@ func (s *Sink) Close() (retErr error) {
 			}
 		} else if s.localWALDir != "" {
 			stats.Add(sinkIncrementalTotal, 1)
-		} else {
+		} else if s.sinkW != nil {
 			stats.Add(sinkFullTotal, 1)
 		}
 	}()
