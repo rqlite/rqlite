@@ -1,6 +1,7 @@
 package store
 
 import (
+	"context"
 	"fmt"
 	"log"
 	"os"
@@ -54,7 +55,11 @@ func (c *CommandProcessor) Process(data []byte, db *sql.SwappableDB) (*proto.Com
 		if err := command.UnmarshalSubCommand(cmd, &qr); err != nil {
 			panic(fmt.Sprintf("failed to unmarshal query subcommand: %s", err.Error()))
 		}
-		r, err := db.Query(qr.Request, qr.Timings)
+		ctx := context.Background()
+		if qr.QualifyColumns {
+			ctx = sql.NewContextWithQualifyColumns(ctx)
+		}
+		r, err := db.QueryWithContext(ctx, qr.Request, qr.Timings)
 		return cmd, false, &fsmQueryResponse{rows: r, error: err}
 	case proto.Command_COMMAND_TYPE_EXECUTE:
 		var er proto.ExecuteRequest
@@ -68,7 +73,11 @@ func (c *CommandProcessor) Process(data []byte, db *sql.SwappableDB) (*proto.Com
 		if err := command.UnmarshalSubCommand(cmd, &eqr); err != nil {
 			panic(fmt.Sprintf("failed to unmarshal execute-query subcommand: %s", err.Error()))
 		}
-		r, err := db.Request(eqr.Request, eqr.Timings)
+		ctx := context.Background()
+		if eqr.QualifyColumns {
+			ctx = sql.NewContextWithQualifyColumns(ctx)
+		}
+		r, err := db.RequestWithContext(ctx, eqr.Request, eqr.Timings)
 		return cmd, ExecuteQueryResponses(r).Mutation(), &fsmExecuteQueryResponse{results: r, error: err}
 	case proto.Command_COMMAND_TYPE_LOAD:
 		var lr proto.LoadRequest
