@@ -11,6 +11,7 @@ import (
 	"net"
 	"os"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/rqlite/rqlite/v10/auth"
@@ -81,6 +82,9 @@ type Client struct {
 
 	poolMu sync.RWMutex
 	pools  map[string]pool.Pool
+
+	// Whitebox testing
+	numForcedNewConns atomic.Int32
 }
 
 // NewClient returns a client instance for talking to a remote node.
@@ -709,6 +713,10 @@ func (c *Client) Stats() (map[string]any, error) {
 }
 
 func (c *Client) dial(nodeAddr string) (net.Conn, error) {
+	return c.dialWithOption(nodeAddr, false)
+}
+
+func (c *Client) dialWithOption(nodeAddr string, forceNew bool) (net.Conn, error) {
 	var pl pool.Pool
 	var ok bool
 
@@ -741,11 +749,10 @@ func (c *Client) dial(nodeAddr string) (net.Conn, error) {
 	}
 
 	// Got pool, now get a connection.
-	conn, err := pl.Get()
-	if err != nil {
-		return nil, fmt.Errorf("pool get: %w", err)
+	if forceNew {
+		return pl.New()
 	}
-	return conn, nil
+	return pl.Get()
 }
 
 // retry retries a command on a remote node. It does this so we churn through connections
@@ -754,7 +761,9 @@ func (c *Client) dial(nodeAddr string) (net.Conn, error) {
 func (c *Client) retry(ctx context.Context, command *proto.Command, nodeAddr string, timeout time.Duration, maxRetries int) ([]byte, int, error) {
 	var p []byte
 	var errOuter error
-	var nRetries int
+	effectiveRetries := max(1, maxRetries)
+	nRetries := 0
+
 	for {
 		if err := ctx.Err(); err != nil {
 			return nil, nRetries, err
@@ -766,16 +775,12 @@ func (c *Client) retry(ctx context.Context, command *proto.Command, nodeAddr str
 			}
 			defer conn.Close()
 
-			if errInner = writeCommand(conn, command, timeout); errInner != nil {
-				handleConnError(conn)
-				return nil, errInner
-			}
-
-			b, errInner := readResponse(conn, timeout)
+			b, errInner := writeCommandReadResponse(conn, command, timeout)
 			if errInner != nil {
 				handleConnError(conn)
 				return nil, errInner
 			}
+
 			return b, nil
 		}()
 		if errOuter == nil {
@@ -783,11 +788,36 @@ func (c *Client) retry(ctx context.Context, command *proto.Command, nodeAddr str
 		}
 		nRetries++
 		stats.Add(numClientRetries, 1)
-		if nRetries > maxRetries {
-			return nil, nRetries, errOuter
+
+		// If we're on the last retry, then try one more time with an explicitly new connection.
+		// We do this because it's possible that the remote node restarted and all the connections
+		// in the pool are stale, but we just don't know it. This is a last-ditch effort to get a
+		// successful response before giving up.
+		if nRetries == effectiveRetries {
+			nRetries++
+			conn, err := c.dialWithOption(nodeAddr, true)
+			if err != nil {
+				return nil, nRetries, err
+			}
+			defer conn.Close()
+			c.numForcedNewConns.Add(1)
+			stats.Add(numClientForceNewConn, 1)
+
+			if p, err = writeCommandReadResponse(conn, command, timeout); err != nil {
+				handleConnError(conn)
+				return nil, nRetries, err
+			}
+			break
 		}
 	}
 	return p, nRetries, nil
+}
+
+func writeCommandReadResponse(conn net.Conn, c *proto.Command, timeout time.Duration) (buf []byte, retErr error) {
+	if err := writeCommand(conn, c, timeout); err != nil {
+		return nil, err
+	}
+	return readResponse(conn, timeout)
 }
 
 func writeCommand(conn net.Conn, c *proto.Command, timeout time.Duration) error {
