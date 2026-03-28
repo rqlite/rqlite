@@ -608,8 +608,7 @@ class Node(object):
     raise_for_status(r)
 
   def stepdown(self, id=None):
-    body = {"id": id}
-    r = requests.post(self._leader_url(), data=json.dumps(body))
+    r = requests.post(self._leader_url(), json={'id': id})
     raise_for_status(r)
 
   def reap(self):
