@@ -28,7 +28,7 @@ const (
 var stats *expvar.Map
 
 func init() {
-	stats = expvar.NewMap("db-wal")
+	stats = expvar.NewMap("db.wal")
 	ResetStats()
 }
 
