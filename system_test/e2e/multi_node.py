@@ -12,7 +12,7 @@ import time
 import sqlite3
 import unittest
 
-from certs import x509cert, x509key, caCert, caSignedCertExampleDotCom, caSignedKeyExampleDotCom
+from certs import x509cert, x509key, caSignedCertExampleDotCom, caSignedKeyExampleDotCom
 from helpers import Node, Cluster, d_, write_random_file, deprovision_node, is_sequence_number, TIMEOUT
 
 RQLITED_PATH = os.environ['RQLITED_PATH']
@@ -173,7 +173,7 @@ class TestEndToEndEncryptedNode(TestEndToEnd):
     self.cluster = Cluster([n0, n1, n2])
 
 class TestEndToEndEncryptedNode_ServerName(unittest.TestCase):
-  caCertFile = write_random_file(caCert)
+  caCertFile = write_random_file(x509cert)
   caSignedKey = write_random_file(caSignedKeyExampleDotCom)
   caSignedCert = write_random_file(caSignedCertExampleDotCom)
 
