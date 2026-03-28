@@ -29,13 +29,23 @@ const (
 )
 
 const (
-	persistSize                     = "latest_persist_size"
-	persistDuration                 = "latest_persist_duration"
-	autoReapDuration                = "latest_autoreap_duration"
-	upgradeOk                       = "upgrade_ok"
-	upgradeFail                     = "upgrade_fail"
-	snapshotsReapedFail             = "snapshots_reaped_failed"
-	snapshotFullCRC32CreateDuration = "snapshot_full_crc32_create_duration"
+	persistSize     = "persist_size"
+	persistDuration = "persist_duration_ms"
+
+	sinkFullTotal        = "sink_full_total"
+	sinkIncrementalTotal = "sink_incremental_total"
+	sinkErrors           = "sink_errors"
+	sinkFullCRC32Dur     = "sink_full_crc32_duration_ms"
+
+	autoReapDuration  = "auto_reap_duration_ms"
+	reapTotal         = "reap_total"
+	reapErrors        = "reap_errors"
+	reapSnapshots     = "reap_snapshots"
+	reapWALs          = "reap_wals"
+	reapPlanRecovered = "reap_plan_recovered"
+
+	upgradeOk   = "upgrade_ok"
+	upgradeFail = "upgrade_fail"
 )
 
 var (
@@ -56,11 +66,18 @@ func ResetStats() {
 	stats.Init()
 	stats.Add(persistSize, 0)
 	stats.Add(persistDuration, 0)
+	stats.Add(sinkFullTotal, 0)
+	stats.Add(sinkIncrementalTotal, 0)
+	stats.Add(sinkErrors, 0)
+	stats.Add(sinkFullCRC32Dur, 0)
 	stats.Add(autoReapDuration, 0)
+	stats.Add(reapTotal, 0)
+	stats.Add(reapErrors, 0)
+	stats.Add(reapSnapshots, 0)
+	stats.Add(reapWALs, 0)
+	stats.Add(reapPlanRecovered, 0)
 	stats.Add(upgradeOk, 0)
 	stats.Add(upgradeFail, 0)
-	stats.Add(snapshotsReapedFail, 0)
-	stats.Add(snapshotFullCRC32CreateDuration, 0)
 }
 
 // LockingStreamer is a snapshot which holds the Snapshot Store MRSW read-lok
@@ -363,6 +380,9 @@ func (s *Store) reap() (int, int, error) {
 	if err != nil {
 		return n, c, err
 	}
+	stats.Add(reapTotal, 1)
+	stats.Get(reapSnapshots).(*expvar.Int).Set(int64(n))
+	stats.Get(reapWALs).(*expvar.Int).Set(int64(c))
 	s.observers.notify(ReapObservation{
 		SnapshotsReaped: n,
 		WALsReaped:      c,
@@ -377,6 +397,7 @@ func (s *Store) reapInternal() (int, int, error) {
 	// Let's make sure it is completed before we start a new reap.
 	if fileExists(s.reapPlanPath) {
 		s.logger.Printf("found interrupted reap plan at %s, resuming", s.reapPlanPath)
+		stats.Add(reapPlanRecovered, 1)
 		p, err := plan.ReadFromFile(s.reapPlanPath)
 		if err != nil {
 			return 0, 0, fmt.Errorf("reading reap plan: %w", err)
@@ -609,11 +630,10 @@ func (s *Store) reapLoop() {
 			continue
 		}
 
-		startTime := time.Now()
+		startT := time.Now()
 		n, c, err := func() (int, int, error) {
 			defer func() {
-				dur := time.Since(startTime)
-				stats.Get(autoReapDuration).(*expvar.Int).Set(dur.Milliseconds())
+				stats.Get(autoReapDuration).(*expvar.Int).Set(time.Since(startT).Milliseconds())
 			}()
 
 			s.mrsw.BeginWriteBlocking("reap")
@@ -622,12 +642,12 @@ func (s *Store) reapLoop() {
 		}()
 		if err != nil {
 			s.logger.Printf("reap failed: %s", err)
-			stats.Add(snapshotsReapedFail, 1)
+			stats.Add(reapErrors, 1)
 			continue
 		}
 		if s.LogReaping {
-			dur := time.Since(startTime)
-			s.logger.Printf("autoreap complete in %s: %d snapshots reaped, %d WALs checkpointed", dur, n, c)
+			s.logger.Printf("autoreap complete in %s: %d snapshots reaped, %d WALs checkpointed",
+				time.Since(startT), n, c)
 		}
 	}
 }
