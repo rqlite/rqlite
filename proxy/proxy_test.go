@@ -83,7 +83,7 @@ func (m *mockStore) LeaderAddr() (string, error) {
 // mockCluster implements Cluster for testing.
 type mockCluster struct {
 	executeFn    func(ctx context.Context, er *proto.ExecuteRequest, nodeAddr string, creds *clstrPB.Credentials, timeout time.Duration, retries int) ([]*proto.ExecuteQueryResponse, uint64, error)
-	queryFn      func(ctx context.Context, qr *proto.QueryRequest, nodeAddr string, creds *clstrPB.Credentials, timeout time.Duration) ([]*proto.QueryRows, uint64, error)
+	queryFn      func(ctx context.Context, qr *proto.QueryRequest, nodeAddr string, creds *clstrPB.Credentials, timeout time.Duration, retries int) ([]*proto.QueryRows, uint64, error)
 	requestFn    func(ctx context.Context, eqr *proto.ExecuteQueryRequest, nodeAddr string, creds *clstrPB.Credentials, timeout time.Duration, retries int) ([]*proto.ExecuteQueryResponse, uint64, uint64, error)
 	backupFn     func(ctx context.Context, br *proto.BackupRequest, nodeAddr string, creds *clstrPB.Credentials, timeout time.Duration, w io.Writer) error
 	loadFn       func(ctx context.Context, lr *proto.LoadRequest, nodeAddr string, creds *clstrPB.Credentials, timeout time.Duration, retries int) error
@@ -98,9 +98,9 @@ func (m *mockCluster) Execute(ctx context.Context, er *proto.ExecuteRequest, nod
 	return nil, 0, nil
 }
 
-func (m *mockCluster) Query(ctx context.Context, qr *proto.QueryRequest, nodeAddr string, creds *clstrPB.Credentials, timeout time.Duration) ([]*proto.QueryRows, uint64, error) {
+func (m *mockCluster) Query(ctx context.Context, qr *proto.QueryRequest, nodeAddr string, creds *clstrPB.Credentials, timeout time.Duration, retries int) ([]*proto.QueryRows, uint64, error) {
 	if m.queryFn != nil {
-		return m.queryFn(ctx, qr, nodeAddr, creds, timeout)
+		return m.queryFn(ctx, qr, nodeAddr, creds, timeout, retries)
 	}
 	return nil, 0, nil
 }
@@ -310,7 +310,7 @@ func Test_Query_LocalSuccess(t *testing.T) {
 	}
 	p := newTestProxy(s, &mockCluster{})
 
-	results, idx, addr, err := p.Query(context.Background(), &proto.QueryRequest{}, nil, time.Second, false)
+	results, idx, addr, err := p.Query(context.Background(), &proto.QueryRequest{}, nil, time.Second, 0, false)
 	if err != nil {
 		t.Fatalf("unexpected error: %s", err)
 	}
@@ -334,7 +334,7 @@ func Test_Query_NotLeader_NoForward(t *testing.T) {
 	}
 	p := newTestProxy(s, &mockCluster{})
 
-	_, _, _, err := p.Query(context.Background(), &proto.QueryRequest{}, nil, time.Second, true)
+	_, _, _, err := p.Query(context.Background(), &proto.QueryRequest{}, nil, time.Second, 0, true)
 	if !errors.Is(err, ErrNotLeader) {
 		t.Fatalf("expected ErrNotLeader, got %v", err)
 	}
@@ -352,7 +352,7 @@ func Test_Query_NotLeader_Forward(t *testing.T) {
 		},
 	}
 	c := &mockCluster{
-		queryFn: func(ctx context.Context, qr *proto.QueryRequest, nodeAddr string, creds *clstrPB.Credentials, timeout time.Duration) ([]*proto.QueryRows, uint64, error) {
+		queryFn: func(ctx context.Context, qr *proto.QueryRequest, nodeAddr string, creds *clstrPB.Credentials, timeout time.Duration, retries int) ([]*proto.QueryRows, uint64, error) {
 			if nodeAddr != "leader:4002" {
 				t.Fatalf("expected forwarding to leader:4002, got %s", nodeAddr)
 			}
@@ -361,7 +361,7 @@ func Test_Query_NotLeader_Forward(t *testing.T) {
 	}
 	p := newTestProxy(s, c)
 
-	results, idx, addr, err := p.Query(context.Background(), &proto.QueryRequest{}, nil, time.Second, false)
+	results, idx, addr, err := p.Query(context.Background(), &proto.QueryRequest{}, nil, time.Second, 0, false)
 	if err != nil {
 		t.Fatalf("unexpected error: %s", err)
 	}
@@ -387,13 +387,13 @@ func Test_Query_Unauthorized(t *testing.T) {
 		},
 	}
 	c := &mockCluster{
-		queryFn: func(ctx context.Context, qr *proto.QueryRequest, nodeAddr string, creds *clstrPB.Credentials, timeout time.Duration) ([]*proto.QueryRows, uint64, error) {
+		queryFn: func(ctx context.Context, qr *proto.QueryRequest, nodeAddr string, creds *clstrPB.Credentials, timeout time.Duration, retries int) ([]*proto.QueryRows, uint64, error) {
 			return nil, 0, errors.New("unauthorized")
 		},
 	}
 	p := newTestProxy(s, c)
 
-	_, _, _, err := p.Query(context.Background(), &proto.QueryRequest{}, nil, time.Second, false)
+	_, _, _, err := p.Query(context.Background(), &proto.QueryRequest{}, nil, time.Second, 0, false)
 	if !errors.Is(err, ErrUnauthorized) {
 		t.Fatalf("expected ErrUnauthorized, got %v", err)
 	}

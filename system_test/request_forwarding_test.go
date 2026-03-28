@@ -88,7 +88,7 @@ func Test_StoreClientSideBySide(t *testing.T) {
 	if exp, got := `[{"columns":["id","name"],"types":["integer","text"],"values":[[1,"fiona"]]}]`, asJSON(results); exp != got {
 		t.Fatalf("unexpected results, exp %s, got %s", exp, got)
 	}
-	rows, _, err = client.Query(context.Background(), queryRequestFromString(`SELECT * FROM foo`), leaderAddr, NO_CREDS, shortWait)
+	rows, _, err = client.Query(context.Background(), queryRequestFromString(`SELECT * FROM foo`), leaderAddr, NO_CREDS, shortWait, noRetries)
 	if err != nil {
 		t.Fatalf("failed to query via remote: %s", err.Error())
 	}
@@ -121,7 +121,7 @@ func Test_StoreClientSideBySide(t *testing.T) {
 	if exp, got := `[{"columns":["id","name"],"types":["integer","text"],"values":[[1,"fiona"]]}]`, asJSON(results); exp != got {
 		t.Fatalf("unexpected results, exp %s, got %s", exp, got)
 	}
-	rows, _, err = client.Query(context.Background(), queryRequestFromString(`SELECT * FROM bar`), leaderAddr, NO_CREDS, shortWait)
+	rows, _, err = client.Query(context.Background(), queryRequestFromString(`SELECT * FROM bar`), leaderAddr, NO_CREDS, shortWait, noRetries)
 	if err != nil {
 		t.Fatalf("failed to query via remote: %s", err.Error())
 	}
@@ -157,7 +157,7 @@ func Test_StoreClientSideBySide(t *testing.T) {
 	// Statements causing errors are considered read-write by SQLite, so
 	// don't bother with index check. It's not super-meaningful.
 
-	rows, _, err = client.Query(context.Background(), queryRequestFromString(`SELECT * FROM qux`), leaderAddr, NO_CREDS, shortWait)
+	rows, _, err = client.Query(context.Background(), queryRequestFromString(`SELECT * FROM qux`), leaderAddr, NO_CREDS, shortWait, noRetries)
 	if err != nil {
 		t.Fatalf("failed to query via remote: %s", err.Error())
 	}

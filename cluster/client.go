@@ -220,7 +220,7 @@ func (c *Client) Execute(ctx context.Context, er *command.ExecuteRequest, nodeAd
 // Query performs a Query on a remote node. If creds is nil, then
 // no credential information will be included in the Query request to the
 // remote node.
-func (c *Client) Query(ctx context.Context, qr *command.QueryRequest, nodeAddr string, creds *proto.Credentials, timeout time.Duration) ([]*command.QueryRows, uint64, error) {
+func (c *Client) Query(ctx context.Context, qr *command.QueryRequest, nodeAddr string, creds *proto.Credentials, timeout time.Duration, retries int) ([]*command.QueryRows, uint64, error) {
 	if err := ctx.Err(); err != nil {
 		return nil, 0, err
 	}
@@ -231,7 +231,7 @@ func (c *Client) Query(ctx context.Context, qr *command.QueryRequest, nodeAddr s
 		},
 		Credentials: creds,
 	}
-	p, nr, err := c.retry(ctx, command, nodeAddr, timeout, defaultMaxRetries)
+	p, nr, err := c.retry(ctx, command, nodeAddr, timeout, retries)
 	stats.Add(numClientQueryRetries, int64(nr))
 	if err != nil {
 		return nil, 0, err
