@@ -775,16 +775,12 @@ func (c *Client) retry(ctx context.Context, command *proto.Command, nodeAddr str
 			}
 			defer conn.Close()
 
-			if errInner = writeCommand(conn, command, timeout); errInner != nil {
-				handleConnError(conn)
-				return nil, errInner
-			}
-
-			b, errInner := readResponse(conn, timeout)
+			b, errInner := writeCommandReadResponse(conn, command, timeout)
 			if errInner != nil {
 				handleConnError(conn)
 				return nil, errInner
 			}
+
 			return b, nil
 		}()
 		if errOuter == nil {
@@ -807,13 +803,7 @@ func (c *Client) retry(ctx context.Context, command *proto.Command, nodeAddr str
 			c.numForcedNewConns.Add(1)
 			stats.Add(numClientForceNewConn, 1)
 
-			if err := writeCommand(conn, command, timeout); err != nil {
-				handleConnError(conn)
-				return nil, nRetries, err
-			}
-
-			p, err = readResponse(conn, timeout)
-			if err != nil {
+			if p, err = writeCommandReadResponse(conn, command, timeout); err != nil {
 				handleConnError(conn)
 				return nil, nRetries, err
 			}
@@ -821,6 +811,13 @@ func (c *Client) retry(ctx context.Context, command *proto.Command, nodeAddr str
 		}
 	}
 	return p, nRetries, nil
+}
+
+func writeCommandReadResponse(conn net.Conn, c *proto.Command, timeout time.Duration) (buf []byte, retErr error) {
+	if err := writeCommand(conn, c, timeout); err != nil {
+		return nil, err
+	}
+	return readResponse(conn, timeout)
 }
 
 func writeCommand(conn net.Conn, c *proto.Command, timeout time.Duration) error {
