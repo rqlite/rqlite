@@ -48,6 +48,7 @@ const (
 	numClientRequestRetries     = "num_client_request_retries"
 	numClientReadTimeouts       = "num_client_read_timeouts"
 	numClientWriteTimeouts      = "num_client_write_timeouts"
+	numClientForceNewConn       = "num_client_force_new_conn"
 
 	// Client stats for this package.
 	numGetNodeAPIRequestLocal = "num_get_node_api_req_local"
@@ -85,6 +86,7 @@ func init() {
 	stats.Add(numClientRequestRetries, 0)
 	stats.Add(numClientReadTimeouts, 0)
 	stats.Add(numClientWriteTimeouts, 0)
+	stats.Add(numClientForceNewConn, 0)
 }
 
 // Dialer is the interface dialers must implement.

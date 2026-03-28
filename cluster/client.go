@@ -288,7 +288,7 @@ func (c *Client) Backup(ctx context.Context, br *command.BackupRequest, nodeAddr
 	if err := ctx.Err(); err != nil {
 		return err
 	}
-	conn, err := c.dial(nodeAddr)
+	conn, err := c.dial(nodeAddr, false)
 	if err != nil {
 		return err
 	}
@@ -377,7 +377,7 @@ func (c *Client) RemoveNode(ctx context.Context, rn *command.RemoveNodeRequest, 
 	if err := ctx.Err(); err != nil {
 		return err
 	}
-	conn, err := c.dial(nodeAddr)
+	conn, err := c.dial(nodeAddr, false)
 	if err != nil {
 		return err
 	}
@@ -421,7 +421,7 @@ func (c *Client) Stepdown(ctx context.Context, sr *command.StepdownRequest, node
 	if err := ctx.Err(); err != nil {
 		return err
 	}
-	conn, err := c.dial(nodeAddr)
+	conn, err := c.dial(nodeAddr, false)
 	if err != nil {
 		return err
 	}
@@ -465,7 +465,7 @@ func (c *Client) Notify(ctx context.Context, nr *command.NotifyRequest, nodeAddr
 	if err := ctx.Err(); err != nil {
 		return err
 	}
-	conn, err := c.dial(nodeAddr)
+	conn, err := c.dial(nodeAddr, false)
 	if err != nil {
 		return err
 	}
@@ -510,7 +510,7 @@ func (c *Client) Join(ctx context.Context, jr *command.JoinRequest, nodeAddr str
 		return err
 	}
 	for {
-		conn, err := c.dial(nodeAddr)
+		conn, err := c.dial(nodeAddr, false)
 		if err != nil {
 			return err
 		}
@@ -605,7 +605,7 @@ func (c *Client) BroadcastHWM(ctx context.Context, hwm uint64, retries int, time
 			// Attempt with retries
 			var lastErr error
 			for attempt := 0; attempt <= retries; attempt++ {
-				conn, err := c.dial(nodeAddress)
+				conn, err := c.dial(nodeAddress, attempt == retries)
 				if err != nil {
 					lastErr = err
 					continue
@@ -708,7 +708,7 @@ func (c *Client) Stats() (map[string]any, error) {
 	return stats, nil
 }
 
-func (c *Client) dial(nodeAddr string) (net.Conn, error) {
+func (c *Client) dial(nodeAddr string, forceNew bool) (net.Conn, error) {
 	var pl pool.Pool
 	var ok bool
 
@@ -741,11 +741,11 @@ func (c *Client) dial(nodeAddr string) (net.Conn, error) {
 	}
 
 	// Got pool, now get a connection.
-	conn, err := pl.Get()
-	if err != nil {
-		return nil, fmt.Errorf("pool get: %w", err)
+	if forceNew {
+		stats.Add(numClientForceNewConn, 1)
+		return pl.New()
 	}
-	return conn, nil
+	return pl.Get()
 }
 
 // retry retries a command on a remote node. It does this so we churn through connections
@@ -760,7 +760,11 @@ func (c *Client) retry(ctx context.Context, command *proto.Command, nodeAddr str
 			return nil, nRetries, err
 		}
 		p, errOuter = func() ([]byte, error) {
-			conn, errInner := c.dial(nodeAddr)
+			// Dial a connection. If we have exceeded maxRetries, then we force a new connection
+			// to be created.  In the event the node restarted all of the connections in the
+			// pool may be stale, so we want to try one last time with a new connection before
+			// giving up.
+			conn, errInner := c.dial(nodeAddr, nRetries == maxRetries)
 			if errInner != nil {
 				return nil, errInner
 			}
@@ -781,13 +785,15 @@ func (c *Client) retry(ctx context.Context, command *proto.Command, nodeAddr str
 		if errOuter == nil {
 			break
 		}
+
 		nRetries++
 		stats.Add(numClientRetries, 1)
 		if nRetries > maxRetries {
-			return nil, nRetries, errOuter
+			break
 		}
 	}
-	return p, nRetries, nil
+
+	return p, nRetries, errOuter
 }
 
 func writeCommand(conn net.Conn, c *proto.Command, timeout time.Duration) error {
