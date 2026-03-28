@@ -709,6 +709,10 @@ func (c *Client) Stats() (map[string]any, error) {
 }
 
 func (c *Client) dial(nodeAddr string) (net.Conn, error) {
+	return c.dialWithOption(nodeAddr, false)
+}
+
+func (c *Client) dialWithOption(nodeAddr string, forceNew bool) (net.Conn, error) {
 	var pl pool.Pool
 	var ok bool
 
@@ -741,11 +745,10 @@ func (c *Client) dial(nodeAddr string) (net.Conn, error) {
 	}
 
 	// Got pool, now get a connection.
-	conn, err := pl.Get()
-	if err != nil {
-		return nil, fmt.Errorf("pool get: %w", err)
+	if forceNew {
+		return pl.New()
 	}
-	return conn, nil
+	return pl.Get()
 }
 
 // retry retries a command on a remote node. It does this so we churn through connections
@@ -754,7 +757,8 @@ func (c *Client) dial(nodeAddr string) (net.Conn, error) {
 func (c *Client) retry(ctx context.Context, command *proto.Command, nodeAddr string, timeout time.Duration, maxRetries int) ([]byte, int, error) {
 	var p []byte
 	var errOuter error
-	var nRetries int
+	nRetries := max(1, maxRetries)
+
 	for {
 		if err := ctx.Err(); err != nil {
 			return nil, nRetries, err
@@ -783,8 +787,30 @@ func (c *Client) retry(ctx context.Context, command *proto.Command, nodeAddr str
 		}
 		nRetries++
 		stats.Add(numClientRetries, 1)
-		if nRetries > maxRetries {
-			return nil, nRetries, errOuter
+
+		// If we're on the last retry, then try one more time with an explicitly new connection.
+		// We do this because it's possible that the remote node restarted and all the connections
+		// in the pool are stale, but we just don't know it. This is a last-ditch effort to get a
+		// successful response before giving up.
+		if nRetries == maxRetries {
+			nRetries++
+			conn, err := c.dialWithOption(nodeAddr, true)
+			if err != nil {
+				return nil, nRetries, err
+			}
+			defer conn.Close()
+
+			if err := writeCommand(conn, command, timeout); err != nil {
+				handleConnError(conn)
+				return nil, nRetries, err
+			}
+
+			p, err = readResponse(conn, timeout)
+			if err != nil {
+				handleConnError(conn)
+				return nil, nRetries, err
+			}
+			break
 		}
 	}
 	return p, nRetries, nil
