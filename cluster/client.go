@@ -800,6 +800,7 @@ func (c *Client) retry(ctx context.Context, command *proto.Command, nodeAddr str
 				return nil, nRetries, err
 			}
 			defer conn.Close()
+			stats.Add(numClientForceNewConn, 1)
 
 			if err := writeCommand(conn, command, timeout); err != nil {
 				handleConnError(conn)
