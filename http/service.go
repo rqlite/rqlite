@@ -187,7 +187,6 @@ const (
 	numStatus                         = "num_status"
 	numBackups                        = "backups"
 	numLoad                           = "loads"
-	numLoadAborted                    = "loads_aborted"
 	numBoot                           = "boot"
 	numSnapshots                      = "user_snapshots"
 	numReaps                          = "user_reaps"
@@ -254,7 +253,6 @@ func ResetStats() {
 	stats.Add(numStatus, 0)
 	stats.Add(numBackups, 0)
 	stats.Add(numLoad, 0)
-	stats.Add(numLoadAborted, 0)
 	stats.Add(numBoot, 0)
 	stats.Add(numSnapshots, 0)
 	stats.Add(numReaps, 0)

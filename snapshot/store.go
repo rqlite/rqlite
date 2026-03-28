@@ -34,10 +34,7 @@ const (
 	autoReapDuration                = "latest_autoreap_duration"
 	upgradeOk                       = "upgrade_ok"
 	upgradeFail                     = "upgrade_fail"
-	snapshotsReaped                 = "snapshots_reaped"
 	snapshotsReapedFail             = "snapshots_reaped_failed"
-	snapshotCreateMRSWFail          = "snapshot_create_mrsw_fail"
-	snapshotOpenMRSWFail            = "snapshot_open_mrsw_fail"
 	snapshotFullCRC32CreateDuration = "snapshot_full_crc32_create_duration"
 )
 
@@ -62,10 +59,7 @@ func ResetStats() {
 	stats.Add(autoReapDuration, 0)
 	stats.Add(upgradeOk, 0)
 	stats.Add(upgradeFail, 0)
-	stats.Add(snapshotsReaped, 0)
 	stats.Add(snapshotsReapedFail, 0)
-	stats.Add(snapshotCreateMRSWFail, 0)
-	stats.Add(snapshotOpenMRSWFail, 0)
 	stats.Add(snapshotFullCRC32CreateDuration, 0)
 }
 
