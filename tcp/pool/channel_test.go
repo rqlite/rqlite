@@ -322,8 +322,8 @@ func TestPool_New_ClosedPool(t *testing.T) {
 	p.Close()
 
 	_, err := p.New()
-	if err == nil {
-		t.Fatal("Expected error from New on closed pool")
+	if err != ErrClosed {
+		t.Fatalf("Expected error from New on closed pool to be ErrClosed, got %v", err)
 	}
 }
 
