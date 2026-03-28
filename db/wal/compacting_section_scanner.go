@@ -3,10 +3,13 @@ package wal
 import (
 	"encoding/binary"
 	"errors"
+	"expvar"
 	"fmt"
 	"io"
 	"maps"
+	"math"
 	"sort"
+	"time"
 )
 
 var (
@@ -82,8 +85,17 @@ func NewCompactingFrameScanner(r io.ReadSeeker, startFrame int64, fullScan bool)
 		start:    WALHeaderSize + startFrame*frameSize,
 	}
 
-	if err := s.scan(); err != nil {
+	startT := time.Now()
+	n, err := s.scan()
+	if err != nil {
+		stats.Add(compactScanErrors, 1)
 		return nil, err
+	}
+	stats.Get(compactScanDuration).(*expvar.Int).Set(time.Since(startT).Milliseconds())
+	stats.Get(compactFramesOutput).(*expvar.Int).Set(int64(len(s.frames)))
+	if len(s.frames) > 0 {
+		r := math.Round(float64(n)/float64(len(s.frames))*10) / 10
+		stats.Get(compactFramesRatio).(*expvar.Float).Set(r)
 	}
 	return s, nil
 }
@@ -175,10 +187,10 @@ func (s *CompactingFrameScanner) Bytes() ([]byte, error) {
 // scan reads all valid frame headers from start to the end of the WAL and
 // builds a compacted frame list, keeping only the latest version of each page.
 // Only committed transactions are included.
-func (s *CompactingFrameScanner) scan() error {
+func (s *CompactingFrameScanner) scan() (int64, error) {
 	// Seek to the start position.
 	if _, err := s.readSeeker.Seek(s.start, io.SeekStart); err != nil {
-		return fmt.Errorf("seek to start offset %d: %w", s.start, err)
+		return 0, fmt.Errorf("seek to start offset %d: %w", s.start, err)
 	}
 
 	var buf []byte
@@ -186,17 +198,18 @@ func (s *CompactingFrameScanner) scan() error {
 		buf = make([]byte, s.header.PageSize)
 	}
 
+	var framesInput int64
 	waitingForCommit := false
 	txFrames := make(map[uint32]*cFrame)
 	frames := make(map[uint32]*cFrame)
-
 	for {
 		pgno, commit, err := s.walReader.ReadFrame(buf)
 		if err == io.EOF {
 			break
 		} else if err != nil {
-			return err
+			return 0, err
 		}
+		framesInput++
 
 		offset := s.start + s.walReader.Offset() - WALHeaderSize
 
@@ -215,9 +228,10 @@ func (s *CompactingFrameScanner) scan() error {
 		maps.Copy(frames, txFrames)
 		clear(txFrames)
 	}
+	stats.Get(compactFramesInput).(*expvar.Int).Set(framesInput)
 
 	if waitingForCommit {
-		return ErrOpenTransaction
+		return framesInput, ErrOpenTransaction
 	}
 
 	s.frames = make(cFrames, 0, len(frames))
@@ -225,7 +239,7 @@ func (s *CompactingFrameScanner) scan() error {
 		s.frames = append(s.frames, frame)
 	}
 	sort.Sort(s.frames)
-	return nil
+	return framesInput, nil
 }
 
 type cFrame struct {

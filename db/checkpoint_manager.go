@@ -82,6 +82,8 @@ func NewCheckpointManager(db *DB) (*CheckpointManager, error) {
 // the given timeout duration. If the checkpoint operation fails to complete within
 // the timeout, an error is returned.
 func (cm *CheckpointManager) Checkpoint(w io.Writer, timeout time.Duration) (int64, error) {
+	stats.Add(numCheckpointTotal, 1)
+
 	if w == nil {
 		// Short-circuit if no writer provided, just checkpoint and truncate the database.
 		err := cm.db.CheckpointTruncateWithTimeout(timeout)
@@ -122,6 +124,12 @@ func (cm *CheckpointManager) Checkpoint(w io.Writer, timeout time.Duration) (int
 		}
 	}
 
+	walSzPre, err := fileSize(cm.walPath)
+	if err != nil {
+		return 0, err
+	}
+	stats.Get(preCompactWALSize).(*expvar.Int).Set(walSzPre)
+
 	compactStartTime := time.Now()
 	scanner, err := wal.NewCompactingFrameScanner(walFD, cm.nextFrameIdx, false)
 	if err != nil {
@@ -137,12 +145,6 @@ func (cm *CheckpointManager) Checkpoint(w io.Writer, timeout time.Duration) (int
 	}
 	stats.Get(createCompactedWALDuration).(*expvar.Int).Set(time.Since(compactStartTime).Milliseconds())
 	stats.Get(compactedWALSize).(*expvar.Int).Set(n)
-
-	walSzPre, err := fileSize(cm.walPath)
-	if err != nil {
-		return 0, err
-	}
-	stats.Get(preCompactWALSize).(*expvar.Int).Set(walSzPre)
 
 	/////////////////////////////////////////////////////////////////////////////////
 	// Now, attempt to perform a TRUNCATE checkpoint of the database.
@@ -161,6 +163,7 @@ func (cm *CheckpointManager) Checkpoint(w io.Writer, timeout time.Duration) (int
 	rc, pnLog, pnCkpt := meta.Code, meta.Pages, meta.Moved
 	if rc == 0 {
 		// WAL was reset. Next write will start at the beginning of the WAL file.
+		stats.Add(numCheckpointWALTruncated, 1)
 		cm.nextFrameIdx = 0
 		cm.salt = nil
 		return n, nil
@@ -170,6 +173,7 @@ func (cm *CheckpointManager) Checkpoint(w io.Writer, timeout time.Duration) (int
 		// this checkpoint as failed, nothing about our state needs to be updated.
 		// Next time we will retry the checkpoint from the same offset and attempt
 		// to move all pages.
+		stats.Add(numCheckpointBusyErrors, 1)
 		return 0, ErrDatabaseCheckpointBusy
 	} else if pnCkpt == pnLog {
 		// In this case, the checkpoint failed, all pages were moved, but the WAL
@@ -182,9 +186,11 @@ func (cm *CheckpointManager) Checkpoint(w io.Writer, timeout time.Duration) (int
 		// the WAL, which would cause the next WAL frame to be written at the beginning
 		// of the file. The only way to tell will be to check the salt values on the
 		// next checkpoint attempt.
+		stats.Add(numCheckpointPartial, 1)
 		cm.nextFrameIdx = int64(pnCkpt)
 		return 0, nil
 	}
+	stats.Add(numCheckpointInvariantErrors, 1)
 	return 0, ErrDatabaseCheckpointInvariant
 }
 

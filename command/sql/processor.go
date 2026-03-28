@@ -24,7 +24,7 @@ const (
 var stats *expvar.Map
 
 func init() {
-	stats = expvar.NewMap("sql-processor")
+	stats = expvar.NewMap("sql.processor")
 	ResetStats()
 }
 

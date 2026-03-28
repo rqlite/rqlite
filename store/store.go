@@ -193,9 +193,7 @@ const (
 	numSnapshotPersists         = "num_snapshot_persists"
 	numSnapshotPersistsFailed   = "num_snapshot_persists_failed"
 	snapshotPersistDuration     = "snapshot_persist_duration"
-	snapshotPrecompactWALSize   = "snapshot_precompact_wal_size"
 	snapshotCRC32CreateDuration = "snapshot_crc32_create_duration"
-	snapshotWALSize             = "snapshot_wal_size"
 	leaderChangesObserved       = "leader_changes_observed"
 	leaderChangesDropped        = "leader_changes_dropped"
 	failedHeartbeatObserved     = "failed_heartbeat_observed"
@@ -256,9 +254,7 @@ func ResetStats() {
 	stats.Add(numSnapshotPersists, 0)
 	stats.Add(numSnapshotPersistsFailed, 0)
 	stats.Add(snapshotPersistDuration, 0)
-	stats.Add(snapshotPrecompactWALSize, 0)
 	stats.Add(snapshotCRC32CreateDuration, 0)
-	stats.Add(snapshotWALSize, 0)
 	stats.Add(leaderChangesObserved, 0)
 	stats.Add(leaderChangesDropped, 0)
 	stats.Add(failedHeartbeatObserved, 0)

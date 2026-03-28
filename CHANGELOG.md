@@ -90,6 +90,7 @@ There are no breaking API changes in this release, nor any changes to how cluste
 - [PR #2581](https://github.com/rqlite/rqlite/pull/2581): Reduce default reap threshold to 4.
 - [PR #2584](https://github.com/rqlite/rqlite/pull/2584): Connection Pool supports explicitly creating new connections.
 - [PR #2585](https://github.com/rqlite/rqlite/pull/2585), [PR #2586](https://github.com/rqlite/rqlite/pull/2586): Cluster client always retries at least once with new connection.  Fixes issue [#2579](https://github.com/rqlite/rqlite/issues/2579).
+- [PR #2587](https://github.com/rqlite/rqlite/pull/2587): Improve DB-layer expvar stats.
 
 ## v9.4.5 (March 9th 2026)
 ### Implementation changes and bug fixes
