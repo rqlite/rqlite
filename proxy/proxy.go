@@ -45,6 +45,10 @@ const (
 	numRemoteRequestsFailed   = "remote_requests_failed"
 )
 
+const (
+	noRetries = 0
+)
+
 func init() {
 	stats = expvar.NewMap("proxy")
 	ResetStats()
@@ -80,7 +84,7 @@ type Store interface {
 // Cluster defines operations for forwarding requests to the leader.
 type Cluster interface {
 	Execute(ctx context.Context, er *proto.ExecuteRequest, nodeAddr string, creds *clstrPB.Credentials, timeout time.Duration, retries int) ([]*proto.ExecuteQueryResponse, uint64, error)
-	Query(ctx context.Context, qr *proto.QueryRequest, nodeAddr string, creds *clstrPB.Credentials, timeout time.Duration) ([]*proto.QueryRows, uint64, error)
+	Query(ctx context.Context, qr *proto.QueryRequest, nodeAddr string, creds *clstrPB.Credentials, timeout time.Duration, retries int) ([]*proto.QueryRows, uint64, error)
 	Request(ctx context.Context, eqr *proto.ExecuteQueryRequest, nodeAddr string, creds *clstrPB.Credentials, timeout time.Duration, retries int) ([]*proto.ExecuteQueryResponse, uint64, uint64, error)
 	Backup(ctx context.Context, br *proto.BackupRequest, nodeAddr string, creds *clstrPB.Credentials, timeout time.Duration, w io.Writer) error
 	Load(ctx context.Context, lr *proto.LoadRequest, nodeAddr string, creds *clstrPB.Credentials, timeout time.Duration, retries int) error
@@ -160,7 +164,7 @@ func (p *Proxy) Query(ctx context.Context, qr *proto.QueryRequest, creds *clstrP
 		if addrErr != nil {
 			return nil, 0, "", addrErr
 		}
-		results, raftIndex, err = p.cluster.Query(ctx, qr, addr, creds, timeout)
+		results, raftIndex, err = p.cluster.Query(ctx, qr, addr, creds, timeout, noRetries)
 		if err != nil {
 			stats.Add(numRemoteQueriesFailed, 1)
 			return nil, 0, "", wrapIfUnauthorized(err)

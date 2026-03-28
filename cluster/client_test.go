@@ -173,7 +173,7 @@ func Test_ClientQuery(t *testing.T) {
 
 	c := NewClient(&simpleDialer{}, 0)
 	_, _, err := c.Query(context.Background(), queryRequestFromString("SELECT * FROM foo"),
-		srv.Addr(), nil, time.Second)
+		srv.Addr(), nil, time.Second, noRetries)
 	if err != nil {
 		t.Fatal(err)
 	}

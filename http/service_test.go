@@ -2653,7 +2653,7 @@ func (m *mockClusterService) Execute(ctx context.Context, er *command.ExecuteReq
 	return nil, 0, nil
 }
 
-func (m *mockClusterService) Query(ctx context.Context, qr *command.QueryRequest, addr string, creds *cluster.Credentials, t time.Duration) ([]*command.QueryRows, uint64, error) {
+func (m *mockClusterService) Query(ctx context.Context, qr *command.QueryRequest, addr string, creds *cluster.Credentials, t time.Duration, r int) ([]*command.QueryRows, uint64, error) {
 	if m.queryFn != nil {
 		return m.queryFn(qr, addr, t)
 	}
