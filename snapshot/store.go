@@ -673,10 +673,24 @@ func (s *Store) check() error {
 	// Remove any incomplete plan file from an interrupted plan write.
 	os.Remove(tmpName(s.reapPlanPath))
 
+	reapPlanFound := fileExists(s.reapPlanPath)
+
+	// If no reap was interrupted, verify the CRC32 of every data file
+	// in every snapshot directory. If a reap was interrupted, the files
+	// may be in an inconsistent state and the CRC32 validation may fail,
+	// so we skip it in that case and just resume the reap to fix any
+	// inconsistencies.
+	if !reapPlanFound {
+		if err := s.checkCRCs(); err != nil {
+			return err
+		}
+	}
+
 	// Resume an interrupted reap if such a plan file exists. Only then should
 	// we remove any leftover temporary directories, since they may be needed
-	// for the reap to complete.
-	if fileExists(s.reapPlanPath) {
+	// for the reap to complete. If a reap plan was found, skip CRC validation
+	// since files may have been left in an inconsistent state by the crash.
+	if reapPlanFound {
 		s.logger.Printf("found interrupted reap plan at %s, resuming", s.reapPlanPath)
 		p, err := plan.ReadFromFile(s.reapPlanPath)
 		if err != nil {
@@ -702,6 +716,49 @@ func (s *Store) check() error {
 		}
 	}
 	return nil
+}
+
+// checkCRCs verifies the CRC32 of every data file in every snapshot directory.
+func (s *Store) checkCRCs() error {
+	startT := time.Now()
+	snapshots, err := s.catalog.Scan(s.dir)
+	if err != nil {
+		return fmt.Errorf("scanning snapshots for CRC check: %w", err)
+	}
+
+	for _, snap := range snapshots.items {
+		if snap.dbFile != nil {
+			ok, err := snap.dbFile.Check()
+			if err != nil {
+				return fmt.Errorf("CRC32 check of %s: %w", snap.dbFile.Path, err)
+			}
+			if !ok {
+				return fmt.Errorf("CRC32 mismatch for %s", snap.dbFile.Path)
+			}
+		}
+		for _, wf := range snap.walFiles {
+			ok, err := wf.Check()
+			if err != nil {
+				return fmt.Errorf("CRC32 check of %s: %w", wf.Path, err)
+			}
+			if !ok {
+				return fmt.Errorf("CRC32 mismatch for %s", wf.Path)
+			}
+		}
+	}
+
+	s.logger.Printf("completed CRC32 check of %d snapshot directories in %s",
+		len(snapshots.items), durString(time.Since(startT)))
+	return nil
+}
+
+// durString returns a human-readable duration string, using milliseconds
+// for durations >= 1ms and microseconds for shorter durations.
+func durString(d time.Duration) string {
+	if d >= time.Millisecond {
+		return fmt.Sprintf("%d ms", d.Milliseconds())
+	}
+	return fmt.Sprintf("%d µs", d.Microseconds())
 }
 
 // getSnapshots returns the set of snapshots in the Store.
