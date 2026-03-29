@@ -592,12 +592,20 @@ func (s *Store) Stats() (map[string]any, error) {
 	}
 	defer s.mrsw.EndRead()
 
+	dirSz, err := dirSize(s.dir)
+	if err != nil {
+		// If we can't compute the directory size, we can still return other stats,
+		// so we ignore the error and just report a size of 0.
+		dirSz = 0
+	}
+
 	snapshots, err := s.getSnapshots()
 	if err != nil {
 		return nil, err
 	}
 	return map[string]any{
 		"dir":       s.dir,
+		"dir_size":  dirSz,
 		"snapshots": snapshots.IDs(),
 	}, nil
 }
@@ -716,4 +724,20 @@ func snapshotName(term, index uint64) string {
 // metaPath returns the path to the meta file in the given directory.
 func metaPath(dir string) string {
 	return filepath.Join(dir, metaFileName)
+}
+
+// write a function which given a directory path calculates the
+// sum of the sizes of all files in the directory and its subdirectories, and returns it as an int64.
+func dirSize(path string) (int64, error) {
+	var size int64
+	err := filepath.Walk(path, func(_ string, info os.FileInfo, err error) error {
+		if err != nil {
+			return err
+		}
+		if !info.IsDir() {
+			size += info.Size()
+		}
+		return nil
+	})
+	return size, err
 }
