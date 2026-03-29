@@ -673,10 +673,24 @@ func (s *Store) check() error {
 	// Remove any incomplete plan file from an interrupted plan write.
 	os.Remove(tmpName(s.reapPlanPath))
 
+	reapPlanFound := fileExists(s.reapPlanPath)
+
+	// If no reap was interrupted, verify the CRC32 of every data file
+	// in every snapshot directory. If a reap was interrupted, the files
+	// may be in an inconsistent state and the CRC32 validation may fail,
+	// so we skip it in that case and just resume the reap to fix any
+	// inconsistencies.
+	if !reapPlanFound {
+		if err := s.checkCRCs(); err != nil {
+			return err
+		}
+	}
+
 	// Resume an interrupted reap if such a plan file exists. Only then should
 	// we remove any leftover temporary directories, since they may be needed
-	// for the reap to complete.
-	if fileExists(s.reapPlanPath) {
+	// for the reap to complete. If a reap plan was found, skip CRC validation
+	// since files may have been left in an inconsistent state by the crash.
+	if reapPlanFound {
 		s.logger.Printf("found interrupted reap plan at %s, resuming", s.reapPlanPath)
 		p, err := plan.ReadFromFile(s.reapPlanPath)
 		if err != nil {
@@ -701,6 +715,36 @@ func (s *Store) check() error {
 			}
 		}
 	}
+	return nil
+}
+
+// checkCRCs verifies the CRC32 of every data file in every snapshot directory.
+func (s *Store) checkCRCs() error {
+	startT := time.Now()
+	snapshots, err := s.catalog.Scan(s.dir)
+	if err != nil {
+		return fmt.Errorf("scanning snapshots for CRC check: %w", err)
+	}
+	if len(snapshots.items) == 0 {
+		return nil
+	}
+
+	checker := NewCRCChecker()
+	for _, snap := range snapshots.items {
+		if snap.dbFile != nil {
+			checker.Add(snap.dbFile)
+		}
+		for _, wf := range snap.walFiles {
+			checker.Add(wf)
+		}
+	}
+
+	if err := <-checker.Check(); err != nil {
+		return err
+	}
+
+	s.logger.Printf("completed CRC32 check of %d snapshot directories in %s",
+		len(snapshots.items), time.Since(startT))
 	return nil
 }
 

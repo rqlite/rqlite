@@ -95,6 +95,7 @@ There are no breaking API changes in this release, nor any changes to how cluste
 - [PR #2587](https://github.com/rqlite/rqlite/pull/2587): Improve DB-layer expvar stats.
 - [PR #2588](https://github.com/rqlite/rqlite/pull/2588): Improve Snapshot Store expvar stats.
 - [PR #2590](https://github.com/rqlite/rqlite/pull/2590): Improve Snapshot reaping expvar stats.
+- [PR #2591](https://github.com/rqlite/rqlite/pull/2591): Check Snapshot store CRC32 values on startup.
 
 ## v9.4.5 (March 9th 2026)
 ### Implementation changes and bug fixes
