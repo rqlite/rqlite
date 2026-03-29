@@ -1,7 +1,6 @@
 package plan
 
 import (
-	"expvar"
 	"fmt"
 	"io"
 	"os"
@@ -67,9 +66,7 @@ func (e *Executor) RemoveAll(path string) error {
 // checkpoint before processing the remaining WALs.
 func (e *Executor) Checkpoint(dbPath string, wals []string) (int, error) {
 	startT := time.Now()
-	defer func() {
-		stats.Get(checkpointDuration).(*expvar.Int).Set(time.Since(startT).Milliseconds())
-	}()
+	defer recordDuration(checkpointDuration, startT)
 
 	walPath := dbPath + "-wal"
 
@@ -168,9 +165,7 @@ func (e *Executor) CopyFile(src, dst string) error {
 // the sidecar with the current checksum.
 func (e *Executor) CalcCRC32(dataPath, crcPath string) error {
 	startT := time.Now()
-	defer func() {
-		stats.Get(calcCRC32Duration).(*expvar.Int).Set(time.Since(startT).Milliseconds())
-	}()
+	defer recordDuration(calcCRC32Duration, startT)
 
 	sum, err := rsum.CRC32(dataPath)
 	if err != nil {
