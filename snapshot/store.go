@@ -37,12 +37,13 @@ const (
 	sinkErrors           = "sink_errors"
 	sinkFullCRC32Dur     = "sink_full_crc32_duration_ms"
 
-	autoReapDuration  = "auto_reap_duration_ms"
-	reapTotal         = "reap_total"
-	reapErrors        = "reap_errors"
-	reapSnapshots     = "reap_snapshots"
-	reapWALs          = "reap_wals"
-	reapPlanRecovered = "reap_plan_recovered"
+	autoReapDuration    = "auto_reap_duration_ms"
+	reapExecuteDuration = "reap_execute_duration_ms"
+	reapTotal           = "reap_total"
+	reapErrors          = "reap_errors"
+	reapSnapshots       = "reap_snapshots"
+	reapWALs            = "reap_wals"
+	reapPlanRecovered   = "reap_plan_recovered"
 
 	upgradeOk   = "upgrade_ok"
 	upgradeFail = "upgrade_fail"
@@ -71,6 +72,7 @@ func ResetStats() {
 	stats.Add(sinkErrors, 0)
 	stats.Add(sinkFullCRC32Dur, 0)
 	stats.Add(autoReapDuration, 0)
+	stats.Add(reapExecuteDuration, 0)
 	stats.Add(reapTotal, 0)
 	stats.Add(reapErrors, 0)
 	stats.Add(reapSnapshots, 0)
@@ -509,6 +511,11 @@ func (s *Store) reapInternal() (int, int, error) {
 
 // executeReapPlan executes a reap plan and cleans up.
 func (s *Store) executeReapPlan(p *plan.Plan, planPath string) (int, int, error) {
+	startT := time.Now()
+	defer func() {
+		stats.Get(reapExecuteDuration).(*expvar.Int).Set(time.Since(startT).Milliseconds())
+	}()
+
 	executor := plan.NewExecutor()
 	if err := p.Execute(executor); err != nil {
 		return 0, 0, fmt.Errorf("executing reap plan: %w", err)

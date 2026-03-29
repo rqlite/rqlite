@@ -1,10 +1,12 @@
 package plan
 
 import (
+	"expvar"
 	"fmt"
 	"io"
 	"os"
 	"path/filepath"
+	"time"
 
 	"github.com/rqlite/rqlite/v10/db"
 	"github.com/rqlite/rqlite/v10/internal/rsum"
@@ -64,6 +66,11 @@ func (e *Executor) RemoveAll(path string) error {
 // completes, a subsequent call will detect and finish the incomplete
 // checkpoint before processing the remaining WALs.
 func (e *Executor) Checkpoint(dbPath string, wals []string) (int, error) {
+	startT := time.Now()
+	defer func() {
+		stats.Get(checkpointDuration).(*expvar.Int).Set(time.Since(startT).Milliseconds())
+	}()
+
 	walPath := dbPath + "-wal"
 
 	// Handle a leftover WAL from a previous interrupted checkpoint.
@@ -160,6 +167,11 @@ func (e *Executor) CopyFile(src, dst string) error {
 // writes it to crcPath. It is idempotent: repeated calls will overwrite
 // the sidecar with the current checksum.
 func (e *Executor) CalcCRC32(dataPath, crcPath string) error {
+	startT := time.Now()
+	defer func() {
+		stats.Get(calcCRC32Duration).(*expvar.Int).Set(time.Since(startT).Milliseconds())
+	}()
+
 	sum, err := rsum.CRC32(dataPath)
 	if err != nil {
 		return fmt.Errorf("calculating CRC32 of %s: %w", dataPath, err)
