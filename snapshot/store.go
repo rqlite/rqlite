@@ -516,9 +516,7 @@ func (s *Store) reapInternal() (int, int, error) {
 // executeReapPlan executes a reap plan and cleans up.
 func (s *Store) executeReapPlan(p *plan.Plan, planPath string) (int, int, error) {
 	startT := time.Now()
-	defer func() {
-		recordDuration(reapExecuteDuration, startT)
-	}()
+	defer recordDuration(reapExecuteDuration, startT)
 
 	executor := plan.NewExecutor()
 	if err := p.Execute(executor); err != nil {
@@ -643,10 +641,7 @@ func (s *Store) reapLoop() {
 
 		startT := time.Now()
 		n, c, err := func() (int, int, error) {
-			defer func() {
-				recordDuration(autoReapDuration, startT)
-			}()
-
+			defer recordDuration(autoReapDuration, startT)
 			s.mrsw.BeginWriteBlocking("reap")
 			defer s.mrsw.EndWrite()
 			return s.reap()
