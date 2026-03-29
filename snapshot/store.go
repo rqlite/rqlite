@@ -37,12 +37,13 @@ const (
 	sinkErrors           = "sink_errors"
 	sinkFullCRC32Dur     = "sink_full_crc32_duration_ms"
 
-	autoReapDuration  = "auto_reap_duration_ms"
-	reapTotal         = "reap_total"
-	reapErrors        = "reap_errors"
-	reapSnapshots     = "reap_snapshots"
-	reapWALs          = "reap_wals"
-	reapPlanRecovered = "reap_plan_recovered"
+	autoReapDuration    = "auto_reap_duration_ms"
+	reapExecuteDuration = "reap_execute_duration_ms"
+	reapTotal           = "reap_total"
+	reapErrors          = "reap_errors"
+	reapSnapshots       = "reap_snapshots"
+	reapWALs            = "reap_wals"
+	reapPlanRecovered   = "reap_plan_recovered"
 
 	upgradeOk   = "upgrade_ok"
 	upgradeFail = "upgrade_fail"
@@ -61,6 +62,10 @@ func init() {
 	ResetStats()
 }
 
+func recordDuration(stat string, startT time.Time) {
+	stats.Get(stat).(*expvar.Int).Set(time.Since(startT).Milliseconds())
+}
+
 // ResetStats resets the expvar stats for this module. Mostly for test purposes.
 func ResetStats() {
 	stats.Init()
@@ -71,6 +76,7 @@ func ResetStats() {
 	stats.Add(sinkErrors, 0)
 	stats.Add(sinkFullCRC32Dur, 0)
 	stats.Add(autoReapDuration, 0)
+	stats.Add(reapExecuteDuration, 0)
 	stats.Add(reapTotal, 0)
 	stats.Add(reapErrors, 0)
 	stats.Add(reapSnapshots, 0)
@@ -509,6 +515,9 @@ func (s *Store) reapInternal() (int, int, error) {
 
 // executeReapPlan executes a reap plan and cleans up.
 func (s *Store) executeReapPlan(p *plan.Plan, planPath string) (int, int, error) {
+	startT := time.Now()
+	defer recordDuration(reapExecuteDuration, startT)
+
 	executor := plan.NewExecutor()
 	if err := p.Execute(executor); err != nil {
 		return 0, 0, fmt.Errorf("executing reap plan: %w", err)
@@ -632,10 +641,7 @@ func (s *Store) reapLoop() {
 
 		startT := time.Now()
 		n, c, err := func() (int, int, error) {
-			defer func() {
-				stats.Get(autoReapDuration).(*expvar.Int).Set(time.Since(startT).Milliseconds())
-			}()
-
+			defer recordDuration(autoReapDuration, startT)
 			s.mrsw.BeginWriteBlocking("reap")
 			defer s.mrsw.EndWrite()
 			return s.reap()

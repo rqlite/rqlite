@@ -91,7 +91,7 @@ func NewCompactingFrameScanner(r io.ReadSeeker, startFrame int64, fullScan bool)
 		stats.Add(compactScanErrors, 1)
 		return nil, err
 	}
-	stats.Get(compactScanDuration).(*expvar.Int).Set(time.Since(startT).Milliseconds())
+	recordDuration(compactScanDuration, startT)
 	stats.Get(compactFramesOutput).(*expvar.Int).Set(int64(len(s.frames)))
 	if len(s.frames) > 0 {
 		r := math.Round(float64(n)/float64(len(s.frames))*10) / 10

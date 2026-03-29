@@ -209,6 +209,10 @@ func init() {
 	ResetStats()
 }
 
+func recordDuration(stat string, startT time.Time) {
+	stats.Get(stat).(*expvar.Int).Set(time.Since(startT).Milliseconds())
+}
+
 // ResetStats resets the expvar stats for this module. Mostly for test purposes.
 func ResetStats() {
 	stats.Init()
@@ -1572,7 +1576,7 @@ func (s *Store) VerifyLeader() (retErr error) {
 	defer func() {
 		if retErr == nil {
 			stats.Add(numVerifyLeader, 1)
-			stats.Get(verifyLeaderDuration).(*expvar.Int).Set(time.Since(startT).Milliseconds())
+			recordDuration(verifyLeaderDuration, startT)
 		} else {
 			stats.Add(numVerifyLeaderFailed, 1)
 		}
@@ -2524,7 +2528,7 @@ func (s *Store) fsmSnapshot() (fSnap raft.FSMSnapshot, retErr error) {
 	if _, _, err := s.snapshotSync.Sync(time.Second); err != nil {
 		return nil, err
 	}
-	stats.Get(snapshotSyncDuration).(*expvar.Int).Set(time.Since(syncStartTime).Milliseconds())
+	recordDuration(snapshotSyncDuration, syncStartTime)
 
 	if err := s.snapshotCAS.Begin("snapshot"); err != nil {
 		return nil, err
@@ -3064,7 +3068,7 @@ func (s *Store) doAutoVac() error {
 		return err
 	}
 	s.logger.Printf("database vacuumed in %s", time.Since(vacStart))
-	stats.Get(autoVacuumDuration).(*expvar.Int).Set(time.Since(vacStart).Milliseconds())
+	recordDuration(autoVacuumDuration, vacStart)
 	stats.Add(numAutoVacuums, 1)
 	s.numAutoVacuums++
 	return s.setKeyTime(lastVacuumTimeKey, time.Now())
@@ -3093,7 +3097,7 @@ func (s *Store) doAutoOptimize() error {
 		return err
 	}
 	s.logger.Printf("database optimized in %s", time.Since(optStart))
-	stats.Get(autoOptimizeDuration).(*expvar.Int).Set(time.Since(optStart).Milliseconds())
+	recordDuration(autoOptimizeDuration, optStart)
 	stats.Add(numAutoOptimizes, 1)
 	s.numAutoOptimizes++
 	return s.setKeyTime(lastOptimizeTimeKey, time.Now())

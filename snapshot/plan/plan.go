@@ -2,10 +2,36 @@ package plan
 
 import (
 	"encoding/json"
+	"expvar"
 	"fmt"
 	"os"
 	"runtime"
+	"time"
 )
+
+const (
+	checkpointDuration = "checkpoint_duration_ms"
+	calcCRC32Duration  = "calc_crc32_duration_ms"
+)
+
+// stats captures stats for the Store.
+var stats *expvar.Map
+
+func init() {
+	stats = expvar.NewMap("snapshot.plan")
+	ResetStats()
+}
+
+func recordDuration(stat string, startT time.Time) {
+	stats.Get(stat).(*expvar.Int).Set(time.Since(startT).Milliseconds())
+}
+
+// ResetStats resets the expvar stats for this module. Mostly for test purposes.
+func ResetStats() {
+	stats.Init()
+	stats.Add(checkpointDuration, 0)
+	stats.Add(calcCRC32Duration, 0)
+}
 
 // OpType represents the type of a snapshot store operation.
 type OpType string
