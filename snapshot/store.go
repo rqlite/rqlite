@@ -725,38 +725,21 @@ func (s *Store) checkCRCs() error {
 	if err != nil {
 		return fmt.Errorf("scanning snapshots for CRC check: %w", err)
 	}
-
-	var wg sync.WaitGroup
-	errCh := make(chan error, 1)
-	checkFile := func(hf *ChecksummedFile) {
-		ok, err := hf.Check()
-		if err != nil {
-			select {
-			case errCh <- fmt.Errorf("CRC32 check of %s: %w", hf.Path, err):
-			default:
-			}
-			return
-		}
-		if !ok {
-			select {
-			case errCh <- fmt.Errorf("CRC32 mismatch for %s", hf.Path):
-			default:
-			}
-		}
+	if len(snapshots.items) == 0 {
+		return nil
 	}
 
+	checker := NewCRCChecker()
 	for _, snap := range snapshots.items {
 		if snap.dbFile != nil {
-			wg.Go(func() { checkFile(snap.dbFile) })
+			checker.Add(snap.dbFile)
 		}
 		for _, wf := range snap.walFiles {
-			wg.Go(func() { checkFile(wf) })
+			checker.Add(wf)
 		}
 	}
-	wg.Wait()
-	close(errCh)
 
-	if err := <-errCh; err != nil {
+	if err := <-checker.Check(); err != nil {
 		return err
 	}
 
