@@ -744,17 +744,8 @@ func (s *Store) checkCRCs() error {
 	}
 
 	s.logger.Printf("completed CRC32 check of %d snapshot directories in %s",
-		len(snapshots.items), durString(time.Since(startT)))
+		len(snapshots.items), time.Since(startT))
 	return nil
-}
-
-// durString returns a human-readable duration string, using milliseconds
-// for durations >= 1ms and microseconds for shorter durations.
-func durString(d time.Duration) string {
-	if d >= time.Millisecond {
-		return fmt.Sprintf("%d ms", d.Milliseconds())
-	}
-	return fmt.Sprintf("%d µs", d.Microseconds())
 }
 
 // getSnapshots returns the set of snapshots in the Store.
