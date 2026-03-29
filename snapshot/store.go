@@ -726,25 +726,38 @@ func (s *Store) checkCRCs() error {
 		return fmt.Errorf("scanning snapshots for CRC check: %w", err)
 	}
 
+	var wg sync.WaitGroup
+	errCh := make(chan error, 1)
+	checkFile := func(hf *ChecksummedFile) {
+		ok, err := hf.Check()
+		if err != nil {
+			select {
+			case errCh <- fmt.Errorf("CRC32 check of %s: %w", hf.Path, err):
+			default:
+			}
+			return
+		}
+		if !ok {
+			select {
+			case errCh <- fmt.Errorf("CRC32 mismatch for %s", hf.Path):
+			default:
+			}
+		}
+	}
+
 	for _, snap := range snapshots.items {
 		if snap.dbFile != nil {
-			ok, err := snap.dbFile.Check()
-			if err != nil {
-				return fmt.Errorf("CRC32 check of %s: %w", snap.dbFile.Path, err)
-			}
-			if !ok {
-				return fmt.Errorf("CRC32 mismatch for %s", snap.dbFile.Path)
-			}
+			wg.Go(func() { checkFile(snap.dbFile) })
 		}
 		for _, wf := range snap.walFiles {
-			ok, err := wf.Check()
-			if err != nil {
-				return fmt.Errorf("CRC32 check of %s: %w", wf.Path, err)
-			}
-			if !ok {
-				return fmt.Errorf("CRC32 mismatch for %s", wf.Path)
-			}
+			wg.Go(func() { checkFile(wf) })
 		}
+	}
+	wg.Wait()
+	close(errCh)
+
+	if err := <-errCh; err != nil {
+		return err
 	}
 
 	s.logger.Printf("completed CRC32 check of %d snapshot directories in %s",
