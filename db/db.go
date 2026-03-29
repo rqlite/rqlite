@@ -107,6 +107,10 @@ func init() {
 	ResetStats()
 }
 
+func recordDuration(stat string, startT time.Time) {
+	stats.Get(stat).(*expvar.Int).Set(time.Since(startT).Milliseconds())
+}
+
 // ResetStats resets the expvar stats for this module. Mostly for test purposes.
 func ResetStats() {
 	stats.Init()
@@ -214,7 +218,7 @@ func OpenWithDriver(drv *Driver, dbPath string, fkEnabled, wal bool) (retDB *DB,
 		if dur := time.Since(startTime); dur > durToOpenLog {
 			logger.Printf("opened database %s in %s", dbPath, dur)
 		}
-		stats.Get(openDuration).(*expvar.Int).Set(time.Since(startTime).Milliseconds())
+		recordDuration(openDuration, startTime)
 	}()
 
 	/////////////////////////////////////////////////////////////////////////
@@ -690,7 +694,7 @@ func (db *DB) CheckpointTruncateWithTimeout(dur time.Duration) (err error) {
 		if err != nil {
 			stats.Add(numCheckpointErrors, 1)
 		} else {
-			stats.Get(checkpointDuration).(*expvar.Int).Set(time.Since(start).Milliseconds())
+			recordDuration(checkpointDuration, start)
 			stats.Add(numCheckpoints, 1)
 		}
 	}()
@@ -745,7 +749,7 @@ func (db *DB) CheckpointWithTimeout(mode CheckpointMode, dur time.Duration) (met
 		if err != nil {
 			stats.Add(numCheckpointErrors, 1)
 		} else {
-			stats.Get(checkpointDuration).(*expvar.Int).Set(time.Since(start).Milliseconds())
+			recordDuration(checkpointDuration, start)
 			stats.Add(numCheckpoints, 1)
 		}
 	}()

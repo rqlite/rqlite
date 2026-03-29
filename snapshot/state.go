@@ -57,7 +57,7 @@ func (s *StateReader) Persist(sink raft.SnapshotSink) error {
 	}
 
 	stats.Get(persistSize).(*expvar.Int).Set(n)
-	stats.Get(persistDuration).(*expvar.Int).Set(time.Since(startT).Milliseconds())
+	recordDuration(persistDuration, startT)
 	return err
 }
 

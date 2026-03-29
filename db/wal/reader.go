@@ -5,6 +5,7 @@ import (
 	"expvar"
 	"fmt"
 	"io"
+	"time"
 )
 
 // SQLite constants
@@ -30,6 +31,10 @@ var stats *expvar.Map
 func init() {
 	stats = expvar.NewMap("db.wal")
 	ResetStats()
+}
+
+func recordDuration(stat string, startT time.Time) {
+	stats.Get(stat).(*expvar.Int).Set(time.Since(startT).Milliseconds())
 }
 
 // ResetStats resets the expvar stats for this module. Mostly for test purposes.

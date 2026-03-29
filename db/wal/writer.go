@@ -2,7 +2,6 @@ package wal
 
 import (
 	"encoding/binary"
-	"expvar"
 	"fmt"
 	"io"
 	"time"
@@ -84,7 +83,7 @@ func NewWriter(r WALIterator) (*Writer, error) {
 func (w *Writer) WriteTo(ww io.Writer) (n int64, retErr error) {
 	startT := time.Now()
 	defer func() {
-		stats.Get(compactWriteDuration).(*expvar.Int).Set(time.Since(startT).Milliseconds())
+		recordDuration(compactWriteDuration, startT)
 	}()
 
 	nn, err := w.writeWALHeader(ww)

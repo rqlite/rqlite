@@ -2,7 +2,6 @@ package snapshot
 
 import (
 	"errors"
-	"expvar"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -227,7 +226,7 @@ func (s *FullSink) Close() error {
 	if err := rsum.WriteCRC32SumFile(s.dbFile+crcSuffix, dbCRC, rsum.Sync); err != nil {
 		return fmt.Errorf("writing CRC32 sidecar for DB file: %w", err)
 	}
-	stats.Get(sinkFullCRC32Dur).(*expvar.Int).Set(time.Since(start).Milliseconds())
+	recordDuration(sinkFullCRC32Dur, start)
 	return nil
 }
 

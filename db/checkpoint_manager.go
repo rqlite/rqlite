@@ -143,7 +143,7 @@ func (cm *CheckpointManager) Checkpoint(w io.Writer, timeout time.Duration) (int
 	if err != nil {
 		return 0, err
 	}
-	stats.Get(createCompactedWALDuration).(*expvar.Int).Set(time.Since(compactStartTime).Milliseconds())
+	recordDuration(createCompactedWALDuration, compactStartTime)
 	stats.Get(compactedWALSize).(*expvar.Int).Set(n)
 
 	/////////////////////////////////////////////////////////////////////////////////

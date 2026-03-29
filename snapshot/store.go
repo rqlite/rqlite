@@ -62,6 +62,10 @@ func init() {
 	ResetStats()
 }
 
+func recordDuration(stat string, startT time.Time) {
+	stats.Get(stat).(*expvar.Int).Set(time.Since(startT).Milliseconds())
+}
+
 // ResetStats resets the expvar stats for this module. Mostly for test purposes.
 func ResetStats() {
 	stats.Init()
@@ -513,7 +517,7 @@ func (s *Store) reapInternal() (int, int, error) {
 func (s *Store) executeReapPlan(p *plan.Plan, planPath string) (int, int, error) {
 	startT := time.Now()
 	defer func() {
-		stats.Get(reapExecuteDuration).(*expvar.Int).Set(time.Since(startT).Milliseconds())
+		recordDuration(reapExecuteDuration, startT)
 	}()
 
 	executor := plan.NewExecutor()
@@ -640,7 +644,7 @@ func (s *Store) reapLoop() {
 		startT := time.Now()
 		n, c, err := func() (int, int, error) {
 			defer func() {
-				stats.Get(autoReapDuration).(*expvar.Int).Set(time.Since(startT).Milliseconds())
+				recordDuration(autoReapDuration, startT)
 			}()
 
 			s.mrsw.BeginWriteBlocking("reap")
