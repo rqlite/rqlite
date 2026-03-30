@@ -586,6 +586,7 @@ type QueryRequest struct {
 	Freshness           int64                  `protobuf:"varint,4,opt,name=freshness,proto3" json:"freshness,omitempty"`
 	FreshnessStrict     bool                   `protobuf:"varint,5,opt,name=freshness_strict,json=freshnessStrict,proto3" json:"freshness_strict,omitempty"`
 	LinearizableTimeout int64                  `protobuf:"varint,6,opt,name=linearizable_timeout,json=linearizableTimeout,proto3" json:"linearizable_timeout,omitempty"`
+	QualifyColumns      bool                   `protobuf:"varint,7,opt,name=qualify_columns,json=qualifyColumns,proto3" json:"qualify_columns,omitempty"`
 	unknownFields       protoimpl.UnknownFields
 	sizeCache           protoimpl.SizeCache
 }
@@ -660,6 +661,13 @@ func (x *QueryRequest) GetLinearizableTimeout() int64 {
 		return x.LinearizableTimeout
 	}
 	return 0
+}
+
+func (x *QueryRequest) GetQualifyColumns() bool {
+	if x != nil {
+		return x.QualifyColumns
+	}
+	return false
 }
 
 type Values struct {
@@ -910,6 +918,7 @@ type ExecuteQueryRequest struct {
 	Freshness           int64                  `protobuf:"varint,4,opt,name=freshness,proto3" json:"freshness,omitempty"`
 	FreshnessStrict     bool                   `protobuf:"varint,5,opt,name=freshness_strict,json=freshnessStrict,proto3" json:"freshness_strict,omitempty"`
 	LinearizableTimeout int64                  `protobuf:"varint,6,opt,name=linearizable_timeout,json=linearizableTimeout,proto3" json:"linearizable_timeout,omitempty"`
+	QualifyColumns      bool                   `protobuf:"varint,7,opt,name=qualify_columns,json=qualifyColumns,proto3" json:"qualify_columns,omitempty"`
 	unknownFields       protoimpl.UnknownFields
 	sizeCache           protoimpl.SizeCache
 }
@@ -984,6 +993,13 @@ func (x *ExecuteQueryRequest) GetLinearizableTimeout() int64 {
 		return x.LinearizableTimeout
 	}
 	return 0
+}
+
+func (x *ExecuteQueryRequest) GetQualifyColumns() bool {
+	if x != nil {
+		return x.QualifyColumns
+	}
+	return false
 }
 
 type ExecuteQueryResponse struct {
