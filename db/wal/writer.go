@@ -54,12 +54,14 @@ type Writer struct {
 	rHeader          *WALHeader
 	chksum1, chksum2 uint32
 	bo               binary.ByteOrder
+	frmHdr           []byte
 }
 
 // NewWriter returns a new Writer.
 func NewWriter(r WALIterator) (*Writer, error) {
 	w := &Writer{
-		r: r,
+		r:      r,
+		frmHdr: make([]byte, WALFrameHeaderSize),
 	}
 	rh, err := w.r.Header()
 	if err != nil {
@@ -137,7 +139,7 @@ func (w *Writer) writeWALHeader(ww io.Writer) (n int64, err error) {
 }
 
 func (w *Writer) writeFrame(ww io.Writer, frame *Frame) (n int64, err error) {
-	frmHdr := make([]byte, WALFrameHeaderSize)
+	frmHdr := w.frmHdr
 
 	// Calculate the frame header.
 	binary.BigEndian.PutUint32(frmHdr[0:], frame.Pgno)
