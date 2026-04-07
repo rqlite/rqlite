@@ -501,7 +501,7 @@ func (s *Service) handleConn(conn net.Conn) {
 
 			rn := c.GetRemoveNodeRequest()
 			if rn == nil {
-				resp.Error = "LoadRequest is nil"
+				resp.Error = "RemoveNodeRequest is nil"
 			} else if !s.checkCommandPerm(c, auth.PermRemove) {
 				resp.Error = "unauthorized"
 			} else {
