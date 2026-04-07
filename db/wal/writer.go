@@ -54,7 +54,7 @@ type Writer struct {
 	rHeader          *WALHeader
 	chksum1, chksum2 uint32
 	bo               binary.ByteOrder
-	frmHdr           []byte
+	frmHdr           [WALFrameHeaderSize]byte
 }
 
 // NewWriter returns a new Writer.
