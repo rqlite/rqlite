@@ -61,7 +61,6 @@ type Writer struct {
 func NewWriter(r WALIterator) (*Writer, error) {
 	w := &Writer{
 		r:      r,
-		frmHdr: make([]byte, WALFrameHeaderSize),
 	}
 	rh, err := w.r.Header()
 	if err != nil {
