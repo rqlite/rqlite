@@ -173,8 +173,14 @@ func (r *Reader) ReadFrame(data []byte) (pgno, commit uint32, err error) {
 		// Verify the checksum is valid.
 		chksum1 := binary.BigEndian.Uint32(hdr[16:])
 		chksum2 := binary.BigEndian.Uint32(hdr[20:])
-		r.chksum1, r.chksum2 = WALChecksum(r.bo, r.chksum1, r.chksum2, hdr[:8]) // frame header
-		r.chksum1, r.chksum2 = WALChecksum(r.bo, r.chksum1, r.chksum2, data)    // frame data
+		r.chksum1, r.chksum2, err = WALChecksum(r.bo, r.chksum1, r.chksum2, hdr[:8]) // frame header
+		if err != nil {
+			return 0, 0, err
+		}
+		r.chksum1, r.chksum2, err = WALChecksum(r.bo, r.chksum1, r.chksum2, data) // frame data
+		if err != nil {
+			return 0, 0, err
+		}
 		if r.chksum1 != chksum1 || r.chksum2 != chksum2 {
 			return 0, 0, io.EOF
 		}
