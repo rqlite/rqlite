@@ -127,6 +127,7 @@ func HasData(dir string) (bool, error) {
 	if err != nil {
 		return false, err
 	}
+	defer sstr.Close()
 	snaps, err := sstr.List()
 	if err != nil {
 		return false, err
@@ -212,6 +213,7 @@ func RecoverNode(dataDir string, extensions []string, logger *log.Logger, logs r
 	if err != nil {
 		return fmt.Errorf("failed to create dechunker manager: %s", err.Error())
 	}
+	defer decMgmr.Close()
 	cmdProc := NewCommandProcessor(logger, decMgmr)
 
 	// The snapshot information is the best known end point for the data
