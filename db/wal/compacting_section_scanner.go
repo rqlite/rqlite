@@ -155,6 +155,7 @@ func (s *CompactingFrameScanner) Bytes() ([]byte, error) {
 
 	frmHdr := WALHeaderSize
 	chksum1, chksum2 := s.header.Checksum1, s.header.Checksum2
+	var err error
 	for _, frame := range s.frames {
 		frmData := frmHdr + WALFrameHeaderSize
 
@@ -164,7 +165,10 @@ func (s *CompactingFrameScanner) Bytes() ([]byte, error) {
 		binary.BigEndian.PutUint32(buf[frmHdr+12:], s.header.Salt2)
 
 		// Checksum of frame header: "...the first 8 bytes..."
-		chksum1, chksum2 = WALChecksum(bo, chksum1, chksum2, buf[frmHdr:frmHdr+8])
+		chksum1, chksum2, err = WALChecksum(bo, chksum1, chksum2, buf[frmHdr:frmHdr+8])
+		if err != nil {
+			return nil, fmt.Errorf("error computing frame header checksum: %s", err)
+		}
 
 		// Read the frame data.
 		if _, err := s.readSeeker.Seek(frame.Offset+WALFrameHeaderSize, io.SeekStart); err != nil {
@@ -175,7 +179,10 @@ func (s *CompactingFrameScanner) Bytes() ([]byte, error) {
 		}
 
 		// Update checksum using frame data.
-		chksum1, chksum2 = WALChecksum(bo, chksum1, chksum2, buf[frmData:frmData+pageSz])
+		chksum1, chksum2, err = WALChecksum(bo, chksum1, chksum2, buf[frmData:frmData+pageSz])
+		if err != nil {
+			return nil, fmt.Errorf("error computing frame data checksum: %s", err)
+		}
 		binary.BigEndian.PutUint32(buf[frmHdr+16:], chksum1)
 		binary.BigEndian.PutUint32(buf[frmHdr+20:], chksum2)
 
