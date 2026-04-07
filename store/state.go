@@ -255,6 +255,7 @@ func RecoverNode(dataDir string, extensions []string, logger *log.Logger, logs r
 	if err != nil {
 		return fmt.Errorf("failed to create snapshot streamer: %s", err)
 	}
+	defer streamer.Close()
 	if err := streamer.Open(); err != nil {
 		return fmt.Errorf("failed to open snapshot streamer: %s", err)
 	}
@@ -263,6 +264,7 @@ func RecoverNode(dataDir string, extensions []string, logger *log.Logger, logs r
 	if err != nil {
 		return fmt.Errorf("failed to create snapshot: %v", err)
 	}
+	defer sink.Cancel() // If we fail, make sure to cancel the snapshot.
 	if err = fsmSnapshot.Persist(sink); err != nil {
 		return fmt.Errorf("failed to persist snapshot: %v", err)
 	}
