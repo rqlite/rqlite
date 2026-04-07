@@ -316,6 +316,7 @@ func (s *Service) handleConn(conn net.Conn) {
 		err = pb.Unmarshal(p, c)
 		if err != nil {
 			conn.Close()
+			return
 		}
 
 		switch c.Type {
@@ -501,7 +502,7 @@ func (s *Service) handleConn(conn net.Conn) {
 
 			rn := c.GetRemoveNodeRequest()
 			if rn == nil {
-				resp.Error = "LoadRequest is nil"
+				resp.Error = "RemoveNodeRequest is nil"
 			} else if !s.checkCommandPerm(c, auth.PermRemove) {
 				resp.Error = "unauthorized"
 			} else {
