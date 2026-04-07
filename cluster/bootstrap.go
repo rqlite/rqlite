@@ -69,7 +69,7 @@ func (s Suffrage) String() string {
 	case NonVoter:
 		return "non-voter"
 	default:
-		panic("unknown suffrage")
+		return "unknown"
 	}
 }
 
@@ -100,8 +100,10 @@ func (b BootStatus) String() string {
 		return "done"
 	case BootTimeout:
 		return "timeout"
+	case BootCanceled:
+		return "canceled"
 	default:
-		panic("unknown boot status")
+		return "unknown"
 	}
 }
 
