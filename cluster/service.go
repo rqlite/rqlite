@@ -316,6 +316,7 @@ func (s *Service) handleConn(conn net.Conn) {
 		err = pb.Unmarshal(p, c)
 		if err != nil {
 			conn.Close()
+			return
 		}
 
 		switch c.Type {
