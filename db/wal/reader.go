@@ -118,7 +118,9 @@ func (r *Reader) ReadHeader() error {
 	// a partial WAL header write during checkpointing.
 	chksum1 := binary.BigEndian.Uint32(hdr[24:])
 	chksum2 := binary.BigEndian.Uint32(hdr[28:])
-	if v0, v1 := WALChecksum(r.bo, 0, 0, hdr[:24]); v0 != chksum1 || v1 != chksum2 {
+	if v0, v1, err := WALChecksum(r.bo, 0, 0, hdr[:24]); err != nil {
+		return err
+	} else if v0 != chksum1 || v1 != chksum2 {
 		return io.EOF
 	}
 
@@ -192,19 +194,15 @@ func (r *Reader) ReadFrame(data []byte) (pgno, commit uint32, err error) {
 }
 
 // WALChecksum computes a running SQLite WAL checksum over a byte slice.
-func WALChecksum(bo binary.ByteOrder, s0, s1 uint32, b []byte) (uint32, uint32) {
-	assert(len(b)%8 == 0, "misaligned checksum byte slice")
+func WALChecksum(bo binary.ByteOrder, s0, s1 uint32, b []byte) (uint32, uint32, error) {
+	if len(b)%8 != 0 {
+		return 0, 0, fmt.Errorf("misaligned checksum byte slice")
+	}
 
 	// Iterate over 8-byte units and compute checksum.
 	for i := 0; i < len(b); i += 8 {
 		s0 += bo.Uint32(b[i:]) + s1
 		s1 += bo.Uint32(b[i+4:]) + s0
 	}
-	return s0, s1
-}
-
-func assert(condition bool, msg string) {
-	if !condition {
-		panic("assertion failed: " + msg)
-	}
+	return s0, s1, nil
 }
