@@ -138,7 +138,7 @@ func (w *Writer) writeWALHeader(ww io.Writer) (n int64, err error) {
 }
 
 func (w *Writer) writeFrame(ww io.Writer, frame *Frame) (n int64, err error) {
-	frmHdr := w.frmHdr
+	frmHdr := w.frmHdr[:]
 
 	// Calculate the frame header.
 	binary.BigEndian.PutUint32(frmHdr[0:], frame.Pgno)
