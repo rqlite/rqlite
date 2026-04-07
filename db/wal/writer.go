@@ -60,7 +60,7 @@ type Writer struct {
 // NewWriter returns a new Writer.
 func NewWriter(r WALIterator) (*Writer, error) {
 	w := &Writer{
-		r:      r,
+		r: r,
 	}
 	rh, err := w.r.Header()
 	if err != nil {
