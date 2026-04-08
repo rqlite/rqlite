@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/rqlite/rqlite/v10/command/proto"
+	"github.com/rqlite/rqlite/v10/internal/fsutil"
 )
 
 func Test_MultiNode_Leader_Followers(t *testing.T) {
@@ -1178,7 +1179,7 @@ func Test_MultiNodeStoreAutoRestoreBootstrap(t *testing.T) {
 		t.Fatalf("unexpected results for query\nexp: %s\ngot: %s", exp, got)
 	}
 
-	if pathExists(path0) || pathExists(path1) || pathExists(path2) {
+	if fsutil.PathExists(path0) || fsutil.PathExists(path1) || fsutil.PathExists(path2) {
 		t.Fatalf("an auto-restore file was not removed")
 	}
 

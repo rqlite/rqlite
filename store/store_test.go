@@ -16,6 +16,7 @@ import (
 	"github.com/rqlite/rqlite/v10/command/encoding"
 	"github.com/rqlite/rqlite/v10/command/proto"
 	"github.com/rqlite/rqlite/v10/db"
+	"github.com/rqlite/rqlite/v10/internal/fsutil"
 	"github.com/rqlite/rqlite/v10/internal/random"
 	"github.com/rqlite/rqlite/v10/internal/rarchive"
 	"github.com/rqlite/rqlite/v10/snapshot"
@@ -3234,7 +3235,7 @@ func mustParseDuration(t string) time.Duration {
 }
 
 func mustFileSize(path string) int64 {
-	n, err := fileSize(path)
+	n, err := fsutil.FileSize(path)
 	if err != nil {
 		panic("failed to get file size")
 	}

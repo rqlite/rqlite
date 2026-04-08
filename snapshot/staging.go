@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/rqlite/rqlite/v10/db"
+	"github.com/rqlite/rqlite/v10/internal/fsutil"
 	"github.com/rqlite/rqlite/v10/internal/rsum"
 )
 
@@ -115,7 +116,7 @@ func (s *StagingDir) Validate() error {
 // MoveWALFilesTo renames each .wal + .crc32 pair from the staging
 // directory into dst. dst must be a directory and must exist.
 func (s *StagingDir) MoveWALFilesTo(dst string) error {
-	if !dirExists(dst) {
+	if !fsutil.DirExists(dst) {
 		return fmt.Errorf("destination %s does not exist or is not a directory", dst)
 	}
 	walFiles, err := s.WALFiles()

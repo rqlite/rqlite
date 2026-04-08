@@ -7,14 +7,6 @@ import (
 	"runtime"
 )
 
-func fileSize(path string) (int64, error) {
-	stat, err := os.Stat(path)
-	if err != nil {
-		return 0, err
-	}
-	return stat.Size(), nil
-}
-
 func parentDir(dir string) string {
 	return filepath.Dir(dir)
 }
@@ -32,13 +24,6 @@ func isTmpName(name string) bool {
 func fileExists(path string) bool {
 	info, err := os.Stat(path)
 	return err == nil && !info.IsDir()
-}
-
-// dirExist returns true if an actual directory exists
-// at the given path.
-func dirExists(path string) bool {
-	stat, err := os.Stat(path)
-	return err == nil && stat.IsDir()
 }
 
 func dirIsEmpty(dir string) (bool, error) {

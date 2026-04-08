@@ -11,6 +11,7 @@ import (
 	"testing"
 
 	"github.com/hashicorp/raft"
+	"github.com/rqlite/rqlite/v10/internal/fsutil"
 	"github.com/rqlite/rqlite/v10/snapshot/plan"
 )
 
@@ -138,10 +139,10 @@ func Test_Upgrade8To10_NothingToDo(t *testing.T) {
 	if err := Upgrade8To10(oldEmpty, newEmpty, logger); err != nil {
 		t.Fatalf("failed to upgrade empty directory: %s", err)
 	}
-	if dirExists(oldEmpty) {
+	if fsutil.DirExists(oldEmpty) {
 		t.Fatal("expected empty old directory to be removed")
 	}
-	if dirExists(newEmpty) {
+	if fsutil.DirExists(newEmpty) {
 		t.Fatal("expected new directory to not be created for empty old")
 	}
 }
@@ -167,7 +168,7 @@ func Test_Upgrade8To10_NewAlreadyExists(t *testing.T) {
 	}
 
 	// Old should be removed since new already exists.
-	if dirExists(oldDir) {
+	if fsutil.DirExists(oldDir) {
 		t.Fatal("expected old directory to be removed")
 	}
 
@@ -214,7 +215,7 @@ func Test_Upgrade8To10_OK(t *testing.T) {
 	}
 
 	// Old should be removed.
-	if dirExists(oldDir) {
+	if fsutil.DirExists(oldDir) {
 		t.Fatal("expected old directory to be removed after upgrade")
 	}
 
@@ -290,7 +291,7 @@ func Test_Upgrade8To10_MultiplePicksNewest(t *testing.T) {
 	}
 
 	// Old should be removed.
-	if dirExists(oldDir) {
+	if fsutil.DirExists(oldDir) {
 		t.Fatal("expected old directory to be removed")
 	}
 
@@ -414,7 +415,7 @@ func Test_Upgrade8To10_ResumesPlan(t *testing.T) {
 	if fileExists(planPath) {
 		t.Fatal("expected plan file to be removed after successful upgrade")
 	}
-	if dirExists(oldDir) {
+	if fsutil.DirExists(oldDir) {
 		t.Fatal("expected old directory to be removed")
 	}
 

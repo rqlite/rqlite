@@ -13,6 +13,7 @@ import (
 
 	"github.com/hashicorp/raft"
 	"github.com/rqlite/rqlite/v10/db"
+	"github.com/rqlite/rqlite/v10/internal/fsutil"
 	"github.com/rqlite/rqlite/v10/snapshot/plan"
 )
 
@@ -42,14 +43,14 @@ func Upgrade7To8(old, new string, logger *log.Logger) (retErr error) {
 
 	// If a temporary version of the new snapshot exists, remove it. This implies a
 	// previous upgrade attempt was interrupted. We will need to start over.
-	if dirExists(newTmpDir) {
+	if fsutil.DirExists(newTmpDir) {
 		logger.Printf("detected temporary upgraded snapshot directory at %s, removing it", newTmpDir)
 		if err := os.RemoveAll(newTmpDir); err != nil {
 			return fmt.Errorf("failed to remove temporary upgraded snapshot directory %s: %s", newTmpDir, err)
 		}
 	}
 
-	if !dirExists(old) {
+	if !fsutil.DirExists(old) {
 		logger.Printf("old v7 snapshot directory does not exist at %s, nothing to upgrade", old)
 		return nil
 	}
@@ -67,7 +68,7 @@ func Upgrade7To8(old, new string, logger *log.Logger) (retErr error) {
 		return nil
 	}
 
-	if dirExists(new) {
+	if fsutil.DirExists(new) {
 		logger.Printf("new snapshot directory %s exists", new)
 		if err := os.RemoveAll(old); err != nil {
 			return fmt.Errorf("failed to remove old snapshot directory %s: %s", old, err)
@@ -117,7 +118,7 @@ func Upgrade7To8(old, new string, logger *log.Logger) (retErr error) {
 			return fmt.Errorf("failed to open old state file %s: %s", oldStatePath, err)
 		}
 		defer stateFd.Close()
-		sz, err := fileSize(oldStatePath)
+		sz, err := fsutil.FileSize(oldStatePath)
 		if err != nil {
 			return fmt.Errorf("failed to get size of old state file %s: %s", oldStatePath, err)
 		}
@@ -212,7 +213,7 @@ func Upgrade8To10(old, new string, logger *log.Logger) (retErr error) {
 		return nil
 	}
 
-	if !dirExists(old) {
+	if !fsutil.DirExists(old) {
 		logger.Printf("old v8 snapshot directory does not exist at %s, nothing to upgrade", old)
 		return nil
 	}
@@ -230,7 +231,7 @@ func Upgrade8To10(old, new string, logger *log.Logger) (retErr error) {
 		return nil
 	}
 
-	if dirExists(new) {
+	if fsutil.DirExists(new) {
 		logger.Printf("new snapshot directory %s exists", new)
 		if err := os.RemoveAll(old); err != nil {
 			return fmt.Errorf("failed to remove old snapshot directory %s: %s", old, err)

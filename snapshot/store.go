@@ -6,7 +6,6 @@ import (
 	"expvar"
 	"fmt"
 	"io"
-	"io/fs"
 	"log"
 	"os"
 	"path/filepath"
@@ -14,6 +13,7 @@ import (
 	"time"
 
 	"github.com/hashicorp/raft"
+	"github.com/rqlite/rqlite/v10/internal/fsutil"
 	"github.com/rqlite/rqlite/v10/internal/rsync"
 	"github.com/rqlite/rqlite/v10/snapshot/plan"
 )
@@ -593,7 +593,7 @@ func (s *Store) Stats() (map[string]any, error) {
 	}
 	defer s.mrsw.EndRead()
 
-	dirSz, err := dirSize(s.dir)
+	dirSz, err := fsutil.DirSize(s.dir)
 	if err != nil {
 		// If we can't compute the directory size, we can still return other stats,
 		// so we ignore the error and just report a size of 0.
@@ -769,24 +769,4 @@ func snapshotName(term, index uint64) string {
 // metaPath returns the path to the meta file in the given directory.
 func metaPath(dir string) string {
 	return filepath.Join(dir, metaFileName)
-}
-
-// write a function which given a directory path calculates the
-// sum of the sizes of all files in the directory and its subdirectories, and returns it as an int64.
-func dirSize(path string) (int64, error) {
-	var size int64
-	err := filepath.WalkDir(path, func(_ string, d fs.DirEntry, err error) error {
-		if err != nil {
-			return err
-		}
-		if !d.IsDir() {
-			info, err := d.Info()
-			if err != nil {
-				return err
-			}
-			size += info.Size()
-		}
-		return nil
-	})
-	return size, err
 }

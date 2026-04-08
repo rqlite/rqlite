@@ -13,6 +13,7 @@ import (
 
 	"github.com/hashicorp/raft"
 	"github.com/rqlite/rqlite/v10/db"
+	"github.com/rqlite/rqlite/v10/internal/fsutil"
 	"github.com/rqlite/rqlite/v10/snapshot/plan"
 )
 
@@ -97,7 +98,7 @@ func Test_StoreCreateCancel(t *testing.T) {
 	tmpSnapDir := dir + "/" + sink.ID() + tmpSuffix
 
 	// Should be a tmp directory with the name of the sink ID
-	if !pathExists(tmpSnapDir) {
+	if !fsutil.PathExists(tmpSnapDir) {
 		t.Fatalf("Expected directory with name %s, but it does not exist", sink.ID())
 	}
 
@@ -114,7 +115,7 @@ func Test_StoreCreateCancel(t *testing.T) {
 	}
 
 	// Should not be a tmp directory with the name of the sink ID
-	if pathExists(tmpSnapDir) {
+	if fsutil.PathExists(tmpSnapDir) {
 		t.Fatalf("Expected directory with name %s to not exist, but it does", sink.ID())
 	}
 
@@ -1034,7 +1035,7 @@ func Test_Store_Check_RemovesTmpDirs(t *testing.T) {
 	defer store2.Close()
 
 	// The .tmp directory should be gone.
-	if pathExists(tmpDir) {
+	if fsutil.PathExists(tmpDir) {
 		t.Fatalf("Expected .tmp directory to be removed, but it still exists")
 	}
 
@@ -1276,11 +1277,6 @@ func makeTestConfiguration(i, a string) raft.Configuration {
 			},
 		},
 	}
-}
-
-func pathExists(path string) bool {
-	_, err := os.Stat(path)
-	return err == nil
 }
 
 func makeRaftMeta(id string, index, term, cfgIndex uint64) *raft.SnapshotMeta {

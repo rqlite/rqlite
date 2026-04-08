@@ -12,7 +12,6 @@ import (
 	"expvar"
 	"fmt"
 	"io"
-	"io/fs"
 	"log"
 	"net"
 	"os"
@@ -32,6 +31,7 @@ import (
 	"github.com/rqlite/rqlite/v10/command/proto"
 	sql "github.com/rqlite/rqlite/v10/db"
 	"github.com/rqlite/rqlite/v10/db/humanize"
+	"github.com/rqlite/rqlite/v10/internal/fsutil"
 	"github.com/rqlite/rqlite/v10/internal/progress"
 	"github.com/rqlite/rqlite/v10/internal/random"
 	"github.com/rqlite/rqlite/v10/internal/rsum"
@@ -544,7 +544,7 @@ func (s *Store) Open() (retErr error) {
 	s.logger.Printf("opening store with node ID %s, listening on %s", s.raftID, s.ly.Addr().String())
 
 	// Clean up a never-used file from previous releases.
-	removeFile(filepath.Join(s.raftDir, "applied_index"))
+	fsutil.RemoveFile(filepath.Join(s.raftDir, "applied_index"))
 
 	// Create all the required Raft directories.
 	s.logger.Printf("ensuring data directory exists at %s", s.raftDir)
@@ -563,7 +563,7 @@ func (s *Store) Open() (retErr error) {
 
 	// Create the database directory, if it doesn't already exist.
 	parentDBDir := filepath.Dir(s.dbPath)
-	if !dirExists(parentDBDir) {
+	if !fsutil.DirExists(parentDBDir) {
 		s.logger.Printf("creating directory for database at %s", parentDBDir)
 		err := os.MkdirAll(parentDBDir, 0755)
 		if err != nil {
@@ -624,20 +624,20 @@ func (s *Store) Open() (retErr error) {
 			if removeDBFiles {
 				stats.Add(numRestoresStart, 1)
 				s.numSnapshotsStart.Add(1)
-				if err := removeFile(s.cleanSnapshotPath); err != nil {
+				if err := fsutil.RemoveFile(s.cleanSnapshotPath); err != nil {
 					s.logger.Printf("warning: failed to remove clean snapshot marker file: %s", err)
 				}
 			}
 		}()
 
-		if !pathExists(s.cleanSnapshotPath) {
+		if !fsutil.PathExists(s.cleanSnapshotPath) {
 			return nil
 		}
 		fp := &FileFingerprint{}
 		if err := fp.ReadFromFile(s.cleanSnapshotPath); err != nil {
 			return nil
 		}
-		mt, sz, err := modTimeSize(s.dbPath)
+		mt, sz, err := fsutil.ModTimeSize(s.dbPath)
 		if err != nil {
 			return nil
 		}
@@ -697,7 +697,7 @@ func (s *Store) Open() (retErr error) {
 	}
 
 	// Create the Raft log store and verify it.
-	raftDBSize, err := fileSizeExists(s.raftDBPath)
+	raftDBSize, err := fsutil.FileSizeExists(s.raftDBPath)
 	if err != nil {
 		return fmt.Errorf("failed to determine size of Raft log: %s", err)
 	}
@@ -727,7 +727,7 @@ func (s *Store) Open() (retErr error) {
 	}
 
 	// Request to recover node?
-	if pathExists(s.peersPath) {
+	if fsutil.PathExists(s.peersPath) {
 		s.logger.Printf("attempting node recovery using %s", s.peersPath)
 		config, err := raft.ReadConfigJSON(s.peersPath)
 		if err != nil {
@@ -735,7 +735,7 @@ func (s *Store) Open() (retErr error) {
 		}
 
 		// Recovering a node invalidates any existing SQLite file.
-		if err := removeFile(s.cleanSnapshotPath); err != nil {
+		if err := fsutil.RemoveFile(s.cleanSnapshotPath); err != nil {
 			return fmt.Errorf("failed to remove clean snapshot file during RecoverNode: %w", err)
 		}
 		if err = RecoverNode(s.raftDir, s.dbConf.Extensions, s.logger, s.raftLog,
@@ -1323,7 +1323,7 @@ func (s *Store) Stats() (map[string]any, error) {
 			raftStats[k] = s
 		}
 	}
-	raftStats["log_size"], err = fileSizeExists(s.raftDBPath)
+	raftStats["log_size"], err = fsutil.FileSizeExists(s.raftDBPath)
 	if err != nil {
 		return nil, err
 	}
@@ -1335,7 +1335,7 @@ func (s *Store) Stats() (map[string]any, error) {
 	raftStats["transport"] = s.raftTn.Stats()
 	raftStats["config"] = RaftConfigAsJSON(s.raftConfig())
 
-	dirSz, err := dirSize(s.raftDir)
+	dirSz, err := fsutil.DirSize(s.raftDir)
 	if err != nil {
 		return nil, err
 	}
@@ -2613,7 +2613,7 @@ func (s *Store) fsmSnapshot() (fSnap raft.FSMSnapshot, retErr error) {
 		stats.Add(numSnapshotsFull, 1)
 		s.numFullSnapshots++
 	} else {
-		if !pathExistsWithData(s.walPath) {
+		if !fsutil.PathExistsWithData(s.walPath) {
 			// No WAL data available. This can happen when the Raft log contains only
 			// entries that don't modify the database (e.g. cluster membership changes).
 			// Return an error so Raft knows there is nothing to snapshot.
@@ -2623,7 +2623,7 @@ func (s *Store) fsmSnapshot() (fSnap raft.FSMSnapshot, retErr error) {
 		// Write the compacted WAL to the WAL staging directory. The Snapshotting process
 		// will atomically move this entire directory. If it fails to do so, then this WAL
 		// file wil be packaged as part of the next Snapshot and the next WAL file.
-		if err := ensureDirExists(s.walStagingDir); err != nil {
+		if err := fsutil.EnsureDirExists(s.walStagingDir); err != nil {
 			return nil, err
 		}
 		sd := snapshot.NewStagingDir(s.walStagingDir)
@@ -2690,7 +2690,7 @@ func (s *Store) fsmSnapshot() (fSnap raft.FSMSnapshot, retErr error) {
 				// incremental snapshot, then it depends on whether the WAL Staging directory is still
 				// around. If it is, we don't have a broken series of WALs and we can retry an incremental
 				// again next time. Otherwise the chain has been broken and we must fall back to full.
-				if !dirExists(s.walStagingDir) {
+				if !fsutil.DirExists(s.walStagingDir) {
 					if err := s.snapshotStore.SetDueNext(snapshot.Full); err != nil {
 						s.logger.Fatalf("failed to set full needed after snapshot processing failure: %s", err)
 					}
@@ -2733,7 +2733,7 @@ func (s *Store) fsmRestore(rc io.ReadCloser) (retErr error) {
 
 	// Any existing SQLite file is about to be invalid, so mark that we can't
 	// fast-restart with it.
-	if err := removeFile(s.cleanSnapshotPath); err != nil {
+	if err := fsutil.RemoveFile(s.cleanSnapshotPath); err != nil {
 		return fmt.Errorf("failed to remove clean snapshot file: %w", err)
 	}
 	if err := s.db.Swap(tmpPath, s.dbConf.FKConstraints, true); err != nil {
@@ -2930,7 +2930,7 @@ func (s *Store) runWALSnapshotting() (closeCh, doneCh chan struct{}) {
 		for {
 			select {
 			case <-ticker.C:
-				sz, err := fileSizeExists(s.walPath)
+				sz, err := fsutil.FileSizeExists(s.walPath)
 				if err != nil {
 					s.logger.Printf("failed to check WAL size: %s", err.Error())
 					continue
@@ -3175,96 +3175,6 @@ func prettyVoter(v bool) string {
 		return "voter"
 	}
 	return "non-voter"
-}
-
-// removeFile removes the file at the given path if it exists.
-func removeFile(path string) error {
-	if !pathExists(path) {
-		return nil
-	}
-	return os.Remove(path)
-}
-
-// pathExists returns true if the given path exists.
-func pathExists(p string) bool {
-	if _, err := os.Lstat(p); err != nil && os.IsNotExist(err) {
-		return false
-	}
-	return true
-}
-
-// pathExistsWithData returns true if the given path exists and has data.
-func pathExistsWithData(p string) bool {
-	stat, err := os.Stat(p)
-	if err != nil {
-		return false
-	}
-	return stat.Size() > 0
-}
-
-func dirExists(path string) bool {
-	stat, err := os.Stat(path)
-	return err == nil && stat.IsDir()
-}
-
-func ensureDirExists(path string) error {
-	if dirExists(path) {
-		return nil
-	}
-	return os.MkdirAll(path, 0755)
-}
-
-func fileSize(path string) (int64, error) {
-	stat, err := os.Stat(path)
-	if err != nil {
-		return 0, err
-	}
-	return stat.Size(), nil
-}
-
-// fileSizeExists returns the size of the given file, or 0 if the file does not
-// exist. Any other error is returned.
-func fileSizeExists(path string) (int64, error) {
-	if !pathExists(path) {
-		return 0, nil
-	}
-	return fileSize(path)
-}
-
-// dirSize returns the total size of all files in the given directory
-func dirSize(path string) (int64, error) {
-	var size int64
-	err := filepath.WalkDir(path, func(_ string, d fs.DirEntry, err error) error {
-		if err != nil {
-			// If the file doesn't exist, we can ignore it. Snapshot files might
-			// disappear during walking.
-			if os.IsNotExist(err) {
-				return nil
-			}
-			return err
-		}
-		if !d.IsDir() {
-			info, err := d.Info()
-			if err != nil {
-				if os.IsNotExist(err) {
-					return nil
-				}
-				return err
-			}
-			size += info.Size()
-		}
-		return nil
-	})
-	return size, err
-}
-
-// modTimeSize returns the modification time and size of the file at the given path.
-func modTimeSize(path string) (time.Time, int64, error) {
-	info, err := os.Stat(path)
-	if err != nil {
-		return time.Time{}, 0, err
-	}
-	return info.ModTime(), info.Size(), nil
 }
 
 func resolvableAddress(addr string) (string, error) {
