@@ -6,7 +6,6 @@ import (
 	"expvar"
 	"fmt"
 	"io"
-	"io/fs"
 	"log"
 	"os"
 	"path/filepath"
@@ -14,6 +13,7 @@ import (
 	"time"
 
 	"github.com/hashicorp/raft"
+	"github.com/rqlite/rqlite/v10/internal/fsutil"
 	"github.com/rqlite/rqlite/v10/internal/rsync"
 	"github.com/rqlite/rqlite/v10/snapshot/plan"
 )
@@ -163,7 +163,7 @@ func NewStore(dir string) (*Store, error) {
 	}
 	str.logger.Printf("store initialized using %s", dir)
 
-	emp, err := dirIsEmpty(dir)
+	emp, err := fsutil.DirIsEmpty(dir)
 	if err != nil {
 		return nil, err
 	}
@@ -402,7 +402,7 @@ func (s *Store) reap() (int, int, error) {
 func (s *Store) reapInternal() (int, int, error) {
 	// If a reap plan file exists, that means a previous reap must have encountered an error.
 	// Let's make sure it is completed before we start a new reap.
-	if fileExists(s.reapPlanPath) {
+	if fsutil.FileExists(s.reapPlanPath) {
 		s.logger.Printf("found interrupted reap plan at %s, resuming", s.reapPlanPath)
 		stats.Add(reapPlanRecovered, 1)
 		p, err := plan.ReadFromFile(s.reapPlanPath)
@@ -524,7 +524,7 @@ func (s *Store) executeReapPlan(p *plan.Plan, planPath string) (int, int, error)
 		return 0, 0, fmt.Errorf("executing reap plan: %w", err)
 	}
 
-	if err := syncDirMaybe(s.dir); err != nil {
+	if err := fsutil.SyncDirMaybe(s.dir); err != nil {
 		return 0, 0, fmt.Errorf("syncing store dir: %w", err)
 	}
 
@@ -543,7 +543,7 @@ func (s *Store) signalReap() {
 
 // DueNext returns the type of snapshot due next.
 func (s *Store) DueNext() (Type, error) {
-	if fileExists(s.fullNeededPath) {
+	if fsutil.FileExists(s.fullNeededPath) {
 		return Full, nil
 	}
 
@@ -570,15 +570,15 @@ func (s *Store) SetDueNext(t Type) error {
 		if err := f.Close(); err != nil {
 			return err
 		}
-		return syncDirMaybe(s.dir)
+		return fsutil.SyncDirMaybe(s.dir)
 	case Incremental:
-		if !fileExists(s.fullNeededPath) {
+		if !fsutil.FileExists(s.fullNeededPath) {
 			return nil
 		}
 		if err := os.Remove(s.fullNeededPath); err != nil {
 			return err
 		}
-		return syncDirMaybe(s.dir)
+		return fsutil.SyncDirMaybe(s.dir)
 	default:
 		return fmt.Errorf("unknown snapshot type: %s", t)
 	}
@@ -593,7 +593,7 @@ func (s *Store) Stats() (map[string]any, error) {
 	}
 	defer s.mrsw.EndRead()
 
-	dirSz, err := dirSize(s.dir)
+	dirSz, err := fsutil.DirSize(s.dir)
 	if err != nil {
 		// If we can't compute the directory size, we can still return other stats,
 		// so we ignore the error and just report a size of 0.
@@ -674,7 +674,7 @@ func (s *Store) check() error {
 	// Remove any incomplete plan file from an interrupted plan write.
 	os.Remove(tmpName(s.reapPlanPath))
 
-	reapPlanFound := fileExists(s.reapPlanPath)
+	reapPlanFound := fsutil.FileExists(s.reapPlanPath)
 
 	// If no reap was interrupted, verify the CRC32 of every data file
 	// in every snapshot directory. If a reap was interrupted, the files
@@ -771,22 +771,10 @@ func metaPath(dir string) string {
 	return filepath.Join(dir, metaFileName)
 }
 
-// write a function which given a directory path calculates the
-// sum of the sizes of all files in the directory and its subdirectories, and returns it as an int64.
-func dirSize(path string) (int64, error) {
-	var size int64
-	err := filepath.WalkDir(path, func(_ string, d fs.DirEntry, err error) error {
-		if err != nil {
-			return err
-		}
-		if !d.IsDir() {
-			info, err := d.Info()
-			if err != nil {
-				return err
-			}
-			size += info.Size()
-		}
-		return nil
-	})
-	return size, err
+func tmpName(path string) string {
+	return path + tmpSuffix
+}
+
+func isTmpName(name string) bool {
+	return filepath.Ext(name) == tmpSuffix
 }

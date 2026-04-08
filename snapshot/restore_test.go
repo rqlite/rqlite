@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	"github.com/rqlite/rqlite/v10/db"
+	"github.com/rqlite/rqlite/v10/internal/fsutil"
 )
 
 func Test_Restore_DBOnly(t *testing.T) {
@@ -31,7 +32,7 @@ func Test_Restore_DBOnly(t *testing.T) {
 	}
 
 	// Output should be byte-identical to the source DB.
-	if !filesIdentical(srcDB, dstPath) {
+	if !fsutil.FilesIdentical(srcDB, dstPath) {
 		t.Fatal("restored database does not match source")
 	}
 }

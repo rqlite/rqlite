@@ -9,6 +9,7 @@ import (
 
 	"github.com/hashicorp/raft"
 	"github.com/rqlite/rqlite/v10/db"
+	"github.com/rqlite/rqlite/v10/internal/fsutil"
 	"github.com/rqlite/rqlite/v10/internal/rsum"
 )
 
@@ -500,7 +501,7 @@ func (c *SnapshotCatalog) loadSnapshot(path string, id string) (*Snapshot, error
 	}
 	sort.Strings(walMatches)
 
-	hasDB := fileExists(dataDBPath)
+	hasDB := fsutil.FileExists(dataDBPath)
 	hasWALs := len(walMatches) > 0
 
 	if !hasDB && !hasWALs {
