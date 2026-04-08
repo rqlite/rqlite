@@ -139,7 +139,7 @@ func (s *StagingDir) MoveWALFilesTo(dst string) error {
 
 // Sync syncs the staging directory file descriptor.
 func (s *StagingDir) Sync() error {
-	return syncDirMaybe(s.dir)
+	return fsutil.SyncDirMaybe(s.dir)
 }
 
 func (s *StagingDir) nextWALName() string {
@@ -177,7 +177,7 @@ func (w *WALWriter) Close() error {
 		return fmt.Errorf("failed to close WAL file: %w", err)
 	}
 	w.closed = true
-	return syncDirMaybe(w.dir)
+	return fsutil.SyncDirMaybe(w.dir)
 }
 
 // Cancel removes the partial WAL file from the staging directory. It is

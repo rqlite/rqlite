@@ -55,7 +55,7 @@ func Upgrade7To8(old, new string, logger *log.Logger) (retErr error) {
 		return nil
 	}
 
-	oldIsEmpty, err := dirIsEmpty(old)
+	oldIsEmpty, err := fsutil.DirIsEmpty(old)
 	if err != nil {
 		return fmt.Errorf("failed to check if old snapshot directory %s is empty: %s", old, err)
 	}
@@ -161,12 +161,12 @@ func Upgrade7To8(old, new string, logger *log.Logger) (retErr error) {
 	if err := os.Rename(newTmpDir, new); err != nil {
 		return fmt.Errorf("failed to move temporary snapshot directory %s to %s: %s", newTmpDir, new, err)
 	}
-	if err := syncDirParentMaybe(new); err != nil {
+	if err := fsutil.SyncDirParentMaybe(new); err != nil {
 		return fmt.Errorf("failed to sync parent directory of new snapshot directory %s: %s", new, err)
 	}
 
 	// We're done! Remove old.
-	if err := removeDirSync(old); err != nil {
+	if err := fsutil.RemoveDirSync(old); err != nil {
 		return fmt.Errorf("failed to remove old snapshot directory %s: %s", old, err)
 	}
 	logger.Printf("upgraded v7 snapshot directory %s to %s", old, new)
@@ -198,7 +198,7 @@ func Upgrade8To10(old, new string, logger *log.Logger) (retErr error) {
 	os.Remove(planPath + ".tmp")
 
 	// Check for existing plan (crash recovery).
-	if fileExists(planPath) {
+	if fsutil.FileExists(planPath) {
 		logger.Printf("found existing upgrade plan at %s, resuming", planPath)
 		p, err := plan.ReadFromFile(planPath)
 		if err != nil {
@@ -218,7 +218,7 @@ func Upgrade8To10(old, new string, logger *log.Logger) (retErr error) {
 		return nil
 	}
 
-	oldIsEmpty, err := dirIsEmpty(old)
+	oldIsEmpty, err := fsutil.DirIsEmpty(old)
 	if err != nil {
 		return fmt.Errorf("failed to check if old snapshot directory %s is empty: %s", old, err)
 	}
@@ -317,7 +317,7 @@ func getNewest8Snapshot(dir string) (string, *raft.SnapshotMeta, error) {
 			continue
 		}
 		mp := filepath.Join(dir, id, metaFileName)
-		if !fileExists(mp) {
+		if !fsutil.FileExists(mp) {
 			continue
 		}
 
@@ -347,7 +347,7 @@ func getNewest7Snapshot(dir string) (*raft.SnapshotMeta, error) {
 			continue
 		}
 		mp := filepath.Join(dir, entry.Name(), metaFileName)
-		if !fileExists(mp) {
+		if !fsutil.FileExists(mp) {
 			continue
 		}
 

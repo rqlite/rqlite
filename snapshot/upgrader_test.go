@@ -202,10 +202,10 @@ func Test_Upgrade8To10_OK(t *testing.T) {
 	mustCreateV8Snapshot(t, oldDir, snapshotID, 18, 2)
 
 	// Verify v8 layout before upgrade.
-	if !fileExists(filepath.Join(oldDir, snapshotID+".db")) {
+	if !fsutil.FileExists(filepath.Join(oldDir, snapshotID+".db")) {
 		t.Fatal("expected .db file at root")
 	}
-	if !fileExists(filepath.Join(oldDir, snapshotID, metaFileName)) {
+	if !fsutil.FileExists(filepath.Join(oldDir, snapshotID, metaFileName)) {
 		t.Fatal("expected meta.json in snapshot directory")
 	}
 
@@ -220,10 +220,10 @@ func Test_Upgrade8To10_OK(t *testing.T) {
 	}
 
 	// Verify v10 layout in new directory.
-	if !fileExists(filepath.Join(newDir, snapshotID, dbfileName)) {
+	if !fsutil.FileExists(filepath.Join(newDir, snapshotID, dbfileName)) {
 		t.Fatal("expected data.db in snapshot directory after upgrade")
 	}
-	if !fileExists(filepath.Join(newDir, snapshotID, metaFileName)) {
+	if !fsutil.FileExists(filepath.Join(newDir, snapshotID, metaFileName)) {
 		t.Fatal("expected meta.json in snapshot directory after upgrade")
 	}
 
@@ -412,7 +412,7 @@ func Test_Upgrade8To10_ResumesPlan(t *testing.T) {
 	}
 
 	// Plan file should be cleaned up.
-	if fileExists(planPath) {
+	if fsutil.FileExists(planPath) {
 		t.Fatal("expected plan file to be removed after successful upgrade")
 	}
 	if fsutil.DirExists(oldDir) {

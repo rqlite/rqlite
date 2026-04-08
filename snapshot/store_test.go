@@ -427,7 +427,7 @@ func Test_Store_EndToEndCycle(t *testing.T) {
 	if exp, got := 0, len(walPaths); exp != got {
 		t.Fatalf("Expected %d WAL files, got %d", exp, got)
 	}
-	if !filesIdentical(dbPath, "testdata/db-and-wals/backup.db") {
+	if !fsutil.FilesIdentical(dbPath, "testdata/db-and-wals/backup.db") {
 		t.Fatalf("Database file in snapshot does not match source")
 	}
 
@@ -832,7 +832,7 @@ func Test_Store_Reap(t *testing.T) {
 	}
 
 	// dbPath should be a byte-for-byte copy of full2.db
-	if !filesIdentical(dbPath, "testdata/db-and-wals/full2.db") {
+	if !fsutil.FilesIdentical(dbPath, "testdata/db-and-wals/full2.db") {
 		t.Fatalf("Database file in snapshot does not match source")
 	}
 
@@ -877,7 +877,7 @@ func Test_Store_Reap(t *testing.T) {
 	}
 
 	// dbPath should be a byte-for-byte copy of backup.db
-	if !filesIdentical(dbPath, "testdata/db-and-wals/backup.db") {
+	if !fsutil.FilesIdentical(dbPath, "testdata/db-and-wals/backup.db") {
 		t.Fatalf("Database file in snapshot does not match source")
 	}
 
@@ -1130,7 +1130,7 @@ func Test_Store_Check_ResumesReapPlan(t *testing.T) {
 	defer store3.Close()
 
 	// The plan file should be gone.
-	if fileExists(planPath) {
+	if fsutil.FileExists(planPath) {
 		t.Fatalf("Expected REAP_PLAN to be removed after check")
 	}
 
