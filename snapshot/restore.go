@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 
 	"github.com/rqlite/rqlite/v10/db"
+	"github.com/rqlite/rqlite/v10/internal/rsum"
 )
 
 // Restore reads a protobuf-framed snapshot stream and writes
@@ -44,13 +45,15 @@ func Restore(r io.Reader, dstPath string) (int64, error) {
 		return totalRead, fmt.Errorf("snapshot has no database")
 	}
 
-	// Extract DB file.
+	// Extract DB file. Wrap the source in a CRC32Reader so we can verify
+	// the bytes match the header's CRC32 without a second pass over disk.
 	dbFile, err := os.Create(dstPath)
 	if err != nil {
 		return totalRead, err
 	}
 
-	nr, err := io.CopyN(dbFile, r, int64(full.DbHeader.SizeBytes))
+	dbCR := rsum.NewCRC32Reader(r)
+	nr, err := io.CopyN(dbFile, dbCR, int64(full.DbHeader.SizeBytes))
 	totalRead += nr
 	if err != nil {
 		dbFile.Close()
@@ -63,8 +66,13 @@ func Restore(r io.Reader, dstPath string) (int64, error) {
 	if err := dbFile.Close(); err != nil {
 		return totalRead, err
 	}
+	if got, want := dbCR.Sum32(), full.DbHeader.Crc32; got != want {
+		return totalRead, fmt.Errorf("CRC32 mismatch for DB file: got %08x, expected %08x", got, want)
+	}
 
-	// Extract and checkpoint any WAL files.
+	// Extract and checkpoint any WAL files. Each WAL is verified against
+	// its header CRC32 immediately after read, before any are checkpointed
+	// into the DB, so a corrupt WAL is never applied.
 	if len(full.WalHeaders) > 0 {
 		dir := filepath.Dir(dstPath)
 		var walFiles []string
@@ -74,7 +82,8 @@ func Restore(r io.Reader, dstPath string) (int64, error) {
 			if err != nil {
 				return totalRead, err
 			}
-			nr, err := io.CopyN(wf, r, int64(wh.SizeBytes))
+			walCR := rsum.NewCRC32Reader(r)
+			nr, err := io.CopyN(wf, walCR, int64(wh.SizeBytes))
 			totalRead += nr
 			if err != nil {
 				wf.Close()
@@ -82,6 +91,9 @@ func Restore(r io.Reader, dstPath string) (int64, error) {
 			}
 			if err := wf.Close(); err != nil {
 				return totalRead, err
+			}
+			if got, want := walCR.Sum32(), wh.Crc32; got != want {
+				return totalRead, fmt.Errorf("CRC32 mismatch for WAL file %d: got %08x, expected %08x", i, got, want)
 			}
 			walFiles = append(walFiles, walPath)
 		}
