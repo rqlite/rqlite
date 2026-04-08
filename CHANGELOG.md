@@ -100,6 +100,7 @@ There are no breaking API changes in this release, nor any changes to how cluste
 - [PR #2594](https://github.com/rqlite/rqlite/pull/2594): Free misc. resources in `store` package.
 - [PR #2595](https://github.com/rqlite/rqlite/pull/2595): Reuse byte buffer for frame header when writing WAL frames.
 - [PR #2596](https://github.com/rqlite/rqlite/pull/2596): Use more efficient file-walking functions from standard library.
+- [PR #2597](https://github.com/rqlite/rqlite/pull/2597): Move CDC RLock inside CDC enabled check.
 
 ## v9.4.5 (March 9th 2026)
 ### Implementation changes and bug fixes
