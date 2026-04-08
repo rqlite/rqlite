@@ -102,6 +102,7 @@ There are no breaking API changes in this release, nor any changes to how cluste
 - [PR #2596](https://github.com/rqlite/rqlite/pull/2596): Use more efficient file-walking functions from standard library.
 - [PR #2597](https://github.com/rqlite/rqlite/pull/2597): Move CDC RLock inside CDC enabled check.
 - [PR #2598](https://github.com/rqlite/rqlite/pull/2598): Consolidate file utilities.
+- [PR #2601](https://github.com/rqlite/rqlite/pull/2601): Ensure Foreign Key DB driver only registered once.
 
 ## v9.4.5 (March 9th 2026)
 ### Implementation changes and bug fixes
