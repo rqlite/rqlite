@@ -50,10 +50,14 @@ func FileSize(path string) (int64, error) {
 // FileSizeExists returns the size of the given file, or 0 if the file does not
 // exist. Any other error is returned.
 func FileSizeExists(path string) (int64, error) {
-	if !PathExists(path) {
-		return 0, nil
+	stat, err := os.Stat(path)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return 0, nil
+		}
+		return 0, err
 	}
-	return FileSize(path)
+	return stat.Size(), nil
 }
 
 // DirSize returns the total size of all files in the given directory.
@@ -111,10 +115,11 @@ func DirIsEmpty(dir string) (bool, error) {
 
 // RemoveFile removes the file at the given path if it exists.
 func RemoveFile(path string) error {
-	if !PathExists(path) {
+	err := os.Remove(path)
+	if err != nil && os.IsNotExist(err) {
 		return nil
 	}
-	return os.Remove(path)
+	return err
 }
 
 // RemoveDirSync removes the directory and syncs the parent directory.
