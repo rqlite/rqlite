@@ -12,6 +12,7 @@ import (
 	"expvar"
 	"fmt"
 	"io"
+	"io/fs"
 	"log"
 	"net"
 	"os"
@@ -3195,13 +3196,11 @@ func pathExists(p string) bool {
 
 // pathExistsWithData returns true if the given path exists and has data.
 func pathExistsWithData(p string) bool {
-	if !pathExists(p) {
+	stat, err := os.Stat(p)
+	if err != nil {
 		return false
 	}
-	if size, err := fileSize(p); err != nil || size == 0 {
-		return false
-	}
-	return true
+	return stat.Size() > 0
 }
 
 func dirExists(path string) bool {
@@ -3236,7 +3235,7 @@ func fileSizeExists(path string) (int64, error) {
 // dirSize returns the total size of all files in the given directory
 func dirSize(path string) (int64, error) {
 	var size int64
-	err := filepath.Walk(path, func(_ string, info os.FileInfo, err error) error {
+	err := filepath.WalkDir(path, func(_ string, d fs.DirEntry, err error) error {
 		if err != nil {
 			// If the file doesn't exist, we can ignore it. Snapshot files might
 			// disappear during walking.
@@ -3245,10 +3244,17 @@ func dirSize(path string) (int64, error) {
 			}
 			return err
 		}
-		if !info.IsDir() {
+		if !d.IsDir() {
+			info, err := d.Info()
+			if err != nil {
+				if os.IsNotExist(err) {
+					return nil
+				}
+				return err
+			}
 			size += info.Size()
 		}
-		return err
+		return nil
 	})
 	return size, err
 }
