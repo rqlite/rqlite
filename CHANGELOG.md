@@ -105,6 +105,7 @@ There are no breaking API changes in this release, nor any changes to how cluste
 - [PR #2601](https://github.com/rqlite/rqlite/pull/2601): Ensure Foreign Key DB driver only registered once.
 - [PR #2602](https://github.com/rqlite/rqlite/pull/2602): Clearer DB extension driver name.
 - [PR #2603](https://github.com/rqlite/rqlite/pull/2603): Capture CRC32 of FullSink while data is being written to disk.
+- [PR #2605](https://github.com/rqlite/rqlite/pull/2605): Define Suffrage via Protobuf.
 
 ## v9.4.5 (March 9th 2026)
 ### Implementation changes and bug fixes

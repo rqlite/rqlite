@@ -1,10 +1,31 @@
 package store
 
+import (
+	"encoding/json"
+
+	"github.com/rqlite/rqlite/v10/command"
+	"github.com/rqlite/rqlite/v10/command/proto"
+)
+
 // Server represents another node in the cluster.
 type Server struct {
-	ID       string `json:"id,omitempty"`
-	Addr     string `json:"addr,omitempty"`
-	Suffrage string `json:"suffrage,omitempty"`
+	ID       string
+	Addr     string
+	Suffrage proto.Suffrage
+}
+
+// MarshalJSON returns the JSON encoding of the Server.
+func (s *Server) MarshalJSON() ([]byte, error) {
+	type j struct {
+		ID       string `json:"id,omitempty"`
+		Addr     string `json:"addr,omitempty"`
+		Suffrage string `json:"suffrage,omitempty"`
+	}
+	return json.Marshal(&j{
+		ID:       s.ID,
+		Addr:     s.Addr,
+		Suffrage: string(s.Suffrage),
+	})
 }
 
 // Equal returns whether the two servers are identical.
@@ -17,14 +38,10 @@ func (s *Server) Equal(other *Server) bool {
 
 // NewServer returns an initialized Server.
 func NewServer(id, addr string, voter bool) *Server {
-	v := "voter"
-	if !voter {
-		v = "Nonvoter"
-	}
 	return &Server{
 		ID:       id,
 		Addr:     addr,
-		Suffrage: v,
+		Suffrage: command.SuffrageVoterFromBool(voter),
 	}
 }
 
@@ -44,7 +61,7 @@ func (s Servers) IsReadOnly(id string) (readOnly bool, found bool) {
 
 	for _, n := range s {
 		if n != nil && n.ID == id {
-			readOnly = n.Suffrage == "Nonvoter"
+			readOnly = n.Suffrage == proto.Suffrage_NON_VOTER
 			found = true
 			return
 		}
@@ -75,7 +92,7 @@ func (s Servers) Voters() Servers {
 
 	var voters Servers
 	for _, n := range s {
-		if n != nil && n.Suffrage != "Nonvoter" {
+		if n != nil && n.Suffrage != proto.Suffrage_NON_VOTER {
 			voters = append(voters, n)
 		}
 	}
@@ -90,7 +107,7 @@ func (s Servers) NonVoters() Servers {
 
 	var nonVoters Servers
 	for _, n := range s {
-		if n != nil && n.Suffrage == "Nonvoter" {
+		if n != nil && n.Suffrage == proto.Suffrage_NON_VOTER {
 			nonVoters = append(nonVoters, n)
 		}
 	}
