@@ -8,6 +8,7 @@ import (
 
 	"github.com/rqlite/rqlite/v10/cluster/proto"
 	"github.com/rqlite/rqlite/v10/cluster/servicetest"
+	command "github.com/rqlite/rqlite/v10/command/proto"
 	pb "google.golang.org/protobuf/proto"
 )
 
@@ -51,7 +52,7 @@ func Test_SingleJoinOK(t *testing.T) {
 
 	c := NewClient(&simpleDialer{}, 0)
 	joiner := NewJoiner(c, numAttempts, attemptInterval)
-	addr, err := joiner.Do(context.Background(), []string{srv.Addr()}, "id0", "1.2.3.4", Voter)
+	addr, err := joiner.Do(context.Background(), []string{srv.Addr()}, "id0", "1.2.3.4", command.Suffrage_VOTER)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -70,7 +71,7 @@ func Test_SingleJoinZeroAttempts(t *testing.T) {
 
 	c := NewClient(&simpleDialer{}, 0)
 	joiner := NewJoiner(c, 0, attemptInterval)
-	_, err := joiner.Do(context.Background(), []string{srv.Addr()}, "id0", "1.2.3.4", Voter)
+	_, err := joiner.Do(context.Background(), []string{srv.Addr()}, "id0", "1.2.3.4", command.Suffrage_VOTER)
 	if err != ErrJoinFailed {
 		t.Fatalf("Incorrect error returned when zero attempts specified")
 	}
@@ -101,7 +102,7 @@ func Test_SingleJoinFail(t *testing.T) {
 
 	c := NewClient(&simpleDialer{}, 0)
 	joiner := NewJoiner(c, numAttempts, attemptInterval)
-	_, err := joiner.Do(context.Background(), []string{srv.Addr()}, "id0", "1.2.3.4", Voter)
+	_, err := joiner.Do(context.Background(), []string{srv.Addr()}, "id0", "1.2.3.4", command.Suffrage_VOTER)
 	if err == nil {
 		t.Fatalf("expected error when joining bad node")
 	}
@@ -139,7 +140,7 @@ func Test_SingleJoinCancel(t *testing.T) {
 
 	c := NewClient(&simpleDialer{}, 0)
 	joiner := NewJoiner(c, 10, attemptInterval)
-	_, err := joiner.Do(ctx, []string{srv.Addr()}, "id0", "1.2.3.4", Voter)
+	_, err := joiner.Do(ctx, []string{srv.Addr()}, "id0", "1.2.3.4", command.Suffrage_VOTER)
 	if err != ErrJoinCanceled {
 		t.Fatalf("incorrect error returned when canceling: %s", err)
 	}
@@ -193,7 +194,7 @@ func Test_DoubleJoinOKSecondNode(t *testing.T) {
 
 	c := NewClient(&simpleDialer{}, 0)
 	joiner := NewJoiner(c, numAttempts, attemptInterval)
-	addr, err := joiner.Do(context.Background(), []string{srv1.Addr(), srv2.Addr()}, "id0", "1.2.3.4", Voter)
+	addr, err := joiner.Do(context.Background(), []string{srv1.Addr(), srv2.Addr()}, "id0", "1.2.3.4", command.Suffrage_VOTER)
 	if err != nil {
 		t.Fatal(err)
 	}

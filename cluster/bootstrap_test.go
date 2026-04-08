@@ -50,7 +50,7 @@ func Test_BootstrapperBootDoneImmediately(t *testing.T) {
 	}
 	p := NewAddressProviderString([]string{srv.Addr()})
 	bs := NewBootstrapper(p, nil)
-	if err := bs.Boot(context.Background(), "node1", "192.168.1.1:1234", Voter, done, 10*time.Second); err != nil {
+	if err := bs.Boot(context.Background(), "node1", "192.168.1.1:1234", command.Suffrage_VOTER, done, 10*time.Second); err != nil {
 		t.Fatalf("failed to boot: %s", err)
 	}
 	if exp, got := BootDone, bs.Status(); exp != got {
@@ -71,7 +71,7 @@ func Test_BootstrapperBootTimeout(t *testing.T) {
 	p := NewAddressProviderString([]string{srv.Addr()})
 	bs := NewBootstrapper(p, NewClient(&simpleDialer{}, 0))
 	bs.Interval = time.Second
-	err := bs.Boot(context.Background(), "node1", "192.168.1.1:1234", Voter, done, 5*time.Second)
+	err := bs.Boot(context.Background(), "node1", "192.168.1.1:1234", command.Suffrage_VOTER, done, 5*time.Second)
 	if err == nil {
 		t.Fatalf("no error returned from timed-out boot")
 	}
@@ -100,7 +100,7 @@ func Test_BootstrapperBootCanceled(t *testing.T) {
 	p := NewAddressProviderString([]string{srv.Addr()})
 	bs := NewBootstrapper(p, NewClient(&simpleDialer{}, 0))
 	bs.Interval = time.Second
-	err := bs.Boot(ctx, "node1", "192.168.1.1:1234", Voter, done, 5*time.Second)
+	err := bs.Boot(ctx, "node1", "192.168.1.1:1234", command.Suffrage_VOTER, done, 5*time.Second)
 	if err == nil {
 		t.Fatalf("no error returned from timed-out boot")
 	}
@@ -131,7 +131,7 @@ func Test_BootstrapperBootCanceledDone(t *testing.T) {
 	p := NewAddressProviderString([]string{srv.Addr()})
 	bs := NewBootstrapper(p, NewClient(&simpleDialer{}, 0))
 	bs.Interval = time.Second
-	err := bs.Boot(ctx, "node1", "192.168.1.1:1234", Voter, done, 5*time.Second)
+	err := bs.Boot(ctx, "node1", "192.168.1.1:1234", command.Suffrage_VOTER, done, 5*time.Second)
 	if err != nil {
 		t.Fatalf("error returned from canceled boot even though it's done: %s", err)
 	}
@@ -179,7 +179,7 @@ func Test_BootstrapperBootSingleJoin(t *testing.T) {
 	bs := NewBootstrapper(p, NewClient(&simpleDialer{}, 0))
 	bs.Interval = time.Second
 
-	err := bs.Boot(context.Background(), "node1", "192.168.1.1:1234", Voter, done, 5*time.Second)
+	err := bs.Boot(context.Background(), "node1", "192.168.1.1:1234", command.Suffrage_VOTER, done, 5*time.Second)
 	if err != nil {
 		t.Fatalf("failed to boot: %s", err)
 	}
@@ -221,7 +221,7 @@ func Test_BootstrapperBootNonVoter(t *testing.T) {
 	bs := NewBootstrapper(p, NewClient(&simpleDialer{}, 0))
 	bs.Interval = time.Second
 
-	err := bs.Boot(context.Background(), "node1", "192.168.1.1:1234", NonVoter, done, 3*time.Second)
+	err := bs.Boot(context.Background(), "node1", "192.168.1.1:1234", command.Suffrage_NON_VOTER, done, 3*time.Second)
 	if err == nil {
 		t.Fatalf("expected error, got none")
 	}
@@ -267,7 +267,7 @@ func Test_BootstrapperBootSingleNotify(t *testing.T) {
 	bs := NewBootstrapper(p, NewClient(&simpleDialer{}, 0))
 	bs.Interval = time.Second
 
-	err := bs.Boot(context.Background(), "node1", "192.168.1.1:1234", Voter, done, 60*time.Second)
+	err := bs.Boot(context.Background(), "node1", "192.168.1.1:1234", command.Suffrage_VOTER, done, 60*time.Second)
 	if err != nil {
 		t.Fatalf("failed to boot: %s", err)
 	}
@@ -356,7 +356,7 @@ func Test_BootstrapperBootMultiJoinNotify(t *testing.T) {
 	bs := NewBootstrapper(p, NewClient(&simpleDialer{}, 0))
 	bs.Interval = time.Second
 
-	err := bs.Boot(context.Background(), "node1", "192.168.1.1:1234", Voter, done, 60*time.Second)
+	err := bs.Boot(context.Background(), "node1", "192.168.1.1:1234", command.Suffrage_VOTER, done, 60*time.Second)
 	if err != nil {
 		t.Fatalf("failed to boot: %s", err)
 	}
