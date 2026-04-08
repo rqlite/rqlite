@@ -78,14 +78,16 @@ var (
 	ErrExecuteTimeout = errors.New("execute timeout")
 )
 
-// CheckpointMode is the mode in which a checkpoint runs.
+// CheckpointMode is the mode in which a checkpoint runs. The
+// numbers correspond to the values used in the SQLite PRAGMA
+// wal_checkpoint command simply for clarity and ease of use.
 type CheckpointMode int
 
 const (
 	// CheckpointRestart instructs the checkpoint to run in restart mode.
-	CheckpointRestart CheckpointMode = iota
+	CheckpointRestart CheckpointMode = 2
 	// CheckpointTruncate instructs the checkpoint to run in truncate mode.
-	CheckpointTruncate
+	CheckpointTruncate CheckpointMode = 3
 )
 
 var (
