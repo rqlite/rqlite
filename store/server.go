@@ -24,7 +24,7 @@ func (s *Server) MarshalJSON() ([]byte, error) {
 	return json.Marshal(&j{
 		ID:       s.ID,
 		Addr:     s.Addr,
-		Suffrage: string(s.Suffrage),
+		Suffrage: command.SuffrageToString(s.Suffrage),
 	})
 }
 
