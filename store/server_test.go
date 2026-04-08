@@ -48,7 +48,7 @@ func Test_Server_IsReadOnly(t *testing.T) {
 		{
 			name: "ExistingNonvoterNode",
 			servers: Servers([]*Server{
-				{ID: "node1", Addr: "localhost:4002", Suffrage: "Nonvoter"},
+				{ID: "node1", Addr: "localhost:4002", Suffrage: "nonvoter"},
 			}),
 			nodeID:        "node1",
 			expectedRO:    true,
@@ -117,7 +117,7 @@ func Test_Server_Sort(t *testing.T) {
 	servers := Servers{
 		{ID: "3", Addr: "localhost:4003", Suffrage: "Voter"},
 		{ID: "1", Addr: "localhost:4001", Suffrage: "Voter"},
-		{ID: "2", Addr: "localhost:4002", Suffrage: "Nonvoter"},
+		{ID: "2", Addr: "localhost:4002", Suffrage: "nonvoter"},
 	}
 	expectedOrder := []string{"1", "2", "3"}
 
@@ -157,8 +157,8 @@ func Test_Server_Voters(t *testing.T) {
 		{
 			name: "AllNonVoters",
 			servers: Servers{
-				{ID: "node1", Addr: "localhost:4001", Suffrage: "Nonvoter"},
-				{ID: "node2", Addr: "localhost:4002", Suffrage: "Nonvoter"},
+				{ID: "node1", Addr: "localhost:4001", Suffrage: "nonvoter"},
+				{ID: "node2", Addr: "localhost:4002", Suffrage: "nonvoter"},
 			},
 			expected: []string{},
 		},
@@ -166,7 +166,7 @@ func Test_Server_Voters(t *testing.T) {
 			name: "MixedServers",
 			servers: Servers{
 				{ID: "node1", Addr: "localhost:4001", Suffrage: "Voter"},
-				{ID: "node2", Addr: "localhost:4002", Suffrage: "Nonvoter"},
+				{ID: "node2", Addr: "localhost:4002", Suffrage: "nonvoter"},
 				{ID: "node3", Addr: "localhost:4003", Suffrage: "Voter"},
 			},
 			expected: []string{"node1", "node3"},
@@ -176,7 +176,7 @@ func Test_Server_Voters(t *testing.T) {
 			servers: Servers{
 				{ID: "node1", Addr: "localhost:4001", Suffrage: "Voter"},
 				nil,
-				{ID: "node2", Addr: "localhost:4002", Suffrage: "Nonvoter"},
+				{ID: "node2", Addr: "localhost:4002", Suffrage: "nonvoter"},
 			},
 			expected: []string{"node1"},
 		},
@@ -184,7 +184,7 @@ func Test_Server_Voters(t *testing.T) {
 			name: "LowercaseVoter",
 			servers: Servers{
 				{ID: "node1", Addr: "localhost:4001", Suffrage: "voter"},
-				{ID: "node2", Addr: "localhost:4002", Suffrage: "Nonvoter"},
+				{ID: "node2", Addr: "localhost:4002", Suffrage: "nonvoter"},
 			},
 			expected: []string{"node1"},
 		},
@@ -238,8 +238,8 @@ func Test_Server_NonVoters(t *testing.T) {
 		{
 			name: "AllNonVoters",
 			servers: Servers{
-				{ID: "node1", Addr: "localhost:4001", Suffrage: "Nonvoter"},
-				{ID: "node2", Addr: "localhost:4002", Suffrage: "Nonvoter"},
+				{ID: "node1", Addr: "localhost:4001", Suffrage: "nonvoter"},
+				{ID: "node2", Addr: "localhost:4002", Suffrage: "nonvoter"},
 			},
 			expected: []string{"node1", "node2"},
 		},
@@ -247,9 +247,9 @@ func Test_Server_NonVoters(t *testing.T) {
 			name: "MixedServers",
 			servers: Servers{
 				{ID: "node1", Addr: "localhost:4001", Suffrage: "Voter"},
-				{ID: "node2", Addr: "localhost:4002", Suffrage: "Nonvoter"},
+				{ID: "node2", Addr: "localhost:4002", Suffrage: "nonvoter"},
 				{ID: "node3", Addr: "localhost:4003", Suffrage: "Voter"},
-				{ID: "node4", Addr: "localhost:4004", Suffrage: "Nonvoter"},
+				{ID: "node4", Addr: "localhost:4004", Suffrage: "nonvoter"},
 			},
 			expected: []string{"node2", "node4"},
 		},
@@ -258,7 +258,7 @@ func Test_Server_NonVoters(t *testing.T) {
 			servers: Servers{
 				{ID: "node1", Addr: "localhost:4001", Suffrage: "Voter"},
 				nil,
-				{ID: "node2", Addr: "localhost:4002", Suffrage: "Nonvoter"},
+				{ID: "node2", Addr: "localhost:4002", Suffrage: "nonvoter"},
 			},
 			expected: []string{"node2"},
 		},
@@ -266,7 +266,7 @@ func Test_Server_NonVoters(t *testing.T) {
 			name: "LowercaseVoterIgnored",
 			servers: Servers{
 				{ID: "node1", Addr: "localhost:4001", Suffrage: "voter"},
-				{ID: "node2", Addr: "localhost:4002", Suffrage: "Nonvoter"},
+				{ID: "node2", Addr: "localhost:4002", Suffrage: "nonvoter"},
 			},
 			expected: []string{"node2"},
 		},
@@ -320,7 +320,7 @@ func Test_Server_Addrs(t *testing.T) {
 			name: "MultipleServers",
 			servers: Servers{
 				{ID: "node1", Addr: "localhost:4001", Suffrage: "Voter"},
-				{ID: "node2", Addr: "localhost:4002", Suffrage: "Nonvoter"},
+				{ID: "node2", Addr: "localhost:4002", Suffrage: "nonvoter"},
 				{ID: "node3", Addr: "localhost:4003", Suffrage: "Voter"},
 			},
 			expected: []string{"localhost:4001", "localhost:4002", "localhost:4003"},
@@ -330,7 +330,7 @@ func Test_Server_Addrs(t *testing.T) {
 			servers: Servers{
 				{ID: "node1", Addr: "localhost:4001", Suffrage: "Voter"},
 				nil,
-				{ID: "node2", Addr: "localhost:4002", Suffrage: "Nonvoter"},
+				{ID: "node2", Addr: "localhost:4002", Suffrage: "nonvoter"},
 			},
 			expected: []string{"localhost:4001", "localhost:4002"},
 		},

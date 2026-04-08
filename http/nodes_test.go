@@ -25,7 +25,7 @@ func Test_NewNodeFromServer(t *testing.T) {
 func Test_NewNodesFromServers(t *testing.T) {
 	servers := []*store.Server{
 		{ID: "1", Addr: "192.168.1.1", Suffrage: "Voter"},
-		{ID: "2", Addr: "192.168.1.2", Suffrage: "Nonvoter"},
+		{ID: "2", Addr: "192.168.1.2", Suffrage: "nonvoter"},
 	}
 	nodes := NewNodesFromServers(servers)
 

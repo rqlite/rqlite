@@ -1,10 +1,32 @@
 package store
 
+import "strings"
+
+// Suffrage represents whether a server is a voter or non-voter.
+type Suffrage string
+
+const (
+	Voter    Suffrage = "voter"
+	NonVoter Suffrage = "nonvoter"
+)
+
+// SuffrageFromString returns a Suffrage from the given string, case-insensitively.
+func SuffrageFromString(s string) Suffrage {
+	switch strings.ToLower(s) {
+	case string(Voter):
+		return Voter
+	case string(NonVoter):
+		return NonVoter
+	default:
+		return Suffrage(s)
+	}
+}
+
 // Server represents another node in the cluster.
 type Server struct {
-	ID       string `json:"id,omitempty"`
-	Addr     string `json:"addr,omitempty"`
-	Suffrage string `json:"suffrage,omitempty"`
+	ID       string   `json:"id,omitempty"`
+	Addr     string   `json:"addr,omitempty"`
+	Suffrage Suffrage `json:"suffrage,omitempty"`
 }
 
 // Equal returns whether the two servers are identical.
@@ -17,9 +39,9 @@ func (s *Server) Equal(other *Server) bool {
 
 // NewServer returns an initialized Server.
 func NewServer(id, addr string, voter bool) *Server {
-	v := "voter"
+	v := Voter
 	if !voter {
-		v = "Nonvoter"
+		v = NonVoter
 	}
 	return &Server{
 		ID:       id,
@@ -44,7 +66,7 @@ func (s Servers) IsReadOnly(id string) (readOnly bool, found bool) {
 
 	for _, n := range s {
 		if n != nil && n.ID == id {
-			readOnly = n.Suffrage == "Nonvoter"
+			readOnly = n.Suffrage == NonVoter
 			found = true
 			return
 		}
@@ -75,7 +97,7 @@ func (s Servers) Voters() Servers {
 
 	var voters Servers
 	for _, n := range s {
-		if n != nil && n.Suffrage != "Nonvoter" {
+		if n != nil && n.Suffrage != NonVoter {
 			voters = append(voters, n)
 		}
 	}
@@ -90,7 +112,7 @@ func (s Servers) NonVoters() Servers {
 
 	var nonVoters Servers
 	for _, n := range s {
-		if n != nil && n.Suffrage == "Nonvoter" {
+		if n != nil && n.Suffrage == NonVoter {
 			nonVoters = append(nonVoters, n)
 		}
 	}

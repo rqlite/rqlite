@@ -1119,7 +1119,7 @@ func (s *Store) Leader() (*Server, error) {
 	return &Server{
 		ID:       string(id),
 		Addr:     string(addr),
-		Suffrage: raft.Voter.String(),
+		Suffrage: SuffrageFromString(raft.Voter.String()),
 	}, nil
 }
 
@@ -1192,7 +1192,7 @@ func (s *Store) Followers() ([]*Server, error) {
 			followers = append(followers, &Server{
 				ID:       string(servers[i].ID),
 				Addr:     string(servers[i].Address),
-				Suffrage: servers[i].Suffrage.String(),
+				Suffrage: SuffrageFromString(servers[i].Suffrage.String()),
 			})
 		}
 	}
@@ -1239,7 +1239,7 @@ func (s *Store) Nodes() ([]*Server, error) {
 		servers[i] = &Server{
 			ID:       string(rs[i].ID),
 			Addr:     string(rs[i].Address),
-			Suffrage: rs[i].Suffrage.String(),
+			Suffrage: SuffrageFromString(rs[i].Suffrage.String()),
 		}
 	}
 
