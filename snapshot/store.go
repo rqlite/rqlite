@@ -770,3 +770,11 @@ func snapshotName(term, index uint64) string {
 func metaPath(dir string) string {
 	return filepath.Join(dir, metaFileName)
 }
+
+func tmpName(path string) string {
+	return path + tmpSuffix
+}
+
+func isTmpName(name string) bool {
+	return filepath.Ext(name) == tmpSuffix
+}

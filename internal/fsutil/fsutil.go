@@ -9,20 +9,24 @@ import (
 	"time"
 )
 
-// RemoveFile removes the file at the given path if it exists.
-func RemoveFile(path string) error {
-	if !PathExists(path) {
-		return nil
-	}
-	return os.Remove(path)
-}
-
 // PathExists returns true if the given path exists.
 func PathExists(p string) bool {
 	if _, err := os.Lstat(p); err != nil && os.IsNotExist(err) {
 		return false
 	}
 	return true
+}
+
+// FileExists returns true if a file exists at path and it is not a directory.
+func FileExists(path string) bool {
+	info, err := os.Stat(path)
+	return err == nil && !info.IsDir()
+}
+
+// DirExists returns true if an actual directory exists at the given path.
+func DirExists(path string) bool {
+	stat, err := os.Stat(path)
+	return err == nil && stat.IsDir()
 }
 
 // PathExistsWithData returns true if the given path exists and has data.
@@ -32,20 +36,6 @@ func PathExistsWithData(p string) bool {
 		return false
 	}
 	return stat.Size() > 0
-}
-
-// DirExists returns true if an actual directory exists at the given path.
-func DirExists(path string) bool {
-	stat, err := os.Stat(path)
-	return err == nil && stat.IsDir()
-}
-
-// EnsureDirExists creates the directory at the given path if it does not exist.
-func EnsureDirExists(path string) error {
-	if DirExists(path) {
-		return nil
-	}
-	return os.MkdirAll(path, 0755)
 }
 
 // FileSize returns the size of the file at the given path.
@@ -102,15 +92,12 @@ func ModTimeSize(path string) (time.Time, int64, error) {
 	return info.ModTime(), info.Size(), nil
 }
 
-// ParentDir returns the parent directory of the given directory.
-func ParentDir(dir string) string {
-	return filepath.Dir(dir)
-}
-
-// FileExists returns true if a file exists at path and it is not a directory.
-func FileExists(path string) bool {
-	info, err := os.Stat(path)
-	return err == nil && !info.IsDir()
+// EnsureDirExists creates the directory at the given path if it does not exist.
+func EnsureDirExists(path string) error {
+	if DirExists(path) {
+		return nil
+	}
+	return os.MkdirAll(path, 0755)
 }
 
 // DirIsEmpty returns true if the given directory is empty.
@@ -120,6 +107,22 @@ func DirIsEmpty(dir string) (bool, error) {
 		return false, err
 	}
 	return len(files) == 0, nil
+}
+
+// RemoveFile removes the file at the given path if it exists.
+func RemoveFile(path string) error {
+	if !PathExists(path) {
+		return nil
+	}
+	return os.Remove(path)
+}
+
+// RemoveDirSync removes the directory and syncs the parent directory.
+func RemoveDirSync(dir string) error {
+	if err := os.RemoveAll(dir); err != nil {
+		return err
+	}
+	return SyncDirParentMaybe(dir)
 }
 
 // SyncDir syncs the given directory to stable storage.
@@ -132,12 +135,12 @@ func SyncDir(dir string) error {
 	return fh.Sync()
 }
 
-// RemoveDirSync removes the directory and syncs the parent directory.
-func RemoveDirSync(dir string) error {
-	if err := os.RemoveAll(dir); err != nil {
-		return err
+// SyncDirMaybe syncs the given directory, but only on non-Windows platforms.
+func SyncDirMaybe(dir string) error {
+	if runtime.GOOS == "windows" {
+		return nil
 	}
-	return SyncDirParentMaybe(dir)
+	return SyncDir(dir)
 }
 
 // SyncDirParentMaybe syncs the parent directory of the given
@@ -153,15 +156,7 @@ func SyncDirParentMaybe(dir string) error {
 	if runtime.GOOS == "windows" {
 		return nil
 	}
-	return SyncDir(ParentDir(dir))
-}
-
-// SyncDirMaybe syncs the given directory, but only on non-Windows platforms.
-func SyncDirMaybe(dir string) error {
-	if runtime.GOOS == "windows" {
-		return nil
-	}
-	return SyncDir(dir)
+	return SyncDir(filepath.Dir(dir))
 }
 
 // FilesIdentical returns true if the two files at the given paths have identical contents.
