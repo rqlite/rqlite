@@ -4,11 +4,11 @@
 
 The `store` package is the central glue of rqlite. It owns the Raft instance, the SQLite database, the snapshot store, the Bolt log store, the network transport, and all the bookkeeping that ties those subsystems together. Every external entry point — HTTP, the cluster service, CDC, the auto-backup uploader — eventually goes through `*store.Store`.
 
-The package's job is to take the simple-sounding contract "a SQL request goes in, a result comes out, replicated and durable" and make it actually true on top of Raft consensus, SQLite, a custom snapshot store, and a forked SQLite driver with hooks. Most of the complexity in the package is coordinating those subsystems — making them interact without stepping on each other.
+The package's job is to take the simple-sounding contract "a SQL request goes in, a result comes out, replicated and durable" and make it actually true on top of Raft consensus, SQLite, a custom snapshot store, and a SQLite driver with hooks. Most of the complexity in the package is coordinating those subsystems — making them interact without stepping on each other.
 
 ## The FSM Bridge
 
-Hashicorp Raft talks to the application through the `raft.FSM` interface (`Apply`, `Snapshot`, `Restore`). Rqlite's `FSM` type (in `fsm.go`) is intentionally a thin wrapper that delegates each method directly to the parent `Store`:
+Hashicorp Raft talks to the application through the `raft.FSM` interface (`Apply`, `Snapshot`, `Restore`). rqlite's `FSM` type (in `fsm.go`) is intentionally a thin wrapper that delegates each method directly to the parent `Store`:
 
 ```go
 func (f *FSM) Apply(l *raft.Log) any              { return f.s.fsmApply(l) }
@@ -23,8 +23,6 @@ Why not put the FSM logic in its own type with its own state? Because all three 
 The actual log-entry-to-database dispatch lives in `CommandProcessor` (`command_processor.go`), not in the Store. It is a small stateless object that takes a serialized `proto.Command`, picks the right SQLite operation (Execute / Query / ExecuteQuery / Load / LoadChunk / Noop), and runs it against a `*sql.SwappableDB`. The Store's `fsmApply` calls into it; nothing else in the steady state does.
 
 The reason it is its own type is `RecoverNode` (`state.go`). When manual quorum recovery runs, it needs to replay log entries against a temporary database without spinning up a full Store, so the dispatch logic has to be reusable. Keeping `CommandProcessor` decoupled from `Store` is what makes that possible. This is the one place in the package where decoupling actually pays off — and it pays off because there is a real second consumer.
-
-The chunked LOAD path is worth flagging. A single big database upload arrives as a sequence of `LOAD_CHUNK` log entries; the `chunking.DechunkerManager` reassembles them into a temp file, and only the last chunk does the actual database swap. If a snapshot truncates earlier chunks out of the log, the reassembled file may be invalid — `CommandProcessor` checks for that and ignores the load rather than corrupting the database.
 
 ## Request Path
 
@@ -45,7 +43,7 @@ Each entry point checks readiness, runs the throttler (`s.throttler.Delay(ctx)`)
 - **`LINEARIZABLE`** — guaranteed to reflect everything committed before the request started. Implemented by `waitForLinearizableRead` using the technique from §6.4 of the Raft dissertation: capture the commit index, verify leadership via a quorum heartbeat round-trip, confirm the term has not changed, then wait for the local FSM to reach that commit index. There is one wrinkle: if no Strong read has yet gone through the Raft log in the current term, the linearizable read upgrades itself to a Strong read so the leader can establish that it has actually committed something in this term. Without that upgrade, a freshly-elected leader could return a result based on a stale committed index. The code comment links to the dissertation thread.
 - **`STRONG`** — the read is itself sent through `raft.Apply` as a `COMMAND_TYPE_QUERY` entry. Slowest, but the read is processed by every node's FSM in log order, which makes it trivially linearizable. Mostly used by tests and as the upgrade target for the linearizable path.
 
-`AUTO` (the wire default) resolves to `WEAK` on voters and `NONE` on non-voters.
+`AUTO` resolves to `WEAK` on voters and `NONE` on non-voters.
 
 ## Snapshot Orchestration
 
