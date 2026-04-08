@@ -2468,10 +2468,9 @@ func (s *Store) fsmApply(l *raft.Log) (e any) {
 
 	cmd, mutated, r := func() (*proto.Command, bool, any) {
 		// Reset CDC streamer with the current log index before processing if CDC is enabled
-		s.cdcMu.RLock()
-		defer s.cdcMu.RUnlock()
-
 		if s.cdcEnabled.Is() {
+			s.cdcMu.RLock()
+			defer s.cdcMu.RUnlock()
 			if s.cdcStreamer == nil {
 				var err error
 				s.cdcStreamer, err = sql.NewCDCStreamer(s.cdcOutCh, s.db)
