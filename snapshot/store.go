@@ -6,6 +6,7 @@ import (
 	"expvar"
 	"fmt"
 	"io"
+	"io/fs"
 	"log"
 	"os"
 	"path/filepath"
@@ -774,11 +775,15 @@ func metaPath(dir string) string {
 // sum of the sizes of all files in the directory and its subdirectories, and returns it as an int64.
 func dirSize(path string) (int64, error) {
 	var size int64
-	err := filepath.Walk(path, func(_ string, info os.FileInfo, err error) error {
+	err := filepath.WalkDir(path, func(_ string, d fs.DirEntry, err error) error {
 		if err != nil {
 			return err
 		}
-		if !info.IsDir() {
+		if !d.IsDir() {
+			info, err := d.Info()
+			if err != nil {
+				return err
+			}
 			size += info.Size()
 		}
 		return nil
