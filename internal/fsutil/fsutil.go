@@ -98,9 +98,6 @@ func ModTimeSize(path string) (time.Time, int64, error) {
 
 // EnsureDirExists creates the directory at the given path if it does not exist.
 func EnsureDirExists(path string) error {
-	if DirExists(path) {
-		return nil
-	}
 	return os.MkdirAll(path, 0755)
 }
 
