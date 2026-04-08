@@ -69,3 +69,45 @@ func BackupFormatFromString(s string) proto.BackupRequest_Format {
 		return proto.BackupRequest_BACKUP_REQUEST_FORMAT_BINARY
 	}
 }
+
+// SuffrageToString converts a proto.Suffrage to a string.
+func SuffrageToString(s proto.Suffrage) string {
+	switch s {
+	case proto.Suffrage_VOTER:
+		return "voter"
+	case proto.Suffrage_NON_VOTER:
+		return "nonvoter"
+	default:
+		return "unknown"
+	}
+}
+
+// SuffrageFromString converts a string to a proto.Suffrage.
+func SuffrageFromString(s string) proto.Suffrage {
+	switch strings.ToLower(s) {
+	case "voter":
+		return proto.Suffrage_VOTER
+	case "nonvoter":
+		return proto.Suffrage_NON_VOTER
+	default:
+		return proto.Suffrage_UNKNOWN
+	}
+}
+
+// SuffrageNonVoterFromBool converts a boolean to a proto.Suffrage,
+// where true is non-voter and false is voter.
+func SuffrageNonVoterFromBool(nonVoter bool) proto.Suffrage {
+	if nonVoter {
+		return proto.Suffrage_NON_VOTER
+	}
+	return proto.Suffrage_VOTER
+}
+
+// SuffrageVoterFromBool converts a boolean to a proto.Suffrage,
+// where true is voter and false is non-voter.
+func SuffrageVoterFromBool(voter bool) proto.Suffrage {
+	if voter {
+		return proto.Suffrage_VOTER
+	}
+	return proto.Suffrage_NON_VOTER
+}

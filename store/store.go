@@ -1119,7 +1119,7 @@ func (s *Store) Leader() (*Server, error) {
 	return &Server{
 		ID:       string(id),
 		Addr:     string(addr),
-		Suffrage: raft.Voter.String(),
+		Suffrage: proto.Suffrage_VOTER,
 	}, nil
 }
 
@@ -1192,7 +1192,7 @@ func (s *Store) Followers() ([]*Server, error) {
 			followers = append(followers, &Server{
 				ID:       string(servers[i].ID),
 				Addr:     string(servers[i].Address),
-				Suffrage: servers[i].Suffrage.String(),
+				Suffrage: proto.Suffrage_NON_VOTER,
 			})
 		}
 	}
@@ -1239,7 +1239,7 @@ func (s *Store) Nodes() ([]*Server, error) {
 		servers[i] = &Server{
 			ID:       string(rs[i].ID),
 			Addr:     string(rs[i].Address),
-			Suffrage: rs[i].Suffrage.String(),
+			Suffrage: command.SuffrageFromString(rs[i].Suffrage.String()),
 		}
 	}
 
@@ -2089,7 +2089,7 @@ func (s *Store) Notify(nr *proto.NotifyRequest) error {
 		return fmt.Errorf("failed to resolve %s: %w", addr, err)
 	}
 
-	s.notifyingNodes[nr.Id] = &Server{nr.Id, nr.Address, "voter"}
+	s.notifyingNodes[nr.Id] = &Server{nr.Id, nr.Address, proto.Suffrage_VOTER}
 	if len(s.notifyingNodes) < s.BootstrapExpect {
 		return nil
 	}
