@@ -2,17 +2,17 @@
 
 ### What's new in this release?
 
-This release introduces a major improvement to the Raft [_Snapshot and Log Truncation_](https://youtu.be/8XbxQ1Epi5w?t=492) process. Previously, a Snapshot stream to a Follower would block the Leader from taking new Snapshots. Normally the retry would succeed, but a persistently slow Follower that kept requiring Snapshots could starve the Leader entirely. With v10, Snapshotting on the Leader is decoupled from streaming pre-existing Snapshots to other nodes.
+This release introduces a major improvement to the Raft [_Snapshot and Log Truncation_](https://youtu.be/8XbxQ1Epi5w?t=492) process. Previously, a Snapshot stream to a Follower would block the Leader from taking new Snapshots. Normally a subsequent retry of the snapshot operation would succeed, but a persistently slow Follower that kept requiring Snapshots could starve the Leader entirely. With v10, Snapshotting on the Leader is no longer blocked by any other operation happening in the _Snapshot Store_, including streaming a pre-existing snapshot to a Follower.
 
-Concurrent read and write access to the database has been improved. In previous releases Raft snapshotting could be blocked for an extended period if there was a long-running read. In v10 the Raft snapshotting process is aborted and retried later if an long-running read is active.
+Concurrent read and write access to the database has been improved. In previous releases Raft snapshotting -- and, as a result, writes -- could be blocked for an extended period if there was a long-running read. In v10 the Raft snapshotting process is aborted and retried later if an long-running read is active.
 
-v10 also uses CRC32 checksumming more comprehensively to detect such issues as file system errors and inadvertent modification of the underlying data files by systems other than rqlite.
+v10 also uses CRC32 checksumming more comprehensively to detect issues such as file system corruption and inadvertent modification of the underlying data files by systems other than rqlite.
 
-This release also introduces a new built-in console app, making it more convenient to work with an rqlite deployment. The console app is available at `http://localhost:4001/console` by default.
+This release also introduces a new built-in console app, making it more convenient to manage a rqlite deployment. The console app is available at `http://localhost:4001/console` by default.
 
 ### Upgrading to v10
 
-Upgrading from v7 or later is seamless and has been extensively tested. v10 supports rolling upgrades, but **you cannot join a new v10 node to a v9 (or earlier) cluster**. Upgrade your existing cluster to v10 before adding new nodes. Back up your [rqlite system](https://rqlite.io/docs/guides/backup/) before upgrading.
+Upgrading from v7 or later is seamless and has been extensively tested, though upgrading first to the latest v9 release is recommended. Upgrading to v10 supports rolling upgrades, but **you cannot join a new v10 node to a v9 (or earlier) cluster**. Upgrade your existing cluster to v10 before adding new nodes. Back up your [rqlite system](https://rqlite.io/docs/guides/backup/) before upgrading.
 
 There are no breaking API changes in this release, nor any changes to how clustering operates. However there have been some command-line option changes:
  - `-on-disk-path` has been removed. It provided little benefit while making it too easy to corrupt a node.
