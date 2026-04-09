@@ -27,7 +27,7 @@ import (
 
 const (
 	SQLiteHeaderSize      = 32
-	bkDelay               = 250 * time.Millisecond
+	bkDelay               = 50 * time.Millisecond
 	checkpointBusyTimeout = 250 * time.Millisecond
 	durToOpenLog          = 2 * time.Second
 	OptimizeDefault       = 0xFFFE
