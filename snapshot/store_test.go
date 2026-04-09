@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/binary"
 	"encoding/json"
+	"expvar"
 	"fmt"
 	"io"
 	"os"
@@ -1001,6 +1002,140 @@ func Test_Store_ReapBlocked(t *testing.T) {
 
 	if _, _, err := store.Reap(); err == nil {
 		t.Fatalf("Expected Reap to fail due to open snapshot, but it succeeded")
+	}
+}
+
+// Test_LockingStreamer_TimeoutAborts verifies that when a snapshot read
+// exceeds the configured deadline, the streamer is force-closed: the next
+// Read returns ErrSnapshotReadTimeout, the read lock is released so Reap can
+// proceed, and Close remains safe to call.
+func Test_LockingStreamer_TimeoutAborts(t *testing.T) {
+	ResetStats()
+	dir := t.TempDir()
+	store, err := NewStore(dir)
+	if err != nil {
+		t.Fatalf("Failed to create new store: %v", err)
+	}
+	defer store.Close()
+
+	// Need at least two snapshots so that Reap has work to do (the partition
+	// requires a full snapshot plus something to reap).
+	createSnapshotInStore(t, store, "2-1017-1704807719996", 1017, 2, 1, "testdata/db-and-wals/backup.db")
+	createSnapshotInStore(t, store, "2-1131-1704807720976", 1131, 5, 4, "", "testdata/db-and-wals/wal-00")
+
+	store.SetSnapshotReadTimeout(50 * time.Millisecond)
+
+	_, snapshot, err := store.Open("2-1131-1704807720976")
+	if err != nil {
+		t.Fatalf("Failed to open snapshot: %v", err)
+	}
+	defer snapshot.Close()
+
+	// While the deadline has not yet elapsed, Reap must fail because the
+	// streamer holds the read lock.
+	if _, _, err := store.Reap(); err == nil {
+		t.Fatalf("Expected Reap to fail while streamer holds the read lock")
+	}
+
+	// Wait for the timer to fire.
+	deadline := time.Now().Add(2 * time.Second)
+	for time.Now().Before(deadline) {
+		if stats.Get(snapshotReadTimeouts).(*expvar.Int).Value() > 0 {
+			break
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	if got := stats.Get(snapshotReadTimeouts).(*expvar.Int).Value(); got != 1 {
+		t.Fatalf("Expected snapshotReadTimeouts counter to be 1, got %d", got)
+	}
+
+	// Read after the timeout must surface the sentinel error.
+	buf := make([]byte, 1024)
+	if _, err := snapshot.Read(buf); err != ErrSnapshotReadTimeout {
+		t.Fatalf("Expected ErrSnapshotReadTimeout from Read, got %v", err)
+	}
+
+	// The read lock must have been released by the timer, so Reap now succeeds.
+	if _, _, err := store.Reap(); err != nil {
+		t.Fatalf("Expected Reap to succeed after streamer timed out, got %v", err)
+	}
+
+	// Close after timeout must be safe (no double EndRead, no panic).
+	if err := snapshot.Close(); err != nil {
+		t.Fatalf("Close after timeout returned error: %v", err)
+	}
+}
+
+// Test_LockingStreamer_TimeoutStoppedOnClose verifies that a clean Close
+// stops the deadline timer so it does not later fire and bump the counter.
+func Test_LockingStreamer_TimeoutStoppedOnClose(t *testing.T) {
+	ResetStats()
+	dir := t.TempDir()
+	store, err := NewStore(dir)
+	if err != nil {
+		t.Fatalf("Failed to create new store: %v", err)
+	}
+	defer store.Close()
+
+	createSnapshotInStore(t, store, "2-1017-1704807719996", 1017, 2, 1, "testdata/db-and-wals/backup.db")
+
+	store.SetSnapshotReadTimeout(50 * time.Millisecond)
+
+	_, snapshot, err := store.Open("2-1017-1704807719996")
+	if err != nil {
+		t.Fatalf("Failed to open snapshot: %v", err)
+	}
+	if err := snapshot.Close(); err != nil {
+		t.Fatalf("Close returned error: %v", err)
+	}
+
+	// Wait well past the deadline; the timer must not fire on a closed streamer.
+	time.Sleep(200 * time.Millisecond)
+	if got := stats.Get(snapshotReadTimeouts).(*expvar.Int).Value(); got != 0 {
+		t.Fatalf("Expected snapshotReadTimeouts counter to be 0 after clean close, got %d", got)
+	}
+}
+
+// Test_LockingStreamer_NoTimeoutWhenZero verifies that a zero timeout
+// disables the deadline entirely: no timer is created and the streamer can
+// be held indefinitely.
+func Test_LockingStreamer_NoTimeoutWhenZero(t *testing.T) {
+	ResetStats()
+	dir := t.TempDir()
+	store, err := NewStore(dir)
+	if err != nil {
+		t.Fatalf("Failed to create new store: %v", err)
+	}
+	defer store.Close()
+
+	createSnapshotInStore(t, store, "2-1017-1704807719996", 1017, 2, 1, "testdata/db-and-wals/backup.db")
+
+	store.SetSnapshotReadTimeout(0)
+
+	_, snapshot, err := store.Open("2-1017-1704807719996")
+	if err != nil {
+		t.Fatalf("Failed to open snapshot: %v", err)
+	}
+	defer snapshot.Close()
+
+	ls, ok := snapshot.(*LockingStreamer)
+	if !ok {
+		t.Fatalf("Expected *LockingStreamer, got %T", snapshot)
+	}
+	if ls.timer != nil {
+		t.Fatalf("Expected no timer when timeout is zero")
+	}
+
+	// Wait long enough that any default-sized timer would have fired.
+	time.Sleep(200 * time.Millisecond)
+	if got := stats.Get(snapshotReadTimeouts).(*expvar.Int).Value(); got != 0 {
+		t.Fatalf("Expected snapshotReadTimeouts counter to be 0 with timeout disabled, got %d", got)
+	}
+
+	// A normal Read must still work.
+	buf := make([]byte, 32)
+	if _, err := snapshot.Read(buf); err != nil {
+		t.Fatalf("Read after long wait returned unexpected error: %v", err)
 	}
 }
 
