@@ -21,6 +21,7 @@ import (
 	"github.com/mattn/go-sqlite3"
 	command "github.com/rqlite/rqlite/v10/command/proto"
 	"github.com/rqlite/rqlite/v10/db/humanize"
+	"github.com/rqlite/rqlite/v10/internal/fsutil"
 	"github.com/rqlite/rqlite/v10/internal/rsum"
 	"github.com/rqlite/rqlite/v10/internal/rsync"
 )
@@ -239,7 +240,7 @@ func OpenWithDriver(drv *Driver, dbPath string, fkEnabled, wal bool) (retDB *DB,
 	if err := rwDB.Ping(); err != nil {
 		return nil, fmt.Errorf("failed to ping on-disk database: %s", err.Error())
 	}
-	if wal && !fileExists(dbPath+"-wal") {
+	if wal && !fsutil.FileExists(dbPath+"-wal") {
 		// Force creation of the WAL files so any external read-only connections
 		// can read the database. See https://www.sqlite.org/draft/wal.html, section 5.
 		if _, err := rwDB.Exec("BEGIN IMMEDIATE"); err != nil {
@@ -516,7 +517,7 @@ func (db *DB) LastModified() (time.Time, error) {
 // DBLastModified returns the last modified time of the main database
 // file.
 func (db *DB) DBLastModified() (time.Time, error) {
-	return lastModified(db.path)
+	return fsutil.LastModified(db.path)
 }
 
 // DBSum returns the MD5 checksum of the database file.
@@ -526,7 +527,7 @@ func (db *DB) DBSum() (string, error) {
 
 // WALLastModified returns the last modified time of the WAL file.
 func (db *DB) WALLastModified() (time.Time, error) {
-	return lastModified(db.walPath)
+	return fsutil.LastModified(db.walPath)
 }
 
 // WALSum returns the MD5 checksum of the WAL file.
@@ -620,7 +621,7 @@ func (db *DB) Size() (int64, error) {
 // FileSize returns the size of the SQLite file on disk. If running in
 // on-memory mode, this function returns 0.
 func (db *DB) FileSize() (int64, error) {
-	return fileSize(db.path)
+	return fsutil.FileSize(db.path)
 }
 
 // WALSize returns the size of the SQLite WAL file on disk. If running in
@@ -629,7 +630,7 @@ func (db *DB) WALSize() (int64, error) {
 	if !db.wal {
 		return 0, nil
 	}
-	sz, err := fileSize(db.walPath)
+	sz, err := fsutil.FileSize(db.walPath)
 	if err == nil || os.IsNotExist(err) {
 		return sz, nil
 	}
@@ -2059,30 +2060,6 @@ func isTextType(t string) bool {
 
 func containsEmptyType(slice []string) bool {
 	return slices.Contains(slice, "")
-}
-
-func fileExists(path string) bool {
-	_, err := os.Stat(path)
-	return err == nil
-}
-
-func fileSize(path string) (int64, error) {
-	stat, err := os.Stat(path)
-	if err != nil {
-		return 0, err
-	}
-	if stat.Mode().IsDir() {
-		return 0, fmt.Errorf("not a file")
-	}
-	return stat.Size(), nil
-}
-
-func lastModified(path string) (time.Time, error) {
-	info, err := os.Stat(path)
-	if err != nil {
-		return time.Time{}, err
-	}
-	return info.ModTime(), nil
 }
 
 func rewriteContextTimeout(err, retErr error) error {

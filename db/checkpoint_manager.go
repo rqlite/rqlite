@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/rqlite/rqlite/v10/db/wal"
+	"github.com/rqlite/rqlite/v10/internal/fsutil"
 )
 
 // RetryableError is an error that indicates whether the failed operation
@@ -124,7 +125,7 @@ func (cm *CheckpointManager) Checkpoint(w io.Writer, timeout time.Duration) (int
 		}
 	}
 
-	walSzPre, err := fileSize(cm.walPath)
+	walSzPre, err := fsutil.FileSize(cm.walPath)
 	if err != nil {
 		return 0, err
 	}
