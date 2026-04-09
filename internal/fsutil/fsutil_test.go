@@ -218,6 +218,40 @@ func Test_ModTimeSize(t *testing.T) {
 	}
 }
 
+func Test_LastModified(t *testing.T) {
+	dir := t.TempDir()
+
+	p := filepath.Join(dir, "file")
+	if err := os.WriteFile(p, []byte("x"), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	mt1, err := LastModified(p)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	time.Sleep(1 * time.Second)
+
+	if err := os.WriteFile(p, []byte("y"), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	mt2, err := LastModified(p)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if !mt2.After(mt1) {
+		t.Fatalf("expected mod time to advance: first=%v second=%v", mt1, mt2)
+	}
+
+	// Nonexistent path.
+	_, err = LastModified(filepath.Join(dir, "nope"))
+	if err == nil {
+		t.Fatal("expected error for nonexistent path")
+	}
+}
+
 func Test_EnsureDirExists(t *testing.T) {
 	dir := t.TempDir()
 	p := filepath.Join(dir, "a", "b", "c")

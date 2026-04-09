@@ -7,6 +7,7 @@ import (
 	"time"
 
 	command "github.com/rqlite/rqlite/v10/command/proto"
+	"github.com/rqlite/rqlite/v10/internal/fsutil"
 )
 
 func Test_CheckpointManager_Create(t *testing.T) {
@@ -72,7 +73,7 @@ func Test_CheckpointManager_Checkpoint_OK(t *testing.T) {
 	}
 
 	// Confirm that the WAL file is zero bytes long after truncate checkpoint.
-	sz, err := fileSize(db.WALPath())
+	sz, err := fsutil.FileSize(db.WALPath())
 	if err != nil {
 		t.Fatalf("failed to get WAL file size: %s", err.Error())
 	}
@@ -143,7 +144,7 @@ func Test_CheckpointManager_Checkpoint_NoWriter_OK(t *testing.T) {
 	}
 
 	// Confirm that the WAL file is zero bytes long after truncate checkpoint.
-	sz, err := fileSize(db.WALPath())
+	sz, err := fsutil.FileSize(db.WALPath())
 	if err != nil {
 		t.Fatalf("failed to get WAL file size: %s", err.Error())
 	}

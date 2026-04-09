@@ -96,6 +96,15 @@ func ModTimeSize(path string) (time.Time, int64, error) {
 	return info.ModTime(), info.Size(), nil
 }
 
+// LastModified returns the modification time of the file at the given path.
+func LastModified(path string) (time.Time, error) {
+	info, err := os.Stat(path)
+	if err != nil {
+		return time.Time{}, err
+	}
+	return info.ModTime(), nil
+}
+
 // EnsureDirExists creates the directory at the given path if it does not exist.
 func EnsureDirExists(path string) error {
 	return os.MkdirAll(path, 0755)

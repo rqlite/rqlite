@@ -18,6 +18,7 @@ import (
 
 	"github.com/mattn/go-sqlite3"
 	command "github.com/rqlite/rqlite/v10/command/proto"
+	"github.com/rqlite/rqlite/v10/internal/fsutil"
 	"github.com/rqlite/rqlite/v10/internal/random"
 )
 
@@ -364,7 +365,7 @@ func CheckpointRemove(path string) error {
 	}
 
 	// Confirm that the WAL file is gone.
-	if fileExists(path + "-wal") {
+	if fsutil.FileExists(path + "-wal") {
 		return ErrWALStillExists
 	}
 	return nil
@@ -408,7 +409,7 @@ func ReplayWAL(path string, wals []string, deleteMode bool) error {
 		}
 	}
 
-	if fileExists(path + "-wal") {
+	if fsutil.FileExists(path + "-wal") {
 		return ErrWALAlreadyExists
 	}
 
