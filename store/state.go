@@ -13,6 +13,7 @@ import (
 	"github.com/rqlite/rqlite/v10/command/chunking"
 	"github.com/rqlite/rqlite/v10/command/proto"
 	sql "github.com/rqlite/rqlite/v10/db"
+	"github.com/rqlite/rqlite/v10/internal/fsutil"
 	"github.com/rqlite/rqlite/v10/internal/random"
 	"github.com/rqlite/rqlite/v10/snapshot"
 	rlog "github.com/rqlite/rqlite/v10/store/log"
@@ -112,7 +113,7 @@ func IsStaleRead(
 func IsNewNode(raftDir string) bool {
 	// If there is any preexisting Raft state, then this node
 	// has already been created.
-	return !pathExists(filepath.Join(raftDir, raftDBPath))
+	return !fsutil.PathExists(filepath.Join(raftDir, raftDBPath))
 }
 
 // HasData returns true if the given dir indicates that at least one FSM entry
@@ -120,13 +121,14 @@ func IsNewNode(raftDir string) bool {
 // if there are any entries in the log of raft.LogCommand type. This function
 // will block if the Bolt database is already open.
 func HasData(dir string) (bool, error) {
-	if !dirExists(dir) {
+	if !fsutil.DirExists(dir) {
 		return false, nil
 	}
 	sstr, err := snapshot.NewStore(filepath.Join(dir, snapshotsDirName))
 	if err != nil {
 		return false, err
 	}
+	defer sstr.Close()
 	snaps, err := sstr.List()
 	if err != nil {
 		return false, err
@@ -212,6 +214,7 @@ func RecoverNode(dataDir string, extensions []string, logger *log.Logger, logs r
 	if err != nil {
 		return fmt.Errorf("failed to create dechunker manager: %s", err.Error())
 	}
+	defer decMgmr.Close()
 	cmdProc := NewCommandProcessor(logger, decMgmr)
 
 	// The snapshot information is the best known end point for the data
@@ -253,6 +256,7 @@ func RecoverNode(dataDir string, extensions []string, logger *log.Logger, logs r
 	if err != nil {
 		return fmt.Errorf("failed to create snapshot streamer: %s", err)
 	}
+	defer streamer.Close()
 	if err := streamer.Open(); err != nil {
 		return fmt.Errorf("failed to open snapshot streamer: %s", err)
 	}
@@ -261,6 +265,7 @@ func RecoverNode(dataDir string, extensions []string, logger *log.Logger, logs r
 	if err != nil {
 		return fmt.Errorf("failed to create snapshot: %v", err)
 	}
+	defer sink.Cancel() // If we fail, make sure to cancel the snapshot.
 	if err = fsmSnapshot.Persist(sink); err != nil {
 		return fmt.Errorf("failed to persist snapshot: %v", err)
 	}

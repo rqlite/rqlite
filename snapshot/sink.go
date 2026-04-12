@@ -11,6 +11,7 @@ import (
 	"path/filepath"
 
 	"github.com/hashicorp/raft"
+	"github.com/rqlite/rqlite/v10/internal/fsutil"
 	"github.com/rqlite/rqlite/v10/snapshot/proto"
 	pb "google.golang.org/protobuf/proto"
 )
@@ -198,8 +199,15 @@ func (s *Sink) Close() (retErr error) {
 	}
 
 	defer func() {
-		if retErr != nil && s.localWALDir != "" && s.fatalFn != nil {
-			s.fatalFn(retErr)
+		if retErr != nil {
+			stats.Add(sinkErrors, 1)
+			if s.localWALDir != "" && s.fatalFn != nil {
+				s.fatalFn(retErr)
+			}
+		} else if s.localWALDir != "" {
+			stats.Add(sinkIncrementalTotal, 1)
+		} else if s.sinkW != nil {
+			stats.Add(sinkFullTotal, 1)
 		}
 	}()
 
@@ -236,7 +244,7 @@ func (s *Sink) Close() (retErr error) {
 			return fmt.Errorf("failed to set due next to incremental: %v", err)
 		}
 	}
-	if err := syncDirMaybe(s.dir); err != nil {
+	if err := fsutil.SyncDirMaybe(s.dir); err != nil {
 		return err
 	}
 

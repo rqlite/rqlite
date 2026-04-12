@@ -11,6 +11,7 @@ import (
 
 	command "github.com/rqlite/rqlite/v10/command/proto"
 	"github.com/rqlite/rqlite/v10/db/wal"
+	"github.com/rqlite/rqlite/v10/internal/fsutil"
 	"github.com/rqlite/rqlite/v10/internal/rsum"
 )
 
@@ -72,7 +73,7 @@ func Test_WALDatabaseCheckpointOK(t *testing.T) {
 	}
 
 	// Confirm that the WAL file is zero bytes long.
-	sz, err := fileSize(db.WALPath())
+	sz, err := fsutil.FileSize(db.WALPath())
 	if err != nil {
 		t.Fatalf("failed to get WAL file size: %s", err.Error())
 	}
@@ -345,7 +346,7 @@ func Test_WALDatabaseCheckpoint_RestartTruncate(t *testing.T) {
 	} else if meta.Moved != 0 {
 		t.Fatalf("expected 0 pages to be moved during checkpoint truncate since nowrite since restart checkpoint")
 	}
-	sz, err := fileSize(db.WALPath())
+	sz, err := fsutil.FileSize(db.WALPath())
 	if err != nil {
 		t.Fatalf("wal file should be deleted after checkpoint truncate")
 	}
@@ -540,7 +541,7 @@ func Test_WALDatabaseCheckpointTruncateOK(t *testing.T) {
 	}
 
 	// Confirm that the WAL file is zero bytes long.
-	sz, err := fileSize(db.WALPath())
+	sz, err := fsutil.FileSize(db.WALPath())
 	if err != nil {
 		t.Fatalf("failed to get WAL file size: %s", err.Error())
 	}

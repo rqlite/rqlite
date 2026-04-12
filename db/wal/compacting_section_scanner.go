@@ -3,10 +3,13 @@ package wal
 import (
 	"encoding/binary"
 	"errors"
+	"expvar"
 	"fmt"
 	"io"
 	"maps"
+	"math"
 	"sort"
+	"time"
 )
 
 var (
@@ -14,29 +17,33 @@ var (
 	ErrOpenTransaction = errors.New("open transaction at end of WAL file")
 )
 
-// CompactingSectionScanner implements WALIterator to iterate over compacted WAL
-// frames within a byte range [start, end). It scans all frames in the range, keeps
-// only the latest version of each page (respecting transaction boundaries), and
+// CompactingFrameScanner implements WALIterator to iterate over compacted WAL
+// frames starting from a given frame index. It scans all valid frames from the
+// start position to the end of the WAL (or the first invalid frame), keeps only
+// the latest version of each page (respecting transaction boundaries), and
 // returns them in file offset order. If fullScan is false, frame checksums are
 // not verified since the WAL file is trusted.
-type CompactingSectionScanner struct {
+type CompactingFrameScanner struct {
 	readSeeker io.ReadSeeker
 	walReader  *Reader
 	header     *WALHeader
 	fullScan   bool
 	start      int64
-	end        int64
 
 	frames cFrames
 	fIdx   int
 }
 
-// NewCompactingSectionScanner creates a new CompactingSectionScanner that reads
-// and compacts frames from the byte range [start, end) of the WAL accessible via
-// r. The start and end offsets must be aligned to frame boundaries. The WAL header
-// is always read from offset 0.
+// NewCompactingFrameScanner creates a new CompactingFrameScanner that reads
+// and compacts frames starting at the 0-based startFrame index, scanning to
+// the end of the WAL or the first invalid frame. The WAL header is always read
+// from offset 0 and is used to determine the page size (and therefore the frame
+// size) for offset calculation.
 //
 // If fullScan is true, the scanner will perform a checksum validation on each frame.
+// fullScan requires startFrame to be 0 so that running checksums can be validated
+// from the beginning of the WAL.
+//
 // If fullScan is false, the scanner will only scan the file sufficiently to find the
 // last valid frame for each page via a simple salt1 and salt2 match, without performing
 // a full checksum validation. This is suitable when the WAL file is trusted (e.g. it's
@@ -44,8 +51,8 @@ type CompactingSectionScanner struct {
 // faster for large WAL files, since it avoids reading the page data for each frame.
 //
 // Scanning stops at the first invalid frame (e.g. salt mismatch, checksum failure if
-// applicable, or partial read), even if the end offset has not been reached.
-func NewCompactingSectionScanner(r io.ReadSeeker, start, end int64, fullScan bool) (*CompactingSectionScanner, error) {
+// applicable, or partial read).
+func NewCompactingFrameScanner(r io.ReadSeeker, startFrame int64, fullScan bool) (*CompactingFrameScanner, error) {
 	walReader := NewReader(r)
 	if err := walReader.ReadHeader(); err != nil {
 		return nil, err
@@ -54,22 +61,14 @@ func NewCompactingSectionScanner(r io.ReadSeeker, start, end int64, fullScan boo
 	pageSize := walReader.pageSize
 	frameSize := int64(WALFrameHeaderSize) + int64(pageSize)
 
-	if fullScan && start != WALHeaderSize {
-		return nil, fmt.Errorf("fullScan requires start offset to be %d, got %d", WALHeaderSize, start)
+	if fullScan && startFrame != 0 {
+		return nil, fmt.Errorf("fullScan requires startFrame to be 0, got %d", startFrame)
 	}
-	if start > end {
-		return nil, fmt.Errorf("start offset (%d) is past end offset (%d)", start, end)
-	}
-	if start != end {
-		if (start-WALHeaderSize)%frameSize != 0 {
-			return nil, fmt.Errorf("start offset %d is not frame-aligned", start)
-		}
-		if (end-WALHeaderSize)%frameSize != 0 {
-			return nil, fmt.Errorf("end offset %d is not frame-aligned", end)
-		}
+	if startFrame < 0 {
+		return nil, fmt.Errorf("startFrame (%d) must not be negative", startFrame)
 	}
 
-	s := &CompactingSectionScanner{
+	s := &CompactingFrameScanner{
 		readSeeker: r,
 		walReader:  walReader,
 		header: &WALHeader{
@@ -83,24 +82,32 @@ func NewCompactingSectionScanner(r io.ReadSeeker, start, end int64, fullScan boo
 			Checksum2: walReader.chksum2,
 		},
 		fullScan: fullScan,
-		start:    start,
-		end:      end,
+		start:    WALHeaderSize + startFrame*frameSize,
 	}
 
-	if err := s.scan(); err != nil {
+	startT := time.Now()
+	n, err := s.scan()
+	if err != nil {
+		stats.Add(compactScanErrors, 1)
 		return nil, err
+	}
+	recordDuration(compactScanDuration, startT)
+	stats.Get(compactFramesOutput).(*expvar.Int).Set(int64(len(s.frames)))
+	if len(s.frames) > 0 {
+		r := math.Round(float64(n)/float64(len(s.frames))*10) / 10
+		stats.Get(compactFramesRatio).(*expvar.Float).Set(r)
 	}
 	return s, nil
 }
 
 // Header returns the WAL header.
-func (s *CompactingSectionScanner) Header() (*WALHeader, error) {
+func (s *CompactingFrameScanner) Header() (*WALHeader, error) {
 	return s.header, nil
 }
 
 // Next returns the next compacted frame. Returns io.EOF when all frames
 // have been read.
-func (s *CompactingSectionScanner) Next() (*Frame, error) {
+func (s *CompactingFrameScanner) Next() (*Frame, error) {
 	if s.fIdx >= len(s.frames) {
 		return nil, io.EOF
 	}
@@ -123,7 +130,7 @@ func (s *CompactingSectionScanner) Next() (*Frame, error) {
 }
 
 // Empty reports whether the scanner has zero frames to deliver.
-func (s *CompactingSectionScanner) Empty() bool {
+func (s *CompactingFrameScanner) Empty() bool {
 	return len(s.frames) == 0
 }
 
@@ -131,7 +138,7 @@ func (s *CompactingSectionScanner) Empty() bool {
 // The byte slice is suitable for writing to a new WAL file. For large WAL files, this
 // may consume a lot of memory, so it should be used with care. It's mostly intended for
 // use in testing, where the WAL files are small.
-func (s *CompactingSectionScanner) Bytes() ([]byte, error) {
+func (s *CompactingFrameScanner) Bytes() ([]byte, error) {
 	pageSz := int(s.header.PageSize)
 	buf := make([]byte, WALHeaderSize+(len(s.frames)*WALFrameHeaderSize)+len(s.frames)*pageSz)
 	s.header.Copy(buf)
@@ -148,6 +155,7 @@ func (s *CompactingSectionScanner) Bytes() ([]byte, error) {
 
 	frmHdr := WALHeaderSize
 	chksum1, chksum2 := s.header.Checksum1, s.header.Checksum2
+	var err error
 	for _, frame := range s.frames {
 		frmData := frmHdr + WALFrameHeaderSize
 
@@ -157,7 +165,10 @@ func (s *CompactingSectionScanner) Bytes() ([]byte, error) {
 		binary.BigEndian.PutUint32(buf[frmHdr+12:], s.header.Salt2)
 
 		// Checksum of frame header: "...the first 8 bytes..."
-		chksum1, chksum2 = WALChecksum(bo, chksum1, chksum2, buf[frmHdr:frmHdr+8])
+		chksum1, chksum2, err = WALChecksum(bo, chksum1, chksum2, buf[frmHdr:frmHdr+8])
+		if err != nil {
+			return nil, fmt.Errorf("error computing frame header checksum: %s", err)
+		}
 
 		// Read the frame data.
 		if _, err := s.readSeeker.Seek(frame.Offset+WALFrameHeaderSize, io.SeekStart); err != nil {
@@ -168,7 +179,10 @@ func (s *CompactingSectionScanner) Bytes() ([]byte, error) {
 		}
 
 		// Update checksum using frame data.
-		chksum1, chksum2 = WALChecksum(bo, chksum1, chksum2, buf[frmData:frmData+pageSz])
+		chksum1, chksum2, err = WALChecksum(bo, chksum1, chksum2, buf[frmData:frmData+pageSz])
+		if err != nil {
+			return nil, fmt.Errorf("error computing frame data checksum: %s", err)
+		}
 		binary.BigEndian.PutUint32(buf[frmHdr+16:], chksum1)
 		binary.BigEndian.PutUint32(buf[frmHdr+20:], chksum2)
 
@@ -177,17 +191,13 @@ func (s *CompactingSectionScanner) Bytes() ([]byte, error) {
 	return buf, nil
 }
 
-// scan reads all frame headers in [start, end) and builds a compacted frame
-// list, keeping only the latest version of each page. Only committed transactions
-// are included.
-func (s *CompactingSectionScanner) scan() error {
-	if s.start >= s.end {
-		return nil
-	}
-
-	// Seek to the start of the section.
+// scan reads all valid frame headers from start to the end of the WAL and
+// builds a compacted frame list, keeping only the latest version of each page.
+// Only committed transactions are included.
+func (s *CompactingFrameScanner) scan() (int64, error) {
+	// Seek to the start position.
 	if _, err := s.readSeeker.Seek(s.start, io.SeekStart); err != nil {
-		return fmt.Errorf("seek to start offset %d: %w", s.start, err)
+		return 0, fmt.Errorf("seek to start offset %d: %w", s.start, err)
 	}
 
 	var buf []byte
@@ -195,22 +205,20 @@ func (s *CompactingSectionScanner) scan() error {
 		buf = make([]byte, s.header.PageSize)
 	}
 
+	var framesInput int64
 	waitingForCommit := false
 	txFrames := make(map[uint32]*cFrame)
 	frames := make(map[uint32]*cFrame)
-
 	for {
 		pgno, commit, err := s.walReader.ReadFrame(buf)
 		if err == io.EOF {
 			break
 		} else if err != nil {
-			return err
+			return 0, err
 		}
+		framesInput++
 
 		offset := s.start + s.walReader.Offset() - WALHeaderSize
-		if offset >= s.end {
-			break
-		}
 
 		txFrames[pgno] = &cFrame{
 			Pgno:   pgno,
@@ -227,9 +235,10 @@ func (s *CompactingSectionScanner) scan() error {
 		maps.Copy(frames, txFrames)
 		clear(txFrames)
 	}
+	stats.Get(compactFramesInput).(*expvar.Int).Set(framesInput)
 
 	if waitingForCommit {
-		return ErrOpenTransaction
+		return framesInput, ErrOpenTransaction
 	}
 
 	s.frames = make(cFrames, 0, len(frames))
@@ -237,7 +246,7 @@ func (s *CompactingSectionScanner) scan() error {
 		s.frames = append(s.frames, frame)
 	}
 	sort.Sort(s.frames)
-	return nil
+	return framesInput, nil
 }
 
 type cFrame struct {

@@ -4,6 +4,12 @@ package command;
 
 option go_package = "github.com/rqlite/rqlite/v10/command/proto";
 
+enum Suffrage {
+	UNKNOWN = 0;
+	VOTER = 1;
+	NON_VOTER = 2;
+}
+
 message Parameter {
 	oneof value {
 		sint64 i = 1;

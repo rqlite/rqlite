@@ -48,6 +48,34 @@ func CRC32WithTiming(path string) (uint32, time.Duration, error) {
 	return sum, time.Since(startT), nil
 }
 
+// CRC32Reader wraps an io.Reader, computing a running CRC32 (Castagnoli)
+// checksum over all data read through it.
+type CRC32Reader struct {
+	h  hash.Hash32
+	tr io.Reader
+}
+
+// NewCRC32Reader creates a new CRC32Reader that reads data from r while
+// computing a running CRC32 checksum.
+func NewCRC32Reader(r io.Reader) *CRC32Reader {
+	h := crc32.New(castagnoliTable)
+	return &CRC32Reader{
+		h:  h,
+		tr: io.TeeReader(r, h),
+	}
+}
+
+// Read reads from the underlying reader and updates the CRC32 checksum
+// with the bytes returned.
+func (c *CRC32Reader) Read(p []byte) (int, error) {
+	return c.tr.Read(p)
+}
+
+// Sum32 returns the CRC32 checksum of all data read so far.
+func (c *CRC32Reader) Sum32() uint32 {
+	return c.h.Sum32()
+}
+
 // CRC32Writer wraps an io.Writer, computing a running CRC32 (Castagnoli)
 // checksum over all data written through it.
 type CRC32Writer struct {

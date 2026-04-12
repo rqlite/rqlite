@@ -3,6 +3,8 @@ package db
 import (
 	"os"
 	"testing"
+
+	"github.com/rqlite/rqlite/v10/internal/fsutil"
 )
 
 func Test_DefaultDriver(t *testing.T) {
@@ -35,13 +37,13 @@ func Test_DefaultDriver(t *testing.T) {
 		t.Fatalf("unexpected results for query, expected %s, got %s", exp, got)
 	}
 
-	if !fileExists(db.WALPath()) {
+	if !fsutil.FileExists(db.WALPath()) {
 		t.Fatalf("WAL file not created")
 	}
 	if err := db.Close(); err != nil {
 		t.Fatalf("Close failed: %s", err.Error())
 	}
-	if !fileExists(db.WALPath()) {
+	if !fsutil.FileExists(db.WALPath()) {
 		t.Fatalf("WAL file removed on close")
 	}
 
@@ -90,13 +92,13 @@ func Test_CheckpointDriver(t *testing.T) {
 		t.Fatalf("OpenWithDriver failed: %s", err.Error())
 	}
 	mustExecute(db, "CREATE TABLE foo (id INTEGER PRIMARY KEY, name TEXT)")
-	if !fileExists(db.WALPath()) {
+	if !fsutil.FileExists(db.WALPath()) {
 		t.Fatalf("WAL file not created")
 	}
 	if err := db.Close(); err != nil {
 		t.Fatalf("Close failed: %s", err.Error())
 	}
-	if fileExists(db.WALPath()) {
+	if fsutil.FileExists(db.WALPath()) {
 		t.Fatalf("WAL file not removed on close")
 	}
 }

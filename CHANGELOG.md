@@ -2,15 +2,17 @@
 
 ### What's new in this release?
 
-This release introduces a major improvement to the Raft [_Snapshot and Log Truncation_](https://youtu.be/8XbxQ1Epi5w?t=492) process. Previously, a Snapshot stream to a Follower would block the Leader from taking new Snapshots. Normally the retry would succeed, but a persistently slow Follower that kept requiring Snapshots could starve the Leader entirely. With v10, Snapshotting on the Leader is decoupled from streaming pre-existing Snapshots to other nodes.
+This release introduces a major improvement to the Raft [_Snapshot and Log Truncation_](https://youtu.be/8XbxQ1Epi5w?t=492) process. Previously, a Snapshot stream to a Follower would block the Leader from taking new Snapshots. Normally a subsequent retry of the snapshot operation would succeed, but a persistently slow Follower that kept requiring Snapshots could starve the Leader entirely. With v10, Snapshotting on the Leader is no longer blocked by any other operation happening in the _Snapshot Store_, including streaming a pre-existing snapshot to a Follower.
 
-v10 also uses CRC32 checksumming more comprehensively to detect such issues as file system errors and inadvertent modification of the underlying data files by systems other than rqlite.
+Concurrent read and write access to the database has been improved. In previous releases Raft snapshotting -- and, as a result, writes -- could be blocked for an extended period if there was a long-running read. In v10 the Raft snapshotting process is aborted and retried later if an long-running read is active.
 
-This release also introduces a new built-in console app, making it more convenient to work with an rqlite deployment. The console app is available at `http://localhost:4001/console` by default.
+v10 also uses CRC32 checksumming more comprehensively to detect issues such as file system corruption and inadvertent modification of the underlying data files by systems other than rqlite.
+
+This release also introduces a new built-in console app, making it more convenient to manage a rqlite deployment. The console app is available at `http://localhost:4001/console` by default.
 
 ### Upgrading to v10
 
-Upgrading from v7 or later is seamless and has been extensively tested. v10 supports rolling upgrades, but **you cannot join a new v10 node to a v9 (or earlier) cluster**. Upgrade your existing cluster to v10 before adding new nodes. Back up your [rqlite system](https://rqlite.io/docs/guides/backup/) before upgrading.
+Upgrading from v7 or later is seamless and has been extensively tested, though upgrading first to the latest v9 release is recommended. Upgrading to v10 supports rolling upgrades, but **you cannot join a new v10 node to a v9 (or earlier) cluster**. Upgrade your existing cluster to v10 before adding new nodes. Back up your [rqlite system](https://rqlite.io/docs/guides/backup/) before upgrading.
 
 There are no breaking API changes in this release, nor any changes to how clustering operates. However there have been some command-line option changes:
  - `-on-disk-path` has been removed. It provided little benefit while making it too easy to corrupt a node.
@@ -25,6 +27,7 @@ There are no breaking API changes in this release, nor any changes to how cluste
 - [PR #2525](https://github.com/rqlite/rqlite/pull/2525): Add on/off control for inter-node snapshot transfer compression. Compression is off by default.
 - [PR #2532](https://github.com/rqlite/rqlite/pull/2532): Add `-raft-commit-timeout` to allow control of this Raft config option.
 - [PR #2558](https://github.com/rqlite/rqlite/pull/2558): Add new commands to the rqlite shell.
+- [PR #2583](https://github.com/rqlite/rqlite/pull/2583): Queries support configurable retries.
 
 ### Implementation changes and bug fixes
 - [PR #2471](https://github.com/rqlite/rqlite/pull/2471): Move to non-blocking Snapshotting store.
@@ -83,6 +86,29 @@ There are no breaking API changes in this release, nor any changes to how cluste
 - [PR #2567](https://github.com/rqlite/rqlite/pull/2567): Add WAL Section-level Scanner.
 - [PR #2569](https://github.com/rqlite/rqlite/pull/2569), [PR #2570](https://github.com/rqlite/rqlite/pull/2570): Add `context.Context` to the cluster layer.
 - [PR #2573](https://github.com/rqlite/rqlite/pull/2573): More Snapshot-reaping unit testing.
+- [PR #2576](https://github.com/rqlite/rqlite/pull/2576): Compact by frame index not offset.
+- [PR #2580](https://github.com/rqlite/rqlite/pull/2580): Update expiry dates for test x509 certs. rqlite development just keeps going.
+- [PR #2578](https://github.com/rqlite/rqlite/pull/2578): Integrate new checkpoint and WAL manager strategy.
+- [PR #2581](https://github.com/rqlite/rqlite/pull/2581): Reduce default reap threshold to 4.
+- [PR #2584](https://github.com/rqlite/rqlite/pull/2584): Connection Pool supports explicitly creating new connections.
+- [PR #2585](https://github.com/rqlite/rqlite/pull/2585), [PR #2586](https://github.com/rqlite/rqlite/pull/2586): Cluster client always retries at least once with new connection.  Fixes issue [#2579](https://github.com/rqlite/rqlite/issues/2579).
+- [PR #2587](https://github.com/rqlite/rqlite/pull/2587): Improve DB-layer expvar stats.
+- [PR #2588](https://github.com/rqlite/rqlite/pull/2588): Improve Snapshot Store expvar stats.
+- [PR #2590](https://github.com/rqlite/rqlite/pull/2590): Improve Snapshot reaping expvar stats.
+- [PR #2591](https://github.com/rqlite/rqlite/pull/2591): Check Snapshot store CRC32 values on startup.
+- [PR #2593](https://github.com/rqlite/rqlite/pull/2593): Fix copy-n-paste error and missing return in `cluster` package.
+- [PR #2594](https://github.com/rqlite/rqlite/pull/2594): Free misc. resources in `store` package.
+- [PR #2595](https://github.com/rqlite/rqlite/pull/2595): Reuse byte buffer for frame header when writing WAL frames.
+- [PR #2596](https://github.com/rqlite/rqlite/pull/2596): Use more efficient file-walking functions from standard library.
+- [PR #2597](https://github.com/rqlite/rqlite/pull/2597): Move CDC RLock inside CDC enabled check.
+- [PR #2598](https://github.com/rqlite/rqlite/pull/2598): Consolidate file utilities.
+- [PR #2601](https://github.com/rqlite/rqlite/pull/2601): Ensure Foreign Key DB driver only registered once.
+- [PR #2602](https://github.com/rqlite/rqlite/pull/2602): Clearer DB extension driver name.
+- [PR #2603](https://github.com/rqlite/rqlite/pull/2603): Capture CRC32 of FullSink while data is being written to disk.
+- [PR #2605](https://github.com/rqlite/rqlite/pull/2605): Define Suffrage via Protobuf.
+- [PR #2606](https://github.com/rqlite/rqlite/pull/2606): Snapshot Restore checks CRCs.
+- [PR #2607](https://github.com/rqlite/rqlite/pull/2607): Reduce sleep during database copy to 50ms. Was 250ms.
+- [PR #2608](https://github.com/rqlite/rqlite/pull/2608): More use of consolidated file utils functions.
 
 ## v9.4.5 (March 9th 2026)
 ### Implementation changes and bug fixes

@@ -4,6 +4,7 @@ import (
 	"encoding/binary"
 	"fmt"
 	"io"
+	"time"
 )
 
 // WALHeader represents the header of a WAL file.
@@ -53,6 +54,7 @@ type Writer struct {
 	rHeader          *WALHeader
 	chksum1, chksum2 uint32
 	bo               binary.ByteOrder
+	frmHdr           [WALFrameHeaderSize]byte
 }
 
 // NewWriter returns a new Writer.
@@ -80,6 +82,11 @@ func NewWriter(r WALIterator) (*Writer, error) {
 
 // WriteTo writes the frames from the WALIterator to the given io.Writer.
 func (w *Writer) WriteTo(ww io.Writer) (n int64, retErr error) {
+	startT := time.Now()
+	defer func() {
+		recordDuration(compactWriteDuration, startT)
+	}()
+
 	nn, err := w.writeWALHeader(ww)
 	if err != nil {
 		return nn, err
@@ -131,7 +138,7 @@ func (w *Writer) writeWALHeader(ww io.Writer) (n int64, err error) {
 }
 
 func (w *Writer) writeFrame(ww io.Writer, frame *Frame) (n int64, err error) {
-	frmHdr := make([]byte, WALFrameHeaderSize)
+	frmHdr := w.frmHdr[:]
 
 	// Calculate the frame header.
 	binary.BigEndian.PutUint32(frmHdr[0:], frame.Pgno)
@@ -140,10 +147,16 @@ func (w *Writer) writeFrame(ww io.Writer, frame *Frame) (n int64, err error) {
 	binary.BigEndian.PutUint32(frmHdr[12:], w.rHeader.Salt2)
 
 	// Checksum of frame header: "...the first 8 bytes..."
-	w.chksum1, w.chksum2 = WALChecksum(w.bo, w.chksum1, w.chksum2, frmHdr[:8])
+	w.chksum1, w.chksum2, err = WALChecksum(w.bo, w.chksum1, w.chksum2, frmHdr[:8])
+	if err != nil {
+		return n, fmt.Errorf("error computing frame header checksum: %s", err)
+	}
 
 	// Update checksum using frame data: "..the content of all frames up to and including the current frame."
-	w.chksum1, w.chksum2 = WALChecksum(w.bo, w.chksum1, w.chksum2, frame.Data)
+	w.chksum1, w.chksum2, err = WALChecksum(w.bo, w.chksum1, w.chksum2, frame.Data)
+	if err != nil {
+		return n, fmt.Errorf("error computing frame data checksum: %s", err)
+	}
 	binary.BigEndian.PutUint32(frmHdr[16:], w.chksum1)
 	binary.BigEndian.PutUint32(frmHdr[20:], w.chksum2)
 

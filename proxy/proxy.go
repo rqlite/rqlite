@@ -80,7 +80,7 @@ type Store interface {
 // Cluster defines operations for forwarding requests to the leader.
 type Cluster interface {
 	Execute(ctx context.Context, er *proto.ExecuteRequest, nodeAddr string, creds *clstrPB.Credentials, timeout time.Duration, retries int) ([]*proto.ExecuteQueryResponse, uint64, error)
-	Query(ctx context.Context, qr *proto.QueryRequest, nodeAddr string, creds *clstrPB.Credentials, timeout time.Duration) ([]*proto.QueryRows, uint64, error)
+	Query(ctx context.Context, qr *proto.QueryRequest, nodeAddr string, creds *clstrPB.Credentials, timeout time.Duration, retries int) ([]*proto.QueryRows, uint64, error)
 	Request(ctx context.Context, eqr *proto.ExecuteQueryRequest, nodeAddr string, creds *clstrPB.Credentials, timeout time.Duration, retries int) ([]*proto.ExecuteQueryResponse, uint64, uint64, error)
 	Backup(ctx context.Context, br *proto.BackupRequest, nodeAddr string, creds *clstrPB.Credentials, timeout time.Duration, w io.Writer) error
 	Load(ctx context.Context, lr *proto.LoadRequest, nodeAddr string, creds *clstrPB.Credentials, timeout time.Duration, retries int) error
@@ -149,7 +149,7 @@ func (p *Proxy) Execute(ctx context.Context, er *proto.ExecuteRequest, creds *cl
 // and noForward is false, the request is forwarded to the current leader.
 // The ConsistencyLevel return value from Store.Query is dropped.
 func (p *Proxy) Query(ctx context.Context, qr *proto.QueryRequest, creds *clstrPB.Credentials,
-	timeout time.Duration, noForward bool) ([]*proto.QueryRows, uint64, string, error) {
+	timeout time.Duration, retries int, noForward bool) ([]*proto.QueryRows, uint64, string, error) {
 
 	results, _, raftIndex, err := p.store.Query(ctx, qr)
 	if errors.Is(err, store.ErrNotLeader) {
@@ -160,7 +160,7 @@ func (p *Proxy) Query(ctx context.Context, qr *proto.QueryRequest, creds *clstrP
 		if addrErr != nil {
 			return nil, 0, "", addrErr
 		}
-		results, raftIndex, err = p.cluster.Query(ctx, qr, addr, creds, timeout)
+		results, raftIndex, err = p.cluster.Query(ctx, qr, addr, creds, timeout, retries)
 		if err != nil {
 			stats.Add(numRemoteQueriesFailed, 1)
 			return nil, 0, "", wrapIfUnauthorized(err)

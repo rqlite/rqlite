@@ -12,6 +12,7 @@ import (
 
 	"github.com/rqlite/rqlite/v10/command/encoding"
 	command "github.com/rqlite/rqlite/v10/command/proto"
+	"github.com/rqlite/rqlite/v10/internal/fsutil"
 	"github.com/rqlite/rqlite/v10/internal/random"
 )
 
@@ -25,7 +26,7 @@ func Test_OpenNonExistentDatabase(t *testing.T) {
 		t.Fatalf("error opening nonexistent database: %s", err.Error())
 	}
 	// Confirm a file was created.
-	if !fileExists(path) {
+	if !fsutil.FileExists(path) {
 		t.Fatalf("database file not created at %s", path)
 	}
 }
@@ -56,10 +57,10 @@ func Test_OpenEmptyInWALMode(t *testing.T) {
 	}
 
 	// Ensure the -wal and -shm files are created.
-	if !fileExists(db.WALPath()) {
+	if !fsutil.FileExists(db.WALPath()) {
 		t.Fatalf("WAL file not created at %s", db.WALPath())
 	}
-	if !fileExists(db.Path() + "-shm") {
+	if !fsutil.FileExists(db.Path() + "-shm") {
 		t.Fatalf("WAL shm file not created at %s", db.WALPath()+"-shm")
 	}
 }
@@ -81,14 +82,14 @@ func Test_WALNotRemovedOnClose(t *testing.T) {
 		t.Fatalf("failed to create table: %s", err.Error())
 	}
 	walPath := db.WALPath()
-	if !fileExists(walPath) {
+	if !fsutil.FileExists(walPath) {
 		t.Fatalf("WAL file does not exist after creating a table")
 	}
 	if err := db.Close(); err != nil {
 		t.Fatalf("error closing database: %s", err.Error())
 	}
 
-	if !fileExists(db.WALPath()) {
+	if !fsutil.FileExists(db.WALPath()) {
 		t.Fatalf("WAL file removed after closing the database")
 	}
 }
@@ -112,14 +113,14 @@ func Test_WALNotChangedOnReopen(t *testing.T) {
 		t.Fatalf("failed to create table: %s", err.Error())
 	}
 	walPath := db.WALPath()
-	if !fileExists(walPath) {
+	if !fsutil.FileExists(walPath) {
 		t.Fatalf("WAL file does not exist after creating a table")
 	}
 	if err := db.Close(); err != nil {
 		t.Fatalf("error closing database: %s", err.Error())
 	}
 
-	if !fileExists(db.WALPath()) {
+	if !fsutil.FileExists(db.WALPath()) {
 		t.Fatalf("WAL file removed after closing the database")
 	}
 
@@ -161,7 +162,7 @@ func Test_WALNotCheckpointedOnClose(t *testing.T) {
 		t.Fatalf("failed to create table: %s", err.Error())
 	}
 	walPath := db.WALPath()
-	if !fileExists(walPath) {
+	if !fsutil.FileExists(walPath) {
 		t.Fatalf("WAL file does not exist after creating a table")
 	}
 
@@ -189,7 +190,7 @@ func Test_WALNotCheckpointedOnClose(t *testing.T) {
 		t.Fatalf("database changed after closing")
 	}
 
-	if !fileExists(db.WALPath()) {
+	if !fsutil.FileExists(db.WALPath()) {
 		t.Fatalf("WAL file removed after closing the database")
 	}
 

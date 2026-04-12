@@ -31,6 +31,7 @@ import (
 	"github.com/rqlite/rqlite/v10/command/proto"
 	sql "github.com/rqlite/rqlite/v10/db"
 	"github.com/rqlite/rqlite/v10/db/humanize"
+	"github.com/rqlite/rqlite/v10/internal/fsutil"
 	"github.com/rqlite/rqlite/v10/internal/progress"
 	"github.com/rqlite/rqlite/v10/internal/random"
 	"github.com/rqlite/rqlite/v10/internal/rsum"
@@ -135,7 +136,7 @@ const (
 	leaderWaitDelay        = 100 * time.Millisecond
 	appliedWaitDelay       = 100 * time.Millisecond
 	commitEquivalenceDelay = 50 * time.Millisecond
-	truncateTimeout        = 5 * time.Minute
+	truncateTimeout        = 250 * time.Millisecond
 	backupCASTimeout       = 10 * time.Second
 	backupCASRetryDelay    = 100 * time.Millisecond
 	connectionPoolCount    = 5
@@ -193,9 +194,7 @@ const (
 	numSnapshotPersists         = "num_snapshot_persists"
 	numSnapshotPersistsFailed   = "num_snapshot_persists_failed"
 	snapshotPersistDuration     = "snapshot_persist_duration"
-	snapshotPrecompactWALSize   = "snapshot_precompact_wal_size"
 	snapshotCRC32CreateDuration = "snapshot_crc32_create_duration"
-	snapshotWALSize             = "snapshot_wal_size"
 	leaderChangesObserved       = "leader_changes_observed"
 	leaderChangesDropped        = "leader_changes_dropped"
 	failedHeartbeatObserved     = "failed_heartbeat_observed"
@@ -209,6 +208,10 @@ var stats *expvar.Map
 func init() {
 	stats = expvar.NewMap("store")
 	ResetStats()
+}
+
+func recordDuration(stat string, startT time.Time) {
+	stats.Get(stat).(*expvar.Int).Set(time.Since(startT).Milliseconds())
 }
 
 // ResetStats resets the expvar stats for this module. Mostly for test purposes.
@@ -256,9 +259,7 @@ func ResetStats() {
 	stats.Add(numSnapshotPersists, 0)
 	stats.Add(numSnapshotPersistsFailed, 0)
 	stats.Add(snapshotPersistDuration, 0)
-	stats.Add(snapshotPrecompactWALSize, 0)
 	stats.Add(snapshotCRC32CreateDuration, 0)
-	stats.Add(snapshotWALSize, 0)
 	stats.Add(leaderChangesObserved, 0)
 	stats.Add(leaderChangesDropped, 0)
 	stats.Add(failedHeartbeatObserved, 0)
@@ -543,7 +544,7 @@ func (s *Store) Open() (retErr error) {
 	s.logger.Printf("opening store with node ID %s, listening on %s", s.raftID, s.ly.Addr().String())
 
 	// Clean up a never-used file from previous releases.
-	removeFile(filepath.Join(s.raftDir, "applied_index"))
+	fsutil.RemoveFile(filepath.Join(s.raftDir, "applied_index"))
 
 	// Create all the required Raft directories.
 	s.logger.Printf("ensuring data directory exists at %s", s.raftDir)
@@ -562,7 +563,7 @@ func (s *Store) Open() (retErr error) {
 
 	// Create the database directory, if it doesn't already exist.
 	parentDBDir := filepath.Dir(s.dbPath)
-	if !dirExists(parentDBDir) {
+	if !fsutil.DirExists(parentDBDir) {
 		s.logger.Printf("creating directory for database at %s", parentDBDir)
 		err := os.MkdirAll(parentDBDir, 0755)
 		if err != nil {
@@ -623,20 +624,20 @@ func (s *Store) Open() (retErr error) {
 			if removeDBFiles {
 				stats.Add(numRestoresStart, 1)
 				s.numSnapshotsStart.Add(1)
-				if err := removeFile(s.cleanSnapshotPath); err != nil {
+				if err := fsutil.RemoveFile(s.cleanSnapshotPath); err != nil {
 					s.logger.Printf("warning: failed to remove clean snapshot marker file: %s", err)
 				}
 			}
 		}()
 
-		if !pathExists(s.cleanSnapshotPath) {
+		if !fsutil.PathExists(s.cleanSnapshotPath) {
 			return nil
 		}
 		fp := &FileFingerprint{}
 		if err := fp.ReadFromFile(s.cleanSnapshotPath); err != nil {
 			return nil
 		}
-		mt, sz, err := modTimeSize(s.dbPath)
+		mt, sz, err := fsutil.ModTimeSize(s.dbPath)
 		if err != nil {
 			return nil
 		}
@@ -696,7 +697,7 @@ func (s *Store) Open() (retErr error) {
 	}
 
 	// Create the Raft log store and verify it.
-	raftDBSize, err := fileSizeExists(s.raftDBPath)
+	raftDBSize, err := fsutil.FileSizeExists(s.raftDBPath)
 	if err != nil {
 		return fmt.Errorf("failed to determine size of Raft log: %s", err)
 	}
@@ -726,7 +727,7 @@ func (s *Store) Open() (retErr error) {
 	}
 
 	// Request to recover node?
-	if pathExists(s.peersPath) {
+	if fsutil.PathExists(s.peersPath) {
 		s.logger.Printf("attempting node recovery using %s", s.peersPath)
 		config, err := raft.ReadConfigJSON(s.peersPath)
 		if err != nil {
@@ -734,7 +735,7 @@ func (s *Store) Open() (retErr error) {
 		}
 
 		// Recovering a node invalidates any existing SQLite file.
-		if err := removeFile(s.cleanSnapshotPath); err != nil {
+		if err := fsutil.RemoveFile(s.cleanSnapshotPath); err != nil {
 			return fmt.Errorf("failed to remove clean snapshot file during RecoverNode: %w", err)
 		}
 		if err = RecoverNode(s.raftDir, s.dbConf.Extensions, s.logger, s.raftLog,
@@ -1118,7 +1119,7 @@ func (s *Store) Leader() (*Server, error) {
 	return &Server{
 		ID:       string(id),
 		Addr:     string(addr),
-		Suffrage: raft.Voter.String(),
+		Suffrage: proto.Suffrage_VOTER,
 	}, nil
 }
 
@@ -1191,7 +1192,7 @@ func (s *Store) Followers() ([]*Server, error) {
 			followers = append(followers, &Server{
 				ID:       string(servers[i].ID),
 				Addr:     string(servers[i].Address),
-				Suffrage: servers[i].Suffrage.String(),
+				Suffrage: proto.Suffrage_NON_VOTER,
 			})
 		}
 	}
@@ -1238,7 +1239,7 @@ func (s *Store) Nodes() ([]*Server, error) {
 		servers[i] = &Server{
 			ID:       string(rs[i].ID),
 			Addr:     string(rs[i].Address),
-			Suffrage: rs[i].Suffrage.String(),
+			Suffrage: command.SuffrageFromString(rs[i].Suffrage.String()),
 		}
 	}
 
@@ -1322,7 +1323,7 @@ func (s *Store) Stats() (map[string]any, error) {
 			raftStats[k] = s
 		}
 	}
-	raftStats["log_size"], err = fileSizeExists(s.raftDBPath)
+	raftStats["log_size"], err = fsutil.FileSizeExists(s.raftDBPath)
 	if err != nil {
 		return nil, err
 	}
@@ -1334,7 +1335,7 @@ func (s *Store) Stats() (map[string]any, error) {
 	raftStats["transport"] = s.raftTn.Stats()
 	raftStats["config"] = RaftConfigAsJSON(s.raftConfig())
 
-	dirSz, err := dirSize(s.raftDir)
+	dirSz, err := fsutil.DirSize(s.raftDir)
 	if err != nil {
 		return nil, err
 	}
@@ -1576,7 +1577,7 @@ func (s *Store) VerifyLeader() (retErr error) {
 	defer func() {
 		if retErr == nil {
 			stats.Add(numVerifyLeader, 1)
-			stats.Get(verifyLeaderDuration).(*expvar.Int).Set(time.Since(startT).Milliseconds())
+			recordDuration(verifyLeaderDuration, startT)
 		} else {
 			stats.Add(numVerifyLeaderFailed, 1)
 		}
@@ -2088,7 +2089,7 @@ func (s *Store) Notify(nr *proto.NotifyRequest) error {
 		return fmt.Errorf("failed to resolve %s: %w", addr, err)
 	}
 
-	s.notifyingNodes[nr.Id] = &Server{nr.Id, nr.Address, "voter"}
+	s.notifyingNodes[nr.Id] = &Server{nr.Id, nr.Address, proto.Suffrage_VOTER}
 	if len(s.notifyingNodes) < s.BootstrapExpect {
 		return nil
 	}
@@ -2467,10 +2468,9 @@ func (s *Store) fsmApply(l *raft.Log) (e any) {
 
 	cmd, mutated, r := func() (*proto.Command, bool, any) {
 		// Reset CDC streamer with the current log index before processing if CDC is enabled
-		s.cdcMu.RLock()
-		defer s.cdcMu.RUnlock()
-
 		if s.cdcEnabled.Is() {
+			s.cdcMu.RLock()
+			defer s.cdcMu.RUnlock()
 			if s.cdcStreamer == nil {
 				var err error
 				s.cdcStreamer, err = sql.NewCDCStreamer(s.cdcOutCh, s.db)
@@ -2528,7 +2528,7 @@ func (s *Store) fsmSnapshot() (fSnap raft.FSMSnapshot, retErr error) {
 	if _, _, err := s.snapshotSync.Sync(time.Second); err != nil {
 		return nil, err
 	}
-	stats.Get(snapshotSyncDuration).(*expvar.Int).Set(time.Since(syncStartTime).Milliseconds())
+	recordDuration(snapshotSyncDuration, syncStartTime)
 
 	if err := s.snapshotCAS.Begin("snapshot"); err != nil {
 		return nil, err
@@ -2598,7 +2598,9 @@ func (s *Store) fsmSnapshot() (fSnap raft.FSMSnapshot, retErr error) {
 		// crash scenarios where we've truncated the WAL into the database, but haven't successfully
 		// completed a snapshot, so the database is modified but the WAL is not present to be snapshotted.
 		if _, err := s.checkpointer.Checkpoint(nil, truncateTimeout); err != nil {
-			s.logger.Fatalf("failed to checkpoint and truncate database for Full snapshot: %s", err.Error())
+			// A failed FULL snapshot is always retryable, since we're looking to capture
+			// the entire database. So return the error and Raft will retry.
+			return nil, err
 		}
 		streamer, err := snapshot.NewSnapshotStreamer(s.db.Path())
 		if err != nil {
@@ -2611,7 +2613,7 @@ func (s *Store) fsmSnapshot() (fSnap raft.FSMSnapshot, retErr error) {
 		stats.Add(numSnapshotsFull, 1)
 		s.numFullSnapshots++
 	} else {
-		if !pathExistsWithData(s.walPath) {
+		if !fsutil.PathExistsWithData(s.walPath) {
 			// No WAL data available. This can happen when the Raft log contains only
 			// entries that don't modify the database (e.g. cluster membership changes).
 			// Return an error so Raft knows there is nothing to snapshot.
@@ -2621,7 +2623,7 @@ func (s *Store) fsmSnapshot() (fSnap raft.FSMSnapshot, retErr error) {
 		// Write the compacted WAL to the WAL staging directory. The Snapshotting process
 		// will atomically move this entire directory. If it fails to do so, then this WAL
 		// file wil be packaged as part of the next Snapshot and the next WAL file.
-		if err := ensureDirExists(s.walStagingDir); err != nil {
+		if err := fsutil.EnsureDirExists(s.walStagingDir); err != nil {
 			return nil, err
 		}
 		sd := snapshot.NewStagingDir(s.walStagingDir)
@@ -2632,7 +2634,12 @@ func (s *Store) fsmSnapshot() (fSnap raft.FSMSnapshot, retErr error) {
 		defer walWriter.Cancel() // Noop if already closed, but ensures cleanup on error paths.
 
 		if _, err := s.checkpointer.Checkpoint(walWriter, truncateTimeout); err != nil {
-			if errors.Is(err, sql.ErrDatabaseCheckpointFailed) {
+			var re sql.RetryableError
+			if errors.As(err, &re) && !re.Retryable() {
+				// A non-retryable error at this point means the underlying system is in a state
+				// that further incremental snapshots won't handle. We could revert to full but
+				// a nonretryable error is that time shouldn't actually happen.
+				walWriter.Cancel()
 				s.logger.Fatalf("failed to checkpoint and truncate database for incremental snapshot: %s",
 					err.Error())
 			}
@@ -2683,7 +2690,7 @@ func (s *Store) fsmSnapshot() (fSnap raft.FSMSnapshot, retErr error) {
 				// incremental snapshot, then it depends on whether the WAL Staging directory is still
 				// around. If it is, we don't have a broken series of WALs and we can retry an incremental
 				// again next time. Otherwise the chain has been broken and we must fall back to full.
-				if !dirExists(s.walStagingDir) {
+				if !fsutil.DirExists(s.walStagingDir) {
 					if err := s.snapshotStore.SetDueNext(snapshot.Full); err != nil {
 						s.logger.Fatalf("failed to set full needed after snapshot processing failure: %s", err)
 					}
@@ -2726,7 +2733,7 @@ func (s *Store) fsmRestore(rc io.ReadCloser) (retErr error) {
 
 	// Any existing SQLite file is about to be invalid, so mark that we can't
 	// fast-restart with it.
-	if err := removeFile(s.cleanSnapshotPath); err != nil {
+	if err := fsutil.RemoveFile(s.cleanSnapshotPath); err != nil {
 		return fmt.Errorf("failed to remove clean snapshot file: %w", err)
 	}
 	if err := s.db.Swap(tmpPath, s.dbConf.FKConstraints, true); err != nil {
@@ -2923,7 +2930,7 @@ func (s *Store) runWALSnapshotting() (closeCh, doneCh chan struct{}) {
 		for {
 			select {
 			case <-ticker.C:
-				sz, err := fileSizeExists(s.walPath)
+				sz, err := fsutil.FileSizeExists(s.walPath)
 				if err != nil {
 					s.logger.Printf("failed to check WAL size: %s", err.Error())
 					continue
@@ -3061,7 +3068,7 @@ func (s *Store) doAutoVac() error {
 		return err
 	}
 	s.logger.Printf("database vacuumed in %s", time.Since(vacStart))
-	stats.Get(autoVacuumDuration).(*expvar.Int).Set(time.Since(vacStart).Milliseconds())
+	recordDuration(autoVacuumDuration, vacStart)
 	stats.Add(numAutoVacuums, 1)
 	s.numAutoVacuums++
 	return s.setKeyTime(lastVacuumTimeKey, time.Now())
@@ -3090,7 +3097,7 @@ func (s *Store) doAutoOptimize() error {
 		return err
 	}
 	s.logger.Printf("database optimized in %s", time.Since(optStart))
-	stats.Get(autoOptimizeDuration).(*expvar.Int).Set(time.Since(optStart).Milliseconds())
+	recordDuration(autoOptimizeDuration, optStart)
 	stats.Add(numAutoOptimizes, 1)
 	s.numAutoOptimizes++
 	return s.setKeyTime(lastOptimizeTimeKey, time.Now())
@@ -3168,91 +3175,6 @@ func prettyVoter(v bool) string {
 		return "voter"
 	}
 	return "non-voter"
-}
-
-// removeFile removes the file at the given path if it exists.
-func removeFile(path string) error {
-	if !pathExists(path) {
-		return nil
-	}
-	return os.Remove(path)
-}
-
-// pathExists returns true if the given path exists.
-func pathExists(p string) bool {
-	if _, err := os.Lstat(p); err != nil && os.IsNotExist(err) {
-		return false
-	}
-	return true
-}
-
-// pathExistsWithData returns true if the given path exists and has data.
-func pathExistsWithData(p string) bool {
-	if !pathExists(p) {
-		return false
-	}
-	if size, err := fileSize(p); err != nil || size == 0 {
-		return false
-	}
-	return true
-}
-
-func dirExists(path string) bool {
-	stat, err := os.Stat(path)
-	return err == nil && stat.IsDir()
-}
-
-func ensureDirExists(path string) error {
-	if dirExists(path) {
-		return nil
-	}
-	return os.MkdirAll(path, 0755)
-}
-
-func fileSize(path string) (int64, error) {
-	stat, err := os.Stat(path)
-	if err != nil {
-		return 0, err
-	}
-	return stat.Size(), nil
-}
-
-// fileSizeExists returns the size of the given file, or 0 if the file does not
-// exist. Any other error is returned.
-func fileSizeExists(path string) (int64, error) {
-	if !pathExists(path) {
-		return 0, nil
-	}
-	return fileSize(path)
-}
-
-// dirSize returns the total size of all files in the given directory
-func dirSize(path string) (int64, error) {
-	var size int64
-	err := filepath.Walk(path, func(_ string, info os.FileInfo, err error) error {
-		if err != nil {
-			// If the file doesn't exist, we can ignore it. Snapshot files might
-			// disappear during walking.
-			if os.IsNotExist(err) {
-				return nil
-			}
-			return err
-		}
-		if !info.IsDir() {
-			size += info.Size()
-		}
-		return err
-	})
-	return size, err
-}
-
-// modTimeSize returns the modification time and size of the file at the given path.
-func modTimeSize(path string) (time.Time, int64, error) {
-	info, err := os.Stat(path)
-	if err != nil {
-		return time.Time{}, 0, err
-	}
-	return info.ModTime(), info.Size(), nil
 }
 
 func resolvableAddress(addr string) (string, error) {

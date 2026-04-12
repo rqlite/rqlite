@@ -21,13 +21,14 @@ import (
 	"github.com/mattn/go-sqlite3"
 	command "github.com/rqlite/rqlite/v10/command/proto"
 	"github.com/rqlite/rqlite/v10/db/humanize"
+	"github.com/rqlite/rqlite/v10/internal/fsutil"
 	"github.com/rqlite/rqlite/v10/internal/rsum"
 	"github.com/rqlite/rqlite/v10/internal/rsync"
 )
 
 const (
 	SQLiteHeaderSize      = 32
-	bkDelay               = 250 * time.Millisecond
+	bkDelay               = 50 * time.Millisecond
 	checkpointBusyTimeout = 250 * time.Millisecond
 	durToOpenLog          = 2 * time.Second
 	OptimizeDefault       = 0xFFFE
@@ -35,34 +36,39 @@ const (
 )
 
 const (
-	openDuration               = "open_duration_ms"
-	numCheckpoints             = "checkpoints"
-	numCheckpointErrors        = "checkpoint_errors"
-	numCheckpointedMoves       = "checkpointed_moves"
-	checkpointDuration         = "checkpoint_duration_ms"
-	createCompactedWALDuration = "create_compacted_wal_duration_ms"
-	preCompactWALSize          = "precompact_wal_size"
-	compactedWALSize           = "compacted_wal_size"
-	numExecutions              = "executions"
-	numExecutionErrors         = "execution_errors"
-	numExecutionsForceQueries  = "executions_force_queries"
-	numQueries                 = "queries"
-	numQueryErrors             = "query_errors"
-	numRequests                = "requests"
-	numETx                     = "execute_transactions"
-	numQTx                     = "query_transactions"
-	numRTx                     = "request_transactions"
-	numBackupStepErrors        = "backup_step_errors"
-	numBackupStepDones         = "backup_step_dones"
-	numBackupSleeps            = "backup_sleeps"
-	numPreupdates              = "preupdates"
-	numPreupdatesErrors        = "preupdates_errors"
-	numPreupdatesCBErrors      = "preupdates_callback_errors"
-	numUpdateHooks             = "update_hooks"
-	numUpdateHooksCBErrors     = "update_hooks_callback_errors"
-	numUpdateHooksErrors       = "update_hooks_errors"
-	numCommitHooks             = "commit_hooks"
-	cdcDroppedEvents           = "dropped_cdc_events"
+	openDuration                 = "open_duration_ms"
+	numCheckpoints               = "checkpoints"
+	numCheckpointErrors          = "checkpoint_errors"
+	numCheckpointedMoves         = "checkpointed_moves"
+	checkpointDuration           = "checkpoint_duration_ms"
+	createCompactedWALDuration   = "create_compacted_wal_duration_ms"
+	preCompactWALSize            = "precompact_wal_size"
+	compactedWALSize             = "compacted_wal_size"
+	numCheckpointTotal           = "checkpoint_total"
+	numCheckpointBusyErrors      = "checkpoint_busy_errors"
+	numCheckpointInvariantErrors = "checkpoint_invariant_errors"
+	numCheckpointPartial         = "checkpoint_partial"
+	numCheckpointWALTruncated    = "checkpoint_wal_truncated"
+	numExecutions                = "executions"
+	numExecutionErrors           = "execution_errors"
+	numExecutionsForceQueries    = "executions_force_queries"
+	numQueries                   = "queries"
+	numQueryErrors               = "query_errors"
+	numRequests                  = "requests"
+	numETx                       = "execute_transactions"
+	numQTx                       = "query_transactions"
+	numRTx                       = "request_transactions"
+	numBackupStepErrors          = "backup_step_errors"
+	numBackupStepDones           = "backup_step_dones"
+	numBackupSleeps              = "backup_sleeps"
+	numPreupdates                = "preupdates"
+	numPreupdatesErrors          = "preupdates_errors"
+	numPreupdatesCBErrors        = "preupdates_callback_errors"
+	numUpdateHooks               = "update_hooks"
+	numUpdateHooksCBErrors       = "update_hooks_callback_errors"
+	numUpdateHooksErrors         = "update_hooks_errors"
+	numCommitHooks               = "commit_hooks"
+	cdcDroppedEvents             = "dropped_cdc_events"
 )
 
 var (
@@ -73,14 +79,16 @@ var (
 	ErrExecuteTimeout = errors.New("execute timeout")
 )
 
-// CheckpointMode is the mode in which a checkpoint runs.
+// CheckpointMode is the mode in which a checkpoint runs. The
+// numbers correspond to the values used in the SQLite PRAGMA
+// wal_checkpoint command simply for clarity and ease of use.
 type CheckpointMode int
 
 const (
 	// CheckpointRestart instructs the checkpoint to run in restart mode.
-	CheckpointRestart CheckpointMode = iota
+	CheckpointRestart CheckpointMode = 2
 	// CheckpointTruncate instructs the checkpoint to run in truncate mode.
-	CheckpointTruncate
+	CheckpointTruncate CheckpointMode = 3
 )
 
 var (
@@ -102,6 +110,10 @@ func init() {
 	ResetStats()
 }
 
+func recordDuration(stat string, startT time.Time) {
+	stats.Get(stat).(*expvar.Int).Set(time.Since(startT).Milliseconds())
+}
+
 // ResetStats resets the expvar stats for this module. Mostly for test purposes.
 func ResetStats() {
 	stats.Init()
@@ -113,6 +125,11 @@ func ResetStats() {
 	stats.Add(createCompactedWALDuration, 0)
 	stats.Add(preCompactWALSize, 0)
 	stats.Add(compactedWALSize, 0)
+	stats.Add(numCheckpointTotal, 0)
+	stats.Add(numCheckpointBusyErrors, 0)
+	stats.Add(numCheckpointInvariantErrors, 0)
+	stats.Add(numCheckpointPartial, 0)
+	stats.Add(numCheckpointWALTruncated, 0)
 	stats.Add(numExecutions, 0)
 	stats.Add(numExecutionErrors, 0)
 	stats.Add(numExecutionsForceQueries, 0)
@@ -204,7 +221,7 @@ func OpenWithDriver(drv *Driver, dbPath string, fkEnabled, wal bool) (retDB *DB,
 		if dur := time.Since(startTime); dur > durToOpenLog {
 			logger.Printf("opened database %s in %s", dbPath, dur)
 		}
-		stats.Get(openDuration).(*expvar.Int).Set(time.Since(startTime).Milliseconds())
+		recordDuration(openDuration, startTime)
 	}()
 
 	/////////////////////////////////////////////////////////////////////////
@@ -223,7 +240,7 @@ func OpenWithDriver(drv *Driver, dbPath string, fkEnabled, wal bool) (retDB *DB,
 	if err := rwDB.Ping(); err != nil {
 		return nil, fmt.Errorf("failed to ping on-disk database: %s", err.Error())
 	}
-	if wal && !fileExists(dbPath+"-wal") {
+	if wal && !fsutil.FileExists(dbPath+"-wal") {
 		// Force creation of the WAL files so any external read-only connections
 		// can read the database. See https://www.sqlite.org/draft/wal.html, section 5.
 		if _, err := rwDB.Exec("BEGIN IMMEDIATE"); err != nil {
@@ -500,7 +517,7 @@ func (db *DB) LastModified() (time.Time, error) {
 // DBLastModified returns the last modified time of the main database
 // file.
 func (db *DB) DBLastModified() (time.Time, error) {
-	return lastModified(db.path)
+	return fsutil.LastModified(db.path)
 }
 
 // DBSum returns the MD5 checksum of the database file.
@@ -510,7 +527,7 @@ func (db *DB) DBSum() (string, error) {
 
 // WALLastModified returns the last modified time of the WAL file.
 func (db *DB) WALLastModified() (time.Time, error) {
-	return lastModified(db.walPath)
+	return fsutil.LastModified(db.walPath)
 }
 
 // WALSum returns the MD5 checksum of the WAL file.
@@ -604,7 +621,7 @@ func (db *DB) Size() (int64, error) {
 // FileSize returns the size of the SQLite file on disk. If running in
 // on-memory mode, this function returns 0.
 func (db *DB) FileSize() (int64, error) {
-	return fileSize(db.path)
+	return fsutil.FileSize(db.path)
 }
 
 // WALSize returns the size of the SQLite WAL file on disk. If running in
@@ -613,7 +630,7 @@ func (db *DB) WALSize() (int64, error) {
 	if !db.wal {
 		return 0, nil
 	}
-	sz, err := fileSize(db.walPath)
+	sz, err := fsutil.FileSize(db.walPath)
 	if err == nil || os.IsNotExist(err) {
 		return sz, nil
 	}
@@ -680,7 +697,7 @@ func (db *DB) CheckpointTruncateWithTimeout(dur time.Duration) (err error) {
 		if err != nil {
 			stats.Add(numCheckpointErrors, 1)
 		} else {
-			stats.Get(checkpointDuration).(*expvar.Int).Set(time.Since(start).Milliseconds())
+			recordDuration(checkpointDuration, start)
 			stats.Add(numCheckpoints, 1)
 		}
 	}()
@@ -735,7 +752,7 @@ func (db *DB) CheckpointWithTimeout(mode CheckpointMode, dur time.Duration) (met
 		if err != nil {
 			stats.Add(numCheckpointErrors, 1)
 		} else {
-			stats.Get(checkpointDuration).(*expvar.Int).Set(time.Since(start).Milliseconds())
+			recordDuration(checkpointDuration, start)
 			stats.Add(numCheckpoints, 1)
 		}
 	}()
@@ -2085,30 +2102,6 @@ func isTextType(t string) bool {
 
 func containsEmptyType(slice []string) bool {
 	return slices.Contains(slice, "")
-}
-
-func fileExists(path string) bool {
-	_, err := os.Stat(path)
-	return err == nil
-}
-
-func fileSize(path string) (int64, error) {
-	stat, err := os.Stat(path)
-	if err != nil {
-		return 0, err
-	}
-	if stat.Mode().IsDir() {
-		return 0, fmt.Errorf("not a file")
-	}
-	return stat.Size(), nil
-}
-
-func lastModified(path string) (time.Time, error) {
-	info, err := os.Stat(path)
-	if err != nil {
-		return time.Time{}, err
-	}
-	return info.ModTime(), nil
 }
 
 func rewriteContextTimeout(err, retErr error) error {

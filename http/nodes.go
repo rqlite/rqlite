@@ -9,6 +9,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/rqlite/rqlite/v10/command/proto"
 	"github.com/rqlite/rqlite/v10/store"
 )
 
@@ -36,7 +37,7 @@ func NewNodeFromServer(s *store.Server) *Node {
 	return &Node{
 		ID:    s.ID,
 		Addr:  s.Addr,
-		Voter: s.Suffrage == "Voter",
+		Voter: s.Suffrage == proto.Suffrage_VOTER,
 	}
 }
 

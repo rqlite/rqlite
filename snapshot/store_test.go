@@ -13,6 +13,7 @@ import (
 
 	"github.com/hashicorp/raft"
 	"github.com/rqlite/rqlite/v10/db"
+	"github.com/rqlite/rqlite/v10/internal/fsutil"
 	"github.com/rqlite/rqlite/v10/snapshot/plan"
 )
 
@@ -97,7 +98,7 @@ func Test_StoreCreateCancel(t *testing.T) {
 	tmpSnapDir := dir + "/" + sink.ID() + tmpSuffix
 
 	// Should be a tmp directory with the name of the sink ID
-	if !pathExists(tmpSnapDir) {
+	if !fsutil.PathExists(tmpSnapDir) {
 		t.Fatalf("Expected directory with name %s, but it does not exist", sink.ID())
 	}
 
@@ -114,7 +115,7 @@ func Test_StoreCreateCancel(t *testing.T) {
 	}
 
 	// Should not be a tmp directory with the name of the sink ID
-	if pathExists(tmpSnapDir) {
+	if fsutil.PathExists(tmpSnapDir) {
 		t.Fatalf("Expected directory with name %s to not exist, but it does", sink.ID())
 	}
 
@@ -426,7 +427,7 @@ func Test_Store_EndToEndCycle(t *testing.T) {
 	if exp, got := 0, len(walPaths); exp != got {
 		t.Fatalf("Expected %d WAL files, got %d", exp, got)
 	}
-	if !filesIdentical(dbPath, "testdata/db-and-wals/backup.db") {
+	if !fsutil.FilesIdentical(dbPath, "testdata/db-and-wals/backup.db") {
 		t.Fatalf("Database file in snapshot does not match source")
 	}
 
@@ -831,7 +832,7 @@ func Test_Store_Reap(t *testing.T) {
 	}
 
 	// dbPath should be a byte-for-byte copy of full2.db
-	if !filesIdentical(dbPath, "testdata/db-and-wals/full2.db") {
+	if !fsutil.FilesIdentical(dbPath, "testdata/db-and-wals/full2.db") {
 		t.Fatalf("Database file in snapshot does not match source")
 	}
 
@@ -876,7 +877,7 @@ func Test_Store_Reap(t *testing.T) {
 	}
 
 	// dbPath should be a byte-for-byte copy of backup.db
-	if !filesIdentical(dbPath, "testdata/db-and-wals/backup.db") {
+	if !fsutil.FilesIdentical(dbPath, "testdata/db-and-wals/backup.db") {
 		t.Fatalf("Database file in snapshot does not match source")
 	}
 
@@ -1034,7 +1035,7 @@ func Test_Store_Check_RemovesTmpDirs(t *testing.T) {
 	defer store2.Close()
 
 	// The .tmp directory should be gone.
-	if pathExists(tmpDir) {
+	if fsutil.PathExists(tmpDir) {
 		t.Fatalf("Expected .tmp directory to be removed, but it still exists")
 	}
 
@@ -1129,7 +1130,7 @@ func Test_Store_Check_ResumesReapPlan(t *testing.T) {
 	defer store3.Close()
 
 	// The plan file should be gone.
-	if fileExists(planPath) {
+	if fsutil.FileExists(planPath) {
 		t.Fatalf("Expected REAP_PLAN to be removed after check")
 	}
 
@@ -1276,11 +1277,6 @@ func makeTestConfiguration(i, a string) raft.Configuration {
 			},
 		},
 	}
-}
-
-func pathExists(path string) bool {
-	_, err := os.Stat(path)
-	return err == nil
 }
 
 func makeRaftMeta(id string, index, term, cfgIndex uint64) *raft.SnapshotMeta {

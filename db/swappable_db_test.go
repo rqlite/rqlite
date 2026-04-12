@@ -3,6 +3,8 @@ package db
 import (
 	"os"
 	"testing"
+
+	"github.com/rqlite/rqlite/v10/internal/fsutil"
 )
 
 // Test_OpenSwappable_Success tests that OpenSwappable correctly opens a database and returns
@@ -24,7 +26,7 @@ func Test_OpenSwappable_Success(t *testing.T) {
 	}
 
 	// Confirm a file was created at the specified path
-	if !fileExists(path) {
+	if !fsutil.FileExists(path) {
 		t.Fatalf("database file not created at %s", path)
 	}
 

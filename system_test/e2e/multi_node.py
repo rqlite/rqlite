@@ -12,7 +12,7 @@ import time
 import sqlite3
 import unittest
 
-from certs import x509cert, x509key, caCert, caSignedCertExampleDotCom, caSignedKeyExampleDotCom
+from certs import x509cert, x509key, caSignedCertExampleDotCom, caSignedKeyExampleDotCom
 from helpers import Node, Cluster, d_, write_random_file, deprovision_node, is_sequence_number, TIMEOUT
 
 RQLITED_PATH = os.environ['RQLITED_PATH']
@@ -173,7 +173,7 @@ class TestEndToEndEncryptedNode(TestEndToEnd):
     self.cluster = Cluster([n0, n1, n2])
 
 class TestEndToEndEncryptedNode_ServerName(unittest.TestCase):
-  caCertFile = write_random_file(caCert)
+  caCertFile = write_random_file(x509cert)
   caSignedKey = write_random_file(caSignedKeyExampleDotCom)
   caSignedCert = write_random_file(caSignedCertExampleDotCom)
 
@@ -398,6 +398,58 @@ class TestRequestForwarding(unittest.TestCase):
       # Data should be ready immediately, since we waited.
       j = l.query('SELECT COUNT(*) FROM foo')
       self.assertEqual(j, d_("{'results': [{'columns': ['COUNT(*)'], 'types': ['integer'], 'values': [[2002]]}]}"))
+
+class TestEndToEndConnectionPools(unittest.TestCase):
+  '''Tests that stale connection pools don't get in the way of inter-node requests'''
+
+  def setUp(self):
+    n0 = Node(RQLITED_PATH, '0')
+    n0.start()
+    n0.wait_for_leader()
+
+    n1 = Node(RQLITED_PATH, '1')
+    n1.start(join=n0.RaftAddr())
+    n1.wait_for_leader()
+
+    n2 = Node(RQLITED_PATH, '2')
+    n2.start(join=n0.RaftAddr())
+    n2.wait_for_leader()
+
+    self.cluster = Cluster([n0, n1, n2])
+
+  def tearDown(self):
+    self.cluster.deprovision()
+
+  def test(self):
+    # Route a dummy query through each follower to populate their connection pools.
+    for f in self.cluster.followers():
+      j = f.query('SELECT 1', level="strong")
+      self.assertEqual(j, d_("{'results': [{'values': [[1]], 'types': ['integer'], 'columns': ['1']}]}"))
+
+    # Stop the leader and then wait for a new leader. Ensure remaining follower
+    # can still query it through the leader.
+    l0 = self.cluster.wait_for_leader()
+    l0.stop()
+    l1 =  self.cluster.wait_for_leader(node_exc=l0)
+    for f in self.cluster.followers():
+      j = f.query('SELECT 1', level="strong")
+      self.assertEqual(j, d_("{'results': [{'values': [[1]], 'types': ['integer'], 'columns': ['1']}]}"))
+
+    # Restart the node that was the leader.
+    l0.start()
+    l0.wait_for_leader()
+
+    # Transfer leadership back to the original leader.
+    l1.stepdown(id=l0.node_id)
+    n = self.cluster.wait_for_leader(node_exc=l1)
+    self.assertEqual(n.node_id, l0.node_id)
+
+    # Now, the followers have connection pools, but the connections within are stale.
+    # Ensure the followers detect this and use a fresh connection to the leader.
+    for f in self.cluster.followers():
+      j = f.query('SELECT 1', level="strong")
+      self.assertEqual(j, d_("{'results': [{'values': [[1]], 'types': ['integer'], 'columns': ['1']}]}"))
+      self.assertEqual(f.expvar()['cluster']['num_client_force_new_conn'], 1)
 
 class TestEndToEndNonVoter(unittest.TestCase):
   def setUp(self):

@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/rqlite/rqlite/v10/db"
+	"github.com/rqlite/rqlite/v10/internal/fsutil"
 	"github.com/rqlite/rqlite/v10/internal/rsum"
 )
 
@@ -115,7 +116,7 @@ func (s *StagingDir) Validate() error {
 // MoveWALFilesTo renames each .wal + .crc32 pair from the staging
 // directory into dst. dst must be a directory and must exist.
 func (s *StagingDir) MoveWALFilesTo(dst string) error {
-	if !dirExists(dst) {
+	if !fsutil.DirExists(dst) {
 		return fmt.Errorf("destination %s does not exist or is not a directory", dst)
 	}
 	walFiles, err := s.WALFiles()
@@ -138,7 +139,7 @@ func (s *StagingDir) MoveWALFilesTo(dst string) error {
 
 // Sync syncs the staging directory file descriptor.
 func (s *StagingDir) Sync() error {
-	return syncDirMaybe(s.dir)
+	return fsutil.SyncDirMaybe(s.dir)
 }
 
 func (s *StagingDir) nextWALName() string {
@@ -176,7 +177,7 @@ func (w *WALWriter) Close() error {
 		return fmt.Errorf("failed to close WAL file: %w", err)
 	}
 	w.closed = true
-	return syncDirMaybe(w.dir)
+	return fsutil.SyncDirMaybe(w.dir)
 }
 
 // Cancel removes the partial WAL file from the staging directory. It is

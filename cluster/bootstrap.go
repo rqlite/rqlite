@@ -44,45 +44,6 @@ const (
 	BootCanceled
 )
 
-// Suffrage is the type of suffrage -- voting or non-voting -- a node has.
-type Suffrage int
-
-const (
-	SuffrageUnknown Suffrage = iota
-	Voter
-	NonVoter
-)
-
-// VoterSuffrage returns a Suffrage based on the given boolean.
-func VoterSuffrage(b bool) Suffrage {
-	if b {
-		return Voter
-	}
-	return NonVoter
-}
-
-// String returns a string representation of the Suffrage.
-func (s Suffrage) String() string {
-	switch s {
-	case Voter:
-		return "voter"
-	case NonVoter:
-		return "non-voter"
-	default:
-		panic("unknown suffrage")
-	}
-}
-
-// IsVoter returns whether the Suffrage is a Voter.
-func (s Suffrage) IsVoter() bool {
-	return s == Voter
-}
-
-// IsNonVoter returns whether the Suffrage is a NonVoter.
-func (s Suffrage) IsNonVoter() bool {
-	return s == NonVoter
-}
-
 const (
 	requestTimeout    = 5 * time.Second
 	numJoinAttempts   = 1
@@ -100,8 +61,10 @@ func (b BootStatus) String() string {
 		return "done"
 	case BootTimeout:
 		return "timeout"
+	case BootCanceled:
+		return "canceled"
 	default:
-		panic("unknown boot status")
+		return "unknown"
 	}
 }
 
@@ -161,7 +124,7 @@ func (b *Bootstrapper) SetCredentials(creds *proto.Credentials) {
 //
 // id and raftAddr are those of the node calling Boot. suf is whether this node
 // is a Voter or NonVoter.
-func (b *Bootstrapper) Boot(ctx context.Context, id, raftAddr string, suf Suffrage, done func() bool, timeout time.Duration) error {
+func (b *Bootstrapper) Boot(ctx context.Context, id, raftAddr string, suf command.Suffrage, done func() bool, timeout time.Duration) error {
 	timeoutT := time.NewTimer(timeout)
 	defer timeoutT.Stop()
 	tickerT := time.NewTimer(random.Jitter(time.Millisecond)) // Check fast, just once at the start.
@@ -209,7 +172,7 @@ func (b *Bootstrapper) Boot(ctx context.Context, id, raftAddr string, suf Suffra
 				return nil
 			}
 
-			if suf.IsVoter() {
+			if suf == command.Suffrage_VOTER {
 				// This is where we have to be careful. This node failed to join with any node
 				// in the targets list. This could be because none of the nodes are contactable,
 				// or none of the nodes are in a functioning cluster with a leader. That means that

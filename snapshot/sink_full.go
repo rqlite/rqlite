@@ -2,7 +2,6 @@ package snapshot
 
 import (
 	"errors"
-	"expvar"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -53,10 +52,16 @@ type FullSink struct {
 	walIndex int
 
 	f         *os.File
+	crcW      *rsum.CRC32Writer
 	remaining uint64
 
 	dbFile   string
 	walFiles []string
+
+	// CRC32 sums computed inline as bytes are written, captured when each
+	// artifact is closed. Verified against the header in Close().
+	dbCRC   uint32
+	walCRCs []uint32
 
 	opened bool
 }
@@ -73,6 +78,7 @@ func NewFullSink(dir string, hdr *proto.FullSnapshot) *FullSink {
 		walPath := filepath.Join(dir, fmt.Sprintf("data-%08d.wal", i))
 		s.walFiles = append(s.walFiles, walPath)
 	}
+	s.walCRCs = make([]uint32, len(hdr.WalHeaders))
 	return s
 }
 
@@ -133,7 +139,7 @@ func (s *FullSink) Write(p []byte) (int, error) {
 
 		var n int
 		var err error
-		n, err = s.f.Write(chunk)
+		n, err = s.crcW.Write(chunk)
 		total += n
 		s.remaining -= uint64(n)
 
@@ -198,23 +204,15 @@ func (s *FullSink) Close() error {
 		return err
 	}
 
-	// Verify the CRC32 of the received DB file against the header.
+	// CRC32 sums were computed inline as bytes were written through the
+	// sink, so verification just compares the captured sums to the header
+	// — no second pass over the on-disk files is required.
 	start := time.Now()
-	dbCRC, _, err := rsum.CRC32WithTiming(s.dbFile)
-	if err != nil {
-		return fmt.Errorf("computing CRC32 of DB file: %w", err)
+	if s.dbCRC != s.header.DbHeader.Crc32 {
+		return fmt.Errorf("CRC32 mismatch for DB file: got %08x, expected %08x", s.dbCRC, s.header.DbHeader.Crc32)
 	}
-	if dbCRC != s.header.DbHeader.Crc32 {
-		return fmt.Errorf("CRC32 mismatch for DB file: got %08x, expected %08x", dbCRC, s.header.DbHeader.Crc32)
-	}
-
-	// Verify the CRC32 of each received WAL file against the header,
-	// and write a CRC32 sidecar for each verified WAL.
 	for i, walPath := range s.walFiles {
-		walCRC, err := rsum.CRC32(walPath)
-		if err != nil {
-			return fmt.Errorf("computing CRC32 of WAL file %d: %w", i, err)
-		}
+		walCRC := s.walCRCs[i]
 		if walCRC != s.header.WalHeaders[i].Crc32 {
 			return fmt.Errorf("CRC32 mismatch for WAL file %d: got %08x, expected %08x", i, walCRC, s.header.WalHeaders[i].Crc32)
 		}
@@ -222,12 +220,10 @@ func (s *FullSink) Close() error {
 			return fmt.Errorf("writing CRC32 sidecar for WAL file %d: %w", i, err)
 		}
 	}
-
-	// Write the CRC32 sidecar for the DB file.
-	if err := rsum.WriteCRC32SumFile(s.dbFile+crcSuffix, dbCRC, rsum.Sync); err != nil {
+	if err := rsum.WriteCRC32SumFile(s.dbFile+crcSuffix, s.dbCRC, rsum.Sync); err != nil {
 		return fmt.Errorf("writing CRC32 sidecar for DB file: %w", err)
 	}
-	stats.Get(snapshotFullCRC32CreateDuration).(*expvar.Int).Set(int64(time.Since(start).Milliseconds()))
+	recordDuration(sinkFullCRC32Dur, start)
 	return nil
 }
 
@@ -251,6 +247,7 @@ func (s *FullSink) openCurrent() error {
 			return err
 		}
 		s.f = f
+		s.crcW = rsum.NewCRC32Writer(f)
 		s.remaining = s.header.DbHeader.SizeBytes
 		return nil
 
@@ -264,6 +261,7 @@ func (s *FullSink) openCurrent() error {
 			return err
 		}
 		s.f = f
+		s.crcW = rsum.NewCRC32Writer(f)
 		s.remaining = s.header.WalHeaders[s.walIndex].SizeBytes
 		return nil
 
@@ -276,6 +274,17 @@ func (s *FullSink) openCurrent() error {
 }
 
 func (s *FullSink) advance() error {
+	// Capture the running CRC32 of the artifact we're about to close so we
+	// can verify it against the header without re-reading from disk.
+	if s.crcW != nil {
+		switch s.phase {
+		case installPhaseDB:
+			s.dbCRC = s.crcW.Sum32()
+		case installPhaseWAL:
+			s.walCRCs[s.walIndex] = s.crcW.Sum32()
+		}
+	}
+
 	// Close current artifact if open.
 	if err := s.closeFile(); err != nil {
 		return err
@@ -320,5 +329,6 @@ func (s *FullSink) closeFile() error {
 		return err
 	}
 	s.f = nil
+	s.crcW = nil
 	return nil
 }

@@ -26,6 +26,7 @@ import (
 	"github.com/rqlite/rqlite/v10/cluster"
 	"github.com/rqlite/rqlite/v10/cluster/disco"
 	"github.com/rqlite/rqlite/v10/cmd"
+	"github.com/rqlite/rqlite/v10/command"
 	"github.com/rqlite/rqlite/v10/db"
 	"github.com/rqlite/rqlite/v10/db/extensions"
 	httpd "github.com/rqlite/rqlite/v10/http"
@@ -557,7 +558,7 @@ func createCluster(ctx context.Context, cfg *Config, hasPeers bool, client *clus
 		leader, _ := str.LeaderAddr()
 		return leader != ""
 	}
-	clusterSuf := cluster.VoterSuffrage(!cfg.RaftNonVoter)
+	clusterSuf := command.SuffrageNonVoterFromBool(cfg.RaftNonVoter)
 
 	joiner := cluster.NewJoiner(client, cfg.JoinAttempts, cfg.JoinInterval)
 	joiner.SetCredentials(cluster.CredentialsFor(credStr, cfg.JoinAs))

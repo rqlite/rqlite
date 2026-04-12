@@ -6,6 +6,7 @@ import (
 	"io"
 	"net"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -173,7 +174,7 @@ func Test_ClientQuery(t *testing.T) {
 
 	c := NewClient(&simpleDialer{}, 0)
 	_, _, err := c.Query(context.Background(), queryRequestFromString("SELECT * FROM foo"),
-		srv.Addr(), nil, time.Second)
+		srv.Addr(), nil, time.Second, noRetries)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -336,6 +337,189 @@ func Test_ClientJoinNode(t *testing.T) {
 	err := c.Join(context.Background(), req, srv.Addr(), nil, time.Second)
 	if err != nil {
 		t.Fatal(err)
+	}
+}
+
+func Test_ClientRetry_SuccessFirstAttempt(t *testing.T) {
+	srv := servicetest.NewService()
+	srv.Handler = func(conn net.Conn) {
+		c := readCommand(conn)
+		if c == nil {
+			return
+		}
+		p, err := pb.Marshal(&proto.CommandQueryResponse{})
+		if err != nil {
+			conn.Close()
+			return
+		}
+		writeBytesWithLength(conn, p)
+	}
+	srv.Start()
+	defer srv.Close()
+
+	c := NewClient(&simpleDialer{}, 0)
+	_, _, err := c.Query(context.Background(), queryRequestFromString("SELECT * FROM foo"),
+		srv.Addr(), nil, time.Second, 0)
+	if err != nil {
+		t.Fatalf("expected success on first attempt, got: %s", err)
+	}
+	if c.numForcedNewConns.Load() != 0 {
+		t.Fatalf("expected no forced new connections, got %d", c.numForcedNewConns.Load())
+	}
+}
+
+func Test_ClientRetry_FailAllPoolThenFreshSucceeds(t *testing.T) {
+	// Simulate a node that restarted: the first connection (from pool) fails,
+	// but a fresh connection succeeds.
+	var connCount int
+	var mu sync.Mutex
+	srv := servicetest.NewService()
+	srv.Handler = func(conn net.Conn) {
+		mu.Lock()
+		connCount++
+		n := connCount
+		mu.Unlock()
+
+		c := readCommand(conn)
+		if c == nil {
+			return
+		}
+
+		// First connection fails (simulating stale pool connection reading response),
+		// second succeeds.
+		if n == 1 {
+			conn.Close()
+			return
+		}
+		p, err := pb.Marshal(&proto.CommandQueryResponse{})
+		if err != nil {
+			conn.Close()
+			return
+		}
+		writeBytesWithLength(conn, p)
+	}
+	srv.Start()
+	defer srv.Close()
+
+	c := NewClient(&simpleDialer{}, 0)
+	_, _, err := c.Query(context.Background(), queryRequestFromString("SELECT * FROM foo"),
+		srv.Addr(), nil, time.Second, 0)
+	if err != nil {
+		t.Fatalf("expected fresh connection to succeed, got: %s", err)
+	}
+	if exp, got := int32(1), c.numForcedNewConns.Load(); exp != got {
+		t.Fatalf("expected %d forced new connection, got %d", exp, got)
+	}
+}
+
+func Test_ClientRetry_AllAttemptsFail(t *testing.T) {
+	// Server immediately closes every connection — both pool and fresh should fail.
+	srv := servicetest.NewService()
+	srv.Handler = func(conn net.Conn) {
+		readCommand(conn)
+		conn.Close()
+	}
+	srv.Start()
+	defer srv.Close()
+
+	c := NewClient(&simpleDialer{}, 0)
+	_, _, err := c.Query(context.Background(), queryRequestFromString("SELECT * FROM foo"),
+		srv.Addr(), nil, time.Second, 0)
+	if err == nil {
+		t.Fatal("expected error when all attempts fail")
+	}
+	if exp, got := int32(1), c.numForcedNewConns.Load(); exp != got {
+		t.Fatalf("expected %d forced new connection, got %d", exp, got)
+	}
+}
+
+func Test_ClientRetry_SuccessMidPool(t *testing.T) {
+	// With maxRetries=3, fail the first 2 pool attempts, succeed on the 3rd.
+	// The fresh dial should never be needed.
+	var connCount int
+	var mu sync.Mutex
+	srv := servicetest.NewService()
+	srv.Handler = func(conn net.Conn) {
+		mu.Lock()
+		connCount++
+		n := connCount
+		mu.Unlock()
+
+		c := readCommand(conn)
+		if c == nil {
+			return
+		}
+		if n <= 2 {
+			conn.Close()
+			return
+		}
+		p, err := pb.Marshal(&proto.CommandQueryResponse{})
+		if err != nil {
+			conn.Close()
+			return
+		}
+		writeBytesWithLength(conn, p)
+	}
+	srv.Start()
+	defer srv.Close()
+
+	c := NewClient(&simpleDialer{}, 0)
+	_, _, err := c.Query(context.Background(), queryRequestFromString("SELECT * FROM foo"),
+		srv.Addr(), nil, time.Second, 3)
+	if err != nil {
+		t.Fatalf("expected success on 3rd pool attempt, got: %s", err)
+	}
+	if exp, got := int32(0), c.numForcedNewConns.Load(); exp != got {
+		t.Fatalf("expected %d forced new connection, got %d", exp, got)
+	}
+}
+
+func Test_ClientRetry_ZeroMaxRetries_NoInfiniteLoop(t *testing.T) {
+	// Regression test: with maxRetries=0, a failing server must not cause
+	// an infinite retry loop. The function must return an error promptly.
+	srv := servicetest.NewService()
+	srv.Handler = func(conn net.Conn) {
+		readCommand(conn)
+		conn.Close()
+	}
+	srv.Start()
+	defer srv.Close()
+
+	c := NewClient(&simpleDialer{}, 0)
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	_, _, err := c.Query(ctx, queryRequestFromString("SELECT * FROM foo"),
+		srv.Addr(), nil, time.Second, 0)
+	if err == nil {
+		t.Fatal("expected error with maxRetries=0 and failing server")
+	}
+	if ctx.Err() != nil {
+		t.Fatal("retry loop did not terminate before context timeout — possible infinite loop")
+	}
+	if exp, got := int32(1), c.numForcedNewConns.Load(); exp != got {
+		t.Fatalf("expected %d forced new connection, got %d", exp, got)
+	}
+}
+
+func Test_ClientRetry_ContextCanceled(t *testing.T) {
+	// Server is slow, context is canceled before retry completes.
+	srv := servicetest.NewService()
+	srv.Handler = func(conn net.Conn) {
+		readCommand(conn)
+		time.Sleep(5 * time.Second)
+	}
+	srv.Start()
+	defer srv.Close()
+
+	c := NewClient(&simpleDialer{}, 0)
+	ctx, cancel := context.WithTimeout(context.Background(), 500*time.Millisecond)
+	defer cancel()
+
+	_, _, err := c.Query(ctx, queryRequestFromString("SELECT * FROM foo"),
+		srv.Addr(), nil, time.Second, 3)
+	if err == nil {
+		t.Fatal("expected error when context is canceled")
 	}
 }
 

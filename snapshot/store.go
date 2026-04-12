@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/hashicorp/raft"
+	"github.com/rqlite/rqlite/v10/internal/fsutil"
 	"github.com/rqlite/rqlite/v10/internal/rsync"
 	"github.com/rqlite/rqlite/v10/snapshot/plan"
 )
@@ -25,20 +26,28 @@ const (
 	fullNeededFile = "FULL_NEEDED"
 	reapPlanFile   = "REAP_PLAN"
 
-	defaultReapThreshold = 8
+	defaultReapThreshold = 4
 )
 
 const (
-	persistSize                     = "latest_persist_size"
-	persistDuration                 = "latest_persist_duration"
-	autoReapDuration                = "latest_autoreap_duration"
-	upgradeOk                       = "upgrade_ok"
-	upgradeFail                     = "upgrade_fail"
-	snapshotsReaped                 = "snapshots_reaped"
-	snapshotsReapedFail             = "snapshots_reaped_failed"
-	snapshotCreateMRSWFail          = "snapshot_create_mrsw_fail"
-	snapshotOpenMRSWFail            = "snapshot_open_mrsw_fail"
-	snapshotFullCRC32CreateDuration = "snapshot_full_crc32_create_duration"
+	persistSize     = "persist_size"
+	persistDuration = "persist_duration_ms"
+
+	sinkFullTotal        = "sink_full_total"
+	sinkIncrementalTotal = "sink_incremental_total"
+	sinkErrors           = "sink_errors"
+	sinkFullCRC32Dur     = "sink_full_crc32_duration_ms"
+
+	autoReapDuration    = "auto_reap_duration_ms"
+	reapExecuteDuration = "reap_execute_duration_ms"
+	reapTotal           = "reap_total"
+	reapErrors          = "reap_errors"
+	reapSnapshots       = "reap_snapshots"
+	reapWALs            = "reap_wals"
+	reapPlanRecovered   = "reap_plan_recovered"
+
+	upgradeOk   = "upgrade_ok"
+	upgradeFail = "upgrade_fail"
 )
 
 var (
@@ -54,19 +63,28 @@ func init() {
 	ResetStats()
 }
 
+func recordDuration(stat string, startT time.Time) {
+	stats.Get(stat).(*expvar.Int).Set(time.Since(startT).Milliseconds())
+}
+
 // ResetStats resets the expvar stats for this module. Mostly for test purposes.
 func ResetStats() {
 	stats.Init()
 	stats.Add(persistSize, 0)
 	stats.Add(persistDuration, 0)
+	stats.Add(sinkFullTotal, 0)
+	stats.Add(sinkIncrementalTotal, 0)
+	stats.Add(sinkErrors, 0)
+	stats.Add(sinkFullCRC32Dur, 0)
 	stats.Add(autoReapDuration, 0)
+	stats.Add(reapExecuteDuration, 0)
+	stats.Add(reapTotal, 0)
+	stats.Add(reapErrors, 0)
+	stats.Add(reapSnapshots, 0)
+	stats.Add(reapWALs, 0)
+	stats.Add(reapPlanRecovered, 0)
 	stats.Add(upgradeOk, 0)
 	stats.Add(upgradeFail, 0)
-	stats.Add(snapshotsReaped, 0)
-	stats.Add(snapshotsReapedFail, 0)
-	stats.Add(snapshotCreateMRSWFail, 0)
-	stats.Add(snapshotOpenMRSWFail, 0)
-	stats.Add(snapshotFullCRC32CreateDuration, 0)
 }
 
 // LockingStreamer is a snapshot which holds the Snapshot Store MRSW read-lok
@@ -145,7 +163,7 @@ func NewStore(dir string) (*Store, error) {
 	}
 	str.logger.Printf("store initialized using %s", dir)
 
-	emp, err := dirIsEmpty(dir)
+	emp, err := fsutil.DirIsEmpty(dir)
 	if err != nil {
 		return nil, err
 	}
@@ -369,6 +387,9 @@ func (s *Store) reap() (int, int, error) {
 	if err != nil {
 		return n, c, err
 	}
+	stats.Add(reapTotal, 1)
+	stats.Get(reapSnapshots).(*expvar.Int).Set(int64(n))
+	stats.Get(reapWALs).(*expvar.Int).Set(int64(c))
 	s.observers.notify(ReapObservation{
 		SnapshotsReaped: n,
 		WALsReaped:      c,
@@ -381,8 +402,9 @@ func (s *Store) reap() (int, int, error) {
 func (s *Store) reapInternal() (int, int, error) {
 	// If a reap plan file exists, that means a previous reap must have encountered an error.
 	// Let's make sure it is completed before we start a new reap.
-	if fileExists(s.reapPlanPath) {
+	if fsutil.FileExists(s.reapPlanPath) {
 		s.logger.Printf("found interrupted reap plan at %s, resuming", s.reapPlanPath)
+		stats.Add(reapPlanRecovered, 1)
 		p, err := plan.ReadFromFile(s.reapPlanPath)
 		if err != nil {
 			return 0, 0, fmt.Errorf("reading reap plan: %w", err)
@@ -494,12 +516,15 @@ func (s *Store) reapInternal() (int, int, error) {
 
 // executeReapPlan executes a reap plan and cleans up.
 func (s *Store) executeReapPlan(p *plan.Plan, planPath string) (int, int, error) {
+	startT := time.Now()
+	defer recordDuration(reapExecuteDuration, startT)
+
 	executor := plan.NewExecutor()
 	if err := p.Execute(executor); err != nil {
 		return 0, 0, fmt.Errorf("executing reap plan: %w", err)
 	}
 
-	if err := syncDirMaybe(s.dir); err != nil {
+	if err := fsutil.SyncDirMaybe(s.dir); err != nil {
 		return 0, 0, fmt.Errorf("syncing store dir: %w", err)
 	}
 
@@ -518,7 +543,7 @@ func (s *Store) signalReap() {
 
 // DueNext returns the type of snapshot due next.
 func (s *Store) DueNext() (Type, error) {
-	if fileExists(s.fullNeededPath) {
+	if fsutil.FileExists(s.fullNeededPath) {
 		return Full, nil
 	}
 
@@ -545,15 +570,15 @@ func (s *Store) SetDueNext(t Type) error {
 		if err := f.Close(); err != nil {
 			return err
 		}
-		return syncDirMaybe(s.dir)
+		return fsutil.SyncDirMaybe(s.dir)
 	case Incremental:
-		if !fileExists(s.fullNeededPath) {
+		if !fsutil.FileExists(s.fullNeededPath) {
 			return nil
 		}
 		if err := os.Remove(s.fullNeededPath); err != nil {
 			return err
 		}
-		return syncDirMaybe(s.dir)
+		return fsutil.SyncDirMaybe(s.dir)
 	default:
 		return fmt.Errorf("unknown snapshot type: %s", t)
 	}
@@ -568,12 +593,20 @@ func (s *Store) Stats() (map[string]any, error) {
 	}
 	defer s.mrsw.EndRead()
 
+	dirSz, err := fsutil.DirSize(s.dir)
+	if err != nil {
+		// If we can't compute the directory size, we can still return other stats,
+		// so we ignore the error and just report a size of 0.
+		dirSz = 0
+	}
+
 	snapshots, err := s.getSnapshots()
 	if err != nil {
 		return nil, err
 	}
 	return map[string]any{
 		"dir":       s.dir,
+		"dir_size":  dirSz,
 		"snapshots": snapshots.IDs(),
 	}, nil
 }
@@ -615,25 +648,21 @@ func (s *Store) reapLoop() {
 			continue
 		}
 
-		startTime := time.Now()
+		startT := time.Now()
 		n, c, err := func() (int, int, error) {
-			defer func() {
-				dur := time.Since(startTime)
-				stats.Get(autoReapDuration).(*expvar.Int).Set(dur.Milliseconds())
-			}()
-
+			defer recordDuration(autoReapDuration, startT)
 			s.mrsw.BeginWriteBlocking("reap")
 			defer s.mrsw.EndWrite()
 			return s.reap()
 		}()
 		if err != nil {
 			s.logger.Printf("reap failed: %s", err)
-			stats.Add(snapshotsReapedFail, 1)
+			stats.Add(reapErrors, 1)
 			continue
 		}
 		if s.LogReaping {
-			dur := time.Since(startTime)
-			s.logger.Printf("autoreap complete in %s: %d snapshots reaped, %d WALs checkpointed", dur, n, c)
+			s.logger.Printf("autoreap complete in %s: %d snapshots reaped, %d WALs checkpointed",
+				time.Since(startT), n, c)
 		}
 	}
 }
@@ -645,10 +674,24 @@ func (s *Store) check() error {
 	// Remove any incomplete plan file from an interrupted plan write.
 	os.Remove(tmpName(s.reapPlanPath))
 
+	reapPlanFound := fsutil.FileExists(s.reapPlanPath)
+
+	// If no reap was interrupted, verify the CRC32 of every data file
+	// in every snapshot directory. If a reap was interrupted, the files
+	// may be in an inconsistent state and the CRC32 validation may fail,
+	// so we skip it in that case and just resume the reap to fix any
+	// inconsistencies.
+	if !reapPlanFound {
+		if err := s.checkCRCs(); err != nil {
+			return err
+		}
+	}
+
 	// Resume an interrupted reap if such a plan file exists. Only then should
 	// we remove any leftover temporary directories, since they may be needed
-	// for the reap to complete.
-	if fileExists(s.reapPlanPath) {
+	// for the reap to complete. If a reap plan was found, skip CRC validation
+	// since files may have been left in an inconsistent state by the crash.
+	if reapPlanFound {
 		s.logger.Printf("found interrupted reap plan at %s, resuming", s.reapPlanPath)
 		p, err := plan.ReadFromFile(s.reapPlanPath)
 		if err != nil {
@@ -676,6 +719,36 @@ func (s *Store) check() error {
 	return nil
 }
 
+// checkCRCs verifies the CRC32 of every data file in every snapshot directory.
+func (s *Store) checkCRCs() error {
+	startT := time.Now()
+	snapshots, err := s.catalog.Scan(s.dir)
+	if err != nil {
+		return fmt.Errorf("scanning snapshots for CRC check: %w", err)
+	}
+	if len(snapshots.items) == 0 {
+		return nil
+	}
+
+	checker := NewCRCChecker()
+	for _, snap := range snapshots.items {
+		if snap.dbFile != nil {
+			checker.Add(snap.dbFile)
+		}
+		for _, wf := range snap.walFiles {
+			checker.Add(wf)
+		}
+	}
+
+	if err := <-checker.Check(); err != nil {
+		return err
+	}
+
+	s.logger.Printf("completed CRC32 check of %d snapshot directories in %s",
+		len(snapshots.items), time.Since(startT))
+	return nil
+}
+
 // getSnapshots returns the set of snapshots in the Store.
 func (s *Store) getSnapshots() (SnapshotSet, error) {
 	return s.catalog.Scan(s.dir)
@@ -696,4 +769,12 @@ func snapshotName(term, index uint64) string {
 // metaPath returns the path to the meta file in the given directory.
 func metaPath(dir string) string {
 	return filepath.Join(dir, metaFileName)
+}
+
+func tmpName(path string) string {
+	return path + tmpSuffix
+}
+
+func isTmpName(name string) bool {
+	return filepath.Ext(name) == tmpSuffix
 }
