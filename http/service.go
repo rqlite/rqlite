@@ -1438,16 +1438,16 @@ func (s *Service) handleQuery(w http.ResponseWriter, r *http.Request, qp QueryPa
 
 	qr := &proto.QueryRequest{
 		Request: &proto.Request{
-			Transaction: qp.Tx(),
-			DbTimeout:   qp.DBTimeout(0).Nanoseconds(),
-			Statements:  queries,
+			Transaction:    qp.Tx(),
+			DbTimeout:      qp.DBTimeout(0).Nanoseconds(),
+			Statements:     queries,
+			QualifyColumns: qp.QualifyColumns(),
 		},
 		Timings:             qp.Timings(),
 		Level:               qp.Level(),
 		Freshness:           qp.Freshness().Nanoseconds(),
 		FreshnessStrict:     qp.FreshnessStrict(),
 		LinearizableTimeout: qp.LinearizableTimeout(defaultLinearTimeout).Nanoseconds(),
-		QualifyColumns:      qp.QualifyColumns(),
 	}
 
 	results, raftIndex, addr, resultsErr := s.proxy.Query(r.Context(), qr, makeCredentials(r),
@@ -1514,15 +1514,15 @@ func (s *Service) handleRequest(w http.ResponseWriter, r *http.Request, qp Query
 
 	eqr := &proto.ExecuteQueryRequest{
 		Request: &proto.Request{
-			Transaction: qp.Tx(),
-			Statements:  stmts,
-			DbTimeout:   int64(qp.DBTimeout(0)),
+			Transaction:    qp.Tx(),
+			Statements:     stmts,
+			DbTimeout:      int64(qp.DBTimeout(0)),
+			QualifyColumns: qp.QualifyColumns(),
 		},
 		Timings:         qp.Timings(),
 		Level:           qp.Level(),
 		Freshness:       qp.Freshness().Nanoseconds(),
 		FreshnessStrict: qp.FreshnessStrict(),
-		QualifyColumns:  qp.QualifyColumns(),
 	}
 
 	results, _, raftIndex, addr, resultsErr := s.proxy.Request(r.Context(), eqr, makeCredentials(r),

@@ -28,6 +28,7 @@ message Request {
 	repeated Statement statements = 2;
 	int64 dbTimeout = 3;
 	bool rollbackOnError = 4;
+	bool qualify_columns = 5;
 }
 
 enum ConsistencyLevel {
@@ -45,7 +46,6 @@ message QueryRequest {
 	int64 freshness = 4;
 	bool freshness_strict = 5;
 	int64 linearizable_timeout = 6;
-	bool qualify_columns = 7;
 }
 
 message Values {
@@ -79,7 +79,6 @@ message ExecuteQueryRequest {
 	int64 freshness = 4;
 	bool freshness_strict = 5;
 	int64 linearizable_timeout = 6;
-	bool qualify_columns = 7;
 }
 
 message ExecuteQueryResponse {

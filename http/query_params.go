@@ -106,7 +106,7 @@ func (qp QueryParams) BlobArray() bool {
 
 // QualifyColumns returns true if the query parameters request table-qualified column names.
 func (qp QueryParams) QualifyColumns() bool {
-	return qp.HasKey("qualify")
+	return qp.HasKey("qualify_columns")
 }
 
 // NoRewriteRandom returns true if the query parameters request no rewriting of queries.

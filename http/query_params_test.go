@@ -40,7 +40,7 @@ func Test_NewQueryParams(t *testing.T) {
 		{"Sync with timeout", "sync&timeout=2s", QueryParams{"sync": "", "timeout": "2s"}, false},
 		{"Byte array with associative", "byte_array&associative", QueryParams{"byte_array": "", "associative": ""}, false},
 		{"Requesting Raft Index", "raft_index", QueryParams{"raft_index": ""}, false},
-		{"Qualify columns", "qualify", QueryParams{"qualify": ""}, false},
+		{"Qualify columns", "qualify_columns", QueryParams{"qualify_columns": ""}, false},
 	}
 
 	for _, tc := range testCases {

@@ -1,7 +1,6 @@
 package db
 
 import (
-	"context"
 	"os"
 	"testing"
 
@@ -39,9 +38,14 @@ func Test_QualifyColumns_Join(t *testing.T) {
 		t.Fatalf("unexpected unqualified results\nexp: %s\ngot: %s", exp, got)
 	}
 
-	// Query with qualify flag via context — columns should be table-qualified
-	ctx := NewContextWithQualifyColumns(context.Background())
-	rows, err = db.QueryWithContext(ctx, req, false)
+	// Query with qualify flag via Request field — columns should be table-qualified
+	reqQualify := &command.Request{
+		Statements: []*command.Statement{
+			{Sql: `SELECT * FROM contacts JOIN titles ON contacts.id = titles.contact_id`},
+		},
+		QualifyColumns: true,
+	}
+	rows, err = db.Query(reqQualify, false)
 	if err != nil {
 		t.Fatalf("failed to query with qualify: %s", err.Error())
 	}
@@ -65,11 +69,11 @@ func Test_QualifyColumns_SingleTable(t *testing.T) {
 		t.Fatalf("failed to setup table: %s", err.Error())
 	}
 
-	ctx := NewContextWithQualifyColumns(context.Background())
-	rows, err := db.QueryWithContext(ctx, &command.Request{
+	rows, err := db.Query(&command.Request{
 		Statements: []*command.Statement{
 			{Sql: `SELECT * FROM foo`},
 		},
+		QualifyColumns: true,
 	}, false)
 	if err != nil {
 		t.Fatalf("failed to query with qualify: %s", err.Error())
@@ -96,11 +100,11 @@ func Test_QualifyColumns_ExplicitColumns(t *testing.T) {
 		t.Fatalf("failed to setup tables: %s", err.Error())
 	}
 
-	ctx := NewContextWithQualifyColumns(context.Background())
-	rows, err := db.QueryWithContext(ctx, &command.Request{
+	rows, err := db.Query(&command.Request{
 		Statements: []*command.Statement{
 			{Sql: `SELECT a.id, b.y FROM a JOIN b ON a.id = b.id`},
 		},
+		QualifyColumns: true,
 	}, false)
 	if err != nil {
 		t.Fatalf("failed to query: %s", err.Error())
@@ -126,11 +130,11 @@ func Test_QualifyColumns_LeftJoin(t *testing.T) {
 		t.Fatalf("failed to setup tables: %s", err.Error())
 	}
 
-	ctx := NewContextWithQualifyColumns(context.Background())
-	rows, err := db.QueryWithContext(ctx, &command.Request{
+	rows, err := db.Query(&command.Request{
 		Statements: []*command.Statement{
 			{Sql: `SELECT * FROM p LEFT JOIN c ON p.id = c.pid`},
 		},
+		QualifyColumns: true,
 	}, false)
 	if err != nil {
 		t.Fatalf("failed to query: %s", err.Error())
@@ -157,11 +161,11 @@ func Test_QualifyColumns_Request(t *testing.T) {
 		t.Fatalf("failed to setup tables: %s", err.Error())
 	}
 
-	ctx := NewContextWithQualifyColumns(context.Background())
-	results, err := db.RequestWithContext(ctx, &command.Request{
+	results, err := db.Request(&command.Request{
 		Statements: []*command.Statement{
 			{Sql: `SELECT * FROM t1 JOIN t2 ON t1.id = t2.t1_id`},
 		},
+		QualifyColumns: true,
 	}, false)
 	if err != nil {
 		t.Fatalf("failed to request: %s", err.Error())

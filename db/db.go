@@ -1271,8 +1271,8 @@ func (db *DB) queryWithConn(ctx context.Context, req *command.Request, xTime boo
 				Error: err.Error(),
 			}
 		}
-		if shouldQualifyColumns(ctx) && rows != nil && rows.Error == "" {
-			if qErr := db.qualifyRowColumns(conn, stmt.Sql, rows); qErr != nil {
+		if req.QualifyColumns && rows != nil && rows.Error == "" {
+			if qErr := qualifyRowColumns(conn, stmt.Sql, rows); qErr != nil {
 				db.logger.Printf("qualify columns: %s", qErr.Error())
 			}
 		}
@@ -1470,8 +1470,8 @@ func (db *DB) RequestWithContext(ctx context.Context, req *command.Request, xTim
 
 		if ro {
 			rows, opErr := db.queryStmtWithConn(ctx, stmt, xTime, eq)
-			if shouldQualifyColumns(ctx) && rows != nil && rows.Error == "" {
-				if qErr := db.qualifyRowColumns(conn, stmt.Sql, rows); qErr != nil {
+			if req.QualifyColumns && rows != nil && rows.Error == "" {
+				if qErr := qualifyRowColumns(conn, stmt.Sql, rows); qErr != nil {
 					db.logger.Printf("qualify columns: %s", qErr.Error())
 				}
 			}
@@ -1776,6 +1776,38 @@ func (db *DB) memStats() (map[string]int64, error) {
 		ms[p] = res[0].Values[0].Parameters[0].GetI()
 	}
 	return ms, nil
+}
+
+// qualifyRowColumns prefixes each column name in rows with its originating table name.
+func qualifyRowColumns(conn *sql.Conn, query string, rows *command.QueryRows) error {
+	if len(rows.Columns) == 0 {
+		return nil
+	}
+
+	var tableNames []string
+	err := conn.Raw(func(driverConn interface{}) error {
+		sqliteConn := driverConn.(*sqlite3.SQLiteConn)
+		stmt, err := sqliteConn.Prepare(query)
+		if err != nil {
+			return err
+		}
+		defer stmt.Close()
+		sqliteStmt := stmt.(*sqlite3.SQLiteStmt)
+		tableNames = make([]string, len(rows.Columns))
+		for i := range rows.Columns {
+			tableNames[i] = sqliteStmt.ColumnTableName(i)
+		}
+		return nil
+	})
+	if err != nil {
+		return err
+	}
+	for i, col := range rows.Columns {
+		if tableNames[i] != "" {
+			rows.Columns[i] = tableNames[i] + "." + col
+		}
+	}
+	return nil
 }
 
 func checkpointDB(rwDB *sql.DB, mode CheckpointMode) (ok, pages, moved int, err error) {
