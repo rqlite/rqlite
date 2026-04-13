@@ -34,7 +34,7 @@ message Request {
 	repeated Statement statements = 2;
 	int64 dbTimeout = 3;
 	bool rollbackOnError = 4;
-	bool qualify_columns = 5;
+	bool qualifyColumns = 5;
 }
 
 enum ConsistencyLevel {

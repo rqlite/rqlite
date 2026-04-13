@@ -565,7 +565,7 @@ type Request struct {
 	Statements      []*Statement           `protobuf:"bytes,2,rep,name=statements,proto3" json:"statements,omitempty"`
 	DbTimeout       int64                  `protobuf:"varint,3,opt,name=dbTimeout,proto3" json:"dbTimeout,omitempty"`
 	RollbackOnError bool                   `protobuf:"varint,4,opt,name=rollbackOnError,proto3" json:"rollbackOnError,omitempty"`
-	QualifyColumns  bool                   `protobuf:"varint,5,opt,name=qualify_columns,json=qualifyColumns,proto3" json:"qualify_columns,omitempty"`
+	QualifyColumns  bool                   `protobuf:"varint,5,opt,name=qualifyColumns,proto3" json:"qualifyColumns,omitempty"`
 	unknownFields   protoimpl.UnknownFields
 	sizeCache       protoimpl.SizeCache
 }
@@ -2172,15 +2172,15 @@ const file_command_proto_rawDesc = "" +
 	"forceStall\x18\x04 \x01(\bR\n" +
 	"forceStall\x12\x1f\n" +
 	"\vsql_explain\x18\x05 \x01(\bR\n" +
-	"sqlExplain\"\xd0\x01\n" +
+	"sqlExplain\"\xcf\x01\n" +
 	"\aRequest\x12 \n" +
 	"\vtransaction\x18\x01 \x01(\bR\vtransaction\x122\n" +
 	"\n" +
 	"statements\x18\x02 \x03(\v2\x12.command.StatementR\n" +
 	"statements\x12\x1c\n" +
 	"\tdbTimeout\x18\x03 \x01(\x03R\tdbTimeout\x12(\n" +
-	"\x0frollbackOnError\x18\x04 \x01(\bR\x0frollbackOnError\x12'\n" +
-	"\x0fqualify_columns\x18\x05 \x01(\bR\x0equalifyColumns\"\x81\x02\n" +
+	"\x0frollbackOnError\x18\x04 \x01(\bR\x0frollbackOnError\x12&\n" +
+	"\x0equalifyColumns\x18\x05 \x01(\bR\x0equalifyColumns\"\x81\x02\n" +
 	"\fQueryRequest\x12*\n" +
 	"\arequest\x18\x01 \x01(\v2\x10.command.RequestR\arequest\x12\x18\n" +
 	"\atimings\x18\x02 \x01(\bR\atimings\x12/\n" +
