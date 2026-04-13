@@ -189,11 +189,11 @@ func Test_AtomicMap_ConcurrentAccess(t *testing.T) {
 	var wg sync.WaitGroup
 
 	// Start multiple goroutines that write to the map
-	for i := 0; i < numGoroutines; i++ {
+	for i := range numGoroutines {
 		wg.Add(1)
 		go func(id int) {
 			defer wg.Done()
-			for j := 0; j < operationsPerGoroutine; j++ {
+			for j := range operationsPerGoroutine {
 				key := id*operationsPerGoroutine + j
 				value := "value" + string(rune('0'+id)) + string(rune('0'+j%10))
 				m.Set(key, value)
@@ -202,11 +202,11 @@ func Test_AtomicMap_ConcurrentAccess(t *testing.T) {
 	}
 
 	// Start multiple goroutines that read from the map
-	for i := 0; i < numGoroutines; i++ {
+	for i := range numGoroutines {
 		wg.Add(1)
 		go func(id int) {
 			defer wg.Done()
-			for j := 0; j < operationsPerGoroutine; j++ {
+			for j := range operationsPerGoroutine {
 				key := id*operationsPerGoroutine + j
 				// Give some time for writers to write
 				time.Sleep(time.Microsecond)
@@ -223,7 +223,7 @@ func Test_AtomicMap_ConcurrentAccess(t *testing.T) {
 	// Verify that all expected keys exist
 	expectedKeys := numGoroutines * operationsPerGoroutine
 	actualKeys := 0
-	for i := 0; i < expectedKeys; i++ {
+	for i := range expectedKeys {
 		if _, exists := m.Get(i); exists {
 			actualKeys++
 		}

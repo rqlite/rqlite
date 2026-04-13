@@ -7,7 +7,7 @@ import (
 
 func Test_JSONRoundTrip(t *testing.T) {
 	type cfg struct {
-		R Regexp `json:"r,omitempty"`
+		R Regexp `json:"r"`
 	}
 
 	in := cfg{R: MustCompile(`^a+$`)}
@@ -31,7 +31,7 @@ func Test_JSONRoundTrip(t *testing.T) {
 
 func Test_NullAndEmpty(t *testing.T) {
 	type cfg struct {
-		R Regexp `json:"r,omitempty"`
+		R Regexp `json:"r"`
 	}
 
 	// null -> unset

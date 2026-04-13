@@ -5,19 +5,11 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
-	"net/url"
 
 	httpcl "github.com/rqlite/rqlite/v10/cmd/rqlite/http"
 )
 
-func removeNode(client *httpcl.Client, id string, argv *argT) error {
-	u := url.URL{
-		Scheme: argv.Protocol,
-		Host:   address6(argv),
-		Path:   fmt.Sprintf("%sremove", argv.Prefix),
-	}
-	urlStr := u.String()
-
+func removeNode(client *httpcl.Client, id string) error {
 	b, err := json.Marshal(map[string]string{
 		"id": id,
 	})
@@ -25,30 +17,19 @@ func removeNode(client *httpcl.Client, id string, argv *argT) error {
 		return err
 	}
 
-	nRedirect := 0
-	for {
-		resp, err := client.Delete(urlStr, bytes.NewReader(b))
-		if err != nil {
-			return err
-		}
-
-		if resp.StatusCode == http.StatusUnauthorized {
-			return fmt.Errorf("unauthorized")
-		}
-
-		if resp.StatusCode == http.StatusMovedPermanently {
-			nRedirect++
-			if nRedirect > maxRedirect {
-				return fmt.Errorf("maximum leader redirect limit exceeded")
-			}
-			urlStr = resp.Header["Location"][0]
-			continue
-		}
-
-		if resp.StatusCode != http.StatusOK {
-			return fmt.Errorf("server responded with: %s", resp.Status)
-		}
-
-		return nil
+	u := fmt.Sprintf("%sremove", client.Prefix)
+	resp, err := client.Delete(u, bytes.NewReader(b))
+	if err != nil {
+		return err
 	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode == http.StatusUnauthorized {
+		return fmt.Errorf("unauthorized")
+	}
+	if resp.StatusCode != http.StatusOK {
+		return fmt.Errorf("server responded with: %s", resp.Status)
+	}
+
+	return nil
 }

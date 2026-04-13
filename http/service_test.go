@@ -265,7 +265,7 @@ func Test_LeaderAddrsOK(t *testing.T) {
 	}
 	defer s.Close()
 
-	addr, err := s.LeaderAddr()
+	addr, err := s.LeaderAddr(t.Context())
 	if err != nil {
 		t.Fatalf("failed to get leader address")
 	}
@@ -273,7 +273,7 @@ func Test_LeaderAddrsOK(t *testing.T) {
 		t.Fatalf("incorrect leader address, got: %s", addr)
 	}
 
-	addr = s.LeaderAPIAddr()
+	addr = s.LeaderAPIAddr(t.Context())
 	if addr != "http://bar:5678" {
 		t.Fatalf("incorrect leader API address, got: %s", addr)
 	}
@@ -288,7 +288,7 @@ func Test_LeaderAddrsFail(t *testing.T) {
 	}
 	defer s.Close()
 
-	_, err := s.LeaderAddr()
+	_, err := s.LeaderAddr(t.Context())
 	if err != ErrLeaderNotFound {
 		t.Fatalf("failed to get expected ErrLeaderNotFound")
 	}
@@ -2640,7 +2640,7 @@ type mockClusterService struct {
 	stepdownFn   func(sr *command.StepdownRequest, nodeAddr string, t time.Duration) error
 }
 
-func (m *mockClusterService) GetNodeMeta(a string, r int, t time.Duration) (*cluster.NodeMeta, error) {
+func (m *mockClusterService) GetNodeMeta(ctx context.Context, a string, r int, t time.Duration) (*cluster.NodeMeta, error) {
 	return &cluster.NodeMeta{
 		Url: m.apiAddr,
 	}, nil
@@ -2653,7 +2653,7 @@ func (m *mockClusterService) Execute(ctx context.Context, er *command.ExecuteReq
 	return nil, 0, nil
 }
 
-func (m *mockClusterService) Query(ctx context.Context, qr *command.QueryRequest, addr string, creds *cluster.Credentials, t time.Duration) ([]*command.QueryRows, uint64, error) {
+func (m *mockClusterService) Query(ctx context.Context, qr *command.QueryRequest, addr string, creds *cluster.Credentials, t time.Duration, r int) ([]*command.QueryRows, uint64, error) {
 	if m.queryFn != nil {
 		return m.queryFn(qr, addr, t)
 	}
@@ -2688,7 +2688,7 @@ func (m *mockClusterService) RemoveNode(ctx context.Context, rn *command.RemoveN
 	return nil
 }
 
-func (m *mockClusterService) Stepdown(sr *command.StepdownRequest, addr string, creds *cluster.Credentials, t time.Duration) error {
+func (m *mockClusterService) Stepdown(ctx context.Context, sr *command.StepdownRequest, addr string, creds *cluster.Credentials, t time.Duration) error {
 	if m.stepdownFn != nil {
 		return m.stepdownFn(sr, addr, t)
 	}

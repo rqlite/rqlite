@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/rqlite/rqlite/v10/cluster"
+	"github.com/rqlite/rqlite/v10/command/proto"
 	"github.com/rqlite/rqlite/v10/db"
 	"github.com/rqlite/rqlite/v10/http"
 	"github.com/rqlite/rqlite/v10/queue"
@@ -210,7 +211,7 @@ func Test_MultiNodeClusterRANDOM(t *testing.T) {
 	}
 
 	// Send a few Noops through to ensure SQLite database has been updated on each node.
-	for i := 0; i < 5; i++ {
+	for range 5 {
 		node1.Noop("some_id")
 	}
 
@@ -327,7 +328,7 @@ func Test_MultiNodeClusterRETURNING(t *testing.T) {
 	}
 
 	// Send a few Noops through to ensure SQLite database has been updated on each node.
-	for i := 0; i < 3; i++ {
+	for range 3 {
 		node1.Noop("some_id")
 	}
 
@@ -389,7 +390,7 @@ func Test_MultiNodeClusterBootstrap(t *testing.T) {
 			addr, _ := node1.Store.LeaderAddr()
 			return addr != ""
 		}
-		node1Bs.Boot(context.Background(), node1.ID, node1.RaftAddr, cluster.Voter, done, 10*time.Second)
+		node1Bs.Boot(context.Background(), node1.ID, node1.RaftAddr, proto.Suffrage_VOTER, done, 10*time.Second)
 		wg.Done()
 	}()
 	go func() {
@@ -397,7 +398,7 @@ func Test_MultiNodeClusterBootstrap(t *testing.T) {
 			addr, _ := node2.Store.LeaderAddr()
 			return addr != ""
 		}
-		node2Bs.Boot(context.Background(), node2.ID, node2.RaftAddr, cluster.Voter, done, 10*time.Second)
+		node2Bs.Boot(context.Background(), node2.ID, node2.RaftAddr, proto.Suffrage_VOTER, done, 10*time.Second)
 		wg.Done()
 	}()
 	go func() {
@@ -405,7 +406,7 @@ func Test_MultiNodeClusterBootstrap(t *testing.T) {
 			addr, _ := node3.Store.LeaderAddr()
 			return addr != ""
 		}
-		node3Bs.Boot(context.Background(), node3.ID, node3.RaftAddr, cluster.Voter, done, 10*time.Second)
+		node3Bs.Boot(context.Background(), node3.ID, node3.RaftAddr, proto.Suffrage_VOTER, done, 10*time.Second)
 		wg.Done()
 	}()
 	wg.Wait()
@@ -557,7 +558,7 @@ func Test_MultiNodeClusterBootstrapLaterJoin(t *testing.T) {
 			addr, _ := node1.Store.LeaderAddr()
 			return addr != ""
 		}
-		node1Bs.Boot(context.Background(), node1.ID, node1.RaftAddr, cluster.Voter, done, 10*time.Second)
+		node1Bs.Boot(context.Background(), node1.ID, node1.RaftAddr, proto.Suffrage_VOTER, done, 10*time.Second)
 		wg.Done()
 	}()
 	go func() {
@@ -565,7 +566,7 @@ func Test_MultiNodeClusterBootstrapLaterJoin(t *testing.T) {
 			addr, _ := node2.Store.LeaderAddr()
 			return addr != ""
 		}
-		node2Bs.Boot(context.Background(), node2.ID, node2.RaftAddr, cluster.Voter, done, 10*time.Second)
+		node2Bs.Boot(context.Background(), node2.ID, node2.RaftAddr, proto.Suffrage_VOTER, done, 10*time.Second)
 		wg.Done()
 	}()
 	go func() {
@@ -573,7 +574,7 @@ func Test_MultiNodeClusterBootstrapLaterJoin(t *testing.T) {
 			addr, _ := node3.Store.LeaderAddr()
 			return addr != ""
 		}
-		node3Bs.Boot(context.Background(), node3.ID, node3.RaftAddr, cluster.Voter, done, 10*time.Second)
+		node3Bs.Boot(context.Background(), node3.ID, node3.RaftAddr, proto.Suffrage_VOTER, done, 10*time.Second)
 		wg.Done()
 	}()
 	wg.Wait()
@@ -610,7 +611,7 @@ func Test_MultiNodeClusterBootstrapLaterJoin(t *testing.T) {
 		addr, _ := node4.Store.LeaderAddr()
 		return addr != ""
 	}
-	if err := node4Bs.Boot(context.Background(), node4.ID, node4.RaftAddr, cluster.Voter, done, 10*time.Second); err != nil {
+	if err := node4Bs.Boot(context.Background(), node4.ID, node4.RaftAddr, proto.Suffrage_VOTER, done, 10*time.Second); err != nil {
 		t.Fatalf("node 4 failed to boot")
 	}
 	node4Leader, err := node4.WaitForLeader()
@@ -658,7 +659,7 @@ func Test_MultiNodeClusterBootstrapLaterJoinTLS(t *testing.T) {
 			addr, _ := node1.Store.LeaderAddr()
 			return addr != ""
 		}
-		node1Bs.Boot(context.Background(), node1.ID, node1.RaftAddr, cluster.Voter, done, 10*time.Second)
+		node1Bs.Boot(context.Background(), node1.ID, node1.RaftAddr, proto.Suffrage_VOTER, done, 10*time.Second)
 		wg.Done()
 	}()
 	go func() {
@@ -666,7 +667,7 @@ func Test_MultiNodeClusterBootstrapLaterJoinTLS(t *testing.T) {
 			addr, _ := node2.Store.LeaderAddr()
 			return addr != ""
 		}
-		node2Bs.Boot(context.Background(), node2.ID, node2.RaftAddr, cluster.Voter, done, 10*time.Second)
+		node2Bs.Boot(context.Background(), node2.ID, node2.RaftAddr, proto.Suffrage_VOTER, done, 10*time.Second)
 		wg.Done()
 	}()
 	go func() {
@@ -674,7 +675,7 @@ func Test_MultiNodeClusterBootstrapLaterJoinTLS(t *testing.T) {
 			addr, _ := node3.Store.LeaderAddr()
 			return addr != ""
 		}
-		node3Bs.Boot(context.Background(), node3.ID, node3.RaftAddr, cluster.Voter, done, 10*time.Second)
+		node3Bs.Boot(context.Background(), node3.ID, node3.RaftAddr, proto.Suffrage_VOTER, done, 10*time.Second)
 		wg.Done()
 	}()
 	wg.Wait()
@@ -712,7 +713,7 @@ func Test_MultiNodeClusterBootstrapLaterJoinTLS(t *testing.T) {
 		addr, _ := node4.Store.LeaderAddr()
 		return addr != ""
 	}
-	if err := node4Bs.Boot(context.Background(), node4.ID, node4.RaftAddr, cluster.Voter, done, 10*time.Second); err != nil {
+	if err := node4Bs.Boot(context.Background(), node4.ID, node4.RaftAddr, proto.Suffrage_VOTER, done, 10*time.Second); err != nil {
 		t.Fatalf("node 4 failed to boot")
 	}
 	node4Leader, err := node4.WaitForLeader()
@@ -919,7 +920,7 @@ func Test_MultiNodeClusterQueuedWrites(t *testing.T) {
 	wg.Add(numLoops)
 	go func() {
 		defer wg.Done()
-		for i := 0; i < writesPerLoop; i++ {
+		for range writesPerLoop {
 			if _, err := node1.Execute(`INSERT INTO foo(name) VALUES("fiona")`); err != nil {
 				t.Errorf("failed to insert records: %s", err.Error())
 			}
@@ -927,7 +928,7 @@ func Test_MultiNodeClusterQueuedWrites(t *testing.T) {
 	}()
 	go func() {
 		defer wg.Done()
-		for i := 0; i < writesPerLoop; i++ {
+		for range writesPerLoop {
 			if _, err := node2.Execute(`INSERT INTO foo(name) VALUES("fiona")`); err != nil {
 				t.Errorf("failed to insert records: %s", err.Error())
 			}
@@ -1706,7 +1707,7 @@ func Test_MultiNodeCluster_DisconnectedNonVoter(t *testing.T) {
 	}
 
 	// Send a few Noops through to ensure SQLite database has been updated on each node.
-	for i := 0; i < 3; i++ {
+	for range 3 {
 		leader.Noop("some_id")
 	}
 
@@ -2250,7 +2251,7 @@ func Test_MultiNodeCluster_Boot(t *testing.T) {
 	}
 
 	// Send a few Noops through to ensure SQLite database has been updated on each node.
-	for i := 0; i < 5; i++ {
+	for range 5 {
 		node1.Noop("some_id")
 	}
 

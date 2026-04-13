@@ -31,13 +31,14 @@ import (
 	"github.com/rqlite/rqlite/v10/command/proto"
 	sql "github.com/rqlite/rqlite/v10/db"
 	"github.com/rqlite/rqlite/v10/db/humanize"
-	"github.com/rqlite/rqlite/v10/db/wal"
+	"github.com/rqlite/rqlite/v10/internal/fsutil"
 	"github.com/rqlite/rqlite/v10/internal/progress"
 	"github.com/rqlite/rqlite/v10/internal/random"
 	"github.com/rqlite/rqlite/v10/internal/rsum"
 	"github.com/rqlite/rqlite/v10/internal/rsync"
 	"github.com/rqlite/rqlite/v10/snapshot"
 	rlog "github.com/rqlite/rqlite/v10/store/log"
+	"github.com/rqlite/rqlite/v10/store/throttler"
 )
 
 var (
@@ -120,31 +121,29 @@ var (
 )
 
 const (
-	cleanSnapshotName        = "clean_snapshot"
-	snapshotsDirName         = "wsnapshots"
-	walStagingDirName        = "wal-staging"
-	restoreScratchPattern    = "rqlite-restore-*"
-	bootScatchPattern        = "rqlite-boot-*"
-	backupScratchPattern     = "rqlite-backup-*"
-	raftDBPath               = "raft.db" // Changing this will break backwards compatibility.
-	peersPath                = "raft/peers.json"
-	peersInfoPath            = "raft/peers.info"
-	applyTimeout             = 10 * time.Second
-	sqliteFile               = "db.sqlite"
-	linearizableTimeout      = 1 * time.Second
-	leaderWaitDelay          = 100 * time.Millisecond
-	appliedWaitDelay         = 100 * time.Millisecond
-	commitEquivalenceDelay   = 50 * time.Millisecond
-	backupCASTimeout         = 10 * time.Second
-	backupCASRetryDelay      = 100 * time.Millisecond
-	connectionPoolCount      = 5
-	connectionTimeout        = 10 * time.Second
-	mustWALCheckpointDelay   = 50 * time.Millisecond
-	mustWALCheckpointTimeout = 5 * time.Minute
-	raftLogCacheSize         = 512
-	trailingScale            = 1.25
-	observerChanLen          = 50
-	maxFailedSnapshotsInRow  = 5
+	cleanSnapshotName      = "clean_snapshot"
+	snapshotsDirName       = "wsnapshots"
+	walStagingDirName      = "wal-staging"
+	restoreScratchPattern  = "rqlite-restore-*"
+	bootScatchPattern      = "rqlite-boot-*"
+	backupScratchPattern   = "rqlite-backup-*"
+	raftDBPath             = "raft.db" // Changing this will break backwards compatibility.
+	peersPath              = "raft/peers.json"
+	peersInfoPath          = "raft/peers.info"
+	applyTimeout           = 10 * time.Second
+	sqliteFile             = "db.sqlite"
+	linearizableTimeout    = 1 * time.Second
+	leaderWaitDelay        = 100 * time.Millisecond
+	appliedWaitDelay       = 100 * time.Millisecond
+	commitEquivalenceDelay = 50 * time.Millisecond
+	truncateTimeout        = 250 * time.Millisecond
+	backupCASTimeout       = 10 * time.Second
+	backupCASRetryDelay    = 100 * time.Millisecond
+	connectionPoolCount    = 5
+	connectionTimeout      = 10 * time.Second
+	raftLogCacheSize       = 512
+	trailingScale          = 1.25
+	observerChanLen        = 50
 
 	baseVacuumTimeKey   = "rqlite_base_vacuum"
 	lastVacuumTimeKey   = "rqlite_last_vacuum"
@@ -153,62 +152,54 @@ const (
 )
 
 const (
-	numSnapshots                      = "num_snapshots"
-	numSnapshotsFailed                = "num_snapshots_failed"
-	numUserSnapshots                  = "num_user_snapshots"
-	numUserSnapshotsFailed            = "num_user_snapshots_failed"
-	numWALSnapshots                   = "num_wal_snapshots"
-	numWALSnapshotsFailed             = "num_wal_snapshots_failed"
-	numSnapshotsFull                  = "num_snapshots_full"
-	numSnapshotsIncremental           = "num_snapshots_incremental"
-	numFullCheckpointFailed           = "num_full_checkpoint_failed"
-	numWALCheckpointTruncateFailed    = "num_wal_checkpoint_truncate_failed"
-	numWALCheckpointIncomplete        = "num_wal_checkpoint_incomplete"
-	numWALMustCheckpoint              = "num_wal_must_checkpoint"
-	numAutoVacuums                    = "num_auto_vacuums"
-	numAutoVacuumsFailed              = "num_auto_vacuums_failed"
-	autoVacuumDuration                = "auto_vacuum_duration"
-	numAutoOptimizes                  = "num_auto_optimizes"
-	numAutoOptimizesFailed            = "num_auto_optimizes_failed"
-	autoOptimizeDuration              = "auto_optimize_duration"
-	numBoots                          = "num_boots"
-	numBackups                        = "num_backups"
-	numLoads                          = "num_loads"
-	numRestores                       = "num_restores"
-	numRestoresFailed                 = "num_restores_failed"
-	numRestoresStart                  = "num_restores_start"
-	numRestoresStartSkipped           = "num_restores_start_skipped"
-	numAutoRestores                   = "num_auto_restores"
-	numAutoRestoresSkipped            = "num_auto_restores_skipped"
-	numAutoRestoresFailed             = "num_auto_restores_failed"
-	numRecoveries                     = "num_recoveries"
-	numProviderChecks                 = "num_provider_checks"
-	numProviderProvides               = "num_provider_provides"
-	numProviderProvidesFail           = "num_provider_provides_fail"
-	numUncompressedCommands           = "num_uncompressed_commands"
-	numCompressedCommands             = "num_compressed_commands"
-	numJoins                          = "num_joins"
-	numIgnoredJoins                   = "num_ignored_joins"
-	numRemovedBeforeJoins             = "num_removed_before_joins"
-	numDBStatsErrors                  = "num_db_stats_errors"
-	numVerifyLeader                   = "num_verify_leader"
-	numVerifyLeaderFailed             = "num_verify_leader_failed"
-	verifyLeaderDuration              = "verify_leader_duration"
-	snapshotCreateDuration            = "snapshot_create_duration"
-	snapshotCreateChkTruncateDuration = "snapshot_create_chk_truncate_duration"
-	snapshotCreateWALCompactDuration  = "snapshot_create_wal_compact_duration"
-	snapshotSyncDuration              = "snapshot_sync_duration"
-	numSnapshotPersists               = "num_snapshot_persists"
-	numSnapshotPersistsFailed         = "num_snapshot_persists_failed"
-	snapshotPersistDuration           = "snapshot_persist_duration"
-	snapshotPrecompactWALSize         = "snapshot_precompact_wal_size"
-	snapshotCRC32CreateDuration       = "snapshot_crc32_create_duration"
-	snapshotWALSize                   = "snapshot_wal_size"
-	leaderChangesObserved             = "leader_changes_observed"
-	leaderChangesDropped              = "leader_changes_dropped"
-	failedHeartbeatObserved           = "failed_heartbeat_observed"
-	nodesReapedOK                     = "nodes_reaped_ok"
-	nodesReapedFailed                 = "nodes_reaped_failed"
+	numSnapshots                = "num_snapshots"
+	numSnapshotsFailed          = "num_snapshots_failed"
+	numUserSnapshots            = "num_user_snapshots"
+	numUserSnapshotsFailed      = "num_user_snapshots_failed"
+	numWALSnapshots             = "num_wal_snapshots"
+	numWALSnapshotsFailed       = "num_wal_snapshots_failed"
+	numSnapshotsFull            = "num_snapshots_full"
+	numSnapshotsIncremental     = "num_snapshots_incremental"
+	numAutoVacuums              = "num_auto_vacuums"
+	numAutoVacuumsFailed        = "num_auto_vacuums_failed"
+	autoVacuumDuration          = "auto_vacuum_duration"
+	numAutoOptimizes            = "num_auto_optimizes"
+	numAutoOptimizesFailed      = "num_auto_optimizes_failed"
+	autoOptimizeDuration        = "auto_optimize_duration"
+	numBoots                    = "num_boots"
+	numBackups                  = "num_backups"
+	numLoads                    = "num_loads"
+	numRestores                 = "num_restores"
+	numRestoresFailed           = "num_restores_failed"
+	numRestoresStart            = "num_restores_start"
+	numRestoresStartSkipped     = "num_restores_start_skipped"
+	numAutoRestores             = "num_auto_restores"
+	numAutoRestoresSkipped      = "num_auto_restores_skipped"
+	numAutoRestoresFailed       = "num_auto_restores_failed"
+	numRecoveries               = "num_recoveries"
+	numProviderChecks           = "num_provider_checks"
+	numProviderProvides         = "num_provider_provides"
+	numProviderProvidesFail     = "num_provider_provides_fail"
+	numUncompressedCommands     = "num_uncompressed_commands"
+	numCompressedCommands       = "num_compressed_commands"
+	numJoins                    = "num_joins"
+	numIgnoredJoins             = "num_ignored_joins"
+	numRemovedBeforeJoins       = "num_removed_before_joins"
+	numDBStatsErrors            = "num_db_stats_errors"
+	numVerifyLeader             = "num_verify_leader"
+	numVerifyLeaderFailed       = "num_verify_leader_failed"
+	verifyLeaderDuration        = "verify_leader_duration"
+	snapshotCreateDuration      = "snapshot_create_duration"
+	snapshotSyncDuration        = "snapshot_sync_duration"
+	numSnapshotPersists         = "num_snapshot_persists"
+	numSnapshotPersistsFailed   = "num_snapshot_persists_failed"
+	snapshotPersistDuration     = "snapshot_persist_duration"
+	snapshotCRC32CreateDuration = "snapshot_crc32_create_duration"
+	leaderChangesObserved       = "leader_changes_observed"
+	leaderChangesDropped        = "leader_changes_dropped"
+	failedHeartbeatObserved     = "failed_heartbeat_observed"
+	nodesReapedOK               = "nodes_reaped_ok"
+	nodesReapedFailed           = "nodes_reaped_failed"
 )
 
 // stats captures stats for the Store.
@@ -217,6 +208,10 @@ var stats *expvar.Map
 func init() {
 	stats = expvar.NewMap("store")
 	ResetStats()
+}
+
+func recordDuration(stat string, startT time.Time) {
+	stats.Get(stat).(*expvar.Int).Set(time.Since(startT).Milliseconds())
 }
 
 // ResetStats resets the expvar stats for this module. Mostly for test purposes.
@@ -230,10 +225,6 @@ func ResetStats() {
 	stats.Add(numWALSnapshotsFailed, 0)
 	stats.Add(numSnapshotsFull, 0)
 	stats.Add(numSnapshotsIncremental, 0)
-	stats.Add(numFullCheckpointFailed, 0)
-	stats.Add(numWALCheckpointTruncateFailed, 0)
-	stats.Add(numWALCheckpointIncomplete, 0)
-	stats.Add(numWALMustCheckpoint, 0)
 	stats.Add(numAutoVacuums, 0)
 	stats.Add(numAutoVacuumsFailed, 0)
 	stats.Add(autoVacuumDuration, 0)
@@ -264,15 +255,11 @@ func ResetStats() {
 	stats.Add(numVerifyLeaderFailed, 0)
 	stats.Add(verifyLeaderDuration, 0)
 	stats.Add(snapshotCreateDuration, 0)
-	stats.Add(snapshotCreateChkTruncateDuration, 0)
-	stats.Add(snapshotCreateWALCompactDuration, 0)
 	stats.Add(snapshotSyncDuration, 0)
 	stats.Add(numSnapshotPersists, 0)
 	stats.Add(numSnapshotPersistsFailed, 0)
 	stats.Add(snapshotPersistDuration, 0)
-	stats.Add(snapshotPrecompactWALSize, 0)
 	stats.Add(snapshotCRC32CreateDuration, 0)
-	stats.Add(snapshotWALSize, 0)
 	stats.Add(leaderChangesObserved, 0)
 	stats.Add(leaderChangesDropped, 0)
 	stats.Add(failedHeartbeatObserved, 0)
@@ -284,11 +271,11 @@ func ResetStats() {
 type SnapshotStore interface {
 	raft.SnapshotStore
 
-	// FullNeeded returns true if a full snapshot is needed.
-	FullNeeded() (bool, error)
+	// DueNext returns the type of snapshot due next.
+	DueNext() (snapshot.Type, error)
 
-	// SetFullNeeded explicitly sets that a full snapshot is needed.
-	SetFullNeeded() error
+	// SetDueNext sets the type of snapshot due next.
+	SetDueNext(snapshot.Type) error
 
 	// Stats returns stats about the Snapshot Store.
 	Stats() (map[string]any, error)
@@ -299,6 +286,11 @@ type SnapshotStore interface {
 
 	// Close shuts down background goroutines in the snapshot store.
 	Close() error
+}
+
+// Checkpointer is the interface systems which can checkpoint databases must implement.
+type Checkpointer interface {
+	Checkpoint(w io.Writer, timeout time.Duration) (int64, error)
 }
 
 // ClusterState defines the possible Raft states the current node can be in
@@ -338,8 +330,9 @@ type Store struct {
 	walPath string    // Path to WAL file.
 	dbDir   string    // Path to directory containing SQLite file.
 
-	dbDrv *sql.Driver      // The SQLite database driver.
-	db    *sql.SwappableDB // The underlying SQLite store.
+	dbDrv        *sql.Driver      // The SQLite database driver.
+	db           *sql.SwappableDB // The underlying SQLite store.
+	checkpointer Checkpointer
 
 	cdcMu         sync.RWMutex
 	cdcStreamer   *sql.CDCStreamer
@@ -360,9 +353,8 @@ type Store struct {
 	snapshotWDone  chan struct{}
 
 	// Snapshotting synchronization and and management
-	snapshotSync            *rsync.SyncChannels
-	snapshotCAS             *rsync.CheckAndSet
-	numFailedSnapshotsInRow int
+	snapshotSync *rsync.SyncChannels
+	snapshotCAS  *rsync.CheckAndSet
 
 	// Latest log entry index actually reflected by the FSM. Due to Raft code
 	// these values are not updated automatically after a Snapshot-restore.
@@ -403,6 +395,12 @@ type Store struct {
 
 	firstLogAppliedT time.Time // Time first log is applied
 	openT            time.Time // Timestamp when Store opens.
+
+	// Throttler for controlling the rate of incoming requests that modify the database.
+	// This is used to avoid overwhelming the system when it's under heavy load. It's
+	// preferable to throttle incoming requests when needed rather than just suddenly
+	// falling over.
+	throttler *throttler.Throttler
 
 	logger *log.Logger
 
@@ -483,6 +481,7 @@ func New(c *Config, ly Layer) *Store {
 		readyChans:        rsync.NewReadyChannels(),
 		leaderObservers:   make([]chan<- bool, 0),
 		reqMarshaller:     command.NewRequestMarshaler(),
+		throttler:         throttler.DefaultThrottler(),
 		logger:            logger,
 		notifyingNodes:    make(map[string]*Server),
 		ApplyTimeout:      applyTimeout,
@@ -545,7 +544,7 @@ func (s *Store) Open() (retErr error) {
 	s.logger.Printf("opening store with node ID %s, listening on %s", s.raftID, s.ly.Addr().String())
 
 	// Clean up a never-used file from previous releases.
-	removeFile(filepath.Join(s.raftDir, "applied_index"))
+	fsutil.RemoveFile(filepath.Join(s.raftDir, "applied_index"))
 
 	// Create all the required Raft directories.
 	s.logger.Printf("ensuring data directory exists at %s", s.raftDir)
@@ -564,7 +563,7 @@ func (s *Store) Open() (retErr error) {
 
 	// Create the database directory, if it doesn't already exist.
 	parentDBDir := filepath.Dir(s.dbPath)
-	if !dirExists(parentDBDir) {
+	if !fsutil.DirExists(parentDBDir) {
 		s.logger.Printf("creating directory for database at %s", parentDBDir)
 		err := os.MkdirAll(parentDBDir, 0755)
 		if err != nil {
@@ -625,20 +624,20 @@ func (s *Store) Open() (retErr error) {
 			if removeDBFiles {
 				stats.Add(numRestoresStart, 1)
 				s.numSnapshotsStart.Add(1)
-				if err := removeFile(s.cleanSnapshotPath); err != nil {
+				if err := fsutil.RemoveFile(s.cleanSnapshotPath); err != nil {
 					s.logger.Printf("warning: failed to remove clean snapshot marker file: %s", err)
 				}
 			}
 		}()
 
-		if !pathExists(s.cleanSnapshotPath) {
+		if !fsutil.PathExists(s.cleanSnapshotPath) {
 			return nil
 		}
 		fp := &FileFingerprint{}
 		if err := fp.ReadFromFile(s.cleanSnapshotPath); err != nil {
 			return nil
 		}
-		mt, sz, err := modTimeSize(s.dbPath)
+		mt, sz, err := fsutil.ModTimeSize(s.dbPath)
 		if err != nil {
 			return nil
 		}
@@ -698,7 +697,7 @@ func (s *Store) Open() (retErr error) {
 	}
 
 	// Create the Raft log store and verify it.
-	raftDBSize, err := fileSizeExists(s.raftDBPath)
+	raftDBSize, err := fsutil.FileSizeExists(s.raftDBPath)
 	if err != nil {
 		return fmt.Errorf("failed to determine size of Raft log: %s", err)
 	}
@@ -728,7 +727,7 @@ func (s *Store) Open() (retErr error) {
 	}
 
 	// Request to recover node?
-	if pathExists(s.peersPath) {
+	if fsutil.PathExists(s.peersPath) {
 		s.logger.Printf("attempting node recovery using %s", s.peersPath)
 		config, err := raft.ReadConfigJSON(s.peersPath)
 		if err != nil {
@@ -736,7 +735,7 @@ func (s *Store) Open() (retErr error) {
 		}
 
 		// Recovering a node invalidates any existing SQLite file.
-		if err := removeFile(s.cleanSnapshotPath); err != nil {
+		if err := fsutil.RemoveFile(s.cleanSnapshotPath); err != nil {
 			return fmt.Errorf("failed to remove clean snapshot file during RecoverNode: %w", err)
 		}
 		if err = RecoverNode(s.raftDir, s.dbConf.Extensions, s.logger, s.raftLog,
@@ -760,6 +759,7 @@ func (s *Store) Open() (retErr error) {
 	if err != nil {
 		return fmt.Errorf("failed to create on-disk database: %s", err)
 	}
+	s.checkpointer = s.db
 
 	// Clean up any files from aborted operations. This tries to catch the case where scratch files
 	// were created in the Raft directory, not cleaned up, and then the node was restarted with an
@@ -1119,7 +1119,7 @@ func (s *Store) Leader() (*Server, error) {
 	return &Server{
 		ID:       string(id),
 		Addr:     string(addr),
-		Suffrage: raft.Voter.String(),
+		Suffrage: proto.Suffrage_VOTER,
 	}, nil
 }
 
@@ -1192,7 +1192,7 @@ func (s *Store) Followers() ([]*Server, error) {
 			followers = append(followers, &Server{
 				ID:       string(servers[i].ID),
 				Addr:     string(servers[i].Address),
-				Suffrage: servers[i].Suffrage.String(),
+				Suffrage: proto.Suffrage_NON_VOTER,
 			})
 		}
 	}
@@ -1239,7 +1239,7 @@ func (s *Store) Nodes() ([]*Server, error) {
 		servers[i] = &Server{
 			ID:       string(rs[i].ID),
 			Addr:     string(rs[i].Address),
-			Suffrage: rs[i].Suffrage.String(),
+			Suffrage: command.SuffrageFromString(rs[i].Suffrage.String()),
 		}
 	}
 
@@ -1323,7 +1323,7 @@ func (s *Store) Stats() (map[string]any, error) {
 			raftStats[k] = s
 		}
 	}
-	raftStats["log_size"], err = fileSizeExists(s.raftDBPath)
+	raftStats["log_size"], err = fsutil.FileSizeExists(s.raftDBPath)
 	if err != nil {
 		return nil, err
 	}
@@ -1335,7 +1335,7 @@ func (s *Store) Stats() (map[string]any, error) {
 	raftStats["transport"] = s.raftTn.Stats()
 	raftStats["config"] = RaftConfigAsJSON(s.raftConfig())
 
-	dirSz, err := dirSize(s.raftDir)
+	dirSz, err := fsutil.DirSize(s.raftDir)
 	if err != nil {
 		return nil, err
 	}
@@ -1410,6 +1410,8 @@ func (s *Store) Stats() (map[string]any, error) {
 
 // Execute executes queries that return no rows, but do modify the database.
 func (s *Store) Execute(ctx context.Context, ex *proto.ExecuteRequest) ([]*proto.ExecuteQueryResponse, uint64, error) {
+	s.throttler.Delay(ctx)
+
 	p := (*PragmaCheckRequest)(ex.Request)
 	if err := p.Check(); err != nil {
 		return nil, 0, err
@@ -1575,7 +1577,7 @@ func (s *Store) VerifyLeader() (retErr error) {
 	defer func() {
 		if retErr == nil {
 			stats.Add(numVerifyLeader, 1)
-			stats.Get(verifyLeaderDuration).(*expvar.Int).Set(time.Since(startT).Milliseconds())
+			recordDuration(verifyLeaderDuration, startT)
 		} else {
 			stats.Add(numVerifyLeaderFailed, 1)
 		}
@@ -1657,6 +1659,11 @@ func (s *Store) Request(ctx context.Context, eqr *proto.ExecuteQueryRequest) ([]
 	}
 	if !s.Ready() {
 		return nil, 0, 0, ErrNotReady
+	}
+
+	// Enforce throttling since we're probably about to make changes to the database.
+	if err := s.throttler.Delay(ctx); err != nil {
+		return nil, 0, 0, err
 	}
 
 	// Send the request through consensus.
@@ -1966,7 +1973,7 @@ func (s *Store) ReadFrom(r io.Reader) (int64, error) {
 	s.cdcRegistered.Unset()
 
 	// Snapshot, so we load the new database into the Raft system.
-	if err := s.snapshotStore.SetFullNeeded(); err != nil {
+	if err := s.snapshotStore.SetDueNext(snapshot.Full); err != nil {
 		s.logger.Fatalf("failed to set full snapshot needed: %s", err)
 	}
 	if err := s.Snapshot(1); err != nil {
@@ -2082,7 +2089,7 @@ func (s *Store) Notify(nr *proto.NotifyRequest) error {
 		return fmt.Errorf("failed to resolve %s: %w", addr, err)
 	}
 
-	s.notifyingNodes[nr.Id] = &Server{nr.Id, nr.Address, "voter"}
+	s.notifyingNodes[nr.Id] = &Server{nr.Id, nr.Address, proto.Suffrage_VOTER}
 	if len(s.notifyingNodes) < s.BootstrapExpect {
 		return nil
 	}
@@ -2461,10 +2468,9 @@ func (s *Store) fsmApply(l *raft.Log) (e any) {
 
 	cmd, mutated, r := func() (*proto.Command, bool, any) {
 		// Reset CDC streamer with the current log index before processing if CDC is enabled
-		s.cdcMu.RLock()
-		defer s.cdcMu.RUnlock()
-
 		if s.cdcEnabled.Is() {
+			s.cdcMu.RLock()
+			defer s.cdcMu.RUnlock()
 			if s.cdcStreamer == nil {
 				var err error
 				s.cdcStreamer, err = sql.NewCDCStreamer(s.cdcOutCh, s.db)
@@ -2498,7 +2504,7 @@ func (s *Store) fsmApply(l *raft.Log) (e any) {
 		s.numNoops.Add(1)
 	case proto.Command_COMMAND_TYPE_LOAD:
 		// Swapping in a new database invalidates any existing snapshot.
-		if err := s.snapshotStore.SetFullNeeded(); err != nil {
+		if err := s.snapshotStore.SetDueNext(snapshot.Full); err != nil {
 			s.logger.Fatalf("failed to set full snapshot needed: %s", err)
 		}
 		// Swapping in a new database deactivates the CDC hooks, so signal that it
@@ -2522,7 +2528,7 @@ func (s *Store) fsmSnapshot() (fSnap raft.FSMSnapshot, retErr error) {
 	if _, _, err := s.snapshotSync.Sync(time.Second); err != nil {
 		return nil, err
 	}
-	stats.Get(snapshotSyncDuration).(*expvar.Int).Set(time.Since(syncStartTime).Milliseconds())
+	recordDuration(snapshotSyncDuration, syncStartTime)
 
 	if err := s.snapshotCAS.Begin("snapshot"); err != nil {
 		return nil, err
@@ -2551,7 +2557,7 @@ func (s *Store) fsmSnapshot() (fSnap raft.FSMSnapshot, retErr error) {
 		lt, err := s.db.DBLastModified()
 		if err != nil {
 			s.logger.Printf("failed to get last modified time: %s", err)
-			s.snapshotStore.SetFullNeeded()
+			s.snapshotStore.SetDueNext(snapshot.Full)
 		} else {
 			s.dbModifiedTime.Store(lt)
 		}
@@ -2576,30 +2582,26 @@ func (s *Store) fsmSnapshot() (fSnap raft.FSMSnapshot, retErr error) {
 		}
 	}
 
-	fullNeeded, err := s.snapshotStore.FullNeeded()
+	dueNext, err := s.snapshotDueNext()
 	if err != nil {
 		return nil, err
 	}
-	fullNeeded = fullNeeded || s.dbModified()
-	fPLog := fullPretty(fullNeeded)
 	defer func() {
 		s.numSnapshots.Add(1)
 	}()
 
 	var fsmSnapshot raft.FSMSnapshot
 	finalizer := s.createSnapshotFingerprint
-	if fullNeeded {
+	if dueNext.IsFull() {
 		// We need to start the snapshoting process over again, starting with a full copy of the SQLite
 		// database. This happens when a node is snapshotting for the very first time, or in certain
 		// crash scenarios where we've truncated the WAL into the database, but haven't successfully
 		// completed a snapshot, so the database is modified but the WAL is not present to be snapshotted.
-		chkStartTime := time.Now()
-		if err := s.checkpointWAL(); err != nil {
-			stats.Add(numFullCheckpointFailed, 1)
-			return nil, fmt.Errorf("full snapshot can't complete due to WAL checkpoint error (will retry): %s",
-				err.Error())
+		if _, err := s.checkpointer.Checkpoint(nil, truncateTimeout); err != nil {
+			// A failed FULL snapshot is always retryable, since we're looking to capture
+			// the entire database. So return the error and Raft will retry.
+			return nil, err
 		}
-		stats.Get(snapshotCreateChkTruncateDuration).(*expvar.Int).Set(time.Since(chkStartTime).Milliseconds())
 		streamer, err := snapshot.NewSnapshotStreamer(s.db.Path())
 		if err != nil {
 			return nil, err
@@ -2611,32 +2613,17 @@ func (s *Store) fsmSnapshot() (fSnap raft.FSMSnapshot, retErr error) {
 		stats.Add(numSnapshotsFull, 1)
 		s.numFullSnapshots++
 	} else {
-		if !pathExistsWithData(s.walPath) {
+		if !fsutil.PathExistsWithData(s.walPath) {
 			// No WAL data available. This can happen when the Raft log contains only
 			// entries that don't modify the database (e.g. cluster membership changes).
 			// Return an error so Raft knows there is nothing to snapshot.
 			return nil, ErrNoWALToSnapshot
 		}
 
-		// We've got a WAL file, let's start processing it. Checkpointing isn't strictly
-		// necessary but it keeps the size of the WAL file down when moved and stored
-		// in the Snapshot Store. It also means smaller data transfers if a snapshot
-		// is transferred to another node.
-		compactStartTime := time.Now()
-		walFD, err := os.Open(s.walPath)
-		if err != nil {
-			return nil, err
-		}
-		defer walFD.Close()
-		scanner, err := wal.NewFastCompactingScanner(walFD)
-		if err != nil {
-			return nil, err
-		}
-
 		// Write the compacted WAL to the WAL staging directory. The Snapshotting process
 		// will atomically move this entire directory. If it fails to do so, then this WAL
 		// file wil be packaged as part of the next Snapshot and the next WAL file.
-		if err := ensureDirExists(s.walStagingDir); err != nil {
+		if err := fsutil.EnsureDirExists(s.walStagingDir); err != nil {
 			return nil, err
 		}
 		sd := snapshot.NewStagingDir(s.walStagingDir)
@@ -2646,35 +2633,18 @@ func (s *Store) fsmSnapshot() (fSnap raft.FSMSnapshot, retErr error) {
 		}
 		defer walWriter.Cancel() // Noop if already closed, but ensures cleanup on error paths.
 
-		ww, err := wal.NewWriter(scanner)
-		if err != nil {
+		if _, err := s.checkpointer.Checkpoint(walWriter, truncateTimeout); err != nil {
+			var re sql.RetryableError
+			if errors.As(err, &re) && !re.Retryable() {
+				// A non-retryable error at this point means the underlying system is in a state
+				// that further incremental snapshots won't handle. We could revert to full but
+				// a nonretryable error is that time shouldn't actually happen.
+				walWriter.Cancel()
+				s.logger.Fatalf("failed to checkpoint and truncate database for incremental snapshot: %s",
+					err.Error())
+			}
 			return nil, err
 		}
-		walSzPost, err := ww.WriteTo(walWriter)
-		if err != nil {
-			return nil, err
-		}
-		stats.Get(snapshotCreateWALCompactDuration).(*expvar.Int).Set(time.Since(compactStartTime).Milliseconds())
-
-		// Now that we've got a (compacted) copy of the WAL we can truncate the
-		// WAL itself. We use TRUNCATE mode so that the next WAL contains just
-		// changes since this snapshot. If the truncation errors the the WAL
-		// Writer will be canceled, and this entire snapshot will be retried.
-		// If we crash before this point, the Staging Directory is deleted on
-		// startup, so it will be as though the snapshot never happened.
-		walSzPre, err := fileSize(s.walPath)
-		if err != nil {
-			return nil, err
-		}
-		chkTStartTime := time.Now()
-		if err := s.checkpointWAL(); err != nil {
-			stats.Add(numWALCheckpointTruncateFailed, 1)
-			return nil, fmt.Errorf("incremental snapshot can't complete due to WAL checkpoint error (will retry): %s",
-				err.Error())
-		}
-		stats.Get(snapshotCreateChkTruncateDuration).(*expvar.Int).Set(time.Since(chkTStartTime).Milliseconds())
-		stats.Get(snapshotPrecompactWALSize).(*expvar.Int).Set(walSzPre)
-		stats.Get(snapshotWALSize).(*expvar.Int).Set(walSzPost)
 
 		// Now that the database has been truncated successfully, the WAL file in the Staging directory
 		// should be marked valid. If we crash here, on restart we delete the Staging directory, but since
@@ -2703,33 +2673,33 @@ func (s *Store) fsmSnapshot() (fSnap raft.FSMSnapshot, retErr error) {
 	dur := time.Since(startT)
 	stats.Get(snapshotCreateDuration).(*expvar.Int).Set(dur.Milliseconds())
 	fs := FSMSnapshot{
-		Full:        fullNeeded,
+		Type:        dueNext,
 		FSMSnapshot: fsmSnapshot,
 		Finalizer:   finalizer,
 		OnRelease: func(invoked, succeeded bool) {
 			if !invoked {
-				s.logger.Printf("persisting %s snapshot was not invoked on node ID %s", fPLog, s.raftID)
+				s.logger.Printf("persisting %s snapshot was not invoked on node ID %s", dueNext, s.raftID)
 				// The WAL staging directory, if it has anything, will not have changed, so the WAL files
 				// will be ready for packaging with the next snapshot. This means we can avoid performing
 				// a full snapshot.
 			} else if !succeeded {
-				s.logger.Printf("persisting %s snapshot did not succeed on node ID %s", fPLog, s.raftID)
+				s.logger.Printf("persisting %s snapshot did not succeed on node ID %s", dueNext, s.raftID)
 				// In this situation the snapshot was processed, but the processing did not succeed.
 				// If this happened while handling a full snapshot, then the system will automatically
 				// try a full snapshot next time round. If, instead, this happened while processing an
 				// incremental snapshot, then it depends on whether the WAL Staging directory is still
 				// around. If it is, we don't have a broken series of WALs and we can retry an incremental
 				// again next time. Otherwise the chain has been broken and we must fall back to full.
-				if !dirExists(s.walStagingDir) {
-					if err := s.snapshotStore.SetFullNeeded(); err != nil {
+				if !fsutil.DirExists(s.walStagingDir) {
+					if err := s.snapshotStore.SetDueNext(snapshot.Full); err != nil {
 						s.logger.Fatalf("failed to set full needed after snapshot processing failure: %s", err)
 					}
 				}
 			}
 		},
 	}
-	if fullNeeded || s.logIncremental() {
-		s.logger.Printf("%s snapshot created in %s on node ID %s", fPLog, dur, s.raftID)
+	if dueNext.IsFull() || s.logIncremental() {
+		s.logger.Printf("%s snapshot created in %s on node ID %s", dueNext, dur, s.raftID)
 		fs.logger = s.logger
 	}
 	return &fs, nil
@@ -2763,7 +2733,7 @@ func (s *Store) fsmRestore(rc io.ReadCloser) (retErr error) {
 
 	// Any existing SQLite file is about to be invalid, so mark that we can't
 	// fast-restart with it.
-	if err := removeFile(s.cleanSnapshotPath); err != nil {
+	if err := fsutil.RemoveFile(s.cleanSnapshotPath); err != nil {
 		return fmt.Errorf("failed to remove clean snapshot file: %w", err)
 	}
 	if err := s.db.Swap(tmpPath, s.dbConf.FKConstraints, true); err != nil {
@@ -2960,7 +2930,7 @@ func (s *Store) runWALSnapshotting() (closeCh, doneCh chan struct{}) {
 		for {
 			select {
 			case <-ticker.C:
-				sz, err := fileSizeExists(s.walPath)
+				sz, err := fsutil.FileSizeExists(s.walPath)
 				if err != nil {
 					s.logger.Printf("failed to check WAL size: %s", err.Error())
 					continue
@@ -2978,85 +2948,6 @@ func (s *Store) runWALSnapshotting() (closeCh, doneCh chan struct{}) {
 		}
 	}()
 	return closeCh, doneCh
-}
-
-// checkpointWAL performs a checkpoint of the WAL, truncating it. If it returns an error
-// the checkpoint operation can be retried at the caller's discretion. If this function
-// encounters an error such that the checkpoint must be retried, it will automatically do
-// that until it is successful (or a timeout fires).
-//
-// This function also implements the policy that if a certain number of checkpoint attempts
-// fail in a row, it will loop until is successful.
-func (s *Store) checkpointWAL() (retErr error) {
-	defer func() {
-		if retErr != nil {
-			s.numFailedSnapshotsInRow++
-			if s.numFailedSnapshotsInRow == maxFailedSnapshotsInRow {
-				s.logger.Printf("too many failed snapshots in a row (%d), forcing WAL checkpoint truncate",
-					s.numFailedSnapshotsInRow)
-				s.mustTruncateCheckpoint()
-				s.numFailedSnapshotsInRow = 0
-				retErr = nil
-			}
-		} else {
-			s.numFailedSnapshotsInRow = 0
-		}
-	}()
-
-	meta, err := s.db.Checkpoint(sql.CheckpointTruncate)
-	if err != nil {
-		return err
-	}
-	if !meta.Success() {
-		if meta.Pages == meta.Moved {
-			s.logger.Printf("checkpoint moved %d/%d pages, but did not truncate WAL, forcing truncate",
-				meta.Moved, meta.Pages)
-			s.mustTruncateCheckpoint()
-			return nil
-		}
-		stats.Add(numWALCheckpointIncomplete, 1)
-		return fmt.Errorf("checkpoint incomplete: %s", meta.String())
-	}
-	return nil
-}
-
-// mustTruncateCheckpoint truncates the checkpointed WAL, retrying until successful or
-// timing out.
-//
-// This should be called if we hit a specifc edge case where all pages were moved but some
-// reader blocked truncation. The next write could start overwriting WAL frames at the start
-// of the WAL which would mean we would lose WAL data, so we need to forcibly truncate here.
-// We do this by blocking all readers (writes are already blocked). This handling is due to
-// research into SQLite and not seen as of yet.
-//
-// Finally, we could still timeout here while trying to truncate. This could happen if a
-// reader external to rqlite just won't let go.
-func (s *Store) mustTruncateCheckpoint() {
-	startT := time.Now()
-	defer func() {
-		s.logger.Printf("forced WAL truncate checkpoint took %s", time.Since(startT))
-	}()
-
-	stats.Add(numWALMustCheckpoint, 1)
-	s.readerMu.Lock()
-	defer s.readerMu.Unlock()
-
-	ticker := time.NewTicker(mustWALCheckpointDelay)
-	defer ticker.Stop()
-	for {
-		select {
-		case <-ticker.C:
-			meta, err := s.db.Checkpoint(sql.CheckpointTruncate)
-			if err == nil && meta.Success() {
-				return
-			}
-		case <-time.After(mustWALCheckpointTimeout):
-			msg := fmt.Sprintf("timed out trying to truncate checkpoint WAL after %s,"+
-				" probably due to external long-running read - aborting",
-				mustWALCheckpointTimeout)
-			s.logger.Fatal(msg)
-		}
-	}
 }
 
 // selfLeaderChange is called when this node detects that its leadership
@@ -3177,7 +3068,7 @@ func (s *Store) doAutoVac() error {
 		return err
 	}
 	s.logger.Printf("database vacuumed in %s", time.Since(vacStart))
-	stats.Get(autoVacuumDuration).(*expvar.Int).Set(time.Since(vacStart).Milliseconds())
+	recordDuration(autoVacuumDuration, vacStart)
 	stats.Add(numAutoVacuums, 1)
 	s.numAutoVacuums++
 	return s.setKeyTime(lastVacuumTimeKey, time.Now())
@@ -3206,10 +3097,21 @@ func (s *Store) doAutoOptimize() error {
 		return err
 	}
 	s.logger.Printf("database optimized in %s", time.Since(optStart))
-	stats.Get(autoOptimizeDuration).(*expvar.Int).Set(time.Since(optStart).Milliseconds())
+	recordDuration(autoOptimizeDuration, optStart)
 	stats.Add(numAutoOptimizes, 1)
 	s.numAutoOptimizes++
 	return s.setKeyTime(lastOptimizeTimeKey, time.Now())
+}
+
+func (s *Store) snapshotDueNext() (snapshot.Type, error) {
+	dueNext, err := s.snapshotStore.DueNext()
+	if err != nil {
+		return snapshot.Full, err
+	}
+	if dueNext == snapshot.Full || s.dbModified() {
+		return snapshot.Full, nil
+	}
+	return snapshot.Incremental, nil
 }
 
 // dbModified returns true if the database appears to have been modified
@@ -3273,98 +3175,6 @@ func prettyVoter(v bool) string {
 		return "voter"
 	}
 	return "non-voter"
-}
-
-// removeFile removes the file at the given path if it exists.
-func removeFile(path string) error {
-	if !pathExists(path) {
-		return nil
-	}
-	return os.Remove(path)
-}
-
-// pathExists returns true if the given path exists.
-func pathExists(p string) bool {
-	if _, err := os.Lstat(p); err != nil && os.IsNotExist(err) {
-		return false
-	}
-	return true
-}
-
-// pathExistsWithData returns true if the given path exists and has data.
-func pathExistsWithData(p string) bool {
-	if !pathExists(p) {
-		return false
-	}
-	if size, err := fileSize(p); err != nil || size == 0 {
-		return false
-	}
-	return true
-}
-
-func dirExists(path string) bool {
-	stat, err := os.Stat(path)
-	return err == nil && stat.IsDir()
-}
-
-func ensureDirExists(path string) error {
-	if dirExists(path) {
-		return nil
-	}
-	return os.MkdirAll(path, 0755)
-}
-
-func fileSize(path string) (int64, error) {
-	stat, err := os.Stat(path)
-	if err != nil {
-		return 0, err
-	}
-	return stat.Size(), nil
-}
-
-// fileSizeExists returns the size of the given file, or 0 if the file does not
-// exist. Any other error is returned.
-func fileSizeExists(path string) (int64, error) {
-	if !pathExists(path) {
-		return 0, nil
-	}
-	return fileSize(path)
-}
-
-// dirSize returns the total size of all files in the given directory
-func dirSize(path string) (int64, error) {
-	var size int64
-	err := filepath.Walk(path, func(_ string, info os.FileInfo, err error) error {
-		if err != nil {
-			// If the file doesn't exist, we can ignore it. Snapshot files might
-			// disappear during walking.
-			if os.IsNotExist(err) {
-				return nil
-			}
-			return err
-		}
-		if !info.IsDir() {
-			size += info.Size()
-		}
-		return err
-	})
-	return size, err
-}
-
-// modTimeSize returns the modification time and size of the file at the given path.
-func modTimeSize(path string) (time.Time, int64, error) {
-	info, err := os.Stat(path)
-	if err != nil {
-		return time.Time{}, 0, err
-	}
-	return info.ModTime(), info.Size(), nil
-}
-
-func fullPretty(full bool) string {
-	if full {
-		return "full"
-	}
-	return "incremental"
 }
 
 func resolvableAddress(addr string) (string, error) {

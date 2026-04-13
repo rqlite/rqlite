@@ -13,6 +13,7 @@ import (
 
 	"github.com/hashicorp/raft"
 	"github.com/rqlite/rqlite/v10/db"
+	"github.com/rqlite/rqlite/v10/internal/fsutil"
 	"github.com/rqlite/rqlite/v10/snapshot/plan"
 )
 
@@ -46,10 +47,10 @@ func Test_StoreEmpty(t *testing.T) {
 		t.Fatalf("Expected no snapshots, got %d", len(snaps))
 	}
 
-	if fn, err := store.FullNeeded(); err != nil {
-		t.Fatalf("Failed to check if full snapshot needed: %v", err)
-	} else if !fn {
-		t.Fatalf("Expected full snapshot needed, but it is not")
+	if dn, err := store.DueNext(); err != nil {
+		t.Fatalf("Failed to check snapshot due next: %v", err)
+	} else if dn != Full {
+		t.Fatalf("Expected full snapshot due next, got %s", dn)
 	}
 
 	_, _, err = store.Open("nonexistent")
@@ -97,7 +98,7 @@ func Test_StoreCreateCancel(t *testing.T) {
 	tmpSnapDir := dir + "/" + sink.ID() + tmpSuffix
 
 	// Should be a tmp directory with the name of the sink ID
-	if !pathExists(tmpSnapDir) {
+	if !fsutil.PathExists(tmpSnapDir) {
 		t.Fatalf("Expected directory with name %s, but it does not exist", sink.ID())
 	}
 
@@ -114,7 +115,7 @@ func Test_StoreCreateCancel(t *testing.T) {
 	}
 
 	// Should not be a tmp directory with the name of the sink ID
-	if pathExists(tmpSnapDir) {
+	if fsutil.PathExists(tmpSnapDir) {
 		t.Fatalf("Expected directory with name %s to not exist, but it does", sink.ID())
 	}
 
@@ -133,7 +134,7 @@ func Test_Store_CreateIncrementalFirst_Fail(t *testing.T) {
 	}
 	defer store.Close()
 
-	sink := NewSink(store.Dir(), makeRaftMeta("1234", 45, 1, 40), store)
+	sink := NewSink(store.Dir(), makeRaftMeta("1234", 45, 1, 40), store, nil)
 	if sink == nil {
 		t.Fatalf("Failed to create new sink")
 	}
@@ -426,7 +427,7 @@ func Test_Store_EndToEndCycle(t *testing.T) {
 	if exp, got := 0, len(walPaths); exp != got {
 		t.Fatalf("Expected %d WAL files, got %d", exp, got)
 	}
-	if !filesIdentical(dbPath, "testdata/db-and-wals/backup.db") {
+	if !fsutil.FilesIdentical(dbPath, "testdata/db-and-wals/backup.db") {
 		t.Fatalf("Database file in snapshot does not match source")
 	}
 
@@ -735,7 +736,7 @@ func Test_Store_Reap(t *testing.T) {
 	}
 
 	//////////////////////////////////////////////////////////////////////////////////
-	// Write two more WAL files, and then Reap.
+	// Write two more incremental snapshots, and then Reap.
 	createSnapshotInStore(t, store, "2-1400-1704807720976", 1400, 2, 1, "", "testdata/db-and-wals/wal-01")
 	createSnapshotInStore(t, store, "2-1500-1704807720976", 1500, 2, 1, "", "testdata/db-and-wals/wal-02")
 	snaps, err = store.ListAll()
@@ -831,7 +832,7 @@ func Test_Store_Reap(t *testing.T) {
 	}
 
 	// dbPath should be a byte-for-byte copy of full2.db
-	if !filesIdentical(dbPath, "testdata/db-and-wals/full2.db") {
+	if !fsutil.FilesIdentical(dbPath, "testdata/db-and-wals/full2.db") {
 		t.Fatalf("Database file in snapshot does not match source")
 	}
 
@@ -876,9 +877,54 @@ func Test_Store_Reap(t *testing.T) {
 	}
 
 	// dbPath should be a byte-for-byte copy of backup.db
-	if !filesIdentical(dbPath, "testdata/db-and-wals/backup.db") {
+	if !fsutil.FilesIdentical(dbPath, "testdata/db-and-wals/backup.db") {
 		t.Fatalf("Database file in snapshot does not match source")
 	}
+
+	// Write an incremental snapshot but this time include two WAL files to test when
+	// the incoming staging directory had multiple WALs.
+	createSnapshotInStore(t, store, "2-6000-1804807720976", 3000, 2, 1, "", "testdata/db-and-wals/wal-00", "testdata/db-and-wals/wal-01")
+
+	n, c, err = store.Reap()
+	if err != nil {
+		t.Fatalf("Failed to reap snapshots: %v", err)
+	}
+
+	// We reap one snapshot, but checkpoint two WALs.
+	if exp, got := 1, n; exp != got {
+		t.Fatalf("Expected %d snapshots reaped, got %d", exp, got)
+	}
+	if exp, got := 2, c; exp != got {
+		t.Fatalf("Expected %d checkpoints made, got %d", exp, got)
+	}
+
+	snaps = mustListSnapshots(t, store)
+	if len(snaps) != 1 {
+		t.Fatalf("Expected 1 snapshot in destination store, got %d", len(snaps))
+	}
+	_, rc, err = store.Open(snaps[0].ID)
+	if err != nil {
+		t.Fatalf("Failed to open snapshot in destination store: %v", err)
+	}
+
+	buf = &bytes.Buffer{}
+	if _, err := io.Copy(buf, rc); err != nil {
+		t.Fatalf("Failed to read snapshot data from destination store: %v", err)
+	}
+	if err := rc.Close(); err != nil {
+		t.Fatalf("Failed to close snapshot reader in destination store: %v", err)
+	}
+
+	dbPath, walPaths = persistStreamerData(t, buf)
+	if len(walPaths) != 0 {
+		t.Fatalf("Expected 0 WAL files, got %d", len(walPaths))
+	}
+
+	rows = mustQueryDB(t, dbPath, "SELECT COUNT(*) FROM foo")
+	if exp, got := `[{"columns":["COUNT(*)"],"types":["integer"],"values":[[2]]}]`, rows; exp != got {
+		t.Fatalf("unexpected results for query exp: %s got: %s", exp, got)
+	}
+
 }
 
 func Test_Store_ReapCorruptDB(t *testing.T) {
@@ -989,7 +1035,7 @@ func Test_Store_Check_RemovesTmpDirs(t *testing.T) {
 	defer store2.Close()
 
 	// The .tmp directory should be gone.
-	if pathExists(tmpDir) {
+	if fsutil.PathExists(tmpDir) {
 		t.Fatalf("Expected .tmp directory to be removed, but it still exists")
 	}
 
@@ -1084,7 +1130,7 @@ func Test_Store_Check_ResumesReapPlan(t *testing.T) {
 	defer store3.Close()
 
 	// The plan file should be gone.
-	if fileExists(planPath) {
+	if fsutil.FileExists(planPath) {
 		t.Fatalf("Expected REAP_PLAN to be removed after check")
 	}
 
@@ -1233,11 +1279,6 @@ func makeTestConfiguration(i, a string) raft.Configuration {
 	}
 }
 
-func pathExists(path string) bool {
-	_, err := os.Stat(path)
-	return err == nil
-}
-
 func makeRaftMeta(id string, index, term, cfgIndex uint64) *raft.SnapshotMeta {
 	return &raft.SnapshotMeta{
 		ID:                 id,
@@ -1252,7 +1293,7 @@ func makeRaftMeta(id string, index, term, cfgIndex uint64) *raft.SnapshotMeta {
 func createSnapshotInStore(t *testing.T, store *Store, id string, index, term, cfgIndex uint64, dbFile string, walFiles ...string) {
 	t.Helper()
 
-	sink := NewSink(store.Dir(), makeRaftMeta(id, index, term, cfgIndex), store)
+	sink := NewSink(store.Dir(), makeRaftMeta(id, index, term, cfgIndex), store, nil)
 	if sink == nil {
 		t.Fatalf("Failed to create new sink")
 	}
@@ -1384,4 +1425,232 @@ func mustQueryDB(t *testing.T, dbPath, query string) string {
 		t.Fatalf("failed to query database: %s", err)
 	}
 	return asJSON(rows)
+}
+
+func Test_StoreRegisterObserver(t *testing.T) {
+	dir := t.TempDir()
+	store, err := NewStore(dir)
+	if err != nil {
+		t.Fatalf("failed to create store: %v", err)
+	}
+	defer store.Close()
+
+	ch := make(chan ReapObservation, 1)
+	obs := NewObserver(ch, nil)
+	store.RegisterObserver(obs)
+
+	n, c, err := store.Reap()
+	if err != nil {
+		t.Fatalf("failed to reap: %v", err)
+	}
+	if n != 0 || c != 0 {
+		t.Fatalf("expected 0 reaped, got n=%d c=%d", n, c)
+	}
+
+	select {
+	case o := <-ch:
+		if o.SnapshotsReaped != 0 {
+			t.Fatalf("expected 0 snapshots reaped, got %d", o.SnapshotsReaped)
+		}
+		if o.WALsReaped != 0 {
+			t.Fatalf("expected 0 WALs reaped, got %d", o.WALsReaped)
+		}
+		if o.Duration < 0 {
+			t.Fatalf("expected non-negative duration, got %s", o.Duration)
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("timed out waiting for observation")
+	}
+
+	if obs.GetNumObserved() != 1 {
+		t.Fatalf("expected 1 observed, got %d", obs.GetNumObserved())
+	}
+}
+
+func Test_StoreDeregisterObserver(t *testing.T) {
+	dir := t.TempDir()
+	store, err := NewStore(dir)
+	if err != nil {
+		t.Fatalf("failed to create store: %v", err)
+	}
+	defer store.Close()
+
+	ch := make(chan ReapObservation, 1)
+	obs := NewObserver(ch, nil)
+	store.RegisterObserver(obs)
+	store.DeregisterObserver(obs)
+
+	_, _, err = store.Reap()
+	if err != nil {
+		t.Fatalf("failed to reap: %v", err)
+	}
+
+	select {
+	case o := <-ch:
+		t.Fatalf("expected no observation after deregister, got %+v", o)
+	default:
+	}
+
+	if obs.GetNumObserved() != 0 {
+		t.Fatalf("expected 0 observed after deregister, got %d", obs.GetNumObserved())
+	}
+}
+
+func Test_StoreRegisterObserver_Reap(t *testing.T) {
+	dir := t.TempDir()
+	store, err := NewStore(dir)
+	if err != nil {
+		t.Fatalf("failed to create store: %v", err)
+	}
+	defer store.Close()
+
+	ch := make(chan ReapObservation, 1)
+	obs := NewObserver(ch, nil)
+	store.RegisterObserver(obs)
+
+	// Create a full snapshot and an incremental snapshot.
+	createSnapshotInStore(t, store, "2-1017-1704807719996", 1017, 2, 1, "testdata/db-and-wals/backup.db")
+	createSnapshotInStore(t, store, "2-1131-1704807720976", 1131, 2, 1, "", "testdata/db-and-wals/wal-00")
+
+	n, c, err := store.Reap()
+	if err != nil {
+		t.Fatalf("failed to reap: %v", err)
+	}
+	if n != 1 {
+		t.Fatalf("expected 1 snapshot reaped, got %d", n)
+	}
+	if c != 1 {
+		t.Fatalf("expected 1 WAL checkpointed, got %d", c)
+	}
+
+	select {
+	case o := <-ch:
+		if o.SnapshotsReaped != 1 {
+			t.Fatalf("expected 1 snapshot reaped in observation, got %d", o.SnapshotsReaped)
+		}
+		if o.WALsReaped != 1 {
+			t.Fatalf("expected 1 WAL reaped in observation, got %d", o.WALsReaped)
+		}
+		if o.Duration < 0 {
+			t.Fatalf("expected non-negative duration, got %s", o.Duration)
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("timed out waiting for observation")
+	}
+
+	if obs.GetNumObserved() != 1 {
+		t.Fatalf("expected 1 observed, got %d", obs.GetNumObserved())
+	}
+}
+
+func Test_StoreRegisterObserver_Reap_MultiObs(t *testing.T) {
+	dir := t.TempDir()
+	store, err := NewStore(dir)
+	if err != nil {
+		t.Fatalf("failed to create store: %v", err)
+	}
+	defer store.Close()
+
+	ch1 := make(chan ReapObservation, 1)
+	obs1 := NewObserver(ch1, nil)
+	store.RegisterObserver(obs1)
+	ch2 := make(chan ReapObservation, 1)
+	obs2 := NewObserver(ch2, nil)
+	store.RegisterObserver(obs2)
+
+	// Create a full snapshot and an incremental snapshot.
+	createSnapshotInStore(t, store, "2-1017-1704807719996", 1017, 2, 1, "testdata/db-and-wals/backup.db")
+	createSnapshotInStore(t, store, "2-1131-1704807720976", 1131, 2, 1, "", "testdata/db-and-wals/wal-00")
+
+	n, c, err := store.Reap()
+	if err != nil {
+		t.Fatalf("failed to reap: %v", err)
+	}
+	if n != 1 {
+		t.Fatalf("expected 1 snapshot reaped, got %d", n)
+	}
+	if c != 1 {
+		t.Fatalf("expected 1 WAL checkpointed, got %d", c)
+	}
+
+	select {
+	case o := <-ch1:
+		if o.SnapshotsReaped != 1 {
+			t.Fatalf("expected 1 snapshot reaped in observation, got %d", o.SnapshotsReaped)
+		}
+		if o.WALsReaped != 1 {
+			t.Fatalf("expected 1 WAL reaped in observation, got %d", o.WALsReaped)
+		}
+		if o.Duration < 0 {
+			t.Fatalf("expected non-negative duration, got %s", o.Duration)
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("timed out waiting for observation")
+	}
+
+	if obs1.GetNumObserved() != 1 {
+		t.Fatalf("expected 1 observed for obs1, got %d", obs1.GetNumObserved())
+	}
+	if obs2.GetNumObserved() != 1 {
+		t.Fatalf("expected 1 observed for obs2, got %d", obs2.GetNumObserved())
+	}
+
+	select {
+	case o := <-ch2:
+		if o.SnapshotsReaped != 1 {
+			t.Fatalf("expected 1 snapshot reaped in observation, got %d", o.SnapshotsReaped)
+		}
+		if o.WALsReaped != 1 {
+			t.Fatalf("expected 1 WAL reaped in observation, got %d", o.WALsReaped)
+		}
+		if o.Duration < 0 {
+			t.Fatalf("expected non-negative duration, got %s", o.Duration)
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("timed out waiting for observation")
+	}
+
+	if obs1.GetNumObserved() != 1 {
+		t.Fatalf("expected 1 observed for obs1, got %d", obs1.GetNumObserved())
+	}
+	if obs2.GetNumObserved() != 1 {
+		t.Fatalf("expected 1 observed for obs2, got %d", obs2.GetNumObserved())
+	}
+
+	// Deregister obs1 and reap again, showing that only obs2 gets the observation.
+	store.DeregisterObserver(obs1)
+	createSnapshotInStore(t, store, "2-2000-1804807720976", 2000, 2, 1, "", "testdata/db-and-wals/wal-01")
+
+	n, c, err = store.Reap()
+	if err != nil {
+		t.Fatalf("failed to reap: %v", err)
+	}
+
+	if n != 1 {
+		t.Fatalf("expected 1 snapshot reaped, got %d", n)
+	}
+	if c != 1 {
+		t.Fatalf("expected 1 WAL checkpointed, got %d", c)
+	}
+
+	select {
+	case o := <-ch1:
+		t.Fatalf("expected no observation for obs1 after deregister, got %+v", o)
+	case <-time.After(2 * time.Second):
+	}
+
+	select {
+	case o := <-ch2:
+		if o.SnapshotsReaped != 1 {
+			t.Fatalf("expected 1 snapshot reaped in observation, got %d", o.SnapshotsReaped)
+		}
+		if o.WALsReaped != 1 {
+			t.Fatalf("expected 1 WAL reaped in observation, got %d", o.WALsReaped)
+		}
+		if o.Duration < 0 {
+			t.Fatalf("expected non-negative duration, got %s", o.Duration)
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("timed out waiting for observation")
+	}
 }

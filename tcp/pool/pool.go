@@ -19,6 +19,11 @@ type Pool interface {
 	// be counted as an error.
 	Get() (net.Conn, error)
 
+	// New creates a new connection via the factory, bypassing any idle
+	// connections in the pool. Closing the returned connection will attempt
+	// to return it to the pool, just like connections from Get().
+	New() (net.Conn, error)
+
 	// Close closes the pool and all its connections. After Close() the pool is
 	// no longer usable.
 	Close()

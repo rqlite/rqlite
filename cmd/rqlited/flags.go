@@ -39,6 +39,10 @@ const (
 // object before the Config object is used. It is OK to call more than
 // once.
 func (c *Config) Validate() error {
+	c.DataPath = strings.TrimSpace(c.DataPath)
+	if c.DataPath == "" {
+		return fmt.Errorf("data directory path is required")
+	}
 	dataPath, err := filepath.Abs(c.DataPath)
 	if err != nil {
 		return fmt.Errorf("failed to determine absolute data path: %s", err.Error())
@@ -293,7 +297,6 @@ func (c *Config) CheckDirPaths() error {
 type BuildInfo struct {
 	Version       string
 	Commit        string
-	Branch        string
 	SQLiteVersion string
 }
 
@@ -305,9 +308,9 @@ func ParseFlags(name, desc string, build *BuildInfo) (*Config, error) {
 	}
 
 	if config.ShowVersion {
-		msg := fmt.Sprintf("%s %s %s %s %s sqlite%s (commit %s, branch %s, compiler %s)",
+		msg := fmt.Sprintf("%s %s %s %s %s sqlite%s (commit %s, compiler %s)",
 			name, build.Version, runtime.GOOS, runtime.GOARCH, runtime.Version(), build.SQLiteVersion,
-			build.Commit, build.Branch, runtime.Compiler)
+			build.Commit, runtime.Compiler)
 		errorExit(0, msg)
 	}
 

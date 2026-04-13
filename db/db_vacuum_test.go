@@ -78,7 +78,7 @@ func Test_DBVacuumInto(t *testing.T) {
 	if exp, got := `[{}]`, asJSON(r); exp != got {
 		t.Fatalf("unexpected results for query, expected %s, got %s", exp, got)
 	}
-	for i := 0; i < 1000; i++ {
+	for range 1000 {
 		_, err = db.ExecuteStringStmt(`INSERT INTO foo(name) VALUES("fiona")`)
 		if err != nil {
 			t.Fatalf("error executing insertion into table: %s", err.Error())

@@ -5,6 +5,7 @@ import (
 	"path/filepath"
 	"testing"
 
+	"github.com/rqlite/rqlite/v10/internal/fsutil"
 	"github.com/rqlite/rqlite/v10/internal/rsum"
 )
 
@@ -31,10 +32,10 @@ func Test_StagingDir_CreateWALAndValidate(t *testing.T) {
 	}
 
 	// WAL file and CRC sidecar should exist.
-	if !fileExists(walPath) {
+	if !fsutil.FileExists(walPath) {
 		t.Fatalf("WAL file does not exist: %v", walPath)
 	}
-	if !fileExists(walPath + crcSuffix) {
+	if !fsutil.FileExists(walPath + crcSuffix) {
 		t.Fatalf("CRC file does not exist: %v", walPath+crcSuffix)
 	}
 
@@ -176,10 +177,10 @@ func Test_StagingDir_MoveWALFilesTo(t *testing.T) {
 	for _, wp := range walPaths {
 		name := filepath.Base(wp)
 		dstWAL := filepath.Join(dstDir, name)
-		if !fileExists(dstWAL) {
+		if !fsutil.FileExists(dstWAL) {
 			t.Fatalf("moved WAL file %s does not exist", name)
 		}
-		if !fileExists(dstWAL + crcSuffix) {
+		if !fsutil.FileExists(dstWAL + crcSuffix) {
 			t.Fatalf("moved CRC file for %s does not exist", name)
 		}
 	}
@@ -273,10 +274,10 @@ func Test_WALWriter_CancelAfterClose(t *testing.T) {
 	// Cancel after Close should be a no-op — files must survive.
 	w.Cancel()
 
-	if !fileExists(walPath) {
+	if !fsutil.FileExists(walPath) {
 		t.Fatalf("WAL file should still exist after Cancel on closed writer")
 	}
-	if !fileExists(walPath + crcSuffix) {
+	if !fsutil.FileExists(walPath + crcSuffix) {
 		t.Fatalf("CRC file should still exist after Cancel on closed writer")
 	}
 }

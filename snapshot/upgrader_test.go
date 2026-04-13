@@ -11,6 +11,7 @@ import (
 	"testing"
 
 	"github.com/hashicorp/raft"
+	"github.com/rqlite/rqlite/v10/internal/fsutil"
 	"github.com/rqlite/rqlite/v10/snapshot/plan"
 )
 
@@ -138,10 +139,10 @@ func Test_Upgrade8To10_NothingToDo(t *testing.T) {
 	if err := Upgrade8To10(oldEmpty, newEmpty, logger); err != nil {
 		t.Fatalf("failed to upgrade empty directory: %s", err)
 	}
-	if dirExists(oldEmpty) {
+	if fsutil.DirExists(oldEmpty) {
 		t.Fatal("expected empty old directory to be removed")
 	}
-	if dirExists(newEmpty) {
+	if fsutil.DirExists(newEmpty) {
 		t.Fatal("expected new directory to not be created for empty old")
 	}
 }
@@ -167,7 +168,7 @@ func Test_Upgrade8To10_NewAlreadyExists(t *testing.T) {
 	}
 
 	// Old should be removed since new already exists.
-	if dirExists(oldDir) {
+	if fsutil.DirExists(oldDir) {
 		t.Fatal("expected old directory to be removed")
 	}
 
@@ -184,7 +185,7 @@ func Test_Upgrade8To10_NewAlreadyExists(t *testing.T) {
 	if snap.id != "2-18-1686659761026" {
 		t.Fatalf("expected snapshot ID 2-18-1686659761026, got %s", snap.id)
 	}
-	if snap.typ != SnapshotTypeFull {
+	if snap.typ != Full {
 		t.Fatalf("expected full snapshot, got type %v", snap.typ)
 	}
 }
@@ -201,10 +202,10 @@ func Test_Upgrade8To10_OK(t *testing.T) {
 	mustCreateV8Snapshot(t, oldDir, snapshotID, 18, 2)
 
 	// Verify v8 layout before upgrade.
-	if !fileExists(filepath.Join(oldDir, snapshotID+".db")) {
+	if !fsutil.FileExists(filepath.Join(oldDir, snapshotID+".db")) {
 		t.Fatal("expected .db file at root")
 	}
-	if !fileExists(filepath.Join(oldDir, snapshotID, metaFileName)) {
+	if !fsutil.FileExists(filepath.Join(oldDir, snapshotID, metaFileName)) {
 		t.Fatal("expected meta.json in snapshot directory")
 	}
 
@@ -214,15 +215,15 @@ func Test_Upgrade8To10_OK(t *testing.T) {
 	}
 
 	// Old should be removed.
-	if dirExists(oldDir) {
+	if fsutil.DirExists(oldDir) {
 		t.Fatal("expected old directory to be removed after upgrade")
 	}
 
 	// Verify v10 layout in new directory.
-	if !fileExists(filepath.Join(newDir, snapshotID, dbfileName)) {
+	if !fsutil.FileExists(filepath.Join(newDir, snapshotID, dbfileName)) {
 		t.Fatal("expected data.db in snapshot directory after upgrade")
 	}
-	if !fileExists(filepath.Join(newDir, snapshotID, metaFileName)) {
+	if !fsutil.FileExists(filepath.Join(newDir, snapshotID, metaFileName)) {
 		t.Fatal("expected meta.json in snapshot directory after upgrade")
 	}
 
@@ -239,7 +240,7 @@ func Test_Upgrade8To10_OK(t *testing.T) {
 	if snap.id != snapshotID {
 		t.Fatalf("expected snapshot ID %s, got %s", snapshotID, snap.id)
 	}
-	if snap.typ != SnapshotTypeFull {
+	if snap.typ != Full {
 		t.Fatalf("expected full snapshot, got type %v", snap.typ)
 	}
 	if snap.raftMeta.Index != 18 {
@@ -290,7 +291,7 @@ func Test_Upgrade8To10_MultiplePicksNewest(t *testing.T) {
 	}
 
 	// Old should be removed.
-	if dirExists(oldDir) {
+	if fsutil.DirExists(oldDir) {
 		t.Fatal("expected old directory to be removed")
 	}
 
@@ -307,7 +308,7 @@ func Test_Upgrade8To10_MultiplePicksNewest(t *testing.T) {
 	if snap.id != "2-20-2000000000000" {
 		t.Fatalf("expected newest snapshot ID 2-20-2000000000000, got %s", snap.id)
 	}
-	if snap.typ != SnapshotTypeFull {
+	if snap.typ != Full {
 		t.Fatalf("expected full snapshot, got type %v", snap.typ)
 	}
 	if snap.raftMeta.Index != 20 {
@@ -352,7 +353,7 @@ func Test_Upgrade8To10_Idempotent(t *testing.T) {
 	if snap.id != snapshotID {
 		t.Fatalf("expected snapshot ID %s, got %s", snapshotID, snap.id)
 	}
-	if snap.typ != SnapshotTypeFull {
+	if snap.typ != Full {
 		t.Fatalf("expected full snapshot, got type %v", snap.typ)
 	}
 	if snap.raftMeta.Index != 18 {
@@ -411,10 +412,10 @@ func Test_Upgrade8To10_ResumesPlan(t *testing.T) {
 	}
 
 	// Plan file should be cleaned up.
-	if fileExists(planPath) {
+	if fsutil.FileExists(planPath) {
 		t.Fatal("expected plan file to be removed after successful upgrade")
 	}
-	if dirExists(oldDir) {
+	if fsutil.DirExists(oldDir) {
 		t.Fatal("expected old directory to be removed")
 	}
 
@@ -431,7 +432,7 @@ func Test_Upgrade8To10_ResumesPlan(t *testing.T) {
 	if snap.id != snapshotID {
 		t.Fatalf("expected snapshot ID %s, got %s", snapshotID, snap.id)
 	}
-	if snap.typ != SnapshotTypeFull {
+	if snap.typ != Full {
 		t.Fatalf("expected full snapshot, got type %v", snap.typ)
 	}
 	if snap.raftMeta.Index != 18 {

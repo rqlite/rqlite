@@ -26,6 +26,7 @@ import (
 	"github.com/rqlite/rqlite/v10/cluster"
 	"github.com/rqlite/rqlite/v10/cluster/disco"
 	"github.com/rqlite/rqlite/v10/cmd"
+	"github.com/rqlite/rqlite/v10/command"
 	"github.com/rqlite/rqlite/v10/db"
 	"github.com/rqlite/rqlite/v10/db/extensions"
 	httpd "github.com/rqlite/rqlite/v10/http"
@@ -54,6 +55,10 @@ storage engine. It provides an easy-to-use, fault-tolerant store for relational 
 
 Visit https://www.rqlite.io to learn more.`
 
+const (
+	shutdownTimeout = 10 * time.Second
+)
+
 func init() {
 	log.SetFlags(log.LstdFlags)
 	log.SetOutput(os.Stderr)
@@ -68,7 +73,6 @@ func main() {
 	cfg, err := ParseFlags(name, desc, &BuildInfo{
 		Version:       cmd.Version,
 		Commit:        cmd.Commit,
-		Branch:        cmd.Branch,
 		SQLiteVersion: db.DBVersion,
 	})
 	if err != nil {
@@ -77,8 +81,8 @@ func main() {
 	fmt.Print(logo)
 
 	// Configure logging and pump out initial message.
-	log.Printf("%s starting, version %s, SQLite %s, commit %s, branch %s, compiler (toolchain) %s, compiler (command) %s",
-		name, cmd.Version, db.DBVersion, cmd.Commit, cmd.Branch, runtime.Compiler, cmd.CompilerCommand)
+	log.Printf("%s starting, version %s, SQLite %s, commit %s, compiler (toolchain) %s, compiler (command) %s",
+		name, cmd.Version, db.DBVersion, cmd.Commit, runtime.Compiler, cmd.CompilerCommand)
 	log.Printf("%s, target architecture is %s, operating system target is %s", runtime.Version(),
 		runtime.GOARCH, runtime.GOOS)
 	log.Printf("launch command: %s", strings.Join(os.Args, " "))
@@ -253,7 +257,9 @@ func main() {
 		remover := cluster.NewRemover(clstrClient, 5*time.Second, str)
 		remover.SetCredentials(cluster.CredentialsFor(credStr, cfg.JoinAs))
 		log.Printf("initiating removal of this node from cluster before shutdown")
-		if err := remover.Do(cfg.NodeID, true); err != nil {
+		shutdownCtx, cancel := context.WithTimeout(context.Background(), shutdownTimeout)
+		defer cancel()
+		if err := remover.Do(shutdownCtx, cfg.NodeID, true); err != nil {
 			log.Fatalf("failed to remove this node from cluster before shutdown: %s", err.Error())
 		}
 		log.Printf("removed this node successfully from cluster before shutdown")
@@ -441,7 +447,6 @@ func startHTTPService(cfg *Config, str *store.Store, cltr *cluster.Client, credS
 	s.DefaultQueueTx = cfg.WriteQueueTx
 	s.BuildInfo = map[string]any{
 		"commit":             cmd.Commit,
-		"branch":             cmd.Branch,
 		"version":            cmd.Version,
 		"compiler_toolchain": runtime.Compiler,
 		"compiler_command":   cmd.CompilerCommand,
@@ -553,7 +558,7 @@ func createCluster(ctx context.Context, cfg *Config, hasPeers bool, client *clus
 		leader, _ := str.LeaderAddr()
 		return leader != ""
 	}
-	clusterSuf := cluster.VoterSuffrage(!cfg.RaftNonVoter)
+	clusterSuf := command.SuffrageNonVoterFromBool(cfg.RaftNonVoter)
 
 	joiner := cluster.NewJoiner(client, cfg.JoinAttempts, cfg.JoinInterval)
 	joiner.SetCredentials(cluster.CredentialsFor(credStr, cfg.JoinAs))

@@ -12,6 +12,7 @@ import (
 
 	"github.com/rqlite/rqlite/v10/command/encoding"
 	command "github.com/rqlite/rqlite/v10/command/proto"
+	"github.com/rqlite/rqlite/v10/internal/fsutil"
 	"github.com/rqlite/rqlite/v10/internal/random"
 )
 
@@ -25,7 +26,7 @@ func Test_OpenNonExistentDatabase(t *testing.T) {
 		t.Fatalf("error opening nonexistent database: %s", err.Error())
 	}
 	// Confirm a file was created.
-	if !fileExists(path) {
+	if !fsutil.FileExists(path) {
 		t.Fatalf("database file not created at %s", path)
 	}
 }
@@ -56,10 +57,10 @@ func Test_OpenEmptyInWALMode(t *testing.T) {
 	}
 
 	// Ensure the -wal and -shm files are created.
-	if !fileExists(db.WALPath()) {
+	if !fsutil.FileExists(db.WALPath()) {
 		t.Fatalf("WAL file not created at %s", db.WALPath())
 	}
-	if !fileExists(db.Path() + "-shm") {
+	if !fsutil.FileExists(db.Path() + "-shm") {
 		t.Fatalf("WAL shm file not created at %s", db.WALPath()+"-shm")
 	}
 }
@@ -81,14 +82,14 @@ func Test_WALNotRemovedOnClose(t *testing.T) {
 		t.Fatalf("failed to create table: %s", err.Error())
 	}
 	walPath := db.WALPath()
-	if !fileExists(walPath) {
+	if !fsutil.FileExists(walPath) {
 		t.Fatalf("WAL file does not exist after creating a table")
 	}
 	if err := db.Close(); err != nil {
 		t.Fatalf("error closing database: %s", err.Error())
 	}
 
-	if !fileExists(db.WALPath()) {
+	if !fsutil.FileExists(db.WALPath()) {
 		t.Fatalf("WAL file removed after closing the database")
 	}
 }
@@ -112,14 +113,14 @@ func Test_WALNotChangedOnReopen(t *testing.T) {
 		t.Fatalf("failed to create table: %s", err.Error())
 	}
 	walPath := db.WALPath()
-	if !fileExists(walPath) {
+	if !fsutil.FileExists(walPath) {
 		t.Fatalf("WAL file does not exist after creating a table")
 	}
 	if err := db.Close(); err != nil {
 		t.Fatalf("error closing database: %s", err.Error())
 	}
 
-	if !fileExists(db.WALPath()) {
+	if !fsutil.FileExists(db.WALPath()) {
 		t.Fatalf("WAL file removed after closing the database")
 	}
 
@@ -161,7 +162,7 @@ func Test_WALNotCheckpointedOnClose(t *testing.T) {
 		t.Fatalf("failed to create table: %s", err.Error())
 	}
 	walPath := db.WALPath()
-	if !fileExists(walPath) {
+	if !fsutil.FileExists(walPath) {
 		t.Fatalf("WAL file does not exist after creating a table")
 	}
 
@@ -189,7 +190,7 @@ func Test_WALNotCheckpointedOnClose(t *testing.T) {
 		t.Fatalf("database changed after closing")
 	}
 
-	if !fileExists(db.WALPath()) {
+	if !fsutil.FileExists(db.WALPath()) {
 		t.Fatalf("WAL file removed after closing the database")
 	}
 
@@ -487,7 +488,7 @@ func Test_DBOptimize(t *testing.T) {
 	if exp, got := `[{}]`, asJSON(r); exp != got {
 		t.Fatalf("unexpected results for query, expected %s, got %s", exp, got)
 	}
-	for i := 0; i < 100; i++ {
+	for range 100 {
 		_, err = db.ExecuteStringStmt(`INSERT INTO foo(first) VALUES("alice")`)
 		if err != nil {
 			t.Fatalf("error executing insertion into table: %s", err.Error())
@@ -543,7 +544,7 @@ func Test_DBOptimize(t *testing.T) {
 	if exp, got := `[{"last_insert_id":100,"rows_affected":1}]`, asJSON(r); exp != got { // 100 because of the 100 records already in the table.
 		t.Fatalf("unexpected results for query, expected %s, got %s", exp, got)
 	}
-	for i := 0; i < 100; i++ {
+	for range 100 {
 		_, err = db.ExecuteStringStmt(`INSERT INTO foo(last) VALUES("bob")`)
 		if err != nil {
 			t.Fatalf("error executing insertion into table: %s", err.Error())
@@ -683,7 +684,7 @@ func Test_ConcurrentQueries(t *testing.T) {
 		t.Fatalf("unexpected results for query\nexp: %s\ngot: %s", exp, got)
 	}
 
-	for i := 0; i < 5000; i++ {
+	for i := range 5000 {
 		r, err = db.ExecuteStringStmt(`INSERT INTO foo(name) VALUES("fiona")`)
 		if err != nil {
 			t.Fatalf("failed to insert record: %s", err.Error())
@@ -694,10 +695,8 @@ func Test_ConcurrentQueries(t *testing.T) {
 	}
 
 	var wg sync.WaitGroup
-	for i := 0; i < 32; i++ {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
+	for range 32 {
+		wg.Go(func() {
 			ro, err := db.QueryStringStmt(`SELECT COUNT(*) FROM foo`)
 			if err != nil {
 				t.Logf("failed to query table: %s", err.Error())
@@ -705,7 +704,7 @@ func Test_ConcurrentQueries(t *testing.T) {
 			if exp, got := `[{"columns":["COUNT(*)"],"types":["integer"],"values":[[5000]]}]`, asJSON(ro); exp != got {
 				t.Logf("unexpected results for query\nexp: %s\ngot: %s", exp, got)
 			}
-		}()
+		})
 	}
 	wg.Wait()
 }
@@ -1303,7 +1302,7 @@ func Test_ParallelOperationsInMemory(t *testing.T) {
 
 	var qWg sync.WaitGroup
 	qWg.Add(3)
-	for i := 0; i < 3; i++ {
+	for i := range 3 {
 		go func(j int) {
 			defer qWg.Done()
 			var n int
@@ -1348,7 +1347,7 @@ func mustSetupDBForTimeoutTests(t *testing.T, n int) (*DB, string) {
 		},
 	}
 
-	for i := 0; i < n; i++ {
+	for i := range n {
 		args := []any{
 			random.String(),
 			fmt.Sprint(i),

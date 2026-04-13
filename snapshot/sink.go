@@ -11,6 +11,7 @@ import (
 	"path/filepath"
 
 	"github.com/hashicorp/raft"
+	"github.com/rqlite/rqlite/v10/internal/fsutil"
 	"github.com/rqlite/rqlite/v10/snapshot/proto"
 	pb "google.golang.org/protobuf/proto"
 )
@@ -20,9 +21,9 @@ type sinker interface {
 	io.WriteCloser
 }
 
-type fullController interface {
-	FullNeeded() (bool, error)
-	UnsetFullNeeded() error
+type snapshotTypeController interface {
+	DueNext() (Type, error)
+	SetDueNext(Type) error
 }
 
 // Sink is a sink for writing snapshot data to a Snapshot store.
@@ -46,7 +47,11 @@ type Sink struct {
 	// In this case, no data follows the header; the WAL directory is moved on Close.
 	localWALDir string
 
-	fc fullController
+	stc snapshotTypeController
+
+	// closeCh, when non-nil, receives a non-blocking signal after a
+	// successful Close.
+	closeCh chan<- struct{}
 
 	// fatalFn is called when Close encounters an error during an incremental
 	// snapshot. In production this terminates the process to avoid data
@@ -57,13 +62,15 @@ type Sink struct {
 }
 
 // NewSink creates a new Sink object. It takes the root snapshot directory
-// and the snapshot metadata.
-func NewSink(dir string, meta *raft.SnapshotMeta, fc fullController) *Sink {
+// and the snapshot metadata. closeCh, if non-nil, will receive a non-blocking
+// signal after a successful Close.
+func NewSink(dir string, meta *raft.SnapshotMeta, stc snapshotTypeController, closeCh chan<- struct{}) *Sink {
 	logger := log.New(log.Writer(), "[snapshot-sink] ", log.LstdFlags)
 	return &Sink{
-		dir:  dir,
-		meta: meta,
-		fc:   fc,
+		dir:     dir,
+		meta:    meta,
+		stc:     stc,
+		closeCh: closeCh,
 		fatalFn: func(err error) {
 			logger.Fatalf("failure during incremental snapshot, exiting process to avoid data corruption: %v", err)
 		},
@@ -120,12 +127,12 @@ func (s *Sink) Write(p []byte) (n int, err error) {
 		case *proto.SnapshotHeader_Full:
 			s.sinkW = NewFullSink(s.snapTmpDirPath, p.Full)
 		case *proto.SnapshotHeader_IncrementalFile:
-			if s.fc != nil {
-				fullNeeded, err := s.fc.FullNeeded()
+			if s.stc != nil {
+				dueNext, err := s.stc.DueNext()
 				if err != nil {
 					return n, err
 				}
-				if fullNeeded {
+				if dueNext == Full {
 					return n, fmt.Errorf("full snapshot needed before incremental can be applied")
 				}
 			}
@@ -192,8 +199,15 @@ func (s *Sink) Close() (retErr error) {
 	}
 
 	defer func() {
-		if retErr != nil && s.localWALDir != "" && s.fatalFn != nil {
-			s.fatalFn(retErr)
+		if retErr != nil {
+			stats.Add(sinkErrors, 1)
+			if s.localWALDir != "" && s.fatalFn != nil {
+				s.fatalFn(retErr)
+			}
+		} else if s.localWALDir != "" {
+			stats.Add(sinkIncrementalTotal, 1)
+		} else if s.sinkW != nil {
+			stats.Add(sinkFullTotal, 1)
 		}
 	}()
 
@@ -225,12 +239,22 @@ func (s *Sink) Close() (retErr error) {
 		return fmt.Errorf("failed to rename snapshot directory: %v", err)
 	}
 
-	if s.fc != nil {
-		if err := s.fc.UnsetFullNeeded(); err != nil {
-			return fmt.Errorf("failed to unset full needed: %v", err)
+	if s.stc != nil {
+		if err := s.stc.SetDueNext(Incremental); err != nil {
+			return fmt.Errorf("failed to set due next to incremental: %v", err)
 		}
 	}
-	return syncDirMaybe(s.dir)
+	if err := fsutil.SyncDirMaybe(s.dir); err != nil {
+		return err
+	}
+
+	if s.closeCh != nil {
+		select {
+		case s.closeCh <- struct{}{}:
+		default:
+		}
+	}
+	return nil
 }
 
 // Cancel cancels the sink.
@@ -295,6 +319,5 @@ func writeMeta(dir string, meta *raft.SnapshotMeta) error {
 	if err = enc.Encode(meta); err != nil {
 		return fmt.Errorf("failed to encode meta: %v", err)
 	}
-
 	return fh.Sync()
 }

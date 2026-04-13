@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/rqlite/rqlite/v10/command/proto"
+	"github.com/rqlite/rqlite/v10/internal/fsutil"
 )
 
 func Test_PragmaCheckRequest_Check(t *testing.T) {
@@ -301,10 +302,10 @@ func Test_SingleNodeRecoverNoChange(t *testing.T) {
 		t.Fatalf("failed to close single-node store: %s", err.Error())
 	}
 
-	if pathExists(peersPath) {
+	if fsutil.PathExists(peersPath) {
 		t.Fatalf("Peers JSON exists at %s", peersPath)
 	}
-	if !pathExists(peersInfo) {
+	if !fsutil.PathExists(peersInfo) {
 		t.Fatalf("Peers info does not exist at %s", peersInfo)
 	}
 }
@@ -381,10 +382,10 @@ func Test_SingleNodeRecoverNetworkChange(t *testing.T) {
 		t.Fatalf("failed to close single-node recovered store: %s", err.Error())
 	}
 
-	if pathExists(peersPath) {
+	if fsutil.PathExists(peersPath) {
 		t.Fatalf("Peers JSON exists at %s", peersPath)
 	}
-	if !pathExists(peersInfo) {
+	if !fsutil.PathExists(peersInfo) {
 		t.Fatalf("Peers info does not exist at %s", peersInfo)
 	}
 }
@@ -430,7 +431,7 @@ func Test_SingleNodeRecoverNetworkChangeSnapshot(t *testing.T) {
 	}
 	queryTest(s0, 1)
 
-	for i := 0; i < 9; i++ {
+	for range 9 {
 		er := executeRequestFromStrings([]string{
 			`INSERT INTO foo(name) VALUES("fiona")`,
 		}, false, false)
@@ -475,10 +476,10 @@ func Test_SingleNodeRecoverNetworkChangeSnapshot(t *testing.T) {
 		t.Fatalf("failed to close single-node recovered store: %s", err.Error())
 	}
 
-	if pathExists(peersPath) {
+	if fsutil.PathExists(peersPath) {
 		t.Fatalf("Peers JSON exists at %s", peersPath)
 	}
-	if !pathExists(peersInfo) {
+	if !fsutil.PathExists(peersInfo) {
 		t.Fatalf("Peers info does not exist at %s", peersInfo)
 	}
 }

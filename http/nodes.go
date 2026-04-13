@@ -2,12 +2,14 @@ package http
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"io"
 	"sort"
 	"sync"
 	"time"
 
+	"github.com/rqlite/rqlite/v10/command/proto"
 	"github.com/rqlite/rqlite/v10/store"
 )
 
@@ -35,7 +37,7 @@ func NewNodeFromServer(s *store.Server) *Node {
 	return &Node{
 		ID:    s.ID,
 		Addr:  s.Addr,
-		Voter: s.Suffrage == "Voter",
+		Voter: s.Suffrage == proto.Suffrage_VOTER,
 	}
 }
 
@@ -53,7 +55,7 @@ func (n *Node) Test(gm GetNodeMetaer, leaderAddr string, retries int, timeout ti
 	done := make(chan struct{})
 	go func() {
 		defer close(done)
-		meta, err := gm.GetNodeMeta(n.Addr, retries, timeout)
+		meta, err := gm.GetNodeMeta(context.Background(), n.Addr, retries, timeout)
 		if err != nil {
 			n.SetError(err.Error())
 			return

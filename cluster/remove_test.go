@@ -1,6 +1,7 @@
 package cluster
 
 import (
+	"context"
 	"fmt"
 	"net"
 	"testing"
@@ -28,7 +29,7 @@ func Test_RemoveOK(t *testing.T) {
 	client := NewClient(&simpleDialer{}, 0)
 
 	r := NewRemover(client, time.Second, control)
-	if err := r.Do("node-id", true); err != nil {
+	if err := r.Do(context.Background(), "node-id", true); err != nil {
 		t.Fatalf("failed to remove node: %s", err.Error())
 	}
 
@@ -46,7 +47,7 @@ func Test_RemoveWaitForLeaderFail(t *testing.T) {
 	client := NewClient(&simpleDialer{}, 0)
 
 	r := NewRemover(client, time.Second, control)
-	if err := r.Do("node-id", true); err == nil {
+	if err := r.Do(context.Background(), "node-id", true); err == nil {
 		t.Fatalf("failed to detect timeout waiting for leader")
 	}
 }
@@ -64,7 +65,7 @@ func Test_RemoveWaitForRemoveFail(t *testing.T) {
 	client := NewClient(&simpleDialer{}, 0)
 
 	r := NewRemover(client, time.Second, control)
-	if err := r.Do("node-id", true); err == nil {
+	if err := r.Do(context.Background(), "node-id", true); err == nil {
 		t.Fatalf("failed to detect timeout waiting for removal")
 	}
 
@@ -84,7 +85,7 @@ func Test_RemoveWaitForRemoveFailOK(t *testing.T) {
 	client := NewClient(&simpleDialer{}, 0)
 
 	r := NewRemover(client, time.Second, control)
-	if err := r.Do("node-id", false); err != nil {
+	if err := r.Do(context.Background(), "node-id", false); err != nil {
 		t.Fatalf("removal timeout not ignored: %s", err.Error())
 	}
 

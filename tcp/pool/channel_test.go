@@ -200,7 +200,7 @@ func TestPoolConcurrent2(t *testing.T) {
 
 	wg.Add(10)
 	go func() {
-		for i := 0; i < 10; i++ {
+		for i := range 10 {
 			go func(i int) {
 				conn, _ := p.Get()
 				time.Sleep(rand.N(100 * time.Millisecond))
@@ -210,7 +210,7 @@ func TestPoolConcurrent2(t *testing.T) {
 		}
 	}()
 
-	for i := 0; i < 10; i++ {
+	for i := range 10 {
 		wg.Add(1)
 		go func(i int) {
 			conn, _ := p.Get()
@@ -228,17 +228,103 @@ func TestPoolConcurrent3(t *testing.T) {
 
 	var wg sync.WaitGroup
 
-	wg.Add(1)
-	go func() {
+	wg.Go(func() {
 		p.Close()
-		wg.Done()
-	}()
+	})
 
 	if conn, err := p.Get(); err == nil {
 		conn.Close()
 	}
 
 	wg.Wait()
+}
+
+func TestPool_New(t *testing.T) {
+	p, _ := newChannelPool()
+	defer p.Close()
+
+	conn, err := p.New()
+	if err != nil {
+		t.Fatalf("New error: %s", err)
+	}
+	if conn == nil {
+		t.Fatal("New error: conn is nil")
+	}
+
+	_, ok := conn.(*Conn)
+	if !ok {
+		t.Fatal("Conn from New is not of type *Conn")
+	}
+}
+
+func TestPool_New_BypassesIdle(t *testing.T) {
+	p, _ := newChannelPool()
+	defer p.Close()
+
+	// Put a connection into the pool so it has an idle connection.
+	conn, _ := p.Get()
+	conn.Close()
+	if p.Len() != 1 {
+		t.Fatalf("Expected 1 idle conn, got %d", p.Len())
+	}
+
+	// New() should create a fresh connection, not take the idle one.
+	conn2, err := p.New()
+	if err != nil {
+		t.Fatalf("New error: %s", err)
+	}
+	defer conn2.Close()
+
+	if p.Len() != 1 {
+		t.Fatalf("Expected idle count to remain 1, got %d", p.Len())
+	}
+}
+
+func TestPool_New_CloseReturnsToPool(t *testing.T) {
+	p, _ := newChannelPool()
+	defer p.Close()
+
+	if p.Len() != 0 {
+		t.Fatalf("Expected 0 idle conns, got %d", p.Len())
+	}
+
+	conn, err := p.New()
+	if err != nil {
+		t.Fatalf("New error: %s", err)
+	}
+
+	// Closing the connection should return it to the pool.
+	conn.Close()
+	if p.Len() != 1 {
+		t.Fatalf("Expected 1 idle conn after Close, got %d", p.Len())
+	}
+}
+
+func TestPool_New_MarkUnusable(t *testing.T) {
+	p, _ := newChannelPool()
+	defer p.Close()
+
+	conn, err := p.New()
+	if err != nil {
+		t.Fatalf("New error: %s", err)
+	}
+
+	// Mark unusable and close — should not return to pool.
+	conn.(*Conn).MarkUnusable()
+	conn.Close()
+	if p.Len() != 0 {
+		t.Fatalf("Expected 0 idle conns after unusable Close, got %d", p.Len())
+	}
+}
+
+func TestPool_New_ClosedPool(t *testing.T) {
+	p, _ := newChannelPool()
+	p.Close()
+
+	_, err := p.New()
+	if err != ErrClosed {
+		t.Fatalf("Expected error from New on closed pool to be ErrClosed, got %v", err)
+	}
 }
 
 func newChannelPool() (Pool, error) {

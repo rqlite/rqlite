@@ -2,6 +2,7 @@ package http
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
 	"strings"
@@ -9,11 +10,13 @@ import (
 	"time"
 
 	"github.com/rqlite/rqlite/v10/cluster/proto"
+	clstrpb "github.com/rqlite/rqlite/v10/cluster/proto"
+	command "github.com/rqlite/rqlite/v10/command/proto"
 	"github.com/rqlite/rqlite/v10/store"
 )
 
 func Test_NewNodeFromServer(t *testing.T) {
-	server := &store.Server{ID: "1", Addr: "192.168.1.1", Suffrage: "Voter"}
+	server := &store.Server{ID: "1", Addr: "192.168.1.1", Suffrage: command.Suffrage_VOTER}
 	node := NewNodeFromServer(server)
 
 	if node.ID != server.ID || node.Addr != server.Addr || !node.Voter {
@@ -23,8 +26,8 @@ func Test_NewNodeFromServer(t *testing.T) {
 
 func Test_NewNodesFromServers(t *testing.T) {
 	servers := []*store.Server{
-		{ID: "1", Addr: "192.168.1.1", Suffrage: "Voter"},
-		{ID: "2", Addr: "192.168.1.2", Suffrage: "Nonvoter"},
+		{ID: "1", Addr: "192.168.1.1", Suffrage: command.Suffrage_VOTER},
+		{ID: "2", Addr: "192.168.1.2", Suffrage: command.Suffrage_NON_VOTER},
 	}
 	nodes := NewNodesFromServers(servers)
 
@@ -80,9 +83,9 @@ func Test_NodeTestDouble(t *testing.T) {
 	node1 := &Node{ID: "1", Addr: "leader-raft-addr", APIAddr: "leader-api-addr"}
 	node2 := &Node{ID: "2", Addr: "follower-raft-addr", APIAddr: "follower-api-addr"}
 	mockGA := &mockGetAddresser{}
-	mockGA.getMetaFn = func(addr string, retries int, timeout time.Duration) (*proto.NodeMeta, error) {
+	mockGA.getMetaFn = func(addr string, retries int, timeout time.Duration) (*clstrpb.NodeMeta, error) {
 		if addr == "leader-raft-addr" {
-			return &proto.NodeMeta{
+			return &clstrpb.NodeMeta{
 				Url:     "leader-api-addr",
 				Version: "1.0.0",
 			}, nil
@@ -108,9 +111,9 @@ func Test_NodeTestDouble_Timeout(t *testing.T) {
 	node1 := &Node{ID: "1", Addr: "leader-raft-addr", APIAddr: "leader-api-addr"}
 	node2 := &Node{ID: "2", Addr: "follower-raft-addr", APIAddr: "follower-api-addr"}
 	mockGA := &mockGetAddresser{}
-	mockGA.getMetaFn = func(addr string, retries int, timeout time.Duration) (*proto.NodeMeta, error) {
+	mockGA.getMetaFn = func(addr string, retries int, timeout time.Duration) (*clstrpb.NodeMeta, error) {
 		if addr == "leader-raft-addr" {
-			return &proto.NodeMeta{Url: "leader-api-addr", Version: "3.0.0"}, nil
+			return &clstrpb.NodeMeta{Url: "leader-api-addr", Version: "3.0.0"}, nil
 		}
 		time.Sleep(10 * time.Second) // Simulate a node just hanging when contacted.
 		return nil, fmt.Errorf("not reachable")
@@ -240,7 +243,7 @@ type mockGetAddresser struct {
 	apiAddr   string
 	version   string
 	err       error
-	getMetaFn func(addr string, retries int, timeout time.Duration) (*proto.NodeMeta, error)
+	getMetaFn func(addr string, retries int, timeout time.Duration) (*clstrpb.NodeMeta, error)
 }
 
 // newMockGetAddresser creates a new instance of mockGetAddresser.
@@ -250,7 +253,7 @@ func newMockGetAddresser(apiAddr, version string, err error) *mockGetAddresser {
 }
 
 // GetNodeMeta is the mock implementation of the GetNodeMeta method.
-func (m *mockGetAddresser) GetNodeMeta(addr string, retries int, timeout time.Duration) (*proto.NodeMeta, error) {
+func (m *mockGetAddresser) GetNodeMeta(ctx context.Context, addr string, retries int, timeout time.Duration) (*clstrpb.NodeMeta, error) {
 	md := &proto.NodeMeta{
 		Url:     m.apiAddr,
 		Version: m.version,

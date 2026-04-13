@@ -26,7 +26,7 @@ func Test_CRC32Success(t *testing.T) {
 
 	// Compare the returned checksum with the expected one
 	if checksum != expectedChecksum {
-		t.Errorf("Expected checksum %v, got %v", expectedChecksum, checksum)
+		t.Fatalf("Expected checksum %v, got %v", expectedChecksum, checksum)
 	}
 }
 
@@ -48,7 +48,122 @@ func Test_CRC32EmptyFile(t *testing.T) {
 	// The CRC32 checksum for an empty input should be 0.
 	expectedChecksum := crc32.NewIEEE().Sum32()
 	if checksum != expectedChecksum {
-		t.Errorf("Expected checksum %v for empty file, got %v", expectedChecksum, checksum)
+		t.Fatalf("Expected checksum %v for empty file, got %v", expectedChecksum, checksum)
+	}
+}
+
+func Test_CRC32Reader(t *testing.T) {
+	testContent := []byte("test content")
+
+	cr := NewCRC32Reader(bytes.NewReader(testContent))
+
+	got, err := io.ReadAll(cr)
+	if err != nil {
+		t.Fatalf("CRC32Reader read failed: %v", err)
+	}
+	if !bytes.Equal(got, testContent) {
+		t.Fatalf("read returned %q, want %q", got, testContent)
+	}
+
+	// Checksum should match a direct computation.
+	h := crc32.New(crc32.MakeTable(crc32.Castagnoli))
+	h.Write(testContent)
+	if got, want := cr.Sum32(), h.Sum32(); got != want {
+		t.Fatalf("checksum = %d, want %d", got, want)
+	}
+}
+
+func Test_CRC32ReaderMultipleReads(t *testing.T) {
+	testContent := []byte("hello world")
+
+	cr := NewCRC32Reader(bytes.NewReader(testContent))
+
+	// Read in small fixed-size chunks to exercise multiple Read calls.
+	buf := make([]byte, 4)
+	var assembled []byte
+	for {
+		n, err := cr.Read(buf)
+		assembled = append(assembled, buf[:n]...)
+		if err == io.EOF {
+			break
+		}
+		if err != nil {
+			t.Fatalf("read failed: %v", err)
+		}
+	}
+	if !bytes.Equal(assembled, testContent) {
+		t.Fatalf("assembled = %q, want %q", assembled, testContent)
+	}
+
+	// Checksum should be the same as hashing the full content in one shot.
+	h := crc32.New(crc32.MakeTable(crc32.Castagnoli))
+	h.Write(testContent)
+	if got, want := cr.Sum32(), h.Sum32(); got != want {
+		t.Fatalf("checksum = %d, want %d", got, want)
+	}
+}
+
+func Test_CRC32ReaderEmpty(t *testing.T) {
+	cr := NewCRC32Reader(bytes.NewReader(nil))
+
+	got, err := io.ReadAll(cr)
+	if err != nil {
+		t.Fatalf("CRC32Reader read failed: %v", err)
+	}
+	if len(got) != 0 {
+		t.Fatalf("expected empty read, got %q", got)
+	}
+	if got, want := cr.Sum32(), uint32(0); got != want {
+		t.Fatalf("empty checksum = %d, want %d", got, want)
+	}
+}
+
+func Test_CRC32ReaderMatchesCRC32Writer(t *testing.T) {
+	// CRC32Reader and CRC32Writer should agree on the same byte stream.
+	testContent := []byte("the quick brown fox jumps over the lazy dog")
+
+	cr := NewCRC32Reader(bytes.NewReader(testContent))
+	if _, err := io.ReadAll(cr); err != nil {
+		t.Fatalf("read failed: %v", err)
+	}
+
+	var sink bytes.Buffer
+	cw := NewCRC32Writer(&sink)
+	if _, err := cw.Write(testContent); err != nil {
+		t.Fatalf("write failed: %v", err)
+	}
+
+	if got, want := cr.Sum32(), cw.Sum32(); got != want {
+		t.Fatalf("reader checksum = %08x, writer checksum = %08x", got, want)
+	}
+}
+
+func Test_CRC32ReaderPartialThenError(t *testing.T) {
+	// Sum should reflect only the bytes that the underlying reader actually
+	// returned before an error.
+	good := []byte("good bytes")
+	r := &errAfterReader{data: good, err: io.ErrUnexpectedEOF}
+
+	cr := NewCRC32Reader(r)
+	buf := make([]byte, 64)
+	n, err := cr.Read(buf)
+	if err != nil {
+		t.Fatalf("first read returned error: %v", err)
+	}
+	if n != len(good) {
+		t.Fatalf("first read returned %d bytes, want %d", n, len(good))
+	}
+
+	// Next read should surface the underlying error.
+	if _, err := cr.Read(buf); err != io.ErrUnexpectedEOF {
+		t.Fatalf("second read err = %v, want %v", err, io.ErrUnexpectedEOF)
+	}
+
+	// Sum should match a direct CRC of the good bytes only.
+	h := crc32.New(crc32.MakeTable(crc32.Castagnoli))
+	h.Write(good)
+	if got, want := cr.Sum32(), h.Sum32(); got != want {
+		t.Fatalf("checksum = %08x, want %08x", got, want)
 	}
 }
 
@@ -75,7 +190,7 @@ func Test_CRC32Writer(t *testing.T) {
 	h := crc32.New(crc32.MakeTable(crc32.Castagnoli))
 	h.Write(testContent)
 	if got, want := cw.Sum32(), h.Sum32(); got != want {
-		t.Errorf("checksum = %d, want %d", got, want)
+		t.Fatalf("checksum = %d, want %d", got, want)
 	}
 }
 
@@ -96,7 +211,7 @@ func Test_CRC32WriterMultipleWrites(t *testing.T) {
 		h.Write(p)
 	}
 	if got, want := cw.Sum32(), h.Sum32(); got != want {
-		t.Errorf("checksum = %d, want %d", got, want)
+		t.Fatalf("checksum = %d, want %d", got, want)
 	}
 }
 
@@ -105,7 +220,7 @@ func Test_CRC32WriterEmpty(t *testing.T) {
 	cw := NewCRC32Writer(&buf)
 
 	if got, want := cw.Sum32(), uint32(0); got != want {
-		t.Errorf("empty checksum = %d, want %d", got, want)
+		t.Fatalf("empty checksum = %d, want %d", got, want)
 	}
 }
 
@@ -166,7 +281,7 @@ func Test_WriteCRC32SumFileRoundTrip(t *testing.T) {
 		t.Fatalf("reading checksum file: %v", err)
 	}
 	if got, want := string(b), "1a2b3c4d"; got != want {
-		t.Errorf("file contents = %q, want %q", got, want)
+		t.Fatalf("file contents = %q, want %q", got, want)
 	}
 
 	// Round-trip through ReadCRC32SumFile.
@@ -175,7 +290,7 @@ func Test_WriteCRC32SumFileRoundTrip(t *testing.T) {
 		t.Fatalf("ReadCRC32SumFile failed: %v", err)
 	}
 	if got != sum {
-		t.Errorf("ReadCRC32SumFile = %08x, want %08x", got, sum)
+		t.Fatalf("ReadCRC32SumFile = %08x, want %08x", got, sum)
 	}
 }
 
@@ -191,7 +306,7 @@ func Test_WriteCRC32SumFileZero(t *testing.T) {
 		t.Fatalf("ReadCRC32SumFile failed: %v", err)
 	}
 	if got != 0 {
-		t.Errorf("ReadCRC32SumFile = %08x, want 00000000", got)
+		t.Fatalf("ReadCRC32SumFile = %08x, want 00000000", got)
 	}
 }
 
@@ -319,4 +434,21 @@ func (n noopWriteCloser) Close() error {
 
 func newNoopWriteCloser(w io.Writer) io.WriteCloser {
 	return noopWriteCloser{w}
+}
+
+// errAfterReader returns data on the first Read and the configured error
+// on the next Read.
+type errAfterReader struct {
+	data []byte
+	err  error
+	done bool
+}
+
+func (e *errAfterReader) Read(p []byte) (int, error) {
+	if e.done {
+		return 0, e.err
+	}
+	n := copy(p, e.data)
+	e.done = true
+	return n, nil
 }

@@ -146,7 +146,7 @@ func Test_ServiceQuery(t *testing.T) {
 		}
 		return nil, 0, errors.New("query failed")
 	}
-	_, _, err := c.Query(context.Background(), queryRequestFromString("SELECT * FROM foo"), s.Addr(), NO_CREDS, longWait)
+	_, _, err := c.Query(context.Background(), queryRequestFromString("SELECT * FROM foo"), s.Addr(), NO_CREDS, longWait, noRetries)
 	if err == nil {
 		t.Fatalf("client failed to report error")
 	}
@@ -164,7 +164,7 @@ func Test_ServiceQuery(t *testing.T) {
 		}
 		return []*command.QueryRows{rows}, 0, nil
 	}
-	res, _, err := c.Query(context.Background(), queryRequestFromString("SELECT * FROM foo"), s.Addr(), NO_CREDS, longWait)
+	res, _, err := c.Query(context.Background(), queryRequestFromString("SELECT * FROM foo"), s.Addr(), NO_CREDS, longWait, noRetries)
 	if err != nil {
 		t.Fatalf("failed to query: %s", err.Error())
 	}
@@ -181,7 +181,7 @@ func Test_ServiceQuery(t *testing.T) {
 		}
 		return []*command.QueryRows{rows}, 0, nil
 	}
-	res, _, err = c.Query(context.Background(), queryRequestFromString("SELECT * FROM foo"), s.Addr(), NO_CREDS, longWait)
+	res, _, err = c.Query(context.Background(), queryRequestFromString("SELECT * FROM foo"), s.Addr(), NO_CREDS, longWait, noRetries)
 	if err != nil {
 		t.Fatalf("failed to query: %s", err.Error())
 	}
@@ -193,7 +193,7 @@ func Test_ServiceQuery(t *testing.T) {
 		time.Sleep(longWait)
 		return nil, 0, nil
 	}
-	_, _, err = c.Query(context.Background(), queryRequestFromString("some SQL"), s.Addr(), NO_CREDS, shortWait)
+	_, _, err = c.Query(context.Background(), queryRequestFromString("some SQL"), s.Addr(), NO_CREDS, shortWait, noRetries)
 	if err == nil {
 		t.Fatalf("failed to receive expected error")
 	}
@@ -232,7 +232,7 @@ func Test_ServiceQueryLarge(t *testing.T) {
 	}
 
 	var b strings.Builder
-	for i := 0; i < 100000; i++ {
+	for range 100000 {
 		b.WriteString("bar")
 	}
 	if b.Len() < 64000 {
@@ -257,7 +257,7 @@ func Test_ServiceQueryLarge(t *testing.T) {
 		}
 		return []*command.QueryRows{rows}, 0, nil
 	}
-	res, _, err := c.Query(context.Background(), queryRequestFromString("SELECT * FROM foo"), s.Addr(), NO_CREDS, longWait)
+	res, _, err := c.Query(context.Background(), queryRequestFromString("SELECT * FROM foo"), s.Addr(), NO_CREDS, longWait, noRetries)
 	if err != nil {
 		t.Fatalf("failed to query: %s", err.Error())
 	}
@@ -449,7 +449,7 @@ func Test_ServiceJoinNode(t *testing.T) {
 	req := &command.JoinRequest{
 		Address: expNodeAddr,
 	}
-	err := c.Join(req, s.Addr(), nil, longWait)
+	err := c.Join(context.Background(), req, s.Addr(), nil, longWait)
 	if err != nil {
 		t.Fatalf("failed to join node: %s", err.Error())
 	}
@@ -518,7 +518,7 @@ func Test_ServiceJoinNodeForwarded(t *testing.T) {
 	req := &command.JoinRequest{
 		Address: "some client",
 	}
-	err := c.Join(req, sF.Addr(), nil, longWait)
+	err := c.Join(context.Background(), req, sF.Addr(), nil, longWait)
 	if err != nil {
 		t.Fatalf("failed to join node: %s", err.Error())
 	}

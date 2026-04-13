@@ -409,15 +409,13 @@ func Test_SingleNodeConcurrentRequests(t *testing.T) {
 	}
 
 	var wg sync.WaitGroup
-	for i := 0; i < 200; i++ {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
+	for range 200 {
+		wg.Go(func() {
 			resp, err := PostExecuteStmt(node.APIAddr, `INSERT INTO foo(name) VALUES("fiona")`)
 			if err != nil {
 				t.Logf("failed to insert record: %s %s", err.Error(), resp)
 			}
-		}()
+		})
 	}
 
 	wg.Wait()
@@ -442,15 +440,13 @@ func Test_SingleNodeConcurrentRequestsCompressed(t *testing.T) {
 	}
 
 	var wg sync.WaitGroup
-	for i := 0; i < 200; i++ {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
+	for range 200 {
+		wg.Go(func() {
 			resp, err := PostExecuteStmt(node.APIAddr, `INSERT INTO foo(name) VALUES("fiona")`)
 			if err != nil {
 				t.Logf("failed to insert record: %s %s", err.Error(), resp)
 			}
-		}()
+		})
 	}
 
 	wg.Wait()
@@ -727,7 +723,7 @@ func Test_SingleNodeParameterizedNamedConstraints(t *testing.T) {
 		t.Fatalf("failed to create table: %s", err.Error())
 	}
 
-	for i := 0; i < 100; i++ {
+	for i := range 100 {
 		r, err := node.ExecuteParameterized([]any{"INSERT into TestTable (Col1, Col2, Col3, Col4) values (:Val1, :Val2, :Val3, :Val4)", map[string]any{"Val1": 1, "Val2": "foo", "Val3": 2, "Val4": nil}})
 		if err != nil {
 			t.Fatalf("failed to insert record on loop %d: %s", i, err.Error())
@@ -1666,7 +1662,7 @@ func Test_SingleNodeNoopSnapReopen(t *testing.T) {
 		t.Fatalf("node never became leader")
 	}
 
-	for i := 0; i < 150; i++ {
+	for i := range 150 {
 		if err := node.Noop(fmt.Sprintf("%d", i)); err != nil {
 			t.Fatalf("failed to write noop command: %s", err)
 		}
@@ -1751,7 +1747,7 @@ func Test_SingleNodeNoopSnapLogsReopen(t *testing.T) {
 		t.Fatalf("node never became leader")
 	}
 
-	for i := 0; i < 150; i++ {
+	for i := range 150 {
 		if err := node.Noop(fmt.Sprintf("%d", i)); err != nil {
 			t.Fatalf("failed to write noop command: %s", err)
 		}
@@ -1759,7 +1755,7 @@ func Test_SingleNodeNoopSnapLogsReopen(t *testing.T) {
 
 	// Wait for a snapshot to happen, and then write some more commands.
 	time.Sleep(5 * time.Second)
-	for i := 0; i < 5; i++ {
+	for i := range 5 {
 		if err := node.Noop(fmt.Sprintf("%d", i)); err != nil {
 			t.Fatalf("failed to write noop command: %s", err)
 		}

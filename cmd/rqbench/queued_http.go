@@ -35,7 +35,7 @@ func (h *QueuedHTTPTester) String() string {
 // Prepare prepares the tester for execution.
 func (h *QueuedHTTPTester) Prepare(stmt string, bSz int, _ bool) error {
 	s := make([]string, bSz)
-	for i := 0; i < len(s); i++ {
+	for i := range s {
 		s[i] = stmt
 	}
 

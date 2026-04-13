@@ -52,7 +52,7 @@ func (j *Joiner) SetCredentials(creds *proto.Credentials) {
 
 // Do makes the actual join request. If the join is successful with any address,
 // that address is returned. Otherwise, an error is returned.
-func (j *Joiner) Do(ctx context.Context, targetAddrs []string, id, addr string, suf Suffrage) (string, error) {
+func (j *Joiner) Do(ctx context.Context, targetAddrs []string, id, addr string, suf command.Suffrage) (string, error) {
 	if id == "" {
 		return "", ErrNodeIDRequired
 	}
@@ -65,7 +65,7 @@ func (j *Joiner) Do(ctx context.Context, targetAddrs []string, id, addr string, 
 			case <-ctx.Done():
 				return "", ErrJoinCanceled
 			default:
-				joinee, err = j.join(ta, id, addr, suf)
+				joinee, err = j.join(ctx, ta, id, addr, suf)
 				if err == nil {
 					return joinee, nil
 				}
@@ -91,15 +91,15 @@ func (j *Joiner) Do(ctx context.Context, targetAddrs []string, id, addr string, 
 	return "", ErrJoinFailed
 }
 
-func (j *Joiner) join(targetAddr, id, addr string, suf Suffrage) (string, error) {
+func (j *Joiner) join(ctx context.Context, targetAddr, id, addr string, suf command.Suffrage) (string, error) {
 	req := &command.JoinRequest{
 		Id:      id,
 		Address: addr,
-		Voter:   suf.IsVoter(),
+		Voter:   suf == command.Suffrage_VOTER,
 	}
 
 	// Attempt to join.
-	if err := j.client.Join(req, targetAddr, j.creds, time.Second); err != nil {
+	if err := j.client.Join(ctx, req, targetAddr, j.creds, time.Second); err != nil {
 		return "", err
 	}
 	return targetAddr, nil

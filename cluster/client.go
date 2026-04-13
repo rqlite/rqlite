@@ -11,6 +11,7 @@ import (
 	"net"
 	"os"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/rqlite/rqlite/v10/auth"
@@ -81,6 +82,9 @@ type Client struct {
 
 	poolMu sync.RWMutex
 	pools  map[string]pool.Pool
+
+	// Whitebox testing
+	numForcedNewConns atomic.Int32
 }
 
 // NewClient returns a client instance for talking to a remote node.
@@ -126,8 +130,11 @@ func (c *Client) GetLocalVersion() string {
 	return c.localVersion
 }
 
-// GetNodeAPIAddr retrieves metadata for the node at nodeAddr
-func (c *Client) GetNodeMeta(nodeAddr string, retries int, timeout time.Duration) (*proto.NodeMeta, error) {
+// GetNodeMeta retrieves metadata for the node at nodeAddr
+func (c *Client) GetNodeMeta(ctx context.Context, nodeAddr string, retries int, timeout time.Duration) (*proto.NodeMeta, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
 	c.localMu.RLock()
 	defer c.localMu.RUnlock()
 	if c.localNodeAddr == nodeAddr && c.localServ != nil {
@@ -142,7 +149,7 @@ func (c *Client) GetNodeMeta(nodeAddr string, retries int, timeout time.Duration
 	command := &proto.Command{
 		Type: proto.Command_COMMAND_TYPE_GET_NODE_META,
 	}
-	p, nr, err := c.retry(command, nodeAddr, timeout, retries)
+	p, nr, err := c.retry(ctx, command, nodeAddr, timeout, retries)
 	stats.Add(numGetNodeAPIRequestRetries, int64(nr))
 	if err != nil {
 		return nil, err
@@ -161,11 +168,14 @@ func (c *Client) GetNodeMeta(nodeAddr string, retries int, timeout time.Duration
 }
 
 // GetCommitIndex retrieves the commit index for the node at nodeAddr
-func (c *Client) GetCommitIndex(nodeAddr string, retries int, timeout time.Duration) (uint64, error) {
+func (c *Client) GetCommitIndex(ctx context.Context, nodeAddr string, retries int, timeout time.Duration) (uint64, error) {
+	if err := ctx.Err(); err != nil {
+		return 0, err
+	}
 	command := &proto.Command{
 		Type: proto.Command_COMMAND_TYPE_GET_NODE_META,
 	}
-	p, nr, err := c.retry(command, nodeAddr, timeout, retries)
+	p, nr, err := c.retry(ctx, command, nodeAddr, timeout, retries)
 	stats.Add(numGetNodeAPIRequestRetries, int64(nr))
 	if err != nil {
 		return 0, err
@@ -193,7 +203,7 @@ func (c *Client) Execute(ctx context.Context, er *command.ExecuteRequest, nodeAd
 		},
 		Credentials: creds,
 	}
-	p, nr, err := c.retry(command, nodeAddr, timeout, retries)
+	p, nr, err := c.retry(ctx, command, nodeAddr, timeout, retries)
 	stats.Add(numClientExecuteRetries, int64(nr))
 	if err != nil {
 		return nil, 0, err
@@ -214,7 +224,7 @@ func (c *Client) Execute(ctx context.Context, er *command.ExecuteRequest, nodeAd
 // Query performs a Query on a remote node. If creds is nil, then
 // no credential information will be included in the Query request to the
 // remote node.
-func (c *Client) Query(ctx context.Context, qr *command.QueryRequest, nodeAddr string, creds *proto.Credentials, timeout time.Duration) ([]*command.QueryRows, uint64, error) {
+func (c *Client) Query(ctx context.Context, qr *command.QueryRequest, nodeAddr string, creds *proto.Credentials, timeout time.Duration, retries int) ([]*command.QueryRows, uint64, error) {
 	if err := ctx.Err(); err != nil {
 		return nil, 0, err
 	}
@@ -225,7 +235,7 @@ func (c *Client) Query(ctx context.Context, qr *command.QueryRequest, nodeAddr s
 		},
 		Credentials: creds,
 	}
-	p, nr, err := c.retry(command, nodeAddr, timeout, defaultMaxRetries)
+	p, nr, err := c.retry(ctx, command, nodeAddr, timeout, retries)
 	stats.Add(numClientQueryRetries, int64(nr))
 	if err != nil {
 		return nil, 0, err
@@ -257,7 +267,7 @@ func (c *Client) Request(ctx context.Context, r *command.ExecuteQueryRequest, no
 		},
 		Credentials: creds,
 	}
-	p, nr, err := c.retry(command, nodeAddr, timeout, retries)
+	p, nr, err := c.retry(ctx, command, nodeAddr, timeout, retries)
 	stats.Add(numClientRequestRetries, int64(nr))
 	if err != nil {
 		return nil, 0, 0, err
@@ -346,7 +356,7 @@ func (c *Client) Load(ctx context.Context, lr *command.LoadRequest, nodeAddr str
 		},
 		Credentials: creds,
 	}
-	p, nr, err := c.retry(command, nodeAddr, timeout, retries)
+	p, nr, err := c.retry(ctx, command, nodeAddr, timeout, retries)
 	stats.Add(numClientLoadRetries, int64(nr))
 	if err != nil {
 		return err
@@ -411,7 +421,10 @@ func (c *Client) RemoveNode(ctx context.Context, rn *command.RemoveNodeRequest, 
 // Stepdown triggers leader stepdown on a remote node. If creds is nil, then no
 // credential information will be included in the Stepdown request to the
 // remote node.
-func (c *Client) Stepdown(sr *command.StepdownRequest, nodeAddr string, creds *proto.Credentials, timeout time.Duration) error {
+func (c *Client) Stepdown(ctx context.Context, sr *command.StepdownRequest, nodeAddr string, creds *proto.Credentials, timeout time.Duration) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
 	conn, err := c.dial(nodeAddr)
 	if err != nil {
 		return err
@@ -451,8 +464,11 @@ func (c *Client) Stepdown(sr *command.StepdownRequest, nodeAddr string, creds *p
 
 // Notify notifies a remote node that this node is ready to bootstrap.
 // If creds is nil, then no credential information will be included in
-// // the Notify request to the remote node.
-func (c *Client) Notify(nr *command.NotifyRequest, nodeAddr string, creds *proto.Credentials, timeout time.Duration) error {
+// the Notify request to the remote node.
+func (c *Client) Notify(ctx context.Context, nr *command.NotifyRequest, nodeAddr string, creds *proto.Credentials, timeout time.Duration) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
 	conn, err := c.dial(nodeAddr)
 	if err != nil {
 		return err
@@ -493,7 +509,10 @@ func (c *Client) Notify(nr *command.NotifyRequest, nodeAddr string, creds *proto
 // Join joins this node to a cluster at the remote address nodeAddr.
 // If creds is nil, then no credential information will be included in
 // the Join request to the remote node.
-func (c *Client) Join(jr *command.JoinRequest, nodeAddr string, creds *proto.Credentials, timeout time.Duration) error {
+func (c *Client) Join(ctx context.Context, jr *command.JoinRequest, nodeAddr string, creds *proto.Credentials, timeout time.Duration) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
 	for {
 		conn, err := c.dial(nodeAddr)
 		if err != nil {
@@ -542,7 +561,10 @@ func (c *Client) Join(jr *command.JoinRequest, nodeAddr string, creds *proto.Cre
 }
 
 // BroadcastHWM performs a broadcast to all specified nodes.
-func (c *Client) BroadcastHWM(hwm uint64, retries int, timeout time.Duration, nodeAddr ...string) (map[string]*proto.HighwaterMarkUpdateResponse, error) {
+func (c *Client) BroadcastHWM(ctx context.Context, hwm uint64, retries int, timeout time.Duration, nodeAddr ...string) (map[string]*proto.HighwaterMarkUpdateResponse, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
 	if len(nodeAddr) == 0 {
 		return map[string]*proto.HighwaterMarkUpdateResponse{}, nil
 	}
@@ -570,6 +592,12 @@ func (c *Client) BroadcastHWM(hwm uint64, retries int, timeout time.Duration, no
 	// Launch goroutines for parallel requests
 	for _, addr := range nodeAddr {
 		go func(nodeAddress string) {
+			// Check context before starting
+			if err := ctx.Err(); err != nil {
+				resultChan <- result{resp: nil, addr: nodeAddress, err: err}
+				return
+			}
+
 			// Create the command
 			command := &proto.Command{
 				Type: proto.Command_COMMAND_TYPE_HIGHWATER_MARK_UPDATE,
@@ -636,6 +664,14 @@ func (c *Client) BroadcastHWM(hwm uint64, retries int, timeout time.Duration, no
 				responses[res.addr] = res.resp
 			}
 			collected++
+		case <-ctx.Done():
+			// Context canceled, fill remaining responses with context error
+			for _, addr := range nodeAddr {
+				if _, exists := responses[addr]; !exists {
+					responses[addr] = &proto.HighwaterMarkUpdateResponse{Error: ctx.Err().Error()}
+				}
+			}
+			collected = len(nodeAddr)
 		case <-timeoutChan:
 			// Timeout reached, fill remaining responses with timeout errors
 			for _, addr := range nodeAddr {
@@ -677,6 +713,10 @@ func (c *Client) Stats() (map[string]any, error) {
 }
 
 func (c *Client) dial(nodeAddr string) (net.Conn, error) {
+	return c.dialWithOption(nodeAddr, false)
+}
+
+func (c *Client) dialWithOption(nodeAddr string, forceNew bool) (net.Conn, error) {
 	var pl pool.Pool
 	var ok bool
 
@@ -709,21 +749,25 @@ func (c *Client) dial(nodeAddr string) (net.Conn, error) {
 	}
 
 	// Got pool, now get a connection.
-	conn, err := pl.Get()
-	if err != nil {
-		return nil, fmt.Errorf("pool get: %w", err)
+	if forceNew {
+		return pl.New()
 	}
-	return conn, nil
+	return pl.Get()
 }
 
 // retry retries a command on a remote node. It does this so we churn through connections
 // in the pool if we hit an error, as the remote node may have restarted and the pool's
 // connections are now stale.
-func (c *Client) retry(command *proto.Command, nodeAddr string, timeout time.Duration, maxRetries int) ([]byte, int, error) {
+func (c *Client) retry(ctx context.Context, command *proto.Command, nodeAddr string, timeout time.Duration, maxRetries int) ([]byte, int, error) {
 	var p []byte
 	var errOuter error
-	var nRetries int
+	effectiveRetries := max(1, maxRetries)
+	nRetries := 0
+
 	for {
+		if err := ctx.Err(); err != nil {
+			return nil, nRetries, err
+		}
 		p, errOuter = func() ([]byte, error) {
 			conn, errInner := c.dial(nodeAddr)
 			if errInner != nil {
@@ -731,16 +775,12 @@ func (c *Client) retry(command *proto.Command, nodeAddr string, timeout time.Dur
 			}
 			defer conn.Close()
 
-			if errInner = writeCommand(conn, command, timeout); errInner != nil {
-				handleConnError(conn)
-				return nil, errInner
-			}
-
-			b, errInner := readResponse(conn, timeout)
+			b, errInner := writeCommandReadResponse(conn, command, timeout)
 			if errInner != nil {
 				handleConnError(conn)
 				return nil, errInner
 			}
+
 			return b, nil
 		}()
 		if errOuter == nil {
@@ -748,11 +788,36 @@ func (c *Client) retry(command *proto.Command, nodeAddr string, timeout time.Dur
 		}
 		nRetries++
 		stats.Add(numClientRetries, 1)
-		if nRetries > maxRetries {
-			return nil, nRetries, errOuter
+
+		// If we're on the last retry, then try one more time with an explicitly new connection.
+		// We do this because it's possible that the remote node restarted and all the connections
+		// in the pool are stale, but we just don't know it. This is a last-ditch effort to get a
+		// successful response before giving up.
+		if nRetries == effectiveRetries {
+			nRetries++
+			conn, err := c.dialWithOption(nodeAddr, true)
+			if err != nil {
+				return nil, nRetries, err
+			}
+			defer conn.Close()
+			c.numForcedNewConns.Add(1)
+			stats.Add(numClientForceNewConn, 1)
+
+			if p, err = writeCommandReadResponse(conn, command, timeout); err != nil {
+				handleConnError(conn)
+				return nil, nRetries, err
+			}
+			break
 		}
 	}
 	return p, nRetries, nil
+}
+
+func writeCommandReadResponse(conn net.Conn, c *proto.Command, timeout time.Duration) (buf []byte, retErr error) {
+	if err := writeCommand(conn, c, timeout); err != nil {
+		return nil, err
+	}
+	return readResponse(conn, timeout)
 }
 
 func writeCommand(conn net.Conn, c *proto.Command, timeout time.Duration) error {

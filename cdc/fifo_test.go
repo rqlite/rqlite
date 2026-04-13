@@ -225,7 +225,7 @@ func Test_DeleteRange(t *testing.T) {
 	}, time.Second)
 
 	// Consume all events in the FiFO
-	for i := 0; i < len(items); i++ {
+	for i := range items {
 		select {
 		case event := <-q.C:
 			// Verify the events are in order
@@ -504,7 +504,7 @@ func Test_QueueLen_MultipleItems(t *testing.T) {
 	// Add multiple items
 	const numItems = 10
 	for i := 1; i <= numItems; i++ {
-		if err := q.Enqueue(&Event{Index: uint64(i), Data: []byte(fmt.Sprintf("item-%d", i))}); err != nil {
+		if err := q.Enqueue(&Event{Index: uint64(i), Data: fmt.Appendf(nil, "item-%d", i)}); err != nil {
 			t.Fatalf("Enqueue failed for item %d: %v", i, err)
 		}
 
@@ -774,13 +774,13 @@ func Test_Events_BufferedChannelBehavior(t *testing.T) {
 		data []byte
 	}, numItems)
 
-	for i := 0; i < numItems; i++ {
+	for i := range numItems {
 		items[i] = struct {
 			idx  uint64
 			data []byte
 		}{
 			idx:  uint64(i + 1),
-			data: []byte(fmt.Sprintf("item-%d", i+1)),
+			data: fmt.Appendf(nil, "item-%d", i+1),
 		}
 	}
 
@@ -800,7 +800,7 @@ func Test_Events_BufferedChannelBehavior(t *testing.T) {
 	receivedEvents := make([]*Event, 0, numItems)
 
 	// Try to receive events with timeout
-	for i := 0; i < numItems; i++ {
+	for range numItems {
 		select {
 		case event := <-eventsCh:
 			receivedEvents = append(receivedEvents, event)
@@ -816,7 +816,7 @@ func Test_Events_BufferedChannelBehavior(t *testing.T) {
 
 	for i, event := range receivedEvents {
 		expectedIdx := uint64(i + 1)
-		expectedData := []byte(fmt.Sprintf("item-%d", i+1))
+		expectedData := fmt.Appendf(nil, "item-%d", i+1)
 
 		if event.Index != expectedIdx {
 			t.Errorf("Event %d: expected index %d, got %d", i, expectedIdx, event.Index)
@@ -912,7 +912,7 @@ func Test_Events_ConcurrentReaders(t *testing.T) {
 	allEvents := make(chan *Event, numReaders*numItemsPerReader)
 
 	// Start multiple readers
-	for i := 0; i < numReaders; i++ {
+	for i := range numReaders {
 		go func(readerID int) {
 			for {
 				select {
@@ -931,7 +931,7 @@ func Test_Events_ConcurrentReaders(t *testing.T) {
 	// Enqueue items
 	const totalItems = numReaders * numItemsPerReader
 	for i := 1; i <= totalItems; i++ {
-		item := []byte(fmt.Sprintf("concurrent-item-%d", i))
+		item := fmt.Appendf(nil, "concurrent-item-%d", i)
 		if err := q.Enqueue(&Event{Index: uint64(i), Data: item}); err != nil {
 			t.Fatalf("Enqueue failed for index %d: %v", i, err)
 		}
@@ -939,7 +939,7 @@ func Test_Events_ConcurrentReaders(t *testing.T) {
 
 	// Collect all events
 	receivedEvents := make([]*Event, 0, totalItems)
-	for i := 0; i < totalItems; i++ {
+	for i := range totalItems {
 		select {
 		case event := <-allEvents:
 			receivedEvents = append(receivedEvents, event)

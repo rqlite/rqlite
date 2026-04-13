@@ -155,10 +155,3 @@ func (c *Chunker) Counts() (int64, int64, int64) {
 	defer c.statsMu.Unlock()
 	return c.sequenceNum, c.r.Count(), c.nWritten
 }
-
-func min(a, b int64) int64 {
-	if a < b {
-		return a
-	}
-	return b
-}

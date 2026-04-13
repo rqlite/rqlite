@@ -82,7 +82,7 @@ type Store interface {
 // GetNodeMetaer is the interface that wraps the GetNodeMeta method.
 // GetNodeMeta returns the HTTP API URL for the node at the given Raft address.
 type GetNodeMetaer interface {
-	GetNodeMeta(addr string, retries int, timeout time.Duration) (*clstrPB.NodeMeta, error)
+	GetNodeMeta(ctx context.Context, addr string, retries int, timeout time.Duration) (*clstrPB.NodeMeta, error)
 }
 
 // Cluster is the interface node API services must provide
@@ -187,7 +187,6 @@ const (
 	numStatus                         = "num_status"
 	numBackups                        = "backups"
 	numLoad                           = "loads"
-	numLoadAborted                    = "loads_aborted"
 	numBoot                           = "boot"
 	numSnapshots                      = "user_snapshots"
 	numReaps                          = "user_reaps"
@@ -254,7 +253,6 @@ func ResetStats() {
 	stats.Add(numStatus, 0)
 	stats.Add(numBackups, 0)
 	stats.Add(numLoad, 0)
-	stats.Add(numLoadAborted, 0)
 	stats.Add(numBoot, 0)
 	stats.Add(numSnapshots, 0)
 	stats.Add(numReaps, 0)
@@ -1115,7 +1113,7 @@ func (s *Service) handleLeader(w http.ResponseWriter, r *http.Request, qp QueryP
 			nodeID = reqBody.ID
 		}
 
-		addr, err := s.proxy.Stepdown(wait, nodeID, makeCredentials(r), qp.Timeout(defaultTimeout), qp.Redirect())
+		addr, err := s.proxy.Stepdown(r.Context(), wait, nodeID, makeCredentials(r), qp.Timeout(defaultTimeout), qp.Redirect())
 		if err != nil {
 			if errors.Is(err, proxy.ErrNotLeader) {
 				s.DoRedirect(w, r, qp)
@@ -1165,7 +1163,7 @@ func (s *Service) handleReadyz(w http.ResponseWriter, r *http.Request, qp QueryP
 		return
 	}
 
-	lAddr, err := s.LeaderAddr()
+	lAddr, err := s.LeaderAddr(r.Context())
 	if err != nil {
 		if errors.Is(err, ErrLeaderNotFound) {
 			w.WriteHeader(http.StatusServiceUnavailable)
@@ -1176,10 +1174,10 @@ func (s *Service) handleReadyz(w http.ResponseWriter, r *http.Request, qp QueryP
 		return
 	}
 
-	_, err = s.cluster.GetNodeMeta(lAddr, qp.Retries(0), qp.Timeout(defaultTimeout))
+	_, err = s.cluster.GetNodeMeta(r.Context(), lAddr, qp.Retries(0), qp.Timeout(defaultTimeout))
 	if err != nil {
 		w.WriteHeader(http.StatusServiceUnavailable)
-		w.Write([]byte(fmt.Sprintf("[+]node ok\n[+]leader not contactable: %s", err.Error())))
+		w.Write(fmt.Appendf(nil, "[+]node ok\n[+]leader not contactable: %s", err.Error()))
 		return
 	}
 
@@ -1193,7 +1191,7 @@ func (s *Service) handleReadyz(w http.ResponseWriter, r *http.Request, qp QueryP
 	if qp.Sync() {
 		if _, err := s.store.Committed(qp.Timeout(defaultTimeout)); err != nil {
 			w.WriteHeader(http.StatusServiceUnavailable)
-			w.Write([]byte(fmt.Sprintf("[+]node ok\n[+]leader ok\n[+]store ok\n[+]sync %s", err.Error())))
+			w.Write(fmt.Appendf(nil, "[+]node ok\n[+]leader ok\n[+]store ok\n[+]sync %s", err.Error()))
 			return
 		}
 		okMsg += "\n[+]sync ok"
@@ -1261,7 +1259,7 @@ func (s *Service) queuedExecute(w http.ResponseWriter, r *http.Request, qp Query
 	// Perform a leader check, unless disabled. This prevents generating queued writes on
 	// a node that does not appear to be connected to a cluster (even a single-node cluster).
 	if !qp.NoLeader() {
-		_, err := s.LeaderAddr()
+		_, err := s.LeaderAddr(r.Context())
 		if err != nil {
 			if errors.Is(err, ErrLeaderNotFound) {
 				stats.Add(numLeaderNotFound, 1)
@@ -1450,7 +1448,7 @@ func (s *Service) handleQuery(w http.ResponseWriter, r *http.Request, qp QueryPa
 	}
 
 	results, raftIndex, addr, resultsErr := s.proxy.Query(r.Context(), qr, makeCredentials(r),
-		qp.Timeout(defaultTimeout), qp.Redirect())
+		qp.Timeout(defaultTimeout), qp.Retries(0), qp.Redirect())
 	if resultsErr != nil {
 		if errors.Is(resultsErr, proxy.ErrNotLeader) {
 			s.DoRedirect(w, r, qp)
@@ -1620,7 +1618,7 @@ func (s *Service) DoRedirect(w http.ResponseWriter, r *http.Request, qp QueryPar
 
 // FormRedirect returns the value for the "Location" header for a 301 response.
 func (s *Service) FormRedirect(r *http.Request) (string, error) {
-	leaderAPIAddr := s.LeaderAPIAddr()
+	leaderAPIAddr := s.LeaderAPIAddr(r.Context())
 	if leaderAPIAddr == "" {
 		stats.Add(numLeaderNotFound, 1)
 		return "", ErrLeaderNotFound
@@ -1687,7 +1685,7 @@ func (s *Service) CheckRequestPermAll(r *http.Request, perms ...string) (b bool)
 }
 
 // LeaderAddr returns the Raft address of the leader, as known by this node.
-func (s *Service) LeaderAddr() (string, error) {
+func (s *Service) LeaderAddr(ctx context.Context) (string, error) {
 	ldr, err := s.store.Leader()
 	if err != nil {
 		return "", err
@@ -1699,13 +1697,13 @@ func (s *Service) LeaderAddr() (string, error) {
 }
 
 // LeaderAPIAddr returns the HTTP API address of the leader, as known by this node.
-func (s *Service) LeaderAPIAddr() string {
+func (s *Service) LeaderAPIAddr(ctx context.Context) string {
 	ldr, err := s.store.Leader()
 	if err != nil {
 		return ""
 	}
 
-	meta, err := s.cluster.GetNodeMeta(ldr.Addr, 0, defaultTimeout)
+	meta, err := s.cluster.GetNodeMeta(ctx, ldr.Addr, 0, defaultTimeout)
 	if err != nil {
 		return ""
 	}

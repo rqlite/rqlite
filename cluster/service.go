@@ -48,6 +48,7 @@ const (
 	numClientRequestRetries     = "num_client_request_retries"
 	numClientReadTimeouts       = "num_client_read_timeouts"
 	numClientWriteTimeouts      = "num_client_write_timeouts"
+	numClientForceNewConn       = "num_client_force_new_conn"
 
 	// Client stats for this package.
 	numGetNodeAPIRequestLocal = "num_get_node_api_req_local"
@@ -63,6 +64,10 @@ const (
 
 func init() {
 	stats = expvar.NewMap("cluster")
+	ResetStats()
+}
+
+func ResetStats() {
 	stats.Add(numGetNodeAPIRequest, 0)
 	stats.Add(numGetNodeAPIResponse, 0)
 	stats.Add(numExecuteRequest, 0)
@@ -85,6 +90,7 @@ func init() {
 	stats.Add(numClientRequestRetries, 0)
 	stats.Add(numClientReadTimeouts, 0)
 	stats.Add(numClientWriteTimeouts, 0)
+	stats.Add(numClientForceNewConn, 0)
 }
 
 // Dialer is the interface dialers must implement.
@@ -310,6 +316,7 @@ func (s *Service) handleConn(conn net.Conn) {
 		err = pb.Unmarshal(p, c)
 		if err != nil {
 			conn.Close()
+			return
 		}
 
 		switch c.Type {
@@ -495,7 +502,7 @@ func (s *Service) handleConn(conn net.Conn) {
 
 			rn := c.GetRemoveNodeRequest()
 			if rn == nil {
-				resp.Error = "LoadRequest is nil"
+				resp.Error = "RemoveNodeRequest is nil"
 			} else if !s.checkCommandPerm(c, auth.PermRemove) {
 				resp.Error = "unauthorized"
 			} else {

@@ -1909,7 +1909,6 @@ func Test_DB_Dump(t *testing.T) {
 	}
 
 	for _, tc := range tests {
-		tc := tc
 		t.Run(tc.name, func(t *testing.T) {
 			var buf strings.Builder
 			if err := db.Dump(&buf, tc.tables...); err != nil {

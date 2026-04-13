@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/hashicorp/raft"
+	"github.com/rqlite/rqlite/v10/internal/fsutil"
 	"github.com/rqlite/rqlite/v10/internal/rsync"
 	"github.com/rqlite/rqlite/v10/snapshot/plan"
 )
@@ -25,20 +26,28 @@ const (
 	fullNeededFile = "FULL_NEEDED"
 	reapPlanFile   = "REAP_PLAN"
 
-	defaultReapThreshold = 8
+	defaultReapThreshold = 4
 )
 
 const (
-	persistSize                     = "latest_persist_size"
-	persistDuration                 = "latest_persist_duration"
-	autoReapDuration                = "latest_autoreap_duration"
-	upgradeOk                       = "upgrade_ok"
-	upgradeFail                     = "upgrade_fail"
-	snapshotsReaped                 = "snapshots_reaped"
-	snapshotsReapedFail             = "snapshots_reaped_failed"
-	snapshotCreateMRSWFail          = "snapshot_create_mrsw_fail"
-	snapshotOpenMRSWFail            = "snapshot_open_mrsw_fail"
-	snapshotFullCRC32CreateDuration = "snapshot_full_crc32_create_duration"
+	persistSize     = "persist_size"
+	persistDuration = "persist_duration_ms"
+
+	sinkFullTotal        = "sink_full_total"
+	sinkIncrementalTotal = "sink_incremental_total"
+	sinkErrors           = "sink_errors"
+	sinkFullCRC32Dur     = "sink_full_crc32_duration_ms"
+
+	autoReapDuration    = "auto_reap_duration_ms"
+	reapExecuteDuration = "reap_execute_duration_ms"
+	reapTotal           = "reap_total"
+	reapErrors          = "reap_errors"
+	reapSnapshots       = "reap_snapshots"
+	reapWALs            = "reap_wals"
+	reapPlanRecovered   = "reap_plan_recovered"
+
+	upgradeOk   = "upgrade_ok"
+	upgradeFail = "upgrade_fail"
 )
 
 var (
@@ -54,72 +63,28 @@ func init() {
 	ResetStats()
 }
 
+func recordDuration(stat string, startT time.Time) {
+	stats.Get(stat).(*expvar.Int).Set(time.Since(startT).Milliseconds())
+}
+
 // ResetStats resets the expvar stats for this module. Mostly for test purposes.
 func ResetStats() {
 	stats.Init()
 	stats.Add(persistSize, 0)
 	stats.Add(persistDuration, 0)
+	stats.Add(sinkFullTotal, 0)
+	stats.Add(sinkIncrementalTotal, 0)
+	stats.Add(sinkErrors, 0)
+	stats.Add(sinkFullCRC32Dur, 0)
 	stats.Add(autoReapDuration, 0)
+	stats.Add(reapExecuteDuration, 0)
+	stats.Add(reapTotal, 0)
+	stats.Add(reapErrors, 0)
+	stats.Add(reapSnapshots, 0)
+	stats.Add(reapWALs, 0)
+	stats.Add(reapPlanRecovered, 0)
 	stats.Add(upgradeOk, 0)
 	stats.Add(upgradeFail, 0)
-	stats.Add(snapshotsReaped, 0)
-	stats.Add(snapshotsReapedFail, 0)
-	stats.Add(snapshotCreateMRSWFail, 0)
-	stats.Add(snapshotOpenMRSWFail, 0)
-	stats.Add(snapshotFullCRC32CreateDuration, 0)
-}
-
-// LockingSink is a wrapper around a Sink holds the MSRW lock
-// while the Sink is in use.
-type LockingSink struct {
-	raft.SnapshotSink
-	str *Store
-
-	mu     sync.Mutex
-	closed bool
-	logger *log.Logger
-}
-
-// NewLockingSink returns a new LockingSink.
-func NewLockingSink(sink raft.SnapshotSink, str *Store) *LockingSink {
-	return &LockingSink{
-		SnapshotSink: sink,
-		str:          str,
-		logger:       log.New(os.Stderr, "[snapshot-locking-sink] ", log.LstdFlags),
-	}
-}
-
-// Close closes the sink, unlocking the Store for creation of a new sink.
-// After a successful close, the reaper goroutine is signaled.
-func (s *LockingSink) Close() error {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	if s.closed {
-		return nil
-	}
-	s.closed = true
-
-	err := s.SnapshotSink.Close()
-	s.str.mrsw.EndRead()
-	if err == nil {
-		s.str.signalReap()
-	}
-	return err
-}
-
-// Cancel cancels the sink, unlocking the Store for creation of a new sink.
-func (s *LockingSink) Cancel() error {
-	defer func() {
-		s.logger.Printf("sink %s canceled", s.ID())
-	}()
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	if s.closed {
-		return nil
-	}
-	s.closed = true
-	defer s.str.mrsw.EndRead()
-	return s.SnapshotSink.Cancel()
 }
 
 // LockingStreamer is a snapshot which holds the Snapshot Store MRSW read-lok
@@ -172,6 +137,8 @@ type Store struct {
 	reapDoneCh chan struct{}
 	wg         sync.WaitGroup
 
+	observers *observerSet
+
 	LogReaping bool
 }
 
@@ -191,11 +158,12 @@ func NewStore(dir string) (*Store, error) {
 		reapThreshold:  defaultReapThreshold,
 		reapCh:         make(chan struct{}, 1),
 		reapDoneCh:     make(chan struct{}),
+		observers:      newObserverSet(),
 		logger:         log.New(os.Stderr, "[snapshot-store] ", log.LstdFlags),
 	}
 	str.logger.Printf("store initialized using %s", dir)
 
-	emp, err := dirIsEmpty(dir)
+	emp, err := fsutil.DirIsEmpty(dir)
 	if err != nil {
 		return nil, err
 	}
@@ -214,15 +182,6 @@ func NewStore(dir string) (*Store, error) {
 // Create creates a new snapshot sink for the given parameters.
 func (s *Store) Create(version raft.SnapshotVersion, index, term uint64, configuration raft.Configuration,
 	configurationIndex uint64, trans raft.Transport) (retSink raft.SnapshotSink, retErr error) {
-	if err := s.mrsw.BeginRead(); err != nil {
-		return nil, err
-	}
-	defer func() {
-		if retErr != nil {
-			s.mrsw.EndRead()
-		}
-	}()
-
 	sink := NewSink(s.dir, &raft.SnapshotMeta{
 		Version:            version,
 		ID:                 snapshotName(term, index),
@@ -230,11 +189,11 @@ func (s *Store) Create(version raft.SnapshotVersion, index, term uint64, configu
 		Term:               term,
 		Configuration:      configuration,
 		ConfigurationIndex: configurationIndex,
-	}, s)
+	}, s, s.reapCh)
 	if err := sink.Open(); err != nil {
 		return nil, err
 	}
-	return NewLockingSink(sink, s), nil
+	return sink, nil
 }
 
 // ListAll returns the list of all available snapshots in the Store,
@@ -318,6 +277,10 @@ func (s *Store) SetReapThreshold(n int) {
 // which wraps a SnapshotInstall object. This is because the snapshot will be used
 // to either rebuild a node's state after restart, or to send the snapshot to another node,
 // both of which require the DB file and any associated WAL files.
+//
+// A sink does not need to lock the Store because either the Snapshot directory it
+// creates will be visible or not. Reaping will not see it until it is fully created,
+// and Listing it will not return it until it is fully created too.
 func (s *Store) Open(id string) (raftMeta *raft.SnapshotMeta, rc io.ReadCloser, retErr error) {
 	if err := s.mrsw.BeginRead(); err != nil {
 		return nil, nil, fmt.Errorf("acquiring read lock: %w", err)
@@ -364,6 +327,16 @@ func (s *Store) Open(id string) (raftMeta *raft.SnapshotMeta, rc io.ReadCloser, 
 	return meta, NewLockingStreamer(streamer, s), nil
 }
 
+// RegisterObserver registers an observer to receive observations.
+func (s *Store) RegisterObserver(o *Observer) {
+	s.observers.register(o)
+}
+
+// DeregisterObserver removes a previously registered observer.
+func (s *Store) DeregisterObserver(o *Observer) {
+	s.observers.deregister(o)
+}
+
 // Close shuts down the reaper goroutine and waits for it to exit.
 func (s *Store) Close() error {
 	close(s.reapDoneCh)
@@ -407,11 +380,31 @@ func (s *Store) Reap() (int, int, error) {
 }
 
 // reap performs the actual reap. The caller must hold the write lock.
+// On success, registered observers are notified.
 func (s *Store) reap() (int, int, error) {
+	startTime := time.Now()
+	n, c, err := s.reapInternal()
+	if err != nil {
+		return n, c, err
+	}
+	stats.Add(reapTotal, 1)
+	stats.Get(reapSnapshots).(*expvar.Int).Set(int64(n))
+	stats.Get(reapWALs).(*expvar.Int).Set(int64(c))
+	s.observers.notify(ReapObservation{
+		SnapshotsReaped: n,
+		WALsReaped:      c,
+		Duration:        time.Since(startTime),
+	})
+	return n, c, nil
+}
+
+// reapInternal performs the actual reap logic. The caller must hold the write lock.
+func (s *Store) reapInternal() (int, int, error) {
 	// If a reap plan file exists, that means a previous reap must have encountered an error.
 	// Let's make sure it is completed before we start a new reap.
-	if fileExists(s.reapPlanPath) {
+	if fsutil.FileExists(s.reapPlanPath) {
 		s.logger.Printf("found interrupted reap plan at %s, resuming", s.reapPlanPath)
+		stats.Add(reapPlanRecovered, 1)
 		p, err := plan.ReadFromFile(s.reapPlanPath)
 		if err != nil {
 			return 0, 0, fmt.Errorf("reading reap plan: %w", err)
@@ -523,12 +516,15 @@ func (s *Store) reap() (int, int, error) {
 
 // executeReapPlan executes a reap plan and cleans up.
 func (s *Store) executeReapPlan(p *plan.Plan, planPath string) (int, int, error) {
+	startT := time.Now()
+	defer recordDuration(reapExecuteDuration, startT)
+
 	executor := plan.NewExecutor()
 	if err := p.Execute(executor); err != nil {
 		return 0, 0, fmt.Errorf("executing reap plan: %w", err)
 	}
 
-	if err := syncDirMaybe(s.dir); err != nil {
+	if err := fsutil.SyncDirMaybe(s.dir); err != nil {
 		return 0, 0, fmt.Errorf("syncing store dir: %w", err)
 	}
 
@@ -545,49 +541,47 @@ func (s *Store) signalReap() {
 	}
 }
 
-// FullNeeded returns true if a full snapshot is needed.
-func (s *Store) FullNeeded() (bool, error) {
-	if fileExists(s.fullNeededPath) {
-		return true, nil
+// DueNext returns the type of snapshot due next.
+func (s *Store) DueNext() (Type, error) {
+	if fsutil.FileExists(s.fullNeededPath) {
+		return Full, nil
 	}
-	if err := s.mrsw.BeginRead(); err != nil {
-		return false, err
-	}
-	defer s.mrsw.EndRead()
 
-	snaps, err := s.getSnapshots()
-	if err != nil {
-		return false, err
+	nSnaps := s.snapshotCount()
+	if nSnaps == 0 {
+		return Full, nil
 	}
-	return snaps.Len() == 0, nil
+	return Incremental, nil
 }
 
-// SetFullNeeded sets the flag that indicates a full snapshot is needed.
-func (s *Store) SetFullNeeded() error {
-	f, err := os.Create(s.fullNeededPath)
-	if err != nil {
-		return err
+// SetDueNext sets the type of snapshot due next. Setting Full
+// creates a flag file; setting Incremental removes it.
+func (s *Store) SetDueNext(t Type) error {
+	switch t {
+	case Full:
+		f, err := os.Create(s.fullNeededPath)
+		if err != nil {
+			return err
+		}
+		if err := f.Sync(); err != nil {
+			f.Close()
+			return err
+		}
+		if err := f.Close(); err != nil {
+			return err
+		}
+		return fsutil.SyncDirMaybe(s.dir)
+	case Incremental:
+		if !fsutil.FileExists(s.fullNeededPath) {
+			return nil
+		}
+		if err := os.Remove(s.fullNeededPath); err != nil {
+			return err
+		}
+		return fsutil.SyncDirMaybe(s.dir)
+	default:
+		return fmt.Errorf("unknown snapshot type: %s", t)
 	}
-	if err := f.Sync(); err != nil {
-		f.Close()
-		return err
-	}
-	if err := f.Close(); err != nil {
-		return err
-	}
-	return syncDirMaybe(s.dir)
-}
-
-// UnsetFullNeeded removes the flag that indicates a full snapshot is
-// needed. If the flag is not set, this is a no-op.
-func (s *Store) UnsetFullNeeded() error {
-	if !fileExists(s.fullNeededPath) {
-		return nil
-	}
-	if err := os.Remove(s.fullNeededPath); err != nil {
-		return err
-	}
-	return syncDirMaybe(s.dir)
 }
 
 // Stats returns stats about the Snapshot Store. This function may return
@@ -599,12 +593,20 @@ func (s *Store) Stats() (map[string]any, error) {
 	}
 	defer s.mrsw.EndRead()
 
+	dirSz, err := fsutil.DirSize(s.dir)
+	if err != nil {
+		// If we can't compute the directory size, we can still return other stats,
+		// so we ignore the error and just report a size of 0.
+		dirSz = 0
+	}
+
 	snapshots, err := s.getSnapshots()
 	if err != nil {
 		return nil, err
 	}
 	return map[string]any{
 		"dir":       s.dir,
+		"dir_size":  dirSz,
 		"snapshots": snapshots.IDs(),
 	}, nil
 }
@@ -625,7 +627,7 @@ func (s *Store) snapshotCount() int {
 	return n
 }
 
-// reapLoop is the reaper goroutine. It waits for signals from LockingSink.Close()
+// reapLoop is the reaper goroutine. It waits for signals from Sink.Close()
 // and reaps snapshots when the count exceeds the threshold. It uses a blocking
 // write lock acquisition so it will wait for active readers to finish rather
 // than failing.
@@ -646,25 +648,21 @@ func (s *Store) reapLoop() {
 			continue
 		}
 
-		startTime := time.Now()
+		startT := time.Now()
 		n, c, err := func() (int, int, error) {
-			defer func() {
-				dur := time.Since(startTime)
-				stats.Get(autoReapDuration).(*expvar.Int).Set(dur.Milliseconds())
-			}()
-
+			defer recordDuration(autoReapDuration, startT)
 			s.mrsw.BeginWriteBlocking("reap")
 			defer s.mrsw.EndWrite()
 			return s.reap()
 		}()
 		if err != nil {
 			s.logger.Printf("reap failed: %s", err)
-			stats.Add(snapshotsReapedFail, 1)
+			stats.Add(reapErrors, 1)
 			continue
 		}
 		if s.LogReaping {
-			dur := time.Since(startTime)
-			s.logger.Printf("autoreap complete in %s: %d snapshots reaped, %d WALs checkpointed", dur, n, c)
+			s.logger.Printf("autoreap complete in %s: %d snapshots reaped, %d WALs checkpointed",
+				time.Since(startT), n, c)
 		}
 	}
 }
@@ -676,10 +674,24 @@ func (s *Store) check() error {
 	// Remove any incomplete plan file from an interrupted plan write.
 	os.Remove(tmpName(s.reapPlanPath))
 
+	reapPlanFound := fsutil.FileExists(s.reapPlanPath)
+
+	// If no reap was interrupted, verify the CRC32 of every data file
+	// in every snapshot directory. If a reap was interrupted, the files
+	// may be in an inconsistent state and the CRC32 validation may fail,
+	// so we skip it in that case and just resume the reap to fix any
+	// inconsistencies.
+	if !reapPlanFound {
+		if err := s.checkCRCs(); err != nil {
+			return err
+		}
+	}
+
 	// Resume an interrupted reap if such a plan file exists. Only then should
 	// we remove any leftover temporary directories, since they may be needed
-	// for the reap to complete.
-	if fileExists(s.reapPlanPath) {
+	// for the reap to complete. If a reap plan was found, skip CRC validation
+	// since files may have been left in an inconsistent state by the crash.
+	if reapPlanFound {
 		s.logger.Printf("found interrupted reap plan at %s, resuming", s.reapPlanPath)
 		p, err := plan.ReadFromFile(s.reapPlanPath)
 		if err != nil {
@@ -707,6 +719,36 @@ func (s *Store) check() error {
 	return nil
 }
 
+// checkCRCs verifies the CRC32 of every data file in every snapshot directory.
+func (s *Store) checkCRCs() error {
+	startT := time.Now()
+	snapshots, err := s.catalog.Scan(s.dir)
+	if err != nil {
+		return fmt.Errorf("scanning snapshots for CRC check: %w", err)
+	}
+	if len(snapshots.items) == 0 {
+		return nil
+	}
+
+	checker := NewCRCChecker()
+	for _, snap := range snapshots.items {
+		if snap.dbFile != nil {
+			checker.Add(snap.dbFile)
+		}
+		for _, wf := range snap.walFiles {
+			checker.Add(wf)
+		}
+	}
+
+	if err := <-checker.Check(); err != nil {
+		return err
+	}
+
+	s.logger.Printf("completed CRC32 check of %d snapshot directories in %s",
+		len(snapshots.items), time.Since(startT))
+	return nil
+}
+
 // getSnapshots returns the set of snapshots in the Store.
 func (s *Store) getSnapshots() (SnapshotSet, error) {
 	return s.catalog.Scan(s.dir)
@@ -727,4 +769,12 @@ func snapshotName(term, index uint64) string {
 // metaPath returns the path to the meta file in the given directory.
 func metaPath(dir string) string {
 	return filepath.Join(dir, metaFileName)
+}
+
+func tmpName(path string) string {
+	return path + tmpSuffix
+}
+
+func isTmpName(name string) bool {
+	return filepath.Ext(name) == tmpSuffix
 }

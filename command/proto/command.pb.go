@@ -21,6 +21,55 @@ const (
 	_ = protoimpl.EnforceVersion(protoimpl.MaxVersion - 20)
 )
 
+type Suffrage int32
+
+const (
+	Suffrage_UNKNOWN   Suffrage = 0
+	Suffrage_VOTER     Suffrage = 1
+	Suffrage_NON_VOTER Suffrage = 2
+)
+
+// Enum value maps for Suffrage.
+var (
+	Suffrage_name = map[int32]string{
+		0: "UNKNOWN",
+		1: "VOTER",
+		2: "NON_VOTER",
+	}
+	Suffrage_value = map[string]int32{
+		"UNKNOWN":   0,
+		"VOTER":     1,
+		"NON_VOTER": 2,
+	}
+)
+
+func (x Suffrage) Enum() *Suffrage {
+	p := new(Suffrage)
+	*p = x
+	return p
+}
+
+func (x Suffrage) String() string {
+	return protoimpl.X.EnumStringOf(x.Descriptor(), protoreflect.EnumNumber(x))
+}
+
+func (Suffrage) Descriptor() protoreflect.EnumDescriptor {
+	return file_command_proto_enumTypes[0].Descriptor()
+}
+
+func (Suffrage) Type() protoreflect.EnumType {
+	return &file_command_proto_enumTypes[0]
+}
+
+func (x Suffrage) Number() protoreflect.EnumNumber {
+	return protoreflect.EnumNumber(x)
+}
+
+// Deprecated: Use Suffrage.Descriptor instead.
+func (Suffrage) EnumDescriptor() ([]byte, []int) {
+	return file_command_proto_rawDescGZIP(), []int{0}
+}
+
 type ConsistencyLevel int32
 
 const (
@@ -60,11 +109,11 @@ func (x ConsistencyLevel) String() string {
 }
 
 func (ConsistencyLevel) Descriptor() protoreflect.EnumDescriptor {
-	return file_command_proto_enumTypes[0].Descriptor()
+	return file_command_proto_enumTypes[1].Descriptor()
 }
 
 func (ConsistencyLevel) Type() protoreflect.EnumType {
-	return &file_command_proto_enumTypes[0]
+	return &file_command_proto_enumTypes[1]
 }
 
 func (x ConsistencyLevel) Number() protoreflect.EnumNumber {
@@ -73,7 +122,7 @@ func (x ConsistencyLevel) Number() protoreflect.EnumNumber {
 
 // Deprecated: Use ConsistencyLevel.Descriptor instead.
 func (ConsistencyLevel) EnumDescriptor() ([]byte, []int) {
-	return file_command_proto_rawDescGZIP(), []int{0}
+	return file_command_proto_rawDescGZIP(), []int{1}
 }
 
 type BackupRequest_Format int32
@@ -112,11 +161,11 @@ func (x BackupRequest_Format) String() string {
 }
 
 func (BackupRequest_Format) Descriptor() protoreflect.EnumDescriptor {
-	return file_command_proto_enumTypes[1].Descriptor()
+	return file_command_proto_enumTypes[2].Descriptor()
 }
 
 func (BackupRequest_Format) Type() protoreflect.EnumType {
-	return &file_command_proto_enumTypes[1]
+	return &file_command_proto_enumTypes[2]
 }
 
 func (x BackupRequest_Format) Number() protoreflect.EnumNumber {
@@ -176,11 +225,11 @@ func (x Command_Type) String() string {
 }
 
 func (Command_Type) Descriptor() protoreflect.EnumDescriptor {
-	return file_command_proto_enumTypes[2].Descriptor()
+	return file_command_proto_enumTypes[3].Descriptor()
 }
 
 func (Command_Type) Type() protoreflect.EnumType {
-	return &file_command_proto_enumTypes[2]
+	return &file_command_proto_enumTypes[3]
 }
 
 func (x Command_Type) Number() protoreflect.EnumNumber {
@@ -228,11 +277,11 @@ func (x CDCEvent_Operation) String() string {
 }
 
 func (CDCEvent_Operation) Descriptor() protoreflect.EnumDescriptor {
-	return file_command_proto_enumTypes[3].Descriptor()
+	return file_command_proto_enumTypes[4].Descriptor()
 }
 
 func (CDCEvent_Operation) Type() protoreflect.EnumType {
-	return &file_command_proto_enumTypes[3]
+	return &file_command_proto_enumTypes[4]
 }
 
 func (x CDCEvent_Operation) Number() protoreflect.EnumNumber {
@@ -280,11 +329,11 @@ func (x UpdateHookEvent_Operation) String() string {
 }
 
 func (UpdateHookEvent_Operation) Descriptor() protoreflect.EnumDescriptor {
-	return file_command_proto_enumTypes[4].Descriptor()
+	return file_command_proto_enumTypes[5].Descriptor()
 }
 
 func (UpdateHookEvent_Operation) Type() protoreflect.EnumType {
-	return &file_command_proto_enumTypes[4]
+	return &file_command_proto_enumTypes[5]
 }
 
 func (x UpdateHookEvent_Operation) Number() protoreflect.EnumNumber {
@@ -2340,7 +2389,11 @@ const file_command_proto_rawDesc = "" +
 	"\n" +
 	"\x06DELETE\x10\x03\"0\n" +
 	"\x16AppendEntriesExtension\x12\x16\n" +
-	"\x06cdcHWM\x18\x01 \x01(\x04R\x06cdcHWM*N\n" +
+	"\x06cdcHWM\x18\x01 \x01(\x04R\x06cdcHWM*1\n" +
+	"\bSuffrage\x12\v\n" +
+	"\aUNKNOWN\x10\x00\x12\t\n" +
+	"\x05VOTER\x10\x01\x12\r\n" +
+	"\tNON_VOTER\x10\x02*N\n" +
 	"\x10ConsistencyLevel\x12\b\n" +
 	"\x04NONE\x10\x00\x12\b\n" +
 	"\x04WEAK\x10\x01\x12\n" +
@@ -2361,64 +2414,65 @@ func file_command_proto_rawDescGZIP() []byte {
 	return file_command_proto_rawDescData
 }
 
-var file_command_proto_enumTypes = make([]protoimpl.EnumInfo, 5)
+var file_command_proto_enumTypes = make([]protoimpl.EnumInfo, 6)
 var file_command_proto_msgTypes = make([]protoimpl.MessageInfo, 27)
 var file_command_proto_goTypes = []any{
-	(ConsistencyLevel)(0),             // 0: command.ConsistencyLevel
-	(BackupRequest_Format)(0),         // 1: command.BackupRequest.Format
-	(Command_Type)(0),                 // 2: command.Command.Type
-	(CDCEvent_Operation)(0),           // 3: command.CDCEvent.Operation
-	(UpdateHookEvent_Operation)(0),    // 4: command.UpdateHookEvent.Operation
-	(*Parameter)(nil),                 // 5: command.Parameter
-	(*Statement)(nil),                 // 6: command.Statement
-	(*Request)(nil),                   // 7: command.Request
-	(*QueryRequest)(nil),              // 8: command.QueryRequest
-	(*Values)(nil),                    // 9: command.Values
-	(*SQLiteError)(nil),               // 10: command.SQLiteError
-	(*QueryRows)(nil),                 // 11: command.QueryRows
-	(*ExecuteRequest)(nil),            // 12: command.ExecuteRequest
-	(*ExecuteResult)(nil),             // 13: command.ExecuteResult
-	(*ExecuteQueryRequest)(nil),       // 14: command.ExecuteQueryRequest
-	(*ExecuteQueryResponse)(nil),      // 15: command.ExecuteQueryResponse
-	(*BackupRequest)(nil),             // 16: command.BackupRequest
-	(*LoadRequest)(nil),               // 17: command.LoadRequest
-	(*LoadChunkRequest)(nil),          // 18: command.LoadChunkRequest
-	(*JoinRequest)(nil),               // 19: command.JoinRequest
-	(*NotifyRequest)(nil),             // 20: command.NotifyRequest
-	(*RemoveNodeRequest)(nil),         // 21: command.RemoveNodeRequest
-	(*StepdownRequest)(nil),           // 22: command.StepdownRequest
-	(*Noop)(nil),                      // 23: command.Noop
-	(*Command)(nil),                   // 24: command.Command
-	(*CDCValue)(nil),                  // 25: command.CDCValue
-	(*CDCRow)(nil),                    // 26: command.CDCRow
-	(*CDCEvent)(nil),                  // 27: command.CDCEvent
-	(*CDCIndexedEventGroup)(nil),      // 28: command.CDCIndexedEventGroup
-	(*CDCIndexedEventGroupBatch)(nil), // 29: command.CDCIndexedEventGroupBatch
-	(*UpdateHookEvent)(nil),           // 30: command.UpdateHookEvent
-	(*AppendEntriesExtension)(nil),    // 31: command.AppendEntriesExtension
+	(Suffrage)(0),                     // 0: command.Suffrage
+	(ConsistencyLevel)(0),             // 1: command.ConsistencyLevel
+	(BackupRequest_Format)(0),         // 2: command.BackupRequest.Format
+	(Command_Type)(0),                 // 3: command.Command.Type
+	(CDCEvent_Operation)(0),           // 4: command.CDCEvent.Operation
+	(UpdateHookEvent_Operation)(0),    // 5: command.UpdateHookEvent.Operation
+	(*Parameter)(nil),                 // 6: command.Parameter
+	(*Statement)(nil),                 // 7: command.Statement
+	(*Request)(nil),                   // 8: command.Request
+	(*QueryRequest)(nil),              // 9: command.QueryRequest
+	(*Values)(nil),                    // 10: command.Values
+	(*SQLiteError)(nil),               // 11: command.SQLiteError
+	(*QueryRows)(nil),                 // 12: command.QueryRows
+	(*ExecuteRequest)(nil),            // 13: command.ExecuteRequest
+	(*ExecuteResult)(nil),             // 14: command.ExecuteResult
+	(*ExecuteQueryRequest)(nil),       // 15: command.ExecuteQueryRequest
+	(*ExecuteQueryResponse)(nil),      // 16: command.ExecuteQueryResponse
+	(*BackupRequest)(nil),             // 17: command.BackupRequest
+	(*LoadRequest)(nil),               // 18: command.LoadRequest
+	(*LoadChunkRequest)(nil),          // 19: command.LoadChunkRequest
+	(*JoinRequest)(nil),               // 20: command.JoinRequest
+	(*NotifyRequest)(nil),             // 21: command.NotifyRequest
+	(*RemoveNodeRequest)(nil),         // 22: command.RemoveNodeRequest
+	(*StepdownRequest)(nil),           // 23: command.StepdownRequest
+	(*Noop)(nil),                      // 24: command.Noop
+	(*Command)(nil),                   // 25: command.Command
+	(*CDCValue)(nil),                  // 26: command.CDCValue
+	(*CDCRow)(nil),                    // 27: command.CDCRow
+	(*CDCEvent)(nil),                  // 28: command.CDCEvent
+	(*CDCIndexedEventGroup)(nil),      // 29: command.CDCIndexedEventGroup
+	(*CDCIndexedEventGroupBatch)(nil), // 30: command.CDCIndexedEventGroupBatch
+	(*UpdateHookEvent)(nil),           // 31: command.UpdateHookEvent
+	(*AppendEntriesExtension)(nil),    // 32: command.AppendEntriesExtension
 }
 var file_command_proto_depIdxs = []int32{
-	5,  // 0: command.Statement.parameters:type_name -> command.Parameter
-	6,  // 1: command.Request.statements:type_name -> command.Statement
-	7,  // 2: command.QueryRequest.request:type_name -> command.Request
-	0,  // 3: command.QueryRequest.level:type_name -> command.ConsistencyLevel
-	5,  // 4: command.Values.parameters:type_name -> command.Parameter
-	9,  // 5: command.QueryRows.values:type_name -> command.Values
-	7,  // 6: command.ExecuteRequest.request:type_name -> command.Request
-	10, // 7: command.ExecuteResult.error_v2:type_name -> command.SQLiteError
-	7,  // 8: command.ExecuteQueryRequest.request:type_name -> command.Request
-	0,  // 9: command.ExecuteQueryRequest.level:type_name -> command.ConsistencyLevel
-	11, // 10: command.ExecuteQueryResponse.q:type_name -> command.QueryRows
-	13, // 11: command.ExecuteQueryResponse.e:type_name -> command.ExecuteResult
-	1,  // 12: command.BackupRequest.format:type_name -> command.BackupRequest.Format
-	2,  // 13: command.Command.type:type_name -> command.Command.Type
-	25, // 14: command.CDCRow.values:type_name -> command.CDCValue
-	3,  // 15: command.CDCEvent.op:type_name -> command.CDCEvent.Operation
-	26, // 16: command.CDCEvent.old_row:type_name -> command.CDCRow
-	26, // 17: command.CDCEvent.new_row:type_name -> command.CDCRow
-	27, // 18: command.CDCIndexedEventGroup.events:type_name -> command.CDCEvent
-	28, // 19: command.CDCIndexedEventGroupBatch.payload:type_name -> command.CDCIndexedEventGroup
-	4,  // 20: command.UpdateHookEvent.op:type_name -> command.UpdateHookEvent.Operation
+	6,  // 0: command.Statement.parameters:type_name -> command.Parameter
+	7,  // 1: command.Request.statements:type_name -> command.Statement
+	8,  // 2: command.QueryRequest.request:type_name -> command.Request
+	1,  // 3: command.QueryRequest.level:type_name -> command.ConsistencyLevel
+	6,  // 4: command.Values.parameters:type_name -> command.Parameter
+	10, // 5: command.QueryRows.values:type_name -> command.Values
+	8,  // 6: command.ExecuteRequest.request:type_name -> command.Request
+	11, // 7: command.ExecuteResult.error_v2:type_name -> command.SQLiteError
+	8,  // 8: command.ExecuteQueryRequest.request:type_name -> command.Request
+	1,  // 9: command.ExecuteQueryRequest.level:type_name -> command.ConsistencyLevel
+	12, // 10: command.ExecuteQueryResponse.q:type_name -> command.QueryRows
+	14, // 11: command.ExecuteQueryResponse.e:type_name -> command.ExecuteResult
+	2,  // 12: command.BackupRequest.format:type_name -> command.BackupRequest.Format
+	3,  // 13: command.Command.type:type_name -> command.Command.Type
+	26, // 14: command.CDCRow.values:type_name -> command.CDCValue
+	4,  // 15: command.CDCEvent.op:type_name -> command.CDCEvent.Operation
+	27, // 16: command.CDCEvent.old_row:type_name -> command.CDCRow
+	27, // 17: command.CDCEvent.new_row:type_name -> command.CDCRow
+	28, // 18: command.CDCIndexedEventGroup.events:type_name -> command.CDCEvent
+	29, // 19: command.CDCIndexedEventGroupBatch.payload:type_name -> command.CDCIndexedEventGroup
+	5,  // 20: command.UpdateHookEvent.op:type_name -> command.UpdateHookEvent.Operation
 	21, // [21:21] is the sub-list for method output_type
 	21, // [21:21] is the sub-list for method input_type
 	21, // [21:21] is the sub-list for extension type_name
@@ -2455,7 +2509,7 @@ func file_command_proto_init() {
 		File: protoimpl.DescBuilder{
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_command_proto_rawDesc), len(file_command_proto_rawDesc)),
-			NumEnums:      5,
+			NumEnums:      6,
 			NumMessages:   27,
 			NumExtensions: 0,
 			NumServices:   0,

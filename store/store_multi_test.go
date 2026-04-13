@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/rqlite/rqlite/v10/command/proto"
+	"github.com/rqlite/rqlite/v10/internal/fsutil"
 )
 
 func Test_MultiNode_Leader_Followers(t *testing.T) {
@@ -148,24 +149,20 @@ func Test_MultiNode_LeaderObservations(t *testing.T) {
 	var wg sync.WaitGroup
 
 	ch0 := make(chan bool)
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
+	wg.Go(func() {
 		b := <-ch0
 		if !b {
 			t.Errorf("expected true on ch0, got false")
 		}
-	}()
+	})
 
 	ch1 := make(chan bool)
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
+	wg.Go(func() {
 		b := <-ch1
 		if b {
 			t.Errorf("expected false on ch1, got false")
 		}
-	}()
+	})
 
 	s0, ln0 := mustNewStore(t)
 	defer ln0.Close()
@@ -455,7 +452,7 @@ func Test_MultiNodeSnapshot_Joins(t *testing.T) {
 	insertRecord := func(s *Store, n int) {
 		t.Helper()
 		stmts := make([]string, 0, n)
-		for i := 0; i < n; i++ {
+		for range n {
 			stmts = append(stmts, `INSERT INTO foo(name) VALUES("fiona")`)
 		}
 		er = executeRequestFromStrings(stmts, false, false)
@@ -466,7 +463,7 @@ func Test_MultiNodeSnapshot_Joins(t *testing.T) {
 	}
 
 	// Snapshot and insert.
-	for i := 0; i < 20; i++ {
+	for range 20 {
 		if err := s0.Snapshot(0); err != nil {
 			t.Fatalf("failed to snapshot single-node store: %s", err.Error())
 		}
@@ -601,7 +598,7 @@ func Test_MultiNodeSnapshot_BlockedSnapshot(t *testing.T) {
 	insertRecord := func(s *Store, n int) {
 		t.Helper()
 		stmts := make([]string, 0, n)
-		for i := 0; i < n; i++ {
+		for range n {
 			stmts = append(stmts, `INSERT INTO foo(name) VALUES("fiona")`)
 		}
 		er = executeRequestFromStrings(stmts, false, false)
@@ -1182,7 +1179,7 @@ func Test_MultiNodeStoreAutoRestoreBootstrap(t *testing.T) {
 		t.Fatalf("unexpected results for query\nexp: %s\ngot: %s", exp, got)
 	}
 
-	if pathExists(path0) || pathExists(path1) || pathExists(path2) {
+	if fsutil.PathExists(path0) || fsutil.PathExists(path1) || fsutil.PathExists(path2) {
 		t.Fatalf("an auto-restore file was not removed")
 	}
 

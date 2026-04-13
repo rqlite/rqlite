@@ -43,7 +43,7 @@ func TestMux(t *testing.T) {
 		if !testing.Verbose() {
 			mux.Logger = log.New(io.Discard, "", 0)
 		}
-		for i := uint8(0); i < n; i++ {
+		for i := range n {
 			ln := mux.Listen(i)
 
 			wg.Add(1)

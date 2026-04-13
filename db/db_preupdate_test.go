@@ -56,7 +56,7 @@ func Test_Preupdate_Basic(t *testing.T) {
 	}
 
 	// Insert 5 rows, make sure the hook is triggered 5 times.
-	for i := 0; i < 5; i++ {
+	for range 5 {
 		mustExecute(db, "INSERT INTO foo(name) VALUES('fiona')")
 	}
 	if count.Load() != 8 {

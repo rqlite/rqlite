@@ -11,6 +11,7 @@ import (
 	"testing"
 
 	"github.com/mattn/go-sqlite3"
+	"github.com/rqlite/rqlite/v10/internal/fsutil"
 	"github.com/rqlite/rqlite/v10/internal/random"
 )
 
@@ -521,14 +522,14 @@ func Test_CheckpointRemove(t *testing.T) {
 		t.Fatalf("failed to open database in WAL mode: %s", err.Error())
 	}
 	dbEmpty.Close()
-	if !fileExists(emptyPath + "-wal") {
+	if !fsutil.FileExists(emptyPath + "-wal") {
 		t.Fatalf("empty WAL file not present")
 	}
 
 	if err := CheckpointRemove(emptyPath); err != nil {
 		t.Fatalf("failed to checkpoint empty database in WAL mode: %s", err.Error())
 	}
-	if fileExists(emptyPath + "-wal") {
+	if fsutil.FileExists(emptyPath + "-wal") {
 		t.Fatalf("empty WAL file still present")
 	}
 
@@ -561,7 +562,7 @@ func Test_CheckpointRemove(t *testing.T) {
 	if !w {
 		t.Fatalf("database not marked as WAL mode")
 	}
-	if fileExists(path + "-wal") {
+	if fsutil.FileExists(path + "-wal") {
 		t.Fatalf("WAL file still present")
 	}
 	db, err = Open(path, false, true)
@@ -608,7 +609,7 @@ func Test_WALReplayOK(t *testing.T) {
 		if _, err := db.ExecuteStringStmt("CREATE TABLE foo (id INTEGER NOT NULL PRIMARY KEY, name TEXT)"); err != nil {
 			t.Fatalf("failed to create table: %s", err.Error())
 		}
-		if !fileExists(walPath) {
+		if !fsutil.FileExists(walPath) {
 			t.Fatalf("WAL file at %s does not exist", walPath)
 		}
 		mustCopyFile(replayDBPath, dbPath)
@@ -622,7 +623,7 @@ func Test_WALReplayOK(t *testing.T) {
 		if err != nil {
 			t.Fatalf("error executing insertion into table: %s", err.Error())
 		}
-		if !fileExists(walPath) {
+		if !fsutil.FileExists(walPath) {
 			t.Fatalf("WAL file at %s does not exist", walPath)
 		}
 		mustCopyFile(filepath.Join(replayDir, walFile+"_002"), walPath)
@@ -635,7 +636,7 @@ func Test_WALReplayOK(t *testing.T) {
 		if err != nil {
 			t.Fatalf("error executing insertion into table: %s", err.Error())
 		}
-		if !fileExists(walPath) {
+		if !fsutil.FileExists(walPath) {
 			t.Fatalf("WAL file at %s does not exist", walPath)
 		}
 		mustCopyFile(filepath.Join(replayDir, walFile+"_003"), walPath)
@@ -726,8 +727,8 @@ func Test_WALReplayOK_Complex(t *testing.T) {
 			os.Remove(p)
 		}
 	}()
-	for i := 0; i < 20; i++ {
-		for j := 0; j < 2000; j++ {
+	for i := range 20 {
+		for range 2000 {
 			if _, err := srcDB.ExecuteStringStmt(fmt.Sprintf(`INSERT INTO foo(name) VALUES("fiona-%d")`, i)); err != nil {
 				t.Fatalf("error executing insertion into table: %s", err.Error())
 			}
@@ -776,7 +777,7 @@ func Test_WALReplayOK_Complex(t *testing.T) {
 
 	//////////////////////////////////////////////////////////////////////////
 	// Create a bunch of new tables, copy the WAL afterwards.
-	for i := 0; i < 20; i++ {
+	for i := range 20 {
 		createTable := fmt.Sprintf("CREATE TABLE bar%d (id INTEGER NOT NULL PRIMARY KEY, name TEXT)", i)
 		if _, err := srcDB.ExecuteStringStmt(createTable); err != nil {
 			t.Fatalf("failed to create table: %s", err.Error())
