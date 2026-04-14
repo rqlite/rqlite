@@ -45,7 +45,7 @@ func Test_OpenStoreCloseStartupSingleNode(t *testing.T) {
 		t.Fatalf("Error waiting for leader: %s", err)
 	}
 	testPoll(t, func() bool {
-		qr := queryRequestFromString("SELECT COUNT(*) FROM foo", false, false)
+		qr := queryRequestFromString("SELECT COUNT(*) FROM foo", false, false, false)
 		qr.Level = command.ConsistencyLevel_STRONG
 		r, _, _, err := s.Query(context.Background(), qr)
 		return err == nil && asJSON(r) == `[{"columns":["COUNT(*)"],"types":["integer"],"values":[[1]]}]`
@@ -84,7 +84,7 @@ func Test_OpenStoreCloseStartupSingleNode(t *testing.T) {
 	}
 	// Insert new records so we have something to snapshot.
 	queryTest := func(s *Store, c int) {
-		qr := queryRequestFromString("SELECT COUNT(*) FROM foo", false, false)
+		qr := queryRequestFromString("SELECT COUNT(*) FROM foo", false, false, false)
 		qr.Level = command.ConsistencyLevel_STRONG
 		r, _, _, err := s.Query(context.Background(), qr)
 		if err != nil {
@@ -147,7 +147,7 @@ func Test_OpenStoreCloseStartupSingleNode(t *testing.T) {
 		t.Fatalf("Error waiting for leader: %s", err)
 	}
 	testPoll(t, func() bool {
-		qr := queryRequestFromString("SELECT COUNT(*) FROM foo", false, false)
+		qr := queryRequestFromString("SELECT COUNT(*) FROM foo", false, false, false)
 		qr.Level = command.ConsistencyLevel_NONE
 		r, _, _, err := s.Query(context.Background(), qr)
 		return err == nil && asJSON(r) == `[{"columns":["COUNT(*)"],"types":["integer"],"values":[[11]]}]`
@@ -169,7 +169,7 @@ func Test_OpenStoreCloseStartupSingleNode(t *testing.T) {
 	}
 
 	testPoll(t, func() bool {
-		qr := queryRequestFromString("SELECT COUNT(*) FROM foo", false, false)
+		qr := queryRequestFromString("SELECT COUNT(*) FROM foo", false, false, false)
 		qr.Level = command.ConsistencyLevel_NONE
 		r, _, _, err := s.Query(context.Background(), qr)
 		return err == nil && asJSON(r) == `[{"columns":["COUNT(*)"],"types":["integer"],"values":[[12]]}]`
@@ -219,7 +219,7 @@ func test_SnapshotStress(t *testing.T, s *Store) {
 			t.Fatalf("failed to execute on single node: %s", err.Error())
 		}
 	}
-	qr := queryRequestFromString("SELECT COUNT(*) FROM foo", false, false)
+	qr := queryRequestFromString("SELECT COUNT(*) FROM foo", false, false, false)
 	qr.Level = command.ConsistencyLevel_STRONG
 	r, _, _, err := s.Query(context.Background(), qr)
 	if err != nil {
@@ -241,7 +241,7 @@ func test_SnapshotStress(t *testing.T, s *Store) {
 		t.Fatalf("Error waiting for leader: %s", err)
 	}
 
-	qr = queryRequestFromString("SELECT COUNT(*) FROM foo", false, false)
+	qr = queryRequestFromString("SELECT COUNT(*) FROM foo", false, false, false)
 	qr.Level = command.ConsistencyLevel_STRONG
 	r, _, _, err = s.Query(context.Background(), qr)
 	if err != nil {
@@ -335,7 +335,7 @@ func Test_OpenStoreCloseUserSnapshot(t *testing.T) {
 		t.Fatalf("Error waiting for leader: %s", err)
 	}
 
-	qr := queryRequestFromString("SELECT * FROM foo", false, false)
+	qr := queryRequestFromString("SELECT * FROM foo", false, false, false)
 	qr.Level = command.ConsistencyLevel_STRONG
 	r, _, _, err := s.Query(context.Background(), qr)
 	if err != nil {
@@ -442,7 +442,7 @@ func Test_Store_RestoreNoCleanSnapshot(t *testing.T) {
 				t.Fatalf("Error waiting for leader: %s", err)
 			}
 
-			qr := queryRequestFromString("SELECT * FROM foo", false, false)
+			qr := queryRequestFromString("SELECT * FROM foo", false, false, false)
 			qr.Level = command.ConsistencyLevel_STRONG
 			r, _, _, err := s.Query(context.Background(), qr)
 			if err != nil {
@@ -613,7 +613,7 @@ func Test_Store_Restore_NoSnapshotOnClose(t *testing.T) {
 		t.Fatalf("Error waiting for leader: %s", err)
 	}
 
-	qr := queryRequestFromString("SELECT * FROM foo", false, false)
+	qr := queryRequestFromString("SELECT * FROM foo", false, false, false)
 	qr.Level = command.ConsistencyLevel_STRONG
 	r, _, _, err := s.Query(context.Background(), qr)
 	if err != nil {
@@ -671,7 +671,7 @@ func Test_Store_Restore_NoSnapshotOnClose_Snapshot(t *testing.T) {
 		t.Fatalf("Error waiting for leader: %s", err)
 	}
 
-	qr := queryRequestFromString("SELECT * FROM foo", false, false)
+	qr := queryRequestFromString("SELECT * FROM foo", false, false, false)
 	qr.Level = command.ConsistencyLevel_STRONG
 	r, _, _, err := s.Query(context.Background(), qr)
 	if err != nil {

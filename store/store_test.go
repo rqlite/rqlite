@@ -166,7 +166,7 @@ func Test_SingleNodeDBAppliedIndex(t *testing.T) {
 	// Do a strong query, and ensure DBAppliedIndex is not updated,
 	// since strong queries do not modify the database, though they
 	// do go through the Raft log.
-	qr := queryRequestFromString("SELECT * FROM foo", false, false)
+	qr := queryRequestFromString("SELECT * FROM foo", false, false, false)
 	qr.Level = proto.ConsistencyLevel_STRONG
 	_, _, _, err = s.Query(context.Background(), qr)
 	if err != nil {
@@ -177,7 +177,7 @@ func Test_SingleNodeDBAppliedIndex(t *testing.T) {
 	}
 
 	// Do a weak query, and ensure DBAppliedIndex is not updated.
-	qr = queryRequestFromString("SELECT * FROM foo", false, false)
+	qr = queryRequestFromString("SELECT * FROM foo", false, false, false)
 	qr.Level = proto.ConsistencyLevel_WEAK
 	_, _, _, err = s.Query(context.Background(), qr)
 	if err != nil {
@@ -483,7 +483,7 @@ func Test_OpenStoreCloseSingleNode(t *testing.T) {
 		t.Fatalf("Error waiting for leader: %s", err)
 	}
 
-	qr := queryRequestFromString("SELECT * FROM foo", false, false)
+	qr := queryRequestFromString("SELECT * FROM foo", false, false, false)
 	qr.Level = proto.ConsistencyLevel_NONE
 	testPoll(t, func() bool {
 		r, _, _, err := s.Query(context.Background(), qr)
@@ -624,7 +624,7 @@ func Test_SingleNodeExecuteQuery(t *testing.T) {
 		t.Fatalf("failed to execute on single node: %s", err.Error())
 	}
 
-	qr := queryRequestFromString("SELECT * FROM foo", false, false)
+	qr := queryRequestFromString("SELECT * FROM foo", false, false, false)
 	qr.Level = proto.ConsistencyLevel_NONE
 	r, _, _, err := s.Query(context.Background(), qr)
 	if err != nil {
@@ -665,7 +665,7 @@ func Test_SingleNodeExecuteQuery_Linearizable(t *testing.T) {
 	}
 
 	// Perform the first linearizable query, which should be upgraded to a strong query.
-	qr := queryRequestFromString("SELECT * FROM foo", false, false)
+	qr := queryRequestFromString("SELECT * FROM foo", false, false, false)
 	qr.Level = proto.ConsistencyLevel_LINEARIZABLE
 	r, _, _, err := s.Query(context.Background(), qr)
 	if err != nil {
@@ -746,7 +746,7 @@ func Test_SingleNodeExecuteQuery_EXPLAIN(t *testing.T) {
 	}
 
 	// Check that EXPLAIN sent directory to query endpoint also works OK.
-	qr := queryRequestFromString("EXPLAIN QUERY PLAN SELECT * FROM foo", false, false)
+	qr := queryRequestFromString("EXPLAIN QUERY PLAN SELECT * FROM foo", false, false, false)
 	qr.Level = proto.ConsistencyLevel_WEAK
 	qr.Request.Statements[0].SqlExplain = true
 	rows, _, _, err := s.Query(context.Background(), qr)
@@ -757,7 +757,7 @@ func Test_SingleNodeExecuteQuery_EXPLAIN(t *testing.T) {
 		t.Fatalf("unexpected results for EXPLAIN QUERY PLAN\ngot: %s", asJSON(rows))
 	}
 
-	qr = queryRequestFromString(`EXPLAIN QUERY PLAN INSERT INTO foo(name) VALUES("fiona")`, false, false)
+	qr = queryRequestFromString(`EXPLAIN QUERY PLAN INSERT INTO foo(name) VALUES("fiona")`, false, false, false)
 	qr.Level = proto.ConsistencyLevel_WEAK
 	qr.Request.Statements[0].SqlExplain = true
 	rows, _, _, err = s.Query(context.Background(), qr)
@@ -804,7 +804,7 @@ func Test_SingleNodeExecuteQuery_RETURNING(t *testing.T) {
 		t.Fatalf("unexpected results for RETURNING query\nexp: %s\ngot: %s", exp, got)
 	}
 
-	qr := queryRequestFromString("SELECT * FROM foo", false, false)
+	qr := queryRequestFromString("SELECT * FROM foo", false, false, false)
 	qr.Level = proto.ConsistencyLevel_NONE
 	r, _, _, err := s.Query(context.Background(), qr)
 	if err != nil {
@@ -863,7 +863,7 @@ func Test_SingleNodeExecuteQuery_RETURNING_KeywordAsIdent(t *testing.T) {
 		t.Fatalf("unexpected results for RETURNING query\nexp: %s\ngot: %s", exp, got)
 	}
 
-	qr := queryRequestFromString("SELECT * FROM foo", false, false)
+	qr := queryRequestFromString("SELECT * FROM foo", false, false, false)
 	qr.Level = proto.ConsistencyLevel_NONE
 	r, _, _, err := s.Query(context.Background(), qr)
 	if err != nil {
@@ -996,7 +996,7 @@ func Test_SingleNodeExecuteQueryTx(t *testing.T) {
 		t.Fatalf("failed to execute on single node: %s", err.Error())
 	}
 
-	qr := queryRequestFromString("SELECT * FROM foo", false, true)
+	qr := queryRequestFromString("SELECT * FROM foo", false, true, false)
 	var r []*proto.QueryRows
 
 	qr.Level = proto.ConsistencyLevel_NONE
@@ -1391,7 +1391,7 @@ func Test_SingleNodeOnDiskFileExecuteQuery(t *testing.T) {
 		}
 	}
 
-	qr := queryRequestFromString("SELECT * FROM foo", false, false)
+	qr := queryRequestFromString("SELECT * FROM foo", false, false, false)
 	qr.Level = proto.ConsistencyLevel_NONE
 	r, _, _, err := s.Query(context.Background(), qr)
 	if err != nil {
@@ -1399,7 +1399,7 @@ func Test_SingleNodeOnDiskFileExecuteQuery(t *testing.T) {
 	}
 	check(r)
 
-	qr = queryRequestFromString("SELECT * FROM foo", false, false)
+	qr = queryRequestFromString("SELECT * FROM foo", false, false, false)
 	qr.Level = proto.ConsistencyLevel_WEAK
 	r, _, _, err = s.Query(context.Background(), qr)
 	if err != nil {
@@ -1407,7 +1407,7 @@ func Test_SingleNodeOnDiskFileExecuteQuery(t *testing.T) {
 	}
 	check(r)
 
-	qr = queryRequestFromString("SELECT * FROM foo", false, false)
+	qr = queryRequestFromString("SELECT * FROM foo", false, false, false)
 	qr.Level = proto.ConsistencyLevel_STRONG
 	r, _, _, err = s.Query(context.Background(), qr)
 	if err != nil {
@@ -1415,7 +1415,7 @@ func Test_SingleNodeOnDiskFileExecuteQuery(t *testing.T) {
 	}
 	check(r)
 
-	qr = queryRequestFromString("SELECT * FROM foo", false, true)
+	qr = queryRequestFromString("SELECT * FROM foo", false, true, false)
 	qr.Timings = true
 	qr.Level = proto.ConsistencyLevel_NONE
 	r, _, _, err = s.Query(context.Background(), qr)
@@ -1424,7 +1424,7 @@ func Test_SingleNodeOnDiskFileExecuteQuery(t *testing.T) {
 	}
 	check(r)
 
-	qr = queryRequestFromString("SELECT * FROM foo", true, false)
+	qr = queryRequestFromString("SELECT * FROM foo", true, false, false)
 	qr.Request.Transaction = true
 	qr.Level = proto.ConsistencyLevel_NONE
 	r, _, _, err = s.Query(context.Background(), qr)
@@ -1461,7 +1461,7 @@ func Test_SingleNodeExecuteQueryFreshness(t *testing.T) {
 		return idx <= s0.DBAppliedIndex()
 	}, 100*time.Millisecond, 5*time.Second)
 
-	qr := queryRequestFromString("SELECT * FROM foo", false, false)
+	qr := queryRequestFromString("SELECT * FROM foo", false, false, false)
 	qr.Level = proto.ConsistencyLevel_NONE
 	qr.Freshness = mustParseDuration("1ns").Nanoseconds()
 	r, _, _, err := s0.Query(context.Background(), qr)
@@ -1895,7 +1895,7 @@ COMMIT;
 	}
 
 	// Check that data were loaded correctly.
-	qr := queryRequestFromString("SELECT * FROM foo", false, true)
+	qr := queryRequestFromString("SELECT * FROM foo", false, true, false)
 	qr.Level = proto.ConsistencyLevel_STRONG
 	r, _, _, err := s.Query(context.Background(), qr)
 	if err != nil {
@@ -1983,7 +1983,7 @@ func Test_SingleNodeLoadTextChinook(t *testing.T) {
 
 	// Check that data were loaded correctly.
 
-	qr := queryRequestFromString("SELECT count(*) FROM track", false, true)
+	qr := queryRequestFromString("SELECT count(*) FROM track", false, true, false)
 	qr.Level = proto.ConsistencyLevel_STRONG
 	r, _, _, err := s.Query(context.Background(), qr)
 	if err != nil {
@@ -1996,7 +1996,7 @@ func Test_SingleNodeLoadTextChinook(t *testing.T) {
 		t.Fatalf("unexpected results for query\nexp: %s\ngot: %s", exp, got)
 	}
 
-	qr = queryRequestFromString("SELECT count(*) FROM album", false, true)
+	qr = queryRequestFromString("SELECT count(*) FROM album", false, true, false)
 	qr.Level = proto.ConsistencyLevel_STRONG
 	r, _, _, err = s.Query(context.Background(), qr)
 	if err != nil {
@@ -2009,7 +2009,7 @@ func Test_SingleNodeLoadTextChinook(t *testing.T) {
 		t.Fatalf("unexpected results for query\nexp: %s\ngot: %s", exp, got)
 	}
 
-	qr = queryRequestFromString("SELECT count(*) FROM artist", false, true)
+	qr = queryRequestFromString("SELECT count(*) FROM artist", false, true, false)
 	qr.Level = proto.ConsistencyLevel_STRONG
 	r, _, _, err = s.Query(context.Background(), qr)
 	if err != nil {
@@ -2053,7 +2053,7 @@ COMMIT;
 	}
 
 	// Check that data were loaded correctly.
-	qr := queryRequestFromString("SELECT * FROM bar", false, true)
+	qr := queryRequestFromString("SELECT * FROM bar", false, true, false)
 	qr.Level = proto.ConsistencyLevel_STRONG
 	r, _, _, err := s.Query(context.Background(), qr)
 	if err != nil {
@@ -2081,7 +2081,7 @@ COMMIT;
 	}
 
 	// Check that data were loaded correctly.
-	qr = queryRequestFromString("SELECT * FROM foo WHERE id=2", false, true)
+	qr = queryRequestFromString("SELECT * FROM foo WHERE id=2", false, true, false)
 	qr.Level = proto.ConsistencyLevel_STRONG
 	r, _, _, err = s.Query(context.Background(), qr)
 	if err != nil {
@@ -2093,7 +2093,7 @@ COMMIT;
 	if exp, got := `[[2,"fiona"]]`, asJSON(r[0].Values); exp != got {
 		t.Fatalf("unexpected results for query\nexp: %s\ngot: %s", exp, got)
 	}
-	qr = queryRequestFromString("SELECT count(*) FROM foo", false, true)
+	qr = queryRequestFromString("SELECT count(*) FROM foo", false, true, false)
 	qr.Level = proto.ConsistencyLevel_STRONG
 	r, _, _, err = s.Query(context.Background(), qr)
 	if err != nil {
@@ -2107,7 +2107,7 @@ COMMIT;
 	}
 
 	// Check preexisting data is gone.
-	qr = queryRequestFromString("SELECT * FROM bar", false, true)
+	qr = queryRequestFromString("SELECT * FROM bar", false, true, false)
 	qr.Level = proto.ConsistencyLevel_STRONG
 	r, _, _, err = s.Query(context.Background(), qr)
 	if err != nil {
@@ -2148,7 +2148,7 @@ COMMIT;
 	}
 
 	// Check that data were loaded correctly.
-	qr := queryRequestFromString("SELECT * FROM bar", false, true)
+	qr := queryRequestFromString("SELECT * FROM bar", false, true, false)
 	qr.Level = proto.ConsistencyLevel_STRONG
 	r, _, _, err := s.Query(context.Background(), qr)
 	if err != nil {
@@ -2192,7 +2192,7 @@ func Test_SingleNodeAutoRestore(t *testing.T) {
 	}
 
 	testPoll(t, s.Ready, 100*time.Millisecond, 2*time.Second)
-	qr := queryRequestFromString("SELECT * FROM foo WHERE id=2", false, true)
+	qr := queryRequestFromString("SELECT * FROM foo WHERE id=2", false, true, false)
 	r, _, _, err := s.Query(context.Background(), qr)
 	if err != nil {
 		t.Fatalf("failed to query single node: %s", err.Error())
@@ -2265,7 +2265,7 @@ COMMIT;
 	}
 
 	// Check that data were loaded correctly.
-	qr := queryRequestFromString("SELECT * FROM bar", false, true)
+	qr := queryRequestFromString("SELECT * FROM bar", false, true, false)
 	qr.Level = proto.ConsistencyLevel_STRONG
 	r, _, _, err := s.Query(context.Background(), qr)
 	if err != nil {
@@ -2301,7 +2301,7 @@ COMMIT;
 	}
 
 	// Check that data were loaded correctly.
-	qr = queryRequestFromString("SELECT * FROM foo WHERE id=2", false, true)
+	qr = queryRequestFromString("SELECT * FROM foo WHERE id=2", false, true, false)
 	qr.Level = proto.ConsistencyLevel_STRONG
 	r, _, _, err = s.Query(context.Background(), qr)
 	if err != nil {
@@ -2313,7 +2313,7 @@ COMMIT;
 	if exp, got := `[[2,"fiona"]]`, asJSON(r[0].Values); exp != got {
 		t.Fatalf("unexpected results for query\nexp: %s\ngot: %s", exp, got)
 	}
-	qr = queryRequestFromString("SELECT count(*) FROM foo", false, true)
+	qr = queryRequestFromString("SELECT count(*) FROM foo", false, true, false)
 	qr.Level = proto.ConsistencyLevel_STRONG
 	r, _, _, err = s.Query(context.Background(), qr)
 	if err != nil {
@@ -2327,7 +2327,7 @@ COMMIT;
 	}
 
 	// Check preexisting data is gone.
-	qr = queryRequestFromString("SELECT * FROM bar", false, true)
+	qr = queryRequestFromString("SELECT * FROM bar", false, true, false)
 	qr.Level = proto.ConsistencyLevel_STRONG
 	r, _, _, err = s.Query(context.Background(), qr)
 	if err != nil {
@@ -2347,7 +2347,7 @@ COMMIT;
 	if _, err := s.WaitForLeader(10 * time.Second); err != nil {
 		t.Fatalf("Error waiting for leader: %s", err)
 	}
-	qr = queryRequestFromString("SELECT count(*) FROM foo", false, true)
+	qr = queryRequestFromString("SELECT count(*) FROM foo", false, true, false)
 	r, _, _, err = s.Query(context.Background(), qr)
 	if err != nil {
 		t.Fatalf("failed to query single node: %s", err.Error())
@@ -2973,7 +2973,7 @@ func Test_StoreQueryRaftIndex(t *testing.T) {
 	}
 
 	// First do a STRONG query to set the strongReadTerm for the current term
-	strongReq := queryRequestFromString("SELECT * FROM foo", false, false)
+	strongReq := queryRequestFromString("SELECT * FROM foo", false, false, false)
 	strongReq.Level = proto.ConsistencyLevel_STRONG
 	_, _, _, err = s.Query(context.Background(), strongReq)
 	if err != nil {
@@ -2991,7 +2991,7 @@ func Test_StoreQueryRaftIndex(t *testing.T) {
 	}
 
 	for _, level := range levels {
-		req := queryRequestFromString("SELECT * FROM foo", false, false)
+		req := queryRequestFromString("SELECT * FROM foo", false, false, false)
 		req.Level = level.level
 		_, _, index, err := s.Query(context.Background(), req)
 		if err != nil {
@@ -3003,7 +3003,7 @@ func Test_StoreQueryRaftIndex(t *testing.T) {
 	}
 
 	// Test STRONG consistency should return non-zero index
-	strongTestReq := queryRequestFromString("SELECT * FROM foo", false, false)
+	strongTestReq := queryRequestFromString("SELECT * FROM foo", false, false, false)
 	strongTestReq.Level = proto.ConsistencyLevel_STRONG
 	_, _, strongIndex, err := s.Query(context.Background(), strongTestReq)
 	if err != nil {
@@ -3041,7 +3041,7 @@ func Test_StoreQueryReturnedLevel(t *testing.T) {
 	}
 
 	// Execute initial STRONG query to set strongReadTerm
-	strongReq := queryRequestFromString("SELECT * FROM foo", false, false)
+	strongReq := queryRequestFromString("SELECT * FROM foo", false, false, false)
 	strongReq.Level = proto.ConsistencyLevel_STRONG
 	_, _, _, err = s.Query(context.Background(), strongReq)
 	if err != nil {
@@ -3049,7 +3049,7 @@ func Test_StoreQueryReturnedLevel(t *testing.T) {
 	}
 
 	// Test NONE level
-	req := queryRequestFromString("SELECT * FROM foo", false, false)
+	req := queryRequestFromString("SELECT * FROM foo", false, false, false)
 	req.Level = proto.ConsistencyLevel_NONE
 	_, level, _, err := s.Query(context.Background(), req)
 	if err != nil {
@@ -3060,7 +3060,7 @@ func Test_StoreQueryReturnedLevel(t *testing.T) {
 	}
 
 	// Test WEAK level
-	req = queryRequestFromString("SELECT * FROM foo", false, false)
+	req = queryRequestFromString("SELECT * FROM foo", false, false, false)
 	req.Level = proto.ConsistencyLevel_WEAK
 	_, level, _, err = s.Query(context.Background(), req)
 	if err != nil {
@@ -3071,7 +3071,7 @@ func Test_StoreQueryReturnedLevel(t *testing.T) {
 	}
 
 	// Test STRONG level
-	req = queryRequestFromString("SELECT * FROM foo", false, false)
+	req = queryRequestFromString("SELECT * FROM foo", false, false, false)
 	req.Level = proto.ConsistencyLevel_STRONG
 	_, level, _, err = s.Query(context.Background(), req)
 	if err != nil {
@@ -3082,7 +3082,7 @@ func Test_StoreQueryReturnedLevel(t *testing.T) {
 	}
 
 	// Test LINEARIZABLE level (should stay LINEARIZABLE if no strong read needed)
-	req = queryRequestFromString("SELECT * FROM foo", false, false)
+	req = queryRequestFromString("SELECT * FROM foo", false, false, false)
 	req.Level = proto.ConsistencyLevel_LINEARIZABLE
 	_, level, _, err = s.Query(context.Background(), req)
 	if err != nil {
@@ -3093,7 +3093,7 @@ func Test_StoreQueryReturnedLevel(t *testing.T) {
 	}
 
 	// Test AUTO level (should be converted to WEAK for a voter)
-	req = queryRequestFromString("SELECT * FROM foo", false, false)
+	req = queryRequestFromString("SELECT * FROM foo", false, false, false)
 	req.Level = proto.ConsistencyLevel_AUTO
 	_, level, _, err = s.Query(context.Background(), req)
 	if err != nil {
@@ -3263,12 +3263,12 @@ func executeRequestFromStrings(s []string, timings, tx bool) *proto.ExecuteReque
 	}
 }
 
-func queryRequestFromString(s string, timings, tx bool) *proto.QueryRequest {
-	return queryRequestFromStrings([]string{s}, timings, tx)
+func queryRequestFromString(s string, timings, tx, qualify bool) *proto.QueryRequest {
+	return queryRequestFromStrings([]string{s}, timings, tx, qualify)
 }
 
 // queryRequestFromStrings converts a slice of strings into a proto.QueryRequest
-func queryRequestFromStrings(s []string, timings, tx bool) *proto.QueryRequest {
+func queryRequestFromStrings(s []string, timings, tx, qualify bool) *proto.QueryRequest {
 	stmts := make([]*proto.Statement, len(s))
 	for i := range s {
 		stmts[i] = &proto.Statement{
@@ -3277,8 +3277,9 @@ func queryRequestFromStrings(s []string, timings, tx bool) *proto.QueryRequest {
 	}
 	return &proto.QueryRequest{
 		Request: &proto.Request{
-			Statements:  stmts,
-			Transaction: tx,
+			Statements:     stmts,
+			Transaction:    tx,
+			QualifyColumns: qualify,
 		},
 		Timings: timings,
 	}
