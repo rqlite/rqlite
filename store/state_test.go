@@ -258,7 +258,7 @@ func Test_SingleNodeRecoverNoChange(t *testing.T) {
 
 	queryTest := func() {
 		t.Helper()
-		qr := queryRequestFromString("SELECT * FROM foo", false, false)
+		qr := queryRequestFromString("SELECT * FROM foo", false, false, false)
 		qr.Level = proto.ConsistencyLevel_NONE
 		r, _, _, err := s.Query(context.Background(), qr)
 		if err != nil {
@@ -326,7 +326,7 @@ func Test_SingleNodeRecoverNetworkChange(t *testing.T) {
 	}
 
 	queryTest := func(s *Store) {
-		qr := queryRequestFromString("SELECT * FROM foo", false, false)
+		qr := queryRequestFromString("SELECT * FROM foo", false, false, false)
 		qr.Level = proto.ConsistencyLevel_NONE
 		r, _, _, err := s.Query(context.Background(), qr)
 		if err != nil {
@@ -407,7 +407,7 @@ func Test_SingleNodeRecoverNetworkChangeSnapshot(t *testing.T) {
 
 	queryTest := func(s *Store, c int) {
 		t.Helper()
-		qr := queryRequestFromString("SELECT COUNT(*) FROM foo", false, false)
+		qr := queryRequestFromString("SELECT COUNT(*) FROM foo", false, false, false)
 		qr.Level = proto.ConsistencyLevel_STRONG
 		r, _, _, err := s.Query(context.Background(), qr)
 		if err != nil {

@@ -272,7 +272,7 @@ func Test_MultiNodeSimple(t *testing.T) {
 	// has been replicated.
 	testFn1 := func(t *testing.T, s *Store) {
 		t.Helper()
-		qr := queryRequestFromString("SELECT * FROM foo", false, false)
+		qr := queryRequestFromString("SELECT * FROM foo", false, false, false)
 		qr.Level = proto.ConsistencyLevel_NONE
 		r, _, _, err := s.Query(context.Background(), qr)
 		if err != nil {
@@ -308,7 +308,7 @@ func Test_MultiNodeSimple(t *testing.T) {
 	}
 
 	// Write another row using Request
-	rr := executeQueryRequestFromString("INSERT INTO foo(id, name) VALUES(2, 'fiona')", proto.ConsistencyLevel_STRONG, false, false)
+	rr := executeQueryRequestFromString("INSERT INTO foo(id, name) VALUES(2, 'fiona')", proto.ConsistencyLevel_STRONG, false, false, false)
 	_, _, _, err = s0.Request(context.Background(), rr)
 	if err != nil {
 		t.Fatalf("failed to execute on single node: %s", err.Error())
@@ -321,7 +321,7 @@ func Test_MultiNodeSimple(t *testing.T) {
 	// has been replicated.
 	testFn2 := func(t *testing.T, s *Store) {
 		t.Helper()
-		qr := queryRequestFromString("SELECT COUNT(*) FROM foo", false, false)
+		qr := queryRequestFromString("SELECT COUNT(*) FROM foo", false, false, false)
 		qr.Level = proto.ConsistencyLevel_NONE
 		r, _, _, err := s.Query(context.Background(), qr)
 		if err != nil {
@@ -470,7 +470,7 @@ func Test_MultiNodeSnapshot_Joins(t *testing.T) {
 		insertRecord(s0, 100)
 	}
 
-	qr := queryRequestFromString("SELECT COUNT(*) FROM foo", false, false)
+	qr := queryRequestFromString("SELECT COUNT(*) FROM foo", false, false, false)
 	qr.Level = proto.ConsistencyLevel_STRONG
 	r, _, _, err := s0.Query(context.Background(), qr)
 	if err != nil {
@@ -496,7 +496,7 @@ func Test_MultiNodeSnapshot_Joins(t *testing.T) {
 
 	// Check that the joining node eventually gets the records.
 	testPoll(t, func() bool {
-		qr := queryRequestFromString("SELECT COUNT(*) FROM foo", false, true)
+		qr := queryRequestFromString("SELECT COUNT(*) FROM foo", false, true, false)
 		qr.Level = proto.ConsistencyLevel_NONE
 		r, _, _, err := s1.Query(context.Background(), qr)
 		if err != nil {
@@ -650,7 +650,7 @@ func Test_MultiNodeSnapshot_BlockedSnapshot(t *testing.T) {
 	insertRecord(s0, 1)
 
 	// Should be two records in database.
-	qr := queryRequestFromString("SELECT COUNT(*) FROM foo", false, false)
+	qr := queryRequestFromString("SELECT COUNT(*) FROM foo", false, false, false)
 	qr.Level = proto.ConsistencyLevel_STRONG
 	r, _, _, err := s0.Query(context.Background(), qr)
 	if err != nil {
@@ -681,7 +681,7 @@ func Test_MultiNodeSnapshot_BlockedSnapshot(t *testing.T) {
 
 	// Check that the joining node eventually gets the right records.
 	testPoll(t, func() bool {
-		qr := queryRequestFromString("SELECT COUNT(*) FROM foo", false, true)
+		qr := queryRequestFromString("SELECT COUNT(*) FROM foo", false, true, false)
 		qr.Level = proto.ConsistencyLevel_NONE
 		r, _, _, err := s2.Query(context.Background(), qr)
 		if err != nil {
@@ -1167,7 +1167,7 @@ func Test_MultiNodeStoreAutoRestoreBootstrap(t *testing.T) {
 	// has completed and the restoreDoneCh has been closed.
 	testPoll(t, s0.Ready, 250*time.Millisecond, 10*time.Second)
 
-	qr := queryRequestFromString("SELECT * FROM foo WHERE id=2", false, true)
+	qr := queryRequestFromString("SELECT * FROM foo WHERE id=2", false, true, false)
 	r, _, _, err := s0.Query(context.Background(), qr)
 	if err != nil {
 		t.Fatalf("failed to query single node: %s", err.Error())
@@ -1322,7 +1322,7 @@ func Test_MultiNodeExecuteQuery(t *testing.T) {
 		return idx <= s0.DBAppliedIndex()
 	}, 100*time.Millisecond, 5*time.Second)
 
-	qr := queryRequestFromString("SELECT * FROM foo", false, false)
+	qr := queryRequestFromString("SELECT * FROM foo", false, false, false)
 	qr.Level = proto.ConsistencyLevel_NONE
 	r, _, _, err := s0.Query(context.Background(), qr)
 	if err != nil {
@@ -1427,7 +1427,7 @@ func Test_MultiNodeExecuteQueryFreshness(t *testing.T) {
 		t.Fatalf("failed to execute on single node: %s", err.Error())
 	}
 
-	qr := queryRequestFromString("SELECT * FROM foo", false, false)
+	qr := queryRequestFromString("SELECT * FROM foo", false, false, false)
 	qr.Level = proto.ConsistencyLevel_NONE
 	r, _, _, err := s0.Query(context.Background(), qr)
 	if err != nil {
@@ -1523,7 +1523,7 @@ func Test_MultiNodeExecuteQueryFreshness(t *testing.T) {
 
 	// Check Stale-read detection works with Requests too.
 	eqr := executeQueryRequestFromString("SELECT * FROM foo", proto.ConsistencyLevel_NONE,
-		false, false)
+		false, false, false)
 	eqr.Freshness = mustParseDuration("1ns").Nanoseconds()
 	_, _, _, err = s1.Request(context.Background(), eqr)
 	if err == nil {
@@ -1655,7 +1655,7 @@ func Test_MultiNodeStoreLogTruncation(t *testing.T) {
 	}
 
 	testPoll(t, func() bool {
-		qr := queryRequestFromString("SELECT count(*) FROM foo", false, true)
+		qr := queryRequestFromString("SELECT count(*) FROM foo", false, true, false)
 		qr.Level = proto.ConsistencyLevel_NONE
 		r, _, _, err := s1.Query(context.Background(), qr)
 		if err != nil {
@@ -1725,7 +1725,7 @@ func Test_MultiNodeExecuteQuery_Linearizable_AllUp(t *testing.T) {
 		if s.IsLeader() {
 			leaderCount++
 		}
-		qr := queryRequestFromString("SELECT * FROM foo", false, false)
+		qr := queryRequestFromString("SELECT * FROM foo", false, false, false)
 		qr.Level = proto.ConsistencyLevel_LINEARIZABLE
 		r, _, _, err := s.Query(context.Background(), qr)
 		if err != nil {
@@ -1813,7 +1813,7 @@ func Test_MultiNodeExecuteQuery_Linearizable_Quorum(t *testing.T) {
 		if s.IsLeader() {
 			leaderCount++
 		}
-		qr := queryRequestFromString("SELECT * FROM foo", false, false)
+		qr := queryRequestFromString("SELECT * FROM foo", false, false, false)
 		qr.Level = proto.ConsistencyLevel_LINEARIZABLE
 		r, _, _, err := s.Query(context.Background(), qr)
 		if err != nil {
@@ -1900,7 +1900,7 @@ func Test_MultiNodeExecuteQuery_Linearizable_NoQuorum(t *testing.T) {
 
 	// Perform a query with Linearizable consistency on the remaining nodes
 	// which should fail.
-	qr := queryRequestFromString("SELECT * FROM foo", false, false)
+	qr := queryRequestFromString("SELECT * FROM foo", false, false, false)
 	qr.Level = proto.ConsistencyLevel_LINEARIZABLE
 
 	_, _, _, err = s0.Query(context.Background(), qr)
@@ -1976,7 +1976,7 @@ func Test_MultiNodeExecuteQuery_Linearizable_Concurrent(t *testing.T) {
 	for range count {
 		go func() {
 			defer wg.Done()
-			qr := queryRequestFromString("SELECT * FROM foo", false, false)
+			qr := queryRequestFromString("SELECT * FROM foo", false, false, false)
 			qr.Level = proto.ConsistencyLevel_LINEARIZABLE
 			r, _, _, err := s0.Query(context.Background(), qr)
 			if err != nil {

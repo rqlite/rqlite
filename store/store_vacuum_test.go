@@ -49,7 +49,7 @@ COMMIT;
 			t.Fatalf("unable to open backup database, %s", err.Error())
 		}
 		defer dstDB.Close()
-		qr := queryRequestFromString("SELECT * FROM foo", false, false)
+		qr := queryRequestFromString("SELECT * FROM foo", false, false, false)
 		qr.Level = proto.ConsistencyLevel_NONE
 		r, _, _, err := s.Query(context.Background(), qr)
 		if err != nil {
@@ -196,7 +196,7 @@ func Test_SingleNodeExplicitVacuumOK(t *testing.T) {
 		}
 	}
 	doQuery := func() {
-		qr := queryRequestFromString("SELECT COUNT(*) FROM foo", false, true)
+		qr := queryRequestFromString("SELECT COUNT(*) FROM foo", false, true, false)
 		qr.Level = proto.ConsistencyLevel_STRONG
 		r, _, _, err := s.Query(context.Background(), qr)
 		if err != nil {
@@ -281,7 +281,7 @@ func Test_SingleNodeExplicitVacuumOK_Stress(t *testing.T) {
 		}
 	}
 	doQuery := func() bool {
-		qr := queryRequestFromString("SELECT COUNT(*) FROM foo", false, true)
+		qr := queryRequestFromString("SELECT COUNT(*) FROM foo", false, true, false)
 		qr.Level = proto.ConsistencyLevel_STRONG
 		r, _, _, err := s.Query(context.Background(), qr)
 		return err == nil && asJSON(r) == `[{"columns":["COUNT(*)"],"types":["integer"],"values":[[2500]]}]`
@@ -416,7 +416,7 @@ func Test_SingleNode_SnapshotWithAutoVac(t *testing.T) {
 	}
 
 	// Query the data, make sure it looks good after all this.
-	qr := queryRequestFromString("SELECT COUNT(*) FROM foo", false, true)
+	qr := queryRequestFromString("SELECT COUNT(*) FROM foo", false, true, false)
 	r, _, _, err := s.Query(context.Background(), qr)
 	if err != nil {
 		t.Fatalf("failed to query single node: %s", err.Error())
@@ -509,7 +509,7 @@ func Test_SingleNode_SnapshotWithAutoVac_Stress(t *testing.T) {
 	wg.Wait()
 
 	// Query the data, make sure it looks good after all this.
-	qr := queryRequestFromString("SELECT COUNT(*) FROM foo", false, true)
+	qr := queryRequestFromString("SELECT COUNT(*) FROM foo", false, true, false)
 	qr.Level = proto.ConsistencyLevel_STRONG // Key to ensuring previous logs are applied.
 	r, _, _, err := s.Query(context.Background(), qr)
 	if err != nil {

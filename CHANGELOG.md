@@ -28,7 +28,7 @@ There are no breaking API changes in this release, nor any changes to how cluste
 - [PR #2532](https://github.com/rqlite/rqlite/pull/2532): Add `-raft-commit-timeout` to allow control of this Raft config option.
 - [PR #2558](https://github.com/rqlite/rqlite/pull/2558): Add new commands to the rqlite shell.
 - [PR #2583](https://github.com/rqlite/rqlite/pull/2583): Queries support configurable retries.
-- [PR #2574](https://github.com/rqlite/rqlite/pull/2574): Support qualifying columns with table names. Fixes issue [#530](https://github.com/rqlite/rqlite/issues/530). Thanks @TanayK07
+- [PR #2574](https://github.com/rqlite/rqlite/pull/2574), [PR #2610](https://github.com/rqlite/rqlite/pull/2610): Support qualifying columns with table names. Fixes issue [#530](https://github.com/rqlite/rqlite/issues/530). Thanks @TanayK07
 
 ### Implementation changes and bug fixes
 - [PR #2471](https://github.com/rqlite/rqlite/pull/2471): Move to non-blocking Snapshotting store.

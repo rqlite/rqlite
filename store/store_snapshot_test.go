@@ -39,7 +39,7 @@ func Test_SingleNodeSnapshot(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to execute on single node: %s", err.Error())
 	}
-	rows, _, _, err := s.Query(context.Background(), queryRequestFromString("SELECT * FROM foo", false, false))
+	rows, _, _, err := s.Query(context.Background(), queryRequestFromString("SELECT * FROM foo", false, false, false))
 	if err != nil {
 		t.Fatalf("failed to query single node: %s", err.Error())
 	}
@@ -76,7 +76,7 @@ func Test_SingleNodeSnapshot(t *testing.T) {
 	}
 
 	// Ensure database is back in the correct state.
-	r, _, _, err := s.Query(context.Background(), queryRequestFromString("SELECT * FROM foo", false, false))
+	r, _, _, err := s.Query(context.Background(), queryRequestFromString("SELECT * FROM foo", false, false, false))
 	if err != nil {
 		t.Fatalf("failed to query single node: %s", err.Error())
 	}
@@ -364,7 +364,7 @@ func Test_SingleNode_SnapshotWithAutoOptimize_Stress(t *testing.T) {
 	wg.Wait()
 
 	// Query the data, make sure it looks good after all this.
-	qr := queryRequestFromString("SELECT COUNT(*) FROM foo", false, true)
+	qr := queryRequestFromString("SELECT COUNT(*) FROM foo", false, true, false)
 	qr.Level = proto.ConsistencyLevel_STRONG
 	r, _, _, err := s.Query(context.Background(), qr)
 	if err != nil {
@@ -672,7 +672,7 @@ func Test_SingleNodeSnapshot_FSMFailures(t *testing.T) {
 		t.Fatalf("failed to snapshot store: %s", err.Error())
 	}
 
-	rows, _, _, err := s.Query(context.Background(), queryRequestFromString("SELECT COUNT(*) FROM foo", false, false))
+	rows, _, _, err := s.Query(context.Background(), queryRequestFromString("SELECT COUNT(*) FROM foo", false, false, false))
 	if err != nil {
 		t.Fatalf("failed to query single node: %s", err.Error())
 	}
@@ -697,7 +697,7 @@ func Test_SingleNodeSnapshot_FSMFailures(t *testing.T) {
 		t.Fatalf("Error waiting for leader: %s", err)
 	}
 
-	query := queryRequestFromString("SELECT COUNT(*) FROM foo", false, false)
+	query := queryRequestFromString("SELECT COUNT(*) FROM foo", false, false, false)
 	query.Level = proto.ConsistencyLevel_STRONG
 	rows, _, _, err = s.Query(context.Background(), query)
 	if err != nil {
