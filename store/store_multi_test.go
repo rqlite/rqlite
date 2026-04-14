@@ -308,7 +308,7 @@ func Test_MultiNodeSimple(t *testing.T) {
 	}
 
 	// Write another row using Request
-	rr := executeQueryRequestFromString("INSERT INTO foo(id, name) VALUES(2, 'fiona')", proto.ConsistencyLevel_STRONG, false, false)
+	rr := executeQueryRequestFromString("INSERT INTO foo(id, name) VALUES(2, 'fiona')", proto.ConsistencyLevel_STRONG, false, false, false)
 	_, _, _, err = s0.Request(context.Background(), rr)
 	if err != nil {
 		t.Fatalf("failed to execute on single node: %s", err.Error())
@@ -1523,7 +1523,7 @@ func Test_MultiNodeExecuteQueryFreshness(t *testing.T) {
 
 	// Check Stale-read detection works with Requests too.
 	eqr := executeQueryRequestFromString("SELECT * FROM foo", proto.ConsistencyLevel_NONE,
-		false, false)
+		false, false, false)
 	eqr.Freshness = mustParseDuration("1ns").Nanoseconds()
 	_, _, _, err = s1.Request(context.Background(), eqr)
 	if err == nil {
