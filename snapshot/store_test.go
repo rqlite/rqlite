@@ -345,6 +345,11 @@ func Test_Store_EndToEndCycle(t *testing.T) {
 	}
 	defer store1.Close()
 
+	// Disable reaping so the background reap goroutine doesn't acquire
+	// the write lock while the test is opening snapshots for reading.
+	store0.SetReapThreshold(100)
+	store1.SetReapThreshold(100)
+
 	id1 := "2-100-1704807719996"
 	id2 := "2-200-1704807800000"
 
