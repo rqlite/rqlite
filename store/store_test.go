@@ -1024,6 +1024,47 @@ func Test_SingleNodeExecuteQueryTx(t *testing.T) {
 	}
 }
 
+// Test_SingleNodeExecuteQueryQualify tests that a Store correctly responds to a simple
+// Execute and Query request, with qualified column names requested.
+func Test_SingleNodeExecuteQueryQualify(t *testing.T) {
+	s, ln := mustNewStore(t)
+	defer ln.Close()
+
+	if err := s.Open(); err != nil {
+		t.Fatalf("failed to open single-node store: %s", err.Error())
+	}
+	if err := s.Bootstrap(NewServer(s.ID(), s.Addr(), true)); err != nil {
+		t.Fatalf("failed to bootstrap single-node store: %s", err.Error())
+	}
+	defer s.Close(true)
+	if _, err := s.WaitForLeader(10 * time.Second); err != nil {
+		t.Fatalf("Error waiting for leader: %s", err)
+	}
+
+	er := executeRequestFromStrings([]string{
+		`CREATE TABLE foo (id INTEGER NOT NULL PRIMARY KEY, name TEXT)`,
+		`INSERT INTO foo(id, name) VALUES(1, "fiona")`,
+	}, false, true)
+	_, _, err := s.Execute(context.Background(), er)
+	if err != nil {
+		t.Fatalf("failed to execute on single node: %s", err.Error())
+	}
+
+	qr := queryRequestFromString("SELECT * FROM foo", false, false, true)
+	var r []*proto.QueryRows
+	r, _, _, err = s.Query(context.Background(), qr)
+	if err != nil {
+		t.Fatalf("failed to query single node: %s", err.Error())
+	}
+
+	if exp, got := `["foo.id","foo.name"]`, asJSON(r[0].Columns); exp != got {
+		t.Fatalf("unexpected results for query\nexp: %s\ngot: %s", exp, got)
+	}
+	if exp, got := `[[1,"fiona"]]`, asJSON(r[0].Values); exp != got {
+		t.Fatalf("unexpected results for query\nexp: %s\ngot: %s", exp, got)
+	}
+}
+
 // Test_SingleNodeRequest tests simple requests that contain both
 // queries and execute statements.
 func Test_SingleNodeRequest(t *testing.T) {
