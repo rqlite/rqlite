@@ -256,7 +256,7 @@ func Test_CheckpointManager_Checkpoint_Blocked_Read(t *testing.T) {
 	if n != 0 {
 		t.Fatalf("expected 0 bytes written on busy error, got %d", n)
 	}
-	if meta != nil {
+	if meta == nil {
 		t.Fatalf("expected nil CheckpointMeta on busy error, got %s", meta)
 	}
 }
