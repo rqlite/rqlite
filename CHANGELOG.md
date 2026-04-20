@@ -110,6 +110,7 @@ There are no breaking API changes in this release, nor any changes to how cluste
 - [PR #2606](https://github.com/rqlite/rqlite/pull/2606): Snapshot Restore checks CRCs.
 - [PR #2607](https://github.com/rqlite/rqlite/pull/2607): Reduce sleep during database copy to 50ms. Was 250ms.
 - [PR #2608](https://github.com/rqlite/rqlite/pull/2608): More use of consolidated file utils functions.
+- [PR #2613](https://github.com/rqlite/rqlite/pull/2613): DB layer returns `CheckpointMeta` to callers.
 
 ## v9.4.5 (March 9th 2026)
 ### Implementation changes and bug fixes

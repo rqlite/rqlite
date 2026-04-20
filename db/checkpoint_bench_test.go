@@ -45,7 +45,7 @@ var (
 // Checkpointer is the interface that checkpoint manager implementations must
 // satisfy in order to be benchmarked.
 type Checkpointer interface {
-	Checkpoint(w io.Writer, timeout time.Duration) (int64, error)
+	Checkpoint(w io.Writer, timeout time.Duration) (*CheckpointMeta, int64, error)
 	Close() error
 }
 
@@ -85,7 +85,7 @@ func BenchmarkCheckpoint(b *testing.B) {
 				}
 
 				b.StartTimer()
-				_, err = cp.Checkpoint(io.Discard, 30*time.Second)
+				_, _, err = cp.Checkpoint(io.Discard, 30*time.Second)
 				if err != nil {
 					b.Fatalf("checkpoint failed: %s", err)
 				}
@@ -131,7 +131,7 @@ func BenchmarkCheckpointNoWriter(b *testing.B) {
 				}
 
 				b.StartTimer()
-				_, err = cp.Checkpoint(nil, 30*time.Second)
+				_, _, err = cp.Checkpoint(nil, 30*time.Second)
 				if err != nil {
 					b.Fatalf("checkpoint failed: %s", err)
 				}
