@@ -166,9 +166,11 @@ func Test_CheckpointManager_Checkpoint_NoWriter_OK(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to checkpoint: %s", err.Error())
 	}
-	// The nil-writer short-circuit path does not populate CheckpointMeta.
-	if meta != nil {
-		t.Fatalf("expected nil CheckpointMeta for nil-writer checkpoint, got %s", meta)
+	if meta == nil {
+		t.Fatal("expected non-nil CheckpointMeta for nil-writer checkpoint")
+	}
+	if !meta.Success() {
+		t.Fatalf("expected nil-writer checkpoint to succeed (WAL truncated), got meta=%s", meta)
 	}
 	if n != 0 {
 		t.Fatalf("expected 0 bytes written for nil-writer checkpoint, got %d", n)

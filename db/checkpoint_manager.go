@@ -104,13 +104,16 @@ func (cm *CheckpointManager) Checkpoint(w io.Writer, timeout time.Duration) (*Ch
 
 	if w == nil {
 		// Short-circuit if no writer provided, just checkpoint and truncate the database.
-		err := cm.db.CheckpointTruncateWithTimeout(timeout)
+		meta, err := cm.db.CheckpointWithTimeout(CheckpointTruncate, timeout)
 		if err != nil {
 			return nil, 0, err
 		}
+		if !meta.Success() {
+			return meta, 0, fmt.Errorf("checkpoint did not complete within %s", timeout)
+		}
 		cm.nextFrameIdx = 0
 		cm.salt = nil
-		return nil, 0, nil
+		return meta, 0, nil
 	}
 
 	/////////////////////////////////////////////////////////////////////////////////
