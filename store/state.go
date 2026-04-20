@@ -248,7 +248,7 @@ func RecoverNode(dataDir string, extensions []string, logger *log.Logger, logs r
 
 	// Create a new snapshot, placing the configuration in as if it was
 	// committed at index 1.
-	_, err = db.Checkpoint(nil, truncateTimeout)
+	_, _, err = db.Checkpoint(nil, truncateTimeout)
 	if err != nil {
 		return fmt.Errorf("failed to checkpoint database: %s", err)
 	}

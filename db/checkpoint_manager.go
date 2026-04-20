@@ -82,25 +82,25 @@ func NewCheckpointManager(db *DB) (*CheckpointManager, error) {
 // before performing the checkpoint. The checkpoint operation will block for at most
 // the given timeout duration. If the checkpoint operation fails to complete within
 // the timeout, an error is returned.
-func (cm *CheckpointManager) Checkpoint(w io.Writer, timeout time.Duration) (int64, error) {
+func (cm *CheckpointManager) Checkpoint(w io.Writer, timeout time.Duration) (*CheckpointMeta, int64, error) {
 	stats.Add(numCheckpointTotal, 1)
 
 	if w == nil {
 		// Short-circuit if no writer provided, just checkpoint and truncate the database.
 		err := cm.db.CheckpointTruncateWithTimeout(timeout)
 		if err != nil {
-			return 0, err
+			return nil, 0, err
 		}
 		cm.nextFrameIdx = 0
 		cm.salt = nil
-		return 0, nil
+		return nil, 0, nil
 	}
 
 	/////////////////////////////////////////////////////////////////////////////////
 	// Write the compacted WAL pages to the provided writer.
 	walFD, err := os.Open(cm.walPath)
 	if err != nil {
-		return 0, err
+		return nil, 0, err
 	}
 	defer walFD.Close()
 
@@ -117,7 +117,7 @@ func (cm *CheckpointManager) Checkpoint(w io.Writer, timeout time.Duration) (int
 		// reset our state to start reading from the beginning of the WAL file again.
 		salt, err := readSaltAt(walFD)
 		if err != nil {
-			return 0, fmt.Errorf("read WAL salt: %w", err)
+			return nil, 0, fmt.Errorf("read WAL salt: %w", err)
 		}
 		if cm.salt == nil || *salt != *cm.salt {
 			cm.nextFrameIdx = 0
@@ -127,22 +127,22 @@ func (cm *CheckpointManager) Checkpoint(w io.Writer, timeout time.Duration) (int
 
 	walSzPre, err := fsutil.FileSize(cm.walPath)
 	if err != nil {
-		return 0, err
+		return nil, 0, err
 	}
 	stats.Get(preCompactWALSize).(*expvar.Int).Set(walSzPre)
 
 	compactStartTime := time.Now()
 	scanner, err := wal.NewCompactingFrameScanner(walFD, cm.nextFrameIdx, false)
 	if err != nil {
-		return 0, err
+		return nil, 0, err
 	}
 	ww, err := wal.NewWriter(scanner)
 	if err != nil {
-		return 0, err
+		return nil, 0, err
 	}
 	n, err := ww.WriteTo(w)
 	if err != nil {
-		return 0, err
+		return nil, 0, err
 	}
 	recordDuration(createCompactedWALDuration, compactStartTime)
 	stats.Get(compactedWALSize).(*expvar.Int).Set(n)
@@ -153,12 +153,12 @@ func (cm *CheckpointManager) Checkpoint(w io.Writer, timeout time.Duration) (int
 	// Grab salt state before checkpoint is attempted.
 	cm.salt, err = readSaltAt(walFD)
 	if err != nil {
-		return 0, fmt.Errorf("read WAL salt: %w", err)
+		return nil, 0, fmt.Errorf("read WAL salt: %w", err)
 	}
 
 	meta, err := cm.db.CheckpointWithTimeout(CheckpointTruncate, timeout)
 	if err != nil {
-		return 0, fmt.Errorf("checkpoint: %w", err)
+		return nil, 0, fmt.Errorf("checkpoint: %w", err)
 	}
 
 	rc, pnLog, pnCkpt := meta.Code, meta.Pages, meta.Moved
@@ -167,7 +167,7 @@ func (cm *CheckpointManager) Checkpoint(w io.Writer, timeout time.Duration) (int
 		stats.Add(numCheckpointWALTruncated, 1)
 		cm.nextFrameIdx = 0
 		cm.salt = nil
-		return n, nil
+		return meta, n, nil
 	}
 	if pnCkpt < pnLog {
 		// In this case future writes to the WAL will be appended, so just treat
@@ -175,7 +175,7 @@ func (cm *CheckpointManager) Checkpoint(w io.Writer, timeout time.Duration) (int
 		// Next time we will retry the checkpoint from the same offset and attempt
 		// to move all pages.
 		stats.Add(numCheckpointBusyErrors, 1)
-		return 0, ErrDatabaseCheckpointBusy
+		return nil, 0, ErrDatabaseCheckpointBusy
 	} else if pnCkpt == pnLog {
 		// In this case, the checkpoint failed, all pages were moved, but the WAL
 		// file not truncated. We can use the WAL data, but it requires special
@@ -189,10 +189,10 @@ func (cm *CheckpointManager) Checkpoint(w io.Writer, timeout time.Duration) (int
 		// next checkpoint attempt.
 		stats.Add(numCheckpointPartial, 1)
 		cm.nextFrameIdx = int64(pnCkpt)
-		return 0, nil
+		return meta, 0, nil
 	}
 	stats.Add(numCheckpointInvariantErrors, 1)
-	return 0, ErrDatabaseCheckpointInvariant
+	return nil, 0, ErrDatabaseCheckpointInvariant
 }
 
 // Close closes the CheckpointManager.

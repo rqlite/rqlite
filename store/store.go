@@ -290,7 +290,7 @@ type SnapshotStore interface {
 
 // Checkpointer is the interface systems which can checkpoint databases must implement.
 type Checkpointer interface {
-	Checkpoint(w io.Writer, timeout time.Duration) (int64, error)
+	Checkpoint(w io.Writer, timeout time.Duration) (*sql.CheckpointMeta, int64, error)
 }
 
 // ClusterState defines the possible Raft states the current node can be in
@@ -2597,7 +2597,7 @@ func (s *Store) fsmSnapshot() (fSnap raft.FSMSnapshot, retErr error) {
 		// database. This happens when a node is snapshotting for the very first time, or in certain
 		// crash scenarios where we've truncated the WAL into the database, but haven't successfully
 		// completed a snapshot, so the database is modified but the WAL is not present to be snapshotted.
-		if _, err := s.checkpointer.Checkpoint(nil, truncateTimeout); err != nil {
+		if _, _, err := s.checkpointer.Checkpoint(nil, truncateTimeout); err != nil {
 			// A failed FULL snapshot is always retryable, since we're looking to capture
 			// the entire database. So return the error and Raft will retry.
 			return nil, err
@@ -2633,7 +2633,7 @@ func (s *Store) fsmSnapshot() (fSnap raft.FSMSnapshot, retErr error) {
 		}
 		defer walWriter.Cancel() // Noop if already closed, but ensures cleanup on error paths.
 
-		if _, err := s.checkpointer.Checkpoint(walWriter, truncateTimeout); err != nil {
+		if _, _, err := s.checkpointer.Checkpoint(walWriter, truncateTimeout); err != nil {
 			var re sql.RetryableError
 			if errors.As(err, &re) && !re.Retryable() {
 				// A non-retryable error at this point means the underlying system is in a state

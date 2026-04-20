@@ -57,7 +57,7 @@ func Test_CheckpointManager_Checkpoint_OK(t *testing.T) {
 	}
 
 	var buf bytes.Buffer
-	n, err := cm.Checkpoint(&buf, 5*time.Second)
+	_, n, err := cm.Checkpoint(&buf, 5*time.Second)
 	if err != nil {
 		t.Fatalf("failed to checkpoint: %s", err.Error())
 	}
@@ -95,7 +95,7 @@ func Test_CheckpointManager_Checkpoint_OK(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to execute INSERT on single node: %s", err.Error())
 	}
-	n, err = cm.Checkpoint(&buf, 5*time.Second)
+	_, n, err = cm.Checkpoint(&buf, 5*time.Second)
 	if err != nil {
 		t.Fatalf("failed to checkpoint: %s", err.Error())
 	}
@@ -138,7 +138,7 @@ func Test_CheckpointManager_Checkpoint_NoWriter_OK(t *testing.T) {
 		t.Fatalf("failed to create checkpoint manager: %s", err.Error())
 	}
 
-	_, err = cm.Checkpoint(nil, 5*time.Second)
+	_, _, err = cm.Checkpoint(nil, 5*time.Second)
 	if err != nil {
 		t.Fatalf("failed to checkpoint: %s", err.Error())
 	}
@@ -218,7 +218,7 @@ func Test_CheckpointManager_Checkpoint_Blocked_Read(t *testing.T) {
 	defer cm.Close()
 
 	var buf bytes.Buffer
-	_, err = cm.Checkpoint(&buf, 100*time.Millisecond)
+	_, _, err = cm.Checkpoint(&buf, 100*time.Millisecond)
 	if err != ErrDatabaseCheckpointBusy {
 		t.Fatalf("expected checkpoint to fail with ErrDatabaseCheckpointBusy, got %v", err)
 	}
@@ -269,7 +269,7 @@ func Test_CheckpointManager_Checkpoint_Blocked_ReadLastPage(t *testing.T) {
 	defer cm.Close()
 
 	var buf bytes.Buffer
-	_, err = cm.Checkpoint(&buf, 100*time.Millisecond)
+	_, _, err = cm.Checkpoint(&buf, 100*time.Millisecond)
 	if err != nil {
 		t.Fatalf("unexpected error checkpoint: %s", err.Error())
 	}
