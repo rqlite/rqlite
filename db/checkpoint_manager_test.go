@@ -57,9 +57,15 @@ func Test_CheckpointManager_Checkpoint_OK(t *testing.T) {
 	}
 
 	var buf bytes.Buffer
-	_, n, err := cm.Checkpoint(&buf, 5*time.Second)
+	meta, n, err := cm.Checkpoint(&buf, 5*time.Second)
 	if err != nil {
 		t.Fatalf("failed to checkpoint: %s", err.Error())
+	}
+	if meta == nil {
+		t.Fatal("expected non-nil CheckpointMeta")
+	}
+	if !meta.Success() {
+		t.Fatalf("expected checkpoint to succeed (WAL truncated), got meta=%s", meta)
 	}
 	if n == 0 {
 		t.Fatal("expected compacted WAL bytes written to be > 0")
@@ -95,9 +101,15 @@ func Test_CheckpointManager_Checkpoint_OK(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to execute INSERT on single node: %s", err.Error())
 	}
-	_, n, err = cm.Checkpoint(&buf, 5*time.Second)
+	meta, n, err = cm.Checkpoint(&buf, 5*time.Second)
 	if err != nil {
 		t.Fatalf("failed to checkpoint: %s", err.Error())
+	}
+	if meta == nil {
+		t.Fatal("expected non-nil CheckpointMeta")
+	}
+	if !meta.Success() {
+		t.Fatalf("expected checkpoint to succeed (WAL truncated), got meta=%s", meta)
 	}
 	if n == 0 {
 		t.Fatal("expected compacted WAL bytes written to be > 0")
@@ -111,6 +123,18 @@ func Test_CheckpointManager_Checkpoint_OK(t *testing.T) {
 	}
 	if exp, got := `[{"columns":["COUNT(*)"],"types":["integer"],"values":[[2]]}]`, asJSON(rows); exp != got {
 		t.Fatalf("unexpected query result: got %s, want %s", got, exp)
+	}
+
+	// Ensure idempotency.
+	meta, n, err = cm.Checkpoint(&buf, 5*time.Second)
+	if err != nil {
+		t.Fatalf("failed to checkpoint: %s", err.Error())
+	}
+	if meta == nil {
+		t.Fatal("expected non-nil CheckpointMeta")
+	}
+	if !meta.Success() {
+		t.Fatalf("expected idempotent checkpoint to succeed, got meta=%s", meta)
 	}
 }
 
@@ -138,9 +162,16 @@ func Test_CheckpointManager_Checkpoint_NoWriter_OK(t *testing.T) {
 		t.Fatalf("failed to create checkpoint manager: %s", err.Error())
 	}
 
-	_, _, err = cm.Checkpoint(nil, 5*time.Second)
+	meta, n, err := cm.Checkpoint(nil, 5*time.Second)
 	if err != nil {
 		t.Fatalf("failed to checkpoint: %s", err.Error())
+	}
+	// The nil-writer short-circuit path does not populate CheckpointMeta.
+	if meta != nil {
+		t.Fatalf("expected nil CheckpointMeta for nil-writer checkpoint, got %s", meta)
+	}
+	if n != 0 {
+		t.Fatalf("expected 0 bytes written for nil-writer checkpoint, got %d", n)
 	}
 
 	// Confirm that the WAL file is zero bytes long after truncate checkpoint.
@@ -218,9 +249,15 @@ func Test_CheckpointManager_Checkpoint_Blocked_Read(t *testing.T) {
 	defer cm.Close()
 
 	var buf bytes.Buffer
-	_, _, err = cm.Checkpoint(&buf, 100*time.Millisecond)
+	meta, n, err := cm.Checkpoint(&buf, 100*time.Millisecond)
 	if err != ErrDatabaseCheckpointBusy {
 		t.Fatalf("expected checkpoint to fail with ErrDatabaseCheckpointBusy, got %v", err)
+	}
+	if n != 0 {
+		t.Fatalf("expected 0 bytes written on busy error, got %d", n)
+	}
+	if meta != nil {
+		t.Fatalf("expected nil CheckpointMeta on busy error, got %s", meta)
 	}
 }
 
@@ -269,9 +306,12 @@ func Test_CheckpointManager_Checkpoint_Blocked_ReadLastPage(t *testing.T) {
 	defer cm.Close()
 
 	var buf bytes.Buffer
-	_, _, err = cm.Checkpoint(&buf, 100*time.Millisecond)
+	meta, _, err := cm.Checkpoint(&buf, 100*time.Millisecond)
 	if err != nil {
 		t.Fatalf("unexpected error checkpoint: %s", err.Error())
+	}
+	if meta == nil {
+		t.Fatal("expected non-nil CheckpointMeta on successful checkpoint")
 	}
 }
 

@@ -51,6 +51,11 @@ var (
 // is not excessively blocked by a concurrent read. If a read is blocking a
 // checkpoint the manager manages its state so that a failed checkpoint is
 // handled gracefully by the next checkpoint attempt.
+//
+// The CheckpointManager is not safe for concurrent use, not concurrent use
+// with writes to the database. It is the caller's responsibility to ensure
+// that checkpoint attempts are serialized and not concurrent with writes to
+// the database.
 type CheckpointManager struct {
 	db      *DB
 	dbPath  string
@@ -84,6 +89,18 @@ func NewCheckpointManager(db *DB) (*CheckpointManager, error) {
 // the timeout, an error is returned.
 func (cm *CheckpointManager) Checkpoint(w io.Writer, timeout time.Duration) (*CheckpointMeta, int64, error) {
 	stats.Add(numCheckpointTotal, 1)
+
+	walSzPre, err := fsutil.FileSize(cm.walPath)
+	if err != nil {
+		return nil, 0, fmt.Errorf("stat WAL file: %w", err)
+	}
+	stats.Get(preCompactWALSize).(*expvar.Int).Set(walSzPre)
+
+	if walSzPre == 0 {
+		cm.nextFrameIdx = 0
+		cm.salt = nil
+		return &CheckpointMeta{}, 0, nil
+	}
 
 	if w == nil {
 		// Short-circuit if no writer provided, just checkpoint and truncate the database.
@@ -125,24 +142,18 @@ func (cm *CheckpointManager) Checkpoint(w io.Writer, timeout time.Duration) (*Ch
 		}
 	}
 
-	walSzPre, err := fsutil.FileSize(cm.walPath)
-	if err != nil {
-		return nil, 0, err
-	}
-	stats.Get(preCompactWALSize).(*expvar.Int).Set(walSzPre)
-
 	compactStartTime := time.Now()
 	scanner, err := wal.NewCompactingFrameScanner(walFD, cm.nextFrameIdx, false)
 	if err != nil {
-		return nil, 0, err
+		return nil, 0, fmt.Errorf("create compacting frame scanner: %w", err)
 	}
 	ww, err := wal.NewWriter(scanner)
 	if err != nil {
-		return nil, 0, err
+		return nil, 0, fmt.Errorf("create WAL writer: %w", err)
 	}
 	n, err := ww.WriteTo(w)
 	if err != nil {
-		return nil, 0, err
+		return nil, 0, fmt.Errorf("write WAL data: %w", err)
 	}
 	recordDuration(createCompactedWALDuration, compactStartTime)
 	stats.Get(compactedWALSize).(*expvar.Int).Set(n)
