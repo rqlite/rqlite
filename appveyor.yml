@@ -16,7 +16,8 @@ install:
   - if %BUILD_ENV%==gnu  set MSYS=winsymlinks=lnk
 
 build_script:
-  - set LINKER_PKG_PATH=github.com/rqlite/rqlite/cmd
+  - set MOD_VER=v10
+  - set LINKER_PKG_PATH=github.com/rqlite/rqlite/%MOD_VER%/cmd
   - go version
   - go env
   - go get ./...
