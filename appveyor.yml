@@ -1,7 +1,5 @@
 os: Visual Studio 2019
 
-stack: go 1.26
-
 version: 10.{build}
 
 platform: x64
