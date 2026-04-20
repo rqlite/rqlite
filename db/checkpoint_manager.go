@@ -186,7 +186,7 @@ func (cm *CheckpointManager) Checkpoint(w io.Writer, timeout time.Duration) (*Ch
 		// Next time we will retry the checkpoint from the same offset and attempt
 		// to move all pages.
 		stats.Add(numCheckpointBusyErrors, 1)
-		return nil, 0, ErrDatabaseCheckpointBusy
+		return meta, 0, ErrDatabaseCheckpointBusy
 	} else if pnCkpt == pnLog {
 		// In this case, the checkpoint failed, all pages were moved, but the WAL
 		// file not truncated. We can use the WAL data, but it requires special
@@ -203,7 +203,7 @@ func (cm *CheckpointManager) Checkpoint(w io.Writer, timeout time.Duration) (*Ch
 		return meta, 0, nil
 	}
 	stats.Add(numCheckpointInvariantErrors, 1)
-	return nil, 0, ErrDatabaseCheckpointInvariant
+	return meta, 0, ErrDatabaseCheckpointInvariant
 }
 
 // Close closes the CheckpointManager.
