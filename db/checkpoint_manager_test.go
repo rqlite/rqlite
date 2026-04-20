@@ -3,6 +3,7 @@ package db
 import (
 	"bytes"
 	"context"
+	"errors"
 	"testing"
 	"time"
 
@@ -260,6 +261,12 @@ func Test_CheckpointManager_Checkpoint_Blocked_Read(t *testing.T) {
 	}
 	if meta == nil {
 		t.Fatalf("expected nil CheckpointMeta on busy error, got %s", meta)
+	}
+
+	// Confirm that the returned error is retryable.
+	var re RetryableError
+	if errors.As(err, &re) && !re.Retryable() {
+		t.Fatalf("expected error to be retryable, got %s", err.Error())
 	}
 }
 
