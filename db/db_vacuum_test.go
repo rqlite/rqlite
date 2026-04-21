@@ -123,6 +123,19 @@ func Test_DBVacuumInto(t *testing.T) {
 	defer vDB2.Close()
 	testQ(vDB2)
 
+	// VACUUM INTO a path containing a single quote should work.
+	tmpDir := t.TempDir()
+	tmpPath3 := tmpDir + "/it's a file.db"
+	if err := db.VacuumInto(tmpPath3); err != nil {
+		t.Fatalf("failed to vacuum into path with single quote: %s", err.Error())
+	}
+	vDB3, err := Open(tmpPath3, false, false)
+	if err != nil {
+		t.Fatalf("failed to open database at path with single quote: %s", err.Error())
+	}
+	defer vDB3.Close()
+	testQ(vDB3)
+
 	// VACUUM into a file which is an existing SQLIte database. Should fail.
 	existDB, existPath := mustCreateOnDiskDatabaseWAL()
 	defer db.Close()

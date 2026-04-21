@@ -847,7 +847,7 @@ func (db *DB) Vacuum() error {
 
 // VacuumInto VACUUMs the database into the file at path
 func (db *DB) VacuumInto(path string) error {
-	_, err := db.rwDB.Exec(fmt.Sprintf("VACUUM INTO '%s'", path))
+	_, err := db.rwDB.Exec(fmt.Sprintf("VACUUM INTO '%s'", strings.ReplaceAll(path, "'", "''")))
 	return err
 }
 
