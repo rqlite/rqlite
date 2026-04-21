@@ -27,9 +27,13 @@ const (
 	maxPoolCapacity   = 64
 	defaultMaxRetries = 0
 	noRetries         = 0
+	maxJoinRedirects  = 8
 
 	protoBufferLengthSize = 8
 )
+
+// ErrTooManyJoinRedirects indicates that a join request was redirected too many times.
+var ErrTooManyJoinRedirects = errors.New("too many leader redirects during join")
 
 // CreateRaftDialer creates a dialer for connecting to other nodes' Raft service. If the cert and
 // key arguments are not set, then the returned dialer will not use TLS. If they are set then
@@ -513,12 +517,17 @@ func (c *Client) Join(ctx context.Context, jr *command.JoinRequest, nodeAddr str
 	if err := ctx.Err(); err != nil {
 		return err
 	}
+
+	redirects := 0
 	for {
+		if err := ctx.Err(); err != nil {
+			return err
+		}
+
 		conn, err := c.dial(nodeAddr)
 		if err != nil {
 			return err
 		}
-		defer conn.Close()
 
 		// Create the request.
 		command := &proto.Command{
@@ -531,14 +540,17 @@ func (c *Client) Join(ctx context.Context, jr *command.JoinRequest, nodeAddr str
 
 		if err := writeCommand(conn, command, timeout); err != nil {
 			handleConnError(conn)
+			conn.Close()
 			return err
 		}
 
 		p, err := readResponse(conn, timeout)
 		if err != nil {
 			handleConnError(conn)
+			conn.Close()
 			return err
 		}
+		conn.Close()
 
 		a := &proto.CommandJoinResponse{}
 		err = pb.Unmarshal(p, a)
@@ -550,6 +562,10 @@ func (c *Client) Join(ctx context.Context, jr *command.JoinRequest, nodeAddr str
 			if a.Error == "not leader" {
 				if a.Leader == "" {
 					return errors.New("no leader")
+				}
+				redirects++
+				if redirects > maxJoinRedirects {
+					return ErrTooManyJoinRedirects
 				}
 				nodeAddr = a.Leader
 				continue

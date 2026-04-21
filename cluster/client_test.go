@@ -7,6 +7,7 @@ import (
 	"net"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -340,6 +341,62 @@ func Test_ClientJoinNode(t *testing.T) {
 	}
 }
 
+func Test_ClientJoinNodeRedirect(t *testing.T) {
+	srv2 := mustNewJoinTestServer(t, func() *proto.CommandJoinResponse {
+		return &proto.CommandJoinResponse{}
+	})
+	defer srv2.Close()
+
+	srv1 := mustNewJoinTestServer(t, func() *proto.CommandJoinResponse {
+		return &proto.CommandJoinResponse{
+			Error:  "not leader",
+			Leader: srv2.Addr(),
+		}
+	})
+	defer srv1.Close()
+
+	c := NewClient(&simpleDialer{}, 0)
+	req := &command.JoinRequest{
+		Address: "test-node-addr",
+	}
+	err := c.Join(context.Background(), req, srv1.Addr(), nil, time.Second)
+	if err != nil {
+		t.Fatal(err)
+	}
+}
+
+func Test_ClientJoinNodeTooManyRedirects(t *testing.T) {
+	var srv1Addr atomic.Value
+	var srv2Addr atomic.Value
+
+	srv1 := mustNewJoinTestServer(t, func() *proto.CommandJoinResponse {
+		return &proto.CommandJoinResponse{
+			Error:  "not leader",
+			Leader: srv2Addr.Load().(string),
+		}
+	})
+	defer srv1.Close()
+	srv1Addr.Store(srv1.Addr())
+
+	srv2 := mustNewJoinTestServer(t, func() *proto.CommandJoinResponse {
+		return &proto.CommandJoinResponse{
+			Error:  "not leader",
+			Leader: srv1Addr.Load().(string),
+		}
+	})
+	defer srv2.Close()
+	srv2Addr.Store(srv2.Addr())
+
+	c := NewClient(&simpleDialer{}, 0)
+	req := &command.JoinRequest{
+		Address: "test-node-addr",
+	}
+	err := c.Join(context.Background(), req, srv1.Addr(), nil, time.Second)
+	if err != ErrTooManyJoinRedirects {
+		t.Fatalf("expected %v, got %v", ErrTooManyJoinRedirects, err)
+	}
+}
+
 func Test_ClientRetry_SuccessFirstAttempt(t *testing.T) {
 	srv := servicetest.NewService()
 	srv.Handler = func(conn net.Conn) {
@@ -552,6 +609,62 @@ func (s *simpleDialer) Dial(address string, timeout time.Duration) (net.Conn, er
 		return nil, err
 	}
 	return conn, nil
+}
+
+type joinTestServer struct {
+	ln net.Listener
+}
+
+func mustNewJoinTestServer(t *testing.T, response func() *proto.CommandJoinResponse) *joinTestServer {
+	t.Helper()
+
+	ln, err := net.Listen("tcp", "localhost:0")
+	if err != nil {
+		t.Fatalf("failed to listen: %s", err)
+	}
+
+	s := &joinTestServer{ln: ln}
+	go func() {
+		for {
+			conn, err := ln.Accept()
+			if err != nil {
+				return
+			}
+
+			go func(conn net.Conn) {
+				defer conn.Close()
+				for {
+					c := readCommand(conn)
+					if c == nil {
+						return
+					}
+					if c.Type != proto.Command_COMMAND_TYPE_JOIN {
+						t.Errorf("unexpected command type: %d", c.Type)
+						return
+					}
+
+					p, err := pb.Marshal(response())
+					if err != nil {
+						t.Errorf("failed to marshal join response: %s", err)
+						return
+					}
+					if err := writeBytesWithLength(conn, p); err != nil {
+						return
+					}
+				}
+			}(conn)
+		}
+	}()
+
+	return s
+}
+
+func (s *joinTestServer) Addr() string {
+	return s.ln.Addr().String()
+}
+
+func (s *joinTestServer) Close() error {
+	return s.ln.Close()
 }
 
 func Test_ClientBroadcast(t *testing.T) {
