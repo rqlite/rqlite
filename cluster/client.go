@@ -510,8 +510,7 @@ func (c *Client) Notify(ctx context.Context, nr *command.NotifyRequest, nodeAddr
 	return nil
 }
 
-
-func (c *Client) joinOnce(jr *command.JoinRequest, nodeAddr string, creds *proto.Credentials, timeout time.Duration) (*proto.CommandJoinResponse, error){
+func (c *Client) joinOnce(jr *command.JoinRequest, nodeAddr string, creds *proto.Credentials, timeout time.Duration) (*proto.CommandJoinResponse, error) {
 	conn, err := c.dial(nodeAddr)
 	if err != nil {
 		return nil, err
