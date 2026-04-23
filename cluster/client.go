@@ -510,6 +510,36 @@ func (c *Client) Notify(ctx context.Context, nr *command.NotifyRequest, nodeAddr
 	return nil
 }
 
+
+func (c *Client) joinOnce(jr *command.JoinRequest, nodeAddr string, creds *proto.Credentials, timeout time.Duration) (*proto.CommandJoinResponse, error){
+	conn, err := c.dial(nodeAddr)
+	if err != nil {
+		return nil, err
+	}
+	defer conn.Close()
+	command := &proto.Command{
+		Type: proto.Command_COMMAND_TYPE_JOIN,
+		Request: &proto.Command_JoinRequest{
+			JoinRequest: jr,
+		},
+		Credentials: creds,
+	}
+	if err := writeCommand(conn, command, timeout); err != nil {
+		handleConnError(conn)
+		return nil, err
+	}
+	p, err := readResponse(conn, timeout)
+	if err != nil {
+		handleConnError(conn)
+		return nil, err
+	}
+	resp := &proto.CommandJoinResponse{}
+	if err := pb.Unmarshal(p, resp); err != nil {
+		return nil, err
+	}
+	return resp, nil
+}
+
 // Join joins this node to a cluster at the remote address nodeAddr.
 // If creds is nil, then no credential information will be included in
 // the Join request to the remote node.
@@ -524,36 +554,7 @@ func (c *Client) Join(ctx context.Context, jr *command.JoinRequest, nodeAddr str
 			return err
 		}
 
-		conn, err := c.dial(nodeAddr)
-		if err != nil {
-			return err
-		}
-
-		// Create the request.
-		command := &proto.Command{
-			Type: proto.Command_COMMAND_TYPE_JOIN,
-			Request: &proto.Command_JoinRequest{
-				JoinRequest: jr,
-			},
-			Credentials: creds,
-		}
-
-		if err := writeCommand(conn, command, timeout); err != nil {
-			handleConnError(conn)
-			conn.Close()
-			return err
-		}
-
-		p, err := readResponse(conn, timeout)
-		if err != nil {
-			handleConnError(conn)
-			conn.Close()
-			return err
-		}
-		conn.Close()
-
-		a := &proto.CommandJoinResponse{}
-		err = pb.Unmarshal(p, a)
+		a, err := c.joinOnce(jr, nodeAddr, creds, timeout)
 		if err != nil {
 			return err
 		}

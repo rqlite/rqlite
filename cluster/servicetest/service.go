@@ -6,8 +6,9 @@ import (
 
 // Service represents a test service.
 type Service struct {
-	Listener net.Listener
-	Handler  func(net.Conn)
+	Listener          net.Listener
+	Handler           func(net.Conn)
+	PersistentHandler func(net.Conn)
 }
 
 // NewService returns a new instance of the service that runs on
@@ -50,6 +51,10 @@ func (s *Service) serve() error {
 }
 
 func (s *Service) handleConn(conn net.Conn) {
+	if s.PersistentHandler != nil {
+		s.PersistentHandler(conn)
+		return
+	}
 	if s.Handler != nil {
 		s.Handler(conn)
 	}
