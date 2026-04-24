@@ -510,6 +510,36 @@ func Test_ServiceRegisterHWMUpdate(t *testing.T) {
 	}
 }
 
+func Test_ServiceClosesIdleConnection(t *testing.T) {
+	ml := mustNewMockTransport()
+	s := New(ml, mustNewMockDatabase(), mustNewMockManager(), mustNewMockCredentialStore())
+	if s == nil {
+		t.Fatalf("failed to create cluster service")
+	}
+	s.ConnReadTimeout = 500 * time.Millisecond
+
+	if err := s.Open(); err != nil {
+		t.Fatalf("failed to open cluster service")
+	}
+	defer s.Close()
+
+	// Connect but send nothing. The service should close the connection
+	// after ConnReadTimeout.
+	conn, err := net.Dial("tcp", s.Addr())
+	if err != nil {
+		t.Fatalf("failed to connect to service: %s", err)
+	}
+	defer conn.Close()
+
+	// Wait for the server to close the connection due to read timeout.
+	conn.SetReadDeadline(time.Now().Add(5 * time.Second))
+	one := make([]byte, 1)
+	_, err = conn.Read(one)
+	if err == nil {
+		t.Fatal("expected connection to be closed by server, but read succeeded")
+	}
+}
+
 type mockTransport struct {
 	tn              net.Listener
 	remoteEncrypted bool

@@ -60,6 +60,12 @@ const (
 
 	// MuxClusterHeader is the byte used to request internode cluster state information.
 	MuxClusterHeader = 2 // Cluster state communications
+
+	// connReadTimeout is the maximum time to wait for data on a
+	// connection. If no data is received within this period, the
+	// connection is closed, preventing stalled clients from holding
+	// goroutines indefinitely.
+	connReadTimeout = 30 * time.Second
 )
 
 func init() {
@@ -163,6 +169,10 @@ type Service struct {
 	apiAddr string // host:port this node serves the HTTP API.
 	version string // Version of software this node is running.
 
+	// ConnReadTimeout is the maximum time to wait for data on a
+	// connection. Defaults to connReadTimeout.
+	ConnReadTimeout time.Duration
+
 	hwmMu      sync.RWMutex
 	hwmUpdateC chan<- uint64 // Channel for HWM updates
 
@@ -178,6 +188,7 @@ func New(ln net.Listener, db Database, m Manager, credentialStore CredentialStor
 		mgr:             m,
 		logger:          log.New(os.Stderr, "[cluster] ", log.LstdFlags),
 		credentialStore: credentialStore,
+		ConnReadTimeout: connReadTimeout,
 	}
 }
 
@@ -300,6 +311,9 @@ func (s *Service) handleConn(conn net.Conn) {
 
 	b := make([]byte, protoBufferLengthSize)
 	for {
+		if err := conn.SetReadDeadline(time.Now().Add(s.ConnReadTimeout)); err != nil {
+			return
+		}
 		_, err := io.ReadFull(conn, b)
 		if err != nil {
 			return
@@ -307,6 +321,9 @@ func (s *Service) handleConn(conn net.Conn) {
 		sz := binary.LittleEndian.Uint64(b[0:])
 
 		p := make([]byte, sz)
+		if err := conn.SetReadDeadline(time.Now().Add(s.ConnReadTimeout)); err != nil {
+			return
+		}
 		_, err = io.ReadFull(conn, p)
 		if err != nil {
 			return
