@@ -167,6 +167,9 @@ type Service struct {
 	hwmUpdateC chan<- uint64 // Channel for HWM updates
 
 	logger *log.Logger
+
+	// connWg tracks active handleConn goroutines for graceful shutdown.
+	connWg sync.WaitGroup
 }
 
 // New returns a new instance of the cluster service
@@ -191,6 +194,7 @@ func (s *Service) Open() error {
 // Close closes the service.
 func (s *Service) Close() error {
 	s.ln.Close()
+	s.connWg.Wait()
 	return nil
 }
 
@@ -271,7 +275,11 @@ func (s *Service) serve() error {
 			return err
 		}
 
-		go s.handleConn(conn)
+		s.connWg.Add(1)
+		go func(c net.Conn) {
+			defer s.connWg.Done()
+			s.handleConn(c)
+		}(conn)
 	}
 }
 
