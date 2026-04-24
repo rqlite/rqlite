@@ -188,7 +188,7 @@ func New(ln net.Listener, db Database, m Manager, credentialStore CredentialStor
 		mgr:             m,
 		logger:          log.New(os.Stderr, "[cluster] ", log.LstdFlags),
 		credentialStore: credentialStore,
-		connTimeout: connReadTimeout,
+		connTimeout:     connReadTimeout,
 	}
 }
 
