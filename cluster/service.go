@@ -169,9 +169,9 @@ type Service struct {
 	apiAddr string // host:port this node serves the HTTP API.
 	version string // Version of software this node is running.
 
-	// ConnReadTimeout is the maximum time to wait for data on a
-	// connection. Defaults to connReadTimeout.
-	ConnReadTimeout time.Duration
+	// connTimeout is the maximum time to wait for data on a
+	// connection. Must be set before Open is called.
+	connTimeout time.Duration
 
 	hwmMu      sync.RWMutex
 	hwmUpdateC chan<- uint64 // Channel for HWM updates
@@ -188,7 +188,7 @@ func New(ln net.Listener, db Database, m Manager, credentialStore CredentialStor
 		mgr:             m,
 		logger:          log.New(os.Stderr, "[cluster] ", log.LstdFlags),
 		credentialStore: credentialStore,
-		ConnReadTimeout: connReadTimeout,
+		connTimeout: connReadTimeout,
 	}
 }
 
@@ -311,8 +311,10 @@ func (s *Service) handleConn(conn net.Conn) {
 
 	b := make([]byte, protoBufferLengthSize)
 	for {
-		if err := conn.SetReadDeadline(time.Now().Add(s.ConnReadTimeout)); err != nil {
-			return
+		if s.connTimeout > 0 {
+			if err := conn.SetReadDeadline(time.Now().Add(s.connTimeout)); err != nil {
+				return
+			}
 		}
 		_, err := io.ReadFull(conn, b)
 		if err != nil {
@@ -321,8 +323,10 @@ func (s *Service) handleConn(conn net.Conn) {
 		sz := binary.LittleEndian.Uint64(b[0:])
 
 		p := make([]byte, sz)
-		if err := conn.SetReadDeadline(time.Now().Add(s.ConnReadTimeout)); err != nil {
-			return
+		if s.connTimeout > 0 {
+			if err := conn.SetReadDeadline(time.Now().Add(s.connTimeout)); err != nil {
+				return
+			}
 		}
 		_, err = io.ReadFull(conn, p)
 		if err != nil {

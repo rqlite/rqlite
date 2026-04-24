@@ -516,7 +516,7 @@ func Test_ServiceClosesIdleConnection(t *testing.T) {
 	if s == nil {
 		t.Fatalf("failed to create cluster service")
 	}
-	s.ConnReadTimeout = 500 * time.Millisecond
+	s.connTimeout = 500 * time.Millisecond
 
 	if err := s.Open(); err != nil {
 		t.Fatalf("failed to open cluster service")
