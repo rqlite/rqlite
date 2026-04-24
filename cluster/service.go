@@ -305,6 +305,9 @@ func (s *Service) handleConn(conn net.Conn) {
 			return
 		}
 		sz := binary.LittleEndian.Uint64(b[0:])
+		if sz > maxProtoBufferSize {
+			return
+		}
 
 		p := make([]byte, sz)
 		_, err = io.ReadFull(conn, p)
