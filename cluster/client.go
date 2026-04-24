@@ -29,6 +29,7 @@ const (
 	noRetries         = 0
 
 	protoBufferLengthSize = 8
+	maxProtoBufferSize    = 1024 * 1024 * 1024 // 1 GB
 )
 
 // CreateRaftDialer creates a dialer for connecting to other nodes' Raft service. If the cert and
@@ -875,6 +876,12 @@ func readResponse(conn net.Conn, timeout time.Duration) (buf []byte, retErr erro
 		return nil, fmt.Errorf("read protobuf length: %w", err)
 	}
 	sz := binary.LittleEndian.Uint64(b[0:])
+	if sz > maxProtoBufferSize {
+		return nil, fmt.Errorf(
+			"message size %d exceeds maximum %d",
+			sz, maxProtoBufferSize,
+		)
+	}
 
 	// Read in the actual response.
 	p := make([]byte, sz)

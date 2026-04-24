@@ -3,6 +3,7 @@ package cluster
 import (
 	"context"
 	"crypto/tls"
+	"encoding/binary"
 	"fmt"
 	"io"
 	"net"
@@ -507,6 +508,40 @@ func Test_ServiceRegisterHWMUpdate(t *testing.T) {
 		}
 	case <-time.After(5 * time.Second):
 		t.Fatalf("timeout waiting for highwater mark update on channel")
+	}
+}
+
+func Test_ServiceRejectsOversizedMessage(t *testing.T) {
+	ml := mustNewMockTransport()
+	s := New(ml, mustNewMockDatabase(), mustNewMockManager(), mustNewMockCredentialStore())
+	if s == nil {
+		t.Fatalf("failed to create cluster service")
+	}
+
+	if err := s.Open(); err != nil {
+		t.Fatalf("failed to open cluster service")
+	}
+	defer s.Close()
+
+	// Connect directly and send an oversized length prefix.
+	conn, err := net.Dial("tcp", s.Addr())
+	if err != nil {
+		t.Fatalf("failed to connect to service: %s", err)
+	}
+	defer conn.Close()
+
+	b := make([]byte, protoBufferLengthSize)
+	binary.LittleEndian.PutUint64(b, maxProtoBufferSize+1)
+	if _, err := conn.Write(b); err != nil {
+		t.Fatalf("failed to write oversized length: %s", err)
+	}
+
+	// The service should close the connection. Verify by attempting a read,
+	// which should return an error or EOF.
+	conn.SetReadDeadline(time.Now().Add(5 * time.Second))
+	one := make([]byte, 1)
+	if _, err := conn.Read(one); err == nil {
+		t.Fatal("expected error on read after oversized message, got nil")
 	}
 }
 

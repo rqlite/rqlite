@@ -305,6 +305,11 @@ func (s *Service) handleConn(conn net.Conn) {
 			return
 		}
 		sz := binary.LittleEndian.Uint64(b[0:])
+		if sz > maxProtoBufferSize {
+			s.logger.Printf("rejected oversized message (%d bytes) from %s",
+				sz, conn.RemoteAddr())
+			return
+		}
 
 		p := make([]byte, sz)
 		_, err = io.ReadFull(conn, p)

@@ -543,6 +543,27 @@ func readCommand(conn net.Conn) *proto.Command {
 	return c
 }
 
+func Test_readResponseOversizedMessage(t *testing.T) {
+	serverConn, clientConn := net.Pipe()
+	defer serverConn.Close()
+	defer clientConn.Close()
+
+	// Write an oversized length prefix to the client connection.
+	go func() {
+		b := make([]byte, protoBufferLengthSize)
+		binary.LittleEndian.PutUint64(b, maxProtoBufferSize+1)
+		serverConn.Write(b)
+	}()
+
+	_, err := readResponse(clientConn, 5*time.Second)
+	if err == nil {
+		t.Fatal("expected error for oversized message, got nil")
+	}
+	if !strings.Contains(err.Error(), "exceeds maximum") {
+		t.Fatalf("expected 'exceeds maximum' error, got: %s", err)
+	}
+}
+
 type simpleDialer struct {
 }
 
