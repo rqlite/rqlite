@@ -29,7 +29,7 @@ const (
 	noRetries         = 0
 
 	protoBufferLengthSize = 8
-	maxProtoBufferSize    = 256 * 1024 * 1024 // 256 MB
+	maxProtoBufferSize    = 1024 * 1024 * 1024 // 1 GB
 )
 
 // CreateRaftDialer creates a dialer for connecting to other nodes' Raft service. If the cert and
