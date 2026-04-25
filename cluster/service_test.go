@@ -531,12 +531,11 @@ func Test_ServiceClosesIdleConnection(t *testing.T) {
 	}
 	defer conn.Close()
 
-	// Wait for the server to close the connection due to read timeout.
-	conn.SetReadDeadline(time.Now().Add(5 * time.Second))
+	// The server should close the connection after the read timeout.
 	one := make([]byte, 1)
 	_, err = conn.Read(one)
-	if err == nil {
-		t.Fatal("expected connection to be closed by server, but read succeeded")
+	if err != io.EOF {
+		t.Fatalf("expected io.EOF, got: %v", err)
 	}
 }
 
