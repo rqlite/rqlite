@@ -58,7 +58,7 @@ func Test_CommitHook_Rollback(t *testing.T) {
 	if err != nil {
 		t.Fatalf("error executing statement: %s", err.Error())
 	}
-	if r[0].GetError() == "" {
+	if r[0].GetError() == "" && r[0].GetE().GetError() == "" {
 		t.Fatal("expected error in response body due to rollback, got nil")
 	}
 	if count.Load() != 1 {
