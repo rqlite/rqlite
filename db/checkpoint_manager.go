@@ -52,10 +52,10 @@ var (
 // checkpoint the manager manages its state so that a failed checkpoint is
 // handled gracefully by the next checkpoint attempt.
 //
-// The CheckpointManager is not safe for concurrent use, not concurrent use
-// with writes to the database. It is the caller's responsibility to ensure
-// that checkpoint attempts are serialized and not concurrent with writes to
-// the database.
+// The CheckpointManager is not safe for concurrent use, and not safe with for
+// use with concurrent writes to the database. It is the caller's responsibility
+// to ensure that checkpoint attempts are serialized and not concurrent with
+// writes to the database.
 type CheckpointManager struct {
 	db      *DB
 	dbPath  string

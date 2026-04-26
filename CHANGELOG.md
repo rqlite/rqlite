@@ -113,6 +113,7 @@ There are no breaking API changes in this release, nor any changes to how cluste
 - [PR #2613](https://github.com/rqlite/rqlite/pull/2613): DB layer returns `CheckpointMeta` to callers.
 - [PR #2622](https://github.com/rqlite/rqlite/pull/2622): Escape single quotes in `VacuumInto()` path. Fixes issue [#2621](https://github.com/rqlite/rqlite/issues/2621). Thanks @mahi-ma
 - [PR #2626](https://github.com/rqlite/rqlite/pull/2626): Add read deadlines to cluster service. Fixes issue [#2618](https://github.com/rqlite/rqlite/issues/2618). Thanks @ChihebBENCHEIKH1
+- [PR #2627](https://github.com/rqlite/rqlite/pull/2627): Batch `PRAGMA` queries in `memStats`. Fixes issue [#2614](https://github.com/rqlite/rqlite/issues/2614). Thanks @goingforstudying-ctrl
 
 ## v9.4.5 (March 9th 2026)
 ### Implementation changes and bug fixes
