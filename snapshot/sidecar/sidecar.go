@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"strconv"
 
 	"github.com/rqlite/rqlite/v10/internal/rsum"
 )
@@ -38,16 +39,20 @@ func NewCastagnoli(sum uint32) *Sidecar {
 }
 
 // CRC32 returns the parsed CRC32 value. It returns an error if the sidecar's
-// Type is not a CRC32 algorithm or if the CRC field cannot be decoded.
+// Type is not a CRC32 algorithm, or if the CRC field is not exactly an
+// 8-character hex string.
 func (s *Sidecar) CRC32() (uint32, error) {
 	if s.Type != TypeCastagnoli {
 		return 0, fmt.Errorf("unsupported sidecar type: %q", s.Type)
 	}
-	var sum uint32
-	if _, err := fmt.Sscanf(s.CRC, "%08x", &sum); err != nil {
+	if len(s.CRC) != 8 {
+		return 0, fmt.Errorf("invalid CRC value %q: expected 8 hex characters, got %d", s.CRC, len(s.CRC))
+	}
+	sum, err := strconv.ParseUint(s.CRC, 16, 32)
+	if err != nil {
 		return 0, fmt.Errorf("invalid CRC value %q: %w", s.CRC, err)
 	}
-	return sum, nil
+	return uint32(sum), nil
 }
 
 // WriteFile writes a Castagnoli CRC32 sidecar to path.

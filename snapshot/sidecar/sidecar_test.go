@@ -55,6 +55,38 @@ func Test_Sidecar_CRC32(t *testing.T) {
 			t.Fatal("expected error for invalid hex, got nil")
 		}
 	})
+
+	t.Run("too short", func(t *testing.T) {
+		// Sscanf with %08x would happily parse "12345678" out of a 4-char
+		// "1234" by zero-padding; the strict check must reject it.
+		s := &Sidecar{CRC: "1234", Type: TypeCastagnoli}
+		if _, err := s.CRC32(); err == nil {
+			t.Fatal("expected error for too-short CRC, got nil")
+		}
+	})
+
+	t.Run("empty", func(t *testing.T) {
+		s := &Sidecar{CRC: "", Type: TypeCastagnoli}
+		if _, err := s.CRC32(); err == nil {
+			t.Fatal("expected error for empty CRC, got nil")
+		}
+	})
+
+	t.Run("too long", func(t *testing.T) {
+		// Sscanf with %08x would parse "12345678" and silently drop the
+		// trailing "90"; the strict check must reject it.
+		s := &Sidecar{CRC: "1234567890", Type: TypeCastagnoli}
+		if _, err := s.CRC32(); err == nil {
+			t.Fatal("expected error for too-long CRC, got nil")
+		}
+	})
+
+	t.Run("eight non-hex chars", func(t *testing.T) {
+		s := &Sidecar{CRC: "zzzzzzzz", Type: TypeCastagnoli}
+		if _, err := s.CRC32(); err == nil {
+			t.Fatal("expected error for non-hex CRC of correct length, got nil")
+		}
+	})
 }
 
 func Test_WriteFile_RoundTrip(t *testing.T) {
