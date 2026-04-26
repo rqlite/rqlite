@@ -397,7 +397,7 @@ func mustWriteCRC32File(t *testing.T, path string) {
 	if err != nil {
 		t.Fatalf("failed to compute CRC32 for %s: %v", path, err)
 	}
-	if err := sidecar.WriteFile(path+crcSuffix, sum, rsum.Sync); err != nil {
+	if err := sidecar.WriteFile(path+crcSuffix, sum); err != nil {
 		t.Fatalf("failed to write CRC32 sum file for %s: %v", path, err)
 	}
 }

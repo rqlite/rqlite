@@ -93,7 +93,7 @@ func Test_WriteFile_RoundTrip(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "data.crc32")
 	const sum uint32 = 0x1a2b3c4d
 
-	if err := WriteFile(path, sum, rsum.Sync); err != nil {
+	if err := WriteFile(path, sum); err != nil {
 		t.Fatalf("WriteFile failed: %v", err)
 	}
 
@@ -124,7 +124,7 @@ func Test_WriteFile_RoundTrip(t *testing.T) {
 
 func Test_WriteFile_Zero(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "data.crc32")
-	if err := WriteFile(path, 0, rsum.Sync); err != nil {
+	if err := WriteFile(path, 0); err != nil {
 		t.Fatalf("WriteFile failed: %v", err)
 	}
 	got, err := ReadCRC32File(path)
@@ -174,7 +174,7 @@ func Test_CompareFile_Match(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := WriteFile(sidecarPath, sum, rsum.Sync); err != nil {
+	if err := WriteFile(sidecarPath, sum); err != nil {
 		t.Fatal(err)
 	}
 
@@ -195,7 +195,7 @@ func Test_CompareFile_Mismatch(t *testing.T) {
 	if err := os.WriteFile(dataPath, []byte("hello world"), 0644); err != nil {
 		t.Fatal(err)
 	}
-	if err := WriteFile(sidecarPath, 0xdeadbeef, rsum.Sync); err != nil {
+	if err := WriteFile(sidecarPath, 0xdeadbeef); err != nil {
 		t.Fatal(err)
 	}
 
@@ -222,7 +222,7 @@ func Test_CompareFile_MissingSidecar(t *testing.T) {
 func Test_CompareFile_MissingData(t *testing.T) {
 	dir := t.TempDir()
 	sidecarPath := filepath.Join(dir, "data.bin.crc32")
-	if err := WriteFile(sidecarPath, 0x12345678, rsum.Sync); err != nil {
+	if err := WriteFile(sidecarPath, 0x12345678); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := CompareFile(filepath.Join(dir, "data.bin"), sidecarPath); err == nil {

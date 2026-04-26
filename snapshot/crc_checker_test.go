@@ -27,7 +27,7 @@ func createTestFile(t *testing.T, dir, name, content string) *ChecksummedFile {
 	}
 
 	crcPath := dataPath + crcSuffix
-	if err := sidecar.WriteFile(crcPath, sum, rsum.NoSync); err != nil {
+	if err := sidecar.WriteFile(crcPath, sum); err != nil {
 		t.Fatalf("writing CRC sidecar: %v", err)
 	}
 
@@ -47,7 +47,7 @@ func createCorruptedTestFile(t *testing.T, dir, name, content string) *Checksumm
 	// Write a bogus CRC that won't match.
 	badCRC := uint32(0xDEADBEEF)
 	crcPath := dataPath + crcSuffix
-	if err := sidecar.WriteFile(crcPath, badCRC, rsum.NoSync); err != nil {
+	if err := sidecar.WriteFile(crcPath, badCRC); err != nil {
 		t.Fatalf("writing CRC sidecar: %v", err)
 	}
 

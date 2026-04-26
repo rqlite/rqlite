@@ -168,7 +168,7 @@ func (w *WALWriter) Write(p []byte) (int, error) {
 // WAL file, closes the file descriptor, and syncs the directory.
 func (w *WALWriter) Close() error {
 	walPath := w.fd.Name()
-	if err := sidecar.WriteFile(walPath+crcSuffix, w.crcW.Sum32(), rsum.Sync); err != nil {
+	if err := sidecar.WriteFile(walPath+crcSuffix, w.crcW.Sum32()); err != nil {
 		return fmt.Errorf("failed to write CRC32 sum file: %w", err)
 	}
 	if err := w.fd.Sync(); err != nil {

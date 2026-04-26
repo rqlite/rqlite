@@ -1,7 +1,5 @@
 // Package sidecar defines the on-disk format of CRC sidecar files written
-// alongside snapshot data files (DB and WAL). The sidecar is a JSON object
-// recording both the checksum value and the algorithm used, so that a future
-// release can change or disable per-file checksums without breaking readers.
+// alongside snapshot data files (DB and WAL).
 package sidecar
 
 import (
@@ -9,6 +7,8 @@ import (
 	"fmt"
 	"os"
 	"strconv"
+
+	"github.com/rqlite/rqlite/v10/internal/rsum"
 )
 
 // Type identifies the checksum algorithm recorded in a sidecar.
@@ -95,4 +95,18 @@ func ReadCRC32File(path string) (uint32, error) {
 		return 0, err
 	}
 	return s.CRC32()
+}
+
+// CompareFile recomputes the CRC32 of the file at dataPath and compares it
+// to the value recorded in the sidecar at sidecarPath.
+func CompareFile(dataPath, sidecarPath string) (bool, error) {
+	expected, err := ReadCRC32File(sidecarPath)
+	if err != nil {
+		return false, fmt.Errorf("reading sidecar: %w", err)
+	}
+	actual, err := rsum.CRC32(dataPath)
+	if err != nil {
+		return false, fmt.Errorf("calculating CRC32 of data file: %w", err)
+	}
+	return expected == actual, nil
 }
