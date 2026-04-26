@@ -24,15 +24,17 @@ const (
 // CRC is encoded as an 8-character lowercase hex string (e.g. "1a2b3c4d") so
 // the file is human-readable and stable across encoders.
 type Sidecar struct {
-	CRC  string `json:"crc"`
-	Type Type   `json:"type"`
+	CRC      string `json:"crc"`
+	Type     Type   `json:"type"`
+	Disabled bool   `json:"disabled,omitempty"`
 }
 
 // NewCastagnoli returns a Sidecar that records sum as a Castagnoli CRC32.
 func NewCastagnoli(sum uint32) *Sidecar {
 	return &Sidecar{
-		CRC:  fmt.Sprintf("%08x", sum),
-		Type: TypeCastagnoli,
+		CRC:      fmt.Sprintf("%08x", sum),
+		Type:     TypeCastagnoli,
+		Disabled: false,
 	}
 }
 

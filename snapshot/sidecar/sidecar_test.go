@@ -17,6 +17,9 @@ func Test_NewCastagnoli(t *testing.T) {
 	if s.Type != TypeCastagnoli {
 		t.Fatalf("Type = %q, want %q", s.Type, TypeCastagnoli)
 	}
+	if s.Disabled {
+		t.Fatalf("expected disabled to be false")
+	}
 }
 
 func Test_Sidecar_CRC32(t *testing.T) {
