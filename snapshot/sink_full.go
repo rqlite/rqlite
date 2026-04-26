@@ -10,6 +10,7 @@ import (
 	"github.com/rqlite/rqlite/v10/db"
 	"github.com/rqlite/rqlite/v10/internal/rsum"
 	"github.com/rqlite/rqlite/v10/snapshot/proto"
+	"github.com/rqlite/rqlite/v10/snapshot/sidecar"
 )
 
 var (
@@ -216,11 +217,11 @@ func (s *FullSink) Close() error {
 		if walCRC != s.header.WalHeaders[i].Crc32 {
 			return fmt.Errorf("CRC32 mismatch for WAL file %d: got %08x, expected %08x", i, walCRC, s.header.WalHeaders[i].Crc32)
 		}
-		if err := rsum.WriteCRC32SumFile(walPath+crcSuffix, walCRC, rsum.Sync); err != nil {
+		if err := sidecar.WriteFile(walPath+crcSuffix, walCRC); err != nil {
 			return fmt.Errorf("writing CRC32 sidecar for WAL file %d: %w", i, err)
 		}
 	}
-	if err := rsum.WriteCRC32SumFile(s.dbFile+crcSuffix, s.dbCRC, rsum.Sync); err != nil {
+	if err := sidecar.WriteFile(s.dbFile+crcSuffix, s.dbCRC); err != nil {
 		return fmt.Errorf("writing CRC32 sidecar for DB file: %w", err)
 	}
 	recordDuration(sinkFullCRC32Dur, start)

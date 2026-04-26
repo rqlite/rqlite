@@ -6,7 +6,7 @@ import (
 	"testing"
 
 	"github.com/rqlite/rqlite/v10/internal/fsutil"
-	"github.com/rqlite/rqlite/v10/internal/rsum"
+	"github.com/rqlite/rqlite/v10/snapshot/sidecar"
 )
 
 func Test_StagingDir_CreateWALAndValidate(t *testing.T) {
@@ -100,7 +100,7 @@ func Test_StagingDir_ValidateFailsCRCMismatch(t *testing.T) {
 	}
 
 	// Corrupt the CRC file.
-	if err := rsum.WriteCRC32SumFile(walPath+crcSuffix, 0xdeadbeef, rsum.Sync); err != nil {
+	if err := sidecar.WriteFile(walPath+crcSuffix, 0xdeadbeef); err != nil {
 		t.Fatalf("failed to write bad CRC: %v", err)
 	}
 

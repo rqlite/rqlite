@@ -11,6 +11,7 @@ import (
 	"github.com/rqlite/rqlite/v10/db"
 	"github.com/rqlite/rqlite/v10/internal/fsutil"
 	"github.com/rqlite/rqlite/v10/internal/rsum"
+	"github.com/rqlite/rqlite/v10/snapshot/sidecar"
 )
 
 const (
@@ -102,7 +103,7 @@ func (s *StagingDir) Validate() error {
 			return fmt.Errorf("%s is not a valid SQLite WAL file", walPath)
 		}
 		crcPath := walPath + crcSuffix
-		ok, err := rsum.CompareCRC32SumFile(walPath, crcPath)
+		ok, err := sidecar.CompareFile(walPath, crcPath)
 		if err != nil {
 			return fmt.Errorf("comparing CRC32 sum for %s: %w", walPath, err)
 		}
@@ -167,7 +168,7 @@ func (w *WALWriter) Write(p []byte) (int, error) {
 // WAL file, closes the file descriptor, and syncs the directory.
 func (w *WALWriter) Close() error {
 	walPath := w.fd.Name()
-	if err := rsum.WriteCRC32SumFile(walPath+crcSuffix, w.crcW.Sum32(), rsum.Sync); err != nil {
+	if err := sidecar.WriteFile(walPath+crcSuffix, w.crcW.Sum32()); err != nil {
 		return fmt.Errorf("failed to write CRC32 sum file: %w", err)
 	}
 	if err := w.fd.Sync(); err != nil {

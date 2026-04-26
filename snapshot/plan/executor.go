@@ -9,6 +9,7 @@ import (
 
 	"github.com/rqlite/rqlite/v10/db"
 	"github.com/rqlite/rqlite/v10/internal/rsum"
+	"github.com/rqlite/rqlite/v10/snapshot/sidecar"
 )
 
 // Executor implements the Visitor interface to execute snapshot store operations.
@@ -171,7 +172,7 @@ func (e *Executor) CalcCRC32(dataPath, crcPath string) error {
 	if err != nil {
 		return fmt.Errorf("calculating CRC32 of %s: %w", dataPath, err)
 	}
-	if err := rsum.WriteCRC32SumFile(crcPath, sum, true); err != nil {
+	if err := sidecar.WriteFile(crcPath, sum); err != nil {
 		return fmt.Errorf("writing CRC32 sum file %s: %w", crcPath, err)
 	}
 	return nil

@@ -2625,7 +2625,12 @@ func (s *Store) fsmSnapshot() (fSnap raft.FSMSnapshot, retErr error) {
 
 		// Write the compacted WAL to the WAL staging directory. The Snapshotting process
 		// will atomically move this entire directory. If it fails to do so, then this WAL
-		// file wil be packaged as part of the next Snapshot and the next WAL file.
+		// file wil be packaged as part of the next Snapshot and the next WAL file. If the
+		// staging directory is moved, but the snapshotting later errors, then FullNeeded
+		// will be set because we've "lost" a WAL file. If the staging directory is moved,
+		// but the system then crashes, then the lack of the clean_snapshot flag will force
+		// a full restore from the Snapshot Store -- which will allow the next snapshot to
+		// be incremental.
 		if err := fsutil.EnsureDirExists(s.walStagingDir); err != nil {
 			return nil, err
 		}
