@@ -1390,11 +1390,27 @@ func Test_ExecShouldTimeout(t *testing.T) {
 	defer db.Close()
 	defer os.Remove(path)
 
+	// Execute a query, using a timeout that is enough to get the timeout error
+	// the test wants.
+	//
+	// Where the timeout surfaces depends on where the deadline expires:
+	// - Inside ExecContext (during query execution) → the SQLite per-row
+	// interrupt callback catches it and turns it into a per-statement error.
+	// Top-level err is nil, and r[0].GetError() contains ErrExecuteTimeout.
+	// This is what the test expects.
+	// - Earlier — inside db.rwDB.Conn(ctx) at db.go:1021 → database/sql returns
+	// context.DeadlineExceeded directly. Top-level/ err != nil, no per-statement
+	// error wrapping.
+	//
+	// 100µs is well under typical Go scheduling jitter on a busy machine. If
+	// acquiring a conn from the pool takes longer than 100µs (idle conn already
+	// in use, lock contention, GC pause, etc.), the context expires before SQLite
+	// even sees the query, and you get the raw context deadline exceeded from Conn().
 	q := `
 INSERT INTO test_table (key1, key_id, key2, key3, key4, key5, key6, data)
 SELECT t1.key1 || t2.key1, t1.key_id || t2.key_id, t1.key2 || t2.key2, t1.key3 || t2.key3, t1.key4 || t2.key4, t1.key5 || t2.key5, t1.key6 || t2.key6, t1.data || t2.data
 FROM test_table t1 LEFT OUTER JOIN test_table t2`
-	r, err := db.ExecuteStringStmtWithTimeout(q, 100*time.Microsecond)
+	r, err := db.ExecuteStringStmtWithTimeout(q, 1*time.Millisecond)
 	if err != nil {
 		t.Fatalf("failed to execute: %s", err.Error())
 	}
