@@ -41,7 +41,9 @@ func NewHeaderFromFile(path string, crc32 bool) (*proto.Header, error) {
 }
 
 // NewHeaderFromChecksummedFile creates a new Header using a pre-loaded ChecksummedFile.
-// The file size is read from disk; the CRC32 comes from the ChecksummedFile.
+// The file size is read from disk; the CRC32 comes from the ChecksummedFile, except
+// when the file's sidecar is Disabled — in that case the CRC32 is computed live so
+// that the receiver's verification still has a real checksum to compare against.
 func NewHeaderFromChecksummedFile(hf *ChecksummedFile) (*proto.Header, error) {
 	if hf.Path == "" {
 		return nil, fmt.Errorf("path must be non-empty")
@@ -50,9 +52,16 @@ func NewHeaderFromChecksummedFile(hf *ChecksummedFile) (*proto.Header, error) {
 	if err != nil {
 		return nil, err
 	}
+	crc := hf.CRC32
+	if hf.sidecar != nil && hf.sidecar.Disabled {
+		crc, err = rsum.CRC32(hf.Path)
+		if err != nil {
+			return nil, err
+		}
+	}
 	return &proto.Header{
 		SizeBytes: uint64(info.Size()),
-		Crc32:     hf.CRC32,
+		Crc32:     crc,
 	}, nil
 }
 

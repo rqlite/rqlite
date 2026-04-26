@@ -23,11 +23,16 @@ type ChecksummedFile struct {
 }
 
 // NewChecksummedFileFromFiles creates a ChecksummedFile by reading the sidecar
-// sidecarPath and associating it with dataPath.
+// sidecarPath and associating it with dataPath. A sidecar marked Disabled
+// (written by a newer release that we have downgraded from) is loaded with a
+// zero CRC32 and verification short-circuits; see Check.
 func NewChecksummedFileFromFiles(dataPath, sidecarPath string) (*ChecksummedFile, error) {
 	sc, err := sidecar.ReadFile(sidecarPath)
 	if err != nil {
 		return nil, fmt.Errorf("reading CRC32 sidecar %s: %w", sidecarPath, err)
+	}
+	if sc.Disabled {
+		return &ChecksummedFile{Path: dataPath, sidecar: sc}, nil
 	}
 	crc, err := sc.CRC32()
 	if err != nil {
@@ -37,8 +42,12 @@ func NewChecksummedFileFromFiles(dataPath, sidecarPath string) (*ChecksummedFile
 }
 
 // Check computes the CRC32 of the file at Path and returns whether it
-// matches the sidecar's CRC32 value.
+// matches the sidecar's CRC32 value. If the sidecar marks the file as
+// not checksummed, Check returns (true, nil) without reading the data file.
 func (hf *ChecksummedFile) Check() (bool, error) {
+	if hf.sidecar != nil && hf.sidecar.Disabled {
+		return true, nil
+	}
 	actual, err := rsum.CRC32(hf.Path)
 	if err != nil {
 		return false, err
