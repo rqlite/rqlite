@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"github.com/rqlite/rqlite/v10/internal/rsum"
+	"github.com/rqlite/rqlite/v10/snapshot/sidecar"
 )
 
 // createTestFile creates a data file with the given content and a matching
@@ -26,7 +27,7 @@ func createTestFile(t *testing.T, dir, name, content string) *ChecksummedFile {
 	}
 
 	crcPath := dataPath + crcSuffix
-	if err := rsum.WriteCRC32SumFile(crcPath, sum, rsum.NoSync); err != nil {
+	if err := sidecar.WriteFile(crcPath, sum, rsum.NoSync); err != nil {
 		t.Fatalf("writing CRC sidecar: %v", err)
 	}
 
@@ -46,7 +47,7 @@ func createCorruptedTestFile(t *testing.T, dir, name, content string) *Checksumm
 	// Write a bogus CRC that won't match.
 	badCRC := uint32(0xDEADBEEF)
 	crcPath := dataPath + crcSuffix
-	if err := rsum.WriteCRC32SumFile(crcPath, badCRC, rsum.NoSync); err != nil {
+	if err := sidecar.WriteFile(crcPath, badCRC, rsum.NoSync); err != nil {
 		t.Fatalf("writing CRC sidecar: %v", err)
 	}
 

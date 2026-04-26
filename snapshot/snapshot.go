@@ -11,6 +11,7 @@ import (
 	"github.com/rqlite/rqlite/v10/db"
 	"github.com/rqlite/rqlite/v10/internal/fsutil"
 	"github.com/rqlite/rqlite/v10/internal/rsum"
+	"github.com/rqlite/rqlite/v10/snapshot/sidecar"
 )
 
 // ChecksummedFile pairs a file path with its CRC32 checksum.
@@ -22,7 +23,7 @@ type ChecksummedFile struct {
 // NewChecksummedFileFromFiles creates a ChecksummedFile by reading the CRC32 checksum
 // from the sidecar file at crcPath and associating it with dataPath.
 func NewChecksummedFileFromFiles(dataPath, crcPath string) (*ChecksummedFile, error) {
-	sum, err := rsum.ReadCRC32SumFile(crcPath)
+	sum, err := sidecar.ReadCRC32File(crcPath)
 	if err != nil {
 		return nil, fmt.Errorf("reading CRC32 sidecar %s: %w", crcPath, err)
 	}

@@ -13,6 +13,7 @@ import (
 	"github.com/rqlite/rqlite/v10/command/encoding"
 	"github.com/rqlite/rqlite/v10/internal/fsutil"
 	"github.com/rqlite/rqlite/v10/internal/rsum"
+	"github.com/rqlite/rqlite/v10/snapshot/sidecar"
 )
 
 func Test_NewFullSink(t *testing.T) {
@@ -396,7 +397,7 @@ func mustWriteCRC32File(t *testing.T, path string) {
 	if err != nil {
 		t.Fatalf("failed to compute CRC32 for %s: %v", path, err)
 	}
-	if err := rsum.WriteCRC32SumFile(path+crcSuffix, sum, rsum.Sync); err != nil {
+	if err := sidecar.WriteFile(path+crcSuffix, sum, rsum.Sync); err != nil {
 		t.Fatalf("failed to write CRC32 sum file for %s: %v", path, err)
 	}
 }
@@ -405,7 +406,7 @@ func mustWriteCRC32File(t *testing.T, path string) {
 // at path and that its checksum matches the data file's actual CRC32.
 func mustVerifyCRC32File(t *testing.T, path string) {
 	t.Helper()
-	ok, err := rsum.CompareCRC32SumFile(path, path+crcSuffix)
+	ok, err := sidecar.CompareFile(path, path+crcSuffix)
 	if err != nil {
 		t.Fatalf("failed to compare CRC32 for %s: %v", path, err)
 	}
