@@ -99,17 +99,3 @@ func ReadCRC32File(path string) (uint32, error) {
 	}
 	return s.CRC32()
 }
-
-// CompareFile recomputes the CRC32 of the file at dataPath and compares it
-// to the value recorded in the sidecar at sidecarPath.
-func CompareFile(dataPath, sidecarPath string) (bool, error) {
-	expected, err := ReadCRC32File(sidecarPath)
-	if err != nil {
-		return false, fmt.Errorf("reading sidecar: %w", err)
-	}
-	actual, err := rsum.CRC32(dataPath)
-	if err != nil {
-		return false, fmt.Errorf("calculating CRC32 of data file: %w", err)
-	}
-	return expected == actual, nil
-}
