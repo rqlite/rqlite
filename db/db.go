@@ -1774,7 +1774,9 @@ func (db *DB) txStatus() (map[string]any, error) {
 
 func (db *DB) memStats() (map[string]int64, error) {
 	ms := make(map[string]int64)
-	for _, p := range []string{
+	// Batch all PRAGMA queries into a single request to avoid acquiring
+	// a separate connection for each PRAGMA.
+	pragmas := []string{
 		"max_page_count",
 		"page_count",
 		"page_size",
@@ -1782,15 +1784,23 @@ func (db *DB) memStats() (map[string]int64, error) {
 		"soft_heap_limit",
 		"cache_size",
 		"freelist_count",
-	} {
-		res, err := db.QueryStringStmt(fmt.Sprintf("PRAGMA %s", p))
-		if err != nil {
-			return nil, err
+	}
+	stmts := make([]*command.Statement, len(pragmas))
+	for i, p := range pragmas {
+		stmts[i] = &command.Statement{
+			Sql: fmt.Sprintf("PRAGMA %s", p),
 		}
-		if res[0].Error != "" {
-			return nil, errors.New(res[0].Error)
+	}
+	req := &command.Request{Statements: stmts}
+	res, err := db.Query(req, false)
+	if err != nil {
+		return nil, err
+	}
+	for i, p := range pragmas {
+		if res[i].Error != "" {
+			return nil, errors.New(res[i].Error)
 		}
-		ms[p] = res[0].Values[0].Parameters[0].GetI()
+		ms[p] = res[i].Values[0].Parameters[0].GetI()
 	}
 	return ms, nil
 }
