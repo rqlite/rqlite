@@ -47,6 +47,28 @@ func Test_NewChecksummedFileFromFiles(t *testing.T) {
 			t.Fatal("expected error for missing sidecar")
 		}
 	})
+
+	t.Run("disabled sidecar", func(t *testing.T) {
+		dir := t.TempDir()
+		dataPath := filepath.Join(dir, "data.db")
+		crcPath := filepath.Join(dir, "data.db.crc32")
+
+		if err := os.WriteFile(dataPath, []byte("hello"), 0644); err != nil {
+			t.Fatalf("failed to write data file: %v", err)
+		}
+		mustWriteDisabledSidecar(t, crcPath)
+
+		hf, err := NewChecksummedFileFromFiles(dataPath, crcPath)
+		if err != nil {
+			t.Fatalf("NewChecksummedFileFromFiles failed: %v", err)
+		}
+		if hf.Path != dataPath {
+			t.Fatalf("expected Path %s, got %s", dataPath, hf.Path)
+		}
+		if hf.CRC32 != 0 {
+			t.Fatalf("expected zero CRC32 for disabled sidecar, got %08x", hf.CRC32)
+		}
+	})
 }
 
 func Test_ChecksummedFile_Check(t *testing.T) {
@@ -106,6 +128,59 @@ func Test_ChecksummedFile_Check(t *testing.T) {
 			t.Fatal("expected error for missing data file")
 		}
 	})
+
+	t.Run("disabled sidecar skips check", func(t *testing.T) {
+		dir := t.TempDir()
+		dataPath := filepath.Join(dir, "data.db")
+		crcPath := dataPath + crcSuffix
+
+		if err := os.WriteFile(dataPath, []byte("hello"), 0644); err != nil {
+			t.Fatalf("failed to write data file: %v", err)
+		}
+		mustWriteDisabledSidecar(t, crcPath)
+
+		hf, err := NewChecksummedFileFromFiles(dataPath, crcPath)
+		if err != nil {
+			t.Fatalf("NewChecksummedFileFromFiles failed: %v", err)
+		}
+
+		// Corrupt the data file. A disabled sidecar should make Check
+		// skip the comparison entirely and report success.
+		if err := os.WriteFile(dataPath, []byte("corrupted"), 0644); err != nil {
+			t.Fatalf("failed to overwrite data file: %v", err)
+		}
+
+		ok, err := hf.Check()
+		if err != nil {
+			t.Fatalf("Check failed: %v", err)
+		}
+		if !ok {
+			t.Fatal("expected Check to return true when sidecar is Disabled")
+		}
+
+		// Also: a disabled sidecar must let Check pass even when the
+		// data file does not exist, since Check must not read it.
+		if err := os.Remove(dataPath); err != nil {
+			t.Fatalf("failed to remove data file: %v", err)
+		}
+		ok, err = hf.Check()
+		if err != nil {
+			t.Fatalf("Check failed after removing data file: %v", err)
+		}
+		if !ok {
+			t.Fatal("expected Check to return true with disabled sidecar and missing data file")
+		}
+	})
+}
+
+// mustWriteDisabledSidecar writes a sidecar JSON file marked Disabled. This
+// simulates a sidecar produced by a future release that we have downgraded
+// from; the current release does not produce these itself.
+func mustWriteDisabledSidecar(t *testing.T, path string) {
+	t.Helper()
+	if err := os.WriteFile(path, []byte(`{"crc":"","type":"castagnoli","disabled":true}`), 0644); err != nil {
+		t.Fatalf("failed to write disabled sidecar: %v", err)
+	}
 }
 
 // Test Snapshot.Less method

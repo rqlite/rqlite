@@ -4,6 +4,7 @@ import (
 	"encoding/binary"
 	"io"
 	"os"
+	"path/filepath"
 	"testing"
 
 	"github.com/rqlite/rqlite/v10/internal/rsum"
@@ -368,6 +369,42 @@ func Test_SnapshotPathStreamer(t *testing.T) {
 
 	if err := streamer.Close(); err != nil {
 		t.Fatalf("Failed to close SnapshotPathStreamer: %v", err)
+	}
+}
+
+func Test_NewHeaderFromChecksummedFile_DisabledRecomputes(t *testing.T) {
+	dir := t.TempDir()
+	dataPath := filepath.Join(dir, "data.db")
+	crcPath := dataPath + crcSuffix
+
+	content := []byte("streaming payload")
+	if err := os.WriteFile(dataPath, content, 0644); err != nil {
+		t.Fatalf("failed to write data file: %v", err)
+	}
+	mustWriteDisabledSidecar(t, crcPath)
+
+	hf, err := NewChecksummedFileFromFiles(dataPath, crcPath)
+	if err != nil {
+		t.Fatalf("NewChecksummedFileFromFiles failed: %v", err)
+	}
+	if hf.CRC32 != 0 {
+		t.Fatalf("expected zero stored CRC32 for disabled sidecar, got %08x", hf.CRC32)
+	}
+
+	header, err := NewHeaderFromChecksummedFile(hf)
+	if err != nil {
+		t.Fatalf("NewHeaderFromChecksummedFile failed: %v", err)
+	}
+	if header.SizeBytes != uint64(len(content)) {
+		t.Fatalf("expected SizeBytes %d, got %d", len(content), header.SizeBytes)
+	}
+
+	expected, err := rsum.CRC32(dataPath)
+	if err != nil {
+		t.Fatalf("rsum.CRC32 failed: %v", err)
+	}
+	if header.Crc32 != expected {
+		t.Fatalf("expected wire Crc32 %08x (recomputed), got %08x", expected, header.Crc32)
 	}
 }
 
