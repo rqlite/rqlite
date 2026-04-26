@@ -547,6 +547,7 @@ func (db *DB) Close() error {
 
 // Stats returns status and diagnostics for the database.
 func (db *DB) Stats() (map[string]any, error) {
+	ctx := context.Background()
 	copts, err := db.CompileOptions()
 	if err != nil {
 		return nil, err
@@ -564,23 +565,33 @@ func (db *DB) Stats() (map[string]any, error) {
 		return nil, err
 	}
 	// Pin one rw and one ro connection so pragmas and txStatus reuse them
-	// instead of checking out a fresh pool connection per PRAGMA.
-	rwConn, err := db.rwDB.Conn(context.Background())
-	if err != nil {
-		return nil, err
-	}
-	defer rwConn.Close()
-	roConn, err := db.roDB.Conn(context.Background())
-	if err != nil {
-		return nil, err
-	}
-	defer roConn.Close()
-	pragmas, err := db.pragmas(rwConn, roConn)
-	if err != nil {
-		return nil, err
-	}
-	txStatus, err := db.txStatus(rwConn, roConn)
-	if err != nil {
+	// instead of checking out a fresh pool connection per PRAGMA. Close them
+	// before any filesystem work below so a single-connection rw pool is not
+	// held during LastModified / FileSize / WALSize.
+	var pragmas, txStatus map[string]any
+	if err := func() error {
+		rwConn, err := db.rwDB.Conn(ctx)
+		if err != nil {
+			return err
+		}
+		defer rwConn.Close()
+		roConn, err := db.roDB.Conn(ctx)
+		if err != nil {
+			return err
+		}
+		defer roConn.Close()
+		p, err := db.pragmas(ctx, rwConn, roConn)
+		if err != nil {
+			return err
+		}
+		pragmas = p
+		t, err := db.txStatus(ctx, rwConn, roConn)
+		if err != nil {
+			return err
+		}
+		txStatus = t
+		return nil
+	}(); err != nil {
 		return nil, err
 	}
 	stats := map[string]any{
@@ -1727,8 +1738,7 @@ func (db *DB) StmtReadOnlyWithConn(sql string, conn *sql.Conn) (bool, error) {
 	return readOnly, nil
 }
 
-func (db *DB) pragmas(rwConn, roConn *sql.Conn) (map[string]any, error) {
-	ctx := context.Background()
+func (db *DB) pragmas(ctx context.Context, rwConn, roConn *sql.Conn) (map[string]any, error) {
 	conns := map[string]*sql.Conn{
 		"rw": rwConn,
 		"ro": roConn,
@@ -1757,7 +1767,10 @@ func (db *DB) pragmas(rwConn, roConn *sql.Conn) (map[string]any, error) {
 
 // txStatus returns whether there is an active transaction on each database
 // connection.
-func (db *DB) txStatus(rwConn, roConn *sql.Conn) (map[string]any, error) {
+func (db *DB) txStatus(ctx context.Context, rwConn, roConn *sql.Conn) (map[string]any, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
 	conns := map[string]*sql.Conn{
 		"rw": rwConn,
 		"ro": roConn,
