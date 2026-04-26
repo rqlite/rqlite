@@ -18,20 +18,26 @@ import (
 type ChecksummedFile struct {
 	Path  string
 	CRC32 uint32
+
+	sidecar *sidecar.Sidecar
 }
 
-// NewChecksummedFileFromFiles creates a ChecksummedFile by reading the CRC32 checksum
-// from the sidecar file at crcPath and associating it with dataPath.
-func NewChecksummedFileFromFiles(dataPath, crcPath string) (*ChecksummedFile, error) {
-	sum, err := sidecar.ReadCRC32File(crcPath)
+// NewChecksummedFileFromFiles creates a ChecksummedFile by reading the sidecar
+// sidecarPath and associating it with dataPath.
+func NewChecksummedFileFromFiles(dataPath, sidecarPath string) (*ChecksummedFile, error) {
+	sc, err := sidecar.ReadFile(sidecarPath)
 	if err != nil {
-		return nil, fmt.Errorf("reading CRC32 sidecar %s: %w", crcPath, err)
+		return nil, fmt.Errorf("reading CRC32 sidecar %s: %w", sidecarPath, err)
 	}
-	return &ChecksummedFile{Path: dataPath, CRC32: sum}, nil
+	crc, err := sc.CRC32()
+	if err != nil {
+		return nil, err
+	}
+	return &ChecksummedFile{Path: dataPath, CRC32: crc, sidecar: sc}, nil
 }
 
 // Check computes the CRC32 of the file at Path and returns whether it
-// matches the stored CRC32 value.
+// matches the sidecar's CRC32 value.
 func (hf *ChecksummedFile) Check() (bool, error) {
 	actual, err := rsum.CRC32(hf.Path)
 	if err != nil {
