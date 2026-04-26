@@ -36,7 +36,7 @@ func NewChecksummedFileFromFiles(dataPath, sidecarPath string) (*ChecksummedFile
 	}
 	crc, err := sc.CRC32()
 	if err != nil {
-		return nil, err
+return nil, fmt.Errorf("parsing CRC32 from sidecar %s: %w", sidecarPath, err)
 	}
 	return &ChecksummedFile{Path: dataPath, CRC32: crc, sidecar: sc}, nil
 }
