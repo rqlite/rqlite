@@ -5,7 +5,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/rqlite/rqlite/v10/internal/rsum"
+	"github.com/rqlite/rqlite/v10/snapshot/sidecar"
 )
 
 func TestExecutor_Rename(t *testing.T) {
@@ -389,7 +389,7 @@ func TestExecutor_CalcCRC32(t *testing.T) {
 }
 
 func compareCRC32(dataPath, crcPath string) (bool, error) {
-	return rsum.CompareCRC32SumFile(dataPath, crcPath)
+	return sidecar.CompareFile(dataPath, crcPath)
 }
 
 func mustCopyFile(src, dst string) {
