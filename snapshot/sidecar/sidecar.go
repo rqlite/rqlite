@@ -65,7 +65,7 @@ func WriteFile(path string, sum uint32, sync rsum.SyncState) error {
 	if err != nil {
 		return err
 	}
-	defer fd.Close()
+	defer fd.Close() // Ignore error if closed happened earlier.
 
 	if _, err := fd.Write(b); err != nil {
 		return err
@@ -75,7 +75,7 @@ func WriteFile(path string, sum uint32, sync rsum.SyncState) error {
 			return err
 		}
 	}
-	return nil
+	return fd.Close()
 }
 
 // ReadFile reads and decodes a sidecar file from path.
