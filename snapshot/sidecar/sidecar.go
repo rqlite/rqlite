@@ -9,8 +9,6 @@ import (
 	"fmt"
 	"os"
 	"strconv"
-
-	"github.com/rqlite/rqlite/v10/internal/rsum"
 )
 
 // Type identifies the checksum algorithm recorded in a sidecar.
@@ -55,8 +53,9 @@ func (s *Sidecar) CRC32() (uint32, error) {
 	return uint32(sum), nil
 }
 
-// WriteFile writes a Castagnoli CRC32 sidecar to path.
-func WriteFile(path string, sum uint32, sync rsum.SyncState) error {
+// WriteFile writes a Castagnoli CRC32 sidecar to path. Always syncs
+// the file to disk.
+func WriteFile(path string, sum uint32) error {
 	b, err := json.Marshal(NewCastagnoli(sum))
 	if err != nil {
 		return err
@@ -70,10 +69,8 @@ func WriteFile(path string, sum uint32, sync rsum.SyncState) error {
 	if _, err := fd.Write(b); err != nil {
 		return err
 	}
-	if sync {
-		if err := fd.Sync(); err != nil {
-			return err
-		}
+	if err := fd.Sync(); err != nil {
+		return err
 	}
 	return fd.Close()
 }

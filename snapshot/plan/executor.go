@@ -172,7 +172,7 @@ func (e *Executor) CalcCRC32(dataPath, crcPath string) error {
 	if err != nil {
 		return fmt.Errorf("calculating CRC32 of %s: %w", dataPath, err)
 	}
-	if err := sidecar.WriteFile(crcPath, sum, rsum.Sync); err != nil {
+	if err := sidecar.WriteFile(crcPath, sum); err != nil {
 		return fmt.Errorf("writing CRC32 sum file %s: %w", crcPath, err)
 	}
 	return nil
