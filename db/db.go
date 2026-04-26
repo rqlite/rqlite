@@ -563,11 +563,23 @@ func (db *DB) Stats() (map[string]any, error) {
 	if err != nil {
 		return nil, err
 	}
-	pragmas, err := db.pragmas()
+	// Pin one rw and one ro connection so pragmas and txStatus reuse them
+	// instead of checking out a fresh pool connection per PRAGMA.
+	rwConn, err := db.rwDB.Conn(context.Background())
 	if err != nil {
 		return nil, err
 	}
-	txStatus, err := db.txStatus()
+	defer rwConn.Close()
+	roConn, err := db.roDB.Conn(context.Background())
+	if err != nil {
+		return nil, err
+	}
+	defer roConn.Close()
+	pragmas, err := db.pragmas(rwConn, roConn)
+	if err != nil {
+		return nil, err
+	}
+	txStatus, err := db.txStatus(rwConn, roConn)
 	if err != nil {
 		return nil, err
 	}
@@ -1715,10 +1727,11 @@ func (db *DB) StmtReadOnlyWithConn(sql string, conn *sql.Conn) (bool, error) {
 	return readOnly, nil
 }
 
-func (db *DB) pragmas() (map[string]any, error) {
-	conns := map[string]*sql.DB{
-		"rw": db.rwDB,
-		"ro": db.roDB,
+func (db *DB) pragmas(rwConn, roConn *sql.Conn) (map[string]any, error) {
+	ctx := context.Background()
+	conns := map[string]*sql.Conn{
+		"rw": rwConn,
+		"ro": roConn,
 	}
 
 	connsMap := make(map[string]any)
@@ -1732,7 +1745,7 @@ func (db *DB) pragmas() (map[string]any, error) {
 			"busy_timeout",
 		} {
 			var s string
-			if err := v.QueryRow(fmt.Sprintf("PRAGMA %s", p)).Scan(&s); err != nil {
+			if err := v.QueryRowContext(ctx, fmt.Sprintf("PRAGMA %s", p)).Scan(&s); err != nil {
 				return nil, err
 			}
 			pragmasMap[p] = s
@@ -1744,10 +1757,10 @@ func (db *DB) pragmas() (map[string]any, error) {
 
 // txStatus returns whether there is an active transaction on each database
 // connection.
-func (db *DB) txStatus() (map[string]any, error) {
-	conns := map[string]*sql.DB{
-		"rw": db.rwDB,
-		"ro": db.roDB,
+func (db *DB) txStatus(rwConn, roConn *sql.Conn) (map[string]any, error) {
+	conns := map[string]*sql.Conn{
+		"rw": rwConn,
+		"ro": roConn,
 	}
 
 	t := false
@@ -1759,12 +1772,7 @@ func (db *DB) txStatus() (map[string]any, error) {
 
 	txStatusMap := make(map[string]any)
 	for k, v := range conns {
-		conn, err := v.Conn(context.Background())
-		if err != nil {
-			return nil, err
-		}
-		defer conn.Close()
-		if err := conn.Raw(f); err != nil {
+		if err := v.Raw(f); err != nil {
 			return nil, err
 		}
 		txStatusMap[k] = !t
@@ -1774,9 +1782,7 @@ func (db *DB) txStatus() (map[string]any, error) {
 
 func (db *DB) memStats() (map[string]int64, error) {
 	ms := make(map[string]int64)
-	// Batch all PRAGMA queries into a single request to avoid acquiring
-	// a separate connection for each PRAGMA.
-	pragmas := []string{
+	for _, p := range []string{
 		"max_page_count",
 		"page_count",
 		"page_size",
@@ -1784,23 +1790,15 @@ func (db *DB) memStats() (map[string]int64, error) {
 		"soft_heap_limit",
 		"cache_size",
 		"freelist_count",
-	}
-	stmts := make([]*command.Statement, len(pragmas))
-	for i, p := range pragmas {
-		stmts[i] = &command.Statement{
-			Sql: fmt.Sprintf("PRAGMA %s", p),
+	} {
+		res, err := db.QueryStringStmt(fmt.Sprintf("PRAGMA %s", p))
+		if err != nil {
+			return nil, err
 		}
-	}
-	req := &command.Request{Statements: stmts}
-	res, err := db.Query(req, false)
-	if err != nil {
-		return nil, err
-	}
-	for i, p := range pragmas {
-		if res[i].Error != "" {
-			return nil, errors.New(res[i].Error)
+		if res[0].Error != "" {
+			return nil, errors.New(res[0].Error)
 		}
-		ms[p] = res[i].Values[0].Parameters[0].GetI()
+		ms[p] = res[0].Values[0].Parameters[0].GetI()
 	}
 	return ms, nil
 }
