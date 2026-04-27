@@ -30,6 +30,11 @@ type CompactingFrameScanner struct {
 	fullScan   bool
 	start      int64
 
+	// pageBuf is a scratch buffer reused across Next() calls to avoid a
+	// page-sized allocation per frame. The Frame returned by Next aliases
+	// this buffer in its Data field; see Next's doc comment.
+	pageBuf []byte
+
 	frames cFrames
 	fIdx   int
 }
@@ -83,6 +88,7 @@ func NewCompactingFrameScanner(r io.ReadSeeker, startFrame int64, fullScan bool)
 		},
 		fullScan: fullScan,
 		start:    WALHeaderSize + startFrame*frameSize,
+		pageBuf:  make([]byte, pageSize),
 	}
 
 	startT := time.Now()
@@ -107,17 +113,20 @@ func (s *CompactingFrameScanner) Header() (*WALHeader, error) {
 
 // Next returns the next compacted frame. Returns io.EOF when all frames
 // have been read.
+//
+// The returned Frame's Data slice is owned by the scanner and is overwritten
+// on the next call to Next. Callers that retain a Frame across Next calls
+// must copy Data first.
 func (s *CompactingFrameScanner) Next() (*Frame, error) {
 	if s.fIdx >= len(s.frames) {
 		return nil, io.EOF
 	}
 
 	cf := s.frames[s.fIdx]
-	data := make([]byte, s.header.PageSize)
 	if _, err := s.readSeeker.Seek(cf.Offset+WALFrameHeaderSize, io.SeekStart); err != nil {
 		return nil, err
 	}
-	if _, err := io.ReadFull(s.readSeeker, data); err != nil {
+	if _, err := io.ReadFull(s.readSeeker, s.pageBuf); err != nil {
 		return nil, err
 	}
 	s.fIdx++
@@ -125,7 +134,7 @@ func (s *CompactingFrameScanner) Next() (*Frame, error) {
 	return &Frame{
 		Pgno:   cf.Pgno,
 		Commit: cf.Commit,
-		Data:   data,
+		Data:   s.pageBuf,
 	}, nil
 }
 
