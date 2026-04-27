@@ -2658,7 +2658,7 @@ s.numFullSnapshotsMetaFail.Add(1)
 s.numIncSnapshotsRetryable.Add(1)
 			return nil, err
 		}
-		s.numIncSnapshots++
+s.numIncSnapshots.Add(1)
 
 		// Now that the database has been truncated successfully, the WAL file in the Staging directory
 		// should be marked valid. If we crash here, on restart we delete the Staging directory, but since
