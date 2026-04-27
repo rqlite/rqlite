@@ -2606,7 +2606,7 @@ func (s *Store) fsmSnapshot() (fSnap raft.FSMSnapshot, retErr error) {
 		if meta, _, err := s.checkpointer.Checkpoint(nil, truncateTimeout); err != nil {
 			return nil, fmt.Errorf("checkpoint failed during full snapshot: %w", err)
 		} else if !meta.Success() {
-s.numFullSnapshotsMetaFail.Add(1)
+			s.numFullSnapshotsMetaFail.Add(1)
 			return nil, fmt.Errorf("checkpoint did not succeed during full snapshot")
 		}
 		streamer, err := snapshot.NewSnapshotStreamer(s.db.Path())
@@ -2655,10 +2655,10 @@ s.numFullSnapshotsMetaFail.Add(1)
 				s.logger.Fatalf("failed to checkpoint and truncate database for incremental snapshot: %s (meta: %s)",
 					err.Error(), meta)
 			}
-s.numIncSnapshotsRetryable.Add(1)
+			s.numIncSnapshotsRetryable.Add(1)
 			return nil, err
 		}
-s.numIncSnapshots.Add(1)
+		s.numIncSnapshots.Add(1)
 
 		// Now that the database has been truncated successfully, the WAL file in the Staging directory
 		// should be marked valid. If we crash here, on restart we delete the Staging directory, but since
@@ -2796,7 +2796,7 @@ func (s *Store) ForceSnapshotRestore() error {
 	}
 
 	err := os.Remove(s.cleanSnapshotPath)
-if err != nil && !os.IsNotExist(err) {
+	if err != nil && !os.IsNotExist(err) {
 		return err
 	}
 	return nil

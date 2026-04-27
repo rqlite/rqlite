@@ -800,7 +800,7 @@ func Test_SingleNodeSnapshot_CheckpointFailures(t *testing.T) {
 	if err := s.Snapshot(0); err == nil {
 		t.Fatalf("expected error when attempting to snapshot with reader")
 	}
-	if got, exp := s.numIncSnapshotsRetryable, 1; got != exp {
+	if got, exp := s.numIncSnapshotsRetryable.Load(), 1; got != uint64(exp) {
 		t.Fatalf("expected %d retryable errors, got %d", exp, got)
 
 	}
