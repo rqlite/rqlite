@@ -2606,7 +2606,7 @@ func (s *Store) fsmSnapshot() (fSnap raft.FSMSnapshot, retErr error) {
 		if meta, _, err := s.checkpointer.Checkpoint(nil, truncateTimeout); err != nil {
 			return nil, fmt.Errorf("checkpoint failed during full snapshot: %w", err)
 		} else if !meta.Success() {
-			s.numFullSnapshotsMetaFail++
+s.numFullSnapshotsMetaFail.Add(1)
 			return nil, fmt.Errorf("checkpoint did not succeed during full snapshot")
 		}
 		streamer, err := snapshot.NewSnapshotStreamer(s.db.Path())
