@@ -262,7 +262,7 @@ func (s *SwappableDB) ColumnNames(table string) ([]string, error) {
 }
 
 // Checkpoint performs a checkpoint of the underlying database.
-func (s *SwappableDB) Checkpoint(w io.Writer, timeout time.Duration) (*CheckpointMeta, int64, error) {
+func (s *SwappableDB) Checkpoint(w io.Writer, timeout time.Duration) (*CheckpointManagerMeta, int64, error) {
 	s.dbMu.RLock()
 	defer s.dbMu.RUnlock()
 	return s.checkpointMgr.Checkpoint(w, timeout)

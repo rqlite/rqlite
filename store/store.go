@@ -290,7 +290,7 @@ type SnapshotStore interface {
 
 // Checkpointer is the interface systems which can checkpoint databases must implement.
 type Checkpointer interface {
-	Checkpoint(w io.Writer, timeout time.Duration) (*sql.CheckpointMeta, int64, error)
+	Checkpoint(w io.Writer, timeout time.Duration) (*sql.CheckpointManagerMeta, int64, error)
 }
 
 // ClusterState defines the possible Raft states the current node can be in

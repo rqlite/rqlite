@@ -81,13 +81,32 @@ func NewCheckpointManager(db *DB) (*CheckpointManager, error) {
 	}, nil
 }
 
+// CheckpointManagerMeta contains metadata about a checkpoint attempt made
+// through CheckpointManager. It embeds CheckpointMeta (the DB-level result)
+// and adds fields the manager itself observes.
+type CheckpointManagerMeta struct {
+	CheckpointMeta
+
+	// WALReset is true if, on entry to this attempt, the manager detected
+	// that the WAL had been reset since the previous attempt (salt mismatch
+	// with the saved value). It is only meaningful when the manager was
+	// tracking partial-checkpoint state from a prior call (i.e. the prior
+	// call left nextFrameIdx > 0); otherwise it is always false.
+	WALReset bool
+}
+
+// String returns a string representation of the CheckpointManagerMeta.
+func (m *CheckpointManagerMeta) String() string {
+	return fmt.Sprintf("%s, WALReset=%t", &m.CheckpointMeta, m.WALReset)
+}
+
 // Checkpoint performs a checkpoint(TRUNCATE) of the database
 //
 // If w is non-nil Checkpoint writes a compacted copy of the WAL to the given writer
 // before performing the checkpoint. The checkpoint operation will block for at most
 // the given timeout duration. If the checkpoint operation fails to complete within
 // the timeout, an error is returned.
-func (cm *CheckpointManager) Checkpoint(w io.Writer, timeout time.Duration) (*CheckpointMeta, int64, error) {
+func (cm *CheckpointManager) Checkpoint(w io.Writer, timeout time.Duration) (*CheckpointManagerMeta, int64, error) {
 	stats.Add(numCheckpointTotal, 1)
 
 	walSzPre, err := fsutil.FileSize(cm.walPath)
@@ -99,7 +118,7 @@ func (cm *CheckpointManager) Checkpoint(w io.Writer, timeout time.Duration) (*Ch
 	if walSzPre == 0 {
 		cm.nextFrameIdx = 0
 		cm.salt = nil
-		return &CheckpointMeta{}, 0, nil
+		return &CheckpointManagerMeta{}, 0, nil
 	}
 
 	if w == nil {
@@ -108,12 +127,13 @@ func (cm *CheckpointManager) Checkpoint(w io.Writer, timeout time.Duration) (*Ch
 		if err != nil {
 			return nil, 0, err
 		}
+		mmeta := &CheckpointManagerMeta{CheckpointMeta: *meta}
 		if !meta.Success() {
-			return meta, 0, fmt.Errorf("checkpoint did not complete within %s", timeout)
+			return mmeta, 0, fmt.Errorf("checkpoint did not complete within %s", timeout)
 		}
 		cm.nextFrameIdx = 0
 		cm.salt = nil
-		return meta, 0, nil
+		return mmeta, 0, nil
 	}
 
 	/////////////////////////////////////////////////////////////////////////////////
@@ -176,7 +196,10 @@ func (cm *CheckpointManager) Checkpoint(w io.Writer, timeout time.Duration) (*Ch
 	if err != nil {
 		return nil, 0, fmt.Errorf("checkpoint: %w", err)
 	}
-	meta.WALReset = walReset
+	mmeta := &CheckpointManagerMeta{
+		CheckpointMeta: *meta,
+		WALReset:       walReset,
+	}
 
 	rc, pnLog, pnCkpt := meta.Code, meta.Pages, meta.Moved
 	if rc == 0 {
@@ -184,7 +207,7 @@ func (cm *CheckpointManager) Checkpoint(w io.Writer, timeout time.Duration) (*Ch
 		stats.Add(numCheckpointWALTruncated, 1)
 		cm.nextFrameIdx = 0
 		cm.salt = nil
-		return meta, n, nil
+		return mmeta, n, nil
 	}
 	if pnCkpt < pnLog {
 		// In this case future writes to the WAL will be appended, so just treat
@@ -192,7 +215,7 @@ func (cm *CheckpointManager) Checkpoint(w io.Writer, timeout time.Duration) (*Ch
 		// Next time we will retry the checkpoint from the same offset and attempt
 		// to move all pages.
 		stats.Add(numCheckpointBusyErrors, 1)
-		return meta, 0, ErrDatabaseCheckpointBusy
+		return mmeta, 0, ErrDatabaseCheckpointBusy
 	} else if pnCkpt == pnLog {
 		// In this case, the checkpoint failed, all pages were moved, but the WAL
 		// file not truncated. We can use the WAL data, but it requires special
@@ -206,10 +229,10 @@ func (cm *CheckpointManager) Checkpoint(w io.Writer, timeout time.Duration) (*Ch
 		// next checkpoint attempt.
 		stats.Add(numCheckpointPartial, 1)
 		cm.nextFrameIdx = int64(pnCkpt)
-		return meta, 0, nil
+		return mmeta, 0, nil
 	}
 	stats.Add(numCheckpointInvariantErrors, 1)
-	return meta, 0, ErrDatabaseCheckpointInvariant
+	return mmeta, 0, ErrDatabaseCheckpointInvariant
 }
 
 // Close closes the CheckpointManager.
