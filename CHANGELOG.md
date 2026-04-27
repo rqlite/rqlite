@@ -115,6 +115,7 @@ There are no breaking API changes in this release, nor any changes to how cluste
 - [PR #2626](https://github.com/rqlite/rqlite/pull/2626): Add read deadlines to cluster service. Fixes issue [#2618](https://github.com/rqlite/rqlite/issues/2618). Thanks @ChihebBENCHEIKH1
 - [PR #2627](https://github.com/rqlite/rqlite/pull/2627): Batch `PRAGMA` queries in `memStats`. Fixes issue [#2614](https://github.com/rqlite/rqlite/issues/2614). Thanks @goingforstudying-ctrl
 - [PR #2628](https://github.com/rqlite/rqlite/pull/2628), [PR #2631](https://github.com/rqlite/rqlite/pull/2631): Store CRC32 in a structured sidecar file.
+- [PR #2632](https://github.com/rqlite/rqlite/pull/2632): Extensive integration testing of `Store` and `CheckpointManager`.
 
 ## v9.4.5 (March 9th 2026)
 ### Implementation changes and bug fixes
