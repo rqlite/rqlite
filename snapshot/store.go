@@ -27,6 +27,8 @@ const (
 	reapPlanFile   = "REAP_PLAN"
 
 	defaultReapThreshold = 4
+
+	defaultSnapshotReadTimeout = 5 * time.Minute
 )
 
 const (
@@ -48,11 +50,18 @@ const (
 
 	upgradeOk   = "upgrade_ok"
 	upgradeFail = "upgrade_fail"
+
+	snapshotReadTimeouts = "snapshot_read_timeouts"
 )
 
 var (
 	// ErrSnapshotNotFound is returned when a snapshot cannot be found.
 	ErrSnapshotNotFound = errors.New("snapshot not found")
+
+	// ErrSnapshotReadTimeout is returned by a LockingStreamer's Read after
+	// the configured snapshot-read deadline has elapsed and the streamer has
+	// been force-closed to release the Store's MRSW read lock.
+	ErrSnapshotReadTimeout = errors.New("snapshot read timed out")
 )
 
 // stats captures stats for the Store.
@@ -85,27 +94,62 @@ func ResetStats() {
 	stats.Add(reapPlanRecovered, 0)
 	stats.Add(upgradeOk, 0)
 	stats.Add(upgradeFail, 0)
+	stats.Add(snapshotReadTimeouts, 0)
 }
 
 // LockingStreamer is a snapshot which holds the Snapshot Store MRSW read-lok
 // while it is open.
+//
+// A LockingStreamer enforces a wall-clock deadline on its lifetime: if the
+// consumer has not finished reading and called Close before the deadline
+// elapses, an internal timer force-closes the underlying stream and releases
+// the Store's read lock so reaping can proceed. Subsequent Read calls return
+// ErrSnapshotReadTimeout. A timeout of zero disables the deadline.
 type LockingStreamer struct {
 	io.ReadCloser
 	str *Store
+	id  string
 
-	mu     sync.Mutex
-	closed bool
+	mu       sync.Mutex
+	closed   bool
+	timedOut bool
+	timer    *time.Timer
 }
 
-// NewLockingStreamer returns a new LockingStreamer.
-func NewLockingStreamer(rc io.ReadCloser, str *Store) *LockingStreamer {
-	return &LockingStreamer{
+// NewLockingStreamer returns a new LockingStreamer. If timeout is greater than
+// zero, an internal timer will force-close the streamer (releasing the Store's
+// read lock) once the deadline elapses.
+func NewLockingStreamer(rc io.ReadCloser, str *Store, id string, timeout time.Duration) *LockingStreamer {
+	l := &LockingStreamer{
 		ReadCloser: rc,
 		str:        str,
+		id:         id,
 	}
+	if timeout > 0 {
+		l.timer = time.AfterFunc(timeout, func() {
+			l.expire(timeout)
+		})
+	}
+	return l
 }
 
-// Close closes the Snapshot and releases the Snapshot Store lock.
+// Read reads from the underlying snapshot stream. If the deadline has elapsed
+// and the streamer was force-closed by the timer, Read returns
+// ErrSnapshotReadTimeout instead of the generic "file already closed" error
+// from the underlying file descriptors.
+func (l *LockingStreamer) Read(p []byte) (int, error) {
+	l.mu.Lock()
+	timedOut := l.timedOut
+	l.mu.Unlock()
+	if timedOut {
+		return 0, ErrSnapshotReadTimeout
+	}
+	return l.ReadCloser.Read(p)
+}
+
+// Close closes the Snapshot and releases the Snapshot Store lock. It is safe
+// to call multiple times and safe to call concurrently with the deadline
+// timer firing.
 func (l *LockingStreamer) Close() error {
 	l.mu.Lock()
 	defer l.mu.Unlock()
@@ -113,8 +157,33 @@ func (l *LockingStreamer) Close() error {
 		return nil
 	}
 	l.closed = true
+	if l.timer != nil {
+		l.timer.Stop()
+	}
 	defer l.str.mrsw.EndRead()
 	return l.ReadCloser.Close()
+}
+
+// expire is invoked by the deadline timer. It marks the streamer as timed out,
+// closes the underlying ReadCloser to interrupt any in-flight or future reads,
+// and releases the Store's read lock so the reaper can make progress. The
+// timeout counter is bumped last so any observer that polls it can rely on
+// the lock having already been released.
+func (l *LockingStreamer) expire(timeout time.Duration) {
+	l.mu.Lock()
+	if l.closed {
+		l.mu.Unlock()
+		return
+	}
+	l.closed = true
+	l.timedOut = true
+	l.mu.Unlock()
+
+	l.str.logger.Printf("snapshot read for %s timed out after %s, force-closing streamer to release read lock",
+		l.id, timeout)
+	l.ReadCloser.Close()
+	l.str.mrsw.EndRead()
+	stats.Add(snapshotReadTimeouts, 1)
 }
 
 // Store stores snapshots in the Raft system.
@@ -133,6 +202,12 @@ type Store struct {
 	reapDisabled  *rsync.AtomicBool
 	reapThreshold int
 
+	// snapshotReadTimeout is the wall-clock deadline for any single
+	// snapshot-read operation (i.e. the lifetime of a LockingStreamer).
+	// If exceeded, the streamer is force-closed and its read lock is
+	// released so the reaper can make progress. Zero disables the deadline.
+	snapshotReadTimeout time.Duration
+
 	reapCh     chan struct{}
 	reapDoneCh chan struct{}
 	wg         sync.WaitGroup
@@ -149,17 +224,18 @@ func NewStore(dir string) (*Store, error) {
 	}
 
 	str := &Store{
-		dir:            dir,
-		fullNeededPath: filepath.Join(dir, fullNeededFile),
-		reapPlanPath:   filepath.Join(dir, reapPlanFile),
-		catalog:        &SnapshotCatalog{},
-		mrsw:           rsync.NewMultiRSW(),
-		reapDisabled:   &rsync.AtomicBool{},
-		reapThreshold:  defaultReapThreshold,
-		reapCh:         make(chan struct{}, 1),
-		reapDoneCh:     make(chan struct{}),
-		observers:      newObserverSet(),
-		logger:         log.New(os.Stderr, "[snapshot-store] ", log.LstdFlags),
+		dir:                 dir,
+		fullNeededPath:      filepath.Join(dir, fullNeededFile),
+		reapPlanPath:        filepath.Join(dir, reapPlanFile),
+		catalog:             &SnapshotCatalog{},
+		mrsw:                rsync.NewMultiRSW(),
+		reapDisabled:        &rsync.AtomicBool{},
+		reapThreshold:       defaultReapThreshold,
+		snapshotReadTimeout: defaultSnapshotReadTimeout,
+		reapCh:              make(chan struct{}, 1),
+		reapDoneCh:          make(chan struct{}),
+		observers:           newObserverSet(),
+		logger:              log.New(os.Stderr, "[snapshot-store] ", log.LstdFlags),
 	}
 	str.logger.Printf("store initialized using %s", dir)
 
@@ -177,6 +253,14 @@ func NewStore(dir string) (*Store, error) {
 	str.wg.Go(str.reapLoop)
 
 	return str, nil
+}
+
+// SetSnapshotReadTimeout configures the wall-clock deadline applied to every
+// snapshot read (i.e. every LockingStreamer returned by Open). A value of
+// zero disables the deadline. The setting only affects streamers created
+// after this call.
+func (s *Store) SetSnapshotReadTimeout(d time.Duration) {
+	s.snapshotReadTimeout = d
 }
 
 // Create creates a new snapshot sink for the given parameters.
@@ -324,7 +408,7 @@ func (s *Store) Open(id string) (raftMeta *raft.SnapshotMeta, rc io.ReadCloser, 
 	}
 	meta.Size = sz
 
-	return meta, NewLockingStreamer(streamer, s), nil
+	return meta, NewLockingStreamer(streamer, s, id, s.snapshotReadTimeout), nil
 }
 
 // RegisterObserver registers an observer to receive observations.
