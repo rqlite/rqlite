@@ -1252,7 +1252,7 @@ func Test_Readyz(t *testing.T) {
 	if resp.StatusCode != http.StatusOK {
 		t.Fatalf("failed to get expected StatusOK for node, got %d", resp.StatusCode)
 	}
-	if exp, got := "[+]node ok\n[+]leader ok\n[+]store ok", mustReadBody(t, resp); exp != got {
+	if exp, got := "[+]node ok\n[+]leader ok\n[+]store ok\n[+]database ok", mustReadBody(t, resp); exp != got {
 		t.Fatalf("incorrect response body, exp: %s, got: %s", exp, got)
 	}
 
@@ -1299,7 +1299,7 @@ func Test_Readyz(t *testing.T) {
 	if resp.StatusCode != http.StatusServiceUnavailable {
 		t.Fatalf("failed to get expected StatusServiceUnavailable, got %d", resp.StatusCode)
 	}
-	if exp, got := "[+]node ok\n[+]leader ok\n[+]store ok\n[+]sync timeout", mustReadBody(t, resp); exp != got {
+	if exp, got := "[+]node ok\n[+]leader ok\n[+]store ok\n[+]database ok\n[+]sync timeout", mustReadBody(t, resp); exp != got {
 		t.Fatalf("incorrect response body, exp: %s, got: %s", exp, got)
 	}
 	if cnt.Load() != 1 {
@@ -1318,11 +1318,42 @@ func Test_Readyz(t *testing.T) {
 	if resp.StatusCode != http.StatusOK {
 		t.Fatalf("failed to get expected StatusOK, got %d", resp.StatusCode)
 	}
-	if exp, got := "[+]node ok\n[+]leader ok\n[+]store ok\n[+]sync ok", mustReadBody(t, resp); exp != got {
+	if exp, got := "[+]node ok\n[+]leader ok\n[+]store ok\n[+]database ok\n[+]sync ok", mustReadBody(t, resp); exp != got {
 		t.Fatalf("incorrect response body, exp: %s, got: %s", exp, got)
 	}
 	if cnt.Load() != 2 {
 		t.Fatalf("failed to call committedFn")
+	}
+}
+
+func Test_Readyz_DatabaseError(t *testing.T) {
+	m := &MockStore{
+		leaderAddr: "foo:1234",
+		queryFn: func(qr *command.QueryRequest) ([]*command.QueryRows, uint64, error) {
+			return nil, 0, fmt.Errorf("disk full")
+		},
+	}
+	c := &mockClusterService{
+		apiAddr: "https://bar:5678",
+	}
+	s := New("127.0.0.1:0", m, c, proxy.New(m, c), nil)
+	if err := s.Start(); err != nil {
+		t.Fatalf("failed to start service")
+	}
+	defer s.Close()
+
+	client := &http.Client{}
+	host := fmt.Sprintf("http://%s", s.Addr().String())
+	resp, err := client.Get(host + "/readyz")
+	if err != nil {
+		t.Fatalf("failed to make readyz request")
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusServiceUnavailable {
+		t.Fatalf("expected 503 when database query fails, got %d", resp.StatusCode)
+	}
+	if exp, got := "[+]node ok\n[+]leader ok\n[+]store ok\n[+]database disk full", mustReadBody(t, resp); exp != got {
+		t.Fatalf("incorrect response body, exp: %s, got: %s", exp, got)
 	}
 }
 
@@ -2536,7 +2567,14 @@ func (m *MockStore) Query(ctx context.Context, qr *command.QueryRequest) ([]*com
 		rows, idx, err := m.queryFn(qr)
 		return rows, command.ConsistencyLevel_NONE, idx, err
 	}
-	return nil, command.ConsistencyLevel_NONE, 0, nil
+	rows := []*command.QueryRows{{
+		Columns: []string{"1"},
+		Types:   []string{"integer"},
+		Values: []*command.Values{{
+			Parameters: []*command.Parameter{{Value: &command.Parameter_I{I: 1}}},
+		}},
+	}}
+	return rows, command.ConsistencyLevel_NONE, 0, nil
 }
 
 func (m *MockStore) Request(ctx context.Context, eqr *command.ExecuteQueryRequest) ([]*command.ExecuteQueryResponse, uint64, uint64, error) {

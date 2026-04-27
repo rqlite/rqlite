@@ -66,6 +66,11 @@ type Store interface {
 	// Stats returns stats on the Store.
 	Stats() (map[string]any, error)
 
+	// Query executes queries that return rows, and do not modify the
+	// database. The /readyz handler uses this to verify that the local
+	// database is reachable.
+	Query(ctx context.Context, qr *proto.QueryRequest) ([]*proto.QueryRows, proto.ConsistencyLevel, uint64, error)
+
 	// Snapshot triggers a Raft Snapshot and Log Truncation.
 	Snapshot(n uint64) error
 
@@ -1187,17 +1192,52 @@ func (s *Service) handleReadyz(w http.ResponseWriter, r *http.Request, qp QueryP
 		return
 	}
 
-	okMsg := "[+]node ok\n[+]leader ok\n[+]store ok"
+	if err := s.databaseReady(r.Context()); err != nil {
+		w.WriteHeader(http.StatusServiceUnavailable)
+		w.Write(fmt.Appendf(nil, "[+]node ok\n[+]leader ok\n[+]store ok\n[+]database %s", err.Error()))
+		return
+	}
+
+	okMsg := "[+]node ok\n[+]leader ok\n[+]store ok\n[+]database ok"
 	if qp.Sync() {
 		if _, err := s.store.Committed(qp.Timeout(defaultTimeout)); err != nil {
 			w.WriteHeader(http.StatusServiceUnavailable)
-			w.Write(fmt.Appendf(nil, "[+]node ok\n[+]leader ok\n[+]store ok\n[+]sync %s", err.Error()))
+			w.Write(fmt.Appendf(nil, "%s\n[+]sync %s", okMsg, err.Error()))
 			return
 		}
 		okMsg += "\n[+]sync ok"
 	}
 	w.WriteHeader(http.StatusOK)
 	w.Write([]byte(okMsg))
+}
+
+// databaseReady verifies the local database is reachable by issuing a
+// `SELECT 1` with NONE read consistency. It returns nil if the database
+// answers `1`, or an error describing the failure.
+func (s *Service) databaseReady(ctx context.Context) error {
+	qr := &proto.QueryRequest{
+		Request: &proto.Request{
+			Statements: []*proto.Statement{{Sql: "SELECT 1"}},
+		},
+		Level: proto.ConsistencyLevel_NONE,
+	}
+	rows, _, _, err := s.store.Query(ctx, qr)
+	if err != nil {
+		return err
+	}
+	if len(rows) == 0 {
+		return fmt.Errorf("no rows returned")
+	}
+	if rows[0].Error != "" {
+		return errors.New(rows[0].Error)
+	}
+	if len(rows[0].Values) == 0 || len(rows[0].Values[0].Parameters) == 0 {
+		return fmt.Errorf("no rows returned")
+	}
+	if v := rows[0].Values[0].Parameters[0].GetI(); v != 1 {
+		return fmt.Errorf("unexpected value %d", v)
+	}
+	return nil
 }
 
 // handleLicenses serves the license information.
