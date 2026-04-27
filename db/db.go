@@ -232,33 +232,6 @@ func OpenWithDriver(drv *Driver, dbPath string, fkEnabled, wal bool) (retDB *DB,
 		return nil, fmt.Errorf("open: %s", err.Error())
 	}
 
-	// Critical that rqlite has full control over the checkpointing process.
-	if _, err := rwDB.Exec("PRAGMA wal_autocheckpoint=0"); err != nil {
-		return nil, fmt.Errorf("disable autocheckpointing: %s", err.Error())
-	}
-
-	if err := rwDB.Ping(); err != nil {
-		return nil, fmt.Errorf("failed to ping on-disk database: %s", err.Error())
-	}
-	if wal && !fsutil.FileExists(dbPath+"-wal") {
-		// Force creation of the WAL files so any external read-only connections
-		// can read the database. See https://www.sqlite.org/draft/wal.html, section 5.
-		if _, err := rwDB.Exec("BEGIN IMMEDIATE"); err != nil {
-			return nil, err
-		}
-		if _, err := rwDB.Exec("ROLLBACK"); err != nil {
-			return nil, err
-		}
-		ok, pages, moved, err := checkpointDB(rwDB, CheckpointTruncate)
-		if err != nil {
-			return nil, err
-		}
-		if ok != 0 {
-			return nil, fmt.Errorf("failed to completely checkpoint WAL at open (%d ok, %d pages, %d moved)",
-				ok, pages, moved)
-		}
-	}
-
 	/////////////////////////////////////////////////////////////////////////
 	// Read-only connection
 	roDSN := MakeDSN(dbPath, ModeReadOnly, fkEnabled, wal)
@@ -272,6 +245,43 @@ func OpenWithDriver(drv *Driver, dbPath string, fkEnabled, wal bool) (retDB *DB,
 	rwDB.SetMaxOpenConns(1) // Key to ensure a new connection doesn't enable checkpointing
 	roDB.SetConnMaxIdleTime(30 * time.Second)
 	roDB.SetConnMaxLifetime(0)
+
+	// Critical that rqlite has full control over the checkpointing process.
+	if _, err := rwDB.Exec("PRAGMA wal_autocheckpoint=0"); err != nil {
+		return nil, fmt.Errorf("disable autocheckpointing: %s", err.Error())
+	}
+
+	if err := rwDB.Ping(); err != nil {
+		return nil, fmt.Errorf("failed to ping on-disk database: %s", err.Error())
+	}
+	if wal && !fsutil.FileExists(dbPath+"-wal") {
+		// Force creation of the WAL files so any external read-only connections
+		// can read the database. See https://www.sqlite.org/draft/wal.html, section 5.
+		err := func() error {
+			// Ensure it takes place on the same connection.
+			conn, err := rwDB.Conn(context.Background())
+			if err != nil {
+				return err
+			}
+			defer conn.Close()
+			if _, err := conn.ExecContext(context.Background(), "BEGIN IMMEDIATE"); err != nil {
+				return err
+			}
+			if _, err := conn.ExecContext(context.Background(), "ROLLBACK"); err != nil {
+				return err
+			}
+			return nil
+		}()
+
+		ok, pages, moved, err := checkpointDB(rwDB, CheckpointTruncate)
+		if err != nil {
+			return nil, err
+		}
+		if ok != 0 {
+			return nil, fmt.Errorf("failed to completely checkpoint WAL at open (%d ok, %d pages, %d moved)",
+				ok, pages, moved)
+		}
+	}
 
 	// Make it clear which extensions have been loaded, if any.
 	extensions := drv.ExtensionNames()
