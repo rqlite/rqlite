@@ -117,6 +117,7 @@ There are no breaking API changes in this release, nor any changes to how cluste
 - [PR #2628](https://github.com/rqlite/rqlite/pull/2628), [PR #2631](https://github.com/rqlite/rqlite/pull/2631): Store CRC32 in a structured sidecar file.
 - [PR #2632](https://github.com/rqlite/rqlite/pull/2632): Extensive integration testing of `Store` and `CheckpointManager`.
 - [PR #2634](https://github.com/rqlite/rqlite/pull/2634): Reuse Frame page buffer when scanning WAL.
+- [PR #2635](https://github.com/rqlite/rqlite/pull/2635): Improve connection handling on DB open.
 
 ## v9.4.5 (March 9th 2026)
 ### Implementation changes and bug fixes
