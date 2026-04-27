@@ -435,9 +435,9 @@ type Store struct {
 	// For whitebox testing
 	numLRUpgraded            atomic.Uint64
 	numFullSnapshots         int
-	numFullSnapshotsMetaFail int
-	numIncSnapshots          int
-	numIncSnapshotsRetryable int
+	numFullSnapshotsMetaFail atomic.Uint64
+	numIncSnapshots          atomic.Uint64
+	numIncSnapshotsRetryable atomic.Uint64
 	numAutoVacuums           int
 	numAutoOptimizes         int
 	numIgnoredJoins          int
