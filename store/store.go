@@ -433,15 +433,18 @@ type Store struct {
 	numTrailingLogs uint64
 
 	// For whitebox testing
-	numLRUpgraded       atomic.Uint64
-	numFullSnapshots    int
-	numAutoVacuums      int
-	numAutoOptimizes    int
-	numIgnoredJoins     int
-	numNoops            atomic.Uint64
-	numSnapshots        atomic.Uint64
-	numSnapshotsSkipped atomic.Uint64
-	numSnapshotsStart   atomic.Uint64
+	numLRUpgraded            atomic.Uint64
+	numFullSnapshots         int
+	numFullSnapshotsMetaFail int
+	numIncSnapshots          int
+	numIncSnapshotsRetryable int
+	numAutoVacuums           int
+	numAutoOptimizes         int
+	numIgnoredJoins          int
+	numNoops                 atomic.Uint64
+	numSnapshots             atomic.Uint64
+	numSnapshotsSkipped      atomic.Uint64
+	numSnapshotsStart        atomic.Uint64
 }
 
 // Config represents the configuration of the underlying Store.
@@ -2603,6 +2606,7 @@ func (s *Store) fsmSnapshot() (fSnap raft.FSMSnapshot, retErr error) {
 		if meta, _, err := s.checkpointer.Checkpoint(nil, truncateTimeout); err != nil {
 			return nil, fmt.Errorf("checkpoint failed during full snapshot: %w", err)
 		} else if !meta.Success() {
+			s.numFullSnapshotsMetaFail++
 			return nil, fmt.Errorf("checkpoint did not succeed during full snapshot")
 		}
 		streamer, err := snapshot.NewSnapshotStreamer(s.db.Path())
@@ -2646,13 +2650,15 @@ func (s *Store) fsmSnapshot() (fSnap raft.FSMSnapshot, retErr error) {
 			if errors.As(err, &re) && !re.Retryable() {
 				// A non-retryable error at this point means the underlying system is in a state
 				// that further incremental snapshots won't handle. We could revert to full but
-				// a nonretryable error is that time shouldn't actually happen.
+				// a nonretryable error shouldn't actually happen. Something bad has gone wrong.
 				walWriter.Cancel()
 				s.logger.Fatalf("failed to checkpoint and truncate database for incremental snapshot: %s (meta: %s)",
 					err.Error(), meta)
 			}
+			s.numIncSnapshotsRetryable++
 			return nil, err
 		}
+		s.numIncSnapshots++
 
 		// Now that the database has been truncated successfully, the WAL file in the Staging directory
 		// should be marked valid. If we crash here, on restart we delete the Staging directory, but since
@@ -2779,6 +2785,20 @@ func (s *Store) fsmRestore(rc io.ReadCloser) (retErr error) {
 	stats.Add(numRestores, 1)
 	s.logger.Printf("node restored in %s", time.Since(startT))
 	rc.Close()
+	return nil
+}
+
+// ForceSnapshotRestore forces the Store to restore its state from the Snapshot
+// Store on startup. Store must be closed before calling. Mostly useful for testing.
+func (s *Store) ForceSnapshotRestore() error {
+	if s.open.Is() {
+		return ErrOpen
+	}
+
+	err := os.Remove(s.cleanSnapshotPath)
+	if err != nil && err != os.ErrExist {
+		return err
+	}
 	return nil
 }
 
