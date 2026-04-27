@@ -2655,7 +2655,7 @@ s.numFullSnapshotsMetaFail.Add(1)
 				s.logger.Fatalf("failed to checkpoint and truncate database for incremental snapshot: %s (meta: %s)",
 					err.Error(), meta)
 			}
-			s.numIncSnapshotsRetryable++
+s.numIncSnapshotsRetryable.Add(1)
 			return nil, err
 		}
 		s.numIncSnapshots++
