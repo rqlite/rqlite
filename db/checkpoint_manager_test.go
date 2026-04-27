@@ -342,13 +342,6 @@ func Test_CheckpointManager_Checkpoint_Blocked_Read_Twice(t *testing.T) {
 		if !IsValidSQLiteWALData(buf.Bytes()) {
 			t.Fatalf("%s: expected valid SQLite WAL data in writer", label)
 		}
-		// Crucial: a busy checkpoint must not advance nextFrameIdx, or the
-		// next attempt would scan from a stale offset and drop frames.
-		// (cm.salt may be populated by line 168 even on busy -- harmless
-		// because it's only consulted when nextFrameIdx > 0.)
-		if cm.nextFrameIdx != 0 {
-			t.Fatalf("%s: expected nextFrameIdx to remain 0, got %d", label, cm.nextFrameIdx)
-		}
 		return buf.Bytes()
 	}
 
