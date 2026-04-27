@@ -435,6 +435,9 @@ func Test_CheckpointManager_Checkpoint_Blocked_ReadLastPage(t *testing.T) {
 	if meta == nil {
 		t.Fatal("expected non-nil CheckpointMeta on successful checkpoint")
 	}
+	if meta.Moved != meta.Pages {
+		t.Fatalf("checkpoint did not move all pages from WAL")
+	}
 }
 
 func Test_CheckpointManager_Close(t *testing.T) {
