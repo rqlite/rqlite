@@ -342,7 +342,8 @@ func Test_ClientJoinNode(t *testing.T) {
 
 func Test_ClientJoinNodeRedirect(t *testing.T) {
 	srv2 := servicetest.NewService()
-	srv2.PersistentHandler = func(conn net.Conn) {
+	srv2.CloseConn = false
+	srv2.Handler = func(conn net.Conn) {
 		defer conn.Close()
 		for {
 			c := readCommand(conn)
@@ -368,7 +369,8 @@ func Test_ClientJoinNodeRedirect(t *testing.T) {
 	defer srv2.Close()
 
 	srv1 := servicetest.NewService()
-	srv1.PersistentHandler = func(conn net.Conn) {
+	srv1.CloseConn = false
+	srv1.Handler = func(conn net.Conn) {
 		defer conn.Close()
 		for {
 			c := readCommand(conn)
@@ -409,8 +411,10 @@ func Test_ClientJoinNodeRedirect(t *testing.T) {
 func Test_ClientJoinNodeTooManyRedirects(t *testing.T) {
 	srv1 := servicetest.NewService()
 	srv2 := servicetest.NewService()
+	srv1.CloseConn = false
+	srv2.CloseConn = false
 
-	srv1.PersistentHandler = func(conn net.Conn) {
+	srv1.Handler = func(conn net.Conn) {
 		defer conn.Close()
 		for {
 			c := readCommand(conn)
@@ -436,7 +440,7 @@ func Test_ClientJoinNodeTooManyRedirects(t *testing.T) {
 		}
 	}
 
-	srv2.PersistentHandler = func(conn net.Conn) {
+	srv2.Handler = func(conn net.Conn) {
 		defer conn.Close()
 		for {
 			c := readCommand(conn)
