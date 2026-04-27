@@ -118,7 +118,7 @@ There are no breaking API changes in this release, nor any changes to how cluste
 - [PR #2632](https://github.com/rqlite/rqlite/pull/2632): Extensive integration testing of `Store` and `CheckpointManager`.
 - [PR #2634](https://github.com/rqlite/rqlite/pull/2634): Reuse Frame page buffer when scanning WAL.
 - [PR #2635](https://github.com/rqlite/rqlite/pull/2635): Improve connection handling on DB open.
-- [PR #2637](https://github.com/rqlite/rqlite/pull/2637): Query database when checking readyiness. Fixes issue [#2633](https://github.com/rqlite/rqlite/issues/2633).
+- [PR #2637](https://github.com/rqlite/rqlite/pull/2637): Query database when checking readiness. Fixes issue [#2633](https://github.com/rqlite/rqlite/issues/2633).
 
 ## v9.4.5 (March 9th 2026)
 ### Implementation changes and bug fixes
