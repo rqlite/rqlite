@@ -2796,7 +2796,7 @@ func (s *Store) ForceSnapshotRestore() error {
 	}
 
 	err := os.Remove(s.cleanSnapshotPath)
-	if err != nil && err != os.ErrExist {
+if err != nil && !os.IsNotExist(err) {
 		return err
 	}
 	return nil
