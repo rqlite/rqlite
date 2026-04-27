@@ -270,6 +270,127 @@ func Test_CheckpointManager_Checkpoint_Blocked_Read(t *testing.T) {
 	}
 }
 
+// Test_CheckpointManager_Checkpoint_Blocked_Read_Twice tests that two
+// consecutive pnCkpt < pnLog checkpoint failures leave the manager in a state
+// that allows the next attempt -- once the blocking reader is released -- to
+// fully capture all WAL frames.
+//
+// Guards against regressions in the busy branch that would advance
+// nextFrameIdx or salt and cause subsequent compacted WAL snapshots to silently
+// omit frames.
+func Test_CheckpointManager_Checkpoint_Blocked_Read_Twice(t *testing.T) {
+	path := mustTempFile()
+	defer RemoveFiles(path)
+
+	db, err := Open(path, false, true)
+	if err != nil {
+		t.Fatalf("failed to open database in WAL mode: %s", err.Error())
+	}
+	defer db.Close()
+
+	if _, err := db.ExecuteStringStmt(`CREATE TABLE foo (id INTEGER NOT NULL PRIMARY KEY, name TEXT)`); err != nil {
+		t.Fatalf("failed to create table: %s", err.Error())
+	}
+	// One row so the reader doesn't complete immediately.
+	if _, err := db.ExecuteStringStmt(`INSERT INTO foo(name) VALUES("alice")`); err != nil {
+		t.Fatalf("failed to insert: %s", err.Error())
+	}
+
+	// Long-running read that holds a read mark mid-WAL.
+	qr := &command.Request{
+		Statements: []*command.Statement{
+			{
+				Sql:        "SELECT * FROM foo",
+				ForceStall: true,
+			},
+		},
+	}
+	ctx, cancelFunc := context.WithCancel(context.Background())
+	defer cancelFunc()
+	go func() {
+		db.QueryWithContext(ctx, qr, false)
+	}()
+	time.Sleep(2 * time.Second)
+
+	// Add WAL frames after the reader's mark so checkpoints will see
+	// pnCkpt < pnLog (some pages can't be moved past the read mark).
+	if _, err := db.ExecuteStringStmt(`INSERT INTO foo(name) VALUES("bob")`); err != nil {
+		t.Fatalf("failed to insert: %s", err.Error())
+	}
+
+	cm, err := NewCheckpointManager(db)
+	if err != nil {
+		t.Fatalf("failed to create checkpoint manager: %s", err.Error())
+	}
+	defer cm.Close()
+
+	doBusyCheckpoint := func(label string) []byte {
+		var buf bytes.Buffer
+		meta, n, err := cm.Checkpoint(&buf, 100*time.Millisecond)
+		if err != ErrDatabaseCheckpointBusy {
+			t.Fatalf("%s: expected ErrDatabaseCheckpointBusy, got %v", label, err)
+		}
+		if n != 0 {
+			t.Fatalf("%s: expected 0 bytes returned on busy, got %d", label, n)
+		}
+		if meta == nil {
+			t.Fatalf("%s: expected non-nil CheckpointMeta on busy", label)
+		}
+		if buf.Len() == 0 {
+			t.Fatalf("%s: expected compacted WAL to have been written to writer", label)
+		}
+		if !IsValidSQLiteWALData(buf.Bytes()) {
+			t.Fatalf("%s: expected valid SQLite WAL data in writer", label)
+		}
+		// nextFrameIdx never advanced in the busy branch, so the salt-check
+		// block at entry is never reached: WALReset must be false.
+		if meta.WALReset {
+			t.Fatalf("%s: expected WALReset=false on busy, got true", label)
+		}
+		return buf.Bytes()
+	}
+
+	// Two consecutive busy checkpoints with no intervening writes must
+	// produce identical compacted WAL bytes -- proving the second attempt
+	// re-scanned from offset 0 just like the first.
+	first := doBusyCheckpoint("first")
+	second := doBusyCheckpoint("second")
+	if !bytes.Equal(first, second) {
+		t.Fatalf("compacted WAL differs across consecutive busy checkpoints (len %d vs %d)",
+			len(first), len(second))
+	}
+
+	// Release the blocking reader and give defer rs.Close() time to run.
+	cancelFunc()
+	time.Sleep(500 * time.Millisecond)
+
+	// Recovery: the next checkpoint must succeed and truncate the WAL.
+	var buf bytes.Buffer
+	meta, n, err := cm.Checkpoint(&buf, 5*time.Second)
+	if err != nil {
+		t.Fatalf("recovery: unexpected error: %s", err.Error())
+	}
+	if meta == nil || !meta.Success() {
+		t.Fatalf("recovery: expected successful (truncated) checkpoint, got meta=%s", meta)
+	}
+	if meta.WALReset {
+		t.Fatalf("recovery: expected WALReset=false (nextFrameIdx was 0), got true")
+	}
+	if n == 0 {
+		t.Fatal("recovery: expected non-zero bytes returned")
+	}
+	if !IsValidSQLiteWALData(buf.Bytes()) {
+		t.Fatal("recovery: expected valid SQLite WAL data in writer")
+	}
+	sz, err := fsutil.FileSize(db.WALPath())
+	if err != nil {
+		t.Fatalf("failed to stat WAL file: %s", err.Error())
+	}
+	if sz != 0 {
+		t.Fatalf("recovery: expected WAL file size to be 0 after truncate, got %d", sz)
+	}
+}
+
 // Test_CheckpointManager_Checkpoint_Blocked_ReadLastPage tests that if a checkpoint is
 // blocked by a long-running read of the last page of the WAL file, the checkpoint
 // still succeeds.
@@ -321,6 +442,106 @@ func Test_CheckpointManager_Checkpoint_Blocked_ReadLastPage(t *testing.T) {
 	}
 	if meta == nil {
 		t.Fatal("expected non-nil CheckpointMeta on successful checkpoint")
+	}
+	if meta.Moved != meta.Pages {
+		t.Fatalf("checkpoint did not move all pages from WAL")
+	}
+	// First call: nextFrameIdx is 0 on entry, so the salt-check block is
+	// skipped and WALReset must be false even though this attempt drives
+	// the manager into the pnCkpt == pnLog state where reset detection
+	// matters on subsequent calls.
+	if meta.WALReset {
+		t.Fatalf("expected WALReset=false on first checkpoint, got true (meta=%s)", meta)
+	}
+}
+
+// Test_CheckpointManager_Checkpoint_WALReset_Detected verifies that when a
+// previous checkpoint left the manager tracking partial-checkpoint state
+// (nextFrameIdx > 0, salt saved) and SQLite subsequently resets the WAL,
+// the next checkpoint detects the reset via the salt comparison and surfaces
+// WALReset=true on the returned CheckpointManagerMeta.
+func Test_CheckpointManager_Checkpoint_WALReset_Detected(t *testing.T) {
+	path := mustTempFile()
+	defer RemoveFiles(path)
+
+	db, err := Open(path, false, true)
+	if err != nil {
+		t.Fatalf("failed to open database in WAL mode: %s", err.Error())
+	}
+	defer db.Close()
+
+	if _, err := db.ExecuteStringStmt(`CREATE TABLE foo (id INTEGER NOT NULL PRIMARY KEY, name TEXT)`); err != nil {
+		t.Fatalf("failed to create table: %s", err.Error())
+	}
+	if _, err := db.ExecuteStringStmt(`INSERT INTO foo(name) VALUES("alice")`); err != nil {
+		t.Fatalf("failed to insert: %s", err.Error())
+	}
+
+	// Reader holding its mark at the end of the WAL: blocks TRUNCATE but
+	// not page movement -- drives the manager into pnCkpt == pnLog, which
+	// is the only branch that saves nextFrameIdx > 0 and a salt.
+	qr := &command.Request{
+		Statements: []*command.Statement{
+			{
+				Sql:        "SELECT * FROM foo",
+				ForceStall: true,
+			},
+		},
+	}
+	ctx, cancelFunc := context.WithCancel(context.Background())
+	go func() {
+		db.QueryWithContext(ctx, qr, false)
+	}()
+	time.Sleep(2 * time.Second)
+
+	cm, err := NewCheckpointManager(db)
+	if err != nil {
+		t.Fatalf("failed to create checkpoint manager: %s", err.Error())
+	}
+	defer cm.Close()
+
+	// First checkpoint: pnCkpt == pnLog, no truncate. Manager records
+	// nextFrameIdx > 0 and the current salt for the next round.
+	var buf bytes.Buffer
+	meta, _, err := cm.Checkpoint(&buf, 100*time.Millisecond)
+	if err != nil {
+		t.Fatalf("first checkpoint: unexpected error: %s", err.Error())
+	}
+	if meta == nil {
+		t.Fatal("first checkpoint: expected non-nil meta")
+	}
+	if meta.WALReset {
+		t.Fatal("first checkpoint: WALReset must be false on the very first attempt")
+	}
+	if cm.nextFrameIdx == 0 {
+		t.Fatalf("first checkpoint: expected nextFrameIdx > 0 (pnCkpt == pnLog path), got 0 (meta=%s)", meta)
+	}
+	if cm.salt == nil {
+		t.Fatal("first checkpoint: expected salt to be saved")
+	}
+
+	// Release the reader. The previous checkpoint moved all frames to the
+	// database, so SQLite considers the WAL fully consumed: the next write
+	// restarts at frame 0 with a new salt rather than appending.
+	cancelFunc()
+	time.Sleep(500 * time.Millisecond)
+
+	if _, err := db.ExecuteStringStmt(`INSERT INTO foo(name) VALUES("carol")`); err != nil {
+		t.Fatalf("failed to insert after reader released: %s", err.Error())
+	}
+
+	// Next checkpoint: nextFrameIdx > 0 on entry, header salt has changed,
+	// so the salt-check block must trip and report WALReset.
+	buf.Reset()
+	meta, _, err = cm.Checkpoint(&buf, 5*time.Second)
+	if err != nil {
+		t.Fatalf("second checkpoint: unexpected error: %s", err.Error())
+	}
+	if meta == nil {
+		t.Fatal("second checkpoint: expected non-nil meta")
+	}
+	if !meta.WALReset {
+		t.Fatalf("second checkpoint: expected WALReset=true after WAL reset, got false (meta=%s)", meta)
 	}
 }
 

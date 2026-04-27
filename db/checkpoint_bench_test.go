@@ -45,7 +45,7 @@ var (
 // Checkpointer is the interface that checkpoint manager implementations must
 // satisfy in order to be benchmarked.
 type Checkpointer interface {
-	Checkpoint(w io.Writer, timeout time.Duration) (*CheckpointMeta, int64, error)
+	Checkpoint(w io.Writer, timeout time.Duration) (*CheckpointManagerMeta, int64, error)
 	Close() error
 }
 

@@ -10,6 +10,8 @@ import (
 	"time"
 
 	"github.com/rqlite/rqlite/v10/command/proto"
+	command "github.com/rqlite/rqlite/v10/command/proto"
+	"github.com/rqlite/rqlite/v10/db"
 	"github.com/rqlite/rqlite/v10/internal/random"
 	"github.com/rqlite/rqlite/v10/snapshot"
 )
@@ -708,6 +710,132 @@ func Test_SingleNodeSnapshot_FSMFailures(t *testing.T) {
 	}
 }
 
+// Test_SingleNodeSnapshot_CheckpointFailures tests the Store responds correctly
+// when checkpoint of the underlying database returns an error. This can happen
+// depending on active readers of the database. The Store should handle active
+// readers fine, aborting the snapshot, and handling it next time. This tests
+// critical code paths which are very rare, but are perfectly possible in production.
+func Test_SingleNodeSnapshot_CheckpointFailures(t *testing.T) {
+	s, ln := mustNewStore(t)
+	defer ln.Close()
+
+	if err := s.Open(); err != nil {
+		t.Fatalf("failed to open single-node store: %s", err.Error())
+	}
+	defer s.Close(true)
+	s.NoSnapshotOnClose = true
+	if err := s.Bootstrap(NewServer(s.ID(), s.Addr(), true)); err != nil {
+		t.Fatalf("failed to bootstrap single-node store: %s", err.Error())
+	}
+	if _, err := s.WaitForLeader(10 * time.Second); err != nil {
+		t.Fatalf("Error waiting for leader: %s", err)
+	}
+
+	queries := []string{
+		`CREATE TABLE foo (id INTEGER NOT NULL PRIMARY KEY, name TEXT)`,
+		`INSERT INTO foo(name) VALUES("fiona")`,
+	}
+	mustExecute(t, s, queries)
+
+	////////////////////////////////////////////////////////////////////////////
+	// Start testing with stalled queries.
+
+	startStalledQuery := func(srcDB *db.DB) context.CancelFunc {
+		ctx, cancelFunc := context.WithCancel(context.Background())
+		go func() {
+			srcDB.QueryWithContext(ctx, mustCreateRequest(`SELECT * FROM foo`), false)
+		}()
+		time.Sleep(time.Second)
+		return cancelFunc
+	}
+
+	srcDB, err := db.Open(s.dbPath, false, true)
+	if err != nil {
+		t.Fatalf("failed to open database: %s", err)
+	}
+	defer srcDB.Close()
+
+	cancelFunc := startStalledQuery(srcDB)
+
+	// First snapshot, which will be full, will fail due to the reader.
+	if err := s.Snapshot(0); err == nil {
+		t.Fatalf("expected error due to blocking reader when attempting first snapshot")
+	}
+
+	// Release the reader, full snapshot should work.
+	cancelFunc()
+	if err := s.Snapshot(0); err != nil {
+		t.Fatalf("failed to snapshot after canceling reader: %s", err)
+	}
+
+	//////////////////////////////////////////////////////////////////////////////////
+	// Insert a bunch of records, which will be added to the WAL. Then start
+	// a reader which should be reading from the last page in the WAL. This will
+	// mean snapshot will be OK.
+	clear(queries)
+	for range 1000 {
+		queries = append(queries, `INSERT INTO foo(name) VALUES("fiona")`)
+	}
+	mustExecute(t, s, queries)
+	cancelFunc = startStalledQuery(srcDB)
+	if err := s.Snapshot(0); err != nil {
+		t.Fatalf("failed to snapshot: %s", err)
+	}
+	cancelFunc()
+
+	//////////////////////////////////////////////////////////////////////////////////
+	// Start a read, then insert a bunch of records. Reader won't be at the end
+	// of the WAL when the snapshot takes place (that's where the records go), which
+	// means the snapshot will fail, but it should be retryable.
+	cancelFunc = startStalledQuery(srcDB)
+	clear(queries)
+	for range 1000 {
+		queries = append(queries, `INSERT INTO foo(name) VALUES("fiona")`)
+	}
+	mustExecute(t, s, queries)
+
+	if err := s.Snapshot(0); err == nil {
+		t.Fatalf("expected error when attempting to snapshot with reader")
+	}
+	if got, exp := s.numIncSnapshotsRetryable.Load(), 1; got != uint64(exp) {
+		t.Fatalf("expected %d retryable errors, got %d", exp, got)
+
+	}
+	cancelFunc()
+	time.Sleep(time.Second)
+
+	// Perform another snapshot which should succeed because the read is finished.
+	if err := s.Snapshot(0); err != nil {
+		t.Fatalf("failed to snapshot after canceling reader: %s", err)
+	}
+
+	//////////////////////////////////////////////////////////////////////////////////
+	// Stop store, remove clean_snapshot, restart it to ensure the restored snapshot
+	// was actually created correctly.
+	if err := s.Close(true); err != nil {
+		t.Fatalf("error closing Store: %v", err)
+	}
+	if err := s.ForceSnapshotRestore(); err != nil {
+		t.Fatalf("failed to force restore from snapshot: %v", err)
+	}
+
+	if err := s.Open(); err != nil {
+		t.Fatalf("error reopening Store: %v", err)
+	}
+	defer s.Close(true)
+	if _, err := s.WaitForLeader(10 * time.Second); err != nil {
+		t.Fatalf("Error waiting for leader: %s", err)
+	}
+
+	rows, err := srcDB.QueryStringStmt("SELECT COUNT(*) FROM foo")
+	if err != nil {
+		t.Fatalf("failed to query rows: %v", err)
+	}
+	if got, exp := asJSON(rows), `[{"columns":["COUNT(*)"],"types":["integer"],"values":[[2001]]}]`; got != exp {
+		t.Fatalf("got incorrect query results, exp %s, got %s", exp, got)
+	}
+}
+
 type mockSnapshotSink struct {
 	fd       *os.File
 	writeErr error
@@ -751,4 +879,15 @@ func mustExecute(t *testing.T, s *Store, queries []string) []*proto.ExecuteQuery
 		t.Fatalf("failed to execute on single node: %s", err.Error())
 	}
 	return rows
+}
+
+func mustCreateRequest(query string) *command.Request {
+	return &command.Request{
+		Statements: []*command.Statement{
+			{
+				Sql:        query,
+				ForceStall: true,
+			},
+		},
+	}
 }
