@@ -740,17 +740,22 @@ func Test_SingleNodeSnapshot_CheckpointFailures(t *testing.T) {
 	////////////////////////////////////////////////////////////////////////////
 	// Start testing with stalled queries.
 
+	startStalledQuery := func(srcDB *db.DB) context.CancelFunc {
+		ctx, cancelFunc := context.WithCancel(context.Background())
+		go func() {
+			srcDB.QueryWithContext(ctx, mustCreateRequest(`SELECT * FROM foo`), false)
+		}()
+		time.Sleep(time.Second)
+		return cancelFunc
+	}
+
 	srcDB, err := db.Open(s.dbPath, false, true)
 	if err != nil {
 		t.Fatalf("failed to open database: %s", err)
 	}
 	defer srcDB.Close()
 
-	ctx, cancelFunc := context.WithCancel(context.Background())
-	go func() {
-		srcDB.QueryWithContext(ctx, mustCreateRequest(`SELECT * FROM foo`), false)
-	}()
-	time.Sleep(time.Second)
+	cancelFunc := startStalledQuery(srcDB)
 
 	// First snapshot, which will be full, will fail due to the reader.
 	if err := s.Snapshot(0); err == nil {
@@ -772,11 +777,7 @@ func Test_SingleNodeSnapshot_CheckpointFailures(t *testing.T) {
 		queries = append(queries, `INSERT INTO foo(name) VALUES("fiona")`)
 	}
 	mustExecute(t, s, queries)
-	ctx, cancelFunc = context.WithCancel(context.Background())
-	go func() {
-		srcDB.QueryWithContext(ctx, mustCreateRequest(`SELECT * FROM foo`), false)
-	}()
-	time.Sleep(time.Second)
+	cancelFunc = startStalledQuery(srcDB)
 	if err := s.Snapshot(0); err != nil {
 		t.Fatalf("failed to snapshot: %s", err)
 	}
@@ -786,11 +787,7 @@ func Test_SingleNodeSnapshot_CheckpointFailures(t *testing.T) {
 	// Start a read, then insert a bunch of records. Reader won't be at the end
 	// of the WAL when the snapshot takes place (that's where the records go), which
 	// means the snapshot will fail, but it should be retryable.
-	ctx, cancelFunc = context.WithCancel(context.Background())
-	go func() {
-		srcDB.QueryWithContext(ctx, mustCreateRequest(`SELECT * FROM foo`), false)
-	}()
-	time.Sleep(time.Second)
+	cancelFunc = startStalledQuery(srcDB)
 	clear(queries)
 	for range 1000 {
 		queries = append(queries, `INSERT INTO foo(name) VALUES("fiona")`)
