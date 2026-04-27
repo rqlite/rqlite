@@ -272,6 +272,9 @@ func OpenWithDriver(drv *Driver, dbPath string, fkEnabled, wal bool) (retDB *DB,
 			}
 			return nil
 		}()
+		if err != nil {
+			return nil, err
+		}
 
 		ok, pages, moved, err := checkpointDB(rwDB, CheckpointTruncate)
 		if err != nil {
