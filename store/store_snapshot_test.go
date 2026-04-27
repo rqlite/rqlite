@@ -811,7 +811,11 @@ func Test_SingleNodeSnapshot_CheckpointFailures(t *testing.T) {
 
 	//////////////////////////////////////////////////////////////////////////////////
 	// Stop store, remove clean_snapshot, restart it to ensure the restored snapshot
-	// was actually created correctly.
+	// was actually created correctly. Start by closing the database to Windows
+	// won't have an issue deleting the SQLite file.
+	if err := srcDB.Close(); err != nil {
+		t.Fatalf("failed to close database: %v", err)
+	}
 	if err := s.Close(true); err != nil {
 		t.Fatalf("error closing Store: %v", err)
 	}
@@ -827,12 +831,13 @@ func Test_SingleNodeSnapshot_CheckpointFailures(t *testing.T) {
 		t.Fatalf("Error waiting for leader: %s", err)
 	}
 
-	rows, err := srcDB.QueryStringStmt("SELECT COUNT(*) FROM foo")
+	query := queryRequestFromString("SELECT COUNT(*) FROM foo", false, false, false)
+	rows, _, _, err := s.Query(context.Background(), query)
 	if err != nil {
-		t.Fatalf("failed to query rows: %v", err)
+		t.Fatalf("failed to query single node: %s", err.Error())
 	}
-	if got, exp := asJSON(rows), `[{"columns":["COUNT(*)"],"types":["integer"],"values":[[2001]]}]`; got != exp {
-		t.Fatalf("got incorrect query results, exp %s, got %s", exp, got)
+	if exp, got := `[{"columns":["COUNT(*)"],"types":["integer"],"values":[[2001]]}]`, asJSON(rows); exp != got {
+		t.Fatalf("unexpected results for query\nexp: %s\ngot: %s", exp, got)
 	}
 }
 
