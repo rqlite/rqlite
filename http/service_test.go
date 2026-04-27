@@ -1236,6 +1236,27 @@ func Test_Readyz(t *testing.T) {
 	c := &mockClusterService{
 		apiAddr: "https://bar:5678",
 	}
+
+	// Simulate database responding correctly.
+	m.queryFn = func(qr *command.QueryRequest) ([]*command.QueryRows, uint64, error) {
+		rows := &command.QueryRows{
+			Columns: []string{"value"},
+			Types:   []string{"integer"},
+			Values: []*command.Values{
+				{
+					Parameters: []*command.Parameter{
+						{
+							Value: &command.Parameter_I{
+								I: 1,
+							},
+						},
+					},
+				},
+			},
+		}
+		return []*command.QueryRows{rows}, 0, nil
+	}
+
 	s := New("127.0.0.1:0", m, c, proxy.New(m, c), nil)
 	if err := s.Start(); err != nil {
 		t.Fatalf("failed to start service")
@@ -1252,7 +1273,7 @@ func Test_Readyz(t *testing.T) {
 	if resp.StatusCode != http.StatusOK {
 		t.Fatalf("failed to get expected StatusOK for node, got %d", resp.StatusCode)
 	}
-	if exp, got := "[+]node ok\n[+]leader ok\n[+]store ok", mustReadBody(t, resp); exp != got {
+	if exp, got := "[+]node ok\n[+]leader ok\n[+]store ok\n[+]db ok", mustReadBody(t, resp); exp != got {
 		t.Fatalf("incorrect response body, exp: %s, got: %s", exp, got)
 	}
 
@@ -1318,7 +1339,7 @@ func Test_Readyz(t *testing.T) {
 	if resp.StatusCode != http.StatusOK {
 		t.Fatalf("failed to get expected StatusOK, got %d", resp.StatusCode)
 	}
-	if exp, got := "[+]node ok\n[+]leader ok\n[+]store ok\n[+]sync ok", mustReadBody(t, resp); exp != got {
+	if exp, got := "[+]node ok\n[+]leader ok\n[+]store ok\n[+]sync ok\n[+]db ok", mustReadBody(t, resp); exp != got {
 		t.Fatalf("incorrect response body, exp: %s, got: %s", exp, got)
 	}
 	if cnt.Load() != 2 {

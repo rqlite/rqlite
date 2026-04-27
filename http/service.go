@@ -1196,6 +1196,26 @@ func (s *Service) handleReadyz(w http.ResponseWriter, r *http.Request, qp QueryP
 		}
 		okMsg += "\n[+]sync ok"
 	}
+
+	qr := &proto.QueryRequest{
+		Request: &proto.Request{
+			DbTimeout:  qp.Timeout(defaultTimeout).Nanoseconds(),
+			Statements: []*proto.Statement{{Sql: `SELECT 1`}},
+		},
+		Level: proto.ConsistencyLevel_NONE,
+	}
+	results, _, _, err := s.proxy.Query(r.Context(), qr, makeCredentials(r),
+		qp.Timeout(defaultTimeout), 0, false)
+	if err == nil && len(results) == 1 && len(results[0].Values) == 1 &&
+		len(results[0].Values[0].GetParameters()) == 1 && results[0].Values[0].GetParameters()[0].GetI() == 1 {
+		okMsg += "\n[+]db ok"
+	} else {
+		w.WriteHeader(http.StatusServiceUnavailable)
+		okMsg += fmt.Sprintf("\n[+]db not ok: (%v, %v)", err, results)
+		w.Write([]byte(okMsg))
+		return
+	}
+
 	w.WriteHeader(http.StatusOK)
 	w.Write([]byte(okMsg))
 }
