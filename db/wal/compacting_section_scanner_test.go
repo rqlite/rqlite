@@ -46,7 +46,12 @@ func Test_CompactingFrameScanner_AllFrames(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		allFrames = append(allFrames, f)
+		// Copy Data: the scanner reuses its page buffer across Next calls.
+		allFrames = append(allFrames, &Frame{
+			Pgno:   f.Pgno,
+			Commit: f.Commit,
+			Data:   append([]byte(nil), f.Data...),
+		})
 	}
 
 	// Compacted output: 2 frames.
@@ -115,7 +120,12 @@ func Test_CompactingFrameScanner_PartialRange(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		allFrames = append(allFrames, f)
+		// Copy Data: the scanner reuses its page buffer across Next calls.
+		allFrames = append(allFrames, &Frame{
+			Pgno:   f.Pgno,
+			Commit: f.Commit,
+			Data:   append([]byte(nil), f.Data...),
+		})
 	}
 
 	// Compacted output: 1 frame (pgno=2 from frame 3).
