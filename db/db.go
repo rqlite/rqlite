@@ -190,11 +190,18 @@ type CheckpointMeta struct {
 	Code  int
 	Pages int
 	Moved int
+
+	// WALReset is set by CheckpointManager when, on entry to a checkpoint
+	// attempt, it detects that the WAL has been reset since the previous
+	// attempt (salt mismatch with the saved value). It is only meaningful
+	// when the manager was tracking partial-checkpoint state from a prior
+	// call (i.e. nextFrameIdx > 0); otherwise it is always false.
+	WALReset bool
 }
 
 // String returns a string representation of the CheckpointMeta.
 func (cm *CheckpointMeta) String() string {
-	return fmt.Sprintf("Code=%d, Pages=%d, Moved=%d", cm.Code, cm.Pages, cm.Moved)
+	return fmt.Sprintf("Code=%d, Pages=%d, Moved=%d, WALReset=%t", cm.Code, cm.Pages, cm.Moved, cm.WALReset)
 }
 
 // Success returns true if the checkpoint completed successfully.

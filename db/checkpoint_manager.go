@@ -124,6 +124,7 @@ func (cm *CheckpointManager) Checkpoint(w io.Writer, timeout time.Duration) (*Ch
 	}
 	defer walFD.Close()
 
+	walReset := false
 	if cm.nextFrameIdx > 0 {
 		// The manager is telling us to start reading from other than the start. This
 		// means that the all frames were moved in the last checkpoint attempt, but the
@@ -142,6 +143,7 @@ func (cm *CheckpointManager) Checkpoint(w io.Writer, timeout time.Duration) (*Ch
 		if cm.salt == nil || *salt != *cm.salt {
 			cm.nextFrameIdx = 0
 			cm.salt = salt
+			walReset = true
 		}
 	}
 
@@ -174,6 +176,7 @@ func (cm *CheckpointManager) Checkpoint(w io.Writer, timeout time.Duration) (*Ch
 	if err != nil {
 		return nil, 0, fmt.Errorf("checkpoint: %w", err)
 	}
+	meta.WALReset = walReset
 
 	rc, pnLog, pnCkpt := meta.Code, meta.Pages, meta.Moved
 	if rc == 0 {
