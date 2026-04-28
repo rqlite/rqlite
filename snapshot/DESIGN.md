@@ -26,6 +26,8 @@ This store solves the problem through its MRSW (multi-reader single-writer) lock
 
 The result is that a slow node catching up via snapshot transfer no longer degrades the leader's ability to keep snapshotting and truncating its Raft log, even under heavy write load.
 
+To bound the worst case — a follower that reads so slowly that it would block reaping for hours — every `LockingStreamer` carries a wall-clock deadline (default 5 minutes, configurable via `Store.SetSnapshotReadTimeout`). If the deadline elapses before the consumer calls `Close`, an internal timer force-closes the streamer: it closes the underlying file handles (so subsequent `Read` calls return `ErrSnapshotReadTimeout`) and releases the read lock so the reaper can proceed. The remote follower sees a broken stream, fails the install-snapshot RPC, and Raft retries through its normal failure path.
+
 ## Core Concepts
 
 ### Snapshot Types
