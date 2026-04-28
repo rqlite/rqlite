@@ -180,6 +180,12 @@ type Service struct {
 
 	// connWg tracks active handleConn goroutines for graceful shutdown.
 	connWg sync.WaitGroup
+	// closing prevents new connections from being accepted during shutdown.
+	closing bool
+	// connMu protects closing and active connections.
+	connMu sync.Mutex
+	// activeConns holds connections that should be closed during shutdown.
+	activeConns map[net.Conn]struct{}
 }
 
 // New returns a new instance of the cluster service
@@ -192,6 +198,7 @@ func New(ln net.Listener, db Database, m Manager, credentialStore CredentialStor
 		logger:          log.New(os.Stderr, "[cluster] ", log.LstdFlags),
 		credentialStore: credentialStore,
 		connTimeout:     connReadTimeout,
+		activeConns:     make(map[net.Conn]struct{}),
 	}
 }
 
@@ -204,6 +211,15 @@ func (s *Service) Open() error {
 
 // Close closes the service.
 func (s *Service) Close() error {
+	s.connMu.Lock()
+	s.closing = true
+	// Close all active connections to unblock handleConn goroutines.
+	for conn := range s.activeConns {
+		conn.Close()
+	}
+	s.activeConns = make(map[net.Conn]struct{})
+	s.connMu.Unlock()
+
 	s.ln.Close()
 	s.connWg.Wait()
 	return nil
@@ -286,9 +302,23 @@ func (s *Service) serve() error {
 			return err
 		}
 
+		s.connMu.Lock()
+		if s.closing {
+			s.connMu.Unlock()
+			conn.Close()
+			continue
+		}
+		s.activeConns[conn] = struct{}{}
+		s.connMu.Unlock()
+
 		s.connWg.Add(1)
 		go func(c net.Conn) {
-			defer s.connWg.Done()
+			defer func() {
+				s.connWg.Done()
+				s.connMu.Lock()
+				delete(s.activeConns, c)
+				s.connMu.Unlock()
+			}()
 			s.handleConn(c)
 		}(conn)
 	}
