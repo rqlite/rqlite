@@ -1,4 +1,4 @@
-## v10.0.0 (unreleased)
+## v10.0.0 (April 27th 2026)
 
 ### What's new in this release?
 
