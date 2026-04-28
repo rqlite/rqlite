@@ -26,7 +26,7 @@ docker run -p4001:4001 rqlite/rqlite
 Check out the [rqlite Docker page](https://hub.docker.com/r/rqlite/rqlite/) for more details on running rqlite via Docker, including how to deploy a cluster.
 
 ### Linux
-_Builds for a variety of CPU architectures are available. See the Assets section below._
+_Builds for a variety of CPU architectures are available. See the Assets section below if you wish to download and install manually._
 
 The easiest way to install rqlite on Linux:
 ```
