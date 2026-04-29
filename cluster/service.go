@@ -221,7 +221,18 @@ func (s *Service) Close() error {
 	s.connMu.Unlock()
 
 	s.ln.Close()
-	s.connWg.Wait()
+	// Wait for active connections with a timeout to prevent indefinite hangs
+	// during shutdown when other nodes may still be trying to connect.
+	done := make(chan struct{})
+	go func() {
+		s.connWg.Wait()
+		close(done)
+	}()
+	select {
+	case <-done:
+	case <-time.After(5 * time.Second):
+		s.logger.Println("timeout waiting for cluster connections to close")
+	}
 	return nil
 }
 
