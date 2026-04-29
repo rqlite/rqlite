@@ -260,6 +260,15 @@ func Test_IsValidSQLiteOnDisk(t *testing.T) {
 	if !IsValidSQLiteData(data) {
 		t.Fatalf("good SQLite data marked as invalid")
 	}
+
+	randomPath := mustTempPath()
+	defer os.Remove(randomPath)
+	if err := os.WriteFile(randomPath, random.Bytes(100), 0644); err != nil {
+		t.Fatalf("failed to write random bytes to temp: %s", err.Error())
+	}
+	if IsValidSQLiteFile(randomPath) {
+		t.Fatalf("random bytes file marked as valid SQLite")
+	}
 }
 
 func Test_IsValidSQLiteCompressedOnDisk(t *testing.T) {
