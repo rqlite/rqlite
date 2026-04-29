@@ -1,6 +1,7 @@
-## v10.0.1 (unreleased)
+## v10.0.1 (April 29th 2026)
 ### Implementation changes and bug fixes
 - [PR #2638](https://github.com/rqlite/rqlite/pull/2638): Upgrade SQLite to 3.53.0.
+- [PR #2639](https://github.com/rqlite/rqlite/pull/2639): Upgrade dependencies.
 
 ## v10.0.0 (April 27th 2026)
 
