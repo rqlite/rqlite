@@ -1,10 +1,10 @@
 package db
 
 import (
-	"bytes"
 	"compress/gzip"
 	"context"
 	"database/sql"
+	"encoding/binary"
 	"encoding/hex"
 	"errors"
 	"fmt"
@@ -244,7 +244,7 @@ func IsValidSQLiteWALFile(path string) bool {
 	}
 	defer f.Close()
 
-	b := make([]byte, 4)
+	b := make([]byte, 8)
 	if _, err := io.ReadFull(f, b); err != nil {
 		return false
 	}
@@ -254,14 +254,18 @@ func IsValidSQLiteWALFile(path string) bool {
 // IsValidSQLiteWALData checks that the supplied data looks like a SQLite
 // WAL file.
 func IsValidSQLiteWALData(b []byte) bool {
-	if len(b) < 4 {
+	if len(b) < 8 {
 		return false
 	}
 
-	header1 := []byte{0x37, 0x7f, 0x06, 0x82}
-	header2 := []byte{0x37, 0x7f, 0x06, 0x83}
-	header := b[:4]
-	return bytes.Equal(header, header1) || bytes.Equal(header, header2)
+	// Check magic number.
+	magic := binary.BigEndian.Uint32(b[:4])
+	if magic != 0x377f0682 && magic != 0x377f0683 {
+		return false
+	}
+
+	// Verify version is correct.
+	return binary.BigEndian.Uint32(b[4:8]) == 3007000
 }
 
 // IsWALModeEnabledSQLiteFile checks that the supplied path looks like a SQLite

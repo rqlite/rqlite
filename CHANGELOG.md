@@ -1,3 +1,7 @@
+## v10.0.2 (unreleased)
+### Implementation changes and bug fixes
+- [PR #2640](https://github.com/rqlite/rqlite/pull/2640): Improve valid WAL data check.
+
 ## v10.0.1 (April 29th 2026)
 ### Implementation changes and bug fixes
 - [PR #2638](https://github.com/rqlite/rqlite/pull/2638): Upgrade SQLite to 3.53.0.
