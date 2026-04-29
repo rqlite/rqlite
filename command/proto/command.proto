@@ -61,7 +61,6 @@ message SQLiteError {
 	int32 code = 1;
 	int32 extended_code = 2;
 	int32 system_errno = 3;
-	string message = 4;
 }
 
 message QueryRows {

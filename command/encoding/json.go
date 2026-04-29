@@ -17,10 +17,9 @@ var (
 
 // SQLiteError represents a structured SQLite error for JSON API responses.
 type SQLiteError struct {
-	Code         int32  `json:"code"`
-	ExtendedCode int32  `json:"extended_code"`
-	SystemErrno  int32  `json:"system_errno"`
-	Message      string `json:"message"`
+	Code         int32 `json:"code"`
+	ExtendedCode int32 `json:"extended_code"`
+	SystemErrno  int32 `json:"system_errno"`
 }
 
 // Result represents the outcome of an operation that changes rows.
@@ -353,6 +352,5 @@ func newSQLiteError(e *proto.SQLiteError) *SQLiteError {
 		Code:         e.Code,
 		ExtendedCode: e.ExtendedCode,
 		SystemErrno:  e.SystemErrno,
-		Message:      e.Message,
 	}
 }

@@ -1484,16 +1484,10 @@ func (db *DB) RequestWithContext(ctx context.Context, req *command.Request, xTim
 		ro, err := db.StmtReadOnlyWithConn(ss, conn)
 		if err != nil {
 			eqResponse = append(eqResponse, &command.ExecuteQueryResponse{
-				Result: &command.ExecuteQueryResponse_E{
-					E: &command.ExecuteResult{
-						Error:   err.Error(),
-						ErrorV2: sqliteErrorV2(err),
-					},
+				Result: &command.ExecuteQueryResponse_Error{
+					Error: err.Error(),
 				},
 			})
-			if abortOnError(err) {
-				break
-			}
 			continue
 		}
 
@@ -2095,7 +2089,6 @@ func sqliteErrorV2(err error) *command.SQLiteError {
 			Code:         int32(sqErr.Code),
 			ExtendedCode: int32(sqErr.ExtendedCode),
 			SystemErrno:  int32(sqErr.SystemErrno),
-			Message:      sqErr.Error(),
 		}
 	}
 	return nil

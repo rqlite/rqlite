@@ -1098,7 +1098,7 @@ func Test_SingleNodeRequest(t *testing.T) {
 				`SELECT COUNT(*) FROM foo WHERE name='fiona'`,
 				`SELECT * FROM foo WHERE name='declan'`,
 			},
-			expected:    `[{"last_insert_id":88,"rows_affected":1,"rows":null},{"error":"near \"nonsense\": syntax error","error_v2":{"code":1,"extended_code":1,"system_errno":0,"message":"near \"nonsense\": syntax error"},"rows":null},{"types":{"COUNT(*)":"integer"},"rows":[{"COUNT(*)":3}]},{"types":{"id":"integer","name":"text"},"rows":[{"id":66,"name":"declan"}]}]`,
+			expected:    `[{"last_insert_id":88,"rows_affected":1,"rows":null},{"error":"near \"nonsense\": syntax error"},{"types":{"COUNT(*)":"integer"},"rows":[{"COUNT(*)":3}]},{"types":{"id":"integer","name":"text"},"rows":[{"id":66,"name":"declan"}]}]`,
 			associative: true,
 		},
 	}
@@ -1171,7 +1171,7 @@ func Test_SingleNodeRequestTx(t *testing.T) {
 				`INSERT INTO foo(id, name) VALUES(1, "fiona")`,
 				`SELECT COUNT(*) FROM foo`,
 			},
-			expected: `[{"last_insert_id":2,"rows_affected":1},{"error":"UNIQUE constraint failed: foo.id","error_v2":{"code":19,"extended_code":1555,"system_errno":0,"message":"UNIQUE constraint failed: foo.id"}}]`,
+			expected: `[{"last_insert_id":2,"rows_affected":1},{"error":"UNIQUE constraint failed: foo.id","error_v2":{"code":19,"extended_code":1555,"system_errno":0}}]`,
 			tx:       true,
 		},
 		{
@@ -1354,7 +1354,7 @@ func Test_SingleNodeFK(t *testing.T) {
 	}
 
 	res, _, _ := s.Execute(context.Background(), executeRequestFromString("INSERT INTO bar(fooid) VALUES(1)", false, false))
-	if got, exp := asJSON(res), `[{"error":"FOREIGN KEY constraint failed","error_v2":{"code":19,"extended_code":787,"system_errno":0,"message":"FOREIGN KEY constraint failed"}}]`; exp != got {
+	if got, exp := asJSON(res), `[{"error":"FOREIGN KEY constraint failed","error_v2":{"code":19,"extended_code":787,"system_errno":0}}]`; exp != got {
 		t.Fatalf("unexpected results for execute\nexp: %s\ngot: %s", exp, got)
 	}
 }
