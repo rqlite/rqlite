@@ -339,7 +339,7 @@ func Test_LoadExtensionDisabled(t *testing.T) {
 	if err != nil {
 		t.Fatalf("error executing insertion into table: %s", err.Error())
 	}
-	if exp, got := `[{"error":"near \"load_extension\": syntax error"}]`, asJSON(r); exp != got {
+	if exp, got := `[{"error":"near \"load_extension\": syntax error","error_v2":{"code":1,"extended_code":1,"system_errno":0}}]`, asJSON(r); exp != got {
 		t.Fatalf("unexpected results for query, expected %s, got %s", exp, got)
 	}
 }
@@ -633,7 +633,7 @@ func Test_TableCreationFK(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to insert record: %s", err.Error())
 	}
-	if exp, got := `[{"error":"FOREIGN KEY constraint failed"}]`, asJSON(r); exp != got {
+	if exp, got := `[{"error":"FOREIGN KEY constraint failed","error_v2":{"code":19,"extended_code":787,"system_errno":0}}]`, asJSON(r); exp != got {
 		t.Fatalf("unexpected results for query, expected %s, got %s", exp, got)
 	}
 
@@ -666,7 +666,7 @@ func Test_TableCreationFK(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to insert record: %s", err.Error())
 	}
-	if exp, got := `[{"error":"FOREIGN KEY constraint failed"}]`, asJSON(r); exp != got {
+	if exp, got := `[{"error":"FOREIGN KEY constraint failed","error_v2":{"code":19,"extended_code":787,"system_errno":0}}]`, asJSON(r); exp != got {
 		t.Fatalf("unexpected results for query, expected %s, got %s", exp, got)
 	}
 }
@@ -789,7 +789,7 @@ func Test_SQLForceQuery_Error(t *testing.T) {
 		{
 			sql:        `INSERT INTO foo(id, name) VALUES(1, "fiona") RETURNING xxx`,
 			forceQuery: false,
-			exp:        `[{"error":"no such column: xxx"}]`,
+			exp:        `[{"error":"no such column: xxx","error_v2":{"code":1,"extended_code":1,"system_errno":0}}]`,
 		},
 		{
 			sql:        `INSERT INTO foo(id, name) VALUES(1, "fiona") RETURNING xxx`,
@@ -799,7 +799,7 @@ func Test_SQLForceQuery_Error(t *testing.T) {
 		{
 			sql:        `INSERT INTO foo(id, name) VALUES(1, "fiona") RETURNING name AS`,
 			forceQuery: false,
-			exp:        `[{"error":"incomplete input"}]`,
+			exp:        `[{"error":"incomplete input","error_v2":{"code":1,"extended_code":1,"system_errno":0}}]`,
 		},
 	}
 	for _, test := range tests {
@@ -895,7 +895,7 @@ func Test_PartialFailTransaction(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to insert records: %s", err.Error())
 	}
-	if exp, got := `[{"last_insert_id":1,"rows_affected":1},{"last_insert_id":2,"rows_affected":1},{"error":"UNIQUE constraint failed: foo.id"}]`, asJSON(r); exp != got {
+	if exp, got := `[{"last_insert_id":1,"rows_affected":1},{"last_insert_id":2,"rows_affected":1},{"error":"UNIQUE constraint failed: foo.id","error_v2":{"code":19,"extended_code":1555,"system_errno":0}}]`, asJSON(r); exp != got {
 		t.Fatalf("unexpected results for query\nexp: %s\ngot: %s", exp, got)
 	}
 	ro, err := db.QueryStringStmt(`SELECT * FROM foo`)
