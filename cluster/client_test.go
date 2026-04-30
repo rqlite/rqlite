@@ -340,6 +340,147 @@ func Test_ClientJoinNode(t *testing.T) {
 	}
 }
 
+func Test_ClientJoinNodeRedirect(t *testing.T) {
+	srv2 := servicetest.NewService()
+	srv2.CloseConn = false
+	srv2.Handler = func(conn net.Conn) {
+		defer conn.Close()
+		for {
+			c := readCommand(conn)
+			if c == nil {
+				return
+			}
+			if c.Type != proto.Command_COMMAND_TYPE_JOIN {
+				t.Errorf("unexpected command type: %d", c.Type)
+				return
+			}
+
+			p, err := pb.Marshal(&proto.CommandJoinResponse{})
+			if err != nil {
+				t.Errorf("failed to marshal join response: %s", err)
+				return
+			}
+			if err := writeBytesWithLength(conn, p); err != nil {
+				return
+			}
+		}
+	}
+	srv2.Start()
+	defer srv2.Close()
+
+	srv1 := servicetest.NewService()
+	srv1.CloseConn = false
+	srv1.Handler = func(conn net.Conn) {
+		defer conn.Close()
+		for {
+			c := readCommand(conn)
+			if c == nil {
+				return
+			}
+			if c.Type != proto.Command_COMMAND_TYPE_JOIN {
+				t.Errorf("unexpected command type: %d", c.Type)
+				return
+			}
+
+			p, err := pb.Marshal(&proto.CommandJoinResponse{
+				Error:  "not leader",
+				Leader: srv2.Addr(),
+			})
+			if err != nil {
+				t.Errorf("failed to marshal join response: %s", err)
+				return
+			}
+			if err := writeBytesWithLength(conn, p); err != nil {
+				return
+			}
+		}
+	}
+	srv1.Start()
+	defer srv1.Close()
+
+	c := NewClient(&simpleDialer{}, 0)
+	req := &command.JoinRequest{
+		Address: "test-node-addr",
+	}
+	err := c.Join(context.Background(), req, srv1.Addr(), nil, time.Second)
+	if err != nil {
+		t.Fatal(err)
+	}
+}
+
+func Test_ClientJoinNodeTooManyRedirects(t *testing.T) {
+	srv1 := servicetest.NewService()
+	srv2 := servicetest.NewService()
+	srv1.CloseConn = false
+	srv2.CloseConn = false
+
+	srv1.Handler = func(conn net.Conn) {
+		defer conn.Close()
+		for {
+			c := readCommand(conn)
+			if c == nil {
+				return
+			}
+			if c.Type != proto.Command_COMMAND_TYPE_JOIN {
+				t.Errorf("unexpected command type: %d", c.Type)
+				return
+			}
+
+			p, err := pb.Marshal(&proto.CommandJoinResponse{
+				Error:  "not leader",
+				Leader: srv2.Addr(),
+			})
+			if err != nil {
+				t.Errorf("failed to marshal join response: %s", err)
+				return
+			}
+			if err := writeBytesWithLength(conn, p); err != nil {
+				return
+			}
+		}
+	}
+
+	srv2.Handler = func(conn net.Conn) {
+		defer conn.Close()
+		for {
+			c := readCommand(conn)
+			if c == nil {
+				return
+			}
+			if c.Type != proto.Command_COMMAND_TYPE_JOIN {
+				t.Errorf("unexpected command type: %d", c.Type)
+				return
+			}
+
+			p, err := pb.Marshal(&proto.CommandJoinResponse{
+				Error:  "not leader",
+				Leader: srv1.Addr(),
+			})
+			if err != nil {
+				t.Errorf("failed to marshal join response: %s", err)
+				return
+			}
+			if err := writeBytesWithLength(conn, p); err != nil {
+				return
+			}
+		}
+	}
+
+	srv1.Start()
+	defer srv1.Close()
+	srv2.Start()
+	defer srv2.Close()
+
+	c := NewClient(&simpleDialer{}, 0)
+	req := &command.JoinRequest{
+		Address: "test-node-addr",
+	}
+	err := c.Join(context.Background(), req, srv1.Addr(), nil, time.Second)
+	if err != ErrTooManyJoinRedirects {
+		t.Fatalf("expected %v, got %v", ErrTooManyJoinRedirects, err)
+	}
+}
+
 func Test_ClientRetry_SuccessFirstAttempt(t *testing.T) {
 	srv := servicetest.NewService()
 	srv.Handler = func(conn net.Conn) {
