@@ -105,9 +105,9 @@ type LockingStreamer struct {
 	str     *Store
 	timeout time.Duration
 
-	lastRead atomic.Int64 // unix nanos of last Read activity
-	timedOut atomic.Bool  // set when force-closed by the idle timer
-	closed   atomic.Bool  // set when Close has been invoked (any path)
+	lastRead atomic.Int64      // unix nanos of last Read activity
+	timedOut *rsync.AtomicBool // set when force-closed by the idle timer
+	closed   *rsync.AtomicBool // set when Close has been invoked (any path)
 
 	mu    sync.Mutex
 	timer *time.Timer
@@ -121,6 +121,8 @@ func NewLockingStreamer(rc io.ReadCloser, str *Store, timeout time.Duration) *Lo
 		ReadCloser: rc,
 		str:        str,
 		timeout:    timeout,
+		timedOut:   rsync.NewAtomicBool(),
+		closed:     rsync.NewAtomicBool(),
 	}
 	l.lastRead.Store(time.Now().UnixNano())
 	if timeout > 0 {
@@ -134,7 +136,7 @@ func NewLockingStreamer(rc io.ReadCloser, str *Store, timeout time.Duration) *Lo
 // timer has already fired, Read returns ErrSnapshotReaderTimeout without
 // touching the underlying reader.
 func (l *LockingStreamer) Read(p []byte) (int, error) {
-	if l.timedOut.Load() {
+	if l.timedOut.Is() {
 		return 0, ErrSnapshotReaderTimeout
 	}
 	n, err := l.ReadCloser.Read(p)
@@ -148,10 +150,10 @@ func (l *LockingStreamer) Read(p []byte) (int, error) {
 func (l *LockingStreamer) Close() error {
 	l.mu.Lock()
 	defer l.mu.Unlock()
-	if l.closed.Load() {
+	if l.closed.Is() {
 		return nil
 	}
-	l.closed.Store(true)
+	l.closed.Set()
 	if l.timer != nil {
 		l.timer.Stop()
 	}
@@ -166,7 +168,7 @@ func (l *LockingStreamer) Close() error {
 func (l *LockingStreamer) checkIdle() {
 	l.mu.Lock()
 	defer l.mu.Unlock()
-	if l.closed.Load() {
+	if l.closed.Is() {
 		return
 	}
 	last := time.Unix(0, l.lastRead.Load())
@@ -175,8 +177,8 @@ func (l *LockingStreamer) checkIdle() {
 		l.timer.Reset(l.timeout - idle)
 		return
 	}
-	l.timedOut.Store(true)
-	l.closed.Store(true)
+	l.timedOut.Set()
+	l.closed.Set()
 	stats.Add(readTimeoutTotal, 1)
 	l.str.logger.Printf("snapshot reader idle for %s, forcing close", idle)
 	if closeErr := l.ReadCloser.Close(); closeErr != nil {
