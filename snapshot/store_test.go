@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/binary"
 	"encoding/json"
+	"expvar"
 	"fmt"
 	"io"
 	"os"
@@ -1658,4 +1659,133 @@ func Test_StoreRegisterObserver_Reap_MultiObs(t *testing.T) {
 	case <-time.After(5 * time.Second):
 		t.Fatal("timed out waiting for observation")
 	}
+}
+
+// Test_Store_ReadTimeout_FiresWhenIdle verifies that an idle LockingStreamer
+// is force-closed after the configured read timeout, releasing the MRSW read
+// lock so that subsequent writers (e.g. reaping) can proceed.
+func Test_Store_ReadTimeout_FiresWhenIdle(t *testing.T) {
+	dir := t.TempDir()
+	store, err := NewStore(dir)
+	if err != nil {
+		t.Fatalf("Failed to create new store: %v", err)
+	}
+	defer store.Close()
+
+	store.SetReadTimeout(100 * time.Millisecond)
+	createSnapshotInStore(t, store, "2-1017-1704807719996", 1017, 2, 1, "testdata/db-and-wals/backup.db")
+
+	before := readStat(t, readTimeoutTotal)
+
+	_, rc, err := store.Open("2-1017-1704807719996")
+	if err != nil {
+		t.Fatalf("Failed to open snapshot: %v", err)
+	}
+
+	// While the streamer is open the read lock is held; a non-blocking write
+	// acquisition must conflict.
+	if err := store.mrsw.BeginWrite("test"); err == nil {
+		store.mrsw.EndWrite()
+		t.Fatalf("expected MRSW conflict while LockingStreamer is open")
+	}
+
+	// Wait for the idle timer to fire and release the lock.
+	deadline := time.Now().Add(5 * time.Second)
+	for {
+		if err := store.mrsw.BeginWrite("test"); err == nil {
+			store.mrsw.EndWrite()
+			break
+		}
+		if time.Now().After(deadline) {
+			t.Fatalf("MRSW lock not released after read timeout")
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+
+	// A subsequent Read should return an error since the underlying file
+	// descriptors have been closed.
+	if _, err := rc.Read(make([]byte, 8)); err == nil {
+		t.Fatalf("expected Read after timeout to error, got nil")
+	}
+
+	// Close should be idempotent.
+	if err := rc.Close(); err != nil {
+		t.Fatalf("Close after timeout returned error: %v", err)
+	}
+
+	if got := readStat(t, readTimeoutTotal); got != before+1 {
+		t.Fatalf("expected read_timeout_total to increment by 1, got before=%d after=%d", before, got)
+	}
+}
+
+// Test_Store_ReadTimeout_ResetByReads verifies that a streamer that is
+// being actively read does not get force-closed by the idle timer.
+func Test_Store_ReadTimeout_ResetByReads(t *testing.T) {
+	dir := t.TempDir()
+	store, err := NewStore(dir)
+	if err != nil {
+		t.Fatalf("Failed to create new store: %v", err)
+	}
+	defer store.Close()
+
+	store.SetReadTimeout(100 * time.Millisecond)
+	createSnapshotInStore(t, store, "2-1017-1704807719996", 1017, 2, 1, "testdata/db-and-wals/backup.db")
+
+	_, rc, err := store.Open("2-1017-1704807719996")
+	if err != nil {
+		t.Fatalf("Failed to open snapshot: %v", err)
+	}
+	defer rc.Close()
+
+	// Read steadily for longer than the timeout. Each successful read
+	// should keep the streamer alive.
+	end := time.Now().Add(400 * time.Millisecond)
+	buf := make([]byte, 64)
+	for time.Now().Before(end) {
+		n, err := rc.Read(buf)
+		if err == io.EOF {
+			break
+		}
+		if err != nil {
+			t.Fatalf("unexpected Read error during active reads: %v (n=%d)", err, n)
+		}
+		time.Sleep(20 * time.Millisecond)
+	}
+}
+
+// Test_Store_OpenReadTimeout_Disabled verifies that a zero timeout disables
+// the idle check entirely.
+func Test_Store_OpenReadTimeout_Disabled(t *testing.T) {
+	dir := t.TempDir()
+	store, err := NewStore(dir)
+	if err != nil {
+		t.Fatalf("Failed to create new store: %v", err)
+	}
+	defer store.Close()
+
+	store.SetReadTimeout(0)
+	createSnapshotInStore(t, store, "2-1017-1704807719996", 1017, 2, 1, "testdata/db-and-wals/backup.db")
+
+	_, rc, err := store.Open("2-1017-1704807719996")
+	if err != nil {
+		t.Fatalf("Failed to open snapshot: %v", err)
+	}
+	defer rc.Close()
+
+	time.Sleep(150 * time.Millisecond)
+
+	// Read should still succeed since the timeout is disabled.
+	buf := make([]byte, 8)
+	if _, err := rc.Read(buf); err != nil && err != io.EOF {
+		t.Fatalf("Read with timeout disabled should succeed, got: %v", err)
+	}
+}
+
+func readStat(t *testing.T, name string) int64 {
+	t.Helper()
+	v := stats.Get(name)
+	if v == nil {
+		t.Fatalf("stat %q not registered", name)
+	}
+	return v.(*expvar.Int).Value()
 }
