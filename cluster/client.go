@@ -617,8 +617,8 @@ func (c *Client) BroadcastHWM(ctx context.Context, hwm uint64, retries int, time
 
 				// Write command
 				if err := writeCommand(conn, command, timeout); err != nil {
-					conn.Close()
 					handleConnError(conn)
+					conn.Close()
 					lastErr = err
 					continue
 				}
