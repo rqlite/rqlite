@@ -10,6 +10,7 @@ import (
 	"os"
 	"path/filepath"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/hashicorp/raft"
@@ -27,6 +28,7 @@ const (
 	reapPlanFile   = "REAP_PLAN"
 
 	defaultReapThreshold = 4
+	defaultReadTimeout   = 30 * time.Second
 )
 
 const (
@@ -45,6 +47,7 @@ const (
 	reapSnapshots       = "reap_snapshots"
 	reapWALs            = "reap_wals"
 	reapPlanRecovered   = "reap_plan_recovered"
+	readTimeoutTotal    = "read_timeout_total"
 
 	upgradeOk   = "upgrade_ok"
 	upgradeFail = "upgrade_fail"
@@ -83,38 +86,105 @@ func ResetStats() {
 	stats.Add(reapSnapshots, 0)
 	stats.Add(reapWALs, 0)
 	stats.Add(reapPlanRecovered, 0)
+	stats.Add(readTimeoutTotal, 0)
 	stats.Add(upgradeOk, 0)
 	stats.Add(upgradeFail, 0)
 }
 
+// ErrSnapshotReaderTimeout is returned by Read after the LockingStreamer has
+// been force-closed due to its idle timeout being exceeded.
+var ErrSnapshotReaderTimeout = errors.New("snapshot reader idle timeout exceeded")
+
 // LockingStreamer is a snapshot which holds the Snapshot Store MRSW read-lok
-// while it is open.
+// while it is open. If a non-zero idle timeout is configured, the streamer
+// will be force-closed after the timeout elapses with no Read activity, so
+// that the read lock cannot be held indefinitely by a stalled consumer
+// (e.g. a slow follower receiving a snapshot transfer).
 type LockingStreamer struct {
 	io.ReadCloser
-	str *Store
+	str     *Store
+	timeout time.Duration
 
-	mu     sync.Mutex
-	closed bool
+	lastRead atomic.Int64      // unix nanos of last Read activity
+	timedOut *rsync.AtomicBool // set when force-closed by the idle timer
+	closed   *rsync.AtomicBool // set when Close has been invoked (any path)
+
+	mu    sync.Mutex
+	timer *time.Timer
 }
 
-// NewLockingStreamer returns a new LockingStreamer.
-func NewLockingStreamer(rc io.ReadCloser, str *Store) *LockingStreamer {
-	return &LockingStreamer{
+// NewLockingStreamer returns a new LockingStreamer. If timeout > 0, the
+// streamer will be force-closed after that much time elapses with no Read
+// activity. A timeout of 0 disables the idle check.
+func NewLockingStreamer(rc io.ReadCloser, str *Store, timeout time.Duration) *LockingStreamer {
+	l := &LockingStreamer{
 		ReadCloser: rc,
 		str:        str,
+		timeout:    timeout,
+		timedOut:   rsync.NewAtomicBool(),
+		closed:     rsync.NewAtomicBool(),
 	}
+	l.lastRead.Store(time.Now().UnixNano())
+	if timeout > 0 {
+		l.timer = time.AfterFunc(timeout, l.checkIdle)
+	}
+	return l
+}
+
+// Read reads from the underlying snapshot stream, recording the time of any
+// successful read so that the idle timeout can be enforced. If the idle
+// timer has already fired, Read returns ErrSnapshotReaderTimeout without
+// touching the underlying reader.
+func (l *LockingStreamer) Read(p []byte) (int, error) {
+	if l.timedOut.Is() {
+		return 0, ErrSnapshotReaderTimeout
+	}
+	n, err := l.ReadCloser.Read(p)
+	if n > 0 {
+		l.lastRead.Store(time.Now().UnixNano())
+	}
+	return n, err
 }
 
 // Close closes the Snapshot and releases the Snapshot Store lock.
 func (l *LockingStreamer) Close() error {
 	l.mu.Lock()
 	defer l.mu.Unlock()
-	if l.closed {
+	if l.closed.Is() {
 		return nil
 	}
-	l.closed = true
+	l.closed.Set()
+	if l.timer != nil {
+		l.timer.Stop()
+	}
 	defer l.str.mrsw.EndRead()
 	return l.ReadCloser.Close()
+}
+
+// checkIdle is invoked by the idle-timeout timer. If the streamer has been
+// idle for at least the configured timeout, it is force-closed and the
+// Snapshot Store read lock is released. Otherwise the timer is re-armed
+// for the remaining idle window.
+func (l *LockingStreamer) checkIdle() {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	if l.closed.Is() {
+		return
+	}
+	last := time.Unix(0, l.lastRead.Load())
+	idle := time.Since(last)
+	if idle < l.timeout {
+		l.timer.Reset(l.timeout - idle)
+		return
+	}
+	l.timedOut.Set()
+	l.closed.Set()
+	stats.Add(readTimeoutTotal, 1)
+	l.str.logger.Printf("snapshot reader idle for %s, forcing close", idle)
+	if closeErr := l.ReadCloser.Close(); closeErr != nil {
+		l.str.logger.Printf("error closing idle snapshot reader: %s", closeErr)
+	}
+	l.str.mrsw.EndRead()
 }
 
 // Store stores snapshots in the Raft system.
@@ -132,6 +202,12 @@ type Store struct {
 	mrsw          *rsync.MultiRSW
 	reapDisabled  *rsync.AtomicBool
 	reapThreshold int
+
+	// readTimeout is the maximum time a LockingStreamer may sit idle (no
+	// Read calls returning data) before it is force-closed. Zero disables
+	// the check. Guarded only by the requirement that callers set it
+	// before any snapshot is opened.
+	readTimeout time.Duration
 
 	reapCh     chan struct{}
 	reapDoneCh chan struct{}
@@ -156,6 +232,7 @@ func NewStore(dir string) (*Store, error) {
 		mrsw:           rsync.NewMultiRSW(),
 		reapDisabled:   &rsync.AtomicBool{},
 		reapThreshold:  defaultReapThreshold,
+		readTimeout:    defaultReadTimeout,
 		reapCh:         make(chan struct{}, 1),
 		reapDoneCh:     make(chan struct{}),
 		observers:      newObserverSet(),
@@ -273,6 +350,16 @@ func (s *Store) SetReapThreshold(n int) {
 	s.reapThreshold = n
 }
 
+// SetReadTimeout sets the idle timeout applied to LockingStreamers
+// returned by Open. A zero or negative value disables the timeout.
+// Must be called before any snapshot is opened.
+func (s *Store) SetReadTimeout(d time.Duration) {
+	if d < 0 {
+		d = 0
+	}
+	s.readTimeout = d
+}
+
 // Open opens the snapshot with the given ID for reading. Open returns an io.ReadCloser
 // which wraps a SnapshotInstall object. This is because the snapshot will be used
 // to either rebuild a node's state after restart, or to send the snapshot to another node,
@@ -324,7 +411,7 @@ func (s *Store) Open(id string) (raftMeta *raft.SnapshotMeta, rc io.ReadCloser, 
 	}
 	meta.Size = sz
 
-	return meta, NewLockingStreamer(streamer, s), nil
+	return meta, NewLockingStreamer(streamer, s, s.readTimeout), nil
 }
 
 // RegisterObserver registers an observer to receive observations.
