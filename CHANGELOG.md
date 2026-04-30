@@ -2,6 +2,7 @@
 ### Implementation changes and bug fixes
 - [PR #2640](https://github.com/rqlite/rqlite/pull/2640): Improve valid WAL data check.
 - [PR #2641](https://github.com/rqlite/rqlite/pull/2641): Minor improvements to `db` and `cluster` modules.
+- [PR #2642](https://github.com/rqlite/rqlite/pull/2642): Timeout if a remote doesn't read snapshot data for 30 seconds.
 
 ## v10.0.1 (April 29th 2026)
 ### Implementation changes and bug fixes
