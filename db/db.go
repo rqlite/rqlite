@@ -9,6 +9,7 @@ import (
 	"expvar"
 	"fmt"
 	"io"
+	"io/fs"
 	"log"
 	"os"
 	"path/filepath"
@@ -638,16 +639,21 @@ func (db *DB) FileSize() (int64, error) {
 }
 
 // WALSize returns the size of the SQLite WAL file on disk. If running in
-// WAL mode is not enabled, this function returns 0.
+// WAL mode is not enabled, this function returns 0. If the WAL file does
+// not exist, even if the database is in WAL mode, 0 is also returned.
 func (db *DB) WALSize() (int64, error) {
 	if !db.wal {
 		return 0, nil
 	}
 	sz, err := fsutil.FileSize(db.walPath)
-	if err == nil || os.IsNotExist(err) {
-		return sz, nil
+	if err != nil {
+		if !errors.Is(err, fs.ErrNotExist) {
+			return 0, err
+		}
+		sz = 0
+		err = nil
 	}
-	return 0, err
+	return sz, err
 }
 
 // ExtensionNames returns the names of the SQLite extensions loaded into the database.
