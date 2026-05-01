@@ -20,7 +20,7 @@ This release introduces a major improvement to the **Raft [_Snapshot and Log Tru
 
 v10 also uses **CRC32 checksumming more comprehensively** to detect issues such as file system corruption and inadvertent modification of the underlying data files by systems other than rqlite.
 
-This release also introduces a new **built-in console app**, making it more convenient to manage a rqlite deployment. The console app is available at `http://localhost:4001/console` by default.
+This release also introduces a new [**built-in console app**](https://rqlite.io/docs/ui/), making it more convenient to manage a rqlite deployment. The console app is available at `http://localhost:4001/console` by default.
 
 ### Upgrading to v10
 
