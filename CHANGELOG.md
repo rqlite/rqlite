@@ -12,14 +12,15 @@
 ## v10.0.0 (April 27th 2026)
 
 ### What's new in this release?
+v10 introduces significantly improves **clustering, data integrity guarantees, and makes managing rqlite easier**.
 
-This release introduces a major improvement to the Raft [_Snapshot and Log Truncation_](https://youtu.be/8XbxQ1Epi5w?t=492) process. Previously, a Snapshot stream to a Follower would block the Leader from taking new Snapshots. Normally a subsequent retry of the snapshot operation would succeed, but a persistently slow Follower that kept requiring Snapshots could starve the Leader entirely. With v10, Snapshotting on the Leader is no longer blocked by any other operation happening in the _Snapshot Store_, including streaming a pre-existing snapshot to a Follower.
+This release introduces a major improvement to the **Raft [_Snapshot and Log Truncation_](https://youtu.be/8XbxQ1Epi5w?t=492) process**. Previously, a Snapshot stream to a Follower would block the Leader from taking new Snapshots. Normally a subsequent retry of the snapshot operation would succeed, but a persistently slow Follower that kept requiring Snapshots could starve the Leader entirely. With v10, Snapshotting on the Leader is no longer blocked by any other operation happening in the _Snapshot Store_, including streaming a pre-existing snapshot to a Follower.
 
-Concurrent read and write access to the database has been improved. In previous releases Raft snapshotting -- and, as a result, writes -- could be blocked for an extended period if there was a long-running read. In v10 the Raft snapshotting process is aborted and retried later if an long-running read is active.
+**Concurrent read and write access to the database has been improved**. In previous releases Raft snapshotting -- and, as a result, writes -- could be blocked for an extended period if there was a long-running read. In v10 the Raft snapshotting process is aborted and retried later if an long-running read is active.
 
-v10 also uses CRC32 checksumming more comprehensively to detect issues such as file system corruption and inadvertent modification of the underlying data files by systems other than rqlite.
+v10 also uses **CRC32 checksumming more comprehensively** to detect issues such as file system corruption and inadvertent modification of the underlying data files by systems other than rqlite.
 
-This release also introduces a new built-in console app, making it more convenient to manage a rqlite deployment. The console app is available at `http://localhost:4001/console` by default.
+This release also introduces a new **built-in console app**, making it more convenient to manage a rqlite deployment. The console app is available at `http://localhost:4001/console` by default.
 
 ### Upgrading to v10
 
