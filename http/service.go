@@ -29,6 +29,7 @@ import (
 	"github.com/rqlite/rqlite/v10/db"
 	"github.com/rqlite/rqlite/v10/http/console"
 	"github.com/rqlite/rqlite/v10/http/licenses"
+	"github.com/rqlite/rqlite/v10/internal/rsync"
 	"github.com/rqlite/rqlite/v10/internal/rtls"
 	"github.com/rqlite/rqlite/v10/proxy"
 	"github.com/rqlite/rqlite/v10/queue"
@@ -39,6 +40,10 @@ import (
 var (
 	// ErrLeaderNotFound is returned when a node cannot locate a leader
 	ErrLeaderNotFound = errors.New("leader not found")
+
+	// ErrServiceStarted is returned when an operation is attempted
+	// which requires the Service to be in a stopped state.
+	ErrServiceStarted = errors.New("service is started")
 )
 
 const kubernetesServiceHostEnv = "KUBERNETES_SERVICE_HOST"
@@ -265,6 +270,7 @@ func ResetStats() {
 // Service provides HTTP service.
 type Service struct {
 	httpServer http.Server
+	started    rsync.AtomicBool
 	closeCh    chan struct{}
 	addr       string       // Bind address of the HTTP service.
 	ln         net.Listener // Service listener
@@ -309,8 +315,9 @@ type Service struct {
 	logger *log.Logger
 }
 
-// New returns an uninitialized HTTP service. If credentials is nil, then
-// the service performs no authentication and authorization checks.
+// New returns an uninitialized HTTP service using the given listener. If
+// credentials is nil, then the service performs no authentication and
+// authorization checks.
 func New(addr string, store Store, cluster Cluster, pxy *proxy.Proxy, credentials CredentialStore) *Service {
 	s := &Service{
 		addr:                addr,
@@ -325,60 +332,35 @@ func New(addr string, store Store, cluster Cluster, pxy *proxy.Proxy, credential
 		credentialStore:     credentials,
 		logger:              log.New(os.Stderr, "[http] ", log.LstdFlags),
 	}
-	s.uiHandler = http.StripPrefix("/console/", http.FileServerFS(ui.Assets))
+	s.uiHandler = http.StripPrefix("/console/", http.FileServerFS(console.Assets))
 	return s
 }
 
-// Start starts the service.
+// Start starts the service using the default listener.
 func (s *Service) Start() error {
+	return s.StartWithListener(nil)
+}
+
+// StartWithListener starts the service using the given Listener.
+func (s *Service) StartWithListener(ln net.Listener) (retErr error) {
+	if s.started.Is() {
+		return ErrServiceStarted
+	}
+	defer func() {
+		s.started.SetBool(retErr == nil)
+	}()
+
 	s.httpServer = http.Server{
 		Handler: s,
 	}
 
-	var ln net.Listener
-	var err error
-	if s.CertFile == "" || s.KeyFile == "" {
-		ln, err = net.Listen("tcp", s.addr)
+	if ln == nil {
+		ln, err := s.defaultListener()
 		if err != nil {
 			return err
 		}
-	} else {
-		mTLSState := rtls.MTLSStateDisabled
-		if s.ClientVerify {
-			mTLSState = rtls.MTLSStateEnabled
-		}
-		s.certReloader, err = rtls.NewCertReloader(s.CertFile, s.KeyFile)
-		if err != nil {
-			return err
-		}
-
-		// Wrap the GetCertificate function so we update the stats.
-		getCertFunc := func() (*tls.Certificate, error) {
-			stats.Add(numTLSCertFetched, 1)
-			return s.certReloader.GetCertificate()
-		}
-
-		s.tlsConfig, err = rtls.CreateServerConfigWithFunc(getCertFunc, s.CACertFile, mTLSState)
-		if err != nil {
-			return err
-		}
-		ln, err = tls.Listen("tcp", s.addr, s.tlsConfig)
-		if err != nil {
-			return err
-		}
-		var b strings.Builder
-		b.WriteString(fmt.Sprintf("secure HTTPS server enabled with cert %s, key %s", s.CertFile, s.KeyFile))
-		if s.CACertFile != "" {
-			b.WriteString(fmt.Sprintf(", CA cert %s", s.CACertFile))
-		}
-		if s.ClientVerify {
-			b.WriteString(", mutual TLS enabled")
-		} else {
-			b.WriteString(", mutual TLS disabled")
-		}
-		s.logger.Println(b.String())
+		s.ln = ln
 	}
-	s.ln = ln
 
 	s.closeCh = make(chan struct{})
 	s.queueDone = make(chan struct{})
@@ -413,6 +395,8 @@ func (s *Service) Close() {
 		close(s.closeCh)
 	}
 	<-s.queueDone
+	s.ln = nil
+	s.started.Unset()
 }
 
 // HTTPS returns whether this service is using HTTPS.
@@ -523,6 +507,55 @@ func (s *Service) RegisterStatus(key string, stat StatusReporter) error {
 	}
 	s.statuses[key] = stat
 	return nil
+}
+
+// defaultListener returns a default listern for the HTTP service, given its
+// current configuration.
+func (s *Service) defaultListener() (net.Listener, error) {
+	var ln net.Listener
+	var err error
+	if s.CertFile == "" || s.KeyFile == "" {
+		ln, err = net.Listen("tcp", s.addr)
+		if err != nil {
+			return nil, err
+		}
+	} else {
+		mTLSState := rtls.MTLSStateDisabled
+		if s.ClientVerify {
+			mTLSState = rtls.MTLSStateEnabled
+		}
+		s.certReloader, err = rtls.NewCertReloader(s.CertFile, s.KeyFile)
+		if err != nil {
+			return nil, err
+		}
+
+		// Wrap the GetCertificate function so we update the stats.
+		getCertFunc := func() (*tls.Certificate, error) {
+			stats.Add(numTLSCertFetched, 1)
+			return s.certReloader.GetCertificate()
+		}
+
+		s.tlsConfig, err = rtls.CreateServerConfigWithFunc(getCertFunc, s.CACertFile, mTLSState)
+		if err != nil {
+			return nil, err
+		}
+		ln, err = tls.Listen("tcp", s.addr, s.tlsConfig)
+		if err != nil {
+			return nil, err
+		}
+		var b strings.Builder
+		b.WriteString(fmt.Sprintf("secure HTTPS server enabled with cert %s, key %s", s.CertFile, s.KeyFile))
+		if s.CACertFile != "" {
+			b.WriteString(fmt.Sprintf(", CA cert %s", s.CACertFile))
+		}
+		if s.ClientVerify {
+			b.WriteString(", mutual TLS enabled")
+		} else {
+			b.WriteString(", mutual TLS disabled")
+		}
+		s.logger.Println(b.String())
+	}
+	return ln, nil
 }
 
 // handleRemove handles cluster-remove requests.
