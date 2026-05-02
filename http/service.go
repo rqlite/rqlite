@@ -27,7 +27,7 @@ import (
 	"github.com/rqlite/rqlite/v10/command/proto"
 	"github.com/rqlite/rqlite/v10/command/sql"
 	"github.com/rqlite/rqlite/v10/db"
-	ui "github.com/rqlite/rqlite/v10/http/console"
+	"github.com/rqlite/rqlite/v10/http/console"
 	"github.com/rqlite/rqlite/v10/http/licenses"
 	"github.com/rqlite/rqlite/v10/internal/rtls"
 	"github.com/rqlite/rqlite/v10/proxy"
@@ -312,7 +312,7 @@ type Service struct {
 // New returns an uninitialized HTTP service with a default listener.
 func New(addr string, store Store, cluster Cluster, pxy *proxy.Proxy, credentials CredentialStore) *Service {
 	s := NewWithListener(addr, nil, store, cluster, pxy, credentials)
-	s.uiHandler = http.StripPrefix("/console/", http.FileServerFS(ui.Assets))
+	s.uiHandler = http.StripPrefix("/console/", http.FileServerFS(console.Assets))
 	return s
 }
 
