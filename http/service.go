@@ -334,7 +334,7 @@ func NewWithListener(addr string, ln net.Listener, store Store, cluster Cluster,
 		credentialStore:     credentials,
 		logger:              log.New(os.Stderr, "[http] ", log.LstdFlags),
 	}
-	s.uiHandler = http.StripPrefix("/console/", http.FileServerFS(ui.Assets))
+	s.uiHandler = http.StripPrefix("/console/", http.FileServerFS(console.Assets))
 	return s
 }
 
