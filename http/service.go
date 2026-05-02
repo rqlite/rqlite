@@ -29,6 +29,7 @@ import (
 	"github.com/rqlite/rqlite/v10/db"
 	"github.com/rqlite/rqlite/v10/http/console"
 	"github.com/rqlite/rqlite/v10/http/licenses"
+	"github.com/rqlite/rqlite/v10/internal/rsync"
 	"github.com/rqlite/rqlite/v10/internal/rtls"
 	"github.com/rqlite/rqlite/v10/proxy"
 	"github.com/rqlite/rqlite/v10/queue"
@@ -39,6 +40,10 @@ import (
 var (
 	// ErrLeaderNotFound is returned when a node cannot locate a leader
 	ErrLeaderNotFound = errors.New("leader not found")
+
+	// ErrServiceStarted is returned when an operation is attempted
+	// which requires the Service to be in a stopped state.
+	ErrServiceStarted = errors.New("service is started")
 )
 
 const kubernetesServiceHostEnv = "KUBERNETES_SERVICE_HOST"
@@ -265,6 +270,7 @@ func ResetStats() {
 // Service provides HTTP service.
 type Service struct {
 	httpServer http.Server
+	started    rsync.AtomicBool
 	closeCh    chan struct{}
 	addr       string       // Bind address of the HTTP service.
 	ln         net.Listener // Service listener
@@ -309,20 +315,12 @@ type Service struct {
 	logger *log.Logger
 }
 
-// New returns an uninitialized HTTP service with a default listener.
+// New returns an uninitialized HTTP service using the given listener. If
+// credentials is nil, then the service performs no authentication and
+// authorization checks.
 func New(addr string, store Store, cluster Cluster, pxy *proxy.Proxy, credentials CredentialStore) *Service {
-	s := NewWithListener(addr, nil, store, cluster, pxy, credentials)
-	s.uiHandler = http.StripPrefix("/console/", http.FileServerFS(console.Assets))
-	return s
-}
-
-// NewWithListener an uninitialized HTTP service using the given listener. If
-// credentials is nil, then the service performs no authentication and authorization
-// checks. If ln is nil the default listener will be used.
-func NewWithListener(addr string, ln net.Listener, store Store, cluster Cluster, pxy *proxy.Proxy, credentials CredentialStore) *Service {
 	s := &Service{
 		addr:                addr,
-		ln:                  ln,
 		store:               store,
 		proxy:               pxy,
 		DefaultQueueCap:     1024,
@@ -338,13 +336,25 @@ func NewWithListener(addr string, ln net.Listener, store Store, cluster Cluster,
 	return s
 }
 
-// Start starts the service.
+// Start starts the service using the default listener.
 func (s *Service) Start() error {
+	return s.StartWithListener(nil)
+}
+
+// StartWithListener starts the service using the given Listener.
+func (s *Service) StartWithListener(ln net.Listener) (retErr error) {
+	if s.started.Is() {
+		return ErrServiceStarted
+	}
+	defer func() {
+		s.started.SetBool(retErr == nil)
+	}()
+
 	s.httpServer = http.Server{
 		Handler: s,
 	}
 
-	if s.ln == nil {
+	if ln == nil {
 		ln, err := s.defaultListener()
 		if err != nil {
 			return err
@@ -385,6 +395,8 @@ func (s *Service) Close() {
 		close(s.closeCh)
 	}
 	<-s.queueDone
+	s.ln = nil
+	s.started.Unset()
 }
 
 // HTTPS returns whether this service is using HTTPS.
