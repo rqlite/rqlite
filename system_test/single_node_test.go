@@ -1558,7 +1558,7 @@ func Test_SingleNodeReopen(t *testing.T) {
 	if err := node.Store.Open(); err != nil {
 		t.Fatalf("failed to re-open store: %s", err)
 	}
-	if err := node.Service.Start(); err != nil {
+	if err := node.RestartHTTP(); err != nil {
 		t.Fatalf("failed to restart service: %s", err)
 	}
 	if _, err := node.WaitForLeader(); err != nil {
@@ -1593,7 +1593,7 @@ func Test_SingleNodeNoopReopen(t *testing.T) {
 	if err := node.Store.Open(); err != nil {
 		t.Fatalf("failed to re-open store: %s", err)
 	}
-	if err := node.Service.Start(); err != nil {
+	if err := node.RestartHTTP(); err != nil {
 		t.Fatalf("failed to restart service: %s", err)
 	}
 	// This testing tells service to restart with localhost:0
@@ -1678,7 +1678,7 @@ func Test_SingleNodeNoopSnapReopen(t *testing.T) {
 	if err := node.Store.Open(); err != nil {
 		t.Fatalf("failed to re-open store: %s", err)
 	}
-	if err := node.Service.Start(); err != nil {
+	if err := node.RestartHTTP(); err != nil {
 		t.Fatalf("failed to restart service: %s", err)
 	}
 	// This testing tells service to restart with localhost:0
@@ -1768,7 +1768,7 @@ func Test_SingleNodeNoopSnapLogsReopen(t *testing.T) {
 	if err := node.Store.Open(); err != nil {
 		t.Fatalf("failed to re-open store: %s", err)
 	}
-	if err := node.Service.Start(); err != nil {
+	if err := node.RestartHTTP(); err != nil {
 		t.Fatalf("failed to restart service: %s", err)
 	}
 	// This testing tells service to restart with localhost:0
@@ -1864,7 +1864,11 @@ func Test_SingleNodeAutoRestore(t *testing.T) {
 	clstrDialer := tcp.NewDialer(cluster.MuxClusterHeader, nil)
 	clstrClient := cluster.NewClient(clstrDialer, 30*time.Second)
 	pxy := proxy.New(node.Store, clstrClient)
-	node.Service = httpd.New("localhost:0", node.Store, clstrClient, pxy, nil)
+	httpLn, err := httpd.DefaultListener("localhost:0")
+	if err != nil {
+		t.Fatalf("failed to create HTTP listener: %s", err.Error())
+	}
+	node.Service = httpd.New(httpLn, node.Store, clstrClient, pxy, nil)
 
 	if err := node.Service.Start(); err != nil {
 		t.Fatalf("failed to start HTTP server: %s", err.Error())
