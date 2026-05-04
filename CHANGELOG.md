@@ -28,7 +28,7 @@ This release also introduces a new [**built-in console app**](https://rqlite.io/
 Upgrading from v7 or later is seamless and has been extensively tested, though upgrading first to the latest v9 release is recommended. Upgrading to v10 supports rolling upgrades, but **you cannot join a new v10 node to a v9 (or earlier) cluster**. Upgrade your existing cluster to v10 before adding new nodes. Back up your [rqlite system](https://rqlite.io/docs/guides/backup/) before upgrading.
 
 There are no breaking API changes in this release, nor any changes to how clustering operates. However there have been some command-line option changes:
- - `-on-disk-path` has been removed. It provided little benefit while making it too easy to corrupt a node.
+ - `-on-disk-path` has been removed. It provided little benefit while making it too easy to corrupt a node. To upgrade a rqlite system which uses this flag first backup your rqlite node, deploy a new v10 system, and then initialize the new deployment using the backup.
  - `-raft-timeout` is now `-raft-heartbeat-timeout`, to better reflect its purpose.
 
 **Downgrading from v10**: If you need to downgrade, back up your v10 system and use that backup to deploy a new pre-v10 system.
