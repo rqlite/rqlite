@@ -435,7 +435,11 @@ func createDiscoService(cfg *Config, str *store.Store) (*disco.Service, error) {
 
 func startHTTPService(cfg *Config, str *store.Store, cltr *cluster.Client, credStr *auth.CredentialsStore, pxy *proxy.Proxy) (*httpd.Service, error) {
 	// Create HTTP server and load authentication information.
-	s := httpd.New(cfg.HTTPAddr, str, cltr, pxy, credStr)
+	ln, err := httpd.DefaultListener(cfg.HTTPAddr)
+	if err != nil {
+		return nil, err
+	}
+	s := httpd.New(ln, str, cltr, pxy, credStr)
 
 	s.CACertFile = cfg.HTTPx509CACert
 	s.CertFile = cfg.HTTPx509Cert
@@ -453,7 +457,11 @@ func startHTTPService(cfg *Config, str *store.Store, cltr *cluster.Client, credS
 		"build_time":         cmd.Buildtime,
 	}
 	s.SetAllowOrigin(cfg.HTTPAllowOrigin)
-	return s, s.Start()
+	if err := s.Start(); err != nil {
+		ln.Close()
+		return nil, err
+	}
+	return s, nil
 }
 
 // startNodeMux starts the TCP mux on the given listener, which should be already

@@ -266,7 +266,6 @@ func ResetStats() {
 type Service struct {
 	httpServer http.Server
 	closeCh    chan struct{}
-	addr       string       // Bind address of the HTTP service.
 	ln         net.Listener // Service listener
 
 	uiHandler http.Handler
@@ -309,11 +308,12 @@ type Service struct {
 	logger *log.Logger
 }
 
-// New returns an uninitialized HTTP service. If credentials is nil, then
-// the service performs no authentication and authorization checks.
-func New(addr string, store Store, cluster Cluster, pxy *proxy.Proxy, credentials CredentialStore) *Service {
+// New returns an uninitialized HTTP service that will serve on ln. If
+// credentials is nil, then the service performs no authentication and
+// authorization checks.
+func New(ln net.Listener, store Store, cluster Cluster, pxy *proxy.Proxy, credentials CredentialStore) *Service {
 	s := &Service{
-		addr:                addr,
+		ln:                  ln,
 		store:               store,
 		proxy:               pxy,
 		DefaultQueueCap:     1024,
@@ -329,24 +329,25 @@ func New(addr string, store Store, cluster Cluster, pxy *proxy.Proxy, credential
 	return s
 }
 
+// SetListener sets the listener used by the service. It must be called
+// before Start, and is intended to install a fresh listener prior to
+// restarting a Service whose previous listener was closed by Close.
+func (s *Service) SetListener(ln net.Listener) {
+	s.ln = ln
+}
+
 // Start starts the service.
 func (s *Service) Start() error {
 	s.httpServer = http.Server{
 		Handler: s,
 	}
 
-	var ln net.Listener
-	var err error
-	if s.CertFile == "" || s.KeyFile == "" {
-		ln, err = net.Listen("tcp", s.addr)
-		if err != nil {
-			return err
-		}
-	} else {
+	if s.CertFile != "" && s.KeyFile != "" {
 		mTLSState := rtls.MTLSStateDisabled
 		if s.ClientVerify {
 			mTLSState = rtls.MTLSStateEnabled
 		}
+		var err error
 		s.certReloader, err = rtls.NewCertReloader(s.CertFile, s.KeyFile)
 		if err != nil {
 			return err
@@ -362,10 +363,7 @@ func (s *Service) Start() error {
 		if err != nil {
 			return err
 		}
-		ln, err = tls.Listen("tcp", s.addr, s.tlsConfig)
-		if err != nil {
-			return err
-		}
+		s.ln = tls.NewListener(s.ln, s.tlsConfig)
 		var b strings.Builder
 		b.WriteString(fmt.Sprintf("secure HTTPS server enabled with cert %s, key %s", s.CertFile, s.KeyFile))
 		if s.CACertFile != "" {
@@ -378,7 +376,6 @@ func (s *Service) Start() error {
 		}
 		s.logger.Println(b.String())
 	}
-	s.ln = ln
 
 	s.closeCh = make(chan struct{})
 	s.queueDone = make(chan struct{})
