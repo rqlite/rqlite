@@ -667,7 +667,7 @@ func (s *Store) Open() (retErr error) {
 			cleanupAndExit := func(msg string) {
 				s.logger.Print(msg)
 				os.Remove(s.cleanSnapshotPath)
-				s.logger.Fatal("removed clean snapshot marker file and aborting - try restarting")
+				s.logger.Fatal("removed clean snapshot marker file. Aborting now, but restarting is safe and can be attempted")
 			}
 
 			// Whatever happens, unblock snapshoting. This is critical because we
