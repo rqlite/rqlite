@@ -11,7 +11,7 @@ import (
 
 var (
 	castagnoliTable = crc32.MakeTable(crc32.Castagnoli)
-	ieeeTable       = crc32.MakeTable(crc32.IEEE)
+	ieeeTable       = crc32.IEEETable
 )
 
 // SyncState represents whether a file should be synced after writing.
