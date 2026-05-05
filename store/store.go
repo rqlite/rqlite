@@ -293,6 +293,9 @@ type Checkpointer interface {
 	Checkpoint(w io.Writer, timeout time.Duration) (*sql.CheckpointManagerMeta, int64, error)
 }
 
+// Resolver in the interface network address resolvers must implement.
+type Resolver func(address string) (string, error)
+
 // ClusterState defines the possible Raft states the current node can be in
 type ClusterState int
 
@@ -314,6 +317,8 @@ type Store struct {
 	walStagingDir string
 	peersPath     string
 	peersInfoPath string
+
+	resolver Resolver
 
 	cleanSnapshotPath string
 	crcBadHandler     func(fpCRC32, actualCRC32 uint32) // For test purposes.
@@ -517,6 +522,15 @@ func (s *Store) SetRestorePath(path string) error {
 
 	s.RegisterReadyChannel(s.restoreDoneCh)
 	s.restorePath = path
+	return nil
+}
+
+// SetResolver allows overriding the default address resolver.
+func (s *Store) SetResolver(r Resolver) error {
+	if s.open.Is() {
+		return ErrOpen
+	}
+	s.resolver = r
 	return nil
 }
 
@@ -2088,7 +2102,7 @@ func (s *Store) Notify(nr *proto.NotifyRequest) error {
 	// to incomplete DNS records across the underlying infrastructure. If it can't
 	// then don't consider this Notify attempt successful -- so the notifying node
 	// will presumably try again.
-	if addr, err := resolvableAddress(nr.Address); err != nil {
+	if addr, err := s.resolvableAddress(nr.Address); err != nil {
 		return fmt.Errorf("failed to resolve %s: %w", addr, err)
 	}
 
@@ -2137,7 +2151,7 @@ func (s *Store) Join(jr *proto.JoinRequest) error {
 	// to incomplete DNS records across the underlying infrastructure. If it can't
 	// then don't consider this join attempt successful -- so the joining node
 	// will presumably try again.
-	if _, err := resolvableAddress(addr); err != nil {
+	if _, err := s.resolvableAddress(addr); err != nil {
 		return fmt.Errorf("failed to resolve %s: %w", addr, err)
 	}
 
@@ -3009,6 +3023,19 @@ func (s *Store) selfLeaderChange(leader bool) {
 	}
 }
 
+func (s *Store) resolvableAddress(addr string) (string, error) {
+	if s.resolver != nil {
+		return s.resolver(addr)
+	}
+	h, _, err := net.SplitHostPort(addr)
+	if err != nil {
+		// Just try the given address directly.
+		h = addr
+	}
+	_, err = net.LookupHost(h)
+	return h, err
+}
+
 func (s *Store) createSnapshotFingerprint() error {
 	tmpFP := s.cleanSnapshotPath + ".tmp"
 	defer os.Remove(tmpFP)
@@ -3203,16 +3230,6 @@ func prettyVoter(v bool) string {
 		return "voter"
 	}
 	return "non-voter"
-}
-
-func resolvableAddress(addr string) (string, error) {
-	h, _, err := net.SplitHostPort(addr)
-	if err != nil {
-		// Just try the given address directly.
-		h = addr
-	}
-	_, err = net.LookupHost(h)
-	return h, err
 }
 
 func friendlyBytes(n uint64) string {
