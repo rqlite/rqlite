@@ -674,16 +674,18 @@ func (s *Store) Open() (retErr error) {
 			}
 			if sum != fp.CRC32 { // Handle zero CRC32 for backward compatibility.
 				if s.crcBadHandler != nil {
+					// This is a test path only.
 					s.crcBadHandler(fp.CRC32, sum)
-				}
-
-				// Fallback to the older IEEE CRC32 format to check for upgrading from v9.
-				sum, err = rsum.CRC32IEEE(s.dbPath)
-				if err != nil {
-					s.logger.Fatalf("failed to calculate IEEE CRC32 of database file during clean snapshot check: %s", err)
-				}
-				if sum != fp.CRC32 {
-					s.logger.Fatalf("CRC32 checksum mismatch during clean snapshot check - aborting")
+				} else {
+					// Fallback to the older IEEE CRC32 format to check for upgrading from v9.
+					s.logger.Println("falling back to IEEE CRC32 calculatum for clean snapshot check")
+					sum, err = rsum.CRC32IEEE(s.dbPath)
+					if err != nil {
+						s.logger.Fatalf("failed to calculate IEEE CRC32 of database file during clean snapshot check: %s", err)
+					}
+					if sum != fp.CRC32 {
+						s.logger.Fatalf("CRC32 checksum mismatch during clean snapshot check - aborting")
+					}
 				}
 			}
 			s.logger.Printf("clean snapshot check CRC32 matched, calculation took %s", dur)
