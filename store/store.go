@@ -664,6 +664,12 @@ func (s *Store) Open() (retErr error) {
 			return err
 		}
 		go func() {
+			cleanupAndExit := func(msg string) {
+				s.logger.Print(msg)
+				os.Remove(s.cleanSnapshotPath)
+				s.logger.Fatal("removed clean snapshot marker file and aborting - try restarting")
+			}
+
 			// Whatever happens, unblock snapshoting. This is critical because we
 			// locked snapshotting before this goroutine launched.
 			defer s.snapshotCAS.End()
@@ -672,7 +678,7 @@ func (s *Store) Open() (retErr error) {
 			}
 			sum, dur, err := rsum.CRC32WithTiming(s.dbPath)
 			if err != nil {
-				s.logger.Fatalf("failed to calculate CRC32 of database file during clean snapshot check: %s", err)
+				cleanupAndExit(fmt.Sprintf("failed to calculate CRC32 of database file during clean snapshot check: %s", err))
 			}
 			if sum != fp.CRC32 { // Handle zero CRC32 for backward compatibility.
 				if s.crcBadHandler != nil {
@@ -683,11 +689,10 @@ func (s *Store) Open() (retErr error) {
 					s.logger.Println("falling back to IEEE CRC32 calculation for clean snapshot check")
 					sum, err = rsum.CRC32IEEE(s.dbPath)
 					if err != nil {
-						s.logger.Fatalf("failed to calculate IEEE CRC32 of database file during clean snapshot check: %s", err)
+						cleanupAndExit(fmt.Sprintf("failed to calculate IEEE CRC32 of database file during clean snapshot check: %s", err))
 					}
 					if sum != fp.CRC32 {
-						os.Remove(s.cleanSnapshotPath)
-						s.logger.Fatalf("CRC32 checksum mismatch during clean snapshot check - removed marker file and aborting")
+						cleanupAndExit("CRC32 checksum mismatch during clean snapshot check")
 					}
 				}
 			}
