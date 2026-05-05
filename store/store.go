@@ -686,7 +686,8 @@ func (s *Store) Open() (retErr error) {
 						s.logger.Fatalf("failed to calculate IEEE CRC32 of database file during clean snapshot check: %s", err)
 					}
 					if sum != fp.CRC32 {
-						s.logger.Fatalf("CRC32 checksum mismatch during clean snapshot check - aborting")
+						os.Remove(s.cleanSnapshotPath)
+						s.logger.Fatalf("CRC32 checksum mismatch during clean snapshot check - removed marker file and aborting")
 					}
 				}
 			}
