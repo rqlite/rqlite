@@ -638,15 +638,17 @@ func (s *Store) Open() (retErr error) {
 		}
 		fp := &FileFingerprint{}
 		if err := fp.ReadFromFile(s.cleanSnapshotPath); err != nil {
+			s.logger.Printf("failed to read clean snapshot (%s), performing full restore", err)
 			return nil
 		}
 		mt, sz, err := fsutil.ModTimeSize(s.dbPath)
 		if err != nil {
+			s.logger.Printf("failed to read mod time from clean snapshot (%s), performing full restore", err)
 			return nil
 		}
 
 		if !mt.Equal(fp.ModTime) || sz != fp.Size {
-			// Basic sanity check didn't pass, full restore needed.
+			s.logger.Printf("clean snapshot failed mod time and size check, full restore needed")
 			return nil
 		}
 
