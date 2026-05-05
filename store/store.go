@@ -680,7 +680,7 @@ func (s *Store) Open() (retErr error) {
 					s.crcBadHandler(fp.CRC32, sum)
 				} else {
 					// Fallback to the older IEEE CRC32 format to check for upgrading from v9.
-					s.logger.Println("falling back to IEEE CRC32 calculatum for clean snapshot check")
+					s.logger.Println("falling back to IEEE CRC32 calculation for clean snapshot check")
 					sum, err = rsum.CRC32IEEE(s.dbPath)
 					if err != nil {
 						s.logger.Fatalf("failed to calculate IEEE CRC32 of database file during clean snapshot check: %s", err)
