@@ -9,7 +9,10 @@ import (
 	"time"
 )
 
-var castagnoliTable = crc32.MakeTable(crc32.Castagnoli)
+var (
+	castagnoliTable = crc32.MakeTable(crc32.Castagnoli)
+	ieeeTable       = crc32.MakeTable(crc32.IEEE)
+)
 
 // SyncState represents whether a file should be synced after writing.
 type SyncState bool
@@ -21,6 +24,21 @@ var (
 	// NoSync indicates that the file should not be synced after writing.
 	NoSync SyncState = false
 )
+
+// CRC32IEEE calculates the IEEE CRC32 checksum of the file at the given path.
+func CRC32IEEE(path string) (uint32, error) {
+	f, err := os.Open(path)
+	if err != nil {
+		return 0, err
+	}
+	defer f.Close()
+
+	h := crc32.New(ieeeTable)
+	if _, err := io.Copy(h, f); err != nil {
+		return 0, err
+	}
+	return h.Sum32(), nil
+}
 
 // CRC32 calculates the CRC32 checksum of the file at the given path.
 func CRC32(path string) (uint32, error) {
