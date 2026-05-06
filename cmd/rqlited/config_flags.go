@@ -80,6 +80,8 @@ type Config struct {
 	DiscoConfig string
 	// Enable SQLite foreign key constraints
 	FKConstraints bool
+	// Maximum number of read-only connections to database
+	DBMaxReadOnlyConns int
 	// Period between automatic VACUUMs. It not set, not enabled
 	AutoVacInterval time.Duration
 	// Period between automatic 'PRAGMA optimize'. Set to 0h to disable
@@ -173,6 +175,7 @@ func Forge(arguments []string) (*flag.FlagSet, *Config, error) {
 	fs.StringVar(&config.DiscoKey, "disco-key", "rqlite", "Key prefix for cluster discovery service")
 	fs.StringVar(&config.DiscoConfig, "disco-config", "", "Set discovery config, or path to cluster discovery config file")
 	fs.BoolVar(&config.FKConstraints, "fk", false, "Enable SQLite foreign key constraints")
+	fs.IntVar(&config.DBMaxReadOnlyConns, "db-max-ro-conns", 256, "Maximum number of read-only connections to database")
 	fs.DurationVar(&config.AutoVacInterval, "auto-vacuum-int", mustParseDuration("0s"), "Period between automatic VACUUMs. It not set, not enabled")
 	fs.DurationVar(&config.AutoOptimizeInterval, "auto-optimize-int", mustParseDuration("24h"), "Period between automatic 'PRAGMA optimize'. Set to 0h to disable")
 	fs.StringVar(&config.RaftLogLevel, "raft-log-level", "WARN", "Minimum log level for Raft module")
@@ -199,7 +202,7 @@ func Forge(arguments []string) (*flag.FlagSet, *Config, error) {
 	fs.StringVar(&config.MemProfile, "mem-profile", "", "Path to file for memory profiling information")
 	fs.StringVar(&config.TraceProfile, "trace-profile", "", "Path to file for trace profiling information")
 	fs.Usage = func() {
-		usage("\nrqlite is a lightweight, fault-tolerant relational database, which uses SQLite as its\nstorage engine. It provides easy-to-use and highly-available storage for relational data.\n\nVisit https://www.rqlite.io to learn more.\n\nUsage: rqlited [flags] <data directory>\n")
+		usage("\nrqlite is a lightweight, distributed relational database, which uses SQLite as its\nstorage engine. It provides an easy-to-use, fault-tolerant store for relational data.\n\nVisit https://www.rqlite.io to learn more.\n\nUsage: rqlited [flags] <data directory>\n")
 		fs.PrintDefaults()
 	}
 	if err := fs.Parse(arguments); err != nil {

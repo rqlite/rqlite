@@ -243,6 +243,22 @@ func Test_RemoveFiles(t *testing.T) {
 	}
 }
 
+func Test_SetMaxReadOnlyConns(t *testing.T) {
+	path := mustTempPath()
+	defer os.Remove(path)
+	db, err := Open(path, false, true)
+	if err != nil {
+		t.Fatalf("error opening nonexistent database")
+	}
+	defer db.Close()
+
+	db.SetMaxReadOnlyConns(42)
+	stats := db.ConnectionPoolStats(db.roDB)
+	if got, exp := stats.MaxOpenConnections, 42; got != exp {
+		t.Fatalf("incorrect max readonly conns, exp %d, got %d", exp, got)
+	}
+}
+
 func Test_DBPaths(t *testing.T) {
 	dbWAL, pathWAL := mustCreateOnDiskDatabaseWAL()
 	defer dbWAL.Close()
