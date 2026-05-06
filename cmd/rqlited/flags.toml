@@ -338,7 +338,7 @@ cli = "db-max-ro-conns"
 type = "int"
 short_help = "Maximum number of read-only connections to database"
 long_help = """
-This places a limit of the number of read queries the node can service concurrently. If this is not bounded query load could cause the node to hit the operating systems's per-process thread limit and crash the node. Setting this to zero means there is no limit.
+This places a limit of the number of read queries the node can service concurrently. If this is not bounded query load could cause the node to hit the operating system's per-process thread limit and crash the node. Setting this to zero means there is no limit.
 """
 default = 256
 
