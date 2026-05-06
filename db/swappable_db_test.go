@@ -14,7 +14,7 @@ func Test_OpenSwappable_Success(t *testing.T) {
 	defer os.Remove(path)
 
 	// Attempt to open a swappable database
-	swappableDB, err := OpenSwappable(path, nil, false, false)
+	swappableDB, err := OpenSwappable(path, nil, false, false, 0)
 	if err != nil {
 		t.Fatalf("failed to open swappable database: %s", err)
 	}
@@ -42,7 +42,7 @@ func Test_OpenSwappable_InvalidPath(t *testing.T) {
 	invalidPath := "/invalid/path/to/database"
 
 	// Attempt to open a swappable database with an invalid path
-	swappableDB, err := OpenSwappable(invalidPath, nil, false, false)
+	swappableDB, err := OpenSwappable(invalidPath, nil, false, false, 0)
 	if err == nil {
 		swappableDB.Close()
 		t.Fatalf("expected an error when opening swappable database with invalid path, got nil")
@@ -70,7 +70,7 @@ func Test_SwapSuccess(t *testing.T) {
 	// Create a SwappableDB with an empty database
 	swappablePath := mustTempPath()
 	defer os.Remove(swappablePath)
-	swappableDB, err := OpenSwappable(swappablePath, nil, false, false)
+	swappableDB, err := OpenSwappable(swappablePath, nil, false, false, 0)
 	if err != nil {
 		t.Fatalf("failed to open swappable database: %s", err)
 	}
@@ -112,7 +112,7 @@ func Test_SwapSuccess_Driver(t *testing.T) {
 	// Create a SwappableDB with an empty database
 	swappablePath := mustTempPath()
 	defer os.Remove(swappablePath)
-	swappableDB, err := OpenSwappable(swappablePath, ForeignKeyDriver(), false, false)
+	swappableDB, err := OpenSwappable(swappablePath, ForeignKeyDriver(), false, false, 0)
 	if err != nil {
 		t.Fatalf("failed to open swappable database: %s", err)
 	}
@@ -142,7 +142,7 @@ func Test_SwapInvalidSQLiteFile(t *testing.T) {
 	// Create a SwappableDB with an empty database
 	swappablePath := mustTempPath()
 	defer os.Remove(swappablePath)
-	swappableDB, err := OpenSwappable(swappablePath, nil, false, false)
+	swappableDB, err := OpenSwappable(swappablePath, nil, false, false, 0)
 	if err != nil {
 		t.Fatalf("failed to open swappable database: %s", err)
 	}

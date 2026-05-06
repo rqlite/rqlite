@@ -307,6 +307,13 @@ func OpenWithDriver(drv *Driver, dbPath string, fkEnabled, wal bool) (retDB *DB,
 	}, nil
 }
 
+// SetMaxReadOnlyConns sets the maximum number of read-only connections to the
+// database. See https://pkg.go.dev/database/sql#DB.SetMaxIdleConns for full
+// details.
+func (db *DB) SetMaxReadOnlyConns(n int) {
+	db.rwDB.SetMaxOpenConns(n)
+}
+
 // PreUpdateHookCallback is a callback function that is called before a row is modified
 // in the database.
 type PreUpdateHookCallback func(ev *command.CDCEvent) error

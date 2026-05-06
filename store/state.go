@@ -203,7 +203,7 @@ func RecoverNode(dataDir string, extensions []string, logger *log.Logger, logs r
 		drv = sql.NewDriver(random.StringPattern("rqlite-extended-recover-xxxx-xxxx-xxxx"),
 			extensions, sql.CnkOnCloseModeDisabled)
 	}
-	db, err := sql.OpenSwappable(tmpDBPath, drv, false, true)
+	db, err := sql.OpenSwappable(tmpDBPath, drv, false, true, 0)
 	if err != nil {
 		return fmt.Errorf("failed to open temporary database: %s", err)
 	}

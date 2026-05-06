@@ -425,6 +425,7 @@ type Store struct {
 	AutoVacInterval          time.Duration
 	AutoOptimizeInterval     time.Duration
 	CompressSnapTransport    bool
+	MaxReadOnlyConns         int
 
 	// Node-reaping configuration
 	ReapTimeout         time.Duration
@@ -775,7 +776,7 @@ func (s *Store) Open() (retErr error) {
 			s.dbConf.Extensions, sql.CnkOnCloseModeDisabled)
 	}
 
-	s.db, err = createDBOnDisk(s.dbPath, s.dbDrv, removeDBFiles, s.dbConf.FKConstraints)
+	s.db, err = createDBOnDisk(s.dbPath, s.dbDrv, removeDBFiles, s.dbConf.FKConstraints, s.MaxReadOnlyConns)
 	if err != nil {
 		return fmt.Errorf("failed to create on-disk database: %s", err)
 	}
@@ -3190,7 +3191,7 @@ func raftLogInfoMessage(sz int64, fi, li uint64) string {
 // for the store. The WAL-specific files are always removed as there is
 // no guarantee they are consistent with the main database file. If remove
 // is true, all existing database files at that path are removed first.
-func createDBOnDisk(path string, drv *sql.Driver, remove, fkConstraints bool) (*sql.SwappableDB, error) {
+func createDBOnDisk(path string, drv *sql.Driver, remove, fkConstraints bool, maxROConns int) (*sql.SwappableDB, error) {
 	if remove {
 		if err := sql.RemoveFiles(path); err != nil {
 			return nil, err
@@ -3200,7 +3201,7 @@ func createDBOnDisk(path string, drv *sql.Driver, remove, fkConstraints bool) (*
 			return nil, err
 		}
 	}
-	return sql.OpenSwappable(path, drv, fkConstraints, true)
+	return sql.OpenSwappable(path, drv, fkConstraints, true, maxROConns)
 }
 
 func createTemp(dir, pattern string) (*os.File, error) {

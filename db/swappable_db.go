@@ -24,7 +24,7 @@ type SwappableDB struct {
 // OpenSwappable returns a new SwappableDB instance, which opens the database at the given path,
 // using the given driver. If drv is nil then the default driver is used. If fkEnabled is true,
 // foreign key constraints are enabled. If wal is true, the WAL journal mode is enabled.
-func OpenSwappable(dbPath string, drv *Driver, fkEnabled, wal bool) (*SwappableDB, error) {
+func OpenSwappable(dbPath string, drv *Driver, fkEnabled, wal bool, maxROConns int) (*SwappableDB, error) {
 	if drv == nil {
 		drv = DefaultDriver()
 	}
@@ -32,6 +32,8 @@ func OpenSwappable(dbPath string, drv *Driver, fkEnabled, wal bool) (*SwappableD
 	if err != nil {
 		return nil, err
 	}
+	db.SetMaxReadOnlyConns(maxROConns)
+
 	mgr, err := NewCheckpointManager(db)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create checkpoint manager: %s", err)
