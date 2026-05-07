@@ -101,7 +101,7 @@ cli = "http-ca-cert"
 type = "string"
 short_help = "Path to X.509 CA certificate for HTTPS mTLS"
 long_help = """
-Path to a PEM file containing one or more X.509 CA certificates. rqlite uses every certificate in this file as a trust anchor when verifying client certificates presented to its HTTPS API under mutual TLS. To restrict trust to a specific issuer, ensure the file contains only that issuer's certificate."""
+Path to a PEM file containing one or more X.509 CA certificates. rqlite uses every certificate in this file as a trust anchor when verifying client certificates presented to its HTTPS API under mutual TLS. To restrict trust to a specific issuer, ensure the file contains only that issuer's certificate You must also set -http-verify-client to enable mTLS."""
 default = ""
 
 [[flags]]
