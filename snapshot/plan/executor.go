@@ -177,3 +177,21 @@ func (e *Executor) CalcCRC32(dataPath, crcPath string) error {
 	}
 	return nil
 }
+
+// VerifyDB runs an integrity check on the database at the given path.
+func (e *Executor) VerifyDB(path string) error {
+	srcDB, err := db.Open(path, false, true)
+	if err != nil {
+		return err
+	}
+	defer srcDB.Close()
+
+	res, err := srcDB.VerifyIntegrity()
+	if err != nil {
+		return err
+	}
+	if !res.OK {
+		return fmt.Errorf("database failed verification: %s", res.Issues[0])
+	}
+	return nil
+}
