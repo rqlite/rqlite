@@ -388,6 +388,17 @@ func TestExecutor_CalcCRC32(t *testing.T) {
 	}
 }
 
+func TestExecutor_CheckDB(t *testing.T) {
+	tmpDir := t.TempDir()
+	srcDB := filepath.Join(tmpDir, "main.db")
+	mustCopyFile("testdata/main.db", srcDB)
+
+	e := NewExecutor()
+	if err := e.CheckDB(srcDB); err != nil {
+		t.Fatalf("failed to check integrity of database: %s", err)
+	}
+}
+
 func compareCRC32(dataPath, crcPath string) (bool, error) {
 	return sidecar.CompareFile(dataPath, crcPath)
 }

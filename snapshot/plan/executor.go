@@ -177,3 +177,31 @@ func (e *Executor) CalcCRC32(dataPath, crcPath string) error {
 	}
 	return nil
 }
+
+// CheckDB runs an integrity check on the database at the given path.
+func (e *Executor) CheckDB(path string) error {
+	srcDB, err := db.Open(path, false, false)
+	if err != nil {
+		return err
+	}
+
+	rows, err := srcDB.IntegrityCheck(true)
+	if err != nil {
+		return err
+	}
+	if len(rows) != 1 {
+		return fmt.Errorf("incorrect number of rows returned: %d", len(rows))
+	}
+	if len(rows[0].Values) != 1 {
+		return fmt.Errorf("incorrect number of values returned: %d", len(rows[0].Values))
+	}
+	params := rows[0].Values[0].GetParameters()
+	if len(params) != 1 {
+		return fmt.Errorf("incorrect number of values returned: %d", len(rows[0].Values))
+	}
+	v := rows[0].Values[0].GetParameters()[0]
+	if v.GetS() != "ok" {
+		return fmt.Errorf("integrity check failed: %v", v)
+	}
+	return nil
+}
