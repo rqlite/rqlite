@@ -956,6 +956,7 @@ func (db *DB) VerifyIntegrity() (IntegrityResult, error) {
 	if !res.OK && len(res.Issues) != 1 {
 		return IntegrityResult{}, fmt.Errorf("verification failed, but no issue available")
 	}
+	return res, nil
 }
 
 // SetSynchronousMode sets the synchronous mode of the database.
