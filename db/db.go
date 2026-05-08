@@ -99,6 +99,28 @@ var (
 	}
 )
 
+// IntegrityCheckMode selects between PRAGMA quick_check and PRAGMA integrity_check.
+type IntegrityCheckMode int
+
+const (
+	// IntegrityCheckQuick selects PRAGMA quick_check: faster, but skips
+	// UNIQUE constraint and index content verification.
+	IntegrityCheckQuick IntegrityCheckMode = iota
+
+	// IntegrityCheckFull selects PRAGMA integrity_check, the more thorough check.
+	IntegrityCheckFull
+)
+
+// IntegrityResult is the outcome of a single integrity check.
+//
+// OK is true iff SQLite returned its sentinel "ok" row. When OK is false,
+// Issues holds the per-problem descriptions SQLite reported, in order,
+// up to the maxIssues bound passed to IntegrityCheck.
+type IntegrityResult struct {
+	OK     bool
+	Issues []string
+}
+
 // DBVersion is the SQLite version.
 var DBVersion string
 
@@ -875,28 +897,6 @@ func (db *DB) Vacuum() error {
 func (db *DB) VacuumInto(path string) error {
 	_, err := db.rwDB.Exec(fmt.Sprintf("VACUUM INTO '%s'", strings.ReplaceAll(path, "'", "''")))
 	return err
-}
-
-// IntegrityCheckMode selects between PRAGMA quick_check and PRAGMA integrity_check.
-type IntegrityCheckMode int
-
-const (
-	// IntegrityCheckQuick selects PRAGMA quick_check: faster, but skips
-	// UNIQUE constraint and index content verification.
-	IntegrityCheckQuick IntegrityCheckMode = iota
-
-	// IntegrityCheckFull selects PRAGMA integrity_check, the more thorough check.
-	IntegrityCheckFull
-)
-
-// IntegrityResult is the outcome of a single integrity check.
-//
-// OK is true iff SQLite returned its sentinel "ok" row. When OK is false,
-// Issues holds the per-problem descriptions SQLite reported, in order,
-// up to the maxIssues bound passed to IntegrityCheck.
-type IntegrityResult struct {
-	OK     bool
-	Issues []string
 }
 
 // IntegrityCheck runs PRAGMA integrity_check (IntegrityCheckFull) or
