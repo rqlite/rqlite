@@ -180,10 +180,11 @@ func (e *Executor) CalcCRC32(dataPath, crcPath string) error {
 
 // CheckDB runs an integrity check on the database at the given path.
 func (e *Executor) CheckDB(path string) error {
-	srcDB, err := db.Open(path, false, false)
+	srcDB, err := db.Open(path, false, true)
 	if err != nil {
 		return err
 	}
+	defer srcDB.Close()
 
 	rows, err := srcDB.IntegrityCheck(true)
 	if err != nil {

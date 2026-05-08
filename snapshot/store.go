@@ -199,9 +199,10 @@ type Store struct {
 	// Multi-reader single-writer lock for the Store, which must be held
 	// if snapshots are deleted i.e. reaped. Simply creating or reading
 	// a snapshot requires only a read lock.
-	mrsw          *rsync.MultiRSW
-	reapDisabled  *rsync.AtomicBool
-	reapThreshold int
+	mrsw             *rsync.MultiRSW
+	reapDisabled     *rsync.AtomicBool
+	reapThreshold    int
+	disableIntegrity bool
 
 	// readTimeout is the maximum time a LockingStreamer may sit idle (no
 	// Read calls returning data) before it is force-closed. Zero disables
@@ -586,7 +587,12 @@ func (s *Store) reapInternal() (int, int, error) {
 		}
 		p.AddWriteMeta(full.path, metaJSON)
 
-		// 6. Rename to new snapshot name. The end result of the Reaping process
+		// 6. Run an integrity check of the checkpointed database.
+		if !s.disableIntegrity {
+			p.AddCheckDB(dbPath)
+		}
+
+		// 7. Rename to new snapshot name. The end result of the Reaping process
 		// will be a new full snapshot with a new ID. That ID is generated from
 		// the newest snapshot's index and term, and the current timestamp.
 		finalDir := filepath.Join(s.dir, newID)

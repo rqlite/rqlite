@@ -207,6 +207,14 @@ func (p *Plan) AddCalcCRC32(dataPath, crcPath string) {
 	})
 }
 
+// AddCheckDB adds an integrity check of the database at path.
+func (p *Plan) AddCheckDB(path string) {
+	p.Ops = append(p.Ops, Operation{
+		Type: OpCheckDB,
+		Src:  path,
+	})
+}
+
 // Visitor is the interface that must be implemented to execute a plan.
 type Visitor interface {
 	Rename(src, dst string) error
