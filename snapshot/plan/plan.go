@@ -61,6 +61,10 @@ const (
 	// OpCalcCRC32 represents a CRC32 checksum calculation operation.
 	// Src is the data file to checksum; Dst is the path for the CRC sidecar file.
 	OpCalcCRC32 OpType = "calc_crc32"
+
+	// OpVerifyDB represents running a databse integrity check.
+	// Src is the database to check.
+	OpVerifyDB OpType = "verify_db"
 )
 
 // Operation represents a single snapshot store operation.
@@ -203,6 +207,14 @@ func (p *Plan) AddCalcCRC32(dataPath, crcPath string) {
 	})
 }
 
+// AddVerifyDB adds an integrity check of the database at path.
+func (p *Plan) AddVerifyDB(path string) {
+	p.Ops = append(p.Ops, Operation{
+		Type: OpVerifyDB,
+		Src:  path,
+	})
+}
+
 // Visitor is the interface that must be implemented to execute a plan.
 type Visitor interface {
 	Rename(src, dst string) error
@@ -213,6 +225,7 @@ type Visitor interface {
 	MkdirAll(path string) error
 	CopyFile(src, dst string) error
 	CalcCRC32(dataPath, crcPath string) error
+	VerifyDB(db string) error
 }
 
 // Execute traverses the plan, calling the appropriate method on the visitor for each operation.
@@ -237,6 +250,8 @@ func (p *Plan) Execute(v Visitor) error {
 			err = v.CopyFile(op.Src, op.Dst)
 		case OpCalcCRC32:
 			err = v.CalcCRC32(op.Src, op.Dst)
+		case OpVerifyDB:
+			err = v.VerifyDB(op.Src)
 		default:
 			err = fmt.Errorf("unknown operation type: %s", op.Type)
 		}

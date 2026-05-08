@@ -1,6 +1,7 @@
 ## v10.0.4 (unreleased)
 ### Implementation changes and bug fixes
 - [PR #2653](https://github.com/rqlite/rqlite/pull/2653): Improve SQLite integrity check functions.
+- [PR #2654](https://github.com/rqlite/rqlite/pull/2654): Enable SQLite integrity checks during Snapshot Store testing.
 
 ## v10.0.3 (May 6th 2026)
 ### Implementation changes and bug fixes

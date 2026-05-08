@@ -426,6 +426,7 @@ type Store struct {
 	AutoOptimizeInterval     time.Duration
 	CompressSnapTransport    bool
 	MaxReadOnlyConns         int
+	NoVerifyDB               bool
 
 	// Node-reaping configuration
 	ReapTimeout         time.Duration
@@ -599,6 +600,7 @@ func (s *Store) Open() (retErr error) {
 	if err != nil {
 		return fmt.Errorf("failed to create snapshot store: %s", err)
 	}
+	snapshotStore.SetNoVerifyDB(s.NoVerifyDB)
 	snapshotStore.LogReaping = s.hcLogLevel() < hclog.Warn
 	if s.SnapshotReapThreshold > 0 {
 		snapshotStore.SetReapThreshold(s.SnapshotReapThreshold)

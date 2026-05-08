@@ -202,6 +202,7 @@ type Store struct {
 	mrsw          *rsync.MultiRSW
 	reapDisabled  *rsync.AtomicBool
 	reapThreshold int
+	noVerifyDB    *rsync.AtomicBool
 
 	// readTimeout is the maximum time a LockingStreamer may sit idle (no
 	// Read calls returning data) before it is force-closed. Zero disables
@@ -231,6 +232,7 @@ func NewStore(dir string) (*Store, error) {
 		catalog:        &SnapshotCatalog{},
 		mrsw:           rsync.NewMultiRSW(),
 		reapDisabled:   &rsync.AtomicBool{},
+		noVerifyDB:     &rsync.AtomicBool{},
 		reapThreshold:  defaultReapThreshold,
 		readTimeout:    defaultReadTimeout,
 		reapCh:         make(chan struct{}, 1),
@@ -424,6 +426,13 @@ func (s *Store) DeregisterObserver(o *Observer) {
 	s.observers.deregister(o)
 }
 
+// SetNoVerifyDB controls whether the database is verified after any
+// manipulation. Verification is not appropriate for production, this
+// is primarily for controlling test coverage.
+func (s *Store) SetNoVerifyDB(v bool) {
+	s.noVerifyDB.SetBool(v)
+}
+
 // Close shuts down the reaper goroutine and waits for it to exit.
 func (s *Store) Close() error {
 	close(s.reapDoneCh)
@@ -586,7 +595,12 @@ func (s *Store) reapInternal() (int, int, error) {
 		}
 		p.AddWriteMeta(full.path, metaJSON)
 
-		// 6. Rename to new snapshot name. The end result of the Reaping process
+		// 6. Run an integrity check of the checkpointed database.
+		if s.noVerifyDB.IsNot() {
+			p.AddVerifyDB(dbPath)
+		}
+
+		// 7. Rename to new snapshot name. The end result of the Reaping process
 		// will be a new full snapshot with a new ID. That ID is generated from
 		// the newest snapshot's index and term, and the current timestamp.
 		finalDir := filepath.Join(s.dir, newID)
