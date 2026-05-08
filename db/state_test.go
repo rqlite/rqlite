@@ -846,7 +846,7 @@ func Test_WALReplayOK_Complex(t *testing.T) {
 	}
 
 	// Finally, run an integrity check on dst.
-	res, err := dstDB.IntegrityCheck(IntegrityCheckFull, 1)
+	res, err := dstDB.VerifyIntegrity()
 	if err != nil {
 		t.Fatalf("failed to run integrity check on dst: %s", err.Error())
 	}

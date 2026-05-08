@@ -942,6 +942,13 @@ func (db *DB) IntegrityCheck(mode IntegrityCheckMode, maxIssues int) (IntegrityR
 	return IntegrityResult{OK: false, Issues: issues}, nil
 }
 
+// VerifyIntegrity runs a full PRAGMA integrity_check that stops after the
+// first problem. It is shorthand for IntegrityCheck(IntegrityCheckFull, 1)
+// for callers that only need a yes/no answer.
+func (db *DB) VerifyIntegrity() (IntegrityResult, error) {
+	return db.IntegrityCheck(IntegrityCheckFull, 1)
+}
+
 // SetSynchronousMode sets the synchronous mode of the database.
 func (db *DB) SetSynchronousMode(mode SynchronousMode) error {
 	if _, err := db.rwDB.Exec(fmt.Sprintf("PRAGMA synchronous=%s", mode)); err != nil {

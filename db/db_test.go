@@ -216,7 +216,7 @@ func Test_WALNotCheckpointedOnClose(t *testing.T) {
 	}
 
 	// Finally, run an integrity check on the database.
-	res, err := db.IntegrityCheck(IntegrityCheckFull, 1)
+	res, err := db.VerifyIntegrity()
 	if err != nil {
 		t.Fatalf("failed to run integrity check on database: %s", err.Error())
 	}
