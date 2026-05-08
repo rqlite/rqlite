@@ -1,3 +1,7 @@
+## v10.0.4 (unreleased)
+### Implementation changes and bug fixes
+- [PR #2653](https://github.com/rqlite/rqlite/pull/2653): Improve SQLite integrity check functions.
+
 ## v10.0.3 (May 6th 2026)
 ### Implementation changes and bug fixes
 - [PR #2649](https://github.com/rqlite/rqlite/pull/2649): Simplify Store CRC check fallback logic.

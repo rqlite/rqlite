@@ -846,12 +846,12 @@ func Test_WALReplayOK_Complex(t *testing.T) {
 	}
 
 	// Finally, run an integrity check on dst.
-	r, err := dstDB.IntegrityCheck(true)
+	res, err := dstDB.VerifyIntegrity()
 	if err != nil {
 		t.Fatalf("failed to run integrity check on dst: %s", err.Error())
 	}
-	if exp, got := `[{"columns":["integrity_check"],"types":["text"],"values":[["ok"]]}]`, asJSON(r); exp != got {
-		t.Fatalf("unexpected results for integrity check of dst, expected %s, got %s", exp, got)
+	if !res.OK {
+		t.Fatalf("integrity check failed on dst: %v", res.Issues)
 	}
 }
 

@@ -99,6 +99,28 @@ var (
 	}
 )
 
+// IntegrityCheckMode selects between PRAGMA quick_check and PRAGMA integrity_check.
+type IntegrityCheckMode int
+
+const (
+	// IntegrityCheckQuick selects PRAGMA quick_check: faster, but skips
+	// UNIQUE constraint and index content verification.
+	IntegrityCheckQuick IntegrityCheckMode = iota
+
+	// IntegrityCheckFull selects PRAGMA integrity_check, the more thorough check.
+	IntegrityCheckFull
+)
+
+// IntegrityResult is the outcome of a single integrity check.
+//
+// OK is true iff SQLite returned its sentinel "ok" row. When OK is false,
+// Issues holds the per-problem descriptions SQLite reported, in order,
+// up to the maxIssues bound passed to IntegrityCheck.
+type IntegrityResult struct {
+	OK     bool
+	Issues []string
+}
+
 // DBVersion is the SQLite version.
 var DBVersion string
 
@@ -877,16 +899,54 @@ func (db *DB) VacuumInto(path string) error {
 	return err
 }
 
-// IntegrityCheck runs a PRAGMA integrity_check on the database.
-// If full is true, a full integrity check is performed, otherwise
-// a quick check. It returns after hitting the first integrity
-// failure, if any.
-func (db *DB) IntegrityCheck(full bool) ([]*command.QueryRows, error) {
-	stmt := `PRAGMA quick_check(1)`
-	if full {
-		stmt = `PRAGMA integrity_check(1)`
+// IntegrityCheck runs PRAGMA integrity_check (IntegrityCheckFull) or
+// PRAGMA quick_check (IntegrityCheckQuick) on the database. maxIssues
+// caps how many problem rows SQLite is asked to emit before it stops;
+// pass 0 to use SQLite's default of 100.
+//
+// A non-nil error is returned only for execution failures (driver, I/O,
+// etc.). A corrupt database is a successful call with OK == false and
+// Issues populated.
+func (db *DB) IntegrityCheck(mode IntegrityCheckMode, maxIssues int) (IntegrityResult, error) {
+	pragma := "quick_check"
+	if mode == IntegrityCheckFull {
+		pragma = "integrity_check"
 	}
-	return db.QueryStringStmt(stmt)
+	stmt := "PRAGMA " + pragma
+	if maxIssues > 0 {
+		stmt = fmt.Sprintf("PRAGMA %s(%d)", pragma, maxIssues)
+	}
+
+	rows, err := db.QueryStringStmt(stmt)
+	if err != nil {
+		return IntegrityResult{}, err
+	}
+	if len(rows) != 1 {
+		return IntegrityResult{}, fmt.Errorf("integrity check returned %d result sets, want 1", len(rows))
+	}
+	r := rows[0]
+	if r.Error != "" {
+		return IntegrityResult{}, fmt.Errorf("integrity check: %s", r.Error)
+	}
+	if len(r.Values) == 1 && len(r.Values[0].Parameters) == 1 &&
+		r.Values[0].Parameters[0].GetS() == "ok" {
+		return IntegrityResult{OK: true}, nil
+	}
+	issues := make([]string, 0, len(r.Values))
+	for _, v := range r.Values {
+		if len(v.Parameters) == 0 {
+			continue
+		}
+		issues = append(issues, v.Parameters[0].GetS())
+	}
+	return IntegrityResult{OK: false, Issues: issues}, nil
+}
+
+// VerifyIntegrity runs a full PRAGMA integrity_check that stops after the
+// first problem. It is shorthand for IntegrityCheck(IntegrityCheckFull, 1)
+// for callers that only need a yes/no answer.
+func (db *DB) VerifyIntegrity() (IntegrityResult, error) {
+	return db.IntegrityCheck(IntegrityCheckFull, 1)
 }
 
 // SetSynchronousMode sets the synchronous mode of the database.

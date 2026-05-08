@@ -99,9 +99,10 @@ default = ""
 name = "HTTPx509CACert"
 cli = "http-ca-cert"
 type = "string"
-short_help = "Path to X.509 CA certificate for HTTPS mTLS"
+short_help = "Path to X.509 CA certificate for HTTPS"
 long_help = """
-Path to a PEM file containing one or more X.509 CA certificates. rqlite uses every certificate in this file as a trust anchor when verifying client certificates presented to its HTTPS API under mutual TLS. To restrict trust to a specific issuer, ensure the file contains only that issuer's certificate You must also set -http-verify-client to enable mTLS."""
+If this value is set rqlite will use this CA certificate to validate any other X509 certificate presented to it, if the node needs to contact another node's HTTP API. It also uses this CA to verify any X509 certificates presented to it by clients connecting to its HTTPS API.
+"""
 default = ""
 
 [[flags]]
