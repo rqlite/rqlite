@@ -2,10 +2,17 @@ package wal
 
 import (
 	"encoding/binary"
+	"errors"
 	"expvar"
 	"fmt"
 	"io"
 	"time"
+)
+
+var (
+	// ErrZeroPageNumber is returned when a WAL frame has a page number of zero.
+	// This violates a SQLite invariant contained in the SQLite source code.
+	ErrZeroPageNumber = errors.New("WAL frame has zero page number")
 )
 
 // SQLite constants
@@ -192,6 +199,9 @@ func (r *Reader) ReadFrame(data []byte) (pgno, commit uint32, err error) {
 	}
 
 	pgno = binary.BigEndian.Uint32(hdr[0:])
+	if pgno == 0 {
+		return 0, 0, ErrZeroPageNumber
+	}
 	commit = binary.BigEndian.Uint32(hdr[4:])
 
 	r.frameN++
