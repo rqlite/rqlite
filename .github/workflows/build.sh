@@ -26,10 +26,6 @@ if ! is_semver "$VERSION"; then
 fi
 
 # Get build parameters
-machine=`uname -m`
-if [ "$machine" == "x86_64" ]; then
-    machine="amd64"
-fi
 commit=`git rev-parse HEAD`
 kernel=`uname -s`
 buildtime=`date +%Y-%m-%dT%T%z`
