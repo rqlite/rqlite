@@ -42,7 +42,7 @@ declare -A archs
 archs=(
   ["amd64"]="gcc musl-gcc"
   ["arm64"]="aarch64-linux-gnu-gcc"
-  ["arm"]="arm-linux-gnueabihf-gcc arm-linux-gnueabi-gcc"
+  ["arm"]="arm-linux-gnueabi-gcc arm-linux-gnueabihf-gcc"
   ["riscv64"]="riscv64-linux-gnu-gcc"
   ["mips"]="mips-linux-gnu-gcc"
   ["mipsle"]="mipsel-linux-gnu-gcc"
