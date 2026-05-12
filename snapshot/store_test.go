@@ -1672,7 +1672,7 @@ func Test_Store_ReadTimeout_FiresWhenIdle(t *testing.T) {
 	}
 	defer store.Close()
 
-	store.SetReadTimeout(100 * time.Millisecond)
+	store.SetReadTimeout(500 * time.Millisecond)
 	createSnapshotInStore(t, store, "2-1017-1704807719996", 1017, 2, 1, "testdata/db-and-wals/backup.db")
 
 	before := readStat(t, readTimeoutTotal)
@@ -1728,7 +1728,7 @@ func Test_Store_ReadTimeout_ResetByReads(t *testing.T) {
 	}
 	defer store.Close()
 
-	store.SetReadTimeout(100 * time.Millisecond)
+	store.SetReadTimeout(500 * time.Millisecond)
 	createSnapshotInStore(t, store, "2-1017-1704807719996", 1017, 2, 1, "testdata/db-and-wals/backup.db")
 
 	_, rc, err := store.Open("2-1017-1704807719996")
@@ -1738,8 +1738,11 @@ func Test_Store_ReadTimeout_ResetByReads(t *testing.T) {
 	defer rc.Close()
 
 	// Read steadily for longer than the timeout. Each successful read
-	// should keep the streamer alive.
-	end := time.Now().Add(400 * time.Millisecond)
+	// should keep the streamer alive. The timeout and window are sized
+	// generously to tolerate scheduling jitter on slow CI runners
+	// (notably Windows), where individual iterations can stall for
+	// >100ms due to coarse timer resolution and GC pauses.
+	end := time.Now().Add(2 * time.Second)
 	buf := make([]byte, 64)
 	for time.Now().Before(end) {
 		n, err := rc.Read(buf)
