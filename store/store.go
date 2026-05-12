@@ -189,6 +189,7 @@ const (
 	numVerifyLeader             = "num_verify_leader"
 	numVerifyLeaderFailed       = "num_verify_leader_failed"
 	verifyLeaderDuration        = "verify_leader_duration"
+	fsmApplyDuration            = "fsm_apply_duration_us"
 	snapshotCreateDuration      = "snapshot_create_duration"
 	snapshotSyncDuration        = "snapshot_sync_duration"
 	numSnapshotPersists         = "num_snapshot_persists"
@@ -254,6 +255,7 @@ func ResetStats() {
 	stats.Add(numVerifyLeader, 0)
 	stats.Add(numVerifyLeaderFailed, 0)
 	stats.Add(verifyLeaderDuration, 0)
+	stats.Add(fsmApplyDuration, 0)
 	stats.Add(snapshotCreateDuration, 0)
 	stats.Add(snapshotSyncDuration, 0)
 	stats.Add(numSnapshotPersists, 0)
@@ -2476,12 +2478,14 @@ type fsmGenericResponse struct {
 
 // fsmApply applies a Raft log entry to the database.
 func (s *Store) fsmApply(l *raft.Log) (e any) {
+	startT := time.Now()
 	defer func() {
 		s.fsmIdx.Store(l.Index)
 		s.fsmTarget.Signal(l.Index)
 		s.fsmTerm.Store(l.Term)
 		s.fsmUpdateTime.Store(time.Now())
 		s.appendedAtTime.Store(l.AppendedAt)
+		stats.Get(fsmApplyDuration).(*expvar.Int).Set(time.Since(startT).Microseconds())
 	}()
 
 	if s.firstLogAppliedT.IsZero() {
