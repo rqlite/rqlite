@@ -1,7 +1,7 @@
-## v10.0.5 (unreleased)
+## v10.0.5 (May 12th 2026)
 ### Implementation changes and bug fixes
-- [PR #2658](https://github.com/rqlite/rqlite/pull/2658): Release images for _hard float_ and v6 ARM systems.
-- [PR #2660](https://github.com/rqlite/rqlite/pull/2660): Measure FSM apply durations.
+- [PR #2658](https://github.com/rqlite/rqlite/pull/2658): Release images for _hard float_ and v6 ARM systems. See [discussion #2657](https://github.com/rqlite/rqlite/discussions/2657).
+- [PR #2660](https://github.com/rqlite/rqlite/pull/2660): Measure _FSM Apply_ duration.
 
 ## v10.0.4 (May 10th 2026)
 ### Implementation changes and bug fixes
