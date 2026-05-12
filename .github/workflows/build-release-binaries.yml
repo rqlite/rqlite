@@ -28,7 +28,7 @@ jobs:
         run: sudo apt-get update
 
       - name: Install compilers
-        run: sudo apt-get install gcc musl-dev musl-tools gcc-arm-linux-gnueabi gcc-aarch64-linux-gnu gcc-riscv64-linux-gnu gcc-powerpc64le-linux-gnu gcc-mips-linux-gnu gcc-mipsel-linux-gnu gcc-mips64-linux-gnuabi64 gcc-mips64el-linux-gnuabi64
+        run: sudo apt-get install gcc musl-dev musl-tools gcc-arm-linux-gnueabihf gcc-arm-linux-gnueabi gcc-aarch64-linux-gnu gcc-riscv64-linux-gnu gcc-powerpc64le-linux-gnu gcc-mips-linux-gnu gcc-mipsel-linux-gnu gcc-mips64-linux-gnuabi64 gcc-mips64el-linux-gnuabi64
         
       - name: Build the release binaries
         run: .github/workflows/build.sh ${{ github.event.release.tag_name }}

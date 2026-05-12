@@ -26,10 +26,6 @@ if ! is_semver "$VERSION"; then
 fi
 
 # Get build parameters
-machine=`uname -m`
-if [ "$machine" == "x86_64" ]; then
-    machine="amd64"
-fi
 commit=`git rev-parse HEAD`
 kernel=`uname -s`
 buildtime=`date +%Y-%m-%dT%T%z`
@@ -42,7 +38,7 @@ declare -A archs
 archs=(
   ["amd64"]="gcc musl-gcc"
   ["arm64"]="aarch64-linux-gnu-gcc"
-  ["arm"]="arm-linux-gnueabi-gcc"
+  ["arm"]="arm-linux-gnueabi-gcc arm-linux-gnueabihf-gcc"
   ["riscv64"]="riscv64-linux-gnu-gcc"
   ["mips"]="mips-linux-gnu-gcc"
   ["mipsle"]="mipsel-linux-gnu-gcc"
@@ -57,12 +53,26 @@ for arch in "${!archs[@]}"; do
   for compiler in $compilers; do
     echo "Building for $arch using $compiler..."
 
-    LDFLAGS="$STRIP_SYMBOLS -X $LINKER_PKG_PATH.CompilerCommand=$compiler -X $LINKER_PKG_PATH.Version=$VERSION -X $LINKER_PKG_PATH.Commit=$commit -X $LINKER_PKG_PATH.Buildtime=$buildtime"
-    CGO_ENABLED=1 GOARCH=$arch CC=$compiler go install -a -ldflags="$LDFLAGS" ./...
+    # Select GOARM for 32-bit arm builds. The hard-float (armhf) variant
+    # targets ARMv7 + VFP, matching Raspberry Pi OS / Debian armhf / Ubuntu
+    # armhf userlands. The soft-float (armel) variant keeps the ARMv5T
+    # baseline for older devices.
+    GOARM=""
+    case "$compiler" in
+      arm-linux-gnueabihf-gcc) GOARM=7 ;;
+      arm-linux-gnueabi-gcc)   GOARM=5 ;;
+    esac
 
-    # Special case for musl-gcc, keep legacy naming.
+    LDFLAGS="$STRIP_SYMBOLS -X $LINKER_PKG_PATH.CompilerCommand=$compiler -X $LINKER_PKG_PATH.Version=$VERSION -X $LINKER_PKG_PATH.Commit=$commit -X $LINKER_PKG_PATH.Buildtime=$buildtime"
+    CGO_ENABLED=1 GOARCH=$arch GOARM=$GOARM CC=$compiler go install -a -ldflags="$LDFLAGS" ./...
+
+    # Tarball naming. The bare "-arm" name is the hard-float build (what
+    # modern ARM Linux distros expect); the soft-float build gets an
+    # explicit suffix. musl keeps its existing legacy suffix.
     if [ "$compiler" == "musl-gcc" ]; then
       release=`echo rqlite-$VERSION-$kernel-$arch-musl | tr '[:upper:]' '[:lower:]'`
+    elif [ "$compiler" == "arm-linux-gnueabi-gcc" ]; then
+      release=`echo rqlite-$VERSION-$kernel-$arch-softfloat | tr '[:upper:]' '[:lower:]'`
     else
       release=`echo rqlite-$VERSION-$kernel-$arch | tr '[:upper:]' '[:lower:]'`
     fi
@@ -84,4 +94,28 @@ for arch in "${!archs[@]}"; do
 )
 done
 
+# ARMv6 hard-float target (Raspberry Pi 1 / Zero / Zero W).
+# Uses the same gnueabihf toolchain and dynamic loader as the armhf
+# build, but restricts both Go (GOARM=6) and the C compiler
+# (-march=armv6 -mfpu=vfp) to instructions the older chip supports.
+(
+  arch="arm"
+  compiler="arm-linux-gnueabihf-gcc"
+  echo "Building for $arch (v6) using $compiler..."
 
+  LDFLAGS="$STRIP_SYMBOLS -X $LINKER_PKG_PATH.CompilerCommand=$compiler -X $LINKER_PKG_PATH.Version=$VERSION -X $LINKER_PKG_PATH.Commit=$commit -X $LINKER_PKG_PATH.Buildtime=$buildtime"
+  CGO_ENABLED=1 GOARCH=$arch GOARM=6 CC=$compiler \
+    CGO_CFLAGS="-march=armv6 -mfpu=vfp -mfloat-abi=hard" \
+    go install -a -ldflags="$LDFLAGS" ./...
+
+  release=`echo rqlite-$VERSION-$kernel-$arch-v6 | tr '[:upper:]' '[:lower:]'`
+  mkdir -p $release
+  copy_binaries $release /home/runner/go/bin/linux_$arch
+
+  tarball=${release}.tar.gz
+  tar cfz $tarball $release
+  if [ $? -ne 0 ]; then
+    echo "Failed to create $tarball"
+    exit 1
+  fi
+)
