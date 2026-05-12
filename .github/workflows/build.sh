@@ -93,29 +93,3 @@ for arch in "${!archs[@]}"; do
   done
 )
 done
-
-# ARMv6 hard-float target (Raspberry Pi 1 / Zero / Zero W).
-# Uses the same gnueabihf toolchain and dynamic loader as the armhf
-# build, but restricts both Go (GOARM=6) and the C compiler
-# (-march=armv6 -mfpu=vfp) to instructions the older chip supports.
-(
-  arch="arm"
-  compiler="arm-linux-gnueabihf-gcc"
-  echo "Building for $arch (v6) using $compiler..."
-
-  LDFLAGS="$STRIP_SYMBOLS -X $LINKER_PKG_PATH.CompilerCommand=$compiler -X $LINKER_PKG_PATH.Version=$VERSION -X $LINKER_PKG_PATH.Commit=$commit -X $LINKER_PKG_PATH.Buildtime=$buildtime"
-  CGO_ENABLED=1 GOARCH=$arch GOARM=6 CC=$compiler \
-    CGO_CFLAGS="-march=armv6 -mfpu=vfp -mfloat-abi=hard" \
-    go install -a -ldflags="$LDFLAGS" ./...
-
-  release=`echo rqlite-$VERSION-$kernel-$arch-v6 | tr '[:upper:]' '[:lower:]'`
-  mkdir -p $release
-  copy_binaries $release /home/runner/go/bin/linux_$arch
-
-  tarball=${release}.tar.gz
-  tar cfz $tarball $release
-  if [ $? -ne 0 ]; then
-    echo "Failed to create $tarball"
-    exit 1
-  fi
-)
