@@ -357,9 +357,11 @@ func Test_CompactingFrameScanner_WriterRoundTrip_SQLite(t *testing.T) {
 	defer srcConn.Close()
 	mustExec(srcConn, "PRAGMA wal_autocheckpoint=0")
 	mustExec(srcConn, "CREATE TABLE foo (id INTEGER PRIMARY KEY, name TEXT)")
+	mustExec(srcConn, "CREATE TABLE bar (id INTEGER PRIMARY KEY, name TEXT)")
 
 	// Insert rows to generate WAL frames.
-	for i := range 100 {
+	testCount := 1000
+	for i := range testCount {
 		mustExec(srcConn, fmt.Sprintf("INSERT INTO foo (name) VALUES ('row%d')", i))
 	}
 
@@ -373,6 +375,7 @@ func Test_CompactingFrameScanner_WriterRoundTrip_SQLite(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	t.Logf("source WAL is %d bytes in size", mustFileSize(srcWAL))
 
 	s, err := NewCompactingFrameScanner(bytes.NewReader(walBytes), 0, false)
 	if err != nil {
@@ -395,6 +398,7 @@ func Test_CompactingFrameScanner_WriterRoundTrip_SQLite(t *testing.T) {
 	if _, err := w.WriteTo(destF); err != nil {
 		t.Fatal(err)
 	}
+	t.Logf("compacted WAL is %d bytes in size", mustFileSize(destWAL))
 
 	// Open the dest database and verify data is present.
 	destDSN := fmt.Sprintf("file:%s", destDB)
@@ -404,12 +408,19 @@ func Test_CompactingFrameScanner_WriterRoundTrip_SQLite(t *testing.T) {
 	}
 	defer destConn.Close()
 
+	// Check that inserted record counts are correct for both tables.
 	var count int
 	if err := destConn.QueryRow("SELECT COUNT(*) FROM foo").Scan(&count); err != nil {
 		t.Fatal(err)
 	}
-	if count != 100 {
-		t.Fatalf("expected 100 rows, got %d", count)
+	if count != testCount {
+		t.Fatalf("expected %d rows, got %d", testCount, count)
+	}
+	if err := destConn.QueryRow("SELECT COUNT(*) FROM bar").Scan(&count); err != nil {
+		t.Fatal(err)
+	}
+	if count != 0 {
+		t.Fatalf("expected 0 rows, got %d", count)
 	}
 }
 
@@ -690,4 +701,12 @@ func Test_CompactingFrameScanner_Writer_FullCycle(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to iterate rows: %s", err)
 	}
+}
+
+func mustFileSize(path string) int64 {
+	stat, err := os.Stat(path)
+	if err != nil {
+		panic("failed to stat file")
+	}
+	return stat.Size()
 }
