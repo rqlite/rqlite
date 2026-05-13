@@ -94,7 +94,7 @@ func Test_WALNotRemovedOnClose(t *testing.T) {
 	}
 }
 
-// Test_WALNotCheckpointedOnClose tests that when a database with an existing
+// Test_WALNotChangedOnReopen tests that when a database with an existing
 // file is opened, that the files are not modified in anyway.
 func Test_WALNotChangedOnReopen(t *testing.T) {
 	path := mustTempPath()
