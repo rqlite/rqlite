@@ -259,6 +259,97 @@ func Test_TLSServiceSecureMutual(t *testing.T) {
 	}
 }
 
+func Test_TLSServiceSecureMutualVerifyCN(t *testing.T) {
+	// Generate a CA cert and key.
+	caCertPEM, caKeyPEM, err := rtls.GenerateCACert(pkix.Name{CommonName: "ca.rqlite.io"}, time.Hour, 2048)
+	if err != nil {
+		t.Fatalf("failed to generate CA cert: %s", err)
+	}
+
+	caCert, _ := pem.Decode(caCertPEM)
+	if caCert == nil {
+		t.Fatal("failed to decode certificate")
+	}
+
+	caKey, _ := pem.Decode(caKeyPEM)
+	if caKey == nil {
+		t.Fatal("failed to decode key")
+	}
+
+	parsedCACert, err := x509.ParseCertificate(caCert.Bytes)
+	if err != nil {
+		t.Fatal(err)
+	}
+	parsedCAKey, err := x509.ParsePKCS1PrivateKey(caKey.Bytes)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Server cert.
+	certServer, keyServer, err := rtls.GenerateCertIPSAN(pkix.Name{CommonName: "server.rqlite.io"}, time.Hour, 2048, parsedCACert, parsedCAKey, net.ParseIP("127.0.0.1"))
+	if err != nil {
+		t.Fatalf("failed to generate server cert: %s", err)
+	}
+
+	// Two client certs signed by the CA, one allowed and one not.
+	certAllowed, keyAllowed, err := rtls.GenerateCertIPSAN(pkix.Name{CommonName: "allowed.rqlite.io"}, time.Hour, 2048, parsedCACert, parsedCAKey, net.ParseIP("127.0.0.1"))
+	if err != nil {
+		t.Fatalf("failed to generate allowed client cert: %s", err)
+	}
+	certDenied, keyDenied, err := rtls.GenerateCertIPSAN(pkix.Name{CommonName: "denied.rqlite.io"}, time.Hour, 2048, parsedCACert, parsedCAKey, net.ParseIP("127.0.0.1"))
+	if err != nil {
+		t.Fatalf("failed to generate denied client cert: %s", err)
+	}
+
+	m := &MockStore{}
+	c := &mockClusterService{}
+	s := New("127.0.0.1:0", m, c, proxy.New(m, c), nil)
+	s.CertFile = mustWriteTempFile(t, certServer)
+	s.KeyFile = mustWriteTempFile(t, keyServer)
+	s.CACertFile = mustWriteTempFile(t, caCertPEM)
+	s.BuildInfo = map[string]any{
+		"version": "the version",
+	}
+	s.ClientVerify = true
+	s.ClientVerifyCN = "allowed.rqlite.io"
+	if err := s.Start(); err != nil {
+		t.Fatalf("failed to start service")
+	}
+	defer s.Close()
+
+	url := fmt.Sprintf("https://%s", s.Addr().String())
+
+	newClient := func(certPEM, keyPEM []byte) *http.Client {
+		tlsConfig := &tls.Config{InsecureSkipVerify: false}
+		tlsConfig.RootCAs = x509.NewCertPool()
+		if ok := tlsConfig.RootCAs.AppendCertsFromPEM(caCertPEM); !ok {
+			t.Fatalf("failed to parse CA certificate(s)")
+		}
+		tlsConfig.Certificates = make([]tls.Certificate, 1)
+		tlsConfig.Certificates[0], err = tls.X509KeyPair(certPEM, keyPEM)
+		if err != nil {
+			t.Fatalf("failed to set X509 key pair %s", err)
+		}
+		return &http.Client{Transport: &http.Transport{
+			TLSClientConfig: tlsConfig,
+		}}
+	}
+
+	// Client with the required CN should succeed.
+	resp, err := newClient(certAllowed, keyAllowed).Get(url)
+	if err != nil {
+		t.Fatalf("client with matching CN failed to make HTTP request: %s", err)
+	}
+	if v := resp.Header.Get("X-RQLITE-VERSION"); v != "the version" {
+		t.Fatalf("incorrect build version present in HTTP response header, got: %s", v)
+	}
+
+	// Client with a different CN, but signed by the same CA, must be rejected.
+	if _, err := newClient(certDenied, keyDenied).Get(url); err == nil {
+		t.Fatalf("client with non-matching CN was not rejected")
+	}
+}
+
 // mustWriteTempFile writes the given bytes to a temporary file, and returns the
 // path to the file. If there is an error, it panics. The file will be automatically
 // deleted when the test ends.

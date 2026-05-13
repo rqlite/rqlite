@@ -109,18 +109,20 @@ func NewMux(ln net.Listener, adv net.Addr) (*Mux, error) {
 // using TLS. If adv is nil, then the addr of ln is used. The server will not
 // require clients to present a valid certificate since mutual TLS is not enabled.
 func NewTLSMux(ln net.Listener, adv net.Addr, cert, key string) (*Mux, error) {
-	return newTLSMux(ln, adv, cert, key, "", false)
+	return newTLSMux(ln, adv, cert, key, "", false, rtls.NoVerifyCN)
 }
 
 // NewMutualTLSMux returns a new instance of Mux for ln, and encrypts all traffic
 // using TLS. The server will also require clients to present a valid certificate.
 // If caCert is not empty, that CA certificate will be added to the pool of CAs.
-func NewMutualTLSMux(ln net.Listener, adv net.Addr, cert, key, caCert string) (*Mux, error) {
-	return newTLSMux(ln, adv, cert, key, caCert, true)
+// If verifyCN is not empty, the connecting peer's leaf certificate must have a
+// Subject Common Name equal to verifyCN.
+func NewMutualTLSMux(ln net.Listener, adv net.Addr, cert, key, caCert, verifyCN string) (*Mux, error) {
+	return newTLSMux(ln, adv, cert, key, caCert, true, verifyCN)
 }
 
 // newTLSMux is an internal helper to create a TLS Mux.
-func newTLSMux(ln net.Listener, adv net.Addr, cert, key, caCert string, mutual bool) (*Mux, error) {
+func newTLSMux(ln net.Listener, adv net.Addr, cert, key, caCert string, mutual bool, verifyCN string) (*Mux, error) {
 	mux, err := NewMux(ln, adv)
 	if err != nil {
 		return nil, err
@@ -140,7 +142,7 @@ func newTLSMux(ln net.Listener, adv net.Addr, cert, key, caCert string, mutual b
 		stats.Add(numTLSCertFetched, 1)
 		return mux.certReloader.GetCertificate()
 	}
-	mux.tlsConfig, err = rtls.CreateServerConfigWithFunc(getCertFunc, caCert, mtlsState)
+	mux.tlsConfig, err = rtls.CreateServerConfigWithFunc(getCertFunc, caCert, mtlsState, verifyCN)
 	if err != nil {
 		return nil, fmt.Errorf("cannot create TLS config: %s", err)
 	}
