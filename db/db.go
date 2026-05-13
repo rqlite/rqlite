@@ -183,6 +183,8 @@ type DB struct {
 	fkEnabled bool   // Foreign key constraints enabled
 	wal       bool
 
+	noIntegrityCheck bool
+
 	rwDB *sql.DB // Database connection for database reads and writes.
 	roDB *sql.DB // Database connection database reads.
 
@@ -838,6 +840,15 @@ func (db *DB) CheckpointWithTimeout(mode CheckpointMode, dur time.Duration) (met
 	ok, nPages, nMoved, err := checkpointDB(db.rwDB, mode)
 	if err != nil {
 		return nil, fmt.Errorf("error checkpointing WAL: %s", err.Error())
+	}
+	if !db.noIntegrityCheck {
+		res, err := db.VerifyIntegrity()
+		if err != nil {
+			return nil, fmt.Errorf("failed to verify database integrity: %s", err.Error())
+		}
+		if !res.OK {
+			return nil, fmt.Errorf("database failed integrity check after checkpoint: %s", res.Issues[0])
+		}
 	}
 	stats.Add(numCheckpointedMoves, int64(nMoved))
 	return &CheckpointMeta{
