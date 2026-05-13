@@ -74,6 +74,18 @@ func (n *Node) SameAs(o *Node) bool {
 	return n.RaftAddr == o.RaftAddr
 }
 
+// RestartHTTP installs a fresh listener and (re)starts the HTTP service.
+// Service.Close closes the underlying listener, so a new one is required
+// to start serving again.
+func (n *Node) RestartHTTP() error {
+	ln, err := httpd.DefaultListener("localhost:0")
+	if err != nil {
+		return err
+	}
+	n.Service.SetListener(ln)
+	return n.Service.Start()
+}
+
 // Close closes the node.
 func (n *Node) Close(graceful bool) error {
 	if err := n.Store.Close(graceful); err != nil {
@@ -856,7 +868,11 @@ func mustNodeEncrypted(id, dir string, enableSingle, httpEncrypt bool, mux *tcp.
 	clstrClient := cluster.NewClient(clstrDialer, 30*time.Second)
 	node.Client = clstrClient
 	pxy := proxy.New(node.Store, clstrClient)
-	node.Service = httpd.New("localhost:0", node.Store, clstrClient, pxy, nil)
+	httpLn, err := httpd.DefaultListener("localhost:0")
+	if err != nil {
+		panic(fmt.Sprintf("failed to create HTTP listener: %s", err.Error()))
+	}
+	node.Service = httpd.New(httpLn, node.Store, clstrClient, pxy, nil)
 	if httpEncrypt {
 		node.Service.CertFile = node.HTTPCertPath
 		node.Service.KeyFile = node.HTTPKeyPath
