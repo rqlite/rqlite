@@ -340,6 +340,163 @@ func Test_ClientJoinNode(t *testing.T) {
 	}
 }
 
+func Test_ClientJoinNode_MaxRedirectsExceeded(t *testing.T) {
+	// Simulate a cluster where every node always redirects to another node,
+	// creating an infinite redirect loop. The client should stop after
+	// maxRedirects and return an error.
+	var redirectCount int
+	var mu sync.Mutex
+
+	srv := servicetest.NewService()
+	srv.Handler = func(conn net.Conn) {
+		mu.Lock()
+		redirectCount++
+		mu.Unlock()
+
+		c := readCommand(conn)
+		if c == nil {
+			return
+		}
+		if c.Type != proto.Command_COMMAND_TYPE_JOIN {
+			t.Fatalf("unexpected command type: %d", c.Type)
+		}
+
+		// Always respond with "not leader" and a leader address to redirect to.
+		p, err := pb.Marshal(&proto.CommandJoinResponse{
+			Error:  "not leader",
+			Leader: srv.Addr(), // redirect back to same server to simulate loop
+		})
+		if err != nil {
+			conn.Close()
+			return
+		}
+		writeBytesWithLength(conn, p)
+	}
+	srv.Start()
+	defer srv.Close()
+
+	c := NewClient(&simpleDialer{}, 0)
+	req := &command.JoinRequest{
+		Address: "test-node-addr",
+	}
+	err := c.Join(context.Background(), req, srv.Addr(), nil, time.Second)
+	if err == nil {
+		t.Fatal("expected error when max redirects exceeded")
+	}
+	if !strings.Contains(err.Error(), "max redirects exceeded") {
+		t.Fatalf("expected 'max redirects exceeded' error, got: %s", err)
+	}
+
+	mu.Lock()
+	count := redirectCount
+	mu.Unlock()
+	if count != maxRedirects {
+		t.Fatalf("expected %d redirect attempts, got %d", maxRedirects, count)
+	}
+}
+
+func Test_ClientJoinNode_ContextCanceledDuringRedirect(t *testing.T) {
+	// Simulate a redirect loop and cancel the context partway through.
+	// The context check happens at the top of each loop iteration, before
+	// dialing. Because the local test server responds instantly, we need
+	// to cancel the context before calling Join to guarantee the
+	// cancellation is observed before the loop exhausts maxRedirects.
+	srv := servicetest.NewService()
+	srv.Handler = func(conn net.Conn) {
+		c := readCommand(conn)
+		if c == nil {
+			return
+		}
+		if c.Type != proto.Command_COMMAND_TYPE_JOIN {
+			t.Fatalf("unexpected command type: %d", c.Type)
+		}
+
+		p, err := pb.Marshal(&proto.CommandJoinResponse{
+			Error:  "not leader",
+			Leader: srv.Addr(),
+		})
+		if err != nil {
+			conn.Close()
+			return
+		}
+		writeBytesWithLength(conn, p)
+	}
+	srv.Start()
+	defer srv.Close()
+
+	c := NewClient(&simpleDialer{}, 0)
+	req := &command.JoinRequest{
+		Address: "test-node-addr",
+	}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel() // cancel immediately so the first iteration sees it
+
+	err := c.Join(ctx, req, srv.Addr(), nil, time.Second)
+	if err == nil {
+		t.Fatal("expected error when context is canceled")
+	}
+	if !strings.Contains(err.Error(), "context canceled") {
+		t.Fatalf("expected context canceled error, got: %s", err)
+	}
+}
+
+func Test_ClientJoinNode_SuccessAfterRedirect(t *testing.T) {
+	// First response redirects, second response succeeds.
+	var attempt int
+	var mu sync.Mutex
+
+	srv := servicetest.NewService()
+	srv.Handler = func(conn net.Conn) {
+		mu.Lock()
+		attempt++
+		n := attempt
+		mu.Unlock()
+
+		c := readCommand(conn)
+		if c == nil {
+			return
+		}
+		if c.Type != proto.Command_COMMAND_TYPE_JOIN {
+			t.Fatalf("unexpected command type: %d", c.Type)
+		}
+
+		var p []byte
+		var err error
+		if n == 1 {
+			p, err = pb.Marshal(&proto.CommandJoinResponse{
+				Error:  "not leader",
+				Leader: srv.Addr(),
+			})
+		} else {
+			p, err = pb.Marshal(&proto.CommandJoinResponse{})
+		}
+		if err != nil {
+			conn.Close()
+			return
+		}
+		writeBytesWithLength(conn, p)
+	}
+	srv.Start()
+	defer srv.Close()
+
+	c := NewClient(&simpleDialer{}, 0)
+	req := &command.JoinRequest{
+		Address: "test-node-addr",
+	}
+	err := c.Join(context.Background(), req, srv.Addr(), nil, time.Second)
+	if err != nil {
+		t.Fatalf("expected success after redirect, got: %s", err)
+	}
+
+	mu.Lock()
+	finalAttempt := attempt
+	mu.Unlock()
+	if finalAttempt != 2 {
+		t.Fatalf("expected 2 attempts, got %d", finalAttempt)
+	}
+}
+
 func Test_ClientRetry_SuccessFirstAttempt(t *testing.T) {
 	srv := servicetest.NewService()
 	srv.Handler = func(conn net.Conn) {

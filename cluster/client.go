@@ -27,6 +27,7 @@ const (
 	maxPoolCapacity   = 64
 	defaultMaxRetries = 0
 	noRetries         = 0
+	maxRedirects      = 10
 
 	protoBufferLengthSize = 8
 )
@@ -513,8 +514,10 @@ func (c *Client) Join(ctx context.Context, jr *command.JoinRequest, nodeAddr str
 	if err := ctx.Err(); err != nil {
 		return err
 	}
-	const maxRedirects = 10
 	for i := 0; i < maxRedirects; i++ {
+		if err := ctx.Err(); err != nil {
+			return err
+		}
 		conn, err := c.dial(nodeAddr)
 		if err != nil {
 			return err
