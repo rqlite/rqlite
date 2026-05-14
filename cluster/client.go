@@ -513,7 +513,8 @@ func (c *Client) Join(ctx context.Context, jr *command.JoinRequest, nodeAddr str
 	if err := ctx.Err(); err != nil {
 		return err
 	}
-	for {
+	const maxRedirects = 10
+	for i := 0; i < maxRedirects; i++ {
 		conn, err := c.dial(nodeAddr)
 		if err != nil {
 			return err
@@ -558,6 +559,7 @@ func (c *Client) Join(ctx context.Context, jr *command.JoinRequest, nodeAddr str
 		}
 		return nil
 	}
+	return errors.New("max redirects exceeded")
 }
 
 // BroadcastHWM performs a broadcast to all specified nodes.
