@@ -1,3 +1,7 @@
+## v10.0.6 (unreleased)
+### Implementation changes and bug fixes
+- [PR #2665](https://github.com/rqlite/rqlite/pull/26565): Use the Salt values in the WAL Checkpoint manager to track state.
+
 ## v10.0.5 (May 12th 2026)
 ### Implementation changes and bug fixes
 - [PR #2658](https://github.com/rqlite/rqlite/pull/2658): Release images for _hard float_ and v6 ARM systems. See [discussion #2657](https://github.com/rqlite/rqlite/discussions/2657).

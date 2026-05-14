@@ -61,6 +61,11 @@ type CheckpointManager struct {
 	dbPath  string
 	walPath string
 
+	// salt is the salt value in the WAL header after a checkpoint. If it's
+	// nil it means that the entire WAL currently represents the changes since
+	// the last checkpoint. That is because either a) this is the first time
+	// checkpoint is called since this node started or b) the WAL was truncated
+	// successfully as a result of the last checkpoint operation.
 	salt *[2]uint32
 
 	// nextFrameIdx is the index of the next frame in the WAL file to read as
