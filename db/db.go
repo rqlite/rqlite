@@ -210,8 +210,15 @@ type PoolStats struct {
 
 // CheckpointMeta contains metadata about a WAL checkpoint operation.
 type CheckpointMeta struct {
-	Code  int
+	// Code is the return code for the operation. Zero if successful.
+	Code int
+
+	// Pages is the total number of frames in the WAL.
 	Pages int
+
+	// Moved is the total number of checkpointed frames in the log file
+	// (including any that were already checkpointed before Checkpoint
+	// was called)
 	Moved int
 }
 
