@@ -443,14 +443,14 @@ func Test_ClientJoinNode_ContextCanceledDuringRedirect(t *testing.T) {
 
 func Test_ClientJoinNode_SuccessAfterRedirect(t *testing.T) {
 	// First response redirects, second response succeeds.
-	var attempt int
+	var numAttempts int
 	var mu sync.Mutex
 
 	srv := servicetest.NewService()
 	srv.Handler = func(conn net.Conn) {
 		mu.Lock()
-		attempt++
-		n := attempt
+		numAttempts++
+		n := numAttempts
 		mu.Unlock()
 
 		c := readCommand(conn)
@@ -490,10 +490,10 @@ func Test_ClientJoinNode_SuccessAfterRedirect(t *testing.T) {
 	}
 
 	mu.Lock()
-	finalAttempt := attempt
+	final := numAttempts
 	mu.Unlock()
-	if finalAttempt != 2 {
-		t.Fatalf("expected 2 attempts, got %d", finalAttempt)
+	if final != 2 {
+		t.Fatalf("expected 2 attempts, got %d", final)
 	}
 }
 
