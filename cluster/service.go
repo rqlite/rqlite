@@ -321,6 +321,9 @@ func (s *Service) handleConn(conn net.Conn) {
 			return
 		}
 		sz := binary.LittleEndian.Uint64(b[0:])
+		if sz > MaxMessageSize {
+			return
+		}
 
 		p := make([]byte, sz)
 		if s.connTimeout > 0 {
