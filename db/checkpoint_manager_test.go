@@ -33,6 +33,28 @@ func Test_CheckpointManager_Create(t *testing.T) {
 	}
 }
 
+func Test_CheckpointManager_Close(t *testing.T) {
+	path := mustTempFile()
+	defer RemoveFiles(path)
+
+	db, err := Open(path, false, true)
+	if err != nil {
+		t.Fatalf("failed to open database in WAL mode: %s", err.Error())
+	}
+	defer db.Close()
+
+	cm, err := NewCheckpointManager(db)
+	if err != nil {
+		t.Fatalf("failed to create checkpoint manager: %s", err.Error())
+	}
+
+	if err := cm.Close(); err != nil {
+		t.Fatalf("expected Close() to return nil, got %s", err.Error())
+	}
+}
+
+// Test_CheckpointManager_Checkpoint_OK tests basic happy-path
+// functionality.
 func Test_CheckpointManager_Checkpoint_OK(t *testing.T) {
 	path := mustTempFile()
 	defer RemoveFiles(path)
@@ -139,6 +161,41 @@ func Test_CheckpointManager_Checkpoint_OK(t *testing.T) {
 	}
 }
 
+func Test_CheckpointManager_Checkpoint_EmptyWAL_OK(t *testing.T) {
+	path := mustTempFile()
+	defer RemoveFiles(path)
+
+	db, err := Open(path, false, true)
+	if err != nil {
+		t.Fatalf("failed to open database in WAL mode: %s", err.Error())
+	}
+	defer db.Close()
+
+	cm, err := NewCheckpointManager(db)
+	if err != nil {
+		t.Fatalf("failed to create checkpoint manager: %s", err.Error())
+	}
+	var buf bytes.Buffer
+	meta, n, err := cm.Checkpoint(&buf, 5*time.Second)
+	if err != nil {
+		t.Fatalf("failed to checkpoint: %s", err.Error())
+	}
+	if meta == nil {
+		t.Fatal("expected non-nil CheckpointMeta")
+	}
+	if !meta.Success() {
+		t.Fatalf("expected checkpoint to succeed got meta=%s", meta)
+	}
+	if n != 0 {
+		t.Fatal("expected compacted WAL bytes written to be 0")
+	}
+	if buf.Len() != 0 {
+		t.Fatal("expected 0 data to be written to writer")
+	}
+}
+
+// Test_CheckpointManager_Checkpoint_NoWriter_OK thats checkpointing
+// operates correctly when no writer is passed.
 func Test_CheckpointManager_Checkpoint_NoWriter_OK(t *testing.T) {
 	path := mustTempFile()
 	defer RemoveFiles(path)
@@ -291,7 +348,7 @@ func Test_CheckpointManager_Checkpoint_Blocked_Read_Twice(t *testing.T) {
 	if _, err := db.ExecuteStringStmt(`CREATE TABLE foo (id INTEGER NOT NULL PRIMARY KEY, name TEXT)`); err != nil {
 		t.Fatalf("failed to create table: %s", err.Error())
 	}
-	// One row so the reader doesn't complete immediately.
+	// Add one row so the reader doesn't complete immediately.
 	if _, err := db.ExecuteStringStmt(`INSERT INTO foo(name) VALUES("alice")`); err != nil {
 		t.Fatalf("failed to insert: %s", err.Error())
 	}
@@ -313,7 +370,7 @@ func Test_CheckpointManager_Checkpoint_Blocked_Read_Twice(t *testing.T) {
 	time.Sleep(2 * time.Second)
 
 	// Add WAL frames after the reader's mark so checkpoints will see
-	// pnCkpt < pnLog (some pages can't be moved past the read mark).
+	// pnCkpt < pnLog (pages can't be moved that are past the read mark).
 	if _, err := db.ExecuteStringStmt(`INSERT INTO foo(name) VALUES("bob")`); err != nil {
 		t.Fatalf("failed to insert: %s", err.Error())
 	}
@@ -394,6 +451,9 @@ func Test_CheckpointManager_Checkpoint_Blocked_Read_Twice(t *testing.T) {
 // Test_CheckpointManager_Checkpoint_Blocked_ReadLastPage tests that if a checkpoint is
 // blocked by a long-running read of the last page of the WAL file, the checkpoint
 // still succeeds.
+//
+// This test does not perform a subsequent checkpoint to ensure that WAL-reset
+// detection is correct. That is tested separtely.
 func Test_CheckpointManager_Checkpoint_Blocked_ReadLastPage(t *testing.T) {
 	path := mustTempFile()
 	defer RemoveFiles(path)
@@ -458,7 +518,7 @@ func Test_CheckpointManager_Checkpoint_Blocked_ReadLastPage(t *testing.T) {
 // Test_CheckpointManager_Checkpoint_WALReset_Detected verifies that when a
 // previous checkpoint left the manager tracking partial-checkpoint state
 // (nextFrameIdx > 0, salt saved) and SQLite subsequently resets the WAL,
-// the next checkpoint detects the reset via the salt comparison and surfaces
+// the next checkpoint detects that reset via the salt comparison and surfaces
 // WALReset=true on the returned CheckpointManagerMeta.
 func Test_CheckpointManager_Checkpoint_WALReset_Detected(t *testing.T) {
 	path := mustTempFile()
@@ -522,16 +582,19 @@ func Test_CheckpointManager_Checkpoint_WALReset_Detected(t *testing.T) {
 
 	// Release the reader. The previous checkpoint moved all frames to the
 	// database, so SQLite considers the WAL fully consumed: the next write
-	// restarts at frame 0 with a new salt rather than appending.
+	// will cause SQLite to restart writing frames at frame 0 with a new salt
+	// rather than appending.
 	cancelFunc()
 	time.Sleep(500 * time.Millisecond)
 
+	// Insert a record -- a new write -- which SQLite should insert at the start of
+	// the WAL i.e. SQLite resets the WAL.
 	if _, err := db.ExecuteStringStmt(`INSERT INTO foo(name) VALUES("carol")`); err != nil {
 		t.Fatalf("failed to insert after reader released: %s", err.Error())
 	}
 
-	// Next checkpoint: nextFrameIdx > 0 on entry, header salt has changed,
-	// so the salt-check block must trip and report WALReset.
+	// Next checkpoint: nextFrameIdx > 0 on entry, header salt has changed on disk,
+	// so the salt-check must detect a WAL reset.
 	buf.Reset()
 	meta, _, err = cm.Checkpoint(&buf, 5*time.Second)
 	if err != nil {
@@ -542,25 +605,5 @@ func Test_CheckpointManager_Checkpoint_WALReset_Detected(t *testing.T) {
 	}
 	if !meta.WALReset {
 		t.Fatalf("second checkpoint: expected WALReset=true after WAL reset, got false (meta=%s)", meta)
-	}
-}
-
-func Test_CheckpointManager_Close(t *testing.T) {
-	path := mustTempFile()
-	defer RemoveFiles(path)
-
-	db, err := Open(path, false, true)
-	if err != nil {
-		t.Fatalf("failed to open database in WAL mode: %s", err.Error())
-	}
-	defer db.Close()
-
-	cm, err := NewCheckpointManager(db)
-	if err != nil {
-		t.Fatalf("failed to create checkpoint manager: %s", err.Error())
-	}
-
-	if err := cm.Close(); err != nil {
-		t.Fatalf("expected Close() to return nil, got %s", err.Error())
 	}
 }
