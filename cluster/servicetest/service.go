@@ -8,6 +8,8 @@ import (
 type Service struct {
 	Listener net.Listener
 	Handler  func(net.Conn)
+	// CloseConn controls whether the service closes a connection after Handler returns.
+	CloseConn bool
 }
 
 // NewService returns a new instance of the service that runs on
@@ -19,7 +21,8 @@ func NewService() *Service {
 		panic("service: failed to listen: " + err.Error())
 	}
 	return &Service{
-		Listener: ln,
+		Listener:  ln,
+		CloseConn: true,
 	}
 }
 
@@ -53,5 +56,7 @@ func (s *Service) handleConn(conn net.Conn) {
 	if s.Handler != nil {
 		s.Handler(conn)
 	}
-	conn.Close()
+	if s.CloseConn {
+		conn.Close()
+	}
 }
