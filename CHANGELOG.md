@@ -1,6 +1,7 @@
 ## v10.0.6 (unreleased)
 ### Implementation changes and bug fixes
 - [PR #2664](https://github.com/rqlite/rqlite/pull/2664): Limit number of redirects followed on cluster-join. Fixes issue [#2616](https://github.com/rqlite/rqlite/issues/2616). Thanks @goingforstudying-ctrl
+- [PR #2667](https://github.com/rqlite/rqlite/pull/2667): Refactor database `CheckpointManager` for clarity.
 
 ## v10.0.5 (May 12th 2026)
 ### Implementation changes and bug fixes
