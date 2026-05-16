@@ -13,6 +13,19 @@ import (
 	"github.com/rqlite/rqlite/v10/internal/fsutil"
 )
 
+// Salt represents the two 32-bit salt values from a SQLite WAL header.
+type Salt [2]uint32
+
+// Equal reports whether s and other hold the same salt values.
+func (s Salt) Equal(other Salt) bool {
+	return s == other
+}
+
+// String returns a human-readable representation of s.
+func (s Salt) String() string {
+	return fmt.Sprintf("Salt(%d,%d)", s[0], s[1])
+}
+
 // RetryableError is an error that indicates whether the failed operation
 // can be safely retried.
 type RetryableError interface {
@@ -61,12 +74,10 @@ type CheckpointManager struct {
 	dbPath  string
 	walPath string
 
-	salt *[2]uint32
-
-	// nextFrameIdx is the index of the next frame in the WAL file to read as
-	// part of a checkpoint attempt. This value is 0-based in the sense that
-	// if the first frame is to be read, then this value is 0, not 1.
-	nextFrameIdx int64
+	// resetWatch carries forward state from a partial-checkpoint (all pages
+	// moved but WAL not truncated) so the next attempt can detect whether
+	// SQLite reset the WAL in the meantime and decide where to resume.
+	resetWatch walResetWatch
 
 	logger *log.Logger
 }
@@ -116,8 +127,7 @@ func (cm *CheckpointManager) Checkpoint(w io.Writer, timeout time.Duration) (*Ch
 	stats.Get(preCompactWALSize).(*expvar.Int).Set(walSzPre)
 
 	if walSzPre == 0 {
-		cm.nextFrameIdx = 0
-		cm.salt = nil
+		cm.resetWatch.disarm()
 		return &CheckpointManagerMeta{}, 0, nil
 	}
 
@@ -131,8 +141,7 @@ func (cm *CheckpointManager) Checkpoint(w io.Writer, timeout time.Duration) (*Ch
 		if !meta.Success() {
 			return mmeta, 0, fmt.Errorf("checkpoint did not complete within %s", timeout)
 		}
-		cm.nextFrameIdx = 0
-		cm.salt = nil
+		cm.resetWatch.disarm()
 		return mmeta, 0, nil
 	}
 
@@ -144,31 +153,17 @@ func (cm *CheckpointManager) Checkpoint(w io.Writer, timeout time.Duration) (*Ch
 	}
 	defer walFD.Close()
 
-	walReset := false
-	if cm.nextFrameIdx > 0 {
-		// The manager is telling us to start reading from other than the start. This
-		// means that the all frames were moved in the last checkpoint attempt, but the
-		// truncate itself failed. Before we start reading the WAL file from the given
-		// frame index, we need to check if the WAL was reset. If it was reset then
-		// SQLite started writing new frames from the beginning of the file, not appending
-		// at index nextFrameIdx.
-		//
-		// We can perform this check by comparing the salt values. If the salt values
-		// do not match, then we know that the WAL file has been reset, and we need to
-		// reset our state to start reading from the beginning of the WAL file again.
-		salt, err := readSaltAt(walFD)
-		if err != nil {
-			return nil, 0, fmt.Errorf("read WAL salt: %w", err)
-		}
-		if cm.salt == nil || *salt != *cm.salt {
-			cm.nextFrameIdx = 0
-			cm.salt = salt
-			walReset = true
-		}
+	// Record the salt in the WAL header before any changes take place. If we
+	// were watching for a WAL reset, the watch tells us where to resume and
+	// whether the WAL was in fact reset since it was armed.
+	preChkSalt, err := readSaltAt(walFD)
+	if err != nil {
+		return nil, 0, fmt.Errorf("read WAL salt: %w", err)
 	}
+	startFrameIdx, walReset := cm.resetWatch.check(*preChkSalt)
 
 	compactStartTime := time.Now()
-	scanner, err := wal.NewCompactingFrameScanner(walFD, cm.nextFrameIdx, false)
+	scanner, err := wal.NewCompactingFrameScanner(walFD, startFrameIdx, false)
 	if err != nil {
 		return nil, 0, fmt.Errorf("create compacting frame scanner: %w", err)
 	}
@@ -186,12 +181,6 @@ func (cm *CheckpointManager) Checkpoint(w io.Writer, timeout time.Duration) (*Ch
 	/////////////////////////////////////////////////////////////////////////////////
 	// Now, attempt to perform a TRUNCATE checkpoint of the database.
 
-	// Grab salt state before checkpoint is attempted.
-	cm.salt, err = readSaltAt(walFD)
-	if err != nil {
-		return nil, 0, fmt.Errorf("read WAL salt: %w", err)
-	}
-
 	meta, err := cm.db.CheckpointWithTimeout(CheckpointTruncate, timeout)
 	if err != nil {
 		return nil, 0, fmt.Errorf("checkpoint: %w", err)
@@ -205,8 +194,7 @@ func (cm *CheckpointManager) Checkpoint(w io.Writer, timeout time.Duration) (*Ch
 	if rc == 0 {
 		// WAL was reset. Next write will start at the beginning of the WAL file.
 		stats.Add(numCheckpointWALTruncated, 1)
-		cm.nextFrameIdx = 0
-		cm.salt = nil
+		cm.resetWatch.disarm()
 		return mmeta, n, nil
 	}
 	if pnCkpt < pnLog {
@@ -221,14 +209,13 @@ func (cm *CheckpointManager) Checkpoint(w io.Writer, timeout time.Duration) (*Ch
 		// file not truncated. We can use the WAL data, but it requires special
 		// handling.
 		//
-		// This needs to be handled carefully because we do not know where the next
-		// WAL frame will be written. That is only revealed when the next write takes
-		// place. It might be written to the end of WAL file, or SQLite might reset
-		// the WAL, which would cause the next WAL frame to be written at the beginning
-		// of the file. The only way to tell will be to check the salt values on the
-		// next checkpoint attempt.
+		// We do not know where the next WAL frame will be written. That is only
+		// revealed when the next write takes place: SQLite might append at the end
+		// of the WAL file, or it might reset the WAL and write from the start. The
+		// only way to tell on the next checkpoint attempt is to compare salt
+		// values, so arm the watch with the salt and resume frame we will need.
 		stats.Add(numCheckpointPartial, 1)
-		cm.nextFrameIdx = int64(pnCkpt)
+		cm.resetWatch.arm(*preChkSalt, int64(pnCkpt))
 		return mmeta, 0, nil
 	}
 	stats.Add(numCheckpointInvariantErrors, 1)
@@ -241,12 +228,12 @@ func (cm *CheckpointManager) Close() error {
 }
 
 // readSaltAt reads the salt values from the WAL header at the given ReaderAt.
-func readSaltAt(r io.ReaderAt) (*[2]uint32, error) {
+func readSaltAt(r io.ReaderAt) (*Salt, error) {
 	buf := make([]byte, 8)
 	if _, err := r.ReadAt(buf, 16); err != nil {
 		return nil, err
 	}
-	return &[2]uint32{
+	return &Salt{
 		binary.BigEndian.Uint32(buf[0:]),
 		binary.BigEndian.Uint32(buf[4:]),
 	}, nil

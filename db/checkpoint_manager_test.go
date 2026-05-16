@@ -513,11 +513,11 @@ func Test_CheckpointManager_Checkpoint_WALReset_Detected(t *testing.T) {
 	if meta.WALReset {
 		t.Fatal("first checkpoint: WALReset must be false on the very first attempt")
 	}
-	if cm.nextFrameIdx == 0 {
-		t.Fatalf("first checkpoint: expected nextFrameIdx > 0 (pnCkpt == pnLog path), got 0 (meta=%s)", meta)
+	if !cm.resetWatch.armed {
+		t.Fatal("first checkpoint: expected resetWatch to be armed (pnCkpt == pnLog path)")
 	}
-	if cm.salt == nil {
-		t.Fatal("first checkpoint: expected salt to be saved")
+	if cm.resetWatch.resumeFrameIdx == 0 {
+		t.Fatalf("first checkpoint: expected resumeFrameIdx > 0 (pnCkpt == pnLog path), got 0 (meta=%s)", meta)
 	}
 
 	// Release the reader. The previous checkpoint moved all frames to the
