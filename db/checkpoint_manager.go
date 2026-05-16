@@ -77,7 +77,7 @@ type CheckpointManager struct {
 	// resetWatch carries forward state from a partial-checkpoint (all pages
 	// moved but WAL not truncated) so the next attempt can detect whether
 	// SQLite reset the WAL in the meantime and decide where to resume.
-	resetWatch walResetWatch
+	resetWatch *WALResetWatch
 
 	logger *log.Logger
 }
@@ -85,10 +85,11 @@ type CheckpointManager struct {
 // NewCheckpointManager returns a new CheckpointManager for the given database.
 func NewCheckpointManager(db *DB) (*CheckpointManager, error) {
 	return &CheckpointManager{
-		db:      db,
-		dbPath:  db.Path(),
-		walPath: db.WALPath(),
-		logger:  log.New(log.Writer(), "[db-checkpoint] ", log.LstdFlags),
+		db:         db,
+		dbPath:     db.Path(),
+		resetWatch: &WALResetWatch{},
+		walPath:    db.WALPath(),
+		logger:     log.New(log.Writer(), "[db-checkpoint] ", log.LstdFlags),
 	}, nil
 }
 
@@ -127,7 +128,7 @@ func (cm *CheckpointManager) Checkpoint(w io.Writer, timeout time.Duration) (*Ch
 	stats.Get(preCompactWALSize).(*expvar.Int).Set(walSzPre)
 
 	if walSzPre == 0 {
-		cm.resetWatch.disarm()
+		cm.resetWatch.Disarm()
 		return &CheckpointManagerMeta{}, 0, nil
 	}
 
@@ -141,7 +142,7 @@ func (cm *CheckpointManager) Checkpoint(w io.Writer, timeout time.Duration) (*Ch
 		if !meta.Success() {
 			return mmeta, 0, fmt.Errorf("checkpoint did not complete within %s", timeout)
 		}
-		cm.resetWatch.disarm()
+		cm.resetWatch.Disarm()
 		return mmeta, 0, nil
 	}
 
@@ -160,7 +161,7 @@ func (cm *CheckpointManager) Checkpoint(w io.Writer, timeout time.Duration) (*Ch
 	if err != nil {
 		return nil, 0, fmt.Errorf("read WAL salt: %w", err)
 	}
-	startFrameIdx, walReset := cm.resetWatch.check(*preChkSalt)
+	startFrameIdx, walReset := cm.resetWatch.Check(preChkSalt)
 
 	compactStartTime := time.Now()
 	scanner, err := wal.NewCompactingFrameScanner(walFD, startFrameIdx, false)
@@ -194,7 +195,7 @@ func (cm *CheckpointManager) Checkpoint(w io.Writer, timeout time.Duration) (*Ch
 	if rc == 0 {
 		// WAL was reset. Next write will start at the beginning of the WAL file.
 		stats.Add(numCheckpointWALTruncated, 1)
-		cm.resetWatch.disarm()
+		cm.resetWatch.Disarm()
 		return mmeta, n, nil
 	}
 	if pnCkpt < pnLog {
@@ -215,7 +216,7 @@ func (cm *CheckpointManager) Checkpoint(w io.Writer, timeout time.Duration) (*Ch
 		// only way to tell on the next checkpoint attempt is to compare salt
 		// values, so arm the watch with the salt and resume frame we will need.
 		stats.Add(numCheckpointPartial, 1)
-		cm.resetWatch.arm(*preChkSalt, int64(pnCkpt))
+		cm.resetWatch.Arm(preChkSalt, int64(pnCkpt))
 		return mmeta, 0, nil
 	}
 	stats.Add(numCheckpointInvariantErrors, 1)
@@ -228,12 +229,12 @@ func (cm *CheckpointManager) Close() error {
 }
 
 // readSaltAt reads the salt values from the WAL header at the given ReaderAt.
-func readSaltAt(r io.ReaderAt) (*Salt, error) {
+func readSaltAt(r io.ReaderAt) (Salt, error) {
 	buf := make([]byte, 8)
 	if _, err := r.ReadAt(buf, 16); err != nil {
-		return nil, err
+		return Salt{}, err
 	}
-	return &Salt{
+	return Salt{
 		binary.BigEndian.Uint32(buf[0:]),
 		binary.BigEndian.Uint32(buf[4:]),
 	}, nil
