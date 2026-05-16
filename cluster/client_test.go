@@ -7,7 +7,6 @@ import (
 	"net"
 	"strings"
 	"sync"
-	"sync/atomic"
 	"testing"
 	"time"
 
@@ -345,11 +344,11 @@ func Test_ClientJoinNode_MaxRedirectsExceeded(t *testing.T) {
 	// Simulate a cluster where every node always redirects to another node,
 	// creating an infinite redirect loop. The client should stop after
 	// maxRedirects and return an error.
-	var redirectCount atomic.Int32
+	redirects := make(chan struct{}, maxRedirects)
 
 	srv := servicetest.NewService()
 	srv.Handler = func(conn net.Conn) {
-		redirectCount.Add(1)
+		redirects <- struct{}{}
 
 		c := readCommand(conn)
 		if c == nil {
@@ -385,8 +384,13 @@ func Test_ClientJoinNode_MaxRedirectsExceeded(t *testing.T) {
 		t.Fatalf("expected 'max redirects exceeded' error, got: %s", err)
 	}
 
-	if redirectCount.Load() != int32(maxRedirects) {
-		t.Fatalf("expected %d redirect attempts, got %d", maxRedirects, redirectCount.Load())
+	close(redirects)
+	count := 0
+	for range redirects {
+		count++
+	}
+	if count != maxRedirects {
+		t.Fatalf("expected %d redirect attempts, got %d", maxRedirects, count)
 	}
 }
 
@@ -438,11 +442,11 @@ func Test_ClientJoinNode_ContextCanceledDuringRedirect(t *testing.T) {
 
 func Test_ClientJoinNode_SuccessAfterRedirect(t *testing.T) {
 	// First response redirects, second response succeeds.
-	var numAttempts atomic.Int32
+	attempts := make(chan struct{}, 2)
 
 	srv := servicetest.NewService()
 	srv.Handler = func(conn net.Conn) {
-		numAttempts.Add(1)
+		attempts <- struct{}{}
 
 		c := readCommand(conn)
 		if c == nil {
@@ -454,7 +458,7 @@ func Test_ClientJoinNode_SuccessAfterRedirect(t *testing.T) {
 
 		var p []byte
 		var err error
-		if numAttempts.Load() == 1 {
+		if len(attempts) == 1 {
 			p, err = pb.Marshal(&proto.CommandJoinResponse{
 				Error:  "not leader",
 				Leader: srv.Addr(),
@@ -480,8 +484,13 @@ func Test_ClientJoinNode_SuccessAfterRedirect(t *testing.T) {
 		t.Fatalf("expected success after redirect, got: %s", err)
 	}
 
-	if numAttempts.Load() != 2 {
-		t.Fatalf("expected 2 attempts, got %d", numAttempts.Load())
+	close(attempts)
+	count := 0
+	for range attempts {
+		count++
+	}
+	if count != 2 {
+		t.Fatalf("expected 2 attempts, got %d", count)
 	}
 }
 
