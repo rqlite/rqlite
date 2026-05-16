@@ -1,7 +1,6 @@
 package db
 
 import (
-	"encoding/binary"
 	"expvar"
 	"fmt"
 	"io"
@@ -12,19 +11,6 @@ import (
 	"github.com/rqlite/rqlite/v10/db/wal"
 	"github.com/rqlite/rqlite/v10/internal/fsutil"
 )
-
-// Salt represents the two 32-bit salt values from a SQLite WAL header.
-type Salt [2]uint32
-
-// Equal reports whether s and other hold the same salt values.
-func (s Salt) Equal(other Salt) bool {
-	return s == other
-}
-
-// String returns a human-readable representation of s.
-func (s Salt) String() string {
-	return fmt.Sprintf("Salt(%d,%d)", s[0], s[1])
-}
 
 // RetryableError is an error that indicates whether the failed operation
 // can be safely retried.
@@ -157,7 +143,7 @@ func (cm *CheckpointManager) Checkpoint(w io.Writer, timeout time.Duration) (*Ch
 	// Record the salt in the WAL header before any changes take place. If we
 	// were watching for a WAL reset, the watch tells us where to resume and
 	// whether the WAL was in fact reset since it was armed.
-	preChkSalt, err := readSaltAt(walFD)
+	preChkSalt, err := wal.ReadSaltAt(walFD)
 	if err != nil {
 		return nil, 0, fmt.Errorf("read WAL salt: %w", err)
 	}
@@ -229,16 +215,4 @@ func (cm *CheckpointManager) Checkpoint(w io.Writer, timeout time.Duration) (*Ch
 // Close closes the CheckpointManager.
 func (cm *CheckpointManager) Close() error {
 	return nil
-}
-
-// readSaltAt reads the salt values from the WAL header at the given ReaderAt.
-func readSaltAt(r io.ReaderAt) (Salt, error) {
-	buf := make([]byte, 8)
-	if _, err := r.ReadAt(buf, 16); err != nil {
-		return Salt{}, err
-	}
-	return Salt{
-		binary.BigEndian.Uint32(buf[0:]),
-		binary.BigEndian.Uint32(buf[4:]),
-	}, nil
 }
