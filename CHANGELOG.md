@@ -1,3 +1,7 @@
+## v10.0.6 (unreleased)
+### Implementation changes and bug fixes
+- [PR #2664](https://github.com/rqlite/rqlite/pull/2664): Limit number of redirects followed on cluster-join. Fixes issue [#2616](https://github.com/rqlite/rqlite/issues/2616). Thanks @goingforstudying-ctrl
+
 ## v10.0.5 (May 12th 2026)
 ### Implementation changes and bug fixes
 - [PR #2658](https://github.com/rqlite/rqlite/pull/2658): Release images for _hard float_ and v6 ARM systems. See [discussion #2657](https://github.com/rqlite/rqlite/discussions/2657).
