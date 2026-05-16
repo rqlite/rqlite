@@ -180,8 +180,11 @@ func (cm *CheckpointManager) Checkpoint(w io.Writer, timeout time.Duration) (*Ch
 	stats.Get(compactedWALSize).(*expvar.Int).Set(n)
 
 	/////////////////////////////////////////////////////////////////////////////////
-	// Now, attempt to perform a TRUNCATE checkpoint of the database.
-
+	// Now, attempt to perform a TRUNCATE checkpoint of the database. Close the WAL
+	// file handle explicitly to avoid any chance of intefering with SQLite.
+	if err := walFD.Close(); err != nil {
+		return nil, 0, fmt.Errorf("create WAL writer: %w", err)
+	}
 	meta, err := cm.db.CheckpointWithTimeout(CheckpointTruncate, timeout)
 	if err != nil {
 		return nil, 0, fmt.Errorf("checkpoint: %w", err)
