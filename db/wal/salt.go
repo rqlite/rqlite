@@ -21,12 +21,12 @@ func (s Salt) String() string {
 
 // ReadSaltAt reads the salt values from the WAL header via the given ReaderAt.
 func ReadSaltAt(r io.ReaderAt) (Salt, error) {
-	buf := make([]byte, 8)
-	if _, err := r.ReadAt(buf, 16); err != nil {
+	var buf [8]byte
+	if _, err := r.ReadAt(buf[:], 16); err != nil {
 		return Salt{}, err
 	}
 	return Salt{
-		binary.BigEndian.Uint32(buf[0:]),
-		binary.BigEndian.Uint32(buf[4:]),
+		binary.BigEndian.Uint32(buf[0:4]),
+		binary.BigEndian.Uint32(buf[4:8]),
 	}, nil
 }
