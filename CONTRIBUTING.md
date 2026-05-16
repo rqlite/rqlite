@@ -7,7 +7,7 @@ rqlite is software, and it goes without saying it can always be improved. It's b
 Many packages have their own `DESIGN.md` design document. You should review these before making changes. Doing so will help you understand the code and its construction.
 
 ## Issues are not assigned
-Issues are never explicitly assigned to inviduals. If you wish to work on issue simply ask questions on the issue as needed, and generate a Pull Request with your proposed fix.
+Issues are never explicitly assigned to inviduals. If you wish to work on issue simply ask questions on the issue as needed, and generate a Pull Request with your proposed fix. **Before coding any substantial change it's strongly recommended you discuss your proposal first**.
 
 ## Use of Coding Agents
 Coding Agents are fine to use, but any PR that appears to be "AI slop" or generated without any apparent thought by the actual programmer, may be closed without comment.
