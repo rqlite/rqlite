@@ -857,3 +857,33 @@ func Test_ClientBroadcast_WithError(t *testing.T) {
 		t.Fatalf("expected 'test error', got '%s'", resp.Error)
 	}
 }
+
+func Test_readProtoResponse_OversizedMessage(t *testing.T) {
+	// Create a server that sends an oversized message length prefix.
+	srv := servicetest.NewService()
+	srv.Handler = func(conn net.Conn) {
+		// Read and discard the incoming command.
+		b := make([]byte, protoBufferLengthSize)
+		io.ReadFull(conn, b)
+		sz := binary.LittleEndian.Uint64(b[0:])
+		p := make([]byte, sz)
+		io.ReadFull(conn, p)
+
+		// Send a response with an oversized length prefix.
+		// MaxMessageSize is 64MB; claim the message is 1GB.
+		var sizePrefix [8]byte
+		binary.LittleEndian.PutUint64(sizePrefix[:], 1024*1024*1024)
+		conn.Write(sizePrefix[:])
+	}
+	srv.Start()
+	defer srv.Close()
+
+	c := NewClient(&simpleDialer{}, time.Second)
+	_, err := c.GetNodeMeta(srv.Addr(), nil, time.Second, defaultMaxRetries)
+	if err == nil {
+		t.Fatal("expected error for oversized message, got nil")
+	}
+	if !strings.Contains(err.Error(), "exceeds maximum") {
+		t.Fatalf("expected 'exceeds maximum' error, got: %s", err.Error())
+	}
+}
