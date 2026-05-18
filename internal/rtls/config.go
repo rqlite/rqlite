@@ -12,6 +12,7 @@ import (
 const (
 	NoCACert     = ""
 	NoServerName = ""
+	NoVerifyCN   = ""
 )
 
 // MTLSState indicates whether mutual TLS is enabled or disabled.
@@ -74,8 +75,9 @@ func CreateClientConfigWithFunc(certFunc func() (*tls.Certificate, error), caCer
 // authenticate the server to the client. The caCertFile parameter is the path to the CA
 // certificate file, which the server will use to verify any certificate presented by the
 // client. If mtls is MTLSStateEnabled, the server will require the client to present a
-// valid certificate.
-func CreateServerConfig(certFile, keyFile, caCertFile string, mtls MTLSState) (*tls.Config, error) {
+// valid certificate. If verifyCN is non-empty, the client certificate's Subject Common
+// Name must match it exactly.
+func CreateServerConfig(certFile, keyFile, caCertFile string, mtls MTLSState, verifyCN string) (*tls.Config, error) {
 	var err error
 
 	config := createBaseTLSConfig(NoServerName, false)
@@ -90,6 +92,9 @@ func CreateServerConfig(certFile, keyFile, caCertFile string, mtls MTLSState) (*
 		}
 	}
 	config.ClientAuth = tls.ClientAuthType(mtls)
+	if verifyCN != "" {
+		setVerifyCN(config, verifyCN)
+	}
 	return config, nil
 }
 
@@ -97,8 +102,9 @@ func CreateServerConfig(certFile, keyFile, caCertFile string, mtls MTLSState) (*
 // parameter is a function that returns the server's certificate and key. The caCertFile
 // parameter is the path to the CA certificate file, which the server will use to verify
 // any certificate presented by the client. If mtls is MTLSStateEnabled, the server will
-// require the client to present a valid certificate.
-func CreateServerConfigWithFunc(certFunc func() (*tls.Certificate, error), caCertFile string, mtls MTLSState) (*tls.Config, error) {
+// require the client to present a valid certificate. If verifyCN is non-empty, the
+// client certificate's Subject Common Name must match it exactly.
+func CreateServerConfigWithFunc(certFunc func() (*tls.Certificate, error), caCertFile string, mtls MTLSState, verifyCN string) (*tls.Config, error) {
 	config := createBaseTLSConfig(NoServerName, false)
 	config.GetCertificate = func(hello *tls.ClientHelloInfo) (*tls.Certificate, error) {
 		return certFunc()
@@ -109,7 +115,24 @@ func CreateServerConfigWithFunc(certFunc func() (*tls.Certificate, error), caCer
 		}
 	}
 	config.ClientAuth = tls.ClientAuthType(mtls)
+	if verifyCN != "" {
+		setVerifyCN(config, verifyCN)
+	}
 	return config, nil
+}
+
+// setVerifyCN installs a VerifyPeerCertificate callback that requires the
+// leaf client certificate's Subject Common Name to match verifyCN exactly.
+// If verifyCN is empty, no callback is installed.
+func setVerifyCN(config *tls.Config, verifyCN string) {
+	config.VerifyPeerCertificate = func(rawCerts [][]byte, verifiedChains [][]*x509.Certificate) error {
+		for _, chain := range verifiedChains {
+			if len(chain) > 0 && chain[0].Subject.CommonName == verifyCN {
+				return nil
+			}
+		}
+		return fmt.Errorf("client did not provide any valid certificate that matches CN %q", verifyCN)
+	}
 }
 
 func createBaseTLSConfig(serverName string, noverify bool) *tls.Config {

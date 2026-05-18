@@ -136,6 +136,16 @@ This allows you to control which clients can connect to the HTTPS API, as only c
 default = false
 
 [[flags]]
+name = "HTTPVerifyCN"
+cli = "http-verify-cn"
+type = "string"
+short_help = "Required Common Name on client certificates. If not set, any client cert signed by the CA is accepted"
+long_help = """
+When set, the Common Name field of the client's leaf certificate must match this string exactly. Only takes effect when -http-verify-client is also set.
+"""
+default = ""
+
+[[flags]]
 name = "NodeX509CACert"
 cli = "node-ca-cert"
 type = "string"
@@ -192,6 +202,16 @@ type = "string"
 short_help = "Hostname to verify on certificate returned by a node"
 long_help = """
 When a node verifies a certificate, it normally checks that the certificate's hostname matches the peer's hostname. This flag explicitly tells the node which hostname to expect in the certificate. It allows you to use a single certificate, with a single hostname, across all nodes. This is primarily useful when mutual TLS is enabled.
+"""
+default = ""
+
+[[flags]]
+name = "NodeVerifyCN"
+cli = "node-verify-cn"
+type = "string"
+short_help = "Required Common Name on incoming peer certificates. If not set, any peer cert signed by the CA is accepted"
+long_help = """
+When set, the Common Name field of every peer's leaf certificate must match this string exactly during the TLS handshake performed by this node's mux. Outbound connections this node makes to peers continue to be validated against -node-verify-server-name. Requires -node-verify-client.
 """
 default = ""
 

@@ -3,6 +3,9 @@ package tcp
 import (
 	"bytes"
 	"crypto/tls"
+	cryptox509 "crypto/x509"
+	"crypto/x509/pkix"
+	"encoding/pem"
 	"io"
 	"log"
 	"net"
@@ -13,6 +16,7 @@ import (
 	"testing/quick"
 	"time"
 
+	"github.com/rqlite/rqlite/v10/internal/rtls"
 	"github.com/rqlite/rqlite/v10/testdata/x509"
 )
 
@@ -249,7 +253,7 @@ func TestMutualTLSMux(t *testing.T) {
 	caCert := x509.CertMyCAFile("")
 	defer os.Remove(caCert)
 
-	mux, err := NewMutualTLSMux(tcpListener, nil, cert, key, caCert)
+	mux, err := NewMutualTLSMux(tcpListener, nil, cert, key, caCert, rtls.NoVerifyCN)
 	if err != nil {
 		t.Fatalf("failed to create mutual TLS mux: %s", err.Error())
 	}
@@ -276,6 +280,102 @@ func TestMutualTLSMux(t *testing.T) {
 	}
 	if !strings.Contains(err.Error(), "certificate required") {
 		t.Fatalf("expected error to reference missing client certificate, got %s", err.Error())
+	}
+}
+
+func TestMutualTLSMuxVerifyCN(t *testing.T) {
+	// Generate a CA and three CA-signed certs (server, allowed client, denied client).
+	caCertPEM, caKeyPEM, err := rtls.GenerateCACert(pkix.Name{CommonName: "ca.rqlite.io"}, time.Hour, 2048)
+	if err != nil {
+		t.Fatalf("failed to generate CA cert: %s", err)
+	}
+	caCertBlock, _ := pem.Decode(caCertPEM)
+	caKeyBlock, _ := pem.Decode(caKeyPEM)
+	parsedCACert, err := cryptox509.ParseCertificate(caCertBlock.Bytes)
+	if err != nil {
+		t.Fatalf("failed to parse CA cert: %s", err)
+	}
+	parsedCAKey, err := cryptox509.ParsePKCS1PrivateKey(caKeyBlock.Bytes)
+	if err != nil {
+		t.Fatalf("failed to parse CA key: %s", err)
+	}
+
+	serverIP := net.ParseIP("127.0.0.1")
+	serverCertPEM, serverKeyPEM, err := rtls.GenerateCertIPSAN(pkix.Name{CommonName: "server.rqlite.io"}, time.Hour, 2048, parsedCACert, parsedCAKey, serverIP)
+	if err != nil {
+		t.Fatalf("failed to generate server cert: %s", err)
+	}
+	allowedPEM, allowedKeyPEM, err := rtls.GenerateCertIPSAN(pkix.Name{CommonName: "allowed.rqlite.io"}, time.Hour, 2048, parsedCACert, parsedCAKey, serverIP)
+	if err != nil {
+		t.Fatalf("failed to generate allowed client cert: %s", err)
+	}
+	deniedPEM, deniedKeyPEM, err := rtls.GenerateCertIPSAN(pkix.Name{CommonName: "denied.rqlite.io"}, time.Hour, 2048, parsedCACert, parsedCAKey, serverIP)
+	if err != nil {
+		t.Fatalf("failed to generate denied client cert: %s", err)
+	}
+
+	mustWrite := func(b []byte) string {
+		f, err := os.CreateTemp(t.TempDir(), "rqlite-mux-cn")
+		if err != nil {
+			t.Fatalf("failed to create temp file: %s", err)
+		}
+		if _, err := f.Write(b); err != nil {
+			t.Fatalf("failed to write temp file: %s", err)
+		}
+		f.Close()
+		return f.Name()
+	}
+
+	tcpListener := mustTCPListener("127.0.0.1:0")
+	defer tcpListener.Close()
+
+	mux, err := NewMutualTLSMux(tcpListener, nil, mustWrite(serverCertPEM), mustWrite(serverKeyPEM), mustWrite(caCertPEM), "allowed.rqlite.io")
+	if err != nil {
+		t.Fatalf("failed to create mutual TLS mux: %s", err.Error())
+	}
+	defer mux.Close()
+	go mux.Serve()
+
+	rootPool := cryptox509.NewCertPool()
+	if !rootPool.AppendCertsFromPEM(caCertPEM) {
+		t.Fatalf("failed to add CA cert to pool")
+	}
+
+	dial := func(certPEM, keyPEM []byte) (*tls.Conn, error) {
+		cert, err := tls.X509KeyPair(certPEM, keyPEM)
+		if err != nil {
+			t.Fatalf("failed to build keypair: %s", err)
+		}
+		return tls.Dial("tcp", tcpListener.Addr().String(), &tls.Config{
+			RootCAs:      rootPool,
+			Certificates: []tls.Certificate{cert},
+			ServerName:   "127.0.0.1",
+		})
+	}
+
+	// Allowed CN — handshake should succeed and the connection should be usable.
+	conn, err := dial(allowedPEM, allowedKeyPEM)
+	if err != nil {
+		t.Fatalf("expected handshake with matching CN to succeed, got error: %s", err)
+	}
+	if err := conn.Handshake(); err != nil {
+		t.Fatalf("explicit handshake with matching CN failed: %s", err)
+	}
+	conn.Close()
+
+	// Denied CN — server must reject. With TLS 1.3 the client's Dial may return
+	// nil; a subsequent Read surfaces the server's alert.
+	conn, err = dial(deniedPEM, deniedKeyPEM)
+	if err == nil {
+		var b [1]byte
+		_, err = conn.Read(b[:])
+		conn.Close()
+	}
+	if err == nil {
+		t.Fatalf("expected handshake with non-matching CN to fail, got nil")
+	}
+	if !strings.Contains(err.Error(), "bad certificate") && !strings.Contains(err.Error(), "did not provide any valid certificate that matches CN") {
+		t.Fatalf("expected CN mismatch error, got: %s", err.Error())
 	}
 }
 
