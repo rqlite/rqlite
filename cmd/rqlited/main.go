@@ -437,7 +437,11 @@ func createDiscoService(cfg *Config, str *store.Store) (*disco.Service, error) {
 
 func startHTTPService(cfg *Config, str *store.Store, cltr *cluster.Client, credStr *auth.CredentialsStore, pxy *proxy.Proxy) (*httpd.Service, error) {
 	// Create HTTP server and load authentication information.
-	s := httpd.New(cfg.HTTPAddr, str, cltr, pxy, credStr)
+	var cs httpd.CredentialStore
+	if credStr != nil {
+		cs = credStr
+	}
+	s := httpd.New(cfg.HTTPAddr, str, cltr, pxy, cs)
 
 	s.CACertFile = cfg.HTTPx509CACert
 	s.CertFile = cfg.HTTPx509Cert
