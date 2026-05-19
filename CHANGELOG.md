@@ -3,7 +3,7 @@
 - [PR #2664](https://github.com/rqlite/rqlite/pull/2664): Limit number of redirects followed on cluster-join. Fixes issue [#2616](https://github.com/rqlite/rqlite/issues/2616). Thanks @goingforstudying-ctrl
 - [PR #2667](https://github.com/rqlite/rqlite/pull/2667): Refactor database `CheckpointManager` for clarity.
 - [PR #2668](https://github.com/rqlite/rqlite/pull/2668): Move WAL-related types to `wal` package.
-- [PR #2670](https://github.com/rqlite/rqlite/pull/2670): Correctly pass a `nil` Credential Store to the HTTP service. See [issue #2669](https://github.com/rqlite/rqlite/discussions/2669).
+- [PR #2670](https://github.com/rqlite/rqlite/pull/2670): Correctly pass a `nil` Credential Store to the HTTP service, fixing HTTP auth reporting. See [issue #2669](https://github.com/rqlite/rqlite/discussions/2669).
 
 ## v10.0.5 (May 12th 2026)
 ### Implementation changes and bug fixes
