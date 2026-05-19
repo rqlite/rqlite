@@ -440,8 +440,6 @@ func startHTTPService(cfg *Config, str *store.Store, cltr *cluster.Client, credS
 	var cs httpd.CredentialStore
 	if credStr != nil {
 		cs = credStr
-	} else {
-		cs = nil
 	}
 	s := httpd.New(cfg.HTTPAddr, str, cltr, pxy, cs)
 
