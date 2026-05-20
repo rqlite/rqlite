@@ -1,6 +1,6 @@
-## v10.1.0 (unreleased)
+## v10.1.0 (May 20th 2026)
 ### New features
-- [PR #2672](https://github.com/rqlite/rqlite/pull/2672): Add Schema management page to Console app.
+- [PR #2672](https://github.com/rqlite/rqlite/pull/2672), [PR #2673](https://github.com/rqlite/rqlite/pull/2673): Add Schema management page to Console app.
 
 ### Implementation changes and bug fixes
 - [PR #2671](https://github.com/rqlite/rqlite/pull/2671): Display node TLS state in console's Cluster panel. See [issue #2669](https://github.com/rqlite/rqlite/discussions/2669).
