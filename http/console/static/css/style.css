@@ -437,6 +437,196 @@ footer a:hover {
     color: var(--accent);
 }
 
+/* Schema Tab */
+.schema-controls {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    margin-bottom: 1rem;
+}
+
+.schema-loading,
+.schema-empty {
+    color: var(--text-muted);
+    font-size: 0.875rem;
+    padding: 1rem 0;
+}
+
+.schema-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 0.5rem;
+    margin-bottom: 0.5rem;
+}
+
+.schema-actions button {
+    background: transparent;
+    border: 1px solid var(--border);
+    color: var(--text-secondary);
+    font-size: 0.75rem;
+    padding: 0.25rem 0.625rem;
+    border-radius: 3px;
+    cursor: pointer;
+}
+
+.schema-actions button:hover {
+    background: var(--surface-alt);
+    color: var(--text);
+}
+
+.schema-section .detail-section-header {
+    font-family: "SF Mono", "Fira Code", "Fira Mono", Menlo, Consolas, monospace;
+}
+
+.schema-kind {
+    display: inline-block;
+    font-size: 0.6875rem;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    padding: 0.0625rem 0.375rem;
+    margin-right: 0.375rem;
+    border-radius: 3px;
+    background: var(--surface-alt);
+    color: var(--text-secondary);
+    font-weight: 600;
+    vertical-align: middle;
+}
+
+.schema-count {
+    color: var(--text-muted);
+    font-weight: normal;
+    font-size: 0.8125rem;
+}
+
+.schema-section .detail-section-body {
+    padding: 0;
+}
+
+.schema-columns {
+    border-radius: 0;
+    box-shadow: none;
+}
+
+.result-table th.schema-center,
+.result-table td.schema-center {
+    text-align: center;
+}
+
+.schema-check {
+    color: var(--success-text);
+    font-weight: 700;
+    font-size: 1.5rem;
+    line-height: 1;
+}
+
+.schema-dash {
+    color: var(--text-muted);
+}
+
+.schema-pk-badge {
+    font-size: 0.75rem;
+    margin-left: 0.25rem;
+}
+
+.schema-pk-row td:first-child {
+    font-weight: 600;
+}
+
+.schema-sql-block {
+    padding: 0.5rem 0.75rem 0.75rem;
+    border-top: 1px solid var(--border-light);
+    background: var(--surface);
+}
+
+.schema-sql-actions {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.schema-sql-toggle {
+    background: transparent;
+    border: 1px solid var(--border);
+    color: var(--text-secondary);
+    font-size: 0.75rem;
+    padding: 0.25rem 0.625rem;
+    border-radius: 3px;
+    cursor: pointer;
+}
+
+.schema-sql-toggle:hover {
+    background: var(--surface-alt);
+    color: var(--text);
+}
+
+.schema-drop-table {
+    background: transparent;
+    border: 1px solid var(--error);
+    color: var(--error-text);
+    font-size: 0.75rem;
+    padding: 0.25rem 0.625rem;
+    border-radius: 3px;
+    cursor: pointer;
+    font-weight: 600;
+}
+
+.schema-drop-table:hover {
+    background: var(--error);
+    color: #fff;
+}
+
+.schema-drop-table:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+.schema-sql-wrapper {
+    position: relative;
+    margin-top: 0.5rem;
+}
+
+.schema-sql-wrapper.hidden {
+    display: none;
+}
+
+.schema-sql {
+    margin: 0;
+    padding: 0.625rem 2.25rem 0.625rem 0.75rem;
+    background: var(--surface-alt);
+    border-radius: 3px;
+    font-family: "SF Mono", "Fira Code", "Fira Mono", Menlo, Consolas, monospace;
+    font-size: 0.8125rem;
+    white-space: pre-wrap;
+    word-break: break-word;
+    color: var(--text);
+}
+
+.schema-sql-copy {
+    position: absolute;
+    top: 0.375rem;
+    right: 0.375rem;
+    background: var(--copy-bg, transparent);
+    border: 1px solid var(--border);
+    border-radius: 3px;
+    cursor: pointer;
+    font-size: 0.875rem;
+    line-height: 1;
+    padding: 0.25rem 0.375rem;
+    color: var(--text-secondary);
+    transition: background 0.15s, color 0.15s;
+}
+
+.schema-sql-copy:hover {
+    background: var(--copy-bg-hover, var(--surface));
+    color: var(--text);
+}
+
+.schema-section > .detail-section-body > .schema-sql {
+    margin: 0;
+    border-radius: 0;
+}
+
 /* Status Tab */
 .status-controls {
     display: flex;

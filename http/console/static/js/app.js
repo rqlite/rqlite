@@ -26,6 +26,47 @@
         return div.innerHTML.replace(/"/g, "&quot;").replace(/'/g, "&#39;");
     }
 
+    function formatTimeOfDay(date) {
+        var d = date || new Date();
+        var hh = String(d.getHours()).padStart(2, "0");
+        var mm = String(d.getMinutes()).padStart(2, "0");
+        var ss = String(d.getSeconds()).padStart(2, "0");
+        return hh + ":" + mm + ":" + ss;
+    }
+
+    // copyToClipboard copies text to the clipboard, returning a Promise that
+    // resolves on success and rejects on failure. Uses the async Clipboard
+    // API when available (secure contexts only), otherwise falls back to a
+    // hidden textarea + document.execCommand("copy") for plain-HTTP serves.
+    function copyToClipboard(text) {
+        if (navigator.clipboard && window.isSecureContext) {
+            return navigator.clipboard.writeText(text);
+        }
+        return new Promise(function (resolve, reject) {
+            var ta = document.createElement("textarea");
+            ta.value = text;
+            ta.setAttribute("readonly", "");
+            ta.style.position = "fixed";
+            ta.style.top = "0";
+            ta.style.left = "0";
+            ta.style.opacity = "0";
+            document.body.appendChild(ta);
+            ta.select();
+            var ok = false;
+            try {
+                ok = document.execCommand("copy");
+            } catch (e) {
+                ok = false;
+            }
+            document.body.removeChild(ta);
+            if (ok) {
+                resolve();
+            } else {
+                reject(new Error("Copy not supported in this context"));
+            }
+        });
+    }
+
     // --- Dark Mode ---
 
     var THEME_KEY = "rqlite_theme";
@@ -88,6 +129,9 @@
             tabContents.forEach(function (tc) { tc.classList.remove("active"); });
             tab.classList.add("active");
             document.getElementById(target).classList.add("active");
+            if (target === "schema") {
+                loadSchema();
+            }
         });
     });
 
@@ -312,9 +356,12 @@
             text = JSON.stringify(rows, null, 2);
         }
 
-        navigator.clipboard.writeText(text).then(function () {
-            var orig = btn.textContent;
+        var orig = btn.textContent;
+        copyToClipboard(text).then(function () {
             btn.textContent = "Copied!";
+            setTimeout(function () { btn.textContent = orig; }, 1500);
+        }, function () {
+            btn.textContent = "Copy failed";
             setTimeout(function () { btn.textContent = orig; }, 1500);
         });
     }
@@ -386,8 +433,12 @@
     });
 
     copyJsonBtn.addEventListener("click", function () {
-        navigator.clipboard.writeText(rawJsonPre.textContent).then(function () {
+        copyToClipboard(rawJsonPre.textContent).then(function () {
             copyJsonBtn.textContent = "\u2714";
+            setTimeout(function () { copyJsonBtn.textContent = "\u2398"; }, 1500);
+        }, function () {
+            copyJsonBtn.title = "Copy not supported in this context";
+            copyJsonBtn.textContent = "\u2718";
             setTimeout(function () { copyJsonBtn.textContent = "\u2398"; }, 1500);
         });
     });
@@ -412,12 +463,7 @@
             if (!rawJsonWrapper.classList.contains("hidden")) {
                 rawJsonPre.textContent = JSON.stringify(lastStatusData, null, 2);
             }
-            // Update last-updated timestamp
-            var now = new Date();
-            var hh = String(now.getHours()).padStart(2, "0");
-            var mm = String(now.getMinutes()).padStart(2, "0");
-            var ss = String(now.getSeconds()).padStart(2, "0");
-            lastUpdatedSpan.textContent = "Updated " + hh + ":" + mm + ":" + ss;
+            lastUpdatedSpan.textContent = "Updated " + formatTimeOfDay();
         }).catch(function (err) {
             statusCards.innerHTML = '<div class="status-error">' + escapeHTML(err.message) + '</div>';
         });
@@ -753,5 +799,254 @@
             .finally(function () {
                 backupBtn.disabled = false;
             });
+    });
+
+    // --- Schema Tab ---
+
+    var schemaContent = document.getElementById("schema-content");
+    var schemaRefreshBtn = document.getElementById("schema-refresh-btn");
+    var schemaLastUpdated = document.getElementById("schema-last-updated");
+
+    var SCHEMA_TABLES_QUERY = "SELECT m.name AS table_name, m.sql AS table_sql, p.name AS column_name, p.type, p.\"notnull\" AS not_null, p.dflt_value, p.pk FROM sqlite_master m JOIN pragma_table_info(m.name) p WHERE m.type = 'table' ORDER BY m.name, p.cid";
+    var SCHEMA_OBJECTS_QUERY = "SELECT name, type, tbl_name, sql FROM sqlite_master WHERE type IN ('index', 'trigger') AND sql IS NOT NULL ORDER BY type, tbl_name, name";
+
+    schemaRefreshBtn.addEventListener("click", loadSchema);
+
+    function slugify(s) {
+        return String(s).toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "");
+    }
+
+    function loadSchema() {
+        schemaRefreshBtn.disabled = true;
+        schemaContent.innerHTML = '<div class="schema-loading">Loading schema...</div>';
+
+        apiRequest("POST", "/db/query?associative", [SCHEMA_TABLES_QUERY, SCHEMA_OBJECTS_QUERY])
+            .then(function (resp) {
+                renderSchema(resp.data);
+                schemaLastUpdated.textContent = "Last updated: " + formatTimeOfDay();
+            })
+            .catch(function (err) {
+                schemaContent.innerHTML = '<div class="result-error">' + escapeHTML(err.message) + '</div>';
+            })
+            .finally(function () {
+                schemaRefreshBtn.disabled = false;
+            });
+    }
+
+    function renderSchema(data) {
+        if (!data || !data.results || data.results.length === 0) {
+            schemaContent.innerHTML = '<div class="result-error">No results returned</div>';
+            return;
+        }
+        var tableResult = data.results[0] || {};
+        var objectResult = data.results[1] || {};
+        if (tableResult.error) {
+            schemaContent.innerHTML = '<div class="result-error">' + escapeHTML(tableResult.error) + '</div>';
+            return;
+        }
+
+        // Group table columns by table name, preserving order.
+        var tables = {};
+        var tableOrder = [];
+        (tableResult.rows || []).forEach(function (row) {
+            var name = row.table_name;
+            if (!tables[name]) {
+                tables[name] = { sql: row.table_sql, columns: [] };
+                tableOrder.push(name);
+            }
+            tables[name].columns.push(row);
+        });
+
+        // Group indexes and triggers by type.
+        var indexes = [];
+        var triggers = [];
+        (objectResult.rows || []).forEach(function (row) {
+            if (row.type === "index") indexes.push(row);
+            else if (row.type === "trigger") triggers.push(row);
+        });
+
+        if (tableOrder.length === 0 && indexes.length === 0 && triggers.length === 0) {
+            schemaContent.innerHTML = '<div class="schema-empty">No tables, indexes, or triggers found.</div>';
+            return;
+        }
+
+        var html = "";
+
+        html += '<div class="schema-actions">';
+        html += '<button type="button" class="schema-expand-all">Expand all</button>';
+        html += '<button type="button" class="schema-collapse-all">Collapse all</button>';
+        html += '</div>';
+
+        // Tables.
+        tableOrder.forEach(function (tableName) {
+            var t = tables[tableName];
+            var anchor = "schema-table-" + slugify(tableName);
+            html += '<div class="detail-section schema-section open" id="' + escapeHTML(anchor) + '">';
+            html += '<div class="detail-section-header">';
+            html += '<span><span class="schema-kind">table</span> ' + escapeHTML(tableName);
+            html += ' <span class="schema-count">(' + t.columns.length + ' column' + (t.columns.length === 1 ? '' : 's') + ')</span></span>';
+            html += '<span class="arrow">&#9654;</span>';
+            html += '</div>';
+            html += '<div class="detail-section-body">';
+            html += '<table class="result-table schema-columns"><thead><tr>';
+            html += '<th>Column</th>';
+            html += '<th>Type</th>';
+            html += '<th class="schema-center">Not Null</th>';
+            html += '<th>Default</th>';
+            html += '</tr></thead><tbody>';
+            t.columns.forEach(function (col) {
+                html += '<tr' + (col.pk ? ' class="schema-pk-row"' : '') + '>';
+                html += '<td>' + escapeHTML(col.column_name);
+                if (col.pk) {
+                    html += ' <span class="schema-pk-badge" title="Primary key">&#128273;</span>';
+                }
+                html += '</td>';
+                html += '<td>' + escapeHTML(col.type) + '</td>';
+                html += '<td class="schema-center">' + (col.not_null
+                    ? '<span class="schema-check" title="Value may not be NULL">&#10003;</span>'
+                    : '<span class="schema-dash" title="Value may be NULL">&mdash;</span>') + '</td>';
+                if (col.dflt_value === null || col.dflt_value === undefined) {
+                    html += '<td class="null-value">NULL</td>';
+                } else {
+                    html += '<td>' + escapeHTML(col.dflt_value) + '</td>';
+                }
+                html += '</tr>';
+            });
+            html += '</tbody></table>';
+            html += '<div class="schema-sql-block">';
+            html += '<div class="schema-sql-actions">';
+            if (t.sql) {
+                html += '<button class="schema-sql-toggle" type="button">Show CREATE TABLE</button>';
+            } else {
+                html += '<span></span>';
+            }
+            html += '<button class="schema-drop-table" type="button" data-table-name="' + escapeHTML(tableName) + '">Drop table</button>';
+            html += '</div>';
+            if (t.sql) {
+                html += '<div class="schema-sql-wrapper hidden">';
+                html += '<button type="button" class="schema-sql-copy" title="Copy to clipboard">&#x2398;</button>';
+                html += '<pre class="schema-sql">' + escapeHTML(t.sql) + '</pre>';
+                html += '</div>';
+            }
+            html += '</div>';
+            html += '</div></div>';
+        });
+
+        // Indexes.
+        indexes.forEach(function (idx) {
+            var anchor = "schema-index-" + slugify(idx.name);
+            html += '<div class="detail-section schema-section" id="' + escapeHTML(anchor) + '">';
+            html += '<div class="detail-section-header">';
+            html += '<span><span class="schema-kind">index</span> ' + escapeHTML(idx.name);
+            html += ' <span class="schema-count">on ' + escapeHTML(idx.tbl_name) + '</span></span>';
+            html += '<span class="arrow">&#9654;</span>';
+            html += '</div>';
+            html += '<div class="detail-section-body">';
+            html += '<pre class="schema-sql">' + escapeHTML(idx.sql) + '</pre>';
+            html += '</div></div>';
+        });
+
+        // Triggers.
+        triggers.forEach(function (trg) {
+            var anchor = "schema-trigger-" + slugify(trg.name);
+            html += '<div class="detail-section schema-section" id="' + escapeHTML(anchor) + '">';
+            html += '<div class="detail-section-header">';
+            html += '<span><span class="schema-kind">trigger</span> ' + escapeHTML(trg.name);
+            html += ' <span class="schema-count">on ' + escapeHTML(trg.tbl_name) + '</span></span>';
+            html += '<span class="arrow">&#9654;</span>';
+            html += '</div>';
+            html += '<div class="detail-section-body">';
+            html += '<pre class="schema-sql">' + escapeHTML(trg.sql) + '</pre>';
+            html += '</div></div>';
+        });
+
+        schemaContent.innerHTML = html;
+    }
+
+    function sqlQuoteIdent(name) {
+        return '"' + String(name).replace(/"/g, '""') + '"';
+    }
+
+    function dropTable(tableName, btn) {
+        btn.disabled = true;
+        var sql = "DROP TABLE " + sqlQuoteIdent(tableName);
+        apiRequest("POST", "/db/execute", [sql])
+            .then(function (resp) {
+                var results = (resp.data && resp.data.results) || [];
+                var err = results[0] && results[0].error;
+                if (err) {
+                    window.alert("Failed to drop table \"" + tableName + "\": " + err);
+                    btn.disabled = false;
+                    return;
+                }
+                loadSchema();
+            })
+            .catch(function (err) {
+                window.alert("Failed to drop table \"" + tableName + "\": " + err.message);
+                btn.disabled = false;
+            });
+    }
+
+    schemaContent.addEventListener("click", function (e) {
+        var header = e.target.closest && e.target.closest(".detail-section-header");
+        if (header && schemaContent.contains(header)) {
+            header.parentElement.classList.toggle("open");
+            return;
+        }
+
+        var btn = e.target;
+        if (!btn.classList) return;
+
+        if (btn.classList.contains("schema-sql-toggle")) {
+            var block = btn.closest(".schema-sql-block");
+            var wrapper = block ? block.querySelector(".schema-sql-wrapper") : null;
+            if (!wrapper) return;
+            if (wrapper.classList.contains("hidden")) {
+                wrapper.classList.remove("hidden");
+                btn.textContent = "Hide CREATE TABLE";
+            } else {
+                wrapper.classList.add("hidden");
+                btn.textContent = "Show CREATE TABLE";
+            }
+            return;
+        }
+
+        if (btn.classList.contains("schema-sql-copy")) {
+            var wrap = btn.closest(".schema-sql-wrapper");
+            var preEl = wrap ? wrap.querySelector(".schema-sql") : null;
+            if (!preEl) return;
+            copyToClipboard(preEl.textContent).then(function () {
+                btn.textContent = "✔";
+                setTimeout(function () { btn.innerHTML = "⎘"; }, 1500);
+            }, function () {
+                btn.title = "Copy not supported in this context";
+                btn.textContent = "✘";
+                setTimeout(function () { btn.innerHTML = "⎘"; }, 1500);
+            });
+            return;
+        }
+
+        if (btn.classList.contains("schema-drop-table")) {
+            var tableName = btn.getAttribute("data-table-name");
+            if (!tableName) return;
+            var ok = window.confirm("Drop table \"" + tableName + "\"?\n\nThis permanently deletes the table and all its data. This action cannot be undone.");
+            if (!ok) return;
+            dropTable(tableName, btn);
+            return;
+        }
+
+        if (btn.classList.contains("schema-expand-all")) {
+            schemaContent.querySelectorAll(".schema-section").forEach(function (s) {
+                s.classList.add("open");
+            });
+            return;
+        }
+
+        if (btn.classList.contains("schema-collapse-all")) {
+            schemaContent.querySelectorAll(".schema-section").forEach(function (s) {
+                s.classList.remove("open");
+            });
+            return;
+        }
     });
 })();
