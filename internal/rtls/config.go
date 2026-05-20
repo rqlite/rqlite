@@ -92,9 +92,7 @@ func CreateServerConfig(certFile, keyFile, caCertFile string, mtls MTLSState, ve
 		}
 	}
 	config.ClientAuth = tls.ClientAuthType(mtls)
-	if verifyCN != "" {
-		setVerifyCN(config, verifyCN)
-	}
+	config.VerifyPeerCertificate = makeVerifyCNCallback(verifyCN)
 	return config, nil
 }
 
@@ -115,17 +113,18 @@ func CreateServerConfigWithFunc(certFunc func() (*tls.Certificate, error), caCer
 		}
 	}
 	config.ClientAuth = tls.ClientAuthType(mtls)
-	if verifyCN != "" {
-		setVerifyCN(config, verifyCN)
-	}
+	config.VerifyPeerCertificate = makeVerifyCNCallback(verifyCN)
 	return config, nil
 }
 
-// setVerifyCN installs a VerifyPeerCertificate callback that requires the
-// leaf client certificate's Subject Common Name to match verifyCN exactly.
-// If verifyCN is empty, no callback is installed.
-func setVerifyCN(config *tls.Config, verifyCN string) {
-	config.VerifyPeerCertificate = func(rawCerts [][]byte, verifiedChains [][]*x509.Certificate) error {
+// makeVerifyCNCallback returns a function which requires the leaf client certificate's
+// Subject Common Name to match verifyCN exactly. If verifyCN is the empty string then
+// nil is returned.
+func makeVerifyCNCallback(verifyCN string) func(rawCerts [][]byte, verifiedChains [][]*x509.Certificate) error {
+	if verifyCN == "" {
+		return nil
+	}
+	return func(rawCerts [][]byte, verifiedChains [][]*x509.Certificate) error {
 		for _, chain := range verifiedChains {
 			if len(chain) > 0 && chain[0].Subject.CommonName == verifyCN {
 				return nil
