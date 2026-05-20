@@ -19,7 +19,7 @@ func Test_CreateServerConfig(t *testing.T) {
 	keyFile := mustWriteTempFile(t, keyPEM)
 
 	// create a server config with no client verification
-	config, err := CreateServerConfig(certFile, keyFile, NoCACert, MTLSStateDisabled)
+	config, err := CreateServerConfig(certFile, keyFile, NoCACert, MTLSStateDisabled, NoVerifyCN)
 	if err != nil {
 		t.Fatalf("failed to create server config: %v", err)
 	}
@@ -46,7 +46,7 @@ func Test_CreateServerConfig(t *testing.T) {
 	}
 
 	// create a server config with client verification
-	config, err = CreateServerConfig(certFile, keyFile, NoCACert, MTLSStateEnabled)
+	config, err = CreateServerConfig(certFile, keyFile, NoCACert, MTLSStateEnabled, NoVerifyCN)
 	if err != nil {
 		t.Fatalf("failed to create server config: %v", err)
 	}
@@ -64,7 +64,7 @@ func Test_CreateServerConfigWithFunc(t *testing.T) {
 	certFile := mustWriteTempFile(t, certPEM)
 	keyFile := mustWriteTempFile(t, keyPEM)
 
-	config, err := CreateServerConfigWithFunc(mustCreateGetCertFunc(t, certFile, keyFile), NoCACert, MTLSStateDisabled)
+	config, err := CreateServerConfigWithFunc(mustCreateGetCertFunc(t, certFile, keyFile), NoCACert, MTLSStateDisabled, NoVerifyCN)
 	if err != nil {
 		t.Fatalf("failed to create server config: %v", err)
 	}
@@ -94,7 +94,7 @@ func Test_CreateServerConfig_CA(t *testing.T) {
 	}
 	caCertFile := mustWriteTempFile(t, caCertPEM)
 
-	config, err := CreateServerConfig(certFile, keyFile, caCertFile, MTLSStateDisabled)
+	config, err := CreateServerConfig(certFile, keyFile, caCertFile, MTLSStateDisabled, NoVerifyCN)
 	if err != nil {
 		t.Fatalf("failed to create server config: %v", err)
 	}
@@ -103,7 +103,7 @@ func Test_CreateServerConfig_CA(t *testing.T) {
 		t.Fatalf("expected root CA, got nil")
 	}
 
-	configF, err := CreateServerConfigWithFunc(nil, caCertFile, MTLSStateDisabled)
+	configF, err := CreateServerConfigWithFunc(nil, caCertFile, MTLSStateDisabled, NoVerifyCN)
 	if err != nil {
 		t.Fatalf("failed to create server config: %v", err)
 	}

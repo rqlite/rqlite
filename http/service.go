@@ -285,12 +285,13 @@ type Service struct {
 	statusMu sync.RWMutex
 	statuses map[string]StatusReporter
 
-	CACertFile   string // Path to x509 CA certificate used to verify certificates.
-	CertFile     string // Path to server's own x509 certificate.
-	KeyFile      string // Path to server's own x509 private key.
-	ClientVerify bool   // Whether client certificates should verified.
-	certReloader *rtls.CertReloader
-	tlsConfig    *tls.Config
+	CACertFile     string // Path to x509 CA certificate used to verify certificates.
+	CertFile       string // Path to server's own x509 certificate.
+	KeyFile        string // Path to server's own x509 private key.
+	ClientVerify   bool   // Whether client certificates should verified.
+	ClientVerifyCN string // If non-empty, required Common Name on client certificates.
+	certReloader   *rtls.CertReloader
+	tlsConfig      *tls.Config
 
 	aoMu        sync.RWMutex
 	allowOrigin string // Value to set for Access-Control-Allow-Origin
@@ -358,7 +359,7 @@ func (s *Service) Start() error {
 			return s.certReloader.GetCertificate()
 		}
 
-		s.tlsConfig, err = rtls.CreateServerConfigWithFunc(getCertFunc, s.CACertFile, mTLSState)
+		s.tlsConfig, err = rtls.CreateServerConfigWithFunc(getCertFunc, s.CACertFile, mTLSState, s.ClientVerifyCN)
 		if err != nil {
 			return err
 		}
@@ -373,6 +374,9 @@ func (s *Service) Start() error {
 		}
 		if s.ClientVerify {
 			b.WriteString(", mutual TLS enabled")
+			if s.ClientVerifyCN != "" {
+				b.WriteString(fmt.Sprintf(", required client CN %q", s.ClientVerifyCN))
+			}
 		} else {
 			b.WriteString(", mutual TLS disabled")
 		}

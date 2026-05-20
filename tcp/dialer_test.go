@@ -185,7 +185,7 @@ func mustNewEchoServerTLS_ExampleDotCom() (*echoServer, string, string) {
 	cert := x509.CertExampleDotComFile("")
 	key := x509.KeyExampleDotComFile("")
 
-	tlsConfig, err := rtls.CreateServerConfig(cert, key, rtls.NoCACert, rtls.MTLSStateDisabled)
+	tlsConfig, err := rtls.CreateServerConfig(cert, key, rtls.NoCACert, rtls.MTLSStateDisabled, rtls.NoVerifyCN)
 	if err != nil {
 		panic(fmt.Sprintf("failed to create TLS config: %s", err.Error()))
 	}
