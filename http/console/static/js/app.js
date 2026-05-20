@@ -140,6 +140,30 @@
     var sqlInput = document.getElementById("sql-input");
     var executeBtn = document.getElementById("execute-btn");
     var resultsDiv = document.getElementById("query-results");
+    var queryLevel = document.getElementById("query-level");
+    var queryFreshness = document.getElementById("query-freshness");
+    var queryFreshnessStrict = document.getElementById("query-freshness-strict");
+    var queryActions = document.querySelector("#query .query-actions");
+
+    var QUERY_LEVEL_KEY = "rqlite_query_level";
+    var savedLevel = localStorage.getItem(QUERY_LEVEL_KEY);
+    if (savedLevel) {
+        queryLevel.value = savedLevel;
+    }
+    updateFreshnessVisibility();
+
+    queryLevel.addEventListener("change", function () {
+        localStorage.setItem(QUERY_LEVEL_KEY, queryLevel.value);
+        updateFreshnessVisibility();
+    });
+
+    function updateFreshnessVisibility() {
+        if (queryLevel.value === "none") {
+            queryActions.classList.add("show-freshness");
+        } else {
+            queryActions.classList.remove("show-freshness");
+        }
+    }
 
     executeBtn.addEventListener("click", executeQuery);
 
@@ -225,6 +249,24 @@
 
     renderHistory();
 
+    function buildRequestURL() {
+        var params = ["timings"];
+        var level = queryLevel.value;
+        if (level && level !== "weak") {
+            params.push("level=" + encodeURIComponent(level));
+        }
+        if (level === "none") {
+            var f = queryFreshness.value.trim();
+            if (f) {
+                params.push("freshness=" + encodeURIComponent(f));
+            }
+            if (queryFreshnessStrict.checked) {
+                params.push("freshness_strict");
+            }
+        }
+        return "/db/request?" + params.join("&");
+    }
+
     // --- Last query results (for export) ---
     var lastQueryResults = null;
 
@@ -237,7 +279,7 @@
 
         saveToHistory(sql);
 
-        apiRequest("POST", "/db/request?timings", [sql])
+        apiRequest("POST", buildRequestURL(), [sql])
             .then(function (resp) {
                 lastQueryResults = resp.data;
                 renderResults(resp.data);
@@ -809,6 +851,11 @@
 
     var SCHEMA_TABLES_QUERY = "SELECT m.name AS table_name, m.sql AS table_sql, p.name AS column_name, p.type, p.\"notnull\" AS not_null, p.dflt_value, p.pk FROM sqlite_master m JOIN pragma_table_info(m.name) p WHERE m.type = 'table' ORDER BY m.name, p.cid";
     var SCHEMA_OBJECTS_QUERY = "SELECT name, type, tbl_name, sql FROM sqlite_master WHERE type IN ('index', 'trigger') AND sql IS NOT NULL ORDER BY type, tbl_name, name";
+    var SCHEMA_COUNT_ROWS_KEY = "rqlite_schema_count_rows";
+
+    function shouldCountRows() {
+        return localStorage.getItem(SCHEMA_COUNT_ROWS_KEY) === "true";
+    }
 
     schemaRefreshBtn.addEventListener("click", loadSchema);
 
@@ -822,8 +869,30 @@
 
         apiRequest("POST", "/db/query?associative", [SCHEMA_TABLES_QUERY, SCHEMA_OBJECTS_QUERY])
             .then(function (resp) {
-                renderSchema(resp.data);
-                schemaLastUpdated.textContent = "Last updated: " + formatTimeOfDay();
+                var tableNames = extractTableNames(resp.data);
+                if (tableNames.length === 0 || !shouldCountRows()) {
+                    renderSchema(resp.data, {});
+                    schemaLastUpdated.textContent = "Last updated: " + formatTimeOfDay();
+                    return;
+                }
+                var countQueries = tableNames.map(function (n) {
+                    return "SELECT COUNT(*) FROM " + sqlQuoteIdent(n);
+                });
+                return apiRequest("POST", "/db/query?level=none", countQueries)
+                    .then(function (cresp) {
+                        var counts = {};
+                        var results = (cresp.data && cresp.data.results) || [];
+                        results.forEach(function (r, i) {
+                            if (r && !r.error && r.values && r.values[0]) {
+                                counts[tableNames[i]] = r.values[0][0];
+                            }
+                        });
+                        renderSchema(resp.data, counts);
+                        schemaLastUpdated.textContent = "Last updated: " + formatTimeOfDay();
+                    }, function () {
+                        renderSchema(resp.data, {});
+                        schemaLastUpdated.textContent = "Last updated: " + formatTimeOfDay();
+                    });
             })
             .catch(function (err) {
                 schemaContent.innerHTML = '<div class="result-error">' + escapeHTML(err.message) + '</div>';
@@ -833,7 +902,22 @@
             });
     }
 
-    function renderSchema(data) {
+    function extractTableNames(data) {
+        var names = [];
+        var seen = {};
+        var rows = (data && data.results && data.results[0] && data.results[0].rows) || [];
+        rows.forEach(function (row) {
+            var n = row.table_name;
+            if (n && !seen[n]) {
+                seen[n] = true;
+                names.push(n);
+            }
+        });
+        return names;
+    }
+
+    function renderSchema(data, rowCounts) {
+        rowCounts = rowCounts || {};
         if (!data || !data.results || data.results.length === 0) {
             schemaContent.innerHTML = '<div class="result-error">No results returned</div>';
             return;
@@ -875,6 +959,9 @@
         html += '<div class="schema-actions">';
         html += '<button type="button" class="schema-expand-all">Expand all</button>';
         html += '<button type="button" class="schema-collapse-all">Collapse all</button>';
+        html += '<label class="schema-count-toggle" title="Run COUNT(*) on every table when loading the schema">';
+        html += '<input type="checkbox" class="schema-count-rows"' + (shouldCountRows() ? ' checked' : '') + '> Count rows';
+        html += '</label>';
         html += '</div>';
 
         // Tables.
@@ -884,7 +971,14 @@
             html += '<div class="detail-section schema-section open" id="' + escapeHTML(anchor) + '">';
             html += '<div class="detail-section-header">';
             html += '<span><span class="schema-kind">table</span> ' + escapeHTML(tableName);
-            html += ' <span class="schema-count">(' + t.columns.length + ' column' + (t.columns.length === 1 ? '' : 's') + ')</span></span>';
+            var columnsStr = t.columns.length + ' column' + (t.columns.length === 1 ? '' : 's');
+            html += ' <span class="schema-count">(' + escapeHTML(columnsStr);
+            if (Object.prototype.hasOwnProperty.call(rowCounts, tableName)) {
+                var rc = Number(rowCounts[tableName]);
+                var rowsStr = rc.toLocaleString() + ' row' + (rc === 1 ? '' : 's');
+                html += ', <span class="schema-rowcount-text" title="Row count read with &#39;none&#39; consistency &mdash; may be slightly stale">' + escapeHTML(rowsStr) + '</span>';
+            }
+            html += ')</span></span>';
             html += '<span class="arrow">&#9654;</span>';
             html += '</div>';
             html += '<div class="detail-section-body">';
@@ -987,6 +1081,14 @@
             });
     }
 
+    schemaContent.addEventListener("change", function (e) {
+        var t = e.target;
+        if (t && t.classList && t.classList.contains("schema-count-rows")) {
+            localStorage.setItem(SCHEMA_COUNT_ROWS_KEY, t.checked ? "true" : "false");
+            loadSchema();
+        }
+    });
+
     schemaContent.addEventListener("click", function (e) {
         var header = e.target.closest && e.target.closest(".detail-section-header");
         if (header && schemaContent.contains(header)) {
@@ -1034,6 +1136,7 @@
             dropTable(tableName, btn);
             return;
         }
+
 
         if (btn.classList.contains("schema-expand-all")) {
             schemaContent.querySelectorAll(".schema-section").forEach(function (s) {

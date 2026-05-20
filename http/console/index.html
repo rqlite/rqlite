@@ -27,6 +27,22 @@
                 <div class="query-actions">
                     <button id="execute-btn">Execute</button>
                     <span class="hint">Ctrl+Enter to execute</span>
+                    <label class="query-option query-option-right" title="Read consistency level for queries; ignored for writes">
+                        Level
+                        <select id="query-level">
+                            <option value="weak">weak (default)</option>
+                            <option value="linearizable">linearizable</option>
+                            <option value="none">none</option>
+                            <option value="strong">strong</option>
+                        </select>
+                    </label>
+                    <label class="query-option query-freshness-field" title="Maximum staleness — Go duration (e.g. 5s, 1m). Only meaningful with level=none.">
+                        Freshness
+                        <input type="text" id="query-freshness" placeholder="e.g. 5s">
+                    </label>
+                    <label class="query-option query-freshness-field" title="Reject the query if data freshness can't be verified within the window">
+                        <input type="checkbox" id="query-freshness-strict"> Strict
+                    </label>
                 </div>
             </div>
             <div id="query-history" class="query-history"></div>
