@@ -1055,6 +1055,12 @@
             html += '</div>';
             html += '<div class="detail-section-body">';
             html += '<pre class="schema-sql">' + escapeHTML(idx.sql) + '</pre>';
+            html += '<div class="schema-sql-block">';
+            html += '<div class="schema-sql-actions">';
+            html += '<span></span>';
+            html += '<button class="schema-drop-index" type="button" data-index-name="' + escapeHTML(idx.name) + '">Drop index</button>';
+            html += '</div>';
+            html += '</div>';
             html += '</div></div>';
         });
 
@@ -1095,6 +1101,26 @@
             })
             .catch(function (err) {
                 window.alert("Failed to drop table \"" + tableName + "\": " + err.message);
+                btn.disabled = false;
+            });
+    }
+
+    function dropIndex(indexName, btn) {
+        btn.disabled = true;
+        var sql = "DROP INDEX " + sqlQuoteIdent(indexName);
+        apiRequest("POST", "/db/execute", [sql])
+            .then(function (resp) {
+                var results = (resp.data && resp.data.results) || [];
+                var err = results[0] && results[0].error;
+                if (err) {
+                    window.alert("Failed to drop index \"" + indexName + "\": " + err);
+                    btn.disabled = false;
+                    return;
+                }
+                loadSchema();
+            })
+            .catch(function (err) {
+                window.alert("Failed to drop index \"" + indexName + "\": " + err.message);
                 btn.disabled = false;
             });
     }
@@ -1152,6 +1178,15 @@
             var ok = window.confirm("Drop table \"" + tableName + "\"?\n\nThis permanently deletes the table and all its data. This action cannot be undone.");
             if (!ok) return;
             dropTable(tableName, btn);
+            return;
+        }
+
+        if (btn.classList.contains("schema-drop-index")) {
+            var indexName = btn.getAttribute("data-index-name");
+            if (!indexName) return;
+            var okIdx = window.confirm("Drop index \"" + indexName + "\"?\n\nThis action cannot be undone.");
+            if (!okIdx) return;
+            dropIndex(indexName, btn);
             return;
         }
 
