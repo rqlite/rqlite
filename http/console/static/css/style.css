@@ -507,14 +507,16 @@ footer a:hover {
     box-shadow: none;
 }
 
-.schema-center {
+.result-table th.schema-center,
+.result-table td.schema-center {
     text-align: center;
 }
 
 .schema-check {
     color: var(--success-text);
     font-weight: 700;
-    font-size: 1rem;
+    font-size: 1.5rem;
+    line-height: 1;
 }
 
 .schema-dash {
@@ -579,9 +581,18 @@ footer a:hover {
     cursor: not-allowed;
 }
 
+.schema-sql-wrapper {
+    position: relative;
+    margin-top: 0.5rem;
+}
+
+.schema-sql-wrapper.hidden {
+    display: none;
+}
+
 .schema-sql {
-    margin: 0.5rem 0 0 0;
-    padding: 0.625rem 0.75rem;
+    margin: 0;
+    padding: 0.625rem 2.25rem 0.625rem 0.75rem;
     background: var(--surface-alt);
     border-radius: 3px;
     font-family: "SF Mono", "Fira Code", "Fira Mono", Menlo, Consolas, monospace;
@@ -591,8 +602,24 @@ footer a:hover {
     color: var(--text);
 }
 
-.schema-section .schema-sql.hidden {
-    display: none;
+.schema-sql-copy {
+    position: absolute;
+    top: 0.375rem;
+    right: 0.375rem;
+    background: var(--copy-bg, transparent);
+    border: 1px solid var(--border);
+    border-radius: 3px;
+    cursor: pointer;
+    font-size: 0.875rem;
+    line-height: 1;
+    padding: 0.25rem 0.375rem;
+    color: var(--text-secondary);
+    transition: background 0.15s, color 0.15s;
+}
+
+.schema-sql-copy:hover {
+    background: var(--copy-bg-hover, var(--surface));
+    color: var(--text);
 }
 
 .schema-section > .detail-section-body > .schema-sql {

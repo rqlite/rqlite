@@ -863,7 +863,9 @@
                 }
                 html += '</td>';
                 html += '<td>' + escapeHTML(col.type) + '</td>';
-                html += '<td class="schema-center">' + (col.not_null ? '<span class="schema-check">&#10003;</span>' : '<span class="schema-dash">&mdash;</span>') + '</td>';
+                html += '<td class="schema-center">' + (col.not_null
+                    ? '<span class="schema-check" title="Value may not be NULL">&#10003;</span>'
+                    : '<span class="schema-dash" title="Value may be NULL">&mdash;</span>') + '</td>';
                 if (col.dflt_value === null || col.dflt_value === undefined) {
                     html += '<td class="null-value">NULL</td>';
                 } else {
@@ -882,7 +884,10 @@
             html += '<button class="schema-drop-table" type="button" data-table-name="' + escapeHTML(tableName) + '">Drop table</button>';
             html += '</div>';
             if (t.sql) {
-                html += '<pre class="schema-sql hidden">' + escapeHTML(t.sql) + '</pre>';
+                html += '<div class="schema-sql-wrapper hidden">';
+                html += '<button type="button" class="schema-sql-copy" title="Copy to clipboard">&#x2398;</button>';
+                html += '<pre class="schema-sql">' + escapeHTML(t.sql) + '</pre>';
+                html += '</div>';
             }
             html += '</div>';
             html += '</div></div>';
@@ -949,15 +954,26 @@
 
         if (btn.classList.contains("schema-sql-toggle")) {
             var block = btn.closest(".schema-sql-block");
-            var pre = block ? block.querySelector(".schema-sql") : null;
-            if (!pre) return;
-            if (pre.classList.contains("hidden")) {
-                pre.classList.remove("hidden");
+            var wrapper = block ? block.querySelector(".schema-sql-wrapper") : null;
+            if (!wrapper) return;
+            if (wrapper.classList.contains("hidden")) {
+                wrapper.classList.remove("hidden");
                 btn.textContent = "Hide CREATE TABLE";
             } else {
-                pre.classList.add("hidden");
+                wrapper.classList.add("hidden");
                 btn.textContent = "Show CREATE TABLE";
             }
+            return;
+        }
+
+        if (btn.classList.contains("schema-sql-copy")) {
+            var wrap = btn.closest(".schema-sql-wrapper");
+            var preEl = wrap ? wrap.querySelector(".schema-sql") : null;
+            if (!preEl) return;
+            navigator.clipboard.writeText(preEl.textContent).then(function () {
+                btn.textContent = "✔";
+                setTimeout(function () { btn.innerHTML = "⎘"; }, 1500);
+            });
             return;
         }
 
