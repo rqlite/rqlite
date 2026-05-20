@@ -88,6 +88,9 @@
             tabContents.forEach(function (tc) { tc.classList.remove("active"); });
             tab.classList.add("active");
             document.getElementById(target).classList.add("active");
+            if (target === "schema") {
+                loadSchema();
+            }
         });
     });
 
@@ -754,4 +757,97 @@
                 backupBtn.disabled = false;
             });
     });
+
+    // --- Schema Tab ---
+
+    var schemaContent = document.getElementById("schema-content");
+    var schemaRefreshBtn = document.getElementById("schema-refresh-btn");
+    var schemaLastUpdated = document.getElementById("schema-last-updated");
+
+    var SCHEMA_QUERY = "SELECT m.name AS table_name, p.cid, p.name AS column_name, p.type, p.\"notnull\" AS not_null, p.dflt_value, p.pk FROM sqlite_master m JOIN pragma_table_info(m.name) p WHERE m.type = 'table' ORDER BY m.name, p.cid";
+
+    schemaRefreshBtn.addEventListener("click", loadSchema);
+
+    function loadSchema() {
+        schemaRefreshBtn.disabled = true;
+        schemaContent.innerHTML = '<div class="schema-loading">Loading schema...</div>';
+
+        var url = "/db/query?associative&q=" + encodeURIComponent(SCHEMA_QUERY);
+        apiRequest("GET", url)
+            .then(function (resp) {
+                renderSchema(resp.data);
+                var now = new Date();
+                var hh = String(now.getHours()).padStart(2, "0");
+                var mm = String(now.getMinutes()).padStart(2, "0");
+                var ss = String(now.getSeconds()).padStart(2, "0");
+                schemaLastUpdated.textContent = "Last updated: " + hh + ":" + mm + ":" + ss;
+            })
+            .catch(function (err) {
+                schemaContent.innerHTML = '<div class="result-error">' + escapeHTML(err.message) + '</div>';
+            })
+            .finally(function () {
+                schemaRefreshBtn.disabled = false;
+            });
+    }
+
+    function renderSchema(data) {
+        if (!data || !data.results || data.results.length === 0) {
+            schemaContent.innerHTML = '<div class="result-error">No results returned</div>';
+            return;
+        }
+        var result = data.results[0];
+        if (result.error) {
+            schemaContent.innerHTML = '<div class="result-error">' + escapeHTML(result.error) + '</div>';
+            return;
+        }
+        var rows = result.rows || [];
+        if (rows.length === 0) {
+            schemaContent.innerHTML = '<div class="schema-empty">No tables found.</div>';
+            return;
+        }
+
+        // Group columns by table name.
+        var tables = {};
+        var order = [];
+        rows.forEach(function (row) {
+            var name = row.table_name;
+            if (!tables[name]) {
+                tables[name] = [];
+                order.push(name);
+            }
+            tables[name].push(row);
+        });
+
+        var html = "";
+        order.forEach(function (tableName) {
+            var cols = tables[tableName];
+            html += '<div class="schema-table">';
+            html += '<h3 class="schema-table-name">' + escapeHTML(tableName) + '</h3>';
+            html += '<table class="result-table"><thead><tr>';
+            html += '<th>#</th>';
+            html += '<th>Column</th>';
+            html += '<th>Type</th>';
+            html += '<th>Not Null</th>';
+            html += '<th>Default</th>';
+            html += '<th>PK</th>';
+            html += '</tr></thead><tbody>';
+            cols.forEach(function (col) {
+                html += '<tr>';
+                html += '<td>' + escapeHTML(col.cid) + '</td>';
+                html += '<td>' + escapeHTML(col.column_name) + '</td>';
+                html += '<td>' + escapeHTML(col.type) + '</td>';
+                html += '<td>' + (col.not_null ? "yes" : "no") + '</td>';
+                if (col.dflt_value === null || col.dflt_value === undefined) {
+                    html += '<td class="null-value">NULL</td>';
+                } else {
+                    html += '<td>' + escapeHTML(col.dflt_value) + '</td>';
+                }
+                html += '<td>' + (col.pk ? "yes" : "no") + '</td>';
+                html += '</tr>';
+            });
+            html += '</tbody></table>';
+            html += '</div>';
+        });
+        schemaContent.innerHTML = html;
+    }
 })();

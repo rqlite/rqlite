@@ -437,6 +437,32 @@ footer a:hover {
     color: var(--accent);
 }
 
+/* Schema Tab */
+.schema-controls {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    margin-bottom: 1rem;
+}
+
+.schema-table {
+    margin-bottom: 1.5rem;
+}
+
+.schema-table-name {
+    margin: 0 0 0.5rem 0;
+    font-size: 1rem;
+    font-family: "SF Mono", "Fira Code", "Fira Mono", Menlo, Consolas, monospace;
+    color: var(--text);
+}
+
+.schema-loading,
+.schema-empty {
+    color: var(--text-muted);
+    font-size: 0.875rem;
+    padding: 1rem 0;
+}
+
 /* Status Tab */
 .status-controls {
     display: flex;
