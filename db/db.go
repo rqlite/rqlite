@@ -1915,7 +1915,7 @@ func qualifyRowColumns(conn *sql.Conn, query string, rows *command.QueryRows) er
 	}
 
 	var tableNames []string
-	err := conn.Raw(func(driverConn interface{}) error {
+	err := conn.Raw(func(driverConn any) error {
 		sqliteConn := driverConn.(*sqlite3.SQLiteConn)
 		stmt, err := sqliteConn.Prepare(query)
 		if err != nil {
