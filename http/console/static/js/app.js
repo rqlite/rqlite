@@ -863,15 +863,26 @@
         return String(s).toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "");
     }
 
+    function captureSchemaOpenStates() {
+        var states = {};
+        schemaContent.querySelectorAll(".schema-section").forEach(function (sec) {
+            if (sec.id) {
+                states[sec.id] = sec.classList.contains("open");
+            }
+        });
+        return states;
+    }
+
     function loadSchema() {
         schemaRefreshBtn.disabled = true;
+        var openStates = captureSchemaOpenStates();
         schemaContent.innerHTML = '<div class="schema-loading">Loading schema...</div>';
 
         apiRequest("POST", "/db/query?associative", [SCHEMA_TABLES_QUERY, SCHEMA_OBJECTS_QUERY])
             .then(function (resp) {
                 var tableNames = extractTableNames(resp.data);
                 if (tableNames.length === 0 || !shouldCountRows()) {
-                    renderSchema(resp.data, {});
+                    renderSchema(resp.data, {}, openStates);
                     schemaLastUpdated.textContent = "Last updated: " + formatTimeOfDay();
                     return;
                 }
@@ -887,10 +898,10 @@
                                 counts[tableNames[i]] = r.values[0][0];
                             }
                         });
-                        renderSchema(resp.data, counts);
+                        renderSchema(resp.data, counts, openStates);
                         schemaLastUpdated.textContent = "Last updated: " + formatTimeOfDay();
                     }, function () {
-                        renderSchema(resp.data, {});
+                        renderSchema(resp.data, {}, openStates);
                         schemaLastUpdated.textContent = "Last updated: " + formatTimeOfDay();
                     });
             })
@@ -916,8 +927,15 @@
         return names;
     }
 
-    function renderSchema(data, rowCounts) {
+    function renderSchema(data, rowCounts, openStates) {
         rowCounts = rowCounts || {};
+        openStates = openStates || {};
+        function openClass(anchor, defaultOpen) {
+            var isOpen = Object.prototype.hasOwnProperty.call(openStates, anchor)
+                ? openStates[anchor]
+                : defaultOpen;
+            return isOpen ? " open" : "";
+        }
         if (!data || !data.results || data.results.length === 0) {
             schemaContent.innerHTML = '<div class="result-error">No results returned</div>';
             return;
@@ -968,7 +986,7 @@
         tableOrder.forEach(function (tableName) {
             var t = tables[tableName];
             var anchor = "schema-table-" + slugify(tableName);
-            html += '<div class="detail-section schema-section open" id="' + escapeHTML(anchor) + '">';
+            html += '<div class="detail-section schema-section' + openClass(anchor, true) + '" id="' + escapeHTML(anchor) + '">';
             html += '<div class="detail-section-header">';
             html += '<span><span class="schema-kind">table</span> ' + escapeHTML(tableName);
             var columnsStr = t.columns.length + ' column' + (t.columns.length === 1 ? '' : 's');
@@ -1029,7 +1047,7 @@
         // Indexes.
         indexes.forEach(function (idx) {
             var anchor = "schema-index-" + slugify(idx.name);
-            html += '<div class="detail-section schema-section" id="' + escapeHTML(anchor) + '">';
+            html += '<div class="detail-section schema-section' + openClass(anchor, false) + '" id="' + escapeHTML(anchor) + '">';
             html += '<div class="detail-section-header">';
             html += '<span><span class="schema-kind">index</span> ' + escapeHTML(idx.name);
             html += ' <span class="schema-count">on ' + escapeHTML(idx.tbl_name) + '</span></span>';
@@ -1043,7 +1061,7 @@
         // Triggers.
         triggers.forEach(function (trg) {
             var anchor = "schema-trigger-" + slugify(trg.name);
-            html += '<div class="detail-section schema-section" id="' + escapeHTML(anchor) + '">';
+            html += '<div class="detail-section schema-section' + openClass(anchor, false) + '" id="' + escapeHTML(anchor) + '">';
             html += '<div class="detail-section-header">';
             html += '<span><span class="schema-kind">trigger</span> ' + escapeHTML(trg.name);
             html += ' <span class="schema-count">on ' + escapeHTML(trg.tbl_name) + '</span></span>';

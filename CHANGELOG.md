@@ -1,3 +1,7 @@
+## v10.1.1 (unreleased)
+### Implementation changes and bug fixes
+- [PR #2674](https://github.com/rqlite/rqlite/pull/2674): Console "count rows" should respect current Expand/Collapse state. 
+
 ## v10.1.0 (May 20th 2026)
 ### New features
 - [PR #2672](https://github.com/rqlite/rqlite/pull/2672), [PR #2673](https://github.com/rqlite/rqlite/pull/2673): Add Schema management page to Console app.
