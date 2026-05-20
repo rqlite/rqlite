@@ -764,16 +764,20 @@
     var schemaRefreshBtn = document.getElementById("schema-refresh-btn");
     var schemaLastUpdated = document.getElementById("schema-last-updated");
 
-    var SCHEMA_QUERY = "SELECT m.name AS table_name, p.cid, p.name AS column_name, p.type, p.\"notnull\" AS not_null, p.dflt_value, p.pk FROM sqlite_master m JOIN pragma_table_info(m.name) p WHERE m.type = 'table' ORDER BY m.name, p.cid";
+    var SCHEMA_TABLES_QUERY = "SELECT m.name AS table_name, m.sql AS table_sql, p.name AS column_name, p.type, p.\"notnull\" AS not_null, p.dflt_value, p.pk FROM sqlite_master m JOIN pragma_table_info(m.name) p WHERE m.type = 'table' ORDER BY m.name, p.cid";
+    var SCHEMA_OBJECTS_QUERY = "SELECT name, type, tbl_name, sql FROM sqlite_master WHERE type IN ('index', 'trigger') AND sql IS NOT NULL ORDER BY type, tbl_name, name";
 
     schemaRefreshBtn.addEventListener("click", loadSchema);
+
+    function slugify(s) {
+        return String(s).toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "");
+    }
 
     function loadSchema() {
         schemaRefreshBtn.disabled = true;
         schemaContent.innerHTML = '<div class="schema-loading">Loading schema...</div>';
 
-        var url = "/db/query?associative&q=" + encodeURIComponent(SCHEMA_QUERY);
-        apiRequest("GET", url)
+        apiRequest("POST", "/db/query?associative", [SCHEMA_TABLES_QUERY, SCHEMA_OBJECTS_QUERY])
             .then(function (resp) {
                 renderSchema(resp.data);
                 var now = new Date();
@@ -795,59 +799,148 @@
             schemaContent.innerHTML = '<div class="result-error">No results returned</div>';
             return;
         }
-        var result = data.results[0];
-        if (result.error) {
-            schemaContent.innerHTML = '<div class="result-error">' + escapeHTML(result.error) + '</div>';
-            return;
-        }
-        var rows = result.rows || [];
-        if (rows.length === 0) {
-            schemaContent.innerHTML = '<div class="schema-empty">No tables found.</div>';
+        var tableResult = data.results[0] || {};
+        var objectResult = data.results[1] || {};
+        if (tableResult.error) {
+            schemaContent.innerHTML = '<div class="result-error">' + escapeHTML(tableResult.error) + '</div>';
             return;
         }
 
-        // Group columns by table name.
+        // Group table columns by table name, preserving order.
         var tables = {};
-        var order = [];
-        rows.forEach(function (row) {
+        var tableOrder = [];
+        (tableResult.rows || []).forEach(function (row) {
             var name = row.table_name;
             if (!tables[name]) {
-                tables[name] = [];
-                order.push(name);
+                tables[name] = { sql: row.table_sql, columns: [] };
+                tableOrder.push(name);
             }
-            tables[name].push(row);
+            tables[name].columns.push(row);
         });
 
+        // Group indexes and triggers by type.
+        var indexes = [];
+        var triggers = [];
+        (objectResult.rows || []).forEach(function (row) {
+            if (row.type === "index") indexes.push(row);
+            else if (row.type === "trigger") triggers.push(row);
+        });
+
+        if (tableOrder.length === 0 && indexes.length === 0 && triggers.length === 0) {
+            schemaContent.innerHTML = '<div class="schema-empty">No tables, indexes, or triggers found.</div>';
+            return;
+        }
+
         var html = "";
-        order.forEach(function (tableName) {
-            var cols = tables[tableName];
-            html += '<div class="schema-table">';
-            html += '<h3 class="schema-table-name">' + escapeHTML(tableName) + '</h3>';
-            html += '<table class="result-table"><thead><tr>';
-            html += '<th>#</th>';
+
+        html += '<div class="schema-actions">';
+        html += '<button type="button" class="schema-expand-all">Expand all</button>';
+        html += '<button type="button" class="schema-collapse-all">Collapse all</button>';
+        html += '</div>';
+
+        // Tables.
+        tableOrder.forEach(function (tableName) {
+            var t = tables[tableName];
+            var anchor = "schema-table-" + slugify(tableName);
+            html += '<div class="detail-section schema-section open" id="' + escapeHTML(anchor) + '">';
+            html += '<div class="detail-section-header" onclick="this.parentElement.classList.toggle(\'open\')">';
+            html += '<span><span class="schema-kind">table</span> ' + escapeHTML(tableName);
+            html += ' <span class="schema-count">(' + t.columns.length + ' column' + (t.columns.length === 1 ? '' : 's') + ')</span></span>';
+            html += '<span class="arrow">&#9654;</span>';
+            html += '</div>';
+            html += '<div class="detail-section-body">';
+            html += '<table class="result-table schema-columns"><thead><tr>';
             html += '<th>Column</th>';
             html += '<th>Type</th>';
-            html += '<th>Not Null</th>';
+            html += '<th class="schema-center">Not Null</th>';
             html += '<th>Default</th>';
-            html += '<th>PK</th>';
             html += '</tr></thead><tbody>';
-            cols.forEach(function (col) {
-                html += '<tr>';
-                html += '<td>' + escapeHTML(col.cid) + '</td>';
-                html += '<td>' + escapeHTML(col.column_name) + '</td>';
+            t.columns.forEach(function (col) {
+                html += '<tr' + (col.pk ? ' class="schema-pk-row"' : '') + '>';
+                html += '<td>' + escapeHTML(col.column_name);
+                if (col.pk) {
+                    html += ' <span class="schema-pk-badge" title="Primary key">&#128273;</span>';
+                }
+                html += '</td>';
                 html += '<td>' + escapeHTML(col.type) + '</td>';
-                html += '<td>' + (col.not_null ? "yes" : "no") + '</td>';
+                html += '<td class="schema-center">' + (col.not_null ? '<span class="schema-check">&#10003;</span>' : '<span class="schema-dash">&mdash;</span>') + '</td>';
                 if (col.dflt_value === null || col.dflt_value === undefined) {
                     html += '<td class="null-value">NULL</td>';
                 } else {
                     html += '<td>' + escapeHTML(col.dflt_value) + '</td>';
                 }
-                html += '<td>' + (col.pk ? "yes" : "no") + '</td>';
                 html += '</tr>';
             });
             html += '</tbody></table>';
-            html += '</div>';
+            if (t.sql) {
+                html += '<div class="schema-sql-block">';
+                html += '<button class="schema-sql-toggle" type="button">Show CREATE TABLE</button>';
+                html += '<pre class="schema-sql hidden">' + escapeHTML(t.sql) + '</pre>';
+                html += '</div>';
+            }
+            html += '</div></div>';
         });
+
+        // Indexes.
+        indexes.forEach(function (idx) {
+            var anchor = "schema-index-" + slugify(idx.name);
+            html += '<div class="detail-section schema-section" id="' + escapeHTML(anchor) + '">';
+            html += '<div class="detail-section-header" onclick="this.parentElement.classList.toggle(\'open\')">';
+            html += '<span><span class="schema-kind">index</span> ' + escapeHTML(idx.name);
+            html += ' <span class="schema-count">on ' + escapeHTML(idx.tbl_name) + '</span></span>';
+            html += '<span class="arrow">&#9654;</span>';
+            html += '</div>';
+            html += '<div class="detail-section-body">';
+            html += '<pre class="schema-sql">' + escapeHTML(idx.sql) + '</pre>';
+            html += '</div></div>';
+        });
+
+        // Triggers.
+        triggers.forEach(function (trg) {
+            var anchor = "schema-trigger-" + slugify(trg.name);
+            html += '<div class="detail-section schema-section" id="' + escapeHTML(anchor) + '">';
+            html += '<div class="detail-section-header" onclick="this.parentElement.classList.toggle(\'open\')">';
+            html += '<span><span class="schema-kind">trigger</span> ' + escapeHTML(trg.name);
+            html += ' <span class="schema-count">on ' + escapeHTML(trg.tbl_name) + '</span></span>';
+            html += '<span class="arrow">&#9654;</span>';
+            html += '</div>';
+            html += '<div class="detail-section-body">';
+            html += '<pre class="schema-sql">' + escapeHTML(trg.sql) + '</pre>';
+            html += '</div></div>';
+        });
+
         schemaContent.innerHTML = html;
     }
+
+    schemaContent.addEventListener("click", function (e) {
+        var btn = e.target;
+        if (!btn.classList) return;
+
+        if (btn.classList.contains("schema-sql-toggle")) {
+            var pre = btn.nextElementSibling;
+            if (!pre) return;
+            if (pre.classList.contains("hidden")) {
+                pre.classList.remove("hidden");
+                btn.textContent = "Hide CREATE TABLE";
+            } else {
+                pre.classList.add("hidden");
+                btn.textContent = "Show CREATE TABLE";
+            }
+            return;
+        }
+
+        if (btn.classList.contains("schema-expand-all")) {
+            schemaContent.querySelectorAll(".schema-section").forEach(function (s) {
+                s.classList.add("open");
+            });
+            return;
+        }
+
+        if (btn.classList.contains("schema-collapse-all")) {
+            schemaContent.querySelectorAll(".schema-section").forEach(function (s) {
+                s.classList.remove("open");
+            });
+            return;
+        }
+    });
 })();
