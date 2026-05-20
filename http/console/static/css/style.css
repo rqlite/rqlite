@@ -547,6 +547,12 @@ footer a:hover {
     font-size: 0.8125rem;
 }
 
+.schema-rowcount-text {
+    text-decoration: underline dotted;
+    text-underline-offset: 2px;
+    cursor: help;
+}
+
 .schema-section .detail-section-body {
     padding: 0;
 }

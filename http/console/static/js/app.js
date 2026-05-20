@@ -878,7 +878,7 @@
                 var countQueries = tableNames.map(function (n) {
                     return "SELECT COUNT(*) FROM " + sqlQuoteIdent(n);
                 });
-                return apiRequest("POST", "/db/query", countQueries)
+                return apiRequest("POST", "/db/query?level=none", countQueries)
                     .then(function (cresp) {
                         var counts = {};
                         var results = (cresp.data && cresp.data.results) || [];
@@ -971,12 +971,14 @@
             html += '<div class="detail-section schema-section open" id="' + escapeHTML(anchor) + '">';
             html += '<div class="detail-section-header">';
             html += '<span><span class="schema-kind">table</span> ' + escapeHTML(tableName);
-            var meta = t.columns.length + ' column' + (t.columns.length === 1 ? '' : 's');
+            var columnsStr = t.columns.length + ' column' + (t.columns.length === 1 ? '' : 's');
+            html += ' <span class="schema-count">(' + escapeHTML(columnsStr);
             if (Object.prototype.hasOwnProperty.call(rowCounts, tableName)) {
                 var rc = Number(rowCounts[tableName]);
-                meta += ', ' + rc.toLocaleString() + ' row' + (rc === 1 ? '' : 's');
+                var rowsStr = rc.toLocaleString() + ' row' + (rc === 1 ? '' : 's');
+                html += ', <span class="schema-rowcount-text" title="Row count read with &#39;none&#39; consistency &mdash; may be slightly stale">' + escapeHTML(rowsStr) + '</span>';
             }
-            html += ' <span class="schema-count">(' + escapeHTML(meta) + ')</span></span>';
+            html += ')</span></span>';
             html += '<span class="arrow">&#9654;</span>';
             html += '</div>';
             html += '<div class="detail-section-body">';
