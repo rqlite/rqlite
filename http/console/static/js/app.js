@@ -26,6 +26,47 @@
         return div.innerHTML.replace(/"/g, "&quot;").replace(/'/g, "&#39;");
     }
 
+    function formatTimeOfDay(date) {
+        var d = date || new Date();
+        var hh = String(d.getHours()).padStart(2, "0");
+        var mm = String(d.getMinutes()).padStart(2, "0");
+        var ss = String(d.getSeconds()).padStart(2, "0");
+        return hh + ":" + mm + ":" + ss;
+    }
+
+    // copyToClipboard copies text to the clipboard, returning a Promise that
+    // resolves on success and rejects on failure. Uses the async Clipboard
+    // API when available (secure contexts only), otherwise falls back to a
+    // hidden textarea + document.execCommand("copy") for plain-HTTP serves.
+    function copyToClipboard(text) {
+        if (navigator.clipboard && window.isSecureContext) {
+            return navigator.clipboard.writeText(text);
+        }
+        return new Promise(function (resolve, reject) {
+            var ta = document.createElement("textarea");
+            ta.value = text;
+            ta.setAttribute("readonly", "");
+            ta.style.position = "fixed";
+            ta.style.top = "0";
+            ta.style.left = "0";
+            ta.style.opacity = "0";
+            document.body.appendChild(ta);
+            ta.select();
+            var ok = false;
+            try {
+                ok = document.execCommand("copy");
+            } catch (e) {
+                ok = false;
+            }
+            document.body.removeChild(ta);
+            if (ok) {
+                resolve();
+            } else {
+                reject(new Error("Copy not supported in this context"));
+            }
+        });
+    }
+
     // --- Dark Mode ---
 
     var THEME_KEY = "rqlite_theme";
@@ -315,9 +356,12 @@
             text = JSON.stringify(rows, null, 2);
         }
 
-        navigator.clipboard.writeText(text).then(function () {
-            var orig = btn.textContent;
+        var orig = btn.textContent;
+        copyToClipboard(text).then(function () {
             btn.textContent = "Copied!";
+            setTimeout(function () { btn.textContent = orig; }, 1500);
+        }, function () {
+            btn.textContent = "Copy failed";
             setTimeout(function () { btn.textContent = orig; }, 1500);
         });
     }
@@ -389,8 +433,12 @@
     });
 
     copyJsonBtn.addEventListener("click", function () {
-        navigator.clipboard.writeText(rawJsonPre.textContent).then(function () {
+        copyToClipboard(rawJsonPre.textContent).then(function () {
             copyJsonBtn.textContent = "\u2714";
+            setTimeout(function () { copyJsonBtn.textContent = "\u2398"; }, 1500);
+        }, function () {
+            copyJsonBtn.title = "Copy not supported in this context";
+            copyJsonBtn.textContent = "\u2718";
             setTimeout(function () { copyJsonBtn.textContent = "\u2398"; }, 1500);
         });
     });
@@ -415,12 +463,7 @@
             if (!rawJsonWrapper.classList.contains("hidden")) {
                 rawJsonPre.textContent = JSON.stringify(lastStatusData, null, 2);
             }
-            // Update last-updated timestamp
-            var now = new Date();
-            var hh = String(now.getHours()).padStart(2, "0");
-            var mm = String(now.getMinutes()).padStart(2, "0");
-            var ss = String(now.getSeconds()).padStart(2, "0");
-            lastUpdatedSpan.textContent = "Updated " + hh + ":" + mm + ":" + ss;
+            lastUpdatedSpan.textContent = "Updated " + formatTimeOfDay();
         }).catch(function (err) {
             statusCards.innerHTML = '<div class="status-error">' + escapeHTML(err.message) + '</div>';
         });
@@ -780,11 +823,7 @@
         apiRequest("POST", "/db/query?associative", [SCHEMA_TABLES_QUERY, SCHEMA_OBJECTS_QUERY])
             .then(function (resp) {
                 renderSchema(resp.data);
-                var now = new Date();
-                var hh = String(now.getHours()).padStart(2, "0");
-                var mm = String(now.getMinutes()).padStart(2, "0");
-                var ss = String(now.getSeconds()).padStart(2, "0");
-                schemaLastUpdated.textContent = "Last updated: " + hh + ":" + mm + ":" + ss;
+                schemaLastUpdated.textContent = "Last updated: " + formatTimeOfDay();
             })
             .catch(function (err) {
                 schemaContent.innerHTML = '<div class="result-error">' + escapeHTML(err.message) + '</div>';
@@ -843,7 +882,7 @@
             var t = tables[tableName];
             var anchor = "schema-table-" + slugify(tableName);
             html += '<div class="detail-section schema-section open" id="' + escapeHTML(anchor) + '">';
-            html += '<div class="detail-section-header" onclick="this.parentElement.classList.toggle(\'open\')">';
+            html += '<div class="detail-section-header">';
             html += '<span><span class="schema-kind">table</span> ' + escapeHTML(tableName);
             html += ' <span class="schema-count">(' + t.columns.length + ' column' + (t.columns.length === 1 ? '' : 's') + ')</span></span>';
             html += '<span class="arrow">&#9654;</span>';
@@ -897,7 +936,7 @@
         indexes.forEach(function (idx) {
             var anchor = "schema-index-" + slugify(idx.name);
             html += '<div class="detail-section schema-section" id="' + escapeHTML(anchor) + '">';
-            html += '<div class="detail-section-header" onclick="this.parentElement.classList.toggle(\'open\')">';
+            html += '<div class="detail-section-header">';
             html += '<span><span class="schema-kind">index</span> ' + escapeHTML(idx.name);
             html += ' <span class="schema-count">on ' + escapeHTML(idx.tbl_name) + '</span></span>';
             html += '<span class="arrow">&#9654;</span>';
@@ -911,7 +950,7 @@
         triggers.forEach(function (trg) {
             var anchor = "schema-trigger-" + slugify(trg.name);
             html += '<div class="detail-section schema-section" id="' + escapeHTML(anchor) + '">';
-            html += '<div class="detail-section-header" onclick="this.parentElement.classList.toggle(\'open\')">';
+            html += '<div class="detail-section-header">';
             html += '<span><span class="schema-kind">trigger</span> ' + escapeHTML(trg.name);
             html += ' <span class="schema-count">on ' + escapeHTML(trg.tbl_name) + '</span></span>';
             html += '<span class="arrow">&#9654;</span>';
@@ -949,6 +988,12 @@
     }
 
     schemaContent.addEventListener("click", function (e) {
+        var header = e.target.closest && e.target.closest(".detail-section-header");
+        if (header && schemaContent.contains(header)) {
+            header.parentElement.classList.toggle("open");
+            return;
+        }
+
         var btn = e.target;
         if (!btn.classList) return;
 
@@ -970,8 +1015,12 @@
             var wrap = btn.closest(".schema-sql-wrapper");
             var preEl = wrap ? wrap.querySelector(".schema-sql") : null;
             if (!preEl) return;
-            navigator.clipboard.writeText(preEl.textContent).then(function () {
+            copyToClipboard(preEl.textContent).then(function () {
                 btn.textContent = "✔";
+                setTimeout(function () { btn.innerHTML = "⎘"; }, 1500);
+            }, function () {
+                btn.title = "Copy not supported in this context";
+                btn.textContent = "✘";
                 setTimeout(function () { btn.innerHTML = "⎘"; }, 1500);
             });
             return;
