@@ -536,6 +536,13 @@ footer a:hover {
     background: var(--surface);
 }
 
+.schema-sql-actions {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 0.5rem;
+}
+
 .schema-sql-toggle {
     background: transparent;
     border: 1px solid var(--border);
@@ -549,6 +556,27 @@ footer a:hover {
 .schema-sql-toggle:hover {
     background: var(--surface-alt);
     color: var(--text);
+}
+
+.schema-drop-table {
+    background: transparent;
+    border: 1px solid var(--error);
+    color: var(--error-text);
+    font-size: 0.75rem;
+    padding: 0.25rem 0.625rem;
+    border-radius: 3px;
+    cursor: pointer;
+    font-weight: 600;
+}
+
+.schema-drop-table:hover {
+    background: var(--error);
+    color: #fff;
+}
+
+.schema-drop-table:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
 }
 
 .schema-sql {

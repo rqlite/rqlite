@@ -872,12 +872,19 @@
                 html += '</tr>';
             });
             html += '</tbody></table>';
+            html += '<div class="schema-sql-block">';
+            html += '<div class="schema-sql-actions">';
             if (t.sql) {
-                html += '<div class="schema-sql-block">';
                 html += '<button class="schema-sql-toggle" type="button">Show CREATE TABLE</button>';
-                html += '<pre class="schema-sql hidden">' + escapeHTML(t.sql) + '</pre>';
-                html += '</div>';
+            } else {
+                html += '<span></span>';
             }
+            html += '<button class="schema-drop-table" type="button" data-table-name="' + escapeHTML(tableName) + '">Drop table</button>';
+            html += '</div>';
+            if (t.sql) {
+                html += '<pre class="schema-sql hidden">' + escapeHTML(t.sql) + '</pre>';
+            }
+            html += '</div>';
             html += '</div></div>';
         });
 
@@ -912,12 +919,37 @@
         schemaContent.innerHTML = html;
     }
 
+    function sqlQuoteIdent(name) {
+        return '"' + String(name).replace(/"/g, '""') + '"';
+    }
+
+    function dropTable(tableName, btn) {
+        btn.disabled = true;
+        var sql = "DROP TABLE " + sqlQuoteIdent(tableName);
+        apiRequest("POST", "/db/execute", [sql])
+            .then(function (resp) {
+                var results = (resp.data && resp.data.results) || [];
+                var err = results[0] && results[0].error;
+                if (err) {
+                    window.alert("Failed to drop table \"" + tableName + "\": " + err);
+                    btn.disabled = false;
+                    return;
+                }
+                loadSchema();
+            })
+            .catch(function (err) {
+                window.alert("Failed to drop table \"" + tableName + "\": " + err.message);
+                btn.disabled = false;
+            });
+    }
+
     schemaContent.addEventListener("click", function (e) {
         var btn = e.target;
         if (!btn.classList) return;
 
         if (btn.classList.contains("schema-sql-toggle")) {
-            var pre = btn.nextElementSibling;
+            var block = btn.closest(".schema-sql-block");
+            var pre = block ? block.querySelector(".schema-sql") : null;
             if (!pre) return;
             if (pre.classList.contains("hidden")) {
                 pre.classList.remove("hidden");
@@ -926,6 +958,15 @@
                 pre.classList.add("hidden");
                 btn.textContent = "Show CREATE TABLE";
             }
+            return;
+        }
+
+        if (btn.classList.contains("schema-drop-table")) {
+            var tableName = btn.getAttribute("data-table-name");
+            if (!tableName) return;
+            var ok = window.confirm("Drop table \"" + tableName + "\"?\n\nThis permanently deletes the table and all its data. This action cannot be undone.");
+            if (!ok) return;
+            dropTable(tableName, btn);
             return;
         }
 
