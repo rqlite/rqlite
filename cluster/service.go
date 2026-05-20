@@ -176,6 +176,14 @@ type Service struct {
 	hwmMu      sync.RWMutex
 	hwmUpdateC chan<- uint64 // Channel for HWM updates
 
+	// Worker pool for handling connections
+	connCh        chan net.Conn  // Connection queue
+	NumWorkers    int            // Number of worker goroutines (default 100)
+	ConnQueueSize int            // Connection queue size (default 1000)
+	doneCh        chan struct{}  // Signal to stop workers
+	wg            sync.WaitGroup // Track worker goroutines
+	closeOnce     sync.Once      // Ensure Close() runs only once
+
 	logger *log.Logger
 }
 
@@ -189,19 +197,40 @@ func New(ln net.Listener, db Database, m Manager, credentialStore CredentialStor
 		logger:          log.New(os.Stderr, "[cluster] ", log.LstdFlags),
 		credentialStore: credentialStore,
 		connTimeout:     connReadTimeout,
+		NumWorkers:      100,  // Default number of workers
+		ConnQueueSize:   1000, // Default connection queue size
 	}
 }
 
 // Open opens the Service.
 func (s *Service) Open() error {
+	// Initialize the connection channel and done signal
+	s.connCh = make(chan net.Conn, s.ConnQueueSize)
+	s.doneCh = make(chan struct{})
+
+	// Start worker pool
+	for i := 0; i < s.NumWorkers; i++ {
+		s.wg.Add(1)
+		go s.worker()
+	}
+
+	// Start the accept loop
 	go s.serve()
-	s.logger.Println("service listening on", s.addr)
+	s.logger.Printf("service listening on %s (workers: %d, queue: %d)", s.addr, s.NumWorkers, s.ConnQueueSize)
 	return nil
 }
 
 // Close closes the service.
 func (s *Service) Close() error {
-	s.ln.Close()
+	s.ln.Close() // Stop accepting new connections
+
+	// Ensure cleanup only happens once
+	s.closeOnce.Do(func() {
+		if s.doneCh != nil {
+			close(s.doneCh) // Signal workers to stop
+			s.wg.Wait()     // Wait for all workers to exit gracefully
+		}
+	})
 	return nil
 }
 
@@ -282,7 +311,33 @@ func (s *Service) serve() error {
 			return err
 		}
 
-		go s.handleConn(conn)
+		// Send connection to worker pool queue instead of spawning goroutine
+		select {
+		case s.connCh <- conn:
+		case <-s.doneCh:
+			conn.Close()
+			return nil
+		}
+	}
+}
+
+// worker processes connections from the connection queue.
+// Multiple workers run in parallel to handle incoming connections without
+// spawning unbounded goroutines. This prevents connection floods from exhausting memory.
+func (s *Service) worker() {
+	defer s.wg.Done()
+	for {
+		select {
+		case conn, ok := <-s.connCh:
+			if !ok {
+				// Channel closed, exit worker
+				return
+			}
+			s.handleConn(conn)
+		case <-s.doneCh:
+			// Stop signal received, exit worker
+			return
+		}
 	}
 }
 
