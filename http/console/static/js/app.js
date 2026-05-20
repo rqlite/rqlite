@@ -464,6 +464,7 @@
         var oss = data.os || {};
         var rt = data.runtime || {};
         var cluster = data.cluster || {};
+        var mux = data.mux || {};
         var snapStore = store.snapshot_store || {};
 
         var sections = [
@@ -533,7 +534,7 @@
                 rows: [
                     ["Address", cluster.addr],
                     ["API Address", cluster.api_addr],
-                    ["HTTPS", cluster.https]
+                    ["TLS", mux.tls]
                 ]
             },
             {
