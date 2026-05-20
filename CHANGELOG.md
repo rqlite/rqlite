@@ -1,3 +1,7 @@
+## v10.0.7 (unreleased)
+### Implementation changes and bug fixes
+- [PR #2671](https://github.com/rqlite/rqlite/pull/2671): Display node TLS state in console's Cluster panel. See [issue #2669](https://github.com/rqlite/rqlite/discussions/2669).
+
 ## v10.0.6 (May 19th 2026)
 ### Implementation changes and bug fixes
 - [PR #2664](https://github.com/rqlite/rqlite/pull/2664): Limit number of redirects followed on cluster-join. Fixes issue [#2616](https://github.com/rqlite/rqlite/issues/2616). Thanks @goingforstudying-ctrl
