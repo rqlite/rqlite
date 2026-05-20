@@ -1,4 +1,7 @@
-## v10.1.1 (unreleased)
+## v10.2.0 (unreleased)
+### New features
+- [PR #2672](https://github.com/rqlite/rqlite/pull/2661): Supporting verifying mTLS peer Common Name. Thanks @hifi
+  
 ### Implementation changes and bug fixes
 - [PR #2674](https://github.com/rqlite/rqlite/pull/2674): Console "count rows" respects current Tables Expand/Collapse state. 
 - [PR #2675](https://github.com/rqlite/rqlite/pull/2675): Console supports dropping indexes.
