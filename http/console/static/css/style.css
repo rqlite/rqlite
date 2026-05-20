@@ -616,7 +616,8 @@ footer a:hover {
     color: var(--text);
 }
 
-.schema-drop-table {
+.schema-drop-table,
+.schema-drop-index {
     background: transparent;
     border: 1px solid var(--error);
     color: var(--error-text);
@@ -627,12 +628,14 @@ footer a:hover {
     font-weight: 600;
 }
 
-.schema-drop-table:hover {
+.schema-drop-table:hover,
+.schema-drop-index:hover {
     background: var(--error);
     color: #fff;
 }
 
-.schema-drop-table:disabled {
+.schema-drop-table:disabled,
+.schema-drop-index:disabled {
     opacity: 0.5;
     cursor: not-allowed;
 }

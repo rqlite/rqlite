@@ -546,7 +546,6 @@
         statusCards.innerHTML = html;
 
         // --- Detail sections ---
-        var queue = (http.queue && http.queue._default) || {};
         var connRO = (sqlite.conn_pool_stats && sqlite.conn_pool_stats.ro) || {};
         var connRW = (sqlite.conn_pool_stats && sqlite.conn_pool_stats.rw) || {};
         var oss = data.os || {};
@@ -557,20 +556,19 @@
 
         var sections = [
             {
-                title: "Store",
+                title: "HTTP",
                 rows: [
-                    ["FSM Index", store.fsm_index],
-                    ["FSM Term", store.fsm_term],
-                    ["DB Applied Index", store.db_applied_index],
-                    ["Ready", store.ready],
-                    ["Apply Timeout", store.apply_timeout],
-                    ["Election Timeout", store.election_timeout],
-                    ["Heartbeat Timeout", store.heartbeat_timeout],
-                    ["Snapshot Threshold", store.snapshot_threshold],
-                    ["Snapshot Interval", store.snapshot_interval],
-                    ["Trailing Logs", store.trailing_logs],
-                    ["Data Directory", store.dir],
-                    ["Directory Size", store.dir_size_friendly]
+                    ["Bind Address", http.bind_addr],
+                    ["Auth", http.auth],
+                    ["TLS", http.tls ? http.tls.enabled : undefined]
+                ]
+            },
+            {
+                title: "Cluster",
+                rows: [
+                    ["Address", cluster.addr],
+                    ["API Address", cluster.api_addr],
+                    ["TLS", mux.tls]
                 ]
             },
             {
@@ -607,22 +605,20 @@
                 ]
             },
             {
-                title: "HTTP",
+                title: "Store",
                 rows: [
-                    ["Bind Address", http.bind_addr],
-                    ["Auth", http.auth],
-                    ["TLS", http.tls ? http.tls.enabled : undefined],
-                    ["Queue Capacity", queue.max_size],
-                    ["Queue Batch Size", queue.batch_size],
-                    ["Queue Timeout", queue.timeout]
-                ]
-            },
-            {
-                title: "Cluster",
-                rows: [
-                    ["Address", cluster.addr],
-                    ["API Address", cluster.api_addr],
-                    ["TLS", mux.tls]
+                    ["FSM Index", store.fsm_index],
+                    ["FSM Term", store.fsm_term],
+                    ["DB Applied Index", store.db_applied_index],
+                    ["Ready", store.ready],
+                    ["Apply Timeout", store.apply_timeout],
+                    ["Election Timeout", store.election_timeout],
+                    ["Heartbeat Timeout", store.heartbeat_timeout],
+                    ["Snapshot Threshold", store.snapshot_threshold],
+                    ["Snapshot Interval", store.snapshot_interval],
+                    ["Trailing Logs", store.trailing_logs],
+                    ["Data Directory", store.dir],
+                    ["Directory Size", store.dir_size_friendly]
                 ]
             },
             {
@@ -1055,6 +1051,12 @@
             html += '</div>';
             html += '<div class="detail-section-body">';
             html += '<pre class="schema-sql">' + escapeHTML(idx.sql) + '</pre>';
+            html += '<div class="schema-sql-block">';
+            html += '<div class="schema-sql-actions">';
+            html += '<span></span>';
+            html += '<button class="schema-drop-index" type="button" data-index-name="' + escapeHTML(idx.name) + '">Drop index</button>';
+            html += '</div>';
+            html += '</div>';
             html += '</div></div>';
         });
 
@@ -1095,6 +1097,26 @@
             })
             .catch(function (err) {
                 window.alert("Failed to drop table \"" + tableName + "\": " + err.message);
+                btn.disabled = false;
+            });
+    }
+
+    function dropIndex(indexName, btn) {
+        btn.disabled = true;
+        var sql = "DROP INDEX " + sqlQuoteIdent(indexName);
+        apiRequest("POST", "/db/execute", [sql])
+            .then(function (resp) {
+                var results = (resp.data && resp.data.results) || [];
+                var err = results[0] && results[0].error;
+                if (err) {
+                    window.alert("Failed to drop index \"" + indexName + "\": " + err);
+                    btn.disabled = false;
+                    return;
+                }
+                loadSchema();
+            })
+            .catch(function (err) {
+                window.alert("Failed to drop index \"" + indexName + "\": " + err.message);
                 btn.disabled = false;
             });
     }
@@ -1152,6 +1174,15 @@
             var ok = window.confirm("Drop table \"" + tableName + "\"?\n\nThis permanently deletes the table and all its data. This action cannot be undone.");
             if (!ok) return;
             dropTable(tableName, btn);
+            return;
+        }
+
+        if (btn.classList.contains("schema-drop-index")) {
+            var indexName = btn.getAttribute("data-index-name");
+            if (!indexName) return;
+            var okIdx = window.confirm("Drop index \"" + indexName + "\"?\n\nThis action cannot be undone.");
+            if (!okIdx) return;
+            dropIndex(indexName, btn);
             return;
         }
 
