@@ -1304,3 +1304,9 @@ h3 {
 #restore-status .error {
     color: var(--error-text);
 }
+
+.restore-countdown {
+    color: var(--text-dim);
+    font-style: italic;
+    margin-left: 0.375rem;
+}

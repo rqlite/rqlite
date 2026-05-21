@@ -1043,28 +1043,74 @@
         xhr.addEventListener("load", function () {
             stopProcessingTimer();
             restoreBtn.disabled = false;
-            if (xhr.status >= 200 && xhr.status < 300) {
+
+            // /db/load can return 200 OK with a SQL parse error nested in the
+            // response body, e.g. {"results":[{"error":"near \"foo\": syntax
+            // error"}]}. Treat any error key in results[] as a failure.
+            var jsonErr = null;
+            if (xhr.responseText) {
+                try {
+                    var resp = JSON.parse(xhr.responseText);
+                    if (resp && Array.isArray(resp.results)) {
+                        for (var i = 0; i < resp.results.length; i++) {
+                            if (resp.results[i] && resp.results[i].error) {
+                                jsonErr = resp.results[i].error;
+                                break;
+                            }
+                        }
+                    }
+                } catch (_) { /* not JSON; ignore */ }
+            }
+
+            if (xhr.status >= 200 && xhr.status < 300 && !jsonErr) {
                 restoreProgressFill.style.width = "100%";
                 restoreProgressText.textContent = "100%";
-                restoreStatusDiv.innerHTML = '<span class="success">Restore completed successfully via ' + escapeHTML(sel.method.label) + '.</span>';
-            } else {
-                var msg = xhr.responseText || ("HTTP " + xhr.status);
-                restoreStatusDiv.innerHTML = '<span class="error">Restore failed: ' + escapeHTML(msg) + '</span>';
-                restoreProgress.classList.add("hidden");
+                var methodLabel = escapeHTML(sel.method.label);
+                var secs = 10;
+                var renderCountdown = function () {
+                    restoreStatusDiv.innerHTML = '<span class="success">Restore completed successfully via ' + methodLabel +
+                        '. <span class="restore-countdown">Returning to console home in ' + secs + '…</span></span>';
+                };
+                renderCountdown();
+                var countdownTimer = setInterval(function () {
+                    secs--;
+                    if (secs <= 0) {
+                        clearInterval(countdownTimer);
+                        // Only auto-navigate if the user is still on the
+                        // Restore tab; otherwise leave them where they are.
+                        var restoreSection = document.getElementById("restore");
+                        if (restoreSection && restoreSection.classList.contains("active")) {
+                            clearRestoreSelection();
+                            showStatus();
+                        }
+                        return;
+                    }
+                    renderCountdown();
+                }, 1000);
+                return;
             }
+
+            var msg;
+            if (jsonErr) {
+                msg = jsonErr;
+            } else if (xhr.status === 400) {
+                msg = "bad file (server rejected the upload as not a valid SQLite database or SQL dump)";
+            } else {
+                msg = xhr.responseText || ("HTTP " + xhr.status);
+            }
+            clearRestoreSelection();
+            restoreStatusDiv.innerHTML = '<span class="error">Restore failed: ' + escapeHTML(msg) + '</span>';
         });
 
         xhr.addEventListener("error", function () {
             stopProcessingTimer();
-            restoreBtn.disabled = false;
-            restoreProgress.classList.add("hidden");
+            clearRestoreSelection();
             restoreStatusDiv.innerHTML = '<span class="error">Restore failed: network error</span>';
         });
 
         xhr.addEventListener("abort", function () {
             stopProcessingTimer();
-            restoreBtn.disabled = false;
-            restoreProgress.classList.add("hidden");
+            clearRestoreSelection();
             restoreStatusDiv.innerHTML = '<span class="error">Restore aborted</span>';
         });
 
