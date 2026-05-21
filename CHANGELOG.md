@@ -5,6 +5,7 @@
 ### Implementation changes and bug fixes
 - [PR #2674](https://github.com/rqlite/rqlite/pull/2674): Console "count rows" respects current Tables Expand/Collapse state. 
 - [PR #2675](https://github.com/rqlite/rqlite/pull/2675): Console supports dropping indexes.
+- [PR #2680](https://github.com/rqlite/rqlite/pull/2680): Further Console app improvements.
 
 ## v10.1.0 (May 20th 2026)
 ### New features
