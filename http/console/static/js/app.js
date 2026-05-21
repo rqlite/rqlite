@@ -586,7 +586,7 @@
                     ["Num Peers", raft.num_peers],
                     ["Protocol Version", raft.protocol_version],
                     ["Voter", raft.voter],
-                    ["Log Size", raft.log_size]
+                    ["Log Size", raft.log_size_friendly]
                 ]
             },
             {
