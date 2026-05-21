@@ -15,6 +15,7 @@
                 <button class="tab" data-tab="schema">Schema</button>
                 <button class="tab" data-tab="query">Query</button>
                 <button class="tab" data-tab="backup">Backup</button>
+                <button class="tab" data-tab="restore">Restore</button>
             </nav>
             <div id="node-info" class="node-info"><span id="node-id-text"></span><br><span id="raft-state-badge"></span></div>
             <button id="theme-toggle" class="theme-toggle" title="Toggle dark mode">&#9790;</button>
@@ -100,6 +101,42 @@
                         <button id="backup-btn">Download Backup</button>
                     </div>
                     <div id="backup-status"></div>
+                </div>
+            </div>
+        </section>
+        <section id="restore" class="tab-content">
+            <div class="backup-panel restore-panel">
+                <h3>Restore Database</h3>
+                <div class="restore-warning">
+                    <strong>Warning:</strong> Restore replaces all existing data in the database. Pause writes to the cluster before proceeding.
+                </div>
+                <div class="backup-form">
+                    <div id="restore-dropzone" class="restore-dropzone">
+                        <input type="file" id="restore-file" hidden>
+                        <div class="restore-dropzone-prompt">
+                            <div>Drag &amp; drop a SQLite or SQL dump file here</div>
+                            <div class="restore-dropzone-or">or</div>
+                            <button type="button" id="restore-pick-btn">Choose file</button>
+                        </div>
+                        <div id="restore-file-info" class="restore-file-info hidden">
+                            <button type="button" id="restore-clear-btn" class="restore-clear-btn" title="Choose a different file">&times;</button>
+                            <table class="restore-file-table">
+                                <tbody>
+                                    <tr><th>File</th><td><strong id="restore-file-name"></strong> <span id="restore-file-size" class="restore-file-size"></span></td></tr>
+                                    <tr><th>Detected</th><td><span id="restore-file-type"></span></td></tr>
+                                    <tr><th>Method</th><td><span id="restore-method"></span></td></tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                    <div class="backup-actions">
+                        <button id="restore-btn" disabled>Restore</button>
+                    </div>
+                    <div class="restore-progress hidden" id="restore-progress">
+                        <div class="restore-progress-bar"><div id="restore-progress-fill" class="restore-progress-fill"></div></div>
+                        <div id="restore-progress-text" class="restore-progress-text">0%</div>
+                    </div>
+                    <div id="restore-status"></div>
                 </div>
             </div>
         </section>

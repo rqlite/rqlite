@@ -131,6 +131,9 @@
             document.getElementById(target).classList.add("active");
             if (target === "schema") {
                 loadSchema();
+            } else if (target === "restore") {
+                // Refresh cluster topology so method auto-selection is current.
+                loadStatus();
             }
         });
     });
@@ -837,6 +840,281 @@
             .finally(function () {
                 backupBtn.disabled = false;
             });
+    });
+
+    // --- Restore Tab ---
+
+    var restoreDropzone = document.getElementById("restore-dropzone");
+    var restoreFileInput = document.getElementById("restore-file");
+    var restorePickBtn = document.getElementById("restore-pick-btn");
+    var restoreClearBtn = document.getElementById("restore-clear-btn");
+    var restoreFileInfo = document.getElementById("restore-file-info");
+    var restoreFileName = document.getElementById("restore-file-name");
+    var restoreFileSize = document.getElementById("restore-file-size");
+    var restoreFileType = document.getElementById("restore-file-type");
+    var restoreMethodSpan = document.getElementById("restore-method");
+    var restoreBtn = document.getElementById("restore-btn");
+    var restoreProgress = document.getElementById("restore-progress");
+    var restoreProgressFill = document.getElementById("restore-progress-fill");
+    var restoreProgressText = document.getElementById("restore-progress-text");
+    var restoreStatusDiv = document.getElementById("restore-status");
+
+    var SQLITE_MAGIC = "SQLite format 3 ";
+
+    // Currently selected file and its detected attributes. Null when no file
+    // is selected.
+    var restoreSelection = null;
+
+    function formatBytes(n) {
+        if (n < 1024) return n + " B";
+        if (n < 1024 * 1024) return (n / 1024).toFixed(1) + " KB";
+        if (n < 1024 * 1024 * 1024) return (n / (1024 * 1024)).toFixed(1) + " MB";
+        return (n / (1024 * 1024 * 1024)).toFixed(2) + " GB";
+    }
+
+    function isSingleNodeCluster() {
+        // Prefer the node list if available; fall back to raft.num_peers.
+        if (lastNodesData && lastNodesData.length > 0) {
+            return lastNodesData.length === 1;
+        }
+        if (lastStatusData && lastStatusData.store && lastStatusData.store.raft) {
+            return Number(lastStatusData.store.raft.num_peers) === 0;
+        }
+        // Unknown — be safe and assume cluster (uses /db/load).
+        return false;
+    }
+
+    function sniffFileType(file) {
+        return file.slice(0, SQLITE_MAGIC.length).arrayBuffer().then(function (buf) {
+            var bytes = new Uint8Array(buf);
+            var header = "";
+            for (var i = 0; i < bytes.length; i++) {
+                header += String.fromCharCode(bytes[i]);
+            }
+            return header === SQLITE_MAGIC ? "sqlite" : "sql";
+        });
+    }
+
+    function pickMethod(fileKind) {
+        // SQL dumps always use /db/load (text/plain).
+        if (fileKind === "sql") {
+            return { endpoint: "/db/load", contentType: "text/plain", label: "load (SQL dump)" };
+        }
+        // SQLite binary: prefer /boot on a single-node cluster.
+        if (isSingleNodeCluster()) {
+            return { endpoint: "/boot", contentType: "application/octet-stream", label: "boot (single-node)" };
+        }
+        return { endpoint: "/db/load", contentType: "application/octet-stream", label: "load (cluster)" };
+    }
+
+    function clearRestoreSelection() {
+        restoreSelection = null;
+        restoreFileInput.value = "";
+        restoreDropzone.classList.remove("has-file");
+        restoreFileInfo.classList.add("hidden");
+        restoreBtn.disabled = true;
+        restoreStatusDiv.innerHTML = "";
+        restoreProgress.classList.add("hidden");
+        restoreProgressFill.style.width = "0%";
+        restoreProgressText.textContent = "0%";
+    }
+
+    function setRestoreFile(file) {
+        if (!file) {
+            clearRestoreSelection();
+            return;
+        }
+        restoreStatusDiv.innerHTML = "";
+        sniffFileType(file).then(function (kind) {
+            var method = pickMethod(kind);
+            restoreSelection = { file: file, kind: kind, method: method };
+            restoreFileName.textContent = file.name;
+            restoreFileSize.textContent = "(" + formatBytes(file.size) + ")";
+            restoreFileType.textContent = kind === "sqlite" ? "SQLite binary" : "SQL dump";
+            restoreMethodSpan.textContent = method.label;
+            restoreDropzone.classList.add("has-file");
+            restoreFileInfo.classList.remove("hidden");
+            restoreBtn.disabled = false;
+        }).catch(function (err) {
+            restoreStatusDiv.innerHTML = '<span class="error">Could not read file: ' + escapeHTML(err.message) + '</span>';
+        });
+    }
+
+    restorePickBtn.addEventListener("click", function () {
+        restoreFileInput.click();
+    });
+
+    restoreFileInput.addEventListener("change", function () {
+        if (restoreFileInput.files && restoreFileInput.files[0]) {
+            setRestoreFile(restoreFileInput.files[0]);
+        }
+    });
+
+    restoreClearBtn.addEventListener("click", function (e) {
+        e.stopPropagation();
+        clearRestoreSelection();
+    });
+
+    ["dragenter", "dragover"].forEach(function (ev) {
+        restoreDropzone.addEventListener(ev, function (e) {
+            e.preventDefault();
+            e.stopPropagation();
+            restoreDropzone.classList.add("dragover");
+        });
+    });
+    ["dragleave", "drop"].forEach(function (ev) {
+        restoreDropzone.addEventListener(ev, function (e) {
+            e.preventDefault();
+            e.stopPropagation();
+            restoreDropzone.classList.remove("dragover");
+        });
+    });
+    restoreDropzone.addEventListener("drop", function (e) {
+        if (e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files[0]) {
+            setRestoreFile(e.dataTransfer.files[0]);
+        }
+    });
+
+    restoreBtn.addEventListener("click", function () {
+        if (!restoreSelection) return;
+        var sel = restoreSelection;
+
+        var confirmMsg = "Restore from \"" + sel.file.name + "\" via " + sel.method.label + "?\n\n" +
+            "This replaces ALL existing data in the database. This action cannot be undone.";
+        if (!window.confirm(confirmMsg)) return;
+
+        restoreBtn.disabled = true;
+        restoreStatusDiv.innerHTML = "";
+        restoreProgress.classList.remove("hidden");
+        restoreProgressFill.classList.remove("processing");
+        restoreProgressFill.style.width = "0%";
+        restoreProgressText.textContent = "0%";
+
+        var processingTimer = null;
+        var processingStart = 0;
+        var inProcessingPhase = false;
+
+        function stopProcessingTimer() {
+            if (processingTimer !== null) {
+                clearInterval(processingTimer);
+                processingTimer = null;
+            }
+            restoreProgressFill.classList.remove("processing");
+            inProcessingPhase = false;
+        }
+
+        function startProcessingPhase() {
+            if (inProcessingPhase) return;
+            inProcessingPhase = true;
+            processingStart = Date.now();
+            restoreProgressFill.style.width = "100%";
+            restoreProgressFill.classList.add("processing");
+            var updateText = function () {
+                var secs = Math.floor((Date.now() - processingStart) / 1000);
+                var mm = Math.floor(secs / 60);
+                var ss = String(secs % 60).padStart(2, "0");
+                restoreProgressText.textContent = "Processing… " + mm + ":" + ss;
+            };
+            updateText();
+            processingTimer = setInterval(updateText, 1000);
+        }
+
+        var xhr = new XMLHttpRequest();
+        xhr.open("POST", sel.method.endpoint);
+        xhr.setRequestHeader("Content-Type", sel.method.contentType);
+
+        xhr.upload.addEventListener("progress", function (e) {
+            if (inProcessingPhase) return;
+            if (e.lengthComputable) {
+                var pct = Math.round((e.loaded / e.total) * 100);
+                restoreProgressFill.style.width = pct + "%";
+                restoreProgressText.textContent = pct + "%";
+                if (e.loaded >= e.total) {
+                    startProcessingPhase();
+                }
+            }
+        });
+
+        // Multiple events can signal upload completion; the guard flag in
+        // startProcessingPhase ensures only the first one takes effect.
+        xhr.upload.addEventListener("load", startProcessingPhase);
+        xhr.upload.addEventListener("loadend", startProcessingPhase);
+
+        xhr.addEventListener("load", function () {
+            stopProcessingTimer();
+            restoreBtn.disabled = false;
+
+            // /db/load can return 200 OK with a SQL parse error nested in the
+            // response body, e.g. {"results":[{"error":"near \"foo\": syntax
+            // error"}]}. Treat any error key in results[] as a failure.
+            var jsonErr = null;
+            if (xhr.responseText) {
+                try {
+                    var resp = JSON.parse(xhr.responseText);
+                    if (resp && Array.isArray(resp.results)) {
+                        for (var i = 0; i < resp.results.length; i++) {
+                            if (resp.results[i] && resp.results[i].error) {
+                                jsonErr = resp.results[i].error;
+                                break;
+                            }
+                        }
+                    }
+                } catch (_) { /* not JSON; ignore */ }
+            }
+
+            if (xhr.status >= 200 && xhr.status < 300 && !jsonErr) {
+                restoreProgressFill.style.width = "100%";
+                restoreProgressText.textContent = "100%";
+                var methodLabel = escapeHTML(sel.method.label);
+                var secs = 10;
+                var renderCountdown = function () {
+                    restoreStatusDiv.innerHTML = '<span class="success">Restore completed successfully via ' + methodLabel +
+                        '. <span class="restore-countdown">Returning to console home in ' + secs + '…</span></span>';
+                };
+                renderCountdown();
+                var countdownTimer = setInterval(function () {
+                    secs--;
+                    if (secs <= 0) {
+                        clearInterval(countdownTimer);
+                        // Only auto-navigate if the user is still on the
+                        // Restore tab; otherwise leave them where they are.
+                        var restoreSection = document.getElementById("restore");
+                        if (restoreSection && restoreSection.classList.contains("active")) {
+                            clearRestoreSelection();
+                            showStatus();
+                        }
+                        return;
+                    }
+                    renderCountdown();
+                }, 1000);
+                return;
+            }
+
+            var msg;
+            if (jsonErr) {
+                msg = jsonErr;
+            } else if (xhr.status === 400) {
+                msg = "bad file (server rejected the upload as not a valid SQLite database or SQL dump)";
+            } else {
+                msg = xhr.responseText || ("HTTP " + xhr.status);
+            }
+            clearRestoreSelection();
+            restoreStatusDiv.innerHTML = '<span class="error">Restore failed: ' + escapeHTML(msg) + '</span>';
+        });
+
+        xhr.addEventListener("error", function () {
+            stopProcessingTimer();
+            clearRestoreSelection();
+            restoreStatusDiv.innerHTML = '<span class="error">Restore failed: network error</span>';
+        });
+
+        xhr.addEventListener("abort", function () {
+            stopProcessingTimer();
+            clearRestoreSelection();
+            restoreStatusDiv.innerHTML = '<span class="error">Restore aborted</span>';
+        });
+
+        xhr.send(sel.file);
     });
 
     // --- Schema Tab ---

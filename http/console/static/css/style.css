@@ -1003,7 +1003,6 @@ h3 {
     border-radius: 4px;
     box-shadow: 0 1px 3px var(--shadow);
     padding: 1.25rem;
-    max-width: 520px;
 }
 
 .backup-panel h3 {
@@ -1099,4 +1098,215 @@ h3 {
 
 #backup-status .error {
     color: var(--error-text);
+}
+
+.restore-warning {
+    background: var(--surface-alt);
+    border-left: 3px solid var(--error);
+    color: var(--text);
+    padding: 0.625rem 0.875rem;
+    border-radius: 4px;
+    font-size: 0.8125rem;
+    margin-bottom: 0.25rem;
+}
+
+.restore-dropzone {
+    border: 2px dashed var(--border);
+    border-radius: 6px;
+    padding: 1.5rem 1rem;
+    text-align: center;
+    background: var(--surface-alt);
+    transition: border-color 0.15s, background 0.15s;
+}
+
+.restore-dropzone.dragover {
+    border-color: var(--accent);
+    background: var(--accent-shadow);
+}
+
+.restore-dropzone.has-file {
+    text-align: left;
+    padding: 0.875rem 1rem;
+}
+
+.restore-dropzone-prompt {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.5rem;
+    color: var(--text-dim);
+    font-size: 0.875rem;
+}
+
+.restore-dropzone.has-file .restore-dropzone-prompt {
+    display: none;
+}
+
+.restore-dropzone-or {
+    color: var(--text-muted);
+    font-size: 0.75rem;
+}
+
+#restore-pick-btn {
+    background: transparent;
+    color: var(--accent);
+    border: 1px solid var(--accent);
+    padding: 0.375rem 0.875rem;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 0.8125rem;
+}
+
+#restore-pick-btn:hover {
+    background: var(--accent-shadow);
+}
+
+.restore-file-info {
+    font-size: 0.875rem;
+    position: relative;
+}
+
+.restore-file-info.hidden {
+    display: none;
+}
+
+.restore-file-table {
+    border-collapse: collapse;
+    width: 100%;
+}
+
+.restore-file-table th,
+.restore-file-table td {
+    text-align: left;
+    padding: 0.25rem 0.75rem 0.25rem 0;
+    vertical-align: top;
+}
+
+.restore-file-table th {
+    font-weight: 500;
+    color: var(--text-dim);
+    font-size: 0.8125rem;
+    width: 5.5rem;
+    white-space: nowrap;
+}
+
+.restore-file-table td {
+    color: var(--text);
+    font-family: "SF Mono", "Fira Code", "Fira Mono", Menlo, Consolas, monospace;
+    font-size: 0.8125rem;
+    word-break: break-all;
+}
+
+.restore-file-size {
+    color: var(--text-muted);
+    margin-left: 0.375rem;
+}
+
+.restore-clear-btn {
+    position: absolute;
+    top: -0.25rem;
+    right: 0;
+    background: transparent;
+    border: none;
+    color: var(--text-muted);
+    cursor: pointer;
+    font-size: 1.25rem;
+    line-height: 1;
+    padding: 0 0.25rem;
+}
+
+.restore-clear-btn:hover {
+    color: var(--text);
+}
+
+#restore-btn {
+    background: var(--accent);
+    color: #fff;
+    border: none;
+    padding: 0.5rem 1.5rem;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 0.875rem;
+    transition: background 0.2s;
+}
+
+#restore-btn:hover:not(:disabled) {
+    background: var(--accent-hover);
+}
+
+#restore-btn:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+.restore-progress {
+    display: flex;
+    align-items: center;
+    gap: 0.625rem;
+    font-size: 0.8125rem;
+}
+
+.restore-progress.hidden {
+    display: none;
+}
+
+.restore-progress-bar {
+    flex: 1;
+    height: 8px;
+    background: var(--border-light);
+    border-radius: 4px;
+    overflow: hidden;
+}
+
+.restore-progress-fill {
+    height: 100%;
+    width: 0%;
+    background: var(--accent);
+    transition: width 0.1s linear;
+}
+
+.restore-progress-fill.processing {
+    width: 100%;
+    background-color: var(--accent);
+    background-image: linear-gradient(
+        45deg,
+        rgba(255, 255, 255, 0.25) 25%,
+        transparent 25%,
+        transparent 50%,
+        rgba(255, 255, 255, 0.25) 50%,
+        rgba(255, 255, 255, 0.25) 75%,
+        transparent 75%
+    );
+    background-size: 1.5rem 1.5rem;
+    animation: restore-stripes 1s linear infinite;
+}
+
+@keyframes restore-stripes {
+    from { background-position: 0 0; }
+    to { background-position: 1.5rem 0; }
+}
+
+.restore-progress-text {
+    min-width: 3.5em;
+    text-align: right;
+    color: var(--text-dim);
+    font-family: "SF Mono", "Fira Code", "Fira Mono", Menlo, Consolas, monospace;
+}
+
+#restore-status {
+    font-size: 0.8125rem;
+}
+
+#restore-status .success {
+    color: var(--success-text);
+}
+
+#restore-status .error {
+    color: var(--error-text);
+}
+
+.restore-countdown {
+    color: var(--text-dim);
+    font-style: italic;
+    margin-left: 0.375rem;
 }
