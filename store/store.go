@@ -1348,10 +1348,12 @@ func (s *Store) Stats() (map[string]any, error) {
 			raftStats[k] = s
 		}
 	}
-	raftStats["log_size"], err = fsutil.FileSizeExists(s.raftDBPath)
+	rLogSz, err := fsutil.FileSizeExists(s.raftDBPath)
 	if err != nil {
 		return nil, err
 	}
+	raftStats["log_size"] = rLogSz
+	raftStats["log_size_friendly"] = friendlyBytes(uint64(rLogSz))
 	raftStats["voter"], err = s.IsVoter()
 	if err != nil {
 		return nil, err

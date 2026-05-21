@@ -586,7 +586,7 @@
                     ["Num Peers", raft.num_peers],
                     ["Protocol Version", raft.protocol_version],
                     ["Voter", raft.voter],
-                    ["Log Size", raft.log_size]
+                    ["Log Size", raft.log_size_friendly]
                 ]
             },
             {
@@ -1000,7 +1000,7 @@
             html += '<th>Column</th>';
             html += '<th>Type</th>';
             html += '<th class="schema-center">Not Null</th>';
-            html += '<th>Default</th>';
+            html += '<th class="schema-center">Default</th>';
             html += '</tr></thead><tbody>';
             t.columns.forEach(function (col) {
                 html += '<tr' + (col.pk ? ' class="schema-pk-row"' : '') + '>';
@@ -1014,9 +1014,13 @@
                     ? '<span class="schema-check" title="Value may not be NULL">&#10003;</span>'
                     : '<span class="schema-dash" title="Value may be NULL">&mdash;</span>') + '</td>';
                 if (col.dflt_value === null || col.dflt_value === undefined) {
-                    html += '<td class="null-value">NULL</td>';
+                    if (col.not_null) {
+                        html += '<td class="schema-center"><span class="schema-dash" title="No default; value required on insert">&mdash;</span></td>';
+                    } else {
+                        html += '<td class="schema-center null-value">NULL</td>';
+                    }
                 } else {
-                    html += '<td>' + escapeHTML(col.dflt_value) + '</td>';
+                    html += '<td class="schema-center">' + escapeHTML(col.dflt_value) + '</td>';
                 }
                 html += '</tr>';
             });
