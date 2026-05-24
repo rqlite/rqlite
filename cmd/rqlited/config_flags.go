@@ -40,8 +40,8 @@ type Config struct {
 	HTTPx509Key string
 	// Enable mutual TLS for HTTPS
 	HTTPVerifyClient bool
-	// Required Common Name on client certificates. If not set, any client cert signed by the CA is accepted
-	HTTPVerifyCN string
+	// Required Common Name on client certificates. If not set, no Common Name required
+	HTTPVerifyCommonName string
 	// Path to X.509 CA certificate for node-to-node encryption
 	NodeX509CACert string
 	// Path to X.509 certificate for node-to-node mutual authentication and encryption
@@ -54,8 +54,8 @@ type Config struct {
 	NodeVerifyClient bool
 	// Hostname to verify on certificate returned by a node
 	NodeVerifyServerName string
-	// Required Common Name on incoming peer certificates. If not set, any peer cert signed by the CA is accepted
-	NodeVerifyCN string
+	// Required Common Name on incoming peer certificates. If not set, no Common Name required
+	NodeVerifyCommonName string
 	// Unique ID for node. If not set, set to advertised Raft address
 	NodeID string
 	// Enable compression when transferring snapshots between nodes
@@ -159,14 +159,14 @@ func Forge(arguments []string) (*flag.FlagSet, *Config, error) {
 	fs.StringVar(&config.HTTPx509Cert, "http-cert", "", "Path to HTTPS X.509 certificate")
 	fs.StringVar(&config.HTTPx509Key, "http-key", "", "Path to HTTPS X.509 private key")
 	fs.BoolVar(&config.HTTPVerifyClient, "http-verify-client", false, "Enable mutual TLS for HTTPS")
-	fs.StringVar(&config.HTTPVerifyCN, "http-verify-cn", "", "Required Common Name on client certificates. If not set, any client cert signed by the CA is accepted")
+	fs.StringVar(&config.HTTPVerifyCommonName, "http-verify-common-name", "", "Required Common Name on client certificates. If not set, no Common Name required")
 	fs.StringVar(&config.NodeX509CACert, "node-ca-cert", "", "Path to X.509 CA certificate for node-to-node encryption")
 	fs.StringVar(&config.NodeX509Cert, "node-cert", "", "Path to X.509 certificate for node-to-node mutual authentication and encryption")
 	fs.StringVar(&config.NodeX509Key, "node-key", "", "Path to X.509 private key for node-to-node mutual authentication and encryption")
 	fs.BoolVar(&config.NoNodeVerify, "node-no-verify", false, "Skip verification of any presented certificate.")
 	fs.BoolVar(&config.NodeVerifyClient, "node-verify-client", false, "Enable mutual TLS for node-to-node communication")
 	fs.StringVar(&config.NodeVerifyServerName, "node-verify-server-name", "", "Hostname to verify on certificate returned by a node")
-	fs.StringVar(&config.NodeVerifyCN, "node-verify-cn", "", "Required Common Name on incoming peer certificates. If not set, any peer cert signed by the CA is accepted")
+	fs.StringVar(&config.NodeVerifyCommonName, "node-verify-common-name", "", "Required Common Name on incoming peer certificates. If not set, no Common Name required")
 	fs.StringVar(&config.NodeID, "node-id", "", "Unique ID for node. If not set, set to advertised Raft address")
 	fs.BoolVar(&config.CompressSnapTransport, "compress-snap-transport", false, "Enable compression when transferring snapshots between nodes")
 	fs.StringVar(&config.RaftAddr, "raft-addr", "localhost:4002", "Raft communication bind address")

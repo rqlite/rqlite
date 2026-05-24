@@ -97,8 +97,10 @@ class Node(object):
                raft_snap_threshold=8192, raft_snap_int="1s",
                raft_cluster_remove_shutdown=False,
                http_cert=None, http_key=None, http_no_verify=False,
+               http_verify_client=False, http_verify_common_name=None,
                node_cert=None, node_key=None, node_ca_cert=None,
-               node_verify_server_name=None, node_no_verify=False,
+               node_verify_server_name=None, node_verify_common_name=None,
+               node_no_verify=False,
                auth=None, auto_backup=None, auto_restore=None,
                cdc_config=None, dir=None):
     
@@ -130,11 +132,14 @@ class Node(object):
     self.http_cert = http_cert
     self.http_key = http_key
     self.http_no_verify = http_no_verify
+    self.http_verify_client = http_verify_client
+    self.http_verify_common_name = http_verify_common_name
     self.node_cert = node_cert
     self.node_key = node_key
     self.node_no_verify = node_no_verify
     self.node_ca_cert = node_ca_cert
     self.node_verify_server_name = node_verify_server_name
+    self.node_verify_common_name = node_verify_common_name
     self.auth = auth
     self.auto_backup = auto_backup
     self.auto_restore = auto_restore
@@ -202,8 +207,12 @@ class Node(object):
       command += ['-raft-adv-addr', self.raft_adv]
     if self.http_cert is not None:
       command += ['-http-cert', self.http_cert, '-http-key', self.http_key]
-      if self.http_no_verify:
-        command += ['-http-no-verify']
+    if self.http_no_verify:
+      command += ['-http-no-verify']
+    if self.http_verify_client:
+      command += ['-http-verify-client']
+    if self.http_verify_common_name is not None:
+      command += ['-http-verify-common-name', self.http_verify_common_name]
     if self.node_cert is not None:
       command += ['-node-cert', self.node_cert, '-node-key', self.node_key]
     if self.node_ca_cert is not None:
@@ -212,6 +221,8 @@ class Node(object):
       command += ['-node-no-verify']
     if self.node_verify_server_name is not None:
       command += ['-node-verify-server-name', self.node_verify_server_name]
+    if self.node_verify_common_name is not None:
+      command += ['-node-verify-common-name', self.node_verify_common_name]
     if self.auth is not None:
       command += ['-auth', self.auth]
     if self.auto_backup is not None:

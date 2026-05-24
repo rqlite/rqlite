@@ -74,11 +74,11 @@ func (c *Config) Validate() error {
 		return fmt.Errorf("either both -%s and -%s must be set, or neither", NodeX509CertFlag, NodeX509KeyFlag)
 
 	}
-	if c.HTTPVerifyCN != "" && !c.HTTPVerifyClient {
-		return errors.New("-http-verify-cn requires -http-verify-client")
+	if c.HTTPVerifyCommonName != "" && !c.HTTPVerifyClient {
+		return errors.New("-http-verify-common-name requires -http-verify-client")
 	}
-	if c.NodeVerifyCN != "" && !c.NodeVerifyClient {
-		return errors.New("-node-verify-cn requires -node-verify-client")
+	if c.NodeVerifyCommonName != "" && !c.NodeVerifyClient {
+		return errors.New("-node-verify-common-name requires -node-verify-client")
 	}
 
 	if c.RaftAddr == c.HTTPAddr {
