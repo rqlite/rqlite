@@ -97,7 +97,7 @@ class Node(object):
                raft_snap_threshold=8192, raft_snap_int="1s",
                raft_cluster_remove_shutdown=False,
                http_cert=None, http_key=None, http_no_verify=False,
-               http_verify_client=False, http_verify_common_name=False,
+               http_verify_client=False, http_verify_common_name=None,
                node_cert=None, node_key=None, node_ca_cert=None,
                node_verify_server_name=None, node_verify_common_name=None,
                node_no_verify=False,
