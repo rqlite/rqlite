@@ -311,7 +311,7 @@ func Test_TLSServiceSecureMutualVerifyCN(t *testing.T) {
 		"version": "the version",
 	}
 	s.ClientVerify = true
-	s.ClientVerifyCN = "allowed.rqlite.io"
+	s.ClientVerifyCommonName = "allowed.rqlite.io"
 	if err := s.Start(); err != nil {
 		t.Fatalf("failed to start service")
 	}

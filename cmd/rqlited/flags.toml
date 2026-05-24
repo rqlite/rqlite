@@ -136,8 +136,8 @@ This allows you to control which clients can connect to the HTTPS API, as only c
 default = false
 
 [[flags]]
-name = "HTTPVerifyCN"
-cli = "http-verify-cn"
+name = "HTTPVerifyCommonName"
+cli = "http-verify-common-name"
 type = "string"
 short_help = "Required Common Name on client certificates. If not set, any client cert signed by the CA is accepted"
 long_help = """
@@ -206,8 +206,8 @@ When a node verifies a certificate, it normally checks that the certificate's ho
 default = ""
 
 [[flags]]
-name = "NodeVerifyCN"
-cli = "node-verify-cn"
+name = "NodeVerifyCommonName"
+cli = "node-verify-common-name"
 type = "string"
 short_help = "Required Common Name on incoming peer certificates. If not set, any peer cert signed by the CA is accepted"
 long_help = """

@@ -447,7 +447,7 @@ func startHTTPService(cfg *Config, str *store.Store, cltr *cluster.Client, credS
 	s.CertFile = cfg.HTTPx509Cert
 	s.KeyFile = cfg.HTTPx509Key
 	s.ClientVerify = cfg.HTTPVerifyClient
-	s.ClientVerifyCN = cfg.HTTPVerifyCN
+	s.ClientVerifyCommonName = cfg.HTTPVerifyCommonName
 	s.DefaultQueueCap = cfg.WriteQueueCap
 	s.DefaultQueueBatchSz = cfg.WriteQueueBatchSz
 	s.DefaultQueueTimeout = cfg.WriteQueueTimeout
@@ -481,10 +481,10 @@ func startNodeMux(cfg *Config, ln net.Listener) (*tcp.Mux, error) {
 		}
 		if cfg.NodeVerifyClient {
 			b.WriteString(", mutual TLS enabled")
-			if cfg.NodeVerifyCN != "" {
-				b.WriteString(fmt.Sprintf(", required peer CN %q", cfg.NodeVerifyCN))
+			if cfg.NodeVerifyCommonName != "" {
+				b.WriteString(fmt.Sprintf(", required peer CN %q", cfg.NodeVerifyCommonName))
 			}
-			mux, err = tcp.NewMutualTLSMux(ln, adv, cfg.NodeX509Cert, cfg.NodeX509Key, cfg.NodeX509CACert, cfg.NodeVerifyCN)
+			mux, err = tcp.NewMutualTLSMux(ln, adv, cfg.NodeX509Cert, cfg.NodeX509Key, cfg.NodeX509CACert, cfg.NodeVerifyCommonName)
 		} else {
 			b.WriteString(", mutual TLS disabled")
 			mux, err = tcp.NewTLSMux(ln, adv, cfg.NodeX509Cert, cfg.NodeX509Key)
