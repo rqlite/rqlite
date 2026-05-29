@@ -7,6 +7,7 @@
 - [PR #2674](https://github.com/rqlite/rqlite/pull/2674): Console "count rows" respects current Tables Expand/Collapse state. 
 - [PR #2675](https://github.com/rqlite/rqlite/pull/2675): Console supports dropping indexes.
 - [PR #2680](https://github.com/rqlite/rqlite/pull/2680): Further Console app improvements.
+- [PR #2684](https://github.com/rqlite/rqlite/pull/2684): Update golang.org/x/net and Update golang.org/x/sys.
 
 ## v10.1.0 (May 20th 2026)
 ### New features
