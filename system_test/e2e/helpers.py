@@ -100,7 +100,7 @@ class Node(object):
                http_verify_client=False, http_verify_common_name=None,
                node_cert=None, node_key=None, node_ca_cert=None,
                node_verify_server_name=None, node_verify_common_name=None,
-               node_no_verify=False,
+               node_no_verify=False, node_verify_client=False,
                auth=None, auto_backup=None, auto_restore=None,
                cdc_config=None, dir=None):
     
@@ -137,6 +137,7 @@ class Node(object):
     self.node_cert = node_cert
     self.node_key = node_key
     self.node_no_verify = node_no_verify
+    self.node_verify_client = node_verify_client
     self.node_ca_cert = node_ca_cert
     self.node_verify_server_name = node_verify_server_name
     self.node_verify_common_name = node_verify_common_name
@@ -219,6 +220,8 @@ class Node(object):
       command += ['-node-ca-cert', self.node_ca_cert]
     if self.node_no_verify:
       command += ['-node-no-verify']
+    if self.node_verify_client:
+      command += ['-node-verify-client']
     if self.node_verify_server_name is not None:
       command += ['-node-verify-server-name', self.node_verify_server_name]
     if self.node_verify_common_name is not None:
