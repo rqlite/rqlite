@@ -207,6 +207,41 @@ class TestEndToEndEncryptedNode_ServerName(unittest.TestCase):
     deprovision_node(n0)
     deprovision_node(n1)
 
+class TestEndToEndEncryptedNode_CommonName(unittest.TestCase):
+  caCertFile = write_random_file(x509cert)
+  caSignedKey = write_random_file(caSignedKeyExampleDotCom)
+  caSignedCert = write_random_file(caSignedCertExampleDotCom)
+
+  def test_ok(self):
+    '''Test that a cluster can be created when nodes present a cert with the right common name'''
+    n0 = Node(RQLITED_PATH, '0', node_cert=self.caSignedCert, node_key=self.caSignedKey, node_ca_cert=self.caCertFile,
+              node_verify_common_name='example.com', node_verify_client=True)
+    n0.start()
+    n0.wait_for_leader()
+
+    n1 = Node(RQLITED_PATH, '1', node_cert=self.caSignedCert, node_key=self.caSignedKey, node_ca_cert=self.caCertFile,
+              node_verify_common_name='example.com', node_verify_client=True)
+    n1.start(join=n0.RaftAddr())
+    n1.wait_for_leader()
+
+    deprovision_node(n0)
+    deprovision_node(n1)
+
+  def test_bad(self):
+    '''Test that a cluster fails to be created when a node presents a cert with the wrong common name'''
+    n0 = Node(RQLITED_PATH, '0', node_cert=self.caSignedCert, node_key=self.caSignedKey, node_ca_cert=self.caCertFile,
+              node_verify_server_name='deny.example.com')
+    n0.start()
+    n0.wait_for_leader()
+
+    n1 = Node(RQLITED_PATH, '1', node_cert=self.caSignedCert, node_key=self.caSignedKey, node_ca_cert=self.caCertFile,
+              node_verify_server_name='deny.example.com')
+    n1.start(join=n0.RaftAddr())
+    self.assertTrue(n1.expect_leader_fail())  # Should fail to join due to bad common name
+
+    deprovision_node(n0)
+    deprovision_node(n1)
+
 class TestClusterRecovery(unittest.TestCase):
   '''Test that a cluster can recover after all Raft network addresses change'''
   def test(self):
