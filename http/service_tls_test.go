@@ -259,7 +259,7 @@ func Test_TLSServiceSecureMutual(t *testing.T) {
 	}
 }
 
-func Test_TLSServiceSecureMutualVerifyCN(t *testing.T) {
+func Test_TLSServiceSecureMutualVerifyCommonName(t *testing.T) {
 	// Generate a CA cert and key.
 	caCertPEM, caKeyPEM, err := rtls.GenerateCACert(pkix.Name{CommonName: "ca.rqlite.io"}, time.Hour, 2048)
 	if err != nil {
@@ -335,18 +335,18 @@ func Test_TLSServiceSecureMutualVerifyCN(t *testing.T) {
 		}}
 	}
 
-	// Client with the required CN should succeed.
+	// Client with the required CommonName should succeed.
 	resp, err := newClient(certAllowed, keyAllowed).Get(url)
 	if err != nil {
-		t.Fatalf("client with matching CN failed to make HTTP request: %s", err)
+		t.Fatalf("client with matching CommonName failed to make HTTP request: %s", err)
 	}
 	if v := resp.Header.Get("X-RQLITE-VERSION"); v != "the version" {
 		t.Fatalf("incorrect build version present in HTTP response header, got: %s", v)
 	}
 
-	// Client with a different CN, but signed by the same CA, must be rejected.
+	// Client with a different CommonName, but signed by the same CA, must be rejected.
 	if _, err := newClient(certDenied, keyDenied).Get(url); err == nil {
-		t.Fatalf("client with non-matching CN was not rejected")
+		t.Fatalf("client with non-matching CommonName was not rejected")
 	}
 }
 

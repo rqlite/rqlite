@@ -482,7 +482,7 @@ func startNodeMux(cfg *Config, ln net.Listener) (*tcp.Mux, error) {
 		if cfg.NodeVerifyClient {
 			b.WriteString(", mutual TLS enabled")
 			if cfg.NodeVerifyCommonName != "" {
-				b.WriteString(fmt.Sprintf(", required peer CN %q", cfg.NodeVerifyCommonName))
+				b.WriteString(fmt.Sprintf(", required peer common name %q", cfg.NodeVerifyCommonName))
 			}
 			mux, err = tcp.NewMutualTLSMux(ln, adv, cfg.NodeX509Cert, cfg.NodeX509Key, cfg.NodeX509CACert, cfg.NodeVerifyCommonName)
 		} else {

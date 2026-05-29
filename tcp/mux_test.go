@@ -283,7 +283,7 @@ func TestMutualTLSMux(t *testing.T) {
 	}
 }
 
-func TestMutualTLSMuxVerifyCN(t *testing.T) {
+func TestMutualTLSMuxVerifyCommonName(t *testing.T) {
 	// Generate a CA and three CA-signed certs (server, allowed client, denied client).
 	caCertPEM, caKeyPEM, err := rtls.GenerateCACert(pkix.Name{CommonName: "ca.rqlite.io"}, time.Hour, 2048)
 	if err != nil {
@@ -315,7 +315,7 @@ func TestMutualTLSMuxVerifyCN(t *testing.T) {
 	}
 
 	mustWrite := func(b []byte) string {
-		f, err := os.CreateTemp(t.TempDir(), "rqlite-mux-cn")
+		f, err := os.CreateTemp(t.TempDir(), "rqlite-mux-common-name")
 		if err != nil {
 			t.Fatalf("failed to create temp file: %s", err)
 		}
@@ -353,17 +353,17 @@ func TestMutualTLSMuxVerifyCN(t *testing.T) {
 		})
 	}
 
-	// Allowed CN — handshake should succeed and the connection should be usable.
+	// Allowed CommonName — handshake should succeed and the connection should be usable.
 	conn, err := dial(allowedPEM, allowedKeyPEM)
 	if err != nil {
-		t.Fatalf("expected handshake with matching CN to succeed, got error: %s", err)
+		t.Fatalf("expected handshake with matching CommonName to succeed, got error: %s", err)
 	}
 	if err := conn.Handshake(); err != nil {
-		t.Fatalf("explicit handshake with matching CN failed: %s", err)
+		t.Fatalf("explicit handshake with matching CommonName failed: %s", err)
 	}
 	conn.Close()
 
-	// Denied CN — server must reject. With TLS 1.3 the client's Dial may return
+	// Denied CommonName — server must reject. With TLS 1.3 the client's Dial may return
 	// nil; a subsequent Read surfaces the server's alert.
 	conn, err = dial(deniedPEM, deniedKeyPEM)
 	if err == nil {
@@ -372,10 +372,10 @@ func TestMutualTLSMuxVerifyCN(t *testing.T) {
 		conn.Close()
 	}
 	if err == nil {
-		t.Fatalf("expected handshake with non-matching CN to fail, got nil")
+		t.Fatalf("expected handshake with non-matching CommonName to fail, got nil")
 	}
-	if !strings.Contains(err.Error(), "bad certificate") && !strings.Contains(err.Error(), "did not provide any valid certificate that matches CN") {
-		t.Fatalf("expected CN mismatch error, got: %s", err.Error())
+	if !strings.Contains(err.Error(), "bad certificate") && !strings.Contains(err.Error(), "did not provide any valid certificate that matches CommonName") {
+		t.Fatalf("expected CCommonNameN mismatch error, got: %s", err.Error())
 	}
 }
 
