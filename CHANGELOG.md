@@ -1,4 +1,4 @@
-## v10.2.0 (unreleased)
+## v10.2.0 (May 29th 2026)
 ### New features
 - [PR #2661](https://github.com/rqlite/rqlite/pull/2661), [PR #2679](https://github.com/rqlite/rqlite/pull/2679), [PR #2683](https://github.com/rqlite/rqlite/pull/2683), [PR #2685](https://github.com/rqlite/rqlite/pull/2685): Support verifying mTLS peer Common Name. Thanks @hifi
 - [PR #2681](https://github.com/rqlite/rqlite/pull/2681): Console supports restore from SQLite data.
