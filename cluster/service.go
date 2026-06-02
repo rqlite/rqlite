@@ -5,6 +5,7 @@ import (
 	"compress/gzip"
 	"context"
 	"encoding/binary"
+	"errors"
 	"expvar"
 	"fmt"
 	"io"
@@ -19,11 +20,17 @@ import (
 	"github.com/rqlite/rqlite/v10/auth"
 	"github.com/rqlite/rqlite/v10/cluster/proto"
 	command "github.com/rqlite/rqlite/v10/command/proto"
+	"github.com/rqlite/rqlite/v10/internal/rsync"
 	pb "google.golang.org/protobuf/proto"
 )
 
-// stats captures stats for the Cluster service.
-var stats *expvar.Map
+var (
+	// stats captures stats for the Cluster service.
+	stats *expvar.Map
+
+	// ErrServiceOpen is returned when the service is already open.
+	ErrServiceOpen = errors.New("service already open")
+)
 
 const (
 	numGetNodeAPIRequest   = "num_get_node_api_req"
@@ -39,6 +46,7 @@ const (
 	numStepdownRequest     = "num_stepdown_req"
 	numBroadcastHWMRequest = "num_broadcast_hwm_req"
 	numHWMUpdateDropped    = "num_hwm_update_dropped"
+	numConnRejected        = "num_conn_rejected"
 
 	numClientRetries            = "num_client_retries"
 	numGetNodeAPIRequestRetries = "num_get_node_api_req_retries"
@@ -66,6 +74,10 @@ const (
 	// connection is closed, preventing stalled clients from holding
 	// goroutines indefinitely.
 	connReadTimeout = 30 * time.Second
+
+	// maxConcurrentConns bounds the number of connections the service handles
+	// concurrently, preventing connection floods from spawning unbounded goroutines.
+	maxConcurrentConns = 1024
 )
 
 func init() {
@@ -97,6 +109,7 @@ func ResetStats() {
 	stats.Add(numClientReadTimeouts, 0)
 	stats.Add(numClientWriteTimeouts, 0)
 	stats.Add(numClientForceNewConn, 0)
+	stats.Add(numConnRejected, 0)
 }
 
 // Dialer is the interface dialers must implement.
@@ -165,13 +178,20 @@ type Service struct {
 	credentialStore CredentialStore
 
 	mu      sync.RWMutex
-	https   bool   // Serving HTTPS?
-	apiAddr string // host:port this node serves the HTTP API.
-	version string // Version of software this node is running.
+	https   bool              // Serving HTTPS?
+	apiAddr string            // host:port this node serves the HTTP API.
+	version string            // Version of software this node is running.
+	open    *rsync.AtomicBool // Tracks whether the service is currently open.
 
 	// connTimeout is the maximum time to wait for data on a
 	// connection. Must be set before Open is called.
 	connTimeout time.Duration
+
+	// connLimit is the maximum number of concurrent service connections.
+	connLimit int
+
+	// connLimiterCh limits the number of in-service connections.
+	connLimiterCh chan struct{}
 
 	hwmMu      sync.RWMutex
 	hwmUpdateC chan<- uint64 // Channel for HWM updates
@@ -189,11 +209,20 @@ func New(ln net.Listener, db Database, m Manager, credentialStore CredentialStor
 		logger:          log.New(os.Stderr, "[cluster] ", log.LstdFlags),
 		credentialStore: credentialStore,
 		connTimeout:     connReadTimeout,
+		connLimit:       maxConcurrentConns,
+		open:            rsync.NewAtomicBool(),
 	}
 }
 
 // Open opens the Service.
 func (s *Service) Open() error {
+	if s.open.Is() {
+		return ErrServiceOpen
+	}
+
+	s.connLimiterCh = make(chan struct{}, s.connLimit)
+	s.open.Set()
+
 	go s.serve()
 	s.logger.Println("service listening on", s.addr)
 	return nil
@@ -201,8 +230,11 @@ func (s *Service) Open() error {
 
 // Close closes the service.
 func (s *Service) Close() error {
-	s.ln.Close()
-	return nil
+	err := s.ln.Close()
+	if err == nil {
+		s.open.Unset()
+	}
+	return err
 }
 
 // RegisterHWMUpdate registers a channel to receive highwater mark update requests.
@@ -275,6 +307,21 @@ func (s *Service) Stats() (map[string]any, error) {
 	return st, nil
 }
 
+// SetConnectionLimit sets the maximum number of concurrent service connections.
+// It must be called before Open. Non-positive values use the default limit.
+func (s *Service) SetConnectionLimit(n int) error {
+	if s.open.Is() {
+		return ErrServiceOpen
+	}
+
+	if n <= 0 {
+		n = maxConcurrentConns
+	}
+
+	s.connLimit = n
+	return nil
+}
+
 func (s *Service) serve() error {
 	for {
 		conn, err := s.ln.Accept()
@@ -282,7 +329,16 @@ func (s *Service) serve() error {
 			return err
 		}
 
-		go s.handleConn(conn)
+		select {
+		case s.connLimiterCh <- struct{}{}:
+			go func() {
+				defer func() { <-s.connLimiterCh }()
+				s.handleConn(conn)
+			}()
+		default:
+			_ = conn.Close()
+			stats.Add(numConnRejected, 1)
+		}
 	}
 }
 

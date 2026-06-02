@@ -3,6 +3,7 @@ package cluster
 import (
 	"context"
 	"crypto/tls"
+	"errors"
 	"fmt"
 	"io"
 	"net"
@@ -536,6 +537,100 @@ func Test_ServiceClosesIdleConnection(t *testing.T) {
 	_, err = conn.Read(one)
 	if err != io.EOF {
 		t.Fatalf("expected io.EOF, got: %v", err)
+	}
+}
+
+func Test_ServiceSetConnectionLimitOpen(t *testing.T) {
+	ml := mustNewMockTransport()
+	s := New(ml, mustNewMockDatabase(), mustNewMockManager(), mustNewMockCredentialStore())
+
+	if err := s.Open(); err != nil {
+		t.Fatalf("failed to open cluster service")
+	}
+	defer s.Close()
+
+	if err := s.SetConnectionLimit(1); !errors.Is(err, ErrServiceOpen) {
+		t.Fatalf("expected ErrServiceOpen, got: %v", err)
+	}
+}
+
+func Test_ServiceConnLimiterRejectAndRelease(t *testing.T) {
+	ml := mustNewMockTransport()
+	s := New(ml, mustNewMockDatabase(), mustNewMockManager(), mustNewMockCredentialStore())
+	if err := s.SetConnectionLimit(1); err != nil {
+		t.Fatalf("failed to set connection limit: %s", err)
+	}
+
+	if err := s.Open(); err != nil {
+		t.Fatalf("failed to open cluster service")
+	}
+	defer s.Close()
+
+	md := &mockDialer{Dialer: ml}
+	t.Cleanup(md.CloseAll)
+
+	c1 := NewClient(md, 30*time.Second)
+	_, err := c1.GetNodeMeta(context.Background(), s.Addr(), noRetries, 5*time.Second)
+	if err != nil {
+		t.Fatalf("failed to get node metadata on first connection: %s", err)
+	}
+
+	// The first client's pooled connection remains open and holds the limiter slot.
+	c2 := NewClient(md, 30*time.Second)
+	_, err = c2.GetNodeMeta(context.Background(), s.Addr(), noRetries, 500*time.Millisecond)
+	if err == nil {
+		t.Fatalf("expected request on rejected connection to fail")
+	}
+	if netErr, ok := errors.AsType[net.Error](err); ok && netErr.Timeout() {
+		t.Fatalf("expected connection to be rejected without timing out, got: %v", err)
+	}
+
+	// Releasing the idle connection should free its limiter slot.
+	if err := md.CloseConn(0); err != nil {
+		t.Fatalf("failed to close first connection: %s", err)
+	}
+
+	// A new client request should be accepted once capacity is available again.
+	c3 := NewClient(md, 30*time.Second)
+	_, err = c3.GetNodeMeta(context.Background(), s.Addr(), noRetries, 500*time.Millisecond)
+	if err != nil {
+		t.Fatalf("failed to get node metadata after release: %s", err)
+	}
+}
+
+type mockDialer struct {
+	Dialer
+	mu    sync.Mutex
+	conns []net.Conn
+}
+
+func (d *mockDialer) Dial(address string, timeout time.Duration) (net.Conn, error) {
+	conn, err := d.Dialer.Dial(address, timeout)
+	if err != nil {
+		return nil, err
+	}
+
+	d.mu.Lock()
+	d.conns = append(d.conns, conn)
+	d.mu.Unlock()
+
+	return conn, nil
+}
+
+func (d *mockDialer) CloseConn(index int) error {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	if index < 0 || index >= len(d.conns) {
+		return fmt.Errorf("connection %d not tracked", index)
+	}
+	return d.conns[index].Close()
+}
+
+func (d *mockDialer) CloseAll() {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	for _, conn := range d.conns {
+		_ = conn.Close()
 	}
 }
 
