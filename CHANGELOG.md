@@ -1,3 +1,7 @@
+## v10.2.1 (unreleased)
+### Implementation changes and bug fixes
+- [PR #2686](https://github.com/rqlite/rqlite/pull/2686): Limit number of connections to cluster service. Fixes issue [#2617](https://github.com/rqlite/rqlite/issues/2617). Thanks @shrtyk
+
 ## v10.2.0 (May 29th 2026)
 ### New features
 - [PR #2661](https://github.com/rqlite/rqlite/pull/2661), [PR #2679](https://github.com/rqlite/rqlite/pull/2679), [PR #2683](https://github.com/rqlite/rqlite/pull/2683), [PR #2685](https://github.com/rqlite/rqlite/pull/2685): Support verifying mTLS peer Common Name. Thanks @hifi
