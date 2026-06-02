@@ -77,7 +77,7 @@ const (
 
 	// maxConcurrentConns bounds the number of connections the service handles
 	// concurrently, preventing connection floods from spawning unbounded goroutines.
-	maxConcurrentConns = 1024
+	maxConcurrentConns = 512
 )
 
 func init() {
