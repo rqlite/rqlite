@@ -2541,6 +2541,9 @@ type MockStore struct {
 	readFromFn  func(r io.Reader) (int64, error)
 	committedFn func(timeout time.Duration) (uint64, error)
 	stepdownFn  func(wait bool, id string) error
+	setKeyFn    func(key string, value []byte) (uint64, error)
+	getKeyFn    func(key string, level command.ConsistencyLevel, freshness int64, freshnessStrict bool, linearizableTimeout int64) ([]byte, uint64, error)
+	deleteKeyFn func(key string) (uint64, error)
 	leaderAddr  string
 	notReady    bool // Default value is true, easier to test.
 }
@@ -2648,6 +2651,28 @@ func (m *MockStore) Stepdown(wait bool, id string) error {
 
 func (m *MockStore) LeaderAddr() (string, error) {
 	return m.leaderAddr, nil
+}
+
+func (m *MockStore) SetKey(ctx context.Context, key string, value []byte) (uint64, error) {
+	if m.setKeyFn != nil {
+		return m.setKeyFn(key, value)
+	}
+	return 0, nil
+}
+
+func (m *MockStore) GetKey(ctx context.Context, key string, level command.ConsistencyLevel,
+	freshness int64, freshnessStrict bool, linearizableTimeout int64) ([]byte, uint64, error) {
+	if m.getKeyFn != nil {
+		return m.getKeyFn(key, level, freshness, freshnessStrict, linearizableTimeout)
+	}
+	return nil, 0, nil
+}
+
+func (m *MockStore) DeleteKey(ctx context.Context, key string) (uint64, error) {
+	if m.deleteKeyFn != nil {
+		return m.deleteKeyFn(key)
+	}
+	return 0, nil
 }
 
 type mockClusterService struct {

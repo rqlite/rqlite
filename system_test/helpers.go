@@ -1224,3 +1224,52 @@ func testPoll(t *testing.T, f func() (bool, error), period time.Duration, timeou
 func sleepForSecond() {
 	time.Sleep(mustParseDuration("1s"))
 }
+
+// KVPut sends an HTTP PUT to /kv/<key> with the supplied value as the body.
+// Returns the HTTP status code.
+func (n *Node) KVPut(key string, value []byte) (int, error) {
+	u := "http://" + n.APIAddr + "/kv/" + url.PathEscape(key)
+	req, err := http.NewRequest(http.MethodPut, u, bytes.NewReader(value))
+	if err != nil {
+		return 0, err
+	}
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return 0, err
+	}
+	defer resp.Body.Close()
+	io.Copy(io.Discard, resp.Body)
+	return resp.StatusCode, nil
+}
+
+// KVGet sends an HTTP GET to /kv/<key>. Returns the HTTP status code and the
+// raw response body.
+func (n *Node) KVGet(key string) (int, []byte, error) {
+	u := "http://" + n.APIAddr + "/kv/" + url.PathEscape(key)
+	resp, err := http.Get(u)
+	if err != nil {
+		return 0, nil, err
+	}
+	defer resp.Body.Close()
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return resp.StatusCode, nil, err
+	}
+	return resp.StatusCode, body, nil
+}
+
+// KVDelete sends an HTTP DELETE to /kv/<key>. Returns the HTTP status code.
+func (n *Node) KVDelete(key string) (int, error) {
+	u := "http://" + n.APIAddr + "/kv/" + url.PathEscape(key)
+	req, err := http.NewRequest(http.MethodDelete, u, nil)
+	if err != nil {
+		return 0, err
+	}
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return 0, err
+	}
+	defer resp.Body.Close()
+	io.Copy(io.Discard, resp.Body)
+	return resp.StatusCode, nil
+}

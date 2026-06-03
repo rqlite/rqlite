@@ -481,6 +481,42 @@ func Test_AuthPermsAllUsers(t *testing.T) {
 	}
 }
 
+func Test_AuthPermKV(t *testing.T) {
+	const jsonStream = `
+		[
+			{
+				"username": "kvuser",
+				"password": "kvpw",
+				"perms": ["kv"]
+			},
+			{
+				"username": "alluser",
+				"password": "allpw",
+				"perms": ["all"]
+			}
+		]
+	`
+
+	store := NewCredentialsStore()
+	if err := store.Load(strings.NewReader(jsonStream)); err != nil {
+		t.Fatalf("failed to load credentials: %s", err.Error())
+	}
+
+	if !store.AA("kvuser", "kvpw", PermKV) {
+		t.Fatalf("kvuser not authorized for PermKV")
+	}
+	if store.AA("kvuser", "kvpw", PermExecute) {
+		t.Fatalf("kvuser unexpectedly authorized for PermExecute")
+	}
+	if store.AA("kvuser", "kvpw", PermQuery) {
+		t.Fatalf("kvuser unexpectedly authorized for PermQuery")
+	}
+
+	if !store.AA("alluser", "allpw", PermKV) {
+		t.Fatalf("alluser not authorized for PermKV via PermAll")
+	}
+}
+
 func mustWriteTempFile(t *testing.T, s string) string {
 	f, err := os.CreateTemp(t.TempDir(), "rqlite-test")
 	if err != nil {
