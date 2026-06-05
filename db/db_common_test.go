@@ -656,7 +656,7 @@ func Test_DB_STRICT(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to insert record: %s", err.Error())
 	}
-	if exp, got := `[{"error":"cannot store TEXT value in BLOB column foo.data"}]`, asJSON(res); exp != got {
+	if exp, got := `[{"error":"cannot store TEXT value in BLOB column foo.data","error_v2":{"code":19,"extended_code":3091,"system_errno":0}}]`, asJSON(res); exp != got {
 		t.Fatalf("unexpected results for query\nexp: %s\ngot: %s", exp, got)
 	}
 
@@ -1239,7 +1239,7 @@ func Test_DB_SimpleFailingStatements_Execute(t *testing.T) {
 	if err != nil {
 		t.Fatalf("error executing insertion into nonexistent table: %s", err.Error())
 	}
-	if exp, got := `[{"error":"no such table: foo"}]`, asJSON(r); exp != got {
+	if exp, got := `[{"error":"no such table: foo","error_v2":{"code":1,"extended_code":1,"system_errno":0}}]`, asJSON(r); exp != got {
 		t.Fatalf("unexpected results for query\nexp: %s\ngot: %s", exp, got)
 	}
 
@@ -1254,7 +1254,7 @@ func Test_DB_SimpleFailingStatements_Execute(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to attempt creation of duplicate table: %s", err.Error())
 	}
-	if exp, got := `[{"error":"table foo already exists"}]`, asJSON(r); exp != got {
+	if exp, got := `[{"error":"table foo already exists","error_v2":{"code":1,"extended_code":1,"system_errno":0}}]`, asJSON(r); exp != got {
 		t.Fatalf("unexpected results for query\nexp: %s\ngot: %s", exp, got)
 	}
 
@@ -1269,13 +1269,13 @@ func Test_DB_SimpleFailingStatements_Execute(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to attempt duplicate record insertion: %s", err.Error())
 	}
-	if exp, got := `[{"error":"UNIQUE constraint failed: foo.id"}]`, asJSON(r); exp != got {
+	if exp, got := `[{"error":"UNIQUE constraint failed: foo.id","error_v2":{"code":19,"extended_code":1555,"system_errno":0}}]`, asJSON(r); exp != got {
 		t.Fatalf("unexpected results for query\nexp: %s\ngot: %s", exp, got)
 	}
 
 	r, err = db.ExecuteStringStmt(`utter nonsense`)
 	if err != nil {
-		if exp, got := `[{"error":"near \"utter\": syntax error"}]`, asJSON(r); exp != got {
+		if exp, got := `[{"error":"near \"utter\": syntax error","error_v2":{"code":1,"extended_code":1,"system_errno":0}}]`, asJSON(r); exp != got {
 			t.Fatalf("unexpected results for query\nexp: %s\ngot: %s", exp, got)
 		}
 	}
@@ -1869,7 +1869,7 @@ func Test_DB_SimpleRequestTx(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to make request: %s", err.Error())
 	}
-	if exp, got := `[{"last_insert_id":2,"rows_affected":1},{"error":"UNIQUE constraint failed: foo.id"}]`, asJSON(r); exp != got {
+	if exp, got := `[{"last_insert_id":2,"rows_affected":1},{"error":"UNIQUE constraint failed: foo.id","error_v2":{"code":19,"extended_code":1555,"system_errno":0}}]`, asJSON(r); exp != got {
 		t.Fatalf("unexpected results for request\nexp: %s\ngot: %s", exp, got)
 	}
 }
@@ -1929,7 +1929,7 @@ func Test_DB_UniqueConstraints(t *testing.T) {
 	if err != nil {
 		t.Fatalf("error executing insertion into table: %s", err.Error())
 	}
-	if exp, got := `[{"error":"UNIQUE constraint failed: foo.name"}]`, asJSON(r); exp != got {
+	if exp, got := `[{"error":"UNIQUE constraint failed: foo.name","error_v2":{"code":19,"extended_code":2067,"system_errno":0}}]`, asJSON(r); exp != got {
 		t.Fatalf("unexpected results for INSERT\nexp: %s\ngot: %s", exp, got)
 	}
 }
@@ -1964,7 +1964,7 @@ func Test_DB_PartialFail(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to insert records: %s", err.Error())
 	}
-	if exp, got := `[{"last_insert_id":1,"rows_affected":1},{"last_insert_id":2,"rows_affected":1},{"error":"UNIQUE constraint failed: foo.id"},{"last_insert_id":4,"rows_affected":1}]`, asJSON(r); exp != got {
+	if exp, got := `[{"last_insert_id":1,"rows_affected":1},{"last_insert_id":2,"rows_affected":1},{"error":"UNIQUE constraint failed: foo.id","error_v2":{"code":19,"extended_code":1555,"system_errno":0}},{"last_insert_id":4,"rows_affected":1}]`, asJSON(r); exp != got {
 		t.Fatalf("unexpected results for query\nexp: %s\ngot: %s", exp, got)
 	}
 	ro, err := db.QueryStringStmt(`SELECT * FROM foo`)
