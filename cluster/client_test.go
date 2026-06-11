@@ -704,7 +704,7 @@ func Test_ClientBroadcast_WithError(t *testing.T) {
 	}
 }
 
-func Test_readProtoResponse_OversizedMessage(t *testing.T) {
+func Test_ClientGetNodeMeta_OversizedResponse(t *testing.T) {
 	// Create a server that sends an oversized message length prefix.
 	srv := servicetest.NewService()
 	srv.Handler = func(conn net.Conn) {
@@ -725,7 +725,7 @@ func Test_readProtoResponse_OversizedMessage(t *testing.T) {
 	defer srv.Close()
 
 	c := NewClient(&simpleDialer{}, time.Second)
-	_, err := c.GetNodeMeta(srv.Addr(), nil, time.Second, defaultMaxRetries)
+	_, err := c.GetNodeMeta(context.Background(), srv.Addr(), defaultMaxRetries, time.Second)
 	if err == nil {
 		t.Fatal("expected error for oversized message, got nil")
 	}
