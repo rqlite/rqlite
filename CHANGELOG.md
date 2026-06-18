@@ -1,6 +1,8 @@
-## v10.2.1 (unreleased)
+## v10.2.1 (June 17th 2026)
 ### Implementation changes and bug fixes
 - [PR #2686](https://github.com/rqlite/rqlite/pull/2686): Limit number of connections to cluster service. Fixes issue [#2617](https://github.com/rqlite/rqlite/issues/2617). Thanks @shrtyk
+- [PR #2688](https://github.com/rqlite/rqlite/pull/2688): Upgrade dependencies via `go get`.
+- [PR #2689](https://github.com/rqlite/rqlite/pull/2689): Upgrade to SQLite 3.35.2.
 
 ## v10.2.0 (May 29th 2026)
 ### New features
