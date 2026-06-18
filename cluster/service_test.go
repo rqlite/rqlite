@@ -736,6 +736,7 @@ func mustNewMockDatabase() *mockDatabase {
 
 type MockManager struct {
 	removeNodeFn func(rn *command.RemoveNodeRequest) error
+	demoteNodeFn func(dn *command.DemoteNodeRequest) error
 	notifyFn     func(n *command.NotifyRequest) error
 	joinFn       func(j *command.JoinRequest) error
 	leaderAddrFn func() (string, error)
@@ -748,6 +749,13 @@ func (m *MockManager) Remove(ctx context.Context, rn *command.RemoveNodeRequest)
 		return nil
 	}
 	return m.removeNodeFn(rn)
+}
+
+func (m *MockManager) Demote(ctx context.Context, dn *command.DemoteNodeRequest) error {
+	if m.demoteNodeFn == nil {
+		return nil
+	}
+	return m.demoteNodeFn(dn)
 }
 
 func (m *MockManager) Notify(n *command.NotifyRequest) error {

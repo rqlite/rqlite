@@ -20,6 +20,7 @@ type mockStore struct {
 	loadFn       func(ctx context.Context, lr *proto.LoadRequest) error
 	backupFn     func(ctx context.Context, br *proto.BackupRequest, dst io.Writer) error
 	removeFn     func(ctx context.Context, rn *proto.RemoveNodeRequest) error
+	demoteFn     func(ctx context.Context, dn *proto.DemoteNodeRequest) error
 	stepdownFn   func(wait bool, id string) error
 	leaderAddrFn func() (string, error)
 }
@@ -66,6 +67,13 @@ func (m *mockStore) Remove(ctx context.Context, rn *proto.RemoveNodeRequest) err
 	return nil
 }
 
+func (m *mockStore) Demote(ctx context.Context, dn *proto.DemoteNodeRequest) error {
+	if m.demoteFn != nil {
+		return m.demoteFn(ctx, dn)
+	}
+	return nil
+}
+
 func (m *mockStore) Stepdown(wait bool, id string) error {
 	if m.stepdownFn != nil {
 		return m.stepdownFn(wait, id)
@@ -88,6 +96,7 @@ type mockCluster struct {
 	backupFn     func(ctx context.Context, br *proto.BackupRequest, nodeAddr string, creds *clstrPB.Credentials, timeout time.Duration, w io.Writer) error
 	loadFn       func(ctx context.Context, lr *proto.LoadRequest, nodeAddr string, creds *clstrPB.Credentials, timeout time.Duration, retries int) error
 	removeNodeFn func(ctx context.Context, rn *proto.RemoveNodeRequest, nodeAddr string, creds *clstrPB.Credentials, timeout time.Duration) error
+	demoteNodeFn func(ctx context.Context, dn *proto.DemoteNodeRequest, nodeAddr string, creds *clstrPB.Credentials, timeout time.Duration) error
 	stepdownFn   func(ctx context.Context, sr *proto.StepdownRequest, nodeAddr string, creds *clstrPB.Credentials, timeout time.Duration) error
 }
 
@@ -129,6 +138,13 @@ func (m *mockCluster) Load(ctx context.Context, lr *proto.LoadRequest, nodeAddr 
 func (m *mockCluster) RemoveNode(ctx context.Context, rn *proto.RemoveNodeRequest, nodeAddr string, creds *clstrPB.Credentials, timeout time.Duration) error {
 	if m.removeNodeFn != nil {
 		return m.removeNodeFn(ctx, rn, nodeAddr, creds, timeout)
+	}
+	return nil
+}
+
+func (m *mockCluster) DemoteNode(ctx context.Context, dn *proto.DemoteNodeRequest, nodeAddr string, creds *clstrPB.Credentials, timeout time.Duration) error {
+	if m.demoteNodeFn != nil {
+		return m.demoteNodeFn(ctx, dn, nodeAddr, creds, timeout)
 	}
 	return nil
 }
@@ -721,6 +737,64 @@ func Test_Remove_NotLeader_Forward(t *testing.T) {
 	p := newTestProxy(s, c)
 
 	addr, err := p.Remove(context.Background(), &proto.RemoveNodeRequest{Id: "node1"}, nil, time.Second, false)
+	if err != nil {
+		t.Fatalf("unexpected error: %s", err)
+	}
+	if addr != "leader:4002" {
+		t.Fatalf("expected addr leader:4002, got %s", addr)
+	}
+}
+
+func Test_Demote_LocalSuccess(t *testing.T) {
+	t.Parallel()
+	s := &mockStore{}
+	p := newTestProxy(s, &mockCluster{})
+
+	addr, err := p.Demote(context.Background(), &proto.DemoteNodeRequest{Id: "node1"}, nil, time.Second, false)
+	if err != nil {
+		t.Fatalf("unexpected error: %s", err)
+	}
+	if addr != "" {
+		t.Fatalf("expected empty addr, got %s", addr)
+	}
+}
+
+func Test_Demote_NotLeader_NoForward(t *testing.T) {
+	t.Parallel()
+	s := &mockStore{
+		demoteFn: func(ctx context.Context, dn *proto.DemoteNodeRequest) error {
+			return store.ErrNotLeader
+		},
+	}
+	p := newTestProxy(s, &mockCluster{})
+
+	_, err := p.Demote(context.Background(), &proto.DemoteNodeRequest{Id: "node1"}, nil, time.Second, true)
+	if !errors.Is(err, ErrNotLeader) {
+		t.Fatalf("expected ErrNotLeader, got %v", err)
+	}
+}
+
+func Test_Demote_NotLeader_Forward(t *testing.T) {
+	t.Parallel()
+	s := &mockStore{
+		demoteFn: func(ctx context.Context, dn *proto.DemoteNodeRequest) error {
+			return store.ErrNotLeader
+		},
+		leaderAddrFn: func() (string, error) {
+			return "leader:4002", nil
+		},
+	}
+	c := &mockCluster{
+		demoteNodeFn: func(ctx context.Context, dn *proto.DemoteNodeRequest, nodeAddr string, creds *clstrPB.Credentials, timeout time.Duration) error {
+			if nodeAddr != "leader:4002" {
+				t.Fatalf("expected forwarding to leader:4002, got %s", nodeAddr)
+			}
+			return nil
+		},
+	}
+	p := newTestProxy(s, c)
+
+	addr, err := p.Demote(context.Background(), &proto.DemoteNodeRequest{Id: "node1"}, nil, time.Second, false)
 	if err != nil {
 		t.Fatalf("unexpected error: %s", err)
 	}

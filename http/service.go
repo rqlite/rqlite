@@ -496,6 +496,8 @@ func (s *Service) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		s.handleReap(w, r)
 	case strings.HasPrefix(r.URL.Path, "/remove"):
 		s.handleRemove(w, r, params)
+	case strings.HasPrefix(r.URL.Path, "/demote"):
+		s.handleDemote(w, r, params)
 	case strings.HasPrefix(r.URL.Path, "/status"):
 		stats.Add(numStatus, 1)
 		s.handleStatus(w, r, params)
@@ -580,6 +582,65 @@ func (s *Service) handleRemove(w http.ResponseWriter, r *http.Request, qp QueryP
 		}
 		if errors.Is(err, proxy.ErrUnauthorized) {
 			http.Error(w, "remote remove node not authorized", http.StatusUnauthorized)
+			return
+		}
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	w.Header().Set(ServedByHTTPHeader, addr)
+}
+
+// handleDemote handles cluster-demote requests.
+func (s *Service) handleDemote(w http.ResponseWriter, r *http.Request, qp QueryParams) {
+	if !s.CheckRequestPerm(r, auth.PermDemote) {
+		w.WriteHeader(http.StatusUnauthorized)
+		return
+	}
+
+	if r.Method != "POST" {
+		w.WriteHeader(http.StatusMethodNotAllowed)
+		return
+	}
+
+	b, err := io.ReadAll(r.Body)
+	if err != nil {
+		w.WriteHeader(http.StatusBadRequest)
+		return
+	}
+	m := map[string]string{}
+	if err := json.Unmarshal(b, &m); err != nil {
+		w.WriteHeader(http.StatusBadRequest)
+		return
+	}
+
+	if len(m) != 1 {
+		w.WriteHeader(http.StatusBadRequest)
+		return
+	}
+
+	remoteID, ok := m["id"]
+	if !ok {
+		w.WriteHeader(http.StatusBadRequest)
+		return
+	}
+
+	dn := &proto.DemoteNodeRequest{
+		Id: remoteID,
+	}
+
+	addr, err := s.proxy.Demote(r.Context(), dn, makeCredentials(r), qp.Timeout(defaultTimeout), qp.Redirect())
+	if err != nil {
+		if errors.Is(err, proxy.ErrNotLeader) {
+			s.DoRedirect(w, r, qp)
+			return
+		}
+		if errors.Is(err, proxy.ErrLeaderNotFound) {
+			stats.Add(numLeaderNotFound, 1)
+			http.Error(w, proxy.ErrLeaderNotFound.Error(), http.StatusServiceUnavailable)
+			return
+		}
+		if errors.Is(err, proxy.ErrUnauthorized) {
+			http.Error(w, "remote demote node not authorized", http.StatusUnauthorized)
 			return
 		}
 		http.Error(w, err.Error(), http.StatusInternalServerError)
