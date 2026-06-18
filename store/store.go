@@ -2245,8 +2245,6 @@ func (s *Store) Demote(ctx context.Context, dn *proto.DemoteNodeRequest) error {
 	}
 
 	id := dn.Id
-
-	s.logger.Printf("received request to demote node %s", id)
 	if err := s.demote(id); err != nil {
 		return err
 	}
