@@ -746,7 +746,6 @@ func Test_Remove_NotLeader_Forward(t *testing.T) {
 }
 
 func Test_Demote_LocalSuccess(t *testing.T) {
-	t.Parallel()
 	s := &mockStore{}
 	p := newTestProxy(s, &mockCluster{})
 
@@ -760,7 +759,6 @@ func Test_Demote_LocalSuccess(t *testing.T) {
 }
 
 func Test_Demote_NotLeader_NoForward(t *testing.T) {
-	t.Parallel()
 	s := &mockStore{
 		demoteFn: func(ctx context.Context, dn *proto.DemoteNodeRequest) error {
 			return store.ErrNotLeader
@@ -775,7 +773,6 @@ func Test_Demote_NotLeader_NoForward(t *testing.T) {
 }
 
 func Test_Demote_NotLeader_Forward(t *testing.T) {
-	t.Parallel()
 	s := &mockStore{
 		demoteFn: func(ctx context.Context, dn *proto.DemoteNodeRequest) error {
 			return store.ErrNotLeader
