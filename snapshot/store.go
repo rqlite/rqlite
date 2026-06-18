@@ -769,7 +769,7 @@ func (s *Store) Check() error {
 	if err != nil {
 		return err
 	}
-	if !emp {
+	if emp {
 		return nil
 	}
 
