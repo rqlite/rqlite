@@ -1033,12 +1033,15 @@ func Test_Store_Check_RemovesTmpDirs(t *testing.T) {
 		t.Fatalf("Failed to write file in tmp dir: %v", err)
 	}
 
-	// Re-open the store — check() should clean up the .tmp directory.
+	// Re-open the store — Check() should clean up the .tmp directory.
 	store2, err := NewStore(dir)
 	if err != nil {
 		t.Fatalf("Failed to re-open store: %v", err)
 	}
 	defer store2.Close()
+	if err := store2.Check(); err != nil {
+		t.Fatalf("failed to check store: %s", err.Error())
+	}
 
 	// The .tmp directory should be gone.
 	if fsutil.PathExists(tmpDir) {
@@ -1134,6 +1137,9 @@ func Test_Store_Check_ResumesReapPlan(t *testing.T) {
 		t.Fatalf("Failed to re-open store2: %v", err)
 	}
 	defer store3.Close()
+	if err := store3.Check(); err != nil {
+		t.Fatalf("failed to check store: %s", err.Error())
+	}
 
 	// The plan file should be gone.
 	if fsutil.FileExists(planPath) {
