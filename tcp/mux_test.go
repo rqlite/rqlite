@@ -392,11 +392,11 @@ func (m *mockAddr) String() string {
 	return m.Addr
 }
 
-// Test_MuxCloseConns verifies that CloseConns force-closes a demultiplexed
-// connection, unblocking a consumer that is parked in a read with no deadline.
-// This models a node receiving a Raft snapshot from a peer that goes silent
-// mid-transfer; without a force-close the read has no upper bound and would
-// block shutdown forever. See https://github.com/rqlite/rqlite/issues/2687.
+// Test_MuxCloseConns verifies that CloseConns actually closes the underlying
+// socket of a tracked connection (not merely drops it from the tracking set),
+// so a peer parked in a read on it is unblocked. This is the property that lets
+// a node shut down while parked reading a Raft snapshot body from a peer that
+// has gone silent. See https://github.com/rqlite/rqlite/issues/2687.
 func Test_MuxCloseConns(t *testing.T) {
 	tcpListener := mustTCPListener("127.0.0.1:0")
 	defer tcpListener.Close()
@@ -408,46 +408,25 @@ func Test_MuxCloseConns(t *testing.T) {
 	if !testing.Verbose() {
 		mux.Logger = log.New(io.Discard, "", 0)
 	}
-	ln := mux.Listen(7)
 	go mux.Serve()
 
-	// Consumer accepts the demuxed conn and then blocks reading from it, just
-	// as Raft does while receiving a snapshot body.
-	accepted := make(chan struct{})
-	readReturned := make(chan error, 1)
-	go func() {
-		conn, err := ln.Accept()
-		if err != nil {
-			close(accepted)
-			readReturned <- err
-			return
-		}
-		close(accepted)
-		var b [1]byte
-		_, err = conn.Read(b[:])
-		readReturned <- err
-	}()
-
-	// Client connects and sends only the header byte, then goes silent.
+	// Connecting is enough for the Mux to accept and track the connection.
 	client, err := net.Dial("tcp", tcpListener.Addr().String())
 	if err != nil {
 		t.Fatalf("failed to dial mux: %s", err.Error())
 	}
 	defer client.Close()
-	if _, err := client.Write([]byte{7}); err != nil {
-		t.Fatalf("failed to write header byte: %s", err.Error())
+	if !waitForTrackedConns(mux, 1, 5*time.Second) {
+		t.Fatalf("connection was not tracked, got %d", numTrackedConns(mux))
 	}
 
-	// Wait until the consumer has the connection. Once Accept returns the conn
-	// has been registered (registration happens before hand-off).
-	select {
-	case <-accepted:
-	case <-time.After(5 * time.Second):
-		t.Fatal("timed out waiting for connection to be accepted")
-	}
-	if got := numTrackedConns(mux); got != 1 {
-		t.Fatalf("expected 1 tracked connection, got %d", got)
-	}
+	// Park a read on the connection; nothing is ever sent on it.
+	readReturned := make(chan error, 1)
+	go func() {
+		var b [1]byte
+		_, err := client.Read(b[:])
+		readReturned <- err
+	}()
 
 	// Force-close all connections; the parked read must return promptly.
 	if err := mux.CloseConns(); err != nil {
