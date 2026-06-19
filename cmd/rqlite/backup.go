@@ -137,9 +137,12 @@ func restore(ctx *cli.Context, client *httpcl.Client, filename string) error {
 		contentType = "application/octet-stream"
 	}
 
+	// Restoring uploads the whole file and waits for the node to load it, which
+	// can take far longer than a normal request, so use a client without an
+	// overall request timeout to avoid aborting the upload mid-transfer.
 	u := fmt.Sprintf("%sdb/load", client.Prefix)
 	headers := http.Header{"Content-Type": {contentType}}
-	resp, err := client.PostWithHeaders(u, bytes.NewReader(restoreFile), headers)
+	resp, err := client.WithoutTimeout().PostWithHeaders(u, bytes.NewReader(restoreFile), headers)
 	if err != nil {
 		return err
 	}
@@ -192,8 +195,12 @@ func boot(ctx *cli.Context, client *httpcl.Client, filename string) error {
 	}
 	defer fd.Close()
 
+	// Booting streams a potentially large SQLite file, and the node must finish
+	// loading it before responding, so this can take far longer than a normal
+	// request. Use a client without an overall request timeout to avoid aborting
+	// the upload mid-transfer.
 	u := fmt.Sprintf("%sboot", client.Prefix)
-	resp, err := client.Post(u, fd)
+	resp, err := client.WithoutTimeout().Post(u, fd)
 	if err != nil {
 		return err
 	}
