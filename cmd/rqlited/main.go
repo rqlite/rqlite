@@ -272,6 +272,15 @@ func main() {
 	muxLn.Close()
 	defer mux.Close()
 
+	// Force-close any in-flight node-to-node connections (e.g. a Raft snapshot
+	// transfer from a peer that is itself shutting down). Such reads have no
+	// deadline, so without this the pre-close snapshot and Raft shutdown in
+	// str.Close below could block indefinitely on the Raft run goroutine.
+	// See https://github.com/rqlite/rqlite/issues/2687.
+	if err := mux.CloseConns(); err != nil {
+		log.Printf("failed to close node-to-node connections during shutdown: %s", err.Error())
+	}
+
 	if err := str.Close(true); err != nil {
 		log.Printf("failed to close store: %s", err.Error())
 	}

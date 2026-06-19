@@ -392,6 +392,137 @@ func (m *mockAddr) String() string {
 	return m.Addr
 }
 
+// Test_MuxCloseConns verifies that CloseConns force-closes a demultiplexed
+// connection, unblocking a consumer that is parked in a read with no deadline.
+// This models a node receiving a Raft snapshot from a peer that goes silent
+// mid-transfer; without a force-close the read has no upper bound and would
+// block shutdown forever. See https://github.com/rqlite/rqlite/issues/2687.
+func Test_MuxCloseConns(t *testing.T) {
+	tcpListener := mustTCPListener("127.0.0.1:0")
+	defer tcpListener.Close()
+
+	mux, err := NewMux(tcpListener, nil)
+	if err != nil {
+		t.Fatalf("failed to create mux: %s", err.Error())
+	}
+	if !testing.Verbose() {
+		mux.Logger = log.New(io.Discard, "", 0)
+	}
+	ln := mux.Listen(7)
+	go mux.Serve()
+
+	// Consumer accepts the demuxed conn and then blocks reading from it, just
+	// as Raft does while receiving a snapshot body.
+	accepted := make(chan struct{})
+	readReturned := make(chan error, 1)
+	go func() {
+		conn, err := ln.Accept()
+		if err != nil {
+			close(accepted)
+			readReturned <- err
+			return
+		}
+		close(accepted)
+		var b [1]byte
+		_, err = conn.Read(b[:])
+		readReturned <- err
+	}()
+
+	// Client connects and sends only the header byte, then goes silent.
+	client, err := net.Dial("tcp", tcpListener.Addr().String())
+	if err != nil {
+		t.Fatalf("failed to dial mux: %s", err.Error())
+	}
+	defer client.Close()
+	if _, err := client.Write([]byte{7}); err != nil {
+		t.Fatalf("failed to write header byte: %s", err.Error())
+	}
+
+	// Wait until the consumer has the connection. Once Accept returns the conn
+	// has been registered (registration happens before hand-off).
+	select {
+	case <-accepted:
+	case <-time.After(5 * time.Second):
+		t.Fatal("timed out waiting for connection to be accepted")
+	}
+	if got := numTrackedConns(mux); got != 1 {
+		t.Fatalf("expected 1 tracked connection, got %d", got)
+	}
+
+	// Force-close all connections; the parked read must return promptly.
+	if err := mux.CloseConns(); err != nil {
+		t.Fatalf("CloseConns returned error: %s", err.Error())
+	}
+	select {
+	case err := <-readReturned:
+		if err == nil {
+			t.Fatal("expected blocked read to return an error after CloseConns")
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("blocked read did not return after CloseConns")
+	}
+
+	// The tracking set must be empty again, so it does not grow without bound.
+	if got := numTrackedConns(mux); got != 0 {
+		t.Fatalf("expected 0 tracked connections after close, got %d", got)
+	}
+}
+
+// Test_MuxConnDeregisterOnClose verifies that a demultiplexed connection
+// deregisters itself from the Mux when closed normally by its consumer, so the
+// tracking set does not leak over the lifetime of the node.
+func Test_MuxConnDeregisterOnClose(t *testing.T) {
+	tcpListener := mustTCPListener("127.0.0.1:0")
+	defer tcpListener.Close()
+
+	mux, err := NewMux(tcpListener, nil)
+	if err != nil {
+		t.Fatalf("failed to create mux: %s", err.Error())
+	}
+	if !testing.Verbose() {
+		mux.Logger = log.New(io.Discard, "", 0)
+	}
+	ln := mux.Listen(9)
+	go mux.Serve()
+
+	closed := make(chan struct{})
+	go func() {
+		conn, err := ln.Accept()
+		if err != nil {
+			close(closed)
+			return
+		}
+		conn.Close()
+		close(closed)
+	}()
+
+	client, err := net.Dial("tcp", tcpListener.Addr().String())
+	if err != nil {
+		t.Fatalf("failed to dial mux: %s", err.Error())
+	}
+	defer client.Close()
+	if _, err := client.Write([]byte{9}); err != nil {
+		t.Fatalf("failed to write header byte: %s", err.Error())
+	}
+
+	select {
+	case <-closed:
+	case <-time.After(5 * time.Second):
+		t.Fatal("timed out waiting for consumer to close connection")
+	}
+	if got := numTrackedConns(mux); got != 0 {
+		t.Fatalf("expected 0 tracked connections after consumer close, got %d", got)
+	}
+}
+
+// numTrackedConns returns the number of connections currently tracked by the
+// Mux for force-close on shutdown.
+func numTrackedConns(mux *Mux) int {
+	mux.connsMu.Lock()
+	defer mux.connsMu.Unlock()
+	return len(mux.conns)
+}
+
 // mustTCPListener returns a listener on bind, or panics.
 func mustTCPListener(bind string) net.Listener {
 	l, err := net.Listen("tcp", bind)
