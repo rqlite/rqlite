@@ -602,9 +602,6 @@ func (s *Store) Open() (retErr error) {
 	if err != nil {
 		return fmt.Errorf("failed to create snapshot store: %s", err)
 	}
-	if err := snapshotStore.Check(); err != nil {
-		return err
-	}
 	snapshotStore.SetNoVerifyDB(s.NoVerifyDB)
 	snapshotStore.LogReaping = s.hcLogLevel() < hclog.Warn
 	if s.SnapshotReapThreshold > 0 {
@@ -810,6 +807,18 @@ func (s *Store) Open() (retErr error) {
 					return fmt.Errorf("failed to remove temporary file %s: %s", f, err.Error())
 				}
 			}
+		}
+	}
+
+	// If Raft will restore from a snapshot on start, verify the snapshot's
+	// integrity now, so the cost and any corruption are surfaced explicitly at
+	// startup before Raft reads it. If we won't restore on start (e.g. the clean
+	// snapshot fast path), this is skipped: the check then runs lazily the first
+	// time snapshot data is actually used -- a reap, a snapshot transfer to a
+	// peer, or a later restore.
+	if !raftConfig.NoSnapshotRestoreOnStart {
+		if err := snapshotStore.Verify(); err != nil {
+			return fmt.Errorf("snapshot integrity check failed: %s", err)
 		}
 	}
 
