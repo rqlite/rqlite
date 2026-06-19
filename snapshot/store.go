@@ -28,7 +28,7 @@ const (
 	reapPlanFile   = "REAP_PLAN"
 
 	defaultReapThreshold = 4
-	defaultReadTimeout   = 30 * time.Second
+	defaultReadTimeout   = 2 * time.Minute
 )
 
 const (
