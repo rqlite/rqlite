@@ -2,6 +2,7 @@
 ### Implementation changes and bug fixes
 - [PR #2695](https://github.com/rqlite/rqlite/pull/2695): Check snapshot store integrity before first actual use.  Triggered by [#2687](https://github.com/rqlite/rqlite/issues/2687).
 - [PR #2696](https://github.com/rqlite/rqlite/pull/2696): Disable HTTP timeout for boot and restore operations via the shell.
+- [PR #2697](https://github.com/rqlite/rqlite/pull/2697): HTTP layer ignores `ErrNoWALToSnapshot` when snapshotting.
 
 ## v10.2.2 (June 19th 2026)
 ### Implementation changes and bug fixes
