@@ -392,6 +392,117 @@ func (m *mockAddr) String() string {
 	return m.Addr
 }
 
+// Test_MuxCloseConns verifies that CloseConns actually closes the underlying
+// socket of a tracked connection (not merely drops it from the tracking set),
+// so a peer parked in a read on it is unblocked. This is the property that lets
+// a node shut down while parked reading a Raft snapshot body from a peer that
+// has gone silent. See https://github.com/rqlite/rqlite/issues/2687.
+func Test_MuxCloseConns(t *testing.T) {
+	tcpListener := mustTCPListener("127.0.0.1:0")
+	defer tcpListener.Close()
+
+	mux, err := NewMux(tcpListener, nil)
+	if err != nil {
+		t.Fatalf("failed to create mux: %s", err.Error())
+	}
+	if !testing.Verbose() {
+		mux.Logger = log.New(io.Discard, "", 0)
+	}
+	go mux.Serve()
+
+	// Connecting is enough for the Mux to accept and track the connection.
+	client, err := net.Dial("tcp", tcpListener.Addr().String())
+	if err != nil {
+		t.Fatalf("failed to dial mux: %s", err.Error())
+	}
+	defer client.Close()
+	if !waitForTrackedConns(mux, 1, 5*time.Second) {
+		t.Fatalf("connection was not tracked, got %d", numTrackedConns(mux))
+	}
+
+	// Park a read on the connection; nothing is ever sent on it.
+	readReturned := make(chan error, 1)
+	go func() {
+		var b [1]byte
+		_, err := client.Read(b[:])
+		readReturned <- err
+	}()
+
+	// Force-close all connections; the parked read must return promptly.
+	if err := mux.CloseConns(); err != nil {
+		t.Fatalf("CloseConns returned error: %s", err.Error())
+	}
+	select {
+	case err := <-readReturned:
+		if err == nil {
+			t.Fatal("expected blocked read to return an error after CloseConns")
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("blocked read did not return after CloseConns")
+	}
+
+	// The tracking set must be empty again, so it does not grow without bound.
+	if got := numTrackedConns(mux); got != 0 {
+		t.Fatalf("expected 0 tracked connections after close, got %d", got)
+	}
+}
+
+// Test_MuxConnDeregisterOnClose verifies that an accepted connection deregisters
+// itself from the Mux's tracking set when closed, so the set does not leak over
+// the lifetime of the node. Connecting is enough for the Mux to track the
+// connection; no header byte is required.
+func Test_MuxConnDeregisterOnClose(t *testing.T) {
+	tcpListener := mustTCPListener("127.0.0.1:0")
+	defer tcpListener.Close()
+
+	mux, err := NewMux(tcpListener, nil)
+	if err != nil {
+		t.Fatalf("failed to create mux: %s", err.Error())
+	}
+	if !testing.Verbose() {
+		mux.Logger = log.New(io.Discard, "", 0)
+	}
+	go mux.Serve()
+
+	// Connecting is enough for the Mux to accept and track the connection.
+	client, err := net.Dial("tcp", tcpListener.Addr().String())
+	if err != nil {
+		t.Fatalf("failed to dial mux: %s", err.Error())
+	}
+	if !waitForTrackedConns(mux, 1, 5*time.Second) {
+		t.Fatalf("connection was not tracked after connecting, got %d", numTrackedConns(mux))
+	}
+
+	// Closing the connection must deregister it from the tracking set.
+	client.Close()
+	if !waitForTrackedConns(mux, 0, 5*time.Second) {
+		t.Fatalf("connection was not deregistered after close, got %d", numTrackedConns(mux))
+	}
+}
+
+// numTrackedConns returns the number of connections currently tracked by the
+// Mux for force-close on shutdown.
+func numTrackedConns(mux *Mux) int {
+	mux.connsMu.Lock()
+	defer mux.connsMu.Unlock()
+	return len(mux.conns)
+}
+
+// waitForTrackedConns waits up to timeout for the Mux to be tracking exactly n
+// connections, returning true if that count is reached.
+func waitForTrackedConns(mux *Mux, n int, timeout time.Duration) bool {
+	deadline := time.Now().Add(timeout)
+	for {
+		if numTrackedConns(mux) == n {
+			return true
+		}
+		if time.Now().After(deadline) {
+			return false
+		}
+		time.Sleep(time.Millisecond)
+	}
+}
+
 // mustTCPListener returns a listener on bind, or panics.
 func mustTCPListener(bind string) net.Listener {
 	l, err := net.Listen("tcp", bind)

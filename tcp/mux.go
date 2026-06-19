@@ -78,6 +78,12 @@ type Mux struct {
 
 	wg sync.WaitGroup
 
+	// conns tracks every demultiplexed connection currently handed off to a
+	// listener, so that they can be force-closed during shutdown. Each
+	// connection deregisters itself when closed.
+	connsMu sync.Mutex
+	conns   map[*trackedConn]struct{}
+
 	// The amount of time to wait for the first header byte.
 	Timeout time.Duration
 
@@ -100,6 +106,7 @@ func NewMux(ln net.Listener, adv net.Addr) (*Mux, error) {
 		ln:      ln,
 		addr:    addr,
 		m:       make(map[byte]*listener),
+		conns:   make(map[*trackedConn]struct{}),
 		Timeout: DefaultTimeout,
 		Logger:  log.New(os.Stderr, "[mux] ", log.LstdFlags),
 	}, nil
@@ -178,9 +185,15 @@ func (mux *Mux) Serve() error {
 			return err
 		}
 
+		// Track the connection so it can be force-closed during shutdown, even
+		// if it stalls before sending a header byte. It deregisters itself when
+		// closed.
+		tc := &trackedConn{Conn: conn, mux: mux}
+		mux.registerConn(tc)
+
 		// Demux in a goroutine to
 		mux.wg.Add(1)
-		go mux.handleConn(conn)
+		go mux.handleConn(tc)
 	}
 }
 
@@ -220,10 +233,67 @@ func (mux *Mux) Listen(header byte) net.Listener {
 }
 
 // Close closes the mux. It does not close any listeners created by the mux, nor
-// does it close the listener it was passed at creation time. It cleans up
-// other resources however.
+// does it close the listener it was passed at creation time. It force-closes
+// any demultiplexed connections still in flight.
 func (mux *Mux) Close() error {
-	return nil
+	return mux.CloseConns()
+}
+
+// CloseConns force-closes every demultiplexed connection currently handed off
+// to a listener. It is used during shutdown to unblock any consumer (such as
+// Raft) that is parked in a deadline-less read on a connection whose peer has
+// stopped sending -- for example a node receiving a snapshot from a peer that
+// is itself shutting down. Without this such a read has no upper bound and can
+// block shutdown indefinitely.
+func (mux *Mux) CloseConns() error {
+	mux.connsMu.Lock()
+	conns := make([]*trackedConn, 0, len(mux.conns))
+	for c := range mux.conns {
+		conns = append(conns, c)
+	}
+	mux.connsMu.Unlock()
+
+	var lastErr error
+	for _, c := range conns {
+		if err := c.Close(); err != nil {
+			lastErr = err
+		}
+	}
+	return lastErr
+}
+
+// registerConn adds a connection to the set of tracked connections.
+func (mux *Mux) registerConn(c *trackedConn) {
+	mux.connsMu.Lock()
+	defer mux.connsMu.Unlock()
+	mux.conns[c] = struct{}{}
+}
+
+// removeConn removes a connection from the set of tracked connections.
+func (mux *Mux) removeConn(c *trackedConn) {
+	mux.connsMu.Lock()
+	defer mux.connsMu.Unlock()
+	delete(mux.conns, c)
+}
+
+// trackedConn wraps an accepted connection so the Mux can force-close it during
+// shutdown. It deregisters itself from the Mux on Close so the tracking set does
+// not grow without bound over the lifetime of the node.
+type trackedConn struct {
+	net.Conn
+	mux  *Mux
+	once sync.Once
+}
+
+// Close removes the connection from the Mux's tracking set and closes the
+// underlying connection. It is safe to call multiple times.
+func (c *trackedConn) Close() error {
+	c.mux.removeConn(c)
+	var err error
+	c.once.Do(func() {
+		err = c.Conn.Close()
+	})
+	return err
 }
 
 func (mux *Mux) handleConn(conn net.Conn) {
@@ -260,7 +330,8 @@ func (mux *Mux) handleConn(conn net.Conn) {
 		return
 	}
 
-	// Send connection to handler.  The handler is responsible for closing the connection.
+	// Send connection to handler. The handler is responsible for closing the
+	// connection.
 	handler.c <- conn
 }
 
