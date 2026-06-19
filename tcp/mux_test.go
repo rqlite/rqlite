@@ -468,9 +468,10 @@ func Test_MuxCloseConns(t *testing.T) {
 	}
 }
 
-// Test_MuxConnDeregisterOnClose verifies that a demultiplexed connection
-// deregisters itself from the Mux when closed normally by its consumer, so the
-// tracking set does not leak over the lifetime of the node.
+// Test_MuxConnDeregisterOnClose verifies that an accepted connection deregisters
+// itself from the Mux's tracking set when closed, so the set does not leak over
+// the lifetime of the node. Connecting is enough for the Mux to track the
+// connection; no header byte is required.
 func Test_MuxConnDeregisterOnClose(t *testing.T) {
 	tcpListener := mustTCPListener("127.0.0.1:0")
 	defer tcpListener.Close()
@@ -482,36 +483,21 @@ func Test_MuxConnDeregisterOnClose(t *testing.T) {
 	if !testing.Verbose() {
 		mux.Logger = log.New(io.Discard, "", 0)
 	}
-	ln := mux.Listen(9)
 	go mux.Serve()
 
-	closed := make(chan struct{})
-	go func() {
-		conn, err := ln.Accept()
-		if err != nil {
-			close(closed)
-			return
-		}
-		conn.Close()
-		close(closed)
-	}()
-
+	// Connecting is enough for the Mux to accept and track the connection.
 	client, err := net.Dial("tcp", tcpListener.Addr().String())
 	if err != nil {
 		t.Fatalf("failed to dial mux: %s", err.Error())
 	}
-	defer client.Close()
-	if _, err := client.Write([]byte{9}); err != nil {
-		t.Fatalf("failed to write header byte: %s", err.Error())
+	if !waitForTrackedConns(mux, 1, 5*time.Second) {
+		t.Fatalf("connection was not tracked after connecting, got %d", numTrackedConns(mux))
 	}
 
-	select {
-	case <-closed:
-	case <-time.After(5 * time.Second):
-		t.Fatal("timed out waiting for consumer to close connection")
-	}
-	if got := numTrackedConns(mux); got != 0 {
-		t.Fatalf("expected 0 tracked connections after consumer close, got %d", got)
+	// Closing the connection must deregister it from the tracking set.
+	client.Close()
+	if !waitForTrackedConns(mux, 0, 5*time.Second) {
+		t.Fatalf("connection was not deregistered after close, got %d", numTrackedConns(mux))
 	}
 }
 
@@ -521,6 +507,21 @@ func numTrackedConns(mux *Mux) int {
 	mux.connsMu.Lock()
 	defer mux.connsMu.Unlock()
 	return len(mux.conns)
+}
+
+// waitForTrackedConns waits up to timeout for the Mux to be tracking exactly n
+// connections, returning true if that count is reached.
+func waitForTrackedConns(mux *Mux, n int, timeout time.Duration) bool {
+	deadline := time.Now().Add(timeout)
+	for {
+		if numTrackedConns(mux) == n {
+			return true
+		}
+		if time.Now().After(deadline) {
+			return false
+		}
+		time.Sleep(time.Millisecond)
+	}
 }
 
 // mustTCPListener returns a listener on bind, or panics.

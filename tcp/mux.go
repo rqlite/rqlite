@@ -185,9 +185,15 @@ func (mux *Mux) Serve() error {
 			return err
 		}
 
+		// Track the connection so it can be force-closed during shutdown, even
+		// if it stalls before sending a header byte. It deregisters itself when
+		// closed.
+		tc := &trackedConn{Conn: conn, mux: mux}
+		mux.registerConn(tc)
+
 		// Demux in a goroutine to
 		mux.wg.Add(1)
-		go mux.handleConn(conn)
+		go mux.handleConn(tc)
 	}
 }
 
@@ -270,9 +276,9 @@ func (mux *Mux) removeConn(c *trackedConn) {
 	delete(mux.conns, c)
 }
 
-// trackedConn wraps a demultiplexed connection so the Mux can force-close it
-// during shutdown. It deregisters itself from the Mux on Close so the tracking
-// set does not grow without bound over the lifetime of the node.
+// trackedConn wraps an accepted connection so the Mux can force-close it during
+// shutdown. It deregisters itself from the Mux on Close so the tracking set does
+// not grow without bound over the lifetime of the node.
 type trackedConn struct {
 	net.Conn
 	mux  *Mux
@@ -325,11 +331,8 @@ func (mux *Mux) handleConn(conn net.Conn) {
 	}
 
 	// Send connection to handler. The handler is responsible for closing the
-	// connection. Wrap it so the Mux can force-close it during shutdown, even
-	// if the handler is blocked reading from it.
-	tc := &trackedConn{Conn: conn, mux: mux}
-	mux.registerConn(tc)
-	handler.c <- tc
+	// connection.
+	handler.c <- conn
 }
 
 // listener is a receiver for connections received by Mux.
