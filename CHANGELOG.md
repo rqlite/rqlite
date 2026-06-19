@@ -1,6 +1,6 @@
 ## v10.2.2 (unreleased)
 ### Implementation changes and bug fixes
-- [PR #2694](https://github.com/rqlite/rqlite/pull/2694): Force-close in-flight node-to-node connections during shutdown, so a stalled Raft snapshot transfer cannot block a node from shutting down. Fixes issue [#2687](https://github.com/rqlite/rqlite/issues/2687).
+- [PR #2694](https://github.com/rqlite/rqlite/pull/2694): Force-close in-flight node-to-node connections during shutdown, so a stalled Raft snapshot transfer cannot block a node from shutting down. Triggered by [#2687](https://github.com/rqlite/rqlite/issues/2687).
 - [PR #2693](https://github.com/rqlite/rqlite/pull/2693): Export `Check` method on Snapshot Store.
 
 ## v10.2.1 (June 17th 2026)
