@@ -945,6 +945,10 @@ func Test_Store_ReapCorruptDB(t *testing.T) {
 	createSnapshotInStore(t, store, "2-1017-1704807719996", 1017, 2, 1, "testdata/db-and-wals/backup.db")
 	createSnapshotInStore(t, store, "2-1131-1704807720976", 1131, 2, 1, "", "testdata/db-and-wals/wal-00")
 
+	// The default fatalFn would terminate the process on corruption; disable it
+	// so the integrity failure surfaces as a returned error we can assert on.
+	store.fatalFn = nil
+
 	// Corrupt the full snapshot's DB file.
 	dbPath := filepath.Join(store.Dir(), "2-1017-1704807719996", dbfileName)
 	if err := os.WriteFile(dbPath, []byte("corrupted"), 0644); err != nil {
@@ -969,6 +973,10 @@ func Test_Store_ReapCorruptWAL(t *testing.T) {
 	// Create a full snapshot, then an incremental.
 	createSnapshotInStore(t, store, "2-1017-1704807719996", 1017, 2, 1, "testdata/db-and-wals/backup.db")
 	createSnapshotInStore(t, store, "2-1131-1704807720976", 1131, 2, 1, "", "testdata/db-and-wals/wal-00")
+
+	// The default fatalFn would terminate the process on corruption; disable it
+	// so the integrity failure surfaces as a returned error we can assert on.
+	store.fatalFn = nil
 
 	// Find and corrupt the WAL file in the incremental snapshot.
 	walPattern := filepath.Join(store.Dir(), "2-1131-1704807720976", "*.wal")
@@ -1039,9 +1047,6 @@ func Test_Store_Check_RemovesTmpDirs(t *testing.T) {
 		t.Fatalf("Failed to re-open store: %v", err)
 	}
 	defer store2.Close()
-	if err := store2.Check(); err != nil {
-		t.Fatalf("failed to check store: %s", err.Error())
-	}
 
 	// The .tmp directory should be gone.
 	if fsutil.PathExists(tmpDir) {
@@ -1113,6 +1118,10 @@ func Test_Store_Check_ResumesReapPlan(t *testing.T) {
 	}
 	p.AddCheckpoint(filepath.Join(fullPath, dbfileName), walMatches)
 	p.NCheckpointed = len(walMatches)
+	// Mirror Reap()'s plan: refresh the data.db CRC32 sidecar after the
+	// checkpoint rewrites the file, otherwise the consolidated snapshot would
+	// fail integrity verification when it is later opened.
+	p.AddCalcCRC32(filepath.Join(fullPath, dbfileName), filepath.Join(fullPath, dbfileName)+crcSuffix)
 	p.AddRemoveAll(incPath)
 	p.NReaped = 1
 
@@ -1137,9 +1146,6 @@ func Test_Store_Check_ResumesReapPlan(t *testing.T) {
 		t.Fatalf("Failed to re-open store2: %v", err)
 	}
 	defer store3.Close()
-	if err := store3.Check(); err != nil {
-		t.Fatalf("failed to check store: %s", err.Error())
-	}
 
 	// The plan file should be gone.
 	if fsutil.FileExists(planPath) {

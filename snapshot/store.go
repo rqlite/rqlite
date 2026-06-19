@@ -196,6 +196,19 @@ type Store struct {
 
 	catalog *SnapshotCatalog
 
+	// verifyOnce ensures the CRC32 integrity check of all snapshot files runs at
+	// most once over the lifetime of the Store, the first time snapshot data is
+	// about to be used. verifyErr caches the result so a corruption verdict is
+	// sticky and a successful check is never recomputed.
+	verifyOnce sync.Once
+	verifyErr  error
+
+	// fatalFn is invoked when snapshot data is found to be corrupt during
+	// verification. By default it terminates the process, since continuing risks
+	// using corrupt data (the cluster is expected to provide fault tolerance).
+	// Tests set it to nil so the error propagates and can be asserted on instead.
+	fatalFn func(error)
+
 	// Multi-reader single-writer lock for the Store, which must be held
 	// if snapshots are deleted i.e. reaped. Simply creating or reading
 	// a snapshot requires only a read lock.
@@ -225,6 +238,7 @@ func NewStore(dir string) (*Store, error) {
 		return nil, err
 	}
 
+	logger := log.New(os.Stderr, "[snapshot-store] ", log.LstdFlags)
 	str := &Store{
 		dir:            dir,
 		fullNeededPath: filepath.Join(dir, fullNeededFile),
@@ -238,9 +252,16 @@ func NewStore(dir string) (*Store, error) {
 		reapCh:         make(chan struct{}, 1),
 		reapDoneCh:     make(chan struct{}),
 		observers:      newObserverSet(),
-		logger:         log.New(os.Stderr, "[snapshot-store] ", log.LstdFlags),
+		logger:         logger,
+		fatalFn: func(err error) {
+			logger.Fatalf("fatal snapshot integrity error, exiting process: %s", err)
+		},
 	}
 	str.logger.Printf("store initialized using %s", dir)
+
+	if err := str.check(); err != nil {
+		return nil, err
+	}
 
 	// Kick off the reaper goroutine.
 	str.wg.Go(str.reapLoop)
@@ -370,6 +391,14 @@ func (s *Store) Open(id string) (raftMeta *raft.SnapshotMeta, rc io.ReadCloser, 
 		}
 	}()
 
+	// The data files are about to be read, so verify their integrity first
+	// (runs at most once over the Store's lifetime). On corruption this hard
+	// exits in production via fatalFn; with fatalFn disabled (tests) the error
+	// is returned.
+	if err := s.ensureVerified(); err != nil {
+		return nil, nil, err
+	}
+
 	snapSet, err := s.getSnapshots()
 	if err != nil {
 		return nil, nil, fmt.Errorf("scanning snapshots: %w", err)
@@ -496,6 +525,16 @@ func (s *Store) reapInternal() (int, int, error) {
 			return 0, 0, fmt.Errorf("reading reap plan: %w", err)
 		}
 		return s.executeReapPlan(p, s.reapPlanPath)
+	} else {
+		// A reap reads and rewrites the data files, so verify their integrity
+		// first (runs at most once over the Store's lifetime). We only do this if
+		// a reap wasn't previously interrupted (by a crash most likely), as an
+		// interrupted reap leaves data in an undefined state. On corruption this
+		// hard exits in production via fatalFn; with fatalFn disabled (tests) the
+		// error is returned.
+		if err := s.ensureVerified(); err != nil {
+			return 0, 0, err
+		}
 	}
 
 	// Scan store.
@@ -758,13 +797,16 @@ func (s *Store) reapLoop() {
 	}
 }
 
-// Check checks the Store for any inconsistencies, and repairs
-// any inconsistencies it finds. Inconsistencies can happen
-// if the system crashes during snapshotting or reaping.
+// check repairs any structural inconsistencies in the Store left behind by a
+// crash during snapshotting or reaping: it discards an incomplete reap plan,
+// resumes an interrupted reap, and removes leftover temporary directories.
+//
+// Check does NOT verify file checksums. That is done lazily, exactly once, the
+// first time snapshot data is about to be used -- see Verify, Open, and Reap.
 //
 // Check must be called on an idle Store or the results are undefined.
 // If called on a empty Store, then it returns without an error.
-func (s *Store) Check() error {
+func (s *Store) check() error {
 	emp, err := fsutil.DirIsEmpty(s.dir)
 	if err != nil {
 		return err
@@ -776,24 +818,9 @@ func (s *Store) Check() error {
 	// Remove any incomplete plan file from an interrupted plan write.
 	os.Remove(tmpName(s.reapPlanPath))
 
-	reapPlanFound := fsutil.FileExists(s.reapPlanPath)
-
-	// If no reap was interrupted, verify the CRC32 of every data file
-	// in every snapshot directory. If a reap was interrupted, the files
-	// may be in an inconsistent state and the CRC32 validation may fail,
-	// so we skip it in that case and just resume the reap to fix any
-	// inconsistencies.
-	if !reapPlanFound {
-		if err := s.checkCRCs(); err != nil {
-			return err
-		}
-	}
-
-	// Resume an interrupted reap if such a plan file exists. Only then should
-	// we remove any leftover temporary directories, since they may be needed
-	// for the reap to complete. If a reap plan was found, skip CRC validation
-	// since files may have been left in an inconsistent state by the crash.
-	if reapPlanFound {
+	// Resume an interrupted reap if a plan file exists, before any temporary
+	// directories are removed below, since the reap may still need them.
+	if fsutil.FileExists(s.reapPlanPath) {
 		s.logger.Printf("found interrupted reap plan at %s, resuming", s.reapPlanPath)
 		p, err := plan.ReadFromFile(s.reapPlanPath)
 		if err != nil {
@@ -849,6 +876,42 @@ func (s *Store) checkCRCs() error {
 	s.logger.Printf("completed CRC32 check of %d snapshot directories in %s",
 		len(snapshots.items), time.Since(startT))
 	return nil
+}
+
+// ensureVerified runs the CRC32 integrity check of every snapshot data file
+// exactly once over the lifetime of the Store, the first time snapshot data is
+// about to be used. The result is cached: a corruption verdict is returned to
+// every subsequent caller, and a successful check is never recomputed.
+//
+// If the check fails, fatalFn is invoked. In production this terminates the
+// process and ensureVerified never returns; tests set fatalFn to nil so the
+// error is returned and can be asserted on instead.
+//
+// The check reads every data file, so the caller must hold the Store read or
+// write lock so it does not run concurrently with a reap.
+func (s *Store) ensureVerified() error {
+	s.verifyOnce.Do(func() {
+		err := s.checkCRCs()
+		if err != nil && s.fatalFn != nil {
+			s.fatalFn(err) // terminates the process in production; never returns
+		}
+		s.verifyErr = err // reached only when fatalFn is nil (tests)
+	})
+	return s.verifyErr
+}
+
+// Verify runs the one-time CRC32 integrity check now, rather than waiting for the
+// first Open or reap to trigger it lazily. It is intended to be called at startup
+// when the snapshot is about to be restored, so the cost and any corruption are
+// surfaced explicitly. It is safe to call repeatedly; the check still runs at
+// most once.
+//
+// The function reads every data file, so it holds the Store read lock for its
+// duration to exclude a concurrent reap.
+func (s *Store) Verify() error {
+	s.mrsw.BeginReadBlocking()
+	defer s.mrsw.EndRead()
+	return s.ensureVerified()
 }
 
 // getSnapshots returns the set of snapshots in the Store.
