@@ -1,3 +1,7 @@
+## v10.2.2 (unreleased)
+### Implementation changes and bug fixes
+- [PR #2693](https://github.com/rqlite/rqlite/pull/2693): Export `Check` method on Snapshot Store.
+
 ## v10.2.1 (June 17th 2026)
 ### Implementation changes and bug fixes
 - [PR #2686](https://github.com/rqlite/rqlite/pull/2686): Limit number of connections to cluster service. Fixes issue [#2617](https://github.com/rqlite/rqlite/issues/2617). Thanks @shrtyk
