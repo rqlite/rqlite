@@ -773,7 +773,9 @@ func (s *Store) Check() error {
 		return nil
 	}
 	startT := time.Now()
-	defer s.logger.Printf("check operation completed in %s", time.Since(startT))
+	defer func() {
+		s.logger.Printf("check operation completed in %s", time.Since(startT))
+	}()
 
 	// Remove any incomplete plan file from an interrupted plan write.
 	os.Remove(tmpName(s.reapPlanPath))
