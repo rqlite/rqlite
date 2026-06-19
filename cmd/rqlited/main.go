@@ -270,15 +270,14 @@ func main() {
 		str.Stepdown(true, "")
 	}
 	muxLn.Close()
-	defer mux.Close()
 
-	// Force-close any in-flight node-to-node connections (e.g. a Raft snapshot
-	// transfer from a peer that is itself shutting down) so that this node is
-	// forcibly disconnected from other nodes. Such internode reads have no
-	// deadline, so without this the pre-close snapshot and Raft shutdown in
-	// str.Close below could block indefinitely on the Raft run goroutine.
-	if err := mux.CloseConns(); err != nil {
-		log.Printf("failed to close node-to-node connections during shutdown: %s", err.Error())
+	// Close the mux, which force-closes any in-flight node-to-node connections
+	// (e.g. a Raft snapshot transfer from a peer that is itself shutting down).
+	// Such internode reads have no deadline, so this must happen before
+	// str.Close below, otherwise the pre-close snapshot and Raft shutdown could
+	// block indefinitely on the Raft run goroutine.
+	if err := mux.Close(); err != nil {
+		log.Printf("failed to close mux during shutdown: %s", err.Error())
 	}
 
 	if err := str.Close(true); err != nil {
