@@ -602,6 +602,9 @@ func (s *Store) Open() (retErr error) {
 	if err != nil {
 		return fmt.Errorf("failed to create snapshot store: %s", err)
 	}
+	if err := snapshotStore.Check(); err != nil {
+		return err
+	}
 	snapshotStore.SetNoVerifyDB(s.NoVerifyDB)
 	snapshotStore.LogReaping = s.hcLogLevel() < hclog.Warn
 	if s.SnapshotReapThreshold > 0 {

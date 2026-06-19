@@ -242,16 +242,6 @@ func NewStore(dir string) (*Store, error) {
 	}
 	str.logger.Printf("store initialized using %s", dir)
 
-	emp, err := fsutil.DirIsEmpty(dir)
-	if err != nil {
-		return nil, err
-	}
-	if !emp {
-		if err := str.check(); err != nil {
-			return nil, fmt.Errorf("check failed: %s", err)
-		}
-	}
-
 	// Kick off the reaper goroutine.
 	str.wg.Go(str.reapLoop)
 
@@ -768,10 +758,21 @@ func (s *Store) reapLoop() {
 	}
 }
 
-// check checks the Store for any inconsistencies, and repairs
+// Check checks the Store for any inconsistencies, and repairs
 // any inconsistencies it finds. Inconsistencies can happen
 // if the system crashes during snapshotting or reaping.
-func (s *Store) check() error {
+//
+// Check must be called on an idle Store or the results are undefined.
+// If called on a empty Store, then it returns without an error.
+func (s *Store) Check() error {
+	emp, err := fsutil.DirIsEmpty(s.dir)
+	if err != nil {
+		return err
+	}
+	if emp {
+		return nil
+	}
+
 	// Remove any incomplete plan file from an interrupted plan write.
 	os.Remove(tmpName(s.reapPlanPath))
 
