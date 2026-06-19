@@ -238,7 +238,7 @@ func (mux *Mux) Close() error {
 // Raft) that is parked in a deadline-less read on a connection whose peer has
 // stopped sending -- for example a node receiving a snapshot from a peer that
 // is itself shutting down. Without this such a read has no upper bound and can
-// block shutdown indefinitely. See https://github.com/rqlite/rqlite/issues/2687.
+// block shutdown indefinitely.
 func (mux *Mux) CloseConns() error {
 	mux.connsMu.Lock()
 	conns := make([]*trackedConn, 0, len(mux.conns))
@@ -259,15 +259,15 @@ func (mux *Mux) CloseConns() error {
 // registerConn adds a connection to the set of tracked connections.
 func (mux *Mux) registerConn(c *trackedConn) {
 	mux.connsMu.Lock()
+	defer mux.connsMu.Unlock()
 	mux.conns[c] = struct{}{}
-	mux.connsMu.Unlock()
 }
 
 // removeConn removes a connection from the set of tracked connections.
 func (mux *Mux) removeConn(c *trackedConn) {
 	mux.connsMu.Lock()
+	defer mux.connsMu.Unlock()
 	delete(mux.conns, c)
-	mux.connsMu.Unlock()
 }
 
 // trackedConn wraps a demultiplexed connection so the Mux can force-close it
