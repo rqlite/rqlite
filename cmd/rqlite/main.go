@@ -877,7 +877,14 @@ func urlsToWriter(client *httpcl.Client, urls []string, w io.Writer) error {
 func createHostList(argv *argT) []string {
 	var hosts = make([]string, 0)
 	hosts = append(hosts, address6(argv))
-	hosts = append(hosts, strings.Split(argv.Alternatives, ",")...)
+	// Alternatives is a comma-separated list. Skip empty entries so a blank or
+	// trailing-comma value doesn't add a bogus "" host to the failover list
+	// (strings.Split("", ",") returns [""]).
+	for _, a := range strings.Split(argv.Alternatives, ",") {
+		if a = strings.TrimSpace(a); a != "" {
+			hosts = append(hosts, a)
+		}
+	}
 	return hosts
 }
 

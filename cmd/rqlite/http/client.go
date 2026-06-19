@@ -103,6 +103,21 @@ func WithBasicAuth(creds string) ConfigFunc {
 	}
 }
 
+// WithoutTimeout returns a shallow copy of the Client whose underlying
+// http.Client has no overall request timeout, while sharing the same Transport,
+// hosts, credentials, and configuration as the receiver. It is intended for
+// long-running streaming uploads (e.g. boot and restore) where a fixed
+// whole-request deadline is inappropriate; liveness is instead governed by the
+// Transport's connection-level timeouts. The receiver is left unmodified.
+func (c *Client) WithoutTimeout() *Client {
+	httpClient := *c.Client
+	httpClient.Timeout = 0
+
+	clientCopy := *c
+	clientCopy.Client = &httpClient
+	return &clientCopy
+}
+
 // GetDirect sends a GET request to the exact URL provided, with authentication
 // but without host override or failover. Use this when you need to target a
 // specific node rather than any node in the cluster.
