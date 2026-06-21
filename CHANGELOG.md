@@ -1,3 +1,7 @@
+## v10.2.4 (unreleased)
+### Implementation changes and bug fixes
+- [PR #2700](https://github.com/rqlite/rqlite/pull/2700): Unit test Snapshot Store `Verify`.
+
 ## v10.2.3 (June 20th 2026)
 ### Implementation changes and bug fixes
 - [PR #2695](https://github.com/rqlite/rqlite/pull/2695): Check snapshot store integrity before first actual use.  Triggered by [#2687](https://github.com/rqlite/rqlite/issues/2687).
