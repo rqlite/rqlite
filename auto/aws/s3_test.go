@@ -43,6 +43,38 @@ func Test_NewS3Client(t *testing.T) {
 	}
 }
 
+func Test_S3Client_RequestChecksumCalculation(t *testing.T) {
+	// S3-compatible endpoint should use WhenRequired
+	c, err := NewS3Client("s3.custom-compatible.com", "region1", "access", "secret", "bucket2", "key3", noForcePathStyleOptions())
+	if err != nil {
+		t.Fatalf("error while creating aws S3 client: %v", err)
+	}
+	if c.s3.Options().RequestChecksumCalculation != aws.RequestChecksumCalculationWhenRequired {
+		t.Fatalf("expected RequestChecksumCalculation to be %v, got %v",
+			aws.RequestChecksumCalculationWhenRequired, c.s3.Options().RequestChecksumCalculation)
+	}
+
+	// Native AWS endpoint should also use WhenRequired
+	c, err = NewS3Client("s3.amazonaws.com", "region1", "access", "secret", "bucket2", "key3", noForcePathStyleOptions())
+	if err != nil {
+		t.Fatalf("error while creating aws S3 client: %v", err)
+	}
+	if c.s3.Options().RequestChecksumCalculation != aws.RequestChecksumCalculationWhenRequired {
+		t.Fatalf("expected RequestChecksumCalculation to be %v, got %v",
+			aws.RequestChecksumCalculationWhenRequired, c.s3.Options().RequestChecksumCalculation)
+	}
+
+	// nil opts should also use WhenRequired
+	c, err = NewS3Client("", "region1", "access", "secret", "bucket2", "key3", nil)
+	if err != nil {
+		t.Fatalf("error while creating aws S3 client: %v", err)
+	}
+	if c.s3.Options().RequestChecksumCalculation != aws.RequestChecksumCalculationWhenRequired {
+		t.Fatalf("expected RequestChecksumCalculation to be %v, got %v",
+			aws.RequestChecksumCalculationWhenRequired, c.s3.Options().RequestChecksumCalculation)
+	}
+}
+
 func Test_S3Client_String(t *testing.T) {
 	// Test native S3 with implicit endpoint
 	c, err := NewS3Client("", "region1", "access", "secret", "bucket2", "key3", noForcePathStyleOptions())
