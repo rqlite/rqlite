@@ -2780,7 +2780,20 @@ func (s *Store) fsmRestore(rc io.ReadCloser) (retErr error) {
 	defer os.Remove(tmpPath)
 
 	if _, err := snapshot.Restore(rc, tmpPath); err != nil {
+		rc.Close()
 		return fmt.Errorf("error restoring database from snapshot: %v", err)
+	}
+
+	// The snapshot stream is now fully drained into tmpPath, so close the reader
+	// immediately. This releases the Snapshot Store's read lock and stops the
+	// reader's idle-timeout timer right away, instead of holding the reader open
+	// across the (potentially slow) database swap and finalization below. Holding
+	// it open across that work lets the idle-timeout fire and force-close the
+	// reader mid-restore, even though the restore is progressing normally. Raft
+	// also closes the source once Restore returns, but LockingStreamer.Close is
+	// idempotent so the later close is a harmless no-op.
+	if err := rc.Close(); err != nil {
+		s.logger.Printf("error closing snapshot reader after restore: %s", err)
 	}
 
 	// Any existing SQLite file is about to be invalid, so mark that we can't
@@ -2822,7 +2835,6 @@ func (s *Store) fsmRestore(rc io.ReadCloser) (retErr error) {
 
 	stats.Add(numRestores, 1)
 	s.logger.Printf("node restored in %s", time.Since(startT))
-	rc.Close()
 	return nil
 }
 
