@@ -358,6 +358,7 @@ func Test_Store_Verify(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to open file: %s", err)
 	}
+	defer fd.Close()
 	if _, err := fd.Seek(-1, io.SeekEnd); err != nil {
 		t.Fatalf("failed to seek: %s", err)
 	}
