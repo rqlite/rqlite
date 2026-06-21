@@ -331,6 +331,56 @@ func Test_Store_List(t *testing.T) {
 	}
 }
 
+func Test_Store_Verify(t *testing.T) {
+	dir := t.TempDir()
+	store, err := NewStore(dir)
+	if err != nil {
+		t.Fatalf("Failed to create new store: %v", err)
+	}
+	defer store.Close()
+
+	// Create a full snapshot, then an incremental.
+	createSnapshotInStore(t, store, "2-1017-1704807719996", 1017, 2, 1, "testdata/db-and-wals/backup.db")
+	createSnapshotInStore(t, store, "2-1131-1704807720976", 1131, 2, 1, "", "testdata/db-and-wals/wal-00")
+
+	// The default fatalFn would terminate the process on corruption; disable it
+	// so the integrity failure surfaces as a returned error we can assert on.
+	store.fatalFn = nil
+
+	// Ensure Verify passes.
+	if err := store.Verify(); err != nil {
+		t.Fatalf("verify of store failed: %s", err)
+	}
+
+	// Corrupt the full snapshot's DB file by flipping the last bit.
+	dbPath := filepath.Join(store.Dir(), "2-1017-1704807719996", dbfileName)
+	fd, err := os.OpenFile(dbPath, os.O_RDWR, 0)
+	if err != nil {
+		t.Fatalf("failed to open file: %s", err)
+	}
+	if _, err := fd.Seek(-1, io.SeekEnd); err != nil {
+		t.Fatalf("failed to seek: %s", err)
+	}
+	var b [1]byte
+	if _, err := fd.Read(b[:]); err != nil {
+		t.Fatalf("failed to read: %s", err)
+	}
+	b[0] ^= 0x01
+
+	// Read advanced the offset; step back before writing.
+	if _, err := fd.Seek(-1, io.SeekCurrent); err != nil {
+		t.Fatalf("failed to seek: %s", err)
+	}
+	if _, err := fd.Write(b[:]); err != nil {
+		t.Fatalf("failed to read: %s", err)
+	}
+
+	// Ensure Verify fails.
+	if err := store.Verify(); err == nil {
+		t.Fatalf("verify of store should have failed")
+	}
+}
+
 // Test_Store_EndToEndCycle tests an end-to-end cycle of creating a Store,
 // creating sinks, and writing various types of snapshots to other Stores.
 func Test_Store_EndToEndCycle(t *testing.T) {

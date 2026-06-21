@@ -900,18 +900,11 @@ func (s *Store) ensureVerified() error {
 	return s.verifyErr
 }
 
-// Verify runs the one-time CRC32 integrity check now, rather than waiting for the
-// first Open or reap to trigger it lazily. It is intended to be called at startup
-// when the snapshot is about to be restored, so the cost and any corruption are
-// surfaced explicitly. It is safe to call repeatedly; the check still runs at
-// most once.
-//
-// The function reads every data file, so it holds the Store read lock for its
-// duration to exclude a concurrent reap.
+// Verify runs the CRC32 integrity check.
 func (s *Store) Verify() error {
 	s.mrsw.BeginReadBlocking()
 	defer s.mrsw.EndRead()
-	return s.ensureVerified()
+	return s.checkCRCs()
 }
 
 // getSnapshots returns the set of snapshots in the Store.
