@@ -1,7 +1,7 @@
 ## v10.2.4 (June 21st 2026)
 ### Implementation changes and bug fixes
 - [PR #2700](https://github.com/rqlite/rqlite/pull/2700): Unit test Snapshot Store `Verify`.
-- [PR #2701](https://github.com/rqlite/rqlite/pull/2701): Set RequestChecksumCalculationWhenRequired for S3-compatible stores. Fixes issue [#2699](https://github.com/rqlite/rqlite/issues/2699). Thanks @NerdyShawn
+- [PR #2701](https://github.com/rqlite/rqlite/pull/2701): Set `RequestChecksumCalculationWhenRequired` for S3-compatible stores. Fixes issue [#2699](https://github.com/rqlite/rqlite/issues/2699). Thanks @NerdyShawn
 
 ## v10.2.3 (June 20th 2026)
 ### Implementation changes and bug fixes
