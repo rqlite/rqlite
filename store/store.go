@@ -2785,13 +2785,8 @@ func (s *Store) fsmRestore(rc io.ReadCloser) (retErr error) {
 	}
 
 	// The snapshot stream is now fully drained into tmpPath, so close the reader
-	// immediately. This releases the Snapshot Store's read lock and stops the
-	// reader's idle-timeout timer right away, instead of holding the reader open
-	// across the (potentially slow) database swap and finalization below. Holding
-	// it open across that work lets the idle-timeout fire and force-close the
-	// reader mid-restore, even though the restore is progressing normally. Raft
-	// also closes the source once Restore returns, but LockingStreamer.Close is
-	// idempotent so the later close is a harmless no-op.
+	// immediately. Do this so we're not holding onto the underlying LockingStreamer
+	// while we calculate fingerprint (which can take measurable time for large databases).
 	if err := rc.Close(); err != nil {
 		s.logger.Printf("error closing snapshot reader after restore: %s", err)
 	}
