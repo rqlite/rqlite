@@ -58,6 +58,7 @@ func NewS3Client(endpoint, region, accessKey, secretKey, bucket, key string, opt
 	// Load the default config
 	cfg, err := config.LoadDefaultConfig(context.Background(),
 		config.WithRegion(region),
+		config.WithRequestChecksumCalculation(aws.RequestChecksumCalculationWhenRequired),
 	)
 	if err != nil {
 		return nil, fmt.Errorf("unable to load SDK config, %v", err)
