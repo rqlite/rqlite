@@ -373,7 +373,7 @@ func Test_Store_Verify(t *testing.T) {
 		t.Fatalf("failed to seek: %s", err)
 	}
 	if _, err := fd.Write(b[:]); err != nil {
-		t.Fatalf("failed to read: %s", err)
+		t.Fatalf("failed to write: %s", err)
 	}
 
 	// Ensure Verify fails.
