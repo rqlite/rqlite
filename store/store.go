@@ -2780,7 +2780,15 @@ func (s *Store) fsmRestore(rc io.ReadCloser) (retErr error) {
 	defer os.Remove(tmpPath)
 
 	if _, err := snapshot.Restore(rc, tmpPath); err != nil {
+		rc.Close()
 		return fmt.Errorf("error restoring database from snapshot: %v", err)
+	}
+
+	// The snapshot stream is now fully drained into tmpPath, so close the reader
+	// immediately. Do this so we're not holding onto the underlying LockingStreamer
+	// while we calculate fingerprint (which can take measurable time for large databases).
+	if err := rc.Close(); err != nil {
+		s.logger.Printf("error closing snapshot reader after restore: %s", err)
 	}
 
 	// Any existing SQLite file is about to be invalid, so mark that we can't
@@ -2822,7 +2830,6 @@ func (s *Store) fsmRestore(rc io.ReadCloser) (retErr error) {
 
 	stats.Add(numRestores, 1)
 	s.logger.Printf("node restored in %s", time.Since(startT))
-	rc.Close()
 	return nil
 }
 
