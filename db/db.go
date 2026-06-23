@@ -949,14 +949,14 @@ func (db *DB) IntegrityCheck(mode IntegrityCheckMode, maxIssues int) (IntegrityR
 	return IntegrityResult{OK: false, Issues: issues}, nil
 }
 
-// VerifyIntegrity runs a full PRAGMA integrity_check that stops after the
-// first problem. It is shorthand for IntegrityCheck(IntegrityCheckFull, 1)
-// for callers that only need a yes/no answer.
+// VerifyIntegrity runs a PRAGMA quick_check that stops after the first problem.
+// It is shorthand for IntegrityCheck(IntegrityCheckQuick, 1) for callers that only
+// need a yes/no answer.
 //
 // If IntegrityResult.OK is false and err is nil this function guarantees
 // that res.Issues will contain exactly 1 issue.
 func (db *DB) VerifyIntegrity() (IntegrityResult, error) {
-	res, err := db.IntegrityCheck(IntegrityCheckFull, 1)
+	res, err := db.IntegrityCheck(IntegrityCheckQuick, 1)
 	if err != nil {
 		return IntegrityResult{}, err
 	}

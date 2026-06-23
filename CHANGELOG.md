@@ -1,3 +1,7 @@
+## v10.2.5 (unreleased)
+### Implementation changes and bug fixes
+- [PR #2702](https://github.com/rqlite/rqlite/pull/2702): Perform a Quick Integrity check after reaping snapshots, not Full.
+
 ## v10.2.4 (June 21st 2026)
 ### Implementation changes and bug fixes
 - [PR #2700](https://github.com/rqlite/rqlite/pull/2700): Unit test Snapshot Store `Verify`.
