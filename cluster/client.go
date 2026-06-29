@@ -30,6 +30,12 @@ const (
 	maxRedirects      = 10
 
 	protoBufferLengthSize = 8
+
+	// MaxMessageSize limits the size of a single protobuf message read from
+	// a network connection. This prevents a malicious peer from sending a
+	// very large size prefix that would cause an OOM when allocating the
+	// receive buffer. 64MB should be sufficient for normal operations.
+	MaxMessageSize = 64 * 1024 * 1024
 )
 
 // CreateRaftDialer creates a dialer for connecting to other nodes' Raft service. If the cert and
@@ -880,6 +886,9 @@ func readResponse(conn net.Conn, timeout time.Duration) (buf []byte, retErr erro
 		return nil, fmt.Errorf("read protobuf length: %w", err)
 	}
 	sz := binary.LittleEndian.Uint64(b[0:])
+	if sz > MaxMessageSize {
+		return nil, fmt.Errorf("message size %d exceeds maximum allowed %d", sz, MaxMessageSize)
+	}
 
 	// Read in the actual response.
 	p := make([]byte, sz)
