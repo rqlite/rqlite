@@ -41,6 +41,7 @@ const (
 	numBackupRequest       = "num_backup_req"
 	numLoadRequest         = "num_load_req"
 	numRemoveNodeRequest   = "num_remove_node_req"
+	numDemoteNodeRequest   = "num_demote_node_req"
 	numNotifyRequest       = "num_notify_req"
 	numJoinRequest         = "num_join_req"
 	numStepdownRequest     = "num_stepdown_req"
@@ -94,6 +95,7 @@ func ResetStats() {
 	stats.Add(numBackupRequest, 0)
 	stats.Add(numLoadRequest, 0)
 	stats.Add(numRemoveNodeRequest, 0)
+	stats.Add(numDemoteNodeRequest, 0)
 	stats.Add(numGetNodeAPIRequestLocal, 0)
 	stats.Add(numNotifyRequest, 0)
 	stats.Add(numJoinRequest, 0)
@@ -147,6 +149,9 @@ type Manager interface {
 
 	// Remove removes the node, given by id, from the cluster
 	Remove(ctx context.Context, rn *command.RemoveNodeRequest) error
+
+	// Demote demotes the node, given by id, to a non-voter in the cluster
+	Demote(ctx context.Context, dn *command.DemoteNodeRequest) error
 
 	// Notify notifies this node that a remote node is ready
 	// for bootstrapping.
@@ -584,6 +589,24 @@ func (s *Service) handleConn(conn net.Conn) {
 				resp.Error = "unauthorized"
 			} else {
 				if err := s.mgr.Remove(context.Background(), rn); err != nil {
+					resp.Error = err.Error()
+				}
+			}
+			if err := marshalAndWrite(conn, resp); err != nil {
+				return
+			}
+
+		case proto.Command_COMMAND_TYPE_DEMOTE_NODE:
+			stats.Add(numDemoteNodeRequest, 1)
+			resp := &proto.CommandDemoteNodeResponse{}
+
+			dn := c.GetDemoteNodeRequest()
+			if dn == nil {
+				resp.Error = "DemoteNodeRequest is nil"
+			} else if !s.checkCommandPerm(c, auth.PermDemote) {
+				resp.Error = "unauthorized"
+			} else {
+				if err := s.mgr.Demote(context.Background(), dn); err != nil {
 					resp.Error = err.Error()
 				}
 			}

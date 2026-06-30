@@ -34,6 +34,7 @@ var stats *expvar.Map
 
 const (
 	numRemoteRemoveNode       = "remote_remove_node"
+	numRemoteDemoteNode       = "remote_demote_node"
 	numRemoteBackups          = "remote_backups"
 	numRemoteLoads            = "remote_loads"
 	numRemoteStepdowns        = "remote_stepdowns"
@@ -54,6 +55,7 @@ func init() {
 func ResetStats() {
 	stats.Init()
 	stats.Add(numRemoteRemoveNode, 0)
+	stats.Add(numRemoteDemoteNode, 0)
 	stats.Add(numRemoteBackups, 0)
 	stats.Add(numRemoteLoads, 0)
 	stats.Add(numRemoteStepdowns, 0)
@@ -73,6 +75,7 @@ type Store interface {
 	Load(ctx context.Context, lr *proto.LoadRequest) error
 	Backup(ctx context.Context, br *proto.BackupRequest, dst io.Writer) error
 	Remove(ctx context.Context, rn *proto.RemoveNodeRequest) error
+	Demote(ctx context.Context, dn *proto.DemoteNodeRequest) error
 	Stepdown(wait bool, id string) error
 	LeaderAddr() (string, error)
 }
@@ -85,6 +88,7 @@ type Cluster interface {
 	Backup(ctx context.Context, br *proto.BackupRequest, nodeAddr string, creds *clstrPB.Credentials, timeout time.Duration, w io.Writer) error
 	Load(ctx context.Context, lr *proto.LoadRequest, nodeAddr string, creds *clstrPB.Credentials, timeout time.Duration, retries int) error
 	RemoveNode(ctx context.Context, rn *proto.RemoveNodeRequest, nodeAddr string, creds *clstrPB.Credentials, timeout time.Duration) error
+	DemoteNode(ctx context.Context, dn *proto.DemoteNodeRequest, nodeAddr string, creds *clstrPB.Credentials, timeout time.Duration) error
 	Stepdown(ctx context.Context, sr *proto.StepdownRequest, nodeAddr string, creds *clstrPB.Credentials, timeout time.Duration) error
 }
 
@@ -267,6 +271,31 @@ func (p *Proxy) Remove(ctx context.Context, rn *proto.RemoveNodeRequest, creds *
 			return "", wrapIfUnauthorized(err)
 		}
 		stats.Add(numRemoteRemoveNode, 1)
+		return addr, nil
+	}
+	return p.GetAPIAddr(), err
+}
+
+// Demote demotes a voter node to a non-voter in the cluster. If the local
+// store returns ErrNotLeader and noForward is false, the request is forwarded
+// to the current leader.
+func (p *Proxy) Demote(ctx context.Context, dn *proto.DemoteNodeRequest, creds *clstrPB.Credentials,
+	timeout time.Duration, noForward bool) (string, error) {
+
+	err := p.store.Demote(ctx, dn)
+	if errors.Is(err, store.ErrNotLeader) {
+		if noForward {
+			return "", ErrNotLeader
+		}
+		addr, addrErr := p.leaderAddr()
+		if addrErr != nil {
+			return "", addrErr
+		}
+		err = p.cluster.DemoteNode(ctx, dn, addr, creds, timeout)
+		if err != nil {
+			return "", wrapIfUnauthorized(err)
+		}
+		stats.Add(numRemoteDemoteNode, 1)
 		return addr, nil
 	}
 	return p.GetAPIAddr(), err

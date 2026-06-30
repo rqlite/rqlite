@@ -32,6 +32,7 @@ message Command {
         COMMAND_TYPE_BACKUP_STREAM = 11;
         COMMAND_TYPE_STEPDOWN = 12;
         COMMAND_TYPE_HIGHWATER_MARK_UPDATE = 13;
+        COMMAND_TYPE_DEMOTE_NODE = 14;
     }
     Type type = 1;
 
@@ -47,6 +48,7 @@ message Command {
         command.LoadChunkRequest load_chunk_request = 11;
         command.StepdownRequest stepdown_request = 12;
         HighwaterMarkUpdateRequest highwater_mark_update_request = 13;
+        command.DemoteNodeRequest demote_node_request = 14;
     }
 
     Credentials credentials = 4;
@@ -107,5 +109,9 @@ message HighwaterMarkUpdateRequest {
 }
 
 message HighwaterMarkUpdateResponse {
+    string error = 1;
+}
+
+message CommandDemoteNodeResponse {
     string error = 1;
 }
