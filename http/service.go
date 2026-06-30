@@ -77,6 +77,17 @@ type Store interface {
 	// the Raft system. It then triggers a Raft snapshot, which will then make
 	// Raft aware of the new data.
 	ReadFrom(r io.Reader) (int64, error)
+
+	// SetKey upserts key→value in the KV store.
+	SetKey(ctx context.Context, key string, value []byte) (uint64, error)
+
+	// GetKey returns the value associated with key at the requested consistency.
+	GetKey(ctx context.Context, key string, level proto.ConsistencyLevel,
+		freshness int64, freshnessStrict bool, linearizableTimeout int64) ([]byte, uint64, error)
+
+	// DeleteKey removes key from the KV store. If it was the last key, the
+	// backing table is dropped.
+	DeleteKey(ctx context.Context, key string) (uint64, error)
 }
 
 // GetNodeMetaer is the interface that wraps the GetNodeMeta method.
@@ -194,6 +205,11 @@ const (
 	numAuthOK                         = "auth_ok"
 	numAuthFail                       = "auth_fail"
 	numTLSCertFetched                 = "tls_cert_fetched"
+	numKVRequests                     = "kv_requests"
+	numKVPuts                         = "kv_puts"
+	numKVGets                         = "kv_gets"
+	numKVDeletes                      = "kv_deletes"
+	numKVNotFound                     = "kv_not_found"
 
 	// Default timeout for cluster communications.
 	defaultTimeout = 30 * time.Second
@@ -260,6 +276,11 @@ func ResetStats() {
 	stats.Add(numAuthOK, 0)
 	stats.Add(numAuthFail, 0)
 	stats.Add(numTLSCertFetched, 0)
+	stats.Add(numKVRequests, 0)
+	stats.Add(numKVPuts, 0)
+	stats.Add(numKVGets, 0)
+	stats.Add(numKVDeletes, 0)
+	stats.Add(numKVNotFound, 0)
 }
 
 // Service provides HTTP service.
@@ -485,6 +506,9 @@ func (s *Service) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	case strings.HasPrefix(r.URL.Path, "/db/sql"):
 		stats.Add(numSQLAnalyze, 1)
 		s.handleSQLAnalyze(w, r, params)
+	case strings.HasPrefix(r.URL.Path, "/kv/"):
+		stats.Add(numKVRequests, 1)
+		s.handleKV(w, r, params)
 	case r.URL.Path == "/boot":
 		stats.Add(numBoot, 1)
 		s.handleBoot(w, r)

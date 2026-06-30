@@ -39,6 +39,8 @@ const (
 	PermLeaderOps = "leader-ops"
 	// PermUI means user can access the UI.
 	PermUI = "ui"
+	// PermKV means user can access the key-value endpoints.
+	PermKV = "kv"
 )
 
 // BasicAuther is the interface an object must support to return basic auth information.
