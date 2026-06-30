@@ -57,6 +57,38 @@ func TestAddOperations(t *testing.T) {
 	}
 }
 
+func TestPlanDone(t *testing.T) {
+	// Empty plan is finished.
+	if !New().Done() {
+		t.Fatal("empty plan should be Done")
+	}
+	dir := t.TempDir()
+	src := filepath.Join(dir, "src")
+	dst := filepath.Join(dir, "dst")
+	if err := os.MkdirAll(src, 0755); err != nil {
+		t.Fatal(err)
+	}
+	// Terminal rename not yet run -> not done.
+	p := New()
+	p.AddRename(src, dst)
+	if p.Done() {
+		t.Fatal("plan with pending rename should not be Done")
+	}
+	// Run the rename -> done.
+	if err := os.Rename(src, dst); err != nil {
+		t.Fatal(err)
+	}
+	if !p.Done() {
+		t.Fatal("plan with completed rename should be Done")
+	}
+	// Last op is not a rename -> not done.
+	p2 := New()
+	p2.AddRemoveAll(filepath.Join(dir, "whatever"))
+	if p2.Done() {
+		t.Fatal("plan whose last op is not a rename should not be Done")
+	}
+}
+
 // MockVisitor records calls for verification
 type MockVisitor struct {
 	Calls []string

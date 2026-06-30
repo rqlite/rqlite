@@ -1230,6 +1230,63 @@ func Test_Store_Check_ResumesReapPlan(t *testing.T) {
 	}
 }
 
+func Test_Store_Check_DropsCompletedReapPlan(t *testing.T) {
+	dir := t.TempDir()
+	store, err := NewStore(dir)
+	if err != nil {
+		t.Fatalf("Failed to create store: %v", err)
+	}
+	defer store.Close()
+
+	// 1. Create a full + incremental snapshot.
+	createSnapshotInStore(t, store, "2-1017-1704807719996", 1017, 2, 1, "testdata/db-and-wals/backup.db")
+	createSnapshotInStore(t, store, "2-1131-1704807720976", 1131, 2, 1, "", "testdata/db-and-wals/wal-00")
+
+	// 2. Run a real reap to completion.
+	n, c, err := store.Reap()
+	if err != nil {
+		t.Fatalf("Reap failed: %v", err)
+	}
+	if n != 1 || c != 1 {
+		t.Fatalf("expected 1 reaped / 1 checkpointed, got %d / %d", n, c)
+	}
+	if store.Len() != 1 {
+		t.Fatalf("expected 1 snapshot after reap, got %d", store.Len())
+	}
+
+	// 3. Reproduce the post-crash state: the reap completed but the plan-file
+	// removal was lost. The terminal rename has already run (origFull renamed
+	// away, finalDir present); writing the plan back recreates that state.
+	origFullPath := filepath.Join(dir, "2-1017-1704807719996")
+	snaps := mustListSnapshots(t, store)
+	finalPath := filepath.Join(dir, snaps[0].ID)
+
+	p := plan.New()
+	p.AddCalcCRC32(filepath.Join(origFullPath, dbfileName), filepath.Join(origFullPath, dbfileName)+crcSuffix)
+	p.AddRename(origFullPath, finalPath)
+
+	planPath := filepath.Join(dir, reapPlanFile)
+	if err := plan.WriteToFile(p, planPath); err != nil {
+		t.Fatalf("Failed to write stale plan: %v", err)
+	}
+
+	// 4. Re-open: check() must detect the completed rename and drop the stale
+	// plan instead of replaying it (which would fail opening the renamed-away
+	// source).
+	store2, err := NewStore(dir)
+	if err != nil {
+		t.Fatalf("NewStore should recover from a completed-but-unremoved reap plan, got: %v", err)
+	}
+	defer store2.Close()
+
+	if fsutil.FileExists(planPath) {
+		t.Fatalf("expected stale REAP_PLAN to be removed on restart")
+	}
+	if store2.Len() != 1 {
+		t.Fatalf("expected 1 snapshot after recovery, got %d", store2.Len())
+	}
+}
+
 func Test_Store_ReaperGoroutine(t *testing.T) {
 	dir := t.TempDir()
 	store, err := NewStore(dir)

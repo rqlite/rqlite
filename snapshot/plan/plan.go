@@ -135,6 +135,27 @@ func (p *Plan) Len() int {
 	return len(p.Ops)
 }
 
+// Done returns whether the plan has been completely executed. It determines
+// this by checking if the last operation in the plan is actually done.
+//
+// If a plan contains no steps then this function returns true.
+func (p *Plan) Done() bool {
+	if len(p.Ops) == 0 {
+		return true
+	}
+	last := p.Ops[len(p.Ops)-1]
+	if last.Type != OpRename {
+		return false
+	}
+	return dirExists(last.Dst) && !dirExists(last.Src)
+}
+
+// dirExists reports whether path exists and is a directory.
+func dirExists(path string) bool {
+	fi, err := os.Stat(path)
+	return err == nil && fi.IsDir()
+}
+
 // AddRename adds a rename operation to the plan.
 func (p *Plan) AddRename(src, dst string) {
 	p.Ops = append(p.Ops, Operation{

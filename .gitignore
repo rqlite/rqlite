@@ -58,3 +58,4 @@ _testmain.go
 
 # IDEs
 *.vscode
+.idea/

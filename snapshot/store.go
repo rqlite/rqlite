@@ -649,11 +649,16 @@ func (s *Store) executeReapPlan(p *plan.Plan, planPath string) (int, int, error)
 	startT := time.Now()
 	defer recordDuration(reapExecuteDuration, startT)
 
+	if p.Done() {
+		s.logger.Printf("reap plan at %s already completed; dropping stale plan", planPath)
+		os.Remove(planPath)
+		return p.NReaped, p.NCheckpointed, nil
+	}
+
 	executor := plan.NewExecutor()
 	if err := p.Execute(executor); err != nil {
 		return 0, 0, fmt.Errorf("executing reap plan: %w", err)
 	}
-
 	if err := fsutil.SyncDirMaybe(s.dir); err != nil {
 		return 0, 0, fmt.Errorf("syncing store dir: %w", err)
 	}
