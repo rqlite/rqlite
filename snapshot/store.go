@@ -836,7 +836,7 @@ func (s *Store) check() error {
 		// Replaying such a plan can fail -- an earlier operation may reference a
 		// path a later one has since renamed or removed -- so skip execution and
 		// just finish the interrupted cleanup. This was a flaw in the initial
-		// v9 implementation, but other fixed would not be backwards-compatible.
+		// v9 implementation, but other fixes would not be backwards-compatible.
 		done, err := p.LastOpDone(plan.NewChecker())
 		if err != nil {
 			return fmt.Errorf("checking reap plan completion: %w", err)
