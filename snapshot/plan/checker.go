@@ -8,9 +8,7 @@ import (
 
 // Checker reports whether a plan's operations have already been applied on disk.
 // It is the read-only counterpart to Executor: Executor performs operations,
-// Checker inspects whether they are done. It implements Inspector, and is used
-// (via Plan.LastOpDone) to decide whether an interrupted plan already ran to
-// completion before it is replayed.
+// Checker inspects whether they are done.
 //
 // The Done methods perform no mutations. Each corresponds to the like-named
 // mutating Executor method.
@@ -21,6 +19,7 @@ func NewChecker() *Checker {
 	return &Checker{}
 }
 
+// Confirm at compile-time that Check implements Inspector.
 var _ Inspector = (*Checker)(nil)
 
 // RenameDone reports whether a rename has taken effect: the source is gone and

@@ -285,12 +285,10 @@ func (p *Plan) Execute(v Visitor) error {
 // mirrors Execute's dispatch, but inspects a single operation instead of
 // performing all of them.
 //
-// Because Execute runs operations in order and stops at the first error, the
-// last operation can only have taken effect if every earlier operation did too.
-// A true result therefore means the entire plan has already run to completion --
-// which lets a caller recognize a plan that was fully executed before a crash
-// prevented its plan file from being removed, and which would fail if naively
-// replayed (an earlier operation may reference a path a later one has moved).
+// Ideally plan-execution is idempotent and if a plan is found post-restart-after-crash
+// the system can just execute the plan again. However this allows the system to ask
+// directly "is the plan executed". Certain recovery scenarios post crash may need
+// this option.
 //
 // An empty plan has no work to do and is reported as done.
 func (p *Plan) LastOpDone(c Inspector) (bool, error) {
