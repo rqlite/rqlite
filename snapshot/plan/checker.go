@@ -96,21 +96,21 @@ func (c *Checker) MkdirAllDone(path string) (bool, error) {
 // so a destination left partially written by an interrupted copy is reported as
 // done; a plan relying on copy as its final operation must account for that.
 func (c *Checker) CopyFileDone(src, dst string) (bool, error) {
-    srcFi, err := os.Stat(src)
-    if err != nil {
-        if os.IsNotExist(err) {
-            return pathExists(dst)
-        }
-        return false, err
-    }
-    dstFi, err := os.Stat(dst)
-    if err != nil {
-        if os.IsNotExist(err) {
-            return false, nil
-        }
-        return false, err
-    }
-    return srcFi.Size() == dstFi.Size(), nil
+	srcFi, err := os.Stat(src)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return pathExists(dst)
+		}
+		return false, err
+	}
+	dstFi, err := os.Stat(dst)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return false, nil
+		}
+		return false, err
+	}
+	return srcFi.Size() == dstFi.Size(), nil
 }
 
 // CalcCRC32Done reports whether the sidecar file exists. It does not recompute
