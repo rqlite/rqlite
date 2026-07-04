@@ -1,3 +1,7 @@
+## v10.2.6 (unreleased)
+### Implementation changes and bug fixes
+- [PR #2704](https://github.com/rqlite/rqlite/pull/2704): Handle a fully-executed Reap plan, but Plan file itself not removed. Thanks to @thecitymouse for spotting this issue.
+
 ## v10.2.5 (June 29th 2026)
 ### Implementation changes and bug fixes
 - [PR #2702](https://github.com/rqlite/rqlite/pull/2702): Perform a Quick Integrity check after reaping snapshots, not Full.
