@@ -1230,6 +1230,113 @@ func Test_Store_Check_ResumesReapPlan(t *testing.T) {
 	}
 }
 
+// Test_Store_Check_CompletedReapPlanLeftover reproduces the crash window in
+// which a reap plan ran to completion -- including its terminal rename of the
+// full-snapshot directory -- but the process died before the REAP_PLAN file was
+// removed. On restart the leftover plan must not be naively replayed (its
+// earlier operations reference the renamed-away directory and would error), and
+// the store must still initialize.
+func Test_Store_Check_CompletedReapPlanLeftover(t *testing.T) {
+	dir := t.TempDir()
+	store, err := NewStore(dir)
+	if err != nil {
+		t.Fatalf("Failed to create store: %v", err)
+	}
+
+	createSnapshotInStore(t, store, "2-1017-1704807719996", 1017, 2, 1, "testdata/db-and-wals/backup.db")
+	createSnapshotInStore(t, store, "2-1131-1704807720976", 1131, 2, 1, "", "testdata/db-and-wals/wal-00")
+
+	// Build the exact plan Reap() would produce for this store.
+	snaps := mustListSnapshots(t, store)
+	fullID := snaps[1].ID // older = full
+	incID := snaps[0].ID  // newer = incremental
+	fullPath := filepath.Join(dir, fullID)
+	incPath := filepath.Join(dir, incID)
+
+	walMatches, err := filepath.Glob(filepath.Join(incPath, "*"+walfileSuffix))
+	if err != nil {
+		t.Fatalf("Failed to glob for WAL files: %v", err)
+	}
+	if len(walMatches) == 0 {
+		t.Fatal("Expected at least one WAL file in incremental snapshot")
+	}
+
+	p := plan.New()
+	p.AddCheckpoint(filepath.Join(fullPath, dbfileName), walMatches)
+	p.NCheckpointed = len(walMatches)
+	p.AddCalcCRC32(filepath.Join(fullPath, dbfileName), filepath.Join(fullPath, dbfileName)+crcSuffix)
+	p.AddRemoveAll(incPath)
+	p.NReaped = 1
+	newMeta := copyRaftMeta(snaps[0])
+	newID := snapshotName(snaps[0].Term, snaps[0].Index)
+	newMeta.ID = newID
+	metaJSON, err := json.Marshal(newMeta)
+	if err != nil {
+		t.Fatalf("Failed to marshal meta: %v", err)
+	}
+	finalDir := filepath.Join(dir, newID)
+	p.AddWriteMeta(fullPath, metaJSON)
+	p.AddRename(fullPath, finalDir)
+
+	// Close the store before mutating its directory directly.
+	store.Close()
+
+	// Apply the plan fully, reaching the terminal on-disk state the crashing
+	// process had already produced.
+	if err := p.Execute(plan.NewExecutor()); err != nil {
+		t.Fatalf("Failed to execute plan: %v", err)
+	}
+
+	// Sanity check: naively replaying the completed plan fails, which is exactly
+	// why the store used to refuse to start with the leftover plan file.
+	if err := p.Execute(plan.NewExecutor()); err == nil {
+		t.Fatal("Expected naive replay of a completed plan to fail")
+	}
+
+	// Simulate the crash window: the plan file was never removed.
+	planPath := filepath.Join(dir, reapPlanFile)
+	if err := plan.WriteToFile(p, planPath); err != nil {
+		t.Fatalf("Failed to write plan: %v", err)
+	}
+
+	// Re-open: check() must recover cleanly rather than failing NewStore.
+	store2, err := NewStore(dir)
+	if err != nil {
+		t.Fatalf("Store failed to initialize with a leftover completed reap plan: %v", err)
+	}
+	defer store2.Close()
+
+	if fsutil.FileExists(planPath) {
+		t.Fatal("Expected leftover REAP_PLAN to be removed after check")
+	}
+	if store2.Len() != 1 {
+		t.Fatalf("Expected 1 snapshot after recovery, got %d", store2.Len())
+	}
+
+	// The consolidated snapshot must be intact and queryable.
+	snaps = mustListSnapshots(t, store2)
+	if snaps[0].ID != newID {
+		t.Fatalf("Expected consolidated snapshot %s, got %s", newID, snaps[0].ID)
+	}
+	_, rc, err := store2.Open(snaps[0].ID)
+	if err != nil {
+		t.Fatalf("Failed to open consolidated snapshot: %v", err)
+	}
+	buf := &bytes.Buffer{}
+	if _, err := io.Copy(buf, rc); err != nil {
+		t.Fatalf("Failed to read snapshot: %v", err)
+	}
+	rc.Close()
+	dbPath, walPaths := persistStreamerData(t, buf)
+	if len(walPaths) != 0 {
+		t.Fatalf("Expected 0 WAL files, got %d", len(walPaths))
+	}
+	rows := mustQueryDB(t, dbPath, "SELECT COUNT(*) FROM foo")
+	if exp, got := `[{"columns":["COUNT(*)"],"types":["integer"],"values":[[1]]}]`, rows; exp != got {
+		t.Fatalf("unexpected query result: exp %s got %s", exp, got)
+	}
+}
+
 func Test_Store_ReaperGoroutine(t *testing.T) {
 	dir := t.TempDir()
 	store, err := NewStore(dir)

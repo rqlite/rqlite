@@ -649,9 +649,21 @@ func (s *Store) executeReapPlan(p *plan.Plan, planPath string) (int, int, error)
 	startT := time.Now()
 	defer recordDuration(reapExecuteDuration, startT)
 
-	executor := plan.NewExecutor()
-	if err := p.Execute(executor); err != nil {
-		return 0, 0, fmt.Errorf("executing reap plan: %w", err)
+	// If the plan's final operation is already applied, the plan ran to
+	// completion on a previous attempt and we crashed after that operation but
+	// before the plan file was removed. Because operations execute in order and
+	// stop at the first error, a completed final operation means every earlier
+	// operation completed too. Replaying such a plan can fail -- an earlier
+	// operation may reference a path a later one has since renamed or removed --
+	// so skip execution and just finish the interrupted cleanup.
+	done, err := p.LastOpDone(plan.NewChecker())
+	if err != nil {
+		return 0, 0, fmt.Errorf("checking reap plan completion: %w", err)
+	}
+	if !done {
+		if err := p.Execute(plan.NewExecutor()); err != nil {
+			return 0, 0, fmt.Errorf("executing reap plan: %w", err)
+		}
 	}
 
 	if err := fsutil.SyncDirMaybe(s.dir); err != nil {
