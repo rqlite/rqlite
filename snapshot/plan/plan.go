@@ -231,7 +231,7 @@ type Visitor interface {
 // Inspector reports, for a single operation, whether that operation's effect is
 // already present on disk -- i.e. whether the operation has already been
 // applied. It is the read-only, query counterpart to Visitor: Visitor performs
-// operations, an Inspector inspects whether they are done. It is used to decide
+// operations, an Inspector inspects whether they are done. It maye be used to decide
 // whether an interrupted plan has already run to completion before replaying it.
 // The concrete implementation is Checker.
 type Inspector interface {

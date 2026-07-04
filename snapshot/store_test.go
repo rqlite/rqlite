@@ -1236,6 +1236,9 @@ func Test_Store_Check_ResumesReapPlan(t *testing.T) {
 // removed. On restart the leftover plan must not be naively replayed (its
 // earlier operations reference the renamed-away directory and would error), and
 // the store must still initialize.
+//
+// This tests code that was added to address an implementation flaw in the initial
+// v9 plan-then-execute system. See https://github.com/rqlite/rqlite/pull/2703.
 func Test_Store_Check_CompletedReapPlanLeftover(t *testing.T) {
 	dir := t.TempDir()
 	store, err := NewStore(dir)
