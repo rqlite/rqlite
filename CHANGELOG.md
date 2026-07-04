@@ -1,6 +1,7 @@
-## v10.2.6 (unreleased)
+## v10.2.6 (July 4th 2026)
 ### Implementation changes and bug fixes
 - [PR #2704](https://github.com/rqlite/rqlite/pull/2704): Handle a fully-executed Reap plan, but Plan file itself not removed. Thanks to @thecitymouse for spotting this issue.
+- [PR #2705](https://github.com/rqlite/rqlite/pull/2705): Close Snapshot streamer on error.
 
 ## v10.2.5 (June 29th 2026)
 ### Implementation changes and bug fixes
