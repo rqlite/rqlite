@@ -842,13 +842,13 @@ func (s *Store) check() error {
 			return fmt.Errorf("checking reap plan completion: %w", err)
 		}
 		if !done {
-			s.logger.Printf("reprocessing interrupted reap plan at %s", s.reapPlanPath)
+			s.logger.Printf("re-executing interrupted reap plan at %s", s.reapPlanPath)
 			if _, _, err := s.executeReapPlan(p, s.reapPlanPath); err != nil {
 				return fmt.Errorf("executing reap plan: %w", err)
 			}
 		} else {
-			s.logger.Printf("reap plan at %s is fully processed, removing plan", s.reapPlanPath)
-
+			s.logger.Printf("reap plan at %s is fully executed, removing plan", s.reapPlanPath)
+			os.Remove(s.reapPlanPath)
 		}
 	}
 
