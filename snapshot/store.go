@@ -420,6 +420,16 @@ func (s *Store) Open(id string) (raftMeta *raft.SnapshotMeta, rc io.ReadCloser, 
 	if err := streamer.Open(); err != nil {
 		return nil, nil, fmt.Errorf("opening streamer for snapshot %s: %w", id, err)
 	}
+	// The streamer now holds open file descriptors for the DB and WAL files.
+	// Ownership passes to the returned LockingStreamer only on the success path;
+	// if we return an error before then, close the streamer here so the
+	// descriptors don't leak (the deferred EndRead above only releases the read
+	// lock).
+	defer func() {
+		if retErr != nil {
+			streamer.Close()
+		}
+	}()
 
 	sz, err := streamer.Len()
 	if err != nil {
