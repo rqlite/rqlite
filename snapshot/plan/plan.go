@@ -228,6 +228,24 @@ type Visitor interface {
 	VerifyDB(db string) error
 }
 
+// Inspector reports, for a single operation, whether that operation's effect is
+// already present on disk -- i.e. whether the operation has already been
+// applied. It is the read-only, query counterpart to Visitor: Visitor performs
+// operations, an Inspector inspects whether they are done. It maye be used to decide
+// whether an interrupted plan has already run to completion before replaying it.
+// The concrete implementation is Checker.
+type Inspector interface {
+	RenameDone(src, dst string) (bool, error)
+	RemoveDone(path string) (bool, error)
+	RemoveAllDone(path string) (bool, error)
+	CheckpointDone(db string, wals []string) (bool, error)
+	WriteMetaDone(dir string, data []byte) (bool, error)
+	MkdirAllDone(path string) (bool, error)
+	CopyFileDone(src, dst string) (bool, error)
+	CalcCRC32Done(dataPath, crcPath string) (bool, error)
+	VerifyDBDone(db string) (bool, error)
+}
+
 // Execute traverses the plan, calling the appropriate method on the visitor for each operation.
 // It stops and returns the first error encountered.
 func (p *Plan) Execute(v Visitor) error {
@@ -260,6 +278,46 @@ func (p *Plan) Execute(v Visitor) error {
 		}
 	}
 	return nil
+}
+
+// LastOpDone reports whether the last operation in the plan has already been
+// applied, by dispatching that operation to the matching Inspector method. This
+// mirrors Execute's dispatch, but inspects a single operation instead of
+// performing all of them.
+//
+// Ideally plan-execution is idempotent and if a plan is found post-restart-after-crash
+// the system can just execute the plan again. However this allows the system to ask
+// directly "is the plan executed". Certain recovery scenarios post crash may need
+// this option.
+//
+// An empty plan has no work to do and is reported as done.
+func (p *Plan) LastOpDone(c Inspector) (bool, error) {
+	if len(p.Ops) == 0 {
+		return true, nil
+	}
+	op := p.Ops[len(p.Ops)-1]
+	switch op.Type {
+	case OpRename:
+		return c.RenameDone(op.Src, op.Dst)
+	case OpRemove:
+		return c.RemoveDone(op.Src)
+	case OpRemoveAll:
+		return c.RemoveAllDone(op.Src)
+	case OpCheckpoint:
+		return c.CheckpointDone(op.DB, op.WALs)
+	case OpWriteMeta:
+		return c.WriteMetaDone(op.Dst, op.Data)
+	case OpMkdirAll:
+		return c.MkdirAllDone(op.Dst)
+	case OpCopyFile:
+		return c.CopyFileDone(op.Src, op.Dst)
+	case OpCalcCRC32:
+		return c.CalcCRC32Done(op.Src, op.Dst)
+	case OpVerifyDB:
+		return c.VerifyDBDone(op.Src)
+	default:
+		return false, fmt.Errorf("unknown operation type: %s", op.Type)
+	}
 }
 
 // syncFile syncs the given file to disk. Skipped on Windows as it is

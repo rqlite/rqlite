@@ -20,6 +20,10 @@ func NewExecutor() *Executor {
 	return &Executor{}
 }
 
+// Executor performs a plan's operations; it implements Visitor. Its read-only
+// counterpart, which reports whether operations are already done, is Checker.
+var _ Visitor = (*Executor)(nil)
+
 // Rename renames a file. It is idempotent: if src does not exist but dst does,
 // it returns nil.
 func (e *Executor) Rename(src, dst string) error {

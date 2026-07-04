@@ -821,13 +821,34 @@ func (s *Store) check() error {
 	// Resume an interrupted reap if a plan file exists, before any temporary
 	// directories are removed below, since the reap may still need them.
 	if fsutil.FileExists(s.reapPlanPath) {
-		s.logger.Printf("found interrupted reap plan at %s, resuming", s.reapPlanPath)
+		s.logger.Printf("found interrupted reap plan at %s", s.reapPlanPath)
 		p, err := plan.ReadFromFile(s.reapPlanPath)
 		if err != nil {
 			return fmt.Errorf("reading reap plan: %w", err)
 		}
-		if _, _, err := s.executeReapPlan(p, s.reapPlanPath); err != nil {
-			return fmt.Errorf("executing interrupted reap plan: %w", err)
+
+		// If the plan's final operation is already applied, the plan ran to
+		// completion on a previous attempt and we crashed after that operation but
+		// before the plan file was removed. Because operations execute in order and
+		// stop at the first error, a completed final operation means every earlier
+		// operation completed too.
+		//
+		// Replaying such a plan can fail -- an earlier operation may reference a
+		// path a later one has since renamed or removed -- so skip execution and
+		// just finish the interrupted cleanup. This was a flaw in the initial
+		// v9 implementation, but other fixes would not be backwards-compatible.
+		done, err := p.LastOpDone(plan.NewChecker())
+		if err != nil {
+			return fmt.Errorf("checking reap plan completion: %w", err)
+		}
+		if !done {
+			s.logger.Printf("re-executing interrupted reap plan at %s", s.reapPlanPath)
+			if _, _, err := s.executeReapPlan(p, s.reapPlanPath); err != nil {
+				return fmt.Errorf("executing reap plan: %w", err)
+			}
+		} else {
+			s.logger.Printf("reap plan at %s is fully executed, removing plan", s.reapPlanPath)
+			os.Remove(s.reapPlanPath)
 		}
 	}
 
