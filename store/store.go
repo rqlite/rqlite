@@ -1229,7 +1229,7 @@ func (s *Store) Followers() ([]*Server, error) {
 			followers = append(followers, &Server{
 				ID:       string(servers[i].ID),
 				Addr:     string(servers[i].Address),
-				Suffrage: proto.Suffrage_NON_VOTER,
+				Suffrage: proto.Suffrage_VOTER,
 			})
 		}
 	}
