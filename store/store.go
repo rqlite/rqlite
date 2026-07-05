@@ -156,7 +156,7 @@ const (
 	numSnapshotsFailed          = "num_snapshots_failed"
 	numUserSnapshots            = "num_user_snapshots"
 	numUserSnapshotsFailed      = "num_user_snapshots_failed"
-	numWALSnapshots             = "num_wal_snapshots_ok"
+	numWALSnapshots             = "num_wal_snapshots"
 	numWALSnapshotsFailed       = "num_wal_snapshots_failed"
 	numSnapshotsFull            = "num_snapshots_full"
 	numSnapshotsIncremental     = "num_snapshots_incremental"
