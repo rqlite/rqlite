@@ -1824,10 +1824,8 @@ func (s *Store) Backup(ctx context.Context, br *proto.BackupRequest, dst io.Writ
 			}
 			defer func() {
 				err := dstGz.Close()
-				if err != nil {
-					if retErr == nil {
-						retErr = err
-					}
+				if err != nil && retErr == nil {
+					retErr = err
 				}
 			}()
 			_, err = io.Copy(dstGz, srcFD)
@@ -1844,10 +1842,8 @@ func (s *Store) Backup(ctx context.Context, br *proto.BackupRequest, dst io.Writ
 			}
 			defer func() {
 				err := dstGz.Close()
-				if err != nil {
-					if retErr == nil {
-						retErr = err
-					}
+				if err != nil && retErr == nil {
+					retErr = err
 				}
 			}()
 			ww = dstGz
@@ -1882,10 +1878,8 @@ func (s *Store) Backup(ctx context.Context, br *proto.BackupRequest, dst io.Writ
 			}
 			defer func() {
 				err := dstGz.Close()
-				if err != nil {
-					if retErr == nil {
-						retErr = err
-					}
+				if err != nil && retErr == nil {
+					retErr = err
 				}
 			}()
 			_, err = io.Copy(dstGz, tmpReadFD)
