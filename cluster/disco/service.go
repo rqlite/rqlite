@@ -126,7 +126,6 @@ func (s *Service) Register(id, apiAddr, addr string) (bool, string, error) {
 // to go stale.
 func (s *Service) StartReporting(id, apiAddr, addr string) chan struct{} {
 	ticker := time.NewTicker(s.ReportInterval)
-	defer ticker.Stop()
 	obCh := make(chan bool, leaderChanLen)
 	s.s.RegisterLeaderChange(obCh)
 
@@ -160,6 +159,7 @@ func (s *Service) StartReporting(id, apiAddr, addr string) chan struct{} {
 	}()
 
 	go func() {
+		defer ticker.Stop()
 		for {
 			select {
 			case isLeader := <-obCh:

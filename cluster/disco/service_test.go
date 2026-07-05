@@ -133,7 +133,7 @@ func Test_StartReportingChange_Timer(t *testing.T) {
 	nCalled := 0
 	m.setLeaderFn = func(id, apiAddr, addr string) error {
 		nCalled++
-		if nCalled > 1 {
+		if nCalled > 5 {
 			ch <- struct{}{}
 		}
 		if id != "1" || apiAddr != "localhost:4001" || addr != "localhost:4002" {
@@ -153,7 +153,7 @@ func Test_StartReportingChange_Timer(t *testing.T) {
 	s.ReportInterval = 100 * time.Millisecond
 	done := s.StartReporting("1", "localhost:4001", "localhost:4002")
 
-	<-ch // Wait for at least two calls to SetLeader
+	<-ch // Wait for multiple periodic calls.
 	close(done)
 }
 
