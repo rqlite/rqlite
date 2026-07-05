@@ -892,7 +892,7 @@ func (s *Store) Stepdown(wait bool, id string) error {
 		return ErrNotOpen
 	}
 
-	if lid, err := s.LeaderID(); err == nil && lid == id {
+	if lid, err := s.LeaderID(); id != "" && err == nil && lid == id {
 		return fmt.Errorf("cannot step down to the current Leader")
 	}
 
