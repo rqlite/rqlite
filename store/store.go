@@ -156,7 +156,7 @@ const (
 	numSnapshotsFailed          = "num_snapshots_failed"
 	numUserSnapshots            = "num_user_snapshots"
 	numUserSnapshotsFailed      = "num_user_snapshots_failed"
-	numWALSnapshots             = "num_wal_snapshots"
+	numWALSnapshots             = "num_wal_snapshots_ok"
 	numWALSnapshotsFailed       = "num_wal_snapshots_failed"
 	numSnapshotsFull            = "num_snapshots_full"
 	numSnapshotsIncremental     = "num_snapshots_incremental"
@@ -3038,8 +3038,9 @@ func (s *Store) runWALSnapshotting() (closeCh, doneCh chan struct{}) {
 					if err := s.Snapshot(0); err != nil {
 						stats.Add(numWALSnapshotsFailed, 1)
 						s.logger.Printf("failed to snapshot due to WAL threshold: %s", err.Error())
+					} else {
+						stats.Add(numWALSnapshots, 1)
 					}
-					stats.Add(numWALSnapshots, 1)
 				}
 			case <-closeCh:
 				return
