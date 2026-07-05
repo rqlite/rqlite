@@ -261,6 +261,11 @@ func OpenWithDriver(drv *Driver, dbPath string, fkEnabled, wal bool) (retDB *DB,
 	if err != nil {
 		return nil, fmt.Errorf("open: %s", err.Error())
 	}
+	defer func() {
+		if retErr != nil {
+			rwDB.Close()
+		}
+	}()
 
 	/////////////////////////////////////////////////////////////////////////
 	// Read-only connection
@@ -269,6 +274,11 @@ func OpenWithDriver(drv *Driver, dbPath string, fkEnabled, wal bool) (retDB *DB,
 	if err != nil {
 		return nil, err
 	}
+	defer func() {
+		if retErr != nil {
+			roDB.Close()
+		}
+	}()
 
 	// Set connection pool behaviour.
 	rwDB.SetConnMaxLifetime(0)
