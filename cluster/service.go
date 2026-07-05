@@ -411,6 +411,7 @@ func (s *Service) handleConn(conn net.Conn) {
 			})
 			if err != nil {
 				conn.Close()
+				return
 			}
 			if err := writeBytesWithLength(conn, p); err != nil {
 				return

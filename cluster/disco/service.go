@@ -159,6 +159,7 @@ func (s *Service) StartReporting(id, apiAddr, addr string) chan struct{} {
 	}()
 
 	go func() {
+		defer ticker.Stop()
 		for {
 			select {
 			case isLeader := <-obCh:

@@ -799,7 +799,6 @@ func (c *Client) retry(ctx context.Context, command *proto.Command, nodeAddr str
 		// in the pool are stale, but we just don't know it. This is a last-ditch effort to get a
 		// successful response before giving up.
 		if nRetries == effectiveRetries {
-			nRetries++
 			conn, err := c.dialWithOption(nodeAddr, true)
 			if err != nil {
 				return nil, nRetries, err
@@ -831,10 +830,11 @@ func writeCommand(conn net.Conn, c *proto.Command, timeout time.Duration) error 
 		return fmt.Errorf("command marshal: %w", err)
 	}
 
-	// Write length of Protobuf
 	if err := conn.SetDeadline(time.Now().Add(timeout)); err != nil {
 		return err
 	}
+
+	// Write length of Protobuf
 	b := make([]byte, protoBufferLengthSize)
 	binary.LittleEndian.PutUint64(b[0:], uint64(len(p)))
 	_, err = conn.Write(b)
@@ -845,9 +845,6 @@ func writeCommand(conn net.Conn, c *proto.Command, timeout time.Duration) error 
 		return fmt.Errorf("write length: %w", err)
 	}
 	// Write actual protobuf.
-	if err := conn.SetDeadline(time.Now().Add(timeout)); err != nil {
-		return err
-	}
 	_, err = conn.Write(p)
 	if err != nil {
 		if errors.Is(err, os.ErrDeadlineExceeded) {
