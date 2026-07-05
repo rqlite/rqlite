@@ -322,7 +322,7 @@ func Test_TableCreation(t *testing.T) {
 	testQ()
 }
 
-func Test_QueryReadOnly(t *testing.T) {
+func Test_Query_PragmaJournal_ReadOnly(t *testing.T) {
 	db, path := mustCreateOnDiskDatabaseWAL()
 	defer db.Close()
 	defer os.Remove(path)
