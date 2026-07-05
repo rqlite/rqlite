@@ -1921,7 +1921,7 @@ func (s *Store) Load(ctx context.Context, lr *proto.LoadRequest) error {
 
 // load loads an entire SQLite file into the database, and is for internal use
 // only. It does not check for readiness, and does not update statistics.
-func (s *Store) load(lr *proto.LoadRequest) error {
+func (s *Store) load(lr *proto.LoadRequest) (retErr error) {
 	startT := time.Now()
 
 	b, err := command.MarshalLoadRequest(lr)
@@ -1939,6 +1939,11 @@ func (s *Store) load(lr *proto.LoadRequest) error {
 	if err != nil {
 		return err
 	}
+	defer func() {
+		if retErr == nil {
+			s.logger.Printf("node loaded in %s (%d bytes)", time.Since(startT), len(b))
+		}
+	}()
 
 	af := s.raft.Apply(b, s.ApplyTimeout)
 	if af.Error() != nil {
@@ -1948,8 +1953,8 @@ func (s *Store) load(lr *proto.LoadRequest) error {
 		s.logger.Printf("load failed during Apply: %s", af.Error())
 		return af.Error()
 	}
-	s.logger.Printf("node loaded in %s (%d bytes)", time.Since(startT), len(b))
-	return nil
+	r := af.Response().(*fsmGenericResponse)
+	return r.error
 }
 
 // ReadFrom reads data from r, and loads it into the database, bypassing Raft consensus.

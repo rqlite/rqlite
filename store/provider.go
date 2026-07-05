@@ -41,7 +41,7 @@ func (p *Provider) LastIndex() (uint64, error) {
 
 // Provide writes the SQLite database to the given path. If path exists,
 // it will be overwritten.
-func (p *Provider) Provide(w io.Writer) (retErr error) {
+func (p *Provider) Provide(w io.WriteSeeker) (retErr error) {
 	stats.Add(numProviderProvides, 1)
 	defer func() {
 		if retErr != nil {
@@ -56,6 +56,9 @@ func (p *Provider) Provide(w io.Writer) (retErr error) {
 	}
 	nRetries := 0
 	for {
+		if _, err := w.Seek(0, io.SeekStart); err != nil {
+			return err
+		}
 		err := p.str.Backup(context.Background(), br, w)
 		if err == nil {
 			break

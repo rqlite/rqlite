@@ -351,7 +351,7 @@ func (mp *mockDataProvider) LastIndex() (uint64, error) {
 	return 1, nil
 }
 
-func (mp *mockDataProvider) Provide(w io.Writer) error {
+func (mp *mockDataProvider) Provide(w io.WriteSeeker) error {
 	if mp.err != nil {
 		return mp.err
 	}
