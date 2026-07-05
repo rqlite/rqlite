@@ -65,7 +65,7 @@ type NodeTransport struct {
 	commandCommitIndex *atomic.Uint64
 	leaderCommitIndex  *atomic.Uint64
 	done               chan struct{}
-	closed             bool
+	closeOnce          sync.Once
 	logger             *log.Logger
 }
 
@@ -113,17 +113,16 @@ func (n *NodeTransport) SetAppendEntriesRxHandler(cb func(req *raft.AppendEntrie
 
 // Close closes the transport
 func (n *NodeTransport) Close() error {
-	if n.closed {
-		return nil
-	}
-	n.closed = true
-
-	close(n.done)
-	if n.NetworkTransport == nil {
-		return nil
-	}
-	n.NetworkTransport.CloseStreams()
-	return n.NetworkTransport.Close()
+	var err error
+	n.closeOnce.Do(func() {
+		close(n.done)
+		if n.NetworkTransport == nil {
+			return
+		}
+		n.NetworkTransport.CloseStreams()
+		err = n.NetworkTransport.Close()
+	})
+	return err
 }
 
 // InstallSnapshot is used to push a snapshot down to a follower. The data is read from
@@ -188,7 +187,11 @@ func (n *NodeTransport) Consumer() <-chan raft.RPC {
 					n.logger.Printf("TimeoutNowRequest received on this node (%s) from node %s at %s",
 						n.LocalAddr(), cmd.ID, cmd.Addr)
 				}
-				ch <- rpc
+				select {
+				case ch <- rpc:
+				case <-n.done:
+					return
+				}
 			}
 		}
 	}()
