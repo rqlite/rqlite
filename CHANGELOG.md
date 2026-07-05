@@ -1,3 +1,7 @@
+## v10.2.7 (unreleased)
+### Implementation changes and bug fixes
+- [PR #2706](https://github.com/rqlite/rqlite/pull/2706): Fixes for minor issues in data handling at the `db` layer.
+
 ## v10.2.6 (July 4th 2026)
 ### Implementation changes and bug fixes
 - [PR #2704](https://github.com/rqlite/rqlite/pull/2704): Handle a fully-executed Reap plan, but Plan file itself not removed. Thanks to @thecitymouse for spotting this issue.

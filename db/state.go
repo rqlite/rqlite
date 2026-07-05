@@ -197,7 +197,7 @@ func IsValidSQLiteFile(path string) bool {
 	defer f.Close()
 
 	b := make([]byte, 16)
-	if _, err := f.Read(b); err != nil {
+	if _, err := io.ReadFull(f, b); err != nil {
 		return false
 	}
 

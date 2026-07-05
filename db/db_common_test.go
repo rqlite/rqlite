@@ -267,7 +267,7 @@ func Test_DB_ColumnNames(t *testing.T) {
 		t.Fatalf("expected error when getting column names for non-existent table")
 	}
 
-	_, err = db.ExecuteStringStmt("CREATE TABLE foo (id INTEGER NOT NULL PRIMARY KEY, name TEXT, age NUMERIC, height REAL, data BLOB)")
+	_, err = db.ExecuteStringStmt(`CREATE TABLE foo (id INTEGER NOT NULL PRIMARY KEY, "my ""quoted"" name" TEXT, age NUMERIC, height REAL, data BLOB)`)
 	if err != nil {
 		t.Fatalf("failed to create table: %s", err.Error())
 	}
@@ -282,7 +282,28 @@ func Test_DB_ColumnNames(t *testing.T) {
 		t.Fatalf("failed to get column names: %s", err.Error())
 	}
 
-	expNames := []string{"id", "name", "age", "height", "data"}
+	expNames := []string{"id", `my "quoted" name`, "age", "height", "data"}
+	if !slices.Equal(names, expNames) {
+		t.Fatalf("unexpected column names, expected %v, got %v", expNames, names)
+	}
+}
+
+func Test_DB_ColumnNames_QuotedTableName(t *testing.T) {
+	db, path := mustCreateOnDiskDatabaseWAL()
+	defer os.Remove(path)
+	defer db.Close()
+
+	_, err := db.ExecuteStringStmt(`CREATE TABLE "my ""q"" table" (id INTEGER NOT NULL PRIMARY KEY)`)
+	if err != nil {
+		t.Fatalf("failed to create table: %s", err.Error())
+	}
+
+	names, err := db.ColumnNames(`my "q" table`)
+	if err != nil {
+		t.Fatalf("failed to get column names: %s", err.Error())
+	}
+
+	expNames := []string{"id"}
 	if !slices.Equal(names, expNames) {
 		t.Fatalf("unexpected column names, expected %v, got %v", expNames, names)
 	}
@@ -319,6 +340,33 @@ func Test_DB_TableColumnTypes(t *testing.T) {
 		"age":    "NUMERIC",
 		"height": "REAL",
 		"data":   "BLOB",
+	}
+	if len(types) != len(expTypes) {
+		t.Fatalf("unexpected number of column types, expected %d, got %d", len(expTypes), len(types))
+	}
+	for k, v := range expTypes {
+		if types[k] != v {
+			t.Fatalf("unexpected type for column %s, expected %s, got %s", k, v, types[k])
+		}
+	}
+}
+
+func Test_DB_TableColumnTypes_QuotedTableName(t *testing.T) {
+	db, path := mustCreateOnDiskDatabaseWAL()
+	defer os.Remove(path)
+	defer db.Close()
+
+	if _, err := db.ExecuteStringStmt(`CREATE TABLE "my ""quoted"" table name" (id INTEGER NOT NULL PRIMARY KEY)`); err != nil {
+		t.Fatalf("failed to create table: %s", err.Error())
+	}
+
+	types, err := db.TableColumnTypes(`my "quoted" table name`)
+	if err != nil {
+		t.Fatalf("failed to get column types: %s", err.Error())
+	}
+
+	expTypes := map[string]string{
+		"id": "INTEGER",
 	}
 	if len(types) != len(expTypes) {
 		t.Fatalf("unexpected number of column types, expected %d, got %d", len(expTypes), len(types))
