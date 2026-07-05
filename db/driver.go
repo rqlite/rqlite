@@ -19,11 +19,11 @@ const (
 type CnkOnCloseMode int
 
 const (
-	// CnkOnCloseModeEnabled enables checkpoint on close.
-	CnkOnCloseModeEnabled CnkOnCloseMode = iota
-
 	// CnkOnCloseModeDisabled disables checkpoint on close.
-	CnkOnCloseModeDisabled
+	CnkOnCloseModeDisabled CnkOnCloseMode = iota
+
+	// CnkOnCloseModeEnabled enables checkpoint on close.
+	CnkOnCloseModeEnabled
 )
 
 // Driver is a Database driver.
@@ -105,6 +105,7 @@ func NewDriver(name string, extensions []string, chkpt CnkOnCloseMode) *Driver {
 	return &Driver{
 		name:       name,
 		extensions: extensions,
+		chkOnClose: chkpt,
 	}
 }
 
