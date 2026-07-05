@@ -768,43 +768,48 @@ func Test_DB_ReadOnlyStatements(t *testing.T) {
 		t.Fatalf("failed to create table: %s", err.Error())
 	}
 
-	// build a table-driven test suite for StmtReadOnlyWithConn
+	// Test that statements are trapped as expected as attempts to change database on read-only
+	// connections.
+	expROResp := `[{"error":"attempt to change database via query operation"}]`
 	tests := []struct {
-		query string
-		ro    bool
+		query   string
+		expResp string
 	}{
 		{
-			query: "SELECT * FROM foo",
-			ro:    true,
+			query:   "SELECT * FROM foo",
+			expResp: `[{"columns":["id","name"],"types":["integer","text"]}]`,
 		},
 		{
-			query: "INSERT INTO foo(name) VALUES('fiona')",
-			ro:    false,
+			query:   "CREATE TABLE temp.qux (id INTEGER NOT NULL PRIMARY KEY, name TEXT)",
+			expResp: expROResp,
 		},
 		{
-			query: "INSERT INTO foo(name) VALUES('fiona') RETURNING *",
-			ro:    false,
+			query:   "INSERT INTO foo(name) VALUES('fiona')",
+			expResp: expROResp,
 		},
 		{
-			query: "UPDATE foo SET name='fiona' WHERE id=1",
-			ro:    false,
+			query:   "INSERT INTO foo(name) VALUES('fiona') RETURNING *",
+			expResp: expROResp,
 		},
 		{
-			query: "DELETE FROM foo WHERE id=1",
-			ro:    false,
+			query:   "UPDATE foo SET name='fiona' WHERE id=1",
+			expResp: expROResp,
 		},
 		{
-			query: "CREATE TABLE bar (id INTEGER NOT NULL PRIMARY KEY, name TEXT)",
-			ro:    false,
+			query:   "DELETE FROM foo WHERE id=1",
+			expResp: expROResp,
 		},
 		{
-			query: "DROP TABLE foo",
-			ro:    false,
+			query:   "CREATE TABLE bar (id INTEGER NOT NULL PRIMARY KEY, name TEXT)",
+			expResp: expROResp,
 		},
 		{
-			// Interestingly enough, this is considered read-only by SQLite.
-			query: "PRAGMA foreign_keys = ON",
-			ro:    true,
+			query:   "DROP TABLE foo",
+			expResp: expROResp,
+		},
+		{
+			query:   "PRAGMA foreign_keys = ON",
+			expResp: `[{}]`,
 		},
 	}
 
@@ -813,10 +818,8 @@ func Test_DB_ReadOnlyStatements(t *testing.T) {
 		if err != nil {
 			t.Fatalf("failed to check if statement is read-only: %s", err.Error())
 		}
-		if !tt.ro {
-			if got, exp := asJSON(ro), `[{"error":"attempt to change database via query operation"}]`; got != exp {
-				t.Fatalf("unexpected results for query\nexp: %s\ngot: %s", exp, got)
-			}
+		if got, exp := asJSON(ro), tt.expResp; got != exp {
+			t.Fatalf("unexpected results for query: %s\nexp: %s\ngot: %s", tt.query, exp, got)
 		}
 	}
 }
