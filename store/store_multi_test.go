@@ -57,6 +57,9 @@ func Test_MultiNode_Leader_Followers(t *testing.T) {
 	if !node0.Equal(node1) {
 		t.Fatalf("leader mismatch, got: %s, exp: %s", node1.ID, node0.ID)
 	}
+	if node0.Suffrage != proto.Suffrage_VOTER {
+		t.Fatalf("incorrect suffrage for leader")
+	}
 
 	// Check the followers returned by each node, and compare.
 	followers0, err := s0.Followers()
@@ -72,6 +75,10 @@ func Test_MultiNode_Leader_Followers(t *testing.T) {
 	}
 	if !followers0[0].Equal(followers1[0]) {
 		t.Fatalf("followers mismatch, got: %s, exp: %s", followers1[0].ID, followers0[0].ID)
+	}
+
+	if followers0[0].Suffrage != proto.Suffrage_VOTER {
+		t.Fatalf("incorrect suffrage for Follower")
 	}
 
 	for _, n := range []*Store{s0, s1} {

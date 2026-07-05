@@ -365,10 +365,6 @@ type Store struct {
 	fsmTerm       atomic.Uint64
 	fsmUpdateTime *rsync.AtomicTime // This is node-local time.
 
-	// readerMu allows blocking of all reads. This is used to handle
-	// specific, very rare, edge cases around WAL checkpointing.
-	readerMu sync.RWMutex
-
 	// appendedAtTime is the Leader's clock time when that Leader appended the log entry.
 	// The Leader that actually appended the log entry is not necessarily the current Leader.
 	appendedAtTime *rsync.AtomicTime
@@ -896,7 +892,7 @@ func (s *Store) Stepdown(wait bool, id string) error {
 		return ErrNotOpen
 	}
 
-	if lid, err := s.LeaderID(); err == nil && lid == id {
+	if lid, err := s.LeaderID(); id != "" && err == nil && lid == id {
 		return fmt.Errorf("cannot step down to the current Leader")
 	}
 
@@ -1229,7 +1225,7 @@ func (s *Store) Followers() ([]*Server, error) {
 			followers = append(followers, &Server{
 				ID:       string(servers[i].ID),
 				Addr:     string(servers[i].Address),
-				Suffrage: proto.Suffrage_NON_VOTER,
+				Suffrage: proto.Suffrage_VOTER,
 			})
 		}
 	}
@@ -1507,9 +1503,6 @@ func (s *Store) execute(ex *proto.ExecuteRequest) ([]*proto.ExecuteQueryResponse
 // upgraded to STRONG if the Store determines that is necessary to guarantee
 // a linearizable read.
 func (s *Store) Query(ctx context.Context, qr *proto.QueryRequest) (rows []*proto.QueryRows, level proto.ConsistencyLevel, raftIndex uint64, retErr error) {
-	s.readerMu.RLock()
-	defer s.readerMu.RUnlock()
-
 	p := (*PragmaCheckRequest)(qr.Request)
 	if err := p.Check(); err != nil {
 		return nil, 0, 0, err
@@ -1522,13 +1515,6 @@ func (s *Store) Query(ctx context.Context, qr *proto.QueryRequest) (rows []*prot
 	// Check if context is already canceled
 	if err := ctx.Err(); err != nil {
 		return nil, 0, 0, err
-	}
-
-	// Apply db_timeout to context if specified
-	if qr.Request.DbTimeout > 0 {
-		var cancel context.CancelFunc
-		ctx, cancel = context.WithTimeout(ctx, time.Duration(qr.Request.DbTimeout))
-		defer cancel()
 	}
 
 	level = qr.Level
@@ -1633,9 +1619,6 @@ func (s *Store) VerifyLeader() (retErr error) {
 
 // Request processes a request that may contain both Executes and Queries.
 func (s *Store) Request(ctx context.Context, eqr *proto.ExecuteQueryRequest) ([]*proto.ExecuteQueryResponse, uint64, uint64, error) {
-	s.readerMu.RLock()
-	defer s.readerMu.RUnlock()
-
 	p := (*PragmaCheckRequest)(eqr.Request)
 	if err := p.Check(); err != nil {
 		return nil, 0, 0, err
@@ -1750,9 +1733,6 @@ func (s *Store) Request(ctx context.Context, eqr *proto.ExecuteQueryRequest) ([]
 // will be written directly to that file. Otherwise a temporary file will be created,
 // and that temporary file copied to dst.
 func (s *Store) Backup(ctx context.Context, br *proto.BackupRequest, dst io.Writer) (retErr error) {
-	s.readerMu.RLock()
-	defer s.readerMu.RUnlock()
-
 	if !s.open.Is() {
 		return ErrNotOpen
 	}
@@ -1814,7 +1794,7 @@ func (s *Store) Backup(ctx context.Context, br *proto.BackupRequest, dst io.Writ
 			}
 			if sz > 0 {
 				if err := s.Snapshot(0); err != nil {
-					if err != raft.ErrNothingNewToSnapshot &&
+					if !errors.Is(err, ErrNothingNewToSnapshot) &&
 						!strings.Contains(err.Error(), "wait until the configuration entry at") {
 						return fmt.Errorf("pre-backup snapshot failed: %s", err.Error())
 					}
@@ -1842,7 +1822,12 @@ func (s *Store) Backup(ctx context.Context, br *proto.BackupRequest, dst io.Writ
 			if err != nil {
 				return err
 			}
-			defer dstGz.Close()
+			defer func() {
+				err := dstGz.Close()
+				if err != nil && retErr == nil {
+					retErr = err
+				}
+			}()
 			_, err = io.Copy(dstGz, srcFD)
 		} else {
 			_, err = io.Copy(dst, srcFD)
@@ -1855,7 +1840,12 @@ func (s *Store) Backup(ctx context.Context, br *proto.BackupRequest, dst io.Writ
 			if err != nil {
 				return err
 			}
-			defer dstGz.Close()
+			defer func() {
+				err := dstGz.Close()
+				if err != nil && retErr == nil {
+					retErr = err
+				}
+			}()
 			ww = dstGz
 		}
 		return s.db.Dump(ww, br.Tables...)
@@ -1886,7 +1876,12 @@ func (s *Store) Backup(ctx context.Context, br *proto.BackupRequest, dst io.Writ
 			if err != nil {
 				return err
 			}
-			defer dstGz.Close()
+			defer func() {
+				err := dstGz.Close()
+				if err != nil && retErr == nil {
+					retErr = err
+				}
+			}()
 			_, err = io.Copy(dstGz, tmpReadFD)
 		} else {
 			_, err = io.Copy(dst, tmpReadFD)
@@ -1921,7 +1916,7 @@ func (s *Store) Load(ctx context.Context, lr *proto.LoadRequest) error {
 
 // load loads an entire SQLite file into the database, and is for internal use
 // only. It does not check for readiness, and does not update statistics.
-func (s *Store) load(lr *proto.LoadRequest) error {
+func (s *Store) load(lr *proto.LoadRequest) (retErr error) {
 	startT := time.Now()
 
 	b, err := command.MarshalLoadRequest(lr)
@@ -1939,6 +1934,11 @@ func (s *Store) load(lr *proto.LoadRequest) error {
 	if err != nil {
 		return err
 	}
+	defer func() {
+		if retErr == nil {
+			s.logger.Printf("node loaded in %s (%d bytes)", time.Since(startT), len(b))
+		}
+	}()
 
 	af := s.raft.Apply(b, s.ApplyTimeout)
 	if af.Error() != nil {
@@ -1948,8 +1948,8 @@ func (s *Store) load(lr *proto.LoadRequest) error {
 		s.logger.Printf("load failed during Apply: %s", af.Error())
 		return af.Error()
 	}
-	s.logger.Printf("node loaded in %s (%d bytes)", time.Since(startT), len(b))
-	return nil
+	r := af.Response().(*fsmGenericResponse)
+	return r.error
 }
 
 // ReadFrom reads data from r, and loads it into the database, bypassing Raft consensus.
@@ -2036,9 +2036,6 @@ func (s *Store) Vacuum() error {
 // http://sqlite.org/howtocorrupt.html states it is safe to do this
 // as long as the database is not written to during the call.
 func (s *Store) Database(leader bool) ([]byte, error) {
-	s.readerMu.RLock()
-	defer s.readerMu.RUnlock()
-
 	if leader && s.raft.State() != raft.Leader {
 		return nil, ErrNotLeader
 	}
@@ -2323,7 +2320,7 @@ func (s *Store) cleanupCDC() error {
 
 // initVacuumTime initializes the last vacuum times in the Config store.
 // If auto-vacuum is disabled, then all auto-vacuum related state is removed.
-// If enabled, but no last vacuum time is set, then the auto-bac baseline
+// If enabled, but no last vacuum time is set, then the auto-vac baseline
 // time i.e. now is set. If a last vacuum time is set, then it is left as is.
 func (s *Store) initVacuumTime() error {
 	if s.AutoVacInterval == 0 {
@@ -3012,8 +3009,9 @@ func (s *Store) runWALSnapshotting() (closeCh, doneCh chan struct{}) {
 					if err := s.Snapshot(0); err != nil {
 						stats.Add(numWALSnapshotsFailed, 1)
 						s.logger.Printf("failed to snapshot due to WAL threshold: %s", err.Error())
+					} else {
+						stats.Add(numWALSnapshots, 1)
 					}
-					stats.Add(numWALSnapshots, 1)
 				}
 			case <-closeCh:
 				return

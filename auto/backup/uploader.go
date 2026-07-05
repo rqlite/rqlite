@@ -38,7 +38,7 @@ type DataProvider interface {
 	LastIndex() (uint64, error)
 
 	// Provide writes the data-for-upload to the writer.
-	Provide(w io.Writer) error
+	Provide(w io.WriteSeeker) error
 }
 
 // stats captures stats for the Uploader service.
