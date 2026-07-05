@@ -1382,8 +1382,6 @@ func (db *DB) queryWithConn(ctx context.Context, req *command.Request, xTime boo
 
 		rows, err = db.queryStmtWithConn(ctx, stmt, xTime, queryer)
 		if err != nil {
-			stats.Add(numQueryErrors, 1)
-
 			// Remap errors if necessary for backwards compatibility reasons.
 			se := NewSQLiteErrorFromError(err)
 			if se != nil && se.ReadOnlyError() {
