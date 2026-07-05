@@ -93,7 +93,7 @@ func (s *Store) LoadFromZip(zipfile string) error {
 	return rarchive.UnzipToDir(zipfile, s.dir)
 }
 
-// LoadFromTarGzip installs all extensions in the given tar.gz file into the store.s
+// LoadFromTarGzip installs all extensions in the given tar.gz file into the store.
 func (s *Store) LoadFromTarGzip(targzfile string) error {
 	h, err := rarchive.TarGzipHasSubdirectories(targzfile)
 	if err != nil {
@@ -147,5 +147,5 @@ func copyFile(src, dst string) error {
 	if err != nil {
 		return err
 	}
-	return nil
+	return dstf.Close()
 }

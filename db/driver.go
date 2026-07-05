@@ -72,7 +72,7 @@ func CheckpointDriver() *Driver {
 var fkRegisterOnce sync.Once
 
 // ForeignKeyDriver returns a driver that enables foreign key support
-// on every connection.
+// on every connection. It also enables no-check
 func ForeignKeyDriver() *Driver {
 	fkRegisterOnce.Do(func() {
 		sql.Register("rqlite-sqlite3-foreignkey", &sqlite3.SQLiteDriver{

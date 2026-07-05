@@ -712,7 +712,7 @@ func (db *DB) ExtensionNames() []string {
 }
 
 // SetBusyTimeout sets the busy timeout for the database. If a timeout is
-// is less than zero it is not set.
+// less than zero it is not set.
 func (db *DB) SetBusyTimeout(rwMs, roMs int) (err error) {
 	if rwMs >= 0 {
 		_, err := db.rwDB.Exec(fmt.Sprintf("PRAGMA busy_timeout=%d", rwMs))
@@ -1753,8 +1753,8 @@ func (db *DB) Dump(w io.Writer, tableNames ...string) error {
 			return err
 		}
 		var columnNames []string
-		for _, w := range r[0].Values {
-			columnNames = append(columnNames, fmt.Sprintf(`'||quote("%s")||'`, w.Parameters[1].GetS()))
+		for _, vv := range r[0].Values {
+			columnNames = append(columnNames, fmt.Sprintf(`'||quote("%s")||'`, vv.Parameters[1].GetS()))
 		}
 
 		query := fmt.Sprintf(`SELECT 'INSERT INTO "%s" VALUES(%s)' FROM "%s";`,

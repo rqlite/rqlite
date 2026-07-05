@@ -38,7 +38,7 @@ var (
 	// already exists alongside the database file.
 	ErrWALAlreadyExists = errors.New("cannot replay WAL files: existing WAL file present")
 
-	// ErrWALStilExists is returned when a WAL file still exists after checkpointing and
+	// ErrWALStillExists is returned when a WAL file still exists after checkpointing and
 	// closing the database.
 	ErrWALStillExists = errors.New("WAL file still exists after checkpointing and closing the database")
 )
