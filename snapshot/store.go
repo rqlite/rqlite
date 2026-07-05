@@ -931,6 +931,14 @@ func (s *Store) ensureVerified() error {
 	return s.verifyErr
 }
 
+// EnsureVerify runs the CRC32 integrity check but sets up the caching of the state
+// so that future verification states will use cached value.
+func (s *Store) EnsureVerify() error {
+	s.mrsw.BeginReadBlocking()
+	defer s.mrsw.EndRead()
+	return s.ensureVerified()
+}
+
 // Verify runs the CRC32 integrity check.
 func (s *Store) Verify() error {
 	s.mrsw.BeginReadBlocking()
