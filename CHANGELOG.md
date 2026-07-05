@@ -3,7 +3,7 @@
 - [PR #2706](https://github.com/rqlite/rqlite/pull/2706): Fixes for minor issues in data handling at the `db` layer.
 - [PR #2707](https://github.com/rqlite/rqlite/pull/2707): Fix minor resource lifecycle issues in the `db` layer.
 - [PR #2708](https://github.com/rqlite/rqlite/pull/2708): Remove explicit database-level read-only check from the pure Query path.
-- [PR #2709](https://github.com/rqlite/rqlite/pull/2709): Miscellaneous Store-level fixes.
+- [PR #2709](https://github.com/rqlite/rqlite/pull/2709): Miscellaneous Store-level fixes related to resource management and shutdown sequence.
 
 ## v10.2.6 (July 4th 2026)
 ### Implementation changes and bug fixes
