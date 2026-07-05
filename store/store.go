@@ -365,10 +365,6 @@ type Store struct {
 	fsmTerm       atomic.Uint64
 	fsmUpdateTime *rsync.AtomicTime // This is node-local time.
 
-	// readerMu allows blocking of all reads. This is used to handle
-	// specific, very rare, edge cases around WAL checkpointing.
-	readerMu sync.RWMutex
-
 	// appendedAtTime is the Leader's clock time when that Leader appended the log entry.
 	// The Leader that actually appended the log entry is not necessarily the current Leader.
 	appendedAtTime *rsync.AtomicTime
@@ -1507,9 +1503,6 @@ func (s *Store) execute(ex *proto.ExecuteRequest) ([]*proto.ExecuteQueryResponse
 // upgraded to STRONG if the Store determines that is necessary to guarantee
 // a linearizable read.
 func (s *Store) Query(ctx context.Context, qr *proto.QueryRequest) (rows []*proto.QueryRows, level proto.ConsistencyLevel, raftIndex uint64, retErr error) {
-	s.readerMu.RLock()
-	defer s.readerMu.RUnlock()
-
 	p := (*PragmaCheckRequest)(qr.Request)
 	if err := p.Check(); err != nil {
 		return nil, 0, 0, err
@@ -1633,9 +1626,6 @@ func (s *Store) VerifyLeader() (retErr error) {
 
 // Request processes a request that may contain both Executes and Queries.
 func (s *Store) Request(ctx context.Context, eqr *proto.ExecuteQueryRequest) ([]*proto.ExecuteQueryResponse, uint64, uint64, error) {
-	s.readerMu.RLock()
-	defer s.readerMu.RUnlock()
-
 	p := (*PragmaCheckRequest)(eqr.Request)
 	if err := p.Check(); err != nil {
 		return nil, 0, 0, err
@@ -1750,9 +1740,6 @@ func (s *Store) Request(ctx context.Context, eqr *proto.ExecuteQueryRequest) ([]
 // will be written directly to that file. Otherwise a temporary file will be created,
 // and that temporary file copied to dst.
 func (s *Store) Backup(ctx context.Context, br *proto.BackupRequest, dst io.Writer) (retErr error) {
-	s.readerMu.RLock()
-	defer s.readerMu.RUnlock()
-
 	if !s.open.Is() {
 		return ErrNotOpen
 	}
@@ -2062,9 +2049,6 @@ func (s *Store) Vacuum() error {
 // http://sqlite.org/howtocorrupt.html states it is safe to do this
 // as long as the database is not written to during the call.
 func (s *Store) Database(leader bool) ([]byte, error) {
-	s.readerMu.RLock()
-	defer s.readerMu.RUnlock()
-
 	if leader && s.raft.State() != raft.Leader {
 		return nil, ErrNotLeader
 	}
