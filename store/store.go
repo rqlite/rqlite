@@ -1814,7 +1814,7 @@ func (s *Store) Backup(ctx context.Context, br *proto.BackupRequest, dst io.Writ
 			}
 			if sz > 0 {
 				if err := s.Snapshot(0); err != nil {
-					if err != raft.ErrNothingNewToSnapshot &&
+					if !errors.Is(err, ErrNothingNewToSnapshot) &&
 						!strings.Contains(err.Error(), "wait until the configuration entry at") {
 						return fmt.Errorf("pre-backup snapshot failed: %s", err.Error())
 					}
