@@ -6,6 +6,7 @@
 - [PR #2709](https://github.com/rqlite/rqlite/pull/2709): Miscellaneous Store-level fixes related to resource management and shutdown sequence.
 - [PR #2710](https://github.com/rqlite/rqlite/pull/2710): Don't run CRC checks twice on Snapshot when fast-restart is explicitly disabled.
 - [PR #2711](https://github.com/rqlite/rqlite/pull/2711): Minor fixes to the `cluster` package related to connection handling and metrics.
+- [PR #2712](https://github.com/rqlite/rqlite/pull/2712): Fixes to the `http` package including SQL rewriting control.
 
 ## v10.2.6 (July 4th 2026)
 ### Implementation changes and bug fixes
