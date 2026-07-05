@@ -45,8 +45,6 @@ func NewNodeFromServer(s *store.Server) *Node {
 // occurs, the Error field will be populated.
 func (n *Node) Test(gm GetNodeMetaer, leaderAddr string, retries int, timeout time.Duration) {
 	start := time.Now()
-	n.Time = time.Since(start).Seconds()
-	n.TimeS = time.Since(start).String()
 	n.Reachable = false
 	n.Leader = false
 
@@ -60,13 +58,21 @@ func (n *Node) Test(gm GetNodeMetaer, leaderAddr string, retries int, timeout ti
 			n.SetError(err.Error())
 			return
 		}
-		n.APIAddr = meta.Url
-		n.Version = meta.Version
-		if n.Version == "" {
-			n.Version = "unknown"
-		}
-		n.Reachable = true
-		n.Leader = n.Addr == leaderAddr
+
+		// Set attributes in a race-safe manner.
+		func() {
+			n.mu.Lock()
+			defer n.mu.Unlock()
+			n.APIAddr = meta.Url
+			n.Version = meta.Version
+			if n.Version == "" {
+				n.Version = "unknown"
+			}
+			n.Reachable = true
+			n.Leader = n.Addr == leaderAddr
+			n.Time = time.Since(start).Seconds()
+			n.TimeS = time.Since(start).String()
+		}()
 	}()
 
 	select {

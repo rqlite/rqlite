@@ -1448,7 +1448,8 @@ func (s *Service) handleQuery(w http.ResponseWriter, r *http.Request, qp QueryPa
 	stats.Add(numQueryStmtsRx, int64(len(queries)))
 
 	if !qp.NoParse() {
-		if err := sql.Process(queries, qp.NoRewriteRandom(), !qp.NoRewriteTime()); err != nil {
+		rLvl := qp.Level() == proto.ConsistencyLevel_STRONG
+		if err := sql.Process(queries, !qp.NoRewriteRandom() && rLvl, !qp.NoRewriteTime() && rLvl); err != nil {
 			http.Error(w, fmt.Sprintf("SQL rewrite: %s", err.Error()), http.StatusInternalServerError)
 			return
 		}
@@ -1524,7 +1525,7 @@ func (s *Service) handleRequest(w http.ResponseWriter, r *http.Request, qp Query
 	stats.Add(numRequestStmtsRx, int64(len(stmts)))
 
 	if !qp.NoParse() {
-		if err := sql.Process(stmts, qp.NoRewriteRandom(), !qp.NoRewriteTime()); err != nil {
+		if err := sql.Process(stmts, !qp.NoRewriteRandom(), !qp.NoRewriteTime()); err != nil {
 			http.Error(w, fmt.Sprintf("SQL rewrite: %s", err.Error()), http.StatusInternalServerError)
 			return
 		}
@@ -1758,6 +1759,12 @@ func (s *Service) runQueue() {
 			// a "checkpoint" through the queue.
 			if er.Request.Statements != nil {
 				for {
+					select {
+					case <-s.closeCh:
+						return
+					default:
+					}
+
 					_, _, _, err = s.proxy.Execute(context.Background(), er, nil, defaultTimeout, 0, false)
 					if err == nil {
 						// Success!
