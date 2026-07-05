@@ -19,11 +19,11 @@ const (
 type CnkOnCloseMode int
 
 const (
-	// CnkOnCloseModeEnabled enables checkpoint on close.
-	CnkOnCloseModeEnabled CnkOnCloseMode = iota
-
 	// CnkOnCloseModeDisabled disables checkpoint on close.
-	CnkOnCloseModeDisabled
+	CnkOnCloseModeDisabled CnkOnCloseMode = iota
+
+	// CnkOnCloseModeEnabled enables checkpoint on close.
+	CnkOnCloseModeEnabled
 )
 
 // Driver is a Database driver.
@@ -72,7 +72,7 @@ func CheckpointDriver() *Driver {
 var fkRegisterOnce sync.Once
 
 // ForeignKeyDriver returns a driver that enables foreign key support
-// on every connection.
+// on every connection. It also enables no-check
 func ForeignKeyDriver() *Driver {
 	fkRegisterOnce.Do(func() {
 		sql.Register("rqlite-sqlite3-foreignkey", &sqlite3.SQLiteDriver{
@@ -105,6 +105,7 @@ func NewDriver(name string, extensions []string, chkpt CnkOnCloseMode) *Driver {
 	return &Driver{
 		name:       name,
 		extensions: extensions,
+		chkOnClose: chkpt,
 	}
 }
 

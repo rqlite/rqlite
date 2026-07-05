@@ -38,7 +38,7 @@ var (
 	// already exists alongside the database file.
 	ErrWALAlreadyExists = errors.New("cannot replay WAL files: existing WAL file present")
 
-	// ErrWALStilExists is returned when a WAL file still exists after checkpointing and
+	// ErrWALStillExists is returned when a WAL file still exists after checkpointing and
 	// closing the database.
 	ErrWALStillExists = errors.New("WAL file still exists after checkpointing and closing the database")
 )
@@ -160,6 +160,7 @@ func ValidateExtension(path string) error {
 	if err != nil {
 		return err
 	}
+	defer conn.Close()
 	if err := conn.Raw(f); err != nil {
 		return err
 	}
@@ -348,6 +349,7 @@ func CheckpointRemove(path string) error {
 	if err != nil {
 		return err
 	}
+	defer db.Close()
 
 	// Ensure changes are flushed to disk.
 	if err := db.SetSynchronousMode(SynchronousFull); err != nil {
@@ -450,6 +452,7 @@ func ReplayWAL(path string, wals []string, deleteMode bool) error {
 		return err
 	}
 	if err := fd.Sync(); err != nil {
+		fd.Close() // Best effort.
 		return err
 	}
 	return fd.Close()
