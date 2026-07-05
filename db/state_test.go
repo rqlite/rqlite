@@ -39,9 +39,17 @@ func Test_IsDisallowedPragmas(t *testing.T) {
 
 		"PRAGMA synchronous=",
 		"PRAGMA synchronous = ",
+		"PRAGMA Synchronous = ",
 		"PRAGMA synchronous  =",
 		"PRAGMA  synchronous=OFF",
 		"PRAGMA main.synchronous=OFF",
+
+		"PRAGMA query_only=",
+		"PRAGMA query_only = ",
+		"PRAGMA query_only = true",
+		"PRAGMA query_only = false",
+		"PRAGMA query_only=false",
+		"PRAGMA QUERY_ONLY=false",
 	}
 
 	for _, s := range tests {

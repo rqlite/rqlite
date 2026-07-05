@@ -133,6 +133,7 @@ var BreakingPragmas = map[string]*regexp.Regexp{
 	"PRAGMA wal_autocheckpoint": regexp.MustCompile(`(?i)^\s*PRAGMA\s+wal_autocheckpoint\s*=\s*`),
 	"PRAGMA wal_checkpoint":     regexp.MustCompile(`(?i)^\s*PRAGMA\s+(\w+\.)?wal_checkpoint`),
 	"PRAGMA synchronous":        regexp.MustCompile(`(?i)^\s*PRAGMA\s+(\w+\.)?synchronous\s*=\s*`),
+	"PRAGMA query_only":         regexp.MustCompile(`(?i)^\s*PRAGMA\s+(\w+\.)?query_only\s*=\s*`),
 }
 
 // IsBreakingPragma returns true if the given statement is a breaking PRAGMA.
