@@ -78,6 +78,10 @@ var (
 
 	// ErrExecuteTimeout is returned when an execute times out.
 	ErrExecuteTimeout = errors.New("execute timeout")
+
+	// ErrQueryWrite is returned when an attempt to make to change the database
+	// via a query.
+	ErrQueryWrite = errors.New("attempt to change database via query operation")
 )
 
 // CheckpointMode is the mode in which a checkpoint runs. The
@@ -1376,27 +1380,13 @@ func (db *DB) queryWithConn(ctx context.Context, req *command.Request, xTime boo
 		var rows *command.QueryRows
 		var err error
 
-		readOnly, err := db.StmtReadOnlyWithConn(sql, conn)
-		if err != nil {
-			stats.Add(numQueryErrors, 1)
-			rows = &command.QueryRows{
-				Error: err.Error(),
-			}
-			allRows = append(allRows, rows)
-			continue
-		}
-		if !readOnly && !stmt.SqlExplain {
-			stats.Add(numQueryErrors, 1)
-			rows = &command.QueryRows{
-				Error: "attempt to change database via query operation",
-			}
-			allRows = append(allRows, rows)
-			continue
-		}
-
 		rows, err = db.queryStmtWithConn(ctx, stmt, xTime, queryer)
 		if err != nil {
-			stats.Add(numQueryErrors, 1)
+			// Remap errors if necessary for backwards compatibility reasons.
+			se := NewSQLiteErrorFromError(err)
+			if se != nil && se.ReadOnlyError() {
+				err = ErrQueryWrite
+			}
 			rows = &command.QueryRows{
 				Error: err.Error(),
 			}

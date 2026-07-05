@@ -322,7 +322,7 @@ func Test_TableCreation(t *testing.T) {
 	testQ()
 }
 
-func Test_QueryReadOnly(t *testing.T) {
+func Test_Query_PragmaJournal_ReadOnly(t *testing.T) {
 	db, path := mustCreateOnDiskDatabaseWAL()
 	defer db.Close()
 	defer os.Remove(path)
@@ -335,12 +335,25 @@ func Test_QueryReadOnly(t *testing.T) {
 		t.Fatalf("unexpected results for query, expected %s, got %s", exp, got)
 	}
 
+	// A journal-mode change is not a data write, so it is not remapped to the
+	// legacy error above. Exactly how it fails -- lock contention, read-only
+	// pager, etc. -- is incidental. What matters is that it returns an error
+	// and the journal mode does not actually change. Pragma policy is enforced
+	// by the Store via PragmaCheckRequest before statements reach this layer.
 	r, err = db.QueryStringStmt("PRAGMA journal_mode=DELETE")
 	if err != nil {
 		t.Fatalf("failed to attempt to change journaling mode: %s", err.Error())
 	}
-	if exp, got := `[{"error":"attempt to change database via query operation"}]`, asJSON(r); exp != got {
-		t.Fatalf("unexpected results for query, expected %s, got %s", exp, got)
+	if len(r) != 1 || r[0].Error == "" {
+		t.Fatalf("expected error attempting to change journal mode via query, got %s", asJSON(r))
+	}
+
+	r, err = db.QueryStringStmt("PRAGMA journal_mode")
+	if err != nil {
+		t.Fatalf("failed to query journal mode: %s", err.Error())
+	}
+	if exp, got := `[{"columns":["journal_mode"],"types":["text"],"values":[["wal"]]}]`, asJSON(r); exp != got {
+		t.Fatalf("unexpected results for journal mode query, expected %s, got %s", exp, got)
 	}
 }
 
