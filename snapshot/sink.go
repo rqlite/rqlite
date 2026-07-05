@@ -235,6 +235,9 @@ func (s *Sink) Close() (retErr error) {
 		return fmt.Errorf("failed to write meta: %v", err)
 	}
 
+	if err := fsutil.SyncDirMaybe(s.snapTmpDirPath); err != nil {
+		return err
+	}
 	if err := os.Rename(s.snapTmpDirPath, s.snapDirPath); err != nil {
 		return fmt.Errorf("failed to rename snapshot directory: %v", err)
 	}

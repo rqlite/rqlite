@@ -813,7 +813,7 @@ func (s *Store) Open() (retErr error) {
 	// time snapshot data is actually used -- a reap, a snapshot transfer to a
 	// peer, or a later restore.
 	if !raftConfig.NoSnapshotRestoreOnStart {
-		if err := snapshotStore.Verify(); err != nil {
+		if err := snapshotStore.EnsureVerify(); err != nil {
 			return fmt.Errorf("snapshot integrity check failed: %s", err)
 		}
 	}
