@@ -2326,7 +2326,7 @@ func (s *Store) cleanupCDC() error {
 
 // initVacuumTime initializes the last vacuum times in the Config store.
 // If auto-vacuum is disabled, then all auto-vacuum related state is removed.
-// If enabled, but no last vacuum time is set, then the auto-bac baseline
+// If enabled, but no last vacuum time is set, then the auto-vac baseline
 // time i.e. now is set. If a last vacuum time is set, then it is left as is.
 func (s *Store) initVacuumTime() error {
 	if s.AutoVacInterval == 0 {
