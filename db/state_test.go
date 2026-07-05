@@ -214,19 +214,19 @@ func Test_MakeDSN(t *testing.T) {
 		{
 			path:     "foo.db",
 			readOnly: true,
-			want:     "file:foo.db?_fk=false&_journal=DELETE&_sync=0&mode=ro",
+			want:     "file:foo.db?_fk=false&_journal=DELETE&_query_only=true&_sync=0&mode=ro",
 		},
 		{
 			path:       "foo.db",
 			readOnly:   true,
 			walEnabled: true,
-			want:       "file:foo.db?_fk=false&_journal=WAL&_sync=0&mode=ro",
+			want:       "file:foo.db?_fk=false&_journal=WAL&_query_only=true&_sync=0&mode=ro",
 		},
 		{
 			path:      "foo.db",
 			readOnly:  true,
 			fkEnabled: true,
-			want:      "file:foo.db?_fk=true&_journal=DELETE&_sync=0&mode=ro",
+			want:      "file:foo.db?_fk=true&_journal=DELETE&_query_only=true&_sync=0&mode=ro",
 		},
 	}
 
