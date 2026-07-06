@@ -6,6 +6,8 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"os"
+	"path/filepath"
 	"reflect"
 	"sync"
 	"testing"
@@ -13,6 +15,7 @@ import (
 
 	cdcjson "github.com/rqlite/rqlite/v10/cdc/json"
 	"github.com/rqlite/rqlite/v10/command/proto"
+	"github.com/rqlite/rqlite/v10/internal/rarchive/flate"
 )
 
 func Test_ServiceSingleEvent(t *testing.T) {
@@ -332,6 +335,101 @@ func Test_ServiceRestart_NoDupes(t *testing.T) {
 	testPoll(t, func() bool {
 		return stats.Get(numFIFOEnqueueIgnored).(*expvar.Int).Value() == currentDrop+1
 	}, 2*time.Second)
+}
+
+// Test_ServiceRestart_UndeliveredEventsNotLost verifies that when a node
+// restarts with events still sitting in its FIFO (i.e. enqueued but not yet
+// delivered to the webhook, as happens after a crash), every one of those
+// events -- including the oldest -- is delivered on the next leadership. This
+// guards the at-least-once guarantee across restarts.
+func Test_ServiceRestart_UndeliveredEventsNotLost(t *testing.T) {
+	ResetStats()
+
+	// Collect the set of indices delivered to the webhook.
+	var mu sync.Mutex
+	delivered := make(map[uint64]bool)
+	testSrv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		defer r.Body.Close()
+		b, _ := io.ReadAll(r.Body)
+		env := &cdcjson.CDCMessagesEnvelope{}
+		if err := cdcjson.UnmarshalFromEnvelopeJSON(b, env); err != nil {
+			t.Errorf("invalid JSON received: %v", err)
+		}
+		mu.Lock()
+		for _, m := range env.Payload {
+			delivered[m.Index] = true
+		}
+		mu.Unlock()
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer testSrv.Close()
+
+	// Pre-seed the FIFO with undelivered events at indices 5, 6, 7, exactly as
+	// the service itself would have written them (enveloped JSON, flate-compressed).
+	// The Service keeps its FIFO at <dir>/cdc/fifo.db.
+	tempDir := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(tempDir, "cdc"), 0o755); err != nil {
+		t.Fatalf("failed to create CDC dir: %v", err)
+	}
+	seedIndices := []uint64{5, 6, 7}
+	func() {
+		q, err := NewQueue(filepath.Join(tempDir, "cdc", cdcDB))
+		if err != nil {
+			t.Fatalf("failed to open FIFO for seeding: %v", err)
+		}
+		defer q.Close()
+		for _, idx := range seedIndices {
+			evg := &proto.CDCIndexedEventGroup{
+				Index: idx,
+				Events: []*proto.CDCEvent{
+					{Op: proto.CDCEvent_INSERT, Table: "foo", NewRowId: int64(idx)},
+				},
+			}
+			b, err := cdcjson.MarshalToEnvelopeJSON("", "node1", true, []*proto.CDCIndexedEventGroup{evg})
+			if err != nil {
+				t.Fatalf("failed to marshal seed event %d: %v", idx, err)
+			}
+			c, err := flate.Compress(b)
+			if err != nil {
+				t.Fatalf("failed to compress seed event %d: %v", idx, err)
+			}
+			if err := q.Enqueue(&Event{Index: idx, Data: c}); err != nil {
+				t.Fatalf("failed to enqueue seed event %d: %v", idx, err)
+			}
+		}
+	}()
+
+	// Start a fresh service over the pre-seeded FIFO and make it leader.
+	cl := &mockCluster{}
+	cfg := DefaultConfig()
+	cfg.Endpoint = testSrv.URL
+	cfg.MaxBatchSz = 1
+	cfg.MaxBatchDelay = 50 * time.Millisecond
+	svc, err := NewService("node1", tempDir, cl, cfg)
+	if err != nil {
+		t.Fatalf("failed to create service: %v", err)
+	}
+	if err := svc.Start(); err != nil {
+		t.Fatalf("failed to start service: %v", err)
+	}
+	defer svc.Stop()
+	cl.SetLeader(0)
+
+	// Every seeded event, including the oldest (index 5), must be delivered.
+	allDelivered := func() bool {
+		mu.Lock()
+		defer mu.Unlock()
+		return delivered[5] && delivered[6] && delivered[7]
+	}
+	deadline := time.Now().Add(5 * time.Second)
+	for !allDelivered() && time.Now().Before(deadline) {
+		time.Sleep(10 * time.Millisecond)
+	}
+	if !allDelivered() {
+		mu.Lock()
+		defer mu.Unlock()
+		t.Fatalf("not all seeded events were delivered after restart: delivered=%v (want indices 5, 6, 7)", delivered)
+	}
 }
 
 func Test_ServiceSingleEvent_Stdout(t *testing.T) {

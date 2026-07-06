@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"net/url"
 	"os"
+	"strings"
 	"time"
 
 	"github.com/rqlite/rqlite/v10/cdc/regexp"
@@ -153,7 +154,7 @@ func NewConfig(s string) (*Config, error) {
 	}
 
 	// Try to parse as URL first
-	if _, err := url.Parse(s); err == nil && (len(s) > 0 && (s[:4] == "http" || s[:5] == "https")) {
+	if _, err := url.Parse(s); err == nil && (strings.HasPrefix(s, "http://") || strings.HasPrefix(s, "https://")) {
 		// Valid URL, create default config with this endpoint
 		config := DefaultConfig()
 		config.Endpoint = s
