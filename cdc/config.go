@@ -154,7 +154,7 @@ func NewConfig(s string) (*Config, error) {
 	}
 
 	// Try to parse as URL first
-	if _, err := url.Parse(s); err == nil && strings.HasPrefix(s, "http") {
+	if _, err := url.Parse(s); err == nil && (strings.HasPrefix(s, "http://") || strings.HasPrefix(s, "https://")) {
 		// Valid URL, create default config with this endpoint
 		config := DefaultConfig()
 		config.Endpoint = s
