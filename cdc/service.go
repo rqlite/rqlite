@@ -476,7 +476,6 @@ func (s *Service) writeToBatcher() {
 			}
 
 			s.batcher.Flush()
-			<-fc
 			select {
 			case <-fc: // Wait for CDC to write to BoltDB.
 			case <-s.done: // Or detect we're shutting down.
@@ -561,13 +560,14 @@ func (s *Service) leaderLoop() (chan struct{}, chan struct{}) {
 					}
 					stats.Add(numRetries, 1)
 					s.endpointRetries.Add(1)
-					time.Sleep(retryDelay)
 
-					// Ensure we catch any shutdown request between sleeps.
+					// Sleep, but detect any shutdown request while sleeping.
+					t := time.NewTimer(retryDelay)
 					select {
 					case <-stop:
+						t.Stop()
 						return
-					default:
+					case <-t.C:
 					}
 				}
 				if sentOK {
