@@ -1,6 +1,6 @@
 ## v10.2.7 (July 5th 2026)
 ### Implementation changes and bug fixes
-- [PR #2713](https://github.com/rqlite/rqlite/pull/2713): `go mod` dependency updates.
+- [PR #2714](https://github.com/rqlite/rqlite/pull/2714): `go mod` dependency updates.
 - [PR #2706](https://github.com/rqlite/rqlite/pull/2706): Fixes for minor issues in data handling at the `db` layer.
 - [PR #2707](https://github.com/rqlite/rqlite/pull/2707): Fix minor resource lifecycle issues in the `db` layer.
 - [PR #2708](https://github.com/rqlite/rqlite/pull/2708): Remove explicit database-level read-only check from the pure Query path.
