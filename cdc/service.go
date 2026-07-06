@@ -476,7 +476,11 @@ func (s *Service) writeToBatcher() {
 			}
 
 			s.batcher.Flush()
-			<-fc      // Wait for CDC to write to BoltDB.
+			<-fc
+			select {
+			case <-fc: // Wait for CDC to write to BoltDB.
+			case <-s.done: // Or detect we're shutting down.
+			}
 			close(ch) // Snapshotting can proceed now.
 		case <-s.done:
 			return
@@ -509,7 +513,6 @@ func (s *Service) leaderLoop() (chan struct{}, chan struct{}) {
 
 			case ev := <-s.fifo.C:
 				if ev == nil {
-					close(done)
 					return
 				}
 				if ev.Index <= s.highWatermark.Load() {
@@ -559,6 +562,13 @@ func (s *Service) leaderLoop() (chan struct{}, chan struct{}) {
 					stats.Add(numRetries, 1)
 					s.endpointRetries.Add(1)
 					time.Sleep(retryDelay)
+
+					// Ensure we catch any shutdown request between sleeps.
+					select {
+					case <-stop:
+						return
+					default:
+					}
 				}
 				if sentOK {
 					s.highWatermark.Store(ev.Index)
