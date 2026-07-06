@@ -1,4 +1,4 @@
-## v10.2.7 (unreleased)
+## v10.2.7 (July 5th 2026)
 ### Implementation changes and bug fixes
 - [PR #2713](https://github.com/rqlite/rqlite/pull/2713): `go mod` dependency updates.
 - [PR #2706](https://github.com/rqlite/rqlite/pull/2706): Fixes for minor issues in data handling at the `db` layer.
