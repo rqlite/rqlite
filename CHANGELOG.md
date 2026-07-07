@@ -1,3 +1,7 @@
+## v10.3.0 (unreleased)
+### New features
+- [PR #2715](https://github.com/rqlite/rqlite/pull/2715): Support pushing metrics, in OTLP format over gRPC, to an OpenTelemetry Collector. Enabled via `-otlp-endpoint`. expvar metrics remain available via the HTTP API.
+
 ## v10.2.7 (July 5th 2026)
 ### Implementation changes and bug fixes
 - [PR #2714](https://github.com/rqlite/rqlite/pull/2714): `go mod` dependency updates.

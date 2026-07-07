@@ -39,6 +39,71 @@ If the passed value is a valid URL then CDC events will be posted to that endpoi
 default = ""
 
 [[flags]]
+name = "OTLPEndpoint"
+cli = "otlp-endpoint"
+type = "string"
+short_help = "Address of OpenTelemetry Collector for metrics. If not set, OTLP reporting not enabled"
+long_help = """
+If set, rqlite periodically pushes its metrics, in OTLP format over gRPC, to the OpenTelemetry Collector at the given address. The address must be in host:port form e.g. localhost:4317, and must not include a protocol scheme. The expvar metrics available via the HTTP API are unaffected by this setting.
+"""
+default = ""
+
+[[flags]]
+name = "OTLPInterval"
+cli = "otlp-interval"
+type = "time.Duration"
+short_help = "Period between OTLP metric exports"
+long_help = """
+"""
+default = "30s"
+
+[[flags]]
+name = "OTLPInsecure"
+cli = "otlp-insecure"
+type = "bool"
+short_help = "Use plaintext gRPC when communicating with the OpenTelemetry Collector"
+long_help = """
+"""
+default = false
+
+[[flags]]
+name = "OTLPNoVerify"
+cli = "otlp-no-verify"
+type = "bool"
+short_help = "Skip verification of the OpenTelemetry Collector certificate"
+long_help = """
+"""
+default = false
+
+[[flags]]
+name = "OTLPCACert"
+cli = "otlp-ca-cert"
+type = "string"
+short_help = "Path to X.509 CA certificate for verifying the OpenTelemetry Collector"
+long_help = """
+If not set, the operating system's CA certificates are used to verify the Collector's certificate.
+"""
+default = ""
+
+[[flags]]
+name = "OTLPCert"
+cli = "otlp-cert"
+type = "string"
+short_help = "Path to X.509 certificate for mutual TLS with the OpenTelemetry Collector"
+long_help = """
+"""
+default = ""
+
+[[flags]]
+name = "OTLPKey"
+cli = "otlp-key"
+type = "string"
+short_help = "Path to X.509 private key for mutual TLS with the OpenTelemetry Collector"
+long_help = """
+"""
+default = ""
+
+[[flags]]
 name = "HTTPAddr"
 cli = "http-addr"
 type = "string"
