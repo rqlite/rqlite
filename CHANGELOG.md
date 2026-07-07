@@ -1,6 +1,6 @@
 ## v10.3.0 (unreleased)
 ### New features
-- [PR #2715](https://github.com/rqlite/rqlite/pull/2715): Support pushing OTLP metrics to an OpenTelemetry Collector.
+- [PR #2715](https://github.com/rqlite/rqlite/pull/2715), [PR #2716](https://github.com/rqlite/rqlite/pull/2716): Support pushing OTLP metrics to an OpenTelemetry Collector.
 
 ## v10.2.7 (July 5th 2026)
 ### Implementation changes and bug fixes
