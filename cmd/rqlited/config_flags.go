@@ -20,6 +20,20 @@ type Config struct {
 	ExtensionPaths []string
 	// Set CDC HTTP endpoint, or path to CDC config file. If not set, CDC not enabled
 	CDCConfig string
+	// Address of OpenTelemetry Collector for metrics. If not set, OTLP reporting not enabled
+	OTLPEndpoint string
+	// Period between OTLP metric exports
+	OTLPInterval time.Duration
+	// Use plaintext gRPC when communicating with the OpenTelemetry Collector
+	OTLPInsecure bool
+	// Skip verification of the OpenTelemetry Collector certificate
+	OTLPNoVerify bool
+	// Path to X.509 CA certificate for verifying the OpenTelemetry Collector
+	OTLPCACert string
+	// Path to X.509 certificate for mutual TLS with the OpenTelemetry Collector
+	OTLPCert string
+	// Path to X.509 private key for mutual TLS with the OpenTelemetry Collector
+	OTLPKey string
 	// HTTP server bind address. To enable HTTPS, set X.509 certificate and key
 	HTTPAddr string
 	// Advertised HTTP address. If not set, same as HTTP server bind address
@@ -149,6 +163,13 @@ func Forge(arguments []string) (*flag.FlagSet, *Config, error) {
 	var tmpExtensionPaths string
 	fs.StringVar(&tmpExtensionPaths, "extensions-path", "", "Comma-delimited list of paths to directories, zipfiles, or tar.gz files containing SQLite extensions")
 	fs.StringVar(&config.CDCConfig, "cdc-config", "", "Set CDC HTTP endpoint, or path to CDC config file. If not set, CDC not enabled")
+	fs.StringVar(&config.OTLPEndpoint, "otlp-endpoint", "", "Address of OpenTelemetry Collector for metrics. If not set, OTLP reporting not enabled")
+	fs.DurationVar(&config.OTLPInterval, "otlp-interval", mustParseDuration("30s"), "Period between OTLP metric exports")
+	fs.BoolVar(&config.OTLPInsecure, "otlp-insecure", false, "Use plaintext gRPC when communicating with the OpenTelemetry Collector")
+	fs.BoolVar(&config.OTLPNoVerify, "otlp-no-verify", false, "Skip verification of the OpenTelemetry Collector certificate")
+	fs.StringVar(&config.OTLPCACert, "otlp-ca-cert", "", "Path to X.509 CA certificate for verifying the OpenTelemetry Collector")
+	fs.StringVar(&config.OTLPCert, "otlp-cert", "", "Path to X.509 certificate for mutual TLS with the OpenTelemetry Collector")
+	fs.StringVar(&config.OTLPKey, "otlp-key", "", "Path to X.509 private key for mutual TLS with the OpenTelemetry Collector")
 	fs.StringVar(&config.HTTPAddr, "http-addr", "localhost:4001", "HTTP server bind address. To enable HTTPS, set X.509 certificate and key")
 	fs.StringVar(&config.HTTPAdv, "http-adv-addr", "", "Advertised HTTP address. If not set, same as HTTP server bind address")
 	fs.StringVar(&config.HTTPAllowOrigin, "http-allow-origin", "", "Value to set for Access-Control-Allow-Origin HTTP header")

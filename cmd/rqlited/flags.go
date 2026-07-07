@@ -32,6 +32,14 @@ const (
 	HTTPx509KeyFlag  = "http-key"
 	NodeX509CertFlag = "node-cert"
 	NodeX509KeyFlag  = "node-key"
+
+	OTLPEndpointFlag = "otlp-endpoint"
+	OTLPIntervalFlag = "otlp-interval"
+	OTLPInsecureFlag = "otlp-insecure"
+	OTLPNoVerifyFlag = "otlp-no-verify"
+	OTLPCACertFlag   = "otlp-ca-cert"
+	OTLPCertFlag     = "otlp-cert"
+	OTLPKeyFlag      = "otlp-key"
 )
 
 // Validate checks the configuration for internal consistency, and activates
@@ -169,6 +177,29 @@ func (c *Config) Validate() error {
 	// Change-Data-Capture (CDC) OK?
 	if c.CDCConfig != "" && c.RaftNonVoter {
 		return errors.New("CDC cannot be enabled on non-voting nodes")
+	}
+
+	// OTLP metrics reporting OK?
+	if !bothUnsetSet(c.OTLPCert, c.OTLPKey) {
+		return fmt.Errorf("either both -%s and -%s must be set, or neither", OTLPCertFlag, OTLPKeyFlag)
+	}
+	if c.OTLPEndpoint == "" {
+		if c.OTLPInsecure || c.OTLPNoVerify || c.OTLPCACert != "" || c.OTLPCert != "" {
+			return fmt.Errorf("OTLP options require -%s", OTLPEndpointFlag)
+		}
+	} else {
+		if strings.Contains(c.OTLPEndpoint, "://") {
+			return fmt.Errorf("-%s must not include a protocol scheme", OTLPEndpointFlag)
+		}
+		if _, _, err := net.SplitHostPort(c.OTLPEndpoint); err != nil {
+			return fmt.Errorf("-%s is not a valid address", OTLPEndpointFlag)
+		}
+		if c.OTLPInterval <= 0 {
+			return fmt.Errorf("-%s must be greater than zero", OTLPIntervalFlag)
+		}
+		if c.OTLPInsecure && (c.OTLPNoVerify || c.OTLPCACert != "" || c.OTLPCert != "") {
+			return fmt.Errorf("-%s cannot be used with other OTLP TLS options", OTLPInsecureFlag)
+		}
 	}
 
 	// Valid disco mode?

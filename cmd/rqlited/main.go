@@ -32,6 +32,7 @@ import (
 	httpd "github.com/rqlite/rqlite/v10/http"
 	"github.com/rqlite/rqlite/v10/internal/rarchive"
 	"github.com/rqlite/rqlite/v10/internal/rtls"
+	"github.com/rqlite/rqlite/v10/otlp"
 	"github.com/rqlite/rqlite/v10/proxy"
 	"github.com/rqlite/rqlite/v10/store"
 	"github.com/rqlite/rqlite/v10/tcp"
@@ -245,6 +246,15 @@ func main() {
 		httpServ.RegisterStatus("auto_backups", backupSrv)
 	}
 
+	// Start any requested OTLP metrics reporting.
+	otlpSrv, err := startOTLPMetrics(cfg)
+	if err != nil {
+		log.Fatalf("failed to start OTLP metrics reporting: %s", err.Error())
+	}
+	if otlpSrv != nil {
+		httpServ.RegisterStatus("otlp_metrics", otlpSrv)
+	}
+
 	// Block until done.
 	<-mainCtx.Done()
 
@@ -283,6 +293,12 @@ func main() {
 	if err := str.Close(true); err != nil {
 		log.Printf("failed to close store: %s", err.Error())
 	}
+
+	// Stop OTLP metrics reporting, flushing any remaining metrics.
+	if otlpSrv != nil {
+		otlpSrv.Stop()
+	}
+
 	stopProfile()
 	log.Println("rqlite server stopped")
 }
@@ -305,6 +321,28 @@ func startAutoBackups(ctx context.Context, cfg *Config, str *store.Store) (*back
 	u := backup.NewUploader(sc, provider, time.Duration(uCfg.Interval))
 	u.Start(ctx, str.IsLeader)
 	return u, nil
+}
+
+func startOTLPMetrics(cfg *Config) (*otlp.Service, error) {
+	if cfg.OTLPEndpoint == "" {
+		return nil, nil
+	}
+
+	srv := otlp.NewService(otlp.Config{
+		Endpoint:           cfg.OTLPEndpoint,
+		Interval:           cfg.OTLPInterval,
+		Insecure:           cfg.OTLPInsecure,
+		InsecureSkipVerify: cfg.OTLPNoVerify,
+		CACertFile:         cfg.OTLPCACert,
+		CertFile:           cfg.OTLPCert,
+		KeyFile:            cfg.OTLPKey,
+		NodeID:             cfg.NodeID,
+		Version:            cmd.Version,
+	})
+	if err := srv.Start(); err != nil {
+		return nil, err
+	}
+	return srv, nil
 }
 
 func createExtensionsStore(cfg *Config) (*extensions.Store, error) {
