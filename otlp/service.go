@@ -70,6 +70,12 @@ func (s *Service) Start() error {
 
 	opts := []otlpmetricgrpc.Option{
 		otlpmetricgrpc.WithEndpoint(s.cfg.Endpoint),
+		// Disable retry of failed exports. Exported metrics are cumulative,
+		// so the next export makes up for any failed one. More importantly,
+		// retrying can block the final export at shutdown until stopTimeout
+		// expires, needlessly delaying node shutdown when the Collector is
+		// unreachable.
+		otlpmetricgrpc.WithRetry(otlpmetricgrpc.RetryConfig{Enabled: false}),
 	}
 	if s.cfg.Insecure {
 		opts = append(opts, otlpmetricgrpc.WithInsecure())
