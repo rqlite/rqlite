@@ -17,6 +17,6 @@ chown rqlite:rqlite /var/lib/rqlite
 chmod 750 /var/lib/rqlite
 
 # Reload systemd, but only if systemd is running (e.g. not in a chroot or container)
-if [ -d /run/systemd/system ]; then
+if [ -d /run/systemd/system ] && command -v systemctl >/dev/null 2>&1; then
     systemctl daemon-reload
 fi
