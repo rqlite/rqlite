@@ -30,7 +30,8 @@ RUN go build -ldflags=" \
     -X github.com/rqlite/rqlite/v10/cmd.Branch=${BRANCH} \
     -X github.com/rqlite/rqlite/v10/cmd.Commit=${COMMIT} \
     -X github.com/rqlite/rqlite/v10/cmd.Buildtime=${DATE}" ./cmd/rqlited/. && \
-    go build -ldflags="-w -s" ./cmd/rqlite/.
+    go build -ldflags="-w -s" ./cmd/rqlite/. && \
+    go build -ldflags="-w -s" ./cmd/rqbench/.
 
 # Build the extensions, start by creating the extensions directory.
 WORKDIR /extensions
@@ -59,6 +60,7 @@ RUN addgroup -g 1000 rqlite && \
 COPY --from=builder /app/docker-entrypoint.sh /bin
 COPY --from=builder /app/rqlited /bin
 COPY --from=builder /app/rqlite /bin
+COPY --from=builder /app/rqbench /bin
 
 # Bake in the extensions.
 COPY --from=builder /extensions /opt/extensions/
