@@ -70,7 +70,7 @@ jobs:
             VERSION=${{ github.event.release.tag_name }}
             COMMIT=${{ github.sha }}
             BRANCH=master
-            DATE=${{ github.event.created_at }}
+            DATE=${{ github.event.release.created_at }}
 
       - name: Build and push by digest to GHCR
         id: build-ghcr
@@ -84,7 +84,7 @@ jobs:
             VERSION=${{ github.event.release.tag_name }}
             COMMIT=${{ github.sha }}
             BRANCH=master
-            DATE=${{ github.event.created_at }}
+            DATE=${{ github.event.release.created_at }}
       
       - name: Export digests
         run: |
