@@ -2,6 +2,9 @@
 ### New features
 - [PR #2715](https://github.com/rqlite/rqlite/pull/2715), [PR #2716](https://github.com/rqlite/rqlite/pull/2716): Support pushing OTLP metrics to an OpenTelemetry Collector.
 
+### Implementation changes and bug fixes
+- [PR #2718](https://github.com/rqlite/rqlite/pull/2718): Skip `systemctl daemon-reload` in package scripts when systemd is not running, fixing package installation inside chroots and containers.
+
 ## v10.2.7 (July 5th 2026)
 ### Implementation changes and bug fixes
 - [PR #2714](https://github.com/rqlite/rqlite/pull/2714): `go mod` dependency updates.
