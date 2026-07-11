@@ -16,5 +16,7 @@ mkdir -p /var/lib/rqlite
 chown rqlite:rqlite /var/lib/rqlite
 chmod 750 /var/lib/rqlite
 
-# Reload systemd
-systemctl daemon-reload
+# Reload systemd, but only if systemd is running (e.g. not in a chroot or container)
+if [ -d /run/systemd/system ]; then
+    systemctl daemon-reload
+fi

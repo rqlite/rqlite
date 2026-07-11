@@ -162,7 +162,9 @@ fi
 mkdir -p /var/lib/rqlite
 chown rqlite:rqlite /var/lib/rqlite
 chmod 750 /var/lib/rqlite
-systemctl daemon-reload
+if [ -d /run/systemd/system ]; then
+    systemctl daemon-reload
+fi
 
 %preun
 if systemctl is-active --quiet rqlited 2>/dev/null; then
