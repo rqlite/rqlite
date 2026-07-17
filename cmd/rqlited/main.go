@@ -258,10 +258,9 @@ func main() {
 	// Block until done.
 	<-mainCtx.Done()
 
-	// Stop the HTTP server and other network access first so clients get notification as soon as
+	// Stop the HTTP server first so clients get notification as soon as
 	// possible that the node is going away.
 	httpServ.Close()
-	clstrServ.Close()
 
 	if cfg.RaftClusterRemoveOnShutdown {
 		remover := cluster.NewRemover(clstrClient, 5*time.Second, str)
@@ -279,6 +278,15 @@ func main() {
 		log.Printf("stepping down as Leader before shutdown")
 		str.Stepdown(true, "")
 	}
+
+	// Stop cluster network access. This must happen after any self-removal
+	// above, since a Leader removing itself sends the removal request to its
+	// own cluster service.
+	clstrServ.Close()
+	if err := clstrClient.Close(); err != nil {
+		log.Printf("failed to close cluster client during shutdown: %s", err.Error())
+	}
+
 	muxLn.Close()
 
 	// Close the mux, which force-closes any in-flight node-to-node connections

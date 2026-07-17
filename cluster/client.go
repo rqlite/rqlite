@@ -32,6 +32,9 @@ const (
 	protoBufferLengthSize = 8
 )
 
+// ErrClientClosed is returned when an operation is attempted on a closed Client.
+var ErrClientClosed = errors.New("client is closed")
+
 // CreateRaftDialer creates a dialer for connecting to other nodes' Raft service. If the cert and
 // key arguments are not set, then the returned dialer will not use TLS. If they are set then
 // the dialer will use TLS. A started CertMonitor will also be returned. The caller is responsible
@@ -691,6 +694,18 @@ func (c *Client) BroadcastHWM(ctx context.Context, hwm uint64, retries int, time
 	return responses, nil
 }
 
+// Close closes the Client, closing all connections in its pools. Once closed,
+// the Client can no longer be used. It is safe to call Close more than once.
+func (c *Client) Close() error {
+	c.poolMu.Lock()
+	defer c.poolMu.Unlock()
+	for _, p := range c.pools {
+		p.Close()
+	}
+	c.pools = nil
+	return nil
+}
+
 // Stats returns stats on the Client instance
 func (c *Client) Stats() (map[string]any, error) {
 	c.poolMu.RLock()
@@ -734,6 +749,9 @@ func (c *Client) dialWithOption(nodeAddr string, forceNew bool) (net.Conn, error
 		if err := func() error {
 			c.poolMu.Lock()
 			defer c.poolMu.Unlock()
+			if c.pools == nil {
+				return ErrClientClosed
+			}
 			pl, ok = c.pools[nodeAddr]
 			if ok {
 				return nil // Pool was inserted just after we checked.
