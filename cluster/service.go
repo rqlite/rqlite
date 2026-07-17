@@ -347,9 +347,14 @@ func (s *Service) serve() error {
 		select {
 		case s.connLimiterCh <- struct{}{}:
 			if !s.addConn(conn) {
-				// Service was closed since the connection was accepted.
+				// Service was closed since the connection was accepted, and
+				// addConn closed the connection. Keep accepting so peers
+				// fail fast rather than hang: the listener may be a mux
+				// channel listener whose Close is a no-op, in which case
+				// conns handed over after Close would otherwise never be
+				// accepted, blocking peers until their timeouts fire.
 				<-s.connLimiterCh
-				return nil
+				continue
 			}
 			go func() {
 				defer func() { <-s.connLimiterCh }()

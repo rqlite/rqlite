@@ -579,6 +579,54 @@ func Test_ServiceCloseClosesConnections(t *testing.T) {
 	}
 }
 
+// Test_ServiceCloseDrainsConnections tests that when the Service's listener
+// remains functional after Close -- as is the case with a mux channel
+// listener, whose Close is a no-op -- connections accepted after Close are
+// promptly closed rather than left unserviced, so peers fail fast instead
+// of blocking until their timeouts fire.
+func Test_ServiceCloseDrainsConnections(t *testing.T) {
+	ml := mustNewMockTransport()
+	s := New(&noopCloseListener{ml}, mustNewMockDatabase(), mustNewMockManager(), mustNewMockCredentialStore())
+	if s == nil {
+		t.Fatalf("failed to create cluster service")
+	}
+
+	if err := s.Open(); err != nil {
+		t.Fatalf("failed to open cluster service")
+	}
+	defer ml.Close()
+
+	if err := s.Close(); err != nil {
+		t.Fatalf("failed to close cluster service: %s", err)
+	}
+
+	// The listener is still accepting, so dials still succeed, but the
+	// service should close each accepted connection immediately.
+	for i := 0; i < 3; i++ {
+		conn, err := net.Dial("tcp", s.Addr())
+		if err != nil {
+			t.Fatalf("failed to connect to service: %s", err)
+		}
+		defer conn.Close()
+
+		if err := conn.SetReadDeadline(time.Now().Add(5 * time.Second)); err != nil {
+			t.Fatalf("failed to set read deadline: %s", err)
+		}
+		one := make([]byte, 1)
+		if _, err := conn.Read(one); err != io.EOF {
+			t.Fatalf("expected io.EOF on connection %d to closed service, got: %v", i, err)
+		}
+	}
+}
+
+// noopCloseListener wraps a net.Listener, making Close a no-op. It mimics
+// the behavior of a mux channel listener.
+type noopCloseListener struct {
+	net.Listener
+}
+
+func (n *noopCloseListener) Close() error { return nil }
+
 func Test_ServiceSetConnectionLimitOpen(t *testing.T) {
 	ml := mustNewMockTransport()
 	s := New(ml, mustNewMockDatabase(), mustNewMockManager(), mustNewMockCredentialStore())
