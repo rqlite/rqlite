@@ -540,6 +540,45 @@ func Test_ServiceClosesIdleConnection(t *testing.T) {
 	}
 }
 
+func Test_ServiceCloseClosesConnections(t *testing.T) {
+	ml := mustNewMockTransport()
+	s := New(ml, mustNewMockDatabase(), mustNewMockManager(), mustNewMockCredentialStore())
+	if s == nil {
+		t.Fatalf("failed to create cluster service")
+	}
+
+	if err := s.Open(); err != nil {
+		t.Fatalf("failed to open cluster service")
+	}
+
+	md := &mockDialer{Dialer: ml}
+	t.Cleanup(md.CloseAll)
+	c := NewClient(md, 30*time.Second)
+	defer c.Close()
+
+	// Make a request so a connection is accepted and being serviced.
+	if _, err := c.GetNodeMeta(context.Background(), s.Addr(), noRetries, 5*time.Second); err != nil {
+		t.Fatalf("failed to get node metadata: %s", err)
+	}
+
+	if err := s.Close(); err != nil {
+		t.Fatalf("failed to close cluster service: %s", err)
+	}
+
+	// Close should have closed the accepted connection, so the client
+	// should see EOF well before the connection read timeout could fire.
+	md.mu.Lock()
+	conn := md.conns[0]
+	md.mu.Unlock()
+	if err := conn.SetReadDeadline(time.Now().Add(5 * time.Second)); err != nil {
+		t.Fatalf("failed to set read deadline: %s", err)
+	}
+	one := make([]byte, 1)
+	if _, err := conn.Read(one); err != io.EOF {
+		t.Fatalf("expected io.EOF reading connection closed by service, got: %v", err)
+	}
+}
+
 func Test_ServiceSetConnectionLimitOpen(t *testing.T) {
 	ml := mustNewMockTransport()
 	s := New(ml, mustNewMockDatabase(), mustNewMockManager(), mustNewMockCredentialStore())

@@ -193,6 +193,11 @@ type Service struct {
 	// connLimiterCh limits the number of in-service connections.
 	connLimiterCh chan struct{}
 
+	// connsMu guards conns, the set of accepted connections currently being
+	// serviced. conns is set to nil when the service is closed.
+	connsMu sync.Mutex
+	conns   map[net.Conn]struct{}
+
 	hwmMu      sync.RWMutex
 	hwmUpdateC chan<- uint64 // Channel for HWM updates
 
@@ -210,6 +215,7 @@ func New(ln net.Listener, db Database, m Manager, credentialStore CredentialStor
 		credentialStore: credentialStore,
 		connTimeout:     connReadTimeout,
 		connLimit:       maxConcurrentConns,
+		conns:           make(map[net.Conn]struct{}),
 		open:            rsync.NewAtomicBool(),
 	}
 }
@@ -228,11 +234,20 @@ func (s *Service) Open() error {
 	return nil
 }
 
-// Close closes the service.
+// Close closes the service, closing any connections it is currently
+// servicing.
 func (s *Service) Close() error {
 	err := s.ln.Close()
 	if err == nil {
 		s.open.Unset()
+	}
+
+	s.connsMu.Lock()
+	conns := s.conns
+	s.conns = nil
+	s.connsMu.Unlock()
+	for conn := range conns {
+		conn.Close()
 	}
 	return err
 }
@@ -331,8 +346,14 @@ func (s *Service) serve() error {
 
 		select {
 		case s.connLimiterCh <- struct{}{}:
+			if !s.addConn(conn) {
+				// Service was closed since the connection was accepted.
+				<-s.connLimiterCh
+				return nil
+			}
 			go func() {
 				defer func() { <-s.connLimiterCh }()
+				defer s.removeConn(conn)
 				s.handleConn(conn)
 			}()
 		default:
@@ -340,6 +361,26 @@ func (s *Service) serve() error {
 			stats.Add(numConnRejected, 1)
 		}
 	}
+}
+
+// addConn records conn as being serviced, returning false if the service
+// has been closed. In that case conn is closed before returning.
+func (s *Service) addConn(conn net.Conn) bool {
+	s.connsMu.Lock()
+	defer s.connsMu.Unlock()
+	if s.conns == nil {
+		conn.Close()
+		return false
+	}
+	s.conns[conn] = struct{}{}
+	return true
+}
+
+// removeConn removes conn from the set of connections being serviced.
+func (s *Service) removeConn(conn net.Conn) {
+	s.connsMu.Lock()
+	defer s.connsMu.Unlock()
+	delete(s.conns, conn)
 }
 
 func (s *Service) checkCommandPerm(c *proto.Command, perm string) bool {

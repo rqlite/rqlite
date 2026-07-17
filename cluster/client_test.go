@@ -3,6 +3,7 @@ package cluster
 import (
 	"context"
 	"encoding/binary"
+	"errors"
 	"io"
 	"net"
 	"strings"
@@ -855,5 +856,58 @@ func Test_ClientBroadcast_WithError(t *testing.T) {
 	}
 	if resp.Error != "test error" {
 		t.Fatalf("expected 'test error', got '%s'", resp.Error)
+	}
+}
+
+func Test_ClientClose(t *testing.T) {
+	srv := servicetest.NewService()
+	srv.Handler = func(conn net.Conn) {
+		for {
+			c := readCommand(conn)
+			if c == nil {
+				// Error on connection, so give up, as normal
+				// test exit can cause that too.
+				return
+			}
+			if c.Type != proto.Command_COMMAND_TYPE_GET_NODE_META {
+				t.Fatalf("unexpected command type: %d", c.Type)
+			}
+			p, err := pb.Marshal(&proto.NodeMeta{
+				Url: "http://localhost:1234",
+			})
+			if err != nil {
+				conn.Close()
+				return
+			}
+			writeBytesWithLength(conn, p)
+		}
+	}
+	srv.Start()
+	defer srv.Close()
+
+	md := &mockDialer{Dialer: &simpleDialer{}}
+	c := NewClient(md, 30*time.Second)
+	if _, err := c.GetNodeMeta(context.Background(), srv.Addr(), noRetries, time.Second); err != nil {
+		t.Fatalf("failed to get node meta: %s", err)
+	}
+
+	if err := c.Close(); err != nil {
+		t.Fatalf("failed to close client: %s", err)
+	}
+
+	// Close should have closed the pooled connection, so closing it
+	// again should return an error.
+	if err := md.CloseConn(0); err == nil {
+		t.Fatalf("expected pooled connection to be closed by client Close")
+	}
+
+	// The client should no longer be usable.
+	if _, err := c.GetNodeMeta(context.Background(), srv.Addr(), noRetries, time.Second); !errors.Is(err, ErrClientClosed) {
+		t.Fatalf("expected ErrClientClosed, got: %v", err)
+	}
+
+	// A second Close should be a no-op.
+	if err := c.Close(); err != nil {
+		t.Fatalf("failed to close client a second time: %s", err)
 	}
 }

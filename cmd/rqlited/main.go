@@ -279,6 +279,13 @@ func main() {
 		log.Printf("stepping down as Leader before shutdown")
 		str.Stepdown(true, "")
 	}
+
+	// Close the cluster client, which closes any pooled connections to
+	// other nodes.
+	if err := clstrClient.Close(); err != nil {
+		log.Printf("failed to close cluster client during shutdown: %s", err.Error())
+	}
+
 	muxLn.Close()
 
 	// Close the mux, which force-closes any in-flight node-to-node connections
