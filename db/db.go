@@ -1820,28 +1820,41 @@ func (db *DB) StmtReadOnlyWithConn(sql string, conn *sql.Conn) (bool, error) {
 }
 
 func (db *DB) pragmas() (map[string]any, error) {
-	conns := map[string]*sql.DB{
-		"rw": db.rwDB,
-		"ro": db.roDB,
+	pragmaNames := []string{
+		"synchronous",
+		"journal_mode",
+		"foreign_keys",
+		"wal_autocheckpoint",
+		"busy_timeout",
+	}
+
+	// readPragmas acquires a single connection from the given pool and reads
+	// all requested pragmas on that one connection, avoiding a separate
+	// connection acquisition per pragma.
+	readPragmas := func(sqlDB *sql.DB) (map[string]string, error) {
+		conn, err := sqlDB.Conn(context.Background())
+		if err != nil {
+			return nil, err
+		}
+		defer conn.Close()
+		m := make(map[string]string, len(pragmaNames))
+		for _, p := range pragmaNames {
+			var s string
+			if err := conn.QueryRowContext(context.Background(), fmt.Sprintf("PRAGMA %s", p)).Scan(&s); err != nil {
+				return nil, err
+			}
+			m[p] = s
+		}
+		return m, nil
 	}
 
 	connsMap := make(map[string]any)
-	for k, v := range conns {
-		pragmasMap := make(map[string]string)
-		for _, p := range []string{
-			"synchronous",
-			"journal_mode",
-			"foreign_keys",
-			"wal_autocheckpoint",
-			"busy_timeout",
-		} {
-			var s string
-			if err := v.QueryRow(fmt.Sprintf("PRAGMA %s", p)).Scan(&s); err != nil {
-				return nil, err
-			}
-			pragmasMap[p] = s
+	for k, sqlDB := range map[string]*sql.DB{"rw": db.rwDB, "ro": db.roDB} {
+		m, err := readPragmas(sqlDB)
+		if err != nil {
+			return nil, err
 		}
-		connsMap[k] = pragmasMap
+		connsMap[k] = m
 	}
 	return connsMap, nil
 }
@@ -1849,29 +1862,32 @@ func (db *DB) pragmas() (map[string]any, error) {
 // txStatus returns whether there is an active transaction on each database
 // connection.
 func (db *DB) txStatus() (map[string]any, error) {
-	conns := map[string]*sql.DB{
-		"rw": db.rwDB,
-		"ro": db.roDB,
-	}
-
-	t := false
-	f := func(driverConn any) error {
-		conn := driverConn.(*sqlite3.SQLiteConn)
-		t = conn.AutoCommit()
-		return nil
+	// checkTx acquires a single connection from the given pool, checks whether
+	// it is in auto-commit mode (i.e. no active transaction), and immediately
+	// releases the connection before returning.
+	checkTx := func(sqlDB *sql.DB) (bool, error) {
+		conn, err := sqlDB.Conn(context.Background())
+		if err != nil {
+			return false, err
+		}
+		defer conn.Close()
+		var autoCommit bool
+		if err := conn.Raw(func(driverConn any) error {
+			autoCommit = driverConn.(*sqlite3.SQLiteConn).AutoCommit()
+			return nil
+		}); err != nil {
+			return false, err
+		}
+		return autoCommit, nil
 	}
 
 	txStatusMap := make(map[string]any)
-	for k, v := range conns {
-		conn, err := v.Conn(context.Background())
+	for k, sqlDB := range map[string]*sql.DB{"rw": db.rwDB, "ro": db.roDB} {
+		autoCommit, err := checkTx(sqlDB)
 		if err != nil {
 			return nil, err
 		}
-		defer conn.Close()
-		if err := conn.Raw(f); err != nil {
-			return nil, err
-		}
-		txStatusMap[k] = !t
+		txStatusMap[k] = !autoCommit
 	}
 	return txStatusMap, nil
 }
