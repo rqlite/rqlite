@@ -1832,6 +1832,9 @@ func (db *DB) pragmas() (map[string]any, error) {
 	// all requested pragmas on that one connection, avoiding a separate
 	// connection acquisition per pragma.
 	readPragmas := func(sqlDB *sql.DB) (map[string]string, error) {
+		if sqlDB == nil {
+			return nil, errors.New("database connection is nil")
+		}
 		conn, err := sqlDB.Conn(context.Background())
 		if err != nil {
 			return nil, err
@@ -1866,6 +1869,9 @@ func (db *DB) txStatus() (map[string]any, error) {
 	// it is in auto-commit mode (i.e. no active transaction), and immediately
 	// releases the connection before returning.
 	checkTx := func(sqlDB *sql.DB) (bool, error) {
+		if sqlDB == nil {
+			return false, errors.New("database connection is nil")
+		}
 		conn, err := sqlDB.Conn(context.Background())
 		if err != nil {
 			return false, err
@@ -1873,7 +1879,11 @@ func (db *DB) txStatus() (map[string]any, error) {
 		defer conn.Close()
 		var autoCommit bool
 		if err := conn.Raw(func(driverConn any) error {
-			autoCommit = driverConn.(*sqlite3.SQLiteConn).AutoCommit()
+			sqliteConn, ok := driverConn.(*sqlite3.SQLiteConn)
+			if !ok {
+				return fmt.Errorf("unexpected driver connection type: %T", driverConn)
+			}
+			autoCommit = sqliteConn.AutoCommit()
 			return nil
 		}); err != nil {
 			return false, err
