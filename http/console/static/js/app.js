@@ -1378,6 +1378,7 @@
         sqlInput.value = "SELECT *\nFROM " + sqlQuoteIdent(tableName) + "\nLIMIT 100;";
         autoGrow();
         executeQuery();
+        window.scrollTo(0, 0);
     }
 
     function dropTable(tableName, btn) {
