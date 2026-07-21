@@ -132,7 +132,7 @@ type Config struct {
 	RaftStepdownOnShutdown bool
 	// Time after which a non-reachable voting node will be reaped. If not set, no reaping takes place
 	RaftReapNodeTimeout time.Duration
-	// Time after which a non-reachable non-voting node will be reaped. If not set, no reaping takes place
+	// Time after which a non-reachable read replica (non-voting) node will be reaped. If not set, no reaping takes place
 	RaftReapReadOnlyNodeTimeout time.Duration
 	// Timeout for initial connection to other nodes
 	ClusterConnectTimeout time.Duration
@@ -219,7 +219,7 @@ func Forge(arguments []string) (*flag.FlagSet, *Config, error) {
 	fs.BoolVar(&config.RaftClusterRemoveOnShutdown, "raft-cluster-remove-shutdown", false, "Node removes itself from cluster on graceful shutdown")
 	fs.BoolVar(&config.RaftStepdownOnShutdown, "raft-shutdown-stepdown", true, "If leader, stepdown before shutting down. Enabled by default")
 	fs.DurationVar(&config.RaftReapNodeTimeout, "raft-reap-node-timeout", mustParseDuration("0h"), "Time after which a non-reachable voting node will be reaped. If not set, no reaping takes place")
-	fs.DurationVar(&config.RaftReapReadOnlyNodeTimeout, "raft-reap-read-only-node-timeout", mustParseDuration("0h"), "Time after which a non-reachable non-voting node will be reaped. If not set, no reaping takes place")
+	fs.DurationVar(&config.RaftReapReadOnlyNodeTimeout, "raft-reap-read-only-node-timeout", mustParseDuration("0h"), "Time after which a non-reachable read replica (non-voting) node will be reaped. If not set, no reaping takes place")
 	fs.DurationVar(&config.ClusterConnectTimeout, "cluster-connect-timeout", mustParseDuration("30s"), "Timeout for initial connection to other nodes")
 	fs.IntVar(&config.WriteQueueCap, "write-queue-capacity", 1024, "Queued Writes queue capacity")
 	fs.IntVar(&config.WriteQueueBatchSz, "write-queue-batch-size", 128, "Queued Writes queue batch size")
