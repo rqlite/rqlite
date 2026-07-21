@@ -616,6 +616,44 @@ footer a:hover {
     color: var(--text);
 }
 
+.schema-table-heading {
+    display: inline-flex;
+    align-items: center;
+}
+
+.schema-view-rows {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 1.5rem;
+    height: 1.5rem;
+    margin-left: 0.375rem;
+    padding: 0;
+    border: 1px solid transparent;
+    border-radius: 3px;
+    background: transparent;
+    color: var(--text-muted);
+    cursor: pointer;
+}
+
+.schema-view-rows:hover,
+.schema-view-rows:focus-visible {
+    border-color: var(--border);
+    background: var(--surface-alt);
+    color: var(--accent);
+}
+
+.schema-view-rows svg {
+    width: 0.875rem;
+    height: 0.875rem;
+    fill: none;
+    stroke: currentColor;
+    stroke-width: 1.75;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+    pointer-events: none;
+}
+
 .schema-drop-table,
 .schema-drop-index {
     background: transparent;

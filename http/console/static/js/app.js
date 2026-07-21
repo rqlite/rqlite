@@ -125,10 +125,7 @@
     tabs.forEach(function (tab) {
         tab.addEventListener("click", function () {
             var target = tab.getAttribute("data-tab");
-            tabs.forEach(function (t) { t.classList.remove("active"); });
-            tabContents.forEach(function (tc) { tc.classList.remove("active"); });
-            tab.classList.add("active");
-            document.getElementById(target).classList.add("active");
+            showTab(target);
             if (target === "schema") {
                 loadSchema();
             } else if (target === "restore") {
@@ -137,6 +134,15 @@
             }
         });
     });
+
+    function showTab(target) {
+        tabs.forEach(function (t) {
+            t.classList.toggle("active", t.getAttribute("data-tab") === target);
+        });
+        tabContents.forEach(function (tc) {
+            tc.classList.toggle("active", tc.id === target);
+        });
+    }
 
     // --- Query Tab ---
 
@@ -1262,7 +1268,7 @@
             var anchor = "schema-table-" + slugify(tableName);
             html += '<div class="detail-section schema-section' + openClass(anchor, true) + '" id="' + escapeHTML(anchor) + '">';
             html += '<div class="detail-section-header">';
-            html += '<span><span class="schema-kind">table</span> ' + escapeHTML(tableName);
+            html += '<span class="schema-table-heading"><span><span class="schema-kind">table</span> ' + escapeHTML(tableName);
             var columnsStr = t.columns.length + ' column' + (t.columns.length === 1 ? '' : 's');
             html += ' <span class="schema-count">(' + escapeHTML(columnsStr);
             if (Object.prototype.hasOwnProperty.call(rowCounts, tableName)) {
@@ -1271,6 +1277,10 @@
                 html += ', <span class="schema-rowcount-text" title="Row count read with &#39;none&#39; consistency &mdash; may be slightly stale">' + escapeHTML(rowsStr) + '</span>';
             }
             html += ')</span></span>';
+            html += '<button class="schema-view-rows" type="button" data-table-name="' + escapeHTML(tableName) + '"';
+            html += ' aria-label="Preview first 100 rows from ' + escapeHTML(tableName) + '" title="Preview first 100 rows">';
+            html += '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M2 12s3.5-6 10-6 10 6 10 6-3.5 6-10 6S2 12 2 12Z"></path><circle cx="12" cy="12" r="2.5"></circle></svg>';
+            html += '</button></span>';
             html += '<span class="arrow">&#9654;</span>';
             html += '</div>';
             html += '<div class="detail-section-body">';
@@ -1363,6 +1373,13 @@
         return '"' + String(name).replace(/"/g, '""') + '"';
     }
 
+    function viewFirstRows(tableName) {
+        showTab("query");
+        sqlInput.value = "SELECT *\nFROM " + sqlQuoteIdent(tableName) + "\nLIMIT 100;";
+        autoGrow();
+        executeQuery();
+    }
+
     function dropTable(tableName, btn) {
         btn.disabled = true;
         var sql = "DROP TABLE " + sqlQuoteIdent(tableName);
@@ -1412,14 +1429,21 @@
     });
 
     schemaContent.addEventListener("click", function (e) {
+        var btn = e.target.closest && e.target.closest("button");
+        if (btn && btn.classList.contains("schema-view-rows")) {
+            var browseTableName = btn.getAttribute("data-table-name");
+            if (!browseTableName) return;
+            viewFirstRows(browseTableName);
+            return;
+        }
+
         var header = e.target.closest && e.target.closest(".detail-section-header");
         if (header && schemaContent.contains(header)) {
             header.parentElement.classList.toggle("open");
             return;
         }
 
-        var btn = e.target;
-        if (!btn.classList) return;
+        if (!btn || !schemaContent.contains(btn)) return;
 
         if (btn.classList.contains("schema-sql-toggle")) {
             var block = btn.closest(".schema-sql-block");
