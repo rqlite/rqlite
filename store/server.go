@@ -51,8 +51,8 @@ type Servers []*Server
 // IsReadReplica returns whether the given node, as specified by its Raft ID,
 // is a read replica (non-voting) node. If no node is found with the given ID
 // then found will be false.
-func (s Servers) IsReadReplica(id string) (readOnly bool, found bool) {
-	readOnly = false
+func (s Servers) IsReadReplica(id string) (readReplica bool, found bool) {
+	readReplica = false
 	found = false
 
 	if s == nil || id == "" {
@@ -61,7 +61,7 @@ func (s Servers) IsReadReplica(id string) (readOnly bool, found bool) {
 
 	for _, n := range s {
 		if n != nil && n.ID == id {
-			readOnly = n.Suffrage == proto.Suffrage_NON_VOTER
+			readReplica = n.Suffrage == proto.Suffrage_NON_VOTER
 			found = true
 			return
 		}
