@@ -19,8 +19,8 @@ const (
 	PermJoin = "join"
 	// PermJoinReadOnly means user is permitted to join the cluster only as a read replica node
 	PermJoinReadOnly = "join-read-only"
-	// PermJoinReplicaOnly means user is permitted to join the cluster only as a read replica node
-	PermJoinReplicaOnly = "join-replica-only"
+	// PermJoinReadReplica means user is permitted to join the cluster only as a read replica node
+	PermJoinReadReplica = "join-read-replica"
 	// PermRemove means user is permitted to remove a node.
 	PermRemove = "remove"
 	// PermExecute means user can access execute endpoint.
