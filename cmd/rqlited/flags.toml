@@ -590,9 +590,9 @@ default = "0h"
 name = "RaftReapReadOnlyNodeTimeout"
 cli = "raft-reap-read-only-node-timeout"
 type = "time.Duration"
-short_help = "Time after which a non-reachable non-voting node will be reaped. If not set, no reaping takes place"
+short_help = "Time after which a non-reachable read replica (non-voting) node will be reaped. If not set, no reaping takes place"
 long_help = """
-This can be useful if you have a deployment where non-voting nodes tend to come and go, and you want to avoid explicitly removing those nodes.
+This can be useful if you have a deployment where read replica (non-voting) nodes tend to come and go, and you want to avoid explicitly removing those nodes.
 """
 default = "0h"
 
