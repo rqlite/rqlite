@@ -60,9 +60,9 @@ func Test_Server_IsReadReplica(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			rr, found := tc.servers.IsReadRelica(tc.nodeID)
+			rr, found := tc.servers.IsReadReplica(tc.nodeID)
 			if rr != tc.expectedRR || found != tc.expectedFound {
-				t.Fatalf("IsReadReplica for %s returned rr: %t, found: %t, expected rr: %t, expected found: %t", tc.name, rr, found, tc.expectedRO, tc.expectedFound)
+				t.Fatalf("IsReadReplica for %s returned rr: %t, found: %t, expected rr: %t, expected found: %t", tc.name, rr, found, tc.expectedRR, tc.expectedFound)
 			}
 		})
 	}
