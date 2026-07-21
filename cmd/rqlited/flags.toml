@@ -463,7 +463,7 @@ cli = "raft-non-voter"
 type = "bool"
 short_help = "Configure as non-voting node"
 long_help = """
-Adding non-voting (also known as read-only) nodes can help scale out query performance. Read-only nodes don't particpate in the Raft consensus system, but do receive the same stream of updates from the Leader as voting nodes do.
+Adding non-voting (also known as read replica) nodes can help scale out query performance. Read-replica nodes don't particpate in the Raft consensus system, but do receive the same stream of updates from the Leader as voting nodes do. This can also service write requests, and will forward the requests to the Leader.
 """
 default = false
 

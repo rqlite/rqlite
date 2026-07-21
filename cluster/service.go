@@ -619,6 +619,7 @@ func (s *Service) handleConn(conn net.Conn) {
 				resp.Error = "JoinRequest is nil"
 			} else {
 				if (jr.Voter && s.checkCommandPerm(c, auth.PermJoin)) ||
+					(!jr.Voter && s.checkCommandPerm(c, auth.PermJoinReadOnly)) ||
 					(!jr.Voter && s.checkCommandPerm(c, auth.PermJoinReadOnly)) {
 					if err := s.mgr.Join(jr); err != nil {
 						resp.Error = err.Error()

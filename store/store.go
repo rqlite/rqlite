@@ -2107,7 +2107,7 @@ func (s *Store) Notify(nr *proto.NotifyRequest) error {
 		// There is no reason this node will bootstrap.
 		//
 		// - Read-only nodes require that BootstrapExpect is set to 0, so this
-		// block ensures that notifying a read-only node will not cause a bootstrap.
+		// block ensures that notifying a read replica node will not cause a bootstrap.
 		// - If the node is already bootstrapped, then there is nothing to do.
 		// - If the node already has a leader, then no bootstrapping is required.
 		return nil
@@ -2884,16 +2884,16 @@ func (s *Store) observe() (closeCh, doneCh chan struct{}) {
 					id := string(signal.PeerID)
 					dur := time.Since(signal.LastContact)
 
-					isReadOnly, found := servers.IsReadOnly(id)
+					isReadReplica, found := servers.IsReadReplica(id)
 					if !found {
 						s.logger.Printf("node %s (failing heartbeat) is not present in configuration", id)
 						break
 					}
 
-					if (isReadOnly && s.ReapReadOnlyTimeout > 0 && dur > s.ReapReadOnlyTimeout) ||
-						(!isReadOnly && s.ReapTimeout > 0 && dur > s.ReapTimeout) {
+					if (isReadReplica && s.ReapReadOnlyTimeout > 0 && dur > s.ReapReadOnlyTimeout) ||
+						(!isReadReplica && s.ReapTimeout > 0 && dur > s.ReapTimeout) {
 						pn := "voting node"
-						if isReadOnly {
+						if isReadReplica {
 							pn = "non-voting node"
 						}
 						if err := s.remove(id); err != nil {
