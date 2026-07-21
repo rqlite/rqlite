@@ -619,7 +619,8 @@ func (s *Service) handleConn(conn net.Conn) {
 				resp.Error = "JoinRequest is nil"
 			} else {
 				if (jr.Voter && s.checkCommandPerm(c, auth.PermJoin)) ||
-					(!jr.Voter && s.checkCommandPerm(c, auth.PermJoinReadOnly)) {
+					(!jr.Voter && s.checkCommandPerm(c, auth.PermJoinReadOnly)) ||
+					(!jr.Voter && s.checkCommandPerm(c, auth.PermJoinReadReplica)) {
 					if err := s.mgr.Join(jr); err != nil {
 						resp.Error = err.Error()
 						if err.Error() == "not leader" {

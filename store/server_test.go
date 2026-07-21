@@ -7,26 +7,26 @@ import (
 	"github.com/rqlite/rqlite/v10/command/proto"
 )
 
-func Test_Server_IsReadOnly(t *testing.T) {
+func Test_Server_IsReadReplica(t *testing.T) {
 	testCases := []struct {
 		name          string
 		servers       Servers
 		nodeID        string
-		expectedRO    bool
+		expectedRR    bool
 		expectedFound bool
 	}{
 		{
 			name:          "EmptyServers",
 			servers:       nil,
 			nodeID:        "1",
-			expectedRO:    false,
+			expectedRR:    false,
 			expectedFound: false,
 		},
 		{
 			name:          "EmptyNodeID",
 			servers:       Servers(make([]*Server, 1)),
 			nodeID:        "",
-			expectedRO:    false,
+			expectedRR:    false,
 			expectedFound: false,
 		},
 		{
@@ -35,7 +35,7 @@ func Test_Server_IsReadOnly(t *testing.T) {
 				{ID: "node1", Addr: "localhost:4002", Suffrage: proto.Suffrage_VOTER},
 			}),
 			nodeID:        "node2",
-			expectedRO:    false,
+			expectedRR:    false,
 			expectedFound: false,
 		},
 		{
@@ -44,7 +44,7 @@ func Test_Server_IsReadOnly(t *testing.T) {
 				{ID: "node1", Addr: "localhost:4002", Suffrage: proto.Suffrage_VOTER},
 			}),
 			nodeID:        "node1",
-			expectedRO:    false,
+			expectedRR:    false,
 			expectedFound: true,
 		},
 		{
@@ -53,16 +53,16 @@ func Test_Server_IsReadOnly(t *testing.T) {
 				{ID: "node1", Addr: "localhost:4002", Suffrage: proto.Suffrage_NON_VOTER},
 			}),
 			nodeID:        "node1",
-			expectedRO:    true,
+			expectedRR:    true,
 			expectedFound: true,
 		},
 	}
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			ro, found := tc.servers.IsReadOnly(tc.nodeID)
-			if ro != tc.expectedRO || found != tc.expectedFound {
-				t.Fatalf("IsReadOnly for %s returned ro: %t, found: %t, expected ro: %t, expected found: %t", tc.name, ro, found, tc.expectedRO, tc.expectedFound)
+			rr, found := tc.servers.IsReadReplica(tc.nodeID)
+			if rr != tc.expectedRR || found != tc.expectedFound {
+				t.Fatalf("IsReadReplica for %s returned rr: %t, found: %t, expected rr: %t, expected found: %t", tc.name, rr, found, tc.expectedRR, tc.expectedFound)
 			}
 		})
 	}
