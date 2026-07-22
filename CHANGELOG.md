@@ -1,6 +1,7 @@
 ## v10.3.0 (unreleased)
 ### New features
 - [PR #2715](https://github.com/rqlite/rqlite/pull/2715), [PR #2716](https://github.com/rqlite/rqlite/pull/2716): Support pushing OTLP metrics to an OpenTelemetry Collector.
+- [PR #2728](https://github.com/rqlite/rqlite/pull/2728): Console app supports quickly querying for first 100 rows of a table. Thanks @rodionlim
 
 ### Implementation changes and bug fixes
 - [PR #2718](https://github.com/rqlite/rqlite/pull/2718): Skip `systemctl daemon-reload` in package scripts when systemd is not running, fixing package installation inside chroots and containers.
