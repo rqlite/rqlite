@@ -1169,7 +1169,7 @@ func (s *Service) handleReadyz(w http.ResponseWriter, r *http.Request, qp QueryP
 
 	lAddr, err := s.LeaderAddr(r.Context())
 	if err != nil {
-		if errors.Is(err, ErrLeaderNotFound) {
+		if errors.Is(err, store.ErrLeaderNotFound) {
 			w.WriteHeader(http.StatusServiceUnavailable)
 			w.Write([]byte("[+]node ok\n[+]leader does not exist"))
 			return
@@ -1285,7 +1285,7 @@ func (s *Service) queuedExecute(w http.ResponseWriter, r *http.Request, qp Query
 	if !qp.NoLeader() {
 		_, err := s.LeaderAddr(r.Context())
 		if err != nil {
-			if errors.Is(err, ErrLeaderNotFound) {
+			if errors.Is(err, store.ErrLeaderNotFound) {
 				stats.Add(numLeaderNotFound, 1)
 				http.Error(w, ErrLeaderNotFound.Error(), http.StatusServiceUnavailable)
 				return
