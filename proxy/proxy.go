@@ -19,11 +19,13 @@ import (
 
 var (
 	// ErrNotLeader is returned when noForward is true and the local
-	// node is not the Raft leader.
-	ErrNotLeader = errors.New("not leader")
+	// node is not the Raft leader. It is an alias for store.ErrNotLeader
+	// so errors.Is matches no matter which layer created the error.
+	ErrNotLeader = store.ErrNotLeader
 
 	// ErrLeaderNotFound is returned when the leader address is unknown.
-	ErrLeaderNotFound = errors.New("leader not found")
+	// It is an alias for store.ErrLeaderNotFound.
+	ErrLeaderNotFound = store.ErrLeaderNotFound
 
 	// ErrUnauthorized is returned when the remote node rejects credentials.
 	ErrUnauthorized = errors.New("unauthorized")

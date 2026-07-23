@@ -36,11 +36,6 @@ import (
 	rsql "github.com/rqlite/sql"
 )
 
-var (
-	// ErrLeaderNotFound is returned when a node cannot locate a leader
-	ErrLeaderNotFound = errors.New("leader not found")
-)
-
 const kubernetesServiceHostEnv = "KUBERNETES_SERVICE_HOST"
 
 type ResultsError interface {
@@ -1067,7 +1062,7 @@ func (s *Service) handleLeader(w http.ResponseWriter, r *http.Request, qp QueryP
 		ldr, err := s.store.Leader()
 		if err != nil {
 			if err == store.ErrLeaderNotFound || err == store.ErrNotOpen {
-				http.Error(w, ErrLeaderNotFound.Error(), http.StatusServiceUnavailable)
+				http.Error(w, store.ErrLeaderNotFound.Error(), http.StatusServiceUnavailable)
 			} else {
 				http.Error(w, fmt.Sprintf("leader: %s", err.Error()), http.StatusInternalServerError)
 			}
@@ -1169,7 +1164,7 @@ func (s *Service) handleReadyz(w http.ResponseWriter, r *http.Request, qp QueryP
 
 	lAddr, err := s.LeaderAddr(r.Context())
 	if err != nil {
-		if errors.Is(err, ErrLeaderNotFound) {
+		if errors.Is(err, store.ErrLeaderNotFound) || errors.Is(err, store.ErrNotOpen) {
 			w.WriteHeader(http.StatusServiceUnavailable)
 			w.Write([]byte("[+]node ok\n[+]leader does not exist"))
 			return
@@ -1285,9 +1280,9 @@ func (s *Service) queuedExecute(w http.ResponseWriter, r *http.Request, qp Query
 	if !qp.NoLeader() {
 		_, err := s.LeaderAddr(r.Context())
 		if err != nil {
-			if errors.Is(err, ErrLeaderNotFound) {
+			if errors.Is(err, store.ErrLeaderNotFound) || errors.Is(err, store.ErrNotOpen) {
 				stats.Add(numLeaderNotFound, 1)
-				http.Error(w, ErrLeaderNotFound.Error(), http.StatusServiceUnavailable)
+				http.Error(w, store.ErrLeaderNotFound.Error(), http.StatusServiceUnavailable)
 				return
 			}
 			http.Error(w, fmt.Sprintf("leader address: %s", err.Error()), http.StatusInternalServerError)
@@ -1648,7 +1643,7 @@ func (s *Service) FormRedirect(r *http.Request) (string, error) {
 	leaderAPIAddr := s.LeaderAPIAddr(r.Context())
 	if leaderAPIAddr == "" {
 		stats.Add(numLeaderNotFound, 1)
-		return "", ErrLeaderNotFound
+		return "", store.ErrLeaderNotFound
 	}
 
 	rq := r.URL.RawQuery
@@ -1718,7 +1713,7 @@ func (s *Service) LeaderAddr(ctx context.Context) (string, error) {
 		return "", err
 	}
 	if ldr.Addr == "" {
-		return "", ErrLeaderNotFound
+		return "", store.ErrLeaderNotFound
 	}
 	return ldr.Addr, nil
 }
