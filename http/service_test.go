@@ -335,6 +335,8 @@ func Test_405Routes(t *testing.T) {
 		{method: "GET", path: "/db/load"},
 		{method: "GET", path: "/remove"},
 		{method: "POST", path: "/remove"},
+		{method: "GET", path: "/demote"},
+		{method: "DELETE", path: "/demote"},
 		{method: "GET", path: "/snapshot"},
 		{method: "POST", path: "/db/backup"},
 		{method: "POST", path: "/status"},
@@ -362,6 +364,12 @@ func Test_405Routes(t *testing.T) {
 			resp, err = client.Get(host + tc.path)
 		case "POST":
 			resp, err = client.Post(host+tc.path, "", nil)
+		case "DELETE":
+			req, rerr := http.NewRequest("DELETE", host+tc.path, nil)
+			if rerr != nil {
+				t.Fatalf("failed to build DELETE request: %s", rerr)
+			}
+			resp, err = client.Do(req)
 		default:
 			t.Fatalf("unsupported method: %s", tc.method)
 		}
@@ -417,6 +425,7 @@ func Test_401Routes_NoBasicAuth(t *testing.T) {
 		"/db/load",
 		"/boot",
 		"/remove",
+		"/demote",
 		"/status",
 		"/nodes",
 		"/leader",
@@ -2579,6 +2588,10 @@ func (m *MockStore) Remove(ctx context.Context, rn *command.RemoveNodeRequest) e
 	return nil
 }
 
+func (m *MockStore) Demote(ctx context.Context, dn *command.DemoteNodeRequest) error {
+	return nil
+}
+
 func (m *MockStore) Leader() (*store.Server, error) {
 	return &store.Server{
 		Addr: m.leaderAddr,
@@ -2658,6 +2671,7 @@ type mockClusterService struct {
 	backupFn     func(br *command.BackupRequest, addr string, t time.Duration, w io.Writer) error
 	loadFn       func(lr *command.LoadRequest, addr string, t time.Duration) error
 	removeNodeFn func(rn *command.RemoveNodeRequest, nodeAddr string, t time.Duration) error
+	demoteNodeFn func(dn *command.DemoteNodeRequest, nodeAddr string, t time.Duration) error
 	stepdownFn   func(sr *command.StepdownRequest, nodeAddr string, t time.Duration) error
 }
 
@@ -2705,6 +2719,13 @@ func (m *mockClusterService) Load(ctx context.Context, lr *command.LoadRequest, 
 func (m *mockClusterService) RemoveNode(ctx context.Context, rn *command.RemoveNodeRequest, addr string, creds *cluster.Credentials, t time.Duration) error {
 	if m.removeNodeFn != nil {
 		return m.removeNodeFn(rn, addr, t)
+	}
+	return nil
+}
+
+func (m *mockClusterService) DemoteNode(ctx context.Context, dn *command.DemoteNodeRequest, addr string, creds *cluster.Credentials, t time.Duration) error {
+	if m.demoteNodeFn != nil {
+		return m.demoteNodeFn(dn, addr, t)
 	}
 	return nil
 }

@@ -2242,6 +2242,26 @@ func (s *Store) Remove(ctx context.Context, rn *proto.RemoveNodeRequest) error {
 	return nil
 }
 
+// Demote demotes a voter node to a non-voter in the store.
+func (s *Store) Demote(ctx context.Context, dn *proto.DemoteNodeRequest) error {
+	if !s.open.Is() {
+		return ErrNotOpen
+	}
+
+	// Check if context is already canceled
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+
+	id := dn.Id
+	if err := s.demote(id); err != nil {
+		return err
+	}
+
+	s.logger.Printf("node %s demoted successfully", id)
+	return nil
+}
+
 // Noop writes a noop command to the Raft log. A noop command simply
 // consumes a slot in the Raft log, but has no other effect on the
 // system.
@@ -2296,6 +2316,15 @@ func (s *Store) StagedWALs() ([]string, error) {
 // remove removes the node, with the given ID, from the cluster.
 func (s *Store) remove(id string) error {
 	f := s.raft.RemoveServer(raft.ServerID(id), 0, 0)
+	if f.Error() != nil && f.Error() == raft.ErrNotLeader {
+		return ErrNotLeader
+	}
+	return f.Error()
+}
+
+// demote demotes the node, with the given ID, to a non-voter.
+func (s *Store) demote(id string) error {
+	f := s.raft.DemoteVoter(raft.ServerID(id), 0, 0)
 	if f.Error() != nil && f.Error() == raft.ErrNotLeader {
 		return ErrNotLeader
 	}
