@@ -9,7 +9,7 @@
 - [135b510](https://github.com/rqlite/rqlite/commit/135b51089467372816247b26e3505d02cb391e2a): Docker `dev` image is now built on-demand via workflow dispatch, for `linux/amd64` only.
 - [PR #2719](https://github.com/rqlite/rqlite/pull/2719): Upgrade to SQLite 3.53.3.
 - [PR #2726](https://github.com/rqlite/rqlite/pull/2726), [PR #2727](https://github.com/rqlite/rqlite/pull/2727): Rename read-only nodes to read replicas. Command-line flags unchanged.
-- [PR #2731](https://github.com/rqlite/rqlite/pull/2731): `ErrNotLeader` and `ErrLeaderNotFound` are now defined solely in the `store` package. Fixes issue [#2729](https://github.com/rqlite/rqlite/issues/2729). Thanks @deanz-io for flagging.
+- [PR #2731](https://github.com/rqlite/rqlite/pull/2731): `ErrNotLeader` and `ErrLeaderNotFound` are now defined solely in the `store` package. Fixes issue [#2729](https://github.com/rqlite/rqlite/issues/2729). Thanks @deanz-io.
 
 ## v10.2.7 (July 5th 2026)
 ### Implementation changes and bug fixes
