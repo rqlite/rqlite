@@ -289,7 +289,7 @@ func Test_LeaderAddrsFail(t *testing.T) {
 	defer s.Close()
 
 	_, err := s.LeaderAddr(t.Context())
-	if err != ErrLeaderNotFound {
+	if !errors.Is(err, store.ErrLeaderNotFound) {
 		t.Fatalf("failed to get expected ErrLeaderNotFound")
 	}
 }
@@ -669,7 +669,9 @@ func Test_ReapOK(t *testing.T) {
 }
 
 func Test_BackupFlagsNoLeaderRedirect(t *testing.T) {
-	m := &MockStore{}
+	m := &MockStore{
+		leaderAddr: "foo:1234",
+	}
 	c := &mockClusterService{
 		apiAddr: "http://1.2.3.4:999",
 	}
@@ -1344,6 +1346,52 @@ func Test_Readyz(t *testing.T) {
 	}
 	if cnt.Load() != 2 {
 		t.Fatalf("failed to call committedFn")
+	}
+}
+
+func Test_ReadyzNoLeader(t *testing.T) {
+	m := &MockStore{}
+	c := &mockClusterService{}
+	s := New("127.0.0.1:0", m, c, proxy.New(m, c), nil)
+	if err := s.Start(); err != nil {
+		t.Fatalf("failed to start service")
+	}
+	defer s.Close()
+
+	client := &http.Client{}
+	host := fmt.Sprintf("http://%s", s.Addr().String())
+	resp, err := client.Get(host + "/readyz")
+	if err != nil {
+		t.Fatalf("failed to make readyz request")
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusServiceUnavailable {
+		t.Fatalf("failed to get expected StatusServiceUnavailable, got %d", resp.StatusCode)
+	}
+	if exp, got := "[+]node ok\n[+]leader does not exist", mustReadBody(t, resp); exp != got {
+		t.Fatalf("incorrect response body, exp: %s, got: %s", exp, got)
+	}
+}
+
+func Test_QueuedExecuteNoLeader(t *testing.T) {
+	m := &MockStore{}
+	c := &mockClusterService{}
+	s := New("127.0.0.1:0", m, c, proxy.New(m, c), nil)
+	if err := s.Start(); err != nil {
+		t.Fatalf("failed to start service")
+	}
+	defer s.Close()
+
+	client := &http.Client{}
+	host := fmt.Sprintf("http://%s", s.Addr().String())
+	resp, err := client.Post(host+"/db/execute?queue", "application/json",
+		strings.NewReader(`["CREATE TABLE foo (id INTEGER NOT NULL PRIMARY KEY, name TEXT)"]`))
+	if err != nil {
+		t.Fatalf("failed to make queued execute request")
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusServiceUnavailable {
+		t.Fatalf("failed to get expected StatusServiceUnavailable, got %d", resp.StatusCode)
 	}
 }
 
@@ -2580,6 +2628,9 @@ func (m *MockStore) Remove(ctx context.Context, rn *command.RemoveNodeRequest) e
 }
 
 func (m *MockStore) Leader() (*store.Server, error) {
+	if m.leaderAddr == "" {
+		return nil, store.ErrLeaderNotFound
+	}
 	return &store.Server{
 		Addr: m.leaderAddr,
 	}, nil
