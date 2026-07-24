@@ -123,12 +123,12 @@ func Test_SingleNode(t *testing.T) {
 		},
 		{
 			stmt:     `INSERT INTO bar(name) VALUES("fiona")`,
-			expected: `{"results":[{"error":"no such table: bar"}]}`,
+			expected: `{"results":[{"error":"no such table: bar","error_v2":{"code":1,"extended_code":1,"system_errno":0}}]}`,
 			execute:  true,
 		},
 		{
 			stmt:     `INSERT blah blah`,
-			expected: `{"results":[{"error":"near \"blah\": syntax error"}]}`,
+			expected: `{"results":[{"error":"near \"blah\": syntax error","error_v2":{"code":1,"extended_code":1,"system_errno":0}}]}`,
 			execute:  true,
 		},
 		{
@@ -138,7 +138,7 @@ func Test_SingleNode(t *testing.T) {
 		},
 		{
 			stmt:     `DROP TABLE bar`,
-			expected: `{"results":[{"error":"no such table: bar"}]}`,
+			expected: `{"results":[{"error":"no such table: bar","error_v2":{"code":1,"extended_code":1,"system_errno":0}}]}`,
 			execute:  true,
 		},
 		{
@@ -186,12 +186,12 @@ func Test_SingleNode_ExecuteQueryRaw(t *testing.T) {
 		},
 		{
 			stmt:     `INSERT INTO bar(name) VALUES("fiona")`,
-			expected: `{"results":[{"error":"no such table: bar"}]}`,
+			expected: `{"results":[{"error":"no such table: bar","error_v2":{"code":1,"extended_code":1,"system_errno":0}}]}`,
 			execute:  true,
 		},
 		{
 			stmt:     `INSERT blah blah`,
-			expected: `{"results":[{"error":"near \"blah\": syntax error"}]}`,
+			expected: `{"results":[{"error":"near \"blah\": syntax error","error_v2":{"code":1,"extended_code":1,"system_errno":0}}]}`,
 			execute:  true,
 		},
 		{
