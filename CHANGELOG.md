@@ -4,12 +4,13 @@
 - [PR #2728](https://github.com/rqlite/rqlite/pull/2728): Console app supports quickly querying for first 100 rows of a table. Thanks @rodionlim
 
 ### Implementation changes and bug fixes
-- [PR #2718](https://github.com/rqlite/rqlite/pull/2718): Skip `systemctl daemon-reload` in package scripts when systemd is not running, fixing package installation inside chroots and containers.
+- [PR #2718](https://github.com/rqlite/rqlite/pull/2718): Skip `systemctl daemon-reload` in package scripts when systemd is not running, fixing package installation inside chroots and containers. Thanks @TechBEK
 - [f1af9b3](https://github.com/rqlite/rqlite/commit/f1af9b33bc2c9039788a3cf96d89eabadec854e2): Fix release Docker builds so images report their build time correctly.
 - [135b510](https://github.com/rqlite/rqlite/commit/135b51089467372816247b26e3505d02cb391e2a): Docker `dev` image is now built on-demand via workflow dispatch, for `linux/amd64` only.
 - [PR #2719](https://github.com/rqlite/rqlite/pull/2719): Upgrade to SQLite 3.53.3.
 - [PR #2726](https://github.com/rqlite/rqlite/pull/2726), [PR #2727](https://github.com/rqlite/rqlite/pull/2727): Rename read-only nodes to read replicas. Command-line flags unchanged.
-- [PR #2731](https://github.com/rqlite/rqlite/pull/2731): `ErrNotLeader` and `ErrLeaderNotFound` are now defined solely in the `store` package. Fixes issue [#2729](https://github.com/rqlite/rqlite/issues/2729). Thanks @deanz-io.
+- [PR #2731](https://github.com/rqlite/rqlite/pull/2731): `ErrNotLeader` and `ErrLeaderNotFound` are now defined solely in the `store` package. Fixes issue [#2729](https://github.com/rqlite/rqlite/issues/2729). Thanks @deanz-io
+- [PR #2732](https://github.com/rqlite/rqlite/pull/2732): Bump google.golang.org/grpc from 1.81.1 to 1.82.1
 
 ## v10.2.7 (July 5th 2026)
 ### Implementation changes and bug fixes
