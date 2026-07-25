@@ -20,7 +20,7 @@ type Config struct {
 	ExtensionPaths []string
 	// Set CDC HTTP endpoint, or path to CDC config file. If not set, CDC not enabled
 	CDCConfig string
-	// Address of OpenTelemetry Collector for metrics. If not set, OTLP reporting not enabled
+	// Address of OpenTelemetry Collector. If not set, OTLP telemetry reporting not enabled
 	OTLPEndpoint string
 	// Period between OTLP metric exports
 	OTLPMetricsInterval time.Duration
@@ -163,7 +163,7 @@ func Forge(arguments []string) (*flag.FlagSet, *Config, error) {
 	var tmpExtensionPaths string
 	fs.StringVar(&tmpExtensionPaths, "extensions-path", "", "Comma-delimited list of paths to directories, zipfiles, or tar.gz files containing SQLite extensions")
 	fs.StringVar(&config.CDCConfig, "cdc-config", "", "Set CDC HTTP endpoint, or path to CDC config file. If not set, CDC not enabled")
-	fs.StringVar(&config.OTLPEndpoint, "otlp-endpoint", "", "Address of OpenTelemetry Collector for metrics. If not set, OTLP reporting not enabled")
+	fs.StringVar(&config.OTLPEndpoint, "otlp-endpoint", "", "Address of OpenTelemetry Collector. If not set, OTLP telemetry reporting not enabled")
 	fs.DurationVar(&config.OTLPMetricsInterval, "otlp-metrics-interval", mustParseDuration("30s"), "Period between OTLP metric exports")
 	fs.BoolVar(&config.OTLPInsecure, "otlp-insecure", false, "Use plaintext gRPC when communicating with the OpenTelemetry Collector")
 	fs.BoolVar(&config.OTLPNoVerify, "otlp-no-verify", false, "Skip verification of the OpenTelemetry Collector certificate")

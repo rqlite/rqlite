@@ -33,13 +33,13 @@ const (
 	NodeX509CertFlag = "node-cert"
 	NodeX509KeyFlag  = "node-key"
 
-	OTLPEndpointFlag = "otlp-endpoint"
-	OTLPIntervalFlag = "otlp-interval"
-	OTLPInsecureFlag = "otlp-insecure"
-	OTLPNoVerifyFlag = "otlp-no-verify"
-	OTLPCACertFlag   = "otlp-ca-cert"
-	OTLPCertFlag     = "otlp-cert"
-	OTLPKeyFlag      = "otlp-key"
+	OTLPEndpointFlag        = "otlp-endpoint"
+	OTLPMetricsIntervalFlag = "otlp-metrics-interval"
+	OTLPInsecureFlag        = "otlp-insecure"
+	OTLPNoVerifyFlag        = "otlp-no-verify"
+	OTLPCACertFlag          = "otlp-ca-cert"
+	OTLPCertFlag            = "otlp-cert"
+	OTLPKeyFlag             = "otlp-key"
 )
 
 // Validate checks the configuration for internal consistency, and activates
@@ -179,7 +179,7 @@ func (c *Config) Validate() error {
 		return errors.New("CDC cannot be enabled on non-voting nodes")
 	}
 
-	// OTLP metrics reporting OK?
+	// OTLP telemetry reporting OK?
 	if !bothUnsetSet(c.OTLPCert, c.OTLPKey) {
 		return fmt.Errorf("either both -%s and -%s must be set, or neither", OTLPCertFlag, OTLPKeyFlag)
 	}
@@ -195,7 +195,7 @@ func (c *Config) Validate() error {
 			return fmt.Errorf("-%s is not a valid address", OTLPEndpointFlag)
 		}
 		if c.OTLPMetricsInterval <= 0 {
-			return fmt.Errorf("-%s must be greater than zero", OTLPIntervalFlag)
+			return fmt.Errorf("-%s must be greater than zero", OTLPMetricsIntervalFlag)
 		}
 		if c.OTLPInsecure && (c.OTLPNoVerify || c.OTLPCACert != "" || c.OTLPCert != "") {
 			return fmt.Errorf("-%s cannot be used with other OTLP TLS options", OTLPInsecureFlag)

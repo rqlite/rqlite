@@ -42,9 +42,9 @@ default = ""
 name = "OTLPEndpoint"
 cli = "otlp-endpoint"
 type = "string"
-short_help = "Address of OpenTelemetry Collector for metrics. If not set, OTLP reporting not enabled"
+short_help = "Address of OpenTelemetry Collector. If not set, OTLP telemetry reporting not enabled"
 long_help = """
-If set, rqlite periodically pushes its metrics, in OTLP format over gRPC, to the OpenTelemetry Collector at the given address. The address must be in host:port form e.g. localhost:4317, and must not include a protocol scheme.
+If set, rqlite pushes both its metrics and traces of its HTTP API requests, in OTLP format over gRPC, to the OpenTelemetry Collector at the given address. The address must be in host:port form e.g. localhost:4317, and must not include a protocol scheme. Individual signals cannot be disabled at the node; configure the Collector to drop a signal if it is not wanted.
 """
 default = ""
 
