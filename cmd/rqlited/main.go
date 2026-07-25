@@ -330,7 +330,7 @@ func startOTLPMetrics(cfg *Config) (*otlp.Service, error) {
 
 	srv := otlp.NewService(otlp.Config{
 		Endpoint:           cfg.OTLPEndpoint,
-		Interval:           cfg.OTLPInterval,
+		Interval:           cfg.OTLPMetricsInterval,
 		Insecure:           cfg.OTLPInsecure,
 		InsecureSkipVerify: cfg.OTLPNoVerify,
 		CACertFile:         cfg.OTLPCACert,
