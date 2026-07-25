@@ -194,7 +194,7 @@ func (c *Config) Validate() error {
 		if _, _, err := net.SplitHostPort(c.OTLPEndpoint); err != nil {
 			return fmt.Errorf("-%s is not a valid address", OTLPEndpointFlag)
 		}
-		if c.OTLPInterval <= 0 {
+		if c.OTLPMetricsInterval <= 0 {
 			return fmt.Errorf("-%s must be greater than zero", OTLPIntervalFlag)
 		}
 		if c.OTLPInsecure && (c.OTLPNoVerify || c.OTLPCACert != "" || c.OTLPCert != "") {
