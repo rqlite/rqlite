@@ -1,6 +1,6 @@
 ## v10.3.0 (unreleased)
 ### New features
-- [PR #2715](https://github.com/rqlite/rqlite/pull/2715), [PR #2716](https://github.com/rqlite/rqlite/pull/2716): Support pushing OTLP metrics to an OpenTelemetry Collector.
+- [PR #2715](https://github.com/rqlite/rqlite/pull/2715), [PR #2716](https://github.com/rqlite/rqlite/pull/2716), [PR #2733](https://github.com/rqlite/rqlite/pull/2733): Support pushing OTLP metrics to an OpenTelemetry Collector.
 - [PR #2728](https://github.com/rqlite/rqlite/pull/2728): Console app supports quickly querying for first 100 rows of a table. Thanks @rodionlim
 
 ### Implementation changes and bug fixes
