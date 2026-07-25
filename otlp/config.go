@@ -14,14 +14,16 @@ import (
 // DefaultInterval is the default period between metric exports.
 const DefaultInterval = 30 * time.Second
 
-// Config holds the configuration for OTLP metrics reporting.
+// Config holds the configuration for OTLP telemetry reporting.
 type Config struct {
 	// Endpoint is the address of the OpenTelemetry Collector, in host:port
-	// form. It must not include a protocol scheme.
+	// form. It must not include a protocol scheme. Both metrics and traces
+	// are sent to this endpoint.
 	Endpoint string
 
 	// Interval is the period between metric exports. It must be greater
-	// than zero.
+	// than zero. It applies to metrics only; traces are exported as the
+	// spans complete.
 	Interval time.Duration
 
 	// Insecure, when true, means communicate with the Collector using
@@ -42,11 +44,11 @@ type Config struct {
 	KeyFile  string
 
 	// NodeID is this node's ID, and is set as the service.instance.id
-	// resource attribute on all exported metrics.
+	// resource attribute on all exported telemetry.
 	NodeID string
 
 	// Version is the rqlite version, and is set as the service.version
-	// resource attribute on all exported metrics.
+	// resource attribute on all exported telemetry.
 	Version string
 }
 

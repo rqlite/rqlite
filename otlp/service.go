@@ -1,12 +1,15 @@
-// Package otlp provides OpenTelemetry metrics reporting for rqlite. It
+// Package otlp provides OpenTelemetry telemetry reporting for rqlite. It
 // bridges rqlite's expvar metrics to the OpenTelemetry metrics data model,
 // and periodically pushes them, along with Go runtime metrics, in OTLP
 // format over gRPC to an OpenTelemetry Collector. The expvar metrics
-// themselves are not modified in any way by this package.
+// themselves are not modified in any way by this package. It also exports
+// trace spans, created via the Service's TracerProvider, to the same
+// Collector.
 package otlp
 
 import (
 	"context"
+	"crypto/tls"
 	"fmt"
 	"log"
 	"os"
@@ -16,19 +19,23 @@ import (
 	"go.opentelemetry.io/contrib/instrumentation/runtime"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/exporters/otlp/otlpmetric/otlpmetricgrpc"
+	"go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracegrpc"
 	sdkmetric "go.opentelemetry.io/otel/sdk/metric"
 	"go.opentelemetry.io/otel/sdk/resource"
+	sdktrace "go.opentelemetry.io/otel/sdk/trace"
 	semconv "go.opentelemetry.io/otel/semconv/v1.40.0"
+	"go.opentelemetry.io/otel/trace"
 	"google.golang.org/grpc/credentials"
 )
 
 const stopTimeout = 5 * time.Second
 
-// Service periodically pushes rqlite metrics, in OTLP format, to an
+// Service pushes rqlite metrics and traces, in OTLP format, to an
 // OpenTelemetry Collector.
 type Service struct {
 	cfg     Config
 	mp      *sdkmetric.MeterProvider
+	tp      *sdktrace.TracerProvider
 	running *rsync.AtomicBool
 
 	logger *log.Logger
@@ -40,11 +47,11 @@ func NewService(cfg Config) *Service {
 	return &Service{
 		cfg:     cfg,
 		running: rsync.NewAtomicBool(),
-		logger:  log.New(os.Stderr, "[otlp-metrics] ", log.LstdFlags),
+		logger:  log.New(os.Stderr, "[otlp] ", log.LstdFlags),
 	}
 }
 
-// Start starts periodic reporting of metrics to the Collector. The
+// Start starts reporting of metrics and traces to the Collector. The
 // connection to the Collector is established lazily, so Start succeeds
 // even if the Collector is not yet reachable.
 func (s *Service) Start() error {
@@ -68,7 +75,15 @@ func (s *Service) Start() error {
 		return fmt.Errorf("failed to create resource: %s", err)
 	}
 
-	opts := []otlpmetricgrpc.Option{
+	var tlsCfg *tls.Config
+	if !s.cfg.Insecure {
+		tlsCfg, err = s.cfg.TLSConfig()
+		if err != nil {
+			return fmt.Errorf("failed to create TLS config: %s", err)
+		}
+	}
+
+	mopts := []otlpmetricgrpc.Option{
 		otlpmetricgrpc.WithEndpoint(s.cfg.Endpoint),
 		// Disable retry of failed exports. Exported metrics are cumulative,
 		// so the next export makes up for any failed one. More importantly,
@@ -78,17 +93,13 @@ func (s *Service) Start() error {
 		otlpmetricgrpc.WithRetry(otlpmetricgrpc.RetryConfig{Enabled: false}),
 	}
 	if s.cfg.Insecure {
-		opts = append(opts, otlpmetricgrpc.WithInsecure())
+		mopts = append(mopts, otlpmetricgrpc.WithInsecure())
 	} else {
-		tlsCfg, err := s.cfg.TLSConfig()
-		if err != nil {
-			return fmt.Errorf("failed to create TLS config: %s", err)
-		}
-		opts = append(opts, otlpmetricgrpc.WithTLSCredentials(credentials.NewTLS(tlsCfg)))
+		mopts = append(mopts, otlpmetricgrpc.WithTLSCredentials(credentials.NewTLS(tlsCfg)))
 	}
-	exp, err := otlpmetricgrpc.New(context.Background(), opts...)
+	exp, err := otlpmetricgrpc.New(context.Background(), mopts...)
 	if err != nil {
-		return fmt.Errorf("failed to create OTLP exporter: %s", err)
+		return fmt.Errorf("failed to create OTLP metric exporter: %s", err)
 	}
 
 	s.mp = sdkmetric.NewMeterProvider(
@@ -98,30 +109,63 @@ func (s *Service) Start() error {
 			sdkmetric.WithProducer(NewBridge()))),
 	)
 
+	// Unlike metrics, retry of failed exports is left enabled for traces.
+	// A span that fails to export is lost forever. Shutdown remains bounded
+	// regardless, since the final flush respects the stopTimeout context.
+	topts := []otlptracegrpc.Option{
+		otlptracegrpc.WithEndpoint(s.cfg.Endpoint),
+	}
+	if s.cfg.Insecure {
+		topts = append(topts, otlptracegrpc.WithInsecure())
+	} else {
+		topts = append(topts, otlptracegrpc.WithTLSCredentials(credentials.NewTLS(tlsCfg)))
+	}
+	texp, err := otlptracegrpc.New(context.Background(), topts...)
+	if err != nil {
+		s.shutdownProviders()
+		return fmt.Errorf("failed to create OTLP trace exporter: %s", err)
+	}
+
+	s.tp = sdktrace.NewTracerProvider(
+		sdktrace.WithResource(res),
+		sdktrace.WithSampler(sdktrace.ParentBased(sdktrace.AlwaysSample())),
+		sdktrace.WithBatcher(texp),
+	)
+
 	// Export happens on a background goroutine, so route any errors it
 	// encounters to this service's logger.
 	otel.SetErrorHandler(otel.ErrorHandlerFunc(func(err error) {
-		s.logger.Printf("error exporting metrics: %s", err)
+		s.logger.Printf("error exporting telemetry: %s", err)
 	}))
 
 	if err := runtime.Start(runtime.WithMeterProvider(s.mp)); err != nil {
-		s.shutdownProvider()
+		s.shutdownProviders()
 		return fmt.Errorf("failed to start Go runtime metrics collection: %s", err)
 	}
 
 	s.running.Set()
-	s.logger.Printf("reporting metrics to %s every %s", s.cfg.Endpoint, s.cfg.Interval)
+	s.logger.Printf("reporting metrics every %s, and traces as they complete, to %s",
+		s.cfg.Interval, s.cfg.Endpoint)
 	return nil
 }
 
-// Stop stops the service, performing a final export of metrics to the
-// Collector before returning.
+// Stop stops the service, performing a final export of metrics and any
+// remaining spans to the Collector before returning.
 func (s *Service) Stop() {
 	if s.running.IsNot() {
 		return
 	}
-	s.shutdownProvider()
+	s.shutdownProviders()
 	s.running.Unset()
+}
+
+// TracerProvider returns the provider to use for creating trace spans.
+// It returns nil unless the Service has been started.
+func (s *Service) TracerProvider() trace.TracerProvider {
+	if s.tp == nil {
+		return nil
+	}
+	return s.tp
 }
 
 // Stats returns the status of the Service.
@@ -135,10 +179,17 @@ func (s *Service) Stats() (map[string]any, error) {
 	}, nil
 }
 
-func (s *Service) shutdownProvider() {
+func (s *Service) shutdownProviders() {
 	ctx, cancel := context.WithTimeout(context.Background(), stopTimeout)
 	defer cancel()
-	if err := s.mp.Shutdown(ctx); err != nil {
-		s.logger.Printf("error shutting down metrics provider: %s", err)
+	if s.tp != nil {
+		if err := s.tp.Shutdown(ctx); err != nil {
+			s.logger.Printf("error shutting down trace provider: %s", err)
+		}
+	}
+	if s.mp != nil {
+		if err := s.mp.Shutdown(ctx); err != nil {
+			s.logger.Printf("error shutting down metrics provider: %s", err)
+		}
 	}
 }

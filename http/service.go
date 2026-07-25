@@ -34,6 +34,8 @@ import (
 	"github.com/rqlite/rqlite/v10/queue"
 	"github.com/rqlite/rqlite/v10/store"
 	rsql "github.com/rqlite/sql"
+	"go.opentelemetry.io/otel/propagation"
+	"go.opentelemetry.io/otel/trace"
 )
 
 const kubernetesServiceHostEnv = "KUBERNETES_SERVICE_HOST"
@@ -302,6 +304,12 @@ type Service struct {
 
 	BuildInfo map[string]any
 
+	// TracerProvider, if set before Start is called, enables OpenTelemetry
+	// tracing of API requests.
+	TracerProvider trace.TracerProvider
+	tracer         trace.Tracer
+	propagator     propagation.TextMapPropagator
+
 	logger *log.Logger
 }
 
@@ -327,6 +335,11 @@ func New(addr string, store Store, cluster Cluster, pxy *proxy.Proxy, credential
 
 // Start starts the service.
 func (s *Service) Start() error {
+	if s.TracerProvider != nil {
+		s.tracer = s.TracerProvider.Tracer("github.com/rqlite/rqlite/v10/http")
+		s.propagator = propagation.TraceContext{}
+	}
+
 	s.httpServer = http.Server{
 		Handler: s,
 	}
@@ -433,8 +446,9 @@ func (s *Service) AllowOrigin() string {
 	return s.allowOrigin
 }
 
-// ServeHTTP allows Service to serve HTTP requests.
-func (s *Service) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+// serveHTTP dispatches requests to the relevant handler. Requests reach it
+// via ServeHTTP in trace.go, which wraps traced routes in a span.
+func (s *Service) serveHTTP(w http.ResponseWriter, r *http.Request) {
 	s.addBuildVersion(w)
 	s.addAllowHeaders(w)
 	if s.credentialStore != nil {

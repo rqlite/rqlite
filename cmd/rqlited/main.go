@@ -190,14 +190,26 @@ func main() {
 	pxy := proxy.New(str, clstrClient)
 	pxy.SetAPIAddr(cfg.HTTPAdv)
 
+	// Start any requested OTLP telemetry reporting. This happens before the HTTP
+	// service is created, so the HTTP service can trace requests from the start.
+	otlpSrv, err := startOTLP(cfg)
+	if err != nil {
+		log.Fatalf("failed to start OTLP telemetry reporting: %s", err.Error())
+	}
+
 	// Create the HTTP service.
 	//
 	// We want to start the HTTP server as soon as possible, so the node is responsive and external
 	// systems can see that it's running. We still have to open the Store though, so the node won't
 	// be able to do much until that happens however.
-	httpServ, err := startHTTPService(cfg, str, clstrClient, credStr, pxy)
+	httpServ, err := startHTTPService(cfg, str, clstrClient, credStr, pxy, otlpSrv)
 	if err != nil {
 		log.Fatalf("failed to start HTTP server: %s", err.Error())
+	}
+	if otlpSrv != nil {
+		if err := httpServ.RegisterStatus("otlp", otlpSrv); err != nil {
+			log.Fatalf("failed to register otlp status provider: %s", err.Error())
+		}
 	}
 
 	// Now, open store. How long this takes does depend on how much data is being stored by rqlite.
@@ -246,15 +258,6 @@ func main() {
 		httpServ.RegisterStatus("auto_backups", backupSrv)
 	}
 
-	// Start any requested OTLP metrics reporting.
-	otlpSrv, err := startOTLPMetrics(cfg)
-	if err != nil {
-		log.Fatalf("failed to start OTLP metrics reporting: %s", err.Error())
-	}
-	if otlpSrv != nil {
-		httpServ.RegisterStatus("otlp_metrics", otlpSrv)
-	}
-
 	// Block until done.
 	<-mainCtx.Done()
 
@@ -294,7 +297,7 @@ func main() {
 		log.Printf("failed to close store: %s", err.Error())
 	}
 
-	// Stop OTLP metrics reporting, flushing any remaining metrics.
+	// Stop OTLP telemetry reporting, flushing any remaining metrics and spans.
 	if otlpSrv != nil {
 		otlpSrv.Stop()
 	}
@@ -323,7 +326,7 @@ func startAutoBackups(ctx context.Context, cfg *Config, str *store.Store) (*back
 	return u, nil
 }
 
-func startOTLPMetrics(cfg *Config) (*otlp.Service, error) {
+func startOTLP(cfg *Config) (*otlp.Service, error) {
 	if cfg.OTLPEndpoint == "" {
 		return nil, nil
 	}
@@ -481,7 +484,7 @@ func createDiscoService(cfg *Config, str *store.Store) (*disco.Service, error) {
 	return disco.NewService(c, str, disco.VoterSuffrage(!cfg.RaftNonVoter)), nil
 }
 
-func startHTTPService(cfg *Config, str *store.Store, cltr *cluster.Client, credStr *auth.CredentialsStore, pxy *proxy.Proxy) (*httpd.Service, error) {
+func startHTTPService(cfg *Config, str *store.Store, cltr *cluster.Client, credStr *auth.CredentialsStore, pxy *proxy.Proxy, otlpSrv *otlp.Service) (*httpd.Service, error) {
 	// Create HTTP server and load authentication information.
 	var cs httpd.CredentialStore
 	if credStr != nil {
@@ -506,6 +509,9 @@ func startHTTPService(cfg *Config, str *store.Store, cltr *cluster.Client, credS
 		"build_time":         cmd.Buildtime,
 	}
 	s.SetAllowOrigin(cfg.HTTPAllowOrigin)
+	if otlpSrv != nil {
+		s.TracerProvider = otlpSrv.TracerProvider()
+	}
 	return s, s.Start()
 }
 
