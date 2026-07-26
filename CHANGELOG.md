@@ -10,7 +10,8 @@
 - [PR #2719](https://github.com/rqlite/rqlite/pull/2719): Upgrade to SQLite 3.53.3.
 - [PR #2726](https://github.com/rqlite/rqlite/pull/2726), [PR #2727](https://github.com/rqlite/rqlite/pull/2727): Rename read-only nodes to read replicas. Command-line flags unchanged.
 - [PR #2731](https://github.com/rqlite/rqlite/pull/2731): `ErrNotLeader` and `ErrLeaderNotFound` are now defined solely in the `store` package. Fixes issue [#2729](https://github.com/rqlite/rqlite/issues/2729). Thanks @deanz-io
-- [PR #2732](https://github.com/rqlite/rqlite/pull/2732): Bump google.golang.org/grpc from 1.81.1 to 1.82.1
+- [PR #2732](https://github.com/rqlite/rqlite/pull/2732): Bump google.golang.org/grpc from 1.81.1 to 1.82.1.
+- [PR #2735](https://github.com/rqlite/rqlite/pull/2735): Enable "Section" in command-line flags configuration.
 
 ## v10.2.7 (July 5th 2026)
 ### Implementation changes and bug fixes
