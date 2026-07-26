@@ -15,98 +15,26 @@ short_help = "DataPath is path to node data. Always set"
 [[flags]]
 name = "ShowVersion"
 cli = "version"
+section = "General"
 type = "bool"
 short_help = "Show version information and exit"
 default = false
 
 [[flags]]
-name = "ExtensionPaths"
-cli = "extensions-path"
-type = "[]string"
-short_help = "Comma-delimited list of paths to directories, zipfiles, or tar.gz files containing SQLite extensions"
-long_help = """
-"""
-default = ""
-
-[[flags]]
-name = "CDCConfig"
-cli = "cdc-config"
+name = "NodeID"
+cli = "node-id"
+section = "General"
 type = "string"
-short_help = "Set CDC HTTP endpoint, or path to CDC config file. If not set, CDC not enabled"
+short_help = "Unique ID for node. If not set, set to advertised Raft address"
 long_help = """
-If the passed value is a valid URL then CDC events will be posted to that endpoint. Otherwise the value is interpreted as the path to the CDC configuration file.
-"""
-default = ""
-
-[[flags]]
-name = "OTLPEndpoint"
-cli = "otlp-endpoint"
-type = "string"
-short_help = "Address of OpenTelemetry Collector for metrics. If not set, OTLP reporting not enabled"
-long_help = """
-If set, rqlite periodically pushes its metrics, in OTLP format over gRPC, to the OpenTelemetry Collector at the given address. The address must be in host:port form e.g. localhost:4317, and must not include a protocol scheme.
-"""
-default = ""
-
-[[flags]]
-name = "OTLPMetricsInterval"
-cli = "otlp-metrics-interval"
-type = "time.Duration"
-short_help = "Period between OTLP metric exports"
-long_help = """
-The interval at which rqlite periodically pushes its metrics, in OTLP format over gRPC, to the OpenTelemetry Collector. rqlite generates the metrics by walking all expvar metrics and emiting those values as the metrics.
-"""
-default = "30s"
-
-[[flags]]
-name = "OTLPInsecure"
-cli = "otlp-insecure"
-type = "bool"
-short_help = "Use plaintext gRPC when communicating with the OpenTelemetry Collector"
-long_help = """
-"""
-default = false
-
-[[flags]]
-name = "OTLPNoVerify"
-cli = "otlp-no-verify"
-type = "bool"
-short_help = "Skip verification of the OpenTelemetry Collector certificate"
-long_help = """
-"""
-default = false
-
-[[flags]]
-name = "OTLPCACert"
-cli = "otlp-ca-cert"
-type = "string"
-short_help = "Path to X.509 CA certificate for verifying the OpenTelemetry Collector"
-long_help = """
-If not set, the operating system's CA certificates are used to verify the Collector's certificate.
-"""
-default = ""
-
-[[flags]]
-name = "OTLPCert"
-cli = "otlp-cert"
-type = "string"
-short_help = "Path to X.509 certificate for mutual TLS with the OpenTelemetry Collector"
-long_help = """
-"""
-default = ""
-
-[[flags]]
-name = "OTLPKey"
-cli = "otlp-key"
-type = "string"
-short_help = "Path to X.509 private key for mutual TLS with the OpenTelemetry Collector"
-long_help = """
+While not required, providing an explicit ID to a node makes cluster management simpler. Once set a node's ID cannot change. If you do change it your cluster will not operate correctly.
 """
 default = ""
 
 [[flags]]
 name = "HTTPAddr"
 cli = "http-addr"
+section = "HTTP API"
 type = "string"
 short_help = "HTTP server bind address. To enable HTTPS, set X.509 certificate and key"
 long_help = """
@@ -117,6 +45,7 @@ default = "localhost:4001"
 [[flags]]
 name = "HTTPAdv"
 cli = "http-adv-addr"
+section = "HTTP API"
 type = "string"
 short_help = "Advertised HTTP address. If not set, same as HTTP server bind address"
 long_help = """
@@ -127,53 +56,18 @@ default = ""
 [[flags]]
 name = "HTTPAllowOrigin"
 cli = "http-allow-origin"
+section = "HTTP API"
 type = "string"
 short_help = "Value to set for Access-Control-Allow-Origin HTTP header"
 long_help = """
-You usually need to set this if if you're using a browser-based application to interact with rqlite. You should set it to the the website that is serving the browser-based application e.g. http-allow-origin="https://example.com".
-"""
-default = ""
-
-[[flags]]
-name = "AuthFile"
-cli = "auth"
-type = "string"
-short_help = "Path to authentication and authorization file. If not set, not enabled"
-long_help = """
-"""
-default = ""
-
-[[flags]]
-name = "AutoBackupFile"
-cli = "auto-backup"
-type = "string"
-short_help = "Path to automatic backup configuration file. If not set, not enabled"
-long_help = """
-"""
-default = ""
-
-[[flags]]
-name = "AutoRestoreFile"
-cli = "auto-restore"
-type = "string"
-short_help = "Path to automatic restore configuration file. If not set, not enabled"
-long_help = """
-"""
-default = ""
-
-[[flags]]
-name = "HTTPx509CACert"
-cli = "http-ca-cert"
-type = "string"
-short_help = "Path to X.509 CA certificate for HTTPS"
-long_help = """
-If this value is set rqlite will use this CA certificate to validate any other X509 certificate presented to it, if the node needs to contact another node's HTTP API. It also uses this CA to verify any X509 certificates presented to it by clients connecting to its HTTPS API.
+You usually need to set this if you're using a browser-based application to interact with rqlite. You should set it to the website that is serving the browser-based application e.g. -http-allow-origin="https://example.com".
 """
 default = ""
 
 [[flags]]
 name = "HTTPx509Cert"
 cli = "http-cert"
+section = "HTTPS and client authentication"
 type = "string"
 short_help = "Path to HTTPS X.509 certificate"
 long_help = """
@@ -184,6 +78,7 @@ default = ""
 [[flags]]
 name = "HTTPx509Key"
 cli = "http-key"
+section = "HTTPS and client authentication"
 type = "string"
 short_help = "Path to HTTPS X.509 private key"
 long_help = """
@@ -192,8 +87,20 @@ This is the private key corresponding to the X509 certificate.
 default = ""
 
 [[flags]]
+name = "HTTPx509CACert"
+cli = "http-ca-cert"
+section = "HTTPS and client authentication"
+type = "string"
+short_help = "Path to X.509 CA certificate for HTTPS"
+long_help = """
+If this value is set rqlite will use this CA certificate to validate any other X509 certificate presented to it, if the node needs to contact another node's HTTP API. It also uses this CA to verify any X509 certificates presented to it by clients connecting to its HTTPS API.
+"""
+default = ""
+
+[[flags]]
 name = "HTTPVerifyClient"
 cli = "http-verify-client"
+section = "HTTPS and client authentication"
 type = "bool"
 short_help = "Enable mutual TLS for HTTPS"
 long_help = """
@@ -204,6 +111,7 @@ default = false
 [[flags]]
 name = "HTTPVerifyCommonName"
 cli = "http-verify-common-name"
+section = "HTTPS and client authentication"
 type = "string"
 short_help = "Required Common Name on client certificates. If not set, no Common Name required"
 long_help = """
@@ -212,18 +120,19 @@ When set, the Common Name field of the client's leaf certificate must match this
 default = ""
 
 [[flags]]
-name = "NodeX509CACert"
-cli = "node-ca-cert"
+name = "AuthFile"
+cli = "auth"
+section = "HTTPS and client authentication"
 type = "string"
-short_help = "Path to X.509 CA certificate for node-to-node encryption"
+short_help = "Path to authentication and authorization file. If not set, not enabled"
 long_help = """
-If this path is configured and nodes use TLS for Raft connections, then any certificate presented during connection setup must be signed by this Certificate Authority - whether it's the node's certificate in one-way TLS or both certificates in mutual TLS.
 """
 default = ""
 
 [[flags]]
 name = "NodeX509Cert"
 cli = "node-cert"
+section = "Node-to-node encryption"
 type = "string"
 short_help = "Path to X.509 certificate for node-to-node mutual authentication and encryption"
 long_help = """
@@ -234,6 +143,7 @@ default = ""
 [[flags]]
 name = "NodeX509Key"
 cli = "node-key"
+section = "Node-to-node encryption"
 type = "string"
 short_help = "Path to X.509 private key for node-to-node mutual authentication and encryption"
 long_help = """
@@ -242,10 +152,22 @@ This is the private key corresponding to the node's X509 certificate, which it u
 default = ""
 
 [[flags]]
+name = "NodeX509CACert"
+cli = "node-ca-cert"
+section = "Node-to-node encryption"
+type = "string"
+short_help = "Path to X.509 CA certificate for node-to-node encryption"
+long_help = """
+If this path is configured and nodes use TLS for Raft connections, then any certificate presented during connection setup must be signed by this Certificate Authority -- whether it's the node's certificate in one-way TLS or both certificates in mutual TLS.
+"""
+default = ""
+
+[[flags]]
 name = "NoNodeVerify"
 cli = "node-no-verify"
+section = "Node-to-node encryption"
 type = "bool"
-short_help = "Skip verification of any presented certificate."
+short_help = "Skip verification of any presented certificate"
 long_help = """
 Validity is defined as signed by an acceptable CA, is unexpired, and that the hostname in the certificate matches the hostname of the connecting node. This applies whether it's the node's certificate in one-way TLS or both certificates in mutual TLS.
 """
@@ -254,6 +176,7 @@ default = false
 [[flags]]
 name = "NodeVerifyClient"
 cli = "node-verify-client"
+section = "Node-to-node encryption"
 type = "bool"
 short_help = "Enable mutual TLS for node-to-node communication"
 long_help = """
@@ -264,6 +187,7 @@ default = false
 [[flags]]
 name = "NodeVerifyServerName"
 cli = "node-verify-server-name"
+section = "Node-to-node encryption"
 type = "string"
 short_help = "Hostname to verify on certificate returned by a node"
 long_help = """
@@ -274,6 +198,7 @@ default = ""
 [[flags]]
 name = "NodeVerifyCommonName"
 cli = "node-verify-common-name"
+section = "Node-to-node encryption"
 type = "string"
 short_help = "Required Common Name on incoming peer certificates. If not set, no Common Name required"
 long_help = """
@@ -282,28 +207,9 @@ When set, the Common Name field of every peer's leaf certificate must match this
 default = ""
 
 [[flags]]
-name = "NodeID"
-cli = "node-id"
-type = "string"
-short_help = "Unique ID for node. If not set, set to advertised Raft address"
-long_help = """
-While not required, providing an explicit ID to a node makes cluster management simpler. Once set a node's ID cannot change. If you do change it your cluster will not operate correctly.
-"""
-default = ""
-
-[[flags]]
-name = "CompressSnapTransport"
-cli = "compress-snap-transport"
-type = "bool"
-short_help = "Enable compression when transferring snapshots between nodes"
-long_help = """
-By default rqlite does not compress snapshots when transferring them between nodes. For high bandwidth networks this is the correct choice. Setting this flag will enable zstd compression, which may improve transfer speed on lower-bandwidth networks. If you set this flag on any node in a cluster, you must set it to the same value on every node in the cluster.
-"""
-default = false
-
-[[flags]]
 name = "RaftAddr"
 cli = "raft-addr"
+section = "Clustering"
 type = "string"
 short_help = "Raft communication bind address"
 long_help = """
@@ -314,6 +220,7 @@ default = "localhost:4002"
 [[flags]]
 name = "RaftAdv"
 cli = "raft-adv-addr"
+section = "Clustering"
 type = "string"
 short_help = "Advertised Raft communication address. If not set, same as Raft bind address"
 long_help = """
@@ -324,6 +231,7 @@ default = ""
 [[flags]]
 name = "JoinAddrs"
 cli = "join"
+section = "Clustering"
 type = "string"
 short_help = "Comma-delimited list of nodes, in host:port form, through which a cluster can be joined"
 long_help = """
@@ -334,6 +242,7 @@ default = ""
 [[flags]]
 name = "JoinAttempts"
 cli = "join-attempts"
+section = "Clustering"
 type = "int"
 short_help = "Number of join attempts to make"
 long_help = """
@@ -344,6 +253,7 @@ default = 5
 [[flags]]
 name = "JoinInterval"
 cli = "join-interval"
+section = "Clustering"
 type = "time.Duration"
 short_help = "Period between join attempts"
 long_help = """
@@ -353,16 +263,18 @@ default = "3s"
 [[flags]]
 name = "JoinAs"
 cli = "join-as"
+section = "Clustering"
 type = "string"
 short_help = "Username in authentication file to join as. If not set, joins anonymously"
 long_help = """
-If joining a cluster requires credentials you can a tell a node to read those credentials from a credential file, for the specified user. By using this flag you can avoid setting credentials in the command line you pass to rqlite, which can expose those credentials if someone has access to the process table.
+If joining a cluster requires credentials you can tell a node to read those credentials from a credential file, for the specified user. By using this flag you can avoid setting credentials in the command line you pass to rqlite, which can expose those credentials if someone has access to the process table.
 """
 default = ""
 
 [[flags]]
 name = "BootstrapExpect"
 cli = "bootstrap-expect"
+section = "Clustering"
 type = "int"
 short_help = "Minimum number of nodes required for a bootstrap"
 long_help = """
@@ -373,16 +285,51 @@ default = 0
 [[flags]]
 name = "BootstrapExpectTimeout"
 cli = "bootstrap-expect-timeout"
+section = "Clustering"
 type = "time.Duration"
 short_help = "Maximum time for bootstrap process"
 long_help = """
-If a bootstrap operation does not succeed with this time, cluster formation will abort.
+If a bootstrap operation does not succeed within this time, cluster formation will abort.
 """
 default = "120s"
 
 [[flags]]
+name = "RaftNonVoter"
+cli = "raft-non-voter"
+section = "Clustering"
+type = "bool"
+short_help = "Configure as non-voting node"
+long_help = """
+Adding non-voting (also known as read replica) nodes can help scale out query performance. Read-replica nodes don't participate in the Raft consensus system, but do receive the same stream of updates from the Leader as voting nodes do. They can also service write requests, forwarding those requests to the Leader.
+"""
+default = false
+
+[[flags]]
+name = "ClusterConnectTimeout"
+cli = "cluster-connect-timeout"
+section = "Clustering"
+type = "time.Duration"
+short_help = "Timeout for initial connection to other nodes"
+long_help = """
+This sets the maximum time a node will wait when attempting to connect to another node over the inter-node network connection.
+"""
+default = "30s"
+
+[[flags]]
+name = "CompressSnapTransport"
+cli = "compress-snap-transport"
+section = "Clustering"
+type = "bool"
+short_help = "Enable compression when transferring snapshots between nodes"
+long_help = """
+By default rqlite does not compress snapshots when transferring them between nodes. For high bandwidth networks this is the correct choice. Setting this flag will enable zstd compression, which may improve transfer speed on lower-bandwidth networks. If you set this flag on any node in a cluster, you must set it to the same value on every node in the cluster.
+"""
+default = false
+
+[[flags]]
 name = "DiscoMode"
 cli = "disco-mode"
+section = "Node discovery"
 type = "string"
 short_help = "Choose clustering discovery mode. If not set, no node discovery is performed"
 long_help = """
@@ -392,6 +339,7 @@ default = ""
 [[flags]]
 name = "DiscoKey"
 cli = "disco-key"
+section = "Node discovery"
 type = "string"
 short_help = "Key prefix for cluster discovery service"
 long_help = """
@@ -402,6 +350,7 @@ default = "rqlite"
 [[flags]]
 name = "DiscoConfig"
 cli = "disco-config"
+section = "Node discovery"
 type = "string"
 short_help = "Set discovery config, or path to cluster discovery config file"
 long_help = """
@@ -409,48 +358,9 @@ long_help = """
 default = ""
 
 [[flags]]
-name = "FKConstraints"
-cli = "fk"
-type = "bool"
-short_help = "Enable SQLite foreign key constraints"
-long_help = """
-SQLite doesn't enable foreign key constraints by default. If you'd like rqlite to automatically do so then set this flag. This flag must be set on every node in your cluster.
-"""
-default = false
-
-[[flags]]
-name = "DBMaxReadOnlyConns"
-cli = "db-max-ro-conns"
-type = "int"
-short_help = "Maximum number of read-only connections to database"
-long_help = """
-This places a limit of the number of read queries the node can service concurrently. If this is not bounded query load could cause the node to hit the operating system's per-process thread limit and crash the node. Setting this to zero means there is no limit.
-"""
-default = 256
-
-[[flags]]
-name = "AutoVacInterval"
-cli = "auto-vacuum-int"
-type = "time.Duration"
-short_help = "Period between automatic VACUUMs. It not set, not enabled"
-long_help = """
-If set to a non-zero interval rqlite will execute VACUUM on the specified interval. This can help reduce SQLite disk usage, but writes are blocked while a VACUUM takes place. See the SQLite documentation for more information.
-"""
-default = "0s"
-
-[[flags]]
-name = "AutoOptimizeInterval"
-cli = "auto-optimize-int"
-type = "time.Duration"
-short_help = "Period between automatic 'PRAGMA optimize'. Set to 0h to disable"
-long_help = """
-If set to a non-zero interval rqlite will execute PRAGMA OPTIMIZE on the specified interval. This can help SQLite query performance. See the SQLite documentation for more information.
-"""
-default = "24h"
-
-[[flags]]
 name = "RaftLogLevel"
 cli = "raft-log-level"
+section = "Raft consensus tuning"
 type = "string"
 short_help = "Minimum log level for Raft module"
 long_help = """
@@ -459,38 +369,31 @@ Acceptable log levels are ERROR, WARN, INFO and DEBUG.
 default = "WARN"
 
 [[flags]]
-name = "RaftNonVoter"
-cli = "raft-non-voter"
-type = "bool"
-short_help = "Configure as non-voting node"
-long_help = """
-Adding non-voting (also known as read replica) nodes can help scale out query performance. Read-replica nodes don't particpate in the Raft consensus system, but do receive the same stream of updates from the Leader as voting nodes do. This can also service write requests, and will forward the requests to the Leader.
-"""
-default = false
-
-[[flags]]
 name = "RaftSnapThreshold"
 cli = "raft-snap"
+section = "Raft consensus tuning"
 type = "uint64"
 short_help = "Number of outstanding log entries which triggers Raft snapshot"
 long_help = """
-Snapshotting is a critical part of the Raft subsystem, which involves storing a copy of the SQLite database and then truncating the Raft log. Writes are blocked during the Snapshot process, but more regular snapshotting can mean faster start-up times, as there will generally be fewer logs to apply when a node restarts.
+Snapshotting is a critical part of the Raft subsystem, which involves storing a copy of the SQLite database and then truncating the Raft log. Writes are blocked during the Snapshot process, but more frequent snapshotting can mean faster start-up times, as there will generally be fewer logs to apply when a node restarts.
 """
 default = 8192
 
 [[flags]]
 name = "RaftSnapThresholdWALSize"
 cli = "raft-snap-wal-size"
+section = "Raft consensus tuning"
 type = "uint64"
 short_help = "SQLite WAL file size in bytes which triggers Raft snapshot. Set to 0 to disable"
 long_help = """
-rqlite, by default, will also trigger a snapshot if the WAL gets larger than 4MB. Large SQLite WAL files can decrease query performance, and since snapshotting involves checkpointing the WAL file, snapshotting is an effective way to limit WAL size. However writes are blocked during the snapshotting process, so it's trade-off.
+rqlite, by default, will also trigger a snapshot if the WAL gets larger than 4MB. Large SQLite WAL files can decrease query performance, and since snapshotting involves checkpointing the WAL file, snapshotting is an effective way to limit WAL size. However writes are blocked during the snapshotting process, so it's a trade-off.
 """
 default = 4194304
 
 [[flags]]
 name = "RaftSnapInterval"
 cli = "raft-snap-int"
+section = "Raft consensus tuning"
 type = "time.Duration"
 short_help = "Snapshot threshold check interval"
 long_help = """
@@ -501,16 +404,18 @@ default = "10s"
 [[flags]]
 name = "RaftLeaderLeaseTimeout"
 cli = "raft-leader-lease-timeout"
+section = "Raft consensus tuning"
 type = "time.Duration"
 short_help = "Raft leader lease timeout. Use 0s for Raft default"
 long_help = """
-This is used to control how long the "lease" lasts for being the Leader without being able to contact a quorum If a Leader reaches this interval without contact, it will step down as Leader.
+This is used to control how long the "lease" lasts for being the Leader without being able to contact a quorum. If a Leader reaches this interval without contact, it will step down as Leader.
 """
 default = "0s"
 
 [[flags]]
 name = "RaftHeartbeatTimeout"
 cli = "raft-heartbeat-timeout"
+section = "Raft consensus tuning"
 type = "time.Duration"
 short_help = "Raft heartbeat timeout"
 long_help = """
@@ -521,16 +426,18 @@ default = "1s"
 [[flags]]
 name = "RaftCommitTimeout"
 cli = "raft-commit-timeout"
+section = "Raft consensus tuning"
 type = "time.Duration"
 short_help = "Raft commit timeout"
 long_help = """
-Specifies the time without an Apply operation before the leader sends an AppendEntry RPC to followers, to ensure a timely commit of log entries.
+Specifies the time without an Apply operation before the Leader sends an AppendEntry RPC to Followers, to ensure a timely commit of log entries.
 """
 default = "50ms"
 
 [[flags]]
 name = "RaftElectionTimeout"
 cli = "raft-election-timeout"
+section = "Raft consensus tuning"
 type = "time.Duration"
 short_help = "Raft election timeout"
 long_help = """
@@ -541,6 +448,7 @@ default = "1s"
 [[flags]]
 name = "RaftApplyTimeout"
 cli = "raft-apply-timeout"
+section = "Raft consensus tuning"
 type = "time.Duration"
 short_help = "Raft apply timeout"
 long_help = """
@@ -550,16 +458,18 @@ default = "10s"
 [[flags]]
 name = "RaftShutdownOnRemove"
 cli = "raft-remove-shutdown"
+section = "Raft consensus tuning"
 type = "bool"
 short_help = "Shutdown Raft if node removed from cluster"
 long_help = """
-This ensures a node doesn't self-elect itself as Leader if it finds itself as the sole node in a single-node cluster.
+This ensures a node doesn't elect itself as Leader if it finds itself as the sole node in a single-node cluster.
 """
 default = false
 
 [[flags]]
 name = "RaftClusterRemoveOnShutdown"
 cli = "raft-cluster-remove-shutdown"
+section = "Raft consensus tuning"
 type = "bool"
 short_help = "Node removes itself from cluster on graceful shutdown"
 long_help = """
@@ -570,16 +480,18 @@ default = false
 [[flags]]
 name = "RaftStepdownOnShutdown"
 cli = "raft-shutdown-stepdown"
+section = "Raft consensus tuning"
 type = "bool"
 short_help = "If leader, stepdown before shutting down. Enabled by default"
 long_help = """
-If a node is being shutdown, and it's the Leader, this helps minimize the time the cluster is without a Leader. The leader will stop accepting client requests, make sure a target node is up to date and starts the transfer with a _TimeoutNow_ message. This message has the same effect as if the election timeout on the target server fires.
+If a node is being shut down, and it's the Leader, this helps minimize the time the cluster is without a Leader. The Leader will stop accepting client requests, make sure a target node is up to date, and start the transfer with a _TimeoutNow_ message. This message has the same effect as if the election timeout on the target server fires.
 """
 default = true
 
 [[flags]]
 name = "RaftReapNodeTimeout"
 cli = "raft-reap-node-timeout"
+section = "Raft consensus tuning"
 type = "time.Duration"
 short_help = "Time after which a non-reachable voting node will be reaped. If not set, no reaping takes place"
 long_help = """
@@ -590,6 +502,7 @@ default = "0h"
 [[flags]]
 name = "RaftReapReadOnlyNodeTimeout"
 cli = "raft-reap-read-only-node-timeout"
+section = "Raft consensus tuning"
 type = "time.Duration"
 short_help = "Time after which a non-reachable read replica (non-voting) node will be reaped. If not set, no reaping takes place"
 long_help = """
@@ -598,18 +511,63 @@ This can be useful if you have a deployment where read replica (non-voting) node
 default = "0h"
 
 [[flags]]
-name = "ClusterConnectTimeout"
-cli = "cluster-connect-timeout"
-type = "time.Duration"
-short_help = "Timeout for initial connection to other nodes"
+name = "FKConstraints"
+cli = "fk"
+section = "SQLite database"
+type = "bool"
+short_help = "Enable SQLite foreign key constraints"
 long_help = """
-This sets the maximum time a node will wait when attempting to connect to another node over the inter-node network connection.
+SQLite doesn't enable foreign key constraints by default. If you'd like rqlite to automatically do so then set this flag. This flag must be set on every node in your cluster.
 """
-default = "30s"
+default = false
+
+[[flags]]
+name = "DBMaxReadOnlyConns"
+cli = "db-max-ro-conns"
+section = "SQLite database"
+type = "int"
+short_help = "Maximum number of read-only connections to database"
+long_help = """
+This places a limit on the number of read queries the node can service concurrently. If this is not bounded query load could cause the node to hit the operating system's per-process thread limit and crash the node. Setting this to zero means there is no limit.
+"""
+default = 256
+
+[[flags]]
+name = "AutoVacInterval"
+cli = "auto-vacuum-int"
+section = "SQLite database"
+type = "time.Duration"
+short_help = "Period between automatic VACUUMs. If not set, not enabled"
+long_help = """
+If set to a non-zero interval rqlite will execute VACUUM on the specified interval. This can help reduce SQLite disk usage, but writes are blocked while a VACUUM takes place. See the SQLite documentation for more information.
+"""
+default = "0s"
+
+[[flags]]
+name = "AutoOptimizeInterval"
+cli = "auto-optimize-int"
+section = "SQLite database"
+type = "time.Duration"
+short_help = "Period between automatic 'PRAGMA optimize'. Set to 0h to disable"
+long_help = """
+If set to a non-zero interval rqlite will execute PRAGMA OPTIMIZE on the specified interval. This can help SQLite query performance. See the SQLite documentation for more information.
+"""
+default = "24h"
+
+[[flags]]
+name = "ExtensionPaths"
+cli = "extensions-path"
+section = "SQLite database"
+type = "[]string"
+short_help = "Comma-delimited list of paths to directories, zipfiles, or tar.gz files containing SQLite extensions"
+long_help = """
+"""
+default = ""
 
 [[flags]]
 name = "WriteQueueCap"
 cli = "write-queue-capacity"
+section = "Queued Writes"
 type = "int"
 short_help = "Queued Writes queue capacity"
 long_help = """
@@ -620,6 +578,7 @@ default = 1024
 [[flags]]
 name = "WriteQueueBatchSz"
 cli = "write-queue-batch-size"
+section = "Queued Writes"
 type = "int"
 short_help = "Queued Writes queue batch size"
 long_help = """
@@ -630,6 +589,7 @@ default = 128
 [[flags]]
 name = "WriteQueueTimeout"
 cli = "write-queue-timeout"
+section = "Queued Writes"
 type = "time.Duration"
 short_help = "Queued Writes queue timeout"
 long_help = """
@@ -639,6 +599,7 @@ default = "50ms"
 [[flags]]
 name = "WriteQueueTx"
 cli = "write-queue-tx"
+section = "Queued Writes"
 type = "bool"
 short_help = "Use a transaction when processing a queued write"
 long_help = """
@@ -646,8 +607,113 @@ long_help = """
 default = false
 
 [[flags]]
+name = "AutoBackupFile"
+cli = "auto-backup"
+section = "Backup and restore"
+type = "string"
+short_help = "Path to automatic backup configuration file. If not set, not enabled"
+long_help = """
+"""
+default = ""
+
+[[flags]]
+name = "AutoRestoreFile"
+cli = "auto-restore"
+section = "Backup and restore"
+type = "string"
+short_help = "Path to automatic restore configuration file. If not set, not enabled"
+long_help = """
+"""
+default = ""
+
+[[flags]]
+name = "CDCConfig"
+cli = "cdc-config"
+section = "Change Data Capture"
+type = "string"
+short_help = "Set CDC HTTP endpoint, or path to CDC config file. If not set, CDC not enabled"
+long_help = """
+If the passed value is a valid URL then CDC events will be posted to that endpoint. Otherwise the value is interpreted as the path to the CDC configuration file.
+"""
+default = ""
+
+[[flags]]
+name = "OTLPEndpoint"
+cli = "otlp-endpoint"
+section = "Observability and profiling"
+type = "string"
+short_help = "Address of OpenTelemetry Collector for metrics. If not set, OTLP reporting not enabled"
+long_help = """
+If set, rqlite periodically pushes its metrics, in OTLP format over gRPC, to the OpenTelemetry Collector at the given address. The address must be in host:port form e.g. localhost:4317, and must not include a protocol scheme.
+"""
+default = ""
+
+[[flags]]
+name = "OTLPMetricsInterval"
+cli = "otlp-metrics-interval"
+section = "Observability and profiling"
+type = "time.Duration"
+short_help = "Period between OTLP metric exports"
+long_help = """
+The interval at which rqlite periodically pushes its metrics, in OTLP format over gRPC, to the OpenTelemetry Collector. rqlite generates the metrics by walking all expvar metrics and emitting those values as the metrics.
+"""
+default = "30s"
+
+[[flags]]
+name = "OTLPInsecure"
+cli = "otlp-insecure"
+section = "Observability and profiling"
+type = "bool"
+short_help = "Use plaintext gRPC when communicating with the OpenTelemetry Collector"
+long_help = """
+"""
+default = false
+
+[[flags]]
+name = "OTLPNoVerify"
+cli = "otlp-no-verify"
+section = "Observability and profiling"
+type = "bool"
+short_help = "Skip verification of the OpenTelemetry Collector certificate"
+long_help = """
+"""
+default = false
+
+[[flags]]
+name = "OTLPCACert"
+cli = "otlp-ca-cert"
+section = "Observability and profiling"
+type = "string"
+short_help = "Path to X.509 CA certificate for verifying the OpenTelemetry Collector"
+long_help = """
+If not set, the operating system's CA certificates are used to verify the Collector's certificate.
+"""
+default = ""
+
+[[flags]]
+name = "OTLPCert"
+cli = "otlp-cert"
+section = "Observability and profiling"
+type = "string"
+short_help = "Path to X.509 certificate for mutual TLS with the OpenTelemetry Collector"
+long_help = """
+"""
+default = ""
+
+[[flags]]
+name = "OTLPKey"
+cli = "otlp-key"
+section = "Observability and profiling"
+type = "string"
+short_help = "Path to X.509 private key for mutual TLS with the OpenTelemetry Collector"
+long_help = """
+"""
+default = ""
+
+[[flags]]
 name = "CPUProfile"
 cli = "cpu-profile"
+section = "Observability and profiling"
 type = "string"
 short_help = "Path to file for CPU profiling information"
 long_help = """
@@ -657,6 +723,7 @@ default = ""
 [[flags]]
 name = "MemProfile"
 cli = "mem-profile"
+section = "Observability and profiling"
 type = "string"
 short_help = "Path to file for memory profiling information"
 long_help = """
@@ -667,6 +734,7 @@ default = ""
 [[flags]]
 name = "TraceProfile"
 cli = "trace-profile"
+section = "Observability and profiling"
 type = "string"
 short_help = "Path to file for trace profiling information"
 long_help = """

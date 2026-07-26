@@ -16,53 +16,33 @@ type Config struct {
 	DataPath string
 	// Show version information and exit
 	ShowVersion bool
-	// Comma-delimited list of paths to directories, zipfiles, or tar.gz files containing SQLite extensions
-	ExtensionPaths []string
-	// Set CDC HTTP endpoint, or path to CDC config file. If not set, CDC not enabled
-	CDCConfig string
-	// Address of OpenTelemetry Collector for metrics. If not set, OTLP reporting not enabled
-	OTLPEndpoint string
-	// Period between OTLP metric exports
-	OTLPMetricsInterval time.Duration
-	// Use plaintext gRPC when communicating with the OpenTelemetry Collector
-	OTLPInsecure bool
-	// Skip verification of the OpenTelemetry Collector certificate
-	OTLPNoVerify bool
-	// Path to X.509 CA certificate for verifying the OpenTelemetry Collector
-	OTLPCACert string
-	// Path to X.509 certificate for mutual TLS with the OpenTelemetry Collector
-	OTLPCert string
-	// Path to X.509 private key for mutual TLS with the OpenTelemetry Collector
-	OTLPKey string
+	// Unique ID for node. If not set, set to advertised Raft address
+	NodeID string
 	// HTTP server bind address. To enable HTTPS, set X.509 certificate and key
 	HTTPAddr string
 	// Advertised HTTP address. If not set, same as HTTP server bind address
 	HTTPAdv string
 	// Value to set for Access-Control-Allow-Origin HTTP header
 	HTTPAllowOrigin string
-	// Path to authentication and authorization file. If not set, not enabled
-	AuthFile string
-	// Path to automatic backup configuration file. If not set, not enabled
-	AutoBackupFile string
-	// Path to automatic restore configuration file. If not set, not enabled
-	AutoRestoreFile string
-	// Path to X.509 CA certificate for HTTPS
-	HTTPx509CACert string
 	// Path to HTTPS X.509 certificate
 	HTTPx509Cert string
 	// Path to HTTPS X.509 private key
 	HTTPx509Key string
+	// Path to X.509 CA certificate for HTTPS
+	HTTPx509CACert string
 	// Enable mutual TLS for HTTPS
 	HTTPVerifyClient bool
 	// Required Common Name on client certificates. If not set, no Common Name required
 	HTTPVerifyCommonName string
-	// Path to X.509 CA certificate for node-to-node encryption
-	NodeX509CACert string
+	// Path to authentication and authorization file. If not set, not enabled
+	AuthFile string
 	// Path to X.509 certificate for node-to-node mutual authentication and encryption
 	NodeX509Cert string
 	// Path to X.509 private key for node-to-node mutual authentication and encryption
 	NodeX509Key string
-	// Skip verification of any presented certificate.
+	// Path to X.509 CA certificate for node-to-node encryption
+	NodeX509CACert string
+	// Skip verification of any presented certificate
 	NoNodeVerify bool
 	// Enable mutual TLS for node-to-node communication
 	NodeVerifyClient bool
@@ -70,10 +50,6 @@ type Config struct {
 	NodeVerifyServerName string
 	// Required Common Name on incoming peer certificates. If not set, no Common Name required
 	NodeVerifyCommonName string
-	// Unique ID for node. If not set, set to advertised Raft address
-	NodeID string
-	// Enable compression when transferring snapshots between nodes
-	CompressSnapTransport bool
 	// Raft communication bind address
 	RaftAddr string
 	// Advertised Raft communication address. If not set, same as Raft bind address
@@ -90,24 +66,20 @@ type Config struct {
 	BootstrapExpect int
 	// Maximum time for bootstrap process
 	BootstrapExpectTimeout time.Duration
+	// Configure as non-voting node
+	RaftNonVoter bool
+	// Timeout for initial connection to other nodes
+	ClusterConnectTimeout time.Duration
+	// Enable compression when transferring snapshots between nodes
+	CompressSnapTransport bool
 	// Choose clustering discovery mode. If not set, no node discovery is performed
 	DiscoMode string
 	// Key prefix for cluster discovery service
 	DiscoKey string
 	// Set discovery config, or path to cluster discovery config file
 	DiscoConfig string
-	// Enable SQLite foreign key constraints
-	FKConstraints bool
-	// Maximum number of read-only connections to database
-	DBMaxReadOnlyConns int
-	// Period between automatic VACUUMs. It not set, not enabled
-	AutoVacInterval time.Duration
-	// Period between automatic 'PRAGMA optimize'. Set to 0h to disable
-	AutoOptimizeInterval time.Duration
 	// Minimum log level for Raft module
 	RaftLogLevel string
-	// Configure as non-voting node
-	RaftNonVoter bool
 	// Number of outstanding log entries which triggers Raft snapshot
 	RaftSnapThreshold uint64
 	// SQLite WAL file size in bytes which triggers Raft snapshot. Set to 0 to disable
@@ -134,8 +106,16 @@ type Config struct {
 	RaftReapNodeTimeout time.Duration
 	// Time after which a non-reachable read replica (non-voting) node will be reaped. If not set, no reaping takes place
 	RaftReapReadOnlyNodeTimeout time.Duration
-	// Timeout for initial connection to other nodes
-	ClusterConnectTimeout time.Duration
+	// Enable SQLite foreign key constraints
+	FKConstraints bool
+	// Maximum number of read-only connections to database
+	DBMaxReadOnlyConns int
+	// Period between automatic VACUUMs. If not set, not enabled
+	AutoVacInterval time.Duration
+	// Period between automatic 'PRAGMA optimize'. Set to 0h to disable
+	AutoOptimizeInterval time.Duration
+	// Comma-delimited list of paths to directories, zipfiles, or tar.gz files containing SQLite extensions
+	ExtensionPaths []string
 	// Queued Writes queue capacity
 	WriteQueueCap int
 	// Queued Writes queue batch size
@@ -144,6 +124,26 @@ type Config struct {
 	WriteQueueTimeout time.Duration
 	// Use a transaction when processing a queued write
 	WriteQueueTx bool
+	// Path to automatic backup configuration file. If not set, not enabled
+	AutoBackupFile string
+	// Path to automatic restore configuration file. If not set, not enabled
+	AutoRestoreFile string
+	// Set CDC HTTP endpoint, or path to CDC config file. If not set, CDC not enabled
+	CDCConfig string
+	// Address of OpenTelemetry Collector for metrics. If not set, OTLP reporting not enabled
+	OTLPEndpoint string
+	// Period between OTLP metric exports
+	OTLPMetricsInterval time.Duration
+	// Use plaintext gRPC when communicating with the OpenTelemetry Collector
+	OTLPInsecure bool
+	// Skip verification of the OpenTelemetry Collector certificate
+	OTLPNoVerify bool
+	// Path to X.509 CA certificate for verifying the OpenTelemetry Collector
+	OTLPCACert string
+	// Path to X.509 certificate for mutual TLS with the OpenTelemetry Collector
+	OTLPCert string
+	// Path to X.509 private key for mutual TLS with the OpenTelemetry Collector
+	OTLPKey string
 	// Path to file for CPU profiling information
 	CPUProfile string
 	// Path to file for memory profiling information
@@ -160,36 +160,23 @@ func Forge(arguments []string) (*flag.FlagSet, *Config, error) {
 		return nil, nil, fmtError("missing required argument: DataPath")
 	}
 	fs.BoolVar(&config.ShowVersion, "version", false, "Show version information and exit")
-	var tmpExtensionPaths string
-	fs.StringVar(&tmpExtensionPaths, "extensions-path", "", "Comma-delimited list of paths to directories, zipfiles, or tar.gz files containing SQLite extensions")
-	fs.StringVar(&config.CDCConfig, "cdc-config", "", "Set CDC HTTP endpoint, or path to CDC config file. If not set, CDC not enabled")
-	fs.StringVar(&config.OTLPEndpoint, "otlp-endpoint", "", "Address of OpenTelemetry Collector for metrics. If not set, OTLP reporting not enabled")
-	fs.DurationVar(&config.OTLPMetricsInterval, "otlp-metrics-interval", mustParseDuration("30s"), "Period between OTLP metric exports")
-	fs.BoolVar(&config.OTLPInsecure, "otlp-insecure", false, "Use plaintext gRPC when communicating with the OpenTelemetry Collector")
-	fs.BoolVar(&config.OTLPNoVerify, "otlp-no-verify", false, "Skip verification of the OpenTelemetry Collector certificate")
-	fs.StringVar(&config.OTLPCACert, "otlp-ca-cert", "", "Path to X.509 CA certificate for verifying the OpenTelemetry Collector")
-	fs.StringVar(&config.OTLPCert, "otlp-cert", "", "Path to X.509 certificate for mutual TLS with the OpenTelemetry Collector")
-	fs.StringVar(&config.OTLPKey, "otlp-key", "", "Path to X.509 private key for mutual TLS with the OpenTelemetry Collector")
+	fs.StringVar(&config.NodeID, "node-id", "", "Unique ID for node. If not set, set to advertised Raft address")
 	fs.StringVar(&config.HTTPAddr, "http-addr", "localhost:4001", "HTTP server bind address. To enable HTTPS, set X.509 certificate and key")
 	fs.StringVar(&config.HTTPAdv, "http-adv-addr", "", "Advertised HTTP address. If not set, same as HTTP server bind address")
 	fs.StringVar(&config.HTTPAllowOrigin, "http-allow-origin", "", "Value to set for Access-Control-Allow-Origin HTTP header")
-	fs.StringVar(&config.AuthFile, "auth", "", "Path to authentication and authorization file. If not set, not enabled")
-	fs.StringVar(&config.AutoBackupFile, "auto-backup", "", "Path to automatic backup configuration file. If not set, not enabled")
-	fs.StringVar(&config.AutoRestoreFile, "auto-restore", "", "Path to automatic restore configuration file. If not set, not enabled")
-	fs.StringVar(&config.HTTPx509CACert, "http-ca-cert", "", "Path to X.509 CA certificate for HTTPS")
 	fs.StringVar(&config.HTTPx509Cert, "http-cert", "", "Path to HTTPS X.509 certificate")
 	fs.StringVar(&config.HTTPx509Key, "http-key", "", "Path to HTTPS X.509 private key")
+	fs.StringVar(&config.HTTPx509CACert, "http-ca-cert", "", "Path to X.509 CA certificate for HTTPS")
 	fs.BoolVar(&config.HTTPVerifyClient, "http-verify-client", false, "Enable mutual TLS for HTTPS")
 	fs.StringVar(&config.HTTPVerifyCommonName, "http-verify-common-name", "", "Required Common Name on client certificates. If not set, no Common Name required")
-	fs.StringVar(&config.NodeX509CACert, "node-ca-cert", "", "Path to X.509 CA certificate for node-to-node encryption")
+	fs.StringVar(&config.AuthFile, "auth", "", "Path to authentication and authorization file. If not set, not enabled")
 	fs.StringVar(&config.NodeX509Cert, "node-cert", "", "Path to X.509 certificate for node-to-node mutual authentication and encryption")
 	fs.StringVar(&config.NodeX509Key, "node-key", "", "Path to X.509 private key for node-to-node mutual authentication and encryption")
-	fs.BoolVar(&config.NoNodeVerify, "node-no-verify", false, "Skip verification of any presented certificate.")
+	fs.StringVar(&config.NodeX509CACert, "node-ca-cert", "", "Path to X.509 CA certificate for node-to-node encryption")
+	fs.BoolVar(&config.NoNodeVerify, "node-no-verify", false, "Skip verification of any presented certificate")
 	fs.BoolVar(&config.NodeVerifyClient, "node-verify-client", false, "Enable mutual TLS for node-to-node communication")
 	fs.StringVar(&config.NodeVerifyServerName, "node-verify-server-name", "", "Hostname to verify on certificate returned by a node")
 	fs.StringVar(&config.NodeVerifyCommonName, "node-verify-common-name", "", "Required Common Name on incoming peer certificates. If not set, no Common Name required")
-	fs.StringVar(&config.NodeID, "node-id", "", "Unique ID for node. If not set, set to advertised Raft address")
-	fs.BoolVar(&config.CompressSnapTransport, "compress-snap-transport", false, "Enable compression when transferring snapshots between nodes")
 	fs.StringVar(&config.RaftAddr, "raft-addr", "localhost:4002", "Raft communication bind address")
 	fs.StringVar(&config.RaftAdv, "raft-adv-addr", "", "Advertised Raft communication address. If not set, same as Raft bind address")
 	fs.StringVar(&config.JoinAddrs, "join", "", "Comma-delimited list of nodes, in host:port form, through which a cluster can be joined")
@@ -198,15 +185,13 @@ func Forge(arguments []string) (*flag.FlagSet, *Config, error) {
 	fs.StringVar(&config.JoinAs, "join-as", "", "Username in authentication file to join as. If not set, joins anonymously")
 	fs.IntVar(&config.BootstrapExpect, "bootstrap-expect", 0, "Minimum number of nodes required for a bootstrap")
 	fs.DurationVar(&config.BootstrapExpectTimeout, "bootstrap-expect-timeout", mustParseDuration("120s"), "Maximum time for bootstrap process")
+	fs.BoolVar(&config.RaftNonVoter, "raft-non-voter", false, "Configure as non-voting node")
+	fs.DurationVar(&config.ClusterConnectTimeout, "cluster-connect-timeout", mustParseDuration("30s"), "Timeout for initial connection to other nodes")
+	fs.BoolVar(&config.CompressSnapTransport, "compress-snap-transport", false, "Enable compression when transferring snapshots between nodes")
 	fs.StringVar(&config.DiscoMode, "disco-mode", "", "Choose clustering discovery mode. If not set, no node discovery is performed")
 	fs.StringVar(&config.DiscoKey, "disco-key", "rqlite", "Key prefix for cluster discovery service")
 	fs.StringVar(&config.DiscoConfig, "disco-config", "", "Set discovery config, or path to cluster discovery config file")
-	fs.BoolVar(&config.FKConstraints, "fk", false, "Enable SQLite foreign key constraints")
-	fs.IntVar(&config.DBMaxReadOnlyConns, "db-max-ro-conns", 256, "Maximum number of read-only connections to database")
-	fs.DurationVar(&config.AutoVacInterval, "auto-vacuum-int", mustParseDuration("0s"), "Period between automatic VACUUMs. It not set, not enabled")
-	fs.DurationVar(&config.AutoOptimizeInterval, "auto-optimize-int", mustParseDuration("24h"), "Period between automatic 'PRAGMA optimize'. Set to 0h to disable")
 	fs.StringVar(&config.RaftLogLevel, "raft-log-level", "WARN", "Minimum log level for Raft module")
-	fs.BoolVar(&config.RaftNonVoter, "raft-non-voter", false, "Configure as non-voting node")
 	fs.Uint64Var(&config.RaftSnapThreshold, "raft-snap", 8192, "Number of outstanding log entries which triggers Raft snapshot")
 	fs.Uint64Var(&config.RaftSnapThresholdWALSize, "raft-snap-wal-size", 4194304, "SQLite WAL file size in bytes which triggers Raft snapshot. Set to 0 to disable")
 	fs.DurationVar(&config.RaftSnapInterval, "raft-snap-int", mustParseDuration("10s"), "Snapshot threshold check interval")
@@ -220,11 +205,26 @@ func Forge(arguments []string) (*flag.FlagSet, *Config, error) {
 	fs.BoolVar(&config.RaftStepdownOnShutdown, "raft-shutdown-stepdown", true, "If leader, stepdown before shutting down. Enabled by default")
 	fs.DurationVar(&config.RaftReapNodeTimeout, "raft-reap-node-timeout", mustParseDuration("0h"), "Time after which a non-reachable voting node will be reaped. If not set, no reaping takes place")
 	fs.DurationVar(&config.RaftReapReadOnlyNodeTimeout, "raft-reap-read-only-node-timeout", mustParseDuration("0h"), "Time after which a non-reachable read replica (non-voting) node will be reaped. If not set, no reaping takes place")
-	fs.DurationVar(&config.ClusterConnectTimeout, "cluster-connect-timeout", mustParseDuration("30s"), "Timeout for initial connection to other nodes")
+	fs.BoolVar(&config.FKConstraints, "fk", false, "Enable SQLite foreign key constraints")
+	fs.IntVar(&config.DBMaxReadOnlyConns, "db-max-ro-conns", 256, "Maximum number of read-only connections to database")
+	fs.DurationVar(&config.AutoVacInterval, "auto-vacuum-int", mustParseDuration("0s"), "Period between automatic VACUUMs. If not set, not enabled")
+	fs.DurationVar(&config.AutoOptimizeInterval, "auto-optimize-int", mustParseDuration("24h"), "Period between automatic 'PRAGMA optimize'. Set to 0h to disable")
+	var tmpExtensionPaths string
+	fs.StringVar(&tmpExtensionPaths, "extensions-path", "", "Comma-delimited list of paths to directories, zipfiles, or tar.gz files containing SQLite extensions")
 	fs.IntVar(&config.WriteQueueCap, "write-queue-capacity", 1024, "Queued Writes queue capacity")
 	fs.IntVar(&config.WriteQueueBatchSz, "write-queue-batch-size", 128, "Queued Writes queue batch size")
 	fs.DurationVar(&config.WriteQueueTimeout, "write-queue-timeout", mustParseDuration("50ms"), "Queued Writes queue timeout")
 	fs.BoolVar(&config.WriteQueueTx, "write-queue-tx", false, "Use a transaction when processing a queued write")
+	fs.StringVar(&config.AutoBackupFile, "auto-backup", "", "Path to automatic backup configuration file. If not set, not enabled")
+	fs.StringVar(&config.AutoRestoreFile, "auto-restore", "", "Path to automatic restore configuration file. If not set, not enabled")
+	fs.StringVar(&config.CDCConfig, "cdc-config", "", "Set CDC HTTP endpoint, or path to CDC config file. If not set, CDC not enabled")
+	fs.StringVar(&config.OTLPEndpoint, "otlp-endpoint", "", "Address of OpenTelemetry Collector for metrics. If not set, OTLP reporting not enabled")
+	fs.DurationVar(&config.OTLPMetricsInterval, "otlp-metrics-interval", mustParseDuration("30s"), "Period between OTLP metric exports")
+	fs.BoolVar(&config.OTLPInsecure, "otlp-insecure", false, "Use plaintext gRPC when communicating with the OpenTelemetry Collector")
+	fs.BoolVar(&config.OTLPNoVerify, "otlp-no-verify", false, "Skip verification of the OpenTelemetry Collector certificate")
+	fs.StringVar(&config.OTLPCACert, "otlp-ca-cert", "", "Path to X.509 CA certificate for verifying the OpenTelemetry Collector")
+	fs.StringVar(&config.OTLPCert, "otlp-cert", "", "Path to X.509 certificate for mutual TLS with the OpenTelemetry Collector")
+	fs.StringVar(&config.OTLPKey, "otlp-key", "", "Path to X.509 private key for mutual TLS with the OpenTelemetry Collector")
 	fs.StringVar(&config.CPUProfile, "cpu-profile", "", "Path to file for CPU profiling information")
 	fs.StringVar(&config.MemProfile, "mem-profile", "", "Path to file for memory profiling information")
 	fs.StringVar(&config.TraceProfile, "trace-profile", "", "Path to file for trace profiling information")
