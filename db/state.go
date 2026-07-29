@@ -428,6 +428,22 @@ func RemoveFiles(path string) error {
 	return nil
 }
 
+// RenameFiles renames the SQLite database file at src to dst, along with any
+// associated WAL and SHM files. Missing WAL and SHM files are ignored.
+func RenameFiles(src, dst string) error {
+	if err := os.Rename(src, dst); err != nil {
+		return err
+	}
+	for _, ext := range []string{"-wal", "-shm"} {
+		if fsutil.FileExists(src + ext) {
+			if err := os.Rename(src+ext, dst+ext); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
+}
+
 // ReplayWAL replays the given WAL files into the database at the given path,
 // in the order given by the slice. The supplied WAL files must be in the same
 // directory as the database file and are deleted as a result of the replay operation.

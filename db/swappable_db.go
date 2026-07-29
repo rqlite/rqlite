@@ -48,24 +48,57 @@ func OpenSwappable(dbPath string, drv *Driver, fkEnabled, wal bool, maxROConns i
 // Swap swaps the underlying database with that at the given path. The Swap operation
 // may fail on some platforms if the file at path is open by another process. It is
 // the caller's responsibility to ensure the file at path is not in use.
-func (s *SwappableDB) Swap(path string, fkConstraints, walEnabled bool) error {
+//
+// If Swap returns an error, the original database is restored before the error
+// is returned.
+func (s *SwappableDB) Swap(path string, fkConstraints, walEnabled bool) (retErr error) {
 	if !IsValidSQLiteFile(path) {
 		return fmt.Errorf("invalid SQLite data")
 	}
 
 	s.dbMu.Lock()
 	defer s.dbMu.Unlock()
+
+	dbPath := s.db.Path()
+	backupPath := dbPath + ".swap-backup"
+	origFK, origWAL := s.db.FKEnabled(), s.db.WALEnabled()
+
 	if err := s.db.Close(); err != nil {
 		return fmt.Errorf("failed to close: %s", err)
 	}
-	if err := RemoveFiles(s.db.Path()); err != nil {
-		return fmt.Errorf("failed to remove files: %s", err)
+
+	// Move the existing database aside, so it can be restored if the swap fails.
+	RemoveFiles(backupPath)
+	if err := RenameFiles(dbPath, backupPath); err != nil {
+		return fmt.Errorf("failed to set aside existing database: %s", err)
 	}
-	if err := os.Rename(path, s.db.Path()); err != nil {
+	defer func() {
+		if retErr == nil {
+			RemoveFiles(backupPath)
+			return
+		}
+		// Swap failed, put the original database back.
+		s.db.Close()
+		RemoveFiles(dbPath)
+		if err := RenameFiles(backupPath, dbPath); err != nil {
+			return
+		}
+		db, err := OpenWithDriver(s.drv, dbPath, origFK, origWAL)
+		if err != nil {
+			return
+		}
+		s.db = db
+		s.checkpointMgr.Close()
+		if mgr, err := NewCheckpointManager(db); err == nil {
+			s.checkpointMgr = mgr
+		}
+	}()
+
+	if err := os.Rename(path, dbPath); err != nil {
 		return fmt.Errorf("failed to rename database: %s", err)
 	}
 
-	db, err := OpenWithDriver(s.drv, s.db.Path(), fkConstraints, walEnabled)
+	db, err := OpenWithDriver(s.drv, dbPath, fkConstraints, walEnabled)
 	if err != nil {
 		return fmt.Errorf("open SQLite file failed: %s", err)
 	}

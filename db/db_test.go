@@ -243,6 +243,45 @@ func Test_RemoveFiles(t *testing.T) {
 	}
 }
 
+func Test_RenameFiles(t *testing.T) {
+	srcDir := t.TempDir()
+	dstDir := t.TempDir()
+	mustCreateClosedFile(fmt.Sprintf("%s/foo", srcDir))
+	mustCreateClosedFile(fmt.Sprintf("%s/foo-wal", srcDir))
+	mustCreateClosedFile(fmt.Sprintf("%s/foo-shm", srcDir))
+
+	dst := fmt.Sprintf("%s/bar", dstDir)
+	if err := RenameFiles(fmt.Sprintf("%s/foo", srcDir), dst); err != nil {
+		t.Fatalf("failed to rename files: %s", err.Error())
+	}
+
+	files, err := os.ReadDir(srcDir)
+	if err != nil {
+		t.Fatalf("failed to read directory: %s", err.Error())
+	}
+	if len(files) != 0 {
+		t.Fatalf("expected source directory to be empty, but wasn't")
+	}
+	files, err = os.ReadDir(dstDir)
+	if err != nil {
+		t.Fatalf("failed to read directory: %s", err.Error())
+	}
+	if len(files) != 3 {
+		t.Fatalf("expected 3 files in destination directory, got %d", len(files))
+	}
+
+	// Missing WAL and SHM files are fine.
+	mustCreateClosedFile(fmt.Sprintf("%s/baz", srcDir))
+	if err := RenameFiles(fmt.Sprintf("%s/baz", srcDir), fmt.Sprintf("%s/qux", dstDir)); err != nil {
+		t.Fatalf("failed to rename files without WAL and SHM: %s", err.Error())
+	}
+
+	// Missing source file is an error.
+	if err := RenameFiles(fmt.Sprintf("%s/nope", srcDir), fmt.Sprintf("%s/nope2", dstDir)); err == nil {
+		t.Fatalf("expected error renaming nonexistent file, got nil")
+	}
+}
+
 func Test_SetMaxReadOnlyConns(t *testing.T) {
 	path := mustTempPath()
 	defer os.Remove(path)
