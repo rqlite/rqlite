@@ -50,6 +50,13 @@ func Test_IsDisallowedPragmas(t *testing.T) {
 		"PRAGMA query_only = false",
 		"PRAGMA query_only=false",
 		"PRAGMA QUERY_ONLY=false",
+
+		"PRAGMA writable_schema=",
+		"PRAGMA writable_schema = ",
+		"PRAGMA writable_schema=ON",
+		"PRAGMA WRITABLE_SCHEMA=ON",
+		"PRAGMA writable_schema=OFF",
+		"PRAGMA main.writable_schema=ON",
 	}
 
 	for _, s := range tests {

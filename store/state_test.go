@@ -42,6 +42,11 @@ func Test_PragmaCheckRequest_Check(t *testing.T) {
 			ExpErr: true,
 		},
 		{
+			Name:   "Single disallowed writable_schema",
+			Stmts:  []string{"PRAGMA writable_schema=ON"},
+			ExpErr: true,
+		},
+		{
 			Name:   "Multiple statements including a trailing disallowed pragma",
 			Stmts:  []string{"SELECT * FROM foo", "PRAGMA wal_checkpoint(TRUNCATE)"},
 			ExpErr: true,
