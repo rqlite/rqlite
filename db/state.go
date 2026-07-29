@@ -129,6 +129,7 @@ func SynchronousModeFromInt(i int) (SynchronousMode, error) {
 
 // BreakingPragmas are PRAGMAs that, if executed, would break the database layer.
 var BreakingPragmas = map[string]*regexp.Regexp{
+	"PRAGMA writable_schema":    regexp.MustCompile(`(?i)^\s*PRAGMA\s+(\w+\.)?writable_schema\s*=\s*`),
 	"PRAGMA journal_mode":       regexp.MustCompile(`(?i)^\s*PRAGMA\s+(\w+\.)?journal_mode\s*=\s*`),
 	"PRAGMA wal_autocheckpoint": regexp.MustCompile(`(?i)^\s*PRAGMA\s+wal_autocheckpoint\s*=\s*`),
 	"PRAGMA wal_checkpoint":     regexp.MustCompile(`(?i)^\s*PRAGMA\s+(\w+\.)?wal_checkpoint`),
