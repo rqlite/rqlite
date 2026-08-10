@@ -56,6 +56,7 @@ func (hf *ChecksummedFile) Check() (bool, error) {
 }
 
 // Snapshot represents a single snapshot stored on disk.
+//
 // A Snapshot corresponds to exactly one directory under the Store root. The
 // directory name is the snapshot ID (typically derived from term, index, and a
 // timestamp).
