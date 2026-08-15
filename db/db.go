@@ -197,6 +197,8 @@ type DB struct {
 	allOptimizedMu sync.Mutex
 
 	logger *log.Logger
+
+	slowQueryThreshold time.Duration // Minimum duration for slow SQL query logging
 }
 
 // PoolStats represents connection pool statistics
@@ -1229,6 +1231,9 @@ func (db *DB) executeStmtWithConn(ctx context.Context, stmt *command.Statement, 
 	}()
 	response := &command.ExecuteQueryResponse{}
 	start := time.Now()
+	if !stmt.ForceQuery {
+		defer db.logSlowQuery(start, stmt.Sql)
+	}
 
 	parameters, err := parametersToValues(stmt.Parameters)
 	if err != nil {
@@ -1417,6 +1422,8 @@ func (db *DB) queryStmtWithConn(ctx context.Context, stmt *command.Statement, xT
 	}()
 	rows := &command.QueryRows{}
 	start := time.Now()
+	defer db.logSlowQuery(start, stmt.Sql)
+
 	forceStall := stmt.ForceStall
 
 	parameters, err := parametersToValues(stmt.Parameters)
@@ -2223,4 +2230,22 @@ func rewriteContextTimeout(err, retErr error) error {
 		return retErr
 	}
 	return err
+}
+
+// SetSlowQueryThreshold sets the minimum duration for logging slow SQL statements. A zero or negative value disables logging.
+func (db *DB) SetSlowQueryThreshold(threshold time.Duration) {
+	db.slowQueryThreshold = threshold
+}
+
+// logSlowQuery logs the SQL statement if its execution time exceeds the
+// configured slow query threshold.
+func (db *DB) logSlowQuery(start time.Time, sql string) {
+	if db.slowQueryThreshold <= 0 {
+		return
+	}
+
+	duration := time.Since(start)
+	if duration > db.slowQueryThreshold {
+		db.logger.Printf("slow query (%s): %s", duration, sql)
+	}
 }

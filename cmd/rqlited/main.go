@@ -432,6 +432,7 @@ func createStore(cfg *Config, ln *tcp.Layer, extensions []string) (*store.Store,
 	str.AutoOptimizeInterval = cfg.AutoOptimizeInterval
 	str.CompressSnapTransport = cfg.CompressSnapTransport
 	str.MaxReadOnlyConns = cfg.DBMaxReadOnlyConns
+	str.SlowQueryThreshold = cfg.SlowQueryThreshold
 	str.NoVerifyDB = true
 
 	if store.IsNewNode(cfg.DataPath) {

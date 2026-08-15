@@ -533,6 +533,17 @@ This places a limit on the number of read queries the node can service concurren
 default = 256
 
 [[flags]]
+name = "SlowQueryThreshold"
+cli = "slow-query-threshold"
+section = "SQLite database"
+type = "time.Duration"
+short_help = "Minimum duration for logging slow SQL statements"
+long_help = """
+SQL statements taking longer than this duration are logged as slow queries. Set to 0s to disable slow query logging.
+"""
+default = "10s"
+
+[[flags]]
 name = "AutoVacInterval"
 cli = "auto-vacuum-int"
 section = "SQLite database"

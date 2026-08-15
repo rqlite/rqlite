@@ -110,6 +110,8 @@ type Config struct {
 	FKConstraints bool
 	// Maximum number of read-only connections to database
 	DBMaxReadOnlyConns int
+	// Minimum duration for logging slow SQL statements
+	SlowQueryThreshold time.Duration
 	// Period between automatic VACUUMs. If not set, not enabled
 	AutoVacInterval time.Duration
 	// Period between automatic 'PRAGMA optimize'. Set to 0h to disable
@@ -207,6 +209,7 @@ func Forge(arguments []string) (*flag.FlagSet, *Config, error) {
 	fs.DurationVar(&config.RaftReapReadOnlyNodeTimeout, "raft-reap-read-only-node-timeout", mustParseDuration("0h"), "Time after which a non-reachable read replica (non-voting) node will be reaped. If not set, no reaping takes place")
 	fs.BoolVar(&config.FKConstraints, "fk", false, "Enable SQLite foreign key constraints")
 	fs.IntVar(&config.DBMaxReadOnlyConns, "db-max-ro-conns", 256, "Maximum number of read-only connections to database")
+	fs.DurationVar(&config.SlowQueryThreshold, "slow-query-threshold", mustParseDuration("10s"), "Minimum duration for logging slow SQL statements")
 	fs.DurationVar(&config.AutoVacInterval, "auto-vacuum-int", mustParseDuration("0s"), "Period between automatic VACUUMs. If not set, not enabled")
 	fs.DurationVar(&config.AutoOptimizeInterval, "auto-optimize-int", mustParseDuration("24h"), "Period between automatic 'PRAGMA optimize'. Set to 0h to disable")
 	var tmpExtensionPaths string

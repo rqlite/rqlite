@@ -15,10 +15,11 @@ import (
 // SwappableDB is a wrapper around DB that allows the underlying database to be swapped out
 // in a thread-safe manner.
 type SwappableDB struct {
-	db            *DB
-	drv           *Driver
-	checkpointMgr *CheckpointManager
-	dbMu          sync.RWMutex
+	db                 *DB
+	drv                *Driver
+	checkpointMgr      *CheckpointManager
+	dbMu               sync.RWMutex
+	slowQueryThreshold time.Duration
 }
 
 // OpenSwappable returns a new SwappableDB instance, which opens the database at the given path,
@@ -69,6 +70,9 @@ func (s *SwappableDB) Swap(path string, fkConstraints, walEnabled bool) error {
 	if err != nil {
 		return fmt.Errorf("open SQLite file failed: %s", err)
 	}
+
+	db.SetSlowQueryThreshold(s.slowQueryThreshold)
+
 	s.db = db
 	if err := s.checkpointMgr.Close(); err != nil {
 		return fmt.Errorf("failed to close checkpoint manager: %s", err)
@@ -268,4 +272,14 @@ func (s *SwappableDB) Checkpoint(w io.Writer, timeout time.Duration) (*Checkpoin
 	s.dbMu.RLock()
 	defer s.dbMu.RUnlock()
 	return s.checkpointMgr.Checkpoint(w, timeout)
+}
+
+// SetSlowQueryThreshold sets the minimum duration for logging slow SQL
+// statements. The setting is preserved when the underlying database is swapped.
+func (s *SwappableDB) SetSlowQueryThreshold(threshold time.Duration) {
+	s.dbMu.Lock()
+	defer s.dbMu.Unlock()
+
+	s.slowQueryThreshold = threshold
+	s.db.SetSlowQueryThreshold(threshold)
 }

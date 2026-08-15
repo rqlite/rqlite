@@ -425,6 +425,7 @@ type Store struct {
 	CompressSnapTransport    bool
 	MaxReadOnlyConns         int
 	NoVerifyDB               bool
+	SlowQueryThreshold       time.Duration
 
 	// Node-reaping configuration
 	ReapTimeout         time.Duration
@@ -780,6 +781,7 @@ func (s *Store) Open() (retErr error) {
 	if err != nil {
 		return fmt.Errorf("failed to create on-disk database: %s", err)
 	}
+	s.db.SetSlowQueryThreshold(s.SlowQueryThreshold)
 	s.checkpointer = s.db
 
 	// Clean up any files from aborted operations. This tries to catch the case where scratch files
