@@ -196,7 +196,8 @@ type DB struct {
 	allOptimized   bool
 	allOptimizedMu sync.Mutex
 
-	logger *log.Logger
+	logger             *log.Logger
+	slowQueryThreshold time.Duration
 }
 
 // PoolStats represents connection pool statistics
@@ -337,16 +338,17 @@ func OpenWithDriver(drv *Driver, dbPath string, fkEnabled, wal bool) (retDB *DB,
 	}
 
 	return &DB{
-		drv:       drv,
-		path:      dbPath,
-		walPath:   dbPath + "-wal",
-		fkEnabled: fkEnabled,
-		wal:       wal,
-		rwDB:      rwDB,
-		roDB:      roDB,
-		rwDSN:     rwDSN,
-		roDSN:     roDSN,
-		logger:    logger,
+		drv:                drv,
+		path:               dbPath,
+		walPath:            dbPath + "-wal",
+		fkEnabled:          fkEnabled,
+		wal:                wal,
+		rwDB:               rwDB,
+		roDB:               roDB,
+		rwDSN:              rwDSN,
+		roDSN:              roDSN,
+		logger:             logger,
+		slowQueryThreshold: defaultSlowQueryThreshold,
 	}, nil
 }
 
@@ -1257,7 +1259,9 @@ func (db *DB) executeStmtWithConn(ctx context.Context, stmt *command.Statement, 
 			Q: rows,
 		}
 	} else {
+		execStart := time.Now()
 		result, err := eq.ExecContext(ctx, stmt.Sql, parameters...)
+		db.logSlowQuery(execStart, stmt.Sql)
 		if err != nil {
 			response.Result = &command.ExecuteQueryResponse_Error{
 				Error: err.Error(),
@@ -1425,6 +1429,11 @@ func (db *DB) queryStmtWithConn(ctx context.Context, stmt *command.Statement, xT
 		rows.Error = err.Error()
 		return rows, nil
 	}
+
+	queryStart := time.Now()
+	defer func() {
+		db.logSlowQuery(queryStart, stmt.Sql)
+	}()
 
 	rs, err := q.QueryContext(ctx, stmt.Sql, parameters...)
 	if err != nil {
