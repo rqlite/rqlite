@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"path/filepath"
 	"regexp"
 	"sync"
 	"time"
@@ -45,6 +46,38 @@ func OpenSwappable(dbPath string, drv *Driver, fkEnabled, wal bool, maxROConns i
 	}, nil
 }
 
+// Restore the original database after a failed swap.
+func (s *SwappableDB) restoreAfterSwapFailure(dbPath, tempPath string, fkConstraints, walEnabled bool) error {
+	// Remove the failed replacement database.
+	if err := RemoveFiles(dbPath); err != nil {
+		return fmt.Errorf("failed to remove failed replacement: %s", err)
+	}
+
+	// Restore the original database files.
+	if err := restoreDatabaseFiles(dbPath, tempPath); err != nil {
+		return fmt.Errorf("failed to restore original database files: %s", err)
+	}
+
+	// Reopen the original database so SwappableDB is usable again.
+	db, err := OpenWithDriver(s.drv, dbPath, fkConstraints, walEnabled)
+	if err != nil {
+		return fmt.Errorf("failed to reopen original database: %s", err)
+	}
+
+	// Recreate the checkpoint manager because the previous DB connection
+	// was closed before the swap started.
+	mgr, err := NewCheckpointManager(db)
+	if err != nil {
+		_ = db.Close()
+		return fmt.Errorf("failed to recreate checkpoint manager: %s", err)
+	}
+
+	s.db = db
+	s.checkpointMgr = mgr
+
+	return nil
+}
+
 // Swap swaps the underlying database with that at the given path. The Swap operation
 // may fail on some platforms if the file at path is open by another process. It is
 // the caller's responsibility to ensure the file at path is not in use.
@@ -55,29 +88,94 @@ func (s *SwappableDB) Swap(path string, fkConstraints, walEnabled bool) error {
 
 	s.dbMu.Lock()
 	defer s.dbMu.Unlock()
+
+	dbPath := s.db.Path()
+
 	if err := s.db.Close(); err != nil {
 		return fmt.Errorf("failed to close: %s", err)
 	}
-	if err := RemoveFiles(s.db.Path()); err != nil {
-		return fmt.Errorf("failed to remove files: %s", err)
+
+	tempPath, err := createSwapTempPath(dbPath)
+	if err != nil {
+		// No files have been moved yet; reopen the original database.
+		db, reopenErr := OpenWithDriver(s.drv, dbPath, fkConstraints, walEnabled)
+		if reopenErr != nil {
+			return fmt.Errorf(
+				"failed to create swap temporary path: %s; failed to reopen original database: %s",
+				err,
+				reopenErr,
+			)
+		}
+		mgr, mgrErr := NewCheckpointManager(db)
+		if mgrErr != nil {
+			_ = db.Close()
+			return fmt.Errorf(
+				"failed to create swap temporary path: %s; failed to recreate checkpoint manager: %s",
+				err,
+				mgrErr,
+			)
+		}
+		s.db = db
+		s.checkpointMgr = mgr
+		return fmt.Errorf("failed to create swap temporary path: %s", err)
 	}
-	if err := os.Rename(path, s.db.Path()); err != nil {
+
+	if err := renameDatabaseFiles(dbPath, tempPath); err != nil {
+		// Some files may have been partially moved; restore what we can and reopen.
+		if restoreErr := s.restoreAfterSwapFailure(dbPath, tempPath, fkConstraints, walEnabled); restoreErr != nil {
+			return fmt.Errorf("failed to rename existing database files: %s; rollback failed: %s", err, restoreErr)
+		}
+		return fmt.Errorf("failed to rename existing database files: %s", err)
+	}
+
+	if err := os.Rename(path, dbPath); err != nil {
+		// Original files are in tempPath; restore them and reopen the original database.
+		if restoreErr := s.restoreAfterSwapFailure(dbPath, tempPath, fkConstraints, walEnabled); restoreErr != nil {
+			return fmt.Errorf("failed to rename database: %s; rollback failed: %s", err, restoreErr)
+		}
 		return fmt.Errorf("failed to rename database: %s", err)
 	}
 
-	db, err := OpenWithDriver(s.drv, s.db.Path(), fkConstraints, walEnabled)
+	db, err := OpenWithDriver(s.drv, dbPath, fkConstraints, walEnabled)
 	if err != nil {
+		if restoreErr := s.restoreAfterSwapFailure(dbPath, tempPath, fkConstraints, walEnabled); restoreErr != nil {
+			return fmt.Errorf("open SQLite file failed: %s; rollback failed: %s", err, restoreErr)
+		}
+
 		return fmt.Errorf("open SQLite file failed: %s", err)
 	}
-	s.db = db
-	if err := s.checkpointMgr.Close(); err != nil {
-		return fmt.Errorf("failed to close checkpoint manager: %s", err)
-	}
-	mgr, err := NewCheckpointManager(db)
+
+	newCheckpointMgr, err := NewCheckpointManager(db)
 	if err != nil {
-		return fmt.Errorf("failed to recreate checkpoint manager: %s", err)
+		_ = db.Close()
+
+		if restoreErr := s.restoreAfterSwapFailure(dbPath, tempPath, fkConstraints, walEnabled); restoreErr != nil {
+			return fmt.Errorf("failed to create checkpoint manager: %s; rollback failed: %s", err, restoreErr)
+		}
+
+		return fmt.Errorf("failed to create checkpoint manager: %s", err)
 	}
-	s.checkpointMgr = mgr
+
+	oldCheckpointMgr := s.checkpointMgr
+
+	if err := oldCheckpointMgr.Close(); err != nil {
+		_ = newCheckpointMgr.Close()
+		_ = db.Close()
+
+		if restoreErr := s.restoreAfterSwapFailure(dbPath, tempPath, fkConstraints, walEnabled); restoreErr != nil {
+			return fmt.Errorf("failed to close old checkpoint manager: %s; rollback failed: %s", err, restoreErr)
+		}
+
+		return fmt.Errorf("failed to close old checkpoint manager: %s", err)
+	}
+
+	s.db = db
+	s.checkpointMgr = newCheckpointMgr
+
+	if err := RemoveFiles(tempPath); err != nil {
+		return fmt.Errorf("swap succeeded, but failed to remove old database files: %s", err)
+	}
+
 	return nil
 }
 
@@ -268,4 +366,75 @@ func (s *SwappableDB) Checkpoint(w io.Writer, timeout time.Duration) (*Checkpoin
 	s.dbMu.RLock()
 	defer s.dbMu.RUnlock()
 	return s.checkpointMgr.Checkpoint(w, timeout)
+}
+
+// Move database files to temporary paths.
+func renameDatabaseFiles(path, tempPath string) error {
+	for _, suffix := range []string{"", "-wal", "-shm"} {
+		src := path + suffix
+		dst := tempPath + suffix
+
+		if _, err := os.Stat(src); err != nil {
+			if os.IsNotExist(err) {
+				continue
+			}
+			return err
+		}
+
+		if err := os.Rename(src, dst); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+// Restore database files from temporary paths.
+func restoreDatabaseFiles(path, tempPath string) error {
+	var firstErr error
+
+	for _, suffix := range []string{"", "-wal", "-shm"} {
+		src := tempPath + suffix
+		dst := path + suffix
+
+		if _, err := os.Stat(src); err != nil {
+			if os.IsNotExist(err) {
+				continue
+			}
+			if firstErr == nil {
+				firstErr = err
+			}
+			continue
+		}
+
+		if err := os.Rename(src, dst); err != nil && firstErr == nil {
+			firstErr = err
+		}
+	}
+
+	return firstErr
+}
+
+// Create a unique temporary swap path.
+func createSwapTempPath(dbPath string) (string, error) {
+	dir := filepath.Dir(dbPath)
+	base := filepath.Base(dbPath)
+
+	file, err := os.CreateTemp(dir, base+"-swap-*")
+	if err != nil {
+		return "", err
+	}
+
+	tempPath := file.Name()
+
+	if err := file.Close(); err != nil {
+		_ = os.Remove(tempPath)
+		return "", err
+	}
+
+	if err := os.Remove(tempPath); err != nil {
+		return "", err
+	}
+
+	return tempPath, nil
 }
