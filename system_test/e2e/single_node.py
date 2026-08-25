@@ -219,7 +219,7 @@ class TestSingleNode_SnapshotRequest(unittest.TestCase):
     self.assertEqual(j, d_("{'results': [{}]}"))
 
     self.n.snapshot()
-    self.assertEqual(n.expvar()['http']['user_snapshots'], 1)
+    self.assertEqual(self.n.expvar()['http']['user_snapshots'], 1)
 
   def tearDown(self):
     deprovision_node(self.n)
