@@ -13,6 +13,7 @@
 - [PR #2732](https://github.com/rqlite/rqlite/pull/2732): Bump google.golang.org/grpc from 1.81.1 to 1.82.1.
 - [PR #2735](https://github.com/rqlite/rqlite/pull/2735): Enable "Section" in command-line flags configuration.
 - [PR #2742](https://github.com/rqlite/rqlite/pull/2742): `go mod` dependency updates, including updating SQLite to 3.53.4.
+- [PR #2743](https://github.com/rqlite/rqlite/pull/2735): ABL for end-to-end tests.
 
 ## v10.2.7 (July 5th 2026)
 ### Implementation changes and bug fixes
