@@ -14,6 +14,7 @@
 - [PR #2735](https://github.com/rqlite/rqlite/pull/2735): Enable "Section" in command-line flags configuration.
 - [PR #2742](https://github.com/rqlite/rqlite/pull/2742): `go mod` dependency updates, including updating SQLite to 3.53.4.
 - [PR #2743](https://github.com/rqlite/rqlite/pull/2735): ABL for end-to-end tests.
+- [PR #2741](https://github.com/rqlite/rqlite/pull/2741): Add Query logger for database layer. Thanks @karangupta982.
 
 ## v10.2.7 (July 5th 2026)
 ### Implementation changes and bug fixes
@@ -26,7 +27,6 @@
 - [PR #2711](https://github.com/rqlite/rqlite/pull/2711): Minor fixes to the `cluster` package related to connection handling and metrics.
 - [PR #2712](https://github.com/rqlite/rqlite/pull/2712): Fixes to the `http` package including SQL rewriting control.
 - [PR #2713](https://github.com/rqlite/rqlite/pull/2713): Address potential dropped CDC event on restart.
-- [PR #2741](https://github.com/rqlite/rqlite/pull/2741): Add Query logger for database layer. Thanks @karangupta982.
 
 ## v10.2.6 (July 4th 2026)
 ### Implementation changes and bug fixes
