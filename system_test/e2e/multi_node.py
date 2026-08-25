@@ -262,7 +262,7 @@ class TestClusterRecovery(unittest.TestCase):
     j = n0.execute('CREATE TABLE foo (id INTEGER NOT NULL PRIMARY KEY, name TEXT)')
     self.assertEqual(j, d_("{'results': [{}]}"))
     j = n0.execute('INSERT INTO foo(name) VALUES("fiona")')
-    fsmIdx = n0.wait_for_all_applied()
+    n0.wait_for_all_applied()
     self.assertEqual(j, d_("{'results': [{'last_insert_id': 1, 'rows_affected': 1}]}"))
     j = n0.query('SELECT * FROM foo')
     self.assertEqual(j, d_("{'results': [{'values': [[1, 'fiona']], 'types': ['integer', 'text'], 'columns': ['id', 'name']}]}"))
@@ -372,7 +372,7 @@ class TestRequestForwarding(unittest.TestCase):
       f = self.cluster.followers()[0]
       j = f.execute('INSERT INTO foo(name) VALUES("fiona")')
       self.assertEqual(j, d_("{'results': [{'last_insert_id': 1, 'rows_affected': 1}]}"))
-      fsmIdx = l.wait_for_all_applied()
+      l.wait_for_all_applied()
 
       j = l.query('SELECT * FROM foo')
       self.assertEqual(j, d_("{'results': [{'values': [[1, 'fiona']], 'types': ['integer', 'text'], 'columns': ['id', 'name']}]}"))
@@ -392,7 +392,7 @@ class TestRequestForwarding(unittest.TestCase):
       f = self.cluster.followers()[0]
       j = f.execute('INSERT INTO foo(name) VALUES("fiona")')
       self.assertEqual(j, d_("{'results': [{'last_insert_id': 1, 'rows_affected': 1}]}"))
-      fsmIdx = l.wait_for_all_applied()
+      l.wait_for_all_applied()
 
       j = f.execute_queued('INSERT INTO foo(name) VALUES("declan")')
       self.assertTrue(is_sequence_number(str(j)))
@@ -420,7 +420,7 @@ class TestRequestForwarding(unittest.TestCase):
       f = self.cluster.followers()[0]
       j = f.execute('INSERT INTO foo(name) VALUES("fiona")')
       self.assertEqual(j, d_("{'results': [{'last_insert_id': 1, 'rows_affected': 1}]}"))
-      fsmIdx = l.wait_for_all_applied()
+      l.wait_for_all_applied()
 
       # Load up the queue!
       for i in range(0,2000):
