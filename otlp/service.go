@@ -18,7 +18,7 @@ import (
 	"go.opentelemetry.io/otel/exporters/otlp/otlpmetric/otlpmetricgrpc"
 	sdkmetric "go.opentelemetry.io/otel/sdk/metric"
 	"go.opentelemetry.io/otel/sdk/resource"
-	semconv "go.opentelemetry.io/otel/semconv/v1.40.0"
+	semconv "go.opentelemetry.io/otel/semconv/v1.43.0"
 	"google.golang.org/grpc/credentials"
 )
 
@@ -55,10 +55,15 @@ func (s *Service) Start() error {
 		return err
 	}
 
+	// Declare the same schema URL as the default resource, since merging two
+	// resources with differing, non-empty schema URLs fails. Doing so means
+	// the merge keeps working when an OTel SDK upgrade advances the default
+	// resource's semantic-convention version ahead of the one imported here.
+	// The service attributes set below are stable across those versions.
 	res, err := resource.Merge(
 		resource.Default(),
 		resource.NewWithAttributes(
-			semconv.SchemaURL,
+			resource.Default().SchemaURL(),
 			semconv.ServiceName("rqlite"),
 			semconv.ServiceVersion(s.cfg.Version),
 			semconv.ServiceInstanceID(s.cfg.NodeID),

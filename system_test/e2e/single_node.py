@@ -40,13 +40,13 @@ class TestSingleNode(unittest.TestCase):
     self.assertEqual(j, d_("{'results': [{}]}"))
 
     j = n.execute('INSERT INTO bar(name) VALUES("fiona")')
-    applied = n.wait_for_all_applied()
+    n.wait_for_all_applied()
     self.assertEqual(j, d_("{'results': [{'last_insert_id': 1, 'rows_affected': 1}]}"))
     j = n.query('SELECT * from bar')
     self.assertEqual(j, d_("{'results': [{'values': [[1, 'fiona']], 'types': ['integer', 'text'], 'columns': ['id', 'name']}]}"))
 
     j = n.execute('INSERT INTO bar(name) VALUES("declan")')
-    applied = n.wait_for_all_applied()
+    n.wait_for_all_applied()
     self.assertEqual(j, d_("{'results': [{'last_insert_id': 2, 'rows_affected': 1}]}"))
     j = n.query('SELECT * from bar where id=2')
     self.assertEqual(j, d_("{'results': [{'values': [[2, 'declan']], 'types': ['integer', 'text'], 'columns': ['id', 'name']}]}"))
@@ -69,7 +69,7 @@ class TestSingleNode(unittest.TestCase):
     self.assertEqual(j, d_("{'results': [{}]}"))
 
     j = n.execute('INSERT INTO foo(name) VALUES ("こんにちは")')
-    applied = n.wait_for_all_applied()
+    n.wait_for_all_applied()
     self.assertEqual(j, d_("{'results': [{'last_insert_id': 1, 'rows_affected': 1}]}"))
     j = n.query('SELECT * from foo')
     self.assertEqual(j, d_("{'results': [{'values': [[1, 'こんにちは']], 'types': ['integer', 'text'], 'columns': ['id', 'name']}]}"))
@@ -84,7 +84,7 @@ class TestSingleNode(unittest.TestCase):
     j = n.execute('CREATE TABLE bar (id INTEGER NOT NULL PRIMARY KEY, name TEXT)')
     self.assertEqual(j, d_("{'results': [{}]}"))
     j = n.execute('INSERT INTO bar(name) VALUES("fiona")')
-    applied = n.wait_for_all_applied()
+    n.wait_for_all_applied()
     self.assertEqual(j, d_("{'results': [{'last_insert_id': 1, 'rows_affected': 1}]}"))
     j = n.query('SELECT * from bar', pretty=True, text=True)
     exp = '''{
@@ -116,11 +116,11 @@ class TestSingleNode(unittest.TestCase):
     self.assertEqual(j, d_("{'results': [{}]}"))
 
     j = n.execute('INSERT INTO bar(name, age) VALUES(?,?)', params=["fiona", 20])
-    applied = n.wait_for_all_applied()
+    n.wait_for_all_applied()
     self.assertEqual(j, d_("{'results': [{'last_insert_id': 1, 'rows_affected': 1}]}"))
 
     j = n.execute('INSERT INTO bar(name, age) VALUES(?,?)', params=["declan", None])
-    applied = n.wait_for_all_applied()
+    n.wait_for_all_applied()
     self.assertEqual(j, d_("{'results': [{'last_insert_id': 2, 'rows_affected': 1}]}"))
 
     j = n.query('SELECT * from bar WHERE age=?', params=[20])
@@ -137,7 +137,7 @@ class TestSingleNode(unittest.TestCase):
     self.assertEqual(j, d_("{'results': [{}]}"))
 
     j = n.execute('INSERT INTO bar(name, age) VALUES(?,?)', params=["fiona", 20])
-    applied = n.wait_for_all_applied()
+    n.wait_for_all_applied()
     self.assertEqual(j, d_("{'results': [{'last_insert_id': 1, 'rows_affected': 1}]}"))
 
     j = n.query('SELECT * from bar')
@@ -147,7 +147,7 @@ class TestSingleNode(unittest.TestCase):
     self.assertEqual(j, d_("{'results': [{'values': [[1, 'fiona', 20]], 'types': ['integer', 'text', 'integer'], 'columns': ['id', 'name', 'age']}]}"))
 
     j = n.execute('INSERT INTO bar(name, age) VALUES(?,?)', params=["declan", None])
-    applied = n.wait_for_all_applied()
+    n.wait_for_all_applied()
     self.assertEqual(j, d_("{'results': [{'last_insert_id': 2, 'rows_affected': 1}]}"))
 
     j = n.query('SELECT * from bar WHERE name=:name', params={"name": "declan"})
@@ -164,7 +164,7 @@ class TestSingleNode(unittest.TestCase):
         ['INSERT INTO bar(name, age) VALUES("sinead", 25)']
     ])
     j = n.execute_raw(body)
-    applied = n.wait_for_all_applied()
+    n.wait_for_all_applied()
     self.assertEqual(j, d_("{'results': [{'last_insert_id': 1, 'rows_affected': 1}, {'last_insert_id': 2, 'rows_affected': 1}]}"))
     j = n.query('SELECT * from bar')
     self.assertEqual(j, d_("{'results': [{'values': [[1, 'fiona', 20], [2, 'sinead', 25]], 'types': ['integer', 'text', 'integer'], 'columns': ['id', 'name', 'age']}]}"))
@@ -180,7 +180,7 @@ class TestSingleNode(unittest.TestCase):
         ['INSERT INTO bar(name, age) VALUES("sinead", 25)']
     ])
     j = n.request_raw(body)
-    applied = n.wait_for_all_applied()
+    n.wait_for_all_applied()
     self.assertEqual(j, d_("{'results': [{'last_insert_id': 1, 'rows_affected': 1}, {'last_insert_id': 2, 'rows_affected': 1}]}"))
     j = n.request('SELECT * from bar')
     self.assertEqual(j, d_("{'results': [{'values': [[1, 'fiona', 20], [2, 'sinead', 25]], 'types': ['integer', 'text', 'integer'], 'columns': ['id', 'name', 'age']}]}"))
@@ -212,30 +212,36 @@ class TestSingleNode(unittest.TestCase):
 class TestSingleNode_SnapshotRequest(unittest.TestCase):
   def test_snapshot_request(self):
     ''' Test that a node performs a snapshot when requested'''
-    n = Node(RQLITED_PATH, '0')
-    n.start()
-    n.wait_for_leader()
-    j = n.execute('CREATE TABLE bar (id INTEGER NOT NULL PRIMARY KEY, name TEXT)')
+    self.n = Node(RQLITED_PATH, '0')
+    self.n.start()
+    self.n.wait_for_leader()
+    j = self.n.execute('CREATE TABLE bar (id INTEGER NOT NULL PRIMARY KEY, name TEXT)')
     self.assertEqual(j, d_("{'results': [{}]}"))
 
-    n.snapshot()
-    self.assertEqual(n.expvar()['http']['user_snapshots'], 1)
+    self.n.snapshot()
+    self.assertEqual(self.n.expvar()['http']['user_snapshots'], 1)
+
+  def tearDown(self):
+    deprovision_node(self.n)
 
 class TestSingleNode_ReapRequest(unittest.TestCase):
   def test_reap_request(self):
     ''' Test that a node performs a reap when requested'''
-    n = Node(RQLITED_PATH, '0')
-    n.start()
-    n.wait_for_leader()
-    n.reap()
-    self.assertEqual(n.expvar()['http']['user_reaps'], 1)
+    self.n = Node(RQLITED_PATH, '0')
+    self.n.start()
+    self.n.wait_for_leader()
+    self.n.reap()
+    self.assertEqual(self.n.expvar()['http']['user_reaps'], 1)
+
+  def tearDown(self):
+    deprovision_node(self.n)
 
 class TestSingleNodeLoadRestart(unittest.TestCase):
   ''' Test that a node can load a SQLite data set in binary format'''
   def test_load_binary(self):
     self.n = Node(RQLITED_PATH, '0',  raft_snap_threshold=8192, raft_snap_int="30s")
     self.n.start()
-    n = self.n.wait_for_leader()
+    self.n.wait_for_leader()
     self.n.restore('system_test/e2e/testdata/1000-numbers.db', fmt='binary')
     poll_query(self.n, 'SELECT COUNT(*) from test', d_("{'results': [{'values': [[1000]], 'types': ['integer'], 'columns': ['COUNT(*)']}]}"))
 
@@ -254,7 +260,7 @@ class TestSingleNodeBootRestart(unittest.TestCase):
   def test(self):
     self.n = Node(RQLITED_PATH, '0',  raft_snap_threshold=8192, raft_snap_int="30s")
     self.n.start()
-    n = self.n.wait_for_leader()
+    self.n.wait_for_leader()
     j = self.n.boot('system_test/e2e/testdata/1000-numbers.db')
     j = self.n.query('SELECT COUNT(*) from test')
     self.assertEqual(j, d_("{'results': [{'values': [[1000]], 'types': ['integer'], 'columns': ['COUNT(*)']}]}"))
