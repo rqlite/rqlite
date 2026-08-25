@@ -1,45 +1,36 @@
 package db
 
 import (
-	"fmt"
 	"log"
 	"sync"
+	"time"
 
 	"github.com/mattn/go-sqlite3"
 )
 
 // QueryLogConfig is the configuration object passed to the DB to control
-// query logging. It is intentionally minimal for the initial implementation;
-// additional options (filtering, thresholds, etc.) can be added later.
+// query logging.
 type QueryLogConfig struct {
 	// Logger is the destination for query log lines. If nil, query logging is disabled.
 	Logger *log.Logger
 }
 
 // traceKey uniquely identifies an in-flight statement execution.
-// A (ConnHandle, StmtHandle) pair is unique for the duration of a single
-// statement execution — STMT fires at start, PROFILE fires at end,
-// both carry the same pair.
 type traceKey struct {
 	ConnHandle uintptr
 	StmtHandle uintptr
 }
 
-// QueryLogger is a self-contained query logging component that receives
-// SQLite trace_v2 events (STMT and PROFILE) and produces log lines
-// containing the SQL statement and its execution duration.
-// It follows the same design pattern as CDCStreamer: a dedicated type
-// with hook methods, testable in isolation, integrated into the db layer
-// via the driver's ConnectHook.
+// QueryLogger receives SQLite trace_v2 events (STMT and PROFILE) and
+// produces log lines containing the SQL statement and its execution duration.
 type QueryLogger struct {
 	config QueryLogConfig
 
 	mu      sync.Mutex
-	pending map[traceKey]string // SQL text buffered from STMT, awaiting PROFILE
+	pending map[traceKey]string
 }
 
 // NewQueryLogger creates a new QueryLogger with the given configuration.
-// If cfg.Logger is nil, the TraceHook will be a no-op.
 func NewQueryLogger(cfg QueryLogConfig) *QueryLogger {
 	return &QueryLogger{
 		config:  cfg,
@@ -87,13 +78,13 @@ func (ql *QueryLogger) TraceHook(info sqlite3.TraceInfo) int {
 		ql.mu.Unlock()
 
 		if !ok {
-			// PROFILE without a preceding STMT — shouldn't happen normally,
-			// but be safe and skip.
+			ql.config.Logger.Printf("PROFILE event without preceding STMT (conn=0x%x, stmt=0x%x)",
+				info.ConnHandle, info.StmtHandle)
 			return 0
 		}
 
-		durationMs := info.RunTimeNanosec / 1_000_000
-		ql.config.Logger.Output(2, fmt.Sprintf("%s [%dms]", sql, durationMs))
+		dur := time.Duration(info.RunTimeNanosec) * time.Nanosecond
+		ql.config.Logger.Printf("%s [%s]", sql, dur)
 	}
 
 	return 0

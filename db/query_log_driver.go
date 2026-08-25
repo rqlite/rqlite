@@ -2,17 +2,34 @@ package db
 
 import (
 	"database/sql"
+	"sync"
 
 	"github.com/mattn/go-sqlite3"
 )
 
-// NewQueryLogDriver returns a new driver with query logging enabled.
-// It registers a SQLite3 driver that installs the given QueryLogger's
-// TraceHook on every new connection via ConnectHook. The driver also
-// disables checkpoint-on-close (same as DefaultDriver).
-// name must be unique across the process. If a driver with the given
-// name already exists, a panic will occur — same behavior as NewDriver.
-func NewQueryLogDriver(name string, ql *QueryLogger) *Driver {
+const queryLogDriverName = "rqlite-sqlite3-querylog"
+
+var queryLogDriverOnce sync.Once
+
+// QueryLogDriver returns the query-log driver. It registers the SQLite3
+// driver with query logging support. It can be called multiple times but
+// only registers the driver once. The driver disables checkpoint-on-close
+// and installs the given QueryLogger's TraceHook on every new connection.
+func QueryLogDriver(ql *QueryLogger) *Driver {
+	queryLogDriverOnce.Do(func() {
+		sql.Register(queryLogDriverName, &sqlite3.SQLiteDriver{
+			ConnectHook: makeQueryLogConnectHookFn(ql),
+		})
+	})
+	return &Driver{
+		name:       queryLogDriverName,
+		chkOnClose: CnkOnCloseModeDisabled,
+	}
+}
+
+// newTestQueryLogDriver registers a query-log driver with the given name.
+// It is used by tests to create isolated drivers.
+func newTestQueryLogDriver(name string, ql *QueryLogger) *Driver {
 	sql.Register(name, &sqlite3.SQLiteDriver{
 		ConnectHook: makeQueryLogConnectHookFn(ql),
 	})
@@ -27,12 +44,10 @@ func NewQueryLogDriver(name string, ql *QueryLogger) *Driver {
 // 2. Installs the QueryLogger's TraceHook via SetTrace.
 func makeQueryLogConnectHookFn(ql *QueryLogger) func(conn *sqlite3.SQLiteConn) error {
 	return func(conn *sqlite3.SQLiteConn) error {
-		// Same as DefaultDriver: disable checkpoint on close.
 		if err := conn.DBConfigNoCkptOnClose(); err != nil {
 			return err
 		}
 
-		// Install trace callback for query logging.
 		if ql != nil {
 			if err := conn.SetTrace(&sqlite3.TraceConfig{
 				Callback:        ql.TraceHook,

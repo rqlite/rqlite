@@ -37,7 +37,7 @@ func Test_QueryLogger_NilLogger(t *testing.T) {
 		StmtHandle:     0x2,
 		RunTimeNanosec: 5_000_000,
 	})
-	// No panic = pass.
+
 }
 
 func Test_QueryLogger_StmtThenProfile(t *testing.T) {
@@ -81,7 +81,6 @@ func Test_QueryLogger_ProfileWithoutStmt(t *testing.T) {
 	logger := log.New(&buf, "", 0)
 	ql := NewQueryLogger(QueryLogConfig{Logger: logger})
 
-	// PROFILE without preceding STMT — should produce no output
 	ql.TraceHook(sqlite3.TraceInfo{
 		EventCode:      sqlite3.TraceProfile,
 		ConnHandle:     0x100,
@@ -89,8 +88,9 @@ func Test_QueryLogger_ProfileWithoutStmt(t *testing.T) {
 		RunTimeNanosec: 1_000_000,
 	})
 
-	if buf.Len() != 0 {
-		t.Fatalf("expected no output for orphan PROFILE, got: %s", buf.String())
+	output := buf.String()
+	if !strings.Contains(output, "PROFILE event without preceding STMT") {
+		t.Fatalf("expected warning log for orphan PROFILE, got: %s", output)
 	}
 }
 
@@ -118,8 +118,8 @@ func Test_QueryLogger_FallbackToStmtOrTrigger(t *testing.T) {
 	if !strings.Contains(output, "PRAGMA journal_mode") {
 		t.Fatalf("expected log to contain StmtOrTrigger text, got: %s", output)
 	}
-	if !strings.Contains(output, "[0ms]") {
-		t.Fatalf("expected [0ms] for zero-duration, got: %s", output)
+	if !strings.Contains(output, "[0s]") {
+		t.Fatalf("expected [0s] for zero-duration, got: %s", output)
 	}
 }
 
@@ -236,8 +236,10 @@ func Test_QueryLogger_EmptySQL(t *testing.T) {
 		RunTimeNanosec: 1_000_000,
 	})
 
-	if buf.Len() != 0 {
-		t.Fatalf("expected no output for empty SQL, got: %s", buf.String())
+	output := buf.String()
+	// Since empty SQL isn't buffered, the PROFILE becomes orphaned and logs a warning
+	if !strings.Contains(output, "PROFILE event without preceding STMT") {
+		t.Fatalf("expected warning for orphan PROFILE after empty SQL, got: %s", output)
 	}
 }
 
