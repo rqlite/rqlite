@@ -1,9 +1,8 @@
 package store
 
 import (
+	"log"
 	"path/filepath"
-
-	sql "github.com/rqlite/rqlite/v10/db"
 )
 
 // DBConfig represents the configuration of the underlying SQLite database.
@@ -15,7 +14,7 @@ type DBConfig struct {
 	Extensions []string `json:"extensions,omitempty"`
 
 	// Controls query logging. If nil, query logging is disabled.
-	QueryLogConfig *sql.QueryLogConfig `json:"query_log_config,omitempty"`
+	QueryLogger *log.Logger
 }
 
 // NewDBConfig returns a new DB config instance.

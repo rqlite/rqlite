@@ -777,8 +777,8 @@ func (s *Store) Open() (retErr error) {
 	}
 
 	// If query logging is configured, use the query-log driver.
-	if s.dbConf.QueryLogConfig != nil {
-		ql := sql.NewQueryLogger(*s.dbConf.QueryLogConfig)
+	if s.dbConf.QueryLogger != nil {
+		ql := sql.NewQueryLogger(sql.QueryLogConfig{Logger: s.dbConf.QueryLogger})
 		s.dbDrv = sql.QueryLogDriver(ql)
 	}
 

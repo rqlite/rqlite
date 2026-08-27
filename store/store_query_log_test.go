@@ -7,11 +7,9 @@ import (
 	"strings"
 	"testing"
 	"time"
-
-	dbpkg "github.com/rqlite/rqlite/v10/db"
 )
 
-// Verifies that when QueryLogConfig is nil,
+// Verifies that when QueryLogger is nil,
 // the store opens and operates normally without any logging.
 func Test_StoreQueryLog_Disabled(t *testing.T) {
 	s, ln := mustNewStore(t)
@@ -34,14 +32,14 @@ func Test_StoreQueryLog_Disabled(t *testing.T) {
 	}
 }
 
-// Verifies that when QueryLogConfig is set,
+// Verifies that when QueryLogger is set,
 // SQL statements executed against the store appear in the query log.
 func Test_StoreQueryLog_Enabled(t *testing.T) {
 	var buf bytes.Buffer
 	logger := log.New(&buf, "", 0)
 
 	cfg := NewDBConfig()
-	cfg.QueryLogConfig = &dbpkg.QueryLogConfig{Logger: logger}
+	cfg.QueryLogger = logger
 
 	ly := mustMockLayer("localhost:0")
 	s := New(&Config{
