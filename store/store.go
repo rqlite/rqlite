@@ -776,6 +776,12 @@ func (s *Store) Open() (retErr error) {
 			s.dbConf.Extensions, sql.CnkOnCloseModeDisabled)
 	}
 
+	// If query logging is configured, use the query-log driver.
+	if s.dbConf.QueryLogConfig != nil {
+		ql := sql.NewQueryLogger(*s.dbConf.QueryLogConfig)
+		s.dbDrv = sql.QueryLogDriver(ql)
+	}
+
 	s.db, err = createDBOnDisk(s.dbPath, s.dbDrv, removeDBFiles, s.dbConf.FKConstraints, s.MaxReadOnlyConns)
 	if err != nil {
 		return fmt.Errorf("failed to create on-disk database: %s", err)
