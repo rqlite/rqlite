@@ -1,6 +1,9 @@
 package store
 
-import "path/filepath"
+import (
+	"log"
+	"path/filepath"
+)
 
 // DBConfig represents the configuration of the underlying SQLite database.
 type DBConfig struct {
@@ -9,6 +12,9 @@ type DBConfig struct {
 
 	// Paths of SQLite Extensions to be loaded
 	Extensions []string `json:"extensions,omitempty"`
+
+	// Controls query logging. If nil, query logging is disabled.
+	QueryLogger *log.Logger
 }
 
 // NewDBConfig returns a new DB config instance.
