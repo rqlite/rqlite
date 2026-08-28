@@ -2,6 +2,7 @@
 ### New features
 - [PR #2715](https://github.com/rqlite/rqlite/pull/2715), [PR #2716](https://github.com/rqlite/rqlite/pull/2716), [PR #2733](https://github.com/rqlite/rqlite/pull/2733): Support pushing OTLP metrics to an OpenTelemetry Collector.
 - [PR #2728](https://github.com/rqlite/rqlite/pull/2728): Console app supports quickly querying for first 100 rows of a table. Thanks @rodionlim
+- [PR #2741](https://github.com/rqlite/rqlite/pull/2741), [PR #2745](https://github.com/rqlite/rqlite/pull/2745): Add database query logging. Thanks @karangupta982
 
 ### Implementation changes and bug fixes
 - [PR #2718](https://github.com/rqlite/rqlite/pull/2718): Skip `systemctl daemon-reload` in package scripts when systemd is not running, fixing package installation inside chroots and containers. Thanks @TechBEK
@@ -14,7 +15,6 @@
 - [PR #2735](https://github.com/rqlite/rqlite/pull/2735): Enable "Section" in command-line flags configuration.
 - [PR #2742](https://github.com/rqlite/rqlite/pull/2742): `go mod` dependency updates, including updating SQLite to 3.53.4.
 - [PR #2743](https://github.com/rqlite/rqlite/pull/2735): ABL for end-to-end tests.
-- [PR #2741](https://github.com/rqlite/rqlite/pull/2741): Add Query logger for database layer. Thanks @karangupta982
 
 ## v10.2.7 (July 5th 2026)
 ### Implementation changes and bug fixes
