@@ -15,6 +15,7 @@
 - [PR #2743](https://github.com/rqlite/rqlite/pull/2735): ABL for end-to-end tests.
 - [PR #2715](https://github.com/rqlite/rqlite/pull/2715), [PR #2716](https://github.com/rqlite/rqlite/pull/2716), [PR #2733](https://github.com/rqlite/rqlite/pull/2733),  [PR #2748](https://github.com/rqlite/rqlite/pull/2748): Add infra for pushing OTLP metrics to an OpenTelemetry Collector.
 - [PR #2741](https://github.com/rqlite/rqlite/pull/2741), [PR #2745](https://github.com/rqlite/rqlite/pull/2745): Add query logging at database level. Thanks @karangupta982
+- [PR #2751](https://github.com/rqlite/rqlite/pull/2751): Add _CopyDir_ functionality to file utils.
 
 ## v10.2.7 (July 5th 2026)
 ### Implementation changes and bug fixes
