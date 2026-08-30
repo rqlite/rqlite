@@ -2635,7 +2635,13 @@ func (s *Store) fsmSnapshot() (fSnap raft.FSMSnapshot, retErr error) {
 	}()
 
 	var fsmSnapshot raft.FSMSnapshot
-	finalizer := s.createSnapshotFingerprint
+	finalizer := func(sink raft.SnapshotSink) error {
+		index, term, err := snapshot.SinkIndexTerm(sink)
+		if err != nil {
+			return err
+		}
+		return s.createSnapshotFingerprint(index, term)
+	}
 	if dueNext.IsFull() {
 		// We need to start the snapshoting process over again, starting with a full copy of the SQLite
 		// database. This happens when a node is snapshotting for the very first time, or in certain
@@ -2804,7 +2810,7 @@ func (s *Store) fsmRestore(rc io.ReadCloser) (retErr error) {
 	}
 	s.logger.Printf("successfully opened database at %s due to restore", s.db.Path())
 	// Installed SQLite database is safe for fast restarts again.
-	if err := s.createSnapshotFingerprint(); err != nil {
+	if err := s.createSnapshotFingerprint(0, 0); err != nil {
 		return fmt.Errorf("failed to create snapshot fingerprint post restore: %s", err)
 	}
 
@@ -3058,7 +3064,7 @@ func (s *Store) selfLeaderChange(leader bool) {
 	}
 }
 
-func (s *Store) createSnapshotFingerprint() error {
+func (s *Store) createSnapshotFingerprint(index, term uint64) error {
 	tmpFP := s.cleanSnapshotPath + ".tmp"
 	defer os.Remove(tmpFP)
 	mt, err := s.db.DBLastModified()
