@@ -19,6 +19,7 @@ import (
 	"github.com/rqlite/rqlite/v10/cluster"
 	"github.com/rqlite/rqlite/v10/http"
 	httpd "github.com/rqlite/rqlite/v10/http"
+	"github.com/rqlite/rqlite/v10/internal/fsutil"
 	"github.com/rqlite/rqlite/v10/internal/random"
 	"github.com/rqlite/rqlite/v10/proxy"
 	"github.com/rqlite/rqlite/v10/store"
@@ -1292,7 +1293,7 @@ func Test_SingleNodeUpgrades_NoSnapshots(t *testing.T) {
 		if err := os.Remove(destdir); err != nil {
 			t.Fatalf("failed to remove dest dir: %s", err)
 		}
-		if err := copyDir(srcdir, destdir); err != nil {
+		if err := fsutil.CopyDir(srcdir, destdir); err != nil {
 			t.Fatalf("failed to copy node test directory: %s", err)
 		}
 
@@ -1341,7 +1342,7 @@ func Test_SingleNodeUpgrades_Snapshots(t *testing.T) {
 		if err := os.Remove(destdir); err != nil {
 			t.Fatalf("failed to remove dest dir: %s", err)
 		}
-		if err := copyDir(srcdir, destdir); err != nil {
+		if err := fsutil.CopyDir(srcdir, destdir); err != nil {
 			t.Fatalf("failed to copy node test directory: %s", err)
 		}
 

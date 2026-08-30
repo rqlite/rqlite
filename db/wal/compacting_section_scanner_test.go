@@ -10,6 +10,7 @@ import (
 	"testing"
 
 	_ "github.com/mattn/go-sqlite3"
+	"github.com/rqlite/rqlite/v10/internal/fsutil"
 )
 
 func Test_CompactingFrameScanner_AllFrames(t *testing.T) {
@@ -550,7 +551,7 @@ func Test_CompactingFrameScanner_Bytes_FullCycle(t *testing.T) {
 	if err := os.Remove(tmpDir); err != nil {
 		t.Fatalf("failed to remove tmp dir: %s", err)
 	}
-	err := copyDir("testdata/compacting-scanner/full-cycle", tmpDir)
+	err := fsutil.CopyDir("testdata/compacting-scanner/full-cycle", tmpDir)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -621,7 +622,7 @@ func Test_CompactingFrameScanner_Writer_FullCycle(t *testing.T) {
 	if err := os.Remove(tmpDir); err != nil {
 		t.Fatalf("failed to remove tmp dir: %s", err)
 	}
-	err := copyDir("testdata/compacting-scanner/full-cycle", tmpDir)
+	err := fsutil.CopyDir("testdata/compacting-scanner/full-cycle", tmpDir)
 	if err != nil {
 		t.Fatal(err)
 	}
