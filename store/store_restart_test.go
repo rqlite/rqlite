@@ -688,3 +688,131 @@ func Test_Store_Restore_NoSnapshotOnClose_Snapshot(t *testing.T) {
 		t.Fatalf("expected snapshot skipped count to be 1")
 	}
 }
+
+// Test_Store_RestoreSnapshotAheadOfDB tests that a node does not fast-restart
+// with a SQLite file which is older than the newest snapshot in the Snapshot
+// Store. See https://github.com/rqlite/rqlite/issues/2747.
+//
+// Raft's InstallSnapshot makes a received snapshot durable and visible -- by
+// calling sink.Close() -- before handing it to the FSM to be restored. If that
+// restore never happens, because the node dies in that window or because opening
+// the snapshot fails, the Snapshot Store is left ahead of the SQLite file. The
+// clean-snapshot fingerprint records only the size, mod time and CRC32 of the
+// SQLite file, so it still matches, and on restart the node takes the fast-restart
+// path and adopts the index and term of the newest snapshot in the Snapshot Store
+// -- an index its database has never seen. Every row committed at or below that
+// index is then invisible and, because Raft comes up with lastApplied already at
+// that index, is never replayed.
+func Test_Store_RestoreSnapshotAheadOfDB(t *testing.T) {
+	// A node holding a row the node under test will never receive. Its FSM
+	// snapshot stands in for the snapshot a Leader would install.
+	src, srcLn := mustNewStore(t)
+	defer srcLn.Close()
+	src.NoSnapshotOnClose = true
+	if err := src.Open(); err != nil {
+		t.Fatalf("failed to open source store: %s", err.Error())
+	}
+	defer src.Close(true)
+	if err := src.Bootstrap(NewServer(src.ID(), src.Addr(), true)); err != nil {
+		t.Fatalf("failed to bootstrap source store: %s", err.Error())
+	}
+	if _, err := src.WaitForLeader(10 * time.Second); err != nil {
+		t.Fatalf("Error waiting for leader on source store: %s", err)
+	}
+	mustExecute(t, src, []string{
+		`CREATE TABLE foo (id INTEGER NOT NULL PRIMARY KEY, name TEXT)`,
+		`INSERT INTO foo(id, name) VALUES(1, "fiona")`,
+		`INSERT INTO foo(id, name) VALUES(2, "declan")`,
+	})
+
+	s, ln := mustNewStore(t)
+	defer ln.Close()
+	s.NoSnapshotOnClose = true
+	if err := s.Open(); err != nil {
+		t.Fatalf("failed to open single-node store: %s", err.Error())
+	}
+	if err := s.Bootstrap(NewServer(s.ID(), s.Addr(), true)); err != nil {
+		t.Fatalf("failed to bootstrap single-node store: %s", err.Error())
+	}
+	if _, err := s.WaitForLeader(10 * time.Second); err != nil {
+		t.Fatalf("Error waiting for leader: %s", err)
+	}
+	mustExecute(t, s, []string{
+		`CREATE TABLE foo (id INTEGER NOT NULL PRIMARY KEY, name TEXT)`,
+		`INSERT INTO foo(id, name) VALUES(1, "fiona")`,
+	})
+
+	// Snapshot the node, which writes its clean-snapshot fingerprint. The SQLite
+	// file and the newest snapshot in the Snapshot Store now agree with one another.
+	if err := s.Snapshot(0); err != nil {
+		t.Fatalf("failed to snapshot single-node store: %s", err.Error())
+	}
+	metas, err := s.snapshotStore.List()
+	if err != nil {
+		t.Fatalf("failed to list snapshots: %s", err.Error())
+	}
+	if len(metas) != 1 {
+		t.Fatalf("expected 1 snapshot in store, got %d", len(metas))
+	}
+	latest := metas[0]
+
+	// Install a newer snapshot into the Snapshot Store, without restoring it into
+	// the FSM. This leaves behind exactly what Raft's installSnapshot leaves behind
+	// when sink.Close() returns but the FSM restore which should follow it does not
+	// happen.
+	installIdx := latest.Index + 100
+	sink, err := s.snapshotStore.Create(latest.Version, installIdx, latest.Term,
+		latest.Configuration, latest.ConfigurationIndex, nil)
+	if err != nil {
+		t.Fatalf("failed to create snapshot sink: %s", err.Error())
+	}
+	installSnap, err := NewFSM(src).Snapshot()
+	if err != nil {
+		t.Fatalf("failed to snapshot source node: %s", err.Error())
+	}
+	if err := installSnap.Persist(sink); err != nil {
+		t.Fatalf("failed to persist installed snapshot: %s", err.Error())
+	}
+	installSnap.Release()
+	if err := sink.Close(); err != nil {
+		t.Fatalf("failed to close snapshot sink: %s", err.Error())
+	}
+
+	// Restart the node.
+	if err := s.Close(true); err != nil {
+		t.Fatalf("failed to close single-node store: %s", err.Error())
+	}
+	if err := s.Open(); err != nil {
+		t.Fatalf("failed to reopen single-node store: %s", err.Error())
+	}
+	defer s.Close(true)
+	if _, err := s.WaitForLeader(10 * time.Second); err != nil {
+		t.Fatalf("Error waiting for leader: %s", err)
+	}
+
+	// The node adopts installIdx as its FSM and database applied index, so every
+	// row in the snapshot at that index must actually be in its database.
+	if got, exp := s.DBAppliedIndex(), installIdx; got < exp {
+		t.Fatalf("wrong DB applied index after restart, got: %d, exp at least %d", got, exp)
+	}
+	qr := queryRequestFromString("SELECT * FROM foo", false, false, false)
+	qr.Level = command.ConsistencyLevel_STRONG
+	r, _, _, err := s.Query(context.Background(), qr)
+	if err != nil {
+		t.Fatalf("failed to query single node: %s", err.Error())
+	}
+	exp := `[{"columns":["id","name"],"types":["integer","text"],"values":[[1,"fiona"],[2,"declan"]]}]`
+	if got := asJSON(r); exp != got {
+		t.Fatalf("node is hiding rows committed at or below its own applied index of %d\nexp: %s\ngot: %s",
+			installIdx, exp, got)
+	}
+
+	// The snapshot was never restored into the FSM, so the fast-restart path must
+	// have been declined and a full restore performed instead.
+	if exp, got := uint64(1), s.numSnapshotsStart.Load(); exp != got {
+		t.Fatalf("expected snapshot start count to be %d, got %d", exp, got)
+	}
+	if exp, got := uint64(0), s.numSnapshotsSkipped.Load(); exp != got {
+		t.Fatalf("expected snapshot skipped count to be %d, got %d", exp, got)
+	}
+}

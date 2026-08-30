@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"net"
 	"os"
 	"path/filepath"
@@ -16,6 +17,7 @@ import (
 	"github.com/rqlite/rqlite/v10/db"
 	"github.com/rqlite/rqlite/v10/http"
 	"github.com/rqlite/rqlite/v10/queue"
+	"github.com/rqlite/rqlite/v10/snapshot"
 	"github.com/rqlite/rqlite/v10/store"
 	"github.com/rqlite/rqlite/v10/tcp"
 )
@@ -2375,4 +2377,157 @@ func Test_ClusterLeader_Stepdown(t *testing.T) {
 		}
 		return ldrNode.Addr != node.Addr, nil
 	}, time.Second, 10*time.Second)
+}
+
+// Test_MultiNodeCluster_SnapshotAheadOfDB tests that a node which restarts with a
+// snapshot in its Snapshot Store that was never restored into its FSM does not come
+// back up serving reads from a database which predates that snapshot.
+// See https://github.com/rqlite/rqlite/issues/2747.
+//
+// Raft's InstallSnapshot makes a received snapshot durable and visible -- by calling
+// sink.Close() -- before handing it to the FSM to be restored. If the node dies in
+// that window, or the restore fails, the Snapshot Store is left ahead of the SQLite
+// file, which is the state set up here. The clean-snapshot fingerprint records only
+// the size, mod time and CRC32 of the SQLite file, so it still matches, and on restart
+// the node takes the fast-restart path and adopts the index of a snapshot it never
+// restored. Rows committed at or below that index are missing from its database and,
+// since Raft comes up with lastApplied already at that index, are never replayed, so
+// reads served locally silently return incomplete results.
+func Test_MultiNodeCluster_SnapshotAheadOfDB(t *testing.T) {
+	raftDialer := tcp.NewDialer(cluster.MuxRaftHeader, nil)
+	clstrDialer := tcp.NewDialer(cluster.MuxClusterHeader, nil)
+
+	leader := mustNewLeaderNode("leader")
+	defer leader.Deprovision()
+
+	// The victim follower gets its own mux so it can later be restarted on the
+	// same Raft address.
+	mux2, ln2 := mustNewOpenMux("")
+	node2 := mustNodeEncrypted("node2", mustTempDir("node2"), false, false, mux2, raftDialer, clstrDialer)
+	if err := node2.Join(leader); err != nil {
+		t.Fatalf("node failed to join leader: %s", err.Error())
+	}
+	if _, err := node2.WaitForLeader(); err != nil {
+		t.Fatalf("failed waiting for leader: %s", err.Error())
+	}
+
+	// A third voter, so that the cluster keeps quorum while the victim is down.
+	node3 := mustNewNode("node3", false)
+	defer node3.Deprovision()
+	if err := node3.Join(leader); err != nil {
+		t.Fatalf("node failed to join leader: %s", err.Error())
+	}
+	if _, err := node3.WaitForLeader(); err != nil {
+		t.Fatalf("failed waiting for leader: %s", err.Error())
+	}
+
+	if _, err := leader.Execute(`CREATE TABLE foo (id integer not null primary key, name text)`); err != nil {
+		t.Fatalf("failed to create table: %s", err.Error())
+	}
+	if _, err := leader.Execute(`INSERT INTO foo(id, name) VALUES(1, "fiona")`); err != nil {
+		t.Fatalf("failed to insert record: %s", err.Error())
+	}
+	testPoll(t, func() (bool, error) {
+		r, err := node2.QueryNoneConsistency(`SELECT COUNT(*) FROM foo`)
+		if err != nil {
+			return false, err
+		}
+		return r == `{"results":[{"columns":["COUNT(*)"],"types":["integer"],"values":[[1]]}]}`, nil
+	}, 50*time.Millisecond, 10*time.Second)
+
+	// Shut the follower down cleanly, which snapshots it and writes its clean-snapshot
+	// fingerprint. Its SQLite file and the newest snapshot in its Snapshot Store now
+	// agree with one another.
+	followerDir, followerRaftAddr := node2.Dir, node2.RaftAddr
+	if err := node2.Close(true); err != nil {
+		t.Fatalf("failed to close follower: %s", err.Error())
+	}
+	ln2.Close()
+
+	// The cluster commits another row while the follower is down.
+	if _, err := leader.Execute(`INSERT INTO foo(id, name) VALUES(2, "declan")`); err != nil {
+		t.Fatalf("failed to insert record: %s", err.Error())
+	}
+
+	// Install the Leader's state into the follower's Snapshot Store, at the index the
+	// Leader has actually reached, but without restoring it into the follower's FSM.
+	leaderDB := mustTempFile()
+	defer os.Remove(leaderDB)
+	if err := leader.Backup(leaderDB, false, ""); err != nil {
+		t.Fatalf("failed to back up leader: %s", err.Error())
+	}
+	installIdx := leader.Store.DBAppliedIndex()
+	// "wsnapshots" is the Snapshot Store directory name used by the store package.
+	mustInstallSnapshotUnrestored(t, filepath.Join(followerDir, "wsnapshots"), leaderDB, installIdx)
+
+	// Restart the follower.
+	mux4, ln4 := mustNewOpenMux(followerRaftAddr)
+	defer ln4.Close()
+	node4 := mustNodeEncrypted("node2", followerDir, false, false, mux4, raftDialer, clstrDialer)
+	defer node4.Deprovision()
+	if _, err := node4.WaitForLeader(); err != nil {
+		t.Fatalf("failed waiting for leader after restart: %s", err.Error())
+	}
+
+	// The restarted node reports having applied installIdx, so a read served from its
+	// own database must return every row committed at or below that index.
+	if got, exp := node4.Store.DBAppliedIndex(), installIdx; got < exp {
+		t.Fatalf("restarted node has DB applied index of %d, expected at least %d", got, exp)
+	}
+	r, err := node4.QueryNoneConsistency(`SELECT * FROM foo`)
+	if err != nil {
+		t.Fatalf("failed to query restarted node: %s", err.Error())
+	}
+	exp := `{"results":[{"columns":["id","name"],"types":["integer","text"],"values":[[1,"fiona"],[2,"declan"]]}]}`
+	if exp != r {
+		t.Fatalf("restarted node is hiding rows committed at or below its own applied index of %d\nexp: %s\ngot: %s",
+			installIdx, exp, r)
+	}
+}
+
+// mustInstallSnapshotUnrestored writes the SQLite file at dbPath into the Snapshot
+// Store at snapDir, as a full snapshot at the given index. This is what Raft's
+// installSnapshot does, up to and including making the snapshot durable and visible,
+// but with no FSM restore following it.
+func mustInstallSnapshotUnrestored(t *testing.T, snapDir, dbPath string, index uint64) {
+	t.Helper()
+	str, err := snapshot.NewStore(snapDir)
+	if err != nil {
+		t.Fatalf("failed to open snapshot store: %s", err.Error())
+	}
+	defer str.Close()
+
+	metas, err := str.List()
+	if err != nil {
+		t.Fatalf("failed to list snapshots: %s", err.Error())
+	}
+	if len(metas) != 1 {
+		t.Fatalf("expected 1 snapshot in store, got %d", len(metas))
+	}
+	latest := metas[0]
+	if index <= latest.Index {
+		t.Fatalf("install index %d is not ahead of newest snapshot index %d", index, latest.Index)
+	}
+
+	sink, err := str.Create(latest.Version, index, latest.Term, latest.Configuration,
+		latest.ConfigurationIndex, nil)
+	if err != nil {
+		t.Fatalf("failed to create snapshot sink: %s", err.Error())
+	}
+	streamer, err := snapshot.NewSnapshotStreamer(dbPath)
+	if err != nil {
+		t.Fatalf("failed to create snapshot streamer: %s", err.Error())
+	}
+	if err := streamer.Open(); err != nil {
+		t.Fatalf("failed to open snapshot streamer: %s", err.Error())
+	}
+	if _, err := io.Copy(sink, streamer); err != nil {
+		t.Fatalf("failed to write installed snapshot to sink: %s", err.Error())
+	}
+	if err := streamer.Close(); err != nil {
+		t.Fatalf("failed to close snapshot streamer: %s", err.Error())
+	}
+	if err := sink.Close(); err != nil {
+		t.Fatalf("failed to close snapshot sink: %s", err.Error())
+	}
 }

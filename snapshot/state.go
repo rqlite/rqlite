@@ -2,11 +2,15 @@ package snapshot
 
 import (
 	"expvar"
+	"fmt"
 	"io"
 	"log"
+	"os"
+	"path/filepath"
 	"time"
 
 	"github.com/hashicorp/raft"
+	"github.com/rqlite/rqlite/v10/internal/fsutil"
 	"github.com/rqlite/rqlite/v10/internal/progress"
 )
 
@@ -23,6 +27,117 @@ func LatestIndexTerm(dir string) (uint64, uint64, error) {
 		return 0, 0, nil
 	}
 	return newest.raftMeta.Index, newest.raftMeta.Term, nil
+}
+
+// Clone copies the snapshot located in dir, and indicated by id, and
+// installs it in dir, but with the new index and term.
+//
+// The data files, and their CRC32 sidecars, are copied verbatim, so the clone
+// holds exactly the database state of the snapshot it was made from -- only its
+// identity changes. A clone is therefore of the same type, Full or Incremental,
+// as its source.
+//
+// Clone exists for testing: it makes it possible to build a Snapshot Store
+// holding a snapshot at an arbitrary index without driving a node to that index
+// first. Clone returns an error if a snapshot with the resulting ID already
+// exists, so it never overwrites one.
+func Clone(dir, id string, index, term uint64) error {
+	srcPath := filepath.Join(dir, id)
+	if !fsutil.DirExists(srcPath) {
+		return fmt.Errorf("snapshot %q not found in %q", id, dir)
+	}
+	meta, err := readRaftMeta(metaPath(srcPath))
+	if err != nil {
+		return fmt.Errorf("reading meta of snapshot %q: %w", id, err)
+	}
+
+	newID := snapshotName(term, index)
+	dstPath := filepath.Join(dir, newID)
+	if fsutil.PathExists(dstPath) {
+		return fmt.Errorf("snapshot %q already exists in %q", newID, dir)
+	}
+
+	// Build the clone under a temporary name, so a partially-written copy is
+	// never picked up by a scan of the Snapshot Store.
+	tmpPath := tmpName(dstPath)
+	if err := os.RemoveAll(tmpPath); err != nil {
+		return fmt.Errorf("removing stale temporary directory %q: %w", tmpPath, err)
+	}
+	defer os.RemoveAll(tmpPath)
+	if err := copySnapshotDir(srcPath, tmpPath); err != nil {
+		return fmt.Errorf("copying snapshot %q: %w", id, err)
+	}
+
+	// Only the metadata needs rewriting: the data files are unchanged, so their
+	// CRC32 sidecars remain correct.
+	meta.ID = newID
+	meta.Index = index
+	meta.Term = term
+	if err := writeMeta(tmpPath, meta); err != nil {
+		return fmt.Errorf("writing meta of snapshot %q: %w", newID, err)
+	}
+
+	if err := fsutil.SyncDirMaybe(tmpPath); err != nil {
+		return err
+	}
+	if err := os.Rename(tmpPath, dstPath); err != nil {
+		return fmt.Errorf("renaming snapshot %q into place: %w", newID, err)
+	}
+	return fsutil.SyncDirMaybe(dir)
+}
+
+// copySnapshotDir copies the contents of the snapshot directory src to dst,
+// which must not already exist. A snapshot directory holds only regular files,
+// so anything else encountered is reported as an error rather than skipped.
+func copySnapshotDir(src, dst string) error {
+	entries, err := os.ReadDir(src)
+	if err != nil {
+		return err
+	}
+	if err := os.MkdirAll(dst, 0755); err != nil {
+		return err
+	}
+
+	for _, entry := range entries {
+		if !entry.Type().IsRegular() {
+			return fmt.Errorf("unexpected non-regular file %q in snapshot directory %q",
+				entry.Name(), src)
+		}
+		if err := copySnapshotFile(filepath.Join(src, entry.Name()),
+			filepath.Join(dst, entry.Name())); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// copySnapshotFile copies the file at src to dst, preserving its mode, and
+// syncs the result to disk.
+func copySnapshotFile(src, dst string) (retErr error) {
+	sf, err := os.Open(src)
+	if err != nil {
+		return err
+	}
+	defer sf.Close()
+
+	info, err := sf.Stat()
+	if err != nil {
+		return err
+	}
+	df, err := os.OpenFile(dst, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, info.Mode())
+	if err != nil {
+		return err
+	}
+	defer func() {
+		if err := df.Close(); err != nil && retErr == nil {
+			retErr = err
+		}
+	}()
+
+	if _, err := io.Copy(df, sf); err != nil {
+		return err
+	}
+	return df.Sync()
 }
 
 // StateReader represents a snapshot of the database state.
