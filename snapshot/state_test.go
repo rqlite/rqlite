@@ -58,6 +58,10 @@ func Test_Snapshot_Clone(t *testing.T) {
 	}
 	defer store.Close()
 
+	if err := Clone(dir, "non-existent", 2000, 100); err == nil {
+		t.Fatal("expected error cloning non-existent snapshot")
+	}
+
 	// Create a single snapshot, List should return it.
 	createSnapshotInStore(t, store, "2-1017-1704807719996", 1017, 2, 1, "testdata/db-and-wals/backup.db")
 	snaps, err := store.List()
