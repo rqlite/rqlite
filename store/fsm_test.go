@@ -8,21 +8,25 @@ import (
 )
 
 func Test_FSMSnapshot_Finalizer(t *testing.T) {
-	finalizerCalled := false
+	var finalizerSink raft.SnapshotSink
+	sink := &mockSnapshotSink{}
 	f := FSMSnapshot{
-		Finalizer: func() error {
-			finalizerCalled = true
+		Finalizer: func(s raft.SnapshotSink) error {
+			finalizerSink = s
 			return nil
 		},
 		FSMSnapshot: &mockRaftSnapshot{},
 		logger:      nil,
 	}
 
-	if err := f.Persist(&mockSnapshotSink{}); err != nil {
+	if err := f.Persist(sink); err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	if !finalizerCalled {
+	if finalizerSink == nil {
 		t.Fatalf("finalizer was not called")
+	}
+	if finalizerSink != raft.SnapshotSink(sink) {
+		t.Fatalf("finalizer was not passed the sink given to Persist")
 	}
 }
 

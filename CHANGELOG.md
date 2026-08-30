@@ -17,6 +17,7 @@
 - [PR #2741](https://github.com/rqlite/rqlite/pull/2741), [PR #2745](https://github.com/rqlite/rqlite/pull/2745): Add query logging at database level. Thanks @karangupta982
 - [PR #2751](https://github.com/rqlite/rqlite/pull/2751): Add _CopyDir_ functionality to file utils.
 - [PR #2752](https://github.com/rqlite/rqlite/pull/2752): Add ability to clone Snapshots, primarily for testing purposes.
+- [PR #2753](https://github.com/rqlite/rqlite/pull/2753): The clean-snapshot marker now records the Raft index and term of the Snapshot the SQLite database corresponds to. A node therefore no longer fast-restarts with a database which does not match the newest Snapshot in its Snapshot Store, which could previously result in the node hiding committed rows. Each node performs a single full restore from its Snapshot Store on its first start after upgrading. Fixes issue [#2747](https://github.com/rqlite/rqlite/issues/2747). Thanks @rohanpadhye
 
 ## v10.2.7 (July 5th 2026)
 ### Implementation changes and bug fixes

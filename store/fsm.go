@@ -41,8 +41,11 @@ func (f *FSM) Restore(rc io.ReadCloser) error {
 // FSMSnapshot is a wrapper around raft.FSMSnapshot which adds an optional
 // Finalizer, instrumentation, and logging.
 type FSMSnapshot struct {
-	Type      snapshot.Type
-	Finalizer func() error
+	Type snapshot.Type
+	// Finalizer, if set, is called once the snapshot has been persisted to the
+	// sink. It is passed the sink so that any record it makes of the snapshot
+	// can be tied to the index and term the snapshot was captured at.
+	Finalizer func(sink raft.SnapshotSink) error
 	OnRelease func(invoked, succeeded bool)
 
 	raft.FSMSnapshot
@@ -74,7 +77,7 @@ func (f *FSMSnapshot) Persist(sink raft.SnapshotSink) (retError error) {
 		return err
 	}
 	if f.Finalizer != nil {
-		return f.Finalizer()
+		return f.Finalizer(sink)
 	}
 	return nil
 }

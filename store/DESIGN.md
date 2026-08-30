@@ -77,12 +77,19 @@ The clean-snapshot fingerprint is the optimization that makes this skip safe. Af
 - The SQLite file's modification time
 - Its size
 - Its CRC32
+- The Raft index and term of the snapshot the file corresponds to
 
-On `Open`, the Store checks for this file. If it exists, the SQLite file's mtime and size still match, and the snapshot store has at least one snapshot, the Store sets `raftConfig.NoSnapshotRestoreOnStart = true` — telling Raft to bring up the FSM without re-restoring from the snapshot. The local SQLite file is reused as-is.
+On `Open`, the Store checks for this file. If it exists, the SQLite file's mtime and size still match, and the recorded index and term are those of the newest snapshot in the snapshot store, the Store sets `raftConfig.NoSnapshotRestoreOnStart = true` — telling Raft to bring up the FSM without re-restoring from the snapshot. The local SQLite file is reused as-is.
+
+The index and term matter as much as the state of the file itself. Raft's `InstallSnapshot` makes a received snapshot durable and visible — `sink.Close()` — *before* handing it to the FSM to be restored, so a crash or a failed restore in that window leaves the snapshot store ahead of the SQLite file, with the fingerprint still describing that file perfectly. Recording only the file's own state, the node would take the fast path and adopt an index its database has never seen, hiding every row committed at or below it; since `NoSnapshotRestoreOnStart` also stops Raft replaying the log below that index, nothing would ever repair it. The drift runs the other way too: a snapshot which is fingerprinted but never becomes visible in the store leaves the SQLite file *ahead* of the store, and Raft would replay entries the database has already applied. Requiring an exact match on index and term declines the fast path in both cases, at the cost of one restore. See [issue #2747](https://github.com/rqlite/rqlite/issues/2747).
+
+The fingerprint is written by the `FSMSnapshot` finalizer, which Raft invokes at the end of `Persist` — before `sink.Close()`, and therefore before the new snapshot is visible in the snapshot store. The index and term cannot be looked up there, so they are taken from the sink Raft passed to `Persist`, via `snapshot.SinkIndexTerm`. On the restore path `fsmRestore` uses the index and term it is itself adopting.
 
 The CRC32 check is more expensive (it has to read the whole file), so it runs asynchronously in a goroutine after `Open` returns. While that goroutine is running, snapshotting is blocked by `snapshotCAS` so the file is not modified mid-CRC. If the CRC mismatches, the process logs a fatal error and exits — the node is in an unrecoverable state and the cluster's redundancy is supposed to provide the fault tolerance.
 
 Any code path that invalidates the SQLite file relative to the snapshot store — `fsmRestore`, `RecoverNode`, `Load`, manual swap — removes the fingerprint file before swapping. On the next restart, the absence of the fingerprint forces a normal snapshot-restore. The optimization is opt-in by design: only a *clean* shutdown after a successful snapshot enables the fast path.
+
+A fingerprint written by a version which did not record the index and term has both set to zero, so it never matches. Every node therefore performs one full restore on its first startup after upgrading to a version which records them.
 
 ## State and Locks
 

@@ -423,3 +423,31 @@ func asJSON(v any) string {
 	}
 	return string(b)
 }
+
+func Test_SinkIndexTerm(t *testing.T) {
+	sink := NewSink(t.TempDir(), makeRaftMeta("test-index-term", 100, 3, 1), nil, nil)
+	index, term, err := SinkIndexTerm(sink)
+	if err != nil {
+		t.Fatalf("unexpected error getting index and term of sink: %s", err.Error())
+	}
+	if exp, got := uint64(100), index; exp != got {
+		t.Fatalf("wrong index, exp %d, got %d", exp, got)
+	}
+	if exp, got := uint64(3), term; exp != got {
+		t.Fatalf("wrong term, exp %d, got %d", exp, got)
+	}
+}
+
+func Test_SinkIndexTerm_NotIndexTermer(t *testing.T) {
+	if _, _, err := SinkIndexTerm(&testSnapshotSink{}); err == nil {
+		t.Fatalf("expected error from sink which does not know its index and term")
+	}
+}
+
+// testSnapshotSink implements raft.SnapshotSink and nothing more.
+type testSnapshotSink struct{}
+
+func (t *testSnapshotSink) Write(p []byte) (int, error) { return len(p), nil }
+func (t *testSnapshotSink) Close() error                { return nil }
+func (t *testSnapshotSink) ID() string                  { return "test" }
+func (t *testSnapshotSink) Cancel() error               { return nil }

@@ -647,9 +647,24 @@ func (s *Store) Open() (retErr error) {
 			s.logger.Printf("failed to read mod time from clean snapshot (%s), performing full restore", err)
 			return nil
 		}
+		li, tm, err := snapshotStore.LatestIndexTerm()
+		if err != nil {
+			s.logger.Printf("failed to retrieve latest snapshot index/term (%s), performing full restore", err)
+			return nil
+		}
 
-		if !mt.Equal(fp.ModTime) || sz != fp.Size {
-			s.logger.Printf("clean snapshot failed mod time and size check, full restore needed")
+		// The SQLite file must be unchanged since it was fingerprinted, and must be the
+		// file which corresponds to the newest snapshot in the Snapshot Store. If the
+		// Store has moved on without the SQLite file moving with it, then a snapshot
+		// reached the Store but was never restored into the FSM, and taking the fast
+		// path would mean coming up at an index this database has never seen.
+		if fp.Index == 0 && fp.Term == 0 {
+			s.logger.Printf("clean snapshot predates recording of snapshot index and term, full restore needed")
+			return nil
+		}
+		if !fp.ValidFor(mt, sz, li, tm) {
+			s.logger.Printf("clean snapshot check failed, full restore needed (%s, database file mod time: %s, size: %d, newest snapshot index: %d, term: %d)",
+				fp, mt, sz, li, tm)
 			return nil
 		}
 
@@ -703,10 +718,6 @@ func (s *Store) Open() (retErr error) {
 		s.logger.Printf("detected successful prior snapshot operation, skipping restore")
 		raftConfig.NoSnapshotRestoreOnStart = true
 		removeDBFiles = false
-		li, tm, err := snapshotStore.LatestIndexTerm()
-		if err != nil {
-			return fmt.Errorf("failed to retrieve latest snapshot index/term: %s", err)
-		}
 		s.fsmIdx.Store(li)
 		s.fsmTerm.Store(tm)
 		s.dbAppliedIdx.Store(li)
@@ -2635,7 +2646,17 @@ func (s *Store) fsmSnapshot() (fSnap raft.FSMSnapshot, retErr error) {
 	}()
 
 	var fsmSnapshot raft.FSMSnapshot
-	finalizer := s.createSnapshotFingerprint
+	// The fingerprint must record the index and term of the snapshot now being
+	// created, so that a restart can tell whether the SQLite file on disk is the
+	// one this snapshot was made from. Raft passes the sink to Persist, and the
+	// sink knows what it is capturing.
+	finalizer := func(sink raft.SnapshotSink) error {
+		index, term, err := snapshot.SinkIndexTerm(sink)
+		if err != nil {
+			return fmt.Errorf("failed to determine index and term of snapshot: %w", err)
+		}
+		return s.createSnapshotFingerprint(index, term)
+	}
 	if dueNext.IsFull() {
 		// We need to start the snapshoting process over again, starting with a full copy of the SQLite
 		// database. This happens when a node is snapshotting for the very first time, or in certain
@@ -2803,10 +2824,6 @@ func (s *Store) fsmRestore(rc io.ReadCloser) (retErr error) {
 		return fmt.Errorf("error swapping database file: %v", err)
 	}
 	s.logger.Printf("successfully opened database at %s due to restore", s.db.Path())
-	// Installed SQLite database is safe for fast restarts again.
-	if err := s.createSnapshotFingerprint(); err != nil {
-		return fmt.Errorf("failed to create snapshot fingerprint post restore: %s", err)
-	}
 
 	// Take conservative approach and assume that everything has changed, so update
 	// the indexes. It is possible that dbAppliedIdx is now ahead of some other nodes'
@@ -2817,6 +2834,14 @@ func (s *Store) fsmRestore(rc io.ReadCloser) (retErr error) {
 	if err != nil {
 		return fmt.Errorf("failed to get latest snapshot index post restore: %s", err)
 	}
+
+	// Installed SQLite database is safe for fast restarts again. It is fingerprinted
+	// against the very index and term the node is adopting here, so that a restart
+	// can tell that the two still correspond to one another.
+	if err := s.createSnapshotFingerprint(li, tm); err != nil {
+		return fmt.Errorf("failed to create snapshot fingerprint post restore: %s", err)
+	}
+
 	s.fsmIdx.Store(li)
 	s.fsmTarget.Signal(li)
 	s.fsmTerm.Store(tm)
@@ -3058,7 +3083,11 @@ func (s *Store) selfLeaderChange(leader bool) {
 	}
 }
 
-func (s *Store) createSnapshotFingerprint() error {
+// createSnapshotFingerprint writes the clean-snapshot marker file, recording the
+// state of the SQLite file on disk along with the index and term of the snapshot
+// that file corresponds to. On restart the marker tells the node whether it can
+// use the SQLite file as-is -- see FileFingerprint.ValidFor.
+func (s *Store) createSnapshotFingerprint(index, term uint64) error {
 	tmpFP := s.cleanSnapshotPath + ".tmp"
 	defer os.Remove(tmpFP)
 	mt, err := s.db.DBLastModified()
@@ -3080,6 +3109,8 @@ func (s *Store) createSnapshotFingerprint() error {
 		ModTime: mt,
 		Size:    sz,
 		CRC32:   sum,
+		Index:   index,
+		Term:    term,
 	}
 	if err := fp.WriteToFile(tmpFP); err != nil {
 		return fmt.Errorf("failed to write snapshot fingerprint to temp file: %s", err)
