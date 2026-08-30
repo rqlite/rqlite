@@ -984,6 +984,90 @@ func Test_Store_Reap(t *testing.T) {
 
 }
 
+// Test_Store_ReapNoOpRename is a regression test for the case where the reap
+// plan's final rename is a no-op (source and destination are the same
+// directory). This happens when the newest snapshot has no incremental
+// snapshots on top of it (so it plans to rename itself to itself) and the
+// millisecond-resolution timestamp component of the recomputed name happens
+// to match the one already in its own name -- which is guaranteed here since
+// we give it an explicit ID and, within a single goroutine with no blocking
+// calls, consecutive time.Now() calls return the same instant.
+//
+// Before the fix, planning this rename unconditionally meant the persisted
+// plan always contained a Src == Dst rename. On platforms where renaming a
+// directory onto itself returns an error (observed on Linux, though not
+// reproducible with os.Rename on Windows, which is why this test asserts on
+// the planned operations rather than a platform-specific rename failure),
+// that made the reap plan permanently un-completable: Checker.RenameDone
+// never sees the source disappear, so a resumed plan fails identically on
+// every restart.
+func Test_Store_ReapNoOpRename(t *testing.T) {
+	dir := t.TempDir()
+	store, err := NewStore(dir)
+	if err != nil {
+		t.Fatalf("Failed to create new store: %v", err)
+	}
+	defer store.Close()
+
+	// An older snapshot for the reap to discard.
+	createSnapshotInStore(t, store, "2-1017-1704807719996", 1017, 2, 1, "testdata/db-and-wals/backup.db")
+
+	// The newest snapshot already has its own bundled, not-yet-checkpointed WAL
+	// file -- the state a node is in immediately after receiving a snapshot
+	// from the leader -- and no incremental snapshot follows it. Its ID's
+	// timestamp component is fixed to whatever time.Now() yields right now, so
+	// that the ID snapshotName() recomputes during reap collides with it.
+	now := time.Now()
+	msec := now.UnixNano() / int64(time.Millisecond)
+	fullID := fmt.Sprintf("2-1131-%d", msec)
+	createSnapshotInStore(t, store, fullID, 1131, 2, 1, "testdata/db-and-wals/backup.db", "testdata/db-and-wals/wal-00")
+
+	n, c, err := store.Reap()
+	if err != nil {
+		t.Fatalf("Failed to reap snapshots: %v", err)
+	}
+	if exp, got := 1, n; exp != got {
+		t.Fatalf("Expected %d snapshots reaped, got %d", exp, got)
+	}
+	if exp, got := 1, c; exp != got {
+		t.Fatalf("Expected %d checkpoints made, got %d", exp, got)
+	}
+
+	snaps := mustListSnapshots(t, store)
+	if exp, got := 1, len(snaps); exp != got {
+		t.Fatalf("Expected %d snapshot in destination store, got %d", exp, got)
+	}
+
+	// Confirm the persisted plan (if any is still on disk) never contains a
+	// Src == Dst rename, regardless of what the underlying OS does with one.
+	if p, err := plan.ReadFromFile(store.reapPlanPath); err == nil {
+		for _, op := range p.Ops {
+			if op.Type == plan.OpRename && op.Src == op.Dst {
+				t.Fatalf("plan contains a no-op rename: %+v", op)
+			}
+		}
+	}
+
+	// The reap must actually have completed and produced valid, queryable data,
+	// not merely returned without error.
+	_, rc, err := store.Open(snaps[0].ID)
+	if err != nil {
+		t.Fatalf("Failed to open snapshot in destination store: %v", err)
+	}
+	buf := &bytes.Buffer{}
+	if _, err := io.Copy(buf, rc); err != nil {
+		t.Fatalf("Failed to read snapshot data from destination store: %v", err)
+	}
+	if err := rc.Close(); err != nil {
+		t.Fatalf("Failed to close snapshot reader in destination store: %v", err)
+	}
+	dbPath, _ := persistStreamerData(t, buf)
+	rows := mustQueryDB(t, dbPath, "SELECT COUNT(*) FROM foo")
+	if exp, got := `[{"columns":["COUNT(*)"],"types":["integer"],"values":[[1]]}]`, rows; exp != got {
+		t.Fatalf("unexpected results for query exp: %s got: %s", exp, got)
+	}
+}
+
 func Test_Store_ReapCorruptDB(t *testing.T) {
 	dir := t.TempDir()
 	store, err := NewStore(dir)

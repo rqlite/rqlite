@@ -642,8 +642,20 @@ func (s *Store) reapInternal() (int, int, error) {
 		// 7. Rename to new snapshot name. The end result of the Reaping process
 		// will be a new full snapshot with a new ID. That ID is generated from
 		// the newest snapshot's index and term, and the current timestamp.
+		//
+		// Skip the rename if it would be a no-op. This happens when there are no
+		// incremental snapshots newer than full (so newest == full) and the
+		// millisecond-resolution timestamp component of newID happens to match the
+		// one already in full's name -- e.g. because less than a millisecond
+		// elapsed since full was named, or the wall clock stepped backwards. In
+		// that case os.Rename fails with EEXIST since source == destination, and
+		// since the rename is persisted in the plan, every future restart replays
+		// the same failing rename forever (see checker.RenameDone, which never
+		// considers a Src == Dst rename done).
 		finalDir := filepath.Join(s.dir, newID)
-		p.AddRename(full.path, finalDir)
+		if full.path != finalDir {
+			p.AddRename(full.path, finalDir)
+		}
 	}
 
 	// Persist the plan to disk for crash recovery.
