@@ -99,6 +99,16 @@ func (s *Sink) ID() string {
 	return s.meta.ID
 }
 
+// Index returns the Raft Index the Snapshot is being captured at.
+func (s *Sink) Index() uint64 {
+	return s.meta.Index
+}
+
+// Term returns the Raft Term the Snapshot is being captured at.
+func (s *Sink) Term() uint64 {
+	return s.meta.Term
+}
+
 // Write writes snapshot data to the sink.
 //
 // If the sink is handling a Full snapshot, this function writes the data to
