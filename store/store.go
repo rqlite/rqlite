@@ -2809,10 +2809,6 @@ func (s *Store) fsmRestore(rc io.ReadCloser) (retErr error) {
 		return fmt.Errorf("error swapping database file: %v", err)
 	}
 	s.logger.Printf("successfully opened database at %s due to restore", s.db.Path())
-	// Installed SQLite database is safe for fast restarts again.
-	if err := s.createSnapshotFingerprint(0, 0); err != nil {
-		return fmt.Errorf("failed to create snapshot fingerprint post restore: %s", err)
-	}
 
 	// Take conservative approach and assume that everything has changed, so update
 	// the indexes. It is possible that dbAppliedIdx is now ahead of some other nodes'
@@ -2823,6 +2819,14 @@ func (s *Store) fsmRestore(rc io.ReadCloser) (retErr error) {
 	if err != nil {
 		return fmt.Errorf("failed to get latest snapshot index post restore: %s", err)
 	}
+
+	// Installed SQLite database is safe for fast restarts again. It is fingerprinted
+	// against the very index and term the node is adopting here, so that a restart
+	// can tell that the two still correspond to one another.
+	if err := s.createSnapshotFingerprint(li, tm); err != nil {
+		return fmt.Errorf("failed to create snapshot fingerprint post restore: %s", err)
+	}
+
 	s.fsmIdx.Store(li)
 	s.fsmTarget.Signal(li)
 	s.fsmTerm.Store(tm)
