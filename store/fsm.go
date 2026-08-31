@@ -42,7 +42,7 @@ func (f *FSM) Restore(rc io.ReadCloser) error {
 // Finalizer, instrumentation, and logging.
 type FSMSnapshot struct {
 	Type      snapshot.Type
-	Finalizer func() error
+	Finalizer func(sink raft.SnapshotSink) error
 	OnRelease func(invoked, succeeded bool)
 
 	raft.FSMSnapshot
@@ -74,7 +74,7 @@ func (f *FSMSnapshot) Persist(sink raft.SnapshotSink) (retError error) {
 		return err
 	}
 	if f.Finalizer != nil {
-		return f.Finalizer()
+		return f.Finalizer(sink)
 	}
 	return nil
 }

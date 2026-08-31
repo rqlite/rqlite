@@ -873,6 +873,14 @@ func (m *mockSnapshotSink) ID() string {
 	return "1"
 }
 
+func (m *mockSnapshotSink) Index() uint64 {
+	return 1
+}
+
+func (m *mockSnapshotSink) Term() uint64 {
+	return 1
+}
+
 func (m *mockSnapshotSink) Cancel() error {
 	return nil
 }

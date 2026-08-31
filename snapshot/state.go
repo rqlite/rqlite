@@ -128,3 +128,23 @@ func (s *StateReader) Release() {
 	// whether the snapshot is persisted or not.
 	s.rc.Close()
 }
+
+// IndexTermer is implemented by a snapshot sink which knows the Raft index and
+// term of the snapshot it is capturing. Sink implements it.
+type IndexTermer interface {
+	Index() uint64
+	Term() uint64
+}
+
+// SinkIndexTerm returns the Raft index and term of the snapshot the given sink is
+// capturing. Raft's SnapshotSink interface exposes only the snapshot ID, so the
+// index and term must be recovered from the sink itself. Every sink Raft holds
+// comes from Store.Create in this package, so a sink which cannot supply them is
+// a programming error and is reported as such.
+func SinkIndexTerm(sink raft.SnapshotSink) (uint64, uint64, error) {
+	it, ok := sink.(IndexTermer)
+	if !ok {
+		return 0, 0, fmt.Errorf("snapshot sink of type %T does not know its index and term", sink)
+	}
+	return it.Index(), it.Term(), nil
+}

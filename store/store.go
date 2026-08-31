@@ -2635,7 +2635,13 @@ func (s *Store) fsmSnapshot() (fSnap raft.FSMSnapshot, retErr error) {
 	}()
 
 	var fsmSnapshot raft.FSMSnapshot
-	finalizer := s.createSnapshotFingerprint
+	finalizer := func(sink raft.SnapshotSink) error {
+		index, term, err := snapshot.SinkIndexTerm(sink)
+		if err != nil {
+			return err
+		}
+		return s.createSnapshotFingerprint(index, term)
+	}
 	if dueNext.IsFull() {
 		// We need to start the snapshoting process over again, starting with a full copy of the SQLite
 		// database. This happens when a node is snapshotting for the very first time, or in certain
@@ -2803,10 +2809,6 @@ func (s *Store) fsmRestore(rc io.ReadCloser) (retErr error) {
 		return fmt.Errorf("error swapping database file: %v", err)
 	}
 	s.logger.Printf("successfully opened database at %s due to restore", s.db.Path())
-	// Installed SQLite database is safe for fast restarts again.
-	if err := s.createSnapshotFingerprint(); err != nil {
-		return fmt.Errorf("failed to create snapshot fingerprint post restore: %s", err)
-	}
 
 	// Take conservative approach and assume that everything has changed, so update
 	// the indexes. It is possible that dbAppliedIdx is now ahead of some other nodes'
@@ -2817,6 +2819,14 @@ func (s *Store) fsmRestore(rc io.ReadCloser) (retErr error) {
 	if err != nil {
 		return fmt.Errorf("failed to get latest snapshot index post restore: %s", err)
 	}
+
+	// Installed SQLite database is safe for fast restarts again. It is fingerprinted
+	// against the very index and term the node is adopting here, so that a restart
+	// can tell that the two still correspond to one another.
+	if err := s.createSnapshotFingerprint(li, tm); err != nil {
+		return fmt.Errorf("failed to create snapshot fingerprint post restore: %s", err)
+	}
+
 	s.fsmIdx.Store(li)
 	s.fsmTarget.Signal(li)
 	s.fsmTerm.Store(tm)
@@ -3058,7 +3068,7 @@ func (s *Store) selfLeaderChange(leader bool) {
 	}
 }
 
-func (s *Store) createSnapshotFingerprint() error {
+func (s *Store) createSnapshotFingerprint(index, term uint64) error {
 	tmpFP := s.cleanSnapshotPath + ".tmp"
 	defer os.Remove(tmpFP)
 	mt, err := s.db.DBLastModified()

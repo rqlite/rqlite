@@ -10,7 +10,7 @@ import (
 func Test_FSMSnapshot_Finalizer(t *testing.T) {
 	finalizerCalled := false
 	f := FSMSnapshot{
-		Finalizer: func() error {
+		Finalizer: func(sink raft.SnapshotSink) error {
 			finalizerCalled = true
 			return nil
 		},
