@@ -17,6 +17,7 @@
 - [PR #2741](https://github.com/rqlite/rqlite/pull/2741), [PR #2745](https://github.com/rqlite/rqlite/pull/2745): Add query logging at database level. Thanks @karangupta982
 - [PR #2751](https://github.com/rqlite/rqlite/pull/2751): Add _CopyDir_ functionality to file utils.
 - [PR #2752](https://github.com/rqlite/rqlite/pull/2752): Add ability to clone Snapshots, primarily for testing purposes.
+- [PR #2753](https://github.com/rqlite/rqlite/pull/2753): `FSMFinalizer` takes a Sink.
 
 ## v10.2.7 (July 5th 2026)
 ### Implementation changes and bug fixes
