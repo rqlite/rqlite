@@ -18,6 +18,7 @@
 - [PR #2751](https://github.com/rqlite/rqlite/pull/2751): Add _CopyDir_ functionality to file utils.
 - [PR #2752](https://github.com/rqlite/rqlite/pull/2752): Add ability to clone Snapshots, primarily for testing purposes.
 - [PR #2753](https://github.com/rqlite/rqlite/pull/2753): `FSMFinalizer` takes a Sink.
+- [PR #2756](https://github.com/rqlite/rqlite/pull/2756): Store Index and Term in Fingerprint file and check during start-up. Fixes issue [#2747](https://github.com/rqlite/rqlite/issues/2747). Thanks @rohanpadhye
 
 ## v10.2.7 (July 5th 2026)
 ### Implementation changes and bug fixes
