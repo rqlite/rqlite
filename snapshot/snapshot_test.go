@@ -1066,6 +1066,51 @@ func Test_SnapshotCatalog_Scan(t *testing.T) {
 		}
 	})
 
+	t.Run("multiple snapshots with milli and nano timestamps", func(t *testing.T) {
+		rootDir := t.TempDir()
+		catalog := &SnapshotCatalog{}
+
+		mustCreateSnapshotFull(t, rootDir, "5-20-2257894000000", 20, 5)
+		mustCreateSnapshotFull(t, rootDir, "5-11-00000000000001258999000000000537", 11, 5)
+		mustCreateSnapshotFull(t, rootDir, "5-9-00000000000001257894000000000537", 9, 5)
+		mustCreateSnapshotFull(t, rootDir, "5-8-00000000000001257894000000000537", 8, 5)
+		mustCreateSnapshotFull(t, rootDir, "5-6-00000000000001257894000000000536", 6, 5)
+		mustCreateSnapshotFull(t, rootDir, "5-6-1257894000000", 6, 5)
+		mustCreateSnapshotFull(t, rootDir, "4-3-1157894000000", 3, 4)
+
+		ss, err := catalog.Scan(rootDir)
+		if err != nil {
+			t.Fatalf("Scan() returned error: %v", err)
+		}
+		if got, exp := ss.Len(), 7; got != exp {
+			t.Fatalf("Scan() returned %d snapshots, want %d", got, exp)
+		}
+
+		// Check ordering: should be sorted by (Term, Index, ID)
+		snapshots := ss.All()
+		if got, exp := snapshots[0].id, "4-3-1157894000000"; got != exp {
+			t.Fatalf("snapshots[0].id = %q, want %q", got, exp)
+		}
+		if got, exp := snapshots[1].id, "5-6-00000000000001257894000000000536"; got != exp {
+			t.Fatalf("snapshots[1].id = %q, want %q", got, exp)
+		}
+		if got, exp := snapshots[2].id, "5-6-1257894000000"; got != exp {
+			t.Fatalf("snapshots[2].id = %q, want %q", got, exp)
+		}
+		if got, exp := snapshots[3].id, "5-8-00000000000001257894000000000537"; got != exp {
+			t.Fatalf("snapshots[3].id = %q, want %q", got, exp)
+		}
+		if got, exp := snapshots[4].id, "5-9-00000000000001257894000000000537"; got != exp {
+			t.Fatalf("snapshots[4].id = %q, want %q", got, exp)
+		}
+		if got, exp := snapshots[5].id, "5-11-00000000000001258999000000000537"; got != exp {
+			t.Fatalf("snapshots[5].id = %q, want %q", got, exp)
+		}
+		if got, exp := snapshots[6].id, "5-20-2257894000000"; got != exp {
+			t.Fatalf("snapshots[6].id = %q, want %q", got, exp)
+		}
+	})
+
 	t.Run("skips temporary directories", func(t *testing.T) {
 		rootDir := t.TempDir()
 		catalog := &SnapshotCatalog{}

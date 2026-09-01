@@ -958,9 +958,8 @@ func copyRaftMeta(m *raft.SnapshotMeta) *raft.SnapshotMeta {
 
 // snapshotName generates a name for the snapshot.
 func snapshotName(term, index uint64) string {
-	now := time.Now()
-	msec := now.UnixNano() / int64(time.Millisecond)
-	return fmt.Sprintf("%d-%d-%d", term, index, msec)
+	ns := time.Now().UnixNano()
+	return fmt.Sprintf("%d-%d-%032d", term, index, ns)
 }
 
 // metaPath returns the path to the meta file in the given directory.
