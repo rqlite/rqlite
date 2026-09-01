@@ -96,7 +96,7 @@ The Store owns the streamer's lifecycle but delegates the row-data conversion (`
 
 A few small utilities in `state.go` exist to catch user input that would break invariants the rest of the package depends on:
 
-- **`BreakingPragmas`** — a regex set covering `journal_mode`, `wal_autocheckpoint`, `wal_checkpoint`, and `synchronous`. The Store rejects any user statement matching one of these before it reaches Raft. The list is deliberately narrow: only PRAGMAs that would invalidate rqlite's coordination with SQLite. Tuning PRAGMAs like `cache_size` are fine and pass through unchanged.
+- **`IsBreakingPragma`** — a regex-free check covering `journal_mode`, `wal_autocheckpoint`, `wal_checkpoint`, `synchronous`, and `query_only`. The Store rejects any user statement matching one of these before it reaches Raft. The list is deliberately narrow: only PRAGMAs that would invalidate rqlite's coordination with SQLite. Tuning PRAGMAs like `cache_size` are fine and pass through unchanged.
 - **`IsValidSQLiteFile` / `IsValidSQLiteData`** — magic-byte checks on file headers, used before swapping a file in or accepting a restore payload.
 - **`IsValidSQLiteWALFile` / `IsValidSQLiteWALData`** — magic and version checks for WAL files, used before WAL replay.
 - **`IsWALModeEnabled` / `IsDELETEModeEnabled`** — read bytes 18–19 of the SQLite header to detect the journal mode without opening the file.

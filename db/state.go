@@ -12,7 +12,6 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
-	"regexp"
 	"strconv"
 	"strings"
 
@@ -127,23 +126,100 @@ func SynchronousModeFromInt(i int) (SynchronousMode, error) {
 	}
 }
 
-// BreakingPragmas are PRAGMAs that, if executed, would break the database layer.
-var BreakingPragmas = map[string]*regexp.Regexp{
-	"PRAGMA journal_mode":       regexp.MustCompile(`(?i)^\s*PRAGMA\s+(\w+\.)?journal_mode\s*=\s*`),
-	"PRAGMA wal_autocheckpoint": regexp.MustCompile(`(?i)^\s*PRAGMA\s+wal_autocheckpoint\s*=\s*`),
-	"PRAGMA wal_checkpoint":     regexp.MustCompile(`(?i)^\s*PRAGMA\s+(\w+\.)?wal_checkpoint`),
-	"PRAGMA synchronous":        regexp.MustCompile(`(?i)^\s*PRAGMA\s+(\w+\.)?synchronous\s*=\s*`),
-	"PRAGMA query_only":         regexp.MustCompile(`(?i)^\s*PRAGMA\s+(\w+\.)?query_only\s*=\s*`),
+// breakingPragmasAnyForm lists pragma names that are breaking in any form:
+// bare name, =value, or (arg).
+var breakingPragmasAnyForm = []string{
+	"wal_checkpoint",
+}
+
+// breakingPragmasAssignment lists pragma names that are breaking only when
+// used in the assignment form (name = value).
+var breakingPragmasAssignment = []string{
+	"journal_mode",
+	"wal_autocheckpoint",
+	"synchronous",
+	"query_only",
 }
 
 // IsBreakingPragma returns true if the given statement is a breaking PRAGMA.
+// Breaking PRAGMAs are those that, if executed, would break the database layer.
+// The check is performed without regular expressions using pure ASCII byte
+// scanning: zero allocations and no regexp init cost.
 func IsBreakingPragma(stmt string) bool {
-	for _, re := range BreakingPragmas {
-		if re.MatchString(stmt) {
+	rest, ok := cutASCIIPrefixFold(trimLeftASCIISpace(stmt), "PRAGMA")
+	if !ok {
+		return false
+	}
+	rest = trimLeftASCIISpace(rest)
+
+	name, rest := cutASCIIWord(rest)
+	// SQLite accepts an attached schema qualifier: PRAGMA main.journal_mode.
+	// The qualifier must be non-empty, matching the original (\w+\.)? semantics.
+	if len(name) > 0 && len(rest) > 0 && rest[0] == '.' {
+		name, rest = cutASCIIWord(rest[1:])
+	}
+	if len(name) == 0 {
+		return false
+	}
+
+	for _, p := range breakingPragmasAnyForm {
+		if strings.EqualFold(name, p) {
 			return true
 		}
 	}
+	for _, p := range breakingPragmasAssignment {
+		if strings.EqualFold(name, p) {
+			rest = trimLeftASCIISpace(rest)
+			return len(rest) > 0 && rest[0] == '='
+		}
+	}
 	return false
+}
+
+// cutASCIIPrefixFold is a case-insensitive prefix match returning the remainder.
+func cutASCIIPrefixFold(s, prefix string) (string, bool) {
+	if len(s) < len(prefix) {
+		return "", false
+	}
+	for i := range len(prefix) {
+		if lowerASCII(s[i]) != lowerASCII(prefix[i]) {
+			return "", false
+		}
+	}
+	return s[len(prefix):], true
+}
+
+func lowerASCII(b byte) byte {
+	if b >= 'A' && b <= 'Z' {
+		return b + ('a' - 'A')
+	}
+	return b
+}
+
+func trimLeftASCIISpace(s string) string {
+	i := 0
+	for i < len(s) && isASCIISpace(s[i]) {
+		i++
+	}
+	return s[i:]
+}
+
+func isASCIISpace(b byte) bool {
+	return b == ' ' || b == '\t' || b == '\n' || b == '\r' || b == '\v' || b == '\f'
+}
+
+// cutASCIIWord splits s at the first non-word byte ([A-Za-z0-9_]).
+func cutASCIIWord(s string) (word, rest string) {
+	i := 0
+	for i < len(s) {
+		b := s[i]
+		if b >= 'a' && b <= 'z' || b >= 'A' && b <= 'Z' || b >= '0' && b <= '9' || b == '_' {
+			i++
+			continue
+		}
+		break
+	}
+	return s[:i], s[i:]
 }
 
 // ParseHex parses the given string into a byte slice as per the SQLite specification:
