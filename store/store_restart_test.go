@@ -10,6 +10,7 @@ import (
 
 	command "github.com/rqlite/rqlite/v10/command/proto"
 	"github.com/rqlite/rqlite/v10/internal/rsum"
+	"github.com/rqlite/rqlite/v10/snapshot"
 )
 
 // Test_OpenStoreCloseStartupSingleNode tests various restart scenarios.
@@ -686,5 +687,69 @@ func Test_Store_Restore_NoSnapshotOnClose_Snapshot(t *testing.T) {
 	}
 	if s.numSnapshotsSkipped.Load() != 1 {
 		t.Fatalf("expected snapshot skipped count to be 1")
+	}
+}
+
+// Test_Store_RestoreSnapshotAheadOfDB tests that a node does not fast-restart
+// with a SQLite file which is older than the newest snapshot in the Snapshot
+// Store. See https://github.com/rqlite/rqlite/issues/2747.
+func Test_Store_RestoreSnapshotAheadOfDB(t *testing.T) {
+	s, ln := mustNewStore(t)
+	defer ln.Close()
+	if err := s.Open(); err != nil {
+		t.Fatalf("failed to open single-node store: %s", err.Error())
+	}
+	if err := s.Bootstrap(NewServer(s.ID(), s.Addr(), true)); err != nil {
+		t.Fatalf("failed to bootstrap single-node store: %s", err.Error())
+	}
+	if _, err := s.WaitForLeader(10 * time.Second); err != nil {
+		t.Fatalf("Error waiting for leader: %s", err)
+	}
+	mustExecute(t, s, []string{
+		`CREATE TABLE foo (id INTEGER NOT NULL PRIMARY KEY, name TEXT)`,
+		`INSERT INTO foo(id, name) VALUES(1, "fiona")`,
+	})
+
+	// Snapshot the node, which writes its clean-snapshot fingerprint. The SQLite
+	// file and the newest snapshot in the Snapshot Store now agree with one another.
+	if err := s.Snapshot(0); err != nil {
+		t.Fatalf("failed to snapshot single-node store: %s", err.Error())
+	}
+
+	metas, err := s.snapshotStore.List()
+	if err != nil {
+		t.Fatalf("failed to list snapshots: %s", err.Error())
+	}
+	if len(metas) != 1 {
+		t.Fatalf("expected 1 snapshot in store, got %d", len(metas))
+	}
+	latest := metas[0]
+
+	if err := s.Close(true); err != nil {
+		t.Fatalf("failed to close single-node store: %s", err.Error())
+	}
+
+	// Install a newer snapshot into the Snapshot Store, without restoring it into
+	// the FSM. This leaves behind exactly what Raft's installSnapshot leaves behind
+	// when sink.Close() returns but the FSM restore which should follow it does not
+	// happen.
+	snapshot.Clone(s.snapshotDir, latest.ID, latest.Index+100, latest.Term)
+
+	// Restart the node.
+	if err := s.Open(); err != nil {
+		t.Fatalf("failed to reopen single-node store: %s", err.Error())
+	}
+	defer s.Close(true)
+	if _, err := s.WaitForLeader(10 * time.Second); err != nil {
+		t.Fatalf("Error waiting for leader: %s", err)
+	}
+
+	// The snapshot was never restored into the FSM, so the fast-restart path must
+	// have been declined and a full restore performed instead.
+	if exp, got := uint64(1), s.numSnapshotsStart.Load(); exp != got {
+		t.Fatalf("expected snapshot start count to be %d, got %d", exp, got)
+	}
+	if exp, got := uint64(0), s.numSnapshotsSkipped.Load(); exp != got {
+		t.Fatalf("expected snapshot skipped count to be %d, got %d", exp, got)
 	}
 }
