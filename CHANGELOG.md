@@ -1,4 +1,4 @@
-## v10.3.0 (unreleased)
+## v10.3.0 (September 1st 2026)
 ### New features
 - [PR #2728](https://github.com/rqlite/rqlite/pull/2728): Console app supports quickly querying for first 100 rows of a table. Thanks @rodionlim
 
