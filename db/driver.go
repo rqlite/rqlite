@@ -26,11 +26,41 @@ const (
 	CnkOnCloseModeEnabled
 )
 
+// DriverConfig holds the configuration for a composable SQLite driver.
+type DriverConfig struct {
+	// Extensions is the list of paths to SQLite extension shared objects.
+	Extensions []string
+
+	// ChkOnClose controls whether SQLite checkpoints the WAL on connection close.
+	ChkOnClose CnkOnCloseMode
+
+	// QueryLogger, if non-nil, installs query tracing on every new connection.
+	QueryLogger *QueryLogger
+}
+
 // Driver is a Database driver.
 type Driver struct {
 	name       string
 	extensions []string
 	chkOnClose CnkOnCloseMode
+}
+
+// Registers a new SQLite driver under name using cfg to
+// compose the ConnectHook. Every feature in cfg is applied to each new
+// connection, so extensions, checkpoint behavior, and query logging can all
+// coexist.
+// If a driver with name is already registered, a panic will occur. Callers
+// that need a singleton driver (fixed names) should guard this with sync.Once.
+func NewDriverFromConfig(name string, cfg DriverConfig) *Driver {
+	sql.Register(name, &sqlite3.SQLiteDriver{
+		Extensions:  cfg.Extensions,
+		ConnectHook: buildConnectHook(cfg),
+	})
+	return &Driver{
+		name:       name,
+		extensions: cfg.Extensions,
+		chkOnClose: cfg.ChkOnClose,
+	}
 }
 
 var defRegisterOnce sync.Once
@@ -41,8 +71,8 @@ var defRegisterOnce sync.Once
 // for any database in WAL mode.
 func DefaultDriver() *Driver {
 	defRegisterOnce.Do(func() {
-		sql.Register(defaultDriverName, &sqlite3.SQLiteDriver{
-			ConnectHook: makeConnectHookFn(CnkOnCloseModeDisabled),
+		NewDriverFromConfig(defaultDriverName, DriverConfig{
+			ChkOnClose: CnkOnCloseModeDisabled,
 		})
 	})
 	return &Driver{
@@ -59,8 +89,8 @@ var chkRegisterOnce sync.Once
 // on close for any database in WAL mode.
 func CheckpointDriver() *Driver {
 	chkRegisterOnce.Do(func() {
-		sql.Register(chkDriverName, &sqlite3.SQLiteDriver{
-			ConnectHook: makeConnectHookFn(CnkOnCloseModeEnabled),
+		NewDriverFromConfig(chkDriverName, DriverConfig{
+			ChkOnClose: CnkOnCloseModeEnabled,
 		})
 	})
 	return &Driver{
@@ -98,15 +128,10 @@ func ForeignKeyDriver() *Driver {
 //
 // If a driver with the given name already exists, a panic will occur.
 func NewDriver(name string, extensions []string, chkpt CnkOnCloseMode) *Driver {
-	sql.Register(name, &sqlite3.SQLiteDriver{
-		Extensions:  extensions,
-		ConnectHook: makeConnectHookFn(chkpt),
+	return NewDriverFromConfig(name, DriverConfig{
+		Extensions: extensions,
+		ChkOnClose: chkpt,
 	})
-	return &Driver{
-		name:       name,
-		extensions: extensions,
-		chkOnClose: chkpt,
-	}
 }
 
 // Name returns the driver name.
@@ -134,13 +159,28 @@ func (d *Driver) CheckpointOnCloseMode() CnkOnCloseMode {
 	return d.chkOnClose
 }
 
-func makeConnectHookFn(chkpt CnkOnCloseMode) func(conn *sqlite3.SQLiteConn) error {
+// buildConnectHook composes a ConnectHook from cfg, chaining all requested
+// connection-level behaviors in order: checkpoint config, then query tracing.
+func buildConnectHook(cfg DriverConfig) func(conn *sqlite3.SQLiteConn) error {
 	return func(conn *sqlite3.SQLiteConn) error {
-		if chkpt == CnkOnCloseModeDisabled {
+		// Checkpoint-on-close configuration.
+		if cfg.ChkOnClose == CnkOnCloseModeDisabled {
 			if err := conn.DBConfigNoCkptOnClose(); err != nil {
 				return fmt.Errorf("cannot disable checkpoint on close: %w", err)
 			}
 		}
+
+		// Query tracing.
+		if cfg.QueryLogger != nil {
+			if err := conn.SetTrace(&sqlite3.TraceConfig{
+				Callback:        cfg.QueryLogger.TraceHook,
+				EventMask:       sqlite3.TraceStmt | sqlite3.TraceProfile,
+				WantExpandedSQL: true,
+			}); err != nil {
+				return err
+			}
+		}
+
 		return nil
 	}
 }

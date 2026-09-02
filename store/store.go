@@ -770,16 +770,21 @@ func (s *Store) Open() (retErr error) {
 		stats.Add(numRecoveries, 1)
 	}
 
-	// If SQLite extensions are specified, we need a custom driver.
-	if len(s.dbConf.Extensions) > 0 {
-		s.dbDrv = sql.NewDriver(random.StringPattern("rqlite-extended-xxxx-xxxx-xxxx"),
-			s.dbConf.Extensions, sql.CnkOnCloseModeDisabled)
-	}
-
-	// If query logging is configured, use the query-log driver.
-	if s.dbConf.QueryLogger != nil {
-		ql := sql.NewQueryLogger(sql.QueryLogConfig{Logger: s.dbConf.QueryLogger})
-		s.dbDrv = sql.QueryLogDriver(ql)
+	// Build a composed driver if any non-default features are configured.
+	// This replaces the previous sequential override pattern and allows
+	// extensions and query logging to coexist in the same driver.
+	if len(s.dbConf.Extensions) > 0 || s.dbConf.QueryLogger != nil {
+		cfg := sql.DriverConfig{
+			Extensions: s.dbConf.Extensions,
+			ChkOnClose: sql.CnkOnCloseModeDisabled,
+		}
+		if s.dbConf.QueryLogger != nil {
+			cfg.QueryLogger = sql.NewQueryLogger(sql.QueryLogConfig{Logger: s.dbConf.QueryLogger})
+		}
+		s.dbDrv = sql.NewDriverFromConfig(
+			random.StringPattern("rqlite-configured-xxxx-xxxx-xxxx"),
+			cfg,
+		)
 	}
 
 	s.db, err = createDBOnDisk(s.dbPath, s.dbDrv, removeDBFiles, s.dbConf.FKConstraints, s.MaxReadOnlyConns)

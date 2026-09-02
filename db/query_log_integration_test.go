@@ -20,7 +20,10 @@ func Test_QueryLog_Integration_Basic(t *testing.T) {
 	logger := log.New(&buf, "[qlog] ", 0)
 	ql := NewQueryLogger(QueryLogConfig{Logger: logger})
 
-	drv := newTestQueryLogDriver(testDriverName(), ql)
+	drv := NewDriverFromConfig(testDriverName(), DriverConfig{
+		ChkOnClose:  CnkOnCloseModeDisabled,
+		QueryLogger: ql,
+	})
 	dbPath := t.TempDir() + "/test.db"
 
 	db, err := OpenWithDriver(drv, dbPath, false, true)
@@ -56,7 +59,10 @@ func Test_QueryLog_Integration_Basic(t *testing.T) {
 
 func Test_QueryLog_Integration_Disabled(t *testing.T) {
 	ql := NewQueryLogger(QueryLogConfig{Logger: nil})
-	drv := newTestQueryLogDriver(testDriverName(), ql)
+	drv := NewDriverFromConfig(testDriverName(), DriverConfig{
+		ChkOnClose:  CnkOnCloseModeDisabled,
+		QueryLogger: ql,
+	})
 	dbPath := t.TempDir() + "/test.db"
 
 	db, err := OpenWithDriver(drv, dbPath, false, true)
@@ -89,7 +95,10 @@ func Test_QueryLog_Integration_BulkRequest(t *testing.T) {
 	var buf bytes.Buffer
 	logger := log.New(&buf, "", 0)
 	ql := NewQueryLogger(QueryLogConfig{Logger: logger})
-	drv := newTestQueryLogDriver(testDriverName(), ql)
+	drv := NewDriverFromConfig(testDriverName(), DriverConfig{
+		ChkOnClose:  CnkOnCloseModeDisabled,
+		QueryLogger: ql,
+	})
 	dbPath := t.TempDir() + "/test.db"
 
 	db, err := OpenWithDriver(drv, dbPath, false, true)
@@ -128,7 +137,10 @@ func Test_QueryLog_Integration_ConstraintViolation(t *testing.T) {
 	var buf bytes.Buffer
 	logger := log.New(&buf, "", 0)
 	ql := NewQueryLogger(QueryLogConfig{Logger: logger})
-	drv := newTestQueryLogDriver(testDriverName(), ql)
+	drv := NewDriverFromConfig(testDriverName(), DriverConfig{
+		ChkOnClose:  CnkOnCloseModeDisabled,
+		QueryLogger: ql,
+	})
 	dbPath := t.TempDir() + "/test.db"
 
 	db, err := OpenWithDriver(drv, dbPath, false, true)
@@ -157,7 +169,10 @@ func Test_QueryLog_Integration_ConstraintViolation(t *testing.T) {
 }
 
 func Test_QueryLog_Integration_NilQueryLogger(t *testing.T) {
-	drv := newTestQueryLogDriver(testDriverName(), nil)
+	drv := NewDriverFromConfig(testDriverName(), DriverConfig{
+		ChkOnClose:  CnkOnCloseModeDisabled,
+		QueryLogger: nil,
+	})
 	dbPath := t.TempDir() + "/test.db"
 
 	db, err := OpenWithDriver(drv, dbPath, false, true)

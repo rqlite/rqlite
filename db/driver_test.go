@@ -1,7 +1,12 @@
 package db
 
 import (
+	"bytes"
+	"fmt"
+	"log"
 	"os"
+	"strings"
+	"sync/atomic"
 	"testing"
 
 	"github.com/rqlite/rqlite/v10/internal/fsutil"
@@ -118,5 +123,83 @@ func Test_NewDriver(t *testing.T) {
 	}
 	if d.CheckpointOnCloseMode() != CnkOnCloseModeEnabled {
 		t.Fatalf("NewDriver returned incorrect checkpoint mode: %v", d.CheckpointOnCloseMode())
+	}
+}
+
+// A local counter for generating unique driver names.
+var driverTestSeq atomic.Int64
+
+func testDriverConfigName() string {
+	return fmt.Sprintf("test-driver-config-%d", driverTestSeq.Add(1))
+}
+
+// Verifies that a DriverConfig with a QueryLogger
+// produces log output for every executed statement.
+func Test_NewDriverFromConfig_QueryLogOnly(t *testing.T) {
+	var buf bytes.Buffer
+	logger := log.New(&buf, "", 0)
+	ql := NewQueryLogger(QueryLogConfig{Logger: logger})
+
+	d := NewDriverFromConfig(testDriverConfigName(), DriverConfig{
+		ChkOnClose:  CnkOnCloseModeDisabled,
+		QueryLogger: ql,
+	})
+
+	path := mustTempPath()
+	defer os.RemoveAll(path)
+	db, err := OpenWithDriver(d, path, false, true)
+	if err != nil {
+		t.Fatalf("OpenWithDriver failed: %s", err)
+	}
+	defer db.Close()
+
+	mustExecute(db, "CREATE TABLE t (id INTEGER PRIMARY KEY, val TEXT)")
+	mustExecute(db, "INSERT INTO t VALUES (1, 'hello')")
+
+	output := buf.String()
+	if !strings.Contains(output, "CREATE TABLE t") {
+		t.Fatalf("expected CREATE TABLE in query log, got:\n%s", output)
+	}
+	if !strings.Contains(output, "INSERT INTO t") {
+		t.Fatalf("expected INSERT in query log, got:\n%s", output)
+	}
+}
+
+// Verifies that a DriverConfig with nil
+// QueryLogger opens and operates normally without tracing.
+func Test_NewDriverFromConfig_NoQueryLog(t *testing.T) {
+	d := NewDriverFromConfig(testDriverConfigName(), DriverConfig{
+		ChkOnClose:  CnkOnCloseModeDisabled,
+		QueryLogger: nil,
+	})
+	if d.CheckpointOnCloseMode() != CnkOnCloseModeDisabled {
+		t.Fatalf("expected CnkOnCloseModeDisabled, got %v", d.CheckpointOnCloseMode())
+	}
+
+	path := mustTempPath()
+	defer os.RemoveAll(path)
+	db, err := OpenWithDriver(d, path, false, true)
+	if err != nil {
+		t.Fatalf("OpenWithDriver failed: %s", err)
+	}
+	defer db.Close()
+
+	mustExecute(db, "CREATE TABLE t (id INTEGER PRIMARY KEY)")
+}
+
+// Verifies that extension paths set in
+// DriverConfig are reflected on the returned Driver struct.
+func Test_DriverConfig_ExtensionsFields(t *testing.T) {
+	exts := []string{"/tmp/ext1.so", "/tmp/ext2.so"}
+	d := NewDriverFromConfig(testDriverConfigName(), DriverConfig{
+		Extensions: exts,
+		ChkOnClose: CnkOnCloseModeDisabled,
+	})
+	if len(d.Extensions()) != 2 {
+		t.Fatalf("expected 2 extensions, got %d", len(d.Extensions()))
+	}
+	names := d.ExtensionNames()
+	if names[0] != "ext1.so" || names[1] != "ext2.so" {
+		t.Fatalf("unexpected extension names: %v", names)
 	}
 }
