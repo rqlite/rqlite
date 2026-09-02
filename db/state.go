@@ -150,6 +150,11 @@ func IsBreakingPragma(stmt string) bool {
 	if !ok {
 		return false
 	}
+	// The PRAGMA keyword must be followed by whitespace, matching the
+	// original \s+ requirement ("PRAGMAjournal_mode" must not match).
+	if len(rest) == 0 || !isASCIISpace(rest[0]) {
+		return false
+	}
 	rest = trimLeftASCIISpace(rest)
 
 	name, rest := cutASCIIWord(rest)
