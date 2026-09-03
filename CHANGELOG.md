@@ -1,3 +1,7 @@
+## v10.3.1 (unreleased)
+### Implementation changes and bug fixes
+- [PR #2758](https://github.com/rqlite/rqlite/pull/2758): Consolidate SQLite driver construction. Thanks @karangupta982
+
 ## v10.3.0 (September 1st 2026)
 ### New features
 - [PR #2728](https://github.com/rqlite/rqlite/pull/2728): Console app supports quickly querying for first 100 rows of a table. Thanks @rodionlim
@@ -18,7 +22,6 @@
 - [PR #2751](https://github.com/rqlite/rqlite/pull/2751): Add _CopyDir_ functionality to file utils.
 - [PR #2752](https://github.com/rqlite/rqlite/pull/2752): Add ability to clone Snapshots, primarily for testing purposes.
 - [PR #2753](https://github.com/rqlite/rqlite/pull/2753): `FSMFinalizer` takes a Sink.
-- [PR #2758](https://github.com/rqlite/rqlite/pull/2758): Consolidate SQLite driver construction to make connection behaviors composable. Thanks @karangupta982
 - [PR #2756](https://github.com/rqlite/rqlite/pull/2756): Store Index and Term in Fingerprint file and check during start-up. Fixes issue [#2747](https://github.com/rqlite/rqlite/issues/2747). Thanks @rohanpadhye
 
 ## v10.2.7 (July 5th 2026)
