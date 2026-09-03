@@ -45,7 +45,7 @@ type Driver struct {
 	chkOnClose CnkOnCloseMode
 }
 
-// Registers a new SQLite driver under name using cfg to
+// NewDriverFromConfig registers a new SQLite driver under name using cfg to
 // compose the ConnectHook. Every feature in cfg is applied to each new
 // connection, so extensions, checkpoint behavior, and query logging can all
 // coexist.
