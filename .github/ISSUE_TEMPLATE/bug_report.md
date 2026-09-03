@@ -6,6 +6,7 @@ labels: ''
 assignees: ''
 
 ---
+_If you use AI to generate a bug report, state the Agent version you are using, and show clearly how to reproduce the issue. For example if you say some simple action crashes rqlite then show step-by-step how to reproduce the crash. If you say lines in the code are buggy, then link to the actual lines in the source. If you say you have a test or benchmark that shows the issue, then include code. If these guidelines are not followed, then issue may be closed without comment._
 
 **What version are you running?**
 

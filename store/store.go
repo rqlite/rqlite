@@ -648,8 +648,24 @@ func (s *Store) Open() (retErr error) {
 			return nil
 		}
 
-		if !mt.Equal(fp.ModTime) || sz != fp.Size {
-			s.logger.Printf("clean snapshot failed mod time and size check, full restore needed")
+		li, tm, err := snapshotStore.LatestIndexTerm()
+		if err != nil {
+			s.logger.Printf("failed to retrieve latest snapshot index/term (%s), performing full restore", err)
+			return nil
+		}
+
+		// The SQLite file must be unchanged since it was fingerprinted, and must be the
+		// file which corresponds to the newest snapshot in the Snapshot Store. If the
+		// Store has moved on without the SQLite file moving with it, then a snapshot
+		// reached the Store but was never restored into the FSM, and taking the fast
+		// path would mean coming up at an index this database has never seen.
+		if fp.Index == 0 && fp.Term == 0 {
+			s.logger.Printf("clean snapshot predates recording of snapshot index and term, full restore needed")
+			return nil
+		}
+		if !fp.ValidFor(mt, sz, li, tm) {
+			s.logger.Printf("clean snapshot check failed, full restore needed (%s, database file mod time: %s, size: %d, newest snapshot index: %d, term: %d)",
+				fp, mt, sz, li, tm)
 			return nil
 		}
 
@@ -703,10 +719,6 @@ func (s *Store) Open() (retErr error) {
 		s.logger.Printf("detected successful prior snapshot operation, skipping restore")
 		raftConfig.NoSnapshotRestoreOnStart = true
 		removeDBFiles = false
-		li, tm, err := snapshotStore.LatestIndexTerm()
-		if err != nil {
-			return fmt.Errorf("failed to retrieve latest snapshot index/term: %s", err)
-		}
 		s.fsmIdx.Store(li)
 		s.fsmTerm.Store(tm)
 		s.dbAppliedIdx.Store(li)
@@ -3073,6 +3085,9 @@ func (s *Store) selfLeaderChange(leader bool) {
 	}
 }
 
+// createSnapshotFingerprint writes the clean-snapshot marker file, recording the
+// state of the SQLite file on disk along with the index and term of the snapshot
+// that file corresponds to.
 func (s *Store) createSnapshotFingerprint(index, term uint64) error {
 	tmpFP := s.cleanSnapshotPath + ".tmp"
 	defer os.Remove(tmpFP)
@@ -3094,6 +3109,8 @@ func (s *Store) createSnapshotFingerprint(index, term uint64) error {
 	fp := &FileFingerprint{
 		ModTime: mt,
 		Size:    sz,
+		Index:   index,
+		Term:    term,
 		CRC32:   sum,
 	}
 	if err := fp.WriteToFile(tmpFP); err != nil {
