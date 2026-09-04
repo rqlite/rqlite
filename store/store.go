@@ -2787,9 +2787,14 @@ func (s *Store) fsmSnapshot() (fSnap raft.FSMSnapshot, retErr error) {
 // will not be called concurrently with Apply(), so synchronization with Execute()
 // is not necessary.
 func (s *Store) fsmRestore(rc io.ReadCloser) (retErr error) {
+	hardExitRequired := false
+
 	defer func() {
 		if retErr != nil {
 			stats.Add(numRestoresFailed, 1)
+			if hardExitRequired {
+				s.logger.Fatalf("restore failed post database swap, aborting: %s", retErr)
+			}
 		}
 	}()
 	s.logger.Printf("initiating node restore on node ID %s", s.raftID)
@@ -2832,6 +2837,19 @@ func (s *Store) fsmRestore(rc io.ReadCloser) (retErr error) {
 	if err := fsutil.RemoveFile(s.cleanSnapshotPath); err != nil {
 		return fmt.Errorf("failed to remove clean snapshot file: %w", err)
 	}
+
+	// We're about to enter a point of no-return. We're going to swap in the incoming
+	// database with the one on disk. If an error is encountered after swapping the
+	// and simply returned that error to the Raft subsystem, Raft would consider the
+	// Restore as FAILED, but the database on disk would be wrong. We could attempt
+	// to reverse the swap, but a simpler, easier to ensure it's correct, solution
+	// is to just exit hard and let the node restart. It will then do a full restore
+	// from Raft.
+	//
+	// Doing it like this protects agains future changes in the code by catching the
+	// error in the defer handler.
+	hardExitRequired = true
+
 	if err := s.db.Swap(tmpPath, s.dbConf.FKConstraints, true); err != nil {
 		return fmt.Errorf("error swapping database file: %v", err)
 	}
