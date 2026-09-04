@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"io"
 	"testing"
+	"time"
 )
 
 func Test_StateReaderNew(t *testing.T) {
@@ -117,6 +118,34 @@ func Test_SinkIndexTerm_NotIndexTermer(t *testing.T) {
 	}
 }
 
+func Test_StreamerIndexTerm(t *testing.T) {
+	streamer := NewLockingStreamer(nil, nil, makeRaftMeta("test-index-term", 100, 3, 1), time.Second)
+	index, term, err := StreamerIndexTerm(streamer)
+	if err != nil {
+		t.Fatalf("unexpected error getting index and term of sink: %s", err.Error())
+	}
+	if exp, got := uint64(100), index; exp != got {
+		t.Fatalf("wrong index, exp %d, got %d", exp, got)
+	}
+	if exp, got := uint64(3), term; exp != got {
+		t.Fatalf("wrong term, exp %d, got %d", exp, got)
+	}
+}
+
+func Test_WrappedStreamerIndexTerm(t *testing.T) {
+	streamer := wrappedReadCloser{NewLockingStreamer(nil, nil, makeRaftMeta("test-index-term", 100, 3, 1), time.Second)}
+	index, term, err := StreamerIndexTerm(&streamer)
+	if err != nil {
+		t.Fatalf("unexpected error getting index and term of sink: %s", err.Error())
+	}
+	if exp, got := uint64(100), index; exp != got {
+		t.Fatalf("wrong index, exp %d, got %d", exp, got)
+	}
+	if exp, got := uint64(3), term; exp != got {
+		t.Fatalf("wrong term, exp %d, got %d", exp, got)
+	}
+}
+
 type mockRaftSink struct {
 	buf bytes.Buffer
 }
@@ -136,4 +165,20 @@ func (mrs *mockRaftSink) Cancel() error {
 
 func (mrs *mockRaftSink) ID() string {
 	return ""
+}
+
+type wrappedReadCloser struct {
+	rc io.ReadCloser
+}
+
+func (w *wrappedReadCloser) WrappedReadCloser() io.ReadCloser {
+	return w.rc
+}
+
+func (w *wrappedReadCloser) Read(p []byte) (n int, err error) {
+	return 0, nil
+}
+
+func (w *wrappedReadCloser) Close() error {
+	return nil
 }
