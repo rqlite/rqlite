@@ -73,6 +73,9 @@ func Clone(dir, id string, index, term uint64) error {
 
 // LatestIndexTerm returns the index and term of the most recent snapshot
 // in the given directory. If no snapshots are found, it returns 0, 0, nil.
+//
+// This function does not take any lock on the Snapshot store contained at dir,
+// so it not safe to call on an open Snapshot store.
 func LatestIndexTerm(dir string) (uint64, uint64, error) {
 	cat := &SnapshotCatalog{}
 	sset, err := cat.Scan(dir)
@@ -147,4 +150,20 @@ func SinkIndexTerm(sink raft.SnapshotSink) (uint64, uint64, error) {
 		return 0, 0, fmt.Errorf("snapshot sink of type %T does not know its index and term", sink)
 	}
 	return it.Index(), it.Term(), nil
+}
+
+// StreamerIndexTerm returns the Raft index and term of the snapshot being streamed.
+// Raft does not hand the ReadCloser returned by Store.Open to the FSM directly, but
+// wraps it first, so any wrappers are unwrapped before the index and term are read.
+func StreamerIndexTerm(rc io.ReadCloser) (uint64, uint64, error) {
+	for src := rc; ; {
+		if it, ok := src.(IndexTermer); ok {
+			return it.Index(), it.Term(), nil
+		}
+		w, ok := src.(raft.ReadCloserWrapper)
+		if !ok {
+			return 0, 0, fmt.Errorf("snapshot streamer of type %T does not know its index and term", rc)
+		}
+		src = w.WrappedReadCloser()
+	}
 }
