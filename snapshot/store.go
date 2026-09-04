@@ -118,17 +118,18 @@ type LockingStreamer struct {
 // NewLockingStreamer returns a new LockingStreamer. If timeout > 0, the
 // streamer will be force-closed after that much time elapses with no Read
 // activity. A timeout of 0 disables the idle check.
-func NewLockingStreamer(rc io.ReadCloser, str *Store, timeout time.Duration) *LockingStreamer {
+func NewLockingStreamer(rc io.ReadCloser, str *Store, mt *raft.SnapshotMeta, to time.Duration) *LockingStreamer {
 	l := &LockingStreamer{
 		ReadCloser: rc,
 		str:        str,
-		timeout:    timeout,
+		timeout:    to,
 		timedOut:   rsync.NewAtomicBool(),
 		closed:     rsync.NewAtomicBool(),
+		meta:       mt,
 	}
 	l.lastRead.Store(time.Now().UnixNano())
-	if timeout > 0 {
-		l.timer = time.AfterFunc(timeout, l.checkIdle)
+	if to > 0 {
+		l.timer = time.AfterFunc(to, l.checkIdle)
 	}
 	return l
 }
@@ -454,7 +455,7 @@ func (s *Store) Open(id string) (raftMeta *raft.SnapshotMeta, rc io.ReadCloser, 
 	}
 	meta.Size = sz
 
-	return meta, NewLockingStreamer(streamer, s, s.readTimeout), nil
+	return meta, NewLockingStreamer(streamer, s, meta, s.readTimeout), nil
 }
 
 // RegisterObserver registers an observer to receive observations.
