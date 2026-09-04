@@ -2817,16 +2817,6 @@ func (s *Store) fsmRestore(rc io.ReadCloser) (retErr error) {
 		s.logger.Printf("error closing snapshot reader after restore: %s", err)
 	}
 
-	// Any existing SQLite file is about to be invalid, so mark that we can't
-	// fast-restart with it.
-	if err := fsutil.RemoveFile(s.cleanSnapshotPath); err != nil {
-		return fmt.Errorf("failed to remove clean snapshot file: %w", err)
-	}
-	if err := s.db.Swap(tmpPath, s.dbConf.FKConstraints, true); err != nil {
-		return fmt.Errorf("error swapping database file: %v", err)
-	}
-	s.logger.Printf("successfully opened database at %s due to restore", s.db.Path())
-
 	// Take conservative approach and assume that everything has changed, so update
 	// the indexes. It is possible that dbAppliedIdx is now ahead of some other nodes'
 	// same value, since the last index is not necessarily a database-changing index,
@@ -2836,6 +2826,16 @@ func (s *Store) fsmRestore(rc io.ReadCloser) (retErr error) {
 	if err != nil {
 		return fmt.Errorf("failed to get streamed snapshot index and term: %s", err)
 	}
+
+	// Any existing SQLite file is about to be invalid, so mark that we can't
+	// fast-restart with it.
+	if err := fsutil.RemoveFile(s.cleanSnapshotPath); err != nil {
+		return fmt.Errorf("failed to remove clean snapshot file: %w", err)
+	}
+	if err := s.db.Swap(tmpPath, s.dbConf.FKConstraints, true); err != nil {
+		return fmt.Errorf("error swapping database file: %v", err)
+	}
+	s.logger.Printf("successfully opened database at %s due to restore", s.db.Path())
 
 	// Installed SQLite database is safe for fast restarts again. It is fingerprinted
 	// against the very index and term the node is adopting here, so that a restart
