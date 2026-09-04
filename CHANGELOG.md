@@ -1,4 +1,4 @@
-## v10.3.1 (unreleased)
+## v10.3.1 (September 3rd 2026)
 ### Implementation changes and bug fixes
 - [PR #2758](https://github.com/rqlite/rqlite/pull/2758): Consolidate SQLite driver construction. Thanks @karangupta982
 - [PR #2760](https://github.com/rqlite/rqlite/pull/2760): Plumb Term and Index through during Snapshot Restore. Fixes issue [#2759](https://github.com/rqlite/rqlite/issues/2759). Thanks @rohanpadhye
