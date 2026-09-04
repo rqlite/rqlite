@@ -2832,9 +2832,9 @@ func (s *Store) fsmRestore(rc io.ReadCloser) (retErr error) {
 	// same value, since the last index is not necessarily a database-changing index,
 	// but that is OK. Worse that can happen is that anything paying attention to the
 	// index might consider the database to be changed when it is not, *logically* speaking.
-	li, tm, err := snapshot.LatestIndexTerm(s.snapshotDir)
+	li, tm, err := snapshot.StreamerIndexTerm(rc)
 	if err != nil {
-		return fmt.Errorf("failed to get latest snapshot index post restore: %s", err)
+		return fmt.Errorf("failed to get streamed snapshot index and term: %s", err)
 	}
 
 	// Installed SQLite database is safe for fast restarts again. It is fingerprinted

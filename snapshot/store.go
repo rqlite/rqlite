@@ -111,6 +111,8 @@ type LockingStreamer struct {
 
 	mu    sync.Mutex
 	timer *time.Timer
+
+	meta *raft.SnapshotMeta
 }
 
 // NewLockingStreamer returns a new LockingStreamer. If timeout > 0, the
@@ -144,6 +146,16 @@ func (l *LockingStreamer) Read(p []byte) (int, error) {
 		l.lastRead.Store(time.Now().UnixNano())
 	}
 	return n, err
+}
+
+// Index returns the Raft Index of the streamed Snapshot
+func (l *LockingStreamer) Index() uint64 {
+	return l.meta.Index
+}
+
+// Term returns the Raft Term of the streamed Snapshot
+func (l *LockingStreamer) Term() uint64 {
+	return l.meta.Term
 }
 
 // Close closes the Snapshot and releases the Snapshot Store lock.
