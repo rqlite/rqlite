@@ -73,7 +73,7 @@ func Test_SingleNodeSnapshot(t *testing.T) {
 		t.Fatalf("failed to open snapshot file: %s", err.Error())
 	}
 	defer snapFile.Close()
-	if err := fsm.Restore(snapFile); err != nil {
+	if err := fsm.Restore(&mockSnapshotStreamer{snapFile}); err != nil {
 		t.Fatalf("failed to restore snapshot from disk: %s", err.Error())
 	}
 
@@ -883,6 +883,20 @@ func (m *mockSnapshotSink) Term() uint64 {
 
 func (m *mockSnapshotSink) Cancel() error {
 	return nil
+}
+
+// mockSnapshotStreamer stands in for the ReadCloser Raft hands to the FSM during
+// a restore, which always knows the index and term of the snapshot it streams.
+type mockSnapshotStreamer struct {
+	*os.File
+}
+
+func (m *mockSnapshotStreamer) Index() uint64 {
+	return 1
+}
+
+func (m *mockSnapshotStreamer) Term() uint64 {
+	return 1
 }
 
 func mustExecute(t *testing.T, s *Store, queries []string) []*proto.ExecuteQueryResponse {
