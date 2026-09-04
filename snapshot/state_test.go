@@ -119,7 +119,14 @@ func Test_SinkIndexTerm_NotIndexTermer(t *testing.T) {
 }
 
 func Test_StreamerIndexTerm(t *testing.T) {
-	streamer := NewLockingStreamer(nil, nil, makeRaftMeta("test-index-term", 100, 3, 1), time.Second)
+	dir := t.TempDir()
+	store, err := NewStore(dir)
+	if err != nil {
+		t.Fatalf("Failed to create new store: %v", err)
+	}
+	defer store.Close()
+
+	streamer := NewLockingStreamer(nil, store, makeRaftMeta("test-index-term", 100, 3, 1), time.Hour)
 	index, term, err := StreamerIndexTerm(streamer)
 	if err != nil {
 		t.Fatalf("unexpected error getting index and term of sink: %s", err.Error())
@@ -133,7 +140,14 @@ func Test_StreamerIndexTerm(t *testing.T) {
 }
 
 func Test_WrappedStreamerIndexTerm(t *testing.T) {
-	streamer := wrappedReadCloser{NewLockingStreamer(nil, nil, makeRaftMeta("test-index-term", 100, 3, 1), time.Second)}
+	dir := t.TempDir()
+	store, err := NewStore(dir)
+	if err != nil {
+		t.Fatalf("Failed to create new store: %v", err)
+	}
+	defer store.Close()
+
+	streamer := wrappedReadCloser{NewLockingStreamer(nil, store, makeRaftMeta("test-index-term", 100, 3, 1), time.Hour)}
 	index, term, err := StreamerIndexTerm(&streamer)
 	if err != nil {
 		t.Fatalf("unexpected error getting index and term of sink: %s", err.Error())
