@@ -2849,11 +2849,7 @@ func (s *Store) fsmRestore(rc io.ReadCloser) (retErr error) {
 	s.fsmTerm.Store(tm)
 	s.dbAppliedIdx.Store(li)
 	s.appliedTarget.Signal(li)
-	lt, err := s.db.DBLastModified()
-	if err != nil {
-		return fmt.Errorf("failed to get last modified time: %s", err)
-	}
-	s.dbModifiedTime.Store(lt)
+	s.dbModifiedTime.Store(time.Now())
 	// Swapping in a new database deactivates the CDC hooks, so signal that it
 	// needs to be reregistered on the next commit.
 	s.cdcRegistered.Unset()
