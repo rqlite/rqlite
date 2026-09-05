@@ -36,7 +36,8 @@ func Clone(dir, id string, index, term uint64) error {
 		return fmt.Errorf("reading meta of snapshot %q: %w", id, err)
 	}
 
-	newID := snapshotName(term, index)
+	snapshotNamer := NewSnapshotNamer(nil)
+	newID := snapshotNamer.MakeName(term, index)
 	dstPath := filepath.Join(dir, newID)
 	if fsutil.PathExists(dstPath) {
 		return fmt.Errorf("snapshot %q already exists in %q", newID, dir)

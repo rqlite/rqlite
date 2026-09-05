@@ -209,6 +209,8 @@ type Store struct {
 
 	catalog *SnapshotCatalog
 
+	snapshotNamer *SnapshotNamer
+
 	// verifyOnce ensures the CRC32 integrity check of all snapshot files runs at
 	// most once over the lifetime of the Store, the first time snapshot data is
 	// about to be used. verifyErr caches the result so a corruption verdict is
@@ -257,6 +259,7 @@ func NewStore(dir string) (*Store, error) {
 		fullNeededPath: filepath.Join(dir, fullNeededFile),
 		reapPlanPath:   filepath.Join(dir, reapPlanFile),
 		catalog:        &SnapshotCatalog{},
+		snapshotNamer:  NewSnapshotNamer(nil),
 		mrsw:           rsync.NewMultiRSW(),
 		reapDisabled:   &rsync.AtomicBool{},
 		noVerifyDB:     &rsync.AtomicBool{},
@@ -287,7 +290,7 @@ func (s *Store) Create(version raft.SnapshotVersion, index, term uint64, configu
 	configurationIndex uint64, trans raft.Transport) (retSink raft.SnapshotSink, retErr error) {
 	sink := NewSink(s.dir, &raft.SnapshotMeta{
 		Version:            version,
-		ID:                 snapshotName(term, index),
+		ID:                 s.snapshotNamer.MakeName(term, index),
 		Index:              index,
 		Term:               term,
 		Configuration:      configuration,
@@ -638,7 +641,7 @@ func (s *Store) reapInternal() (int, int, error) {
 		} else {
 			newest = full
 		}
-		newID := snapshotName(newest.raftMeta.Term, newest.raftMeta.Index)
+		newID := s.snapshotNamer.MakeName(newest.raftMeta.Term, newest.raftMeta.Index)
 		newMeta := copyRaftMeta(newest.raftMeta)
 		newMeta.ID = newID
 		metaJSON, err := json.Marshal(newMeta)
@@ -967,13 +970,6 @@ func (s *Store) getSnapshots() (SnapshotSet, error) {
 func copyRaftMeta(m *raft.SnapshotMeta) *raft.SnapshotMeta {
 	c := *m
 	return &c
-}
-
-// snapshotName generates a name for the snapshot.
-func snapshotName(term, index uint64) string {
-	now := time.Now()
-	msec := now.UnixNano() / int64(time.Millisecond)
-	return fmt.Sprintf("%d-%d-%d", term, index, msec)
 }
 
 // metaPath returns the path to the meta file in the given directory.
