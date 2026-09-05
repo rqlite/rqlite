@@ -1649,3 +1649,61 @@ func mustFileSize(path string) int64 {
 func isAppveyor() bool {
 	return os.Getenv("APPVEYOR") != ""
 }
+
+// Test_DBStats_NoPragmaConnectionLeak verifies that calling Stats() does not
+// leave any additional connections open on the rw pool after it returns.
+// Previously, pragmas() acquired a separate connection per pragma rather than
+// batching them on a single connection, and txStatus() deferred Close() inside
+// a loop, keeping all connections alive until the function returned.
+func Test_DBStats_NoPragmaConnectionLeak(t *testing.T) {
+	db, path := mustCreateOnDiskDatabaseWAL()
+	defer db.Close()
+	defer os.Remove(path)
+
+	// Baseline: how many connections are in use before Stats() is called.
+	beforeRW := db.ConnectionPoolStats(db.rwDB).InUse
+
+	stats, err := db.Stats()
+	if err != nil {
+		t.Fatalf("Stats() returned error: %s", err)
+	}
+	if stats == nil {
+		t.Fatal("Stats() returned nil")
+	}
+
+	// After Stats() returns every transient connection must have been released.
+	afterRW := db.ConnectionPoolStats(db.rwDB).InUse
+	if afterRW != beforeRW {
+		t.Fatalf("expected %d rw connections in use after Stats(), got %d", beforeRW, afterRW)
+	}
+}
+
+// Test_DBStats_PragmaFields verifies that the pragmas map returned by Stats()
+// contains the expected keys for both the rw and ro pools.
+func Test_DBStats_PragmaFields(t *testing.T) {
+	db, path := mustCreateOnDiskDatabaseWAL()
+	defer db.Close()
+	defer os.Remove(path)
+
+	stats, err := db.Stats()
+	if err != nil {
+		t.Fatalf("Stats() returned error: %s", err)
+	}
+
+	pragmas, ok := stats["pragmas"].(map[string]any)
+	if !ok {
+		t.Fatalf("expected pragmas map, got %T", stats["pragmas"])
+	}
+
+	for _, pool := range []string{"rw", "ro"} {
+		poolPragmas, ok := pragmas[pool].(map[string]string)
+		if !ok {
+			t.Fatalf("expected pragmas[%q] to be map[string]string, got %T", pool, pragmas[pool])
+		}
+		for _, key := range []string{"synchronous", "journal_mode", "foreign_keys", "wal_autocheckpoint", "busy_timeout"} {
+			if _, exists := poolPragmas[key]; !exists {
+				t.Errorf("pragmas[%q] missing key %q", pool, key)
+			}
+		}
+	}
+}
