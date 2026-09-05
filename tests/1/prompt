@@ -1,3 +1,5 @@
+Codex, gpt-5.6-sol high
+
  Can you fetch this issue? https://github.com/rqlite/rqlite/issues/2746. Can you write a unit test in the snapshot/ package to bring out this issue? This is how I'm thinking you do it. Look at the unit tests in store_test.go, specifically Test_Store_Reap_Full_FullWALs as an
   example. I think it goes like this: install one snapshot, then another, and then call reap. However you're going to inject (or control) the SnapshotName in the snapshot/store object so that the next
   snapshot gets the same timestamp. This will bring out the issue. Ask me any questions if you need. Before you code, study the code in snapshot/ and tell me if you agree. If you do, show me the proposed
