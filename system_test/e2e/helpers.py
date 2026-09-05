@@ -378,7 +378,7 @@ class Node(object):
   def wait_for_ready(self, sync=False, timeout=TIMEOUT):
     deadline = time.time() + timeout
     while time.time() < deadline:
-      if self.ready(sync):
+      if self.ready(sync=sync):
         return
       time.sleep(0.1)
     raise Exception('rqlite node failed to become ready within %d seconds' % timeout)
