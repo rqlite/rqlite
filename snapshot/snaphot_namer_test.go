@@ -328,6 +328,11 @@ func Test_ParseSnapshotName(t *testing.T) {
 			errContains: "bad term field",
 		},
 		{
+			name:        "loads of fields empty",
+			input:       "------",
+			errContains: "3 parts",
+		},
+		{
 			name:        "non-numeric term",
 			input:       "a-2-3",
 			errContains: "bad term field",
