@@ -1245,7 +1245,7 @@ func Test_Store_Check_ResumesReapPlan(t *testing.T) {
 	p.NReaped = 1
 
 	newMeta := copyRaftMeta(snaps[0])
-	newID := snapshotName(snaps[0].Term, snaps[0].Index)
+	newID := NewSnapshotNamer(nil).MakeName(snaps[0].Term, snaps[0].Index)
 	newMeta.ID = newID
 	metaJSON, err := json.Marshal(newMeta)
 	if err != nil {
@@ -1339,7 +1339,7 @@ func Test_Store_Check_CompletedReapPlanLeftover(t *testing.T) {
 	p.AddRemoveAll(incPath)
 	p.NReaped = 1
 	newMeta := copyRaftMeta(snaps[0])
-	newID := snapshotName(snaps[0].Term, snaps[0].Index)
+	newID := NewSnapshotNamer(nil).MakeName(snaps[0].Term, snaps[0].Index)
 	newMeta.ID = newID
 	metaJSON, err := json.Marshal(newMeta)
 	if err != nil {
