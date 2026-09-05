@@ -3,6 +3,7 @@
 - [PR #2762](https://github.com/rqlite/rqlite/pull/2762): Upgrade SQLite driver.
 - [PR #2763](https://github.com/rqlite/rqlite/pull/2763): Unit test reaping an installed and streamed Snapshot. See issue [#2763](https://github.com/rqlite/rqlite/issues/2763).
 - [PR #2764](https://github.com/rqlite/rqlite/pull/2764): Use distinct Snapshot Namer type. See issue [#2763](https://github.com/rqlite/rqlite/issues/2763).
+- [PR #2755](https://github.com/rqlite/rqlite/pull/2755): Replace breaking-pragma regexes with ASCII prefix scanning.
 
 ## v10.3.1 (September 3rd 2026)
 ### Implementation changes and bug fixes
