@@ -36,6 +36,11 @@ func Test_IsDisallowedPragmas(t *testing.T) {
 		"PRAGMA  wal_checkpoint(OFF)",
 		"PRAGMA  wal_checkpoint (FULL)",
 		"PRAGMA main.wal_checkpoint(TRUNCATE)",
+		"PRAGMA wal_checkpoint",
+		"PRAGMA wal_checkpoint   ",
+		"PRAGMA main.wal_checkpoint",
+		"PRAGMA wal_checkpoint=",
+		"PRAGMA wal_checkpoint = FULL",
 
 		"PRAGMA synchronous=",
 		"PRAGMA synchronous = ",
@@ -50,6 +55,10 @@ func Test_IsDisallowedPragmas(t *testing.T) {
 		"PRAGMA query_only = false",
 		"PRAGMA query_only=false",
 		"PRAGMA QUERY_ONLY=false",
+
+		// Tabs and mixed-case schema qualifiers.
+		"\tPRAGMA\tjournal_mode\t=\tWAL",
+		"PRAGMA MAIN.synchronous=OFF",
 	}
 
 	for _, s := range tests {
@@ -67,6 +76,37 @@ func Test_AllowedPragmas(t *testing.T) {
 		"optimize",
 		"FOO PRAGMA main.synchronous=OFF",
 		`SELECT * FROM foo WHERE s="PRAGMA wal_autocheckpoint = 1000"`,
+
+		// Query forms without '=' are not breaking.
+		"PRAGMA journal_mode",
+		"PRAGMA synchronous",
+		"PRAGMA query_only",
+		"PRAGMA main.query_only",
+		"PRAGMA wal_autocheckpoint",
+
+		// Other pragmas are not breaking.
+		"PRAGMA cache_size = 10000",
+
+		// Name boundaries: a breaking name that is only a prefix of the
+		// actual pragma name must not match.
+		"PRAGMA wal_checkpoint2",
+		"PRAGMA journal_mode2=X",
+		"PRAGMA journal_mode2",
+		"PRAGMA query_onlyx=1",
+		"PRAGMA synchronous2=OFF",
+		"PRAGMA wal_autocheckpoint2=1",
+
+		// Malformed or incomplete statements.
+		"",
+		"   ",
+		"PRAGMA",
+		"PRAGMA ",
+		"PRAGMAjournal_mode=1",
+		"PRAGMA schema",
+		"PRAGMA schema.",
+		"PRAGMA .journal_mode=1",
+		"PRAGMA main..journal_mode=1",
+		"  PRAGMA journal-mode=1",
 	}
 
 	for _, s := range tests {
