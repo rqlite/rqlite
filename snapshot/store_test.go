@@ -1052,6 +1052,27 @@ func Test_Store_Reap_Full_FullWALs(t *testing.T) {
 	}
 }
 
+// Test_Store_Reap_Full_FullWALs_NameCollision tests reaping when the name
+// generated for the consolidated snapshot is identical to the name of the
+// newest full snapshot.
+func Test_Store_Reap_Full_FullWALs_NameCollision(t *testing.T) {
+	dir := t.TempDir()
+	store, err := NewStore(dir)
+	if err != nil {
+		t.Fatalf("Failed to create new store: %v", err)
+	}
+	defer store.Close()
+
+	createSnapshotInStore(t, store, "2-1017-1704807719996", 1017, 2, 1, "testdata/db-and-wals/backup.db")
+	createSnapshotInStore(t, store, "3-2000-2222222222222", 2000, 3, 1,
+		"testdata/db-and-wals/full2.db", "testdata/db-and-wals/full2-wal-00")
+
+	store.snapshotNamer = NewSnapshotNamer(fixedClock(time.UnixMilli(2222222222222)))
+	if _, _, err := store.Reap(); err != nil {
+		t.Fatalf("Failed to reap snapshots: %v", err)
+	}
+}
+
 func Test_Store_ReapCorruptDB(t *testing.T) {
 	dir := t.TempDir()
 	store, err := NewStore(dir)
