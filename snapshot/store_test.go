@@ -981,7 +981,75 @@ func Test_Store_Reap(t *testing.T) {
 	if exp, got := `[{"columns":["COUNT(*)"],"types":["integer"],"values":[[2]]}]`, rows; exp != got {
 		t.Fatalf("unexpected results for query exp: %s got: %s", exp, got)
 	}
+}
 
+// Test_Store_Reap_Full_FullWALs tests reaping when an existing full pairs with another
+// full that contains a WAL. This could happen if the latter snapshot was streamed by
+// the leader to this node (which would be follower.
+func Test_Store_Reap_Full_FullWALs(t *testing.T) {
+	dir := t.TempDir()
+	store, err := NewStore(dir)
+	if err != nil {
+		t.Fatalf("Failed to create new store: %v", err)
+	}
+	defer store.Close()
+
+	snaps := mustListSnapshots(t, store)
+	if len(snaps) != 0 {
+		t.Fatalf("Expected 0 snapshots in destination store, got %d", len(snaps))
+	}
+
+	//////////////////////////////////////////////////////////////////////////////////
+	// Start with installing a full snapshot.
+	createSnapshotInStore(t, store, "2-1017-1704807719996", 1017, 2, 1, "testdata/db-and-wals/backup.db")
+
+	//////////////////////////////////////////////////////////////////////////////////
+	// Next install a second snapshot, comprising a full database and a single WAL.
+	createSnapshotInStore(t, store, "3-2000-2222222222222", 2000, 3, 1, "testdata/db-and-wals/full2.db", "testdata/db-and-wals/full2-wal-00")
+
+	// Reap and check results.
+	n, c, err := store.Reap()
+	if err != nil {
+		t.Fatalf("Failed to reap snapshots: %v", err)
+	}
+	if exp, got := 1, n; exp != got {
+		t.Fatalf("Expected %d snapshots reaped, got %d", exp, got)
+	}
+	if exp, got := 1, c; exp != got {
+		t.Fatalf("Expected %d checkpoints made, got %d", exp, got)
+	}
+
+	// Check the remaining snapshotted database looks good.
+	snaps = mustListSnapshots(t, store)
+	if len(snaps) != 1 {
+		t.Fatalf("Expected 1 snapshot in destination store, got %d", len(snaps))
+	}
+	_, rc, err := store.Open(snaps[0].ID)
+	if err != nil {
+		t.Fatalf("Failed to open snapshot in destination store: %v", err)
+	}
+
+	buf := &bytes.Buffer{}
+	if _, err := io.Copy(buf, rc); err != nil {
+		t.Fatalf("Failed to read snapshot data from destination store: %v", err)
+	}
+	if err := rc.Close(); err != nil {
+		t.Fatalf("Failed to close snapshot reader in destination store: %v", err)
+	}
+
+	dbPath, walPaths := persistStreamerData(t, buf)
+	if len(walPaths) != 0 {
+		t.Fatalf("Expected 0 WAL files, got %d", len(walPaths))
+	}
+
+	rows := mustQueryDB(t, dbPath, "SELECT COUNT(*) FROM foo")
+	if exp, got := `[{"columns":["COUNT(*)"],"types":["integer"],"values":[[0]]}]`, rows; exp != got {
+		t.Fatalf("unexpected results for query exp: %s got: %s", exp, got)
+	}
+	rows = mustQueryDB(t, dbPath, "SELECT COUNT(*) FROM bar")
+	if exp, got := `[{"columns":["COUNT(*)"],"types":["integer"],"values":[[1]]}]`, rows; exp != got {
+		t.Fatalf("unexpected results for query exp: %s got: %s", exp, got)
+	}
 }
 
 func Test_Store_ReapCorruptDB(t *testing.T) {
