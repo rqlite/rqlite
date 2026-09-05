@@ -320,7 +320,7 @@ func Test_ParseSnapshotName(t *testing.T) {
 		{
 			name:        "empty term",
 			input:       "-2-3",
-			errContains: "3 parts", // leading separator, so counted first
+			errContains: "bad term field", // leading separator, so counted first
 		},
 		{
 			name:        "all fields empty",
