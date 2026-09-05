@@ -3408,6 +3408,12 @@ func removeNodeRequest(id string) *proto.RemoveNodeRequest {
 	}
 }
 
+func demoteNodeRequest(id string) *proto.DemoteNodeRequest {
+	return &proto.DemoteNodeRequest{
+		Id: id,
+	}
+}
+
 func filesIdentical(path1, path2 string) bool {
 	b1, err := os.ReadFile(path1)
 	if err != nil {
