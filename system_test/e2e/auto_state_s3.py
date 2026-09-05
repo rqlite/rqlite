@@ -288,7 +288,11 @@ class TestAutoRestore_S3(unittest.TestCase):
     n1 = Node(RQLITED_PATH, '0', dir=n0.dir, auto_restore=cfg)
     n1.start()
     n1.wait_for_ready()
-    j = n1.query('SELECT * FROM bar')
+    # Readiness only means the node has a Leader, so it can be reported before the
+    # node has replayed its own Raft log into the SQLite database. Read at Strong
+    # level, which is ordered after every preceding log entry, so the replay is
+    # guaranteed to be complete.
+    j = n1.query('SELECT * FROM bar', level='strong')
     self.assertEqual(j, d_("{'results': [{'types': ['integer', 'text'], 'columns': ['id', 'name']}]}"))
     j = n1.query('SELECT * FROM foo')
     self.assertEqual(j, d_("{'results': [{'error': 'no such table: foo'}]}"))
