@@ -111,6 +111,30 @@ func Test_NewService(t *testing.T) {
 	}
 }
 
+func Test_ServiceMultipleListeners(t *testing.T) {
+	store := &MockStore{}
+	cluster := &mockClusterService{}
+	s := New("127.0.0.1:0,127.0.0.1:0", store, cluster, proxy.New(store, cluster), nil)
+	if err := s.Start(); err != nil {
+		t.Fatalf("failed to start service: %s", err)
+	}
+	defer s.Close()
+
+	if got := len(s.lns); got != 2 {
+		t.Fatalf("expected 2 listeners, got %d", got)
+	}
+	for _, ln := range s.lns {
+		resp, err := http.Get(fmt.Sprintf("http://%s/status", ln.Addr()))
+		if err != nil {
+			t.Fatalf("failed to request %s: %s", ln.Addr(), err)
+		}
+		resp.Body.Close()
+		if resp.StatusCode != http.StatusOK {
+			t.Fatalf("expected HTTP 200 from %s, got %d", ln.Addr(), resp.StatusCode)
+		}
+	}
+}
+
 func Test_HasVersionHeader(t *testing.T) {
 	m := &MockStore{}
 	c := &mockClusterService{}

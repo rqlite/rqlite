@@ -11,9 +11,24 @@ import os
 import time
 import unittest
 
-from helpers import Node, Cluster, d_, deprovision_node, poll_query
+import requests
+
+from helpers import Node, Cluster, d_, deprovision_node, poll_query, random_addr
 
 RQLITED_PATH = os.environ['RQLITED_PATH']
+
+class TestMultipleHTTPAddresses(unittest.TestCase):
+  def test_listens_on_each_address(self):
+    first = random_addr()
+    second = random_addr()
+    node = Node(RQLITED_PATH, '0', api_addr=','.join([first, second]), api_adv=first)
+    try:
+      node.start()
+      node.wait_for_leader()
+      response = requests.get('http://' + second + '/readyz?noleader')
+      self.assertEqual(response.status_code, 200)
+    finally:
+      deprovision_node(node)
 
 class TestSingleNode(unittest.TestCase):
   def setUp(self):

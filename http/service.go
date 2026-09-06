@@ -263,6 +263,7 @@ type Service struct {
 	closeCh    chan struct{}
 	addr       string       // Bind address of the HTTP service.
 	ln         net.Listener // Service listener
+	lns        []net.Listener
 
 	uiHandler http.Handler
 
@@ -331,10 +332,10 @@ func (s *Service) Start() error {
 		Handler: s,
 	}
 
-	var ln net.Listener
+	var lns []net.Listener
 	var err error
 	if s.CertFile == "" || s.KeyFile == "" {
-		ln, err = net.Listen("tcp", s.addr)
+		lns, err = listenTCP(s.addr)
 		if err != nil {
 			return err
 		}
@@ -358,9 +359,12 @@ func (s *Service) Start() error {
 		if err != nil {
 			return err
 		}
-		ln, err = tls.Listen("tcp", s.addr, s.tlsConfig)
+		lns, err = listenTCP(s.addr)
 		if err != nil {
 			return err
+		}
+		for i := range lns {
+			lns[i] = tls.NewListener(lns[i], s.tlsConfig)
 		}
 		var b strings.Builder
 		b.WriteString(fmt.Sprintf("secure HTTPS server enabled with cert %s, key %s", s.CertFile, s.KeyFile))
@@ -377,7 +381,8 @@ func (s *Service) Start() error {
 		}
 		s.logger.Println(b.String())
 	}
-	s.ln = ln
+	s.ln = lns[0]
+	s.lns = lns
 
 	s.closeCh = make(chan struct{})
 	s.queueDone = make(chan struct{})
@@ -387,12 +392,14 @@ func (s *Service) Start() error {
 	s.logger.Printf("execute queue processing started with capacity %d, batch size %d, timeout %s",
 		s.DefaultQueueCap, s.DefaultQueueBatchSz, s.DefaultQueueTimeout.String())
 
-	go func() {
-		err := s.httpServer.Serve(s.ln)
-		if err != nil {
-			s.logger.Printf("HTTP service on %s stopped: %s", s.ln.Addr().String(), err.Error())
-		}
-	}()
+	for _, ln := range s.lns {
+		go func(ln net.Listener) {
+			err := s.httpServer.Serve(ln)
+			if err != nil {
+				s.logger.Printf("HTTP service on %s stopped: %s", ln.Addr().String(), err.Error())
+			}
+		}(ln)
+	}
 	s.logger.Println("service listening on", s.Addr())
 
 	return nil
@@ -404,6 +411,11 @@ func (s *Service) Close() {
 	if err := s.httpServer.Shutdown(context.Background()); err != nil {
 		s.logger.Println("HTTP service shutdown error:", err.Error())
 	}
+	for _, ln := range s.lns {
+		if err := ln.Close(); err != nil && !errors.Is(err, net.ErrClosed) {
+			s.logger.Println("HTTP service listener close error:", err.Error())
+		}
+	}
 
 	s.stmtQueue.Close()
 	select {
@@ -412,6 +424,21 @@ func (s *Service) Close() {
 		close(s.closeCh)
 	}
 	<-s.queueDone
+}
+
+func listenTCP(addrs string) ([]net.Listener, error) {
+	var lns []net.Listener
+	for _, addr := range strings.Split(addrs, ",") {
+		ln, err := net.Listen("tcp", addr)
+		if err != nil {
+			for _, ln := range lns {
+				ln.Close()
+			}
+			return nil, err
+		}
+		lns = append(lns, ln)
+	}
+	return lns, nil
 }
 
 // HTTPS returns whether this service is using HTTPS.

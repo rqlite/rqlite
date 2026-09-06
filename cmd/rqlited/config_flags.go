@@ -18,7 +18,7 @@ type Config struct {
 	ShowVersion bool
 	// Unique ID for node. If not set, set to advertised Raft address
 	NodeID string
-	// HTTP server bind address. To enable HTTPS, set X.509 certificate and key
+	// Comma-delimited HTTP server bind addresses. To enable HTTPS, set X.509 certificate and key
 	HTTPAddr string
 	// Advertised HTTP address. If not set, same as HTTP server bind address
 	HTTPAdv string
@@ -161,7 +161,7 @@ func Forge(arguments []string) (*flag.FlagSet, *Config, error) {
 	}
 	fs.BoolVar(&config.ShowVersion, "version", false, "Show version information and exit")
 	fs.StringVar(&config.NodeID, "node-id", "", "Unique ID for node. If not set, set to advertised Raft address")
-	fs.StringVar(&config.HTTPAddr, "http-addr", "localhost:4001", "HTTP server bind address. To enable HTTPS, set X.509 certificate and key")
+	fs.StringVar(&config.HTTPAddr, "http-addr", "localhost:4001", "Comma-delimited HTTP server bind addresses. To enable HTTPS, set X.509 certificate and key")
 	fs.StringVar(&config.HTTPAdv, "http-adv-addr", "", "Advertised HTTP address. If not set, same as HTTP server bind address")
 	fs.StringVar(&config.HTTPAllowOrigin, "http-allow-origin", "", "Value to set for Access-Control-Allow-Origin HTTP header")
 	fs.StringVar(&config.HTTPx509Cert, "http-cert", "", "Path to HTTPS X.509 certificate")
