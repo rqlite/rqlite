@@ -7,6 +7,7 @@ import (
 	"strings"
 	"sync"
 	"testing"
+	"time"
 
 	"github.com/mattn/go-sqlite3"
 )
@@ -43,7 +44,7 @@ func Test_QueryLogger_NilLogger(t *testing.T) {
 func Test_QueryLogger_StmtThenProfile(t *testing.T) {
 	var buf bytes.Buffer
 	logger := log.New(&buf, "", 0)
-	ql := NewQueryLogger(QueryLogConfig{Logger: logger})
+	ql := NewQueryLogger(QueryLogConfig{Logger: logger, ExpandedSQL: true})
 
 	// STMT event — provides SQL
 	ql.TraceHook(sqlite3.TraceInfo{
@@ -316,5 +317,232 @@ func Test_QueryLogger_ConcurrentAccess(t *testing.T) {
 	ql.mu.Unlock()
 	if remaining != 0 {
 		t.Fatalf("expected empty pending map, got %d entries", remaining)
+	}
+}
+
+func Test_QueryLogger_MinDuration_BelowThreshold(t *testing.T) {
+	var buf bytes.Buffer
+	logger := log.New(&buf, "", 0)
+	// Threshold: 10ms — query runs for 5ms, should NOT be logged.
+	ql := NewQueryLogger(QueryLogConfig{Logger: logger, MinDuration: 10 * time.Millisecond, ExpandedSQL: true})
+
+	ql.TraceHook(sqlite3.TraceInfo{
+		EventCode:   sqlite3.TraceStmt,
+		ConnHandle:  0x1,
+		StmtHandle:  0x2,
+		ExpandedSQL: "SELECT 1",
+	})
+	ql.TraceHook(sqlite3.TraceInfo{
+		EventCode:      sqlite3.TraceProfile,
+		ConnHandle:     0x1,
+		StmtHandle:     0x2,
+		RunTimeNanosec: 5_000_000, // 5ms
+	})
+
+	if buf.Len() != 0 {
+		t.Fatalf("expected no output for query below threshold, got: %s", buf.String())
+	}
+
+	// Pending map must be empty — entry cleaned up even though query was filtered.
+	ql.mu.Lock()
+	remaining := len(ql.pending)
+	ql.mu.Unlock()
+	if remaining != 0 {
+		t.Fatalf("expected empty pending map after filtered query, got %d entries", remaining)
+	}
+}
+
+func Test_QueryLogger_MinDuration_AtThreshold(t *testing.T) {
+	var buf bytes.Buffer
+	logger := log.New(&buf, "", 0)
+	// Threshold: 10ms — query runs for exactly 10ms, should be logged.
+	ql := NewQueryLogger(QueryLogConfig{Logger: logger, MinDuration: 10 * time.Millisecond, ExpandedSQL: true})
+
+	ql.TraceHook(sqlite3.TraceInfo{
+		EventCode:   sqlite3.TraceStmt,
+		ConnHandle:  0x1,
+		StmtHandle:  0x2,
+		ExpandedSQL: "SELECT 'at_threshold'",
+	})
+	ql.TraceHook(sqlite3.TraceInfo{
+		EventCode:      sqlite3.TraceProfile,
+		ConnHandle:     0x1,
+		StmtHandle:     0x2,
+		RunTimeNanosec: 10_000_000, // exactly 10ms
+	})
+
+	output := buf.String()
+	if !strings.Contains(output, "SELECT 'at_threshold'") {
+		t.Fatalf("expected query at threshold to be logged, got: %s", output)
+	}
+}
+
+func Test_QueryLogger_MinDuration_AboveThreshold(t *testing.T) {
+	var buf bytes.Buffer
+	logger := log.New(&buf, "", 0)
+	// Threshold: 10ms — query runs for 50ms, should be logged.
+	ql := NewQueryLogger(QueryLogConfig{Logger: logger, MinDuration: 10 * time.Millisecond, ExpandedSQL: true})
+
+	ql.TraceHook(sqlite3.TraceInfo{
+		EventCode:   sqlite3.TraceStmt,
+		ConnHandle:  0x1,
+		StmtHandle:  0x2,
+		ExpandedSQL: "SELECT 'above_threshold'",
+	})
+	ql.TraceHook(sqlite3.TraceInfo{
+		EventCode:      sqlite3.TraceProfile,
+		ConnHandle:     0x1,
+		StmtHandle:     0x2,
+		RunTimeNanosec: 50_000_000, // 50ms
+	})
+
+	output := buf.String()
+	if !strings.Contains(output, "SELECT 'above_threshold'") {
+		t.Fatalf("expected query above threshold to be logged, got: %s", output)
+	}
+	if !strings.Contains(output, "[50ms]") {
+		t.Fatalf("expected [50ms] in output, got: %s", output)
+	}
+}
+
+func Test_QueryLogger_MinDuration_Zero_LogsEverything(t *testing.T) {
+	var buf bytes.Buffer
+	logger := log.New(&buf, "", 0)
+	// MinDuration=0 means every query is logged regardless of duration.
+	ql := NewQueryLogger(QueryLogConfig{Logger: logger, MinDuration: 0, ExpandedSQL: true})
+
+	ql.TraceHook(sqlite3.TraceInfo{
+		EventCode:   sqlite3.TraceStmt,
+		ConnHandle:  0x1,
+		StmtHandle:  0x2,
+		ExpandedSQL: "SELECT 'zero_threshold'",
+	})
+	ql.TraceHook(sqlite3.TraceInfo{
+		EventCode:      sqlite3.TraceProfile,
+		ConnHandle:     0x1,
+		StmtHandle:     0x2,
+		RunTimeNanosec: 0, // instantaneous
+	})
+
+	output := buf.String()
+	if !strings.Contains(output, "SELECT 'zero_threshold'") {
+		t.Fatalf("expected zero-threshold query to be logged, got: %s", output)
+	}
+}
+
+func Test_QueryLogger_MinDuration_PendingCleanedOnFilter(t *testing.T) {
+	var buf bytes.Buffer
+	logger := log.New(&buf, "", 0)
+	ql := NewQueryLogger(QueryLogConfig{Logger: logger, MinDuration: 1 * time.Second, ExpandedSQL: true})
+
+	// Inject three statements that will all be filtered (run < 1s).
+	for i := uintptr(1); i <= 3; i++ {
+		ql.TraceHook(sqlite3.TraceInfo{
+			EventCode:   sqlite3.TraceStmt,
+			ConnHandle:  0x1,
+			StmtHandle:  i,
+			ExpandedSQL: fmt.Sprintf("SELECT %d", i),
+		})
+		ql.TraceHook(sqlite3.TraceInfo{
+			EventCode:      sqlite3.TraceProfile,
+			ConnHandle:     0x1,
+			StmtHandle:     i,
+			RunTimeNanosec: 1_000_000, // 1ms — below 1s threshold
+		})
+	}
+
+	// Nothing should be logged.
+	if buf.Len() != 0 {
+		t.Fatalf("expected no output for all-filtered queries, got: %s", buf.String())
+	}
+
+	// Pending map must be empty — no leaks from filtered entries.
+	ql.mu.Lock()
+	remaining := len(ql.pending)
+	ql.mu.Unlock()
+	if remaining != 0 {
+		t.Fatalf("expected empty pending map, got %d leaked entries", remaining)
+	}
+}
+
+func Test_QueryLogger_ExpandedSQL_True_UsesExpanded(t *testing.T) {
+	var buf bytes.Buffer
+	logger := log.New(&buf, "", 0)
+	ql := NewQueryLogger(QueryLogConfig{Logger: logger, ExpandedSQL: true})
+
+	ql.TraceHook(sqlite3.TraceInfo{
+		EventCode:     sqlite3.TraceStmt,
+		ConnHandle:    0x1,
+		StmtHandle:    0x2,
+		StmtOrTrigger: "INSERT INTO t VALUES (?)",
+		ExpandedSQL:   "INSERT INTO t VALUES ('expanded')",
+	})
+	ql.TraceHook(sqlite3.TraceInfo{
+		EventCode:      sqlite3.TraceProfile,
+		ConnHandle:     0x1,
+		StmtHandle:     0x2,
+		RunTimeNanosec: 1_000_000,
+	})
+
+	output := buf.String()
+	if !strings.Contains(output, "INSERT INTO t VALUES ('expanded')") {
+		t.Fatalf("expected expanded SQL in output, got: %s", output)
+	}
+	if strings.Contains(output, "INSERT INTO t VALUES (?)") {
+		t.Fatalf("should not see unexpanded SQL when ExpandedSQL=true, got: %s", output)
+	}
+}
+
+func Test_QueryLogger_ExpandedSQL_False_UsesOriginal(t *testing.T) {
+	var buf bytes.Buffer
+	logger := log.New(&buf, "", 0)
+	ql := NewQueryLogger(QueryLogConfig{Logger: logger, ExpandedSQL: false})
+
+	ql.TraceHook(sqlite3.TraceInfo{
+		EventCode:     sqlite3.TraceStmt,
+		ConnHandle:    0x1,
+		StmtHandle:    0x2,
+		StmtOrTrigger: "INSERT INTO t VALUES (?)",
+		ExpandedSQL:   "INSERT INTO t VALUES ('expanded')",
+	})
+	ql.TraceHook(sqlite3.TraceInfo{
+		EventCode:      sqlite3.TraceProfile,
+		ConnHandle:     0x1,
+		StmtHandle:     0x2,
+		RunTimeNanosec: 1_000_000,
+	})
+
+	output := buf.String()
+	if !strings.Contains(output, "INSERT INTO t VALUES (?)") {
+		t.Fatalf("expected original SQL when ExpandedSQL=false, got: %s", output)
+	}
+	if strings.Contains(output, "'expanded'") {
+		t.Fatalf("should not see expanded SQL when ExpandedSQL=false, got: %s", output)
+	}
+}
+
+func Test_QueryLogger_ExpandedSQL_True_FallbackWhenUnavailable(t *testing.T) {
+	var buf bytes.Buffer
+	logger := log.New(&buf, "", 0)
+	ql := NewQueryLogger(QueryLogConfig{Logger: logger, ExpandedSQL: true})
+
+	// ExpandedSQL is empty — should fall back to StmtOrTrigger.
+	ql.TraceHook(sqlite3.TraceInfo{
+		EventCode:     sqlite3.TraceStmt,
+		ConnHandle:    0x1,
+		StmtHandle:    0x2,
+		StmtOrTrigger: "PRAGMA journal_mode",
+		ExpandedSQL:   "", // unavailable
+	})
+	ql.TraceHook(sqlite3.TraceInfo{
+		EventCode:      sqlite3.TraceProfile,
+		ConnHandle:     0x1,
+		StmtHandle:     0x2,
+		RunTimeNanosec: 1_000_000,
+	})
+
+	output := buf.String()
+	if !strings.Contains(output, "PRAGMA journal_mode") {
+		t.Fatalf("expected fallback to StmtOrTrigger, got: %s", output)
 	}
 }

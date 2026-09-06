@@ -13,6 +13,16 @@ import (
 type QueryLogConfig struct {
 	// Logger is the destination for query log lines. If nil, query logging is disabled.
 	Logger *log.Logger
+
+	/// MinDuration is the minimum execution time for a statement to be logged.
+	// A value of 0 logs everything (used by stderr). JSON-file mode defaults to 10s.
+	MinDuration time.Duration
+
+	// ExpandedSQL controls which SQL text is logged. When true, the driver attempts
+	// to use the expanded form of the statement (with bound parameters filled in).
+	// When false, or when the expanded form is unavailable, the original statement
+	// text is used.
+	ExpandedSQL bool
 }
 
 // traceKey uniquely identifies an in-flight statement execution.
@@ -45,7 +55,9 @@ func NewQueryLogger(cfg QueryLogConfig) *QueryLogger {
 //     is buffered keyed by (ConnHandle, StmtHandle).
 //
 //   - SQLITE_TRACE_PROFILE: fired at statement execution end. The buffered
-//     SQL is looked up and a log line "SQL [duration]" is emitted.
+//     SQL is looked up, the pending entry is always removed (even when the
+//     statement is missing or the duration is below MinDuration), and a log
+//     line "SQL [duration]" is emitted only when the threshold is met.
 //
 // All other event types are ignored.
 func (ql *QueryLogger) TraceHook(info sqlite3.TraceInfo) int {
@@ -55,21 +67,29 @@ func (ql *QueryLogger) TraceHook(info sqlite3.TraceInfo) int {
 
 	switch info.EventCode {
 	case sqlite3.TraceStmt:
-		sql := info.ExpandedSQL
-		if sql == "" {
-			sql = info.StmtOrTrigger
+		// Select which SQL text to buffer. When ExpandedSQL is requested and
+		// available, prefer it; otherwise fall back to the original statement text.
+		var sqlText string
+		if ql.config.ExpandedSQL && info.ExpandedSQL != "" {
+			sqlText = info.ExpandedSQL
+		} else {
+			sqlText = info.StmtOrTrigger
 		}
-		if sql == "" {
+		if sqlText == "" {
 			return 0
 		}
 
 		key := traceKey{ConnHandle: info.ConnHandle, StmtHandle: info.StmtHandle}
 		ql.mu.Lock()
-		ql.pending[key] = sql
+		ql.pending[key] = sqlText
 		ql.mu.Unlock()
 
 	case sqlite3.TraceProfile:
 		key := traceKey{ConnHandle: info.ConnHandle, StmtHandle: info.StmtHandle}
+
+		// Always remove the pending entry first, regardless of whether the
+		// duration meets the threshold. Failing to do so would leak entries
+		// for any filtered or orphaned statement.
 		ql.mu.Lock()
 		sql, ok := ql.pending[key]
 		if ok {
@@ -84,6 +104,13 @@ func (ql *QueryLogger) TraceHook(info sqlite3.TraceInfo) int {
 		}
 
 		dur := time.Duration(info.RunTimeNanosec) * time.Nanosecond
+
+		// Apply duration filter. Queries below the threshold are silently dropped;
+		// the pending entry has already been cleaned up above.
+		if dur < ql.config.MinDuration {
+			return 0
+		}
+
 		ql.config.Logger.Printf("%s [%s]", sql, dur)
 	}
 

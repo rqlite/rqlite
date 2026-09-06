@@ -791,7 +791,11 @@ func (s *Store) Open() (retErr error) {
 			ChkOnClose: sql.CnkOnCloseModeDisabled,
 		}
 		if s.dbConf.QueryLogger != nil {
-			cfg.QueryLogger = sql.NewQueryLogger(sql.QueryLogConfig{Logger: s.dbConf.QueryLogger})
+			cfg.QueryLogger = sql.NewQueryLogger(sql.QueryLogConfig{
+				Logger:      s.dbConf.QueryLogger,
+				MinDuration: s.dbConf.QueryLogMinDuration,
+				ExpandedSQL: s.dbConf.QueryLogExpandedSQL,
+			})
 		}
 		s.dbDrv = sql.NewDriverFromConfig(
 			random.StringPattern("rqlite-configured-xxxx-xxxx-xxxx"),

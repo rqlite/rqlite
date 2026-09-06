@@ -3,6 +3,7 @@ package store
 import (
 	"log"
 	"path/filepath"
+	"time"
 )
 
 // DBConfig represents the configuration of the underlying SQLite database.
@@ -15,6 +16,15 @@ type DBConfig struct {
 
 	// Controls query logging. If nil, query logging is disabled.
 	QueryLogger *log.Logger
+
+	// Only queries whose execution time is >= this value are logged.
+	// A value of 0 logs every traced query.
+	// Ignored when QueryLogger is nil.
+	QueryLogMinDuration time.Duration
+
+	// When true, the logger prefers expanded SQL (with bound parameters filled in).
+	// Ignored when QueryLogger is nil.
+	QueryLogExpandedSQL bool
 }
 
 // NewDBConfig returns a new DB config instance.
