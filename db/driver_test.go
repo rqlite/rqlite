@@ -9,6 +9,7 @@ import (
 	"sync/atomic"
 	"testing"
 
+	"github.com/rqlite/rqlite/v10/db/querylog"
 	"github.com/rqlite/rqlite/v10/internal/fsutil"
 )
 
@@ -138,7 +139,7 @@ func testDriverConfigName() string {
 func Test_NewDriverFromConfig_QueryLogOnly(t *testing.T) {
 	var buf bytes.Buffer
 	logger := log.New(&buf, "", 0)
-	ql := NewQueryLogger(QueryLogConfig{Logger: logger})
+	ql := querylog.NewQueryLogger(querylog.LoggerConfig{Logger: logger})
 
 	d := NewDriverFromConfig(testDriverConfigName(), DriverConfig{
 		ChkOnClose:  CnkOnCloseModeDisabled,

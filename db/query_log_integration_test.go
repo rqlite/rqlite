@@ -7,6 +7,8 @@ import (
 	"strings"
 	"sync/atomic"
 	"testing"
+
+	"github.com/rqlite/rqlite/v10/db/querylog"
 )
 
 var driverSeq atomic.Int64
@@ -18,7 +20,7 @@ func testDriverName() string {
 func Test_QueryLog_Integration_Basic(t *testing.T) {
 	var buf bytes.Buffer
 	logger := log.New(&buf, "[qlog] ", 0)
-	ql := NewQueryLogger(QueryLogConfig{Logger: logger})
+	ql := querylog.NewQueryLogger(querylog.LoggerConfig{Logger: logger})
 
 	drv := NewDriverFromConfig(testDriverName(), DriverConfig{
 		ChkOnClose:  CnkOnCloseModeDisabled,
@@ -58,7 +60,7 @@ func Test_QueryLog_Integration_Basic(t *testing.T) {
 }
 
 func Test_QueryLog_Integration_Disabled(t *testing.T) {
-	ql := NewQueryLogger(QueryLogConfig{Logger: nil})
+	ql := querylog.NewQueryLogger(querylog.LoggerConfig{Logger: nil})
 	drv := NewDriverFromConfig(testDriverName(), DriverConfig{
 		ChkOnClose:  CnkOnCloseModeDisabled,
 		QueryLogger: ql,
@@ -94,7 +96,7 @@ func Test_QueryLog_Integration_Disabled(t *testing.T) {
 func Test_QueryLog_Integration_BulkRequest(t *testing.T) {
 	var buf bytes.Buffer
 	logger := log.New(&buf, "", 0)
-	ql := NewQueryLogger(QueryLogConfig{Logger: logger})
+	ql := querylog.NewQueryLogger(querylog.LoggerConfig{Logger: logger})
 	drv := NewDriverFromConfig(testDriverName(), DriverConfig{
 		ChkOnClose:  CnkOnCloseModeDisabled,
 		QueryLogger: ql,
@@ -136,7 +138,7 @@ func Test_QueryLog_Integration_BulkRequest(t *testing.T) {
 func Test_QueryLog_Integration_ConstraintViolation(t *testing.T) {
 	var buf bytes.Buffer
 	logger := log.New(&buf, "", 0)
-	ql := NewQueryLogger(QueryLogConfig{Logger: logger})
+	ql := querylog.NewQueryLogger(querylog.LoggerConfig{Logger: logger})
 	drv := NewDriverFromConfig(testDriverName(), DriverConfig{
 		ChkOnClose:  CnkOnCloseModeDisabled,
 		QueryLogger: ql,
