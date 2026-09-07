@@ -487,7 +487,7 @@ func startHTTPService(cfg *Config, str *store.Store, cltr *cluster.Client, credS
 	if credStr != nil {
 		cs = credStr
 	}
-	s := httpd.New(cfg.HTTPAddr, str, cltr, pxy, cs)
+	s := httpd.New(str, cltr, pxy, cs)
 
 	s.CACertFile = cfg.HTTPx509CACert
 	s.CertFile = cfg.HTTPx509Cert
@@ -506,7 +506,15 @@ func startHTTPService(cfg *Config, str *store.Store, cltr *cluster.Client, credS
 		"build_time":         cmd.Buildtime,
 	}
 	s.SetAllowOrigin(cfg.HTTPAllowOrigin)
-	return s, s.Start()
+	ln, err := net.Listen("tcp", cfg.HTTPAddr)
+	if err != nil {
+		return s, err
+	}
+	if err := s.Start(ln); err != nil {
+		ln.Close()
+		return s, err
+	}
+	return s, nil
 }
 
 // startNodeMux starts the TCP mux on the given listener, which should be already

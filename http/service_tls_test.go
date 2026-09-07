@@ -9,6 +9,7 @@ import (
 	"net"
 	"net/http"
 	"os"
+	"path/filepath"
 	"testing"
 	"time"
 
@@ -17,10 +18,57 @@ import (
 	"golang.org/x/net/http2"
 )
 
+func Test_TLSServiceStartError(t *testing.T) {
+	cert, key, err := rtls.GenerateSelfSignedCert(pkix.Name{CommonName: "rqlite"}, time.Hour, 2048)
+	if err != nil {
+		t.Fatalf("failed to generate self-signed cert: %s", err)
+	}
+	certPath := mustWriteTempFile(t, cert)
+	keyPath := mustWriteTempFile(t, key)
+	missingPath := filepath.Join(t.TempDir(), "missing.pem")
+	for _, tc := range []struct {
+		name string
+		cert string
+		key  string
+		ca   string
+	}{
+		{name: "certificate", cert: missingPath, key: keyPath},
+		{name: "key", cert: certPath, key: missingPath},
+		{name: "CA", cert: certPath, key: keyPath, ca: missingPath},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			m := &MockStore{}
+			c := &mockClusterService{}
+			s := New(m, c, proxy.New(m, c), nil)
+			s.CertFile, s.KeyFile, s.CACertFile = tc.cert, tc.key, tc.ca
+			ln := mustHTTPListener(t)
+			if err := s.Start(ln); err == nil {
+				s.Close()
+				t.Fatal("expected TLS setup to fail")
+			}
+
+			// The caller still owns a usable listener after startup fails.
+			if err := ln.(*net.TCPListener).SetDeadline(time.Now().Add(5 * time.Second)); err != nil {
+				t.Fatalf("listener is no longer usable: %s", err)
+			}
+			conn, err := net.DialTimeout("tcp", ln.Addr().String(), 5*time.Second)
+			if err != nil {
+				t.Fatalf("failed to dial listener after startup error: %s", err)
+			}
+			defer conn.Close()
+			accepted, err := ln.Accept()
+			if err != nil {
+				t.Fatalf("failed to accept connection after startup error: %s", err)
+			}
+			accepted.Close()
+		})
+	}
+}
+
 func Test_TLSServiceInsecure(t *testing.T) {
 	m := &MockStore{}
 	c := &mockClusterService{}
-	s := New("127.0.0.1:0", m, c, proxy.New(m, c), nil)
+	s := New(m, c, proxy.New(m, c), nil)
 
 	cert, key, err := rtls.GenerateSelfSignedCert(pkix.Name{CommonName: "rqlite"}, time.Hour, 2048)
 	if err != nil {
@@ -32,7 +80,7 @@ func Test_TLSServiceInsecure(t *testing.T) {
 	s.BuildInfo = map[string]any{
 		"version": "the version",
 	}
-	if err := s.Start(); err != nil {
+	if err := s.Start(mustHTTPListener(t)); err != nil {
 		t.Fatalf("failed to start service")
 	}
 	if !s.HTTPS() {
@@ -105,7 +153,7 @@ func Test_TLSServiceInsecure(t *testing.T) {
 func Test_TLSServiceSecure(t *testing.T) {
 	m := &MockStore{}
 	c := &mockClusterService{}
-	s := New("127.0.0.1:0", m, c, proxy.New(m, c), nil)
+	s := New(m, c, proxy.New(m, c), nil)
 
 	cert, key, err := rtls.GenerateSelfSignedCertIPSAN(pkix.Name{CommonName: "rqlite.io"}, time.Hour, 2048, net.ParseIP("127.0.0.1"))
 	if err != nil {
@@ -117,7 +165,7 @@ func Test_TLSServiceSecure(t *testing.T) {
 	s.BuildInfo = map[string]any{
 		"version": "the version",
 	}
-	if err := s.Start(); err != nil {
+	if err := s.Start(mustHTTPListener(t)); err != nil {
 		t.Fatalf("failed to start service")
 	}
 	if !s.HTTPS() {
@@ -206,7 +254,7 @@ func Test_TLSServiceSecureMutual(t *testing.T) {
 	// Create and start the HTTP service.
 	m := &MockStore{}
 	c := &mockClusterService{}
-	s := New("127.0.0.1:0", m, c, proxy.New(m, c), nil)
+	s := New(m, c, proxy.New(m, c), nil)
 	s.CertFile = mustWriteTempFile(t, certServer)
 	s.KeyFile = mustWriteTempFile(t, keyServer)
 	s.CACertFile = mustWriteTempFile(t, caCertPEM) // Enables client verification by HTTP server
@@ -214,7 +262,7 @@ func Test_TLSServiceSecureMutual(t *testing.T) {
 		"version": "the version",
 	}
 	s.ClientVerify = true
-	if err := s.Start(); err != nil {
+	if err := s.Start(mustHTTPListener(t)); err != nil {
 		t.Fatalf("failed to start service")
 	}
 	defer s.Close()
@@ -303,7 +351,7 @@ func Test_TLSServiceSecureMutualVerifyCommonName(t *testing.T) {
 
 	m := &MockStore{}
 	c := &mockClusterService{}
-	s := New("127.0.0.1:0", m, c, proxy.New(m, c), nil)
+	s := New(m, c, proxy.New(m, c), nil)
 	s.CertFile = mustWriteTempFile(t, certServer)
 	s.KeyFile = mustWriteTempFile(t, keyServer)
 	s.CACertFile = mustWriteTempFile(t, caCertPEM)
@@ -312,7 +360,7 @@ func Test_TLSServiceSecureMutualVerifyCommonName(t *testing.T) {
 	}
 	s.ClientVerify = true
 	s.ClientVerifyCommonName = "allowed.rqlite.io"
-	if err := s.Start(); err != nil {
+	if err := s.Start(mustHTTPListener(t)); err != nil {
 		t.Fatalf("failed to start service")
 	}
 	defer s.Close()

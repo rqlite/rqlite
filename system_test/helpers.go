@@ -855,7 +855,7 @@ func mustNodeEncrypted(id, dir string, enableSingle, httpEncrypt bool, mux *tcp.
 	clstrClient := cluster.NewClient(clstrDialer, 30*time.Second)
 	node.Client = clstrClient
 	pxy := proxy.New(node.Store, clstrClient)
-	node.Service = httpd.New("localhost:0", node.Store, clstrClient, pxy, nil)
+	node.Service = httpd.New(node.Store, clstrClient, pxy, nil)
 	if httpEncrypt {
 		node.Service.CertFile = node.HTTPCertPath
 		node.Service.KeyFile = node.HTTPKeyPath
@@ -864,7 +864,9 @@ func mustNodeEncrypted(id, dir string, enableSingle, httpEncrypt bool, mux *tcp.
 	node.Service.DefaultQueueBatchSz = 8
 	node.Service.DefaultQueueCap = 64
 
-	if err := node.Service.Start(); err != nil {
+	httpLn := mustTCPListener("localhost:0")
+	if err := node.Service.Start(httpLn); err != nil {
+		httpLn.Close()
 		node.Deprovision()
 		panic(fmt.Sprintf("failed to start HTTP server: %s", err.Error()))
 	}

@@ -261,7 +261,6 @@ func ResetStats() {
 type Service struct {
 	httpServer http.Server
 	closeCh    chan struct{}
-	addr       string       // Bind address of the HTTP service.
 	ln         net.Listener // Service listener
 
 	uiHandler http.Handler
@@ -307,9 +306,8 @@ type Service struct {
 
 // New returns an uninitialized HTTP service. If credentials is nil, then
 // the service performs no authentication and authorization checks.
-func New(addr string, store Store, cluster Cluster, pxy *proxy.Proxy, credentials CredentialStore) *Service {
+func New(store Store, cluster Cluster, pxy *proxy.Proxy, credentials CredentialStore) *Service {
 	s := &Service{
-		addr:                addr,
 		store:               store,
 		proxy:               pxy,
 		DefaultQueueCap:     1024,
@@ -325,20 +323,17 @@ func New(addr string, store Store, cluster Cluster, pxy *proxy.Proxy, credential
 	return s
 }
 
-// Start starts the service.
-func (s *Service) Start() error {
+// Start starts the service on ln, wrapping it with TLS if configured. The listener
+// should not already be wrapped with TLS when TLS is configured on the service.
+// On success, the service owns ln and closes it when the service stops. On error,
+// the caller retains ownership of ln and is responsible for closing it.
+func (s *Service) Start(ln net.Listener) error {
 	s.httpServer = http.Server{
 		Handler: s,
 	}
 
-	var ln net.Listener
 	var err error
-	if s.CertFile == "" || s.KeyFile == "" {
-		ln, err = net.Listen("tcp", s.addr)
-		if err != nil {
-			return err
-		}
-	} else {
+	if s.CertFile != "" && s.KeyFile != "" {
 		mTLSState := rtls.MTLSStateDisabled
 		if s.ClientVerify {
 			mTLSState = rtls.MTLSStateEnabled
@@ -358,10 +353,7 @@ func (s *Service) Start() error {
 		if err != nil {
 			return err
 		}
-		ln, err = tls.Listen("tcp", s.addr, s.tlsConfig)
-		if err != nil {
-			return err
-		}
+		ln = tls.NewListener(ln, s.tlsConfig)
 		var b strings.Builder
 		b.WriteString(fmt.Sprintf("secure HTTPS server enabled with cert %s, key %s", s.CertFile, s.KeyFile))
 		if s.CACertFile != "" {
