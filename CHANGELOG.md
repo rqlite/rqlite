@@ -1,4 +1,4 @@
-## v10.3.2 (unreleased)
+## v10.3.2 (September 7th 2026)
 ### Implementation changes and bug fixes
 - [PR #2762](https://github.com/rqlite/rqlite/pull/2762): Upgrade SQLite driver.
 - [PR #2763](https://github.com/rqlite/rqlite/pull/2763): Unit test reaping an installed Snapshot and streamed Snapshot combo. See issue [#2763](https://github.com/rqlite/rqlite/issues/2763).
