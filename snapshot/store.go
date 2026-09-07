@@ -641,7 +641,19 @@ func (s *Store) reapInternal() (int, int, error) {
 		} else {
 			newest = full
 		}
-		newID := s.snapshotNamer.MakeName(newest.raftMeta.Term, newest.raftMeta.Index)
+		initialGen := int64(1)
+		newID := s.snapshotNamer.MakeName(newest.raftMeta.Term, newest.raftMeta.Index, initialGen)
+		newGen := int64(initialGen)
+		for {
+			finalDir := filepath.Join(s.dir, newID)
+			if !fsutil.DirExists(finalDir) {
+				// No ID collision, use it.
+				break
+			}
+			newGen++
+			newID = s.snapshotNamer.MakeName(newest.raftMeta.Term, newest.raftMeta.Index, newGen)
+		}
+
 		newMeta := copyRaftMeta(newest.raftMeta)
 		newMeta.ID = newID
 		metaJSON, err := json.Marshal(newMeta)
