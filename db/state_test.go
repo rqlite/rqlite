@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"compress/gzip"
 	"database/sql"
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -963,5 +964,204 @@ func mustGzip(dst, src string) {
 
 	if err := srcF.Close(); err != nil {
 		panic(err)
+	}
+}
+
+func Test_StashPopFiles(t *testing.T) {
+	for mask := 0; mask < 8; mask++ {
+		t.Run(fmt.Sprintf("files-%d", mask), func(t *testing.T) {
+			path := filepath.Join(t.TempDir(), "db.sqlite")
+			for i, suffix := range []string{"", "-wal", "-shm"} {
+				if mask&(1<<i) != 0 {
+					if err := os.WriteFile(path+suffix, []byte("original"+suffix), 0600); err != nil {
+						t.Fatal(err)
+					}
+				}
+			}
+			if err := StashFiles(path); err != nil {
+				t.Fatal(err)
+			}
+			for i, suffix := range []string{"", "-wal", "-shm"} {
+				if _, err := os.Stat(path + suffix); !os.IsNotExist(err) {
+					t.Fatalf("source %s was not moved: %v", suffix, err)
+				}
+				if mask&(1<<i) != 0 {
+					assertStashFileContents(t, path+stashedFilesSuffix+suffix, "original"+suffix)
+				}
+			}
+			if err := PopFiles(path); err != nil {
+				t.Fatal(err)
+			}
+			for i, suffix := range []string{"", "-wal", "-shm"} {
+				if mask&(1<<i) != 0 {
+					assertStashFileContents(t, path+suffix, "original"+suffix)
+				}
+				if _, err := os.Stat(path + stashedFilesSuffix + suffix); !os.IsNotExist(err) {
+					t.Fatalf("stash %s was not consumed: %v", suffix, err)
+				}
+			}
+			// No stash is a no-op, including when live files exist.
+			if err := PopFiles(path); err != nil {
+				t.Fatal(err)
+			}
+			for i, suffix := range []string{"", "-wal", "-shm"} {
+				if mask&(1<<i) != 0 {
+					assertStashFileContents(t, path+suffix, "original"+suffix)
+				}
+			}
+		})
+	}
+}
+
+func Test_StashPopFiles_ExistingDestination(t *testing.T) {
+	for _, pop := range []bool{false, true} {
+		for _, suffix := range []string{"", "-wal", "-shm"} {
+			t.Run(fmt.Sprintf("pop-%t-conflict-%s", pop, suffix), func(t *testing.T) {
+				path := filepath.Join(t.TempDir(), "db.sqlite")
+				from, to, move := path, path+stashedFilesSuffix, StashFiles
+				if pop {
+					from, to, move = to, from, PopFiles
+				}
+				if err := os.WriteFile(from, []byte("source"), 0600); err != nil {
+					t.Fatal(err)
+				}
+				if err := os.WriteFile(to+suffix, []byte("destination"), 0600); err != nil {
+					t.Fatal(err)
+				}
+				if err := move(path); !errors.Is(err, os.ErrExist) {
+					t.Fatalf("expected destination conflict, got %v", err)
+				}
+				assertStashFileContents(t, from, "source")
+				assertStashFileContents(t, to+suffix, "destination")
+			})
+		}
+	}
+}
+
+func Test_StashFiles_InvalidSource(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "db.sqlite")
+	if err := os.WriteFile(path, []byte("source"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Mkdir(path+"-wal", 0700); err != nil {
+		t.Fatal(err)
+	}
+	if err := StashFiles(path); err == nil {
+		t.Fatal("expected error for non-file WAL")
+	}
+	assertStashFileContents(t, path, "source")
+	if _, err := os.Stat(path + stashedFilesSuffix); !os.IsNotExist(err) {
+		t.Fatalf("database moved before source validation: %v", err)
+	}
+}
+
+func Test_MoveSQLiteFiles_Rollback(t *testing.T) {
+	moveErr, rollbackErr := errors.New("move failed"), errors.New("rollback failed")
+	for _, failRollback := range []bool{false, true} {
+		t.Run(fmt.Sprintf("rollback-fails-%t", failRollback), func(t *testing.T) {
+			from := filepath.Join(t.TempDir(), "source")
+			to := from + stashedFilesSuffix
+			for _, suffix := range []string{"", "-wal", "-shm"} {
+				if err := os.WriteFile(from+suffix, []byte("original"+suffix), 0600); err != nil {
+					t.Fatal(err)
+				}
+			}
+			rename := func(old, new string) error {
+				if old == from+"-shm" {
+					return moveErr
+				}
+				if failRollback && old == to+"-wal" {
+					return rollbackErr
+				}
+				return os.Rename(old, new)
+			}
+			err := moveSQLiteFiles(from, to, rename)
+			if !errors.Is(err, moveErr) || errors.Is(err, rollbackErr) != failRollback || errors.Is(err, errSQLiteFilesRollback) != failRollback {
+				t.Fatalf("unexpected error: %v", err)
+			}
+			// A failed rollback does not stop restoration of the remaining files.
+			assertStashFileContents(t, from, "original")
+			assertStashFileContents(t, from+"-shm", "original-shm")
+			wal := from + "-wal"
+			if failRollback {
+				wal = to + "-wal"
+			}
+			assertStashFileContents(t, wal, "original-wal")
+		})
+	}
+}
+
+func Test_RemoveStashedFiles(t *testing.T) {
+	for mask := 0; mask < 8; mask++ {
+		t.Run(fmt.Sprintf("files-%d", mask), func(t *testing.T) {
+			path := filepath.Join(t.TempDir(), "db.sqlite")
+			for i, suffix := range []string{"", "-wal", "-shm"} {
+				if err := os.WriteFile(path+suffix, []byte("live"+suffix), 0600); err != nil {
+					t.Fatal(err)
+				}
+				if mask&(1<<i) != 0 {
+					if err := os.WriteFile(path+stashedFilesSuffix+suffix, []byte("stash"), 0600); err != nil {
+						t.Fatal(err)
+					}
+				}
+			}
+			for range 2 {
+				if err := RemoveStashedFiles(path); err != nil {
+					t.Fatal(err)
+				}
+				for _, suffix := range []string{"", "-wal", "-shm"} {
+					assertStashFileContents(t, path+suffix, "live"+suffix)
+					if _, err := os.Stat(path + stashedFilesSuffix + suffix); !os.IsNotExist(err) {
+						t.Fatalf("stash remains: %v", err)
+					}
+				}
+			}
+		})
+	}
+}
+
+func Test_StashPopFiles_SQLite(t *testing.T) {
+	for _, wal := range []bool{false, true} {
+		t.Run(fmt.Sprintf("wal-%t", wal), func(t *testing.T) {
+			path := filepath.Join(t.TempDir(), "db.sqlite")
+			db, err := Open(path, false, wal)
+			if err != nil {
+				t.Fatal(err)
+			}
+			mustExecute(db, "CREATE TABLE foo (name TEXT)")
+			mustExecute(db, "INSERT INTO foo VALUES ('original')")
+			if err := db.Close(); err != nil {
+				t.Fatal(err)
+			}
+			if wal {
+				info, err := os.Stat(path + "-wal")
+				if err != nil || info.Size() == 0 {
+					t.Fatalf("expected uncheckpointed WAL: %v", err)
+				}
+			}
+			if err := StashFiles(path); err != nil {
+				t.Fatal(err)
+			}
+			if err := PopFiles(path); err != nil {
+				t.Fatal(err)
+			}
+			db, err = Open(path, false, wal)
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer db.Close()
+			rows := mustQuery(db, "SELECT name FROM foo")
+			if got, want := asJSON(rows), `[{"columns":["name"],"types":["text"],"values":[["original"]]}]`; got != want {
+				t.Fatalf("got %s, want %s", got, want)
+			}
+		})
+	}
+}
+
+func assertStashFileContents(t *testing.T, path, want string) {
+	t.Helper()
+	got, err := os.ReadFile(path)
+	if err != nil || string(got) != want {
+		t.Fatalf("%s: got %q, want %q, error %v", path, got, want, err)
 	}
 }

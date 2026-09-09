@@ -24,6 +24,22 @@ func Test_DB_BusyTimeout(t *testing.T) {
 		t.Fatalf("failed to set busy_timeout: %s", err.Error())
 	}
 
+	gotRwOnly, err := db.RWBusyTimeout()
+	if err != nil {
+		t.Fatalf("failed to get read-write busy_timeout: %s", err.Error())
+	}
+	if gotRwOnly != wantRw {
+		t.Fatalf("want read-write busy_timeout=%d, got %d", wantRw, gotRwOnly)
+	}
+
+	gotRoOnly, err := db.ROBusyTimeout()
+	if err != nil {
+		t.Fatalf("failed to get read-only busy_timeout: %s", err.Error())
+	}
+	if gotRoOnly != wantRo {
+		t.Fatalf("want read-only busy_timeout=%d, got %d", wantRo, gotRoOnly)
+	}
+
 	gotRw, gotRo, err := db.BusyTimeout()
 	if err != nil {
 		t.Fatalf("failed to get busy_timeout: %s", err.Error())
