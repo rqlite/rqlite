@@ -1,3 +1,7 @@
+## v10.3.3 (unreleased)
+### Implementation changes and bug fixes
+- [PR #2770](https://github.com/rqlite/rqlite/pull/2770): Upgrade gRPC to 1.83.2.
+
 ## v10.3.2 (September 7th 2026)
 ### Implementation changes and bug fixes
 - [PR #2762](https://github.com/rqlite/rqlite/pull/2762): Upgrade SQLite driver.
