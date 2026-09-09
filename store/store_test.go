@@ -3492,3 +3492,53 @@ func testPollLog(t *testing.T, f func(to bool) bool, checkPeriod time.Duration, 
 		}
 	}
 }
+
+func Test_CreateDBOnDisk_RemovesStash(t *testing.T) {
+	for _, remove := range []bool{false, true} {
+		t.Run(fmt.Sprintf("remove-%t", remove), func(t *testing.T) {
+			path := filepath.Join(t.TempDir(), "db.sqlite")
+			writeDB := func(name string) {
+				t.Helper()
+				d, err := db.Open(path, false, false)
+				if err != nil {
+					t.Fatal(err)
+				}
+				for _, stmt := range []string{"CREATE TABLE foo (name TEXT)", "INSERT INTO foo VALUES ('" + name + "')"} {
+					results, err := d.ExecuteStringStmt(stmt)
+					if err != nil || len(results) != 1 || results[0].GetError() != "" {
+						t.Fatalf("execute %s: %v, %v", stmt, results, err)
+					}
+				}
+				if err := d.Close(); err != nil {
+					t.Fatal(err)
+				}
+			}
+			writeDB("stashed")
+			if err := db.StashFiles(path); err != nil {
+				t.Fatal(err)
+			}
+			writeDB("live")
+			s, err := createDBOnDisk(path, nil, remove, false, 0)
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer s.Close()
+			query, want := "SELECT name FROM foo", `[{"columns":["name"],"types":["text"],"values":[["live"]]}]`
+			if remove {
+				query = "SELECT count(*) FROM sqlite_master WHERE name = 'foo'"
+				want = `[{"columns":["count(*)"],"types":["integer"],"values":[[0]]}]`
+			}
+			rows, err := s.QueryStringStmt(query)
+			if err != nil || asJSON(rows) != want {
+				t.Fatalf("got %s, want %s, error %v", asJSON(rows), want, err)
+			}
+			if err := s.Close(); err != nil {
+				t.Fatal(err)
+			}
+			// A new stash succeeds only if startup removed the old stash.
+			if err := db.StashFiles(path); err != nil {
+				t.Fatalf("old stash not removed: %v", err)
+			}
+		})
+	}
+}

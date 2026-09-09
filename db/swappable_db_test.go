@@ -1,12 +1,16 @@
 package db
 
 import (
+	"database/sql"
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
+	"github.com/mattn/go-sqlite3"
+	command "github.com/rqlite/rqlite/v10/command/proto"
 	"github.com/rqlite/rqlite/v10/internal/fsutil"
 )
 
@@ -173,52 +177,138 @@ func Test_SwapInvalidSQLiteFile(t *testing.T) {
 // Test_SwapOpenFailureRestoresOriginal tests that the original database is restored
 // when the incoming database cannot be opened after being renamed into place.
 func Test_SwapOpenFailureRestoresOriginal(t *testing.T) {
-	// Create a source database with content
-	srcPath := mustTempPath()
-	defer os.Remove(srcPath)
-	srcDB, err := Open(srcPath, false, false)
+	for _, wal := range []bool{false, true} {
+		for _, corruptFile := range []bool{false, true} {
+			t.Run(fmt.Sprintf("wal-%t-corrupt-%t", wal, corruptFile), func(t *testing.T) {
+				s, srcPath := newSwapFailureTestDB(t, wal)
+				if corruptFile {
+					// Pass the header check but fail SQLite's actual open.
+					data := append([]byte("SQLite format 3\x00"), make([]byte, 84)...)
+					if err := os.WriteFile(srcPath, data, 0600); err != nil {
+						t.Fatal(err)
+					}
+				} else {
+					s.drv = &Driver{name: "no-such-driver-for-swap-test"}
+				}
+				// Use different settings for the replacement to check that recovery
+				// restores the original settings, including the connection pool limit.
+				err := s.Swap(srcPath, false, !wal)
+				if err == nil || !strings.Contains(err.Error(), "open SQLite file failed") {
+					t.Fatalf("expected replacement open failure, got %v", err)
+				}
+				assertSwapOriginalUsable(t, s, wal)
+				for _, suffix := range []string{"", "-wal", "-shm"} {
+					if _, err := os.Stat(s.Path() + stashedFilesSuffix + suffix); !os.IsNotExist(err) {
+						t.Fatalf("stash remains after rollback: %v", err)
+					}
+				}
+			})
+		}
+	}
+}
+
+func Test_SwapStashFailureLeavesOriginalUsable(t *testing.T) {
+	s, srcPath := newSwapFailureTestDB(t, true)
+	stash := s.Path() + stashedFilesSuffix
+	if err := os.WriteFile(stash, []byte("existing stash"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.Swap(srcPath, false, false); err == nil {
+		t.Fatal("expected stash conflict")
+	}
+	assertStashFileContents(t, stash, "existing stash")
+	assertSwapOriginalUsable(t, s, true)
+}
+
+func Test_SwapSelfLeavesOriginalUsable(t *testing.T) {
+	s, _ := newSwapFailureTestDB(t, true)
+	if err := s.Swap(s.Path(), false, false); err == nil {
+		t.Fatal("expected self-swap error")
+	}
+	assertSwapOriginalUsable(t, s, true)
+}
+
+func Test_SwapRollbackFailureReported(t *testing.T) {
+	s, srcPath := newSwapFailureTestDB(t, false)
+	path := s.Path()
+	name := fmt.Sprintf("swap-failed-cleanup-%d", time.Now().UnixNano())
+	sql.Register(name, &sqlite3.SQLiteDriver{
+		ConnectHook: func(conn *sqlite3.SQLiteConn) error {
+			// Leave a nonempty directory where a replacement sidecar would be,
+			// then fail opening. Removing the replacement must report the error
+			// and retain the original stash for recovery.
+			if err := os.Mkdir(path+"-shm", 0700); err != nil {
+				return err
+			}
+			if err := os.WriteFile(filepath.Join(path+"-shm", "blocked"), nil, 0600); err != nil {
+				return err
+			}
+			return fmt.Errorf("injected open failure")
+		},
+	})
+	s.drv = &Driver{name: name}
+	err := s.Swap(srcPath, false, false)
+	if err == nil || !strings.Contains(err.Error(), "injected open failure") ||
+		!strings.Contains(err.Error(), "failed to remove replacement files") {
+		t.Fatalf("expected both open and rollback errors, got %v", err)
+	}
+	original, err := Open(path+stashedFilesSuffix, true, false)
 	if err != nil {
-		t.Fatalf("failed to open source database: %s", err)
+		t.Fatalf("original stash not readable: %v", err)
 	}
-	mustExecute(srcDB, "CREATE TABLE foo (id INTEGER NOT NULL PRIMARY KEY, name TEXT)")
-	mustExecute(srcDB, `INSERT INTO foo(name) VALUES("incoming")`)
-	if err := srcDB.Close(); err != nil {
-		t.Fatalf("failed to close source database: %s", err)
+	defer original.Close()
+	rows := mustQuery(original, "SELECT name FROM foo")
+	if got, want := asJSON(rows), `[{"columns":["name"],"types":["text"],"values":[["original"]]}]`; got != want {
+		t.Fatalf("got %s, want %s", got, want)
 	}
+}
 
-	// Create a SwappableDB with content
-	swappablePath := mustTempPath()
-	defer os.Remove(swappablePath)
-	swappableDB, err := OpenSwappable(swappablePath, nil, false, false, 0)
+func newSwapFailureTestDB(t *testing.T, wal bool) (*SwappableDB, string) {
+	t.Helper()
+	dir := t.TempDir()
+	srcPath := filepath.Join(dir, "incoming.sqlite")
+	src, err := Open(srcPath, false, false)
 	if err != nil {
-		t.Fatalf("failed to open swappable database: %s", err)
+		t.Fatal(err)
 	}
-	defer swappableDB.Close()
-	mustExecute(swappableDB.db, "CREATE TABLE foo (id INTEGER NOT NULL PRIMARY KEY, name TEXT)")
-	mustExecute(swappableDB.db, `INSERT INTO foo(name) VALUES("original")`)
-
-	// Point the SwappableDB at a driver that cannot open anything, so opening the
-	// incoming database fails after its file has been renamed into place.
-	swappableDB.drv = &Driver{name: "no-such-driver-for-swap-test"}
-	err = swappableDB.Swap(srcPath, false, false)
-	if err == nil {
-		t.Fatalf("expected an error when swapping in an unopenable database, got nil")
+	mustExecute(src, "CREATE TABLE foo (name TEXT)")
+	mustExecute(src, "INSERT INTO foo VALUES ('incoming')")
+	if err := src.Close(); err != nil {
+		t.Fatal(err)
 	}
-
-	// The original database must be back in place, with its data intact.
-	db, err := Open(swappablePath, false, false)
+	s, err := OpenSwappable(filepath.Join(dir, "current.sqlite"), nil, true, wal, 3)
 	if err != nil {
-		t.Fatalf("failed to reopen database after failed swap: %s", err)
+		t.Fatal(err)
 	}
-	defer db.Close()
-	rows := mustQuery(db, "SELECT name FROM foo")
-	if exp, got := `[{"columns":["name"],"types":["text"],"values":[["original"]]}]`, asJSON(rows); exp != got {
-		t.Fatalf("unexpected results after failed swap, expected %s, got %s", exp, got)
-	}
+	t.Cleanup(func() { s.Close() })
+	mustExecute(s.db, "CREATE TABLE foo (name TEXT)")
+	mustExecute(s.db, "INSERT INTO foo VALUES ('original')")
+	return s, srcPath
+}
 
-	// No set-aside files may be left behind.
-	if fsutil.FileExists(swapAsidePath(swappablePath)) {
-		t.Fatalf("set-aside files not cleaned up after failed swap")
+func assertSwapOriginalUsable(t *testing.T, s *SwappableDB, wal bool) {
+	t.Helper()
+	rows, err := s.QueryStringStmt("SELECT name FROM foo")
+	if err != nil {
+		t.Fatalf("same SwappableDB is not queryable after failure: %v", err)
+	}
+	if got, want := asJSON(rows), `[{"columns":["name"],"types":["text"],"values":[["original"]]}]`; got != want {
+		t.Fatalf("got %s, want %s", got, want)
+	}
+	if !s.FKEnabled() || s.WALEnabled() != wal || s.db.roDB.Stats().MaxOpenConnections != 3 {
+		t.Fatal("original database configuration not restored")
+	}
+	results, err := s.Execute(&command.Request{Statements: []*command.Statement{{Sql: "INSERT INTO foo VALUES ('after failure')"}}}, false)
+	if err != nil || len(results) != 1 || results[0].GetError() != "" || results[0].GetE() == nil || results[0].GetE().GetRowsAffected() != 1 {
+		t.Fatalf("same SwappableDB is not writable: %v, %v", results, err)
+	}
+	if s.checkpointMgr.db != s.db {
+		t.Fatal("checkpoint manager still points at the old connection")
+	}
+	if wal {
+		if _, _, err := s.Checkpoint(nil, time.Second); err != nil {
+			t.Fatalf("restored checkpoint manager is not usable: %v", err)
+		}
 	}
 }
 
@@ -257,21 +347,21 @@ func Test_SwapRenameFailureRestoresOriginal(t *testing.T) {
 
 	if err := swappableDB.Swap(srcPath, false, false); err == nil {
 		t.Skip("rename across filesystems unexpectedly succeeded, cannot exercise failure path")
+	} else if !strings.Contains(err.Error(), "failed to rename database") {
+		t.Fatalf("unexpected swap failure: %v", err)
 	}
 
-	// The original database must be back in place, with its data intact.
-	db, err := Open(swappablePath, false, false)
+	// The existing wrapper must be usable with its original data.
+	rows, err := swappableDB.QueryStringStmt("SELECT name FROM foo")
 	if err != nil {
-		t.Fatalf("failed to reopen database after failed swap: %s", err)
+		t.Fatalf("same SwappableDB is not queryable after rename failure: %v", err)
 	}
-	defer db.Close()
-	rows := mustQuery(db, "SELECT name FROM foo")
 	if exp, got := `[{"columns":["name"],"types":["text"],"values":[["original"]]}]`, asJSON(rows); exp != got {
 		t.Fatalf("unexpected results after failed swap, expected %s, got %s", exp, got)
 	}
 
 	// No set-aside files may be left behind.
-	if fsutil.FileExists(swapAsidePath(swappablePath)) {
+	if fsutil.FileExists(swappablePath + stashedFilesSuffix) {
 		t.Fatalf("set-aside files not cleaned up after failed swap")
 	}
 }
@@ -297,7 +387,7 @@ func Test_SwapSuccessWAL(t *testing.T) {
 	// Create a SwappableDB with content
 	swappablePath := mustTempPath()
 	defer os.Remove(swappablePath)
-	swappableDB, err := OpenSwappable(swappablePath, nil, false, true, 0)
+	swappableDB, err := OpenSwappable(swappablePath, nil, false, true, 3)
 	if err != nil {
 		t.Fatalf("failed to open swappable database: %s", err)
 	}
@@ -307,6 +397,10 @@ func Test_SwapSuccessWAL(t *testing.T) {
 
 	if err := swappableDB.Swap(srcPath, false, true); err != nil {
 		t.Fatalf("failed to swap database: %s", err)
+	}
+
+	if got := swappableDB.db.roDB.Stats().MaxOpenConnections; got != 3 {
+		t.Fatalf("read-only pool limit changed after swap: %d", got)
 	}
 
 	// Confirm the SwappableDB contains the data from the source database
@@ -319,99 +413,7 @@ func Test_SwapSuccessWAL(t *testing.T) {
 	}
 
 	// No set-aside files may be left behind.
-	if fsutil.FileExists(swapAsidePath(swappablePath)) {
+	if fsutil.FileExists(swappablePath + stashedFilesSuffix) {
 		t.Fatalf("set-aside files not cleaned up after successful swap")
 	}
-}
-
-// Test_RecoverPendingSwap tests recovery of a swap interrupted by a crash.
-func Test_RecoverPendingSwap(t *testing.T) {
-	t.Run("NoAsideFiles", func(t *testing.T) {
-		dbPath := mustTempPath()
-		defer os.Remove(dbPath)
-		if err := RecoverPendingSwap(dbPath, false); err != nil {
-			t.Fatalf("unexpected error when no swap is pending: %s", err)
-		}
-	})
-
-	t.Run("RestoresWhenDatabaseMissing", func(t *testing.T) {
-		dbPath := mustTempPath()
-		defer os.Remove(dbPath)
-		if err := os.WriteFile(dbPath, []byte("original"), 0644); err != nil {
-			t.Fatalf("failed to create database file: %s", err)
-		}
-		if err := moveFilesAside(dbPath, swapAsidePath(dbPath)); err != nil {
-			t.Fatalf("failed to set aside database files: %s", err)
-		}
-		if err := RecoverPendingSwap(dbPath, false); err != nil {
-			t.Fatalf("failed to recover pending swap: %s", err)
-		}
-		if b, err := os.ReadFile(dbPath); err != nil || string(b) != "original" {
-			t.Fatalf("database file not restored")
-		}
-		if fsutil.FileExists(swapAsidePath(dbPath)) {
-			t.Fatalf("set-aside files not removed after recovery")
-		}
-	})
-
-	t.Run("RestoresWALAndSHMFiles", func(t *testing.T) {
-		dbPath := mustTempPath()
-		defer os.Remove(dbPath)
-		for _, path := range []string{dbPath, dbPath + "-wal", dbPath + "-shm"} {
-			if err := os.WriteFile(path, []byte("data"), 0644); err != nil {
-				t.Fatalf("failed to create file %s: %s", path, err)
-			}
-		}
-		if err := moveFilesAside(dbPath, swapAsidePath(dbPath)); err != nil {
-			t.Fatalf("failed to set aside database files: %s", err)
-		}
-		if err := RecoverPendingSwap(dbPath, false); err != nil {
-			t.Fatalf("failed to recover pending swap: %s", err)
-		}
-		for _, path := range []string{dbPath, dbPath + "-wal", dbPath + "-shm"} {
-			if !fsutil.FileExists(path) {
-				t.Fatalf("file %s not restored", path)
-			}
-		}
-		if fsutil.FileExists(swapAsidePath(dbPath)) {
-			t.Fatalf("set-aside files not removed after recovery")
-		}
-	})
-
-	t.Run("RemovesAsideWhenDatabasePresent", func(t *testing.T) {
-		dbPath := mustTempPath()
-		defer os.Remove(dbPath)
-		if err := os.WriteFile(dbPath, []byte("new"), 0644); err != nil {
-			t.Fatalf("failed to create database file: %s", err)
-		}
-		if err := os.WriteFile(swapAsidePath(dbPath), []byte("old"), 0644); err != nil {
-			t.Fatalf("failed to create set-aside file: %s", err)
-		}
-		if err := RecoverPendingSwap(dbPath, false); err != nil {
-			t.Fatalf("failed to recover pending swap: %s", err)
-		}
-		if b, err := os.ReadFile(dbPath); err != nil || string(b) != "new" {
-			t.Fatalf("database file was modified during recovery")
-		}
-		if fsutil.FileExists(swapAsidePath(dbPath)) {
-			t.Fatalf("stale set-aside files not removed")
-		}
-	})
-
-	t.Run("DiscardRemovesAside", func(t *testing.T) {
-		dbPath := mustTempPath()
-		defer os.Remove(dbPath)
-		if err := os.WriteFile(dbPath, []byte("new"), 0644); err != nil {
-			t.Fatalf("failed to create database file: %s", err)
-		}
-		if err := os.WriteFile(swapAsidePath(dbPath), []byte("old"), 0644); err != nil {
-			t.Fatalf("failed to create set-aside file: %s", err)
-		}
-		if err := RecoverPendingSwap(dbPath, true); err != nil {
-			t.Fatalf("failed to discard pending swap: %s", err)
-		}
-		if fsutil.FileExists(swapAsidePath(dbPath)) {
-			t.Fatalf("set-aside files not removed when discarding")
-		}
-	})
 }

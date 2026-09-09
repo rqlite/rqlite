@@ -3269,11 +3269,6 @@ func raftLogInfoMessage(sz int64, fi, li uint64) string {
 // no guarantee they are consistent with the main database file. If remove
 // is true, all existing database files at that path are removed first.
 func createDBOnDisk(path string, drv *sql.Driver, remove, fkConstraints bool, maxROConns int) (*sql.SwappableDB, error) {
-	// Recover from a database swap interrupted by a crash. If the database
-	// files are about to be removed, any set-aside files are discarded too.
-	if err := sql.RecoverPendingSwap(path, remove); err != nil {
-		return nil, fmt.Errorf("failed to recover interrupted database swap: %s", err)
-	}
 	if remove {
 		if err := sql.RemoveFiles(path); err != nil {
 			return nil, err
@@ -3282,6 +3277,12 @@ func createDBOnDisk(path string, drv *sql.Driver, remove, fkConstraints bool, ma
 		if err := sql.RemoveWALFiles(path); err != nil {
 			return nil, err
 		}
+	}
+	// The Store has already decided whether the main database is safe to reuse
+	// using its clean-snapshot fingerprint, or must be rebuilt from Raft. Do not
+	// infer a completed swap from the existence of the main database file.
+	if err := sql.RemoveStashedFiles(path); err != nil {
+		return nil, fmt.Errorf("failed to remove stashed database files: %w", err)
 	}
 	return sql.OpenSwappable(path, drv, fkConstraints, true, maxROConns)
 }
