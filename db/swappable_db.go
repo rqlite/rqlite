@@ -5,11 +5,13 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"path/filepath"
 	"regexp"
 	"sync"
 	"time"
 
 	command "github.com/rqlite/rqlite/v10/command/proto"
+	"github.com/rqlite/rqlite/v10/internal/fsutil"
 )
 
 // SwappableDB is a wrapper around DB that allows the underlying database to be swapped out
@@ -48,6 +50,10 @@ func OpenSwappable(dbPath string, drv *Driver, fkEnabled, wal bool, maxROConns i
 // Swap swaps the underlying database with that at the given path. The Swap operation
 // may fail on some platforms if the file at path is open by another process. It is
 // the caller's responsibility to ensure the file at path is not in use.
+//
+// The existing database files are moved aside rather than deleted, and are removed
+// only once the incoming database has been opened. If any step fails, the original
+// files are moved back into place.
 func (s *SwappableDB) Swap(path string, fkConstraints, walEnabled bool) error {
 	if !IsValidSQLiteFile(path) {
 		return fmt.Errorf("invalid SQLite data")
@@ -58,27 +64,104 @@ func (s *SwappableDB) Swap(path string, fkConstraints, walEnabled bool) error {
 	if err := s.db.Close(); err != nil {
 		return fmt.Errorf("failed to close: %s", err)
 	}
-	if err := RemoveFiles(s.db.Path()); err != nil {
-		return fmt.Errorf("failed to remove files: %s", err)
+
+	dbPath := s.db.Path()
+	asidePath := swapAsidePath(dbPath)
+	if err := moveFilesAside(dbPath, asidePath); err != nil {
+		return fmt.Errorf("failed to move current database files aside: %s", err)
 	}
-	if err := os.Rename(path, s.db.Path()); err != nil {
+	restoreOnExit := true
+	defer func() {
+		if restoreOnExit {
+			restoreFiles(asidePath, dbPath) // best effort, no database is open
+		}
+	}()
+
+	if err := os.Rename(path, dbPath); err != nil {
 		return fmt.Errorf("failed to rename database: %s", err)
 	}
+	if err := fsutil.SyncDirMaybe(filepath.Dir(dbPath)); err != nil {
+		return fmt.Errorf("failed to sync data directory: %s", err)
+	}
 
-	db, err := OpenWithDriver(s.drv, s.db.Path(), fkConstraints, walEnabled)
+	db, err := OpenWithDriver(s.drv, dbPath, fkConstraints, walEnabled)
 	if err != nil {
 		return fmt.Errorf("open SQLite file failed: %s", err)
 	}
-	s.db = db
-	if err := s.checkpointMgr.Close(); err != nil {
-		return fmt.Errorf("failed to close checkpoint manager: %s", err)
-	}
 	mgr, err := NewCheckpointManager(db)
 	if err != nil {
+		db.Close()
 		return fmt.Errorf("failed to recreate checkpoint manager: %s", err)
 	}
+	s.db = db
+	if err := s.checkpointMgr.Close(); err != nil {
+		db.Close()
+		return fmt.Errorf("failed to close checkpoint manager: %s", err)
+	}
 	s.checkpointMgr = mgr
+
+	// The swap is complete. The old files are stale now, and if removing them
+	// fails they are cleaned up at next startup by RecoverPendingSwap.
+	restoreOnExit = false
+	if err := RemoveFiles(asidePath); err != nil {
+		// Ignore. Failing the swap over stale file cleanup is not worth it.
+	}
 	return nil
+}
+
+// swapAsidePath returns the path the database files are moved to while a swap is
+// in progress.
+func swapAsidePath(dbPath string) string {
+	return dbPath + ".swap-old"
+}
+
+// moveFilesAside moves the SQLite database at dbPath, along with any WAL and SHM
+// files, so that their names begin with asidePath. Stale files at asidePath are
+// removed first. If any move fails, moves already made are rolled back.
+func moveFilesAside(dbPath, asidePath string) error {
+	if err := RemoveFiles(asidePath); err != nil {
+		return err
+	}
+	var moved []string
+	for _, suffix := range []string{"", "-wal", "-shm"} {
+		if !fsutil.FileExists(dbPath + suffix) {
+			continue
+		}
+		if err := os.Rename(dbPath+suffix, asidePath+suffix); err != nil {
+			for _, s := range moved {
+				os.Rename(asidePath+s, dbPath+s)
+			}
+			return err
+		}
+		moved = append(moved, suffix)
+	}
+	return nil
+}
+
+// restoreFiles moves the files previously set aside at asidePath back to dbPath.
+// Any files already at dbPath are removed first.
+func restoreFiles(asidePath, dbPath string) error {
+	if err := moveFilesAside(asidePath, dbPath); err != nil {
+		return err
+	}
+	return fsutil.SyncDirMaybe(filepath.Dir(dbPath))
+}
+
+// RecoverPendingSwap cleans up state left behind by a Swap interrupted by a crash.
+// If discard is true, any set-aside files are removed. Otherwise the original files
+// are restored if the database file is missing, or removed as stale if it is present.
+func RecoverPendingSwap(dbPath string, discard bool) error {
+	asidePath := swapAsidePath(dbPath)
+	if !fsutil.FileExists(asidePath) {
+		return nil
+	}
+	if discard || fsutil.FileExists(dbPath) {
+		if err := RemoveFiles(asidePath); err != nil {
+			return err
+		}
+		return fsutil.SyncDirMaybe(filepath.Dir(dbPath))
+	}
+	return restoreFiles(asidePath, dbPath)
 }
 
 // Close closes the underlying database.
