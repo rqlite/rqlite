@@ -136,6 +136,10 @@ message RemoveNodeRequest {
 	string id = 1;
 }
 
+message DemoteNodeRequest {
+	string id = 1;
+}
+
 message StepdownRequest {
 	string id = 1;
 	bool wait = 2;
