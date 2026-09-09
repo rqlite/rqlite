@@ -857,3 +857,31 @@ func Test_ClientBroadcast_WithError(t *testing.T) {
 		t.Fatalf("expected 'test error', got '%s'", resp.Error)
 	}
 }
+
+// Test_ClientExecute_OversizedResponse verifies that the client rejects a response
+// whose declared length exceeds maxMessageSize, preventing a potentially huge allocation.
+func Test_ClientExecute_OversizedResponse(t *testing.T) {
+	srv := servicetest.NewService()
+	srv.Handler = func(conn net.Conn) {
+		// Consume the incoming command so the client's write doesn't stall.
+		readCommand(conn)
+
+		// Send an oversized length prefix with no body.
+		b := make([]byte, protoBufferLengthSize)
+		binary.LittleEndian.PutUint64(b, maxMessageSize+1)
+		conn.Write(b)
+	}
+	srv.Start()
+	defer srv.Close()
+
+	c := NewClient(&simpleDialer{}, 0)
+	_, _, err := c.Execute(context.Background(),
+		executeRequestFromString("INSERT INTO foo VALUES (1)"),
+		srv.Addr(), nil, time.Second, noRetries)
+	if err == nil {
+		t.Fatal("expected error for oversized response, got nil")
+	}
+	if !strings.Contains(err.Error(), "too large") {
+		t.Fatalf("expected 'too large' in error, got: %s", err)
+	}
+}

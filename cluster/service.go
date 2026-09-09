@@ -78,6 +78,11 @@ const (
 	// maxConcurrentConns bounds the number of connections the service handles
 	// concurrently, preventing connection floods from spawning unbounded goroutines.
 	maxConcurrentConns = 512
+
+	// maxMessageSize is the maximum number of bytes allowed for a single
+	// cluster protocol message. A peer sending a larger length prefix would
+	// cause an enormous allocation; this limit prevents that.
+	maxMessageSize = 64 * 1024 * 1024 // 64 MiB
 )
 
 func init() {
@@ -377,6 +382,9 @@ func (s *Service) handleConn(conn net.Conn) {
 			return
 		}
 		sz := binary.LittleEndian.Uint64(b[0:])
+		if sz > maxMessageSize {
+			return
+		}
 
 		p := make([]byte, sz)
 		if s.connTimeout > 0 {
