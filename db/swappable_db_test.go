@@ -283,6 +283,9 @@ func newSwapFailureTestDB(t *testing.T, wal bool) (*SwappableDB, string) {
 	t.Cleanup(func() { s.Close() })
 	mustExecute(s.db, "CREATE TABLE foo (name TEXT)")
 	mustExecute(s.db, "INSERT INTO foo VALUES ('original')")
+	if err := s.SetSynchronousMode(SynchronousFull); err != nil {
+		t.Fatal(err)
+	}
 	return s, srcPath
 }
 
@@ -297,6 +300,9 @@ func assertSwapOriginalUsable(t *testing.T, s *SwappableDB, wal bool) {
 	}
 	if !s.FKEnabled() || s.WALEnabled() != wal || s.db.roDB.Stats().MaxOpenConnections != 3 {
 		t.Fatal("original database configuration not restored")
+	}
+	if mode, err := s.db.GetSynchronousMode(); err != nil || mode != SynchronousFull {
+		t.Fatalf("original synchronous mode not restored: %v, %v", mode, err)
 	}
 	results, err := s.Execute(&command.Request{Statements: []*command.Statement{{Sql: "INSERT INTO foo VALUES ('after failure')"}}}, false)
 	if err != nil || len(results) != 1 || results[0].GetError() != "" || results[0].GetE() == nil || results[0].GetE().GetRowsAffected() != 1 {
@@ -415,5 +421,85 @@ func Test_SwapSuccessWAL(t *testing.T) {
 	// No set-aside files may be left behind.
 	if fsutil.FileExists(swappablePath + stashedFilesSuffix) {
 		t.Fatalf("set-aside files not cleaned up after successful swap")
+	}
+}
+
+func Test_SwapRetryAfterRollback(t *testing.T) {
+	s, srcPath := newSwapFailureTestDB(t, true)
+	drv := s.drv
+	s.drv = &Driver{name: "no-such-driver-for-swap-retry-test"}
+	if err := s.Swap(srcPath, false, true); err == nil {
+		t.Fatal("expected first swap to fail")
+	}
+	assertSwapOriginalUsable(t, s, true)
+	s.drv = drv
+	writeSwapReplacement(t, srcPath, "retry")
+	if err := s.Swap(srcPath, true, true); err != nil {
+		t.Fatalf("retry failed after rollback: %v", err)
+	}
+	rows, err := s.QueryStringStmt("SELECT name FROM foo")
+	if err != nil || asJSON(rows) != `[{"columns":["name"],"types":["text"],"values":[["retry"]]}]` {
+		t.Fatalf("unexpected retry results: %s, %v", asJSON(rows), err)
+	}
+}
+
+func Test_SwapRetriesCommittedStashCleanup(t *testing.T) {
+	s, srcPath := newSwapFailureTestDB(t, false)
+	path := s.Path()
+	blockedPath := path + stashedFilesSuffix + "-shm"
+	name := fmt.Sprintf("swap-cleanup-retry-%d", time.Now().UnixNano())
+	blockCleanup := true
+	sql.Register(name, &sqlite3.SQLiteDriver{
+		ConnectHook: func(conn *sqlite3.SQLiteConn) error {
+			if !blockCleanup {
+				return nil
+			}
+			blockCleanup = false
+			if err := os.Mkdir(blockedPath, 0700); err != nil {
+				return err
+			}
+			return os.WriteFile(filepath.Join(blockedPath, "blocked"), nil, 0600)
+		},
+	})
+	s.drv = &Driver{name: name}
+	if err := s.Swap(srcPath, false, false); err != nil {
+		t.Fatalf("successful installation failed on cleanup: %v", err)
+	}
+	if !s.stashCleanupPending {
+		t.Fatal("completed swap did not record pending cleanup")
+	}
+	writeSwapReplacement(t, srcPath, "retry")
+	if err := s.Swap(srcPath, false, false); err == nil || !strings.Contains(err.Error(), "stash from completed swap") {
+		t.Fatalf("expected cleanup error while obstruction remains: %v", err)
+	}
+	rows, err := s.QueryStringStmt("SELECT name FROM foo")
+	if err != nil || asJSON(rows) != `[{"columns":["name"],"types":["text"],"values":[["incoming"]]}]` {
+		t.Fatalf("cleanup failure affected the active database: %s, %v", asJSON(rows), err)
+	}
+	if err := os.RemoveAll(blockedPath); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.Swap(srcPath, false, false); err != nil {
+		t.Fatalf("retry failed after cleanup obstruction was removed: %v", err)
+	}
+	if s.stashCleanupPending {
+		t.Fatal("cleanup still marked pending")
+	}
+	rows, err = s.QueryStringStmt("SELECT name FROM foo")
+	if err != nil || asJSON(rows) != `[{"columns":["name"],"types":["text"],"values":[["retry"]]}]` {
+		t.Fatalf("unexpected retry results: %s, %v", asJSON(rows), err)
+	}
+}
+
+func writeSwapReplacement(t *testing.T, path, name string) {
+	t.Helper()
+	d, err := Open(path, false, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	mustExecute(d, "CREATE TABLE foo (name TEXT)")
+	mustExecute(d, "INSERT INTO foo VALUES ('"+name+"')")
+	if err := d.Close(); err != nil {
+		t.Fatal(err)
 	}
 }

@@ -2025,14 +2025,13 @@ func (s *Store) ReadFrom(r io.Reader) (int64, error) {
 		return n, err
 	}
 
-	// Swap in new database file.
-	if err := s.db.Swap(f.Name(), s.dbConf.FKConstraints, true); err != nil {
+	// Swap can replace the underlying connections even when it rolls back, so
+	// reregister CDC hooks on the next change regardless of the outcome.
+	err = s.db.Swap(f.Name(), s.dbConf.FKConstraints, true)
+	s.cdcRegistered.Unset()
+	if err != nil {
 		return n, fmt.Errorf("error swapping database file: %v", err)
 	}
-
-	// Swapping in a new database unregisters any registered CDC hooks, so signal that it
-	// needs to be reregistered on the next change.
-	s.cdcRegistered.Unset()
 
 	// Snapshot, so we load the new database into the Raft system.
 	if err := s.snapshotStore.SetDueNext(snapshot.Full); err != nil {

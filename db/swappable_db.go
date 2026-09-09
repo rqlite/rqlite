@@ -22,6 +22,9 @@ type SwappableDB struct {
 	drv           *Driver
 	checkpointMgr *CheckpointManager
 	dbMu          sync.RWMutex
+
+	// Only a successfully installed replacement makes its leftover stash safe to remove.
+	stashCleanupPending bool
 }
 
 // OpenSwappable returns a new SwappableDB instance, which opens the database at the given path,
@@ -66,6 +69,12 @@ func (s *SwappableDB) Swap(path string, fkConstraints, walEnabled bool) (retErr 
 
 	oldDB := s.db
 	dbPath := oldDB.Path()
+	if s.stashCleanupPending {
+		if err := RemoveStashedFiles(dbPath); err != nil {
+			return fmt.Errorf("failed to remove stash from completed swap: %w", err)
+		}
+		s.stashCleanupPending = false
+	}
 	srcInfo, err := os.Stat(path)
 	if err != nil {
 		return err
@@ -76,6 +85,10 @@ func (s *SwappableDB) Swap(path string, fkConstraints, walEnabled bool) (retErr 
 	}
 	if os.SameFile(srcInfo, dstInfo) {
 		return fmt.Errorf("cannot swap a database with itself")
+	}
+	syncMode, err := oldDB.GetSynchronousMode()
+	if err != nil {
+		return fmt.Errorf("failed to read original synchronous mode: %w", err)
 	}
 	maxROConns := oldDB.roDB.Stats().MaxOpenConnections
 	if err := s.checkpointMgr.Close(); err != nil {
@@ -122,6 +135,10 @@ func (s *SwappableDB) Swap(path string, fkConstraints, walEnabled bool) (retErr 
 			return
 		}
 		restored.SetMaxReadOnlyConns(maxROConns)
+		if err := restored.SetSynchronousMode(syncMode); err != nil {
+			retErr = errors.Join(retErr, fmt.Errorf("failed to restore synchronous mode: %w", err), restored.Close())
+			return
+		}
 		mgr, err := NewCheckpointManager(restored)
 		if err != nil {
 			retErr = errors.Join(retErr, fmt.Errorf("failed to recreate original checkpoint manager: %w", err), restored.Close())
@@ -158,6 +175,7 @@ func (s *SwappableDB) Swap(path string, fkConstraints, walEnabled bool) (retErr 
 	// The replacement is installed. A cleanup failure must not trigger rollback:
 	// some of the stashed files may already have been removed.
 	if err := RemoveStashedFiles(dbPath); err != nil {
+		s.stashCleanupPending = true
 		incoming.logger.Printf("failed to remove stashed database files after swap: %s", err)
 	}
 	return nil
