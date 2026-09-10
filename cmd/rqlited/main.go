@@ -752,9 +752,9 @@ func createCluster(ctx context.Context, cfg *Config, hasPeers bool, client *clus
 
 func networkCheckJoinAddrs(joinAddrs []string) error {
 	if len(joinAddrs) > 0 {
-		log.Println("checking that supplied join addresses don't serve HTTP(S)")
+		log.Println("checking that supplied join addresses are not incorrectly set to the HTTP(S) addresses")
 		if addr, ok := httpd.AnyServingHTTP(joinAddrs); ok {
-			return fmt.Errorf("join address %s appears to be serving HTTP when it should be Raft", addr)
+			return fmt.Errorf("join address %s is serving HTTP traffic. Make sure you're joining via the Raft address", addr)
 		}
 	}
 	return nil

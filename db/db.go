@@ -733,13 +733,30 @@ func (db *DB) SetBusyTimeout(rwMs, roMs int) (err error) {
 	return nil
 }
 
-// BusyTimeout returns the current busy timeout value.
+// RWBusyTimeout returns the current busy timeout value for the read-write
+// database connection.
+func (db *DB) RWBusyTimeout() (int, error) {
+	var ms int
+	err := db.rwDB.QueryRow("PRAGMA busy_timeout").Scan(&ms)
+	return ms, err
+}
+
+// ROBusyTimeout returns the current busy timeout value for the read-only
+// database connection.
+func (db *DB) ROBusyTimeout() (int, error) {
+	var ms int
+	err := db.roDB.QueryRow("PRAGMA busy_timeout").Scan(&ms)
+	return ms, err
+}
+
+// BusyTimeout returns the current busy timeout values for the read-write and
+// read-only database connections.
 func (db *DB) BusyTimeout() (rwMs, roMs int, err error) {
-	err = db.rwDB.QueryRow("PRAGMA busy_timeout").Scan(&rwMs)
+	rwMs, err = db.RWBusyTimeout()
 	if err != nil {
 		return 0, 0, err
 	}
-	err = db.roDB.QueryRow("PRAGMA busy_timeout").Scan(&roMs)
+	roMs, err = db.ROBusyTimeout()
 	if err != nil {
 		return 0, 0, err
 	}
@@ -771,7 +788,7 @@ func (db *DB) CheckpointTruncateWithTimeout(dur time.Duration) (err error) {
 		}
 	}()
 
-	rwBt, _, err := db.BusyTimeout()
+	rwBt, err := db.RWBusyTimeout()
 	if err != nil {
 		return fmt.Errorf("failed to get busy_timeout: %s", err.Error())
 	}
@@ -827,7 +844,7 @@ func (db *DB) CheckpointWithTimeout(mode CheckpointMode, dur time.Duration) (met
 	}()
 
 	if dur > 0 {
-		rwBt, _, err := db.BusyTimeout()
+		rwBt, err := db.RWBusyTimeout()
 		if err != nil {
 			return nil, fmt.Errorf("failed to get busy_timeout on checkpointing connection: %s", err.Error())
 		}
