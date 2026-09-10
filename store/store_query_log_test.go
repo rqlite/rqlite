@@ -41,9 +41,8 @@ func Test_StoreQueryLog_Enabled(t *testing.T) {
 	logger := log.New(&buf, "", 0)
 
 	cfg := NewDBConfig()
-	cfg.QueryLogger = querylog.NewQueryLogger(querylog.LoggerConfig{
-		Logger:      logger,
-		ExpandedSQL: true,
+	cfg.QueryLogger = querylog.NewQueryLogger(querylog.Config{
+		Logger: logger,
 	})
 
 	ly := mustMockLayer("localhost:0")
