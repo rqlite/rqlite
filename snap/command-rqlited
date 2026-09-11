@@ -1,0 +1,6 @@
+#!/bin/sh
+set -eu
+
+DATA_DIR="${SNAP_COMMON}/data"
+mkdir -p "$DATA_DIR"
+exec "$SNAP/bin/rqlited" "$@" "$DATA_DIR"
