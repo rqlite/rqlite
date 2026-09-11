@@ -2733,7 +2733,7 @@ func (s *Store) fsmSnapshot() (fSnap raft.FSMSnapshot, retErr error) {
 		// which will be faster than performing a full snapshot. All this means that we avoid breaking the
 		// series of incremental snapshots. The next Snapshot will comprise of two WAL files in that case.
 		if err := walWriter.Close(); err != nil {
-			// Failing to close the staged WAL would break the chain of incrementals. Fall back full.
+			// Failing to close the staged WAL would break the chain of incrementals. Fall back to full.
 			if err := s.snapshotStore.SetDueNext(snapshot.Full); err != nil {
 				s.logger.Fatalf("failed to set full needed after WAL writer close failure: %s", err)
 			}
