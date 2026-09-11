@@ -7,6 +7,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/rqlite/rqlite/v10/db/querylog"
 )
 
 // Verifies that when QueryLogger is nil,
@@ -39,7 +41,9 @@ func Test_StoreQueryLog_Enabled(t *testing.T) {
 	logger := log.New(&buf, "", 0)
 
 	cfg := NewDBConfig()
-	cfg.QueryLogger = logger
+	cfg.QueryLogger = querylog.NewQueryLogger(querylog.Config{
+		Logger: logger,
+	})
 
 	ly := mustMockLayer("localhost:0")
 	s := New(&Config{
