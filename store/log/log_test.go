@@ -5,7 +5,7 @@ import (
 	"testing"
 
 	"github.com/hashicorp/raft"
-	raftboltdb "github.com/rqlite/raft-boltdb/v2"
+	"github.com/rqlite/rqlite/v10/internal/raftdb"
 )
 
 func Test_LogNewEmpty(t *testing.T) {
@@ -56,7 +56,7 @@ func Test_LogNewExistNotEmpty(t *testing.T) {
 	path := mustTempFile(t)
 
 	// Write some entries directory to the BoltDB Raft store.
-	bs, err := raftboltdb.NewBoltStore(path)
+	bs, err := raftdb.NewBoltStore(path)
 	if err != nil {
 		t.Fatalf("failed to create bolt store: %s", err)
 	}
@@ -113,7 +113,7 @@ func Test_LogNewExistNotEmpty(t *testing.T) {
 	}
 
 	// Delete an entry, recheck index functionality.
-	bs, err = raftboltdb.NewBoltStore(path)
+	bs, err = raftdb.NewBoltStore(path)
 	if err != nil {
 		t.Fatalf("failed to re-open bolt store: %s", err)
 	}
@@ -165,7 +165,7 @@ func Test_LogNewExistNotEmptyNoFreelistSync(t *testing.T) {
 	path := mustTempFile(t)
 
 	// Write some entries directory to the BoltDB Raft store.
-	bs, err := raftboltdb.NewBoltStore(path)
+	bs, err := raftdb.NewBoltStore(path)
 	if err != nil {
 		t.Fatalf("failed to create bolt store: %s", err)
 	}
@@ -214,7 +214,7 @@ func Test_LogNewExistNotEmptyNoFreelistSync(t *testing.T) {
 	}
 
 	// Delete an entry, recheck index functionality.
-	bs, err = raftboltdb.NewBoltStore(path)
+	bs, err = raftdb.NewBoltStore(path)
 	if err != nil {
 		t.Fatalf("failed to re-open bolt store: %s", err)
 	}
@@ -266,7 +266,7 @@ func Test_LogDeleteAll(t *testing.T) {
 	path := mustTempFile(t)
 
 	// Write some entries directory to the BoltDB Raft store.
-	bs, err := raftboltdb.NewBoltStore(path)
+	bs, err := raftdb.NewBoltStore(path)
 	if err != nil {
 		t.Fatalf("failed to create bolt store: %s", err)
 	}
@@ -344,7 +344,7 @@ func Test_LogLastCommandIndexNotExist(t *testing.T) {
 	path := mustTempFile(t)
 
 	// Write some entries directory to the BoltDB Raft store.
-	bs, err := raftboltdb.NewBoltStore(path)
+	bs, err := raftdb.NewBoltStore(path)
 	if err != nil {
 		t.Fatalf("failed to create bolt store: %s", err)
 	}
@@ -394,7 +394,7 @@ func Test_LogLastCommandIndexNotExist(t *testing.T) {
 	}
 
 	// Delete first log.
-	bs, err = raftboltdb.NewBoltStore(path)
+	bs, err = raftdb.NewBoltStore(path)
 	if err != nil {
 		t.Fatalf("failed to re-open bolt store: %s", err)
 	}
@@ -431,7 +431,7 @@ func Test_LogStats(t *testing.T) {
 	path := mustTempFile(t)
 
 	// Write some entries directory to the BoltDB Raft store.
-	bs, err := raftboltdb.NewBoltStore(path)
+	bs, err := raftdb.NewBoltStore(path)
 	if err != nil {
 		t.Fatalf("failed to create bolt store: %s", err)
 	}
