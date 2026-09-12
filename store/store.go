@@ -2025,14 +2025,13 @@ func (s *Store) ReadFrom(r io.Reader) (int64, error) {
 		return n, err
 	}
 
-	// Swap in new database file.
-	if err := s.db.Swap(f.Name(), s.dbConf.FKConstraints, true); err != nil {
+	// Swap can replace the underlying connections even when it rolls back, so
+	// reregister CDC hooks on the next change regardless of the outcome.
+	err = s.db.Swap(f.Name(), s.dbConf.FKConstraints, true)
+	s.cdcRegistered.Unset()
+	if err != nil {
 		return n, fmt.Errorf("error swapping database file: %v", err)
 	}
-
-	// Swapping in a new database unregisters any registered CDC hooks, so signal that it
-	// needs to be reregistered on the next change.
-	s.cdcRegistered.Unset()
 
 	// Snapshot, so we load the new database into the Raft system.
 	if err := s.snapshotStore.SetDueNext(snapshot.Full); err != nil {
@@ -3298,6 +3297,12 @@ func createDBOnDisk(path string, drv *sql.Driver, remove, fkConstraints bool, ma
 		if err := sql.RemoveWALFiles(path); err != nil {
 			return nil, err
 		}
+	}
+	// The Store has already decided whether the main database is safe to reuse
+	// using its clean-snapshot fingerprint, or must be rebuilt from Raft. Do not
+	// infer a completed swap from the existence of the main database file.
+	if err := sql.RemoveStashedFiles(path); err != nil {
+		return nil, fmt.Errorf("failed to remove stashed database files: %w", err)
 	}
 	return sql.OpenSwappable(path, drv, fkConstraints, true, maxROConns)
 }

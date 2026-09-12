@@ -1,8 +1,11 @@
 package store
 
 import (
+	"bytes"
 	"context"
+	"fmt"
 	"slices"
+	"strings"
 	"testing"
 	"time"
 
@@ -147,4 +150,49 @@ func Test_StoreCDC_Events_Single(t *testing.T) {
 	case <-timeout:
 		t.Fatalf("timeout waiting for CDC INSERT event for table 'foo'")
 	}
+}
+
+func Test_SingleNodeBoot_FailedSwapPreservesCDC(t *testing.T) {
+	s, ln := mustNewStore(t)
+	defer ln.Close()
+	if err := s.Open(); err != nil {
+		t.Fatal(err)
+	}
+	defer s.Close(true)
+	if err := s.Bootstrap(NewServer(s.ID(), s.Addr(), true)); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.WaitForLeader(10 * time.Second); err != nil {
+		t.Fatal(err)
+	}
+	create := executeRequestFromString("CREATE TABLE foo (id INTEGER NOT NULL PRIMARY KEY)", false, false)
+	if _, _, err := s.Execute(context.Background(), create); err != nil {
+		t.Fatal(err)
+	}
+	events := make(chan *proto.CDCIndexedEventGroup, 10)
+	if err := s.EnableCDC(events, nil, false); err != nil {
+		t.Fatal(err)
+	}
+	insertAndCheck := func(id int64) {
+		t.Helper()
+		er := executeRequestFromString(fmt.Sprintf("INSERT INTO foo VALUES (%d)", id), false, false)
+		if _, _, err := s.Execute(context.Background(), er); err != nil {
+			t.Fatal(err)
+		}
+		select {
+		case group := <-events:
+			if group == nil || len(group.Events) != 1 || group.Events[0].NewRowId != id {
+				t.Fatalf("unexpected CDC event for row %d: %v", id, group)
+			}
+		case <-time.After(5 * time.Second):
+			t.Fatalf("missing CDC event for row %d", id)
+		}
+	}
+	insertAndCheck(1)
+	// A valid header gets as far as Swap, but SQLite cannot open this file.
+	corrupt := append([]byte("SQLite format 3\x00"), make([]byte, 84)...)
+	if _, err := s.ReadFrom(bytes.NewReader(corrupt)); err == nil || !strings.Contains(err.Error(), "open SQLite file failed") {
+		t.Fatalf("expected SQLite open failure during boot, got %v", err)
+	}
+	insertAndCheck(2)
 }
