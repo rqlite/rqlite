@@ -771,7 +771,7 @@ func (s *Store) Open() (retErr error) {
 		if err := fsutil.RemoveFile(s.cleanSnapshotPath); err != nil {
 			return fmt.Errorf("failed to remove clean snapshot file during RecoverNode: %w", err)
 		}
-		if err = RecoverNode(s.raftDir, s.dbConf.Extensions, s.logger, s.raftLog,
+		if err = RecoverNode(s.raftDir, s.dbConf, s.logger, s.raftLog,
 			s.boltStore, s.snapshotStore, s.raftTn, config); err != nil {
 			return fmt.Errorf("failed to recover node: %s", err.Error())
 		}

@@ -310,6 +310,184 @@ func Test_SingleNodeRecoverNoChange(t *testing.T) {
 	}
 }
 
+func Test_SingleNodeRecoverForeignKeysEnabled(t *testing.T) {
+	s, ln := mustNewStoreFK(t)
+	defer ln.Close()
+	s.NoSnapshotOnClose = true // Keep the DELETE in the log for recovery to replay.
+	if err := s.Open(); err != nil {
+		t.Fatalf("failed to open single-node store: %s", err)
+	}
+	defer s.Close(true)
+	if err := s.Bootstrap(NewServer(s.ID(), s.Addr(), true)); err != nil {
+		t.Fatalf("failed to bootstrap single-node store: %s", err)
+	}
+	if _, err := s.WaitForLeader(10 * time.Second); err != nil {
+		t.Fatalf("error waiting for leader: %s", err)
+	}
+
+	er := executeRequestFromStrings([]string{
+		`CREATE TABLE foo (id INTEGER NOT NULL PRIMARY KEY)`,
+		`CREATE TABLE bar (fooid INTEGER NOT NULL PRIMARY KEY, FOREIGN KEY(fooid) REFERENCES foo(id))`,
+		`INSERT INTO foo(id) VALUES(1)`,
+		`INSERT INTO bar(fooid) VALUES(1)`,
+	}, false, false)
+	res, _, err := s.Execute(context.Background(), er)
+	if err != nil {
+		t.Fatalf("failed to create foreign-key data: %s", err)
+	}
+	for _, r := range res {
+		if r.GetError() != "" {
+			t.Fatalf("failed to create foreign-key data: %s", r.GetError())
+		}
+	}
+	if err := s.Snapshot(0); err != nil {
+		t.Fatalf("failed to snapshot single-node store: %s", err)
+	}
+
+	// Foreign-key enforcement rejects deleting the referenced parent.
+	er = executeRequestFromString(`DELETE FROM foo WHERE id=1`, false, false)
+	res, _, err = s.Execute(context.Background(), er)
+	if err != nil {
+		t.Fatalf("failed to execute DELETE: %s", err)
+	}
+	if len(res) != 1 || res[0].GetError() != "FOREIGN KEY constraint failed" {
+		t.Fatalf("unexpected DELETE results: %s", asJSON(res))
+	}
+
+	qr := queryRequestFromString(`SELECT (SELECT COUNT(*) FROM foo), (SELECT COUNT(*) FROM bar)`, false, false, false)
+	qr.Level = proto.ConsistencyLevel_STRONG
+	r, _, _, err := s.Query(context.Background(), qr)
+	if err != nil {
+		t.Fatalf("failed to query before recovery: %s", err)
+	}
+	if len(r) != 1 || r[0].Error != "" {
+		t.Fatalf("unexpected query results before recovery: %s", asJSON(r))
+	}
+	if exp, got := `[[1,1]]`, asJSON(r[0].Values); exp != got {
+		t.Fatalf("unexpected parent/child counts before recovery: exp %s, got %s", exp, got)
+	}
+	if err := s.Close(true); err != nil {
+		t.Fatalf("failed to close single-node store: %s", err)
+	}
+
+	// Recover into a new Store with foreign-key enforcement still enabled.
+	sR, lnR := mustNewStoreAtPathsLn(s.ID(), s.Path(), true)
+	defer lnR.Close()
+	peers := fmt.Sprintf(`[{"id": "%s", "address": "%s"}]`, sR.ID(), lnR.Addr().String())
+	peersPath := filepath.Join(sR.Path(), "raft/peers.json")
+	mustWriteFile(peersPath, peers)
+	if err := sR.Open(); err != nil {
+		t.Fatalf("failed to open recovered store: %s", err)
+	}
+	defer sR.Close(true)
+	if _, err := sR.WaitForLeader(10 * time.Second); err != nil {
+		t.Fatalf("error waiting for leader on recovered node: %s", err)
+	}
+
+	r, _, _, err = sR.Query(context.Background(), qr)
+	if err != nil {
+		t.Fatalf("failed to query after recovery: %s", err)
+	}
+	if len(r) != 1 || r[0].Error != "" {
+		t.Fatalf("unexpected query results after recovery: %s", asJSON(r))
+	}
+	if exp, got := `[[1,1]]`, asJSON(r[0].Values); exp != got {
+		t.Fatalf("unexpected parent/child counts after recovery: exp %s, got %s", exp, got)
+	}
+	if fsutil.PathExists(peersPath) || !fsutil.PathExists(filepath.Join(sR.Path(), "raft/peers.info")) {
+		t.Fatal("recovery did not rename peers.json to peers.info")
+	}
+}
+
+func Test_SingleNodeRecoverForeignKeysDisabled(t *testing.T) {
+	s, ln := mustNewStore(t)
+	defer ln.Close()
+	s.NoSnapshotOnClose = true // Keep the DELETE in the log for recovery to replay.
+	if err := s.Open(); err != nil {
+		t.Fatalf("failed to open single-node store: %s", err)
+	}
+	defer s.Close(true)
+	if err := s.Bootstrap(NewServer(s.ID(), s.Addr(), true)); err != nil {
+		t.Fatalf("failed to bootstrap single-node store: %s", err)
+	}
+	if _, err := s.WaitForLeader(10 * time.Second); err != nil {
+		t.Fatalf("error waiting for leader: %s", err)
+	}
+
+	er := executeRequestFromStrings([]string{
+		`CREATE TABLE foo (id INTEGER NOT NULL PRIMARY KEY)`,
+		`CREATE TABLE bar (fooid INTEGER NOT NULL PRIMARY KEY, FOREIGN KEY(fooid) REFERENCES foo(id))`,
+		`INSERT INTO foo(id) VALUES(1)`,
+		`INSERT INTO bar(fooid) VALUES(1)`,
+	}, false, false)
+	res, _, err := s.Execute(context.Background(), er)
+	if err != nil {
+		t.Fatalf("failed to create foreign-key data: %s", err)
+	}
+	for _, r := range res {
+		if r.GetError() != "" {
+			t.Fatalf("failed to create foreign-key data: %s", r.GetError())
+		}
+	}
+	if err := s.Snapshot(0); err != nil {
+		t.Fatalf("failed to snapshot single-node store: %s", err)
+	}
+
+	// With foreign keys disabled, deleting the parent leaves the child.
+	er = executeRequestFromString(`DELETE FROM foo WHERE id=1`, false, false)
+	res, _, err = s.Execute(context.Background(), er)
+	if err != nil {
+		t.Fatalf("failed to execute DELETE: %s", err)
+	}
+	if len(res) != 1 || res[0].GetError() != "" {
+		t.Fatalf("unexpected DELETE results: %s", asJSON(res))
+	}
+
+	qr := queryRequestFromString(`SELECT (SELECT COUNT(*) FROM foo), (SELECT COUNT(*) FROM bar)`, false, false, false)
+	qr.Level = proto.ConsistencyLevel_STRONG
+	r, _, _, err := s.Query(context.Background(), qr)
+	if err != nil {
+		t.Fatalf("failed to query before recovery: %s", err)
+	}
+	if len(r) != 1 || r[0].Error != "" {
+		t.Fatalf("unexpected query results before recovery: %s", asJSON(r))
+	}
+	if exp, got := `[[0,1]]`, asJSON(r[0].Values); exp != got {
+		t.Fatalf("unexpected parent/child counts before recovery: exp %s, got %s", exp, got)
+	}
+	if err := s.Close(true); err != nil {
+		t.Fatalf("failed to close single-node store: %s", err)
+	}
+
+	// Recover into a new Store with foreign-key enforcement still disabled.
+	sR, lnR := mustNewStoreAtPathsLn(s.ID(), s.Path(), false)
+	defer lnR.Close()
+	peers := fmt.Sprintf(`[{"id": "%s", "address": "%s"}]`, sR.ID(), lnR.Addr().String())
+	peersPath := filepath.Join(sR.Path(), "raft/peers.json")
+	mustWriteFile(peersPath, peers)
+	if err := sR.Open(); err != nil {
+		t.Fatalf("failed to open recovered store: %s", err)
+	}
+	defer sR.Close(true)
+	if _, err := sR.WaitForLeader(10 * time.Second); err != nil {
+		t.Fatalf("error waiting for leader on recovered node: %s", err)
+	}
+
+	r, _, _, err = sR.Query(context.Background(), qr)
+	if err != nil {
+		t.Fatalf("failed to query after recovery: %s", err)
+	}
+	if len(r) != 1 || r[0].Error != "" {
+		t.Fatalf("unexpected query results after recovery: %s", asJSON(r))
+	}
+	if exp, got := `[[0,1]]`, asJSON(r[0].Values); exp != got {
+		t.Fatalf("unexpected parent/child counts after recovery: exp %s, got %s", exp, got)
+	}
+	if fsutil.PathExists(peersPath) || !fsutil.PathExists(filepath.Join(sR.Path(), "raft/peers.info")) {
+		t.Fatal("recovery did not rename peers.json to peers.info")
+	}
+}
+
 // Test_SingleNodeRecoverNetworkChange tests a node recovery that
 // involves a changed-network address.
 func Test_SingleNodeRecoverNetworkChange(t *testing.T) {
