@@ -8,6 +8,7 @@
 - [PR #2782](https://github.com/rqlite/rqlite/pull/2782): Use correct Foreign Key setting when recovering node.
 - [PR #2779](https://github.com/rqlite/rqlite/pull/2779): Only dump the indexes and triggers of the selected tables. Fixes issue [#2777](https://github.com/rqlite/rqlite/issues/2777). Thanks @geiltonxavier
 - [PR #2783](https://github.com/rqlite/rqlite/pull/2783): Detect DB changes during Request(RETURNING).
+- [PR #2784](https://github.com/rqlite/rqlite/pull/2784): Snapshot `Open()` first checks for failed reap.
 
 ## v10.3.2 (September 7th 2026)
 ### Implementation changes and bug fixes
