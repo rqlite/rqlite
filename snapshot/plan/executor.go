@@ -80,12 +80,16 @@ func (e *Executor) Checkpoint(dbPath string, wals []string) (int, error) {
 		if err := db.CheckpointRemove(dbPath); err != nil {
 			return 0, fmt.Errorf("checkpoint leftover WAL: %w", err)
 		}
+	} else if !os.IsNotExist(err) {
+		return 0, fmt.Errorf("checking leftover WAL %s: %w", walPath, err)
 	}
 
 	existingWals := []string{}
 	for _, wal := range wals {
 		if _, err := os.Stat(wal); err == nil {
 			existingWals = append(existingWals, wal)
+		} else if !os.IsNotExist(err) {
+			return 0, fmt.Errorf("checking WAL %s: %w", wal, err)
 		}
 	}
 	n := len(existingWals)
