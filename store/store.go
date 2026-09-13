@@ -2216,12 +2216,12 @@ func (s *Store) Join(jr *proto.JoinRequest) error {
 				return nil
 			}
 
-			if err := s.remove(id); err != nil {
-				s.logger.Printf("failed to remove node %s: %v", id, err)
+			if err := s.remove(string(srv.ID)); err != nil {
+				s.logger.Printf("failed to remove node %s: %v", srv.ID, err)
 				return err
 			}
 			stats.Add(numRemovedBeforeJoins, 1)
-			s.logger.Printf("removed node %s prior to rejoin with changed ID or address", id)
+			s.logger.Printf("removed node %s prior to rejoin with changed ID or address", srv.ID)
 		}
 	}
 
