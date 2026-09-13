@@ -1242,6 +1242,8 @@ func (db *DB) executeStmtWithConn(ctx context.Context, stmt *command.Statement, 
 					Error: retErr.Error(),
 				}
 			}
+		} else if res != nil && res.GetError() == "" && res.GetQ().GetError() == "" {
+			res.Mutated = true
 		}
 	}()
 	response := &command.ExecuteQueryResponse{}

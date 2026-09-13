@@ -1907,6 +1907,176 @@ func Test_DB_SimpleRequest(t *testing.T) {
 	}
 }
 
+func Test_DB_ExecuteMutation(t *testing.T) {
+	db, path := mustCreateOnDiskDatabaseWAL()
+	defer os.Remove(path)
+	defer db.Close()
+
+	responses, err := db.Execute(&command.Request{
+		Statements: []*command.Statement{
+			{Sql: `CREATE TABLE foo (id INT NOT NULL UNIQUE)`},
+			{Sql: `INSERT INTO foo VALUES (1)`},
+			{Sql: `UPDATE foo SET id = 2 WHERE id = 1`},
+			{Sql: `DELETE FROM foo WHERE id = 2`},
+			{Sql: `DELETE FROM foo WHERE id = 2`}, // A successful write affecting no rows.
+			{Sql: `INSERT INTO foo VALUES (NULL)`},
+		},
+	}, false)
+	if err != nil {
+		t.Fatalf("failed to execute: %s", err)
+	}
+	if len(responses) != 6 {
+		t.Fatalf("unexpected response count: got %d, exp 6", len(responses))
+	}
+	for i, response := range responses[:5] {
+		if response.GetE() == nil || response.GetError() != "" {
+			t.Fatalf("statement %d failed: %s", i, asJSON(response))
+		}
+		if !response.GetMutated() {
+			t.Errorf("statement %d: expected mutation", i)
+		}
+	}
+	if responses[5].GetError() == "" {
+		t.Fatal("expected NOT NULL constraint error")
+	}
+	if responses[5].GetMutated() {
+		t.Fatal("failed write reported a mutation")
+	}
+}
+
+func Test_DB_ExecuteMutationReturning(t *testing.T) {
+	db, path := mustCreateOnDiskDatabaseWAL()
+	defer os.Remove(path)
+	defer db.Close()
+	mustExecute(db, `CREATE TABLE foo (id INT NOT NULL UNIQUE)`)
+
+	responses, err := db.Execute(&command.Request{
+		Statements: []*command.Statement{
+			{Sql: `INSERT INTO foo VALUES (1) RETURNING id`, ForceQuery: true},
+			{Sql: `UPDATE foo SET id = 2 WHERE id = 1 RETURNING id`, ForceQuery: true},
+			{Sql: `DELETE FROM foo WHERE id = 2 RETURNING id`, ForceQuery: true},
+			{Sql: `DELETE FROM foo WHERE id = 2 RETURNING id`, ForceQuery: true},
+			{Sql: `INSERT INTO foo VALUES (NULL) RETURNING id`, ForceQuery: true},
+		},
+	}, false)
+	if err != nil {
+		t.Fatalf("failed to execute: %s", err)
+	}
+	if len(responses) != 5 {
+		t.Fatalf("unexpected response count: got %d, exp 5", len(responses))
+	}
+	for i, response := range responses[:4] {
+		if response.GetQ() == nil || response.GetQ().GetError() != "" {
+			t.Fatalf("statement %d failed: %s", i, asJSON(response))
+		}
+		if !response.GetMutated() {
+			t.Errorf("statement %d: expected mutation", i)
+		}
+	}
+	if responses[4].GetError() == "" {
+		t.Fatal("expected NOT NULL constraint error")
+	}
+	if responses[4].GetMutated() {
+		t.Fatal("failed write reported a mutation")
+	}
+}
+
+func Test_DB_RequestMutation(t *testing.T) {
+	tests := []struct {
+		name    string
+		stmts   []*command.Statement
+		tx      bool
+		mutated []bool
+		count   int64
+	}{
+		{
+			name: "empty",
+		},
+		{
+			name:    "read with ForceQuery",
+			mutated: []bool{false},
+			stmts: []*command.Statement{
+				{Sql: `SELECT * FROM foo`, ForceQuery: true},
+			},
+		},
+		{
+			name: "returning",
+			stmts: []*command.Statement{
+				{Sql: `INSERT INTO foo VALUES (1) RETURNING id`, ForceQuery: true},
+			},
+			mutated: []bool{true},
+			count:   1,
+		},
+		{
+			name: "schema changes within batch",
+			stmts: []*command.Statement{
+				{Sql: `ALTER TABLE foo ADD COLUMN name TEXT`},
+				{Sql: `INSERT INTO foo VALUES (1, 'fiona') RETURNING name`, ForceQuery: true},
+			},
+			tx:      true,
+			mutated: []bool{true, true},
+			count:   1,
+		},
+		{
+			name: "no rows affected",
+			stmts: []*command.Statement{
+				{Sql: `DELETE FROM foo RETURNING id`, ForceQuery: true},
+			},
+			mutated: []bool{true},
+		},
+		{
+			name:    "failed write",
+			mutated: []bool{false},
+			stmts: []*command.Statement{
+				{Sql: `INSERT INTO foo VALUES (NULL) RETURNING id`, ForceQuery: true},
+			},
+		},
+		{
+			name: "rolled back transaction",
+			stmts: []*command.Statement{
+				{Sql: `INSERT INTO foo VALUES (1) RETURNING id`, ForceQuery: true},
+				{Sql: `INSERT INTO foo VALUES (1) RETURNING id`, ForceQuery: true},
+			},
+			tx:      true,
+			mutated: []bool{true, false},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			db, path := mustCreateOnDiskDatabaseWAL()
+			defer os.Remove(path)
+			defer db.Close()
+			mustExecute(db, `CREATE TABLE foo (id INT NOT NULL UNIQUE)`)
+
+			responses, err := db.Request(&command.Request{
+				Statements:  tt.stmts,
+				Transaction: tt.tx,
+			}, false)
+			if err != nil {
+				t.Fatalf("failed to make request: %s", err)
+			}
+			if len(responses) != len(tt.mutated) {
+				t.Fatalf("unexpected response count: got %d, exp %d", len(responses), len(tt.mutated))
+			}
+			for i, response := range responses {
+				if got := response.GetMutated(); got != tt.mutated[i] {
+					t.Fatalf("response %d: unexpected mutation flag: got %t, exp %t", i, got, tt.mutated[i])
+				}
+			}
+			r, err := db.QueryStringStmt(`SELECT COUNT(*) FROM foo`)
+			if err != nil {
+				t.Fatalf("failed to query row count: %s", err)
+			}
+			if len(r) != 1 || r[0].Error != "" || len(r[0].Values) != 1 {
+				t.Fatalf("unexpected row count result: %s", asJSON(r))
+			}
+			if got := r[0].Values[0].Parameters[0].GetI(); got != tt.count {
+				t.Fatalf("unexpected row count: got %d, exp %d", got, tt.count)
+			}
+		})
+	}
+}
+
 // Test_DB_SimpleRequestTx tests that a transaction is rolled back when an error occurs, and that
 // subsequent statements after the failed statement are not processed. This also checks that
 // the code which checks if the statement is a query or not works when holding a transaction.
