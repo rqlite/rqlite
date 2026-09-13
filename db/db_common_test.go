@@ -2171,6 +2171,115 @@ func Test_DB_Dump(t *testing.T) {
 	}
 }
 
+// mustCreateDumpSchemaFixture creates a database holding three tables, an index
+// and a trigger per table, and a view.
+func mustCreateDumpSchemaFixture(t *testing.T) (*DB, string) {
+	db, path := mustCreateOnDiskDatabaseWAL()
+	mustExecute(db, `CREATE TABLE t1 (id INTEGER NOT NULL PRIMARY KEY, name TEXT)`)
+	mustExecute(db, `CREATE TABLE t2 (id INTEGER NOT NULL PRIMARY KEY, v TEXT)`)
+	mustExecute(db, `CREATE TABLE t3 (id INTEGER NOT NULL PRIMARY KEY, w TEXT)`)
+	mustExecute(db, `CREATE INDEX idx_t1_name ON t1(name)`)
+	mustExecute(db, `CREATE INDEX idx_t2_v ON t2(v)`)
+	mustExecute(db, `CREATE INDEX idx_t3_w ON t3(w)`)
+	mustExecute(db, `INSERT INTO t1(id, name) VALUES(1, 'a')`)
+	mustExecute(db, `INSERT INTO t1(id, name) VALUES(2, 'b')`)
+	mustExecute(db, `INSERT INTO t2(id, v) VALUES(1, 'c')`)
+	mustExecute(db, `CREATE TRIGGER trg_t1 AFTER INSERT ON t1 BEGIN UPDATE t1 SET name = 'z' WHERE id = NEW.id; END`)
+	mustExecute(db, `CREATE TRIGGER trg_t2 AFTER INSERT ON t2 BEGIN UPDATE t2 SET v = 'y' WHERE id = NEW.id; END`)
+	mustExecute(db, `CREATE VIEW v_t1_t2 AS SELECT a.id FROM t1 a JOIN t2 b ON a.id = b.id`)
+	return db, path
+}
+
+// Test_SchemaObjects_Filter checks which schema objects a dump of selected tables
+// carries, without a database connection.
+func Test_SchemaObjects_Filter(t *testing.T) {
+	objs := schemaObjects{
+		{name: "idx_t1_name", typ: "index", tblName: "t1"},
+		{name: "idx_t2_v", typ: "index", tblName: "t2"},
+		{name: "trg_t1", typ: "trigger", tblName: "t1"},
+		{name: "v_t1_t2", typ: "view"},
+	}
+	all := []string{"idx_t1_name", "idx_t2_v", "trg_t1", "v_t1_t2"}
+
+	tests := []struct {
+		name   string
+		tables []string
+		want   []string
+	}{
+		{"no tables keeps every object", nil, all},
+		{"empty table list keeps every object", []string{}, all},
+		{"one table keeps its index and trigger, and every view", []string{"t1"}, []string{"idx_t1_name", "trg_t1", "v_t1_t2"}},
+		{"two tables keep both", []string{"t2", "t1"}, all},
+		{"table names are case insensitive", []string{"T1"}, []string{"idx_t1_name", "trg_t1", "v_t1_t2"}},
+		{"a table with no objects keeps the views only", []string{"t3"}, []string{"v_t1_t2"}},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			var got []string
+			for _, o := range objs.Filter(tc.tables) {
+				got = append(got, o.name)
+			}
+			if !slices.Equal(got, tc.want) {
+				t.Fatalf("got %v, want %v", got, tc.want)
+			}
+		})
+	}
+}
+
+// Test_DB_DumpSelectedTables checks that a dump of selected tables loads into an
+// empty database, carrying the schema objects of those tables and not those of
+// the whole database.
+func Test_DB_DumpSelectedTables(t *testing.T) {
+	db, path := mustCreateDumpSchemaFixture(t)
+	defer os.Remove(path)
+	defer db.Close()
+
+	var buf strings.Builder
+	if err := db.Dump(&buf, "t1"); err != nil {
+		t.Fatalf("dump t1: %s", err.Error())
+	}
+
+	newDB, newPath := mustCreateOnDiskDatabase()
+	defer os.Remove(newPath)
+	defer newDB.Close()
+
+	resps, err := newDB.ExecuteStringStmt(buf.String())
+	if err != nil {
+		t.Fatalf("loading dump: %s", err.Error())
+	}
+	for _, r := range resps {
+		if r.GetError() != "" {
+			t.Fatalf("loading dump: %s", r.GetError())
+		}
+	}
+
+	expObjects := `[{"columns":["obj"],"types":["text"],"values":[["index:idx_t1_name"],["trigger:trg_t1"],["view:v_t1_t2"]]}]`
+	rows := mustQuery(newDB, `SELECT "type" || ':' || "name" AS obj FROM "sqlite_master"
+							  WHERE "sql" NOT NULL AND "name" NOT LIKE 'sqlite_%'
+							  AND "type" IN ('index', 'trigger', 'view') ORDER BY obj`)
+	if got := asJSON(rows); got != expObjects {
+		t.Fatalf("schema objects of a filtered dump:\ngot  %s\nwant %s", got, expObjects)
+	}
+
+	expTables := `[{"columns":["obj"],"types":["text"],"values":[["table:t1"]]}]`
+	rows = mustQuery(newDB, `SELECT "type" || ':' || "name" AS obj FROM "sqlite_master"
+							 WHERE "sql" NOT NULL AND "name" NOT LIKE 'sqlite_%'
+							 AND "type" = 'table' ORDER BY obj`)
+	if got := asJSON(rows); got != expTables {
+		t.Fatalf("tables of a filtered dump: got %s want %s", got, expTables)
+	}
+
+	expRows := `[{"columns":["id","name"],"types":["integer","text"],"values":[[1,"a"],[2,"b"]]}]`
+	gotRows, err := newDB.QueryStringStmt(`SELECT id, name FROM t1 ORDER BY id`)
+	if err != nil {
+		t.Fatalf("query t1: %s", err.Error())
+	}
+	if s := asJSON(gotRows); s != expRows {
+		t.Fatalf("rows of a filtered dump: got %s want %s", s, expRows)
+	}
+}
+
 func Test_DB_Size(t *testing.T) {
 	db, path := mustCreateOnDiskDatabaseWAL()
 	defer os.Remove(path)
