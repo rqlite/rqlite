@@ -151,7 +151,8 @@ func HasData(dir string) (bool, error) {
 // RecoverNode is used to manually force a new configuration, in the event that
 // quorum cannot be restored. This borrows heavily from RecoverCluster functionality
 // of the Hashicorp Raft library, but has been customized for rqlite use.
-func RecoverNode(dataDir string, extensions []string, logger *log.Logger, logs raft.LogStore,
+// dbConf supplies the extensions and foreign-key enforcement used during log replay.
+func RecoverNode(dataDir string, dbConf *DBConfig, logger *log.Logger, logs raft.LogStore,
 	stable *rlog.Log, snaps raft.SnapshotStore, tn raft.Transport, conf raft.Configuration) error {
 	logPrefix := logger.Prefix()
 	logger.SetPrefix(fmt.Sprintf("%s[recovery] ", logPrefix))
@@ -199,11 +200,11 @@ func RecoverNode(dataDir string, extensions []string, logger *log.Logger, logs r
 
 	// Now, open the database so we can replay any outstanding Raft log entries.
 	drv := sql.DefaultDriver()
-	if len(extensions) > 0 {
+	if len(dbConf.Extensions) > 0 {
 		drv = sql.NewDriver(random.StringPattern("rqlite-extended-recover-xxxx-xxxx-xxxx"),
-			extensions, sql.CnkOnCloseModeDisabled)
+			dbConf.Extensions, sql.CnkOnCloseModeDisabled)
 	}
-	db, err := sql.OpenSwappable(tmpDBPath, drv, false, true, 0)
+	db, err := sql.OpenSwappable(tmpDBPath, drv, dbConf.FKConstraints, true, 0)
 	if err != nil {
 		return fmt.Errorf("failed to open temporary database: %s", err)
 	}
