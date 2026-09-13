@@ -9,6 +9,12 @@
 - [PR #2779](https://github.com/rqlite/rqlite/pull/2779): Only dump the indexes and triggers of the selected tables. Fixes issue [#2777](https://github.com/rqlite/rqlite/issues/2777). Thanks @geiltonxavier
 - [PR #2783](https://github.com/rqlite/rqlite/pull/2783): Detect DB changes during Request(RETURNING).
 - [PR #2784](https://github.com/rqlite/rqlite/pull/2784): Snapshot `Open()` first checks for failed reap.
+- [PR #2785](https://github.com/rqlite/rqlite/pull/2785): Sync snapshot plan directory.
+- [PR #2786](https://github.com/rqlite/rqlite/pull/2786): Propagate WAL stat errors.
+- [PR #2787](https://github.com/rqlite/rqlite/pull/2787): Clean up cancelled snapshots.
+- [PR #2788](https://github.com/rqlite/rqlite/pull/2788): Reject incomplete snapshot headers.
+- [PR #2789](https://github.com/rqlite/rqlite/pull/2789): Validate restore database header.
+- [PR #2790](https://github.com/rqlite/rqlite/pull/2790): Only reap a sole fullsnapshot if it has zero WALs.
 
 ## v10.3.2 (September 7th 2026)
 ### Implementation changes and bug fixes
