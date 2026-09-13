@@ -56,6 +56,10 @@ const (
 var (
 	// ErrSnapshotNotFound is returned when a snapshot cannot be found.
 	ErrSnapshotNotFound = errors.New("snapshot not found")
+
+	// ErrReapPending is returned when a snapshot cannot be opened because an
+	// interrupted reap must complete first.
+	ErrReapPending = errors.New("snapshot store has an unfinished reap")
 )
 
 // stats captures stats for the Store.
@@ -397,6 +401,8 @@ func (s *Store) SetReadTimeout(d time.Duration) {
 // A sink does not need to lock the Store because either the Snapshot directory it
 // creates will be visible or not. Reaping will not see it until it is fully created,
 // and Listing it will not return it until it is fully created too.
+//
+// Open returns ErrReapPending if a previous reap failed and has not yet completed.
 func (s *Store) Open(id string) (raftMeta *raft.SnapshotMeta, rc io.ReadCloser, retErr error) {
 	if err := s.mrsw.BeginRead(); err != nil {
 		return nil, nil, fmt.Errorf("acquiring read lock: %w", err)
@@ -406,6 +412,13 @@ func (s *Store) Open(id string) (raftMeta *raft.SnapshotMeta, rc io.ReadCloser, 
 			s.mrsw.EndRead()
 		}
 	}()
+
+	// A failed reap may have checkpointed WALs into the database without
+	// updating its metadata. Do not expose that state until the plan completes.
+	// The read lock prevents a reap from starting between this check and use.
+	if fsutil.FileExists(s.reapPlanPath) {
+		return nil, nil, ErrReapPending
+	}
 
 	// The data files are about to be read, so verify their integrity first
 	// (runs at most once over the Store's lifetime). On corruption this hard
