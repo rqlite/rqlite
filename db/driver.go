@@ -42,6 +42,7 @@ type DriverConfig struct {
 // Driver is a Database driver.
 type Driver struct {
 	name       string
+	driver     *sqlite3.SQLiteDriver
 	extensions []string
 	chkOnClose CnkOnCloseMode
 }
@@ -53,18 +54,21 @@ type Driver struct {
 // If a driver with name is already registered, a panic will occur. Callers
 // that need a singleton driver (fixed names) should guard this with sync.Once.
 func NewDriverFromConfig(name string, cfg DriverConfig) *Driver {
-	sql.Register(name, &sqlite3.SQLiteDriver{
+	sqliteDriver := &sqlite3.SQLiteDriver{
 		Extensions:  cfg.Extensions,
 		ConnectHook: buildConnectHook(cfg),
-	})
+	}
+	sql.Register(name, sqliteDriver)
 	return &Driver{
 		name:       name,
+		driver:     sqliteDriver,
 		extensions: cfg.Extensions,
 		chkOnClose: cfg.ChkOnClose,
 	}
 }
 
 var defRegisterOnce sync.Once
+var defaultDriver *Driver
 
 // DefaultDriver returns the default driver. It registers the SQLite3 driver
 // with the default driver name. It can be called multiple times, but only
@@ -72,17 +76,15 @@ var defRegisterOnce sync.Once
 // for any database in WAL mode.
 func DefaultDriver() *Driver {
 	defRegisterOnce.Do(func() {
-		NewDriverFromConfig(defaultDriverName, DriverConfig{
+		defaultDriver = NewDriverFromConfig(defaultDriverName, DriverConfig{
 			ChkOnClose: CnkOnCloseModeDisabled,
 		})
 	})
-	return &Driver{
-		name:       defaultDriverName,
-		chkOnClose: CnkOnCloseModeDisabled,
-	}
+	return defaultDriver
 }
 
 var chkRegisterOnce sync.Once
+var checkpointDriver *Driver
 
 // CheckpointDriver returns the checkpoint driver. It registers the SQLite3
 // driver with the checkpoint driver name. It can be called multiple times,
@@ -90,23 +92,21 @@ var chkRegisterOnce sync.Once
 // on close for any database in WAL mode.
 func CheckpointDriver() *Driver {
 	chkRegisterOnce.Do(func() {
-		NewDriverFromConfig(chkDriverName, DriverConfig{
+		checkpointDriver = NewDriverFromConfig(chkDriverName, DriverConfig{
 			ChkOnClose: CnkOnCloseModeEnabled,
 		})
 	})
-	return &Driver{
-		name:       chkDriverName,
-		chkOnClose: CnkOnCloseModeEnabled,
-	}
+	return checkpointDriver
 }
 
 var fkRegisterOnce sync.Once
+var foreignKeyDriver *Driver
 
 // ForeignKeyDriver returns a driver that enables foreign key support
 // on every connection. It also enables no-check
 func ForeignKeyDriver() *Driver {
 	fkRegisterOnce.Do(func() {
-		sql.Register(foreignKeyDriverName, &sqlite3.SQLiteDriver{
+		sqliteDriver := &sqlite3.SQLiteDriver{
 			ConnectHook: func(conn *sqlite3.SQLiteConn) error {
 				// Enable foreign key support via the SQLite PRAGMA
 				if _, err := conn.Exec("PRAGMA foreign_keys = ON", nil); err != nil {
@@ -114,12 +114,15 @@ func ForeignKeyDriver() *Driver {
 				}
 				return nil
 			},
-		})
+		}
+		sql.Register(foreignKeyDriverName, sqliteDriver)
+		foreignKeyDriver = &Driver{
+			name:       foreignKeyDriverName,
+			driver:     sqliteDriver,
+			chkOnClose: CnkOnCloseModeDisabled,
+		}
 	})
-	return &Driver{
-		name:       foreignKeyDriverName,
-		chkOnClose: CnkOnCloseModeDisabled,
-	}
+	return foreignKeyDriver
 }
 
 // NewDriver returns a new driver with the given name and extensions. It

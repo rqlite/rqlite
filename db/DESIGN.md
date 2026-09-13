@@ -19,9 +19,9 @@ This shifts a lot of responsibility into the `db` package. SQLite's normal "I'll
 - `rwDB` — read/write, with `MaxOpenConns(1)`.
 - `roDB` — read-only DSN (`mode=ro`), with the standard idle pool.
 
-The two-handle split exists because SQLite's WAL mode allows readers to run concurrently with a writer. Sending all reads through `roDB` lets `Query` and `RequestWithContext` execute alongside an in-flight write without serializing against the writer.
+The two-handle split exists because SQLite's WAL mode allows readers to run concurrently with a writer. Sending queries through `roDB` lets `Query` execute alongside an in-flight write without serializing against the writer. `RequestWithContext` uses `rwDB` because its statements may write.
 
-`MaxOpenConns(1)` on `rwDB` is the load-bearing detail. Right after opening, the package executes `PRAGMA wal_autocheckpoint=0` to disable SQLite's automatic checkpointer. That PRAGMA is per-connection. If `database/sql` were free to open additional read/write connections from its pool, each fresh connection would arrive with `wal_autocheckpoint=1000` re-enabled, and SQLite would silently start checkpointing behind the snapshot subsystem's back. Holding the writer pool to exactly one connection is what guarantees the disable-autocheckpoint setting is real and permanent. The struct comment "Key to ensure a new connection doesn't enable checkpointing" marks this on the field.
+`MaxOpenConns(1)` on `rwDB` serializes writes, but does not guarantee the connection survives forever: `database/sql` can discard it after cancelling a transaction. Each database therefore owns a writer connector which applies `PRAGMA wal_autocheckpoint=0` when opening a connection and reinstalls the registered hooks. Explicit calls to `EnableCheckpointing` and `DisableCheckpointing` update the setting used by replacement connections too. The underlying driver still applies extensions, query tracing, and checkpoint-on-close configuration on every open.
 
 `Open` also forces the WAL files into existence at open time when WAL mode is requested. SQLite normally creates `-wal` and `-shm` lazily on the first write; the package executes `BEGIN IMMEDIATE; ROLLBACK` on a single pinned connection to materialize them, then runs a `wal_checkpoint(TRUNCATE)`. This matters because external read-only connections (and startup checks elsewhere in rqlite) need to be able to see the WAL files even on a brand-new database.
 
@@ -86,7 +86,7 @@ The compacting scanner has a `fullScan` mode that verifies every frame's checksu
 
 ## CDC Integration
 
-Change Data Capture is wired through SQLite's preupdate and commit hooks. The hooks are registered on the single `rwDB` connection — the same one that does all writes — via `RegisterPreUpdateHook` and `RegisterCommitHook`. Hook installation goes through `conn.Raw` because the registration methods are on the SQLite-specific connection type, not on the abstract `database/sql` connection.
+Change Data Capture is wired through SQLite's preupdate, commit, and rollback hooks. The hooks are registered on the single `rwDB` connection — the same one that does all writes — via `RegisterPreUpdateHook`, `RegisterCommitHook`, and `RegisterRollbackHook`. Hook installation goes through `conn.Raw` because the registration methods are on the SQLite-specific connection type, not on the abstract `database/sql` connection. The writer connector retains the current registrations, including removals, so replacement connections receive the same callbacks.
 
 `CDCStreamer` (in `cdc.go`) is the in-package hook target. The preupdate hook appends an event to a pending group; the commit hook stamps the group with the current time, looks up column names per table (cached for the duration of the group), and non-blockingly sends the group to a channel. If the channel is full the event is dropped and a stat increments — by design, CDC is at-least-once on the receiver side, not back-pressuring the writer. The `CDCStreamer` lives in `db/` rather than in `cdc/` because its hook installation, its per-statement reset, and its lifecycle are all driven from inside the database write path; it is tightly bound to the SQLite hook plumbing and would only become harder to reason about if moved further away.
 
@@ -120,7 +120,7 @@ Loaded extensions are baked into a per-set driver via `NewDriver(name, extension
 
 ## Key Design Decisions and Trade-offs
 
-- **rqlite owns the WAL lifecycle.** SQLite's autocheckpointer is disabled (`PRAGMA wal_autocheckpoint=0`), close-time checkpointing is disabled (`DBConfigNoCkptOnClose`), and `MaxOpenConns(1)` on the writer pool prevents either from being silently re-enabled by a fresh connection. This is what lets the snapshot subsystem reason about what is in the WAL at any moment.
+- **rqlite owns the WAL lifecycle.** SQLite's autocheckpointer is disabled (`PRAGMA wal_autocheckpoint=0`), close-time checkpointing is disabled (`DBConfigNoCkptOnClose`), and connection initialization reapplies these settings whenever the writer connection is replaced. This is what lets the snapshot subsystem reason about what is in the WAL at any moment.
 
 - **Synchronous=OFF in steady state, FULL during checkpoint.** Performance comes from `SYNCHRONOUS=OFF` (Raft provides durability across the cluster), but the checkpoint is the moment when SQLite assumes "what is in the file is durable" — so the checkpoint path temporarily switches to FULL and switches back.
 
@@ -128,7 +128,7 @@ Loaded extensions are baked into a per-set driver via `NewDriver(name, extension
 
 - **Bounded checkpointing replaces wait-forever (v10).** The v10 `CheckpointManager` ensures a slow reader cannot stall checkpointing — and therefore cannot stall Raft log truncation. The cost is the bookkeeping for the partial-checkpoint case, including the WAL-salt comparison that distinguishes "WAL was reset" from "WAL was appended" between attempts. The benefit is that write throughput no longer collapses when one node has a slow reader.
 
-- **Two connection pools, one writer.** Read concurrency comes from the read-only pool; write coordination (and PRAGMA persistence) comes from holding the writer pool to one connection. This mirrors SQLite's underlying single-writer model.
+- **Two connection pools, one writer.** Read concurrency comes from the read-only pool; write coordination comes from holding the writer pool to one connection. The writer connector preserves checkpointing configuration and hooks across connection replacement. This mirrors SQLite's underlying single-writer model.
 
 - **CDC streamer lives next to the SQLite hooks.** The streamer's lifecycle is driven by the same write-path code that registers and tears down the preupdate and commit hooks. Separating it from the hook plumbing would create an awkward two-way dependency for no real benefit.
 

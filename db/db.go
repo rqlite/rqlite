@@ -5,6 +5,7 @@ package db
 import (
 	"context"
 	"database/sql"
+	"database/sql/driver"
 	"errors"
 	"expvar"
 	"fmt"
@@ -187,8 +188,9 @@ type DB struct {
 	fkEnabled bool   // Foreign key constraints enabled
 	wal       bool
 
-	rwDB *sql.DB // Database connection for database reads and writes.
-	roDB *sql.DB // Database connection database reads.
+	rwConnector *rwConnector
+	rwDB        *sql.DB // Database connection for database reads and writes.
+	roDB        *sql.DB // Database connection database reads.
 
 	rwDSN string // DSN used for read-write connection
 	roDSN string // DSN used for read-only connections
@@ -261,10 +263,8 @@ func OpenWithDriver(drv *Driver, dbPath string, fkEnabled, wal bool) (retDB *DB,
 	/////////////////////////////////////////////////////////////////////////
 	// Main RW connection
 	rwDSN := MakeDSN(dbPath, ModeReadWrite, fkEnabled, wal)
-	rwDB, err := sql.Open(drv.name, rwDSN)
-	if err != nil {
-		return nil, fmt.Errorf("open: %s", err.Error())
-	}
+	connector := &rwConnector{driver: drv.driver, dsn: rwDSN}
+	rwDB := sql.OpenDB(connector)
 	defer func() {
 		if retErr != nil {
 			rwDB.Close()
@@ -286,14 +286,9 @@ func OpenWithDriver(drv *Driver, dbPath string, fkEnabled, wal bool) (retDB *DB,
 
 	// Set connection pool behaviour.
 	rwDB.SetConnMaxLifetime(0)
-	rwDB.SetMaxOpenConns(1) // Key to ensure a new connection doesn't enable checkpointing
+	rwDB.SetMaxOpenConns(1) // Serialize writes on a single connection.
 	roDB.SetConnMaxIdleTime(30 * time.Second)
 	roDB.SetConnMaxLifetime(0)
-
-	// Critical that rqlite has full control over the checkpointing process.
-	if _, err := rwDB.Exec("PRAGMA wal_autocheckpoint=0"); err != nil {
-		return nil, fmt.Errorf("disable autocheckpointing: %s", err.Error())
-	}
 
 	if err := rwDB.Ping(); err != nil {
 		return nil, fmt.Errorf("failed to ping on-disk database: %s", err.Error())
@@ -337,16 +332,17 @@ func OpenWithDriver(drv *Driver, dbPath string, fkEnabled, wal bool) (retDB *DB,
 	}
 
 	return &DB{
-		drv:       drv,
-		path:      dbPath,
-		walPath:   dbPath + "-wal",
-		fkEnabled: fkEnabled,
-		wal:       wal,
-		rwDB:      rwDB,
-		roDB:      roDB,
-		rwDSN:     rwDSN,
-		roDSN:     roDSN,
-		logger:    logger,
+		drv:         drv,
+		path:        dbPath,
+		walPath:     dbPath + "-wal",
+		fkEnabled:   fkEnabled,
+		wal:         wal,
+		rwConnector: connector,
+		rwDB:        rwDB,
+		roDB:        roDB,
+		rwDSN:       rwDSN,
+		roDSN:       roDSN,
+		logger:      logger,
 	}, nil
 }
 
@@ -450,7 +446,10 @@ func (db *DB) RegisterPreUpdateHook(hook PreUpdateHookCallback, tblRe *regexp.Re
 	}
 	f := func(driverConn any) error {
 		conn := driverConn.(*sqlite3.SQLiteConn)
+		db.rwConnector.mu.Lock()
+		defer db.rwConnector.mu.Unlock()
 		conn.RegisterPreUpdateHook(cb)
+		db.rwConnector.preUpdateHook = cb
 		return nil
 	}
 
@@ -510,7 +509,10 @@ func (db *DB) RegisterUpdateHook(hook UpdateHookCallback) error {
 	}
 	f := func(driverConn any) error {
 		conn := driverConn.(*sqlite3.SQLiteConn)
+		db.rwConnector.mu.Lock()
+		defer db.rwConnector.mu.Unlock()
 		conn.RegisterUpdateHook(cb)
+		db.rwConnector.updateHook = cb
 		return nil
 	}
 
@@ -538,7 +540,10 @@ func (db *DB) RegisterRollbackHook(hook RollbackHookCallback) error {
 	}
 	defer conn.Close()
 	return conn.Raw(func(driverConn any) error {
+		db.rwConnector.mu.Lock()
+		defer db.rwConnector.mu.Unlock()
 		driverConn.(*sqlite3.SQLiteConn).RegisterRollbackHook(hook)
+		db.rwConnector.rollbackHook = hook
 		return nil
 	})
 }
@@ -564,7 +569,10 @@ func (db *DB) RegisterCommitHook(hook CommitHookCallback) error {
 	}
 	f := func(driverConn any) error {
 		conn := driverConn.(*sqlite3.SQLiteConn)
+		db.rwConnector.mu.Lock()
+		defer db.rwConnector.mu.Unlock()
 		conn.RegisterCommitHook(cb)
+		db.rwConnector.commitHook = cb
 		return nil
 	}
 
@@ -907,15 +915,30 @@ func (db *DB) CheckpointWithTimeout(mode CheckpointMode, dur time.Duration) (met
 // the WAL reaches a certain size. This is key for full control of snapshotting.
 // and can be useful for testing.
 func (db *DB) DisableCheckpointing() error {
-	_, err := db.rwDB.Exec("PRAGMA wal_autocheckpoint=0")
-	return err
+	return db.setCheckpointing(0)
 }
 
 // EnableCheckpointing enables the automatic checkpointing that occurs when
 // the WAL reaches a certain size.
 func (db *DB) EnableCheckpointing() error {
-	_, err := db.rwDB.Exec("PRAGMA wal_autocheckpoint=1000")
-	return err
+	return db.setCheckpointing(1000)
+}
+
+// setCheckpointing updates both the current connection and its replacements.
+func (db *DB) setCheckpointing(n int) error {
+	conn, err := db.rwDB.Conn(context.Background())
+	if err != nil {
+		return err
+	}
+	defer conn.Close()
+
+	db.rwConnector.mu.Lock()
+	defer db.rwConnector.mu.Unlock()
+	if _, err := conn.ExecContext(context.Background(), fmt.Sprintf("PRAGMA wal_autocheckpoint=%d", n)); err != nil {
+		return err
+	}
+	db.rwConnector.autoCheckpoint = n
+	return nil
 }
 
 // GetCheckpointing returns the current checkpointing setting.
@@ -2008,6 +2031,45 @@ func (db *DB) memStats() (map[string]int64, error) {
 		ms[p] = res[i].Values[0].Parameters[0].GetI()
 	}
 	return ms, nil
+}
+
+// rwConnector reapplies writer configuration whenever database/sql replaces a
+// connection, for example after cancelling a transaction. Its state belongs to
+// one DB, even when multiple databases share the same registered driver.
+type rwConnector struct {
+	driver *sqlite3.SQLiteDriver
+	dsn    string
+
+	mu             sync.Mutex
+	autoCheckpoint int
+	preUpdateHook  func(sqlite3.SQLitePreUpdateData)
+	updateHook     func(int, string, string, int64)
+	commitHook     func() int
+	rollbackHook   func()
+}
+
+func (c *rwConnector) Connect(context.Context) (driver.Conn, error) {
+	conn, err := c.driver.Open(c.dsn)
+	if err != nil {
+		return nil, err
+	}
+	sqliteConn := conn.(*sqlite3.SQLiteConn)
+
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if _, err := sqliteConn.Exec(fmt.Sprintf("PRAGMA wal_autocheckpoint=%d", c.autoCheckpoint), nil); err != nil {
+		conn.Close()
+		return nil, fmt.Errorf("configure autocheckpointing: %w", err)
+	}
+	sqliteConn.RegisterPreUpdateHook(c.preUpdateHook)
+	sqliteConn.RegisterUpdateHook(c.updateHook)
+	sqliteConn.RegisterCommitHook(c.commitHook)
+	sqliteConn.RegisterRollbackHook(c.rollbackHook)
+	return conn, nil
+}
+
+func (c *rwConnector) Driver() driver.Driver {
+	return c.driver
 }
 
 // schemaObject is an index, a trigger or a view held by the database schema.
