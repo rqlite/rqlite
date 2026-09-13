@@ -15,6 +15,7 @@ func Test_ExecuteQueryResponsesMutation(t *testing.T) {
 
 func Test_ExecuteQueryResponsesMutation_Check(t *testing.T) {
 	eqr0 := &proto.ExecuteQueryResponse{
+		Mutated: true,
 		Result: &proto.ExecuteQueryResponse_E{
 			E: &proto.ExecuteResult{
 				RowsAffected: 0,
@@ -22,6 +23,7 @@ func Test_ExecuteQueryResponsesMutation_Check(t *testing.T) {
 		},
 	}
 	eqr1 := &proto.ExecuteQueryResponse{
+		Mutated: true,
 		Result: &proto.ExecuteQueryResponse_E{
 			E: &proto.ExecuteResult{
 				RowsAffected: 1,
@@ -64,5 +66,18 @@ func Test_ExecuteQueryResponsesMutation_Check(t *testing.T) {
 	e = ExecuteQueryResponses{qqr, qqr}
 	if e.Mutation() {
 		t.Fatalf("expected no mutations")
+	}
+}
+
+func Test_ExecuteQueryResponsesMutation_Returning(t *testing.T) {
+	e := ExecuteQueryResponses{
+		{Result: &proto.ExecuteQueryResponse_Q{Q: &proto.QueryRows{}}},
+		{
+			Mutated: true,
+			Result:  &proto.ExecuteQueryResponse_Q{Q: &proto.QueryRows{}},
+		},
+	}
+	if !e.Mutation() {
+		t.Fatal("expected mutation for write returning rows")
 	}
 }

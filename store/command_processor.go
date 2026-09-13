@@ -15,13 +15,13 @@ import (
 // ExecuteQueryResponses is a slice of ExecuteQueryResponse, which detects mutations.
 type ExecuteQueryResponses []*proto.ExecuteQueryResponse
 
-// Mutation returns true if any of the responses mutated the database.
+// Mutation returns true if any of the responses reports a successful write.
 func (e ExecuteQueryResponses) Mutation() bool {
 	if len(e) == 0 {
 		return false
 	}
 	for i := range e {
-		if e[i].GetE() != nil {
+		if e[i].GetMutated() {
 			return true
 		}
 	}
