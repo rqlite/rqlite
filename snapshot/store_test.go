@@ -4,11 +4,13 @@ import (
 	"bytes"
 	"encoding/binary"
 	"encoding/json"
+	"errors"
 	"expvar"
 	"fmt"
 	"io"
 	"os"
 	"path/filepath"
+	"runtime"
 	"testing"
 	"time"
 
@@ -1111,6 +1113,83 @@ func Test_Store_ReapCorruptWAL(t *testing.T) {
 	_, _, err = store.Reap()
 	if err == nil {
 		t.Fatal("Expected Reap to fail due to corrupted WAL, but it succeeded")
+	}
+}
+
+func Test_Store_ReapFailedBlocksOpen(t *testing.T) {
+	if runtime.GOOS == "windows" || os.Geteuid() == 0 {
+		t.Skip("requires Unix directory permissions and an unprivileged user")
+	}
+
+	dir := t.TempDir()
+	store, err := NewStore(dir)
+	if err != nil {
+		t.Fatalf("Failed to create new store: %v", err)
+	}
+	defer store.Close()
+
+	createSnapshotInStore(t, store, "1-10-1000", 10, 1, 0, "testdata/db-and-wals/backup.db")
+	createSnapshotInStore(t, store, "1-20-2000", 20, 1, 0, "testdata/db-and-wals/backup.db")
+	createSnapshotInStore(t, store, "1-30-3000", 30, 1, 0, "", "testdata/db-and-wals/wal-00")
+
+	// Fail removal of the oldest snapshot. By this point the incremental WAL
+	// has been checkpointed into the index-20 snapshot, but its metadata has
+	// not yet been updated to index 30.
+	olderPath := filepath.Join(dir, "1-10-1000")
+	if err := os.Chmod(olderPath, 0555); err != nil {
+		t.Fatalf("Failed to make old snapshot read-only: %v", err)
+	}
+	defer os.Chmod(olderPath, 0755)
+	if _, _, err := store.Reap(); !errors.Is(err, os.ErrPermission) {
+		t.Fatalf("Expected permission error from Reap, got: %v", err)
+	}
+
+	// Confirm that the failure occurred after the database was changed.
+	dbPath := filepath.Join(dir, "1-20-2000", "data.db")
+	rows := mustQueryDB(t, dbPath, "SELECT COUNT(*) FROM foo")
+	if exp, got := `[{"columns":["COUNT(*)"],"types":["integer"],"values":[[1]]}]`, rows; exp != got {
+		t.Fatalf("unexpected checkpointed data: exp %s got %s", exp, got)
+	}
+	if !fsutil.FileExists(filepath.Join(dir, "REAP_PLAN")) {
+		t.Fatal("Expected pending reap plan")
+	}
+
+	_, rc, err := store.Open("1-20-2000")
+	if err == nil {
+		rc.Close()
+		t.Fatal("Open succeeded after failed reap, exposing index-30 data as index 20")
+	}
+	if !errors.Is(err, ErrReapPending) {
+		t.Fatalf("Expected ErrReapPending, got: %v", err)
+	}
+
+	// Remove the fault and retry on the same Store. Open must become usable
+	// again once the pending plan has completed.
+	if err := os.Chmod(olderPath, 0755); err != nil {
+		t.Fatalf("Failed to restore old snapshot permissions: %v", err)
+	}
+	if _, _, err := store.Reap(); err != nil {
+		t.Fatalf("Failed to resume reap: %v", err)
+	}
+	snaps := mustListSnapshots(t, store)
+	if len(snaps) != 1 {
+		t.Fatalf("Expected 1 snapshot after resumed reap, got %d", len(snaps))
+	}
+	meta, rc, err := store.Open(snaps[0].ID)
+	if err != nil {
+		t.Fatalf("Failed to open snapshot after resumed reap: %v", err)
+	}
+	defer rc.Close()
+	if meta.Index != 30 || meta.Term != 1 {
+		t.Fatalf("Unexpected snapshot metadata: index %d, term %d", meta.Index, meta.Term)
+	}
+	restoredPath := filepath.Join(t.TempDir(), "restored.db")
+	if _, err := Restore(rc, restoredPath); err != nil {
+		t.Fatalf("Failed to restore snapshot: %v", err)
+	}
+	rows = mustQueryDB(t, restoredPath, "SELECT COUNT(*) FROM foo")
+	if exp, got := `[{"columns":["COUNT(*)"],"types":["integer"],"values":[[1]]}]`, rows; exp != got {
+		t.Fatalf("unexpected restored data: exp %s got %s", exp, got)
 	}
 }
 
