@@ -6,6 +6,7 @@
 - [PR #2781](https://github.com/rqlite/rqlite/pull/2781): Switch to `quay.io/minio/minio:latest` for testing purposes.
 - [PR #2778](https://github.com/rqlite/rqlite/pull/2778): Fix removing a node with different ID, but same Raft address.
 - [PR #2782](https://github.com/rqlite/rqlite/pull/2782): Use correct Foreign Key setting when recovering node.
+- [PR #2779](https://github.com/rqlite/rqlite/pull/2779): Only dump the indexes and triggers of the selected tables. Fixes issue [#2777](https://github.com/rqlite/rqlite/issues/2777). Thanks @geiltonxavier
 
 ## v10.3.2 (September 7th 2026)
 ### Implementation changes and bug fixes
