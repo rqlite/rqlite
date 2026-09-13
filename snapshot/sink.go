@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/binary"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"log"
@@ -205,7 +206,7 @@ func (s *Sink) Close() (retErr error) {
 
 	if s.sinkW == nil && s.localWALDir == "" {
 		// Header was never fully received; clean up the temp directory.
-		return os.RemoveAll(s.snapTmpDirPath)
+		return errors.Join(ErrIncomplete, os.RemoveAll(s.snapTmpDirPath))
 	}
 
 	defer func() {
