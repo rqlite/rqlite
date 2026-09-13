@@ -256,6 +256,13 @@ func (s *SwappableDB) RegisterCommitHook(hook CommitHookCallback) error {
 	return s.db.RegisterCommitHook(hook)
 }
 
+// RegisterRollbackHook registers a rollback hook on the underlying database.
+func (s *SwappableDB) RegisterRollbackHook(hook RollbackHookCallback) error {
+	s.dbMu.RLock()
+	defer s.dbMu.RUnlock()
+	return s.db.RegisterRollbackHook(hook)
+}
+
 // ColumnNames returns the column names for the given table from the underlying database.
 func (s *SwappableDB) ColumnNames(table string) ([]string, error) {
 	s.dbMu.RLock()

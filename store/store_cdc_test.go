@@ -79,6 +79,49 @@ func Test_StoreEnableDisableCDC(t *testing.T) {
 	}
 }
 
+func Test_StoreCDC_RolledBackInsert(t *testing.T) {
+	s, ln := mustNewStore(t)
+	defer ln.Close()
+	if err := s.Open(); err != nil {
+		t.Fatalf("failed to open store: %v", err)
+	}
+	defer s.Close(true)
+	if err := s.Bootstrap(NewServer(s.ID(), s.Addr(), true)); err != nil {
+		t.Fatalf("failed to bootstrap store: %v", err)
+	}
+	if _, err := s.WaitForLeader(10 * time.Second); err != nil {
+		t.Fatalf("failed to wait for leader: %v", err)
+	}
+	if _, _, err := s.Execute(context.Background(), executeRequestFromString(
+		"CREATE TABLE foo (id INTEGER PRIMARY KEY)", false, false)); err != nil {
+		t.Fatalf("failed to create table: %v", err)
+	}
+	ch := make(chan *proto.CDCIndexedEventGroup, 10)
+	if err := s.EnableCDC(ch, nil, false); err != nil {
+		t.Fatalf("failed to enable CDC: %v", err)
+	}
+	results, _, err := s.Execute(context.Background(), &proto.ExecuteRequest{
+		Request: &proto.Request{Statements: []*proto.Statement{
+			{Sql: "INSERT INTO foo VALUES(1), (1)"},
+			{Sql: "INSERT INTO foo VALUES(2)"},
+		}},
+	})
+	if err != nil {
+		t.Fatalf("failed to execute request: %v", err)
+	}
+	if len(results) != 2 || results[0].GetError() == "" || results[1].GetError() != "" {
+		t.Fatalf("unexpected results: %s", asJSON(results))
+	}
+	select {
+	case group := <-ch:
+		if len(group.Events) != 1 || group.Events[0].NewRowId != 2 {
+			t.Fatalf("unexpected committed group: %s", asJSON(group))
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("timed out waiting for committed insert")
+	}
+}
+
 // Test_StoreCDC_Events_Single tests that CDC events are actually sent when database changes occur.
 func Test_StoreCDC_Events_Single(t *testing.T) {
 	s, ln := mustNewStore(t)

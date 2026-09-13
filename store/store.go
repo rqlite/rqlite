@@ -2101,6 +2101,9 @@ func (s *Store) DisableCDC() error {
 		if err := s.db.RegisterCommitHook(nil); err != nil {
 			return fmt.Errorf("failed to unregister commit hook: %w", err)
 		}
+		if err := s.db.RegisterRollbackHook(nil); err != nil {
+			return fmt.Errorf("failed to unregister rollback hook: %w", err)
+		}
 	}
 	if s.cdcStreamer != nil {
 		s.cdcStreamer.Close()
@@ -2338,6 +2341,9 @@ func (s *Store) cleanupCDC() error {
 	if err := s.db.RegisterCommitHook(nil); err != nil {
 		return fmt.Errorf("failed to unregister commit hook: %w", err)
 	}
+	if err := s.db.RegisterRollbackHook(nil); err != nil {
+		return fmt.Errorf("failed to unregister rollback hook: %w", err)
+	}
 	return nil
 }
 
@@ -2548,6 +2554,9 @@ func (s *Store) fsmApply(l *raft.Log) (e any) {
 				}
 				if err := s.db.RegisterCommitHook(s.cdcStreamer.CommitHook); err != nil {
 					s.logger.Fatalf("failed to register commit hook for CDC: %s", err)
+				}
+				if err := s.db.RegisterRollbackHook(s.cdcStreamer.RollbackHook); err != nil {
+					s.logger.Fatalf("failed to register rollback hook for CDC: %s", err)
 				}
 				s.cdcRegistered.Set()
 			}
