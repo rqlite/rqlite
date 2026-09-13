@@ -44,6 +44,9 @@ func Restore(r io.Reader, dstPath string) (int64, error) {
 	if full == nil {
 		return totalRead, fmt.Errorf("snapshot has no database")
 	}
+	if full.DbHeader == nil {
+		return totalRead, fmt.Errorf("missing database header: %w", ErrHeaderInvalid)
+	}
 
 	// Extract DB file. Wrap the source in a CRC32Reader so we can verify
 	// the bytes match the header's CRC32 without a second pass over disk.
