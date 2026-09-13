@@ -1718,13 +1718,24 @@ func (db *DB) Serialize() ([]byte, error) {
 // carry is created but cannot be queried. The dump itself still loads, since
 // SQLite resolves the tables a view reads from when the view is used, not when it
 // is created.
-func (db *DB) Dump(w io.Writer, tableNames ...string) error {
+func (db *DB) Dump(w io.Writer, tableNames ...string) (retErr error) {
 	conn, err := db.roDB.Conn(context.Background())
 	if err != nil {
 		return err
 	}
 	defer conn.Close()
 	ctx := context.Background()
+
+	// Keep schema and data reads on one snapshot, even if writes commit while
+	// the dump is being streamed. End the read transaction on every exit path.
+	if _, err := conn.ExecContext(ctx, "BEGIN"); err != nil {
+		return err
+	}
+	defer func() {
+		if _, err := conn.ExecContext(ctx, "ROLLBACK"); retErr == nil {
+			retErr = err
+		}
+	}()
 
 	// Convenience function to convert string query to protobuf.
 	commReq := func(query string) *command.Request {

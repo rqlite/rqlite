@@ -2400,6 +2400,127 @@ func Test_DB_Dump(t *testing.T) {
 	}
 }
 
+// Test_DB_DumpConcurrentWrite verifies that Dump reads schema and data from one
+// database snapshot when a write commits partway through the dump. Both tables
+// initially contain 0. During dumping, one transaction changes both values to 1
+// and creates an index on b. The dump must contain the original values and omit
+// the new index; the final query confirms that the live database contains 1 in
+// both tables. Without a read transaction spanning Dump, the output contains
+// a's old value, b's new value, and the newly created index.
+//
+// The test uses the supplied writer to trigger the update at a deterministic
+// point, using only exported DB methods and without goroutines or sleeps. This
+// relies on Dump's current implementation: it processes tables in name order,
+// reads a table's data, and passes each complete INSERT statement to Write before
+// reading the next table's data. The write beginning with INSERT INTO "a" therefore
+// occurs after a has been read but before b's data or the indexes, triggers, and
+// views have been read. The writer callback commits the update synchronously, so Dump cannot
+// advance to those reads until the callback returns. Statement boundaries come
+// from Dump's explicit Write calls, not from line terminators or an io.Writer
+// guarantee.
+//
+// This deliberately couples the test to Dump's output chunks and read ordering.
+// The updated assertion catches a callback that never fires, but does not prove
+// that it fired before b was read. If Dump is changed to buffer output, combine
+// writes, reorder tables, or prefetch data or schema objects, revisit the trigger
+// and its ordering assumptions. Merely adjusting the prefix could leave a passing
+// test that no longer exercises the intended interleaving.
+func Test_DB_DumpConcurrentWrite(t *testing.T) {
+	db, path := mustCreateOnDiskDatabaseWAL()
+	defer os.Remove(path)
+	defer db.Close()
+
+	mustExecute(db, `CREATE TABLE a(v INTEGER); CREATE TABLE b(v INTEGER)`)
+	mustExecute(db, `INSERT INTO a VALUES(0); INSERT INTO b VALUES(0)`)
+
+	var buf strings.Builder
+	updated := false
+	w := dumpWriterFunc(func(p []byte) (int, error) {
+		if !updated && strings.HasPrefix(string(p), `INSERT INTO "a"`) {
+			// Update both tables after Dump has read a, but before it reads b.
+			updated = true
+			r, err := db.Execute(&command.Request{
+				Transaction: true,
+				Statements: []*command.Statement{
+					{Sql: `UPDATE a SET v=1`},
+					{Sql: `UPDATE b SET v=1`},
+					{Sql: `CREATE INDEX idx_b ON b(v)`},
+				},
+			}, false)
+			if err != nil {
+				t.Fatalf("failed to update database during dump: %s", err)
+			}
+			for _, result := range r {
+				if result.GetError() != "" {
+					t.Fatalf("failed to update database during dump: %s", result.GetError())
+				}
+			}
+		}
+		return buf.Write(p)
+	})
+	if err := db.Dump(w); err != nil {
+		t.Fatalf("failed to dump database: %s", err)
+	}
+	if !updated {
+		t.Fatal("database was not updated during dump")
+	}
+	const exp = `PRAGMA foreign_keys=OFF;
+BEGIN TRANSACTION;
+CREATE TABLE a(v INTEGER);
+INSERT INTO "a" VALUES(0);
+CREATE TABLE b(v INTEGER);
+INSERT INTO "b" VALUES(0);
+COMMIT;
+`
+	if got := buf.String(); got != exp {
+		t.Fatalf("dump contains inconsistent schema or data\nexp: %s\ngot: %s", exp, got)
+	}
+
+	rows, err := db.QueryStringStmt(`SELECT a.v, b.v FROM a, b`)
+	if err != nil {
+		t.Fatalf("failed to query updated database: %s", err)
+	}
+	if exp, got := `[{"columns":["v","v"],"types":["integer","integer"],"values":[[1,1]]}]`, asJSON(rows); exp != got {
+		t.Fatalf("unexpected current data\nexp: %s\ngot: %s", exp, got)
+	}
+}
+
+func Test_DB_DumpWriteError(t *testing.T) {
+	db, path := mustCreateOnDiskDatabaseWAL()
+	defer os.Remove(path)
+	defer db.Close()
+	db.SetMaxReadOnlyConns(1)
+	mustExecute(db, `CREATE TABLE foo(v INTEGER); INSERT INTO foo VALUES(0)`)
+
+	writeErr := errors.New("dump write failed")
+	w := dumpWriterFunc(func(p []byte) (int, error) {
+		if strings.HasPrefix(string(p), `INSERT INTO`) {
+			return 0, writeErr
+		}
+		return len(p), nil
+	})
+	if err := db.Dump(w); !errors.Is(err, writeErr) {
+		t.Fatalf("unexpected dump error: %v", err)
+	}
+
+	// The failed dump must release its read transaction before returning the
+	// connection to the pool. A subsequent dump must see the new value.
+	mustExecute(db, `UPDATE foo SET v=1`)
+	var buf strings.Builder
+	if err := db.Dump(&buf); err != nil {
+		t.Fatalf("failed to dump after write error: %s", err)
+	}
+	if !strings.Contains(buf.String(), `INSERT INTO "foo" VALUES(1);`) {
+		t.Fatalf("dump did not see updated data: %s", buf.String())
+	}
+}
+
+type dumpWriterFunc func([]byte) (int, error)
+
+func (f dumpWriterFunc) Write(p []byte) (int, error) {
+	return f(p)
+}
+
 // Test_SchemaObjects_Filter checks which schema objects a dump of selected tables
 // carries, without a database connection.
 func Test_SchemaObjects_Filter(t *testing.T) {
