@@ -595,8 +595,8 @@ func (s *Store) reapInternal() (int, int, error) {
 
 	full, _ := fullSet.Newest()
 
-	// Single full snapshot with nothing newer — nothing to do.
-	if snapSet.Len() == 1 {
+	// A single full snapshot needs no work unless it contains WALs.
+	if snapSet.Len() == 1 && len(full.walFiles) == 0 {
 		return 0, 0, nil
 	}
 
