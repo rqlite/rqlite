@@ -7,6 +7,8 @@ import (
 	"os"
 	"runtime"
 	"time"
+
+	"github.com/rqlite/rqlite/v10/internal/fsutil"
 )
 
 const (
@@ -115,6 +117,8 @@ func ReadFromFile(path string) (*Plan, error) {
 // WriteToFile writes the plan to the specified file in JSON format.
 // The write is atomic: data is first written to a temporary file
 // (path + ".tmp"), synced, and then renamed to the final path.
+// The parent directory is then synced on non-Windows platforms to make
+// the rename durable before the plan can be executed.
 func WriteToFile(p *Plan, path string) error {
 	data, err := json.Marshal(p)
 	if err != nil {
@@ -127,7 +131,10 @@ func WriteToFile(p *Plan, path string) error {
 	if err := syncFileMaybe(tmpPath); err != nil {
 		return err
 	}
-	return os.Rename(tmpPath, path)
+	if err := os.Rename(tmpPath, path); err != nil {
+		return err
+	}
+	return fsutil.SyncDirParentMaybe(path)
 }
 
 // Len returns the number of operations in the plan.
