@@ -4,6 +4,7 @@
 - [PR #2771](https://github.com/rqlite/rqlite/pull/2771): Refactor busy timeout methods. Thanks @ zxysilent
 - [PR #2776](https://github.com/rqlite/rqlite/pull/2776): Fix edge-case bugs detected by GPT-6 Astra.
 - [PR #2781](https://github.com/rqlite/rqlite/pull/2781): Switch to `quay.io/minio/minio:latest` for testing purposes.
+- [PR #2778](https://github.com/rqlite/rqlite/pull/2778): Fix removing a node with different ID, but same Raft address.
 
 ## v10.3.2 (September 7th 2026)
 ### Implementation changes and bug fixes
