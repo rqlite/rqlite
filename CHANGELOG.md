@@ -15,6 +15,7 @@
 - [PR #2788](https://github.com/rqlite/rqlite/pull/2788): Reject incomplete snapshot headers.
 - [PR #2789](https://github.com/rqlite/rqlite/pull/2789): Validate restore database header.
 - [PR #2790](https://github.com/rqlite/rqlite/pull/2790): Only reap a sole fullsnapshot if it has zero WALs.
+- [PR #2790](https://github.com/rqlite/rqlite/pull/2793): Keep SQL dumps consistent during writes.
 
 ## v10.3.2 (September 7th 2026)
 ### Implementation changes and bug fixes
