@@ -2171,25 +2171,6 @@ func Test_DB_Dump(t *testing.T) {
 	}
 }
 
-// mustCreateDumpSchemaFixture creates a database holding three tables, an index
-// and a trigger per table, and a view.
-func mustCreateDumpSchemaFixture(t *testing.T) (*DB, string) {
-	db, path := mustCreateOnDiskDatabaseWAL()
-	mustExecute(db, `CREATE TABLE t1 (id INTEGER NOT NULL PRIMARY KEY, name TEXT)`)
-	mustExecute(db, `CREATE TABLE t2 (id INTEGER NOT NULL PRIMARY KEY, v TEXT)`)
-	mustExecute(db, `CREATE TABLE t3 (id INTEGER NOT NULL PRIMARY KEY, w TEXT)`)
-	mustExecute(db, `CREATE INDEX idx_t1_name ON t1(name)`)
-	mustExecute(db, `CREATE INDEX idx_t2_v ON t2(v)`)
-	mustExecute(db, `CREATE INDEX idx_t3_w ON t3(w)`)
-	mustExecute(db, `INSERT INTO t1(id, name) VALUES(1, 'a')`)
-	mustExecute(db, `INSERT INTO t1(id, name) VALUES(2, 'b')`)
-	mustExecute(db, `INSERT INTO t2(id, v) VALUES(1, 'c')`)
-	mustExecute(db, `CREATE TRIGGER trg_t1 AFTER INSERT ON t1 BEGIN UPDATE t1 SET name = 'z' WHERE id = NEW.id; END`)
-	mustExecute(db, `CREATE TRIGGER trg_t2 AFTER INSERT ON t2 BEGIN UPDATE t2 SET v = 'y' WHERE id = NEW.id; END`)
-	mustExecute(db, `CREATE VIEW v_t1_t2 AS SELECT a.id FROM t1 a JOIN t2 b ON a.id = b.id`)
-	return db, path
-}
-
 // Test_SchemaObjects_Filter checks which schema objects a dump of selected tables
 // carries, without a database connection.
 func Test_SchemaObjects_Filter(t *testing.T) {
@@ -2612,4 +2593,23 @@ func Test_DB_Backup(t *testing.T) {
 			t.Fatalf("unexpected results for query\nexp: %s\ngot: %s", exp, got)
 		}
 	}
+}
+
+// mustCreateDumpSchemaFixture creates a database holding three tables, an index
+// and a trigger per table, and a view.
+func mustCreateDumpSchemaFixture(t *testing.T) (*DB, string) {
+	db, path := mustCreateOnDiskDatabaseWAL()
+	mustExecute(db, `CREATE TABLE t1 (id INTEGER NOT NULL PRIMARY KEY, name TEXT)`)
+	mustExecute(db, `CREATE TABLE t2 (id INTEGER NOT NULL PRIMARY KEY, v TEXT)`)
+	mustExecute(db, `CREATE TABLE t3 (id INTEGER NOT NULL PRIMARY KEY, w TEXT)`)
+	mustExecute(db, `CREATE INDEX idx_t1_name ON t1(name)`)
+	mustExecute(db, `CREATE INDEX idx_t2_v ON t2(v)`)
+	mustExecute(db, `CREATE INDEX idx_t3_w ON t3(w)`)
+	mustExecute(db, `INSERT INTO t1(id, name) VALUES(1, 'a')`)
+	mustExecute(db, `INSERT INTO t1(id, name) VALUES(2, 'b')`)
+	mustExecute(db, `INSERT INTO t2(id, v) VALUES(1, 'c')`)
+	mustExecute(db, `CREATE TRIGGER trg_t1 AFTER INSERT ON t1 BEGIN UPDATE t1 SET name = 'z' WHERE id = NEW.id; END`)
+	mustExecute(db, `CREATE TRIGGER trg_t2 AFTER INSERT ON t2 BEGIN UPDATE t2 SET v = 'y' WHERE id = NEW.id; END`)
+	mustExecute(db, `CREATE VIEW v_t1_t2 AS SELECT a.id FROM t1 a JOIN t2 b ON a.id = b.id`)
+	return db, path
 }

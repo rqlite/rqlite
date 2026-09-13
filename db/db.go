@@ -1804,12 +1804,38 @@ func (db *DB) Dump(w io.Writer, tableNames ...string) error {
 	return err
 }
 
-// schemaObject is an index, a trigger or a view held by the database schema.
-type schemaObject struct {
-	name    string
-	typ     string
-	tblName string
-	sql     string
+// StmtReadOnly returns whether the given SQL statement is read-only.
+// As per https://www.sqlite.org/c3ref/stmt_readonly.html, this function
+// may not return 100% correct results, but should cover most scenarios.
+func (db *DB) StmtReadOnly(sql string) (bool, error) {
+	conn, err := db.roDB.Conn(context.Background())
+	if err != nil {
+		return false, err
+	}
+	defer conn.Close()
+	return db.StmtReadOnlyWithConn(sql, conn)
+}
+
+// StmtReadOnlyWithConn returns whether the given SQL statement is read-only, using
+// the given connection.
+func (db *DB) StmtReadOnlyWithConn(sql string, conn *sql.Conn) (bool, error) {
+	var readOnly bool
+	f := func(driverConn any) error {
+		c := driverConn.(*sqlite3.SQLiteConn)
+		drvStmt, err := c.Prepare(sql)
+		if err != nil {
+			return err
+		}
+		defer drvStmt.Close()
+		sqliteStmt := drvStmt.(*sqlite3.SQLiteStmt)
+		readOnly = sqliteStmt.Readonly()
+		return nil
+	}
+
+	if err := conn.Raw(f); err != nil {
+		return false, err
+	}
+	return readOnly, nil
 }
 
 // schemaObjectsWithConn returns every index, trigger and view of the database, in
@@ -1846,70 +1872,6 @@ func (db *DB) schemaObjectsWithConn(ctx context.Context, conn *sql.Conn) (schema
 		})
 	}
 	return objs, nil
-}
-
-// schemaObjects is a set of schema objects held by the database.
-type schemaObjects []schemaObject
-
-// Filter returns the objects that belong to the given tables: an index or a
-// trigger is kept when the table it belongs to is one of them, and views are
-// always kept, since a view says nothing about the objects it reads from. See
-// Dump for what that means for a filtered dump. With no table names every object
-// is kept.
-func (s schemaObjects) Filter(tables []string) schemaObjects {
-	if len(tables) == 0 {
-		return s
-	}
-
-	selected := make(map[string]struct{}, len(tables))
-	for _, t := range tables {
-		selected[strings.ToLower(t)] = struct{}{}
-	}
-
-	filtered := make(schemaObjects, 0, len(s))
-	for _, o := range s {
-		if o.typ != "view" {
-			if _, ok := selected[strings.ToLower(o.tblName)]; !ok {
-				continue
-			}
-		}
-		filtered = append(filtered, o)
-	}
-	return filtered
-}
-
-// StmtReadOnly returns whether the given SQL statement is read-only.
-// As per https://www.sqlite.org/c3ref/stmt_readonly.html, this function
-// may not return 100% correct results, but should cover most scenarios.
-func (db *DB) StmtReadOnly(sql string) (bool, error) {
-	conn, err := db.roDB.Conn(context.Background())
-	if err != nil {
-		return false, err
-	}
-	defer conn.Close()
-	return db.StmtReadOnlyWithConn(sql, conn)
-}
-
-// StmtReadOnlyWithConn returns whether the given SQL statement is read-only, using
-// the given connection.
-func (db *DB) StmtReadOnlyWithConn(sql string, conn *sql.Conn) (bool, error) {
-	var readOnly bool
-	f := func(driverConn any) error {
-		c := driverConn.(*sqlite3.SQLiteConn)
-		drvStmt, err := c.Prepare(sql)
-		if err != nil {
-			return err
-		}
-		defer drvStmt.Close()
-		sqliteStmt := drvStmt.(*sqlite3.SQLiteStmt)
-		readOnly = sqliteStmt.Readonly()
-		return nil
-	}
-
-	if err := conn.Raw(f); err != nil {
-		return false, err
-	}
-	return readOnly, nil
 }
 
 func (db *DB) pragmas() (map[string]any, error) {
@@ -2026,6 +1988,44 @@ func (db *DB) memStats() (map[string]int64, error) {
 		ms[p] = res[i].Values[0].Parameters[0].GetI()
 	}
 	return ms, nil
+}
+
+// schemaObject is an index, a trigger or a view held by the database schema.
+type schemaObject struct {
+	name    string
+	typ     string
+	tblName string
+	sql     string
+}
+
+// schemaObjects is a set of schema objects held by the database.
+type schemaObjects []schemaObject
+
+// Filter returns the objects that belong to the given tables: an index or a
+// trigger is kept when the table it belongs to is one of them, and views are
+// always kept, since a view says nothing about the objects it reads from. See
+// Dump for what that means for a filtered dump. With no table names every object
+// is kept.
+func (s schemaObjects) Filter(tables []string) schemaObjects {
+	if len(tables) == 0 {
+		return s
+	}
+
+	selected := make(map[string]struct{}, len(tables))
+	for _, t := range tables {
+		selected[strings.ToLower(t)] = struct{}{}
+	}
+
+	filtered := make(schemaObjects, 0, len(s))
+	for _, o := range s {
+		if o.typ != "view" {
+			if _, ok := selected[strings.ToLower(o.tblName)]; !ok {
+				continue
+			}
+		}
+		filtered = append(filtered, o)
+	}
+	return filtered
 }
 
 // qualifyRowColumns prefixes each column name in rows with its originating table name.
