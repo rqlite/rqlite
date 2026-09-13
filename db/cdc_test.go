@@ -10,6 +10,120 @@ import (
 	command "github.com/rqlite/rqlite/v10/command/proto"
 )
 
+func Test_CDCStreamer_RequestCommits(t *testing.T) {
+	db, streamer, ch := mustCreateCDCStreamerDatabase(t)
+
+	streamer.Reset(42)
+	r, err := db.Execute(&command.Request{Statements: []*command.Statement{
+		{Sql: "INSERT INTO foo VALUES(1)"},
+		{Sql: "INSERT INTO foo VALUES(2)"},
+	}}, false)
+	if err != nil {
+		t.Fatalf("error executing request: %s", err)
+	}
+	for _, result := range r {
+		if result.GetError() != "" {
+			t.Fatalf("unexpected statement error: %s", result.GetError())
+		}
+	}
+	if len(ch) != 0 {
+		t.Fatal("events sent before the request was flushed")
+	}
+	streamer.Flush()
+	if len(ch) != 1 {
+		t.Fatalf("expected one group for the request, got %d", len(ch))
+	}
+	group := <-ch
+	if group.Index != 42 {
+		t.Fatalf("expected index 42, got %d", group.Index)
+	}
+	if len(group.Events) != 2 {
+		t.Fatalf("expected two committed events, got %d", len(group.Events))
+	}
+	if group.Events[0].NewRowId != 1 || group.Events[1].NewRowId != 2 {
+		t.Fatalf("unexpected event order: %s", group)
+	}
+	if group.CommitTimestamp == 0 {
+		t.Fatal("missing commit timestamp")
+	}
+	for _, event := range group.Events {
+		if !slices.Equal(event.ColumnNames, []string{"id"}) {
+			t.Fatalf("unexpected column names: %v", event.ColumnNames)
+		}
+	}
+
+	// A later request has its own index and does not resend earlier events.
+	streamer.Reset(43)
+	mustExecute(db, "INSERT INTO foo VALUES(3)")
+	streamer.Flush()
+	streamer.Flush()
+	if len(ch) != 1 {
+		t.Fatalf("expected one group after repeated Flush, got %d", len(ch))
+	}
+	group = <-ch
+	if group.Index != 43 || len(group.Events) != 1 || group.Events[0].NewRowId != 3 {
+		t.Fatalf("unexpected group for the next request: %s", group)
+	}
+}
+
+func Test_CDCStreamer_RequestPartialSuccess(t *testing.T) {
+	db, streamer, ch := mustCreateCDCStreamerDatabase(t)
+
+	streamer.Reset(42)
+	r, err := db.Request(&command.Request{Statements: []*command.Statement{
+		{Sql: "INSERT INTO foo VALUES(1)"},
+		{Sql: "INSERT INTO missing VALUES(2)"},
+		{Sql: "INSERT INTO foo VALUES(3)"},
+	}}, false)
+	if err != nil {
+		t.Fatalf("error executing request: %s", err)
+	}
+	if len(r) != 3 || r[0].GetError() != "" || r[1].GetError() == "" || r[2].GetError() != "" {
+		t.Fatalf("unexpected results: %s", asJSON(r))
+	}
+	streamer.Flush()
+	if len(ch) != 1 {
+		t.Fatalf("expected one group for the request, got %d", len(ch))
+	}
+	group := <-ch
+	if group.Index != 42 || len(group.Events) != 2 {
+		t.Fatalf("unexpected group for partially successful request: %s", group)
+	}
+	if group.Events[0].NewRowId != 1 || group.Events[1].NewRowId != 3 {
+		t.Fatalf("unexpected committed rows: %s", group)
+	}
+}
+
+func Test_CDCStreamer_RequestCommitsWithRollback(t *testing.T) {
+	db, streamer, ch := mustCreateCDCStreamerDatabase(t)
+	streamer.Reset(42)
+	results, err := db.Execute(&command.Request{Statements: []*command.Statement{
+		{Sql: "INSERT INTO foo VALUES(1)"},
+		{Sql: "INSERT INTO foo VALUES(2), (2)"},
+		{Sql: "INSERT INTO foo VALUES(3)"},
+	}}, false)
+	if err != nil {
+		t.Fatalf("error executing request: %s", err)
+	}
+	if len(results) != 3 || results[0].GetError() != "" || results[1].GetError() == "" || results[2].GetError() != "" {
+		t.Fatalf("unexpected results: %s", asJSON(results))
+	}
+	streamer.Flush()
+	if len(ch) != 1 {
+		t.Fatalf("expected one group for the request, got %d", len(ch))
+	}
+	group := <-ch
+	if group.Index != 42 || len(group.Events) != 2 {
+		t.Fatalf("unexpected committed group: %s", group)
+	}
+	if group.Events[0].NewRowId != 1 || group.Events[1].NewRowId != 3 {
+		t.Fatalf("expected commits before and after rollback, got %s", group)
+	}
+	if got := asJSON(mustQuery(db, "SELECT id FROM foo ORDER BY id")); got != `[{"columns":["id"],"types":["integer"],"values":[[1],[3]]}]` {
+		t.Fatalf("unexpected committed rows: %s", got)
+	}
+}
+
 func Test_CDCStreamer_New(t *testing.T) {
 	ch := make(chan *command.CDCIndexedEventGroup, 10)
 	streamer, err := NewCDCStreamer(ch, &mockColumnNamesProvider{})
@@ -51,6 +165,7 @@ func Test_CDCStreamer_CommitOne(t *testing.T) {
 	}
 
 	streamer.CommitHook()
+	streamer.Flush()
 	if len(streamer.pending.Events) != 0 {
 		t.Fatalf("expected no pending events after commit, got %d", len(streamer.pending.Events))
 	}
@@ -112,6 +227,7 @@ func Test_CDCStreamer_CommitTwo(t *testing.T) {
 	}
 
 	streamer.CommitHook()
+	streamer.Flush()
 	if len(streamer.pending.Events) != 0 {
 		t.Fatalf("expected no pending events after commit, got %d", len(streamer.pending.Events))
 	}
@@ -186,6 +302,7 @@ func Test_CDCStreamer_ResetThenPreupdate(t *testing.T) {
 	}
 
 	streamer.CommitHook()
+	streamer.Flush()
 	if len(streamer.pending.Events) != 0 {
 		t.Fatalf("expected no pending events after commit, got %d", len(streamer.pending.Events))
 	}
@@ -226,6 +343,7 @@ func Test_CDCStreamer_ExecuteRollback(t *testing.T) {
 	if len(results) != 2 || results[0].GetError() == "" || results[1].GetError() != "" {
 		t.Fatalf("unexpected results: %s", asJSON(results))
 	}
+	streamer.Flush()
 	if len(ch) != 1 {
 		t.Fatalf("expected one committed group, got %d", len(ch))
 	}
@@ -251,6 +369,7 @@ func Test_CDCStreamer_RequestRollback(t *testing.T) {
 	if len(results) != 2 || results[0].GetError() == "" || results[1].GetError() != "" {
 		t.Fatalf("unexpected results: %s", asJSON(results))
 	}
+	streamer.Flush()
 	if len(ch) != 1 {
 		t.Fatalf("expected one committed group, got %d", len(ch))
 	}
@@ -273,10 +392,12 @@ func Test_CDCStreamer_TransactionRollback(t *testing.T) {
 	if len(results) != 2 || results[0].GetError() != "" || results[1].GetError() == "" {
 		t.Fatalf("unexpected results: %s", asJSON(results))
 	}
+	streamer.Flush()
 	if streamer.Len() != 0 || len(ch) != 0 {
 		t.Fatalf("rolled-back transaction retained %d pending events and emitted %d groups", streamer.Len(), len(ch))
 	}
 	mustExecute(db, "INSERT INTO foo VALUES(2)")
+	streamer.Flush()
 	if len(ch) != 1 {
 		t.Fatalf("expected one committed group, got %d", len(ch))
 	}
@@ -297,6 +418,7 @@ func Test_CDCStreamer_ConflictFailRetainsChanges(t *testing.T) {
 		t.Fatalf("expected constraint error, got %s", asJSON(results))
 	}
 	// FAIL preserves the first insert even though the statement returns an error.
+	streamer.Flush()
 	if len(ch) != 1 {
 		t.Fatalf("expected one committed group, got %d", len(ch))
 	}

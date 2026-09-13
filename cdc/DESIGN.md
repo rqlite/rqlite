@@ -37,7 +37,7 @@ Sink (HTTP POST to webhook endpoint)
 
 ### Change Capture
 
-Changes are captured via SQLite's pre-update hook and commit hook, registered by the `db` package. The pre-update hook captures the before/after state of each affected row. The commit hook fires when the transaction commits. These hooks execute during `FSM.Apply`, so each event group is tagged with the **Raft log index** of the command that triggered the changes.
+Changes are captured via SQLite's pre-update hook and commit hook, registered by the `db` package. The pre-update hook captures the before/after state of each affected row. The commit hook collects events for each transaction. At the end of command processing, `FSM.Apply` flushes all committed events as one group tagged with the command's **Raft log index**. Keeping multiple commits in one group prevents a high-watermark update from acknowledging only part of a command's changes.
 
 The Raft index serves two purposes:
 - It provides a total ordering of changes across the cluster.
