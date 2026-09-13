@@ -2111,6 +2111,65 @@ func Test_DB_SimpleRequestTx(t *testing.T) {
 	}
 }
 
+func Test_DB_RequestTxPrepareError(t *testing.T) {
+	db, path := mustCreateOnDiskDatabaseWAL()
+	defer os.Remove(path)
+	defer db.Close()
+
+	mustExecute(db, `CREATE TABLE foo(id INTEGER)`)
+	r, err := db.Request(&command.Request{
+		Transaction: true,
+		Statements: []*command.Statement{
+			{Sql: `INSERT INTO foo VALUES(1)`},
+			{Sql: `INSERT INTO missing VALUES(2)`},
+			{Sql: `INSERT INTO foo VALUES(3)`},
+		},
+	}, false)
+	if err != nil {
+		t.Fatalf("failed to make request: %s", err)
+	}
+	if exp, got := `[{"last_insert_id":1,"rows_affected":1},{"error":"no such table: missing"}]`, asJSON(r); exp != got {
+		t.Fatalf("unexpected results for request\nexp: %s\ngot: %s", exp, got)
+	}
+
+	rows, err := db.QueryStringStmt(`SELECT COUNT(*) FROM foo`)
+	if err != nil {
+		t.Fatalf("failed to query row count: %s", err)
+	}
+	if exp, got := `[{"columns":["COUNT(*)"],"types":["integer"],"values":[[0]]}]`, asJSON(rows); exp != got {
+		t.Fatalf("transaction was not rolled back\nexp: %s\ngot: %s", exp, got)
+	}
+}
+
+func Test_DB_RequestPrepareError(t *testing.T) {
+	db, path := mustCreateOnDiskDatabaseWAL()
+	defer os.Remove(path)
+	defer db.Close()
+
+	mustExecute(db, `CREATE TABLE foo(id INTEGER)`)
+	r, err := db.Request(&command.Request{
+		Statements: []*command.Statement{
+			{Sql: `INSERT INTO foo VALUES(1)`},
+			{Sql: `INSERT INTO missing VALUES(2)`},
+			{Sql: `INSERT INTO foo VALUES(3)`},
+		},
+	}, false)
+	if err != nil {
+		t.Fatalf("failed to make request: %s", err)
+	}
+	if exp, got := `[{"last_insert_id":1,"rows_affected":1},{"error":"no such table: missing"},{"last_insert_id":2,"rows_affected":1}]`, asJSON(r); exp != got {
+		t.Fatalf("unexpected results for request\nexp: %s\ngot: %s", exp, got)
+	}
+
+	rows, err := db.QueryStringStmt(`SELECT id FROM foo ORDER BY id`)
+	if err != nil {
+		t.Fatalf("failed to query rows: %s", err)
+	}
+	if exp, got := `[{"columns":["id"],"types":["integer"],"values":[[1],[3]]}]`, asJSON(rows); exp != got {
+		t.Fatalf("unexpected rows\nexp: %s\ngot: %s", exp, got)
+	}
+}
+
 func Test_DB_CommonTableExpressions(t *testing.T) {
 	db, path := mustCreateOnDiskDatabaseWAL()
 	defer os.Remove(path)
