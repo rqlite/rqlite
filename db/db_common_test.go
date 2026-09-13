@@ -2341,6 +2341,31 @@ func Test_DB_Dump(t *testing.T) {
 	}
 }
 
+// Test_DB_DumpConcurrentWrite verifies that Dump reads schema and data from one
+// database snapshot when a write commits partway through the dump. Both tables
+// initially contain 0. During dumping, one transaction changes both values to 1
+// and creates an index on b. The dump must contain the original values and omit
+// the new index; the final query confirms that the live database contains 1 in
+// both tables. Without a read transaction spanning Dump, the output contains
+// a's old value, b's new value, and the newly created index.
+//
+// The test uses the supplied writer to trigger the update at a deterministic
+// point, using only exported DB methods and without goroutines or sleeps. This
+// relies on Dump's current implementation: it processes tables in name order,
+// reads a table's data, and passes each complete INSERT statement to Write before
+// reading the next table's data. The write beginning with INSERT INTO "a" therefore
+// occurs after a has been read but before b's data or the indexes, triggers, and
+// views have been read. The writer callback commits the update synchronously, so Dump cannot
+// advance to those reads until the callback returns. Statement boundaries come
+// from Dump's explicit Write calls, not from line terminators or an io.Writer
+// guarantee.
+//
+// This deliberately couples the test to Dump's output chunks and read ordering.
+// The updated assertion catches a callback that never fires, but does not prove
+// that it fired before b was read. If Dump is changed to buffer output, combine
+// writes, reorder tables, or prefetch data or schema objects, revisit the trigger
+// and its ordering assumptions. Merely adjusting the prefix could leave a passing
+// test that no longer exercises the intended interleaving.
 func Test_DB_DumpConcurrentWrite(t *testing.T) {
 	db, path := mustCreateOnDiskDatabaseWAL()
 	defer os.Remove(path)
