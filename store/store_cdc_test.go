@@ -9,6 +9,61 @@ import (
 	"github.com/rqlite/rqlite/v10/command/proto"
 )
 
+func Test_StoreCDC_Events_MultipleStatements(t *testing.T) {
+	s, ln := mustNewStore(t)
+	defer ln.Close()
+	if err := s.Open(); err != nil {
+		t.Fatalf("failed to open store: %s", err)
+	}
+	defer s.Close(true)
+	if err := s.Bootstrap(NewServer(s.ID(), s.Addr(), true)); err != nil {
+		t.Fatalf("failed to bootstrap store: %s", err)
+	}
+	if _, err := s.WaitForLeader(10 * time.Second); err != nil {
+		t.Fatalf("failed to wait for leader: %s", err)
+	}
+	if _, _, err := s.Execute(context.Background(), executeRequestFromString(
+		"CREATE TABLE foo (id INTEGER PRIMARY KEY)", false, false)); err != nil {
+		t.Fatalf("failed to create table: %s", err)
+	}
+
+	ch := make(chan *proto.CDCIndexedEventGroup, 10)
+	if err := s.EnableCDC(ch, nil, false); err != nil {
+		t.Fatalf("failed to enable CDC: %s", err)
+	}
+	r, index, err := s.Execute(context.Background(), &proto.ExecuteRequest{
+		Request: &proto.Request{Statements: []*proto.Statement{
+			{Sql: "INSERT INTO foo VALUES(1)"},
+			{Sql: "INSERT INTO foo VALUES(2)"},
+		}},
+	})
+	if err != nil {
+		t.Fatalf("failed to execute inserts: %s", err)
+	}
+	for _, result := range r {
+		if result.GetError() != "" {
+			t.Fatalf("unexpected statement error: %s", result.GetError())
+		}
+	}
+	select {
+	case group := <-ch:
+		if group.Index != index {
+			t.Fatalf("expected Raft index %d, got %d", index, group.Index)
+		}
+		if len(group.Events) != 2 {
+			t.Fatalf("expected both commits in one group, got %d events", len(group.Events))
+		}
+		if group.Events[0].NewRowId != 1 || group.Events[1].NewRowId != 2 {
+			t.Fatalf("unexpected event order: %s", group)
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("timeout waiting for CDC events")
+	}
+	if len(ch) != 0 {
+		t.Fatalf("unexpected additional groups for the same Raft request: %d", len(ch))
+	}
+}
+
 // Test_StoreEnableCDC tests that CDC can be enabled and disabled on the Store.
 func Test_StoreEnableCDC(t *testing.T) {
 	s, ln := mustNewStore(t)

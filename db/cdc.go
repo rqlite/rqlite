@@ -12,13 +12,13 @@ type ColumnsNameProvider interface {
 	ColumnNames(table string) ([]string, error)
 }
 
-// CDCStreamer is a CDC streamer that collects events and sends them
-// to a channel when the commit hook is called. It is used to stream
-// changes to a client.
+// CDCStreamer collects committed changes for a Raft request and sends them
+// to a channel when Flush is called.
 type CDCStreamer struct {
-	pending *command.CDCIndexedEventGroup
-	out     chan<- *command.CDCIndexedEventGroup
-	db      ColumnsNameProvider
+	pending   *command.CDCIndexedEventGroup
+	committed *command.CDCIndexedEventGroup
+	out       chan<- *command.CDCIndexedEventGroup
+	db        ColumnsNameProvider
 }
 
 // NewCDCStreamer creates a new CDCStreamer. The out channel is used
@@ -42,14 +42,14 @@ func NewCDCStreamer(out chan<- *command.CDCIndexedEventGroup, db ColumnsNameProv
 	}, nil
 }
 
-// Reset resets the CDCStreamer. The K value is set to the
-// current K value, and all pending events are cleared. This is used
-// to reset the CDCStreamer before a new transaction is started.
+// Reset starts a new request at Raft index k, discarding any unflushed events.
+// The caller must Flush after processing the request, before the next Reset.
 func (s *CDCStreamer) Reset(k uint64) {
 	s.pending = &command.CDCIndexedEventGroup{
 		Events: make([]*command.CDCEvent, 0),
 		Index:  k,
 	}
+	s.committed = nil
 }
 
 // Close closes the CDCStreamer. It closes the out channel.
@@ -70,8 +70,8 @@ func (s *CDCStreamer) RollbackHook() {
 	s.pending.Events = nil
 }
 
-// CommitHook is called after the transaction is committed. It sends the
-// pending events to the out channel and clears the pending events.
+// CommitHook collects the pending events at a transaction's commit. A request
+// can commit multiple transactions; Flush sends them together at one Raft index.
 func (s *CDCStreamer) CommitHook() bool {
 	if len(s.pending.Events) == 0 {
 		// No CDC events to send, but let the transaction proceed.
@@ -94,16 +94,28 @@ func (s *CDCStreamer) CommitHook() bool {
 		ev.ColumnNames = colNamesCache[ev.Table]
 	}
 
-	s.pending.CommitTimestamp = time.Now().UnixMilli()
+	if s.committed == nil {
+		s.committed = &command.CDCIndexedEventGroup{Index: s.pending.Index}
+	}
+	s.committed.Events = append(s.committed.Events, s.pending.Events...)
+	s.committed.CommitTimestamp = time.Now().UnixMilli()
+	s.pending.Events = nil
+	return true
+}
+
+// Flush sends the request's committed events as a single group. Uncommitted
+// events are not sent. Keeping a request together allows consumers to acknowledge
+// its Raft index without losing events from subsequent commits in that request.
+func (s *CDCStreamer) Flush() {
+	if s.committed == nil {
+		return
+	}
 	select {
-	case s.out <- s.pending:
+	case s.out <- s.committed:
 	default:
 		stats.Add(cdcDroppedEvents, 1)
 	}
-	s.pending = &command.CDCIndexedEventGroup{
-		Events: make([]*command.CDCEvent, 0),
-	}
-	return true
+	s.committed = nil
 }
 
 // Len returns the number of pending events.

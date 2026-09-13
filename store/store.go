@@ -2561,6 +2561,7 @@ func (s *Store) fsmApply(l *raft.Log) (e any) {
 				s.cdcRegistered.Set()
 			}
 			s.cdcStreamer.Reset(l.Index)
+			defer s.cdcStreamer.Flush()
 		}
 		return s.cmdProc.Process(l.Data, s.db)
 	}()
