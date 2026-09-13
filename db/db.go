@@ -1605,6 +1605,9 @@ func (db *DB) RequestWithContext(ctx context.Context, req *command.Request, xTim
 					Error: err.Error(),
 				},
 			})
+			if abortOnError(err) {
+				break
+			}
 			continue
 		}
 
