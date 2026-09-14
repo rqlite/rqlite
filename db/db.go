@@ -1726,17 +1726,6 @@ func (db *DB) Dump(w io.Writer, tableNames ...string) (retErr error) {
 	defer conn.Close()
 	ctx := context.Background()
 
-	// Keep schema and data reads on one snapshot, even if writes commit while
-	// the dump is being streamed. End the read transaction on every exit path.
-	if _, err := conn.ExecContext(ctx, "BEGIN"); err != nil {
-		return err
-	}
-	defer func() {
-		if _, err := conn.ExecContext(ctx, "ROLLBACK"); retErr == nil {
-			retErr = err
-		}
-	}()
-
 	// Convenience function to convert string query to protobuf.
 	commReq := func(query string) *command.Request {
 		return &command.Request{
@@ -1752,8 +1741,11 @@ func (db *DB) Dump(w io.Writer, tableNames ...string) (retErr error) {
 		return err
 	}
 
-	// Get the schema.
-	rows, err := db.queryWithConn(ctx, DumpTablesReq(tableNames...), false, conn)
+	// Get the schema, ensuring it's performed within a transaction so we query a consistent
+	// snapshot of the database.
+	req := DumpTablesReq(tableNames...)
+	req.Transaction = true
+	rows, err := db.queryWithConn(ctx, req, false, conn)
 	if err != nil {
 		return err
 	}
