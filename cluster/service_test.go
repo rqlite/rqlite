@@ -3,6 +3,7 @@ package cluster
 import (
 	"context"
 	"crypto/tls"
+	"encoding/binary"
 	"errors"
 	"fmt"
 	"io"
@@ -551,6 +552,43 @@ func Test_ServiceSetConnectionLimitOpen(t *testing.T) {
 
 	if err := s.SetConnectionLimit(1); !errors.Is(err, ErrServiceOpen) {
 		t.Fatalf("expected ErrServiceOpen, got: %v", err)
+	}
+}
+
+// Test_ServiceRejectsOversizedMessage verifies that the service closes the
+// connection immediately when a peer sends a length prefix that exceeds
+// maxMessageSize, without attempting to allocate that many bytes.
+func Test_ServiceRejectsOversizedMessage(t *testing.T) {
+	ml := mustNewMockTransport()
+	s := New(ml, mustNewMockDatabase(), mustNewMockManager(), mustNewMockCredentialStore())
+	if s == nil {
+		t.Fatalf("failed to create cluster service")
+	}
+
+	if err := s.Open(); err != nil {
+		t.Fatalf("failed to open cluster service")
+	}
+	defer s.Close()
+
+	conn, err := net.Dial("tcp", s.Addr())
+	if err != nil {
+		t.Fatalf("failed to connect: %s", err)
+	}
+	defer conn.Close()
+
+	// Send a length prefix that exceeds maxMessageSize.
+	b := make([]byte, protoBufferLengthSize)
+	binary.LittleEndian.PutUint64(b, maxMessageSize+1)
+	if _, err := conn.Write(b); err != nil {
+		t.Fatalf("failed to write oversized length: %s", err)
+	}
+
+	// The service should close the connection without reading any body.
+	conn.SetDeadline(time.Now().Add(2 * time.Second))
+	one := make([]byte, 1)
+	_, err = conn.Read(one)
+	if err != io.EOF {
+		t.Fatalf("expected io.EOF after oversized message, got: %v", err)
 	}
 }
 
