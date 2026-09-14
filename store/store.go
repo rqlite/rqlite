@@ -771,13 +771,15 @@ func (s *Store) Open() (retErr error) {
 		if err := fsutil.RemoveFile(s.cleanSnapshotPath); err != nil {
 			return fmt.Errorf("failed to remove clean snapshot file during RecoverNode: %w", err)
 		}
-		if err = RecoverNode(s.raftDir, s.dbConf.Extensions, s.logger, s.raftLog,
+		if err = RecoverNode(s.raftDir, s.dbConf, s.logger, s.raftLog,
 			s.boltStore, s.snapshotStore, s.raftTn, config); err != nil {
 			return fmt.Errorf("failed to recover node: %s", err.Error())
 		}
 		if err := os.Rename(s.peersPath, s.peersInfoPath); err != nil {
 			return fmt.Errorf("failed to move %s after recovery: %s", s.peersPath, err.Error())
 		}
+		// Recovering a node creates a new snapshot. We need to use it on startup.
+		raftConfig.NoSnapshotRestoreOnStart = false
 		s.logger.Printf("node recovered successfully using %s", s.peersPath)
 		stats.Add(numRecoveries, 1)
 	}
@@ -1002,7 +1004,7 @@ func (s *Store) Close(wait bool) (retErr error) {
 		s.logger.Println("snapshot-on-close took ", time.Since(startT))
 	}
 
-	if err := s.snapshotCAS.BeginWithRetry("close", 10*time.Millisecond, 10*time.Second); err != nil {
+	if err := s.snapshotCAS.BeginWithRetry("close", 10*time.Second, 10*time.Millisecond); err != nil {
 		return err
 	}
 	defer s.snapshotCAS.End()
@@ -1538,16 +1540,9 @@ func (s *Store) Query(ctx context.Context, qr *proto.QueryRequest) (rows []*prot
 		return nil, 0, 0, err
 	}
 
-	level = qr.Level
-	if level == proto.ConsistencyLevel_AUTO {
-		level = proto.ConsistencyLevel_WEAK
-		isVoter, err := s.IsVoter()
-		if err != nil {
-			return nil, 0, 0, err
-		}
-		if !isVoter {
-			level = proto.ConsistencyLevel_NONE
-		}
+	level, retErr = s.resolveAutoLevel(qr.Level)
+	if retErr != nil {
+		return nil, 0, 0, retErr
 	}
 
 	readTerm := s.raft.CurrentTerm()
@@ -1657,9 +1652,14 @@ func (s *Store) Request(ctx context.Context, eqr *proto.ExecuteQueryRequest) ([]
 	nRW, nRO := s.RORWCount(eqr)
 	isLeader := s.raft.State() == raft.Leader
 
+	level, err := s.resolveAutoLevel(eqr.Level)
+	if err != nil {
+		return nil, 0, 0, err
+	}
+
 	// See the Query() code for a full explanation of this.
 	readTerm := s.raft.CurrentTerm()
-	if eqr.Level == proto.ConsistencyLevel_LINEARIZABLE {
+	if level == proto.ConsistencyLevel_LINEARIZABLE {
 		err := s.waitForLinearizableRead(readTerm, eqr.LinearizableTimeout)
 		if err != nil {
 			if err == ErrStrongReadNeeded {
@@ -2214,12 +2214,12 @@ func (s *Store) Join(jr *proto.JoinRequest) error {
 				return nil
 			}
 
-			if err := s.remove(id); err != nil {
-				s.logger.Printf("failed to remove node %s: %v", id, err)
+			if err := s.remove(string(srv.ID)); err != nil {
+				s.logger.Printf("failed to remove node %s: %v", srv.ID, err)
 				return err
 			}
 			stats.Add(numRemovedBeforeJoins, 1)
-			s.logger.Printf("removed node %s prior to rejoin with changed ID or address", id)
+			s.logger.Printf("removed node %s prior to rejoin with changed ID or address", srv.ID)
 		}
 	}
 
@@ -2731,6 +2731,10 @@ func (s *Store) fsmSnapshot() (fSnap raft.FSMSnapshot, retErr error) {
 		// which will be faster than performing a full snapshot. All this means that we avoid breaking the
 		// series of incremental snapshots. The next Snapshot will comprise of two WAL files in that case.
 		if err := walWriter.Close(); err != nil {
+			// Failing to close the staged WAL would break the chain of incrementals. Fall back to full.
+			if err := s.snapshotStore.SetDueNext(snapshot.Full); err != nil {
+				s.logger.Fatalf("failed to set full needed after WAL writer close failure: %s", err)
+			}
 			return nil, err
 		}
 
@@ -3233,6 +3237,23 @@ func (s *Store) snapshotDueNext() (snapshot.Type, error) {
 		return snapshot.Full, nil
 	}
 	return snapshot.Incremental, nil
+}
+
+// resolveAutoLevel maps AUTO read consistency level to the right level. If the level is not
+// AUTO then the level is returned unchanged.
+func (s *Store) resolveAutoLevel(lvl proto.ConsistencyLevel) (proto.ConsistencyLevel, error) {
+	if lvl != proto.ConsistencyLevel_AUTO {
+		return lvl, nil
+	}
+	isVoter, err := s.IsVoter()
+	if err != nil {
+		return proto.ConsistencyLevel_AUTO, err
+	}
+
+	if isVoter {
+		return proto.ConsistencyLevel_WEAK, nil
+	}
+	return proto.ConsistencyLevel_NONE, nil
 }
 
 // dbModified returns true if the database appears to have been modified

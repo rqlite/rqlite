@@ -1907,6 +1907,176 @@ func Test_DB_SimpleRequest(t *testing.T) {
 	}
 }
 
+func Test_DB_ExecuteMutation(t *testing.T) {
+	db, path := mustCreateOnDiskDatabaseWAL()
+	defer os.Remove(path)
+	defer db.Close()
+
+	responses, err := db.Execute(&command.Request{
+		Statements: []*command.Statement{
+			{Sql: `CREATE TABLE foo (id INT NOT NULL UNIQUE)`},
+			{Sql: `INSERT INTO foo VALUES (1)`},
+			{Sql: `UPDATE foo SET id = 2 WHERE id = 1`},
+			{Sql: `DELETE FROM foo WHERE id = 2`},
+			{Sql: `DELETE FROM foo WHERE id = 2`}, // A successful write affecting no rows.
+			{Sql: `INSERT INTO foo VALUES (NULL)`},
+		},
+	}, false)
+	if err != nil {
+		t.Fatalf("failed to execute: %s", err)
+	}
+	if len(responses) != 6 {
+		t.Fatalf("unexpected response count: got %d, exp 6", len(responses))
+	}
+	for i, response := range responses[:5] {
+		if response.GetE() == nil || response.GetError() != "" {
+			t.Fatalf("statement %d failed: %s", i, asJSON(response))
+		}
+		if !response.GetMutated() {
+			t.Errorf("statement %d: expected mutation", i)
+		}
+	}
+	if responses[5].GetError() == "" {
+		t.Fatal("expected NOT NULL constraint error")
+	}
+	if responses[5].GetMutated() {
+		t.Fatal("failed write reported a mutation")
+	}
+}
+
+func Test_DB_ExecuteMutationReturning(t *testing.T) {
+	db, path := mustCreateOnDiskDatabaseWAL()
+	defer os.Remove(path)
+	defer db.Close()
+	mustExecute(db, `CREATE TABLE foo (id INT NOT NULL UNIQUE)`)
+
+	responses, err := db.Execute(&command.Request{
+		Statements: []*command.Statement{
+			{Sql: `INSERT INTO foo VALUES (1) RETURNING id`, ForceQuery: true},
+			{Sql: `UPDATE foo SET id = 2 WHERE id = 1 RETURNING id`, ForceQuery: true},
+			{Sql: `DELETE FROM foo WHERE id = 2 RETURNING id`, ForceQuery: true},
+			{Sql: `DELETE FROM foo WHERE id = 2 RETURNING id`, ForceQuery: true},
+			{Sql: `INSERT INTO foo VALUES (NULL) RETURNING id`, ForceQuery: true},
+		},
+	}, false)
+	if err != nil {
+		t.Fatalf("failed to execute: %s", err)
+	}
+	if len(responses) != 5 {
+		t.Fatalf("unexpected response count: got %d, exp 5", len(responses))
+	}
+	for i, response := range responses[:4] {
+		if response.GetQ() == nil || response.GetQ().GetError() != "" {
+			t.Fatalf("statement %d failed: %s", i, asJSON(response))
+		}
+		if !response.GetMutated() {
+			t.Errorf("statement %d: expected mutation", i)
+		}
+	}
+	if responses[4].GetError() == "" {
+		t.Fatal("expected NOT NULL constraint error")
+	}
+	if responses[4].GetMutated() {
+		t.Fatal("failed write reported a mutation")
+	}
+}
+
+func Test_DB_RequestMutation(t *testing.T) {
+	tests := []struct {
+		name    string
+		stmts   []*command.Statement
+		tx      bool
+		mutated []bool
+		count   int64
+	}{
+		{
+			name: "empty",
+		},
+		{
+			name:    "read with ForceQuery",
+			mutated: []bool{false},
+			stmts: []*command.Statement{
+				{Sql: `SELECT * FROM foo`, ForceQuery: true},
+			},
+		},
+		{
+			name: "returning",
+			stmts: []*command.Statement{
+				{Sql: `INSERT INTO foo VALUES (1) RETURNING id`, ForceQuery: true},
+			},
+			mutated: []bool{true},
+			count:   1,
+		},
+		{
+			name: "schema changes within batch",
+			stmts: []*command.Statement{
+				{Sql: `ALTER TABLE foo ADD COLUMN name TEXT`},
+				{Sql: `INSERT INTO foo VALUES (1, 'fiona') RETURNING name`, ForceQuery: true},
+			},
+			tx:      true,
+			mutated: []bool{true, true},
+			count:   1,
+		},
+		{
+			name: "no rows affected",
+			stmts: []*command.Statement{
+				{Sql: `DELETE FROM foo RETURNING id`, ForceQuery: true},
+			},
+			mutated: []bool{true},
+		},
+		{
+			name:    "failed write",
+			mutated: []bool{false},
+			stmts: []*command.Statement{
+				{Sql: `INSERT INTO foo VALUES (NULL) RETURNING id`, ForceQuery: true},
+			},
+		},
+		{
+			name: "rolled back transaction",
+			stmts: []*command.Statement{
+				{Sql: `INSERT INTO foo VALUES (1) RETURNING id`, ForceQuery: true},
+				{Sql: `INSERT INTO foo VALUES (1) RETURNING id`, ForceQuery: true},
+			},
+			tx:      true,
+			mutated: []bool{true, false},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			db, path := mustCreateOnDiskDatabaseWAL()
+			defer os.Remove(path)
+			defer db.Close()
+			mustExecute(db, `CREATE TABLE foo (id INT NOT NULL UNIQUE)`)
+
+			responses, err := db.Request(&command.Request{
+				Statements:  tt.stmts,
+				Transaction: tt.tx,
+			}, false)
+			if err != nil {
+				t.Fatalf("failed to make request: %s", err)
+			}
+			if len(responses) != len(tt.mutated) {
+				t.Fatalf("unexpected response count: got %d, exp %d", len(responses), len(tt.mutated))
+			}
+			for i, response := range responses {
+				if got := response.GetMutated(); got != tt.mutated[i] {
+					t.Fatalf("response %d: unexpected mutation flag: got %t, exp %t", i, got, tt.mutated[i])
+				}
+			}
+			r, err := db.QueryStringStmt(`SELECT COUNT(*) FROM foo`)
+			if err != nil {
+				t.Fatalf("failed to query row count: %s", err)
+			}
+			if len(r) != 1 || r[0].Error != "" || len(r[0].Values) != 1 {
+				t.Fatalf("unexpected row count result: %s", asJSON(r))
+			}
+			if got := r[0].Values[0].Parameters[0].GetI(); got != tt.count {
+				t.Fatalf("unexpected row count: got %d, exp %d", got, tt.count)
+			}
+		})
+	}
+}
+
 // Test_DB_SimpleRequestTx tests that a transaction is rolled back when an error occurs, and that
 // subsequent statements after the failed statement are not processed. This also checks that
 // the code which checks if the statement is a query or not works when holding a transaction.
@@ -1938,6 +2108,65 @@ func Test_DB_SimpleRequestTx(t *testing.T) {
 	}
 	if exp, got := `[{"last_insert_id":2,"rows_affected":1},{"error":"UNIQUE constraint failed: foo.id"}]`, asJSON(r); exp != got {
 		t.Fatalf("unexpected results for request\nexp: %s\ngot: %s", exp, got)
+	}
+}
+
+func Test_DB_RequestTxPrepareError(t *testing.T) {
+	db, path := mustCreateOnDiskDatabaseWAL()
+	defer os.Remove(path)
+	defer db.Close()
+
+	mustExecute(db, `CREATE TABLE foo(id INTEGER)`)
+	r, err := db.Request(&command.Request{
+		Transaction: true,
+		Statements: []*command.Statement{
+			{Sql: `INSERT INTO foo VALUES(1)`},
+			{Sql: `INSERT INTO missing VALUES(2)`},
+			{Sql: `INSERT INTO foo VALUES(3)`},
+		},
+	}, false)
+	if err != nil {
+		t.Fatalf("failed to make request: %s", err)
+	}
+	if exp, got := `[{"last_insert_id":1,"rows_affected":1},{"error":"no such table: missing"}]`, asJSON(r); exp != got {
+		t.Fatalf("unexpected results for request\nexp: %s\ngot: %s", exp, got)
+	}
+
+	rows, err := db.QueryStringStmt(`SELECT COUNT(*) FROM foo`)
+	if err != nil {
+		t.Fatalf("failed to query row count: %s", err)
+	}
+	if exp, got := `[{"columns":["COUNT(*)"],"types":["integer"],"values":[[0]]}]`, asJSON(rows); exp != got {
+		t.Fatalf("transaction was not rolled back\nexp: %s\ngot: %s", exp, got)
+	}
+}
+
+func Test_DB_RequestPrepareError(t *testing.T) {
+	db, path := mustCreateOnDiskDatabaseWAL()
+	defer os.Remove(path)
+	defer db.Close()
+
+	mustExecute(db, `CREATE TABLE foo(id INTEGER)`)
+	r, err := db.Request(&command.Request{
+		Statements: []*command.Statement{
+			{Sql: `INSERT INTO foo VALUES(1)`},
+			{Sql: `INSERT INTO missing VALUES(2)`},
+			{Sql: `INSERT INTO foo VALUES(3)`},
+		},
+	}, false)
+	if err != nil {
+		t.Fatalf("failed to make request: %s", err)
+	}
+	if exp, got := `[{"last_insert_id":1,"rows_affected":1},{"error":"no such table: missing"},{"last_insert_id":2,"rows_affected":1}]`, asJSON(r); exp != got {
+		t.Fatalf("unexpected results for request\nexp: %s\ngot: %s", exp, got)
+	}
+
+	rows, err := db.QueryStringStmt(`SELECT id FROM foo ORDER BY id`)
+	if err != nil {
+		t.Fatalf("failed to query rows: %s", err)
+	}
+	if exp, got := `[{"columns":["id"],"types":["integer"],"values":[[1],[3]]}]`, asJSON(rows); exp != got {
+		t.Fatalf("unexpected rows\nexp: %s\ngot: %s", exp, got)
 	}
 }
 
@@ -2168,6 +2397,217 @@ func Test_DB_Dump(t *testing.T) {
 				t.Fatalf("%s: got %s want %s", tc.name, got, tc.want)
 			}
 		})
+	}
+}
+
+// Test_DB_DumpConcurrentWrite verifies that Dump reads schema and data from one
+// database snapshot when a write commits partway through the dump. Both tables
+// initially contain 0. During dumping, one transaction changes both values to 1
+// and creates an index on b. The dump must contain the original values and omit
+// the new index; the final query confirms that the live database contains 1 in
+// both tables. Without a read transaction spanning Dump, the output contains
+// a's old value, b's new value, and the newly created index.
+//
+// The test uses the supplied writer to trigger the update at a deterministic
+// point, using only exported DB methods and without goroutines or sleeps. This
+// relies on Dump's current implementation: it processes tables in name order,
+// reads a table's data, and passes each complete INSERT statement to Write before
+// reading the next table's data. The write beginning with INSERT INTO "a" therefore
+// occurs after a has been read but before b's data or the indexes, triggers, and
+// views have been read. The writer callback commits the update synchronously, so Dump cannot
+// advance to those reads until the callback returns. Statement boundaries come
+// from Dump's explicit Write calls, not from line terminators or an io.Writer
+// guarantee.
+//
+// This deliberately couples the test to Dump's output chunks and read ordering.
+// The updated assertion catches a callback that never fires, but does not prove
+// that it fired before b was read. If Dump is changed to buffer output, combine
+// writes, reorder tables, or prefetch data or schema objects, revisit the trigger
+// and its ordering assumptions. Merely adjusting the prefix could leave a passing
+// test that no longer exercises the intended interleaving.
+func Test_DB_DumpConcurrentWrite(t *testing.T) {
+	db, path := mustCreateOnDiskDatabaseWAL()
+	defer os.Remove(path)
+	defer db.Close()
+
+	mustExecute(db, `CREATE TABLE a(v INTEGER); CREATE TABLE b(v INTEGER)`)
+	mustExecute(db, `INSERT INTO a VALUES(0); INSERT INTO b VALUES(0)`)
+
+	var buf strings.Builder
+	updated := false
+	w := dumpWriterFunc(func(p []byte) (int, error) {
+		if !updated && strings.HasPrefix(string(p), `INSERT INTO "a"`) {
+			// Update both tables after Dump has read a, but before it reads b.
+			updated = true
+			r, err := db.Execute(&command.Request{
+				Transaction: true,
+				Statements: []*command.Statement{
+					{Sql: `UPDATE a SET v=1`},
+					{Sql: `UPDATE b SET v=1`},
+					{Sql: `CREATE INDEX idx_b ON b(v)`},
+				},
+			}, false)
+			if err != nil {
+				t.Fatalf("failed to update database during dump: %s", err)
+			}
+			for _, result := range r {
+				if result.GetError() != "" {
+					t.Fatalf("failed to update database during dump: %s", result.GetError())
+				}
+			}
+		}
+		return buf.Write(p)
+	})
+	if err := db.Dump(w); err != nil {
+		t.Fatalf("failed to dump database: %s", err)
+	}
+	if !updated {
+		t.Fatal("database was not updated during dump")
+	}
+	const exp = `PRAGMA foreign_keys=OFF;
+BEGIN TRANSACTION;
+CREATE TABLE a(v INTEGER);
+INSERT INTO "a" VALUES(0);
+CREATE TABLE b(v INTEGER);
+INSERT INTO "b" VALUES(0);
+COMMIT;
+`
+	if got := buf.String(); got != exp {
+		t.Fatalf("dump contains inconsistent schema or data\nexp: %s\ngot: %s", exp, got)
+	}
+
+	rows, err := db.QueryStringStmt(`SELECT a.v, b.v FROM a, b`)
+	if err != nil {
+		t.Fatalf("failed to query updated database: %s", err)
+	}
+	if exp, got := `[{"columns":["v","v"],"types":["integer","integer"],"values":[[1,1]]}]`, asJSON(rows); exp != got {
+		t.Fatalf("unexpected current data\nexp: %s\ngot: %s", exp, got)
+	}
+}
+
+func Test_DB_DumpWriteError(t *testing.T) {
+	db, path := mustCreateOnDiskDatabaseWAL()
+	defer os.Remove(path)
+	defer db.Close()
+	db.SetMaxReadOnlyConns(1)
+	mustExecute(db, `CREATE TABLE foo(v INTEGER); INSERT INTO foo VALUES(0)`)
+
+	writeErr := errors.New("dump write failed")
+	w := dumpWriterFunc(func(p []byte) (int, error) {
+		if strings.HasPrefix(string(p), `INSERT INTO`) {
+			return 0, writeErr
+		}
+		return len(p), nil
+	})
+	if err := db.Dump(w); !errors.Is(err, writeErr) {
+		t.Fatalf("unexpected dump error: %v", err)
+	}
+
+	// The failed dump must release its read transaction before returning the
+	// connection to the pool. A subsequent dump must see the new value.
+	mustExecute(db, `UPDATE foo SET v=1`)
+	var buf strings.Builder
+	if err := db.Dump(&buf); err != nil {
+		t.Fatalf("failed to dump after write error: %s", err)
+	}
+	if !strings.Contains(buf.String(), `INSERT INTO "foo" VALUES(1);`) {
+		t.Fatalf("dump did not see updated data: %s", buf.String())
+	}
+}
+
+type dumpWriterFunc func([]byte) (int, error)
+
+func (f dumpWriterFunc) Write(p []byte) (int, error) {
+	return f(p)
+}
+
+// Test_SchemaObjects_Filter checks which schema objects a dump of selected tables
+// carries, without a database connection.
+func Test_SchemaObjects_Filter(t *testing.T) {
+	objs := schemaObjects{
+		{name: "idx_t1_name", typ: "index", tblName: "t1"},
+		{name: "idx_t2_v", typ: "index", tblName: "t2"},
+		{name: "trg_t1", typ: "trigger", tblName: "t1"},
+		{name: "v_t1_t2", typ: "view"},
+	}
+	all := []string{"idx_t1_name", "idx_t2_v", "trg_t1", "v_t1_t2"}
+
+	tests := []struct {
+		name   string
+		tables []string
+		want   []string
+	}{
+		{"no tables keeps every object", nil, all},
+		{"empty table list keeps every object", []string{}, all},
+		{"one table keeps its index and trigger, and every view", []string{"t1"}, []string{"idx_t1_name", "trg_t1", "v_t1_t2"}},
+		{"two tables keep both", []string{"t2", "t1"}, all},
+		{"table names are case insensitive", []string{"T1"}, []string{"idx_t1_name", "trg_t1", "v_t1_t2"}},
+		{"a table with no objects keeps the views only", []string{"t3"}, []string{"v_t1_t2"}},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			var got []string
+			for _, o := range objs.Filter(tc.tables) {
+				got = append(got, o.name)
+			}
+			if !slices.Equal(got, tc.want) {
+				t.Fatalf("got %v, want %v", got, tc.want)
+			}
+		})
+	}
+}
+
+// Test_DB_DumpSelectedTables checks that a dump of selected tables loads into an
+// empty database, carrying the schema objects of those tables and not those of
+// the whole database.
+func Test_DB_DumpSelectedTables(t *testing.T) {
+	db, path := mustCreateDumpSchemaFixture(t)
+	defer os.Remove(path)
+	defer db.Close()
+
+	var buf strings.Builder
+	if err := db.Dump(&buf, "t1"); err != nil {
+		t.Fatalf("dump t1: %s", err.Error())
+	}
+
+	newDB, newPath := mustCreateOnDiskDatabase()
+	defer os.Remove(newPath)
+	defer newDB.Close()
+
+	resps, err := newDB.ExecuteStringStmt(buf.String())
+	if err != nil {
+		t.Fatalf("loading dump: %s", err.Error())
+	}
+	for _, r := range resps {
+		if r.GetError() != "" {
+			t.Fatalf("loading dump: %s", r.GetError())
+		}
+	}
+
+	expObjects := `[{"columns":["obj"],"types":["text"],"values":[["index:idx_t1_name"],["trigger:trg_t1"],["view:v_t1_t2"]]}]`
+	rows := mustQuery(newDB, `SELECT "type" || ':' || "name" AS obj FROM "sqlite_master"
+							  WHERE "sql" NOT NULL AND "name" NOT LIKE 'sqlite_%'
+							  AND "type" IN ('index', 'trigger', 'view') ORDER BY obj`)
+	if got := asJSON(rows); got != expObjects {
+		t.Fatalf("schema objects of a filtered dump:\ngot  %s\nwant %s", got, expObjects)
+	}
+
+	expTables := `[{"columns":["obj"],"types":["text"],"values":[["table:t1"]]}]`
+	rows = mustQuery(newDB, `SELECT "type" || ':' || "name" AS obj FROM "sqlite_master"
+							 WHERE "sql" NOT NULL AND "name" NOT LIKE 'sqlite_%'
+							 AND "type" = 'table' ORDER BY obj`)
+	if got := asJSON(rows); got != expTables {
+		t.Fatalf("tables of a filtered dump: got %s want %s", got, expTables)
+	}
+
+	expRows := `[{"columns":["id","name"],"types":["integer","text"],"values":[[1,"a"],[2,"b"]]}]`
+	gotRows, err := newDB.QueryStringStmt(`SELECT id, name FROM t1 ORDER BY id`)
+	if err != nil {
+		t.Fatalf("query t1: %s", err.Error())
+	}
+	if s := asJSON(gotRows); s != expRows {
+		t.Fatalf("rows of a filtered dump: got %s want %s", s, expRows)
 	}
 }
 
@@ -2503,4 +2943,23 @@ func Test_DB_Backup(t *testing.T) {
 			t.Fatalf("unexpected results for query\nexp: %s\ngot: %s", exp, got)
 		}
 	}
+}
+
+// mustCreateDumpSchemaFixture creates a database holding three tables, an index
+// and a trigger per table, and a view.
+func mustCreateDumpSchemaFixture(t *testing.T) (*DB, string) {
+	db, path := mustCreateOnDiskDatabaseWAL()
+	mustExecute(db, `CREATE TABLE t1 (id INTEGER NOT NULL PRIMARY KEY, name TEXT)`)
+	mustExecute(db, `CREATE TABLE t2 (id INTEGER NOT NULL PRIMARY KEY, v TEXT)`)
+	mustExecute(db, `CREATE TABLE t3 (id INTEGER NOT NULL PRIMARY KEY, w TEXT)`)
+	mustExecute(db, `CREATE INDEX idx_t1_name ON t1(name)`)
+	mustExecute(db, `CREATE INDEX idx_t2_v ON t2(v)`)
+	mustExecute(db, `CREATE INDEX idx_t3_w ON t3(w)`)
+	mustExecute(db, `INSERT INTO t1(id, name) VALUES(1, 'a')`)
+	mustExecute(db, `INSERT INTO t1(id, name) VALUES(2, 'b')`)
+	mustExecute(db, `INSERT INTO t2(id, v) VALUES(1, 'c')`)
+	mustExecute(db, `CREATE TRIGGER trg_t1 AFTER INSERT ON t1 BEGIN UPDATE t1 SET name = 'z' WHERE id = NEW.id; END`)
+	mustExecute(db, `CREATE TRIGGER trg_t2 AFTER INSERT ON t2 BEGIN UPDATE t2 SET v = 'y' WHERE id = NEW.id; END`)
+	mustExecute(db, `CREATE VIEW v_t1_t2 AS SELECT a.id FROM t1 a JOIN t2 b ON a.id = b.id`)
+	return db, path
 }

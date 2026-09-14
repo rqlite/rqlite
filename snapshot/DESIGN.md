@@ -101,6 +101,8 @@ Reaping is destructive and must run to completion. The package uses a **plan-exe
 
 The `plan` sub-package implements this pattern with a `Plan` type (ordered list of `Operation` values), a `Visitor` interface, and an `Executor` that performs the actual filesystem and SQLite operations.
 
+If reaping fails while the store is running, `Open` returns `ErrReapPending` while the `REAP_PLAN` file remains. A partially executed plan may have changed the database without updating its snapshot metadata, so it cannot be served safely. Retrying `Reap`, or restarting the store, completes the pending plan before snapshot reads can resume.
+
 #### Concurrency: MRSW Lock
 
 The store uses a multi-reader single-writer (MRSW) lock. Creating or reading snapshots requires only a read lock — multiple snapshots can be created and read concurrently. Reaping requires the write lock and waits for all active readers to finish. The `LockingSink` and `LockingStreamer` wrappers ensure the lock is held for the duration of the operation and released on `Close`.

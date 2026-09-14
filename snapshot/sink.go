@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/binary"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"log"
@@ -205,7 +206,7 @@ func (s *Sink) Close() (retErr error) {
 
 	if s.sinkW == nil && s.localWALDir == "" {
 		// Header was never fully received; clean up the temp directory.
-		return os.RemoveAll(s.snapTmpDirPath)
+		return errors.Join(ErrIncomplete, os.RemoveAll(s.snapTmpDirPath))
 	}
 
 	defer func() {
@@ -272,17 +273,20 @@ func (s *Sink) Close() (retErr error) {
 
 // Cancel cancels the sink.
 func (s *Sink) Cancel() error {
-	if !s.opened {
+	if s.snapTmpDirPath == "" {
 		return nil
 	}
 	s.opened = false
+	var closeErr error
 	if s.sinkW != nil {
-		if err := s.sinkW.Close(); err != nil {
-			return err
+		closeErr = s.sinkW.Close()
+		// Incomplete data and an already closed sink are expected when cancelling.
+		if errors.Is(closeErr, ErrIncomplete) || errors.Is(closeErr, ErrSinkNotOpen) {
+			closeErr = nil
 		}
 		s.sinkW = nil
 	}
-	return os.RemoveAll(s.snapTmpDirPath)
+	return errors.Join(closeErr, os.RemoveAll(s.snapTmpDirPath))
 }
 
 // processHeader processes the header data in the buffer to extract the header.
