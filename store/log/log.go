@@ -4,13 +4,13 @@ import (
 	"fmt"
 
 	"github.com/hashicorp/raft"
-	"github.com/rqlite/raft-boltdb/v2"
+	"github.com/rqlite/rqlite/v10/internal/raftdb"
 	"go.etcd.io/bbolt"
 )
 
 // Log is an object that can return information about the Raft log.
 type Log struct {
-	*raftboltdb.BoltStore
+	*raftdb.BoltStore
 }
 
 // New returns an instantiated Log object that provides access to the Raft log
@@ -20,7 +20,7 @@ type Log struct {
 // but may increase the risk of data loss in the event of a crash or power loss.
 // Returns an error if the BoltDB store cannot be created.
 func New(path string, noFreelistSync bool) (*Log, error) {
-	bs, err := raftboltdb.New(raftboltdb.Options{
+	bs, err := raftdb.New(raftdb.Options{
 		BoltOptions: &bbolt.Options{
 			NoFreelistSync: noFreelistSync,
 		},
