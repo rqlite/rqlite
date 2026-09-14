@@ -1,4 +1,4 @@
-## v10.3.3 (unreleased)
+## v10.3.3 (September 13th 2026)
 ### Implementation changes and bug fixes
 - [PR #2770](https://github.com/rqlite/rqlite/pull/2770): Upgrade gRPC to 1.83.2.
 - [PR #2771](https://github.com/rqlite/rqlite/pull/2771): Refactor busy timeout methods. Thanks @ zxysilent
