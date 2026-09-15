@@ -2,14 +2,17 @@ package db
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"os"
+	"path/filepath"
 	"regexp"
 	"sync"
 	"time"
 
 	command "github.com/rqlite/rqlite/v10/command/proto"
+	"github.com/rqlite/rqlite/v10/internal/fsutil"
 )
 
 // SwappableDB is a wrapper around DB that allows the underlying database to be swapped out
@@ -19,6 +22,9 @@ type SwappableDB struct {
 	drv           *Driver
 	checkpointMgr *CheckpointManager
 	dbMu          sync.RWMutex
+
+	// Only a successfully installed replacement makes its leftover stash safe to remove.
+	stashCleanupPending bool
 }
 
 // OpenSwappable returns a new SwappableDB instance, which opens the database at the given path,
@@ -48,36 +54,130 @@ func OpenSwappable(dbPath string, drv *Driver, fkEnabled, wal bool, maxROConns i
 // Swap swaps the underlying database with that at the given path. The Swap operation
 // may fail on some platforms if the file at path is open by another process. It is
 // the caller's responsibility to ensure the file at path is not in use.
-func (s *SwappableDB) Swap(path string, fkConstraints, walEnabled bool) error {
+//
+// The existing database files are stashed until the replacement is open. On
+// failure, Swap attempts to restore and reopen the original database. Cleanup or
+// rollback errors are returned as well; callers must not assume that every error
+// leaves the database usable or restores connection-local state such as hooks.
+func (s *SwappableDB) Swap(path string, fkConstraints, walEnabled bool) (retErr error) {
 	if !IsValidSQLiteFile(path) {
 		return fmt.Errorf("invalid SQLite data")
 	}
 
 	s.dbMu.Lock()
 	defer s.dbMu.Unlock()
-	if err := s.db.Close(); err != nil {
-		return fmt.Errorf("failed to close: %s", err)
+
+	oldDB := s.db
+	dbPath := oldDB.Path()
+	if s.stashCleanupPending {
+		if err := RemoveStashedFiles(dbPath); err != nil {
+			return fmt.Errorf("failed to remove stash from completed swap: %w", err)
+		}
+		s.stashCleanupPending = false
 	}
-	if err := RemoveFiles(s.db.Path()); err != nil {
-		return fmt.Errorf("failed to remove files: %s", err)
+	srcInfo, err := os.Stat(path)
+	if err != nil {
+		return err
 	}
-	if err := os.Rename(path, s.db.Path()); err != nil {
-		return fmt.Errorf("failed to rename database: %s", err)
+	dstInfo, err := os.Stat(dbPath)
+	if err != nil {
+		return err
+	}
+	if os.SameFile(srcInfo, dstInfo) {
+		return fmt.Errorf("cannot swap a database with itself")
+	}
+	syncMode, err := oldDB.GetSynchronousMode()
+	if err != nil {
+		return fmt.Errorf("failed to read original synchronous mode: %w", err)
+	}
+	maxROConns := oldDB.roDB.Stats().MaxOpenConnections
+	if err := s.checkpointMgr.Close(); err != nil {
+		return fmt.Errorf("failed to close checkpoint manager: %w", err)
+	}
+	if err := oldDB.Close(); err != nil {
+		return fmt.Errorf("failed to close database: %w", err)
 	}
 
-	db, err := OpenWithDriver(s.drv, s.db.Path(), fkConstraints, walEnabled)
+	stashed := false
+	var incoming *DB
+	defer func() {
+		if retErr == nil {
+			return
+		}
+		if incoming != nil {
+			if err := incoming.Close(); err != nil {
+				retErr = errors.Join(retErr, fmt.Errorf("failed to close replacement database: %w", err))
+				return // Do not move files while the replacement may still be open.
+			}
+		}
+		if stashed {
+			if err := RemoveFiles(dbPath); err != nil {
+				retErr = errors.Join(retErr, fmt.Errorf("failed to remove replacement files: %w", err))
+				return
+			}
+			if err := PopFiles(dbPath); err != nil {
+				retErr = errors.Join(retErr, fmt.Errorf("failed to restore original files: %w", err))
+				return
+			}
+			if err := fsutil.SyncDirMaybe(filepath.Dir(dbPath)); err != nil {
+				retErr = errors.Join(retErr, fmt.Errorf("failed to sync restored files: %w", err))
+			}
+		} else if errors.Is(retErr, errSQLiteFilesRollback) {
+			return // An incomplete stash rollback must not be opened as a database.
+		}
+
+		// Use the original driver and settings, which may differ from those of
+		// the failed replacement. Opening only the on-disk files is not enough:
+		// callers still hold this SwappableDB and need its handles replaced.
+		restored, err := OpenWithDriver(oldDB.drv, dbPath, oldDB.fkEnabled, oldDB.wal)
+		if err != nil {
+			retErr = errors.Join(retErr, fmt.Errorf("failed to reopen original database: %w", err))
+			return
+		}
+		restored.SetMaxReadOnlyConns(maxROConns)
+		if err := restored.SetSynchronousMode(syncMode); err != nil {
+			retErr = errors.Join(retErr, fmt.Errorf("failed to restore synchronous mode: %w", err), restored.Close())
+			return
+		}
+		mgr, err := NewCheckpointManager(restored)
+		if err != nil {
+			retErr = errors.Join(retErr, fmt.Errorf("failed to recreate original checkpoint manager: %w", err), restored.Close())
+			return
+		}
+		s.db, s.checkpointMgr = restored, mgr
+	}()
+
+	if err := StashFiles(dbPath); err != nil {
+		return fmt.Errorf("failed to stash database files: %w", err)
+	}
+	stashed = true
+	if err := fsutil.SyncDirMaybe(filepath.Dir(dbPath)); err != nil {
+		return fmt.Errorf("failed to sync stashed files: %w", err)
+	}
+	if err := os.Rename(path, dbPath); err != nil {
+		return fmt.Errorf("failed to rename database: %w", err)
+	}
+	if err := fsutil.SyncDirMaybe(filepath.Dir(dbPath)); err != nil {
+		return fmt.Errorf("failed to sync replacement files: %w", err)
+	}
+
+	incoming, err = OpenWithDriver(s.drv, dbPath, fkConstraints, walEnabled)
 	if err != nil {
-		return fmt.Errorf("open SQLite file failed: %s", err)
+		return fmt.Errorf("open SQLite file failed: %w", err)
 	}
-	s.db = db
-	if err := s.checkpointMgr.Close(); err != nil {
-		return fmt.Errorf("failed to close checkpoint manager: %s", err)
-	}
-	mgr, err := NewCheckpointManager(db)
+	incoming.SetMaxReadOnlyConns(maxROConns)
+	mgr, err := NewCheckpointManager(incoming)
 	if err != nil {
-		return fmt.Errorf("failed to recreate checkpoint manager: %s", err)
+		return fmt.Errorf("failed to recreate checkpoint manager: %w", err)
 	}
-	s.checkpointMgr = mgr
+	s.db, s.checkpointMgr = incoming, mgr
+
+	// The replacement is installed. A cleanup failure must not trigger rollback:
+	// some of the stashed files may already have been removed.
+	if err := RemoveStashedFiles(dbPath); err != nil {
+		s.stashCleanupPending = true
+		incoming.logger.Printf("failed to remove stashed database files after swap: %s", err)
+	}
 	return nil
 }
 
