@@ -565,6 +565,30 @@ long_help = """
 default = ""
 
 [[flags]]
+name = "QueryLog"
+cli = "query-log"
+section = "SQLite database"
+type = "string"
+short_help = "Enable query logging. Set to 'stderr' or provide a path to a JSON config file"
+long_help = """
+Enables logging of SQL statements executed against the SQLite database. Two modes are supported:
+
+  stderr     Log every query to standard error, regardless of duration.
+
+  <path>     Read a JSON configuration file containing the following optional fields:
+               min_duration      Minimum execution duration in nanoseconds before a query is logged.
+                                 Omitting this field defaults to 10000000000 (10s).
+                                 Set to 0 to log every query regardless of duration.
+               no_expanded_sql   If true, log the original SQL text instead of the expanded SQL
+                                 with bound parameters filled in. Defaults to false if omitted.
+
+             Example: {"min_duration": 10000000000, "no_expanded_sql": false}
+
+If not set, query logging is disabled.
+"""
+default = ""
+
+[[flags]]
 name = "WriteQueueCap"
 cli = "write-queue-capacity"
 section = "Queued Writes"

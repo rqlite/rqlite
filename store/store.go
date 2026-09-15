@@ -789,11 +789,9 @@ func (s *Store) Open() (retErr error) {
 	// extensions and query logging to coexist in the same driver.
 	if len(s.dbConf.Extensions) > 0 || s.dbConf.QueryLogger != nil {
 		cfg := sql.DriverConfig{
-			Extensions: s.dbConf.Extensions,
-			ChkOnClose: sql.CnkOnCloseModeDisabled,
-		}
-		if s.dbConf.QueryLogger != nil {
-			cfg.QueryLogger = sql.NewQueryLogger(sql.QueryLogConfig{Logger: s.dbConf.QueryLogger})
+			Extensions:  s.dbConf.Extensions,
+			ChkOnClose:  sql.CnkOnCloseModeDisabled,
+			QueryLogger: s.dbConf.QueryLogger,
 		}
 		s.dbDrv = sql.NewDriverFromConfig(
 			random.StringPattern("rqlite-configured-xxxx-xxxx-xxxx"),
