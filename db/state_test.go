@@ -10,7 +10,6 @@ import (
 	"io"
 	"os"
 	"path/filepath"
-	"strings"
 	"testing"
 
 	"github.com/mattn/go-sqlite3"
@@ -970,17 +969,36 @@ func mustGzip(dst, src string) {
 }
 
 // Test_StashPopFiles verifies that StashFiles moves each present SQLite file
-// (database, WAL, SHM) aside to the .stash paths and that PopFiles moves them
-// back, for every combination of present files.
+// (database, WAL, SHM) aside to the .stash paths, and that PopFiles moves
+// them back. Each test case lists which files exist before the move.
 func Test_StashPopFiles(t *testing.T) {
-	for mask := 0; mask < 8; mask++ {
-		// Each bit of mask selects one of the three SQLite files, so the
-		// loop covers every combination of present files.
-		t.Run(stashMaskSubtestName(mask), func(t *testing.T) {
+	tests := []struct {
+		name         string
+		db, wal, shm bool
+	}{
+		{name: "db only", db: true},
+		{name: "db and wal", db: true, wal: true},
+		{name: "db and shm", db: true, shm: true},
+		{name: "db wal and shm", db: true, wal: true, shm: true},
+		{name: "wal only", wal: true},
+		{name: "wal and shm", wal: true, shm: true},
+		{name: "shm only", shm: true},
+		{name: "no files"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
 			path := filepath.Join(t.TempDir(), "db.sqlite")
-			for i, suffix := range []string{"", "-wal", "-shm"} {
-				if mask&(1<<i) != 0 {
-					if err := os.WriteFile(path+suffix, stashTestFileData(suffix), 0600); err != nil {
+			files := []struct {
+				suffix  string
+				present bool
+			}{
+				{suffix: "", present: tt.db},
+				{suffix: "-wal", present: tt.wal},
+				{suffix: "-shm", present: tt.shm},
+			}
+			for _, f := range files {
+				if f.present {
+					if err := os.WriteFile(path+f.suffix, stashTestFileData(f.suffix), 0600); err != nil {
 						t.Fatal(err)
 					}
 				}
@@ -988,33 +1006,28 @@ func Test_StashPopFiles(t *testing.T) {
 			if err := StashFiles(path); err != nil {
 				t.Fatal(err)
 			}
-			for i, suffix := range []string{"", "-wal", "-shm"} {
-				if _, err := os.Stat(path + suffix); !os.IsNotExist(err) {
-					t.Fatalf("source %s was not moved: %v", suffix, err)
+			for _, f := range files {
+				if _, err := os.Stat(path + f.suffix); !os.IsNotExist(err) {
+					t.Fatalf("source %s was not moved: %v", f.suffix, err)
 				}
-				if mask&(1<<i) != 0 {
-					assertStashFileContents(t, path+stashedFilesSuffix+suffix, string(stashTestFileData(suffix)))
+				if f.present {
+					assertStashFileContents(t, path+stashedFilesSuffix+f.suffix, string(stashTestFileData(f.suffix)))
 				}
 			}
 			if err := PopFiles(path); err != nil {
 				t.Fatal(err)
 			}
-			for i, suffix := range []string{"", "-wal", "-shm"} {
-				if mask&(1<<i) != 0 {
-					assertStashFileContents(t, path+suffix, string(stashTestFileData(suffix)))
+			for _, f := range files {
+				if f.present {
+					assertStashFileContents(t, path+f.suffix, string(stashTestFileData(f.suffix)))
 				}
-				if _, err := os.Stat(path + stashedFilesSuffix + suffix); !os.IsNotExist(err) {
-					t.Fatalf("stash %s was not consumed: %v", suffix, err)
+				if _, err := os.Stat(path + stashedFilesSuffix + f.suffix); !os.IsNotExist(err) {
+					t.Fatalf("stash %s was not consumed: %v", f.suffix, err)
 				}
 			}
-			// No stash is a no-op, including when live files exist.
+			// Popping again, with no stash present, is a no-op.
 			if err := PopFiles(path); err != nil {
 				t.Fatal(err)
-			}
-			for i, suffix := range []string{"", "-wal", "-shm"} {
-				if mask&(1<<i) != 0 {
-					assertStashFileContents(t, path+suffix, string(stashTestFileData(suffix)))
-				}
 			}
 		})
 	}
@@ -1024,27 +1037,37 @@ func Test_StashPopFiles(t *testing.T) {
 // fail with os.ErrExist when a file already exists at a destination path, and
 // leave both sides untouched.
 func Test_StashPopFiles_ExistingDestination(t *testing.T) {
-	for _, pop := range []bool{false, true} {
-		for _, suffix := range []string{"", "-wal", "-shm"} {
-			t.Run(fmt.Sprintf("pop-%t-conflict-%s", pop, suffix), func(t *testing.T) {
-				path := filepath.Join(t.TempDir(), "db.sqlite")
-				from, to, move := path, path+stashedFilesSuffix, StashFiles
-				if pop {
-					from, to, move = to, from, PopFiles
-				}
-				if err := os.WriteFile(from, stashTestFileData(""), 0600); err != nil {
-					t.Fatal(err)
-				}
-				if err := os.WriteFile(to+suffix, []byte("destination"), 0600); err != nil {
-					t.Fatal(err)
-				}
-				if err := move(path); !errors.Is(err, os.ErrExist) {
-					t.Fatalf("expected destination conflict, got %v", err)
-				}
-				assertStashFileContents(t, from, string(stashTestFileData("")))
-				assertStashFileContents(t, to+suffix, "destination")
-			})
-		}
+	tests := []struct {
+		name   string
+		pop    bool
+		suffix string
+	}{
+		{name: "stash db conflict", suffix: ""},
+		{name: "stash wal conflict", suffix: "-wal"},
+		{name: "stash shm conflict", suffix: "-shm"},
+		{name: "pop db conflict", pop: true, suffix: ""},
+		{name: "pop wal conflict", pop: true, suffix: "-wal"},
+		{name: "pop shm conflict", pop: true, suffix: "-shm"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			path := filepath.Join(t.TempDir(), "db.sqlite")
+			from, to, move := path, path+stashedFilesSuffix, StashFiles
+			if tt.pop {
+				from, to, move = to, from, PopFiles
+			}
+			if err := os.WriteFile(from, stashTestFileData(""), 0600); err != nil {
+				t.Fatal(err)
+			}
+			if err := os.WriteFile(to+tt.suffix, []byte("destination"), 0600); err != nil {
+				t.Fatal(err)
+			}
+			if err := move(path); !errors.Is(err, os.ErrExist) {
+				t.Fatalf("expected destination conflict, got %v", err)
+			}
+			assertStashFileContents(t, from, string(stashTestFileData("")))
+			assertStashFileContents(t, to+tt.suffix, "destination")
+		})
 	}
 }
 
@@ -1110,17 +1133,38 @@ func Test_MoveSQLiteFiles_Rollback(t *testing.T) {
 
 // Test_RemoveStashedFiles verifies that RemoveStashedFiles removes only the
 // stash paths, leaving the live database files untouched, and tolerates
-// missing stash files.
+// missing stash files. Each test case lists which stash files exist.
 func Test_RemoveStashedFiles(t *testing.T) {
-	for mask := 0; mask < 8; mask++ {
-		t.Run(stashMaskSubtestName(mask), func(t *testing.T) {
+	tests := []struct {
+		name         string
+		db, wal, shm bool
+	}{
+		{name: "db only", db: true},
+		{name: "db and wal", db: true, wal: true},
+		{name: "db and shm", db: true, shm: true},
+		{name: "db wal and shm", db: true, wal: true, shm: true},
+		{name: "wal only", wal: true},
+		{name: "wal and shm", wal: true, shm: true},
+		{name: "shm only", shm: true},
+		{name: "no stash"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
 			path := filepath.Join(t.TempDir(), "db.sqlite")
-			for i, suffix := range []string{"", "-wal", "-shm"} {
-				if err := os.WriteFile(path+suffix, []byte("live"+suffix), 0600); err != nil {
+			stashed := []struct {
+				suffix  string
+				present bool
+			}{
+				{suffix: "", present: tt.db},
+				{suffix: "-wal", present: tt.wal},
+				{suffix: "-shm", present: tt.shm},
+			}
+			for _, f := range stashed {
+				if err := os.WriteFile(path+f.suffix, []byte("live"+f.suffix), 0600); err != nil {
 					t.Fatal(err)
 				}
-				if mask&(1<<i) != 0 {
-					if err := os.WriteFile(path+stashedFilesSuffix+suffix, []byte("stash"), 0600); err != nil {
+				if f.present {
+					if err := os.WriteFile(path+stashedFilesSuffix+f.suffix, []byte("stash"), 0600); err != nil {
 						t.Fatal(err)
 					}
 				}
@@ -1195,21 +1239,6 @@ func stashTestFileData(suffix string) []byte {
 	binary.BigEndian.PutUint32(b[4:8], 3007000)
 	copy(b[8:], suffix)
 	return b
-}
-
-// stashMaskSubtestName returns a readable subtest name for a bitmask over the
-// SQLite file suffixes, where bit i selects files[i].
-func stashMaskSubtestName(mask int) string {
-	var names []string
-	for i, name := range []string{"db", "wal", "shm"} {
-		if mask&(1<<i) != 0 {
-			names = append(names, name)
-		}
-	}
-	if len(names) == 0 {
-		return "none"
-	}
-	return strings.Join(names, "+")
 }
 
 func assertStashFileContents(t *testing.T, path, want string) {
