@@ -1,7 +1,7 @@
 ## v10.3.3 (September 15th 2026)
 ### Implementation changes and bug fixes
 - [PR #2791](https://github.com/rqlite/rqlite/pull/2791): Do not emit rolled-back events over CDC.
-- 
+
 ## v10.3.3 (September 13th 2026)
 ### Implementation changes and bug fixes
 - [PR #2770](https://github.com/rqlite/rqlite/pull/2770): Upgrade gRPC to 1.83.2.
