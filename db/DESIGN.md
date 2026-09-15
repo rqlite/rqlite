@@ -90,6 +90,8 @@ Change Data Capture is wired through SQLite's preupdate and commit hooks. The ho
 
 `CDCStreamer` (in `cdc.go`) is the in-package hook target. The preupdate hook appends an event to a pending group; the commit hook stamps the group with the current time, looks up column names per table (cached for the duration of the group), and non-blockingly sends the group to a channel. If the channel is full the event is dropped and a stat increments — by design, CDC is at-least-once on the receiver side, not back-pressuring the writer. The `CDCStreamer` lives in `db/` rather than in `cdc/` because its hook installation, its per-statement reset, and its lifecycle are all driven from inside the database write path; it is tightly bound to the SQLite hook plumbing and would only become harder to reason about if moved further away.
 
+The transaction rollback hook discards pending events when SQLite rolls back an autocommit statement or a transaction managed by the DB API. It must not discard events merely because a statement returns an error: SQLite's `FAIL` conflict resolution can retain and commit changes made before the error. SQLite does not notify this hook about statement rollback within an explicitly opened SQL transaction or `ROLLBACK TO` a savepoint; CDC does not yet account for those partial rollbacks.
+
 The Store owns the streamer's lifecycle but delegates the row-data conversion (`normalizeCDCValues`) to this package, which is also where the SQLite-to-rqlite type mapping for query results lives.
 
 ## Boundary Checks

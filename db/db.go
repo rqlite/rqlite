@@ -525,6 +525,24 @@ func (db *DB) RegisterUpdateHook(hook UpdateHookCallback) error {
 	return nil
 }
 
+// RollbackHookCallback is called when SQLite rolls back a transaction.
+type RollbackHookCallback func()
+
+// RegisterRollbackHook registers a callback for transaction rollbacks. If hook is
+// nil, the callback is removed. SQLite does not invoke this hook for a statement
+// rollback within an open transaction, or for ROLLBACK TO a savepoint.
+func (db *DB) RegisterRollbackHook(hook RollbackHookCallback) error {
+	conn, err := db.rwDB.Conn(context.Background())
+	if err != nil {
+		return err
+	}
+	defer conn.Close()
+	return conn.Raw(func(driverConn any) error {
+		driverConn.(*sqlite3.SQLiteConn).RegisterRollbackHook(hook)
+		return nil
+	})
+}
+
 // CommitHookCallback is a callback function that is called whenever a transaction
 // is committed to the database. If the callback returns true the transaction
 // is committed, otherwise it is rolled back.
@@ -1728,6 +1746,8 @@ func (db *DB) Dump(w io.Writer, tableNames ...string) (retErr error) {
 
 	// Keep schema and data reads on one snapshot, even if writes commit while
 	// the dump is being streamed. End the read transaction on every exit path.
+	// Because we need the transaction to span multiple queries we manually
+	// manage the transaction.
 	if _, err := conn.ExecContext(ctx, "BEGIN"); err != nil {
 		return err
 	}

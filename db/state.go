@@ -570,6 +570,8 @@ func ReplayWAL(path string, wals []string, deleteMode bool) error {
 // DumpTablesReq returns a command.Request that will dump the schema of the
 // given tables, or all tables if none are specified. This form protects
 // against SQL injection by using parameterized queries.
+//
+// The returne object does not have the Transaction flag set.
 func DumpTablesReq(tables ...string) *command.Request {
 	if len(tables) == 0 {
 		return &command.Request{
