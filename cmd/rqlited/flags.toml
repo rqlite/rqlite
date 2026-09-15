@@ -576,12 +576,13 @@ Enables logging of SQL statements executed against the SQLite database. Two mode
   stderr     Log every query to standard error, regardless of duration.
 
   <path>     Read a JSON configuration file containing the following optional fields:
-               duration      Minimum execution duration before a query is logged (e.g. "10s", "500ms").
-                             Defaults to 10s if omitted.
-               expanded_sql  If true, log expanded SQL with bound parameters filled in.
-                             Defaults to true if omitted.
+               min_duration      Minimum execution duration in nanoseconds before a query is logged.
+                                 Omitting this field defaults to 10000000000 (10s).
+                                 Set to 0 to log every query regardless of duration.
+               no_expanded_sql   If true, log the original SQL text instead of the expanded SQL
+                                 with bound parameters filled in. Defaults to false if omitted.
 
-             Example: {"duration": "10s", "expanded_sql": true}
+             Example: {"min_duration": 10000000000, "no_expanded_sql": false}
 
 If not set, query logging is disabled.
 """

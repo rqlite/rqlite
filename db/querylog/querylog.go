@@ -2,6 +2,7 @@ package querylog
 
 import (
 	"log"
+	"os"
 	"sync"
 	"time"
 
@@ -17,6 +18,10 @@ type traceKey struct {
 
 // QueryLogger logs SQL statements and their durations using SQLite trace_v2.
 // Safe for concurrent use.
+//
+// QueryLogger owns all runtime resources: the logger, the pending statement
+// map, and the mutex. Config fields are copied into plain value fields at
+// construction time; no *Config reference is retained.
 type QueryLogger struct {
 	logger        *log.Logger
 	minDuration   time.Duration
@@ -26,23 +31,43 @@ type QueryLogger struct {
 	pending map[traceKey]string
 }
 
-// NewQueryLogger creates a QueryLogger from cfg.
-func NewQueryLogger(cfg Config) *QueryLogger {
+// New creates a QueryLogger from cfg. The logger writes to stderr with the
+// "[query] " prefix. cfg must not be nil; the normal production flow in
+// main.go guarantees this by checking qCfg != nil before calling New.
+func New(cfg *Config) *QueryLogger {
+	return newWithLogger(cfg, log.New(os.Stderr, "[query] ", log.LstdFlags))
+}
+
+// newWithLogger creates a QueryLogger from cfg using the supplied logger.
+// Passing a nil logger is a supported state: TraceHook becomes a no-op,
+// which is useful in tests that only verify non-interference.
+// This constructor is intentionally unexported so same-package tests can
+// capture log output without adding a public test-only API.
+func newWithLogger(cfg *Config, l *log.Logger) *QueryLogger {
+	var minDur time.Duration
+	var noExpanded bool
+	if cfg != nil {
+		if cfg.MinDuration != nil {
+			minDur = *cfg.MinDuration
+		}
+		noExpanded = cfg.NoExpandedSQL
+	}
 	return &QueryLogger{
-		logger:        cfg.Logger,
-		minDuration:   cfg.MinDuration,
-		noExpandedSQL: cfg.NoExpandedSQL,
+		logger:        l,
+		minDuration:   minDur,
+		noExpandedSQL: noExpanded,
 		pending:       make(map[traceKey]string),
 	}
 }
 
-// Close is a no-op. Reserved for when file output is added.
+// Close is a no-op placeholder reserved for when file-based log output
+// is added. Callers should defer ql.Close() for forward compatibility.
 func (ql *QueryLogger) Close() error {
 	return nil
 }
 
-// TraceHook is the SQLite trace callback. Handles STMT and PROFILE events;
-// ignores all others.
+// TraceHook is the SQLite trace callback. It handles STMT and PROFILE
+// events and ignores all others. It is safe for concurrent use.
 func (ql *QueryLogger) TraceHook(info sqlite3.TraceInfo) int {
 	if ql.logger == nil {
 		return 0

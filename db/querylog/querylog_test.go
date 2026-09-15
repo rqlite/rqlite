@@ -12,8 +12,10 @@ import (
 	"github.com/mattn/go-sqlite3"
 )
 
+// --- Construction and lifecycle ---
+
 func Test_QueryLogger_New(t *testing.T) {
-	ql := NewQueryLogger(Config{})
+	ql := New(DefaultConfig())
 	if ql == nil {
 		t.Fatal("expected QueryLogger to be created, got nil")
 	}
@@ -22,8 +24,11 @@ func Test_QueryLogger_New(t *testing.T) {
 	}
 }
 
+// Test_QueryLogger_NilLogger verifies that a nil logger is a supported
+// runtime state: TraceHook must not panic when no log destination is set.
+// This tests the QueryLogger runtime contract, not Config.
 func Test_QueryLogger_NilLogger(t *testing.T) {
-	ql := NewQueryLogger(Config{Logger: nil})
+	ql := newWithLogger(DefaultConfig(), nil)
 
 	ql.TraceHook(sqlite3.TraceInfo{
 		EventCode:     sqlite3.TraceStmt,
@@ -37,20 +42,23 @@ func Test_QueryLogger_NilLogger(t *testing.T) {
 		StmtHandle:     0x2,
 		RunTimeNanosec: 5_000_000,
 	})
+	// No panic == pass.
 }
 
 func Test_QueryLogger_Close(t *testing.T) {
-	ql := NewQueryLogger(Config{})
+	ql := New(DefaultConfig())
 	if err := ql.Close(); err != nil {
 		t.Fatalf("Close() returned unexpected error: %v", err)
 	}
 }
 
+// --- Trace behaviour ---
+
 func Test_QueryLogger_StmtThenProfile(t *testing.T) {
 	var buf bytes.Buffer
 	logger := log.New(&buf, "", 0)
-	// NoExpandedSQL=false means expanded SQL is used (default behaviour).
-	ql := NewQueryLogger(Config{Logger: logger, NoExpandedSQL: false})
+	zero := time.Duration(0)
+	ql := newWithLogger(&Config{MinDuration: &zero, NoExpandedSQL: false}, logger)
 
 	ql.TraceHook(sqlite3.TraceInfo{
 		EventCode:     sqlite3.TraceStmt,
@@ -82,7 +90,7 @@ func Test_QueryLogger_StmtThenProfile(t *testing.T) {
 func Test_QueryLogger_ProfileWithoutStmt(t *testing.T) {
 	var buf bytes.Buffer
 	logger := log.New(&buf, "", 0)
-	ql := NewQueryLogger(Config{Logger: logger})
+	ql := newWithLogger(DefaultConfig(), logger)
 
 	ql.TraceHook(sqlite3.TraceInfo{
 		EventCode:      sqlite3.TraceProfile,
@@ -91,16 +99,16 @@ func Test_QueryLogger_ProfileWithoutStmt(t *testing.T) {
 		RunTimeNanosec: 1_000_000,
 	})
 
-	output := buf.String()
-	if !strings.Contains(output, "PROFILE event without preceding STMT") {
-		t.Fatalf("expected warning log for orphan PROFILE, got: %s", output)
+	if !strings.Contains(buf.String(), "PROFILE event without preceding STMT") {
+		t.Fatalf("expected warning log for orphan PROFILE, got: %s", buf.String())
 	}
 }
 
 func Test_QueryLogger_FallbackToStmtOrTrigger(t *testing.T) {
 	var buf bytes.Buffer
 	logger := log.New(&buf, "", 0)
-	ql := NewQueryLogger(Config{Logger: logger})
+	zero := time.Duration(0)
+	ql := newWithLogger(&Config{MinDuration: &zero}, logger)
 
 	ql.TraceHook(sqlite3.TraceInfo{
 		EventCode:     sqlite3.TraceStmt,
@@ -128,34 +136,13 @@ func Test_QueryLogger_FallbackToStmtOrTrigger(t *testing.T) {
 func Test_QueryLogger_MultipleConnections(t *testing.T) {
 	var buf bytes.Buffer
 	logger := log.New(&buf, "", 0)
-	ql := NewQueryLogger(Config{Logger: logger})
+	zero := time.Duration(0)
+	ql := newWithLogger(&Config{MinDuration: &zero}, logger)
 
-	ql.TraceHook(sqlite3.TraceInfo{
-		EventCode:     sqlite3.TraceStmt,
-		ConnHandle:    0xA,
-		StmtHandle:    0x1,
-		StmtOrTrigger: "SELECT 'conn_a'",
-		ExpandedSQL:   "SELECT 'conn_a'",
-	})
-	ql.TraceHook(sqlite3.TraceInfo{
-		EventCode:     sqlite3.TraceStmt,
-		ConnHandle:    0xB,
-		StmtHandle:    0x1,
-		StmtOrTrigger: "SELECT 'conn_b'",
-		ExpandedSQL:   "SELECT 'conn_b'",
-	})
-	ql.TraceHook(sqlite3.TraceInfo{
-		EventCode:      sqlite3.TraceProfile,
-		ConnHandle:     0xB,
-		StmtHandle:     0x1,
-		RunTimeNanosec: 2_000_000,
-	})
-	ql.TraceHook(sqlite3.TraceInfo{
-		EventCode:      sqlite3.TraceProfile,
-		ConnHandle:     0xA,
-		StmtHandle:     0x1,
-		RunTimeNanosec: 5_000_000,
-	})
+	ql.TraceHook(sqlite3.TraceInfo{EventCode: sqlite3.TraceStmt, ConnHandle: 0xA, StmtHandle: 0x1, StmtOrTrigger: "SELECT 'conn_a'", ExpandedSQL: "SELECT 'conn_a'"})
+	ql.TraceHook(sqlite3.TraceInfo{EventCode: sqlite3.TraceStmt, ConnHandle: 0xB, StmtHandle: 0x1, StmtOrTrigger: "SELECT 'conn_b'", ExpandedSQL: "SELECT 'conn_b'"})
+	ql.TraceHook(sqlite3.TraceInfo{EventCode: sqlite3.TraceProfile, ConnHandle: 0xB, StmtHandle: 0x1, RunTimeNanosec: 2_000_000})
+	ql.TraceHook(sqlite3.TraceInfo{EventCode: sqlite3.TraceProfile, ConnHandle: 0xA, StmtHandle: 0x1, RunTimeNanosec: 5_000_000})
 
 	output := buf.String()
 	if !strings.Contains(output, "SELECT 'conn_b'") {
@@ -169,29 +156,17 @@ func Test_QueryLogger_MultipleConnections(t *testing.T) {
 func Test_QueryLogger_HandleReuse(t *testing.T) {
 	var buf bytes.Buffer
 	logger := log.New(&buf, "", 0)
-	ql := NewQueryLogger(Config{Logger: logger})
+	zero := time.Duration(0)
+	ql := newWithLogger(&Config{MinDuration: &zero}, logger)
 
-	ql.TraceHook(sqlite3.TraceInfo{
-		EventCode:     sqlite3.TraceStmt,
-		ConnHandle:    0x1,
-		StmtHandle:    0x99,
-		StmtOrTrigger: "INSERT INTO t VALUES (1)",
-		ExpandedSQL:   "INSERT INTO t VALUES (1)",
-	})
+	ql.TraceHook(sqlite3.TraceInfo{EventCode: sqlite3.TraceStmt, ConnHandle: 0x1, StmtHandle: 0x99, StmtOrTrigger: "INSERT INTO t VALUES (1)", ExpandedSQL: "INSERT INTO t VALUES (1)"})
 	ql.TraceHook(sqlite3.TraceInfo{EventCode: sqlite3.TraceProfile, ConnHandle: 0x1, StmtHandle: 0x99, RunTimeNanosec: 1_000_000})
-	ql.TraceHook(sqlite3.TraceInfo{
-		EventCode:     sqlite3.TraceStmt,
-		ConnHandle:    0x1,
-		StmtHandle:    0x99,
-		StmtOrTrigger: "DELETE FROM t WHERE id = 1",
-		ExpandedSQL:   "DELETE FROM t WHERE id = 1",
-	})
+	ql.TraceHook(sqlite3.TraceInfo{EventCode: sqlite3.TraceStmt, ConnHandle: 0x1, StmtHandle: 0x99, StmtOrTrigger: "DELETE FROM t WHERE id = 1", ExpandedSQL: "DELETE FROM t WHERE id = 1"})
 	ql.TraceHook(sqlite3.TraceInfo{EventCode: sqlite3.TraceProfile, ConnHandle: 0x1, StmtHandle: 0x99, RunTimeNanosec: 2_000_000})
 
-	output := buf.String()
-	lines := strings.Split(strings.TrimSpace(output), "\n")
+	lines := strings.Split(strings.TrimSpace(buf.String()), "\n")
 	if len(lines) != 2 {
-		t.Fatalf("expected 2 log lines, got %d: %s", len(lines), output)
+		t.Fatalf("expected 2 log lines, got %d: %s", len(lines), buf.String())
 	}
 	if !strings.Contains(lines[0], "INSERT INTO t VALUES (1)") {
 		t.Fatalf("first line should be INSERT, got: %s", lines[0])
@@ -204,7 +179,8 @@ func Test_QueryLogger_HandleReuse(t *testing.T) {
 func Test_QueryLogger_EmptySQL(t *testing.T) {
 	var buf bytes.Buffer
 	logger := log.New(&buf, "", 0)
-	ql := NewQueryLogger(Config{Logger: logger})
+	zero := time.Duration(0)
+	ql := newWithLogger(&Config{MinDuration: &zero}, logger)
 
 	ql.TraceHook(sqlite3.TraceInfo{EventCode: sqlite3.TraceStmt, ConnHandle: 0x1, StmtHandle: 0x2, StmtOrTrigger: "", ExpandedSQL: ""})
 	ql.TraceHook(sqlite3.TraceInfo{EventCode: sqlite3.TraceProfile, ConnHandle: 0x1, StmtHandle: 0x2, RunTimeNanosec: 1_000_000})
@@ -217,7 +193,7 @@ func Test_QueryLogger_EmptySQL(t *testing.T) {
 func Test_QueryLogger_IgnoresOtherEvents(t *testing.T) {
 	var buf bytes.Buffer
 	logger := log.New(&buf, "", 0)
-	ql := NewQueryLogger(Config{Logger: logger})
+	ql := newWithLogger(DefaultConfig(), logger)
 
 	ql.TraceHook(sqlite3.TraceInfo{EventCode: sqlite3.TraceRow, ConnHandle: 0x1, StmtHandle: 0x2})
 	ql.TraceHook(sqlite3.TraceInfo{EventCode: sqlite3.TraceClose, ConnHandle: 0x1})
@@ -230,7 +206,8 @@ func Test_QueryLogger_IgnoresOtherEvents(t *testing.T) {
 func Test_QueryLogger_ConcurrentAccess(t *testing.T) {
 	var buf bytes.Buffer
 	logger := log.New(&buf, "", 0)
-	ql := NewQueryLogger(Config{Logger: logger})
+	zero := time.Duration(0)
+	ql := newWithLogger(&Config{MinDuration: &zero}, logger)
 
 	const numGoroutines = 10
 	const numOps = 50
@@ -264,12 +241,13 @@ func Test_QueryLogger_ConcurrentAccess(t *testing.T) {
 	}
 }
 
-// --- MinDuration filtering tests ---
+// --- MinDuration filtering ---
 
 func Test_QueryLogger_MinDuration_BelowThreshold(t *testing.T) {
 	var buf bytes.Buffer
 	logger := log.New(&buf, "", 0)
-	ql := NewQueryLogger(Config{Logger: logger, MinDuration: 10 * time.Millisecond})
+	d := 10 * time.Millisecond
+	ql := newWithLogger(&Config{MinDuration: &d}, logger)
 
 	ql.TraceHook(sqlite3.TraceInfo{EventCode: sqlite3.TraceStmt, ConnHandle: 0x1, StmtHandle: 0x2, ExpandedSQL: "SELECT 1"})
 	ql.TraceHook(sqlite3.TraceInfo{EventCode: sqlite3.TraceProfile, ConnHandle: 0x1, StmtHandle: 0x2, RunTimeNanosec: 5_000_000})
@@ -289,7 +267,8 @@ func Test_QueryLogger_MinDuration_BelowThreshold(t *testing.T) {
 func Test_QueryLogger_MinDuration_AtThreshold(t *testing.T) {
 	var buf bytes.Buffer
 	logger := log.New(&buf, "", 0)
-	ql := NewQueryLogger(Config{Logger: logger, MinDuration: 10 * time.Millisecond})
+	d := 10 * time.Millisecond
+	ql := newWithLogger(&Config{MinDuration: &d}, logger)
 
 	ql.TraceHook(sqlite3.TraceInfo{EventCode: sqlite3.TraceStmt, ConnHandle: 0x1, StmtHandle: 0x2, ExpandedSQL: "SELECT 'at_threshold'"})
 	ql.TraceHook(sqlite3.TraceInfo{EventCode: sqlite3.TraceProfile, ConnHandle: 0x1, StmtHandle: 0x2, RunTimeNanosec: 10_000_000})
@@ -302,7 +281,8 @@ func Test_QueryLogger_MinDuration_AtThreshold(t *testing.T) {
 func Test_QueryLogger_MinDuration_AboveThreshold(t *testing.T) {
 	var buf bytes.Buffer
 	logger := log.New(&buf, "", 0)
-	ql := NewQueryLogger(Config{Logger: logger, MinDuration: 10 * time.Millisecond})
+	d := 10 * time.Millisecond
+	ql := newWithLogger(&Config{MinDuration: &d}, logger)
 
 	ql.TraceHook(sqlite3.TraceInfo{EventCode: sqlite3.TraceStmt, ConnHandle: 0x1, StmtHandle: 0x2, ExpandedSQL: "SELECT 'above_threshold'"})
 	ql.TraceHook(sqlite3.TraceInfo{EventCode: sqlite3.TraceProfile, ConnHandle: 0x1, StmtHandle: 0x2, RunTimeNanosec: 50_000_000})
@@ -319,7 +299,8 @@ func Test_QueryLogger_MinDuration_AboveThreshold(t *testing.T) {
 func Test_QueryLogger_MinDuration_Zero_LogsEverything(t *testing.T) {
 	var buf bytes.Buffer
 	logger := log.New(&buf, "", 0)
-	ql := NewQueryLogger(Config{Logger: logger, MinDuration: 0})
+	zero := time.Duration(0)
+	ql := newWithLogger(&Config{MinDuration: &zero}, logger)
 
 	ql.TraceHook(sqlite3.TraceInfo{EventCode: sqlite3.TraceStmt, ConnHandle: 0x1, StmtHandle: 0x2, ExpandedSQL: "SELECT 'zero_threshold'"})
 	ql.TraceHook(sqlite3.TraceInfo{EventCode: sqlite3.TraceProfile, ConnHandle: 0x1, StmtHandle: 0x2, RunTimeNanosec: 0})
@@ -332,7 +313,8 @@ func Test_QueryLogger_MinDuration_Zero_LogsEverything(t *testing.T) {
 func Test_QueryLogger_MinDuration_PendingCleanedOnFilter(t *testing.T) {
 	var buf bytes.Buffer
 	logger := log.New(&buf, "", 0)
-	ql := NewQueryLogger(Config{Logger: logger, MinDuration: time.Second})
+	d := time.Second
+	ql := newWithLogger(&Config{MinDuration: &d}, logger)
 
 	for i := uintptr(1); i <= 3; i++ {
 		ql.TraceHook(sqlite3.TraceInfo{EventCode: sqlite3.TraceStmt, ConnHandle: 0x1, StmtHandle: i, ExpandedSQL: fmt.Sprintf("SELECT %d", i)})
@@ -351,21 +333,15 @@ func Test_QueryLogger_MinDuration_PendingCleanedOnFilter(t *testing.T) {
 	}
 }
 
-// --- NoExpandedSQL selection tests ---
+// --- NoExpandedSQL selection ---
 
 func Test_QueryLogger_NoExpandedSQL_False_UsesExpanded(t *testing.T) {
 	var buf bytes.Buffer
 	logger := log.New(&buf, "", 0)
-	// NoExpandedSQL=false means expanded SQL is preferred (default).
-	ql := NewQueryLogger(Config{Logger: logger, NoExpandedSQL: false})
+	zero := time.Duration(0)
+	ql := newWithLogger(&Config{MinDuration: &zero, NoExpandedSQL: false}, logger)
 
-	ql.TraceHook(sqlite3.TraceInfo{
-		EventCode:     sqlite3.TraceStmt,
-		ConnHandle:    0x1,
-		StmtHandle:    0x2,
-		StmtOrTrigger: "INSERT INTO t VALUES (?)",
-		ExpandedSQL:   "INSERT INTO t VALUES ('expanded')",
-	})
+	ql.TraceHook(sqlite3.TraceInfo{EventCode: sqlite3.TraceStmt, ConnHandle: 0x1, StmtHandle: 0x2, StmtOrTrigger: "INSERT INTO t VALUES (?)", ExpandedSQL: "INSERT INTO t VALUES ('expanded')"})
 	ql.TraceHook(sqlite3.TraceInfo{EventCode: sqlite3.TraceProfile, ConnHandle: 0x1, StmtHandle: 0x2, RunTimeNanosec: 1_000_000})
 
 	output := buf.String()
@@ -380,16 +356,10 @@ func Test_QueryLogger_NoExpandedSQL_False_UsesExpanded(t *testing.T) {
 func Test_QueryLogger_NoExpandedSQL_True_UsesOriginal(t *testing.T) {
 	var buf bytes.Buffer
 	logger := log.New(&buf, "", 0)
-	// NoExpandedSQL=true means original SQL is used.
-	ql := NewQueryLogger(Config{Logger: logger, NoExpandedSQL: true})
+	zero := time.Duration(0)
+	ql := newWithLogger(&Config{MinDuration: &zero, NoExpandedSQL: true}, logger)
 
-	ql.TraceHook(sqlite3.TraceInfo{
-		EventCode:     sqlite3.TraceStmt,
-		ConnHandle:    0x1,
-		StmtHandle:    0x2,
-		StmtOrTrigger: "INSERT INTO t VALUES (?)",
-		ExpandedSQL:   "INSERT INTO t VALUES ('expanded')",
-	})
+	ql.TraceHook(sqlite3.TraceInfo{EventCode: sqlite3.TraceStmt, ConnHandle: 0x1, StmtHandle: 0x2, StmtOrTrigger: "INSERT INTO t VALUES (?)", ExpandedSQL: "INSERT INTO t VALUES ('expanded')"})
 	ql.TraceHook(sqlite3.TraceInfo{EventCode: sqlite3.TraceProfile, ConnHandle: 0x1, StmtHandle: 0x2, RunTimeNanosec: 1_000_000})
 
 	output := buf.String()
@@ -404,15 +374,10 @@ func Test_QueryLogger_NoExpandedSQL_True_UsesOriginal(t *testing.T) {
 func Test_QueryLogger_NoExpandedSQL_False_FallbackWhenUnavailable(t *testing.T) {
 	var buf bytes.Buffer
 	logger := log.New(&buf, "", 0)
-	ql := NewQueryLogger(Config{Logger: logger, NoExpandedSQL: false})
+	zero := time.Duration(0)
+	ql := newWithLogger(&Config{MinDuration: &zero, NoExpandedSQL: false}, logger)
 
-	ql.TraceHook(sqlite3.TraceInfo{
-		EventCode:     sqlite3.TraceStmt,
-		ConnHandle:    0x1,
-		StmtHandle:    0x2,
-		StmtOrTrigger: "PRAGMA journal_mode",
-		ExpandedSQL:   "",
-	})
+	ql.TraceHook(sqlite3.TraceInfo{EventCode: sqlite3.TraceStmt, ConnHandle: 0x1, StmtHandle: 0x2, StmtOrTrigger: "PRAGMA journal_mode", ExpandedSQL: ""})
 	ql.TraceHook(sqlite3.TraceInfo{EventCode: sqlite3.TraceProfile, ConnHandle: 0x1, StmtHandle: 0x2, RunTimeNanosec: 1_000_000})
 
 	if !strings.Contains(buf.String(), "PRAGMA journal_mode") {

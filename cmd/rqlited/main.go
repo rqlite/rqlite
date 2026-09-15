@@ -125,11 +125,13 @@ func main() {
 	}
 
 	// Parse query-log configuration, if requested.
-	ql, err := querylog.New(cfg.QueryLog)
+	qCfg, err := querylog.NewConfig(cfg.QueryLog)
 	if err != nil {
 		log.Fatalf("failed to configure query logging: %s", err.Error())
 	}
-	if ql != nil {
+	var ql *querylog.QueryLogger
+	if qCfg != nil {
+		ql = querylog.New(qCfg)
 		defer ql.Close()
 	}
 	// Create the store.
