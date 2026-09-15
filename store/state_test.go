@@ -42,6 +42,16 @@ func Test_PragmaCheckRequest_Check(t *testing.T) {
 			ExpErr: true,
 		},
 		{
+			Name:   "Parenthesized assignment",
+			Stmts:  []string{"PRAGMA wal_autocheckpoint(1)"},
+			ExpErr: true,
+		},
+		{
+			Name:   "Assignment after another SQL statement",
+			Stmts:  []string{"SELECT 1; /* comment */ PRAGMA [wal_autocheckpoint](1)"},
+			ExpErr: true,
+		},
+		{
 			Name:   "Multiple statements including a trailing disallowed pragma",
 			Stmts:  []string{"SELECT * FROM foo", "PRAGMA wal_checkpoint(TRUNCATE)"},
 			ExpErr: true,
