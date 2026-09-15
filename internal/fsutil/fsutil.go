@@ -23,6 +23,16 @@ func FileExists(path string) bool {
 	return err == nil && !info.IsDir()
 }
 
+// IsRegularFile returns true if the path refers to a regular file. Symlinks
+// are not followed.
+func IsRegularFile(path string) (bool, error) {
+	info, err := os.Lstat(path)
+	if err != nil {
+		return false, err
+	}
+	return info.Mode().IsRegular(), nil
+}
+
 // DirExists returns true if an actual directory exists at the given path.
 func DirExists(path string) bool {
 	stat, err := os.Stat(path)

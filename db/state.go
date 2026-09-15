@@ -509,6 +509,102 @@ func RemoveFiles(path string) error {
 	return nil
 }
 
+const stashedFilesSuffix = ".stash"
+
+var errSQLiteFilesRollback = errors.New("SQLite file rollback failed")
+
+// renameFile moves a file from one path to another. It is a variable, rather
+// than a direct call to os.Rename, so tests can inject rename failures.
+var renameFile = os.Rename
+
+// StashFiles moves the SQLite database file and any associated WAL and SHM files
+// aside to dbPath + ".stash" (with "-wal" and "-shm" appended for the sidecars).
+// Missing files are ignored. An existing stash is never overwritten.
+//
+// The caller must close the database and prevent concurrent access to the files.
+// The renames are not atomic as a group or guaranteed durable across a crash. If
+// a rename fails, earlier renames are rolled back; rollback errors are returned
+// along with the original error, and files may then remain at either location.
+func StashFiles(dbPath string) error {
+	return moveSQLiteFiles(dbPath, dbPath+stashedFilesSuffix)
+}
+
+// PopFiles restores files moved aside by StashFiles. If there are no stashed
+// files, it returns without modifying anything. Existing database, WAL or SHM
+// files are never overwritten; callers must remove them explicitly if desired.
+// The same concurrency and error guarantees as StashFiles apply.
+func PopFiles(dbPath string) error {
+	return moveSQLiteFiles(dbPath+stashedFilesSuffix, dbPath)
+}
+
+// RemoveStashedFiles removes the files moved aside by StashFiles, leaving the
+// database and its WAL and SHM files untouched. Missing stash files are ignored.
+func RemoveStashedFiles(dbPath string) error {
+	return RemoveFiles(dbPath + stashedFilesSuffix)
+}
+
+// moveSQLiteFiles moves the SQLite database file at from, and any WAL and SHM
+// files alongside it, to to. Sources that don't exist are ignored. Non-empty
+// sources must look like the SQLite file type they claim to be; empty files
+// are allowed, since SQLite can leave an empty file behind after a checkpoint.
+func moveSQLiteFiles(from, to string) error {
+	suffixes := []string{"", "-wal", "-shm"}
+	var present []string
+	for _, suffix := range suffixes {
+		p := from + suffix
+		regular, err := fsutil.IsRegularFile(p)
+		if os.IsNotExist(err) {
+			continue
+		}
+		if err != nil {
+			return err
+		}
+		if !regular {
+			return fmt.Errorf("not a regular file: %s", p)
+		}
+		if fsutil.PathExistsWithData(p) {
+			switch suffix {
+			case "":
+				if !IsValidSQLiteFile(p) {
+					return fmt.Errorf("not a valid SQLite database file: %s", p)
+				}
+			case "-wal":
+				if !IsValidSQLiteWALFile(p) {
+					return fmt.Errorf("not a valid SQLite WAL file: %s", p)
+				}
+				// The db package has no validator for WAL-index files, so
+				// -shm gets the regular-file check only.
+			}
+		}
+		present = append(present, suffix)
+	}
+	if len(present) == 0 {
+		return nil
+	}
+
+	// Check every destination, even if its source is absent, to avoid combining
+	// a database with WAL or SHM files from a different database.
+	for _, suffix := range suffixes {
+		if fsutil.PathExists(to + suffix) {
+			return fmt.Errorf("SQLite file already exists: %s: %w", to+suffix, os.ErrExist)
+		}
+	}
+
+	for i, suffix := range present {
+		if err := renameFile(from+suffix, to+suffix); err != nil {
+			retErr := fmt.Errorf("move SQLite file %s: %w", from+suffix, err)
+			for j := i - 1; j >= 0; j-- {
+				s := present[j]
+				if err := renameFile(to+s, from+s); err != nil {
+					retErr = errors.Join(retErr, fmt.Errorf("%w for %s: %w", errSQLiteFilesRollback, from+s, err))
+				}
+			}
+			return retErr
+		}
+	}
+	return nil
+}
+
 // ReplayWAL replays the given WAL files into the database at the given path,
 // in the order given by the slice. The supplied WAL files must be in the same
 // directory as the database file and are deleted as a result of the replay operation.
