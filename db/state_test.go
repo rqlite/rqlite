@@ -4,11 +4,13 @@ import (
 	"bytes"
 	"compress/gzip"
 	"database/sql"
+	"encoding/binary"
 	"errors"
 	"fmt"
 	"io"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/mattn/go-sqlite3"
@@ -967,13 +969,18 @@ func mustGzip(dst, src string) {
 	}
 }
 
+// Test_StashPopFiles verifies that StashFiles moves each present SQLite file
+// (database, WAL, SHM) aside to the .stash paths and that PopFiles moves them
+// back, for every combination of present files.
 func Test_StashPopFiles(t *testing.T) {
 	for mask := 0; mask < 8; mask++ {
-		t.Run(fmt.Sprintf("files-%d", mask), func(t *testing.T) {
+		// Each bit of mask selects one of the three SQLite files, so the
+		// loop covers every combination of present files.
+		t.Run(stashMaskSubtestName(mask), func(t *testing.T) {
 			path := filepath.Join(t.TempDir(), "db.sqlite")
 			for i, suffix := range []string{"", "-wal", "-shm"} {
 				if mask&(1<<i) != 0 {
-					if err := os.WriteFile(path+suffix, []byte("original"+suffix), 0600); err != nil {
+					if err := os.WriteFile(path+suffix, stashTestFileData(suffix), 0600); err != nil {
 						t.Fatal(err)
 					}
 				}
@@ -986,7 +993,7 @@ func Test_StashPopFiles(t *testing.T) {
 					t.Fatalf("source %s was not moved: %v", suffix, err)
 				}
 				if mask&(1<<i) != 0 {
-					assertStashFileContents(t, path+stashedFilesSuffix+suffix, "original"+suffix)
+					assertStashFileContents(t, path+stashedFilesSuffix+suffix, string(stashTestFileData(suffix)))
 				}
 			}
 			if err := PopFiles(path); err != nil {
@@ -994,7 +1001,7 @@ func Test_StashPopFiles(t *testing.T) {
 			}
 			for i, suffix := range []string{"", "-wal", "-shm"} {
 				if mask&(1<<i) != 0 {
-					assertStashFileContents(t, path+suffix, "original"+suffix)
+					assertStashFileContents(t, path+suffix, string(stashTestFileData(suffix)))
 				}
 				if _, err := os.Stat(path + stashedFilesSuffix + suffix); !os.IsNotExist(err) {
 					t.Fatalf("stash %s was not consumed: %v", suffix, err)
@@ -1006,13 +1013,16 @@ func Test_StashPopFiles(t *testing.T) {
 			}
 			for i, suffix := range []string{"", "-wal", "-shm"} {
 				if mask&(1<<i) != 0 {
-					assertStashFileContents(t, path+suffix, "original"+suffix)
+					assertStashFileContents(t, path+suffix, string(stashTestFileData(suffix)))
 				}
 			}
 		})
 	}
 }
 
+// Test_StashPopFiles_ExistingDestination verifies that StashFiles and PopFiles
+// fail with os.ErrExist when a file already exists at a destination path, and
+// leave both sides untouched.
 func Test_StashPopFiles_ExistingDestination(t *testing.T) {
 	for _, pop := range []bool{false, true} {
 		for _, suffix := range []string{"", "-wal", "-shm"} {
@@ -1022,7 +1032,7 @@ func Test_StashPopFiles_ExistingDestination(t *testing.T) {
 				if pop {
 					from, to, move = to, from, PopFiles
 				}
-				if err := os.WriteFile(from, []byte("source"), 0600); err != nil {
+				if err := os.WriteFile(from, stashTestFileData(""), 0600); err != nil {
 					t.Fatal(err)
 				}
 				if err := os.WriteFile(to+suffix, []byte("destination"), 0600); err != nil {
@@ -1031,16 +1041,18 @@ func Test_StashPopFiles_ExistingDestination(t *testing.T) {
 				if err := move(path); !errors.Is(err, os.ErrExist) {
 					t.Fatalf("expected destination conflict, got %v", err)
 				}
-				assertStashFileContents(t, from, "source")
+				assertStashFileContents(t, from, string(stashTestFileData("")))
 				assertStashFileContents(t, to+suffix, "destination")
 			})
 		}
 	}
 }
 
+// Test_StashFiles_InvalidSource verifies that StashFiles fails without moving
+// anything when a source path is not a valid SQLite file.
 func Test_StashFiles_InvalidSource(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "db.sqlite")
-	if err := os.WriteFile(path, []byte("source"), 0600); err != nil {
+	if err := os.WriteFile(path, stashTestFileData(""), 0600); err != nil {
 		t.Fatal(err)
 	}
 	if err := os.Mkdir(path+"-wal", 0700); err != nil {
@@ -1049,12 +1061,15 @@ func Test_StashFiles_InvalidSource(t *testing.T) {
 	if err := StashFiles(path); err == nil {
 		t.Fatal("expected error for non-file WAL")
 	}
-	assertStashFileContents(t, path, "source")
+	assertStashFileContents(t, path, string(stashTestFileData("")))
 	if _, err := os.Stat(path + stashedFilesSuffix); !os.IsNotExist(err) {
 		t.Fatalf("database moved before source validation: %v", err)
 	}
 }
 
+// Test_MoveSQLiteFiles_Rollback verifies that when a rename fails partway
+// through a move, the files already moved are moved back, and that a rollback
+// failure is joined onto the returned error.
 func Test_MoveSQLiteFiles_Rollback(t *testing.T) {
 	moveErr, rollbackErr := errors.New("move failed"), errors.New("rollback failed")
 	for _, failRollback := range []bool{false, true} {
@@ -1062,11 +1077,12 @@ func Test_MoveSQLiteFiles_Rollback(t *testing.T) {
 			from := filepath.Join(t.TempDir(), "source")
 			to := from + stashedFilesSuffix
 			for _, suffix := range []string{"", "-wal", "-shm"} {
-				if err := os.WriteFile(from+suffix, []byte("original"+suffix), 0600); err != nil {
+				if err := os.WriteFile(from+suffix, stashTestFileData(suffix), 0600); err != nil {
 					t.Fatal(err)
 				}
 			}
-			rename := func(old, new string) error {
+			origRenameFile := renameFile
+			renameFile = func(old, new string) error {
 				if old == from+"-shm" {
 					return moveErr
 				}
@@ -1075,25 +1091,29 @@ func Test_MoveSQLiteFiles_Rollback(t *testing.T) {
 				}
 				return os.Rename(old, new)
 			}
-			err := moveSQLiteFiles(from, to, rename)
+			defer func() { renameFile = origRenameFile }()
+			err := moveSQLiteFiles(from, to)
 			if !errors.Is(err, moveErr) || errors.Is(err, rollbackErr) != failRollback || errors.Is(err, errSQLiteFilesRollback) != failRollback {
 				t.Fatalf("unexpected error: %v", err)
 			}
 			// A failed rollback does not stop restoration of the remaining files.
-			assertStashFileContents(t, from, "original")
-			assertStashFileContents(t, from+"-shm", "original-shm")
+			assertStashFileContents(t, from, string(stashTestFileData("")))
+			assertStashFileContents(t, from+"-shm", string(stashTestFileData("-shm")))
 			wal := from + "-wal"
 			if failRollback {
 				wal = to + "-wal"
 			}
-			assertStashFileContents(t, wal, "original-wal")
+			assertStashFileContents(t, wal, string(stashTestFileData("-wal")))
 		})
 	}
 }
 
+// Test_RemoveStashedFiles verifies that RemoveStashedFiles removes only the
+// stash paths, leaving the live database files untouched, and tolerates
+// missing stash files.
 func Test_RemoveStashedFiles(t *testing.T) {
 	for mask := 0; mask < 8; mask++ {
-		t.Run(fmt.Sprintf("files-%d", mask), func(t *testing.T) {
+		t.Run(stashMaskSubtestName(mask), func(t *testing.T) {
 			path := filepath.Join(t.TempDir(), "db.sqlite")
 			for i, suffix := range []string{"", "-wal", "-shm"} {
 				if err := os.WriteFile(path+suffix, []byte("live"+suffix), 0600); err != nil {
@@ -1120,6 +1140,9 @@ func Test_RemoveStashedFiles(t *testing.T) {
 	}
 }
 
+// Test_StashPopFiles_SQLite verifies the stash and pop round trip against a
+// real SQLite database, with and without WAL mode, and that the restored
+// database opens with its data intact.
 func Test_StashPopFiles_SQLite(t *testing.T) {
 	for _, wal := range []bool{false, true} {
 		t.Run(fmt.Sprintf("wal-%t", wal), func(t *testing.T) {
@@ -1156,6 +1179,37 @@ func Test_StashPopFiles_SQLite(t *testing.T) {
 			}
 		})
 	}
+}
+
+// stashTestFileData returns file contents that pass the SQLite validation
+// performed by StashFiles. The contents differ by suffix, so tests can verify
+// that each file is moved and restored independently.
+func stashTestFileData(suffix string) []byte {
+	b := make([]byte, 32)
+	if suffix == "" {
+		copy(b, "SQLite format 3\x00")
+		copy(b[16:], "db")
+		return b
+	}
+	binary.BigEndian.PutUint32(b[0:4], 0x377f0682)
+	binary.BigEndian.PutUint32(b[4:8], 3007000)
+	copy(b[8:], suffix)
+	return b
+}
+
+// stashMaskSubtestName returns a readable subtest name for a bitmask over the
+// SQLite file suffixes, where bit i selects files[i].
+func stashMaskSubtestName(mask int) string {
+	var names []string
+	for i, name := range []string{"db", "wal", "shm"} {
+		if mask&(1<<i) != 0 {
+			names = append(names, name)
+		}
+	}
+	if len(names) == 0 {
+		return "none"
+	}
+	return strings.Join(names, "+")
 }
 
 func assertStashFileContents(t *testing.T, path, want string) {

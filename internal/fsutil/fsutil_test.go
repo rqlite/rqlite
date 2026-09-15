@@ -64,6 +64,41 @@ func Test_FileExists(t *testing.T) {
 	}
 }
 
+func Test_IsRegularFile(t *testing.T) {
+	dir := t.TempDir()
+
+	// Regular file.
+	p := filepath.Join(dir, "file")
+	if err := os.WriteFile(p, []byte("x"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	regular, err := IsRegularFile(p)
+	if err != nil || !regular {
+		t.Fatalf("expected regular file, got %t, %v", regular, err)
+	}
+
+	// Directory.
+	regular, err = IsRegularFile(dir)
+	if err != nil || regular {
+		t.Fatalf("expected non-regular directory, got %t, %v", regular, err)
+	}
+
+	// Symlink is not followed.
+	link := filepath.Join(dir, "link")
+	if err := os.Symlink(p, link); err != nil {
+		t.Fatal(err)
+	}
+	regular, err = IsRegularFile(link)
+	if err != nil || regular {
+		t.Fatalf("expected non-regular symlink, got %t, %v", regular, err)
+	}
+
+	// Nonexistent path returns the error.
+	if _, err = IsRegularFile(filepath.Join(dir, "nope")); !os.IsNotExist(err) {
+		t.Fatalf("expected IsNotExist, got %v", err)
+	}
+}
+
 func Test_DirExists(t *testing.T) {
 	dir := t.TempDir()
 
