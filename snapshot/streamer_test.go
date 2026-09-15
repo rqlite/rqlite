@@ -1,0 +1,425 @@
+package snapshot
+
+import (
+	"encoding/binary"
+	"io"
+	"os"
+	"path/filepath"
+	"testing"
+
+	"github.com/rqlite/rqlite/v10/internal/rsum"
+)
+
+func Test_NewHeaderFromFile(t *testing.T) {
+	content := []byte("Hello, World!")
+	tmpFile := mustWriteToTempFile(t, content)
+
+	t.Run("without CRC32", func(t *testing.T) {
+		header, err := NewHeaderFromFile(tmpFile, false)
+		if err != nil {
+			t.Fatalf("NewHeaderFromFile failed: %v", err)
+		}
+		if header.SizeBytes != uint64(len(content)) {
+			t.Errorf("Expected SizeBytes %d, got %d", len(content), header.SizeBytes)
+		}
+		if header.Crc32 != 0 {
+			t.Errorf("Expected Crc32 0, got %d", header.Crc32)
+		}
+	})
+
+	t.Run("with CRC32", func(t *testing.T) {
+		header, err := NewHeaderFromFile(tmpFile, true)
+		if err != nil {
+			t.Fatalf("NewHeaderFromFile failed: %v", err)
+		}
+		expectedCRC, err := rsum.CRC32(tmpFile)
+		if err != nil {
+			t.Fatalf("rsum.CRC32 failed: %v", err)
+		}
+		if header.Crc32 != expectedCRC {
+			t.Errorf("Expected Crc32 %d, got %d", expectedCRC, header.Crc32)
+		}
+	})
+}
+
+func Test_NewHeaderFromFile_Fail(t *testing.T) {
+	_, err := NewHeaderFromFile("non-existent", false)
+	if err == nil {
+		t.Fatalf("Expected error for non-existent file, got nil")
+	}
+}
+
+func Test_NewSnapshotHeader(t *testing.T) {
+	if _, err := NewSnapshotHeader(""); err == nil {
+		t.Fatalf("Expected error when dbPath is empty, got nil")
+	}
+
+	tmpDBFile := mustWriteToTempFile(t, []byte("DB Content"))
+	tmpWALFile1 := mustWriteToTempFile(t, []byte("WAL Content 1"))
+	tmpWALFile2 := mustWriteToTempFile(t, []byte("WAL Content 2"))
+
+	// DB only → FullSnapshot
+	hdr, err := NewSnapshotHeader(tmpDBFile)
+	if err != nil {
+		t.Fatalf("NewSnapshotHeader failed with single DB file: %v", err)
+	}
+	if hdr.GetFull() == nil {
+		t.Fatalf("Expected Full payload for DB-only header")
+	}
+
+	// DB + single WAL → FullSnapshot
+	hdr, err = NewSnapshotHeader(tmpDBFile, tmpWALFile1)
+	if err != nil {
+		t.Fatalf("NewSnapshotHeader failed with DB and single WAL file: %v", err)
+	}
+	if hdr.GetFull() == nil {
+		t.Fatalf("Expected Full payload for DB+WAL header")
+	}
+
+	// DB + multiple WALs → FullSnapshot
+	hdr, err = NewSnapshotHeader(tmpDBFile, tmpWALFile1, tmpWALFile2)
+	if err != nil {
+		t.Fatalf("NewSnapshotHeader failed with DB and multiple WAL files: %v", err)
+	}
+	if full := hdr.GetFull(); full == nil {
+		t.Fatalf("Expected Full payload for DB+WALs header")
+	} else if len(full.WalHeaders) != 2 {
+		t.Fatalf("Expected 2 WAL headers, got %d", len(full.WalHeaders))
+	}
+
+	// Empty dbPath with WALs → error
+	if _, err := NewSnapshotHeader("", tmpWALFile1); err == nil {
+		t.Fatalf("Expected error when dbPath is empty, got nil")
+	}
+}
+
+func Test_SnapshotStreamer_EndToEndSize(t *testing.T) {
+	cases := []struct {
+		name     string
+		dbData   string
+		walDatas []string
+	}{
+		{
+			name:   "DBOnly",
+			dbData: "DB Content",
+		},
+		{
+			name:     "DBWAL",
+			dbData:   "DB Content",
+			walDatas: []string{"WAL Content"},
+		},
+		{
+			name:     "DBWALs",
+			dbData:   "DB Content",
+			walDatas: []string{"WAL Content", "More WAL Content"},
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			runSnapshotStreamerEndToEnd(t, tc.dbData, tc.walDatas)
+		})
+	}
+}
+
+func runSnapshotStreamerEndToEnd(t *testing.T, dbData string, walDatas []string) {
+	t.Helper()
+
+	var dbPath string
+	if dbData != "" {
+		dbPath = mustWriteToTempFile(t, []byte(dbData))
+	}
+
+	walPaths := make([]string, 0, len(walDatas))
+	for _, wd := range walDatas {
+		walPaths = append(walPaths, mustWriteToTempFile(t, []byte(wd)))
+	}
+
+	streamer, err := NewSnapshotStreamer(dbPath, walPaths...)
+	if err != nil {
+		t.Fatalf("NewSnapshotStreamer failed: %v", err)
+	}
+	if err := streamer.Open(); err != nil {
+		t.Fatalf("SnapshotStreamer Open failed: %v", err)
+	}
+	defer func() {
+		if err := streamer.Close(); err != nil {
+			t.Fatalf("SnapshotStreamer Close failed: %v", err)
+		}
+	}()
+
+	expectedReadLen, err := streamer.Len()
+	if err != nil {
+		t.Fatalf("SnapshotStreamer Len failed: %v", err)
+	}
+
+	totalRead := 0
+
+	// Read and decode header size.
+	sizeBuf := make([]byte, HeaderSizeLen)
+	n, err := io.ReadFull(streamer, sizeBuf)
+	if err != nil {
+		t.Fatalf("Failed to read header size: %v", err)
+	}
+	totalRead += n
+
+	hdrLen := int(binary.BigEndian.Uint32(sizeBuf))
+	hdrBuf := make([]byte, hdrLen)
+	n, err = io.ReadFull(streamer, hdrBuf)
+	if err != nil {
+		t.Fatalf("Failed to read header: %v", err)
+	}
+	totalRead += n
+
+	header, err := UnmarshalSnapshotHeader(hdrBuf)
+	if err != nil {
+		t.Fatalf("Failed to unmarshal header: %v", err)
+	}
+
+	// Read payloads based on header type.
+	full := header.GetFull()
+	if full == nil {
+		t.Fatalf("Expected Full payload in header")
+	}
+
+	dbBuf := make([]byte, full.DbHeader.SizeBytes)
+	n, err = io.ReadFull(streamer, dbBuf)
+	if err != nil {
+		t.Fatalf("Failed to read DB data: %v", err)
+	}
+	totalRead += n
+
+	if string(dbBuf) != dbData {
+		t.Fatalf("DB data does not match expected content")
+	}
+
+	if len(full.WalHeaders) != len(walDatas) {
+		t.Fatalf("Expected %d WAL headers, got %d", len(walDatas), len(full.WalHeaders))
+	}
+	for i, expected := range walDatas {
+		walBuf := make([]byte, full.WalHeaders[i].SizeBytes)
+		n, err = io.ReadFull(streamer, walBuf)
+		if err != nil {
+			t.Fatalf("Failed to read WAL data %d: %v", i, err)
+		}
+		totalRead += n
+
+		if string(walBuf) != expected {
+			t.Fatalf("WAL data %d does not match expected content", i)
+		}
+	}
+
+	// Ensure EOF.
+	var eofBuf [1]byte
+	if _, err := streamer.Read(eofBuf[:]); err != io.EOF {
+		t.Fatalf("Expected EOF, got: %v", err)
+	}
+
+	if int64(totalRead) != expectedReadLen {
+		t.Fatalf("Total read size %d does not match expected length %d", totalRead, expectedReadLen)
+	}
+}
+
+func Test_NewChecksummedSnapshotStreamer_EndToEnd(t *testing.T) {
+	dbData := "DB Content"
+	walData := "WAL Content"
+
+	dbPath := mustWriteToTempFile(t, []byte(dbData))
+	walPath := mustWriteToTempFile(t, []byte(walData))
+
+	// Pre-compute CRC32 values (simulating sidecar file loading).
+	dbCRC, err := rsum.CRC32(dbPath)
+	if err != nil {
+		t.Fatalf("CRC32 failed: %v", err)
+	}
+	walCRC, err := rsum.CRC32(walPath)
+	if err != nil {
+		t.Fatalf("CRC32 failed: %v", err)
+	}
+
+	dbFile := &ChecksummedFile{Path: dbPath, CRC32: dbCRC}
+	walFile := &ChecksummedFile{Path: walPath, CRC32: walCRC}
+
+	streamer, err := NewChecksummedSnapshotStreamer(dbFile, walFile)
+	if err != nil {
+		t.Fatalf("NewChecksummedSnapshotStreamer failed: %v", err)
+	}
+	if err := streamer.Open(); err != nil {
+		t.Fatalf("Open failed: %v", err)
+	}
+	defer streamer.Close()
+
+	expectedLen, err := streamer.Len()
+	if err != nil {
+		t.Fatalf("Len failed: %v", err)
+	}
+
+	totalRead := 0
+
+	// Read header size.
+	sizeBuf := make([]byte, HeaderSizeLen)
+	n, err := io.ReadFull(streamer, sizeBuf)
+	if err != nil {
+		t.Fatalf("Failed to read header size: %v", err)
+	}
+	totalRead += n
+
+	hdrLen := int(binary.BigEndian.Uint32(sizeBuf))
+	hdrBuf := make([]byte, hdrLen)
+	n, err = io.ReadFull(streamer, hdrBuf)
+	if err != nil {
+		t.Fatalf("Failed to read header: %v", err)
+	}
+	totalRead += n
+
+	header, err := UnmarshalSnapshotHeader(hdrBuf)
+	if err != nil {
+		t.Fatalf("Failed to unmarshal header: %v", err)
+	}
+
+	full := header.GetFull()
+	if full == nil {
+		t.Fatalf("Expected Full payload")
+	}
+
+	// Verify CRC32 values are set in the header.
+	if full.DbHeader.Crc32 != dbCRC {
+		t.Fatalf("DB CRC32 = %d, want %d", full.DbHeader.Crc32, dbCRC)
+	}
+	if len(full.WalHeaders) != 1 {
+		t.Fatalf("Expected 1 WAL header, got %d", len(full.WalHeaders))
+	}
+	if full.WalHeaders[0].Crc32 != walCRC {
+		t.Fatalf("WAL CRC32 = %d, want %d", full.WalHeaders[0].Crc32, walCRC)
+	}
+
+	// Read DB data.
+	dbBuf := make([]byte, full.DbHeader.SizeBytes)
+	n, err = io.ReadFull(streamer, dbBuf)
+	if err != nil {
+		t.Fatalf("Failed to read DB data: %v", err)
+	}
+	totalRead += n
+	if string(dbBuf) != dbData {
+		t.Fatalf("DB data mismatch")
+	}
+
+	// Read WAL data.
+	walBuf := make([]byte, full.WalHeaders[0].SizeBytes)
+	n, err = io.ReadFull(streamer, walBuf)
+	if err != nil {
+		t.Fatalf("Failed to read WAL data: %v", err)
+	}
+	totalRead += n
+	if string(walBuf) != walData {
+		t.Fatalf("WAL data mismatch")
+	}
+
+	// Verify EOF.
+	var eofBuf [1]byte
+	if _, err := streamer.Read(eofBuf[:]); err != io.EOF {
+		t.Fatalf("Expected EOF, got: %v", err)
+	}
+
+	if int64(totalRead) != expectedLen {
+		t.Fatalf("Total read %d != expected %d", totalRead, expectedLen)
+	}
+}
+
+func Test_SnapshotPathStreamer(t *testing.T) {
+	walDir := t.TempDir()
+	streamer, err := NewSnapshotPathStreamer(walDir)
+	if err != nil {
+		t.Fatalf("NewSnapshotPathStreamer failed: %v", err)
+	}
+
+	// Read and decode header size.
+	sizeBuf := make([]byte, HeaderSizeLen)
+	_, err = io.ReadFull(streamer, sizeBuf)
+	if err != nil {
+		t.Fatalf("Failed to read header size: %v", err)
+	}
+
+	hdrLen := int(binary.BigEndian.Uint32(sizeBuf))
+	hdrBuf := make([]byte, hdrLen)
+	_, err = io.ReadFull(streamer, hdrBuf)
+	if err != nil {
+		t.Fatalf("Failed to read header: %v", err)
+	}
+
+	pb, err := UnmarshalSnapshotHeader(hdrBuf)
+	if err != nil {
+		t.Fatalf("Failed to unmarshal header from SnapshotPathStreamer: %v", err)
+	}
+
+	inc := pb.GetIncrementalFile()
+	if inc == nil {
+		t.Fatalf("Expected IncrementalFile payload, got nil")
+	}
+
+	if inc.WalDirPath != walDir {
+		t.Fatalf("Expected WalDirPath %q, got %q", walDir, inc.WalDirPath)
+	}
+
+	// Check that there is no more data to read after the header.
+	var eofBuf [1]byte
+	if _, err := streamer.Read(eofBuf[:]); err != io.EOF {
+		t.Fatalf("Expected EOF after reading header, got: %v", err)
+	}
+
+	if err := streamer.Close(); err != nil {
+		t.Fatalf("Failed to close SnapshotPathStreamer: %v", err)
+	}
+}
+
+func Test_NewHeaderFromChecksummedFile_DisabledRecomputes(t *testing.T) {
+	dir := t.TempDir()
+	dataPath := filepath.Join(dir, "data.db")
+	crcPath := dataPath + crcSuffix
+
+	content := []byte("streaming payload")
+	if err := os.WriteFile(dataPath, content, 0644); err != nil {
+		t.Fatalf("failed to write data file: %v", err)
+	}
+	mustWriteDisabledSidecar(t, crcPath)
+
+	hf, err := NewChecksummedFileFromFiles(dataPath, crcPath)
+	if err != nil {
+		t.Fatalf("NewChecksummedFileFromFiles failed: %v", err)
+	}
+	if hf.CRC32 != 0 {
+		t.Fatalf("expected zero stored CRC32 for disabled sidecar, got %08x", hf.CRC32)
+	}
+
+	header, err := NewHeaderFromChecksummedFile(hf)
+	if err != nil {
+		t.Fatalf("NewHeaderFromChecksummedFile failed: %v", err)
+	}
+	if header.SizeBytes != uint64(len(content)) {
+		t.Fatalf("expected SizeBytes %d, got %d", len(content), header.SizeBytes)
+	}
+
+	expected, err := rsum.CRC32(dataPath)
+	if err != nil {
+		t.Fatalf("rsum.CRC32 failed: %v", err)
+	}
+	if header.Crc32 != expected {
+		t.Fatalf("expected wire Crc32 %08x (recomputed), got %08x", expected, header.Crc32)
+	}
+}
+
+func mustWriteToTempFile(t *testing.T, data []byte) string {
+	t.Helper()
+
+	tmpFile, err := os.CreateTemp(t.TempDir(), "testfile")
+	if err != nil {
+		t.Fatalf("Failed to create temp file: %v", err)
+	}
+	if _, err := tmpFile.Write(data); err != nil {
+		t.Fatalf("Failed to write to temp file: %v", err)
+	}
+	if err := tmpFile.Close(); err != nil {
+		t.Fatalf("Failed to close temp file: %v", err)
+	}
+	return tmpFile.Name()
+}

@@ -1,0 +1,2866 @@
+package http
+
+import (
+	"bytes"
+	"context"
+	"encoding/json"
+	"errors"
+	"fmt"
+	"io"
+	"net/http"
+	"net/http/httptest"
+	"net/url"
+	"os"
+	"regexp"
+	"strings"
+	"sync"
+	"sync/atomic"
+	"testing"
+	"time"
+
+	cluster "github.com/rqlite/rqlite/v10/cluster/proto"
+	command "github.com/rqlite/rqlite/v10/command/proto"
+	"github.com/rqlite/rqlite/v10/proxy"
+	"github.com/rqlite/rqlite/v10/store"
+)
+
+func Test_ResponseJSONMarshal(t *testing.T) {
+	resp := NewResponse()
+	b, err := json.Marshal(resp)
+	if err != nil {
+		t.Fatalf("error JSON marshaling empty Response: %s", err.Error())
+	}
+	if exp, got := `{"results":[]}`, string(b); exp != got {
+		t.Fatalf("Incorrect marshal, exp: %s, got: %s", exp, got)
+	}
+
+	resp = NewResponse()
+	resp.Results.ExecuteQueryResponse = []*command.ExecuteQueryResponse{
+		{
+			Result: &command.ExecuteQueryResponse_E{
+				E: &command.ExecuteResult{
+					LastInsertId: 39,
+					RowsAffected: 45,
+					Time:         1234,
+				},
+			},
+		},
+	}
+
+	b, err = json.Marshal(resp)
+	if err != nil {
+		t.Fatalf("failed to JSON marshal empty Response: %s", err)
+	}
+	if exp, got := `{"results":[{"last_insert_id":39,"rows_affected":45,"time":1234}]}`, string(b); exp != got {
+		t.Fatalf("Incorrect marshal, exp: %s, got: %s", exp, got)
+	}
+
+	resp = NewResponse()
+	resp.Results.QueryRows = []*command.QueryRows{{
+		Columns: []string{"id", "name"},
+		Types:   []string{"int", "string"},
+	}}
+	b, err = json.Marshal(resp)
+	if err != nil {
+		t.Fatalf("failed to JSON marshal empty Response: %s", err)
+	}
+	if exp, got := `{"results":[{"columns":["id","name"],"types":["int","string"]}]}`, string(b); exp != got {
+		t.Fatalf("Incorrect marshal, exp: %s, got: %s", exp, got)
+	}
+
+	resp = NewResponse()
+	resp.Results.QueryRows = []*command.QueryRows{{
+		Columns: []string{"id", "name"},
+		Types:   []string{"int", "string"},
+		Values: []*command.Values{
+			{
+				Parameters: []*command.Parameter{
+					{
+						Value: &command.Parameter_S{
+							S: "fiona",
+						},
+					},
+					{
+						Value: &command.Parameter_I{
+							I: 5,
+						},
+					},
+				},
+			},
+		},
+	}}
+	b, err = json.Marshal(resp)
+	if err != nil {
+		t.Fatalf("failed to JSON marshal empty Response: %s", err)
+	}
+	if exp, got := `{"results":[{"columns":["id","name"],"types":["int","string"],"values":[["fiona",5]]}]}`, string(b); exp != got {
+		t.Fatalf("Incorrect marshal, exp: %s, got: %s", exp, got)
+	}
+}
+
+func Test_NewService(t *testing.T) {
+	store := &MockStore{}
+	cluster := &mockClusterService{}
+	cred := &mockCredentialStore{HasPermOK: true}
+	s := New("127.0.0.1:0", store, cluster, proxy.New(store, cluster), cred)
+	if s == nil {
+		t.Fatalf("failed to create new service")
+	}
+	if s.HTTPS() {
+		t.Fatalf("expected service to report not HTTPS")
+	}
+}
+
+func Test_HasVersionHeader(t *testing.T) {
+	m := &MockStore{}
+	c := &mockClusterService{}
+	s := New("127.0.0.1:0", m, c, proxy.New(m, c), nil)
+	if err := s.Start(); err != nil {
+		t.Fatalf("failed to start service")
+	}
+	defer s.Close()
+	s.BuildInfo = map[string]any{
+		"version": "the version",
+	}
+	url := fmt.Sprintf("http://%s", s.Addr().String())
+
+	client := &http.Client{}
+	resp, err := client.Get(url)
+	if err != nil {
+		t.Fatalf("failed to make request")
+	}
+
+	if resp.Header.Get("X-RQLITE-VERSION") != "the version" {
+		t.Fatalf("incorrect build version present in HTTP response header")
+	}
+}
+
+func Test_HasAllowOriginHeader(t *testing.T) {
+	m := &MockStore{}
+	c := &mockClusterService{}
+	s := New("127.0.0.1:0", m, c, proxy.New(m, c), nil)
+	if err := s.Start(); err != nil {
+		t.Fatalf("failed to start service")
+	}
+	defer s.Close()
+	url := fmt.Sprintf("http://%s", s.Addr().String())
+
+	client := &http.Client{}
+	resp, err := client.Get(url)
+	if err != nil {
+		t.Fatalf("failed to make request")
+	}
+	if resp.Header.Get("Access-Control-Allow-Origin") != "" {
+		t.Fatalf("incorrect allow-origin present in HTTP response header")
+	}
+
+	s.SetAllowOrigin("https://www.philipotoole.com")
+	resp, err = client.Get(url)
+	if err != nil {
+		t.Fatalf("failed to make request")
+	}
+	if resp.Header.Get("Access-Control-Allow-Origin") != "https://www.philipotoole.com" {
+		t.Fatalf("incorrect allow-origin in HTTP response header")
+	}
+}
+
+func Test_Options(t *testing.T) {
+	m := &MockStore{}
+	c := &mockClusterService{}
+	s := New("127.0.0.1:0", m, c, proxy.New(m, c), nil)
+	if err := s.Start(); err != nil {
+		t.Fatalf("failed to start service")
+	}
+	defer s.Close()
+	url := fmt.Sprintf("http://%s", s.Addr().String())
+
+	client := &http.Client{}
+	req, err := http.NewRequest("OPTIONS", url, nil)
+	if err != nil {
+		t.Fatalf("failed to create request: %s", err.Error())
+	}
+
+	resp, err := client.Do(req)
+	if err != nil {
+		t.Fatalf("failed to make request: %s", err.Error())
+	}
+	if resp.StatusCode != 200 {
+		t.Fatalf("failed to get expected 200 for OPTIONS, got %d", resp.StatusCode)
+	}
+}
+
+func Test_HasContentTypeJSON(t *testing.T) {
+	m := &MockStore{}
+	c := &mockClusterService{}
+	s := New("127.0.0.1:0", m, c, proxy.New(m, c), nil)
+	if err := s.Start(); err != nil {
+		t.Fatalf("failed to start service")
+	}
+	defer s.Close()
+
+	client := &http.Client{}
+	resp, err := client.Get(fmt.Sprintf("http://%s/status", s.Addr().String()))
+	if err != nil {
+		t.Fatalf("failed to make request")
+	}
+
+	h := resp.Header.Get("Content-Type")
+	if h != "application/json; charset=utf-8" {
+		t.Fatalf("incorrect Content-type in HTTP response: %s", h)
+	}
+}
+
+func Test_HasContentTypeOctetStream(t *testing.T) {
+	m := &MockStore{}
+	c := &mockClusterService{}
+	s := New("127.0.0.1:0", m, c, proxy.New(m, c), nil)
+	if err := s.Start(); err != nil {
+		t.Fatalf("failed to start service")
+	}
+	defer s.Close()
+
+	client := &http.Client{}
+	resp, err := client.Get(fmt.Sprintf("http://%s/db/backup", s.Addr().String()))
+	if err != nil {
+		t.Fatalf("failed to make request")
+	}
+
+	h := resp.Header.Get("Content-Type")
+	if h != "application/octet-stream" {
+		t.Fatalf("incorrect Content-type in HTTP response: %s", h)
+	}
+}
+
+func Test_HasVersionHeaderUnknown(t *testing.T) {
+	m := &MockStore{}
+	c := &mockClusterService{}
+	s := New("127.0.0.1:0", m, c, proxy.New(m, c), nil)
+	if err := s.Start(); err != nil {
+		t.Fatalf("failed to start service")
+	}
+	defer s.Close()
+	url := fmt.Sprintf("http://%s", s.Addr().String())
+
+	client := &http.Client{}
+	resp, err := client.Get(url)
+	if err != nil {
+		t.Fatalf("failed to make request")
+	}
+
+	if resp.Header.Get("X-RQLITE-VERSION") != "unknown" {
+		t.Fatalf("incorrect build version present in HTTP response header")
+	}
+}
+
+func Test_LeaderAddrsOK(t *testing.T) {
+	m := &MockStore{
+		leaderAddr: "foo:1234",
+	}
+	c := &mockClusterService{
+		apiAddr: "http://bar:5678",
+	}
+	s := New("127.0.0.1:0", m, c, proxy.New(m, c), nil)
+	if err := s.Start(); err != nil {
+		t.Fatalf("failed to start service")
+	}
+	defer s.Close()
+
+	addr, err := s.LeaderAddr(t.Context())
+	if err != nil {
+		t.Fatalf("failed to get leader address")
+	}
+	if addr != "foo:1234" {
+		t.Fatalf("incorrect leader address, got: %s", addr)
+	}
+
+	addr = s.LeaderAPIAddr(t.Context())
+	if addr != "http://bar:5678" {
+		t.Fatalf("incorrect leader API address, got: %s", addr)
+	}
+}
+
+func Test_LeaderAddrsFail(t *testing.T) {
+	m := &MockStore{}
+	c := &mockClusterService{}
+	s := New("127.0.0.1:0", m, c, proxy.New(m, c), nil)
+	if err := s.Start(); err != nil {
+		t.Fatalf("failed to start service")
+	}
+	defer s.Close()
+
+	_, err := s.LeaderAddr(t.Context())
+	if !errors.Is(err, store.ErrLeaderNotFound) {
+		t.Fatalf("failed to get expected ErrLeaderNotFound")
+	}
+}
+
+func Test_404Routes(t *testing.T) {
+	m := &MockStore{}
+	c := &mockClusterService{}
+	s := New("127.0.0.1:0", m, c, proxy.New(m, c), nil)
+	if err := s.Start(); err != nil {
+		t.Fatalf("failed to start service")
+	}
+	defer s.Close()
+	host := fmt.Sprintf("http://%s", s.Addr().String())
+
+	client := &http.Client{}
+
+	resp, err := client.Get(host + "/db/xxx")
+	if err != nil {
+		t.Fatalf("failed to make request")
+	}
+	if resp.StatusCode != 404 {
+		t.Fatalf("failed to get expected 404, got %d", resp.StatusCode)
+	}
+
+	resp, err = client.Post(host+"/xxx", "", nil)
+	if err != nil {
+		t.Fatalf("failed to make request")
+	}
+	if resp.StatusCode != 404 {
+		t.Fatalf("failed to get expected 404, got %d", resp.StatusCode)
+	}
+}
+
+func Test_405Routes(t *testing.T) {
+	type testCase struct {
+		method string
+		path   string
+	}
+
+	tests := []testCase{
+		{method: "GET", path: "/db/execute"},
+		{method: "GET", path: "/boot"},
+		{method: "GET", path: "/db/load"},
+		{method: "GET", path: "/remove"},
+		{method: "POST", path: "/remove"},
+		{method: "GET", path: "/snapshot"},
+		{method: "POST", path: "/db/backup"},
+		{method: "POST", path: "/status"},
+		{method: "POST", path: "/nodes"},
+		{method: "POST", path: "/licenses"},
+	}
+
+	m := &MockStore{}
+	c := &mockClusterService{}
+	s := New("127.0.0.1:0", m, c, proxy.New(m, c), nil)
+	if err := s.Start(); err != nil {
+		t.Fatalf("failed to start service")
+	}
+	defer s.Close()
+	host := fmt.Sprintf("http://%s", s.Addr().String())
+
+	client := &http.Client{}
+
+	for _, tc := range tests {
+		var resp *http.Response
+		var err error
+
+		switch tc.method {
+		case "GET":
+			resp, err = client.Get(host + tc.path)
+		case "POST":
+			resp, err = client.Post(host+tc.path, "", nil)
+		default:
+			t.Fatalf("unsupported method: %s", tc.method)
+		}
+
+		if err != nil {
+			t.Fatalf("failed to make request for %s %s", tc.method, tc.path)
+		}
+		if resp.StatusCode != 405 {
+			t.Fatalf("failed to get expected 405 for %s %s, got %d", tc.method, tc.path, resp.StatusCode)
+		}
+	}
+}
+
+func Test_400Routes(t *testing.T) {
+	m := &MockStore{}
+	c := &mockClusterService{}
+	s := New("127.0.0.1:0", m, c, proxy.New(m, c), nil)
+	if err := s.Start(); err != nil {
+		t.Fatalf("failed to start service")
+	}
+	defer s.Close()
+	host := fmt.Sprintf("http://%s", s.Addr().String())
+
+	client := &http.Client{}
+
+	resp, err := client.Get(host + "/db/query?q=")
+	if err != nil {
+		t.Fatalf("failed to make request")
+	}
+	if resp.StatusCode != 400 {
+		t.Fatalf("failed to get expected 400, got %d", resp.StatusCode)
+	}
+}
+
+func Test_401Routes_NoBasicAuth(t *testing.T) {
+	c := &mockCredentialStore{HasPermOK: false}
+
+	m := &MockStore{}
+	n := &mockClusterService{}
+	s := New("127.0.0.1:0", m, n, proxy.New(m, n), c)
+	if err := s.Start(); err != nil {
+		t.Fatalf("failed to start service")
+	}
+	defer s.Close()
+	host := fmt.Sprintf("http://%s", s.Addr().String())
+
+	client := &http.Client{}
+	for _, path := range []string{
+		"/db/execute",
+		"/db/query",
+		"/db/request",
+		"/db/backup",
+		"/db/load",
+		"/boot",
+		"/remove",
+		"/status",
+		"/nodes",
+		"/leader",
+		"/snapshot",
+		"/reap",
+		"/readyz",
+		"/licenses",
+		"/debug/vars",
+		"/debug/pprof/cmdline",
+		"/debug/pprof/profile",
+		"/debug/pprof/symbol",
+	} {
+		resp, err := client.Get(host + path)
+		if err != nil {
+			t.Fatalf("failed to make request")
+		}
+		if resp.StatusCode != 401 {
+			t.Fatalf("failed to get expected 401 for path %s, got %d", path, resp.StatusCode)
+		}
+	}
+}
+
+func Test_401Routes_BasicAuthBadPassword(t *testing.T) {
+	c := &mockCredentialStore{HasPermOK: false}
+
+	m := &MockStore{}
+	n := &mockClusterService{}
+	s := New("127.0.0.1:0", m, n, proxy.New(m, n), c)
+	if err := s.Start(); err != nil {
+		t.Fatalf("failed to start service")
+	}
+	defer s.Close()
+	host := fmt.Sprintf("http://%s", s.Addr().String())
+
+	client := &http.Client{}
+	for _, path := range []string{
+		"/db/execute",
+		"/db/query",
+		"/db/request",
+		"/db/backup",
+		"/db/load",
+		"/boot",
+		"/status",
+		"/nodes",
+		"/leader",
+		"/snapshot",
+		"/reap",
+		"/readyz",
+		"/debug/vars",
+		"/debug/pprof/cmdline",
+		"/debug/pprof/profile",
+		"/debug/pprof/symbol",
+	} {
+		req, err := http.NewRequest("GET", host+path, nil)
+		if err != nil {
+			t.Fatalf("failed to create request: %s", err.Error())
+		}
+		req.SetBasicAuth("username1", "password1")
+
+		resp, err := client.Do(req)
+		if err != nil {
+			t.Fatalf("failed to make request: %s", err.Error())
+		}
+		if resp.StatusCode != 401 {
+			t.Fatalf("failed to get expected 401 for path %s, got %d", path, resp.StatusCode)
+		}
+	}
+}
+
+func Test_401Routes_BasicAuthBadPerm(t *testing.T) {
+	c := &mockCredentialStore{HasPermOK: false}
+
+	m := &MockStore{}
+	n := &mockClusterService{}
+	s := New("127.0.0.1:0", m, n, proxy.New(m, n), c)
+	if err := s.Start(); err != nil {
+		t.Fatalf("failed to start service")
+	}
+	defer s.Close()
+	host := fmt.Sprintf("http://%s", s.Addr().String())
+
+	client := &http.Client{}
+
+	for _, path := range []string{
+		"/db/execute",
+		"/db/query",
+		"/db/backup",
+		"/db/request",
+		"/db/load",
+		"/db/sql",
+		"/boot",
+		"/snapshot",
+		"/status",
+		"/nodes",
+		"/leader",
+		"/snapshot",
+		"/reap",
+		"/readyz",
+		"/debug/vars",
+		"/debug/pprof/cmdline",
+		"/debug/pprof/profile",
+		"/debug/pprof/symbol",
+	} {
+		req, err := http.NewRequest("GET", host+path, nil)
+		if err != nil {
+			t.Fatalf("failed to create request: %s", err.Error())
+		}
+		req.SetBasicAuth("username1", "password1")
+
+		resp, err := client.Do(req)
+		if err != nil {
+			t.Fatalf("failed to make request: %s", err.Error())
+		}
+		if resp.StatusCode != 401 {
+			t.Fatalf("failed to get expected 401 for path %s, got %d", path, resp.StatusCode)
+		}
+	}
+}
+
+func Test_BackupOK(t *testing.T) {
+	m := &MockStore{}
+	c := &mockClusterService{}
+	s := New("127.0.0.1:0", m, c, proxy.New(m, c), nil)
+	if err := s.Start(); err != nil {
+		t.Fatalf("failed to start service")
+	}
+	defer s.Close()
+
+	m.backupFn = func(br *command.BackupRequest, dst io.Writer) error {
+		return nil
+	}
+
+	client := &http.Client{}
+	host := fmt.Sprintf("http://%s", s.Addr().String())
+	resp, err := client.Get(host + "/db/backup")
+	if err != nil {
+		t.Fatalf("failed to make backup request")
+	}
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("failed to get expected StatusOK for backup, got %d", resp.StatusCode)
+	}
+}
+
+func Test_BackupVacuumOK(t *testing.T) {
+	m := &MockStore{}
+	c := &mockClusterService{}
+	s := New("127.0.0.1:0", m, c, proxy.New(m, c), nil)
+	if err := s.Start(); err != nil {
+		t.Fatalf("failed to start service")
+	}
+	defer s.Close()
+
+	m.backupFn = func(br *command.BackupRequest, dst io.Writer) error {
+		if !br.Vacuum {
+			t.Fatal("expected vacuum to be true")
+		}
+		return nil
+	}
+
+	client := &http.Client{}
+	host := fmt.Sprintf("http://%s", s.Addr().String())
+
+	resp, err := client.Get(host + "/db/backup?vacuum")
+	if err != nil {
+		t.Fatalf("failed to make backup request")
+	}
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("failed to get expected StatusOK for backup, got %d", resp.StatusCode)
+	}
+	resp, err = client.Get(host + "/db/backup?vacuum&fmt=binary")
+	if err != nil {
+		t.Fatalf("failed to make backup request")
+	}
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("failed to get expected StatusOK for backup, got %d", resp.StatusCode)
+	}
+}
+
+func Test_SnapshotOK(t *testing.T) {
+	m := &MockStore{}
+	c := &mockClusterService{}
+	s := New("127.0.0.1:0", m, c, proxy.New(m, c), nil)
+	if err := s.Start(); err != nil {
+		t.Fatalf("failed to start service")
+	}
+	defer s.Close()
+
+	// Set the snapshot function to return OK
+	var wg sync.WaitGroup
+	wg.Add(1)
+	m.snapshotFn = func(n uint64) error {
+		defer wg.Done()
+		if exp, got := uint64(100), n; exp != got {
+			t.Fatalf("expected trailing logs to be %d, got %d", exp, got)
+		}
+		return nil
+	}
+
+	client := &http.Client{}
+	host := fmt.Sprintf("http://%s", s.Addr().String())
+	resp, err := client.Post(host+"/snapshot?trailing_logs=100", "", nil)
+	if err != nil {
+		t.Fatalf("failed to make Snapshot request")
+	}
+
+	wg.Wait()
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("failed to get expected StatusOK for Snapshot, got %d", resp.StatusCode)
+	}
+}
+
+func Test_ReapOK(t *testing.T) {
+	m := &MockStore{}
+	c := &mockClusterService{}
+	s := New("127.0.0.1:0", m, c, proxy.New(m, c), nil)
+	if err := s.Start(); err != nil {
+		t.Fatalf("failed to start service")
+	}
+	defer s.Close()
+
+	var wg sync.WaitGroup
+	wg.Add(1)
+	m.reapFn = func() (int, int, error) {
+		defer wg.Done()
+		return 3, 2, nil
+	}
+
+	client := &http.Client{}
+	host := fmt.Sprintf("http://%s", s.Addr().String())
+	resp, err := client.Post(host+"/reap", "", nil)
+	if err != nil {
+		t.Fatalf("failed to make Reap request")
+	}
+
+	wg.Wait()
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("failed to get expected StatusOK for Reap, got %d", resp.StatusCode)
+	}
+
+	var result map[string]int
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		t.Fatalf("failed to decode Reap response: %s", err)
+	}
+	if result["snapshots_reaped"] != 3 {
+		t.Fatalf("expected 3 snapshots reaped, got %d", result["snapshots_reaped"])
+	}
+	if result["wals_checkpointed"] != 2 {
+		t.Fatalf("expected 2 WALs checkpointed, got %d", result["wals_checkpointed"])
+	}
+}
+
+func Test_BackupFlagsNoLeaderRedirect(t *testing.T) {
+	m := &MockStore{
+		leaderAddr: "foo:1234",
+	}
+	c := &mockClusterService{
+		apiAddr: "http://1.2.3.4:999",
+	}
+
+	s := New("127.0.0.1:0", m, c, proxy.New(m, c), nil)
+
+	if err := s.Start(); err != nil {
+		t.Fatalf("failed to start service")
+	}
+	defer s.Close()
+
+	m.backupFn = func(br *command.BackupRequest, dst io.Writer) error {
+		return store.ErrNotLeader
+	}
+
+	client := &http.Client{}
+	client.CheckRedirect = func(req *http.Request, via []*http.Request) error {
+		return http.ErrUseLastResponse
+	}
+
+	host := fmt.Sprintf("http://%s", s.Addr().String())
+	resp, err := client.Get(host + "/db/backup?redirect")
+	if err != nil {
+		t.Fatalf("failed to make backup request: %s", err.Error())
+	}
+	if resp.StatusCode != http.StatusMovedPermanently {
+		t.Fatalf("failed to get expected StatusServiceUnavailable for backup, got %d", resp.StatusCode)
+	}
+}
+
+func Test_BackupFlagsNoLeaderRemoteFetch(t *testing.T) {
+	m := &MockStore{
+		leaderAddr: "foo:1234",
+	}
+	c := &mockClusterService{
+		apiAddr: "http://1.2.3.4:999",
+	}
+
+	s := New("127.0.0.1:0", m, c, proxy.New(m, c), nil)
+
+	if err := s.Start(); err != nil {
+		t.Fatalf("failed to start service")
+	}
+	defer s.Close()
+
+	m.backupFn = func(br *command.BackupRequest, dst io.Writer) error {
+		return store.ErrNotLeader
+	}
+
+	backupData := "this is SQLite data"
+	c.backupFn = func(br *command.BackupRequest, addr string, t time.Duration, w io.Writer) error {
+		w.Write([]byte(backupData))
+		return nil
+	}
+
+	client := &http.Client{}
+	client.CheckRedirect = func(req *http.Request, via []*http.Request) error {
+		return http.ErrUseLastResponse
+	}
+
+	host := fmt.Sprintf("http://%s", s.Addr().String())
+	resp, err := client.Get(host + "/db/backup")
+	if err != nil {
+		t.Fatalf("failed to make backup request: %s", err.Error())
+	}
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("failed to get expected StatusOK for remote backup fetch, got %d", resp.StatusCode)
+	}
+	defer resp.Body.Close()
+	if exp, got := backupData, mustReadBody(t, resp); exp != got {
+		t.Fatalf("received incorrect backup data, exp: %s, got: %s", exp, got)
+	}
+}
+
+func Test_BackupFlagsNoLeaderOK(t *testing.T) {
+	m := &MockStore{}
+	c := &mockClusterService{
+		apiAddr: "http://1.2.3.4:999",
+	}
+
+	s := New("127.0.0.1:0", m, c, proxy.New(m, c), nil)
+
+	if err := s.Start(); err != nil {
+		t.Fatalf("failed to start service")
+	}
+	defer s.Close()
+
+	m.backupFn = func(br *command.BackupRequest, dst io.Writer) error {
+		if !br.Leader {
+			return nil
+		}
+		return store.ErrNotLeader
+	}
+
+	client := &http.Client{}
+	host := fmt.Sprintf("http://%s", s.Addr().String())
+	resp, err := client.Get(host + "/db/backup?noleader")
+	if err != nil {
+		t.Fatalf("failed to make backup request")
+	}
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("failed to get expected StatusOK for backup, got %d", resp.StatusCode)
+	}
+}
+
+func Test_BackupFlagsInvalid(t *testing.T) {
+	m := &MockStore{}
+	c := &mockClusterService{
+		apiAddr: "http://1.2.3.4:999",
+	}
+
+	s := New("127.0.0.1:0", m, c, proxy.New(m, c), nil)
+
+	if err := s.Start(); err != nil {
+		t.Fatalf("failed to start service")
+	}
+	defer s.Close()
+
+	m.backupFn = func(br *command.BackupRequest, dst io.Writer) error {
+		if br.Vacuum && br.Format == command.BackupRequest_BACKUP_REQUEST_FORMAT_SQL {
+			return store.ErrInvalidVacuum
+		}
+		return nil
+	}
+
+	client := &http.Client{}
+	host := fmt.Sprintf("http://%s", s.Addr().String())
+	resp, err := client.Get(host + "/db/backup?fmt=sql&vacuum")
+	if err != nil {
+		t.Fatalf("failed to make backup request")
+	}
+	if resp.StatusCode != http.StatusBadRequest {
+		t.Fatalf("failed to get expected StatusBadRequest for backup, got %d", resp.StatusCode)
+	}
+}
+
+func Test_BackupDeleteOK(t *testing.T) {
+	m := &MockStore{}
+	c := &mockClusterService{}
+	s := New("127.0.0.1:0", m, c, proxy.New(m, c), nil)
+	if err := s.Start(); err != nil {
+		t.Fatalf("failed to start service")
+	}
+	defer s.Close()
+
+	// Track that the backup function is called with DELETE format
+	var capturedRequest *command.BackupRequest
+	m.backupFn = func(br *command.BackupRequest, dst io.Writer) error {
+		capturedRequest = br
+		return nil
+	}
+
+	client := &http.Client{}
+	host := fmt.Sprintf("http://%s", s.Addr().String())
+	resp, err := client.Get(host + "/db/backup?fmt=delete")
+	if err != nil {
+		t.Fatalf("failed to make backup request")
+	}
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("failed to get expected StatusOK for backup, got %d", resp.StatusCode)
+	}
+
+	// Verify that the backup request has the DELETE format
+	if capturedRequest == nil {
+		t.Fatalf("backup function was not called")
+	}
+	if capturedRequest.Format != command.BackupRequest_BACKUP_REQUEST_FORMAT_DELETE {
+		t.Fatalf("expected DELETE format, got %v", capturedRequest.Format)
+	}
+}
+
+func Test_BackupTablesOK(t *testing.T) {
+	m := &MockStore{}
+	c := &mockClusterService{}
+	s := New("127.0.0.1:0", m, c, proxy.New(m, c), nil)
+	if err := s.Start(); err != nil {
+		t.Fatalf("failed to start service")
+	}
+	defer s.Close()
+
+	// Track that the backup function is called with specified tables
+	var capturedRequest *command.BackupRequest
+	m.backupFn = func(br *command.BackupRequest, dst io.Writer) error {
+		capturedRequest = br
+		return nil
+	}
+
+	client := &http.Client{}
+	host := fmt.Sprintf("http://%s", s.Addr().String())
+	resp, err := client.Get(host + "/db/backup?fmt=sql&tables=users,products")
+	if err != nil {
+		t.Fatalf("failed to make backup request")
+	}
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("failed to get expected StatusOK for backup, got %d", resp.StatusCode)
+	}
+
+	// Verify that the backup request has the specified tables
+	if capturedRequest == nil {
+		t.Fatalf("backup function was not called")
+	}
+	if capturedRequest.Format != command.BackupRequest_BACKUP_REQUEST_FORMAT_SQL {
+		t.Fatalf("expected SQL format, got %v", capturedRequest.Format)
+	}
+	expectedTables := []string{"users", "products"}
+	if len(capturedRequest.Tables) != len(expectedTables) {
+		t.Fatalf("expected %d tables, got %d", len(expectedTables), len(capturedRequest.Tables))
+	}
+	for i, table := range expectedTables {
+		if capturedRequest.Tables[i] != table {
+			t.Fatalf("expected table %s at index %d, got %s", table, i, capturedRequest.Tables[i])
+		}
+	}
+}
+
+func Test_LoadOK(t *testing.T) {
+	m := &MockStore{
+		leaderAddr: "foo:1234",
+	}
+	c := &mockClusterService{}
+	s := New("127.0.0.1:0", m, c, proxy.New(m, c), nil)
+	if err := s.Start(); err != nil {
+		t.Fatalf("failed to start service")
+	}
+	defer s.Close()
+
+	client := &http.Client{}
+	host := fmt.Sprintf("http://%s", s.Addr().String())
+	resp, err := client.Post(host+"/db/load", "application/octet-stream", strings.NewReader("SELECT"))
+	if err != nil {
+		t.Fatalf("failed to make load request")
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("failed to get expected StatusOK for load, got %d, %s", resp.StatusCode, mustReadBody(t, resp))
+	}
+	if exp, got := `{"results":[]}`, mustReadBody(t, resp); exp != got {
+		t.Fatalf("incorrect response body, exp: %s, got %s", exp, got)
+	}
+}
+
+func Test_LoadFlagsNoLeader(t *testing.T) {
+	m := &MockStore{
+		leaderAddr: "foo:1234",
+	}
+	c := &mockClusterService{
+		apiAddr: "http://1.2.3.4:999",
+	}
+
+	s := New("127.0.0.1:0", m, c, proxy.New(m, c), nil)
+
+	if err := s.Start(); err != nil {
+		t.Fatalf("failed to start service")
+	}
+	defer s.Close()
+
+	testData, err := os.ReadFile("testdata/load.db")
+	if err != nil {
+		t.Fatalf("failed to load test SQLite data")
+	}
+
+	m.loadFn = func(lr *command.LoadRequest) error {
+		return store.ErrNotLeader
+	}
+
+	clusterLoadCalled := false
+	c.loadFn = func(lc *command.LoadRequest, nodeAddr string, timeout time.Duration) error {
+		clusterLoadCalled = true
+		if !bytes.Equal(lc.Data, testData) {
+			t.Fatalf("wrong data passed to cluster load")
+		}
+		return nil
+	}
+
+	client := &http.Client{}
+	host := fmt.Sprintf("http://%s", s.Addr().String())
+	resp, err := client.Post(host+"/db/load", "application/octet-stream", bytes.NewReader(testData))
+	if err != nil {
+		t.Fatalf("failed to make load request")
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("failed to get expected StatusOK for load, got %d", resp.StatusCode)
+	}
+
+	if !clusterLoadCalled {
+		t.Fatalf("cluster load was not called")
+	}
+
+	if exp, got := `{"results":[]}`, mustReadBody(t, resp); exp != got {
+		t.Fatalf("incorrect response body, exp: %s, got %s", exp, got)
+	}
+}
+
+func Test_LoadRemoteError(t *testing.T) {
+	m := &MockStore{
+		leaderAddr: "foo:1234",
+	}
+	c := &mockClusterService{
+		apiAddr: "http://1.2.3.4:999",
+	}
+
+	s := New("127.0.0.1:0", m, c, proxy.New(m, c), nil)
+
+	if err := s.Start(); err != nil {
+		t.Fatalf("failed to start service")
+	}
+	defer s.Close()
+
+	testData, err := os.ReadFile("testdata/load.db")
+	if err != nil {
+		t.Fatalf("failed to load test SQLite data")
+	}
+
+	m.loadFn = func(br *command.LoadRequest) error {
+		return store.ErrNotLeader
+	}
+	clusterLoadCalled := false
+	c.loadFn = func(lr *command.LoadRequest, addr string, t time.Duration) error {
+		clusterLoadCalled = true
+		return fmt.Errorf("the load failed")
+	}
+
+	client := &http.Client{}
+	host := fmt.Sprintf("http://%s", s.Addr().String())
+	resp, err := client.Post(host+"/db/load", "application/octet-stream", bytes.NewReader(testData))
+	if err != nil {
+		t.Fatalf("failed to make load request")
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusInternalServerError {
+		t.Fatalf("failed to get expected StatusInternalServerError for load, got %d", resp.StatusCode)
+	}
+
+	if !clusterLoadCalled {
+		t.Fatalf("cluster load was not called")
+	}
+
+	if exp, got := "the load failed\n", mustReadBody(t, resp); exp != got {
+		t.Fatalf(`incorrect response body, exp: "%s", got: "%s"`, exp, got)
+	}
+}
+
+func Test_Boot(t *testing.T) {
+	m := &MockStore{
+		leaderAddr: "foo:1234",
+	}
+	c := &mockClusterService{
+		apiAddr: "http://1.2.3.4:999",
+	}
+
+	s := New("127.0.0.1:0", m, c, proxy.New(m, c), nil)
+	if err := s.Start(); err != nil {
+		t.Fatalf("failed to start service")
+	}
+	defer s.Close()
+
+	testData, err := os.ReadFile("testdata/load.db")
+	if err != nil {
+		t.Fatalf("failed to load test SQLite data")
+	}
+
+	readFromCalled := false
+	m.readFromFn = func(r io.Reader) (int64, error) {
+		// read all data from r and compare to the data in testData
+		b, err := io.ReadAll(r)
+		if err != nil {
+			return 0, err
+		}
+		if !bytes.Equal(b, testData) {
+			t.Fatalf("wrong data passed to ReadFrom")
+		}
+		readFromCalled = true
+		return int64(len(b)), nil
+	}
+
+	client := &http.Client{}
+	host := fmt.Sprintf("http://%s", s.Addr().String())
+	resp, err := client.Post(host+"/boot", "application/octet-stream", bytes.NewReader(testData))
+	if err != nil {
+		t.Fatalf("failed to make boot request")
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("failed to get expected StatusOK for boot, got %d", resp.StatusCode)
+	}
+
+	if !readFromCalled {
+		t.Fatalf("ReadFrom was not called")
+	}
+}
+
+func Test_RegisterStatus(t *testing.T) {
+	var stats *mockStatusReporter
+	m := &MockStore{}
+	c := &mockClusterService{}
+
+	s := New("127.0.0.1:0", m, c, proxy.New(m, c), nil)
+
+	if err := s.RegisterStatus("foo", stats); err != nil {
+		t.Fatalf("failed to register statusReporter: %s", err.Error())
+	}
+
+	if err := s.RegisterStatus("foo", stats); err == nil {
+		t.Fatal("successfully re-registered statusReporter")
+	}
+}
+
+func Test_FormRedirect(t *testing.T) {
+	m := &MockStore{
+		leaderAddr: "foo:4002",
+	}
+	c := &mockClusterService{
+		apiAddr: "http://foo:4001",
+	}
+
+	s := New("127.0.0.1:0", m, c, proxy.New(m, c), nil)
+	req := mustNewHTTPRequest("http://qux:4001")
+
+	rd, err := s.FormRedirect(req)
+	if err != nil {
+		t.Fatalf("failed to form redirect: %s", err.Error())
+	}
+	if exp, got := "http://foo:4001", rd; exp != got {
+		t.Fatalf("incorrect redirect, exp: %s, got: %s", exp, got)
+	}
+}
+
+func Test_FormRedirectParam(t *testing.T) {
+	m := &MockStore{
+		leaderAddr: "foo:4002",
+	}
+	c := &mockClusterService{
+		apiAddr: "http://foo:4001",
+	}
+	s := New("127.0.0.1:0", m, c, proxy.New(m, c), nil)
+	req := mustNewHTTPRequest("http://qux:4001/db/query?x=y")
+
+	rd, err := s.FormRedirect(req)
+	if err != nil {
+		t.Fatalf("failed to form redirect: %s", err.Error())
+	}
+
+	if exp, got := "http://foo:4001/db/query?x=y", rd; exp != got {
+		t.Fatalf("incorrect redirect, exp: %s, got: %s", exp, got)
+	}
+}
+
+func Test_FormRedirectHTTPS(t *testing.T) {
+	m := &MockStore{
+		leaderAddr: "foo:4002",
+	}
+	c := &mockClusterService{
+		apiAddr: "https://foo:4001",
+	}
+
+	s := New("127.0.0.1:0", m, c, proxy.New(m, c), nil)
+	req := mustNewHTTPRequest("http://qux:4001")
+
+	rd, err := s.FormRedirect(req)
+	if err != nil {
+		t.Fatalf("failed to form redirect: %s", err.Error())
+	}
+	if exp, got := "https://foo:4001", rd; exp != got {
+		t.Fatalf("incorrect redirect, exp: %s, got: %s", exp, got)
+	}
+}
+
+func Test_DoRedirect(t *testing.T) {
+	m := &MockStore{
+		leaderAddr: "foo:4002",
+	}
+	c := &mockClusterService{
+		apiAddr: "https://foo:4001",
+	}
+	s := New("127.0.0.1:0", m, c, proxy.New(m, c), nil)
+	req := mustNewHTTPRequest("http://qux:4001")
+	qp := mustGetQueryParams(req)
+
+	if s.DoRedirect(nil, req, qp) {
+		t.Fatalf("incorrectly redirected")
+	}
+
+	req = mustNewHTTPRequest("http://qux:4001/db/query?redirect")
+	qp = mustGetQueryParams(req)
+	w := httptest.NewRecorder()
+	if !s.DoRedirect(w, req, qp) {
+		t.Fatalf("incorrectly not redirected")
+	}
+	if exp, got := http.StatusMovedPermanently, w.Code; exp != got {
+		t.Fatalf("incorrect redirect code, exp: %d, got: %d", exp, got)
+	}
+	// check location header
+	if exp, got := "https://foo:4001/db/query?redirect", w.Header().Get("Location"); exp != got {
+		t.Fatalf("incorrect redirect location, exp: %s, got: %s", exp, got)
+	}
+}
+
+func Test_Nodes(t *testing.T) {
+	m := &MockStore{
+		leaderAddr: "foo:1234",
+	}
+	c := &mockClusterService{
+		apiAddr: "https://bar:5678",
+	}
+	s := New("127.0.0.1:0", m, c, proxy.New(m, c), nil)
+	if err := s.Start(); err != nil {
+		t.Fatalf("failed to start service")
+	}
+	defer s.Close()
+
+	client := &http.Client{}
+	host := fmt.Sprintf("http://%s", s.Addr().String())
+	resp, err := client.Get(host + "/nodes")
+	if err != nil {
+		t.Fatalf("failed to make nodes request")
+	}
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("failed to get expected StatusOK for nodes, got %d", resp.StatusCode)
+	}
+}
+
+func Test_RootRedirectToUI(t *testing.T) {
+	m := &MockStore{}
+	c := &mockClusterService{}
+	s := New("127.0.0.1:0", m, c, proxy.New(m, c), nil)
+	if err := s.Start(); err != nil {
+		t.Fatalf("failed to start service")
+	}
+	defer s.Close()
+
+	client := &http.Client{
+		CheckRedirect: func(req *http.Request, via []*http.Request) error {
+			return http.ErrUseLastResponse
+		},
+	}
+	resp, err := client.Get(fmt.Sprintf("http://%s/", s.Addr().String()))
+	if err != nil {
+		t.Fatalf("failed to make root request")
+	}
+	if resp.StatusCode != http.StatusFound {
+		t.Fatalf("failed to get expected StatusFound for root, got %d", resp.StatusCode)
+	}
+	if resp.Header["Location"][0] != "/console/" {
+		t.Fatalf("received incorrect redirect path")
+	}
+
+	resp, err = client.Get(fmt.Sprintf("http://%s", s.Addr().String()))
+	if err != nil {
+		t.Fatalf("failed to make root request")
+	}
+	if resp.StatusCode != http.StatusFound {
+		t.Fatalf("failed to get expected StatusFound for root, got %d", resp.StatusCode)
+	}
+	if resp.Header["Location"][0] != "/console/" {
+		t.Fatalf("received incorrect redirect path")
+	}
+}
+
+func Test_Readyz(t *testing.T) {
+	m := &MockStore{
+		leaderAddr: "foo:1234",
+	}
+	c := &mockClusterService{
+		apiAddr: "https://bar:5678",
+	}
+
+	// Simulate database responding correctly.
+	m.queryFn = func(qr *command.QueryRequest) ([]*command.QueryRows, uint64, error) {
+		rows := &command.QueryRows{
+			Columns: []string{"value"},
+			Types:   []string{"integer"},
+			Values: []*command.Values{
+				{
+					Parameters: []*command.Parameter{
+						{
+							Value: &command.Parameter_I{
+								I: 1,
+							},
+						},
+					},
+				},
+			},
+		}
+		return []*command.QueryRows{rows}, 0, nil
+	}
+
+	s := New("127.0.0.1:0", m, c, proxy.New(m, c), nil)
+	if err := s.Start(); err != nil {
+		t.Fatalf("failed to start service")
+	}
+	defer s.Close()
+
+	client := &http.Client{}
+	host := fmt.Sprintf("http://%s", s.Addr().String())
+	resp, err := client.Get(host + "/readyz")
+	if err != nil {
+		t.Fatalf("failed to make readyz request")
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("failed to get expected StatusOK for node, got %d", resp.StatusCode)
+	}
+	if exp, got := "[+]node ok\n[+]leader ok\n[+]store ok\n[+]db ok", mustReadBody(t, resp); exp != got {
+		t.Fatalf("incorrect response body, exp: %s, got: %s", exp, got)
+	}
+
+	resp, err = client.Get(host + "/readyz?noleader")
+	if err != nil {
+		t.Fatalf("failed to make readyz request")
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("failed to get expected StatusOK, got %d", resp.StatusCode)
+	}
+	if exp, got := "[+]node ok", mustReadBody(t, resp); exp != got {
+		t.Fatalf("incorrect response body, exp: %s, got: %s", exp, got)
+	}
+
+	m.notReady = true
+	m.committedFn = func(timeout time.Duration) (uint64, error) {
+		t.Fatal("committedFn should not have been called")
+		return 0, nil
+	}
+	resp, err = client.Get(host + "/readyz")
+	if err != nil {
+		t.Fatalf("failed to make readyz request")
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusServiceUnavailable {
+		t.Fatalf("failed to get expected StatusServiceUnavailable, got %d", resp.StatusCode)
+	}
+	if exp, got := "[+]node ok\n[+]leader ok\n[+]store not ready", mustReadBody(t, resp); exp != got {
+		t.Fatalf("incorrect response body, exp: %s, got: %s", exp, got)
+	}
+
+	cnt := &atomic.Uint32{}
+	m.notReady = false
+	m.committedFn = func(timeout time.Duration) (uint64, error) {
+		cnt.Store(1)
+		return 0, fmt.Errorf("timeout")
+	}
+	resp, err = client.Get(host + "/readyz?sync")
+	if err != nil {
+		t.Fatalf("failed to make readyz request with sync set")
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusServiceUnavailable {
+		t.Fatalf("failed to get expected StatusServiceUnavailable, got %d", resp.StatusCode)
+	}
+	if exp, got := "[+]node ok\n[+]leader ok\n[+]store ok\n[+]sync timeout", mustReadBody(t, resp); exp != got {
+		t.Fatalf("incorrect response body, exp: %s, got: %s", exp, got)
+	}
+	if cnt.Load() != 1 {
+		t.Fatalf("failed to call committedFn")
+	}
+	m.notReady = false
+	m.committedFn = func(timeout time.Duration) (uint64, error) {
+		cnt.Store(2)
+		return 0, nil
+	}
+	resp, err = client.Get(host + "/readyz?sync")
+	if err != nil {
+		t.Fatalf("failed to make readyz request with sync set")
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("failed to get expected StatusOK, got %d", resp.StatusCode)
+	}
+	if exp, got := "[+]node ok\n[+]leader ok\n[+]store ok\n[+]sync ok\n[+]db ok", mustReadBody(t, resp); exp != got {
+		t.Fatalf("incorrect response body, exp: %s, got: %s", exp, got)
+	}
+	if cnt.Load() != 2 {
+		t.Fatalf("failed to call committedFn")
+	}
+}
+
+func Test_ReadyzNoLeader(t *testing.T) {
+	m := &MockStore{}
+	c := &mockClusterService{}
+	s := New("127.0.0.1:0", m, c, proxy.New(m, c), nil)
+	if err := s.Start(); err != nil {
+		t.Fatalf("failed to start service")
+	}
+	defer s.Close()
+
+	client := &http.Client{}
+	host := fmt.Sprintf("http://%s", s.Addr().String())
+	resp, err := client.Get(host + "/readyz")
+	if err != nil {
+		t.Fatalf("failed to make readyz request")
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusServiceUnavailable {
+		t.Fatalf("failed to get expected StatusServiceUnavailable, got %d", resp.StatusCode)
+	}
+	if exp, got := "[+]node ok\n[+]leader does not exist", mustReadBody(t, resp); exp != got {
+		t.Fatalf("incorrect response body, exp: %s, got: %s", exp, got)
+	}
+}
+
+func Test_QueuedExecuteNoLeader(t *testing.T) {
+	m := &MockStore{}
+	c := &mockClusterService{}
+	s := New("127.0.0.1:0", m, c, proxy.New(m, c), nil)
+	if err := s.Start(); err != nil {
+		t.Fatalf("failed to start service")
+	}
+	defer s.Close()
+
+	client := &http.Client{}
+	host := fmt.Sprintf("http://%s", s.Addr().String())
+	resp, err := client.Post(host+"/db/execute?queue", "application/json",
+		strings.NewReader(`["CREATE TABLE foo (id INTEGER NOT NULL PRIMARY KEY, name TEXT)"]`))
+	if err != nil {
+		t.Fatalf("failed to make queued execute request")
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusServiceUnavailable {
+		t.Fatalf("failed to get expected StatusServiceUnavailable, got %d", resp.StatusCode)
+	}
+}
+
+func Test_Licenses(t *testing.T) {
+	m := &MockStore{}
+	c := &mockClusterService{}
+	s := New("127.0.0.1:0", m, c, proxy.New(m, c), nil)
+	if err := s.Start(); err != nil {
+		t.Fatalf("failed to start service")
+	}
+	defer s.Close()
+
+	client := &http.Client{}
+	host := fmt.Sprintf("http://%s", s.Addr().String())
+
+	// Test GET request
+	resp, err := client.Get(host + "/licenses")
+	if err != nil {
+		t.Fatalf("failed to make licenses request")
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("failed to get expected StatusOK, got %d", resp.StatusCode)
+	}
+
+	// Check content type
+	if ct := resp.Header.Get("Content-Type"); ct != "text/plain; charset=utf-8" {
+		t.Fatalf("unexpected content type, exp: text/plain; charset=utf-8, got: %s", ct)
+	}
+
+	// Check response body contains license text
+	body := mustReadBody(t, resp)
+	if !strings.Contains(body, "MIT License") {
+		t.Fatalf("response body does not contain expected license text, got: %s", body)
+	}
+}
+
+func Test_LicensesMethodNotAllowed(t *testing.T) {
+	m := &MockStore{}
+	c := &mockClusterService{}
+	s := New("127.0.0.1:0", m, c, proxy.New(m, c), nil)
+	if err := s.Start(); err != nil {
+		t.Fatalf("failed to start service")
+	}
+	defer s.Close()
+
+	client := &http.Client{}
+	host := fmt.Sprintf("http://%s", s.Addr().String())
+
+	// Test POST request
+	resp, err := client.Post(host+"/licenses", "text/plain", nil)
+	if err != nil {
+		t.Fatalf("failed to make POST request")
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusMethodNotAllowed {
+		t.Fatalf("expected StatusMethodNotAllowed for POST, got %d", resp.StatusCode)
+	}
+
+	// Test DELETE request
+	req, err := http.NewRequest("DELETE", host+"/licenses", nil)
+	if err != nil {
+		t.Fatalf("failed to create DELETE request")
+	}
+	resp, err = client.Do(req)
+	if err != nil {
+		t.Fatalf("failed to make DELETE request")
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusMethodNotAllowed {
+		t.Fatalf("expected StatusMethodNotAllowed for DELETE, got %d", resp.StatusCode)
+	}
+}
+
+func Test_LicensesAuth(t *testing.T) {
+	c := &mockCredentialStore{HasPermOK: false}
+	m := &MockStore{}
+	n := &mockClusterService{}
+	s := New("127.0.0.1:0", m, n, proxy.New(m, n), c)
+	if err := s.Start(); err != nil {
+		t.Fatalf("failed to start service")
+	}
+	defer s.Close()
+
+	client := &http.Client{}
+	host := fmt.Sprintf("http://%s", s.Addr().String())
+
+	// Test unauthorized access
+	resp, err := client.Get(host + "/licenses")
+	if err != nil {
+		t.Fatalf("failed to make request")
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusUnauthorized {
+		t.Fatalf("expected StatusUnauthorized, got %d", resp.StatusCode)
+	}
+}
+
+func Test_UIIndex(t *testing.T) {
+	m := &MockStore{}
+	c := &mockClusterService{}
+	s := New("127.0.0.1:0", m, c, proxy.New(m, c), nil)
+	if err := s.Start(); err != nil {
+		t.Fatalf("failed to start service")
+	}
+	defer s.Close()
+
+	client := &http.Client{}
+	host := fmt.Sprintf("http://%s", s.Addr().String())
+
+	resp, err := client.Get(host + "/console/")
+	if err != nil {
+		t.Fatalf("failed to make UI request")
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("expected StatusOK for /console/, got %d", resp.StatusCode)
+	}
+
+	ct := resp.Header.Get("Content-Type")
+	if !strings.Contains(ct, "text/html") {
+		t.Fatalf("expected text/html content type, got %s", ct)
+	}
+
+	body := mustReadBody(t, resp)
+	if !strings.Contains(body, "rqlite") {
+		t.Fatalf("response body does not contain 'rqlite'")
+	}
+}
+
+func Test_UIStaticAssets(t *testing.T) {
+	m := &MockStore{}
+	c := &mockClusterService{}
+	s := New("127.0.0.1:0", m, c, proxy.New(m, c), nil)
+	if err := s.Start(); err != nil {
+		t.Fatalf("failed to start service")
+	}
+	defer s.Close()
+
+	client := &http.Client{}
+	host := fmt.Sprintf("http://%s", s.Addr().String())
+
+	resp, err := client.Get(host + "/console/static/css/style.css")
+	if err != nil {
+		t.Fatalf("failed to make CSS request")
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("expected StatusOK for style.css, got %d", resp.StatusCode)
+	}
+}
+
+func Test_UIRedirectSlash(t *testing.T) {
+	m := &MockStore{}
+	c := &mockClusterService{}
+	s := New("127.0.0.1:0", m, c, proxy.New(m, c), nil)
+	if err := s.Start(); err != nil {
+		t.Fatalf("failed to start service")
+	}
+	defer s.Close()
+
+	client := &http.Client{
+		CheckRedirect: func(req *http.Request, via []*http.Request) error {
+			return http.ErrUseLastResponse
+		},
+	}
+	host := fmt.Sprintf("http://%s", s.Addr().String())
+
+	resp, err := client.Get(host + "/console")
+	if err != nil {
+		t.Fatalf("failed to make /console request")
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusMovedPermanently {
+		t.Fatalf("expected StatusMovedPermanently for /console, got %d", resp.StatusCode)
+	}
+	if resp.Header.Get("Location") != "/console/" {
+		t.Fatalf("expected redirect to /console/, got %s", resp.Header.Get("Location"))
+	}
+}
+
+func Test_UIMethodNotAllowed(t *testing.T) {
+	m := &MockStore{}
+	c := &mockClusterService{}
+	s := New("127.0.0.1:0", m, c, proxy.New(m, c), nil)
+	if err := s.Start(); err != nil {
+		t.Fatalf("failed to start service")
+	}
+	defer s.Close()
+
+	client := &http.Client{}
+	host := fmt.Sprintf("http://%s", s.Addr().String())
+
+	resp, err := client.Post(host+"/console/", "text/plain", nil)
+	if err != nil {
+		t.Fatalf("failed to make POST request")
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusMethodNotAllowed {
+		t.Fatalf("expected StatusMethodNotAllowed for POST /console/, got %d", resp.StatusCode)
+	}
+}
+
+func Test_UIAuth(t *testing.T) {
+	c := &mockCredentialStore{HasPermOK: false}
+	m := &MockStore{}
+	n := &mockClusterService{}
+	s := New("127.0.0.1:0", m, n, proxy.New(m, n), c)
+	if err := s.Start(); err != nil {
+		t.Fatalf("failed to start service")
+	}
+	defer s.Close()
+
+	client := &http.Client{}
+	host := fmt.Sprintf("http://%s", s.Addr().String())
+
+	resp, err := client.Get(host + "/console/")
+	if err != nil {
+		t.Fatalf("failed to make request")
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusUnauthorized {
+		t.Fatalf("expected StatusUnauthorized, got %d", resp.StatusCode)
+	}
+}
+
+func Test_ForwardingRedirectQuery(t *testing.T) {
+	m := &MockStore{
+		leaderAddr: "foo:1234",
+	}
+	m.queryFn = func(qr *command.QueryRequest) ([]*command.QueryRows, uint64, error) {
+		return nil, 0, store.ErrNotLeader
+	}
+
+	c := &mockClusterService{
+		apiAddr: "https://bar:5678",
+	}
+	c.queryFn = func(qr *command.QueryRequest, addr string, timeout time.Duration) ([]*command.QueryRows, uint64, error) {
+		rows := &command.QueryRows{
+			Columns: []string{},
+			Types:   []string{},
+		}
+		return []*command.QueryRows{rows}, 0, nil
+	}
+
+	s := New("127.0.0.1:0", m, c, proxy.New(m, c), nil)
+	if err := s.Start(); err != nil {
+		t.Fatalf("failed to start service")
+	}
+	defer s.Close()
+
+	// Check queries.
+	client := &http.Client{
+		CheckRedirect: func(req *http.Request, via []*http.Request) error {
+			return http.ErrUseLastResponse
+		},
+	}
+	host := fmt.Sprintf("http://%s", s.Addr().String())
+
+	resp, err := client.Get(host + "/db/query?pretty&timings&q=SELECT%20%2A%20FROM%20foo")
+	if err != nil {
+		t.Fatalf("failed to make query request")
+	}
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("failed to get expected StatusOK for nodes, got %d", resp.StatusCode)
+	}
+
+	resp, err = client.Get(host + "/db/query?redirect&pretty&timings&q=SELECT%20%2A%20FROM%20foo")
+	if err != nil {
+		t.Fatalf("failed to make redirected query request: %s", err)
+	}
+	if resp.StatusCode != http.StatusMovedPermanently {
+		t.Fatalf("failed to get expected StatusMovedPermanently for query, got %d", resp.StatusCode)
+	}
+
+	// Check leader failure case.
+	m.leaderAddr = ""
+	resp, err = client.Get(host + "/db/query?pretty&timings&q=SELECT%20%2A%20FROM%20foo")
+	if err != nil {
+		t.Fatalf("failed to make query forwarded request")
+	}
+	if resp.StatusCode != http.StatusServiceUnavailable {
+		t.Fatalf("failed to get expected StatusServiceUnavailable for node with no leader, got %d", resp.StatusCode)
+	}
+}
+
+func Test_ForwardingRedirectExecute(t *testing.T) {
+	m := &MockStore{
+		leaderAddr: "foo:1234",
+	}
+	m.executeFn = func(er *command.ExecuteRequest) ([]*command.ExecuteQueryResponse, uint64, error) {
+		return nil, 0, store.ErrNotLeader
+	}
+
+	c := &mockClusterService{
+		apiAddr: "https://bar:5678",
+	}
+	c.executeFn = func(er *command.ExecuteRequest, addr string, timeout time.Duration) ([]*command.ExecuteQueryResponse, uint64, error) {
+		result := &command.ExecuteQueryResponse{
+			Result: &command.ExecuteQueryResponse_E{
+				E: &command.ExecuteResult{
+					LastInsertId: 1234,
+					RowsAffected: 5678,
+				},
+			},
+		}
+		return []*command.ExecuteQueryResponse{result}, 0, nil
+	}
+
+	s := New("127.0.0.1:0", m, c, proxy.New(m, c), nil)
+	if err := s.Start(); err != nil {
+		t.Fatalf("failed to start service")
+	}
+	defer s.Close()
+
+	// Check executes.
+	client := &http.Client{
+		CheckRedirect: func(req *http.Request, via []*http.Request) error {
+			return http.ErrUseLastResponse
+		},
+	}
+	host := fmt.Sprintf("http://%s", s.Addr().String())
+
+	resp, err := client.Post(host+"/db/execute", "application/json", strings.NewReader(`["Some SQL"]`))
+	if err != nil {
+		t.Fatalf("failed to make execute request")
+	}
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("failed to get expected StatusOK for execute, got %d", resp.StatusCode)
+	}
+
+	resp, err = client.Post(host+"/db/execute?redirect", "application/json", strings.NewReader(`["Some SQL"]`))
+	if err != nil {
+		t.Fatalf("failed to make redirected execute request: %s", err)
+	}
+	if resp.StatusCode != http.StatusMovedPermanently {
+		t.Fatalf("failed to get expected StatusMovedPermanently for execute, got %d", resp.StatusCode)
+	}
+
+	// Check leader failure case.
+	m.leaderAddr = ""
+	resp, err = client.Post(host+"/db/execute", "application/json", strings.NewReader(`["Some SQL"]`))
+	if err != nil {
+		t.Fatalf("failed to make execute request")
+	}
+	if resp.StatusCode != http.StatusServiceUnavailable {
+		t.Fatalf("failed to get expected StatusServiceUnavailable for node with no leader, got %d", resp.StatusCode)
+	}
+}
+
+func Test_ForwardingRedirectExecuteQuery(t *testing.T) {
+	m := &MockStore{
+		leaderAddr: "foo:1234",
+	}
+	m.requestFn = func(er *command.ExecuteQueryRequest) ([]*command.ExecuteQueryResponse, uint64, uint64, error) {
+		return nil, 0, 0, store.ErrNotLeader
+	}
+
+	c := &mockClusterService{
+		apiAddr: "https://bar:5678",
+	}
+	c.requestFn = func(er *command.ExecuteQueryRequest, addr string, timeout time.Duration) ([]*command.ExecuteQueryResponse, uint64, uint64, error) {
+		resp := &command.ExecuteQueryResponse{
+			Result: &command.ExecuteQueryResponse_E{
+				E: &command.ExecuteResult{
+					LastInsertId: 1234,
+					RowsAffected: 5678,
+				},
+			},
+		}
+		return []*command.ExecuteQueryResponse{resp}, 0, 0, nil
+	}
+
+	s := New("127.0.0.1:0", m, c, proxy.New(m, c), nil)
+	if err := s.Start(); err != nil {
+		t.Fatalf("failed to start service")
+	}
+	defer s.Close()
+
+	// Check ExecuteQuery.
+	client := &http.Client{
+		CheckRedirect: func(req *http.Request, via []*http.Request) error {
+			return http.ErrUseLastResponse
+		},
+	}
+	host := fmt.Sprintf("http://%s", s.Addr().String())
+
+	resp, err := client.Post(host+"/db/request", "application/json", strings.NewReader(`["Some SQL"]`))
+	if err != nil {
+		t.Fatalf("failed to make ExecuteQuery request")
+	}
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("failed to get expected StatusOK for ExecuteQuery, got %d", resp.StatusCode)
+	}
+
+	resp, err = client.Post(host+"/db/request?redirect", "application/json", strings.NewReader(`["Some SQL"]`))
+	if err != nil {
+		t.Fatalf("failed to make redirected ExecuteQuery request: %s", err)
+	}
+	if resp.StatusCode != http.StatusMovedPermanently {
+		t.Fatalf("failed to get expected StatusMovedPermanently for execute, got %d", resp.StatusCode)
+	}
+
+	// Check leader failure case.
+	m.leaderAddr = ""
+	resp, err = client.Post(host+"/db/request", "application/json", strings.NewReader(`["Some SQL"]`))
+	if err != nil {
+		t.Fatalf("failed to make ExecuteQuery request")
+	}
+	if resp.StatusCode != http.StatusServiceUnavailable {
+		t.Fatalf("failed to get expected StatusServiceUnavailable for node with no leader, got %d", resp.StatusCode)
+	}
+}
+
+func Test_timeoutVersionPrettyQueryParam(t *testing.T) {
+	defStr := "10s"
+	def := mustParseDuration(defStr)
+	tests := []struct {
+		u        string
+		dur      string
+		ver      string
+		pretty   bool
+		parseErr bool
+	}{
+		{
+			u:      "http://localhost:4001/nodes?pretty&timeout=5s&ver=2",
+			dur:    "5s",
+			pretty: true,
+			ver:    "2",
+		},
+		{
+			u:   "http://localhost:4001/nodes?timeout=2m",
+			dur: "2m",
+		},
+		{
+			u:   "http://localhost:4001/nodes?x=777&timeout=5s",
+			dur: "5s",
+		},
+		{
+			u:   "http://localhost:4001/nodes",
+			dur: defStr,
+		},
+		{
+			u:   "http://localhost:4001/nodes?ver=666",
+			dur: defStr,
+			ver: "666",
+		},
+		{
+			u:      "http://localhost:4001/nodes?pretty&ver=666",
+			dur:    defStr,
+			pretty: true,
+			ver:    "666",
+		},
+		{
+			u:        "http://localhost:4001/nodes?timeout=zdfjkh",
+			parseErr: true,
+		},
+		{
+			u:        "http://localhost:4001/db/query?q=",
+			dur:      defStr,
+			parseErr: true,
+		},
+	}
+
+	for i, tt := range tests {
+		mustURLParse(tt.u) // Make sure it's OK.
+		req, err := http.NewRequest("GET", tt.u, nil)
+		if err != nil {
+			t.Fatalf("failed to create request: %s", err)
+		}
+		qp, err := NewQueryParams(req)
+		if err != nil {
+			if !tt.parseErr {
+				t.Fatalf(" unexpectedly failed to parse query params on test %d: %s", i, err)
+			}
+			continue
+		}
+
+		if got, exp := qp.Timeout(def), mustParseDuration(tt.dur); got != exp {
+			t.Fatalf("got wrong timeout on test %d, expected %s, got %s", i, exp, got)
+		}
+		if got, exp := qp.Version(), tt.ver; got != exp {
+			t.Fatalf("got wrong version on test %d, expected %s, got %s", i, exp, got)
+		}
+		if got, exp := qp.Pretty(), tt.pretty; got != exp {
+			t.Fatalf("got wrong pretty on test %d, expected %t, got %t", i, exp, got)
+		}
+	}
+}
+
+func Test_Leader_GET(t *testing.T) {
+	store := &MockStore{leaderAddr: "127.0.0.1:8001"}
+	cluster := &mockClusterService{apiAddr: "http://127.0.0.1:4001"}
+	cred := &mockCredentialStore{HasPermOK: true}
+
+	s := New("127.0.0.1:4001", store, cluster, proxy.New(store, cluster), cred)
+
+	// Test GET request
+	req, err := http.NewRequest("GET", "/leader", nil)
+	if err != nil {
+		t.Fatalf("failed to create GET request: %s", err.Error())
+	}
+	rr := httptest.NewRecorder()
+	s.ServeHTTP(rr, req)
+
+	if rr.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", rr.Code)
+	}
+
+	// Ensure the response is well formed.
+	var node Node
+	if err := json.Unmarshal(rr.Body.Bytes(), &node); err != nil {
+		t.Fatalf("failed to unmarshal response body: %s", err.Error())
+	}
+}
+
+func Test_DBTimeoutQueryParam(t *testing.T) {
+	tests := []struct {
+		name    string
+		url     string
+		want    time.Duration
+		wantErr bool
+	}{
+		{
+			name: "1s",
+			url:  "http://localhost:4001/execute?db_timeout=1s",
+			want: 1 * time.Second,
+		},
+		{
+			name: "100ms",
+			url:  "http://localhost:4001/execute?db_timeout=100ms",
+			want: 100 * time.Millisecond,
+		},
+		{
+			name: "default value",
+			url:  "http://localhost:4001/execute",
+			want: 0,
+		},
+		{
+			name:    "parse error",
+			url:     "http://localhost:4001/execute?db_timeout=xyz",
+			wantErr: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			mustURLParse(tt.url)
+			req, err := http.NewRequest("GET", tt.url, nil)
+			if err != nil {
+				t.Fatalf("failed to create request: %s", err)
+			}
+			qp, err := NewQueryParams(req)
+			if err != nil {
+				if !tt.wantErr {
+					t.Fatalf("failed to create request: %s", err)
+				}
+			}
+
+			got := qp.DBTimeout(0)
+			if got != tt.want {
+				t.Fatalf("want %d, got %d", tt.want, got)
+			}
+		})
+	}
+}
+
+func Test_Leader_POST(t *testing.T) {
+	stepdownCalled := false
+	stepdownWait := false
+	store := &MockStore{
+		leaderAddr: "127.0.0.1:8001",
+		stepdownFn: func(wait bool, id string) error {
+			stepdownCalled = true
+			stepdownWait = wait
+			return nil
+		},
+	}
+	cluster := &mockClusterService{apiAddr: "http://127.0.0.1:4001"}
+	cred := &mockCredentialStore{HasPermOK: true}
+
+	s := New("127.0.0.1:4001", store, cluster, proxy.New(store, cluster), cred)
+
+	// Test POST request without wait
+	req, err := http.NewRequest("POST", "/leader", nil)
+	if err != nil {
+		t.Fatalf("failed to create POST request: %s", err.Error())
+	}
+	rr := httptest.NewRecorder()
+	s.ServeHTTP(rr, req)
+
+	if rr.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", rr.Code)
+	}
+
+	if !stepdownCalled {
+		t.Fatalf("expected stepdown to be called")
+	}
+
+	if stepdownWait {
+		t.Fatalf("expected stepdown to be called with wait=false")
+	}
+
+	// Test POST request with wait
+	stepdownCalled = false
+	stepdownWait = false
+
+	req, err = http.NewRequest("POST", "/leader?wait", nil)
+	if err != nil {
+		t.Fatalf("failed to create POST request with wait: %s", err.Error())
+	}
+	rr = httptest.NewRecorder()
+	s.ServeHTTP(rr, req)
+
+	if rr.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", rr.Code)
+	}
+
+	if !stepdownCalled {
+		t.Fatalf("expected stepdown to be called")
+	}
+
+	if !stepdownWait {
+		t.Fatalf("expected stepdown to be called with wait=true")
+	}
+}
+
+func Test_LeaderPOST_ForwardToLeader(t *testing.T) {
+	stepdownCalled := false
+	store := &MockStore{
+		leaderAddr: "127.0.0.1:8001",
+		stepdownFn: func(wait bool, id string) error {
+			return store.ErrNotLeader
+		},
+	}
+	cluster := &mockClusterService{
+		apiAddr: "http://127.0.0.1:4001",
+		stepdownFn: func(sr *command.StepdownRequest, nodeAddr string, t time.Duration) error {
+			stepdownCalled = true
+			return nil
+		},
+	}
+	cred := &mockCredentialStore{HasPermOK: true}
+
+	s := New("127.0.0.1:4001", store, cluster, proxy.New(store, cluster), cred)
+
+	req, err := http.NewRequest("POST", "/leader", nil)
+	if err != nil {
+		t.Fatalf("failed to create POST request: %s", err.Error())
+	}
+	rr := httptest.NewRecorder()
+	s.ServeHTTP(rr, req)
+
+	if rr.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", rr.Code)
+	}
+
+	if !stepdownCalled {
+		t.Fatalf("expected stepdown to be forwarded to leader")
+	}
+}
+
+func Test_LeaderPOST_ForwardError(t *testing.T) {
+	store := &MockStore{
+		leaderAddr: "127.0.0.1:8001",
+		stepdownFn: func(wait bool, id string) error {
+			return store.ErrNotLeader
+		},
+	}
+	cluster := &mockClusterService{
+		apiAddr: "http://127.0.0.1:4001",
+		stepdownFn: func(sr *command.StepdownRequest, nodeAddr string, t time.Duration) error {
+			return errors.New("stepdown failed")
+		},
+	}
+	cred := &mockCredentialStore{HasPermOK: true}
+
+	s := New("127.0.0.1:4001", store, cluster, proxy.New(store, cluster), cred)
+
+	req, err := http.NewRequest("POST", "/leader", nil)
+	if err != nil {
+		t.Fatalf("failed to create POST request: %s", err.Error())
+	}
+	rr := httptest.NewRecorder()
+	s.ServeHTTP(rr, req)
+
+	if rr.Code != http.StatusInternalServerError {
+		t.Fatalf("expected 500, got %d", rr.Code)
+	}
+
+	if !strings.Contains(rr.Body.String(), "stepdown failed") {
+		t.Fatalf("expected error message to contain 'stepdown failed', got %s", rr.Body.String())
+	}
+}
+
+func Test_LeaderMethodNotAllowed(t *testing.T) {
+	store := &MockStore{leaderAddr: "127.0.0.1:8001"}
+	cluster := &mockClusterService{apiAddr: "http://127.0.0.1:4001"}
+	cred := &mockCredentialStore{HasPermOK: true}
+
+	s := New("127.0.0.1:4001", store, cluster, proxy.New(store, cluster), cred)
+
+	req, err := http.NewRequest("DELETE", "/leader", nil)
+	if err != nil {
+		t.Fatalf("failed to create DELETE request: %s", err.Error())
+	}
+	rr := httptest.NewRecorder()
+	s.ServeHTTP(rr, req)
+
+	if rr.Code != http.StatusMethodNotAllowed {
+		t.Fatalf("expected 405, got %d", rr.Code)
+	}
+}
+
+func Test_Leader_POST_JSON_TargetNode(t *testing.T) {
+	stepdownCalled := false
+	stepdownWait := false
+	stepdownID := ""
+	store := &MockStore{
+		leaderAddr: "127.0.0.1:8001",
+		stepdownFn: func(wait bool, id string) error {
+			stepdownCalled = true
+			stepdownWait = wait
+			stepdownID = id
+			return nil
+		},
+	}
+	cluster := &mockClusterService{apiAddr: "http://127.0.0.1:4001"}
+	cred := &mockCredentialStore{HasPermOK: true}
+
+	s := New("127.0.0.1:4001", store, cluster, proxy.New(store, cluster), cred)
+
+	// Test with JSON body specifying target node
+	reqBody := `{"id": "node1"}`
+	req, err := http.NewRequest("POST", "/leader?wait", strings.NewReader(reqBody))
+	if err != nil {
+		t.Fatalf("failed to create POST request: %s", err.Error())
+	}
+	req.Header.Set("Content-Type", "application/json")
+	rr := httptest.NewRecorder()
+	s.ServeHTTP(rr, req)
+
+	if rr.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", rr.Code)
+	}
+
+	if !stepdownCalled {
+		t.Fatalf("expected stepdown to be called")
+	}
+
+	if !stepdownWait {
+		t.Fatalf("expected stepdown to be called with wait=true")
+	}
+
+	if stepdownID != "node1" {
+		t.Fatalf("expected stepdown to be called with id='node1', got '%s'", stepdownID)
+	}
+}
+
+func Test_Leader_POST_JSON_EmptyID(t *testing.T) {
+	stepdownCalled := false
+	stepdownID := ""
+	store := &MockStore{
+		leaderAddr: "127.0.0.1:8001",
+		stepdownFn: func(wait bool, id string) error {
+			stepdownCalled = true
+			stepdownID = id
+			return nil
+		},
+	}
+	cluster := &mockClusterService{apiAddr: "http://127.0.0.1:4001"}
+	cred := &mockCredentialStore{HasPermOK: true}
+
+	s := New("127.0.0.1:4001", store, cluster, proxy.New(store, cluster), cred)
+
+	// Test with JSON body but empty ID (should behave like no JSON)
+	reqBody := `{"id": ""}`
+	req, err := http.NewRequest("POST", "/leader", strings.NewReader(reqBody))
+	if err != nil {
+		t.Fatalf("failed to create POST request: %s", err.Error())
+	}
+	req.Header.Set("Content-Type", "application/json")
+	rr := httptest.NewRecorder()
+	s.ServeHTTP(rr, req)
+
+	if rr.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", rr.Code)
+	}
+
+	if !stepdownCalled {
+		t.Fatalf("expected stepdown to be called")
+	}
+
+	if stepdownID != "" {
+		t.Fatalf("expected stepdown to be called with empty id, got '%s'", stepdownID)
+	}
+}
+
+func Test_Leader_POST_JSON_InvalidJSON(t *testing.T) {
+	store := &MockStore{leaderAddr: "127.0.0.1:8001"}
+	cluster := &mockClusterService{apiAddr: "http://127.0.0.1:4001"}
+	cred := &mockCredentialStore{HasPermOK: true}
+
+	s := New("127.0.0.1:4001", store, cluster, proxy.New(store, cluster), cred)
+
+	// Test with invalid JSON
+	reqBody := `{"id": "node1"`
+	req, err := http.NewRequest("POST", "/leader", strings.NewReader(reqBody))
+	if err != nil {
+		t.Fatalf("failed to create POST request: %s", err.Error())
+	}
+	req.Header.Set("Content-Type", "application/json")
+	rr := httptest.NewRecorder()
+	s.ServeHTTP(rr, req)
+
+	if rr.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400, got %d", rr.Code)
+	}
+
+	if !strings.Contains(rr.Body.String(), "invalid JSON") {
+		t.Fatalf("expected error message to contain 'invalid JSON', got %s", rr.Body.String())
+	}
+}
+
+func Test_Leader_POST_JSON_ForwardToLeader(t *testing.T) {
+	stepdownCalled := false
+	var forwardedRequest *command.StepdownRequest
+	store := &MockStore{
+		leaderAddr: "127.0.0.1:8001",
+		stepdownFn: func(wait bool, id string) error {
+			return store.ErrNotLeader
+		},
+	}
+	cluster := &mockClusterService{
+		apiAddr: "http://127.0.0.1:4001",
+		stepdownFn: func(sr *command.StepdownRequest, nodeAddr string, t time.Duration) error {
+			stepdownCalled = true
+			forwardedRequest = sr
+			return nil
+		},
+	}
+	cred := &mockCredentialStore{HasPermOK: true}
+
+	s := New("127.0.0.1:4001", store, cluster, proxy.New(store, cluster), cred)
+
+	// Test forwarding with target node ID
+	reqBody := `{"id": "node1"}`
+	req, err := http.NewRequest("POST", "/leader?wait", strings.NewReader(reqBody))
+	if err != nil {
+		t.Fatalf("failed to create POST request: %s", err.Error())
+	}
+	req.Header.Set("Content-Type", "application/json")
+	rr := httptest.NewRecorder()
+	s.ServeHTTP(rr, req)
+
+	if rr.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", rr.Code)
+	}
+
+	if !stepdownCalled {
+		t.Fatalf("expected stepdown to be forwarded to leader")
+	}
+
+	if forwardedRequest == nil {
+		t.Fatalf("expected stepdown request to be forwarded")
+	}
+
+	if forwardedRequest.Id != "node1" {
+		t.Fatalf("expected forwarded request to have id='node1', got '%s'", forwardedRequest.Id)
+	}
+
+	if !forwardedRequest.Wait {
+		t.Fatalf("expected forwarded request to have wait=true")
+	}
+}
+
+func Test_SQLAnalyze_InvalidJSON(t *testing.T) {
+	host := newSQLAnalyzeHost(t)
+	client := &http.Client{}
+
+	resp, err := client.Post(host+"/db/sql", "application/json",
+		strings.NewReader(`not json`))
+	if err != nil {
+		t.Fatalf("failed to make request: %s", err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusBadRequest {
+		t.Fatalf("expected StatusBadRequest for invalid JSON, got %d", resp.StatusCode)
+	}
+}
+
+func Test_SQLAnalyze_Random(t *testing.T) {
+	host := newSQLAnalyzeHost(t)
+	client := &http.Client{}
+
+	resp, err := client.Post(host+"/db/sql", "application/json",
+		strings.NewReader(`["INSERT INTO foo VALUES(RANDOM())"]`))
+	if err != nil {
+		t.Fatalf("failed to make request: %s", err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("expected StatusOK, got %d", resp.StatusCode)
+	}
+
+	r := mustGetFirstResult(t, mustReadBody(t, resp))
+
+	if r["original"] != "INSERT INTO foo VALUES(RANDOM())" {
+		t.Fatalf("unexpected original: %v", r["original"])
+	}
+
+	// RANDOM() should be replaced with an integer (positive or negative)
+	rewritten := r["rewritten"].(string)
+	if !regexp.MustCompile(`VALUES \(-?\d+\)`).MatchString(rewritten) {
+		t.Fatalf("expected RANDOM() to be replaced with integer, got: %s", rewritten)
+	}
+}
+
+func Test_SQLAnalyze_RandomBlob(t *testing.T) {
+	host := newSQLAnalyzeHost(t)
+	client := &http.Client{}
+
+	resp, err := client.Post(host+"/db/sql", "application/json",
+		strings.NewReader(`["INSERT INTO foo VALUES(RANDOMBLOB(16))"]`))
+	if err != nil {
+		t.Fatalf("failed to make request: %s", err)
+	}
+	defer resp.Body.Close()
+
+	r := mustGetFirstResult(t, mustReadBody(t, resp))
+
+	if r["original"] != "INSERT INTO foo VALUES(RANDOMBLOB(16))" {
+		t.Fatalf("unexpected original: %v", r["original"])
+	}
+
+	// RANDOMBLOB(16) should be replaced with x'...' containing 32 hex chars (16 bytes)
+	rewritten := r["rewritten"].(string)
+	if !regexp.MustCompile(`VALUES \(x'[A-F0-9]{32}'\)`).MatchString(rewritten) {
+		t.Fatalf("expected RANDOMBLOB(16) to be replaced with 32-char hex blob, got: %s", rewritten)
+	}
+}
+
+func Test_SQLAnalyze_TimeFunctions(t *testing.T) {
+	host := newSQLAnalyzeHost(t)
+	client := &http.Client{}
+
+	// Julian day pattern: a decimal number like 2461077.397825
+	julianDayPattern := `\d{7}\.\d+`
+
+	testCases := []struct {
+		name     string
+		input    string
+		funcName string
+	}{
+		{"datetime", `["INSERT INTO foo VALUES(datetime('now'))"]`, "datetime"},
+		{"date", `["INSERT INTO foo VALUES(date('now'))"]`, "date"},
+		{"time", `["INSERT INTO foo VALUES(time('now'))"]`, "time"},
+		{"julianday", `["INSERT INTO foo VALUES(julianday('now'))"]`, "julianday"},
+		{"unixepoch", `["INSERT INTO foo VALUES(unixepoch('now'))"]`, "unixepoch"},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			resp, err := client.Post(host+"/db/sql", "application/json",
+				strings.NewReader(tc.input))
+			if err != nil {
+				t.Fatalf("failed to make request: %s", err)
+			}
+			defer resp.Body.Close()
+
+			r := mustGetFirstResult(t, mustReadBody(t, resp))
+
+			// Check that 'now' was replaced with a Julian day number
+			rewritten := r["rewritten"].(string)
+			funcPattern := regexp.MustCompile(tc.funcName + `\(` + julianDayPattern + `\)`)
+			if !funcPattern.MatchString(rewritten) {
+				t.Fatalf("expected %s('now') to be replaced with Julian day, got: %s", tc.funcName, rewritten)
+			}
+		})
+	}
+}
+
+func Test_SQLAnalyze_Strftime(t *testing.T) {
+	host := newSQLAnalyzeHost(t)
+	client := &http.Client{}
+
+	resp, err := client.Post(host+"/db/sql", "application/json",
+		strings.NewReader(`["INSERT INTO foo VALUES(strftime('%Y-%m-%d', 'now'))"]`))
+	if err != nil {
+		t.Fatalf("failed to make request: %s", err)
+	}
+	defer resp.Body.Close()
+
+	r := mustGetFirstResult(t, mustReadBody(t, resp))
+
+	// strftime('%Y-%m-%d', 'now') -> strftime('%Y-%m-%d', JULIAN_DAY)
+	rewritten := r["rewritten"].(string)
+	if !regexp.MustCompile(`strftime\('%Y-%m-%d', \d{7}\.\d+\)`).MatchString(rewritten) {
+		t.Fatalf("expected strftime 'now' to be replaced with Julian day, got: %s", rewritten)
+	}
+}
+
+func Test_SQLAnalyze_Timediff(t *testing.T) {
+	host := newSQLAnalyzeHost(t)
+	client := &http.Client{}
+
+	resp, err := client.Post(host+"/db/sql", "application/json",
+		strings.NewReader(`["INSERT INTO foo VALUES(timediff('now', '2020-01-01'))"]`))
+	if err != nil {
+		t.Fatalf("failed to make request: %s", err)
+	}
+	defer resp.Body.Close()
+
+	r := mustGetFirstResult(t, mustReadBody(t, resp))
+
+	// timediff('now', '2020-01-01') -> timediff(JULIAN_DAY, '2020-01-01')
+	rewritten := r["rewritten"].(string)
+	if !regexp.MustCompile(`timediff\(\d{7}\.\d+, '2020-01-01'\)`).MatchString(rewritten) {
+		t.Fatalf("expected timediff 'now' to be replaced with Julian day, got: %s", rewritten)
+	}
+}
+
+func Test_SQLAnalyze_OrderByRandom(t *testing.T) {
+	host := newSQLAnalyzeHost(t)
+	client := &http.Client{}
+
+	// ORDER BY RANDOM() should NOT be rewritten (per documentation)
+	resp, err := client.Post(host+"/db/sql", "application/json",
+		strings.NewReader(`["SELECT * FROM foo ORDER BY RANDOM()"]`))
+	if err != nil {
+		t.Fatalf("failed to make request: %s", err)
+	}
+	defer resp.Body.Close()
+
+	r := mustGetFirstResult(t, mustReadBody(t, resp))
+
+	// RANDOM() should still be present in the output
+	rewritten := r["rewritten"].(string)
+	if !strings.Contains(rewritten, "RANDOM()") {
+		t.Fatalf("expected RANDOM() to remain in ORDER BY clause, got: %s", rewritten)
+	}
+}
+
+func Test_SQLAnalyze_NoRewriteRandom(t *testing.T) {
+	host := newSQLAnalyzeHost(t)
+	client := &http.Client{}
+
+	resp, err := client.Post(host+"/db/sql?norwrandom", "application/json",
+		strings.NewReader(`["INSERT INTO foo VALUES(RANDOM())"]`))
+	if err != nil {
+		t.Fatalf("failed to make request: %s", err)
+	}
+	defer resp.Body.Close()
+
+	r := mustGetFirstResult(t, mustReadBody(t, resp))
+
+	rewritten := r["rewritten"].(string)
+	if !strings.Contains(rewritten, "RANDOM()") {
+		t.Fatalf("expected RANDOM() to remain when norwrandom set, got: %s", rewritten)
+	}
+}
+
+func Test_SQLAnalyze_NoRewriteTime(t *testing.T) {
+	host := newSQLAnalyzeHost(t)
+	client := &http.Client{}
+
+	resp, err := client.Post(host+"/db/sql?norwtime", "application/json",
+		strings.NewReader(`["INSERT INTO foo VALUES(datetime('now'))"]`))
+	if err != nil {
+		t.Fatalf("failed to make request: %s", err)
+	}
+	defer resp.Body.Close()
+
+	r := mustGetFirstResult(t, mustReadBody(t, resp))
+
+	rewritten := r["rewritten"].(string)
+	if !strings.Contains(rewritten, "'now'") {
+		t.Fatalf("expected 'now' to remain when norwtime set, got: %s", rewritten)
+	}
+}
+
+func Test_SQLAnalyze_ParseError(t *testing.T) {
+	host := newSQLAnalyzeHost(t)
+	client := &http.Client{}
+
+	resp, err := client.Post(host+"/db/sql", "application/json",
+		strings.NewReader(`["SLECT * FORM foo"]`))
+	if err != nil {
+		t.Fatalf("failed to make request: %s", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("expected StatusOK even for parse errors, got %d", resp.StatusCode)
+	}
+
+	r := mustGetFirstResult(t, mustReadBody(t, resp))
+
+	if r["error"] == nil || r["error"] == "" {
+		t.Fatalf("expected error field to be set for invalid SQL")
+	}
+	if r["original"] != "SLECT * FORM foo" {
+		t.Fatalf("expected original to be preserved even on error")
+	}
+}
+
+func Test_SQLAnalyze_MethodNotAllowed(t *testing.T) {
+	host := newSQLAnalyzeHost(t)
+	client := &http.Client{}
+
+	req, err := http.NewRequest("DELETE", host+"/db/sql", nil)
+	if err != nil {
+		t.Fatalf("failed to create request: %s", err)
+	}
+	resp, err := client.Do(req)
+	if err != nil {
+		t.Fatalf("failed to make request: %s", err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusMethodNotAllowed {
+		t.Fatalf("expected StatusMethodNotAllowed, got %d", resp.StatusCode)
+	}
+}
+
+func Test_SQLAnalyze_GET(t *testing.T) {
+	host := newSQLAnalyzeHost(t)
+	client := &http.Client{}
+
+	resp, err := client.Get(host + "/db/sql?q=" + url.QueryEscape("INSERT INTO foo VALUES(RANDOM())"))
+	if err != nil {
+		t.Fatalf("failed to make request: %s", err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("expected StatusOK, got %d", resp.StatusCode)
+	}
+
+	r := mustGetFirstResult(t, mustReadBody(t, resp))
+
+	if r["original"] != "INSERT INTO foo VALUES(RANDOM())" {
+		t.Fatalf("unexpected original: %v", r["original"])
+	}
+
+	rewritten := r["rewritten"].(string)
+	if !regexp.MustCompile(`VALUES \(-?\d+\)`).MatchString(rewritten) {
+		t.Fatalf("expected RANDOM() to be replaced with integer, got: %s", rewritten)
+	}
+}
+
+func Test_SQLAnalyze_GET_NoQuery(t *testing.T) {
+	host := newSQLAnalyzeHost(t)
+	client := &http.Client{}
+
+	resp, err := client.Get(host + "/db/sql")
+	if err != nil {
+		t.Fatalf("failed to make request: %s", err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusBadRequest {
+		t.Fatalf("expected StatusBadRequest for missing query, got %d", resp.StatusCode)
+	}
+}
+
+func Test_SQLAnalyze_MultipleStatements(t *testing.T) {
+	host := newSQLAnalyzeHost(t)
+	client := &http.Client{}
+
+	resp, err := client.Post(host+"/db/sql", "application/json",
+		strings.NewReader(`["INSERT INTO foo VALUES(RANDOM())", "INSERT INTO bar VALUES(datetime('now'))"]`))
+	if err != nil {
+		t.Fatalf("failed to make request: %s", err)
+	}
+	defer resp.Body.Close()
+
+	body := mustReadBody(t, resp)
+	var result map[string]any
+	if err := json.Unmarshal([]byte(body), &result); err != nil {
+		t.Fatalf("failed to unmarshal: %s", err)
+	}
+
+	results := result["results"].([]any)
+	if len(results) != 2 {
+		t.Fatalf("expected 2 results, got %d", len(results))
+	}
+}
+
+type MockStore struct {
+	executeFn   func(er *command.ExecuteRequest) ([]*command.ExecuteQueryResponse, uint64, error)
+	queryFn     func(qr *command.QueryRequest) ([]*command.QueryRows, uint64, error)
+	requestFn   func(eqr *command.ExecuteQueryRequest) ([]*command.ExecuteQueryResponse, uint64, uint64, error)
+	backupFn    func(br *command.BackupRequest, dst io.Writer) error
+	loadFn      func(lr *command.LoadRequest) error
+	snapshotFn  func(n uint64) error
+	reapFn      func() (int, int, error)
+	readFromFn  func(r io.Reader) (int64, error)
+	committedFn func(timeout time.Duration) (uint64, error)
+	stepdownFn  func(wait bool, id string) error
+	leaderAddr  string
+	notReady    bool // Default value is true, easier to test.
+}
+
+func (m *MockStore) Execute(ctx context.Context, er *command.ExecuteRequest) ([]*command.ExecuteQueryResponse, uint64, error) {
+	if m.executeFn != nil {
+		return m.executeFn(er)
+	}
+	return nil, 0, nil
+}
+
+func (m *MockStore) Query(ctx context.Context, qr *command.QueryRequest) ([]*command.QueryRows, command.ConsistencyLevel, uint64, error) {
+	if m.queryFn != nil {
+		rows, idx, err := m.queryFn(qr)
+		return rows, command.ConsistencyLevel_NONE, idx, err
+	}
+	return nil, command.ConsistencyLevel_NONE, 0, nil
+}
+
+func (m *MockStore) Request(ctx context.Context, eqr *command.ExecuteQueryRequest) ([]*command.ExecuteQueryResponse, uint64, uint64, error) {
+	if m.requestFn != nil {
+		return m.requestFn(eqr)
+	}
+	return nil, 0, 0, nil
+}
+
+func (m *MockStore) Join(jr *command.JoinRequest) error {
+	return nil
+}
+
+func (m *MockStore) Notify(nr *command.NotifyRequest) error {
+	return nil
+}
+
+func (m *MockStore) Remove(ctx context.Context, rn *command.RemoveNodeRequest) error {
+	return nil
+}
+
+func (m *MockStore) Leader() (*store.Server, error) {
+	if m.leaderAddr == "" {
+		return nil, store.ErrLeaderNotFound
+	}
+	return &store.Server{
+		Addr: m.leaderAddr,
+	}, nil
+}
+
+func (m *MockStore) Ready() bool {
+	return !m.notReady
+}
+
+func (m *MockStore) Committed(timeout time.Duration) (uint64, error) {
+	if m.committedFn != nil {
+		return m.committedFn(timeout)
+	}
+	return 0, nil
+}
+
+func (m *MockStore) Stats() (map[string]any, error) {
+	return nil, nil
+}
+
+func (m *MockStore) Nodes() ([]*store.Server, error) {
+	return nil, nil
+}
+
+func (m *MockStore) Backup(ctx context.Context, br *command.BackupRequest, w io.Writer) error {
+	if m.backupFn == nil {
+		return nil
+	}
+	return m.backupFn(br, w)
+}
+
+func (m *MockStore) Load(ctx context.Context, lr *command.LoadRequest) error {
+	if m.loadFn != nil {
+		return m.loadFn(lr)
+	}
+	return nil
+}
+
+func (m *MockStore) Snapshot(n uint64) error {
+	if m.snapshotFn != nil {
+		return m.snapshotFn(n)
+	}
+	return nil
+}
+
+func (m *MockStore) Reap() (int, int, error) {
+	if m.reapFn != nil {
+		return m.reapFn()
+	}
+	return 0, 0, nil
+}
+
+func (m *MockStore) ReadFrom(r io.Reader) (int64, error) {
+	if m.readFromFn != nil {
+		return m.readFromFn(r)
+	}
+	return 0, nil
+}
+
+func (m *MockStore) Stepdown(wait bool, id string) error {
+	if m.stepdownFn != nil {
+		return m.stepdownFn(wait, id)
+	}
+	return nil
+}
+
+func (m *MockStore) LeaderAddr() (string, error) {
+	return m.leaderAddr, nil
+}
+
+type mockClusterService struct {
+	apiAddr      string
+	executeFn    func(er *command.ExecuteRequest, addr string, t time.Duration) ([]*command.ExecuteQueryResponse, uint64, error)
+	queryFn      func(qr *command.QueryRequest, addr string, t time.Duration) ([]*command.QueryRows, uint64, error)
+	requestFn    func(eqr *command.ExecuteQueryRequest, nodeAddr string, timeout time.Duration) ([]*command.ExecuteQueryResponse, uint64, uint64, error)
+	backupFn     func(br *command.BackupRequest, addr string, t time.Duration, w io.Writer) error
+	loadFn       func(lr *command.LoadRequest, addr string, t time.Duration) error
+	removeNodeFn func(rn *command.RemoveNodeRequest, nodeAddr string, t time.Duration) error
+	stepdownFn   func(sr *command.StepdownRequest, nodeAddr string, t time.Duration) error
+}
+
+func (m *mockClusterService) GetNodeMeta(ctx context.Context, a string, r int, t time.Duration) (*cluster.NodeMeta, error) {
+	return &cluster.NodeMeta{
+		Url: m.apiAddr,
+	}, nil
+}
+
+func (m *mockClusterService) Execute(ctx context.Context, er *command.ExecuteRequest, addr string, creds *cluster.Credentials, t time.Duration, r int) ([]*command.ExecuteQueryResponse, uint64, error) {
+	if m.executeFn != nil {
+		return m.executeFn(er, addr, t)
+	}
+	return nil, 0, nil
+}
+
+func (m *mockClusterService) Query(ctx context.Context, qr *command.QueryRequest, addr string, creds *cluster.Credentials, t time.Duration, r int) ([]*command.QueryRows, uint64, error) {
+	if m.queryFn != nil {
+		return m.queryFn(qr, addr, t)
+	}
+	return nil, 0, nil
+}
+
+func (m *mockClusterService) Request(ctx context.Context, eqr *command.ExecuteQueryRequest, nodeAddr string, creds *cluster.Credentials, timeout time.Duration, r int) ([]*command.ExecuteQueryResponse, uint64, uint64, error) {
+	if m.requestFn != nil {
+		return m.requestFn(eqr, nodeAddr, timeout)
+	}
+	return nil, 0, 0, nil
+}
+
+func (m *mockClusterService) Backup(ctx context.Context, br *command.BackupRequest, addr string, creds *cluster.Credentials, t time.Duration, w io.Writer) error {
+	if m.backupFn != nil {
+		return m.backupFn(br, addr, t, w)
+	}
+	return nil
+}
+
+func (m *mockClusterService) Load(ctx context.Context, lr *command.LoadRequest, nodeAddr string, creds *cluster.Credentials, timeout time.Duration, r int) error {
+	if m.loadFn != nil {
+		return m.loadFn(lr, nodeAddr, timeout)
+	}
+	return nil
+}
+
+func (m *mockClusterService) RemoveNode(ctx context.Context, rn *command.RemoveNodeRequest, addr string, creds *cluster.Credentials, t time.Duration) error {
+	if m.removeNodeFn != nil {
+		return m.removeNodeFn(rn, addr, t)
+	}
+	return nil
+}
+
+func (m *mockClusterService) Stepdown(ctx context.Context, sr *command.StepdownRequest, addr string, creds *cluster.Credentials, t time.Duration) error {
+	if m.stepdownFn != nil {
+		return m.stepdownFn(sr, addr, t)
+	}
+	return nil
+}
+
+type mockCredentialStore struct {
+	HasPermOK bool
+	aaFunc    func(username, password, perm string) bool
+}
+
+func (m *mockCredentialStore) AA(username, password, perm string) bool {
+	if m == nil {
+		return true
+	}
+
+	if m.aaFunc != nil {
+		return m.aaFunc(username, password, perm)
+	}
+	return m.HasPermOK
+}
+
+func (m *mockClusterService) Stats() (map[string]any, error) {
+	return nil, nil
+}
+
+type mockStatusReporter struct {
+}
+
+func (m *mockStatusReporter) Stats() (map[string]any, error) {
+	return nil, nil
+}
+
+func mustNewHTTPRequest(url string) *http.Request {
+	req, err := http.NewRequest("GET", url, nil)
+	if err != nil {
+		panic("failed to create HTTP request for testing")
+	}
+	return req
+}
+
+func mustURLParse(s string) *url.URL {
+	u, err := url.Parse(s)
+	if err != nil {
+		panic("failed to URL parse string")
+	}
+	return u
+}
+
+func mustParseDuration(d string) time.Duration {
+	if dur, err := time.ParseDuration(d); err != nil {
+		panic(fmt.Sprintf("failed to parse duration %s: %s", d, err))
+	} else {
+		return dur
+	}
+}
+
+// mustGetFirstResult is a helper to extract the first result from a JSON response.
+func mustGetFirstResult(t *testing.T, body string) map[string]any {
+	t.Helper()
+	var result map[string]any
+	if err := json.Unmarshal([]byte(body), &result); err != nil {
+		t.Fatalf("failed to unmarshal response: %s", err)
+	}
+	results, ok := result["results"].([]any)
+	if !ok || len(results) < 1 {
+		t.Fatalf("expected at least 1 result, got %v", result)
+	}
+	return results[0].(map[string]any)
+}
+
+func mustGetQueryParams(req *http.Request) QueryParams {
+	qp, err := NewQueryParams(req)
+	if err != nil {
+		panic("failed to get query params")
+	}
+	return qp
+}
+
+func mustReadBody(t *testing.T, resp *http.Response) string {
+	t.Helper()
+	b, err := io.ReadAll(resp.Body)
+	if err != nil {
+		t.Fatalf("failed to read response body: %s", err)
+	}
+	return string(b)
+}
+
+// newSQLAnalyzeHost creates a test HTTP service and returns the host URL.
+// The service is automatically cleaned up when the test finishes.
+func newSQLAnalyzeHost(t *testing.T) string {
+	t.Helper()
+	m := &MockStore{
+		leaderAddr: "foo:1234",
+	}
+	c := &mockClusterService{}
+	s := New("127.0.0.1:0", m, c, proxy.New(m, c), nil)
+	if err := s.Start(); err != nil {
+		t.Fatalf("failed to start service: %v", err)
+	}
+	t.Cleanup(func() { s.Close() })
+	return fmt.Sprintf("http://%s", s.Addr().String())
+}

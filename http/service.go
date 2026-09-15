@@ -1,0 +1,1975 @@
+// Package http provides the HTTP server for accessing the distributed database.
+package http
+
+import (
+	"bufio"
+	"context"
+	"crypto/tls"
+	"encoding/json"
+	"errors"
+	"expvar"
+	"fmt"
+	"io"
+	"log"
+	"net"
+	"net/http"
+	"net/http/pprof"
+	"os"
+	"runtime"
+	"strings"
+	"sync"
+	"sync/atomic"
+	"time"
+
+	"github.com/rqlite/rqlite/v10/auth"
+	clstrPB "github.com/rqlite/rqlite/v10/cluster/proto"
+	"github.com/rqlite/rqlite/v10/command/encoding"
+	"github.com/rqlite/rqlite/v10/command/proto"
+	"github.com/rqlite/rqlite/v10/command/sql"
+	"github.com/rqlite/rqlite/v10/db"
+	"github.com/rqlite/rqlite/v10/http/console"
+	"github.com/rqlite/rqlite/v10/http/licenses"
+	"github.com/rqlite/rqlite/v10/internal/rtls"
+	"github.com/rqlite/rqlite/v10/proxy"
+	"github.com/rqlite/rqlite/v10/queue"
+	"github.com/rqlite/rqlite/v10/store"
+	rsql "github.com/rqlite/sql"
+)
+
+const kubernetesServiceHostEnv = "KUBERNETES_SERVICE_HOST"
+
+type ResultsError interface {
+	Error() string
+	IsAuthorized() bool
+}
+
+// Store is the interface the Raft-based database must implement.
+type Store interface {
+	// Leader returns the Leader of the cluster
+	Leader() (*store.Server, error)
+
+	// Nodes returns the slice of store.Servers in the cluster
+	Nodes() ([]*store.Server, error)
+
+	// Ready returns whether the Store is ready to service requests.
+	Ready() bool
+
+	// Committed blocks until the local commit index is greater than or
+	// equal to the Leader index, as checked when the function is called.
+	Committed(timeout time.Duration) (uint64, error)
+
+	// Stats returns stats on the Store.
+	Stats() (map[string]any, error)
+
+	// Snapshot triggers a Raft Snapshot and Log Truncation.
+	Snapshot(n uint64) error
+
+	// Reap reaps old snapshots, returning the number of snapshots reaped
+	// and WAL files checkpointed.
+	Reap() (int, int, error)
+
+	// ReadFrom reads and loads a SQLite database into the node, initially bypassing
+	// the Raft system. It then triggers a Raft snapshot, which will then make
+	// Raft aware of the new data.
+	ReadFrom(r io.Reader) (int64, error)
+}
+
+// GetNodeMetaer is the interface that wraps the GetNodeMeta method.
+// GetNodeMeta returns the HTTP API URL for the node at the given Raft address.
+type GetNodeMetaer interface {
+	GetNodeMeta(ctx context.Context, addr string, retries int, timeout time.Duration) (*clstrPB.NodeMeta, error)
+}
+
+// Cluster is the interface node API services must provide
+type Cluster interface {
+	GetNodeMetaer
+
+	// Stats returns stats on the Cluster.
+	Stats() (map[string]any, error)
+}
+
+// CredentialStore is the interface credential stores must support.
+type CredentialStore interface {
+	// AA authenticates and checks authorization for the given perm.
+	AA(username, password, perm string) bool
+}
+
+// StatusReporter is the interface status providers must implement.
+type StatusReporter interface {
+	Stats() (map[string]any, error)
+}
+
+// DBResults stores either an Execute result, a Query result, or
+// an ExecuteQuery result.
+type DBResults struct {
+	ExecuteQueryResponse []*proto.ExecuteQueryResponse
+	QueryRows            []*proto.QueryRows
+
+	AssociativeJSON bool // Render in associative form
+	BlobsAsArrays   bool // Render BLOB data as byte arrays
+}
+
+// Responser is the interface response objects must implement.
+type Responser interface {
+	SetTime()
+}
+
+// MarshalJSON implements the JSON Marshaler interface.
+func (d *DBResults) MarshalJSON() ([]byte, error) {
+	enc := encoding.Encoder{
+		Associative:       d.AssociativeJSON,
+		BlobsAsByteArrays: d.BlobsAsArrays,
+	}
+
+	if d.QueryRows != nil {
+		return enc.JSONMarshal(d.QueryRows)
+	} else if d.ExecuteQueryResponse != nil {
+		return enc.JSONMarshal(d.ExecuteQueryResponse)
+	}
+	return json.Marshal(make([]any, 0))
+}
+
+// Response represents a response from the HTTP service.
+type Response struct {
+	Results     *DBResults `json:"results,omitempty"`
+	Error       string     `json:"error,omitempty"`
+	Time        float64    `json:"time,omitempty"`
+	SequenceNum int64      `json:"sequence_number,omitempty"`
+	RaftIndex   uint64     `json:"raft_index,omitempty"`
+
+	start time.Time
+	end   time.Time
+}
+
+// SetTime sets the Time attribute of the response. This way it will be present
+// in the serialized JSON version.
+func (r *Response) SetTime() {
+	r.Time = r.end.Sub(r.start).Seconds()
+}
+
+// NewResponse returns a new instance of response.
+func NewResponse() *Response {
+	return &Response{
+		Results: &DBResults{},
+		start:   time.Now(),
+	}
+}
+
+// stats captures stats for the HTTP service.
+var stats *expvar.Map
+
+const (
+	numLeaderNotFound                 = "leader_not_found"
+	numUI                             = "ui"
+	numExecutions                     = "executions"
+	numExecuteStmtsRx                 = "execute_stmts_rx"
+	numQueuedExecutions               = "queued_executions"
+	numQueuedExecutionsOK             = "queued_executions_ok"
+	numQueuedExecutionsStmtsRx        = "queued_executions_num_stmts_rx"
+	numQueuedExecutionsStmtsTx        = "queued_executions_num_stmts_tx"
+	numQueuedExecutionsNoLeader       = "queued_executions_no_leader"
+	numQueuedExecutionsNotLeader      = "queued_executions_not_leader"
+	numQueuedExecutionsLeadershipLost = "queued_executions_leadership_lost"
+	numQueuedExecutionsUnknownError   = "queued_executions_unknown_error"
+	numQueuedExecutionsFailed         = "queued_executions_failed"
+	numQueuedExecutionsWait           = "queued_executions_wait"
+	numQueuedExecutionsWaitTimeout    = "queued_executions_wait_timeout"
+	numQueries                        = "queries"
+	numQueryStmtsRx                   = "query_stmts_rx"
+	numRequests                       = "requests"
+	numRequestStmtsRx                 = "request_stmts_rx"
+	numReadyz                         = "num_readyz"
+	numStatus                         = "num_status"
+	numBackups                        = "backups"
+	numLoad                           = "loads"
+	numBoot                           = "boot"
+	numSnapshots                      = "user_snapshots"
+	numReaps                          = "user_reaps"
+	numSQLAnalyze                     = "sql_analyze"
+	numAuthOK                         = "auth_ok"
+	numAuthFail                       = "auth_fail"
+	numTLSCertFetched                 = "tls_cert_fetched"
+
+	// Default timeout for cluster communications.
+	defaultTimeout = 30 * time.Second
+
+	// Default timeout for linearizable reads.
+	defaultLinearTimeout = 10 * time.Second
+
+	// VersionHTTPHeader is the HTTP header key for the version.
+	VersionHTTPHeader = "X-RQLITE-VERSION"
+
+	// ServedByHTTPHeader is the HTTP header used to report which
+	// node (by node Raft address) actually served the request if
+	// it wasn't served by this node.
+	ServedByHTTPHeader = "X-RQLITE-SERVED-BY"
+
+	// AllowOriginHeader is the HTTP header for allowing CORS compliant access from certain origins
+	AllowOriginHeader = "Access-Control-Allow-Origin"
+
+	// AllowMethodsHeader is the HTTP header for supporting the correct methods
+	AllowMethodsHeader = "Access-Control-Allow-Methods"
+
+	// AllowHeadersHeader is the HTTP header for supporting the correct request headers
+	AllowHeadersHeader = "Access-Control-Allow-Headers"
+
+	// AllowCredentialsHeader is the HTTP header for supporting specifying credentials
+	AllowCredentialsHeader = "Access-Control-Allow-Credentials"
+)
+
+func init() {
+	stats = expvar.NewMap("http")
+	ResetStats()
+}
+
+// ResetStats resets the expvar stats for this module. Mostly for test purposes.
+func ResetStats() {
+	stats.Init()
+	stats.Add(numLeaderNotFound, 0)
+	stats.Add(numUI, 0)
+	stats.Add(numExecutions, 0)
+	stats.Add(numExecuteStmtsRx, 0)
+	stats.Add(numQueuedExecutions, 0)
+	stats.Add(numQueuedExecutionsOK, 0)
+	stats.Add(numQueuedExecutionsStmtsRx, 0)
+	stats.Add(numQueuedExecutionsStmtsTx, 0)
+	stats.Add(numQueuedExecutionsNoLeader, 0)
+	stats.Add(numQueuedExecutionsNotLeader, 0)
+	stats.Add(numQueuedExecutionsLeadershipLost, 0)
+	stats.Add(numQueuedExecutionsUnknownError, 0)
+	stats.Add(numQueuedExecutionsFailed, 0)
+	stats.Add(numQueuedExecutionsWait, 0)
+	stats.Add(numQueuedExecutionsWaitTimeout, 0)
+	stats.Add(numQueries, 0)
+	stats.Add(numQueryStmtsRx, 0)
+	stats.Add(numRequests, 0)
+	stats.Add(numRequestStmtsRx, 0)
+	stats.Add(numReadyz, 0)
+	stats.Add(numStatus, 0)
+	stats.Add(numBackups, 0)
+	stats.Add(numLoad, 0)
+	stats.Add(numBoot, 0)
+	stats.Add(numSnapshots, 0)
+	stats.Add(numReaps, 0)
+	stats.Add(numSQLAnalyze, 0)
+	stats.Add(numAuthOK, 0)
+	stats.Add(numAuthFail, 0)
+	stats.Add(numTLSCertFetched, 0)
+}
+
+// Service provides HTTP service.
+type Service struct {
+	httpServer http.Server
+	closeCh    chan struct{}
+	addr       string       // Bind address of the HTTP service.
+	ln         net.Listener // Service listener
+
+	uiHandler http.Handler
+
+	store Store // The Raft-backed database store.
+	proxy *proxy.Proxy
+
+	queueDone chan struct{}
+	stmtQueue *queue.Queue[*proto.Statement] // Queue for queued executes
+
+	cluster Cluster // The Cluster service.
+
+	start      time.Time // Start up time.
+	lastBackup time.Time // Time of last successful backup.
+
+	statusMu sync.RWMutex
+	statuses map[string]StatusReporter
+
+	CACertFile             string // Path to x509 CA certificate used to verify certificates.
+	CertFile               string // Path to server's own x509 certificate.
+	KeyFile                string // Path to server's own x509 private key.
+	ClientVerify           bool   // Whether client certificates should verified.
+	ClientVerifyCommonName string // If non-empty, required Common Name on client certificates.
+	certReloader           *rtls.CertReloader
+	tlsConfig              *tls.Config
+
+	aoMu        sync.RWMutex
+	allowOrigin string // Value to set for Access-Control-Allow-Origin
+
+	DefaultQueueCap     int
+	DefaultQueueBatchSz int
+	DefaultQueueTimeout time.Duration
+	DefaultQueueTx      bool
+
+	seqNum int64 // Last sequence number written OK.
+
+	credentialStore CredentialStore
+
+	BuildInfo map[string]any
+
+	logger *log.Logger
+}
+
+// New returns an uninitialized HTTP service. If credentials is nil, then
+// the service performs no authentication and authorization checks.
+func New(addr string, store Store, cluster Cluster, pxy *proxy.Proxy, credentials CredentialStore) *Service {
+	s := &Service{
+		addr:                addr,
+		store:               store,
+		proxy:               pxy,
+		DefaultQueueCap:     1024,
+		DefaultQueueBatchSz: 128,
+		DefaultQueueTimeout: 100 * time.Millisecond,
+		cluster:             cluster,
+		start:               time.Now(),
+		statuses:            make(map[string]StatusReporter),
+		credentialStore:     credentials,
+		logger:              log.New(os.Stderr, "[http] ", log.LstdFlags),
+	}
+	s.uiHandler = http.StripPrefix("/console/", http.FileServerFS(console.Assets))
+	return s
+}
+
+// Start starts the service.
+func (s *Service) Start() error {
+	s.httpServer = http.Server{
+		Handler: s,
+	}
+
+	var ln net.Listener
+	var err error
+	if s.CertFile == "" || s.KeyFile == "" {
+		ln, err = net.Listen("tcp", s.addr)
+		if err != nil {
+			return err
+		}
+	} else {
+		mTLSState := rtls.MTLSStateDisabled
+		if s.ClientVerify {
+			mTLSState = rtls.MTLSStateEnabled
+		}
+		s.certReloader, err = rtls.NewCertReloader(s.CertFile, s.KeyFile)
+		if err != nil {
+			return err
+		}
+
+		// Wrap the GetCertificate function so we update the stats.
+		getCertFunc := func() (*tls.Certificate, error) {
+			stats.Add(numTLSCertFetched, 1)
+			return s.certReloader.GetCertificate()
+		}
+
+		s.tlsConfig, err = rtls.CreateServerConfigWithFunc(getCertFunc, s.CACertFile, mTLSState, s.ClientVerifyCommonName)
+		if err != nil {
+			return err
+		}
+		ln, err = tls.Listen("tcp", s.addr, s.tlsConfig)
+		if err != nil {
+			return err
+		}
+		var b strings.Builder
+		b.WriteString(fmt.Sprintf("secure HTTPS server enabled with cert %s, key %s", s.CertFile, s.KeyFile))
+		if s.CACertFile != "" {
+			b.WriteString(fmt.Sprintf(", CA cert %s", s.CACertFile))
+		}
+		if s.ClientVerify {
+			b.WriteString(", mutual TLS enabled")
+			if s.ClientVerifyCommonName != "" {
+				b.WriteString(fmt.Sprintf(", required client CN %q", s.ClientVerifyCommonName))
+			}
+		} else {
+			b.WriteString(", mutual TLS disabled")
+		}
+		s.logger.Println(b.String())
+	}
+	s.ln = ln
+
+	s.closeCh = make(chan struct{})
+	s.queueDone = make(chan struct{})
+
+	s.stmtQueue = queue.New[*proto.Statement](s.DefaultQueueCap, s.DefaultQueueBatchSz, s.DefaultQueueTimeout)
+	go s.runQueue()
+	s.logger.Printf("execute queue processing started with capacity %d, batch size %d, timeout %s",
+		s.DefaultQueueCap, s.DefaultQueueBatchSz, s.DefaultQueueTimeout.String())
+
+	go func() {
+		err := s.httpServer.Serve(s.ln)
+		if err != nil {
+			s.logger.Printf("HTTP service on %s stopped: %s", s.ln.Addr().String(), err.Error())
+		}
+	}()
+	s.logger.Println("service listening on", s.Addr())
+
+	return nil
+}
+
+// Close closes the service.
+func (s *Service) Close() {
+	s.logger.Println("closing HTTP service on", s.ln.Addr().String())
+	if err := s.httpServer.Shutdown(context.Background()); err != nil {
+		s.logger.Println("HTTP service shutdown error:", err.Error())
+	}
+
+	s.stmtQueue.Close()
+	select {
+	case <-s.queueDone:
+	default:
+		close(s.closeCh)
+	}
+	<-s.queueDone
+}
+
+// HTTPS returns whether this service is using HTTPS.
+func (s *Service) HTTPS() bool {
+	return s.CertFile != "" && s.KeyFile != ""
+}
+
+// SetAllowOrigin sets the value for the Access-Control-Allow-Origin header.
+func (s *Service) SetAllowOrigin(origin string) {
+	s.aoMu.Lock()
+	defer s.aoMu.Unlock()
+	s.allowOrigin = origin
+}
+
+// AllowOrigin returns the value for the Access-Control-Allow-Origin header.
+func (s *Service) AllowOrigin() string {
+	s.aoMu.RLock()
+	defer s.aoMu.RUnlock()
+	return s.allowOrigin
+}
+
+// ServeHTTP allows Service to serve HTTP requests.
+func (s *Service) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	s.addBuildVersion(w)
+	s.addAllowHeaders(w)
+	if s.credentialStore != nil {
+		w.Header().Set("WWW-Authenticate", `Basic realm="rqlite"`)
+	}
+
+	if r.Method == http.MethodOptions {
+		w.WriteHeader(http.StatusOK)
+		return
+	}
+
+	params, err := NewQueryParams(r)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	switch {
+	case r.URL.Path == "/" || r.URL.Path == "":
+		http.Redirect(w, r, "/console/", http.StatusFound)
+	case strings.HasPrefix(r.URL.Path, "/console"):
+		if r.URL.Path == "/console" {
+			http.Redirect(w, r, "/console/", http.StatusMovedPermanently)
+			return
+		}
+		stats.Add(numUI, 1)
+		s.handleUI(w, r)
+	case strings.HasPrefix(r.URL.Path, "/db/execute"):
+		stats.Add(numExecutions, 1)
+		s.handleExecute(w, r, params)
+	case strings.HasPrefix(r.URL.Path, "/db/query"):
+		stats.Add(numQueries, 1)
+		s.handleQuery(w, r, params)
+	case strings.HasPrefix(r.URL.Path, "/db/request"):
+		stats.Add(numRequests, 1)
+		s.handleRequest(w, r, params)
+	case strings.HasPrefix(r.URL.Path, "/db/backup"):
+		stats.Add(numBackups, 1)
+		s.handleBackup(w, r, params)
+	case strings.HasPrefix(r.URL.Path, "/db/load"):
+		stats.Add(numLoad, 1)
+		s.handleLoad(w, r, params)
+	case strings.HasPrefix(r.URL.Path, "/db/sql"):
+		stats.Add(numSQLAnalyze, 1)
+		s.handleSQLAnalyze(w, r, params)
+	case r.URL.Path == "/boot":
+		stats.Add(numBoot, 1)
+		s.handleBoot(w, r)
+	case r.URL.Path == "/snapshot":
+		stats.Add(numSnapshots, 1)
+		s.handleSnapshot(w, r, params)
+	case r.URL.Path == "/reap":
+		stats.Add(numReaps, 1)
+		s.handleReap(w, r)
+	case strings.HasPrefix(r.URL.Path, "/remove"):
+		s.handleRemove(w, r, params)
+	case strings.HasPrefix(r.URL.Path, "/status"):
+		stats.Add(numStatus, 1)
+		s.handleStatus(w, r, params)
+	case strings.HasPrefix(r.URL.Path, "/nodes"):
+		s.handleNodes(w, r, params)
+	case r.URL.Path == "/leader":
+		s.handleLeader(w, r, params)
+	case strings.HasPrefix(r.URL.Path, "/readyz"):
+		stats.Add(numReadyz, 1)
+		s.handleReadyz(w, r, params)
+	case r.URL.Path == "/licenses":
+		s.handleLicenses(w, r, params)
+	case r.URL.Path == "/debug/vars":
+		s.handleExpvar(w, r, params)
+	case strings.HasPrefix(r.URL.Path, "/debug/pprof"):
+		s.handlePprof(w, r)
+	default:
+		w.WriteHeader(http.StatusNotFound)
+	}
+}
+
+// RegisterStatus allows other modules to register status for serving over HTTP.
+func (s *Service) RegisterStatus(key string, stat StatusReporter) error {
+	s.statusMu.Lock()
+	defer s.statusMu.Unlock()
+
+	if _, ok := s.statuses[key]; ok {
+		return fmt.Errorf("status already registered with key %s", key)
+	}
+	s.statuses[key] = stat
+	return nil
+}
+
+// handleRemove handles cluster-remove requests.
+func (s *Service) handleRemove(w http.ResponseWriter, r *http.Request, qp QueryParams) {
+	if !s.CheckRequestPerm(r, auth.PermRemove) {
+		w.WriteHeader(http.StatusUnauthorized)
+		return
+	}
+
+	if r.Method != "DELETE" {
+		w.WriteHeader(http.StatusMethodNotAllowed)
+		return
+	}
+
+	b, err := io.ReadAll(r.Body)
+	if err != nil {
+		w.WriteHeader(http.StatusBadRequest)
+		return
+	}
+	m := map[string]string{}
+	if err := json.Unmarshal(b, &m); err != nil {
+		w.WriteHeader(http.StatusBadRequest)
+		return
+	}
+
+	if len(m) != 1 {
+		w.WriteHeader(http.StatusBadRequest)
+		return
+	}
+
+	remoteID, ok := m["id"]
+	if !ok {
+		w.WriteHeader(http.StatusBadRequest)
+		return
+	}
+
+	rn := &proto.RemoveNodeRequest{
+		Id: remoteID,
+	}
+
+	addr, err := s.proxy.Remove(r.Context(), rn, makeCredentials(r), qp.Timeout(defaultTimeout), qp.Redirect())
+	if err != nil {
+		if errors.Is(err, proxy.ErrNotLeader) {
+			s.DoRedirect(w, r, qp)
+			return
+		}
+		if errors.Is(err, proxy.ErrLeaderNotFound) {
+			stats.Add(numLeaderNotFound, 1)
+			http.Error(w, proxy.ErrLeaderNotFound.Error(), http.StatusServiceUnavailable)
+			return
+		}
+		if errors.Is(err, proxy.ErrUnauthorized) {
+			http.Error(w, "remote remove node not authorized", http.StatusUnauthorized)
+			return
+		}
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	w.Header().Set(ServedByHTTPHeader, addr)
+}
+
+// handleSQLAnalyze handles requests to analyze and show SQL rewriting.
+func (s *Service) handleSQLAnalyze(w http.ResponseWriter, r *http.Request, qp QueryParams) {
+	w.Header().Set("Content-Type", "application/json; charset=utf-8")
+
+	if !s.CheckRequestPerm(r, auth.PermQuery) {
+		w.WriteHeader(http.StatusUnauthorized)
+		return
+	}
+
+	if r.Method != "GET" && r.Method != "POST" {
+		w.WriteHeader(http.StatusMethodNotAllowed)
+		return
+	}
+
+	var stmts []*proto.Statement
+	if r.Method == "GET" {
+		q := qp.Query()
+		if q == "" {
+			http.Error(w, "query not specified", http.StatusBadRequest)
+			return
+		}
+		stmts = []*proto.Statement{{Sql: q}}
+	} else {
+		var err error
+		stmts, err = ParseRequest(r.Body)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+	}
+
+	analyzeStmt := func(sqlStr string, rwRand, rwTime bool) (res sqlAnalyzeStmtResult, retErr error) {
+		defer func() {
+			if r := recover(); r != nil {
+				retErr = fmt.Errorf("panic during SQL analysis: %v", r)
+			}
+		}()
+		res.Original = sqlStr
+
+		parsed, err := rsql.NewParser(strings.NewReader(sqlStr)).ParseStatement()
+		if err != nil {
+			res.Error = err.Error()
+			return res, nil
+		}
+
+		rewriter := sql.NewRewriter()
+		rewriter.RewriteRand = rwRand
+		rewriter.RewriteTime = rwTime
+		rwStmt, _, _, err := rewriter.Do(parsed)
+		if err != nil {
+			res.Error = err.Error()
+			return res, nil
+		}
+
+		res.Rewritten = rwStmt.String()
+		return res, nil
+	}
+
+	results := make([]sqlAnalyzeStmtResult, len(stmts))
+	for i, stmt := range stmts {
+		r, err := analyzeStmt(stmt.Sql, !qp.NoRewriteRandom(), !qp.NoRewriteTime())
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		results[i] = r
+	}
+	resp := &sqlAnalyzeResponse{Results: results, start: time.Now()}
+	s.writeResponse(w, qp, resp)
+}
+
+// handleBackup returns the consistent database snapshot.
+func (s *Service) handleBackup(w http.ResponseWriter, r *http.Request, qp QueryParams) {
+	if !s.CheckRequestPerm(r, auth.PermBackup) {
+		w.WriteHeader(http.StatusUnauthorized)
+		return
+	}
+
+	if r.Method != "GET" {
+		w.WriteHeader(http.StatusMethodNotAllowed)
+		return
+	}
+
+	br := &proto.BackupRequest{
+		Format:   qp.BackupFormat(),
+		Leader:   !qp.NoLeader(),
+		Vacuum:   qp.Vacuum(),
+		Compress: qp.Compress(),
+		Tables:   qp.Tables(),
+	}
+	addBackupFormatHeader(w, qp)
+
+	addr, err := s.proxy.Backup(r.Context(), br, w, makeCredentials(r), qp.Timeout(defaultTimeout), qp.Redirect())
+	if err != nil {
+		if errors.Is(err, proxy.ErrNotLeader) {
+			s.DoRedirect(w, r, qp)
+			return
+		}
+		if errors.Is(err, proxy.ErrLeaderNotFound) {
+			stats.Add(numLeaderNotFound, 1)
+			http.Error(w, proxy.ErrLeaderNotFound.Error(), http.StatusServiceUnavailable)
+			return
+		}
+		if errors.Is(err, proxy.ErrUnauthorized) {
+			http.Error(w, "remote backup not authorized", http.StatusUnauthorized)
+			return
+		}
+		if err == store.ErrInvalidVacuum {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	w.Header().Set(ServedByHTTPHeader, addr)
+
+	s.lastBackup = time.Now()
+}
+
+// handleLoad loads the database from the given SQLite database file or SQLite dump.
+func (s *Service) handleLoad(w http.ResponseWriter, r *http.Request, qp QueryParams) {
+	if !s.CheckRequestPerm(r, auth.PermLoad) {
+		w.WriteHeader(http.StatusUnauthorized)
+		return
+	}
+
+	if r.Method != "POST" {
+		w.WriteHeader(http.StatusMethodNotAllowed)
+		return
+	}
+
+	handleProxyErr := func(err error) bool {
+		if errors.Is(err, proxy.ErrNotLeader) {
+			s.DoRedirect(w, r, qp)
+			return true
+		}
+		if errors.Is(err, proxy.ErrLeaderNotFound) {
+			stats.Add(numLeaderNotFound, 1)
+			http.Error(w, proxy.ErrLeaderNotFound.Error(), http.StatusServiceUnavailable)
+			return true
+		}
+		if errors.Is(err, proxy.ErrUnauthorized) {
+			http.Error(w, "remote load not authorized", http.StatusUnauthorized)
+			return true
+		}
+		return false
+	}
+
+	resp := NewResponse()
+	b, err := io.ReadAll(r.Body)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	r.Body.Close()
+
+	if db.IsValidSQLiteData(b) {
+		s.logger.Printf("SQLite database file detected as load data")
+		lr := &proto.LoadRequest{
+			Data: b,
+		}
+
+		addr, err := s.proxy.Load(r.Context(), lr, makeCredentials(r), qp.Timeout(defaultTimeout), qp.Retries(0), qp.Redirect())
+		if err != nil {
+			if handleProxyErr(err) {
+				return
+			}
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		w.Header().Set(ServedByHTTPHeader, addr)
+	} else {
+		// No JSON structure expected for this API, just a bunch of SQL statements.
+		queries := []string{string(b)}
+		er := executeRequestFromStrings(queries, qp.Timings(), false)
+		er.Request.RollbackOnError = true
+
+		response, _, addr, resultsErr := s.proxy.Execute(r.Context(), er, makeCredentials(r),
+			qp.Timeout(defaultTimeout), qp.Retries(0), qp.Redirect())
+		if resultsErr != nil {
+			if handleProxyErr(resultsErr) {
+				return
+			}
+			resp.Error = resultsErr.Error()
+		} else {
+			w.Header().Set(ServedByHTTPHeader, addr)
+			resp.Results.ExecuteQueryResponse = response
+		}
+		resp.end = time.Now()
+	}
+	s.writeResponse(w, qp, resp)
+}
+
+// handleBoot handles booting this node using a SQLite file.
+func (s *Service) handleBoot(w http.ResponseWriter, r *http.Request) {
+	if !s.CheckRequestPerm(r, auth.PermLoad) {
+		w.WriteHeader(http.StatusUnauthorized)
+		return
+	}
+
+	if r.Method != "POST" {
+		w.WriteHeader(http.StatusMethodNotAllowed)
+		return
+	}
+
+	bufReader := bufio.NewReader(r.Body)
+	peek, err := bufReader.Peek(db.SQLiteHeaderSize)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusServiceUnavailable)
+		return
+	}
+	if !db.IsValidSQLiteData(peek) {
+		http.Error(w, "invalid SQLite data", http.StatusBadRequest)
+		return
+	}
+
+	s.logger.Printf("starting boot process")
+	_, err = s.store.ReadFrom(bufReader)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusServiceUnavailable)
+		return
+	}
+}
+
+// handleSnapshot handles a snapshot request.
+func (s *Service) handleSnapshot(w http.ResponseWriter, r *http.Request, qp QueryParams) {
+	if !s.CheckRequestPerm(r, auth.PermSnapshot) {
+		w.WriteHeader(http.StatusUnauthorized)
+		return
+	}
+
+	if r.Method != "POST" {
+		w.WriteHeader(http.StatusMethodNotAllowed)
+		return
+	}
+
+	err := s.store.Snapshot(uint64(qp.TrailingLogs(0)))
+	if err != nil {
+		if errors.Is(err, store.ErrNothingNewToSnapshot) || errors.Is(err, store.ErrNoWALToSnapshot) {
+			w.WriteHeader(http.StatusNoContent)
+			return
+		}
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+}
+
+// handleReap handles a reap request.
+func (s *Service) handleReap(w http.ResponseWriter, r *http.Request) {
+	if !s.CheckRequestPerm(r, auth.PermSnapshot) {
+		w.WriteHeader(http.StatusUnauthorized)
+		return
+	}
+
+	if r.Method != "POST" {
+		w.WriteHeader(http.StatusMethodNotAllowed)
+		return
+	}
+
+	n, c, err := s.store.Reap()
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	resp := map[string]int{
+		"snapshots_reaped":  n,
+		"wals_checkpointed": c,
+	}
+	w.Header().Set("Content-Type", "application/json; charset=utf-8")
+	if err := json.NewEncoder(w).Encode(resp); err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+	}
+}
+
+// handleStatus returns status on the system.
+func (s *Service) handleStatus(w http.ResponseWriter, r *http.Request, qp QueryParams) {
+	w.Header().Set("Content-Type", "application/json; charset=utf-8")
+
+	if !s.CheckRequestPerm(r, auth.PermStatus) {
+		w.WriteHeader(http.StatusUnauthorized)
+		return
+	}
+
+	if r.Method != "GET" {
+		w.WriteHeader(http.StatusMethodNotAllowed)
+		return
+	}
+
+	storeStatus, err := s.store.Stats()
+	if err != nil {
+		http.Error(w, fmt.Sprintf("store stats: %s", err.Error()),
+			http.StatusInternalServerError)
+		return
+	}
+
+	clusterStatus, err := s.cluster.Stats()
+	if err != nil {
+		http.Error(w, fmt.Sprintf("cluster stats: %s", err.Error()),
+			http.StatusInternalServerError)
+		return
+	}
+
+	rt := map[string]any{
+		"GOARCH":          runtime.GOARCH,
+		"GOOS":            runtime.GOOS,
+		"GOMAXPROCS":      runtime.GOMAXPROCS(0),
+		"num_cpu":         runtime.NumCPU(),
+		"num_goroutine":   runtime.NumGoroutine(),
+		"version":         runtime.Version(),
+		"kubernetes_hint": kubernetesHint(),
+	}
+
+	oss := map[string]any{
+		"pid":       os.Getpid(),
+		"ppid":      os.Getppid(),
+		"page_size": os.Getpagesize(),
+	}
+	executable, err := os.Executable()
+	if err == nil {
+		oss["executable"] = executable
+	}
+	hostname, err := os.Hostname()
+	if err == nil {
+		oss["hostname"] = hostname
+	}
+
+	qs, err := s.stmtQueue.Stats()
+	if err != nil {
+		http.Error(w, fmt.Sprintf("queue stats: %s", err.Error()),
+			http.StatusInternalServerError)
+		return
+	}
+	qs["sequence_number"] = atomic.LoadInt64(&s.seqNum)
+	queueStats := map[string]any{
+		"_default": qs,
+	}
+	httpStatus := map[string]any{
+		"bind_addr": s.Addr().String(),
+		"auth":      prettyEnabled(s.credentialStore != nil),
+		"cluster":   clusterStatus,
+		"queue":     queueStats,
+		"tls":       s.tlsStats(),
+	}
+	ao := s.AllowOrigin()
+	if ao != "" {
+		httpStatus["allow_origin"] = ao
+	}
+
+	nodeStatus := map[string]any{
+		"start_time":   s.start,
+		"current_time": time.Now(),
+		"uptime":       time.Since(s.start).String(),
+	}
+
+	// Build the status response.
+	status := map[string]any{
+		"os":      oss,
+		"runtime": rt,
+		"store":   storeStatus,
+		"http":    httpStatus,
+		"node":    nodeStatus,
+	}
+	if !s.lastBackup.IsZero() {
+		status["last_backup_time"] = s.lastBackup
+	}
+	if s.BuildInfo != nil {
+		status["build"] = s.BuildInfo
+	}
+
+	// Add any registered StatusReporters.
+	func() {
+		s.statusMu.RLock()
+		defer s.statusMu.RUnlock()
+		for k, v := range s.statuses {
+			stat, err := v.Stats()
+			if err != nil {
+				s.logger.Printf("failed to retrieve stats for registered reporter %s: %s", k, err.Error())
+				stat = map[string]any{"error": err.Error()}
+			}
+			status[k] = stat
+		}
+	}()
+
+	var b []byte
+	if qp.Pretty() {
+		b, err = json.MarshalIndent(status, "", "    ")
+	} else {
+		b, err = json.Marshal(status)
+	}
+	if err != nil {
+		http.Error(w, fmt.Sprintf("JSON marshal: %s", err.Error()),
+			http.StatusInternalServerError)
+		return
+	}
+
+	b, err = getSubJSON(b, qp.Key())
+	if err != nil {
+		http.Error(w, fmt.Sprintf("JSON subkey: %s", err.Error()),
+			http.StatusInternalServerError)
+		return
+	}
+
+	_, err = w.Write(b)
+	if err != nil {
+		s.logger.Println("failed to write status to client", err.Error())
+		return
+	}
+}
+
+// handleNodes returns status on the other voting nodes in the system.
+// This attempts to contact all the nodes in the cluster, so may take
+// some time to return.
+func (s *Service) handleNodes(w http.ResponseWriter, r *http.Request, qp QueryParams) {
+	w.Header().Set("Content-Type", "application/json; charset=utf-8")
+
+	if !s.CheckRequestPerm(r, auth.PermStatus) {
+		w.WriteHeader(http.StatusUnauthorized)
+		return
+	}
+
+	if r.Method != "GET" {
+		w.WriteHeader(http.StatusMethodNotAllowed)
+		return
+	}
+
+	// Get nodes in the cluster, and possibly filter out non-voters.
+	sNodes, err := s.store.Nodes()
+	if err != nil {
+		statusCode := http.StatusInternalServerError
+		if err == store.ErrNotOpen {
+			statusCode = http.StatusServiceUnavailable
+		}
+		http.Error(w, fmt.Sprintf("store nodes: %s", err.Error()), statusCode)
+		return
+	}
+	nodes := NewNodesFromServers(sNodes)
+	if !qp.NonVoters() {
+		nodes = nodes.Voters()
+	}
+
+	// Now test the nodes
+	laddr := ""
+	lNode, err := s.store.Leader()
+	if err != nil && err != store.ErrLeaderNotFound {
+		http.Error(w, fmt.Sprintf("leader: %s", err.Error()), http.StatusInternalServerError)
+		return
+	} else if lNode != nil {
+		laddr = lNode.Addr
+	}
+	nodes.Test(s.cluster, laddr, qp.Retries(0), qp.Timeout(defaultTimeout))
+
+	enc := NewNodesRespEncoder(w, qp.Version() != "2")
+	if qp.Pretty() {
+		enc.SetIndent("", "    ")
+	}
+	err = enc.Encode(nodes)
+	if err != nil {
+		http.Error(w, fmt.Sprintf("JSON marshal: %s", err.Error()),
+			http.StatusInternalServerError)
+	}
+}
+
+// handleLeader returns leader information, or triggers leader stepdown.
+func (s *Service) handleLeader(w http.ResponseWriter, r *http.Request, qp QueryParams) {
+	w.Header().Set("Content-Type", "application/json; charset=utf-8")
+
+	if !s.CheckRequestPerm(r, auth.PermLeaderOps) {
+		w.WriteHeader(http.StatusUnauthorized)
+		return
+	}
+
+	switch r.Method {
+	case "GET":
+		// Return leader information
+		laddr := ""
+		ldr, err := s.store.Leader()
+		if err != nil {
+			if err == store.ErrLeaderNotFound || err == store.ErrNotOpen {
+				http.Error(w, store.ErrLeaderNotFound.Error(), http.StatusServiceUnavailable)
+			} else {
+				http.Error(w, fmt.Sprintf("leader: %s", err.Error()), http.StatusInternalServerError)
+			}
+			return
+		}
+		if ldr != nil {
+			laddr = ldr.Addr
+		}
+
+		node := NewNodeFromServer(ldr)
+		if node == nil {
+			http.Error(w, "leader node", http.StatusInternalServerError)
+			return
+		}
+		node.Test(s.cluster, laddr, qp.Retries(0), qp.Timeout(defaultTimeout))
+
+		b, err := func() ([]byte, error) {
+			if qp.Pretty() {
+				return json.MarshalIndent(node, "", "    ")
+			}
+			return json.Marshal(node)
+		}()
+		if err != nil {
+			http.Error(w, fmt.Sprintf("JSON marshal: %s", err.Error()), http.StatusInternalServerError)
+			return
+		}
+		_, err = w.Write(b)
+		if err != nil {
+			s.logger.Println("failed to write leader node to client", err.Error())
+			return
+		}
+
+	case "POST":
+		// Trigger leader stepdown
+		wait := qp.Wait()
+
+		// Parse optional JSON body for target node ID
+		var nodeID string
+		if r.Header.Get("Content-Type") == "application/json" && r.ContentLength > 0 {
+			var reqBody struct {
+				ID string `json:"id"`
+			}
+			if err := json.NewDecoder(r.Body).Decode(&reqBody); err != nil {
+				http.Error(w, fmt.Sprintf("invalid JSON: %s", err.Error()), http.StatusBadRequest)
+				return
+			}
+			nodeID = reqBody.ID
+		}
+
+		addr, err := s.proxy.Stepdown(r.Context(), wait, nodeID, makeCredentials(r), qp.Timeout(defaultTimeout), qp.Redirect())
+		if err != nil {
+			if errors.Is(err, proxy.ErrNotLeader) {
+				s.DoRedirect(w, r, qp)
+				return
+			}
+			if errors.Is(err, proxy.ErrLeaderNotFound) {
+				stats.Add(numLeaderNotFound, 1)
+				http.Error(w, proxy.ErrLeaderNotFound.Error(), http.StatusServiceUnavailable)
+				return
+			}
+			if errors.Is(err, proxy.ErrUnauthorized) {
+				http.Error(w, "remote stepdown not authorized", http.StatusUnauthorized)
+				return
+			}
+
+			statusCode := http.StatusInternalServerError
+			if err == store.ErrNotOpen {
+				statusCode = http.StatusServiceUnavailable
+			}
+			http.Error(w, fmt.Sprintf("stepdown: %s", err.Error()), statusCode)
+			return
+		}
+		w.Header().Set(ServedByHTTPHeader, addr)
+		w.WriteHeader(http.StatusOK)
+
+	default:
+		w.WriteHeader(http.StatusMethodNotAllowed)
+	}
+}
+
+// handleReadyz returns whether the node is ready.
+func (s *Service) handleReadyz(w http.ResponseWriter, r *http.Request, qp QueryParams) {
+	if !s.CheckRequestPerm(r, auth.PermReady) {
+		w.WriteHeader(http.StatusUnauthorized)
+		return
+	}
+
+	if r.Method != "GET" {
+		w.WriteHeader(http.StatusMethodNotAllowed)
+		return
+	}
+
+	if qp.NoLeader() {
+		// Simply handling the HTTP request is enough.
+		w.WriteHeader(http.StatusOK)
+		w.Write([]byte("[+]node ok"))
+		return
+	}
+
+	lAddr, err := s.LeaderAddr(r.Context())
+	if err != nil {
+		if errors.Is(err, store.ErrLeaderNotFound) || errors.Is(err, store.ErrNotOpen) {
+			w.WriteHeader(http.StatusServiceUnavailable)
+			w.Write([]byte("[+]node ok\n[+]leader does not exist"))
+			return
+		}
+		http.Error(w, fmt.Sprintf("leader address: %s", err.Error()), http.StatusInternalServerError)
+		return
+	}
+
+	_, err = s.cluster.GetNodeMeta(r.Context(), lAddr, qp.Retries(0), qp.Timeout(defaultTimeout))
+	if err != nil {
+		w.WriteHeader(http.StatusServiceUnavailable)
+		w.Write(fmt.Appendf(nil, "[+]node ok\n[+]leader not contactable: %s", err.Error()))
+		return
+	}
+
+	if !s.store.Ready() {
+		w.WriteHeader(http.StatusServiceUnavailable)
+		w.Write([]byte("[+]node ok\n[+]leader ok\n[+]store not ready"))
+		return
+	}
+
+	okMsg := "[+]node ok\n[+]leader ok\n[+]store ok"
+	if qp.Sync() {
+		if _, err := s.store.Committed(qp.Timeout(defaultTimeout)); err != nil {
+			w.WriteHeader(http.StatusServiceUnavailable)
+			w.Write(fmt.Appendf(nil, "[+]node ok\n[+]leader ok\n[+]store ok\n[+]sync %s", err.Error()))
+			return
+		}
+		okMsg += "\n[+]sync ok"
+	}
+
+	qr := &proto.QueryRequest{
+		Request: &proto.Request{
+			DbTimeout:  qp.Timeout(defaultTimeout).Nanoseconds(),
+			Statements: []*proto.Statement{{Sql: `SELECT 1`}},
+		},
+		Level: proto.ConsistencyLevel_NONE,
+	}
+	results, _, _, err := s.proxy.Query(r.Context(), qr, makeCredentials(r),
+		qp.Timeout(defaultTimeout), 0, false)
+	if err == nil && len(results) == 1 && len(results[0].Values) == 1 &&
+		len(results[0].Values[0].GetParameters()) == 1 && results[0].Values[0].GetParameters()[0].GetI() == 1 {
+		okMsg += "\n[+]db ok"
+	} else {
+		w.WriteHeader(http.StatusServiceUnavailable)
+		okMsg += fmt.Sprintf("\n[+]db not ok: (%v, %v)", err, results)
+		w.Write([]byte(okMsg))
+		return
+	}
+
+	w.WriteHeader(http.StatusOK)
+	w.Write([]byte(okMsg))
+}
+
+// handleLicenses serves the license information.
+func (s *Service) handleLicenses(w http.ResponseWriter, r *http.Request, qp QueryParams) {
+	w.Header().Set("Content-Type", "text/plain; charset=utf-8")
+
+	if !s.CheckRequestPerm(r, auth.PermStatus) {
+		w.WriteHeader(http.StatusUnauthorized)
+		return
+	}
+
+	if r.Method != "GET" {
+		w.WriteHeader(http.StatusMethodNotAllowed)
+		return
+	}
+
+	w.WriteHeader(http.StatusOK)
+	w.Write([]byte(licenses.Text))
+}
+
+// handleUI serves the built-in web UI.
+func (s *Service) handleUI(w http.ResponseWriter, r *http.Request) {
+	if !s.CheckRequestPerm(r, auth.PermUI) {
+		w.WriteHeader(http.StatusUnauthorized)
+		return
+	}
+	if r.Method != http.MethodGet && r.Method != http.MethodHead {
+		w.WriteHeader(http.StatusMethodNotAllowed)
+		return
+	}
+	s.uiHandler.ServeHTTP(w, r)
+}
+
+func (s *Service) handleExecute(w http.ResponseWriter, r *http.Request, qp QueryParams) {
+	w.Header().Set("Content-Type", "application/json; charset=utf-8")
+
+	if !s.CheckRequestPerm(r, auth.PermExecute) {
+		w.WriteHeader(http.StatusUnauthorized)
+		return
+	}
+
+	if r.Method != "POST" {
+		w.WriteHeader(http.StatusMethodNotAllowed)
+		return
+	}
+
+	if qp.Queue() {
+		stats.Add(numQueuedExecutions, 1)
+		s.queuedExecute(w, r, qp)
+	} else {
+		s.execute(w, r, qp)
+	}
+}
+
+// queuedExecute handles queued queries that modify the database.
+func (s *Service) queuedExecute(w http.ResponseWriter, r *http.Request, qp QueryParams) {
+	resp := NewResponse()
+
+	// Perform a leader check, unless disabled. This prevents generating queued writes on
+	// a node that does not appear to be connected to a cluster (even a single-node cluster).
+	if !qp.NoLeader() {
+		_, err := s.LeaderAddr(r.Context())
+		if err != nil {
+			if errors.Is(err, store.ErrLeaderNotFound) || errors.Is(err, store.ErrNotOpen) {
+				stats.Add(numLeaderNotFound, 1)
+				http.Error(w, store.ErrLeaderNotFound.Error(), http.StatusServiceUnavailable)
+				return
+			}
+			http.Error(w, fmt.Sprintf("leader address: %s", err.Error()), http.StatusInternalServerError)
+			return
+		}
+	}
+
+	stmts, err := ParseRequest(r.Body)
+	if err != nil {
+		if errors.Is(err, ErrNoStatements) && !qp.Wait() {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+	}
+	if err := sql.Process(stmts, !qp.NoRewriteRandom(), !qp.NoRewriteTime()); err != nil {
+		http.Error(w, fmt.Sprintf("SQL rewrite: %s", err.Error()), http.StatusInternalServerError)
+		return
+	}
+
+	var fc queue.FlushChannel
+	if qp.Wait() {
+		stats.Add(numQueuedExecutionsWait, 1)
+		fc = make(queue.FlushChannel)
+	}
+
+	seqNum, err := s.stmtQueue.Write(stmts, fc)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	resp.SequenceNum = seqNum
+
+	if qp.Wait() {
+		// Wait for the flush channel to close, or timeout.
+		select {
+		case <-fc:
+			break
+		case <-time.NewTimer(qp.Timeout(defaultTimeout)).C:
+			stats.Add(numQueuedExecutionsWaitTimeout, 1)
+			http.Error(w, "queue wait timeout", http.StatusRequestTimeout)
+			return
+		}
+	}
+
+	resp.end = time.Now()
+	s.writeResponse(w, qp, resp)
+}
+
+// execute handles queries that modify the database.
+func (s *Service) execute(w http.ResponseWriter, r *http.Request, qp QueryParams) {
+	resp := NewResponse()
+	resp.Results.AssociativeJSON = qp.Associative()
+	resp.Results.BlobsAsArrays = qp.BlobArray()
+
+	var stmts []*proto.Statement
+	var err error
+	if strings.HasPrefix(r.Header.Get("Content-Type"), "text/plain") {
+		sql, err := io.ReadAll(r.Body)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+		stmts = []*proto.Statement{
+			{
+				Sql: string(sql),
+			},
+		}
+	} else {
+		stmts, err = ParseRequest(r.Body)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+	}
+	stats.Add(numExecuteStmtsRx, int64(len(stmts)))
+	if !qp.NoParse() {
+		if err := sql.Process(stmts, !qp.NoRewriteRandom(), !qp.NoRewriteTime()); err != nil {
+			http.Error(w, fmt.Sprintf("SQL rewrite: %s", err.Error()), http.StatusInternalServerError)
+			return
+		}
+	}
+
+	er := &proto.ExecuteRequest{
+		Request: &proto.Request{
+			Transaction: qp.Tx(),
+			DbTimeout:   int64(qp.DBTimeout(0)),
+			Statements:  stmts,
+		},
+		Timings: qp.Timings(),
+	}
+
+	results, raftIndex, addr, resultsErr := s.proxy.Execute(r.Context(), er, makeCredentials(r),
+		qp.Timeout(defaultTimeout), qp.Retries(0), qp.Redirect())
+	if resultsErr != nil {
+		if errors.Is(resultsErr, proxy.ErrNotLeader) {
+			s.DoRedirect(w, r, qp)
+			return
+		}
+		if errors.Is(resultsErr, proxy.ErrLeaderNotFound) {
+			stats.Add(numLeaderNotFound, 1)
+			http.Error(w, proxy.ErrLeaderNotFound.Error(), http.StatusServiceUnavailable)
+			return
+		}
+		if errors.Is(resultsErr, proxy.ErrUnauthorized) {
+			http.Error(w, "remote Execute not authorized", http.StatusUnauthorized)
+			return
+		}
+	}
+
+	if resultsErr != nil {
+		resp.Error = resultsErr.Error()
+	} else {
+		w.Header().Set(ServedByHTTPHeader, addr)
+		resp.Results.ExecuteQueryResponse = results
+		if qp.RaftIndex() {
+			resp.RaftIndex = raftIndex
+		}
+	}
+	resp.end = time.Now()
+	s.writeResponse(w, qp, resp)
+}
+
+// handleQuery handles queries that do not modify the database.
+func (s *Service) handleQuery(w http.ResponseWriter, r *http.Request, qp QueryParams) {
+	w.Header().Set("Content-Type", "application/json; charset=utf-8")
+
+	if !s.CheckRequestPerm(r, auth.PermQuery) {
+		w.WriteHeader(http.StatusUnauthorized)
+		return
+	}
+
+	if r.Method != "GET" && r.Method != "POST" {
+		w.WriteHeader(http.StatusMethodNotAllowed)
+		return
+	}
+
+	var queries []*proto.Statement
+	var err error
+	if strings.HasPrefix(r.Header.Get("Content-Type"), "text/plain") && r.Method == "POST" {
+		sql, err := io.ReadAll(r.Body)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+		queries = []*proto.Statement{
+			{
+				Sql: string(sql),
+			},
+		}
+	} else {
+		// Get the query statement(s), and do tx if necessary.
+		queries, err = requestQueries(r, qp)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+	}
+	stats.Add(numQueryStmtsRx, int64(len(queries)))
+
+	if !qp.NoParse() {
+		rLvl := qp.Level() == proto.ConsistencyLevel_STRONG
+		if err := sql.Process(queries, !qp.NoRewriteRandom() && rLvl, !qp.NoRewriteTime() && rLvl); err != nil {
+			http.Error(w, fmt.Sprintf("SQL rewrite: %s", err.Error()), http.StatusInternalServerError)
+			return
+		}
+	}
+
+	resp := NewResponse()
+	resp.Results.AssociativeJSON = qp.Associative()
+	resp.Results.BlobsAsArrays = qp.BlobArray()
+
+	qr := &proto.QueryRequest{
+		Request: &proto.Request{
+			Transaction:    qp.Tx(),
+			DbTimeout:      qp.DBTimeout(0).Nanoseconds(),
+			Statements:     queries,
+			QualifyColumns: qp.QualifyColumns(),
+		},
+		Timings:             qp.Timings(),
+		Level:               qp.Level(),
+		Freshness:           qp.Freshness().Nanoseconds(),
+		FreshnessStrict:     qp.FreshnessStrict(),
+		LinearizableTimeout: qp.LinearizableTimeout(defaultLinearTimeout).Nanoseconds(),
+	}
+
+	results, raftIndex, addr, resultsErr := s.proxy.Query(r.Context(), qr, makeCredentials(r),
+		qp.Timeout(defaultTimeout), qp.Retries(0), qp.Redirect())
+	if resultsErr != nil {
+		if errors.Is(resultsErr, proxy.ErrNotLeader) {
+			s.DoRedirect(w, r, qp)
+			return
+		}
+		if errors.Is(resultsErr, proxy.ErrLeaderNotFound) {
+			stats.Add(numLeaderNotFound, 1)
+			http.Error(w, proxy.ErrLeaderNotFound.Error(), http.StatusServiceUnavailable)
+			return
+		}
+		if errors.Is(resultsErr, proxy.ErrUnauthorized) {
+			http.Error(w, "remote query not authorized", http.StatusUnauthorized)
+			return
+		}
+	}
+
+	if resultsErr != nil {
+		resp.Error = resultsErr.Error()
+	} else {
+		w.Header().Set(ServedByHTTPHeader, addr)
+		resp.Results.QueryRows = results
+		if qp.RaftIndex() {
+			resp.RaftIndex = raftIndex
+		}
+	}
+	resp.end = time.Now()
+	s.writeResponse(w, qp, resp)
+}
+
+func (s *Service) handleRequest(w http.ResponseWriter, r *http.Request, qp QueryParams) {
+	w.Header().Set("Content-Type", "application/json; charset=utf-8")
+
+	if !s.CheckRequestPermAll(r, auth.PermQuery, auth.PermExecute) {
+		w.WriteHeader(http.StatusUnauthorized)
+		return
+	}
+
+	if r.Method != "POST" {
+		w.WriteHeader(http.StatusMethodNotAllowed)
+		return
+	}
+
+	stmts, err := ParseRequest(r.Body)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	stats.Add(numRequestStmtsRx, int64(len(stmts)))
+
+	if !qp.NoParse() {
+		if err := sql.Process(stmts, !qp.NoRewriteRandom(), !qp.NoRewriteTime()); err != nil {
+			http.Error(w, fmt.Sprintf("SQL rewrite: %s", err.Error()), http.StatusInternalServerError)
+			return
+		}
+	}
+
+	resp := NewResponse()
+	resp.Results.AssociativeJSON = qp.Associative()
+	resp.Results.BlobsAsArrays = qp.BlobArray()
+
+	eqr := &proto.ExecuteQueryRequest{
+		Request: &proto.Request{
+			Transaction:    qp.Tx(),
+			Statements:     stmts,
+			DbTimeout:      int64(qp.DBTimeout(0)),
+			QualifyColumns: qp.QualifyColumns(),
+		},
+		Timings:         qp.Timings(),
+		Level:           qp.Level(),
+		Freshness:       qp.Freshness().Nanoseconds(),
+		FreshnessStrict: qp.FreshnessStrict(),
+	}
+
+	results, _, raftIndex, addr, resultsErr := s.proxy.Request(r.Context(), eqr, makeCredentials(r),
+		qp.Timeout(defaultTimeout), qp.Retries(0), qp.Redirect())
+	if resultsErr != nil {
+		if errors.Is(resultsErr, proxy.ErrNotLeader) {
+			s.DoRedirect(w, r, qp)
+			return
+		}
+		if errors.Is(resultsErr, proxy.ErrLeaderNotFound) {
+			stats.Add(numLeaderNotFound, 1)
+			http.Error(w, proxy.ErrLeaderNotFound.Error(), http.StatusServiceUnavailable)
+			return
+		}
+		if errors.Is(resultsErr, proxy.ErrUnauthorized) {
+			http.Error(w, "remote Request not authorized", http.StatusUnauthorized)
+			return
+		}
+	}
+
+	if resultsErr != nil {
+		resp.Error = resultsErr.Error()
+	} else {
+		w.Header().Set(ServedByHTTPHeader, addr)
+		resp.Results.ExecuteQueryResponse = results
+		if qp.RaftIndex() {
+			resp.RaftIndex = raftIndex
+		}
+	}
+	resp.end = time.Now()
+	s.writeResponse(w, qp, resp)
+}
+
+// handleExpvar serves registered expvar information over HTTP.
+func (s *Service) handleExpvar(w http.ResponseWriter, r *http.Request, qp QueryParams) {
+	w.Header().Set("Content-Type", "application/json; charset=utf-8")
+	if !s.CheckRequestPerm(r, auth.PermStatus) {
+		w.WriteHeader(http.StatusUnauthorized)
+		return
+	}
+
+	fmt.Fprintf(w, "{\n")
+	first := true
+	expvar.Do(func(kv expvar.KeyValue) {
+		if qp.Key() != "" && qp.Key() != kv.Key {
+			return
+		}
+		if !first {
+			fmt.Fprintf(w, ",\n")
+		}
+		first = false
+		fmt.Fprintf(w, "%q: %s", kv.Key, kv.Value)
+	})
+	fmt.Fprintf(w, "\n}\n")
+}
+
+// handlePprof serves pprof information over HTTP.
+func (s *Service) handlePprof(w http.ResponseWriter, r *http.Request) {
+	if !s.CheckRequestPerm(r, auth.PermStatus) {
+		w.WriteHeader(http.StatusUnauthorized)
+		return
+	}
+
+	switch r.URL.Path {
+	case "/debug/pprof/cmdline":
+		pprof.Cmdline(w, r)
+	case "/debug/pprof/profile":
+		pprof.Profile(w, r)
+	case "/debug/pprof/symbol":
+		pprof.Symbol(w, r)
+	default:
+		pprof.Index(w, r)
+	}
+}
+
+// Addr returns the address on which the Service is listening
+func (s *Service) Addr() net.Addr {
+	return s.ln.Addr()
+}
+
+// DoRedirect checks if the request is a redirect, and if so, performs the redirect.
+// Returns true caller can consider the request handled. Returns false if the request
+// was not a redirect and the caller should continue processing the request.
+func (s *Service) DoRedirect(w http.ResponseWriter, r *http.Request, qp QueryParams) bool {
+	if !qp.Redirect() {
+		return false
+	}
+
+	rd, err := s.FormRedirect(r)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+	} else {
+		http.Redirect(w, r, rd, http.StatusMovedPermanently)
+	}
+	return true
+}
+
+// FormRedirect returns the value for the "Location" header for a 301 response.
+func (s *Service) FormRedirect(r *http.Request) (string, error) {
+	leaderAPIAddr := s.LeaderAPIAddr(r.Context())
+	if leaderAPIAddr == "" {
+		stats.Add(numLeaderNotFound, 1)
+		return "", store.ErrLeaderNotFound
+	}
+
+	rq := r.URL.RawQuery
+	if rq != "" {
+		rq = fmt.Sprintf("?%s", rq)
+	}
+	return fmt.Sprintf("%s%s%s", leaderAPIAddr, r.URL.Path, rq), nil
+}
+
+// CheckRequestPerm checks if the request is authenticated and authorized
+// with the given Perm.
+func (s *Service) CheckRequestPerm(r *http.Request, perm string) (b bool) {
+	defer func() {
+		if b {
+			stats.Add(numAuthOK, 1)
+		} else {
+			stats.Add(numAuthFail, 1)
+		}
+	}()
+
+	// No auth store set, so no checking required.
+	if s.credentialStore == nil {
+		return true
+	}
+
+	username, password, ok := r.BasicAuth()
+	if !ok {
+		username = ""
+	}
+
+	return s.credentialStore.AA(username, password, perm)
+}
+
+// CheckRequestPermAll checks if the request is authenticated and authorized
+// with all the given Perms.
+func (s *Service) CheckRequestPermAll(r *http.Request, perms ...string) (b bool) {
+	defer func() {
+		if b {
+			stats.Add(numAuthOK, 1)
+		} else {
+			stats.Add(numAuthFail, 1)
+		}
+	}()
+
+	// No auth store set, so no checking required.
+	if s.credentialStore == nil {
+		return true
+	}
+
+	username, password, ok := r.BasicAuth()
+	if !ok {
+		username = ""
+	}
+
+	for _, perm := range perms {
+		if !s.credentialStore.AA(username, password, perm) {
+			return false
+		}
+	}
+	return true
+}
+
+// LeaderAddr returns the Raft address of the leader, as known by this node.
+func (s *Service) LeaderAddr(ctx context.Context) (string, error) {
+	ldr, err := s.store.Leader()
+	if err != nil {
+		return "", err
+	}
+	if ldr.Addr == "" {
+		return "", store.ErrLeaderNotFound
+	}
+	return ldr.Addr, nil
+}
+
+// LeaderAPIAddr returns the HTTP API address of the leader, as known by this node.
+func (s *Service) LeaderAPIAddr(ctx context.Context) string {
+	ldr, err := s.store.Leader()
+	if err != nil {
+		return ""
+	}
+
+	meta, err := s.cluster.GetNodeMeta(ctx, ldr.Addr, 0, defaultTimeout)
+	if err != nil {
+		return ""
+	}
+	return meta.Url
+}
+
+func (s *Service) runQueue() {
+	defer close(s.queueDone)
+	retryDelay := time.Second
+
+	var err error
+	for {
+		select {
+		case <-s.closeCh:
+			return
+		case req := <-s.stmtQueue.C:
+			er := &proto.ExecuteRequest{
+				Request: &proto.Request{
+					Statements:  req.Objects,
+					Transaction: s.DefaultQueueTx,
+				},
+			}
+			stats.Add(numQueuedExecutionsStmtsRx, int64(len(req.Objects)))
+
+			// Nil statements are valid, as clients may want to just send
+			// a "checkpoint" through the queue.
+			if er.Request.Statements != nil {
+				for {
+					select {
+					case <-s.closeCh:
+						return
+					default:
+					}
+
+					_, _, _, err = s.proxy.Execute(context.Background(), er, nil, defaultTimeout, 0, false)
+					if err == nil {
+						// Success!
+						break
+					}
+
+					if errors.Is(err, proxy.ErrLeaderNotFound) {
+						s.logger.Printf("execute queue can't find leader for sequence number %d on node %s",
+							req.SequenceNumber, s.Addr().String())
+						stats.Add(numQueuedExecutionsNoLeader, 1)
+					} else {
+						s.logger.Printf("execute queue write failed for sequence number %d on node %s: %s",
+							req.SequenceNumber, s.Addr().String(), err.Error())
+						if err.Error() == "leadership lost while committing log" {
+							stats.Add(numQueuedExecutionsLeadershipLost, 1)
+						} else if err.Error() == "not leader" {
+							stats.Add(numQueuedExecutionsNotLeader, 1)
+						} else {
+							stats.Add(numQueuedExecutionsUnknownError, 1)
+						}
+					}
+
+					stats.Add(numQueuedExecutionsFailed, 1)
+					time.Sleep(retryDelay)
+				}
+			}
+
+			// Perform post-write processing.
+			atomic.StoreInt64(&s.seqNum, req.SequenceNumber)
+			req.Close()
+			stats.Add(numQueuedExecutionsStmtsTx, int64(len(req.Objects)))
+			stats.Add(numQueuedExecutionsOK, 1)
+		}
+	}
+}
+
+// addBuildVersion adds the build version to the HTTP response.
+func (s *Service) addBuildVersion(w http.ResponseWriter) {
+	version := "unknown"
+	if v, ok := s.BuildInfo["version"].(string); ok {
+		version = v
+	}
+	w.Header().Add(VersionHTTPHeader, version)
+}
+
+// addAllowHeaders adds the Access-Control-Allow-Origin, Access-Control-Allow-Methods,
+// and Access-Control-Allow-Headers headers to the HTTP response.
+func (s *Service) addAllowHeaders(w http.ResponseWriter) {
+	ao := s.AllowOrigin()
+	if ao != "" {
+		w.Header().Add(AllowOriginHeader, ao)
+	}
+	w.Header().Add(AllowMethodsHeader, "OPTIONS, GET, POST")
+	if s.credentialStore == nil {
+		w.Header().Add(AllowHeadersHeader, "Content-Type")
+	} else {
+		w.Header().Add(AllowHeadersHeader, "Content-Type, Authorization")
+		w.Header().Add(AllowCredentialsHeader, "true")
+	}
+}
+
+// addBackupFormatHeader adds the Content-Type header for the backup format.
+func addBackupFormatHeader(w http.ResponseWriter, qp QueryParams) {
+	w.Header().Set("Content-Type", "application/octet-stream")
+	if qp.BackupFormat() == proto.BackupRequest_BACKUP_REQUEST_FORMAT_SQL {
+		w.Header().Set("Content-Type", "application/sql")
+	}
+}
+
+// tlsStats returns the TLS stats for the service.
+func (s *Service) tlsStats() map[string]any {
+	m := map[string]any{
+		"enabled": fmt.Sprintf("%t", s.tlsConfig != nil),
+	}
+	if s.tlsConfig != nil {
+		m["client_auth"] = s.tlsConfig.ClientAuth.String()
+		m["cert_file"] = s.CertFile
+		m["key_file"] = s.KeyFile
+		m["ca_file"] = s.CACertFile
+		m["next_protos"] = s.tlsConfig.NextProtos
+	}
+	return m
+}
+
+// writeResponse writes the given response to the given writer.
+func (s *Service) writeResponse(w http.ResponseWriter, qp QueryParams, j Responser) {
+	var b []byte
+	var err error
+	if qp.Timings() {
+		j.SetTime()
+	}
+
+	if qp.Pretty() {
+		b, err = json.MarshalIndent(j, "", "    ")
+	} else {
+		b, err = json.Marshal(j)
+	}
+
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	_, err = w.Write(b)
+	if err != nil {
+		s.logger.Println("writing response failed:", err.Error())
+	}
+}
+
+func requestQueries(r *http.Request, qp QueryParams) ([]*proto.Statement, error) {
+	if r.Method == "GET" {
+		return []*proto.Statement{
+			{
+				Sql: qp.Query(),
+			},
+		}, nil
+	}
+	return ParseRequest(r.Body)
+}
+
+func getSubJSON(jsonBlob []byte, keyString string) (json.RawMessage, error) {
+	if keyString == "" {
+		return jsonBlob, nil
+	}
+
+	keys := strings.Split(keyString, ".")
+	var obj any
+	if err := json.Unmarshal(jsonBlob, &obj); err != nil {
+		return nil, fmt.Errorf("failed to unmarshal json: %w", err)
+	}
+
+	for _, key := range keys {
+		switch val := obj.(type) {
+		case map[string]any:
+			if value, ok := val[key]; ok {
+				obj = value
+			} else {
+				emptyObj := json.RawMessage("{}")
+				return emptyObj, nil
+			}
+		default:
+			// If a value is not a map, marshal and return this value
+			finalObjBytes, err := json.Marshal(obj)
+			if err != nil {
+				return nil, fmt.Errorf("failed to marshal final object: %w", err)
+			}
+			return finalObjBytes, nil
+		}
+	}
+
+	finalObjBytes, err := json.Marshal(obj)
+	if err != nil {
+		return nil, fmt.Errorf("failed to marshal final object: %w", err)
+	}
+
+	return finalObjBytes, nil
+}
+
+type sqlAnalyzeStmtResult struct {
+	Original  string `json:"original"`
+	Rewritten string `json:"rewritten,omitempty"`
+	Error     string `json:"error,omitempty"`
+}
+
+type sqlAnalyzeResponse struct {
+	Results []sqlAnalyzeStmtResult `json:"results"`
+	Time    float64                `json:"time,omitempty"`
+	start   time.Time
+}
+
+func (r *sqlAnalyzeResponse) SetTime() {
+	r.Time = time.Since(r.start).Seconds()
+}
+
+func prettyEnabled(e bool) string {
+	if e {
+		return "enabled"
+	}
+	return "disabled"
+}
+
+func kubernetesHint() bool {
+	_, ok := os.LookupEnv(kubernetesServiceHostEnv)
+	return ok
+}
+
+// queryRequestFromStrings converts a slice of strings into a proto.QueryRequest
+func executeRequestFromStrings(s []string, timings, tx bool) *proto.ExecuteRequest {
+	stmts := make([]*proto.Statement, len(s))
+	for i := range s {
+		stmts[i] = &proto.Statement{
+			Sql: s[i],
+		}
+
+	}
+	return &proto.ExecuteRequest{
+		Request: &proto.Request{
+			Statements:  stmts,
+			Transaction: tx,
+		},
+		Timings: timings,
+	}
+}
+
+func makeCredentials(r *http.Request) *clstrPB.Credentials {
+	username, password, ok := r.BasicAuth()
+	if !ok {
+		return nil
+	}
+	return &clstrPB.Credentials{
+		Username: username,
+		Password: password,
+	}
+}

@@ -1,0 +1,201 @@
+package plan
+
+import (
+	"fmt"
+	"io"
+	"os"
+	"path/filepath"
+	"time"
+
+	"github.com/rqlite/rqlite/v10/db"
+	"github.com/rqlite/rqlite/v10/internal/rsum"
+	"github.com/rqlite/rqlite/v10/snapshot/sidecar"
+)
+
+// Executor implements the Visitor interface to execute snapshot store operations.
+type Executor struct{}
+
+// NewExecutor returns a new Executor.
+func NewExecutor() *Executor {
+	return &Executor{}
+}
+
+// Executor performs a plan's operations; it implements Visitor. Its read-only
+// counterpart, which reports whether operations are already done, is Checker.
+var _ Visitor = (*Executor)(nil)
+
+// Rename renames a file. It is idempotent: if src does not exist but dst does,
+// it returns nil.
+func (e *Executor) Rename(src, dst string) error {
+	err := os.Rename(src, dst)
+	if err == nil {
+		return nil
+	}
+	if os.IsNotExist(err) {
+		// If source does not exist, check if destination exists.
+		if _, statErr := os.Stat(dst); statErr == nil {
+			return nil
+		}
+	}
+	return err
+}
+
+// Remove removes a file. It is idempotent: if the file does not exist, it returns nil.
+func (e *Executor) Remove(path string) error {
+	err := os.Remove(path)
+	if err != nil && !os.IsNotExist(err) {
+		return err
+	}
+	return nil
+}
+
+// RemoveAll removes a directory and any children. It is idempotent.
+func (e *Executor) RemoveAll(path string) error {
+	return os.RemoveAll(path)
+}
+
+// Checkpoint performs a WAL checkpoint of the given WAL files into the
+// database at dbPath. WAL files may reside in any directory; each is
+// renamed into the database's directory before checkpointing.
+//
+// If any WAL file does not exist, it is skipped. If no WAL files
+// exist, no checkpoint is attempted. The number of checkpointed
+// WAL files is returned.
+//
+// If any WAL files do exist, but the dbPath does not, an error is
+// returned.
+//
+// Checkpoint is idempotent: if the process crashes after a WAL has
+// been renamed into the checkpoint position but before the checkpoint
+// completes, a subsequent call will detect and finish the incomplete
+// checkpoint before processing the remaining WALs.
+func (e *Executor) Checkpoint(dbPath string, wals []string) (int, error) {
+	startT := time.Now()
+	defer recordDuration(checkpointDuration, startT)
+
+	walPath := dbPath + "-wal"
+
+	// Handle a leftover WAL from a previous interrupted checkpoint.
+	if _, err := os.Stat(walPath); err == nil {
+		if err := db.CheckpointRemove(dbPath); err != nil {
+			return 0, fmt.Errorf("checkpoint leftover WAL: %w", err)
+		}
+	}
+
+	existingWals := []string{}
+	for _, wal := range wals {
+		if _, err := os.Stat(wal); err == nil {
+			existingWals = append(existingWals, wal)
+		}
+	}
+	n := len(existingWals)
+	if n == 0 {
+		return 0, nil
+	}
+
+	if _, err := os.Stat(dbPath); err != nil {
+		return 0, err
+	}
+
+	for _, wal := range existingWals {
+		if err := os.Rename(wal, walPath); err != nil {
+			return 0, fmt.Errorf("moving WAL %s: %w", wal, err)
+		}
+		if err := db.CheckpointRemove(dbPath); err != nil {
+			return 0, fmt.Errorf("checkpointing WAL: %w", err)
+		}
+	}
+	return n, nil
+}
+
+// WriteMeta writes data to a meta.json file in the given directory. It is
+// idempotent: if the directory no longer exists (because a subsequent rename
+// in the plan already moved it), it returns nil.
+func (e *Executor) WriteMeta(dir string, data []byte) error {
+	path := filepath.Join(dir, "meta.json")
+	if err := os.WriteFile(path, data, 0644); err != nil {
+		if os.IsNotExist(err) {
+			return nil
+		}
+		return err
+	}
+	fh, err := os.Open(path)
+	if err != nil {
+		return err
+	}
+	defer fh.Close()
+	return syncFileMaybe(fh.Name())
+}
+
+// MkdirAll creates a directory and all necessary parents. It is idempotent:
+// if the directory already exists, it returns nil.
+func (e *Executor) MkdirAll(path string) error {
+	return os.MkdirAll(path, 0755)
+}
+
+// CopyFile copies a file from src to dst. It is idempotent: if dst already
+// exists and src does not (i.e. the copy was completed but a subsequent step
+// failed), it returns nil.
+func (e *Executor) CopyFile(src, dst string) error {
+	srcFd, err := os.Open(src)
+	if err != nil {
+		if os.IsNotExist(err) {
+			if _, statErr := os.Stat(dst); statErr == nil {
+				return nil
+			}
+		}
+		return err
+	}
+	defer srcFd.Close()
+
+	fi, err := srcFd.Stat()
+	if err != nil {
+		return err
+	}
+
+	dstFd, err := os.OpenFile(dst, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, fi.Mode())
+	if err != nil {
+		return err
+	}
+	defer dstFd.Close()
+
+	if _, err := io.Copy(dstFd, srcFd); err != nil {
+		return err
+	}
+	return dstFd.Sync()
+}
+
+// CalcCRC32 calculates the CRC32 checksum of the file at dataPath and
+// writes it to crcPath. It is idempotent: repeated calls will overwrite
+// the sidecar with the current checksum.
+func (e *Executor) CalcCRC32(dataPath, crcPath string) error {
+	startT := time.Now()
+	defer recordDuration(calcCRC32Duration, startT)
+
+	sum, err := rsum.CRC32(dataPath)
+	if err != nil {
+		return fmt.Errorf("calculating CRC32 of %s: %w", dataPath, err)
+	}
+	if err := sidecar.WriteFile(crcPath, sum); err != nil {
+		return fmt.Errorf("writing CRC32 sum file %s: %w", crcPath, err)
+	}
+	return nil
+}
+
+// VerifyDB runs an integrity check on the database at the given path.
+func (e *Executor) VerifyDB(path string) error {
+	srcDB, err := db.Open(path, false, true)
+	if err != nil {
+		return err
+	}
+	defer srcDB.Close()
+
+	res, err := srcDB.VerifyIntegrity()
+	if err != nil {
+		return err
+	}
+	if !res.OK {
+		return fmt.Errorf("database failed verification: %s", res.Issues[0])
+	}
+	return nil
+}

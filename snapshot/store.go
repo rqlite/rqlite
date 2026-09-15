@@ -1,0 +1,986 @@
+package snapshot
+
+import (
+	"encoding/json"
+	"errors"
+	"expvar"
+	"fmt"
+	"io"
+	"log"
+	"os"
+	"path/filepath"
+	"sync"
+	"sync/atomic"
+	"time"
+
+	"github.com/hashicorp/raft"
+	"github.com/rqlite/rqlite/v10/internal/fsutil"
+	"github.com/rqlite/rqlite/v10/internal/rsync"
+	"github.com/rqlite/rqlite/v10/snapshot/plan"
+)
+
+const (
+	dbfileName     = "data.db"
+	metaFileName   = "meta.json"
+	tmpSuffix      = ".tmp"
+	walfileSuffix  = ".wal"
+	fullNeededFile = "FULL_NEEDED"
+	reapPlanFile   = "REAP_PLAN"
+
+	defaultReapThreshold = 4
+	defaultReadTimeout   = 30 * time.Second
+)
+
+const (
+	persistSize     = "persist_size"
+	persistDuration = "persist_duration_ms"
+
+	sinkFullTotal        = "sink_full_total"
+	sinkIncrementalTotal = "sink_incremental_total"
+	sinkErrors           = "sink_errors"
+	sinkFullCRC32Dur     = "sink_full_crc32_duration_ms"
+
+	autoReapDuration    = "auto_reap_duration_ms"
+	reapExecuteDuration = "reap_execute_duration_ms"
+	reapTotal           = "reap_total"
+	reapErrors          = "reap_errors"
+	reapSnapshots       = "reap_snapshots"
+	reapWALs            = "reap_wals"
+	reapPlanRecovered   = "reap_plan_recovered"
+	readTimeoutTotal    = "read_timeout_total"
+
+	upgradeOk   = "upgrade_ok"
+	upgradeFail = "upgrade_fail"
+)
+
+var (
+	// ErrSnapshotNotFound is returned when a snapshot cannot be found.
+	ErrSnapshotNotFound = errors.New("snapshot not found")
+)
+
+// stats captures stats for the Store.
+var stats *expvar.Map
+
+func init() {
+	stats = expvar.NewMap("snapshot")
+	ResetStats()
+}
+
+func recordDuration(stat string, startT time.Time) {
+	stats.Get(stat).(*expvar.Int).Set(time.Since(startT).Milliseconds())
+}
+
+// ResetStats resets the expvar stats for this module. Mostly for test purposes.
+func ResetStats() {
+	stats.Init()
+	stats.Add(persistSize, 0)
+	stats.Add(persistDuration, 0)
+	stats.Add(sinkFullTotal, 0)
+	stats.Add(sinkIncrementalTotal, 0)
+	stats.Add(sinkErrors, 0)
+	stats.Add(sinkFullCRC32Dur, 0)
+	stats.Add(autoReapDuration, 0)
+	stats.Add(reapExecuteDuration, 0)
+	stats.Add(reapTotal, 0)
+	stats.Add(reapErrors, 0)
+	stats.Add(reapSnapshots, 0)
+	stats.Add(reapWALs, 0)
+	stats.Add(reapPlanRecovered, 0)
+	stats.Add(readTimeoutTotal, 0)
+	stats.Add(upgradeOk, 0)
+	stats.Add(upgradeFail, 0)
+}
+
+// ErrSnapshotReaderTimeout is returned by Read after the LockingStreamer has
+// been force-closed due to its idle timeout being exceeded.
+var ErrSnapshotReaderTimeout = errors.New("snapshot reader idle timeout exceeded")
+
+// LockingStreamer is a snapshot which holds the Snapshot Store MRSW read-lok
+// while it is open. If a non-zero idle timeout is configured, the streamer
+// will be force-closed after the timeout elapses with no Read activity, so
+// that the read lock cannot be held indefinitely by a stalled consumer
+// (e.g. a slow follower receiving a snapshot transfer).
+type LockingStreamer struct {
+	io.ReadCloser
+	str     *Store
+	timeout time.Duration
+
+	lastRead atomic.Int64      // unix nanos of last Read activity
+	timedOut *rsync.AtomicBool // set when force-closed by the idle timer
+	closed   *rsync.AtomicBool // set when Close has been invoked (any path)
+
+	mu    sync.Mutex
+	timer *time.Timer
+
+	meta *raft.SnapshotMeta
+}
+
+// NewLockingStreamer returns a new LockingStreamer. If timeout > 0, the
+// streamer will be force-closed after that much time elapses with no Read
+// activity. A timeout of 0 disables the idle check.
+func NewLockingStreamer(rc io.ReadCloser, str *Store, mt *raft.SnapshotMeta, to time.Duration) *LockingStreamer {
+	l := &LockingStreamer{
+		ReadCloser: rc,
+		str:        str,
+		timeout:    to,
+		timedOut:   rsync.NewAtomicBool(),
+		closed:     rsync.NewAtomicBool(),
+		meta:       mt,
+	}
+	l.lastRead.Store(time.Now().UnixNano())
+	if to > 0 {
+		l.timer = time.AfterFunc(to, l.checkIdle)
+	}
+	return l
+}
+
+// Read reads from the underlying snapshot stream, recording the time of any
+// successful read so that the idle timeout can be enforced. If the idle
+// timer has already fired, Read returns ErrSnapshotReaderTimeout without
+// touching the underlying reader.
+func (l *LockingStreamer) Read(p []byte) (int, error) {
+	if l.timedOut.Is() {
+		return 0, ErrSnapshotReaderTimeout
+	}
+	n, err := l.ReadCloser.Read(p)
+	if n > 0 {
+		l.lastRead.Store(time.Now().UnixNano())
+	}
+	return n, err
+}
+
+// Index returns the Raft Index of the streamed Snapshot
+func (l *LockingStreamer) Index() uint64 {
+	return l.meta.Index
+}
+
+// Term returns the Raft Term of the streamed Snapshot
+func (l *LockingStreamer) Term() uint64 {
+	return l.meta.Term
+}
+
+// Close closes the Snapshot and releases the Snapshot Store lock.
+func (l *LockingStreamer) Close() error {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	if l.closed.Is() {
+		return nil
+	}
+	l.closed.Set()
+	if l.timer != nil {
+		l.timer.Stop()
+	}
+	defer l.str.mrsw.EndRead()
+	return l.ReadCloser.Close()
+}
+
+// checkIdle is invoked by the idle-timeout timer. If the streamer has been
+// idle for at least the configured timeout, it is force-closed and the
+// Snapshot Store read lock is released. Otherwise the timer is re-armed
+// for the remaining idle window.
+func (l *LockingStreamer) checkIdle() {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	if l.closed.Is() {
+		return
+	}
+	last := time.Unix(0, l.lastRead.Load())
+	idle := time.Since(last)
+	if idle < l.timeout {
+		l.timer.Reset(l.timeout - idle)
+		return
+	}
+	l.timedOut.Set()
+	l.closed.Set()
+	stats.Add(readTimeoutTotal, 1)
+	l.str.logger.Printf("snapshot reader idle for %s, forcing close", idle)
+	if closeErr := l.ReadCloser.Close(); closeErr != nil {
+		l.str.logger.Printf("error closing idle snapshot reader: %s", closeErr)
+	}
+	l.str.mrsw.EndRead()
+}
+
+// Store stores snapshots in the Raft system.
+type Store struct {
+	dir            string
+	fullNeededPath string
+	reapPlanPath   string
+	logger         *log.Logger
+
+	catalog *SnapshotCatalog
+
+	snapshotNamer *SnapshotNamer
+
+	// verifyOnce ensures the CRC32 integrity check of all snapshot files runs at
+	// most once over the lifetime of the Store, the first time snapshot data is
+	// about to be used. verifyErr caches the result so a corruption verdict is
+	// sticky and a successful check is never recomputed.
+	verifyOnce sync.Once
+	verifyErr  error
+
+	// fatalFn is invoked when snapshot data is found to be corrupt during
+	// verification. By default it terminates the process, since continuing risks
+	// using corrupt data (the cluster is expected to provide fault tolerance).
+	// Tests set it to nil so the error propagates and can be asserted on instead.
+	fatalFn func(error)
+
+	// Multi-reader single-writer lock for the Store, which must be held
+	// if snapshots are deleted i.e. reaped. Simply creating or reading
+	// a snapshot requires only a read lock.
+	mrsw          *rsync.MultiRSW
+	reapDisabled  *rsync.AtomicBool
+	reapThreshold int
+	noVerifyDB    *rsync.AtomicBool
+
+	// readTimeout is the maximum time a LockingStreamer may sit idle (no
+	// Read calls returning data) before it is force-closed. Zero disables
+	// the check. Guarded only by the requirement that callers set it
+	// before any snapshot is opened.
+	readTimeout time.Duration
+
+	reapCh     chan struct{}
+	reapDoneCh chan struct{}
+	wg         sync.WaitGroup
+
+	observers *observerSet
+
+	LogReaping bool
+}
+
+// NewStore creates a new store.
+func NewStore(dir string) (*Store, error) {
+	if err := os.MkdirAll(dir, 0755); err != nil {
+		return nil, err
+	}
+
+	logger := log.New(os.Stderr, "[snapshot-store] ", log.LstdFlags)
+	str := &Store{
+		dir:            dir,
+		fullNeededPath: filepath.Join(dir, fullNeededFile),
+		reapPlanPath:   filepath.Join(dir, reapPlanFile),
+		catalog:        &SnapshotCatalog{},
+		snapshotNamer:  NewSnapshotNamer(nil),
+		mrsw:           rsync.NewMultiRSW(),
+		reapDisabled:   &rsync.AtomicBool{},
+		noVerifyDB:     &rsync.AtomicBool{},
+		reapThreshold:  defaultReapThreshold,
+		readTimeout:    defaultReadTimeout,
+		reapCh:         make(chan struct{}, 1),
+		reapDoneCh:     make(chan struct{}),
+		observers:      newObserverSet(),
+		logger:         logger,
+		fatalFn: func(err error) {
+			logger.Fatalf("fatal snapshot integrity error, exiting process: %s", err)
+		},
+	}
+	str.logger.Printf("store initialized using %s", dir)
+
+	if err := str.check(); err != nil {
+		return nil, err
+	}
+
+	// Kick off the reaper goroutine.
+	str.wg.Go(str.reapLoop)
+
+	return str, nil
+}
+
+// Create creates a new snapshot sink for the given parameters.
+func (s *Store) Create(version raft.SnapshotVersion, index, term uint64, configuration raft.Configuration,
+	configurationIndex uint64, trans raft.Transport) (retSink raft.SnapshotSink, retErr error) {
+	sink := NewSink(s.dir, &raft.SnapshotMeta{
+		Version:            version,
+		ID:                 s.snapshotNamer.MakeName(term, index),
+		Index:              index,
+		Term:               term,
+		Configuration:      configuration,
+		ConfigurationIndex: configurationIndex,
+	}, s, s.reapCh)
+	if err := sink.Open(); err != nil {
+		return nil, err
+	}
+	return sink, nil
+}
+
+// ListAll returns the list of all available snapshots in the Store,
+// ordered from newest to oldest.
+func (s *Store) ListAll() ([]*raft.SnapshotMeta, error) {
+	if err := s.mrsw.BeginRead(); err != nil {
+		return nil, err
+	}
+	defer s.mrsw.EndRead()
+
+	sset, err := s.catalog.Scan(s.dir)
+	if err != nil {
+		return nil, err
+	}
+	metas := sset.RaftMetas()
+	// reverse the order to be from newest to oldest
+	for i, j := 0, len(metas)-1; i < j; i, j = i+1, j-1 {
+		metas[i], metas[j] = metas[j], metas[i]
+	}
+	return metas, nil
+}
+
+// List returns the most recent snapshot in the Store, if any exist.
+// It satisfies the raft.SnapshotStore interface.
+func (s *Store) List() ([]*raft.SnapshotMeta, error) {
+	metas, err := s.ListAll()
+	if err != nil {
+		return nil, err
+	}
+	if len(metas) == 0 {
+		return metas, nil
+	}
+	return metas[:1], nil
+}
+
+// Len returns the number of snapshots in the Store.
+func (s *Store) Len() int {
+	if err := s.mrsw.BeginRead(); err != nil {
+		return 0
+	}
+	defer s.mrsw.EndRead()
+
+	sset, err := s.catalog.Scan(s.dir)
+	if err != nil {
+		return 0
+	}
+	return sset.Len()
+}
+
+// LatestIndexTerm returns the index and term of the most recent
+// snapshot in the Store.
+func (s *Store) LatestIndexTerm() (uint64, uint64, error) {
+	if err := s.mrsw.BeginRead(); err != nil {
+		return 0, 0, err
+	}
+	defer s.mrsw.EndRead()
+
+	sset, err := s.catalog.Scan(s.dir)
+	if err != nil {
+		return 0, 0, err
+	}
+	newest, ok := sset.Newest()
+	if !ok {
+		return 0, 0, ErrSnapshotNotFound
+	}
+	return newest.raftMeta.Index, newest.raftMeta.Term, nil
+}
+
+// Dir returns the directory where the snapshots are stored.
+func (s *Store) Dir() string {
+	return s.dir
+}
+
+// SetReapThreshold sets the minimum number of snapshots that must
+// exist before auto-reap is triggered after a successful persist.
+func (s *Store) SetReapThreshold(n int) {
+	s.reapThreshold = n
+}
+
+// SetReadTimeout sets the idle timeout applied to LockingStreamers
+// returned by Open. A zero or negative value disables the timeout.
+// Must be called before any snapshot is opened.
+func (s *Store) SetReadTimeout(d time.Duration) {
+	if d < 0 {
+		d = 0
+	}
+	s.readTimeout = d
+}
+
+// Open opens the snapshot with the given ID for reading. Open returns an io.ReadCloser
+// which wraps a SnapshotInstall object. This is because the snapshot will be used
+// to either rebuild a node's state after restart, or to send the snapshot to another node,
+// both of which require the DB file and any associated WAL files.
+//
+// A sink does not need to lock the Store because either the Snapshot directory it
+// creates will be visible or not. Reaping will not see it until it is fully created,
+// and Listing it will not return it until it is fully created too.
+func (s *Store) Open(id string) (raftMeta *raft.SnapshotMeta, rc io.ReadCloser, retErr error) {
+	if err := s.mrsw.BeginRead(); err != nil {
+		return nil, nil, fmt.Errorf("acquiring read lock: %w", err)
+	}
+	defer func() {
+		if retErr != nil {
+			s.mrsw.EndRead()
+		}
+	}()
+
+	// The data files are about to be read, so verify their integrity first
+	// (runs at most once over the Store's lifetime). On corruption this hard
+	// exits in production via fatalFn; with fatalFn disabled (tests) the error
+	// is returned.
+	if err := s.ensureVerified(); err != nil {
+		return nil, nil, err
+	}
+
+	snapSet, err := s.getSnapshots()
+	if err != nil {
+		return nil, nil, fmt.Errorf("scanning snapshots: %w", err)
+	}
+	if snapSet.Len() == 0 {
+		return nil, nil, ErrSnapshotNotFound
+	}
+
+	dbFile, walFiles, err := snapSet.ResolveFiles(id)
+	if err != nil {
+		return nil, nil, fmt.Errorf("resolving files for snapshot %s: %w", id, err)
+	}
+
+	streamer, err := NewChecksummedSnapshotStreamer(dbFile, walFiles...)
+	if err != nil {
+		return nil, nil, fmt.Errorf("creating streamer for snapshot %s: %w", id, err)
+	}
+
+	if err := streamer.Open(); err != nil {
+		return nil, nil, fmt.Errorf("opening streamer for snapshot %s: %w", id, err)
+	}
+	// The streamer now holds open file descriptors for the DB and WAL files.
+	// Ownership passes to the returned LockingStreamer only on the success path;
+	// if we return an error before then, close the streamer here so the
+	// descriptors don't leak (the deferred EndRead above only releases the read
+	// lock).
+	defer func() {
+		if retErr != nil {
+			streamer.Close()
+		}
+	}()
+
+	sz, err := streamer.Len()
+	if err != nil {
+		return nil, nil, fmt.Errorf("computing stream length for snapshot %s: %w", id, err)
+	}
+
+	meta, err := readRaftMeta(metaPath(filepath.Join(s.dir, id)))
+	if err != nil {
+		return nil, nil, fmt.Errorf("reading metadata for snapshot %s: %w", id, err)
+	}
+	meta.Size = sz
+
+	return meta, NewLockingStreamer(streamer, s, meta, s.readTimeout), nil
+}
+
+// RegisterObserver registers an observer to receive observations.
+func (s *Store) RegisterObserver(o *Observer) {
+	s.observers.register(o)
+}
+
+// DeregisterObserver removes a previously registered observer.
+func (s *Store) DeregisterObserver(o *Observer) {
+	s.observers.deregister(o)
+}
+
+// SetNoVerifyDB controls whether the database is verified after any
+// manipulation. Verification is not appropriate for production, this
+// is primarily for controlling test coverage.
+func (s *Store) SetNoVerifyDB(v bool) {
+	s.noVerifyDB.SetBool(v)
+}
+
+// Close shuts down the reaper goroutine and waits for it to exit.
+func (s *Store) Close() error {
+	close(s.reapDoneCh)
+	s.wg.Wait()
+	return nil
+}
+
+// Reap reaps snapshots. Reaping is the process of deleting old snapshots that are no
+// longer needed. Reaping is a destructive operation, and is non-reversible. If it
+// is interrupted, it must be completed later before the snapshot store is usable
+// again.
+//
+// What does Reaping do? It starts by identifying the most recent full snapshot. It
+// then deletes all snapshots older than that snapshot, since they are not needed.
+//
+// Next, if there are no snapshots newer than that snapshot, then the reaping process
+// is complete as there is nothing else to do. However, if there are snapshots newer
+// than that snapshot they must be incremental snapshots, and they must be based on
+// that full snapshot. In that case, the reaping process consolidates those incremental
+// snapshots into the full snapshot, creating a single up-to-date full snapshot.
+//
+// It does this by checkpointing each incremental WAL file into the full snapshot's
+// database file, removing the incremental snapshot directories and any older snapshot
+// directories, writing new metadata reflecting the newest incremental's index and term,
+// and finally renaming the full snapshot directory to a new name with a current timestamp.
+//
+// Because this is a critical operation which must run to completion even if interrupted,
+// it uses a plan-then-execute approach. The entire sequence of operations is captured in
+// a Plan, which is serialized to disk at the path REAP_PLAN. The plan is then executed.
+// If the process is interrupted during execution, the plan can be re-read and re-executed
+// on restart, since all operations are idempotent.
+//
+// It returns the number of snapshots reaped, and the number of WAL files checkpointed as
+// part of the consolidation.
+func (s *Store) Reap() (int, int, error) {
+	if err := s.mrsw.BeginWrite("reap"); err != nil {
+		return 0, 0, err
+	}
+	defer s.mrsw.EndWrite()
+	return s.reap()
+}
+
+// reap performs the actual reap. The caller must hold the write lock.
+// On success, registered observers are notified.
+func (s *Store) reap() (int, int, error) {
+	startTime := time.Now()
+	n, c, err := s.reapInternal()
+	if err != nil {
+		return n, c, err
+	}
+	stats.Add(reapTotal, 1)
+	stats.Get(reapSnapshots).(*expvar.Int).Set(int64(n))
+	stats.Get(reapWALs).(*expvar.Int).Set(int64(c))
+	s.observers.notify(ReapObservation{
+		SnapshotsReaped: n,
+		WALsReaped:      c,
+		Duration:        time.Since(startTime),
+	})
+	return n, c, nil
+}
+
+// reapInternal performs the actual reap logic. The caller must hold the write lock.
+func (s *Store) reapInternal() (int, int, error) {
+	// If a reap plan file exists, that means a previous reap must have encountered an error.
+	// Let's make sure it is completed before we start a new reap.
+	if fsutil.FileExists(s.reapPlanPath) {
+		s.logger.Printf("found interrupted reap plan at %s, resuming", s.reapPlanPath)
+		stats.Add(reapPlanRecovered, 1)
+		p, err := plan.ReadFromFile(s.reapPlanPath)
+		if err != nil {
+			return 0, 0, fmt.Errorf("reading reap plan: %w", err)
+		}
+		return s.executeReapPlan(p, s.reapPlanPath)
+	} else {
+		// A reap reads and rewrites the data files, so verify their integrity
+		// first (runs at most once over the Store's lifetime). We only do this if
+		// a reap wasn't previously interrupted (by a crash most likely), as an
+		// interrupted reap leaves data in an undefined state. On corruption this
+		// hard exits in production via fatalFn; with fatalFn disabled (tests) the
+		// error is returned.
+		if err := s.ensureVerified(); err != nil {
+			return 0, 0, err
+		}
+	}
+
+	// Scan store.
+	snapSet, err := s.getSnapshots()
+	if err != nil {
+		return 0, 0, err
+	}
+
+	// Nothing to do for empty stores.
+	if snapSet.Len() == 0 {
+		return 0, 0, nil
+	}
+
+	// Find the newest full snapshot and everything newer than it.
+	fullSet, newerSet := snapSet.PartitionAtFull()
+	if fullSet.Len() == 0 {
+		return 0, 0, fmt.Errorf("no full snapshot found")
+	}
+
+	full, _ := fullSet.Newest()
+
+	// Single full snapshot with nothing newer — nothing to do.
+	if snapSet.Len() == 1 {
+		return 0, 0, nil
+	}
+
+	olderSet := snapSet.BeforeID(full.id)
+
+	p := plan.New()
+
+	// Collect all WAL files: from the full snapshot itself and from any
+	// incremental snapshots that follow it.
+	var walFiles []string
+	for _, wf := range full.walFiles {
+		walFiles = append(walFiles, wf.Path)
+	}
+	for _, snap := range newerSet.All() {
+		for _, wf := range snap.walFiles {
+			walFiles = append(walFiles, wf.Path)
+		}
+	}
+
+	if newerSet.Len() == 0 && len(walFiles) == 0 {
+		// No WALs to checkpoint and no incrementals — just remove older snapshots.
+		for _, snap := range olderSet.All() {
+			p.AddRemoveAll(snap.path)
+			p.NReaped++
+		}
+	} else if len(walFiles) > 0 {
+		// 1. Checkpoint all WAL files into the full snapshot's DB. We do it this way
+		// because presumably the full snapshot DB is the largest file and it generally
+		// makes sense to move the WAL files to it.
+		dbPath := filepath.Join(full.path, dbfileName)
+		p.AddCheckpoint(dbPath, walFiles)
+		p.NCheckpointed = len(walFiles)
+
+		// 2. Recompute CRC32 sidecar for the checkpointed DB file.
+		p.AddCalcCRC32(dbPath, dbPath+crcSuffix)
+
+		// 3. Remove all incremental snapshot dirs since we have just checkpointed
+		// associated WAL files into the full database.
+		for _, snap := range newerSet.All() {
+			p.AddRemoveAll(snap.path)
+			p.NReaped++
+		}
+
+		// 4. Remove all older-than-full dirs. They are not needed any longer.
+		for _, snap := range olderSet.All() {
+			p.AddRemoveAll(snap.path)
+			p.NReaped++
+		}
+
+		// 5. Write new metadata into the full snapshot dir, overwriting the existing
+		// metadata.
+		var newest *Snapshot
+		if newerSet.Len() > 0 {
+			newest, _ = newerSet.Newest()
+		} else {
+			newest = full
+		}
+		newID := s.snapshotNamer.MakeName(newest.raftMeta.Term, newest.raftMeta.Index)
+		newMeta := copyRaftMeta(newest.raftMeta)
+		newMeta.ID = newID
+		metaJSON, err := json.Marshal(newMeta)
+		if err != nil {
+			return 0, 0, fmt.Errorf("marshaling consolidated meta: %w", err)
+		}
+		p.AddWriteMeta(full.path, metaJSON)
+
+		// 6. Run an integrity check of the checkpointed database.
+		if s.noVerifyDB.IsNot() {
+			p.AddVerifyDB(dbPath)
+		}
+
+		// 7. Rename to new snapshot name. The end result of the Reaping process
+		// will be a new full snapshot with a new ID. That ID is generated from
+		// the newest snapshot's index and term, and the current timestamp.
+		finalDir := filepath.Join(s.dir, newID)
+		p.AddRename(full.path, finalDir)
+	}
+
+	// Persist the plan to disk for crash recovery.
+	if err := plan.WriteToFile(p, s.reapPlanPath); err != nil {
+		return 0, 0, fmt.Errorf("writing reap plan: %w", err)
+	}
+
+	return s.executeReapPlan(p, s.reapPlanPath)
+}
+
+// executeReapPlan executes a reap plan and cleans up.
+func (s *Store) executeReapPlan(p *plan.Plan, planPath string) (int, int, error) {
+	startT := time.Now()
+	defer recordDuration(reapExecuteDuration, startT)
+
+	executor := plan.NewExecutor()
+	if err := p.Execute(executor); err != nil {
+		return 0, 0, fmt.Errorf("executing reap plan: %w", err)
+	}
+
+	if err := fsutil.SyncDirMaybe(s.dir); err != nil {
+		return 0, 0, fmt.Errorf("syncing store dir: %w", err)
+	}
+
+	// Clean up the plan file.
+	os.Remove(planPath)
+	return p.NReaped, p.NCheckpointed, nil
+}
+
+// signalReap sends a non-blocking signal to the reaper goroutine.
+func (s *Store) signalReap() {
+	select {
+	case s.reapCh <- struct{}{}:
+	default:
+	}
+}
+
+// DueNext returns the type of snapshot due next.
+func (s *Store) DueNext() (Type, error) {
+	if fsutil.FileExists(s.fullNeededPath) {
+		return Full, nil
+	}
+
+	nSnaps := s.snapshotCount()
+	if nSnaps == 0 {
+		return Full, nil
+	}
+	return Incremental, nil
+}
+
+// SetDueNext sets the type of snapshot due next. Setting Full
+// creates a flag file; setting Incremental removes it.
+func (s *Store) SetDueNext(t Type) error {
+	switch t {
+	case Full:
+		f, err := os.Create(s.fullNeededPath)
+		if err != nil {
+			return err
+		}
+		if err := f.Sync(); err != nil {
+			f.Close()
+			return err
+		}
+		if err := f.Close(); err != nil {
+			return err
+		}
+		return fsutil.SyncDirMaybe(s.dir)
+	case Incremental:
+		if !fsutil.FileExists(s.fullNeededPath) {
+			return nil
+		}
+		if err := os.Remove(s.fullNeededPath); err != nil {
+			return err
+		}
+		return fsutil.SyncDirMaybe(s.dir)
+	default:
+		return fmt.Errorf("unknown snapshot type: %s", t)
+	}
+}
+
+// Stats returns stats about the Snapshot Store. This function may return
+// an error if the Store is in an inconsistent state. In that case the stats
+// returned may be incomplete or invalid.
+func (s *Store) Stats() (map[string]any, error) {
+	if err := s.mrsw.BeginRead(); err != nil {
+		return nil, err
+	}
+	defer s.mrsw.EndRead()
+
+	dirSz, err := fsutil.DirSize(s.dir)
+	if err != nil {
+		// If we can't compute the directory size, we can still return other stats,
+		// so we ignore the error and just report a size of 0.
+		dirSz = 0
+	}
+
+	snapshots, err := s.getSnapshots()
+	if err != nil {
+		return nil, err
+	}
+	return map[string]any{
+		"dir":       s.dir,
+		"dir_size":  dirSz,
+		"snapshots": snapshots.IDs(),
+	}, nil
+}
+
+// snapshotCount returns the number of non-tmp snapshot subdirectories.
+// This is a lightweight heuristic that does not require any lock.
+func (s *Store) snapshotCount() int {
+	entries, err := os.ReadDir(s.dir)
+	if err != nil {
+		return 0
+	}
+	n := 0
+	for _, e := range entries {
+		if e.IsDir() && !isTmpName(e.Name()) {
+			n++
+		}
+	}
+	return n
+}
+
+// reapLoop is the reaper goroutine. It waits for signals from Sink.Close()
+// and reaps snapshots when the count exceeds the threshold. It uses a blocking
+// write lock acquisition so it will wait for active readers to finish rather
+// than failing.
+func (s *Store) reapLoop() {
+	for {
+		select {
+		case <-s.reapCh:
+		case <-s.reapDoneCh:
+			return
+		}
+
+		if s.reapDisabled.Is() {
+			continue
+		}
+
+		count := s.snapshotCount()
+		if count < s.reapThreshold {
+			continue
+		}
+
+		startT := time.Now()
+		n, c, err := func() (int, int, error) {
+			defer recordDuration(autoReapDuration, startT)
+			s.mrsw.BeginWriteBlocking("reap")
+			defer s.mrsw.EndWrite()
+			return s.reap()
+		}()
+		if err != nil {
+			s.logger.Printf("reap failed: %s", err)
+			stats.Add(reapErrors, 1)
+			continue
+		}
+		if s.LogReaping {
+			s.logger.Printf("autoreap complete in %s: %d snapshots reaped, %d WALs checkpointed",
+				time.Since(startT), n, c)
+		}
+	}
+}
+
+// check repairs any structural inconsistencies in the Store left behind by a
+// crash during snapshotting or reaping: it discards an incomplete reap plan,
+// resumes an interrupted reap, and removes leftover temporary directories.
+//
+// Check does NOT verify file checksums. That is done lazily, exactly once, the
+// first time snapshot data is about to be used -- see Verify, Open, and Reap.
+//
+// Check must be called on an idle Store or the results are undefined.
+// If called on a empty Store, then it returns without an error.
+func (s *Store) check() error {
+	emp, err := fsutil.DirIsEmpty(s.dir)
+	if err != nil {
+		return err
+	}
+	if emp {
+		return nil
+	}
+
+	// Remove any incomplete plan file from an interrupted plan write.
+	os.Remove(tmpName(s.reapPlanPath))
+
+	// Resume an interrupted reap if a plan file exists, before any temporary
+	// directories are removed below, since the reap may still need them.
+	if fsutil.FileExists(s.reapPlanPath) {
+		s.logger.Printf("found interrupted reap plan at %s", s.reapPlanPath)
+		p, err := plan.ReadFromFile(s.reapPlanPath)
+		if err != nil {
+			return fmt.Errorf("reading reap plan: %w", err)
+		}
+
+		// If the plan's final operation is already applied, the plan ran to
+		// completion on a previous attempt and we crashed after that operation but
+		// before the plan file was removed. Because operations execute in order and
+		// stop at the first error, a completed final operation means every earlier
+		// operation completed too.
+		//
+		// Replaying such a plan can fail -- an earlier operation may reference a
+		// path a later one has since renamed or removed -- so skip execution and
+		// just finish the interrupted cleanup. This was a flaw in the initial
+		// v9 implementation, but other fixes would not be backwards-compatible.
+		done, err := p.LastOpDone(plan.NewChecker())
+		if err != nil {
+			return fmt.Errorf("checking reap plan completion: %w", err)
+		}
+		if !done {
+			s.logger.Printf("re-executing interrupted reap plan at %s", s.reapPlanPath)
+			if _, _, err := s.executeReapPlan(p, s.reapPlanPath); err != nil {
+				return fmt.Errorf("executing reap plan: %w", err)
+			}
+		} else {
+			s.logger.Printf("reap plan at %s is fully executed, removing plan", s.reapPlanPath)
+			os.Remove(s.reapPlanPath)
+		}
+	}
+
+	// Anything remaining is truly temporary and can now be cleaned up.
+	entries, err := os.ReadDir(s.dir)
+	if err != nil {
+		return fmt.Errorf("reading store directory: %w", err)
+	}
+	for _, e := range entries {
+		if e.IsDir() && isTmpName(e.Name()) {
+			tmpPath := filepath.Join(s.dir, e.Name())
+			s.logger.Printf("removing leftover temporary directory %s", tmpPath)
+			if err := os.RemoveAll(tmpPath); err != nil {
+				return fmt.Errorf("removing temporary directory %s: %w", tmpPath, err)
+			}
+		}
+	}
+	return nil
+}
+
+// checkCRCs verifies the CRC32 of every data file in every snapshot directory.
+func (s *Store) checkCRCs() error {
+	startT := time.Now()
+	snapshots, err := s.catalog.Scan(s.dir)
+	if err != nil {
+		return fmt.Errorf("scanning snapshots for CRC check: %w", err)
+	}
+	if len(snapshots.items) == 0 {
+		return nil
+	}
+
+	checker := NewCRCChecker()
+	for _, snap := range snapshots.items {
+		if snap.dbFile != nil {
+			checker.Add(snap.dbFile)
+		}
+		for _, wf := range snap.walFiles {
+			checker.Add(wf)
+		}
+	}
+
+	if err := <-checker.Check(); err != nil {
+		return err
+	}
+
+	s.logger.Printf("completed CRC32 check of %d snapshot directories in %s",
+		len(snapshots.items), time.Since(startT))
+	return nil
+}
+
+// ensureVerified runs the CRC32 integrity check of every snapshot data file
+// exactly once over the lifetime of the Store, the first time snapshot data is
+// about to be used. The result is cached: a corruption verdict is returned to
+// every subsequent caller, and a successful check is never recomputed.
+//
+// If the check fails, fatalFn is invoked. In production this terminates the
+// process and ensureVerified never returns; tests set fatalFn to nil so the
+// error is returned and can be asserted on instead.
+//
+// The check reads every data file, so the caller must hold the Store read or
+// write lock so it does not run concurrently with a reap.
+func (s *Store) ensureVerified() error {
+	s.verifyOnce.Do(func() {
+		err := s.checkCRCs()
+		if err != nil && s.fatalFn != nil {
+			s.fatalFn(err) // terminates the process in production; never returns
+		}
+		s.verifyErr = err // reached only when fatalFn is nil (tests)
+	})
+	return s.verifyErr
+}
+
+// EnsureVerify runs the CRC32 integrity check but sets up the caching of the state
+// so that future verification states will use cached value.
+func (s *Store) EnsureVerify() error {
+	s.mrsw.BeginReadBlocking()
+	defer s.mrsw.EndRead()
+	return s.ensureVerified()
+}
+
+// Verify runs the CRC32 integrity check.
+func (s *Store) Verify() error {
+	s.mrsw.BeginReadBlocking()
+	defer s.mrsw.EndRead()
+	return s.checkCRCs()
+}
+
+// getSnapshots returns the set of snapshots in the Store.
+func (s *Store) getSnapshots() (SnapshotSet, error) {
+	return s.catalog.Scan(s.dir)
+}
+
+func copyRaftMeta(m *raft.SnapshotMeta) *raft.SnapshotMeta {
+	c := *m
+	return &c
+}
+
+// metaPath returns the path to the meta file in the given directory.
+func metaPath(dir string) string {
+	return filepath.Join(dir, metaFileName)
+}
+
+func tmpName(path string) string {
+	return path + tmpSuffix
+}
+
+func isTmpName(name string) bool {
+	return filepath.Ext(name) == tmpSuffix
+}

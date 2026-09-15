@@ -1,0 +1,51 @@
+name: Build and release on Windows
+
+on:
+  release:
+    types:
+      - created
+
+jobs:
+  build:
+    runs-on: windows-latest
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v3
+
+    - name: Set up Go
+      uses: actions/setup-go@v5
+      with:
+        go-version: '1.26'
+
+    - name: Install C Compiler
+      run: choco install mingw
+
+    - name: Verify GCC Installation
+      run: gcc --version
+
+    - name: Build server
+      run:  |
+        $env:CGO_ENABLED=1
+        $env:CC=gcc
+        $env:STRIP_SYMBOLS = "-w -s"
+        $env:LINKER_PKG_PATH = "github.com/rqlite/rqlite/v10/cmd"
+        $env:LDFLAGS = "-X $env:LINKER_PKG_PATH.CompilerCommand=$env:CC -X $env:LINKER_PKG_PATH.Version=${{ github.event.release.tag_name }} -X $env:LINKER_PKG_PATH.Branch=master -X $env:LINKER_PKG_PATH.Commit=$(git rev-parse HEAD) -X $env:LINKER_PKG_PATH.Buildtime=$(Get-Date -Format o)"
+        go build -a -ldflags="$env:LDFLAGS $env:STRIP_SYMBOLS" ./cmd/rqlited
+
+    - name: Build shell
+      run:  set CGO_ENABLED=1 && set CC=gcc && go build -a -ldflags="-w -s" ./cmd/rqlite
+
+    - name: Zip up the binaries
+      run:  7z.exe a rqlite-${{ github.event.release.tag_name }}-win64.zip rqlite.exe rq*.exe
+
+    - name: Upload release
+      shell: pwsh
+      run: |
+        $filePath = "rqlite-${{ github.event.release.tag_name }}-win64.zip"
+        $endpoint = "https://uploads.github.com/repos/rqlite/rqlite/releases/${{ github.event.release.id }}/assets?name=rqlite-${{ github.event.release.tag_name }}-win64.zip"
+        $headers = @{
+          "Authorization" = "token ${{ secrets.GITHUB_TOKEN }}"
+          "Content-Type"  = "application/zip"
+        }
+        Invoke-RestMethod -Uri $endpoint -Method Post -Headers $headers -InFile $filePath -ContentType "application/octet-stream"

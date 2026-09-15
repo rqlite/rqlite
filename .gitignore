@@ -1,0 +1,60 @@
+# Executables
+rqlited
+**/rqlited
+!**/rqlited/
+
+rqlite
+**/rqlite
+!**/rqlite/
+
+rqbench
+**/rqbench
+!**/rqbench/
+
+genflags
+**/genflags
+!**/genflags/
+
+walr
+**/walr
+
+# Compiled Object files, Static and Dynamic libs (Shared Objects)
+*.o
+*.a
+*.so
+
+# Folders
+_obj
+_test
+.vagrant
+
+# Logs
+*.log
+
+# Temporary vim files
+*.swp
+
+# Temporary data files
+cmd/rqlited/data*
+system_test/e2e/__pycache__/
+
+# Notes
+TODO
+
+# Architecture specific extensions/prefixes
+*.[568vq]
+[568vq].out
+
+*.cgo1.go
+*.cgo2.c
+_cgo_defun.c
+_cgo_gotypes.go
+_cgo_export.*
+
+_testmain.go
+
+*.exe
+*.test
+
+# IDEs
+*.vscode

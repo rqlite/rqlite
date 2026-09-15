@@ -1,0 +1,34 @@
+os: Visual Studio 2019
+
+version: 10.{build}
+
+platform: x64
+
+clone_folder: c:\gopath\src\github.com\rqlite\rqlite
+
+environment:
+  GOPATH: c:\gopath
+
+install:
+  - set BUILD_ENV=gnu
+  - if %BUILD_ENV%==gnu  set PATH=C:\msys64\mingw64\bin;C:\msys64\usr\bin\;%PATH%
+  - if %BUILD_ENV%==gnu  set MSYSTEM=MINGW64
+  - if %BUILD_ENV%==gnu  set MSYS=winsymlinks=lnk
+
+build_script:
+  - set MOD_VER=v10
+  - set LINKER_PKG_PATH=github.com/rqlite/rqlite/%MOD_VER%/cmd
+  - go version
+  - go env
+  - go get ./...
+  - go test -failfast ./...
+  - go install -ldflags="-X %LINKER_PKG_PATH%.Branch=%APPVEYOR_REPO_BRANCH% -X %LINKER_PKG_PATH%.Commit=%APPVEYOR_REPO_COMMIT%" ./...
+
+after_build:
+  - 7z a rqlite-latest-win64.zip %GOPATH%\bin\rq*.exe
+
+artifacts:
+  - path: rqlite-latest-win64.zip
+    name: rqlite for Windows x64
+
+

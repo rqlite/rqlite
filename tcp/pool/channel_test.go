@@ -1,0 +1,352 @@
+package pool
+
+import (
+	"log"
+	"math/rand/v2"
+	"net"
+	"sync"
+	"testing"
+	"time"
+)
+
+var (
+	MaximumCap = 30
+	network    = "tcp"
+	address    = "127.0.0.1:7777"
+	factory    = func() (net.Conn, error) { return net.Dial(network, address) }
+)
+
+func init() {
+	// used for factory function
+	go simpleTCPServer()
+	time.Sleep(time.Millisecond * 300) // wait until tcp server has been settled
+}
+
+func TestNew(t *testing.T) {
+	_, err := newChannelPool()
+	if err != nil {
+		t.Errorf("New error: %s", err)
+	}
+}
+func TestPool_Get_Impl(t *testing.T) {
+	p, _ := newChannelPool()
+	defer p.Close()
+
+	conn, err := p.Get()
+	if err != nil {
+		t.Errorf("Get error: %s", err)
+	}
+
+	_, ok := conn.(*Conn)
+	if !ok {
+		t.Errorf("Conn is not of type poolConn")
+	}
+}
+
+func TestPool_Get(t *testing.T) {
+	p, _ := newChannelPool()
+	defer p.Close()
+
+	conn, err := p.Get()
+	if err != nil {
+		t.Errorf("Get error: %s", err)
+	}
+	if conn == nil {
+		t.Errorf("Get error: conn is nil")
+	}
+
+	// After one get, there should still be no connections available.
+	if p.Len() != 0 {
+		t.Errorf("Get error. Expecting %d, got %d", 0, p.Len())
+	}
+}
+
+func TestPool_Put(t *testing.T) {
+	p, err := NewChannelPool(30, factory)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer p.Close()
+
+	// get/create from the pool
+	conns := make([]net.Conn, MaximumCap)
+	for i := 0; i < MaximumCap; i++ {
+		conn, _ := p.Get()
+		conns[i] = conn
+	}
+
+	// now put them all back
+	for _, conn := range conns {
+		conn.Close()
+	}
+
+	if p.Len() != MaximumCap {
+		t.Errorf("Put error len. Expecting %d, got %d",
+			1, p.Len())
+	}
+
+	conn, _ := p.Get()
+	p.Close() // close pool
+
+	conn.Close() // try to put into a full pool
+	if p.Len() != 0 {
+		t.Errorf("Put error. Closed pool shouldn't allow to put connections.")
+	}
+}
+
+func TestPool_PutUnusableConn(t *testing.T) {
+	p, _ := newChannelPool()
+	defer p.Close()
+
+	// ensure pool is not empty
+	conn, _ := p.Get()
+	conn.Close()
+
+	poolSize := p.Len()
+	conn, _ = p.Get()
+	conn.Close()
+	if p.Len() != poolSize {
+		t.Errorf("Pool size is expected to be equal to initial size")
+	}
+
+	conn, _ = p.Get()
+	if pc, ok := conn.(*Conn); !ok {
+		t.Errorf("impossible")
+	} else {
+		pc.MarkUnusable()
+	}
+	conn.Close()
+	if p.Len() != poolSize-1 {
+		t.Errorf("Pool size is expected to be initial_size - 1, %d, %d", p.Len(), poolSize-1)
+	}
+}
+
+func TestPool_UsedCapacity(t *testing.T) {
+	p, _ := newChannelPool()
+	defer p.Close()
+
+	if p.Len() != 0 {
+		t.Errorf("InitialCap error. Expecting %d, got %d", 0, p.Len())
+	}
+}
+
+func TestPool_Close(t *testing.T) {
+	p, _ := newChannelPool()
+
+	// now close it and test all cases we are expecting.
+	p.Close()
+
+	c := p.(*channelPool)
+
+	if c.conns != nil {
+		t.Errorf("Close error, conns channel should be nil")
+	}
+
+	if c.factory != nil {
+		t.Errorf("Close error, factory should be nil")
+	}
+
+	_, err := p.Get()
+	if err == nil {
+		t.Errorf("Close error, get conn should return an error")
+	}
+
+	if p.Len() != 0 {
+		t.Errorf("Close error used capacity. Expecting 0, got %d", p.Len())
+	}
+}
+
+func TestPoolConcurrent(t *testing.T) {
+	p, _ := newChannelPool()
+	pipe := make(chan net.Conn)
+
+	go func() {
+		p.Close()
+	}()
+
+	for i := 0; i < MaximumCap; i++ {
+		go func() {
+			conn, _ := p.Get()
+
+			pipe <- conn
+		}()
+
+		go func() {
+			conn := <-pipe
+			if conn == nil {
+				return
+			}
+			conn.Close()
+		}()
+	}
+}
+
+func TestPoolWriteRead(t *testing.T) {
+	p, _ := NewChannelPool(30, factory)
+
+	conn, _ := p.Get()
+
+	msg := "hello"
+	_, err := conn.Write([]byte(msg))
+	if err != nil {
+		t.Error(err)
+	}
+}
+
+func TestPoolConcurrent2(t *testing.T) {
+	p, _ := NewChannelPool(30, factory)
+
+	var wg sync.WaitGroup
+
+	wg.Add(10)
+	go func() {
+		for i := range 10 {
+			go func(i int) {
+				conn, _ := p.Get()
+				time.Sleep(rand.N(100 * time.Millisecond))
+				conn.Close()
+				wg.Done()
+			}(i)
+		}
+	}()
+
+	for i := range 10 {
+		wg.Add(1)
+		go func(i int) {
+			conn, _ := p.Get()
+			time.Sleep(rand.N(100 * time.Millisecond))
+			conn.Close()
+			wg.Done()
+		}(i)
+	}
+
+	wg.Wait()
+}
+
+func TestPoolConcurrent3(t *testing.T) {
+	p, _ := NewChannelPool(1, factory)
+
+	var wg sync.WaitGroup
+
+	wg.Go(func() {
+		p.Close()
+	})
+
+	if conn, err := p.Get(); err == nil {
+		conn.Close()
+	}
+
+	wg.Wait()
+}
+
+func TestPool_New(t *testing.T) {
+	p, _ := newChannelPool()
+	defer p.Close()
+
+	conn, err := p.New()
+	if err != nil {
+		t.Fatalf("New error: %s", err)
+	}
+	if conn == nil {
+		t.Fatal("New error: conn is nil")
+	}
+
+	_, ok := conn.(*Conn)
+	if !ok {
+		t.Fatal("Conn from New is not of type *Conn")
+	}
+}
+
+func TestPool_New_BypassesIdle(t *testing.T) {
+	p, _ := newChannelPool()
+	defer p.Close()
+
+	// Put a connection into the pool so it has an idle connection.
+	conn, _ := p.Get()
+	conn.Close()
+	if p.Len() != 1 {
+		t.Fatalf("Expected 1 idle conn, got %d", p.Len())
+	}
+
+	// New() should create a fresh connection, not take the idle one.
+	conn2, err := p.New()
+	if err != nil {
+		t.Fatalf("New error: %s", err)
+	}
+	defer conn2.Close()
+
+	if p.Len() != 1 {
+		t.Fatalf("Expected idle count to remain 1, got %d", p.Len())
+	}
+}
+
+func TestPool_New_CloseReturnsToPool(t *testing.T) {
+	p, _ := newChannelPool()
+	defer p.Close()
+
+	if p.Len() != 0 {
+		t.Fatalf("Expected 0 idle conns, got %d", p.Len())
+	}
+
+	conn, err := p.New()
+	if err != nil {
+		t.Fatalf("New error: %s", err)
+	}
+
+	// Closing the connection should return it to the pool.
+	conn.Close()
+	if p.Len() != 1 {
+		t.Fatalf("Expected 1 idle conn after Close, got %d", p.Len())
+	}
+}
+
+func TestPool_New_MarkUnusable(t *testing.T) {
+	p, _ := newChannelPool()
+	defer p.Close()
+
+	conn, err := p.New()
+	if err != nil {
+		t.Fatalf("New error: %s", err)
+	}
+
+	// Mark unusable and close — should not return to pool.
+	conn.(*Conn).MarkUnusable()
+	conn.Close()
+	if p.Len() != 0 {
+		t.Fatalf("Expected 0 idle conns after unusable Close, got %d", p.Len())
+	}
+}
+
+func TestPool_New_ClosedPool(t *testing.T) {
+	p, _ := newChannelPool()
+	p.Close()
+
+	_, err := p.New()
+	if err != ErrClosed {
+		t.Fatalf("Expected error from New on closed pool to be ErrClosed, got %v", err)
+	}
+}
+
+func newChannelPool() (Pool, error) {
+	return NewChannelPool(MaximumCap, factory)
+}
+
+func simpleTCPServer() {
+	l, err := net.Listen(network, address)
+	if err != nil {
+		log.Fatal(err)
+	}
+	defer l.Close()
+
+	for {
+		conn, err := l.Accept()
+		if err != nil {
+			log.Fatal(err)
+		}
+
+		go func() {
+			buffer := make([]byte, 256)
+			conn.Read(buffer)
+		}()
+	}
+}

@@ -1,0 +1,224 @@
+package wal
+
+import (
+	"encoding/binary"
+	"errors"
+	"expvar"
+	"fmt"
+	"io"
+	"time"
+)
+
+var (
+	// ErrZeroPageNumber is returned when a WAL frame has a page number of zero.
+	// This violates a SQLite invariant contained in the SQLite source code.
+	ErrZeroPageNumber = errors.New("WAL frame has zero page number")
+)
+
+// SQLite constants
+const (
+	WALHeaderSize      = 32
+	WALFrameHeaderSize = 24
+
+	WALSupportedVersion = 3007000
+)
+
+const (
+	compactScanDuration  = "compact_scan_duration_ms"
+	compactWriteDuration = "compact_write_duration_ms"
+	compactFramesInput   = "compact_frames_input"
+	compactFramesOutput  = "compact_frames_output"
+	compactScanErrors    = "compact_scan_errors"
+	compactFramesRatio   = "compact_frames_ratio"
+)
+
+// stats captures stats for the DB layer.
+var stats *expvar.Map
+
+func init() {
+	stats = expvar.NewMap("db.wal")
+	ResetStats()
+}
+
+func recordDuration(stat string, startT time.Time) {
+	stats.Get(stat).(*expvar.Int).Set(time.Since(startT).Milliseconds())
+}
+
+// ResetStats resets the expvar stats for this module. Mostly for test purposes.
+func ResetStats() {
+	stats.Init()
+	stats.Add(compactScanDuration, 0)
+	stats.Add(compactWriteDuration, 0)
+	stats.Add(compactFramesInput, 0)
+	stats.Add(compactFramesOutput, 0)
+	stats.Add(compactScanErrors, 0)
+	stats.Set(compactFramesRatio, new(expvar.Float))
+}
+
+// Reader wraps an io.Reader and parses SQLite WAL frames.
+//
+// This reader verifies the salt & checksum integrity while it reads. It does
+// not enforce transaction boundaries (i.e. it may return uncommitted frames).
+// It is the responsibility of the caller to handle this.
+//
+// Reader has been copied from the litefs source code. Many thanks to the
+// authors of that software. See https://github.com/superfly/litefs for more
+// details.
+type Reader struct {
+	r      io.ReadSeeker
+	frameN int
+
+	magic    uint32
+	bo       binary.ByteOrder
+	pageSize uint32
+	seq      uint32
+
+	salt1, salt2     uint32
+	chksum1, chksum2 uint32
+
+	// scratch buffer for reading frame headers, reused across ReadFrame calls
+	frmHdr []byte
+}
+
+// NewReader returns a new instance of Reader.
+func NewReader(r io.ReadSeeker) *Reader {
+	return &Reader{
+		r:      r,
+		frmHdr: make([]byte, WALFrameHeaderSize),
+	}
+}
+
+// PageSize returns the page size from the header. Must call ReadHeader() first.
+func (r *Reader) PageSize() uint32 { return r.pageSize }
+
+// Offset returns the file offset of the last read frame.
+// Returns zero if no frames have been read.
+func (r *Reader) Offset() int64 {
+	if r.frameN == 0 {
+		return 0
+	}
+	return WALHeaderSize + ((int64(r.frameN) - 1) * (WALFrameHeaderSize + int64(r.pageSize)))
+}
+
+// ReadHeader reads the WAL header into the reader. Returns io.EOF if WAL is invalid.
+func (r *Reader) ReadHeader() error {
+	// If we have a partial WAL, then mark WAL as done.
+	hdr := make([]byte, WALHeaderSize)
+	if _, err := io.ReadFull(r.r, hdr); err == io.ErrUnexpectedEOF {
+		return io.EOF
+	} else if err != nil {
+		return err
+	}
+
+	// Determine byte order of checksums.
+	r.magic = binary.BigEndian.Uint32(hdr[0:])
+	switch r.magic {
+	case 0x377f0682:
+		r.bo = binary.LittleEndian
+	case 0x377f0683:
+		r.bo = binary.BigEndian
+	default:
+		return fmt.Errorf("invalid wal header magic: %x", r.magic)
+	}
+
+	// If the header checksum doesn't match then we may have failed with
+	// a partial WAL header write during checkpointing.
+	chksum1 := binary.BigEndian.Uint32(hdr[24:])
+	chksum2 := binary.BigEndian.Uint32(hdr[28:])
+	if v0, v1, err := WALChecksum(r.bo, 0, 0, hdr[:24]); err != nil {
+		return err
+	} else if v0 != chksum1 || v1 != chksum2 {
+		return io.EOF
+	}
+
+	// Verify version is correct.
+	if version := binary.BigEndian.Uint32(hdr[4:]); version != WALSupportedVersion {
+		return fmt.Errorf("unsupported wal version: %d", version)
+	}
+
+	r.pageSize = binary.BigEndian.Uint32(hdr[8:])
+	r.seq = binary.BigEndian.Uint32(hdr[12:])
+	r.salt1 = binary.BigEndian.Uint32(hdr[16:])
+	r.salt2 = binary.BigEndian.Uint32(hdr[20:])
+	r.chksum1, r.chksum2 = chksum1, chksum2
+
+	return nil
+}
+
+// ReadFrame returns the next page number and commit offset from the WAL. If
+// data is not nil, then the page data is read into the buffer and the checksum
+// is verified. If data is nil, then the page data is skipped and no checksum
+// verification is performed. Returns io.EOF at the end of the valid WAL.
+func (r *Reader) ReadFrame(data []byte) (pgno, commit uint32, err error) {
+	if data != nil && len(data) != int(r.pageSize) {
+		return 0, 0, fmt.Errorf("WALReader.ReadFrame(): buffer size (%d) must match page size (%d)", len(data), r.pageSize)
+	}
+
+	// Read WAL frame header.
+	hdr := r.frmHdr
+	if _, err := io.ReadFull(r.r, hdr); err == io.ErrUnexpectedEOF {
+		return 0, 0, io.EOF
+	} else if err != nil {
+		return 0, 0, err
+	}
+
+	// Verify salt matches the salt in the header.
+	salt1 := binary.BigEndian.Uint32(hdr[8:])
+	salt2 := binary.BigEndian.Uint32(hdr[12:])
+	if r.salt1 != salt1 || r.salt2 != salt2 {
+		return 0, 0, io.EOF
+	}
+
+	if data != nil {
+		// Read WAL page data.
+		if _, err := io.ReadFull(r.r, data); err == io.ErrUnexpectedEOF {
+			return 0, 0, io.EOF
+		} else if err != nil {
+			return 0, 0, err
+		}
+
+		// Verify the checksum is valid.
+		chksum1 := binary.BigEndian.Uint32(hdr[16:])
+		chksum2 := binary.BigEndian.Uint32(hdr[20:])
+		r.chksum1, r.chksum2, err = WALChecksum(r.bo, r.chksum1, r.chksum2, hdr[:8]) // frame header
+		if err != nil {
+			return 0, 0, err
+		}
+		r.chksum1, r.chksum2, err = WALChecksum(r.bo, r.chksum1, r.chksum2, data) // frame data
+		if err != nil {
+			return 0, 0, err
+		}
+		if r.chksum1 != chksum1 || r.chksum2 != chksum2 {
+			return 0, 0, io.EOF
+		}
+	} else {
+		// Skip WAL page data.
+		if _, err := r.r.Seek(int64(r.pageSize), io.SeekCurrent); err != nil {
+			return 0, 0, err
+		}
+	}
+
+	pgno = binary.BigEndian.Uint32(hdr[0:])
+	if pgno == 0 {
+		return 0, 0, ErrZeroPageNumber
+	}
+	commit = binary.BigEndian.Uint32(hdr[4:])
+
+	r.frameN++
+
+	return pgno, commit, nil
+}
+
+// WALChecksum computes a running SQLite WAL checksum over a byte slice.
+func WALChecksum(bo binary.ByteOrder, s0, s1 uint32, b []byte) (uint32, uint32, error) {
+	if len(b)%8 != 0 {
+		return 0, 0, fmt.Errorf("misaligned checksum byte slice")
+	}
+
+	// Iterate over 8-byte units and compute checksum.
+	for i := 0; i < len(b); i += 8 {
+		s0 += bo.Uint32(b[i:]) + s1
+		s1 += bo.Uint32(b[i+4:]) + s0
+	}
+	return s0, s1, nil
+}

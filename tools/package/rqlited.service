@@ -1,0 +1,21 @@
+[Unit]
+Description=rqlite - lightweight, distributed relational database
+Documentation=https://rqlite.io
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=rqlite
+Group=rqlite
+ExecStart=/usr/bin/rqlited /var/lib/rqlite/data
+Restart=on-failure
+RestartSec=5
+LimitNOFILE=65536
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/var/lib/rqlite
+
+[Install]
+WantedBy=multi-user.target

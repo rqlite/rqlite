@@ -1,0 +1,55 @@
+name: Build Release Binaries
+
+on:
+  release:
+    types:
+      - created
+
+jobs:
+  build:
+    name: Build Release Assets
+    runs-on: ubuntu-22.04
+    steps:
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: 1.26
+
+      - name: Display the version of go that we have installed
+        run: go version
+
+      - name: Checkout code
+        uses: actions/checkout@v2
+
+      - name: Download Go modules
+        run: go get ./...
+
+      - name: Update apt repo
+        run: sudo apt-get update
+
+      - name: Install compilers
+        run: sudo apt-get install gcc musl-dev musl-tools gcc-arm-linux-gnueabihf gcc-arm-linux-gnueabi gcc-aarch64-linux-gnu gcc-riscv64-linux-gnu gcc-powerpc64le-linux-gnu gcc-mips-linux-gnu gcc-mipsel-linux-gnu gcc-mips64-linux-gnuabi64 gcc-mips64el-linux-gnuabi64
+        
+      - name: Build the release binaries
+        run: .github/workflows/build.sh ${{ github.event.release.tag_name }}
+
+      - name: Install rpm build tools
+        run: sudo apt-get install -y rpm
+
+      - name: Build deb and rpm packages
+        run: tools/package/build-packages.sh ${{ github.event.release.tag_name }}
+
+      - name: Upload Release Assets
+        run: |
+          for asset in *.tar.gz *.deb *.rpm; do
+            [ -f "$asset" ] || continue
+            curl \
+              -X POST \
+              -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
+              -H "Content-type: application/octet-stream" \
+              --data-binary @$asset \
+              "https://uploads.github.com/repos/rqlite/rqlite/releases/${{ github.event.release.id }}/assets?name=$asset"
+          done
+
+      - name: Update the release notes
+        run: .github/workflows/release-notes.py ${{ secrets.GITHUB_TOKEN }} ${{ github.event.release.id }} ${{ github.event.release.tag_name }}

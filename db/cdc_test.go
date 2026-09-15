@@ -1,0 +1,224 @@
+package db
+
+import (
+	"reflect"
+	"slices"
+	"testing"
+	"time"
+
+	command "github.com/rqlite/rqlite/v10/command/proto"
+)
+
+func Test_CDCStreamer_New(t *testing.T) {
+	ch := make(chan *command.CDCIndexedEventGroup, 10)
+	streamer, err := NewCDCStreamer(ch, &mockColumnNamesProvider{})
+	if err != nil {
+		t.Fatalf("expected no error, got %v", err)
+	}
+	if streamer == nil {
+		t.Fatalf("expected CDCStreamer to be created, got nil")
+	}
+	if len(streamer.pending.Events) != 0 {
+		t.Fatalf("expected no pending events after commit, got %d", len(streamer.pending.Events))
+	}
+	if err := streamer.Close(); err != nil {
+		t.Fatalf("expected no error on close, got %v", err)
+	}
+}
+
+func Test_CDCStreamer_CommitOne(t *testing.T) {
+	ch := make(chan *command.CDCIndexedEventGroup, 10)
+	np := &mockColumnNamesProvider{
+		columns: map[string][]string{
+			"test_table": {"id", "name", "value"},
+		},
+	}
+	streamer, err := NewCDCStreamer(ch, np)
+	if err != nil {
+		t.Fatalf("error creating CDCStreamer: %v", err)
+	}
+
+	streamer.Reset(5678)
+	change := &command.CDCEvent{
+		Table:    "test_table",
+		Op:       command.CDCEvent_INSERT,
+		OldRowId: 100,
+		NewRowId: 200,
+	}
+	if err := streamer.PreupdateHook(change); err != nil {
+		t.Fatalf("expected no error, got %v", err)
+	}
+
+	streamer.CommitHook()
+	if len(streamer.pending.Events) != 0 {
+		t.Fatalf("expected no pending events after commit, got %d", len(streamer.pending.Events))
+	}
+
+	select {
+	case ev := <-ch:
+		if ev.Index != 5678 {
+			t.Fatalf("expected index value to be 5678, got %d", ev.Index)
+		}
+		if len(ev.Events) != 1 {
+			t.Fatalf("expected 1 event, got %d", len(ev.Events))
+		}
+		if !slices.Equal(ev.Events[0].ColumnNames, []string{"id", "name", "value"}) {
+			t.Fatalf("expected column names to be [id name value], got %v", ev.Events[0].ColumnNames)
+		}
+		if !reflect.DeepEqual(change, ev.Events[0]) {
+			t.Fatalf("received event does not match sent event: expected %v, got %v", change, ev.Events[0])
+		}
+	case <-time.After(1 * time.Second):
+		t.Fatalf("timeout waiting for event on channel")
+	}
+
+	if err := streamer.Close(); err != nil {
+		t.Fatalf("expected no error on close, got %v", err)
+	}
+}
+
+func Test_CDCStreamer_CommitTwo(t *testing.T) {
+	ch := make(chan *command.CDCIndexedEventGroup, 10)
+	np := &mockColumnNamesProvider{
+		columns: map[string][]string{
+			"test_table": {"id", "name", "value"},
+		},
+	}
+	streamer, err := NewCDCStreamer(ch, np)
+	if err != nil {
+		t.Fatalf("error creating CDCStreamer: %v", err)
+	}
+
+	streamer.Reset(9012)
+	change1 := &command.CDCEvent{
+		Table:    "test_table",
+		Op:       command.CDCEvent_UPDATE,
+		OldRowId: 300,
+		NewRowId: 400,
+	}
+	change2 := &command.CDCEvent{
+		Table:    "test_table",
+		Op:       command.CDCEvent_DELETE,
+		OldRowId: 500,
+		NewRowId: 0,
+	}
+
+	if err := streamer.PreupdateHook(change1); err != nil {
+		t.Fatalf("expected no error, got %v", err)
+	}
+	if err := streamer.PreupdateHook(change2); err != nil {
+		t.Fatalf("expected no error, got %v", err)
+	}
+
+	streamer.CommitHook()
+	if len(streamer.pending.Events) != 0 {
+		t.Fatalf("expected no pending events after commit, got %d", len(streamer.pending.Events))
+	}
+
+	select {
+	case ev := <-ch:
+		if ev.Index != 9012 {
+			t.Fatalf("expected index value to be 9012, got %d", ev.GetIndex())
+		}
+		if len(ev.Events) != 2 {
+			t.Fatalf("expected 2 events, got %d", len(ev.Events))
+		}
+		if !reflect.DeepEqual(change1, ev.Events[0]) {
+			t.Fatalf("received first event does not match sent event: expected %v, got %v", change1, ev.Events[0])
+		}
+		if !slices.Equal(ev.Events[0].ColumnNames, []string{"id", "name", "value"}) {
+			t.Fatalf("expected column names to be [id name value], got %v", ev.Events[0].ColumnNames)
+		}
+		if !reflect.DeepEqual(change2, ev.Events[1]) {
+			t.Fatalf("received second event does not match sent event: expected %v, got %v", change2, ev.Events[1])
+		}
+	case <-time.After(1 * time.Second):
+		t.Fatalf("timeout waiting for event on channel")
+	}
+
+	if err := streamer.Close(); err != nil {
+		t.Fatalf("expected no error on close, got %v", err)
+	}
+}
+
+// Test_NewCDCStreamer_ResetThenPreupdate tests the behavior of the CDCStreamer
+// when  predupdate is called followed by a reset. It ensures that the reset
+// clears out any pending events.
+func Test_CDCStreamer_ResetThenPreupdate(t *testing.T) {
+	ch := make(chan *command.CDCIndexedEventGroup, 10)
+	np := &mockColumnNamesProvider{
+		columns: map[string][]string{
+			"test_table": {"id", "name", "value"},
+		},
+	}
+	streamer, err := NewCDCStreamer(ch, np)
+	if err != nil {
+		t.Fatalf("error creating CDCStreamer: %v", err)
+	}
+
+	streamer.Reset(1234)
+	change1 := &command.CDCEvent{
+		Table:    "test_table",
+		Op:       command.CDCEvent_INSERT,
+		OldRowId: 100,
+		NewRowId: 200,
+	}
+	if err := streamer.PreupdateHook(change1); err != nil {
+		t.Fatalf("expected no error, got %v", err)
+	}
+	if streamer.Len() != 1 {
+		t.Fatalf("expected 1 pending event, got %d", streamer.Len())
+	}
+
+	streamer.Reset(5678)
+	if streamer.Len() != 0 {
+		t.Fatalf("expected no pending events after reset, got %d", streamer.Len())
+	}
+	change2 := &command.CDCEvent{
+		Table:    "test_table",
+		Op:       command.CDCEvent_UPDATE,
+		OldRowId: 300,
+		NewRowId: 400,
+	}
+	if err := streamer.PreupdateHook(change2); err != nil {
+		t.Fatalf("expected no error, got %v", err)
+	}
+
+	streamer.CommitHook()
+	if len(streamer.pending.Events) != 0 {
+		t.Fatalf("expected no pending events after commit, got %d", len(streamer.pending.Events))
+	}
+
+	select {
+	case ev := <-ch:
+		if ev.Index != 5678 {
+			t.Fatalf("expected K value to be 5678, got %d", ev.Index)
+		}
+		if len(ev.Events) != 1 {
+			t.Fatalf("expected 1 event, got %d", len(ev.Events))
+		}
+		if !slices.Equal(ev.Events[0].ColumnNames, []string{"id", "name", "value"}) {
+			t.Fatalf("expected column names to be [id name value], got %v", ev.Events[0].ColumnNames)
+		}
+		if !reflect.DeepEqual(change2, ev.Events[0]) {
+			t.Fatalf("received event does not match sent event: expected %v, got %v", change2, ev.Events[0])
+		}
+	case <-time.After(1 * time.Second):
+		t.Fatalf("timeout waiting for event on channel")
+	}
+
+	if err := streamer.Close(); err != nil {
+		t.Fatalf("expected no error on close, got %v", err)
+	}
+}
+
+type mockColumnNamesProvider struct {
+	columns map[string][]string
+}
+
+func (m *mockColumnNamesProvider) ColumnNames(table string) ([]string, error) {
+	if cols, ok := m.columns[table]; ok {
+		return cols, nil
+	}
+	return []string{}, nil
+}

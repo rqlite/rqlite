@@ -1,0 +1,221 @@
+syntax = "proto3";
+
+package command;
+
+option go_package = "github.com/rqlite/rqlite/v10/command/proto";
+
+enum Suffrage {
+	UNKNOWN = 0;
+	VOTER = 1;
+	NON_VOTER = 2;
+}
+
+message Parameter {
+	oneof value {
+		sint64 i = 1;
+		double d = 2;
+		bool b = 3;
+		bytes y = 4;
+		string s = 5;
+	}
+	string name = 6;
+}
+
+message Statement {
+	string sql = 1;
+	repeated Parameter parameters = 2;
+	bool forceQuery = 3;
+	bool forceStall = 4;
+	bool sql_explain = 5;
+}
+
+message Request {
+	bool transaction = 1;
+	repeated Statement statements = 2;
+	int64 dbTimeout = 3;
+	bool rollbackOnError = 4;
+	bool qualifyColumns = 5;
+}
+
+enum ConsistencyLevel {
+  NONE = 0;
+  WEAK = 1;
+  STRONG = 2;
+  AUTO = 3;
+  LINEARIZABLE = 4;
+}
+
+message QueryRequest {
+	Request request = 1;
+	bool timings = 2;
+	ConsistencyLevel level = 3;
+	int64 freshness = 4;
+	bool freshness_strict = 5;
+	int64 linearizable_timeout = 6;
+}
+
+message Values {
+	repeated Parameter parameters = 1;
+}
+
+message QueryRows {
+	repeated string columns = 1;
+	repeated string types = 2;
+	repeated Values values = 3;
+	string error = 4;
+	double time = 5;
+}
+
+message ExecuteRequest {
+	Request request = 1;
+	bool timings = 2;	
+}
+
+message ExecuteResult {
+	int64 last_insert_id = 1;
+	int64 rows_affected = 2;
+	string error = 3;
+	double time = 4;
+}
+
+message ExecuteQueryRequest {
+	Request request = 1;
+	bool timings = 2;
+	ConsistencyLevel level = 3;
+	int64 freshness = 4;
+	bool freshness_strict = 5;
+	int64 linearizable_timeout = 6;
+}
+
+message ExecuteQueryResponse {
+	oneof result {
+		QueryRows q = 1;
+		ExecuteResult e = 2;
+		string error = 3;
+	}
+}
+
+message BackupRequest {
+	enum Format {
+		BACKUP_REQUEST_FORMAT_NONE = 0;
+		BACKUP_REQUEST_FORMAT_SQL = 1;
+		BACKUP_REQUEST_FORMAT_BINARY = 2;
+		BACKUP_REQUEST_FORMAT_DELETE = 3;
+	}
+	Format format = 1;
+	bool Leader = 2;
+	bool Vacuum = 3;
+	bool Compress = 4;
+	repeated string tables = 5;
+}
+
+message LoadRequest {
+	bytes data = 1;
+}
+
+message LoadChunkRequest {
+	string stream_id = 1;
+	int64 sequence_num = 2;
+	bool is_last = 3;
+	bytes data = 4;
+	bool abort = 5;
+}
+
+message JoinRequest {
+	string id = 1;
+	string address = 2;
+	bool voter = 3;
+}
+
+message NotifyRequest {
+	string id = 1;
+	string address = 2;
+}
+
+message RemoveNodeRequest {
+	string id = 1;
+}
+
+message StepdownRequest {
+	string id = 1;
+	bool wait = 2;
+}
+
+message Noop {
+	string id = 1;
+}
+
+message Command {
+	enum Type {
+		COMMAND_TYPE_UNKNOWN = 0;
+		COMMAND_TYPE_QUERY = 1;
+		COMMAND_TYPE_EXECUTE = 2;
+		COMMAND_TYPE_NOOP = 3;
+		COMMAND_TYPE_LOAD = 4;
+		COMMAND_TYPE_JOIN = 5;
+		COMMAND_TYPE_EXECUTE_QUERY = 6;
+		COMMAND_TYPE_LOAD_CHUNK = 7;
+	}
+	Type type = 1;
+	bytes sub_command = 2;
+	bool compressed = 3;
+}
+
+message CDCValue {
+	oneof value {
+		sint64 i = 1;
+		double d = 2;
+		bool b = 3;
+		bytes y = 4;
+		string s = 5;
+	}
+}
+
+message CDCRow {
+	repeated CDCValue values = 1;
+}
+
+message CDCEvent {
+	enum Operation {
+		UNKNOWN = 0;
+		INSERT = 1;
+		UPDATE = 2;
+		DELETE = 3;
+	}
+	string error = 1;
+	Operation op = 2;
+	string table = 3;
+	repeated string column_names = 4;
+	int64 old_row_id = 5;
+	int64 new_row_id = 6;
+	CDCRow old_row = 7;
+	CDCRow new_row = 8;
+}
+
+message CDCIndexedEventGroup {
+	uint64 index = 1;
+	int64 commit_timestamp = 2;
+	repeated CDCEvent events = 3;
+	bool flush = 4;
+}
+
+message CDCIndexedEventGroupBatch {
+	repeated CDCIndexedEventGroup payload = 1;
+}
+
+message UpdateHookEvent {
+	enum Operation {
+		UNKNOWN = 0;
+		INSERT = 1;
+		UPDATE = 2;
+		DELETE = 3;
+	}
+	string error = 1;
+	Operation op = 2;
+	string table = 3;
+	int64 row_id = 4;
+}
+
+message AppendEntriesExtension {
+	uint64 cdcHWM = 1;
+}

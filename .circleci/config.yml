@@ -1,0 +1,346 @@
+# CircleCI 2.0 configuration file
+# Check https://circleci.com/docs/2.0/language-go/ for more details
+version: 2.1
+
+parameters:
+  primary_image:
+    type: string
+    default: 'rqlite/circleci-primary:0.0.13'
+
+commands: # a reusable command with parameters
+  restore_and_save_cache:
+    steps:
+      - restore_cache:
+          keys:
+            - go-mod-v4-{{ checksum "go.sum" }}
+      - run: go get -v -t -d ./...
+      - save_cache:
+          key: go-mod-v4-{{ checksum "go.sum" }}
+          paths:
+            - "/home/circleci/go/pkg/mod"
+
+  cross_compile:
+    parameters:
+      cc:
+        type: string
+      goarch:
+        default: ""
+        type: string
+      goos:
+        default: ""
+        type: string
+    steps:
+      - run: go version
+      - run:
+          name: "Cross compile using <<parameters.cc>>"
+          command: go install -a ./...
+          environment:
+            CGO_ENABLED: 1
+            GOARCH: <<parameters.goarch>>
+            GOOS: <<parameters.goos>>
+            CC: <<parameters.cc>>
+
+jobs:
+  lint:
+    docker:
+      - image: << pipeline.parameters.primary_image >>
+    steps:
+      # Don't do a restore_cache here, so we regularly check that the Go
+      # modules are actually fetchable.
+      - checkout
+      - run: go version
+      - run: test -z "$(gofmt -l . | tee /dev/stderr)"
+      - run: go vet ./...
+    resource_class: large
+
+  test_odd:
+    docker:
+      - image: << pipeline.parameters.primary_image >>
+    steps:
+      - checkout
+      - restore_and_save_cache
+      - run: go test -failfast $(go list ./... | sed -n 'n;p')
+    resource_class: large
+
+  test_odd_race:
+    docker:
+      - image: << pipeline.parameters.primary_image >>
+    steps:
+      - checkout
+      - restore_and_save_cache
+      - run:
+          command: go test -v -failfast -timeout 20m -race $(go list ./... | sed -n 'n;p')
+          environment:
+            GORACE: "halt_on_error=1"
+    resource_class: large
+
+  test_even:
+    docker:
+      - image: << pipeline.parameters.primary_image >>
+    steps:
+      - checkout
+      - restore_and_save_cache
+      - run: go test -failfast $(go list ./... | sed -n 'p;n')
+    resource_class: large
+
+  test_even_race:
+    docker:
+      - image: << pipeline.parameters.primary_image >>
+    steps:
+      - checkout
+      - restore_and_save_cache
+      - run:
+          command: go test -v -failfast -timeout 20m -race $(go list ./... | sed -n 'p;n')
+          environment:
+            GORACE: "halt_on_error=1"
+    resource_class: large
+
+  cross_compile_windows:
+    docker:
+      - image: << pipeline.parameters.primary_image >>
+    steps:
+      - checkout
+      - restore_and_save_cache
+      - cross_compile:
+          cc: x86_64-w64-mingw32-gcc
+          goarch: amd64
+          goos: windows
+    resource_class: large
+  cross_compile:
+    docker:
+      - image: << pipeline.parameters.primary_image >>
+    steps:
+      - checkout
+      - restore_and_save_cache
+      - cross_compile:
+          cc: musl-gcc
+          goarch: amd64
+      - cross_compile:
+          cc: powerpc64le-linux-gnu-gcc
+          goarch: ppc64le
+    resource_class: large
+  cross_compile_risc:
+    docker:
+      - image: << pipeline.parameters.primary_image >>
+    steps:
+      - checkout
+      - restore_and_save_cache
+      - cross_compile:
+          cc: riscv64-linux-gnu-gcc
+          goarch: riscv64
+    resource_class: large
+  cross_compile_arm:
+    docker:
+      - image: << pipeline.parameters.primary_image >>
+    steps:
+      - checkout
+      - restore_and_save_cache
+      - cross_compile:
+          cc: arm-linux-gnueabi-gcc
+          goarch: arm
+      - cross_compile:
+          cc: aarch64-linux-gnu-gcc
+          goarch: arm64
+    resource_class: large
+  cross_compile_mips:
+    docker:
+      - image: << pipeline.parameters.primary_image >>
+    steps:
+      - checkout
+      - restore_and_save_cache
+      - cross_compile:
+          cc: mips-linux-gnu-gcc
+          goarch: mips
+      - cross_compile:
+          cc: mips64-linux-gnuabi64-gcc
+          goarch: mips64
+    resource_class: large
+  cross_compile_mips_le:
+    docker:
+      - image: << pipeline.parameters.primary_image >>
+    steps:
+      - checkout
+      - restore_and_save_cache
+      - cross_compile:
+          cc: mipsel-linux-gnu-gcc
+          goarch: mipsle
+      - cross_compile:
+          cc: mips64el-linux-gnuabi64-gcc
+          goarch: mips64le
+    resource_class: large
+
+  end_to_end_single:
+    docker:
+      - image: << pipeline.parameters.primary_image >>
+    steps:
+      - checkout
+      - restore_and_save_cache
+      - run: go version
+      - run: go install ./...
+      - run:
+          command: python3 system_test/e2e/single_node.py
+          environment:
+            RQLITED_PATH: /home/circleci/go/bin/rqlited
+    resource_class: large
+
+  end_to_end_upgrade:
+    docker:
+      - image: << pipeline.parameters.primary_image >>
+    steps:
+      - checkout
+      - restore_and_save_cache
+      - run: go install ./...
+      - run:
+          command: |
+            cd system_test/e2e
+            python3 upgrade.py
+          environment:
+            RQLITED_PATH: /home/circleci/go/bin/rqlited
+    resource_class: large
+
+  end_to_end_joining:
+    docker:
+      - image: << pipeline.parameters.primary_image >>
+    steps:
+      - checkout
+      - restore_and_save_cache
+      - run: go install ./...
+      - run:
+          command: python3 system_test/e2e/joining.py
+          environment:
+            RQLITED_PATH: /home/circleci/go/bin/rqlited
+    resource_class: large
+
+  end_to_end_multi:
+    docker:
+      - image: << pipeline.parameters.primary_image >>
+    environment:
+      RQLITED_PATH: /home/circleci/go/bin/rqlited
+    steps:
+      - checkout
+      - restore_and_save_cache
+      - run: go install ./...
+      - run: python3 system_test/e2e/multi_node.py
+      - run: python3 system_test/e2e/multi_node_adv.py
+    resource_class: large
+
+  end_to_end_autoclustering:
+    docker:
+      - image: << pipeline.parameters.primary_image >>
+      - image: hashicorp/consul:1.22.3
+      - image: gcr.io/etcd-development/etcd:v3.5.1
+    steps:
+      - checkout
+      - restore_and_save_cache
+      - run: go install ./...
+      - run:
+          command: python3 system_test/e2e/auto_clustering.py
+          environment:
+            RQLITED_PATH: /home/circleci/go/bin/rqlited
+    resource_class: large
+
+  end_to_end_auto_state:
+    docker:
+      - image: << pipeline.parameters.primary_image >>
+      - image: minio/minio
+        name: minio
+        command: server /data
+    environment:
+        RQLITED_PATH: /home/circleci/go/bin/rqlited
+        MINIO_ENDPOINT: http://minio:9000
+        MINIO_ROOT_USER: minioadmin
+        MINIO_ROOT_PASSWORD: minioadmin
+        MINIO_BUCKET: minio-bucket
+        # All other required env vars for GCS and S3 are set via CircleCI project settings
+    steps:
+      - checkout
+      - restore_and_save_cache
+      # Build rqlite now, which will give time for minio to come up
+      - run: go install ./...
+      - run: mc alias set myminio http://minio:9000 minioadmin minioadmin
+      - run: mc mb myminio/minio-bucket
+      - run:
+          command: python3 system_test/e2e/auto_state_file.py
+      - run:
+          command: python3 system_test/e2e/auto_state_gcs.py
+      - run:
+          command: python3 system_test/e2e/auto_state_s3.py
+    resource_class: large
+
+  end_to_end_cdc:
+    docker:
+      - image: << pipeline.parameters.primary_image >>
+    steps:
+      - checkout
+      - restore_and_save_cache
+      - run: go install ./...
+      - run:
+          command: python3 system_test/e2e/cdc.py
+          environment:
+            RQLITED_PATH: /home/circleci/go/bin/rqlited
+    resource_class: large
+
+  end_to_end_extensions:
+    docker:
+      - image: << pipeline.parameters.primary_image >>
+    steps:
+      - checkout
+      - restore_and_save_cache
+      - run: go install ./...
+      - run: mkdir /home/circleci/extensions
+      - run: mkdir /home/circleci/extensions-misc
+      - run: gcc -g -fPIC -shared db/testdata/rot13.c -o /home/circleci/extensions/rot13.so
+      - run: gcc -g -fPIC -shared db/testdata/carray.c -o /home/circleci/extensions/carray.so
+      - run: zip -j /home/circleci/rot13.zip /home/circleci/extensions/rot13.so
+      - run: tar -czf /home/circleci/rot13.tar.gz --strip-components=1 -C /home/circleci/extensions rot13.so
+      - run: git clone https://github.com/rqlite/rqlite-sqlite-ext.git && cd rqlite-sqlite-ext/misc && make && cp *.so /home/circleci/extensions-misc
+      - run:
+          command: python3 system_test/e2e/extensions.py
+          environment:
+            RQLITED_PATH: /home/circleci/go/bin/rqlited
+            EXTENSIONS_PATH: /home/circleci/extensions/rot13.so
+            EXTENSIONS_PATH_DIR: /home/circleci/extensions
+            EXTENSIONS_PATH_ZIP: /home/circleci/rot13.zip
+            EXTENSIONS_PATH_TAR_GZIP: /home/circleci/rot13.tar.gz
+            EXTENSIONS_PATH_MULTIPLE: /home/circleci/rot13.zip,/home/circleci/extensions/carray.so
+            EXTENSIONS_PATH_MISC: /home/circleci/extensions-misc
+    resource_class: large
+
+  end_to_end_shell:
+    docker:
+      - image: << pipeline.parameters.primary_image >>
+    steps:
+      - checkout
+      - restore_and_save_cache
+      - run: go install ./...
+      - run:
+          command: python3 system_test/e2e/shell.py
+          environment:
+            RQLITED_PATH: /home/circleci/go/bin/rqlited
+            RQLITE_PATH: /home/circleci/go/bin/rqlite
+    resource_class: large
+
+workflows:
+  version: 2
+  build_and_test:
+    jobs:
+      - lint
+      - cross_compile
+      - cross_compile_risc
+      - cross_compile_windows
+      - cross_compile_arm
+      - cross_compile_mips
+      - cross_compile_mips_le
+      - test_even
+      - test_even_race
+      - test_odd
+      - test_odd_race
+      - end_to_end_single
+      - end_to_end_multi
+      - end_to_end_joining
+      - end_to_end_autoclustering
+      - end_to_end_auto_state
+      - end_to_end_upgrade
+      - end_to_end_cdc
+      - end_to_end_extensions
+      - end_to_end_shell

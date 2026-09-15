@@ -1,0 +1,3 @@
+package text
+
+const Lorum = "Lorem ipsum dolor sit amet, consectetur adipiscing elit. Nam ultricies turpis nisi, quis egestas enim scelerisque sit amet. Maecenas id massa tempus, pellentesque metus sit amet, faucibus ex. Fusce velit lacus, eleifend sit amet semper vitae, varius nec odio. Vestibulum dignissim massa sem, quis elementum nibh sodales ac. Mauris eget pretium diam. Praesent non diam mauris. Suspendisse finibus non purus non condimentum. In hac habitasse platea dictumst. Quisque vitae nibh justo. Aliquam tempus eget diam at commodo. Aenean nec sem leo. Cras bibendum, quam eu elementum laoreet, turpis orci bibendum arcu, id euismod justo dolor a augue"

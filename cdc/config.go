@@ -1,0 +1,199 @@
+package cdc
+
+import (
+	"crypto/tls"
+	"encoding/json"
+	"net/url"
+	"os"
+	"strings"
+	"time"
+
+	"github.com/rqlite/rqlite/v10/cdc/regexp"
+	"github.com/rqlite/rqlite/v10/internal/rtls"
+)
+
+// RetryPolicy defines the retry policy for transmitting events to the endpoint.
+type RetryPolicy int
+
+const (
+	// LinearRetryPolicy indicates that the retry delay is constant.
+	LinearRetryPolicy RetryPolicy = iota
+
+	// ExponentialRetryPolicy indicates that the retry delay increases exponentially
+	// with each retry.
+	ExponentialRetryPolicy
+)
+
+const (
+	DefaultMaxBatchSz            = 10
+	DefaultMaxBatchDelay         = 200 * time.Millisecond
+	DefaultHighWatermarkInterval = 1 * time.Second
+	DefaultTransmitTimeout       = 5 * time.Second
+	DefaultTransmitRetryPolicy   = LinearRetryPolicy
+	DefaultTransmitMinBackoff    = time.Second
+	DefaultTransmitMaxBackoff    = 30 * time.Second
+)
+
+// TLSConfiguration holds the TLS configuration for the CDC service.
+type TLSConfiguration struct {
+	// CACertFile is the path to the CA certificate file for TLS verification.
+	CACertFile string `json:"ca_cert_file,omitempty"`
+
+	// CertFile is the path to the client certificate file for mutual TLS.
+	CertFile string `json:"cert_file,omitempty"`
+
+	// KeyFile is the path to the client private key file for mutual TLS.
+	KeyFile string `json:"key_file,omitempty"`
+
+	// InsecureSkipVerify controls whether the client verifies the server's certificate.
+	// If true, TLS accepts any certificate presented by the server.
+	InsecureSkipVerify bool `json:"insecure_skip_verify,omitempty"`
+
+	// ServerName is used to verify the hostname on the returned certificates.
+	// If empty, the hostname used for the connection is used.
+	ServerName string `json:"server_name,omitempty"`
+}
+
+// Config holds the configuration for the CDC service.
+type Config struct {
+	// Endpoint is the HTTP endpoint to which the CDC events are sent. It must be specified.
+	Endpoint string `json:"endpoint"`
+
+	// ServiceID is an optional field. If set, it will be part of the event sent to the downstream
+	// CDC consumer. This allows CDC consumers to receive events from multiple rqlite systems
+	// and differentiate between events sent by those systems.
+	ServiceID string `json:"service_id,omitempty"`
+
+	// RowIDsOnly indicates whether only the row IDs should be sent in the CDC events.
+	RowIDsOnly bool `json:"row_ids_only,omitempty"`
+
+	// TableFilter is an optional regular expression that filters which tables changes are
+	// captured for. If unspecified or empty, changes to all tables are captured. If specified,
+	// only changes to tables whose names match the regular expression are captured.
+	TableFilter *regexp.Regexp `json:"table_filter,omitempty"`
+
+	// TLS configuration
+	TLS *TLSConfiguration `json:"tls,omitempty"`
+
+	// MaxBatchSz is the maximum number of events to send in a single request to the endpoint.
+	// If it is unspecified or is zero, the default DefaultMaxBatchSz is used.
+	MaxBatchSz int `json:"max_batch_size"`
+
+	// MaxBatchDelay is the maximum delay before sending a rquest to the endpoint, regardless
+	// of the number of events ready for sending. This is used to ensure that we don't wait
+	// too long for a batch to fill up. If it is unspecified or is zero, the default of
+	// DefaultMaxBatchDelay is used.
+	MaxBatchDelay time.Duration `json:"max_batch_delay"`
+
+	// HighWatermarkInterval is the interval at which the high watermark is broadcast by the
+	// Leader. If it is zero or unspecified, the default of DefaultHighWatermarkInterval is used.
+	HighWatermarkInterval time.Duration `json:"high_watermark_interval"`
+
+	// TransmitTimeout is the timeout for transmitting events to the endpoint. If the transmission
+	// takes longer than this, it will be retried. If zero os not specified, the default of
+	// DefaultTransmitTimeout is used.
+	TransmitTimeout time.Duration `json:"transmit_timeout"`
+
+	// TransmitMaxRetries is the maximum number of retries for sending events to the endpoint.
+	// If the transmission fails after this many retries, it will be dropped. If not specified,
+	// events will be retried forever.
+	TransmitMaxRetries *int `json:"transmit_max_retries"`
+
+	// TransmitRetryPolicy defines the retry policy to use when sending events to the endpoint.
+	// If unspecified, LinearRetryPolicy is used.
+	TransmitRetryPolicy RetryPolicy `json:"transmit_retry_policy"`
+
+	// TransmitMinBackoff is the initial backoff time. If it is zero or unspecified,
+	// a default of 100 milliseconds is used.
+	TransmitMinBackoff time.Duration `json:"transmit_min_backoff"`
+
+	// TransmitMaxBackoff is the maximum backoff time for retries when using ExponentialRetryPolicy.
+	// If unspecified or if zero, there is no maximum backoff time.
+	TransmitMaxBackoff time.Duration `json:"transmit_max_backoff"`
+}
+
+// DefaultConfig returns a default configuration for the CDC service.
+func DefaultConfig() *Config {
+	return &Config{
+		MaxBatchSz:            DefaultMaxBatchSz,
+		MaxBatchDelay:         DefaultMaxBatchDelay,
+		HighWatermarkInterval: DefaultHighWatermarkInterval,
+		TransmitTimeout:       DefaultTransmitTimeout,
+		TransmitRetryPolicy:   DefaultTransmitRetryPolicy,
+		TransmitMinBackoff:    DefaultTransmitMinBackoff,
+		TransmitMaxBackoff:    DefaultTransmitMaxBackoff,
+	}
+}
+
+// TLSConfig creates a *tls.Config from the individual TLS configuration fields.
+// This uses the same TLS utilities as other parts of rqlite.
+func (c *Config) TLSConfig() (*tls.Config, error) {
+	if c.TLS == nil {
+		return nil, nil
+	}
+	if c.TLS.CACertFile == "" && c.TLS.CertFile == "" && c.TLS.KeyFile == "" &&
+		!c.TLS.InsecureSkipVerify && c.TLS.ServerName == "" {
+		return nil, nil
+	}
+	return rtls.CreateClientConfig(c.TLS.CertFile, c.TLS.KeyFile, c.TLS.CACertFile,
+		c.TLS.ServerName, c.TLS.InsecureSkipVerify)
+}
+
+// NewConfig creates a new Config from a string. If the string can be parsed
+// as a URL, it creates a default config with the endpoint set to the URL.
+// If the string is "stdout", it creates a default config with the endpoint
+// set to "stdout" for writing events to stdout.
+// Otherwise, it treats the string as a file path and attempts to read and
+// parse a JSON configuration file.
+func NewConfig(s string) (*Config, error) {
+	// Handle special "stdout" case
+	if s == "stdout" {
+		config := DefaultConfig()
+		config.Endpoint = "stdout"
+		return config, nil
+	}
+
+	// Try to parse as URL first
+	if _, err := url.Parse(s); err == nil && (strings.HasPrefix(s, "http://") || strings.HasPrefix(s, "https://")) {
+		// Valid URL, create default config with this endpoint
+		config := DefaultConfig()
+		config.Endpoint = s
+		return config, nil
+	}
+
+	// Not a URL, treat as file path
+	data, err := os.ReadFile(s)
+	if err != nil {
+		return nil, err
+	}
+
+	var config Config
+	if err := json.Unmarshal(data, &config); err != nil {
+		return nil, err
+	}
+
+	// Ensure all fields have sensible values, using defaults where necessary.
+	if config.MaxBatchSz <= 0 {
+		config.MaxBatchSz = DefaultMaxBatchSz
+	}
+	if config.MaxBatchDelay <= 0 {
+		config.MaxBatchDelay = DefaultMaxBatchDelay
+	}
+	if config.HighWatermarkInterval == 0 {
+		config.HighWatermarkInterval = DefaultHighWatermarkInterval
+	}
+	if config.TransmitTimeout == 0 {
+		config.TransmitTimeout = DefaultTransmitTimeout
+	}
+	if config.TransmitMinBackoff == 0 {
+		config.TransmitMinBackoff = DefaultTransmitMinBackoff
+	}
+	if config.TransmitMaxBackoff == 0 {
+		config.TransmitMaxBackoff = DefaultTransmitMaxBackoff
+	}
+	return &config, nil
+}
+
+func intPtr(v int) *int {
+	return &v
+}
