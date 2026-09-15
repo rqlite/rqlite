@@ -4,6 +4,7 @@ import (
 	"path/filepath"
 	"reflect"
 	"slices"
+	"strings"
 	"testing"
 	"time"
 
@@ -217,17 +218,17 @@ func Test_CDCStreamer_ExecuteRollback(t *testing.T) {
 	db, streamer, ch := mustCreateCDCStreamerDatabase(t)
 	streamer.Reset(42)
 	results, err := db.Execute(&command.Request{Statements: []*command.Statement{
-		{Sql: "INSERT INTO foo VALUES(1), (1)"},
-		{Sql: "INSERT INTO foo VALUES(2)"},
+		{Sql: "INSERT INTO foo VALUES(1), (1)"}, // Should fail due to UNIQUE constraint on PK.
+		{Sql: "INSERT INTO foo VALUES(2)"},      // Should work.
 	}}, false)
 	if err != nil {
 		t.Fatalf("error executing request: %v", err)
 	}
-	if len(results) != 2 || results[0].GetError() == "" || results[1].GetError() != "" {
+	if len(results) != 2 || !strings.Contains(results[0].GetError(), "UNIQUE") || results[1].GetError() != "" {
 		t.Fatalf("unexpected results: %s", asJSON(results))
 	}
 	if len(ch) != 1 {
-		t.Fatalf("expected one committed group, got %d", len(ch))
+		t.Fatalf("expected only one committed group, got %d", len(ch))
 	}
 	group := <-ch
 	if group.Index != 42 || len(group.Events) != 1 || group.Events[0].NewRowId != 2 {
@@ -248,7 +249,7 @@ func Test_CDCStreamer_RequestRollback(t *testing.T) {
 	if err != nil {
 		t.Fatalf("error processing request: %v", err)
 	}
-	if len(results) != 2 || results[0].GetError() == "" || results[1].GetError() != "" {
+	if len(results) != 2 || !strings.Contains(results[0].GetError(), "UNIQUE") || results[1].GetError() != "" {
 		t.Fatalf("unexpected results: %s", asJSON(results))
 	}
 	if len(ch) != 1 {
@@ -270,7 +271,7 @@ func Test_CDCStreamer_TransactionRollback(t *testing.T) {
 	if err != nil {
 		t.Fatalf("error executing transaction: %v", err)
 	}
-	if len(results) != 2 || results[0].GetError() != "" || results[1].GetError() == "" {
+	if len(results) != 2 || results[0].GetError() != "" || !strings.Contains(results[1].GetError(), "UNIQUE") {
 		t.Fatalf("unexpected results: %s", asJSON(results))
 	}
 	if streamer.Len() != 0 || len(ch) != 0 {
