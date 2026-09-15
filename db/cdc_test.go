@@ -1,8 +1,10 @@
 package db
 
 import (
+	"path/filepath"
 	"reflect"
 	"slices"
+	"strings"
 	"testing"
 	"time"
 
@@ -210,6 +212,127 @@ func Test_CDCStreamer_ResetThenPreupdate(t *testing.T) {
 	if err := streamer.Close(); err != nil {
 		t.Fatalf("expected no error on close, got %v", err)
 	}
+}
+
+func Test_CDCStreamer_ExecuteRollback(t *testing.T) {
+	db, streamer, ch := mustCreateCDCStreamerDatabase(t)
+	streamer.Reset(42)
+	results, err := db.Execute(&command.Request{Statements: []*command.Statement{
+		{Sql: "INSERT INTO foo VALUES(1), (1)"}, // Should fail due to UNIQUE constraint on PK.
+		{Sql: "INSERT INTO foo VALUES(2)"},      // Should work.
+	}}, false)
+	if err != nil {
+		t.Fatalf("error executing request: %v", err)
+	}
+	if len(results) != 2 || !strings.Contains(results[0].GetError(), "UNIQUE") || results[1].GetError() != "" {
+		t.Fatalf("unexpected results: %s", asJSON(results))
+	}
+	if len(ch) != 1 {
+		t.Fatalf("expected only one committed group, got %d", len(ch))
+	}
+	group := <-ch
+	if group.Index != 42 || len(group.Events) != 1 || group.Events[0].NewRowId != 2 {
+		t.Fatalf("unexpected committed group: %s", asJSON(group))
+	}
+	if got := asJSON(mustQuery(db, "SELECT id FROM foo")); got != `[{"columns":["id"],"types":["integer"],"values":[[2]]}]` {
+		t.Fatalf("unexpected rows: %s", got)
+	}
+}
+
+func Test_CDCStreamer_RequestRollback(t *testing.T) {
+	db, streamer, ch := mustCreateCDCStreamerDatabase(t)
+	streamer.Reset(42)
+	results, err := db.Request(&command.Request{Statements: []*command.Statement{
+		{Sql: "INSERT INTO foo VALUES(1), (1)"},
+		{Sql: "INSERT INTO foo VALUES(2)"},
+	}}, false)
+	if err != nil {
+		t.Fatalf("error processing request: %v", err)
+	}
+	if len(results) != 2 || !strings.Contains(results[0].GetError(), "UNIQUE") || results[1].GetError() != "" {
+		t.Fatalf("unexpected results: %s", asJSON(results))
+	}
+	if len(ch) != 1 {
+		t.Fatalf("expected one committed group, got %d", len(ch))
+	}
+	group := <-ch
+	if group.Index != 42 || len(group.Events) != 1 || group.Events[0].NewRowId != 2 {
+		t.Fatalf("unexpected committed group: %s", asJSON(group))
+	}
+}
+
+func Test_CDCStreamer_TransactionRollback(t *testing.T) {
+	db, streamer, ch := mustCreateCDCStreamerDatabase(t)
+	streamer.Reset(42)
+	results, err := db.Execute(&command.Request{Transaction: true, Statements: []*command.Statement{
+		{Sql: "INSERT INTO foo VALUES(1)"},
+		{Sql: "INSERT INTO foo VALUES(1)"},
+	}}, false)
+	if err != nil {
+		t.Fatalf("error executing transaction: %v", err)
+	}
+	if len(results) != 2 || results[0].GetError() != "" || !strings.Contains(results[1].GetError(), "UNIQUE") {
+		t.Fatalf("unexpected results: %s", asJSON(results))
+	}
+	if streamer.Len() != 0 || len(ch) != 0 {
+		t.Fatalf("rolled-back transaction retained %d pending events and emitted %d groups", streamer.Len(), len(ch))
+	}
+	mustExecute(db, "INSERT INTO foo VALUES(2)")
+	if len(ch) != 1 {
+		t.Fatalf("expected one committed group, got %d", len(ch))
+	}
+	group := <-ch
+	if group.Index != 42 || len(group.Events) != 1 || group.Events[0].NewRowId != 2 {
+		t.Fatalf("unexpected committed group: %s", asJSON(group))
+	}
+}
+
+func Test_CDCStreamer_ConflictFailRetainsChanges(t *testing.T) {
+	db, streamer, ch := mustCreateCDCStreamerDatabase(t)
+	streamer.Reset(42)
+	results, err := db.ExecuteStringStmt("INSERT OR FAIL INTO foo VALUES(1), (1)")
+	if err != nil {
+		t.Fatalf("error executing request: %v", err)
+	}
+	if len(results) != 1 || results[0].GetError() == "" {
+		t.Fatalf("expected constraint error, got %s", asJSON(results))
+	}
+	// FAIL preserves the first insert even though the statement returns an error.
+	if len(ch) != 1 {
+		t.Fatalf("expected one committed group, got %d", len(ch))
+	}
+	group := <-ch
+	if group.Index != 42 || len(group.Events) != 1 || group.Events[0].NewRowId != 1 {
+		t.Fatalf("unexpected committed group: %s", asJSON(group))
+	}
+	if got := asJSON(mustQuery(db, "SELECT id FROM foo")); got != `[{"columns":["id"],"types":["integer"],"values":[[1]]}]` {
+		t.Fatalf("unexpected rows: %s", got)
+	}
+}
+
+func mustCreateCDCStreamerDatabase(t *testing.T) (*DB, *CDCStreamer, chan *command.CDCIndexedEventGroup) {
+	t.Helper()
+	db, err := Open(filepath.Join(t.TempDir(), "cdc.db"), false, true)
+	if err != nil {
+		t.Fatalf("error opening database: %v", err)
+	}
+	t.Cleanup(func() { db.Close() })
+	mustExecute(db, "CREATE TABLE foo (id INTEGER PRIMARY KEY)")
+	ch := make(chan *command.CDCIndexedEventGroup, 10)
+	streamer, err := NewCDCStreamer(ch, db)
+	if err != nil {
+		t.Fatalf("error creating CDC streamer: %v", err)
+	}
+	if err := db.RegisterPreUpdateHook(streamer.PreupdateHook, nil, false); err != nil {
+		t.Fatalf("error registering preupdate hook: %v", err)
+	}
+	if err := db.RegisterCommitHook(streamer.CommitHook); err != nil {
+		t.Fatalf("error registering commit hook: %v", err)
+	}
+	if err := db.RegisterRollbackHook(streamer.RollbackHook); err != nil {
+		t.Fatalf("error registering rollback hook: %v", err)
+	}
+	return db, streamer, ch
 }
 
 type mockColumnNamesProvider struct {
