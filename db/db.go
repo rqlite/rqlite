@@ -1728,6 +1728,8 @@ func (db *DB) Dump(w io.Writer, tableNames ...string) (retErr error) {
 
 	// Keep schema and data reads on one snapshot, even if writes commit while
 	// the dump is being streamed. End the read transaction on every exit path.
+	// Because we need the transaction to span multiple queries we manually
+	// manage the transaction.
 	if _, err := conn.ExecContext(ctx, "BEGIN"); err != nil {
 		return err
 	}

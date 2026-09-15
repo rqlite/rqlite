@@ -15,6 +15,13 @@ import (
 	"github.com/rqlite/rqlite/v10/internal/random"
 )
 
+func Test_DumpTablesReq(t *testing.T) {
+	req := DumpTablesReq("foo")
+	if req.Transaction {
+		t.Fatalf("DumpTablesReq set transaction flag")
+	}
+}
+
 func Test_IsDisallowedPragmas(t *testing.T) {
 	tests := []string{
 		"   PRAGMA JOURNAL_MODE=",
