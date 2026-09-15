@@ -1,4 +1,4 @@
-## v10.3.3 (September 15th 2026)
+## v10.3.4 (September 15th 2026)
 ### Implementation changes and bug fixes
 - [PR #2791](https://github.com/rqlite/rqlite/pull/2791): Do not emit rolled-back events over CDC.
 
