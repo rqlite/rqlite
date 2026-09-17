@@ -29,7 +29,6 @@ import (
 	"github.com/rqlite/rqlite/v10/command"
 	"github.com/rqlite/rqlite/v10/db"
 	"github.com/rqlite/rqlite/v10/db/extensions"
-	"github.com/rqlite/rqlite/v10/db/querylog"
 	httpd "github.com/rqlite/rqlite/v10/http"
 	"github.com/rqlite/rqlite/v10/internal/rarchive"
 	"github.com/rqlite/rqlite/v10/internal/rtls"
@@ -124,18 +123,8 @@ func main() {
 		log.Fatalf("failed to list extensions: %s", err.Error())
 	}
 
-	// Parse query-log configuration, if requested.
-	qCfg, err := querylog.NewConfig(cfg.QueryLog)
-	if err != nil {
-		log.Fatalf("failed to configure query logging: %s", err.Error())
-	}
-	var ql *querylog.QueryLogger
-	if qCfg != nil {
-		ql = querylog.New(qCfg)
-		defer ql.Close()
-	}
 	// Create the store.
-	str, err := createStore(cfg, raftTn, extensionsPaths, ql)
+	str, err := createStore(cfg, raftTn, extensionsPaths)
 	if err != nil {
 		log.Fatalf("failed to create store: %s", err.Error())
 	}
@@ -414,11 +403,10 @@ func createCDC(cfg *Config, str *store.Store, clstrServ *cluster.Service, clstrC
 	return cdcService, nil
 }
 
-func createStore(cfg *Config, ln *tcp.Layer, extensions []string, ql *querylog.QueryLogger) (*store.Store, error) {
+func createStore(cfg *Config, ln *tcp.Layer, extensions []string) (*store.Store, error) {
 	dbConf := store.NewDBConfig()
 	dbConf.FKConstraints = cfg.FKConstraints
 	dbConf.Extensions = extensions
-	dbConf.QueryLogger = ql // A nil logger means query logging is disabled.
 
 	str := store.New(&store.Config{
 		DBConf: dbConf,
