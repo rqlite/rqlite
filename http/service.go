@@ -29,6 +29,7 @@ import (
 	"github.com/rqlite/rqlite/v10/db"
 	"github.com/rqlite/rqlite/v10/http/console"
 	"github.com/rqlite/rqlite/v10/http/licenses"
+	"github.com/rqlite/rqlite/v10/internal/rsync"
 	"github.com/rqlite/rqlite/v10/internal/rtls"
 	"github.com/rqlite/rqlite/v10/proxy"
 	"github.com/rqlite/rqlite/v10/queue"
@@ -274,8 +275,8 @@ type Service struct {
 
 	cluster Cluster // The Cluster service.
 
-	start      time.Time // Start up time.
-	lastBackup time.Time // Time of last successful backup.
+	start      time.Time        // Start up time.
+	lastBackup rsync.AtomicTime // Time of last successful backup.
 
 	statusMu sync.RWMutex
 	statuses map[string]StatusReporter
@@ -703,7 +704,7 @@ func (s *Service) handleBackup(w http.ResponseWriter, r *http.Request, qp QueryP
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
-	s.lastBackup = time.Now()
+	s.lastBackup.Store(time.Now())
 }
 
 // handleLoad loads the database from the given SQLite database file or SQLite dump.
@@ -951,7 +952,7 @@ func (s *Service) handleStatus(w http.ResponseWriter, r *http.Request, qp QueryP
 		"node":    nodeStatus,
 	}
 	if !s.lastBackup.IsZero() {
-		status["last_backup_time"] = s.lastBackup
+		status["last_backup_time"] = s.lastBackup.Load()
 	}
 	if s.BuildInfo != nil {
 		status["build"] = s.BuildInfo
