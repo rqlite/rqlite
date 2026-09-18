@@ -1300,7 +1300,10 @@ func (s *Service) queuedExecute(w http.ResponseWriter, r *http.Request, qp Query
 
 	stmts, err := ParseRequest(r.Body)
 	if err != nil {
-		if errors.Is(err, ErrNoStatements) && !qp.Wait() {
+		if (errors.Is(err, ErrNoStatements) || errors.Is(err, ErrInvalidRequest)) && qp.Wait() {
+			// These errors are OK if waiting.
+			err = nil
+		} else {
 			http.Error(w, err.Error(), http.StatusBadRequest)
 			return
 		}
