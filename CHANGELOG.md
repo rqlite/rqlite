@@ -1,4 +1,4 @@
-## v10.3.5 (unreleased)
+## v10.3.5 (September 18th)
 This release moves the build process for binaries to Go 1.27.
 
 ### Implementation changes and bug fixes
