@@ -1,6 +1,14 @@
 ## v10.3.5 (unreleased)
+This release moves the build process for binaries to Go 1.27.
+
 ### Implementation changes and bug fixes
 - [PR #2794](https://github.com/rqlite/rqlite/pull/2794): Reject alternate form of unsupported `PRAGMA` commands.
+- [PR #2798](https://github.com/rqlite/rqlite/pull/2798): Handle negative trailing logs.
+- [PR #2799](https://github.com/rqlite/rqlite/pull/2799): Sync access to last backup time at `http` layer.
+- [PR #2800](https://github.com/rqlite/rqlite/pull/2800): Set the "Served by" header before first backup byte.
+- [PR #2801](https://github.com/rqlite/rqlite/pull/2801): Set DB load response time for all formats.
+- [PR #2802](https://github.com/rqlite/rqlite/pull/2802): Fix HTTP logic error for queued statements.
+- [PR #2804](https://github.com/rqlite/rqlite/pull/2804): Minor web console fixes.
 
 ## v10.3.4 (September 15th 2026)
 ### Implementation changes and bug fixes
