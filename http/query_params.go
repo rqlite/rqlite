@@ -235,7 +235,10 @@ func (qp QueryParams) TrailingLogs(def int) int {
 	if !ok {
 		return def
 	}
-	r, _ := strconv.Atoi(i)
+	r, err := strconv.Atoi(i)
+	if err != nil || r < 0 {
+		return def
+	}
 	return r
 }
 

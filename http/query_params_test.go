@@ -173,3 +173,34 @@ func Test_QueryParams_BackupFormat(t *testing.T) {
 		})
 	}
 }
+
+func Test_QueryParams_TrailingLogs(t *testing.T) {
+	def := 100
+
+	testCases := []struct {
+		name     string
+		rawQuery string
+		expected int
+	}{
+		{"valid value", "trailing_logs=10", 10},
+		{"zero value", "trailing_logs=0", 0},
+		{"negative", "trailing_logs=-1", def},
+	}
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			req := &http.Request{
+				URL: &url.URL{
+					RawQuery: tc.rawQuery,
+				},
+			}
+			qp, err := NewQueryParams(req)
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+			n := qp.TrailingLogs(def)
+			if n != tc.expected {
+				t.Errorf("expected %v, got %v", tc.expected, n)
+			}
+		})
+	}
+}
