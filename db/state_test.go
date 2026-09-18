@@ -66,6 +66,18 @@ func Test_IsDisallowedPragmas(t *testing.T) {
 		// Tabs and mixed-case schema qualifiers.
 		"\tPRAGMA\tjournal_mode\t=\tWAL",
 		"PRAGMA MAIN.synchronous=OFF",
+		"PRAGMA journal_mode(DELETE)",
+		"PRAGMA synchronous(OFF)",
+		"PRAGMA query_only(false)",
+		"PRAGMA wal_autocheckpoint(1)",
+		"/* leading comment */ PRAGMA wal_checkpoint",
+		"PRAGMA/* comment */main /* comment */ . [wal_checkpoint]",
+		"PRAGMA 'synchronous' /* comment */ (OFF)",
+		"PRAGMA `query_only` (false)",
+		`PRAGMA "main" . "journal_mode" = DELETE`,
+		"SELECT 1; PRAGMA wal_checkpoint",
+		"PRAGMA cache_size=1000; PRAGMA wal_autocheckpoint(1)",
+		"; ; -- comment\n PRAGMA wal_checkpoint",
 	}
 
 	for _, s := range tests {
@@ -93,6 +105,25 @@ func Test_AllowedPragmas(t *testing.T) {
 
 		// Other pragmas are not breaking.
 		"PRAGMA cache_size = 10000",
+		"PRAGMA cache_size(10000)",
+		"PRAGMA main . [wal_autocheckpoint]",
+		"-- PRAGMA wal_checkpoint\nSELECT 1",
+		"/* PRAGMA wal_checkpoint; */ SELECT 1",
+		"SELECT 'text; PRAGMA wal_checkpoint'",
+		"SELECT 'text''; PRAGMA wal_checkpoint'",
+		`SELECT "text""; PRAGMA wal_checkpoint"`,
+		"SELECT `text``; PRAGMA wal_checkpoint`",
+		"SELECT [text; PRAGMA wal_checkpoint]",
+		"SELECT 1; -- PRAGMA wal_checkpoint",
+		"SELECT 1; /* PRAGMA wal_checkpoint */",
+		"PRAGMA user_version; SELECT 'PRAGMA wal_checkpoint'",
+		"EXPLAIN SELECT 'PRAGMA wal_checkpoint'",
+		"EXPLAIN QUERY PLAN SELECT 'PRAGMA wal_checkpoint'",
+		"PRAGMA 'wal_checkpoint''other'",
+		`PRAGMA "wal_checkpoint""other"`,
+		"PRAGMA [wal_checkpoint; other]",
+		"PRAGMA wal_autocheckpoint$other=1",
+		"PRAGMA wal_autocheckpointé=1",
 
 		// Name boundaries: a breaking name that is only a prefix of the
 		// actual pragma name must not match.
@@ -120,6 +151,44 @@ func Test_AllowedPragmas(t *testing.T) {
 		if IsBreakingPragma(s) {
 			t.Fatalf(`"%s" is marked as breaking`, s)
 		}
+	}
+}
+
+func Test_IsBreakingPragma_CheckpointAssignments(t *testing.T) {
+	for _, stmt := range []string{
+		"PRAGMA wal_autocheckpoint(1)",
+		"PRAGMA wal_autocheckpoint = 1",
+		"/* comment */ PRAGMA wal_autocheckpoint(1)",
+		"-- comment\n PRAGMA wal_autocheckpoint(1)",
+		"PRAGMA/* comment */wal_autocheckpoint/* comment */(1)",
+		`PRAGMA "wal_autocheckpoint"(1)`,
+		"PRAGMA 'wal_autocheckpoint'(1)",
+		"PRAGMA `wal_autocheckpoint`(1)",
+		"PRAGMA[wal_autocheckpoint](1)",
+		`PRAGMA "main" /* comment */ . [wal_autocheckpoint](1)`,
+		"SELECT '; not a statement'; PRAGMA wal_autocheckpoint(1)",
+		"EXPLAIN PRAGMA wal_autocheckpoint(1)",
+		"EXPLAIN QUERY PLAN PRAGMA wal_autocheckpoint(1)",
+		"\ufeffPRAGMA wal_autocheckpoint(1)",
+	} {
+		t.Run(stmt, func(t *testing.T) {
+			db, err := Open(filepath.Join(t.TempDir(), "test.db"), false, true)
+			if err != nil {
+				t.Fatalf("failed to open database: %v", err)
+			}
+			defer db.Close()
+			mustExecute(db, stmt)
+			setting, err := db.GetCheckpointing()
+			if err != nil {
+				t.Fatalf("failed to read checkpoint setting: %v", err)
+			}
+			if setting != 1 {
+				t.Fatalf("expected statement to enable checkpointing, got %d", setting)
+			}
+			if !IsBreakingPragma(stmt) {
+				t.Fatal("statement changes checkpointing but is allowed")
+			}
+		})
 	}
 }
 
