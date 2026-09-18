@@ -676,7 +676,13 @@ func (s *Service) handleBackup(w http.ResponseWriter, r *http.Request, qp QueryP
 	}
 	addBackupFormatHeader(w, qp)
 
-	addr, err := s.proxy.Backup(r.Context(), br, w, makeCredentials(r), qp.Timeout(defaultTimeout), qp.Redirect())
+	preWFn := func() error {
+		addr := s.proxy.GetAPIAddr()
+		w.Header().Set(ServedByHTTPHeader, addr)
+		return nil
+	}
+
+	_, err := s.proxy.Backup(r.Context(), br, w, makeCredentials(r), qp.Timeout(defaultTimeout), qp.Redirect(), preWFn)
 	if err != nil {
 		if errors.Is(err, proxy.ErrNotLeader) {
 			s.DoRedirect(w, r, qp)
@@ -698,8 +704,6 @@ func (s *Service) handleBackup(w http.ResponseWriter, r *http.Request, qp QueryP
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
-	w.Header().Set(ServedByHTTPHeader, addr)
-
 	s.lastBackup.Store(time.Now())
 }
 
