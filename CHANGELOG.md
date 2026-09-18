@@ -1,3 +1,7 @@
+## v10.3.5 (unreleased)
+### Implementation changes and bug fixes
+- [PR #2794](https://github.com/rqlite/rqlite/pull/2794): Reject alternate form of unsupported `PRAGMA` commands.
+
 ## v10.3.4 (September 15th 2026)
 ### Implementation changes and bug fixes
 - [PR #2791](https://github.com/rqlite/rqlite/pull/2791): Do not emit rolled-back events over CDC.
