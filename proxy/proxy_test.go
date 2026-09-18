@@ -510,12 +510,36 @@ func Test_Backup_LocalSuccess(t *testing.T) {
 	}
 	p := newTestProxy(s, &mockCluster{})
 
-	addr, err := p.Backup(context.Background(), &proto.BackupRequest{}, nil, nil, time.Second, false)
+	addr, err := p.Backup(context.Background(), &proto.BackupRequest{}, nil, nil, time.Second, false, nil)
 	if err != nil {
 		t.Fatalf("unexpected error: %s", err)
 	}
 	if addr != "" {
 		t.Fatalf("expected empty addr, got %s", addr)
+	}
+}
+
+func Test_Backup_LocalSuccess_PreWrite(t *testing.T) {
+	t.Parallel()
+	s := &mockStore{
+		backupFn: func(ctx context.Context, br *proto.BackupRequest, dst io.Writer) error {
+			return nil
+		},
+	}
+	p := newTestProxy(s, &mockCluster{})
+
+	called := false
+	preW := func() error {
+		called = true
+		return nil
+	}
+
+	_, err := p.Backup(context.Background(), &proto.BackupRequest{}, nil, nil, time.Second, false, preW)
+	if err != nil {
+		t.Fatalf("unexpected error: %s", err)
+	}
+	if !called {
+		t.Fatal("pre-write function not called")
 	}
 }
 
@@ -528,7 +552,7 @@ func Test_Backup_NotLeader_NoForward(t *testing.T) {
 	}
 	p := newTestProxy(s, &mockCluster{})
 
-	_, err := p.Backup(context.Background(), &proto.BackupRequest{}, nil, nil, time.Second, true)
+	_, err := p.Backup(context.Background(), &proto.BackupRequest{}, nil, nil, time.Second, true, nil)
 	if !errors.Is(err, ErrNotLeader) {
 		t.Fatalf("expected ErrNotLeader, got %v", err)
 	}
@@ -554,7 +578,7 @@ func Test_Backup_NotLeader_Forward(t *testing.T) {
 	}
 	p := newTestProxy(s, c)
 
-	addr, err := p.Backup(context.Background(), &proto.BackupRequest{}, nil, nil, time.Second, false)
+	addr, err := p.Backup(context.Background(), &proto.BackupRequest{}, nil, nil, time.Second, false, nil)
 	if err != nil {
 		t.Fatalf("unexpected error: %s", err)
 	}
@@ -580,7 +604,7 @@ func Test_Backup_Unauthorized(t *testing.T) {
 	}
 	p := newTestProxy(s, c)
 
-	_, err := p.Backup(context.Background(), &proto.BackupRequest{}, nil, nil, time.Second, false)
+	_, err := p.Backup(context.Background(), &proto.BackupRequest{}, nil, nil, time.Second, false, nil)
 	if !errors.Is(err, ErrUnauthorized) {
 		t.Fatalf("expected ErrUnauthorized, got %v", err)
 	}

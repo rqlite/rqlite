@@ -67,6 +67,10 @@ func ResetStats() {
 	stats.Add(numRemoteRequestsFailed, 0)
 }
 
+// PreWrite is an optional function which is called before the first write to the
+// writer.
+type PreWrite func() error
+
 // Store defines the local database operations needed by the proxy.
 type Store interface {
 	Execute(ctx context.Context, er *proto.ExecuteRequest) ([]*proto.ExecuteQueryResponse, uint64, error)
@@ -203,7 +207,13 @@ func (p *Proxy) Request(ctx context.Context, eqr *proto.ExecuteQueryRequest, cre
 // ErrNotLeader and noForward is false, the request is forwarded to
 // the current leader.
 func (p *Proxy) Backup(ctx context.Context, br *proto.BackupRequest, dst io.Writer, creds *clstrPB.Credentials,
-	timeout time.Duration, noForward bool) (string, error) {
+	timeout time.Duration, noForward bool, preFn PreWrite) (string, error) {
+
+	if preFn != nil {
+		if err := preFn(); err != nil {
+			return "", err
+		}
+	}
 
 	err := p.store.Backup(ctx, br, dst)
 	if errors.Is(err, store.ErrNotLeader) {
