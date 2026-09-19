@@ -128,8 +128,8 @@ func Test_QueryLogger_FallbackToStmtOrTrigger(t *testing.T) {
 	if !strings.Contains(output, "PRAGMA journal_mode") {
 		t.Fatalf("expected log to contain StmtOrTrigger text, got: %s", output)
 	}
-	if !strings.Contains(output, "[0s]") {
-		t.Fatalf("expected [0s] for zero-duration, got: %s", output)
+	if !strings.Contains(output, "(0s)") {
+		t.Fatalf("expected (0s) for zero-duration, got: %s", output)
 	}
 }
 
@@ -291,8 +291,8 @@ func Test_QueryLogger_MinDuration_AboveThreshold(t *testing.T) {
 	if !strings.Contains(output, "SELECT 'above_threshold'") {
 		t.Fatalf("expected query above threshold to be logged, got: %s", output)
 	}
-	if !strings.Contains(output, "[50ms]") {
-		t.Fatalf("expected [50ms] in output, got: %s", output)
+	if !strings.Contains(output, "(50ms)") {
+		t.Fatalf("expected (50ms) in output, got: %s", output)
 	}
 }
 
