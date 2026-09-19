@@ -419,6 +419,50 @@ func (c *Client) RemoveNode(ctx context.Context, rn *command.RemoveNodeRequest, 
 	return nil
 }
 
+// DemoteNode demotes a voter node to a non-voter in the cluster. If creds is
+// nil, then no credential information will be included in the DemoteNode
+// request to the remote node.
+func (c *Client) DemoteNode(ctx context.Context, dn *command.DemoteNodeRequest, nodeAddr string, creds *proto.Credentials, timeout time.Duration) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	conn, err := c.dial(nodeAddr)
+	if err != nil {
+		return err
+	}
+	defer conn.Close()
+
+	// Create the request.
+	command := &proto.Command{
+		Type: proto.Command_COMMAND_TYPE_DEMOTE_NODE,
+		Request: &proto.Command_DemoteNodeRequest{
+			DemoteNodeRequest: dn,
+		},
+		Credentials: creds,
+	}
+	if err := writeCommand(conn, command, timeout); err != nil {
+		handleConnError(conn)
+		return err
+	}
+
+	p, err := readResponse(conn, timeout)
+	if err != nil {
+		handleConnError(conn)
+		return err
+	}
+
+	a := &proto.CommandDemoteNodeResponse{}
+	err = pb.Unmarshal(p, a)
+	if err != nil {
+		return err
+	}
+
+	if a.Error != "" {
+		return errors.New(a.Error)
+	}
+	return nil
+}
+
 // Stepdown triggers leader stepdown on a remote node. If creds is nil, then no
 // credential information will be included in the Stepdown request to the
 // remote node.
