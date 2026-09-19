@@ -795,7 +795,7 @@ func (s *Store) Open() (retErr error) {
 		}
 		s.dbDrv = sql.NewDriverFromConfig(
 			random.StringPattern("rqlite-configured-xxxx-xxxx-xxxx"),
-			cfg,
+			&cfg,
 		)
 	}
 
