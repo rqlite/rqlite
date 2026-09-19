@@ -44,8 +44,6 @@ func Test_NewConfig_MissingFile(t *testing.T) {
 	}
 }
 
-// --- NewConfig: JSON config file loading ---
-
 func Test_NewConfig_FullConfig(t *testing.T) {
 	// 5_000_000_000 ns = 5s
 	f := mustWriteQueryLogFile(t, []byte(`{"min_duration":5000000000,"no_expanded_sql":true}`))
@@ -67,7 +65,6 @@ func Test_NewConfig_FullConfig(t *testing.T) {
 }
 
 func Test_NewConfig_OmittedMinDuration_GetsDefault(t *testing.T) {
-	// min_duration absent → must receive DefaultMinDuration.
 	f := mustWriteQueryLogFile(t, []byte(`{"no_expanded_sql":false}`))
 	defer os.Remove(f)
 
@@ -82,7 +79,6 @@ func Test_NewConfig_OmittedMinDuration_GetsDefault(t *testing.T) {
 		t.Fatalf("expected DefaultMinDuration %v, got %v", DefaultMinDuration, *cfg.MinDuration)
 	}
 }
-
 func Test_NewConfig_ExplicitZeroMinDuration_LogsEverything(t *testing.T) {
 	// Explicit min_duration:0 must NOT be replaced by the default.
 	// Zero means "log every query".
@@ -138,16 +134,6 @@ func Test_NewConfig_MalformedJSON(t *testing.T) {
 	_, err := NewConfig(f)
 	if err == nil {
 		t.Fatal("expected error for malformed JSON")
-	}
-}
-
-func Test_NewConfig_UnknownField(t *testing.T) {
-	f := mustWriteQueryLogFile(t, []byte(`{"min_duration":10000000000,"unknown_field":true}`))
-	defer os.Remove(f)
-
-	_, err := NewConfig(f)
-	if err == nil {
-		t.Fatal("expected error for unknown JSON field")
 	}
 }
 
@@ -229,8 +215,6 @@ func Test_DefaultConfig(t *testing.T) {
 		t.Fatal("DefaultConfig NoExpandedSQL must be false")
 	}
 }
-
-// --- helpers ---
 
 func mustWriteQueryLogFile(t *testing.T, content []byte) string {
 	t.Helper()

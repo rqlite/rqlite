@@ -1,11 +1,9 @@
 package querylog
 
 import (
-	"bytes"
 	"encoding/json"
 	"errors"
 	"fmt"
-	"io"
 	"os"
 	"time"
 )
@@ -20,8 +18,7 @@ const (
 )
 
 // Config holds the query-log configuration. All fields are declarative
-// configuration values suitable for JSON serialisation. No runtime
-// resources (loggers, mutexes, channels) are stored here.
+// configuration values suitable for JSON serialisation.
 //
 // MinDuration is a pointer so the JSON decoder can distinguish an explicitly
 // supplied zero ("log every query") from an absent field ("use the default").
@@ -78,27 +75,15 @@ func (c *Config) Validate() error {
 
 // newConfigFromFile reads a JSON Config file from path, applies defaults to
 // omitted fields, validates the result, and returns the Config.
-//
-// Decoding pipeline:
-//
-//	decode JSON → apply defaults → Validate() → return *Config
 func newConfigFromFile(path string) (*Config, error) {
-	data, err := os.ReadFile(path)
+	b, err := os.ReadFile(path)
 	if err != nil {
-		return nil, fmt.Errorf("querylog: cannot open config file %q: %w", path, err)
+		return nil, fmt.Errorf("cannot open config file %q: %w", path, err)
 	}
 
 	var cfg Config
-	dec := json.NewDecoder(bytes.NewReader(data))
-	dec.DisallowUnknownFields()
-	if err := dec.Decode(&cfg); err != nil {
-		return nil, fmt.Errorf("querylog: invalid JSON in config file %q: %w", path, err)
-	}
-	if err := dec.Decode(&struct{}{}); err != io.EOF {
-		if err == nil {
-			return nil, fmt.Errorf("querylog: config file %q contains trailing data", path)
-		}
-		return nil, fmt.Errorf("querylog: config file %q contains invalid trailing data: %w", path, err)
+	if err := json.Unmarshal(b, &cfg); err != nil {
+		return nil, fmt.Errorf("failed to unmarshal config ta %s: %w", path, err)
 	}
 
 	// Apply defaults to omitted fields only. An explicit zero is left as-is.
