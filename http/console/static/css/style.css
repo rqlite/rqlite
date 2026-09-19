@@ -103,17 +103,40 @@ header {
 
 header h1 {
     font-size: 1.25rem;
-    font-weight: 600;
+    font-weight: 700;
     padding: 0.75rem 0;
+    flex-shrink: 0;
+}
+
+.home-link {
     display: flex;
     align-items: center;
-    gap: 0.5rem;
+    gap: 0.6rem;
+    border: none;
+    background: none;
+    color: inherit;
+    font: inherit;
+    line-height: 1;
     cursor: pointer;
 }
 
+.home-link:focus-visible {
+    outline: 2px solid currentColor;
+    outline-offset: 4px;
+    border-radius: 3px;
+}
+
+.brand-name {
+    letter-spacing: -0.03em;
+    /* Center the visible lettering, accounting for the font's baseline. */
+    transform: translateY(-0.05em);
+}
+
 .logo {
+    display: block;
     height: 1.75rem;
-    width: auto;
+    width: 1.75rem;
+    flex-shrink: 0;
 }
 
 .node-info {
