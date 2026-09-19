@@ -136,7 +136,7 @@ func testDriverConfigName() string {
 func Test_NewDriverFromConfig_QueryLogOnly(t *testing.T) {
 	ql := querylog.New(querylog.DefaultConfig())
 
-	d := NewDriverFromConfig(testDriverConfigName(), DriverConfig{
+	d := NewDriverFromConfig(testDriverConfigName(), &DriverConfig{
 		ChkOnClose:  CnkOnCloseModeDisabled,
 		QueryLogger: ql,
 	})
@@ -164,7 +164,7 @@ func Test_NewDriverFromConfig_QueryLogOnly(t *testing.T) {
 // Verifies that a DriverConfig with nil
 // QueryLogger opens and operates normally without tracing.
 func Test_NewDriverFromConfig_NoQueryLog(t *testing.T) {
-	d := NewDriverFromConfig(testDriverConfigName(), DriverConfig{
+	d := NewDriverFromConfig(testDriverConfigName(), &DriverConfig{
 		ChkOnClose:  CnkOnCloseModeDisabled,
 		QueryLogger: nil,
 	})
@@ -187,7 +187,7 @@ func Test_NewDriverFromConfig_NoQueryLog(t *testing.T) {
 // DriverConfig are reflected on the returned Driver struct.
 func Test_DriverConfig_ExtensionsFields(t *testing.T) {
 	exts := []string{"/tmp/ext1.so", "/tmp/ext2.so"}
-	d := NewDriverFromConfig(testDriverConfigName(), DriverConfig{
+	d := NewDriverFromConfig(testDriverConfigName(), &DriverConfig{
 		Extensions: exts,
 		ChkOnClose: CnkOnCloseModeDisabled,
 	})
