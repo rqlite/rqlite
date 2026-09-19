@@ -8,6 +8,7 @@ import (
 	"sync"
 
 	"github.com/mattn/go-sqlite3"
+	"github.com/rqlite/rqlite/v10/db/querylog"
 )
 
 const (
@@ -36,7 +37,7 @@ type DriverConfig struct {
 	ChkOnClose CnkOnCloseMode
 
 	// QueryLogger, if non-nil, installs query tracing on every new connection.
-	QueryLogger *QueryLogger
+	QueryLogger *querylog.QueryLogger
 }
 
 // Driver is a Database driver.
