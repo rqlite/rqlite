@@ -22,7 +22,7 @@ type QueryLogger struct {
 
 // New creates a QueryLogger from cfg.
 func New(cfg *Config) *QueryLogger {
-	return newWithLogger(cfg, log.New(os.Stderr, "[query] ", log.LstdFlags))
+	return newWithLogger(cfg, log.New(os.Stderr, "[db-query] ", log.LstdFlags))
 }
 
 // Close is a no-op placeholder reserved for when file-based log output
@@ -76,7 +76,7 @@ func (ql *QueryLogger) TraceHook(info sqlite3.TraceInfo) int {
 			return 0
 		}
 
-		ql.logger.Printf("%s [%s]", sql, dur)
+		ql.logger.Printf("%s (%s)", sql, dur)
 	}
 
 	return 0

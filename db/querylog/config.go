@@ -12,7 +12,7 @@ const (
 	// DefaultMinDuration is applied when min_duration is omitted from the
 	// JSON config file. An explicitly supplied zero means "log every query"
 	// and is never replaced by this default.
-	DefaultMinDuration = 10 * time.Second
+	DefaultMinDuration = 1 * time.Second
 
 	stderrValue = "stderr"
 )
