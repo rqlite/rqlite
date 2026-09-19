@@ -75,15 +75,15 @@ func Test_QueryLogger_StmtThenProfile(t *testing.T) {
 		EventCode:      sqlite3.TraceProfile,
 		ConnHandle:     0x100,
 		StmtHandle:     0x200,
-		RunTimeNanosec: 3_000_000,
+		RunTimeNanosec: 30_000_000,
 	})
 
 	output := buf.String()
 	if !strings.Contains(output, "INSERT INTO t VALUES ('alice')") {
 		t.Fatalf("expected log to contain expanded SQL, got: %s", output)
 	}
-	if !strings.Contains(output, "[3ms]") {
-		t.Fatalf("expected log to contain [3ms], got: %s", output)
+	if !strings.Contains(output, "(30ms)") {
+		t.Fatalf("expected log to contain [30ms], got: %s", output)
 	}
 }
 
