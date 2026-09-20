@@ -733,7 +733,9 @@ func Test_Store_RestoreSnapshotAheadOfDB(t *testing.T) {
 	// the FSM. This leaves behind exactly what Raft's installSnapshot leaves behind
 	// when sink.Close() returns but the FSM restore which should follow it does not
 	// happen.
-	snapshot.Clone(s.snapshotDir, latest.ID, latest.Index+100, latest.Term)
+	//
+	// This test uses a generation set to 0 to test pre-snapshot-generation behavior.
+	snapshot.Clone(s.snapshotDir, latest.ID, latest.Index+100, latest.Term, 0)
 
 	// Restart the node.
 	if err := s.Open(); err != nil {
