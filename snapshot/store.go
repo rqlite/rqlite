@@ -647,14 +647,27 @@ func (s *Store) reapInternal() (int, int, error) {
 		}
 
 		// 5. Write new metadata into the full snapshot dir, overwriting the existing
-		// metadata.
+		// metadata. Use a generation in the snapshot ID to protect against no changes
+		// in the millisecond timestamp.
 		var newest *Snapshot
 		if newerSet.Len() > 0 {
 			newest, _ = newerSet.Newest()
 		} else {
 			newest = full
 		}
-		newID := s.snapshotNamer.MakeName(newest.raftMeta.Term, newest.raftMeta.Index, 0)
+
+		gen := int64(1)
+		newID := s.snapshotNamer.MakeName(newest.raftMeta.Term, newest.raftMeta.Index, gen)
+		for {
+			finalDir := filepath.Join(s.dir, newID)
+			if !fsutil.DirExists(finalDir) {
+				// No ID collision, use it.
+				break
+			}
+			gen++
+			newID = s.snapshotNamer.MakeName(newest.raftMeta.Term, newest.raftMeta.Index, gen)
+		}
+
 		newMeta := copyRaftMeta(newest.raftMeta)
 		newMeta.ID = newID
 		metaJSON, err := json.Marshal(newMeta)
