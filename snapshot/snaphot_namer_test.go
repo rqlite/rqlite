@@ -243,6 +243,14 @@ func Test_ParseSnapshotName(t *testing.T) {
 			wantMsec:  3,
 		},
 		{
+			name:      "simple with generation",
+			input:     "1-2-3-4",
+			wantTerm:  1,
+			wantIndex: 2,
+			wantMsec:  3,
+			wantGen:   4,
+		},
+		{
 			name:  "all zero",
 			input: "0-0-0",
 		},
@@ -254,11 +262,27 @@ func Test_ParseSnapshotName(t *testing.T) {
 			wantMsec:  1500000000000,
 		},
 		{
+			name:      "realistic name with generation",
+			input:     "4-1234567-1500000000000-5",
+			wantTerm:  4,
+			wantIndex: 1234567,
+			wantMsec:  1500000000000,
+			wantGen:   5,
+		},
+		{
 			name:      "maximum values",
 			input:     "18446744073709551615-18446744073709551615-9223372036854775807",
 			wantTerm:  math.MaxUint64,
 			wantIndex: math.MaxUint64,
 			wantMsec:  math.MaxInt64,
+		},
+		{
+			name:      "maximum values with generation",
+			input:     "18446744073709551615-18446744073709551615-9223372036854775807-9223372036854775807",
+			wantTerm:  math.MaxUint64,
+			wantIndex: math.MaxUint64,
+			wantMsec:  math.MaxInt64,
+			wantGen:   math.MaxInt64,
 		},
 		{
 			name:      "leading zeroes accepted",
@@ -273,6 +297,14 @@ func Test_ParseSnapshotName(t *testing.T) {
 			wantTerm:  1,
 			wantIndex: 2,
 			wantMsec:  3,
+		},
+		{
+			name:      "explicit plus accepted in timestamp only with generation",
+			input:     "1-2-+3-4",
+			wantTerm:  1,
+			wantIndex: 2,
+			wantMsec:  3,
+			wantGen:   4,
 		},
 
 		// Wrong number of fields.
@@ -321,6 +353,11 @@ func Test_ParseSnapshotName(t *testing.T) {
 		{
 			name:        "all fields empty",
 			input:       "--",
+			errContains: "bad term field",
+		},
+		{
+			name:        "all fields empty with generation",
+			input:       "---",
 			errContains: "bad term field",
 		},
 		{
