@@ -1054,6 +1054,79 @@ func Test_Store_Reap_Full_FullWALs(t *testing.T) {
 	}
 }
 
+// Test_Store_Reap_Full_FullWALs_NameCollision_NoGen tests reaping when the name
+// generated for the consolidated snapshot is identical to the name of the newest
+// full snapshot and the snapshot IDs don't use generations. This is the case with
+// older releases.
+func Test_Store_Reap_Full_FullWALs_NameCollision_NoGen(t *testing.T) {
+	dir := t.TempDir()
+	store, err := NewStore(dir)
+	if err != nil {
+		t.Fatalf("Failed to create new store: %v", err)
+	}
+	defer store.Close()
+
+	createSnapshotInStore(t, store, "2-1017-1704807719996", 1017, 2, 1, "testdata/db-and-wals/backup.db")
+	createSnapshotInStore(t, store, "3-2000-2222222222222", 2000, 3, 1,
+		"testdata/db-and-wals/full2.db", "testdata/db-and-wals/full2-wal-00")
+
+	// Now use a fixed clock so we get the same timestamp when we reap. This should trigger a bump in
+	// generation from 0 (implied because it's not in the snapshot ID) to 1.
+	store.snapshotNamer = NewSnapshotNamer(fixedClock(time.UnixMilli(2222222222222)))
+	if _, _, err := store.Reap(); err != nil {
+		t.Fatalf("Failed to reap snapshots: %v", err)
+	}
+
+	snaps, err := store.ListAll()
+	if exp, got := 1, len(snaps); exp != got {
+		t.Fatalf("expected %d snapshot in list, got %d", exp, got)
+	}
+
+	term, index, msec, gen, err := ParseSnapshotName(snaps[0].ID)
+	if err != nil {
+		t.Fatalf("failed to parse snapshot name: %s", err)
+	}
+	if term != 3 || index != 2000 || msec != 2222222222222 || gen != 1 {
+		t.Fatalf("incorrect snapshot ID, got %d, %d, %d, %d", term, index, msec, gen)
+	}
+}
+
+// Test_Store_Reap_Full_FullWALs_NameCollision_WithGen tests reaping when the name
+// generated for the consolidated snapshot is identical to the name of the newest
+// full snapshot and generations are in use.
+func Test_Store_Reap_Full_FullWALs_NameCollision_WithGen(t *testing.T) {
+	dir := t.TempDir()
+	store, err := NewStore(dir)
+	if err != nil {
+		t.Fatalf("Failed to create new store: %v", err)
+	}
+	defer store.Close()
+
+	createSnapshotInStore(t, store, "2-1017-1704807719996-1", 1017, 2, 1, "testdata/db-and-wals/backup.db")
+	createSnapshotInStore(t, store, "3-2000-2222222222222-1", 2000, 3, 1,
+		"testdata/db-and-wals/full2.db", "testdata/db-and-wals/full2-wal-00")
+
+	// Now use a fixed clock so we get the same timestamp when we reap. This should trigger a bump in
+	// generation from 1 to 2.
+	store.snapshotNamer = NewSnapshotNamer(fixedClock(time.UnixMilli(2222222222222)))
+	if _, _, err := store.Reap(); err != nil {
+		t.Fatalf("Failed to reap snapshots: %v", err)
+	}
+
+	snaps, err := store.ListAll()
+	if exp, got := 1, len(snaps); exp != got {
+		t.Fatalf("expected %d snapshot in list, got %d", exp, got)
+	}
+
+	term, index, msec, gen, err := ParseSnapshotName(snaps[0].ID)
+	if err != nil {
+		t.Fatalf("failed to parse snapshot name: %s", err)
+	}
+	if term != 3 || index != 2000 || msec != 2222222222222 || gen != 2 {
+		t.Fatalf("incorrect snapshot ID, got %d, %d, %d, %d", term, index, msec, gen)
+	}
+}
+
 func Test_Store_ReapCorruptDB(t *testing.T) {
 	dir := t.TempDir()
 	store, err := NewStore(dir)
