@@ -377,6 +377,21 @@ func (ss SnapshotSet) PartitionAtFull() (full SnapshotSet, newer SnapshotSet) {
 	return full, newer
 }
 
+// WithTermIndex returns all snapshots in the set which have the given
+// Term and Index.
+func (ss SnapshotSet) WithTermIndex(term, index uint64) SnapshotSet {
+	var filtered []*Snapshot
+	for _, snapshot := range ss.items {
+		if snapshot.raftMeta.Term == term && snapshot.raftMeta.Index == index {
+			filtered = append(filtered, snapshot)
+		}
+	}
+	return SnapshotSet{
+		dir:   ss.dir,
+		items: filtered,
+	}
+}
+
 // ValidateIncrementalChain checks that all snapshots newer than the newest full
 // snapshot are incremental snapshots.
 //

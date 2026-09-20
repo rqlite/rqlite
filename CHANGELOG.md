@@ -3,6 +3,7 @@
 - [PR #2768](https://github.com/rqlite/rqlite/pull/2768), [PR #2805](https://github.com/rqlite/rqlite/pull/2805), [PR #2806](https://github.com/rqlite/rqlite/pull/2806): Add query logging to database layer. Thanks @karangupta982
 - [PR #2807](https://github.com/rqlite/rqlite/pull/2807): Snapshot IDs now contain (optional) generation.
 - [PR #2808](https://github.com/rqlite/rqlite/pull/2808): Bump generation ID if snapshot IDs collide. Fixes issue [#2746](https://github.com/rqlite/rqlite/issues/2746). Thanks @rohanpadhye
+- [PR #2810](https://github.com/rqlite/rqlite/pull/2810): Snapshots can be filtered by term and index.
 
 ## v10.3.5 (September 18th)
 This release moves the build process for binaries to Go 1.27.
