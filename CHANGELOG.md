@@ -1,6 +1,7 @@
 ## v10.3.6 (unreleased)
 ### Implementation changes and bug fixes
 - [PR #2768](https://github.com/rqlite/rqlite/pull/2768), [PR #2805](https://github.com/rqlite/rqlite/pull/2805), [PR #2806](https://github.com/rqlite/rqlite/pull/2806): Add query logging to database layer. Thanks @karangupta982
+- [PR #2807](https://github.com/rqlite/rqlite/pull/2807): Snapshot IDs now contain (optional) generation.
 
 ## v10.3.5 (September 18th)
 This release moves the build process for binaries to Go 1.27.
