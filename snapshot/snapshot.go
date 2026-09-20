@@ -102,10 +102,13 @@ func (s *Snapshot) Less(other *Snapshot) bool {
 		return s.raftMeta.Index < other.raftMeta.Index
 	}
 
-	_, _, msecThis, _, errThis := ParseSnapshotName(s.id)
-	_, _, msecOther, _, errOther := ParseSnapshotName(other.id)
+	_, _, msecThis, genThis, errThis := ParseSnapshotName(s.id)
+	_, _, msecOther, genOther, errOther := ParseSnapshotName(other.id)
 	if errThis == nil && errOther == nil {
-		return msecThis < msecOther
+		if msecThis != msecOther {
+			return msecThis < msecOther
+		}
+		return genThis < genOther
 	}
 	return s.id < other.id
 }
