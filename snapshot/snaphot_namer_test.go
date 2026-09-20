@@ -22,12 +22,12 @@ func Test_NewSnapshotNamer_NilNowFn(t *testing.T) {
 	}
 
 	before := time.Now().UnixNano() / int64(time.Millisecond)
-	name := sn.MakeName(7, 8)
+	name := sn.MakeName(7, 8, 9)
 	after := time.Now().UnixNano() / int64(time.Millisecond)
 
-	term, index, msec := parseName(t, name)
-	if term != 7 || index != 8 {
-		t.Fatalf("got term=%d index=%d, want 7 and 8", term, index)
+	term, index, msec, gen := parseName(t, name)
+	if term != 7 || index != 8 || gen != 9 {
+		t.Fatalf("got term=%d index=%d, gen=%d want 7 and 8", term, index, gen)
 	}
 	if msec < before || msec > after {
 		t.Fatalf("timestamp %d outside range [%d, %d]", msec, before, after)
@@ -39,7 +39,7 @@ func Test_NewSnapshotNamer_CustomNowFn(t *testing.T) {
 	tm := time.Unix(1500000000, 0).UTC() // 1500000000000 msec
 	sn := NewSnapshotNamer(fixedClock(tm))
 
-	if got, want := sn.MakeName(1, 1), "1-1-1500000000000"; got != want {
+	if got, want := sn.MakeName(1, 1, 0), "1-1-1500000000000"; got != want {
 		t.Fatalf("got %q, want %q", got, want)
 	}
 }
@@ -53,22 +53,24 @@ func Test_MakeName_Format(t *testing.T) {
 		name  string
 		term  uint64
 		index uint64
+		gen   int64
 		want  string
 	}{
-		{"zero values", 0, 0, "0-0-1500000000000"},
-		{"small values", 1, 2, "1-2-1500000000000"},
-		{"large values", 1 << 40, 1 << 41, "1099511627776-2199023255552-1500000000000"},
+		{"zero values", 0, 0, 0, "0-0-1500000000000"},
+		{"small values", 1, 2, 3, "1-2-1500000000000-3"},
+		{"large values", 1 << 40, 1 << 41, 0, "1099511627776-2199023255552-1500000000000"},
 		{
 			"max uint64",
 			math.MaxUint64,
 			math.MaxUint64,
-			"18446744073709551615-18446744073709551615-1500000000000",
+			1,
+			"18446744073709551615-18446744073709551615-1500000000000-1",
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			if got := sn.MakeName(tt.term, tt.index); got != tt.want {
+			if got := sn.MakeName(tt.term, tt.index, tt.gen); got != tt.want {
 				t.Fatalf("got %q, want %q", got, tt.want)
 			}
 		})
@@ -96,25 +98,11 @@ func Test_MakeName_TimestampTruncation(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			sn := NewSnapshotNamer(fixedClock(tt.now))
-			want := fmt.Sprintf("3-4-%d", tt.want)
-			if got := sn.MakeName(3, 4); got != want {
+			want := fmt.Sprintf("3-4-%d-1", tt.want)
+			if got := sn.MakeName(3, 4, 1); got != want {
 				t.Fatalf("got %q, want %q", got, want)
 			}
 		})
-	}
-}
-
-// Test_MakeName_PreEpochAddsAField records that a pre-epoch clock yields a
-// negative timestamp, so the name splits into four fields, not three.
-func Test_MakeName_PreEpochAddsAField(t *testing.T) {
-	sn := NewSnapshotNamer(fixedClock(time.Unix(-1, 0)))
-
-	name := sn.MakeName(1, 2)
-	if got, want := name, "1-2--1000"; got != want {
-		t.Fatalf("got %q, want %q", got, want)
-	}
-	if got, want := len(strings.Split(name, "-")), 4; got != want {
-		t.Fatalf("got %d fields, want %d", got, want)
 	}
 }
 
@@ -128,7 +116,7 @@ func Test_MakeName_CallsNowFnOncePerCall(t *testing.T) {
 	})
 
 	for i := 0; i < 5; i++ {
-		sn.MakeName(uint64(i), uint64(i))
+		sn.MakeName(uint64(i), uint64(i), 1)
 	}
 	if calls != 5 {
 		t.Fatalf("nowFn called %d times, want 5", calls)
@@ -141,8 +129,8 @@ func Test_MakeName_CallsNowFnOncePerCall(t *testing.T) {
 func Test_MakeName_CollidesWithinSameMillisecond(t *testing.T) {
 	sn := NewSnapshotNamer(fixedClock(time.Unix(1500000000, 0)))
 
-	first := sn.MakeName(1, 2)
-	second := sn.MakeName(1, 2)
+	first := sn.MakeName(1, 2, 3)
+	second := sn.MakeName(1, 2, 3)
 	if first != second {
 		t.Fatalf("got %q and %q, want identical names", first, second)
 	}
@@ -161,7 +149,7 @@ func Test_MakeName_DistinctInputsDistinctNames(t *testing.T) {
 	for _, tc := range []struct{ term, index uint64 }{
 		{1, 1}, {1, 2}, {2, 1}, {1, 1},
 	} {
-		name := sn.MakeName(tc.term, tc.index)
+		name := sn.MakeName(tc.term, tc.index, 1)
 		if seen[name] {
 			t.Fatalf("duplicate name %q", name)
 		}
@@ -173,7 +161,7 @@ func Test_MakeName_DistinctInputsDistinctNames(t *testing.T) {
 func Test_MakeName_Concurrent(t *testing.T) {
 	const goroutines, iterations = 8, 200
 	sn := NewSnapshotNamer(fixedClock(time.Unix(1500000000, 0)))
-	want := "1-2-1500000000000"
+	want := "1-2-1500000000000-3"
 
 	var wg sync.WaitGroup
 	errs := make(chan string, goroutines*iterations)
@@ -182,7 +170,7 @@ func Test_MakeName_Concurrent(t *testing.T) {
 		go func() {
 			defer wg.Done()
 			for j := 0; j < iterations; j++ {
-				if got := sn.MakeName(1, 2); got != want {
+				if got := sn.MakeName(1, 2, 3); got != want {
 					errs <- got
 				}
 			}
@@ -201,13 +189,13 @@ func fixedClock(t time.Time) func() time.Time {
 	return func() time.Time { return t }
 }
 
-// parseName splits a name into its three fields. It requires a
+// parseName splits a name into its four fields. It requires a
 // non-negative timestamp, since a negative one introduces a fourth field.
-func parseName(t *testing.T, name string) (term, index uint64, msec int64) {
+func parseName(t *testing.T, name string) (term, index uint64, msec, gen int64) {
 	t.Helper()
 	parts := strings.Split(name, "-")
-	if len(parts) != 3 {
-		t.Fatalf("name %q: got %d fields, want 3", name, len(parts))
+	if len(parts) != 4 {
+		t.Fatalf("name %q: got %d fields, want 4", name, len(parts))
 	}
 	term, err := strconv.ParseUint(parts[0], 10, 64)
 	if err != nil {
@@ -221,7 +209,11 @@ func parseName(t *testing.T, name string) (term, index uint64, msec int64) {
 	if err != nil {
 		t.Fatalf("name %q: bad timestamp field: %s", name, err)
 	}
-	return term, index, msec
+	gen, err = strconv.ParseInt(parts[3], 10, 64)
+	if err != nil {
+		t.Fatalf("name %q: bad generation field: %s", name, err)
+	}
+	return term, index, msec, gen
 }
 
 func Test_ParseSnapshotName(t *testing.T) {
@@ -231,15 +223,24 @@ func Test_ParseSnapshotName(t *testing.T) {
 		wantTerm    uint64
 		wantIndex   uint64
 		wantMsec    int64
+		wantGen     int64
 		errContains string // empty means no error expected
 	}{
 		// Valid input.
 		{
-			name:      "simple",
+			name:      "simple without generation",
 			input:     "1-2-3",
 			wantTerm:  1,
 			wantIndex: 2,
 			wantMsec:  3,
+		},
+		{
+			name:      "simple with generation",
+			input:     "1-2-3-4",
+			wantTerm:  1,
+			wantIndex: 2,
+			wantMsec:  3,
+			wantGen:   4,
 		},
 		{
 			name:  "all zero",
@@ -253,11 +254,27 @@ func Test_ParseSnapshotName(t *testing.T) {
 			wantMsec:  1500000000000,
 		},
 		{
+			name:      "realistic name with generation",
+			input:     "4-1234567-1500000000000-5",
+			wantTerm:  4,
+			wantIndex: 1234567,
+			wantMsec:  1500000000000,
+			wantGen:   5,
+		},
+		{
 			name:      "maximum values",
 			input:     "18446744073709551615-18446744073709551615-9223372036854775807",
 			wantTerm:  math.MaxUint64,
 			wantIndex: math.MaxUint64,
 			wantMsec:  math.MaxInt64,
+		},
+		{
+			name:      "maximum values with generation",
+			input:     "18446744073709551615-18446744073709551615-9223372036854775807-9223372036854775807",
+			wantTerm:  math.MaxUint64,
+			wantIndex: math.MaxUint64,
+			wantMsec:  math.MaxInt64,
+			wantGen:   math.MaxInt64,
 		},
 		{
 			name:      "leading zeroes accepted",
@@ -273,47 +290,45 @@ func Test_ParseSnapshotName(t *testing.T) {
 			wantIndex: 2,
 			wantMsec:  3,
 		},
+		{
+			name:      "explicit plus accepted in timestamp only with generation",
+			input:     "1-2-+3-4",
+			wantTerm:  1,
+			wantIndex: 2,
+			wantMsec:  3,
+			wantGen:   4,
+		},
 
 		// Wrong number of fields.
 		{
 			name:        "empty string",
 			input:       "",
-			errContains: "3 parts",
+			errContains: "3 or 4 parts",
 		},
 		{
 			name:        "no separators",
 			input:       "123",
-			errContains: "3 parts",
+			errContains: "3 or 4 parts",
 		},
 		{
 			name:        "two fields",
 			input:       "1-2",
-			errContains: "3 parts",
-		},
-		{
-			name:        "four fields",
-			input:       "1-2-3-4",
-			errContains: "3 parts",
+			errContains: "3 or 4 parts",
 		},
 		{
 			name:        "negative term adds a field",
 			input:       "-1-2-3",
-			errContains: "3 parts",
+			errContains: "bad term field",
 		},
 		{
 			name:        "negative index adds a field",
 			input:       "1--2-3",
-			errContains: "3 parts",
+			errContains: "bad index field",
 		},
 		{
 			name:        "negative timestamp adds a field",
 			input:       "1-2--3",
-			errContains: "3 parts",
-		},
-		{
-			name:        "trailing separator",
-			input:       "1-2-3-",
-			errContains: "3 parts",
+			errContains: "bad timestamp field",
 		},
 
 		// Bad term.
@@ -328,9 +343,14 @@ func Test_ParseSnapshotName(t *testing.T) {
 			errContains: "bad term field",
 		},
 		{
+			name:        "all fields empty with generation",
+			input:       "---",
+			errContains: "bad term field",
+		},
+		{
 			name:        "loads of fields empty",
 			input:       "------",
-			errContains: "3 parts",
+			errContains: "3 or 4 parts",
 		},
 		{
 			name:        "non-numeric term",
@@ -411,11 +431,38 @@ func Test_ParseSnapshotName(t *testing.T) {
 			input:       "1-2-3.snap",
 			errContains: "bad timestamp field",
 		},
+
+		// Bad generation
+		{
+			name:        "trailing separator",
+			input:       "1-2-3-",
+			errContains: "bad generation field",
+		},
+		{
+			name:        "non-numeric generation",
+			input:       "1-2-3-c",
+			errContains: "bad generation field",
+		},
+		{
+			name:        "generation overflows int64",
+			input:       "1-2-4-9223372036854775808",
+			errContains: "bad generation field",
+		},
+		{
+			name:        "trailing newline",
+			input:       "1-2-3-4\n",
+			errContains: "bad generation field",
+		},
+		{
+			name:        "trailing extension",
+			input:       "1-2-3-4.snap",
+			errContains: "bad generation field",
+		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			term, index, msec, err := ParseSnapshotName(tt.input)
+			term, index, msec, gen, err := ParseSnapshotName(tt.input)
 
 			if tt.errContains != "" {
 				if err == nil {
@@ -437,9 +484,9 @@ func Test_ParseSnapshotName(t *testing.T) {
 			if err != nil {
 				t.Fatalf("ParseSnapshotName(%q) returned unexpected error: %s", tt.input, err)
 			}
-			if term != tt.wantTerm || index != tt.wantIndex || msec != tt.wantMsec {
-				t.Fatalf("ParseSnapshotName(%q) = (%d, %d, %d), want (%d, %d, %d)",
-					tt.input, term, index, msec, tt.wantTerm, tt.wantIndex, tt.wantMsec)
+			if term != tt.wantTerm || index != tt.wantIndex || msec != tt.wantMsec || gen != tt.wantGen {
+				t.Fatalf("ParseSnapshotName(%q) = (%d, %d, %d, %d), want (%d, %d, %d, %d)",
+					tt.input, term, index, msec, gen, tt.wantTerm, tt.wantIndex, tt.wantMsec, tt.wantGen)
 			}
 		})
 	}
@@ -466,8 +513,8 @@ func Test_ParseSnapshotName_RoundTrip(t *testing.T) {
 			now := tt.now
 			sn := NewSnapshotNamer(func() time.Time { return now })
 
-			name := sn.MakeName(tt.term, tt.index)
-			term, index, msec, err := ParseSnapshotName(name)
+			name := sn.MakeName(tt.term, tt.index, 0)
+			term, index, msec, _, err := ParseSnapshotName(name)
 			if err != nil {
 				t.Fatalf("ParseSnapshotName(%q) returned error: %s", name, err)
 			}
@@ -489,8 +536,8 @@ func Test_ParseSnapshotName_PreEpochNameFails(t *testing.T) {
 	now := time.Unix(-1, 0)
 	sn := NewSnapshotNamer(func() time.Time { return now })
 
-	name := sn.MakeName(1, 2)
-	if _, _, _, err := ParseSnapshotName(name); err == nil {
+	name := sn.MakeName(1, 2, 0)
+	if _, _, _, _, err := ParseSnapshotName(name); err == nil {
 		t.Fatalf("ParseSnapshotName(%q) returned no error, want one", name)
 	}
 }
@@ -500,11 +547,11 @@ func Test_ParseSnapshotName_PreEpochNameFails(t *testing.T) {
 func Test_ParseSnapshotName_NotInjective(t *testing.T) {
 	first, second := "1-2-3", "01-02-03"
 
-	fTerm, fIndex, fMsec, err := ParseSnapshotName(first)
+	fTerm, fIndex, fMsec, _, err := ParseSnapshotName(first)
 	if err != nil {
 		t.Fatalf("ParseSnapshotName(%q) returned error: %s", first, err)
 	}
-	sTerm, sIndex, sMsec, err := ParseSnapshotName(second)
+	sTerm, sIndex, sMsec, _, err := ParseSnapshotName(second)
 	if err != nil {
 		t.Fatalf("ParseSnapshotName(%q) returned error: %s", second, err)
 	}
@@ -516,14 +563,14 @@ func Test_ParseSnapshotName_NotInjective(t *testing.T) {
 
 func Fuzz_ParseSnapshotName(f *testing.F) {
 	for _, seed := range []string{
-		"", "1-2-3", "0-0-0", "--", "-1-2-3", "1-2-3-4",
+		"", "1-2-3", "0-0-0", "--", "-1-2-3", "1-2-3-4-5",
 		"18446744073709551616-2-3", "1-2-9223372036854775808",
 	} {
 		f.Add(seed)
 	}
 
 	f.Fuzz(func(t *testing.T, name string) {
-		term, index, msec, err := ParseSnapshotName(name)
+		term, index, msec, _, err := ParseSnapshotName(name)
 		if err != nil {
 			if term != 0 || index != 0 || msec != 0 {
 				t.Fatalf("ParseSnapshotName(%q) returned (%d, %d, %d) alongside an error",

@@ -59,7 +59,7 @@ func Test_Snapshot_Clone(t *testing.T) {
 	}
 	defer store.Close()
 
-	if err := Clone(dir, "non-existent", 2000, 100); err == nil {
+	if err := Clone(dir, "non-existent", 2000, 100, 1); err == nil {
 		t.Fatal("expected error cloning non-existent snapshot")
 	}
 
@@ -76,11 +76,32 @@ func Test_Snapshot_Clone(t *testing.T) {
 		t.Fatalf("Expected snapshot ID to be 2-1017-1704807719996, got %s", snaps[0].ID)
 	}
 
-	// Clone the snapshot, make sure it is installed.
-	if err := Clone(dir, snaps[0].ID, 2000, 100); err != nil {
+	// Clone the snapshot without using a generation, make sure it is installed.
+	if err := Clone(dir, snaps[0].ID, 2000, 100, 0); err != nil {
 		t.Fatalf("failed to clone snapshot: %s", err)
 	}
 	if store.Len() != 2 {
+		t.Fatalf("Expected store to have 2 snapshots, got %d", store.Len())
+	}
+	snaps, err = store.List()
+	if err != nil {
+		t.Fatalf("Failed to list snapshots: %v", err)
+	}
+	if len(snaps) != 1 {
+		t.Fatalf("Expected 1 snapshot, got %d", len(snaps))
+	}
+	if snaps[0].Index != 2000 {
+		t.Fatalf("Expected cloned snapshot index to be 2000, got %d", snaps[0].Index)
+	}
+	if snaps[0].Term != 100 {
+		t.Fatalf("Expected cloned snapshot term to be 100, got %d", snaps[0].Term)
+	}
+
+	// Clone the snapshot with a generation, make sure it is installed.
+	if err := Clone(dir, snaps[0].ID, 2000, 100, 1); err != nil {
+		t.Fatalf("failed to clone snapshot: %s", err)
+	}
+	if store.Len() != 3 {
 		t.Fatalf("Expected store to have 2 snapshots, got %d", store.Len())
 	}
 	snaps, err = store.List()
