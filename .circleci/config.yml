@@ -13,7 +13,7 @@ commands: # a reusable command with parameters
       - restore_cache:
           keys:
             - go-mod-v4-{{ checksum "go.sum" }}
-      - run: go get -v -t -d ./...
+      - run: go get -v -t ./...
       - save_cache:
           key: go-mod-v4-{{ checksum "go.sum" }}
           paths:
