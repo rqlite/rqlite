@@ -294,7 +294,7 @@ func (s *Store) Create(version raft.SnapshotVersion, index, term uint64, configu
 	configurationIndex uint64, trans raft.Transport) (retSink raft.SnapshotSink, retErr error) {
 	sink := NewSink(s.dir, &raft.SnapshotMeta{
 		Version:            version,
-		ID:                 s.snapshotNamer.MakeName(term, index),
+		ID:                 s.snapshotNamer.MakeName(term, index, 0),
 		Index:              index,
 		Term:               term,
 		Configuration:      configuration,
@@ -654,7 +654,7 @@ func (s *Store) reapInternal() (int, int, error) {
 		} else {
 			newest = full
 		}
-		newID := s.snapshotNamer.MakeName(newest.raftMeta.Term, newest.raftMeta.Index)
+		newID := s.snapshotNamer.MakeName(newest.raftMeta.Term, newest.raftMeta.Index, 0)
 		newMeta := copyRaftMeta(newest.raftMeta)
 		newMeta.ID = newID
 		metaJSON, err := json.Marshal(newMeta)
