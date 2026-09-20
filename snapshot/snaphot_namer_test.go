@@ -338,11 +338,6 @@ func Test_ParseSnapshotName(t *testing.T) {
 			input:       "1-2--3",
 			errContains: "bad timestamp field",
 		},
-		{
-			name:        "trailing separator",
-			input:       "1-2-3-",
-			errContains: "bad generation field",
-		},
 
 		// Bad term.
 		{
@@ -443,6 +438,33 @@ func Test_ParseSnapshotName(t *testing.T) {
 			name:        "trailing extension",
 			input:       "1-2-3.snap",
 			errContains: "bad timestamp field",
+		},
+
+		// Bad generation
+		{
+			name:        "trailing separator",
+			input:       "1-2-3-",
+			errContains: "bad generation field",
+		},
+		{
+			name:        "non-numeric generation",
+			input:       "1-2-3-c",
+			errContains: "bad generation field",
+		},
+		{
+			name:        "generation overflows int64",
+			input:       "1-2-4-9223372036854775808",
+			errContains: "bad generation field",
+		},
+		{
+			name:        "trailing newline",
+			input:       "1-2-3-4\n",
+			errContains: "bad generation field",
+		},
+		{
+			name:        "trailing extension",
+			input:       "1-2-3-4.snap",
+			errContains: "bad generation field",
 		},
 	}
 
