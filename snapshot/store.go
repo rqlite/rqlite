@@ -29,6 +29,9 @@ const (
 
 	defaultReapThreshold = 4
 	defaultReadTimeout   = 30 * time.Second
+
+	renameRetryTimeout  = 2 * time.Second
+	renameRetryInterval = 10 * time.Millisecond
 )
 
 const (

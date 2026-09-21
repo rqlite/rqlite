@@ -128,10 +128,10 @@ func (s *StagingDir) MoveWALFilesTo(dst string) error {
 		srcCRCPath := srcPath + crcSuffix
 		name := filepath.Base(srcPath)
 		dstPath := filepath.Join(dst, name)
-		if err := os.Rename(srcPath, dstPath); err != nil {
+		if _, err := fsutil.RenameWithRetry(srcPath, dstPath, renameRetryTimeout, renameRetryInterval); err != nil {
 			return err
 		}
-		if err := os.Rename(srcCRCPath, dstPath+crcSuffix); err != nil {
+		if _, err := fsutil.RenameWithRetry(srcCRCPath, dstPath+crcSuffix, renameRetryTimeout, renameRetryInterval); err != nil {
 			return err
 		}
 	}

@@ -226,15 +226,15 @@ func (s *Sink) Close() (retErr error) {
 		// IncrementalFileSnapshot: atomically move the WAL directory into the
 		// snapshot directory, then redistribute the WAL files.
 		movedDir := filepath.Join(s.snapTmpDirPath, "wal-incoming")
-		if err := os.Rename(s.localWALDir, movedDir); err != nil {
-			return fmt.Errorf("failed to move WAL directory into snapshot directory: %v", err)
+		if n, err := fsutil.RenameWithRetry(s.localWALDir, movedDir, renameRetryTimeout, renameRetryInterval); err != nil {
+			return fmt.Errorf("failed to move WAL directory into snapshot directory after %d retries: %v", n, err)
 		}
 		sd := NewStagingDir(movedDir)
 		if err := sd.MoveWALFilesTo(s.snapTmpDirPath); err != nil {
 			return fmt.Errorf("failed to move WAL files into snapshot directory: %v", err)
 		}
-		if err := os.Remove(movedDir); err != nil {
-			return fmt.Errorf("failed to remove temporary WAL directory: %v", err)
+		if n, err := fsutil.RemoveWithRetry(movedDir, renameRetryTimeout, renameRetryInterval); err != nil {
+			return fmt.Errorf("failed to remove temporary WAL directory after %d retries: %v", n, err)
 		}
 	} else {
 		if err := s.sinkW.Close(); err != nil {
@@ -249,8 +249,8 @@ func (s *Sink) Close() (retErr error) {
 	if err := fsutil.SyncDirMaybe(s.snapTmpDirPath); err != nil {
 		return err
 	}
-	if err := os.Rename(s.snapTmpDirPath, s.snapDirPath); err != nil {
-		return fmt.Errorf("failed to rename snapshot directory: %v", err)
+	if n, err := fsutil.RenameWithRetry(s.snapTmpDirPath, s.snapDirPath, renameRetryTimeout, renameRetryInterval); err != nil {
+		return fmt.Errorf("failed to rename snapshot directory after %d retries: %v", n, err)
 	}
 
 	if s.stc != nil {
