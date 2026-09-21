@@ -13,6 +13,7 @@ import (
 	"github.com/rqlite/rqlite/v10/auto/aws"
 	"github.com/rqlite/rqlite/v10/auto/file"
 	"github.com/rqlite/rqlite/v10/auto/gcp"
+	"github.com/rqlite/rqlite/v10/internal/fsutil"
 )
 
 func Test_ReadConfigFile(t *testing.T) {
@@ -22,7 +23,7 @@ func Test_ReadConfigFile(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		defer os.Remove(tempFile.Name())
+		defer fsutil.Remove(tempFile.Name())
 
 		content := []byte("key=value")
 		if _, err := tempFile.Write(content); err != nil {
@@ -55,7 +56,7 @@ func Test_ReadConfigFile(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		defer os.Remove(tempFile.Name())
+		defer fsutil.Remove(tempFile.Name())
 
 		content := []byte("key=$TEST_VAR")
 		if _, err := tempFile.Write(content); err != nil {
@@ -82,7 +83,7 @@ func Test_ReadConfigFile(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		defer os.Remove(tempFile.Name())
+		defer fsutil.Remove(tempFile.Name())
 
 		content := []byte(`
 key1=$TEST_VAR1
@@ -107,7 +108,7 @@ key2=TEST_VAR2`)
 
 func Test_NewStorageClient(t *testing.T) {
 	gcsCredsFile := mustGCSCredFile(t)
-	defer os.Remove(gcsCredsFile)
+	defer fsutil.Remove(gcsCredsFile)
 	// Windows-compatible when embedded in JSON.
 	tempDir := strings.ReplaceAll(t.TempDir(), `\`, `\\`)
 

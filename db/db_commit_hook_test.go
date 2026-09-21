@@ -1,14 +1,15 @@
 package db
 
 import (
-	"os"
 	"sync/atomic"
 	"testing"
+
+	"github.com/rqlite/rqlite/v10/internal/fsutil"
 )
 
 func Test_CommitHook(t *testing.T) {
 	path := mustTempPath()
-	defer os.Remove(path)
+	defer fsutil.Remove(path)
 	db, err := Open(path, false, false)
 	if err != nil {
 		t.Fatalf("error opening database")
@@ -37,7 +38,7 @@ func Test_CommitHook(t *testing.T) {
 // transaction which is rolled back.
 func Test_CommitHook_Rollback(t *testing.T) {
 	path := mustTempPath()
-	defer os.Remove(path)
+	defer fsutil.Remove(path)
 	db, err := Open(path, false, false)
 	if err != nil {
 		t.Fatalf("error opening database")
@@ -79,7 +80,7 @@ func Test_CommitHook_Rollback(t *testing.T) {
 // transaction which is rolled back.
 func Test_CommitHook_Tx(t *testing.T) {
 	path := mustTempPath()
-	defer os.Remove(path)
+	defer fsutil.Remove(path)
 	db, err := Open(path, false, false)
 	if err != nil {
 		t.Fatalf("error opening database")

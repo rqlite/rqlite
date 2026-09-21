@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/rqlite/rqlite/v10/db"
+	"github.com/rqlite/rqlite/v10/internal/fsutil"
 	"github.com/rqlite/rqlite/v10/internal/rsum"
 	"github.com/rqlite/rqlite/v10/snapshot/sidecar"
 )
@@ -27,7 +28,7 @@ var _ Visitor = (*Executor)(nil)
 // Rename renames a file. It is idempotent: if src does not exist but dst does,
 // it returns nil.
 func (e *Executor) Rename(src, dst string) error {
-	err := os.Rename(src, dst)
+	err := fsutil.Rename(src, dst)
 	if err == nil {
 		return nil
 	}
@@ -42,7 +43,7 @@ func (e *Executor) Rename(src, dst string) error {
 
 // Remove removes a file. It is idempotent: if the file does not exist, it returns nil.
 func (e *Executor) Remove(path string) error {
-	err := os.Remove(path)
+	err := fsutil.Remove(path)
 	if err != nil && !os.IsNotExist(err) {
 		return err
 	}
@@ -51,7 +52,7 @@ func (e *Executor) Remove(path string) error {
 
 // RemoveAll removes a directory and any children. It is idempotent.
 func (e *Executor) RemoveAll(path string) error {
-	return os.RemoveAll(path)
+	return fsutil.RemoveAll(path)
 }
 
 // Checkpoint performs a WAL checkpoint of the given WAL files into the
@@ -102,7 +103,7 @@ func (e *Executor) Checkpoint(dbPath string, wals []string) (int, error) {
 	}
 
 	for _, wal := range existingWals {
-		if err := os.Rename(wal, walPath); err != nil {
+		if err := fsutil.Rename(wal, walPath); err != nil {
 			return 0, fmt.Errorf("moving WAL %s: %w", wal, err)
 		}
 		if err := db.CheckpointRemove(dbPath); err != nil {

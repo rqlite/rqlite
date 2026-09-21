@@ -19,7 +19,7 @@ import (
 // even when no data has been written to the database.
 func Test_WALDatabaseCheckpointOKNoWrites(t *testing.T) {
 	path := mustTempFile()
-	defer os.Remove(path)
+	defer fsutil.Remove(path)
 
 	db, err := Open(path, false, true)
 	if err != nil {
@@ -45,7 +45,7 @@ func Test_WALDatabaseCheckpointOKNoWrites(t *testing.T) {
 // with a write.
 func Test_WALDatabaseCheckpointOK(t *testing.T) {
 	path := mustTempFile()
-	defer os.Remove(path)
+	defer fsutil.Remove(path)
 
 	db, err := Open(path, false, true)
 	if err != nil {
@@ -102,7 +102,7 @@ func Test_WALDatabaseCheckpointOK(t *testing.T) {
 
 func Test_WALDatabaseCheckpoint_SyncModeRestore(t *testing.T) {
 	path := mustTempFile()
-	defer os.Remove(path)
+	defer fsutil.Remove(path)
 
 	db, err := Open(path, false, true)
 	if err != nil {
@@ -140,7 +140,7 @@ func Test_WALDatabaseCheckpoint_SyncModeRestore(t *testing.T) {
 
 func Test_WALDatabaseCheckpointFail_Blocked(t *testing.T) {
 	path := mustTempFile()
-	defer os.Remove(path)
+	defer fsutil.Remove(path)
 
 	db, err := Open(path, false, true)
 	if err != nil {
@@ -198,7 +198,7 @@ func Test_WALDatabaseCheckpointFail_Blocked(t *testing.T) {
 // the truncate checkpoint later.
 func Test_WALDatabaseCheckpointOK_NoWALChange(t *testing.T) {
 	path := mustTempFile()
-	defer os.Remove(path)
+	defer fsutil.Remove(path)
 
 	db, err := Open(path, false, true)
 	if err != nil {
@@ -276,7 +276,7 @@ func Test_WALDatabaseCheckpointOK_NoWALChange(t *testing.T) {
 // even when the database is opened in DELETE mode.
 func Test_WALDatabaseCheckpointOKDelete(t *testing.T) {
 	path := mustTempFile()
-	defer os.Remove(path)
+	defer fsutil.Remove(path)
 
 	db, err := Open(path, false, false)
 	if err != nil {
@@ -297,7 +297,7 @@ func Test_WALDatabaseCheckpointOKDelete(t *testing.T) {
 // is called and the WAL file is deleted.
 func Test_WALDatabaseCheckpoint_RestartTruncate(t *testing.T) {
 	path := mustTempFile()
-	defer os.Remove(path)
+	defer fsutil.Remove(path)
 	db, err := Open(path, false, true)
 	if err != nil {
 		t.Fatalf("failed to open database in WAL mode: %s", err.Error())
@@ -368,7 +368,7 @@ func Test_WALDatabaseCheckpoint_RestartTruncate(t *testing.T) {
 // does time out as expected if there is a long running read.
 func Test_WALDatabaseCheckpoint_RestartTimeout(t *testing.T) {
 	path := mustTempFile()
-	defer os.Remove(path)
+	defer fsutil.Remove(path)
 	db, err := Open(path, false, true)
 	if err != nil {
 		t.Fatalf("failed to open database in WAL mode: %s", err.Error())
@@ -443,7 +443,7 @@ func Test_WALDatabaseCheckpoint_RestartTimeout(t *testing.T) {
 // that the WAL file is not modified as a result of this failure.
 func Test_WALDatabaseCheckpoint_TruncateTimeout(t *testing.T) {
 	path := mustTempFile()
-	defer os.Remove(path)
+	defer fsutil.Remove(path)
 	db, err := Open(path, false, true)
 	if err != nil {
 		t.Fatalf("failed to open database in WAL mode: %s", err.Error())
@@ -522,7 +522,7 @@ func Test_WALDatabaseCheckpoint_TruncateTimeout(t *testing.T) {
 
 func Test_WALDatabaseCheckpointTruncateOK(t *testing.T) {
 	path := mustTempFile()
-	defer os.Remove(path)
+	defer fsutil.Remove(path)
 
 	db, err := Open(path, false, true)
 	if err != nil {
@@ -567,7 +567,7 @@ func Test_WALDatabaseCheckpointTruncateOK(t *testing.T) {
 
 func Test_WALDatabaseCheckpointTruncateFail_Blocked(t *testing.T) {
 	path := mustTempFile()
-	defer os.Remove(path)
+	defer fsutil.Remove(path)
 
 	db, err := Open(path, false, true)
 	if err != nil {

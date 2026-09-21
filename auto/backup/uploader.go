@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/rqlite/rqlite/v10/db/humanize"
+	"github.com/rqlite/rqlite/v10/internal/fsutil"
 	"github.com/rqlite/rqlite/v10/internal/progress"
 )
 
@@ -154,7 +155,7 @@ func (u *Uploader) upload(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-	defer os.Remove(fd.Name())
+	defer fsutil.Remove(fd.Name())
 	defer fd.Close()
 
 	if err := u.dataProvider.Provide(fd); err != nil {

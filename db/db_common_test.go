@@ -9,11 +9,13 @@ import (
 	"testing"
 
 	command "github.com/rqlite/rqlite/v10/command/proto"
+
+	"github.com/rqlite/rqlite/v10/internal/fsutil"
 )
 
 func Test_DB_BusyTimeout(t *testing.T) {
 	db, path := mustCreateOnDiskDatabaseWAL()
-	defer os.Remove(path)
+	defer fsutil.Remove(path)
 	defer db.Close()
 
 	wantRw := rand.N(10000)
@@ -52,7 +54,7 @@ func Test_DB_BusyTimeout(t *testing.T) {
 
 func Test_DB_CompileOptions(t *testing.T) {
 	db, path := mustCreateOnDiskDatabaseWAL()
-	defer os.Remove(path)
+	defer fsutil.Remove(path)
 	defer db.Close()
 
 	_, err := db.CompileOptions()
@@ -63,7 +65,7 @@ func Test_DB_CompileOptions(t *testing.T) {
 
 func Test_DB_SetSynchronousMode(t *testing.T) {
 	db, path := mustCreateOnDiskDatabaseWAL()
-	defer os.Remove(path)
+	defer fsutil.Remove(path)
 	defer db.Close()
 
 	modes := []SynchronousMode{
@@ -88,7 +90,7 @@ func Test_DB_SetSynchronousMode(t *testing.T) {
 
 func Test_DB_TableNotExist(t *testing.T) {
 	db, path := mustCreateOnDiskDatabaseWAL()
-	defer os.Remove(path)
+	defer fsutil.Remove(path)
 	defer db.Close()
 
 	q, err := db.QueryStringStmt("SELECT * FROM foo")
@@ -102,7 +104,7 @@ func Test_DB_TableNotExist(t *testing.T) {
 
 func Test_DB_TableCreation(t *testing.T) {
 	db, path := mustCreateOnDiskDatabaseWAL()
-	defer os.Remove(path)
+	defer fsutil.Remove(path)
 	defer db.Close()
 
 	r, err := db.ExecuteStringStmt("CREATE TABLE foo (id INTEGER NOT NULL PRIMARY KEY, name TEXT)")
@@ -124,7 +126,7 @@ func Test_DB_TableCreation(t *testing.T) {
 
 func Test_SQL_Comments(t *testing.T) {
 	db, path := mustCreateOnDiskDatabaseWAL()
-	defer os.Remove(path)
+	defer fsutil.Remove(path)
 	defer db.Close()
 
 	for _, tt := range []struct {
@@ -188,7 +190,7 @@ func Test_SQL_Comments(t *testing.T) {
 
 func Test_DB_ExplainSelect(t *testing.T) {
 	db, path := mustCreateOnDiskDatabaseWAL()
-	defer os.Remove(path)
+	defer fsutil.Remove(path)
 	defer db.Close()
 
 	// Create a table
@@ -246,7 +248,7 @@ func Test_DB_ExplainSelect(t *testing.T) {
 
 func Test_DB_TableCreationFTS(t *testing.T) {
 	db, path := mustCreateOnDiskDatabaseWAL()
-	defer os.Remove(path)
+	defer fsutil.Remove(path)
 	defer db.Close()
 
 	r, err := db.ExecuteStringStmt("CREATE VIRTUAL TABLE foo3 USING fts3(id INTEGER NOT NULL PRIMARY KEY, name TEXT)")
@@ -275,7 +277,7 @@ func Test_DB_TableCreationFTS(t *testing.T) {
 
 func Test_DB_ColumnNames(t *testing.T) {
 	db, path := mustCreateOnDiskDatabaseWAL()
-	defer os.Remove(path)
+	defer fsutil.Remove(path)
 	defer db.Close()
 
 	names, err := db.ColumnNames("foo")
@@ -306,7 +308,7 @@ func Test_DB_ColumnNames(t *testing.T) {
 
 func Test_DB_ColumnNames_QuotedTableName(t *testing.T) {
 	db, path := mustCreateOnDiskDatabaseWAL()
-	defer os.Remove(path)
+	defer fsutil.Remove(path)
 	defer db.Close()
 
 	_, err := db.ExecuteStringStmt(`CREATE TABLE "my ""q"" table" (id INTEGER NOT NULL PRIMARY KEY)`)
@@ -327,7 +329,7 @@ func Test_DB_ColumnNames_QuotedTableName(t *testing.T) {
 
 func Test_DB_TableColumnTypes(t *testing.T) {
 	db, path := mustCreateOnDiskDatabaseWAL()
-	defer os.Remove(path)
+	defer fsutil.Remove(path)
 	defer db.Close()
 
 	types, err := db.TableColumnTypes("foo")
@@ -369,7 +371,7 @@ func Test_DB_TableColumnTypes(t *testing.T) {
 
 func Test_DB_TableColumnTypes_QuotedTableName(t *testing.T) {
 	db, path := mustCreateOnDiskDatabaseWAL()
-	defer os.Remove(path)
+	defer fsutil.Remove(path)
 	defer db.Close()
 
 	if _, err := db.ExecuteStringStmt(`CREATE TABLE "my ""quoted"" table name" (id INTEGER NOT NULL PRIMARY KEY)`); err != nil {
@@ -396,7 +398,7 @@ func Test_DB_TableColumnTypes_QuotedTableName(t *testing.T) {
 
 func Test_QualifyColumns_Join(t *testing.T) {
 	db, path := mustCreateOnDiskDatabaseWAL()
-	defer os.Remove(path)
+	defer fsutil.Remove(path)
 	defer db.Close()
 
 	_, err := db.Execute(&command.Request{
@@ -443,7 +445,7 @@ func Test_QualifyColumns_Join(t *testing.T) {
 
 func Test_QualifyColumns_SingleTable(t *testing.T) {
 	db, path := mustCreateOnDiskDatabaseWAL()
-	defer os.Remove(path)
+	defer fsutil.Remove(path)
 	defer db.Close()
 
 	_, err := db.Execute(&command.Request{
@@ -472,7 +474,7 @@ func Test_QualifyColumns_SingleTable(t *testing.T) {
 
 func Test_QualifyColumns_ExplicitColumns(t *testing.T) {
 	db, path := mustCreateOnDiskDatabaseWAL()
-	defer os.Remove(path)
+	defer fsutil.Remove(path)
 	defer db.Close()
 
 	_, err := db.Execute(&command.Request{
@@ -503,7 +505,7 @@ func Test_QualifyColumns_ExplicitColumns(t *testing.T) {
 
 func Test_QualifyColumns_LeftJoin(t *testing.T) {
 	db, path := mustCreateOnDiskDatabaseWAL()
-	defer os.Remove(path)
+	defer fsutil.Remove(path)
 	defer db.Close()
 
 	_, err := db.Execute(&command.Request{
@@ -533,7 +535,7 @@ func Test_QualifyColumns_LeftJoin(t *testing.T) {
 
 func Test_QualifyColumns_Request(t *testing.T) {
 	db, path := mustCreateOnDiskDatabaseWAL()
-	defer os.Remove(path)
+	defer fsutil.Remove(path)
 	defer db.Close()
 
 	_, err := db.Execute(&command.Request{
@@ -564,7 +566,7 @@ func Test_QualifyColumns_Request(t *testing.T) {
 
 func Test_DB_SQLiteMasterTable(t *testing.T) {
 	db, path := mustCreateOnDiskDatabaseWAL()
-	defer os.Remove(path)
+	defer fsutil.Remove(path)
 	defer db.Close()
 
 	_, err := db.ExecuteStringStmt("CREATE TABLE foo (id INTEGER NOT NULL PRIMARY KEY, name TEXT)")
@@ -583,7 +585,7 @@ func Test_DB_SQLiteMasterTable(t *testing.T) {
 
 func Test_DB_SQLiteTimeTypes(t *testing.T) {
 	db, path := mustCreateOnDiskDatabaseWAL()
-	defer os.Remove(path)
+	defer fsutil.Remove(path)
 	defer db.Close()
 
 	_, err := db.ExecuteStringStmt("CREATE TABLE foo(d DATE, ts TIMESTAMP, dt DATETIME)")
@@ -607,7 +609,7 @@ func Test_DB_SQLiteTimeTypes(t *testing.T) {
 
 func Test_DB_SQLiteRandomBlob(t *testing.T) {
 	db, path := mustCreateOnDiskDatabaseWAL()
-	defer os.Remove(path)
+	defer fsutil.Remove(path)
 	defer db.Close()
 
 	_, err := db.ExecuteStringStmt("CREATE TABLE large_data (id INTEGER PRIMARY KEY, large_text TEXT)")
@@ -640,7 +642,7 @@ func Test_DB_SQLiteRandomBlob(t *testing.T) {
 
 func Test_DB_NotNULLField(t *testing.T) {
 	db, path := mustCreateOnDiskDatabaseWAL()
-	defer os.Remove(path)
+	defer fsutil.Remove(path)
 	defer db.Close()
 
 	_, err := db.ExecuteStringStmt("CREATE TABLE foo (id INTEGER NOT NULL PRIMARY KEY, name TEXT)")
@@ -658,7 +660,7 @@ func Test_DB_NotNULLField(t *testing.T) {
 
 func Test_DB_BLOB(t *testing.T) {
 	db, path := mustCreateOnDiskDatabaseWAL()
-	defer os.Remove(path)
+	defer fsutil.Remove(path)
 	defer db.Close()
 
 	_, err := db.ExecuteStringStmt("CREATE TABLE foo (name TEXT, data BLOB)")
@@ -686,7 +688,7 @@ func Test_DB_BLOB(t *testing.T) {
 
 func Test_DB_HexQuery(t *testing.T) {
 	db, path := mustCreateOnDiskDatabaseWAL()
-	defer os.Remove(path)
+	defer fsutil.Remove(path)
 	defer db.Close()
 
 	_, err := db.ExecuteStringStmt("CREATE TABLE foo(blob_column BLOB)")
@@ -708,7 +710,7 @@ func Test_DB_HexQuery(t *testing.T) {
 
 func Test_DB_STRICT(t *testing.T) {
 	db, path := mustCreateOnDiskDatabaseWAL()
-	defer os.Remove(path)
+	defer fsutil.Remove(path)
 	defer db.Close()
 
 	_, err := db.ExecuteStringStmt("CREATE TABLE foo (name TEXT, data BLOB) STRICT")
@@ -735,7 +737,7 @@ func Test_DB_STRICT(t *testing.T) {
 
 func Test_DB_EmptyStatements(t *testing.T) {
 	db, path := mustCreateOnDiskDatabaseWAL()
-	defer os.Remove(path)
+	defer fsutil.Remove(path)
 	defer db.Close()
 
 	_, err := db.ExecuteStringStmt("")
@@ -750,7 +752,7 @@ func Test_DB_EmptyStatements(t *testing.T) {
 
 func Test_Geopoly(t *testing.T) {
 	db, path := mustCreateOnDiskDatabaseWAL()
-	defer os.Remove(path)
+	defer fsutil.Remove(path)
 	defer db.Close()
 
 	_, err := db.ExecuteStringStmt("CREATE VIRTUAL TABLE polygons USING geopoly(a, b, c)")
@@ -776,7 +778,7 @@ func Test_Geopoly(t *testing.T) {
 
 func Test_DB_ReadOnlyStatements(t *testing.T) {
 	db, path := mustCreateOnDiskDatabaseWAL()
-	defer os.Remove(path)
+	defer fsutil.Remove(path)
 	defer db.Close()
 
 	_, err := db.ExecuteStringStmt("CREATE TABLE foo (id INTEGER NOT NULL PRIMARY KEY, name TEXT)")
@@ -842,7 +844,7 @@ func Test_DB_ReadOnlyStatements(t *testing.T) {
 
 func Test_DB_SimpleStatementsNumeric(t *testing.T) {
 	db, path := mustCreateOnDiskDatabaseWAL()
-	defer os.Remove(path)
+	defer fsutil.Remove(path)
 	defer db.Close()
 
 	_, err := db.ExecuteStringStmt("CREATE TABLE foo (id INTEGER NOT NULL PRIMARY KEY, name TEXT, age NUMERIC)")
@@ -866,7 +868,7 @@ func Test_DB_SimpleStatementsNumeric(t *testing.T) {
 
 func Test_DB_SimpleStatementsCollate(t *testing.T) {
 	db, path := mustCreateOnDiskDatabaseWAL()
-	defer os.Remove(path)
+	defer fsutil.Remove(path)
 	defer db.Close()
 
 	_, err := db.ExecuteStringStmt("CREATE TABLE foo(x INTEGER PRIMARY KEY, a, b COLLATE BINARY, c COLLATE RTRIM, d COLLATE NOCASE)")
@@ -935,7 +937,7 @@ func Test_DB_SimpleStatementsCollate(t *testing.T) {
 
 func Test_DB_SimpleSingleStatements(t *testing.T) {
 	db, path := mustCreateOnDiskDatabaseWAL()
-	defer os.Remove(path)
+	defer fsutil.Remove(path)
 	defer db.Close()
 
 	_, err := db.ExecuteStringStmt("CREATE TABLE foo (id INTEGER NOT NULL PRIMARY KEY, name TEXT)")
@@ -997,7 +999,7 @@ func Test_DB_SimpleSingleStatements(t *testing.T) {
 // Test_DB_SimpleExpressionStatements tests that types are set for expressions.
 func Test_DB_SimpleExpressionStatements(t *testing.T) {
 	db, path := mustCreateOnDiskDatabaseWAL()
-	defer os.Remove(path)
+	defer fsutil.Remove(path)
 	defer db.Close()
 
 	_, err := db.ExecuteStringStmt("CREATE TABLE foo (id INTEGER NOT NULL PRIMARY KEY, name TEXT, age INTEGER, height REAL)")
@@ -1058,7 +1060,7 @@ func Test_DB_SimpleExpressionStatements(t *testing.T) {
 
 func Test_DB_UpsertStatements(t *testing.T) {
 	db, path := mustCreateOnDiskDatabaseWAL()
-	defer os.Remove(path)
+	defer fsutil.Remove(path)
 	defer db.Close()
 
 	_, err := db.ExecuteStringStmt("CREATE TABLE vocabulary(word TEXT PRIMARY KEY, count INT DEFAULT 1)")
@@ -1093,7 +1095,7 @@ func Test_DB_UpsertStatements(t *testing.T) {
 
 func Test_DB_SimpleSingleJSONStatements(t *testing.T) {
 	db, path := mustCreateOnDiskDatabaseWAL()
-	defer os.Remove(path)
+	defer fsutil.Remove(path)
 	defer db.Close()
 
 	_, err := db.ExecuteStringStmt("CREATE TABLE foo (c0 VARCHAR(36), c1 JSON, c2 NCHAR, c3 NVARCHAR, c4 CLOB)")
@@ -1117,7 +1119,7 @@ func Test_DB_SimpleSingleJSONStatements(t *testing.T) {
 
 func Test_DB_SimpleSingleJSONBStatements(t *testing.T) {
 	db, path := mustCreateOnDiskDatabaseWAL()
-	defer os.Remove(path)
+	defer fsutil.Remove(path)
 	defer db.Close()
 
 	_, err := db.ExecuteStringStmt("CREATE TABLE foo (tag JSONB)")
@@ -1141,7 +1143,7 @@ func Test_DB_SimpleSingleJSONBStatements(t *testing.T) {
 
 func Test_DB_SimpleJoinStatements(t *testing.T) {
 	db, path := mustCreateOnDiskDatabaseWAL()
-	defer os.Remove(path)
+	defer fsutil.Remove(path)
 	defer db.Close()
 
 	_, err := db.ExecuteStringStmt("CREATE TABLE names (id INTEGER NOT NULL PRIMARY KEY, name TEXT, ssn TEXT)")
@@ -1188,7 +1190,7 @@ func Test_DB_SimpleJoinStatements(t *testing.T) {
 
 func Test_DB_SimpleSingleConcatStatements(t *testing.T) {
 	db, path := mustCreateOnDiskDatabaseWAL()
-	defer os.Remove(path)
+	defer fsutil.Remove(path)
 	defer db.Close()
 
 	_, err := db.ExecuteStringStmt("CREATE TABLE foo (id INTEGER NOT NULL PRIMARY KEY, name TEXT)")
@@ -1212,7 +1214,7 @@ func Test_DB_SimpleSingleConcatStatements(t *testing.T) {
 
 func Test_DB_SimpleMultiStatements(t *testing.T) {
 	db, path := mustCreateOnDiskDatabaseWAL()
-	defer os.Remove(path)
+	defer fsutil.Remove(path)
 	defer db.Close()
 
 	_, err := db.ExecuteStringStmt("CREATE TABLE foo (id INTEGER NOT NULL PRIMARY KEY, name TEXT)")
@@ -1259,7 +1261,7 @@ func Test_DB_SimpleMultiStatements(t *testing.T) {
 
 func Test_DB_SimpleSingleMultiLineStatements(t *testing.T) {
 	db, path := mustCreateOnDiskDatabaseWAL()
-	defer os.Remove(path)
+	defer fsutil.Remove(path)
 	defer db.Close()
 
 	req := &command.Request{
@@ -1299,7 +1301,7 @@ name TEXT
 
 func Test_DB_SimpleFailingStatements_Execute(t *testing.T) {
 	db, path := mustCreateOnDiskDatabaseWAL()
-	defer os.Remove(path)
+	defer fsutil.Remove(path)
 	defer db.Close()
 
 	r, err := db.ExecuteStringStmt(`INSERT INTO foo(name) VALUES("fiona")`)
@@ -1350,7 +1352,7 @@ func Test_DB_SimpleFailingStatements_Execute(t *testing.T) {
 
 func Test_DB_SimpleFailingStatements_Query(t *testing.T) {
 	db, path := mustCreateOnDiskDatabaseWAL()
-	defer os.Remove(path)
+	defer fsutil.Remove(path)
 	defer db.Close()
 
 	ro, err := db.QueryStringStmt(`SELECT * FROM bar`)
@@ -1393,7 +1395,7 @@ func Test_DB_SimpleFailingStatements_Query(t *testing.T) {
 
 func Test_DB_SimplePragmaTableInfo(t *testing.T) {
 	db, path := mustCreateOnDiskDatabaseWAL()
-	defer os.Remove(path)
+	defer fsutil.Remove(path)
 	defer db.Close()
 
 	r, err := db.ExecuteStringStmt(`CREATE TABLE foo (id INTEGER NOT NULL PRIMARY KEY, name TEXT)`)
@@ -1415,7 +1417,7 @@ func Test_DB_SimplePragmaTableInfo(t *testing.T) {
 
 func Test_DB_WriteOnQueryDatabaseShouldFail(t *testing.T) {
 	db, path := mustCreateOnDiskDatabaseWAL()
-	defer os.Remove(path)
+	defer fsutil.Remove(path)
 	defer db.Close()
 
 	r, err := db.ExecuteStringStmt(`CREATE TABLE foo (id INTEGER NOT NULL PRIMARY KEY, name TEXT)`)
@@ -1453,7 +1455,7 @@ func Test_DB_WriteOnQueryDatabaseShouldFail(t *testing.T) {
 
 func Test_DB_SimpleParameterizedStatements(t *testing.T) {
 	db, path := mustCreateOnDiskDatabaseWAL()
-	defer os.Remove(path)
+	defer fsutil.Remove(path)
 	defer db.Close()
 
 	_, err := db.ExecuteStringStmt("CREATE TABLE foo (id INTEGER NOT NULL PRIMARY KEY, name TEXT)")
@@ -1560,7 +1562,7 @@ func Test_DB_SimpleParameterizedStatements(t *testing.T) {
 
 func Test_DB_SimpleParameterizedStatements_IN(t *testing.T) {
 	db, path := mustCreateOnDiskDatabaseWAL()
-	defer os.Remove(path)
+	defer fsutil.Remove(path)
 	defer db.Close()
 
 	_, err := db.ExecuteStringStmt("CREATE TABLE foo (id INTEGER NOT NULL PRIMARY KEY, name TEXT)")
@@ -1642,7 +1644,7 @@ func Test_DB_SimpleParameterizedStatements_IN(t *testing.T) {
 
 func Test_DB_SimpleTwoParameterizedStatements(t *testing.T) {
 	db, path := mustCreateOnDiskDatabaseWAL()
-	defer os.Remove(path)
+	defer fsutil.Remove(path)
 	defer db.Close()
 
 	_, err := db.ExecuteStringStmt("CREATE TABLE foo (id INTEGER NOT NULL PRIMARY KEY, first TEXT, last TEXT)")
@@ -1686,7 +1688,7 @@ func Test_DB_SimpleTwoParameterizedStatements(t *testing.T) {
 
 func Test_DB_SimpleNilParameterizedStatements(t *testing.T) {
 	db, path := mustCreateOnDiskDatabaseWAL()
-	defer os.Remove(path)
+	defer fsutil.Remove(path)
 	defer db.Close()
 
 	_, err := db.ExecuteStringStmt("CREATE TABLE foo (id INTEGER NOT NULL PRIMARY KEY, first TEXT, last TEXT)")
@@ -1728,7 +1730,7 @@ func Test_DB_SimpleNilParameterizedStatements(t *testing.T) {
 
 func Test_DB_SimpleNamedParameterizedStatements(t *testing.T) {
 	db, path := mustCreateOnDiskDatabaseWAL()
-	defer os.Remove(path)
+	defer fsutil.Remove(path)
 	defer db.Close()
 
 	_, err := db.ExecuteStringStmt("CREATE TABLE foo (id INTEGER NOT NULL PRIMARY KEY, first TEXT, last TEXT)")
@@ -1838,7 +1840,7 @@ func Test_DB_SimpleNamedParameterizedStatements(t *testing.T) {
 
 func Test_DB_SimpleRequest(t *testing.T) {
 	db, path := mustCreateOnDiskDatabaseWAL()
-	defer os.Remove(path)
+	defer fsutil.Remove(path)
 	defer db.Close()
 
 	_, err := db.ExecuteStringStmt("CREATE TABLE foo (id INTEGER NOT NULL PRIMARY KEY, first TEXT, last TEXT)")
@@ -1909,7 +1911,7 @@ func Test_DB_SimpleRequest(t *testing.T) {
 
 func Test_DB_ExecuteMutation(t *testing.T) {
 	db, path := mustCreateOnDiskDatabaseWAL()
-	defer os.Remove(path)
+	defer fsutil.Remove(path)
 	defer db.Close()
 
 	responses, err := db.Execute(&command.Request{
@@ -1946,7 +1948,7 @@ func Test_DB_ExecuteMutation(t *testing.T) {
 
 func Test_DB_ExecuteMutationReturning(t *testing.T) {
 	db, path := mustCreateOnDiskDatabaseWAL()
-	defer os.Remove(path)
+	defer fsutil.Remove(path)
 	defer db.Close()
 	mustExecute(db, `CREATE TABLE foo (id INT NOT NULL UNIQUE)`)
 
@@ -2044,7 +2046,7 @@ func Test_DB_RequestMutation(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			db, path := mustCreateOnDiskDatabaseWAL()
-			defer os.Remove(path)
+			defer fsutil.Remove(path)
 			defer db.Close()
 			mustExecute(db, `CREATE TABLE foo (id INT NOT NULL UNIQUE)`)
 
@@ -2082,7 +2084,7 @@ func Test_DB_RequestMutation(t *testing.T) {
 // the code which checks if the statement is a query or not works when holding a transaction.
 func Test_DB_SimpleRequestTx(t *testing.T) {
 	db, path := mustCreateOnDiskDatabaseWAL()
-	defer os.Remove(path)
+	defer fsutil.Remove(path)
 	defer db.Close()
 
 	mustExecute(db, `CREATE TABLE foo (id INTEGER NOT NULL PRIMARY KEY, name TEXT)`)
@@ -2113,7 +2115,7 @@ func Test_DB_SimpleRequestTx(t *testing.T) {
 
 func Test_DB_RequestTxPrepareError(t *testing.T) {
 	db, path := mustCreateOnDiskDatabaseWAL()
-	defer os.Remove(path)
+	defer fsutil.Remove(path)
 	defer db.Close()
 
 	mustExecute(db, `CREATE TABLE foo(id INTEGER)`)
@@ -2143,7 +2145,7 @@ func Test_DB_RequestTxPrepareError(t *testing.T) {
 
 func Test_DB_RequestPrepareError(t *testing.T) {
 	db, path := mustCreateOnDiskDatabaseWAL()
-	defer os.Remove(path)
+	defer fsutil.Remove(path)
 	defer db.Close()
 
 	mustExecute(db, `CREATE TABLE foo(id INTEGER)`)
@@ -2172,7 +2174,7 @@ func Test_DB_RequestPrepareError(t *testing.T) {
 
 func Test_DB_CommonTableExpressions(t *testing.T) {
 	db, path := mustCreateOnDiskDatabaseWAL()
-	defer os.Remove(path)
+	defer fsutil.Remove(path)
 	defer db.Close()
 
 	_, err := db.ExecuteStringStmt("CREATE TABLE test(x foo)")
@@ -2204,7 +2206,7 @@ func Test_DB_CommonTableExpressions(t *testing.T) {
 
 func Test_DB_UniqueConstraints(t *testing.T) {
 	db, path := mustCreateOnDiskDatabaseWAL()
-	defer os.Remove(path)
+	defer fsutil.Remove(path)
 	defer db.Close()
 
 	_, err := db.ExecuteStringStmt("CREATE TABLE foo (id INTEGER NOT NULL PRIMARY KEY, name TEXT, CONSTRAINT name_unique UNIQUE (name))")
@@ -2232,7 +2234,7 @@ func Test_DB_UniqueConstraints(t *testing.T) {
 
 func Test_DB_PartialFail(t *testing.T) {
 	db, path := mustCreateOnDiskDatabaseWAL()
-	defer os.Remove(path)
+	defer fsutil.Remove(path)
 	defer db.Close()
 
 	_, err := db.ExecuteStringStmt("CREATE TABLE foo (id INTEGER NOT NULL PRIMARY KEY, name TEXT)")
@@ -2274,7 +2276,7 @@ func Test_DB_PartialFail(t *testing.T) {
 
 func Test_DB_Serialize(t *testing.T) {
 	db, path := mustCreateOnDiskDatabaseWAL()
-	defer os.Remove(path)
+	defer fsutil.Remove(path)
 	defer db.Close()
 
 	_, err := db.ExecuteStringStmt("CREATE TABLE foo (id INTEGER NOT NULL PRIMARY KEY, name TEXT)")
@@ -2309,7 +2311,7 @@ func Test_DB_Serialize(t *testing.T) {
 		t.Fatalf("failed to create temp file: %s", err.Error())
 	}
 	dstDB.Close()
-	defer os.Remove(dstDB.Name())
+	defer fsutil.Remove(dstDB.Name())
 
 	// Get the bytes, and write to a temp file.
 	b, err := db.Serialize()
@@ -2331,7 +2333,7 @@ func Test_DB_Serialize(t *testing.T) {
 		t.Fatalf("failed to open on-disk serialized database: %s", err.Error())
 	}
 	defer newDB.Close()
-	defer os.Remove(dstDB.Name())
+	defer fsutil.Remove(dstDB.Name())
 	ro, err := newDB.QueryStringStmt(`SELECT * FROM foo`)
 	if err != nil {
 		t.Fatalf("failed to query table: %s", err.Error())
@@ -2343,7 +2345,7 @@ func Test_DB_Serialize(t *testing.T) {
 
 func Test_DB_Dump(t *testing.T) {
 	db, path := mustCreateOnDiskDatabaseWAL()
-	defer os.Remove(path)
+	defer fsutil.Remove(path)
 	defer db.Close()
 
 	const expRows = `[{"columns":["COUNT(*)"],"types":["integer"],"values":[[0]]}]`
@@ -2382,7 +2384,7 @@ func Test_DB_Dump(t *testing.T) {
 			// load dump into new DB
 			newDB, path := mustCreateOnDiskDatabase()
 			defer newDB.Close()
-			defer os.Remove(path)
+			defer fsutil.Remove(path)
 
 			if _, err := newDB.ExecuteStringStmt(buf.String()); err != nil {
 				t.Fatalf("load %s: %v", tc.name, err)
@@ -2427,7 +2429,7 @@ func Test_DB_Dump(t *testing.T) {
 // test that no longer exercises the intended interleaving.
 func Test_DB_DumpConcurrentWrite(t *testing.T) {
 	db, path := mustCreateOnDiskDatabaseWAL()
-	defer os.Remove(path)
+	defer fsutil.Remove(path)
 	defer db.Close()
 
 	mustExecute(db, `CREATE TABLE a(v INTEGER); CREATE TABLE b(v INTEGER)`)
@@ -2487,7 +2489,7 @@ COMMIT;
 
 func Test_DB_DumpWriteError(t *testing.T) {
 	db, path := mustCreateOnDiskDatabaseWAL()
-	defer os.Remove(path)
+	defer fsutil.Remove(path)
 	defer db.Close()
 	db.SetMaxReadOnlyConns(1)
 	mustExecute(db, `CREATE TABLE foo(v INTEGER); INSERT INTO foo VALUES(0)`)
@@ -2563,7 +2565,7 @@ func Test_SchemaObjects_Filter(t *testing.T) {
 // the whole database.
 func Test_DB_DumpSelectedTables(t *testing.T) {
 	db, path := mustCreateDumpSchemaFixture(t)
-	defer os.Remove(path)
+	defer fsutil.Remove(path)
 	defer db.Close()
 
 	var buf strings.Builder
@@ -2572,7 +2574,7 @@ func Test_DB_DumpSelectedTables(t *testing.T) {
 	}
 
 	newDB, newPath := mustCreateOnDiskDatabase()
-	defer os.Remove(newPath)
+	defer fsutil.Remove(newPath)
 	defer newDB.Close()
 
 	resps, err := newDB.ExecuteStringStmt(buf.String())
@@ -2613,7 +2615,7 @@ func Test_DB_DumpSelectedTables(t *testing.T) {
 
 func Test_DB_Size(t *testing.T) {
 	db, path := mustCreateOnDiskDatabaseWAL()
-	defer os.Remove(path)
+	defer fsutil.Remove(path)
 	defer db.Close()
 
 	if _, err := db.Size(); err != nil {
@@ -2622,7 +2624,7 @@ func Test_DB_Size(t *testing.T) {
 }
 func Test_DB_FileSize(t *testing.T) {
 	db, path := mustCreateOnDiskDatabaseWAL()
-	defer os.Remove(path)
+	defer fsutil.Remove(path)
 	defer db.Close()
 
 	if _, err := db.FileSize(); err != nil {
@@ -2631,7 +2633,7 @@ func Test_DB_FileSize(t *testing.T) {
 }
 func Test_DB_WALSize(t *testing.T) {
 	db, path := mustCreateOnDiskDatabaseWAL()
-	defer os.Remove(path)
+	defer fsutil.Remove(path)
 	defer db.Close()
 
 	if _, err := db.WALSize(); err != nil {
@@ -2641,7 +2643,7 @@ func Test_DB_WALSize(t *testing.T) {
 
 func Test_DB_StmtReadOnly(t *testing.T) {
 	db, path := mustCreateOnDiskDatabaseWAL()
-	defer os.Remove(path)
+	defer fsutil.Remove(path)
 	defer db.Close()
 
 	r, err := db.ExecuteStringStmt(`CREATE TABLE foo (id INTEGER NOT NULL PRIMARY KEY, name TEXT)`)
@@ -2753,7 +2755,7 @@ func Test_DB_StmtReadOnly(t *testing.T) {
 
 func Test_DB_JSON1(t *testing.T) {
 	db, path := mustCreateOnDiskDatabaseWAL()
-	defer os.Remove(path)
+	defer fsutil.Remove(path)
 	defer db.Close()
 
 	_, err := db.ExecuteStringStmt("CREATE TABLE customer(name,phone)")
@@ -2791,7 +2793,7 @@ func Test_DB_JSON1(t *testing.T) {
 
 func Test_DB_DBSTAT_table(t *testing.T) {
 	db, path := mustCreateOnDiskDatabaseWAL()
-	defer os.Remove(path)
+	defer fsutil.Remove(path)
 	defer db.Close()
 
 	_, err := db.ExecuteStringStmt("CREATE TABLE foo (id INTEGER NOT NULL PRIMARY KEY, name TEXT)")
@@ -2810,7 +2812,7 @@ func Test_DB_DBSTAT_table(t *testing.T) {
 
 func Test_DB_Copy(t *testing.T) {
 	db, path := mustCreateOnDiskDatabaseWAL()
-	defer os.Remove(path)
+	defer fsutil.Remove(path)
 	defer db.Close()
 
 	_, err := db.ExecuteStringStmt("CREATE TABLE foo (id INTEGER NOT NULL PRIMARY KEY, name TEXT)")
@@ -2841,7 +2843,7 @@ func Test_DB_Copy(t *testing.T) {
 	}
 
 	dstFile := mustTempFile()
-	defer os.Remove(dstFile)
+	defer fsutil.Remove(dstFile)
 	dstDB, err := Open(dstFile, false, false)
 	if err != nil {
 		t.Fatalf("failed to open destination database: %s", err)
@@ -2872,7 +2874,7 @@ func Test_DB_Copy(t *testing.T) {
 
 func Test_DB_Backup(t *testing.T) {
 	db, path := mustCreateOnDiskDatabaseWAL()
-	defer os.Remove(path)
+	defer fsutil.Remove(path)
 	defer db.Close()
 
 	for _, vacuum := range []bool{false, true} {
@@ -2908,7 +2910,7 @@ func Test_DB_Backup(t *testing.T) {
 		}
 
 		dstDB := mustTempFile()
-		defer os.Remove(dstDB)
+		defer fsutil.Remove(dstDB)
 
 		err = db.Backup(dstDB, vacuum)
 		if err != nil {
@@ -2927,7 +2929,7 @@ func Test_DB_Backup(t *testing.T) {
 			t.Fatalf("failed to open backup database: %s", err.Error())
 		}
 		defer newDB.Close()
-		defer os.Remove(dstDB)
+		defer fsutil.Remove(dstDB)
 		ro, err := newDB.QueryStringStmt(`SELECT * FROM foo`)
 		if err != nil {
 			t.Fatalf("failed to query table: %s", err.Error())

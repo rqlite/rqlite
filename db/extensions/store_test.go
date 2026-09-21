@@ -4,6 +4,8 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+
+	"github.com/rqlite/rqlite/v10/internal/fsutil"
 )
 
 func Test_NewStore(t *testing.T) {
@@ -42,7 +44,7 @@ func Test_EmptyStore(t *testing.T) {
 
 func Test_LoadFromFile(t *testing.T) {
 	src := mustTempFile()
-	defer os.Remove(src)
+	defer fsutil.Remove(src)
 	if err := os.WriteFile(src, []byte("test"), 0644); err != nil {
 		t.Fatalf("WriteFile() error: %s", err)
 	}

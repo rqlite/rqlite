@@ -305,7 +305,7 @@ func Test_ParseHex(t *testing.T) {
 
 func Test_ValidateExtension(t *testing.T) {
 	temp := mustTempPath()
-	defer os.Remove(temp)
+	defer fsutil.Remove(temp)
 	if err := os.WriteFile(temp, random.Bytes(100), 0644); err != nil {
 		t.Fatalf("failed to write random bytes to temp: %s", err.Error())
 	}
@@ -356,7 +356,7 @@ func Test_MakeDSN(t *testing.T) {
 
 func Test_IsValidSQLiteOnDisk(t *testing.T) {
 	path := mustTempFile()
-	defer os.Remove(path)
+	defer fsutil.Remove(path)
 
 	drvName := random.String()
 	sql.Register(drvName, &sqlite3.SQLiteDriver{})
@@ -386,7 +386,7 @@ func Test_IsValidSQLiteOnDisk(t *testing.T) {
 	}
 
 	randomPath := mustTempPath()
-	defer os.Remove(randomPath)
+	defer fsutil.Remove(randomPath)
 	if err := os.WriteFile(randomPath, random.Bytes(100), 0644); err != nil {
 		t.Fatalf("failed to write random bytes to temp: %s", err.Error())
 	}
@@ -397,7 +397,7 @@ func Test_IsValidSQLiteOnDisk(t *testing.T) {
 
 func Test_IsValidSQLiteCompressedOnDisk(t *testing.T) {
 	path := mustTempFile()
-	defer os.Remove(path)
+	defer fsutil.Remove(path)
 
 	dsn := fmt.Sprintf("file:%s", path)
 	db, err := sql.Open(defaultDriverName, dsn)
@@ -414,7 +414,7 @@ func Test_IsValidSQLiteCompressedOnDisk(t *testing.T) {
 
 	// Compress the SQLite file to a second a path.
 	compressedPath := mustTempFile()
-	defer os.Remove(compressedPath)
+	defer fsutil.Remove(compressedPath)
 	mustGzip(compressedPath, path)
 	if !IsValidSQLiteFileCompressed(compressedPath) {
 		t.Fatalf("good compressed SQLite file marked as invalid")
@@ -434,7 +434,7 @@ func Test_IsValidSQLiteCompressedOnDisk(t *testing.T) {
 	// as invalid. This is to check that an valid Gzip archive, but one
 	// that is not a valid SQLite file, is marked as invalid.
 	compressedCompressedPath := mustTempFile()
-	defer os.Remove(compressedCompressedPath)
+	defer fsutil.Remove(compressedCompressedPath)
 	mustGzip(compressedCompressedPath, compressedPath)
 	if IsValidSQLiteFileCompressed(compressedCompressedPath) {
 		t.Fatalf("Gzip archive of non-SQLite file marked as valid")
@@ -443,7 +443,7 @@ func Test_IsValidSQLiteCompressedOnDisk(t *testing.T) {
 
 func Test_IsWALModeEnabledOnDiskDELETE(t *testing.T) {
 	path := mustTempFile()
-	defer os.Remove(path)
+	defer fsutil.Remove(path)
 
 	drvName := random.String()
 	sql.Register(drvName, &sqlite3.SQLiteDriver{})
@@ -489,7 +489,7 @@ func Test_IsWALModeEnabledOnDiskDELETE(t *testing.T) {
 
 func Test_IsWALModeEnabledOnDiskWAL(t *testing.T) {
 	path := mustTempFile()
-	defer os.Remove(path)
+	defer fsutil.Remove(path)
 
 	drvName := random.String()
 	sql.Register(drvName, &sqlite3.SQLiteDriver{})
@@ -549,7 +549,7 @@ func Test_IsWALModeEnabledOnDiskWAL(t *testing.T) {
 
 func Test_EnsureDeleteMode(t *testing.T) {
 	path := mustTempFile()
-	defer os.Remove(path)
+	defer fsutil.Remove(path)
 
 	db, err := Open(path, false, true)
 	if err != nil {
@@ -580,7 +580,7 @@ func Test_EnsureDeleteMode(t *testing.T) {
 
 func Test_EnsureWALMode(t *testing.T) {
 	path := mustTempFile()
-	defer os.Remove(path)
+	defer fsutil.Remove(path)
 
 	db, err := Open(path, false, false)
 	if err != nil {
@@ -609,7 +609,7 @@ func Test_EnsureWALMode(t *testing.T) {
 
 func Test_IsValidSQLiteWALFile(t *testing.T) {
 	path := mustTempFile()
-	defer os.Remove(path)
+	defer fsutil.Remove(path)
 
 	drvName := random.String()
 	sql.Register(drvName, &sqlite3.SQLiteDriver{})
@@ -637,7 +637,7 @@ func Test_IsValidSQLiteWALFile(t *testing.T) {
 func Test_CheckpointRemove(t *testing.T) {
 	// Non-WAL-mode database.
 	deleteModePath := mustTempFile()
-	defer os.Remove(deleteModePath)
+	defer fsutil.Remove(deleteModePath)
 	dbDeleteMode, err := Open(deleteModePath, false, false)
 	if err != nil {
 		t.Fatalf("failed to open database in DELETE mode: %s", err.Error())
@@ -649,7 +649,7 @@ func Test_CheckpointRemove(t *testing.T) {
 
 	// Empty WAL-mode database.
 	emptyPath := mustTempFile()
-	defer os.Remove(emptyPath)
+	defer fsutil.Remove(emptyPath)
 	dbEmpty, err := Open(emptyPath, false, true)
 	if err != nil {
 		t.Fatalf("failed to open database in WAL mode: %s", err.Error())
@@ -668,7 +668,7 @@ func Test_CheckpointRemove(t *testing.T) {
 
 	// WAL-mode database with non-empty WAL files.
 	path := mustTempFile()
-	defer os.Remove(path)
+	defer fsutil.Remove(path)
 	db, err := Open(path, false, true)
 	if err != nil {
 		t.Fatalf("failed to open database in WAL mode: %s", err.Error())
@@ -716,7 +716,7 @@ func Test_CheckpointRemove(t *testing.T) {
 func Test_WALReplayOK(t *testing.T) {
 	testFunc := func(t *testing.T, replayIntoDelete bool) {
 		dbPath := mustTempFile()
-		defer os.Remove(dbPath)
+		defer fsutil.Remove(dbPath)
 		db, err := Open(dbPath, false, true)
 		if err != nil {
 			t.Fatalf("failed to open database in WAL mode: %s", err.Error())
@@ -831,7 +831,7 @@ func Test_WALReplayOK(t *testing.T) {
 // complex scenario, including showing the interaction with VACUUM.
 func Test_WALReplayOK_Complex(t *testing.T) {
 	srcPath := mustTempFile()
-	defer os.Remove(srcPath)
+	defer fsutil.Remove(srcPath)
 	srcWALPath := srcPath + "-wal"
 	dstPath := srcPath + "-dst"
 
@@ -857,7 +857,7 @@ func Test_WALReplayOK_Complex(t *testing.T) {
 	var dstWALs []string
 	defer func() {
 		for _, p := range dstWALs {
-			os.Remove(p)
+			fsutil.Remove(p)
 		}
 	}()
 	for i := range 20 {

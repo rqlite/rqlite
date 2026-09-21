@@ -3,6 +3,8 @@ package history
 import (
 	"os"
 	"path/filepath"
+
+	"github.com/rqlite/rqlite/v10/internal/fsutil"
 )
 
 const historyFile = ".rqlite_history"
@@ -22,5 +24,5 @@ func Delete() error {
 	if err != nil {
 		return err
 	}
-	return os.Remove(p)
+	return fsutil.Remove(p)
 }

@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"github.com/rqlite/rqlite/v10/auto/gcp"
+	"github.com/rqlite/rqlite/v10/internal/fsutil"
 )
 
 func main() {
@@ -49,7 +50,7 @@ func main() {
 	if err != nil {
 		panic(err)
 	}
-	defer os.Remove(tmp.Name())
+	defer fsutil.Remove(tmp.Name())
 
 	if err := client.Download(ctx, tmp); err != nil {
 		panic(err)

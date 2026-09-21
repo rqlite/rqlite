@@ -8,6 +8,8 @@ import (
 	"testing"
 
 	"github.com/hashicorp/raft"
+
+	"github.com/rqlite/rqlite/v10/internal/fsutil"
 )
 
 func Test_NewChecksummedFileFromFiles(t *testing.T) {
@@ -160,7 +162,7 @@ func Test_ChecksummedFile_Check(t *testing.T) {
 
 		// Also: a disabled sidecar must let Check pass even when the
 		// data file does not exist, since Check must not read it.
-		if err := os.Remove(dataPath); err != nil {
+		if err := fsutil.Remove(dataPath); err != nil {
 			t.Fatalf("failed to remove data file: %v", err)
 		}
 		ok, err = hf.Check()

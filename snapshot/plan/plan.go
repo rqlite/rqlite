@@ -131,7 +131,7 @@ func WriteToFile(p *Plan, path string) error {
 	if err := syncFileMaybe(tmpPath); err != nil {
 		return err
 	}
-	if err := os.Rename(tmpPath, path); err != nil {
+	if err := fsutil.Rename(tmpPath, path); err != nil {
 		return err
 	}
 	return fsutil.SyncDirParentMaybe(path)

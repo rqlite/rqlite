@@ -4,6 +4,8 @@ import (
 	"os"
 	"strings"
 	"testing"
+
+	"github.com/rqlite/rqlite/v10/internal/fsutil"
 )
 
 type testBasicAuther struct {
@@ -349,7 +351,7 @@ func Test_AuthPermsRequestLoadSingleFromFile(t *testing.T) {
 		]
 	`
 	path := mustWriteTempFile(t, jsonStream)
-	defer os.Remove(path)
+	defer fsutil.Remove(path)
 
 	store, err := NewCredentialsStoreFromFile(path)
 	if err != nil {

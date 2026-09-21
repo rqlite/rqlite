@@ -23,6 +23,7 @@ import (
 	"github.com/rqlite/rqlite/v10/command/encoding"
 	"github.com/rqlite/rqlite/v10/command/proto"
 	httpd "github.com/rqlite/rqlite/v10/http"
+	"github.com/rqlite/rqlite/v10/internal/fsutil"
 	"github.com/rqlite/rqlite/v10/proxy"
 	"github.com/rqlite/rqlite/v10/store"
 	"github.com/rqlite/rqlite/v10/tcp"
@@ -98,7 +99,7 @@ func (n *Node) Deprovision() {
 	n.Store.Close(true)
 	n.Cluster.Close()
 	n.Mux.Close()
-	os.RemoveAll(n.Dir)
+	fsutil.RemoveAll(n.Dir)
 }
 
 // WaitForLeader blocks for up to 10 seconds until the node detects a leader.

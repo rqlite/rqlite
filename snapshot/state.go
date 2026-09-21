@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"io"
 	"log"
-	"os"
 	"path/filepath"
 	"time"
 
@@ -46,10 +45,10 @@ func Clone(dir, id string, index, term uint64, gen int64) error {
 	// Build the clone under a temporary name, so a partially-written copy is
 	// never picked up by a scan of the Snapshot Store.
 	tmpPath := tmpName(dstPath)
-	if err := os.RemoveAll(tmpPath); err != nil {
+	if err := fsutil.RemoveAll(tmpPath); err != nil {
 		return fmt.Errorf("removing stale temporary directory %q: %w", tmpPath, err)
 	}
-	defer os.RemoveAll(tmpPath)
+	defer fsutil.RemoveAll(tmpPath)
 	if err := fsutil.CopyDir(srcPath, tmpPath); err != nil {
 		return fmt.Errorf("copying snapshot %q: %w", id, err)
 	}
@@ -66,7 +65,7 @@ func Clone(dir, id string, index, term uint64, gen int64) error {
 	if err := fsutil.SyncDirMaybe(tmpPath); err != nil {
 		return err
 	}
-	if err := os.Rename(tmpPath, dstPath); err != nil {
+	if err := fsutil.Rename(tmpPath, dstPath); err != nil {
 		return fmt.Errorf("renaming snapshot %q into place: %w", newID, err)
 	}
 	return fsutil.SyncDirMaybe(dir)

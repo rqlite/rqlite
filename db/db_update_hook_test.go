@@ -1,12 +1,13 @@
 package db
 
 import (
-	"os"
 	"sync"
 	"sync/atomic"
 	"testing"
 
 	command "github.com/rqlite/rqlite/v10/command/proto"
+
+	"github.com/rqlite/rqlite/v10/internal/fsutil"
 )
 
 // Test_UpdateHook_Basic tests the basic functionality of the update hook, ensuring
@@ -14,7 +15,7 @@ import (
 // executes that don't change anything, and when unregistered.
 func Test_UpdateHook_Basic(t *testing.T) {
 	path := mustTempPath()
-	defer os.Remove(path)
+	defer fsutil.Remove(path)
 	db, err := Open(path, false, false)
 	if err != nil {
 		t.Fatalf("error opening database")
@@ -92,7 +93,7 @@ func Test_UpdateHook_Basic(t *testing.T) {
 // transaction which is rolled back.
 func Test_UpdateHook_Tx(t *testing.T) {
 	path := mustTempPath()
-	defer os.Remove(path)
+	defer fsutil.Remove(path)
 	db, err := Open(path, false, false)
 	if err != nil {
 		t.Fatalf("error opening database")

@@ -34,7 +34,7 @@ func Test_PathExists(t *testing.T) {
 	if err := os.Symlink(target, link); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.Remove(target); err != nil {
+	if err := Remove(target); err != nil {
 		t.Fatal(err)
 	}
 	if !PathExists(link) {
@@ -301,7 +301,7 @@ func Test_RemoveFile(t *testing.T) {
 	if err := os.WriteFile(p, []byte("x"), 0644); err != nil {
 		t.Fatal(err)
 	}
-	if err := RemoveFile(p); err != nil {
+	if err := Remove(p); err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 	if PathExists(p) {
@@ -309,7 +309,7 @@ func Test_RemoveFile(t *testing.T) {
 	}
 
 	// Removing nonexistent file should not error.
-	if err := RemoveFile(p); err != nil {
+	if err := Remove(p); err != nil {
 		t.Fatalf("expected no error for nonexistent file, got: %v", err)
 	}
 }
@@ -373,7 +373,7 @@ func Test_RenameWithRetry_InUse(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := os.Rename(src, filepath.Join(dir, "plain")); err == nil {
+	if err := Rename(src, filepath.Join(dir, "plain")); err == nil {
 		t.Fatal("expected rename of an open directory to fail")
 	}
 

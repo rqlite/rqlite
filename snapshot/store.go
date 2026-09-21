@@ -711,7 +711,7 @@ func (s *Store) executeReapPlan(p *plan.Plan, planPath string) (int, int, error)
 	}
 
 	// Clean up the plan file.
-	os.Remove(planPath)
+	fsutil.Remove(planPath)
 	return p.NReaped, p.NCheckpointed, nil
 }
 
@@ -757,7 +757,7 @@ func (s *Store) SetDueNext(t Type) error {
 		if !fsutil.FileExists(s.fullNeededPath) {
 			return nil
 		}
-		if err := os.Remove(s.fullNeededPath); err != nil {
+		if err := fsutil.Remove(s.fullNeededPath); err != nil {
 			return err
 		}
 		return fsutil.SyncDirMaybe(s.dir)
@@ -868,7 +868,7 @@ func (s *Store) check() error {
 	}
 
 	// Remove any incomplete plan file from an interrupted plan write.
-	os.Remove(tmpName(s.reapPlanPath))
+	fsutil.Remove(tmpName(s.reapPlanPath))
 
 	// Resume an interrupted reap if a plan file exists, before any temporary
 	// directories are removed below, since the reap may still need them.
@@ -900,7 +900,7 @@ func (s *Store) check() error {
 			}
 		} else {
 			s.logger.Printf("reap plan at %s is fully executed, removing plan", s.reapPlanPath)
-			os.Remove(s.reapPlanPath)
+			fsutil.Remove(s.reapPlanPath)
 		}
 	}
 
@@ -913,7 +913,7 @@ func (s *Store) check() error {
 		if e.IsDir() && isTmpName(e.Name()) {
 			tmpPath := filepath.Join(s.dir, e.Name())
 			s.logger.Printf("removing leftover temporary directory %s", tmpPath)
-			if err := os.RemoveAll(tmpPath); err != nil {
+			if err := fsutil.RemoveAll(tmpPath); err != nil {
 				return fmt.Errorf("removing temporary directory %s: %w", tmpPath, err)
 			}
 		}

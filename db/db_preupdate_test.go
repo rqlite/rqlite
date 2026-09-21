@@ -1,7 +1,6 @@
 package db
 
 import (
-	"os"
 	"reflect"
 	"regexp"
 	"sync"
@@ -10,6 +9,7 @@ import (
 
 	"github.com/rqlite/rqlite/v10/command"
 	"github.com/rqlite/rqlite/v10/command/proto"
+	"github.com/rqlite/rqlite/v10/internal/fsutil"
 )
 
 // Test_Preupdate_Basic tests the basic functionality of the preupdate hook, ensuring
@@ -17,7 +17,7 @@ import (
 // executes that don't change anything, and when unregistered.
 func Test_Preupdate_Basic(t *testing.T) {
 	path := mustTempPath()
-	defer os.Remove(path)
+	defer fsutil.Remove(path)
 	db, err := Open(path, false, false)
 	if err != nil {
 		t.Fatalf("error opening database")
@@ -91,7 +91,7 @@ func Test_Preupdate_Basic(t *testing.T) {
 
 func Test_Preupdate_AllTypes(t *testing.T) {
 	path := mustTempPath()
-	defer os.Remove(path)
+	defer fsutil.Remove(path)
 	db, err := Open(path, false, false)
 	if err != nil {
 		t.Fatalf("error opening database")
@@ -347,7 +347,7 @@ func Test_Preupdate_AllTypes(t *testing.T) {
 
 func Test_Preupdate_Basic_Regex(t *testing.T) {
 	path := mustTempPath()
-	defer os.Remove(path)
+	defer fsutil.Remove(path)
 	db, err := Open(path, false, false)
 	if err != nil {
 		t.Fatalf("error opening database")
@@ -436,7 +436,7 @@ func Test_Preupdate_Basic_Regex(t *testing.T) {
 // inserts that violate a constraint.
 func Test_Preupdate_Constraint(t *testing.T) {
 	path := mustTempPath()
-	defer os.Remove(path)
+	defer fsutil.Remove(path)
 	db, err := Open(path, false, false)
 	if err != nil {
 		t.Fatalf("error opening database")
@@ -480,7 +480,7 @@ func Test_Preupdate_Constraint(t *testing.T) {
 
 func Test_Preupdate_RowIDs(t *testing.T) {
 	path := mustTempPath()
-	defer os.Remove(path)
+	defer fsutil.Remove(path)
 	db, err := Open(path, false, false)
 	if err != nil {
 		t.Fatalf("error opening database")
@@ -570,7 +570,7 @@ func Test_Preupdate_RowIDs(t *testing.T) {
 
 func Test_Preupdate_Data(t *testing.T) {
 	path := mustTempPath()
-	defer os.Remove(path)
+	defer fsutil.Remove(path)
 	db, err := Open(path, false, false)
 	if err != nil {
 		t.Fatalf("error opening database")
@@ -725,7 +725,7 @@ func Test_Preupdate_Data(t *testing.T) {
 // deletes.
 func Test_Preupdate_Multi(t *testing.T) {
 	path := mustTempPath()
-	defer os.Remove(path)
+	defer fsutil.Remove(path)
 	db, err := Open(path, false, false)
 	if err != nil {
 		t.Fatalf("error opening database")
@@ -752,7 +752,7 @@ func Test_Preupdate_Multi(t *testing.T) {
 // a transaction which is rolled back.
 func Test_Preupdate_Tx(t *testing.T) {
 	path := mustTempPath()
-	defer os.Remove(path)
+	defer fsutil.Remove(path)
 	db, err := Open(path, false, false)
 	if err != nil {
 		t.Fatalf("error opening database")
