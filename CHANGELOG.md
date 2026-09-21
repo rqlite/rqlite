@@ -5,6 +5,9 @@
 - [PR #2808](https://github.com/rqlite/rqlite/pull/2808): Bump generation ID if snapshot IDs collide. Fixes issue [#2746](https://github.com/rqlite/rqlite/issues/2746). Thanks @rohanpadhye
 - [PR #2810](https://github.com/rqlite/rqlite/pull/2810): Snapshots can be filtered by term and index.
 - [PR #2811](https://github.com/rqlite/rqlite/pull/2811): Upgrade dependencies.
+- [PR #2814](https://github.com/rqlite/rqlite/pull/2814): Add support for retryable renames and removes.
+- [PR #2815](https://github.com/rqlite/rqlite/pull/2815): Only dump the indexes and triggers of the selected tables. Fixes issue [#2813](https://github.com/rqlite/rqlite/issues/2813). Thanks @orrery-dev
+
 
 ## v10.3.5 (September 18th)
 This release moves the build process for binaries to Go 1.27.
