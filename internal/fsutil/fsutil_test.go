@@ -3,6 +3,7 @@ package fsutil
 import (
 	"os"
 	"path/filepath"
+	"runtime"
 	"testing"
 	"time"
 )
@@ -354,5 +355,49 @@ func Test_FilesIdentical(t *testing.T) {
 	}
 	if FilesIdentical(a, b) {
 		t.Fatal("expected files to differ")
+	}
+}
+
+func Test_RenameWithRetry_InUse(t *testing.T) {
+	if runtime.GOOS != "windows" {
+		t.Skip("a directory held open blocks a rename only on Windows")
+	}
+	dir := t.TempDir()
+	src := filepath.Join(dir, "src")
+	if err := os.Mkdir(src, 0755); err != nil {
+		t.Fatal(err)
+	}
+
+	// Hold the directory open so a plain rename fails.
+	fd, err := os.Open(src)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Rename(src, filepath.Join(dir, "plain")); err == nil {
+		t.Fatal("expected rename of an open directory to fail")
+	}
+
+	// Release it shortly after the retrying rename starts.
+	go func() {
+		time.Sleep(50 * time.Millisecond)
+		fd.Close()
+	}()
+	dst := filepath.Join(dir, "dst")
+	if _, err := RenameWithRetry(src, dst, 2*time.Second, 10*time.Millisecond); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if !DirExists(dst) {
+		t.Fatalf("expected %s to exist", dst)
+	}
+}
+
+func Test_RenameWithRetry_NotInUse(t *testing.T) {
+	dir := t.TempDir()
+	n, err := RenameWithRetry(filepath.Join(dir, "missing"), filepath.Join(dir, "dst"), 2*time.Second, 10*time.Millisecond)
+	if err == nil {
+		t.Fatal("expected error renaming a missing path")
+	}
+	if n != 0 {
+		t.Fatalf("expected a non-in-use error to return without retrying, took %d retries", n)
 	}
 }
