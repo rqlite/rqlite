@@ -1054,10 +1054,10 @@ func Test_Store_Reap_Full_FullWALs(t *testing.T) {
 	}
 }
 
-// Test_Store_Reap_Full_FullWALs_NameCollision_NoGen tests reaping when the name
-// generated for the consolidated snapshot is identical to the name of the newest
-// full snapshot and the snapshot IDs don't use generations. This is the case with
-// older releases.
+// Test_Store_Reap_Full_FullWALs_NameCollision_NoGen tests reaping when the
+// clock reads the same millisecond recorded in the newest full snapshot's ID
+// and the snapshot IDs don't use generations, as with older releases. The
+// consolidated snapshot must still sort after the snapshot it replaces.
 func Test_Store_Reap_Full_FullWALs_NameCollision_NoGen(t *testing.T) {
 	dir := t.TempDir()
 	store, err := NewStore(dir)
@@ -1070,8 +1070,9 @@ func Test_Store_Reap_Full_FullWALs_NameCollision_NoGen(t *testing.T) {
 	createSnapshotInStore(t, store, "3-2000-2222222222222", 2000, 3, 1,
 		"testdata/db-and-wals/full2.db", "testdata/db-and-wals/full2-wal-00")
 
-	// Now use a fixed clock so we get the same timestamp when we reap. This should trigger a bump in
-	// generation from 0 (implied because it's not in the snapshot ID) to 1.
+	// Now use a fixed clock reading the same millisecond recorded in the
+	// newest snapshot's ID. The consolidated snapshot must sort strictly
+	// after it, so the millisecond field is bumped past the existing one.
 	store.snapshotNamer = NewSnapshotNamer(fixedClock(time.UnixMilli(2222222222222)))
 	if _, _, err := store.Reap(); err != nil {
 		t.Fatalf("Failed to reap snapshots: %v", err)
@@ -1086,14 +1087,15 @@ func Test_Store_Reap_Full_FullWALs_NameCollision_NoGen(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to parse snapshot name: %s", err)
 	}
-	if term != 3 || index != 2000 || msec != 2222222222222 || gen != 1 {
+	if term != 3 || index != 2000 || msec != 2222222222223 || gen != 1 {
 		t.Fatalf("incorrect snapshot ID, got %d, %d, %d, %d", term, index, msec, gen)
 	}
 }
 
-// Test_Store_Reap_Full_FullWALs_NameCollision_WithGen tests reaping when the name
-// generated for the consolidated snapshot is identical to the name of the newest
-// full snapshot and generations are in use.
+// Test_Store_Reap_Full_FullWALs_NameCollision_WithGen tests reaping when the
+// clock reads the same millisecond recorded in the newest full snapshot's ID
+// and generations are in use. The consolidated snapshot must still sort after
+// the snapshot it replaces.
 func Test_Store_Reap_Full_FullWALs_NameCollision_WithGen(t *testing.T) {
 	dir := t.TempDir()
 	store, err := NewStore(dir)
@@ -1106,8 +1108,9 @@ func Test_Store_Reap_Full_FullWALs_NameCollision_WithGen(t *testing.T) {
 	createSnapshotInStore(t, store, "3-2000-2222222222222-1", 2000, 3, 1,
 		"testdata/db-and-wals/full2.db", "testdata/db-and-wals/full2-wal-00")
 
-	// Now use a fixed clock so we get the same timestamp when we reap. This should trigger a bump in
-	// generation from 1 to 2.
+	// Now use a fixed clock reading the same millisecond recorded in the
+	// newest snapshot's ID. The consolidated snapshot must sort strictly
+	// after it, so the millisecond field is bumped past the existing one.
 	store.snapshotNamer = NewSnapshotNamer(fixedClock(time.UnixMilli(2222222222222)))
 	if _, _, err := store.Reap(); err != nil {
 		t.Fatalf("Failed to reap snapshots: %v", err)
@@ -1122,7 +1125,95 @@ func Test_Store_Reap_Full_FullWALs_NameCollision_WithGen(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to parse snapshot name: %s", err)
 	}
-	if term != 3 || index != 2000 || msec != 2222222222222 || gen != 2 {
+	if term != 3 || index != 2000 || msec != 2222222222223 || gen != 1 {
+		t.Fatalf("incorrect snapshot ID, got %d, %d, %d, %d", term, index, msec, gen)
+	}
+}
+
+// Test_Store_Create_ClockBackward_SameTermIndex tests that a snapshot created
+// after the system clock moves backwards still sorts as newer than an existing
+// snapshot with the same term and index.
+func Test_Store_Create_ClockBackward_SameTermIndex(t *testing.T) {
+	dir := t.TempDir()
+	store, err := NewStore(dir)
+	if err != nil {
+		t.Fatalf("Failed to create new store: %v", err)
+	}
+	defer store.Close()
+
+	// Existing snapshot at term 3, index 100, created at millisecond 1000.
+	createSnapshotInStore(t, store, "3-100-1000", 100, 3, 1, "testdata/db-and-wals/backup.db")
+
+	// The clock moves backwards to millisecond 500. A new snapshot at the same
+	// term and index must still sort as newer than the existing one.
+	store.snapshotNamer = NewSnapshotNamer(fixedClock(time.UnixMilli(500)))
+	sink, err := store.Create(1, 100, 3, makeTestConfiguration("1", "localhost:1"), 1, nil)
+	if err != nil {
+		t.Fatalf("Failed to create sink: %v", err)
+	}
+	if exp, got := "3-100-1001", sink.ID(); exp != got {
+		t.Fatalf("expected sink ID %s, got %s", exp, got)
+	}
+
+	streamer, err := NewSnapshotStreamer("testdata/db-and-wals/backup.db")
+	if err != nil {
+		t.Fatalf("Failed to create SnapshotStreamer: %v", err)
+	}
+	if err := streamer.Open(); err != nil {
+		t.Fatalf("Failed to open SnapshotStreamer: %v", err)
+	}
+	defer streamer.Close()
+	if _, err := io.Copy(sink, streamer); err != nil {
+		t.Fatalf("Failed to copy snapshot data to sink: %v", err)
+	}
+	if err := sink.Close(); err != nil {
+		t.Fatalf("Failed to close sink: %v", err)
+	}
+
+	// The new snapshot must be the one the store reports as newest.
+	snaps, err := store.ListAll()
+	if err != nil {
+		t.Fatalf("Failed to list snapshots: %v", err)
+	}
+	if exp, got := 2, len(snaps); exp != got {
+		t.Fatalf("expected %d snapshots, got %d", exp, got)
+	}
+	if exp, got := "3-100-1001", snaps[0].ID; exp != got {
+		t.Fatalf("expected newest snapshot %s, got %s", exp, got)
+	}
+}
+
+// Test_Store_Reap_ClockBackward_SameTermIndex tests that the consolidated
+// snapshot produced by a reap sorts as newer than the snapshot it replaces,
+// even when the system clock has moved backwards.
+func Test_Store_Reap_ClockBackward_SameTermIndex(t *testing.T) {
+	dir := t.TempDir()
+	store, err := NewStore(dir)
+	if err != nil {
+		t.Fatalf("Failed to create new store: %v", err)
+	}
+	defer store.Close()
+
+	createSnapshotInStore(t, store, "2-1017-1704807719996", 1017, 2, 1, "testdata/db-and-wals/backup.db")
+	createSnapshotInStore(t, store, "3-2000-2222222222222", 2000, 3, 1,
+		"testdata/db-and-wals/full2.db", "testdata/db-and-wals/full2-wal-00")
+
+	// Reap with the clock moved backwards, behind the timestamp of every
+	// snapshot in the store.
+	store.snapshotNamer = NewSnapshotNamer(fixedClock(time.UnixMilli(1000)))
+	if _, _, err := store.Reap(); err != nil {
+		t.Fatalf("Failed to reap snapshots: %v", err)
+	}
+
+	snaps, err := store.ListAll()
+	if exp, got := 1, len(snaps); exp != got {
+		t.Fatalf("expected %d snapshot in list, got %d", exp, got)
+	}
+	term, index, msec, gen, err := ParseSnapshotName(snaps[0].ID)
+	if err != nil {
+		t.Fatalf("failed to parse snapshot name: %s", err)
+	}
+	if term != 3 || index != 2000 || msec != 2222222222223 || gen != 1 {
 		t.Fatalf("incorrect snapshot ID, got %d, %d, %d, %d", term, index, msec, gen)
 	}
 }

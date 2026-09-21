@@ -8,6 +8,8 @@ import (
 	"sync"
 	"testing"
 	"time"
+
+	"github.com/hashicorp/raft"
 )
 
 // Test_NewSnapshotNamer_NilNowFn checks that a nil nowFn falls back to
@@ -182,6 +184,86 @@ func Test_MakeName_Concurrent(t *testing.T) {
 	for got := range errs {
 		t.Fatalf("got %q, want %q", got, want)
 	}
+}
+
+// Test_makeName_MinMsec checks that makeName raises the millisecond field to
+// the given minimum when the clock reads lower, and leaves it alone otherwise.
+func Test_makeName_MinMsec(t *testing.T) {
+	sn := NewSnapshotNamer(fixedClock(time.UnixMilli(1000)))
+
+	if got, want := sn.makeName(1, 2, 0, 1500), "1-2-1500"; got != want {
+		t.Fatalf("got %q, want %q", got, want)
+	}
+	if got, want := sn.makeName(1, 2, 3, 1500), "1-2-1500-3"; got != want {
+		t.Fatalf("got %q, want %q", got, want)
+	}
+	if got, want := sn.makeName(1, 2, 0, 500), "1-2-1000"; got != want {
+		t.Fatalf("got %q, want %q", got, want)
+	}
+	if got, want := sn.makeName(1, 2, 3, 1000), "1-2-1000-3"; got != want {
+		t.Fatalf("got %q, want %q", got, want)
+	}
+}
+
+// Test_makeNameForSet exercises set-aware name generation: a name made for a
+// term and index already present in the set must sort after every snapshot in
+// the set with that term and index.
+func Test_makeNameForSet(t *testing.T) {
+	mkSnap := func(id string, term, index uint64) *Snapshot {
+		return &Snapshot{id: id, raftMeta: &raft.SnapshotMeta{Term: term, Index: index}}
+	}
+
+	t.Run("clock backwards with same term and index", func(t *testing.T) {
+		set := SnapshotSet{dir: "/test", items: []*Snapshot{
+			mkSnap("3-100-1000", 3, 100),
+			mkSnap("3-100-1500-2", 3, 100),
+			mkSnap("3-101-9999", 3, 101),
+			mkSnap("4-100-9999", 4, 100),
+		}}
+		sn := NewSnapshotNamer(fixedClock(time.UnixMilli(500)))
+		if exp, got := "3-100-1501", sn.makeNameForSet(set, 3, 100, 0); got != exp {
+			t.Fatalf("got %q, want %q", got, exp)
+		}
+	})
+
+	t.Run("clock ahead ignores floor", func(t *testing.T) {
+		set := SnapshotSet{dir: "/test", items: []*Snapshot{
+			mkSnap("3-100-1000", 3, 100),
+		}}
+		sn := NewSnapshotNamer(fixedClock(time.UnixMilli(2000)))
+		if exp, got := "3-100-2000", sn.makeNameForSet(set, 3, 100, 0); got != exp {
+			t.Fatalf("got %q, want %q", got, exp)
+		}
+	})
+
+	t.Run("empty set", func(t *testing.T) {
+		set := SnapshotSet{dir: "/test"}
+		sn := NewSnapshotNamer(fixedClock(time.UnixMilli(500)))
+		if exp, got := "3-100-500-1", sn.makeNameForSet(set, 3, 100, 1); got != exp {
+			t.Fatalf("got %q, want %q", got, exp)
+		}
+	})
+
+	t.Run("generation preserved", func(t *testing.T) {
+		set := SnapshotSet{dir: "/test", items: []*Snapshot{
+			mkSnap("3-100-1000-4", 3, 100),
+		}}
+		sn := NewSnapshotNamer(fixedClock(time.UnixMilli(500)))
+		if exp, got := "3-100-1001-7", sn.makeNameForSet(set, 3, 100, 7); got != exp {
+			t.Fatalf("got %q, want %q", got, exp)
+		}
+	})
+
+	t.Run("unparsable newest ID ignored", func(t *testing.T) {
+		set := SnapshotSet{dir: "/test", items: []*Snapshot{
+			mkSnap("3-100-1000", 3, 100),
+			mkSnap("backup-copy", 3, 100),
+		}}
+		sn := NewSnapshotNamer(fixedClock(time.UnixMilli(500)))
+		if exp, got := "3-100-500", sn.makeNameForSet(set, 3, 100, 0); got != exp {
+			t.Fatalf("got %q, want %q", got, exp)
+		}
+	})
 }
 
 // fixedClock returns a nowFn that always reports t.
