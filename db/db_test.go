@@ -20,7 +20,7 @@ import (
 // works OK. It should.
 func Test_OpenNonExistentDatabase(t *testing.T) {
 	path := mustTempPath()
-	defer os.Remove(path)
+	defer fsutil.Remove(path)
 	_, err := Open(path, false, false)
 	if err != nil {
 		t.Fatalf("error opening nonexistent database: %s", err.Error())
@@ -33,7 +33,7 @@ func Test_OpenNonExistentDatabase(t *testing.T) {
 
 func Test_OpenEmptyInDELETEMode(t *testing.T) {
 	path := mustTempPath()
-	defer os.Remove(path)
+	defer fsutil.Remove(path)
 	db, err := Open(path, false, false)
 	if err != nil {
 		t.Fatalf("error opening database")
@@ -46,7 +46,7 @@ func Test_OpenEmptyInDELETEMode(t *testing.T) {
 
 func Test_OpenEmptyInWALMode(t *testing.T) {
 	path := mustTempPath()
-	defer os.Remove(path)
+	defer fsutil.Remove(path)
 	db, err := Open(path, false, true)
 	if err != nil {
 		t.Fatalf("error opening database")
@@ -67,7 +67,7 @@ func Test_OpenEmptyInWALMode(t *testing.T) {
 
 func Test_WALNotRemovedOnClose(t *testing.T) {
 	path := mustTempPath()
-	defer os.Remove(path)
+	defer fsutil.Remove(path)
 	db, err := Open(path, false, true)
 	if err != nil {
 		t.Fatalf("error opening nonexistent database")
@@ -98,7 +98,7 @@ func Test_WALNotRemovedOnClose(t *testing.T) {
 // file is opened, that the files are not modified in anyway.
 func Test_WALNotChangedOnReopen(t *testing.T) {
 	path := mustTempPath()
-	defer os.Remove(path)
+	defer fsutil.Remove(path)
 	db, err := Open(path, false, true)
 	if err != nil {
 		t.Fatalf("error opening nonexistent database")
@@ -147,7 +147,7 @@ func Test_WALNotChangedOnReopen(t *testing.T) {
 // crash, where WAL files are left behind and we want to discard them.
 func Test_WALNotCheckpointedOnClose(t *testing.T) {
 	path := mustTempPath()
-	defer os.Remove(path)
+	defer fsutil.Remove(path)
 	db, err := Open(path, false, true)
 	if err != nil {
 		t.Fatalf("error opening nonexistent database")
@@ -196,7 +196,7 @@ func Test_WALNotCheckpointedOnClose(t *testing.T) {
 
 	// Remove the WAL file, and confirm we now have an empty table in
 	// the database.
-	if err := os.Remove(walPath); err != nil {
+	if err := fsutil.Remove(walPath); err != nil {
 		t.Fatalf("failed to remove WAL file: %s", err.Error())
 	}
 
@@ -245,7 +245,7 @@ func Test_RemoveFiles(t *testing.T) {
 
 func Test_SetMaxReadOnlyConns(t *testing.T) {
 	path := mustTempPath()
-	defer os.Remove(path)
+	defer fsutil.Remove(path)
 	db, err := Open(path, false, true)
 	if err != nil {
 		t.Fatalf("error opening nonexistent database")
@@ -262,7 +262,7 @@ func Test_SetMaxReadOnlyConns(t *testing.T) {
 func Test_DBPaths(t *testing.T) {
 	dbWAL, pathWAL := mustCreateOnDiskDatabaseWAL()
 	defer dbWAL.Close()
-	defer os.Remove(pathWAL)
+	defer fsutil.Remove(pathWAL)
 	if exp, got := pathWAL, dbWAL.Path(); exp != got {
 		t.Fatalf("expected path %s, got %s", exp, got)
 	}
@@ -275,7 +275,7 @@ func Test_DBPaths(t *testing.T) {
 
 	db, path := mustCreateOnDiskDatabase()
 	defer db.Close()
-	defer os.Remove(path)
+	defer fsutil.Remove(path)
 	if exp, got := path, db.Path(); exp != got {
 		t.Fatalf("expected path %s, got %s", exp, got)
 	}
@@ -288,7 +288,7 @@ func Test_DBPaths(t *testing.T) {
 func Test_TableCreation(t *testing.T) {
 	db, path := mustCreateOnDiskDatabaseWAL()
 	defer db.Close()
-	defer os.Remove(path)
+	defer fsutil.Remove(path)
 
 	r, err := db.ExecuteStringStmt("CREATE TABLE foo (id INTEGER NOT NULL PRIMARY KEY, name TEXT)")
 	if err != nil {
@@ -325,7 +325,7 @@ func Test_TableCreation(t *testing.T) {
 func Test_Query_PragmaJournal_ReadOnly(t *testing.T) {
 	db, path := mustCreateOnDiskDatabaseWAL()
 	defer db.Close()
-	defer os.Remove(path)
+	defer fsutil.Remove(path)
 
 	r, err := db.QueryStringStmt("CREATE TABLE foo (id INTEGER NOT NULL PRIMARY KEY, name TEXT)")
 	if err != nil {
@@ -362,7 +362,7 @@ func Test_Query_PragmaJournal_ReadOnly(t *testing.T) {
 func Test_LoadExtensionDisabled(t *testing.T) {
 	db, path := mustCreateOnDiskDatabaseWAL()
 	defer db.Close()
-	defer os.Remove(path)
+	defer fsutil.Remove(path)
 
 	r, err := db.ExecuteStringStmt(`load_extension("foo")`)
 	if err != nil {
@@ -376,7 +376,7 @@ func Test_LoadExtensionDisabled(t *testing.T) {
 func Test_DBSums(t *testing.T) {
 	db, path := mustCreateOnDiskDatabaseWAL()
 	defer db.Close()
-	defer os.Remove(path)
+	defer fsutil.Remove(path)
 
 	getSums := func() (string, string) {
 		sumDB, err := db.DBSum()
@@ -423,7 +423,7 @@ func Test_DBSums(t *testing.T) {
 
 func Test_DBLastModified(t *testing.T) {
 	path := mustTempFile()
-	defer os.Remove(path)
+	defer fsutil.Remove(path)
 	db, err := Open(path, false, true)
 	if err != nil {
 		t.Fatalf("failed to open database in WAL mode: %s", err.Error())
@@ -500,7 +500,7 @@ func Test_DBLastModified(t *testing.T) {
 func Test_DBOptimize(t *testing.T) {
 	db, path := mustCreateOnDiskDatabaseWAL()
 	defer db.Close()
-	defer os.Remove(path)
+	defer fsutil.Remove(path)
 
 	// Create the table, index, and write a bunch of records.
 	r, err := db.ExecuteStringStmt("CREATE TABLE foo (id INTEGER NOT NULL PRIMARY KEY, first TEXT, last TEXT)")
@@ -606,7 +606,7 @@ func Test_TableCreationFK(t *testing.T) {
 
 	db, path := mustCreateOnDiskDatabaseWAL()
 	defer db.Close()
-	defer os.Remove(path)
+	defer fsutil.Remove(path)
 
 	r, err := db.ExecuteStringStmt(createTableFoo)
 	if err != nil {
@@ -635,7 +635,7 @@ func Test_TableCreationFK(t *testing.T) {
 	// Do same test, but this explicitly enable FK constraints after open.
 	dbFKPragma, path := mustCreateOnDiskDatabaseWAL()
 	defer dbFKPragma.Close()
-	defer os.Remove(path)
+	defer fsutil.Remove(path)
 
 	_, err = dbFKPragma.ExecuteStringStmt("PRAGMA foreign_keys = ON")
 	if err != nil {
@@ -669,7 +669,7 @@ func Test_TableCreationFK(t *testing.T) {
 	// Do same testing with FK constraints enabled at open time.
 	dbFK, path := mustCreateOnDiskDatabaseWALFK()
 	defer dbFK.Close()
-	defer os.Remove(path)
+	defer fsutil.Remove(path)
 
 	if !dbFK.FKEnabled() {
 		t.Fatal("FK constraints not marked as enabled")
@@ -703,7 +703,7 @@ func Test_TableCreationFK(t *testing.T) {
 func Test_ConcurrentQueries(t *testing.T) {
 	db, path := mustCreateOnDiskDatabaseWAL()
 	defer db.Close()
-	defer os.Remove(path)
+	defer fsutil.Remove(path)
 
 	r, err := db.ExecuteStringStmt(`CREATE TABLE foo (id INTEGER NOT NULL PRIMARY KEY, name TEXT)`)
 	if err != nil {
@@ -741,7 +741,7 @@ func Test_ConcurrentQueries(t *testing.T) {
 func Test_SQLForceQuery(t *testing.T) {
 	db, path := mustCreateOnDiskDatabaseWAL()
 	defer db.Close()
-	defer os.Remove(path)
+	defer fsutil.Remove(path)
 
 	_, err := db.ExecuteStringStmt("CREATE TABLE foo (id INTEGER NOT NULL PRIMARY KEY, name TEXT)")
 	if err != nil {
@@ -798,7 +798,7 @@ func Test_SQLForceQuery(t *testing.T) {
 func Test_SQLForceQuery_Error(t *testing.T) {
 	db, path := mustCreateOnDiskDatabaseWAL()
 	defer db.Close()
-	defer os.Remove(path)
+	defer fsutil.Remove(path)
 
 	_, err := db.ExecuteStringStmt("CREATE TABLE foo (id INTEGER NOT NULL PRIMARY KEY, name TEXT)")
 	if err != nil {
@@ -853,7 +853,7 @@ func Test_SQLForceQuery_Error(t *testing.T) {
 func Test_SimpleTransaction(t *testing.T) {
 	db, path := mustCreateOnDiskDatabaseWAL()
 	defer db.Close()
-	defer os.Remove(path)
+	defer fsutil.Remove(path)
 
 	_, err := db.ExecuteStringStmt("CREATE TABLE foo (id INTEGER NOT NULL PRIMARY KEY, name TEXT)")
 	if err != nil {
@@ -896,7 +896,7 @@ func Test_SimpleTransaction(t *testing.T) {
 func Test_PartialFailTransaction(t *testing.T) {
 	db, path := mustCreateOnDiskDatabaseWAL()
 	defer db.Close()
-	defer os.Remove(path)
+	defer fsutil.Remove(path)
 
 	_, err := db.ExecuteStringStmt("CREATE TABLE foo (id INTEGER NOT NULL PRIMARY KEY, name TEXT)")
 	if err != nil {
@@ -941,7 +941,7 @@ func Test_PartialFailTransaction(t *testing.T) {
 func Test_PartialFailTransactionReturning(t *testing.T) {
 	db, path := mustCreateOnDiskDatabaseWAL()
 	defer db.Close()
-	defer os.Remove(path)
+	defer fsutil.Remove(path)
 
 	_, err := db.ExecuteStringStmt("CREATE TABLE foo (id INTEGER NOT NULL PRIMARY KEY, name TEXT UNIQUE)")
 	if err != nil {
@@ -999,7 +999,7 @@ func Test_PartialFailTransactionReturning(t *testing.T) {
 // a checkpoint succeeds
 func Test_WALDatabaseCreatedOK(t *testing.T) {
 	path := mustTempFile()
-	defer os.Remove(path)
+	defer fsutil.Remove(path)
 
 	db, err := Open(path, false, true)
 	if err != nil {
@@ -1047,7 +1047,7 @@ func Test_WALDatabaseCreatedOK(t *testing.T) {
 // even when supplied with a DELETE-mode database.
 func Test_WALDatabaseCreatedOKFromDELETE(t *testing.T) {
 	deletePath := mustTempFile()
-	defer os.Remove(deletePath)
+	defer fsutil.Remove(deletePath)
 	deleteDB, err := Open(deletePath, false, false)
 	if err != nil {
 		t.Fatalf("failed to open database in WAL mode: %s", err.Error())
@@ -1086,7 +1086,7 @@ func Test_WALDatabaseCreatedOKFromDELETE(t *testing.T) {
 // even when supplied with a WAL-mode database.
 func Test_DELETEDatabaseCreatedOKFromWAL(t *testing.T) {
 	walPath := mustTempFile()
-	defer os.Remove(walPath)
+	defer fsutil.Remove(walPath)
 	walDB, err := Open(walPath, false, true)
 	if err != nil {
 		t.Fatalf("failed to open database in WAL mode: %s", err.Error())
@@ -1127,7 +1127,7 @@ func Test_DELETEDatabaseCreatedOKFromWAL(t *testing.T) {
 
 func Test_WALDisableCheckpointing(t *testing.T) {
 	path := mustTempFile()
-	defer os.Remove(path)
+	defer fsutil.Remove(path)
 
 	db, err := Open(path, false, true)
 	if err != nil {
@@ -1234,14 +1234,14 @@ func Test_DatabaseCommonOnDiskOperations(t *testing.T) {
 	for _, tc := range testCases {
 		db, path := mustCreateOnDiskDatabase()
 		defer db.Close()
-		defer os.Remove(path)
+		defer fsutil.Remove(path)
 		t.Run(tc.name+":disk", func(t *testing.T) {
 			tc.testFunc(t, db)
 		})
 
 		db, path = mustCreateOnDiskDatabaseWAL()
 		defer db.Close()
-		defer os.Remove(path)
+		defer fsutil.Remove(path)
 		t.Run(tc.name+":wal", func(t *testing.T) {
 			tc.testFunc(t, db)
 		})
@@ -1256,7 +1256,7 @@ func Test_DatabaseCommonOnDiskOperations(t *testing.T) {
 func Test_ParallelOperationsInMemory(t *testing.T) {
 	db, path := mustCreateOnDiskDatabaseWAL()
 	defer db.Close()
-	defer os.Remove(path)
+	defer fsutil.Remove(path)
 
 	if _, err := db.ExecuteStringStmt("CREATE TABLE foo (id INTEGER NOT NULL PRIMARY KEY, name TEXT)"); err != nil {
 		t.Fatalf("failed to create table: %s", err.Error())
@@ -1417,7 +1417,7 @@ func Test_ExecShouldTimeout(t *testing.T) {
 	}
 	db, path := mustSetupDBForTimeoutTests(t, 7500)
 	defer db.Close()
-	defer os.Remove(path)
+	defer fsutil.Remove(path)
 
 	// Execute a query, using a timeout that is enough to get the timeout error
 	// the test wants.
@@ -1457,7 +1457,7 @@ FROM test_table t1 LEFT OUTER JOIN test_table t2`
 func Test_QueryShouldTimeout(t *testing.T) {
 	db, path := mustSetupDBForTimeoutTests(t, 5000)
 	defer db.Close()
-	defer os.Remove(path)
+	defer fsutil.Remove(path)
 
 	q := `SELECT key1, key_id, key2, key3, key4, key5, key6, data
 	FROM test_table
@@ -1497,7 +1497,7 @@ func Test_QueryShouldTimeout(t *testing.T) {
 func Test_RequestShouldTimeout(t *testing.T) {
 	db, path := mustSetupDBForTimeoutTests(t, 5000)
 	defer db.Close()
-	defer os.Remove(path)
+	defer fsutil.Remove(path)
 
 	q := `SELECT key1, key_id, key2, key3, key4, key5, key6, data
 	FROM test_table
@@ -1586,7 +1586,7 @@ func mustTempPath() string {
 		panic(err.Error())
 	}
 	tmpfile.Close()
-	if err := os.Remove(tmpfile.Name()); err != nil {
+	if err := fsutil.Remove(tmpfile.Name()); err != nil {
 		panic(err.Error())
 	}
 	return tmpfile.Name()
@@ -1658,7 +1658,7 @@ func isAppveyor() bool {
 func Test_DBStats_NoPragmaConnectionLeak(t *testing.T) {
 	db, path := mustCreateOnDiskDatabaseWAL()
 	defer db.Close()
-	defer os.Remove(path)
+	defer fsutil.Remove(path)
 
 	// Baseline: how many connections are in use before Stats() is called.
 	beforeRW := db.ConnectionPoolStats(db.rwDB).InUse
@@ -1683,7 +1683,7 @@ func Test_DBStats_NoPragmaConnectionLeak(t *testing.T) {
 func Test_DBStats_PragmaFields(t *testing.T) {
 	db, path := mustCreateOnDiskDatabaseWAL()
 	defer db.Close()
-	defer os.Remove(path)
+	defer fsutil.Remove(path)
 
 	stats, err := db.Stats()
 	if err != nil {

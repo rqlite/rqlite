@@ -5,6 +5,8 @@ import (
 	"os"
 	"testing"
 	"time"
+
+	"github.com/rqlite/rqlite/v10/internal/fsutil"
 )
 
 func Test_NewCertReloader(t *testing.T) {
@@ -102,10 +104,10 @@ func Test_ReloadOnFileChange(t *testing.T) {
 		t.Fatalf("Expected CommonName to be 'rqlite', got '%s'", c.Leaf.Subject.CommonName)
 	}
 
-	if err := os.Rename(keyPath2, keyPath1); err != nil {
+	if err := fsutil.Rename(keyPath2, keyPath1); err != nil {
 		t.Fatalf("failed to rename key file: %v", err)
 	}
-	if err := os.Rename(certPath2, certPath1); err != nil {
+	if err := fsutil.Rename(certPath2, certPath1); err != nil {
 		t.Fatalf("failed to rename cert file: %v", err)
 	}
 	mustAdvanceFileOneSec(certPath1)
@@ -147,7 +149,7 @@ func Test_NoReloadOnMismatch(t *testing.T) {
 	}
 
 	// Only replace the key file so the new files are "mismatched"
-	if err := os.Rename(keyPath2, keyPath1); err != nil {
+	if err := fsutil.Rename(keyPath2, keyPath1); err != nil {
 		t.Fatalf("failed to rename key file: %v", err)
 	}
 	mustAdvanceFileOneSec(certPath1)

@@ -5,6 +5,7 @@ import (
 	"path/filepath"
 	"testing"
 
+	"github.com/rqlite/rqlite/v10/internal/fsutil"
 	"github.com/rqlite/rqlite/v10/snapshot/sidecar"
 )
 
@@ -307,7 +308,7 @@ func TestExecutor_CopyFile(t *testing.T) {
 	}
 
 	// Test idempotency: remove src, CopyFile again -> should succeed.
-	os.Remove(src)
+	fsutil.Remove(src)
 	if err := e.CopyFile(src, dst); err != nil {
 		t.Fatalf("CopyFile idempotency failed: %v", err)
 	}
@@ -322,7 +323,7 @@ func TestExecutor_CopyFile(t *testing.T) {
 	}
 
 	// Test error: both src and dst missing.
-	os.Remove(dst)
+	fsutil.Remove(dst)
 	if err := e.CopyFile(src, dst); err == nil {
 		t.Fatalf("CopyFile should fail when both src and dst are missing")
 	}

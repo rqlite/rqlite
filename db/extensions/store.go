@@ -8,6 +8,7 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/rqlite/rqlite/v10/internal/fsutil"
 	"github.com/rqlite/rqlite/v10/internal/rarchive"
 )
 
@@ -20,7 +21,7 @@ type Store struct {
 // The directory is created if it does not exist, and any existing
 // files are removed.
 func NewStore(dir string) (*Store, error) {
-	if err := os.RemoveAll(dir); err != nil {
+	if err := fsutil.RemoveAll(dir); err != nil {
 		return nil, err
 	}
 	if err := os.MkdirAll(dir, 0755); err != nil {

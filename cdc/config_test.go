@@ -6,6 +6,8 @@ import (
 	"path/filepath"
 	"testing"
 	"time"
+
+	"github.com/rqlite/rqlite/v10/internal/fsutil"
 )
 
 func Test_NewConfig_ValidURL(t *testing.T) {
@@ -286,7 +288,7 @@ func TestNewConfig_WithTLSFields(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer os.Remove(tmpFile.Name())
+	defer fsutil.Remove(tmpFile.Name())
 
 	configJSON := `{
 		"endpoint": "https://secure.example.com/cdc",

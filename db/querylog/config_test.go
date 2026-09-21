@@ -4,6 +4,8 @@ import (
 	"os"
 	"testing"
 	"time"
+
+	"github.com/rqlite/rqlite/v10/internal/fsutil"
 )
 
 // --- NewConfig: special input values ---
@@ -47,7 +49,7 @@ func Test_NewConfig_MissingFile(t *testing.T) {
 func Test_NewConfig_FullConfig(t *testing.T) {
 	// 5_000_000_000 ns = 5s
 	f := mustWriteQueryLogFile(t, []byte(`{"min_duration":5000000000,"no_expanded_sql":true}`))
-	defer os.Remove(f)
+	defer fsutil.Remove(f)
 
 	cfg, err := NewConfig(f)
 	if err != nil {
@@ -66,7 +68,7 @@ func Test_NewConfig_FullConfig(t *testing.T) {
 
 func Test_NewConfig_OmittedMinDuration_GetsDefault(t *testing.T) {
 	f := mustWriteQueryLogFile(t, []byte(`{"no_expanded_sql":false}`))
-	defer os.Remove(f)
+	defer fsutil.Remove(f)
 
 	cfg, err := NewConfig(f)
 	if err != nil {
@@ -83,7 +85,7 @@ func Test_NewConfig_ExplicitZeroMinDuration_LogsEverything(t *testing.T) {
 	// Explicit min_duration:0 must NOT be replaced by the default.
 	// Zero means "log every query".
 	f := mustWriteQueryLogFile(t, []byte(`{"min_duration":0}`))
-	defer os.Remove(f)
+	defer fsutil.Remove(f)
 
 	cfg, err := NewConfig(f)
 	if err != nil {
@@ -99,7 +101,7 @@ func Test_NewConfig_ExplicitZeroMinDuration_LogsEverything(t *testing.T) {
 
 func Test_NewConfig_EmptyObject_GetsDefaults(t *testing.T) {
 	f := mustWriteQueryLogFile(t, []byte(`{}`))
-	defer os.Remove(f)
+	defer fsutil.Remove(f)
 
 	cfg, err := NewConfig(f)
 	if err != nil {
@@ -119,7 +121,7 @@ func Test_NewConfig_EmptyObject_GetsDefaults(t *testing.T) {
 func Test_NewConfig_NegativeMinDuration_IsRejected(t *testing.T) {
 	// -1_000_000_000 ns = -1s — must be rejected by Validate().
 	f := mustWriteQueryLogFile(t, []byte(`{"min_duration":-1000000000}`))
-	defer os.Remove(f)
+	defer fsutil.Remove(f)
 
 	_, err := NewConfig(f)
 	if err == nil {
@@ -129,7 +131,7 @@ func Test_NewConfig_NegativeMinDuration_IsRejected(t *testing.T) {
 
 func Test_NewConfig_MalformedJSON(t *testing.T) {
 	f := mustWriteQueryLogFile(t, []byte(`{not valid`))
-	defer os.Remove(f)
+	defer fsutil.Remove(f)
 
 	_, err := NewConfig(f)
 	if err == nil {
@@ -139,7 +141,7 @@ func Test_NewConfig_MalformedJSON(t *testing.T) {
 
 func Test_NewConfig_TrailingData(t *testing.T) {
 	f := mustWriteQueryLogFile(t, []byte(`{"min_duration":10000000000} extra`))
-	defer os.Remove(f)
+	defer fsutil.Remove(f)
 
 	_, err := NewConfig(f)
 	if err == nil {
@@ -149,7 +151,7 @@ func Test_NewConfig_TrailingData(t *testing.T) {
 
 func Test_NewConfig_NoExpandedSQL_True(t *testing.T) {
 	f := mustWriteQueryLogFile(t, []byte(`{"no_expanded_sql":true}`))
-	defer os.Remove(f)
+	defer fsutil.Remove(f)
 
 	cfg, err := NewConfig(f)
 	if err != nil {

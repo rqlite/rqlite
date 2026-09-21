@@ -7,13 +7,13 @@ import (
 	"fmt"
 	"io"
 	"net"
-	"os"
 	"sync"
 	"testing"
 	"time"
 
 	"github.com/rqlite/rqlite/v10/cluster/proto"
 	command "github.com/rqlite/rqlite/v10/command/proto"
+	"github.com/rqlite/rqlite/v10/internal/fsutil"
 	"github.com/rqlite/rqlite/v10/testdata/x509"
 )
 
@@ -790,9 +790,9 @@ func mustCreateTLSConfig() *tls.Config {
 	var err error
 
 	certFile := x509.CertExampleDotComFile("")
-	defer os.Remove(certFile)
+	defer fsutil.Remove(certFile)
 	keyFile := x509.KeyExampleDotComFile("")
-	defer os.Remove(keyFile)
+	defer fsutil.Remove(keyFile)
 
 	config := &tls.Config{
 		InsecureSkipVerify: true,

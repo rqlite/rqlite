@@ -5,6 +5,8 @@ import (
 	"io"
 	"os"
 	"testing"
+
+	"github.com/rqlite/rqlite/v10/internal/fsutil"
 )
 
 // Test_GzipFileNotFound tests the case where the input file does not exist.
@@ -21,7 +23,7 @@ func Test_GzipSuccess(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to create temp file: %v", err)
 	}
-	defer os.Remove(tmpFile.Name()) // Clean up the file afterward
+	defer fsutil.Remove(tmpFile.Name()) // Clean up the file afterward
 	if _, err := tmpFile.WriteString(testContent); err != nil {
 		t.Fatalf("Failed to write to temp file: %v", err)
 	}
@@ -31,7 +33,7 @@ func Test_GzipSuccess(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Gzip failed: %v", err)
 	}
-	defer os.Remove(gzFile) // Clean up the gzipped file
+	defer fsutil.Remove(gzFile) // Clean up the gzipped file
 
 	// Open the file, and then read from it using a gzip reader
 	f, err := os.Open(gzFile)
@@ -63,7 +65,7 @@ func Test_Gunzip_ValidFile(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to create temp gzip file: %v", err)
 	}
-	defer os.Remove(tmpFile.Name()) // Clean up the file afterward
+	defer fsutil.Remove(tmpFile.Name()) // Clean up the file afterward
 
 	// Write compressed data to the temporary file
 	gw := gzip.NewWriter(tmpFile)
@@ -79,7 +81,7 @@ func Test_Gunzip_ValidFile(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Gunzip failed: %v", err)
 	}
-	defer os.Remove(outFile) // Clean up the decompressed file afterward
+	defer fsutil.Remove(outFile) // Clean up the decompressed file afterward
 
 	// Read and check the contents of the decompressed file
 	decompressedData, err := os.ReadFile(outFile)
@@ -107,7 +109,7 @@ func Test_Gunzip_InvalidGzip(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to create temp file: %v", err)
 	}
-	defer os.Remove(tmpFile.Name()) // Clean up the file afterward
+	defer fsutil.Remove(tmpFile.Name()) // Clean up the file afterward
 
 	// Write invalid (non-GZIP) data to the file
 	_, err = tmpFile.Write([]byte("this is not gzip data"))
@@ -130,7 +132,7 @@ func Test_Gunzip_EmptyFile(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to create temp file: %v", err)
 	}
-	defer os.Remove(tmpFile.Name()) // Clean up the file afterward
+	defer fsutil.Remove(tmpFile.Name()) // Clean up the file afterward
 	tmpFile.Close()
 
 	// Now test the Gunzip function

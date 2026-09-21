@@ -532,10 +532,10 @@ func CheckpointRemove(path string) error {
 // RemoveWALFiles removes the WAL and SHM files associated with the given path,
 // leaving the database file untouched.
 func RemoveWALFiles(path string) error {
-	if err := os.Remove(path + "-wal"); err != nil && !os.IsNotExist(err) {
+	if err := fsutil.Remove(path + "-wal"); err != nil && !os.IsNotExist(err) {
 		return err
 	}
-	if err := os.Remove(path + "-shm"); err != nil && !os.IsNotExist(err) {
+	if err := fsutil.Remove(path + "-shm"); err != nil && !os.IsNotExist(err) {
 		return err
 	}
 	return nil
@@ -543,7 +543,7 @@ func RemoveWALFiles(path string) error {
 
 // RemoveFiles removes the SQLite database file, and any associated WAL and SHM files.
 func RemoveFiles(path string) error {
-	if err := os.Remove(path); err != nil && !os.IsNotExist(err) {
+	if err := fsutil.Remove(path); err != nil && !os.IsNotExist(err) {
 		return err
 	}
 	if err := RemoveWALFiles(path); err != nil {
@@ -579,7 +579,7 @@ func ReplayWAL(path string, wals []string, deleteMode bool) error {
 		if !IsValidSQLiteWALFile(wal) {
 			return fmt.Errorf("invalid WAL file %s", wal)
 		}
-		if err := os.Rename(wal, path+"-wal"); err != nil {
+		if err := fsutil.Rename(wal, path+"-wal"); err != nil {
 			return fmt.Errorf("rename WAL %s: %s", wal, err.Error())
 		}
 

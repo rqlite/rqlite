@@ -3,13 +3,13 @@ package store
 import (
 	"fmt"
 	"log"
-	"os"
 	"path/filepath"
 
 	"github.com/rqlite/rqlite/v10/command"
 	"github.com/rqlite/rqlite/v10/command/chunking"
 	"github.com/rqlite/rqlite/v10/command/proto"
 	sql "github.com/rqlite/rqlite/v10/db"
+	"github.com/rqlite/rqlite/v10/internal/fsutil"
 )
 
 // ExecuteQueryResponses is a slice of ExecuteQueryResponse, which detects mutations.
@@ -81,7 +81,7 @@ func (c *CommandProcessor) Process(data []byte, db *sql.SwappableDB) (*proto.Com
 		if err != nil {
 			return cmd, false, &fsmGenericResponse{error: fmt.Errorf("failed to create temporary database file: %s", err)}
 		}
-		defer os.Remove(fd.Name())
+		defer fsutil.Remove(fd.Name())
 		defer fd.Close()
 		_, err = fd.Write(lr.Data)
 		if err != nil {
@@ -110,7 +110,7 @@ func (c *CommandProcessor) Process(data []byte, db *sql.SwappableDB) (*proto.Com
 				return cmd, false, &fsmGenericResponse{error: fmt.Errorf("failed to close dechunker: %s", err)}
 			}
 			c.decMgmr.Delete(lcr.StreamId)
-			defer os.Remove(path)
+			defer fsutil.Remove(path)
 		} else {
 			last, err := dec.WriteChunk(&lcr)
 			if err != nil {
@@ -122,7 +122,7 @@ func (c *CommandProcessor) Process(data []byte, db *sql.SwappableDB) (*proto.Com
 					return cmd, false, &fsmGenericResponse{error: fmt.Errorf("failed to close dechunker: %s", err)}
 				}
 				c.decMgmr.Delete(lcr.StreamId)
-				defer os.Remove(path)
+				defer fsutil.Remove(path)
 
 				// Check if reassembled database is valid. If not, do not perform the load. This could
 				// happen a snapshot truncated earlier parts of the log which contained the earlier parts

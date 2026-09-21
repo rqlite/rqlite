@@ -2,7 +2,6 @@ package db
 
 import (
 	"fmt"
-	"os"
 	"sync/atomic"
 	"testing"
 
@@ -26,7 +25,7 @@ func Test_DefaultDriver(t *testing.T) {
 	}
 
 	path := mustTempPath()
-	defer os.RemoveAll(path)
+	defer fsutil.RemoveAll(path)
 	db, err := OpenWithDriver(d, path, false, true)
 	if err != nil {
 		t.Fatalf("OpenWithDriver failed: %s", err.Error())
@@ -52,7 +51,7 @@ func Test_DefaultDriver(t *testing.T) {
 
 	// Now, delete the WAL file, and re-open the database. The SELECT should
 	// fail with "no table", proving the WAL was not checkpointed.
-	if err := os.Remove(db.WALPath()); err != nil {
+	if err := fsutil.Remove(db.WALPath()); err != nil {
 		t.Fatalf("Failed to remove WAL file: %s", err.Error())
 	}
 	db, err = OpenWithDriver(d, path, false, true)
@@ -89,7 +88,7 @@ func Test_CheckpointDriver(t *testing.T) {
 	}
 
 	path := mustTempPath()
-	defer os.RemoveAll(path)
+	defer fsutil.RemoveAll(path)
 	db, err := OpenWithDriver(d, path, false, true)
 	if err != nil {
 		t.Fatalf("OpenWithDriver failed: %s", err.Error())
@@ -142,7 +141,7 @@ func Test_NewDriverFromConfig_QueryLogOnly(t *testing.T) {
 	})
 
 	path := mustTempPath()
-	defer os.RemoveAll(path)
+	defer fsutil.RemoveAll(path)
 	db, err := OpenWithDriver(d, path, false, true)
 	if err != nil {
 		t.Fatalf("OpenWithDriver failed: %s", err)
@@ -173,7 +172,7 @@ func Test_NewDriverFromConfig_NoQueryLog(t *testing.T) {
 	}
 
 	path := mustTempPath()
-	defer os.RemoveAll(path)
+	defer fsutil.RemoveAll(path)
 	db, err := OpenWithDriver(d, path, false, true)
 	if err != nil {
 		t.Fatalf("OpenWithDriver failed: %s", err)

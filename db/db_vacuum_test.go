@@ -1,14 +1,15 @@
 package db
 
 import (
-	"os"
 	"testing"
+
+	"github.com/rqlite/rqlite/v10/internal/fsutil"
 )
 
 func Test_DBVacuum(t *testing.T) {
 	db, path := mustCreateOnDiskDatabaseWAL()
 	defer db.Close()
-	defer os.Remove(path)
+	defer fsutil.Remove(path)
 
 	r, err := db.ExecuteStringStmt("CREATE TABLE foo (id INTEGER NOT NULL PRIMARY KEY, name TEXT)")
 	if err != nil {
@@ -69,7 +70,7 @@ func Test_DBVacuum(t *testing.T) {
 func Test_DBVacuumInto(t *testing.T) {
 	db, path := mustCreateOnDiskDatabaseWAL()
 	defer db.Close()
-	defer os.Remove(path)
+	defer fsutil.Remove(path)
 
 	r, err := db.ExecuteStringStmt("CREATE TABLE foo (id INTEGER NOT NULL PRIMARY KEY, name TEXT)")
 	if err != nil {
@@ -99,7 +100,7 @@ func Test_DBVacuumInto(t *testing.T) {
 
 	// VACUUM INTO an empty file, open the database, and check it's correct.
 	tmpPath := mustTempFile()
-	defer os.Remove(tmpPath)
+	defer fsutil.Remove(tmpPath)
 	if err := db.VacuumInto(tmpPath); err != nil {
 		t.Fatalf("failed to vacuum database: %s", err.Error())
 	}
@@ -112,7 +113,7 @@ func Test_DBVacuumInto(t *testing.T) {
 
 	// VACUUM INTO an non-existing file, should still work.
 	tmpPath2 := mustTempPath()
-	defer os.Remove(tmpPath2)
+	defer fsutil.Remove(tmpPath2)
 	if err := db.VacuumInto(tmpPath2); err != nil {
 		t.Fatalf("failed to vacuum database: %s", err.Error())
 	}
@@ -139,7 +140,7 @@ func Test_DBVacuumInto(t *testing.T) {
 	// VACUUM into a file which is an existing SQLIte database. Should fail.
 	existDB, existPath := mustCreateOnDiskDatabaseWAL()
 	defer db.Close()
-	defer os.Remove(existPath)
+	defer fsutil.Remove(existPath)
 	_, err = existDB.ExecuteStringStmt("CREATE TABLE foo (id INTEGER NOT NULL PRIMARY KEY, name TEXT)")
 	if err != nil {
 		t.Fatalf("failed to create table: %s", err.Error())

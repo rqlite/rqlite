@@ -2,11 +2,11 @@ package store
 
 import (
 	"context"
-	"os"
 	"testing"
 	"time"
 
 	command "github.com/rqlite/rqlite/v10/command/proto"
+	"github.com/rqlite/rqlite/v10/internal/fsutil"
 	"github.com/rqlite/rqlite/v10/internal/rarchive"
 )
 
@@ -47,7 +47,7 @@ func test_SingleNodeProvide(t *testing.T, vacuum, compress bool) {
 	}
 
 	tmpFd := mustCreateTempFD()
-	defer os.Remove(tmpFd.Name())
+	defer fsutil.Remove(tmpFd.Name())
 	defer tmpFd.Close()
 	provider := NewProvider(s0, vacuum, compress)
 	if err := provider.Provide(tmpFd); err != nil {
@@ -129,7 +129,7 @@ func Test_SingleNodeProvideLastIndex(t *testing.T) {
 	}
 
 	tmpFile := mustCreateTempFile()
-	defer os.Remove(tmpFile)
+	defer fsutil.Remove(tmpFile)
 	provider := NewProvider(s, false, false)
 
 	lm, err := provider.LastIndex()
@@ -244,7 +244,7 @@ func Test_SingleNodeProvideLastIndex_Restart(t *testing.T) {
 	}
 
 	tmpFile := mustCreateTempFile()
-	defer os.Remove(tmpFile)
+	defer fsutil.Remove(tmpFile)
 	provider := NewProvider(s, false, false)
 
 	er := executeRequestFromStrings([]string{

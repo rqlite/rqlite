@@ -159,7 +159,7 @@ func Test_Restore_CorruptWAL(t *testing.T) {
 	for _, e := range entries {
 		if strings.HasPrefix(e.Name(), "restore-wal-") {
 			// Clean up in case the test runs in a shared dir.
-			os.Remove(filepath.Join(filepath.Dir(dstPath), e.Name()))
+			fsutil.Remove(filepath.Join(filepath.Dir(dstPath), e.Name()))
 		}
 	}
 }

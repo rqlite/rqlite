@@ -34,7 +34,7 @@ func Upgrade7To8(old, new string, logger *log.Logger) (retErr error) {
 	newTmpDir := tmpName(new)
 	defer func() {
 		if retErr != nil {
-			if err := os.RemoveAll(newTmpDir); err != nil && !os.IsNotExist(err) {
+			if err := fsutil.RemoveAll(newTmpDir); err != nil && !os.IsNotExist(err) {
 				logger.Printf("failed to remove temporary upgraded snapshot directory at %s due to outer error (%s) cleanup: %s",
 					newTmpDir, retErr, err)
 			}
@@ -45,7 +45,7 @@ func Upgrade7To8(old, new string, logger *log.Logger) (retErr error) {
 	// previous upgrade attempt was interrupted. We will need to start over.
 	if fsutil.DirExists(newTmpDir) {
 		logger.Printf("detected temporary upgraded snapshot directory at %s, removing it", newTmpDir)
-		if err := os.RemoveAll(newTmpDir); err != nil {
+		if err := fsutil.RemoveAll(newTmpDir); err != nil {
 			return fmt.Errorf("failed to remove temporary upgraded snapshot directory %s: %s", newTmpDir, err)
 		}
 	}
@@ -62,7 +62,7 @@ func Upgrade7To8(old, new string, logger *log.Logger) (retErr error) {
 
 	if oldIsEmpty {
 		logger.Printf("old snapshot directory %s is empty, nothing to upgrade", old)
-		if err := os.RemoveAll(old); err != nil {
+		if err := fsutil.RemoveAll(old); err != nil {
 			return fmt.Errorf("failed to remove empty old snapshot directory %s: %s", old, err)
 		}
 		return nil
@@ -70,7 +70,7 @@ func Upgrade7To8(old, new string, logger *log.Logger) (retErr error) {
 
 	if fsutil.DirExists(new) {
 		logger.Printf("new snapshot directory %s exists", new)
-		if err := os.RemoveAll(old); err != nil {
+		if err := fsutil.RemoveAll(old); err != nil {
 			return fmt.Errorf("failed to remove old snapshot directory %s: %s", old, err)
 		}
 		logger.Printf("removed old snapshot directory %s as no upgrade is needed", old)
@@ -158,7 +158,7 @@ func Upgrade7To8(old, new string, logger *log.Logger) (retErr error) {
 	}
 
 	// Move the upgraded snapshot directory into place.
-	if err := os.Rename(newTmpDir, new); err != nil {
+	if err := fsutil.Rename(newTmpDir, new); err != nil {
 		return fmt.Errorf("failed to move temporary snapshot directory %s to %s: %s", newTmpDir, new, err)
 	}
 	if err := fsutil.SyncDirParentMaybe(new); err != nil {
@@ -195,7 +195,7 @@ func Upgrade8To10(old, new string, logger *log.Logger) (retErr error) {
 	planPath := filepath.Join(filepath.Dir(new), upgrade8To10Plan)
 
 	// Remove incomplete plan file from an interrupted write.
-	os.Remove(planPath + ".tmp")
+	fsutil.Remove(planPath + ".tmp")
 
 	// Check for existing plan (crash recovery).
 	if fsutil.FileExists(planPath) {
@@ -207,7 +207,7 @@ func Upgrade8To10(old, new string, logger *log.Logger) (retErr error) {
 		if err := p.Execute(plan.NewExecutor()); err != nil {
 			return fmt.Errorf("executing resumed upgrade plan: %w", err)
 		}
-		os.Remove(planPath)
+		fsutil.Remove(planPath)
 		logger.Printf("resumed and completed upgrade of v8 snapshot directory to %s", new)
 		stats.Add(upgradeOk, 1)
 		return nil
@@ -225,7 +225,7 @@ func Upgrade8To10(old, new string, logger *log.Logger) (retErr error) {
 
 	if oldIsEmpty {
 		logger.Printf("old snapshot directory %s is empty, nothing to upgrade", old)
-		if err := os.RemoveAll(old); err != nil {
+		if err := fsutil.RemoveAll(old); err != nil {
 			return fmt.Errorf("failed to remove empty old snapshot directory %s: %s", old, err)
 		}
 		return nil
@@ -233,7 +233,7 @@ func Upgrade8To10(old, new string, logger *log.Logger) (retErr error) {
 
 	if fsutil.DirExists(new) {
 		logger.Printf("new snapshot directory %s exists", new)
-		if err := os.RemoveAll(old); err != nil {
+		if err := fsutil.RemoveAll(old); err != nil {
 			return fmt.Errorf("failed to remove old snapshot directory %s: %s", old, err)
 		}
 		logger.Printf("removed old snapshot directory %s as no upgrade is needed", old)
@@ -281,7 +281,7 @@ func Upgrade8To10(old, new string, logger *log.Logger) (retErr error) {
 	}
 
 	// Clean up the plan file.
-	if err := os.Remove(planPath); err != nil {
+	if err := fsutil.Remove(planPath); err != nil {
 		logger.Printf("failed to remove upgrade plan file %s: %v", planPath, err)
 	}
 	logger.Printf("upgraded v8 snapshot directory %s to %s", old, new)

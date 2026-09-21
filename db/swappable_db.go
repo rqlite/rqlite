@@ -4,12 +4,13 @@ import (
 	"context"
 	"fmt"
 	"io"
-	"os"
 	"regexp"
 	"sync"
 	"time"
 
 	command "github.com/rqlite/rqlite/v10/command/proto"
+
+	"github.com/rqlite/rqlite/v10/internal/fsutil"
 )
 
 // SwappableDB is a wrapper around DB that allows the underlying database to be swapped out
@@ -61,7 +62,7 @@ func (s *SwappableDB) Swap(path string, fkConstraints, walEnabled bool) error {
 	if err := RemoveFiles(s.db.Path()); err != nil {
 		return fmt.Errorf("failed to remove files: %s", err)
 	}
-	if err := os.Rename(path, s.db.Path()); err != nil {
+	if err := fsutil.Rename(path, s.db.Path()); err != nil {
 		return fmt.Errorf("failed to rename database: %s", err)
 	}
 

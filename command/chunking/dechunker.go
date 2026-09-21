@@ -9,6 +9,7 @@ import (
 	"sync"
 
 	"github.com/rqlite/rqlite/v10/command/proto"
+	"github.com/rqlite/rqlite/v10/internal/fsutil"
 )
 
 // Dechunker is a writer that writes chunks to a file and returns the file path when
@@ -85,7 +86,7 @@ func NewDechunkerManager(dir string) (*DechunkerManager, error) {
 		return nil, fmt.Errorf("failed to test file in dir %s: %v", dir, err)
 	}
 	file.Close()
-	os.Remove(file.Name())
+	fsutil.Remove(file.Name())
 
 	return &DechunkerManager{
 		dir: dir,

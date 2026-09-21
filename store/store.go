@@ -547,7 +547,7 @@ func (s *Store) Open() (retErr error) {
 	s.logger.Printf("opening store with node ID %s, listening on %s", s.raftID, s.ly.Addr().String())
 
 	// Clean up a never-used file from previous releases.
-	fsutil.RemoveFile(filepath.Join(s.raftDir, "applied_index"))
+	fsutil.Remove(filepath.Join(s.raftDir, "applied_index"))
 
 	// Create all the required Raft directories.
 	s.logger.Printf("ensuring data directory exists at %s", s.raftDir)
@@ -628,7 +628,7 @@ func (s *Store) Open() (retErr error) {
 			if removeDBFiles {
 				stats.Add(numRestoresStart, 1)
 				s.numSnapshotsStart.Add(1)
-				if err := fsutil.RemoveFile(s.cleanSnapshotPath); err != nil {
+				if err := fsutil.Remove(s.cleanSnapshotPath); err != nil {
 					s.logger.Printf("warning: failed to remove clean snapshot marker file: %s", err)
 				}
 			}
@@ -683,7 +683,7 @@ func (s *Store) Open() (retErr error) {
 		go func() {
 			cleanupAndExit := func(msg string) {
 				s.logger.Print(msg)
-				os.Remove(s.cleanSnapshotPath)
+				fsutil.Remove(s.cleanSnapshotPath)
 				s.logger.Fatal("removed clean snapshot marker file. Aborting now, but restarting is safe and can be attempted")
 			}
 
@@ -768,14 +768,14 @@ func (s *Store) Open() (retErr error) {
 		}
 
 		// Recovering a node invalidates any existing SQLite file.
-		if err := fsutil.RemoveFile(s.cleanSnapshotPath); err != nil {
+		if err := fsutil.Remove(s.cleanSnapshotPath); err != nil {
 			return fmt.Errorf("failed to remove clean snapshot file during RecoverNode: %w", err)
 		}
 		if err = RecoverNode(s.raftDir, s.dbConf, s.logger, s.raftLog,
 			s.boltStore, s.snapshotStore, s.raftTn, config); err != nil {
 			return fmt.Errorf("failed to recover node: %s", err.Error())
 		}
-		if err := os.Rename(s.peersPath, s.peersInfoPath); err != nil {
+		if err := fsutil.Rename(s.peersPath, s.peersInfoPath); err != nil {
 			return fmt.Errorf("failed to move %s after recovery: %s", s.peersPath, err.Error())
 		}
 		// Recovering a node creates a new snapshot. We need to use it on startup.
@@ -809,7 +809,7 @@ func (s *Store) Open() (retErr error) {
 	// were created in the Raft directory, not cleaned up, and then the node was restarted with an
 	// explicit SQLite path set. The only way a Staging Directory should be present is if a snapshot
 	// operation was in progress and the node crashed.
-	if err := os.RemoveAll(s.walStagingDir); err != nil {
+	if err := fsutil.RemoveAll(s.walStagingDir); err != nil {
 		return fmt.Errorf("failed to remove pre-existing WAL staging directory: %s", err.Error())
 	}
 	for _, pattern := range []string{
@@ -822,7 +822,7 @@ func (s *Store) Open() (retErr error) {
 				return fmt.Errorf("failed to locate temporary files for pattern %s: %s", pattern, err.Error())
 			}
 			for _, f := range files {
-				if err := os.Remove(f); err != nil {
+				if err := fsutil.Remove(f); err != nil {
 					return fmt.Errorf("failed to remove temporary file %s: %s", f, err.Error())
 				}
 			}
@@ -1799,7 +1799,7 @@ func (s *Store) Backup(ctx context.Context, br *proto.BackupRequest, dst io.Writ
 			if err != nil {
 				return err
 			}
-			defer os.Remove(srcFD.Name())
+			defer fsutil.Remove(srcFD.Name())
 			defer srcFD.Close()
 			if err := s.db.Backup(srcFD.Name(), br.Vacuum); err != nil {
 				return err
@@ -1876,7 +1876,7 @@ func (s *Store) Backup(ctx context.Context, br *proto.BackupRequest, dst io.Writ
 		if err != nil {
 			return err
 		}
-		defer os.Remove(tmpFD.Name())
+		defer fsutil.Remove(tmpFD.Name())
 		defer tmpFD.Close()
 
 		// Copy the current database to the temporary file and convert to DELETE mode
@@ -1994,7 +1994,7 @@ func (s *Store) ReadFrom(r io.Reader) (int64, error) {
 	if err != nil {
 		return 0, err
 	}
-	defer os.Remove(f.Name())
+	defer fsutil.Remove(f.Name())
 	defer f.Close()
 
 	cw := progress.NewCountingWriter(f)
@@ -2819,7 +2819,7 @@ func (s *Store) fsmRestore(rc io.ReadCloser) (retErr error) {
 	}
 	tmpPath := tmpFile.Name()
 	tmpFile.Close()
-	defer os.Remove(tmpPath)
+	defer fsutil.Remove(tmpPath)
 
 	if _, err := snapshot.Restore(rc, tmpPath); err != nil {
 		rc.Close()
@@ -2845,7 +2845,7 @@ func (s *Store) fsmRestore(rc io.ReadCloser) (retErr error) {
 
 	// Any existing SQLite file is about to be invalid, so mark that we can't
 	// fast-restart with it.
-	if err := fsutil.RemoveFile(s.cleanSnapshotPath); err != nil {
+	if err := fsutil.Remove(s.cleanSnapshotPath); err != nil {
 		return fmt.Errorf("failed to remove clean snapshot file: %w", err)
 	}
 
@@ -2895,7 +2895,7 @@ func (s *Store) ForceSnapshotRestore() error {
 		return ErrOpen
 	}
 
-	err := os.Remove(s.cleanSnapshotPath)
+	err := fsutil.Remove(s.cleanSnapshotPath)
 	if err != nil && !os.IsNotExist(err) {
 		return err
 	}
@@ -3085,7 +3085,7 @@ func (s *Store) selfLeaderChange(leader bool) {
 	if s.restorePath != "" {
 		defer func() {
 			// Whatever happens, this is a one-shot attempt to perform a restore
-			err := os.Remove(s.restorePath)
+			err := fsutil.Remove(s.restorePath)
 			if err != nil {
 				s.logger.Printf("failed to remove restore path after restore %s: %s",
 					s.restorePath, err.Error())
@@ -3115,7 +3115,7 @@ func (s *Store) selfLeaderChange(leader bool) {
 // that file corresponds to.
 func (s *Store) createSnapshotFingerprint(index, term uint64) error {
 	tmpFP := s.cleanSnapshotPath + ".tmp"
-	defer os.Remove(tmpFP)
+	defer fsutil.Remove(tmpFP)
 	mt, err := s.db.DBLastModified()
 	if err != nil {
 		return fmt.Errorf("failed to get last modified time for snapshot finalizer: %s", err)
@@ -3141,7 +3141,7 @@ func (s *Store) createSnapshotFingerprint(index, term uint64) error {
 	if err := fp.WriteToFile(tmpFP); err != nil {
 		return fmt.Errorf("failed to write snapshot fingerprint to temp file: %s", err)
 	}
-	return os.Rename(tmpFP, s.cleanSnapshotPath)
+	return fsutil.Rename(tmpFP, s.cleanSnapshotPath)
 }
 
 func (s *Store) installRestore() error {

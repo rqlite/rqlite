@@ -9,6 +9,7 @@ import (
 
 	"github.com/rqlite/rqlite/v10/command/proto"
 	"github.com/rqlite/rqlite/v10/db"
+	"github.com/rqlite/rqlite/v10/internal/fsutil"
 	"github.com/rqlite/rqlite/v10/internal/rarchive"
 	"github.com/rqlite/rqlite/v10/snapshot"
 )
@@ -67,7 +68,7 @@ COMMIT;
 	if err != nil {
 		t.Fatalf("Backup Failed: unable to create temp file, %s", err.Error())
 	}
-	defer os.Remove(vf.Name())
+	defer fsutil.Remove(vf.Name())
 	defer vf.Close()
 	if err := s.Backup(context.Background(), backupRequestBinary(true, true, false), vf); err != nil {
 		t.Fatalf("Backup failed %s", err.Error())
@@ -80,7 +81,7 @@ COMMIT;
 	if err != nil {
 		t.Fatalf("Backup Failed: unable to create temp file, %s", err.Error())
 	}
-	defer os.Remove(gzf.Name())
+	defer fsutil.Remove(gzf.Name())
 	defer gzf.Close()
 	if err := s.Backup(context.Background(), backupRequestBinary(true, true, true), gzf); err != nil {
 		t.Fatalf("Compressed backup failed %s", err.Error())
@@ -91,7 +92,7 @@ COMMIT;
 	if err != nil {
 		t.Fatalf("Backup Failed: unable to create temp file, %s", err.Error())
 	}
-	defer os.Remove(guzf)
+	defer fsutil.Remove(guzf)
 	checkDB(guzf)
 }
 

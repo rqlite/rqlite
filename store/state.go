@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"log"
 	"net"
-	"os"
 	"path/filepath"
 	"strings"
 	"time"
@@ -165,7 +164,7 @@ func RecoverNode(dataDir string, dbConf *DBConfig, logger *log.Logger, logs raft
 
 	// Get a path to a temporary file to use for a temporary database.
 	tmpDBPath := filepath.Join(dataDir, "recovery.db")
-	defer os.Remove(tmpDBPath)
+	defer fsutil.Remove(tmpDBPath)
 
 	// Attempt to restore any latest snapshot.
 	var (

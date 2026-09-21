@@ -4,6 +4,8 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+
+	"github.com/rqlite/rqlite/v10/internal/fsutil"
 )
 
 // MockInspector records which Done method LastOpDone dispatched to.
@@ -160,7 +162,7 @@ func Test_Checker_RenameDone(t *testing.T) {
 		t.Fatalf("expected not done with src present, got done=%v err=%v", done, err)
 	}
 	// src gone, dst present -> done.
-	if err := os.Rename(src, dst); err != nil {
+	if err := fsutil.Rename(src, dst); err != nil {
 		t.Fatal(err)
 	}
 	if done, err := c.RenameDone(src, dst); err != nil || !done {
@@ -198,7 +200,7 @@ func Test_Checker_CheckpointDone(t *testing.T) {
 		t.Fatalf("expected not done with WAL present, got done=%v err=%v", done, err)
 	}
 	// WAL consumed, no leftover -wal -> done.
-	if err := os.Remove(wal); err != nil {
+	if err := fsutil.Remove(wal); err != nil {
 		t.Fatal(err)
 	}
 	if done, err := c.CheckpointDone(dbPath, []string{wal}); err != nil || !done {

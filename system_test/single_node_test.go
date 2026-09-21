@@ -1288,7 +1288,7 @@ func Test_SingleNodeUpgrades_NoSnapshots(t *testing.T) {
 		// Deprovision of a node deletes the node's dir, so make a copy first.
 		srcdir := filepath.Join("testdata", dir)
 		destdir := mustTempDir("")
-		if err := os.Remove(destdir); err != nil {
+		if err := fsutil.Remove(destdir); err != nil {
 			t.Fatalf("failed to remove dest dir: %s", err)
 		}
 		if err := fsutil.CopyDir(srcdir, destdir); err != nil {
@@ -1337,7 +1337,7 @@ func Test_SingleNodeUpgrades_Snapshots(t *testing.T) {
 		// Deprovision of a node deletes the node's dir, so make a copy first.
 		srcdir := filepath.Join("testdata", dir)
 		destdir := mustTempDir("")
-		if err := os.Remove(destdir); err != nil {
+		if err := fsutil.Remove(destdir); err != nil {
 			t.Fatalf("failed to remove dest dir: %s", err)
 		}
 		if err := fsutil.CopyDir(srcdir, destdir); err != nil {
@@ -1389,7 +1389,7 @@ func Test_SingleNodeBackup_Binary(t *testing.T) {
 	}
 
 	backup := mustTempFile()
-	defer os.Remove(backup)
+	defer fsutil.Remove(backup)
 	if err := node.Backup(backup, false, ""); err != nil {
 		t.Fatalf(`backup failed: %s`, err.Error())
 	}
@@ -1416,7 +1416,7 @@ func Test_SingleNodeBackup_Binary(t *testing.T) {
 
 	// decompress backup and check it.
 	decompressedBackup := mustTempFile()
-	defer os.Remove(decompressedBackup)
+	defer fsutil.Remove(decompressedBackup)
 
 	f, err := os.Open(backup)
 	if err != nil {
@@ -1464,7 +1464,7 @@ func Test_SingleNodeBackup_SQL(t *testing.T) {
 	}
 
 	backup := mustTempFile()
-	defer os.Remove(backup)
+	defer fsutil.Remove(backup)
 	if err := node.Backup(backup, false, "sql"); err != nil {
 		t.Fatalf(`backup failed: %s`, err.Error())
 	}

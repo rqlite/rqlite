@@ -12,6 +12,7 @@ import (
 
 	cdcjson "github.com/rqlite/rqlite/v10/cdc/json"
 	"github.com/rqlite/rqlite/v10/command/proto"
+	"github.com/rqlite/rqlite/v10/internal/fsutil"
 	"github.com/rqlite/rqlite/v10/internal/rarchive/flate"
 	"github.com/rqlite/rqlite/v10/internal/rsync"
 	"github.com/rqlite/rqlite/v10/queue"
@@ -218,7 +219,7 @@ func NewService(nodeID, dir string, clstr Cluster, cfg *Config) (*Service, error
 	}
 	cdcDB90Path := filepath.Join(dir, cdcDB)
 	if fileExists(cdcDB90Path) {
-		if err := os.Rename(cdcDB90Path, filepath.Join(srv.dir, cdcDB)); err != nil {
+		if err := fsutil.Rename(cdcDB90Path, filepath.Join(srv.dir, cdcDB)); err != nil {
 			return nil, fmt.Errorf("failed to move existing FIFO DB to CDC service directory: %w", err)
 		}
 	}

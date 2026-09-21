@@ -1706,7 +1706,7 @@ func (db *DB) Serialize() ([]byte, error) {
 		if err != nil {
 			return nil, err
 		}
-		defer os.Remove(tmpFile.Name())
+		defer fsutil.Remove(tmpFile.Name())
 		defer tmpFile.Close()
 
 		if err := db.Backup(tmpFile.Name(), false); err != nil {

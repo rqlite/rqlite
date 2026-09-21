@@ -127,8 +127,13 @@ func DirIsEmpty(dir string) (bool, error) {
 	return len(files) == 0, nil
 }
 
-// RemoveFile removes the file at the given path if it exists.
-func RemoveFile(path string) error {
+// Rename renames (moves) oldpath to newpath.
+func Rename(oldpath, newpath string) error {
+	return os.Rename(oldpath, newpath)
+}
+
+// Remove removes the file at the given path if it exists.
+func Remove(path string) error {
 	err := os.Remove(path)
 	if err != nil && os.IsNotExist(err) {
 		return nil
@@ -136,23 +141,28 @@ func RemoveFile(path string) error {
 	return err
 }
 
+// RemoveAll removes path and any children it contains.
+func RemoveAll(path string) error {
+	return os.RemoveAll(path)
+}
+
 // RenameWithRetry renames src to dst. On Windows, if another process has
 // the path open, the rename is retried until timeout elapses. Returns the
 // number of times the rename was retried.
 func RenameWithRetry(src, dst string, timeout, retryInterval time.Duration) (int, error) {
-	return retryInUse(func() error { return os.Rename(src, dst) }, timeout, retryInterval)
+	return retryInUse(func() error { return Rename(src, dst) }, timeout, retryInterval)
 }
 
 // RemoveWithRetry removes the named file or empty directory. On Windows, if
 // another process has the path open, the removal is retried until timeout elapses.
 // Returns the number of times the rename was retried.
 func RemoveWithRetry(path string, timeout, retryInterval time.Duration) (int, error) {
-	return retryInUse(func() error { return os.Remove(path) }, timeout, retryInterval)
+	return retryInUse(func() error { return Remove(path) }, timeout, retryInterval)
 }
 
 // RemoveDirSync removes the directory and syncs the parent directory.
 func RemoveDirSync(dir string) error {
-	if err := os.RemoveAll(dir); err != nil {
+	if err := RemoveAll(dir); err != nil {
 		return err
 	}
 	return SyncDirParentMaybe(dir)
