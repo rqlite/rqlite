@@ -17,10 +17,10 @@ const (
 	errorSharingViolation syscall.Errno = 32
 
 	removeInterval = 10 * time.Millisecond
-	removeTimeout  = 2 * time.Second
+	removeTimeout  = 5 * time.Second
 
 	renameInterval = 10 * time.Millisecond
-	renameTimeout  = 2 * time.Second
+	renameTimeout  = 5 * time.Second
 )
 
 // PathExists returns true if the given path exists.
