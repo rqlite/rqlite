@@ -2,6 +2,7 @@ package snapshot
 
 import (
 	"fmt"
+	"math"
 	"strconv"
 	"strings"
 	"time"
@@ -21,11 +22,35 @@ func NewSnapshotNamer(nowFn func() time.Time) *SnapshotNamer {
 	return &SnapshotNamer{nowFn}
 }
 
-// MakeName returns a name for the Snapshot, for the given the term, index, and
-// and generation. If gen is less than 1, then no generation is present in the name.
-func (sn *SnapshotNamer) MakeName(term, index uint64, gen int64) string {
+// MakeName returns a name for the Snapshot, for the given snapshot set, term,
+// index, and generation. If gen is less than 1, then no generation is present
+// in the name.
+//
+// The name is generated so that it sorts as newer than every snapshot in the
+// set sharing the given term and index: the millisecond field is the larger of
+// the current wall-clock time and one more than the millisecond field of the
+// newest such snapshot. Ordering therefore stays correct even if the system
+// clock moved backwards since those snapshots were created.
+func (sn *SnapshotNamer) MakeName(set SnapshotSet, term, index uint64, gen int64) string {
+	minMsec := int64(math.MinInt64)
+	if newest, ok := set.WithTermIndex(term, index).Newest(); ok {
+		// A snapshot whose ID has no parsable timestamp cannot take part in
+		// the floor, so it is simply ignored.
+		if _, _, msec, _, err := ParseSnapshotName(newest.id); err == nil {
+			minMsec = msec + 1
+		}
+	}
+	return sn.makeName(term, index, gen, minMsec)
+}
+
+// makeName returns a name for the Snapshot, as MakeName does, but the
+// millisecond field is raised to minMsec if the current time is lower.
+func (sn *SnapshotNamer) makeName(term, index uint64, gen int64, minMsec int64) string {
 	now := sn.nowFn()
 	msec := now.UnixNano() / int64(time.Millisecond)
+	if msec < minMsec {
+		msec = minMsec
+	}
 	if gen < 1 {
 		return fmt.Sprintf("%d-%d-%d", term, index, msec)
 	}
