@@ -233,7 +233,7 @@ func (s *Sink) Close() (retErr error) {
 		if err := sd.MoveWALFilesTo(s.snapTmpDirPath); err != nil {
 			return fmt.Errorf("failed to move WAL files into snapshot directory: %v", err)
 		}
-		if err := fsutil.Remove(movedDir); err != nil {
+		if err := os.Remove(movedDir); err != nil {
 			return fmt.Errorf("failed to remove temporary WAL directory: %v", err)
 		}
 	} else {
