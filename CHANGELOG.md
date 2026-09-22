@@ -7,7 +7,7 @@
 - [PR #2811](https://github.com/rqlite/rqlite/pull/2811): Upgrade dependencies.
 - [PR #2811](https://github.com/rqlite/rqlite/pull/2811): Add Rename and Remove with retries.
 - [PR #2816](https://github.com/rqlite/rqlite/pull/2816): Replace standard library with fsutil.
-- [PR #2817](https://github.com/rqlite/rqlite/pull/2817): Rename and Remove are retried. Fixes issue [#2813](https://github.com/rqlite/rqlite/issues/2813). Thanks@orrery-dev
+- [PR #2817](https://github.com/rqlite/rqlite/pull/2817): File _Rename_ and _Remove_ are retried, addressing possible errors on Windows. Fixes issue [#2813](https://github.com/rqlite/rqlite/issues/2813). Thanks@orrery-dev
 - [PR #2812](https://github.com/rqlite/rqlite/pull/2812): Keep snapshot ordering correct regardless of clock. Fixes issue [#2809](https://github.com/rqlite/rqlite/issues/2809). Thanks @goingforstudying-ctrl, @rohanpadhy
 - [PR #2819](https://github.com/rqlite/rqlite/pull/2819): Remove snapshot name generation ID, backing out [PR #2807](https://github.com/rqlite/rqlite/pull/2807) and [PR #2808](https://github.com/rqlite/rqlite/pull/2808).
 
