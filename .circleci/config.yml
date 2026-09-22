@@ -51,6 +51,7 @@ jobs:
       - run: go version
       - run: test -z "$(gofmt -l . | tee /dev/stderr)"
       - run: go vet ./...
+      - run: go run ./tools/check-fsutil
     resource_class: large
 
   test_odd:
