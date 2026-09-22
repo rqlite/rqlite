@@ -5,6 +5,8 @@
 - [PR #2808](https://github.com/rqlite/rqlite/pull/2808): Bump generation ID if snapshot IDs collide. Fixes issue [#2746](https://github.com/rqlite/rqlite/issues/2746). Thanks @rohanpadhye
 - [PR #2810](https://github.com/rqlite/rqlite/pull/2810): Snapshots can be filtered by term and index.
 - [PR #2811](https://github.com/rqlite/rqlite/pull/2811): Upgrade dependencies.
+- [PR #2811](https://github.com/rqlite/rqlite/pull/2811): Add Rename and Remove with retries.
+- [PR #2816](https://github.com/rqlite/rqlite/pull/2816): Replace standard library with fsutil.
 
 ## v10.3.5 (September 18th)
 This release moves the build process for binaries to Go 1.27.
