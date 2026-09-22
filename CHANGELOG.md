@@ -1,4 +1,4 @@
-## v10.3.6 (unreleased)
+## v10.3.6 (September 22nd 2026)
 ### Implementation changes and bug fixes
 - [PR #2768](https://github.com/rqlite/rqlite/pull/2768), [PR #2805](https://github.com/rqlite/rqlite/pull/2805), [PR #2806](https://github.com/rqlite/rqlite/pull/2806): Add query logging to database layer. Thanks @karangupta982
 - [PR #2807](https://github.com/rqlite/rqlite/pull/2807): Snapshot IDs now contain (optional) generation.
@@ -11,7 +11,7 @@
 - [PR #2812](https://github.com/rqlite/rqlite/pull/2812): Keep snapshot ordering correct regardless of clock. Fixes issue [#2809](https://github.com/rqlite/rqlite/issues/2809). Thanks @goingforstudying-ctrl, @rohanpadhy
 - [PR #2819](https://github.com/rqlite/rqlite/pull/2819): Remove snapshot name generation ID, backing out [PR #2807](https://github.com/rqlite/rqlite/pull/2807) and [PR #2808](https://github.com/rqlite/rqlite/pull/2808).
 
-## v10.3.5 (September 18th)
+## v10.3.5 (September 18th 2026)
 This release moves the build process for binaries to Go 1.27.
 
 ### Implementation changes and bug fixes
