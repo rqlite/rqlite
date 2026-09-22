@@ -1054,11 +1054,10 @@ func Test_Store_Reap_Full_FullWALs(t *testing.T) {
 	}
 }
 
-// Test_Store_Reap_Full_FullWALs_NameCollision_NoGen tests reaping when the
+// Test_Store_Reap_Full_FullWALs_NameCollision tests reaping when the
 // clock reads the same millisecond recorded in the newest full snapshot's ID
-// and the snapshot IDs don't use generations, as with older releases. The
-// consolidated snapshot must still sort after the snapshot it replaces.
-func Test_Store_Reap_Full_FullWALs_NameCollision_NoGen(t *testing.T) {
+// so the consolidated snapshot must sort after the snapshot it replaces.
+func Test_Store_Reap_Full_FullWALs_NameCollision(t *testing.T) {
 	dir := t.TempDir()
 	store, err := NewStore(dir)
 	if err != nil {
@@ -1083,50 +1082,12 @@ func Test_Store_Reap_Full_FullWALs_NameCollision_NoGen(t *testing.T) {
 		t.Fatalf("expected %d snapshot in list, got %d", exp, got)
 	}
 
-	term, index, msec, gen, err := ParseSnapshotName(snaps[0].ID)
+	term, index, msec, err := ParseSnapshotName(snaps[0].ID)
 	if err != nil {
 		t.Fatalf("failed to parse snapshot name: %s", err)
 	}
-	if term != 3 || index != 2000 || msec != 2222222222223 || gen != 1 {
-		t.Fatalf("incorrect snapshot ID, got %d, %d, %d, %d", term, index, msec, gen)
-	}
-}
-
-// Test_Store_Reap_Full_FullWALs_NameCollision_WithGen tests reaping when the
-// clock reads the same millisecond recorded in the newest full snapshot's ID
-// and generations are in use. The consolidated snapshot must still sort after
-// the snapshot it replaces.
-func Test_Store_Reap_Full_FullWALs_NameCollision_WithGen(t *testing.T) {
-	dir := t.TempDir()
-	store, err := NewStore(dir)
-	if err != nil {
-		t.Fatalf("Failed to create new store: %v", err)
-	}
-	defer store.Close()
-
-	createSnapshotInStore(t, store, "2-1017-1704807719996-1", 1017, 2, 1, "testdata/db-and-wals/backup.db")
-	createSnapshotInStore(t, store, "3-2000-2222222222222-1", 2000, 3, 1,
-		"testdata/db-and-wals/full2.db", "testdata/db-and-wals/full2-wal-00")
-
-	// Now use a fixed clock reading the same millisecond recorded in the
-	// newest snapshot's ID. The consolidated snapshot must sort strictly
-	// after it, so the millisecond field is bumped past the existing one.
-	store.snapshotNamer = NewSnapshotNamer(fixedClock(time.UnixMilli(2222222222222)))
-	if _, _, err := store.Reap(); err != nil {
-		t.Fatalf("Failed to reap snapshots: %v", err)
-	}
-
-	snaps, err := store.ListAll()
-	if exp, got := 1, len(snaps); exp != got {
-		t.Fatalf("expected %d snapshot in list, got %d", exp, got)
-	}
-
-	term, index, msec, gen, err := ParseSnapshotName(snaps[0].ID)
-	if err != nil {
-		t.Fatalf("failed to parse snapshot name: %s", err)
-	}
-	if term != 3 || index != 2000 || msec != 2222222222223 || gen != 1 {
-		t.Fatalf("incorrect snapshot ID, got %d, %d, %d, %d", term, index, msec, gen)
+	if term != 3 || index != 2000 || msec != 2222222222223 {
+		t.Fatalf("incorrect snapshot ID, got %d, %d, %d", term, index, msec)
 	}
 }
 
@@ -1209,12 +1170,12 @@ func Test_Store_Reap_ClockBackward_SameTermIndex(t *testing.T) {
 	if exp, got := 1, len(snaps); exp != got {
 		t.Fatalf("expected %d snapshot in list, got %d", exp, got)
 	}
-	term, index, msec, gen, err := ParseSnapshotName(snaps[0].ID)
+	term, index, msec, err := ParseSnapshotName(snaps[0].ID)
 	if err != nil {
 		t.Fatalf("failed to parse snapshot name: %s", err)
 	}
-	if term != 3 || index != 2000 || msec != 2222222222223 || gen != 1 {
-		t.Fatalf("incorrect snapshot ID, got %d, %d, %d, %d", term, index, msec, gen)
+	if term != 3 || index != 2000 || msec != 2222222222223 {
+		t.Fatalf("incorrect snapshot ID, got %d, %d, %d", term, index, msec)
 	}
 }
 
@@ -1488,7 +1449,7 @@ func Test_Store_Check_ResumesReapPlan(t *testing.T) {
 	p.NReaped = 1
 
 	newMeta := copyRaftMeta(snaps[0])
-	newID := NewSnapshotNamer(nil).MakeName(SnapshotSet{}, snaps[0].Term, snaps[0].Index, 0)
+	newID := NewSnapshotNamer(nil).MakeName(SnapshotSet{}, snaps[0].Term, snaps[0].Index)
 	newMeta.ID = newID
 	metaJSON, err := json.Marshal(newMeta)
 	if err != nil {
@@ -1582,7 +1543,7 @@ func Test_Store_Check_CompletedReapPlanLeftover(t *testing.T) {
 	p.AddRemoveAll(incPath)
 	p.NReaped = 1
 	newMeta := copyRaftMeta(snaps[0])
-	newID := NewSnapshotNamer(nil).MakeName(SnapshotSet{}, snaps[0].Term, snaps[0].Index, 0)
+	newID := NewSnapshotNamer(nil).MakeName(SnapshotSet{}, snaps[0].Term, snaps[0].Index)
 	newMeta.ID = newID
 	metaJSON, err := json.Marshal(newMeta)
 	if err != nil {

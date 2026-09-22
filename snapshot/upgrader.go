@@ -111,7 +111,7 @@ func Upgrade7To8(old, new string, logger *log.Logger) (retErr error) {
 		}
 		defer newSqliteFd.Close()
 
-		// Copy the old state file into the new generation directory.
+		// Copy the old state file into the new snapshot directory.
 		oldStatePath := filepath.Join(old, oldMeta.ID, v7StateFile)
 		stateFd, err := os.Open(oldStatePath)
 		if err != nil {

@@ -198,6 +198,36 @@ func Test_Snapshot_Less(t *testing.T) {
 		expected bool
 	}{
 		{
+			name:     "less by numeric timestamp",
+			s1Term:   1,
+			s1Index:  10,
+			s1ID:     "1-10-9",
+			s2Term:   1,
+			s2Index:  10,
+			s2ID:     "1-10-10",
+			expected: true,
+		},
+		{
+			name:     "greater by numeric timestamp",
+			s1Term:   1,
+			s1Index:  10,
+			s1ID:     "1-10-10",
+			s2Term:   1,
+			s2Index:  10,
+			s2ID:     "1-10-9",
+			expected: false,
+		},
+		{
+			name:     "equal timestamps",
+			s1Term:   1,
+			s1Index:  10,
+			s1ID:     "1-10-100",
+			s2Term:   1,
+			s2Index:  10,
+			s2ID:     "1-10-100",
+			expected: false,
+		},
+		{
 			name:     "less by term",
 			s1Term:   1,
 			s1Index:  10,

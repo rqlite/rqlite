@@ -301,7 +301,7 @@ func (s *Store) Create(version raft.SnapshotVersion, index, term uint64, configu
 	}
 	sink := NewSink(s.dir, &raft.SnapshotMeta{
 		Version:            version,
-		ID:                 s.snapshotNamer.MakeName(snapSet, term, index, 0),
+		ID:                 s.snapshotNamer.MakeName(snapSet, term, index),
 		Index:              index,
 		Term:               term,
 		Configuration:      configuration,
@@ -654,8 +654,8 @@ func (s *Store) reapInternal() (int, int, error) {
 		}
 
 		// 5. Write new metadata into the full snapshot dir, overwriting the existing
-		// metadata. Use a generation in the snapshot ID to protect against no changes
-		// in the millisecond timestamp.
+		// metadata. The new ID's timestamp sorts after every existing snapshot
+		// with the same term and index, even if the clock has not advanced.
 		var newest *Snapshot
 		if newerSet.Len() > 0 {
 			newest, _ = newerSet.Newest()
@@ -663,18 +663,7 @@ func (s *Store) reapInternal() (int, int, error) {
 			newest = full
 		}
 
-		gen := int64(1)
-		newID := s.snapshotNamer.MakeName(snapSet, newest.raftMeta.Term, newest.raftMeta.Index, gen)
-		for {
-			finalDir := filepath.Join(s.dir, newID)
-			if !fsutil.DirExists(finalDir) {
-				// No ID collision, use it.
-				break
-			}
-			gen++
-			newID = s.snapshotNamer.MakeName(snapSet, newest.raftMeta.Term, newest.raftMeta.Index, gen)
-		}
-
+		newID := s.snapshotNamer.MakeName(snapSet, newest.raftMeta.Term, newest.raftMeta.Index)
 		newMeta := copyRaftMeta(newest.raftMeta)
 		newMeta.ID = newID
 		metaJSON, err := json.Marshal(newMeta)

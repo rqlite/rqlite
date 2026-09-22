@@ -25,7 +25,7 @@ import (
 // holding a snapshot at an arbitrary index without driving a node to that index
 // first. Clone returns an error if a snapshot with the resulting ID already
 // exists, so it never overwrites one.
-func Clone(dir, id string, index, term uint64, gen int64) error {
+func Clone(dir, id string, index, term uint64) error {
 	srcPath := filepath.Join(dir, id)
 	if !fsutil.DirExists(srcPath) {
 		return fmt.Errorf("snapshot %q not found in %q", id, dir)
@@ -36,7 +36,7 @@ func Clone(dir, id string, index, term uint64, gen int64) error {
 	}
 
 	snapshotNamer := NewSnapshotNamer(nil)
-	newID := snapshotNamer.MakeName(SnapshotSet{}, term, index, gen)
+	newID := snapshotNamer.MakeName(SnapshotSet{}, term, index)
 	dstPath := filepath.Join(dir, newID)
 	if fsutil.PathExists(dstPath) {
 		return fmt.Errorf("snapshot %q already exists in %q", newID, dir)
