@@ -301,7 +301,7 @@ func (s *Store) Create(version raft.SnapshotVersion, index, term uint64, configu
 	}
 	sink := NewSink(s.dir, &raft.SnapshotMeta{
 		Version:            version,
-		ID:                 s.snapshotNamer.makeNameForSet(snapSet, term, index, 0),
+		ID:                 s.snapshotNamer.MakeName(snapSet, term, index, 0),
 		Index:              index,
 		Term:               term,
 		Configuration:      configuration,
@@ -664,7 +664,7 @@ func (s *Store) reapInternal() (int, int, error) {
 		}
 
 		gen := int64(1)
-		newID := s.snapshotNamer.makeNameForSet(snapSet, newest.raftMeta.Term, newest.raftMeta.Index, gen)
+		newID := s.snapshotNamer.MakeName(snapSet, newest.raftMeta.Term, newest.raftMeta.Index, gen)
 		for {
 			finalDir := filepath.Join(s.dir, newID)
 			if !fsutil.DirExists(finalDir) {
@@ -672,7 +672,7 @@ func (s *Store) reapInternal() (int, int, error) {
 				break
 			}
 			gen++
-			newID = s.snapshotNamer.makeNameForSet(snapSet, newest.raftMeta.Term, newest.raftMeta.Index, gen)
+			newID = s.snapshotNamer.MakeName(snapSet, newest.raftMeta.Term, newest.raftMeta.Index, gen)
 		}
 
 		newMeta := copyRaftMeta(newest.raftMeta)

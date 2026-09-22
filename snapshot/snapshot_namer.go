@@ -22,10 +22,25 @@ func NewSnapshotNamer(nowFn func() time.Time) *SnapshotNamer {
 	return &SnapshotNamer{nowFn}
 }
 
-// MakeName returns a name for the Snapshot, for the given the term, index, and
-// and generation. If gen is less than 1, then no generation is present in the name.
-func (sn *SnapshotNamer) MakeName(term, index uint64, gen int64) string {
-	return sn.makeName(term, index, gen, math.MinInt64)
+// MakeName returns a name for the Snapshot, for the given snapshot set, term,
+// index, and generation. If gen is less than 1, then no generation is present
+// in the name.
+//
+// The name is generated so that it sorts as newer than every snapshot in the
+// set sharing the given term and index: the millisecond field is the larger of
+// the current wall-clock time and one more than the millisecond field of the
+// newest such snapshot. Ordering therefore stays correct even if the system
+// clock moved backwards since those snapshots were created.
+func (sn *SnapshotNamer) MakeName(set SnapshotSet, term, index uint64, gen int64) string {
+	minMsec := int64(math.MinInt64)
+	if newest, ok := set.WithTermIndex(term, index).Newest(); ok {
+		// A snapshot whose ID has no parsable timestamp cannot take part in
+		// the floor, so it is simply ignored.
+		if _, _, msec, _, err := ParseSnapshotName(newest.id); err == nil {
+			minMsec = msec + 1
+		}
+	}
+	return sn.makeName(term, index, gen, minMsec)
 }
 
 // makeName returns a name for the Snapshot, as MakeName does, but the
@@ -40,24 +55,6 @@ func (sn *SnapshotNamer) makeName(term, index uint64, gen int64, minMsec int64) 
 		return fmt.Sprintf("%d-%d-%d", term, index, msec)
 	}
 	return fmt.Sprintf("%d-%d-%d-%d", term, index, msec, gen)
-}
-
-// makeNameForSet returns a name for the Snapshot, as makeName does, but with
-// the minimum millisecond field derived from the given SnapshotSet: one more
-// than the millisecond field of the newest snapshot in the set sharing the
-// given term and index, if any. The returned name therefore sorts as newer
-// than every snapshot in the set with that term and index, even if the system
-// clock moved backwards since those snapshots were created.
-func (sn *SnapshotNamer) makeNameForSet(set SnapshotSet, term, index uint64, gen int64) string {
-	minMsec := int64(math.MinInt64)
-	if newest, ok := set.WithTermIndex(term, index).Newest(); ok {
-		// A snapshot whose ID has no parsable timestamp cannot take part in
-		// the floor, so it is simply ignored.
-		if _, _, msec, _, err := ParseSnapshotName(newest.id); err == nil {
-			minMsec = msec + 1
-		}
-	}
-	return sn.makeName(term, index, gen, minMsec)
 }
 
 // ParseSnapshotName splits a name into its three or four fields. It requires a
