@@ -407,6 +407,8 @@ type Store struct {
 	bootstrapped    bool
 	notifyingNodes  map[string]*Server
 
+	kvMu sync.Mutex
+
 	ShutdownOnRemove         bool
 	NoSnapshotOnClose        bool
 	SnapshotThreshold        uint64
