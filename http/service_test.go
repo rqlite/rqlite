@@ -595,6 +595,39 @@ func Test_BackupVacuumOK(t *testing.T) {
 	}
 }
 
+// Test_BackupProxyFail tests that the HTTP server handles a failed streaming
+// backup correctly.
+func Test_BackupProxyFail(t *testing.T) {
+	m := &MockStore{}
+	c := &mockClusterService{}
+	s := New("127.0.0.1:0", m, c, proxy.New(m, c), nil)
+	if err := s.Start(); err != nil {
+		t.Fatalf("failed to start service")
+	}
+	defer s.Close()
+
+	m.backupFn = func(br *command.BackupRequest, dst io.Writer) error {
+		if _, err := dst.Write([]byte{1, 2, 3}); err != nil {
+			t.Fatalf("failed to write dummy backup data: %s", err)
+		}
+		return fmt.Errorf("some random error from backup streaming")
+	}
+
+	client := &http.Client{}
+	host := fmt.Sprintf("http://%s", s.Addr().String())
+	resp, err := client.Get(host + "/db/backup")
+	if err != nil {
+		t.Fatalf("backup request failed: %s", err)
+	}
+	_, err = io.Copy(io.Discard, resp.Body)
+	if err != nil {
+		t.Fatalf("failed to discard body: %s", err)
+	}
+	if got := resp.Trailer.Get(StreamErrorHTTPHeader); got == "" {
+		t.Fatalf("expected stream error trailer")
+	}
+}
+
 func Test_SnapshotOK(t *testing.T) {
 	m := &MockStore{}
 	c := &mockClusterService{}
