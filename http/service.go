@@ -205,6 +205,13 @@ const (
 	// it wasn't served by this node.
 	ServedByHTTPHeader = "X-RQLITE-SERVED-BY"
 
+	// StreamErrorHTTPHeader is the header used to report any error
+	// which occured during streamed writes.
+	StreamErrorHTTPHeader = "X-STREAM-ERROR"
+
+	// TrailerHeader is the HTTP header for sending information after the response.
+	TrailerHeader = "Trailer"
+
 	// AllowOriginHeader is the HTTP header for allowing CORS compliant access from certain origins
 	AllowOriginHeader = "Access-Control-Allow-Origin"
 
@@ -679,29 +686,35 @@ func (s *Service) handleBackup(w http.ResponseWriter, r *http.Request, qp QueryP
 	preWFn := func() error {
 		addr := s.proxy.GetAPIAddr()
 		w.Header().Set(ServedByHTTPHeader, addr)
+		w.Header().Set(TrailerHeader, StreamErrorHTTPHeader)
 		return nil
 	}
 
-	_, err := s.proxy.Backup(r.Context(), br, w, makeCredentials(r), qp.Timeout(defaultTimeout), qp.Redirect(), preWFn)
+	handleError := func(err error) {
+		s.logger.Printf("%s", err)
+		w.Header().Set(StreamErrorHTTPHeader, err.Error())
+	}
+
+	servedBy, err := s.proxy.Backup(r.Context(), br, w, makeCredentials(r), qp.Timeout(defaultTimeout), qp.Redirect(), preWFn)
 	if err != nil {
+		if servedBy == "" {
+			servedBy = "unknown"
+		}
 		if errors.Is(err, proxy.ErrNotLeader) {
 			s.DoRedirect(w, r, qp)
 			return
 		}
+
 		if errors.Is(err, proxy.ErrLeaderNotFound) {
 			stats.Add(numLeaderNotFound, 1)
-			http.Error(w, proxy.ErrLeaderNotFound.Error(), http.StatusServiceUnavailable)
-			return
+			handleError(fmt.Errorf("no leader available to handle Backup request"))
+		} else if errors.Is(err, proxy.ErrUnauthorized) {
+			handleError(fmt.Errorf("not authorized to fetch backup from remote node at %s", servedBy))
+		} else if errors.Is(err, store.ErrInvalidVacuum) {
+			handleError(fmt.Errorf("remote node at %s reported invalid Backup request", servedBy))
+		} else {
+			handleError(fmt.Errorf("failed to retrieve backup from remote node at %s: %s", servedBy, err))
 		}
-		if errors.Is(err, proxy.ErrUnauthorized) {
-			http.Error(w, "remote backup not authorized", http.StatusUnauthorized)
-			return
-		}
-		if err == store.ErrInvalidVacuum {
-			http.Error(w, err.Error(), http.StatusBadRequest)
-			return
-		}
-		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
 	s.lastBackup.Store(time.Now())
