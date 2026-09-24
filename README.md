@@ -42,6 +42,23 @@ curl -G 'localhost:4001/db/query?pretty' --data-urlencode 'q=SELECT * FROM foo'
 
 [Learn how to form a multi-node cluster in seconds.](https://rqlite.io/docs/clustering/) and dive into the [_Developer Guide_](https://www.rqlite.io/docs/api).
 
+## Install with Snap
+
+On supported Linux systems, install the rqlite snap with:
+
+```bash
+sudo snap install rqlite
+```
+
+The `rqlited` service is started automatically and stores its data in the
+snap's data directory. The `rqlite` and `rqbench` applications are also
+included:
+
+```bash
+rqlite.rqlite -H localhost
+rqlite.rqbench -h
+```
+
 ## Key features
 
 **Core functionality**
