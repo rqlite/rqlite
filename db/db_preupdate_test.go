@@ -461,7 +461,7 @@ func Test_Preupdate_Constraint(t *testing.T) {
 
 	// Insert a row with the same ID, should not trigger the hook.
 	r, err := db.ExecuteStringStmt("INSERT INTO foo(id, name) VALUES(5, 'fiona2')")
-	if err == nil && r[0].GetError() == "" {
+	if err == nil && r[0].GetError() == "" && r[0].GetE().GetError() == "" {
 		t.Fatalf("expected error, got nil")
 	}
 	if count.Load() != 1 {
@@ -470,7 +470,7 @@ func Test_Preupdate_Constraint(t *testing.T) {
 
 	// Ensure the hook is not triggered for a INSERT that violates a unique constraint.
 	r, err = db.ExecuteStringStmt("INSERT INTO foo(id, name) VALUES(6, 'fiona')")
-	if err == nil && r[0].GetError() == "" {
+	if err == nil && r[0].GetError() == "" && r[0].GetE().GetError() == "" {
 		t.Fatalf("expected error, got nil")
 	}
 	if count.Load() != 1 {
