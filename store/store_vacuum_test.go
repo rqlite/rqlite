@@ -70,8 +70,12 @@ COMMIT;
 	}
 	defer fsutil.Remove(vf.Name())
 	defer vf.Close()
-	if _, err := s.Backup(context.Background(), backupRequestBinary(true, true, false), vf); err != nil {
+	if n, err := s.Backup(context.Background(), backupRequestBinary(true, true, false), vf); err != nil {
 		t.Fatalf("Backup failed %s", err.Error())
+	} else if fi, err := vf.Stat(); err != nil {
+		t.Fatalf("failed to stat backup file: %s", err)
+	} else if int64(n) != fi.Size() {
+		t.Fatalf("backup byte count: got %d, want %d", n, fi.Size())
 	}
 	checkDB(vf.Name())
 
@@ -83,8 +87,12 @@ COMMIT;
 	}
 	defer fsutil.Remove(gzf.Name())
 	defer gzf.Close()
-	if _, err := s.Backup(context.Background(), backupRequestBinary(true, true, true), gzf); err != nil {
+	if n, err := s.Backup(context.Background(), backupRequestBinary(true, true, true), gzf); err != nil {
 		t.Fatalf("Compressed backup failed %s", err.Error())
+	} else if fi, err := gzf.Stat(); err != nil {
+		t.Fatalf("failed to stat backup file: %s", err)
+	} else if int64(n) != fi.Size() {
+		t.Fatalf("backup byte count: got %d, want %d", n, fi.Size())
 	}
 
 	// Gzip decompress file to a new temp file
