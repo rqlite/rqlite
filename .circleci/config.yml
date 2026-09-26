@@ -243,23 +243,14 @@ jobs:
   end_to_end_auto_state:
     docker:
       - image: << pipeline.parameters.primary_image >>
-      - image: quay.io/minio/aistor/minio:latest
-        name: minio
-        command: server /data
     environment:
         RQLITED_PATH: /home/circleci/go/bin/rqlited
-        MINIO_ENDPOINT: http://minio:9000
-        MINIO_ROOT_USER: minioadmin
-        MINIO_ROOT_PASSWORD: minioadmin
-        MINIO_BUCKET: minio-bucket
-        # All other required env vars for GCS and S3 are set via CircleCI project settings
+        # All required env vars for GCS and S3 are set via CircleCI project settings
     steps:
       - checkout
       - restore_and_save_cache
       # Build rqlite now, which will give time for minio to come up
       - run: go install ./...
-      - run: mc alias set myminio http://minio:9000 minioadmin minioadmin
-      - run: mc mb myminio/minio-bucket
       - run:
           command: python3 system_test/e2e/auto_state_file.py
       - run:
