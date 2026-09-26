@@ -77,7 +77,7 @@ type Store interface {
 	Query(ctx context.Context, qr *proto.QueryRequest) ([]*proto.QueryRows, proto.ConsistencyLevel, uint64, error)
 	Request(ctx context.Context, eqr *proto.ExecuteQueryRequest) ([]*proto.ExecuteQueryResponse, uint64, uint64, error)
 	Load(ctx context.Context, lr *proto.LoadRequest) error
-	Backup(ctx context.Context, br *proto.BackupRequest, dst io.Writer) error
+	Backup(ctx context.Context, br *proto.BackupRequest, dst io.Writer) (int, error)
 	Remove(ctx context.Context, rn *proto.RemoveNodeRequest) error
 	Stepdown(wait bool, id string) error
 	LeaderAddr() (string, error)
@@ -88,7 +88,7 @@ type Cluster interface {
 	Execute(ctx context.Context, er *proto.ExecuteRequest, nodeAddr string, creds *clstrPB.Credentials, timeout time.Duration, retries int) ([]*proto.ExecuteQueryResponse, uint64, error)
 	Query(ctx context.Context, qr *proto.QueryRequest, nodeAddr string, creds *clstrPB.Credentials, timeout time.Duration, retries int) ([]*proto.QueryRows, uint64, error)
 	Request(ctx context.Context, eqr *proto.ExecuteQueryRequest, nodeAddr string, creds *clstrPB.Credentials, timeout time.Duration, retries int) ([]*proto.ExecuteQueryResponse, uint64, uint64, error)
-	Backup(ctx context.Context, br *proto.BackupRequest, nodeAddr string, creds *clstrPB.Credentials, timeout time.Duration, w io.Writer) error
+	Backup(ctx context.Context, br *proto.BackupRequest, nodeAddr string, creds *clstrPB.Credentials, timeout time.Duration, w io.Writer) (int, error)
 	Load(ctx context.Context, lr *proto.LoadRequest, nodeAddr string, creds *clstrPB.Credentials, timeout time.Duration, retries int) error
 	RemoveNode(ctx context.Context, rn *proto.RemoveNodeRequest, nodeAddr string, creds *clstrPB.Credentials, timeout time.Duration) error
 	Stepdown(ctx context.Context, sr *proto.StepdownRequest, nodeAddr string, creds *clstrPB.Credentials, timeout time.Duration) error
@@ -215,7 +215,7 @@ func (p *Proxy) Backup(ctx context.Context, br *proto.BackupRequest, dst io.Writ
 		}
 	}
 
-	err := p.store.Backup(ctx, br, dst)
+	_, err := p.store.Backup(ctx, br, dst)
 	if errors.Is(err, store.ErrNotLeader) {
 		if noForward {
 			return "", ErrNotLeader
@@ -224,7 +224,7 @@ func (p *Proxy) Backup(ctx context.Context, br *proto.BackupRequest, dst io.Writ
 		if addrErr != nil {
 			return "", addrErr
 		}
-		err = p.cluster.Backup(ctx, br, addr, creds, timeout, dst)
+		_, err = p.cluster.Backup(ctx, br, addr, creds, timeout, dst)
 		if err != nil {
 			return "", wrapIfUnauthorized(err)
 		}

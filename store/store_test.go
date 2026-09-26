@@ -391,7 +391,7 @@ func Test_SingleNodeBackupBinary_NoLogs(t *testing.T) {
 	}
 	defer fsutil.Remove(f.Name())
 	defer f.Close()
-	if err := s.Backup(context.Background(), backupRequestBinary(true, false, false), f); err != nil {
+	if _, err := s.Backup(context.Background(), backupRequestBinary(true, false, false), f); err != nil {
 		t.Fatalf("Backup failed %s", err.Error())
 	}
 	if !filesIdentical(f.Name(), s.dbPath) {
@@ -435,7 +435,7 @@ COMMIT;
 	}
 	defer fsutil.Remove(f.Name())
 	defer f.Close()
-	if err := s.Backup(context.Background(), backupRequestBinary(true, false, false), f); err != nil {
+	if _, err := s.Backup(context.Background(), backupRequestBinary(true, false, false), f); err != nil {
 		t.Fatalf("Backup failed %s", err.Error())
 	}
 	if !filesIdentical(f.Name(), s.dbPath) {
@@ -450,7 +450,7 @@ COMMIT;
 	}
 	defer fsutil.Remove(gzf.Name())
 	defer gzf.Close()
-	if err := s.Backup(context.Background(), backupRequestBinary(true, false, true), gzf); err != nil {
+	if _, err := s.Backup(context.Background(), backupRequestBinary(true, false, true), gzf); err != nil {
 		t.Fatalf("Compressed backup failed %s", err.Error())
 	}
 
@@ -502,7 +502,7 @@ func Test_StoreSingleNodeNotOpen(t *testing.T) {
 	if _, err := s.Nodes(); err != ErrNotOpen {
 		t.Fatalf("wrong error received for non-open store: %s", err)
 	}
-	if err := s.Backup(context.Background(), nil, nil); err != ErrNotOpen {
+	if _, err := s.Backup(context.Background(), nil, nil); err != ErrNotOpen {
 		t.Fatalf("wrong error received for non-open store: %s", err)
 	}
 
@@ -1643,7 +1643,7 @@ COMMIT;
 	defer fsutil.Remove(f.Name())
 	s.logger.Printf("backup file is %s", f.Name())
 
-	if err := s.Backup(context.Background(), backupRequestSQL(true), f); err != nil {
+	if _, err := s.Backup(context.Background(), backupRequestSQL(true), f); err != nil {
 		t.Fatalf("Backup failed %s", err.Error())
 	}
 
@@ -1693,7 +1693,7 @@ COMMIT;
 	defer fsutil.Remove(f.Name())
 	defer f.Close()
 
-	if err := s.Backup(context.Background(), backupRequestDelete(true, false, false), f); err != nil {
+	if _, err := s.Backup(context.Background(), backupRequestDelete(true, false, false), f); err != nil {
 		t.Fatalf("DELETE backup failed %s", err.Error())
 	}
 
@@ -1720,7 +1720,7 @@ COMMIT;
 	defer fsutil.Remove(gzf.Name())
 	defer gzf.Close()
 
-	if err := s.Backup(context.Background(), backupRequestDelete(true, false, true), gzf); err != nil {
+	if _, err := s.Backup(context.Background(), backupRequestDelete(true, false, true), gzf); err != nil {
 		t.Fatalf("Compressed DELETE backup failed %s", err.Error())
 	}
 
@@ -1784,7 +1784,7 @@ COMMIT;
 	defer fsutil.Remove(f.Name())
 	s.logger.Printf("backup file is %s", f.Name())
 
-	if err := s.Backup(context.Background(), backupRequestSQLWithTables(true, []string{"foo"}), f); err != nil {
+	if _, err := s.Backup(context.Background(), backupRequestSQLWithTables(true, []string{"foo"}), f); err != nil {
 		t.Fatalf("Backup failed %s", err.Error())
 	}
 
@@ -1848,7 +1848,7 @@ COMMIT;
 	defer fsutil.Remove(f.Name())
 	s.logger.Printf("backup file is %s", f.Name())
 
-	if err := s.Backup(context.Background(), backupRequestSQLWithTables(true, []string{"foo", "bar"}), f); err != nil {
+	if _, err := s.Backup(context.Background(), backupRequestSQLWithTables(true, []string{"foo", "bar"}), f); err != nil {
 		t.Fatalf("Backup failed %s", err.Error())
 	}
 
@@ -1914,7 +1914,7 @@ COMMIT;
 	defer fsutil.Remove(f.Name())
 	s.logger.Printf("backup file is %s", f.Name())
 
-	if err := s.Backup(context.Background(), backupRequestSQLWithTables(true, []string{"nonexistent"}), f); err != nil {
+	if _, err := s.Backup(context.Background(), backupRequestSQLWithTables(true, []string{"nonexistent"}), f); err != nil {
 		t.Fatalf("Backup failed %s", err.Error())
 	}
 

@@ -70,7 +70,7 @@ COMMIT;
 	}
 	defer fsutil.Remove(vf.Name())
 	defer vf.Close()
-	if err := s.Backup(context.Background(), backupRequestBinary(true, true, false), vf); err != nil {
+	if _, err := s.Backup(context.Background(), backupRequestBinary(true, true, false), vf); err != nil {
 		t.Fatalf("Backup failed %s", err.Error())
 	}
 	checkDB(vf.Name())
@@ -83,7 +83,7 @@ COMMIT;
 	}
 	defer fsutil.Remove(gzf.Name())
 	defer gzf.Close()
-	if err := s.Backup(context.Background(), backupRequestBinary(true, true, true), gzf); err != nil {
+	if _, err := s.Backup(context.Background(), backupRequestBinary(true, true, true), gzf); err != nil {
 		t.Fatalf("Compressed backup failed %s", err.Error())
 	}
 

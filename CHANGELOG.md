@@ -1,3 +1,7 @@
+## v10.3.7 (unreleased)
+### Implementation changes and bug fixes
+- [PR #2822](https://github.com/rqlite/rqlite/pull/2822): Backup calls now return number of bytes written.
+
 ## v10.3.6 (September 22nd 2026)
 ### Implementation changes and bug fixes
 - [PR #2768](https://github.com/rqlite/rqlite/pull/2768), [PR #2805](https://github.com/rqlite/rqlite/pull/2805), [PR #2806](https://github.com/rqlite/rqlite/pull/2806): Add query logging to database layer. Thanks @karangupta982
