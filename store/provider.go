@@ -59,7 +59,7 @@ func (p *Provider) Provide(w io.WriteSeeker) (retErr error) {
 		if _, err := w.Seek(0, io.SeekStart); err != nil {
 			return err
 		}
-		err := p.str.Backup(context.Background(), br, w)
+		_, err := p.str.Backup(context.Background(), br, w)
 		if err == nil {
 			break
 		}

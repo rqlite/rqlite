@@ -545,8 +545,8 @@ func Test_BackupOK(t *testing.T) {
 	}
 	defer s.Close()
 
-	m.backupFn = func(br *command.BackupRequest, dst io.Writer) error {
-		return nil
+	m.backupFn = func(br *command.BackupRequest, dst io.Writer) (int, error) {
+		return 0, nil
 	}
 
 	client := &http.Client{}
@@ -569,11 +569,11 @@ func Test_BackupVacuumOK(t *testing.T) {
 	}
 	defer s.Close()
 
-	m.backupFn = func(br *command.BackupRequest, dst io.Writer) error {
+	m.backupFn = func(br *command.BackupRequest, dst io.Writer) (int, error) {
 		if !br.Vacuum {
 			t.Fatal("expected vacuum to be true")
 		}
-		return nil
+		return 0, nil
 	}
 
 	client := &http.Client{}
@@ -683,8 +683,8 @@ func Test_BackupFlagsNoLeaderRedirect(t *testing.T) {
 	}
 	defer s.Close()
 
-	m.backupFn = func(br *command.BackupRequest, dst io.Writer) error {
-		return store.ErrNotLeader
+	m.backupFn = func(br *command.BackupRequest, dst io.Writer) (int, error) {
+		return 0, store.ErrNotLeader
 	}
 
 	client := &http.Client{}
@@ -717,14 +717,13 @@ func Test_BackupFlagsNoLeaderRemoteFetch(t *testing.T) {
 	}
 	defer s.Close()
 
-	m.backupFn = func(br *command.BackupRequest, dst io.Writer) error {
-		return store.ErrNotLeader
+	m.backupFn = func(br *command.BackupRequest, dst io.Writer) (int, error) {
+		return 0, store.ErrNotLeader
 	}
 
 	backupData := "this is SQLite data"
-	c.backupFn = func(br *command.BackupRequest, addr string, t time.Duration, w io.Writer) error {
-		w.Write([]byte(backupData))
-		return nil
+	c.backupFn = func(br *command.BackupRequest, addr string, t time.Duration, w io.Writer) (int, error) {
+		return w.Write([]byte(backupData))
 	}
 
 	client := &http.Client{}
@@ -759,11 +758,11 @@ func Test_BackupFlagsNoLeaderOK(t *testing.T) {
 	}
 	defer s.Close()
 
-	m.backupFn = func(br *command.BackupRequest, dst io.Writer) error {
+	m.backupFn = func(br *command.BackupRequest, dst io.Writer) (int, error) {
 		if !br.Leader {
-			return nil
+			return 0, nil
 		}
-		return store.ErrNotLeader
+		return 0, store.ErrNotLeader
 	}
 
 	client := &http.Client{}
@@ -790,11 +789,11 @@ func Test_BackupFlagsInvalid(t *testing.T) {
 	}
 	defer s.Close()
 
-	m.backupFn = func(br *command.BackupRequest, dst io.Writer) error {
+	m.backupFn = func(br *command.BackupRequest, dst io.Writer) (int, error) {
 		if br.Vacuum && br.Format == command.BackupRequest_BACKUP_REQUEST_FORMAT_SQL {
-			return store.ErrInvalidVacuum
+			return 0, store.ErrInvalidVacuum
 		}
-		return nil
+		return 0, nil
 	}
 
 	client := &http.Client{}
@@ -819,9 +818,9 @@ func Test_BackupDeleteOK(t *testing.T) {
 
 	// Track that the backup function is called with DELETE format
 	var capturedRequest *command.BackupRequest
-	m.backupFn = func(br *command.BackupRequest, dst io.Writer) error {
+	m.backupFn = func(br *command.BackupRequest, dst io.Writer) (int, error) {
 		capturedRequest = br
-		return nil
+		return 0, nil
 	}
 
 	client := &http.Client{}
@@ -854,9 +853,9 @@ func Test_BackupTablesOK(t *testing.T) {
 
 	// Track that the backup function is called with specified tables
 	var capturedRequest *command.BackupRequest
-	m.backupFn = func(br *command.BackupRequest, dst io.Writer) error {
+	m.backupFn = func(br *command.BackupRequest, dst io.Writer) (int, error) {
 		capturedRequest = br
-		return nil
+		return 0, nil
 	}
 
 	client := &http.Client{}
@@ -2582,7 +2581,7 @@ type MockStore struct {
 	executeFn   func(er *command.ExecuteRequest) ([]*command.ExecuteQueryResponse, uint64, error)
 	queryFn     func(qr *command.QueryRequest) ([]*command.QueryRows, uint64, error)
 	requestFn   func(eqr *command.ExecuteQueryRequest) ([]*command.ExecuteQueryResponse, uint64, uint64, error)
-	backupFn    func(br *command.BackupRequest, dst io.Writer) error
+	backupFn    func(br *command.BackupRequest, dst io.Writer) (int, error)
 	loadFn      func(lr *command.LoadRequest) error
 	snapshotFn  func(n uint64) error
 	reapFn      func() (int, int, error)
@@ -2655,9 +2654,9 @@ func (m *MockStore) Nodes() ([]*store.Server, error) {
 	return nil, nil
 }
 
-func (m *MockStore) Backup(ctx context.Context, br *command.BackupRequest, w io.Writer) error {
+func (m *MockStore) Backup(ctx context.Context, br *command.BackupRequest, w io.Writer) (int, error) {
 	if m.backupFn == nil {
-		return nil
+		return 0, nil
 	}
 	return m.backupFn(br, w)
 }
@@ -2706,7 +2705,7 @@ type mockClusterService struct {
 	executeFn    func(er *command.ExecuteRequest, addr string, t time.Duration) ([]*command.ExecuteQueryResponse, uint64, error)
 	queryFn      func(qr *command.QueryRequest, addr string, t time.Duration) ([]*command.QueryRows, uint64, error)
 	requestFn    func(eqr *command.ExecuteQueryRequest, nodeAddr string, timeout time.Duration) ([]*command.ExecuteQueryResponse, uint64, uint64, error)
-	backupFn     func(br *command.BackupRequest, addr string, t time.Duration, w io.Writer) error
+	backupFn     func(br *command.BackupRequest, addr string, t time.Duration, w io.Writer) (int, error)
 	loadFn       func(lr *command.LoadRequest, addr string, t time.Duration) error
 	removeNodeFn func(rn *command.RemoveNodeRequest, nodeAddr string, t time.Duration) error
 	stepdownFn   func(sr *command.StepdownRequest, nodeAddr string, t time.Duration) error
@@ -2739,11 +2738,11 @@ func (m *mockClusterService) Request(ctx context.Context, eqr *command.ExecuteQu
 	return nil, 0, 0, nil
 }
 
-func (m *mockClusterService) Backup(ctx context.Context, br *command.BackupRequest, addr string, creds *cluster.Credentials, t time.Duration, w io.Writer) error {
+func (m *mockClusterService) Backup(ctx context.Context, br *command.BackupRequest, addr string, creds *cluster.Credentials, t time.Duration, w io.Writer) (int, error) {
 	if m.backupFn != nil {
 		return m.backupFn(br, addr, t, w)
 	}
-	return nil
+	return 0, nil
 }
 
 func (m *mockClusterService) Load(ctx context.Context, lr *command.LoadRequest, nodeAddr string, creds *cluster.Credentials, timeout time.Duration, r int) error {

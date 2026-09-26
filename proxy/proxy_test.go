@@ -18,7 +18,7 @@ type mockStore struct {
 	queryFn      func(ctx context.Context, qr *proto.QueryRequest) ([]*proto.QueryRows, proto.ConsistencyLevel, uint64, error)
 	requestFn    func(ctx context.Context, eqr *proto.ExecuteQueryRequest) ([]*proto.ExecuteQueryResponse, uint64, uint64, error)
 	loadFn       func(ctx context.Context, lr *proto.LoadRequest) error
-	backupFn     func(ctx context.Context, br *proto.BackupRequest, dst io.Writer) error
+	backupFn     func(ctx context.Context, br *proto.BackupRequest, dst io.Writer) (int, error)
 	removeFn     func(ctx context.Context, rn *proto.RemoveNodeRequest) error
 	stepdownFn   func(wait bool, id string) error
 	leaderAddrFn func() (string, error)
@@ -52,11 +52,11 @@ func (m *mockStore) Load(ctx context.Context, lr *proto.LoadRequest) error {
 	return nil
 }
 
-func (m *mockStore) Backup(ctx context.Context, br *proto.BackupRequest, dst io.Writer) error {
+func (m *mockStore) Backup(ctx context.Context, br *proto.BackupRequest, dst io.Writer) (int, error) {
 	if m.backupFn != nil {
 		return m.backupFn(ctx, br, dst)
 	}
-	return nil
+	return 0, nil
 }
 
 func (m *mockStore) Remove(ctx context.Context, rn *proto.RemoveNodeRequest) error {
@@ -85,7 +85,7 @@ type mockCluster struct {
 	executeFn    func(ctx context.Context, er *proto.ExecuteRequest, nodeAddr string, creds *clstrPB.Credentials, timeout time.Duration, retries int) ([]*proto.ExecuteQueryResponse, uint64, error)
 	queryFn      func(ctx context.Context, qr *proto.QueryRequest, nodeAddr string, creds *clstrPB.Credentials, timeout time.Duration, retries int) ([]*proto.QueryRows, uint64, error)
 	requestFn    func(ctx context.Context, eqr *proto.ExecuteQueryRequest, nodeAddr string, creds *clstrPB.Credentials, timeout time.Duration, retries int) ([]*proto.ExecuteQueryResponse, uint64, uint64, error)
-	backupFn     func(ctx context.Context, br *proto.BackupRequest, nodeAddr string, creds *clstrPB.Credentials, timeout time.Duration, w io.Writer) error
+	backupFn     func(ctx context.Context, br *proto.BackupRequest, nodeAddr string, creds *clstrPB.Credentials, timeout time.Duration, w io.Writer) (int, error)
 	loadFn       func(ctx context.Context, lr *proto.LoadRequest, nodeAddr string, creds *clstrPB.Credentials, timeout time.Duration, retries int) error
 	removeNodeFn func(ctx context.Context, rn *proto.RemoveNodeRequest, nodeAddr string, creds *clstrPB.Credentials, timeout time.Duration) error
 	stepdownFn   func(ctx context.Context, sr *proto.StepdownRequest, nodeAddr string, creds *clstrPB.Credentials, timeout time.Duration) error
@@ -112,11 +112,11 @@ func (m *mockCluster) Request(ctx context.Context, eqr *proto.ExecuteQueryReques
 	return nil, 0, 0, nil
 }
 
-func (m *mockCluster) Backup(ctx context.Context, br *proto.BackupRequest, nodeAddr string, creds *clstrPB.Credentials, timeout time.Duration, w io.Writer) error {
+func (m *mockCluster) Backup(ctx context.Context, br *proto.BackupRequest, nodeAddr string, creds *clstrPB.Credentials, timeout time.Duration, w io.Writer) (int, error) {
 	if m.backupFn != nil {
 		return m.backupFn(ctx, br, nodeAddr, creds, timeout, w)
 	}
-	return nil
+	return 0, nil
 }
 
 func (m *mockCluster) Load(ctx context.Context, lr *proto.LoadRequest, nodeAddr string, creds *clstrPB.Credentials, timeout time.Duration, retries int) error {
@@ -504,8 +504,8 @@ func Test_Request_Unauthorized(t *testing.T) {
 func Test_Backup_LocalSuccess(t *testing.T) {
 	t.Parallel()
 	s := &mockStore{
-		backupFn: func(ctx context.Context, br *proto.BackupRequest, dst io.Writer) error {
-			return nil
+		backupFn: func(ctx context.Context, br *proto.BackupRequest, dst io.Writer) (int, error) {
+			return 0, nil
 		},
 	}
 	p := newTestProxy(s, &mockCluster{})
@@ -522,8 +522,8 @@ func Test_Backup_LocalSuccess(t *testing.T) {
 func Test_Backup_LocalSuccess_PreWrite(t *testing.T) {
 	t.Parallel()
 	s := &mockStore{
-		backupFn: func(ctx context.Context, br *proto.BackupRequest, dst io.Writer) error {
-			return nil
+		backupFn: func(ctx context.Context, br *proto.BackupRequest, dst io.Writer) (int, error) {
+			return 0, nil
 		},
 	}
 	p := newTestProxy(s, &mockCluster{})
@@ -546,8 +546,8 @@ func Test_Backup_LocalSuccess_PreWrite(t *testing.T) {
 func Test_Backup_NotLeader_NoForward(t *testing.T) {
 	t.Parallel()
 	s := &mockStore{
-		backupFn: func(ctx context.Context, br *proto.BackupRequest, dst io.Writer) error {
-			return store.ErrNotLeader
+		backupFn: func(ctx context.Context, br *proto.BackupRequest, dst io.Writer) (int, error) {
+			return 0, store.ErrNotLeader
 		},
 	}
 	p := newTestProxy(s, &mockCluster{})
@@ -561,19 +561,19 @@ func Test_Backup_NotLeader_NoForward(t *testing.T) {
 func Test_Backup_NotLeader_Forward(t *testing.T) {
 	t.Parallel()
 	s := &mockStore{
-		backupFn: func(ctx context.Context, br *proto.BackupRequest, dst io.Writer) error {
-			return store.ErrNotLeader
+		backupFn: func(ctx context.Context, br *proto.BackupRequest, dst io.Writer) (int, error) {
+			return 0, store.ErrNotLeader
 		},
 		leaderAddrFn: func() (string, error) {
 			return "leader:4002", nil
 		},
 	}
 	c := &mockCluster{
-		backupFn: func(ctx context.Context, br *proto.BackupRequest, nodeAddr string, creds *clstrPB.Credentials, timeout time.Duration, w io.Writer) error {
+		backupFn: func(ctx context.Context, br *proto.BackupRequest, nodeAddr string, creds *clstrPB.Credentials, timeout time.Duration, w io.Writer) (int, error) {
 			if nodeAddr != "leader:4002" {
 				t.Fatalf("expected forwarding to leader:4002, got %s", nodeAddr)
 			}
-			return nil
+			return 0, nil
 		},
 	}
 	p := newTestProxy(s, c)
@@ -590,16 +590,16 @@ func Test_Backup_NotLeader_Forward(t *testing.T) {
 func Test_Backup_Unauthorized(t *testing.T) {
 	t.Parallel()
 	s := &mockStore{
-		backupFn: func(ctx context.Context, br *proto.BackupRequest, dst io.Writer) error {
-			return store.ErrNotLeader
+		backupFn: func(ctx context.Context, br *proto.BackupRequest, dst io.Writer) (int, error) {
+			return 0, store.ErrNotLeader
 		},
 		leaderAddrFn: func() (string, error) {
 			return "leader:4002", nil
 		},
 	}
 	c := &mockCluster{
-		backupFn: func(ctx context.Context, br *proto.BackupRequest, nodeAddr string, creds *clstrPB.Credentials, timeout time.Duration, w io.Writer) error {
-			return errors.New("unauthorized")
+		backupFn: func(ctx context.Context, br *proto.BackupRequest, nodeAddr string, creds *clstrPB.Credentials, timeout time.Duration, w io.Writer) (int, error) {
+			return 0, errors.New("unauthorized")
 		},
 	}
 	p := newTestProxy(s, c)
