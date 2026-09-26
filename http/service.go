@@ -73,6 +73,9 @@ type Store interface {
 	// the Raft system. It then triggers a Raft snapshot, which will then make
 	// Raft aware of the new data.
 	ReadFrom(r io.Reader) (int64, error)
+
+	// Backup writes a consistent snapshot of the underlying database to dst.
+	Backup(ctx context.Context, br *proto.BackupRequest, dst io.Writer) (int, error)
 }
 
 // GetNodeMetaer is the interface that wraps the GetNodeMeta method.
@@ -84,6 +87,9 @@ type GetNodeMetaer interface {
 // Cluster is the interface node API services must provide
 type Cluster interface {
 	GetNodeMetaer
+
+	// Backup writes a consistent snapshot of the underlying database to w.
+	Backup(ctx context.Context, br *proto.BackupRequest, addr string, creds *clstrPB.Credentials, t time.Duration, w io.Writer) (int, error)
 
 	// Stats returns stats on the Cluster.
 	Stats() (map[string]any, error)
@@ -204,6 +210,10 @@ const (
 	// node (by node Raft address) actually served the request if
 	// it wasn't served by this node.
 	ServedByHTTPHeader = "X-RQLITE-SERVED-BY"
+
+	// StreamErrorHeader is the trailing HTTP header use to report
+	// any error that occurs while streaming data to a client.
+	StreamErrorHeader = "X-STREAM-ERROR"
 
 	// AllowOriginHeader is the HTTP header for allowing CORS compliant access from certain origins
 	AllowOriginHeader = "Access-Control-Allow-Origin"
@@ -675,33 +685,38 @@ func (s *Service) handleBackup(w http.ResponseWriter, r *http.Request, qp QueryP
 		Tables:   qp.Tables(),
 	}
 	addBackupFormatHeader(w, qp)
+	w.Header().Set("Trailer", StreamErrorHeader)
 
-	preWFn := func() error {
-		addr := s.proxy.GetAPIAddr()
-		w.Header().Set(ServedByHTTPHeader, addr)
-		return nil
-	}
-
-	_, err := s.proxy.Backup(r.Context(), br, w, makeCredentials(r), qp.Timeout(defaultTimeout), qp.Redirect(), preWFn)
+	err := s.store.Backup(r.Context(), br, w)
 	if err != nil {
-		if errors.Is(err, proxy.ErrNotLeader) {
-			s.DoRedirect(w, r, qp)
+		if errors.Is(err, store.ErrNotLeader) {
+			if qp.Redirect() {
+				s.DoRedirect(w, r, qp)
+				return
+			}
+
+			addr, addrErr := s.store.Leader()
+			if addrErr != nil {
+				stats.Add(numLeaderNotFound, 1)
+				http.Error(w, proxy.ErrLeaderNotFound.Error(), http.StatusServiceUnavailable)
+				return
+			}
+
+			clstrErr := s.cluster.Backup(r.Context(), br, addr.Addr, makeCredentials(r), qp.Timeout(defaultTimeout), w)
+			if clstrErr != nil {
+				if clstrErr.Error() == "unauthorized" {
+					http.Error(w, "remote backup not authorized", http.StatusUnauthorized)
+				} else {
+					// Streaming has started, we must now set the Trailing header to inform the
+					// client of the error. Any other header cannot be set since HTTP 200 has
+					// already been sent.
+					w.Header().Set(StreamErrorHeader, clstrErr.Error())
+				}
+			}
 			return
 		}
-		if errors.Is(err, proxy.ErrLeaderNotFound) {
-			stats.Add(numLeaderNotFound, 1)
-			http.Error(w, proxy.ErrLeaderNotFound.Error(), http.StatusServiceUnavailable)
-			return
-		}
-		if errors.Is(err, proxy.ErrUnauthorized) {
-			http.Error(w, "remote backup not authorized", http.StatusUnauthorized)
-			return
-		}
-		if err == store.ErrInvalidVacuum {
-			http.Error(w, err.Error(), http.StatusBadRequest)
-			return
-		}
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+
+		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
 	s.lastBackup.Store(time.Now())

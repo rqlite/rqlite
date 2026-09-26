@@ -8,7 +8,6 @@ import (
 	"context"
 	"errors"
 	"expvar"
-	"io"
 	"sync"
 	"time"
 
@@ -77,7 +76,6 @@ type Store interface {
 	Query(ctx context.Context, qr *proto.QueryRequest) ([]*proto.QueryRows, proto.ConsistencyLevel, uint64, error)
 	Request(ctx context.Context, eqr *proto.ExecuteQueryRequest) ([]*proto.ExecuteQueryResponse, uint64, uint64, error)
 	Load(ctx context.Context, lr *proto.LoadRequest) error
-	Backup(ctx context.Context, br *proto.BackupRequest, dst io.Writer) error
 	Remove(ctx context.Context, rn *proto.RemoveNodeRequest) error
 	Stepdown(wait bool, id string) error
 	LeaderAddr() (string, error)
@@ -88,7 +86,6 @@ type Cluster interface {
 	Execute(ctx context.Context, er *proto.ExecuteRequest, nodeAddr string, creds *clstrPB.Credentials, timeout time.Duration, retries int) ([]*proto.ExecuteQueryResponse, uint64, error)
 	Query(ctx context.Context, qr *proto.QueryRequest, nodeAddr string, creds *clstrPB.Credentials, timeout time.Duration, retries int) ([]*proto.QueryRows, uint64, error)
 	Request(ctx context.Context, eqr *proto.ExecuteQueryRequest, nodeAddr string, creds *clstrPB.Credentials, timeout time.Duration, retries int) ([]*proto.ExecuteQueryResponse, uint64, uint64, error)
-	Backup(ctx context.Context, br *proto.BackupRequest, nodeAddr string, creds *clstrPB.Credentials, timeout time.Duration, w io.Writer) error
 	Load(ctx context.Context, lr *proto.LoadRequest, nodeAddr string, creds *clstrPB.Credentials, timeout time.Duration, retries int) error
 	RemoveNode(ctx context.Context, rn *proto.RemoveNodeRequest, nodeAddr string, creds *clstrPB.Credentials, timeout time.Duration) error
 	Stepdown(ctx context.Context, sr *proto.StepdownRequest, nodeAddr string, creds *clstrPB.Credentials, timeout time.Duration) error
@@ -201,37 +198,6 @@ func (p *Proxy) Request(ctx context.Context, eqr *proto.ExecuteQueryRequest, cre
 		return results, seq, raftIndex, addr, nil
 	}
 	return results, seq, raftIndex, p.GetAPIAddr(), err
-}
-
-// Backup writes a backup of the database. If the local store returns
-// ErrNotLeader and noForward is false, the request is forwarded to
-// the current leader.
-func (p *Proxy) Backup(ctx context.Context, br *proto.BackupRequest, dst io.Writer, creds *clstrPB.Credentials,
-	timeout time.Duration, noForward bool, preFn PreWrite) (string, error) {
-
-	if preFn != nil {
-		if err := preFn(); err != nil {
-			return "", err
-		}
-	}
-
-	err := p.store.Backup(ctx, br, dst)
-	if errors.Is(err, store.ErrNotLeader) {
-		if noForward {
-			return "", ErrNotLeader
-		}
-		addr, addrErr := p.leaderAddr()
-		if addrErr != nil {
-			return "", addrErr
-		}
-		err = p.cluster.Backup(ctx, br, addr, creds, timeout, dst)
-		if err != nil {
-			return "", wrapIfUnauthorized(err)
-		}
-		stats.Add(numRemoteBackups, 1)
-		return addr, nil
-	}
-	return p.GetAPIAddr(), err
 }
 
 // Load loads a SQLite file into the cluster. If the local store returns
