@@ -75,7 +75,7 @@ type Store interface {
 	ReadFrom(r io.Reader) (int64, error)
 
 	// Backup writes a consistent snapshot of the underlying database to dst.
-	Backup(ctx context.Context, br *proto.BackupRequest, dst io.Writer) error
+	Backup(ctx context.Context, br *proto.BackupRequest, dst io.Writer) (int, error)
 }
 
 // GetNodeMetaer is the interface that wraps the GetNodeMeta method.
@@ -89,7 +89,7 @@ type Cluster interface {
 	GetNodeMetaer
 
 	// Backup writes a consistent snapshot of the underlying database to w.
-	Backup(ctx context.Context, br *proto.BackupRequest, addr string, creds *clstrPB.Credentials, t time.Duration, w io.Writer) error
+	Backup(ctx context.Context, br *proto.BackupRequest, addr string, creds *clstrPB.Credentials, t time.Duration, w io.Writer) (int, error)
 
 	// Stats returns stats on the Cluster.
 	Stats() (map[string]any, error)
@@ -712,8 +712,8 @@ func (s *Service) handleBackup(w http.ResponseWriter, r *http.Request, qp QueryP
 					// already been sent.
 					w.Header().Set(StreamErrorHeader, clstrErr.Error())
 				}
-				return
 			}
+			return
 		}
 
 		http.Error(w, err.Error(), http.StatusBadRequest)
