@@ -295,20 +295,22 @@ func Test_ServiceBackup(t *testing.T) {
 
 	// Ready for Backup tests now.
 	testData := []byte("this is SQLite data")
-	db.backupFn = func(br *command.BackupRequest, dst io.Writer) error {
+	db.backupFn = func(br *command.BackupRequest, dst io.Writer) (int, error) {
 		if br.Format != command.BackupRequest_BACKUP_REQUEST_FORMAT_BINARY {
 			t.Fatalf("wrong backup format requested")
 		}
-		dst.Write(mustGZIPCompress(testData))
-		return nil
+		return dst.Write(mustGZIPCompress(testData))
 	}
 
 	buf := new(bytes.Buffer)
-	err := c.Backup(context.Background(), backupRequestBinary(true), s.Addr(), NO_CREDS, longWait, buf)
+	n, err := c.Backup(context.Background(), backupRequestBinary(true), s.Addr(), NO_CREDS, longWait, buf)
 	if err != nil {
 		t.Fatalf("failed to backup database: %s", err.Error())
 	}
 
+	if n != buf.Len() {
+		t.Fatalf("backup byte count: got %d, want %d", n, buf.Len())
+	}
 	if !bytes.Equal(buf.Bytes(), testData) {
 		t.Fatalf("backup data is not as expected, exp: %s, got: %s", testData, buf.Bytes())
 	}

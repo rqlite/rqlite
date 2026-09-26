@@ -1752,19 +1752,20 @@ func (s *Store) Request(ctx context.Context, eqr *proto.ExecuteQueryRequest) ([]
 // If vacuum is true, then a VACUUM is performed on the database before the backup
 // is made. If compression false, and dst is an os.File, then the vacuumed copy
 // will be written directly to that file. Otherwise a temporary file will be created,
-// and that temporary file copied to dst.
-func (s *Store) Backup(ctx context.Context, br *proto.BackupRequest, dst io.Writer) (retErr error) {
+// and that temporary file copied to dst. The function returns the number of bytes
+// written to dst, including any bytes written before a streaming error.
+func (s *Store) Backup(ctx context.Context, br *proto.BackupRequest, dst io.Writer) (n int, retErr error) {
 	if !s.open.Is() {
-		return ErrNotOpen
+		return 0, ErrNotOpen
 	}
 
 	// Check if context is already canceled
 	if err := ctx.Err(); err != nil {
-		return err
+		return 0, err
 	}
 
 	if br.Vacuum && br.Format != proto.BackupRequest_BACKUP_REQUEST_FORMAT_BINARY {
-		return ErrInvalidBackupFormat
+		return 0, ErrInvalidBackupFormat
 	}
 
 	startT := time.Now()
@@ -1780,8 +1781,14 @@ func (s *Store) Backup(ctx context.Context, br *proto.BackupRequest, dst io.Writ
 	}()
 
 	if br.Leader && s.raft.State() != raft.Leader {
-		return ErrNotLeader
+		return 0, ErrNotLeader
 	}
+
+	cw := progress.NewCountingWriter(dst)
+	defer func() {
+		// Count after any gzip writer has closed and written its footer.
+		n += int(cw.Count())
+	}()
 
 	switch br.Format {
 	case proto.BackupRequest_BACKUP_REQUEST_FORMAT_BINARY:
@@ -1791,18 +1798,25 @@ func (s *Store) Backup(ctx context.Context, br *proto.BackupRequest, dst io.Writ
 			if !br.Compress {
 				if f, ok := dst.(*os.File); ok {
 					// Fast path, just vacuum directly to the destination.
-					return s.db.Backup(f.Name(), br.Vacuum)
+					if err := s.db.Backup(f.Name(), br.Vacuum); err != nil {
+						return 0, err
+					}
+					fi, err := f.Stat()
+					if err != nil {
+						return 0, err
+					}
+					return int(fi.Size()), nil
 				}
 			}
 
 			srcFD, err = createTemp(s.dbDir, backupScratchPattern)
 			if err != nil {
-				return err
+				return 0, err
 			}
 			defer fsutil.Remove(srcFD.Name())
 			defer srcFD.Close()
 			if err := s.db.Backup(srcFD.Name(), br.Vacuum); err != nil {
-				return err
+				return 0, err
 			}
 		} else {
 			// If there is data in the WAL we need to do a snapshot to ensure that the
@@ -1811,13 +1825,13 @@ func (s *Store) Backup(ctx context.Context, br *proto.BackupRequest, dst io.Writ
 			// check for the "nothing new to snapshot" error anyway.
 			sz, err := s.db.WALSize()
 			if err != nil {
-				return err
+				return 0, err
 			}
 			if sz > 0 {
 				if err := s.Snapshot(0); err != nil {
 					if !errors.Is(err, ErrNothingNewToSnapshot) &&
 						!strings.Contains(err.Error(), "wait until the configuration entry at") {
-						return fmt.Errorf("pre-backup snapshot failed: %s", err.Error())
+						return 0, fmt.Errorf("pre-backup snapshot failed: %s", err.Error())
 					}
 				}
 			}
@@ -1825,23 +1839,23 @@ func (s *Store) Backup(ctx context.Context, br *proto.BackupRequest, dst io.Writ
 			// it changing underneath us. Any incoming writes will be sent to the WAL, so
 			// write traffic is not blocked during the backup process.
 			if err := s.snapshotCAS.BeginWithRetry("backup", backupCASTimeout, backupCASRetryDelay); err != nil {
-				return ErrBackupCASFailed
+				return 0, ErrBackupCASFailed
 			}
 			defer s.snapshotCAS.End()
 
 			// Now we can copy the SQLite file directly.
 			srcFD, err = os.Open(s.dbPath)
 			if err != nil {
-				return fmt.Errorf("failed to open database file: %s", err.Error())
+				return 0, fmt.Errorf("failed to open database file: %s", err.Error())
 			}
 			defer srcFD.Close()
 		}
 
 		if br.Compress {
 			var dstGz *gzip.Writer
-			dstGz, err = gzip.NewWriterLevel(dst, gzip.BestSpeed)
+			dstGz, err = gzip.NewWriterLevel(cw, gzip.BestSpeed)
 			if err != nil {
-				return err
+				return 0, err
 			}
 			defer func() {
 				err := dstGz.Close()
@@ -1851,15 +1865,15 @@ func (s *Store) Backup(ctx context.Context, br *proto.BackupRequest, dst io.Writ
 			}()
 			_, err = io.Copy(dstGz, srcFD)
 		} else {
-			_, err = io.Copy(dst, srcFD)
+			_, err = io.Copy(cw, srcFD)
 		}
-		return err
+		return 0, err
 	case proto.BackupRequest_BACKUP_REQUEST_FORMAT_SQL:
-		ww := dst
+		var ww io.Writer = cw
 		if br.Compress {
-			dstGz, err := gzip.NewWriterLevel(dst, gzip.BestSpeed)
+			dstGz, err := gzip.NewWriterLevel(cw, gzip.BestSpeed)
 			if err != nil {
-				return err
+				return 0, err
 			}
 			defer func() {
 				err := dstGz.Close()
@@ -1869,33 +1883,33 @@ func (s *Store) Backup(ctx context.Context, br *proto.BackupRequest, dst io.Writ
 			}()
 			ww = dstGz
 		}
-		return s.db.Dump(ww, br.Tables...)
+		return 0, s.db.Dump(ww, br.Tables...)
 	case proto.BackupRequest_BACKUP_REQUEST_FORMAT_DELETE:
 		// Create a temporary database file in DELETE mode
 		tmpFD, err := createTemp(s.dbDir, backupScratchPattern)
 		if err != nil {
-			return err
+			return 0, err
 		}
 		defer fsutil.Remove(tmpFD.Name())
 		defer tmpFD.Close()
 
 		// Copy the current database to the temporary file and convert to DELETE mode
 		if err := s.db.Backup(tmpFD.Name(), br.Vacuum); err != nil {
-			return err
+			return 0, err
 		}
 
 		// Re-open the temporary file for reading (to ensure all data is written)
 		tmpReadFD, err := os.Open(tmpFD.Name())
 		if err != nil {
-			return err
+			return 0, err
 		}
 		defer tmpReadFD.Close()
 
 		// Stream the DELETE mode database to the destination
 		if br.Compress {
-			dstGz, err := gzip.NewWriterLevel(dst, gzip.BestSpeed)
+			dstGz, err := gzip.NewWriterLevel(cw, gzip.BestSpeed)
 			if err != nil {
-				return err
+				return 0, err
 			}
 			defer func() {
 				err := dstGz.Close()
@@ -1905,11 +1919,11 @@ func (s *Store) Backup(ctx context.Context, br *proto.BackupRequest, dst io.Writ
 			}()
 			_, err = io.Copy(dstGz, tmpReadFD)
 		} else {
-			_, err = io.Copy(dst, tmpReadFD)
+			_, err = io.Copy(cw, tmpReadFD)
 		}
-		return err
+		return 0, err
 	}
-	return ErrInvalidBackupFormat
+	return 0, ErrInvalidBackupFormat
 }
 
 // Load loads an entire SQLite file into the database, sending the request

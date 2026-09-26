@@ -18,7 +18,7 @@ type mockStore struct {
 	queryFn      func(ctx context.Context, qr *proto.QueryRequest) ([]*proto.QueryRows, proto.ConsistencyLevel, uint64, error)
 	requestFn    func(ctx context.Context, eqr *proto.ExecuteQueryRequest) ([]*proto.ExecuteQueryResponse, uint64, uint64, error)
 	loadFn       func(ctx context.Context, lr *proto.LoadRequest) error
-	backupFn     func(ctx context.Context, br *proto.BackupRequest, dst io.Writer) error
+	backupFn     func(ctx context.Context, br *proto.BackupRequest, dst io.Writer) (int, error)
 	removeFn     func(ctx context.Context, rn *proto.RemoveNodeRequest) error
 	stepdownFn   func(wait bool, id string) error
 	leaderAddrFn func() (string, error)
@@ -52,13 +52,6 @@ func (m *mockStore) Load(ctx context.Context, lr *proto.LoadRequest) error {
 	return nil
 }
 
-func (m *mockStore) Backup(ctx context.Context, br *proto.BackupRequest, dst io.Writer) error {
-	if m.backupFn != nil {
-		return m.backupFn(ctx, br, dst)
-	}
-	return nil
-}
-
 func (m *mockStore) Remove(ctx context.Context, rn *proto.RemoveNodeRequest) error {
 	if m.removeFn != nil {
 		return m.removeFn(ctx, rn)
@@ -85,7 +78,7 @@ type mockCluster struct {
 	executeFn    func(ctx context.Context, er *proto.ExecuteRequest, nodeAddr string, creds *clstrPB.Credentials, timeout time.Duration, retries int) ([]*proto.ExecuteQueryResponse, uint64, error)
 	queryFn      func(ctx context.Context, qr *proto.QueryRequest, nodeAddr string, creds *clstrPB.Credentials, timeout time.Duration, retries int) ([]*proto.QueryRows, uint64, error)
 	requestFn    func(ctx context.Context, eqr *proto.ExecuteQueryRequest, nodeAddr string, creds *clstrPB.Credentials, timeout time.Duration, retries int) ([]*proto.ExecuteQueryResponse, uint64, uint64, error)
-	backupFn     func(ctx context.Context, br *proto.BackupRequest, nodeAddr string, creds *clstrPB.Credentials, timeout time.Duration, w io.Writer) error
+	backupFn     func(ctx context.Context, br *proto.BackupRequest, nodeAddr string, creds *clstrPB.Credentials, timeout time.Duration, w io.Writer) (int, error)
 	loadFn       func(ctx context.Context, lr *proto.LoadRequest, nodeAddr string, creds *clstrPB.Credentials, timeout time.Duration, retries int) error
 	removeNodeFn func(ctx context.Context, rn *proto.RemoveNodeRequest, nodeAddr string, creds *clstrPB.Credentials, timeout time.Duration) error
 	stepdownFn   func(ctx context.Context, sr *proto.StepdownRequest, nodeAddr string, creds *clstrPB.Credentials, timeout time.Duration) error
@@ -112,11 +105,11 @@ func (m *mockCluster) Request(ctx context.Context, eqr *proto.ExecuteQueryReques
 	return nil, 0, 0, nil
 }
 
-func (m *mockCluster) Backup(ctx context.Context, br *proto.BackupRequest, nodeAddr string, creds *clstrPB.Credentials, timeout time.Duration, w io.Writer) error {
+func (m *mockCluster) Backup(ctx context.Context, br *proto.BackupRequest, nodeAddr string, creds *clstrPB.Credentials, timeout time.Duration, w io.Writer) (int, error) {
 	if m.backupFn != nil {
 		return m.backupFn(ctx, br, nodeAddr, creds, timeout, w)
 	}
-	return nil
+	return 0, nil
 }
 
 func (m *mockCluster) Load(ctx context.Context, lr *proto.LoadRequest, nodeAddr string, creds *clstrPB.Credentials, timeout time.Duration, retries int) error {

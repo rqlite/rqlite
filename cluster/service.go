@@ -131,7 +131,7 @@ type Database interface {
 	Request(ctx context.Context, rr *command.ExecuteQueryRequest) ([]*command.ExecuteQueryResponse, uint64, uint64, error)
 
 	// Backup writes a backup of the database to the writer.
-	Backup(ctx context.Context, br *command.BackupRequest, dst io.Writer) error
+	Backup(ctx context.Context, br *command.BackupRequest, dst io.Writer) (int, error)
 
 	// Load an entire SQLite file into the database
 	Load(ctx context.Context, lr *command.LoadRequest) error
@@ -496,7 +496,7 @@ func (s *Service) handleConn(conn net.Conn) {
 				resp.Error = "unauthorized"
 			} else {
 				buf := new(bytes.Buffer)
-				if err := s.db.Backup(context.Background(), br, buf); err != nil {
+				if _, err := s.db.Backup(context.Background(), br, buf); err != nil {
 					resp.Error = err.Error()
 				} else {
 					resp.Data = buf.Bytes()
@@ -542,7 +542,7 @@ func (s *Service) handleConn(conn net.Conn) {
 			// can easily detect the end of the stream, as well as saving
 			// space on the wire.
 			br.Compress = true
-			if err := s.db.Backup(context.Background(), br, conn); err != nil {
+			if _, err := s.db.Backup(context.Background(), br, conn); err != nil {
 				s.logger.Printf("failed to stream backup: %s", err.Error())
 				return
 			}

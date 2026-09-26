@@ -687,36 +687,46 @@ func (s *Service) handleBackup(w http.ResponseWriter, r *http.Request, qp QueryP
 	addBackupFormatHeader(w, qp)
 	w.Header().Set("Trailer", StreamErrorHeader)
 
-	err := s.store.Backup(r.Context(), br, w)
+	n, err := s.store.Backup(r.Context(), br, w)
 	if err != nil {
-		if errors.Is(err, store.ErrNotLeader) {
-			if qp.Redirect() {
-				s.DoRedirect(w, r, qp)
-				return
-			}
-
-			addr, addrErr := s.store.Leader()
-			if addrErr != nil {
-				stats.Add(numLeaderNotFound, 1)
-				http.Error(w, proxy.ErrLeaderNotFound.Error(), http.StatusServiceUnavailable)
-				return
-			}
-
-			clstrErr := s.cluster.Backup(r.Context(), br, addr.Addr, makeCredentials(r), qp.Timeout(defaultTimeout), w)
-			if clstrErr != nil {
-				if clstrErr.Error() == "unauthorized" {
-					http.Error(w, "remote backup not authorized", http.StatusUnauthorized)
-				} else {
-					// Streaming has started, we must now set the Trailing header to inform the
-					// client of the error. Any other header cannot be set since HTTP 200 has
-					// already been sent.
-					w.Header().Set(StreamErrorHeader, clstrErr.Error())
-				}
-			}
+		if n > 0 {
+			// Streaming started, only way to signal the error is via Trailing header.
+			w.Header().Set(StreamErrorHeader, err.Error())
 			return
 		}
 
-		http.Error(w, err.Error(), http.StatusBadRequest)
+		// Any other error except "not leader" and we have to give up immediately.
+		if !errors.Is(err, store.ErrNotLeader) {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+
+		// We're not the leader node, so figure out how the client wants us to handle it.
+
+		if qp.Redirect() {
+			s.DoRedirect(w, r, qp)
+			return
+		}
+
+		addr, addrErr := s.store.Leader()
+		if addrErr != nil {
+			stats.Add(numLeaderNotFound, 1)
+			http.Error(w, proxy.ErrLeaderNotFound.Error(), http.StatusServiceUnavailable)
+			return
+		}
+
+		clstrN, clstrErr := s.cluster.Backup(r.Context(), br, addr.Addr, makeCredentials(r), qp.Timeout(defaultTimeout), w)
+		if clstrErr != nil {
+			if clstrN > 0 {
+				// Streaming started, only way to signal the error is via Trailing header.
+				w.Header().Set(StreamErrorHeader, err.Error())
+				return
+			}
+
+			if clstrErr.Error() == "unauthorized" {
+				http.Error(w, "remote backup not authorized", http.StatusUnauthorized)
+			}
+		}
 		return
 	}
 	s.lastBackup.Store(time.Now())

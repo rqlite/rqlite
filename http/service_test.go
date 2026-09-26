@@ -2304,7 +2304,7 @@ type MockStore struct {
 	executeFn   func(er *command.ExecuteRequest) ([]*command.ExecuteQueryResponse, uint64, error)
 	queryFn     func(qr *command.QueryRequest) ([]*command.QueryRows, uint64, error)
 	requestFn   func(eqr *command.ExecuteQueryRequest) ([]*command.ExecuteQueryResponse, uint64, uint64, error)
-	backupFn    func(br *command.BackupRequest, dst io.Writer) error
+	backupFn    func(br *command.BackupRequest, dst io.Writer) (int, error)
 	loadFn      func(lr *command.LoadRequest) error
 	snapshotFn  func(n uint64) error
 	reapFn      func() (int, int, error)
@@ -2377,9 +2377,9 @@ func (m *MockStore) Nodes() ([]*store.Server, error) {
 	return nil, nil
 }
 
-func (m *MockStore) Backup(ctx context.Context, br *command.BackupRequest, w io.Writer) error {
+func (m *MockStore) Backup(ctx context.Context, br *command.BackupRequest, w io.Writer) (int, error) {
 	if m.backupFn == nil {
-		return nil
+		return 0, nil
 	}
 	return m.backupFn(br, w)
 }
@@ -2428,7 +2428,7 @@ type mockClusterService struct {
 	executeFn    func(er *command.ExecuteRequest, addr string, t time.Duration) ([]*command.ExecuteQueryResponse, uint64, error)
 	queryFn      func(qr *command.QueryRequest, addr string, t time.Duration) ([]*command.QueryRows, uint64, error)
 	requestFn    func(eqr *command.ExecuteQueryRequest, nodeAddr string, timeout time.Duration) ([]*command.ExecuteQueryResponse, uint64, uint64, error)
-	backupFn     func(br *command.BackupRequest, addr string, t time.Duration, w io.Writer) error
+	backupFn     func(br *command.BackupRequest, addr string, t time.Duration, w io.Writer) (int, error)
 	loadFn       func(lr *command.LoadRequest, addr string, t time.Duration) error
 	removeNodeFn func(rn *command.RemoveNodeRequest, nodeAddr string, t time.Duration) error
 	stepdownFn   func(sr *command.StepdownRequest, nodeAddr string, t time.Duration) error
@@ -2461,11 +2461,11 @@ func (m *mockClusterService) Request(ctx context.Context, eqr *command.ExecuteQu
 	return nil, 0, 0, nil
 }
 
-func (m *mockClusterService) Backup(ctx context.Context, br *command.BackupRequest, addr string, creds *cluster.Credentials, t time.Duration, w io.Writer) error {
+func (m *mockClusterService) Backup(ctx context.Context, br *command.BackupRequest, addr string, creds *cluster.Credentials, t time.Duration, w io.Writer) (int, error) {
 	if m.backupFn != nil {
 		return m.backupFn(br, addr, t, w)
 	}
-	return nil
+	return 0, nil
 }
 
 func (m *mockClusterService) Load(ctx context.Context, lr *command.LoadRequest, nodeAddr string, creds *cluster.Credentials, timeout time.Duration, r int) error {

@@ -2,7 +2,6 @@ package http
 
 import (
 	"bytes"
-	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -27,9 +26,8 @@ func Test_BackupOK_Local(t *testing.T) {
 	defer s.Close()
 
 	testData := "some random SQLite data"
-	m.backupFn = func(br *command.BackupRequest, w io.Writer) error {
-		_, err := w.Write([]byte(testData))
-		return err
+	m.backupFn = func(br *command.BackupRequest, w io.Writer) (int, error) {
+		return w.Write([]byte(testData))
 	}
 
 	client := &http.Client{}
@@ -67,12 +65,11 @@ func Test_BackupOK_Remote(t *testing.T) {
 	defer s.Close()
 
 	testData := "some random SQLite data"
-	m.backupFn = func(br *command.BackupRequest, dst io.Writer) error {
-		return store.ErrNotLeader
+	m.backupFn = func(br *command.BackupRequest, dst io.Writer) (int, error) {
+		return 0, store.ErrNotLeader
 	}
-	c.backupFn = func(br *command.BackupRequest, addr string, t time.Duration, w io.Writer) error {
-		_, err := w.Write([]byte(testData))
-		return err
+	c.backupFn = func(br *command.BackupRequest, addr string, t time.Duration, w io.Writer) (int, error) {
+		return w.Write([]byte(testData))
 	}
 
 	client := &http.Client{}
@@ -109,11 +106,8 @@ func Test_BackupStreamError_Local(t *testing.T) {
 	defer s.Close()
 
 	partialData := "partial SQLite data"
-	m.backupFn = func(br *command.BackupRequest, w io.Writer) error {
-		if _, err := w.Write([]byte(partialData)); err != nil {
-			return err
-		}
-		return errors.New("local write failed")
+	m.backupFn = func(br *command.BackupRequest, w io.Writer) (int, error) {
+		return w.Write([]byte(partialData))
 	}
 
 	client := &http.Client{}
@@ -155,14 +149,11 @@ func Test_BackupStreamError_Remote(t *testing.T) {
 	defer s.Close()
 
 	partialData := "partial SQLite data"
-	m.backupFn = func(br *command.BackupRequest, dst io.Writer) error {
-		return store.ErrNotLeader
+	m.backupFn = func(br *command.BackupRequest, dst io.Writer) (int, error) {
+		return 0, store.ErrNotLeader
 	}
-	c.backupFn = func(br *command.BackupRequest, addr string, t time.Duration, w io.Writer) error {
-		if _, err := w.Write([]byte(partialData)); err != nil {
-			return err
-		}
-		return errors.New("remote write failed")
+	c.backupFn = func(br *command.BackupRequest, addr string, t time.Duration, w io.Writer) (int, error) {
+		return w.Write([]byte(partialData))
 	}
 
 	client := &http.Client{}
@@ -200,11 +191,11 @@ func Test_BackupVacuumSet(t *testing.T) {
 	}
 	defer s.Close()
 
-	m.backupFn = func(br *command.BackupRequest, dst io.Writer) error {
+	m.backupFn = func(br *command.BackupRequest, dst io.Writer) (int, error) {
 		if !br.Vacuum {
 			t.Fatal("expected vacuum to be true")
 		}
-		return nil
+		return 0, nil
 	}
 
 	client := &http.Client{}
@@ -245,8 +236,8 @@ func Test_BackupFlagsNoLeaderRedirect(t *testing.T) {
 	}
 	defer s.Close()
 
-	m.backupFn = func(br *command.BackupRequest, dst io.Writer) error {
-		return store.ErrNotLeader
+	m.backupFn = func(br *command.BackupRequest, dst io.Writer) (int, error) {
+		return 0, store.ErrNotLeader
 	}
 
 	client := &http.Client{}
@@ -283,14 +274,13 @@ func Test_BackupFlagsNoLeaderRemoteFetch(t *testing.T) {
 	}
 	defer s.Close()
 
-	m.backupFn = func(br *command.BackupRequest, dst io.Writer) error {
-		return store.ErrNotLeader
+	m.backupFn = func(br *command.BackupRequest, dst io.Writer) (int, error) {
+		return 0, store.ErrNotLeader
 	}
 
 	backupData := "this is SQLite data"
-	c.backupFn = func(br *command.BackupRequest, addr string, t time.Duration, w io.Writer) error {
-		w.Write([]byte(backupData))
-		return nil
+	c.backupFn = func(br *command.BackupRequest, addr string, t time.Duration, w io.Writer) (int, error) {
+		return w.Write([]byte(backupData))
 	}
 
 	client := &http.Client{}
@@ -330,11 +320,11 @@ func Test_BackupFlagsNoLeaderOK(t *testing.T) {
 	}
 	defer s.Close()
 
-	m.backupFn = func(br *command.BackupRequest, dst io.Writer) error {
+	m.backupFn = func(br *command.BackupRequest, dst io.Writer) (int, error) {
 		if !br.Leader {
-			return nil
+			return 0, nil
 		}
-		return store.ErrNotLeader
+		return 0, store.ErrNotLeader
 	}
 
 	client := &http.Client{}
@@ -364,11 +354,11 @@ func Test_BackupFlagsInvalid(t *testing.T) {
 	}
 	defer s.Close()
 
-	m.backupFn = func(br *command.BackupRequest, dst io.Writer) error {
+	m.backupFn = func(br *command.BackupRequest, dst io.Writer) (int, error) {
 		if br.Vacuum && br.Format == command.BackupRequest_BACKUP_REQUEST_FORMAT_SQL {
-			return store.ErrInvalidVacuum
+			return 0, store.ErrInvalidVacuum
 		}
-		return nil
+		return 0, nil
 	}
 
 	client := &http.Client{}
@@ -395,9 +385,9 @@ func Test_BackupDeleteOK(t *testing.T) {
 
 	// Track that the backup function is called with DELETE format
 	var capturedRequest *command.BackupRequest
-	m.backupFn = func(br *command.BackupRequest, dst io.Writer) error {
+	m.backupFn = func(br *command.BackupRequest, dst io.Writer) (int, error) {
 		capturedRequest = br
-		return nil
+		return 0, nil
 	}
 
 	client := &http.Client{}
@@ -433,9 +423,9 @@ func Test_BackupTablesOK(t *testing.T) {
 
 	// Track that the backup function is called with specified tables
 	var capturedRequest *command.BackupRequest
-	m.backupFn = func(br *command.BackupRequest, dst io.Writer) error {
+	m.backupFn = func(br *command.BackupRequest, dst io.Writer) (int, error) {
 		capturedRequest = br
-		return nil
+		return 0, nil
 	}
 
 	client := &http.Client{}

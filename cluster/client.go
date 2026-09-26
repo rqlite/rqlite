@@ -288,14 +288,15 @@ func (c *Client) Request(ctx context.Context, r *command.ExecuteQueryRequest, no
 
 // Backup retrieves a backup from a remote node and writes to the io.Writer.
 // If creds is nil, then no credential information will be included in the
-// Backup request to the remote node.
-func (c *Client) Backup(ctx context.Context, br *command.BackupRequest, nodeAddr string, creds *proto.Credentials, timeout time.Duration, w io.Writer) error {
+// Backup request to the remote node. Function returns the number of bytes
+// written to w, including any bytes written before an error.
+func (c *Client) Backup(ctx context.Context, br *command.BackupRequest, nodeAddr string, creds *proto.Credentials, timeout time.Duration, w io.Writer) (int, error) {
 	if err := ctx.Err(); err != nil {
-		return err
+		return 0, err
 	}
 	conn, err := c.dial(nodeAddr)
 	if err != nil {
-		return err
+		return 0, err
 	}
 	defer conn.Close()
 
@@ -309,22 +310,22 @@ func (c *Client) Backup(ctx context.Context, br *command.BackupRequest, nodeAddr
 
 	if err := writeCommand(conn, command, timeout); err != nil {
 		handleConnError(conn)
-		return err
+		return 0, err
 	}
 
 	p, err := readResponse(conn, timeout)
 	if err != nil {
 		handleConnError(conn)
-		return err
+		return 0, err
 	}
 
 	a := &proto.CommandBackupResponse{}
 	err = pb.Unmarshal(p, a)
 	if err != nil {
-		return err
+		return 0, err
 	}
 	if a.Error != "" {
-		return errors.New(a.Error)
+		return 0, errors.New(a.Error)
 	}
 
 	// The backup stream is unconditionally compressed, so depending on whether
@@ -334,14 +335,14 @@ func (c *Client) Backup(ctx context.Context, br *command.BackupRequest, nodeAddr
 	if !br.Compress {
 		gzr, err := gzip.NewReader(conn)
 		if err != nil {
-			return err
+			return 0, err
 		}
 		gzr.Multistream(false)
 		rc = gzr
 		defer rc.Close()
 	}
-	_, err = io.Copy(w, rc)
-	return err
+	n, err := io.Copy(w, rc)
+	return int(n), err
 }
 
 // Load loads a SQLite file into the database. If creds is nil, then no
