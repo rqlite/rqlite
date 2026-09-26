@@ -877,6 +877,9 @@ func readResponse(conn net.Conn, timeout time.Duration) (buf []byte, retErr erro
 		return nil, fmt.Errorf("read protobuf length: %w", err)
 	}
 	sz := binary.LittleEndian.Uint64(b[0:])
+	if sz > maxMessageSize {
+		return nil, fmt.Errorf("response message too large: %d bytes (max %d)", sz, maxMessageSize)
+	}
 
 	// Read in the actual response.
 	p := make([]byte, sz)
