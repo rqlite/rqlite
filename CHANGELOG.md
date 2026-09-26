@@ -1,6 +1,7 @@
 ## v10.3.7 (unreleased)
 ### Implementation changes and bug fixes
 - [PR #2822](https://github.com/rqlite/rqlite/pull/2822): Backup calls now return number of bytes written.
+- [PR #2823](https://github.com/rqlite/rqlite/pull/2823): Stop CI testing against MinIO.
 
 ## v10.3.6 (September 22nd 2026)
 ### Implementation changes and bug fixes
