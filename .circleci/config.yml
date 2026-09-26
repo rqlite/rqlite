@@ -243,7 +243,7 @@ jobs:
   end_to_end_auto_state:
     docker:
       - image: << pipeline.parameters.primary_image >>
-      - image: quay.io/minio/minio:latest
+      - image: quay.io/minio/aistor/minio:latest
         name: minio
         command: server /data
     environment:
