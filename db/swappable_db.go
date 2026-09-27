@@ -153,7 +153,7 @@ func (s *SwappableDB) VacuumInto(path string) error {
 }
 
 // Backup calls Backup on the underlying database.
-func (s *SwappableDB) Backup(path string, vacuum bool) error {
+func (s *SwappableDB) Backup(path string, vacuum bool) (sz int64, retErr error) {
 	s.dbMu.RLock()
 	defer s.dbMu.RUnlock()
 	return s.db.Backup(path, vacuum)
