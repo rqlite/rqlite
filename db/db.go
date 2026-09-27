@@ -1658,29 +1658,42 @@ func (db *DB) RequestWithContext(ctx context.Context, req *command.Request, xTim
 // Backup writes a consistent snapshot of the database to the given file.
 // The resultant SQLite database file will be in DELETE mode. This function
 // can be called when changes to the database are in flight.
-func (db *DB) Backup(path string, vacuum bool) error {
+//
+// The function returns the size of the file at path once the Backup completes
+// regardless of whether an error is returned or not.
+func (db *DB) Backup(path string, vacuum bool) (sz int64, retErr error) {
+	defer func() {
+		n, err := fsutil.FileSizeExists(path)
+		sz = n
+		if err != nil {
+			retErr = err
+		}
+	}()
+
 	dstDB, err := Open(path, false, false)
 	if err != nil {
-		return err
+		return
 	}
 	defer dstDB.Close()
 
 	if err := copyDatabase(dstDB, db); err != nil {
-		return fmt.Errorf("backup database: %s", err)
+		retErr = fmt.Errorf("backup database: %s", err)
+		return
 	}
 
 	// Source database might be in WAL mode.
 	_, err = dstDB.ExecuteStringStmt("PRAGMA journal_mode=DELETE")
 	if err != nil {
-		return err
+		return
 	}
 
 	if vacuum {
 		if err := dstDB.Vacuum(); err != nil {
-			return err
+			return
 		}
 	}
-	return dstDB.Close()
+	retErr = dstDB.Close()
+	return
 }
 
 // Copy copies the contents of the database to the given database. All other
@@ -1709,7 +1722,7 @@ func (db *DB) Serialize() ([]byte, error) {
 		defer fsutil.Remove(tmpFile.Name())
 		defer tmpFile.Close()
 
-		if err := db.Backup(tmpFile.Name(), false); err != nil {
+		if _, err := db.Backup(tmpFile.Name(), false); err != nil {
 			return nil, err
 		}
 		newDB, err := Open(tmpFile.Name(), db.fkEnabled, false)

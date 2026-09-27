@@ -2912,9 +2912,12 @@ func Test_DB_Backup(t *testing.T) {
 		dstDB := mustTempFile()
 		defer fsutil.Remove(dstDB)
 
-		err = db.Backup(dstDB, vacuum)
+		sz, err := db.Backup(dstDB, vacuum)
 		if err != nil {
 			t.Fatalf("failed to backup database: %s", err.Error())
+		}
+		if exp, got := mustFileSize(dstDB), sz; exp != got {
+			t.Fatalf("returned backup size is incorrect, exp %d, got %d", exp, got)
 		}
 		d, err := IsDELETEModeEnabledSQLiteFile(dstDB)
 		if err != nil {

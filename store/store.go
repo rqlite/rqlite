@@ -1798,14 +1798,8 @@ func (s *Store) Backup(ctx context.Context, br *proto.BackupRequest, dst io.Writ
 			if !br.Compress {
 				if f, ok := dst.(*os.File); ok {
 					// Fast path, just vacuum directly to the destination.
-					if err := s.db.Backup(f.Name(), br.Vacuum); err != nil {
-						return 0, err
-					}
-					fi, err := f.Stat()
-					if err != nil {
-						return 0, err
-					}
-					return int(fi.Size()), nil
+					sz, err := s.db.Backup(f.Name(), br.Vacuum)
+					return int(sz), err
 				}
 			}
 
@@ -1815,8 +1809,8 @@ func (s *Store) Backup(ctx context.Context, br *proto.BackupRequest, dst io.Writ
 			}
 			defer fsutil.Remove(srcFD.Name())
 			defer srcFD.Close()
-			if err := s.db.Backup(srcFD.Name(), br.Vacuum); err != nil {
-				return 0, err
+			if sz, err := s.db.Backup(srcFD.Name(), br.Vacuum); err != nil {
+				return int(sz), err
 			}
 		} else {
 			// If there is data in the WAL we need to do a snapshot to ensure that the
@@ -1894,8 +1888,8 @@ func (s *Store) Backup(ctx context.Context, br *proto.BackupRequest, dst io.Writ
 		defer tmpFD.Close()
 
 		// Copy the current database to the temporary file and convert to DELETE mode
-		if err := s.db.Backup(tmpFD.Name(), br.Vacuum); err != nil {
-			return 0, err
+		if sz, err := s.db.Backup(tmpFD.Name(), br.Vacuum); err != nil {
+			return int(sz), err
 		}
 
 		// Re-open the temporary file for reading (to ensure all data is written)
