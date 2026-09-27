@@ -1670,25 +1670,25 @@ func (db *DB) Backup(path string, vacuum bool) (sz int64, retErr error) {
 		}
 	}()
 
-	dstDB, err := Open(path, false, false)
-	if err != nil {
+	var dstDB *DB
+	dstDB, retErr = Open(path, false, false)
+	if retErr != nil {
 		return
 	}
 	defer dstDB.Close()
 
-	if err := copyDatabase(dstDB, db); err != nil {
-		retErr = fmt.Errorf("backup database: %s", err)
+	if retErr = copyDatabase(dstDB, db); retErr != nil {
 		return
 	}
 
 	// Source database might be in WAL mode.
-	_, err = dstDB.ExecuteStringStmt("PRAGMA journal_mode=DELETE")
-	if err != nil {
+	_, retErr = dstDB.ExecuteStringStmt("PRAGMA journal_mode=DELETE")
+	if retErr != nil {
 		return
 	}
 
 	if vacuum {
-		if err := dstDB.Vacuum(); err != nil {
+		if retErr = dstDB.Vacuum(); retErr != nil {
 			return
 		}
 	}
