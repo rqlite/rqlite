@@ -2950,6 +2950,16 @@ func Test_DB_Backup(t *testing.T) {
 	}
 }
 
+func Test_DB_BackupFail(t *testing.T) {
+	db, path := mustCreateOnDiskDatabaseWAL()
+	defer fsutil.Remove(path)
+	defer db.Close()
+	_, err := db.Backup("/non-existent-path/surely/this/does/not/exist", false)
+	if err == nil {
+		t.Fatal("expected error when copying to non-existent location")
+	}
+}
+
 // mustCreateDumpSchemaFixture creates a database holding three tables, an index
 // and a trigger per table, and a view.
 func mustCreateDumpSchemaFixture(t *testing.T) (*DB, string) {
