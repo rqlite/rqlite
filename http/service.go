@@ -690,7 +690,8 @@ func (s *Service) handleBackup(w http.ResponseWriter, r *http.Request, qp QueryP
 	n, err := s.store.Backup(r.Context(), br, w)
 	if err != nil {
 		if n > 0 {
-			// Streaming started, only way to signal the error is via Trailing header.
+			// Streaming started, only way to signal the error is via Trailing header because
+			// the standard library wrote HTTP 200 once first byte went out.
 			w.Header().Set(StreamErrorHeader, err.Error())
 			return
 		}
@@ -702,7 +703,6 @@ func (s *Service) handleBackup(w http.ResponseWriter, r *http.Request, qp QueryP
 		}
 
 		// We're not the leader node, so figure out how the client wants us to handle it.
-
 		if qp.Redirect() {
 			s.DoRedirect(w, r, qp)
 			return
@@ -714,17 +714,17 @@ func (s *Service) handleBackup(w http.ResponseWriter, r *http.Request, qp QueryP
 			http.Error(w, proxy.ErrLeaderNotFound.Error(), http.StatusServiceUnavailable)
 			return
 		}
-
 		clstrN, clstrErr := s.cluster.Backup(r.Context(), br, addr.Addr, makeCredentials(r), qp.Timeout(defaultTimeout), w)
 		if clstrErr != nil {
 			if clstrN > 0 {
-				// Streaming started, only way to signal the error is via Trailing header.
+				// Streaming started, only way to signal the error is via Trailing header because
+				// the standard library wrote HTTP 200 once first byte went out.
 				w.Header().Set(StreamErrorHeader, err.Error())
 				return
 			}
 
 			if clstrErr.Error() == "unauthorized" {
-				http.Error(w, "remote backup not authorized", http.StatusUnauthorized)
+				http.Error(w, fmt.Sprintf("backup not authorized on remote node at %s", addr.Addr), http.StatusUnauthorized)
 			}
 		}
 		return
