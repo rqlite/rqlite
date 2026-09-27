@@ -2954,9 +2954,9 @@ func Test_DB_BackupFail(t *testing.T) {
 	db, path := mustCreateOnDiskDatabaseWAL()
 	defer fsutil.Remove(path)
 	defer db.Close()
-	_, err := db.Backup("/non-existent-path/surely/this/does/not/exist", false)
+	_, err := db.Backup("/non-writable-path/surely/this/does/not/exist", false)
 	if err == nil {
-		t.Fatal("expected error when copying to non-existent location")
+		t.Fatal("expected error when copying to non-writable location")
 	}
 }
 
