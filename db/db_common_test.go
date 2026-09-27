@@ -2912,9 +2912,12 @@ func Test_DB_Backup(t *testing.T) {
 		dstDB := mustTempFile()
 		defer fsutil.Remove(dstDB)
 
-		err = db.Backup(dstDB, vacuum)
+		sz, err := db.Backup(dstDB, vacuum)
 		if err != nil {
 			t.Fatalf("failed to backup database: %s", err.Error())
+		}
+		if exp, got := mustFileSize(dstDB), sz; exp != got {
+			t.Fatalf("returned backup size is incorrect, exp %d, got %d", exp, got)
 		}
 		d, err := IsDELETEModeEnabledSQLiteFile(dstDB)
 		if err != nil {
@@ -2944,6 +2947,16 @@ func Test_DB_Backup(t *testing.T) {
 		if exp, got := `[{"columns":["name"],"types":["text"],"values":[["foo"],["baz"]]}]`, asJSON(ro); exp != got {
 			t.Fatalf("unexpected results for query\nexp: %s\ngot: %s", exp, got)
 		}
+	}
+}
+
+func Test_DB_BackupFail(t *testing.T) {
+	db, path := mustCreateOnDiskDatabaseWAL()
+	defer fsutil.Remove(path)
+	defer db.Close()
+	_, err := db.Backup("/non-existent-path/surely/this/does/not/exist", false)
+	if err == nil {
+		t.Fatal("expected error when copying to non-existent location")
 	}
 }
 
