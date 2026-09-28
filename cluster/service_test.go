@@ -444,7 +444,7 @@ func Test_ServiceHandleHighwaterMarkUpdate(t *testing.T) {
 	c.SetLocal("test-node", nil)
 
 	// Use the client to send a highwater mark update
-	responses, err := c.BroadcastHWM(context.Background(), 987654, 0, 5*time.Second, s.Addr())
+	responses, err := c.BroadcastHWM(context.Background(), 987654, nil, 0, 5*time.Second, s.Addr())
 	if err != nil {
 		t.Fatalf("failed to broadcast highwater mark update: %s", err)
 	}
@@ -484,7 +484,7 @@ func Test_ServiceRegisterHWMUpdate(t *testing.T) {
 
 	// Use the client to send a highwater mark update
 	testHWM := uint64(123456)
-	responses, err := c.BroadcastHWM(context.Background(), testHWM, 0, 5*time.Second, s.Addr())
+	responses, err := c.BroadcastHWM(context.Background(), testHWM, nil, 0, 5*time.Second, s.Addr())
 	if err != nil {
 		t.Fatalf("failed to broadcast highwater mark update: %s", err)
 	}
@@ -508,6 +508,64 @@ func Test_ServiceRegisterHWMUpdate(t *testing.T) {
 		}
 	case <-time.After(5 * time.Second):
 		t.Fatalf("timeout waiting for highwater mark update on channel")
+	}
+}
+
+// Test_ServiceRegisterHWMUpdate_WithAuth checks that the CDC service checks credentials.
+func Test_ServiceRegisterHWMUpdate_WithAuth(t *testing.T) {
+	creds := &proto.Credentials{Username: "bob", Password: "passwd"}
+	ml := mustNewMockTransport()
+	mgr := mustNewMockManager()
+	credStr := mustNewMockCredentialStore()
+	credStr.aaFunc = func(username, password, perm string) bool {
+		return username == creds.Username && password == creds.Password
+	}
+	s := New(ml, mustNewMockDatabase(), mgr, credStr)
+	if s == nil {
+		t.Fatalf("failed to create cluster service")
+	}
+
+	if err := s.Open(); err != nil {
+		t.Fatalf("failed to open cluster service")
+	}
+	defer s.Close()
+
+	// Create a client and send highwater mark update
+	c := NewClient(ml, 30*time.Second)
+	c.SetLocal("test-node", nil)
+
+	// Use the client to send a highwater mark update
+	testHWM := uint64(123456)
+	responses, err := c.BroadcastHWM(context.Background(), testHWM, creds, 0, 5*time.Second, s.Addr())
+	if err != nil {
+		t.Fatalf("failed to broadcast highwater mark update: %s", err)
+	}
+
+	// Check that we got a response for the service address
+	resp, ok := responses[s.Addr()]
+	if !ok {
+		t.Fatalf("expected response for address %s", s.Addr())
+	}
+
+	// Check response has no error
+	if resp.Error != "" {
+		t.Fatalf("expected no error, got: %s", resp.Error)
+	}
+
+	// Change required creds and ensure auth kicks in to deny.
+	credStr.aaFunc = func(username, password, perm string) bool {
+		return username == creds.Username && password == "foo"
+	}
+	responses, err = c.BroadcastHWM(context.Background(), testHWM, creds, 0, 5*time.Second, s.Addr())
+	if err != nil {
+		t.Fatalf("failed to broadcast highwater mark update: %s", err)
+	}
+	resp, ok = responses[s.Addr()]
+	if !ok {
+		t.Fatalf("expected response for address %s", s.Addr())
+	}
+	if resp.Error != "unauthorized" {
+		t.Fatal("expected an error")
 	}
 }
 

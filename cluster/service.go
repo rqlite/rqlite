@@ -665,6 +665,8 @@ func (s *Service) handleConn(conn net.Conn) {
 			br := c.GetHighwaterMarkUpdateRequest()
 			if br == nil {
 				resp.Error = "HighwaterMarkUpdateRequest is nil"
+			} else if !s.checkCommandPerm(c, auth.PermCDCHWMUpdate) {
+				resp.Error = "unauthorized"
 			} else {
 				// Send to registered channel if available
 				s.hwmMu.RLock()

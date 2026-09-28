@@ -607,6 +607,17 @@ long_help = """
 default = false
 
 [[flags]]
+name = "WriteQueueRetry"
+cli = "write-queue-retry"
+section = "Queued Writes"
+type = "int"
+short_help = "How many times to retry a queued write"
+long_help = """
+If a node fails to send to a queued write to the Leader it will retry the attempt this many times. Retrying queue writes can result in duplicated records if the Leader actually accepted the request and committed it to the log, but the response was never reached the sending node. This may be acceptable depending on your application needs. Set this value to zero if you do not want any risk of duplicate records.
+"""
+default = 1
+
+[[flags]]
 name = "AutoBackupFile"
 cli = "auto-backup"
 section = "Backup and restore"
@@ -634,6 +645,17 @@ type = "string"
 short_help = "Set CDC HTTP endpoint, or path to CDC config file. If not set, CDC not enabled"
 long_help = """
 If the passed value is a valid URL then CDC events will be posted to that endpoint. Otherwise the value is interpreted as the path to the CDC configuration file.
+"""
+default = ""
+
+[[flags]]
+name = "CDCAs"
+cli = "cdc-as"
+section = "Clustering"
+type = "string"
+short_help = "Username in authentication file to perform internode CDC operations. If not set, performs CDC operations anonymously"
+long_help = """
+If communicating CDC updates to other nodes requires credentials you can tell a node to read those credentials from a credential file, for the specified user.
 """
 default = ""
 

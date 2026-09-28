@@ -181,7 +181,7 @@ func main() {
 	// picks up every change.
 	var cdcServ *cdc.Service
 	if cfg.CDCConfig != "" {
-		if cdcServ, err = createCDC(cfg, str, clstrServ, clstrClient); err != nil {
+		if cdcServ, err = createCDC(cfg, str, clstrServ, clstrClient, credStr); err != nil {
 			log.Fatalf("failed to create CDC Service: %s", err.Error())
 		}
 	}
@@ -376,7 +376,7 @@ func createExtensionsStore(cfg *Config) (*extensions.Store, error) {
 	return str, nil
 }
 
-func createCDC(cfg *Config, str *store.Store, clstrServ *cluster.Service, clstrClient *cluster.Client) (*cdc.Service, error) {
+func createCDC(cfg *Config, str *store.Store, clstrServ *cluster.Service, clstrClient *cluster.Client, credStr *auth.CredentialsStore) (*cdc.Service, error) {
 	if cfg.RaftNonVoter {
 		return nil, fmt.Errorf("cannot enable CDC on non-voting node")
 	}
@@ -389,6 +389,7 @@ func createCDC(cfg *Config, str *store.Store, clstrServ *cluster.Service, clstrC
 	if err != nil {
 		return nil, fmt.Errorf("failed to create CDC Service: %s", err.Error())
 	}
+	CDCCluster.SetAuth(cluster.CredentialsFor(credStr, cfg.CDCAs))
 	if err := cdcService.Start(); err != nil {
 		return nil, fmt.Errorf("failed to start CDC Service: %s", err.Error())
 	}
@@ -506,6 +507,7 @@ func startHTTPService(cfg *Config, str *store.Store, cltr *cluster.Client, credS
 		"build_time":         cmd.Buildtime,
 	}
 	s.SetAllowOrigin(cfg.HTTPAllowOrigin)
+	s.SetQueueMaxRetry(int64(cfg.WriteQueueRetry))
 	return s, s.Start()
 }
 
