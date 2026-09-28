@@ -1861,7 +1861,7 @@ func (s *Store) Backup(ctx context.Context, br *proto.BackupRequest, dst io.Writ
 		} else {
 			_, err = io.Copy(cw, srcFD)
 		}
-		return n, err
+		return 0, err
 	case proto.BackupRequest_BACKUP_REQUEST_FORMAT_SQL:
 		var ww io.Writer = cw
 		if br.Compress {
@@ -1917,7 +1917,7 @@ func (s *Store) Backup(ctx context.Context, br *proto.BackupRequest, dst io.Writ
 		} else {
 			_, err = io.Copy(cw, tmpReadFD)
 		}
-		return n, err
+		return 0, err
 	}
 	return 0, ErrInvalidBackupFormat
 }
