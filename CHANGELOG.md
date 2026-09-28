@@ -1,4 +1,6 @@
-## v10.3.7 (unreleased)
+## v10.3.7 (September 28th 2026)
+This release addresses a gap in the role-based access permissions related to change-data-capture handling. If you run a cluster where the Raft port is accesible by other systems you should upgrade (though that is not recommended production practise in the first place -- see the [rqlite Security guide](https://rqlite.io/docs/guides/security/)).
+
 ### Implementation changes and bug fixes
 - [PR #2822](https://github.com/rqlite/rqlite/pull/2822): Backup calls now return number of bytes written.
 - [PR #2823](https://github.com/rqlite/rqlite/pull/2823): Stop CI testing against MinIO.
