@@ -857,3 +857,50 @@ func Test_ClientBroadcast_WithError(t *testing.T) {
 		t.Fatalf("expected 'test error', got '%s'", resp.Error)
 	}
 }
+
+func Test_ClientBroadcast_WithCreds(t *testing.T) {
+	srv := servicetest.NewService()
+	srv.Handler = func(conn net.Conn) {
+		var p []byte
+		var err error
+		c := readCommand(conn)
+		if c == nil {
+			return
+		}
+		if c.Credentials == nil {
+			t.Fatal("got nil credentials")
+		}
+		if c.Credentials.Username != "bob" || c.Credentials.Password != "passwd" {
+			t.Fatal("got wrong credentials")
+		}
+		if c.Type != proto.Command_COMMAND_TYPE_HIGHWATER_MARK_UPDATE {
+			t.Fatalf("unexpected command type: %d", c.Type)
+		}
+
+		p, err = pb.Marshal(&proto.HighwaterMarkUpdateResponse{Error: "test error"})
+		if err != nil {
+			conn.Close()
+		}
+		writeBytesWithLength(conn, p)
+	}
+	srv.Start()
+	defer srv.Close()
+
+	c := NewClient(&simpleDialer{}, 0)
+	c.SetLocal("node1", nil) // Set local node address to match test expectation
+	creds := &proto.Credentials{Username: "bob", Password: "passwd"}
+	responses, err := c.BroadcastHWM(context.Background(), 12345, creds, 0, time.Second, srv.Addr())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(responses) != 1 {
+		t.Fatalf("expected 1 response, got %d", len(responses))
+	}
+	resp, exists := responses[srv.Addr()]
+	if !exists {
+		t.Fatalf("response for %s not found", srv.Addr())
+	}
+	if resp.Error != "test error" {
+		t.Fatalf("expected 'test error', got '%s'", resp.Error)
+	}
+}
