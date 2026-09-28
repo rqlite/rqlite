@@ -37,8 +37,10 @@ const (
 	PermLoad = "load"
 	// PermSnapshot means user can request a snapshot.
 	PermSnapshot = "snapshot"
-	// PermLeaderOps means user can perform leader-related operations
+	// PermLeaderOps means user can perform leader-related operations.
 	PermLeaderOps = "leader-ops"
+	// PermCDCHWMUpdate = means a user can perform CDC high watermark updates.
+	PermCDCHWMUpdate = "cdc-hwm-update"
 	// PermUI means user can access the UI.
 	PermUI = "ui"
 )

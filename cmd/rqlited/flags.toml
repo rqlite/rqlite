@@ -638,6 +638,17 @@ If the passed value is a valid URL then CDC events will be posted to that endpoi
 default = ""
 
 [[flags]]
+name = "CDCAs"
+cli = "cdc-as"
+section = "Clustering"
+type = "string"
+short_help = "Username in authentication file to perform internode CDC operations. If not set, performs CDC operations anonymously"
+long_help = """
+If communicating CDC updates to other nodes requires credentials you can tell a node to read those credentials from a credential file, for the specified user. By using this flag you can avoid setting credentials in the command line you pass to rqlite, which can expose those credentials if someone has access to the process table.
+"""
+default = ""
+
+[[flags]]
 name = "OTLPEndpoint"
 cli = "otlp-endpoint"
 section = "Observability and profiling"
