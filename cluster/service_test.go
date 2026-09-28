@@ -551,6 +551,22 @@ func Test_ServiceRegisterHWMUpdate_WithAuth(t *testing.T) {
 	if resp.Error != "" {
 		t.Fatalf("expected no error, got: %s", resp.Error)
 	}
+
+	// Change required creds and ensure auth kicks in to deny.
+	credStr.aaFunc = func(username, password, perm string) bool {
+		return username == creds.Username && password == "foo"
+	}
+	responses, err = c.BroadcastHWM(context.Background(), testHWM, creds, 0, 5*time.Second, s.Addr())
+	if err != nil {
+		t.Fatalf("failed to broadcast highwater mark update: %s", err)
+	}
+	resp, ok = responses[s.Addr()]
+	if !ok {
+		t.Fatalf("expected response for address %s", s.Addr())
+	}
+	if resp.Error != "unauthorized" {
+		t.Fatal("expected an error")
+	}
 }
 
 func Test_ServiceClosesIdleConnection(t *testing.T) {
