@@ -73,6 +73,9 @@ type Store interface {
 	// the Raft system. It then triggers a Raft snapshot, which will then make
 	// Raft aware of the new data.
 	ReadFrom(r io.Reader) (int64, error)
+
+	// Backup writes a consistent snapshot of the underlying database to dst.
+	Backup(ctx context.Context, br *proto.BackupRequest, dst io.Writer) (int, error)
 }
 
 // GetNodeMetaer is the interface that wraps the GetNodeMeta method.
@@ -84,6 +87,9 @@ type GetNodeMetaer interface {
 // Cluster is the interface node API services must provide
 type Cluster interface {
 	GetNodeMetaer
+
+	// Backup writes a consistent snapshot of the underlying database to w.
+	Backup(ctx context.Context, br *proto.BackupRequest, addr string, creds *clstrPB.Credentials, t time.Duration, w io.Writer) (int, error)
 
 	// Stats returns stats on the Cluster.
 	Stats() (map[string]any, error)
@@ -208,6 +214,10 @@ const (
 	// node (by node Raft address) actually served the request if
 	// it wasn't served by this node.
 	ServedByHTTPHeader = "X-RQLITE-SERVED-BY"
+
+	// StreamErrorHeader is the trailing HTTP header use to report
+	// any error that occurs while streaming data to a client.
+	StreamErrorHeader = "X-STREAM-ERROR"
 
 	// AllowOriginHeader is the HTTP header for allowing CORS compliant access from certain origins
 	AllowOriginHeader = "Access-Control-Allow-Origin"
@@ -669,6 +679,9 @@ func (s *Service) handleSQLAnalyze(w http.ResponseWriter, r *http.Request, qp Qu
 }
 
 // handleBackup returns the consistent database snapshot.
+//
+// Backup is not performed via a proxy layer because streaming over HTTP is just that
+// - specific to HTTP and we need to handle errors mid-streaming.
 func (s *Service) handleBackup(w http.ResponseWriter, r *http.Request, qp QueryParams) {
 	if !s.CheckRequestPerm(r, auth.PermBackup) {
 		w.WriteHeader(http.StatusUnauthorized)
@@ -688,33 +701,48 @@ func (s *Service) handleBackup(w http.ResponseWriter, r *http.Request, qp QueryP
 		Tables:   qp.Tables(),
 	}
 	addBackupFormatHeader(w, qp)
+	w.Header().Set("Trailer", StreamErrorHeader)
 
-	preWFn := func() error {
-		addr := s.proxy.GetAPIAddr()
-		w.Header().Set(ServedByHTTPHeader, addr)
-		return nil
-	}
-
-	_, err := s.proxy.Backup(r.Context(), br, w, makeCredentials(r), qp.Timeout(defaultTimeout), qp.Redirect(), preWFn)
+	n, err := s.store.Backup(r.Context(), br, w)
 	if err != nil {
-		if errors.Is(err, proxy.ErrNotLeader) {
+		if n > 0 {
+			// Streaming started, only way to signal the error is via Trailing header because
+			// the standard library wrote HTTP 200 once first byte went out.
+			w.Header().Set(StreamErrorHeader, err.Error())
+			return
+		}
+
+		// Any other error except "not leader" and we have to give up immediately.
+		if !errors.Is(err, store.ErrNotLeader) {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+
+		// We're not the leader node, so figure out how the client wants us to handle it.
+		if qp.Redirect() {
 			s.DoRedirect(w, r, qp)
 			return
 		}
-		if errors.Is(err, proxy.ErrLeaderNotFound) {
+
+		addr, addrErr := s.store.Leader()
+		if addrErr != nil {
 			stats.Add(numLeaderNotFound, 1)
 			http.Error(w, proxy.ErrLeaderNotFound.Error(), http.StatusServiceUnavailable)
 			return
 		}
-		if errors.Is(err, proxy.ErrUnauthorized) {
-			http.Error(w, "remote backup not authorized", http.StatusUnauthorized)
-			return
+		clstrN, clstrErr := s.cluster.Backup(r.Context(), br, addr.Addr, makeCredentials(r), qp.Timeout(defaultTimeout), w)
+		if clstrErr != nil {
+			if clstrN > 0 {
+				// Streaming started, only way to signal the error is via Trailing header because
+				// the standard library wrote HTTP 200 once first byte went out.
+				w.Header().Set(StreamErrorHeader, clstrErr.Error())
+				return
+			}
+
+			if clstrErr.Error() == "unauthorized" {
+				http.Error(w, fmt.Sprintf("backup not authorized on remote node at %s", addr.Addr), http.StatusUnauthorized)
+			}
 		}
-		if err == store.ErrInvalidVacuum {
-			http.Error(w, err.Error(), http.StatusBadRequest)
-			return
-		}
-		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
 	s.lastBackup.Store(time.Now())

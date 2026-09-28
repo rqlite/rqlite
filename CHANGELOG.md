@@ -4,6 +4,7 @@
 
 ### Implementation changes and bug fixes
 - [PR #2828](https://github.com/rqlite/rqlite/pull/2828): DB `Dump()` returns number of bytes written.
+- [PR #2821](https://github.com/rqlite/rqlite/pull/2821): HTTP layer performs Backup directly setting _Trailer_ HTTP header `X-STREAM-ERROR` on error.
 
 ## v10.3.7 (September 28th 2026)
 This release addresses a gap in the role-based access permissions related to [change-data-capture (CDC)](https://rqlite.io/docs/guides/cdc/) handling.
