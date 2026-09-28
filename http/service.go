@@ -679,6 +679,9 @@ func (s *Service) handleSQLAnalyze(w http.ResponseWriter, r *http.Request, qp Qu
 }
 
 // handleBackup returns the consistent database snapshot.
+//
+// Backup is not performed via a proxy layer because streaming over HTTP is just that
+// - specific to HTTP and we need to handle errors mid-streaming.
 func (s *Service) handleBackup(w http.ResponseWriter, r *http.Request, qp QueryParams) {
 	if !s.CheckRequestPerm(r, auth.PermBackup) {
 		w.WriteHeader(http.StatusUnauthorized)
