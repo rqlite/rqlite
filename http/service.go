@@ -173,6 +173,7 @@ const (
 	numQueuedExecutionsLeadershipLost = "queued_executions_leadership_lost"
 	numQueuedExecutionsUnknownError   = "queued_executions_unknown_error"
 	numQueuedExecutionsFailed         = "queued_executions_failed"
+	numQueuedExecutionsRetryLimited   = "queued_executions_retry_limited"
 	numQueuedExecutionsWait           = "queued_executions_wait"
 	numQueuedExecutionsWaitTimeout    = "queued_executions_wait_timeout"
 	numQueries                        = "queries"
@@ -190,6 +191,9 @@ const (
 	numAuthOK                         = "auth_ok"
 	numAuthFail                       = "auth_fail"
 	numTLSCertFetched                 = "tls_cert_fetched"
+
+	// default queued write retry count.
+	defaultQueueRetry = 1
 
 	// Default timeout for cluster communications.
 	defaultTimeout = 30 * time.Second
@@ -239,6 +243,7 @@ func ResetStats() {
 	stats.Add(numQueuedExecutionsLeadershipLost, 0)
 	stats.Add(numQueuedExecutionsUnknownError, 0)
 	stats.Add(numQueuedExecutionsFailed, 0)
+	stats.Add(numQueuedExecutionsRetryLimited, 0)
 	stats.Add(numQueuedExecutionsWait, 0)
 	stats.Add(numQueuedExecutionsWaitTimeout, 0)
 	stats.Add(numQueries, 0)
@@ -297,6 +302,8 @@ type Service struct {
 	DefaultQueueTimeout time.Duration
 	DefaultQueueTx      bool
 
+	queueRetry atomic.Int64
+
 	seqNum int64 // Last sequence number written OK.
 
 	credentialStore CredentialStore
@@ -322,6 +329,7 @@ func New(addr string, store Store, cluster Cluster, pxy *proxy.Proxy, credential
 		credentialStore:     credentials,
 		logger:              log.New(os.Stderr, "[http] ", log.LstdFlags),
 	}
+	s.queueRetry.Store(defaultQueueRetry)
 	s.uiHandler = http.StripPrefix("/console/", http.FileServerFS(console.Assets))
 	return s
 }
@@ -413,6 +421,11 @@ func (s *Service) Close() {
 		close(s.closeCh)
 	}
 	<-s.queueDone
+}
+
+// SetQueryMaxRetry sets the max queue retry-write value.
+func (s *Service) SetQueueMaxRetry(n int64) {
+	s.queueRetry.Store(n)
 }
 
 // HTTPS returns whether this service is using HTTPS.
@@ -1764,6 +1777,7 @@ func (s *Service) runQueue() {
 			// Nil statements are valid, as clients may want to just send
 			// a "checkpoint" through the queue.
 			if er.Request.Statements != nil {
+				nRetries := int64(0)
 				for {
 					select {
 					case <-s.closeCh:
@@ -1774,6 +1788,13 @@ func (s *Service) runQueue() {
 					_, _, _, err = s.proxy.Execute(context.Background(), er, nil, defaultTimeout, 0, false)
 					if err == nil {
 						// Success!
+						break
+					}
+					nRetries++
+					if nRetries > s.queueRetry.Load() {
+						s.logger.Printf("execute queue write retry limit (%d) limit reached for sequence number %d on node %d",
+							s.queueRetry.Load(), req.SequenceNumber, s.Addr().String())
+						stats.Add(numQueuedExecutionsRetryLimited, 1)
 						break
 					}
 

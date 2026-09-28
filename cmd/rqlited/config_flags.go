@@ -124,6 +124,8 @@ type Config struct {
 	WriteQueueTimeout time.Duration
 	// Use a transaction when processing a queued write
 	WriteQueueTx bool
+	// How many times to retry a queued write
+	WriteQueueRetry int
 	// Path to automatic backup configuration file. If not set, not enabled
 	AutoBackupFile string
 	// Path to automatic restore configuration file. If not set, not enabled
@@ -217,6 +219,7 @@ func Forge(arguments []string) (*flag.FlagSet, *Config, error) {
 	fs.IntVar(&config.WriteQueueBatchSz, "write-queue-batch-size", 128, "Queued Writes queue batch size")
 	fs.DurationVar(&config.WriteQueueTimeout, "write-queue-timeout", mustParseDuration("50ms"), "Queued Writes queue timeout")
 	fs.BoolVar(&config.WriteQueueTx, "write-queue-tx", false, "Use a transaction when processing a queued write")
+	fs.IntVar(&config.WriteQueueRetry, "write-queue-retry", 1, "How many times to retry a queued write")
 	fs.StringVar(&config.AutoBackupFile, "auto-backup", "", "Path to automatic backup configuration file. If not set, not enabled")
 	fs.StringVar(&config.AutoRestoreFile, "auto-restore", "", "Path to automatic restore configuration file. If not set, not enabled")
 	fs.StringVar(&config.CDCConfig, "cdc-config", "", "Set CDC HTTP endpoint, or path to CDC config file. If not set, CDC not enabled")
