@@ -1792,7 +1792,7 @@ func (s *Service) runQueue() {
 					}
 					nRetries++
 					if nRetries > s.queueRetry.Load() {
-						s.logger.Printf("execute queue write retry limit (%d) limit reached for sequence number %d on node %d",
+						s.logger.Printf("execute queue write retry limit (%d) limit reached for sequence number %d on node %s",
 							s.queueRetry.Load(), req.SequenceNumber, s.Addr().String())
 						stats.Add(numQueuedExecutionsRetryLimited, 1)
 						break
