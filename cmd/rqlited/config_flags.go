@@ -130,6 +130,8 @@ type Config struct {
 	AutoRestoreFile string
 	// Set CDC HTTP endpoint, or path to CDC config file. If not set, CDC not enabled
 	CDCConfig string
+	// Username in authentication file to perform internode CDC operations. If not set, performs CDC operations anonymously
+	CDCAs string
 	// Address of OpenTelemetry Collector for metrics. If not set, OTLP reporting not enabled
 	OTLPEndpoint string
 	// Period between OTLP metric exports
@@ -218,6 +220,14 @@ func Forge(arguments []string) (*flag.FlagSet, *Config, error) {
 	fs.StringVar(&config.AutoBackupFile, "auto-backup", "", "Path to automatic backup configuration file. If not set, not enabled")
 	fs.StringVar(&config.AutoRestoreFile, "auto-restore", "", "Path to automatic restore configuration file. If not set, not enabled")
 	fs.StringVar(&config.CDCConfig, "cdc-config", "", "Set CDC HTTP endpoint, or path to CDC config file. If not set, CDC not enabled")
+	fs.StringVar(&config.CDCAs, "cdc-as", "", "Username in authentication file to perform internode CDC operations. If not set, performs CDC operations anonymously")
+	fs.StringVar(&config.OTLPEndpoint, "otlp-endpoint", "", "Address of OpenTelemetry Collector for metrics. If not set, OTLP reporting not enabled")
+	fs.DurationVar(&config.OTLPMetricsInterval, "otlp-metrics-interval", mustParseDuration("30s"), "Period between OTLP metric exports")
+	fs.BoolVar(&config.OTLPInsecure, "otlp-insecure", false, "Use plaintext gRPC when communicating with the OpenTelemetry Collector")
+	fs.BoolVar(&config.OTLPNoVerify, "otlp-no-verify", false, "Skip verification of the OpenTelemetry Collector certificate")
+	fs.StringVar(&config.OTLPCACert, "otlp-ca-cert", "", "Path to X.509 CA certificate for verifying the OpenTelemetry Collector")
+	fs.StringVar(&config.OTLPCert, "otlp-cert", "", "Path to X.509 certificate for mutual TLS with the OpenTelemetry Collector")
+	fs.StringVar(&config.OTLPKey, "otlp-key", "", "Path to X.509 private key for mutual TLS with the OpenTelemetry Collector")
 	fs.StringVar(&config.CPUProfile, "cpu-profile", "", "Path to file for CPU profiling information")
 	fs.StringVar(&config.MemProfile, "mem-profile", "", "Path to file for memory profiling information")
 	fs.StringVar(&config.TraceProfile, "trace-profile", "", "Path to file for trace profiling information")
