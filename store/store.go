@@ -1852,9 +1852,9 @@ func (s *Store) Backup(ctx context.Context, br *proto.BackupRequest, dst io.Writ
 				return 0, err
 			}
 			defer func() {
-				errClose := dstGz.Close()
-				if errClose != nil && retErr == nil {
-					retErr = errClose
+				err := dstGz.Close()
+				if err != nil && retErr == nil {
+					retErr = err
 				}
 			}()
 			_, err = io.Copy(dstGz, srcFD)
