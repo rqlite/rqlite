@@ -1790,13 +1790,6 @@ func (s *Service) runQueue() {
 						// Success!
 						break
 					}
-					nRetries++
-					if nRetries > s.queueRetry.Load() {
-						s.logger.Printf("execute queue write retry limit (%d) limit reached for sequence number %d on node %s",
-							s.queueRetry.Load(), req.SequenceNumber, s.Addr().String())
-						stats.Add(numQueuedExecutionsRetryLimited, 1)
-						break
-					}
 
 					if errors.Is(err, proxy.ErrLeaderNotFound) {
 						s.logger.Printf("execute queue can't find leader for sequence number %d on node %s",
@@ -1812,6 +1805,13 @@ func (s *Service) runQueue() {
 						} else {
 							stats.Add(numQueuedExecutionsUnknownError, 1)
 						}
+					}
+					nRetries++
+					if nRetries > s.queueRetry.Load() {
+						s.logger.Printf("execute queue write retry limit (%d) limit reached for sequence number %d on node %s",
+							s.queueRetry.Load(), req.SequenceNumber, s.Addr().String())
+						stats.Add(numQueuedExecutionsRetryLimited, 1)
+						break
 					}
 
 					stats.Add(numQueuedExecutionsFailed, 1)
