@@ -145,12 +145,11 @@ func Test_BackupStreamError_Remote(t *testing.T) {
 	}
 	defer s.Close()
 
-	partialData := "partial SQLite data"
 	m.backupFn = func(br *command.BackupRequest, dst io.Writer) (int, error) {
 		return 0, store.ErrNotLeader
 	}
 	c.backupFn = func(br *command.BackupRequest, addr string, t time.Duration, w io.Writer) (int, error) {
-		return w.Write([]byte(partialData))
+		return 1, fmt.Errorf("remote node failed the write")
 	}
 
 	client := &http.Client{}
@@ -168,10 +167,8 @@ func Test_BackupStreamError_Remote(t *testing.T) {
 	}
 
 	// Trailers are only populated once the body has been fully read.
-	if got, exp := mustReadBody(t, resp), partialData; got != exp {
-		t.Fatalf("unexpected backup data, got %q, exp %q", got, exp)
-	}
-	if got, exp := resp.Trailer.Get(StreamErrorHeader), "remote write failed"; got != exp {
+	mustReadBody(t, resp)
+	if got, exp := resp.Trailer.Get(StreamErrorHeader), "remote node failed the write"; got != exp {
 		t.Fatalf("unexpected %s trailer, got %q, exp %q", StreamErrorHeader, got, exp)
 	}
 }

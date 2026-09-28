@@ -735,7 +735,7 @@ func (s *Service) handleBackup(w http.ResponseWriter, r *http.Request, qp QueryP
 			if clstrN > 0 {
 				// Streaming started, only way to signal the error is via Trailing header because
 				// the standard library wrote HTTP 200 once first byte went out.
-				w.Header().Set(StreamErrorHeader, err.Error())
+				w.Header().Set(StreamErrorHeader, clstrErr.Error())
 				return
 			}
 
