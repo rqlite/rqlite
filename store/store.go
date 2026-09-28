@@ -1913,13 +1913,9 @@ func (s *Store) Backup(ctx context.Context, br *proto.BackupRequest, dst io.Writ
 					retErr = err
 				}
 			}()
-			n64, errCp := io.Copy(dstGz, tmpReadFD)
-			n = int(n64)
-			err = errCp
+			_, err = io.Copy(dstGz, tmpReadFD)
 		} else {
-			n64, errCp := io.Copy(cw, tmpReadFD)
-			n = int(n64)
-			err = errCp
+			_, err = io.Copy(cw, tmpReadFD)
 		}
 		return n, err
 	}
