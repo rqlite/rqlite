@@ -1878,7 +1878,8 @@ func (s *Store) Backup(ctx context.Context, br *proto.BackupRequest, dst io.Writ
 			ww = dstGz
 		}
 		// The destination counter includes compression and is read after gzip closes.
-		return s.db.Dump(ww, br.Tables...)
+		_, err := s.db.Dump(ww, br.Tables...)
+		return 0, err
 	case proto.BackupRequest_BACKUP_REQUEST_FORMAT_DELETE:
 		// Create a temporary database file in DELETE mode
 		tmpFD, err := createTemp(s.dbDir, backupScratchPattern)
