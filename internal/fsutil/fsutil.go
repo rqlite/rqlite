@@ -2,11 +2,25 @@ package fsutil
 
 import (
 	"bytes"
+	"errors"
 	"io/fs"
 	"os"
 	"path/filepath"
 	"runtime"
+	"syscall"
 	"time"
+)
+
+// Windows error codes returned when another process has a file or directory open.
+const (
+	errorAccessDenied     syscall.Errno = 5
+	errorSharingViolation syscall.Errno = 32
+
+	removeInterval = 10 * time.Millisecond
+	removeTimeout  = 5 * time.Second
+
+	renameInterval = 10 * time.Millisecond
+	renameTimeout  = 5 * time.Second
 )
 
 // PathExists returns true if the given path exists.
@@ -119,18 +133,50 @@ func DirIsEmpty(dir string) (bool, error) {
 	return len(files) == 0, nil
 }
 
-// RemoveFile removes the file at the given path if it exists.
-func RemoveFile(path string) error {
-	err := os.Remove(path)
+// Rename renames (moves) oldpath to newpath.
+func Rename(oldpath, newpath string) error {
+	_, err := RenameWithRetry(oldpath, newpath, renameTimeout, renameInterval)
+	return err
+}
+
+// Remove removes the file at the given path if it exists.
+func Remove(path string) error {
+	_, err := RemoveWithRetry(path, removeTimeout, removeInterval)
 	if err != nil && os.IsNotExist(err) {
 		return nil
 	}
 	return err
 }
 
+// RemoveAll removes path and any children it contains.
+func RemoveAll(path string) error {
+	return os.RemoveAll(path)
+}
+
+// RenameWithRetry renames src to dst. On Windows, if another process has
+// the path open, the rename is retried until timeout elapses. Returns the
+// number of times the rename was retried.
+func RenameWithRetry(src, dst string, timeout, retryInterval time.Duration) (int, error) {
+	return retryInUse(func() error { return os.Rename(src, dst) }, timeout, retryInterval)
+}
+
+// RemoveWithRetry removes the named file or empty directory. On Windows, if
+// another process has the path open, the removal is retried until timeout elapses.
+// Returns the number of times the rename was retried.
+func RemoveWithRetry(path string, timeout, retryInterval time.Duration) (int, error) {
+	return retryInUse(func() error { return os.Remove(path) }, timeout, retryInterval)
+}
+
+// RemoveWithRetry removes the named file or empty directory recursively. On Windows,
+// if another process has the path open, the removal is retried until timeout elapses.
+// Returns the number of times the rename was retried.
+func RemoveAllWithRetry(path string, timeout, retryInterval time.Duration) (int, error) {
+	return retryInUse(func() error { return os.RemoveAll(path) }, timeout, retryInterval)
+}
+
 // RemoveDirSync removes the directory and syncs the parent directory.
 func RemoveDirSync(dir string) error {
-	if err := os.RemoveAll(dir); err != nil {
+	if err := RemoveAll(dir); err != nil {
 		return err
 	}
 	return SyncDirParentMaybe(dir)
@@ -181,4 +227,28 @@ func FilesIdentical(path1, path2 string) bool {
 		return false
 	}
 	return bytes.Equal(b1, b2)
+}
+
+// retryInUse calls fn until it succeeds, fails for a reason other than the path
+// being in use, or timeout elapses. It returns the last error from fn.
+func retryInUse(fn func() error, timeout, retryInterval time.Duration) (int, error) {
+	deadline := time.Now().Add(timeout)
+	nRetries := 0
+	for {
+		err := fn()
+		if err == nil || !isInUse(err) || time.Now().After(deadline) {
+			return nRetries, err
+		}
+		nRetries++
+		time.Sleep(retryInterval)
+	}
+}
+
+// isInUse returns true if err is the error Windows returns when another
+// process has the path open.
+func isInUse(err error) bool {
+	if runtime.GOOS != "windows" {
+		return false
+	}
+	return errors.Is(err, errorAccessDenied) || errors.Is(err, errorSharingViolation)
 }

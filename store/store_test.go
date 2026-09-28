@@ -217,6 +217,86 @@ func Test_SingleNodeDBAppliedIndex(t *testing.T) {
 	}, 100*time.Millisecond, 2*time.Second)
 }
 
+func Test_SingleNodeDBAppliedIndex_RequestReturning(t *testing.T) {
+	s, ln := mustNewStore(t)
+	defer ln.Close()
+	if err := s.Open(); err != nil {
+		t.Fatalf("failed to open single-node store: %s", err)
+	}
+	defer s.Close(true)
+	if err := s.Bootstrap(NewServer(s.ID(), s.Addr(), true)); err != nil {
+		t.Fatalf("failed to bootstrap single-node store: %s", err)
+	}
+	if _, err := s.WaitForLeader(10 * time.Second); err != nil {
+		t.Fatalf("error waiting for leader: %s", err)
+	}
+
+	er := executeRequestFromString(`CREATE TABLE foo (id INTEGER PRIMARY KEY, name TEXT)`, false, false)
+	if r, _, err := s.Execute(context.Background(), er); err != nil {
+		t.Fatalf("failed to create table: %s", err)
+	} else if got, exp := asJSON(r), `[{}]`; got != exp {
+		t.Fatalf("unexpected create result: got %s, exp %s", got, exp)
+	}
+
+	tests := []struct {
+		name     string
+		sql      string
+		expected string
+	}{
+		{
+			name:     "insert",
+			sql:      `INSERT INTO foo VALUES (1, 'fiona') RETURNING id, name`,
+			expected: `[{"columns":["id","name"],"types":["integer","text"],"values":[[1,"fiona"]]}]`,
+		},
+		{
+			name:     "update",
+			sql:      `UPDATE foo SET name = 'declan' WHERE id = 1 RETURNING id, name`,
+			expected: `[{"columns":["id","name"],"types":["integer","text"],"values":[[1,"declan"]]}]`,
+		},
+		{
+			name:     "delete",
+			sql:      `DELETE FROM foo WHERE id = 1 RETURNING id, name`,
+			expected: `[{"columns":["id","name"],"types":["integer","text"],"values":[[1,"declan"]]}]`,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			before := s.DBAppliedIndex()
+			eqr := executeQueryRequestFromString(tt.sql, proto.ConsistencyLevel_WEAK, false, false, false)
+			eqr.Request.Statements[0].ForceQuery = true
+			r, _, idx, err := s.Request(context.Background(), eqr)
+			if err != nil {
+				t.Fatalf("failed to execute RETURNING request: %s", err)
+			}
+			if got := asJSON(r); got != tt.expected {
+				t.Fatalf("unexpected RETURNING result: got %s, exp %s", got, tt.expected)
+			}
+			if got := s.DBAppliedIndex(); got != idx || got <= before {
+				t.Errorf("wrong DB applied index after RETURNING: got %d, exp %d, previous %d", got, idx, before)
+			}
+
+			// Strong reads pass through the FSM but must not mark the database changed,
+			// even when ForceQuery is set on the statement.
+			before = s.DBAppliedIndex()
+			eqr = executeQueryRequestFromString(`SELECT COUNT(*) FROM foo`, proto.ConsistencyLevel_STRONG, false, false, false)
+			eqr.Request.Statements[0].ForceQuery = true
+			r, _, idx, err = s.Request(context.Background(), eqr)
+			if err != nil {
+				t.Fatalf("failed to execute strong read request: %s", err)
+			}
+			if len(r) != 1 || r[0].GetQ() == nil || r[0].GetQ().Error != "" {
+				t.Fatalf("unexpected strong read result: %s", asJSON(r))
+			}
+			if idx <= before {
+				t.Fatalf("strong read did not advance Raft index: got %d, previous DB index %d", idx, before)
+			}
+			if got := s.DBAppliedIndex(); got != before {
+				t.Fatalf("strong read changed DB applied index: got %d, exp %d", got, before)
+			}
+		})
+	}
+}
+
 func Test_SingleNode_WaitForCommitIndex(t *testing.T) {
 	s, ln := mustNewStore(t)
 	defer ln.Close()
@@ -309,10 +389,14 @@ func Test_SingleNodeBackupBinary_NoLogs(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Backup Failed: unable to create temp file, %s", err.Error())
 	}
-	defer os.Remove(f.Name())
+	defer fsutil.Remove(f.Name())
 	defer f.Close()
-	if err := s.Backup(context.Background(), backupRequestBinary(true, false, false), f); err != nil {
+	if n, err := s.Backup(context.Background(), backupRequestBinary(true, false, false), f); err != nil {
 		t.Fatalf("Backup failed %s", err.Error())
+	} else if fi, err := f.Stat(); err != nil {
+		t.Fatalf("failed to stat backup file: %s", err)
+	} else if int64(n) != fi.Size() {
+		t.Fatalf("backup byte count: got %d, want %d", n, fi.Size())
 	}
 	if !filesIdentical(f.Name(), s.dbPath) {
 		t.Fatalf("backup file not identical to database file")
@@ -353,10 +437,14 @@ COMMIT;
 	if err != nil {
 		t.Fatalf("Backup Failed: unable to create temp file, %s", err.Error())
 	}
-	defer os.Remove(f.Name())
+	defer fsutil.Remove(f.Name())
 	defer f.Close()
-	if err := s.Backup(context.Background(), backupRequestBinary(true, false, false), f); err != nil {
+	if n, err := s.Backup(context.Background(), backupRequestBinary(true, false, false), f); err != nil {
 		t.Fatalf("Backup failed %s", err.Error())
+	} else if fi, err := f.Stat(); err != nil {
+		t.Fatalf("failed to stat backup file: %s", err)
+	} else if int64(n) != fi.Size() {
+		t.Fatalf("backup byte count: got %d, want %d", n, fi.Size())
 	}
 	if !filesIdentical(f.Name(), s.dbPath) {
 		t.Fatalf("backup file not identical to database file")
@@ -368,10 +456,14 @@ COMMIT;
 	if err != nil {
 		t.Fatalf("Backup Failed: unable to create temp file, %s", err.Error())
 	}
-	defer os.Remove(gzf.Name())
+	defer fsutil.Remove(gzf.Name())
 	defer gzf.Close()
-	if err := s.Backup(context.Background(), backupRequestBinary(true, false, true), gzf); err != nil {
+	if n, err := s.Backup(context.Background(), backupRequestBinary(true, false, true), gzf); err != nil {
 		t.Fatalf("Compressed backup failed %s", err.Error())
+	} else if fi, err := gzf.Stat(); err != nil {
+		t.Fatalf("failed to stat backup file: %s", err)
+	} else if int64(n) != fi.Size() {
+		t.Fatalf("backup byte count: got %d, want %d", n, fi.Size())
 	}
 
 	// Gzip decompress file to a new temp file
@@ -422,7 +514,7 @@ func Test_StoreSingleNodeNotOpen(t *testing.T) {
 	if _, err := s.Nodes(); err != ErrNotOpen {
 		t.Fatalf("wrong error received for non-open store: %s", err)
 	}
-	if err := s.Backup(context.Background(), nil, nil); err != ErrNotOpen {
+	if _, err := s.Backup(context.Background(), nil, nil); err != ErrNotOpen {
 		t.Fatalf("wrong error received for non-open store: %s", err)
 	}
 
@@ -1560,11 +1652,15 @@ COMMIT;
 	if err != nil {
 		t.Fatalf("Backup Failed: unable to create temp file, %s", err.Error())
 	}
-	defer os.Remove(f.Name())
+	defer fsutil.Remove(f.Name())
 	s.logger.Printf("backup file is %s", f.Name())
 
-	if err := s.Backup(context.Background(), backupRequestSQL(true), f); err != nil {
+	if n, err := s.Backup(context.Background(), backupRequestSQL(true), f); err != nil {
 		t.Fatalf("Backup failed %s", err.Error())
+	} else if fi, err := f.Stat(); err != nil {
+		t.Fatalf("failed to stat backup file: %s", err)
+	} else if int64(n) != fi.Size() {
+		t.Fatalf("backup byte count: got %d, want %d", n, fi.Size())
 	}
 
 	// Check the backed up data
@@ -1610,11 +1706,15 @@ COMMIT;
 	if err != nil {
 		t.Fatalf("Backup Failed: unable to create temp file, %s", err.Error())
 	}
-	defer os.Remove(f.Name())
+	defer fsutil.Remove(f.Name())
 	defer f.Close()
 
-	if err := s.Backup(context.Background(), backupRequestDelete(true, false, false), f); err != nil {
+	if n, err := s.Backup(context.Background(), backupRequestDelete(true, false, false), f); err != nil {
 		t.Fatalf("DELETE backup failed %s", err.Error())
+	} else if fi, err := f.Stat(); err != nil {
+		t.Fatalf("failed to stat backup file: %s", err)
+	} else if int64(n) != fi.Size() {
+		t.Fatalf("backup byte count: got %d, want %d", n, fi.Size())
 	}
 
 	// Check that the backup file is a valid SQLite database
@@ -1637,11 +1737,15 @@ COMMIT;
 	if err != nil {
 		t.Fatalf("Compressed backup Failed: unable to create temp file, %s", err.Error())
 	}
-	defer os.Remove(gzf.Name())
+	defer fsutil.Remove(gzf.Name())
 	defer gzf.Close()
 
-	if err := s.Backup(context.Background(), backupRequestDelete(true, false, true), gzf); err != nil {
+	if n, err := s.Backup(context.Background(), backupRequestDelete(true, false, true), gzf); err != nil {
 		t.Fatalf("Compressed DELETE backup failed %s", err.Error())
+	} else if fi, err := gzf.Stat(); err != nil {
+		t.Fatalf("failed to stat backup file: %s", err)
+	} else if int64(n) != fi.Size() {
+		t.Fatalf("backup byte count: got %d, want %d", n, fi.Size())
 	}
 
 	// Verify the compressed backup can be decompressed and is valid
@@ -1649,7 +1753,7 @@ COMMIT;
 	if err != nil {
 		t.Fatalf("Failed to gunzip DELETE backup file %s", err.Error())
 	}
-	defer os.Remove(guzf)
+	defer fsutil.Remove(guzf)
 
 	guzData, err := os.ReadFile(guzf)
 	if err != nil {
@@ -1701,10 +1805,10 @@ COMMIT;
 	if err != nil {
 		t.Fatalf("Backup Failed: unable to create temp file, %s", err.Error())
 	}
-	defer os.Remove(f.Name())
+	defer fsutil.Remove(f.Name())
 	s.logger.Printf("backup file is %s", f.Name())
 
-	if err := s.Backup(context.Background(), backupRequestSQLWithTables(true, []string{"foo"}), f); err != nil {
+	if _, err := s.Backup(context.Background(), backupRequestSQLWithTables(true, []string{"foo"}), f); err != nil {
 		t.Fatalf("Backup failed %s", err.Error())
 	}
 
@@ -1765,10 +1869,10 @@ COMMIT;
 	if err != nil {
 		t.Fatalf("Backup Failed: unable to create temp file, %s", err.Error())
 	}
-	defer os.Remove(f.Name())
+	defer fsutil.Remove(f.Name())
 	s.logger.Printf("backup file is %s", f.Name())
 
-	if err := s.Backup(context.Background(), backupRequestSQLWithTables(true, []string{"foo", "bar"}), f); err != nil {
+	if _, err := s.Backup(context.Background(), backupRequestSQLWithTables(true, []string{"foo", "bar"}), f); err != nil {
 		t.Fatalf("Backup failed %s", err.Error())
 	}
 
@@ -1831,10 +1935,10 @@ COMMIT;
 	if err != nil {
 		t.Fatalf("Backup Failed: unable to create temp file, %s", err.Error())
 	}
-	defer os.Remove(f.Name())
+	defer fsutil.Remove(f.Name())
 	s.logger.Printf("backup file is %s", f.Name())
 
-	if err := s.Backup(context.Background(), backupRequestSQLWithTables(true, []string{"nonexistent"}), f); err != nil {
+	if _, err := s.Backup(context.Background(), backupRequestSQLWithTables(true, []string{"nonexistent"}), f); err != nil {
 		t.Fatalf("Backup failed %s", err.Error())
 	}
 
@@ -2255,7 +2359,7 @@ func Test_SingleNodeSetRestoreFailStoreOpen(t *testing.T) {
 	defer s.Close(true)
 
 	path := mustCopyFileToTempFile(filepath.Join("testdata", "load.sqlite"))
-	defer os.Remove(path)
+	defer fsutil.Remove(path)
 	if err := s.SetRestorePath(path); err == nil {
 		t.Fatalf("expected error setting restore path on open store")
 	}
@@ -2270,7 +2374,7 @@ func Test_SingleNodeSetRestoreFailBadFile(t *testing.T) {
 	defer s.Close(true)
 
 	path := mustCreateTempFile()
-	defer os.Remove(path)
+	defer fsutil.Remove(path)
 	os.WriteFile(path, []byte("not valid SQLite data"), 0644)
 	if err := s.SetRestorePath(path); err == nil {
 		t.Fatalf("expected error setting restore path with invalid file")

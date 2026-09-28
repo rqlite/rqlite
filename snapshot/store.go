@@ -56,6 +56,10 @@ const (
 var (
 	// ErrSnapshotNotFound is returned when a snapshot cannot be found.
 	ErrSnapshotNotFound = errors.New("snapshot not found")
+
+	// ErrReapPending is returned when a snapshot cannot be opened because an
+	// interrupted reap must complete first.
+	ErrReapPending = errors.New("snapshot store has an unfinished reap")
 )
 
 // stats captures stats for the Store.
@@ -288,9 +292,16 @@ func NewStore(dir string) (*Store, error) {
 // Create creates a new snapshot sink for the given parameters.
 func (s *Store) Create(version raft.SnapshotVersion, index, term uint64, configuration raft.Configuration,
 	configurationIndex uint64, trans raft.Transport) (retSink raft.SnapshotSink, retErr error) {
+	// Read the store under a read lock so the scan cannot race with a reap.
+	s.mrsw.BeginReadBlocking()
+	snapSet, err := s.getSnapshots()
+	s.mrsw.EndRead()
+	if err != nil {
+		return nil, err
+	}
 	sink := NewSink(s.dir, &raft.SnapshotMeta{
 		Version:            version,
-		ID:                 s.snapshotNamer.MakeName(term, index),
+		ID:                 s.snapshotNamer.MakeName(snapSet, term, index),
 		Index:              index,
 		Term:               term,
 		Configuration:      configuration,
@@ -397,6 +408,8 @@ func (s *Store) SetReadTimeout(d time.Duration) {
 // A sink does not need to lock the Store because either the Snapshot directory it
 // creates will be visible or not. Reaping will not see it until it is fully created,
 // and Listing it will not return it until it is fully created too.
+//
+// Open returns ErrReapPending if a previous reap failed and has not yet completed.
 func (s *Store) Open(id string) (raftMeta *raft.SnapshotMeta, rc io.ReadCloser, retErr error) {
 	if err := s.mrsw.BeginRead(); err != nil {
 		return nil, nil, fmt.Errorf("acquiring read lock: %w", err)
@@ -406,6 +419,13 @@ func (s *Store) Open(id string) (raftMeta *raft.SnapshotMeta, rc io.ReadCloser, 
 			s.mrsw.EndRead()
 		}
 	}()
+
+	// A failed reap may have checkpointed WALs into the database without
+	// updating its metadata. Do not expose that state until the plan completes.
+	// The read lock prevents a reap from starting between this check and use.
+	if fsutil.FileExists(s.reapPlanPath) {
+		return nil, nil, ErrReapPending
+	}
 
 	// The data files are about to be read, so verify their integrity first
 	// (runs at most once over the Store's lifetime). On corruption this hard
@@ -582,8 +602,8 @@ func (s *Store) reapInternal() (int, int, error) {
 
 	full, _ := fullSet.Newest()
 
-	// Single full snapshot with nothing newer — nothing to do.
-	if snapSet.Len() == 1 {
+	// A single full snapshot needs no work unless it contains WALs.
+	if snapSet.Len() == 1 && len(full.walFiles) == 0 {
 		return 0, 0, nil
 	}
 
@@ -634,14 +654,16 @@ func (s *Store) reapInternal() (int, int, error) {
 		}
 
 		// 5. Write new metadata into the full snapshot dir, overwriting the existing
-		// metadata.
+		// metadata. The new ID's timestamp sorts after every existing snapshot
+		// with the same term and index, even if the clock has not advanced.
 		var newest *Snapshot
 		if newerSet.Len() > 0 {
 			newest, _ = newerSet.Newest()
 		} else {
 			newest = full
 		}
-		newID := s.snapshotNamer.MakeName(newest.raftMeta.Term, newest.raftMeta.Index)
+
+		newID := s.snapshotNamer.MakeName(snapSet, newest.raftMeta.Term, newest.raftMeta.Index)
 		newMeta := copyRaftMeta(newest.raftMeta)
 		newMeta.ID = newID
 		metaJSON, err := json.Marshal(newMeta)
@@ -685,7 +707,7 @@ func (s *Store) executeReapPlan(p *plan.Plan, planPath string) (int, int, error)
 	}
 
 	// Clean up the plan file.
-	os.Remove(planPath)
+	fsutil.Remove(planPath)
 	return p.NReaped, p.NCheckpointed, nil
 }
 
@@ -731,7 +753,7 @@ func (s *Store) SetDueNext(t Type) error {
 		if !fsutil.FileExists(s.fullNeededPath) {
 			return nil
 		}
-		if err := os.Remove(s.fullNeededPath); err != nil {
+		if err := fsutil.Remove(s.fullNeededPath); err != nil {
 			return err
 		}
 		return fsutil.SyncDirMaybe(s.dir)
@@ -842,7 +864,7 @@ func (s *Store) check() error {
 	}
 
 	// Remove any incomplete plan file from an interrupted plan write.
-	os.Remove(tmpName(s.reapPlanPath))
+	fsutil.Remove(tmpName(s.reapPlanPath))
 
 	// Resume an interrupted reap if a plan file exists, before any temporary
 	// directories are removed below, since the reap may still need them.
@@ -874,7 +896,7 @@ func (s *Store) check() error {
 			}
 		} else {
 			s.logger.Printf("reap plan at %s is fully executed, removing plan", s.reapPlanPath)
-			os.Remove(s.reapPlanPath)
+			fsutil.Remove(s.reapPlanPath)
 		}
 	}
 
@@ -887,7 +909,7 @@ func (s *Store) check() error {
 		if e.IsDir() && isTmpName(e.Name()) {
 			tmpPath := filepath.Join(s.dir, e.Name())
 			s.logger.Printf("removing leftover temporary directory %s", tmpPath)
-			if err := os.RemoveAll(tmpPath); err != nil {
+			if err := fsutil.RemoveAll(tmpPath); err != nil {
 				return fmt.Errorf("removing temporary directory %s: %w", tmpPath, err)
 			}
 		}

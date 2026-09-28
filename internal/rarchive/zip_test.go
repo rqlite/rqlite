@@ -7,18 +7,20 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+
+	"github.com/rqlite/rqlite/v10/internal/fsutil"
 )
 
 func Test_IsZipFile(t *testing.T) {
 	// Create a valid ZIP file
 	zipFilename := mustTempFile()
 	mustCreateZipFile(zipFilename, "This is a test file inside the zip")
-	defer os.Remove(zipFilename)
+	defer fsutil.Remove(zipFilename)
 
 	// Create a non-ZIP file
 	nonZipFilename := mustTempFile()
 	mustWriteBytesToFile(nonZipFilename, []byte("This is not a zip file"))
-	defer os.Remove(nonZipFilename)
+	defer fsutil.Remove(nonZipFilename)
 
 	// Test cases
 	tests := []struct {
@@ -54,7 +56,7 @@ func Test_UnzipToDir(t *testing.T) {
 		t.Fatalf("Failed to create ZIP file in memory: %v", err)
 	}
 	zipFileName := mustTempFile()
-	defer os.Remove(zipFileName)
+	defer fsutil.Remove(zipFileName)
 	mustWriteBytesToFile(zipFileName, zipData)
 
 	// Create a temporary directory for unzipping
@@ -91,7 +93,7 @@ func Test_UnzipToDir_InvalidZip(t *testing.T) {
 
 	// Write a non-zip file to disk
 	nonZipFileName := mustTempFile()
-	defer os.Remove(nonZipFileName)
+	defer fsutil.Remove(nonZipFileName)
 	mustWriteBytesToFile(nonZipFileName, []byte("This is not a zip file"))
 
 	// Try to unzip the non-zip file

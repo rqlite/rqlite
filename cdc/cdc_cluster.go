@@ -2,9 +2,11 @@ package cdc
 
 import (
 	"context"
+	"sync"
 	"time"
 
 	"github.com/rqlite/rqlite/v10/cluster"
+	"github.com/rqlite/rqlite/v10/cluster/proto"
 	"github.com/rqlite/rqlite/v10/store"
 )
 
@@ -14,6 +16,9 @@ type CDCCluster struct {
 	store  *store.Store
 	clstr  *cluster.Service
 	client *cluster.Client
+
+	mu    sync.RWMutex
+	creds *proto.Credentials
 }
 
 // NewCDCCluster creates a new CDCCluster instance with the given store,
@@ -59,6 +64,15 @@ func (c *CDCCluster) BroadcastHighWatermark(value uint64) error {
 	const timeout = 5 * time.Second
 
 	// Broadcast to all cluster nodes
-	_, err = c.client.BroadcastHWM(context.Background(), value, retries, timeout, nodeAddrs...)
+	c.mu.RLock()
+	_, err = c.client.BroadcastHWM(context.Background(), value, c.creds, retries, timeout, nodeAddrs...)
+	c.mu.RUnlock()
 	return err
+}
+
+// SetAuth sets credentials for broadcasting to other nodes.
+func (c *CDCCluster) SetAuth(creds *proto.Credentials) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.creds = creds
 }

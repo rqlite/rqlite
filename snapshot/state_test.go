@@ -76,7 +76,7 @@ func Test_Snapshot_Clone(t *testing.T) {
 		t.Fatalf("Expected snapshot ID to be 2-1017-1704807719996, got %s", snaps[0].ID)
 	}
 
-	// Clone the snapshot, make sure it is installed.
+	// Clone the snapshot and make sure it is installed.
 	if err := Clone(dir, snaps[0].ID, 2000, 100); err != nil {
 		t.Fatalf("failed to clone snapshot: %s", err)
 	}
@@ -95,6 +95,11 @@ func Test_Snapshot_Clone(t *testing.T) {
 	}
 	if snaps[0].Term != 100 {
 		t.Fatalf("Expected cloned snapshot term to be 100, got %d", snaps[0].Term)
+	}
+
+	term, index, _ := parseName(t, snaps[0].ID)
+	if term != 100 || index != 2000 {
+		t.Fatalf("unexpected cloned snapshot ID: %s", snaps[0].ID)
 	}
 }
 

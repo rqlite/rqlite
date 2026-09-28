@@ -1,14 +1,11 @@
 package db
 
 import (
-	"bytes"
 	"fmt"
-	"log"
-	"os"
-	"strings"
 	"sync/atomic"
 	"testing"
 
+	"github.com/rqlite/rqlite/v10/db/querylog"
 	"github.com/rqlite/rqlite/v10/internal/fsutil"
 )
 
@@ -28,7 +25,7 @@ func Test_DefaultDriver(t *testing.T) {
 	}
 
 	path := mustTempPath()
-	defer os.RemoveAll(path)
+	defer fsutil.RemoveAll(path)
 	db, err := OpenWithDriver(d, path, false, true)
 	if err != nil {
 		t.Fatalf("OpenWithDriver failed: %s", err.Error())
@@ -54,7 +51,7 @@ func Test_DefaultDriver(t *testing.T) {
 
 	// Now, delete the WAL file, and re-open the database. The SELECT should
 	// fail with "no table", proving the WAL was not checkpointed.
-	if err := os.Remove(db.WALPath()); err != nil {
+	if err := fsutil.Remove(db.WALPath()); err != nil {
 		t.Fatalf("Failed to remove WAL file: %s", err.Error())
 	}
 	db, err = OpenWithDriver(d, path, false, true)
@@ -91,7 +88,7 @@ func Test_CheckpointDriver(t *testing.T) {
 	}
 
 	path := mustTempPath()
-	defer os.RemoveAll(path)
+	defer fsutil.RemoveAll(path)
 	db, err := OpenWithDriver(d, path, false, true)
 	if err != nil {
 		t.Fatalf("OpenWithDriver failed: %s", err.Error())
@@ -133,20 +130,18 @@ func testDriverConfigName() string {
 	return fmt.Sprintf("test-driver-config-%d", driverTestSeq.Add(1))
 }
 
-// Verifies that a DriverConfig with a QueryLogger
-// produces log output for every executed statement.
+// Verifies that a DriverConfig with a QueryLogger does not interfere with
+// normal database operations. Log output capture is tested in db/querylog.
 func Test_NewDriverFromConfig_QueryLogOnly(t *testing.T) {
-	var buf bytes.Buffer
-	logger := log.New(&buf, "", 0)
-	ql := NewQueryLogger(QueryLogConfig{Logger: logger})
+	ql := querylog.New(querylog.DefaultConfig())
 
-	d := NewDriverFromConfig(testDriverConfigName(), DriverConfig{
+	d := NewDriverFromConfig(testDriverConfigName(), &DriverConfig{
 		ChkOnClose:  CnkOnCloseModeDisabled,
 		QueryLogger: ql,
 	})
 
 	path := mustTempPath()
-	defer os.RemoveAll(path)
+	defer fsutil.RemoveAll(path)
 	db, err := OpenWithDriver(d, path, false, true)
 	if err != nil {
 		t.Fatalf("OpenWithDriver failed: %s", err)
@@ -156,19 +151,19 @@ func Test_NewDriverFromConfig_QueryLogOnly(t *testing.T) {
 	mustExecute(db, "CREATE TABLE t (id INTEGER PRIMARY KEY, val TEXT)")
 	mustExecute(db, "INSERT INTO t VALUES (1, 'hello')")
 
-	output := buf.String()
-	if !strings.Contains(output, "CREATE TABLE t") {
-		t.Fatalf("expected CREATE TABLE in query log, got:\n%s", output)
+	rows, err := db.QueryStringStmt("SELECT val FROM t")
+	if err != nil {
+		t.Fatalf("SELECT failed: %s", err)
 	}
-	if !strings.Contains(output, "INSERT INTO t") {
-		t.Fatalf("expected INSERT in query log, got:\n%s", output)
+	if len(rows) != 1 || len(rows[0].Values) != 1 {
+		t.Fatalf("expected 1 row from SELECT, got unexpected result")
 	}
 }
 
 // Verifies that a DriverConfig with nil
 // QueryLogger opens and operates normally without tracing.
 func Test_NewDriverFromConfig_NoQueryLog(t *testing.T) {
-	d := NewDriverFromConfig(testDriverConfigName(), DriverConfig{
+	d := NewDriverFromConfig(testDriverConfigName(), &DriverConfig{
 		ChkOnClose:  CnkOnCloseModeDisabled,
 		QueryLogger: nil,
 	})
@@ -177,7 +172,7 @@ func Test_NewDriverFromConfig_NoQueryLog(t *testing.T) {
 	}
 
 	path := mustTempPath()
-	defer os.RemoveAll(path)
+	defer fsutil.RemoveAll(path)
 	db, err := OpenWithDriver(d, path, false, true)
 	if err != nil {
 		t.Fatalf("OpenWithDriver failed: %s", err)
@@ -191,7 +186,7 @@ func Test_NewDriverFromConfig_NoQueryLog(t *testing.T) {
 // DriverConfig are reflected on the returned Driver struct.
 func Test_DriverConfig_ExtensionsFields(t *testing.T) {
 	exts := []string{"/tmp/ext1.so", "/tmp/ext2.so"}
-	d := NewDriverFromConfig(testDriverConfigName(), DriverConfig{
+	d := NewDriverFromConfig(testDriverConfigName(), &DriverConfig{
 		Extensions: exts,
 		ChkOnClose: CnkOnCloseModeDisabled,
 	})

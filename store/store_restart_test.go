@@ -9,6 +9,7 @@ import (
 	"time"
 
 	command "github.com/rqlite/rqlite/v10/command/proto"
+	"github.com/rqlite/rqlite/v10/internal/fsutil"
 	"github.com/rqlite/rqlite/v10/internal/rsum"
 	"github.com/rqlite/rqlite/v10/snapshot"
 )
@@ -358,7 +359,7 @@ func Test_Store_RestoreNoCleanSnapshot(t *testing.T) {
 			name: "NoCleanSnapshot",
 			tamperFn: func(t *testing.T, s *Store) {
 				// Remove clean snapshot marker to force a full restore.
-				if err := os.Remove(s.cleanSnapshotPath); err != nil {
+				if err := fsutil.Remove(s.cleanSnapshotPath); err != nil {
 					t.Fatalf("failed to remove clean snapshot during testing: %s", err.Error())
 				}
 			},

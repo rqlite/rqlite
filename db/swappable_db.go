@@ -154,7 +154,7 @@ func (s *SwappableDB) Swap(path string, fkConstraints, walEnabled bool) (retErr 
 	if err := fsutil.SyncDirMaybe(filepath.Dir(dbPath)); err != nil {
 		return fmt.Errorf("failed to sync stashed files: %w", err)
 	}
-	if err := os.Rename(path, dbPath); err != nil {
+	if err := fsutil.Rename(path, dbPath); err != nil {
 		return fmt.Errorf("failed to rename database: %w", err)
 	}
 	if err := fsutil.SyncDirMaybe(filepath.Dir(dbPath)); err != nil {
@@ -252,7 +252,7 @@ func (s *SwappableDB) VacuumInto(path string) error {
 }
 
 // Backup calls Backup on the underlying database.
-func (s *SwappableDB) Backup(path string, vacuum bool) error {
+func (s *SwappableDB) Backup(path string, vacuum bool) (sz int64, retErr error) {
 	s.dbMu.RLock()
 	defer s.dbMu.RUnlock()
 	return s.db.Backup(path, vacuum)
@@ -354,6 +354,13 @@ func (s *SwappableDB) RegisterCommitHook(hook CommitHookCallback) error {
 	s.dbMu.RLock()
 	defer s.dbMu.RUnlock()
 	return s.db.RegisterCommitHook(hook)
+}
+
+// RegisterRollbackHook registers a rollback hook on the underlying database.
+func (s *SwappableDB) RegisterRollbackHook(hook RollbackHookCallback) error {
+	s.dbMu.RLock()
+	defer s.dbMu.RUnlock()
+	return s.db.RegisterRollbackHook(hook)
 }
 
 // ColumnNames returns the column names for the given table from the underlying database.

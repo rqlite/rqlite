@@ -9,6 +9,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/rqlite/rqlite/v10/internal/fsutil"
 	"github.com/rqlite/rqlite/v10/internal/rtls"
 	"github.com/rqlite/rqlite/v10/testdata/x509"
 )
@@ -54,8 +55,8 @@ func Test_DialerHeader(t *testing.T) {
 func Test_DialerHeaderTLS(t *testing.T) {
 	s, cert, key := mustNewEchoServerTLS_ExampleDotCom()
 	defer s.Close()
-	defer os.Remove(cert)
-	defer os.Remove(key)
+	defer fsutil.Remove(cert)
+	defer fsutil.Remove(key)
 	go s.Start(t)
 
 	tlsConfig, err := rtls.CreateClientConfig("", "", rtls.NoCACert, rtls.NoServerName, true)
@@ -83,8 +84,8 @@ func Test_DialerHeaderTLS(t *testing.T) {
 func Test_DialerHeaderTLS_ExampleDotCom(t *testing.T) {
 	s, cert, key := mustNewEchoServerTLS_ExampleDotCom()
 	defer s.Close()
-	defer os.Remove(cert)
-	defer os.Remove(key)
+	defer fsutil.Remove(cert)
+	defer fsutil.Remove(key)
 	go s.Start(t)
 
 	// Set server name to wrong value, dialing should fail.
@@ -113,8 +114,8 @@ func Test_DialerHeaderTLS_ExampleDotCom(t *testing.T) {
 func Test_DialerHeaderTLSBadConnect(t *testing.T) {
 	s, cert, key := mustNewEchoServerTLS_ExampleDotCom()
 	defer s.Close()
-	defer os.Remove(cert)
-	defer os.Remove(key)
+	defer fsutil.Remove(cert)
+	defer fsutil.Remove(key)
 	go s.Start(t)
 
 	// Connect to a TLS server with an unencrypted client, to make sure

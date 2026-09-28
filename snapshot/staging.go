@@ -128,10 +128,10 @@ func (s *StagingDir) MoveWALFilesTo(dst string) error {
 		srcCRCPath := srcPath + crcSuffix
 		name := filepath.Base(srcPath)
 		dstPath := filepath.Join(dst, name)
-		if err := os.Rename(srcPath, dstPath); err != nil {
+		if err := fsutil.Rename(srcPath, dstPath); err != nil {
 			return err
 		}
-		if err := os.Rename(srcCRCPath, dstPath+crcSuffix); err != nil {
+		if err := fsutil.Rename(srcCRCPath, dstPath+crcSuffix); err != nil {
 			return err
 		}
 	}
@@ -189,6 +189,6 @@ func (w *WALWriter) Cancel() {
 	}
 	w.fd.Close()
 	walPath := w.fd.Name()
-	os.Remove(walPath)
-	os.Remove(walPath + crcSuffix)
+	fsutil.Remove(walPath)
+	fsutil.Remove(walPath + crcSuffix)
 }

@@ -29,6 +29,7 @@ import (
 	"github.com/rqlite/rqlite/v10/db"
 	"github.com/rqlite/rqlite/v10/http/console"
 	"github.com/rqlite/rqlite/v10/http/licenses"
+	"github.com/rqlite/rqlite/v10/internal/rsync"
 	"github.com/rqlite/rqlite/v10/internal/rtls"
 	"github.com/rqlite/rqlite/v10/proxy"
 	"github.com/rqlite/rqlite/v10/queue"
@@ -274,8 +275,8 @@ type Service struct {
 
 	cluster Cluster // The Cluster service.
 
-	start      time.Time // Start up time.
-	lastBackup time.Time // Time of last successful backup.
+	start      time.Time        // Start up time.
+	lastBackup rsync.AtomicTime // Time of last successful backup.
 
 	statusMu sync.RWMutex
 	statuses map[string]StatusReporter
@@ -675,7 +676,13 @@ func (s *Service) handleBackup(w http.ResponseWriter, r *http.Request, qp QueryP
 	}
 	addBackupFormatHeader(w, qp)
 
-	addr, err := s.proxy.Backup(r.Context(), br, w, makeCredentials(r), qp.Timeout(defaultTimeout), qp.Redirect())
+	preWFn := func() error {
+		addr := s.proxy.GetAPIAddr()
+		w.Header().Set(ServedByHTTPHeader, addr)
+		return nil
+	}
+
+	_, err := s.proxy.Backup(r.Context(), br, w, makeCredentials(r), qp.Timeout(defaultTimeout), qp.Redirect(), preWFn)
 	if err != nil {
 		if errors.Is(err, proxy.ErrNotLeader) {
 			s.DoRedirect(w, r, qp)
@@ -697,9 +704,7 @@ func (s *Service) handleBackup(w http.ResponseWriter, r *http.Request, qp QueryP
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
-	w.Header().Set(ServedByHTTPHeader, addr)
-
-	s.lastBackup = time.Now()
+	s.lastBackup.Store(time.Now())
 }
 
 // handleLoad loads the database from the given SQLite database file or SQLite dump.
@@ -732,6 +737,9 @@ func (s *Service) handleLoad(w http.ResponseWriter, r *http.Request, qp QueryPar
 	}
 
 	resp := NewResponse()
+	defer func() {
+		resp.end = time.Now()
+	}()
 	b, err := io.ReadAll(r.Body)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
@@ -771,8 +779,8 @@ func (s *Service) handleLoad(w http.ResponseWriter, r *http.Request, qp QueryPar
 			w.Header().Set(ServedByHTTPHeader, addr)
 			resp.Results.ExecuteQueryResponse = response
 		}
-		resp.end = time.Now()
 	}
+
 	s.writeResponse(w, qp, resp)
 }
 
@@ -947,7 +955,7 @@ func (s *Service) handleStatus(w http.ResponseWriter, r *http.Request, qp QueryP
 		"node":    nodeStatus,
 	}
 	if !s.lastBackup.IsZero() {
-		status["last_backup_time"] = s.lastBackup
+		status["last_backup_time"] = s.lastBackup.Load()
 	}
 	if s.BuildInfo != nil {
 		status["build"] = s.BuildInfo
@@ -1292,7 +1300,10 @@ func (s *Service) queuedExecute(w http.ResponseWriter, r *http.Request, qp Query
 
 	stmts, err := ParseRequest(r.Body)
 	if err != nil {
-		if errors.Is(err, ErrNoStatements) && !qp.Wait() {
+		if (errors.Is(err, ErrNoStatements) || errors.Is(err, ErrInvalidRequest)) && qp.Wait() {
+			// These errors are OK if waiting.
+			err = nil
+		} else {
 			http.Error(w, err.Error(), http.StatusBadRequest)
 			return
 		}

@@ -88,6 +88,9 @@ message ExecuteQueryRequest {
 }
 
 message ExecuteQueryResponse {
+	// Set when a statement succeeds through the write path. This is conservative:
+	// no rows may have changed, or the transaction may subsequently be rolled back.
+	bool mutated = 4;
 	oneof result {
 		QueryRows q = 1;
 		ExecuteResult e = 2;

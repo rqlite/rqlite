@@ -6,12 +6,14 @@ import (
 	"log"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
 
 	cdcjson "github.com/rqlite/rqlite/v10/cdc/json"
 	"github.com/rqlite/rqlite/v10/command/proto"
+	"github.com/rqlite/rqlite/v10/internal/fsutil"
 	"github.com/rqlite/rqlite/v10/internal/rarchive/flate"
 	"github.com/rqlite/rqlite/v10/internal/rsync"
 	"github.com/rqlite/rqlite/v10/queue"
@@ -218,7 +220,7 @@ func NewService(nodeID, dir string, clstr Cluster, cfg *Config) (*Service, error
 	}
 	cdcDB90Path := filepath.Join(dir, cdcDB)
 	if fileExists(cdcDB90Path) {
-		if err := os.Rename(cdcDB90Path, filepath.Join(srv.dir, cdcDB)); err != nil {
+		if err := fsutil.Rename(cdcDB90Path, filepath.Join(srv.dir, cdcDB)); err != nil {
 			return nil, fmt.Errorf("failed to move existing FIFO DB to CDC service directory: %w", err)
 		}
 	}
@@ -608,7 +610,10 @@ func (s *Service) leaderHWMLoop() (chan struct{}, chan struct{}) {
 				// followers get the update even if there are no new events,
 				// or nodes that join the cluster get the current HWM.
 				if err := s.clstr.BroadcastHighWatermark(hwm); err != nil {
-					s.logger.Printf("error broadcasting high watermark to Cluster: %v", err)
+					s.logger.Printf("error broadcasting high watermark to Cluster - this will affect CDC operation: %v", err)
+					if strings.Contains(err.Error(), "unauthorized") {
+						s.logger.Println("did you forget to set authentication credentials for cdc-hwm-update?")
+					}
 				}
 				// While we always broadcast the high watermark, we only prune the
 				// FIFO if it has advanced since the last time we did so. There

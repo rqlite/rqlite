@@ -15,6 +15,7 @@ import (
 	"github.com/rqlite/rqlite/v10/command/proto"
 	"github.com/rqlite/rqlite/v10/db"
 	"github.com/rqlite/rqlite/v10/http"
+	"github.com/rqlite/rqlite/v10/internal/fsutil"
 	"github.com/rqlite/rqlite/v10/queue"
 	"github.com/rqlite/rqlite/v10/store"
 	"github.com/rqlite/rqlite/v10/tcp"
@@ -1391,7 +1392,7 @@ func Test_MultiNodeCluster_Backup(t *testing.T) {
 	}
 
 	backupFile := mustTempFile()
-	defer os.Remove(backupFile)
+	defer fsutil.Remove(backupFile)
 	if err := followers[0].Backup(backupFile, false, ""); err != nil {
 		t.Fatalf("failed to get backup from follower: %s", err.Error())
 	}
@@ -1442,7 +1443,7 @@ func Test_MultiNodeCluster_Backup_SQL(t *testing.T) {
 	}
 
 	backupFile := mustTempFile()
-	defer os.Remove(backupFile)
+	defer fsutil.Remove(backupFile)
 	if err := followers[0].Backup(backupFile, false, "sql"); err != nil {
 		t.Fatalf("failed to get backup from follower: %s", err.Error())
 	}

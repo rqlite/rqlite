@@ -12,6 +12,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/rqlite/rqlite/v10/internal/fsutil"
 	"github.com/rqlite/rqlite/v10/internal/rtls"
 	"github.com/rqlite/rqlite/v10/proxy"
 	"golang.org/x/net/http2"
@@ -366,7 +367,7 @@ func mustWriteTempFile(t *testing.T, b []byte) string {
 }
 
 func mustRename(new, old string) {
-	if err := os.Rename(new, old); err != nil {
+	if err := fsutil.Rename(new, old); err != nil {
 		panic(fmt.Sprintf("failed to rename %s to %s: %s", new, old, err))
 	}
 }

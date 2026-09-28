@@ -6,6 +6,8 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+
+	"github.com/rqlite/rqlite/v10/internal/fsutil"
 )
 
 // TestIsTarGzipFile tests the IsTarGzipFile function.
@@ -16,7 +18,7 @@ func TestIsTarGzipFile(t *testing.T) {
 		"file1.txt": "This is file 1",
 		"file2.txt": "This is file 2",
 	})
-	defer os.Remove(tarGzipFile)
+	defer fsutil.Remove(tarGzipFile)
 
 	if !IsTarGzipFile(tarGzipFile) {
 		t.Errorf("expected %s to be recognized as a gzipped tarball", tarGzipFile)
@@ -36,7 +38,7 @@ func TestTarGzipHasSubdirectories(t *testing.T) {
 		"file1.txt": "This is file 1",
 		"file2.txt": "This is file 2",
 	})
-	defer os.Remove(tarGzipFile)
+	defer fsutil.Remove(tarGzipFile)
 
 	hasSubdirs, err := TarGzipHasSubdirectories(tarGzipFile)
 	if err != nil {
@@ -51,7 +53,7 @@ func TestTarGzipHasSubdirectories(t *testing.T) {
 	createTestTarGzipFile(t, tarGzipFileWithDir, map[string]string{
 		"dir/file1.txt": "This is file 1 in a dir",
 	})
-	defer os.Remove(tarGzipFileWithDir)
+	defer fsutil.Remove(tarGzipFileWithDir)
 
 	hasSubdirs, err = TarGzipHasSubdirectories(tarGzipFileWithDir)
 	if err != nil {
@@ -70,7 +72,7 @@ func TestUntarGzipToDir(t *testing.T) {
 		"file1.txt": "This is file 1",
 		"file2.txt": "This is file 2",
 	})
-	defer os.Remove(tarGzipFile)
+	defer fsutil.Remove(tarGzipFile)
 
 	// Create a directory to extract to
 	extractDir := t.TempDir()

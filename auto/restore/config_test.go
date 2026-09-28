@@ -10,6 +10,7 @@ import (
 	"github.com/rqlite/rqlite/v10/auto"
 	"github.com/rqlite/rqlite/v10/auto/aws"
 	"github.com/rqlite/rqlite/v10/auto/gcp"
+	"github.com/rqlite/rqlite/v10/internal/fsutil"
 )
 
 func Test_ReadConfigFile(t *testing.T) {
@@ -19,7 +20,7 @@ func Test_ReadConfigFile(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		defer os.Remove(tempFile.Name())
+		defer fsutil.Remove(tempFile.Name())
 
 		content := []byte("key=value")
 		if _, err := tempFile.Write(content); err != nil {
@@ -52,7 +53,7 @@ func Test_ReadConfigFile(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		defer os.Remove(tempFile.Name())
+		defer fsutil.Remove(tempFile.Name())
 
 		content := []byte("key=$TEST_VAR")
 		if _, err := tempFile.Write(content); err != nil {
@@ -79,7 +80,7 @@ func Test_ReadConfigFile(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		defer os.Remove(tempFile.Name())
+		defer fsutil.Remove(tempFile.Name())
 
 		content := []byte(`
 key1=$TEST_VAR1

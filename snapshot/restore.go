@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 
 	"github.com/rqlite/rqlite/v10/db"
+	"github.com/rqlite/rqlite/v10/internal/fsutil"
 	"github.com/rqlite/rqlite/v10/internal/rsum"
 )
 
@@ -43,6 +44,9 @@ func Restore(r io.Reader, dstPath string) (int64, error) {
 	full := hdr.GetFull()
 	if full == nil {
 		return totalRead, fmt.Errorf("snapshot has no database")
+	}
+	if full.DbHeader == nil {
+		return totalRead, fmt.Errorf("missing database header: %w", ErrHeaderInvalid)
 	}
 
 	// Extract DB file. Wrap the source in a CRC32Reader so we can verify
@@ -101,7 +105,7 @@ func Restore(r io.Reader, dstPath string) (int64, error) {
 			return totalRead, fmt.Errorf("checkpointing WALs: %w", err)
 		}
 		for _, wf := range walFiles {
-			os.Remove(wf)
+			fsutil.Remove(wf)
 		}
 	}
 

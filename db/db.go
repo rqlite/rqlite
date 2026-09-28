@@ -525,6 +525,24 @@ func (db *DB) RegisterUpdateHook(hook UpdateHookCallback) error {
 	return nil
 }
 
+// RollbackHookCallback is called when SQLite rolls back a transaction.
+type RollbackHookCallback func()
+
+// RegisterRollbackHook registers a callback for transaction rollbacks. If hook is
+// nil, the callback is removed. SQLite does not invoke this hook for a statement
+// rollback within an open transaction, or for ROLLBACK TO a savepoint.
+func (db *DB) RegisterRollbackHook(hook RollbackHookCallback) error {
+	conn, err := db.rwDB.Conn(context.Background())
+	if err != nil {
+		return err
+	}
+	defer conn.Close()
+	return conn.Raw(func(driverConn any) error {
+		driverConn.(*sqlite3.SQLiteConn).RegisterRollbackHook(hook)
+		return nil
+	})
+}
+
 // CommitHookCallback is a callback function that is called whenever a transaction
 // is committed to the database. If the callback returns true the transaction
 // is committed, otherwise it is rolled back.
@@ -1242,6 +1260,8 @@ func (db *DB) executeStmtWithConn(ctx context.Context, stmt *command.Statement, 
 					Error: retErr.Error(),
 				}
 			}
+		} else if res != nil && res.GetError() == "" && res.GetQ().GetError() == "" {
+			res.Mutated = true
 		}
 	}()
 	response := &command.ExecuteQueryResponse{}
@@ -1603,6 +1623,9 @@ func (db *DB) RequestWithContext(ctx context.Context, req *command.Request, xTim
 					Error: err.Error(),
 				},
 			})
+			if abortOnError(err) {
+				break
+			}
 			continue
 		}
 
@@ -1635,29 +1658,42 @@ func (db *DB) RequestWithContext(ctx context.Context, req *command.Request, xTim
 // Backup writes a consistent snapshot of the database to the given file.
 // The resultant SQLite database file will be in DELETE mode. This function
 // can be called when changes to the database are in flight.
-func (db *DB) Backup(path string, vacuum bool) error {
-	dstDB, err := Open(path, false, false)
-	if err != nil {
-		return err
+//
+// The function returns the size of the file at path once the Backup completes
+// regardless of whether an error is returned or not.
+func (db *DB) Backup(path string, vacuum bool) (sz int64, retErr error) {
+	defer func() {
+		n, err := fsutil.FileSizeExists(path)
+		sz = n
+		if err != nil {
+			retErr = err
+		}
+	}()
+
+	var dstDB *DB
+	dstDB, retErr = Open(path, false, false)
+	if retErr != nil {
+		return
 	}
 	defer dstDB.Close()
 
-	if err := copyDatabase(dstDB, db); err != nil {
-		return fmt.Errorf("backup database: %s", err)
+	if retErr = copyDatabase(dstDB, db); retErr != nil {
+		return
 	}
 
 	// Source database might be in WAL mode.
-	_, err = dstDB.ExecuteStringStmt("PRAGMA journal_mode=DELETE")
-	if err != nil {
-		return err
+	_, retErr = dstDB.ExecuteStringStmt("PRAGMA journal_mode=DELETE")
+	if retErr != nil {
+		return
 	}
 
 	if vacuum {
-		if err := dstDB.Vacuum(); err != nil {
-			return err
+		if retErr = dstDB.Vacuum(); retErr != nil {
+			return
 		}
 	}
-	return dstDB.Close()
+	retErr = dstDB.Close()
+	return
 }
 
 // Copy copies the contents of the database to the given database. All other
@@ -1683,10 +1719,10 @@ func (db *DB) Serialize() ([]byte, error) {
 		if err != nil {
 			return nil, err
 		}
-		defer os.Remove(tmpFile.Name())
+		defer fsutil.Remove(tmpFile.Name())
 		defer tmpFile.Close()
 
-		if err := db.Backup(tmpFile.Name(), false); err != nil {
+		if _, err := db.Backup(tmpFile.Name(), false); err != nil {
 			return nil, err
 		}
 		newDB, err := Open(tmpFile.Name(), db.fkEnabled, false)
@@ -1706,13 +1742,33 @@ func (db *DB) Serialize() ([]byte, error) {
 
 // Dump writes a consistent snapshot of the database in SQL text format.
 // This function can be called when changes to the database are in flight.
-func (db *DB) Dump(w io.Writer, tableNames ...string) error {
+//
+// When table names are given, the dump carries those tables and their data, plus
+// the indexes and triggers that belong to them. Views are written out as they
+// are, filtered or not, so a view that reads from a table the dump does not
+// carry is created but cannot be queried. The dump itself still loads, since
+// SQLite resolves the tables a view reads from when the view is used, not when it
+// is created.
+func (db *DB) Dump(w io.Writer, tableNames ...string) (retErr error) {
 	conn, err := db.roDB.Conn(context.Background())
 	if err != nil {
 		return err
 	}
 	defer conn.Close()
 	ctx := context.Background()
+
+	// Keep schema and data reads on one snapshot, even if writes commit while
+	// the dump is being streamed. End the read transaction on every exit path.
+	// Because we need the transaction to span multiple queries we manually
+	// manage the transaction.
+	if _, err := conn.ExecContext(ctx, "BEGIN"); err != nil {
+		return err
+	}
+	defer func() {
+		if _, err := conn.ExecContext(ctx, "ROLLBACK"); retErr == nil {
+			retErr = err
+		}
+	}()
 
 	// Convenience function to convert string query to protobuf.
 	commReq := func(query string) *command.Request {
@@ -1783,17 +1839,12 @@ func (db *DB) Dump(w io.Writer, tableNames ...string) error {
 	}
 
 	// Do indexes, triggers, and views.
-	query := `SELECT "name", "type", "sql" FROM "sqlite_master"
-			  WHERE "sql" NOT NULL AND "type" IN ('index', 'trigger', 'view')`
-	rows, err = db.queryWithConn(ctx, commReq(query), false, conn)
+	objs, err := db.schemaObjectsWithConn(ctx, conn)
 	if err != nil {
 		return err
 	}
-	row = rows[0]
-	for _, v := range row.Values {
-		// For indexes, triggers, and views, we could add more sophisticated filtering
-		// based on the table they relate to, but for now include all of them
-		if _, err := w.Write(fmt.Appendf(nil, "%s;\n", v.Parameters[2].GetS())); err != nil {
+	for _, o := range objs.Filter(tableNames) {
+		if _, err := w.Write(fmt.Appendf(nil, "%s;\n", o.sql)); err != nil {
 			return err
 		}
 	}
@@ -1834,6 +1885,42 @@ func (db *DB) StmtReadOnlyWithConn(sql string, conn *sql.Conn) (bool, error) {
 		return false, err
 	}
 	return readOnly, nil
+}
+
+// schemaObjectsWithConn returns every index, trigger and view of the database, in
+// the order they were created.
+func (db *DB) schemaObjectsWithConn(ctx context.Context, conn *sql.Conn) (schemaObjects, error) {
+	req := &command.Request{
+		Statements: []*command.Statement{
+			{
+				Sql: `SELECT "name", "type", "tbl_name", "sql" FROM "sqlite_master"
+					  WHERE "sql" NOT NULL AND "type" IN ('index', 'trigger', 'view')
+					  ORDER BY "rowid"`,
+			},
+		},
+	}
+
+	rows, err := db.queryWithConn(ctx, req, false, conn)
+	if err != nil {
+		return nil, err
+	}
+	if len(rows) == 0 {
+		return nil, nil
+	}
+	if rows[0].Error != "" {
+		return nil, fmt.Errorf("failed to read schema objects: %s", rows[0].Error)
+	}
+
+	objs := make(schemaObjects, 0, len(rows[0].Values))
+	for _, v := range rows[0].Values {
+		objs = append(objs, schemaObject{
+			name:    v.Parameters[0].GetS(),
+			typ:     v.Parameters[1].GetS(),
+			tblName: v.Parameters[2].GetS(),
+			sql:     v.Parameters[3].GetS(),
+		})
+	}
+	return objs, nil
 }
 
 func (db *DB) pragmas() (map[string]any, error) {
@@ -1950,6 +2037,44 @@ func (db *DB) memStats() (map[string]int64, error) {
 		ms[p] = res[i].Values[0].Parameters[0].GetI()
 	}
 	return ms, nil
+}
+
+// schemaObject is an index, a trigger or a view held by the database schema.
+type schemaObject struct {
+	name    string
+	typ     string
+	tblName string
+	sql     string
+}
+
+// schemaObjects is a set of schema objects held by the database.
+type schemaObjects []schemaObject
+
+// Filter returns the objects that belong to the given tables: an index or a
+// trigger is kept when the table it belongs to is one of them, and views are
+// always kept, since a view says nothing about the objects it reads from. See
+// Dump for what that means for a filtered dump. With no table names every object
+// is kept.
+func (s schemaObjects) Filter(tables []string) schemaObjects {
+	if len(tables) == 0 {
+		return s
+	}
+
+	selected := make(map[string]struct{}, len(tables))
+	for _, t := range tables {
+		selected[strings.ToLower(t)] = struct{}{}
+	}
+
+	filtered := make(schemaObjects, 0, len(s))
+	for _, o := range s {
+		if o.typ != "view" {
+			if _, ok := selected[strings.ToLower(o.tblName)]; !ok {
+				continue
+			}
+		}
+		filtered = append(filtered, o)
+	}
+	return filtered
 }
 
 // qualifyRowColumns prefixes each column name in rows with its originating table name.

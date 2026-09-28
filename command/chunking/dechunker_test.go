@@ -10,6 +10,7 @@ import (
 	"testing"
 
 	"github.com/rqlite/rqlite/v10/command/proto"
+	"github.com/rqlite/rqlite/v10/internal/fsutil"
 )
 
 func Test_SingleChunk(t *testing.T) {
@@ -262,7 +263,7 @@ func Test_ReassemblyOfLargeData(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to close Dechunker: %v", err)
 	}
-	defer os.Remove(outFilePath)
+	defer fsutil.Remove(outFilePath)
 
 	// The output data should be the same as the original largeData.
 	outData, err := os.ReadFile(outFilePath)

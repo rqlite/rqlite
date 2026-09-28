@@ -548,14 +548,14 @@ func Test_CompactingFrameScanner_Bytes(t *testing.T) {
 func Test_CompactingFrameScanner_Bytes_FullCycle(t *testing.T) {
 	// First, make a copy of the test data.
 	tmpDir := t.TempDir()
-	if err := os.Remove(tmpDir); err != nil {
+	if err := fsutil.Remove(tmpDir); err != nil {
 		t.Fatalf("failed to remove tmp dir: %s", err)
 	}
 	err := fsutil.CopyDir("testdata/compacting-scanner/full-cycle", tmpDir)
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer os.RemoveAll(tmpDir)
+	defer fsutil.RemoveAll(tmpDir)
 
 	// Compact the WAL file.
 	walPath := filepath.Join(tmpDir, "fc.db-wal")
@@ -578,7 +578,7 @@ func Test_CompactingFrameScanner_Bytes_FullCycle(t *testing.T) {
 	if err := walFD.Close(); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.Remove(walPath); err != nil {
+	if err := fsutil.Remove(walPath); err != nil {
 		t.Fatal(err)
 	}
 
@@ -619,14 +619,14 @@ func Test_CompactingFrameScanner_Bytes_FullCycle(t *testing.T) {
 func Test_CompactingFrameScanner_Writer_FullCycle(t *testing.T) {
 	// First, make a copy of the test data.
 	tmpDir := t.TempDir()
-	if err := os.Remove(tmpDir); err != nil {
+	if err := fsutil.Remove(tmpDir); err != nil {
 		t.Fatalf("failed to remove tmp dir: %s", err)
 	}
 	err := fsutil.CopyDir("testdata/compacting-scanner/full-cycle", tmpDir)
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer os.RemoveAll(tmpDir)
+	defer fsutil.RemoveAll(tmpDir)
 
 	// Compact the WAL file.
 	walPath := filepath.Join(tmpDir, "fc.db-wal")
@@ -666,12 +666,12 @@ func Test_CompactingFrameScanner_Writer_FullCycle(t *testing.T) {
 	if err := walFD.Close(); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.Remove(walPath); err != nil {
+	if err := fsutil.Remove(walPath); err != nil {
 		t.Fatal(err)
 	}
 
 	// Put the compacted WAL file in place.
-	if err := os.Rename(tmpWALPath, walPath); err != nil {
+	if err := fsutil.Rename(tmpWALPath, walPath); err != nil {
 		t.Fatal(err)
 	}
 

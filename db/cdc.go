@@ -65,6 +65,11 @@ func (s *CDCStreamer) PreupdateHook(ev *command.CDCEvent) error {
 	return nil
 }
 
+// RollbackHook discards events collected for the rolled-back transaction.
+func (s *CDCStreamer) RollbackHook() {
+	s.pending.Events = nil
+}
+
 // CommitHook is called after the transaction is committed. It sends the
 // pending events to the out channel and clears the pending events.
 func (s *CDCStreamer) CommitHook() bool {

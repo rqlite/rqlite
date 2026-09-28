@@ -16,6 +16,7 @@ import (
 	"testing/quick"
 	"time"
 
+	"github.com/rqlite/rqlite/v10/internal/fsutil"
 	"github.com/rqlite/rqlite/v10/internal/rtls"
 	"github.com/rqlite/rqlite/v10/testdata/x509"
 )
@@ -179,9 +180,9 @@ func TestTLSMux(t *testing.T) {
 	defer tcpListener.Close()
 
 	cert := x509.CertExampleDotComFile("")
-	defer os.Remove(cert)
+	defer fsutil.Remove(cert)
 	key := x509.KeyExampleDotComFile("")
-	defer os.Remove(key)
+	defer fsutil.Remove(key)
 
 	mux, err := NewTLSMux(tcpListener, nil, cert, key)
 	if err != nil {
@@ -209,9 +210,9 @@ func TestTLSMux(t *testing.T) {
 
 	// Next swap in a new cert and key, and verify that the new cert is used.
 	cert2 := x509.CertExample2DotComFile("")
-	defer os.Remove(cert2)
+	defer fsutil.Remove(cert2)
 	key2 := x509.KeyExample2DotComFile("")
-	defer os.Remove(key2)
+	defer fsutil.Remove(key2)
 	mustRename(key, key2)
 	mustRename(cert, cert2)
 
@@ -247,11 +248,11 @@ func TestMutualTLSMux(t *testing.T) {
 	defer tcpListener.Close()
 
 	cert := x509.CertExampleDotComFile("")
-	defer os.Remove(cert)
+	defer fsutil.Remove(cert)
 	key := x509.KeyExampleDotComFile("")
-	defer os.Remove(key)
+	defer fsutil.Remove(key)
 	caCert := x509.CertMyCAFile("")
-	defer os.Remove(caCert)
+	defer fsutil.Remove(caCert)
 
 	mux, err := NewMutualTLSMux(tcpListener, nil, cert, key, caCert, rtls.NoVerifyCN)
 	if err != nil {
@@ -513,7 +514,7 @@ func mustTCPListener(bind string) net.Listener {
 }
 
 func mustRename(new, old string) {
-	if err := os.Rename(old, new); err != nil {
+	if err := fsutil.Rename(old, new); err != nil {
 		panic(err)
 	}
 }

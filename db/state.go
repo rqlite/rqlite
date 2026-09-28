@@ -133,7 +133,7 @@ var breakingPragmasAnyForm = []string{
 }
 
 // breakingPragmasAssignment lists pragma names that are breaking only when
-// used in the assignment form (name = value).
+// used in an assignment form (name = value or name(value)).
 var breakingPragmasAssignment = []string{
 	"journal_mode",
 	"wal_autocheckpoint",
@@ -141,32 +141,50 @@ var breakingPragmasAssignment = []string{
 	"query_only",
 }
 
-// IsBreakingPragma returns true if the given statement is a breaking PRAGMA.
-// Breaking PRAGMAs are those that, if executed, would break the database layer.
-// The check is performed without regular expressions using pure ASCII byte
-// scanning: zero allocations and no regexp init cost.
+// IsBreakingPragma reports whether any SQL statement contains a PRAGMA that
+// would break the database layer. It recognizes both assignment forms, quoted
+// identifiers, and comments, while skipping quoted SQL text.
 func IsBreakingPragma(stmt string) bool {
-	rest, ok := cutASCIIPrefixFold(trimLeftASCIISpace(stmt), "PRAGMA")
-	if !ok {
-		return false
+	start := true
+	for len(stmt) > 0 {
+		var token string
+		token, stmt = nextPragmaToken(stmt)
+		if token == ";" {
+			start = true
+			continue
+		}
+		// Some PRAGMAs take effect during preparation, including when the
+		// statement is prefixed with EXPLAIN or EXPLAIN QUERY PLAN.
+		if start && strings.EqualFold(token, "EXPLAIN") {
+			token, stmt = nextPragmaToken(stmt)
+			if strings.EqualFold(token, "QUERY") {
+				token, stmt = nextPragmaToken(stmt)
+				if strings.EqualFold(token, "PLAN") {
+					token, stmt = nextPragmaToken(stmt)
+				}
+			}
+		}
+		if start && strings.EqualFold(token, "PRAGMA") && isBreakingPragmaBody(stmt) {
+			return true
+		}
+		start = false
 	}
-	// The PRAGMA keyword must be followed by whitespace, matching the
-	// original \s+ requirement ("PRAGMAjournal_mode" must not match).
-	if len(rest) == 0 || !isASCIISpace(rest[0]) {
-		return false
-	}
-	rest = trimLeftASCIISpace(rest)
+	return false
+}
 
-	name, rest := cutASCIIWord(rest)
-	// SQLite accepts an attached schema qualifier: PRAGMA main.journal_mode.
-	// The qualifier must be non-empty, matching the original (\w+\.)? semantics.
-	if len(name) > 0 && len(rest) > 0 && rest[0] == '.' {
-		name, rest = cutASCIIWord(rest[1:])
+func isBreakingPragmaBody(stmt string) bool {
+	name, rest := nextPragmaToken(stmt)
+	next, rest := nextPragmaToken(rest)
+	if next == "." {
+		name, rest = nextPragmaToken(rest)
+		next, _ = nextPragmaToken(rest)
 	}
-	if len(name) == 0 {
-		return false
+	if len(name) > 1 {
+		switch name[0] {
+		case '\'', '"', '`', '[':
+			name = name[1 : len(name)-1]
+		}
 	}
-
 	for _, p := range breakingPragmasAnyForm {
 		if strings.EqualFold(name, p) {
 			return true
@@ -174,57 +192,82 @@ func IsBreakingPragma(stmt string) bool {
 	}
 	for _, p := range breakingPragmasAssignment {
 		if strings.EqualFold(name, p) {
-			rest = trimLeftASCIISpace(rest)
-			return len(rest) > 0 && rest[0] == '='
+			return next == "=" || next == "("
 		}
 	}
 	return false
 }
 
-// cutASCIIPrefixFold is a case-insensitive prefix match returning the remainder.
-func cutASCIIPrefixFold(s, prefix string) (string, bool) {
-	if len(s) < len(prefix) {
-		return "", false
-	}
-	for i := range len(prefix) {
-		if lowerASCII(s[i]) != lowerASCII(prefix[i]) {
-			return "", false
+// nextPragmaToken scans only the SQL tokens needed to recognize PRAGMAs and
+// statement boundaries. Quoted tokens are returned intact, so semicolons and
+// comment markers inside strings or identifiers cannot become SQL syntax.
+func nextPragmaToken(s string) (token, rest string) {
+	for len(s) > 0 {
+		if isASCIISpace(s[0]) {
+			s = s[1:]
+			continue
 		}
+		if strings.HasPrefix(s, "\ufeff") {
+			s = s[3:]
+			continue
+		}
+		if strings.HasPrefix(s, "--") {
+			if i := strings.IndexByte(s, '\n'); i >= 0 {
+				s = s[i+1:]
+			} else {
+				return "", ""
+			}
+			continue
+		}
+		if strings.HasPrefix(s, "/*") {
+			if i := strings.Index(s[2:], "*/"); i >= 0 {
+				s = s[i+4:]
+			} else {
+				return "", ""
+			}
+			continue
+		}
+		break
 	}
-	return s[len(prefix):], true
-}
-
-func lowerASCII(b byte) byte {
-	if b >= 'A' && b <= 'Z' {
-		return b + ('a' - 'A')
+	if len(s) == 0 {
+		return "", ""
 	}
-	return b
-}
 
-func trimLeftASCIISpace(s string) string {
-	i := 0
-	for i < len(s) && isASCIISpace(s[i]) {
-		i++
+	switch s[0] {
+	case '\'', '"', '`', '[':
+		quote := s[0]
+		if quote == '[' {
+			quote = ']'
+		}
+		for i := 1; i < len(s); i++ {
+			if s[i] != quote {
+				continue
+			}
+			if quote != ']' && i+1 < len(s) && s[i+1] == quote {
+				i++
+				continue
+			}
+			return s[:i+1], s[i+1:]
+		}
+		return s, ""
 	}
-	return s[i:]
-}
-
-func isASCIISpace(b byte) bool {
-	return b == ' ' || b == '\t' || b == '\n' || b == '\r' || b == '\v' || b == '\f'
-}
-
-// cutASCIIWord splits s at the first non-word byte ([A-Za-z0-9_]).
-func cutASCIIWord(s string) (word, rest string) {
 	i := 0
 	for i < len(s) {
 		b := s[i]
-		if b >= 'a' && b <= 'z' || b >= 'A' && b <= 'Z' || b >= '0' && b <= '9' || b == '_' {
+		if b >= 'a' && b <= 'z' || b >= 'A' && b <= 'Z' || b >= '0' && b <= '9' || b == '_' || b == '$' || b >= 0x80 {
 			i++
 			continue
 		}
 		break
 	}
+	if i == 0 {
+		i = 1
+	}
 	return s[:i], s[i:]
+}
+
+func isASCIISpace(b byte) bool {
+	return b == ' ' || b == '\t' || b == '\n' || b == '\r' || b == '\v' || b == '\f'
 }
 
 // ParseHex parses the given string into a byte slice as per the SQLite specification:
@@ -489,10 +532,10 @@ func CheckpointRemove(path string) error {
 // RemoveWALFiles removes the WAL and SHM files associated with the given path,
 // leaving the database file untouched.
 func RemoveWALFiles(path string) error {
-	if err := os.Remove(path + "-wal"); err != nil && !os.IsNotExist(err) {
+	if err := fsutil.Remove(path + "-wal"); err != nil && !os.IsNotExist(err) {
 		return err
 	}
-	if err := os.Remove(path + "-shm"); err != nil && !os.IsNotExist(err) {
+	if err := fsutil.Remove(path + "-shm"); err != nil && !os.IsNotExist(err) {
 		return err
 	}
 	return nil
@@ -500,7 +543,7 @@ func RemoveWALFiles(path string) error {
 
 // RemoveFiles removes the SQLite database file, and any associated WAL and SHM files.
 func RemoveFiles(path string) error {
-	if err := os.Remove(path); err != nil && !os.IsNotExist(err) {
+	if err := fsutil.Remove(path); err != nil && !os.IsNotExist(err) {
 		return err
 	}
 	if err := RemoveWALFiles(path); err != nil {
@@ -522,7 +565,7 @@ var errSQLiteFilesRollback = errors.New("SQLite file rollback failed")
 // a rename fails, earlier renames are rolled back; rollback errors are returned
 // along with the original error, and files may then remain at either location.
 func StashFiles(dbPath string) error {
-	return moveSQLiteFiles(dbPath, dbPath+stashedFilesSuffix, os.Rename)
+	return moveSQLiteFiles(dbPath, dbPath+stashedFilesSuffix, fsutil.Rename)
 }
 
 // PopFiles restores files moved aside by StashFiles. If there are no stashed
@@ -530,7 +573,7 @@ func StashFiles(dbPath string) error {
 // files are never overwritten; callers must remove them explicitly if desired.
 // The same concurrency and error guarantees as StashFiles apply.
 func PopFiles(dbPath string) error {
-	return moveSQLiteFiles(dbPath+stashedFilesSuffix, dbPath, os.Rename)
+	return moveSQLiteFiles(dbPath+stashedFilesSuffix, dbPath, fsutil.Rename)
 }
 
 // RemoveStashedFiles removes the files moved aside by StashFiles, leaving the
@@ -611,7 +654,7 @@ func ReplayWAL(path string, wals []string, deleteMode bool) error {
 		if !IsValidSQLiteWALFile(wal) {
 			return fmt.Errorf("invalid WAL file %s", wal)
 		}
-		if err := os.Rename(wal, path+"-wal"); err != nil {
+		if err := fsutil.Rename(wal, path+"-wal"); err != nil {
 			return fmt.Errorf("rename WAL %s: %s", wal, err.Error())
 		}
 
@@ -645,6 +688,8 @@ func ReplayWAL(path string, wals []string, deleteMode bool) error {
 // DumpTablesReq returns a command.Request that will dump the schema of the
 // given tables, or all tables if none are specified. This form protects
 // against SQL injection by using parameterized queries.
+//
+// The returne object does not have the Transaction flag set.
 func DumpTablesReq(tables ...string) *command.Request {
 	if len(tables) == 0 {
 		return &command.Request{

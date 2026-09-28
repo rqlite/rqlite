@@ -498,14 +498,11 @@
         loadStatus();
     });
 
-    function nodesURL() {
-        return showNonVoters.checked ? "/nodes?nonvoters" : "/nodes";
-    }
-
     function loadStatus() {
         Promise.all([
             apiRequest("GET", "/status"),
-            apiRequest("GET", nodesURL())
+            // Keep complete membership for restore routing; filter only the table.
+            apiRequest("GET", "/nodes?nonvoters")
         ]).then(function (responses) {
             lastStatusData = responses[0].data;
             renderStatus(lastStatusData);
@@ -709,7 +706,9 @@
     }
 
     function renderNodesTable() {
-        var nodes = lastNodesData.slice();
+        var nodes = lastNodesData.filter(function (node) {
+            return showNonVoters.checked || node.voter;
+        });
 
         if (nodesSortKey) {
             nodes.sort(function (a, b) {
@@ -879,15 +878,9 @@
     }
 
     function isSingleNodeCluster() {
-        // Prefer the node list if available; fall back to raft.num_peers.
-        if (lastNodesData && lastNodesData.length > 0) {
-            return lastNodesData.length === 1;
-        }
-        if (lastStatusData && lastStatusData.store && lastStatusData.store.raft) {
-            return Number(lastStatusData.store.raft.num_peers) === 0;
-        }
-        // Unknown — be safe and assume cluster (uses /db/load).
-        return false;
+        // This list includes non-voters. raft.num_peers counts only voting peers
+        // and cannot establish whether /boot is allowed. Unknown uses /db/load.
+        return lastNodesData.length === 1;
     }
 
     function sniffFileType(file) {
@@ -984,6 +977,9 @@
     restoreBtn.addEventListener("click", function () {
         if (!restoreSelection) return;
         var sel = restoreSelection;
+        // Membership may have refreshed since the file was selected.
+        sel.method = pickMethod(sel.kind);
+        restoreMethodSpan.textContent = sel.method.label;
 
         var confirmMsg = "Restore from \"" + sel.file.name + "\" via " + sel.method.label + "?\n\n" +
             "This replaces ALL existing data in the database. This action cannot be undone.";
@@ -1050,14 +1046,15 @@
             stopProcessingTimer();
             restoreBtn.disabled = false;
 
-            // /db/load can return 200 OK with a SQL parse error nested in the
-            // response body, e.g. {"results":[{"error":"near \"foo\": syntax
-            // error"}]}. Treat any error key in results[] as a failure.
+            // /db/load can return 200 OK with a top-level request error or
+            // a SQL error nested in results[]. Treat either as a failure.
             var jsonErr = null;
             if (xhr.responseText) {
                 try {
                     var resp = JSON.parse(xhr.responseText);
-                    if (resp && Array.isArray(resp.results)) {
+                    if (resp && resp.error) {
+                        jsonErr = resp.error;
+                    } else if (resp && Array.isArray(resp.results)) {
                         for (var i = 0; i < resp.results.length; i++) {
                             if (resp.results[i] && resp.results[i].error) {
                                 jsonErr = resp.results[i].error;

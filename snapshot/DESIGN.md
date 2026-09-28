@@ -32,6 +32,8 @@ The result is that a slow node catching up via snapshot transfer no longer degra
 
 A snapshot is a directory under the store root. The directory name is the snapshot ID (derived from Raft term, index, and a timestamp). Each directory contains a `meta.json` file with Raft metadata and one or more data files.
 
+Snapshot IDs are generated so that a snapshot always sorts as newer than any existing snapshot with the same term and index: the timestamp field is the larger of the current wall-clock time and one more than the largest timestamp found among those existing snapshots. Ordering therefore stays correct even if the system clock moves backwards between the creation of two such snapshots.
+
 The snapshot type is determined by what files are present:
 
 - **Full snapshot**: Contains `data.db` (a valid SQLite database). May also contain zero or more `.wal` files. A full snapshot is always the base from which database state is reconstructed.
@@ -100,6 +102,8 @@ Reaping is triggered automatically by a background goroutine (`reapLoop`) when t
 Reaping is destructive and must run to completion. The package uses a **plan-execute pattern**: the entire sequence of operations is serialized as a JSON plan file (`REAP_PLAN`) before any mutations begin. If the process crashes mid-execution, `Store.check()` on startup detects the plan file and re-executes it. Every operation in the plan (rename, remove, checkpoint, etc.) is idempotent, so re-execution is safe.
 
 The `plan` sub-package implements this pattern with a `Plan` type (ordered list of `Operation` values), a `Visitor` interface, and an `Executor` that performs the actual filesystem and SQLite operations.
+
+If reaping fails while the store is running, `Open` returns `ErrReapPending` while the `REAP_PLAN` file remains. A partially executed plan may have changed the database without updating its snapshot metadata, so it cannot be served safely. Retrying `Reap`, or restarting the store, completes the pending plan before snapshot reads can resume.
 
 #### Concurrency: MRSW Lock
 

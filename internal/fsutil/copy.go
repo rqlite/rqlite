@@ -70,15 +70,15 @@ func CopyDir(src string, dst string) error {
 	// out any remains of an earlier interrupted copy. The deferred removal is a
 	// no-op once the rename below has succeeded.
 	tmp := dst + tmpSuffix
-	if err := os.RemoveAll(tmp); err != nil {
+	if err := RemoveAll(tmp); err != nil {
 		return err
 	}
-	defer os.RemoveAll(tmp)
+	defer RemoveAll(tmp)
 
 	if err := copyDir(src, tmp); err != nil {
 		return err
 	}
-	if err := os.Rename(tmp, dst); err != nil {
+	if err := Rename(tmp, dst); err != nil {
 		return err
 	}
 	return SyncDirParentMaybe(dst)

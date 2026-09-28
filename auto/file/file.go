@@ -9,6 +9,8 @@ import (
 	"path/filepath"
 	"strings"
 	"time"
+
+	"github.com/rqlite/rqlite/v10/internal/fsutil"
 )
 
 // Config represents configuration for the file storage client.
@@ -66,7 +68,7 @@ func NewClient(dir, name string, opt *Options) (*Client, error) {
 		return nil, fmt.Errorf("failed to test writing to directory %s: %w", dir, err)
 	}
 	f.Close()
-	os.Remove(touchPath)
+	fsutil.Remove(touchPath)
 
 	c := &Client{
 		dir:      dir,
@@ -138,8 +140,8 @@ func (c *Client) Upload(ctx context.Context, reader io.Reader, id string) (retEr
 	defer func() {
 		tmpFile.Close()
 		if retErr != nil {
-			os.Remove(tmpMetaPath)
-			os.Remove(tmpPath)
+			fsutil.Remove(tmpMetaPath)
+			fsutil.Remove(tmpPath)
 		}
 	}()
 
@@ -171,12 +173,12 @@ func (c *Client) Upload(ctx context.Context, reader io.Reader, id string) (retEr
 		return fmt.Errorf("failed to write temporary metadata file %s: %w", tmpMetaPath, err)
 	}
 
-	if err := os.Rename(tmpPath, finalPath); err != nil {
+	if err := fsutil.Rename(tmpPath, finalPath); err != nil {
 		return fmt.Errorf("failed to rename temporary file %s to %s: %w", tmpPath, finalPath, err)
 	}
 
-	if err := os.Rename(tmpMetaPath, c.metaPath); err != nil {
-		os.Remove(finalPath)
+	if err := fsutil.Rename(tmpMetaPath, c.metaPath); err != nil {
+		fsutil.Remove(finalPath)
 		return fmt.Errorf("failed to rename temporary metadata file %s to %s: %w", tmpMetaPath, c.metaPath, err)
 	}
 	return nil

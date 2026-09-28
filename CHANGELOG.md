@@ -1,7 +1,62 @@
-## v10.3.3 (unreleased)
+## v10.3.7 (September 28th 2026)
+This release addresses a gap in the role-based access permissions related to [change-data-capture (CDC)](https://rqlite.io/docs/guides/cdc/) handling.
+
+If you run a cluster where the Raft port is accesible by other systems you should upgrade (though that is not recommended production practise in the first place -- see the [rqlite Security guide](https://rqlite.io/docs/guides/security/)). If you are running CDC with Role-based access you may need to reconfigure your [user-level permissions](https://rqlite.io/docs/guides/security/#user-level-permissions) to set the new CDC permission and set the `-cdc-as` flag.
+
+### Implementation changes and bug fixes
+- [PR #2822](https://github.com/rqlite/rqlite/pull/2822): Backup calls now return number of bytes written.
+- [PR #2823](https://github.com/rqlite/rqlite/pull/2823): Stop CI testing against MinIO.
+- [PR #2824](https://github.com/rqlite/rqlite/pull/2824): Database `Backup` returns size of backup file.
+- [PR #2826](https://github.com/rqlite/rqlite/pull/2826): Add new permission for CDC high watermark updates. Fixes issue [#2825](https://github.com/rqlite/rqlite/issues/2825). Thanks @White0xdi3
+
+## v10.3.6 (September 22nd 2026)
+### Implementation changes and bug fixes
+- [PR #2768](https://github.com/rqlite/rqlite/pull/2768), [PR #2805](https://github.com/rqlite/rqlite/pull/2805), [PR #2806](https://github.com/rqlite/rqlite/pull/2806): Add query logging to database layer. Thanks @karangupta982
+- [PR #2807](https://github.com/rqlite/rqlite/pull/2807): Snapshot IDs now contain (optional) generation.
+- [PR #2808](https://github.com/rqlite/rqlite/pull/2808): Bump generation ID if snapshot IDs collide. Fixes issue [#2746](https://github.com/rqlite/rqlite/issues/2746). Thanks @rohanpadhye
+- [PR #2810](https://github.com/rqlite/rqlite/pull/2810): Snapshots can be filtered by term and index.
+- [PR #2811](https://github.com/rqlite/rqlite/pull/2811): Upgrade dependencies.
+- [PR #2811](https://github.com/rqlite/rqlite/pull/2811): Add support for _File_ Renaming and Removing with retries.
+- [PR #2816](https://github.com/rqlite/rqlite/pull/2816): Replace standard library with fsutil.
+- [PR #2817](https://github.com/rqlite/rqlite/pull/2817): File _Rename_ and _Remove_ are retried, addressing possible errors on Windows. Fixes issue [#2813](https://github.com/rqlite/rqlite/issues/2813). Thanks @orrery-dev
+- [PR #2812](https://github.com/rqlite/rqlite/pull/2812): Keep snapshot ordering correct regardless of clock. Fixes issue [#2809](https://github.com/rqlite/rqlite/issues/2809). Thanks @goingforstudying-ctrl, @rohanpadhy
+- [PR #2819](https://github.com/rqlite/rqlite/pull/2819): Remove snapshot name generation ID, backing out [PR #2807](https://github.com/rqlite/rqlite/pull/2807) and [PR #2808](https://github.com/rqlite/rqlite/pull/2808).
+
+## v10.3.5 (September 18th 2026)
+This release moves the build process for binaries to Go 1.27.
+
+### Implementation changes and bug fixes
+- [PR #2794](https://github.com/rqlite/rqlite/pull/2794): Reject alternate form of unsupported `PRAGMA` commands.
+- [PR #2798](https://github.com/rqlite/rqlite/pull/2798): Handle negative trailing logs.
+- [PR #2799](https://github.com/rqlite/rqlite/pull/2799): Sync access to last backup time at `http` layer.
+- [PR #2800](https://github.com/rqlite/rqlite/pull/2800): Set the "Served by" header before first backup byte.
+- [PR #2801](https://github.com/rqlite/rqlite/pull/2801): Set DB load response time for all formats.
+- [PR #2802](https://github.com/rqlite/rqlite/pull/2802): Fix HTTP logic error for queued statements.
+- [PR #2804](https://github.com/rqlite/rqlite/pull/2804): Minor web console fixes.
+
+## v10.3.4 (September 15th 2026)
+### Implementation changes and bug fixes
+- [PR #2791](https://github.com/rqlite/rqlite/pull/2791): Do not emit rolled-back events over CDC.
+
+## v10.3.3 (September 13th 2026)
 ### Implementation changes and bug fixes
 - [PR #2770](https://github.com/rqlite/rqlite/pull/2770): Upgrade gRPC to 1.83.2.
-- [PR #2771](https://github.com/rqlite/rqlite/pull/2771): Refactor busy timeout methods. Thanks @ zxysilent
+- [PR #2771](https://github.com/rqlite/rqlite/pull/2771): Refactor busy timeout methods. Thanks @zxysilent
+- [PR #2776](https://github.com/rqlite/rqlite/pull/2776): Fix edge-case bugs detected by GPT-6 Astra.
+- [PR #2781](https://github.com/rqlite/rqlite/pull/2781): Switch to `quay.io/minio/minio:latest` for testing purposes.
+- [PR #2778](https://github.com/rqlite/rqlite/pull/2778): Fix removing a node with different ID, but same Raft address.
+- [PR #2782](https://github.com/rqlite/rqlite/pull/2782): Use correct Foreign Key setting when recovering node.
+- [PR #2779](https://github.com/rqlite/rqlite/pull/2779): Only dump the indexes and triggers of the selected tables. Fixes issue [#2777](https://github.com/rqlite/rqlite/issues/2777). Thanks @geiltonxavier
+- [PR #2783](https://github.com/rqlite/rqlite/pull/2783): Detect DB changes during Request(RETURNING).
+- [PR #2784](https://github.com/rqlite/rqlite/pull/2784): Snapshot `Open()` first checks for failed reap.
+- [PR #2785](https://github.com/rqlite/rqlite/pull/2785): Sync snapshot plan directory.
+- [PR #2786](https://github.com/rqlite/rqlite/pull/2786): Propagate WAL stat errors.
+- [PR #2787](https://github.com/rqlite/rqlite/pull/2787): Clean up cancelled snapshots.
+- [PR #2788](https://github.com/rqlite/rqlite/pull/2788): Reject incomplete snapshot headers.
+- [PR #2789](https://github.com/rqlite/rqlite/pull/2789): Validate restore database header.
+- [PR #2790](https://github.com/rqlite/rqlite/pull/2790): Only reap a sole fullsnapshot if it has zero WALs.
+- [PR #2790](https://github.com/rqlite/rqlite/pull/2793): Keep database dumps consistent during writes to the database.
+- [PR #2792](https://github.com/rqlite/rqlite/pull/2792): Roll back DB Requests on statement-prepare errors.
 
 ## v10.3.2 (September 7th 2026)
 ### Implementation changes and bug fixes

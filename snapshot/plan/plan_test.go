@@ -7,6 +7,8 @@ import (
 	"path/filepath"
 	"reflect"
 	"testing"
+
+	"github.com/rqlite/rqlite/v10/internal/fsutil"
 )
 
 func TestNewPlan(t *testing.T) {
@@ -270,7 +272,7 @@ func TestFilePersistence(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to create temp file: %v", err)
 	}
-	defer os.Remove(tmpFile.Name())
+	defer fsutil.Remove(tmpFile.Name())
 	tmpFile.Close()
 
 	if err := WriteToFile(p, tmpFile.Name()); err != nil {

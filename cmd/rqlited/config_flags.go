@@ -130,6 +130,8 @@ type Config struct {
 	AutoRestoreFile string
 	// Set CDC HTTP endpoint, or path to CDC config file. If not set, CDC not enabled
 	CDCConfig string
+	// Username in authentication file to perform internode CDC operations. If not set, performs CDC operations anonymously
+	CDCAs string
 	// Address of OpenTelemetry Collector for metrics. If not set, OTLP reporting not enabled
 	OTLPEndpoint string
 	// Period between OTLP metric exports
@@ -218,6 +220,7 @@ func Forge(arguments []string) (*flag.FlagSet, *Config, error) {
 	fs.StringVar(&config.AutoBackupFile, "auto-backup", "", "Path to automatic backup configuration file. If not set, not enabled")
 	fs.StringVar(&config.AutoRestoreFile, "auto-restore", "", "Path to automatic restore configuration file. If not set, not enabled")
 	fs.StringVar(&config.CDCConfig, "cdc-config", "", "Set CDC HTTP endpoint, or path to CDC config file. If not set, CDC not enabled")
+	fs.StringVar(&config.CDCAs, "cdc-as", "", "Username in authentication file to perform internode CDC operations. If not set, performs CDC operations anonymously")
 	fs.StringVar(&config.CPUProfile, "cpu-profile", "", "Path to file for CPU profiling information")
 	fs.StringVar(&config.MemProfile, "mem-profile", "", "Path to file for memory profiling information")
 	fs.StringVar(&config.TraceProfile, "trace-profile", "", "Path to file for trace profiling information")

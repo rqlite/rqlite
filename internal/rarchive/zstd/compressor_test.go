@@ -9,6 +9,8 @@ import (
 	"math/rand"
 	"os"
 	"testing"
+
+	"github.com/rqlite/rqlite/v10/internal/fsutil"
 )
 
 func Test_Compressor_SingleRead(t *testing.T) {
@@ -109,7 +111,7 @@ func Test_Compressor_CompressLargeFile(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to write random data to source file: %v", err)
 	}
-	defer os.Remove(srcFD.Name())
+	defer fsutil.Remove(srcFD.Name())
 	defer srcFD.Close()
 	if _, err := srcFD.Seek(0, 0); err != nil {
 		t.Fatalf("Failed to seek to beginning of file: %v", err)
@@ -122,7 +124,7 @@ func Test_Compressor_CompressLargeFile(t *testing.T) {
 	}
 	defer compressor.Close()
 	dstFD := mustOpenTempFile(t)
-	defer os.Remove(dstFD.Name())
+	defer fsutil.Remove(dstFD.Name())
 	defer dstFD.Close()
 	_, err = io.Copy(dstFD, compressor)
 	if err != nil {
@@ -131,7 +133,7 @@ func Test_Compressor_CompressLargeFile(t *testing.T) {
 
 	// Decompress it.
 	dstUncompressedFD := mustOpenTempFile(t)
-	defer os.Remove(dstUncompressedFD.Name())
+	defer fsutil.Remove(dstUncompressedFD.Name())
 	defer dstUncompressedFD.Close()
 	dstFD.Seek(0, 0)
 	decompressor := NewDecompressor(dstFD)

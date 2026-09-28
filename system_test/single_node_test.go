@@ -784,18 +784,16 @@ func Test_SingleNodeQueryTimeout(t *testing.T) {
 		t.Fatalf("test received wrong result\nexp: %s\ngot: %s\n", exp, r)
 	}
 
-	q := `SELECT key1, key_id, key2, key3, key4, key5, key6, data
-	FROM test_table
-	ORDER BY key2 ASC`
-	r, err = node.QueryWithTimeout(q, 1*time.Millisecond)
+	// Counting 5000^3 combinations keeps SQLite busy long enough for the
+	// timeout cancellation to run, even when Go timer delivery is delayed.
+	q := `SELECT COUNT(*) FROM test_table t1
+	CROSS JOIN test_table t2 CROSS JOIN test_table t3`
+	r, err = node.QueryWithTimeout(q, 50*time.Millisecond)
 	if err != nil {
 		t.Fatalf("failed to query with timeout: %s", err.Error())
 	}
 	if !strings.Contains(r, `"error":"query timeout"`) {
-		// This test is brittle, but it's the best we can do, as we can't be sure
-		// how much of the query will actually be executed. We just know it should
-		// time out at some point.
-		t.Fatalf("query ran to completion, but should have timed out")
+		t.Fatalf("expected query timeout, got: %s", r)
 	}
 }
 
@@ -1290,7 +1288,7 @@ func Test_SingleNodeUpgrades_NoSnapshots(t *testing.T) {
 		// Deprovision of a node deletes the node's dir, so make a copy first.
 		srcdir := filepath.Join("testdata", dir)
 		destdir := mustTempDir("")
-		if err := os.Remove(destdir); err != nil {
+		if err := fsutil.Remove(destdir); err != nil {
 			t.Fatalf("failed to remove dest dir: %s", err)
 		}
 		if err := fsutil.CopyDir(srcdir, destdir); err != nil {
@@ -1339,7 +1337,7 @@ func Test_SingleNodeUpgrades_Snapshots(t *testing.T) {
 		// Deprovision of a node deletes the node's dir, so make a copy first.
 		srcdir := filepath.Join("testdata", dir)
 		destdir := mustTempDir("")
-		if err := os.Remove(destdir); err != nil {
+		if err := fsutil.Remove(destdir); err != nil {
 			t.Fatalf("failed to remove dest dir: %s", err)
 		}
 		if err := fsutil.CopyDir(srcdir, destdir); err != nil {
@@ -1391,7 +1389,7 @@ func Test_SingleNodeBackup_Binary(t *testing.T) {
 	}
 
 	backup := mustTempFile()
-	defer os.Remove(backup)
+	defer fsutil.Remove(backup)
 	if err := node.Backup(backup, false, ""); err != nil {
 		t.Fatalf(`backup failed: %s`, err.Error())
 	}
@@ -1418,7 +1416,7 @@ func Test_SingleNodeBackup_Binary(t *testing.T) {
 
 	// decompress backup and check it.
 	decompressedBackup := mustTempFile()
-	defer os.Remove(decompressedBackup)
+	defer fsutil.Remove(decompressedBackup)
 
 	f, err := os.Open(backup)
 	if err != nil {
@@ -1466,7 +1464,7 @@ func Test_SingleNodeBackup_SQL(t *testing.T) {
 	}
 
 	backup := mustTempFile()
-	defer os.Remove(backup)
+	defer fsutil.Remove(backup)
 	if err := node.Backup(backup, false, "sql"); err != nil {
 		t.Fatalf(`backup failed: %s`, err.Error())
 	}

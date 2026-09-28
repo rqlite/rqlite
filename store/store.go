@@ -547,7 +547,7 @@ func (s *Store) Open() (retErr error) {
 	s.logger.Printf("opening store with node ID %s, listening on %s", s.raftID, s.ly.Addr().String())
 
 	// Clean up a never-used file from previous releases.
-	fsutil.RemoveFile(filepath.Join(s.raftDir, "applied_index"))
+	fsutil.Remove(filepath.Join(s.raftDir, "applied_index"))
 
 	// Create all the required Raft directories.
 	s.logger.Printf("ensuring data directory exists at %s", s.raftDir)
@@ -628,7 +628,7 @@ func (s *Store) Open() (retErr error) {
 			if removeDBFiles {
 				stats.Add(numRestoresStart, 1)
 				s.numSnapshotsStart.Add(1)
-				if err := fsutil.RemoveFile(s.cleanSnapshotPath); err != nil {
+				if err := fsutil.Remove(s.cleanSnapshotPath); err != nil {
 					s.logger.Printf("warning: failed to remove clean snapshot marker file: %s", err)
 				}
 			}
@@ -683,7 +683,7 @@ func (s *Store) Open() (retErr error) {
 		go func() {
 			cleanupAndExit := func(msg string) {
 				s.logger.Print(msg)
-				os.Remove(s.cleanSnapshotPath)
+				fsutil.Remove(s.cleanSnapshotPath)
 				s.logger.Fatal("removed clean snapshot marker file. Aborting now, but restarting is safe and can be attempted")
 			}
 
@@ -768,16 +768,18 @@ func (s *Store) Open() (retErr error) {
 		}
 
 		// Recovering a node invalidates any existing SQLite file.
-		if err := fsutil.RemoveFile(s.cleanSnapshotPath); err != nil {
+		if err := fsutil.Remove(s.cleanSnapshotPath); err != nil {
 			return fmt.Errorf("failed to remove clean snapshot file during RecoverNode: %w", err)
 		}
-		if err = RecoverNode(s.raftDir, s.dbConf.Extensions, s.logger, s.raftLog,
+		if err = RecoverNode(s.raftDir, s.dbConf, s.logger, s.raftLog,
 			s.boltStore, s.snapshotStore, s.raftTn, config); err != nil {
 			return fmt.Errorf("failed to recover node: %s", err.Error())
 		}
-		if err := os.Rename(s.peersPath, s.peersInfoPath); err != nil {
+		if err := fsutil.Rename(s.peersPath, s.peersInfoPath); err != nil {
 			return fmt.Errorf("failed to move %s after recovery: %s", s.peersPath, err.Error())
 		}
+		// Recovering a node creates a new snapshot. We need to use it on startup.
+		raftConfig.NoSnapshotRestoreOnStart = false
 		s.logger.Printf("node recovered successfully using %s", s.peersPath)
 		stats.Add(numRecoveries, 1)
 	}
@@ -787,15 +789,13 @@ func (s *Store) Open() (retErr error) {
 	// extensions and query logging to coexist in the same driver.
 	if len(s.dbConf.Extensions) > 0 || s.dbConf.QueryLogger != nil {
 		cfg := sql.DriverConfig{
-			Extensions: s.dbConf.Extensions,
-			ChkOnClose: sql.CnkOnCloseModeDisabled,
-		}
-		if s.dbConf.QueryLogger != nil {
-			cfg.QueryLogger = sql.NewQueryLogger(sql.QueryLogConfig{Logger: s.dbConf.QueryLogger})
+			Extensions:  s.dbConf.Extensions,
+			ChkOnClose:  sql.CnkOnCloseModeDisabled,
+			QueryLogger: s.dbConf.QueryLogger,
 		}
 		s.dbDrv = sql.NewDriverFromConfig(
 			random.StringPattern("rqlite-configured-xxxx-xxxx-xxxx"),
-			cfg,
+			&cfg,
 		)
 	}
 
@@ -809,7 +809,7 @@ func (s *Store) Open() (retErr error) {
 	// were created in the Raft directory, not cleaned up, and then the node was restarted with an
 	// explicit SQLite path set. The only way a Staging Directory should be present is if a snapshot
 	// operation was in progress and the node crashed.
-	if err := os.RemoveAll(s.walStagingDir); err != nil {
+	if err := fsutil.RemoveAll(s.walStagingDir); err != nil {
 		return fmt.Errorf("failed to remove pre-existing WAL staging directory: %s", err.Error())
 	}
 	for _, pattern := range []string{
@@ -822,7 +822,7 @@ func (s *Store) Open() (retErr error) {
 				return fmt.Errorf("failed to locate temporary files for pattern %s: %s", pattern, err.Error())
 			}
 			for _, f := range files {
-				if err := os.Remove(f); err != nil {
+				if err := fsutil.Remove(f); err != nil {
 					return fmt.Errorf("failed to remove temporary file %s: %s", f, err.Error())
 				}
 			}
@@ -1004,7 +1004,7 @@ func (s *Store) Close(wait bool) (retErr error) {
 		s.logger.Println("snapshot-on-close took ", time.Since(startT))
 	}
 
-	if err := s.snapshotCAS.BeginWithRetry("close", 10*time.Millisecond, 10*time.Second); err != nil {
+	if err := s.snapshotCAS.BeginWithRetry("close", 10*time.Second, 10*time.Millisecond); err != nil {
 		return err
 	}
 	defer s.snapshotCAS.End()
@@ -1540,16 +1540,9 @@ func (s *Store) Query(ctx context.Context, qr *proto.QueryRequest) (rows []*prot
 		return nil, 0, 0, err
 	}
 
-	level = qr.Level
-	if level == proto.ConsistencyLevel_AUTO {
-		level = proto.ConsistencyLevel_WEAK
-		isVoter, err := s.IsVoter()
-		if err != nil {
-			return nil, 0, 0, err
-		}
-		if !isVoter {
-			level = proto.ConsistencyLevel_NONE
-		}
+	level, retErr = s.resolveAutoLevel(qr.Level)
+	if retErr != nil {
+		return nil, 0, 0, retErr
 	}
 
 	readTerm := s.raft.CurrentTerm()
@@ -1659,9 +1652,14 @@ func (s *Store) Request(ctx context.Context, eqr *proto.ExecuteQueryRequest) ([]
 	nRW, nRO := s.RORWCount(eqr)
 	isLeader := s.raft.State() == raft.Leader
 
+	level, err := s.resolveAutoLevel(eqr.Level)
+	if err != nil {
+		return nil, 0, 0, err
+	}
+
 	// See the Query() code for a full explanation of this.
 	readTerm := s.raft.CurrentTerm()
-	if eqr.Level == proto.ConsistencyLevel_LINEARIZABLE {
+	if level == proto.ConsistencyLevel_LINEARIZABLE {
 		err := s.waitForLinearizableRead(readTerm, eqr.LinearizableTimeout)
 		if err != nil {
 			if err == ErrStrongReadNeeded {
@@ -1754,19 +1752,20 @@ func (s *Store) Request(ctx context.Context, eqr *proto.ExecuteQueryRequest) ([]
 // If vacuum is true, then a VACUUM is performed on the database before the backup
 // is made. If compression false, and dst is an os.File, then the vacuumed copy
 // will be written directly to that file. Otherwise a temporary file will be created,
-// and that temporary file copied to dst.
-func (s *Store) Backup(ctx context.Context, br *proto.BackupRequest, dst io.Writer) (retErr error) {
+// and that temporary file copied to dst. The function returns the number of bytes
+// written to dst, including any bytes written before a streaming error.
+func (s *Store) Backup(ctx context.Context, br *proto.BackupRequest, dst io.Writer) (n int, retErr error) {
 	if !s.open.Is() {
-		return ErrNotOpen
+		return 0, ErrNotOpen
 	}
 
 	// Check if context is already canceled
 	if err := ctx.Err(); err != nil {
-		return err
+		return 0, err
 	}
 
 	if br.Vacuum && br.Format != proto.BackupRequest_BACKUP_REQUEST_FORMAT_BINARY {
-		return ErrInvalidBackupFormat
+		return 0, ErrInvalidBackupFormat
 	}
 
 	startT := time.Now()
@@ -1782,8 +1781,14 @@ func (s *Store) Backup(ctx context.Context, br *proto.BackupRequest, dst io.Writ
 	}()
 
 	if br.Leader && s.raft.State() != raft.Leader {
-		return ErrNotLeader
+		return 0, ErrNotLeader
 	}
+
+	cw := progress.NewCountingWriter(dst)
+	defer func() {
+		// Count after any gzip writer has closed and written its footer.
+		n += int(cw.Count())
+	}()
 
 	switch br.Format {
 	case proto.BackupRequest_BACKUP_REQUEST_FORMAT_BINARY:
@@ -1793,18 +1798,19 @@ func (s *Store) Backup(ctx context.Context, br *proto.BackupRequest, dst io.Writ
 			if !br.Compress {
 				if f, ok := dst.(*os.File); ok {
 					// Fast path, just vacuum directly to the destination.
-					return s.db.Backup(f.Name(), br.Vacuum)
+					sz, err := s.db.Backup(f.Name(), br.Vacuum)
+					return int(sz), err
 				}
 			}
 
 			srcFD, err = createTemp(s.dbDir, backupScratchPattern)
 			if err != nil {
-				return err
+				return 0, err
 			}
-			defer os.Remove(srcFD.Name())
+			defer fsutil.Remove(srcFD.Name())
 			defer srcFD.Close()
-			if err := s.db.Backup(srcFD.Name(), br.Vacuum); err != nil {
-				return err
+			if sz, err := s.db.Backup(srcFD.Name(), br.Vacuum); err != nil {
+				return int(sz), err
 			}
 		} else {
 			// If there is data in the WAL we need to do a snapshot to ensure that the
@@ -1813,13 +1819,13 @@ func (s *Store) Backup(ctx context.Context, br *proto.BackupRequest, dst io.Writ
 			// check for the "nothing new to snapshot" error anyway.
 			sz, err := s.db.WALSize()
 			if err != nil {
-				return err
+				return 0, err
 			}
 			if sz > 0 {
 				if err := s.Snapshot(0); err != nil {
 					if !errors.Is(err, ErrNothingNewToSnapshot) &&
 						!strings.Contains(err.Error(), "wait until the configuration entry at") {
-						return fmt.Errorf("pre-backup snapshot failed: %s", err.Error())
+						return 0, fmt.Errorf("pre-backup snapshot failed: %s", err.Error())
 					}
 				}
 			}
@@ -1827,23 +1833,23 @@ func (s *Store) Backup(ctx context.Context, br *proto.BackupRequest, dst io.Writ
 			// it changing underneath us. Any incoming writes will be sent to the WAL, so
 			// write traffic is not blocked during the backup process.
 			if err := s.snapshotCAS.BeginWithRetry("backup", backupCASTimeout, backupCASRetryDelay); err != nil {
-				return ErrBackupCASFailed
+				return 0, ErrBackupCASFailed
 			}
 			defer s.snapshotCAS.End()
 
 			// Now we can copy the SQLite file directly.
 			srcFD, err = os.Open(s.dbPath)
 			if err != nil {
-				return fmt.Errorf("failed to open database file: %s", err.Error())
+				return 0, fmt.Errorf("failed to open database file: %s", err.Error())
 			}
 			defer srcFD.Close()
 		}
 
 		if br.Compress {
 			var dstGz *gzip.Writer
-			dstGz, err = gzip.NewWriterLevel(dst, gzip.BestSpeed)
+			dstGz, err = gzip.NewWriterLevel(cw, gzip.BestSpeed)
 			if err != nil {
-				return err
+				return 0, err
 			}
 			defer func() {
 				err := dstGz.Close()
@@ -1853,15 +1859,15 @@ func (s *Store) Backup(ctx context.Context, br *proto.BackupRequest, dst io.Writ
 			}()
 			_, err = io.Copy(dstGz, srcFD)
 		} else {
-			_, err = io.Copy(dst, srcFD)
+			_, err = io.Copy(cw, srcFD)
 		}
-		return err
+		return 0, err
 	case proto.BackupRequest_BACKUP_REQUEST_FORMAT_SQL:
-		ww := dst
+		var ww io.Writer = cw
 		if br.Compress {
-			dstGz, err := gzip.NewWriterLevel(dst, gzip.BestSpeed)
+			dstGz, err := gzip.NewWriterLevel(cw, gzip.BestSpeed)
 			if err != nil {
-				return err
+				return 0, err
 			}
 			defer func() {
 				err := dstGz.Close()
@@ -1871,33 +1877,33 @@ func (s *Store) Backup(ctx context.Context, br *proto.BackupRequest, dst io.Writ
 			}()
 			ww = dstGz
 		}
-		return s.db.Dump(ww, br.Tables...)
+		return 0, s.db.Dump(ww, br.Tables...)
 	case proto.BackupRequest_BACKUP_REQUEST_FORMAT_DELETE:
 		// Create a temporary database file in DELETE mode
 		tmpFD, err := createTemp(s.dbDir, backupScratchPattern)
 		if err != nil {
-			return err
+			return 0, err
 		}
-		defer os.Remove(tmpFD.Name())
+		defer fsutil.Remove(tmpFD.Name())
 		defer tmpFD.Close()
 
 		// Copy the current database to the temporary file and convert to DELETE mode
-		if err := s.db.Backup(tmpFD.Name(), br.Vacuum); err != nil {
-			return err
+		if sz, err := s.db.Backup(tmpFD.Name(), br.Vacuum); err != nil {
+			return int(sz), err
 		}
 
 		// Re-open the temporary file for reading (to ensure all data is written)
 		tmpReadFD, err := os.Open(tmpFD.Name())
 		if err != nil {
-			return err
+			return 0, err
 		}
 		defer tmpReadFD.Close()
 
 		// Stream the DELETE mode database to the destination
 		if br.Compress {
-			dstGz, err := gzip.NewWriterLevel(dst, gzip.BestSpeed)
+			dstGz, err := gzip.NewWriterLevel(cw, gzip.BestSpeed)
 			if err != nil {
-				return err
+				return 0, err
 			}
 			defer func() {
 				err := dstGz.Close()
@@ -1907,11 +1913,11 @@ func (s *Store) Backup(ctx context.Context, br *proto.BackupRequest, dst io.Writ
 			}()
 			_, err = io.Copy(dstGz, tmpReadFD)
 		} else {
-			_, err = io.Copy(dst, tmpReadFD)
+			_, err = io.Copy(cw, tmpReadFD)
 		}
-		return err
+		return 0, err
 	}
-	return ErrInvalidBackupFormat
+	return 0, ErrInvalidBackupFormat
 }
 
 // Load loads an entire SQLite file into the database, sending the request
@@ -1996,7 +2002,7 @@ func (s *Store) ReadFrom(r io.Reader) (int64, error) {
 	if err != nil {
 		return 0, err
 	}
-	defer os.Remove(f.Name())
+	defer fsutil.Remove(f.Name())
 	defer f.Close()
 
 	cw := progress.NewCountingWriter(f)
@@ -2099,6 +2105,9 @@ func (s *Store) DisableCDC() error {
 		}
 		if err := s.db.RegisterCommitHook(nil); err != nil {
 			return fmt.Errorf("failed to unregister commit hook: %w", err)
+		}
+		if err := s.db.RegisterRollbackHook(nil); err != nil {
+			return fmt.Errorf("failed to unregister rollback hook: %w", err)
 		}
 	}
 	if s.cdcStreamer != nil {
@@ -2215,12 +2224,12 @@ func (s *Store) Join(jr *proto.JoinRequest) error {
 				return nil
 			}
 
-			if err := s.remove(id); err != nil {
-				s.logger.Printf("failed to remove node %s: %v", id, err)
+			if err := s.remove(string(srv.ID)); err != nil {
+				s.logger.Printf("failed to remove node %s: %v", srv.ID, err)
 				return err
 			}
 			stats.Add(numRemovedBeforeJoins, 1)
-			s.logger.Printf("removed node %s prior to rejoin with changed ID or address", id)
+			s.logger.Printf("removed node %s prior to rejoin with changed ID or address", srv.ID)
 		}
 	}
 
@@ -2336,6 +2345,9 @@ func (s *Store) cleanupCDC() error {
 	}
 	if err := s.db.RegisterCommitHook(nil); err != nil {
 		return fmt.Errorf("failed to unregister commit hook: %w", err)
+	}
+	if err := s.db.RegisterRollbackHook(nil); err != nil {
+		return fmt.Errorf("failed to unregister rollback hook: %w", err)
 	}
 	return nil
 }
@@ -2548,6 +2560,9 @@ func (s *Store) fsmApply(l *raft.Log) (e any) {
 				if err := s.db.RegisterCommitHook(s.cdcStreamer.CommitHook); err != nil {
 					s.logger.Fatalf("failed to register commit hook for CDC: %s", err)
 				}
+				if err := s.db.RegisterRollbackHook(s.cdcStreamer.RollbackHook); err != nil {
+					s.logger.Fatalf("failed to register rollback hook for CDC: %s", err)
+				}
 				s.cdcRegistered.Set()
 			}
 			s.cdcStreamer.Reset(l.Index)
@@ -2732,6 +2747,10 @@ func (s *Store) fsmSnapshot() (fSnap raft.FSMSnapshot, retErr error) {
 		// which will be faster than performing a full snapshot. All this means that we avoid breaking the
 		// series of incremental snapshots. The next Snapshot will comprise of two WAL files in that case.
 		if err := walWriter.Close(); err != nil {
+			// Failing to close the staged WAL would break the chain of incrementals. Fall back to full.
+			if err := s.snapshotStore.SetDueNext(snapshot.Full); err != nil {
+				s.logger.Fatalf("failed to set full needed after WAL writer close failure: %s", err)
+			}
 			return nil, err
 		}
 
@@ -2807,7 +2826,7 @@ func (s *Store) fsmRestore(rc io.ReadCloser) (retErr error) {
 	}
 	tmpPath := tmpFile.Name()
 	tmpFile.Close()
-	defer os.Remove(tmpPath)
+	defer fsutil.Remove(tmpPath)
 
 	if _, err := snapshot.Restore(rc, tmpPath); err != nil {
 		rc.Close()
@@ -2833,7 +2852,7 @@ func (s *Store) fsmRestore(rc io.ReadCloser) (retErr error) {
 
 	// Any existing SQLite file is about to be invalid, so mark that we can't
 	// fast-restart with it.
-	if err := fsutil.RemoveFile(s.cleanSnapshotPath); err != nil {
+	if err := fsutil.Remove(s.cleanSnapshotPath); err != nil {
 		return fmt.Errorf("failed to remove clean snapshot file: %w", err)
 	}
 
@@ -2883,7 +2902,7 @@ func (s *Store) ForceSnapshotRestore() error {
 		return ErrOpen
 	}
 
-	err := os.Remove(s.cleanSnapshotPath)
+	err := fsutil.Remove(s.cleanSnapshotPath)
 	if err != nil && !os.IsNotExist(err) {
 		return err
 	}
@@ -3073,7 +3092,7 @@ func (s *Store) selfLeaderChange(leader bool) {
 	if s.restorePath != "" {
 		defer func() {
 			// Whatever happens, this is a one-shot attempt to perform a restore
-			err := os.Remove(s.restorePath)
+			err := fsutil.Remove(s.restorePath)
 			if err != nil {
 				s.logger.Printf("failed to remove restore path after restore %s: %s",
 					s.restorePath, err.Error())
@@ -3103,7 +3122,7 @@ func (s *Store) selfLeaderChange(leader bool) {
 // that file corresponds to.
 func (s *Store) createSnapshotFingerprint(index, term uint64) error {
 	tmpFP := s.cleanSnapshotPath + ".tmp"
-	defer os.Remove(tmpFP)
+	defer fsutil.Remove(tmpFP)
 	mt, err := s.db.DBLastModified()
 	if err != nil {
 		return fmt.Errorf("failed to get last modified time for snapshot finalizer: %s", err)
@@ -3129,7 +3148,7 @@ func (s *Store) createSnapshotFingerprint(index, term uint64) error {
 	if err := fp.WriteToFile(tmpFP); err != nil {
 		return fmt.Errorf("failed to write snapshot fingerprint to temp file: %s", err)
 	}
-	return os.Rename(tmpFP, s.cleanSnapshotPath)
+	return fsutil.Rename(tmpFP, s.cleanSnapshotPath)
 }
 
 func (s *Store) installRestore() error {
@@ -3234,6 +3253,23 @@ func (s *Store) snapshotDueNext() (snapshot.Type, error) {
 		return snapshot.Full, nil
 	}
 	return snapshot.Incremental, nil
+}
+
+// resolveAutoLevel maps AUTO read consistency level to the right level. If the level is not
+// AUTO then the level is returned unchanged.
+func (s *Store) resolveAutoLevel(lvl proto.ConsistencyLevel) (proto.ConsistencyLevel, error) {
+	if lvl != proto.ConsistencyLevel_AUTO {
+		return lvl, nil
+	}
+	isVoter, err := s.IsVoter()
+	if err != nil {
+		return proto.ConsistencyLevel_AUTO, err
+	}
+
+	if isVoter {
+		return proto.ConsistencyLevel_WEAK, nil
+	}
+	return proto.ConsistencyLevel_NONE, nil
 }
 
 // dbModified returns true if the database appears to have been modified

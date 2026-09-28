@@ -1200,6 +1200,70 @@ func Test_MultiNodeStoreAutoRestoreBootstrap(t *testing.T) {
 	}
 }
 
+func Test_MultiNodeJoinNonVoter_ChangedIDAddrSame(t *testing.T) {
+	s0, ln0 := mustNewStore(t)
+	defer ln0.Close()
+	if err := s0.Open(); err != nil {
+		t.Fatalf("failed to open single-node store: %s", err.Error())
+	}
+	defer s0.Close(true)
+	if err := s0.Bootstrap(NewServer(s0.ID(), s0.Addr(), true)); err != nil {
+		t.Fatalf("failed to bootstrap single-node store: %s", err.Error())
+	}
+	if _, err := s0.WaitForLeader(10 * time.Second); err != nil {
+		t.Fatalf("Error waiting for leader: %s", err)
+	}
+
+	s1, ln1 := mustNewStore(t)
+	defer ln1.Close()
+	if err := s1.Open(); err != nil {
+		t.Fatalf("failed to open single-node store: %s", err.Error())
+	}
+	defer s1.Close(true)
+
+	// Join the second node to the first.
+	if err := s0.Join(joinRequest(s1.ID(), s1.Addr(), false)); err != nil {
+		t.Fatalf("failed to join non-voter: %s", err.Error())
+	}
+	if _, err := s1.WaitForLeader(10 * time.Second); err != nil {
+		t.Fatalf("Error waiting for leader: %s", err)
+	}
+	nodes, err := s0.Nodes()
+	if err != nil {
+		t.Fatalf("failed to get nodes: %s", err.Error())
+	}
+	if len(nodes) != 2 || !Servers(nodes).Contains(s1.ID()) {
+		t.Fatalf("cluster does not have correct nodes before rejoin")
+	}
+
+	// Rejoining with the new ID must remove the old member at that address.
+	newID := s1.ID() + "-new"
+	if err := s0.Join(joinRequest(newID, s1.Addr(), false)); err != nil {
+		t.Fatalf("failed to rejoin non-voter with changed ID: %s", err.Error())
+	}
+	if err := s0.WaitForRemoval(s1.ID(), time.Second); err != nil {
+		t.Fatalf("error waiting for removal of old ID: %s", err.Error())
+	}
+
+	storeNodes := []string{s0.ID(), newID}
+	sort.StringSlice(storeNodes).Sort()
+	nodes, err = s0.Nodes()
+	if err != nil {
+		t.Fatalf("failed to get nodes post rejoin: %s", err.Error())
+	}
+	if len(nodes) != len(storeNodes) {
+		t.Fatalf("size of cluster is not correct post rejoin")
+	}
+	if storeNodes[0] != nodes[0].ID || storeNodes[1] != nodes[1].ID {
+		t.Fatalf("cluster does not have correct nodes post rejoin")
+	}
+	for _, node := range nodes {
+		if node.ID == newID && (node.Addr != s1.Addr() || node.Suffrage != proto.Suffrage_NON_VOTER) {
+			t.Fatalf("non-voter has incorrect address or suffrage post rejoin")
+		}
+	}
+}
+
 func Test_MultiNodeJoinNonVoterRemove(t *testing.T) {
 	s0, ln0 := mustNewStore(t)
 	defer ln0.Close()

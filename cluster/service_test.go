@@ -7,13 +7,13 @@ import (
 	"fmt"
 	"io"
 	"net"
-	"os"
 	"sync"
 	"testing"
 	"time"
 
 	"github.com/rqlite/rqlite/v10/cluster/proto"
 	command "github.com/rqlite/rqlite/v10/command/proto"
+	"github.com/rqlite/rqlite/v10/internal/fsutil"
 	"github.com/rqlite/rqlite/v10/testdata/x509"
 )
 
@@ -444,7 +444,7 @@ func Test_ServiceHandleHighwaterMarkUpdate(t *testing.T) {
 	c.SetLocal("test-node", nil)
 
 	// Use the client to send a highwater mark update
-	responses, err := c.BroadcastHWM(context.Background(), 987654, 0, 5*time.Second, s.Addr())
+	responses, err := c.BroadcastHWM(context.Background(), 987654, nil, 0, 5*time.Second, s.Addr())
 	if err != nil {
 		t.Fatalf("failed to broadcast highwater mark update: %s", err)
 	}
@@ -484,7 +484,7 @@ func Test_ServiceRegisterHWMUpdate(t *testing.T) {
 
 	// Use the client to send a highwater mark update
 	testHWM := uint64(123456)
-	responses, err := c.BroadcastHWM(context.Background(), testHWM, 0, 5*time.Second, s.Addr())
+	responses, err := c.BroadcastHWM(context.Background(), testHWM, nil, 0, 5*time.Second, s.Addr())
 	if err != nil {
 		t.Fatalf("failed to broadcast highwater mark update: %s", err)
 	}
@@ -508,6 +508,64 @@ func Test_ServiceRegisterHWMUpdate(t *testing.T) {
 		}
 	case <-time.After(5 * time.Second):
 		t.Fatalf("timeout waiting for highwater mark update on channel")
+	}
+}
+
+// Test_ServiceRegisterHWMUpdate_WithAuth checks that the CDC service checks credentials.
+func Test_ServiceRegisterHWMUpdate_WithAuth(t *testing.T) {
+	creds := &proto.Credentials{Username: "bob", Password: "passwd"}
+	ml := mustNewMockTransport()
+	mgr := mustNewMockManager()
+	credStr := mustNewMockCredentialStore()
+	credStr.aaFunc = func(username, password, perm string) bool {
+		return username == creds.Username && password == creds.Password
+	}
+	s := New(ml, mustNewMockDatabase(), mgr, credStr)
+	if s == nil {
+		t.Fatalf("failed to create cluster service")
+	}
+
+	if err := s.Open(); err != nil {
+		t.Fatalf("failed to open cluster service")
+	}
+	defer s.Close()
+
+	// Create a client and send highwater mark update
+	c := NewClient(ml, 30*time.Second)
+	c.SetLocal("test-node", nil)
+
+	// Use the client to send a highwater mark update
+	testHWM := uint64(123456)
+	responses, err := c.BroadcastHWM(context.Background(), testHWM, creds, 0, 5*time.Second, s.Addr())
+	if err != nil {
+		t.Fatalf("failed to broadcast highwater mark update: %s", err)
+	}
+
+	// Check that we got a response for the service address
+	resp, ok := responses[s.Addr()]
+	if !ok {
+		t.Fatalf("expected response for address %s", s.Addr())
+	}
+
+	// Check response has no error
+	if resp.Error != "" {
+		t.Fatalf("expected no error, got: %s", resp.Error)
+	}
+
+	// Change required creds and ensure auth kicks in to deny.
+	credStr.aaFunc = func(username, password, perm string) bool {
+		return username == creds.Username && password == "foo"
+	}
+	responses, err = c.BroadcastHWM(context.Background(), testHWM, creds, 0, 5*time.Second, s.Addr())
+	if err != nil {
+		t.Fatalf("failed to broadcast highwater mark update: %s", err)
+	}
+	resp, ok = responses[s.Addr()]
+	if !ok {
+		t.Fatalf("expected response for address %s", s.Addr())
+	}
+	if resp.Error != "unauthorized" {
+		t.Fatal("expected an error")
 	}
 }
 
@@ -690,7 +748,7 @@ type mockDatabase struct {
 	executeFn func(er *command.ExecuteRequest) ([]*command.ExecuteQueryResponse, uint64, error)
 	queryFn   func(qr *command.QueryRequest) ([]*command.QueryRows, uint64, error)
 	requestFn func(rr *command.ExecuteQueryRequest) ([]*command.ExecuteQueryResponse, uint64, uint64, error)
-	backupFn  func(br *command.BackupRequest, dst io.Writer) error
+	backupFn  func(br *command.BackupRequest, dst io.Writer) (int, error)
 	loadFn    func(lr *command.LoadRequest) error
 }
 
@@ -710,9 +768,9 @@ func (m *mockDatabase) Request(ctx context.Context, rr *command.ExecuteQueryRequ
 	return m.requestFn(rr)
 }
 
-func (m *mockDatabase) Backup(ctx context.Context, br *command.BackupRequest, dst io.Writer) error {
+func (m *mockDatabase) Backup(ctx context.Context, br *command.BackupRequest, dst io.Writer) (int, error) {
 	if m.backupFn == nil {
-		return nil
+		return 0, nil
 	}
 	return m.backupFn(br, dst)
 }
@@ -790,9 +848,9 @@ func mustCreateTLSConfig() *tls.Config {
 	var err error
 
 	certFile := x509.CertExampleDotComFile("")
-	defer os.Remove(certFile)
+	defer fsutil.Remove(certFile)
 	keyFile := x509.KeyExampleDotComFile("")
-	defer os.Remove(keyFile)
+	defer fsutil.Remove(keyFile)
 
 	config := &tls.Config{
 		InsecureSkipVerify: true,

@@ -8,6 +8,8 @@ import (
 	"testing"
 
 	"github.com/hashicorp/raft"
+
+	"github.com/rqlite/rqlite/v10/internal/fsutil"
 )
 
 func Test_NewChecksummedFileFromFiles(t *testing.T) {
@@ -160,7 +162,7 @@ func Test_ChecksummedFile_Check(t *testing.T) {
 
 		// Also: a disabled sidecar must let Check pass even when the
 		// data file does not exist, since Check must not read it.
-		if err := os.Remove(dataPath); err != nil {
+		if err := fsutil.Remove(dataPath); err != nil {
 			t.Fatalf("failed to remove data file: %v", err)
 		}
 		ok, err = hf.Check()
@@ -195,6 +197,36 @@ func Test_Snapshot_Less(t *testing.T) {
 		s2ID     string
 		expected bool
 	}{
+		{
+			name:     "less by numeric timestamp",
+			s1Term:   1,
+			s1Index:  10,
+			s1ID:     "1-10-9",
+			s2Term:   1,
+			s2Index:  10,
+			s2ID:     "1-10-10",
+			expected: true,
+		},
+		{
+			name:     "greater by numeric timestamp",
+			s1Term:   1,
+			s1Index:  10,
+			s1ID:     "1-10-10",
+			s2Term:   1,
+			s2Index:  10,
+			s2ID:     "1-10-9",
+			expected: false,
+		},
+		{
+			name:     "equal timestamps",
+			s1Term:   1,
+			s1Index:  10,
+			s1ID:     "1-10-100",
+			s2Term:   1,
+			s2Index:  10,
+			s2ID:     "1-10-100",
+			expected: false,
+		},
 		{
 			name:     "less by term",
 			s1Term:   1,
@@ -918,6 +950,53 @@ func Test_SnapshotSet_PartitionAtFull(t *testing.T) {
 			t.Fatalf("PartitionAtFull() returned %v, want newer snapshot %v", newer.All()[0], items[3])
 		}
 	})
+}
+
+// Test SnapshotSet.WithTermIndex method
+func Test_SnapshotSet_WithTermIndex(t *testing.T) {
+	items := []*Snapshot{
+		{id: "snapshot-1", typ: Full, raftMeta: &raft.SnapshotMeta{Term: 1, Index: 10}},
+		{id: "snapshot-2", typ: Full, raftMeta: &raft.SnapshotMeta{Term: 2, Index: 10}},
+		{id: "snapshot-3", typ: Incremental, raftMeta: &raft.SnapshotMeta{Term: 2, Index: 10}},
+		{id: "snapshot-4", typ: Incremental, raftMeta: &raft.SnapshotMeta{Term: 2, Index: 20}},
+	}
+
+	tests := []struct {
+		name  string
+		items []*Snapshot
+		term  uint64
+		index uint64
+		want  []*Snapshot
+	}{
+		{"nil items", nil, 2, 10, nil},
+		{"empty set", []*Snapshot{}, 2, 10, nil},
+		{"no matches", items, 3, 30, nil},
+		{"matching term only", items, 2, 30, nil},
+		{"matching index only", items, 3, 10, nil},
+		{"single match", items, 1, 10, []*Snapshot{items[0]}},
+		{"multiple matches", items, 2, 10, []*Snapshot{items[1], items[2]}},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			ss := SnapshotSet{dir: "/test", items: tt.items}
+
+			result := ss.WithTermIndex(tt.term, tt.index)
+			if result.Len() != len(tt.want) {
+				t.Fatalf("WithTermIndex() returned %d items, want %d", result.Len(), len(tt.want))
+			}
+			if result.dir != "/test" {
+				t.Fatalf("WithTermIndex().dir = %q, want %q", result.dir, "/test")
+			}
+
+			resultItems := result.All()
+			for i, want := range tt.want {
+				if resultItems[i] != want {
+					t.Fatalf("WithTermIndex()[%d] = %v, want %v", i, resultItems[i], want)
+				}
+			}
+		})
+	}
 }
 
 // Test SnapshotSet.ValidateIncrementalChain method

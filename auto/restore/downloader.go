@@ -10,6 +10,8 @@ import (
 	"log"
 	"os"
 	"time"
+
+	"github.com/rqlite/rqlite/v10/internal/fsutil"
 )
 
 // stats captures stats for the Uploader service.
@@ -48,7 +50,7 @@ func DownloadFile(ctx context.Context, cfgPath string) (path string, errOK bool,
 		if err != nil {
 			if f != nil {
 				f.Close()
-				os.Remove(f.Name())
+				fsutil.Remove(f.Name())
 			}
 		}
 	}()
@@ -118,7 +120,7 @@ func (d *Downloader) Do(ctx context.Context, w io.Writer, timeout time.Duration)
 	if err != nil {
 		return err
 	}
-	defer os.Remove(f.Name())
+	defer fsutil.Remove(f.Name())
 	defer f.Close()
 
 	ctx, cancel := context.WithTimeout(ctx, timeout)

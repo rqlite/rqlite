@@ -8,6 +8,8 @@ import (
 	"sync"
 	"testing"
 	"time"
+
+	"github.com/hashicorp/raft"
 )
 
 // Test_NewSnapshotNamer_NilNowFn checks that a nil nowFn falls back to
@@ -22,7 +24,7 @@ func Test_NewSnapshotNamer_NilNowFn(t *testing.T) {
 	}
 
 	before := time.Now().UnixNano() / int64(time.Millisecond)
-	name := sn.MakeName(7, 8)
+	name := sn.MakeName(SnapshotSet{}, 7, 8)
 	after := time.Now().UnixNano() / int64(time.Millisecond)
 
 	term, index, msec := parseName(t, name)
@@ -39,7 +41,7 @@ func Test_NewSnapshotNamer_CustomNowFn(t *testing.T) {
 	tm := time.Unix(1500000000, 0).UTC() // 1500000000000 msec
 	sn := NewSnapshotNamer(fixedClock(tm))
 
-	if got, want := sn.MakeName(1, 1), "1-1-1500000000000"; got != want {
+	if got, want := sn.MakeName(SnapshotSet{}, 1, 1), "1-1-1500000000000"; got != want {
 		t.Fatalf("got %q, want %q", got, want)
 	}
 }
@@ -68,7 +70,7 @@ func Test_MakeName_Format(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			if got := sn.MakeName(tt.term, tt.index); got != tt.want {
+			if got := sn.MakeName(SnapshotSet{}, tt.term, tt.index); got != tt.want {
 				t.Fatalf("got %q, want %q", got, tt.want)
 			}
 		})
@@ -77,7 +79,7 @@ func Test_MakeName_Format(t *testing.T) {
 
 // Test_MakeName_TimestampTruncation checks that sub-millisecond precision is
 // discarded, and that the division truncates towards zero rather than
-// flooring.
+// flooring. Pre-epoch timestamps are clamped to zero.
 func Test_MakeName_TimestampTruncation(t *testing.T) {
 	tests := []struct {
 		name string
@@ -90,31 +92,17 @@ func Test_MakeName_TimestampTruncation(t *testing.T) {
 		{"just under 2 msec", time.Unix(0, 1999999), 1},
 		{"1.5 seconds", time.Unix(1, 500000000), 1500},
 		{"1 nsec before epoch truncates to zero", time.Unix(0, -1), 0},
-		{"1 second before epoch", time.Unix(-1, 0), -1000},
+		{"1 second before epoch clamps to zero", time.Unix(-1, 0), 0},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			sn := NewSnapshotNamer(fixedClock(tt.now))
 			want := fmt.Sprintf("3-4-%d", tt.want)
-			if got := sn.MakeName(3, 4); got != want {
+			if got := sn.MakeName(SnapshotSet{}, 3, 4); got != want {
 				t.Fatalf("got %q, want %q", got, want)
 			}
 		})
-	}
-}
-
-// Test_MakeName_PreEpochAddsAField records that a pre-epoch clock yields a
-// negative timestamp, so the name splits into four fields, not three.
-func Test_MakeName_PreEpochAddsAField(t *testing.T) {
-	sn := NewSnapshotNamer(fixedClock(time.Unix(-1, 0)))
-
-	name := sn.MakeName(1, 2)
-	if got, want := name, "1-2--1000"; got != want {
-		t.Fatalf("got %q, want %q", got, want)
-	}
-	if got, want := len(strings.Split(name, "-")), 4; got != want {
-		t.Fatalf("got %d fields, want %d", got, want)
 	}
 }
 
@@ -128,7 +116,7 @@ func Test_MakeName_CallsNowFnOncePerCall(t *testing.T) {
 	})
 
 	for i := 0; i < 5; i++ {
-		sn.MakeName(uint64(i), uint64(i))
+		sn.MakeName(SnapshotSet{}, uint64(i), uint64(i))
 	}
 	if calls != 5 {
 		t.Fatalf("nowFn called %d times, want 5", calls)
@@ -141,8 +129,8 @@ func Test_MakeName_CallsNowFnOncePerCall(t *testing.T) {
 func Test_MakeName_CollidesWithinSameMillisecond(t *testing.T) {
 	sn := NewSnapshotNamer(fixedClock(time.Unix(1500000000, 0)))
 
-	first := sn.MakeName(1, 2)
-	second := sn.MakeName(1, 2)
+	first := sn.MakeName(SnapshotSet{}, 1, 2)
+	second := sn.MakeName(SnapshotSet{}, 1, 2)
 	if first != second {
 		t.Fatalf("got %q and %q, want identical names", first, second)
 	}
@@ -161,7 +149,7 @@ func Test_MakeName_DistinctInputsDistinctNames(t *testing.T) {
 	for _, tc := range []struct{ term, index uint64 }{
 		{1, 1}, {1, 2}, {2, 1}, {1, 1},
 	} {
-		name := sn.MakeName(tc.term, tc.index)
+		name := sn.MakeName(SnapshotSet{}, tc.term, tc.index)
 		if seen[name] {
 			t.Fatalf("duplicate name %q", name)
 		}
@@ -182,7 +170,7 @@ func Test_MakeName_Concurrent(t *testing.T) {
 		go func() {
 			defer wg.Done()
 			for j := 0; j < iterations; j++ {
-				if got := sn.MakeName(1, 2); got != want {
+				if got := sn.MakeName(SnapshotSet{}, 1, 2); got != want {
 					errs <- got
 				}
 			}
@@ -193,6 +181,108 @@ func Test_MakeName_Concurrent(t *testing.T) {
 
 	for got := range errs {
 		t.Fatalf("got %q, want %q", got, want)
+	}
+}
+
+// Test_makeName_MinMsec checks that makeName raises the millisecond field to
+// the given minimum when the clock reads lower, and leaves it alone otherwise.
+func Test_makeName_MinMsec(t *testing.T) {
+	sn := NewSnapshotNamer(fixedClock(time.UnixMilli(1000)))
+
+	if got, want := sn.makeName(1, 2, 1500), "1-2-1500"; got != want {
+		t.Fatalf("got %q, want %q", got, want)
+	}
+	if got, want := sn.makeName(1, 2, 500), "1-2-1000"; got != want {
+		t.Fatalf("got %q, want %q", got, want)
+	}
+	if got, want := sn.makeName(1, 2, 1000), "1-2-1000"; got != want {
+		t.Fatalf("got %q, want %q", got, want)
+	}
+}
+
+// Test_MakeName_Set exercises set-aware name generation: a name made for a
+// term and index already present in the set must sort after every snapshot in
+// the set with that term and index.
+func Test_MakeName_Set(t *testing.T) {
+	mkSnap := func(id string, term, index uint64) *Snapshot {
+		return &Snapshot{id: id, raftMeta: &raft.SnapshotMeta{Term: term, Index: index}}
+	}
+
+	t.Run("clock backwards with same term and index", func(t *testing.T) {
+		set := SnapshotSet{dir: "/test", items: []*Snapshot{
+			mkSnap("3-100-1000", 3, 100),
+			mkSnap("3-100-1500", 3, 100),
+			mkSnap("3-101-9999", 3, 101),
+			mkSnap("4-100-9999", 4, 100),
+		}}
+		sn := NewSnapshotNamer(fixedClock(time.UnixMilli(500)))
+		if exp, got := "3-100-1501", sn.MakeName(set, 3, 100); got != exp {
+			t.Fatalf("got %q, want %q", got, exp)
+		}
+	})
+
+	t.Run("clock ahead ignores floor", func(t *testing.T) {
+		set := SnapshotSet{dir: "/test", items: []*Snapshot{
+			mkSnap("3-100-1000", 3, 100),
+		}}
+		sn := NewSnapshotNamer(fixedClock(time.UnixMilli(2000)))
+		if exp, got := "3-100-2000", sn.MakeName(set, 3, 100); got != exp {
+			t.Fatalf("got %q, want %q", got, exp)
+		}
+	})
+
+	t.Run("empty set", func(t *testing.T) {
+		set := SnapshotSet{dir: "/test"}
+		sn := NewSnapshotNamer(fixedClock(time.UnixMilli(500)))
+		if exp, got := "3-100-500", sn.MakeName(set, 3, 100); got != exp {
+			t.Fatalf("got %q, want %q", got, exp)
+		}
+	})
+
+	t.Run("same millisecond advances timestamp", func(t *testing.T) {
+		set := SnapshotSet{dir: "/test", items: []*Snapshot{
+			mkSnap("3-100-1000", 3, 100),
+		}}
+		sn := NewSnapshotNamer(fixedClock(time.UnixMilli(1000)))
+		if exp, got := "3-100-1001", sn.MakeName(set, 3, 100); got != exp {
+			t.Fatalf("got %q, want %q", got, exp)
+		}
+	})
+
+	t.Run("unparsable newest ID ignored", func(t *testing.T) {
+		set := SnapshotSet{dir: "/test", items: []*Snapshot{
+			mkSnap("3-100-1000", 3, 100),
+			mkSnap("backup-copy", 3, 100),
+		}}
+		sn := NewSnapshotNamer(fixedClock(time.UnixMilli(500)))
+		if exp, got := "3-100-500", sn.MakeName(set, 3, 100); got != exp {
+			t.Fatalf("got %q, want %q", got, exp)
+		}
+	})
+}
+
+// Repeated snapshots at the same term and index remain ordered even when the
+// clock stays fixed or moves backwards between snapshots.
+func Test_MakeName_AdvancesWithSet(t *testing.T) {
+	for _, times := range [][]int64{{1000, 1000, 1000}, {1000, 500, 100}} {
+		t.Run(fmt.Sprint(times), func(t *testing.T) {
+			var set SnapshotSet
+			for i, msec := range times {
+				sn := NewSnapshotNamer(fixedClock(time.UnixMilli(msec)))
+				id := sn.MakeName(set, 3, 100)
+				parseName(t, id)
+				if want := fmt.Sprintf("3-100-%d", 1000+i); id != want {
+					t.Fatalf("got %q, want %q", id, want)
+				}
+				next := &Snapshot{id: id, raftMeta: &raft.SnapshotMeta{Term: 3, Index: 100}}
+				for _, previous := range set.items {
+					if !previous.Less(next) || next.Less(previous) {
+						t.Fatalf("snapshot %q must sort after %q", id, previous.id)
+					}
+				}
+				set.items = append(set.items, next)
+			}
+		})
 	}
 }
 
@@ -275,6 +365,12 @@ func Test_ParseSnapshotName(t *testing.T) {
 		},
 
 		// Wrong number of fields.
+		{name: "four numeric fields", input: "1-2-3-4", errContains: "3 parts"},
+		{name: "four fields ending in zero", input: "1-2-3-0", errContains: "3 parts"},
+		{name: "four fields ending in text", input: "1-2-3-extra", errContains: "3 parts"},
+		{name: "trailing separator", input: "1-2-3-", errContains: "3 parts"},
+		{name: "four empty fields", input: "---", errContains: "3 parts"},
+		{name: "five fields", input: "1-2-3-4-5", errContains: "3 parts"},
 		{
 			name:        "empty string",
 			input:       "",
@@ -291,11 +387,6 @@ func Test_ParseSnapshotName(t *testing.T) {
 			errContains: "3 parts",
 		},
 		{
-			name:        "four fields",
-			input:       "1-2-3-4",
-			errContains: "3 parts",
-		},
-		{
 			name:        "negative term adds a field",
 			input:       "-1-2-3",
 			errContains: "3 parts",
@@ -308,11 +399,6 @@ func Test_ParseSnapshotName(t *testing.T) {
 		{
 			name:        "negative timestamp adds a field",
 			input:       "1-2--3",
-			errContains: "3 parts",
-		},
-		{
-			name:        "trailing separator",
-			input:       "1-2-3-",
 			errContains: "3 parts",
 		},
 
@@ -446,7 +532,7 @@ func Test_ParseSnapshotName(t *testing.T) {
 }
 
 // Test_ParseSnapshotName_RoundTrip checks that every name MakeName can
-// produce, given a post-epoch clock, parses back to its inputs.
+// produce parses back to its term and index with a non-negative timestamp.
 func Test_ParseSnapshotName_RoundTrip(t *testing.T) {
 	tests := []struct {
 		name  string
@@ -454,6 +540,7 @@ func Test_ParseSnapshotName_RoundTrip(t *testing.T) {
 		index uint64
 		now   time.Time
 	}{
+		{"pre-epoch clock", 1, 2, time.Unix(-1, 0)},
 		{"zero values at epoch", 0, 0, time.Unix(0, 0)},
 		{"small values", 1, 2, time.Unix(1500000000, 0)},
 		{"sub-millisecond clock", 3, 4, time.Unix(1500000000, 999999)},
@@ -466,7 +553,8 @@ func Test_ParseSnapshotName_RoundTrip(t *testing.T) {
 			now := tt.now
 			sn := NewSnapshotNamer(func() time.Time { return now })
 
-			name := sn.MakeName(tt.term, tt.index)
+			name := sn.MakeName(SnapshotSet{}, tt.term, tt.index)
+			parseName(t, name) // Independently enforce exactly three numeric fields.
 			term, index, msec, err := ParseSnapshotName(name)
 			if err != nil {
 				t.Fatalf("ParseSnapshotName(%q) returned error: %s", name, err)
@@ -475,23 +563,10 @@ func Test_ParseSnapshotName_RoundTrip(t *testing.T) {
 				t.Fatalf("round trip of %q gave (%d, %d), want (%d, %d)",
 					name, term, index, tt.term, tt.index)
 			}
-			if want := now.UnixNano() / int64(time.Millisecond); msec != want {
+			if want := max(int64(0), now.UnixNano()/int64(time.Millisecond)); msec != want {
 				t.Fatalf("round trip of %q gave timestamp %d, want %d", name, msec, want)
 			}
 		})
-	}
-}
-
-// Test_ParseSnapshotName_PreEpochNameFails records that names produced by a
-// pre-epoch clock cannot be parsed, since the negative timestamp splits into
-// a fourth field.
-func Test_ParseSnapshotName_PreEpochNameFails(t *testing.T) {
-	now := time.Unix(-1, 0)
-	sn := NewSnapshotNamer(func() time.Time { return now })
-
-	name := sn.MakeName(1, 2)
-	if _, _, _, err := ParseSnapshotName(name); err == nil {
-		t.Fatalf("ParseSnapshotName(%q) returned no error, want one", name)
 	}
 }
 
@@ -516,7 +591,7 @@ func Test_ParseSnapshotName_NotInjective(t *testing.T) {
 
 func Fuzz_ParseSnapshotName(f *testing.F) {
 	for _, seed := range []string{
-		"", "1-2-3", "0-0-0", "--", "-1-2-3", "1-2-3-4",
+		"", "1-2-3", "0-0-0", "--", "-1-2-3", "1-2-3-4", "1-2-3-0", "1-2-3-", "1-2-3-4-5",
 		"18446744073709551616-2-3", "1-2-9223372036854775808",
 	} {
 		f.Add(seed)
