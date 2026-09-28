@@ -567,7 +567,7 @@ func (c *Client) Join(ctx context.Context, jr *command.JoinRequest, nodeAddr str
 }
 
 // BroadcastHWM performs a broadcast to all specified nodes.
-func (c *Client) BroadcastHWM(ctx context.Context, hwm uint64, retries int, timeout time.Duration, nodeAddr ...string) (map[string]*proto.HighwaterMarkUpdateResponse, error) {
+func (c *Client) BroadcastHWM(ctx context.Context, hwm uint64, creds *proto.Credentials, retries int, timeout time.Duration, nodeAddr ...string) (map[string]*proto.HighwaterMarkUpdateResponse, error) {
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
@@ -610,6 +610,7 @@ func (c *Client) BroadcastHWM(ctx context.Context, hwm uint64, retries int, time
 				Request: &proto.Command_HighwaterMarkUpdateRequest{
 					HighwaterMarkUpdateRequest: br,
 				},
+				Credentials: creds,
 			}
 
 			// Attempt with retries

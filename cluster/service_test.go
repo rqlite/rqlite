@@ -444,7 +444,7 @@ func Test_ServiceHandleHighwaterMarkUpdate(t *testing.T) {
 	c.SetLocal("test-node", nil)
 
 	// Use the client to send a highwater mark update
-	responses, err := c.BroadcastHWM(context.Background(), 987654, 0, 5*time.Second, s.Addr())
+	responses, err := c.BroadcastHWM(context.Background(), 987654, nil, 0, 5*time.Second, s.Addr())
 	if err != nil {
 		t.Fatalf("failed to broadcast highwater mark update: %s", err)
 	}
@@ -484,7 +484,7 @@ func Test_ServiceRegisterHWMUpdate(t *testing.T) {
 
 	// Use the client to send a highwater mark update
 	testHWM := uint64(123456)
-	responses, err := c.BroadcastHWM(context.Background(), testHWM, 0, 5*time.Second, s.Addr())
+	responses, err := c.BroadcastHWM(context.Background(), testHWM, nil, 0, 5*time.Second, s.Addr())
 	if err != nil {
 		t.Fatalf("failed to broadcast highwater mark update: %s", err)
 	}

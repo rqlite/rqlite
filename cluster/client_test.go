@@ -744,7 +744,7 @@ func Test_ClientBroadcast(t *testing.T) {
 
 	c := NewClient(&simpleDialer{}, 0)
 	c.SetLocal("node1", nil) // Set local node address to match test expectation
-	responses, err := c.BroadcastHWM(context.Background(), 12345, 0, time.Second, srv.Addr())
+	responses, err := c.BroadcastHWM(context.Background(), 12345, nil, 0, time.Second, srv.Addr())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -793,7 +793,7 @@ func Test_ClientBroadcast_MultipleNodes(t *testing.T) {
 
 	c := NewClient(&simpleDialer{}, 0)
 	c.SetLocal("test-node", nil) // Set local node address to match test expectation
-	responses, err := c.BroadcastHWM(context.Background(), 999, 0, time.Second, srv1.Addr(), srv2.Addr())
+	responses, err := c.BroadcastHWM(context.Background(), 999, nil, 0, time.Second, srv1.Addr(), srv2.Addr())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -809,7 +809,7 @@ func Test_ClientBroadcast_MultipleNodes(t *testing.T) {
 
 func Test_ClientBroadcast_EmptyNodeList(t *testing.T) {
 	c := NewClient(&simpleDialer{}, 0)
-	responses, err := c.BroadcastHWM(context.Background(), 1, 0, time.Second)
+	responses, err := c.BroadcastHWM(context.Background(), 1, nil, 0, time.Second)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -842,7 +842,7 @@ func Test_ClientBroadcast_WithError(t *testing.T) {
 
 	c := NewClient(&simpleDialer{}, 0)
 	c.SetLocal("node1", nil) // Set local node address to match test expectation
-	responses, err := c.BroadcastHWM(context.Background(), 12345, 0, time.Second, srv.Addr())
+	responses, err := c.BroadcastHWM(context.Background(), 12345, nil, 0, time.Second, srv.Addr())
 	if err != nil {
 		t.Fatal(err)
 	}
