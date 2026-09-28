@@ -132,6 +132,20 @@ type Config struct {
 	CDCConfig string
 	// Username in authentication file to perform internode CDC operations. If not set, performs CDC operations anonymously
 	CDCAs string
+	// Address of OpenTelemetry Collector for metrics. If not set, OTLP reporting not enabled
+	OTLPEndpoint string
+	// Period between OTLP metric exports
+	OTLPMetricsInterval time.Duration
+	// Use plaintext gRPC when communicating with the OpenTelemetry Collector
+	OTLPInsecure bool
+	// Skip verification of the OpenTelemetry Collector certificate
+	OTLPNoVerify bool
+	// Path to X.509 CA certificate for verifying the OpenTelemetry Collector
+	OTLPCACert string
+	// Path to X.509 certificate for mutual TLS with the OpenTelemetry Collector
+	OTLPCert string
+	// Path to X.509 private key for mutual TLS with the OpenTelemetry Collector
+	OTLPKey string
 	// Path to file for CPU profiling information
 	CPUProfile string
 	// Path to file for memory profiling information

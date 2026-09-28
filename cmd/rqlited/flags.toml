@@ -658,7 +658,6 @@ long_help = """
 If set, rqlite periodically pushes its metrics, in OTLP format over gRPC, to the OpenTelemetry Collector at the given address. The address must be in host:port form e.g. localhost:4317, and must not include a protocol scheme.
 """
 default = ""
-hide = true
 
 [[flags]]
 name = "OTLPMetricsInterval"
@@ -670,7 +669,6 @@ long_help = """
 The interval at which rqlite periodically pushes its metrics, in OTLP format over gRPC, to the OpenTelemetry Collector. rqlite generates the metrics by walking all expvar metrics and emitting those values as the metrics.
 """
 default = "30s"
-hide = true
 
 [[flags]]
 name = "OTLPInsecure"
@@ -681,7 +679,6 @@ short_help = "Use plaintext gRPC when communicating with the OpenTelemetry Colle
 long_help = """
 """
 default = false
-hide = true
 
 [[flags]]
 name = "OTLPNoVerify"
@@ -692,7 +689,6 @@ short_help = "Skip verification of the OpenTelemetry Collector certificate"
 long_help = """
 """
 default = false
-hide = true
 
 [[flags]]
 name = "OTLPCACert"
@@ -704,7 +700,6 @@ long_help = """
 If not set, the operating system's CA certificates are used to verify the Collector's certificate.
 """
 default = ""
-hide = true
 
 [[flags]]
 name = "OTLPCert"
@@ -715,7 +710,6 @@ short_help = "Path to X.509 certificate for mutual TLS with the OpenTelemetry Co
 long_help = """
 """
 default = ""
-hide = true
 
 [[flags]]
 name = "OTLPKey"
@@ -726,7 +720,6 @@ short_help = "Path to X.509 private key for mutual TLS with the OpenTelemetry Co
 long_help = """
 """
 default = ""
-hide = true
 
 [[flags]]
 name = "CPUProfile"
