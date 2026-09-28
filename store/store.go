@@ -1857,11 +1857,15 @@ func (s *Store) Backup(ctx context.Context, br *proto.BackupRequest, dst io.Writ
 					retErr = err
 				}
 			}()
-			_, err = io.Copy(dstGz, srcFD)
+			n64, errCp := io.Copy(dstGz, srcFD)
+			n = int(n64)
+			err = errCp
 		} else {
-			_, err = io.Copy(cw, srcFD)
+			n64, errCp := io.Copy(cw, srcFD)
+			n = int(n64)
+			err = errCp
 		}
-		return 0, err
+		return n, err
 	case proto.BackupRequest_BACKUP_REQUEST_FORMAT_SQL:
 		var ww io.Writer = cw
 		if br.Compress {
@@ -1877,7 +1881,7 @@ func (s *Store) Backup(ctx context.Context, br *proto.BackupRequest, dst io.Writ
 			}()
 			ww = dstGz
 		}
-		return 0, s.db.Dump(ww, br.Tables...)
+		return 0, s.db.Dump(ww, br.Tables...) //// XXXX needs to return n bytes written?
 	case proto.BackupRequest_BACKUP_REQUEST_FORMAT_DELETE:
 		// Create a temporary database file in DELETE mode
 		tmpFD, err := createTemp(s.dbDir, backupScratchPattern)
@@ -1911,11 +1915,15 @@ func (s *Store) Backup(ctx context.Context, br *proto.BackupRequest, dst io.Writ
 					retErr = err
 				}
 			}()
-			_, err = io.Copy(dstGz, tmpReadFD)
+			n64, errCp := io.Copy(dstGz, tmpReadFD)
+			n = int(n64)
+			err = errCp
 		} else {
-			_, err = io.Copy(cw, tmpReadFD)
+			n64, errCp := io.Copy(cw, tmpReadFD)
+			n = int(n64)
+			err = errCp
 		}
-		return 0, err
+		return n, err
 	}
 	return 0, ErrInvalidBackupFormat
 }
