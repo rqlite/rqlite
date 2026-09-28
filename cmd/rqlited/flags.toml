@@ -607,6 +607,17 @@ long_help = """
 default = false
 
 [[flags]]
+name = "WriteQueueRetry"
+cli = "write-queue-retry"
+section = "Queued Writes"
+type = "int"
+short_help = "How many times to retry a queued write"
+long_help = """
+If a node fails to send to a queued write to the Leader it will retry the attempt this many times. Retrying queue writes can result in duplicated records if the Leader actually accepted the request and committed it to the log, but the response was never reached the sending node. This may be acceptable depending on your application needs. Set this value to zero if you do not want any risk of duplicate records.
+"""
+default = 1
+
+[[flags]]
 name = "AutoBackupFile"
 cli = "auto-backup"
 section = "Backup and restore"

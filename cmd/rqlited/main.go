@@ -507,6 +507,7 @@ func startHTTPService(cfg *Config, str *store.Store, cltr *cluster.Client, credS
 		"build_time":         cmd.Buildtime,
 	}
 	s.SetAllowOrigin(cfg.HTTPAllowOrigin)
+	s.SetQueueMaxRetry(int64(cfg.WriteQueueRetry))
 	return s, s.Start()
 }
 

@@ -1,3 +1,7 @@
+## v10.4.0 (unreleased)
+### New features
+- [PR #2827](https://github.com/rqlite/rqlite/pull/2827): Support configurable queued-writes retries. See [torx #17](https://github.com/dotnwat/torx/issues/17). Thanks @dotnwat
+
 ## v10.3.7 (September 28th 2026)
 This release addresses a gap in the role-based access permissions related to [change-data-capture (CDC)](https://rqlite.io/docs/guides/cdc/) handling.
 
