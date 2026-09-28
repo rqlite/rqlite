@@ -1852,18 +1852,14 @@ func (s *Store) Backup(ctx context.Context, br *proto.BackupRequest, dst io.Writ
 				return 0, err
 			}
 			defer func() {
-				err := dstGz.Close()
-				if err != nil && retErr == nil {
-					retErr = err
+				errClose := dstGz.Close()
+				if errClose != nil && retErr == nil {
+					retErr = errClose
 				}
 			}()
-			n64, errCp := io.Copy(dstGz, srcFD)
-			n = int(n64)
-			err = errCp
+			_, err = io.Copy(dstGz, srcFD)
 		} else {
-			n64, errCp := io.Copy(cw, srcFD)
-			n = int(n64)
-			err = errCp
+			_, err = io.Copy(cw, srcFD)
 		}
 		return n, err
 	case proto.BackupRequest_BACKUP_REQUEST_FORMAT_SQL:
