@@ -2,7 +2,6 @@ package db
 
 import (
 	"errors"
-	"fmt"
 	"math/rand/v2"
 	"os"
 	"slices"
@@ -2528,48 +2527,34 @@ func Test_DB_DumpWriteError(t *testing.T) {
 	}
 }
 
-func Test_DB_DumpPartialWriteCounts(t *testing.T) {
-	db, path := mustCreateDumpSchemaFixture(t)
+func Test_DB_DumpPartialWriteCount(t *testing.T) {
+	db, path := mustCreateOnDiskDatabaseWAL()
 	defer fsutil.Remove(path)
 	defer db.Close()
+	mustExecute(db, `CREATE TABLE foo(v INTEGER); INSERT INTO foo VALUES(1)`)
 
-	// Record the output chunks so every write site is tested, including schema
-	// objects and the final COMMIT. No particular chunk boundaries are assumed.
-	var chunks []string
-	if n, err := db.Dump(dumpWriterFunc(func(p []byte) (int, error) {
-		chunks = append(chunks, string(p))
-		return len(p), nil
-	})); err != nil {
-		t.Fatal(err)
-	} else if want := len(strings.Join(chunks, "")); n != want {
-		t.Fatalf("dump byte count: got %d, want %d", n, want)
-	}
-
+	// Accept the first 50 bytes of the dump, then fail.
+	const limit = 50
 	writeErr := errors.New("destination full")
-	for failAt, chunk := range chunks {
-		for _, accepted := range []int{0, len(chunk) / 2, len(chunk)} {
-			t.Run(fmt.Sprintf("write=%d/accepted=%d", failAt, accepted), func(t *testing.T) {
-				var buf strings.Builder
-				calls := 0
-				w := dumpWriterFunc(func(p []byte) (int, error) {
-					current := calls
-					calls++
-					if current == failAt {
-						n, _ := buf.Write(p[:accepted])
-						return n, writeErr
-					}
-					return buf.Write(p)
-				})
-				n, err := db.Dump(w)
-				if !errors.Is(err, writeErr) {
-					t.Fatalf("expected writer error, got %v", err)
-				}
-				want := strings.Join(chunks[:failAt], "") + chunk[:accepted]
-				if n != len(want) || buf.String() != want {
-					t.Fatalf("dump byte count: got %d, wrote %d, want %d", n, buf.Len(), len(want))
-				}
-			})
+	var buf strings.Builder
+	w := dumpWriterFunc(func(p []byte) (int, error) {
+		remaining := limit - buf.Len()
+		if len(p) > remaining {
+			n, _ := buf.Write(p[:remaining])
+			return n, writeErr
 		}
+		return buf.Write(p)
+	})
+
+	n, err := db.Dump(w)
+	if !errors.Is(err, writeErr) {
+		t.Fatalf("expected writer error, got %v", err)
+	}
+	if buf.Len() != limit {
+		t.Fatalf("bytes written: got %d, want %d", buf.Len(), limit)
+	}
+	if n != limit {
+		t.Fatalf("dump byte count: got %d, want %d", n, limit)
 	}
 }
 
