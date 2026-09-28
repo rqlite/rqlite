@@ -23,6 +23,7 @@ import (
 	command "github.com/rqlite/rqlite/v10/command/proto"
 	"github.com/rqlite/rqlite/v10/db/humanize"
 	"github.com/rqlite/rqlite/v10/internal/fsutil"
+	"github.com/rqlite/rqlite/v10/internal/progress"
 	"github.com/rqlite/rqlite/v10/internal/rsum"
 	"github.com/rqlite/rqlite/v10/internal/rsync"
 )
@@ -1742,6 +1743,7 @@ func (db *DB) Serialize() ([]byte, error) {
 
 // Dump writes a consistent snapshot of the database in SQL text format.
 // This function can be called when changes to the database are in flight.
+// It returns the number of bytes written to w, even when it returns an error.
 //
 // When table names are given, the dump carries those tables and their data, plus
 // the indexes and triggers that belong to them. Views are written out as they
@@ -1749,10 +1751,13 @@ func (db *DB) Serialize() ([]byte, error) {
 // carry is created but cannot be queried. The dump itself still loads, since
 // SQLite resolves the tables a view reads from when the view is used, not when it
 // is created.
-func (db *DB) Dump(w io.Writer, tableNames ...string) (retErr error) {
+func (db *DB) Dump(w io.Writer, tableNames ...string) (n int, retErr error) {
+	cw := progress.NewCountingWriter(w)
+	defer func() { n = int(cw.Count()) }()
+
 	conn, err := db.roDB.Conn(context.Background())
 	if err != nil {
-		return err
+		return 0, err
 	}
 	defer conn.Close()
 	ctx := context.Background()
@@ -1762,7 +1767,7 @@ func (db *DB) Dump(w io.Writer, tableNames ...string) (retErr error) {
 	// Because we need the transaction to span multiple queries we manually
 	// manage the transaction.
 	if _, err := conn.ExecContext(ctx, "BEGIN"); err != nil {
-		return err
+		return 0, err
 	}
 	defer func() {
 		if _, err := conn.ExecContext(ctx, "ROLLBACK"); retErr == nil {
@@ -1781,14 +1786,14 @@ func (db *DB) Dump(w io.Writer, tableNames ...string) (retErr error) {
 		}
 	}
 
-	if _, err := w.Write([]byte("PRAGMA foreign_keys=OFF;\nBEGIN TRANSACTION;\n")); err != nil {
-		return err
+	if _, err := cw.Write([]byte("PRAGMA foreign_keys=OFF;\nBEGIN TRANSACTION;\n")); err != nil {
+		return 0, err
 	}
 
 	// Get the schema.
 	rows, err := db.queryWithConn(ctx, DumpTablesReq(tableNames...), false, conn)
 	if err != nil {
-		return err
+		return 0, err
 	}
 	row := rows[0]
 	for _, v := range row.Values {
@@ -1806,15 +1811,15 @@ func (db *DB) Dump(w io.Writer, tableNames ...string) (retErr error) {
 			stmt = v.Parameters[2].GetS()
 		}
 
-		if _, err := w.Write(fmt.Appendf(nil, "%s;\n", stmt)); err != nil {
-			return err
+		if _, err := cw.Write(fmt.Appendf(nil, "%s;\n", stmt)); err != nil {
+			return 0, err
 		}
 
 		tableIndent := strings.Replace(table, `"`, `""`, -1)
 		r, err := db.queryWithConn(ctx, commReq(fmt.Sprintf(`PRAGMA table_info("%s")`, tableIndent)),
 			false, conn)
 		if err != nil {
-			return err
+			return 0, err
 		}
 		var columnNames []string
 		for _, vv := range r[0].Values {
@@ -1828,12 +1833,12 @@ func (db *DB) Dump(w io.Writer, tableNames ...string) (retErr error) {
 		r, err = db.queryWithConn(ctx, commReq(query), false, conn)
 
 		if err != nil {
-			return err
+			return 0, err
 		}
 		for _, x := range r[0].Values {
 			y := fmt.Sprintf("%s;\n", x.Parameters[0].GetS())
-			if _, err := w.Write([]byte(y)); err != nil {
-				return err
+			if _, err := cw.Write([]byte(y)); err != nil {
+				return 0, err
 			}
 		}
 	}
@@ -1841,16 +1846,16 @@ func (db *DB) Dump(w io.Writer, tableNames ...string) (retErr error) {
 	// Do indexes, triggers, and views.
 	objs, err := db.schemaObjectsWithConn(ctx, conn)
 	if err != nil {
-		return err
+		return 0, err
 	}
 	for _, o := range objs.Filter(tableNames) {
-		if _, err := w.Write(fmt.Appendf(nil, "%s;\n", o.sql)); err != nil {
-			return err
+		if _, err := cw.Write(fmt.Appendf(nil, "%s;\n", o.sql)); err != nil {
+			return 0, err
 		}
 	}
 
-	_, err = w.Write([]byte("COMMIT;\n"))
-	return err
+	_, err = cw.Write([]byte("COMMIT;\n"))
+	return 0, err
 }
 
 // StmtReadOnly returns whether the given SQL statement is read-only.

@@ -195,7 +195,7 @@ func (s *SwappableDB) Path() string {
 }
 
 // Dump calls Dump on the underlying database.
-func (s *SwappableDB) Dump(w io.Writer, tableNames ...string) error {
+func (s *SwappableDB) Dump(w io.Writer, tableNames ...string) (int, error) {
 	s.dbMu.RLock()
 	defer s.dbMu.RUnlock()
 	return s.db.Dump(w, tableNames...)

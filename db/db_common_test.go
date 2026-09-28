@@ -2,6 +2,7 @@ package db
 
 import (
 	"errors"
+	"fmt"
 	"math/rand/v2"
 	"os"
 	"slices"
@@ -2377,8 +2378,10 @@ func Test_DB_Dump(t *testing.T) {
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
 			var buf strings.Builder
-			if err := db.Dump(&buf, tc.tables...); err != nil {
+			if n, err := db.Dump(&buf, tc.tables...); err != nil {
 				t.Fatalf("dump %s: %v", tc.name, err)
+			} else if n != buf.Len() {
+				t.Fatalf("dump byte count: got %d, want %d", n, buf.Len())
 			}
 
 			// load dump into new DB
@@ -2460,8 +2463,10 @@ func Test_DB_DumpConcurrentWrite(t *testing.T) {
 		}
 		return buf.Write(p)
 	})
-	if err := db.Dump(w); err != nil {
+	if n, err := db.Dump(w); err != nil {
 		t.Fatalf("failed to dump database: %s", err)
+	} else if n != buf.Len() {
+		t.Fatalf("dump byte count: got %d, want %d", n, buf.Len())
 	}
 	if !updated {
 		t.Fatal("database was not updated during dump")
@@ -2495,25 +2500,88 @@ func Test_DB_DumpWriteError(t *testing.T) {
 	mustExecute(db, `CREATE TABLE foo(v INTEGER); INSERT INTO foo VALUES(0)`)
 
 	writeErr := errors.New("dump write failed")
+	var written strings.Builder
 	w := dumpWriterFunc(func(p []byte) (int, error) {
 		if strings.HasPrefix(string(p), `INSERT INTO`) {
-			return 0, writeErr
+			n, _ := written.Write(p[:3])
+			return n, writeErr
 		}
-		return len(p), nil
+		return written.Write(p)
 	})
-	if err := db.Dump(w); !errors.Is(err, writeErr) {
+	if n, err := db.Dump(w); !errors.Is(err, writeErr) {
 		t.Fatalf("unexpected dump error: %v", err)
+	} else if n != written.Len() {
+		t.Fatalf("dump byte count on error: got %d, want %d", n, written.Len())
 	}
 
 	// The failed dump must release its read transaction before returning the
 	// connection to the pool. A subsequent dump must see the new value.
 	mustExecute(db, `UPDATE foo SET v=1`)
 	var buf strings.Builder
-	if err := db.Dump(&buf); err != nil {
+	if n, err := db.Dump(&buf); err != nil {
 		t.Fatalf("failed to dump after write error: %s", err)
+	} else if n != buf.Len() {
+		t.Fatalf("dump byte count: got %d, want %d", n, buf.Len())
 	}
 	if !strings.Contains(buf.String(), `INSERT INTO "foo" VALUES(1);`) {
 		t.Fatalf("dump did not see updated data: %s", buf.String())
+	}
+}
+
+func Test_DB_DumpPartialWriteCounts(t *testing.T) {
+	db, path := mustCreateDumpSchemaFixture(t)
+	defer fsutil.Remove(path)
+	defer db.Close()
+
+	// Record the output chunks so every write site is tested, including schema
+	// objects and the final COMMIT. No particular chunk boundaries are assumed.
+	var chunks []string
+	if n, err := db.Dump(dumpWriterFunc(func(p []byte) (int, error) {
+		chunks = append(chunks, string(p))
+		return len(p), nil
+	})); err != nil {
+		t.Fatal(err)
+	} else if want := len(strings.Join(chunks, "")); n != want {
+		t.Fatalf("dump byte count: got %d, want %d", n, want)
+	}
+
+	writeErr := errors.New("destination full")
+	for failAt, chunk := range chunks {
+		for _, accepted := range []int{0, len(chunk) / 2, len(chunk)} {
+			t.Run(fmt.Sprintf("write=%d/accepted=%d", failAt, accepted), func(t *testing.T) {
+				var buf strings.Builder
+				calls := 0
+				w := dumpWriterFunc(func(p []byte) (int, error) {
+					current := calls
+					calls++
+					if current == failAt {
+						n, _ := buf.Write(p[:accepted])
+						return n, writeErr
+					}
+					return buf.Write(p)
+				})
+				n, err := db.Dump(w)
+				if !errors.Is(err, writeErr) {
+					t.Fatalf("expected writer error, got %v", err)
+				}
+				want := strings.Join(chunks[:failAt], "") + chunk[:accepted]
+				if n != len(want) || buf.String() != want {
+					t.Fatalf("dump byte count: got %d, wrote %d, want %d", n, buf.Len(), len(want))
+				}
+			})
+		}
+	}
+}
+
+func Test_DB_DumpClosed(t *testing.T) {
+	db, path := mustCreateOnDiskDatabaseWAL()
+	defer fsutil.Remove(path)
+	if err := db.Close(); err != nil {
+		t.Fatal(err)
+	}
+	var buf strings.Builder
+	if n, err := db.Dump(&buf); err == nil || n != 0 || buf.Len() != 0 {
+		t.Fatalf("closed database dump: count=%d, written=%d, error=%v", n, buf.Len(), err)
 	}
 }
 
@@ -2569,8 +2637,10 @@ func Test_DB_DumpSelectedTables(t *testing.T) {
 	defer db.Close()
 
 	var buf strings.Builder
-	if err := db.Dump(&buf, "t1"); err != nil {
+	if n, err := db.Dump(&buf, "t1"); err != nil {
 		t.Fatalf("dump t1: %s", err.Error())
+	} else if n != buf.Len() {
+		t.Fatalf("dump byte count: got %d, want %d", n, buf.Len())
 	}
 
 	newDB, newPath := mustCreateOnDiskDatabase()
