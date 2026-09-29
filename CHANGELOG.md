@@ -1,4 +1,4 @@
-## v10.4.0 (unreleased)
+## v10.4.0 (September 29th 2026)
 ### New features
 - [PR #2827](https://github.com/rqlite/rqlite/pull/2827): Support configurable queued-writes retries. See [torx #17](https://github.com/dotnwat/torx/issues/17). Thanks @dotnwat
 
