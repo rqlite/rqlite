@@ -3,6 +3,7 @@
 - [PR #2827](https://github.com/rqlite/rqlite/pull/2827): Support configurable queued-writes retries. See [torx #17](https://github.com/dotnwat/torx/issues/17). Thanks @dotnwat
 
 ### Implementation changes and bug fixes
+- [PR #2830](https://github.com/rqlite/rqlite/pull/2830): Log-fatal, don't panic.
 - [PR #2828](https://github.com/rqlite/rqlite/pull/2828): DB `Dump()` returns number of bytes written.
 - [PR #2821](https://github.com/rqlite/rqlite/pull/2821): HTTP layer performs Backup directly, setting _Trailer_ HTTP header `X-STREAM-ERROR` on error.
 

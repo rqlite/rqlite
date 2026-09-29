@@ -45,35 +45,35 @@ func NewCommandProcessor(logger *log.Logger, dm *chunking.DechunkerManager) *Com
 func (c *CommandProcessor) Process(data []byte, db *sql.SwappableDB) (*proto.Command, bool, any) {
 	cmd := &proto.Command{}
 	if err := command.Unmarshal(data, cmd); err != nil {
-		panic(fmt.Sprintf("failed to unmarshal cluster command: %s", err.Error()))
+		c.logger.Fatalf("failed to unmarshal cluster command: %s", err.Error())
 	}
 
 	switch cmd.Type {
 	case proto.Command_COMMAND_TYPE_QUERY:
 		var qr proto.QueryRequest
 		if err := command.UnmarshalSubCommand(cmd, &qr); err != nil {
-			panic(fmt.Sprintf("failed to unmarshal query subcommand: %s", err.Error()))
+			c.logger.Fatalf("failed to unmarshal query subcommand: %s", err.Error())
 		}
 		r, err := db.Query(qr.Request, qr.Timings)
 		return cmd, false, &fsmQueryResponse{rows: r, error: err}
 	case proto.Command_COMMAND_TYPE_EXECUTE:
 		var er proto.ExecuteRequest
 		if err := command.UnmarshalSubCommand(cmd, &er); err != nil {
-			panic(fmt.Sprintf("failed to unmarshal execute subcommand: %s", err.Error()))
+			c.logger.Fatalf("failed to unmarshal execute subcommand: %s", err.Error())
 		}
 		r, err := db.Execute(er.Request, er.Timings)
 		return cmd, true, &fsmExecuteQueryResponse{results: r, error: err}
 	case proto.Command_COMMAND_TYPE_EXECUTE_QUERY:
 		var eqr proto.ExecuteQueryRequest
 		if err := command.UnmarshalSubCommand(cmd, &eqr); err != nil {
-			panic(fmt.Sprintf("failed to unmarshal execute-query subcommand: %s", err.Error()))
+			c.logger.Fatalf("failed to unmarshal execute-query subcommand: %s", err.Error())
 		}
 		r, err := db.Request(eqr.Request, eqr.Timings)
 		return cmd, ExecuteQueryResponses(r).Mutation(), &fsmExecuteQueryResponse{results: r, error: err}
 	case proto.Command_COMMAND_TYPE_LOAD:
 		var lr proto.LoadRequest
 		if err := command.UnmarshalLoadRequest(cmd.SubCommand, &lr); err != nil {
-			panic(fmt.Sprintf("failed to unmarshal load subcommand: %s", err.Error()))
+			c.logger.Fatalf("failed to unmarshal load subcommand: %s", err.Error())
 		}
 
 		// create a scratch file in the same directory as s.db.Path()
@@ -97,7 +97,7 @@ func (c *CommandProcessor) Process(data []byte, db *sql.SwappableDB) (*proto.Com
 	case proto.Command_COMMAND_TYPE_LOAD_CHUNK:
 		var lcr proto.LoadChunkRequest
 		if err := command.UnmarshalLoadChunkRequest(cmd.SubCommand, &lcr); err != nil {
-			panic(fmt.Sprintf("failed to unmarshal load-chunk subcommand: %s", err.Error()))
+			c.logger.Fatalf("failed to unmarshal load-chunk subcommand: %s", err.Error())
 		}
 
 		dec, err := c.decMgmr.Get(lcr.StreamId)
