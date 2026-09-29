@@ -51,11 +51,15 @@ func Test_DBErrors_FullStopsBatch(t *testing.T) {
 						mustExecute(db, "CREATE TABLE data (value BLOB)")
 						mustExecute(db, "CREATE TABLE marker (value INTEGER)")
 						mustExecute(db, "INSERT INTO marker VALUES (0)")
+
+						// Set the max page count to the current page count, which will prevent the database
+						// from growing, and trigger the SQLITE_FULL error.
 						var pages int
 						if err := db.rwDB.QueryRow("PRAGMA page_count").Scan(&pages); err != nil {
 							t.Fatal(err)
 						}
 						mustExecute(db, fmt.Sprintf("PRAGMA max_page_count=%d", pages))
+
 						insert := "INSERT INTO data VALUES (zeroblob(1048576))"
 						if forceQuery {
 							insert += " RETURNING rowid"
@@ -131,8 +135,11 @@ func Test_DBErrors_OrdinarySQL(t *testing.T) {
 func Test_DBErrors_Prepare(t *testing.T) {
 	db := newErrorTestDB(t, false)
 	mustExecute(db, "CREATE TABLE data (id INTEGER)")
-	// Limit instruction allocation to force SQLITE_NOMEM during preparation,
-	// without relying on host memory pressure or SQLite schema-cache behavior.
+	// SQLite compiles each SQL statement into a virtual-machine program during
+	// preparation. SQLITE_LIMIT_VDBE_OP limits the number of instructions it can
+	// allocate for that program, not the number executed at runtime. Exceeding
+	// the limit returns SQLITE_NOMEM. Setting it to one makes even our simple
+	// statements fail preparation without exhausting actual memory.
 	for _, pool := range []*sql.DB{db.rwDB, db.roDB} {
 		conn, err := pool.Conn(context.Background())
 		if err != nil {
@@ -167,6 +174,7 @@ func Test_DBErrors_Prepare(t *testing.T) {
 func Test_DBErrors_DriverFailures(t *testing.T) {
 	ioErr := sqlite3.Error{Code: sqlite3.ErrIoErr, ExtendedCode: sqlite3.ErrIoErrFsync}
 	constraint := sqlite3.Error{Code: sqlite3.ErrConstraint}
+
 	for _, api := range []string{"execute", "query", "request"} {
 		for _, stage := range []string{"connect", "begin", "commit", "statement", "next", "close", "rollback"} {
 			// Request uses a concrete SQLite connection for statement preparation;
@@ -260,12 +268,15 @@ func Test_DBErrors_QueryContention(t *testing.T) {
 			conn := &errorTestConn{statementErr: sqlite3.Error{Code: code}}
 			sqldb := sql.OpenDB(conn)
 			defer sqldb.Close()
+
 			db := &DB{rwDB: sqldb, roDB: sqldb}
+
 			req := &command.Request{Statements: []*command.Statement{{Sql: "first"}, {Sql: "second"}}}
 			rows, err := db.Query(req, false)
 			if err != nil || len(rows) != 2 || rows[0].Error == "" || rows[1].Error == "" {
 				t.Fatalf("read contention behavior changed: %v, %v", rows, err)
 			}
+
 			results, err := db.Execute(req, false)
 			mustBeFatalSQLiteError(t, err, code)
 			if len(results) != 1 {
