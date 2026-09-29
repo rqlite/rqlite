@@ -168,14 +168,15 @@ func Test_DBErrors_Prepare(t *testing.T) {
 
 // Test_DBErrors_DriverFailures injects errors at connection acquisition,
 // transaction begin and commit, statement execution, row iteration and closure,
-// and rollback. It verifies fatal propagation and batch termination, including
+// and rollback on write-capable paths, including Execute with ForceQuery. It
+// verifies fatal propagation and batch termination, including
 // promotion of a fatal rollback error after an ordinary statement error and
 // preservation of an earlier fatal error when rollback also fails.
 func Test_DBErrors_DriverFailures(t *testing.T) {
 	ioErr := sqlite3.Error{Code: sqlite3.ErrIoErr, ExtendedCode: sqlite3.ErrIoErrFsync}
 	constraint := sqlite3.Error{Code: sqlite3.ErrConstraint}
 
-	for _, api := range []string{"execute", "query", "request"} {
+	for _, api := range []string{"execute", "execute_returning", "request"} {
 		for _, stage := range []string{"connect", "begin", "commit", "statement", "next", "close", "rollback"} {
 			// Request uses a concrete SQLite connection for statement preparation;
 			// its statement paths are exercised by the real SQLite tests above.
@@ -203,8 +204,8 @@ func Test_DBErrors_DriverFailures(t *testing.T) {
 				case "rollback":
 					conn.rollbackErr = ioErr
 					conn.statementErr = constraint
-					if api == "query" {
-						// A fatal row error causes queryWithConn to roll back.
+					if api == "execute_returning" {
+						// A fatal query-path error must survive rollback failure.
 						conn.statementErr = sqlite3.Error{Code: sqlite3.ErrFull}
 					}
 				}
@@ -213,19 +214,20 @@ func Test_DBErrors_DriverFailures(t *testing.T) {
 				db := &DB{rwDB: sqldb, roDB: sqldb}
 				req := &command.Request{Transaction: stage == "begin" || stage == "commit" || stage == "rollback"}
 				if api != "request" {
-					req.Statements = []*command.Statement{{Sql: "first"}, {Sql: "second"}}
+					req.Statements = []*command.Statement{
+						{Sql: "first", ForceQuery: api == "execute_returning"},
+						{Sql: "second", ForceQuery: api == "execute_returning"},
+					}
 				}
 				var err error
 				switch api {
-				case "execute":
+				case "execute", "execute_returning":
 					_, err = db.Execute(req, false)
-				case "query":
-					_, err = db.Query(req, false)
 				case "request":
 					_, err = db.Request(req, false)
 				}
 				want := sqlite3.ErrIoErr
-				if api == "query" && stage == "rollback" {
+				if api == "execute_returning" && stage == "rollback" {
 					want = sqlite3.ErrFull // Preserve the original fatal error.
 				}
 				mustBeFatalSQLiteError(t, err, want)
@@ -259,11 +261,11 @@ func Test_DBErrors_ExplicitRollback(t *testing.T) {
 	}
 }
 
-// Test_DBErrors_QueryContention verifies that busy and locked errors remain
-// ordinary statement errors in read-only Query batches, but become fatal errors
-// that stop Execute batches.
-func Test_DBErrors_QueryContention(t *testing.T) {
-	for _, code := range []sqlite3.ErrNo{sqlite3.ErrBusy, sqlite3.ErrLocked} {
+// Test_DBErrors_QueryErrors verifies that busy, locked, and I/O errors remain
+// ordinary statement errors in read-only Query batches, including journal-mode
+// changes, but become fatal errors that stop Execute batches.
+func Test_DBErrors_QueryErrors(t *testing.T) {
+	for _, code := range []sqlite3.ErrNo{sqlite3.ErrBusy, sqlite3.ErrLocked, sqlite3.ErrIoErr} {
 		t.Run(fmt.Sprint(int(code)), func(t *testing.T) {
 			conn := &errorTestConn{statementErr: sqlite3.Error{Code: code}}
 			sqldb := sql.OpenDB(conn)
@@ -271,16 +273,59 @@ func Test_DBErrors_QueryContention(t *testing.T) {
 
 			db := &DB{rwDB: sqldb, roDB: sqldb}
 
-			req := &command.Request{Statements: []*command.Statement{{Sql: "first"}, {Sql: "second"}}}
+			req := &command.Request{Statements: []*command.Statement{
+				{Sql: "PRAGMA journal_mode=DELETE"}, {Sql: "SELECT 1"},
+			}}
 			rows, err := db.Query(req, false)
-			if err != nil || len(rows) != 2 || rows[0].Error == "" || rows[1].Error == "" {
-				t.Fatalf("read contention behavior changed: %v, %v", rows, err)
+			if err != nil || len(rows) != 2 || rows[0].Error != conn.statementErr.Error() || rows[1].Error != conn.statementErr.Error() {
+				t.Fatalf("read error behavior changed: %v, %v", rows, err)
+			}
+			if conn.statements != 2 {
+				t.Fatalf("expected both queries to reach the driver, got %d", conn.statements)
 			}
 
 			results, err := db.Execute(req, false)
 			mustBeFatalSQLiteError(t, err, code)
 			if len(results) != 1 {
-				t.Fatalf("execute continued after contention: %v", results)
+				t.Fatalf("execute continued after failure: %v", results)
+			}
+		})
+	}
+}
+
+// Test_DBErrors_QueryDriverFailures verifies that connection and transaction
+// errors retain their original type in Query, while row iteration and closure
+// failures remain statement errors and allow later queries to run.
+func Test_DBErrors_QueryDriverFailures(t *testing.T) {
+	ioErr := sqlite3.Error{Code: sqlite3.ErrIoErr, ExtendedCode: sqlite3.ErrIoErrRead}
+	for _, stage := range []string{"connect", "begin", "commit", "next", "close"} {
+		t.Run(stage, func(t *testing.T) {
+			conn := &errorTestConn{}
+			switch stage {
+			case "connect":
+				conn.connectErr = ioErr
+			case "begin":
+				conn.beginErr = ioErr
+			case "commit":
+				conn.commitErr = ioErr
+			case "next":
+				conn.nextErr = ioErr
+			case "close":
+				conn.closeRowsErr = ioErr
+			}
+			sqldb := sql.OpenDB(conn)
+			defer sqldb.Close()
+			db := &DB{roDB: sqldb}
+			rows, err := db.Query(&command.Request{
+				Transaction: stage == "begin" || stage == "commit",
+				Statements:  []*command.Statement{{Sql: "SELECT 1"}, {Sql: "SELECT 2"}},
+			}, false)
+			if stage == "next" || stage == "close" {
+				if err != nil || len(rows) != 2 || rows[0].Error != ioErr.Error() || rows[1].Error != ioErr.Error() || conn.statements != 2 {
+					t.Fatalf("expected ordinary row errors and batch continuation, got %v, %v", rows, err)
+				}
+			} else if err != ioErr {
+				t.Fatalf("expected original driver error, got %T: %v", err, err)
 			}
 		})
 	}

@@ -1378,9 +1378,8 @@ func (db *DB) QueryStringStmtWithTimeout(query string, tx bool, timeout time.Dur
 }
 
 // Query executes queries that return rows, but don't modify the database.
-// Node-local SQLite failures return a *FatalError and stop the request. Lock
-// contention and attempts to write through this read-only API remain statement
-// errors, since they cannot cause a replicated write to be skipped.
+// Query errors are not classified as fatal because this path cannot skip a
+// replicated write. Statement errors are reported in the returned rows.
 func (db *DB) Query(req *command.Request, xTime bool) ([]*command.QueryRows, error) {
 	return db.QueryWithContext(context.Background(), req, xTime)
 }
@@ -1388,8 +1387,7 @@ func (db *DB) Query(req *command.Request, xTime bool) ([]*command.QueryRows, err
 // QueryWithContext executes queries that return rows, but don't modify the database.
 // Any timeout set in the request is also applied, so the effective deadline is the
 // earlier of the context's deadline and the request's timeout.
-func (db *DB) QueryWithContext(ctx context.Context, req *command.Request, xTime bool) (rows []*command.QueryRows, retErr error) {
-	defer func() { retErr = classifyError(retErr) }()
+func (db *DB) QueryWithContext(ctx context.Context, req *command.Request, xTime bool) ([]*command.QueryRows, error) {
 	if req.DbTimeout > 0 {
 		var cancel context.CancelFunc
 		ctx, cancel = context.WithTimeout(ctx, time.Duration(req.DbTimeout))
@@ -1400,7 +1398,7 @@ func (db *DB) QueryWithContext(ctx context.Context, req *command.Request, xTime 
 	if err != nil {
 		return nil, err
 	}
-	defer func() { preserveFatalError(&retErr, conn.Close()) }()
+	defer conn.Close()
 	return db.queryWithConn(ctx, req, xTime, conn)
 }
 
@@ -1408,22 +1406,22 @@ type queryer interface {
 	QueryContext(ctx context.Context, query string, args ...any) (*sql.Rows, error)
 }
 
-func (db *DB) queryWithConn(ctx context.Context, req *command.Request, xTime bool, conn *sql.Conn) (allRows []*command.QueryRows, retErr error) {
-	defer func() { retErr = classifyError(retErr) }()
+func (db *DB) queryWithConn(ctx context.Context, req *command.Request, xTime bool, conn *sql.Conn) ([]*command.QueryRows, error) {
+	var err error
 
 	queryer := queryer(conn)
 	var tx *sql.Tx
 	if req.Transaction {
 		stats.Add(numQTx, 1)
-		var err error
 		tx, err = conn.BeginTx(ctx, nil)
 		if err != nil {
 			return nil, err
 		}
-		defer func() { preserveFatalError(&retErr, tx.Rollback()) }()
+		defer tx.Rollback() // Will be ignored if tx is committed
 		queryer = tx
 	}
 
+	var allRows []*command.QueryRows
 	for _, stmt := range req.Statements {
 		sql := stmt.Sql
 		if sql == "" {
@@ -1437,14 +1435,8 @@ func (db *DB) queryWithConn(ctx context.Context, req *command.Request, xTime boo
 		if err != nil {
 			// Remap errors if necessary for backwards compatibility reasons.
 			se := NewSQLiteErrorFromError(err)
-			switch {
-			case se != nil && se.ReadOnlyError():
+			if se != nil && se.ReadOnlyError() {
 				err = ErrQueryWrite
-			case se != nil && (se.Code == int32(sqlite3.ErrBusy) || se.Code == int32(sqlite3.ErrLocked)):
-				// Contention on the read-only connection is an ordinary query
-				// failure. Execute and Request must still treat it as fatal.
-			case isFatalError(err):
-				return allRows, err
 			}
 			rows = &command.QueryRows{
 				Error: err.Error(),
@@ -1452,9 +1444,6 @@ func (db *DB) queryWithConn(ctx context.Context, req *command.Request, xTime boo
 		}
 		if req.QualifyColumns && rows != nil && rows.Error == "" {
 			if qErr := qualifyRowColumns(conn, stmt.Sql, rows); qErr != nil {
-				if qErr = classifyError(qErr); isFatalError(qErr) {
-					return allRows, qErr
-				}
 				db.logger.Printf("qualify columns: %s", qErr.Error())
 			}
 		}
@@ -1462,9 +1451,9 @@ func (db *DB) queryWithConn(ctx context.Context, req *command.Request, xTime boo
 	}
 
 	if tx != nil {
-		retErr = tx.Commit()
+		err = tx.Commit()
 	}
-	return allRows, retErr
+	return allRows, err
 }
 
 func (db *DB) queryStmtWithConn(ctx context.Context, stmt *command.Statement, xTime bool, q queryer) (retRows *command.QueryRows, retErr error) {

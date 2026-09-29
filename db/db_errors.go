@@ -22,7 +22,7 @@ func (e *FatalError) Unwrap() error { return e.err }
 // nodeLocalErrorCodes identifies errors that cannot safely be treated as
 // deterministic SQL failures. Primary codes include all their extended variants.
 // Busy and locked errors are fatal on write paths once they escape SQLite's
-// busy handling. Query preserves ordinary read-only contention/write errors.
+// busy handling. The read-only Query API retains ordinary error handling.
 // Interrupts and context cancellation retain their existing, separate policy.
 var nodeLocalErrorCodes = map[sqlite3.ErrNo]struct{}{
 	sqlite3.ErrFull:     {}, // Storage capacity exhausted.
