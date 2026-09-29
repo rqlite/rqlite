@@ -236,7 +236,9 @@ func RecoverNode(dataDir string, dbConf *DBConfig, logger *log.Logger, logs raft
 			return fmt.Errorf("failed to get log at index %d: %v", index, err)
 		}
 		if entry.Type == raft.LogCommand {
-			cmdProc.Process(entry.Data, db)
+			if _, _, _, err := cmdProc.Process(entry.Data, db); err != nil {
+				return fmt.Errorf("failed to replay command at index %d: %w", index, err)
+			}
 		}
 		lastIndex = entry.Index
 		lastTerm = entry.Term
