@@ -1378,8 +1378,6 @@ func (db *DB) QueryStringStmtWithTimeout(query string, tx bool, timeout time.Dur
 }
 
 // Query executes queries that return rows, but don't modify the database.
-// Query errors are not classified as fatal because this path cannot skip a
-// replicated write. Statement errors are reported in the returned rows.
 func (db *DB) Query(req *command.Request, xTime bool) ([]*command.QueryRows, error) {
 	return db.QueryWithContext(context.Background(), req, xTime)
 }
@@ -1885,30 +1883,29 @@ func (db *DB) Dump(w io.Writer, tableNames ...string) (n int, retErr error) {
 // StmtReadOnly returns whether the given SQL statement is read-only.
 // As per https://www.sqlite.org/c3ref/stmt_readonly.html, this function
 // may not return 100% correct results, but should cover most scenarios.
-func (db *DB) StmtReadOnly(sql string) (readOnly bool, retErr error) {
-	defer func() { retErr = classifyError(retErr) }()
+func (db *DB) StmtReadOnly(sql string) (bool, error) {
 	conn, err := db.roDB.Conn(context.Background())
 	if err != nil {
 		return false, err
 	}
-	defer func() { preserveFatalError(&retErr, conn.Close()) }()
+	defer conn.Close()
 	return db.StmtReadOnlyWithConn(sql, conn)
 }
 
 // StmtReadOnlyWithConn returns whether the given SQL statement is read-only, using
-// the given connection.
-func (db *DB) StmtReadOnlyWithConn(sql string, conn *sql.Conn) (readOnly bool, retErr error) {
-	defer func() { retErr = classifyError(retErr) }()
-	f := func(driverConn any) (retErr error) {
+// the given connection. Errors are returned unchanged so the caller can classify
+// them in the context of execution.
+func (db *DB) StmtReadOnlyWithConn(sql string, conn *sql.Conn) (bool, error) {
+	var readOnly bool
+	f := func(driverConn any) error {
 		c := driverConn.(*sqlite3.SQLiteConn)
 		drvStmt, err := c.Prepare(sql)
 		if err != nil {
 			return err
 		}
-		defer func() { preserveFatalError(&retErr, drvStmt.Close()) }()
 		sqliteStmt := drvStmt.(*sqlite3.SQLiteStmt)
 		readOnly = sqliteStmt.Readonly()
-		return nil
+		return drvStmt.Close()
 	}
 
 	if err := conn.Raw(f); err != nil {

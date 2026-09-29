@@ -130,8 +130,8 @@ func Test_DBErrors_OrdinarySQL(t *testing.T) {
 }
 
 // Test_DBErrors_Prepare verifies that a SQLite allocation failure during
-// preparation propagates as a FatalError from StmtReadOnly and stops Request
-// before it processes subsequent statements.
+// preparation remains an ordinary driver error from StmtReadOnly, but is
+// promoted to a FatalError by Request before it processes subsequent statements.
 func Test_DBErrors_Prepare(t *testing.T) {
 	db := newErrorTestDB(t, false)
 	mustExecute(db, "CREATE TABLE data (id INTEGER)")
@@ -155,7 +155,9 @@ func Test_DBErrors_Prepare(t *testing.T) {
 		}
 	}
 	_, err := db.StmtReadOnly("SELECT * FROM data")
-	mustBeFatalSQLiteError(t, err, sqlite3.ErrNomem)
+	if sqliteErr, ok := err.(sqlite3.Error); !ok || sqliteErr.Code != sqlite3.ErrNomem {
+		t.Fatalf("expected ordinary SQLite allocation error, got %T: %v", err, err)
+	}
 	results, err := db.Request(&command.Request{Statements: []*command.Statement{
 		{Sql: "INSERT INTO data VALUES (1)"},
 		{Sql: "SELECT 1"},
