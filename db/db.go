@@ -1893,8 +1893,7 @@ func (db *DB) StmtReadOnly(sql string) (bool, error) {
 }
 
 // StmtReadOnlyWithConn returns whether the given SQL statement is read-only, using
-// the given connection. Errors are returned unchanged so the caller can classify
-// them in the context of execution.
+// the given connection.
 func (db *DB) StmtReadOnlyWithConn(sql string, conn *sql.Conn) (bool, error) {
 	var readOnly bool
 	f := func(driverConn any) error {
@@ -2111,19 +2110,18 @@ func qualifyRowColumns(conn *sql.Conn, query string, rows *command.QueryRows) er
 	}
 
 	var tableNames []string
-	err := conn.Raw(func(driverConn any) (retErr error) {
+	err := conn.Raw(func(driverConn any) error {
 		sqliteConn := driverConn.(*sqlite3.SQLiteConn)
 		stmt, err := sqliteConn.Prepare(query)
 		if err != nil {
 			return err
 		}
-		defer func() { preserveFatalError(&retErr, stmt.Close()) }()
 		sqliteStmt := stmt.(*sqlite3.SQLiteStmt)
 		tableNames = make([]string, len(rows.Columns))
 		for i := range rows.Columns {
 			tableNames[i] = sqliteStmt.ColumnTableName(i)
 		}
-		return nil
+		return stmt.Close()
 	})
 	if err != nil {
 		return err
