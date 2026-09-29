@@ -741,6 +741,8 @@ func (s *Service) handleBackup(w http.ResponseWriter, r *http.Request, qp QueryP
 
 			if clstrErr.Error() == "unauthorized" {
 				http.Error(w, fmt.Sprintf("backup not authorized on remote node at %s", addr.Addr), http.StatusUnauthorized)
+			} else {
+				http.Error(w, clstrErr.Error(), http.StatusServiceUnavailable)
 			}
 		}
 		return
