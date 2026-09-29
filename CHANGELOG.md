@@ -7,7 +7,7 @@
 - [PR #2828](https://github.com/rqlite/rqlite/pull/2828): DB `Dump()` returns number of bytes written.
 - [PR #2821](https://github.com/rqlite/rqlite/pull/2821): HTTP layer performs Backup directly, setting _Trailer_ HTTP header `X-STREAM-ERROR` on error.
 - [PR #2829](https://github.com/rqlite/rqlite/pull/2829): DB layer checks for, and classifies if necessary, fatal SQLite errors.
-- [PR #2831](https://github.com/rqlite/rqlite/pull/2831): Exit on node-local SQLite error. See [torx #15](https://github.com/dotnwat/torx/issues/15). Thanks @dotnwat
+- [PR #2831](https://github.com/rqlite/rqlite/pull/2831): Exit on node-local SQLite error to prevent possible node database state divergence. See [torx #15](https://github.com/dotnwat/torx/issues/15). Thanks @dotnwat
 
 ## v10.3.7 (September 28th 2026)
 This release addresses a gap in the role-based access permissions related to [change-data-capture (CDC)](https://rqlite.io/docs/guides/cdc/) handling.
