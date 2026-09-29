@@ -2541,7 +2541,7 @@ func (s *Store) fsmApply(l *raft.Log) (e any) {
 		s.logger.Printf("first log applied since node %s started, log at index %d", s.raftID, l.Index)
 	}
 
-	cmd, mutated, r := func() (*proto.Command, bool, any) {
+	cmd, mutated, r, err := func() (*proto.Command, bool, any, error) {
 		// Reset CDC streamer with the current log index before processing if CDC is enabled
 		if s.cdcEnabled.Is() {
 			s.cdcMu.RLock()
@@ -2572,6 +2572,9 @@ func (s *Store) fsmApply(l *raft.Log) (e any) {
 		}
 		return s.cmdProc.Process(l.Data, s.db)
 	}()
+	if err != nil {
+		s.logger.Fatalf("fatal error applying command at index %d - aborting to prevent divergence between nodes: %s", l.Index, err)
+	}
 
 	if mutated {
 		s.dbAppliedIdx.Store(l.Index)

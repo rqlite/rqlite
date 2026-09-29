@@ -42,84 +42,93 @@ func NewCommandProcessor(logger *log.Logger, dm *chunking.DechunkerManager) *Com
 }
 
 // Process processes the given command against the given database.
-func (c *CommandProcessor) Process(data []byte, db *sql.SwappableDB) (*proto.Command, bool, any) {
+// A non-nil error means the command could not safely be applied and the caller
+// must stop applying commands. The other return values must not be used in that
+// case. Ordinary SQL and operation errors are carried in the response.
+func (c *CommandProcessor) Process(data []byte, db *sql.SwappableDB) (*proto.Command, bool, any, error) {
 	cmd := &proto.Command{}
 	if err := command.Unmarshal(data, cmd); err != nil {
-		c.logger.Fatalf("failed to unmarshal cluster command: %s", err.Error())
+		return nil, false, nil, fmt.Errorf("failed to unmarshal cluster command: %w", err)
 	}
 
 	switch cmd.Type {
 	case proto.Command_COMMAND_TYPE_QUERY:
 		var qr proto.QueryRequest
 		if err := command.UnmarshalSubCommand(cmd, &qr); err != nil {
-			c.logger.Fatalf("failed to unmarshal query subcommand: %s", err.Error())
+			return cmd, false, nil, fmt.Errorf("failed to unmarshal query subcommand: %w", err)
 		}
 		r, err := db.Query(qr.Request, qr.Timings)
-		return cmd, false, &fsmQueryResponse{rows: r, error: err}
+		return cmd, false, &fsmQueryResponse{rows: r, error: err}, nil
 	case proto.Command_COMMAND_TYPE_EXECUTE:
 		var er proto.ExecuteRequest
 		if err := command.UnmarshalSubCommand(cmd, &er); err != nil {
-			c.logger.Fatalf("failed to unmarshal execute subcommand: %s", err.Error())
+			return cmd, false, nil, fmt.Errorf("failed to unmarshal execute subcommand: %w", err)
 		}
 		r, err := db.Execute(er.Request, er.Timings)
-		return cmd, true, &fsmExecuteQueryResponse{results: r, error: err}
+		if _, ok := err.(*sql.FatalError); ok {
+			return cmd, false, nil, err
+		}
+		return cmd, true, &fsmExecuteQueryResponse{results: r, error: err}, nil
 	case proto.Command_COMMAND_TYPE_EXECUTE_QUERY:
 		var eqr proto.ExecuteQueryRequest
 		if err := command.UnmarshalSubCommand(cmd, &eqr); err != nil {
-			c.logger.Fatalf("failed to unmarshal execute-query subcommand: %s", err.Error())
+			return cmd, false, nil, fmt.Errorf("failed to unmarshal execute-query subcommand: %w", err)
 		}
 		r, err := db.Request(eqr.Request, eqr.Timings)
-		return cmd, ExecuteQueryResponses(r).Mutation(), &fsmExecuteQueryResponse{results: r, error: err}
+		if _, ok := err.(*sql.FatalError); ok {
+			return cmd, false, nil, err
+		}
+		return cmd, ExecuteQueryResponses(r).Mutation(), &fsmExecuteQueryResponse{results: r, error: err}, nil
 	case proto.Command_COMMAND_TYPE_LOAD:
 		var lr proto.LoadRequest
 		if err := command.UnmarshalLoadRequest(cmd.SubCommand, &lr); err != nil {
-			c.logger.Fatalf("failed to unmarshal load subcommand: %s", err.Error())
+			return cmd, false, nil, fmt.Errorf("failed to unmarshal load subcommand: %w", err)
 		}
 
 		// create a scratch file in the same directory as s.db.Path()
 		fd, err := createTemp(filepath.Dir(db.Path()), "rqlite-load-")
 		if err != nil {
-			return cmd, false, &fsmGenericResponse{error: fmt.Errorf("failed to create temporary database file: %s", err)}
+			return cmd, false, &fsmGenericResponse{error: fmt.Errorf("failed to create temporary database file: %s", err)}, nil
 		}
 		defer fsutil.Remove(fd.Name())
 		defer fd.Close()
 		_, err = fd.Write(lr.Data)
 		if err != nil {
-			return cmd, false, &fsmGenericResponse{error: fmt.Errorf("failed to write to temporary database file: %s", err)}
+			return cmd, false, &fsmGenericResponse{error: fmt.Errorf("failed to write to temporary database file: %s", err)}, nil
 		}
 		fd.Close()
 
 		// Swap the underlying database to the new one.
 		if err := db.Swap(fd.Name(), db.FKEnabled(), db.WALEnabled()); err != nil {
-			return cmd, false, &fsmGenericResponse{error: fmt.Errorf("error swapping databases: %s", err)}
+			return cmd, false, &fsmGenericResponse{error: fmt.Errorf("error swapping databases: %s", err)}, nil
 		}
-		return cmd, true, &fsmGenericResponse{}
+		return cmd, true, &fsmGenericResponse{}, nil
 	case proto.Command_COMMAND_TYPE_LOAD_CHUNK:
 		var lcr proto.LoadChunkRequest
 		if err := command.UnmarshalLoadChunkRequest(cmd.SubCommand, &lcr); err != nil {
-			c.logger.Fatalf("failed to unmarshal load-chunk subcommand: %s", err.Error())
+			return cmd, false, nil, fmt.Errorf("failed to unmarshal load-chunk subcommand: %w", err)
 		}
 
 		dec, err := c.decMgmr.Get(lcr.StreamId)
 		if err != nil {
-			return cmd, false, &fsmGenericResponse{error: fmt.Errorf("failed to get dechunker: %s", err)}
+			return cmd, false, &fsmGenericResponse{error: fmt.Errorf("failed to get dechunker: %s", err)}, nil
 		}
 		if lcr.Abort {
 			path, err := dec.Close()
 			if err != nil {
-				return cmd, false, &fsmGenericResponse{error: fmt.Errorf("failed to close dechunker: %s", err)}
+				return cmd, false, &fsmGenericResponse{error: fmt.Errorf("failed to close dechunker: %s", err)}, nil
 			}
 			c.decMgmr.Delete(lcr.StreamId)
 			defer fsutil.Remove(path)
 		} else {
 			last, err := dec.WriteChunk(&lcr)
 			if err != nil {
-				return cmd, false, &fsmGenericResponse{error: fmt.Errorf("failed to write chunk: %s", err)}
+				return cmd, false, &fsmGenericResponse{error: fmt.Errorf("failed to write chunk: %s", err)}, nil
 			}
 			if last {
 				path, err := dec.Close()
 				if err != nil {
-					return cmd, false, &fsmGenericResponse{error: fmt.Errorf("failed to close dechunker: %s", err)}
+					return cmd, false, &fsmGenericResponse{error: fmt.Errorf("failed to close dechunker: %s", err)}, nil
 				}
 				c.decMgmr.Delete(lcr.StreamId)
 				defer fsutil.Remove(path)
@@ -130,17 +139,17 @@ func (c *CommandProcessor) Process(data []byte, db *sql.SwappableDB) (*proto.Com
 				// this load should be ignored.
 				if !sql.IsValidSQLiteFile(path) {
 					c.logger.Printf("invalid chunked database file - ignoring")
-					return cmd, false, &fsmGenericResponse{error: fmt.Errorf("invalid chunked database file - ignoring")}
+					return cmd, false, &fsmGenericResponse{error: fmt.Errorf("invalid chunked database file - ignoring")}, nil
 				}
 				if err := db.Swap(path, db.FKEnabled(), db.WALEnabled()); err != nil {
-					return cmd, false, &fsmGenericResponse{error: fmt.Errorf("error swapping databases: %s", err)}
+					return cmd, false, &fsmGenericResponse{error: fmt.Errorf("error swapping databases: %s", err)}, nil
 				}
 			}
 		}
-		return cmd, true, &fsmGenericResponse{}
+		return cmd, true, &fsmGenericResponse{}, nil
 	case proto.Command_COMMAND_TYPE_NOOP:
-		return cmd, false, &fsmGenericResponse{}
+		return cmd, false, &fsmGenericResponse{}, nil
 	default:
-		return cmd, false, &fsmGenericResponse{error: fmt.Errorf("unhandled command: %v", cmd.Type)}
+		return cmd, false, &fsmGenericResponse{error: fmt.Errorf("unhandled command: %v", cmd.Type)}, nil
 	}
 }
