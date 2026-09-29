@@ -1165,7 +1165,9 @@ func (db *DB) Execute(req *command.Request, xTime bool) ([]*command.ExecuteQuery
 // ExecuteWithContext executes queries that modify the database, using the given context.
 // Any timeout set in the request is also applied, so the effective deadline is the
 // earlier of the context's deadline and the request's timeout.
-func (db *DB) ExecuteWithContext(ctx context.Context, req *command.Request, xTime bool) ([]*command.ExecuteQueryResponse, error) {
+func (db *DB) ExecuteWithContext(ctx context.Context, req *command.Request, xTime bool) (results []*command.ExecuteQueryResponse, retErr error) {
+	defer func() { retErr = classifyError(retErr) }()
+
 	if req.DbTimeout > 0 {
 		var cancel context.CancelFunc
 		ctx, cancel = context.WithTimeout(ctx, time.Duration(req.DbTimeout))
@@ -1176,7 +1178,8 @@ func (db *DB) ExecuteWithContext(ctx context.Context, req *command.Request, xTim
 	if err != nil {
 		return nil, err
 	}
-	defer conn.Close()
+	// Close the connection, preserving any fatal error.
+	defer func() { preserveFatalError(&retErr, conn.Close()) }()
 	return db.executeWithConn(ctx, req, xTime, conn)
 }
 
@@ -1185,48 +1188,55 @@ type execerQueryer interface {
 	QueryContext(ctx context.Context, query string, args ...any) (*sql.Rows, error)
 }
 
-func (db *DB) executeWithConn(ctx context.Context, req *command.Request, xTime bool, conn *sql.Conn) ([]*command.ExecuteQueryResponse, error) {
-	var err error
+func (db *DB) executeWithConn(ctx context.Context, req *command.Request, xTime bool, conn *sql.Conn) (allResults []*command.ExecuteQueryResponse, retErr error) {
+	defer func() { retErr = classifyError(retErr) }()
 
 	eqer := execerQueryer(conn)
 	var tx *sql.Tx
 	if req.Transaction {
 		stats.Add(numETx, 1)
+		var err error
 		tx, err = conn.BeginTx(ctx, nil)
 		if err != nil {
 			return nil, err
 		}
 		defer func() {
 			if tx != nil {
-				tx.Rollback() // Will be ignored if tx is committed
+				preserveFatalError(&retErr, tx.Rollback())
 			}
 		}()
 		eqer = tx
 	}
 
-	var allResults []*command.ExecuteQueryResponse
-
 	// handleError sets the error field on the given result. It returns
 	// whether the caller should continue processing or break.
 	handleError := func(result *command.ExecuteQueryResponse, err error) bool {
+		err = classifyError(err)
+		if isFatalError(err) {
+			retErr = err
+		}
 		stats.Add(numExecutionErrors, 1)
+		if result == nil {
+			result = &command.ExecuteQueryResponse{}
+		}
 		result.Result = &command.ExecuteQueryResponse_Error{
 			Error: err.Error(),
 		}
 		allResults = append(allResults, result)
 		if tx != nil {
-			tx.Rollback()
+			preserveFatalError(&retErr, tx.Rollback())
 			tx = nil
 			return false
 		}
 		if req.RollbackOnError {
 			// Use a background context here since the original context may have been canceled or hit its deadline,
 			// and we want to ensure the rollback goes through.
-			db.executeStmtWithConn(context.Background(), &command.Statement{Sql: "ROLLBACK"}, false, eqer,
+			_, rollbackErr := db.executeStmtWithConn(context.Background(), &command.Statement{Sql: "ROLLBACK"}, false, eqer,
 				time.Duration(req.DbTimeout))
+			preserveFatalError(&retErr, rollbackErr)
 			return false
 		}
-		return true
+		return retErr == nil
 	}
 
 	// Execute each statement.
@@ -1247,15 +1257,15 @@ func (db *DB) executeWithConn(ctx context.Context, req *command.Request, xTime b
 	}
 
 	if tx != nil {
-		err = tx.Commit()
+		retErr = tx.Commit()
 	}
-	return allResults, err
+	return allResults, retErr
 }
 
 func (db *DB) executeStmtWithConn(ctx context.Context, stmt *command.Statement, xTime bool, eq execerQueryer, timeout time.Duration) (res *command.ExecuteQueryResponse, retErr error) {
 	defer func() {
 		if retErr != nil {
-			retErr = rewriteContextTimeout(retErr, ErrExecuteTimeout)
+			retErr = classifyError(rewriteContextTimeout(retErr, ErrExecuteTimeout))
 			if res != nil {
 				res.Result = &command.ExecuteQueryResponse_Error{
 					Error: retErr.Error(),
@@ -1447,7 +1457,7 @@ func (db *DB) queryWithConn(ctx context.Context, req *command.Request, xTime boo
 func (db *DB) queryStmtWithConn(ctx context.Context, stmt *command.Statement, xTime bool, q queryer) (retRows *command.QueryRows, retErr error) {
 	defer func() {
 		if retErr != nil {
-			retErr = rewriteContextTimeout(retErr, ErrQueryTimeout)
+			retErr = classifyError(rewriteContextTimeout(retErr, ErrQueryTimeout))
 			if retRows != nil {
 				retRows.Error = retErr.Error()
 			}
@@ -1470,7 +1480,7 @@ func (db *DB) queryStmtWithConn(ctx context.Context, stmt *command.Statement, xT
 		rows.Error = err.Error()
 		return rows, err
 	}
-	defer rs.Close()
+	defer func() { preserveFatalError(&retErr, rs.Close()) }()
 
 	columns, err := rs.Columns()
 	if err != nil {
@@ -1567,6 +1577,7 @@ func (db *DB) RequestStringStmtsWithTimeout(stmts []string, timeout time.Duratio
 }
 
 // Request processes a request that can contain both executes and queries.
+// Node-local SQLite failures return a *FatalError and stop the request.
 func (db *DB) Request(req *command.Request, xTime bool) ([]*command.ExecuteQueryResponse, error) {
 	return db.RequestWithContext(context.Background(), req, xTime)
 }
@@ -1574,7 +1585,8 @@ func (db *DB) Request(req *command.Request, xTime bool) ([]*command.ExecuteQuery
 // RequestWithContext processes a request that can contain both executes and queries,
 // using the given context. Any timeout set in the request is also applied, so the
 // effective deadline is the earlier of the context's deadline and the request's timeout.
-func (db *DB) RequestWithContext(ctx context.Context, req *command.Request, xTime bool) ([]*command.ExecuteQueryResponse, error) {
+func (db *DB) RequestWithContext(ctx context.Context, req *command.Request, xTime bool) (eqResponse []*command.ExecuteQueryResponse, retErr error) {
+	defer func() { retErr = classifyError(retErr) }()
 	if req.DbTimeout > 0 {
 		var cancel context.CancelFunc
 		ctx, cancel = context.WithTimeout(ctx, time.Duration(req.DbTimeout))
@@ -1585,7 +1597,7 @@ func (db *DB) RequestWithContext(ctx context.Context, req *command.Request, xTim
 	if err != nil {
 		return nil, err
 	}
-	defer conn.Close()
+	defer func() { preserveFatalError(&retErr, conn.Close()) }()
 
 	eq := execerQueryer(conn)
 	var tx *sql.Tx
@@ -1595,22 +1607,29 @@ func (db *DB) RequestWithContext(ctx context.Context, req *command.Request, xTim
 		if err != nil {
 			return nil, err
 		}
-		defer tx.Rollback() // Will be ignored if tx is committed
+		defer func() {
+			if tx != nil {
+				preserveFatalError(&retErr, tx.Rollback())
+			}
+		}()
 		eq = tx
 	}
 
 	// abortOnError indicates whether the caller should continue
 	// processing or break.
 	abortOnError := func(err error) bool {
+		err = classifyError(err)
+		if isFatalError(err) {
+			retErr = err
+		}
 		if err != nil && tx != nil {
-			tx.Rollback()
+			preserveFatalError(&retErr, tx.Rollback())
 			tx = nil
 			return true
 		}
-		return false
+		return retErr != nil
 	}
 
-	var eqResponse []*command.ExecuteQueryResponse
 	for _, stmt := range req.Statements {
 		ss := stmt.Sql
 		if ss == "" {
@@ -1634,6 +1653,9 @@ func (db *DB) RequestWithContext(ctx context.Context, req *command.Request, xTim
 			rows, opErr := db.queryStmtWithConn(ctx, stmt, xTime, eq)
 			if req.QualifyColumns && rows != nil && rows.Error == "" {
 				if qErr := qualifyRowColumns(conn, stmt.Sql, rows); qErr != nil {
+					if qErr = classifyError(qErr); isFatalError(qErr) {
+						return eqResponse, qErr
+					}
 					db.logger.Printf("qualify columns: %s", qErr.Error())
 				}
 			}
@@ -1651,9 +1673,9 @@ func (db *DB) RequestWithContext(ctx context.Context, req *command.Request, xTim
 	}
 
 	if tx != nil {
-		err = tx.Commit()
+		retErr = tx.Commit()
 	}
-	return eqResponse, err
+	return eqResponse, retErr
 }
 
 // Backup writes a consistent snapshot of the database to the given file.
@@ -1880,10 +1902,9 @@ func (db *DB) StmtReadOnlyWithConn(sql string, conn *sql.Conn) (bool, error) {
 		if err != nil {
 			return err
 		}
-		defer drvStmt.Close()
 		sqliteStmt := drvStmt.(*sqlite3.SQLiteStmt)
 		readOnly = sqliteStmt.Readonly()
-		return nil
+		return drvStmt.Close()
 	}
 
 	if err := conn.Raw(f); err != nil {
@@ -2095,13 +2116,12 @@ func qualifyRowColumns(conn *sql.Conn, query string, rows *command.QueryRows) er
 		if err != nil {
 			return err
 		}
-		defer stmt.Close()
 		sqliteStmt := stmt.(*sqlite3.SQLiteStmt)
 		tableNames = make([]string, len(rows.Columns))
 		for i := range rows.Columns {
 			tableNames[i] = sqliteStmt.ColumnTableName(i)
 		}
-		return nil
+		return stmt.Close()
 	})
 	if err != nil {
 		return err
