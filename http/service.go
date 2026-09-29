@@ -708,6 +708,7 @@ func (s *Service) handleBackup(w http.ResponseWriter, r *http.Request, qp QueryP
 		if n > 0 {
 			// Streaming started, only way to signal the error is via Trailing header because
 			// the standard library wrote HTTP 200 once first byte went out.
+			s.logger.Printf("local backup failed, aborting stream operation: %s", err)
 			w.Header().Set(StreamErrorHeader, err.Error())
 			return
 		}
@@ -735,6 +736,7 @@ func (s *Service) handleBackup(w http.ResponseWriter, r *http.Request, qp QueryP
 			if clstrN > 0 {
 				// Streaming started, only way to signal the error is via Trailing header because
 				// the standard library wrote HTTP 200 once first byte went out.
+				s.logger.Printf("backup from remote node at %s failed, aborting stream operation: %s", addr.Addr, err)
 				w.Header().Set(StreamErrorHeader, clstrErr.Error())
 				return
 			}
