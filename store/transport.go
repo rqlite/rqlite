@@ -63,12 +63,12 @@ type NodeTransport struct {
 	appendEntriesTxHandler func(req *raft.AppendEntriesRequest) error
 	appendEntriesRxHandler func(req *raft.AppendEntriesRequest) error
 
-	lastAppendEntriesTime rsync.AtomicTime
-	commandCommitIndex    atomic.Uint64
-	leaderCommitIndex     atomic.Uint64
-	done                  chan struct{}
-	closeOnce             sync.Once
-	logger                *log.Logger
+	lastAppendEntriesRxTime rsync.AtomicTime
+	commandCommitIndex      atomic.Uint64
+	leaderCommitIndex       atomic.Uint64
+	done                    chan struct{}
+	closeOnce               sync.Once
+	logger                  *log.Logger
 }
 
 // NewNodeTransport returns an initialized NodeTransport.
@@ -81,9 +81,9 @@ func NewNodeTransport(transport *raft.NetworkTransport, compressSnap bool) *Node
 	}
 }
 
-// LastAppendEntriesTime returns the last time we received an AppendEntriesRPC.
-func (n *NodeTransport) LastAppendEntriesTime() time.Time {
-	return n.lastAppendEntriesTime.Load()
+// LastAppendEntriesRxTime returns the last time we received an AppendEntriesRPC.
+func (n *NodeTransport) LastAppendEntriesRxTime() time.Time {
+	return n.lastAppendEntriesRxTime.Load()
 }
 
 // CommandCommitIndex returns the index of the latest committed log entry
@@ -174,7 +174,8 @@ func (n *NodeTransport) Consumer() <-chan raft.RPC {
 						rpc.Reader = zstd.NewDecompressor(rpc.Reader)
 					}
 				case *raft.AppendEntriesRequest:
-					n.lastAppendEntriesTime.Store(time.Now())
+					n.lastAppendEntriesRxTime.Store(time.Now())
+
 					n.aeMu.RLock()
 					handler := n.appendEntriesRxHandler
 					n.aeMu.RUnlock()
@@ -207,9 +208,9 @@ func (n *NodeTransport) Consumer() <-chan raft.RPC {
 // Stats returns the current stats of the transport.
 func (n *NodeTransport) Stats() map[string]any {
 	return map[string]any{
-		"last_append_entries_time": n.LastAppendEntriesTime(),
-		"command_commit_index":     n.CommandCommitIndex(),
-		"leader_commit_index":      n.LeaderCommitIndex(),
-		"compress_snap":            n.compressSnap,
+		"last_append_entries_rx_time": n.LastAppendEntriesRxTime(),
+		"command_commit_index":        n.CommandCommitIndex(),
+		"leader_commit_index":         n.LeaderCommitIndex(),
+		"compress_snap":               n.compressSnap,
 	}
 }
