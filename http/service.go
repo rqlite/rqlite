@@ -420,8 +420,8 @@ func (s *Service) Start() error {
 // Close closes the service.
 func (s *Service) Close() {
 	s.logger.Println("closing HTTP service on", s.ln.Addr().String())
-	if err := s.httpServer.Shutdown(context.Background()); err != nil {
-		s.logger.Println("HTTP service shutdown error:", err.Error())
+	if err := s.httpServer.Close(); err != nil {
+		s.logger.Println("HTTP service close error:", err.Error())
 	}
 
 	s.stmtQueue.Close()
