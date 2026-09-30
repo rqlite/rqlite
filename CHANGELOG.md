@@ -1,6 +1,7 @@
 ## v10.4.1 (unreleased)
 ### Implementation changes and bug fixes
 - [PR #2832](https://github.com/rqlite/rqlite/pull/2832): Record _AppendEntries RPC_ reception time on each node.
+- [PR #2833](https://github.com/rqlite/rqlite/pull/2833): Do not perform graceful shutdown of HTTP server, just close it. See [torx #21](https://github.com/dotnwat/torx/issues/21). Thanks @dotnwat
 
 ## v10.4.0 (September 29th 2026)
 ### New features
