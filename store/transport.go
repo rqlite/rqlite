@@ -11,6 +11,7 @@ import (
 
 	"github.com/hashicorp/raft"
 	"github.com/rqlite/rqlite/v10/internal/rarchive/zstd"
+	"github.com/rqlite/rqlite/v10/internal/rsync"
 )
 
 // Layer is the interface expected by the Store for network communication
@@ -62,23 +63,27 @@ type NodeTransport struct {
 	appendEntriesTxHandler func(req *raft.AppendEntriesRequest) error
 	appendEntriesRxHandler func(req *raft.AppendEntriesRequest) error
 
-	commandCommitIndex *atomic.Uint64
-	leaderCommitIndex  *atomic.Uint64
-	done               chan struct{}
-	closeOnce          sync.Once
-	logger             *log.Logger
+	lastAppendEntriesRxTime rsync.AtomicTime
+	commandCommitIndex      atomic.Uint64
+	leaderCommitIndex       atomic.Uint64
+	done                    chan struct{}
+	closeOnce               sync.Once
+	logger                  *log.Logger
 }
 
 // NewNodeTransport returns an initialized NodeTransport.
 func NewNodeTransport(transport *raft.NetworkTransport, compressSnap bool) *NodeTransport {
 	return &NodeTransport{
-		NetworkTransport:   transport,
-		compressSnap:       compressSnap,
-		commandCommitIndex: &atomic.Uint64{},
-		leaderCommitIndex:  &atomic.Uint64{},
-		done:               make(chan struct{}),
-		logger:             log.New(os.Stderr, "[transport] ", log.LstdFlags),
+		NetworkTransport: transport,
+		compressSnap:     compressSnap,
+		done:             make(chan struct{}),
+		logger:           log.New(os.Stderr, "[transport] ", log.LstdFlags),
 	}
+}
+
+// LastAppendEntriesRxTime returns the last time we received an AppendEntriesRPC.
+func (n *NodeTransport) LastAppendEntriesRxTime() time.Time {
+	return n.lastAppendEntriesRxTime.Load()
 }
 
 // CommandCommitIndex returns the index of the latest committed log entry
@@ -169,6 +174,8 @@ func (n *NodeTransport) Consumer() <-chan raft.RPC {
 						rpc.Reader = zstd.NewDecompressor(rpc.Reader)
 					}
 				case *raft.AppendEntriesRequest:
+					n.lastAppendEntriesRxTime.Store(time.Now())
+
 					n.aeMu.RLock()
 					handler := n.appendEntriesRxHandler
 					n.aeMu.RUnlock()
@@ -201,8 +208,9 @@ func (n *NodeTransport) Consumer() <-chan raft.RPC {
 // Stats returns the current stats of the transport.
 func (n *NodeTransport) Stats() map[string]any {
 	return map[string]any{
-		"command_commit_index": n.CommandCommitIndex(),
-		"leader_commit_index":  n.LeaderCommitIndex(),
-		"compress_snap":        n.compressSnap,
+		"last_append_entries_rx_time": n.LastAppendEntriesRxTime(),
+		"command_commit_index":        n.CommandCommitIndex(),
+		"leader_commit_index":         n.LeaderCommitIndex(),
+		"compress_snap":               n.compressSnap,
 	}
 }
