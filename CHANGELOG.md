@@ -1,3 +1,7 @@
+## v10.4.1 (unreleased)
+### Implementation changes and bug fixes
+- [PR #2832](https://github.com/rqlite/rqlite/pull/2832): Record _AppendEntries RPC_ reception time on each node.
+
 ## v10.4.0 (September 29th 2026)
 ### New features
 - [PR #2827](https://github.com/rqlite/rqlite/pull/2827): Support configurable queued-writes retries. See [torx #17](https://github.com/dotnwat/torx/issues/17). Thanks @dotnwat
