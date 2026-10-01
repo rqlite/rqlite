@@ -2502,10 +2502,10 @@ func (s *Store) isStaleRead(freshness int64, strict bool) bool {
 	}
 	return IsStaleRead(
 		s.raft.LastContact(),
+		s.raftTn.LastAppendEntriesRxTime(),
+		s.raft.AppliedIndex(),
+		s.raftTn.LeaderCommitIndex(),
 		s.fsmUpdateTime.Load(),
-		s.appendedAtTime.Load(),
-		s.fsmIdx.Load(),
-		s.raftTn.CommandCommitIndex(),
 		freshness,
 		strict)
 }

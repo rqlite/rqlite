@@ -93,7 +93,9 @@ func (n *NodeTransport) CommandCommitIndex() uint64 {
 }
 
 // LeaderCommitIndex returns the index of the latest committed log entry
-// which is known to be replicated to the majority of the cluster.
+// which is known to be replicated to the majority of the cluster. This value
+// is monotonically increasing. It will never return a value lower than a value
+// it returned previously.
 func (n *NodeTransport) LeaderCommitIndex() uint64 {
 	return n.leaderCommitIndex.Load()
 }
@@ -189,7 +191,13 @@ func (n *NodeTransport) Consumer() <-chan raft.RPC {
 							n.commandCommitIndex.Store(e.Index)
 						}
 					}
-					n.leaderCommitIndex.Store(cmd.LeaderCommitIndex)
+					if cmd.LeaderCommitIndex > n.leaderCommitIndex.Load() {
+						// There is a small window where a newly elected Leader's internal state can make the commit
+						// index it sends be less than a commit index this node received from the previous leader.
+						// It's not a safety issue as logs are always correct underneath. The Raft library has
+						// the same checks internally.
+						n.leaderCommitIndex.Store(cmd.LeaderCommitIndex)
+					}
 				case *raft.TimeoutNowRequest:
 					n.logger.Printf("TimeoutNowRequest received on this node (%s) from node %s at %s",
 						n.LocalAddr(), cmd.ID, cmd.Addr)
