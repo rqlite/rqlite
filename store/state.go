@@ -71,12 +71,24 @@ func (p *PragmaCheckRequest) Check() error {
 }
 
 // IsStaleRead returns whether a read is stale.
+//
+// The Raft library sends heartbeats, which contain just term and leader set,
+// on one message, but messages which contain the current term and index set
+// on a different message. The latter are called "append entries". Checking
+// if a read is stale requires timestamps for both.
+//
+// lastHeartbeatTime: last time we received a heartbeat from the Leader.
+// lastAppendEntriesTime: last time we receievd an AppendEntries request from the Leader.
+// lastAppliedIndex: index currently applied to the FSM.
+// lastAppliedAtTime: time the currently applied index was actually applied.
+// freshness: freshness window
+// strict: whether strict freshness is required.
 func IsStaleRead(
-	leaderlastContact time.Time,
-	lastFSMUpdateTime time.Time,
-	lastAppendedAtTime time.Time,
-	fsmIndex uint64,
-	commitIndex uint64,
+	lastHeartbeatTime time.Time,
+	lastAppendEntriesTime time.Time,
+	lastAppliedIndex uint64,
+	leaderCommitIndex uint64,
+	lastAppliedAtTime time.Time,
 	freshness int64,
 	strict bool,
 ) bool {
@@ -84,7 +96,7 @@ func IsStaleRead(
 		// Freshness not set, so no read can be stale.
 		return false
 	}
-	if time.Since(leaderlastContact).Nanoseconds() > freshness {
+	if time.Since(lastHeartbeatTime).Nanoseconds() > freshness {
 		// The Leader has not been in contact within the freshness window, so
 		// the read is stale.
 		return true
@@ -93,18 +105,23 @@ func IsStaleRead(
 		// Strict mode is not enabled, so no further checks are needed.
 		return false
 	}
-	if lastAppendedAtTime.IsZero() {
-		// We've yet to be told about any appended log entries, so we
-		// assume we're caught up.
+
+	if time.Since(lastAppendEntriesTime).Nanoseconds() > freshness {
+		// The Leader sent us heartbeats, but hasn't sent us an AppendEntries
+		// message within the required window. We're stale.
+		// See https://github.com/dotnwat/torx/issues/18
+		return true
+	}
+
+	if lastAppliedIndex >= leaderCommitIndex {
+		// We've applied the latest leader commit index we know about and that
+		// commit index arrived within the window, we can't be stale.
 		return false
 	}
-	if fsmIndex == commitIndex {
-		// FSM index is the same as the commit index, so we're caught up.
-		return false
-	}
-	// OK, we're not caught up. So was the log that last updated our local FSM
-	// appended by the Leader to its log within the freshness window?
-	return lastFSMUpdateTime.Sub(lastAppendedAtTime).Nanoseconds() > freshness
+
+	// We've haven't yet applied the leader's latest commit index, but was the currently
+	// applied index applied within the freshness window?
+	return time.Since(lastAppliedAtTime).Nanoseconds() > freshness
 }
 
 // IsNewNode returns whether a node using raftDir would be a brand-new node.

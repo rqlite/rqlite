@@ -84,16 +84,17 @@ func Test_PragmaCheckRequest_Check(t *testing.T) {
 }
 
 func Test_IsStaleRead(t *testing.T) {
+	now := time.Now()
 	tests := []struct {
-		Name               string
-		LeaderLastContact  time.Time
-		LastFSMUpdateTime  time.Time
-		LastAppendedAtTime time.Time
-		FSMIndex           uint64
-		CommitIndex        uint64
-		Freshness          time.Duration
-		Strict             bool
-		Exp                bool
+		Name              string
+		LastHeartbeat     time.Time
+		LastAppendEntries time.Time
+		AppliedIndex      uint64
+		LeaderCommitIndex uint64
+		LastAppliedAt     time.Time
+		Freshness         time.Duration
+		Strict            bool
+		Exp               bool
 	}{
 		{
 			Name:      "no freshness set",
@@ -101,82 +102,117 @@ func Test_IsStaleRead(t *testing.T) {
 			Exp:       false,
 		},
 		{
-			Name:              "no freshness set, but clearly unfresh connection",
-			LeaderLastContact: time.Now().Add(-1000 * time.Hour),
-			Freshness:         0,
-			Exp:               false,
+			Name:          "no freshness set, but clearly unfresh connection",
+			LastHeartbeat: now.Add(-1000 * time.Hour),
+			Freshness:     0,
+			Exp:           false,
 		},
 		{
-			Name:              "freshness set, but not exceeded",
-			LeaderLastContact: time.Now().Add(10 * time.Second),
-			Freshness:         time.Minute,
-			Exp:               false,
+			Name:      "no freshness set, strict set, nothing received",
+			Freshness: 0,
+			Strict:    true,
+			Exp:       false,
 		},
 		{
-			Name:              "freshness set and exceeded",
-			LeaderLastContact: time.Now().Add(-10 * time.Second),
+			Name:          "freshness set, but not exceeded",
+			LastHeartbeat: now,
+			Freshness:     time.Minute,
+			Exp:           false,
+		},
+		{
+			Name:          "freshness set and exceeded",
+			LastHeartbeat: now.Add(-10 * time.Second),
+			Freshness:     time.Second,
+			Exp:           true,
+		},
+		{
+			Name:      "freshness set, never heard from Leader",
+			Freshness: time.Second,
+			Exp:       true,
+		},
+		{
+			Name:              "freshness set and exceeded, strict set, everything else fresh",
+			LastHeartbeat:     now.Add(-10 * time.Second),
+			LastAppendEntries: now,
+			AppliedIndex:      10,
+			LeaderCommitIndex: 10,
+			LastAppliedAt:     now,
 			Freshness:         time.Second,
+			Strict:            true,
 			Exp:               true,
 		},
 		{
-			Name:              "freshness set and ok, strict is set, but no appended time",
-			LeaderLastContact: time.Now(),
-			Freshness:         10 * time.Second,
+			Name:              "freshness set and not exceeded, AppendEntries exceeded, but strict not set",
+			LastHeartbeat:     now,
+			LastAppendEntries: now.Add(-10 * time.Second),
+			AppliedIndex:      10,
+			LeaderCommitIndex: 10,
+			Freshness:         time.Second,
+			Exp:               false,
+		},
+		{
+			Name:              "strict set, heartbeats fresh, AppendEntries exceeded, applied index up-to-date",
+			LastHeartbeat:     now,
+			LastAppendEntries: now.Add(-10 * time.Second),
+			AppliedIndex:      10,
+			LeaderCommitIndex: 10,
+			LastAppliedAt:     now,
+			Freshness:         time.Second,
+			Strict:            true,
+			Exp:               true,
+		},
+		{
+			Name:              "strict set, heartbeats fresh, no AppendEntries ever received",
+			LastHeartbeat:     now,
+			AppliedIndex:      10,
+			LeaderCommitIndex: 10,
+			LastAppliedAt:     now,
+			Freshness:         time.Second,
+			Strict:            true,
+			Exp:               true,
+		},
+		{
+			Name:              "strict set, heartbeats and AppendEntries fresh, applied index up-to-date",
+			LastHeartbeat:     now,
+			LastAppendEntries: now,
+			AppliedIndex:      10,
+			LeaderCommitIndex: 10,
+			LastAppliedAt:     now,
+			Freshness:         time.Second,
 			Strict:            true,
 			Exp:               false,
 		},
 		{
-			Name:               "freshness set, is ok, strict is set, appended time exceeds, but applied index is up-to-date",
-			LeaderLastContact:  time.Now(),
-			LastFSMUpdateTime:  time.Now(),
-			LastAppendedAtTime: time.Now().Add(-30 * time.Second),
-			FSMIndex:           10,
-			CommitIndex:        10,
-			Freshness:          10 * time.Second,
-			Strict:             true,
-			Exp:                false,
+			Name:              "strict set, heartbeats and AppendEntries fresh, applied index up-to-date, idle cluster",
+			LastHeartbeat:     now,
+			LastAppendEntries: now,
+			AppliedIndex:      10,
+			LeaderCommitIndex: 10,
+			LastAppliedAt:     now.Add(-1000 * time.Hour),
+			Freshness:         time.Second,
+			Strict:            true,
+			Exp:               false,
 		},
 		{
-			Name:               "freshness set, is ok, strict is set, appended time exceeds, applied index behind",
-			LeaderLastContact:  time.Now(),
-			LastFSMUpdateTime:  time.Now(),
-			LastAppendedAtTime: time.Now().Add(-15 * time.Second),
-			FSMIndex:           9,
-			CommitIndex:        10,
-			Freshness:          10 * time.Second,
-			Strict:             true,
-			Exp:                true,
-		},
-		{
-			Name:               "freshness set, is ok, strict is set, appended time does not exceed, applied index is behind",
-			LeaderLastContact:  time.Now(),
-			LastFSMUpdateTime:  time.Now(),
-			LastAppendedAtTime: time.Now(),
-			FSMIndex:           9,
-			CommitIndex:        10,
-			Freshness:          time.Minute,
-			Strict:             true,
-			Exp:                false,
-		},
-		{
-			Name:               "freshness set, is ok, appended time exceeds, applied index is behind, but strict not set",
-			LeaderLastContact:  time.Now(),
-			LastFSMUpdateTime:  time.Now(),
-			LastAppendedAtTime: time.Now().Add(-10 * time.Second),
-			FSMIndex:           9,
-			CommitIndex:        10,
-			Freshness:          5 * time.Second,
-			Exp:                false,
+			Name:              "strict set, heartbeats and AppendEntries fresh, applied index ahead of Leader commit index",
+			LastHeartbeat:     now,
+			LastAppendEntries: now,
+			AppliedIndex:      11,
+			LeaderCommitIndex: 10,
+			LastAppliedAt:     now.Add(-1000 * time.Hour),
+			Freshness:         time.Second,
+			Strict:            true,
+			Exp:               false,
 		},
 	}
 
 	for i, tt := range tests {
 		if got, exp := IsStaleRead(
-			tt.LeaderLastContact,
-			tt.LastFSMUpdateTime,
-			tt.LastAppendedAtTime,
-			tt.FSMIndex,
-			tt.CommitIndex,
+			tt.LastHeartbeat,
+			tt.LastAppendEntries,
+			tt.AppliedIndex,
+			tt.LeaderCommitIndex,
+			tt.LastAppliedAt,
 			tt.Freshness.Nanoseconds(),
 			tt.Strict), tt.Exp; got != exp {
 			t.Fatalf("unexpected result for IsStaleRead test #%d, %s\nexp: %v\ngot: %v", i+1, tt.Name, exp, got)
