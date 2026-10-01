@@ -41,6 +41,7 @@
                     <p id="cluster-perspective" class="cluster-muted">Membership and reachability</p>
                 </div>
                 <div class="cluster-controls">
+                    <label><input type="checkbox" id="cluster-show-read-replicas" checked> Show read replicas</label>
                     <label><input type="checkbox" id="cluster-auto-refresh" checked> Auto-refresh (5s)</label>
                     <button type="button" id="cluster-refresh">Refresh</button>
                 </div>
@@ -58,7 +59,7 @@
                     <span><i class="cluster-dot is-unreachable"></i> Unreachable</span>
                     <span><i class="cluster-dot is-unknown"></i> Unknown / stale</span>
                     <span><i class="cluster-line-key"></i> Voter</span>
-                    <span><i class="cluster-line-key is-replica"></i> Read-only</span>
+                    <span><i class="cluster-line-key is-replica"></i> Read Replica</span>
                 </div>
             </div>
             <p class="cluster-footnote">Connections show replication relationships. Reachability is checked from the node serving this console; it does not measure every connection or replication health.</p>
@@ -98,7 +99,7 @@
             <div id="status-cards" class="cards"></div>
             <div class="nodes-header">
                 <h3>Nodes</h3>
-                <label class="nodes-option"><input type="checkbox" id="show-nonvoters"> Include non-voters</label>
+                <label class="nodes-option"><input type="checkbox" id="show-nonvoters"> Include read replicas</label>
             </div>
             <div id="nodes-table"></div>
             <div id="detail-sections"></div>

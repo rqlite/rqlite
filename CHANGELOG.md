@@ -1,3 +1,7 @@
+## v10.5.1 (unreleased)
+### Implementation changes and bug fixes
+- [PR #2836](https://github.com/rqlite/rqlite/pull/2836): Web console should use term "read replicas".
+
 ## v10.5.0 (October 1st 2026)
 ### New features
 - [PR #2835](https://github.com/rqlite/rqlite/pull/2835): Display interactive cluster topology on web console.
