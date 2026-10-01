@@ -6,6 +6,7 @@
     <title>rqlite</title>
     <link rel="icon" href="/console/static/favicon.ico">
     <link rel="stylesheet" href="/console/static/css/style.css">
+    <link rel="stylesheet" href="/console/static/css/cluster.css">
 </head>
 <body>
     <header>
@@ -22,6 +23,7 @@
                 </button>
             </h1>
             <nav>
+                <button class="tab" data-tab="cluster">Cluster</button>
                 <button class="tab" data-tab="schema">Schema</button>
                 <button class="tab" data-tab="query">Query</button>
                 <button class="tab" data-tab="backup">Backup</button>
@@ -32,6 +34,35 @@
         </div>
     </header>
     <main>
+        <section id="cluster" class="tab-content">
+            <div class="cluster-toolbar">
+                <div>
+                    <h2>Cluster</h2>
+                    <p id="cluster-perspective" class="cluster-muted">Membership and reachability</p>
+                </div>
+                <div class="cluster-controls">
+                    <label><input type="checkbox" id="cluster-auto-refresh" checked> Auto-refresh (5s)</label>
+                    <button type="button" id="cluster-refresh">Refresh</button>
+                </div>
+            </div>
+            <div id="cluster-message" role="status" class="cluster-message" hidden></div>
+            <div id="cluster-summary" class="cluster-summary" aria-live="polite"></div>
+            <div class="cluster-map-panel">
+                <div class="cluster-map-heading">
+                    <span>Replication topology</span>
+                    <span id="cluster-updated" class="cluster-muted">Waiting for cluster information</span>
+                </div>
+                <div id="cluster-map" class="cluster-map" aria-label="Cluster nodes"></div>
+                <div class="cluster-legend">
+                    <span><i class="cluster-dot is-reachable"></i> Reachable</span>
+                    <span><i class="cluster-dot is-unreachable"></i> Unreachable</span>
+                    <span><i class="cluster-dot is-unknown"></i> Unknown / stale</span>
+                    <span><i class="cluster-line-key"></i> Voter</span>
+                    <span><i class="cluster-line-key is-replica"></i> Read-only</span>
+                </div>
+            </div>
+            <p class="cluster-footnote">Connections show replication relationships. Reachability is checked from the node serving this console; it does not measure every connection or replication health.</p>
+        </section>
         <section id="query" class="tab-content">
             <div class="query-input">
                 <textarea id="sql-input" placeholder="Enter SQL statement..." rows="4" spellcheck="false"></textarea>
@@ -154,5 +185,6 @@
     <footer>Copyright <span id="footer-year"></span> <a href="https://rqlite.io" target="_blank" rel="noopener">rqlite.io</a></footer>
     <script>document.getElementById("footer-year").textContent = new Date().getFullYear();</script>
     <script src="/console/static/js/app.js"></script>
+    <script src="/console/static/js/cluster.js"></script>
 </body>
 </html>
