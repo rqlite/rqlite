@@ -19,7 +19,7 @@
         nodes.forEach(function (node) {
             node.isLeader = node === leader;
             node.role = node.isLeader ? (node.leader ? "Leader" : "Reported leader") :
-                (node.voter ? "Follower" : "Read-only");
+                (node.voter ? "Follower" : "Read Replica");
             // Without a known leader, we cannot infer a voting node's Raft state.
             if (!leader && node.voter) node.role = "Voter";
         });
@@ -58,6 +58,7 @@
     var summary = document.getElementById("cluster-summary");
     var refresh = document.getElementById("cluster-refresh");
     var auto = document.getElementById("cluster-auto-refresh");
+    var showReadReplicas = document.getElementById("cluster-show-read-replicas");
     var message = document.getElementById("cluster-message");
     var updated = document.getElementById("cluster-updated");
     var model = null;
@@ -100,7 +101,9 @@
     }
 
     function render() {
-        var geometry = layout(model);
+        var visibleNodes = model.nodes.filter(function (node) { return showReadReplicas.checked || node.voter; });
+        var visibleLeader = visibleNodes.find(function (node) { return node.isLeader; });
+        var geometry = layout(Object.assign({}, model, { nodes: visibleNodes, leader: visibleLeader }));
         map.style.height = geometry.height + "px";
         svg.setAttribute("viewBox", "0 0 " + geometry.width + " " + geometry.height);
         svg.replaceChildren();
@@ -108,7 +111,7 @@
         var reachable = model.nodes.filter(function (n) { return n.reachable === true; }).length;
         summary.innerHTML = [
             [model.nodes.length, "Nodes"], [voters, "Voters"],
-            [model.nodes.length - voters, "Read-only"],
+            [model.nodes.length - voters, "Read Replicas"],
             [stale ? "—" : reachable + " / " + model.nodes.length, "Reachable"]
         ].map(function (item) {
             return '<div><strong>' + item[0] + '</strong><span>' + item[1] + '</span></div>';
@@ -119,10 +122,10 @@
         cards.forEach(function (card, id) {
             if (!geometry.positions.has(id)) { card.wrapper.remove(); cards.delete(id); }
         });
-        model.nodes.forEach(function (node) {
+        visibleNodes.forEach(function (node) {
             var position = geometry.positions.get(node.id);
-            if (model.leader && !node.isLeader) {
-                var origin = geometry.positions.get(model.leader.id);
+            if (visibleLeader && !node.isLeader) {
+                var origin = geometry.positions.get(visibleLeader.id);
                 var line = document.createElementNS(svg.namespaceURI, "line");
                 line.setAttribute("x1", origin.x);
                 line.setAttribute("y1", origin.y);
@@ -220,6 +223,7 @@
     }
 
     refresh.addEventListener("click", load);
+    showReadReplicas.addEventListener("change", function () { if (model) render(); });
     auto.addEventListener("change", function () { if (auto.checked) load(); else clearTimeout(timer); });
     function visibilityChanged() {
         if (active()) load();
