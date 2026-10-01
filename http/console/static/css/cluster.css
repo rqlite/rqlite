@@ -38,6 +38,7 @@
 .cluster-summary span { font-size: 0.75rem; color: var(--text-secondary); }
 .cluster-map-panel { border: 1px solid var(--border); border-radius: 8px; background: var(--surface); }
 .cluster-map-heading { padding: 1rem 1.2rem; font-size: 0.8125rem; border-bottom: 1px solid var(--border-light); }
+.cluster-map-heading > span:first-child { color: var(--text); font-weight: 700; }
 .cluster-map { position: relative; background-image: radial-gradient(var(--border-light) 1px, transparent 1px); background-size: 18px 18px; }
 .cluster-links { position: absolute; width: 100%; height: 100%; inset: 0; }
 .cluster-edge { stroke: var(--border); stroke-width: 2; }
@@ -45,8 +46,7 @@
 .cluster-edge.is-unreachable { stroke: var(--error); opacity: 0.6; }
 .cluster-edge.is-replica { stroke-dasharray: 6 5; }
 .cluster-node { position: absolute; width: 235px; transform: translate(-50%, -50%); }
-.cluster-node:hover, .cluster-node:focus-within { z-index: 3; }
-.cluster-node-button {
+.cluster-node-link {
     display: block;
     width: 100%;
     padding: 0.85rem;
@@ -55,14 +55,16 @@
     background: var(--cluster-node-bg);
     color: var(--text);
     text-align: left;
+    text-decoration: none;
     font: inherit;
     cursor: pointer;
     box-shadow: var(--cluster-node-shadow);
 }
-.cluster-node-button.is-leader { border: 2px solid var(--accent); box-shadow: 0 0 0 4px var(--accent-shadow), var(--cluster-node-shadow); }
-.cluster-node-button.is-replica { border-style: dashed; }
-.cluster-node-button:hover, .cluster-node-button[aria-pressed="true"] { background: var(--cluster-node-hover); }
-.cluster-node-button:focus-visible, #cluster-refresh:focus-visible { outline: 3px solid var(--accent); outline-offset: 4px; }
+.cluster-node-link:not([href]) { cursor: default; }
+.cluster-node-link.is-current { border: 2px solid var(--accent); box-shadow: 0 0 0 4px var(--accent-shadow), var(--cluster-node-shadow); }
+.cluster-node-link.is-replica { border-style: dashed; }
+.cluster-node-link[href]:hover { background: var(--cluster-node-hover); }
+.cluster-node-link:focus-visible, #cluster-refresh:focus-visible { outline: 3px solid var(--accent); outline-offset: 4px; }
 .cluster-node-heading { display: flex; gap: 0.6rem; align-items: center; margin-bottom: 0.7rem; }
 .cluster-node-heading > span:nth-child(2) { min-width: 0; }
 .cluster-node-heading strong { display: block; font-size: 0.875rem; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
@@ -82,20 +84,6 @@
 .cluster-legend > span { display: inline-flex; align-items: center; gap: 0.4rem; }
 .cluster-line-key { width: 20px; border-top: 2px solid var(--text-secondary); }
 .cluster-line-key.is-replica { border-top-style: dashed; }
-.cluster-details { margin-top: 1rem; background: var(--surface); border: 1px solid var(--border); border-radius: 7px; padding: 1rem 1.2rem; font-size: 0.8125rem; }
-.cluster-details a { color: var(--accent); display: inline-block; margin-top: 0.6rem; }
-.cluster-details dl { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0.25rem 2rem; margin-top: 0.5rem; }
-.cluster-details dl > div, .cluster-tooltip dl > div { display: grid; grid-template-columns: 6.5rem minmax(0, 1fr); gap: 0.5rem; }
-.cluster-details dt, .cluster-tooltip dt { color: var(--text-secondary); }
-.cluster-details dd, .cluster-tooltip dd { overflow-wrap: anywhere; }
-.cluster-tooltip { display: none; position: absolute; bottom: calc(100% + 8px); left: 0; width: 285px; padding: 1rem; border-radius: 7px; border: 1px solid var(--border); background: var(--surface); color: var(--text); box-shadow: 0 5px 20px var(--shadow); font-size: 0.75rem; }
-.tooltip-align-right .cluster-tooltip { left: auto; right: 0; }
-.cluster-tooltip > strong { overflow-wrap: anywhere; }
-.cluster-tooltip::after { content: ""; position: absolute; top: 100%; left: 0; width: 100%; height: 10px; }
-.tooltip-below .cluster-tooltip { top: calc(100% + 8px); bottom: auto; }
-.tooltip-below .cluster-tooltip::after { top: auto; bottom: 100%; }
-.cluster-tooltip dl { margin-top: 0.5rem; }
-.cluster-node:not(.tooltip-dismissed):hover .cluster-tooltip, .cluster-node:not(.tooltip-dismissed):focus-within .cluster-tooltip { display: block; }
 .cluster-footnote { margin-top: 0.8rem; line-height: 1.6; }
 @media (max-width: 800px) {
     .header-content { flex-wrap: wrap; gap: 0.5rem; }
@@ -104,8 +92,6 @@
     .cluster-map { height: auto !important; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 1rem; padding: 1rem; }
     .cluster-links { display: none; }
     .cluster-node { position: relative; left: auto !important; top: auto !important; width: auto; transform: none; }
-    .cluster-tooltip { width: 100%; left: 0 !important; right: auto !important; }
-    .cluster-details dl { grid-template-columns: 1fr; }
 }
 @media (max-width: 480px) {
     .cluster-summary { grid-template-columns: repeat(2, 1fr); }

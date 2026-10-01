@@ -56,14 +56,12 @@
     var section = document.getElementById("cluster");
     var map = document.getElementById("cluster-map");
     var summary = document.getElementById("cluster-summary");
-    var details = document.getElementById("cluster-details");
     var refresh = document.getElementById("cluster-refresh");
     var auto = document.getElementById("cluster-auto-refresh");
     var message = document.getElementById("cluster-message");
     var updated = document.getElementById("cluster-updated");
     var model = null;
     var stale = false;
-    var selected = null;
     var timer = null;
     var busy = false;
     var cards = new Map();
@@ -88,43 +86,16 @@
         return stale ? "Stale observation" : { reachable: "Reachable", unreachable: "Unreachable", unknown: "Unknown" }[health(node)];
     }
 
-    function detailHTML(node) {
-        var rows = [
-            ["Role", node.role], ["Reachability", healthLabel(node)],
-            ["Raft address", node.addr || "Unavailable"],
-            ["API address", node.api_addr || "Unavailable"],
-            ["Version", node.version || "Unavailable"],
-            ["Probe time", node.time_s || "Unavailable"]
-        ];
-        if (node.error) rows.push(["Probe error", node.error]);
-        return '<strong>Node ' + escape(node.id) + '</strong><dl>' + rows.map(function (row) {
-            return '<div><dt>' + row[0] + '</dt><dd>' + escape(row[1]) + '</dd></div>';
-        }).join("") + '</dl>';
-    }
-
-    function renderSelection() {
-        var node = model.nodes.find(function (n) { return n.id === selected; });
-        cards.forEach(function (card, id) {
-            card.button.setAttribute("aria-pressed", String(id === selected));
-        });
-        if (!node) {
-            selected = null;
-            details.innerHTML = '<p class="cluster-muted">Hover over or focus a node for details. Click to keep it selected.</p>';
-            return;
-        }
-        details.innerHTML = detailHTML(node);
-        if (node.api_addr) {
-            try {
-                var url = new URL(node.api_addr);
-                if (url.protocol === "http:" || url.protocol === "https:") {
-                    var link = document.createElement("a");
-                    link.href = node.api_addr.replace(/\/$/, "") + "/console/";
-                    link.textContent = "Open node console ↗";
-                    link.target = "_blank";
-                    link.rel = "noopener";
-                    details.appendChild(link);
-                }
-            } catch (_) { /* Only valid HTTP API addresses become links. */ }
+    function consoleURL(address) {
+        try {
+            var url = new URL(address);
+            if (url.protocol !== "http:" && url.protocol !== "https:") return "";
+            url.pathname = url.pathname.replace(/\/$/, "") + "/console/";
+            url.search = "";
+            url.hash = "cluster";
+            return url.href;
+        } catch (_) {
+            return "";
         }
     }
 
@@ -148,7 +119,7 @@
         cards.forEach(function (card, id) {
             if (!geometry.positions.has(id)) { card.wrapper.remove(); cards.delete(id); }
         });
-        model.nodes.forEach(function (node, index) {
+        model.nodes.forEach(function (node) {
             var position = geometry.positions.get(node.id);
             if (model.leader && !node.isLeader) {
                 var origin = geometry.positions.get(model.leader.id);
@@ -163,48 +134,33 @@
             var card = cards.get(node.id);
             if (!card) {
                 var wrapper = document.createElement("div");
-                var button = document.createElement("button");
-                var tooltip = document.createElement("div");
+                var link = document.createElement("a");
                 wrapper.className = "cluster-node";
-                button.type = "button";
-                button.className = "cluster-node-button";
-                tooltip.className = "cluster-tooltip";
-                tooltip.setAttribute("role", "tooltip");
-                button.addEventListener("click", function () {
-                    selected = selected === node.id ? null : node.id;
-                    renderSelection();
-                });
-                wrapper.addEventListener("keydown", function (event) {
-                    if (event.key === "Escape") {
-                        wrapper.classList.add("tooltip-dismissed");
-                        selected = null;
-                        renderSelection();
-                    }
-                });
-                wrapper.addEventListener("mouseenter", function () { wrapper.classList.remove("tooltip-dismissed"); });
-                button.addEventListener("focus", function () { wrapper.classList.remove("tooltip-dismissed"); });
-                wrapper.append(button, tooltip);
+                wrapper.appendChild(link);
                 map.appendChild(wrapper);
-                card = { wrapper: wrapper, button: button, tooltip: tooltip };
+                card = { wrapper: wrapper, link: link };
                 cards.set(node.id, card);
             }
             card.wrapper.style.left = (100 * position.x / geometry.width) + "%";
             card.wrapper.style.top = position.y + "px";
-            card.wrapper.classList.toggle("tooltip-below", position.y < 220);
-            card.wrapper.classList.toggle("tooltip-align-right", position.x > geometry.width / 2);
-            card.button.className = "cluster-node-button is-" + health(node) + (node.isLeader ? " is-leader" : "") + (node.voter ? "" : " is-replica");
-            card.button.innerHTML = '<span class="cluster-node-heading"><span class="cluster-node-icon" aria-hidden="true">' +
+            var destination = consoleURL(node.api_addr);
+            if (destination) {
+                card.link.href = destination;
+                card.link.removeAttribute("aria-disabled");
+            } else {
+                card.link.removeAttribute("href");
+                card.link.setAttribute("aria-disabled", "true");
+            }
+            card.link.className = "cluster-node-link is-" + health(node) + (node.isLeader ? " is-leader" : "") +
+                (node.id === model.localID ? " is-current" : "") + (node.voter ? "" : " is-replica");
+            card.link.innerHTML = '<span class="cluster-node-heading"><span class="cluster-node-icon" aria-hidden="true">' +
                 (node.isLeader ? "★" : node.voter ? "●" : "◇") + '</span><span><strong>Node ' + escape(node.id) +
                 '</strong><span class="cluster-node-role">' + escape(node.role) + '</span></span>' +
                 (node.id === model.localID ? '<span class="cluster-this-node">This node</span>' : '') + '</span>' +
                 '<span class="cluster-address"><b>Raft</b> ' + escape(node.addr || "Unavailable") + '</span>' +
                 '<span class="cluster-address"><b>API</b> ' + escape(node.api_addr || "Unavailable") + '</span>' +
                 '<span class="cluster-node-health"><i class="cluster-dot is-' + health(node) + '"></i>' + healthLabel(node) + '</span>';
-            card.tooltip.id = "cluster-tooltip-" + index;
-            card.button.setAttribute("aria-describedby", card.tooltip.id);
-            card.tooltip.innerHTML = detailHTML(node);
         });
-        renderSelection();
     }
 
     function active() {
