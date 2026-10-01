@@ -53,7 +53,7 @@
         return;
     }
 
-    var section = document.getElementById("cluster");
+    var section = document.getElementById("topology");
     var map = document.getElementById("cluster-map");
     var summary = document.getElementById("cluster-summary");
     var refresh = document.getElementById("cluster-refresh");
@@ -92,7 +92,7 @@
             if (url.protocol !== "http:" && url.protocol !== "https:") return "";
             url.pathname = url.pathname.replace(/\/$/, "") + "/console/";
             url.search = "";
-            url.hash = "cluster";
+            url.hash = "topology";
             return url.href;
         } catch (_) {
             return "";
@@ -227,5 +227,7 @@
     }
     new MutationObserver(visibilityChanged).observe(section, { attributes: true, attributeFilter: ["class"] });
     document.addEventListener("visibilitychange", visibilityChanged);
-    if (window.location.hash === "#cluster") document.querySelector('[data-tab="cluster"]').click();
+    if (window.location.hash === "#topology" || window.location.hash === "#cluster") {
+        document.querySelector('[data-tab="topology"]').click();
+    }
 })();

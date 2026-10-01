@@ -1,10 +1,10 @@
-#cluster {
+#topology {
     --cluster-node-bg: #fff;
     --cluster-node-hover: #f5f8fc;
     --cluster-node-border: #8292a6;
     --cluster-node-shadow: 0 4px 14px rgba(20, 40, 65, 0.18);
 }
-[data-theme="dark"] #cluster {
+[data-theme="dark"] #topology {
     --cluster-node-bg: #243650;
     --cluster-node-hover: #2b4162;
     --cluster-node-border: #7387a3;
