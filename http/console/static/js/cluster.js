@@ -48,8 +48,59 @@
         return { positions: positions, width: 900, height: height };
     }
 
+    function preferences(saved, hash) {
+        var result = { autoRefresh: true, showReadReplicas: true };
+        try {
+            var parsed = JSON.parse(saved);
+            Object.keys(result).forEach(function (key) {
+                if (parsed && typeof parsed[key] === "boolean") result[key] = parsed[key];
+            });
+        } catch (_) { /* Ignore unavailable or invalid saved preferences. */ }
+        var tab = hash.split("?")[0];
+        if (tab === "#topology" || tab === "#cluster") {
+            var params = new URLSearchParams(hash.split("?")[1] || "");
+            [["auto-refresh", "autoRefresh"], ["read-replicas", "showReadReplicas"]].forEach(function (pair) {
+                var value = params.get(pair[0]);
+                if (value === "0" || value === "1") result[pair[1]] = value === "1";
+            });
+        }
+        return result;
+    }
+
+    function preferenceHash(settings) {
+        return "topology?auto-refresh=" + (settings.autoRefresh ? "1" : "0") +
+            "&read-replicas=" + (settings.showReadReplicas ? "1" : "0");
+    }
+
+    function consoleURL(address, settings) {
+        try {
+            var url = new URL(address);
+            if (url.protocol !== "http:" && url.protocol !== "https:") return "";
+            url.pathname = url.pathname.replace(/\/$/, "") + "/console/";
+            url.search = "";
+            url.hash = preferenceHash(settings);
+            return url.href;
+        } catch (_) {
+            return "";
+        }
+    }
+
+    function probeLabel(model, peer, stale) {
+        if (stale || !model.leader || peer.isLeader) return "";
+        // /nodes probes originate at the viewing node, not necessarily the leader.
+        var target = model.localID === model.leader.id ? peer :
+            model.localID === peer.id ? model.leader : null;
+        if (!target || target.reachable !== true || typeof target.time !== "number" ||
+            !Number.isFinite(target.time) || target.time < 0) return "";
+        var ms = target.time * 1000;
+        var duration = ms > 0 && ms < 0.1 ? "<0.1 ms" :
+            ms < 1000 ? ms.toFixed(1).replace(/\.0$/, "") + " ms" :
+                target.time.toFixed(1).replace(/\.0$/, "") + " s";
+        return "Probe: " + duration;
+    }
+
     if (typeof module !== "undefined" && module.exports) {
-        module.exports = { topology: topology, layout: layout };
+        module.exports = { topology: topology, layout: layout, preferences: preferences, consoleURL: consoleURL, probeLabel: probeLabel };
         return;
     }
 
@@ -59,6 +110,15 @@
     var refresh = document.getElementById("cluster-refresh");
     var auto = document.getElementById("cluster-auto-refresh");
     var showReadReplicas = document.getElementById("cluster-show-read-replicas");
+    var preferencesKey = "rqlite_topology_preferences";
+    var savedPreferences = null;
+    try { savedPreferences = localStorage.getItem(preferencesKey); } catch (_) { /* Storage may be disabled. */ }
+    var initialPreferences = preferences(savedPreferences, window.location.hash);
+    auto.checked = initialPreferences.autoRefresh;
+    showReadReplicas.checked = initialPreferences.showReadReplicas;
+    // Origins cannot share localStorage, so node links carry these preferences
+    // in the fragment. Save incoming preferences on the destination node too.
+    savePreferences();
     var message = document.getElementById("cluster-message");
     var updated = document.getElementById("cluster-updated");
     var model = null;
@@ -68,7 +128,8 @@
     var cards = new Map();
     var svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
     svg.classList.add("cluster-links");
-    svg.setAttribute("aria-hidden", "true");
+    svg.setAttribute("role", "img");
+    svg.setAttribute("aria-label", "Replication connections");
     svg.setAttribute("preserveAspectRatio", "none");
     map.appendChild(svg);
 
@@ -87,17 +148,20 @@
         return stale ? "Stale observation" : { reachable: "Reachable", unreachable: "Unreachable", unknown: "Unknown" }[health(node)];
     }
 
-    function consoleURL(address) {
-        try {
-            var url = new URL(address);
-            if (url.protocol !== "http:" && url.protocol !== "https:") return "";
-            url.pathname = url.pathname.replace(/\/$/, "") + "/console/";
-            url.search = "";
-            url.hash = "topology";
-            return url.href;
-        } catch (_) {
-            return "";
-        }
+    function currentPreferences() {
+        return { autoRefresh: auto.checked, showReadReplicas: showReadReplicas.checked };
+    }
+
+    function savePreferences() {
+        try { localStorage.setItem(preferencesKey, JSON.stringify(currentPreferences())); } catch (_) { /* Storage may be disabled. */ }
+    }
+
+    function preferencesChanged() {
+        savePreferences();
+        // Keep the current fragment up to date so a reload never reapplies
+        // older preferences imported when navigating from another node.
+        window.history.replaceState(null, "", "#" + preferenceHash(currentPreferences()));
+        if (model) render();
     }
 
     function render() {
@@ -107,6 +171,7 @@
         map.style.height = geometry.height + "px";
         svg.setAttribute("viewBox", "0 0 " + geometry.width + " " + geometry.height);
         svg.replaceChildren();
+        var probes = [];
         var voters = model.nodes.filter(function (n) { return n.voter; }).length;
         var reachable = model.nodes.filter(function (n) { return n.reachable === true; }).length;
         summary.innerHTML = [
@@ -133,6 +198,8 @@
                 line.setAttribute("y2", position.y);
                 line.setAttribute("class", "cluster-edge" + (node.voter ? "" : " is-replica"));
                 svg.appendChild(line);
+                var probe = probeLabel(model, node, stale);
+                if (probe) probes.push({ text: probe, origin: origin, position: position, peerID: node.id });
             }
             var card = cards.get(node.id);
             if (!card) {
@@ -147,7 +214,7 @@
             card.wrapper.style.left = (100 * position.x / geometry.width) + "%";
             card.wrapper.style.top = position.y + "px";
             card.link.title = "Raft: " + (node.addr || "Unavailable") + "\nAPI: " + (node.api_addr || "Unavailable");
-            var destination = consoleURL(node.api_addr);
+            var destination = consoleURL(node.api_addr, currentPreferences());
             if (destination) {
                 card.link.href = destination;
                 card.link.removeAttribute("aria-disabled");
@@ -165,6 +232,50 @@
                 '<span class="cluster-address"><b>API</b> ' + escape(node.api_addr || "Unavailable") + '</span>' +
                 '<span class="cluster-node-health"><i class="cluster-dot is-' + health(node) + '"></i>' + healthLabel(node) + '</span>';
         });
+        renderProbes(probes, geometry);
+    }
+
+    function renderProbes(probes, geometry) {
+        var scaleX = geometry.width / map.clientWidth;
+        var obstacles = [];
+        cards.forEach(function (card, id) {
+            var p = geometry.positions.get(id);
+            obstacles.push({ x: p.x, y: p.y, w: card.wrapper.offsetWidth * scaleX + 12, h: card.wrapper.offsetHeight + 12 });
+        });
+        probes.forEach(function (probe) {
+            var label = document.createElementNS(svg.namespaceURI, "text");
+            label.setAttribute("class", "cluster-probe-label");
+            label.textContent = probe.text;
+            svg.appendChild(label);
+            var bounds = label.getBBox();
+            var dx = probe.position.x - probe.origin.x;
+            var dy = probe.position.y - probe.origin.y;
+            var distance = Math.hypot(dx, dy);
+            var candidates = [];
+            [0.5, 0.65, 0.35].forEach(function (fraction) {
+                [0, -24, 24, -48, 48, -72, 72, -96, 96].forEach(function (offset) {
+                    candidates.push({ x: probe.origin.x + dx * fraction - dy / distance * offset,
+                        y: probe.origin.y + dy * fraction + dx / distance * offset,
+                        w: bounds.width + 10, h: bounds.height + 8 });
+                });
+            });
+            // Keep labels clear of cards and one another, including diagonal links.
+            var placed = candidates.find(function (p) {
+                return p.x > p.w / 2 && p.x < geometry.width - p.w / 2 &&
+                    p.y > p.h / 2 && p.y < geometry.height - p.h / 2 &&
+                    obstacles.every(function (other) {
+                        return Math.abs(p.x - other.x) >= (p.w + other.w) / 2 ||
+                            Math.abs(p.y - other.y) >= (p.h + other.h) / 2;
+                    });
+            }) || candidates[0];
+            label.setAttribute("x", placed.x);
+            label.setAttribute("y", placed.y);
+            obstacles.push(placed);
+        });
+        svg.setAttribute("aria-label", "Replication connections" + probes.map(function (probe) {
+            var targetID = model.localID === model.leader.id ? probe.peerID : model.leader.id;
+            return "; from node " + model.localID + " to node " + targetID + ", " + probe.text;
+        }).join(""));
     }
 
     function active() {
@@ -223,15 +334,19 @@
     }
 
     refresh.addEventListener("click", load);
-    showReadReplicas.addEventListener("change", function () { if (model) render(); });
-    auto.addEventListener("change", function () { if (auto.checked) load(); else clearTimeout(timer); });
+    showReadReplicas.addEventListener("change", preferencesChanged);
+    auto.addEventListener("change", function () {
+        preferencesChanged();
+        if (auto.checked) load(); else clearTimeout(timer);
+    });
     function visibilityChanged() {
         if (active()) load();
         else clearTimeout(timer);
     }
     new MutationObserver(visibilityChanged).observe(section, { attributes: true, attributeFilter: ["class"] });
     document.addEventListener("visibilitychange", visibilityChanged);
-    if (window.location.hash === "#topology" || window.location.hash === "#cluster") {
+    var initialTab = window.location.hash.split("?")[0];
+    if (initialTab === "#topology" || initialTab === "#cluster") {
         document.querySelector('[data-tab="topology"]').click();
     }
 })();

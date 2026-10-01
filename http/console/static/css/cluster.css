@@ -43,6 +43,17 @@
 .cluster-links { position: absolute; width: 100%; height: 100%; inset: 0; }
 .cluster-edge { stroke: var(--text-secondary); stroke-width: 2; opacity: 0.6; }
 .cluster-edge.is-replica { stroke-dasharray: 6 5; }
+.cluster-probe-label {
+    fill: var(--text-secondary);
+    font-size: 11px;
+    text-anchor: middle;
+    dominant-baseline: central;
+    paint-order: stroke;
+    stroke: var(--surface);
+    stroke-width: 5px;
+    stroke-linejoin: round;
+    pointer-events: none;
+}
 .cluster-node { position: absolute; width: 235px; transform: translate(-50%, -50%); }
 .cluster-node-link {
     display: block;
