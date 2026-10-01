@@ -41,9 +41,7 @@
 .cluster-map-heading > span:first-child { color: var(--text); font-weight: 700; }
 .cluster-map { position: relative; background-image: radial-gradient(var(--border-light) 1px, transparent 1px); background-size: 18px 18px; }
 .cluster-links { position: absolute; width: 100%; height: 100%; inset: 0; }
-.cluster-edge { stroke: var(--border); stroke-width: 2; }
-.cluster-edge.is-reachable { stroke: var(--success); opacity: 0.6; }
-.cluster-edge.is-unreachable { stroke: var(--error); opacity: 0.6; }
+.cluster-edge { stroke: var(--text-secondary); stroke-width: 2; opacity: 0.6; }
 .cluster-edge.is-replica { stroke-dasharray: 6 5; }
 .cluster-node { position: absolute; width: 235px; transform: translate(-50%, -50%); }
 .cluster-node-link {

@@ -128,7 +128,7 @@
                 line.setAttribute("y1", origin.y);
                 line.setAttribute("x2", position.x);
                 line.setAttribute("y2", position.y);
-                line.setAttribute("class", "cluster-edge is-" + health(node) + (node.voter ? "" : " is-replica"));
+                line.setAttribute("class", "cluster-edge" + (node.voter ? "" : " is-replica"));
                 svg.appendChild(line);
             }
             var card = cards.get(node.id);
@@ -143,6 +143,7 @@
             }
             card.wrapper.style.left = (100 * position.x / geometry.width) + "%";
             card.wrapper.style.top = position.y + "px";
+            card.link.title = "Raft: " + (node.addr || "Unavailable") + "\nAPI: " + (node.api_addr || "Unavailable");
             var destination = consoleURL(node.api_addr);
             if (destination) {
                 card.link.href = destination;
