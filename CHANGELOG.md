@@ -1,4 +1,7 @@
-## v10.4.1 (unreleased)
+## v10.5.0 (October 1st 2026)
+### New features
+- [PR #2835](https://github.com/rqlite/rqlite/pull/2835): Display interactive cluster topology on web console.
+
 ### Implementation changes and bug fixes
 - [PR #2832](https://github.com/rqlite/rqlite/pull/2832): Record _AppendEntries RPC_ reception time on each node.
 - [PR #2833](https://github.com/rqlite/rqlite/pull/2833): Do not perform graceful shutdown of HTTP server, just close it. See [torx #21](https://github.com/dotnwat/torx/issues/21). Thanks @dotnwat
