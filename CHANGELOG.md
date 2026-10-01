@@ -1,6 +1,7 @@
 ## v10.5.1 (unreleased)
 ### Implementation changes and bug fixes
 - [PR #2836](https://github.com/rqlite/rqlite/pull/2836): Web console should use term "read replicas".
+- [PR #2837](https://github.com/rqlite/rqlite/pull/2837): More improvements to the console topology view.
 
 ## v10.5.0 (October 1st 2026)
 ### New features
