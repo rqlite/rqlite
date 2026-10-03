@@ -55,6 +55,9 @@ func Test_CDCStreamer_CommitOne(t *testing.T) {
 	if len(streamer.pending.Events) != 0 {
 		t.Fatalf("expected no pending events after commit, got %d", len(streamer.pending.Events))
 	}
+	if streamer.Index() != 5678 {
+		t.Fatalf("expected streamer to keep index post-commit")
+	}
 
 	select {
 	case ev := <-ch:
@@ -115,6 +118,9 @@ func Test_CDCStreamer_CommitTwo(t *testing.T) {
 	streamer.CommitHook()
 	if len(streamer.pending.Events) != 0 {
 		t.Fatalf("expected no pending events after commit, got %d", len(streamer.pending.Events))
+	}
+	if streamer.Index() != 9012 {
+		t.Fatalf("incorrect index after commit")
 	}
 
 	select {
@@ -236,6 +242,10 @@ func Test_CDCStreamer_ExecuteRollback(t *testing.T) {
 	}
 	if got := asJSON(mustQuery(db, "SELECT id FROM foo")); got != `[{"columns":["id"],"types":["integer"],"values":[[2]]}]` {
 		t.Fatalf("unexpected rows: %s", got)
+	}
+
+	if streamer.Index() != 42 {
+		t.Fatal("incorrect index after rollback")
 	}
 }
 

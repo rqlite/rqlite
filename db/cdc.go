@@ -58,6 +58,15 @@ func (s *CDCStreamer) Close() error {
 	return nil
 }
 
+// Index returns the Index the Streamer is currently associating with
+// any pending state. If there is no pending state, it returns 0.
+func (s *CDCStreamer) Index() uint64 {
+	if s.pending != nil {
+		return s.pending.Index
+	}
+	return 0
+}
+
 // PreupdateHook is called before the update is applied. It collects
 // the event and adds it to the pending events.
 func (s *CDCStreamer) PreupdateHook(ev *command.CDCEvent) error {
@@ -66,12 +75,15 @@ func (s *CDCStreamer) PreupdateHook(ev *command.CDCEvent) error {
 }
 
 // RollbackHook discards events collected for the rolled-back transaction.
+// It does not change the Index value, which remains as it was.
 func (s *CDCStreamer) RollbackHook() {
 	s.pending.Events = nil
 }
 
 // CommitHook is called after the transaction is committed. It sends the
-// pending events to the out channel and clears the pending events.
+// pending events to the out channel and clears the pending events. It
+// does not change the Index value, it remains set until the next explicit
+// call to Reset().
 func (s *CDCStreamer) CommitHook() bool {
 	if len(s.pending.Events) == 0 {
 		// No CDC events to send, but let the transaction proceed.
@@ -102,6 +114,7 @@ func (s *CDCStreamer) CommitHook() bool {
 	}
 	s.pending = &command.CDCIndexedEventGroup{
 		Events: make([]*command.CDCEvent, 0),
+		Index:  s.pending.Index,
 	}
 	return true
 }
