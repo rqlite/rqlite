@@ -176,7 +176,7 @@ func (n *NodeTransport) Consumer() <-chan raft.RPC {
 						rpc.Reader = zstd.NewDecompressor(rpc.Reader)
 					}
 				case *raft.AppendEntriesRequest:
-					n.lastAppendEntriesRxTime.Store(time.Now())
+					n.recordAppendEntries(cmd, time.Now())
 
 					n.aeMu.RLock()
 					handler := n.appendEntriesRxHandler
@@ -185,18 +185,6 @@ func (n *NodeTransport) Consumer() <-chan raft.RPC {
 						if err := handler(cmd); err != nil {
 							n.logger.Printf("AppendEntriesRxHandler error: %v", err)
 						}
-					}
-					for _, e := range cmd.Entries {
-						if e.Type == raft.LogCommand {
-							n.commandCommitIndex.Store(e.Index)
-						}
-					}
-					if cmd.LeaderCommitIndex > n.leaderCommitIndex.Load() {
-						// There is a small window where a newly elected Leader's internal state can make the commit
-						// index it sends be less than a commit index this node received from the previous leader.
-						// It's not a safety issue as logs are always correct underneath. The Raft library has
-						// the same checks internally.
-						n.leaderCommitIndex.Store(cmd.LeaderCommitIndex)
 					}
 				case *raft.TimeoutNowRequest:
 					n.logger.Printf("TimeoutNowRequest received on this node (%s) from node %s at %s",
@@ -211,6 +199,30 @@ func (n *NodeTransport) Consumer() <-chan raft.RPC {
 		}
 	}()
 	return ch
+}
+
+// recordAppendEntries updates the transport's view of replication from the
+// Leader, using an AppendEntries request received at time now.
+//
+// Heartbeats never reach this function. The Raft library's NetworkTransport
+// dispatches them directly to Raft via its heartbeat fast-path, bypassing
+// Consumer(). Only AppendEntries requests which carry log position and commit
+// index are recorded here. The Leader sends these at least every CommitTimeout,
+// even when there are no new log entries to send.
+func (n *NodeTransport) recordAppendEntries(req *raft.AppendEntriesRequest, now time.Time) {
+	n.lastAppendEntriesRxTime.Store(now)
+	for _, e := range req.Entries {
+		if e.Type == raft.LogCommand {
+			n.commandCommitIndex.Store(e.Index)
+		}
+	}
+	if req.LeaderCommitIndex > n.leaderCommitIndex.Load() {
+		// There is a small window where a newly elected Leader's internal state can make the commit
+		// index it sends be less than a commit index this node received from the previous leader.
+		// It's not a safety issue as logs are always correct underneath. The Raft library has
+		// the same checks internally.
+		n.leaderCommitIndex.Store(req.LeaderCommitIndex)
+	}
 }
 
 // Stats returns the current stats of the transport.
