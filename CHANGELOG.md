@@ -1,3 +1,7 @@
+## v10.5.2 (unreleased)
+### Implementation changes and bug fixes
+- [PR #2839](https://github.com/rqlite/rqlite/pull/2839): CDC streamer should retain Index after Commit and Rollback.
+
 ## v10.5.1 (October 2nd 2026)
 ### Implementation changes and bug fixes
 - [PR #2836](https://github.com/rqlite/rqlite/pull/2836): Web console should use term "read replicas".
