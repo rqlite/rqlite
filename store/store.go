@@ -2563,8 +2563,10 @@ func (s *Store) fsmApply(l *raft.Log) (e any) {
 					s.logger.Fatalf("failed to register rollback hook for CDC: %s", err)
 				}
 				s.cdcRegistered.Set()
-				s.cdcCollator.Reset(&cdcEvents)
 			}
+
+			// Prime collection of events.
+			s.cdcCollator.Reset(&cdcEvents)
 		}
 		defer func() {
 			if s.cdcCollator == nil {
