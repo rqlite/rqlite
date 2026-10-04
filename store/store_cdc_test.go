@@ -192,8 +192,8 @@ func Test_StoreCDC_Events_Single(t *testing.T) {
 	}
 }
 
-// Test_StoreCDC_Events_MultiStatementIndex reproduces the bug fixed by
-// https://github.com/rqlite/rqlite/pull/2796.
+// Test_StoreCDC_Events_MultiStatementIndex ensures that a bulk request with
+// multiple statements emits the correct group of CDC events.
 //
 // The Store resets the CDC streamer with the Raft index once per log entry,
 // then processes every statement in that entry. A non-transactional request
