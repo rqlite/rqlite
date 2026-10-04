@@ -262,10 +262,7 @@ func OpenWithDriver(drv *Driver, dbPath string, fkEnabled, wal bool) (retDB *DB,
 	/////////////////////////////////////////////////////////////////////////
 	// Main RW connection
 	rwDSN := MakeDSN(dbPath, ModeReadWrite, fkEnabled, wal)
-	rwDB, err := sql.Open(drv.name, rwDSN)
-	if err != nil {
-		return nil, fmt.Errorf("open: %s", err.Error())
-	}
+	rwDB := sql.OpenDB(drv.connector(rwDSN))
 	defer func() {
 		if retErr != nil {
 			rwDB.Close()
@@ -275,10 +272,7 @@ func OpenWithDriver(drv *Driver, dbPath string, fkEnabled, wal bool) (retDB *DB,
 	/////////////////////////////////////////////////////////////////////////
 	// Read-only connection
 	roDSN := MakeDSN(dbPath, ModeReadOnly, fkEnabled, wal)
-	roDB, err := sql.Open(drv.name, roDSN)
-	if err != nil {
-		return nil, err
-	}
+	roDB := sql.OpenDB(drv.connector(roDSN))
 	defer func() {
 		if retErr != nil {
 			roDB.Close()
@@ -722,8 +716,8 @@ func (db *DB) WALSize() (int64, error) {
 
 // ExtensionNames returns the names of the SQLite extensions loaded into the database.
 func (db *DB) ExtensionNames() []string {
-	names := make([]string, 0, len(db.drv.extensions))
-	for _, ext := range db.drv.extensions {
+	names := make([]string, 0, len(db.drv.cfg.Extensions))
+	for _, ext := range db.drv.cfg.Extensions {
 		names = append(names, filepath.Base(ext))
 	}
 	return names
