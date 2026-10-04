@@ -683,3 +683,14 @@ type errorColumnNamesProvider struct {
 func (p *errorColumnNamesProvider) ColumnNames(table string) ([]string, error) {
 	return nil, p.err
 }
+
+type mockColumnNamesProvider struct {
+	columns map[string][]string
+}
+
+func (m *mockColumnNamesProvider) ColumnNames(table string) ([]string, error) {
+	if cols, ok := m.columns[table]; ok {
+		return cols, nil
+	}
+	return []string{}, nil
+}

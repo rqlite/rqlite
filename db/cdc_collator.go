@@ -6,6 +6,11 @@ import (
 	command "github.com/rqlite/rqlite/v10/command/proto"
 )
 
+// ColumnsNameProvider provides column names for a given table.
+type ColumnsNameProvider interface {
+	ColumnNames(table string) ([]string, error)
+}
+
 // CDCCollator gathers Change Data Capture events into a slice owned by the
 // caller. It implements the SQLite preupdate, commit, and rollback hooks.
 //
