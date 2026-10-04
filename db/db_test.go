@@ -1684,7 +1684,7 @@ func Test_DBStats_PragmaFields(t *testing.T) {
 func Test_TransactionTimeout_WriterConnectionReplaced(t *testing.T) {
 	db, path := mustCreateOnDiskDatabaseWAL()
 	defer db.Close()
-	defer os.Remove(path)
+	defer fsutil.Remove(path)
 	mustExecute(db, "CREATE TABLE foo (id INTEGER PRIMARY KEY)")
 
 	var commits int
