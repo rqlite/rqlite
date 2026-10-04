@@ -1684,7 +1684,7 @@ func Test_DBStats_PragmaFields(t *testing.T) {
 func Test_TransactionTimeout_AutoCheckpointDisabled(t *testing.T) {
 	db, path := mustCreateOnDiskDatabaseWAL()
 	defer db.Close()
-	defer os.Remove(path)
+	defer fsutil.Remove(path)
 	mustExecute(db, "CREATE TABLE foo (id INTEGER PRIMARY KEY)")
 
 	req := timeoutTransactionRequest()
@@ -1704,7 +1704,7 @@ func Test_TransactionTimeout_HooksRetained(t *testing.T) {
 
 	db, path := mustCreateOnDiskDatabaseWAL()
 	defer db.Close()
-	defer os.Remove(path)
+	defer fsutil.Remove(path)
 	mustExecute(db, "CREATE TABLE foo (id INTEGER PRIMARY KEY)")
 
 	var commits int
