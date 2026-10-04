@@ -188,8 +188,9 @@ type DB struct {
 	fkEnabled bool   // Foreign key constraints enabled
 	wal       bool
 
-	rwDB *sql.DB // Database connection for database reads and writes.
-	roDB *sql.DB // Database connection database reads.
+	rwConnector *connector // Opens, and holds the settings of, read-write connections.
+	rwDB        *sql.DB    // Database connection for database reads and writes.
+	roDB        *sql.DB    // Database connection database reads.
 
 	rwDSN string // DSN used for read-write connection
 	roDSN string // DSN used for read-only connections
@@ -262,10 +263,8 @@ func OpenWithDriver(drv *Driver, dbPath string, fkEnabled, wal bool) (retDB *DB,
 	/////////////////////////////////////////////////////////////////////////
 	// Main RW connection
 	rwDSN := MakeDSN(dbPath, ModeReadWrite, fkEnabled, wal)
-	rwDB, err := sql.Open(drv.name, rwDSN)
-	if err != nil {
-		return nil, fmt.Errorf("open: %s", err.Error())
-	}
+	rwConnector := drv.connector(rwDSN)
+	rwDB := sql.OpenDB(rwConnector)
 	defer func() {
 		if retErr != nil {
 			rwDB.Close()
@@ -275,10 +274,7 @@ func OpenWithDriver(drv *Driver, dbPath string, fkEnabled, wal bool) (retDB *DB,
 	/////////////////////////////////////////////////////////////////////////
 	// Read-only connection
 	roDSN := MakeDSN(dbPath, ModeReadOnly, fkEnabled, wal)
-	roDB, err := sql.Open(drv.name, roDSN)
-	if err != nil {
-		return nil, err
-	}
+	roDB := sql.OpenDB(drv.connector(roDSN))
 	defer func() {
 		if retErr != nil {
 			roDB.Close()
@@ -333,16 +329,17 @@ func OpenWithDriver(drv *Driver, dbPath string, fkEnabled, wal bool) (retDB *DB,
 	}
 
 	return &DB{
-		drv:       drv,
-		path:      dbPath,
-		walPath:   dbPath + "-wal",
-		fkEnabled: fkEnabled,
-		wal:       wal,
-		rwDB:      rwDB,
-		roDB:      roDB,
-		rwDSN:     rwDSN,
-		roDSN:     roDSN,
-		logger:    logger,
+		drv:         drv,
+		path:        dbPath,
+		walPath:     dbPath + "-wal",
+		fkEnabled:   fkEnabled,
+		wal:         wal,
+		rwConnector: rwConnector,
+		rwDB:        rwDB,
+		roDB:        roDB,
+		rwDSN:       rwDSN,
+		roDSN:       roDSN,
+		logger:      logger,
 	}, nil
 }
 
@@ -444,21 +441,7 @@ func (db *DB) RegisterPreUpdateHook(hook PreUpdateHookCallback, tblRe *regexp.Re
 			}
 		}
 	}
-	f := func(driverConn any) error {
-		conn := driverConn.(*sqlite3.SQLiteConn)
-		conn.RegisterPreUpdateHook(cb)
-		return nil
-	}
-
-	conn, err := db.rwDB.Conn(context.Background())
-	if err != nil {
-		return err
-	}
-	defer conn.Close()
-	if err := conn.Raw(f); err != nil {
-		return err
-	}
-	return nil
+	return db.updateRWSettings(func(s *connSettings) { s.preUpdateHook = cb })
 }
 
 // UpdateHookCallback is a callback function that is called before a row is modified
@@ -504,21 +487,7 @@ func (db *DB) RegisterUpdateHook(hook UpdateHookCallback) error {
 			}
 		}
 	}
-	f := func(driverConn any) error {
-		conn := driverConn.(*sqlite3.SQLiteConn)
-		conn.RegisterUpdateHook(cb)
-		return nil
-	}
-
-	conn, err := db.rwDB.Conn(context.Background())
-	if err != nil {
-		return err
-	}
-	defer conn.Close()
-	if err := conn.Raw(f); err != nil {
-		return err
-	}
-	return nil
+	return db.updateRWSettings(func(s *connSettings) { s.updateHook = cb })
 }
 
 // RollbackHookCallback is called when SQLite rolls back a transaction.
@@ -528,15 +497,7 @@ type RollbackHookCallback func()
 // nil, the callback is removed. SQLite does not invoke this hook for a statement
 // rollback within an open transaction, or for ROLLBACK TO a savepoint.
 func (db *DB) RegisterRollbackHook(hook RollbackHookCallback) error {
-	conn, err := db.rwDB.Conn(context.Background())
-	if err != nil {
-		return err
-	}
-	defer conn.Close()
-	return conn.Raw(func(driverConn any) error {
-		driverConn.(*sqlite3.SQLiteConn).RegisterRollbackHook(hook)
-		return nil
-	})
+	return db.updateRWSettings(func(s *connSettings) { s.rollbackHook = hook })
 }
 
 // CommitHookCallback is a callback function that is called whenever a transaction
@@ -558,21 +519,21 @@ func (db *DB) RegisterCommitHook(hook CommitHookCallback) error {
 			return 1
 		}
 	}
-	f := func(driverConn any) error {
-		conn := driverConn.(*sqlite3.SQLiteConn)
-		conn.RegisterCommitHook(cb)
-		return nil
-	}
+	return db.updateRWSettings(func(s *connSettings) { s.commitHook = cb })
+}
 
+// updateRWSettings changes the settings of the read-write connection. The
+// change is applied to the current connection, and is held by the connector
+// so that it also applies to any connection which replaces it.
+func (db *DB) updateRWSettings(change func(s *connSettings)) error {
 	conn, err := db.rwDB.Conn(context.Background())
 	if err != nil {
 		return err
 	}
 	defer conn.Close()
-	if err := conn.Raw(f); err != nil {
-		return err
-	}
-	return nil
+	return conn.Raw(func(driverConn any) error {
+		return db.rwConnector.update(driverConn.(*sqlite3.SQLiteConn), change)
+	})
 }
 
 // LastModified returns the last modified time of the database file, or the WAL file,
@@ -722,29 +683,21 @@ func (db *DB) WALSize() (int64, error) {
 
 // ExtensionNames returns the names of the SQLite extensions loaded into the database.
 func (db *DB) ExtensionNames() []string {
-	names := make([]string, 0, len(db.drv.extensions))
-	for _, ext := range db.drv.extensions {
+	names := make([]string, 0, len(db.drv.cfg.Extensions))
+	for _, ext := range db.drv.cfg.Extensions {
 		names = append(names, filepath.Base(ext))
 	}
 	return names
 }
 
-// SetBusyTimeout sets the busy timeout for the database. If a timeout is
-// less than zero it is not set.
-func (db *DB) SetBusyTimeout(rwMs, roMs int) (err error) {
-	if rwMs >= 0 {
-		_, err := db.rwDB.Exec(fmt.Sprintf("PRAGMA busy_timeout=%d", rwMs))
-		if err != nil {
-			return err
-		}
+// SetBusyTimeout sets the busy timeout, in milliseconds, of the read-write
+// database connection. The busy timeout of read-only connections is fixed when
+// they are opened.
+func (db *DB) SetBusyTimeout(ms int) error {
+	if ms < 0 {
+		return fmt.Errorf("invalid busy timeout %d", ms)
 	}
-	if roMs >= 0 {
-		_, err = db.roDB.Exec(fmt.Sprintf("PRAGMA busy_timeout=%d", roMs))
-		if err != nil {
-			return err
-		}
-	}
-	return nil
+	return db.updateRWSettings(func(s *connSettings) { s.busyTimeout = ms })
 }
 
 // RWBusyTimeout returns the current busy timeout value for the read-write
@@ -806,11 +759,11 @@ func (db *DB) CheckpointTruncateWithTimeout(dur time.Duration) (err error) {
 	if err != nil {
 		return fmt.Errorf("failed to get busy_timeout: %s", err.Error())
 	}
-	if err := db.SetBusyTimeout(int(dur.Milliseconds()), -1); err != nil {
+	if err := db.SetBusyTimeout(int(dur.Milliseconds())); err != nil {
 		return fmt.Errorf("failed to set busy_timeout: %s", err.Error())
 	}
 	defer func() {
-		if err := db.SetBusyTimeout(rwBt, -1); err != nil {
+		if err := db.SetBusyTimeout(rwBt); err != nil {
 			db.logger.Printf("failed to reset busy_timeout: %s", err.Error())
 		}
 	}()
@@ -862,12 +815,12 @@ func (db *DB) CheckpointWithTimeout(mode CheckpointMode, dur time.Duration) (met
 		if err != nil {
 			return nil, fmt.Errorf("failed to get busy_timeout on checkpointing connection: %s", err.Error())
 		}
-		if err := db.SetBusyTimeout(int(dur.Milliseconds()), -1); err != nil {
+		if err := db.SetBusyTimeout(int(dur.Milliseconds())); err != nil {
 			return nil, fmt.Errorf("failed to set busy_timeout on checkpointing connection: %s", err.Error())
 		}
 		defer func() {
 			// Reset back to default
-			if err := db.SetBusyTimeout(rwBt, -1); err != nil {
+			if err := db.SetBusyTimeout(rwBt); err != nil {
 				db.logger.Printf("failed to reset busy_timeout on checkpointing connection: %s", err.Error())
 			}
 		}()
@@ -998,10 +951,7 @@ func (db *DB) VerifyIntegrity() (IntegrityResult, error) {
 
 // SetSynchronousMode sets the synchronous mode of the database.
 func (db *DB) SetSynchronousMode(mode SynchronousMode) error {
-	if _, err := db.rwDB.Exec(fmt.Sprintf("PRAGMA synchronous=%s", mode)); err != nil {
-		return fmt.Errorf("failed to set synchronous mode to %s: %s", mode, err.Error())
-	}
-	return nil
+	return db.updateRWSettings(func(s *connSettings) { s.synchronous = &mode })
 }
 
 // GetSynchronousMode returns the current synchronous mode.

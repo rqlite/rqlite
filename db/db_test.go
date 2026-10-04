@@ -2,6 +2,9 @@ package db
 
 import (
 	"bytes"
+	"context"
+	"database/sql/driver"
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -1700,8 +1703,6 @@ func Test_TransactionTimeout_AutoCheckpointDisabled(t *testing.T) {
 // place if a transaction times out. See Test_TransactionTimeout_AutoCheckpointDisabled
 // for why the test repeatedly times out transactions.
 func Test_TransactionTimeout_HooksRetained(t *testing.T) {
-	t.Skip("hooks are lost when database/sql replaces the read-write connection")
-
 	db, path := mustCreateOnDiskDatabaseWAL()
 	defer db.Close()
 	defer fsutil.Remove(path)
@@ -1723,6 +1724,101 @@ func Test_TransactionTimeout_HooksRetained(t *testing.T) {
 		if commits != 1 {
 			t.Fatalf("commit hook calls after %d timed-out transactions: got %d, want 1", i+1, commits)
 		}
+	}
+}
+
+// Test_ConnectionReplaced_SettingsRetained tests that everything set on the
+// read-write connection after the database is opened is also set on a
+// connection which replaces it.
+func Test_ConnectionReplaced_SettingsRetained(t *testing.T) {
+	db, path := mustCreateOnDiskDatabaseWAL()
+	defer db.Close()
+	defer fsutil.Remove(path)
+	mustExecute(db, "CREATE TABLE foo (id INTEGER PRIMARY KEY)")
+
+	var preupdates, updates, commits, rollbacks int
+	if err := db.RegisterPreUpdateHook(func(*command.CDCEvent) error {
+		preupdates++
+		return nil
+	}, nil, false); err != nil {
+		t.Fatalf("failed to register preupdate hook: %s", err)
+	}
+	if err := db.RegisterUpdateHook(func(*command.UpdateHookEvent) error {
+		updates++
+		return nil
+	}); err != nil {
+		t.Fatalf("failed to register update hook: %s", err)
+	}
+	if err := db.RegisterCommitHook(func() bool {
+		commits++
+		return true
+	}); err != nil {
+		t.Fatalf("failed to register commit hook: %s", err)
+	}
+	if err := db.RegisterRollbackHook(func() {
+		rollbacks++
+	}); err != nil {
+		t.Fatalf("failed to register rollback hook: %s", err)
+	}
+	if err := db.SetBusyTimeout(1234); err != nil {
+		t.Fatalf("failed to set busy timeout: %s", err)
+	}
+	if err := db.SetSynchronousMode(SynchronousFull); err != nil {
+		t.Fatalf("failed to set synchronous mode: %s", err)
+	}
+
+	check := func(wantHooks int) {
+		t.Helper()
+		preupdates, updates, commits, rollbacks = 0, 0, 0, 0
+		mustExecute(db, "INSERT INTO foo VALUES (NULL)")
+		mustExecute(db, "BEGIN; INSERT INTO foo VALUES (NULL); ROLLBACK")
+		if preupdates != 2*wantHooks || updates != 2*wantHooks || commits != wantHooks || rollbacks != wantHooks {
+			t.Fatalf("hook calls: preupdates=%d, updates=%d, commits=%d, rollbacks=%d",
+				preupdates, updates, commits, rollbacks)
+		}
+		if ms, err := db.RWBusyTimeout(); err != nil || ms != 1234 {
+			t.Fatalf("busy timeout: got %d, error %v, want 1234", ms, err)
+		}
+		if mode, err := db.GetSynchronousMode(); err != nil || mode != SynchronousFull {
+			t.Fatalf("synchronous mode: got %s, error %v, want %s", mode, err, SynchronousFull)
+		}
+		if n, err := db.GetCheckpointing(); err != nil || n != 0 {
+			t.Fatalf("autocheckpointing: got %d, error %v, want 0", n, err)
+		}
+	}
+	check(1)
+	mustReplaceRWConnection(t, db)
+	check(1)
+
+	// Removing hooks must also survive replacement.
+	if err := db.RegisterPreUpdateHook(nil, nil, false); err != nil {
+		t.Fatalf("failed to remove preupdate hook: %s", err)
+	}
+	if err := db.RegisterUpdateHook(nil); err != nil {
+		t.Fatalf("failed to remove update hook: %s", err)
+	}
+	if err := db.RegisterCommitHook(nil); err != nil {
+		t.Fatalf("failed to remove commit hook: %s", err)
+	}
+	if err := db.RegisterRollbackHook(nil); err != nil {
+		t.Fatalf("failed to remove rollback hook: %s", err)
+	}
+	mustReplaceRWConnection(t, db)
+	check(0)
+}
+
+// mustReplaceRWConnection makes database/sql discard the read-write connection,
+// as it does when the context of a transaction is canceled, so that the next
+// use of the database opens a replacement.
+func mustReplaceRWConnection(t *testing.T, db *DB) {
+	t.Helper()
+	conn, err := db.rwDB.Conn(context.Background())
+	if err != nil {
+		t.Fatalf("failed to get read-write connection: %s", err)
+	}
+	defer conn.Close()
+	if err := conn.Raw(func(any) error { return driver.ErrBadConn }); !errors.Is(err, driver.ErrBadConn) {
+		t.Fatalf("failed to discard read-write connection: %v", err)
 	}
 }
 

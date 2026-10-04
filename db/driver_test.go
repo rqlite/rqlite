@@ -3,8 +3,6 @@ package db
 import (
 	"context"
 	"database/sql"
-	"fmt"
-	"sync/atomic"
 	"testing"
 
 	"github.com/rqlite/rqlite/v10/db/querylog"
@@ -15,9 +13,6 @@ func Test_DefaultDriver(t *testing.T) {
 	d := DefaultDriver()
 	if d == nil {
 		t.Fatalf("DefaultDriver returned nil")
-	}
-	if d.Name() != defaultDriverName {
-		t.Fatalf("DefaultDriver returned incorrect name: %s", d.Name())
 	}
 
 	// Call it again, make sure it doesn't panic.
@@ -79,9 +74,6 @@ func Test_CheckpointDriver(t *testing.T) {
 	if d == nil {
 		t.Fatalf("CheckpointDriver returned nil")
 	}
-	if d.Name() != chkDriverName {
-		t.Fatalf("CheckpointDriver returned incorrect name: %s", d.Name())
-	}
 
 	// Call it again, make sure it doesn't panic.
 	d = CheckpointDriver()
@@ -108,14 +100,10 @@ func Test_CheckpointDriver(t *testing.T) {
 }
 
 func Test_NewDriver(t *testing.T) {
-	name := "test-driver"
 	extensions := []string{"test1", "test2"}
-	d := NewDriver(name, extensions, CnkOnCloseModeEnabled)
+	d := NewDriver(extensions, CnkOnCloseModeEnabled)
 	if d == nil {
 		t.Fatalf("NewDriver returned nil")
-	}
-	if d.Name() != name {
-		t.Fatalf("NewDriver returned incorrect name: %s", d.Name())
 	}
 	if len(d.Extensions()) != 2 {
 		t.Fatalf("NewDriver returned incorrect extensions: %v", d.Extensions())
@@ -130,45 +118,35 @@ func Test_NewDriver(t *testing.T) {
 // control over checkpointing, and database/sql is free to open a new
 // connection at any time.
 func Test_Drivers_AutoCheckpointDisabled(t *testing.T) {
-	for _, d := range []*Driver{
-		DefaultDriver(),
-		CheckpointDriver(),
-		ForeignKeyDriver(),
-		NewDriver(testDriverConfigName(), nil, CnkOnCloseModeEnabled),
+	for name, d := range map[string]*Driver{
+		"default":     DefaultDriver(),
+		"checkpoint":  CheckpointDriver(),
+		"foreign key": ForeignKeyDriver(),
+		"new":         NewDriver(nil, CnkOnCloseModeEnabled),
 	} {
 		path := mustTempPath()
 		defer fsutil.RemoveAll(path)
 		for _, readOnly := range []bool{ModeReadWrite, ModeReadOnly} {
-			db, err := sql.Open(d.Name(), MakeDSN(path, readOnly, false, true))
-			if err != nil {
-				t.Fatalf("driver %s: failed to open database: %s", d.Name(), err)
-			}
+			db := sql.OpenDB(d.connector(MakeDSN(path, readOnly, false, true)))
 			defer db.Close()
 
 			// Hold each connection open so the pool must create a new one each time.
 			for i := 0; i < 3; i++ {
 				conn, err := db.Conn(context.Background())
 				if err != nil {
-					t.Fatalf("driver %s: failed to get connection: %s", d.Name(), err)
+					t.Fatalf("driver %s: failed to get connection: %s", name, err)
 				}
 				defer conn.Close()
 				var n int
 				if err := conn.QueryRowContext(context.Background(), "PRAGMA wal_autocheckpoint").Scan(&n); err != nil {
-					t.Fatalf("driver %s: failed to read autocheckpoint setting: %s", d.Name(), err)
+					t.Fatalf("driver %s: failed to read autocheckpoint setting: %s", name, err)
 				}
 				if n != 0 {
-					t.Errorf("driver %s, read-only %v, connection %d: autocheckpoint is %d, want 0", d.Name(), readOnly, i, n)
+					t.Errorf("driver %s, read-only %v, connection %d: autocheckpoint is %d, want 0", name, readOnly, i, n)
 				}
 			}
 		}
 	}
-}
-
-// A local counter for generating unique driver names.
-var driverTestSeq atomic.Int64
-
-func testDriverConfigName() string {
-	return fmt.Sprintf("test-driver-config-%d", driverTestSeq.Add(1))
 }
 
 // Verifies that a DriverConfig with a QueryLogger does not interfere with
@@ -176,7 +154,7 @@ func testDriverConfigName() string {
 func Test_NewDriverFromConfig_QueryLogOnly(t *testing.T) {
 	ql := querylog.New(querylog.DefaultConfig())
 
-	d := NewDriverFromConfig(testDriverConfigName(), &DriverConfig{
+	d := NewDriverFromConfig(&DriverConfig{
 		ChkOnClose:  CnkOnCloseModeDisabled,
 		QueryLogger: ql,
 	})
@@ -204,7 +182,7 @@ func Test_NewDriverFromConfig_QueryLogOnly(t *testing.T) {
 // Verifies that a DriverConfig with nil
 // QueryLogger opens and operates normally without tracing.
 func Test_NewDriverFromConfig_NoQueryLog(t *testing.T) {
-	d := NewDriverFromConfig(testDriverConfigName(), &DriverConfig{
+	d := NewDriverFromConfig(&DriverConfig{
 		ChkOnClose:  CnkOnCloseModeDisabled,
 		QueryLogger: nil,
 	})
@@ -227,7 +205,7 @@ func Test_NewDriverFromConfig_NoQueryLog(t *testing.T) {
 // DriverConfig are reflected on the returned Driver struct.
 func Test_DriverConfig_ExtensionsFields(t *testing.T) {
 	exts := []string{"/tmp/ext1.so", "/tmp/ext2.so"}
-	d := NewDriverFromConfig(testDriverConfigName(), &DriverConfig{
+	d := NewDriverFromConfig(&DriverConfig{
 		Extensions: exts,
 		ChkOnClose: CnkOnCloseModeDisabled,
 	})

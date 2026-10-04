@@ -793,10 +793,7 @@ func (s *Store) Open() (retErr error) {
 			ChkOnClose:  sql.CnkOnCloseModeDisabled,
 			QueryLogger: s.dbConf.QueryLogger,
 		}
-		s.dbDrv = sql.NewDriverFromConfig(
-			random.StringPattern("rqlite-configured-xxxx-xxxx-xxxx"),
-			&cfg,
-		)
+		s.dbDrv = sql.NewDriverFromConfig(&cfg)
 	}
 
 	s.db, err = createDBOnDisk(s.dbPath, s.dbDrv, removeDBFiles, s.dbConf.FKConstraints, s.MaxReadOnlyConns)

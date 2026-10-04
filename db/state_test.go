@@ -400,11 +400,8 @@ func Test_IsValidSQLiteCompressedOnDisk(t *testing.T) {
 	defer fsutil.Remove(path)
 
 	dsn := fmt.Sprintf("file:%s", path)
-	db, err := sql.Open(defaultDriverName, dsn)
-	if err != nil {
-		t.Fatalf("failed to create SQLite database: %s", err.Error())
-	}
-	_, err = db.Exec("CREATE TABLE foo (name TEXT)")
+	db := sql.OpenDB(DefaultDriver().connector(dsn))
+	_, err := db.Exec("CREATE TABLE foo (name TEXT)")
 	if err != nil {
 		t.Fatalf("failed to create table: %s", err.Error())
 	}
