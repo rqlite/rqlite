@@ -1673,19 +1673,38 @@ func Test_DBStats_PragmaFields(t *testing.T) {
 	}
 }
 
-// Test_TransactionTimeout_WriterConnectionReplaced shows that a transaction
-// which times out can cause database/sql to discard the single read-write
-// connection. The replacement connection has autocheckpointing re-enabled and
-// has lost any registered hooks.
+// Test_TransactionTimeout_AutoCheckpointDisabled tests that automatic
+// checkpointing remains disabled if a transaction times out, since that can
+// cause database/sql to discard the single read-write connection and open a
+// replacement.
 //
 // database/sql only discards the connection if its goroutine watching the
 // transaction's context wins a race with DB closing the connection, so the
-// test repeatedly times out transactions until that happens.
-func Test_TransactionTimeout_WriterConnectionReplaced(t *testing.T) {
-	t.Skip()
+// test repeatedly times out transactions to make that happen.
+func Test_TransactionTimeout_AutoCheckpointDisabled(t *testing.T) {
 	db, path := mustCreateOnDiskDatabaseWAL()
 	defer db.Close()
-	defer fsutil.Remove(path)
+	defer os.Remove(path)
+	mustExecute(db, "CREATE TABLE foo (id INTEGER PRIMARY KEY)")
+
+	req := timeoutTransactionRequest()
+	for i := 0; i < 5000; i++ {
+		db.Execute(req, false)
+		if n, err := db.GetCheckpointing(); err != nil || n != 0 {
+			t.Fatalf("autocheckpointing after %d timed-out transactions: got %d, error %v, want 0", i+1, n, err)
+		}
+	}
+}
+
+// Test_TransactionTimeout_HooksRetained tests that registered hooks remain in
+// place if a transaction times out. See Test_TransactionTimeout_AutoCheckpointDisabled
+// for why the test repeatedly times out transactions.
+func Test_TransactionTimeout_HooksRetained(t *testing.T) {
+	t.Skip("hooks are lost when database/sql replaces the read-write connection")
+
+	db, path := mustCreateOnDiskDatabaseWAL()
+	defer db.Close()
+	defer os.Remove(path)
 	mustExecute(db, "CREATE TABLE foo (id INTEGER PRIMARY KEY)")
 
 	var commits int
@@ -1696,6 +1715,20 @@ func Test_TransactionTimeout_WriterConnectionReplaced(t *testing.T) {
 		t.Fatalf("failed to register commit hook: %s", err)
 	}
 
+	req := timeoutTransactionRequest()
+	for i := 0; i < 5000; i++ {
+		db.Execute(req, false)
+		commits = 0
+		mustExecute(db, "INSERT INTO foo VALUES (NULL)")
+		if commits != 1 {
+			t.Fatalf("commit hook calls after %d timed-out transactions: got %d, want 1", i+1, commits)
+		}
+	}
+}
+
+// timeoutTransactionRequest returns a transaction which will not complete
+// before its timeout expires.
+func timeoutTransactionRequest() *command.Request {
 	req := &command.Request{
 		Transaction: true,
 		DbTimeout:   int64(20 * time.Microsecond),
@@ -1704,17 +1737,5 @@ func Test_TransactionTimeout_WriterConnectionReplaced(t *testing.T) {
 	for i := range req.Statements {
 		req.Statements[i] = &command.Statement{Sql: "INSERT INTO foo VALUES (NULL)"}
 	}
-	for i := 0; i < 5000; i++ {
-		db.Execute(req, false)
-		if n, err := db.GetCheckpointing(); err != nil || n != 0 {
-			t.Errorf("autocheckpointing after %d timed-out transactions: got %d, error %v, want 0", i+1, n, err)
-			break
-		}
-	}
-
-	commits = 0
-	mustExecute(db, "INSERT INTO foo VALUES (NULL)")
-	if commits != 1 {
-		t.Errorf("commit hook calls after timed-out transactions: got %d, want 1", commits)
-	}
+	return req
 }
