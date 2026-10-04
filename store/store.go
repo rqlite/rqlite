@@ -337,7 +337,7 @@ type Store struct {
 	checkpointer Checkpointer
 
 	cdcMu         sync.RWMutex
-	cdcStreamer   *sql.CDCStreamer
+	cdcCollator   *sql.CDCCollator
 	cdcOutCh      chan<- *proto.CDCIndexedEventGroup
 	cdcIDsOnly    bool
 	cdcTableRe    *regexp.Regexp
@@ -2113,10 +2113,8 @@ func (s *Store) DisableCDC() error {
 			return fmt.Errorf("failed to unregister rollback hook: %w", err)
 		}
 	}
-	if s.cdcStreamer != nil {
-		s.cdcStreamer.Close()
-	}
-	s.cdcStreamer = nil
+
+	s.cdcCollator = nil
 	s.cdcRegistered.Unset()
 	s.cdcEnabled.Unset()
 	return nil
@@ -2339,10 +2337,7 @@ func (s *Store) remove(id string) error {
 func (s *Store) cleanupCDC() error {
 	s.cdcMu.Lock()
 	defer s.cdcMu.Unlock()
-	if s.cdcStreamer != nil {
-		s.cdcStreamer.Close()
-	}
-	s.cdcStreamer = nil
+	s.cdcCollator = nil
 	if err := s.db.RegisterPreUpdateHook(nil, nil, false); err != nil {
 		return fmt.Errorf("failed to unregister preupdate hook: %w", err)
 	}
@@ -2541,14 +2536,15 @@ func (s *Store) fsmApply(l *raft.Log) (e any) {
 		s.logger.Printf("first log applied since node %s started, log at index %d", s.raftID, l.Index)
 	}
 
+	var cdcEvents []*proto.CDCEvent
 	cmd, mutated, r, err := func() (*proto.Command, bool, any, error) {
 		// Reset CDC streamer with the current log index before processing if CDC is enabled
 		if s.cdcEnabled.Is() {
 			s.cdcMu.RLock()
 			defer s.cdcMu.RUnlock()
-			if s.cdcStreamer == nil {
+			if s.cdcCollator == nil {
 				var err error
-				s.cdcStreamer, err = sql.NewCDCStreamer(s.cdcOutCh, s.db)
+				s.cdcCollator, err = sql.NewCDCCollator(s.db)
 				if err != nil {
 					s.logger.Fatalf("failed to create CDC streamer: %s", err)
 				}
@@ -2557,19 +2553,30 @@ func (s *Store) fsmApply(l *raft.Log) (e any) {
 			// If CDC is enabled but not yet activated, do so now. By doing it here we keep
 			// CDC registration in a single place in the code.
 			if s.cdcRegistered.IsNot() {
-				if err := s.db.RegisterPreUpdateHook(s.cdcStreamer.PreupdateHook, s.cdcTableRe, s.cdcIDsOnly); err != nil {
+				if err := s.db.RegisterPreUpdateHook(s.cdcCollator.PreupdateHook, s.cdcTableRe, s.cdcIDsOnly); err != nil {
 					s.logger.Fatalf("failed to register preupdate hook for CDC: %s", err)
 				}
-				if err := s.db.RegisterCommitHook(s.cdcStreamer.CommitHook); err != nil {
+				if err := s.db.RegisterCommitHook(s.cdcCollator.CommitHook); err != nil {
 					s.logger.Fatalf("failed to register commit hook for CDC: %s", err)
 				}
-				if err := s.db.RegisterRollbackHook(s.cdcStreamer.RollbackHook); err != nil {
+				if err := s.db.RegisterRollbackHook(s.cdcCollator.RollbackHook); err != nil {
 					s.logger.Fatalf("failed to register rollback hook for CDC: %s", err)
 				}
 				s.cdcRegistered.Set()
+				s.cdcCollator.Reset(&cdcEvents)
 			}
-			s.cdcStreamer.Reset(l.Index)
 		}
+		defer func() {
+			if s.cdcCollator == nil {
+				return
+			}
+			cdcGroup := &proto.CDCIndexedEventGroup{
+				Index:  l.Index,
+				Events: cdcEvents,
+			}
+			s.cdcOutCh <- cdcGroup
+			s.cdcCollator.Reset(nil)
+		}()
 		return s.cmdProc.Process(l.Data, s.db)
 	}()
 	if err != nil {
