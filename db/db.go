@@ -287,14 +287,9 @@ func OpenWithDriver(drv *Driver, dbPath string, fkEnabled, wal bool) (retDB *DB,
 
 	// Set connection pool behaviour.
 	rwDB.SetConnMaxLifetime(0)
-	rwDB.SetMaxOpenConns(1) // Key to ensure a new connection doesn't enable checkpointing
+	rwDB.SetMaxOpenConns(1) // Serialize writes on a single connection.
 	roDB.SetConnMaxIdleTime(30 * time.Second)
 	roDB.SetConnMaxLifetime(0)
-
-	// Critical that rqlite has full control over the checkpointing process.
-	if _, err := rwDB.Exec("PRAGMA wal_autocheckpoint=0"); err != nil {
-		return nil, fmt.Errorf("disable autocheckpointing: %s", err.Error())
-	}
 
 	if err := rwDB.Ping(); err != nil {
 		return nil, fmt.Errorf("failed to ping on-disk database: %s", err.Error())
@@ -902,21 +897,6 @@ func (db *DB) CheckpointWithTimeout(mode CheckpointMode, dur time.Duration) (met
 		Pages: nPages,
 		Moved: nMoved,
 	}, nil
-}
-
-// DisableCheckpointing disables the automatic checkpointing that occurs when
-// the WAL reaches a certain size. This is key for full control of snapshotting.
-// and can be useful for testing.
-func (db *DB) DisableCheckpointing() error {
-	_, err := db.rwDB.Exec("PRAGMA wal_autocheckpoint=0")
-	return err
-}
-
-// EnableCheckpointing enables the automatic checkpointing that occurs when
-// the WAL reaches a certain size.
-func (db *DB) EnableCheckpointing() error {
-	_, err := db.rwDB.Exec("PRAGMA wal_autocheckpoint=1000")
-	return err
 }
 
 // GetCheckpointing returns the current checkpointing setting.

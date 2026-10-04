@@ -36,6 +36,10 @@ type DriverConfig struct {
 	// ChkOnClose controls whether SQLite checkpoints the WAL on connection close.
 	ChkOnClose CnkOnCloseMode
 
+	// ForeignKeys, if true, enables foreign key constraints on every new
+	// connection, regardless of any setting in the DSN.
+	ForeignKeys bool
+
 	// QueryLogger, if non-nil, installs query tracing on every new connection.
 	QueryLogger *querylog.QueryLogger
 }
@@ -104,17 +108,14 @@ func CheckpointDriver() *Driver {
 var fkRegisterOnce sync.Once
 
 // ForeignKeyDriver returns a driver that enables foreign key support
-// on every connection. It also enables no-check
+// on every connection. It can be called multiple times, but only registers
+// the SQLite3 driver once. This driver disables checkpoint on close for any
+// database in WAL mode.
 func ForeignKeyDriver() *Driver {
 	fkRegisterOnce.Do(func() {
-		sql.Register(foreignKeyDriverName, &sqlite3.SQLiteDriver{
-			ConnectHook: func(conn *sqlite3.SQLiteConn) error {
-				// Enable foreign key support via the SQLite PRAGMA
-				if _, err := conn.Exec("PRAGMA foreign_keys = ON", nil); err != nil {
-					return fmt.Errorf("cannot enable foreign keys: %w", err)
-				}
-				return nil
-			},
+		NewDriverFromConfig(foreignKeyDriverName, &DriverConfig{
+			ChkOnClose:  CnkOnCloseModeDisabled,
+			ForeignKeys: true,
 		})
 	})
 	return &Driver{
@@ -162,13 +163,30 @@ func (d *Driver) CheckpointOnCloseMode() CnkOnCloseMode {
 }
 
 // buildConnectHook composes a ConnectHook from cfg, chaining all requested
-// connection-level behaviors in order: checkpoint config, then query tracing.
+// connection-level behaviors in order: checkpoint config, foreign keys, then
+// query tracing.
+//
+// This driver unconditionally disables automatic checkpointing.
 func buildConnectHook(cfg *DriverConfig) func(conn *sqlite3.SQLiteConn) error {
 	return func(conn *sqlite3.SQLiteConn) error {
 		// Checkpoint-on-close configuration.
 		if cfg.ChkOnClose == CnkOnCloseModeDisabled {
 			if err := conn.DBConfigNoCkptOnClose(); err != nil {
 				return fmt.Errorf("cannot disable checkpoint on close: %w", err)
+			}
+		}
+
+		// It's critical that rqlite has full control over the checkpointing process
+		// so disable all auto-checkpoint. This doesn't return an error on a read-only
+		// connection, so an error here really is an issue.
+		if _, err := conn.Exec("PRAGMA wal_autocheckpoint=0", nil); err != nil {
+			return fmt.Errorf("failed to disable automatic checkpointing: %s", err)
+		}
+
+		// Foreign key constraints.
+		if cfg.ForeignKeys {
+			if _, err := conn.Exec("PRAGMA foreign_keys = ON", nil); err != nil {
+				return fmt.Errorf("cannot enable foreign keys: %w", err)
 			}
 		}
 
