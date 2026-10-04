@@ -19,11 +19,6 @@ func Test_StoreEnableCDC(t *testing.T) {
 		t.Fatalf("failed to open store: %v", err)
 	}
 
-	// Initially CDC should be nil
-	if s.cdcStreamer != nil {
-		t.Fatalf("expected CDC streamer to be nil initially")
-	}
-
 	// Create a channel for CDC events
 	ch := make(chan *proto.CDCIndexedEventGroup, 10)
 
@@ -190,4 +185,201 @@ func Test_StoreCDC_Events_Single(t *testing.T) {
 	case <-timeout:
 		t.Fatalf("timeout waiting for CDC INSERT event for table 'foo'")
 	}
+}
+
+// Test_StoreCDC_Events_Twice checks that the reset-lifecycle of the CDCCollator is handled properly
+// across two distinct changes to the database.
+func Test_StoreCDC_Events_Twice(t *testing.T) {
+	s, ln := mustNewStore(t)
+	defer ln.Close()
+
+	// Create a channel for CDC events.
+	cdcChannel := make(chan *proto.CDCIndexedEventGroup, 100)
+
+	if err := s.Open(); err != nil {
+		t.Fatalf("failed to open single-node store: %s", err.Error())
+	}
+	if err := s.Bootstrap(NewServer(s.ID(), s.Addr(), true)); err != nil {
+		t.Fatalf("failed to bootstrap single-node store: %s", err.Error())
+	}
+	defer s.Close(true)
+	_, err := s.WaitForLeader(10 * time.Second)
+	if err != nil {
+		t.Fatalf("Error waiting for leader: %s", err)
+	}
+
+	er := executeRequestFromString(`CREATE TABLE foo (id INTEGER NOT NULL PRIMARY KEY, name TEXT)`, false, false)
+	_, _, err = s.Execute(context.Background(), er)
+	if err != nil {
+		t.Fatalf("failed to execute INSERT on single node: %s", err.Error())
+	}
+
+	if err := s.EnableCDC(cdcChannel, nil, false); err != nil {
+		t.Fatalf("failed to enable CDC: %v", err)
+	}
+
+	timeout := time.After(5 * time.Second)
+
+	// Write first event.
+	er = executeRequestFromString(`INSERT INTO foo(id, name) VALUES(101, "alice")`, false, false)
+	_, _, err = s.Execute(context.Background(), er)
+	if err != nil {
+		t.Fatalf("failed to execute INSERT on single node: %s", err.Error())
+	}
+	select {
+	case events := <-cdcChannel:
+		if events == nil {
+			t.Fatalf("received nil CDC events")
+		}
+		if len(events.Events) != 1 {
+			t.Fatalf("expected 1 CDC event, got %d", len(events.Events))
+		}
+		ev := events.Events[0]
+
+		if ev.Table != "foo" {
+			t.Fatalf("expected table name to be 'foo', got %s", ev.Table)
+		}
+		if !slices.Equal(ev.ColumnNames, []string{"id", "name"}) {
+			t.Fatalf("expected column names to be [id name], got %v", ev.ColumnNames)
+		}
+		if ev.Op != proto.CDCEvent_INSERT {
+			t.Fatalf("expected CDC event operation to be INSERT, got %s", ev.Op)
+		}
+		if ev.NewRowId != 101 {
+			t.Fatalf("expected new row ID to be 101, got %d", ev.NewRowId)
+		}
+		if ev.NewRow.Values[0].GetI() != 101 {
+			t.Fatalf("expected new row ID value to be 1, got %d", ev.NewRow.Values[0].GetI())
+		}
+		if ev.NewRow.Values[1].GetS() != "alice" {
+			t.Fatalf("expected new row name value to be 'alice', got %s", ev.NewRow.Values[1].GetS())
+		}
+	case <-timeout:
+		t.Fatalf("timeout waiting for CDC INSERT event for table 'foo'")
+	}
+
+	// Write a second row.
+	er = executeRequestFromString(`INSERT INTO foo(id, name) VALUES(102, "bob")`, false, false)
+	_, _, err = s.Execute(context.Background(), er)
+	if err != nil {
+		t.Fatalf("failed to execute INSERT on single node: %s", err.Error())
+	}
+	select {
+	case events := <-cdcChannel:
+		if events == nil {
+			t.Fatalf("received nil CDC events")
+		}
+		if len(events.Events) != 1 {
+			t.Fatalf("expected 1 CDC event, got %d", len(events.Events))
+		}
+		ev := events.Events[0]
+
+		if ev.Table != "foo" {
+			t.Fatalf("expected table name to be 'foo', got %s", ev.Table)
+		}
+		if !slices.Equal(ev.ColumnNames, []string{"id", "name"}) {
+			t.Fatalf("expected column names to be [id name], got %v", ev.ColumnNames)
+		}
+		if ev.Op != proto.CDCEvent_INSERT {
+			t.Fatalf("expected CDC event operation to be INSERT, got %s", ev.Op)
+		}
+		if ev.NewRowId != 102 {
+			t.Fatalf("expected new row ID to be 101, got %d", ev.NewRowId)
+		}
+		if ev.NewRow.Values[0].GetI() != 102 {
+			t.Fatalf("expected new row ID value to be 1, got %d", ev.NewRow.Values[0].GetI())
+		}
+		if ev.NewRow.Values[1].GetS() != "bob" {
+			t.Fatalf("expected new row name value to be 'declan', got %s", ev.NewRow.Values[1].GetS())
+		}
+	case <-timeout:
+		t.Fatalf("timeout waiting for CDC INSERT event for table 'foo'")
+	}
+}
+
+// Test_StoreCDC_Events_MultiStatementIndex ensures that a bulk request with
+// multiple statements emits the correct group of CDC events.
+//
+// The Store resets the CDC streamer with the Raft index once per log entry,
+// then processes every statement in that entry. A non-transactional request
+// with two statements autocommits twice, so SQLite fires the commit hook
+// twice during that single apply. Every CDC group the Store emits for the
+// request must be tagged with the request's Raft index, because the CDC
+// service uses that index to deduplicate and to advance its high watermark.
+func Test_StoreCDC_Events_MultiStatementIndex(t *testing.T) {
+	s, ln := mustNewStore(t)
+	defer ln.Close()
+
+	cdcChannel := make(chan *proto.CDCIndexedEventGroup, 100)
+
+	if err := s.Open(); err != nil {
+		t.Fatalf("failed to open single-node store: %s", err.Error())
+	}
+	if err := s.Bootstrap(NewServer(s.ID(), s.Addr(), true)); err != nil {
+		t.Fatalf("failed to bootstrap single-node store: %s", err.Error())
+	}
+	defer s.Close(true)
+	if _, err := s.WaitForLeader(10 * time.Second); err != nil {
+		t.Fatalf("Error waiting for leader: %s", err)
+	}
+
+	er := executeRequestFromString(`CREATE TABLE foo (id INTEGER NOT NULL PRIMARY KEY)`, false, false)
+	if _, _, err := s.Execute(context.Background(), er); err != nil {
+		t.Fatalf("failed to create table: %s", err.Error())
+	}
+
+	if err := s.EnableCDC(cdcChannel, nil, false); err != nil {
+		t.Fatalf("failed to enable CDC: %v", err)
+	}
+
+	// One bulk request, no transaction, so each committed seperately.
+	er = executeRequestFromStrings([]string{
+		`INSERT INTO foo(id) VALUES(1)`,
+		`INSERT INTO foo(id) VALUES(2)`,
+	}, false, false)
+	results, raftIndex, err := s.Execute(context.Background(), er)
+	if err != nil {
+		t.Fatalf("failed to execute inserts: %s", err.Error())
+	}
+	for _, r := range results {
+		if r.GetError() != "" {
+			t.Fatalf("unexpected statement error: %s", r.GetError())
+		}
+	}
+
+	// Collect every group emitted for this request, until both inserted
+	// rows have been seen. The test does not care whether they arrive in
+	// one group or two, only that each group carries the request's index.
+	var groups []*proto.CDCIndexedEventGroup
+	numEvents := 0
+	timeout := time.After(5 * time.Second)
+	for numEvents < 2 {
+		select {
+		case g := <-cdcChannel:
+			if g == nil {
+				t.Fatalf("received nil CDC event group")
+			}
+			groups = append(groups, g)
+			numEvents += len(g.Events)
+		case <-timeout:
+			t.Fatalf("timeout waiting for CDC events, got %d of 2 events in %d groups",
+				numEvents, len(groups))
+		}
+	}
+
+	for i, g := range groups {
+		if g.Index != raftIndex {
+			t.Fatalf("group %d of %d: expected Raft index %d, got %d (rows %v)",
+				i+1, len(groups), raftIndex, g.Index, rowIDs(g))
+		}
+	}
+}
+
+// rowIDs returns the new row IDs in a CDC group, for test diagnostics.
+func rowIDs(g *proto.CDCIndexedEventGroup) []int64 {
+	ids := make([]int64, 0, len(g.Events))
+	for _, ev := range g.Events {
+		ids = append(ids, ev.NewRowId)
+	}
+	return ids
 }

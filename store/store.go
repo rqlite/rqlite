@@ -337,7 +337,7 @@ type Store struct {
 	checkpointer Checkpointer
 
 	cdcMu         sync.RWMutex
-	cdcStreamer   *sql.CDCStreamer
+	cdcCollator   *sql.CDCCollator
 	cdcOutCh      chan<- *proto.CDCIndexedEventGroup
 	cdcIDsOnly    bool
 	cdcTableRe    *regexp.Regexp
@@ -804,6 +804,12 @@ func (s *Store) Open() (retErr error) {
 		return fmt.Errorf("failed to create on-disk database: %s", err)
 	}
 	s.checkpointer = s.db
+
+	// Prep the CDC Collator.
+	s.cdcCollator, err = sql.NewCDCCollator(s.db)
+	if err != nil {
+		return fmt.Errorf("failed to create CDC streamer: %s", err)
+	}
 
 	// Clean up any files from aborted operations. This tries to catch the case where scratch files
 	// were created in the Raft directory, not cleaned up, and then the node was restarted with an
@@ -2094,8 +2100,7 @@ func (s *Store) EnableCDC(out chan<- *proto.CDCIndexedEventGroup, tableRe *regex
 	return nil
 }
 
-// DisableCDC disables Change Data Capture on this Store. Disabling CDC will
-// close the output channel provided when enabling CDC.
+// DisableCDC disables Change Data Capture on this Store.
 //
 // If CDC is not enabled, this is a no-op.
 func (s *Store) DisableCDC() error {
@@ -2113,11 +2118,8 @@ func (s *Store) DisableCDC() error {
 			return fmt.Errorf("failed to unregister rollback hook: %w", err)
 		}
 	}
-	if s.cdcStreamer != nil {
-		s.cdcStreamer.Close()
-	}
-	s.cdcStreamer = nil
 	s.cdcRegistered.Unset()
+
 	s.cdcEnabled.Unset()
 	return nil
 }
@@ -2337,12 +2339,6 @@ func (s *Store) remove(id string) error {
 }
 
 func (s *Store) cleanupCDC() error {
-	s.cdcMu.Lock()
-	defer s.cdcMu.Unlock()
-	if s.cdcStreamer != nil {
-		s.cdcStreamer.Close()
-	}
-	s.cdcStreamer = nil
 	if err := s.db.RegisterPreUpdateHook(nil, nil, false); err != nil {
 		return fmt.Errorf("failed to unregister preupdate hook: %w", err)
 	}
@@ -2352,6 +2348,11 @@ func (s *Store) cleanupCDC() error {
 	if err := s.db.RegisterRollbackHook(nil); err != nil {
 		return fmt.Errorf("failed to unregister rollback hook: %w", err)
 	}
+	s.cdcRegistered.Unset()
+
+	s.cdcMu.Lock()
+	defer s.cdcMu.Unlock()
+	s.cdcCollator = nil
 	return nil
 }
 
@@ -2542,34 +2543,42 @@ func (s *Store) fsmApply(l *raft.Log) (e any) {
 	}
 
 	cmd, mutated, r, err := func() (*proto.Command, bool, any, error) {
-		// Reset CDC streamer with the current log index before processing if CDC is enabled
+		// CDC enabled? Prep collection of events.
 		if s.cdcEnabled.Is() {
 			s.cdcMu.RLock()
 			defer s.cdcMu.RUnlock()
-			if s.cdcStreamer == nil {
-				var err error
-				s.cdcStreamer, err = sql.NewCDCStreamer(s.cdcOutCh, s.db)
-				if err != nil {
-					s.logger.Fatalf("failed to create CDC streamer: %s", err)
-				}
-			}
 
 			// If CDC is enabled but not yet activated, do so now. By doing it here we keep
 			// CDC registration in a single place in the code.
 			if s.cdcRegistered.IsNot() {
-				if err := s.db.RegisterPreUpdateHook(s.cdcStreamer.PreupdateHook, s.cdcTableRe, s.cdcIDsOnly); err != nil {
+				if err := s.db.RegisterPreUpdateHook(s.cdcCollator.PreupdateHook, s.cdcTableRe, s.cdcIDsOnly); err != nil {
 					s.logger.Fatalf("failed to register preupdate hook for CDC: %s", err)
 				}
-				if err := s.db.RegisterCommitHook(s.cdcStreamer.CommitHook); err != nil {
+				if err := s.db.RegisterCommitHook(s.cdcCollator.CommitHook); err != nil {
 					s.logger.Fatalf("failed to register commit hook for CDC: %s", err)
 				}
-				if err := s.db.RegisterRollbackHook(s.cdcStreamer.RollbackHook); err != nil {
+				if err := s.db.RegisterRollbackHook(s.cdcCollator.RollbackHook); err != nil {
 					s.logger.Fatalf("failed to register rollback hook for CDC: %s", err)
 				}
 				s.cdcRegistered.Set()
 			}
-			s.cdcStreamer.Reset(l.Index)
+
+			// Prime collection of events.
+			s.cdcCollator.Reset()
 		}
+		defer func() {
+			s.cdcMu.RLock()
+			defer s.cdcMu.RUnlock()
+			if s.cdcCollator == nil {
+				return
+			}
+			if events := s.cdcCollator.Events(); len(events) > 0 {
+				s.cdcOutCh <- &proto.CDCIndexedEventGroup{
+					Index:  l.Index,
+					Events: events,
+				}
+			}
+		}()
 		return s.cmdProc.Process(l.Data, s.db)
 	}()
 	if err != nil {
