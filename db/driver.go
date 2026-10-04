@@ -36,6 +36,10 @@ type DriverConfig struct {
 	// ChkOnClose controls whether SQLite checkpoints the WAL on connection close.
 	ChkOnClose CnkOnCloseMode
 
+	// ForeignKeys, if true, enables foreign key constraints on every new
+	// connection, regardless of any setting in the DSN.
+	ForeignKeys bool
+
 	// QueryLogger, if non-nil, installs query tracing on every new connection.
 	QueryLogger *querylog.QueryLogger
 }
@@ -104,21 +108,14 @@ func CheckpointDriver() *Driver {
 var fkRegisterOnce sync.Once
 
 // ForeignKeyDriver returns a driver that enables foreign key support
-// on every connection. It also enables no-check
+// on every connection. It can be called multiple times, but only registers
+// the SQLite3 driver once. This driver disables checkpoint on close for any
+// database in WAL mode.
 func ForeignKeyDriver() *Driver {
 	fkRegisterOnce.Do(func() {
-		sql.Register(foreignKeyDriverName, &sqlite3.SQLiteDriver{
-			ConnectHook: func(conn *sqlite3.SQLiteConn) error {
-				// Enable foreign key support via the SQLite PRAGMA
-				if _, err := conn.Exec("PRAGMA foreign_keys = ON", nil); err != nil {
-					return fmt.Errorf("cannot enable foreign keys: %w", err)
-				}
-				// As with all drivers, rqlite must have full control over checkpointing.
-				if _, err := conn.Exec("PRAGMA wal_autocheckpoint=0", nil); err != nil {
-					return fmt.Errorf("failed to disable automatic checkpointing: %s", err)
-				}
-				return nil
-			},
+		NewDriverFromConfig(foreignKeyDriverName, &DriverConfig{
+			ChkOnClose:  CnkOnCloseModeDisabled,
+			ForeignKeys: true,
 		})
 	})
 	return &Driver{
@@ -166,7 +163,8 @@ func (d *Driver) CheckpointOnCloseMode() CnkOnCloseMode {
 }
 
 // buildConnectHook composes a ConnectHook from cfg, chaining all requested
-// connection-level behaviors in order: checkpoint config, then query tracing.
+// connection-level behaviors in order: checkpoint config, foreign keys, then
+// query tracing.
 //
 // This driver unconditionally disables automatic checkpointing.
 func buildConnectHook(cfg *DriverConfig) func(conn *sqlite3.SQLiteConn) error {
@@ -183,6 +181,13 @@ func buildConnectHook(cfg *DriverConfig) func(conn *sqlite3.SQLiteConn) error {
 		// connection, so an error here really is an issue.
 		if _, err := conn.Exec("PRAGMA wal_autocheckpoint=0", nil); err != nil {
 			return fmt.Errorf("failed to disable automatic checkpointing: %s", err)
+		}
+
+		// Foreign key constraints.
+		if cfg.ForeignKeys {
+			if _, err := conn.Exec("PRAGMA foreign_keys = ON", nil); err != nil {
+				return fmt.Errorf("cannot enable foreign keys: %w", err)
+			}
 		}
 
 		// Query tracing.
