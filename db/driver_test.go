@@ -1,6 +1,8 @@
 package db
 
 import (
+	"context"
+	"database/sql"
 	"fmt"
 	"sync/atomic"
 	"testing"
@@ -120,6 +122,45 @@ func Test_NewDriver(t *testing.T) {
 	}
 	if d.CheckpointOnCloseMode() != CnkOnCloseModeEnabled {
 		t.Fatalf("NewDriver returned incorrect checkpoint mode: %v", d.CheckpointOnCloseMode())
+	}
+}
+
+// Test_Drivers_AutoCheckpointDisabled tests that every connection opened by
+// every driver has automatic checkpointing disabled. rqlite must have full
+// control over checkpointing, and database/sql is free to open a new
+// connection at any time.
+func Test_Drivers_AutoCheckpointDisabled(t *testing.T) {
+	for _, d := range []*Driver{
+		DefaultDriver(),
+		CheckpointDriver(),
+		ForeignKeyDriver(),
+		NewDriver(testDriverConfigName(), nil, CnkOnCloseModeEnabled),
+	} {
+		path := mustTempPath()
+		defer fsutil.RemoveAll(path)
+		for _, readOnly := range []bool{ModeReadWrite, ModeReadOnly} {
+			db, err := sql.Open(d.Name(), MakeDSN(path, readOnly, false, true))
+			if err != nil {
+				t.Fatalf("driver %s: failed to open database: %s", d.Name(), err)
+			}
+			defer db.Close()
+
+			// Hold each connection open so the pool must create a new one each time.
+			for i := 0; i < 3; i++ {
+				conn, err := db.Conn(context.Background())
+				if err != nil {
+					t.Fatalf("driver %s: failed to get connection: %s", d.Name(), err)
+				}
+				defer conn.Close()
+				var n int
+				if err := conn.QueryRowContext(context.Background(), "PRAGMA wal_autocheckpoint").Scan(&n); err != nil {
+					t.Fatalf("driver %s: failed to read autocheckpoint setting: %s", d.Name(), err)
+				}
+				if n != 0 {
+					t.Errorf("driver %s, read-only %v, connection %d: autocheckpoint is %d, want 0", d.Name(), readOnly, i, n)
+				}
+			}
+		}
 	}
 }
 
