@@ -2536,7 +2536,6 @@ func (s *Store) fsmApply(l *raft.Log) (e any) {
 		s.logger.Printf("first log applied since node %s started, log at index %d", s.raftID, l.Index)
 	}
 
-	var cdcEvents []*proto.CDCEvent
 	cmd, mutated, r, err := func() (*proto.Command, bool, any, error) {
 		// Reset CDC streamer with the current log index before processing if CDC is enabled
 		if s.cdcEnabled.Is() {
@@ -2566,18 +2565,18 @@ func (s *Store) fsmApply(l *raft.Log) (e any) {
 			}
 
 			// Prime collection of events.
-			s.cdcCollator.Reset(&cdcEvents)
+			s.cdcCollator.Reset()
 		}
 		defer func() {
 			if s.cdcCollator == nil {
 				return
 			}
-			cdcGroup := &proto.CDCIndexedEventGroup{
-				Index:  l.Index,
-				Events: cdcEvents,
+			if events := s.cdcCollator.Events(); len(events) > 0 {
+				s.cdcOutCh <- &proto.CDCIndexedEventGroup{
+					Index:  l.Index,
+					Events: events,
+				}
 			}
-			s.cdcOutCh <- cdcGroup
-			s.cdcCollator.Reset(nil)
 		}()
 		return s.cmdProc.Process(l.Data, s.db)
 	}()

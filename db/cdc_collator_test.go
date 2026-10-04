@@ -12,7 +12,7 @@ import (
 )
 
 // Test_CDCCollator_New verifies that a collator requires a column-name
-// provider and starts detached with nothing pending.
+// provider and starts with no events collected.
 func Test_CDCCollator_New(t *testing.T) {
 	if _, err := NewCDCCollator(nil); err == nil {
 		t.Fatal("expected error for nil ColumnsNameProvider")
@@ -24,21 +24,20 @@ func Test_CDCCollator_New(t *testing.T) {
 	if c == nil {
 		t.Fatal("expected collator to be created, got nil")
 	}
-	if c.Len() != 0 {
-		t.Fatalf("expected no pending events, got %d", c.Len())
+	if c.Events() != nil {
+		t.Fatalf("expected no events, got %d", len(c.Events()))
 	}
 }
 
 // Test_CDCCollator_CommitOne verifies that a single event committed in one
-// transaction lands in the caller's slice with its column names resolved.
+// transaction is returned by Events with its column names resolved.
 func Test_CDCCollator_CommitOne(t *testing.T) {
 	np := &mockColumnNamesProvider{
 		columns: map[string][]string{"test_table": {"id", "name", "value"}},
 	}
 	c := mustNewCDCCollator(t, np)
 
-	var events []*command.CDCEvent
-	c.Reset(&events)
+	c.Reset()
 	change := &command.CDCEvent{
 		Table:    "test_table",
 		Op:       command.CDCEvent_INSERT,
@@ -48,27 +47,21 @@ func Test_CDCCollator_CommitOne(t *testing.T) {
 	if err := c.PreupdateHook(change); err != nil {
 		t.Fatalf("expected no error, got %v", err)
 	}
-	if c.Len() != 1 {
-		t.Fatalf("expected 1 pending event, got %d", c.Len())
-	}
-	if len(events) != 0 {
+	if len(c.Events()) != 0 {
 		t.Fatal("event reached the caller before commit")
 	}
 
 	if !c.CommitHook() {
 		t.Fatal("commit hook must always allow the transaction to proceed")
 	}
-	if c.Len() != 0 {
-		t.Fatalf("expected no pending events after commit, got %d", c.Len())
+	if len(c.Events()) != 1 {
+		t.Fatalf("expected 1 event, got %d", len(c.Events()))
 	}
-	if len(events) != 1 {
-		t.Fatalf("expected 1 event, got %d", len(events))
+	if !slices.Equal(c.Events()[0].ColumnNames, []string{"id", "name", "value"}) {
+		t.Fatalf("expected column names [id name value], got %v", c.Events()[0].ColumnNames)
 	}
-	if !slices.Equal(events[0].ColumnNames, []string{"id", "name", "value"}) {
-		t.Fatalf("expected column names [id name value], got %v", events[0].ColumnNames)
-	}
-	if !reflect.DeepEqual(change, events[0]) {
-		t.Fatalf("collected event does not match: expected %v, got %v", change, events[0])
+	if !reflect.DeepEqual(change, c.Events()[0]) {
+		t.Fatalf("collected event does not match: expected %v, got %v", change, c.Events()[0])
 	}
 }
 
@@ -80,8 +73,7 @@ func Test_CDCCollator_CommitTwo(t *testing.T) {
 	}
 	c := mustNewCDCCollator(t, np)
 
-	var events []*command.CDCEvent
-	c.Reset(&events)
+	c.Reset()
 	change1 := &command.CDCEvent{
 		Table:    "test_table",
 		Op:       command.CDCEvent_UPDATE,
@@ -100,38 +92,34 @@ func Test_CDCCollator_CommitTwo(t *testing.T) {
 	if err := c.PreupdateHook(change2); err != nil {
 		t.Fatalf("expected no error, got %v", err)
 	}
-	if c.Len() != 2 {
-		t.Fatalf("expected 2 pending events, got %d", c.Len())
+	if len(c.Events()) != 0 {
+		t.Fatal("c.Events() reached the caller before commit")
 	}
 
 	c.CommitHook()
-	if c.Len() != 0 {
-		t.Fatalf("expected no pending events after commit, got %d", c.Len())
+	if len(c.Events()) != 2 {
+		t.Fatalf("expected 2 c.Events(), got %d", len(c.Events()))
 	}
-	if len(events) != 2 {
-		t.Fatalf("expected 2 events, got %d", len(events))
+	if !reflect.DeepEqual(change1, c.Events()[0]) {
+		t.Fatalf("first event does not match: expected %v, got %v", change1, c.Events()[0])
 	}
-	if !reflect.DeepEqual(change1, events[0]) {
-		t.Fatalf("first event does not match: expected %v, got %v", change1, events[0])
+	if !slices.Equal(c.Events()[0].ColumnNames, []string{"id", "name", "value"}) {
+		t.Fatalf("expected column names [id name value], got %v", c.Events()[0].ColumnNames)
 	}
-	if !slices.Equal(events[0].ColumnNames, []string{"id", "name", "value"}) {
-		t.Fatalf("expected column names [id name value], got %v", events[0].ColumnNames)
-	}
-	if !reflect.DeepEqual(change2, events[1]) {
-		t.Fatalf("second event does not match: expected %v, got %v", change2, events[1])
+	if !reflect.DeepEqual(change2, c.Events()[1]) {
+		t.Fatalf("second event does not match: expected %v, got %v", change2, c.Events()[1])
 	}
 }
 
 // Test_CDCCollator_MultipleCommits verifies that several transactions committed
-// after one Reset all accumulate in the same caller-owned slice.
+// after one Reset all accumulate and are returned together by Events.
 func Test_CDCCollator_MultipleCommits(t *testing.T) {
 	np := &mockColumnNamesProvider{
 		columns: map[string][]string{"foo": {"id"}},
 	}
 	c := mustNewCDCCollator(t, np)
 
-	var events []*command.CDCEvent
-	c.Reset(&events)
+	c.Reset()
 	for i := int64(1); i <= 3; i++ {
 		if err := c.PreupdateHook(&command.CDCEvent{Table: "foo", Op: command.CDCEvent_INSERT, NewRowId: i}); err != nil {
 			t.Fatalf("expected no error, got %v", err)
@@ -139,10 +127,10 @@ func Test_CDCCollator_MultipleCommits(t *testing.T) {
 		c.CommitHook()
 	}
 
-	if got := newRowIDs(events); !slices.Equal(got, []int64{1, 2, 3}) {
+	if got := newRowIDs(c.Events()); !slices.Equal(got, []int64{1, 2, 3}) {
 		t.Fatalf("expected rows [1 2 3] in one slice, got %v", got)
 	}
-	for _, ev := range events {
+	for _, ev := range c.Events() {
 		if !slices.Equal(ev.ColumnNames, []string{"id"}) {
 			t.Fatalf("expected column names [id], got %v", ev.ColumnNames)
 		}
@@ -150,31 +138,29 @@ func Test_CDCCollator_MultipleCommits(t *testing.T) {
 }
 
 // Test_CDCCollator_CommitNoEvents verifies that a commit with nothing pending,
-// as happens for schema changes, leaves the caller's slice untouched.
+// as happens for schema changes, collects nothing.
 func Test_CDCCollator_CommitNoEvents(t *testing.T) {
 	c := mustNewCDCCollator(t, &mockColumnNamesProvider{})
 
-	var events []*command.CDCEvent
-	c.Reset(&events)
+	c.Reset()
 	if !c.CommitHook() {
 		t.Fatal("commit hook must always allow the transaction to proceed")
 	}
-	if events != nil {
-		t.Fatalf("expected slice to remain nil, got %d events", len(events))
+	if c.Events() != nil {
+		t.Fatalf("expected nil c.Events(), got %d c.Events()", len(c.Events()))
 	}
 }
 
 // Test_CDCCollator_ResetThenPreupdate verifies that Reset discards events from
-// an unfinished transaction, redirects later commits to the new slice, and
-// never modifies the previous slice.
+// an unfinished transaction, so that only changes made after the Reset are
+// collected by a later commit.
 func Test_CDCCollator_ResetThenPreupdate(t *testing.T) {
 	np := &mockColumnNamesProvider{
 		columns: map[string][]string{"test_table": {"id", "name", "value"}},
 	}
 	c := mustNewCDCCollator(t, np)
 
-	var events1 []*command.CDCEvent
-	c.Reset(&events1)
+	c.Reset()
 	change1 := &command.CDCEvent{
 		Table:    "test_table",
 		Op:       command.CDCEvent_INSERT,
@@ -184,15 +170,8 @@ func Test_CDCCollator_ResetThenPreupdate(t *testing.T) {
 	if err := c.PreupdateHook(change1); err != nil {
 		t.Fatalf("expected no error, got %v", err)
 	}
-	if c.Len() != 1 {
-		t.Fatalf("expected 1 pending event, got %d", c.Len())
-	}
 
-	var events2 []*command.CDCEvent
-	c.Reset(&events2)
-	if c.Len() != 0 {
-		t.Fatalf("expected no pending events after reset, got %d", c.Len())
-	}
+	c.Reset()
 	change2 := &command.CDCEvent{
 		Table:    "test_table",
 		Op:       command.CDCEvent_UPDATE,
@@ -203,36 +182,47 @@ func Test_CDCCollator_ResetThenPreupdate(t *testing.T) {
 		t.Fatalf("expected no error, got %v", err)
 	}
 	c.CommitHook()
-	if c.Len() != 0 {
-		t.Fatalf("expected no pending events after commit, got %d", c.Len())
-	}
 
-	if len(events1) != 0 {
-		t.Fatalf("previous slice was modified after reset: %s", asJSON(events1))
+	events := c.Events()
+	if len(events) != 1 {
+		t.Fatalf("expected 1 event, got %d", len(events))
 	}
-	if len(events2) != 1 {
-		t.Fatalf("expected 1 event, got %d", len(events2))
+	if !slices.Equal(events[0].ColumnNames, []string{"id", "name", "value"}) {
+		t.Fatalf("expected column names [id name value], got %v", events[0].ColumnNames)
 	}
-	if !slices.Equal(events2[0].ColumnNames, []string{"id", "name", "value"}) {
-		t.Fatalf("expected column names [id name value], got %v", events2[0].ColumnNames)
-	}
-	if !reflect.DeepEqual(change2, events2[0]) {
-		t.Fatalf("event does not match: expected %v, got %v", change2, events2[0])
+	if !reflect.DeepEqual(change2, events[0]) {
+		t.Fatalf("event does not match: expected %v, got %v", change2, events[0])
 	}
 }
 
-// Test_CDCCollator_ResetAppendsOnly verifies that Reset never clears the slice
-// the caller passes in, so events already present are preserved.
-func Test_CDCCollator_ResetAppendsOnly(t *testing.T) {
+// Test_CDCCollator_ResetDiscardsCollected verifies that Reset discards events
+// already collected, and that a slice previously returned by Events is not
+// modified by the Reset or by later commits.
+func Test_CDCCollator_ResetDiscardsCollected(t *testing.T) {
 	c := mustNewCDCCollator(t, &mockColumnNamesProvider{})
 
-	events := []*command.CDCEvent{{Table: "foo", NewRowId: 99}}
-	c.Reset(&events)
-	c.PreupdateHook(&command.CDCEvent{Table: "foo", NewRowId: 100})
+	c.Reset()
+	c.PreupdateHook(&command.CDCEvent{Table: "foo", NewRowId: 1})
+	c.CommitHook()
+	events1 := c.Events()
+	if got := newRowIDs(events1); !slices.Equal(got, []int64{1}) {
+		t.Fatalf("expected rows [1], got %v", got)
+	}
+
+	c.Reset()
+	if c.Events() != nil {
+		t.Fatalf("expected nil events after reset, got %d events", len(c.Events()))
+	}
+	c.PreupdateHook(&command.CDCEvent{Table: "foo", NewRowId: 2})
+	c.CommitHook()
+	c.PreupdateHook(&command.CDCEvent{Table: "foo", NewRowId: 3})
 	c.CommitHook()
 
-	if got := newRowIDs(events); !slices.Equal(got, []int64{99, 100}) {
-		t.Fatalf("expected rows [99 100], got %v", got)
+	if got := newRowIDs(events1); !slices.Equal(got, []int64{1}) {
+		t.Fatalf("previously returned slice was modified: rows %v", got)
+	}
+	if got := newRowIDs(c.Events()); !slices.Equal(got, []int64{2, 3}) {
+		t.Fatalf("expected rows [2 3], got %v", got)
 	}
 }
 
@@ -242,62 +232,37 @@ func Test_CDCCollator_ResetAppendsOnly(t *testing.T) {
 func Test_CDCCollator_RollbackDiscardsPendingOnly(t *testing.T) {
 	c := mustNewCDCCollator(t, &mockColumnNamesProvider{})
 
-	var events []*command.CDCEvent
-	c.Reset(&events)
+	c.Reset()
 
 	c.PreupdateHook(&command.CDCEvent{Table: "foo", NewRowId: 1})
 	c.CommitHook()
 
 	c.PreupdateHook(&command.CDCEvent{Table: "foo", NewRowId: 2})
 	c.PreupdateHook(&command.CDCEvent{Table: "foo", NewRowId: 3})
-	if c.Len() != 2 {
-		t.Fatalf("expected 2 pending events, got %d", c.Len())
-	}
 	c.RollbackHook()
-	if c.Len() != 0 {
-		t.Fatalf("expected no pending events after rollback, got %d", c.Len())
-	}
 
 	c.PreupdateHook(&command.CDCEvent{Table: "foo", NewRowId: 4})
 	c.CommitHook()
 
-	if got := newRowIDs(events); !slices.Equal(got, []int64{1, 4}) {
+	if got := newRowIDs(c.Events()); !slices.Equal(got, []int64{1, 4}) {
 		t.Fatalf("expected rows [1 4], got %v", got)
 	}
 }
 
-// Test_CDCCollator_Detached verifies that a collator with no destination,
-// whether never reset or explicitly reset with nil, discards committed events
-// without failing the transaction and without touching any previous slice.
-func Test_CDCCollator_Detached(t *testing.T) {
+// Test_CDCCollator_NoReset verifies that a collator which has never been
+// reset collects committed events and discards rolled-back ones.
+func Test_CDCCollator_NoReset(t *testing.T) {
 	c := mustNewCDCCollator(t, &mockColumnNamesProvider{})
 
-	// Never reset.
 	c.PreupdateHook(&command.CDCEvent{Table: "foo", NewRowId: 1})
 	if !c.CommitHook() {
 		t.Fatal("commit hook must always allow the transaction to proceed")
 	}
-	if c.Len() != 0 {
-		t.Fatalf("expected pending events to be discarded, got %d", c.Len())
-	}
-
-	// Attached, then detached after the caller has taken the events.
-	var events []*command.CDCEvent
-	c.Reset(&events)
 	c.PreupdateHook(&command.CDCEvent{Table: "foo", NewRowId: 2})
-	c.CommitHook()
-	c.Reset(nil)
-
-	c.PreupdateHook(&command.CDCEvent{Table: "foo", NewRowId: 3})
-	c.CommitHook()
-	c.PreupdateHook(&command.CDCEvent{Table: "foo", NewRowId: 4})
 	c.RollbackHook()
 
-	if got := newRowIDs(events); !slices.Equal(got, []int64{2}) {
-		t.Fatalf("detached collator modified a handed-on slice: rows %v", got)
-	}
-	if c.Len() != 0 {
-		t.Fatalf("expected no pending events, got %d", c.Len())
+	if got := newRowIDs(c.Events()); !slices.Equal(got, []int64{1}) {
+		t.Fatalf("expected rows [1], got %v", got)
 	}
 }
 
@@ -306,15 +271,14 @@ func Test_CDCCollator_Detached(t *testing.T) {
 func Test_CDCCollator_ColumnNamesError(t *testing.T) {
 	c := mustNewCDCCollator(t, &errorColumnNamesProvider{err: errors.New("no such table")})
 
-	var events []*command.CDCEvent
-	c.Reset(&events)
+	c.Reset()
 	c.PreupdateHook(&command.CDCEvent{Table: "missing", NewRowId: 1})
 	c.CommitHook()
 
-	if len(events) != 1 {
-		t.Fatalf("expected 1 event, got %d", len(events))
+	if len(c.Events()) != 1 {
+		t.Fatalf("expected 1 event, got %d", len(c.Events()))
 	}
-	ev := events[0]
+	ev := c.Events()[0]
 	if ev.ColumnNames != nil {
 		t.Fatalf("expected no column names, got %v", ev.ColumnNames)
 	}
@@ -325,15 +289,14 @@ func Test_CDCCollator_ColumnNamesError(t *testing.T) {
 
 // Test_CDCCollator_ColumnNamesPerCommit verifies that column names are
 // resolved at each commit, so a schema change between two transactions
-// collected into the same slice is reflected in the later events.
+// collected together is reflected in the later events.
 func Test_CDCCollator_ColumnNamesPerCommit(t *testing.T) {
 	np := &mockColumnNamesProvider{
 		columns: map[string][]string{"foo": {"id"}},
 	}
 	c := mustNewCDCCollator(t, np)
 
-	var events []*command.CDCEvent
-	c.Reset(&events)
+	c.Reset()
 
 	c.PreupdateHook(&command.CDCEvent{Table: "foo", NewRowId: 1})
 	c.CommitHook()
@@ -344,25 +307,24 @@ func Test_CDCCollator_ColumnNamesPerCommit(t *testing.T) {
 	c.PreupdateHook(&command.CDCEvent{Table: "foo", NewRowId: 2})
 	c.CommitHook()
 
-	if len(events) != 2 {
-		t.Fatalf("expected 2 events, got %d", len(events))
+	if len(c.Events()) != 2 {
+		t.Fatalf("expected 2 c.Events(), got %d", len(c.Events()))
 	}
-	if !slices.Equal(events[0].ColumnNames, []string{"id"}) {
-		t.Fatalf("expected first event columns [id], got %v", events[0].ColumnNames)
+	if !slices.Equal(c.Events()[0].ColumnNames, []string{"id"}) {
+		t.Fatalf("expected first event columns [id], got %v", c.Events()[0].ColumnNames)
 	}
-	if !slices.Equal(events[1].ColumnNames, []string{"id", "name"}) {
-		t.Fatalf("expected second event columns [id name], got %v", events[1].ColumnNames)
+	if !slices.Equal(c.Events()[1].ColumnNames, []string{"id", "name"}) {
+		t.Fatalf("expected second event columns [id name], got %v", c.Events()[1].ColumnNames)
 	}
 }
 
 // Test_CDCCollator_MultiStatementRequest verifies, through a real database
 // with the hooks registered, that two autocommit statements in one request
-// are collected together into the caller's slice.
+// are collected together.
 func Test_CDCCollator_MultiStatementRequest(t *testing.T) {
 	db, c := mustCreateCDCCollatorDatabase(t)
 
-	var events []*command.CDCEvent
-	c.Reset(&events)
+	c.Reset()
 	results, err := db.Execute(&command.Request{Statements: []*command.Statement{
 		{Sql: "INSERT INTO foo VALUES(1)"},
 		{Sql: "INSERT INTO foo VALUES(2)"},
@@ -376,19 +338,16 @@ func Test_CDCCollator_MultiStatementRequest(t *testing.T) {
 		}
 	}
 
-	if got := newRowIDs(events); !slices.Equal(got, []int64{1, 2}) {
+	if got := newRowIDs(c.Events()); !slices.Equal(got, []int64{1, 2}) {
 		t.Fatalf("expected rows [1 2] in one slice, got %v", got)
 	}
-	for _, ev := range events {
+	for _, ev := range c.Events() {
 		if ev.Op != command.CDCEvent_INSERT {
 			t.Fatalf("expected INSERT, got %s", ev.Op)
 		}
 		if !slices.Equal(ev.ColumnNames, []string{"id"}) {
 			t.Fatalf("expected column names [id], got %v", ev.ColumnNames)
 		}
-	}
-	if c.Len() != 0 {
-		t.Fatalf("expected no pending events, got %d", c.Len())
 	}
 }
 
@@ -397,8 +356,7 @@ func Test_CDCCollator_MultiStatementRequest(t *testing.T) {
 func Test_CDCCollator_Transaction(t *testing.T) {
 	db, c := mustCreateCDCCollatorDatabase(t)
 
-	var events []*command.CDCEvent
-	c.Reset(&events)
+	c.Reset()
 	results, err := db.Execute(&command.Request{Transaction: true, Statements: []*command.Statement{
 		{Sql: "INSERT INTO foo VALUES(1)"},
 		{Sql: "INSERT INTO foo VALUES(2)"},
@@ -411,24 +369,24 @@ func Test_CDCCollator_Transaction(t *testing.T) {
 			t.Fatalf("unexpected statement error: %s", r.GetError())
 		}
 	}
-	if got := newRowIDs(events); !slices.Equal(got, []int64{1, 2}) {
+	if got := newRowIDs(c.Events()); !slices.Equal(got, []int64{1, 2}) {
 		t.Fatalf("expected rows [1 2], got %v", got)
 	}
 }
 
-// Test_CDCCollator_SuccessiveRequests verifies that each Reset starts
-// collecting into a fresh slice and that no earlier slice is modified by
-// later requests.
+// Test_CDCCollator_SuccessiveRequests verifies that each Reset starts a
+// fresh collection and that events returned for an earlier request are not
+// modified by later requests.
 func Test_CDCCollator_SuccessiveRequests(t *testing.T) {
 	db, c := mustCreateCDCCollatorDatabase(t)
 
-	var events1 []*command.CDCEvent
-	c.Reset(&events1)
+	c.Reset()
 	mustExecute(db, "INSERT INTO foo VALUES(1)")
+	events1 := c.Events()
 
-	var events2 []*command.CDCEvent
-	c.Reset(&events2)
+	c.Reset()
 	mustExecute(db, "INSERT INTO foo VALUES(2)")
+	events2 := c.Events()
 
 	if !slices.Equal(newRowIDs(events1), []int64{1}) {
 		t.Fatalf("unexpected first slice: %s", asJSON(events1))
@@ -443,41 +401,39 @@ func Test_CDCCollator_SuccessiveRequests(t *testing.T) {
 func Test_CDCCollator_SchemaChangeNoEvents(t *testing.T) {
 	db, c := mustCreateCDCCollatorDatabase(t)
 
-	var events []*command.CDCEvent
-	c.Reset(&events)
+	c.Reset()
 	mustExecute(db, "CREATE TABLE bar (id INTEGER PRIMARY KEY)")
 
-	if len(events) != 0 {
-		t.Fatalf("expected no events for schema change, got %d", len(events))
+	if len(c.Events()) != 0 {
+		t.Fatalf("expected no c.Events() for schema change, got %d", len(c.Events()))
 	}
 }
 
-// Test_CDCCollator_DetachedDatabase verifies, through a real database, that a
-// detached collator records nothing while writes continue, and that a later
-// Reset resumes collection.
-func Test_CDCCollator_DetachedDatabase(t *testing.T) {
+// Test_CDCCollator_WritesBetweenRequests verifies, through a real database,
+// that writes made after the caller has retrieved its events do not modify
+// the slice it holds, and are discarded by the next Reset.
+func Test_CDCCollator_WritesBetweenRequests(t *testing.T) {
 	db, c := mustCreateCDCCollatorDatabase(t)
 
-	var events1 []*command.CDCEvent
-	c.Reset(&events1)
+	c.Reset()
 	mustExecute(db, "INSERT INTO foo VALUES(1)")
-	c.Reset(nil)
+	events1 := c.Events()
 
-	// Writes while detached, including one that rolls back.
+	// Writes before the next Reset, including one that rolls back.
 	mustExecute(db, "INSERT INTO foo VALUES(2)")
 	if _, err := db.ExecuteStringStmt("INSERT INTO foo VALUES(3), (3)"); err != nil {
 		t.Fatalf("error executing statement: %v", err)
 	}
 
-	var events2 []*command.CDCEvent
-	c.Reset(&events2)
+	c.Reset()
 	mustExecute(db, "INSERT INTO foo VALUES(4)")
+	events2 := c.Events()
 
 	if !slices.Equal(newRowIDs(events1), []int64{1}) {
-		t.Fatalf("detached collator modified a handed-on slice: %s", asJSON(events1))
+		t.Fatalf("later writes modified a handed-on slice: %s", asJSON(events1))
 	}
 	if !slices.Equal(newRowIDs(events2), []int64{4}) {
-		t.Fatalf("unexpected events after reattaching: %s", asJSON(events2))
+		t.Fatalf("unexpected events after reset: %s", asJSON(events2))
 	}
 }
 
@@ -487,8 +443,7 @@ func Test_CDCCollator_DetachedDatabase(t *testing.T) {
 func Test_CDCCollator_ExecuteRollback(t *testing.T) {
 	db, c := mustCreateCDCCollatorDatabase(t)
 
-	var events []*command.CDCEvent
-	c.Reset(&events)
+	c.Reset()
 	results, err := db.Execute(&command.Request{Statements: []*command.Statement{
 		{Sql: "INSERT INTO foo VALUES(1), (1)"}, // Fails due to UNIQUE constraint on PK.
 		{Sql: "INSERT INTO foo VALUES(2)"},      // Succeeds.
@@ -500,8 +455,8 @@ func Test_CDCCollator_ExecuteRollback(t *testing.T) {
 		t.Fatalf("unexpected results: %s", asJSON(results))
 	}
 
-	if !slices.Equal(newRowIDs(events), []int64{2}) {
-		t.Fatalf("unexpected committed events: %s", asJSON(events))
+	if !slices.Equal(newRowIDs(c.Events()), []int64{2}) {
+		t.Fatalf("unexpected committed c.Events(): %s", asJSON(c.Events()))
 	}
 	if got := asJSON(mustQuery(db, "SELECT id FROM foo")); got != `[{"columns":["id"],"types":["integer"],"values":[[2]]}]` {
 		t.Fatalf("unexpected rows: %s", got)
@@ -513,8 +468,7 @@ func Test_CDCCollator_ExecuteRollback(t *testing.T) {
 func Test_CDCCollator_RequestRollback(t *testing.T) {
 	db, c := mustCreateCDCCollatorDatabase(t)
 
-	var events []*command.CDCEvent
-	c.Reset(&events)
+	c.Reset()
 	results, err := db.Request(&command.Request{Statements: []*command.Statement{
 		{Sql: "INSERT INTO foo VALUES(1), (1)"},
 		{Sql: "INSERT INTO foo VALUES(2)"},
@@ -525,8 +479,8 @@ func Test_CDCCollator_RequestRollback(t *testing.T) {
 	if len(results) != 2 || !strings.Contains(results[0].GetError(), "UNIQUE") || results[1].GetError() != "" {
 		t.Fatalf("unexpected results: %s", asJSON(results))
 	}
-	if !slices.Equal(newRowIDs(events), []int64{2}) {
-		t.Fatalf("unexpected committed events: %s", asJSON(events))
+	if !slices.Equal(newRowIDs(c.Events()), []int64{2}) {
+		t.Fatalf("unexpected committed c.Events(): %s", asJSON(c.Events()))
 	}
 }
 
@@ -536,8 +490,7 @@ func Test_CDCCollator_RequestRollback(t *testing.T) {
 func Test_CDCCollator_RequestPartialSuccess(t *testing.T) {
 	db, c := mustCreateCDCCollatorDatabase(t)
 
-	var events []*command.CDCEvent
-	c.Reset(&events)
+	c.Reset()
 	results, err := db.Request(&command.Request{Statements: []*command.Statement{
 		{Sql: "INSERT INTO foo VALUES(1)"},
 		{Sql: "INSERT INTO missing VALUES(2)"},
@@ -549,8 +502,8 @@ func Test_CDCCollator_RequestPartialSuccess(t *testing.T) {
 	if len(results) != 3 || results[0].GetError() != "" || results[1].GetError() == "" || results[2].GetError() != "" {
 		t.Fatalf("unexpected results: %s", asJSON(results))
 	}
-	if !slices.Equal(newRowIDs(events), []int64{1, 3}) {
-		t.Fatalf("unexpected events for partially successful request: %s", asJSON(events))
+	if !slices.Equal(newRowIDs(c.Events()), []int64{1, 3}) {
+		t.Fatalf("unexpected c.Events() for partially successful request: %s", asJSON(c.Events()))
 	}
 }
 
@@ -560,8 +513,7 @@ func Test_CDCCollator_RequestPartialSuccess(t *testing.T) {
 func Test_CDCCollator_CommitsAroundRollback(t *testing.T) {
 	db, c := mustCreateCDCCollatorDatabase(t)
 
-	var events []*command.CDCEvent
-	c.Reset(&events)
+	c.Reset()
 	results, err := db.Execute(&command.Request{Statements: []*command.Statement{
 		{Sql: "INSERT INTO foo VALUES(1)"},
 		{Sql: "INSERT INTO foo VALUES(2), (2)"},
@@ -573,8 +525,8 @@ func Test_CDCCollator_CommitsAroundRollback(t *testing.T) {
 	if len(results) != 3 || results[0].GetError() != "" || !strings.Contains(results[1].GetError(), "UNIQUE") || results[2].GetError() != "" {
 		t.Fatalf("unexpected results: %s", asJSON(results))
 	}
-	if !slices.Equal(newRowIDs(events), []int64{1, 3}) {
-		t.Fatalf("expected commits before and after rollback, got %s", asJSON(events))
+	if !slices.Equal(newRowIDs(c.Events()), []int64{1, 3}) {
+		t.Fatalf("expected commits before and after rollback, got %s", asJSON(c.Events()))
 	}
 	if got := asJSON(mustQuery(db, "SELECT id FROM foo ORDER BY id")); got != `[{"columns":["id"],"types":["integer"],"values":[[1],[3]]}]` {
 		t.Fatalf("unexpected committed rows: %s", got)
@@ -587,8 +539,7 @@ func Test_CDCCollator_CommitsAroundRollback(t *testing.T) {
 func Test_CDCCollator_TransactionRollback(t *testing.T) {
 	db, c := mustCreateCDCCollatorDatabase(t)
 
-	var events []*command.CDCEvent
-	c.Reset(&events)
+	c.Reset()
 	results, err := db.Execute(&command.Request{Transaction: true, Statements: []*command.Statement{
 		{Sql: "INSERT INTO foo VALUES(1)"},
 		{Sql: "INSERT INTO foo VALUES(1)"},
@@ -599,13 +550,13 @@ func Test_CDCCollator_TransactionRollback(t *testing.T) {
 	if len(results) != 2 || results[0].GetError() != "" || !strings.Contains(results[1].GetError(), "UNIQUE") {
 		t.Fatalf("unexpected results: %s", asJSON(results))
 	}
-	if c.Len() != 0 || len(events) != 0 {
-		t.Fatalf("rolled-back transaction left %d pending events and %d collected", c.Len(), len(events))
+	if c.Events() != nil {
+		t.Fatalf("rolled-back transaction left %d c.Events() collected", len(c.Events()))
 	}
 
 	mustExecute(db, "INSERT INTO foo VALUES(2)")
-	if !slices.Equal(newRowIDs(events), []int64{2}) {
-		t.Fatalf("unexpected committed events: %s", asJSON(events))
+	if !slices.Equal(newRowIDs(c.Events()), []int64{2}) {
+		t.Fatalf("unexpected committed c.Events(): %s", asJSON(c.Events()))
 	}
 }
 
@@ -615,8 +566,7 @@ func Test_CDCCollator_TransactionRollback(t *testing.T) {
 func Test_CDCCollator_ConflictFailRetainsChanges(t *testing.T) {
 	db, c := mustCreateCDCCollatorDatabase(t)
 
-	var events []*command.CDCEvent
-	c.Reset(&events)
+	c.Reset()
 	results, err := db.ExecuteStringStmt("INSERT OR FAIL INTO foo VALUES(1), (1)")
 	if err != nil {
 		t.Fatalf("error executing statement: %v", err)
@@ -624,8 +574,8 @@ func Test_CDCCollator_ConflictFailRetainsChanges(t *testing.T) {
 	if len(results) != 1 || results[0].GetError() == "" {
 		t.Fatalf("expected constraint error, got %s", asJSON(results))
 	}
-	if !slices.Equal(newRowIDs(events), []int64{1}) {
-		t.Fatalf("unexpected committed events: %s", asJSON(events))
+	if !slices.Equal(newRowIDs(c.Events()), []int64{1}) {
+		t.Fatalf("unexpected committed c.Events(): %s", asJSON(c.Events()))
 	}
 	if got := asJSON(mustQuery(db, "SELECT id FROM foo")); got != `[{"columns":["id"],"types":["integer"],"values":[[1]]}]` {
 		t.Fatalf("unexpected rows: %s", got)

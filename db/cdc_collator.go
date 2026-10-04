@@ -11,31 +11,27 @@ type ColumnsNameProvider interface {
 	ColumnNames(table string) ([]string, error)
 }
 
-// CDCCollator gathers Change Data Capture events into a slice owned by the
-// caller. It implements the SQLite preupdate, commit, and rollback hooks.
+// CDCCollator gathers Change Data Capture events. It implements the SQLite
+// preupdate, commit, and rollback hooks.
 //
-// Before modifying the database, the caller passes a pointer to a slice to
-// Reset. The preupdate hook records each changed row for the transaction in
-// progress. When that transaction commits, its events are appended to the
-// slice. When it rolls back, they are discarded. A database change entry may
-// contain several autocommit transactions, so the slice may accumulate events
-// from several commits. When the caller knows that all changes for the entry
-// are complete, it reads the slice it passed in, and then calls Reset with nil
-// to detach the collator so that no later commit can modify events that have
-// already been handed on.
+// Before modifying the database, the caller calls Reset. The preupdate hook
+// records each changed row for the transaction in progress. When that
+// transaction commits, its events are added to the collected events. When it
+// rolls back, they are discarded. A database change entry may contain several
+// autocommit transactions, so events from several commits may be collected.
+// When the caller knows that all changes for the entry are complete, it calls
+// Events to retrieve what was collected.
 //
 // A CDCCollator is not safe for concurrent use. The hooks run on the goroutine
-// that executes the SQL, and the caller must not read the slice until that
+// that executes the SQL, and the caller must not call Events until that
 // execution has finished.
 type CDCCollator struct {
-	events  *[]*command.CDCEvent
+	events  []*command.CDCEvent
 	pending []*command.CDCEvent
 	db      ColumnsNameProvider
 }
 
 // NewCDCCollator returns a collator that resolves column names through db.
-// The collator starts detached, so it discards committed events until Reset
-// is called with a destination.
 func NewCDCCollator(db ColumnsNameProvider) (*CDCCollator, error) {
 	if db == nil {
 		return nil, fmt.Errorf("nil ColumnsNameProvider")
@@ -43,40 +39,44 @@ func NewCDCCollator(db ColumnsNameProvider) (*CDCCollator, error) {
 	return &CDCCollator{db: db}, nil
 }
 
-// Reset makes events the destination for the events of transactions that
-// commit from now on, and discards events from any transaction still in
-// progress. The collator only ever appends to the slice and never clears it,
-// so the caller should pass a pointer to an empty slice. Passing nil detaches
-// the collator, and committed events are then discarded until the next Reset.
-func (c *CDCCollator) Reset(events *[]*command.CDCEvent) {
-	c.events = events
+// Reset discards all collected events, and the events of any transaction
+// still in progress. The collator releases its storage rather than reusing
+// it, so a slice previously returned by Events is never modified.
+func (c *CDCCollator) Reset() {
+	c.events = nil
 	c.pending = nil
 }
 
+// Events returns the events of all transactions committed since the last
+// Reset, in the order they occurred. It returns nil if no events have been
+// collected. The returned slice remains valid after Reset.
+func (c *CDCCollator) Events() []*command.CDCEvent {
+	return c.events
+}
+
 // PreupdateHook records a change made by the transaction in progress. The
-// event does not reach the caller's slice until that transaction commits.
+// event is not returned by Events until that transaction commits.
 func (c *CDCCollator) PreupdateHook(ev *command.CDCEvent) error {
 	c.pending = append(c.pending, ev)
 	return nil
 }
 
 // RollbackHook discards the events of the transaction in progress. Events
-// already appended to the caller's slice by earlier commits are unaffected.
+// collected from earlier commits are unaffected.
 func (c *CDCCollator) RollbackHook() {
 	c.pending = nil
 }
 
-// CommitHook appends the events of the transaction in progress to the caller's
-// slice. Column names are resolved here rather than later, because a
+// CommitHook adds the events of the transaction in progress to the collected
+// events. Column names are resolved here rather than later, because a
 // subsequent transaction in the same change entry may alter the table. It
 // always returns true, because CDC bookkeeping must never cause a transaction
 // to be rolled back.
 func (c *CDCCollator) CommitHook() bool {
 	events := c.pending
 	c.pending = nil
-	if len(events) == 0 || c.events == nil {
-		// Schema changes commit without producing events, and a detached
-		// collator has nowhere to put them.
+	if len(events) == 0 {
+		// Schema changes commit without producing events.
 		return true
 	}
 
@@ -93,11 +93,6 @@ func (c *CDCCollator) CommitHook() bool {
 		ev.ColumnNames = colNames[ev.Table]
 	}
 
-	*c.events = append(*c.events, events...)
+	c.events = append(c.events, events...)
 	return true
-}
-
-// Len returns the number of events recorded for the transaction in progress.
-func (c *CDCCollator) Len() int {
-	return len(c.pending)
 }
