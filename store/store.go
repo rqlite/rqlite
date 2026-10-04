@@ -808,7 +808,7 @@ func (s *Store) Open() (retErr error) {
 	// Prep the CDC Collator.
 	s.cdcCollator, err = sql.NewCDCCollator(s.db)
 	if err != nil {
-		s.logger.Fatalf("failed to create CDC streamer: %s", err)
+		return fmt.Errorf("failed to create CDC streamer: %s", err)
 	}
 
 	// Clean up any files from aborted operations. This tries to catch the case where scratch files
