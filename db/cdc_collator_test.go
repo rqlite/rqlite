@@ -357,8 +357,7 @@ func Test_CDCCollator_ColumnNamesPerCommit(t *testing.T) {
 
 // Test_CDCCollator_MultiStatementRequest verifies, through a real database
 // with the hooks registered, that two autocommit statements in one request
-// are collected together into the caller's slice. This is the production path
-// on which the original bug appeared.
+// are collected together into the caller's slice.
 func Test_CDCCollator_MultiStatementRequest(t *testing.T) {
 	db, c := mustCreateCDCCollatorDatabase(t)
 
