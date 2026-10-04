@@ -43,7 +43,7 @@ The fork also adds the preupdate, update, and commit hook registration methods (
 
 `SwappableDB` is a thin synchronization wrapper around `*DB`. Every method takes an `RWMutex` read lock, delegates to the inner `*DB`, and unlocks. The single method that takes the write lock is `Swap`, which closes the current database, removes the on-disk files, renames a replacement file into place, reopens the database, and recreates the `CheckpointManager` (which has to start over because the new database has fresh WAL salt values).
 
-The wrapper exists because callers — the FSM, the HTTP layer, the auto-backup uploader, the CDC streamer — all hold a long-lived reference to "the database" and must not see a closed `*DB` while a swap is in flight. `Swap` happens during Restore (after a snapshot is loaded), Load (operator-initiated database replacement), and recovery flows. Without the wrapper, every caller would need its own coordination, or the Store would have to broadcast a "stop using the DB" signal across the codebase.
+The wrapper exists because callers — the FSM, the HTTP layer, the auto-backup uploader, the CDC collator — all hold a long-lived reference to "the database" and must not see a closed `*DB` while a swap is in flight. `Swap` happens during Restore (after a snapshot is loaded), Load (operator-initiated database replacement), and recovery flows. Without the wrapper, every caller would need its own coordination, or the Store would have to broadcast a "stop using the DB" signal across the codebase.
 
 ## Checkpointing
 
@@ -86,13 +86,22 @@ The compacting scanner has a `fullScan` mode that verifies every frame's checksu
 
 ## CDC Integration
 
-Change Data Capture is wired through SQLite's preupdate and commit hooks. The hooks are registered on the single `rwDB` connection — the same one that does all writes — via `RegisterPreUpdateHook` and `RegisterCommitHook`. Hook installation goes through `conn.Raw` because the registration methods are on the SQLite-specific connection type, not on the abstract `database/sql` connection.
+Change Data Capture is wired through SQLite's preupdate, commit, and rollback hooks. The hooks are registered on the single `rwDB` connection — the same one that does all writes — via `RegisterPreUpdateHook`, `RegisterCommitHook`, and `RegisterRollbackHook`. Hook installation goes through `conn.Raw` because the registration methods are on the SQLite-specific connection type, not on the abstract `database/sql` connection. `RegisterPreUpdateHook` is also where raw SQLite preupdate data is converted into a `CDCEvent` protobuf (including `normalizeCDCValues`, the row-data conversion), so hook targets only ever see normalized events.
 
-`CDCStreamer` (in `cdc.go`) is the in-package hook target. The preupdate hook appends an event to a pending group; the commit hook stamps the group with the current time, looks up column names per table (cached for the duration of the group), and non-blockingly sends the group to a channel. If the channel is full the event is dropped and a stat increments — by design, CDC is at-least-once on the receiver side, not back-pressuring the writer. The `CDCStreamer` lives in `db/` rather than in `cdc/` because its hook installation, its per-statement reset, and its lifecycle are all driven from inside the database write path; it is tightly bound to the SQLite hook plumbing and would only become harder to reason about if moved further away.
+`CDCCollator` (in `cdc_collator.go`) is the in-package hook target. It does no I/O and has no channel: it simply gathers the events produced by one database change entry — in practice, one Raft log entry — so the caller can retrieve them once the entry has been fully applied. It keeps two lists:
 
-The transaction rollback hook discards pending events when SQLite rolls back an autocommit statement or a transaction managed by the DB API. It must not discard events merely because a statement returns an error: SQLite's `FAIL` conflict resolution can retain and commit changes made before the error. SQLite does not notify this hook about statement rollback within an explicitly opened SQL transaction or `ROLLBACK TO` a savepoint; CDC does not yet account for those partial rollbacks.
+- **`pending`** — events from the transaction currently in progress. The preupdate hook appends to it.
+- **`events`** — events from transactions that have committed since the last `Reset`.
 
-The Store owns the streamer's lifecycle but delegates the row-data conversion (`normalizeCDCValues`) to this package, which is also where the SQLite-to-rqlite type mapping for query results lives.
+The commit hook moves `pending` onto the end of `events`; the rollback hook discards `pending` and leaves `events` alone. The split exists because a single change entry can contain several autocommit transactions — a bulk request without an enclosing transaction commits once per statement — so one entry can see many commits, and a rollback of a later statement must not throw away the events of earlier statements that did commit. An earlier design delivered events from inside the commit hook, one group per commit; collecting across commits and handing over the whole set afterwards is what lets every request in a bulk request contribute its events to the entry's single event group.
+
+The caller's protocol is `Reset` before applying the entry, then `Events` after execution has finished. `Reset` drops both lists by releasing the storage rather than truncating it, so a slice previously returned by `Events` is never modified and can be handed off without copying. The collator is not safe for concurrent use and does not need to be: the hooks run on the goroutine executing the SQL, and the caller reads the result only after that execution returns.
+
+Column names are resolved in the commit hook, through the `ColumnsNameProvider` passed to `NewCDCCollator` (the Store passes its `SwappableDB`), and cached per table for the duration of that one commit. They are resolved at commit rather than when `Events` is called because a later transaction in the same entry may alter the table, and each event must carry the column names that were in effect when its transaction committed. A failed lookup is recorded in the event's `Error` field rather than failing the commit. The commit hook always returns true: CDC bookkeeping must never cause a transaction to be rolled back.
+
+The rollback hook fires when SQLite rolls back an autocommit statement or a transaction managed by the DB API. Events must not be discarded merely because a statement returns an error: SQLite's `FAIL` conflict resolution can retain and commit changes made before the error. SQLite does not notify this hook about statement rollback within an explicitly opened SQL transaction or `ROLLBACK TO` a savepoint; CDC does not yet account for those partial rollbacks.
+
+The Store owns the collator's lifecycle and everything downstream of it. It creates the collator when it opens, registers the three hooks lazily on the first log entry applied with CDC enabled, calls `Reset` before applying each entry, and after applying it wraps any collected events in a group stamped with the entry's Raft index and sends that group to the CDC service. Because the hooks live on the writer connection, a `Swap` silently removes them along with the old connection; the Store re-registers them on the next entry after a Load.
 
 ## Boundary Checks
 
@@ -130,7 +139,7 @@ Loaded extensions are baked into a per-set driver via `NewDriver(name, extension
 
 - **Two connection pools, one writer.** Read concurrency comes from the read-only pool; write coordination comes from holding the writer pool to one connection. This mirrors SQLite's underlying single-writer model.
 
-- **CDC streamer lives next to the SQLite hooks.** The streamer's lifecycle is driven by the same write-path code that registers and tears down the preupdate and commit hooks. Separating it from the hook plumbing would create an awkward two-way dependency for no real benefit.
+- **CDC events are collected per change entry, not delivered per commit.** The `CDCCollator` accumulates events across every commit in an entry and the Store retrieves them once the entry is applied. This keeps delivery, back-pressure, and Raft-index stamping in the Store, leaves the hook path free of I/O, and means a multi-statement entry yields one complete event group. The collator stays in `db/` because it is defined entirely by SQLite's hook semantics — what commits, what rolls back, and when column names are valid.
 
 - **WAL parsing is byte-level, not via SQLite.** Compacting the WAL requires reading frames and selecting the latest per page across transaction boundaries, which SQLite does not expose. The `wal/` subpackage reimplements just enough of the WAL format (derived from LiteFS) to do this, with checksum and salt validation.
 
