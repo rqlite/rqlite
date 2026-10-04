@@ -19,11 +19,6 @@ func Test_StoreEnableCDC(t *testing.T) {
 		t.Fatalf("failed to open store: %v", err)
 	}
 
-	// Initially CDC should be nil
-	if s.cdcCollator != nil {
-		t.Fatalf("expected CDC streamer to be nil initially")
-	}
-
 	// Create a channel for CDC events
 	ch := make(chan *proto.CDCIndexedEventGroup, 10)
 

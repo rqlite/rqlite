@@ -805,6 +805,12 @@ func (s *Store) Open() (retErr error) {
 	}
 	s.checkpointer = s.db
 
+	// Prep the CDC Collator.
+	s.cdcCollator, err = sql.NewCDCCollator(s.db)
+	if err != nil {
+		s.logger.Fatalf("failed to create CDC streamer: %s", err)
+	}
+
 	// Clean up any files from aborted operations. This tries to catch the case where scratch files
 	// were created in the Raft directory, not cleaned up, and then the node was restarted with an
 	// explicit SQLite path set. The only way a Staging Directory should be present is if a snapshot
@@ -2094,8 +2100,7 @@ func (s *Store) EnableCDC(out chan<- *proto.CDCIndexedEventGroup, tableRe *regex
 	return nil
 }
 
-// DisableCDC disables Change Data Capture on this Store. Disabling CDC will
-// close the output channel provided when enabling CDC.
+// DisableCDC disables Change Data Capture on this Store.
 //
 // If CDC is not enabled, this is a no-op.
 func (s *Store) DisableCDC() error {
@@ -2113,9 +2118,8 @@ func (s *Store) DisableCDC() error {
 			return fmt.Errorf("failed to unregister rollback hook: %w", err)
 		}
 	}
-
-	s.cdcCollator = nil
 	s.cdcRegistered.Unset()
+
 	s.cdcEnabled.Unset()
 	return nil
 }
@@ -2335,9 +2339,6 @@ func (s *Store) remove(id string) error {
 }
 
 func (s *Store) cleanupCDC() error {
-	s.cdcMu.Lock()
-	defer s.cdcMu.Unlock()
-	s.cdcCollator = nil
 	if err := s.db.RegisterPreUpdateHook(nil, nil, false); err != nil {
 		return fmt.Errorf("failed to unregister preupdate hook: %w", err)
 	}
@@ -2347,6 +2348,11 @@ func (s *Store) cleanupCDC() error {
 	if err := s.db.RegisterRollbackHook(nil); err != nil {
 		return fmt.Errorf("failed to unregister rollback hook: %w", err)
 	}
+	s.cdcRegistered.Unset()
+
+	s.cdcMu.Lock()
+	defer s.cdcMu.Unlock()
+	s.cdcCollator = nil
 	return nil
 }
 
@@ -2541,13 +2547,6 @@ func (s *Store) fsmApply(l *raft.Log) (e any) {
 		if s.cdcEnabled.Is() {
 			s.cdcMu.RLock()
 			defer s.cdcMu.RUnlock()
-			if s.cdcCollator == nil {
-				var err error
-				s.cdcCollator, err = sql.NewCDCCollator(s.db)
-				if err != nil {
-					s.logger.Fatalf("failed to create CDC streamer: %s", err)
-				}
-			}
 
 			// If CDC is enabled but not yet activated, do so now. By doing it here we keep
 			// CDC registration in a single place in the code.
