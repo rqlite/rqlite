@@ -2,6 +2,7 @@
 ### Implementation changes and bug fixes
 - [PR #2839](https://github.com/rqlite/rqlite/pull/2839): CDC streamer should retain Index after Commit and Rollback.
 - [PR #2840](https://github.com/rqlite/rqlite/pull/2840): Fix issue where CDC was not emitting all events resulting from a Bulk Request.
+- [PR #2841](https://github.com/rqlite/rqlite/pull/2841): Fix issue where a database connection could be created without autocheckpointing being disabled.
 
 ## v10.5.1 (October 2nd 2026)
 ### Implementation changes and bug fixes
