@@ -113,6 +113,10 @@ func ForeignKeyDriver() *Driver {
 				if _, err := conn.Exec("PRAGMA foreign_keys = ON", nil); err != nil {
 					return fmt.Errorf("cannot enable foreign keys: %w", err)
 				}
+				// As with all drivers, rqlite must have full control over checkpointing.
+				if _, err := conn.Exec("PRAGMA wal_autocheckpoint=0", nil); err != nil {
+					return fmt.Errorf("failed to disable automatic checkpointing: %s", err)
+				}
 				return nil
 			},
 		})
@@ -163,6 +167,8 @@ func (d *Driver) CheckpointOnCloseMode() CnkOnCloseMode {
 
 // buildConnectHook composes a ConnectHook from cfg, chaining all requested
 // connection-level behaviors in order: checkpoint config, then query tracing.
+//
+// This driver unconditionally disables automatic checkpointing.
 func buildConnectHook(cfg *DriverConfig) func(conn *sqlite3.SQLiteConn) error {
 	return func(conn *sqlite3.SQLiteConn) error {
 		// Checkpoint-on-close configuration.
@@ -170,6 +176,13 @@ func buildConnectHook(cfg *DriverConfig) func(conn *sqlite3.SQLiteConn) error {
 			if err := conn.DBConfigNoCkptOnClose(); err != nil {
 				return fmt.Errorf("cannot disable checkpoint on close: %w", err)
 			}
+		}
+
+		// It's critical that rqlite has full control over the checkpointing process
+		// so disable all auto-checkpoint. This doesn't return an error on a read-only
+		// connection, so an error here really is an issue.
+		if _, err := conn.Exec("PRAGMA wal_autocheckpoint=0", nil); err != nil {
+			return fmt.Errorf("failed to disable automatic checkpointing: %s", err)
 		}
 
 		// Query tracing.
