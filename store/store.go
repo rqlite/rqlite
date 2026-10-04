@@ -2537,7 +2537,7 @@ func (s *Store) fsmApply(l *raft.Log) (e any) {
 	}
 
 	cmd, mutated, r, err := func() (*proto.Command, bool, any, error) {
-		// Reset CDC streamer with the current log index before processing if CDC is enabled
+		// CDC enabled? Prep collection of events.
 		if s.cdcEnabled.Is() {
 			s.cdcMu.RLock()
 			defer s.cdcMu.RUnlock()
@@ -2568,6 +2568,8 @@ func (s *Store) fsmApply(l *raft.Log) (e any) {
 			s.cdcCollator.Reset()
 		}
 		defer func() {
+			s.cdcMu.RLock()
+			defer s.cdcMu.RUnlock()
 			if s.cdcCollator == nil {
 				return
 			}
