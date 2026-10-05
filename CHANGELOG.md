@@ -1,6 +1,6 @@
 ## v10.5.3 (unreleased)
 ### Implementation changes and bug fixes
-- [PR #2844](https://github.com/rqlite/rqlite/pull/2844): Verify WAL-related compile-time options.
+- [PR #2844](https://github.com/rqlite/rqlite/pull/2844): Unit-test WAL-related compile-time options, to ensure SQLite operates as per rqlite needs.
 
 ## v10.5.2 (October 4th 2026)
 ### Implementation changes and bug fixes
