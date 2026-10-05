@@ -1,6 +1,7 @@
 ## v10.5.3 (unreleased)
 ### Implementation changes and bug fixes
 - [PR #2844](https://github.com/rqlite/rqlite/pull/2844): Unit-test WAL-related compile-time options, to ensure SQLite operates as per rqlite needs.
+- [PR #2845](https://github.com/rqlite/rqlite/pull/2845): Check Raft snapshot threshold every 5 seconds by default.
 
 ## v10.5.2 (October 4th 2026)
 ### Implementation changes and bug fixes
