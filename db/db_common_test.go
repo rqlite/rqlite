@@ -18,26 +18,37 @@ func Test_DB_BusyTimeout(t *testing.T) {
 	defer fsutil.Remove(path)
 	defer db.Close()
 
-	// Only the busy timeout of the read-write connection can be changed.
-	wantRo, err := db.ROBusyTimeout()
+	wantRw := rand.N(10000)
+	wantRo := rand.N(10000)
+
+	err := db.SetBusyTimeout(wantRw, wantRo)
+	if err != nil {
+		t.Fatalf("failed to set busy_timeout: %s", err.Error())
+	}
+
+	gotRwOnly, err := db.RWBusyTimeout()
+	if err != nil {
+		t.Fatalf("failed to get read-write busy_timeout: %s", err.Error())
+	}
+	if gotRwOnly != wantRw {
+		t.Fatalf("want read-write busy_timeout=%d, got %d", wantRw, gotRwOnly)
+	}
+
+	gotRoOnly, err := db.ROBusyTimeout()
 	if err != nil {
 		t.Fatalf("failed to get read-only busy_timeout: %s", err.Error())
 	}
-	wantRw := rand.N(10000)
-	if err := db.SetBusyTimeout(wantRw); err != nil {
-		t.Fatalf("failed to set busy_timeout: %s", err.Error())
+	if gotRoOnly != wantRo {
+		t.Fatalf("want read-only busy_timeout=%d, got %d", wantRo, gotRoOnly)
 	}
 
 	gotRw, gotRo, err := db.BusyTimeout()
 	if err != nil {
 		t.Fatalf("failed to get busy_timeout: %s", err.Error())
 	}
+
 	if gotRw != wantRw || gotRo != wantRo {
 		t.Fatalf("want busy_timeout rw=%d, ro=%d, got rw=%d, ro=%d", wantRw, wantRo, gotRw, gotRo)
-	}
-
-	if err := db.SetBusyTimeout(-1); err == nil {
-		t.Fatalf("expected error setting negative busy_timeout")
 	}
 }
 

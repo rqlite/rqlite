@@ -1760,7 +1760,7 @@ func Test_ConnectionReplaced_SettingsRetained(t *testing.T) {
 	}); err != nil {
 		t.Fatalf("failed to register rollback hook: %s", err)
 	}
-	if err := db.SetBusyTimeout(1234); err != nil {
+	if err := db.SetBusyTimeout(1234, -1); err != nil {
 		t.Fatalf("failed to set busy timeout: %s", err)
 	}
 	if err := db.SetSynchronousMode(SynchronousFull); err != nil {

@@ -188,9 +188,10 @@ type DB struct {
 	fkEnabled bool   // Foreign key constraints enabled
 	wal       bool
 
-	rwConnector *connector // Opens, and holds the settings of, read-write connections.
-	rwDB        *sql.DB    // Database connection for database reads and writes.
-	roDB        *sql.DB    // Database connection database reads.
+	rwFactory *ConnectionFactory // Opens and configures every read-write connection.
+	roFactory *ConnectionFactory // Opens and configures every read-only connection.
+	rwDB      *sql.DB            // Database connection for database reads and writes.
+	roDB      *sql.DB            // Database connection database reads.
 
 	rwDSN string // DSN used for read-write connection
 	roDSN string // DSN used for read-only connections
@@ -263,8 +264,8 @@ func OpenWithDriver(drv *Driver, dbPath string, fkEnabled, wal bool) (retDB *DB,
 	/////////////////////////////////////////////////////////////////////////
 	// Main RW connection
 	rwDSN := MakeDSN(dbPath, ModeReadWrite, fkEnabled, wal)
-	rwConnector := drv.connector(rwDSN)
-	rwDB := sql.OpenDB(rwConnector)
+	rwFactory := drv.factory(rwDSN)
+	rwDB := sql.OpenDB(rwFactory)
 	defer func() {
 		if retErr != nil {
 			rwDB.Close()
@@ -274,7 +275,8 @@ func OpenWithDriver(drv *Driver, dbPath string, fkEnabled, wal bool) (retDB *DB,
 	/////////////////////////////////////////////////////////////////////////
 	// Read-only connection
 	roDSN := MakeDSN(dbPath, ModeReadOnly, fkEnabled, wal)
-	roDB := sql.OpenDB(drv.connector(roDSN))
+	roFactory := drv.factory(roDSN)
+	roDB := sql.OpenDB(roFactory)
 	defer func() {
 		if retErr != nil {
 			roDB.Close()
@@ -329,17 +331,18 @@ func OpenWithDriver(drv *Driver, dbPath string, fkEnabled, wal bool) (retDB *DB,
 	}
 
 	return &DB{
-		drv:         drv,
-		path:        dbPath,
-		walPath:     dbPath + "-wal",
-		fkEnabled:   fkEnabled,
-		wal:         wal,
-		rwConnector: rwConnector,
-		rwDB:        rwDB,
-		roDB:        roDB,
-		rwDSN:       rwDSN,
-		roDSN:       roDSN,
-		logger:      logger,
+		drv:       drv,
+		path:      dbPath,
+		walPath:   dbPath + "-wal",
+		fkEnabled: fkEnabled,
+		wal:       wal,
+		rwFactory: rwFactory,
+		roFactory: roFactory,
+		rwDB:      rwDB,
+		roDB:      roDB,
+		rwDSN:     rwDSN,
+		roDSN:     roDSN,
+		logger:    logger,
 	}, nil
 }
 
@@ -441,7 +444,8 @@ func (db *DB) RegisterPreUpdateHook(hook PreUpdateHookCallback, tblRe *regexp.Re
 			}
 		}
 	}
-	return db.updateRWSettings(func(s *connSettings) { s.preUpdateHook = cb })
+	db.rwFactory.RegisterPreUpdateHook(cb)
+	return nil
 }
 
 // UpdateHookCallback is a callback function that is called before a row is modified
@@ -487,7 +491,8 @@ func (db *DB) RegisterUpdateHook(hook UpdateHookCallback) error {
 			}
 		}
 	}
-	return db.updateRWSettings(func(s *connSettings) { s.updateHook = cb })
+	db.rwFactory.RegisterUpdateHook(cb)
+	return nil
 }
 
 // RollbackHookCallback is called when SQLite rolls back a transaction.
@@ -497,7 +502,8 @@ type RollbackHookCallback func()
 // nil, the callback is removed. SQLite does not invoke this hook for a statement
 // rollback within an open transaction, or for ROLLBACK TO a savepoint.
 func (db *DB) RegisterRollbackHook(hook RollbackHookCallback) error {
-	return db.updateRWSettings(func(s *connSettings) { s.rollbackHook = hook })
+	db.rwFactory.RegisterRollbackHook(hook)
+	return nil
 }
 
 // CommitHookCallback is a callback function that is called whenever a transaction
@@ -519,21 +525,8 @@ func (db *DB) RegisterCommitHook(hook CommitHookCallback) error {
 			return 1
 		}
 	}
-	return db.updateRWSettings(func(s *connSettings) { s.commitHook = cb })
-}
-
-// updateRWSettings changes the settings of the read-write connection. The
-// change is applied to the current connection, and is held by the connector
-// so that it also applies to any connection which replaces it.
-func (db *DB) updateRWSettings(change func(s *connSettings)) error {
-	conn, err := db.rwDB.Conn(context.Background())
-	if err != nil {
-		return err
-	}
-	defer conn.Close()
-	return conn.Raw(func(driverConn any) error {
-		return db.rwConnector.update(driverConn.(*sqlite3.SQLiteConn), change)
-	})
+	db.rwFactory.RegisterCommitHook(cb)
+	return nil
 }
 
 // LastModified returns the last modified time of the database file, or the WAL file,
@@ -690,14 +683,21 @@ func (db *DB) ExtensionNames() []string {
 	return names
 }
 
-// SetBusyTimeout sets the busy timeout, in milliseconds, of the read-write
-// database connection. The busy timeout of read-only connections is fixed when
-// they are opened.
-func (db *DB) SetBusyTimeout(ms int) error {
-	if ms < 0 {
-		return fmt.Errorf("invalid busy timeout %d", ms)
+// SetBusyTimeout sets the busy timeout, in milliseconds, of every read-write
+// and read-only connection to the database. If a timeout is less than zero it
+// is not set.
+func (db *DB) SetBusyTimeout(rwMs, roMs int) error {
+	if rwMs >= 0 {
+		if err := db.rwFactory.SetBusyTimeout(rwMs); err != nil {
+			return err
+		}
 	}
-	return db.updateRWSettings(func(s *connSettings) { s.busyTimeout = ms })
+	if roMs >= 0 {
+		if err := db.roFactory.SetBusyTimeout(roMs); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 // RWBusyTimeout returns the current busy timeout value for the read-write
@@ -759,11 +759,11 @@ func (db *DB) CheckpointTruncateWithTimeout(dur time.Duration) (err error) {
 	if err != nil {
 		return fmt.Errorf("failed to get busy_timeout: %s", err.Error())
 	}
-	if err := db.SetBusyTimeout(int(dur.Milliseconds())); err != nil {
+	if err := db.SetBusyTimeout(int(dur.Milliseconds()), -1); err != nil {
 		return fmt.Errorf("failed to set busy_timeout: %s", err.Error())
 	}
 	defer func() {
-		if err := db.SetBusyTimeout(rwBt); err != nil {
+		if err := db.SetBusyTimeout(rwBt, -1); err != nil {
 			db.logger.Printf("failed to reset busy_timeout: %s", err.Error())
 		}
 	}()
@@ -815,12 +815,12 @@ func (db *DB) CheckpointWithTimeout(mode CheckpointMode, dur time.Duration) (met
 		if err != nil {
 			return nil, fmt.Errorf("failed to get busy_timeout on checkpointing connection: %s", err.Error())
 		}
-		if err := db.SetBusyTimeout(int(dur.Milliseconds())); err != nil {
+		if err := db.SetBusyTimeout(int(dur.Milliseconds()), -1); err != nil {
 			return nil, fmt.Errorf("failed to set busy_timeout on checkpointing connection: %s", err.Error())
 		}
 		defer func() {
 			// Reset back to default
-			if err := db.SetBusyTimeout(rwBt); err != nil {
+			if err := db.SetBusyTimeout(rwBt, -1); err != nil {
 				db.logger.Printf("failed to reset busy_timeout on checkpointing connection: %s", err.Error())
 			}
 		}()
@@ -951,7 +951,7 @@ func (db *DB) VerifyIntegrity() (IntegrityResult, error) {
 
 // SetSynchronousMode sets the synchronous mode of the database.
 func (db *DB) SetSynchronousMode(mode SynchronousMode) error {
-	return db.updateRWSettings(func(s *connSettings) { s.synchronous = &mode })
+	return db.rwFactory.SetSynchronousMode(mode)
 }
 
 // GetSynchronousMode returns the current synchronous mode.
@@ -1827,7 +1827,7 @@ func (db *DB) StmtReadOnly(sql string) (bool, error) {
 func (db *DB) StmtReadOnlyWithConn(sql string, conn *sql.Conn) (bool, error) {
 	var readOnly bool
 	f := func(driverConn any) error {
-		c := driverConn.(*sqlite3.SQLiteConn)
+		c := driverConn.(*Connection)
 		drvStmt, err := c.Prepare(sql)
 		if err != nil {
 			return err
@@ -1939,7 +1939,7 @@ func (db *DB) txStatus() (map[string]any, error) {
 		defer conn.Close()
 		var autoCommit bool
 		if err := conn.Raw(func(driverConn any) error {
-			sqliteConn, ok := driverConn.(*sqlite3.SQLiteConn)
+			sqliteConn, ok := driverConn.(*Connection)
 			if !ok {
 				return fmt.Errorf("unexpected driver connection type: %T", driverConn)
 			}
@@ -2041,7 +2041,7 @@ func qualifyRowColumns(conn *sql.Conn, query string, rows *command.QueryRows) er
 
 	var tableNames []string
 	err := conn.Raw(func(driverConn any) error {
-		sqliteConn := driverConn.(*sqlite3.SQLiteConn)
+		sqliteConn := driverConn.(*Connection)
 		stmt, err := sqliteConn.Prepare(query)
 		if err != nil {
 			return err
@@ -2101,12 +2101,12 @@ func copyDatabase(dst *DB, src *DB) error {
 	var dstSQLiteConn *sqlite3.SQLiteConn
 
 	bf := func(driverConn any) error {
-		srcSQLiteConn := driverConn.(*sqlite3.SQLiteConn)
+		srcSQLiteConn := driverConn.(*Connection).SQLiteConn
 		return copyDatabaseConnection(dstSQLiteConn, srcSQLiteConn)
 	}
 	return dstConn.Raw(
 		func(driverConn any) error {
-			dstSQLiteConn = driverConn.(*sqlite3.SQLiteConn)
+			dstSQLiteConn = driverConn.(*Connection).SQLiteConn
 			return srcConn.Raw(bf)
 		})
 }

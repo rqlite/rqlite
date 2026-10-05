@@ -146,7 +146,7 @@ func Test_DBErrors_Prepare(t *testing.T) {
 			t.Fatal(err)
 		}
 		err = conn.Raw(func(raw any) error {
-			raw.(*sqlite3.SQLiteConn).SetLimit(sqlite3.SQLITE_LIMIT_VDBE_OP, 1)
+			raw.(*Connection).SetLimit(sqlite3.SQLITE_LIMIT_VDBE_OP, 1)
 			return nil
 		})
 		conn.Close()

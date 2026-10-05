@@ -127,7 +127,7 @@ func Test_Drivers_AutoCheckpointDisabled(t *testing.T) {
 		path := mustTempPath()
 		defer fsutil.RemoveAll(path)
 		for _, readOnly := range []bool{ModeReadWrite, ModeReadOnly} {
-			db := sql.OpenDB(d.connector(MakeDSN(path, readOnly, false, true)))
+			db := sql.OpenDB(d.factory(MakeDSN(path, readOnly, false, true)))
 			defer db.Close()
 
 			// Hold each connection open so the pool must create a new one each time.
