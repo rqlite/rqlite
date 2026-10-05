@@ -52,14 +52,25 @@ func Test_DB_BusyTimeout(t *testing.T) {
 	}
 }
 
+// Test_DB_CompileOptions tests that we can fetch the compile options, and that the
+// underlying SQLite library is compiled as expected.
 func Test_DB_CompileOptions(t *testing.T) {
 	db, path := mustCreateOnDiskDatabaseWAL()
 	defer fsutil.Remove(path)
 	defer db.Close()
 
-	_, err := db.CompileOptions()
+	opts, err := db.CompileOptions()
 	if err != nil {
 		t.Fatalf("failed to retrieve compilation options: %s", err.Error())
+	}
+
+	for _, o := range []string{
+		"DEFAULT_WAL_AUTOCHECKPOINT=0",
+		"DEFAULT_WAL_SYNCHRONOUS=0",
+	} {
+		if !slices.Contains(opts, o) {
+			t.Fatalf("%s not present in compile options", o)
+		}
 	}
 }
 
