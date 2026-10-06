@@ -1696,24 +1696,28 @@ func Test_TransactionTimeout_AutoCheckpointDisabled(t *testing.T) {
 	}
 }
 
-// Test_TransactionTimeout_HooksRetained tests that registered hooks remain in
-// place if a transaction times out. See Test_TransactionTimeout_AutoCheckpointDisabled
-// for why the test repeatedly times out transactions.
+// Test_TransactionTimeout_HooksRetained tests that hooks configured on the
+// driver remain in place if a transaction times out, since the hooks are
+// installed on every connection the driver opens, including any replacement.
+// See Test_TransactionTimeout_AutoCheckpointDisabled for why the test
+// repeatedly times out transactions.
 func Test_TransactionTimeout_HooksRetained(t *testing.T) {
-	t.Skip("hooks are lost when database/sql replaces the read-write connection")
-
-	db, path := mustCreateOnDiskDatabaseWAL()
-	defer db.Close()
-	defer fsutil.Remove(path)
-	mustExecute(db, "CREATE TABLE foo (id INTEGER PRIMARY KEY)")
-
 	var commits int
-	if err := db.RegisterCommitHook(func() bool {
-		commits++
-		return true
-	}); err != nil {
-		t.Fatalf("failed to register commit hook: %s", err)
+	drv := NewDriverFromConfig("hooks-retained-test", &DriverConfig{
+		ChkOnClose: CnkOnCloseModeDisabled,
+		CommitHook: func() bool {
+			commits++
+			return true
+		},
+	})
+	path := mustTempPath()
+	defer fsutil.Remove(path)
+	db, err := OpenWithDriver(drv, path, false, true)
+	if err != nil {
+		t.Fatalf("failed to open database: %s", err)
 	}
+	defer db.Close()
+	mustExecute(db, "CREATE TABLE foo (id INTEGER PRIMARY KEY)")
 
 	req := timeoutTransactionRequest()
 	for i := 0; i < 5000; i++ {

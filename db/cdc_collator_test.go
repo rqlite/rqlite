@@ -603,16 +603,16 @@ func mustCreateCDCCollatorDatabase(t *testing.T) (*DB, *CDCCollator) {
 	t.Cleanup(func() { db.Close() })
 	mustExecute(db, "CREATE TABLE foo (id INTEGER PRIMARY KEY)")
 
-	c := mustNewCDCCollator(t, db)
-	if err := db.RegisterPreUpdateHook(c.PreupdateHook, nil, false); err != nil {
-		t.Fatalf("error registering preupdate hook: %v", err)
-	}
-	if err := db.RegisterCommitHook(c.CommitHook); err != nil {
-		t.Fatalf("error registering commit hook: %v", err)
-	}
-	if err := db.RegisterRollbackHook(c.RollbackHook); err != nil {
-		t.Fatalf("error registering rollback hook: %v", err)
-	}
+	// The collator resolves column names through whichever database is
+	// currently open, since the database is reopened to install the hooks.
+	p := &lazyColumnNamesProvider{}
+	c := mustNewCDCCollator(t, p)
+	db = mustReopenWithHooks(t, db, &DriverConfig{
+		PreUpdateHook: c.PreupdateHook,
+		CommitHook:    c.CommitHook,
+		RollbackHook:  c.RollbackHook,
+	})
+	p.db = db
 	return db, c
 }
 
@@ -643,4 +643,14 @@ func (m *mockColumnNamesProvider) ColumnNames(table string) ([]string, error) {
 		return cols, nil
 	}
 	return []string{}, nil
+}
+
+// lazyColumnNamesProvider resolves column names through a database which may
+// be set after the provider is created.
+type lazyColumnNamesProvider struct {
+	db *DB
+}
+
+func (p *lazyColumnNamesProvider) ColumnNames(table string) ([]string, error) {
+	return p.db.ColumnNames(table)
 }

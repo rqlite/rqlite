@@ -4,6 +4,7 @@ import (
 	"os"
 	"testing"
 
+	"github.com/rqlite/rqlite/v10/command/proto"
 	"github.com/rqlite/rqlite/v10/internal/fsutil"
 )
 
@@ -133,6 +134,58 @@ func Test_SwapSuccess_Driver(t *testing.T) {
 	}
 	if exp, got := `[{"columns":["foreign_keys"],"types":["integer"],"values":[[1]]}]`, asJSON(rows); exp != got {
 		t.Fatalf("expected foreign key support to be enabled, got %s", got)
+	}
+}
+
+// Test_SwapSuccess_Hooks tests that hooks configured on the driver are in place
+// after a swap, since the swapped-in database is opened with the same driver.
+func Test_SwapSuccess_Hooks(t *testing.T) {
+	// Create the database to be swapped in.
+	srcPath := mustTempPath()
+	defer fsutil.Remove(srcPath)
+	srcDB, err := Open(srcPath, false, false)
+	if err != nil {
+		t.Fatalf("failed to open source database: %s", err)
+	}
+	mustExecute(srcDB, "CREATE TABLE foo (id INTEGER NOT NULL PRIMARY KEY, name TEXT)")
+	if err := srcDB.Close(); err != nil {
+		t.Fatalf("failed to close source database pre-swap: %s", err)
+	}
+
+	// Create a SwappableDB with an empty database, using a driver with hooks.
+	var preupdates, commits int
+	drv := NewDriverFromConfig(testDriverConfigName(), &DriverConfig{
+		ChkOnClose: CnkOnCloseModeDisabled,
+		PreUpdateHook: func(ev *proto.CDCEvent) error {
+			preupdates++
+			return nil
+		},
+		CommitHook: func() bool {
+			commits++
+			return true
+		},
+	})
+	swappablePath := mustTempPath()
+	defer fsutil.Remove(swappablePath)
+	swappableDB, err := OpenSwappable(swappablePath, drv, false, false, 0)
+	if err != nil {
+		t.Fatalf("failed to open swappable database: %s", err)
+	}
+	defer swappableDB.Close()
+
+	if err := swappableDB.Swap(srcPath, false, false); err != nil {
+		t.Fatalf("failed to swap database: %s", err)
+	}
+
+	// Write to the swapped-in database, and confirm the hooks fired.
+	preupdates, commits = 0, 0
+	if _, err := swappableDB.Execute(&proto.Request{Statements: []*proto.Statement{
+		{Sql: "INSERT INTO foo(name) VALUES('fiona')"},
+	}}, false); err != nil {
+		t.Fatalf("failed to write to swapped database: %s", err)
+	}
+	if preupdates != 1 || commits != 1 {
+		t.Fatalf("hooks after swap: preupdates=%d, commits=%d, want 1 each", preupdates, commits)
 	}
 }
 

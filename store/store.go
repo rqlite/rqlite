@@ -772,12 +772,26 @@ func (s *Store) Open() (retErr error) {
 
 	// Build a composed driver if any non-default features are configured.
 	// This replaces the previous sequential override pattern and allows
-	// extensions and query logging to coexist in the same driver.
-	if len(s.dbConf.Extensions) > 0 || s.dbConf.QueryLogger != nil {
+	// extensions, query logging, and CDC to coexist in the same driver.
+	if len(s.dbConf.Extensions) > 0 || s.dbConf.QueryLogger != nil || s.cdcConf != nil {
 		cfg := sql.DriverConfig{
 			Extensions:  s.dbConf.Extensions,
 			ChkOnClose:  sql.CnkOnCloseModeDisabled,
 			QueryLogger: s.dbConf.QueryLogger,
+		}
+		if s.cdcConf != nil {
+			// The CDC hooks are part of the driver configuration, so they are
+			// installed on every database connection, including any connection
+			// opened after the database is swapped.
+			s.cdcCollator, err = sql.NewCDCCollator(&ColumnNamesProvider{s})
+			if err != nil {
+				return fmt.Errorf("failed to create CDC collator: %s", err)
+			}
+			cfg.PreUpdateHook = s.cdcCollator.PreupdateHook
+			cfg.PreUpdateTableRe = s.cdcConf.TableRe
+			cfg.PreUpdateRowIDsOnly = s.cdcConf.RowIDsOnly
+			cfg.CommitHook = s.cdcCollator.CommitHook
+			cfg.RollbackHook = s.cdcCollator.RollbackHook
 		}
 		s.dbDrv = sql.NewDriverFromConfig(
 			random.StringPattern("rqlite-configured-xxxx-xxxx-xxxx"),
@@ -790,17 +804,6 @@ func (s *Store) Open() (retErr error) {
 		return fmt.Errorf("failed to create on-disk database: %s", err)
 	}
 	s.checkpointer = s.db
-
-	// Start CDC, if enabled.
-	if s.cdcConf != nil {
-		s.cdcCollator, err = sql.NewCDCCollator(s.db)
-		if err != nil {
-			return fmt.Errorf("failed to create CDC collator: %s", err)
-		}
-		if err := s.registerCDCHooks(); err != nil {
-			return fmt.Errorf("failed to register CDC hooks: %s", err)
-		}
-	}
 
 	// Clean up any files from aborted operations. This tries to catch the case where scratch files
 	// were created in the Raft directory, not cleaned up, and then the node was restarted with an
@@ -1005,11 +1008,6 @@ func (s *Store) Close(wait bool) (retErr error) {
 		return err
 	}
 	defer s.snapshotCAS.End()
-
-	// Clean up any CDC.
-	if err := s.cleanupCDC(); err != nil {
-		return err
-	}
 
 	s.dechunkManager.Close()
 
@@ -2034,11 +2032,6 @@ func (s *Store) ReadFrom(r io.Reader) (int64, error) {
 		return n, fmt.Errorf("error swapping database file: %v", err)
 	}
 
-	// Swapping in a new database unregisters any registered CDC hooks.
-	if err := s.registerCDCHooks(); err != nil {
-		s.logger.Fatalf("failed to register CDC hooks after loading database: %s", err)
-	}
-
 	// Snapshot, so we load the new database into the Raft system.
 	if err := s.snapshotStore.SetDueNext(snapshot.Full); err != nil {
 		s.logger.Fatalf("failed to set full snapshot needed: %s", err)
@@ -2291,43 +2284,6 @@ func (s *Store) remove(id string) error {
 	return f.Error()
 }
 
-// registerCDCHooks registers the CDC collator's hooks on the database, if CDC
-// is enabled. SQLite hooks belong to a database connection, so this must be
-// called whenever the database is opened or swapped.
-func (s *Store) registerCDCHooks() error {
-	if s.cdcConf == nil {
-		return nil
-	}
-	if err := s.db.RegisterPreUpdateHook(s.cdcCollator.PreupdateHook, s.cdcConf.TableRe, s.cdcConf.RowIDsOnly); err != nil {
-		return fmt.Errorf("failed to register preupdate hook: %w", err)
-	}
-	if err := s.db.RegisterCommitHook(s.cdcCollator.CommitHook); err != nil {
-		return fmt.Errorf("failed to register commit hook: %w", err)
-	}
-	if err := s.db.RegisterRollbackHook(s.cdcCollator.RollbackHook); err != nil {
-		return fmt.Errorf("failed to register rollback hook: %w", err)
-	}
-	return nil
-}
-
-func (s *Store) cleanupCDC() error {
-	if s.cdcConf == nil {
-		return nil
-	}
-	if err := s.db.RegisterPreUpdateHook(nil, nil, false); err != nil {
-		return fmt.Errorf("failed to unregister preupdate hook: %w", err)
-	}
-	if err := s.db.RegisterCommitHook(nil); err != nil {
-		return fmt.Errorf("failed to unregister commit hook: %w", err)
-	}
-	if err := s.db.RegisterRollbackHook(nil); err != nil {
-		return fmt.Errorf("failed to unregister rollback hook: %w", err)
-	}
-
-	s.cdcCollator = nil
-	return nil
-}
-
 // initVacuumTime initializes the last vacuum times in the Config store.
 // If auto-vacuum is disabled, then all auto-vacuum related state is removed.
 // If enabled, but no last vacuum time is set, then the auto-vac baseline
@@ -2547,10 +2503,6 @@ func (s *Store) fsmApply(l *raft.Log) (e any) {
 		// Swapping in a new database invalidates any existing snapshot.
 		if err := s.snapshotStore.SetDueNext(snapshot.Full); err != nil {
 			s.logger.Fatalf("failed to set full snapshot needed: %s", err)
-		}
-		// Swapping in a new database deactivates the CDC hooks.
-		if err := s.registerCDCHooks(); err != nil {
-			s.logger.Fatalf("failed to register CDC hooks after loading database: %s", err)
 		}
 	}
 	return r
@@ -2853,10 +2805,6 @@ func (s *Store) fsmRestore(rc io.ReadCloser) (retErr error) {
 	s.dbAppliedIdx.Store(li)
 	s.appliedTarget.Signal(li)
 	s.dbModifiedTime.Store(time.Now())
-	// Swapping in a new database deactivates the CDC hooks.
-	if err := s.registerCDCHooks(); err != nil {
-		s.logger.Fatalf("failed to register CDC hooks after restoring database: %s", err)
-	}
 
 	stats.Add(numRestores, 1)
 	s.logger.Printf("node restored in %s", time.Since(startT))
