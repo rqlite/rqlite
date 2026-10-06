@@ -385,7 +385,7 @@ func createCDC(cfg *Config, str *store.Store, clstrServ *cluster.Service, clstrC
 		return nil, fmt.Errorf("failed to create CDC config: %s", err.Error())
 	}
 	CDCCluster := cdc.NewCDCCluster(str, clstrServ, clstrClient)
-	cdcService, err := cdc.NewService(cfg.NodeID, cfg.DataPath, CDCCluster, cdcCfg)
+	cdcService, err := cdc.NewService(cfg.NodeID, cfg.DataPath, CDCCluster, str.CDCEventsC(), cdcCfg)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create CDC Service: %s", err.Error())
 	}
@@ -398,7 +398,7 @@ func createCDC(cfg *Config, str *store.Store, clstrServ *cluster.Service, clstrC
 	if cdcCfg.TableFilter != nil {
 		re = cdcCfg.TableFilter.Regexp
 	}
-	if err := str.EnableCDC(cdcService.C(), re, cdcCfg.RowIDsOnly); err != nil {
+	if err := str.EnableCDC(re, cdcCfg.RowIDsOnly); err != nil {
 		return nil, fmt.Errorf("failed to enable CDC on Store: %s", err.Error())
 	}
 	return cdcService, nil

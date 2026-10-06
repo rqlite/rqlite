@@ -22,7 +22,7 @@ func Test_CDC_SingleNode(t *testing.T) {
 
 		// Configure CDC before opening the store.
 		cdcCluster := cdc.NewCDCCluster(node.Store, node.Cluster, node.Client)
-		cdcService, err := cdc.NewService(node.ID, node.Dir, cdcCluster, mustCDCConfig(testEndpoint.URL()))
+		cdcService, err := cdc.NewService(node.ID, node.Dir, cdcCluster, node.Store.CDCEventsC(), mustCDCConfig(testEndpoint.URL()))
 		if err != nil {
 			t.Fatalf("failed to create CDC service: %s", err.Error())
 		}
@@ -30,7 +30,7 @@ func Test_CDC_SingleNode(t *testing.T) {
 		node.CDC.Start()
 		node.CDC.SetLeader(true)
 
-		node.Store.EnableCDC(node.CDC.C(), nil, false)
+		node.Store.EnableCDC(nil, false)
 
 		_, err = node.Execute(`CREATE TABLE foo (id integer not null primary key, name text)`)
 		if err != nil {
@@ -78,7 +78,7 @@ func Test_CDC_SingleNode_Snapshot(t *testing.T) {
 
 		// Configure CDC before opening the store.
 		cdcCluster := cdc.NewCDCCluster(node.Store, node.Cluster, node.Client)
-		cdcService, err := cdc.NewService(node.ID, node.Dir, cdcCluster, mustCDCConfig(testEndpoint.URL()))
+		cdcService, err := cdc.NewService(node.ID, node.Dir, cdcCluster, node.Store.CDCEventsC(), mustCDCConfig(testEndpoint.URL()))
 		if err != nil {
 			t.Fatalf("failed to create CDC service: %s", err.Error())
 		}
@@ -86,7 +86,7 @@ func Test_CDC_SingleNode_Snapshot(t *testing.T) {
 		node.CDC.Start()
 		node.CDC.SetLeader(true)
 
-		node.Store.EnableCDC(node.CDC.C(), nil, false)
+		node.Store.EnableCDC(nil, false)
 
 		_, err = node.Execute(`CREATE TABLE foo (id integer not null primary key, name text)`)
 		if err != nil {
@@ -132,7 +132,7 @@ func Test_CDC_SingleNode_LaterStart(t *testing.T) {
 
 	// Configure CDC before opening the store.
 	cdcCluster := cdc.NewCDCCluster(node.Store, node.Cluster, node.Client)
-	cdcService, err := cdc.NewService(node.ID, node.Dir, cdcCluster, mustCDCConfig(testEndpoint.URL()))
+	cdcService, err := cdc.NewService(node.ID, node.Dir, cdcCluster, node.Store.CDCEventsC(), mustCDCConfig(testEndpoint.URL()))
 	if err != nil {
 		t.Fatalf("failed to create CDC service: %s", err.Error())
 	}
@@ -140,7 +140,7 @@ func Test_CDC_SingleNode_LaterStart(t *testing.T) {
 	node.CDC.Start()
 	node.CDC.SetLeader(true)
 
-	node.Store.EnableCDC(node.CDC.C(), nil, false)
+	node.Store.EnableCDC(nil, false)
 
 	_, err = node.Execute(`CREATE TABLE foo (id integer not null primary key, name text)`)
 	if err != nil {
@@ -178,7 +178,7 @@ func Test_CDC_SingleNode_PostLoadBoot(t *testing.T) {
 
 	// Configure CDC before opening the store.
 	cdcCluster := cdc.NewCDCCluster(node.Store, node.Cluster, node.Client)
-	cdcService, err := cdc.NewService(node.ID, node.Dir, cdcCluster, mustCDCConfig(testEndpoint.URL()))
+	cdcService, err := cdc.NewService(node.ID, node.Dir, cdcCluster, node.Store.CDCEventsC(), mustCDCConfig(testEndpoint.URL()))
 	if err != nil {
 		t.Fatalf("failed to create CDC service: %s", err.Error())
 	}
@@ -186,7 +186,7 @@ func Test_CDC_SingleNode_PostLoadBoot(t *testing.T) {
 	node.CDC.Start()
 	node.CDC.SetLeader(true)
 
-	node.Store.EnableCDC(node.CDC.C(), nil, false)
+	node.Store.EnableCDC(nil, false)
 
 	_, err = node.Execute(`CREATE TABLE foo (id integer not null primary key, name text)`)
 	if err != nil {
@@ -278,13 +278,13 @@ func Test_CDC_MultiNode(t *testing.T) {
 		// Configure CDC service for each node.
 		for _, node := range []*Node{node1, node2, node3} {
 			cdcCluster := cdc.NewCDCCluster(node.Store, node.Cluster, node.Client)
-			cdcService, err := cdc.NewService(node.ID, node.Dir, cdcCluster, mustCDCConfig(testEndpoint.URL()))
+			cdcService, err := cdc.NewService(node.ID, node.Dir, cdcCluster, node.Store.CDCEventsC(), mustCDCConfig(testEndpoint.URL()))
 			if err != nil {
 				panic(fmt.Sprintf("failed to create CDC service: %s", err.Error()))
 			}
 			node.CDC = cdcService
 			node.CDC.Start()
-			node.Store.EnableCDC(node.CDC.C(), nil, false)
+			node.Store.EnableCDC(nil, false)
 		}
 
 		node1.CDC.SetLeader(true)
@@ -363,13 +363,13 @@ func Test_CDC_MultiNode(t *testing.T) {
 			t.Fatalf("failed waiting for leader: %s", err.Error())
 		}
 		cdcCluster := cdc.NewCDCCluster(node4.Store, node4.Cluster, node4.Client)
-		cdcService, err := cdc.NewService(node4.ID, node4.Dir, cdcCluster, mustCDCConfig(testEndpoint.URL()))
+		cdcService, err := cdc.NewService(node4.ID, node4.Dir, cdcCluster, node4.Store.CDCEventsC(), mustCDCConfig(testEndpoint.URL()))
 		if err != nil {
 			t.Fatalf("failed to create CDC service: %s", err.Error())
 		}
 		node4.CDC = cdcService
 		node4.CDC.Start()
-		node4.Store.EnableCDC(node4.CDC.C(), nil, false)
+		node4.Store.EnableCDC(nil, false)
 		testPoll(t, func() (bool, error) {
 			return node4.CDC.HighWatermark() == testEndpoint.GetHighestMessageIndex(), nil
 		}, 100*time.Millisecond, 10*time.Second)
