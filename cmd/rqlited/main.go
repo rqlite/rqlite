@@ -126,6 +126,9 @@ func main() {
 	// life of the Store, so the Store must know about it when it is created.
 	var cdcCfg *cdc.Config
 	if cfg.CDCConfig != "" {
+		if cfg.RaftNonVoter {
+			log.Fatalf("cannot enable CDC on non-voting node")
+		}
 		if cdcCfg, err = cdc.NewConfig(cfg.CDCConfig); err != nil {
 			log.Fatalf("failed to create CDC config: %s", err.Error())
 		}
