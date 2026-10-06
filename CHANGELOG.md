@@ -8,6 +8,8 @@
 - [PR #2851](https://github.com/rqlite/rqlite/pull/2851): Store's CDC configuration set statically at start-up.
 - [PR #2852](https://github.com/rqlite/rqlite/pull/2852): Initialize CDC hooks at Store start-up.
 - [PR #2853](https://github.com/rqlite/rqlite/pull/2853): CDC hooks now configured as part of database driver.
+- [PR #2854](https://github.com/rqlite/rqlite/pull/2854): Set linearizable timeout when handling a request.
+- [PR #2855](https://github.com/rqlite/rqlite/pull/2855): `DELETE` is also an accepted method for CORS.
 - [PR #2856](https://github.com/rqlite/rqlite/pull/2856): Fix off-by-one error in CDC retry logic.
 
 ## v10.5.2 (October 4th 2026)
