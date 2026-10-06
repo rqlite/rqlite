@@ -1593,10 +1593,11 @@ func (s *Service) handleRequest(w http.ResponseWriter, r *http.Request, qp Query
 			DbTimeout:      int64(qp.DBTimeout(0)),
 			QualifyColumns: qp.QualifyColumns(),
 		},
-		Timings:         qp.Timings(),
-		Level:           qp.Level(),
-		Freshness:       qp.Freshness().Nanoseconds(),
-		FreshnessStrict: qp.FreshnessStrict(),
+		Timings:             qp.Timings(),
+		Level:               qp.Level(),
+		Freshness:           qp.Freshness().Nanoseconds(),
+		FreshnessStrict:     qp.FreshnessStrict(),
+		LinearizableTimeout: qp.LinearizableTimeout(defaultLinearTimeout).Nanoseconds(),
 	}
 
 	results, _, raftIndex, addr, resultsErr := s.proxy.Request(r.Context(), eqr, makeCredentials(r),
