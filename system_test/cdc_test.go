@@ -12,7 +12,7 @@ import (
 
 func Test_CDC_SingleNode(t *testing.T) {
 	testFn := func(t *testing.T, failRate int) {
-		node := mustNewLeaderNode("node1")
+		node := mustNewLeaderNodeCDC("node1")
 		defer node.Deprovision()
 
 		testEndpoint := cdctest.NewHTTPTestServer()
@@ -20,7 +20,7 @@ func Test_CDC_SingleNode(t *testing.T) {
 		testEndpoint.Start()
 		defer testEndpoint.Close()
 
-		// Configure CDC before opening the store.
+		// Create the CDC service; CDC is already enabled on the Store.
 		cdcCluster := cdc.NewCDCCluster(node.Store, node.Cluster, node.Client)
 		cdcService, err := cdc.NewService(node.ID, node.Dir, cdcCluster, node.Store.CDCEventsC(), mustCDCConfig(testEndpoint.URL()))
 		if err != nil {
@@ -29,8 +29,6 @@ func Test_CDC_SingleNode(t *testing.T) {
 		node.CDC = cdcService
 		node.CDC.Start()
 		node.CDC.SetLeader(true)
-
-		node.Store.EnableCDC(nil, false)
 
 		_, err = node.Execute(`CREATE TABLE foo (id integer not null primary key, name text)`)
 		if err != nil {
@@ -68,7 +66,7 @@ func Test_CDC_SingleNode(t *testing.T) {
 
 func Test_CDC_SingleNode_Snapshot(t *testing.T) {
 	testFn := func(t *testing.T, failRate int) {
-		node := mustNewLeaderNode("node1")
+		node := mustNewLeaderNodeCDC("node1")
 		defer node.Deprovision()
 
 		testEndpoint := cdctest.NewHTTPTestServer()
@@ -76,7 +74,7 @@ func Test_CDC_SingleNode_Snapshot(t *testing.T) {
 		testEndpoint.Start()
 		defer testEndpoint.Close()
 
-		// Configure CDC before opening the store.
+		// Create the CDC service; CDC is already enabled on the Store.
 		cdcCluster := cdc.NewCDCCluster(node.Store, node.Cluster, node.Client)
 		cdcService, err := cdc.NewService(node.ID, node.Dir, cdcCluster, node.Store.CDCEventsC(), mustCDCConfig(testEndpoint.URL()))
 		if err != nil {
@@ -85,8 +83,6 @@ func Test_CDC_SingleNode_Snapshot(t *testing.T) {
 		node.CDC = cdcService
 		node.CDC.Start()
 		node.CDC.SetLeader(true)
-
-		node.Store.EnableCDC(nil, false)
 
 		_, err = node.Execute(`CREATE TABLE foo (id integer not null primary key, name text)`)
 		if err != nil {
@@ -125,7 +121,7 @@ func Test_CDC_SingleNode_Snapshot(t *testing.T) {
 // Test_CDC_SingleNode_LaterStart verifies that starting the CDC service
 // before the HTTP endpoint is available works as expected.
 func Test_CDC_SingleNode_LaterStart(t *testing.T) {
-	node := mustNewLeaderNode("node1")
+	node := mustNewLeaderNodeCDC("node1")
 	defer node.Deprovision()
 
 	testEndpoint := cdctest.NewHTTPTestServer()
@@ -139,8 +135,6 @@ func Test_CDC_SingleNode_LaterStart(t *testing.T) {
 	node.CDC = cdcService
 	node.CDC.Start()
 	node.CDC.SetLeader(true)
-
-	node.Store.EnableCDC(nil, false)
 
 	_, err = node.Execute(`CREATE TABLE foo (id integer not null primary key, name text)`)
 	if err != nil {
@@ -171,7 +165,7 @@ func Test_CDC_SingleNode_LaterStart(t *testing.T) {
 // Test_CDC_SingleNode_PostLoadBoot verifies that CDC continues to operate
 // after a node is loaded or booted.
 func Test_CDC_SingleNode_PostLoadBoot(t *testing.T) {
-	node := mustNewLeaderNode("node1")
+	node := mustNewLeaderNodeCDC("node1")
 	defer node.Deprovision()
 
 	testEndpoint := cdctest.NewHTTPTestServer()
@@ -185,8 +179,6 @@ func Test_CDC_SingleNode_PostLoadBoot(t *testing.T) {
 	node.CDC = cdcService
 	node.CDC.Start()
 	node.CDC.SetLeader(true)
-
-	node.Store.EnableCDC(nil, false)
 
 	_, err = node.Execute(`CREATE TABLE foo (id integer not null primary key, name text)`)
 	if err != nil {
@@ -249,9 +241,9 @@ func Test_CDC_SingleNode_PostLoadBoot(t *testing.T) {
 
 func Test_CDC_MultiNode(t *testing.T) {
 	testFn := func(t *testing.T, failRate int) {
-		node1 := mustNewLeaderNode("node1")
+		node1 := mustNewLeaderNodeCDC("node1")
 		defer node1.Deprovision()
-		node2 := mustNewNode("node2", false)
+		node2 := mustNewNodeCDC("node2", false)
 		defer node2.Deprovision()
 		if err := node2.Join(node1); err != nil {
 			t.Fatalf("node failed to join leader: %s", err.Error())
@@ -260,7 +252,7 @@ func Test_CDC_MultiNode(t *testing.T) {
 		if err != nil {
 			t.Fatalf("failed waiting for leader: %s", err.Error())
 		}
-		node3 := mustNewNode("node3", false)
+		node3 := mustNewNodeCDC("node3", false)
 		defer node3.Deprovision()
 		if err := node3.Join(node1); err != nil {
 			t.Fatalf("node failed to join leader: %s", err.Error())
@@ -284,7 +276,6 @@ func Test_CDC_MultiNode(t *testing.T) {
 			}
 			node.CDC = cdcService
 			node.CDC.Start()
-			node.Store.EnableCDC(nil, false)
 		}
 
 		node1.CDC.SetLeader(true)
@@ -353,7 +344,7 @@ func Test_CDC_MultiNode(t *testing.T) {
 		}
 
 		// Join another node, check that it picks up the highwater mark.
-		node4 := mustNewNode("node4", false)
+		node4 := mustNewNodeCDC("node4", false)
 		defer node4.Deprovision()
 		if err := node4.Join(newLeader); err != nil {
 			t.Fatalf("node failed to join leader: %s", err.Error())
@@ -369,7 +360,6 @@ func Test_CDC_MultiNode(t *testing.T) {
 		}
 		node4.CDC = cdcService
 		node4.CDC.Start()
-		node4.Store.EnableCDC(nil, false)
 		testPoll(t, func() (bool, error) {
 			return node4.CDC.HighWatermark() == testEndpoint.GetHighestMessageIndex(), nil
 		}, 100*time.Millisecond, 10*time.Second)
