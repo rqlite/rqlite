@@ -6,6 +6,7 @@
 - [PR #2848](https://github.com/rqlite/rqlite/pull/2848): Unit-test _SYNCHRONOUS_ compile-time option, to ensure it's set as rqlite needs.
 - [PR #2850](https://github.com/rqlite/rqlite/pull/2850): Move CDC channel ownership to the Store object.
 - [PR #2851](https://github.com/rqlite/rqlite/pull/2851): Store's CDC configuration set statically at start-up.
+- [PR #2852](https://github.com/rqlite/rqlite/pull/2852): Store's CDC configuration set statically at start-up.
 
 ## v10.5.2 (October 4th 2026)
 ### Implementation changes and bug fixes
