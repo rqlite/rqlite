@@ -3,6 +3,7 @@
 - [PR #2844](https://github.com/rqlite/rqlite/pull/2844): Unit-test WAL-related compile-time options, to ensure SQLite operates as per rqlite needs.
 - [PR #2845](https://github.com/rqlite/rqlite/pull/2845): Check Raft snapshot threshold every 5 seconds by default.
 - [PR #2846](https://github.com/rqlite/rqlite/pull/2846): Trivial simplification of snapshotting logic.
+- [PR #2848](https://github.com/rqlite/rqlite/pull/2848): Unit-test SYNCHRONOUS compile-time option, to ensure it's set as rqlite needs.
 
 ## v10.5.2 (October 4th 2026)
 ### Implementation changes and bug fixes

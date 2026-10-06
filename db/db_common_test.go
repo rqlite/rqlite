@@ -66,6 +66,7 @@ func Test_DB_CompileOptions(t *testing.T) {
 
 	for _, o := range []string{
 		"DEFAULT_WAL_AUTOCHECKPOINT=0",
+		"DEFAULT_SYNCHRONOUS=0",
 		"DEFAULT_WAL_SYNCHRONOUS=0",
 	} {
 		if !slices.Contains(opts, o) {
