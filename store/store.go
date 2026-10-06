@@ -93,9 +93,6 @@ var (
 	// ErrBackupCASFailed is returned when we cannot acquire the backup CAS lock.
 	ErrBackupCASFailed = errors.New("failed to acquire backup CAS lock")
 
-	// ErrCDCEnabled is returned when CDC is already enabled.
-	ErrCDCEnabled = errors.New("CDC already enabled")
-
 	// ErrInvalidVacuum is returned when the requested backup format is not
 	// compatible with vacuum.
 	ErrInvalidVacuum = errors.New("invalid vacuum")
@@ -339,10 +336,8 @@ type Store struct {
 
 	cdcMu         sync.RWMutex
 	cdcCollator   *sql.CDCCollator
+	cdcConf       *CDCConfig // nil if CDC is not enabled.
 	cdcOutCh      chan *proto.CDCIndexedEventGroup
-	cdcIDsOnly    bool
-	cdcTableRe    *regexp.Regexp
-	cdcEnabled    rsync.AtomicBool
 	cdcRegistered rsync.AtomicBool
 
 	dechunkManager *chunking.DechunkerManager
@@ -455,6 +450,17 @@ type Config struct {
 	Tn     Transport   // The underlying Transport for raft.
 	ID     string      // Node ID.
 	Logger *log.Logger // The logger to use to log stuff.
+	CDC    *CDCConfig  // If non-nil, Change Data Capture is enabled with this configuration.
+}
+
+// CDCConfig is the configuration for Change Data Capture. CDC is enabled, or
+// not, for the life of a Store.
+type CDCConfig struct {
+	// TableRe, if non-nil, restricts CDC to tables whose names match it.
+	TableRe *regexp.Regexp
+
+	// RowIDsOnly, if true, means CDC events contain row IDs but no row data.
+	RowIDsOnly bool
 }
 
 // New returns a new Store.
@@ -482,6 +488,7 @@ func New(c *Config, ly Layer) *Store {
 		walPath:           sql.WALPath(dbPath),
 		dbDir:             filepath.Dir(dbPath),
 		dbDrv:             sql.DefaultDriver(),
+		cdcConf:           c.CDC,
 		cdcOutCh:          make(chan *proto.CDCIndexedEventGroup, cdcChanLen),
 		readyChans:        rsync.NewReadyChannels(),
 		leaderObservers:   make([]chan<- bool, 0),
@@ -1427,7 +1434,7 @@ func (s *Store) Stats() (map[string]any, error) {
 			"dropped":  s.observer.GetNumDropped(),
 		},
 		"cdc": map[string]any{
-			"enabled":    s.cdcEnabled.Is(),
+			"enabled":    s.cdcConf != nil,
 			"registered": s.cdcRegistered.Is(),
 		},
 		"apply_timeout":          s.ApplyTimeout.String(),
@@ -2081,54 +2088,11 @@ func (s *Store) Database(leader bool) ([]byte, error) {
 	return s.db.Serialize()
 }
 
-// CDCEventsC returns the channel on which Change Data Capture events are sent
-// once CDC is enabled. It is the caller's responsibility to ensure that the
+// CDCEventsC returns the channel on which Change Data Capture events are sent,
+// if CDC is enabled. It is the caller's responsibility to ensure that the
 // channel is read from, as the Store blocks when the channel is full.
 func (s *Store) CDCEventsC() <-chan *proto.CDCIndexedEventGroup {
 	return s.cdcOutCh
-}
-
-// EnableCDC enables Change Data Capture on this Store. Events will be streamed
-// to the channel returned by CDCEventsC.
-//
-// If the Store is open then CDC will begin immediately. If the Store is not open
-// yet, then CDC will begin when the Store is opened. This function will return
-// an error if CDC is already enabled.
-func (s *Store) EnableCDC(tableRe *regexp.Regexp, rowIDsOnly bool) error {
-	s.cdcMu.Lock()
-	defer s.cdcMu.Unlock()
-
-	if s.cdcEnabled.Is() {
-		return ErrCDCEnabled
-	}
-	s.cdcIDsOnly = rowIDsOnly
-	s.cdcTableRe = tableRe
-	s.cdcEnabled.Set()
-	return nil
-}
-
-// DisableCDC disables Change Data Capture on this Store.
-//
-// If CDC is not enabled, this is a no-op.
-func (s *Store) DisableCDC() error {
-	s.cdcMu.Lock()
-	defer s.cdcMu.Unlock()
-
-	if s.db != nil {
-		if err := s.db.RegisterPreUpdateHook(nil, nil, false); err != nil {
-			return fmt.Errorf("failed to unregister preupdate hook: %w", err)
-		}
-		if err := s.db.RegisterCommitHook(nil); err != nil {
-			return fmt.Errorf("failed to unregister commit hook: %w", err)
-		}
-		if err := s.db.RegisterRollbackHook(nil); err != nil {
-			return fmt.Errorf("failed to unregister rollback hook: %w", err)
-		}
-	}
-	s.cdcRegistered.Unset()
-
-	s.cdcEnabled.Unset()
-	return nil
 }
 
 // Notify notifies this Store that a node is ready for bootstrapping at the
@@ -2551,14 +2515,14 @@ func (s *Store) fsmApply(l *raft.Log) (e any) {
 
 	cmd, mutated, r, err := func() (*proto.Command, bool, any, error) {
 		// CDC enabled? Prep collection of events.
-		if s.cdcEnabled.Is() {
+		if s.cdcConf != nil {
 			s.cdcMu.RLock()
 			defer s.cdcMu.RUnlock()
 
 			// If CDC is enabled but not yet activated, do so now. By doing it here we keep
 			// CDC registration in a single place in the code.
 			if s.cdcRegistered.IsNot() {
-				if err := s.db.RegisterPreUpdateHook(s.cdcCollator.PreupdateHook, s.cdcTableRe, s.cdcIDsOnly); err != nil {
+				if err := s.db.RegisterPreUpdateHook(s.cdcCollator.PreupdateHook, s.cdcConf.TableRe, s.cdcConf.RowIDsOnly); err != nil {
 					s.logger.Fatalf("failed to register preupdate hook for CDC: %s", err)
 				}
 				if err := s.db.RegisterCommitHook(s.cdcCollator.CommitHook); err != nil {
