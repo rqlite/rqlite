@@ -21,8 +21,7 @@ import (
 
 const (
 	cdcDB         = "fifo.db"
-	leaderChanLen = 5   // Support any fast back-to-back leadership changes.
-	inChanLen     = 100 // Size of the input channel for CDC events.
+	leaderChanLen = 5 // Support any fast back-to-back leadership changes.
 
 	retryForever = -1
 )
@@ -96,7 +95,7 @@ type Service struct {
 	clstr       Cluster
 
 	// in is the channel from which the CDC events are read.
-	in chan *proto.CDCIndexedEventGroup
+	in <-chan *proto.CDCIndexedEventGroup
 
 	// sink is the sink to which the CDC events are sent.
 	sink Sink
@@ -167,8 +166,9 @@ type Service struct {
 	logger *log.Logger
 }
 
-// NewService creates a new CDC service.
-func NewService(nodeID, dir string, clstr Cluster, cfg *Config) (*Service, error) {
+// NewService creates a new CDC service. The service reads the CDC events it
+// is to deliver from in.
+func NewService(nodeID, dir string, clstr Cluster, in <-chan *proto.CDCIndexedEventGroup, cfg *Config) (*Service, error) {
 	// Build the TLS configuration from the config fields
 	tlsConfig, err := cfg.TLSConfig()
 	if err != nil {
@@ -191,7 +191,7 @@ func NewService(nodeID, dir string, clstr Cluster, cfg *Config) (*Service, error
 		nodeID:                nodeID,
 		dir:                   filepath.Join(dir, "cdc"),
 		clstr:                 clstr,
-		in:                    make(chan *proto.CDCIndexedEventGroup, inChanLen),
+		in:                    in,
 		sink:                  sink,
 		transmitTimeout:       cfg.TransmitTimeout,
 		transmitMinBackoff:    cfg.TransmitMinBackoff,
@@ -247,11 +247,6 @@ func NewService(nodeID, dir string, clstr Cluster, cfg *Config) (*Service, error
 	srv.highWatermark.Store(higHWM)
 
 	return srv, nil
-}
-
-// C returns the channel to which CDC events are sent.
-func (s *Service) C() chan<- *proto.CDCIndexedEventGroup {
-	return s.in
 }
 
 // Start starts the CDC service.

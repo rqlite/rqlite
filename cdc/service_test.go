@@ -36,10 +36,12 @@ func Test_ServiceSingleEvent(t *testing.T) {
 	cfg.Endpoint = testSrv.URL
 	cfg.MaxBatchSz = 1
 	cfg.MaxBatchDelay = 50 * time.Millisecond
+	in := make(chan *proto.CDCIndexedEventGroup, 100)
 	svc, err := NewService(
 		"node1",
 		t.TempDir(),
 		cl,
+		in,
 		cfg,
 	)
 	if err != nil {
@@ -108,7 +110,7 @@ func Test_ServiceSingleEvent(t *testing.T) {
 		}
 	}
 
-	svc.C() <- evs
+	in <- evs
 	waitFn(1*time.Second, 1)
 
 	testPoll(t, func() bool {
@@ -121,7 +123,7 @@ func Test_ServiceSingleEvent(t *testing.T) {
 
 	// Send events, and make sure they are ignored.
 	evs.Index = 67
-	svc.C() <- evs
+	in <- evs
 	waitFn(1*time.Second, 0)
 
 	cl.SetLeader(0)
@@ -137,10 +139,12 @@ func Test_ServiceSingleEvent_Flush(t *testing.T) {
 	cfg.Endpoint = "stdout" // Use stdout mode for testing
 	cfg.MaxBatchSz = 1
 	cfg.MaxBatchDelay = 50 * time.Millisecond
+	in := make(chan *proto.CDCIndexedEventGroup, 100)
 	svc, err := NewService(
 		"node1",
 		t.TempDir(),
 		cl,
+		in,
 		cfg,
 	)
 	if err != nil {
@@ -159,7 +163,7 @@ func Test_ServiceSingleEvent_Flush(t *testing.T) {
 		Flush: true,
 	}
 
-	svc.C() <- evs
+	in <- evs
 
 	testPoll(t, func() bool {
 		return svc.flushRx.Load() == 1
@@ -175,10 +179,12 @@ func Test_ServiceSingleEvent_SnapshotSync(t *testing.T) {
 	cfg.Endpoint = "stdout" // Use stdout mode to avoid HTTP complexity
 	cfg.MaxBatchSz = 10
 	cfg.MaxBatchDelay = 30 * time.Second
+	in := make(chan *proto.CDCIndexedEventGroup, 100)
 	svc, err := NewService(
 		"node1",
 		t.TempDir(),
 		cl,
+		in,
 		cfg,
 	)
 	if err != nil {
@@ -206,7 +212,7 @@ func Test_ServiceSingleEvent_SnapshotSync(t *testing.T) {
 
 	// Send event, which will just sit there due to high batching and timeout
 	// settings. Ensure we wait until it's actually written to internal batcher.
-	svc.C() <- evs
+	in <- evs
 	testPoll(t, func() bool {
 		return svc.writesToBatcher.Load() == 1
 	}, 1*time.Second)
@@ -244,10 +250,12 @@ func Test_ServiceRestart_NoDupes(t *testing.T) {
 	cfg.MaxBatchSz = 1
 	cfg.MaxBatchDelay = 50 * time.Millisecond
 	tempDir := t.TempDir()
+	in := make(chan *proto.CDCIndexedEventGroup, 100)
 	svc, err := NewService(
 		"node1",
 		tempDir,
 		cl,
+		in,
 		cfg,
 	)
 	if err != nil {
@@ -270,7 +278,7 @@ func Test_ServiceRestart_NoDupes(t *testing.T) {
 		Index:  100,
 		Events: []*proto.CDCEvent{ev},
 	}
-	svc.C() <- evs
+	in <- evs
 	testPoll(t, func() bool {
 		return svc.HighWatermark() == evs.Index
 	}, 2*time.Second)
@@ -313,10 +321,12 @@ func Test_ServiceRestart_NoDupes(t *testing.T) {
 	svc.Stop()
 
 	// Start a new service with the same params.
+	in2 := make(chan *proto.CDCIndexedEventGroup, 100)
 	svc2, err := NewService(
 		"node1",
 		tempDir,
 		cl,
+		in2,
 		cfg,
 	)
 	if err != nil {
@@ -331,7 +341,7 @@ func Test_ServiceRestart_NoDupes(t *testing.T) {
 	// Send the same event, ensure it is not forwarded because the
 	// FIFO's highest-key-written logic will drop it.
 	currentDrop := stats.Get(numFIFOEnqueueIgnored).(*expvar.Int).Value()
-	svc2.C() <- evs
+	in2 <- evs
 	testPoll(t, func() bool {
 		return stats.Get(numFIFOEnqueueIgnored).(*expvar.Int).Value() == currentDrop+1
 	}, 2*time.Second)
@@ -405,7 +415,8 @@ func Test_ServiceRestart_UndeliveredEventsNotLost(t *testing.T) {
 	cfg.Endpoint = testSrv.URL
 	cfg.MaxBatchSz = 1
 	cfg.MaxBatchDelay = 50 * time.Millisecond
-	svc, err := NewService("node1", tempDir, cl, cfg)
+	in := make(chan *proto.CDCIndexedEventGroup, 100)
+	svc, err := NewService("node1", tempDir, cl, in, cfg)
 	if err != nil {
 		t.Fatalf("failed to create service: %v", err)
 	}
@@ -441,10 +452,12 @@ func Test_ServiceSingleEvent_Stdout(t *testing.T) {
 	cfg.MaxBatchSz = 1
 	cfg.MaxBatchDelay = 50 * time.Millisecond
 	cfg.Endpoint = "stdout"
+	in := make(chan *proto.CDCIndexedEventGroup, 100)
 	svc, err := NewService(
 		"node1",
 		t.TempDir(),
 		cl,
+		in,
 		cfg,
 	)
 	if err != nil {
@@ -467,7 +480,7 @@ func Test_ServiceSingleEvent_Stdout(t *testing.T) {
 		Index:  1,
 		Events: []*proto.CDCEvent{ev},
 	}
-	svc.C() <- evs
+	in <- evs
 
 	testPoll(t, func() bool {
 		return svc.HighWatermark() == evs.Index
@@ -498,10 +511,12 @@ func Test_ServiceSingleEvent_Retry(t *testing.T) {
 	cfg.Endpoint = testSrv.URL
 	cfg.MaxBatchSz = 1
 	cfg.MaxBatchDelay = 50 * time.Millisecond
+	in := make(chan *proto.CDCIndexedEventGroup, 100)
 	svc, err := NewService(
 		"node1",
 		t.TempDir(),
 		cl,
+		in,
 		cfg,
 	)
 	if err != nil {
@@ -524,7 +539,7 @@ func Test_ServiceSingleEvent_Retry(t *testing.T) {
 		Index:  1,
 		Events: []*proto.CDCEvent{ev},
 	}
-	svc.C() <- evs
+	in <- evs
 
 	// Wait for the service to forward the batch.
 	select {
@@ -579,10 +594,12 @@ func Test_ServiceMultiEvent(t *testing.T) {
 	cfg.Endpoint = testSrv.URL
 	cfg.MaxBatchSz = 2
 	cfg.MaxBatchDelay = time.Second
+	in := make(chan *proto.CDCIndexedEventGroup, 100)
 	svc, err := NewService(
 		"node1",
 		t.TempDir(),
 		cl,
+		in,
 		cfg,
 	)
 	if err != nil {
@@ -616,8 +633,8 @@ func Test_ServiceMultiEvent(t *testing.T) {
 		Index:  2,
 		Events: []*proto.CDCEvent{ev2},
 	}
-	svc.C() <- evs1
-	svc.C() <- evs2
+	in <- evs1
+	in <- evs2
 
 	// Wait for the service to forward the batch.
 	select {
@@ -684,10 +701,12 @@ func Test_ServiceMultiEvent_Batch(t *testing.T) {
 	cfg.Endpoint = testSrv.URL
 	cfg.MaxBatchSz = 2
 	cfg.MaxBatchDelay = 100 * time.Millisecond
+	in := make(chan *proto.CDCIndexedEventGroup, 100)
 	svc, err := NewService(
 		"node1",
 		t.TempDir(),
 		cl,
+		in,
 		cfg,
 	)
 	if err != nil {
@@ -731,9 +750,9 @@ func Test_ServiceMultiEvent_Batch(t *testing.T) {
 		Index:  3,
 		Events: []*proto.CDCEvent{ev3},
 	}
-	svc.C() <- evs1
-	svc.C() <- evs2
-	svc.C() <- evs3
+	in <- evs1
+	in <- evs2
+	in <- evs3
 
 	// Wait for the service to forward the first batch.
 	select {
@@ -820,10 +839,12 @@ func Test_ServiceHWMUpdate_Leader(t *testing.T) {
 	cfg.MaxBatchSz = 1
 	cfg.MaxBatchDelay = 50 * time.Millisecond
 	cfg.Endpoint = "stdout" // Use stdout mode to avoid HTTP complexity
+	in := make(chan *proto.CDCIndexedEventGroup, 100)
 	svc, err := NewService(
 		"node1",
 		t.TempDir(),
 		cl,
+		in,
 		cfg,
 	)
 	if err != nil {
@@ -877,7 +898,7 @@ func Test_ServiceHWMUpdate_Leader(t *testing.T) {
 
 	// Send events to the service
 	for _, ev := range events {
-		svc.C() <- ev
+		in <- ev
 	}
 
 	// Wait for events to be processed and high watermark updated
@@ -895,10 +916,12 @@ func Test_ServiceHWMUpdate_Follow(t *testing.T) {
 	cfg.MaxBatchSz = 1
 	cfg.MaxBatchDelay = 50 * time.Millisecond
 	cfg.Endpoint = "stdout" // Use stdout mode to avoid HTTP complexity
+	in := make(chan *proto.CDCIndexedEventGroup, 100)
 	svc, err := NewService(
 		"node1",
 		t.TempDir(),
 		cl,
+		in,
 		cfg,
 	)
 	if err != nil {
@@ -929,7 +952,7 @@ func Test_ServiceHWMUpdate_Follow(t *testing.T) {
 
 	// Send events to the service
 	for _, ev := range events {
-		svc.C() <- ev
+		in <- ev
 	}
 
 	// Confirm FIFO has the events
