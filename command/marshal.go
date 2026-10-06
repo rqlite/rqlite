@@ -74,7 +74,16 @@ func (m *RequestMarshaler) Marshal(r Requester) ([]byte, bool, error) {
 		compress = true
 	} else {
 		for i := range stmts {
-			if len(stmts[i].Sql) >= m.SizeThreshold {
+			size := len(stmts[i].Sql)
+			for _, p := range stmts[i].Parameters {
+				switch v := p.GetValue().(type) {
+				case *proto.Parameter_S:
+					size += len(v.S)
+				case *proto.Parameter_Y:
+					size += len(v.Y)
+				}
+			}
+			if size >= m.SizeThreshold {
 				compress = true
 				break
 			}
