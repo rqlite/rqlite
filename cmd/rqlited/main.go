@@ -9,6 +9,7 @@ import (
 	"net"
 	"os"
 	"path/filepath"
+	"regexp"
 	"runtime"
 	"strings"
 	"syscall"
@@ -122,20 +123,8 @@ func main() {
 		log.Fatalf("failed to list extensions: %s", err.Error())
 	}
 
-	// Parse the CDC configuration, if any. CDC is enabled, or not, for the
-	// life of the Store, so the Store must know about it when it is created.
-	var cdcCfg *cdc.Config
-	if cfg.CDCConfig != "" {
-		if cfg.RaftNonVoter {
-			log.Fatalf("cannot enable CDC on non-voting node")
-		}
-		if cdcCfg, err = cdc.NewConfig(cfg.CDCConfig); err != nil {
-			log.Fatalf("failed to create CDC config: %s", err.Error())
-		}
-	}
-
 	// Create the store.
-	str, err := createStore(cfg, raftTn, extensionsPaths, cdcCfg)
+	str, err := createStore(cfg, raftTn, extensionsPaths)
 	if err != nil {
 		log.Fatalf("failed to create store: %s", err.Error())
 	}
@@ -191,8 +180,8 @@ func main() {
 	// Create the CDC service, if requested. Do this before opening the Store so the CDC
 	// picks up every change.
 	var cdcServ *cdc.Service
-	if cdcCfg != nil {
-		if cdcServ, err = createCDC(cfg, cdcCfg, str, clstrServ, clstrClient, credStr); err != nil {
+	if cfg.CDCConfig != "" {
+		if cdcServ, err = createCDC(cfg, str, clstrServ, clstrClient, credStr); err != nil {
 			log.Fatalf("failed to create CDC Service: %s", err.Error())
 		}
 	}
@@ -387,9 +376,16 @@ func createExtensionsStore(cfg *Config) (*extensions.Store, error) {
 	return str, nil
 }
 
-func createCDC(cfg *Config, cdcCfg *cdc.Config, str *store.Store, clstrServ *cluster.Service, clstrClient *cluster.Client, credStr *auth.CredentialsStore) (*cdc.Service, error) {
+func createCDC(cfg *Config, str *store.Store, clstrServ *cluster.Service, clstrClient *cluster.Client, credStr *auth.CredentialsStore) (*cdc.Service, error) {
+	if cfg.RaftNonVoter {
+		return nil, fmt.Errorf("cannot enable CDC on non-voting node")
+	}
+	cdcCfg, err := cdc.NewConfig(cfg.CDCConfig)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create CDC config: %s", err.Error())
+	}
 	CDCCluster := cdc.NewCDCCluster(str, clstrServ, clstrClient)
-	cdcService, err := cdc.NewService(cfg.NodeID, cfg.DataPath, CDCCluster, str.CDCEvents(), cdcCfg)
+	cdcService, err := cdc.NewService(cfg.NodeID, cfg.DataPath, CDCCluster, cdcCfg)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create CDC Service: %s", err.Error())
 	}
@@ -397,29 +393,26 @@ func createCDC(cfg *Config, cdcCfg *cdc.Config, str *store.Store, clstrServ *clu
 	if err := cdcService.Start(); err != nil {
 		return nil, fmt.Errorf("failed to start CDC Service: %s", err.Error())
 	}
+
+	var re *regexp.Regexp
+	if cdcCfg.TableFilter != nil {
+		re = cdcCfg.TableFilter.Regexp
+	}
+	if err := str.EnableCDC(cdcService.C(), re, cdcCfg.RowIDsOnly); err != nil {
+		return nil, fmt.Errorf("failed to enable CDC on Store: %s", err.Error())
+	}
 	return cdcService, nil
 }
 
-func createStore(cfg *Config, ln *tcp.Layer, extensions []string, cdcCfg *cdc.Config) (*store.Store, error) {
+func createStore(cfg *Config, ln *tcp.Layer, extensions []string) (*store.Store, error) {
 	dbConf := store.NewDBConfig()
 	dbConf.FKConstraints = cfg.FKConstraints
 	dbConf.Extensions = extensions
-
-	var storeCDCCfg *store.CDCConfig
-	if cdcCfg != nil {
-		storeCDCCfg = &store.CDCConfig{
-			RowIDsOnly: cdcCfg.RowIDsOnly,
-		}
-		if cdcCfg.TableFilter != nil {
-			storeCDCCfg.TableRe = cdcCfg.TableFilter.Regexp
-		}
-	}
 
 	str := store.New(&store.Config{
 		DBConf: dbConf,
 		Dir:    cfg.DataPath,
 		ID:     cfg.NodeID,
-		CDC:    storeCDCCfg,
 	}, ln)
 
 	// Set optional parameters on store.

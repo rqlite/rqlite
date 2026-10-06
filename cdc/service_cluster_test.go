@@ -26,7 +26,6 @@ func Test_ClusterBasicDelivery(t *testing.T) {
 
 	// Create three services
 	services := make([]*Service, 3)
-	ins := make([]chan *proto.CDCIndexedEventGroup, 3)
 
 	for i := range 3 {
 		cfg := DefaultConfig()
@@ -35,12 +34,10 @@ func Test_ClusterBasicDelivery(t *testing.T) {
 		cfg.MaxBatchDelay = 50 * time.Millisecond
 		cfg.HighWatermarkInterval = 100 * time.Millisecond // Short interval for testing
 
-		ins[i] = make(chan *proto.CDCIndexedEventGroup, 100)
 		svc, err := NewService(
 			fmt.Sprintf("node%d", i),
 			t.TempDir(),
 			cluster,
-			ins[i],
 			cfg,
 		)
 		if err != nil {
@@ -85,7 +82,7 @@ func Test_ClusterBasicDelivery(t *testing.T) {
 	}
 
 	for _, ev := range events {
-		ins[0] <- ev
+		services[0].C() <- ev
 	}
 
 	// Wait for events to be sent
@@ -109,8 +106,8 @@ func Test_ClusterBasicDelivery(t *testing.T) {
 
 	// Send events to followers
 	for _, ev := range events {
-		ins[1] <- ev
-		ins[2] <- ev
+		services[1].C() <- ev
+		services[2].C() <- ev
 	}
 
 	// Wait a bit to ensure no HTTP requests are made
@@ -139,12 +136,10 @@ func Test_ClusterSimpleHWM(t *testing.T) {
 	cfg.Endpoint = "stdout" // Use stdout mode to avoid HTTP complexity
 	cfg.HighWatermarkInterval = 100 * time.Millisecond
 
-	in := make(chan *proto.CDCIndexedEventGroup, 100)
 	svc, err := NewService(
 		"node1",
 		t.TempDir(),
 		cluster,
-		in,
 		cfg,
 	)
 	if err != nil {
@@ -171,7 +166,7 @@ func Test_ClusterSimpleHWM(t *testing.T) {
 			},
 		},
 	}
-	in <- event
+	svc.C() <- event
 
 	// Wait for event to be processed and local HWM updated
 	testPoll(t, func() bool {
@@ -193,7 +188,6 @@ func Test_ClusterHWMPropagation(t *testing.T) {
 
 	// Create three services
 	services := make([]*Service, 3)
-	ins := make([]chan *proto.CDCIndexedEventGroup, 3)
 
 	for i := range 3 {
 		cfg := DefaultConfig()
@@ -202,12 +196,10 @@ func Test_ClusterHWMPropagation(t *testing.T) {
 		cfg.MaxBatchDelay = 50 * time.Millisecond
 		cfg.HighWatermarkInterval = 100 * time.Millisecond // Short interval for testing
 
-		ins[i] = make(chan *proto.CDCIndexedEventGroup, 100)
 		svc, err := NewService(
 			fmt.Sprintf("node%d", i+1),
 			t.TempDir(),
 			cluster,
-			ins[i],
 			cfg,
 		)
 		if err != nil {
@@ -251,12 +243,12 @@ func Test_ClusterHWMPropagation(t *testing.T) {
 			},
 		},
 	}
-	for _, in := range ins {
+	for _, svc := range services {
 		go func(ch chan<- *proto.CDCIndexedEventGroup) {
 			for _, ev := range events {
 				ch <- ev
 			}
-		}(in)
+		}(svc.C())
 	}
 
 	// Wait for events to be sent by the Leader
@@ -290,7 +282,6 @@ func Test_ClusterLeadershipChange(t *testing.T) {
 
 	// Create three services
 	services := make([]*Service, 3)
-	ins := make([]chan *proto.CDCIndexedEventGroup, 3)
 
 	for i := range 3 {
 		cfg := DefaultConfig()
@@ -299,12 +290,10 @@ func Test_ClusterLeadershipChange(t *testing.T) {
 		cfg.MaxBatchDelay = 50 * time.Millisecond
 		cfg.HighWatermarkInterval = 100 * time.Millisecond // Short interval for testing
 
-		ins[i] = make(chan *proto.CDCIndexedEventGroup, 100)
 		svc, err := NewService(
 			fmt.Sprintf("node%d", i+1),
 			t.TempDir(),
 			cluster,
-			ins[i],
 			cfg,
 		)
 		if err != nil {
@@ -336,7 +325,7 @@ func Test_ClusterLeadershipChange(t *testing.T) {
 			},
 		},
 	}
-	ins[1] <- event1
+	services[1].C() <- event1
 
 	// Wait a bit to ensure no HTTP request is made by non-leader
 	time.Sleep(200 * time.Millisecond)
@@ -371,7 +360,7 @@ func Test_ClusterLeadershipChange(t *testing.T) {
 			},
 		},
 	}
-	ins[1] <- event2
+	services[1].C() <- event2
 
 	// Wait for the second event to be sent
 	testPoll(t, func() bool {
@@ -384,7 +373,7 @@ func Test_ClusterLeadershipChange(t *testing.T) {
 	}, time.Second)
 
 	// Verify that the old leader (service 0) doesn't send any new events
-	ins[0] <- event2
+	services[0].C() <- event2
 	time.Sleep(200 * time.Millisecond)
 	if httpServer.GetRequestCount() != 2 {
 		t.Fatalf("old leader should not send new events after demotion, got %d requests", httpServer.GetRequestCount())
@@ -410,12 +399,10 @@ func Test_ClusterHWMDeletion(t *testing.T) {
 	cfg.MaxBatchDelay = 50 * time.Millisecond
 	cfg.HighWatermarkInterval = 100 * time.Millisecond // Short interval for testing
 
-	in := make(chan *proto.CDCIndexedEventGroup, 100)
 	svc, err := NewService(
 		"node1",
 		t.TempDir(),
 		cluster,
-		in,
 		cfg,
 	)
 	if err != nil {
@@ -452,7 +439,7 @@ func Test_ClusterHWMDeletion(t *testing.T) {
 	}
 
 	for _, ev := range events {
-		in <- ev
+		svc.C() <- ev
 	}
 
 	// Wait for events to be queued in FIFO
@@ -496,12 +483,10 @@ func Test_ClusterBatchingBehavior(t *testing.T) {
 	cfg.MaxBatchDelay = 1 * time.Second                // Long delay to test batching by size
 	cfg.HighWatermarkInterval = 100 * time.Millisecond // Short interval for testing
 
-	in := make(chan *proto.CDCIndexedEventGroup, 100)
 	svc, err := NewService(
 		"node1",
 		t.TempDir(),
 		cluster,
-		in,
 		cfg,
 	)
 	if err != nil {
@@ -552,7 +537,7 @@ func Test_ClusterBatchingBehavior(t *testing.T) {
 	}
 
 	for _, ev := range events {
-		in <- ev
+		svc.C() <- ev
 	}
 
 	// Wait for events to be batched and sent as one request
@@ -605,7 +590,6 @@ func Test_Cluster_100Events(t *testing.T) {
 
 	cluster := newMockCluster()
 	services := make([]*Service, 3)
-	ins := make([]chan *proto.CDCIndexedEventGroup, 3)
 
 	for i := range 3 {
 		cfg := DefaultConfig()
@@ -613,12 +597,10 @@ func Test_Cluster_100Events(t *testing.T) {
 		cfg.MaxBatchDelay = time.Second
 		cfg.HighWatermarkInterval = 1 * time.Second
 
-		ins[i] = make(chan *proto.CDCIndexedEventGroup, 100)
 		svc, err := NewService(
 			fmt.Sprintf("node%d", i),
 			t.TempDir(),
 			cluster,
-			ins[i],
 			cfg,
 		)
 		if err != nil {
@@ -656,7 +638,7 @@ func Test_Cluster_100Events(t *testing.T) {
 	numEvents := 100
 	leaderSwitch := make(chan struct{})
 	rns := random.IntN(3, 100)
-	for idx, in := range ins {
+	for idx, svc := range services {
 		go func(ch chan<- *proto.CDCIndexedEventGroup) {
 			// Simulate leadership changing on cluster during processing. While events
 			// may be repeated, none should be lost. These indexes were chosen at random.
@@ -668,7 +650,7 @@ func Test_Cluster_100Events(t *testing.T) {
 				}
 				ch <- makeEvent(int64(i + 1))
 			}
-		}(in)
+		}(svc.C())
 	}
 
 	go func() {

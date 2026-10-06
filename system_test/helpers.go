@@ -796,17 +796,7 @@ func mustNewNode(id string, enableSingle bool) *Node {
 	return mustNewNodeEncrypted(id, enableSingle, false, false)
 }
 
-// mustNewNodeCDC returns a new node with CDC enabled on its Store. The caller
-// must create and start the node's CDC service.
-func mustNewNodeCDC(id string, enableSingle bool) *Node {
-	return mustNewNodeEncryptedCDC(id, enableSingle, false, false, &store.CDCConfig{})
-}
-
 func mustNewNodeEncrypted(id string, enableSingle, httpEncrypt, nodeEncrypt bool) *Node {
-	return mustNewNodeEncryptedCDC(id, enableSingle, httpEncrypt, nodeEncrypt, nil)
-}
-
-func mustNewNodeEncryptedCDC(id string, enableSingle, httpEncrypt, nodeEncrypt bool, cdcCfg *store.CDCConfig) *Node {
 	dir := mustTempDir(id)
 	var mux *tcp.Mux
 	var raftDialer *tcp.Dialer
@@ -821,14 +811,10 @@ func mustNewNodeEncryptedCDC(id string, enableSingle, httpEncrypt, nodeEncrypt b
 		clstrDialer = tcp.NewDialer(cluster.MuxClusterHeader, nil)
 	}
 	go mux.Serve()
-	return mustNodeEncryptedCDC(id, dir, enableSingle, httpEncrypt, mux, raftDialer, clstrDialer, cdcCfg)
+	return mustNodeEncrypted(id, dir, enableSingle, httpEncrypt, mux, raftDialer, clstrDialer)
 }
 
 func mustNodeEncrypted(id, dir string, enableSingle, httpEncrypt bool, mux *tcp.Mux, raftDialer, clstrDialer *tcp.Dialer) *Node {
-	return mustNodeEncryptedCDC(id, dir, enableSingle, httpEncrypt, mux, raftDialer, clstrDialer, nil)
-}
-
-func mustNodeEncryptedCDC(id, dir string, enableSingle, httpEncrypt bool, mux *tcp.Mux, raftDialer, clstrDialer *tcp.Dialer, cdcCfg *store.CDCConfig) *Node {
 	nodeCertPath := rX509.CertExampleDotComFile(dir)
 	nodeKeyPath := rX509.KeyExampleDotComFile(dir)
 	httpCertPath := nodeCertPath
@@ -855,7 +841,6 @@ func mustNodeEncryptedCDC(id, dir string, enableSingle, httpEncrypt bool, mux *t
 		DBConf: dbConf,
 		Dir:    node.Dir,
 		ID:     id,
-		CDC:    cdcCfg,
 	}, raftTn)
 	node.Store.SnapshotThreshold = SnapshotThreshold
 	node.Store.SnapshotInterval = SnapshotInterval
@@ -907,17 +892,6 @@ func mustNodeEncryptedCDC(id, dir string, enableSingle, httpEncrypt bool, mux *t
 
 func mustNewLeaderNode(id string) *Node {
 	node := mustNewNode(id, true)
-	if _, err := node.WaitForLeader(); err != nil {
-		node.Deprovision()
-		panic("node never became leader")
-	}
-	return node
-}
-
-// mustNewLeaderNodeCDC returns a new single-node leader with CDC enabled on
-// its Store. The caller must create and start the node's CDC service.
-func mustNewLeaderNodeCDC(id string) *Node {
-	node := mustNewNodeCDC(id, true)
 	if _, err := node.WaitForLeader(); err != nil {
 		node.Deprovision()
 		panic("node never became leader")

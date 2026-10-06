@@ -2,44 +2,80 @@ package store
 
 import (
 	"context"
-	"net"
 	"slices"
 	"testing"
 	"time"
 
 	"github.com/rqlite/rqlite/v10/command/proto"
-	"github.com/rqlite/rqlite/v10/internal/random"
 )
 
-// Test_StoreCDC_Config tests that CDC is enabled by, and only by, the Store's
-// configuration.
-func Test_StoreCDC_Config(t *testing.T) {
+// Test_StoreEnableCDC tests that CDC can be enabled and disabled on the Store.
+func Test_StoreEnableCDC(t *testing.T) {
 	s, ln := mustNewStore(t)
+	defer s.Close(true)
 	defer ln.Close()
-	if s.CDCEvents() != nil {
-		t.Fatalf("expected no CDC events channel on store without CDC")
-	}
 
-	s, ln = mustNewStoreCDC(t)
-	defer ln.Close()
-	if s.CDCEvents() == nil {
-		t.Fatalf("expected CDC events channel on store with CDC")
-	}
 	if err := s.Open(); err != nil {
 		t.Fatalf("failed to open store: %v", err)
 	}
-	defer s.Close(true)
-	stats, err := s.Stats()
-	if err != nil {
-		t.Fatalf("failed to get stats: %v", err)
+
+	// Create a channel for CDC events
+	ch := make(chan *proto.CDCIndexedEventGroup, 10)
+
+	// Enable CDC
+	if err := s.EnableCDC(ch, nil, false); err != nil {
+		t.Fatalf("failed to enable CDC: %v", err)
 	}
-	if enabled := stats["cdc"].(map[string]any)["enabled"]; enabled != true {
-		t.Fatalf("expected CDC to be reported as enabled, got %v", enabled)
+	if s.cdcEnabled.IsNot() {
+		t.Fatalf("expected CDC to enabled after EnableCDC")
+	}
+
+	// Disable CDC
+	if err := s.DisableCDC(); err != nil {
+		t.Fatalf("failed to disable CDC: %v", err)
+	}
+	if s.cdcEnabled.Is() {
+		t.Fatalf("expected CDC to be disabled after DisableCDC")
+	}
+}
+
+// Test_StoreEnableDisableCDC tests that CDC can be enabled and disabled multiple times.
+func Test_StoreEnableDisableCDC(t *testing.T) {
+	s, ln := mustNewStore(t)
+	defer s.Close(true)
+	defer ln.Close()
+
+	if err := s.Open(); err != nil {
+		t.Fatalf("failed to open store: %v", err)
+	}
+
+	ch1 := make(chan *proto.CDCIndexedEventGroup, 10)
+	ch2 := make(chan *proto.CDCIndexedEventGroup, 10)
+	ch3 := make(chan *proto.CDCIndexedEventGroup, 10)
+
+	// Enable CDC with first channel
+	if err := s.EnableCDC(ch1, nil, false); err != nil {
+		t.Fatalf("failed to enable CDC: %v", err)
+	}
+
+	// Enable CDC with second channel (should return error)
+	if err := s.EnableCDC(ch2, nil, false); err != ErrCDCEnabled {
+		t.Fatalf("expected ErrCDCEnabled, got: %v", err)
+	}
+
+	// Disable CDC
+	if err := s.DisableCDC(); err != nil {
+		t.Fatalf("failed to disable CDC: %v", err)
+	}
+
+	// Enable again
+	if err := s.EnableCDC(ch3, nil, false); err != nil {
+		t.Fatalf("failed to enable CDC again: %v", err)
 	}
 }
 
 func Test_StoreCDC_RolledBackInsert(t *testing.T) {
-	s, ln := mustNewStoreCDC(t)
+	s, ln := mustNewStore(t)
 	defer ln.Close()
 	if err := s.Open(); err != nil {
 		t.Fatalf("failed to open store: %v", err)
@@ -55,6 +91,10 @@ func Test_StoreCDC_RolledBackInsert(t *testing.T) {
 		"CREATE TABLE foo (id INTEGER PRIMARY KEY)", false, false)); err != nil {
 		t.Fatalf("failed to create table: %v", err)
 	}
+	ch := make(chan *proto.CDCIndexedEventGroup, 10)
+	if err := s.EnableCDC(ch, nil, false); err != nil {
+		t.Fatalf("failed to enable CDC: %v", err)
+	}
 	results, _, err := s.Execute(context.Background(), &proto.ExecuteRequest{
 		Request: &proto.Request{Statements: []*proto.Statement{
 			{Sql: "INSERT INTO foo VALUES(1), (1)"},
@@ -68,7 +108,7 @@ func Test_StoreCDC_RolledBackInsert(t *testing.T) {
 		t.Fatalf("unexpected results: %s", asJSON(results))
 	}
 	select {
-	case group := <-s.CDCEvents():
+	case group := <-ch:
 		if len(group.Events) != 1 || group.Events[0].NewRowId != 2 {
 			t.Fatalf("unexpected committed group: %s", asJSON(group))
 		}
@@ -79,8 +119,11 @@ func Test_StoreCDC_RolledBackInsert(t *testing.T) {
 
 // Test_StoreCDC_Events_Single tests that CDC events are actually sent when database changes occur.
 func Test_StoreCDC_Events_Single(t *testing.T) {
-	s, ln := mustNewStoreCDC(t)
+	s, ln := mustNewStore(t)
 	defer ln.Close()
+
+	// Create a channel for CDC events.
+	cdcChannel := make(chan *proto.CDCIndexedEventGroup, 100)
 
 	if err := s.Open(); err != nil {
 		t.Fatalf("failed to open single-node store: %s", err.Error())
@@ -100,6 +143,10 @@ func Test_StoreCDC_Events_Single(t *testing.T) {
 		t.Fatalf("failed to execute INSERT on single node: %s", err.Error())
 	}
 
+	if err := s.EnableCDC(cdcChannel, nil, false); err != nil {
+		t.Fatalf("failed to enable CDC: %v", err)
+	}
+
 	er = executeRequestFromString(`INSERT INTO foo(id, name) VALUES(101, "fiona")`, false, false)
 	_, _, err = s.Execute(context.Background(), er)
 	if err != nil {
@@ -108,7 +155,7 @@ func Test_StoreCDC_Events_Single(t *testing.T) {
 
 	timeout := time.After(5 * time.Second)
 	select {
-	case events := <-s.CDCEvents():
+	case events := <-cdcChannel:
 		if events == nil {
 			t.Fatalf("received nil CDC events")
 		}
@@ -143,8 +190,11 @@ func Test_StoreCDC_Events_Single(t *testing.T) {
 // Test_StoreCDC_Events_Twice checks that the reset-lifecycle of the CDCCollator is handled properly
 // across two distinct changes to the database.
 func Test_StoreCDC_Events_Twice(t *testing.T) {
-	s, ln := mustNewStoreCDC(t)
+	s, ln := mustNewStore(t)
 	defer ln.Close()
+
+	// Create a channel for CDC events.
+	cdcChannel := make(chan *proto.CDCIndexedEventGroup, 100)
 
 	if err := s.Open(); err != nil {
 		t.Fatalf("failed to open single-node store: %s", err.Error())
@@ -164,6 +214,10 @@ func Test_StoreCDC_Events_Twice(t *testing.T) {
 		t.Fatalf("failed to execute INSERT on single node: %s", err.Error())
 	}
 
+	if err := s.EnableCDC(cdcChannel, nil, false); err != nil {
+		t.Fatalf("failed to enable CDC: %v", err)
+	}
+
 	timeout := time.After(5 * time.Second)
 
 	// Write first event.
@@ -173,7 +227,7 @@ func Test_StoreCDC_Events_Twice(t *testing.T) {
 		t.Fatalf("failed to execute INSERT on single node: %s", err.Error())
 	}
 	select {
-	case events := <-s.CDCEvents():
+	case events := <-cdcChannel:
 		if events == nil {
 			t.Fatalf("received nil CDC events")
 		}
@@ -211,7 +265,7 @@ func Test_StoreCDC_Events_Twice(t *testing.T) {
 		t.Fatalf("failed to execute INSERT on single node: %s", err.Error())
 	}
 	select {
-	case events := <-s.CDCEvents():
+	case events := <-cdcChannel:
 		if events == nil {
 			t.Fatalf("received nil CDC events")
 		}
@@ -253,8 +307,10 @@ func Test_StoreCDC_Events_Twice(t *testing.T) {
 // request must be tagged with the request's Raft index, because the CDC
 // service uses that index to deduplicate and to advance its high watermark.
 func Test_StoreCDC_Events_MultiStatementIndex(t *testing.T) {
-	s, ln := mustNewStoreCDC(t)
+	s, ln := mustNewStore(t)
 	defer ln.Close()
+
+	cdcChannel := make(chan *proto.CDCIndexedEventGroup, 100)
 
 	if err := s.Open(); err != nil {
 		t.Fatalf("failed to open single-node store: %s", err.Error())
@@ -270,6 +326,10 @@ func Test_StoreCDC_Events_MultiStatementIndex(t *testing.T) {
 	er := executeRequestFromString(`CREATE TABLE foo (id INTEGER NOT NULL PRIMARY KEY)`, false, false)
 	if _, _, err := s.Execute(context.Background(), er); err != nil {
 		t.Fatalf("failed to create table: %s", err.Error())
+	}
+
+	if err := s.EnableCDC(cdcChannel, nil, false); err != nil {
+		t.Fatalf("failed to enable CDC: %v", err)
 	}
 
 	// One bulk request, no transaction, so each committed seperately.
@@ -295,7 +355,7 @@ func Test_StoreCDC_Events_MultiStatementIndex(t *testing.T) {
 	timeout := time.After(5 * time.Second)
 	for numEvents < 2 {
 		select {
-		case g := <-s.CDCEvents():
+		case g := <-cdcChannel:
 			if g == nil {
 				t.Fatalf("received nil CDC event group")
 			}
@@ -322,19 +382,4 @@ func rowIDs(g *proto.CDCIndexedEventGroup) []int64 {
 		ids = append(ids, ev.NewRowId)
 	}
 	return ids
-}
-
-// mustNewStoreCDC returns a new Store with CDC enabled.
-func mustNewStoreCDC(t *testing.T) (*Store, net.Listener) {
-	ly := mustMockLayer("localhost:0")
-	s := New(&Config{
-		DBConf: NewDBConfig(),
-		Dir:    t.TempDir(),
-		ID:     random.String(),
-		CDC:    &CDCConfig{},
-	}, ly)
-	if s == nil {
-		panic("failed to create new store")
-	}
-	return s, ly
 }
