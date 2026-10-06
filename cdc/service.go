@@ -528,12 +528,10 @@ func (s *Service) leaderLoop() (chan struct{}, chan struct{}) {
 					continue
 				}
 
-				nAttempts := 0
+				nRetries := 0
 				retryDelay := s.transmitMinBackoff
 				sentOK := false
 				for {
-					nAttempts++
-
 					stats.Add(numBytesTx, int64(len(decompressed)))
 					_, err := s.sink.Write(decompressed)
 					if err == nil {
@@ -542,13 +540,14 @@ func (s *Service) leaderLoop() (chan struct{}, chan struct{}) {
 					}
 					stats.Add(numEventTxFailed, 1)
 
-					if s.transmitMaxRetries != retryForever && nAttempts == s.transmitMaxRetries {
-						s.logger.Printf("failed to send request to endpoint after %d retries, last error: %v", nAttempts, err)
+					if s.transmitMaxRetries != retryForever && nRetries == s.transmitMaxRetries {
+						s.logger.Printf("failed to send request to endpoint after %d retries, last error: %v", nRetries, err)
 						stats.Add(numDroppedFailedToSend, 1)
 						break
 					}
 
 					// OK, need to prep for a retry.
+					nRetries++
 					if s.transmitRetryPolicy == ExponentialRetryPolicy {
 						retryDelay *= 2
 						if retryDelay > s.transmitMaxBackoff {
