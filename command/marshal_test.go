@@ -283,12 +283,14 @@ func Test_MarshalCompressedParameterSize(t *testing.T) {
 	}
 
 	for _, tt := range []struct {
-		name  string
-		stmts []*proto.Statement
-		comp  bool
+		name           string
+		stmts          []*proto.Statement
+		compressionExp bool
 	}{
 		{"TEXT at threshold", []*proto.Statement{{Sql: sql, Parameters: text(n)}}, true},
 		{"BLOB at threshold", []*proto.Statement{{Sql: sql, Parameters: blob(n)}}, true},
+		{"TEXT above threshold", []*proto.Statement{{Sql: sql, Parameters: text(n + 1)}}, true},
+		{"BLOB above threshold", []*proto.Statement{{Sql: sql, Parameters: blob(n + 1)}}, true},
 		{"TEXT below threshold", []*proto.Statement{{Sql: sql, Parameters: text(n - 1)}}, false},
 		{"threshold reached only across statements", []*proto.Statement{
 			{Sql: sql, Parameters: text(n / 2)},
@@ -301,8 +303,8 @@ func Test_MarshalCompressedParameterSize(t *testing.T) {
 			if err != nil {
 				t.Fatalf("failed to marshal ExecuteRequest: %s", err)
 			}
-			if comp != tt.comp {
-				t.Fatalf("compressed is %v, expected %v", comp, tt.comp)
+			if comp != tt.compressionExp {
+				t.Fatalf("compressed is %v, expected %v", comp, tt.compressionExp)
 			}
 		})
 	}
