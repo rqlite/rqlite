@@ -11,6 +11,7 @@
 - [PR #2854](https://github.com/rqlite/rqlite/pull/2854): Set linearizable timeout when handling a request.
 - [PR #2855](https://github.com/rqlite/rqlite/pull/2855): `DELETE` is also an accepted method for CORS.
 - [PR #2856](https://github.com/rqlite/rqlite/pull/2856): Fix off-by-one error in CDC retry logic.
+- [PR #2849](https://github.com/rqlite/rqlite/pull/2849): Count bound TEXT and BLOB bytes toward the compression size threshold. Thanks @abdu-benayad
 
 ## v10.5.2 (October 4th 2026)
 ### Implementation changes and bug fixes
