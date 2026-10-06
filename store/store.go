@@ -333,11 +333,10 @@ type Store struct {
 	db           *sql.SwappableDB // The underlying SQLite store.
 	checkpointer Checkpointer
 
-	cdcMu         sync.RWMutex
-	cdcCollator   *sql.CDCCollator
-	cdcConf       *CDCConfig // nil if CDC is not enabled.
-	cdcOutCh      chan *proto.CDCIndexedEventGroup
-	cdcRegistered rsync.AtomicBool
+	cdcMu       sync.RWMutex
+	cdcCollator *sql.CDCCollator
+	cdcConf     *CDCConfig // nil if CDC is not enabled.
+	cdcOutCh    chan *proto.CDCIndexedEventGroup
 
 	dechunkManager *chunking.DechunkerManager
 	cmdProc        *CommandProcessor
@@ -793,10 +792,15 @@ func (s *Store) Open() (retErr error) {
 	}
 	s.checkpointer = s.db
 
-	// Prep the CDC Collator.
-	s.cdcCollator, err = sql.NewCDCCollator(s.db)
-	if err != nil {
-		return fmt.Errorf("failed to create CDC streamer: %s", err)
+	// Start CDC, if enabled.
+	if s.cdcConf != nil {
+		s.cdcCollator, err = sql.NewCDCCollator(s.db)
+		if err != nil {
+			return fmt.Errorf("failed to create CDC collator: %s", err)
+		}
+		if err := s.registerCDCHooks(); err != nil {
+			return fmt.Errorf("failed to register CDC hooks: %s", err)
+		}
 	}
 
 	// Clean up any files from aborted operations. This tries to catch the case where scratch files
@@ -1413,8 +1417,7 @@ func (s *Store) Stats() (map[string]any, error) {
 			"dropped":  s.observer.GetNumDropped(),
 		},
 		"cdc": map[string]any{
-			"enabled":    s.cdcConf != nil,
-			"registered": s.cdcRegistered.Is(),
+			"enabled": s.cdcConf != nil,
 		},
 		"apply_timeout":          s.ApplyTimeout.String(),
 		"heartbeat_timeout":      s.HeartbeatTimeout.String(),
@@ -2032,9 +2035,10 @@ func (s *Store) ReadFrom(r io.Reader) (int64, error) {
 		return n, fmt.Errorf("error swapping database file: %v", err)
 	}
 
-	// Swapping in a new database unregisters any registered CDC hooks, so signal that it
-	// needs to be reregistered on the next change.
-	s.cdcRegistered.Unset()
+	// Swapping in a new database unregisters any registered CDC hooks.
+	if err := s.registerCDCHooks(); err != nil {
+		s.logger.Fatalf("failed to register CDC hooks after loading database: %s", err)
+	}
 
 	// Snapshot, so we load the new database into the Raft system.
 	if err := s.snapshotStore.SetDueNext(snapshot.Full); err != nil {
@@ -2288,7 +2292,29 @@ func (s *Store) remove(id string) error {
 	return f.Error()
 }
 
+// registerCDCHooks registers the CDC collator's hooks on the database, if CDC
+// is enabled. SQLite hooks belong to a database connection, so this must be
+// called whenever the database is opened or swapped.
+func (s *Store) registerCDCHooks() error {
+	if s.cdcConf == nil {
+		return nil
+	}
+	if err := s.db.RegisterPreUpdateHook(s.cdcCollator.PreupdateHook, s.cdcConf.TableRe, s.cdcConf.RowIDsOnly); err != nil {
+		return fmt.Errorf("failed to register preupdate hook: %w", err)
+	}
+	if err := s.db.RegisterCommitHook(s.cdcCollator.CommitHook); err != nil {
+		return fmt.Errorf("failed to register commit hook: %w", err)
+	}
+	if err := s.db.RegisterRollbackHook(s.cdcCollator.RollbackHook); err != nil {
+		return fmt.Errorf("failed to register rollback hook: %w", err)
+	}
+	return nil
+}
+
 func (s *Store) cleanupCDC() error {
+	if s.cdcConf == nil {
+		return nil
+	}
 	if err := s.db.RegisterPreUpdateHook(nil, nil, false); err != nil {
 		return fmt.Errorf("failed to unregister preupdate hook: %w", err)
 	}
@@ -2298,7 +2324,6 @@ func (s *Store) cleanupCDC() error {
 	if err := s.db.RegisterRollbackHook(nil); err != nil {
 		return fmt.Errorf("failed to unregister rollback hook: %w", err)
 	}
-	s.cdcRegistered.Unset()
 
 	s.cdcMu.Lock()
 	defer s.cdcMu.Unlock()
@@ -2493,28 +2518,13 @@ func (s *Store) fsmApply(l *raft.Log) (e any) {
 	}
 
 	cmd, mutated, r, err := func() (*proto.Command, bool, any, error) {
-		// CDC enabled? Prep collection of events.
+		// CDC enabled? Prime collection of events.
 		if s.cdcConf != nil {
 			s.cdcMu.RLock()
 			defer s.cdcMu.RUnlock()
-
-			// If CDC is enabled but not yet activated, do so now. By doing it here we keep
-			// CDC registration in a single place in the code.
-			if s.cdcRegistered.IsNot() {
-				if err := s.db.RegisterPreUpdateHook(s.cdcCollator.PreupdateHook, s.cdcConf.TableRe, s.cdcConf.RowIDsOnly); err != nil {
-					s.logger.Fatalf("failed to register preupdate hook for CDC: %s", err)
-				}
-				if err := s.db.RegisterCommitHook(s.cdcCollator.CommitHook); err != nil {
-					s.logger.Fatalf("failed to register commit hook for CDC: %s", err)
-				}
-				if err := s.db.RegisterRollbackHook(s.cdcCollator.RollbackHook); err != nil {
-					s.logger.Fatalf("failed to register rollback hook for CDC: %s", err)
-				}
-				s.cdcRegistered.Set()
+			if s.cdcCollator != nil {
+				s.cdcCollator.Reset()
 			}
-
-			// Prime collection of events.
-			s.cdcCollator.Reset()
 		}
 		defer func() {
 			s.cdcMu.RLock()
@@ -2547,9 +2557,10 @@ func (s *Store) fsmApply(l *raft.Log) (e any) {
 		if err := s.snapshotStore.SetDueNext(snapshot.Full); err != nil {
 			s.logger.Fatalf("failed to set full snapshot needed: %s", err)
 		}
-		// Swapping in a new database deactivates the CDC hooks, so signal that it
-		// needs to be reregistered on the next commit.
-		s.cdcRegistered.Unset()
+		// Swapping in a new database deactivates the CDC hooks.
+		if err := s.registerCDCHooks(); err != nil {
+			s.logger.Fatalf("failed to register CDC hooks after loading database: %s", err)
+		}
 	}
 	return r
 }
@@ -2851,9 +2862,10 @@ func (s *Store) fsmRestore(rc io.ReadCloser) (retErr error) {
 	s.dbAppliedIdx.Store(li)
 	s.appliedTarget.Signal(li)
 	s.dbModifiedTime.Store(time.Now())
-	// Swapping in a new database deactivates the CDC hooks, so signal that it
-	// needs to be reregistered on the next commit.
-	s.cdcRegistered.Unset()
+	// Swapping in a new database deactivates the CDC hooks.
+	if err := s.registerCDCHooks(); err != nil {
+		s.logger.Fatalf("failed to register CDC hooks after restoring database: %s", err)
+	}
 
 	stats.Add(numRestores, 1)
 	s.logger.Printf("node restored in %s", time.Since(startT))
