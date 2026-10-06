@@ -1,8 +1,14 @@
+## v10.5.3 (unreleased)
+### Implementation changes and bug fixes
+- [PR #2844](https://github.com/rqlite/rqlite/pull/2844): Unit-test WAL-related compile-time options, to ensure SQLite operates as per rqlite needs.
+- [PR #2845](https://github.com/rqlite/rqlite/pull/2845): Check Raft snapshot threshold every 5 seconds by default.
+- [PR #2846](https://github.com/rqlite/rqlite/pull/2846): Trivial simplification of snapshotting logic.
+
 ## v10.5.2 (October 4th 2026)
 ### Implementation changes and bug fixes
 - [PR #2839](https://github.com/rqlite/rqlite/pull/2839): CDC streamer should retain Index after Commit and Rollback.
-- [PR #2840](https://github.com/rqlite/rqlite/pull/2840): Fix issue where CDC was not emitting all events resulting from a Bulk Request.
-- [PR #2841](https://github.com/rqlite/rqlite/pull/2841): Fix issue where a database connection could be created without autocheckpointing being disabled.
+- [PR #2840](https://github.com/rqlite/rqlite/pull/2840): Fix issue where CDC was not emitting all after processing a Bulk Request.
+- [PR #2841](https://github.com/rqlite/rqlite/pull/2841): Fix issue where a database connection could be created without WAL _auto-checkpointing_ being disabled.
 - [PR #2841](https://github.com/rqlite/rqlite/pull/2841): Consolidate Foreign Key database driver creation.
 
 ## v10.5.1 (October 2nd 2026)

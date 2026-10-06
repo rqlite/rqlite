@@ -198,7 +198,7 @@ func Forge(arguments []string) (*flag.FlagSet, *Config, error) {
 	fs.StringVar(&config.RaftLogLevel, "raft-log-level", "WARN", "Minimum log level for Raft module")
 	fs.Uint64Var(&config.RaftSnapThreshold, "raft-snap", 8192, "Number of outstanding log entries which triggers Raft snapshot")
 	fs.Uint64Var(&config.RaftSnapThresholdWALSize, "raft-snap-wal-size", 4194304, "SQLite WAL file size in bytes which triggers Raft snapshot. Set to 0 to disable")
-	fs.DurationVar(&config.RaftSnapInterval, "raft-snap-int", mustParseDuration("10s"), "Snapshot threshold check interval")
+	fs.DurationVar(&config.RaftSnapInterval, "raft-snap-int", mustParseDuration("5s"), "Snapshot threshold check interval")
 	fs.DurationVar(&config.RaftLeaderLeaseTimeout, "raft-leader-lease-timeout", mustParseDuration("0s"), "Raft leader lease timeout. Use 0s for Raft default")
 	fs.DurationVar(&config.RaftHeartbeatTimeout, "raft-heartbeat-timeout", mustParseDuration("1s"), "Raft heartbeat timeout")
 	fs.DurationVar(&config.RaftCommitTimeout, "raft-commit-timeout", mustParseDuration("50ms"), "Raft commit timeout")

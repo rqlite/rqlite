@@ -399,7 +399,7 @@ short_help = "Snapshot threshold check interval"
 long_help = """
 This controls how often the Raft subsystem will check if snapshotting is required, either due to the number of outstanding log entries, or due to WAL size.
 """
-default = "10s"
+default = "5s"
 
 [[flags]]
 name = "RaftLeaderLeaseTimeout"

@@ -3086,9 +3086,9 @@ func (s *Store) runWALSnapshotting() (closeCh, doneCh chan struct{}) {
 					if err := s.Snapshot(0); err != nil {
 						stats.Add(numWALSnapshotsFailed, 1)
 						s.logger.Printf("failed to snapshot due to WAL threshold: %s", err.Error())
-					} else {
-						stats.Add(numWALSnapshots, 1)
+						continue
 					}
+					stats.Add(numWALSnapshots, 1)
 				}
 			case <-closeCh:
 				return
