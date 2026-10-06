@@ -333,7 +333,6 @@ type Store struct {
 	db           *sql.SwappableDB // The underlying SQLite store.
 	checkpointer Checkpointer
 
-	cdcMu       sync.RWMutex
 	cdcCollator *sql.CDCCollator
 	cdcConf     *CDCConfig // nil if CDC is not enabled.
 	cdcOutCh    chan *proto.CDCIndexedEventGroup
@@ -2325,8 +2324,6 @@ func (s *Store) cleanupCDC() error {
 		return fmt.Errorf("failed to unregister rollback hook: %w", err)
 	}
 
-	s.cdcMu.Lock()
-	defer s.cdcMu.Unlock()
 	s.cdcCollator = nil
 	return nil
 }
@@ -2519,16 +2516,10 @@ func (s *Store) fsmApply(l *raft.Log) (e any) {
 
 	cmd, mutated, r, err := func() (*proto.Command, bool, any, error) {
 		// CDC enabled? Prime collection of events.
-		if s.cdcConf != nil {
-			s.cdcMu.RLock()
-			defer s.cdcMu.RUnlock()
-			if s.cdcCollator != nil {
-				s.cdcCollator.Reset()
-			}
+		if s.cdcCollator != nil {
+			s.cdcCollator.Reset()
 		}
 		defer func() {
-			s.cdcMu.RLock()
-			defer s.cdcMu.RUnlock()
 			if s.cdcCollator == nil {
 				return
 			}
