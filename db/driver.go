@@ -9,7 +9,9 @@ import (
 	"sync"
 
 	"github.com/mattn/go-sqlite3"
+	command "github.com/rqlite/rqlite/v10/command/proto"
 	"github.com/rqlite/rqlite/v10/db/querylog"
+	"github.com/rqlite/rqlite/v10/internal/rsync"
 )
 
 const (
@@ -215,18 +217,179 @@ func buildConnectHook(cfg *DriverConfig) func(conn *sqlite3.SQLiteConn) error {
 
 		// Hooks.
 		if cfg.PreUpdateHook != nil {
-			conn.RegisterPreUpdateHook(sqlitePreUpdateHook(cfg.PreUpdateHook, cfg.PreUpdateTableRe, cfg.PreUpdateRowIDsOnly))
+			conn.RegisterPreUpdateHook(cfg.PreUpdateHook.SQLite(cfg.PreUpdateTableRe, cfg.PreUpdateRowIDsOnly))
 		}
 		if cfg.UpdateHook != nil {
-			conn.RegisterUpdateHook(sqliteUpdateHook(cfg.UpdateHook))
+			conn.RegisterUpdateHook(cfg.UpdateHook.SQLite())
 		}
 		if cfg.CommitHook != nil {
-			conn.RegisterCommitHook(sqliteCommitHook(cfg.CommitHook))
+			conn.RegisterCommitHook(cfg.CommitHook.SQLite())
 		}
 		if cfg.RollbackHook != nil {
 			conn.RegisterRollbackHook(cfg.RollbackHook)
 		}
 
 		return nil
+	}
+}
+
+// PreUpdateHookCallback is a callback function that is called before a row is modified
+// in the database.
+type PreUpdateHookCallback func(ev *command.CDCEvent) error
+
+// SQLite returns the SQLite preupdate hook which converts the SQLite hook data to rqlite
+// hook data, and passes it to hook. If hook is nil, nil is returned, which removes any
+// installed hook. If tblRe is non-nil only rows of tables whose names match it are passed
+// to hook. If rowIDsOnly is true the events passed to hook contain row IDs but no row data.
+func (hook *PreUpdateHookCallback) SQLite(tblRe *regexp.Regexp, rowIDsOnly bool) func(sqlite3.SQLitePreUpdateData) {
+	if hook == nil {
+		return nil
+	}
+
+	// Convert from SQLite hook data to rqlite hook data.
+	tableMatch := rsync.NewAtomicMap[string, bool]()
+	convertFn := func(d sqlite3.SQLitePreUpdateData) (*command.CDCEvent, error) {
+		if tblRe != nil {
+			m, ok := tableMatch.Get(d.TableName)
+			if !ok {
+				m = tblRe.MatchString(d.TableName)
+				tableMatch.Set(d.TableName, m)
+			}
+			if !m {
+				return nil, nil
+			}
+		}
+
+		ev := &command.CDCEvent{
+			Table: d.TableName,
+		}
+
+		switch d.Op {
+		case sqlite3.SQLITE_INSERT:
+			ev.Op = command.CDCEvent_INSERT
+			ev.NewRowId = d.NewRowID
+		case sqlite3.SQLITE_UPDATE:
+			ev.Op = command.CDCEvent_UPDATE
+			ev.OldRowId = d.OldRowID
+			ev.NewRowId = d.NewRowID
+		case sqlite3.SQLITE_DELETE:
+			ev.Op = command.CDCEvent_DELETE
+			ev.OldRowId = d.OldRowID
+		default:
+			return ev, fmt.Errorf("unknown preupdate hook operation %d", d.Op)
+		}
+
+		// Are we done?
+		if rowIDsOnly {
+			return ev, nil
+		}
+
+		c := d.Count()
+		if d.Op != sqlite3.SQLITE_INSERT {
+			oldRow := make([]any, c)
+			err := d.Old(oldRow...)
+			if err != nil {
+				return ev, fmt.Errorf("failed to get old row data: %w", err)
+			}
+			ev.OldRow, err = normalizeCDCValues(oldRow)
+			if err != nil {
+				return ev, fmt.Errorf("failed to normalize old row data: %w", err)
+			}
+		}
+
+		if d.Op != sqlite3.SQLITE_DELETE {
+			newRow := make([]any, c)
+			err := d.New(newRow...)
+			if err != nil {
+				return ev, fmt.Errorf("failed to get new row data: %w", err)
+			}
+			ev.NewRow, err = normalizeCDCValues(newRow)
+			if err != nil {
+				return ev, fmt.Errorf("failed to normalize new row data: %w", err)
+			}
+		}
+		return ev, nil
+	}
+
+	return func(d sqlite3.SQLitePreUpdateData) {
+		stats.Add(numPreupdates, 1)
+		ev, err := convertFn(d)
+		if err != nil {
+			stats.Add(numPreupdatesErrors, 1)
+			ev.Error = err.Error()
+		}
+		if ev == nil {
+			return
+		}
+		if err := (*hook)(ev); err != nil {
+			stats.Add(numPreupdatesCBErrors, 1)
+		}
+	}
+}
+
+// UpdateHookCallback is a callback function that is called before a row is modified
+// in the database.
+type UpdateHookCallback func(ev *command.UpdateHookEvent) error
+
+// SQLite the SQLite update hook which converts the SQLite hook data to rqlite hook
+// data, and passes it to hook. If hook is nil, nil is returned, which removes any
+// installed hook.
+func (hook *UpdateHookCallback) SQLite() func(int, string, string, int64) {
+	if hook == nil {
+		return nil
+	}
+
+	// Convert from SQLite hook data to rqlite hook data.
+	convertFn := func(op int, _, table string, rowID int64) (*command.UpdateHookEvent, error) {
+		he := &command.UpdateHookEvent{
+			Table: table,
+			RowId: rowID,
+		}
+
+		switch op {
+		case sqlite3.SQLITE_INSERT:
+			he.Op = command.UpdateHookEvent_INSERT
+		case sqlite3.SQLITE_UPDATE:
+			he.Op = command.UpdateHookEvent_UPDATE
+		case sqlite3.SQLITE_DELETE:
+			he.Op = command.UpdateHookEvent_DELETE
+		default:
+			return nil, fmt.Errorf("unknown update hook operation %d", op)
+		}
+		return he, nil
+	}
+
+	return func(op int, dbName, tblName string, rowID int64) {
+		stats.Add(numUpdateHooks, 1)
+		ev, err := convertFn(op, dbName, tblName, rowID)
+		if err != nil {
+			stats.Add(numUpdateHooksErrors, 1)
+			ev.Error = err.Error()
+		}
+		if err := (*hook)(ev); err != nil {
+			stats.Add(numUpdateHooksCBErrors, 1)
+		}
+	}
+}
+
+// RollbackHookCallback is called when SQLite rolls back a transaction.
+type RollbackHookCallback func()
+
+// CommitHookCallback is a callback function that is called whenever a transaction
+// is committed to the database. If the callback returns true the transaction
+// is committed, otherwise it is rolled back.
+type CommitHookCallback func() bool
+
+// SQLite returns the SQLite commit hook which passes control to hook. If hookis nil, nil is returned, which removes any installed hook.
+func (hook *CommitHookCallback) SQLite() func() int {
+	if hook == nil {
+		return nil
+	}
+	return func() int {
+		stats.Add(numCommitHooks, 1)
+		if (*hook)() {
+			return 0
+		}
+		return 1
 	}
 }
