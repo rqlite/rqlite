@@ -1009,11 +1009,6 @@ func (s *Store) Close(wait bool) (retErr error) {
 	}
 	defer s.snapshotCAS.End()
 
-	// Clean up any CDC.
-	if err := s.cleanupCDC(); err != nil {
-		return err
-	}
-
 	s.dechunkManager.Close()
 
 	close(s.observerClose)
@@ -2287,11 +2282,6 @@ func (s *Store) remove(id string) error {
 		return ErrNotLeader
 	}
 	return f.Error()
-}
-
-func (s *Store) cleanupCDC() error {
-	s.cdcCollator = nil
-	return nil
 }
 
 // initVacuumTime initializes the last vacuum times in the Config store.
