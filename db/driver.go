@@ -380,7 +380,8 @@ type RollbackHookCallback func()
 // is committed, otherwise it is rolled back.
 type CommitHookCallback func() bool
 
-// SQLite returns the SQLite commit hook which passes control to hook. If hookis nil, nil is returned, which removes any installed hook.
+// SQLite returns the SQLite commit hook which passes control to hook. If hooki s nil,
+// nil is returned, which removes any installed hook.
 func (hook *CommitHookCallback) SQLite() func() int {
 	if hook == nil {
 		return nil
