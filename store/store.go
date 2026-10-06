@@ -783,7 +783,7 @@ func (s *Store) Open() (retErr error) {
 			// The CDC hooks are part of the driver configuration, so they are
 			// installed on every database connection, including any connection
 			// opened after the database is swapped.
-			s.cdcCollator, err = sql.NewCDCCollator(storeColumnNames{s})
+			s.cdcCollator, err = sql.NewCDCCollator(&ColumnNamesProvider{s})
 			if err != nil {
 				return fmt.Errorf("failed to create CDC collator: %s", err)
 			}
@@ -3263,15 +3263,4 @@ func resolvableAddress(addr string) (string, error) {
 
 func friendlyBytes(n uint64) string {
 	return humanize.Bytes(n)
-}
-
-// storeColumnNames resolves column names through the Store's current database.
-// The database is created after the CDC collator, and may be swapped, so the
-// collator must not hold the database directly.
-type storeColumnNames struct {
-	s *Store
-}
-
-func (c storeColumnNames) ColumnNames(table string) ([]string, error) {
-	return c.s.db.ColumnNames(table)
 }
