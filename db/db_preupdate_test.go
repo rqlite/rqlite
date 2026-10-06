@@ -1,6 +1,7 @@
 package db
 
 import (
+	"fmt"
 	"reflect"
 	"regexp"
 	"sync"
@@ -30,9 +31,7 @@ func Test_Preupdate_Basic(t *testing.T) {
 		count.Add(1)
 		return nil
 	}
-	if err := db.RegisterPreUpdateHook(hook, nil, true); err != nil {
-		t.Fatalf("error registering preupdate hook")
-	}
+	db = mustReopenWithHooks(t, db, &DriverConfig{PreUpdateHook: hook, PreUpdateRowIDsOnly: true})
 
 	// A select should not trigger the hook and a basic insert should trigger the hook.
 	mustQuery(db, "SELECT * FROM foo")
@@ -80,9 +79,7 @@ func Test_Preupdate_Basic(t *testing.T) {
 	}
 
 	// Unregister the hook, insert a row, and make sure the hook is not triggered.
-	if err := db.RegisterPreUpdateHook(nil, nil, true); err != nil {
-		t.Fatalf("error unregistering preupdate hook")
-	}
+	db = mustReopenWithHooks(t, db, &DriverConfig{PreUpdateRowIDsOnly: true})
 	mustExecute(db, "INSERT INTO foo(name) VALUES('fiona')")
 	if count.Load() != 13 {
 		t.Fatalf("expected count 8, got %d", count.Load())
@@ -282,7 +279,7 @@ func Test_Preupdate_AllTypes(t *testing.T) {
 		},
 	} {
 		var wg sync.WaitGroup
-		if err := db.RegisterPreUpdateHook(func(ev *proto.CDCEvent) error {
+		db = mustReopenWithHooks(t, db, &DriverConfig{PreUpdateHook: func(ev *proto.CDCEvent) error {
 			defer wg.Done()
 
 			if exp, got := tt.ev.Table, ev.Table; exp != got {
@@ -334,9 +331,7 @@ func Test_Preupdate_AllTypes(t *testing.T) {
 				}
 			}
 			return nil
-		}, nil, false); err != nil {
-			t.Fatalf("error registering preupdate hook: %s", err)
-		}
+		}})
 
 		wg.Add(1)
 		mustExecute(db, tt.sql)
@@ -365,9 +360,7 @@ func Test_Preupdate_Basic_Regex(t *testing.T) {
 
 	// Match.
 	exp++
-	if err := db.RegisterPreUpdateHook(hook, nil, true); err != nil {
-		t.Fatalf("error registering preupdate hook")
-	}
+	db = mustReopenWithHooks(t, db, &DriverConfig{PreUpdateHook: hook, PreUpdateRowIDsOnly: true})
 	mustExecute(db, "INSERT INTO foo(name) VALUES('fiona')")
 	if exp, got := exp, count.Load(); exp != int(got) {
 		t.Fatalf("expected count %d, got %d", exp, got)
@@ -375,9 +368,7 @@ func Test_Preupdate_Basic_Regex(t *testing.T) {
 
 	// Match it twice to test memoization.
 	exp += 2
-	if err := db.RegisterPreUpdateHook(hook, mustRegex("foo"), true); err != nil {
-		t.Fatalf("error registering preupdate hook")
-	}
+	db = mustReopenWithHooks(t, db, &DriverConfig{PreUpdateHook: hook, PreUpdateTableRe: mustRegex("foo"), PreUpdateRowIDsOnly: true})
 	mustExecute(db, "INSERT INTO foo(name) VALUES('fiona')")
 	mustExecute(db, "INSERT INTO foo(name) VALUES('fiona')")
 	if exp, got := exp, count.Load(); exp != int(got) {
@@ -385,18 +376,14 @@ func Test_Preupdate_Basic_Regex(t *testing.T) {
 	}
 
 	// No match
-	if err := db.RegisterPreUpdateHook(hook, mustRegex("foobar"), true); err != nil {
-		t.Fatalf("error registering preupdate hook")
-	}
+	db = mustReopenWithHooks(t, db, &DriverConfig{PreUpdateHook: hook, PreUpdateTableRe: mustRegex("foobar"), PreUpdateRowIDsOnly: true})
 	mustExecute(db, "INSERT INTO foo(name) VALUES('fiona')")
 	if exp, got := exp, count.Load(); exp != int(got) {
 		t.Fatalf("expected count %d, got %d", exp, got)
 	}
 
 	// No match
-	if err := db.RegisterPreUpdateHook(hook, mustRegex("^foob.*"), true); err != nil {
-		t.Fatalf("error registering preupdate hook")
-	}
+	db = mustReopenWithHooks(t, db, &DriverConfig{PreUpdateHook: hook, PreUpdateTableRe: mustRegex("^foob.*"), PreUpdateRowIDsOnly: true})
 	mustExecute(db, "INSERT INTO foo(name) VALUES('fiona')")
 	if exp, got := exp, count.Load(); exp != int(got) {
 		t.Fatalf("expected count %d, got %d", exp, got)
@@ -404,9 +391,7 @@ func Test_Preupdate_Basic_Regex(t *testing.T) {
 
 	// Two matches.
 	exp += 2
-	if err := db.RegisterPreUpdateHook(hook, mustRegex("^foo.*"), true); err != nil {
-		t.Fatalf("error registering preupdate hook")
-	}
+	db = mustReopenWithHooks(t, db, &DriverConfig{PreUpdateHook: hook, PreUpdateTableRe: mustRegex("^foo.*"), PreUpdateRowIDsOnly: true})
 	mustExecute(db, "INSERT INTO foo(name) VALUES('fiona')")
 	mustExecute(db, "INSERT INTO foobar(name) VALUES('fiona')")
 	if exp, got := exp, count.Load(); exp != int(got) {
@@ -414,18 +399,14 @@ func Test_Preupdate_Basic_Regex(t *testing.T) {
 	}
 
 	// No match
-	if err := db.RegisterPreUpdateHook(hook, mustRegex("qux"), true); err != nil {
-		t.Fatalf("error registering preupdate hook")
-	}
+	db = mustReopenWithHooks(t, db, &DriverConfig{PreUpdateHook: hook, PreUpdateTableRe: mustRegex("qux"), PreUpdateRowIDsOnly: true})
 	mustExecute(db, "INSERT INTO foo(name) VALUES('fiona')")
 	if exp, got := exp, count.Load(); exp != int(got) {
 		t.Fatalf("expected count %d, got %d", exp, got)
 	}
 
 	// No match
-	if err := db.RegisterPreUpdateHook(hook, mustRegex(" foo"), true); err != nil {
-		t.Fatalf("error registering preupdate hook")
-	}
+	db = mustReopenWithHooks(t, db, &DriverConfig{PreUpdateHook: hook, PreUpdateTableRe: mustRegex(" foo"), PreUpdateRowIDsOnly: true})
 	mustExecute(db, "INSERT INTO foo(name) VALUES('fiona')")
 	if exp, got := exp, count.Load(); exp != int(got) {
 		t.Fatalf("expected count %d, got %d", exp, got)
@@ -449,9 +430,7 @@ func Test_Preupdate_Constraint(t *testing.T) {
 		count.Add(1)
 		return nil
 	}
-	if err := db.RegisterPreUpdateHook(hook, nil, true); err != nil {
-		t.Fatalf("error registering preupdate hook")
-	}
+	db = mustReopenWithHooks(t, db, &DriverConfig{PreUpdateHook: hook, PreUpdateRowIDsOnly: true})
 
 	// Insert a row, with an explicit ID.
 	mustExecute(db, "INSERT INTO foo(id, name) VALUES(5, 'fiona')")
@@ -507,9 +486,7 @@ func Test_Preupdate_RowIDs(t *testing.T) {
 		}
 		return nil
 	}
-	if err := db.RegisterPreUpdateHook(hook, nil, true); err != nil {
-		t.Fatalf("error registering preupdate hook")
-	}
+	db = mustReopenWithHooks(t, db, &DriverConfig{PreUpdateHook: hook, PreUpdateRowIDsOnly: true})
 	wg.Add(1)
 	mustExecute(db, "INSERT INTO foo(id, name, age) VALUES(5, 'fiona', 2.4)")
 	wg.Wait()
@@ -535,9 +512,7 @@ func Test_Preupdate_RowIDs(t *testing.T) {
 		}
 		return nil
 	}
-	if err := db.RegisterPreUpdateHook(hook, nil, true); err != nil {
-		t.Fatalf("error registering preupdate hook")
-	}
+	db = mustReopenWithHooks(t, db, &DriverConfig{PreUpdateHook: hook, PreUpdateRowIDsOnly: true})
 	wg.Add(1)
 	mustExecute(db, "UPDATE foo SET name='fiona2' WHERE id=5")
 	wg.Wait()
@@ -560,9 +535,7 @@ func Test_Preupdate_RowIDs(t *testing.T) {
 		}
 		return nil
 	}
-	if err := db.RegisterPreUpdateHook(hook, nil, true); err != nil {
-		t.Fatalf("error registering preupdate hook")
-	}
+	db = mustReopenWithHooks(t, db, &DriverConfig{PreUpdateHook: hook, PreUpdateRowIDsOnly: true})
 	wg.Add(1)
 	mustExecute(db, "DELETE FROM foo WHERE id=5")
 	wg.Wait()
@@ -599,9 +572,7 @@ func Test_Preupdate_Data(t *testing.T) {
 		compareEvents(t, exp, got)
 		return nil
 	}
-	if err := db.RegisterPreUpdateHook(hook, nil, false); err != nil {
-		t.Fatalf("error registering preupdate hook")
-	}
+	db = mustReopenWithHooks(t, db, &DriverConfig{PreUpdateHook: hook})
 	wg.Add(1)
 	mustExecute(db, "INSERT INTO foo(id, name, age) VALUES(5, 'fiona', 2.4)")
 	wg.Wait()
@@ -626,9 +597,7 @@ func Test_Preupdate_Data(t *testing.T) {
 		compareEvents(t, exp, got)
 		return nil
 	}
-	if err := db.RegisterPreUpdateHook(hook, nil, false); err != nil {
-		t.Fatalf("error registering preupdate hook")
-	}
+	db = mustReopenWithHooks(t, db, &DriverConfig{PreUpdateHook: hook})
 	wg.Add(1)
 	mustExecute(db, "INSERT INTO foo(id, name, age) VALUES(20, '😃💁 People 大鹿', 1.23)")
 	wg.Wait()
@@ -653,9 +622,7 @@ func Test_Preupdate_Data(t *testing.T) {
 		compareEvents(t, exp, got)
 		return nil
 	}
-	if err := db.RegisterPreUpdateHook(hook, nil, false); err != nil {
-		t.Fatalf("error registering preupdate hook")
-	}
+	db = mustReopenWithHooks(t, db, &DriverConfig{PreUpdateHook: hook})
 	wg.Add(1)
 	mustExecute(db, "INSERT INTO foo(id, age) VALUES(6, 3.7)")
 	wg.Wait()
@@ -687,9 +654,7 @@ func Test_Preupdate_Data(t *testing.T) {
 		compareEvents(t, exp, got)
 		return nil
 	}
-	if err := db.RegisterPreUpdateHook(hook, nil, false); err != nil {
-		t.Fatalf("error registering preupdate hook")
-	}
+	db = mustReopenWithHooks(t, db, &DriverConfig{PreUpdateHook: hook})
 	wg.Add(1)
 	mustExecute(db, "UPDATE foo SET name='fiona2' WHERE id=5")
 	wg.Wait()
@@ -713,9 +678,7 @@ func Test_Preupdate_Data(t *testing.T) {
 		compareEvents(t, exp, got)
 		return nil
 	}
-	if err := db.RegisterPreUpdateHook(hook, nil, false); err != nil {
-		t.Fatalf("error registering preupdate hook")
-	}
+	db = mustReopenWithHooks(t, db, &DriverConfig{PreUpdateHook: hook})
 	wg.Add(1)
 	mustExecute(db, "DELETE FROM foo WHERE id=5")
 	wg.Wait()
@@ -740,9 +703,7 @@ func Test_Preupdate_Multi(t *testing.T) {
 		defer wg.Done()
 		return nil
 	}
-	if err := db.RegisterPreUpdateHook(hook, nil, false); err != nil {
-		t.Fatalf("error registering preupdate hook")
-	}
+	db = mustReopenWithHooks(t, db, &DriverConfig{PreUpdateHook: hook})
 	wg.Add(2)
 	mustExecute(db, "DELETE FROM foo")
 	wg.Wait()
@@ -765,9 +726,7 @@ func Test_Preupdate_Tx(t *testing.T) {
 		defer wg.Done()
 		return nil
 	}
-	if err := db.RegisterPreUpdateHook(hook, nil, false); err != nil {
-		t.Fatalf("error registering preupdate hook")
-	}
+	db = mustReopenWithHooks(t, db, &DriverConfig{PreUpdateHook: hook})
 	wg.Add(1)
 	mustExecute(db, "BEGIN")
 	mustExecute(db, "INSERT INTO foo(id, name) VALUES(1, 'fiona')")
@@ -835,4 +794,31 @@ func mustRegex(s string) *regexp.Regexp {
 		panic(err)
 	}
 	return r
+}
+
+var hooksDriverSeq atomic.Int64
+
+// mustOpenWithHooks opens the database at path using a driver configured with
+// the given hooks, so the hooks are installed on every connection.
+func mustOpenWithHooks(t *testing.T, path string, fkEnabled, wal bool, cfg *DriverConfig) *DB {
+	t.Helper()
+	cfg.ChkOnClose = CnkOnCloseModeDisabled
+	drv := NewDriverFromConfig(fmt.Sprintf("hooks-test-%d", hooksDriverSeq.Add(1)), cfg)
+	db, err := OpenWithDriver(drv, path, fkEnabled, wal)
+	if err != nil {
+		t.Fatalf("error opening database with hooks: %s", err)
+	}
+	t.Cleanup(func() { db.Close() })
+	return db
+}
+
+// mustReopenWithHooks closes db, and reopens the same database using a driver
+// configured with the given hooks.
+func mustReopenWithHooks(t *testing.T, db *DB, cfg *DriverConfig) *DB {
+	t.Helper()
+	path, fkEnabled, wal := db.Path(), db.FKEnabled(), db.WALEnabled()
+	if err := db.Close(); err != nil {
+		t.Fatalf("error closing database: %s", err)
+	}
+	return mustOpenWithHooks(t, path, fkEnabled, wal, cfg)
 }

@@ -4,6 +4,7 @@ import (
 	"database/sql"
 	"fmt"
 	"path/filepath"
+	"regexp"
 	"sort"
 	"sync"
 
@@ -39,6 +40,17 @@ type DriverConfig struct {
 	// ForeignKeys, if true, enables foreign key constraints on every new
 	// connection, regardless of any setting in the DSN.
 	ForeignKeys bool
+
+	// Hooks, installed on every new connection. A nil hook is not installed.
+	// PreUpdateTableRe, if non-nil, restricts PreUpdateHook to rows of tables
+	// whose names match it, and PreUpdateRowIDsOnly, if true, means the events
+	// passed to PreUpdateHook contain row IDs but no row data.
+	PreUpdateHook       PreUpdateHookCallback
+	PreUpdateTableRe    *regexp.Regexp
+	PreUpdateRowIDsOnly bool
+	UpdateHook          UpdateHookCallback
+	CommitHook          CommitHookCallback
+	RollbackHook        RollbackHookCallback
 
 	// QueryLogger, if non-nil, installs query tracing on every new connection.
 	QueryLogger *querylog.QueryLogger
@@ -163,8 +175,8 @@ func (d *Driver) CheckpointOnCloseMode() CnkOnCloseMode {
 }
 
 // buildConnectHook composes a ConnectHook from cfg, chaining all requested
-// connection-level behaviors in order: checkpoint config, foreign keys, then
-// query tracing.
+// connection-level behaviors in order: checkpoint config, foreign keys, query
+// tracing, then hooks.
 //
 // This driver unconditionally disables automatic checkpointing.
 func buildConnectHook(cfg *DriverConfig) func(conn *sqlite3.SQLiteConn) error {
@@ -199,6 +211,20 @@ func buildConnectHook(cfg *DriverConfig) func(conn *sqlite3.SQLiteConn) error {
 			}); err != nil {
 				return err
 			}
+		}
+
+		// Hooks.
+		if cfg.PreUpdateHook != nil {
+			conn.RegisterPreUpdateHook(sqlitePreUpdateHook(cfg.PreUpdateHook, cfg.PreUpdateTableRe, cfg.PreUpdateRowIDsOnly))
+		}
+		if cfg.UpdateHook != nil {
+			conn.RegisterUpdateHook(sqliteUpdateHook(cfg.UpdateHook))
+		}
+		if cfg.CommitHook != nil {
+			conn.RegisterCommitHook(sqliteCommitHook(cfg.CommitHook))
+		}
+		if cfg.RollbackHook != nil {
+			conn.RegisterRollbackHook(cfg.RollbackHook)
 		}
 
 		return nil

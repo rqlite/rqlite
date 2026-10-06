@@ -357,10 +357,16 @@ func (db *DB) SetMaxReadOnlyConns(n int) {
 // in the database.
 type PreUpdateHookCallback func(ev *command.CDCEvent) error
 
-// RegisterPreUpdateHook registers a callback that is called before a row is modified
-// in the database. If a callback is already registered, it is replaced. If hook is nil,
-// the callback is removed.
-func (db *DB) RegisterPreUpdateHook(hook PreUpdateHookCallback, tblRe *regexp.Regexp, rowIDsOnly bool) error {
+// sqlitePreUpdateHook returns the SQLite preupdate hook which converts the
+// SQLite hook data to rqlite hook data, and passes it to hook. If hook is nil,
+// nil is returned, which removes any installed hook. If tblRe is non-nil only
+// rows of tables whose names match it are passed to hook. If rowIDsOnly is
+// true the events passed to hook contain row IDs but no row data.
+func sqlitePreUpdateHook(hook PreUpdateHookCallback, tblRe *regexp.Regexp, rowIDsOnly bool) func(sqlite3.SQLitePreUpdateData) {
+	if hook == nil {
+		return nil
+	}
+
 	// Convert from SQLite hook data to rqlite hook data.
 	tableMatch := rsync.NewAtomicMap[string, bool]()
 	convertFn := func(d sqlite3.SQLitePreUpdateData) (*command.CDCEvent, error) {
@@ -426,49 +432,34 @@ func (db *DB) RegisterPreUpdateHook(hook PreUpdateHookCallback, tblRe *regexp.Re
 		return ev, nil
 	}
 
-	// Register the callback with the SQLite connection.
-	var cb func(d sqlite3.SQLitePreUpdateData)
-	if hook != nil {
-		cb = func(d sqlite3.SQLitePreUpdateData) {
-			stats.Add(numPreupdates, 1)
-			ev, err := convertFn(d)
-			if err != nil {
-				stats.Add(numPreupdatesErrors, 1)
-				ev.Error = err.Error()
-			}
-			if ev == nil {
-				return
-			}
-			if err := hook(ev); err != nil {
-				stats.Add(numPreupdatesCBErrors, 1)
-			}
+	return func(d sqlite3.SQLitePreUpdateData) {
+		stats.Add(numPreupdates, 1)
+		ev, err := convertFn(d)
+		if err != nil {
+			stats.Add(numPreupdatesErrors, 1)
+			ev.Error = err.Error()
+		}
+		if ev == nil {
+			return
+		}
+		if err := hook(ev); err != nil {
+			stats.Add(numPreupdatesCBErrors, 1)
 		}
 	}
-	f := func(driverConn any) error {
-		conn := driverConn.(*sqlite3.SQLiteConn)
-		conn.RegisterPreUpdateHook(cb)
-		return nil
-	}
-
-	conn, err := db.rwDB.Conn(context.Background())
-	if err != nil {
-		return err
-	}
-	defer conn.Close()
-	if err := conn.Raw(f); err != nil {
-		return err
-	}
-	return nil
 }
 
 // UpdateHookCallback is a callback function that is called before a row is modified
 // in the database.
 type UpdateHookCallback func(ev *command.UpdateHookEvent) error
 
-// RegisterUpdateHook registers a callback that is called when a row is modified
-// in the database. If a callback is already registered, it is replaced. If hook is nil,
-// the callback is removed.
-func (db *DB) RegisterUpdateHook(hook UpdateHookCallback) error {
+// sqliteUpdateHook returns the SQLite update hook which converts the SQLite
+// hook data to rqlite hook data, and passes it to hook. If hook is nil, nil is
+// returned, which removes any installed hook.
+func sqliteUpdateHook(hook UpdateHookCallback) func(int, string, string, int64) {
+	if hook == nil {
+		return nil
+	}
+
 	// Convert from SQLite hook data to rqlite hook data.
 	convertFn := func(op int, _, table string, rowID int64) (*command.UpdateHookEvent, error) {
 		he := &command.UpdateHookEvent{
@@ -489,90 +480,40 @@ func (db *DB) RegisterUpdateHook(hook UpdateHookCallback) error {
 		return he, nil
 	}
 
-	// Register the callback with the SQLite connection.
-	var cb func(int, string, string, int64)
-	if hook != nil {
-		cb = func(op int, dbName, tblName string, rowID int64) {
-			stats.Add(numUpdateHooks, 1)
-			ev, err := convertFn(op, dbName, tblName, rowID)
-			if err != nil {
-				stats.Add(numUpdateHooksErrors, 1)
-				ev.Error = err.Error()
-			}
-			if err := hook(ev); err != nil {
-				stats.Add(numUpdateHooksCBErrors, 1)
-			}
+	return func(op int, dbName, tblName string, rowID int64) {
+		stats.Add(numUpdateHooks, 1)
+		ev, err := convertFn(op, dbName, tblName, rowID)
+		if err != nil {
+			stats.Add(numUpdateHooksErrors, 1)
+			ev.Error = err.Error()
+		}
+		if err := hook(ev); err != nil {
+			stats.Add(numUpdateHooksCBErrors, 1)
 		}
 	}
-	f := func(driverConn any) error {
-		conn := driverConn.(*sqlite3.SQLiteConn)
-		conn.RegisterUpdateHook(cb)
-		return nil
-	}
-
-	conn, err := db.rwDB.Conn(context.Background())
-	if err != nil {
-		return err
-	}
-	defer conn.Close()
-	if err := conn.Raw(f); err != nil {
-		return err
-	}
-	return nil
 }
 
 // RollbackHookCallback is called when SQLite rolls back a transaction.
 type RollbackHookCallback func()
-
-// RegisterRollbackHook registers a callback for transaction rollbacks. If hook is
-// nil, the callback is removed. SQLite does not invoke this hook for a statement
-// rollback within an open transaction, or for ROLLBACK TO a savepoint.
-func (db *DB) RegisterRollbackHook(hook RollbackHookCallback) error {
-	conn, err := db.rwDB.Conn(context.Background())
-	if err != nil {
-		return err
-	}
-	defer conn.Close()
-	return conn.Raw(func(driverConn any) error {
-		driverConn.(*sqlite3.SQLiteConn).RegisterRollbackHook(hook)
-		return nil
-	})
-}
 
 // CommitHookCallback is a callback function that is called whenever a transaction
 // is committed to the database. If the callback returns true the transaction
 // is committed, otherwise it is rolled back.
 type CommitHookCallback func() bool
 
-// RegisterCommitHook registers a callback that is called whenever a transaction
-// is committed to the database. If a callback is already registered, it is replaced.
-// If hook is nil, the callback is removed.
-func (db *DB) RegisterCommitHook(hook CommitHookCallback) error {
-	var cb func() int
-	if hook != nil {
-		cb = func() int {
-			stats.Add(numCommitHooks, 1)
-			if hook() {
-				return 0
-			}
-			return 1
-		}
-	}
-	f := func(driverConn any) error {
-		conn := driverConn.(*sqlite3.SQLiteConn)
-		conn.RegisterCommitHook(cb)
+// sqliteCommitHook returns the SQLite commit hook which passes control to
+// hook. If hook is nil, nil is returned, which removes any installed hook.
+func sqliteCommitHook(hook CommitHookCallback) func() int {
+	if hook == nil {
 		return nil
 	}
-
-	conn, err := db.rwDB.Conn(context.Background())
-	if err != nil {
-		return err
+	return func() int {
+		stats.Add(numCommitHooks, 1)
+		if hook() {
+			return 0
+		}
+		return 1
 	}
-	defer conn.Close()
-	if err := conn.Raw(f); err != nil {
-		return err
-	}
-	return nil
 }
 
 // LastModified returns the last modified time of the database file, or the WAL file,
