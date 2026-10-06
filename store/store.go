@@ -16,7 +16,6 @@ import (
 	"net"
 	"os"
 	"path/filepath"
-	"regexp"
 	"sort"
 	"strconv"
 	"strings"
@@ -441,26 +440,6 @@ type Store struct {
 	numSnapshots             atomic.Uint64
 	numSnapshotsSkipped      atomic.Uint64
 	numSnapshotsStart        atomic.Uint64
-}
-
-// Config represents the configuration of the underlying Store.
-type Config struct {
-	DBConf *DBConfig   // The DBConfig object for this Store.
-	Dir    string      // The working directory for raft.
-	Tn     Transport   // The underlying Transport for raft.
-	ID     string      // Node ID.
-	Logger *log.Logger // The logger to use to log stuff.
-	CDC    *CDCConfig  // If non-nil, Change Data Capture is enabled with this configuration.
-}
-
-// CDCConfig is the configuration for Change Data Capture. CDC is enabled, or
-// not, for the life of a Store.
-type CDCConfig struct {
-	// TableRe, if non-nil, restricts CDC to tables whose names match it.
-	TableRe *regexp.Regexp
-
-	// RowIDsOnly, if true, means CDC events contain row IDs but no row data.
-	RowIDsOnly bool
 }
 
 // New returns a new Store.

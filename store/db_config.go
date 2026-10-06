@@ -1,10 +1,22 @@
 package store
 
 import (
+	"log"
 	"path/filepath"
+	"regexp"
 
 	"github.com/rqlite/rqlite/v10/db/querylog"
 )
+
+// Config represents the configuration of the underlying Store.
+type Config struct {
+	DBConf *DBConfig   // The DBConfig object for this Store.
+	Dir    string      // The working directory for raft.
+	Tn     Transport   // The underlying Transport for raft.
+	ID     string      // Node ID.
+	Logger *log.Logger // The logger to use to log stuff.
+	CDC    *CDCConfig  // If non-nil, Change Data Capture is enabled with this configuration.
+}
 
 // DBConfig represents the configuration of the underlying SQLite database.
 type DBConfig struct {
@@ -31,4 +43,14 @@ func (c *DBConfig) ExtensionNames() []string {
 		names = append(names, filepath.Base(ext))
 	}
 	return names
+}
+
+// CDCConfig is the configuration for Change Data Capture. CDC is enabled, or
+// not, for the life of a Store.
+type CDCConfig struct {
+	// TableRe, if non-nil, restricts CDC to tables whose names match it.
+	TableRe *regexp.Regexp
+
+	// RowIDsOnly, if true, means CDC events contain row IDs but no row data.
+	RowIDsOnly bool
 }
