@@ -6,7 +6,6 @@ import (
 	"expvar"
 	"fmt"
 	"io"
-	"math"
 
 	"github.com/rqlite/rqlite/v10/command/proto"
 	pb "google.golang.org/protobuf/proto"
@@ -69,14 +68,22 @@ func NewRequestMarshaler() *RequestMarshaler {
 func (m *RequestMarshaler) Marshal(r Requester) ([]byte, bool, error) {
 	stats.Add(numRequests, 1)
 	compress := false
-	parameterCompression := false
 
 	stmts := r.GetRequest().GetStatements()
 	if len(stmts) >= m.BatchThreshold {
 		compress = true
 	} else {
 		for i := range stmts {
-			if len(stmts[i].Sql) >= m.SizeThreshold {
+			size := len(stmts[i].Sql)
+			for _, p := range stmts[i].Parameters {
+				switch v := p.GetValue().(type) {
+				case *proto.Parameter_S:
+					size += len(v.S)
+				case *proto.Parameter_Y:
+					size += len(v.Y)
+				}
+			}
+			if size >= m.SizeThreshold {
 				compress = true
 				break
 			}
@@ -89,19 +96,10 @@ func (m *RequestMarshaler) Marshal(r Requester) ([]byte, bool, error) {
 	}
 	ubz := len(b)
 	stats.Add(numPrecompressedBytes, int64(ubz))
-	// Include bound parameters and aggregate request size in eligibility.
-	if !compress && ubz >= m.SizeThreshold && (m.ForceCompression || sampleCompressible(b)) {
-		compress = true
-		parameterCompression = true
-	}
 
 	if compress {
 		// Let's try compression.
-		level := gzip.DefaultCompression
-		if parameterCompression {
-			level = gzip.BestSpeed
-		}
-		gzData, err := gzCompressLevel(b, level)
+		gzData, err := gzCompress(b)
 		if err != nil {
 			return nil, false, err
 		}
@@ -215,12 +213,8 @@ func UnmarshalSubCommand(c *proto.Command, m pb.Message) error {
 
 // gzCompress compresses the given byte slice.
 func gzCompress(b []byte) ([]byte, error) {
-	return gzCompressLevel(b, gzip.DefaultCompression)
-}
-
-func gzCompressLevel(b []byte, level int) ([]byte, error) {
 	var buf bytes.Buffer
-	gzw, err := gzip.NewWriterLevel(&buf, level)
+	gzw, err := gzip.NewWriterLevel(&buf, gzip.DefaultCompression)
 	if err != nil {
 		return nil, fmt.Errorf("gzip new writer: %s", err)
 	}
@@ -249,34 +243,4 @@ func gzUncompress(b []byte) ([]byte, error) {
 		return nil, fmt.Errorf("unmarshal gzip Close: %s", err)
 	}
 	return ub, nil
-}
-
-// sampleCompressible bounds sampling to four distributed 1 KiB windows.
-// High entropy can still compress: this is a performance heuristic, not a
-// correctness check. Skipping compression always retains the original bytes.
-func sampleCompressible(b []byte) bool {
-	var counts [256]int
-	n := 0
-	width := len(b) / 4
-	if width > 1024 {
-		width = 1024
-	}
-	if width == 0 {
-		return false
-	}
-	for i := 0; i < 4; i++ {
-		start := i * (len(b) - width) / 3
-		for _, value := range b[start : start+width] {
-			counts[value]++
-			n++
-		}
-	}
-	entropy := 0.0
-	for _, count := range counts {
-		if count != 0 {
-			p := float64(count) / float64(n)
-			entropy -= p * math.Log2(p)
-		}
-	}
-	return entropy < 7.5
 }

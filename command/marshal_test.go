@@ -1,6 +1,7 @@
 package command
 
 import (
+	"strings"
 	"sync"
 	"testing"
 
@@ -268,5 +269,41 @@ func Test_MarshalWontCompressSize(t *testing.T) {
 	}
 	if comp {
 		t.Fatal("Marshaled QueryRequest was compressed")
+	}
+}
+
+func Test_MarshalCompressedParameterSize(t *testing.T) {
+	const sql = "INSERT INTO foo(name) VALUES(?)"
+	n := defaultSizeThreshold - len(sql)
+	text := func(size int) []*proto.Parameter {
+		return []*proto.Parameter{{Value: &proto.Parameter_S{S: strings.Repeat("a", size)}}}
+	}
+	blob := func(size int) []*proto.Parameter {
+		return []*proto.Parameter{{Value: &proto.Parameter_Y{Y: []byte(strings.Repeat("a", size))}}}
+	}
+
+	for _, tt := range []struct {
+		name  string
+		stmts []*proto.Statement
+		comp  bool
+	}{
+		{"TEXT at threshold", []*proto.Statement{{Sql: sql, Parameters: text(n)}}, true},
+		{"BLOB at threshold", []*proto.Statement{{Sql: sql, Parameters: blob(n)}}, true},
+		{"TEXT below threshold", []*proto.Statement{{Sql: sql, Parameters: text(n - 1)}}, false},
+		{"threshold reached only across statements", []*proto.Statement{
+			{Sql: sql, Parameters: text(n / 2)},
+			{Sql: sql, Parameters: text(n / 2)},
+		}, false},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			r := &proto.ExecuteRequest{Request: &proto.Request{Statements: tt.stmts}}
+			_, comp, err := NewRequestMarshaler().Marshal(r)
+			if err != nil {
+				t.Fatalf("failed to marshal ExecuteRequest: %s", err)
+			}
+			if comp != tt.comp {
+				t.Fatalf("compressed is %v, expected %v", comp, tt.comp)
+			}
+		})
 	}
 }
