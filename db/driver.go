@@ -238,14 +238,10 @@ func buildConnectHook(cfg *DriverConfig) func(conn *sqlite3.SQLiteConn) error {
 type PreUpdateHookCallback func(ev *command.CDCEvent) error
 
 // SQLite returns the SQLite preupdate hook which converts the SQLite hook data to rqlite
-// hook data, and passes it to hook. If hook is nil, nil is returned, which removes any
-// installed hook. If tblRe is non-nil only rows of tables whose names match it are passed
-// to hook. If rowIDsOnly is true the events passed to hook contain row IDs but no row data.
+// hook data, and passes it to hook If tblRe is non-nil only rows of tables whose names match
+// it are passed to hook. If rowIDsOnly is true the events passed to hook contain row IDs but
+// no row data.
 func (hook *PreUpdateHookCallback) SQLite(tblRe *regexp.Regexp, rowIDsOnly bool) func(sqlite3.SQLitePreUpdateData) {
-	if hook == nil {
-		return nil
-	}
-
 	// Convert from SQLite hook data to rqlite hook data.
 	tableMatch := rsync.NewAtomicMap[string, bool]()
 	convertFn := func(d sqlite3.SQLitePreUpdateData) (*command.CDCEvent, error) {
@@ -332,13 +328,8 @@ func (hook *PreUpdateHookCallback) SQLite(tblRe *regexp.Regexp, rowIDsOnly bool)
 type UpdateHookCallback func(ev *command.UpdateHookEvent) error
 
 // SQLite the SQLite update hook which converts the SQLite hook data to rqlite hook
-// data, and passes it to hook. If hook is nil, nil is returned, which removes any
-// installed hook.
+// data, and passes it to hook.
 func (hook *UpdateHookCallback) SQLite() func(int, string, string, int64) {
-	if hook == nil {
-		return nil
-	}
-
 	// Convert from SQLite hook data to rqlite hook data.
 	convertFn := func(op int, _, table string, rowID int64) (*command.UpdateHookEvent, error) {
 		he := &command.UpdateHookEvent{
@@ -380,12 +371,8 @@ type RollbackHookCallback func()
 // is committed, otherwise it is rolled back.
 type CommitHookCallback func() bool
 
-// SQLite returns the SQLite commit hook which passes control to hook. If hooki s nil,
-// nil is returned, which removes any installed hook.
+// SQLite returns the SQLite commit hook which passes control to hook.
 func (hook *CommitHookCallback) SQLite() func() int {
-	if hook == nil {
-		return nil
-	}
 	return func() int {
 		stats.Add(numCommitHooks, 1)
 		if (*hook)() {

@@ -3,10 +3,13 @@ package db
 import (
 	"context"
 	"database/sql"
+	"expvar"
 	"fmt"
+	"regexp"
 	"sync/atomic"
 	"testing"
 
+	"github.com/rqlite/rqlite/v10/command/proto"
 	"github.com/rqlite/rqlite/v10/db/querylog"
 	"github.com/rqlite/rqlite/v10/internal/fsutil"
 )
@@ -221,6 +224,146 @@ func Test_NewDriverFromConfig_NoQueryLog(t *testing.T) {
 	defer db.Close()
 
 	mustExecute(db, "CREATE TABLE t (id INTEGER PRIMARY KEY)")
+}
+
+// Test_NewDriverFromConfig_NoHooks verifies that a driver whose config has no
+// hooks installs none: writing to a database opened with it fires nothing.
+func Test_NewDriverFromConfig_NoHooks(t *testing.T) {
+	d := NewDriverFromConfig(testDriverConfigName(), &DriverConfig{
+		ChkOnClose: CnkOnCloseModeDisabled,
+	})
+
+	path := mustTempPath()
+	defer fsutil.RemoveAll(path)
+	db, err := OpenWithDriver(d, path, false, true)
+	if err != nil {
+		t.Fatalf("OpenWithDriver failed: %s", err)
+	}
+	defer db.Close()
+
+	before := hookStats()
+	mustExecute(db, "CREATE TABLE t (id INTEGER PRIMARY KEY)")
+	mustExecute(db, "INSERT INTO t VALUES (1)")
+	mustExecute(db, "BEGIN; INSERT INTO t VALUES (2); ROLLBACK")
+	if after := hookStats(); after != before {
+		t.Fatalf("hooks fired on driver with no hooks configured: before %v, after %v", before, after)
+	}
+}
+
+// Test_NewDriverFromConfig_Hooks verifies that hooks set in the config are
+// installed, and are called with converted event data.
+func Test_NewDriverFromConfig_Hooks(t *testing.T) {
+	var preupdates, updates, commits, rollbacks int
+	var lastPreupdate *proto.CDCEvent
+	var lastUpdate *proto.UpdateHookEvent
+	d := NewDriverFromConfig(testDriverConfigName(), &DriverConfig{
+		ChkOnClose: CnkOnCloseModeDisabled,
+		PreUpdateHook: func(ev *proto.CDCEvent) error {
+			preupdates++
+			lastPreupdate = ev
+			return nil
+		},
+		UpdateHook: func(ev *proto.UpdateHookEvent) error {
+			updates++
+			lastUpdate = ev
+			return nil
+		},
+		CommitHook: func() bool {
+			commits++
+			return true
+		},
+		RollbackHook: func() {
+			rollbacks++
+		},
+	})
+
+	path := mustTempPath()
+	defer fsutil.RemoveAll(path)
+	db, err := OpenWithDriver(d, path, false, true)
+	if err != nil {
+		t.Fatalf("OpenWithDriver failed: %s", err)
+	}
+	defer db.Close()
+
+	// Opening a WAL-mode database runs a transaction which is rolled back, to
+	// force creation of the WAL files, so the rollback hook has already fired.
+	if rollbacks != 1 {
+		t.Fatalf("expected 1 rollback on open, got %d", rollbacks)
+	}
+	rollbacks = 0
+
+	mustExecute(db, "CREATE TABLE t (id INTEGER PRIMARY KEY, name TEXT)")
+
+	// The schema change commits, but changes no rows.
+	if preupdates != 0 || updates != 0 || commits != 1 || rollbacks != 0 {
+		t.Fatalf("after CREATE TABLE: preupdates=%d, updates=%d, commits=%d, rollbacks=%d",
+			preupdates, updates, commits, rollbacks)
+	}
+
+	mustExecute(db, "INSERT INTO t VALUES (1, 'fiona')")
+	if preupdates != 1 || updates != 1 || commits != 2 || rollbacks != 0 {
+		t.Fatalf("after INSERT: preupdates=%d, updates=%d, commits=%d, rollbacks=%d",
+			preupdates, updates, commits, rollbacks)
+	}
+	if lastPreupdate.Table != "t" || lastPreupdate.Op != proto.CDCEvent_INSERT || lastPreupdate.NewRowId != 1 ||
+		lastPreupdate.NewRow == nil || lastPreupdate.NewRow.Values[1].GetS() != "fiona" {
+		t.Fatalf("unexpected preupdate event: %v", lastPreupdate)
+	}
+	if lastUpdate.Table != "t" || lastUpdate.Op != proto.UpdateHookEvent_INSERT || lastUpdate.RowId != 1 {
+		t.Fatalf("unexpected update event: %v", lastUpdate)
+	}
+
+	mustExecute(db, "BEGIN; INSERT INTO t VALUES (2, 'declan'); ROLLBACK")
+	if preupdates != 2 || updates != 2 || commits != 2 || rollbacks != 1 {
+		t.Fatalf("after rolled-back INSERT: preupdates=%d, updates=%d, commits=%d, rollbacks=%d",
+			preupdates, updates, commits, rollbacks)
+	}
+}
+
+// Test_NewDriverFromConfig_PreUpdateHookOptions verifies the table filter and
+// row-IDs-only options of the preupdate hook.
+func Test_NewDriverFromConfig_PreUpdateHookOptions(t *testing.T) {
+	var events []*proto.CDCEvent
+	d := NewDriverFromConfig(testDriverConfigName(), &DriverConfig{
+		ChkOnClose: CnkOnCloseModeDisabled,
+		PreUpdateHook: func(ev *proto.CDCEvent) error {
+			events = append(events, ev)
+			return nil
+		},
+		PreUpdateTableRe:    regexp.MustCompile("^foo$"),
+		PreUpdateRowIDsOnly: true,
+	})
+
+	path := mustTempPath()
+	defer fsutil.RemoveAll(path)
+	db, err := OpenWithDriver(d, path, false, true)
+	if err != nil {
+		t.Fatalf("OpenWithDriver failed: %s", err)
+	}
+	defer db.Close()
+	mustExecute(db, "CREATE TABLE foo (id INTEGER PRIMARY KEY, name TEXT)")
+	mustExecute(db, "CREATE TABLE bar (id INTEGER PRIMARY KEY, name TEXT)")
+
+	mustExecute(db, "INSERT INTO foo VALUES (1, 'fiona')")
+	mustExecute(db, "INSERT INTO bar VALUES (1, 'fiona')")
+	if len(events) != 1 {
+		t.Fatalf("expected 1 event for table matching filter, got %d", len(events))
+	}
+	if events[0].Table != "foo" || events[0].NewRowId != 1 {
+		t.Fatalf("unexpected event: %v", events[0])
+	}
+	if events[0].NewRow != nil {
+		t.Fatalf("expected no row data with row IDs only, got %v", events[0].NewRow)
+	}
+}
+
+// hookStats returns the current values of the hook invocation stats.
+func hookStats() [3]int64 {
+	return [3]int64{
+		stats.Get(numPreupdates).(*expvar.Int).Value(),
+		stats.Get(numUpdateHooks).(*expvar.Int).Value(),
+		stats.Get(numCommitHooks).(*expvar.Int).Value(),
+	}
 }
 
 // Verifies that extension paths set in
