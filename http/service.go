@@ -1877,7 +1877,7 @@ func (s *Service) addAllowHeaders(w http.ResponseWriter) {
 	if ao != "" {
 		w.Header().Add(AllowOriginHeader, ao)
 	}
-	w.Header().Add(AllowMethodsHeader, "OPTIONS, GET, POST")
+	w.Header().Add(AllowMethodsHeader, "OPTIONS, GET, POST, DELETE")
 	if s.credentialStore == nil {
 		w.Header().Add(AllowHeadersHeader, "Content-Type")
 	} else {
