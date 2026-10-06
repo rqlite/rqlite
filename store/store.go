@@ -121,6 +121,7 @@ var (
 )
 
 const (
+	cdcChanLen             = 100 // Size of the channel on which CDC events are sent.
 	cleanSnapshotName      = "clean_snapshot"
 	snapshotsDirName       = "wsnapshots"
 	walStagingDirName      = "wal-staging"
@@ -338,7 +339,7 @@ type Store struct {
 
 	cdcMu         sync.RWMutex
 	cdcCollator   *sql.CDCCollator
-	cdcOutCh      chan<- *proto.CDCIndexedEventGroup
+	cdcOutCh      chan *proto.CDCIndexedEventGroup
 	cdcIDsOnly    bool
 	cdcTableRe    *regexp.Regexp
 	cdcEnabled    rsync.AtomicBool
@@ -481,6 +482,7 @@ func New(c *Config, ly Layer) *Store {
 		walPath:           sql.WALPath(dbPath),
 		dbDir:             filepath.Dir(dbPath),
 		dbDrv:             sql.DefaultDriver(),
+		cdcOutCh:          make(chan *proto.CDCIndexedEventGroup, cdcChanLen),
 		readyChans:        rsync.NewReadyChannels(),
 		leaderObservers:   make([]chan<- bool, 0),
 		reqMarshaller:     command.NewRequestMarshaler(),
@@ -2079,21 +2081,26 @@ func (s *Store) Database(leader bool) ([]byte, error) {
 	return s.db.Serialize()
 }
 
+// CDCEventsC returns the channel on which Change Data Capture events are sent
+// once CDC is enabled. It is the caller's responsibility to ensure that the
+// channel is read from, as the Store blocks when the channel is full.
+func (s *Store) CDCEventsC() <-chan *proto.CDCIndexedEventGroup {
+	return s.cdcOutCh
+}
+
 // EnableCDC enables Change Data Capture on this Store. Events will be streamed
-// to the provided channel. It is the caller's responsibility to ensure that the
-// channel is read from, as the CDCStreamer will drop events if the channel is full.
+// to the channel returned by CDCEventsC.
 //
 // If the Store is open then CDC will begin immediately. If the Store is not open
 // yet, then CDC will begin when the Store is opened. This function will return
 // an error if CDC is already enabled.
-func (s *Store) EnableCDC(out chan<- *proto.CDCIndexedEventGroup, tableRe *regexp.Regexp, rowIDsOnly bool) error {
+func (s *Store) EnableCDC(tableRe *regexp.Regexp, rowIDsOnly bool) error {
 	s.cdcMu.Lock()
 	defer s.cdcMu.Unlock()
 
 	if s.cdcEnabled.Is() {
 		return ErrCDCEnabled
 	}
-	s.cdcOutCh = out
 	s.cdcIDsOnly = rowIDsOnly
 	s.cdcTableRe = tableRe
 	s.cdcEnabled.Set()
