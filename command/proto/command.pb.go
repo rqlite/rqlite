@@ -347,9 +347,10 @@ func (UpdateHookEvent_Operation) EnumDescriptor() ([]byte, []int) {
 
 type Error struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
-	Code          int32                  `protobuf:"varint,1,opt,name=code,proto3" json:"code,omitempty"`
-	ExtendedCode  int32                  `protobuf:"varint,2,opt,name=extended_code,json=extendedCode,proto3" json:"extended_code,omitempty"`
-	SystemErrno   int32                  `protobuf:"varint,3,opt,name=system_errno,json=systemErrno,proto3" json:"system_errno,omitempty"`
+	Message       string                 `protobuf:"bytes,1,opt,name=message,proto3" json:"message,omitempty"`
+	Code          int32                  `protobuf:"varint,2,opt,name=code,proto3" json:"code,omitempty"`
+	ExtendedCode  int32                  `protobuf:"varint,3,opt,name=extended_code,json=extendedCode,proto3" json:"extended_code,omitempty"`
+	SystemErrno   int32                  `protobuf:"varint,4,opt,name=system_errno,json=systemErrno,proto3" json:"system_errno,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -382,6 +383,13 @@ func (x *Error) ProtoReflect() protoreflect.Message {
 // Deprecated: Use Error.ProtoReflect.Descriptor instead.
 func (*Error) Descriptor() ([]byte, []int) {
 	return file_command_proto_rawDescGZIP(), []int{0}
+}
+
+func (x *Error) GetMessage() string {
+	if x != nil {
+		return x.Message
+	}
+	return ""
 }
 
 func (x *Error) GetCode() int32 {
@@ -2237,11 +2245,12 @@ var File_command_proto protoreflect.FileDescriptor
 
 const file_command_proto_rawDesc = "" +
 	"\n" +
-	"\rcommand.proto\x12\acommand\"c\n" +
-	"\x05Error\x12\x12\n" +
-	"\x04code\x18\x01 \x01(\x05R\x04code\x12#\n" +
-	"\rextended_code\x18\x02 \x01(\x05R\fextendedCode\x12!\n" +
-	"\fsystem_errno\x18\x03 \x01(\x05R\vsystemErrno\"x\n" +
+	"\rcommand.proto\x12\acommand\"}\n" +
+	"\x05Error\x12\x18\n" +
+	"\amessage\x18\x01 \x01(\tR\amessage\x12\x12\n" +
+	"\x04code\x18\x02 \x01(\x05R\x04code\x12#\n" +
+	"\rextended_code\x18\x03 \x01(\x05R\fextendedCode\x12!\n" +
+	"\fsystem_errno\x18\x04 \x01(\x05R\vsystemErrno\"x\n" +
 	"\tParameter\x12\x0e\n" +
 	"\x01i\x18\x01 \x01(\x12H\x00R\x01i\x12\x0e\n" +
 	"\x01d\x18\x02 \x01(\x01H\x00R\x01d\x12\x0e\n" +

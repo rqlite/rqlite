@@ -412,10 +412,15 @@ func Test_DBErrors_StructuredErrors(t *testing.T) {
 	mustExecute(db, "CREATE TABLE data (id INTEGER PRIMARY KEY)")
 	mustExecute(db, "INSERT INTO data VALUES (1)")
 
-	checkCodes := func(t *testing.T, e *command.Error, code sqlite3.ErrNo, extended sqlite3.ErrNoExtended) {
+	// checkCodes verifies the structured error carries the given SQLite codes
+	// and the same message as the legacy error string.
+	checkCodes := func(t *testing.T, msg string, e *command.Error, code sqlite3.ErrNo, extended sqlite3.ErrNoExtended) {
 		t.Helper()
 		if e == nil {
 			t.Fatal("expected structured error, got nil")
+		}
+		if e.GetMessage() != msg {
+			t.Fatalf("unexpected message: got %q, want %q", e.GetMessage(), msg)
 		}
 		if e.GetCode() != int32(code) || e.GetExtendedCode() != int32(extended) {
 			t.Fatalf("unexpected codes: got (%d, %d), want (%d, %d)",
@@ -430,7 +435,7 @@ func Test_DBErrors_StructuredErrors(t *testing.T) {
 	if err != nil || len(results) != 1 || results[0].GetE().GetError() == "" {
 		t.Fatalf("unexpected execute results: %v, %v", results, err)
 	}
-	checkCodes(t, results[0].GetE().GetErrorV2(), sqlite3.ErrConstraint, sqlite3.ErrConstraintPrimaryKey)
+	checkCodes(t, results[0].GetE().GetError(), results[0].GetE().GetErrorV2(), sqlite3.ErrConstraint, sqlite3.ErrConstraintPrimaryKey)
 
 	// Query: missing table.
 	rows, err := db.Query(&command.Request{Statements: []*command.Statement{
@@ -439,16 +444,17 @@ func Test_DBErrors_StructuredErrors(t *testing.T) {
 	if err != nil || len(rows) != 1 || rows[0].GetError() == "" {
 		t.Fatalf("unexpected query results: %v, %v", rows, err)
 	}
-	checkCodes(t, rows[0].GetErrorV2(), sqlite3.ErrError, sqlite3.ErrNoExtended(sqlite3.ErrError))
+	checkCodes(t, rows[0].GetError(), rows[0].GetErrorV2(), sqlite3.ErrError, sqlite3.ErrNoExtended(sqlite3.ErrError))
 
 	// Query: write attempted through the read-only connection keeps its
-	// remapped message but reports the underlying SQLite codes.
+	// remapped legacy message, while the structured error reports the
+	// underlying SQLite message and codes.
 	rows, err = db.QueryStringStmt("INSERT INTO data VALUES (2)")
 	if err != nil || len(rows) != 1 || rows[0].Error != ErrQueryWrite.Error() {
 		t.Fatalf("unexpected read-only query results: %v, %v", rows, err)
 	}
-	if got := rows[0].GetErrorV2().GetCode(); got != int32(sqlite3.ErrReadonly) {
-		t.Fatalf("expected structured error code %d, got %d", sqlite3.ErrReadonly, got)
+	if e := rows[0].GetErrorV2(); e.GetCode() != int32(sqlite3.ErrReadonly) || e.GetMessage() == "" || e.GetMessage() == ErrQueryWrite.Error() {
+		t.Fatalf("unexpected structured error for read-only query: %v", e)
 	}
 
 	// Execute with a forced query: the execute path reports every failed
@@ -459,7 +465,7 @@ func Test_DBErrors_StructuredErrors(t *testing.T) {
 	if err != nil || len(results) != 1 || results[0].GetE().GetError() == "" {
 		t.Fatalf("unexpected forced query results: %v, %v", results, err)
 	}
-	checkCodes(t, results[0].GetE().GetErrorV2(), sqlite3.ErrError, sqlite3.ErrNoExtended(sqlite3.ErrError))
+	checkCodes(t, results[0].GetE().GetError(), results[0].GetE().GetErrorV2(), sqlite3.ErrError, sqlite3.ErrNoExtended(sqlite3.ErrError))
 
 	// Request: a constraint violation, and a statement which fails the
 	// read-only check before it runs, so it is reported as an execute error.
@@ -470,8 +476,8 @@ func Test_DBErrors_StructuredErrors(t *testing.T) {
 	if err != nil || len(results) != 2 {
 		t.Fatalf("unexpected request results: %v, %v", results, err)
 	}
-	checkCodes(t, results[0].GetE().GetErrorV2(), sqlite3.ErrConstraint, sqlite3.ErrConstraintPrimaryKey)
-	checkCodes(t, results[1].GetE().GetErrorV2(), sqlite3.ErrError, sqlite3.ErrNoExtended(sqlite3.ErrError))
+	checkCodes(t, results[0].GetE().GetError(), results[0].GetE().GetErrorV2(), sqlite3.ErrConstraint, sqlite3.ErrConstraintPrimaryKey)
+	checkCodes(t, results[1].GetE().GetError(), results[1].GetE().GetErrorV2(), sqlite3.ErrError, sqlite3.ErrNoExtended(sqlite3.ErrError))
 
 	// Successful statements carry no structured error.
 	results, err = db.Execute(&command.Request{Statements: []*command.Statement{

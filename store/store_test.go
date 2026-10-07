@@ -1033,7 +1033,7 @@ func Test_SingleNodeErrorCodes(t *testing.T) {
 	if len(r) != 3 || r[2].GetE().GetError() == "" {
 		t.Fatalf("expected constraint error, got %s", asJSON(r))
 	}
-	if e := r[2].GetE().GetErrorV2(); e.GetCode() != sqliteConstraint || e.GetExtendedCode() != sqliteConstraintPK {
+	if e := r[2].GetE().GetErrorV2(); e.GetMessage() != r[2].GetE().GetError() || e.GetCode() != sqliteConstraint || e.GetExtendedCode() != sqliteConstraintPK {
 		t.Fatalf("unexpected execute error codes: %v", e)
 	}
 
@@ -1045,7 +1045,7 @@ func Test_SingleNodeErrorCodes(t *testing.T) {
 	if len(rows) != 1 || rows[0].GetError() == "" {
 		t.Fatalf("expected query error, got %s", asJSON(rows))
 	}
-	if e := rows[0].GetErrorV2(); e.GetCode() != sqliteError {
+	if e := rows[0].GetErrorV2(); e.GetMessage() != rows[0].GetError() || e.GetCode() != sqliteError {
 		t.Fatalf("unexpected query error codes: %v", e)
 	}
 

@@ -5,9 +5,10 @@ package command;
 option go_package = "github.com/rqlite/rqlite/v10/command/proto";
 
 message Error {
-	int32 code = 1;
-	int32 extended_code = 2;
-	int32 system_errno = 3;
+	string message = 1;
+	int32 code = 2;
+	int32 extended_code = 3;
+	int32 system_errno = 4;
 }
 
 enum Suffrage {

@@ -160,9 +160,6 @@ type Config struct {
 func Forge(arguments []string) (*flag.FlagSet, *Config, error) {
 	config := &Config{}
 	fs := flag.NewFlagSet("rqlited", flag.ExitOnError)
-	if len(arguments) <= 0 {
-		return nil, nil, fmtError("missing required argument: DataPath")
-	}
 	fs.BoolVar(&config.ShowVersion, "version", false, "Show version information and exit")
 	fs.StringVar(&config.NodeID, "node-id", "", "Unique ID for node. If not set, set to advertised Raft address")
 	fs.StringVar(&config.HTTPAddr, "http-addr", "localhost:4001", "HTTP server bind address. To enable HTTPS, set X.509 certificate and key")

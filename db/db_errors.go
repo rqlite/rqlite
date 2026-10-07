@@ -33,24 +33,24 @@ func NewSQLiteErrorFromError(err error) *SQLiteError {
 	return nil
 }
 
-// newErrorProto returns the structured form of a SQLite error, or nil if err
-// does not wrap a SQLite error. Timeouts, parameter conversion failures, and
-// other non-SQLite errors have no codes, so callers must treat the result as
-// optional.
+// newErrorProto returns the structured form of err. The message is always
+// set. The SQLite result codes are set only when err wraps a SQLite error;
+// timeouts, parameter conversion failures, and other non-SQLite errors leave
+// them at zero.
 func newErrorProto(err error) *command.Error {
-	se := NewSQLiteErrorFromError(err)
-	if se == nil {
-		return nil
+	e := &command.Error{
+		Message: err.Error(),
 	}
-	return &command.Error{
-		Code:         se.Code,
-		ExtendedCode: se.ExtendedCode,
-		SystemErrno:  se.SystemErrno,
+	if se := NewSQLiteErrorFromError(err); se != nil {
+		e.Code = se.Code
+		e.ExtendedCode = se.ExtendedCode
+		e.SystemErrno = se.SystemErrno
 	}
+	return e
 }
 
 // newExecuteResultError returns an ExecuteResult describing err, carrying
-// both the error message and, when available, the structured SQLite error.
+// both the legacy error message and the structured error.
 func newExecuteResultError(err error) *command.ExecuteResult {
 	return &command.ExecuteResult{
 		Error:   err.Error(),
@@ -59,7 +59,7 @@ func newExecuteResultError(err error) *command.ExecuteResult {
 }
 
 // newQueryRowsError returns a QueryRows describing err, carrying both the
-// error message and, when available, the structured SQLite error.
+// legacy error message and the structured error.
 func newQueryRowsError(err error) *command.QueryRows {
 	rows := &command.QueryRows{}
 	setQueryRowsError(rows, err)
@@ -67,7 +67,7 @@ func newQueryRowsError(err error) *command.QueryRows {
 }
 
 // setQueryRowsError records err on an existing QueryRows, carrying both the
-// error message and, when available, the structured SQLite error.
+// legacy error message and the structured error.
 func setQueryRowsError(rows *command.QueryRows, err error) {
 	rows.Error = err.Error()
 	rows.ErrorV2 = newErrorProto(err)

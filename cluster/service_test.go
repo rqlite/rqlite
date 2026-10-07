@@ -896,7 +896,7 @@ func makeCredentials(username, password string) *proto.Credentials {
 // The client does not set a local service, so every call crosses the network.
 func Test_NewServiceErrorV2RoundTrip(t *testing.T) {
 	ml := mustNewMockTransport()
-	wantErr := &command.Error{Code: 19, ExtendedCode: 1555, SystemErrno: 0}
+	wantErr := &command.Error{Message: "constraint failed", Code: 19, ExtendedCode: 1555, SystemErrno: 0}
 	db := &mockDatabase{
 		executeFn: func(er *command.ExecuteRequest) ([]*command.ExecuteQueryResponse, uint64, error) {
 			return []*command.ExecuteQueryResponse{{
@@ -934,8 +934,8 @@ func Test_NewServiceErrorV2RoundTrip(t *testing.T) {
 		if got == nil {
 			t.Fatalf("%s: structured error lost in transit", what)
 		}
-		if got.GetCode() != wantErr.GetCode() || got.GetExtendedCode() != wantErr.GetExtendedCode() ||
-			got.GetSystemErrno() != wantErr.GetSystemErrno() {
+		if got.GetMessage() != wantErr.GetMessage() || got.GetCode() != wantErr.GetCode() ||
+			got.GetExtendedCode() != wantErr.GetExtendedCode() || got.GetSystemErrno() != wantErr.GetSystemErrno() {
 			t.Fatalf("%s: unexpected structured error: got %v, want %v", what, got, wantErr)
 		}
 	}
