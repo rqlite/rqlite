@@ -1052,8 +1052,10 @@ func (db *DB) executeStmtWithConn(ctx context.Context, stmt *command.Statement, 
 		stats.Add(numExecutionsForceQueries, 1)
 		rows, err := db.queryStmtWithConn(ctx, stmt, xTime, eq)
 		if err != nil {
-			response.Result = &command.ExecuteQueryResponse_Error{
-				Error: err.Error(),
+			response.Result = &command.ExecuteQueryResponse_Q{
+				Q: &command.QueryRows{
+					Error: err.Error(),
+				},
 			}
 			return response, err
 		}
@@ -1063,8 +1065,10 @@ func (db *DB) executeStmtWithConn(ctx context.Context, stmt *command.Statement, 
 	} else {
 		result, err := eq.ExecContext(ctx, stmt.Sql, parameters...)
 		if err != nil {
-			response.Result = &command.ExecuteQueryResponse_Error{
-				Error: err.Error(),
+			response.Result = &command.ExecuteQueryResponse_E{
+				E: &command.ExecuteResult{
+					Error: err.Error(),
+				},
 			}
 			return response, err
 		}
@@ -1077,16 +1081,20 @@ func (db *DB) executeStmtWithConn(ctx context.Context, stmt *command.Statement, 
 
 		lid, err := result.LastInsertId()
 		if err != nil {
-			response.Result = &command.ExecuteQueryResponse_Error{
-				Error: err.Error(),
+			response.Result = &command.ExecuteQueryResponse_E{
+				E: &command.ExecuteResult{
+					Error: err.Error(),
+				},
 			}
 			return response, err
 		}
 
 		ra, err := result.RowsAffected()
 		if err != nil {
-			response.Result = &command.ExecuteQueryResponse_Error{
-				Error: err.Error(),
+			response.Result = &command.ExecuteQueryResponse_E{
+				E: &command.ExecuteResult{
+					Error: err.Error(),
+				},
 			}
 			return response, err
 		}
