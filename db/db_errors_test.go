@@ -78,6 +78,9 @@ func Test_DBErrors_FullStopsBatch(t *testing.T) {
 						if len(results) != 2 || results[1].GetE().GetError() == "" || results[1].GetMutated() {
 							t.Fatalf("unexpected results: %v", results)
 						}
+						if got := results[1].GetE().GetErrorV2().GetCode(); got != int32(sqlite3.ErrFull) {
+							t.Fatalf("expected structured error code %d, got %d", sqlite3.ErrFull, got)
+						}
 						want := 1
 						if transaction {
 							want = 0
@@ -399,4 +402,91 @@ func (r *errorTestRows) Next([]driver.Value) error {
 		return r.conn.nextErr
 	}
 	return io.EOF
+}
+
+// Test_DBErrors_StructuredErrors verifies that statement errors carry the
+// SQLite result codes alongside the error message, on every API path, and
+// that the message remapped for read-only queries still retains its codes.
+func Test_DBErrors_StructuredErrors(t *testing.T) {
+	db := newErrorTestDB(t, true)
+	mustExecute(db, "CREATE TABLE data (id INTEGER PRIMARY KEY)")
+	mustExecute(db, "INSERT INTO data VALUES (1)")
+
+	// checkCodes verifies the structured error carries the given SQLite codes
+	// and the same message as the legacy error string.
+	checkCodes := func(t *testing.T, msg string, e *command.Error, code sqlite3.ErrNo, extended sqlite3.ErrNoExtended) {
+		t.Helper()
+		if e == nil {
+			t.Fatal("expected structured error, got nil")
+		}
+		if e.GetMessage() != msg {
+			t.Fatalf("unexpected message: got %q, want %q", e.GetMessage(), msg)
+		}
+		if e.GetCode() != int32(code) || e.GetExtendedCode() != int32(extended) {
+			t.Fatalf("unexpected codes: got (%d, %d), want (%d, %d)",
+				e.GetCode(), e.GetExtendedCode(), code, extended)
+		}
+	}
+
+	// Execute: constraint violation.
+	results, err := db.Execute(&command.Request{Statements: []*command.Statement{
+		{Sql: "INSERT INTO data VALUES (1)"},
+	}}, false)
+	if err != nil || len(results) != 1 || results[0].GetE().GetError() == "" {
+		t.Fatalf("unexpected execute results: %v, %v", results, err)
+	}
+	checkCodes(t, results[0].GetE().GetError(), results[0].GetE().GetErrorV2(), sqlite3.ErrConstraint, sqlite3.ErrConstraintPrimaryKey)
+
+	// Query: missing table.
+	rows, err := db.Query(&command.Request{Statements: []*command.Statement{
+		{Sql: "SELECT * FROM nonexistent"},
+	}}, false)
+	if err != nil || len(rows) != 1 || rows[0].GetError() == "" {
+		t.Fatalf("unexpected query results: %v, %v", rows, err)
+	}
+	checkCodes(t, rows[0].GetError(), rows[0].GetErrorV2(), sqlite3.ErrError, sqlite3.ErrNoExtended(sqlite3.ErrError))
+
+	// Query: write attempted through the read-only connection keeps its
+	// remapped legacy message, while the structured error reports the
+	// underlying SQLite message and codes.
+	rows, err = db.QueryStringStmt("INSERT INTO data VALUES (2)")
+	if err != nil || len(rows) != 1 || rows[0].Error != ErrQueryWrite.Error() {
+		t.Fatalf("unexpected read-only query results: %v, %v", rows, err)
+	}
+	if e := rows[0].GetErrorV2(); e.GetCode() != int32(sqlite3.ErrReadonly) || e.GetMessage() == "" || e.GetMessage() == ErrQueryWrite.Error() {
+		t.Fatalf("unexpected structured error for read-only query: %v", e)
+	}
+
+	// Execute with a forced query: the execute path reports every failed
+	// statement as an execute error.
+	results, err = db.Execute(&command.Request{Statements: []*command.Statement{
+		{Sql: "SELECT * FROM nonexistent", ForceQuery: true},
+	}}, false)
+	if err != nil || len(results) != 1 || results[0].GetE().GetError() == "" {
+		t.Fatalf("unexpected forced query results: %v, %v", results, err)
+	}
+	checkCodes(t, results[0].GetE().GetError(), results[0].GetE().GetErrorV2(), sqlite3.ErrError, sqlite3.ErrNoExtended(sqlite3.ErrError))
+
+	// Request: a constraint violation, and a statement which fails the
+	// read-only check before it runs, so it is reported as an execute error.
+	results, err = db.Request(&command.Request{Statements: []*command.Statement{
+		{Sql: "INSERT INTO data VALUES (1)"},
+		{Sql: "SELECT * FROM nonexistent"},
+	}}, false)
+	if err != nil || len(results) != 2 {
+		t.Fatalf("unexpected request results: %v, %v", results, err)
+	}
+	checkCodes(t, results[0].GetE().GetError(), results[0].GetE().GetErrorV2(), sqlite3.ErrConstraint, sqlite3.ErrConstraintPrimaryKey)
+	checkCodes(t, results[1].GetE().GetError(), results[1].GetE().GetErrorV2(), sqlite3.ErrError, sqlite3.ErrNoExtended(sqlite3.ErrError))
+
+	// Successful statements carry no structured error.
+	results, err = db.Execute(&command.Request{Statements: []*command.Statement{
+		{Sql: "INSERT INTO data VALUES (2)"},
+	}}, false)
+	if err != nil || len(results) != 1 || results[0].GetE().GetError() != "" {
+		t.Fatalf("unexpected execute results: %v, %v", results, err)
+	}
+	if results[0].GetE().GetErrorV2() != nil {
+		t.Fatalf("expected no structured error, got %v", results[0].GetE().GetErrorV2())
+	}
 }

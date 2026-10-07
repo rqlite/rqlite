@@ -1417,6 +1417,11 @@ FROM test_table t1 LEFT OUTER JOIN test_table t2`
 	if !strings.Contains(res.GetE().GetError(), ErrExecuteTimeout.Error()) {
 		t.Fatalf("expected execute timeout, got %s", asJSON(res))
 	}
+	// A timeout is not a SQLite error, so the structured error carries the
+	// message but no codes.
+	if e := res.GetE().GetErrorV2(); e.GetMessage() != res.GetE().GetError() || e.GetCode() != 0 || e.GetExtendedCode() != 0 {
+		t.Fatalf("unexpected structured error for a timeout: %v", e)
+	}
 }
 
 func Test_QueryShouldTimeout(t *testing.T) {

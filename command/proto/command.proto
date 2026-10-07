@@ -4,6 +4,13 @@ package command;
 
 option go_package = "github.com/rqlite/rqlite/v10/command/proto";
 
+message Error {
+	string message = 1;
+	int32 code = 2;
+	int32 extended_code = 3;
+	int32 system_errno = 4;
+}
+
 enum Suffrage {
 	UNKNOWN = 0;
 	VOTER = 1;
@@ -64,6 +71,7 @@ message QueryRows {
 	repeated Values values = 3;
 	string error = 4;
 	double time = 5;
+	Error error_v2 = 6;
 }
 
 message ExecuteRequest {
@@ -76,6 +84,7 @@ message ExecuteResult {
 	int64 rows_affected = 2;
 	string error = 3;
 	double time = 4;
+	Error error_v2 = 5;
 }
 
 message ExecuteQueryRequest {

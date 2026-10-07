@@ -4,6 +4,7 @@ import (
 	"errors"
 
 	"github.com/mattn/go-sqlite3"
+	command "github.com/rqlite/rqlite/v10/command/proto"
 )
 
 // SQLiteError is a representation of the SQLite-level detailed error.
@@ -30,6 +31,46 @@ func NewSQLiteErrorFromError(err error) *SQLiteError {
 		}
 	}
 	return nil
+}
+
+// newErrorProto returns the structured form of err. The message is always
+// set. The SQLite result codes are set only when err wraps a SQLite error;
+// timeouts, parameter conversion failures, and other non-SQLite errors leave
+// them at zero.
+func newErrorProto(err error) *command.Error {
+	e := &command.Error{
+		Message: err.Error(),
+	}
+	if se := NewSQLiteErrorFromError(err); se != nil {
+		e.Code = se.Code
+		e.ExtendedCode = se.ExtendedCode
+		e.SystemErrno = se.SystemErrno
+	}
+	return e
+}
+
+// newExecuteResultError returns an ExecuteResult describing err, carrying
+// both the legacy error message and the structured error.
+func newExecuteResultError(err error) *command.ExecuteResult {
+	return &command.ExecuteResult{
+		Error:   err.Error(),
+		ErrorV2: newErrorProto(err),
+	}
+}
+
+// newQueryRowsError returns a QueryRows describing err, carrying both the
+// legacy error message and the structured error.
+func newQueryRowsError(err error) *command.QueryRows {
+	rows := &command.QueryRows{}
+	setQueryRowsError(rows, err)
+	return rows
+}
+
+// setQueryRowsError records err on an existing QueryRows, carrying both the
+// legacy error message and the structured error.
+func setQueryRowsError(rows *command.QueryRows, err error) {
+	rows.Error = err.Error()
+	rows.ErrorV2 = newErrorProto(err)
 }
 
 // FatalError indicates that a database operation failed for a reason which may
