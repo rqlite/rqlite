@@ -13,6 +13,7 @@
 - [PR #2856](https://github.com/rqlite/rqlite/pull/2856): Fix off-by-one error in CDC retry logic.
 - [PR #2849](https://github.com/rqlite/rqlite/pull/2849): Count bound TEXT and BLOB bytes toward the compression size threshold. Thanks @abdu-benayad
 - [PR #2857](https://github.com/rqlite/rqlite/pull/2857): Use richer embedded type for query errors.
+- [PR #2858](https://github.com/rqlite/rqlite/pull/2858): Further use of richer embedded error in db package.
 
 ## v10.5.2 (October 4th 2026)
 ### Implementation changes and bug fixes
