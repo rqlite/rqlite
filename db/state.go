@@ -42,32 +42,6 @@ var (
 	ErrWALStillExists = errors.New("WAL file still exists after checkpointing and closing the database")
 )
 
-// SQLiteError is a representation of the SQLite-level detailed error.
-type SQLiteError struct {
-	Code         int32
-	ExtendedCode int32
-	SystemErrno  int32
-}
-
-// ReadOnlyError returns true if the error is a read-only error.
-func (e *SQLiteError) ReadOnlyError() bool {
-	return e.Code == int32(sqlite3.ErrReadonly)
-}
-
-// NewSQLiteErrorFromError extracts a full structured SQLite error from an error,
-// returning nil if the error is not a SQLite error.
-func NewSQLiteErrorFromError(err error) *SQLiteError {
-	var sqErr sqlite3.Error
-	if errors.As(err, &sqErr) {
-		return &SQLiteError{
-			Code:         int32(sqErr.Code),
-			ExtendedCode: int32(sqErr.ExtendedCode),
-			SystemErrno:  int32(sqErr.SystemErrno),
-		}
-	}
-	return nil
-}
-
 // SynchronousMode is SQLite synchronous mode.
 type SynchronousMode int
 
