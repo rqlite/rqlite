@@ -997,6 +997,79 @@ func Test_SingleNodeExecuteQueryFail(t *testing.T) {
 	}
 }
 
+// Test_SingleNodeErrorCodes ensures the structured SQLite error codes survive
+// the trip through the Raft log, on the execute, query, and request paths.
+func Test_SingleNodeErrorCodes(t *testing.T) {
+	// SQLite result codes, see https://www.sqlite.org/rescode.html
+	const (
+		sqliteError        = 1
+		sqliteConstraint   = 19
+		sqliteConstraintPK = 1555
+	)
+
+	s, ln := mustNewStore(t)
+	defer ln.Close()
+
+	if err := s.Open(); err != nil {
+		t.Fatalf("failed to open single-node store: %s", err.Error())
+	}
+	if err := s.Bootstrap(NewServer(s.ID(), s.Addr(), true)); err != nil {
+		t.Fatalf("failed to bootstrap single-node store: %s", err.Error())
+	}
+	defer s.Close(true)
+	if _, err := s.WaitForLeader(10 * time.Second); err != nil {
+		t.Fatalf("Error waiting for leader: %s", err)
+	}
+
+	er := executeRequestFromStrings([]string{
+		`CREATE TABLE foo (id INTEGER NOT NULL PRIMARY KEY, name TEXT)`,
+		`INSERT INTO foo(id, name) VALUES(1, "fiona")`,
+		`INSERT INTO foo(id, name) VALUES(1, "fiona")`,
+	}, false, false)
+	r, _, err := s.Execute(context.Background(), er)
+	if err != nil {
+		t.Fatalf("failed to execute on single node: %s", err.Error())
+	}
+	if len(r) != 3 || r[2].GetE().GetError() == "" {
+		t.Fatalf("expected constraint error, got %s", asJSON(r))
+	}
+	if e := r[2].GetE().GetErrorV2(); e.GetCode() != sqliteConstraint || e.GetExtendedCode() != sqliteConstraintPK {
+		t.Fatalf("unexpected execute error codes: %v", e)
+	}
+
+	qr := queryRequestFromString("SELECT * FROM nonexistent", false, false, false)
+	rows, _, _, err := s.Query(context.Background(), qr)
+	if err != nil {
+		t.Fatalf("failed to query single node: %s", err.Error())
+	}
+	if len(rows) != 1 || rows[0].GetError() == "" {
+		t.Fatalf("expected query error, got %s", asJSON(rows))
+	}
+	if e := rows[0].GetErrorV2(); e.GetCode() != sqliteError {
+		t.Fatalf("unexpected query error codes: %v", e)
+	}
+
+	eqr := executeQueryRequestFromStrings([]string{
+		`INSERT INTO foo(id, name) VALUES(1, "fiona")`,
+		`SELECT * FROM nonexistent`,
+	}, proto.ConsistencyLevel_WEAK, false, false, false)
+	r, _, _, err = s.Request(context.Background(), eqr)
+	if err != nil {
+		t.Fatalf("failed to execute request on single node: %s", err.Error())
+	}
+	if len(r) != 2 {
+		t.Fatalf("expected two results, got %s", asJSON(r))
+	}
+	if e := r[0].GetE().GetErrorV2(); e.GetCode() != sqliteConstraint || e.GetExtendedCode() != sqliteConstraintPK {
+		t.Fatalf("unexpected request execute error codes: %v", e)
+	}
+	// The missing table fails the read-only check before the statement
+	// runs, so the Request path reports it as an execute error.
+	if e := r[1].GetE().GetErrorV2(); e.GetCode() != sqliteError {
+		t.Fatalf("unexpected request query error codes: %v", e)
+	}
+}
+
 // Test_SingleNodeRequest_Linearizable tests that a Store correctly responds to a
 // simple Request with Linearizable consistency level.
 func Test_SingleNodeRequest_Linearizable(t *testing.T) {

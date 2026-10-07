@@ -890,3 +890,82 @@ func makeCredentials(username, password string) *proto.Credentials {
 		Password: password,
 	}
 }
+
+// Test_NewServiceErrorV2RoundTrip ensures the structured SQLite error on
+// execute, query, and request results survives being forwarded between nodes.
+// The client does not set a local service, so every call crosses the network.
+func Test_NewServiceErrorV2RoundTrip(t *testing.T) {
+	ml := mustNewMockTransport()
+	wantErr := &command.Error{Code: 19, ExtendedCode: 1555, SystemErrno: 0}
+	db := &mockDatabase{
+		executeFn: func(er *command.ExecuteRequest) ([]*command.ExecuteQueryResponse, uint64, error) {
+			return []*command.ExecuteQueryResponse{{
+				Result: &command.ExecuteQueryResponse_E{
+					E: &command.ExecuteResult{Error: "constraint failed", ErrorV2: wantErr},
+				},
+			}}, 1, nil
+		},
+		queryFn: func(qr *command.QueryRequest) ([]*command.QueryRows, uint64, error) {
+			return []*command.QueryRows{{Error: "no such table", ErrorV2: wantErr}}, 1, nil
+		},
+		requestFn: func(rr *command.ExecuteQueryRequest) ([]*command.ExecuteQueryResponse, uint64, uint64, error) {
+			return []*command.ExecuteQueryResponse{
+				{Result: &command.ExecuteQueryResponse_E{
+					E: &command.ExecuteResult{Error: "constraint failed", ErrorV2: wantErr},
+				}},
+				{Result: &command.ExecuteQueryResponse_Q{
+					Q: &command.QueryRows{Error: "no such table", ErrorV2: wantErr},
+				}},
+			}, 1, 1, nil
+		},
+	}
+
+	s := New(ml, db, mustNewMockManager(), mustNewMockCredentialStore())
+	if s == nil {
+		t.Fatalf("failed to create cluster service")
+	}
+	if err := s.Open(); err != nil {
+		t.Fatalf("failed to open cluster service")
+	}
+	defer s.Close()
+
+	checkErr := func(t *testing.T, what string, got *command.Error) {
+		t.Helper()
+		if got == nil {
+			t.Fatalf("%s: structured error lost in transit", what)
+		}
+		if got.GetCode() != wantErr.GetCode() || got.GetExtendedCode() != wantErr.GetExtendedCode() ||
+			got.GetSystemErrno() != wantErr.GetSystemErrno() {
+			t.Fatalf("%s: unexpected structured error: got %v, want %v", what, got, wantErr)
+		}
+	}
+
+	cl := NewClient(ml, 30*time.Second)
+	res, _, err := cl.Execute(context.Background(), &command.ExecuteRequest{}, s.Addr(), nil, 5*time.Second, defaultMaxRetries)
+	if err != nil {
+		t.Fatalf("failed to execute: %s", err)
+	}
+	if len(res) != 1 || res[0].GetE().GetError() != "constraint failed" {
+		t.Fatalf("unexpected execute results: %v", res)
+	}
+	checkErr(t, "execute", res[0].GetE().GetErrorV2())
+
+	rows, _, err := cl.Query(context.Background(), &command.QueryRequest{}, s.Addr(), nil, 5*time.Second, noRetries)
+	if err != nil {
+		t.Fatalf("failed to query: %s", err)
+	}
+	if len(rows) != 1 || rows[0].GetError() != "no such table" {
+		t.Fatalf("unexpected query results: %v", rows)
+	}
+	checkErr(t, "query", rows[0].GetErrorV2())
+
+	res, _, _, err = cl.Request(context.Background(), &command.ExecuteQueryRequest{}, s.Addr(), nil, 5*time.Second, defaultMaxRetries)
+	if err != nil {
+		t.Fatalf("failed to request: %s", err)
+	}
+	if len(res) != 2 {
+		t.Fatalf("unexpected request results: %v", res)
+	}
+	checkErr(t, "request execute", res[0].GetE().GetErrorV2())
+	checkErr(t, "request query", res[1].GetQ().GetErrorV2())
+}

@@ -976,9 +976,7 @@ func (db *DB) executeWithConn(ctx context.Context, req *command.Request, xTime b
 			result = &command.ExecuteQueryResponse{}
 		}
 		result.Result = &command.ExecuteQueryResponse_E{
-			E: &command.ExecuteResult{
-				Error: err.Error(),
-			},
+			E: newExecuteResultError(err),
 		}
 		allResults = append(allResults, result)
 		if tx != nil {
@@ -1026,9 +1024,7 @@ func (db *DB) executeStmtWithConn(ctx context.Context, stmt *command.Statement, 
 			retErr = classifyError(rewriteContextTimeout(retErr, ErrExecuteTimeout))
 			if res != nil {
 				res.Result = &command.ExecuteQueryResponse_E{
-					E: &command.ExecuteResult{
-						Error: retErr.Error(),
-					},
+					E: newExecuteResultError(retErr),
 				}
 			}
 		} else if res != nil && res.GetE().GetError() == "" && res.GetQ().GetError() == "" {
@@ -1041,9 +1037,7 @@ func (db *DB) executeStmtWithConn(ctx context.Context, stmt *command.Statement, 
 	parameters, err := parametersToValues(stmt.Parameters)
 	if err != nil {
 		response.Result = &command.ExecuteQueryResponse_E{
-			E: &command.ExecuteResult{
-				Error: err.Error(),
-			},
+			E: newExecuteResultError(err),
 		}
 		return response, err
 	}
@@ -1059,9 +1053,7 @@ func (db *DB) executeStmtWithConn(ctx context.Context, stmt *command.Statement, 
 		rows, err := db.queryStmtWithConn(ctx, stmt, xTime, eq)
 		if err != nil {
 			response.Result = &command.ExecuteQueryResponse_Q{
-				Q: &command.QueryRows{
-					Error: err.Error(),
-				},
+				Q: newQueryRowsError(err),
 			}
 			return response, err
 		}
@@ -1072,9 +1064,7 @@ func (db *DB) executeStmtWithConn(ctx context.Context, stmt *command.Statement, 
 		result, err := eq.ExecContext(ctx, stmt.Sql, parameters...)
 		if err != nil {
 			response.Result = &command.ExecuteQueryResponse_E{
-				E: &command.ExecuteResult{
-					Error: err.Error(),
-				},
+				E: newExecuteResultError(err),
 			}
 			return response, err
 		}
@@ -1088,9 +1078,7 @@ func (db *DB) executeStmtWithConn(ctx context.Context, stmt *command.Statement, 
 		lid, err := result.LastInsertId()
 		if err != nil {
 			response.Result = &command.ExecuteQueryResponse_E{
-				E: &command.ExecuteResult{
-					Error: err.Error(),
-				},
+				E: newExecuteResultError(err),
 			}
 			return response, err
 		}
@@ -1098,9 +1086,7 @@ func (db *DB) executeStmtWithConn(ctx context.Context, stmt *command.Statement, 
 		ra, err := result.RowsAffected()
 		if err != nil {
 			response.Result = &command.ExecuteQueryResponse_E{
-				E: &command.ExecuteResult{
-					Error: err.Error(),
-				},
+				E: newExecuteResultError(err),
 			}
 			return response, err
 		}
@@ -1201,13 +1187,12 @@ func (db *DB) queryWithConn(ctx context.Context, req *command.Request, xTime boo
 
 		rows, err = db.queryStmtWithConn(ctx, stmt, xTime, queryer)
 		if err != nil {
-			// Remap errors if necessary for backwards compatibility reasons.
+			rows = newQueryRowsError(err)
+			// Remap the message if necessary for backwards compatibility
+			// reasons. The structured error retains the SQLite codes.
 			se := NewSQLiteErrorFromError(err)
 			if se != nil && se.ReadOnlyError() {
-				err = ErrQueryWrite
-			}
-			rows = &command.QueryRows{
-				Error: err.Error(),
+				rows.Error = ErrQueryWrite.Error()
 			}
 		}
 		if req.QualifyColumns && rows != nil && rows.Error == "" {
@@ -1229,7 +1214,7 @@ func (db *DB) queryStmtWithConn(ctx context.Context, stmt *command.Statement, xT
 		if retErr != nil {
 			retErr = classifyError(rewriteContextTimeout(retErr, ErrQueryTimeout))
 			if retRows != nil {
-				retRows.Error = retErr.Error()
+				setQueryRowsError(retRows, retErr)
 			}
 		}
 	}()
@@ -1240,14 +1225,14 @@ func (db *DB) queryStmtWithConn(ctx context.Context, stmt *command.Statement, xT
 	parameters, err := parametersToValues(stmt.Parameters)
 	if err != nil {
 		stats.Add(numQueryErrors, 1)
-		rows.Error = err.Error()
+		setQueryRowsError(rows, err)
 		return rows, nil
 	}
 
 	rs, err := q.QueryContext(ctx, stmt.Sql, parameters...)
 	if err != nil {
 		stats.Add(numQueryErrors, 1)
-		rows.Error = err.Error()
+		setQueryRowsError(rows, err)
 		return rows, err
 	}
 	defer func() { preserveFatalError(&retErr, rs.Close()) }()
@@ -1410,9 +1395,7 @@ func (db *DB) RequestWithContext(ctx context.Context, req *command.Request, xTim
 		if err != nil {
 			eqResponse = append(eqResponse, &command.ExecuteQueryResponse{
 				Result: &command.ExecuteQueryResponse_E{
-					E: &command.ExecuteResult{
-						Error: err.Error(),
-					},
+					E: newExecuteResultError(err),
 				},
 			})
 			if abortOnError(err) {
@@ -1915,9 +1898,7 @@ func createEQQueryResponse(rows *command.QueryRows, err error) *command.ExecuteQ
 	if err != nil {
 		return &command.ExecuteQueryResponse{
 			Result: &command.ExecuteQueryResponse_Q{
-				Q: &command.QueryRows{
-					Error: err.Error(),
-				},
+				Q: newQueryRowsError(err),
 			},
 		}
 	}

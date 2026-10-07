@@ -1417,6 +1417,9 @@ FROM test_table t1 LEFT OUTER JOIN test_table t2`
 	if !strings.Contains(res.GetE().GetError(), ErrExecuteTimeout.Error()) {
 		t.Fatalf("expected execute timeout, got %s", asJSON(res))
 	}
+	if res.GetE().GetErrorV2() != nil {
+		t.Fatalf("expected no structured error for a timeout, got %v", res.GetE().GetErrorV2())
+	}
 }
 
 func Test_QueryShouldTimeout(t *testing.T) {
