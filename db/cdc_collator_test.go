@@ -333,8 +333,8 @@ func Test_CDCCollator_MultiStatementRequest(t *testing.T) {
 		t.Fatalf("error executing request: %v", err)
 	}
 	for _, r := range results {
-		if r.GetError() != "" {
-			t.Fatalf("unexpected statement error: %s", r.GetError())
+		if r.GetE().GetError() != "" {
+			t.Fatalf("unexpected statement error: %s", r.GetE().GetError())
 		}
 	}
 
@@ -365,8 +365,8 @@ func Test_CDCCollator_Transaction(t *testing.T) {
 		t.Fatalf("error executing transaction: %v", err)
 	}
 	for _, r := range results {
-		if r.GetError() != "" {
-			t.Fatalf("unexpected statement error: %s", r.GetError())
+		if r.GetE().GetError() != "" {
+			t.Fatalf("unexpected statement error: %s", r.GetE().GetError())
 		}
 	}
 	if got := newRowIDs(c.Events()); !slices.Equal(got, []int64{1, 2}) {
@@ -451,7 +451,7 @@ func Test_CDCCollator_ExecuteRollback(t *testing.T) {
 	if err != nil {
 		t.Fatalf("error executing request: %v", err)
 	}
-	if len(results) != 2 || !strings.Contains(results[0].GetError(), "UNIQUE") || results[1].GetError() != "" {
+	if len(results) != 2 || !strings.Contains(results[0].GetE().GetError(), "UNIQUE") || results[1].GetE().GetError() != "" {
 		t.Fatalf("unexpected results: %s", asJSON(results))
 	}
 
@@ -476,7 +476,7 @@ func Test_CDCCollator_RequestRollback(t *testing.T) {
 	if err != nil {
 		t.Fatalf("error processing request: %v", err)
 	}
-	if len(results) != 2 || !strings.Contains(results[0].GetError(), "UNIQUE") || results[1].GetError() != "" {
+	if len(results) != 2 || !strings.Contains(results[0].GetE().GetError(), "UNIQUE") || results[1].GetE().GetError() != "" {
 		t.Fatalf("unexpected results: %s", asJSON(results))
 	}
 	if !slices.Equal(newRowIDs(c.Events()), []int64{2}) {
@@ -499,7 +499,7 @@ func Test_CDCCollator_RequestPartialSuccess(t *testing.T) {
 	if err != nil {
 		t.Fatalf("error processing request: %v", err)
 	}
-	if len(results) != 3 || results[0].GetError() != "" || results[1].GetError() == "" || results[2].GetError() != "" {
+	if len(results) != 3 || results[0].GetE().GetError() != "" || results[1].GetE().GetError() == "" || results[2].GetE().GetError() != "" {
 		t.Fatalf("unexpected results: %s", asJSON(results))
 	}
 	if !slices.Equal(newRowIDs(c.Events()), []int64{1, 3}) {
@@ -522,7 +522,7 @@ func Test_CDCCollator_CommitsAroundRollback(t *testing.T) {
 	if err != nil {
 		t.Fatalf("error executing request: %v", err)
 	}
-	if len(results) != 3 || results[0].GetError() != "" || !strings.Contains(results[1].GetError(), "UNIQUE") || results[2].GetError() != "" {
+	if len(results) != 3 || results[0].GetE().GetError() != "" || !strings.Contains(results[1].GetE().GetError(), "UNIQUE") || results[2].GetE().GetError() != "" {
 		t.Fatalf("unexpected results: %s", asJSON(results))
 	}
 	if !slices.Equal(newRowIDs(c.Events()), []int64{1, 3}) {
@@ -547,7 +547,7 @@ func Test_CDCCollator_TransactionRollback(t *testing.T) {
 	if err != nil {
 		t.Fatalf("error executing transaction: %v", err)
 	}
-	if len(results) != 2 || results[0].GetError() != "" || !strings.Contains(results[1].GetError(), "UNIQUE") {
+	if len(results) != 2 || results[0].GetE().GetError() != "" || !strings.Contains(results[1].GetE().GetError(), "UNIQUE") {
 		t.Fatalf("unexpected results: %s", asJSON(results))
 	}
 	if c.Events() != nil {
@@ -571,7 +571,7 @@ func Test_CDCCollator_ConflictFailRetainsChanges(t *testing.T) {
 	if err != nil {
 		t.Fatalf("error executing statement: %v", err)
 	}
-	if len(results) != 1 || results[0].GetError() == "" {
+	if len(results) != 1 || results[0].GetE().GetError() == "" {
 		t.Fatalf("expected constraint error, got %s", asJSON(results))
 	}
 	if !slices.Equal(newRowIDs(c.Events()), []int64{1}) {

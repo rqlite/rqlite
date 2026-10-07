@@ -1390,7 +1390,7 @@ func Test_ExecShouldTimeout(t *testing.T) {
 	// Where the timeout surfaces depends on where the deadline expires:
 	// - Inside ExecContext (during query execution) → the SQLite per-row
 	// interrupt callback catches it and turns it into a per-statement error.
-	// Top-level err is nil, and r[0].GetError() contains ErrExecuteTimeout.
+	// Top-level err is nil, and r[0].GetE().GetError() contains ErrExecuteTimeout.
 	// This is what the test expects.
 	// - Earlier — inside db.rwDB.Conn(ctx) at db.go:1021 → database/sql returns
 	// context.DeadlineExceeded directly. Top-level/ err != nil, no per-statement
@@ -1414,7 +1414,7 @@ FROM test_table t1 LEFT OUTER JOIN test_table t2`
 	}
 
 	res := r[0]
-	if !strings.Contains(res.GetError(), ErrExecuteTimeout.Error()) {
+	if !strings.Contains(res.GetE().GetError(), ErrExecuteTimeout.Error()) {
 		t.Fatalf("expected execute timeout, got %s", asJSON(res))
 	}
 }
@@ -1519,8 +1519,8 @@ func mustExecute(db *DB, stmt string) {
 	if err != nil {
 		panic(fmt.Sprintf("failed to execute statement: %s", err.Error()))
 	}
-	if r[0].GetError() != "" {
-		panic(fmt.Sprintf("failed to execute statement: %s", r[0].GetError()))
+	if r[0].GetE().GetError() != "" {
+		panic(fmt.Sprintf("failed to execute statement: %s", r[0].GetE().GetError()))
 	}
 }
 

@@ -975,8 +975,10 @@ func (db *DB) executeWithConn(ctx context.Context, req *command.Request, xTime b
 		if result == nil {
 			result = &command.ExecuteQueryResponse{}
 		}
-		result.Result = &command.ExecuteQueryResponse_Error{
-			Error: err.Error(),
+		result.Result = &command.ExecuteQueryResponse_E{
+			E: &command.ExecuteResult{
+				Error: err.Error(),
+			},
 		}
 		allResults = append(allResults, result)
 		if tx != nil {
@@ -1023,11 +1025,13 @@ func (db *DB) executeStmtWithConn(ctx context.Context, stmt *command.Statement, 
 		if retErr != nil {
 			retErr = classifyError(rewriteContextTimeout(retErr, ErrExecuteTimeout))
 			if res != nil {
-				res.Result = &command.ExecuteQueryResponse_Error{
-					Error: retErr.Error(),
+				res.Result = &command.ExecuteQueryResponse_E{
+					E: &command.ExecuteResult{
+						Error: retErr.Error(),
+					},
 				}
 			}
-		} else if res != nil && res.GetError() == "" && res.GetQ().GetError() == "" {
+		} else if res != nil && res.GetE().GetError() == "" && res.GetQ().GetError() == "" {
 			res.Mutated = true
 		}
 	}()
@@ -1036,8 +1040,10 @@ func (db *DB) executeStmtWithConn(ctx context.Context, stmt *command.Statement, 
 
 	parameters, err := parametersToValues(stmt.Parameters)
 	if err != nil {
-		response.Result = &command.ExecuteQueryResponse_Error{
-			Error: err.Error(),
+		response.Result = &command.ExecuteQueryResponse_E{
+			E: &command.ExecuteResult{
+				Error: err.Error(),
+			},
 		}
 		return response, err
 	}
@@ -1403,8 +1409,10 @@ func (db *DB) RequestWithContext(ctx context.Context, req *command.Request, xTim
 		ro, err := db.StmtReadOnlyWithConn(ss, conn)
 		if err != nil {
 			eqResponse = append(eqResponse, &command.ExecuteQueryResponse{
-				Result: &command.ExecuteQueryResponse_Error{
-					Error: err.Error(),
+				Result: &command.ExecuteQueryResponse_E{
+					E: &command.ExecuteResult{
+						Error: err.Error(),
+					},
 				},
 			})
 			if abortOnError(err) {

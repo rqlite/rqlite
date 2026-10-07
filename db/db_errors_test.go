@@ -75,7 +75,7 @@ func Test_DBErrors_FullStopsBatch(t *testing.T) {
 						}
 						results, err := run(req, false)
 						mustBeFatalSQLiteError(t, err, sqlite3.ErrFull)
-						if len(results) != 2 || results[1].GetError() == "" || results[1].GetMutated() {
+						if len(results) != 2 || results[1].GetE().GetError() == "" || results[1].GetMutated() {
 							t.Fatalf("unexpected results: %v", results)
 						}
 						want := 1
@@ -115,7 +115,7 @@ func Test_DBErrors_OrdinarySQL(t *testing.T) {
 				if transaction {
 					want = 1
 				}
-				if err != nil || len(results) != want || results[0].GetError() == "" {
+				if err != nil || len(results) != want || results[0].GetE().GetError() == "" {
 					t.Fatalf("ordinary constraint behavior changed: %v, %v", results, err)
 				}
 			})
