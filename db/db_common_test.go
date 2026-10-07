@@ -1943,14 +1943,14 @@ func Test_DB_ExecuteMutation(t *testing.T) {
 		t.Fatalf("unexpected response count: got %d, exp 6", len(responses))
 	}
 	for i, response := range responses[:5] {
-		if response.GetE() == nil || response.GetError() != "" {
+		if response.GetE() == nil || response.GetE().GetError() != "" {
 			t.Fatalf("statement %d failed: %s", i, asJSON(response))
 		}
 		if !response.GetMutated() {
 			t.Errorf("statement %d: expected mutation", i)
 		}
 	}
-	if responses[5].GetError() == "" {
+	if responses[5].GetE().GetError() == "" {
 		t.Fatal("expected NOT NULL constraint error")
 	}
 	if responses[5].GetMutated() {
@@ -1987,7 +1987,7 @@ func Test_DB_ExecuteMutationReturning(t *testing.T) {
 			t.Errorf("statement %d: expected mutation", i)
 		}
 	}
-	if responses[4].GetError() == "" {
+	if responses[4].GetE().GetError() == "" {
 		t.Fatal("expected NOT NULL constraint error")
 	}
 	if responses[4].GetMutated() {
@@ -2467,8 +2467,8 @@ func Test_DB_DumpConcurrentWrite(t *testing.T) {
 				t.Fatalf("failed to update database during dump: %s", err)
 			}
 			for _, result := range r {
-				if result.GetError() != "" {
-					t.Fatalf("failed to update database during dump: %s", result.GetError())
+				if result.GetE().GetError() != "" {
+					t.Fatalf("failed to update database during dump: %s", result.GetE().GetError())
 				}
 			}
 		}
@@ -2649,8 +2649,8 @@ func Test_DB_DumpSelectedTables(t *testing.T) {
 		t.Fatalf("loading dump: %s", err.Error())
 	}
 	for _, r := range resps {
-		if r.GetError() != "" {
-			t.Fatalf("loading dump: %s", r.GetError())
+		if r.GetE().GetError() != "" {
+			t.Fatalf("loading dump: %s", r.GetE().GetError())
 		}
 	}
 

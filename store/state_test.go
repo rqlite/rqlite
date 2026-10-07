@@ -382,8 +382,8 @@ func Test_SingleNodeRecoverForeignKeysEnabled(t *testing.T) {
 		t.Fatalf("failed to create foreign-key data: %s", err)
 	}
 	for _, r := range res {
-		if r.GetError() != "" {
-			t.Fatalf("failed to create foreign-key data: %s", r.GetError())
+		if r.GetE().GetError() != "" {
+			t.Fatalf("failed to create foreign-key data: %s", r.GetE().GetError())
 		}
 	}
 	if err := s.Snapshot(0); err != nil {
@@ -396,7 +396,7 @@ func Test_SingleNodeRecoverForeignKeysEnabled(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to execute DELETE: %s", err)
 	}
-	if len(res) != 1 || res[0].GetError() != "FOREIGN KEY constraint failed" {
+	if len(res) != 1 || res[0].GetE().GetError() != "FOREIGN KEY constraint failed" {
 		t.Fatalf("unexpected DELETE results: %s", asJSON(res))
 	}
 
@@ -471,8 +471,8 @@ func Test_SingleNodeRecoverForeignKeysDisabled(t *testing.T) {
 		t.Fatalf("failed to create foreign-key data: %s", err)
 	}
 	for _, r := range res {
-		if r.GetError() != "" {
-			t.Fatalf("failed to create foreign-key data: %s", r.GetError())
+		if r.GetE().GetError() != "" {
+			t.Fatalf("failed to create foreign-key data: %s", r.GetE().GetError())
 		}
 	}
 	if err := s.Snapshot(0); err != nil {
@@ -485,7 +485,7 @@ func Test_SingleNodeRecoverForeignKeysDisabled(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to execute DELETE: %s", err)
 	}
-	if len(res) != 1 || res[0].GetError() != "" {
+	if len(res) != 1 || res[0].GetE().GetError() != "" {
 		t.Fatalf("unexpected DELETE results: %s", asJSON(res))
 	}
 

@@ -120,12 +120,12 @@ func Test_CommandProcessor_FatalError(t *testing.T) {
 				"INSERT INTO data VALUES (1, NULL)",
 			} {
 				response := process(statement)
-				if response.error != nil || len(response.results) != 1 || response.results[0].GetError() != "" {
+				if response.error != nil || len(response.results) != 1 || response.results[0].GetE().GetError() != "" {
 					t.Fatalf("setup failed: %+v", response)
 				}
 			}
 			response := process("INSERT INTO data VALUES (1, NULL)")
-			if response.error != nil || len(response.results) != 1 || response.results[0].GetError() == "" {
+			if response.error != nil || len(response.results) != 1 || response.results[0].GetE().GetError() == "" {
 				t.Fatalf("expected ordinary constraint error: %+v", response)
 			}
 
@@ -136,7 +136,7 @@ func Test_CommandProcessor_FatalError(t *testing.T) {
 			}
 			pages := rows[0].Values[0].Parameters[0].GetI()
 			response = process(fmt.Sprintf("PRAGMA max_page_count=%d", pages))
-			if response.error != nil || len(response.results) != 1 || response.results[0].GetError() != "" {
+			if response.error != nil || len(response.results) != 1 || response.results[0].GetE().GetError() != "" {
 				t.Fatalf("setting page limit failed: %+v", response)
 			}
 			_, _, _, err = processor.Process(mustMarshalWriteCommand(t, cmdType,

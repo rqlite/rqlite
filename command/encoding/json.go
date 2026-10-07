@@ -78,6 +78,13 @@ func NewResultRowsFromExecuteQueryResponse(e *proto.ExecuteQueryResponse, bytesA
 
 func NewAssociativeResultRowsFromExecuteQueryResponse(e *proto.ExecuteQueryResponse, bytesAsArray bool) (any, error) {
 	if er := e.GetE(); er != nil {
+		if er.Error != "" {
+			// A failed statement carries only its error. Omit the rows
+			// field so the output matches that of a top-level error.
+			return map[string]string{
+				"error": er.Error,
+			}, nil
+		}
 		r, err := NewResultFromExecuteResult(er)
 		if err != nil {
 			return nil, err

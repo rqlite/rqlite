@@ -64,7 +64,7 @@ func Test_StoreCDC_RolledBackInsert(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to execute request: %v", err)
 	}
-	if len(results) != 2 || results[0].GetError() == "" || results[1].GetError() != "" {
+	if len(results) != 2 || results[0].GetE().GetError() == "" || results[1].GetE().GetError() != "" {
 		t.Fatalf("unexpected results: %s", asJSON(results))
 	}
 	select {
@@ -282,8 +282,8 @@ func Test_StoreCDC_Events_MultiStatementIndex(t *testing.T) {
 		t.Fatalf("failed to execute inserts: %s", err.Error())
 	}
 	for _, r := range results {
-		if r.GetError() != "" {
-			t.Fatalf("unexpected statement error: %s", r.GetError())
+		if r.GetE().GetError() != "" {
+			t.Fatalf("unexpected statement error: %s", r.GetE().GetError())
 		}
 	}
 

@@ -992,7 +992,7 @@ func Test_SingleNodeExecuteQueryFail(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to execute on single node: %s", err.Error())
 	}
-	if exp, got := "no such table: foo", r[0].GetError(); exp != got {
+	if exp, got := "no such table: foo", r[0].GetE().GetError(); exp != got {
 		t.Fatalf("unexpected results for query\nexp: %s\ngot: %s", exp, got)
 	}
 }
