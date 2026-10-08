@@ -586,7 +586,7 @@ func Test_MarshalExecuteQueryResponse(t *testing.T) {
 					},
 				},
 			},
-			expected: `[{"last_insert_id":123,"rows_affected":456},{"error":"unique constraint failed"},{"error":"not null constraint failed"},{"error":"unique constraint failed","error_v2":{"message":"unique constraint failed","sqlite":{"code":19,"extended_code":2067}}},{"error":"query timeout","error_v2":{"message":"query timeout"}},{"columns":["column1","column2"],"types":["int","text"],"values":[[456,"declan"]]},{"columns":["column1","column2"],"types":["int","text"]}]`,
+			expected: `[{"last_insert_id":123,"rows_affected":456},{"error":"unique constraint failed","error_v2":{"message":"unique constraint failed"}},{"error":"not null constraint failed"},{"error":"unique constraint failed","error_v2":{"message":"unique constraint failed","sqlite":{"code":19,"extended_code":2067}}},{"error":"query timeout","error_v2":{"message":"query timeout"}},{"columns":["column1","column2"],"types":["int","text"],"values":[[456,"declan"]]},{"columns":["column1","column2"],"types":["int","text"]}]`,
 		},
 	}
 
@@ -748,7 +748,7 @@ func Test_MarshalExecuteQueryAssociativeResponse(t *testing.T) {
 					},
 				},
 			},
-			expected: `[{"last_insert_id":123,"rows_affected":456,"rows":null},{"error":"unique constraint failed"},{"error":"not null constraint failed"},{"error":"unique constraint failed","error_v2":{"message":"unique constraint failed","sqlite":{"code":19,"extended_code":2067}}},{"rows":[],"error":"query timeout","error_v2":{"message":"query timeout"}},{"types":{"column1":"int","column2":"text"},"rows":[{"column1":456,"column2":"declan"}]},{"types":{"aaa":"int","bbb":"text"},"rows":[]},{"types":{"ccc":"int","ddd":"text"},"rows":[]}]`,
+			expected: `[{"last_insert_id":123,"rows_affected":456,"rows":null},{"error":"unique constraint failed","error_v2":{"message":"unique constraint failed"}},{"error":"not null constraint failed"},{"error":"unique constraint failed","error_v2":{"message":"unique constraint failed","sqlite":{"code":19,"extended_code":2067}}},{"rows":[],"error":"query timeout","error_v2":{"message":"query timeout"}},{"types":{"column1":"int","column2":"text"},"rows":[{"column1":456,"column2":"declan"}]},{"types":{"aaa":"int","bbb":"text"},"rows":[]},{"types":{"ccc":"int","ddd":"text"},"rows":[]}]`,
 		},
 	}
 
@@ -763,5 +763,107 @@ func Test_MarshalExecuteQueryAssociativeResponse(t *testing.T) {
 				t.Errorf("unexpected JSON output: got %v want %v", string(data), tt.expected)
 			}
 		})
+	}
+}
+
+// Test_MarshalErrorFormat tests that the error format selects which forms of
+// a statement error are rendered, across every kind of result.
+func Test_MarshalErrorFormat(t *testing.T) {
+	sqliteErr := &proto.Error{
+		Message: "no such table: foo",
+		Sqlite:  &proto.SQLiteErrorCodes{Code: 1, ExtendedCode: 1},
+	}
+	responses := []*proto.ExecuteQueryResponse{
+		{Result: &proto.ExecuteQueryResponse_E{E: &proto.ExecuteResult{LastInsertId: 1, RowsAffected: 1}}},
+		{Result: &proto.ExecuteQueryResponse_E{E: &proto.ExecuteResult{Error: "no such table: foo", ErrorV2: sqliteErr}}},
+		{Result: &proto.ExecuteQueryResponse_Q{Q: &proto.QueryRows{Error: "no such table: foo", ErrorV2: sqliteErr}}},
+		{Result: &proto.ExecuteQueryResponse_Error{Error: "legacy failure"}},
+	}
+	rows := []*proto.QueryRows{
+		{Columns: []string{"id"}, Types: []string{"integer"}},
+		{Error: "query timeout", ErrorV2: &proto.Error{Message: "query timeout"}},
+	}
+	const v2 = `"error_v2":{"message":"no such table: foo","sqlite":{"code":1,"extended_code":1}}`
+
+	tests := []struct {
+		name        string
+		format      ErrorFormat
+		associative bool
+		expResp     string
+		expRows     string
+	}{
+		{
+			name:    "both",
+			format:  ErrorFormatBoth,
+			expResp: `[{"last_insert_id":1,"rows_affected":1},{"error":"no such table: foo",` + v2 + `},{"error":"no such table: foo",` + v2 + `},{"error":"legacy failure","error_v2":{"message":"legacy failure"}}]`,
+			expRows: `[{"columns":["id"],"types":["integer"]},{"error":"query timeout","error_v2":{"message":"query timeout"}}]`,
+		},
+		{
+			name:    "v1",
+			format:  ErrorFormatV1,
+			expResp: `[{"last_insert_id":1,"rows_affected":1},{"error":"no such table: foo"},{"error":"no such table: foo"},{"error":"legacy failure"}]`,
+			expRows: `[{"columns":["id"],"types":["integer"]},{"error":"query timeout"}]`,
+		},
+		{
+			name:    "v2",
+			format:  ErrorFormatV2,
+			expResp: `[{"last_insert_id":1,"rows_affected":1},{` + v2 + `},{` + v2 + `},{"error_v2":{"message":"legacy failure"}}]`,
+			expRows: `[{"columns":["id"],"types":["integer"]},{"error_v2":{"message":"query timeout"}}]`,
+		},
+		{
+			name:        "both associative",
+			format:      ErrorFormatBoth,
+			associative: true,
+			expResp:     `[{"last_insert_id":1,"rows_affected":1,"rows":null},{"error":"no such table: foo",` + v2 + `},{"rows":[],"error":"no such table: foo",` + v2 + `},{"error":"legacy failure","error_v2":{"message":"legacy failure"}}]`,
+			expRows:     `[{"types":{"id":"integer"},"rows":[]},{"rows":[],"error":"query timeout","error_v2":{"message":"query timeout"}}]`,
+		},
+		{
+			name:        "v1 associative",
+			format:      ErrorFormatV1,
+			associative: true,
+			expResp:     `[{"last_insert_id":1,"rows_affected":1,"rows":null},{"error":"no such table: foo"},{"rows":[],"error":"no such table: foo"},{"error":"legacy failure"}]`,
+			expRows:     `[{"types":{"id":"integer"},"rows":[]},{"rows":[],"error":"query timeout"}]`,
+		},
+		{
+			name:        "v2 associative",
+			format:      ErrorFormatV2,
+			associative: true,
+			expResp:     `[{"last_insert_id":1,"rows_affected":1,"rows":null},{` + v2 + `},{"rows":[],` + v2 + `},{"error_v2":{"message":"legacy failure"}}]`,
+			expRows:     `[{"types":{"id":"integer"},"rows":[]},{"rows":[],"error_v2":{"message":"query timeout"}}]`,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			enc := Encoder{Associative: tt.associative, ErrorFormat: tt.format}
+			b, err := enc.JSONMarshal(responses)
+			if err != nil {
+				t.Fatalf("failed to marshal responses: %s", err)
+			}
+			if got := string(b); got != tt.expResp {
+				t.Fatalf("unexpected responses JSON\ngot: %s\nexp: %s", got, tt.expResp)
+			}
+			b, err = enc.JSONMarshal(rows)
+			if err != nil {
+				t.Fatalf("failed to marshal rows: %s", err)
+			}
+			if got := string(b); got != tt.expRows {
+				t.Fatalf("unexpected rows JSON\ngot: %s\nexp: %s", got, tt.expRows)
+			}
+		})
+	}
+}
+
+// Test_ErrorFormatFromString tests parsing of error format names.
+func Test_ErrorFormatFromString(t *testing.T) {
+	for _, tt := range []struct {
+		s   string
+		exp ErrorFormat
+	}{
+		{"", ErrorFormatBoth}, {"v1", ErrorFormatV1}, {"V1", ErrorFormatV1},
+		{"v2", ErrorFormatV2}, {"V2", ErrorFormatV2}, {"v3", ErrorFormatBoth}, {"both", ErrorFormatBoth},
+	} {
+		if got := ErrorFormatFromString(tt.s); got != tt.exp {
+			t.Fatalf("ErrorFormatFromString(%q) = %d, want %d", tt.s, got, tt.exp)
+		}
 	}
 }

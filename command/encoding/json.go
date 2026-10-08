@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"strings"
 
 	"github.com/rqlite/rqlite/v10/command/proto"
 )
@@ -31,8 +32,82 @@ type SQLiteErrorCodes struct {
 
 // ErrorResult represents a failed statement which produced no other output.
 type ErrorResult struct {
-	Error   string `json:"error"`
+	Error   string `json:"error,omitempty"`
 	ErrorV2 *Error `json:"error_v2,omitempty"`
+}
+
+// ErrorFormat controls which forms of a statement error are rendered.
+type ErrorFormat int
+
+const (
+	// ErrorFormatBoth renders both the legacy "error" string and the
+	// structured "error_v2" object. This is the default.
+	ErrorFormatBoth ErrorFormat = iota
+	// ErrorFormatV1 renders only the legacy "error" string.
+	ErrorFormatV1
+	// ErrorFormatV2 renders only the structured "error_v2" object.
+	ErrorFormatV2
+)
+
+// ErrorFormatFromString returns the ErrorFormat named by s. Unrecognized
+// names, including the empty string, select ErrorFormatBoth.
+func ErrorFormatFromString(s string) ErrorFormat {
+	switch strings.ToLower(s) {
+	case "v1":
+		return ErrorFormatV1
+	case "v2":
+		return ErrorFormatV2
+	default:
+		return ErrorFormatBoth
+	}
+}
+
+// formatError applies f to a pair of error fields, clearing whichever form
+// f excludes.
+func formatError(f ErrorFormat, err *string, errV2 **Error) {
+	switch f {
+	case ErrorFormatV1:
+		*errV2 = nil
+	case ErrorFormatV2:
+		*err = ""
+	}
+}
+
+func (r *Result) formatError(f ErrorFormat)          { formatError(f, &r.Error, &r.ErrorV2) }
+func (r *Rows) formatError(f ErrorFormat)            { formatError(f, &r.Error, &r.ErrorV2) }
+func (r *AssociativeRows) formatError(f ErrorFormat) { formatError(f, &r.Error, &r.ErrorV2) }
+func (r *ErrorResult) formatError(f ErrorFormat)     { formatError(f, &r.Error, &r.ErrorV2) }
+
+// errorFormatter is implemented by API objects which render a statement error.
+type errorFormatter interface {
+	formatError(ErrorFormat)
+}
+
+// applyErrorFormat applies f to v, which is an API object or a slice of them.
+func applyErrorFormat(v any, f ErrorFormat) {
+	if f == ErrorFormatBoth {
+		return
+	}
+	switch v := v.(type) {
+	case errorFormatter:
+		v.formatError(f)
+	case []*Result:
+		for _, r := range v {
+			r.formatError(f)
+		}
+	case []*Rows:
+		for _, r := range v {
+			r.formatError(f)
+		}
+	case []*AssociativeRows:
+		for _, r := range v {
+			r.formatError(f)
+		}
+	case []any:
+		for _, r := range v {
+			applyErrorFormat(r, f)
+		}
+	}
 }
 
 // Result represents the outcome of an operation that changes rows.
@@ -92,7 +167,7 @@ func NewResultRowsFromExecuteQueryResponse(e *proto.ExecuteQueryResponse, bytesA
 	} else if qr := e.GetQ(); qr != nil {
 		return NewRowsFromQueryRows(qr, bytesAsArray)
 	} else if err := e.GetError(); err != "" {
-		return &ErrorResult{Error: err}, nil
+		return &ErrorResult{Error: err, ErrorV2: &Error{Message: err}}, nil
 	}
 	return nil, errors.New("no ExecuteResult, QueryRows, or Error")
 }
@@ -119,7 +194,7 @@ func NewAssociativeResultRowsFromExecuteQueryResponse(e *proto.ExecuteQueryRespo
 	} else if qr := e.GetQ(); qr != nil {
 		return NewAssociativeRowsFromQueryRows(qr, bytesAsArray)
 	} else if err := e.GetError(); err != "" {
-		return &ErrorResult{Error: err}, nil
+		return &ErrorResult{Error: err, ErrorV2: &Error{Message: err}}, nil
 	}
 	return nil, errors.New("no ExecuteResult, QueryRows, or Error")
 }
@@ -256,11 +331,12 @@ func NewValuesFromQueryValues(dest [][]any, v []*proto.Values, bytesAsArray bool
 type Encoder struct {
 	Associative       bool
 	BlobsAsByteArrays bool
+	ErrorFormat       ErrorFormat
 }
 
 // JSONMarshal implements the marshal interface
 func (e *Encoder) JSONMarshal(i any) ([]byte, error) {
-	return jsonMarshal(i, noEscapeEncode, e.Associative, e.BlobsAsByteArrays)
+	return jsonMarshal(i, noEscapeEncode, e.Associative, e.BlobsAsByteArrays, e.ErrorFormat)
 }
 
 // JSONMarshalIndent implements the marshal indent interface
@@ -276,7 +352,7 @@ func (e *Encoder) JSONMarshalIndent(i any, prefix, indent string) ([]byte, error
 		}
 		return out.Bytes(), nil
 	}
-	return jsonMarshal(i, f, e.Associative, e.BlobsAsByteArrays)
+	return jsonMarshal(i, f, e.Associative, e.BlobsAsByteArrays, e.ErrorFormat)
 }
 
 func noEscapeEncode(i any) ([]byte, error) {
@@ -291,14 +367,19 @@ func noEscapeEncode(i any) ([]byte, error) {
 
 type marshalFunc func(i any) ([]byte, error)
 
-func jsonMarshal(i any, f marshalFunc, assoc, bytesAsArray bool) ([]byte, error) {
+func jsonMarshal(i any, f marshalFunc, assoc, bytesAsArray bool, errFmt ErrorFormat) ([]byte, error) {
+	// marshal applies the error format to a converted API object and encodes it.
+	marshal := func(r any) ([]byte, error) {
+		applyErrorFormat(r, errFmt)
+		return f(r)
+	}
 	switch v := i.(type) {
 	case *proto.ExecuteResult:
 		r, err := NewResultFromExecuteResult(v)
 		if err != nil {
 			return nil, err
 		}
-		return f(r)
+		return marshal(r)
 	case []*proto.ExecuteResult:
 		var err error
 		results := make([]*Result, len(v))
@@ -308,27 +389,27 @@ func jsonMarshal(i any, f marshalFunc, assoc, bytesAsArray bool) ([]byte, error)
 				return nil, err
 			}
 		}
-		return f(results)
+		return marshal(results)
 	case *proto.QueryRows:
 		if assoc {
 			r, err := NewAssociativeRowsFromQueryRows(v, bytesAsArray)
 			if err != nil {
 				return nil, err
 			}
-			return f(r)
+			return marshal(r)
 		} else {
 			r, err := NewRowsFromQueryRows(v, bytesAsArray)
 			if err != nil {
 				return nil, err
 			}
-			return f(r)
+			return marshal(r)
 		}
 	case *proto.ExecuteQueryResponse:
 		r, err := NewResultRowsFromExecuteQueryResponse(v, bytesAsArray)
 		if err != nil {
 			return nil, err
 		}
-		return f(r)
+		return marshal(r)
 	case []*proto.QueryRows:
 		var err error
 
@@ -340,7 +421,7 @@ func jsonMarshal(i any, f marshalFunc, assoc, bytesAsArray bool) ([]byte, error)
 					return nil, err
 				}
 			}
-			return f(rows)
+			return marshal(rows)
 		} else {
 			rows := make([]*Rows, len(v))
 			for j := range v {
@@ -349,7 +430,7 @@ func jsonMarshal(i any, f marshalFunc, assoc, bytesAsArray bool) ([]byte, error)
 					return nil, err
 				}
 			}
-			return f(rows)
+			return marshal(rows)
 		}
 	case []*proto.ExecuteQueryResponse:
 		if assoc {
@@ -361,7 +442,7 @@ func jsonMarshal(i any, f marshalFunc, assoc, bytesAsArray bool) ([]byte, error)
 				}
 				res[j] = r
 			}
-			return f(res)
+			return marshal(res)
 		} else {
 			res := make([]any, len(v))
 			for j := range v {
@@ -371,7 +452,7 @@ func jsonMarshal(i any, f marshalFunc, assoc, bytesAsArray bool) ([]byte, error)
 				}
 				res[j] = r
 			}
-			return f(res)
+			return marshal(res)
 		}
 	case []*proto.Values:
 		values := make([][]any, len(v))

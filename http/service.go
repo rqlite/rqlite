@@ -112,8 +112,9 @@ type DBResults struct {
 	ExecuteQueryResponse []*proto.ExecuteQueryResponse
 	QueryRows            []*proto.QueryRows
 
-	AssociativeJSON bool // Render in associative form
-	BlobsAsArrays   bool // Render BLOB data as byte arrays
+	AssociativeJSON bool                 // Render in associative form
+	BlobsAsArrays   bool                 // Render BLOB data as byte arrays
+	ErrorFormat     encoding.ErrorFormat // Which forms of statement errors to render
 }
 
 // Responser is the interface response objects must implement.
@@ -126,6 +127,7 @@ func (d *DBResults) MarshalJSON() ([]byte, error) {
 	enc := encoding.Encoder{
 		Associative:       d.AssociativeJSON,
 		BlobsAsByteArrays: d.BlobsAsArrays,
+		ErrorFormat:       d.ErrorFormat,
 	}
 
 	if d.QueryRows != nil {
@@ -1392,6 +1394,7 @@ func (s *Service) execute(w http.ResponseWriter, r *http.Request, qp QueryParams
 	resp := NewResponse()
 	resp.Results.AssociativeJSON = qp.Associative()
 	resp.Results.BlobsAsArrays = qp.BlobArray()
+	resp.Results.ErrorFormat = qp.ErrorFormat()
 
 	var stmts []*proto.Statement
 	var err error
@@ -1509,6 +1512,7 @@ func (s *Service) handleQuery(w http.ResponseWriter, r *http.Request, qp QueryPa
 	resp := NewResponse()
 	resp.Results.AssociativeJSON = qp.Associative()
 	resp.Results.BlobsAsArrays = qp.BlobArray()
+	resp.Results.ErrorFormat = qp.ErrorFormat()
 
 	qr := &proto.QueryRequest{
 		Request: &proto.Request{
@@ -1585,6 +1589,7 @@ func (s *Service) handleRequest(w http.ResponseWriter, r *http.Request, qp Query
 	resp := NewResponse()
 	resp.Results.AssociativeJSON = qp.Associative()
 	resp.Results.BlobsAsArrays = qp.BlobArray()
+	resp.Results.ErrorFormat = qp.ErrorFormat()
 
 	eqr := &proto.ExecuteQueryRequest{
 		Request: &proto.Request{

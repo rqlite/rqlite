@@ -124,6 +124,18 @@ func (n *Node) ExecuteRaw(stmt string) (string, error) {
 	return n.postExecute(stmt, "text/plain")
 }
 
+// ExecuteErrorFormat executes a single statement against the node, requesting
+// the given rendering of statement errors via the errors query parameter.
+func (n *Node) ExecuteErrorFormat(stmt, format string) (string, error) {
+	return n.postExecuteWithQuery(stmt, "text/plain", "errors="+format)
+}
+
+// QueryErrorFormat queries a single statement against the node, requesting
+// the given rendering of statement errors via the errors query parameter.
+func (n *Node) QueryErrorFormat(stmt, format string) (string, error) {
+	return n.postQueryWithQuery(stmt, "text/plain", "errors="+format)
+}
+
 // ExecuteMulti executes multiple statements against the node.
 func (n *Node) ExecuteMulti(stmts []string) (string, error) {
 	j, err := json.Marshal(stmts)
@@ -537,6 +549,32 @@ func (n *Node) postExecute(stmt, contentType string) (string, error) {
 	if resp.StatusCode != http.StatusOK {
 		return "", fmt.Errorf("execute endpoint returned: %s", resp.Status)
 	}
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return "", err
+	}
+	return string(body), nil
+}
+
+func (n *Node) postExecuteWithQuery(stmt, contentType, query string) (string, error) {
+	resp, err := http.Post("http://"+n.APIAddr+"/db/execute?"+query, contentType, strings.NewReader(stmt))
+	if err != nil {
+		return "", err
+	}
+	defer resp.Body.Close()
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return "", err
+	}
+	return string(body), nil
+}
+
+func (n *Node) postQueryWithQuery(stmt, contentType, query string) (string, error) {
+	resp, err := http.Post("http://"+n.APIAddr+"/db/query?"+query, contentType, strings.NewReader(stmt))
+	if err != nil {
+		return "", err
+	}
+	defer resp.Body.Close()
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
 		return "", err

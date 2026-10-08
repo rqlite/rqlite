@@ -33,6 +33,23 @@ class TestSingleNode(unittest.TestCase):
     self.assertEqual(ro_pragmas, d_("{'busy_timeout': '5000', 'foreign_keys': '0', 'journal_mode': 'wal', 'synchronous': '0', 'wal_autocheckpoint': '0'}"))
     self.assertEqual(rw_pragmas, d_("{'busy_timeout': '5000', 'foreign_keys': '0', 'journal_mode': 'wal', 'synchronous': '0', 'wal_autocheckpoint': '0'}"))
 
+  def test_error_format(self):
+    '''Test the errors query parameter selects how statement errors are rendered'''
+    n = self.cluster.wait_for_leader()
+    both = d_("{'results': [{'error': 'no such table: bar', 'error_v2': {'message': 'no such table: bar', 'sqlite': {'code': 1, 'extended_code': 1}}}]}")
+    v1 = d_("{'results': [{'error': 'no such table: bar'}]}")
+    v2 = d_("{'results': [{'error_v2': {'message': 'no such table: bar', 'sqlite': {'code': 1, 'extended_code': 1}}}]}")
+
+    self.assertEqual(n.execute('INSERT INTO bar(name) VALUES("fiona")'), both)
+    self.assertEqual(n.execute('INSERT INTO bar(name) VALUES("fiona")', errors='v1'), v1)
+    self.assertEqual(n.execute('INSERT INTO bar(name) VALUES("fiona")', errors='v2'), v2)
+    self.assertEqual(n.execute('INSERT INTO bar(name) VALUES("fiona")', errors='other'), both)
+
+    self.assertEqual(n.query('SELECT * FROM bar'), both)
+    self.assertEqual(n.query('SELECT * FROM bar', errors='v1'), v1)
+    self.assertEqual(n.query('SELECT * FROM bar', errors='v2'), v2)
+    self.assertEqual(n.query('SELECT * FROM bar', errors='other'), both)
+
   def test_simple_raw_queries(self):
     '''Test simple queries work as expected'''
     n = self.cluster.wait_for_leader()

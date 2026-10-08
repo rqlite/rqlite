@@ -103,6 +103,41 @@ func Test_SingleNodeNotReadyLive(t *testing.T) {
 	}
 }
 
+// Test_SingleNodeErrorFormat tests that the errors query parameter selects
+// which forms of a statement error are rendered.
+func Test_SingleNodeErrorFormat(t *testing.T) {
+	node := mustNewLeaderNode("node1")
+	defer node.Deprovision()
+
+	const v2 = `"error_v2":{"message":"no such table: bar","sqlite":{"code":1,"extended_code":1}}`
+	tests := []struct {
+		format     string
+		expExecute string
+		expQuery   string
+	}{
+		{"", `{"results":[{"error":"no such table: bar",` + v2 + `}]}`, `{"results":[{"error":"no such table: bar",` + v2 + `}]}`},
+		{"v1", `{"results":[{"error":"no such table: bar"}]}`, `{"results":[{"error":"no such table: bar"}]}`},
+		{"v2", `{"results":[{` + v2 + `}]}`, `{"results":[{` + v2 + `}]}`},
+		{"other", `{"results":[{"error":"no such table: bar",` + v2 + `}]}`, `{"results":[{"error":"no such table: bar",` + v2 + `}]}`},
+	}
+	for _, tt := range tests {
+		got, err := node.ExecuteErrorFormat(`INSERT INTO bar(name) VALUES("fiona")`, tt.format)
+		if err != nil {
+			t.Fatalf("failed to execute with errors=%q: %s", tt.format, err)
+		}
+		if got != tt.expExecute {
+			t.Fatalf("unexpected execute results for errors=%q\ngot: %s\nexp: %s", tt.format, got, tt.expExecute)
+		}
+		got, err = node.QueryErrorFormat(`SELECT * FROM bar`, tt.format)
+		if err != nil {
+			t.Fatalf("failed to query with errors=%q: %s", tt.format, err)
+		}
+		if got != tt.expQuery {
+			t.Fatalf("unexpected query results for errors=%q\ngot: %s\nexp: %s", tt.format, got, tt.expQuery)
+		}
+	}
+}
+
 func Test_SingleNode(t *testing.T) {
 	node := mustNewLeaderNode("node1")
 	defer node.Deprovision()

@@ -95,7 +95,7 @@ func Test_ServiceExecute(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to execute: %s", err.Error())
 	}
-	if exp, got := `[{"error":"no such table"}]`, asJSON(res); exp != got {
+	if exp, got := `[{"error":"no such table","error_v2":{"message":"no such table"}}]`, asJSON(res); exp != got {
 		t.Fatalf("unexpected results for execute, expected %s, got %s", exp, got)
 	}
 

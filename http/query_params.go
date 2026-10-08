@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/rqlite/rqlite/v10/command"
+	"github.com/rqlite/rqlite/v10/command/encoding"
 	"github.com/rqlite/rqlite/v10/command/proto"
 )
 
@@ -102,6 +103,13 @@ func (qp QueryParams) Associative() bool {
 // BlobArray returns true if the query parameters request BLOB array results.
 func (qp QueryParams) BlobArray() bool {
 	return qp.HasKey("blob_array")
+}
+
+// ErrorFormat returns the requested rendering of statement errors. "v1"
+// selects only the legacy "error" string, "v2" only the structured
+// "error_v2" object, and anything else, including no parameter, both.
+func (qp QueryParams) ErrorFormat() encoding.ErrorFormat {
+	return encoding.ErrorFormatFromString(qp["errors"])
 }
 
 // QualifyColumns returns true if the query parameters request table-qualified column names.

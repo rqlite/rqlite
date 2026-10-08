@@ -6,6 +6,7 @@ import (
 	"reflect"
 	"testing"
 
+	"github.com/rqlite/rqlite/v10/command/encoding"
 	"github.com/rqlite/rqlite/v10/command/proto"
 )
 
@@ -202,5 +203,30 @@ func Test_QueryParams_TrailingLogs(t *testing.T) {
 				t.Errorf("expected %v, got %v", tc.expected, n)
 			}
 		})
+	}
+}
+
+// Test_QueryParams_ErrorFormat tests parsing of the errors query parameter.
+func Test_QueryParams_ErrorFormat(t *testing.T) {
+	for _, tt := range []struct {
+		rawQuery string
+		exp      encoding.ErrorFormat
+	}{
+		{"", encoding.ErrorFormatBoth},
+		{"errors=v1", encoding.ErrorFormatV1},
+		{"errors=v2", encoding.ErrorFormatV2},
+		{"errors=V2", encoding.ErrorFormatV2},
+		{"errors=v3", encoding.ErrorFormatBoth},
+		{"errors=", encoding.ErrorFormatBoth},
+		{"errors", encoding.ErrorFormatBoth},
+	} {
+		req := &http.Request{URL: &url.URL{RawQuery: tt.rawQuery}}
+		qp, err := NewQueryParams(req)
+		if err != nil {
+			t.Fatalf("unexpected error for %q: %s", tt.rawQuery, err)
+		}
+		if got := qp.ErrorFormat(); got != tt.exp {
+			t.Fatalf("ErrorFormat for %q = %d, want %d", tt.rawQuery, got, tt.exp)
+		}
 	}
 }

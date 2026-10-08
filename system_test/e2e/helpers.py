@@ -514,7 +514,7 @@ class Node(object):
       time.sleep(0.1)
     return self.num_restores()
 
-  def query(self, statement, params=None, level='weak', pretty=False, text=False, associative=False):
+  def query(self, statement, params=None, level='weak', pretty=False, text=False, associative=False, errors=None):
     body = [statement]
     if params is not None:
       try:
@@ -528,13 +528,15 @@ class Node(object):
       reqParams['pretty'] = "yes"
     if associative:
       reqParams['associative'] = "yes"
+    if errors is not None:
+      reqParams['errors'] = errors
     r = requests.post(self._query_url(), params=reqParams, data=json.dumps([body]))
     raise_for_status(r)
     if text:
       return r.text
     return r.json()
 
-  def execute(self, statement, params=None):
+  def execute(self, statement, params=None, errors=None):
     body = [statement]
     if params is not None:
       try:
@@ -542,10 +544,13 @@ class Node(object):
       except TypeError:
         # Presumably not a list, so append as an object.
         body.append(params)
-    return self.execute_raw(json.dumps([body]))
+    reqParams = {}
+    if errors is not None:
+      reqParams['errors'] = errors
+    return self.execute_raw(json.dumps([body]), reqParams)
 
-  def execute_raw(self, body):
-    r = requests.post(self._execute_url(), data=body)
+  def execute_raw(self, body, reqParams=None):
+    r = requests.post(self._execute_url(), params=reqParams, data=body)
     raise_for_status(r)
     return r.json()
 

@@ -2586,3 +2586,74 @@ func newSQLAnalyzeHost(t *testing.T) string {
 	t.Cleanup(func() { s.Close() })
 	return fmt.Sprintf("http://%s", s.Addr().String())
 }
+
+// Test_ErrorFormatParam tests that the errors query parameter controls which
+// forms of a statement error the execute, query, and request endpoints render.
+func Test_ErrorFormatParam(t *testing.T) {
+	m := &MockStore{}
+	execErr := &command.ExecuteQueryResponse{
+		Result: &command.ExecuteQueryResponse_E{
+			E: &command.ExecuteResult{
+				Error: "no such table: foo",
+				ErrorV2: &command.Error{
+					Message: "no such table: foo",
+					Sqlite:  &command.SQLiteErrorCodes{Code: 1, ExtendedCode: 1},
+				},
+			},
+		},
+	}
+	m.executeFn = func(er *command.ExecuteRequest) ([]*command.ExecuteQueryResponse, uint64, error) {
+		return []*command.ExecuteQueryResponse{execErr}, 0, nil
+	}
+	m.queryFn = func(qr *command.QueryRequest) ([]*command.QueryRows, uint64, error) {
+		return []*command.QueryRows{{Error: "query timeout", ErrorV2: &command.Error{Message: "query timeout"}}}, 0, nil
+	}
+	m.requestFn = func(eqr *command.ExecuteQueryRequest) ([]*command.ExecuteQueryResponse, uint64, uint64, error) {
+		return []*command.ExecuteQueryResponse{execErr}, 0, 0, nil
+	}
+	c := &mockClusterService{}
+	s := New("127.0.0.1:0", m, c, proxy.New(m, c), nil)
+	if err := s.Start(); err != nil {
+		t.Fatalf("failed to start service")
+	}
+	defer s.Close()
+	host := fmt.Sprintf("http://%s", s.Addr().String())
+
+	const sqlite = `"error_v2":{"message":"no such table: foo","sqlite":{"code":1,"extended_code":1}}`
+	tests := []struct {
+		params     string
+		expExecute string
+		expQuery   string
+	}{
+		{"", `{"results":[{"error":"no such table: foo",` + sqlite + `}]}`, `{"results":[{"error":"query timeout","error_v2":{"message":"query timeout"}}]}`},
+		{"?errors=v1", `{"results":[{"error":"no such table: foo"}]}`, `{"results":[{"error":"query timeout"}]}`},
+		{"?errors=v2", `{"results":[{` + sqlite + `}]}`, `{"results":[{"error_v2":{"message":"query timeout"}}]}`},
+		{"?errors=other", `{"results":[{"error":"no such table: foo",` + sqlite + `}]}`, `{"results":[{"error":"query timeout","error_v2":{"message":"query timeout"}}]}`},
+	}
+	for _, tt := range tests {
+		for _, ep := range []struct {
+			path string
+			exp  string
+		}{
+			{"/db/execute", tt.expExecute},
+			{"/db/query", tt.expQuery},
+			{"/db/request", tt.expExecute},
+		} {
+			resp, err := http.Post(host+ep.path+tt.params, "application/json", strings.NewReader(`["Some SQL"]`))
+			if err != nil {
+				t.Fatalf("failed to make request to %s%s: %s", ep.path, tt.params, err)
+			}
+			body, err := io.ReadAll(resp.Body)
+			resp.Body.Close()
+			if err != nil {
+				t.Fatalf("failed to read body: %s", err)
+			}
+			if resp.StatusCode != http.StatusOK {
+				t.Fatalf("unexpected status for %s%s: %d", ep.path, tt.params, resp.StatusCode)
+			}
+			if got := string(body); got != ep.exp {
+				t.Fatalf("unexpected body for %s%s\ngot: %s\nexp: %s", ep.path, tt.params, got, ep.exp)
+			}
+		}
+	}
+}
