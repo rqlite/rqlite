@@ -15,11 +15,28 @@ var (
 	ErrTypesColumnsLengthViolation = errors.New("types and columns are different lengths")
 )
 
+// Error represents the structured form of a statement failure. Message is
+// always set. The SQLite result codes are present only when the failure
+// originated in SQLite.
+type Error struct {
+	Message      string `json:"message"`
+	Code         int32  `json:"code,omitempty"`
+	ExtendedCode int32  `json:"extended_code,omitempty"`
+	SystemErrno  int32  `json:"system_errno,omitempty"`
+}
+
+// ErrorResult represents a failed statement which produced no other output.
+type ErrorResult struct {
+	Error   string `json:"error"`
+	ErrorV2 *Error `json:"error_v2,omitempty"`
+}
+
 // Result represents the outcome of an operation that changes rows.
 type Result struct {
 	LastInsertID int64   `json:"last_insert_id,omitempty"`
 	RowsAffected int64   `json:"rows_affected,omitempty"`
 	Error        string  `json:"error,omitempty"`
+	ErrorV2      *Error  `json:"error_v2,omitempty"`
 	Time         float64 `json:"time,omitempty"`
 }
 
@@ -29,15 +46,17 @@ type Rows struct {
 	Types   []string `json:"types,omitempty"`
 	Values  [][]any  `json:"values,omitempty"`
 	Error   string   `json:"error,omitempty"`
+	ErrorV2 *Error   `json:"error_v2,omitempty"`
 	Time    float64  `json:"time,omitempty"`
 }
 
 // AssociativeRows represents the outcome of an operation that returns query data.
 type AssociativeRows struct {
-	Types map[string]string `json:"types,omitempty"`
-	Rows  []map[string]any  `json:"rows"`
-	Error string            `json:"error,omitempty"`
-	Time  float64           `json:"time,omitempty"`
+	Types   map[string]string `json:"types,omitempty"`
+	Rows    []map[string]any  `json:"rows"`
+	Error   string            `json:"error,omitempty"`
+	ErrorV2 *Error            `json:"error_v2,omitempty"`
+	Time    float64           `json:"time,omitempty"`
 }
 
 // ResultWithRows represents the outcome of an operation that changes rows, but also
@@ -69,20 +88,21 @@ func NewResultRowsFromExecuteQueryResponse(e *proto.ExecuteQueryResponse, bytesA
 	} else if qr := e.GetQ(); qr != nil {
 		return NewRowsFromQueryRows(qr, bytesAsArray)
 	} else if err := e.GetError(); err != "" {
-		return map[string]string{
-			"error": err,
-		}, nil
+		return &ErrorResult{Error: err}, nil
 	}
 	return nil, errors.New("no ExecuteResult, QueryRows, or Error")
 }
 
+// NewAssociativeResultRowsFromExecuteQueryResponse returns an associative API
+// object from an ExecuteQueryResponse.
 func NewAssociativeResultRowsFromExecuteQueryResponse(e *proto.ExecuteQueryResponse, bytesAsArray bool) (any, error) {
 	if er := e.GetE(); er != nil {
 		if er.Error != "" {
 			// A failed statement carries only its error. Omit the rows
 			// field so the output matches that of a top-level error.
-			return map[string]string{
-				"error": er.Error,
+			return &ErrorResult{
+				Error:   er.Error,
+				ErrorV2: NewErrorFromProto(er.ErrorV2),
 			}, nil
 		}
 		r, err := NewResultFromExecuteResult(er)
@@ -95,11 +115,23 @@ func NewAssociativeResultRowsFromExecuteQueryResponse(e *proto.ExecuteQueryRespo
 	} else if qr := e.GetQ(); qr != nil {
 		return NewAssociativeRowsFromQueryRows(qr, bytesAsArray)
 	} else if err := e.GetError(); err != "" {
-		return map[string]string{
-			"error": err,
-		}, nil
+		return &ErrorResult{Error: err}, nil
 	}
 	return nil, errors.New("no ExecuteResult, QueryRows, or Error")
+}
+
+// NewErrorFromProto returns an API Error object from a proto Error, or nil
+// if there is no error.
+func NewErrorFromProto(e *proto.Error) *Error {
+	if e == nil {
+		return nil
+	}
+	return &Error{
+		Message:      e.Message,
+		Code:         e.Code,
+		ExtendedCode: e.ExtendedCode,
+		SystemErrno:  e.SystemErrno,
+	}
 }
 
 // NewResultFromExecuteResult returns an API Result object from an ExecuteResult.
@@ -108,6 +140,7 @@ func NewResultFromExecuteResult(e *proto.ExecuteResult) (*Result, error) {
 		LastInsertID: e.LastInsertId,
 		RowsAffected: e.RowsAffected,
 		Error:        e.Error,
+		ErrorV2:      NewErrorFromProto(e.ErrorV2),
 		Time:         e.Time,
 	}, nil
 }
@@ -127,6 +160,7 @@ func NewRowsFromQueryRows(q *proto.QueryRows, bytesAsArray bool) (*Rows, error) 
 		Types:   q.Types,
 		Values:  values,
 		Error:   q.Error,
+		ErrorV2: NewErrorFromProto(q.ErrorV2),
 		Time:    q.Time,
 	}, nil
 }
@@ -157,10 +191,11 @@ func NewAssociativeRowsFromQueryRows(q *proto.QueryRows, bytesAsArray bool) (*As
 	}
 
 	return &AssociativeRows{
-		Types: types,
-		Rows:  rows,
-		Error: q.Error,
-		Time:  q.Time,
+		Types:   types,
+		Rows:    rows,
+		Error:   q.Error,
+		ErrorV2: NewErrorFromProto(q.ErrorV2),
+		Time:    q.Time,
 	}, nil
 }
 

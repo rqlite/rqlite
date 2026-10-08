@@ -144,14 +144,14 @@ func Test_StoreClientSideBySide(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to query on local: %s", err.Error())
 	}
-	if exp, got := `[{"error":"no such table: qux"}]`, asJSON(rows); exp != got {
+	if exp, got := `[{"error":"no such table: qux","error_v2":{"message":"no such table: qux","code":1,"extended_code":1}}]`, asJSON(rows); exp != got {
 		t.Fatalf("unexpected results, exp %s, got %s", exp, got)
 	}
 	results, _, _, err = node.Store.Request(context.Background(), executeQueryRequestFromString(`SELECT * FROM qux`))
 	if err != nil {
 		t.Fatalf("failed to request on local: %s", err.Error())
 	}
-	if exp, got := `[{"error":"no such table: qux"}]`, asJSON(results); exp != got {
+	if exp, got := `[{"error":"no such table: qux","error_v2":{"message":"no such table: qux","code":1,"extended_code":1}}]`, asJSON(results); exp != got {
 		t.Fatalf("unexpected results, exp %s, got %s", exp, got)
 	}
 	// Statements causing errors are considered read-write by SQLite, so
@@ -161,14 +161,14 @@ func Test_StoreClientSideBySide(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to query via remote: %s", err.Error())
 	}
-	if exp, got := `[{"error":"no such table: qux"}]`, asJSON(rows); exp != got {
+	if exp, got := `[{"error":"no such table: qux","error_v2":{"message":"no such table: qux","code":1,"extended_code":1}}]`, asJSON(rows); exp != got {
 		t.Fatalf("unexpected results, exp %s, got %s", exp, got)
 	}
 	results, _, _, err = client.Request(context.Background(), executeQueryRequestFromString(`SELECT * FROM qux`), leaderAddr, NO_CREDS, shortWait, noRetries)
 	if err != nil {
 		t.Fatalf("failed to query via remote: %s", err.Error())
 	}
-	if exp, got := `[{"error":"no such table: qux"}]`, asJSON(results); exp != got {
+	if exp, got := `[{"error":"no such table: qux","error_v2":{"message":"no such table: qux","code":1,"extended_code":1}}]`, asJSON(results); exp != got {
 		t.Fatalf("unexpected results, exp %s, got %s", exp, got)
 	}
 }

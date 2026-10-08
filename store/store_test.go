@@ -1300,7 +1300,7 @@ func Test_SingleNodeRequest(t *testing.T) {
 				`SELECT COUNT(*) FROM foo WHERE name='fiona'`,
 				`SELECT * FROM foo WHERE name='declan'`,
 			},
-			expected:    `[{"last_insert_id":88,"rows_affected":1,"rows":null},{"error":"near \"nonsense\": syntax error"},{"types":{"COUNT(*)":"integer"},"rows":[{"COUNT(*)":3}]},{"types":{"id":"integer","name":"text"},"rows":[{"id":66,"name":"declan"}]}]`,
+			expected:    `[{"last_insert_id":88,"rows_affected":1,"rows":null},{"error":"near \"nonsense\": syntax error","error_v2":{"message":"near \"nonsense\": syntax error","code":1,"extended_code":1}},{"types":{"COUNT(*)":"integer"},"rows":[{"COUNT(*)":3}]},{"types":{"id":"integer","name":"text"},"rows":[{"id":66,"name":"declan"}]}]`,
 			associative: true,
 		},
 	}
@@ -1373,7 +1373,7 @@ func Test_SingleNodeRequestTx(t *testing.T) {
 				`INSERT INTO foo(id, name) VALUES(1, "fiona")`,
 				`SELECT COUNT(*) FROM foo`,
 			},
-			expected: `[{"last_insert_id":2,"rows_affected":1},{"error":"UNIQUE constraint failed: foo.id"}]`,
+			expected: `[{"last_insert_id":2,"rows_affected":1},{"error":"UNIQUE constraint failed: foo.id","error_v2":{"message":"UNIQUE constraint failed: foo.id","code":19,"extended_code":1555}}]`,
 			tx:       true,
 		},
 		{
@@ -1556,7 +1556,7 @@ func Test_SingleNodeFK(t *testing.T) {
 	}
 
 	res, _, _ := s.Execute(context.Background(), executeRequestFromString("INSERT INTO bar(fooid) VALUES(1)", false, false))
-	if got, exp := asJSON(res), `[{"error":"FOREIGN KEY constraint failed"}]`; exp != got {
+	if got, exp := asJSON(res), `[{"error":"FOREIGN KEY constraint failed","error_v2":{"message":"FOREIGN KEY constraint failed","code":19,"extended_code":787}}]`; exp != got {
 		t.Fatalf("unexpected results for execute\nexp: %s\ngot: %s", exp, got)
 	}
 }
@@ -2331,7 +2331,7 @@ COMMIT;
 	if err != nil {
 		t.Fatalf("failed to query single node: %s", err.Error())
 	}
-	if exp, got := `{"error":"no such table: bar"}`, asJSON(r[0]); exp != got {
+	if exp, got := `{"error":"no such table: bar","error_v2":{"message":"no such table: bar","code":1,"extended_code":1}}`, asJSON(r[0]); exp != got {
 		t.Fatalf("unexpected results for query\nexp: %s\ngot: %s", exp, got)
 	}
 }
@@ -2372,7 +2372,7 @@ COMMIT;
 	if err != nil {
 		t.Fatalf("failed to query single node: %s", err.Error())
 	}
-	if exp, got := `[{"error":"no such table: bar"}]`, asJSON(r); exp != got {
+	if exp, got := `[{"error":"no such table: bar","error_v2":{"message":"no such table: bar","code":1,"extended_code":1}}]`, asJSON(r); exp != got {
 		t.Fatalf("unexpected results for query\nexp: %s\ngot: %s", exp, got)
 	}
 
@@ -2551,7 +2551,7 @@ COMMIT;
 	if err != nil {
 		t.Fatalf("failed to query single node: %s", err.Error())
 	}
-	if exp, got := `{"error":"no such table: bar"}`, asJSON(r[0]); exp != got {
+	if exp, got := `{"error":"no such table: bar","error_v2":{"message":"no such table: bar","code":1,"extended_code":1}}`, asJSON(r[0]); exp != got {
 		t.Fatalf("unexpected results for query\nexp: %s\ngot: %s", exp, got)
 	}
 
