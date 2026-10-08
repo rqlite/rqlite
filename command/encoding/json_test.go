@@ -529,6 +529,30 @@ func Test_MarshalExecuteQueryResponse(t *testing.T) {
 					},
 				},
 				{
+					Result: &proto.ExecuteQueryResponse_E{
+						E: &proto.ExecuteResult{
+							Error: "unique constraint failed",
+							ErrorV2: &proto.Error{
+								Message: "unique constraint failed",
+								Sqlite: &proto.SQLiteErrorCodes{
+									Code:         19,
+									ExtendedCode: 2067,
+								},
+							},
+						},
+					},
+				},
+				{
+					Result: &proto.ExecuteQueryResponse_Q{
+						Q: &proto.QueryRows{
+							Error: "query timeout",
+							ErrorV2: &proto.Error{
+								Message: "query timeout",
+							},
+						},
+					},
+				},
+				{
 					Result: &proto.ExecuteQueryResponse_Q{
 						Q: &proto.QueryRows{
 							Columns: []string{"column1", "column2"},
@@ -562,7 +586,7 @@ func Test_MarshalExecuteQueryResponse(t *testing.T) {
 					},
 				},
 			},
-			expected: `[{"last_insert_id":123,"rows_affected":456},{"error":"unique constraint failed"},{"error":"not null constraint failed"},{"columns":["column1","column2"],"types":["int","text"],"values":[[456,"declan"]]},{"columns":["column1","column2"],"types":["int","text"]}]`,
+			expected: `[{"last_insert_id":123,"rows_affected":456},{"error":"unique constraint failed"},{"error":"not null constraint failed"},{"error":"unique constraint failed","error_v2":{"message":"unique constraint failed","sqlite":{"code":19,"extended_code":2067}}},{"error":"query timeout","error_v2":{"message":"query timeout"}},{"columns":["column1","column2"],"types":["int","text"],"values":[[456,"declan"]]},{"columns":["column1","column2"],"types":["int","text"]}]`,
 		},
 	}
 
@@ -658,6 +682,30 @@ func Test_MarshalExecuteQueryAssociativeResponse(t *testing.T) {
 					},
 				},
 				{
+					Result: &proto.ExecuteQueryResponse_E{
+						E: &proto.ExecuteResult{
+							Error: "unique constraint failed",
+							ErrorV2: &proto.Error{
+								Message: "unique constraint failed",
+								Sqlite: &proto.SQLiteErrorCodes{
+									Code:         19,
+									ExtendedCode: 2067,
+								},
+							},
+						},
+					},
+				},
+				{
+					Result: &proto.ExecuteQueryResponse_Q{
+						Q: &proto.QueryRows{
+							Error: "query timeout",
+							ErrorV2: &proto.Error{
+								Message: "query timeout",
+							},
+						},
+					},
+				},
+				{
 					Result: &proto.ExecuteQueryResponse_Q{
 						Q: &proto.QueryRows{
 							Columns: []string{"column1", "column2"},
@@ -700,7 +748,7 @@ func Test_MarshalExecuteQueryAssociativeResponse(t *testing.T) {
 					},
 				},
 			},
-			expected: `[{"last_insert_id":123,"rows_affected":456,"rows":null},{"error":"unique constraint failed"},{"error":"not null constraint failed"},{"types":{"column1":"int","column2":"text"},"rows":[{"column1":456,"column2":"declan"}]},{"types":{"aaa":"int","bbb":"text"},"rows":[]},{"types":{"ccc":"int","ddd":"text"},"rows":[]}]`,
+			expected: `[{"last_insert_id":123,"rows_affected":456,"rows":null},{"error":"unique constraint failed"},{"error":"not null constraint failed"},{"error":"unique constraint failed","error_v2":{"message":"unique constraint failed","sqlite":{"code":19,"extended_code":2067}}},{"rows":[],"error":"query timeout","error_v2":{"message":"query timeout"}},{"types":{"column1":"int","column2":"text"},"rows":[{"column1":456,"column2":"declan"}]},{"types":{"aaa":"int","bbb":"text"},"rows":[]},{"types":{"ccc":"int","ddd":"text"},"rows":[]}]`,
 		},
 	}
 

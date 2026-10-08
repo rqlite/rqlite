@@ -68,7 +68,7 @@ func Test_DefaultDriver(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to query empty table: %s", err.Error())
 	}
-	if exp, got := `[{"error":"no such table: foo"}]`, asJSON(q); exp != got {
+	if exp, got := `[{"error":"no such table: foo","error_v2":{"message":"no such table: foo","sqlite":{"code":1,"extended_code":1}}}]`, asJSON(q); exp != got {
 		t.Fatalf("unexpected results for query, expected %s, got %s", exp, got)
 	}
 

@@ -1,3 +1,9 @@
+## v10.6.0 (October 1st 2026)
+This release features an addition to the API. In the event of an error there is a new field, named `error_v2`, which may contain numeric SQLite error codes. Clients accessing the API can now identify errors in much more robust manner.
+
+### New features
+- [PR #2860](https://github.com/rqlite/rqlite/pull/2860): New `error_v2` field in API responses which communicates numeric error codes.
+
 ## v10.5.3 (October 7th 2026)
 ### Implementation changes and bug fixes
 - [PR #2844](https://github.com/rqlite/rqlite/pull/2844): Unit-test WAL-related compile-time options, to ensure SQLite operates as per rqlite needs.

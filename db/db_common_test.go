@@ -109,7 +109,7 @@ func Test_DB_TableNotExist(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to query empty table: %s", err.Error())
 	}
-	if exp, got := `[{"error":"no such table: foo"}]`, asJSON(q); exp != got {
+	if exp, got := `[{"error":"no such table: foo","error_v2":{"message":"no such table: foo","sqlite":{"code":1,"extended_code":1}}}]`, asJSON(q); exp != got {
 		t.Fatalf("unexpected results for query, expected %s, got %s", exp, got)
 	}
 }
@@ -195,7 +195,7 @@ func Test_SQL_Comments(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to request empty statements: %s", err.Error())
 	}
-	if exp, got := `[{},{"error":"no such table: qux"}]`, asJSON(req); exp != got {
+	if exp, got := `[{},{"error":"no such table: qux","error_v2":{"message":"no such table: qux","sqlite":{"code":1,"extended_code":1}}}]`, asJSON(req); exp != got {
 		t.Fatalf(`unexpected results for request exp: %s got: %s`, exp, got)
 	}
 }
@@ -734,7 +734,7 @@ func Test_DB_STRICT(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to insert record: %s", err.Error())
 	}
-	if exp, got := `[{"error":"cannot store TEXT value in BLOB column foo.data"}]`, asJSON(res); exp != got {
+	if exp, got := `[{"error":"cannot store TEXT value in BLOB column foo.data","error_v2":{"message":"cannot store TEXT value in BLOB column foo.data","sqlite":{"code":19,"extended_code":3091}}}]`, asJSON(res); exp != got {
 		t.Fatalf("unexpected results for query\nexp: %s\ngot: %s", exp, got)
 	}
 
@@ -800,7 +800,7 @@ func Test_DB_ReadOnlyStatements(t *testing.T) {
 
 	// Test that statements are trapped as expected as attempts to change database on read-only
 	// connections.
-	expROResp := `[{"error":"attempt to change database via query operation"}]`
+	expROResp := `[{"error":"attempt to change database via query operation","error_v2":{"message":"attempt to write a readonly database","sqlite":{"code":8,"extended_code":8}}}]`
 	tests := []struct {
 		query   string
 		expResp string
@@ -1320,7 +1320,7 @@ func Test_DB_SimpleFailingStatements_Execute(t *testing.T) {
 	if err != nil {
 		t.Fatalf("error executing insertion into nonexistent table: %s", err.Error())
 	}
-	if exp, got := `[{"error":"no such table: foo"}]`, asJSON(r); exp != got {
+	if exp, got := `[{"error":"no such table: foo","error_v2":{"message":"no such table: foo","sqlite":{"code":1,"extended_code":1}}}]`, asJSON(r); exp != got {
 		t.Fatalf("unexpected results for query\nexp: %s\ngot: %s", exp, got)
 	}
 
@@ -1335,7 +1335,7 @@ func Test_DB_SimpleFailingStatements_Execute(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to attempt creation of duplicate table: %s", err.Error())
 	}
-	if exp, got := `[{"error":"table foo already exists"}]`, asJSON(r); exp != got {
+	if exp, got := `[{"error":"table foo already exists","error_v2":{"message":"table foo already exists","sqlite":{"code":1,"extended_code":1}}}]`, asJSON(r); exp != got {
 		t.Fatalf("unexpected results for query\nexp: %s\ngot: %s", exp, got)
 	}
 
@@ -1350,13 +1350,13 @@ func Test_DB_SimpleFailingStatements_Execute(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to attempt duplicate record insertion: %s", err.Error())
 	}
-	if exp, got := `[{"error":"UNIQUE constraint failed: foo.id"}]`, asJSON(r); exp != got {
+	if exp, got := `[{"error":"UNIQUE constraint failed: foo.id","error_v2":{"message":"UNIQUE constraint failed: foo.id","sqlite":{"code":19,"extended_code":1555}}}]`, asJSON(r); exp != got {
 		t.Fatalf("unexpected results for query\nexp: %s\ngot: %s", exp, got)
 	}
 
 	r, err = db.ExecuteStringStmt(`utter nonsense`)
 	if err != nil {
-		if exp, got := `[{"error":"near \"utter\": syntax error"}]`, asJSON(r); exp != got {
+		if exp, got := `[{"error":"near \"utter\": syntax error","error_v2":{"message":"near \"utter\": syntax error","sqlite":{"code":1,"extended_code":1}}}]`, asJSON(r); exp != got {
 			t.Fatalf("unexpected results for query\nexp: %s\ngot: %s", exp, got)
 		}
 	}
@@ -1371,7 +1371,7 @@ func Test_DB_SimpleFailingStatements_Query(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to attempt query of nonexistent table: %s", err.Error())
 	}
-	if exp, got := `[{"error":"no such table: bar"}]`, asJSON(ro); exp != got {
+	if exp, got := `[{"error":"no such table: bar","error_v2":{"message":"no such table: bar","sqlite":{"code":1,"extended_code":1}}}]`, asJSON(ro); exp != got {
 		t.Fatalf("unexpected results for query\nexp: %s\ngot: %s", exp, got)
 	}
 
@@ -1379,12 +1379,12 @@ func Test_DB_SimpleFailingStatements_Query(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to attempt nonsense query: %s", err.Error())
 	}
-	if exp, got := `[{"error":"near \"SELECTxx\": syntax error"}]`, asJSON(ro); exp != got {
+	if exp, got := `[{"error":"near \"SELECTxx\": syntax error","error_v2":{"message":"near \"SELECTxx\": syntax error","sqlite":{"code":1,"extended_code":1}}}]`, asJSON(ro); exp != got {
 		t.Fatalf("unexpected results for query\nexp: %s\ngot: %s", exp, got)
 	}
 	ro, err = db.QueryStringStmt(`utter nonsense`)
 	if err != nil {
-		if exp, got := `[{"error":"near \"utter\": syntax error"}]`, asJSON(ro); exp != got {
+		if exp, got := `[{"error":"near \"utter\": syntax error","error_v2":{"message":"near \"utter\": syntax error","sqlite":{"code":1,"extended_code":1}}}]`, asJSON(ro); exp != got {
 			t.Fatalf("unexpected results for query\nexp: %s\ngot: %s", exp, got)
 		}
 	}
@@ -1400,7 +1400,7 @@ func Test_DB_SimpleFailingStatements_Query(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to attempt query of table: %s", err.Error())
 	}
-	if exp, got := `[{"error":"near \"RETURNING\": syntax error"}]`, asJSON(ro); exp != got {
+	if exp, got := `[{"error":"near \"RETURNING\": syntax error","error_v2":{"message":"near \"RETURNING\": syntax error","sqlite":{"code":1,"extended_code":1}}}]`, asJSON(ro); exp != got {
 		t.Fatalf("unexpected results for query\nexp: %s\ngot: %s", exp, got)
 	}
 }
@@ -1452,7 +1452,7 @@ func Test_DB_WriteOnQueryDatabaseShouldFail(t *testing.T) {
 	if err != nil {
 		t.Fatalf("error attempting read-only write test: %s", err)
 	}
-	if exp, got := `[{"error":"attempt to change database via query operation"}]`, asJSON(ro); exp != got {
+	if exp, got := `[{"error":"attempt to change database via query operation","error_v2":{"message":"attempt to write a readonly database","sqlite":{"code":8,"extended_code":8}}}]`, asJSON(ro); exp != got {
 		t.Fatalf("unexpected results for query\nexp: %s\ngot: %s", exp, got)
 	}
 
@@ -1904,7 +1904,7 @@ func Test_DB_SimpleRequest(t *testing.T) {
 				`SELECT COUNT(*) FROM foo`,
 				`SELECT * FROM bar`,
 			},
-			exp: `[{"last_insert_id":4,"rows_affected":1},{"columns":["COUNT(*)"],"types":["integer"],"values":[[4]]},{"error":"no such table: bar"}]`,
+			exp: `[{"last_insert_id":4,"rows_affected":1},{"columns":["COUNT(*)"],"types":["integer"],"values":[[4]]},{"error":"no such table: bar","error_v2":{"message":"no such table: bar","sqlite":{"code":1,"extended_code":1}}}]`,
 		},
 	}
 
@@ -2120,7 +2120,7 @@ func Test_DB_SimpleRequestTx(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to make request: %s", err.Error())
 	}
-	if exp, got := `[{"last_insert_id":2,"rows_affected":1},{"error":"UNIQUE constraint failed: foo.id"}]`, asJSON(r); exp != got {
+	if exp, got := `[{"last_insert_id":2,"rows_affected":1},{"error":"UNIQUE constraint failed: foo.id","error_v2":{"message":"UNIQUE constraint failed: foo.id","sqlite":{"code":19,"extended_code":1555}}}]`, asJSON(r); exp != got {
 		t.Fatalf("unexpected results for request\nexp: %s\ngot: %s", exp, got)
 	}
 }
@@ -2142,7 +2142,7 @@ func Test_DB_RequestTxPrepareError(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to make request: %s", err)
 	}
-	if exp, got := `[{"last_insert_id":1,"rows_affected":1},{"error":"no such table: missing"}]`, asJSON(r); exp != got {
+	if exp, got := `[{"last_insert_id":1,"rows_affected":1},{"error":"no such table: missing","error_v2":{"message":"no such table: missing","sqlite":{"code":1,"extended_code":1}}}]`, asJSON(r); exp != got {
 		t.Fatalf("unexpected results for request\nexp: %s\ngot: %s", exp, got)
 	}
 
@@ -2171,7 +2171,7 @@ func Test_DB_RequestPrepareError(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to make request: %s", err)
 	}
-	if exp, got := `[{"last_insert_id":1,"rows_affected":1},{"error":"no such table: missing"},{"last_insert_id":2,"rows_affected":1}]`, asJSON(r); exp != got {
+	if exp, got := `[{"last_insert_id":1,"rows_affected":1},{"error":"no such table: missing","error_v2":{"message":"no such table: missing","sqlite":{"code":1,"extended_code":1}}},{"last_insert_id":2,"rows_affected":1}]`, asJSON(r); exp != got {
 		t.Fatalf("unexpected results for request\nexp: %s\ngot: %s", exp, got)
 	}
 
@@ -2239,7 +2239,7 @@ func Test_DB_UniqueConstraints(t *testing.T) {
 	if err != nil {
 		t.Fatalf("error executing insertion into table: %s", err.Error())
 	}
-	if exp, got := `[{"error":"UNIQUE constraint failed: foo.name"}]`, asJSON(r); exp != got {
+	if exp, got := `[{"error":"UNIQUE constraint failed: foo.name","error_v2":{"message":"UNIQUE constraint failed: foo.name","sqlite":{"code":19,"extended_code":2067}}}]`, asJSON(r); exp != got {
 		t.Fatalf("unexpected results for INSERT\nexp: %s\ngot: %s", exp, got)
 	}
 }
@@ -2274,7 +2274,7 @@ func Test_DB_PartialFail(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to insert records: %s", err.Error())
 	}
-	if exp, got := `[{"last_insert_id":1,"rows_affected":1},{"last_insert_id":2,"rows_affected":1},{"error":"UNIQUE constraint failed: foo.id"},{"last_insert_id":4,"rows_affected":1}]`, asJSON(r); exp != got {
+	if exp, got := `[{"last_insert_id":1,"rows_affected":1},{"last_insert_id":2,"rows_affected":1},{"error":"UNIQUE constraint failed: foo.id","error_v2":{"message":"UNIQUE constraint failed: foo.id","sqlite":{"code":19,"extended_code":1555}}},{"last_insert_id":4,"rows_affected":1}]`, asJSON(r); exp != got {
 		t.Fatalf("unexpected results for query\nexp: %s\ngot: %s", exp, got)
 	}
 	ro, err := db.QueryStringStmt(`SELECT * FROM foo`)
@@ -2381,8 +2381,8 @@ func Test_DB_Dump(t *testing.T) {
 		want   string
 	}{
 		{"full dump", nil, expRows},
-		{"SQL injection", []string{"foo;DROP TABLE Album"}, `[{"error":"no such table: Album"}]`},
-		{"no such table", []string{"foo"}, `[{"error":"no such table: Album"}]`},
+		{"SQL injection", []string{"foo;DROP TABLE Album"}, `[{"error":"no such table: Album","error_v2":{"message":"no such table: Album","sqlite":{"code":1,"extended_code":1}}}]`},
+		{"no such table", []string{"foo"}, `[{"error":"no such table: Album","error_v2":{"message":"no such table: Album","sqlite":{"code":1,"extended_code":1}}}]`},
 		{"single table", []string{"Album"}, expRows},
 	}
 
