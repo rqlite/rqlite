@@ -57,7 +57,7 @@ This release features an addition to the API. In the event of an error there is 
 ## v10.3.7 (September 28th 2026)
 This release addresses a gap in the role-based access permissions related to [change-data-capture (CDC)](https://rqlite.io/docs/guides/cdc/) handling.
 
-If you run a cluster where the Raft port is accesible by other systems you should upgrade (though that is not recommended production practise in the first place -- see the [rqlite Security guide](https://rqlite.io/docs/guides/security/)). If you are running CDC with Role-based access you may need to reconfigure your [user-level permissions](https://rqlite.io/docs/guides/security/#user-level-permissions) to set the new CDC permission and set the `-cdc-as` flag.
+If you run a cluster where the Raft port is accessible by other systems you should upgrade (though that is not recommended production practice in the first place -- see the [rqlite Security guide](https://rqlite.io/docs/guides/security/)). If you are running CDC with Role-based access you may need to reconfigure your [user-level permissions](https://rqlite.io/docs/guides/security/#user-level-permissions) to set the new CDC permission and set the `-cdc-as` flag.
 
 ### Implementation changes and bug fixes
 - [PR #2822](https://github.com/rqlite/rqlite/pull/2822): Backup calls now return number of bytes written.
@@ -541,14 +541,14 @@ There are no changes in v9.2.3 relative to v9.2.2 in terms of rqlite functionali
 ## v9.2.0 (October 31st 2025)
 This release introduces new support for Associative responses when using the `RETURNING` keyword.
 
-**Most importantly this release optimizes the startup process**. Previously rqlite startup times grew linearily with the amount of SQLite data being managed by the rqlite node. If the data set was large (100s MBs and greater) startup times became noticeable. With this release startup times are not dependant on data set size, and even systems with GBs of data will start almost instantly.
+**Most importantly this release optimizes the startup process**. Previously rqlite startup times grew linearly with the amount of SQLite data being managed by the rqlite node. If the data set was large (100s MBs and greater) startup times became noticeable. With this release startup times are not dependent on data set size, and even systems with GBs of data will start almost instantly.
 
 ### New features
 - [PR #2373](https://github.com/rqlite/rqlite/pull/2373): Support _Associative_ response form on Execute endpoint, fixes issue [#2372](https://github.com/rqlite/rqlite/issues/2372).
 
 ### Implementation changes and bug fixes
 - [PR #2374](https://github.com/rqlite/rqlite/pull/2374): Remove racy functions which interact with Raft log indexes.
-- [PR #2371](https://github.com/rqlite/rqlite/pull/2371): Don't restore snaphot from Raft on startup if possible, fixes issue [#1496](https://github.com/rqlite/rqlite/issues/1496).
+- [PR #2371](https://github.com/rqlite/rqlite/pull/2371): Don't restore snapshot from Raft on startup if possible, fixes issue [#1496](https://github.com/rqlite/rqlite/issues/1496).
 - [PR #2375](https://github.com/rqlite/rqlite/pull/2375): Extensive testing of not restoring from Raft on startup.
 - [PR #2376](https://github.com/rqlite/rqlite/pull/2376): Remove never-used applied_index file.
 
@@ -1012,7 +1012,7 @@ This release corrects the implementation of Linearizable reads so they implement
 
 ## v8.31.0 (September 24th 2024)
 ### New features
-- [PR #1910](https://github.com/rqlite/rqlite/pull/1910): Support for byte arays and hex-encoded values as Parameterized values.
+- [PR #1910](https://github.com/rqlite/rqlite/pull/1910): Support for byte arrays and hex-encoded values as Parameterized values.
 
 ### Implementation changes and bug fixes
 - [PR #1906](https://github.com/rqlite/rqlite/pull/1906): Exit if _Full Needed_ flag cannot be set.
@@ -1176,7 +1176,7 @@ There are no changes in this release relative to v8.26.4, but now the [Linux rel
 - [PR #1808](https://github.com/rqlite/rqlite/pull/1808): Associate "owners" with Check-and-Sets. See issue [#1807](https://github.com/rqlite/rqlite/issues/1807).
 
 ## v8.26.0 (June 14th 2024)
-This release sees the addition of a new API, which allows users to trigger a Raft snapshot and Log Truncation (see the [Raft paper](https://raft.github.io/raft.pdf) for an explanation). This is mostly useful for test purposes, but may have operational value occassionally.
+This release sees the addition of a new API, which allows users to trigger a Raft snapshot and Log Truncation (see the [Raft paper](https://raft.github.io/raft.pdf) for an explanation). This is mostly useful for test purposes, but may have operational value occasionally.
 
 ### New features
 - [PR #1804](https://github.com/rqlite/rqlite/pull/1804): Raft snapshots can now be triggered via a HTTP API request.
@@ -1665,7 +1665,7 @@ This release fixes an edge case issue during restore-from-SQLite. It's possible 
 - [PR #1458](https://github.com/rqlite/rqlite/pull/1458): Perform full snapshot after chunked load.
 
 ## v8.0.0 (December 5th 2023)
-This release introduces support for much larger data sets. Previously the [Raft snapshotting](https://raft.github.io/) process became more memory intensive and time-consuming as the SQLite database became larger. This set an practical upper limit on the size of the SQLite database. With the 8.0 release rqlite has been fundamentally redesigned such that snapshotting consumes approximately the same amount of resources, regardless of the size of the SQLite database.
+This release introduces support for much larger data sets. Previously the [Raft snapshotting](https://raft.github.io/) process became more memory intensive and time-consuming as the SQLite database became larger. This set a practical upper limit on the size of the SQLite database. With the 8.0 release rqlite has been fundamentally redesigned such that snapshotting consumes approximately the same amount of resources, regardless of the size of the SQLite database.
 
 This release also eases operations, as well as adding new features and bug fixes.
 
@@ -1872,7 +1872,7 @@ This release introduces the ability for a node to automatically recover from a b
 - [PR #1227](https://github.com/rqlite/rqlite/pull/1227): Upgrade dependencies, including moving to [Hashicorp Raft 1.5](https://github.com/hashicorp/raft/pull/541).
 
 ## v7.14.2 (April 7th 2023)
-This release is the first to includes various bug fixes and optimizations thanks to running much of the code through [Chat GPT-4](https://openai.com/product/gpt-4), most of which are not explicitly listed in the [CHANGELOG](https://github.com/rqlite/rqlite/edit/master/CHANGELOG.md), but you can check the commit history for details. Future releases of rqlite will probably include more such changes.
+This release is the first to include various bug fixes and optimizations thanks to running much of the code through [Chat GPT-4](https://openai.com/product/gpt-4), most of which are not explicitly listed in the [CHANGELOG](https://github.com/rqlite/rqlite/edit/master/CHANGELOG.md), but you can check the commit history for details. Future releases of rqlite will probably include more such changes.
 ### Implementation changes and bug fixes
 - [PR #1179](https://github.com/rqlite/rqlite/pull/1179): go mod updates.
 - [PR #1180](https://github.com/rqlite/rqlite/pull/1180): Support large numbers in requests.
