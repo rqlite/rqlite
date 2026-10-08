@@ -124,12 +124,12 @@ func Test_SingleNode(t *testing.T) {
 		},
 		{
 			stmt:     `INSERT INTO bar(name) VALUES("fiona")`,
-			expected: `{"results":[{"error":"no such table: bar","error_v2":{"message":"no such table: bar","code":1,"extended_code":1}}]}`,
+			expected: `{"results":[{"error":"no such table: bar","error_v2":{"message":"no such table: bar","sqlite":{"code":1,"extended_code":1}}}]}`,
 			execute:  true,
 		},
 		{
 			stmt:     `INSERT blah blah`,
-			expected: `{"results":[{"error":"near \"blah\": syntax error","error_v2":{"message":"near \"blah\": syntax error","code":1,"extended_code":1}}]}`,
+			expected: `{"results":[{"error":"near \"blah\": syntax error","error_v2":{"message":"near \"blah\": syntax error","sqlite":{"code":1,"extended_code":1}}}]}`,
 			execute:  true,
 		},
 		{
@@ -139,7 +139,7 @@ func Test_SingleNode(t *testing.T) {
 		},
 		{
 			stmt:     `DROP TABLE bar`,
-			expected: `{"results":[{"error":"no such table: bar","error_v2":{"message":"no such table: bar","code":1,"extended_code":1}}]}`,
+			expected: `{"results":[{"error":"no such table: bar","error_v2":{"message":"no such table: bar","sqlite":{"code":1,"extended_code":1}}}]}`,
 			execute:  true,
 		},
 		{
@@ -187,12 +187,12 @@ func Test_SingleNode_ExecuteQueryRaw(t *testing.T) {
 		},
 		{
 			stmt:     `INSERT INTO bar(name) VALUES("fiona")`,
-			expected: `{"results":[{"error":"no such table: bar","error_v2":{"message":"no such table: bar","code":1,"extended_code":1}}]}`,
+			expected: `{"results":[{"error":"no such table: bar","error_v2":{"message":"no such table: bar","sqlite":{"code":1,"extended_code":1}}}]}`,
 			execute:  true,
 		},
 		{
 			stmt:     `INSERT blah blah`,
-			expected: `{"results":[{"error":"near \"blah\": syntax error","error_v2":{"message":"near \"blah\": syntax error","code":1,"extended_code":1}}]}`,
+			expected: `{"results":[{"error":"near \"blah\": syntax error","error_v2":{"message":"near \"blah\": syntax error","sqlite":{"code":1,"extended_code":1}}}]}`,
 			execute:  true,
 		},
 		{
@@ -306,11 +306,11 @@ func Test_SingleNodeRequest(t *testing.T) {
 		},
 		{
 			stmt:     `INSERT INTO bar(name) VALUES("fiona")`,
-			expected: `{"results":[{"error":"no such table: bar","error_v2":{"message":"no such table: bar","code":1,"extended_code":1}}]}`,
+			expected: `{"results":[{"error":"no such table: bar","error_v2":{"message":"no such table: bar","sqlite":{"code":1,"extended_code":1}}}]}`,
 		},
 		{
 			stmt:     `INSERT blah blah`,
-			expected: `{"results":[{"error":"near \"blah\": syntax error","error_v2":{"message":"near \"blah\": syntax error","code":1,"extended_code":1}}]}`,
+			expected: `{"results":[{"error":"near \"blah\": syntax error","error_v2":{"message":"near \"blah\": syntax error","sqlite":{"code":1,"extended_code":1}}}]}`,
 		},
 		{
 			stmt:     `SELECT * FROM foo`,
@@ -318,7 +318,7 @@ func Test_SingleNodeRequest(t *testing.T) {
 		},
 		{
 			stmt:     `DROP TABLE bar`,
-			expected: `{"results":[{"error":"no such table: bar","error_v2":{"message":"no such table: bar","code":1,"extended_code":1}}]}`,
+			expected: `{"results":[{"error":"no such table: bar","error_v2":{"message":"no such table: bar","sqlite":{"code":1,"extended_code":1}}}]}`,
 		},
 		{
 			stmt:     `DROP TABLE foo`,
@@ -854,7 +854,7 @@ func Test_SingleNode_RETURNING(t *testing.T) {
 	if err != nil {
 		t.Fatalf(`write failed: %s`, err.Error())
 	}
-	if got, exp := res, `{"results":[{"error":"no such table: nonsense","error_v2":{"message":"no such table: nonsense","code":1,"extended_code":1}}]}`; got != exp {
+	if got, exp := res, `{"results":[{"error":"no such table: nonsense","error_v2":{"message":"no such table: nonsense","sqlite":{"code":1,"extended_code":1}}}]}`; got != exp {
 		t.Fatalf("wrong execute results for RETURNING, exp %s, got %s", exp, got)
 	}
 
@@ -1198,7 +1198,7 @@ func Test_SingleNodeSQLInjection(t *testing.T) {
 		},
 		{
 			stmt:     `SELECT * FROM foo`,
-			expected: `{"results":[{"error":"no such table: foo","error_v2":{"message":"no such table: foo","code":1,"extended_code":1}}]}`,
+			expected: `{"results":[{"error":"no such table: foo","error_v2":{"message":"no such table: foo","sqlite":{"code":1,"extended_code":1}}}]}`,
 			execute:  false,
 		},
 	}

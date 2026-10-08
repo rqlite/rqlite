@@ -16,13 +16,17 @@ var (
 )
 
 // Error represents the structured form of a statement failure. Message is
-// always set. The SQLite result codes are present only when the failure
-// originated in SQLite.
+// always set. SQLite is present only when the failure originated in SQLite.
 type Error struct {
-	Message      string `json:"message"`
-	Code         int32  `json:"code,omitempty"`
-	ExtendedCode int32  `json:"extended_code,omitempty"`
-	SystemErrno  int32  `json:"system_errno,omitempty"`
+	Message string            `json:"message"`
+	SQLite  *SQLiteErrorCodes `json:"sqlite,omitempty"`
+}
+
+// SQLiteErrorCodes represents the result codes SQLite reported for a failure.
+type SQLiteErrorCodes struct {
+	Code         int32 `json:"code,omitempty"`
+	ExtendedCode int32 `json:"extended_code,omitempty"`
+	SystemErrno  int32 `json:"system_errno,omitempty"`
 }
 
 // ErrorResult represents a failed statement which produced no other output.
@@ -126,12 +130,17 @@ func NewErrorFromProto(e *proto.Error) *Error {
 	if e == nil {
 		return nil
 	}
-	return &Error{
-		Message:      e.Message,
-		Code:         e.Code,
-		ExtendedCode: e.ExtendedCode,
-		SystemErrno:  e.SystemErrno,
+	apiErr := &Error{
+		Message: e.Message,
 	}
+	if se := e.Sqlite; se != nil {
+		apiErr.SQLite = &SQLiteErrorCodes{
+			Code:         se.Code,
+			ExtendedCode: se.ExtendedCode,
+			SystemErrno:  se.SystemErrno,
+		}
+	}
+	return apiErr
 }
 
 // NewResultFromExecuteResult returns an API Result object from an ExecuteResult.

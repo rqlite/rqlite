@@ -213,7 +213,7 @@ class TestExtensions_NotLoaded(unittest.TestCase):
   def test_rot13(self):
     n = self.cluster.wait_for_leader()
     j = n.query('SELECT rot13("hello")')
-    expected = d_('{"results": [{"error": "no such function: rot13", "error_v2": {"message": "no such function: rot13", "code": 1, "extended_code": 1}}]}')
+    expected = d_('{"results": [{"error": "no such function: rot13", "error_v2": {"message": "no such function: rot13", "sqlite": {"code": 1, "extended_code": 1}}}]}')
     self.assertEqual(j, expected)
 
 class TestExtensions_NotLoaded_EmptyDir(unittest.TestCase):
@@ -233,7 +233,7 @@ class TestExtensions_NotLoaded_EmptyDir(unittest.TestCase):
   def test_rot13(self):
     n = self.cluster.wait_for_leader()
     j = n.query('SELECT rot13("hello")')
-    expected = d_('{"results": [{"error": "no such function: rot13", "error_v2": {"message": "no such function: rot13", "code": 1, "extended_code": 1}}]}')
+    expected = d_('{"results": [{"error": "no such function: rot13", "error_v2": {"message": "no such function: rot13", "sqlite": {"code": 1, "extended_code": 1}}}]}')
     self.assertEqual(j, expected)
 
 if __name__ == "__main__":

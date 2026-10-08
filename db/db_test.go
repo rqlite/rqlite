@@ -331,7 +331,7 @@ func Test_Query_PragmaJournal_ReadOnly(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to attempt to create table: %s", err.Error())
 	}
-	if exp, got := `[{"error":"attempt to change database via query operation","error_v2":{"message":"attempt to write a readonly database","code":8,"extended_code":8}}]`, asJSON(r); exp != got {
+	if exp, got := `[{"error":"attempt to change database via query operation","error_v2":{"message":"attempt to write a readonly database","sqlite":{"code":8,"extended_code":8}}}]`, asJSON(r); exp != got {
 		t.Fatalf("unexpected results for query, expected %s, got %s", exp, got)
 	}
 
@@ -368,7 +368,7 @@ func Test_LoadExtensionDisabled(t *testing.T) {
 	if err != nil {
 		t.Fatalf("error executing insertion into table: %s", err.Error())
 	}
-	if exp, got := `[{"error":"near \"load_extension\": syntax error","error_v2":{"message":"near \"load_extension\": syntax error","code":1,"extended_code":1}}]`, asJSON(r); exp != got {
+	if exp, got := `[{"error":"near \"load_extension\": syntax error","error_v2":{"message":"near \"load_extension\": syntax error","sqlite":{"code":1,"extended_code":1}}}]`, asJSON(r); exp != got {
 		t.Fatalf("unexpected results for query, expected %s, got %s", exp, got)
 	}
 }
@@ -536,7 +536,7 @@ func Test_DBOptimize(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to query empty table: %s", err.Error())
 	}
-	if exp, got := `[{"error":"no such table: sqlite_stat1","error_v2":{"message":"no such table: sqlite_stat1","code":1,"extended_code":1}}]`, asJSON(q); exp != got {
+	if exp, got := `[{"error":"no such table: sqlite_stat1","error_v2":{"message":"no such table: sqlite_stat1","sqlite":{"code":1,"extended_code":1}}}]`, asJSON(q); exp != got {
 		t.Fatalf("unexpected results for query, expected %s, got %s", exp, got)
 	}
 
@@ -662,7 +662,7 @@ func Test_TableCreationFK(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to insert record: %s", err.Error())
 	}
-	if exp, got := `[{"error":"FOREIGN KEY constraint failed","error_v2":{"message":"FOREIGN KEY constraint failed","code":19,"extended_code":787}}]`, asJSON(r); exp != got {
+	if exp, got := `[{"error":"FOREIGN KEY constraint failed","error_v2":{"message":"FOREIGN KEY constraint failed","sqlite":{"code":19,"extended_code":787}}}]`, asJSON(r); exp != got {
 		t.Fatalf("unexpected results for query, expected %s, got %s", exp, got)
 	}
 
@@ -695,7 +695,7 @@ func Test_TableCreationFK(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to insert record: %s", err.Error())
 	}
-	if exp, got := `[{"error":"FOREIGN KEY constraint failed","error_v2":{"message":"FOREIGN KEY constraint failed","code":19,"extended_code":787}}]`, asJSON(r); exp != got {
+	if exp, got := `[{"error":"FOREIGN KEY constraint failed","error_v2":{"message":"FOREIGN KEY constraint failed","sqlite":{"code":19,"extended_code":787}}}]`, asJSON(r); exp != got {
 		t.Fatalf("unexpected results for query, expected %s, got %s", exp, got)
 	}
 }
@@ -813,22 +813,22 @@ func Test_SQLForceQuery_Error(t *testing.T) {
 		{
 			sql:        `INSERT INTO foo(id, name) VALUES(1, "fiona") RETURNING name AS`,
 			forceQuery: true,
-			exp:        `[{"error":"incomplete input","error_v2":{"message":"incomplete input","code":1,"extended_code":1}}]`,
+			exp:        `[{"error":"incomplete input","error_v2":{"message":"incomplete input","sqlite":{"code":1,"extended_code":1}}}]`,
 		},
 		{
 			sql:        `INSERT INTO foo(id, name) VALUES(1, "fiona") RETURNING xxx`,
 			forceQuery: false,
-			exp:        `[{"error":"no such column: xxx","error_v2":{"message":"no such column: xxx","code":1,"extended_code":1}}]`,
+			exp:        `[{"error":"no such column: xxx","error_v2":{"message":"no such column: xxx","sqlite":{"code":1,"extended_code":1}}}]`,
 		},
 		{
 			sql:        `INSERT INTO foo(id, name) VALUES(1, "fiona") RETURNING xxx`,
 			forceQuery: true,
-			exp:        `[{"error":"no such column: xxx","error_v2":{"message":"no such column: xxx","code":1,"extended_code":1}}]`,
+			exp:        `[{"error":"no such column: xxx","error_v2":{"message":"no such column: xxx","sqlite":{"code":1,"extended_code":1}}}]`,
 		},
 		{
 			sql:        `INSERT INTO foo(id, name) VALUES(1, "fiona") RETURNING name AS`,
 			forceQuery: false,
-			exp:        `[{"error":"incomplete input","error_v2":{"message":"incomplete input","code":1,"extended_code":1}}]`,
+			exp:        `[{"error":"incomplete input","error_v2":{"message":"incomplete input","sqlite":{"code":1,"extended_code":1}}}]`,
 		},
 	}
 	for _, test := range tests {
@@ -924,7 +924,7 @@ func Test_PartialFailTransaction(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to insert records: %s", err.Error())
 	}
-	if exp, got := `[{"last_insert_id":1,"rows_affected":1},{"last_insert_id":2,"rows_affected":1},{"error":"UNIQUE constraint failed: foo.id","error_v2":{"message":"UNIQUE constraint failed: foo.id","code":19,"extended_code":1555}}]`, asJSON(r); exp != got {
+	if exp, got := `[{"last_insert_id":1,"rows_affected":1},{"last_insert_id":2,"rows_affected":1},{"error":"UNIQUE constraint failed: foo.id","error_v2":{"message":"UNIQUE constraint failed: foo.id","sqlite":{"code":19,"extended_code":1555}}}]`, asJSON(r); exp != got {
 		t.Fatalf("unexpected results for query\nexp: %s\ngot: %s", exp, got)
 	}
 	ro, err := db.QueryStringStmt(`SELECT * FROM foo`)
@@ -981,7 +981,7 @@ func Test_PartialFailTransactionReturning(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to execute: %s", err.Error())
 	}
-	if exp, got := `[{"error":"UNIQUE constraint failed: foo.name","error_v2":{"message":"UNIQUE constraint failed: foo.name","code":19,"extended_code":2067}}]`, asJSON(r); exp != got {
+	if exp, got := `[{"error":"UNIQUE constraint failed: foo.name","error_v2":{"message":"UNIQUE constraint failed: foo.name","sqlite":{"code":19,"extended_code":2067}}}]`, asJSON(r); exp != got {
 		t.Fatalf("unexpected results for execute\nexp: %s\ngot: %s", exp, got)
 	}
 
@@ -1418,8 +1418,8 @@ FROM test_table t1 LEFT OUTER JOIN test_table t2`
 		t.Fatalf("expected execute timeout, got %s", asJSON(res))
 	}
 	// A timeout is not a SQLite error, so the structured error carries the
-	// message but no codes.
-	if e := res.GetE().GetErrorV2(); e.GetMessage() != res.GetE().GetError() || e.GetCode() != 0 || e.GetExtendedCode() != 0 {
+	// message but no SQLite codes.
+	if e := res.GetE().GetErrorV2(); e.GetMessage() != res.GetE().GetError() || e.GetSqlite() != nil {
 		t.Fatalf("unexpected structured error for a timeout: %v", e)
 	}
 }

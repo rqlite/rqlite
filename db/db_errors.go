@@ -34,17 +34,19 @@ func NewSQLiteErrorFromError(err error) *SQLiteError {
 }
 
 // newErrorProto returns the structured form of err. The message is always
-// set. The SQLite result codes are set only when err wraps a SQLite error;
-// timeouts, parameter conversion failures, and other non-SQLite errors leave
-// them at zero.
+// set. The SQLite result codes are present only when err wraps a SQLite
+// error; timeouts, parameter conversion failures, and other non-SQLite errors
+// carry no codes.
 func newErrorProto(err error) *command.Error {
 	e := &command.Error{
 		Message: err.Error(),
 	}
 	if se := NewSQLiteErrorFromError(err); se != nil {
-		e.Code = se.Code
-		e.ExtendedCode = se.ExtendedCode
-		e.SystemErrno = se.SystemErrno
+		e.Sqlite = &command.SQLiteErrorCodes{
+			Code:         se.Code,
+			ExtendedCode: se.ExtendedCode,
+			SystemErrno:  se.SystemErrno,
+		}
 	}
 	return e
 }

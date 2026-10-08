@@ -140,7 +140,7 @@ func Test_MultiNodeCluster(t *testing.T) {
 	}{
 		{
 			stmt:     `CREATE TABLE foo (id integer not null primary key, name text)`,
-			expected: `{"results":[{"error":"table foo already exists","error_v2":{"message":"table foo already exists","code":1,"extended_code":1}}]}`,
+			expected: `{"results":[{"error":"table foo already exists","error_v2":{"message":"table foo already exists","sqlite":{"code":1,"extended_code":1}}}]}`,
 			execute:  true,
 		},
 		{
@@ -494,7 +494,7 @@ func Test_MultiNodeClusterBootstrap(t *testing.T) {
 	}{
 		{
 			stmt:     `CREATE TABLE foo (id integer not null primary key, name text)`,
-			expected: `{"results":[{"error":"table foo already exists","error_v2":{"message":"table foo already exists","code":1,"extended_code":1}}]}`,
+			expected: `{"results":[{"error":"table foo already exists","error_v2":{"message":"table foo already exists","sqlite":{"code":1,"extended_code":1}}}]}`,
 			execute:  true,
 		},
 		{
@@ -1239,7 +1239,7 @@ func Test_MultiNodeClusterNodeEncrypted(t *testing.T) {
 	}{
 		{
 			stmt:     `CREATE TABLE foo (id integer not null primary key, name text)`,
-			expected: `{"results":[{"error":"table foo already exists","error_v2":{"message":"table foo already exists","code":1,"extended_code":1}}]}`,
+			expected: `{"results":[{"error":"table foo already exists","error_v2":{"message":"table foo already exists","sqlite":{"code":1,"extended_code":1}}}]}`,
 			execute:  true,
 		},
 		{
@@ -1604,7 +1604,7 @@ func Test_MultiNodeClusterWithNonVoter(t *testing.T) {
 	}{
 		{
 			stmt:     `CREATE TABLE foo (id integer not null primary key, name text)`,
-			expected: `{"results":[{"error":"table foo already exists","error_v2":{"message":"table foo already exists","code":1,"extended_code":1}}]}`,
+			expected: `{"results":[{"error":"table foo already exists","error_v2":{"message":"table foo already exists","sqlite":{"code":1,"extended_code":1}}}]}`,
 			execute:  true,
 		},
 		{

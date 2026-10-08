@@ -78,7 +78,7 @@ func Test_DBErrors_FullStopsBatch(t *testing.T) {
 						if len(results) != 2 || results[1].GetE().GetError() == "" || results[1].GetMutated() {
 							t.Fatalf("unexpected results: %v", results)
 						}
-						if got := results[1].GetE().GetErrorV2().GetCode(); got != int32(sqlite3.ErrFull) {
+						if got := results[1].GetE().GetErrorV2().GetSqlite().GetCode(); got != int32(sqlite3.ErrFull) {
 							t.Fatalf("expected structured error code %d, got %d", sqlite3.ErrFull, got)
 						}
 						want := 1
@@ -422,9 +422,9 @@ func Test_DBErrors_StructuredErrors(t *testing.T) {
 		if e.GetMessage() != msg {
 			t.Fatalf("unexpected message: got %q, want %q", e.GetMessage(), msg)
 		}
-		if e.GetCode() != int32(code) || e.GetExtendedCode() != int32(extended) {
+		if se := e.GetSqlite(); se == nil || se.GetCode() != int32(code) || se.GetExtendedCode() != int32(extended) {
 			t.Fatalf("unexpected codes: got (%d, %d), want (%d, %d)",
-				e.GetCode(), e.GetExtendedCode(), code, extended)
+				se.GetCode(), se.GetExtendedCode(), code, extended)
 		}
 	}
 
@@ -453,7 +453,7 @@ func Test_DBErrors_StructuredErrors(t *testing.T) {
 	if err != nil || len(rows) != 1 || rows[0].Error != ErrQueryWrite.Error() {
 		t.Fatalf("unexpected read-only query results: %v, %v", rows, err)
 	}
-	if e := rows[0].GetErrorV2(); e.GetCode() != int32(sqlite3.ErrReadonly) || e.GetMessage() == "" || e.GetMessage() == ErrQueryWrite.Error() {
+	if e := rows[0].GetErrorV2(); e.GetSqlite().GetCode() != int32(sqlite3.ErrReadonly) || e.GetMessage() == "" || e.GetMessage() == ErrQueryWrite.Error() {
 		t.Fatalf("unexpected structured error for read-only query: %v", e)
 	}
 
