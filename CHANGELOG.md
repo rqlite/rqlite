@@ -75,7 +75,7 @@ If you run a cluster where the Raft port is accessible by other systems you shou
 - [PR #2811](https://github.com/rqlite/rqlite/pull/2811): Add support for _File_ Renaming and Removing with retries.
 - [PR #2816](https://github.com/rqlite/rqlite/pull/2816): Replace standard library with fsutil.
 - [PR #2817](https://github.com/rqlite/rqlite/pull/2817): File _Rename_ and _Remove_ are retried, addressing possible errors on Windows. Fixes issue [#2813](https://github.com/rqlite/rqlite/issues/2813). Thanks @orrery-dev
-- [PR #2812](https://github.com/rqlite/rqlite/pull/2812): Keep snapshot ordering correct regardless of clock. Fixes issue [#2809](https://github.com/rqlite/rqlite/issues/2809). Thanks @goingforstudying-ctrl, @rohanpadhy
+- [PR #2812](https://github.com/rqlite/rqlite/pull/2812): Keep snapshot ordering correct regardless of clock. Fixes issue [#2809](https://github.com/rqlite/rqlite/issues/2809). Thanks @goingforstudying-ctrl, @rohanpadhye
 - [PR #2819](https://github.com/rqlite/rqlite/pull/2819): Remove snapshot name generation ID, backing out [PR #2807](https://github.com/rqlite/rqlite/pull/2807) and [PR #2808](https://github.com/rqlite/rqlite/pull/2808).
 
 ## v10.3.5 (September 18th 2026)
@@ -193,7 +193,7 @@ This release moves the build process for binaries to Go 1.27.
 ### Implementation changes and bug fixes
 - [PR #2686](https://github.com/rqlite/rqlite/pull/2686): Limit number of connections to cluster service. Fixes issue [#2617](https://github.com/rqlite/rqlite/issues/2617). Thanks @shrtyk
 - [PR #2688](https://github.com/rqlite/rqlite/pull/2688): Upgrade dependencies via `go get`.
-- [PR #2689](https://github.com/rqlite/rqlite/pull/2689): Upgrade to SQLite 3.35.2.
+- [PR #2689](https://github.com/rqlite/rqlite/pull/2689): Upgrade to SQLite 3.53.2.
 
 ## v10.2.0 (May 29th 2026)
 ### New features
