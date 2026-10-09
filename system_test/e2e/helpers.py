@@ -595,6 +595,18 @@ class Node(object):
     r = requests.delete(self._remove_url(), data=json.dumps(body))
     raise_for_status(r)
 
+  def demote_node(self, id):
+    body = {"id": id}
+    r = requests.post(self._demote_url(), data=json.dumps(body))
+    raise_for_status(r)
+
+  def wait_for_voter_status(self, exp, timeout=TIMEOUT):
+    deadline = time.time() + timeout
+    while self.is_voter() != exp:
+      if time.time() > deadline:
+        raise Exception('rqlite node failed to report voter status of %s within %d seconds' % (exp, timeout))
+      time.sleep(0.1)
+
   def restore(self, file, fmt=None):
     # This is an API that doesn't expect JSON.
     if fmt != "binary":
@@ -696,6 +708,8 @@ class Node(object):
     return 'http://' + self.APIAddr() + '/leader'
   def _remove_url(self):
     return 'http://' + self.APIAddr() + '/remove'
+  def _demote_url(self):
+    return 'http://' + self.APIAddr() + '/demote'
   def __eq__(self, other):
     return self.node_id == other.node_id
   def __str__(self):

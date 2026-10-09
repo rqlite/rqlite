@@ -470,6 +470,28 @@ func (n *Node) Stepdown(wait bool) error {
 	return nil
 }
 
+// Demote asks the cluster, via this node, to demote the node with the given
+// ID from a voter to a non-voter.
+func (n *Node) Demote(id string) error {
+	b, err := json.Marshal(map[string]string{"id": id})
+	if err != nil {
+		return err
+	}
+
+	resp, err := http.Post("http://"+n.APIAddr+"/demote", "application/json", bytes.NewReader(b))
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != 200 {
+		body, _ := io.ReadAll(resp.Body)
+		return fmt.Errorf("demote endpoint returned: %s (%s)", resp.Status,
+			strings.TrimSuffix(string(body), "\n"))
+	}
+	return nil
+}
+
 // IsVoter returns whether the node is a voter or not.
 func (n *Node) IsVoter() (bool, error) {
 	statusJSON, err := n.Status()
