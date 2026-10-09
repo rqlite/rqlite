@@ -17,7 +17,7 @@ require (
 	github.com/peterh/liner v1.2.3
 	github.com/rqlite/raft-boltdb/v2 v2.0.0-20230523104317-c08e70f4de48
 	github.com/rqlite/rqlite-disco-clients v0.0.0-20250205044118-8ada2b350099
-	github.com/rqlite/sql v0.0.0-20261008132628-fcc04ce68602
+	github.com/rqlite/sql v0.0.0-20261009014406-867735296214
 	go.etcd.io/bbolt v1.5.0
 	go.opentelemetry.io/contrib/instrumentation/runtime v0.72.0
 	go.opentelemetry.io/otel v1.47.0
