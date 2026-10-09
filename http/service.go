@@ -562,30 +562,12 @@ func (s *Service) handleRemove(w http.ResponseWriter, r *http.Request, qp QueryP
 		return
 	}
 
-	b, err := io.ReadAll(r.Body)
-	if err != nil {
-		w.WriteHeader(http.StatusBadRequest)
-		return
-	}
-	m := map[string]string{}
-	if err := json.Unmarshal(b, &m); err != nil {
-		w.WriteHeader(http.StatusBadRequest)
-		return
-	}
-
-	if len(m) != 1 {
-		w.WriteHeader(http.StatusBadRequest)
-		return
-	}
-
-	remoteID, ok := m["id"]
+	id, ok := nodeIDFromBody(w, r)
 	if !ok {
-		w.WriteHeader(http.StatusBadRequest)
 		return
 	}
-
 	rn := &proto.RemoveNodeRequest{
-		Id: remoteID,
+		Id: id,
 	}
 
 	addr, err := s.proxy.Remove(r.Context(), rn, makeCredentials(r), qp.Timeout(defaultTimeout), qp.Redirect())
@@ -607,6 +589,32 @@ func (s *Service) handleRemove(w http.ResponseWriter, r *http.Request, qp QueryP
 		return
 	}
 	w.Header().Set(ServedByHTTPHeader, addr)
+}
+
+// nodeIDFromBody reads a JSON body of the form {"id": "<node ID>"} from the
+// request and returns the node ID. If the body is malformed, a 400 is written
+// to w and false is returned.
+func nodeIDFromBody(w http.ResponseWriter, r *http.Request) (string, bool) {
+	b, err := io.ReadAll(r.Body)
+	if err != nil {
+		w.WriteHeader(http.StatusBadRequest)
+		return "", false
+	}
+	m := map[string]string{}
+	if err := json.Unmarshal(b, &m); err != nil {
+		w.WriteHeader(http.StatusBadRequest)
+		return "", false
+	}
+	if len(m) != 1 {
+		w.WriteHeader(http.StatusBadRequest)
+		return "", false
+	}
+	id, ok := m["id"]
+	if !ok {
+		w.WriteHeader(http.StatusBadRequest)
+		return "", false
+	}
+	return id, true
 }
 
 // handleSQLAnalyze handles requests to analyze and show SQL rewriting.
