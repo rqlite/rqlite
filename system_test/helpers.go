@@ -124,6 +124,42 @@ func (n *Node) ExecuteRaw(stmt string) (string, error) {
 	return n.postExecute(stmt, "text/plain")
 }
 
+// ExecuteWithParams executes a single statement against the node, passing
+// the given query parameters in the URL.
+func (n *Node) ExecuteWithParams(stmt string, params url.Values) (string, error) {
+	j, err := json.Marshal([]string{stmt})
+	if err != nil {
+		return "", err
+	}
+	u := "http://" + n.APIAddr + "/db/execute?" + params.Encode()
+	return n.post(u, string(j), "application/json")
+}
+
+// QueryWithParams queries the node with a single statement, passing the
+// given query parameters in the URL alongside the statement.
+func (n *Node) QueryWithParams(stmt string, params url.Values) (string, error) {
+	v, _ := url.Parse("http://" + n.APIAddr + "/db/query")
+	vals := url.Values{}
+	for k, vs := range params {
+		vals[k] = vs
+	}
+	vals.Set("q", stmt)
+	v.RawQuery = vals.Encode()
+	resp, err := http.Get(v.String())
+	if err != nil {
+		return "", err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		return "", fmt.Errorf("query endpoint returned: %s", resp.Status)
+	}
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return "", err
+	}
+	return string(body), nil
+}
+
 // ExecuteMulti executes multiple statements against the node.
 func (n *Node) ExecuteMulti(stmts []string) (string, error) {
 	j, err := json.Marshal(stmts)
@@ -529,7 +565,13 @@ func (n *Node) ConfirmRedirect(host string) bool {
 }
 
 func (n *Node) postExecute(stmt, contentType string) (string, error) {
-	resp, err := http.Post("http://"+n.APIAddr+"/db/execute", contentType, strings.NewReader(stmt))
+	return n.post("http://"+n.APIAddr+"/db/execute", stmt, contentType)
+}
+
+// post POSTs body to u and returns the response body, failing on any
+// non-200 status.
+func (n *Node) post(u, payload, contentType string) (string, error) {
+	resp, err := http.Post(u, contentType, strings.NewReader(payload))
 	if err != nil {
 		return "", err
 	}

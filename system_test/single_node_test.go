@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"net/url"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -162,6 +163,52 @@ func Test_SingleNode(t *testing.T) {
 		}
 		if r != tt.expected {
 			t.Fatalf(`test %d received wrong result "%s" got: %s exp: %s`, i, tt.stmt, r, tt.expected)
+		}
+	}
+}
+
+// Test_SingleNode_ErrorsParam tests that the "errors" query parameter
+// controls which error fields a failed statement carries.
+func Test_SingleNode_ErrorsParam(t *testing.T) {
+	node := mustNewLeaderNode("node1")
+	defer node.Deprovision()
+
+	const (
+		v1   = `"error":"no such table: bar"`
+		v2   = `"error_v2":{"message":"no such table: bar","sqlite":{"code":1,"extended_code":1}}`
+		both = v1 + "," + v2
+	)
+	tests := []struct {
+		errors   string
+		expected string
+	}{
+		{"", `{"results":[{` + both + `}]}`},
+		{"both", `{"results":[{` + both + `}]}`},
+		{"v3", `{"results":[{` + both + `}]}`},
+		{"v1", `{"results":[{` + v1 + `}]}`},
+		{"v2", `{"results":[{` + v2 + `}]}`},
+	}
+
+	for i, tt := range tests {
+		params := url.Values{}
+		if tt.errors != "" {
+			params.Set("errors", tt.errors)
+		}
+
+		r, err := node.ExecuteWithParams(`INSERT INTO bar(name) VALUES("fiona")`, params)
+		if err != nil {
+			t.Fatalf("test %d: execute failed: %s", i, err)
+		}
+		if r != tt.expected {
+			t.Fatalf("test %d: execute with errors=%q got: %s exp: %s", i, tt.errors, r, tt.expected)
+		}
+
+		r, err = node.QueryWithParams(`SELECT * FROM bar`, params)
+		if err != nil {
+			t.Fatalf("test %d: query failed: %s", i, err)
+		}
+		if r != tt.expected {
+			t.Fatalf("test %d: query with errors=%q got: %s exp: %s", i, tt.errors, r, tt.expected)
 		}
 	}
 }

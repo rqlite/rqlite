@@ -2586,3 +2586,107 @@ func newSQLAnalyzeHost(t *testing.T) string {
 	t.Cleanup(func() { s.Close() })
 	return fmt.Sprintf("http://%s", s.Addr().String())
 }
+
+// Test_ErrorsParam tests that the "errors" query parameter selects which
+// error fields are rendered, on every endpoint which returns statement results.
+func Test_ErrorsParam(t *testing.T) {
+	errV2 := &command.Error{
+		Message: "no such table: foo",
+		Sqlite:  &command.SQLiteErrorCodes{Code: 1, ExtendedCode: 1},
+	}
+	execResp := []*command.ExecuteQueryResponse{{
+		Result: &command.ExecuteQueryResponse_E{
+			E: &command.ExecuteResult{Error: "no such table: foo", ErrorV2: errV2},
+		},
+	}}
+	queryRows := []*command.QueryRows{{Error: "no such table: foo", ErrorV2: errV2}}
+
+	m := &MockStore{leaderAddr: "foo:1234"}
+	m.executeFn = func(er *command.ExecuteRequest) ([]*command.ExecuteQueryResponse, uint64, error) {
+		return execResp, 0, nil
+	}
+	m.queryFn = func(qr *command.QueryRequest) ([]*command.QueryRows, uint64, error) {
+		return queryRows, 0, nil
+	}
+	m.requestFn = func(eqr *command.ExecuteQueryRequest) ([]*command.ExecuteQueryResponse, uint64, uint64, error) {
+		return execResp, 0, 0, nil
+	}
+	c := &mockClusterService{}
+	s := New("127.0.0.1:0", m, c, proxy.New(m, c), nil)
+	if err := s.Start(); err != nil {
+		t.Fatalf("failed to start service")
+	}
+	defer s.Close()
+	host := fmt.Sprintf("http://%s", s.Addr().String())
+
+	const (
+		v1   = `"error":"no such table: foo"`
+		v2   = `"error_v2":{"message":"no such table: foo","sqlite":{"code":1,"extended_code":1}}`
+		both = v1 + "," + v2
+	)
+	tests := []struct {
+		query    string
+		expected string
+	}{
+		{"", `{"results":[{` + both + `}]}`},
+		{"?errors=both", `{"results":[{` + both + `}]}`},
+		{"?errors=v3", `{"results":[{` + both + `}]}`},
+		{"?errors=v1", `{"results":[{` + v1 + `}]}`},
+		{"?errors=v2", `{"results":[{` + v2 + `}]}`},
+		{"?errors=v1&associative", `{"results":[{` + v1 + `}]}`},
+		{"?errors=v2&associative", `{"results":[{` + v2 + `}]}`},
+	}
+
+	do := func(path, query string, post bool) string {
+		t.Helper()
+		var resp *http.Response
+		var err error
+		if post {
+			resp, err = http.Post(host+path+query, "application/json", strings.NewReader(`["SELECT * FROM foo"]`))
+		} else {
+			resp, err = http.Get(host + path + query)
+		}
+		if err != nil {
+			t.Fatalf("%s%s: request failed: %s", path, query, err)
+		}
+		defer resp.Body.Close()
+		if resp.StatusCode != http.StatusOK {
+			t.Fatalf("%s%s: expected StatusOK, got %d", path, query, resp.StatusCode)
+		}
+		body, err := io.ReadAll(resp.Body)
+		if err != nil {
+			t.Fatalf("%s%s: failed to read body: %s", path, query, err)
+		}
+		return strings.TrimSpace(string(body))
+	}
+
+	for _, tt := range tests {
+		for _, ep := range []struct {
+			path string
+			post bool
+		}{
+			{"/db/execute", true},
+			{"/db/query", true},
+			{"/db/request", true},
+		} {
+			got := do(ep.path, tt.query, ep.post)
+			exp := tt.expected
+			if ep.path == "/db/query" && strings.Contains(tt.query, "associative") {
+				// Associative query rows always carry a rows field.
+				exp = strings.Replace(exp, `{"results":[{`, `{"results":[{"rows":[],`, 1)
+			}
+			if got != exp {
+				t.Fatalf("%s%s: unexpected response\n exp: %s\n got: %s", ep.path, tt.query, exp, got)
+			}
+		}
+	}
+
+	// GET on /db/query must behave the same as POST.
+	q := "?q=" + url.QueryEscape("SELECT * FROM foo")
+	if got, exp := do("/db/query", q+"&errors=v2", false), `{"results":[{`+v2+`}]}`; got != exp {
+		t.Fatalf("GET /db/query errors=v2: exp %s, got %s", exp, got)
+	}
+	if got, exp := do("/db/query", q+"&errors=v1", false), `{"results":[{`+v1+`}]}`; got != exp {
+		t.Fatalf("GET /db/query errors=v1: exp %s, got %s", exp, got)
+	}
+}

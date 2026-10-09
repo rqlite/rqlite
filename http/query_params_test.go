@@ -6,6 +6,7 @@ import (
 	"reflect"
 	"testing"
 
+	"github.com/rqlite/rqlite/v10/command/encoding"
 	"github.com/rqlite/rqlite/v10/command/proto"
 )
 
@@ -200,6 +201,40 @@ func Test_QueryParams_TrailingLogs(t *testing.T) {
 			n := qp.TrailingLogs(def)
 			if n != tc.expected {
 				t.Errorf("expected %v, got %v", tc.expected, n)
+			}
+		})
+	}
+}
+
+func Test_QueryParams_Errors(t *testing.T) {
+	testCases := []struct {
+		name     string
+		rawQuery string
+		expected encoding.ErrorFormat
+	}{
+		{"No errors parameter", "", encoding.ErrorFormatBoth},
+		{"errors=v1", "errors=v1", encoding.ErrorFormatV1},
+		{"errors=V1", "errors=V1", encoding.ErrorFormatV1},
+		{"errors=v2", "errors=v2", encoding.ErrorFormatV2},
+		{"errors=V2", "errors=V2", encoding.ErrorFormatV2},
+		{"errors with empty value", "errors=", encoding.ErrorFormatBoth},
+		{"errors with no value", "errors", encoding.ErrorFormatBoth},
+		{"errors=both", "errors=both", encoding.ErrorFormatBoth},
+		{"Invalid errors parameter", "errors=v3", encoding.ErrorFormatBoth},
+	}
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			req := &http.Request{
+				URL: &url.URL{
+					RawQuery: tc.rawQuery,
+				},
+			}
+			qp, err := NewQueryParams(req)
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+			if got := qp.Errors(); got != tc.expected {
+				t.Errorf("expected %v, got %v", tc.expected, got)
 			}
 		})
 	}
