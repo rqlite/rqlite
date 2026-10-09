@@ -4,6 +4,7 @@ This release features an addition to the API. In the event of an error there is 
 ### New features
 - [PR #2860](https://github.com/rqlite/rqlite/pull/2860): New `error_v2` field in API responses which communicates numeric error codes.
 - [PR #2864](https://github.com/rqlite/rqlite/pull/2864): New `errors` query parameter selects which error fields are returned.
+- [PR #2865](https://github.com/rqlite/rqlite/pull/2865): Enable query logging via command-line flag.
 
 ### Implementation changes and bug fixes
 - [PR #2862](https://github.com/rqlite/rqlite/pull/2862), [PR #2863](https://github.com/rqlite/rqlite/pull/2863): Upgrade dependencies via `go get`.
