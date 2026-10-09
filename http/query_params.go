@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/rqlite/rqlite/v10/command"
+	"github.com/rqlite/rqlite/v10/command/encoding"
 	"github.com/rqlite/rqlite/v10/command/proto"
 )
 
@@ -173,6 +174,13 @@ func (qp QueryParams) LinearizableTimeout(def time.Duration) time.Duration {
 func (qp QueryParams) Level() proto.ConsistencyLevel {
 	lvl := qp["level"]
 	return command.LevelFromString(lvl)
+}
+
+// Errors returns the requested rendering of statement errors. "v1" selects
+// only the legacy "error" field, "v2" only the structured "error_v2" field.
+// Any other value, or no value, selects both.
+func (qp QueryParams) Errors() encoding.ErrorFormat {
+	return encoding.ErrorFormatFromString(qp["errors"])
 }
 
 // BackupFormat returns the requested backup format.

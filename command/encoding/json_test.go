@@ -765,3 +765,114 @@ func Test_MarshalExecuteQueryAssociativeResponse(t *testing.T) {
 		})
 	}
 }
+
+func Test_ErrorFormatFromString(t *testing.T) {
+	for _, tc := range []struct {
+		in  string
+		exp ErrorFormat
+	}{
+		{"", ErrorFormatBoth},
+		{"v1", ErrorFormatV1},
+		{"V1", ErrorFormatV1},
+		{"v2", ErrorFormatV2},
+		{"V2", ErrorFormatV2},
+		{"v3", ErrorFormatBoth},
+		{"both", ErrorFormatBoth},
+		{"junk", ErrorFormatBoth},
+	} {
+		if got := ErrorFormatFromString(tc.in); got != tc.exp {
+			t.Fatalf("ErrorFormatFromString(%q): exp %v, got %v", tc.in, tc.exp, got)
+		}
+	}
+}
+
+// Test_MarshalErrorFormat tests that the Encoder renders only the requested
+// error fields, for every object type that can carry a statement error.
+func Test_MarshalErrorFormat(t *testing.T) {
+	errV2 := &proto.Error{
+		Message: "unique constraint failed",
+		Sqlite: &proto.SQLiteErrorCodes{
+			Code:         19,
+			ExtendedCode: 2067,
+		},
+	}
+	execResult := &proto.ExecuteResult{Error: "unique constraint failed", ErrorV2: errV2}
+	queryRows := &proto.QueryRows{Error: "unique constraint failed", ErrorV2: errV2}
+	eqrExec := &proto.ExecuteQueryResponse{Result: &proto.ExecuteQueryResponse_E{E: execResult}}
+	eqrQuery := &proto.ExecuteQueryResponse{Result: &proto.ExecuteQueryResponse_Q{Q: queryRows}}
+
+	const (
+		v1   = `"error":"unique constraint failed"`
+		v2   = `"error_v2":{"message":"unique constraint failed","sqlite":{"code":19,"extended_code":2067}}`
+		both = v1 + "," + v2
+	)
+
+	tests := []struct {
+		name     string
+		format   ErrorFormat
+		assoc    bool
+		input    any
+		expected string
+	}{
+		// ExecuteResult
+		{"ExecuteResult both", ErrorFormatBoth, false, execResult, `{` + both + `}`},
+		{"ExecuteResult v1", ErrorFormatV1, false, execResult, `{` + v1 + `}`},
+		{"ExecuteResult v2", ErrorFormatV2, false, execResult, `{` + v2 + `}`},
+		{"[]ExecuteResult v2", ErrorFormatV2, false, []*proto.ExecuteResult{execResult}, `[{` + v2 + `}]`},
+
+		// QueryRows
+		{"QueryRows both", ErrorFormatBoth, false, queryRows, `{` + both + `}`},
+		{"QueryRows v1", ErrorFormatV1, false, queryRows, `{` + v1 + `}`},
+		{"QueryRows v2", ErrorFormatV2, false, queryRows, `{` + v2 + `}`},
+		{"[]QueryRows v1", ErrorFormatV1, false, []*proto.QueryRows{queryRows}, `[{` + v1 + `}]`},
+		{"QueryRows assoc both", ErrorFormatBoth, true, queryRows, `{"rows":[],` + both + `}`},
+		{"QueryRows assoc v1", ErrorFormatV1, true, queryRows, `{"rows":[],` + v1 + `}`},
+		{"QueryRows assoc v2", ErrorFormatV2, true, queryRows, `{"rows":[],` + v2 + `}`},
+
+		// ExecuteQueryResponse wrapping an ExecuteResult
+		{"EQR exec both", ErrorFormatBoth, false, eqrExec, `{` + both + `}`},
+		{"EQR exec v1", ErrorFormatV1, false, eqrExec, `{` + v1 + `}`},
+		{"EQR exec v2", ErrorFormatV2, false, eqrExec, `{` + v2 + `}`},
+		{"[]EQR exec assoc both", ErrorFormatBoth, true, []*proto.ExecuteQueryResponse{eqrExec}, `[{` + both + `}]`},
+		{"[]EQR exec assoc v1", ErrorFormatV1, true, []*proto.ExecuteQueryResponse{eqrExec}, `[{` + v1 + `}]`},
+		{"[]EQR exec assoc v2", ErrorFormatV2, true, []*proto.ExecuteQueryResponse{eqrExec}, `[{` + v2 + `}]`},
+
+		// ExecuteQueryResponse wrapping QueryRows
+		{"EQR query both", ErrorFormatBoth, false, eqrQuery, `{` + both + `}`},
+		{"EQR query v1", ErrorFormatV1, false, eqrQuery, `{` + v1 + `}`},
+		{"EQR query v2", ErrorFormatV2, false, eqrQuery, `{` + v2 + `}`},
+		{"[]EQR query assoc both", ErrorFormatBoth, true, []*proto.ExecuteQueryResponse{eqrQuery}, `[{"rows":[],` + both + `}]`},
+		{"[]EQR query assoc v1", ErrorFormatV1, true, []*proto.ExecuteQueryResponse{eqrQuery}, `[{"rows":[],` + v1 + `}]`},
+		{"[]EQR query assoc v2", ErrorFormatV2, true, []*proto.ExecuteQueryResponse{eqrQuery}, `[{"rows":[],` + v2 + `}]`},
+		{"[]EQR query v1", ErrorFormatV1, false, []*proto.ExecuteQueryResponse{eqrQuery}, `[{` + v1 + `}]`},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			enc := Encoder{Associative: tt.assoc, Errors: tt.format}
+			b, err := enc.JSONMarshal(tt.input)
+			if err != nil {
+				t.Fatalf("failed to marshal: %s", err)
+			}
+			if string(b) != tt.expected {
+				t.Fatalf("unexpected JSON\n exp: %s\n got: %s", tt.expected, string(b))
+			}
+		})
+	}
+}
+
+// Test_MarshalErrorFormat_Success tests that the error format has no effect
+// on statements which succeed.
+func Test_MarshalErrorFormat_Success(t *testing.T) {
+	ok := &proto.ExecuteResult{LastInsertId: 1, RowsAffected: 2}
+	for _, f := range []ErrorFormat{ErrorFormatBoth, ErrorFormatV1, ErrorFormatV2} {
+		enc := Encoder{Errors: f}
+		b, err := enc.JSONMarshal(ok)
+		if err != nil {
+			t.Fatalf("failed to marshal: %s", err)
+		}
+		if exp, got := `{"last_insert_id":1,"rows_affected":2}`, string(b); exp != got {
+			t.Fatalf("format %v: exp %s, got %s", f, exp, got)
+		}
+	}
+}
