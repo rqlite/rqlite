@@ -28,6 +28,7 @@ import (
 	"github.com/rqlite/rqlite/v10/command"
 	"github.com/rqlite/rqlite/v10/db"
 	"github.com/rqlite/rqlite/v10/db/extensions"
+	"github.com/rqlite/rqlite/v10/db/querylog"
 	httpd "github.com/rqlite/rqlite/v10/http"
 	"github.com/rqlite/rqlite/v10/internal/rarchive"
 	"github.com/rqlite/rqlite/v10/internal/rtls"
@@ -131,8 +132,20 @@ func main() {
 		}
 	}
 
+	// Parse the query-log configuration, if any. Query logging is installed
+	// on every database connection via the driver, so the Store must know
+	// about it when it is created.
+	var queryLogger *querylog.QueryLogger
+	if cfg.QueryLog != "" {
+		qlCfg, err := querylog.NewConfig(cfg.QueryLog)
+		if err != nil {
+			log.Fatalf("failed to create query-log config: %s", err.Error())
+		}
+		queryLogger = querylog.New(qlCfg)
+	}
+
 	// Create the store.
-	str, err := createStore(cfg, raftTn, extensionsPaths, cdcCfg)
+	str, err := createStore(cfg, raftTn, extensionsPaths, cdcCfg, queryLogger)
 	if err != nil {
 		log.Fatalf("failed to create store: %s", err.Error())
 	}
@@ -302,6 +315,14 @@ func main() {
 		log.Printf("failed to close store: %s", err.Error())
 	}
 
+	// Close the query logger only once the store, and therefore every
+	// database connection that traces through it, has been closed.
+	if queryLogger != nil {
+		if err := queryLogger.Close(); err != nil {
+			log.Printf("failed to close query logger: %s", err.Error())
+		}
+	}
+
 	// Stop OTLP metrics reporting, flushing any remaining metrics.
 	if otlpSrv != nil {
 		otlpSrv.Stop()
@@ -397,10 +418,11 @@ func createCDC(cfg *Config, cdcCfg *cdc.Config, str *store.Store, clstrServ *clu
 	return cdcService, nil
 }
 
-func createStore(cfg *Config, ln *tcp.Layer, extensions []string, cdcCfg *cdc.Config) (*store.Store, error) {
+func createStore(cfg *Config, ln *tcp.Layer, extensions []string, cdcCfg *cdc.Config, queryLogger *querylog.QueryLogger) (*store.Store, error) {
 	dbConf := store.NewDBConfig()
 	dbConf.FKConstraints = cfg.FKConstraints
 	dbConf.Extensions = extensions
+	dbConf.QueryLogger = queryLogger
 
 	var storeCDCCfg *store.CDCConfig
 	if cdcCfg != nil {
