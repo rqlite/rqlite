@@ -2311,6 +2311,7 @@ type MockStore struct {
 	readFromFn  func(r io.Reader) (int64, error)
 	committedFn func(timeout time.Duration) (uint64, error)
 	stepdownFn  func(wait bool, id string) error
+	demoteFn    func(dn *command.DemoteNodeRequest) error
 	leaderAddr  string
 	notReady    bool // Default value is true, easier to test.
 }
@@ -2346,6 +2347,13 @@ func (m *MockStore) Notify(nr *command.NotifyRequest) error {
 }
 
 func (m *MockStore) Remove(ctx context.Context, rn *command.RemoveNodeRequest) error {
+	return nil
+}
+
+func (m *MockStore) Demote(ctx context.Context, dn *command.DemoteNodeRequest) error {
+	if m.demoteFn != nil {
+		return m.demoteFn(dn)
+	}
 	return nil
 }
 
@@ -2431,6 +2439,7 @@ type mockClusterService struct {
 	backupFn     func(br *command.BackupRequest, addr string, t time.Duration, w io.Writer) (int, error)
 	loadFn       func(lr *command.LoadRequest, addr string, t time.Duration) error
 	removeNodeFn func(rn *command.RemoveNodeRequest, nodeAddr string, t time.Duration) error
+	demoteNodeFn func(dn *command.DemoteNodeRequest, nodeAddr string, t time.Duration) error
 	stepdownFn   func(sr *command.StepdownRequest, nodeAddr string, t time.Duration) error
 }
 
@@ -2478,6 +2487,13 @@ func (m *mockClusterService) Load(ctx context.Context, lr *command.LoadRequest, 
 func (m *mockClusterService) RemoveNode(ctx context.Context, rn *command.RemoveNodeRequest, addr string, creds *cluster.Credentials, t time.Duration) error {
 	if m.removeNodeFn != nil {
 		return m.removeNodeFn(rn, addr, t)
+	}
+	return nil
+}
+
+func (m *mockClusterService) DemoteNode(ctx context.Context, dn *command.DemoteNodeRequest, addr string, creds *cluster.Credentials, t time.Duration) error {
+	if m.demoteNodeFn != nil {
+		return m.demoteNodeFn(dn, addr, t)
 	}
 	return nil
 }
