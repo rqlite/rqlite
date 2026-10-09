@@ -23,6 +23,8 @@ const (
 	PermJoinReadReplica = "join-read-replica"
 	// PermRemove means user is permitted to remove a node.
 	PermRemove = "remove"
+	// PermDemote means user is permitted to demote a voting node to a non-voter.
+	PermDemote = "demote"
 	// PermExecute means user can access execute endpoint.
 	PermExecute = "execute"
 	// PermQuery means user can access query endpoint

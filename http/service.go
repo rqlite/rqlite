@@ -517,6 +517,8 @@ func (s *Service) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		s.handleReap(w, r)
 	case strings.HasPrefix(r.URL.Path, "/remove"):
 		s.handleRemove(w, r, params)
+	case strings.HasPrefix(r.URL.Path, "/demote"):
+		s.handleDemote(w, r, params)
 	case strings.HasPrefix(r.URL.Path, "/status"):
 		stats.Add(numStatus, 1)
 		s.handleStatus(w, r, params)
@@ -562,30 +564,12 @@ func (s *Service) handleRemove(w http.ResponseWriter, r *http.Request, qp QueryP
 		return
 	}
 
-	b, err := io.ReadAll(r.Body)
-	if err != nil {
-		w.WriteHeader(http.StatusBadRequest)
-		return
-	}
-	m := map[string]string{}
-	if err := json.Unmarshal(b, &m); err != nil {
-		w.WriteHeader(http.StatusBadRequest)
-		return
-	}
-
-	if len(m) != 1 {
-		w.WriteHeader(http.StatusBadRequest)
-		return
-	}
-
-	remoteID, ok := m["id"]
+	id, ok := nodeIDFromBody(w, r)
 	if !ok {
-		w.WriteHeader(http.StatusBadRequest)
 		return
 	}
-
 	rn := &proto.RemoveNodeRequest{
-		Id: remoteID,
+		Id: id,
 	}
 
 	addr, err := s.proxy.Remove(r.Context(), rn, makeCredentials(r), qp.Timeout(defaultTimeout), qp.Redirect())
@@ -607,6 +591,73 @@ func (s *Service) handleRemove(w http.ResponseWriter, r *http.Request, qp QueryP
 		return
 	}
 	w.Header().Set(ServedByHTTPHeader, addr)
+}
+
+// handleDemote handles requests to demote a voting node to a non-voter.
+func (s *Service) handleDemote(w http.ResponseWriter, r *http.Request, qp QueryParams) {
+	if !s.CheckRequestPerm(r, auth.PermDemote) {
+		w.WriteHeader(http.StatusUnauthorized)
+		return
+	}
+
+	if r.Method != "POST" {
+		w.WriteHeader(http.StatusMethodNotAllowed)
+		return
+	}
+
+	id, ok := nodeIDFromBody(w, r)
+	if !ok {
+		return
+	}
+	dn := &proto.DemoteNodeRequest{
+		Id: id,
+	}
+
+	addr, err := s.proxy.Demote(r.Context(), dn, makeCredentials(r), qp.Timeout(defaultTimeout), qp.Redirect())
+	if err != nil {
+		if errors.Is(err, proxy.ErrNotLeader) {
+			s.DoRedirect(w, r, qp)
+			return
+		}
+		if errors.Is(err, proxy.ErrLeaderNotFound) {
+			stats.Add(numLeaderNotFound, 1)
+			http.Error(w, proxy.ErrLeaderNotFound.Error(), http.StatusServiceUnavailable)
+			return
+		}
+		if errors.Is(err, proxy.ErrUnauthorized) {
+			http.Error(w, "remote demote node not authorized", http.StatusUnauthorized)
+			return
+		}
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	w.Header().Set(ServedByHTTPHeader, addr)
+}
+
+// nodeIDFromBody reads a JSON body of the form {"id": "<node ID>"} from the
+// request and returns the node ID. If the body is malformed, a 400 is written
+// to w and false is returned.
+func nodeIDFromBody(w http.ResponseWriter, r *http.Request) (string, bool) {
+	b, err := io.ReadAll(r.Body)
+	if err != nil {
+		w.WriteHeader(http.StatusBadRequest)
+		return "", false
+	}
+	m := map[string]string{}
+	if err := json.Unmarshal(b, &m); err != nil {
+		w.WriteHeader(http.StatusBadRequest)
+		return "", false
+	}
+	if len(m) != 1 {
+		w.WriteHeader(http.StatusBadRequest)
+		return "", false
+	}
+	id, ok := m["id"]
+	if !ok {
+		w.WriteHeader(http.StatusBadRequest)
+		return "", false
+	}
+	return id, true
 }
 
 // handleSQLAnalyze handles requests to analyze and show SQL rewriting.

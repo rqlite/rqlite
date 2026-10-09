@@ -153,6 +153,50 @@ class TestEndToEnd(unittest.TestCase):
     nodes = l.nodes()
     self.assertEqual(len(nodes), 2)
 
+  def test_demote_node_via_leader(self):
+    '''Test that demoting a node via the leader works'''
+    l = self.cluster.wait_for_leader()
+    fs = self.cluster.followers()
+
+    # Validate state of cluster.
+    self.assertEqual(len(fs), 2)
+    nodes = l.nodes()
+    self.assertEqual(len(nodes), 3)
+    for n in nodes.values():
+      self.assertTrue(n['voter'])
+
+    l.demote_node(fs[0].node_id)
+    fs[0].wait_for_voter_status(False)
+
+    # Demoted node remains in the cluster, but as a non-voter.
+    nodes = l.nodes()
+    self.assertEqual(len(nodes), 3)
+    self.assertFalse(nodes[fs[0].node_id]['voter'])
+    self.assertTrue(nodes[fs[1].node_id]['voter'])
+    self.assertTrue(nodes[l.node_id]['voter'])
+
+    # Demoting an already-demoted node is fine.
+    l.demote_node(fs[0].node_id)
+    self.assertFalse(l.nodes()[fs[0].node_id]['voter'])
+
+  def test_demote_node_via_follower(self):
+    '''Test that demoting a node via a follower works'''
+    l = self.cluster.wait_for_leader()
+    fs = self.cluster.followers()
+
+    # Validate state of cluster.
+    self.assertEqual(len(fs), 2)
+    nodes = l.nodes()
+    self.assertEqual(len(nodes), 3)
+
+    fs[0].demote_node(fs[1].node_id)
+    fs[1].wait_for_voter_status(False)
+    nodes = l.nodes()
+    self.assertEqual(len(nodes), 3)
+    self.assertFalse(nodes[fs[1].node_id]['voter'])
+    self.assertTrue(nodes[fs[0].node_id]['voter'])
+    self.assertTrue(nodes[l.node_id]['voter'])
+
 class TestEndToEndEncryptedNode(TestEndToEnd):
   def setUp(self):
     certFile = write_random_file(x509cert)

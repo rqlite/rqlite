@@ -419,6 +419,62 @@ func Test_ServiceRemoveNode(t *testing.T) {
 	}
 }
 
+func Test_ServiceDemoteNode(t *testing.T) {
+	ln, mux := mustNewMux()
+	defer mux.Close()
+	go mux.Serve()
+	tn := mux.Listen(1) // Could be any byte value.
+	db := mustNewMockDatabase()
+	mgr := mustNewMockManager()
+	cred := mustNewMockCredentialStore()
+	s := New(tn, db, mgr, cred)
+	if s == nil {
+		t.Fatalf("failed to create cluster service")
+	}
+
+	c := NewClient(mustNewDialer(1, false, false), 30*time.Second)
+
+	if err := s.Open(); err != nil {
+		t.Fatalf("failed to open cluster service: %s", err.Error())
+	}
+
+	expNodeID := "node_1"
+	called := false
+	mgr.demoteNodeFn = func(dn *command.DemoteNodeRequest) error {
+		called = true
+		if dn.Id != expNodeID {
+			t.Fatalf("node ID is wrong, exp: %s, got %s", expNodeID, dn.Id)
+		}
+		return nil
+	}
+
+	err := c.DemoteNode(context.Background(), demoteNodeRequest(expNodeID), s.Addr(), NO_CREDS, longWait)
+	if err != nil {
+		t.Fatalf("failed to demote node: %s", err.Error())
+	}
+
+	if !called {
+		t.Fatal("DemoteNode not called on manager")
+	}
+
+	// An error from the manager should be returned to the client.
+	mgr.demoteNodeFn = func(dn *command.DemoteNodeRequest) error {
+		return errors.New("demote failed")
+	}
+	err = c.DemoteNode(context.Background(), demoteNodeRequest(expNodeID), s.Addr(), NO_CREDS, longWait)
+	if err == nil || err.Error() != "demote failed" {
+		t.Fatalf("expected manager error to be returned, got: %v", err)
+	}
+
+	// Clean up resources.
+	if err := ln.Close(); err != nil {
+		t.Fatalf("failed to close Mux's listener: %s", err)
+	}
+	if err := s.Close(); err != nil {
+		t.Fatalf("failed to close cluster service")
+	}
+}
+
 func Test_ServiceJoinNode(t *testing.T) {
 	ln, mux := mustNewMux()
 	defer mux.Close()
@@ -628,6 +684,12 @@ func backupRequestBinary(leader bool) *command.BackupRequest {
 func loadRequest(b []byte) *command.LoadRequest {
 	return &command.LoadRequest{
 		Data: b,
+	}
+}
+
+func demoteNodeRequest(id string) *command.DemoteNodeRequest {
+	return &command.DemoteNodeRequest{
+		Id: id,
 	}
 }
 

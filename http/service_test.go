@@ -335,6 +335,8 @@ func Test_405Routes(t *testing.T) {
 		{method: "GET", path: "/db/load"},
 		{method: "GET", path: "/remove"},
 		{method: "POST", path: "/remove"},
+		{method: "GET", path: "/demote"},
+		{method: "DELETE", path: "/demote"},
 		{method: "GET", path: "/snapshot"},
 		{method: "POST", path: "/db/backup"},
 		{method: "POST", path: "/status"},
@@ -362,6 +364,12 @@ func Test_405Routes(t *testing.T) {
 			resp, err = client.Get(host + tc.path)
 		case "POST":
 			resp, err = client.Post(host+tc.path, "", nil)
+		case "DELETE":
+			req, rerr := http.NewRequest("DELETE", host+tc.path, nil)
+			if rerr != nil {
+				t.Fatalf("failed to build DELETE request: %s", rerr)
+			}
+			resp, err = client.Do(req)
 		default:
 			t.Fatalf("unsupported method: %s", tc.method)
 		}
@@ -417,6 +425,7 @@ func Test_401Routes_NoBasicAuth(t *testing.T) {
 		"/db/load",
 		"/boot",
 		"/remove",
+		"/demote",
 		"/status",
 		"/nodes",
 		"/leader",
@@ -1809,6 +1818,190 @@ func Test_LeaderPOST_ForwardError(t *testing.T) {
 	}
 }
 
+func Test_Demote_POST(t *testing.T) {
+	demotedID := ""
+	store := &MockStore{
+		leaderAddr: "127.0.0.1:8001",
+		demoteFn: func(dn *command.DemoteNodeRequest) error {
+			demotedID = dn.Id
+			return nil
+		},
+	}
+	cluster := &mockClusterService{apiAddr: "http://127.0.0.1:4001"}
+	cred := &mockCredentialStore{HasPermOK: true}
+
+	s := New("127.0.0.1:4001", store, cluster, proxy.New(store, cluster), cred)
+
+	req, err := http.NewRequest("POST", "/demote", strings.NewReader(`{"id": "node1"}`))
+	if err != nil {
+		t.Fatalf("failed to create POST request: %s", err.Error())
+	}
+	rr := httptest.NewRecorder()
+	s.ServeHTTP(rr, req)
+
+	if rr.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", rr.Code)
+	}
+	if demotedID != "node1" {
+		t.Fatalf("expected node1 to be demoted, got %q", demotedID)
+	}
+}
+
+func Test_Demote_POST_BadRequest(t *testing.T) {
+	store := &MockStore{
+		leaderAddr: "127.0.0.1:8001",
+		demoteFn: func(dn *command.DemoteNodeRequest) error {
+			t.Fatalf("demote should not be called")
+			return nil
+		},
+	}
+	cluster := &mockClusterService{apiAddr: "http://127.0.0.1:4001"}
+	cred := &mockCredentialStore{HasPermOK: true}
+
+	s := New("127.0.0.1:4001", store, cluster, proxy.New(store, cluster), cred)
+
+	for _, body := range []string{``, `not json`, `{}`, `{"foo": "bar"}`, `{"id": "node1", "foo": "bar"}`} {
+		req, err := http.NewRequest("POST", "/demote", strings.NewReader(body))
+		if err != nil {
+			t.Fatalf("failed to create POST request: %s", err.Error())
+		}
+		rr := httptest.NewRecorder()
+		s.ServeHTTP(rr, req)
+
+		if rr.Code != http.StatusBadRequest {
+			t.Fatalf("expected 400 for body %q, got %d", body, rr.Code)
+		}
+	}
+}
+
+func Test_Demote_POST_StoreError(t *testing.T) {
+	store := &MockStore{
+		leaderAddr: "127.0.0.1:8001",
+		demoteFn: func(dn *command.DemoteNodeRequest) error {
+			return errors.New("demote failed")
+		},
+	}
+	cluster := &mockClusterService{apiAddr: "http://127.0.0.1:4001"}
+	cred := &mockCredentialStore{HasPermOK: true}
+
+	s := New("127.0.0.1:4001", store, cluster, proxy.New(store, cluster), cred)
+
+	req, err := http.NewRequest("POST", "/demote", strings.NewReader(`{"id": "node1"}`))
+	if err != nil {
+		t.Fatalf("failed to create POST request: %s", err.Error())
+	}
+	rr := httptest.NewRecorder()
+	s.ServeHTTP(rr, req)
+
+	if rr.Code != http.StatusInternalServerError {
+		t.Fatalf("expected 500, got %d", rr.Code)
+	}
+	if !strings.Contains(rr.Body.String(), "demote failed") {
+		t.Fatalf("expected error message to contain 'demote failed', got %s", rr.Body.String())
+	}
+}
+
+func Test_Demote_POST_ForwardToLeader(t *testing.T) {
+	forwardedID := ""
+	forwardedAddr := ""
+	store := &MockStore{
+		leaderAddr: "127.0.0.1:8001",
+		demoteFn: func(dn *command.DemoteNodeRequest) error {
+			return store.ErrNotLeader
+		},
+	}
+	cluster := &mockClusterService{
+		apiAddr: "http://127.0.0.1:4001",
+		demoteNodeFn: func(dn *command.DemoteNodeRequest, nodeAddr string, t time.Duration) error {
+			forwardedID = dn.Id
+			forwardedAddr = nodeAddr
+			return nil
+		},
+	}
+	cred := &mockCredentialStore{HasPermOK: true}
+
+	s := New("127.0.0.1:4001", store, cluster, proxy.New(store, cluster), cred)
+
+	req, err := http.NewRequest("POST", "/demote", strings.NewReader(`{"id": "node1"}`))
+	if err != nil {
+		t.Fatalf("failed to create POST request: %s", err.Error())
+	}
+	rr := httptest.NewRecorder()
+	s.ServeHTTP(rr, req)
+
+	if rr.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", rr.Code)
+	}
+	if forwardedID != "node1" {
+		t.Fatalf("expected demote of node1 to be forwarded to leader, got %q", forwardedID)
+	}
+	if forwardedAddr != "127.0.0.1:8001" {
+		t.Fatalf("expected demote to be forwarded to 127.0.0.1:8001, got %q", forwardedAddr)
+	}
+}
+
+func Test_Demote_POST_ForwardError(t *testing.T) {
+	store := &MockStore{
+		leaderAddr: "127.0.0.1:8001",
+		demoteFn: func(dn *command.DemoteNodeRequest) error {
+			return store.ErrNotLeader
+		},
+	}
+	cluster := &mockClusterService{
+		apiAddr: "http://127.0.0.1:4001",
+		demoteNodeFn: func(dn *command.DemoteNodeRequest, nodeAddr string, t time.Duration) error {
+			return errors.New("demote failed")
+		},
+	}
+	cred := &mockCredentialStore{HasPermOK: true}
+
+	s := New("127.0.0.1:4001", store, cluster, proxy.New(store, cluster), cred)
+
+	req, err := http.NewRequest("POST", "/demote", strings.NewReader(`{"id": "node1"}`))
+	if err != nil {
+		t.Fatalf("failed to create POST request: %s", err.Error())
+	}
+	rr := httptest.NewRecorder()
+	s.ServeHTTP(rr, req)
+
+	if rr.Code != http.StatusInternalServerError {
+		t.Fatalf("expected 500, got %d", rr.Code)
+	}
+	if !strings.Contains(rr.Body.String(), "demote failed") {
+		t.Fatalf("expected error message to contain 'demote failed', got %s", rr.Body.String())
+	}
+}
+
+func Test_Demote_POST_Redirect(t *testing.T) {
+	store := &MockStore{
+		leaderAddr: "127.0.0.1:8001",
+		demoteFn: func(dn *command.DemoteNodeRequest) error {
+			return store.ErrNotLeader
+		},
+	}
+	cluster := &mockClusterService{
+		apiAddr: "http://127.0.0.1:4001",
+		demoteNodeFn: func(dn *command.DemoteNodeRequest, nodeAddr string, _ time.Duration) error {
+			t.Fatalf("demote should not be forwarded when redirect is requested")
+			return nil
+		},
+	}
+	cred := &mockCredentialStore{HasPermOK: true}
+
+	s := New("127.0.0.1:4001", store, cluster, proxy.New(store, cluster), cred)
+
+	req, err := http.NewRequest("POST", "/demote?redirect", strings.NewReader(`{"id": "node1"}`))
+	if err != nil {
+		t.Fatalf("failed to create POST request: %s", err.Error())
+	}
+	rr := httptest.NewRecorder()
+	s.ServeHTTP(rr, req)
+
+	if rr.Code != http.StatusMovedPermanently {
+		t.Fatalf("expected 301, got %d", rr.Code)
+	}
+}
+
 func Test_LeaderMethodNotAllowed(t *testing.T) {
 	store := &MockStore{leaderAddr: "127.0.0.1:8001"}
 	cluster := &mockClusterService{apiAddr: "http://127.0.0.1:4001"}
@@ -2311,6 +2504,7 @@ type MockStore struct {
 	readFromFn  func(r io.Reader) (int64, error)
 	committedFn func(timeout time.Duration) (uint64, error)
 	stepdownFn  func(wait bool, id string) error
+	demoteFn    func(dn *command.DemoteNodeRequest) error
 	leaderAddr  string
 	notReady    bool // Default value is true, easier to test.
 }
@@ -2346,6 +2540,13 @@ func (m *MockStore) Notify(nr *command.NotifyRequest) error {
 }
 
 func (m *MockStore) Remove(ctx context.Context, rn *command.RemoveNodeRequest) error {
+	return nil
+}
+
+func (m *MockStore) Demote(ctx context.Context, dn *command.DemoteNodeRequest) error {
+	if m.demoteFn != nil {
+		return m.demoteFn(dn)
+	}
 	return nil
 }
 
@@ -2431,6 +2632,7 @@ type mockClusterService struct {
 	backupFn     func(br *command.BackupRequest, addr string, t time.Duration, w io.Writer) (int, error)
 	loadFn       func(lr *command.LoadRequest, addr string, t time.Duration) error
 	removeNodeFn func(rn *command.RemoveNodeRequest, nodeAddr string, t time.Duration) error
+	demoteNodeFn func(dn *command.DemoteNodeRequest, nodeAddr string, t time.Duration) error
 	stepdownFn   func(sr *command.StepdownRequest, nodeAddr string, t time.Duration) error
 }
 
@@ -2478,6 +2680,13 @@ func (m *mockClusterService) Load(ctx context.Context, lr *command.LoadRequest, 
 func (m *mockClusterService) RemoveNode(ctx context.Context, rn *command.RemoveNodeRequest, addr string, creds *cluster.Credentials, t time.Duration) error {
 	if m.removeNodeFn != nil {
 		return m.removeNodeFn(rn, addr, t)
+	}
+	return nil
+}
+
+func (m *mockClusterService) DemoteNode(ctx context.Context, dn *command.DemoteNodeRequest, addr string, creds *cluster.Credentials, t time.Duration) error {
+	if m.demoteNodeFn != nil {
+		return m.demoteNodeFn(dn, addr, t)
 	}
 	return nil
 }
