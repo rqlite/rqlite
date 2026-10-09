@@ -517,6 +517,8 @@ func (s *Service) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		s.handleReap(w, r)
 	case strings.HasPrefix(r.URL.Path, "/remove"):
 		s.handleRemove(w, r, params)
+	case strings.HasPrefix(r.URL.Path, "/demote"):
+		s.handleDemote(w, r, params)
 	case strings.HasPrefix(r.URL.Path, "/status"):
 		stats.Add(numStatus, 1)
 		s.handleStatus(w, r, params)
@@ -583,6 +585,47 @@ func (s *Service) handleRemove(w http.ResponseWriter, r *http.Request, qp QueryP
 		}
 		if errors.Is(err, proxy.ErrUnauthorized) {
 			http.Error(w, "remote remove node not authorized", http.StatusUnauthorized)
+			return
+		}
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	w.Header().Set(ServedByHTTPHeader, addr)
+}
+
+// handleDemote handles requests to demote a voting node to a non-voter.
+func (s *Service) handleDemote(w http.ResponseWriter, r *http.Request, qp QueryParams) {
+	if !s.CheckRequestPerm(r, auth.PermDemote) {
+		w.WriteHeader(http.StatusUnauthorized)
+		return
+	}
+
+	if r.Method != "POST" {
+		w.WriteHeader(http.StatusMethodNotAllowed)
+		return
+	}
+
+	id, ok := nodeIDFromBody(w, r)
+	if !ok {
+		return
+	}
+	dn := &proto.DemoteNodeRequest{
+		Id: id,
+	}
+
+	addr, err := s.proxy.Demote(r.Context(), dn, makeCredentials(r), qp.Timeout(defaultTimeout), qp.Redirect())
+	if err != nil {
+		if errors.Is(err, proxy.ErrNotLeader) {
+			s.DoRedirect(w, r, qp)
+			return
+		}
+		if errors.Is(err, proxy.ErrLeaderNotFound) {
+			stats.Add(numLeaderNotFound, 1)
+			http.Error(w, proxy.ErrLeaderNotFound.Error(), http.StatusServiceUnavailable)
+			return
+		}
+		if errors.Is(err, proxy.ErrUnauthorized) {
+			http.Error(w, "remote demote node not authorized", http.StatusUnauthorized)
 			return
 		}
 		http.Error(w, err.Error(), http.StatusInternalServerError)
