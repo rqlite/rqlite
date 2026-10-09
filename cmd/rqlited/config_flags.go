@@ -116,6 +116,8 @@ type Config struct {
 	AutoOptimizeInterval time.Duration
 	// Comma-delimited list of paths to directories, zipfiles, or tar.gz files containing SQLite extensions
 	ExtensionPaths []string
+	// Set to 'stderr' to log every SQL statement, or to path of query-log config file. If not set, query logging not enabled
+	QueryLog string
 	// Queued Writes queue capacity
 	WriteQueueCap int
 	// Queued Writes queue batch size
@@ -212,6 +214,7 @@ func Forge(arguments []string) (*flag.FlagSet, *Config, error) {
 	fs.DurationVar(&config.AutoOptimizeInterval, "auto-optimize-int", mustParseDuration("24h"), "Period between automatic 'PRAGMA optimize'. Set to 0h to disable")
 	var tmpExtensionPaths string
 	fs.StringVar(&tmpExtensionPaths, "extensions-path", "", "Comma-delimited list of paths to directories, zipfiles, or tar.gz files containing SQLite extensions")
+	fs.StringVar(&config.QueryLog, "query-log", "", "Set to 'stderr' to log every SQL statement, or to path of query-log config file. If not set, query logging not enabled")
 	fs.IntVar(&config.WriteQueueCap, "write-queue-capacity", 1024, "Queued Writes queue capacity")
 	fs.IntVar(&config.WriteQueueBatchSz, "write-queue-batch-size", 128, "Queued Writes queue batch size")
 	fs.DurationVar(&config.WriteQueueTimeout, "write-queue-timeout", mustParseDuration("50ms"), "Queued Writes queue timeout")
