@@ -83,7 +83,7 @@ func newConfigFromFile(path string) (*Config, error) {
 
 	var cfg Config
 	if err := json.Unmarshal(b, &cfg); err != nil {
-		return nil, fmt.Errorf("failed to unmarshal config ta %s: %w", path, err)
+		return nil, fmt.Errorf("failed to unmarshal config file %s: %w", path, err)
 	}
 
 	// Apply defaults to omitted fields only. An explicit zero is left as-is.
