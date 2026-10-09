@@ -511,6 +511,9 @@ func Test_StoreSingleNodeNotOpen(t *testing.T) {
 	if err := s.Remove(context.Background(), nil); err != ErrNotOpen {
 		t.Fatalf("wrong error received for non-open store: %s", err)
 	}
+	if err := s.Demote(context.Background(), nil); err != ErrNotOpen {
+		t.Fatalf("wrong error received for non-open store: %s", err)
+	}
 	if _, err := s.Nodes(); err != ErrNotOpen {
 		t.Fatalf("wrong error received for non-open store: %s", err)
 	}
@@ -2774,6 +2777,49 @@ func Test_SingleNodeWaitForRemove(t *testing.T) {
 	}
 }
 
+// Test_SingleNodeDemote tests that a single-node cluster refuses to demote
+// a node which is not a member, and refuses to demote its only voter.
+func Test_SingleNodeDemote(t *testing.T) {
+	s, ln := mustNewStore(t)
+	defer ln.Close()
+	if err := s.Open(); err != nil {
+		t.Fatalf("failed to open single-node store: %s", err.Error())
+	}
+	defer s.Close(true)
+	if err := s.Bootstrap(NewServer(s.ID(), s.Addr(), true)); err != nil {
+		t.Fatalf("failed to bootstrap single-node store: %s", err.Error())
+	}
+	if _, err := s.WaitForLeader(10 * time.Second); err != nil {
+		t.Fatalf("Error waiting for leader: %s", err)
+	}
+
+	// Demoting a node that isn't in the cluster should fail.
+	err := s.Demote(context.Background(), demoteNodeRequest("nonexistent-node"))
+	if !errors.Is(err, ErrNodeNotFound) {
+		t.Fatalf("expected ErrNodeNotFound demoting nonexistent node, got: %v", err)
+	}
+
+	// Demoting the only voter would leave the cluster without any voters,
+	// so Raft must refuse it.
+	if err := s.Demote(context.Background(), demoteNodeRequest(s.ID())); err == nil {
+		t.Fatalf("expected error demoting the only voter in the cluster")
+	}
+	v, err := s.IsVoter()
+	if err != nil {
+		t.Fatalf("failed to get voter status: %s", err.Error())
+	}
+	if !v {
+		t.Fatalf("node should still be a voter")
+	}
+
+	// A canceled context should be rejected before anything else happens.
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	if err := s.Demote(ctx, demoteNodeRequest(s.ID())); !errors.Is(err, context.Canceled) {
+		t.Fatalf("expected context.Canceled, got: %v", err)
+	}
+}
+
 func Test_SingleNodeNoop(t *testing.T) {
 	s, ln := mustNewStore(t)
 	defer ln.Close()
@@ -3581,6 +3627,12 @@ func notifyRequest(id, addr string) *proto.NotifyRequest {
 
 func removeNodeRequest(id string) *proto.RemoveNodeRequest {
 	return &proto.RemoveNodeRequest{
+		Id: id,
+	}
+}
+
+func demoteNodeRequest(id string) *proto.DemoteNodeRequest {
+	return &proto.DemoteNodeRequest{
 		Id: id,
 	}
 }

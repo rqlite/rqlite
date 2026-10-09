@@ -1264,6 +1264,104 @@ func Test_MultiNodeJoinNonVoter_ChangedIDAddrSame(t *testing.T) {
 	}
 }
 
+// Test_MultiNodeDemote tests demoting a voting follower to a non-voter.
+func Test_MultiNodeDemote(t *testing.T) {
+	s0, ln0 := mustNewStore(t)
+	defer ln0.Close()
+	if err := s0.Open(); err != nil {
+		t.Fatalf("failed to open single-node store: %s", err.Error())
+	}
+	defer s0.Close(true)
+	if err := s0.Bootstrap(NewServer(s0.ID(), s0.Addr(), true)); err != nil {
+		t.Fatalf("failed to bootstrap single-node store: %s", err.Error())
+	}
+	if _, err := s0.WaitForLeader(10 * time.Second); err != nil {
+		t.Fatalf("Error waiting for leader: %s", err)
+	}
+
+	s1, ln1 := mustNewStore(t)
+	defer ln1.Close()
+	if err := s1.Open(); err != nil {
+		t.Fatalf("failed to open single-node store: %s", err.Error())
+	}
+	defer s1.Close(true)
+
+	// Join the second node to the first as a voter.
+	if err := s0.Join(joinRequest(s1.ID(), s1.Addr(), true)); err != nil {
+		t.Fatalf("failed to join to node at %s: %s", s0.Addr(), err.Error())
+	}
+	if _, err := s1.WaitForLeader(10 * time.Second); err != nil {
+		t.Fatalf("Error waiting for leader: %s", err)
+	}
+	testPoll(t, func() bool {
+		v, err := s1.IsVoter()
+		return err == nil && v
+	}, 100*time.Millisecond, 5*time.Second)
+
+	// A follower cannot demote anything.
+	if err := s1.Demote(context.Background(), demoteNodeRequest(s0.ID())); !errors.Is(err, ErrNotLeader) {
+		t.Fatalf("expected ErrNotLeader demoting via follower, got: %v", err)
+	}
+
+	// Demote the follower via the leader.
+	if err := s0.Demote(context.Background(), demoteNodeRequest(s1.ID())); err != nil {
+		t.Fatalf("failed to demote %s: %s", s1.ID(), err.Error())
+	}
+
+	// Leader's view of the cluster should show the follower as a non-voter,
+	// and the cluster should still have both nodes.
+	nodes, err := s0.Nodes()
+	if err != nil {
+		t.Fatalf("failed to get nodes post demote: %s", err.Error())
+	}
+	if len(nodes) != 2 {
+		t.Fatalf("size of cluster is not correct post demote, got %d", len(nodes))
+	}
+	for _, n := range nodes {
+		switch n.ID {
+		case s0.ID():
+			if n.Suffrage != proto.Suffrage_VOTER {
+				t.Fatalf("leader should still be a voter")
+			}
+		case s1.ID():
+			if n.Suffrage != proto.Suffrage_NON_VOTER {
+				t.Fatalf("demoted node should be a non-voter, got %s", n.Suffrage)
+			}
+		default:
+			t.Fatalf("unexpected node %s in cluster", n.ID)
+		}
+	}
+
+	// The demoted node should learn of its new status via replication.
+	testPoll(t, func() bool {
+		v, err := s1.IsVoter()
+		return err == nil && !v
+	}, 100*time.Millisecond, 5*time.Second)
+
+	// Demoting an already-demoted node is a no-op.
+	if err := s0.Demote(context.Background(), demoteNodeRequest(s1.ID())); err != nil {
+		t.Fatalf("failed to demote already-demoted node %s: %s", s1.ID(), err.Error())
+	}
+
+	// Demoting a node that isn't in the cluster should fail.
+	err = s0.Demote(context.Background(), demoteNodeRequest("nonexistent-node"))
+	if !errors.Is(err, ErrNodeNotFound) {
+		t.Fatalf("expected ErrNodeNotFound demoting nonexistent node, got: %v", err)
+	}
+
+	// The non-voter can still be removed.
+	if err := s0.Remove(context.Background(), removeNodeRequest(s1.ID())); err != nil {
+		t.Fatalf("failed to remove %s from cluster: %s", s1.ID(), err.Error())
+	}
+	nodes, err = s0.Nodes()
+	if err != nil {
+		t.Fatalf("failed to get nodes post remove: %s", err.Error())
+	}
+	if len(nodes) != 1 || nodes[0].ID != s0.ID() {
+		t.Fatalf("cluster does not have correct nodes post remove")
+	}
+}
+
 func Test_MultiNodeJoinNonVoterRemove(t *testing.T) {
 	s0, ln0 := mustNewStore(t)
 	defer ln0.Close()
