@@ -519,6 +519,8 @@ func (s *Service) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		s.handleRemove(w, r, params)
 	case strings.HasPrefix(r.URL.Path, "/demote"):
 		s.handleDemote(w, r, params)
+	case strings.HasPrefix(r.URL.Path, "/promote"):
+		s.handlePromote(w, r, params)
 	case strings.HasPrefix(r.URL.Path, "/status"):
 		stats.Add(numStatus, 1)
 		s.handleStatus(w, r, params)
@@ -626,6 +628,47 @@ func (s *Service) handleDemote(w http.ResponseWriter, r *http.Request, qp QueryP
 		}
 		if errors.Is(err, proxy.ErrUnauthorized) {
 			http.Error(w, "remote demote node not authorized", http.StatusUnauthorized)
+			return
+		}
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	w.Header().Set(ServedByHTTPHeader, addr)
+}
+
+// handlePromote handles requests to promote a non-voting node to a voter.
+func (s *Service) handlePromote(w http.ResponseWriter, r *http.Request, qp QueryParams) {
+	if !s.CheckRequestPerm(r, auth.PermPromote) {
+		w.WriteHeader(http.StatusUnauthorized)
+		return
+	}
+
+	if r.Method != "POST" {
+		w.WriteHeader(http.StatusMethodNotAllowed)
+		return
+	}
+
+	id, ok := nodeIDFromBody(w, r)
+	if !ok {
+		return
+	}
+	pn := &proto.PromoteNodeRequest{
+		Id: id,
+	}
+
+	addr, err := s.proxy.Promote(r.Context(), pn, makeCredentials(r), qp.Timeout(defaultTimeout), qp.Redirect())
+	if err != nil {
+		if errors.Is(err, proxy.ErrNotLeader) {
+			s.DoRedirect(w, r, qp)
+			return
+		}
+		if errors.Is(err, proxy.ErrLeaderNotFound) {
+			stats.Add(numLeaderNotFound, 1)
+			http.Error(w, proxy.ErrLeaderNotFound.Error(), http.StatusServiceUnavailable)
+			return
+		}
+		if errors.Is(err, proxy.ErrUnauthorized) {
+			http.Error(w, "remote promote node not authorized", http.StatusUnauthorized)
 			return
 		}
 		http.Error(w, err.Error(), http.StatusInternalServerError)

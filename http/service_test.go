@@ -337,6 +337,8 @@ func Test_405Routes(t *testing.T) {
 		{method: "POST", path: "/remove"},
 		{method: "GET", path: "/demote"},
 		{method: "DELETE", path: "/demote"},
+		{method: "GET", path: "/promote"},
+		{method: "DELETE", path: "/promote"},
 		{method: "GET", path: "/snapshot"},
 		{method: "POST", path: "/db/backup"},
 		{method: "POST", path: "/status"},
@@ -426,6 +428,7 @@ func Test_401Routes_NoBasicAuth(t *testing.T) {
 		"/boot",
 		"/remove",
 		"/demote",
+		"/promote",
 		"/status",
 		"/nodes",
 		"/leader",
@@ -1991,6 +1994,190 @@ func Test_Demote_POST_Redirect(t *testing.T) {
 	s := New("127.0.0.1:4001", store, cluster, proxy.New(store, cluster), cred)
 
 	req, err := http.NewRequest("POST", "/demote?redirect", strings.NewReader(`{"id": "node1"}`))
+	if err != nil {
+		t.Fatalf("failed to create POST request: %s", err.Error())
+	}
+	rr := httptest.NewRecorder()
+	s.ServeHTTP(rr, req)
+
+	if rr.Code != http.StatusMovedPermanently {
+		t.Fatalf("expected 301, got %d", rr.Code)
+	}
+}
+
+func Test_Promote_POST(t *testing.T) {
+	promotedID := ""
+	store := &MockStore{
+		leaderAddr: "127.0.0.1:8001",
+		promoteFn: func(pn *command.PromoteNodeRequest) error {
+			promotedID = pn.Id
+			return nil
+		},
+	}
+	cluster := &mockClusterService{apiAddr: "http://127.0.0.1:4001"}
+	cred := &mockCredentialStore{HasPermOK: true}
+
+	s := New("127.0.0.1:4001", store, cluster, proxy.New(store, cluster), cred)
+
+	req, err := http.NewRequest("POST", "/promote", strings.NewReader(`{"id": "node1"}`))
+	if err != nil {
+		t.Fatalf("failed to create POST request: %s", err.Error())
+	}
+	rr := httptest.NewRecorder()
+	s.ServeHTTP(rr, req)
+
+	if rr.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", rr.Code)
+	}
+	if promotedID != "node1" {
+		t.Fatalf("expected node1 to be promoted, got %q", promotedID)
+	}
+}
+
+func Test_Promote_POST_BadRequest(t *testing.T) {
+	store := &MockStore{
+		leaderAddr: "127.0.0.1:8001",
+		promoteFn: func(pn *command.PromoteNodeRequest) error {
+			t.Fatalf("promote should not be called")
+			return nil
+		},
+	}
+	cluster := &mockClusterService{apiAddr: "http://127.0.0.1:4001"}
+	cred := &mockCredentialStore{HasPermOK: true}
+
+	s := New("127.0.0.1:4001", store, cluster, proxy.New(store, cluster), cred)
+
+	for _, body := range []string{``, `not json`, `{}`, `{"foo": "bar"}`, `{"id": "node1", "foo": "bar"}`} {
+		req, err := http.NewRequest("POST", "/promote", strings.NewReader(body))
+		if err != nil {
+			t.Fatalf("failed to create POST request: %s", err.Error())
+		}
+		rr := httptest.NewRecorder()
+		s.ServeHTTP(rr, req)
+
+		if rr.Code != http.StatusBadRequest {
+			t.Fatalf("expected 400 for body %q, got %d", body, rr.Code)
+		}
+	}
+}
+
+func Test_Promote_POST_StoreError(t *testing.T) {
+	store := &MockStore{
+		leaderAddr: "127.0.0.1:8001",
+		promoteFn: func(pn *command.PromoteNodeRequest) error {
+			return errors.New("promote failed")
+		},
+	}
+	cluster := &mockClusterService{apiAddr: "http://127.0.0.1:4001"}
+	cred := &mockCredentialStore{HasPermOK: true}
+
+	s := New("127.0.0.1:4001", store, cluster, proxy.New(store, cluster), cred)
+
+	req, err := http.NewRequest("POST", "/promote", strings.NewReader(`{"id": "node1"}`))
+	if err != nil {
+		t.Fatalf("failed to create POST request: %s", err.Error())
+	}
+	rr := httptest.NewRecorder()
+	s.ServeHTTP(rr, req)
+
+	if rr.Code != http.StatusInternalServerError {
+		t.Fatalf("expected 500, got %d", rr.Code)
+	}
+	if !strings.Contains(rr.Body.String(), "promote failed") {
+		t.Fatalf("expected error message to contain 'promote failed', got %s", rr.Body.String())
+	}
+}
+
+func Test_Promote_POST_ForwardToLeader(t *testing.T) {
+	forwardedID := ""
+	forwardedAddr := ""
+	store := &MockStore{
+		leaderAddr: "127.0.0.1:8001",
+		promoteFn: func(pn *command.PromoteNodeRequest) error {
+			return store.ErrNotLeader
+		},
+	}
+	cluster := &mockClusterService{
+		apiAddr: "http://127.0.0.1:4001",
+		promoteNodeFn: func(pn *command.PromoteNodeRequest, nodeAddr string, t time.Duration) error {
+			forwardedID = pn.Id
+			forwardedAddr = nodeAddr
+			return nil
+		},
+	}
+	cred := &mockCredentialStore{HasPermOK: true}
+
+	s := New("127.0.0.1:4001", store, cluster, proxy.New(store, cluster), cred)
+
+	req, err := http.NewRequest("POST", "/promote", strings.NewReader(`{"id": "node1"}`))
+	if err != nil {
+		t.Fatalf("failed to create POST request: %s", err.Error())
+	}
+	rr := httptest.NewRecorder()
+	s.ServeHTTP(rr, req)
+
+	if rr.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", rr.Code)
+	}
+	if forwardedID != "node1" {
+		t.Fatalf("expected promote of node1 to be forwarded to leader, got %q", forwardedID)
+	}
+	if forwardedAddr != "127.0.0.1:8001" {
+		t.Fatalf("expected promote to be forwarded to 127.0.0.1:8001, got %q", forwardedAddr)
+	}
+}
+
+func Test_Promote_POST_ForwardError(t *testing.T) {
+	store := &MockStore{
+		leaderAddr: "127.0.0.1:8001",
+		promoteFn: func(pn *command.PromoteNodeRequest) error {
+			return store.ErrNotLeader
+		},
+	}
+	cluster := &mockClusterService{
+		apiAddr: "http://127.0.0.1:4001",
+		promoteNodeFn: func(pn *command.PromoteNodeRequest, nodeAddr string, t time.Duration) error {
+			return errors.New("promote failed")
+		},
+	}
+	cred := &mockCredentialStore{HasPermOK: true}
+
+	s := New("127.0.0.1:4001", store, cluster, proxy.New(store, cluster), cred)
+
+	req, err := http.NewRequest("POST", "/promote", strings.NewReader(`{"id": "node1"}`))
+	if err != nil {
+		t.Fatalf("failed to create POST request: %s", err.Error())
+	}
+	rr := httptest.NewRecorder()
+	s.ServeHTTP(rr, req)
+
+	if rr.Code != http.StatusInternalServerError {
+		t.Fatalf("expected 500, got %d", rr.Code)
+	}
+	if !strings.Contains(rr.Body.String(), "promote failed") {
+		t.Fatalf("expected error message to contain 'promote failed', got %s", rr.Body.String())
+	}
+}
+
+func Test_Promote_POST_Redirect(t *testing.T) {
+	store := &MockStore{
+		leaderAddr: "127.0.0.1:8001",
+		promoteFn: func(pn *command.PromoteNodeRequest) error {
+			return store.ErrNotLeader
+		},
+	}
+	cluster := &mockClusterService{
+		apiAddr: "http://127.0.0.1:4001",
+		promoteNodeFn: func(pn *command.PromoteNodeRequest, nodeAddr string, _ time.Duration) error {
+			t.Fatalf("promote should not be forwarded when redirect is requested")
+			return nil
+		},
+	}
+	cred := &mockCredentialStore{HasPermOK: true}
+
+	s := New("127.0.0.1:4001", store, cluster, proxy.New(store, cluster), cred)
+
+	req, err := http.NewRequest("POST", "/promote?redirect", strings.NewReader(`{"id": "node1"}`))
 	if err != nil {
 		t.Fatalf("failed to create POST request: %s", err.Error())
 	}
