@@ -23,46 +23,64 @@
                 </button>
             </h1>
             <nav>
+                <button class="tab active" data-tab="status" aria-current="page">Home</button>
                 <button class="tab" data-tab="schema">Schema</button>
                 <button class="tab" data-tab="query">Query</button>
                 <button class="tab" data-tab="backup">Backup</button>
                 <button class="tab" data-tab="restore">Restore</button>
-                <button class="tab" data-tab="topology">Topology</button>
             </nav>
             <div id="node-info" class="node-info"><span id="node-id-text"></span><br><span id="raft-state-badge"></span></div>
             <button id="theme-toggle" class="theme-toggle" title="Toggle dark mode">&#9790;</button>
         </div>
     </header>
     <main>
-        <section id="topology" class="tab-content">
+        <section id="status" class="tab-content active">
             <div class="cluster-toolbar">
-                <div>
-                    <h2>Topology</h2>
-                    <p id="cluster-perspective" class="cluster-muted">Membership and reachability</p>
+                <div class="cluster-heading">
+                    <h2>Cluster</h2>
+                    <div id="cluster-summary" class="cluster-summary" aria-live="polite">Connecting to cluster…</div>
                 </div>
                 <div class="cluster-controls">
-                    <label><input type="checkbox" id="cluster-show-read-replicas" checked> Show read replicas</label>
                     <label><input type="checkbox" id="cluster-auto-refresh" checked> Auto-refresh (5s)</label>
                     <button type="button" id="cluster-refresh">Refresh</button>
                 </div>
             </div>
             <div id="cluster-message" role="status" class="cluster-message" hidden></div>
-            <div id="cluster-summary" class="cluster-summary" aria-live="polite"></div>
-            <div class="cluster-map-panel">
-                <div class="cluster-map-heading">
-                    <span>Replication topology</span>
-                    <span id="cluster-updated" class="cluster-muted">Waiting for cluster information</span>
-                </div>
-                <div id="cluster-map" class="cluster-map" aria-label="Cluster nodes"></div>
-                <div class="cluster-legend">
-                    <span><i class="cluster-dot is-reachable"></i> Reachable</span>
-                    <span><i class="cluster-dot is-unreachable"></i> Unreachable</span>
-                    <span><i class="cluster-dot is-unknown"></i> Unknown / stale</span>
-                    <span><i class="cluster-line-key"></i> Voter</span>
-                    <span><i class="cluster-line-key is-replica"></i> Read Replica</span>
+            <div class="cluster-workspace">
+                <aside id="node-inspector" class="node-inspector" aria-labelledby="inspector-title">
+                    <div class="inspector-heading">
+                        <span class="inspector-eyebrow">This node</span>
+                        <h2 id="inspector-title">Waiting for cluster</h2>
+                        <div id="inspector-state" class="inspector-state" aria-live="polite"></div>
+                    </div>
+                    <div class="inspector-body">
+                        <dl id="inspector-meta" class="inspector-meta"></dl>
+                        <div id="local-node-details" hidden>
+                            <dl id="node-stats" class="inspector-stats"></dl>
+                            <div id="detail-sections"></div>
+                            <div class="raw-json-toggle">
+                                <button id="raw-json-btn" class="toggle-btn" aria-haspopup="dialog">Show Raw JSON</button>
+                            </div>
+                        </div>
+                        <p id="inspector-note" class="inspector-note">Node information will appear here.</p>
+                    </div>
+                </aside>
+                <div class="cluster-map-panel">
+                    <div class="cluster-map-heading">
+                        <h3>Topology</h3>
+                        <label id="cluster-replicas-option"><input type="checkbox" id="cluster-show-read-replicas" checked> Read replicas</label>
+                    </div>
+                    <div class="cluster-map-viewport">
+                        <div id="cluster-map" class="cluster-map" role="group" aria-label="Cluster node consoles"></div>
+                        <p id="cluster-empty" class="cluster-empty">Loading cluster nodes…</p>
+                    </div>
+                    <div class="cluster-map-footer">
+                        <span>Open a node’s console</span>
+                        <span id="cluster-updated">Waiting for first observation</span>
+                    </div>
                 </div>
             </div>
-            <p class="cluster-footnote">Connections show replication relationships. Reachability is checked from the node serving this console; it does not measure every connection or replication health.</p>
+            <p id="cluster-perspective" class="cluster-perspective">Reachability is observed from the node serving this console. Lines show replication relationships.</p>
         </section>
         <section id="query" class="tab-content">
             <div class="query-input">
@@ -90,26 +108,6 @@
             </div>
             <div id="query-history" class="query-history"></div>
             <div id="query-results"></div>
-        </section>
-        <section id="status" class="tab-content active">
-            <div class="status-controls">
-                <label><input type="checkbox" id="auto-refresh"> Auto-refresh (5s)</label>
-                <span id="last-updated" class="last-updated"></span>
-            </div>
-            <div id="status-cards" class="cards"></div>
-            <div class="nodes-header">
-                <h3>Nodes</h3>
-                <label class="nodes-option"><input type="checkbox" id="show-nonvoters"> Include read replicas</label>
-            </div>
-            <div id="nodes-table"></div>
-            <div id="detail-sections"></div>
-            <div class="raw-json-toggle">
-                <button id="raw-json-btn" class="toggle-btn">Show Raw JSON</button>
-            </div>
-            <div class="raw-json-wrapper hidden" id="raw-json-wrapper">
-                <button id="copy-json-btn" class="copy-json-btn" title="Copy to clipboard">&#x2398;</button>
-                <pre id="raw-json" class="raw-json"></pre>
-            </div>
         </section>
         <section id="schema" class="tab-content">
             <div class="schema-controls">
@@ -183,6 +181,31 @@
             </div>
         </section>
     </main>
+    <div id="node-menu" class="node-menu" role="menu" aria-label="Node actions" hidden>
+        <div id="node-menu-title" class="node-menu-title"></div>
+        <a id="node-menu-backup" role="menuitem" tabindex="-1">Download backup…</a>
+        <button id="node-menu-copy" type="button" role="menuitem" tabindex="-1">Copy node URL</button>
+        <a id="node-menu-open" role="menuitem" tabindex="-1" target="_blank" rel="noopener">Open console in new tab</a>
+    </div>
+    <p id="node-action-feedback" class="node-action-feedback" role="status" aria-live="polite" hidden></p>
+    <dialog id="raw-json-dialog" class="json-dialog" aria-labelledby="raw-json-title" aria-describedby="raw-json-context">
+        <div class="json-dialog-heading">
+            <div>
+                <h2 id="raw-json-title">Raw JSON</h2>
+                <p id="raw-json-context"></p>
+            </div>
+            <div class="json-dialog-actions">
+                <button type="button" class="json-copy-btn" data-copy-json aria-label="Copy JSON to clipboard" title="Copy JSON to clipboard">
+                    <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="8" y="8" width="12" height="12" rx="2"/><path d="M16 8V4a1 1 0 0 0-1-1H4a1 1 0 0 0-1 1v11a1 1 0 0 0 1 1h4"/></svg>
+                </button>
+                <button type="button" id="raw-json-close" class="json-close-btn" aria-label="Close raw JSON" title="Close (Esc)" autofocus>&times;</button>
+            </div>
+        </div>
+        <pre id="raw-json" class="raw-json" tabindex="0" aria-label="Node status JSON"></pre>
+        <div class="json-dialog-footer">
+            <span id="json-copy-status" role="status" aria-live="polite"></span>
+        </div>
+    </dialog>
     <footer>Copyright <span id="footer-year"></span> <a href="https://rqlite.io" target="_blank" rel="noopener">rqlite.io</a></footer>
     <script>document.getElementById("footer-year").textContent = new Date().getFullYear();</script>
     <script src="/console/static/js/app.js"></script>
