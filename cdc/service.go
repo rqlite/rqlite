@@ -635,7 +635,6 @@ func (s *Service) followerLoop() (chan struct{}, chan struct{}) {
 	stop := make(chan struct{})
 	done := make(chan struct{})
 
-	hwmPersisted := uint64(0)
 	go func() {
 		defer close(done)
 		for {
@@ -643,8 +642,11 @@ func (s *Service) followerLoop() (chan struct{}, chan struct{}) {
 			case <-stop:
 				return
 			case hwm := <-s.hwmObCh:
-				// Dedupe high watermark updates and ignore invalid ones.
-				if hwm <= hwmPersisted || hwm == 0 {
+				// The high watermark only ever advances. Ignore duplicate
+				// updates, and updates that lag what this node already
+				// knows, such as from a new leader that has yet to catch
+				// up with what this node delivered while it was leader.
+				if hwm <= s.highWatermark.Load() {
 					continue
 				}
 				// This means all events up to this high watermark have been
@@ -653,7 +655,6 @@ func (s *Service) followerLoop() (chan struct{}, chan struct{}) {
 				if err := s.fifo.DeleteRange(hwm); err != nil {
 					s.logger.Printf("error deleting events up to high watermark from FIFO: %v", err)
 				}
-				hwmPersisted = hwm
 				s.highWatermark.Store(hwm)
 				s.hwmFollowerUpdated.Add(1)
 			}
