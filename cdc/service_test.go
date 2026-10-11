@@ -977,6 +977,63 @@ func Test_ServiceHWMUpdate_Leader(t *testing.T) {
 	}, 2*time.Second)
 }
 
+// Test_ServiceHWMUpdate_Follow_NoRegress tests that a high watermark update
+// from the cluster never moves a node's high watermark backwards. This can
+// happen when a node delivers events as leader, loses leadership, and the new
+// leader broadcasts a high watermark that lags the old leader's.
+func Test_ServiceHWMUpdate_Follow_NoRegress(t *testing.T) {
+	ResetStats()
+
+	cl := &mockCluster{}
+
+	cfg := DefaultConfig()
+	cfg.MaxBatchSz = 1
+	cfg.MaxBatchDelay = 50 * time.Millisecond
+	cfg.HighWatermarkInterval = 10 * time.Second // Keep the leader's own broadcasts out of the test.
+	cfg.Endpoint = "stdout"
+	in := make(chan *proto.CDCIndexedEventGroup, 100)
+	svc, err := NewService(
+		"node1",
+		t.TempDir(),
+		cl,
+		in,
+		cfg,
+	)
+	if err != nil {
+		t.Fatalf("failed to create service: %v", err)
+	}
+	if err := svc.Start(); err != nil {
+		t.Fatalf("failed to start service: %v", err)
+	}
+	defer svc.Stop()
+
+	// As leader, deliver an event so the high watermark reaches 100.
+	cl.SetLeader(0)
+	testPoll(t, func() bool { return svc.IsLeader() }, 2*time.Second)
+	in <- &proto.CDCIndexedEventGroup{
+		Index: 100,
+		Events: []*proto.CDCEvent{
+			{
+				Op:       proto.CDCEvent_INSERT,
+				Table:    "foo",
+				NewRowId: 1,
+			},
+		},
+	}
+	testPoll(t, func() bool { return svc.HighWatermark() == 100 }, 2*time.Second)
+
+	// Step down, then receive a lagging high watermark followed by one that
+	// is ahead. Only the latter should be applied.
+	cl.SetLeader(-1)
+	testPoll(t, func() bool { return !svc.IsLeader() }, 2*time.Second)
+	cl.BroadcastHighWatermark(90)
+	cl.BroadcastHighWatermark(110)
+	testPoll(t, func() bool { return svc.HighWatermark() == 110 }, 2*time.Second)
+	if n := svc.hwmFollowerUpdated.Load(); n != 1 {
+		t.Fatalf("expected 1 follower high watermark update, got %d", n)
+	}
+}
+
 func Test_ServiceHWMUpdate_Follow(t *testing.T) {
 	ResetStats()
 
