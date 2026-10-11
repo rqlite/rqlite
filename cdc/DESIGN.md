@@ -20,7 +20,7 @@ The CDC service runs on every node in the cluster, but only the **leader** trans
 SQLite commit hooks (during FSM Apply)
     |
     v
-in channel (CDCIndexedEventGroup protobufs)
+Service.Write (one CDCIndexedEventGroup per log entry)
     |
     v
 Batcher (collects events up to batch size or time limit)
@@ -79,13 +79,18 @@ A **row-IDs-only mode** is available (`row_ids_only` in the config) which omits 
 
 ### Service
 
-The `Service` is the top-level coordinator. It is instantiated with a `Config`, a `Cluster` interface for leadership and high watermark operations, and a channel on which to receive CDC events from the FSM.
+The `Service` is the top-level coordinator. It is instantiated with a `Config` and a `Cluster` interface for leadership and high watermark operations. The store gives it events through two methods, which together form the service's contract with its producer:
+
+- `Write`: Hands the service the events produced by applying one Raft log entry.
+- `Sync`: Returns once every event given to `Write` before the call is in the FIFO, or an error if that has not happened within a timeout. Why a caller needs that guarantee is the caller's business; the store uses it before snapshotting (see below).
+
+Both methods send a message on one internal channel, so the order in which the store calls them is the order in which the service sees them.
 
 On `Start`, the service launches two goroutines:
 
-- **writeToBatcher**: Reads events from the input channel and writes them to an in-memory batcher. This runs on every node regardless of leadership status. It also handles snapshot synchronization (see below).
+- **writeToBatcher**: Reads messages from the internal channel and writes them to an in-memory batcher. This runs on every node regardless of leadership status. A sync request also forces the batcher to flush, so it is not held for up to the batch delay.
 
-- **mainLoop**: Manages leadership transitions and reads batched events from the batcher into the persistent FIFO. It switches between a leader loop and a follower loop based on leadership notifications.
+- **mainLoop**: Manages leadership transitions and reads batches from the batcher into the persistent FIFO. Once a batch is in the FIFO, it answers any sync requests the batch carried. It switches between a leader loop and a follower loop based on leadership notifications.
 
 ### Batcher
 
@@ -149,7 +154,6 @@ The sink is selected based on the configured endpoint string. Using `"stdout"` a
 The `Cluster` interface decouples the CDC service from the concrete Raft and cluster implementations. It provides:
 
 - `RegisterLeaderChange`: Receive notifications when leadership changes.
-- `RegisterSnapshotSync`: Synchronize with the snapshotting process (see below).
 - `RegisterHWMUpdate`: Receive high watermark updates from the leader.
 - `BroadcastHighWatermark`: Broadcast the high watermark to all voting nodes.
 
@@ -157,16 +161,18 @@ The `CDCCluster` type is the production implementation, bridging the CDC service
 
 ## Snapshot Synchronization
 
-Snapshotting deletes Raft log entries. If the CDC batcher has events in memory that haven't been written to the FIFO yet, those events could be lost if the corresponding log entries are truncated during snapshotting.
+Snapshotting deletes Raft log entries. If the CDC service still holds events in memory that haven't been written to the FIFO, those events would be lost if the corresponding log entries were truncated and the process then crashed, since the snapshot already reflects the changes and the entries would never be re-applied.
 
-To prevent this, the CDC service registers a snapshot synchronization channel. Before a snapshot proceeds, the store sends a channel on `snapshotCh`. The CDC service responds by:
+To prevent this, the store calls `Sync` on the service from its snapshot callback and does not snapshot unless `Sync` succeeds. The request takes the same path as the events:
 
-1. Writing a flush marker to the batcher.
-2. Flushing the batcher, forcing all pending events to be written to the FIFO.
-3. Waiting for the flush to complete (the flush marker propagates through the batcher and back).
-4. Closing the received channel, signaling that snapshotting can proceed.
+1. `Sync` sends a sync request on the service's internal channel, behind every event already written.
+2. `writeToBatcher` moves it into the batcher behind those events and flushes the batcher.
+3. `mainLoop` writes the batch holding the request to the FIFO, then answers the request.
+4. `Sync` returns, and the store snapshots.
 
-This ensures all committed changes are safely in the BoltDB FIFO before any Raft log truncation occurs. The synchronization is brief — it only blocks snapshotting for the time it takes to flush the in-memory batcher, not for the time it takes to deliver events to the webhook.
+Ordering is the whole guarantee. The request can only be answered after everything written before it, because it travels behind those events through a single channel and a single batcher. There is nothing to block on the producer side: events written after the request belong to log entries applied after the snapshot point, which this snapshot does not truncate.
+
+`Sync` returns an error if the request is not answered within its timeout, which happens if the batch cannot be written to the FIFO, if the batcher is closed, or if the service is stopped first. The store then abandons the snapshot and keeps its log entries. The synchronization is brief — it only blocks snapshotting for the time it takes to flush the in-memory batcher, not for the time it takes to deliver events to the webhook.
 
 ## Leadership Transitions and Duplicate Handling
 
