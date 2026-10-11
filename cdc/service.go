@@ -463,21 +463,24 @@ func (s *Service) writeToBatcher() {
 
 		case ch := <-s.snapshotCh:
 			stats.Add(numSnapshotSync, 1)
-			evg := &proto.CDCIndexedEventGroup{
-				Flush: true,
-			}
-			fc := make(queue.FlushChannel)
-			if _, err := s.batcher.WriteOne(evg, fc); err != nil {
-				s.logger.Printf("error writing CDC flush event to batcher: %v", err)
-				continue
-			}
+			func() {
+				defer close(ch) // Snapshotting can proceed once we return.
 
-			s.batcher.Flush()
-			select {
-			case <-fc: // Wait for CDC to write to BoltDB.
-			case <-s.done: // Or detect we're shutting down.
-			}
-			close(ch) // Snapshotting can proceed now.
+				evg := &proto.CDCIndexedEventGroup{
+					Flush: true,
+				}
+				fc := make(queue.FlushChannel)
+				if _, err := s.batcher.WriteOne(evg, fc); err != nil {
+					s.logger.Printf("error writing CDC flush event to batcher: %v", err)
+					return
+				}
+
+				s.batcher.Flush()
+				select {
+				case <-fc: // Wait for CDC to write to BoltDB.
+				case <-s.done: // Or detect we're shutting down.
+				}
+			}()
 		case <-s.done:
 			return
 		}
