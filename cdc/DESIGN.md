@@ -167,6 +167,8 @@ To prevent this, the CDC service registers a snapshot synchronization channel. B
 4. Waiting for the flush to complete (the flush marker propagates through the batcher and back).
 5. Closing the received channel, signaling that snapshotting can proceed.
 
+The channel is closed only once the flush is known to have reached the FIFO. If a batch cannot be written to the FIFO, the write is retried until it succeeds or the service stops, and the channel stays open. The store then times out waiting, abandons the snapshot, and keeps the Raft log entries whose events are not yet durable. The same applies if the service stops before the flush completes.
+
 This ensures all committed changes are safely in the BoltDB FIFO before any Raft log truncation occurs. The synchronization is brief — it only blocks snapshotting for the time it takes to flush the in-memory batcher, not for the time it takes to deliver events to the webhook.
 
 ## Leadership Transitions and Duplicate Handling
