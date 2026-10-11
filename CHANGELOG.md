@@ -10,6 +10,7 @@ This release features an addition to the API. In the event of an error there is 
 
 ### Implementation changes and bug fixes
 - [PR #2862](https://github.com/rqlite/rqlite/pull/2862), [PR #2863](https://github.com/rqlite/rqlite/pull/2863), [PR #2866](https://github.com/rqlite/rqlite/pull/2866): Upgrade dependencies via `go get`.
+- [PR #2869](https://github.com/rqlite/rqlite/pull/2869): Optimize gzip memory usage via `sync.Pool`.
 
 ## v10.5.3 (October 7th 2026)
 ### Implementation changes and bug fixes
