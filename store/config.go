@@ -4,6 +4,7 @@ import (
 	"log"
 	"path/filepath"
 	"regexp"
+	"time"
 
 	"github.com/rqlite/rqlite/v10/command/proto"
 	"github.com/rqlite/rqlite/v10/db/querylog"
@@ -60,4 +61,8 @@ type CDCConfig struct {
 type CDCService interface {
 	// Write gives the service the events produced by applying one log entry.
 	Write(evs *proto.CDCIndexedEventGroup) error
+
+	// Sync returns once every group of events given to Write before the
+	// call is durable, or an error if that has not happened within timeout.
+	Sync(timeout time.Duration) error
 }

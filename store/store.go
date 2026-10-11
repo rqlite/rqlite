@@ -2634,11 +2634,16 @@ func (s *Store) fsmSnapshot() (fSnap raft.FSMSnapshot, retErr error) {
 		return nil, ErrNotOpen
 	}
 
-	syncStartTime := time.Now()
-	if _, _, err := s.snapshotSync.Sync(time.Second); err != nil {
-		return nil, err
+	if s.cdc != nil {
+		// Every CDC event produced by the log entries this snapshot covers must
+		// be durable in the CDC service before any of those entries can be
+		// truncated. If they are not, the snapshot is abandoned.
+		syncStartTime := time.Now()
+		if err := s.cdc.Sync(time.Second); err != nil {
+			return nil, fmt.Errorf("CDC sync failed: %w", err)
+		}
+		recordDuration(snapshotSyncDuration, syncStartTime)
 	}
-	recordDuration(snapshotSyncDuration, syncStartTime)
 
 	if err := s.snapshotCAS.Begin("snapshot"); err != nil {
 		return nil, err

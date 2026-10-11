@@ -128,7 +128,9 @@ func Test_ServiceSingleEvent(t *testing.T) {
 	waitFn(2*time.Second, 1)
 }
 
-func Test_ServiceSingleEvent_Flush(t *testing.T) {
+// Test_ServiceSync tests that Sync is answered when the service has nothing
+// to write.
+func Test_ServiceSync(t *testing.T) {
 	ResetStats()
 
 	cl := &mockCluster{}
@@ -154,19 +156,17 @@ func Test_ServiceSingleEvent_Flush(t *testing.T) {
 	// Make it the leader.
 	cl.SetLeader(0)
 
-	// Send one signal event to the service.
-	evs := &proto.CDCIndexedEventGroup{
-		Flush: true,
+	if err := svc.Sync(time.Second); err != nil {
+		t.Fatalf("sync failed: %v", err)
 	}
-
-	svc.Write(evs)
-
-	testPoll(t, func() bool {
-		return svc.flushRx.Load() == 1
-	}, 1*time.Second)
+	if n := svc.syncRx.Load(); n != 1 {
+		t.Fatalf("expected 1 sync request to be received, got %d", n)
+	}
 }
 
-func Test_ServiceSingleEvent_SnapshotSync(t *testing.T) {
+// Test_ServiceSync_FlushesBatcher tests that Sync gets events waiting in the
+// batcher into the FIFO, without waiting for the batch to fill.
+func Test_ServiceSync_FlushesBatcher(t *testing.T) {
 	ResetStats()
 
 	cl := &mockCluster{}
@@ -212,7 +212,9 @@ func Test_ServiceSingleEvent_SnapshotSync(t *testing.T) {
 	}, 1*time.Second)
 
 	// Now request a sync which should cause the event to be written to the FIFO.
-	cl.RequestSnapshotSync(1 * time.Second)
+	if err := svc.Sync(time.Second); err != nil {
+		t.Fatalf("sync failed: %v", err)
+	}
 
 	idx, err := svc.fifo.HighestKey()
 	if err != nil {
@@ -223,10 +225,9 @@ func Test_ServiceSingleEvent_SnapshotSync(t *testing.T) {
 	}
 }
 
-// Test_ServiceSnapshotSync_BatcherClosed tests that a snapshot sync request is
-// always answered, even when the service cannot flush its batcher. Otherwise
-// the Store would block snapshotting until its sync timeout expires.
-func Test_ServiceSnapshotSync_BatcherClosed(t *testing.T) {
+// Test_ServiceSync_BatcherClosed tests that Sync fails when the service
+// cannot get the sync request into its batcher.
+func Test_ServiceSync_BatcherClosed(t *testing.T) {
 	ResetStats()
 
 	cl := &mockCluster{}
@@ -247,11 +248,120 @@ func Test_ServiceSnapshotSync_BatcherClosed(t *testing.T) {
 	}
 	defer svc.Stop()
 
-	// Close the batcher so the flush marker cannot be written to it.
+	// Close the batcher so the sync request cannot be written to it.
 	svc.batcher.Close()
 
-	if err := cl.RequestSnapshotSync(1 * time.Second); err != nil {
-		t.Fatalf("snapshot sync did not complete: %v", err)
+	if err := svc.Sync(300 * time.Millisecond); err != ErrSyncTimeout {
+		t.Fatalf("expected ErrSyncTimeout, got %v", err)
+	}
+}
+
+// Test_ServiceSync_QueuedEvents tests that Sync is not answered until every
+// event written before it is in the FIFO, even if those events are still
+// waiting to be processed when Sync is called.
+func Test_ServiceSync_QueuedEvents(t *testing.T) {
+	ResetStats()
+
+	cl := &mockCluster{}
+
+	cfg := DefaultConfig()
+	cfg.Endpoint = "stdout"
+	cfg.MaxBatchSz = 1000
+	cfg.MaxBatchDelay = 30 * time.Second // Only a sync moves events to the FIFO.
+	svc, err := NewService(
+		"node1",
+		t.TempDir(),
+		cl,
+		cfg,
+	)
+	if err != nil {
+		t.Fatalf("failed to create service: %v", err)
+	}
+
+	// Write events before the service runs, so they are all waiting when the
+	// sync request arrives.
+	const numEvents = inChanLen
+	for i := 1; i <= numEvents; i++ {
+		err := svc.Write(&proto.CDCIndexedEventGroup{
+			Index: uint64(i),
+			Events: []*proto.CDCEvent{
+				{
+					Op:       proto.CDCEvent_INSERT,
+					Table:    "foo",
+					NewRowId: int64(i),
+				},
+			},
+		})
+		if err != nil {
+			t.Fatalf("failed to write event %d: %v", i, err)
+		}
+	}
+
+	if err := svc.Start(); err != nil {
+		t.Fatalf("failed to start service: %v", err)
+	}
+	defer svc.Stop()
+
+	if err := svc.Sync(2 * time.Second); err != nil {
+		t.Fatalf("sync failed: %v", err)
+	}
+	idx, err := svc.fifo.HighestKey()
+	if err != nil {
+		t.Fatalf("failed to get FIFO highest key: %v", err)
+	}
+	if idx != numEvents {
+		t.Fatalf("expected FIFO highest key to be %d after sync, got %d", numEvents, idx)
+	}
+}
+
+// Test_ServiceSync_FIFOWriteFails tests that Sync is not answered while the
+// events written before it cannot be written to the FIFO, and that it fails
+// at once if the service is stopped.
+func Test_ServiceSync_FIFOWriteFails(t *testing.T) {
+	ResetStats()
+
+	cl := &mockCluster{}
+
+	cfg := DefaultConfig()
+	cfg.Endpoint = "stdout"
+	svc, err := NewService(
+		"node1",
+		t.TempDir(),
+		cl,
+		cfg,
+	)
+	if err != nil {
+		t.Fatalf("failed to create service: %v", err)
+	}
+	if err := svc.Start(); err != nil {
+		t.Fatalf("failed to start service: %v", err)
+	}
+	defer svc.Stop()
+
+	// Close the FIFO so that nothing can be persisted, then give the
+	// service an event that will need persisting.
+	svc.fifo.Close()
+	err = svc.Write(&proto.CDCIndexedEventGroup{
+		Index: 1,
+		Events: []*proto.CDCEvent{
+			{
+				Op:       proto.CDCEvent_INSERT,
+				Table:    "foo",
+				NewRowId: 1,
+			},
+		},
+	})
+	if err != nil {
+		t.Fatalf("failed to write event: %v", err)
+	}
+
+	if err := svc.Sync(300 * time.Millisecond); err != ErrSyncTimeout {
+		t.Fatalf("expected ErrSyncTimeout, got %v", err)
+	}
+
+	svc.Stop()
+	if err := svc.Sync(time.Second); err != ErrStopped {
+		t.Fatalf("expected ErrStopped, got %v", err)
 	}
 }
 
