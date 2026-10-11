@@ -1,6 +1,7 @@
 package cdc
 
 import (
+	"errors"
 	"expvar"
 	"fmt"
 	"log"
@@ -21,7 +22,8 @@ import (
 
 const (
 	cdcDB         = "fifo.db"
-	leaderChanLen = 5 // Support any fast back-to-back leadership changes.
+	leaderChanLen = 5   // Support any fast back-to-back leadership changes.
+	inChanLen     = 100 // Number of event groups Write accepts before it blocks.
 
 	retryForever = -1
 )
@@ -32,7 +34,7 @@ const (
 	numEventsTxOK          = "num_events_tx_ok"
 	numEventTxFailed       = "num_events_tx_failed"
 	numBytesTx             = "num_bytes_tx"
-	numSnapshotSync        = "snapshot_sync"
+	numSyncs               = "syncs"
 	numBatcherWrites       = "batcher_writes"
 	numBatcherEventsWrite  = "batcher_events_write"
 	numBatcherReads        = "batcher_reads"
@@ -41,6 +43,21 @@ const (
 	numHWMIgnored          = "hwm_ignored"
 	fifoSize               = "fifo_size"
 )
+
+// ErrStopped is returned when an operation is attempted on a stopped service.
+var ErrStopped = errors.New("cdc service stopped")
+
+// ErrSyncTimeout is returned by Sync when the events written before it were
+// not all in the FIFO within the timeout.
+var ErrSyncTimeout = errors.New("cdc sync timed out")
+
+// message is what Write and Sync send through the service: a group of events
+// to deliver, or a sync request. A sync request is answered once every
+// message ahead of it has been written to the FIFO.
+type message struct {
+	events *proto.CDCIndexedEventGroup
+	synced chan struct{} // Closed to answer a sync request.
+}
 
 // stats captures stats for the CDC Service.
 var stats *expvar.Map
@@ -58,7 +75,7 @@ func ResetStats() {
 	stats.Add(numEventsTxOK, 0)
 	stats.Add(numEventTxFailed, 0)
 	stats.Add(numBytesTx, 0)
-	stats.Add(numSnapshotSync, 0)
+	stats.Add(numSyncs, 0)
 	stats.Add(numBatcherWrites, 0)
 	stats.Add(numBatcherEventsWrite, 0)
 	stats.Add(numBatcherReads, 0)
@@ -73,10 +90,6 @@ type Cluster interface {
 	// RegisterLeaderChange registers the given channel which will receive
 	// a signal when the node detects that the Leader changes.
 	RegisterLeaderChange(c chan<- bool)
-
-	// RegisterSnapshotSync registers a channel to allow synchronization with
-	// Snapshotting.
-	RegisterSnapshotSync(ch chan<- chan struct{})
 
 	// RegisterHWMUpdate registers a channel to receive highwater mark updates.
 	RegisterHWMUpdate(c chan<- uint64)
@@ -94,8 +107,9 @@ type Service struct {
 	hwmFilePath string
 	clstr       Cluster
 
-	// in is the channel from which the CDC events are read.
-	in <-chan *proto.CDCIndexedEventGroup
+	// in carries the messages sent by Write and Sync, in the order they
+	// were sent.
+	in chan message
 
 	// sink is the sink to which the CDC events are sent.
 	sink Sink
@@ -129,9 +143,10 @@ type Service struct {
 	// at least once to the webhook endpoint.
 	fifo *Queue
 
-	// queue implements the batching of CDC events before transmission to the webhook. The
-	// contents of this queue do not persist across restarts or leader changes.
-	batcher *queue.Queue[*proto.CDCIndexedEventGroup]
+	// batcher collects messages into batches before they are written to the
+	// FIFO. The contents of the batcher do not persist across restarts or
+	// leader changes.
+	batcher *queue.Queue[message]
 
 	// highWatermark is the index of the last event that was successfully sent to the webhook
 	// by the cluster.
@@ -145,9 +160,6 @@ type Service struct {
 	leaderObCh chan bool
 	isLeader   rsync.AtomicBool
 
-	// Channel to receive notifications of snapshot requests.
-	snapshotCh chan chan struct{}
-
 	// Channel to receive high watermark updates from the cluster.
 	hwmObCh chan uint64
 
@@ -160,15 +172,15 @@ type Service struct {
 	hwmLeaderUpdated   atomic.Uint64
 	hwmFollowerUpdated atomic.Uint64
 	endpointRetries    atomic.Uint64
-	flushRx            atomic.Uint64
+	syncRx             atomic.Uint64
 	writesToBatcher    atomic.Uint64
 
 	logger *log.Logger
 }
 
-// NewService creates a new CDC service. The service reads the CDC events it
-// is to deliver from in.
-func NewService(nodeID, dir string, clstr Cluster, in <-chan *proto.CDCIndexedEventGroup, cfg *Config) (*Service, error) {
+// NewService creates a new CDC service. Events for the service to deliver
+// are given to it via Write.
+func NewService(nodeID, dir string, clstr Cluster, cfg *Config) (*Service, error) {
 	// Build the TLS configuration from the config fields
 	tlsConfig, err := cfg.TLSConfig()
 	if err != nil {
@@ -191,7 +203,7 @@ func NewService(nodeID, dir string, clstr Cluster, in <-chan *proto.CDCIndexedEv
 		nodeID:                nodeID,
 		dir:                   filepath.Join(dir, "cdc"),
 		clstr:                 clstr,
-		in:                    in,
+		in:                    make(chan message, inChanLen),
 		sink:                  sink,
 		transmitTimeout:       cfg.TransmitTimeout,
 		transmitMinBackoff:    cfg.TransmitMinBackoff,
@@ -199,10 +211,9 @@ func NewService(nodeID, dir string, clstr Cluster, in <-chan *proto.CDCIndexedEv
 		transmitRetryPolicy:   cfg.TransmitRetryPolicy,
 		maxBatchSz:            cfg.MaxBatchSz,
 		maxBatchDelay:         cfg.MaxBatchDelay,
-		batcher:               queue.New[*proto.CDCIndexedEventGroup](cfg.MaxBatchSz, cfg.MaxBatchSz, cfg.MaxBatchDelay),
+		batcher:               queue.New[message](cfg.MaxBatchSz, cfg.MaxBatchSz, cfg.MaxBatchDelay),
 		highWatermarkInterval: cfg.HighWatermarkInterval,
 		leaderObCh:            make(chan bool, leaderChanLen),
-		snapshotCh:            make(chan chan struct{}),
 		hwmObCh:               make(chan uint64, leaderChanLen),
 		done:                  make(chan struct{}),
 		logger:                log.New(os.Stderr, "[cdc-service] ", log.LstdFlags),
@@ -260,7 +271,6 @@ func (s *Service) Start() (retErr error) {
 	}
 
 	s.clstr.RegisterLeaderChange(s.leaderObCh)
-	s.clstr.RegisterSnapshotSync(s.snapshotCh)
 	s.clstr.RegisterHWMUpdate(s.hwmObCh)
 
 	s.wg.Add(2)
@@ -287,6 +297,44 @@ func (s *Service) Stop() {
 		s.sink.Close()
 	}
 	s.started.Unset()
+}
+
+// Write gives the service a group of events to deliver. It blocks while the
+// service is busy, and returns ErrStopped if the service has been stopped.
+func (s *Service) Write(evs *proto.CDCIndexedEventGroup) error {
+	select {
+	case s.in <- message{events: evs}:
+		return nil
+	case <-s.done:
+		return ErrStopped
+	}
+}
+
+// Sync blocks until every group of events given to Write before the call is
+// in the FIFO. It returns ErrSyncTimeout if that has not happened within
+// timeout, and ErrStopped if the service is stopped first. The sync request
+// travels through the service behind the events written before it, so once
+// Sync returns nil those events are durable.
+func (s *Service) Sync(timeout time.Duration) error {
+	synced := make(chan struct{})
+	t := time.NewTimer(timeout)
+	defer t.Stop()
+
+	select {
+	case s.in <- message{synced: synced}:
+	case <-t.C:
+		return ErrSyncTimeout
+	case <-s.done:
+		return ErrStopped
+	}
+	select {
+	case <-synced:
+		return nil
+	case <-t.C:
+		return ErrSyncTimeout
+	case <-s.done:
+		return ErrStopped
+	}
 }
 
 // HighWatermark returns the high watermark of the CDC service. This
@@ -391,41 +439,46 @@ func (s *Service) mainLoop() {
 		case req := <-s.batcher.C:
 			stats.Add(numBatcherReads, 1)
 
-			if len(req.Objects) == 1 && req.Objects[0].Flush {
-				// Nothing but a flush request, short-ciruit out.
-				s.flushRx.Add(1)
-				req.Close()
-				break
-			}
-
-			// Get the highest index in this batch, for enqueueing to FIFO.
-			hiIdx := uint64(0)
-			for i := range req.Objects {
-				if req.Objects[i].Index > hiIdx {
-					hiIdx = req.Objects[i].Index
+			// Separate the events from the sync requests. The sync requests
+			// are answered only once the events are in the FIFO, so if that
+			// fails they go unanswered and their callers time out.
+			var evs []*proto.CDCIndexedEventGroup
+			var synced []chan struct{}
+			hiIdx := uint64(0) // Highest index in this batch, which is its FIFO key.
+			for _, m := range req.Objects {
+				if m.synced != nil {
+					synced = append(synced, m.synced)
+					continue
 				}
-				if req.Objects[i].Flush {
-					s.flushRx.Add(1)
+				evs = append(evs, m.events)
+				if m.events.Index > hiIdx {
+					hiIdx = m.events.Index
 				}
 			}
 
-			b, err := cdcjson.MarshalToEnvelopeJSON(s.serviceID, s.nodeID, true, req.Objects)
-			if err != nil {
-				s.logger.Printf("error marshalling batch for FIFO: %v", err)
-				continue
+			if len(evs) > 0 {
+				b, err := cdcjson.MarshalToEnvelopeJSON(s.serviceID, s.nodeID, true, evs)
+				if err != nil {
+					s.logger.Printf("error marshalling batch for FIFO: %v", err)
+					continue
+				}
+
+				// Compress the marshalled data before enqueuing to FIFO
+				compressedData, err := flate.Compress(b)
+				if err != nil {
+					s.logger.Printf("error compressing batch for FIFO: %v", err)
+					continue
+				}
+
+				if err := s.fifo.Enqueue(&Event{Index: hiIdx, Data: compressedData}); err != nil {
+					s.logger.Printf("error writing batch to FIFO: %v", err)
+					continue
+				}
 			}
 
-			// Compress the marshalled data before enqueuing to FIFO
-			compressedData, err := flate.Compress(b)
-			if err != nil {
-				s.logger.Printf("error compressing batch for FIFO: %v", err)
-				continue
+			for _, c := range synced {
+				close(c)
 			}
-
-			if err := s.fifo.Enqueue(&Event{Index: hiIdx, Data: compressedData}); err != nil {
-				s.logger.Printf("error writing batch to FIFO: %v", err)
-			}
-			req.Close()
 
 		case <-s.done:
 			return
@@ -433,18 +486,30 @@ func (s *Service) mainLoop() {
 	}
 }
 
-// writeToBatcher handles events sent to this service. It writes the events to the
-// internal batcher. Writing to the batcher happens regardless of whether this service
-// is running on the leader or a follower.
+// writeToBatcher moves the messages sent by Write and Sync into the batcher,
+// in order. This happens regardless of whether this service is running on
+// the leader or a follower.
 func (s *Service) writeToBatcher() {
 	defer s.wg.Done()
 	for {
 		select {
-		case o := <-s.in:
-			if o == nil {
-				// Channel closed, exiting goroutine.
-				return
+		case m := <-s.in:
+			if m.synced != nil {
+				// A sync request. It enters the batcher behind every event
+				// written before it, and flushing the batcher gets it, and
+				// those events, to the FIFO without waiting for the batch
+				// to fill.
+				stats.Add(numSyncs, 1)
+				s.syncRx.Add(1)
+				if _, err := s.batcher.WriteOne(m, nil); err != nil {
+					s.logger.Printf("error writing sync request to batcher: %v", err)
+					continue
+				}
+				s.batcher.Flush()
+				continue
 			}
+
+			o := m.events
 			if o.Index != 0 && o.Index <= s.highWatermark.Load() {
 				// High watermark has advanced since we processed these CDC events.
 				// This could happen on followers if the Leader has advanced the HWM
@@ -453,7 +518,7 @@ func (s *Service) writeToBatcher() {
 				stats.Add(numBatcherWriteIgnored, 1)
 				continue
 			}
-			if _, err := s.batcher.WriteOne(o, nil); err != nil {
+			if _, err := s.batcher.WriteOne(m, nil); err != nil {
 				s.logger.Printf("error writing CDC events to batcher: %v", err)
 			} else {
 				s.writesToBatcher.Add(1)
@@ -461,26 +526,6 @@ func (s *Service) writeToBatcher() {
 				stats.Add(numBatcherEventsWrite, int64(len(o.Events)))
 			}
 
-		case ch := <-s.snapshotCh:
-			stats.Add(numSnapshotSync, 1)
-			func() {
-				defer close(ch) // Snapshotting can proceed once we return.
-
-				evg := &proto.CDCIndexedEventGroup{
-					Flush: true,
-				}
-				fc := make(queue.FlushChannel)
-				if _, err := s.batcher.WriteOne(evg, fc); err != nil {
-					s.logger.Printf("error writing CDC flush event to batcher: %v", err)
-					return
-				}
-
-				s.batcher.Flush()
-				select {
-				case <-fc: // Wait for CDC to write to BoltDB.
-				case <-s.done: // Or detect we're shutting down.
-				}
-			}()
 		case <-s.done:
 			return
 		}

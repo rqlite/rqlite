@@ -47,6 +47,10 @@ var (
 	// ErrOpen is returned when a Store is already open.
 	ErrOpen = errors.New("store already open")
 
+	// ErrCDCServiceNotSet is returned when a Store with CDC enabled is opened
+	// before a CDC service has been set.
+	ErrCDCServiceNotSet = errors.New("CDC enabled but no CDC service set")
+
 	// ErrNotReady is returned when a Store is not ready to accept requests.
 	ErrNotReady = errors.New("store not ready")
 
@@ -117,7 +121,6 @@ var (
 )
 
 const (
-	cdcChanLen             = 100 // Size of the channel on which CDC events are sent.
 	cleanSnapshotName      = "clean_snapshot"
 	snapshotsDirName       = "wsnapshots"
 	walStagingDirName      = "wal-staging"
@@ -343,7 +346,7 @@ type Store struct {
 
 	cdcCollator *sql.CDCCollator
 	cdcConf     *CDCConfig // nil if CDC is not enabled.
-	cdcOutCh    chan *proto.CDCIndexedEventGroup
+	cdc         CDCService // nil until SetCDCService is called.
 
 	dechunkManager *chunking.DechunkerManager
 	cmdProc        *CommandProcessor
@@ -355,9 +358,8 @@ type Store struct {
 	snapshotWClose chan struct{}
 	snapshotWDone  chan struct{}
 
-	// Snapshotting synchronization and and management
-	snapshotSync *rsync.SyncChannels
-	snapshotCAS  *rsync.CheckAndSet
+	// Snapshotting management
+	snapshotCAS *rsync.CheckAndSet
 
 	// Latest log entry index actually reflected by the FSM. Due to Raft code
 	// these values are not updated automatically after a Snapshot-restore.
@@ -474,7 +476,6 @@ func New(c *Config, ly Layer) *Store {
 		dbDir:             filepath.Dir(dbPath),
 		dbDrv:             sql.DefaultDriver(),
 		cdcConf:           c.CDC,
-		cdcOutCh:          make(chan *proto.CDCIndexedEventGroup, cdcChanLen),
 		readyChans:        rsync.NewReadyChannels(),
 		leaderObservers:   make([]chan<- bool, 0),
 		reqMarshaller:     command.NewRequestMarshaler(),
@@ -482,7 +483,6 @@ func New(c *Config, ly Layer) *Store {
 		logger:            logger,
 		notifyingNodes:    make(map[string]*Server),
 		ApplyTimeout:      applyTimeout,
-		snapshotSync:      rsync.NewSyncChannels(),
 		snapshotCAS:       rsync.NewCheckAndSet(),
 		fsmTarget:         rsync.NewReadyTarget[uint64](),
 		fsmUpdateTime:     rsync.NewAtomicTime(),
@@ -524,6 +524,9 @@ func (s *Store) Open() (retErr error) {
 
 	if s.open.Is() {
 		return ErrOpen
+	}
+	if s.cdcConf != nil && s.cdc == nil {
+		return ErrCDCServiceNotSet
 	}
 
 	s.fsmIdx.Store(0)
@@ -961,13 +964,6 @@ func (s *Store) Stepdown(wait bool, id string) error {
 		return ErrNotLeader
 	}
 	return f.Error()
-}
-
-// RegisterSnapshotSync registers a channel that will receive a channel
-// that is closed when a snapshot operation is about to begin. This is used
-// to coordinate activities that should be handled before a snapshot is taken.
-func (s *Store) RegisterSnapshotSync(ch chan<- chan struct{}) {
-	s.snapshotSync.Register(ch)
 }
 
 // RegisterReadyChannel registers a channel that must be closed before the
@@ -2081,11 +2077,10 @@ func (s *Store) Database(leader bool) ([]byte, error) {
 	return s.db.Serialize()
 }
 
-// CDCEventsC returns the channel on which Change Data Capture events are sent,
-// if CDC is enabled. It is the caller's responsibility to ensure that the
-// channel is read from, as the Store blocks when the channel is full.
-func (s *Store) CDCEventsC() <-chan *proto.CDCIndexedEventGroup {
-	return s.cdcOutCh
+// SetCDCService sets the service the Store gives Change Data Capture events
+// to. It must be called before Open if CDC is enabled.
+func (s *Store) SetCDCService(svc CDCService) {
+	s.cdc = svc
 }
 
 // Notify notifies this Store that a node is ready for bootstrapping at the
@@ -2589,9 +2584,12 @@ func (s *Store) fsmApply(l *raft.Log) (e any) {
 				return
 			}
 			if events := s.cdcCollator.Events(); len(events) > 0 {
-				s.cdcOutCh <- &proto.CDCIndexedEventGroup{
+				evs := &proto.CDCIndexedEventGroup{
 					Index:  l.Index,
 					Events: events,
+				}
+				if err := s.cdc.Write(evs); err != nil {
+					s.logger.Printf("failed to give CDC events at index %d to CDC service: %s", l.Index, err)
 				}
 			}
 		}()
@@ -2627,11 +2625,16 @@ func (s *Store) fsmSnapshot() (fSnap raft.FSMSnapshot, retErr error) {
 		return nil, ErrNotOpen
 	}
 
-	syncStartTime := time.Now()
-	if _, _, err := s.snapshotSync.Sync(time.Second); err != nil {
-		return nil, err
+	if s.cdc != nil {
+		// Every CDC event produced by the log entries this snapshot covers must
+		// be durable in the CDC service before any of those entries can be
+		// truncated. If they are not, the snapshot is abandoned.
+		syncStartTime := time.Now()
+		if err := s.cdc.Sync(time.Second); err != nil {
+			return nil, fmt.Errorf("CDC sync failed: %w", err)
+		}
+		recordDuration(snapshotSyncDuration, syncStartTime)
 	}
-	recordDuration(snapshotSyncDuration, syncStartTime)
 
 	if err := s.snapshotCAS.Begin("snapshot"); err != nil {
 		return nil, err

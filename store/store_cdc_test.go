@@ -2,8 +2,10 @@ package store
 
 import (
 	"context"
+	"errors"
 	"net"
 	"slices"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -33,13 +35,53 @@ func Test_StoreCDC_Config(t *testing.T) {
 	defer ln.Close()
 	check(s, false)
 
-	s, ln = mustNewStoreCDC(t)
+	s, _, ln = mustNewStoreCDC(t)
 	defer ln.Close()
 	check(s, true)
 }
 
+// Test_StoreCDC_SnapshotSyncs tests that the Store syncs the CDC service
+// before it snapshots, and does not snapshot if the sync fails.
+func Test_StoreCDC_SnapshotSyncs(t *testing.T) {
+	s, c, ln := mustNewStoreCDC(t)
+	defer ln.Close()
+	if err := s.Open(); err != nil {
+		t.Fatalf("failed to open store: %v", err)
+	}
+	if err := s.Bootstrap(NewServer(s.ID(), s.Addr(), true)); err != nil {
+		t.Fatalf("failed to bootstrap store: %v", err)
+	}
+	defer s.Close(true)
+	if _, err := s.WaitForLeader(10 * time.Second); err != nil {
+		t.Fatalf("error waiting for leader: %v", err)
+	}
+
+	if _, _, err := s.Execute(context.Background(), executeRequestFromString(
+		"CREATE TABLE foo (id INTEGER PRIMARY KEY)", false, false)); err != nil {
+		t.Fatalf("failed to create table: %v", err)
+	}
+	if err := s.Snapshot(0); err != nil {
+		t.Fatalf("failed to snapshot: %v", err)
+	}
+	if n := c.syncs.Load(); n != 1 {
+		t.Fatalf("expected 1 CDC sync, got %d", n)
+	}
+
+	if _, _, err := s.Execute(context.Background(), executeRequestFromString(
+		"INSERT INTO foo VALUES(1)", false, false)); err != nil {
+		t.Fatalf("failed to insert: %v", err)
+	}
+	c.SyncErr = errors.New("sync failed")
+	if err := s.Snapshot(0); err == nil {
+		t.Fatalf("expected snapshot to fail when CDC sync fails")
+	}
+	if n := c.syncs.Load(); n != 2 {
+		t.Fatalf("expected 2 CDC syncs, got %d", n)
+	}
+}
+
 func Test_StoreCDC_RolledBackInsert(t *testing.T) {
-	s, ln := mustNewStoreCDC(t)
+	s, c, ln := mustNewStoreCDC(t)
 	defer ln.Close()
 	if err := s.Open(); err != nil {
 		t.Fatalf("failed to open store: %v", err)
@@ -68,7 +110,7 @@ func Test_StoreCDC_RolledBackInsert(t *testing.T) {
 		t.Fatalf("unexpected results: %s", asJSON(results))
 	}
 	select {
-	case group := <-s.CDCEventsC():
+	case group := <-c.C:
 		if len(group.Events) != 1 || group.Events[0].NewRowId != 2 {
 			t.Fatalf("unexpected committed group: %s", asJSON(group))
 		}
@@ -79,7 +121,7 @@ func Test_StoreCDC_RolledBackInsert(t *testing.T) {
 
 // Test_StoreCDC_Events_Single tests that CDC events are actually sent when database changes occur.
 func Test_StoreCDC_Events_Single(t *testing.T) {
-	s, ln := mustNewStoreCDC(t)
+	s, c, ln := mustNewStoreCDC(t)
 	defer ln.Close()
 
 	if err := s.Open(); err != nil {
@@ -108,7 +150,7 @@ func Test_StoreCDC_Events_Single(t *testing.T) {
 
 	timeout := time.After(5 * time.Second)
 	select {
-	case events := <-s.CDCEventsC():
+	case events := <-c.C:
 		if events == nil {
 			t.Fatalf("received nil CDC events")
 		}
@@ -143,7 +185,7 @@ func Test_StoreCDC_Events_Single(t *testing.T) {
 // Test_StoreCDC_Events_Twice checks that the reset-lifecycle of the CDCCollator is handled properly
 // across two distinct changes to the database.
 func Test_StoreCDC_Events_Twice(t *testing.T) {
-	s, ln := mustNewStoreCDC(t)
+	s, c, ln := mustNewStoreCDC(t)
 	defer ln.Close()
 
 	if err := s.Open(); err != nil {
@@ -173,7 +215,7 @@ func Test_StoreCDC_Events_Twice(t *testing.T) {
 		t.Fatalf("failed to execute INSERT on single node: %s", err.Error())
 	}
 	select {
-	case events := <-s.CDCEventsC():
+	case events := <-c.C:
 		if events == nil {
 			t.Fatalf("received nil CDC events")
 		}
@@ -211,7 +253,7 @@ func Test_StoreCDC_Events_Twice(t *testing.T) {
 		t.Fatalf("failed to execute INSERT on single node: %s", err.Error())
 	}
 	select {
-	case events := <-s.CDCEventsC():
+	case events := <-c.C:
 		if events == nil {
 			t.Fatalf("received nil CDC events")
 		}
@@ -253,7 +295,7 @@ func Test_StoreCDC_Events_Twice(t *testing.T) {
 // request must be tagged with the request's Raft index, because the CDC
 // service uses that index to deduplicate and to advance its high watermark.
 func Test_StoreCDC_Events_MultiStatementIndex(t *testing.T) {
-	s, ln := mustNewStoreCDC(t)
+	s, c, ln := mustNewStoreCDC(t)
 	defer ln.Close()
 
 	if err := s.Open(); err != nil {
@@ -295,7 +337,7 @@ func Test_StoreCDC_Events_MultiStatementIndex(t *testing.T) {
 	timeout := time.After(5 * time.Second)
 	for numEvents < 2 {
 		select {
-		case g := <-s.CDCEventsC():
+		case g := <-c.C:
 			if g == nil {
 				t.Fatalf("received nil CDC event group")
 			}
@@ -324,8 +366,31 @@ func rowIDs(g *proto.CDCIndexedEventGroup) []int64 {
 	return ids
 }
 
-// mustNewStoreCDC returns a new Store with CDC enabled.
-func mustNewStoreCDC(t *testing.T) (*Store, net.Listener) {
+// cdcChan is a CDCService that makes the event groups it is given available
+// on C. It counts the Sync calls it receives, and fails them if SyncErr is set.
+type cdcChan struct {
+	C       chan *proto.CDCIndexedEventGroup
+	SyncErr error
+	syncs   atomic.Int64
+}
+
+func newCDCChan() *cdcChan {
+	return &cdcChan{C: make(chan *proto.CDCIndexedEventGroup, 100)}
+}
+
+func (c *cdcChan) Write(evs *proto.CDCIndexedEventGroup) error {
+	c.C <- evs
+	return nil
+}
+
+func (c *cdcChan) Sync(time.Duration) error {
+	c.syncs.Add(1)
+	return c.SyncErr
+}
+
+// mustNewStoreCDC returns a new Store with CDC enabled, and the cdcChan it
+// gives its events to.
+func mustNewStoreCDC(t *testing.T) (*Store, *cdcChan, net.Listener) {
 	ly := mustMockLayer("localhost:0")
 	s := New(&Config{
 		DBConf: NewDBConfig(),
@@ -336,5 +401,7 @@ func mustNewStoreCDC(t *testing.T) (*Store, net.Listener) {
 	if s == nil {
 		panic("failed to create new store")
 	}
-	return s, ly
+	c := newCDCChan()
+	s.SetCDCService(c)
+	return s, c, ly
 }
