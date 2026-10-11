@@ -514,6 +514,9 @@ func Test_StoreSingleNodeNotOpen(t *testing.T) {
 	if err := s.Demote(context.Background(), nil); err != ErrNotOpen {
 		t.Fatalf("wrong error received for non-open store: %s", err)
 	}
+	if err := s.Promote(context.Background(), nil); err != ErrNotOpen {
+		t.Fatalf("wrong error received for non-open store: %s", err)
+	}
 	if _, err := s.Nodes(); err != ErrNotOpen {
 		t.Fatalf("wrong error received for non-open store: %s", err)
 	}
@@ -2820,6 +2823,48 @@ func Test_SingleNodeDemote(t *testing.T) {
 	}
 }
 
+// Test_SingleNodePromote tests that a single-node cluster refuses to promote
+// a node which is not a member, and ignores promotion of an existing voter.
+func Test_SingleNodePromote(t *testing.T) {
+	s, ln := mustNewStore(t)
+	defer ln.Close()
+	if err := s.Open(); err != nil {
+		t.Fatalf("failed to open single-node store: %s", err.Error())
+	}
+	defer s.Close(true)
+	if err := s.Bootstrap(NewServer(s.ID(), s.Addr(), true)); err != nil {
+		t.Fatalf("failed to bootstrap single-node store: %s", err.Error())
+	}
+	if _, err := s.WaitForLeader(10 * time.Second); err != nil {
+		t.Fatalf("Error waiting for leader: %s", err)
+	}
+
+	// Promoting a node that isn't in the cluster should fail.
+	err := s.Promote(context.Background(), promoteNodeRequest("nonexistent-node"))
+	if !errors.Is(err, ErrNodeNotFound) {
+		t.Fatalf("expected ErrNodeNotFound promoting nonexistent node, got: %v", err)
+	}
+
+	// Promoting a node which is already a voter is a no-op.
+	if err := s.Promote(context.Background(), promoteNodeRequest(s.ID())); err != nil {
+		t.Fatalf("unexpected error promoting existing voter: %s", err.Error())
+	}
+	v, err := s.IsVoter()
+	if err != nil {
+		t.Fatalf("failed to get voter status: %s", err.Error())
+	}
+	if !v {
+		t.Fatalf("node should still be a voter")
+	}
+
+	// A canceled context should be rejected before anything else happens.
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	if err := s.Promote(ctx, promoteNodeRequest(s.ID())); !errors.Is(err, context.Canceled) {
+		t.Fatalf("expected context.Canceled, got: %v", err)
+	}
+}
+
 func Test_SingleNodeNoop(t *testing.T) {
 	s, ln := mustNewStore(t)
 	defer ln.Close()
@@ -3633,6 +3678,12 @@ func removeNodeRequest(id string) *proto.RemoveNodeRequest {
 
 func demoteNodeRequest(id string) *proto.DemoteNodeRequest {
 	return &proto.DemoteNodeRequest{
+		Id: id,
+	}
+}
+
+func promoteNodeRequest(id string) *proto.PromoteNodeRequest {
+	return &proto.PromoteNodeRequest{
 		Id: id,
 	}
 }

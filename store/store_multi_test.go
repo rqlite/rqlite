@@ -1362,6 +1362,102 @@ func Test_MultiNodeDemote(t *testing.T) {
 	}
 }
 
+// Test_MultiNodePromote tests promoting a non-voting follower to a voter.
+func Test_MultiNodePromote(t *testing.T) {
+	s0, ln0 := mustNewStore(t)
+	defer ln0.Close()
+	if err := s0.Open(); err != nil {
+		t.Fatalf("failed to open single-node store: %s", err.Error())
+	}
+	defer s0.Close(true)
+	if err := s0.Bootstrap(NewServer(s0.ID(), s0.Addr(), true)); err != nil {
+		t.Fatalf("failed to bootstrap single-node store: %s", err.Error())
+	}
+	if _, err := s0.WaitForLeader(10 * time.Second); err != nil {
+		t.Fatalf("Error waiting for leader: %s", err)
+	}
+
+	s1, ln1 := mustNewStore(t)
+	defer ln1.Close()
+	if err := s1.Open(); err != nil {
+		t.Fatalf("failed to open single-node store: %s", err.Error())
+	}
+	defer s1.Close(true)
+
+	// Join the second node to the first as a non-voter.
+	if err := s0.Join(joinRequest(s1.ID(), s1.Addr(), false)); err != nil {
+		t.Fatalf("failed to join to node at %s: %s", s0.Addr(), err.Error())
+	}
+	if _, err := s1.WaitForLeader(10 * time.Second); err != nil {
+		t.Fatalf("Error waiting for leader: %s", err)
+	}
+	testPoll(t, func() bool {
+		v, err := s1.IsVoter()
+		return err == nil && !v
+	}, 100*time.Millisecond, 5*time.Second)
+
+	// A follower cannot promote anything.
+	if err := s1.Promote(context.Background(), promoteNodeRequest(s1.ID())); !errors.Is(err, ErrNotLeader) {
+		t.Fatalf("expected ErrNotLeader promoting via follower, got: %v", err)
+	}
+
+	// Promote the non-voter via the leader.
+	if err := s0.Promote(context.Background(), promoteNodeRequest(s1.ID())); err != nil {
+		t.Fatalf("failed to promote %s: %s", s1.ID(), err.Error())
+	}
+
+	// Leader's view of the cluster should show both nodes as voters, and the
+	// promoted node's address must be unchanged.
+	nodes, err := s0.Nodes()
+	if err != nil {
+		t.Fatalf("failed to get nodes post promote: %s", err.Error())
+	}
+	if len(nodes) != 2 {
+		t.Fatalf("size of cluster is not correct post promote, got %d", len(nodes))
+	}
+	for _, n := range nodes {
+		if n.Suffrage != proto.Suffrage_VOTER {
+			t.Fatalf("node %s should be a voter, got %s", n.ID, n.Suffrage)
+		}
+		if n.ID == s1.ID() && n.Addr != s1.Addr() {
+			t.Fatalf("promoted node has wrong address, got %s, exp %s", n.Addr, s1.Addr())
+		}
+	}
+
+	// The promoted node should learn of its new status via replication.
+	testPoll(t, func() bool {
+		v, err := s1.IsVoter()
+		return err == nil && v
+	}, 100*time.Millisecond, 5*time.Second)
+
+	// Promoting an already-promoted node is a no-op.
+	if err := s0.Promote(context.Background(), promoteNodeRequest(s1.ID())); err != nil {
+		t.Fatalf("failed to promote already-promoted node %s: %s", s1.ID(), err.Error())
+	}
+
+	// Promoting a node that isn't in the cluster should fail.
+	err = s0.Promote(context.Background(), promoteNodeRequest("nonexistent-node"))
+	if !errors.Is(err, ErrNodeNotFound) {
+		t.Fatalf("expected ErrNodeNotFound promoting nonexistent node, got: %v", err)
+	}
+
+	// Demote and promote again, to check the round trip.
+	if err := s0.Demote(context.Background(), demoteNodeRequest(s1.ID())); err != nil {
+		t.Fatalf("failed to demote %s: %s", s1.ID(), err.Error())
+	}
+	testPoll(t, func() bool {
+		v, err := s1.IsVoter()
+		return err == nil && !v
+	}, 100*time.Millisecond, 5*time.Second)
+	if err := s0.Promote(context.Background(), promoteNodeRequest(s1.ID())); err != nil {
+		t.Fatalf("failed to re-promote %s: %s", s1.ID(), err.Error())
+	}
+	testPoll(t, func() bool {
+		v, err := s1.IsVoter()
+		return err == nil && v
+	}, 100*time.Millisecond, 5*time.Second)
+}
+
 func Test_MultiNodeJoinNonVoterRemove(t *testing.T) {
 	s0, ln0 := mustNewStore(t)
 	defer ln0.Close()
