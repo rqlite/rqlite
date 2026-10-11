@@ -38,7 +38,7 @@
     // resolves on success and rejects on failure. Uses the async Clipboard
     // API when available (secure contexts only), otherwise falls back to a
     // hidden textarea + document.execCommand("copy") for plain-HTTP serves.
-    function copyToClipboard(text) {
+    function copyToClipboard(text, container) {
         if (navigator.clipboard && window.isSecureContext) {
             return navigator.clipboard.writeText(text);
         }
@@ -50,7 +50,11 @@
             ta.style.top = "0";
             ta.style.left = "0";
             ta.style.opacity = "0";
-            document.body.appendChild(ta);
+            // A modal dialog makes the rest of the document inert. Its fallback
+            // copy textarea must live inside the dialog to remain selectable.
+            var parent = container || document.body;
+            var previousFocus = document.activeElement;
+            parent.appendChild(ta);
             ta.select();
             var ok = false;
             try {
@@ -58,7 +62,8 @@
             } catch (e) {
                 ok = false;
             }
-            document.body.removeChild(ta);
+            parent.removeChild(ta);
+            if (previousFocus) previousFocus.focus({ preventScroll: true });
             if (ok) {
                 resolve();
             } else {
@@ -114,10 +119,7 @@
     var homeLink = document.getElementById("home-link");
 
     function showStatus() {
-        tabs.forEach(function (t) { t.classList.remove("active"); });
-        tabContents.forEach(function (tc) { tc.classList.remove("active"); });
-        document.getElementById("status").classList.add("active");
-        loadStatus();
+        showTab("status");
     }
 
     homeLink.addEventListener("click", showStatus);
@@ -137,11 +139,15 @@
 
     function showTab(target) {
         tabs.forEach(function (t) {
-            t.classList.toggle("active", t.getAttribute("data-tab") === target);
+            var selected = t.getAttribute("data-tab") === target;
+            t.classList.toggle("active", selected);
+            if (selected) t.setAttribute("aria-current", "page");
+            else t.removeAttribute("aria-current");
         });
         tabContents.forEach(function (tc) {
             tc.classList.toggle("active", tc.id === target);
         });
+        document.dispatchEvent(new CustomEvent("rqlite:tab-change"));
     }
 
     // --- Query Tab ---
@@ -439,83 +445,115 @@
         return '<div class="result-message success">' + escapeHTML(parts.join(" | ")) + '</div>';
     }
 
-    // --- Status Tab ---
+    // --- Home: diagnostics for the node serving this console ---
 
-    var statusCards = document.getElementById("status-cards");
-    var nodesTable = document.getElementById("nodes-table");
+    var nodeStats = document.getElementById("node-stats");
     var detailSections = document.getElementById("detail-sections");
     var rawJsonPre = document.getElementById("raw-json");
     var rawJsonBtn = document.getElementById("raw-json-btn");
-    var autoRefreshCheckbox = document.getElementById("auto-refresh");
-    var showNonVoters = document.getElementById("show-nonvoters");
-    var lastUpdatedSpan = document.getElementById("last-updated");
-    var refreshTimer = null;
     var lastStatusData = null;
+    var lastStatusTime = null;
+    var nodesStale = false;
+    var lastNodesData = [];
 
-    autoRefreshCheckbox.addEventListener("change", function () {
-        if (autoRefreshCheckbox.checked) {
-            loadStatus();
-            refreshTimer = setInterval(loadStatus, 5000);
-        } else {
-            if (refreshTimer) {
-                clearInterval(refreshTimer);
-                refreshTimer = null;
-            }
-        }
-    });
+    var rawJsonDialog = document.getElementById("raw-json-dialog");
+    var copyJsonStatus = document.getElementById("json-copy-status");
+    var jsonCopyGeneration = 0;
 
-    // Status is the default tab, so load immediately.
-    loadStatus();
-
-    var rawJsonWrapper = document.getElementById("raw-json-wrapper");
-    var copyJsonBtn = document.getElementById("copy-json-btn");
+    function openJson(text, context) {
+        if (rawJsonDialog.open) return;
+        rawJsonPre.textContent = text;
+        document.getElementById("raw-json-context").textContent = context;
+        copyJsonStatus.textContent = "";
+        jsonCopyGeneration++;
+        rawJsonDialog.showModal();
+        document.body.classList.add("json-dialog-open");
+        rawJsonPre.scrollTop = 0;
+        rawJsonPre.scrollLeft = 0;
+    }
 
     rawJsonBtn.addEventListener("click", function () {
-        if (rawJsonWrapper.classList.contains("hidden")) {
-            rawJsonWrapper.classList.remove("hidden");
-            rawJsonBtn.textContent = "Hide Raw JSON";
-            if (lastStatusData) {
-                rawJsonPre.textContent = JSON.stringify(lastStatusData, null, 2);
-            }
-        } else {
-            rawJsonWrapper.classList.add("hidden");
-            rawJsonBtn.textContent = "Show Raw JSON";
+        if (!lastStatusData || rawJsonDialog.open) return;
+        // Hold this observation steady while it is being read or copied.
+        var nodeID = (lastStatusData.store || {}).node_id;
+        openJson(JSON.stringify(lastStatusData, null, 2),
+            (nodeID == null ? "This node" : "Node " + nodeID) + " · Snapshot from " + formatTimeOfDay(lastStatusTime) +
+            (nodesStale ? " · Last successful observation" : ""));
+    });
+
+    var nodeFeedback = document.getElementById("node-action-feedback");
+    var nodeFeedbackTimer;
+    document.addEventListener("rqlite:node-action", function (event) {
+        var action = event.detail;
+        if (action.action === "backup") {
+            backupNoLeader.checked = true;
+            showTab("backup");
+            return;
+        }
+        if (action.action === "copy") {
+            copyToClipboard(action.url).then(function () { feedback("Node URL copied."); },
+                function () { feedback("Unable to copy node URL: " + action.url); });
+            return;
         }
     });
 
-    copyJsonBtn.addEventListener("click", function () {
-        copyToClipboard(rawJsonPre.textContent).then(function () {
-            copyJsonBtn.textContent = "\u2714";
-            setTimeout(function () { copyJsonBtn.textContent = "\u2398"; }, 1500);
-        }, function () {
-            copyJsonBtn.title = "Copy not supported in this context";
-            copyJsonBtn.textContent = "\u2718";
-            setTimeout(function () { copyJsonBtn.textContent = "\u2398"; }, 1500);
-        });
-    });
-
-    showNonVoters.addEventListener("change", function () {
-        loadStatus();
-    });
-
-    function loadStatus() {
-        Promise.all([
-            apiRequest("GET", "/status"),
-            // Keep complete membership for restore routing; filter only the table.
-            apiRequest("GET", "/nodes?nonvoters")
-        ]).then(function (responses) {
-            lastStatusData = responses[0].data;
-            renderStatus(lastStatusData);
-            updateNodeInfo(lastStatusData);
-            renderNodes(responses[1].data);
-            if (!rawJsonWrapper.classList.contains("hidden")) {
-                rawJsonPre.textContent = JSON.stringify(lastStatusData, null, 2);
-            }
-            lastUpdatedSpan.textContent = "Updated " + formatTimeOfDay();
-        }).catch(function (err) {
-            statusCards.innerHTML = '<div class="status-error">' + escapeHTML(err.message) + '</div>';
-        });
+    function feedback(text) {
+        clearTimeout(nodeFeedbackTimer);
+        nodeFeedback.textContent = text;
+        nodeFeedback.hidden = false;
+        nodeFeedbackTimer = setTimeout(function () { nodeFeedback.hidden = true; }, 6000);
     }
+
+    document.getElementById("raw-json-close").addEventListener("click", function () {
+        rawJsonDialog.close();
+    });
+    var jsonBackdropPressed = false;
+    rawJsonDialog.addEventListener("pointerdown", function (event) {
+        jsonBackdropPressed = event.target === rawJsonDialog;
+    });
+    rawJsonDialog.addEventListener("click", function (event) {
+        if (jsonBackdropPressed && event.target === rawJsonDialog) rawJsonDialog.close();
+        jsonBackdropPressed = false;
+    });
+    // Native dialog behavior handles Escape, focus containment and inert content.
+    rawJsonDialog.addEventListener("close", function () {
+        jsonCopyGeneration++;
+        document.body.classList.remove("json-dialog-open");
+        rawJsonBtn.focus({ preventScroll: true });
+    });
+    rawJsonDialog.querySelectorAll("[data-copy-json]").forEach(function (button) {
+        button.addEventListener("click", function () {
+            var generation = ++jsonCopyGeneration;
+            copyJsonStatus.textContent = "Copying…";
+            copyToClipboard(rawJsonPre.textContent, rawJsonDialog).then(function () {
+                if (generation === jsonCopyGeneration) copyJsonStatus.textContent = "JSON copied to clipboard.";
+            }, function () {
+                if (generation === jsonCopyGeneration) copyJsonStatus.textContent = "Copy failed. Select the JSON and copy it manually.";
+            });
+        });
+    });
+
+    // The Home controller owns the shared /status and /nodes requests, including
+    // refreshes requested by Restore. Keep full membership for restore routing.
+    function loadStatus() {
+        document.dispatchEvent(new CustomEvent("rqlite:cluster-refresh"));
+    }
+
+    document.addEventListener("rqlite:cluster-updated", function (event) {
+        lastStatusData = event.detail.status;
+        lastStatusTime = new Date();
+        nodesStale = false;
+        renderStatus(lastStatusData);
+        updateNodeInfo(lastStatusData);
+        lastNodesData = event.detail.nodes;
+    });
+
+    document.addEventListener("rqlite:cluster-error", function () {
+        nodesStale = true;
+        // Do not leave a current-looking Raft badge after a failed refresh.
+        raftStateBadge.textContent = "Unknown";
+        raftStateBadge.className = "raft-state-badge";
+    });
 
     function renderStatus(data) {
         var store = data.store || {};
@@ -524,40 +562,21 @@
         var http = data.http || {};
         var build = data.build || {};
         var sqlite = store.sqlite3 || {};
-
-        // --- Overview cards ---
-        var cards = [
-            { label: "Node ID", value: store.node_id || "N/A" },
-            { label: "Raft State", value: raft.state || "N/A" },
-            { label: "Leader", value: store.leader ? store.leader.addr || "N/A" : "N/A" },
-            { label: "Version", value: build.version || "N/A" },
-            { label: "Uptime", value: node.uptime ? node.uptime.replace(/(\d+\.\d)\d+s$/, "$1s") : "N/A" },
-            { label: "DB Size", value: store.dir_size_friendly || "N/A" },
-            { label: "API Address", value: http.bind_addr || "N/A" },
-            { label: "Raft Address", value: store.addr || "N/A" }
-        ];
-
-        var raftStateClass = "";
-        var raftStateLower = (raft.state || "").toLowerCase();
-        if (raftStateLower === "leader") raftStateClass = " raft-leader";
-        else if (raftStateLower === "follower") raftStateClass = " raft-follower";
-        else if (raftStateLower === "candidate") raftStateClass = " raft-candidate";
-
-        var html = "";
-        cards.forEach(function (c) {
-            var extraClass = (c.label === "Raft State") ? raftStateClass : "";
-            html += '<div class="card' + extraClass + '"><div class="label">' + escapeHTML(c.label) +
-                '</div><div class="value">' + escapeHTML(c.value) + '</div></div>';
-        });
-        statusCards.innerHTML = html;
+        // The panel always describes the node serving this console.
+        nodeStats.innerHTML = [
+            ["Version", build.version || "N/A"],
+            ["Uptime", node.uptime ? node.uptime.replace(/(\d+\.\d)\d+s$/, "$1s") : "N/A"],
+            ["DB size", sqlite.db_size_friendly || "N/A"],
+            ["Ready", store.ready === true ? "Yes" : store.ready === false ? "No" : "N/A"]
+        ].map(function (item) {
+            return '<div><dt>' + escapeHTML(item[0]) + '</dt><dd>' + escapeHTML(item[1]) + '</dd></div>';
+        }).join("");
 
         // --- Detail sections ---
         var connRO = (sqlite.conn_pool_stats && sqlite.conn_pool_stats.ro) || {};
         var connRW = (sqlite.conn_pool_stats && sqlite.conn_pool_stats.rw) || {};
         var oss = data.os || {};
         var rt = data.runtime || {};
-        var cluster = data.cluster || {};
-        var mux = data.mux || {};
         var snapStore = store.snapshot_store || {};
 
         var sections = [
@@ -567,14 +586,6 @@
                     ["Bind Address", http.bind_addr],
                     ["Auth", http.auth],
                     ["TLS", http.tls ? http.tls.enabled : undefined]
-                ]
-            },
-            {
-                title: "Cluster",
-                rows: [
-                    ["Address", cluster.addr],
-                    ["API Address", cluster.api_addr],
-                    ["TLS", mux.tls]
                 ]
             },
             {
@@ -651,13 +662,21 @@
             }
         ];
 
-        html = "";
+        // Put the most useful node diagnostics first, followed by transport config.
+        sections = sections.slice(2).concat(sections.slice(0, 2));
+        var focusedSection = document.activeElement && document.activeElement.parentElement;
+        var focusedTitle = focusedSection && focusedSection.getAttribute("data-section");
+        var openSections = new Set(Array.from(detailSections.querySelectorAll("details[open]"), function (section) {
+            return section.getAttribute("data-section");
+        }));
+        var html = "";
         sections.forEach(function (section) {
-            html += '<div class="detail-section">';
-            html += '<div class="detail-section-header" onclick="this.parentElement.classList.toggle(\'open\')">';
+            html += '<details class="detail-section" data-section="' + escapeHTML(section.title) + '"' +
+                (openSections.has(section.title) ? ' open' : '') + '>';
+            html += '<summary class="detail-section-header">';
             html += '<span>' + escapeHTML(section.title) + '</span>';
             html += '<span class="arrow">&#9654;</span>';
-            html += '</div>';
+            html += '</summary>';
             html += '<div class="detail-section-body"><table class="detail-table">';
             section.rows.forEach(function (row) {
                 var val = row[1];
@@ -671,99 +690,15 @@
                 }
                 html += '<tr><td>' + escapeHTML(row[0]) + '</td><td>' + display + '</td></tr>';
             });
-            html += '</table></div></div>';
+            html += '</table></div></details>';
         });
         detailSections.innerHTML = html;
-    }
-
-    var nodesColumns = [
-        { key: "id", label: "ID" },
-        { key: "api_addr", label: "API Address" },
-        { key: "addr", label: "Raft Address" },
-        { key: "voter", label: "Voter" },
-        { key: "leader", label: "Leader" },
-        { key: "reachable", label: "Reachable" }
-    ];
-    var lastNodesData = [];
-    var nodesSortKey = "id";
-    var nodesSortAsc = true;
-
-    function renderNodes(data) {
-        if (!data || typeof data !== "object") {
-            lastNodesData = [];
-            nodesTable.innerHTML = '<div class="result-message">No node information available</div>';
-            return;
-        }
-
-        // /nodes returns an object keyed by node ID, not an array.
-        lastNodesData = Object.values(data);
-        if (lastNodesData.length === 0) {
-            nodesTable.innerHTML = '<div class="result-message">No node information available</div>';
-            return;
-        }
-
-        renderNodesTable();
-    }
-
-    function renderNodesTable() {
-        var nodes = lastNodesData.filter(function (node) {
-            return showNonVoters.checked || node.voter;
-        });
-
-        if (nodesSortKey) {
-            nodes.sort(function (a, b) {
-                var va = a[nodesSortKey];
-                var vb = b[nodesSortKey];
-                if (typeof va === "boolean") { va = va ? 1 : 0; vb = vb ? 1 : 0; }
-                if (va == null) va = "";
-                if (vb == null) vb = "";
-                var cmp = String(va).localeCompare(String(vb), undefined, { numeric: true });
-                return nodesSortAsc ? cmp : -cmp;
+        if (focusedTitle) {
+            var focusedDetails = Array.from(detailSections.querySelectorAll("details")).find(function (section) {
+                return section.getAttribute("data-section") === focusedTitle;
             });
+            if (focusedDetails) focusedDetails.querySelector("summary").focus({ preventScroll: true });
         }
-
-        var html = '<table><thead><tr>';
-        nodesColumns.forEach(function (col) {
-            var arrow = "";
-            if (nodesSortKey === col.key) {
-                arrow = nodesSortAsc ? " \u25B2" : " \u25BC";
-            }
-            html += '<th class="sortable" data-sort-key="' + col.key + '">' + escapeHTML(col.label) + arrow + '</th>';
-        });
-        html += '</tr></thead><tbody>';
-
-        nodes.forEach(function (node) {
-            html += "<tr>";
-            html += "<td>" + escapeHTML(node.id) + "</td>";
-            var apiURL = node.api_addr || "";
-            if (apiURL) {
-                var uiURL = apiURL.replace(/\/$/, "") + "/console/";
-                html += '<td><a href="' + escapeHTML(uiURL) + '">' + escapeHTML(apiURL) + '</a></td>';
-            } else {
-                html += "<td>N/A</td>";
-            }
-            html += "<td>" + escapeHTML(node.addr) + "</td>";
-            html += "<td>" + (node.voter ? "Yes" : "No") + "</td>";
-            html += "<td>" + (node.leader ? "Yes" : "No") + "</td>";
-            html += '<td><span class="status-dot ' + (node.reachable ? 'reachable' : 'unreachable') + '" title="' + (node.reachable ? 'Reachable' : 'Unreachable') + '"></span></td>';
-            html += "</tr>";
-        });
-        html += "</tbody></table>";
-        nodesTable.innerHTML = html;
-
-        // Attach click handlers to sortable headers.
-        nodesTable.querySelectorAll("th.sortable").forEach(function (th) {
-            th.addEventListener("click", function () {
-                var key = th.getAttribute("data-sort-key");
-                if (nodesSortKey === key) {
-                    nodesSortAsc = !nodesSortAsc;
-                } else {
-                    nodesSortKey = key;
-                    nodesSortAsc = true;
-                }
-                renderNodesTable();
-            });
-        });
     }
 
     // --- Backup Tab ---
@@ -775,6 +710,15 @@
     var backupNoLeader = document.getElementById("backup-noleader");
     var backupBtn = document.getElementById("backup-btn");
     var backupStatusDiv = document.getElementById("backup-status");
+
+    function openLinkedBackup() {
+        if (window.location.hash.split("?")[0] !== "#backup") return;
+        var params = new URLSearchParams(window.location.hash.split("?")[1] || "");
+        backupNoLeader.checked = params.get("noleader") === "1";
+        showTab("backup");
+    }
+    openLinkedBackup();
+    window.addEventListener("hashchange", openLinkedBackup);
 
     // Show/hide tables field based on format selection.
     var tablesField = document.getElementById("tables-field");
@@ -880,7 +824,7 @@
     function isSingleNodeCluster() {
         // This list includes non-voters. raft.num_peers counts only voting peers
         // and cannot establish whether /boot is allowed. Unknown uses /db/load.
-        return lastNodesData.length === 1;
+        return !nodesStale && lastNodesData.length === 1;
     }
 
     function sniffFileType(file) {

@@ -15,6 +15,7 @@ This release features an addition to the API. In the event of an error there is 
 - [PR #2871](https://github.com/rqlite/rqlite/pull/2871): CDC stats returns promptly on closed queue.
 - [PR #2872](https://github.com/rqlite/rqlite/pull/2872): Never move a follower's CDC high watermark backwards.
 - [PR #2873](https://github.com/rqlite/rqlite/pull/2873): Advance CDC high watermark past dropped batches.
+- [PR #2876](https://github.com/rqlite/rqlite/pull/2876): Consolidate console home and topology tabs.
 
 ## v10.5.3 (October 7th 2026)
 ### Implementation changes and bug fixes
