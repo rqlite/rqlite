@@ -492,6 +492,28 @@ func (n *Node) Demote(id string) error {
 	return nil
 }
 
+// Promote asks the cluster, via this node, to promote the node with the given
+// ID from a non-voter to a voter.
+func (n *Node) Promote(id string) error {
+	b, err := json.Marshal(map[string]string{"id": id})
+	if err != nil {
+		return err
+	}
+
+	resp, err := http.Post("http://"+n.APIAddr+"/promote", "application/json", bytes.NewReader(b))
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != 200 {
+		body, _ := io.ReadAll(resp.Body)
+		return fmt.Errorf("promote endpoint returned: %s (%s)", resp.Status,
+			strings.TrimSuffix(string(body), "\n"))
+	}
+	return nil
+}
+
 // IsVoter returns whether the node is a voter or not.
 func (n *Node) IsVoter() (bool, error) {
 	statusJSON, err := n.Status()

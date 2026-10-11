@@ -6,6 +6,7 @@ This release features an addition to the API. In the event of an error there is 
 - [PR #2864](https://github.com/rqlite/rqlite/pull/2864): New `errors` query parameter selects which error fields are returned.
 - [PR #2865](https://github.com/rqlite/rqlite/pull/2865): Enable query logging via command-line flag.
 - [PR #2867](https://github.com/rqlite/rqlite/pull/2867): Support demoting a voting node to a non-voter via `POST /demote` and the shell's `.demote`.
+- [PR #2868](https://github.com/rqlite/rqlite/pull/2868): Support promoting a non-voting node to a voter via `POST /promote` and the shell's `.promote`.
 
 ### Implementation changes and bug fixes
 - [PR #2862](https://github.com/rqlite/rqlite/pull/2862), [PR #2863](https://github.com/rqlite/rqlite/pull/2863), [PR #2866](https://github.com/rqlite/rqlite/pull/2866): Upgrade dependencies via `go get`.

@@ -84,6 +84,7 @@ func init() {
 		`.ready                                        Show ready status for connected node`,
 		`.remove NODEID                                Remove node NODEID from the cluster`,
 		`.demote NODEID                                Demote node NODEID from a voter to a non-voter`,
+		`.promote NODEID                               Promote node NODEID from a non-voter to a voter`,
 		`.restore FILE                                 Load using SQLite file or SQL dump contained in FILE`,
 		`.schema                                       Show CREATE statements for all tables`,
 		`.reap                                         Request a snapshot reap on connected node`,
@@ -261,6 +262,8 @@ func main() {
 				err = removeNode(client, input[index+1:])
 			case ".DEMOTE":
 				err = demoteNode(client, input[index+1:])
+			case ".PROMOTE":
+				err = promoteNode(client, input[index+1:])
 			case ".BACKUP":
 				arg, argErr := requireArg(input, index, "please specify an output file for the backup")
 				if argErr != nil {

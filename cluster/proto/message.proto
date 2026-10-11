@@ -33,6 +33,7 @@ message Command {
         COMMAND_TYPE_STEPDOWN = 12;
         COMMAND_TYPE_HIGHWATER_MARK_UPDATE = 13;
         COMMAND_TYPE_DEMOTE_NODE = 14;
+        COMMAND_TYPE_PROMOTE_NODE = 15;
     }
     Type type = 1;
 
@@ -49,6 +50,7 @@ message Command {
         command.StepdownRequest stepdown_request = 12;
         HighwaterMarkUpdateRequest highwater_mark_update_request = 13;
         command.DemoteNodeRequest demote_node_request = 14;
+        command.PromoteNodeRequest promote_node_request = 15;
     }
 
     Credentials credentials = 4;
@@ -91,6 +93,10 @@ message CommandRemoveNodeResponse {
 }
 
 message CommandDemoteNodeResponse {
+    string error = 1;
+}
+
+message CommandPromoteNodeResponse {
     string error = 1;
 }
 

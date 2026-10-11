@@ -40,6 +40,7 @@ const (
 	Command_COMMAND_TYPE_STEPDOWN              Command_Type = 12
 	Command_COMMAND_TYPE_HIGHWATER_MARK_UPDATE Command_Type = 13
 	Command_COMMAND_TYPE_DEMOTE_NODE           Command_Type = 14
+	Command_COMMAND_TYPE_PROMOTE_NODE          Command_Type = 15
 )
 
 // Enum value maps for Command_Type.
@@ -60,6 +61,7 @@ var (
 		12: "COMMAND_TYPE_STEPDOWN",
 		13: "COMMAND_TYPE_HIGHWATER_MARK_UPDATE",
 		14: "COMMAND_TYPE_DEMOTE_NODE",
+		15: "COMMAND_TYPE_PROMOTE_NODE",
 	}
 	Command_Type_value = map[string]int32{
 		"COMMAND_TYPE_UNKNOWN":               0,
@@ -77,6 +79,7 @@ var (
 		"COMMAND_TYPE_STEPDOWN":              12,
 		"COMMAND_TYPE_HIGHWATER_MARK_UPDATE": 13,
 		"COMMAND_TYPE_DEMOTE_NODE":           14,
+		"COMMAND_TYPE_PROMOTE_NODE":          15,
 	}
 )
 
@@ -236,6 +239,7 @@ type Command struct {
 	//	*Command_StepdownRequest
 	//	*Command_HighwaterMarkUpdateRequest
 	//	*Command_DemoteNodeRequest
+	//	*Command_PromoteNodeRequest
 	Request       isCommand_Request `protobuf_oneof:"request"`
 	Credentials   *Credentials      `protobuf:"bytes,4,opt,name=credentials,proto3" json:"credentials,omitempty"`
 	unknownFields protoimpl.UnknownFields
@@ -394,6 +398,15 @@ func (x *Command) GetDemoteNodeRequest() *proto.DemoteNodeRequest {
 	return nil
 }
 
+func (x *Command) GetPromoteNodeRequest() *proto.PromoteNodeRequest {
+	if x != nil {
+		if x, ok := x.Request.(*Command_PromoteNodeRequest); ok {
+			return x.PromoteNodeRequest
+		}
+	}
+	return nil
+}
+
 func (x *Command) GetCredentials() *Credentials {
 	if x != nil {
 		return x.Credentials
@@ -453,6 +466,10 @@ type Command_DemoteNodeRequest struct {
 	DemoteNodeRequest *proto.DemoteNodeRequest `protobuf:"bytes,14,opt,name=demote_node_request,json=demoteNodeRequest,proto3,oneof"`
 }
 
+type Command_PromoteNodeRequest struct {
+	PromoteNodeRequest *proto.PromoteNodeRequest `protobuf:"bytes,15,opt,name=promote_node_request,json=promoteNodeRequest,proto3,oneof"`
+}
+
 func (*Command_ExecuteRequest) isCommand_Request() {}
 
 func (*Command_QueryRequest) isCommand_Request() {}
@@ -476,6 +493,8 @@ func (*Command_StepdownRequest) isCommand_Request() {}
 func (*Command_HighwaterMarkUpdateRequest) isCommand_Request() {}
 
 func (*Command_DemoteNodeRequest) isCommand_Request() {}
+
+func (*Command_PromoteNodeRequest) isCommand_Request() {}
 
 type CommandExecuteResponse struct {
 	state         protoimpl.MessageState        `protogen:"open.v1"`
@@ -893,6 +912,50 @@ func (x *CommandDemoteNodeResponse) GetError() string {
 	return ""
 }
 
+type CommandPromoteNodeResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Error         string                 `protobuf:"bytes,1,opt,name=error,proto3" json:"error,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *CommandPromoteNodeResponse) Reset() {
+	*x = CommandPromoteNodeResponse{}
+	mi := &file_message_proto_msgTypes[11]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *CommandPromoteNodeResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*CommandPromoteNodeResponse) ProtoMessage() {}
+
+func (x *CommandPromoteNodeResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_message_proto_msgTypes[11]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use CommandPromoteNodeResponse.ProtoReflect.Descriptor instead.
+func (*CommandPromoteNodeResponse) Descriptor() ([]byte, []int) {
+	return file_message_proto_rawDescGZIP(), []int{11}
+}
+
+func (x *CommandPromoteNodeResponse) GetError() string {
+	if x != nil {
+		return x.Error
+	}
+	return ""
+}
+
 type CommandNotifyResponse struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Error         string                 `protobuf:"bytes,1,opt,name=error,proto3" json:"error,omitempty"`
@@ -902,7 +965,7 @@ type CommandNotifyResponse struct {
 
 func (x *CommandNotifyResponse) Reset() {
 	*x = CommandNotifyResponse{}
-	mi := &file_message_proto_msgTypes[11]
+	mi := &file_message_proto_msgTypes[12]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -914,7 +977,7 @@ func (x *CommandNotifyResponse) String() string {
 func (*CommandNotifyResponse) ProtoMessage() {}
 
 func (x *CommandNotifyResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_message_proto_msgTypes[11]
+	mi := &file_message_proto_msgTypes[12]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -927,7 +990,7 @@ func (x *CommandNotifyResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CommandNotifyResponse.ProtoReflect.Descriptor instead.
 func (*CommandNotifyResponse) Descriptor() ([]byte, []int) {
-	return file_message_proto_rawDescGZIP(), []int{11}
+	return file_message_proto_rawDescGZIP(), []int{12}
 }
 
 func (x *CommandNotifyResponse) GetError() string {
@@ -947,7 +1010,7 @@ type CommandJoinResponse struct {
 
 func (x *CommandJoinResponse) Reset() {
 	*x = CommandJoinResponse{}
-	mi := &file_message_proto_msgTypes[12]
+	mi := &file_message_proto_msgTypes[13]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -959,7 +1022,7 @@ func (x *CommandJoinResponse) String() string {
 func (*CommandJoinResponse) ProtoMessage() {}
 
 func (x *CommandJoinResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_message_proto_msgTypes[12]
+	mi := &file_message_proto_msgTypes[13]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -972,7 +1035,7 @@ func (x *CommandJoinResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CommandJoinResponse.ProtoReflect.Descriptor instead.
 func (*CommandJoinResponse) Descriptor() ([]byte, []int) {
-	return file_message_proto_rawDescGZIP(), []int{12}
+	return file_message_proto_rawDescGZIP(), []int{13}
 }
 
 func (x *CommandJoinResponse) GetError() string {
@@ -998,7 +1061,7 @@ type CommandStepdownResponse struct {
 
 func (x *CommandStepdownResponse) Reset() {
 	*x = CommandStepdownResponse{}
-	mi := &file_message_proto_msgTypes[13]
+	mi := &file_message_proto_msgTypes[14]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1010,7 +1073,7 @@ func (x *CommandStepdownResponse) String() string {
 func (*CommandStepdownResponse) ProtoMessage() {}
 
 func (x *CommandStepdownResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_message_proto_msgTypes[13]
+	mi := &file_message_proto_msgTypes[14]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1023,7 +1086,7 @@ func (x *CommandStepdownResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CommandStepdownResponse.ProtoReflect.Descriptor instead.
 func (*CommandStepdownResponse) Descriptor() ([]byte, []int) {
-	return file_message_proto_rawDescGZIP(), []int{13}
+	return file_message_proto_rawDescGZIP(), []int{14}
 }
 
 func (x *CommandStepdownResponse) GetError() string {
@@ -1043,7 +1106,7 @@ type HighwaterMarkUpdateRequest struct {
 
 func (x *HighwaterMarkUpdateRequest) Reset() {
 	*x = HighwaterMarkUpdateRequest{}
-	mi := &file_message_proto_msgTypes[14]
+	mi := &file_message_proto_msgTypes[15]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1055,7 +1118,7 @@ func (x *HighwaterMarkUpdateRequest) String() string {
 func (*HighwaterMarkUpdateRequest) ProtoMessage() {}
 
 func (x *HighwaterMarkUpdateRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_message_proto_msgTypes[14]
+	mi := &file_message_proto_msgTypes[15]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1068,7 +1131,7 @@ func (x *HighwaterMarkUpdateRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use HighwaterMarkUpdateRequest.ProtoReflect.Descriptor instead.
 func (*HighwaterMarkUpdateRequest) Descriptor() ([]byte, []int) {
-	return file_message_proto_rawDescGZIP(), []int{14}
+	return file_message_proto_rawDescGZIP(), []int{15}
 }
 
 func (x *HighwaterMarkUpdateRequest) GetNodeId() string {
@@ -1094,7 +1157,7 @@ type HighwaterMarkUpdateResponse struct {
 
 func (x *HighwaterMarkUpdateResponse) Reset() {
 	*x = HighwaterMarkUpdateResponse{}
-	mi := &file_message_proto_msgTypes[15]
+	mi := &file_message_proto_msgTypes[16]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1106,7 +1169,7 @@ func (x *HighwaterMarkUpdateResponse) String() string {
 func (*HighwaterMarkUpdateResponse) ProtoMessage() {}
 
 func (x *HighwaterMarkUpdateResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_message_proto_msgTypes[15]
+	mi := &file_message_proto_msgTypes[16]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1119,7 +1182,7 @@ func (x *HighwaterMarkUpdateResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use HighwaterMarkUpdateResponse.ProtoReflect.Descriptor instead.
 func (*HighwaterMarkUpdateResponse) Descriptor() ([]byte, []int) {
-	return file_message_proto_rawDescGZIP(), []int{15}
+	return file_message_proto_rawDescGZIP(), []int{16}
 }
 
 func (x *HighwaterMarkUpdateResponse) GetError() string {
@@ -1140,7 +1203,7 @@ const file_message_proto_rawDesc = "" +
 	"\bNodeMeta\x12\x10\n" +
 	"\x03url\x18\x01 \x01(\tR\x03url\x12!\n" +
 	"\fcommit_index\x18\x02 \x01(\x04R\vcommitIndex\x12\x18\n" +
-	"\aversion\x18\x03 \x01(\tR\aversion\"\x88\v\n" +
+	"\aversion\x18\x03 \x01(\tR\aversion\"\xf8\v\n" +
 	"\aCommand\x12)\n" +
 	"\x04type\x18\x01 \x01(\x0e2\x15.cluster.Command.TypeR\x04type\x12B\n" +
 	"\x0fexecute_request\x18\x02 \x01(\v2\x17.command.ExecuteRequestH\x00R\x0eexecuteRequest\x12<\n" +
@@ -1155,8 +1218,9 @@ const file_message_proto_rawDesc = "" +
 	"\x12load_chunk_request\x18\v \x01(\v2\x19.command.LoadChunkRequestH\x00R\x10loadChunkRequest\x12E\n" +
 	"\x10stepdown_request\x18\f \x01(\v2\x18.command.StepdownRequestH\x00R\x0fstepdownRequest\x12h\n" +
 	"\x1dhighwater_mark_update_request\x18\r \x01(\v2#.cluster.HighwaterMarkUpdateRequestH\x00R\x1ahighwaterMarkUpdateRequest\x12L\n" +
-	"\x13demote_node_request\x18\x0e \x01(\v2\x1a.command.DemoteNodeRequestH\x00R\x11demoteNodeRequest\x126\n" +
-	"\vcredentials\x18\x04 \x01(\v2\x14.cluster.CredentialsR\vcredentials\"\xa8\x03\n" +
+	"\x13demote_node_request\x18\x0e \x01(\v2\x1a.command.DemoteNodeRequestH\x00R\x11demoteNodeRequest\x12O\n" +
+	"\x14promote_node_request\x18\x0f \x01(\v2\x1b.command.PromoteNodeRequestH\x00R\x12promoteNodeRequest\x126\n" +
+	"\vcredentials\x18\x04 \x01(\v2\x14.cluster.CredentialsR\vcredentials\"\xc7\x03\n" +
 	"\x04Type\x12\x18\n" +
 	"\x14COMMAND_TYPE_UNKNOWN\x10\x00\x12\x1e\n" +
 	"\x1aCOMMAND_TYPE_GET_NODE_META\x10\x01\x12\x18\n" +
@@ -1173,7 +1237,8 @@ const file_message_proto_rawDesc = "" +
 	"\x1aCOMMAND_TYPE_BACKUP_STREAM\x10\v\x12\x19\n" +
 	"\x15COMMAND_TYPE_STEPDOWN\x10\f\x12&\n" +
 	"\"COMMAND_TYPE_HIGHWATER_MARK_UPDATE\x10\r\x12\x1c\n" +
-	"\x18COMMAND_TYPE_DEMOTE_NODE\x10\x0eB\t\n" +
+	"\x18COMMAND_TYPE_DEMOTE_NODE\x10\x0e\x12\x1d\n" +
+	"\x19COMMAND_TYPE_PROMOTE_NODE\x10\x0fB\t\n" +
 	"\arequest\"\x87\x01\n" +
 	"\x16CommandExecuteResponse\x12\x14\n" +
 	"\x05error\x18\x01 \x01(\tR\x05error\x129\n" +
@@ -1198,6 +1263,8 @@ const file_message_proto_rawDesc = "" +
 	"\x19CommandRemoveNodeResponse\x12\x14\n" +
 	"\x05error\x18\x01 \x01(\tR\x05error\"1\n" +
 	"\x19CommandDemoteNodeResponse\x12\x14\n" +
+	"\x05error\x18\x01 \x01(\tR\x05error\"2\n" +
+	"\x1aCommandPromoteNodeResponse\x12\x14\n" +
 	"\x05error\x18\x01 \x01(\tR\x05error\"-\n" +
 	"\x15CommandNotifyResponse\x12\x14\n" +
 	"\x05error\x18\x01 \x01(\tR\x05error\"C\n" +
@@ -1225,7 +1292,7 @@ func file_message_proto_rawDescGZIP() []byte {
 }
 
 var file_message_proto_enumTypes = make([]protoimpl.EnumInfo, 1)
-var file_message_proto_msgTypes = make([]protoimpl.MessageInfo, 16)
+var file_message_proto_msgTypes = make([]protoimpl.MessageInfo, 17)
 var file_message_proto_goTypes = []any{
 	(Command_Type)(0),                   // 0: cluster.Command.Type
 	(*Credentials)(nil),                 // 1: cluster.Credentials
@@ -1239,48 +1306,51 @@ var file_message_proto_goTypes = []any{
 	(*CommandLoadChunkResponse)(nil),    // 9: cluster.CommandLoadChunkResponse
 	(*CommandRemoveNodeResponse)(nil),   // 10: cluster.CommandRemoveNodeResponse
 	(*CommandDemoteNodeResponse)(nil),   // 11: cluster.CommandDemoteNodeResponse
-	(*CommandNotifyResponse)(nil),       // 12: cluster.CommandNotifyResponse
-	(*CommandJoinResponse)(nil),         // 13: cluster.CommandJoinResponse
-	(*CommandStepdownResponse)(nil),     // 14: cluster.CommandStepdownResponse
-	(*HighwaterMarkUpdateRequest)(nil),  // 15: cluster.HighwaterMarkUpdateRequest
-	(*HighwaterMarkUpdateResponse)(nil), // 16: cluster.HighwaterMarkUpdateResponse
-	(*proto.ExecuteRequest)(nil),        // 17: command.ExecuteRequest
-	(*proto.QueryRequest)(nil),          // 18: command.QueryRequest
-	(*proto.BackupRequest)(nil),         // 19: command.BackupRequest
-	(*proto.LoadRequest)(nil),           // 20: command.LoadRequest
-	(*proto.RemoveNodeRequest)(nil),     // 21: command.RemoveNodeRequest
-	(*proto.NotifyRequest)(nil),         // 22: command.NotifyRequest
-	(*proto.JoinRequest)(nil),           // 23: command.JoinRequest
-	(*proto.ExecuteQueryRequest)(nil),   // 24: command.ExecuteQueryRequest
-	(*proto.LoadChunkRequest)(nil),      // 25: command.LoadChunkRequest
-	(*proto.StepdownRequest)(nil),       // 26: command.StepdownRequest
-	(*proto.DemoteNodeRequest)(nil),     // 27: command.DemoteNodeRequest
-	(*proto.ExecuteQueryResponse)(nil),  // 28: command.ExecuteQueryResponse
-	(*proto.QueryRows)(nil),             // 29: command.QueryRows
+	(*CommandPromoteNodeResponse)(nil),  // 12: cluster.CommandPromoteNodeResponse
+	(*CommandNotifyResponse)(nil),       // 13: cluster.CommandNotifyResponse
+	(*CommandJoinResponse)(nil),         // 14: cluster.CommandJoinResponse
+	(*CommandStepdownResponse)(nil),     // 15: cluster.CommandStepdownResponse
+	(*HighwaterMarkUpdateRequest)(nil),  // 16: cluster.HighwaterMarkUpdateRequest
+	(*HighwaterMarkUpdateResponse)(nil), // 17: cluster.HighwaterMarkUpdateResponse
+	(*proto.ExecuteRequest)(nil),        // 18: command.ExecuteRequest
+	(*proto.QueryRequest)(nil),          // 19: command.QueryRequest
+	(*proto.BackupRequest)(nil),         // 20: command.BackupRequest
+	(*proto.LoadRequest)(nil),           // 21: command.LoadRequest
+	(*proto.RemoveNodeRequest)(nil),     // 22: command.RemoveNodeRequest
+	(*proto.NotifyRequest)(nil),         // 23: command.NotifyRequest
+	(*proto.JoinRequest)(nil),           // 24: command.JoinRequest
+	(*proto.ExecuteQueryRequest)(nil),   // 25: command.ExecuteQueryRequest
+	(*proto.LoadChunkRequest)(nil),      // 26: command.LoadChunkRequest
+	(*proto.StepdownRequest)(nil),       // 27: command.StepdownRequest
+	(*proto.DemoteNodeRequest)(nil),     // 28: command.DemoteNodeRequest
+	(*proto.PromoteNodeRequest)(nil),    // 29: command.PromoteNodeRequest
+	(*proto.ExecuteQueryResponse)(nil),  // 30: command.ExecuteQueryResponse
+	(*proto.QueryRows)(nil),             // 31: command.QueryRows
 }
 var file_message_proto_depIdxs = []int32{
 	0,  // 0: cluster.Command.type:type_name -> cluster.Command.Type
-	17, // 1: cluster.Command.execute_request:type_name -> command.ExecuteRequest
-	18, // 2: cluster.Command.query_request:type_name -> command.QueryRequest
-	19, // 3: cluster.Command.backup_request:type_name -> command.BackupRequest
-	20, // 4: cluster.Command.load_request:type_name -> command.LoadRequest
-	21, // 5: cluster.Command.remove_node_request:type_name -> command.RemoveNodeRequest
-	22, // 6: cluster.Command.notify_request:type_name -> command.NotifyRequest
-	23, // 7: cluster.Command.join_request:type_name -> command.JoinRequest
-	24, // 8: cluster.Command.execute_query_request:type_name -> command.ExecuteQueryRequest
-	25, // 9: cluster.Command.load_chunk_request:type_name -> command.LoadChunkRequest
-	26, // 10: cluster.Command.stepdown_request:type_name -> command.StepdownRequest
-	15, // 11: cluster.Command.highwater_mark_update_request:type_name -> cluster.HighwaterMarkUpdateRequest
-	27, // 12: cluster.Command.demote_node_request:type_name -> command.DemoteNodeRequest
-	1,  // 13: cluster.Command.credentials:type_name -> cluster.Credentials
-	28, // 14: cluster.CommandExecuteResponse.response:type_name -> command.ExecuteQueryResponse
-	29, // 15: cluster.CommandQueryResponse.rows:type_name -> command.QueryRows
-	28, // 16: cluster.CommandRequestResponse.response:type_name -> command.ExecuteQueryResponse
-	17, // [17:17] is the sub-list for method output_type
-	17, // [17:17] is the sub-list for method input_type
-	17, // [17:17] is the sub-list for extension type_name
-	17, // [17:17] is the sub-list for extension extendee
-	0,  // [0:17] is the sub-list for field type_name
+	18, // 1: cluster.Command.execute_request:type_name -> command.ExecuteRequest
+	19, // 2: cluster.Command.query_request:type_name -> command.QueryRequest
+	20, // 3: cluster.Command.backup_request:type_name -> command.BackupRequest
+	21, // 4: cluster.Command.load_request:type_name -> command.LoadRequest
+	22, // 5: cluster.Command.remove_node_request:type_name -> command.RemoveNodeRequest
+	23, // 6: cluster.Command.notify_request:type_name -> command.NotifyRequest
+	24, // 7: cluster.Command.join_request:type_name -> command.JoinRequest
+	25, // 8: cluster.Command.execute_query_request:type_name -> command.ExecuteQueryRequest
+	26, // 9: cluster.Command.load_chunk_request:type_name -> command.LoadChunkRequest
+	27, // 10: cluster.Command.stepdown_request:type_name -> command.StepdownRequest
+	16, // 11: cluster.Command.highwater_mark_update_request:type_name -> cluster.HighwaterMarkUpdateRequest
+	28, // 12: cluster.Command.demote_node_request:type_name -> command.DemoteNodeRequest
+	29, // 13: cluster.Command.promote_node_request:type_name -> command.PromoteNodeRequest
+	1,  // 14: cluster.Command.credentials:type_name -> cluster.Credentials
+	30, // 15: cluster.CommandExecuteResponse.response:type_name -> command.ExecuteQueryResponse
+	31, // 16: cluster.CommandQueryResponse.rows:type_name -> command.QueryRows
+	30, // 17: cluster.CommandRequestResponse.response:type_name -> command.ExecuteQueryResponse
+	18, // [18:18] is the sub-list for method output_type
+	18, // [18:18] is the sub-list for method input_type
+	18, // [18:18] is the sub-list for extension type_name
+	18, // [18:18] is the sub-list for extension extendee
+	0,  // [0:18] is the sub-list for field type_name
 }
 
 func init() { file_message_proto_init() }
@@ -1301,6 +1371,7 @@ func file_message_proto_init() {
 		(*Command_StepdownRequest)(nil),
 		(*Command_HighwaterMarkUpdateRequest)(nil),
 		(*Command_DemoteNodeRequest)(nil),
+		(*Command_PromoteNodeRequest)(nil),
 	}
 	type x struct{}
 	out := protoimpl.TypeBuilder{
@@ -1308,7 +1379,7 @@ func file_message_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_message_proto_rawDesc), len(file_message_proto_rawDesc)),
 			NumEnums:      1,
-			NumMessages:   16,
+			NumMessages:   17,
 			NumExtensions: 0,
 			NumServices:   0,
 		},

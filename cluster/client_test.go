@@ -340,6 +340,83 @@ func Test_ClientDemoteNodeTimeout(t *testing.T) {
 	}
 }
 
+func Test_ClientPromoteNode(t *testing.T) {
+	srv := servicetest.NewService()
+	srv.Handler = func(conn net.Conn) {
+		var p []byte
+		var err error
+		c := readCommand(conn)
+		if c == nil {
+			// Error on connection, so give up, as normal
+			// test exit can cause that too.
+			return
+		}
+		if c.Type != proto.Command_COMMAND_TYPE_PROMOTE_NODE {
+			t.Fatalf("unexpected command type: %d", c.Type)
+		}
+		pnr := c.GetPromoteNodeRequest()
+		if pnr == nil {
+			t.Fatal("expected promote node request, got nil")
+		}
+		if pnr.Id != "node1" {
+			t.Fatalf("unexpected node id, got %s", pnr.Id)
+		}
+
+		p, err = pb.Marshal(&proto.CommandPromoteNodeResponse{})
+		if err != nil {
+			conn.Close()
+		}
+		writeBytesWithLength(conn, p)
+	}
+	srv.Start()
+	defer srv.Close()
+
+	c := NewClient(&simpleDialer{}, 0)
+	req := &command.PromoteNodeRequest{
+		Id: "node1",
+	}
+	err := c.PromoteNode(context.Background(), req, srv.Addr(), nil, time.Second)
+	if err != nil {
+		t.Fatal(err)
+	}
+}
+
+func Test_ClientPromoteNodeTimeout(t *testing.T) {
+	srv := servicetest.NewService()
+	srv.Handler = func(conn net.Conn) {
+		c := readCommand(conn)
+		if c == nil {
+			// Error on connection, so give up, as normal
+			// test exit can cause that too.
+			return
+		}
+		if c.Type != proto.Command_COMMAND_TYPE_PROMOTE_NODE {
+			t.Fatalf("unexpected command type: %d", c.Type)
+		}
+		pnr := c.GetPromoteNodeRequest()
+		if pnr == nil {
+			t.Fatal("expected promote node request, got nil")
+		}
+		if pnr.Id != "node1" {
+			t.Fatalf("unexpected node id, got %s", pnr.Id)
+		}
+
+		// Don't write anything, so a timeout occurs.
+		time.Sleep(5 * time.Second)
+	}
+	srv.Start()
+	defer srv.Close()
+
+	c := NewClient(&simpleDialer{}, 0)
+	req := &command.PromoteNodeRequest{
+		Id: "node1",
+	}
+	err := c.PromoteNode(context.Background(), req, srv.Addr(), nil, time.Second)
+	if err == nil || !strings.Contains(err.Error(), "i/o timeout") {
+		t.Fatalf("failed to receive expected error, got: %T %s", err, err)
+	}
+}
+
 func Test_ClientRemoveNodeTimeout(t *testing.T) {
 	srv := servicetest.NewService()
 	srv.Handler = func(conn net.Conn) {

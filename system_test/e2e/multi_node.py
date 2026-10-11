@@ -197,6 +197,43 @@ class TestEndToEnd(unittest.TestCase):
     self.assertTrue(nodes[fs[0].node_id]['voter'])
     self.assertTrue(nodes[l.node_id]['voter'])
 
+  def test_promote_node_via_leader(self):
+    '''Test that promoting a demoted node via the leader works'''
+    l = self.cluster.wait_for_leader()
+    fs = self.cluster.followers()
+    self.assertEqual(len(fs), 2)
+
+    l.demote_node(fs[0].node_id)
+    fs[0].wait_for_voter_status(False)
+    self.assertFalse(l.nodes()[fs[0].node_id]['voter'])
+
+    l.promote_node(fs[0].node_id)
+    fs[0].wait_for_voter_status(True)
+    nodes = l.nodes()
+    self.assertEqual(len(nodes), 3)
+    for n in nodes.values():
+      self.assertTrue(n['voter'])
+
+    # Promoting an already-promoted node is fine.
+    l.promote_node(fs[0].node_id)
+    self.assertTrue(l.nodes()[fs[0].node_id]['voter'])
+
+  def test_promote_node_via_follower(self):
+    '''Test that promoting a demoted node via a follower works'''
+    l = self.cluster.wait_for_leader()
+    fs = self.cluster.followers()
+    self.assertEqual(len(fs), 2)
+
+    l.demote_node(fs[1].node_id)
+    fs[1].wait_for_voter_status(False)
+
+    fs[0].promote_node(fs[1].node_id)
+    fs[1].wait_for_voter_status(True)
+    nodes = l.nodes()
+    self.assertEqual(len(nodes), 3)
+    for n in nodes.values():
+      self.assertTrue(n['voter'])
+
 class TestEndToEndEncryptedNode(TestEndToEnd):
   def setUp(self):
     certFile = write_random_file(x509cert)

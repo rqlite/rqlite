@@ -36,6 +36,7 @@ var stats *expvar.Map
 const (
 	numRemoteRemoveNode       = "remote_remove_node"
 	numRemoteDemoteNode       = "remote_demote_node"
+	numRemotePromoteNode      = "remote_promote_node"
 	numRemoteBackups          = "remote_backups"
 	numRemoteLoads            = "remote_loads"
 	numRemoteStepdowns        = "remote_stepdowns"
@@ -57,6 +58,7 @@ func ResetStats() {
 	stats.Init()
 	stats.Add(numRemoteRemoveNode, 0)
 	stats.Add(numRemoteDemoteNode, 0)
+	stats.Add(numRemotePromoteNode, 0)
 	stats.Add(numRemoteBackups, 0)
 	stats.Add(numRemoteLoads, 0)
 	stats.Add(numRemoteStepdowns, 0)
@@ -80,6 +82,7 @@ type Store interface {
 	Load(ctx context.Context, lr *proto.LoadRequest) error
 	Remove(ctx context.Context, rn *proto.RemoveNodeRequest) error
 	Demote(ctx context.Context, dn *proto.DemoteNodeRequest) error
+	Promote(ctx context.Context, pn *proto.PromoteNodeRequest) error
 	Stepdown(wait bool, id string) error
 	LeaderAddr() (string, error)
 }
@@ -92,6 +95,7 @@ type Cluster interface {
 	Load(ctx context.Context, lr *proto.LoadRequest, nodeAddr string, creds *clstrPB.Credentials, timeout time.Duration, retries int) error
 	RemoveNode(ctx context.Context, rn *proto.RemoveNodeRequest, nodeAddr string, creds *clstrPB.Credentials, timeout time.Duration) error
 	DemoteNode(ctx context.Context, dn *proto.DemoteNodeRequest, nodeAddr string, creds *clstrPB.Credentials, timeout time.Duration) error
+	PromoteNode(ctx context.Context, pn *proto.PromoteNodeRequest, nodeAddr string, creds *clstrPB.Credentials, timeout time.Duration) error
 	Stepdown(ctx context.Context, sr *proto.StepdownRequest, nodeAddr string, creds *clstrPB.Credentials, timeout time.Duration) error
 }
 
@@ -274,6 +278,31 @@ func (p *Proxy) Demote(ctx context.Context, dn *proto.DemoteNodeRequest, creds *
 			return "", wrapIfUnauthorized(err)
 		}
 		stats.Add(numRemoteDemoteNode, 1)
+		return addr, nil
+	}
+	return p.GetAPIAddr(), err
+}
+
+// Promote promotes a non-voting node to a voter. If the local store returns
+// ErrNotLeader and noForward is false, the request is forwarded to
+// the current leader.
+func (p *Proxy) Promote(ctx context.Context, pn *proto.PromoteNodeRequest, creds *clstrPB.Credentials,
+	timeout time.Duration, noForward bool) (string, error) {
+
+	err := p.store.Promote(ctx, pn)
+	if errors.Is(err, store.ErrNotLeader) {
+		if noForward {
+			return "", ErrNotLeader
+		}
+		addr, addrErr := p.leaderAddr()
+		if addrErr != nil {
+			return "", addrErr
+		}
+		err = p.cluster.PromoteNode(ctx, pn, addr, creds, timeout)
+		if err != nil {
+			return "", wrapIfUnauthorized(err)
+		}
+		stats.Add(numRemotePromoteNode, 1)
 		return addr, nil
 	}
 	return p.GetAPIAddr(), err

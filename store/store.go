@@ -184,6 +184,8 @@ const (
 	numRemovedBeforeJoins       = "num_removed_before_joins"
 	numDemotes                  = "num_demotes"
 	numIgnoredDemotes           = "num_ignored_demotes"
+	numPromotes                 = "num_promotes"
+	numIgnoredPromotes          = "num_ignored_promotes"
 	numDBStatsErrors            = "num_db_stats_errors"
 	numVerifyLeader             = "num_verify_leader"
 	numVerifyLeaderFailed       = "num_verify_leader_failed"
@@ -252,6 +254,8 @@ func ResetStats() {
 	stats.Add(numRemovedBeforeJoins, 0)
 	stats.Add(numDemotes, 0)
 	stats.Add(numIgnoredDemotes, 0)
+	stats.Add(numPromotes, 0)
+	stats.Add(numIgnoredPromotes, 0)
 	stats.Add(numDBStatsErrors, 0)
 	stats.Add(numVerifyLeader, 0)
 	stats.Add(numVerifyLeaderFailed, 0)
@@ -2281,6 +2285,51 @@ func (s *Store) Demote(ctx context.Context, dn *proto.DemoteNodeRequest) error {
 
 	stats.Add(numDemotes, 1)
 	s.logger.Printf("node %s demoted successfully", id)
+	return nil
+}
+
+// Promote promotes a non-voting node to a voting node, using the address
+// the node already has in the cluster configuration. Only the Leader can
+// promote a node. If the node is not a member of the cluster,
+// ErrNodeNotFound is returned. Promoting a node which is already a voter
+// is a no-op.
+func (s *Store) Promote(ctx context.Context, pn *proto.PromoteNodeRequest) error {
+	if !s.open.Is() {
+		return ErrNotOpen
+	}
+
+	// Check if context is already canceled
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+
+	if s.raft.State() != raft.Leader {
+		return ErrNotLeader
+	}
+
+	id := pn.Id
+	s.logger.Printf("received request to promote node %s", id)
+
+	server, err := s.getServerByID(id)
+	if err != nil {
+		return err
+	}
+	if server.Suffrage == raft.Voter {
+		stats.Add(numIgnoredPromotes, 1)
+		s.logger.Printf("node %s is already a voter, ignoring promote request", id)
+		return nil
+	}
+
+	f := s.raft.AddVoter(raft.ServerID(id), server.Address, 0, 0)
+	if f.Error() != nil {
+		if f.Error() == raft.ErrNotLeader {
+			return ErrNotLeader
+		}
+		return f.Error()
+	}
+
+	stats.Add(numPromotes, 1)
+	s.logger.Printf("node %s promoted successfully", id)
 	return nil
 }
 

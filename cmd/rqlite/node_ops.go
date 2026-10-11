@@ -21,6 +21,12 @@ func demoteNode(client *httpcl.Client, id string) error {
 	return sendNodeID(client, "demote", client.Post, id)
 }
 
+// promoteNode asks the cluster to promote the non-voting node with the given
+// ID to a voter.
+func promoteNode(client *httpcl.Client, id string) error {
+	return sendNodeID(client, "promote", client.Post, id)
+}
+
 // sendNodeID sends a JSON body of the form {"id": "<id>"} to the given
 // endpoint, using the given request function.
 func sendNodeID(client *httpcl.Client, endpoint string, send func(string, io.Reader) (*http.Response, error), id string) error {

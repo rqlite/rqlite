@@ -21,6 +21,7 @@ type mockStore struct {
 	backupFn     func(ctx context.Context, br *proto.BackupRequest, dst io.Writer) (int, error)
 	removeFn     func(ctx context.Context, rn *proto.RemoveNodeRequest) error
 	demoteFn     func(ctx context.Context, dn *proto.DemoteNodeRequest) error
+	promoteFn    func(ctx context.Context, pn *proto.PromoteNodeRequest) error
 	stepdownFn   func(wait bool, id string) error
 	leaderAddrFn func() (string, error)
 }
@@ -67,6 +68,13 @@ func (m *mockStore) Demote(ctx context.Context, dn *proto.DemoteNodeRequest) err
 	return nil
 }
 
+func (m *mockStore) Promote(ctx context.Context, pn *proto.PromoteNodeRequest) error {
+	if m.promoteFn != nil {
+		return m.promoteFn(ctx, pn)
+	}
+	return nil
+}
+
 func (m *mockStore) Stepdown(wait bool, id string) error {
 	if m.stepdownFn != nil {
 		return m.stepdownFn(wait, id)
@@ -83,14 +91,15 @@ func (m *mockStore) LeaderAddr() (string, error) {
 
 // mockCluster implements Cluster for testing.
 type mockCluster struct {
-	executeFn    func(ctx context.Context, er *proto.ExecuteRequest, nodeAddr string, creds *clstrPB.Credentials, timeout time.Duration, retries int) ([]*proto.ExecuteQueryResponse, uint64, error)
-	queryFn      func(ctx context.Context, qr *proto.QueryRequest, nodeAddr string, creds *clstrPB.Credentials, timeout time.Duration, retries int) ([]*proto.QueryRows, uint64, error)
-	requestFn    func(ctx context.Context, eqr *proto.ExecuteQueryRequest, nodeAddr string, creds *clstrPB.Credentials, timeout time.Duration, retries int) ([]*proto.ExecuteQueryResponse, uint64, uint64, error)
-	backupFn     func(ctx context.Context, br *proto.BackupRequest, nodeAddr string, creds *clstrPB.Credentials, timeout time.Duration, w io.Writer) (int, error)
-	loadFn       func(ctx context.Context, lr *proto.LoadRequest, nodeAddr string, creds *clstrPB.Credentials, timeout time.Duration, retries int) error
-	removeNodeFn func(ctx context.Context, rn *proto.RemoveNodeRequest, nodeAddr string, creds *clstrPB.Credentials, timeout time.Duration) error
-	demoteNodeFn func(ctx context.Context, dn *proto.DemoteNodeRequest, nodeAddr string, creds *clstrPB.Credentials, timeout time.Duration) error
-	stepdownFn   func(ctx context.Context, sr *proto.StepdownRequest, nodeAddr string, creds *clstrPB.Credentials, timeout time.Duration) error
+	executeFn     func(ctx context.Context, er *proto.ExecuteRequest, nodeAddr string, creds *clstrPB.Credentials, timeout time.Duration, retries int) ([]*proto.ExecuteQueryResponse, uint64, error)
+	queryFn       func(ctx context.Context, qr *proto.QueryRequest, nodeAddr string, creds *clstrPB.Credentials, timeout time.Duration, retries int) ([]*proto.QueryRows, uint64, error)
+	requestFn     func(ctx context.Context, eqr *proto.ExecuteQueryRequest, nodeAddr string, creds *clstrPB.Credentials, timeout time.Duration, retries int) ([]*proto.ExecuteQueryResponse, uint64, uint64, error)
+	backupFn      func(ctx context.Context, br *proto.BackupRequest, nodeAddr string, creds *clstrPB.Credentials, timeout time.Duration, w io.Writer) (int, error)
+	loadFn        func(ctx context.Context, lr *proto.LoadRequest, nodeAddr string, creds *clstrPB.Credentials, timeout time.Duration, retries int) error
+	removeNodeFn  func(ctx context.Context, rn *proto.RemoveNodeRequest, nodeAddr string, creds *clstrPB.Credentials, timeout time.Duration) error
+	demoteNodeFn  func(ctx context.Context, dn *proto.DemoteNodeRequest, nodeAddr string, creds *clstrPB.Credentials, timeout time.Duration) error
+	promoteNodeFn func(ctx context.Context, pn *proto.PromoteNodeRequest, nodeAddr string, creds *clstrPB.Credentials, timeout time.Duration) error
+	stepdownFn    func(ctx context.Context, sr *proto.StepdownRequest, nodeAddr string, creds *clstrPB.Credentials, timeout time.Duration) error
 }
 
 func (m *mockCluster) Execute(ctx context.Context, er *proto.ExecuteRequest, nodeAddr string, creds *clstrPB.Credentials, timeout time.Duration, retries int) ([]*proto.ExecuteQueryResponse, uint64, error) {
@@ -138,6 +147,13 @@ func (m *mockCluster) RemoveNode(ctx context.Context, rn *proto.RemoveNodeReques
 func (m *mockCluster) DemoteNode(ctx context.Context, dn *proto.DemoteNodeRequest, nodeAddr string, creds *clstrPB.Credentials, timeout time.Duration) error {
 	if m.demoteNodeFn != nil {
 		return m.demoteNodeFn(ctx, dn, nodeAddr, creds, timeout)
+	}
+	return nil
+}
+
+func (m *mockCluster) PromoteNode(ctx context.Context, pn *proto.PromoteNodeRequest, nodeAddr string, creds *clstrPB.Credentials, timeout time.Duration) error {
+	if m.promoteNodeFn != nil {
+		return m.promoteNodeFn(ctx, pn, nodeAddr, creds, timeout)
 	}
 	return nil
 }
@@ -783,6 +799,141 @@ func Test_Demote_NotLeader_ForwardUnauthorized(t *testing.T) {
 	p := newTestProxy(s, c)
 
 	_, err := p.Demote(context.Background(), &proto.DemoteNodeRequest{Id: "node1"}, nil, time.Second, false)
+	if !errors.Is(err, ErrUnauthorized) {
+		t.Fatalf("expected ErrUnauthorized, got %v", err)
+	}
+}
+
+func Test_Promote_LocalSuccess(t *testing.T) {
+	t.Parallel()
+	called := false
+	s := &mockStore{
+		promoteFn: func(ctx context.Context, pn *proto.PromoteNodeRequest) error {
+			called = true
+			if pn.Id != "node1" {
+				t.Fatalf("expected node1, got %s", pn.Id)
+			}
+			return nil
+		},
+	}
+	p := newTestProxy(s, &mockCluster{})
+
+	addr, err := p.Promote(context.Background(), &proto.PromoteNodeRequest{Id: "node1"}, nil, time.Second, false)
+	if err != nil {
+		t.Fatalf("unexpected error: %s", err)
+	}
+	if addr != "" {
+		t.Fatalf("expected empty addr, got %s", addr)
+	}
+	if !called {
+		t.Fatalf("expected store Promote to be called")
+	}
+}
+
+func Test_Promote_LocalError(t *testing.T) {
+	t.Parallel()
+	s := &mockStore{
+		promoteFn: func(ctx context.Context, pn *proto.PromoteNodeRequest) error {
+			return store.ErrNodeNotFound
+		},
+	}
+	c := &mockCluster{
+		promoteNodeFn: func(ctx context.Context, pn *proto.PromoteNodeRequest, nodeAddr string, creds *clstrPB.Credentials, timeout time.Duration) error {
+			t.Fatalf("unexpected forward of request")
+			return nil
+		},
+	}
+	p := newTestProxy(s, c)
+
+	_, err := p.Promote(context.Background(), &proto.PromoteNodeRequest{Id: "node1"}, nil, time.Second, false)
+	if !errors.Is(err, store.ErrNodeNotFound) {
+		t.Fatalf("expected ErrNodeNotFound, got %v", err)
+	}
+}
+
+func Test_Promote_NotLeader_NoForward(t *testing.T) {
+	t.Parallel()
+	s := &mockStore{
+		promoteFn: func(ctx context.Context, pn *proto.PromoteNodeRequest) error {
+			return store.ErrNotLeader
+		},
+	}
+	p := newTestProxy(s, &mockCluster{})
+
+	_, err := p.Promote(context.Background(), &proto.PromoteNodeRequest{Id: "node1"}, nil, time.Second, true)
+	if !errors.Is(err, ErrNotLeader) {
+		t.Fatalf("expected ErrNotLeader, got %v", err)
+	}
+}
+
+func Test_Promote_NotLeader_Forward(t *testing.T) {
+	t.Parallel()
+	s := &mockStore{
+		promoteFn: func(ctx context.Context, pn *proto.PromoteNodeRequest) error {
+			return store.ErrNotLeader
+		},
+		leaderAddrFn: func() (string, error) {
+			return "leader:4002", nil
+		},
+	}
+	c := &mockCluster{
+		promoteNodeFn: func(ctx context.Context, pn *proto.PromoteNodeRequest, nodeAddr string, creds *clstrPB.Credentials, timeout time.Duration) error {
+			if nodeAddr != "leader:4002" {
+				t.Fatalf("expected forwarding to leader:4002, got %s", nodeAddr)
+			}
+			if pn.Id != "node1" {
+				t.Fatalf("expected node1, got %s", pn.Id)
+			}
+			return nil
+		},
+	}
+	p := newTestProxy(s, c)
+
+	addr, err := p.Promote(context.Background(), &proto.PromoteNodeRequest{Id: "node1"}, nil, time.Second, false)
+	if err != nil {
+		t.Fatalf("unexpected error: %s", err)
+	}
+	if addr != "leader:4002" {
+		t.Fatalf("expected addr leader:4002, got %s", addr)
+	}
+}
+
+func Test_Promote_NotLeader_NoLeader(t *testing.T) {
+	t.Parallel()
+	s := &mockStore{
+		promoteFn: func(ctx context.Context, pn *proto.PromoteNodeRequest) error {
+			return store.ErrNotLeader
+		},
+		leaderAddrFn: func() (string, error) {
+			return "", nil
+		},
+	}
+	p := newTestProxy(s, &mockCluster{})
+
+	_, err := p.Promote(context.Background(), &proto.PromoteNodeRequest{Id: "node1"}, nil, time.Second, false)
+	if !errors.Is(err, ErrLeaderNotFound) {
+		t.Fatalf("expected ErrLeaderNotFound, got %v", err)
+	}
+}
+
+func Test_Promote_NotLeader_ForwardUnauthorized(t *testing.T) {
+	t.Parallel()
+	s := &mockStore{
+		promoteFn: func(ctx context.Context, pn *proto.PromoteNodeRequest) error {
+			return store.ErrNotLeader
+		},
+		leaderAddrFn: func() (string, error) {
+			return "leader:4002", nil
+		},
+	}
+	c := &mockCluster{
+		promoteNodeFn: func(ctx context.Context, pn *proto.PromoteNodeRequest, nodeAddr string, creds *clstrPB.Credentials, timeout time.Duration) error {
+			return errors.New("unauthorized")
+		},
+	}
+	p := newTestProxy(s, c)
+
+	_, err := p.Promote(context.Background(), &proto.PromoteNodeRequest{Id: "node1"}, nil, time.Second, false)
 	if !errors.Is(err, ErrUnauthorized) {
 		t.Fatalf("expected ErrUnauthorized, got %v", err)
 	}
