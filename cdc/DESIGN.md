@@ -161,10 +161,11 @@ Snapshotting deletes Raft log entries. If the CDC batcher has events in memory t
 
 To prevent this, the CDC service registers a snapshot synchronization channel. Before a snapshot proceeds, the store sends a channel on `snapshotCh`. The CDC service responds by:
 
-1. Writing a flush marker to the batcher.
-2. Flushing the batcher, forcing all pending events to be written to the FIFO.
-3. Waiting for the flush to complete (the flush marker propagates through the batcher and back).
-4. Closing the received channel, signaling that snapshotting can proceed.
+1. Moving any events still queued on its input channel into the batcher, so that the flush marker cannot overtake them. No new events arrive during this, since the store does not apply log entries while it is snapshotting.
+2. Writing a flush marker to the batcher.
+3. Flushing the batcher, forcing all pending events to be written to the FIFO.
+4. Waiting for the flush to complete (the flush marker propagates through the batcher and back).
+5. Closing the received channel, signaling that snapshotting can proceed.
 
 This ensures all committed changes are safely in the BoltDB FIFO before any Raft log truncation occurs. The synchronization is brief — it only blocks snapshotting for the time it takes to flush the in-memory batcher, not for the time it takes to deliver events to the webhook.
 

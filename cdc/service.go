@@ -438,7 +438,38 @@ func (s *Service) mainLoop() {
 // is running on the leader or a follower.
 func (s *Service) writeToBatcher() {
 	defer s.wg.Done()
+
+	// syncCh is the snapshot sync request waiting to be answered, if any.
+	var syncCh chan struct{}
 	for {
+		if syncCh != nil && len(s.in) == 0 {
+			// Every event that was queued ahead of the sync request is now
+			// in the batcher, so the flush cannot overtake any of them. No
+			// new events arrive during a sync, as the Store does not apply
+			// log entries while it is snapshotting.
+			stats.Add(numSnapshotSync, 1)
+			func() {
+				defer close(syncCh) // Snapshotting can proceed once we return.
+
+				evg := &proto.CDCIndexedEventGroup{
+					Flush: true,
+				}
+				fc := make(queue.FlushChannel)
+				if _, err := s.batcher.WriteOne(evg, fc); err != nil {
+					s.logger.Printf("error writing CDC flush event to batcher: %v", err)
+					return
+				}
+
+				s.batcher.Flush()
+				select {
+				case <-fc: // Wait for CDC to write to BoltDB.
+				case <-s.done: // Or detect we're shutting down.
+				}
+			}()
+			syncCh = nil
+			continue
+		}
+
 		select {
 		case o := <-s.in:
 			if o == nil {
@@ -461,26 +492,10 @@ func (s *Service) writeToBatcher() {
 				stats.Add(numBatcherEventsWrite, int64(len(o.Events)))
 			}
 
-		case ch := <-s.snapshotCh:
-			stats.Add(numSnapshotSync, 1)
-			func() {
-				defer close(ch) // Snapshotting can proceed once we return.
-
-				evg := &proto.CDCIndexedEventGroup{
-					Flush: true,
-				}
-				fc := make(queue.FlushChannel)
-				if _, err := s.batcher.WriteOne(evg, fc); err != nil {
-					s.logger.Printf("error writing CDC flush event to batcher: %v", err)
-					return
-				}
-
-				s.batcher.Flush()
-				select {
-				case <-fc: // Wait for CDC to write to BoltDB.
-				case <-s.done: // Or detect we're shutting down.
-				}
-			}()
+		case syncCh = <-s.snapshotCh:
+			// Answered above, once any queued events have been drained. A
+			// further request can only arrive after the Store has given up
+			// waiting on the previous one, so replacing it is safe.
 		case <-s.done:
 			return
 		}
