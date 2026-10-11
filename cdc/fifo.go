@@ -204,6 +204,12 @@ func (q *Queue) Empty() (bool, error) {
 
 // HasNext checks if there is at least one item available to dequeue.
 func (q *Queue) HasNext() bool {
+	select {
+	case <-q.done:
+		return false
+	default:
+	}
+
 	req := queryReq{respChan: make(chan queryResp)}
 	q.queryChan <- req
 	resp := <-req.respChan

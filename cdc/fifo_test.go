@@ -58,6 +58,12 @@ func Test_Queue_Closed(t *testing.T) {
 	if err := q.DeleteRange(10); err != ErrQueueClosed {
 		t.Fatalf("DeleteRange should fail on closed queue")
 	}
+	if q.HasNext() {
+		t.Fatalf("HasNext should return false on closed queue")
+	}
+	if q.Len() != 0 {
+		t.Fatalf("Len should return 0 on closed queue")
+	}
 }
 
 // Test_EnqueueEvents_Simple tests a single Enqueue operation and receiving the event.
