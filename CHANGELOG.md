@@ -13,6 +13,8 @@ This release features an addition to the API. In the event of an error there is 
 - [PR #2869](https://github.com/rqlite/rqlite/pull/2869): Optimize gzip memory usage via `sync.Pool`.
 - [PR #2870](https://github.com/rqlite/rqlite/pull/2870): CDC: Always answer snapshot sync requests.
 - [PR #2871](https://github.com/rqlite/rqlite/pull/2871): CDC stats returns promptly on closed queue.
+- [PR #2872](https://github.com/rqlite/rqlite/pull/2872): Never move a follower's CDC high watermark backwards.
+- [PR #2873](https://github.com/rqlite/rqlite/pull/2873): Advance CDC high watermark past dropped batches.
 
 ## v10.5.3 (October 7th 2026)
 ### Implementation changes and bug fixes
