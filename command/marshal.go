@@ -6,6 +6,7 @@ import (
 	"expvar"
 	"fmt"
 	"io"
+	"sync"
 
 	"github.com/rqlite/rqlite/v10/command/proto"
 	pb "google.golang.org/protobuf/proto"
@@ -43,6 +44,34 @@ const (
 
 // stats captures stats for the Proto marshaler.
 var stats *expvar.Map
+
+// gzipWriterPool pools gzip writers. A gzip writer carries hundreds of
+// kilobytes of compressor state, so allocating one per compressed request
+// is far more expensive than the request itself.
+var gzipWriterPool = sync.Pool{
+	New: func() any {
+		gzw, err := gzip.NewWriterLevel(nil, gzip.DefaultCompression)
+		if err != nil {
+			panic(fmt.Sprintf("failed to create gzip writer: %s", err.Error()))
+		}
+		return gzw
+	},
+}
+
+// gzipReaderPool pools gzip readers. Pooled readers are reset against each
+// new input, so they are stored as *gzip.Reader regardless of prior use.
+var gzipReaderPool = sync.Pool{
+	New: func() any {
+		return new(gzip.Reader)
+	},
+}
+
+// bufferPool pools the scratch buffers compressed output is written to.
+var bufferPool = sync.Pool{
+	New: func() any {
+		return new(bytes.Buffer)
+	},
+}
 
 func init() {
 	stats = expvar.NewMap("proto")
@@ -213,11 +242,13 @@ func UnmarshalSubCommand(c *proto.Command, m pb.Message) error {
 
 // gzCompress compresses the given byte slice.
 func gzCompress(b []byte) ([]byte, error) {
-	var buf bytes.Buffer
-	gzw, err := gzip.NewWriterLevel(&buf, gzip.DefaultCompression)
-	if err != nil {
-		return nil, fmt.Errorf("gzip new writer: %s", err)
-	}
+	buf := bufferPool.Get().(*bytes.Buffer)
+	buf.Reset()
+	defer bufferPool.Put(buf)
+
+	gzw := gzipWriterPool.Get().(*gzip.Writer)
+	gzw.Reset(buf)
+	defer gzipWriterPool.Put(gzw)
 
 	if _, err := gzw.Write(b); err != nil {
 		return nil, fmt.Errorf("gzip Write: %s", err)
@@ -225,12 +256,14 @@ func gzCompress(b []byte) ([]byte, error) {
 	if err := gzw.Close(); err != nil {
 		return nil, fmt.Errorf("gzip Close: %s", err)
 	}
-	return buf.Bytes(), nil
+	// The buffer goes back to the pool, so the caller gets its own copy.
+	return bytes.Clone(buf.Bytes()), nil
 }
 
 func gzUncompress(b []byte) ([]byte, error) {
-	gz, err := gzip.NewReader(bytes.NewReader(b))
-	if err != nil {
+	gz := gzipReaderPool.Get().(*gzip.Reader)
+	defer gzipReaderPool.Put(gz)
+	if err := gz.Reset(bytes.NewReader(b)); err != nil {
 		return nil, fmt.Errorf("unmarshal gzip NewReader: %s", err)
 	}
 
