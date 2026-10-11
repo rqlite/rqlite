@@ -527,7 +527,11 @@ func (s *Service) leaderLoop() (chan struct{}, chan struct{}) {
 				// so the sink can handle the request properly.
 				decompressed, err := flate.Decompress(ev.Data)
 				if err != nil {
-					s.logger.Printf("error decompressing data for batch from FIFO: %v", err)
+					// The batch can never be sent, so drop it and advance the
+					// high watermark past it, as for a batch that exhausts
+					// its retries.
+					s.logger.Printf("error decompressing data for batch from FIFO, dropping it: %v", err)
+					s.highWatermark.Store(ev.Index)
 					continue
 				}
 
@@ -570,9 +574,12 @@ func (s *Service) leaderLoop() (chan struct{}, chan struct{}) {
 					}
 				}
 				if sentOK {
-					s.highWatermark.Store(ev.Index)
 					stats.Add(numEventsTxOK, 1)
 				}
+				// Whether the batch was sent or dropped, this node is finished
+				// with it. Advance the high watermark so the batch is pruned
+				// from every node's FIFO and never resent.
+				s.highWatermark.Store(ev.Index)
 			}
 		}
 	}()
