@@ -477,6 +477,42 @@ func Test_ServiceRestart_UndeliveredEventsNotLost(t *testing.T) {
 	}
 }
 
+// Test_ServiceStats_AfterStop tests that Stats returns after the service has
+// been stopped, rather than blocking on the closed FIFO.
+func Test_ServiceStats_AfterStop(t *testing.T) {
+	ResetStats()
+
+	cfg := DefaultConfig()
+	cfg.Endpoint = "stdout"
+	svc, err := NewService(
+		"node1",
+		t.TempDir(),
+		&mockCluster{},
+		make(chan *proto.CDCIndexedEventGroup),
+		cfg,
+	)
+	if err != nil {
+		t.Fatalf("failed to create service: %v", err)
+	}
+	if err := svc.Start(); err != nil {
+		t.Fatalf("failed to start service: %v", err)
+	}
+	svc.Stop()
+
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		if _, err := svc.Stats(); err != nil {
+			t.Errorf("failed to get stats: %v", err)
+		}
+	}()
+	select {
+	case <-done:
+	case <-time.After(time.Second):
+		t.Fatalf("Stats did not return after service was stopped")
+	}
+}
+
 func Test_ServiceSingleEvent_Stdout(t *testing.T) {
 	ResetStats()
 
