@@ -91,10 +91,6 @@ type Cluster interface {
 	// a signal when the node detects that the Leader changes.
 	RegisterLeaderChange(c chan<- bool)
 
-	// RegisterSnapshotSync registers a channel to allow synchronization with
-	// Snapshotting.
-	RegisterSnapshotSync(ch chan<- chan struct{})
-
 	// RegisterHWMUpdate registers a channel to receive highwater mark updates.
 	RegisterHWMUpdate(c chan<- uint64)
 

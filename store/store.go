@@ -358,9 +358,8 @@ type Store struct {
 	snapshotWClose chan struct{}
 	snapshotWDone  chan struct{}
 
-	// Snapshotting synchronization and and management
-	snapshotSync *rsync.SyncChannels
-	snapshotCAS  *rsync.CheckAndSet
+	// Snapshotting management
+	snapshotCAS *rsync.CheckAndSet
 
 	// Latest log entry index actually reflected by the FSM. Due to Raft code
 	// these values are not updated automatically after a Snapshot-restore.
@@ -484,7 +483,6 @@ func New(c *Config, ly Layer) *Store {
 		logger:            logger,
 		notifyingNodes:    make(map[string]*Server),
 		ApplyTimeout:      applyTimeout,
-		snapshotSync:      rsync.NewSyncChannels(),
 		snapshotCAS:       rsync.NewCheckAndSet(),
 		fsmTarget:         rsync.NewReadyTarget[uint64](),
 		fsmUpdateTime:     rsync.NewAtomicTime(),
@@ -966,13 +964,6 @@ func (s *Store) Stepdown(wait bool, id string) error {
 		return ErrNotLeader
 	}
 	return f.Error()
-}
-
-// RegisterSnapshotSync registers a channel that will receive a channel
-// that is closed when a snapshot operation is about to begin. This is used
-// to coordinate activities that should be handled before a snapshot is taken.
-func (s *Store) RegisterSnapshotSync(ch chan<- chan struct{}) {
-	s.snapshotSync.Register(ch)
 }
 
 // RegisterReadyChannel registers a channel that must be closed before the

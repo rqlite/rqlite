@@ -2,7 +2,6 @@ package cdc
 
 import (
 	"expvar"
-	"fmt"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -1276,7 +1275,6 @@ type mockCluster struct {
 	mu             sync.Mutex
 	leaderChannels []chan<- bool
 	hwmChannels    []chan<- uint64
-	snapshotSyncCh chan<- chan struct{}
 	currentLeader  int // index of current leader, -1 if none
 }
 
@@ -1290,12 +1288,6 @@ func (tc *mockCluster) RegisterLeaderChange(ch chan<- bool) {
 	tc.mu.Lock()
 	defer tc.mu.Unlock()
 	tc.leaderChannels = append(tc.leaderChannels, ch)
-}
-
-func (tc *mockCluster) RegisterSnapshotSync(ch chan<- chan struct{}) {
-	tc.mu.Lock()
-	defer tc.mu.Unlock()
-	tc.snapshotSyncCh = ch
 }
 
 func (tc *mockCluster) RegisterHWMUpdate(ch chan<- uint64) {
@@ -1334,21 +1326,6 @@ func (tc *mockCluster) SetLeader(leaderIndex int) {
 			// Non-blocking send to avoid deadlocks
 		}
 	}
-}
-
-// RequestSnapshotSync requests a snapshot sync and waits for completion or timeout
-func (tc *mockCluster) RequestSnapshotSync(timeout time.Duration) error {
-	tc.mu.Lock()
-	defer tc.mu.Unlock()
-
-	respCh := make(chan struct{})
-	tc.snapshotSyncCh <- respCh
-	select {
-	case <-respCh:
-	case <-time.After(timeout):
-		return fmt.Errorf("timeout waiting for snapshot sync")
-	}
-	return nil
 }
 
 // BroadcastHWM sends HWM update to all registered channels
