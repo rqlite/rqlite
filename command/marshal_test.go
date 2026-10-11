@@ -309,3 +309,66 @@ func Test_MarshalCompressedParameterSize(t *testing.T) {
 		})
 	}
 }
+
+// benchRequest returns an ExecuteRequest large enough to trigger compression
+// under the default batch threshold.
+func benchRequest() *proto.ExecuteRequest {
+	stmts := make([]*proto.Statement, defaultBatchThreshold+100)
+	for i := range stmts {
+		stmts[i] = &proto.Statement{
+			Sql: `INSERT INTO "names" (id, name, ssn) VALUES(?, ?, ?)`,
+			Parameters: []*proto.Parameter{
+				{Value: &proto.Parameter_I{I: int64(i)}},
+				{Value: &proto.Parameter_S{S: "bob"}},
+				{Value: &proto.Parameter_S{S: "123-45-678"}},
+			},
+		}
+	}
+	return &proto.ExecuteRequest{
+		Request: &proto.Request{Statements: stmts},
+		Timings: true,
+	}
+}
+
+func Benchmark_MarshalCompressed(b *testing.B) {
+	rm := NewRequestMarshaler()
+	r := benchRequest()
+
+	b.ReportAllocs()
+	b.ResetTimer()
+	for b.Loop() {
+		_, comp, err := rm.Marshal(r)
+		if err != nil {
+			b.Fatalf("failed to marshal: %s", err)
+		}
+		if !comp {
+			b.Fatal("request was not compressed")
+		}
+	}
+}
+
+func Benchmark_UnmarshalSubCommandCompressed(b *testing.B) {
+	rm := NewRequestMarshaler()
+	r := benchRequest()
+	sub, comp, err := rm.Marshal(r)
+	if err != nil {
+		b.Fatalf("failed to marshal: %s", err)
+	}
+	if !comp {
+		b.Fatal("request was not compressed")
+	}
+	c := &proto.Command{
+		Type:       proto.Command_COMMAND_TYPE_EXECUTE,
+		SubCommand: sub,
+		Compressed: comp,
+	}
+
+	b.ReportAllocs()
+	b.ResetTimer()
+	for b.Loop() {
+		var er proto.ExecuteRequest
+		if err := UnmarshalSubCommand(c, &er); err != nil {
+			b.Fatalf("failed to unmarshal: %s", err)
+		}
+	}
+}
