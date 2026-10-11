@@ -25,6 +25,8 @@ const (
 	PermRemove = "remove"
 	// PermDemote means user is permitted to demote a voting node to a non-voter.
 	PermDemote = "demote"
+	// PermPromote means user is permitted to promote a non-voting node to a voter.
+	PermPromote = "promote"
 	// PermExecute means user can access execute endpoint.
 	PermExecute = "execute"
 	// PermQuery means user can access query endpoint
