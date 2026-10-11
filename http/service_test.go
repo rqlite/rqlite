@@ -2505,6 +2505,7 @@ type MockStore struct {
 	committedFn func(timeout time.Duration) (uint64, error)
 	stepdownFn  func(wait bool, id string) error
 	demoteFn    func(dn *command.DemoteNodeRequest) error
+	promoteFn   func(pn *command.PromoteNodeRequest) error
 	leaderAddr  string
 	notReady    bool // Default value is true, easier to test.
 }
@@ -2546,6 +2547,13 @@ func (m *MockStore) Remove(ctx context.Context, rn *command.RemoveNodeRequest) e
 func (m *MockStore) Demote(ctx context.Context, dn *command.DemoteNodeRequest) error {
 	if m.demoteFn != nil {
 		return m.demoteFn(dn)
+	}
+	return nil
+}
+
+func (m *MockStore) Promote(ctx context.Context, pn *command.PromoteNodeRequest) error {
+	if m.promoteFn != nil {
+		return m.promoteFn(pn)
 	}
 	return nil
 }
@@ -2625,15 +2633,16 @@ func (m *MockStore) LeaderAddr() (string, error) {
 }
 
 type mockClusterService struct {
-	apiAddr      string
-	executeFn    func(er *command.ExecuteRequest, addr string, t time.Duration) ([]*command.ExecuteQueryResponse, uint64, error)
-	queryFn      func(qr *command.QueryRequest, addr string, t time.Duration) ([]*command.QueryRows, uint64, error)
-	requestFn    func(eqr *command.ExecuteQueryRequest, nodeAddr string, timeout time.Duration) ([]*command.ExecuteQueryResponse, uint64, uint64, error)
-	backupFn     func(br *command.BackupRequest, addr string, t time.Duration, w io.Writer) (int, error)
-	loadFn       func(lr *command.LoadRequest, addr string, t time.Duration) error
-	removeNodeFn func(rn *command.RemoveNodeRequest, nodeAddr string, t time.Duration) error
-	demoteNodeFn func(dn *command.DemoteNodeRequest, nodeAddr string, t time.Duration) error
-	stepdownFn   func(sr *command.StepdownRequest, nodeAddr string, t time.Duration) error
+	apiAddr       string
+	executeFn     func(er *command.ExecuteRequest, addr string, t time.Duration) ([]*command.ExecuteQueryResponse, uint64, error)
+	queryFn       func(qr *command.QueryRequest, addr string, t time.Duration) ([]*command.QueryRows, uint64, error)
+	requestFn     func(eqr *command.ExecuteQueryRequest, nodeAddr string, timeout time.Duration) ([]*command.ExecuteQueryResponse, uint64, uint64, error)
+	backupFn      func(br *command.BackupRequest, addr string, t time.Duration, w io.Writer) (int, error)
+	loadFn        func(lr *command.LoadRequest, addr string, t time.Duration) error
+	removeNodeFn  func(rn *command.RemoveNodeRequest, nodeAddr string, t time.Duration) error
+	demoteNodeFn  func(dn *command.DemoteNodeRequest, nodeAddr string, t time.Duration) error
+	promoteNodeFn func(pn *command.PromoteNodeRequest, nodeAddr string, t time.Duration) error
+	stepdownFn    func(sr *command.StepdownRequest, nodeAddr string, t time.Duration) error
 }
 
 func (m *mockClusterService) GetNodeMeta(ctx context.Context, a string, r int, t time.Duration) (*cluster.NodeMeta, error) {
@@ -2687,6 +2696,13 @@ func (m *mockClusterService) RemoveNode(ctx context.Context, rn *command.RemoveN
 func (m *mockClusterService) DemoteNode(ctx context.Context, dn *command.DemoteNodeRequest, addr string, creds *cluster.Credentials, t time.Duration) error {
 	if m.demoteNodeFn != nil {
 		return m.demoteNodeFn(dn, addr, t)
+	}
+	return nil
+}
+
+func (m *mockClusterService) PromoteNode(ctx context.Context, pn *command.PromoteNodeRequest, addr string, creds *cluster.Credentials, t time.Duration) error {
+	if m.promoteNodeFn != nil {
+		return m.promoteNodeFn(pn, addr, t)
 	}
 	return nil
 }
