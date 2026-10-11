@@ -1,6 +1,7 @@
 package cdc
 
 import (
+	"errors"
 	"expvar"
 	"fmt"
 	"log"
@@ -21,7 +22,8 @@ import (
 
 const (
 	cdcDB         = "fifo.db"
-	leaderChanLen = 5 // Support any fast back-to-back leadership changes.
+	leaderChanLen = 5   // Support any fast back-to-back leadership changes.
+	inChanLen     = 100 // Number of event groups Write accepts before it blocks.
 
 	retryForever = -1
 )
@@ -41,6 +43,9 @@ const (
 	numHWMIgnored          = "hwm_ignored"
 	fifoSize               = "fifo_size"
 )
+
+// ErrStopped is returned when an operation is attempted on a stopped service.
+var ErrStopped = errors.New("cdc service stopped")
 
 // stats captures stats for the CDC Service.
 var stats *expvar.Map
@@ -94,8 +99,8 @@ type Service struct {
 	hwmFilePath string
 	clstr       Cluster
 
-	// in is the channel from which the CDC events are read.
-	in <-chan *proto.CDCIndexedEventGroup
+	// in carries the event groups given to the service by Write.
+	in chan *proto.CDCIndexedEventGroup
 
 	// sink is the sink to which the CDC events are sent.
 	sink Sink
@@ -166,9 +171,9 @@ type Service struct {
 	logger *log.Logger
 }
 
-// NewService creates a new CDC service. The service reads the CDC events it
-// is to deliver from in.
-func NewService(nodeID, dir string, clstr Cluster, in <-chan *proto.CDCIndexedEventGroup, cfg *Config) (*Service, error) {
+// NewService creates a new CDC service. Events for the service to deliver
+// are given to it via Write.
+func NewService(nodeID, dir string, clstr Cluster, cfg *Config) (*Service, error) {
 	// Build the TLS configuration from the config fields
 	tlsConfig, err := cfg.TLSConfig()
 	if err != nil {
@@ -191,7 +196,7 @@ func NewService(nodeID, dir string, clstr Cluster, in <-chan *proto.CDCIndexedEv
 		nodeID:                nodeID,
 		dir:                   filepath.Join(dir, "cdc"),
 		clstr:                 clstr,
-		in:                    in,
+		in:                    make(chan *proto.CDCIndexedEventGroup, inChanLen),
 		sink:                  sink,
 		transmitTimeout:       cfg.TransmitTimeout,
 		transmitMinBackoff:    cfg.TransmitMinBackoff,
@@ -287,6 +292,17 @@ func (s *Service) Stop() {
 		s.sink.Close()
 	}
 	s.started.Unset()
+}
+
+// Write gives the service a group of events to deliver. It blocks while the
+// service is busy, and returns ErrStopped if the service has been stopped.
+func (s *Service) Write(evs *proto.CDCIndexedEventGroup) error {
+	select {
+	case s.in <- evs:
+		return nil
+	case <-s.done:
+		return ErrStopped
+	}
 }
 
 // HighWatermark returns the high watermark of the CDC service. This
@@ -441,10 +457,6 @@ func (s *Service) writeToBatcher() {
 	for {
 		select {
 		case o := <-s.in:
-			if o == nil {
-				// Channel closed, exiting goroutine.
-				return
-			}
 			if o.Index != 0 && o.Index <= s.highWatermark.Load() {
 				// High watermark has advanced since we processed these CDC events.
 				// This could happen on followers if the Leader has advanced the HWM

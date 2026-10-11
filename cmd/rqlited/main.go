@@ -407,10 +407,11 @@ func createExtensionsStore(cfg *Config) (*extensions.Store, error) {
 
 func createCDC(cfg *Config, cdcCfg *cdc.Config, str *store.Store, clstrServ *cluster.Service, clstrClient *cluster.Client, credStr *auth.CredentialsStore) (*cdc.Service, error) {
 	CDCCluster := cdc.NewCDCCluster(str, clstrServ, clstrClient)
-	cdcService, err := cdc.NewService(cfg.NodeID, cfg.DataPath, CDCCluster, str.CDCEventsC(), cdcCfg)
+	cdcService, err := cdc.NewService(cfg.NodeID, cfg.DataPath, CDCCluster, cdcCfg)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create CDC Service: %s", err.Error())
 	}
+	str.SetCDCService(cdcService)
 	CDCCluster.SetAuth(cluster.CredentialsFor(credStr, cfg.CDCAs))
 	if err := cdcService.Start(); err != nil {
 		return nil, fmt.Errorf("failed to start CDC Service: %s", err.Error())
