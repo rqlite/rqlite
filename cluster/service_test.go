@@ -793,13 +793,14 @@ func mustNewMockDatabase() *mockDatabase {
 }
 
 type MockManager struct {
-	removeNodeFn func(rn *command.RemoveNodeRequest) error
-	demoteNodeFn func(dn *command.DemoteNodeRequest) error
-	notifyFn     func(n *command.NotifyRequest) error
-	joinFn       func(j *command.JoinRequest) error
-	leaderAddrFn func() (string, error)
-	stepdownFn   func(wait bool, id string) error
-	commitIndex  uint64
+	removeNodeFn  func(rn *command.RemoveNodeRequest) error
+	demoteNodeFn  func(dn *command.DemoteNodeRequest) error
+	promoteNodeFn func(pn *command.PromoteNodeRequest) error
+	notifyFn      func(n *command.NotifyRequest) error
+	joinFn        func(j *command.JoinRequest) error
+	leaderAddrFn  func() (string, error)
+	stepdownFn    func(wait bool, id string) error
+	commitIndex   uint64
 }
 
 func (m *MockManager) Remove(ctx context.Context, rn *command.RemoveNodeRequest) error {
@@ -814,6 +815,13 @@ func (m *MockManager) Demote(ctx context.Context, dn *command.DemoteNodeRequest)
 		return nil
 	}
 	return m.demoteNodeFn(dn)
+}
+
+func (m *MockManager) Promote(ctx context.Context, pn *command.PromoteNodeRequest) error {
+	if m.promoteNodeFn == nil {
+		return nil
+	}
+	return m.promoteNodeFn(pn)
 }
 
 func (m *MockManager) Notify(n *command.NotifyRequest) error {

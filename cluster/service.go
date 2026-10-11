@@ -42,6 +42,7 @@ const (
 	numLoadRequest         = "num_load_req"
 	numRemoveNodeRequest   = "num_remove_node_req"
 	numDemoteNodeRequest   = "num_demote_node_req"
+	numPromoteNodeRequest  = "num_promote_node_req"
 	numNotifyRequest       = "num_notify_req"
 	numJoinRequest         = "num_join_req"
 	numStepdownRequest     = "num_stepdown_req"
@@ -96,6 +97,7 @@ func ResetStats() {
 	stats.Add(numLoadRequest, 0)
 	stats.Add(numRemoveNodeRequest, 0)
 	stats.Add(numDemoteNodeRequest, 0)
+	stats.Add(numPromoteNodeRequest, 0)
 	stats.Add(numGetNodeAPIRequestLocal, 0)
 	stats.Add(numNotifyRequest, 0)
 	stats.Add(numJoinRequest, 0)
@@ -152,6 +154,9 @@ type Manager interface {
 
 	// Demote demotes the voting node, given by id, to a non-voter.
 	Demote(ctx context.Context, dn *command.DemoteNodeRequest) error
+
+	// Promote promotes the non-voting node, given by id, to a voter.
+	Promote(ctx context.Context, pn *command.PromoteNodeRequest) error
 
 	// Notify notifies this node that a remote node is ready
 	// for bootstrapping.
@@ -608,6 +613,24 @@ func (s *Service) handleConn(conn net.Conn) {
 				resp.Error = "unauthorized"
 			} else {
 				if err := s.mgr.Demote(context.Background(), dn); err != nil {
+					resp.Error = err.Error()
+				}
+			}
+			if err := marshalAndWrite(conn, resp); err != nil {
+				return
+			}
+
+		case proto.Command_COMMAND_TYPE_PROMOTE_NODE:
+			stats.Add(numPromoteNodeRequest, 1)
+			resp := &proto.CommandPromoteNodeResponse{}
+
+			pn := c.GetPromoteNodeRequest()
+			if pn == nil {
+				resp.Error = "PromoteNodeRequest is nil"
+			} else if !s.checkCommandPerm(c, auth.PermPromote) {
+				resp.Error = "unauthorized"
+			} else {
+				if err := s.mgr.Promote(context.Background(), pn); err != nil {
 					resp.Error = err.Error()
 				}
 			}
