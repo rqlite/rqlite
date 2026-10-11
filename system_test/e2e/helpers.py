@@ -600,6 +600,11 @@ class Node(object):
     r = requests.post(self._demote_url(), data=json.dumps(body))
     raise_for_status(r)
 
+  def promote_node(self, id):
+    body = {"id": id}
+    r = requests.post(self._promote_url(), data=json.dumps(body))
+    raise_for_status(r)
+
   def wait_for_voter_status(self, exp, timeout=TIMEOUT):
     deadline = time.time() + timeout
     while self.is_voter() != exp:
@@ -710,6 +715,8 @@ class Node(object):
     return 'http://' + self.APIAddr() + '/remove'
   def _demote_url(self):
     return 'http://' + self.APIAddr() + '/demote'
+  def _promote_url(self):
+    return 'http://' + self.APIAddr() + '/promote'
   def __eq__(self, other):
     return self.node_id == other.node_id
   def __str__(self):

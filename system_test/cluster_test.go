@@ -1226,6 +1226,107 @@ func Test_MultiNodeClusterDemote(t *testing.T) {
 	}
 }
 
+// Test_MultiNodeClusterPromote tests promoting non-voting nodes to voters, via
+// both the Leader and a Follower.
+func Test_MultiNodeClusterPromote(t *testing.T) {
+	node1 := mustNewLeaderNode("leader1")
+	defer node1.Deprovision()
+
+	node2 := mustNewNode("node2", false)
+	defer node2.Deprovision()
+	if err := node2.Join(node1); err != nil {
+		t.Fatalf("node failed to join leader: %s", err.Error())
+	}
+	if _, err := node2.WaitForLeader(); err != nil {
+		t.Fatalf("failed waiting for leader: %s", err.Error())
+	}
+
+	c := Cluster{node1, node2}
+	leader, err := c.Leader()
+	if err != nil {
+		t.Fatalf("failed to find cluster leader: %s", err.Error())
+	}
+	follower := node1
+	if leader == node1 {
+		follower = node2
+	}
+
+	nonVoter := mustNewNode("nonvoter", false)
+	defer nonVoter.Deprovision()
+	if err := nonVoter.JoinAsNonVoter(leader); err != nil {
+		t.Fatalf("node failed to join leader as non-voter: %s", err.Error())
+	}
+	if _, err := nonVoter.WaitForLeader(); err != nil {
+		t.Fatalf("failed waiting for leader: %s", err.Error())
+	}
+	c = Cluster{node1, node2, nonVoter}
+
+	waitForVoterStatus := func(node *Node, exp bool) {
+		t.Helper()
+		testPoll(t, func() (bool, error) {
+			v, err := node.IsVoter()
+			return v == exp, err
+		}, 100*time.Millisecond, 5*time.Second)
+	}
+	waitForVoterStatus(leader, true)
+	waitForVoterStatus(follower, true)
+	waitForVoterStatus(nonVoter, false)
+
+	// Promote the non-voter via the leader.
+	if err := leader.Promote(nonVoter.ID); err != nil {
+		t.Fatalf("failed to promote node via leader: %s", err.Error())
+	}
+	waitForVoterStatus(nonVoter, true)
+
+	// The promoted node should now appear in the voter-only nodes/ output.
+	nodes, err := leader.Nodes(false)
+	if err != nil {
+		t.Fatalf("failed to get nodes status: %s", err.Error())
+	}
+	if len(nodes) != len(c) {
+		t.Fatalf("nodes/ output returned wrong number of nodes, got %d, exp %d", len(nodes), len(c))
+	}
+	for _, n := range nodes {
+		if n.ID == nonVoter.ID && !n.Voter {
+			t.Fatalf("promoted node still reported as non-voter by nodes/")
+		}
+	}
+
+	// Demote it again, then promote via the follower, which must forward
+	// the request to the leader.
+	if err := leader.Demote(nonVoter.ID); err != nil {
+		t.Fatalf("failed to demote node via leader: %s", err.Error())
+	}
+	waitForVoterStatus(nonVoter, false)
+	if err := follower.Promote(nonVoter.ID); err != nil {
+		t.Fatalf("failed to promote node via follower: %s", err.Error())
+	}
+	waitForVoterStatus(nonVoter, true)
+
+	// Promoting a node which is already a voter is fine.
+	if err := leader.Promote(nonVoter.ID); err != nil {
+		t.Fatalf("failed to promote already-promoted node: %s", err.Error())
+	}
+	waitForVoterStatus(nonVoter, true)
+
+	// Writes must still replicate to the promoted node.
+	if _, err := leader.Execute(`CREATE TABLE foo (id integer not null primary key, name text)`); err != nil {
+		t.Fatalf("failed to create table: %s", err.Error())
+	}
+	if _, err := leader.Execute(`INSERT INTO foo(name) VALUES("fiona")`); err != nil {
+		t.Fatalf("failed to insert record: %s", err.Error())
+	}
+	testPoll(t, func() (bool, error) {
+		r, err := nonVoter.QueryNoneConsistency(`SELECT COUNT(*) FROM foo`)
+		return r == `{"results":[{"columns":["COUNT(*)"],"types":["integer"],"values":[[1]]}]}`, err
+	}, 100*time.Millisecond, 5*time.Second)
+
+	// Promoting a node which is not a member of the cluster should fail.
+	if err := leader.Promote("nonexistent-node"); err == nil {
+		t.Fatalf("expected error promoting nonexistent node")
+	}
+}
+
 // Test_MultiNodeClusterNodeEncrypted tests formation of a 3-node cluster, and its operation.
 // This test enables inter-node encryption, but keeps the unencrypted HTTP API.
 func Test_MultiNodeClusterNodeEncrypted(t *testing.T) {
