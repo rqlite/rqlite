@@ -646,6 +646,101 @@ func Test_ServiceSingleEvent_Retry(t *testing.T) {
 	}, 2*time.Second)
 }
 
+// Test_ServiceSingleEvent_Dropped tests that a batch dropped after exhausting
+// its retries is treated as handled: the high watermark advances past it and
+// it is pruned from the FIFO, so it is not resent after a restart or a
+// leadership change.
+func Test_ServiceSingleEvent_Dropped(t *testing.T) {
+	ResetStats()
+
+	testSrv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusInternalServerError)
+	}))
+	defer testSrv.Close()
+
+	cl := &mockCluster{}
+
+	cfg := DefaultConfig()
+	cfg.Endpoint = testSrv.URL
+	cfg.MaxBatchSz = 1
+	cfg.MaxBatchDelay = 50 * time.Millisecond
+	cfg.HighWatermarkInterval = 50 * time.Millisecond
+	cfg.TransmitMaxRetries = intPtr(1)
+	cfg.TransmitMinBackoff = 10 * time.Millisecond
+	in := make(chan *proto.CDCIndexedEventGroup, 100)
+	svc, err := NewService(
+		"node1",
+		t.TempDir(),
+		cl,
+		in,
+		cfg,
+	)
+	if err != nil {
+		t.Fatalf("failed to create service: %v", err)
+	}
+	if err := svc.Start(); err != nil {
+		t.Fatalf("failed to start service: %v", err)
+	}
+	defer svc.Stop()
+	cl.SetLeader(0)
+
+	in <- &proto.CDCIndexedEventGroup{
+		Index: 10,
+		Events: []*proto.CDCEvent{
+			{
+				Op:       proto.CDCEvent_INSERT,
+				Table:    "foo",
+				NewRowId: 1,
+			},
+		},
+	}
+
+	testPoll(t, func() bool {
+		return stats.Get(numDroppedFailedToSend).(*expvar.Int).Value() == 1
+	}, 2*time.Second)
+	testPoll(t, func() bool {
+		return svc.HighWatermark() == 10 && svc.fifo.Len() == 0
+	}, 2*time.Second)
+}
+
+// Test_ServiceSingleEvent_Undecompressable tests that a batch in the FIFO which
+// cannot be decompressed is dropped, with the high watermark advanced past it
+// so it is pruned and never retried.
+func Test_ServiceSingleEvent_Undecompressable(t *testing.T) {
+	ResetStats()
+
+	cl := &mockCluster{}
+
+	cfg := DefaultConfig()
+	cfg.Endpoint = "stdout"
+	cfg.HighWatermarkInterval = 50 * time.Millisecond
+	svc, err := NewService(
+		"node1",
+		t.TempDir(),
+		cl,
+		make(chan *proto.CDCIndexedEventGroup),
+		cfg,
+	)
+	if err != nil {
+		t.Fatalf("failed to create service: %v", err)
+	}
+
+	// Place a batch in the FIFO that is not valid compressed data.
+	if err := svc.fifo.Enqueue(&Event{Index: 10, Data: []byte("not compressed")}); err != nil {
+		t.Fatalf("failed to enqueue corrupt batch: %v", err)
+	}
+
+	if err := svc.Start(); err != nil {
+		t.Fatalf("failed to start service: %v", err)
+	}
+	defer svc.Stop()
+	cl.SetLeader(0)
+
+	testPoll(t, func() bool {
+		return svc.HighWatermark() == 10 && svc.fifo.Len() == 0
+	}, 2*time.Second)
+}
+
 func Test_ServiceMultiEvent(t *testing.T) {
 	ResetStats()
 

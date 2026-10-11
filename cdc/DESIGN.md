@@ -116,10 +116,10 @@ When a node becomes leader, the `leaderLoop` starts:
 
 1. Read the next event from the FIFO channel.
 2. Skip it if its index is at or below the current high watermark (already delivered).
-3. Decompress the event data.
+3. Decompress the event data. A batch that cannot be decompressed is dropped, and the high watermark is advanced past it.
 4. POST the JSON payload to the webhook endpoint via the sink.
 5. Retry on failure according to the configured retry policy (linear or exponential backoff).
-6. On success, advance the local high watermark.
+6. Once the batch has been sent, or dropped because the retry limit was reached, advance the local high watermark. A dropped batch is treated as handled and is never resent.
 
 A concurrent `leaderHWMLoop` periodically:
 - **Broadcasts** the high watermark to all voting nodes in the cluster.
