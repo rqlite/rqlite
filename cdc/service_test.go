@@ -229,6 +229,40 @@ func Test_ServiceSingleEvent_SnapshotSync(t *testing.T) {
 	}
 }
 
+// Test_ServiceSnapshotSync_BatcherClosed tests that a snapshot sync request is
+// always answered, even when the service cannot flush its batcher. Otherwise
+// the Store would block snapshotting until its sync timeout expires.
+func Test_ServiceSnapshotSync_BatcherClosed(t *testing.T) {
+	ResetStats()
+
+	cl := &mockCluster{}
+
+	cfg := DefaultConfig()
+	cfg.Endpoint = "stdout"
+	in := make(chan *proto.CDCIndexedEventGroup, 100)
+	svc, err := NewService(
+		"node1",
+		t.TempDir(),
+		cl,
+		in,
+		cfg,
+	)
+	if err != nil {
+		t.Fatalf("failed to create service: %v", err)
+	}
+	if err := svc.Start(); err != nil {
+		t.Fatalf("failed to start service: %v", err)
+	}
+	defer svc.Stop()
+
+	// Close the batcher so the flush marker cannot be written to it.
+	svc.batcher.Close()
+
+	if err := cl.RequestSnapshotSync(1 * time.Second); err != nil {
+		t.Fatalf("snapshot sync did not complete: %v", err)
+	}
+}
+
 // Test_ServiceRestart_NoDupes tests that when a CDC service is restarted, it does not resend
 // events that were already sent before the restart. This ensures that Raft log replay does not
 // cause duplicate events to be sent.
