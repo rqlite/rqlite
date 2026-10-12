@@ -59,8 +59,7 @@ func mergeQueued[T any](qs []*queuedObjects[T]) *Request[T] {
 	if len(qs) == 0 {
 		return nil
 	}
-	var req *Request[T]
-	req = &Request[T]{
+	req := &Request[T]{
 		SequenceNumber: qs[0].SequenceNumber,
 		flushChans:     make([]FlushChannel, 0),
 	}
