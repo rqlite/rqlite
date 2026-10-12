@@ -51,6 +51,7 @@ func main() {
 
 	if tp != "http" {
 		fmt.Fprintf(os.Stderr, "not a valid transport: %s\n", tp)
+		os.Exit(1)
 	}
 
 	if oneshot != "" {
