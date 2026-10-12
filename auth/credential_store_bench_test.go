@@ -10,10 +10,13 @@ func BenchmarkCredentialStore(b *testing.B) {
 		[
 			{
 				"username": "username1",
-				"password": "$2a$10$fKRHxrEuyDTP6tXIiDycr.nyC8Q7UMIfc31YMyXHDLgRDyhLK3VFS"
+				"password": "$2a$10$fKRHxrEuyDTP6tXIiDycr.nyC8Q7UMIfc31YMyXHDLgRDyhLK3VFS",
+				"perms": ["all"]
 			},
-			{	"username": "username2",
-				"password": "password2"
+			{
+				"username": "username2",
+				"password": "password2",
+				"perms": ["all"]
 			}
 		]
 	`

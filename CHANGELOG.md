@@ -9,6 +9,7 @@ This release features an addition to the API. In the event of an error there is 
 - [PR #2868](https://github.com/rqlite/rqlite/pull/2868): Support promoting a non-voting node to a voter via `POST /promote` and the shell's `.promote`.
 
 ### Implementation changes and bug fixes
+- [PR #2956](https://github.com/rqlite/rqlite/pull/2956): Misconfigured auth file could transfer permissions to a second username.
 - [PR #2862](https://github.com/rqlite/rqlite/pull/2862), [PR #2863](https://github.com/rqlite/rqlite/pull/2863), [PR #2866](https://github.com/rqlite/rqlite/pull/2866): Upgrade dependencies via `go get`.
 - [PR #2887](https://github.com/rqlite/rqlite/pull/2886): Read-lock _cluster_ attributes before returning via `Stats`.
 - [PR #2954](https://github.com/rqlite/rqlite/pull/2954): Remove unused code from `proxy` object.
