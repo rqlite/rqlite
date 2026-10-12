@@ -11,7 +11,7 @@ import (
 	"github.com/rqlite/rqlite/v10/auto/gcp"
 )
 
-// Config is the config file format for the upload service
+// Config is the config file format for the restore service
 type Config struct {
 	Version           int              `json:"version"`
 	Type              auto.StorageType `json:"type"`

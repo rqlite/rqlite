@@ -163,7 +163,7 @@ func (s *S3Client) CurrentID(ctx context.Context) (string, error) {
 
 	id, ok := result.Metadata[AWSS3IDKey]
 	if !ok {
-		return "", fmt.Errorf("sum metadata not found for %v", s)
+		return "", fmt.Errorf("ID metadata not found for %v", s)
 	}
 	return id, nil
 }

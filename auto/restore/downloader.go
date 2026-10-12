@@ -14,7 +14,7 @@ import (
 	"github.com/rqlite/rqlite/v10/internal/fsutil"
 )
 
-// stats captures stats for the Uploader service.
+// stats captures stats for the Downloader service.
 var stats *expvar.Map
 
 var (

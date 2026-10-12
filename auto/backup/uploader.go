@@ -18,7 +18,7 @@ import (
 // StorageClient is an interface for uploading data to a storage service.
 type StorageClient interface {
 	// Upload uploads the data from the given reader to the storage service.
-	// id is a identifier for the data, and will be stored along with
+	// id is an identifier for the data, and will be stored along with
 	// the data in the storage service.
 	Upload(ctx context.Context, reader io.Reader, id string) error
 
@@ -31,8 +31,8 @@ type StorageClient interface {
 }
 
 // DataProvider is an interface for providing data to be uploaded. The Uploader
-// service will call Provide() to have the data-for-upload to be written to the
-// to the file specified by path.
+// service will call Provide() to have the data-for-upload written to the
+// given writer.
 type DataProvider interface {
 	// LastIndex returns the cluster-wide index the data managed by the DataProvider was
 	// last modified by.
