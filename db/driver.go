@@ -345,7 +345,7 @@ func (hook *UpdateHookCallback) SQLite() func(int, string, string, int64) {
 		case sqlite3.SQLITE_DELETE:
 			he.Op = command.UpdateHookEvent_DELETE
 		default:
-			return nil, fmt.Errorf("unknown update hook operation %d", op)
+			return he, fmt.Errorf("unknown update hook operation %d", op)
 		}
 		return he, nil
 	}
