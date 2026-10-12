@@ -1,6 +1,8 @@
 ## v10.6.0 (unreleased)
 This release features an addition to the API. In the event of an error there is a new field in the response, named `error_v2`, which may contain numeric SQLite error codes. Clients accessing the API can now identify errors in a much more robust manner.
 
+This release also addresses a security issue related to Authentication files. A **misconfigured** file could grant elevated permissions to the wrong user. Correctly configured files do not suffer from this issue.
+
 ### New features
 - [PR #2860](https://github.com/rqlite/rqlite/pull/2860): New `error_v2` field in API responses which communicates numeric error codes. Thanks @TanayK07.
 - [PR #2864](https://github.com/rqlite/rqlite/pull/2864): New `errors` query parameter selects which error fields are returned.
