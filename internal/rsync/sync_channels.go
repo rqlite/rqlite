@@ -28,7 +28,7 @@ func (sc *SyncChannels) Register(ch chan<- chan struct{}) {
 	sc.chs = append(sc.chs, ch)
 }
 
-// Sync sends channel to all registered channels and waits for those channels
+// Sync sends a channel to all registered channels and waits for those channels
 // to close. Returns the total number of channels and the number that
 // successfully synchronized before any error or timeout.
 func (sc *SyncChannels) Sync(timeout time.Duration) (int, int, error) {

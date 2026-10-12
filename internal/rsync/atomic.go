@@ -73,7 +73,7 @@ func (t *AtomicTime) Add(d time.Duration) {
 	t.t = t.t.Add(d)
 }
 
-// Sub return the difference between the stored time and the given time.
+// Sub returns the difference between the stored time and the given time.
 func (t *AtomicTime) Sub(tt *AtomicTime) time.Duration {
 	t.mu.RLock()
 	defer t.mu.RUnlock()

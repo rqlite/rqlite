@@ -6,7 +6,7 @@ import (
 	"time"
 )
 
-func Test_AtomicMonotonicUin64(t *testing.T) {
+func Test_AtomicMonotonicUint64(t *testing.T) {
 	u := NewAtomicMonotonicUint64()
 	if u == nil {
 		t.Errorf("NewAtomicMonotonicUint64() returned nil")

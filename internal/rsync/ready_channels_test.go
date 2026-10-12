@@ -6,7 +6,7 @@ import (
 	"time"
 )
 
-// TestNewReadyChannels ensures that a new ReadyChannels instance is ready when no channels are registered.
+// Test_NewReadyChannels ensures that a new ReadyChannels instance is ready when no channels are registered.
 func Test_NewReadyChannels(t *testing.T) {
 	rc := NewReadyChannels()
 	if !rc.Ready() {

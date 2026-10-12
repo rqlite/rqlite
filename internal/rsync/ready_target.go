@@ -30,7 +30,7 @@ type Subscriber[T Ordered] struct {
 }
 
 // Subscribe returns a channel that will be closed when the target is reached.
-// If the target has already been a reached the channel will be returned in a
+// If the target has already been reached the channel will be returned in a
 // closed state.
 func (r *ReadyTarget[T]) Subscribe(target T) <-chan struct{} {
 	ch := make(chan struct{})
