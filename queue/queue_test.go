@@ -316,7 +316,7 @@ func Test_QueueWriteNilSingleChan(t *testing.T) {
 		if req.Objects != nil {
 			t.Fatalf("statements slice is not nil")
 		}
-		if len(req.flushChans) != 1 && req.flushChans[0] != fc {
+		if len(req.flushChans) != 1 || req.flushChans[0] != fc {
 			t.Fatalf("flush chans is not correct")
 		}
 		req.Close()
