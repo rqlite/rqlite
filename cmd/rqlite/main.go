@@ -259,11 +259,26 @@ func main() {
 			case ".EXPVAR":
 				err = expvar(ctx, client, input)
 			case ".REMOVE":
-				err = removeNode(client, input[index+1:])
+				arg, argErr := requireArg(input, index, "please specify the ID of the node to remove")
+				if argErr != nil {
+					err = argErr
+				} else {
+					err = removeNode(client, arg)
+				}
 			case ".DEMOTE":
-				err = demoteNode(client, input[index+1:])
+				arg, argErr := requireArg(input, index, "please specify the ID of the node to demote")
+				if argErr != nil {
+					err = argErr
+				} else {
+					err = demoteNode(client, arg)
+				}
 			case ".PROMOTE":
-				err = promoteNode(client, input[index+1:])
+				arg, argErr := requireArg(input, index, "please specify the ID of the node to promote")
+				if argErr != nil {
+					err = argErr
+				} else {
+					err = promoteNode(client, arg)
+				}
 			case ".BACKUP":
 				arg, argErr := requireArg(input, index, "please specify an output file for the backup")
 				if argErr != nil {
