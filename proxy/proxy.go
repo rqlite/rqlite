@@ -37,7 +37,6 @@ const (
 	numRemoteRemoveNode       = "remote_remove_node"
 	numRemoteDemoteNode       = "remote_demote_node"
 	numRemotePromoteNode      = "remote_promote_node"
-	numRemoteBackups          = "remote_backups"
 	numRemoteLoads            = "remote_loads"
 	numRemoteStepdowns        = "remote_stepdowns"
 	numRemoteExecutions       = "remote_executions"
@@ -59,7 +58,6 @@ func ResetStats() {
 	stats.Add(numRemoteRemoveNode, 0)
 	stats.Add(numRemoteDemoteNode, 0)
 	stats.Add(numRemotePromoteNode, 0)
-	stats.Add(numRemoteBackups, 0)
 	stats.Add(numRemoteLoads, 0)
 	stats.Add(numRemoteStepdowns, 0)
 	stats.Add(numRemoteExecutions, 0)
@@ -69,10 +67,6 @@ func ResetStats() {
 	stats.Add(numRemoteRequests, 0)
 	stats.Add(numRemoteRequestsFailed, 0)
 }
-
-// PreWrite is an optional function which is called before the first write to the
-// writer.
-type PreWrite func() error
 
 // Store defines the local database operations needed by the proxy.
 type Store interface {
