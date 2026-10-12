@@ -34,7 +34,7 @@ func NewDechunker(dir string) (*Dechunker, error) {
 }
 
 // WriteChunk writes the chunk to the file. If the chunk is the last chunk, the
-// the bool return value is true.
+// bool return value is true.
 func (d *Dechunker) WriteChunk(chunk *proto.LoadChunkRequest) (bool, error) {
 	if d.streamID == "" {
 		d.streamID = chunk.StreamId
