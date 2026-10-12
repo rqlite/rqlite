@@ -239,7 +239,7 @@ func Test_TLSServiceSecureMutual(t *testing.T) {
 		t.Fatalf("made successful HTTP request by untrusted client")
 	}
 
-	// Now set the client cert, which as also been signed by the CA. This should
+	// Now set the client cert, which has also been signed by the CA. This should
 	// mean the HTTP server trusts the client.
 	tlsConfig.Certificates = make([]tls.Certificate, 1)
 	tlsConfig.Certificates[0], err = tls.X509KeyPair(certClient, keyClient)
