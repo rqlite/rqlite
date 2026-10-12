@@ -87,12 +87,7 @@ func requestWithClient(output io.Writer, client *cl.Client, timer, forceWrites, 
 		RawQuery: queryStr.Encode(),
 	}
 
-	requestData := strings.NewReader(makeJSONBody(stmt))
-	if _, err := requestData.Seek(0, io.SeekStart); err != nil {
-		return err
-	}
-
-	resp, err := client.Execute(u, requestData)
+	resp, err := client.Execute(u, strings.NewReader(makeJSONBody(stmt)))
 
 	var hcr error
 	if err != nil {
