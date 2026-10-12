@@ -30,7 +30,7 @@ var (
 	ErrUnauthorized = errors.New("unauthorized")
 )
 
-// stats captures stats for the HTTP service.
+// stats captures stats for the proxy package.
 var stats *expvar.Map
 
 const (
