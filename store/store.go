@@ -2969,6 +2969,7 @@ func (s *Store) observe() (closeCh, doneCh chan struct{}) {
 					nodes, err := s.Nodes()
 					if err != nil {
 						s.logger.Printf("failed to get nodes configuration during reap check: %s", err.Error())
+						break
 					}
 					servers := Servers(nodes)
 					id := string(signal.PeerID)
