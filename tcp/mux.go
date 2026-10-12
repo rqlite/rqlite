@@ -36,9 +36,9 @@ func init() {
 	stats.Add(numTLSCertFetched, 0)
 }
 
-// Layer represents the connection between nodes. It can be both used to
+// Layer represents the connection between nodes. It can be used both to
 // make connections to other nodes (client), and receive connections from other
-// nodes (server)
+// nodes (server).
 type Layer struct {
 	ln     net.Listener
 	addr   net.Addr
@@ -158,7 +158,7 @@ func newTLSMux(ln net.Listener, adv net.Addr, cert, key, caCert string, mutual b
 	return mux, nil
 }
 
-// Serve handles connections from ln and multiplexes then across registered listener.
+// Serve handles connections from ln and multiplexes them across the registered listeners.
 func (mux *Mux) Serve() error {
 	tlsStr := ""
 	if mux.tlsConfig != nil {
@@ -191,7 +191,7 @@ func (mux *Mux) Serve() error {
 		tc := &trackedConn{Conn: conn, mux: mux}
 		mux.registerConn(tc)
 
-		// Demux in a goroutine to
+		// Demux in a goroutine so Serve can keep accepting connections.
 		mux.wg.Add(1)
 		go mux.handleConn(tc)
 	}
@@ -300,7 +300,7 @@ func (mux *Mux) handleConn(conn net.Conn) {
 	stats.Add(numConnectionsHandled, 1)
 
 	defer mux.wg.Done()
-	// Set a read deadline so connections with no data don't timeout.
+	// Set a read deadline so connections that never send a header byte time out.
 	if err := conn.SetReadDeadline(time.Now().Add(mux.Timeout)); err != nil {
 		conn.Close()
 		mux.Logger.Printf("cannot set read deadline: %s", err)
@@ -318,7 +318,7 @@ func (mux *Mux) handleConn(conn net.Conn) {
 	// Reset read deadline and let the listener handle that.
 	if err := conn.SetReadDeadline(time.Time{}); err != nil {
 		conn.Close()
-		mux.Logger.Printf("cannot reset set read deadline: %s", err)
+		mux.Logger.Printf("cannot reset read deadline: %s", err)
 		return
 	}
 
@@ -353,5 +353,5 @@ func (ln *listener) Accept() (c net.Conn, err error) {
 // Close is a no-op. The mux's listener should be closed instead.
 func (ln *listener) Close() error { return nil }
 
-// Addr always returns nil
+// Addr returns the advertised address of the mux.
 func (ln *listener) Addr() net.Addr { return ln.addr }
