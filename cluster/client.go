@@ -123,8 +123,7 @@ func (c *Client) SetLocalVersion(version string) error {
 	return nil
 }
 
-// GetLocalNodeAddr retrieves the version of software of the software
-// running on this node.
+// GetLocalVersion retrieves the version of the software running on this node.
 func (c *Client) GetLocalVersion() string {
 	c.localMu.RLock()
 	defer c.localMu.RUnlock()

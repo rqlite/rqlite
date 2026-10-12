@@ -674,7 +674,7 @@ func executeRequestFromString(s string) *command.ExecuteRequest {
 	return executeRequestFromStrings([]string{s})
 }
 
-// queryRequestFromStrings converts a slice of strings into a command.ExecuteRequest
+// executeRequestFromStrings converts a slice of strings into a command.ExecuteRequest
 func executeRequestFromStrings(s []string) *command.ExecuteRequest {
 	stmts := make([]*command.Statement, len(s))
 	for i := range s {

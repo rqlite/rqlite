@@ -112,11 +112,11 @@ func (b *Bootstrapper) SetCredentials(creds *proto.Credentials) {
 //   - joining an existing cluster by explicitly joining it through a node returned
 //     by the AddressProvider, or
 //   - if it's a Voting node, notifying all nodes returned by the AddressProvider
-//     that it exists, potentially allowing a cluster-wide bootstrap take place
+//     that it exists, potentially allowing a cluster-wide bootstrap to take place
 //     which will include this node.
 //
 // Returns nil if the boot operation was successful, or if done() ever returns
-// true. done() is periodically polled by the boot process. Returns an error
+// true. done() is periodically polled by the boot process. Returns an error if
 // the boot process encounters an unrecoverable error, or booting does not
 // occur within the given timeout. If booting was canceled, ErrBootCanceled is
 // returned unless done() returns true at the time of cancelation, in which case

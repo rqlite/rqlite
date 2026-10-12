@@ -12,7 +12,7 @@ import (
 )
 
 var (
-	// ErrNodeIDRequired is returned a join request doesn't supply a node ID
+	// ErrNodeIDRequired is returned when a join request doesn't supply a node ID
 	ErrNodeIDRequired = errors.New("node required")
 
 	// ErrJoinFailed is returned when a node fails to join a cluster
@@ -77,7 +77,7 @@ func (j *Joiner) Do(ctx context.Context, targetAddrs []string, id, addr string, 
 			}
 		}
 		if i+1 < j.numAttempts {
-			// This logic message only make sense if performing more than 1 join-attempt.
+			// This log message only makes sense if performing more than 1 join-attempt.
 			j.logger.Printf("failed to join cluster at %s, sleeping %s before retry", targetAddrs, j.attemptInterval)
 			select {
 			case <-ctx.Done():
