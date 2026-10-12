@@ -8,7 +8,7 @@ import (
 )
 
 const (
-	magicNumber uint32 = 0x01415152 // "RAQ\x01"
+	magicNumber uint32 = 0x01415152 // "RQA\x01" when written little-endian
 	recordSize  uint32 = 16         // bytes
 )
 
