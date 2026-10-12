@@ -87,6 +87,7 @@ func init() {
 	ResetStats()
 }
 
+// ResetStats resets the expvar stats for this module. Mostly for test purposes.
 func ResetStats() {
 	stats.Add(numGetNodeAPIRequest, 0)
 	stats.Add(numGetNodeAPIResponse, 0)
