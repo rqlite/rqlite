@@ -75,9 +75,7 @@ func (t *AtomicTime) Add(d time.Duration) {
 
 // Sub returns the difference between the stored time and the given time.
 func (t *AtomicTime) Sub(tt *AtomicTime) time.Duration {
-	t.mu.RLock()
-	defer t.mu.RUnlock()
-	return t.t.Sub(tt.t)
+	return t.Load().Sub(tt.Load())
 }
 
 // IsZero returns true if the stored time is zero, false otherwise.
