@@ -66,7 +66,7 @@ func WriteFile(path string, sum uint32) error {
 	if err != nil {
 		return err
 	}
-	defer fd.Close() // Ignore error if closed happened earlier.
+	defer fd.Close() // Ignore error if close happened earlier.
 
 	if _, err := fd.Write(b); err != nil {
 		return err

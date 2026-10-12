@@ -153,7 +153,7 @@ func Test_Restore_CorruptWAL(t *testing.T) {
 
 	// No temporary WAL files should be left behind from the failed restore...
 	// (the existing code doesn't clean up on error, so this is informational
-	// only — we just confirm the restored DB is the unchecksumed DB and not
+	// only — we just confirm the restored DB is the unchecksummed DB and not
 	// a checkpointed one.)
 	entries, _ := os.ReadDir(filepath.Dir(dstPath))
 	for _, e := range entries {

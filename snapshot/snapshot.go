@@ -93,7 +93,7 @@ type Snapshot struct {
 // Less reports whether this snapshot is older than the other snapshot.
 // Ordering is defined by (Term, Index, millisecond field in Snapshot ID).
 // If Term and Index are the same, and millisecond cannot be parsed, this
-// function falls back to a simple lexigraphical ordering.
+// function falls back to a simple lexicographical ordering.
 func (s *Snapshot) Less(other *Snapshot) bool {
 	if s.raftMeta.Term != other.raftMeta.Term {
 		return s.raftMeta.Term < other.raftMeta.Term

@@ -99,7 +99,7 @@ func ResetStats() {
 // been force-closed due to its idle timeout being exceeded.
 var ErrSnapshotReaderTimeout = errors.New("snapshot reader idle timeout exceeded")
 
-// LockingStreamer is a snapshot which holds the Snapshot Store MRSW read-lok
+// LockingStreamer is a snapshot which holds the Snapshot Store MRSW read-lock
 // while it is open. If a non-zero idle timeout is configured, the streamer
 // will be force-closed after the timeout elapses with no Read activity, so
 // that the read lock cannot be held indefinitely by a stalled consumer
@@ -853,7 +853,7 @@ func (s *Store) reapLoop() {
 // first time snapshot data is about to be used -- see Verify, Open, and Reap.
 //
 // Check must be called on an idle Store or the results are undefined.
-// If called on a empty Store, then it returns without an error.
+// If called on an empty Store, then it returns without an error.
 func (s *Store) check() error {
 	emp, err := fsutil.DirIsEmpty(s.dir)
 	if err != nil {

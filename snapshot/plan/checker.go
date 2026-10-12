@@ -19,7 +19,7 @@ func NewChecker() *Checker {
 	return &Checker{}
 }
 
-// Confirm at compile-time that Check implements Inspector.
+// Confirm at compile-time that Checker implements Inspector.
 var _ Inspector = (*Checker)(nil)
 
 // RenameDone reports whether a rename has taken effect: the source is gone and

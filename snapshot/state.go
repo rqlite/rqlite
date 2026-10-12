@@ -75,7 +75,7 @@ func Clone(dir, id string, index, term uint64) error {
 // in the given directory. If no snapshots are found, it returns 0, 0, nil.
 //
 // This function does not take any lock on the Snapshot store contained at dir,
-// so it not safe to call on an open Snapshot store.
+// so it is not safe to call on an open Snapshot store.
 func LatestIndexTerm(dir string) (uint64, uint64, error) {
 	cat := &SnapshotCatalog{}
 	sset, err := cat.Scan(dir)
