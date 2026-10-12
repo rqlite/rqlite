@@ -107,7 +107,7 @@ func run(t Tester, n int) (time.Duration, error) {
 		dur += d
 
 		if modPrint != 0 && i != 0 && i%modPrint == 0 {
-			fmt.Printf("%d requests completed in %s\n", i, d)
+			fmt.Printf("%d requests completed in %s\n", i, dur)
 		}
 	}
 	return dur, t.Close()
