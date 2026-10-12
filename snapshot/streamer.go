@@ -164,7 +164,7 @@ func snapshotHeaderPayloadSize(s *proto.SnapshotHeader) (int64, error) {
 	if err != nil {
 		return 0, err
 	}
-	var total int64 = int64(len(data))
+	total := int64(len(data))
 
 	switch p := s.Payload.(type) {
 	case *proto.SnapshotHeader_Full:
@@ -321,7 +321,7 @@ func (s *SnapshotStreamer) Len() (int64, error) {
 	if err != nil {
 		return 0, err
 	}
-	return HeaderSizeLen + int64(sz), nil
+	return HeaderSizeLen + sz, nil
 }
 
 // SnapshotPathStreamer implements io.ReadCloser for streaming a snapshot's
