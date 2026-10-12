@@ -101,11 +101,12 @@ func requestWithClient(output io.Writer, client *cl.Client, timer, forceWrites, 
 		hcr = err
 	}
 
+	defer resp.Body.Close()
+
 	response, err := io.ReadAll(resp.Body)
 	if err != nil {
 		return err
 	}
-	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
 		return fmt.Errorf("server responded with %s: %s", resp.Status, response)
