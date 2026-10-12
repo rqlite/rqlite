@@ -17,8 +17,8 @@ var ErrNoAvailableHost = fmt.Errorf("no host available to perform the request")
 // ErrTooManyRedirects indicates that the client exceeded the maximum number of redirects
 var ErrTooManyRedirects = fmt.Errorf("maximum leader redirect limit exceeded")
 
-// HostChangedError indicates that the underlying request was executed on a different host
-// different from the caller anticipated
+// HostChangedError indicates that the underlying request was executed on a
+// host different from the one the caller anticipated.
 type HostChangedError struct {
 	NewHost string
 }
@@ -27,6 +27,7 @@ func (he *HostChangedError) Error() string {
 	return fmt.Sprintf("HostChangedErr: new host is '%s'", he.NewHost)
 }
 
+// ConfigFunc is an option applied to a Client by NewClient.
 type ConfigFunc func(*Client)
 
 // Client is a wrapper around stock `http.Client` that adds "retry on another host" behaviour

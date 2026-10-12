@@ -20,14 +20,18 @@ type TableData struct {
 	Values  [][]any  `json:"values,omitempty"`
 }
 
+// RowCount returns the number of rows, including the header row.
 func (t *TableData) RowCount() int {
 	return len(t.Values) + 1
 }
 
+// ColCount returns the number of columns.
 func (t *TableData) ColCount() int {
 	return len(t.Columns)
 }
 
+// Get returns the cell at row i and column j as a string. Row 0 is the
+// header row; missing values are rendered as NULL.
 func (t *TableData) Get(i, j int) string {
 	if i == 0 {
 		if j >= len(t.Columns) {

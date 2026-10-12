@@ -8,6 +8,8 @@ import (
 	"strings"
 )
 
+// MaxHistSize is the default maximum number of commands kept in history,
+// used when RQLITE_HISTFILESIZE is not set.
 const MaxHistSize = 100
 
 // Size returns the max number of commands that should be stored in history.
