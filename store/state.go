@@ -78,7 +78,7 @@ func (p *PragmaCheckRequest) Check() error {
 // if a read is stale requires timestamps for both.
 //
 // lastHeartbeatTime: last time we received a heartbeat from the Leader.
-// lastAppendEntriesTime: last time we receievd an AppendEntries request from the Leader.
+// lastAppendEntriesTime: last time we received an AppendEntries request from the Leader.
 // lastAppliedIndex: index currently applied to the FSM.
 // lastAppliedAtTime: time the currently applied index was actually applied.
 // freshness: freshness window
