@@ -235,11 +235,17 @@ func (c *Client) requestFollowRedirect(method string, urlStr string, body io.Rea
 		}
 
 		if resp.StatusCode == http.StatusMovedPermanently {
+			// This response is not returned to the caller, so release it here.
+			resp.Body.Close()
 			nRedirects++
 			if nRedirects > c.maxRedirect {
-				return resp, ErrTooManyRedirects
+				return nil, ErrTooManyRedirects
 			}
-			urlStr = resp.Header["Location"][0]
+			loc := resp.Header.Get("Location")
+			if loc == "" {
+				return nil, fmt.Errorf("redirect from %s has no Location header", urlStr)
+			}
+			urlStr = loc
 			continue
 		}
 
