@@ -31,7 +31,7 @@ type statusResponse struct {
 }
 
 func backup(ctx *cli.Context, client *httpcl.Client, filename string) error {
-	fd, err := os.OpenFile(filename, os.O_CREATE|os.O_WRONLY, 0644)
+	fd, err := os.OpenFile(filename, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0644)
 	if err != nil {
 		return err
 	}
@@ -60,7 +60,7 @@ func backup(ctx *cli.Context, client *httpcl.Client, filename string) error {
 }
 
 func dump(ctx *cli.Context, client *httpcl.Client, filename string, tables []string) error {
-	fd, err := os.OpenFile(filename, os.O_CREATE|os.O_WRONLY, 0644)
+	fd, err := os.OpenFile(filename, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0644)
 	if err != nil {
 		return err
 	}
