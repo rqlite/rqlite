@@ -120,6 +120,8 @@ func (cm *CountingMonitor) runOnce() {
 	cm.loggerFn(cm.ctr.Count())
 }
 
+// StopAndWait stops the monitor and waits for its goroutine to exit. It is
+// safe to call more than once.
 func (cm *CountingMonitor) StopAndWait() {
 	cm.once.Do(func() {
 		cm.cancel()
