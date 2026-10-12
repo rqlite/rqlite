@@ -15,7 +15,11 @@ This release features an addition to the API. In the event of an error there is 
 - [PR #2871](https://github.com/rqlite/rqlite/pull/2871): CDC stats returns promptly on closed queue.
 - [PR #2872](https://github.com/rqlite/rqlite/pull/2872): Never move a follower's CDC high watermark backwards.
 - [PR #2873](https://github.com/rqlite/rqlite/pull/2873): Advance CDC high watermark past dropped batches.
+- [PR #2888](https://github.com/rqlite/rqlite/pull/2888): Avoid recursive _RLock_ in `Client.GetNodeMeta`.
+- [PR #2889](https://github.com/rqlite/rqlite/pull/2889): Mark CDC HWM broadcast conn unusable before returning it to cluster.
 - [PR #2876](https://github.com/rqlite/rqlite/pull/2876): Consolidate console home and topology tabs.
+- [PR #2892](https://github.com/rqlite/rqlite/pull/2892): Small clean-ups in `rqbench`.
+- [PR #2879](https://github.com/rqlite/rqlite/pull/2879), [PR #2880](https://github.com/rqlite/rqlite/pull/2880), [PR #2883](https://github.com/rqlite/rqlite/pull/2883), [PR #2878](https://github.com/rqlite/rqlite/pull/2878), [PR #2885](https://github.com/rqlite/rqlite/pull/2885), [PR #2886](https://github.com/rqlite/rqlite/pull/2886), [PR #2891](https://github.com/rqlite/rqlite/pull/2891), [PR #2896](https://github.com/rqlite/rqlite/pull/2896): Fix typos and missing details in source code and comments.
 
 ## v10.5.3 (October 7th 2026)
 ### Implementation changes and bug fixes
