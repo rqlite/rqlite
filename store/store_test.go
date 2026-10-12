@@ -337,7 +337,7 @@ func Test_SingleNodeTempFileCleanup(t *testing.T) {
 	for _, pattern := range []string{
 		restoreScratchPattern,
 		backupScratchPattern,
-		bootScatchPattern,
+		bootScratchPattern,
 	} {
 		f, err := createTemp(s.dbDir, pattern)
 		if err != nil {
@@ -356,7 +356,7 @@ func Test_SingleNodeTempFileCleanup(t *testing.T) {
 	for _, pattern := range []string{
 		restoreScratchPattern,
 		backupScratchPattern,
-		bootScatchPattern,
+		bootScratchPattern,
 	} {
 		matches, err := filepath.Glob(filepath.Join(s.dbDir, pattern))
 		if err != nil {

@@ -122,7 +122,7 @@ const (
 	snapshotsDirName       = "wsnapshots"
 	walStagingDirName      = "wal-staging"
 	restoreScratchPattern  = "rqlite-restore-*"
-	bootScatchPattern      = "rqlite-boot-*"
+	bootScratchPattern     = "rqlite-boot-*"
 	backupScratchPattern   = "rqlite-backup-*"
 	raftDBPath             = "raft.db" // Changing this will break backwards compatibility.
 	peersPath              = "raft/peers.json"
@@ -822,7 +822,7 @@ func (s *Store) Open() (retErr error) {
 	}
 	for _, pattern := range []string{
 		restoreScratchPattern,
-		bootScatchPattern,
+		bootScratchPattern,
 		backupScratchPattern} {
 		for _, dir := range []string{s.raftDir, s.dbDir} {
 			files, err := filepath.Glob(filepath.Join(dir, pattern))
@@ -2012,7 +2012,7 @@ func (s *Store) ReadFrom(r io.Reader) (int64, error) {
 	}
 
 	// Write the data to a temporary file.
-	f, err := createTemp(s.dbDir, bootScatchPattern)
+	f, err := createTemp(s.dbDir, bootScratchPattern)
 	if err != nil {
 		return 0, err
 	}
