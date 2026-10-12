@@ -436,6 +436,42 @@ func Test_AuthPermsNilLoadSingle(t *testing.T) {
 	}
 }
 
+// Test_AuthLoadNoCarryOver ensures that a credential which omits a field does
+// not inherit that field's value from the credential decoded before it.
+func Test_AuthLoadNoCarryOver(t *testing.T) {
+	const jsonStream = `
+		[
+			{
+				"username": "username1",
+				"password": "password1",
+				"perms": ["all"]
+			},
+			{
+				"username": "username2",
+				"password": "password2"
+			},
+			{
+				"username": "username3"
+			}
+		]
+	`
+
+	store := NewCredentialsStore()
+	if err := store.Load(strings.NewReader(jsonStream)); err != nil {
+		t.Fatalf("failed to load credentials: %s", err.Error())
+	}
+
+	if store.HasPerm("username2", "all") {
+		t.Fatalf("username2 inherited perm from username1")
+	}
+	if pw, ok := store.Password("username3"); !ok || pw != "" {
+		t.Fatalf("username3 inherited password from username2, got %q", pw)
+	}
+	if store.HasPerm("username3", "all") {
+		t.Fatalf("username3 inherited perm from username1")
+	}
+}
+
 func Test_AuthPermsAllUsers(t *testing.T) {
 	const jsonStream = `
 		[

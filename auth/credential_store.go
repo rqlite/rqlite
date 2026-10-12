@@ -96,8 +96,10 @@ func (c *CredentialsStore) Load(r io.Reader) error {
 		return err
 	}
 
-	var cred Credential
 	for dec.More() {
+		// Decode into a fresh value each time, otherwise fields omitted from
+		// one credential would carry over from the previous one.
+		var cred Credential
 		err := dec.Decode(&cred)
 		if err != nil {
 			return err
