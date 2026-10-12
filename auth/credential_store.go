@@ -133,10 +133,7 @@ func (c *CredentialsStore) Password(username string) (string, bool) {
 // CheckRequest returns true if b contains a valid username and password.
 func (c *CredentialsStore) CheckRequest(b BasicAuther) bool {
 	username, password, ok := b.BasicAuth()
-	if !ok || !c.Check(username, password) {
-		return false
-	}
-	return true
+	return ok && c.Check(username, password)
 }
 
 // HasPerm returns true if username has the given perm, either directly or
@@ -160,14 +157,12 @@ func (c *CredentialsStore) HasPerm(username string, perm string) bool {
 // HasAnyPerm returns true if username has at least one of the given perms,
 // either directly, or via AllUsers. It does not perform any password checking.
 func (c *CredentialsStore) HasAnyPerm(username string, perm ...string) bool {
-	return func(p []string) bool {
-		for i := range p {
-			if c.HasPerm(username, p[i]) {
-				return true
-			}
+	for _, p := range perm {
+		if c.HasPerm(username, p) {
+			return true
 		}
-		return false
-	}(perm)
+	}
+	return false
 }
 
 // AA authenticates and checks authorization for the given username and password
