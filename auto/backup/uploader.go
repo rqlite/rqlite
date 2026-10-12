@@ -138,10 +138,7 @@ func (u *Uploader) Stats() (map[string]any, error) {
 }
 
 func (u *Uploader) upload(ctx context.Context) error {
-	var err error
-	var li uint64
-
-	li, err = u.dataProvider.LastIndex()
+	li, err := u.dataProvider.LastIndex()
 	if err != nil {
 		return err
 	}
@@ -194,8 +191,7 @@ func (u *Uploader) upload(ctx context.Context) error {
 	u.lastUploadTime = time.Now()
 	u.lastUploadDuration = time.Since(startTime)
 	u.logger.Printf("completed auto upload of %s to %s in %s",
-		humanize.Bytes(uint64(stats.Get(lastUploadBytes).(*expvar.Int).Value())),
-		u.storageClient, u.lastUploadDuration)
+		humanize.Bytes(uint64(cr.Count())), u.storageClient, u.lastUploadDuration)
 	return nil
 }
 
