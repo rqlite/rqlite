@@ -183,10 +183,8 @@ func main() {
 		// Set up command history.
 		hr := history.Reader()
 		if hr != nil {
-			_, err := line.ReadHistory(hr)
-			if err != nil {
-				// If reading history fails, it's not critical - just continue
-			}
+			// Failing to read history is not critical, so ignore any error.
+			line.ReadHistory(hr)
 			hr.Close()
 		}
 
