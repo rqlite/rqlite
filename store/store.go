@@ -3347,6 +3347,8 @@ func createTemp(dir, pattern string) (*os.File, error) {
 		return nil, err
 	}
 	if err := os.Chmod(fd.Name(), 0644); err != nil {
+		fd.Close()
+		fsutil.Remove(fd.Name())
 		return nil, err
 	}
 	return fd, nil
