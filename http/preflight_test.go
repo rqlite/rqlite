@@ -133,7 +133,7 @@ func Test_IsServingHTTP_OpenPort(t *testing.T) {
 	}
 }
 
-// Test_IsServingHTTP_OpenPort tests that we correctly detect a non-functioning HTTP
+// Test_IsServingHTTP_OpenPortTLS tests that we correctly detect a non-functioning HTTP
 // server when the other side is just an open TLS TCP port.
 func Test_IsServingHTTP_OpenPortTLS(t *testing.T) {
 	cert, key, err := rtls.GenerateSelfSignedCert(pkix.Name{CommonName: "rqlite"}, time.Hour, 2048)

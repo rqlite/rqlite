@@ -238,7 +238,7 @@ func Test_NodesRespDecoder_Decode_EmptyJSON(t *testing.T) {
 	}
 }
 
-// mockGetMetaer is a mock implementation of the GetMetaer interface.
+// mockGetAddresser is a mock implementation of the GetNodeMetaer interface.
 type mockGetAddresser struct {
 	apiAddr   string
 	version   string

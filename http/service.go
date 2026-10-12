@@ -435,7 +435,7 @@ func (s *Service) Close() {
 	<-s.queueDone
 }
 
-// SetQueryMaxRetry sets the max queue retry-write value.
+// SetQueueMaxRetry sets the max queue retry-write value.
 func (s *Service) SetQueueMaxRetry(n int64) {
 	s.queueRetry.Store(n)
 }
@@ -2109,7 +2109,7 @@ func kubernetesHint() bool {
 	return ok
 }
 
-// queryRequestFromStrings converts a slice of strings into a proto.QueryRequest
+// executeRequestFromStrings converts a slice of strings into a proto.ExecuteRequest.
 func executeRequestFromStrings(s []string, timings, tx bool) *proto.ExecuteRequest {
 	stmts := make([]*proto.Statement, len(s))
 	for i := range s {
