@@ -1,5 +1,5 @@
 ## v10.6.0 (October 12th 2026)
-This release features an addition to the API. In the event of an error there is a new field in the response, named `error_v2`, which may contain numeric SQLite error codes. Clients accessing the API can now identify errors in a much more robust manner.
+This release features an addition to the API. In the event of an error there is a new field in the response, named `error_v2`, which may contain numeric SQLite error codes. Clients accessing the API can now identify errors in a much more robust manner. See the [documentation for more details](https://rqlite.io/docs/api/api/#handling-errors). This feature also [introduces query logging](https://rqlite.io/docs/guides/config/#sqlite-database).
 
 This release also addresses a security issue related to Authentication files. A **misconfigured** file could grant elevated permissions to the wrong user. Correctly configured files do not suffer from this issue.
 
