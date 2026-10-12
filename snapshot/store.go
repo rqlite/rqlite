@@ -401,9 +401,9 @@ func (s *Store) SetReadTimeout(d time.Duration) {
 }
 
 // Open opens the snapshot with the given ID for reading. Open returns an io.ReadCloser
-// which wraps a SnapshotInstall object. This is because the snapshot will be used
-// to either rebuild a node's state after restart, or to send the snapshot to another node,
-// both of which require the DB file and any associated WAL files.
+// which streams the snapshot's DB file and any associated WAL files. This is because
+// the snapshot will be used to either rebuild a node's state after restart, or to send
+// the snapshot to another node, both of which require the DB file and the WAL files.
 //
 // A sink does not need to lock the Store because either the Snapshot directory it
 // creates will be visible or not. Reaping will not see it until it is fully created,

@@ -92,9 +92,12 @@ func (c *Checker) MkdirAllDone(path string) (bool, error) {
 	return pathExists(path)
 }
 
-// CopyFileDone reports whether the destination exists. CopyFile is not atomic,
-// so a destination left partially written by an interrupted copy is reported as
-// done; a plan relying on copy as its final operation must account for that.
+// CopyFileDone reports whether the destination exists and is the same size as
+// the source. If the source is gone (a later operation in the plan may have
+// removed it), only the destination's existence can be checked. CopyFile is not
+// atomic, so in that case a destination left partially written by an interrupted
+// copy is reported as done; a plan relying on copy as its final operation must
+// account for that.
 func (c *Checker) CopyFileDone(src, dst string) (bool, error) {
 	srcFi, err := os.Stat(src)
 	if err != nil {
