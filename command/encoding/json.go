@@ -94,7 +94,7 @@ type AssociativeRows struct {
 }
 
 // ResultWithRows represents the outcome of an operation that changes rows, but also
-// includes an nil rows object, so clients can distinguish between a query and execute
+// includes a nil rows object, so clients can distinguish between a query and execute
 // result.
 type ResultWithRows struct {
 	Result
