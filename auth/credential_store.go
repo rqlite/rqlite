@@ -98,8 +98,6 @@ func (c *CredentialsStore) Load(r io.Reader) error {
 	}
 
 	for dec.More() {
-		// Decode into a fresh Credential each time so a field missing from one
-		// entry is not silently inherited from the previous entry.
 		var cred Credential
 		err := dec.Decode(&cred)
 		if err != nil {
