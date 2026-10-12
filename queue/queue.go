@@ -31,7 +31,7 @@ func ResetStats() {
 	stats.Add(numFlush, 0)
 }
 
-// FlushChannel is the type passed to the Queue, if caller wants
+// FlushChannel is the type passed to the Queue, if the caller wants
 // to know when a specific set of objects has been processed.
 type FlushChannel chan bool
 
@@ -97,7 +97,7 @@ type Queue[T any] struct {
 	numTimeouts int
 }
 
-// New returns a instance of a Queue. t is the maximum time that
+// New returns an instance of a Queue. t is the maximum time that
 // objects can remain in the queue before being sent, even if
 // the batch size has not been reached. If t is zero, there is no
 // timeout, and batches are sent only when the batch size is reached.
@@ -120,7 +120,7 @@ func New[T any](maxSize, batchSize int, t time.Duration) *Queue[T] {
 
 // Write queues a request, and returns a monotonically increasing
 // sequence number associated with the slice of objects. A slice with
-// a lower sequence number than second slice will always be transmitted
+// a lower sequence number than a second slice will always be transmitted
 // on the Queue's C object before the second slice.
 //
 // c is an optional channel. If non-nil, it will be closed when the Request
@@ -157,7 +157,7 @@ func (q *Queue[T]) WriteOne(object T, c FlushChannel) (int64, error) {
 	return q.Write([]T{object}, c)
 }
 
-// Flush flushes the queue
+// Flush flushes the queue.
 func (q *Queue[T]) Flush() error {
 	q.batchCh <- nil
 	return nil
@@ -174,7 +174,7 @@ func (q *Queue[T]) Close() error {
 	return nil
 }
 
-// Depth returns the number of queued requests
+// Depth returns the number of queued requests.
 func (q *Queue[T]) Depth() int {
 	return len(q.batchCh)
 }
