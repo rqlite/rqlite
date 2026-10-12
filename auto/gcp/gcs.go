@@ -27,6 +27,7 @@ var (
 	jwtScope                = "https://www.googleapis.com/auth/devstorage.read_write"
 	jwtAudTarget            = "https://oauth2.googleapis.com/token"
 
+	// GCPGCSIDKey is the GCS object metadata key under which the backup ID is stored.
 	GCPGCSIDKey = "rqlite-auto-backup-id"
 )
 

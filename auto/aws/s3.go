@@ -15,6 +15,7 @@ import (
 )
 
 var (
+	// AWSS3IDKey is the S3 object metadata key under which the backup ID is stored.
 	AWSS3IDKey = "x-rqlite-auto-backup-id"
 )
 
