@@ -1262,8 +1262,6 @@ func (db *DB) queryStmtWithConn(ctx context.Context, stmt *command.Statement, xT
 	dest := make([]any, len(columns))
 	ptrs := make([]any, len(dest))
 	for rs.Next() && (len(columns) > 0 || forceStall) {
-		dest := dest[:]
-		ptrs := ptrs[:]
 		for i := range ptrs {
 			ptrs[i] = &dest[i]
 		}
