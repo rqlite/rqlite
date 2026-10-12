@@ -150,14 +150,12 @@ func (g *GCSClient) Upload(ctx context.Context, r io.Reader, id string) error {
 		name = TimestampedPath(name, time.Now().UTC())
 	}
 	metaData := struct {
-		Name     string `json:"name"`
-		Metadata struct {
-			ID string `json:"rqlite-auto-backup-id"`
-		} `json:"metadata"`
+		Name     string            `json:"name"`
+		Metadata map[string]string `json:"metadata"`
 	}{
-		Name: name,
+		Name:     name,
+		Metadata: map[string]string{GCPGCSIDKey: id},
 	}
-	metaData.Metadata.ID = id
 
 	meta, err := json.Marshal(metaData)
 	if err != nil {
