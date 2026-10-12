@@ -2387,7 +2387,7 @@ func (s *Store) StagedWALs() ([]string, error) {
 // remove removes the node, with the given ID, from the cluster.
 func (s *Store) remove(id string) error {
 	f := s.raft.RemoveServer(raft.ServerID(id), 0, 0)
-	if f.Error() != nil && f.Error() == raft.ErrNotLeader {
+	if f.Error() == raft.ErrNotLeader {
 		return ErrNotLeader
 	}
 	return f.Error()
@@ -2927,11 +2927,7 @@ func (s *Store) ForceSnapshotRestore() error {
 		return ErrOpen
 	}
 
-	err := fsutil.Remove(s.cleanSnapshotPath)
-	if err != nil && !os.IsNotExist(err) {
-		return err
-	}
-	return nil
+	return fsutil.Remove(s.cleanSnapshotPath)
 }
 
 // RegisterObserver registers an observer of Raft events
@@ -3318,7 +3314,7 @@ func (s *Store) logBackup() bool {
 
 func raftLogInfoMessage(sz int64, fi, li uint64) string {
 	if sz == 0 {
-		return ("raft log is 0 bytes at open, no entries present")
+		return "raft log is 0 bytes at open, no entries present"
 	}
 	hSz := humanize.Bytes(uint64(sz))
 	return fmt.Sprintf("raft log is %s, first index is %d, last index is %d", hSz, fi, li)
