@@ -14,7 +14,7 @@ import (
 	"github.com/rqlite/rqlite/v10/snapshot"
 )
 
-// Test_SingleNodeBackupBinary tests that requesting a binary-formatted
+// Test_SingleNodeBackupBinaryVacuum tests that requesting a vacuumed binary-formatted
 // backup works as expected.
 func Test_SingleNodeBackupBinaryVacuum(t *testing.T) {
 	s, ln := mustNewStore(t)
