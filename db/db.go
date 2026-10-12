@@ -838,7 +838,7 @@ func (db *DB) CompileOptions() ([]string, error) {
 	compileOptions = make([]string, len(res[0].Values))
 	for i := range compileOptions {
 		if len(res[0].Values[i].Parameters) != 1 {
-			return nil, fmt.Errorf("compile options values wrong size (%d)", len(res))
+			return nil, fmt.Errorf("compile options values wrong size (%d)", len(res[0].Values[i].Parameters))
 		}
 		compileOptions[i] = res[0].Values[i].Parameters[0].GetS()
 	}
