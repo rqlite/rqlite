@@ -152,7 +152,7 @@ func TestMux_Advertise(t *testing.T) {
 	ln := mux.Listen(1)
 	if ln.Addr().String() != addr.Addr {
 		t.Fatalf("listener advertise address not correct, exp %s, got %s",
-			ln.Addr().String(), addr.Addr)
+			addr.Addr, ln.Addr().String())
 	}
 }
 
@@ -376,7 +376,7 @@ func TestMutualTLSMuxVerifyCommonName(t *testing.T) {
 		t.Fatalf("expected handshake with non-matching CommonName to fail, got nil")
 	}
 	if !strings.Contains(err.Error(), "bad certificate") && !strings.Contains(err.Error(), "did not provide any valid certificate that matches CommonName") {
-		t.Fatalf("expected CCommonNameN mismatch error, got: %s", err.Error())
+		t.Fatalf("expected CommonName mismatch error, got: %s", err.Error())
 	}
 }
 
