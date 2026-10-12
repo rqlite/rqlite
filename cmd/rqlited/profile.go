@@ -32,7 +32,7 @@ func startProfile(cpuprofile, memprofile, traceprofile string) {
 	if memprofile != "" {
 		f, err := os.Create(memprofile)
 		if err != nil {
-			log.Fatalf("failed to create memory profile file at %s: %s", cpuprofile, err.Error())
+			log.Fatalf("failed to create memory profile file at %s: %s", memprofile, err.Error())
 		}
 		log.Printf("writing memory profile to: %s\n", memprofile)
 		prof.mem = f
@@ -42,7 +42,7 @@ func startProfile(cpuprofile, memprofile, traceprofile string) {
 	if traceprofile != "" {
 		f, err := os.Create(traceprofile)
 		if err != nil {
-			log.Fatalf("failed to create trace profile file at %s: %s", cpuprofile, err.Error())
+			log.Fatalf("failed to create trace profile file at %s: %s", traceprofile, err.Error())
 		}
 		prof.trace = f
 		log.Printf("writing trace profile to: %s\n", traceprofile)
