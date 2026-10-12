@@ -1,7 +1,7 @@
 package tcp
 
 // NameAddress wraps a string and implements the
-// net.Listener interface.
+// net.Addr interface.
 type NameAddress struct {
 	Address string
 }
