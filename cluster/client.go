@@ -142,7 +142,7 @@ func (c *Client) GetNodeMeta(ctx context.Context, nodeAddr string, retries int, 
 		stats.Add(numGetNodeAPIRequestLocal, 1)
 		return &proto.NodeMeta{
 			Url:     c.localServ.GetNodeAPIURL(),
-			Version: c.GetLocalVersion(),
+			Version: c.localVersion, // localMu is already held, don't re-lock via GetLocalVersion.
 		}, nil
 	}
 
