@@ -17,9 +17,9 @@ const (
 	PermAll = "all"
 	// PermJoin means user is permitted to join cluster.
 	PermJoin = "join"
-	// PermJoinReadOnly means user is permitted to join the cluster only as a read replica node
+	// PermJoinReadOnly means user is permitted to join the cluster only as a read replica node.
 	PermJoinReadOnly = "join-read-only"
-	// PermJoinReadReplica means user is permitted to join the cluster only as a read replica node
+	// PermJoinReadReplica means user is permitted to join the cluster only as a read replica node.
 	PermJoinReadReplica = "join-read-replica"
 	// PermRemove means user is permitted to remove a node.
 	PermRemove = "remove"
@@ -29,7 +29,7 @@ const (
 	PermPromote = "promote"
 	// PermExecute means user can access execute endpoint.
 	PermExecute = "execute"
-	// PermQuery means user can access query endpoint
+	// PermQuery means user can access query endpoint.
 	PermQuery = "query"
 	// PermStatus means user can retrieve node status.
 	PermStatus = "status"
@@ -43,7 +43,7 @@ const (
 	PermSnapshot = "snapshot"
 	// PermLeaderOps means user can perform leader-related operations.
 	PermLeaderOps = "leader-ops"
-	// PermCDCHWMUpdate = means a user can perform CDC high watermark updates.
+	// PermCDCHWMUpdate means user can perform CDC high watermark updates.
 	PermCDCHWMUpdate = "cdc-hwm-update"
 	// PermUI means user can access the UI.
 	PermUI = "ui"
@@ -67,7 +67,7 @@ type CredentialsStore struct {
 	perms map[string]map[string]bool
 }
 
-// NewCredentialsStore returns a new instance of a CredentialStore.
+// NewCredentialsStore returns a new instance of a CredentialsStore.
 func NewCredentialsStore() *CredentialsStore {
 	return &CredentialsStore{
 		store: make(map[string]string),
@@ -75,7 +75,7 @@ func NewCredentialsStore() *CredentialsStore {
 	}
 }
 
-// NewCredentialsStoreFromFile returns a new instance of a CredentialStore loaded from a file.
+// NewCredentialsStoreFromFile returns a new instance of a CredentialsStore loaded from a file.
 func NewCredentialsStoreFromFile(path string) (*CredentialsStore, error) {
 	f, err := os.Open(path)
 	if err != nil {
@@ -90,7 +90,7 @@ func NewCredentialsStoreFromFile(path string) (*CredentialsStore, error) {
 // Load loads credential information from a reader.
 func (c *CredentialsStore) Load(r io.Reader) error {
 	dec := json.NewDecoder(r)
-	// Read open bracket
+	// Read opening bracket.
 	_, err := dec.Token()
 	if err != nil {
 		return err
@@ -172,8 +172,8 @@ func (c *CredentialsStore) HasAnyPerm(username string, perm ...string) bool {
 
 // AA authenticates and checks authorization for the given username and password
 // for the given perm. If the credential store is nil, then this function always
-// returns true. If AllUsers have the given perm, authentication is not done.
-// Only then are the credentials checked, and then the perm checked.
+// returns true. If AllUsers has the given perm, authentication is not done.
+// Otherwise the credentials are checked first, and then the perm.
 func (c *CredentialsStore) AA(username, password, perm string) bool {
 	// No credential store? Auth is not even enabled.
 	if c == nil {

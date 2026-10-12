@@ -198,7 +198,7 @@ func Test_AuthPermsLoadSingle(t *testing.T) {
 	}
 
 	if perm := store.HasPerm("username2", "baz"); !perm {
-		t.Fatalf("username1 does not have baz perm")
+		t.Fatalf("username2 does not have baz perm")
 	}
 
 	if perm := store.HasAnyPerm("username1", "foo"); !perm {
@@ -328,7 +328,7 @@ func Test_AuthPermsRequestLoadSingle(t *testing.T) {
 		ok:       true,
 	}
 	if perm := store.HasPermRequest(b1, "foo"); !perm {
-		t.Fatalf("username1 does not has perm foo via request")
+		t.Fatalf("username1 does not have perm foo via request")
 	}
 	b2 := &testBasicAuther{
 		username: "username2",
@@ -336,7 +336,7 @@ func Test_AuthPermsRequestLoadSingle(t *testing.T) {
 		ok:       true,
 	}
 	if perm := store.HasPermRequest(b2, "foo"); perm {
-		t.Fatalf("username1 does have perm foo via request")
+		t.Fatalf("username2 has perm foo via request")
 	}
 }
 
@@ -368,7 +368,7 @@ func Test_AuthPermsRequestLoadSingleFromFile(t *testing.T) {
 		ok:       true,
 	}
 	if perm := store.HasPermRequest(b1, "foo"); !perm {
-		t.Fatalf("username1 does not has perm foo via request")
+		t.Fatalf("username1 does not have perm foo via request")
 	}
 	b2 := &testBasicAuther{
 		username: "username2",
@@ -376,9 +376,8 @@ func Test_AuthPermsRequestLoadSingleFromFile(t *testing.T) {
 		ok:       true,
 	}
 	if perm := store.HasPermRequest(b2, "foo"); perm {
-		t.Fatalf("username1 does have perm foo via request")
+		t.Fatalf("username2 has perm foo via request")
 	}
-
 }
 
 func Test_AuthPermsEmptyLoadSingle(t *testing.T) {
