@@ -45,10 +45,8 @@ func GenerateCACert(subject pkix.Name, validFor time.Duration, keySize int) ([]b
 }
 
 // GenerateCert generates a new x509 certificate and returns the cert and key as PEM-encoded bytes.
-// The function should take in a subject, a validity period, and a key size. It should optionally
-// take in a parent certificate and key. If a parent certificate and key are provided, the new
-// certificate should be signed by the parent. If no parent certificate and key are provided,
-// the new certificate should be self-signed.
+// If a parent certificate and key are provided, the new certificate is signed by the parent.
+// Otherwise the new certificate is self-signed.
 func GenerateCert(subject pkix.Name, validFor time.Duration, keySize int, parent *x509.Certificate, parentKey any) ([]byte, []byte, error) {
 	// generate a new private key
 	key, err := rsa.GenerateKey(rand.Reader, keySize)
@@ -84,6 +82,8 @@ func GenerateCert(subject pkix.Name, validFor time.Duration, keySize int, parent
 	return certPEM, keyPEM, nil
 }
 
+// GenerateCertIPSAN is like GenerateCert, but also adds the given IP address to the
+// certificate as a Subject Alternative Name.
 func GenerateCertIPSAN(subject pkix.Name, validFor time.Duration, keySize int, parent *x509.Certificate, parentKey any, san net.IP) ([]byte, []byte, error) {
 	// generate a new private key
 	key, err := rsa.GenerateKey(rand.Reader, keySize)
@@ -100,8 +100,6 @@ func GenerateCertIPSAN(subject pkix.Name, validFor time.Duration, keySize int, p
 		KeyUsage:     x509.KeyUsageKeyEncipherment | x509.KeyUsageDigitalSignature,
 		ExtKeyUsage:  []x509.ExtKeyUsage{x509.ExtKeyUsageServerAuth, x509.ExtKeyUsageClientAuth},
 	}
-
-	// generate cert template for new certificate suitable for client verification
 
 	// Add IP SAN to the certificate
 	template.IPAddresses = append(template.IPAddresses, san)
@@ -144,9 +142,6 @@ func GenerateSelfSignedCert(subject pkix.Name, validFor time.Duration, keySize i
 		IsCA:                  true,
 		BasicConstraintsValid: true,
 	}
-
-	// Add IP SAN to the certificate
-	//template.IPAddresses = append(template.IPAddresses, net.ParseIP("127.0.0.1"))
 
 	cert, err := x509.CreateCertificate(rand.Reader, &template, &template, &key.PublicKey, key)
 	if err != nil {
