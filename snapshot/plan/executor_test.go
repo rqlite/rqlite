@@ -175,7 +175,7 @@ func TestExecutor_Checkpoint(t *testing.T) {
 
 	// Test checkpointing when one WAL has already been checkpointed but the plan
 	// still includes it. This could happen if we crash after checkpointing one WAL
-	// but before we checkpointe the second.
+	// but before we checkpoint the second.
 	t.Run("multiple WAL one checkpointed", func(t *testing.T) {
 		tmpDir := t.TempDir()
 

@@ -16,7 +16,7 @@ const (
 	calcCRC32Duration  = "calc_crc32_duration_ms"
 )
 
-// stats captures stats for the Store.
+// stats captures stats for the plan package.
 var stats *expvar.Map
 
 func init() {
@@ -64,7 +64,7 @@ const (
 	// Src is the data file to checksum; Dst is the path for the CRC sidecar file.
 	OpCalcCRC32 OpType = "calc_crc32"
 
-	// OpVerifyDB represents running a databse integrity check.
+	// OpVerifyDB represents running a database integrity check.
 	// Src is the database to check.
 	OpVerifyDB OpType = "verify_db"
 )
@@ -238,7 +238,7 @@ type Visitor interface {
 // Inspector reports, for a single operation, whether that operation's effect is
 // already present on disk -- i.e. whether the operation has already been
 // applied. It is the read-only, query counterpart to Visitor: Visitor performs
-// operations, an Inspector inspects whether they are done. It maye be used to decide
+// operations, an Inspector inspects whether they are done. It may be used to decide
 // whether an interrupted plan has already run to completion before replaying it.
 // The concrete implementation is Checker.
 type Inspector interface {
@@ -327,7 +327,7 @@ func (p *Plan) LastOpDone(c Inspector) (bool, error) {
 	}
 }
 
-// syncFile syncs the given file to disk. Skipped on Windows as it is
+// syncFileMaybe syncs the given file to disk. Skipped on Windows as it is
 // not supported.
 func syncFileMaybe(path string) error {
 	if runtime.GOOS == "windows" {

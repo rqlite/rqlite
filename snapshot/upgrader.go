@@ -22,7 +22,7 @@ const (
 	upgrade8To10Plan = "UPGRADE_8_10_PLAN"
 )
 
-// Upgrade7To8 writes a copy of the 7.x-format Snapshot directory at 'old' to a
+// Upgrade7To8 writes a copy of the 7.x-format Snapshot directory at 'old' to an
 // 8.x-format new Snapshot directory at 'new'. If the upgrade is successful,
 // the 'old' directory is removed before the function returns.
 func Upgrade7To8(old, new string, logger *log.Logger) (retErr error) {
