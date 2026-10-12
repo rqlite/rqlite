@@ -136,7 +136,8 @@ func (c *Chunker) Next() (*proto.LoadChunkRequest, error) {
 		StreamId:    c.streamID,
 		SequenceNum: c.sequenceNum,
 		IsLast:      totalRead < c.chunkSize,
-		Data:        buf.Bytes(),
+		// The buffer goes back to the pool, so the caller gets its own copy.
+		Data: bytes.Clone(buf.Bytes()),
 	}, nil
 }
 
