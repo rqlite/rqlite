@@ -46,9 +46,13 @@ var (
 type SynchronousMode int
 
 const (
+	// SynchronousOff corresponds to PRAGMA synchronous=OFF.
 	SynchronousOff SynchronousMode = iota
+	// SynchronousNormal corresponds to PRAGMA synchronous=NORMAL.
 	SynchronousNormal
+	// SynchronousFull corresponds to PRAGMA synchronous=FULL.
 	SynchronousFull
+	// SynchronousExtra corresponds to PRAGMA synchronous=EXTRA.
 	SynchronousExtra
 )
 

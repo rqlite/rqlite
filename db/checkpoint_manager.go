@@ -40,7 +40,12 @@ func (e *CheckpointInvariantError) Error() string   { return e.msg }
 func (e *CheckpointInvariantError) Retryable() bool { return false }
 
 var (
-	ErrDatabaseCheckpointBusy      = &CheckpointBusyError{msg: "database checkpoint busy"}
+	// ErrDatabaseCheckpointBusy is returned when a checkpoint moved only some
+	// of the WAL pages because a concurrent read blocked it. It is retryable.
+	ErrDatabaseCheckpointBusy = &CheckpointBusyError{msg: "database checkpoint busy"}
+
+	// ErrDatabaseCheckpointInvariant is returned when SQLite reports more
+	// checkpointed pages than the WAL contains. It is not retryable.
 	ErrDatabaseCheckpointInvariant = &CheckpointInvariantError{msg: "database checkpoint invariant violation"}
 )
 

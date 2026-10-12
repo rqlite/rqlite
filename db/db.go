@@ -27,12 +27,20 @@ import (
 )
 
 const (
-	SQLiteHeaderSize      = 32
+	// SQLiteHeaderSize is the number of leading bytes of a SQLite file that
+	// identify it as a SQLite database.
+	SQLiteHeaderSize = 32
+
+	// OptimizeDefault is the PRAGMA optimize mask used for routine optimization.
+	OptimizeDefault = 0xFFFE
+
+	// OptimizeAll is the PRAGMA optimize mask which also runs ANALYZE on all
+	// tables, used the first time a database is optimized.
+	OptimizeAll = 0x10002
+
 	bkDelay               = 50 * time.Millisecond
 	checkpointBusyTimeout = 250 * time.Millisecond
 	durToOpenLog          = 2 * time.Second
-	OptimizeDefault       = 0xFFFE
-	OptimizeAll           = 0x10002
 )
 
 const (
