@@ -91,7 +91,7 @@ func init() {
 		`.show                                         Show the current values for various settings`,
 		`.snapshot [TRAILINGLOGS]                      Request a Raft snapshot and log truncation on connected node`,
 		`.status                                       Show status and diagnostic information for connected node`,
-		`.stepdown [NODEID]                            Instruct the leader to stepdown, optionally specifying new Leader node`,
+		`.stepdown [NODEID]                            Instruct the leader to step down, optionally specifying the new leader node`,
 		`.sysdump FILE                                 Dump system diagnostics to FILE`,
 		`.tables                                       List names of tables`,
 		`.timer [on|off]                               Show setting, or set query timings on or off`,
