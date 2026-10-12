@@ -783,12 +783,16 @@ func (c *Client) BroadcastHWM(ctx context.Context, hwm uint64, creds *proto.Cred
 
 // Stats returns stats on the Client instance
 func (c *Client) Stats() (map[string]any, error) {
+	c.localMu.RLock()
+	localNodeAddr := c.localNodeAddr
+	c.localMu.RUnlock()
+
 	c.poolMu.RLock()
 	defer c.poolMu.RUnlock()
 
 	stats := map[string]any{
 		"timeout":         c.timeout.String(),
-		"local_node_addr": c.localNodeAddr,
+		"local_node_addr": localNodeAddr,
 	}
 
 	if (len(c.pools)) == 0 {

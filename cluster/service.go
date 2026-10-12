@@ -309,6 +309,8 @@ func (s *Service) GetNodeAPIURL() string {
 
 // Stats returns status of the Service.
 func (s *Service) Stats() (map[string]any, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
 	st := map[string]any{
 		"addr":     s.addr.String(),
 		"https":    strconv.FormatBool(s.https),
