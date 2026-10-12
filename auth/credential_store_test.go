@@ -44,10 +44,111 @@ func Test_AuthLoadMalformed(t *testing.T) {
 	}
 }
 
+func Test_AuthLoadMissingUsername(t *testing.T) {
+	const jsonStream = `
+		[
+			{
+				"password": "password1",
+				"perms": ["foo", "bar"]
+			}
+		]
+	`
+
+	store := NewCredentialsStore()
+	if err := store.Load(strings.NewReader(jsonStream)); err == nil {
+		t.Fatalf("expected error for JSON input with missing username")
+	}
+}
+
+func Test_AuthLoadMissingPassword(t *testing.T) {
+	const jsonStream = `
+		[
+			{
+				"username": "username1",
+				"perms": ["foo", "bar"]
+			}
+		]
+	`
+
+	store := NewCredentialsStore()
+	if err := store.Load(strings.NewReader(jsonStream)); err == nil {
+		t.Fatalf("expected error for JSON input with missing password")
+	}
+}
+
+func Test_AuthLoadMissingPerms(t *testing.T) {
+	const jsonStream = `
+		[
+			{
+				"username": "username1",
+				"password": "password1"
+			}
+		]
+	`
+
+	store := NewCredentialsStore()
+	if err := store.Load(strings.NewReader(jsonStream)); err == nil {
+		t.Fatalf("expected error for JSON input with missing perms")
+	}
+}
+
+func Test_AuthLoadEmptyPerms(t *testing.T) {
+	const jsonStream = `
+		[
+			{
+				"username": "username1",
+				"password": "password1",
+				"perms": []
+			}
+		]
+	`
+
+	store := NewCredentialsStore()
+	if err := store.Load(strings.NewReader(jsonStream)); err == nil {
+		t.Fatalf("expected error for JSON input with empty perms")
+	}
+}
+
+// Test_AuthLoadMissingFieldsNotInherited ensures that a field missing from a
+// later entry is rejected, rather than silently taking the value from the
+// previous entry.
+func Test_AuthLoadMissingFieldsNotInherited(t *testing.T) {
+	for _, tc := range []struct {
+		name       string
+		jsonStream string
+	}{
+		{
+			name: "password",
+			jsonStream: `
+		[
+			{"username": "username1", "password": "password1", "perms": ["foo"]},
+			{"username": "username2", "perms": ["bar"]}
+		]
+	`,
+		},
+		{
+			name: "perms",
+			jsonStream: `
+		[
+			{"username": "username1", "password": "password1", "perms": ["foo"]},
+			{"username": "username2", "password": "password2"}
+		]
+	`,
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			store := NewCredentialsStore()
+			if err := store.Load(strings.NewReader(tc.jsonStream)); err == nil {
+				t.Fatalf("expected error for second entry with missing %s", tc.name)
+			}
+		})
+	}
+}
+
 func Test_AuthLoadSingle(t *testing.T) {
 	const jsonStream = `
 		[
-			{"username": "username1", "password": "password1"}
+			{"username": "username1", "password": "password1", "perms": ["all"]}
 		]
 	`
 
@@ -85,8 +186,8 @@ func Test_AuthLoadSingle(t *testing.T) {
 func Test_AuthLoadMultiple(t *testing.T) {
 	const jsonStream = `
 		[
-			{"username": "username1", "password": "password1"},
-			{"username": "username2", "password": "password2"}
+			{"username": "username1", "password": "password1", "perms": ["all"]},
+			{"username": "username2", "password": "password2", "perms": ["all"]}
 		]
 	`
 
@@ -123,13 +224,13 @@ func Test_AuthLoadMultiple(t *testing.T) {
 func Test_AuthLoadSingleRequest(t *testing.T) {
 	const jsonStream = `
 		[
-			{"username": "username1", "password": "password1"}
+			{"username": "username1", "password": "password1", "perms": ["all"]}
 		]
 	`
 
 	store := NewCredentialsStore()
 	if err := store.Load(strings.NewReader(jsonStream)); err != nil {
-		t.Fatalf("failed to load multiple credentials: %s", err.Error())
+		t.Fatalf("failed to load single credential: %s", err.Error())
 	}
 
 	b1 := &testBasicAuther{
@@ -377,61 +478,6 @@ func Test_AuthPermsRequestLoadSingleFromFile(t *testing.T) {
 	}
 	if perm := store.HasPermRequest(b2, "foo"); perm {
 		t.Fatalf("username2 has perm foo via request")
-	}
-}
-
-func Test_AuthPermsEmptyLoadSingle(t *testing.T) {
-	const jsonStream = `
-		[
-			{
-				"username": "username1",
-				"password": "password1",
-				"perms": []
-			}
-		]
-	`
-
-	store := NewCredentialsStore()
-	if err := store.Load(strings.NewReader(jsonStream)); err != nil {
-		t.Fatalf("failed to load single credential: %s", err.Error())
-	}
-
-	if check := store.Check("username1", "password1"); !check {
-		t.Fatalf("single credential not loaded correctly")
-	}
-	if check := store.Check("username1", "wrong"); check {
-		t.Fatalf("single credential not loaded correctly")
-	}
-
-	if perm := store.HasPerm("username1", "foo"); perm {
-		t.Fatalf("wrong has foo perm")
-	}
-}
-
-func Test_AuthPermsNilLoadSingle(t *testing.T) {
-	const jsonStream = `
-		[
-			{
-				"username": "username1",
-				"password": "password1"
-			}
-		]
-	`
-
-	store := NewCredentialsStore()
-	if err := store.Load(strings.NewReader(jsonStream)); err != nil {
-		t.Fatalf("failed to load single credential: %s", err.Error())
-	}
-
-	if check := store.Check("username1", "password1"); !check {
-		t.Fatalf("single credential not loaded correctly")
-	}
-	if check := store.Check("username1", "wrong"); check {
-		t.Fatalf("single credential not loaded correctly")
-	}
-
-	if perm := store.HasPerm("username1", "foo"); perm {
-		t.Fatalf("wrong has foo perm")
 	}
 }
 

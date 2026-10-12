@@ -4,6 +4,7 @@ package auth
 
 import (
 	"encoding/json"
+	"fmt"
 	"io"
 	"os"
 )
@@ -56,9 +57,9 @@ type BasicAuther interface {
 
 // Credential represents authentication and authorization configuration for a single user.
 type Credential struct {
-	Username string   `json:"username,omitempty"`
+	Username string   `json:"username"`
 	Password string   `json:"password,omitempty"`
-	Perms    []string `json:"perms,omitempty"`
+	Perms    []string `json:"perms"`
 }
 
 // CredentialsStore stores authentication and authorization information for all users.
@@ -96,11 +97,24 @@ func (c *CredentialsStore) Load(r io.Reader) error {
 		return err
 	}
 
-	var cred Credential
 	for dec.More() {
+		// Decode into a fresh Credential each time so a field missing from one
+		// entry is not silently inherited from the previous entry.
+		var cred Credential
 		err := dec.Decode(&cred)
 		if err != nil {
 			return err
+		}
+		if cred.Username == "" {
+			return fmt.Errorf("empty username")
+		}
+		// AllUsers grants permissions to every request, including anonymous
+		// ones, and is never password-checked, so it carries no password.
+		if cred.Username != AllUsers && cred.Password == "" {
+			return fmt.Errorf("empty password for username %s", cred.Username)
+		}
+		if len(cred.Perms) == 0 {
+			return fmt.Errorf("no permissions specified for username %s", cred.Username)
 		}
 		c.store[cred.Username] = cred.Password
 		c.perms[cred.Username] = make(map[string]bool, len(cred.Perms))
