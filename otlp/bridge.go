@@ -54,11 +54,12 @@ func NewBridge() *Bridge {
 }
 
 // Produce returns the current state of all expvar metrics in OpenTelemetry
-// form. Each key in each top-level expvar map is emitted as a metric named
-// rqlite.<map>.<key>. The expvar registry is walked on every call, so maps
-// and keys registered after the Bridge is created are picked up
-// automatically. It never returns an error, since doing so would suppress
-// the export of all other metrics gathered in the same collection cycle.
+// form. Each Int or Float key in each top-level expvar map is emitted as a
+// metric named rqlite.<map>.<key>; keys holding other types are skipped. The
+// expvar registry is walked on every call, so maps and keys registered after
+// the Bridge is created are picked up automatically. It never returns an
+// error, since doing so would suppress the export of all other metrics
+// gathered in the same collection cycle.
 func (b *Bridge) Produce(_ context.Context) ([]metricdata.ScopeMetrics, error) {
 	now := time.Now()
 	var metrics []metricdata.Metrics

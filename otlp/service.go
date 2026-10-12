@@ -22,6 +22,8 @@ import (
 	"google.golang.org/grpc/credentials"
 )
 
+// stopTimeout bounds the final export of metrics performed when the Service
+// is stopped.
 const stopTimeout = 5 * time.Second
 
 // Service periodically pushes rqlite metrics, in OTLP format, to an
