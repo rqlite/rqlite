@@ -30,7 +30,7 @@ func TestParseHostEnv(t *testing.T) {
 			expectedPort:     4002,
 		},
 		{
-			name:             "port defaults to 4001",
+			name:             "no port given",
 			envValue:         "http://localhost",
 			hasErr:           false,
 			expectedProtocol: "http",
