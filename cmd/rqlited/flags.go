@@ -117,7 +117,7 @@ func (c *Config) Validate() error {
 
 	hadv, _, err := net.SplitHostPort(c.HTTPAdv)
 	if err != nil {
-		return errors.New("HTTP advertised HTTP address not valid")
+		return errors.New("HTTP advertised address not valid")
 	}
 	if addr := net.ParseIP(hadv); addr != nil && addr.IsUnspecified() {
 		return fmt.Errorf("advertised HTTP address is not routable (%s), specify it via -%s or -%s",
