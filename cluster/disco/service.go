@@ -46,8 +46,13 @@ type Store interface {
 type Suffrage int
 
 const (
+	// SuffrageUnknown means the node's suffrage has not been determined.
 	SuffrageUnknown Suffrage = iota
+
+	// Voter means the node is a voting member of the cluster.
 	Voter
+
+	// NonVoter means the node is a non-voting (read-only) member of the cluster.
 	NonVoter
 )
 
