@@ -238,7 +238,7 @@ func buildConnectHook(cfg *DriverConfig) func(conn *sqlite3.SQLiteConn) error {
 type PreUpdateHookCallback func(ev *command.CDCEvent) error
 
 // SQLite returns the SQLite preupdate hook which converts the SQLite hook data to rqlite
-// hook data, and passes it to hook If tblRe is non-nil only rows of tables whose names match
+// hook data, and passes it to hook. If tblRe is non-nil only rows of tables whose names match
 // it are passed to hook. If rowIDsOnly is true the events passed to hook contain row IDs but
 // no row data.
 func (hook *PreUpdateHookCallback) SQLite(tblRe *regexp.Regexp, rowIDsOnly bool) func(sqlite3.SQLitePreUpdateData) {
@@ -327,7 +327,7 @@ func (hook *PreUpdateHookCallback) SQLite(tblRe *regexp.Regexp, rowIDsOnly bool)
 // in the database.
 type UpdateHookCallback func(ev *command.UpdateHookEvent) error
 
-// SQLite the SQLite update hook which converts the SQLite hook data to rqlite hook
+// SQLite returns the SQLite update hook which converts the SQLite hook data to rqlite hook
 // data, and passes it to hook.
 func (hook *UpdateHookCallback) SQLite() func(int, string, string, int64) {
 	// Convert from SQLite hook data to rqlite hook data.

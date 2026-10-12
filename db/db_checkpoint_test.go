@@ -291,7 +291,7 @@ func Test_WALDatabaseCheckpointOKDelete(t *testing.T) {
 	}
 }
 
-// Test_WALDatabaseCheckpoint_Restart tests that a checkpoint restart
+// Test_WALDatabaseCheckpoint_RestartTruncate tests that a checkpoint restart
 // returns no error and that the WAL file is not modified even though
 // all the WAL pages are copied to the database file. Then Truncate
 // is called and the WAL file is deleted.
