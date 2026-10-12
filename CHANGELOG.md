@@ -10,6 +10,7 @@ This release features an addition to the API. In the event of an error there is 
 
 ### Implementation changes and bug fixes
 - [PR #2862](https://github.com/rqlite/rqlite/pull/2862), [PR #2863](https://github.com/rqlite/rqlite/pull/2863), [PR #2866](https://github.com/rqlite/rqlite/pull/2866): Upgrade dependencies via `go get`.
+- [PR #2908](https://github.com/rqlite/rqlite/pull/2908): rqlite shell requires node ID for _promote_ and _demote_.
 - [PR #2869](https://github.com/rqlite/rqlite/pull/2869): Optimize gzip memory usage via `sync.Pool`.
 - [PR #2870](https://github.com/rqlite/rqlite/pull/2870): CDC: Always answer snapshot sync requests.
 - [PR #2871](https://github.com/rqlite/rqlite/pull/2871): CDC stats returns promptly on closed queue.
