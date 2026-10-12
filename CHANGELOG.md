@@ -21,6 +21,7 @@ This release features an addition to the API. In the event of an error there is 
 - [PR #2892](https://github.com/rqlite/rqlite/pull/2892): Small clean-ups in `rqbench`.
 - [PR #2899](https://github.com/rqlite/rqlite/pull/2899): No need to seek to 0 on new reader.
 - [PR #2934](https://github.com/rqlite/rqlite/pull/2934): Simplify some logic in auth module.
+- [PR #2929](https://github.com/rqlite/rqlite/pull/2929): Don't use magic string in GCS code.
 - [PR #2879](https://github.com/rqlite/rqlite/pull/2879), [PR #2880](https://github.com/rqlite/rqlite/pull/2880), [PR #2883](https://github.com/rqlite/rqlite/pull/2883), [PR #2878](https://github.com/rqlite/rqlite/pull/2878), [PR #2885](https://github.com/rqlite/rqlite/pull/2885), [PR #2886](https://github.com/rqlite/rqlite/pull/2886), [PR #2891](https://github.com/rqlite/rqlite/pull/2891), [PR #2896](https://github.com/rqlite/rqlite/pull/2896): Fix typos and missing details in source code and comments.
 
 ## v10.5.3 (October 7th 2026)
