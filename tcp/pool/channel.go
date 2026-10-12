@@ -110,7 +110,7 @@ func (c *channelPool) Stats() (map[string]any, error) {
 	conns, _ := c.getConnsAndFactory()
 	return map[string]any{
 		"idle":                 len(conns),
-		"open_connections":     c.nOpenConns,
+		"open_connections":     atomic.LoadInt64(&c.nOpenConns),
 		"max_open_connections": cap(conns),
 	}, nil
 }
