@@ -41,7 +41,7 @@ func Test_Sync_SingleChannel_Succeeds(t *testing.T) {
 		t.Fatalf("Sync() returned unexpected error: %v", err)
 	}
 	if total != 1 || ok != 1 {
-		t.Fatalf("Sync() returned total=%d, ok=%d; want 1,0", total, ok)
+		t.Fatalf("Sync() returned total=%d, ok=%d; want 1,1", total, ok)
 	}
 }
 
