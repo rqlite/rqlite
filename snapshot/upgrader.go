@@ -195,7 +195,7 @@ func Upgrade8To10(old, new string, logger *log.Logger) (retErr error) {
 	planPath := filepath.Join(filepath.Dir(new), upgrade8To10Plan)
 
 	// Remove incomplete plan file from an interrupted write.
-	fsutil.Remove(planPath + ".tmp")
+	fsutil.Remove(tmpName(planPath))
 
 	// Check for existing plan (crash recovery).
 	if fsutil.FileExists(planPath) {
