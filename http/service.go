@@ -39,11 +39,6 @@ import (
 
 const kubernetesServiceHostEnv = "KUBERNETES_SERVICE_HOST"
 
-type ResultsError interface {
-	Error() string
-	IsAuthorized() bool
-}
-
 // Store is the interface the Raft-based database must implement.
 type Store interface {
 	// Leader returns the Leader of the cluster
