@@ -22,7 +22,8 @@ var (
 	ErrInvalidInterval = errors.New("invalid interval")
 )
 
-// Duration is a wrapper around time.Duration that allows us to unmarshal
+// Duration is a wrapper around time.Duration that unmarshals from either a
+// Go duration string or a number of nanoseconds.
 type Duration time.Duration
 
 // MarshalJSON marshals the duration as a string

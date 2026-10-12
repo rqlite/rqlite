@@ -311,7 +311,7 @@ func Test_UploaderStats(t *testing.T) {
 }
 
 // mockStorageClient implements StorageClient and in its default configuration
-// always returns an error for CurrentSum.
+// always returns an error for CurrentID.
 type mockStorageClient struct {
 	uploadFn    func(ctx context.Context, reader io.Reader, id string) error
 	currentIDFn func(ctx context.Context) (string, error)
@@ -328,7 +328,7 @@ func (mc *mockStorageClient) CurrentID(ctx context.Context) (string, error) {
 	if mc.currentIDFn != nil {
 		return mc.currentIDFn(ctx)
 	}
-	return "", fmt.Errorf("no current sum")
+	return "", fmt.Errorf("no current ID")
 }
 
 func (mc *mockStorageClient) String() string {
@@ -336,8 +336,8 @@ func (mc *mockStorageClient) String() string {
 }
 
 // mockDataProvider implements DataProvider and in its default configuration
-// always returns the current time for LastModified and writes the data it is
-// provided to the file specified by Provide.
+// always returns 1 for LastIndex and writes the data it is
+// provided to the writer passed to Provide.
 type mockDataProvider struct {
 	data        string
 	err         error
