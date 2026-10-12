@@ -272,7 +272,7 @@ func Test_StoreCDC_Events_MultiStatementIndex(t *testing.T) {
 		t.Fatalf("failed to create table: %s", err.Error())
 	}
 
-	// One bulk request, no transaction, so each committed seperately.
+	// One bulk request, no transaction, so each committed separately.
 	er = executeRequestFromStrings([]string{
 		`INSERT INTO foo(id) VALUES(1)`,
 		`INSERT INTO foo(id) VALUES(2)`,

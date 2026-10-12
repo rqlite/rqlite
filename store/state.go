@@ -78,7 +78,8 @@ func (p *PragmaCheckRequest) Check() error {
 // if a read is stale requires timestamps for both.
 //
 // lastHeartbeatTime: last time we received a heartbeat from the Leader.
-// lastAppendEntriesTime: last time we receievd an AppendEntries request from the Leader.
+// lastAppendEntriesTime: last time we received an AppendEntries request from the Leader.
+// leaderCommitIndex: latest commit index received from the Leader.
 // lastAppliedIndex: index currently applied to the FSM.
 // lastAppliedAtTime: time the currently applied index was actually applied.
 // freshness: freshness window
@@ -119,7 +120,7 @@ func IsStaleRead(
 		return false
 	}
 
-	// We've haven't yet applied the leader's latest commit index, but was the currently
+	// We haven't yet applied the leader's latest commit index, but was the currently
 	// applied index applied within the freshness window?
 	return time.Since(lastAppliedAtTime).Nanoseconds() > freshness
 }

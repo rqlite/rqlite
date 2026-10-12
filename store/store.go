@@ -61,7 +61,7 @@ var (
 	// only operation.
 	ErrNotSingleNode = errors.New("not single-node")
 
-	// ErrStaleRead is returned if the executing the query would violate the
+	// ErrStaleRead is returned if executing the query would violate the
 	// requested freshness.
 	ErrStaleRead = errors.New("stale read")
 
@@ -355,7 +355,7 @@ type Store struct {
 	snapshotWClose chan struct{}
 	snapshotWDone  chan struct{}
 
-	// Snapshotting synchronization and and management
+	// Snapshotting synchronization and management
 	snapshotSync *rsync.SyncChannels
 	snapshotCAS  *rsync.CheckAndSet
 
@@ -638,7 +638,7 @@ func (s *Store) Open() (retErr error) {
 		}
 		mt, sz, err := fsutil.ModTimeSize(s.dbPath)
 		if err != nil {
-			s.logger.Printf("failed to read mod time from clean snapshot (%s), performing full restore", err)
+			s.logger.Printf("failed to read mod time and size of database file (%s), performing full restore", err)
 			return nil
 		}
 
@@ -681,7 +681,7 @@ func (s *Store) Open() (retErr error) {
 				s.logger.Fatal("removed clean snapshot marker file. Aborting now, but restarting is safe and can be attempted")
 			}
 
-			// Whatever happens, unblock snapshoting. This is critical because we
+			// Whatever happens, unblock snapshotting. This is critical because we
 			// locked snapshotting before this goroutine launched.
 			defer s.snapshotCAS.End()
 			if fp.CRC32 == 0 {
@@ -691,7 +691,7 @@ func (s *Store) Open() (retErr error) {
 			if err != nil {
 				cleanupAndExit(fmt.Sprintf("failed to calculate CRC32 of database file during clean snapshot check: %s", err))
 			}
-			if sum != fp.CRC32 { // Handle zero CRC32 for backward compatibility.
+			if sum != fp.CRC32 {
 				if s.crcBadHandler != nil {
 					// This is a path for test-coverage reasons only.
 					s.crcBadHandler(fp.CRC32, sum)
@@ -1086,7 +1086,7 @@ func (s *Store) DBAppliedIndex() uint64 {
 }
 
 // AppliedIndex returns the index of the last Raft log entry sent to the FSM
-// by the Raft system. This does not mean that the log entry has actaully been
+// by the Raft system. This does not mean that the log entry has actually been
 // applied to the database.
 func (s *Store) AppliedIndex() uint64 {
 	return s.raft.AppliedIndex()
@@ -1203,7 +1203,7 @@ func (s *Store) LeaderAddr() (string, error) {
 }
 
 // LeaderID returns the node ID of the Raft leader. Returns a
-// blank string if there is no leader, or an error.
+// blank string if there is no leader or if the Store is not open.
 func (s *Store) LeaderID() (string, error) {
 	if !s.open.Is() {
 		return "", nil
@@ -1827,7 +1827,7 @@ func (s *Store) Backup(ctx context.Context, br *proto.BackupRequest, dst io.Writ
 		} else {
 			// If there is data in the WAL we need to do a snapshot to ensure that the
 			// backup we take of the main database file is up-to-date. Doing this check
-			// is an optimization, it's not crticial that it is 100% correct as we still
+			// is an optimization, it's not critical that it is 100% correct as we still
 			// check for the "nothing new to snapshot" error anyway.
 			sz, err := s.db.WALSize()
 			if err != nil {
@@ -2702,7 +2702,7 @@ func (s *Store) fsmSnapshot() (fSnap raft.FSMSnapshot, retErr error) {
 		return s.createSnapshotFingerprint(index, term)
 	}
 	if dueNext.IsFull() {
-		// We need to start the snapshoting process over again, starting with a full copy of the SQLite
+		// We need to start the snapshotting process over again, starting with a full copy of the SQLite
 		// database. This happens when a node is snapshotting for the very first time, or in certain
 		// crash scenarios where we've truncated the WAL into the database, but haven't successfully
 		// completed a snapshot, so the database is modified but the WAL is not present to be snapshotted.
@@ -2735,7 +2735,7 @@ func (s *Store) fsmSnapshot() (fSnap raft.FSMSnapshot, retErr error) {
 
 		// Write the compacted WAL to the WAL staging directory. The Snapshotting process
 		// will atomically move this entire directory. If it fails to do so, then this WAL
-		// file wil be packaged as part of the next Snapshot and the next WAL file. If the
+		// file will be packaged as part of the next Snapshot and the next WAL file. If the
 		// staging directory is moved, but the snapshotting later errors, then FullNeeded
 		// will be set because we've "lost" a WAL file. If the staging directory is moved,
 		// but the system then crashes, then the lack of the clean_snapshot flag will force
@@ -2771,7 +2771,7 @@ func (s *Store) fsmSnapshot() (fSnap raft.FSMSnapshot, retErr error) {
 		// the Snapshot didn't get to complete, the database fingerprint will not be updated, so on
 		// restart the database will be replaced by that in the Snapshot. But by marking the WAL file
 		// as valid, if the snapshotting processes errors later (Persist fails for example), we can
-		// continue to use the compacted WALfile in the Staging directory for the next snapshot attempt,
+		// continue to use the compacted WAL file in the Staging directory for the next snapshot attempt,
 		// which will be faster than performing a full snapshot. All this means that we avoid breaking the
 		// series of incremental snapshots. The next Snapshot will comprise of two WAL files in that case.
 		if err := walWriter.Close(); err != nil {
@@ -2885,14 +2885,14 @@ func (s *Store) fsmRestore(rc io.ReadCloser) (retErr error) {
 	}
 
 	// We're about to enter a point of no-return. We're going to swap in the incoming
-	// database with the one on disk. If an error is encountered after swapping the
-	// and simply returned that error to the Raft subsystem, Raft would consider the
+	// database with the one on disk. If an error is encountered after swapping, and we
+	// simply returned that error to the Raft subsystem, Raft would consider the
 	// Restore as FAILED, but the database on disk would be wrong. We could attempt
 	// to reverse the swap, but a simpler, easier to ensure it's correct, solution
 	// is to just exit hard and let the node restart. It will then do a full restore
 	// from Raft.
 	//
-	// Doing it like this protects agains future changes in the code by catching the
+	// Doing it like this protects against future changes in the code by catching the
 	// error in the defer handler.
 	hardExitRequired = true
 

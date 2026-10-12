@@ -201,7 +201,7 @@ func Test_SingleNodeProvideLastIndex(t *testing.T) {
 		t.Fatalf("failed to get last index: %s", err.Error())
 	}
 	if newLI == lm {
-		t.Fatalf("last index should changed even with constraint violation")
+		t.Fatalf("last index should have changed even with constraint violation")
 	}
 	lm = newLI
 
