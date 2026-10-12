@@ -93,6 +93,7 @@ func UnzipToDir(path, dir string) error {
 
 			rc, err := f.Open()
 			if err != nil {
+				outFile.Close()
 				return err
 			}
 

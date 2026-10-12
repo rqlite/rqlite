@@ -20,6 +20,7 @@ func Gzip(file string) (string, error) {
 	if err != nil {
 		return "", err
 	}
+	defer tmpFd.Close()
 
 	gz := gzip.NewWriter(tmpFd)
 	_, err = io.Copy(gz, f)
