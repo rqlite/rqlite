@@ -186,11 +186,12 @@ func queryWithClient(output io.Writer, client *cl.Client, timer, blobArray bool,
 		hcr = innerErr
 	}
 
+	defer resp.Body.Close()
+
 	response, err := io.ReadAll(resp.Body)
 	if err != nil {
 		return err
 	}
-	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
 		return fmt.Errorf("server responded with %s: %s", resp.Status, response)
