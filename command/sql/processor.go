@@ -37,9 +37,11 @@ func ResetStats() {
 
 // Process processes the given SQL statements, rewriting them if necessary. If
 // random-rewriting is enabled, calls to the RANDOM() function are replaced with
-// an actual random value. If a statement contains a RETURNING clause, the
-// statement is marked as a query, so that the result set can be returned to the
-// client.
+// an actual random value. If time-rewriting is enabled, 'now' arguments to the
+// time functions are replaced with the current Julian day. If a statement
+// contains a RETURNING clause, the statement is marked as a query, so that the
+// result set can be returned to the client. If a statement is an EXPLAIN, it is
+// marked as such.
 func Process(stmts []*proto.Statement, rwrand, rwtime bool) (retErr error) {
 	defer func() {
 		if r := recover(); r != nil {
@@ -144,7 +146,9 @@ func NewRewriter() *Rewriter {
 	}
 }
 
-// Do rewrites the provided statement. If the statement is rewritten, the second return value is true.
+// Do rewrites the provided statement. The second return value is true if the
+// statement was rewritten, and the third is true if it contains a RETURNING
+// clause.
 func (rw *Rewriter) Do(stmt sql.Statement) (sql.Statement, bool, bool, error) {
 	rw.modified = false
 	node, err := sql.Walk(rw, stmt)
@@ -154,6 +158,8 @@ func (rw *Rewriter) Do(stmt sql.Statement) (sql.Statement, bool, bool, error) {
 	return node.(sql.Statement), rw.modified, rw.returning, nil
 }
 
+// Visit implements sql.Visitor. It is called for each node in the statement
+// before its children are visited, and may replace the node.
 func (rw *Rewriter) Visit(node sql.Node) (w sql.Visitor, n sql.Node, err error) {
 	retNode := node
 
@@ -214,6 +220,8 @@ func (rw *Rewriter) Visit(node sql.Node) (w sql.Visitor, n sql.Node, err error) 
 	return rw, retNode, nil
 }
 
+// VisitEnd implements sql.Visitor. It is called for each node after its
+// children have been visited.
 func (rw *Rewriter) VisitEnd(node sql.Node) (sql.Node, error) {
 	switch node.(type) {
 	case *sql.OrderingTerm:
