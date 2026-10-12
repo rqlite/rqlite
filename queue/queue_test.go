@@ -95,8 +95,8 @@ func Test_MergeQueuedObjects(t *testing.T) {
 		if len(r.flushChans) != len(tt.exp.flushChans) {
 			t.Fatalf("incorrect number of flush channels for test %d", i)
 		}
-		for i := range r.flushChans {
-			if r.flushChans[i] != tt.exp.flushChans[i] {
+		for j := range r.flushChans {
+			if r.flushChans[j] != tt.exp.flushChans[j] {
 				t.Fatalf("wrong channel for test %d", i)
 			}
 		}
