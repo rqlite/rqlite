@@ -12,7 +12,6 @@ import (
 	"github.com/rqlite/rqlite/v10/command/proto"
 	"github.com/rqlite/rqlite/v10/internal/random"
 	"github.com/rqlite/sql"
-	rsql "github.com/rqlite/sql"
 )
 
 const (
@@ -57,7 +56,7 @@ func Process(stmts []*proto.Statement, rwrand, rwtime bool) (retErr error) {
 			!ContainsExplain(lowered) {
 			continue
 		}
-		parsed, err := rsql.NewParser(strings.NewReader(stmts[i].Sql)).ParseStatement()
+		parsed, err := sql.NewParser(strings.NewReader(stmts[i].Sql)).ParseStatement()
 		if err != nil {
 			continue
 		}
