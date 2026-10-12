@@ -101,6 +101,7 @@ func (n *Node) MarshalJSON() ([]byte, error) {
 	})
 }
 
+// Nodes is a slice of Node pointers, sortable by node ID.
 type Nodes []*Node
 
 func (n Nodes) Len() int           { return len(n) }
