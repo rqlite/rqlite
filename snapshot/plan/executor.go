@@ -124,12 +124,7 @@ func (e *Executor) WriteMeta(dir string, data []byte) error {
 		}
 		return err
 	}
-	fh, err := os.Open(path)
-	if err != nil {
-		return err
-	}
-	defer fh.Close()
-	return syncFileMaybe(fh.Name())
+	return syncFileMaybe(path)
 }
 
 // MkdirAll creates a directory and all necessary parents. It is idempotent:
