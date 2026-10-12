@@ -217,7 +217,7 @@ const (
 	// it wasn't served by this node.
 	ServedByHTTPHeader = "X-RQLITE-SERVED-BY"
 
-	// StreamErrorHeader is the trailing HTTP header use to report
+	// StreamErrorHeader is the trailing HTTP header used to report
 	// any error that occurs while streaming data to a client.
 	StreamErrorHeader = "X-STREAM-ERROR"
 
@@ -301,7 +301,7 @@ type Service struct {
 	CACertFile             string // Path to x509 CA certificate used to verify certificates.
 	CertFile               string // Path to server's own x509 certificate.
 	KeyFile                string // Path to server's own x509 private key.
-	ClientVerify           bool   // Whether client certificates should verified.
+	ClientVerify           bool   // Whether client certificates should be verified.
 	ClientVerifyCommonName string // If non-empty, required Common Name on client certificates.
 	certReloader           *rtls.CertReloader
 	tlsConfig              *tls.Config
@@ -1778,7 +1778,7 @@ func (s *Service) Addr() net.Addr {
 }
 
 // DoRedirect checks if the request is a redirect, and if so, performs the redirect.
-// Returns true caller can consider the request handled. Returns false if the request
+// Returns true if the caller can consider the request handled. Returns false if the request
 // was not a redirect and the caller should continue processing the request.
 func (s *Service) DoRedirect(w http.ResponseWriter, r *http.Request, qp QueryParams) bool {
 	if !qp.Redirect() {
