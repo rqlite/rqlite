@@ -42,9 +42,10 @@ func ZipHasSubdirectories(path string) (bool, error) {
 
 	// Iterate through each file in the ZIP archive
 	for _, f := range r.File {
-		if f.FileInfo().IsDir() ||
-			len(f.Name) > 0 && (f.Name[len(f.Name)-1] == '/' ||
-				len(f.Name) > 0 && f.Name != filepath.Base(f.Name)) {
+		if f.FileInfo().IsDir() {
+			return true, nil
+		}
+		if f.Name != "" && (strings.HasSuffix(f.Name, "/") || f.Name != filepath.Base(f.Name)) {
 			return true, nil
 		}
 	}
