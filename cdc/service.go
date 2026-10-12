@@ -24,6 +24,8 @@ const (
 	leaderChanLen = 5 // Support any fast back-to-back leadership changes.
 
 	retryForever = -1
+
+	fifoRetryDelay = time.Second // Delay between attempts to write a batch to the FIFO.
 )
 
 const (
@@ -411,19 +413,34 @@ func (s *Service) mainLoop() {
 
 			b, err := cdcjson.MarshalToEnvelopeJSON(s.serviceID, s.nodeID, true, req.Objects)
 			if err != nil {
-				s.logger.Printf("error marshalling batch for FIFO: %v", err)
+				s.logger.Printf("error marshalling batch for FIFO, dropping it: %v", err)
+				req.Close()
 				continue
 			}
 
 			// Compress the marshalled data before enqueuing to FIFO
 			compressedData, err := flate.Compress(b)
 			if err != nil {
-				s.logger.Printf("error compressing batch for FIFO: %v", err)
+				s.logger.Printf("error compressing batch for FIFO, dropping it: %v", err)
+				req.Close()
 				continue
 			}
 
-			if err := s.fifo.Enqueue(&Event{Index: hiIdx, Data: compressedData}); err != nil {
-				s.logger.Printf("error writing batch to FIFO: %v", err)
+			// Closing the request tells anyone waiting on a flush that the
+			// batch is durable, so keep trying until it is.
+			for {
+				err := s.fifo.Enqueue(&Event{Index: hiIdx, Data: compressedData})
+				if err == nil {
+					break
+				}
+				s.logger.Printf("error writing batch to FIFO, will retry: %v", err)
+				t := time.NewTimer(fifoRetryDelay)
+				select {
+				case <-t.C:
+				case <-s.done:
+					t.Stop()
+					return
+				}
 			}
 			req.Close()
 
@@ -438,7 +455,39 @@ func (s *Service) mainLoop() {
 // is running on the leader or a follower.
 func (s *Service) writeToBatcher() {
 	defer s.wg.Done()
+
+	// syncCh is the snapshot sync request waiting to be answered, if any.
+	var syncCh chan struct{}
 	for {
+		if syncCh != nil && len(s.in) == 0 {
+			// Every event that was queued ahead of the sync request is now
+			// in the batcher, so the flush cannot overtake any of them. No
+			// new events arrive during a sync, as the Store does not apply
+			// log entries while it is snapshotting.
+			//
+			// The request is acknowledged only once the flush is known to
+			// have reached the FIFO. Otherwise the Store times out waiting
+			// and abandons the snapshot, keeping the log entries whose
+			// events are not yet durable.
+			stats.Add(numSnapshotSync, 1)
+			evg := &proto.CDCIndexedEventGroup{
+				Flush: true,
+			}
+			fc := make(queue.FlushChannel)
+			if _, err := s.batcher.WriteOne(evg, fc); err != nil {
+				s.logger.Printf("error writing CDC flush event to batcher: %v", err)
+			} else {
+				s.batcher.Flush()
+				select {
+				case <-fc: // The flushed batch is in the FIFO.
+					close(syncCh) // Snapshotting can proceed now.
+				case <-s.done: // Shutting down before the flush completed.
+				}
+			}
+			syncCh = nil
+			continue
+		}
+
 		select {
 		case o := <-s.in:
 			if o == nil {
@@ -461,26 +510,10 @@ func (s *Service) writeToBatcher() {
 				stats.Add(numBatcherEventsWrite, int64(len(o.Events)))
 			}
 
-		case ch := <-s.snapshotCh:
-			stats.Add(numSnapshotSync, 1)
-			func() {
-				defer close(ch) // Snapshotting can proceed once we return.
-
-				evg := &proto.CDCIndexedEventGroup{
-					Flush: true,
-				}
-				fc := make(queue.FlushChannel)
-				if _, err := s.batcher.WriteOne(evg, fc); err != nil {
-					s.logger.Printf("error writing CDC flush event to batcher: %v", err)
-					return
-				}
-
-				s.batcher.Flush()
-				select {
-				case <-fc: // Wait for CDC to write to BoltDB.
-				case <-s.done: // Or detect we're shutting down.
-				}
-			}()
+		case syncCh = <-s.snapshotCh:
+			// Answered above, once any queued events have been drained. A
+			// further request can only arrive after the Store has given up
+			// waiting on the previous one, so replacing it is safe.
 		case <-s.done:
 			return
 		}

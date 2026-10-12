@@ -229,9 +229,67 @@ func Test_ServiceSingleEvent_SnapshotSync(t *testing.T) {
 	}
 }
 
+// Test_ServiceSnapshotSync_QueuedEvents tests that a snapshot sync is not
+// acknowledged until every event already queued on the service's input
+// channel is in the FIFO. The flush marker must not overtake those events.
+func Test_ServiceSnapshotSync_QueuedEvents(t *testing.T) {
+	ResetStats()
+
+	cl := &mockCluster{}
+
+	cfg := DefaultConfig()
+	cfg.Endpoint = "stdout"
+	cfg.MaxBatchSz = 1000
+	cfg.MaxBatchDelay = 30 * time.Second // Only a flush moves events to the FIFO.
+	in := make(chan *proto.CDCIndexedEventGroup, 100)
+	svc, err := NewService(
+		"node1",
+		t.TempDir(),
+		cl,
+		in,
+		cfg,
+	)
+	if err != nil {
+		t.Fatalf("failed to create service: %v", err)
+	}
+
+	// Queue events on the input channel before the service runs, so they are
+	// all waiting when the snapshot sync request arrives.
+	const numEvents = 100
+	for i := 1; i <= numEvents; i++ {
+		in <- &proto.CDCIndexedEventGroup{
+			Index: uint64(i),
+			Events: []*proto.CDCEvent{
+				{
+					Op:       proto.CDCEvent_INSERT,
+					Table:    "foo",
+					NewRowId: int64(i),
+				},
+			},
+		}
+	}
+
+	if err := svc.Start(); err != nil {
+		t.Fatalf("failed to start service: %v", err)
+	}
+	defer svc.Stop()
+
+	if err := cl.RequestSnapshotSync(2 * time.Second); err != nil {
+		t.Fatalf("snapshot sync did not complete: %v", err)
+	}
+	idx, err := svc.fifo.HighestKey()
+	if err != nil {
+		t.Fatalf("failed to get FIFO highest key: %v", err)
+	}
+	if idx != numEvents {
+		t.Fatalf("expected FIFO highest key to be %d after snapshot sync, got %d", numEvents, idx)
+	}
+}
+
 // Test_ServiceSnapshotSync_BatcherClosed tests that a snapshot sync request is
-// always answered, even when the service cannot flush its batcher. Otherwise
-// the Store would block snapshotting until its sync timeout expires.
+// not acknowledged when the service cannot flush its batcher. The Store then
+// times out and abandons the snapshot, rather than truncating log entries
+// whose events are not in the FIFO.
 func Test_ServiceSnapshotSync_BatcherClosed(t *testing.T) {
 	ResetStats()
 
@@ -258,8 +316,64 @@ func Test_ServiceSnapshotSync_BatcherClosed(t *testing.T) {
 	// Close the batcher so the flush marker cannot be written to it.
 	svc.batcher.Close()
 
-	if err := cl.RequestSnapshotSync(1 * time.Second); err != nil {
-		t.Fatalf("snapshot sync did not complete: %v", err)
+	if err := cl.RequestSnapshotSync(300 * time.Millisecond); err == nil {
+		t.Fatalf("snapshot sync acknowledged although batcher could not be flushed")
+	}
+}
+
+// Test_ServiceSnapshotSync_FIFOWriteFails tests that a snapshot sync request
+// is not acknowledged while the flushed batch cannot be written to the FIFO,
+// and is not acknowledged by the service stopping either.
+func Test_ServiceSnapshotSync_FIFOWriteFails(t *testing.T) {
+	ResetStats()
+
+	cl := &mockCluster{}
+
+	cfg := DefaultConfig()
+	cfg.Endpoint = "stdout"
+	in := make(chan *proto.CDCIndexedEventGroup, 100)
+	svc, err := NewService(
+		"node1",
+		t.TempDir(),
+		cl,
+		in,
+		cfg,
+	)
+	if err != nil {
+		t.Fatalf("failed to create service: %v", err)
+	}
+	if err := svc.Start(); err != nil {
+		t.Fatalf("failed to start service: %v", err)
+	}
+	defer svc.Stop()
+
+	// Close the FIFO so that nothing can be persisted, then give the
+	// service an event that will need persisting.
+	svc.fifo.Close()
+	in <- &proto.CDCIndexedEventGroup{
+		Index: 1,
+		Events: []*proto.CDCEvent{
+			{
+				Op:       proto.CDCEvent_INSERT,
+				Table:    "foo",
+				NewRowId: 1,
+			},
+		},
+	}
+
+	errCh := make(chan error, 1)
+	go func() {
+		errCh <- cl.RequestSnapshotSync(2 * time.Second)
+	}()
+	select {
+	case err := <-errCh:
+		t.Fatalf("snapshot sync acknowledged although FIFO write failed: %v", err)
+	case <-time.After(300 * time.Millisecond):
+	}
+
+	svc.Stop()
+	if err := <-errCh; err == nil {
+		t.Fatalf("snapshot sync acknowledged on shutdown")
 	}
 }
 
