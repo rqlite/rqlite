@@ -82,7 +82,7 @@ func TestPool_Put(t *testing.T) {
 
 	if p.Len() != MaximumCap {
 		t.Errorf("Put error len. Expecting %d, got %d",
-			1, p.Len())
+			MaximumCap, p.Len())
 	}
 
 	conn, _ := p.Get()
