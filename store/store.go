@@ -1014,7 +1014,7 @@ func (s *Store) Close(wait bool) (retErr error) {
 		// Snapshot before closing to minimize startup time on next open.
 		startT := time.Now()
 		if err := s.Snapshot(0); err != nil {
-			if !strings.Contains(err.Error(), "nothing new to snapshot") &&
+			if !errors.Is(err, ErrNothingNewToSnapshot) &&
 				!strings.Contains(err.Error(), "wait until the configuration entry at") {
 				s.logger.Printf("pre-close snapshot failed: %s", err.Error())
 			}
