@@ -1331,7 +1331,7 @@ func Test_SingleNodeRequest(t *testing.T) {
 	}
 }
 
-// Test_SingleNodeRequest tests simple requests that contain both
+// Test_SingleNodeRequestTx tests simple requests that contain both
 // queries and execute statements, when wrapped in a transaction.
 func Test_SingleNodeRequestTx(t *testing.T) {
 	s, ln := mustNewStore(t)
@@ -1699,7 +1699,7 @@ func Test_SingleNodeExecuteQueryFreshness(t *testing.T) {
 	}
 }
 
-// Test_SingleNodeBackup tests that a Store correctly backs up its data
+// Test_SingleNodeBackupText tests that a Store correctly backs up its data
 // in text format.
 func Test_SingleNodeBackupText(t *testing.T) {
 	s, ln := mustNewStore(t)
