@@ -19,6 +19,7 @@ This release features an addition to the API. In the event of an error there is 
 - [PR #2889](https://github.com/rqlite/rqlite/pull/2889): Mark CDC HWM broadcast conn unusable before returning it to cluster.
 - [PR #2876](https://github.com/rqlite/rqlite/pull/2876): Consolidate console home and topology tabs.
 - [PR #2892](https://github.com/rqlite/rqlite/pull/2892): Small clean-ups in `rqbench`.
+- [PR #2899](https://github.com/rqlite/rqlite/pull/2899): No need to seek to 0 on new reader.
 - [PR #2879](https://github.com/rqlite/rqlite/pull/2879), [PR #2880](https://github.com/rqlite/rqlite/pull/2880), [PR #2883](https://github.com/rqlite/rqlite/pull/2883), [PR #2878](https://github.com/rqlite/rqlite/pull/2878), [PR #2885](https://github.com/rqlite/rqlite/pull/2885), [PR #2886](https://github.com/rqlite/rqlite/pull/2886), [PR #2891](https://github.com/rqlite/rqlite/pull/2891), [PR #2896](https://github.com/rqlite/rqlite/pull/2896): Fix typos and missing details in source code and comments.
 
 ## v10.5.3 (October 7th 2026)
