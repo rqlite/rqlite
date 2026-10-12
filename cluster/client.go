@@ -720,12 +720,13 @@ func (c *Client) BroadcastHWM(ctx context.Context, hwm uint64, creds *proto.Cred
 
 				// Read response
 				p, err := readResponse(conn, timeout)
-				conn.Close()
 				if err != nil {
 					handleConnError(conn)
+					conn.Close()
 					lastErr = err
 					continue
 				}
+				conn.Close()
 
 				// Parse response
 				resp := &proto.HighwaterMarkUpdateResponse{}
