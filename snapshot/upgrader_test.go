@@ -34,7 +34,9 @@ func Test_Upgrade_OK(t *testing.T) {
 	newTemp10 := filepath.Join(t.TempDir(), "wsnapshots")
 
 	// Copy directory because successful test runs will delete it.
-	fsutil.CopyDir(v7Snapshot, oldTemp7)
+	if err := fsutil.CopyDir(v7Snapshot, oldTemp7); err != nil {
+		t.Fatalf("failed to copy test snapshot directory: %s", err)
+	}
 
 	// Upgrade it.
 	if err := Upgrade7To8(oldTemp7, newTemp8, logger); err != nil {
@@ -83,7 +85,9 @@ func Test_Upgrade_EmptyOK(t *testing.T) {
 	newTemp10 := filepath.Join(t.TempDir(), "wsnapshots")
 
 	// Copy directory because successful test runs will delete it.
-	fsutil.CopyDir(v7Snapshot, oldTemp7)
+	if err := fsutil.CopyDir(v7Snapshot, oldTemp7); err != nil {
+		t.Fatalf("failed to copy test snapshot directory: %s", err)
+	}
 
 	// Upgrade it.
 	if err := Upgrade7To8(oldTemp7, newTemp8, logger); err != nil {
