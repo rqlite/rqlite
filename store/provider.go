@@ -39,8 +39,9 @@ func (p *Provider) LastIndex() (uint64, error) {
 	return p.str.DBAppliedIndex(), nil
 }
 
-// Provide writes the SQLite database to the given path. If path exists,
-// it will be overwritten.
+// Provide writes the SQLite database to w, starting at the beginning of w.
+// Any existing content of w is overwritten. If the backup fails it is retried
+// a fixed number of times before the last error is returned.
 func (p *Provider) Provide(w io.WriteSeeker) (retErr error) {
 	stats.Add(numProviderProvides, 1)
 	defer func() {
