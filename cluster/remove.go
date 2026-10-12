@@ -31,7 +31,7 @@ type Remover struct {
 	log *log.Logger
 }
 
-// / NewRemover returns an instantiated Remover.
+// NewRemover returns an instantiated Remover.
 func NewRemover(client *Client, timeout time.Duration, control Control) *Remover {
 	return &Remover{
 		client:  client,

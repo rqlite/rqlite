@@ -131,7 +131,7 @@ type Database interface {
 	// Query executes a slice of queries, each of which returns rows.
 	Query(ctx context.Context, qr *command.QueryRequest) ([]*command.QueryRows, command.ConsistencyLevel, uint64, error)
 
-	// Request processes a request that can both executes and queries.
+	// Request processes a request that can both execute and query.
 	Request(ctx context.Context, rr *command.ExecuteQueryRequest) ([]*command.ExecuteQueryResponse, uint64, uint64, error)
 
 	// Backup writes a backup of the database to the writer.
