@@ -2413,13 +2413,17 @@ func (s *Store) initVacuumTime() error {
 	return nil
 }
 
+// initOptimizeTime initializes the last optimize times in the Config store.
+// If auto-optimize is disabled, then all auto-optimize related state is removed.
+// If enabled, but no last optimize time is set, then the auto-optimize baseline
+// time i.e. now is set. If a last optimize time is set, then it is left as is.
 func (s *Store) initOptimizeTime() error {
 	if s.AutoOptimizeInterval == 0 {
 		if err := s.clearKeyTime(baseOptimizeTimeKey); err != nil {
-			return fmt.Errorf("failed to clear base vacuum time: %s", err)
+			return fmt.Errorf("failed to clear base optimize time: %s", err)
 		}
 		if err := s.clearKeyTime(lastOptimizeTimeKey); err != nil {
-			return fmt.Errorf("failed to clear last vacuum time: %s", err)
+			return fmt.Errorf("failed to clear last optimize time: %s", err)
 		}
 		return nil
 	}
