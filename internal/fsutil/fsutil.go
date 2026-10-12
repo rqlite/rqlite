@@ -15,7 +15,10 @@ import (
 const (
 	errorAccessDenied     syscall.Errno = 5
 	errorSharingViolation syscall.Errno = 32
+)
 
+// Retry parameters used by Remove and Rename when a path is in use.
+const (
 	removeInterval = 10 * time.Millisecond
 	removeTimeout  = 5 * time.Second
 
@@ -162,14 +165,14 @@ func RenameWithRetry(src, dst string, timeout, retryInterval time.Duration) (int
 
 // RemoveWithRetry removes the named file or empty directory. On Windows, if
 // another process has the path open, the removal is retried until timeout elapses.
-// Returns the number of times the rename was retried.
+// Returns the number of times the removal was retried.
 func RemoveWithRetry(path string, timeout, retryInterval time.Duration) (int, error) {
 	return retryInUse(func() error { return os.Remove(path) }, timeout, retryInterval)
 }
 
-// RemoveWithRetry removes the named file or empty directory recursively. On Windows,
+// RemoveAllWithRetry removes path and any children it contains. On Windows,
 // if another process has the path open, the removal is retried until timeout elapses.
-// Returns the number of times the rename was retried.
+// Returns the number of times the removal was retried.
 func RemoveAllWithRetry(path string, timeout, retryInterval time.Duration) (int, error) {
 	return retryInUse(func() error { return os.RemoveAll(path) }, timeout, retryInterval)
 }
