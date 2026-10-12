@@ -128,7 +128,7 @@ func Test_GenerateCASignedCertIPSAN(t *testing.T) {
 		t.Fatal("failed to decode certificate")
 	}
 	key, _ := pem.Decode(keyPEM)
-	if keyPEM == nil {
+	if key == nil {
 		t.Fatal("failed to decode key")
 	}
 
