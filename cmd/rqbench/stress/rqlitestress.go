@@ -30,7 +30,7 @@ func sendRequest(address string, endpoint string, transaction bool, reqBody stri
 	if transaction {
 		query = query + "&transaction"
 	}
-	URL := "http://" + string(address) + query
+	URL := "http://" + address + query
 	req, err := http.NewRequest("POST", URL, strings.NewReader(reqBody))
 	if err != nil {
 		return nil, err
@@ -40,10 +40,10 @@ func sendRequest(address string, endpoint string, transaction bool, reqBody stri
 	if err != nil {
 		return nil, err
 	}
-	if resp.StatusCode != 200 {
-		return nil, fmt.Errorf("metarqlite: bad http status code: %d", resp.StatusCode)
-	}
 	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("rqlite: bad http status code: %d", resp.StatusCode)
+	}
 	respBody, err := io.ReadAll(resp.Body)
 	if err != nil {
 		fmt.Printf("rqlite: response error is: %v\n", err)
@@ -91,7 +91,7 @@ func runMain() error {
 	const iterateCount = 100
 	const latencyCount = 50
 	if err := createSchema(); err != nil {
-		return fmt.Errorf("failed to create schema: %w\n", err)
+		return fmt.Errorf("failed to create schema: %w", err)
 	}
 	fmt.Printf("will insert %d rows in batches of %d\n", batchSize*iterateCount*latencyCount, batchSize)
 
