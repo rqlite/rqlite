@@ -1488,14 +1488,14 @@ func (s *Service) execute(w http.ResponseWriter, r *http.Request, qp QueryParams
 	var stmts []*proto.Statement
 	var err error
 	if strings.HasPrefix(r.Header.Get("Content-Type"), "text/plain") {
-		sql, err := io.ReadAll(r.Body)
+		body, err := io.ReadAll(r.Body)
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusBadRequest)
 			return
 		}
 		stmts = []*proto.Statement{
 			{
-				Sql: string(sql),
+				Sql: string(body),
 			},
 		}
 	} else {
@@ -1570,14 +1570,14 @@ func (s *Service) handleQuery(w http.ResponseWriter, r *http.Request, qp QueryPa
 	var queries []*proto.Statement
 	var err error
 	if strings.HasPrefix(r.Header.Get("Content-Type"), "text/plain") && r.Method == "POST" {
-		sql, err := io.ReadAll(r.Body)
+		body, err := io.ReadAll(r.Body)
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusBadRequest)
 			return
 		}
 		queries = []*proto.Statement{
 			{
-				Sql: string(sql),
+				Sql: string(body),
 			},
 		}
 	} else {
