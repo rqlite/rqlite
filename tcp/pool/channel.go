@@ -37,7 +37,7 @@ func NewChannelPool(maxCap int, factory Factory) (Pool, error) {
 	}, nil
 }
 
-// Get implements the Pool interfaces Get() method. If there is no new
+// Get implements the Pool interface's Get() method. If there is no new
 // connection available in the pool, a new connection will be created via the
 // Factory() method. Do not call Get() on a closed pool.
 func (c *channelPool) Get() (net.Conn, error) {
@@ -130,8 +130,8 @@ func (c *channelPool) put(conn net.Conn) error {
 		return conn.Close()
 	}
 
-	// put the resource back into the pool. If the pool is full, this will
-	// block and the default case will be executed.
+	// put the resource back into the pool. If the pool is full, the send would
+	// block, so the default case executes instead.
 	select {
 	case c.conns <- conn:
 		return nil
@@ -148,7 +148,7 @@ func (c *channelPool) getConnsAndFactory() (chan net.Conn, Factory) {
 	return c.conns, c.factory
 }
 
-// wrapConn wraps a standard net.Conn to a poolConn net.Conn.
+// wrapConn wraps a standard net.Conn in a pool Conn.
 func (c *channelPool) wrapConn(conn net.Conn) net.Conn {
 	p := &Conn{c: c}
 	p.Conn = conn
