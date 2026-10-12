@@ -323,7 +323,7 @@ func (hook *PreUpdateHookCallback) SQLite(tblRe *regexp.Regexp, rowIDsOnly bool)
 	}
 }
 
-// UpdateHookCallback is a callback function that is called before a row is modified
+// UpdateHookCallback is a callback function that is called after a row is modified
 // in the database.
 type UpdateHookCallback func(ev *command.UpdateHookEvent) error
 

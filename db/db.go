@@ -480,8 +480,7 @@ func (db *DB) Size() (int64, error) {
 	return rows[0].Values[0].Parameters[0].GetI(), nil
 }
 
-// FileSize returns the size of the SQLite file on disk. If running in
-// on-memory mode, this function returns 0.
+// FileSize returns the size of the SQLite file on disk.
 func (db *DB) FileSize() (int64, error) {
 	return fsutil.FileSize(db.path)
 }
@@ -1291,8 +1290,8 @@ func (db *DB) queryStmtWithConn(ctx context.Context, stmt *command.Statement, xT
 			}
 		}
 
-		// One-time population of any empty types. Best effort, ignore
-		// error.
+		// One-time population of any empty types, using the values in the
+		// first row.
 		if needsQueryTypes {
 			if err := populateEmptyTypes(xTypes, params); err != nil {
 				return nil, err
