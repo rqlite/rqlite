@@ -331,7 +331,7 @@ func IsValidSQLiteFile(path string) bool {
 	return IsValidSQLiteData(b)
 }
 
-// IsValidSQLiteData checks that the supplied data looks like a SQLite data.
+// IsValidSQLiteData checks that the supplied data looks like SQLite data.
 // See https://www.sqlite.org/fileformat.html.
 func IsValidSQLiteData(b []byte) bool {
 	return len(b) > 13 && string(b[0:13]) == "SQLite format"
@@ -396,7 +396,7 @@ func IsValidSQLiteWALData(b []byte) bool {
 }
 
 // IsWALModeEnabledSQLiteFile checks that the supplied path looks like a SQLite
-// with WAL mode enabled.
+// file with WAL mode enabled.
 func IsWALModeEnabledSQLiteFile(path string) (bool, error) {
 	f, err := os.Open(path)
 	if err != nil {
@@ -411,14 +411,14 @@ func IsWALModeEnabledSQLiteFile(path string) (bool, error) {
 	return IsWALModeEnabled(b), nil
 }
 
-// IsWALModeEnabled checks that the supplied data looks like a SQLite data
+// IsWALModeEnabled checks that the supplied data looks like SQLite data
 // with WAL mode enabled.
 func IsWALModeEnabled(b []byte) bool {
 	return len(b) >= 20 && b[18] == 2 && b[19] == 2
 }
 
 // IsDELETEModeEnabledSQLiteFile checks that the supplied path looks like a SQLite
-// with DELETE mode enabled.
+// file with DELETE mode enabled.
 func IsDELETEModeEnabledSQLiteFile(path string) (bool, error) {
 	f, err := os.Open(path)
 	if err != nil {
@@ -457,7 +457,7 @@ func EnsureWALMode(path string) error {
 	return db.Close()
 }
 
-// CheckpointRemove checkpoints any WAL file into the database file at the given
+// CheckpointRemove checkpoints any WAL file into the database file at the
 // given path. The function confirms that the WAL file has been removed before returning.
 //
 // Checkpointing a database in DELETE mode is an error.
@@ -491,7 +491,7 @@ func CheckpointRemove(path string) error {
 		return fmt.Errorf("checkpoint not successful: %v", meta)
 	}
 
-	// Now close the database which checkpoint and removes the WAL and SHM files.
+	// Now close the database which checkpoints and removes the WAL and SHM files.
 	if err := db.Close(); err != nil {
 		return fmt.Errorf("failed to close database after checkpoint: %w", err)
 	}
@@ -588,7 +588,7 @@ func ReplayWAL(path string, wals []string, deleteMode bool) error {
 // given tables, or all tables if none are specified. This form protects
 // against SQL injection by using parameterized queries.
 //
-// The returne object does not have the Transaction flag set.
+// The returned object does not have the Transaction flag set.
 func DumpTablesReq(tables ...string) *command.Request {
 	if len(tables) == 0 {
 		return &command.Request{

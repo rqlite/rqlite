@@ -78,7 +78,7 @@ var (
 	// ErrExecuteTimeout is returned when an execute times out.
 	ErrExecuteTimeout = errors.New("execute timeout")
 
-	// ErrQueryWrite is returned when an attempt to make to change the database
+	// ErrQueryWrite is returned when an attempt is made to change the database
 	// via a query.
 	ErrQueryWrite = errors.New("attempt to change database via query operation")
 )
@@ -187,7 +187,7 @@ type DB struct {
 	wal       bool
 
 	rwDB *sql.DB // Database connection for database reads and writes.
-	roDB *sql.DB // Database connection database reads.
+	roDB *sql.DB // Database connection for database reads.
 
 	rwDSN string // DSN used for read-write connection
 	roDSN string // DSN used for read-only connections
@@ -478,8 +478,8 @@ func (db *DB) FileSize() (int64, error) {
 	return fsutil.FileSize(db.path)
 }
 
-// WALSize returns the size of the SQLite WAL file on disk. If running in
-// WAL mode is not enabled, this function returns 0. If the WAL file does
+// WALSize returns the size of the SQLite WAL file on disk. If WAL mode is
+// not enabled, this function returns 0. If the WAL file does
 // not exist, even if the database is in WAL mode, 0 is also returned.
 func (db *DB) WALSize() (int64, error) {
 	if !db.wal {
@@ -1106,7 +1106,7 @@ func (db *DB) executeStmtWithConn(ctx context.Context, stmt *command.Statement, 
 	return response, nil
 }
 
-// QueryStringStmt executes a single query that return rows, but don't modify database.
+// QueryStringStmt executes a single query that returns rows, but doesn't modify the database.
 func (db *DB) QueryStringStmt(query string) ([]*command.QueryRows, error) {
 	r := &command.Request{
 		Statements: []*command.Statement{
@@ -1118,7 +1118,7 @@ func (db *DB) QueryStringStmt(query string) ([]*command.QueryRows, error) {
 	return db.Query(r, false)
 }
 
-// QueryStringStmtWithTimeout executes a single query that return rows, but don't modify database.
+// QueryStringStmtWithTimeout executes a single query that returns rows, but doesn't modify the database.
 // It also sets a timeout for the query.
 func (db *DB) QueryStringStmtWithTimeout(query string, tx bool, timeout time.Duration) ([]*command.QueryRows, error) {
 	r := &command.Request{
@@ -1272,7 +1272,7 @@ func (db *DB) queryStmtWithConn(ctx context.Context, stmt *command.Statement, xT
 		})
 
 		// Check for slow query, blocked query, etc testing. This field
-		// should never set by production code and is only for fault-injection
+		// should never be set by production code and is only for fault-injection
 		// testing purposes.
 		if forceStall {
 			select {

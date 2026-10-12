@@ -32,7 +32,7 @@ const (
 	compactFramesRatio   = "compact_frames_ratio"
 )
 
-// stats captures stats for the DB layer.
+// stats captures stats for the WAL layer.
 var stats *expvar.Map
 
 func init() {
