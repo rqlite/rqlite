@@ -72,7 +72,7 @@ func NewFullSink(dir string, hdr *proto.FullSnapshot) *FullSink {
 	s := &FullSink{
 		dir:    dir,
 		header: hdr,
-		dbFile: filepath.Join(dir, "data.db"),
+		dbFile: filepath.Join(dir, dbfileName),
 	}
 
 	for i := range hdr.WalHeaders {
