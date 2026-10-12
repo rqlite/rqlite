@@ -1,5 +1,4 @@
-// rtls is for creating TLS configurations for use by servers and clients.
-
+// Package rtls is for creating TLS configurations for use by servers and clients.
 package rtls
 
 import (
@@ -9,18 +8,28 @@ import (
 	"os"
 )
 
+// Named empty values for the optional string parameters of the Create*Config
+// functions, so call sites read clearly.
 const (
-	NoCACert     = ""
+	// NoCACert means no CA certificate file is supplied.
+	NoCACert = ""
+
+	// NoServerName means no server name is set on the client config.
 	NoServerName = ""
-	NoVerifyCN   = ""
+
+	// NoVerifyCN means the client certificate's Common Name is not checked.
+	NoVerifyCN = ""
 )
 
 // MTLSState indicates whether mutual TLS is enabled or disabled.
 type MTLSState tls.ClientAuthType
 
 const (
+	// MTLSStateDisabled means the server does not request a client certificate.
 	MTLSStateDisabled MTLSState = MTLSState(tls.NoClientCert)
-	MTLSStateEnabled  MTLSState = MTLSState(tls.RequireAndVerifyClientCert)
+
+	// MTLSStateEnabled means the server requires and verifies a client certificate.
+	MTLSStateEnabled MTLSState = MTLSState(tls.RequireAndVerifyClientCert)
 )
 
 // CreateClientConfig creates a new tls.Config for use by a client. The certFile and keyFile
