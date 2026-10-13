@@ -513,6 +513,79 @@ func Test_ServiceStats_AfterStop(t *testing.T) {
 	}
 }
 
+func Test_ServiceStopDrainsPendingEvents(t *testing.T) {
+	ResetStats()
+
+	cl := &mockCluster{}
+
+	cfg := DefaultConfig()
+	cfg.Endpoint = "http://localhost:1" // Unreachable, only the FIFO matters.
+	cfg.MaxBatchSz = 100
+	cfg.MaxBatchDelay = time.Hour // Batcher never flushes on its own.
+	tempDir := t.TempDir()
+	in := make(chan *proto.CDCIndexedEventGroup, 100)
+	svc, err := NewService(
+		"node1",
+		tempDir,
+		cl,
+		in,
+		cfg,
+	)
+	if err != nil {
+		t.Fatalf("failed to create service: %v", err)
+	}
+	if err := svc.Start(); err != nil {
+		t.Fatalf("failed to start service: %v", err)
+	}
+
+	// Send events which can only be sitting in the input channel or the
+	// batcher when Stop is called, never in the FIFO.
+	for i := uint64(1); i <= 3; i++ {
+		in <- &proto.CDCIndexedEventGroup{
+			Index: i,
+			Events: []*proto.CDCEvent{
+				{Op: proto.CDCEvent_INSERT, Table: "foo", NewRowId: int64(i)},
+			},
+		}
+	}
+	svc.Stop()
+
+	// Every event must have reached the FIFO, since each one represents a
+	// change already committed to the database.
+	q, err := NewQueue(filepath.Join(tempDir, "cdc", cdcDB))
+	if err != nil {
+		t.Fatalf("failed to open FIFO after stop: %v", err)
+	}
+	defer q.Close()
+	if q.Len() != 1 {
+		t.Fatalf("expected 1 batch in FIFO after stop, got %d", q.Len())
+	}
+	select {
+	case ev := <-q.C:
+		if ev.Index != 3 {
+			t.Fatalf("expected batch at index 3, got %d", ev.Index)
+		}
+		b, err := flate.Decompress(ev.Data)
+		if err != nil {
+			t.Fatalf("failed to decompress batch: %v", err)
+		}
+		msg := &cdcjson.CDCMessagesEnvelope{}
+		if err := cdcjson.UnmarshalFromEnvelopeJSON(b, msg); err != nil {
+			t.Fatalf("invalid JSON in FIFO: %v", err)
+		}
+		if len(msg.Payload) != 3 {
+			t.Fatalf("expected 3 messages in batch, got %d", len(msg.Payload))
+		}
+		for i, p := range msg.Payload {
+			if p.Index != uint64(i+1) {
+				t.Fatalf("expected message at index %d, got %d", i+1, p.Index)
+			}
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatalf("timeout waiting for batch from FIFO")
+	}
+}
+
 func Test_ServiceSingleEvent_Stdout(t *testing.T) {
 	ResetStats()
 
