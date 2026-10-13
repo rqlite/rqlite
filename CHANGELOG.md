@@ -1,3 +1,8 @@
+## v10.6.1 (unreleased)
+### Implementation changes and bug fixes
+- [PR #2959](https://github.com/rqlite/rqlite/pull/2959): Record SQL analyze start at right point.
+- [PR #2960](https://github.com/rqlite/rqlite/pull/2960): Conditionally rewrite SQL during queued writes.
+
 ## v10.6.0 (October 12th 2026)
 This release features an addition to the API. In the event of an error there is a new field in the response, named `error_v2`, which may contain numeric SQLite error codes. Clients accessing the API can now identify errors in a much more robust manner. See the [documentation for more details](https://rqlite.io/docs/api/api/#handling-errors). This feature also [introduces configurable query logging](https://rqlite.io/docs/guides/config/#sqlite-database).
 
