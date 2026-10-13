@@ -1,3 +1,76 @@
+// Package cdc implements Change Data Capture for rqlite. It captures row-level
+// changes as they are applied to SQLite and streams them, as JSON over HTTP,
+// to a webhook with at-least-once delivery. See DESIGN.md for the rationale.
+//
+// Every node runs the service and every node records its own changes, but
+// only the leader transmits them. The diagram shows a single node, with
+// channels drawn in square brackets.
+//
+//	                  +---------------------+
+//	                  | SQLite commit hooks |    every node, during Raft apply
+//	                  +----------+----------+
+//	                             |  change events, each tagged with the
+//	                             |  Raft index of the command that made them
+//	                             v
+//	                     [ event channel ]       buffered; written by the store
+//	                             |
+//	                             v
+//	                    +---------v-----------+
+//	               flush| Batcher             |  in-memory
+//	+-------------+     |  [ input channel ]  |  buffered; one event group per write
+//	| Snapshotter |---->|        |            |
+//	+-------------+     |        v            |
+//	 log truncation     |    group by count   |
+//	 waits for flush    |    or by time       |
+//	                    |        |            |
+//	                    |        v            |
+//	                    |  [ batch channel ]  |  one complete batch at a time
+//	                    +---------+-----------+
+//	                             |  JSON-encode, then compress
+//	                             v
+//	                    +---------v-----------+
+//	                    | FIFO                |  persistent
+//	                    | [ enqueue channel ] |  buffered
+//	                    |        |            |
+//	                    |        v            |
+//	                    |    BoltDB file      |  one entry per batch, keyed by Raft
+//	                    |        |            |  index; pruned only up to the high
+//	                    |        v            |  watermark (HWM)
+//	                    |  [ output channel ] |  unbuffered; reading does not delete
+//	                    +--+---------+---+----+
+//	                       |         ^   ^
+//	 leader only           |         |   | prune
+//	                       v         |   |      +----------+
+//	+---------+       +--------+     |   +------| Follower |<--- HWM broadcast
+//	| Webhook |<------| Sender |     |          +----------+     from the leader
+//	+---------+       +----+---+     |
+//	 retried until         |         | prune
+//	 sent, or dropped;     |         |
+//	 then advances HWM     |         |
+//	              +--------+---------+--+
+//	              |   HWM Broadcaster   |----> HWM to all voters, on a timer
+//	              +---------------------+
+//
+// Changes flow top to bottom. Commit hooks fire during Raft apply, so every
+// change carries the Raft index of the command that produced it. That index
+// orders changes across the cluster and is what consumers deduplicate on.
+//
+// The batcher is a short in-memory stage that amortizes BoltDB writes. Because
+// its contents would be lost on a crash, the store flushes it before any Raft
+// log truncation, so a change can never vanish from both the log and the FIFO.
+//
+// The FIFO is the durable heart of the system and is deliberately independent
+// of the Raft log, so a slow webhook never blocks snapshotting. Reading from
+// it does not delete; entries are removed only when the high watermark passes
+// them.
+//
+// On the leader, the sender drains the FIFO to the webhook, retrying per the
+// configured policy, and advances the high watermark after each batch whether
+// it was sent or finally dropped. The broadcaster periodically pushes that
+// watermark to every voter and prunes the local FIFO. Followers do nothing but
+// receive the watermark and prune, so a follower promoted to leader resumes
+// from the first undelivered batch. The watermark can lag across a leadership
+// change, which is where duplicates come from.
 package cdc
 
 import (
