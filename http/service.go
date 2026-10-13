@@ -1444,9 +1444,11 @@ func (s *Service) queuedExecute(w http.ResponseWriter, r *http.Request, qp Query
 			return
 		}
 	}
-	if err := sql.Process(stmts, !qp.NoRewriteRandom(), !qp.NoRewriteTime()); err != nil {
-		http.Error(w, fmt.Sprintf("SQL rewrite: %s", err.Error()), http.StatusInternalServerError)
-		return
+	if !qp.NoParse() {
+		if err := sql.Process(stmts, !qp.NoRewriteRandom(), !qp.NoRewriteTime()); err != nil {
+			http.Error(w, fmt.Sprintf("SQL rewrite: %s", err.Error()), http.StatusInternalServerError)
+			return
+		}
 	}
 
 	var fc queue.FlushChannel
