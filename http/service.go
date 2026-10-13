@@ -701,6 +701,7 @@ func nodeIDFromBody(w http.ResponseWriter, r *http.Request) (string, bool) {
 // handleSQLAnalyze handles requests to analyze and show SQL rewriting.
 func (s *Service) handleSQLAnalyze(w http.ResponseWriter, r *http.Request, qp QueryParams) {
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")
+	startT := time.Now()
 
 	if !s.CheckRequestPerm(r, auth.PermQuery) {
 		w.WriteHeader(http.StatusUnauthorized)
@@ -765,7 +766,7 @@ func (s *Service) handleSQLAnalyze(w http.ResponseWriter, r *http.Request, qp Qu
 		}
 		results[i] = r
 	}
-	resp := &sqlAnalyzeResponse{Results: results, start: time.Now()}
+	resp := &sqlAnalyzeResponse{Results: results, start: startT}
 	s.writeResponse(w, qp, resp)
 }
 
