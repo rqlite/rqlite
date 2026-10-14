@@ -85,7 +85,7 @@ func Test_UpdateHook_Basic(t *testing.T) {
 	}
 }
 
-// Test_UpdateHook_Tx demostrates that the Update hook is called for a
+// Test_UpdateHook_Tx demonstrates that the Update hook is called for a
 // transaction which is rolled back.
 func Test_UpdateHook_Tx(t *testing.T) {
 	path := mustTempPath()

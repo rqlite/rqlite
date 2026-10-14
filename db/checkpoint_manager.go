@@ -20,7 +20,7 @@ type RetryableError interface {
 }
 
 // CheckpointBusyError is returned when a checkpoint operation is blocked by
-// a concurrent read operation, fails to complete within the specified timeout,
+// a concurrent read operation and fails to complete within the specified timeout,
 // but leaves the database in a state where a future checkpoint attempt may be
 // safely retried.
 type CheckpointBusyError struct {
@@ -49,7 +49,7 @@ var (
 	ErrDatabaseCheckpointInvariant = &CheckpointInvariantError{msg: "database checkpoint invariant violation"}
 )
 
-// CheckpointManager manages checkpointing database across checkpoints.
+// CheckpointManager manages checkpointing of the database across checkpoints.
 //
 // A key goal of the CheckpointManager is to ensure that a checkpoint attempt
 // is not excessively blocked by a concurrent read. If a read is blocking a
@@ -103,7 +103,7 @@ func (m *CheckpointManagerMeta) String() string {
 	return fmt.Sprintf("%s, WALReset=%t", &m.CheckpointMeta, m.WALReset)
 }
 
-// Checkpoint performs a checkpoint(TRUNCATE) of the database
+// Checkpoint performs a checkpoint(TRUNCATE) of the database.
 //
 // If w is non-nil Checkpoint writes a compacted copy of the WAL to the given writer
 // before performing the checkpoint. The checkpoint operation will block for at most
@@ -124,7 +124,7 @@ func (cm *CheckpointManager) Checkpoint(w io.Writer, timeout time.Duration) (*Ch
 	}
 
 	if w == nil {
-		// Short-circuit if no writer provided, just checkpoint and truncate the database.
+		// Short-circuit if no writer is provided, just checkpoint and truncate the database.
 		meta, err := cm.db.CheckpointWithTimeout(CheckpointTruncate, timeout)
 		if err != nil {
 			return nil, 0, err
@@ -194,14 +194,14 @@ func (cm *CheckpointManager) Checkpoint(w io.Writer, timeout time.Duration) (*Ch
 	}
 	if pnCkpt < pnLog {
 		// In this case future writes to the WAL will be appended, so just treat
-		// this checkpoint as failed, nothing about our state needs to be updated.
+		// this checkpoint as failed; nothing about our state needs to be updated.
 		// Next time we will retry the checkpoint from the same offset and attempt
 		// to move all pages.
 		stats.Add(numCheckpointBusyErrors, 1)
 		return mmeta, 0, ErrDatabaseCheckpointBusy
 	} else if pnCkpt == pnLog {
 		// In this case, the checkpoint failed, all pages were moved, but the WAL
-		// file not truncated. We can use the WAL data, but it requires special
+		// file was not truncated. We can use the WAL data, but it requires special
 		// handling.
 		//
 		// We do not know where the next WAL frame will be written. That is only

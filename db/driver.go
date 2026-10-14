@@ -191,7 +191,7 @@ func buildConnectHook(cfg *DriverConfig) func(conn *sqlite3.SQLiteConn) error {
 		}
 
 		// It's critical that rqlite has full control over the checkpointing process
-		// so disable all auto-checkpoint. This doesn't return an error on a read-only
+		// so disable all auto-checkpointing. This doesn't return an error on a read-only
 		// connection, so an error here really is an issue.
 		if _, err := conn.Exec("PRAGMA wal_autocheckpoint=0", nil); err != nil {
 			return fmt.Errorf("failed to disable automatic checkpointing: %s", err)

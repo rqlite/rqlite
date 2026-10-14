@@ -198,7 +198,7 @@ func Test_CheckpointManager_Checkpoint_NoWriter_OK(t *testing.T) {
 
 // Test_CheckpointManager_Checkpoint_Blocked_Read tests that if a checkpoint is
 // blocked by a long-running read of the WAL file which holds WAL frames other
-// than the last page, the checkpoint fails with ErrDatabaseCheckpointBusy
+// than the last page, the checkpoint fails with ErrDatabaseCheckpointBusy.
 func Test_CheckpointManager_Checkpoint_Blocked_Read(t *testing.T) {
 	path := mustTempFile()
 	defer RemoveFiles(path)
@@ -214,8 +214,8 @@ func Test_CheckpointManager_Checkpoint_Blocked_Read(t *testing.T) {
 		t.Fatalf("failed to execute on single node: %s", err.Error())
 	}
 
-	// Insert a row or the long-running read I'm a about to kick off would just complete
-	// and the checkpoint would complete. After all a SELECT * on an empty table would not
+	// Insert a row or the long-running read I'm about to kick off would just complete
+	// and the checkpoint would complete. After all, a SELECT * on an empty table would not
 	// read any WAL frames, so the checkpoint would not be blocked.
 	_, err = db.ExecuteStringStmt(`INSERT INTO foo(name) VALUES("alice")`)
 	if err != nil {

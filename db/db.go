@@ -206,7 +206,7 @@ type DB struct {
 	logger *log.Logger
 }
 
-// PoolStats represents connection pool statistics
+// PoolStats represents connection pool statistics.
 type PoolStats struct {
 	MaxOpenConnections int           `json:"max_open_connections"`
 	OpenConnections    int           `json:"open_connections"`
@@ -229,7 +229,7 @@ type CheckpointMeta struct {
 
 	// Moved is the total number of checkpointed frames in the log file
 	// (including any that were already checkpointed before Checkpoint
-	// was called)
+	// was called).
 	Moved int
 }
 
@@ -560,7 +560,7 @@ func (db *DB) BusyTimeout() (rwMs, roMs int, err error) {
 	return rwMs, roMs, nil
 }
 
-// Checkpoint checkpoints the WAL file. If the WAL file is not enabled, this
+// Checkpoint checkpoints the WAL file. If WAL mode is not enabled, this
 // function is a no-op.
 //
 // This operation will temporarily set the database synchronous mode to FULL
@@ -713,7 +713,7 @@ func (db *DB) Vacuum() error {
 	return err
 }
 
-// VacuumInto VACUUMs the database into the file at path
+// VacuumInto VACUUMs the database into the file at path.
 func (db *DB) VacuumInto(path string) error {
 	_, err := db.rwDB.Exec(fmt.Sprintf("VACUUM INTO '%s'", strings.ReplaceAll(path, "'", "''")))
 	return err
@@ -845,7 +845,7 @@ func (db *DB) CompileOptions() ([]string, error) {
 	return compileOptions, nil
 }
 
-// ConnectionPoolStats returns database pool statistics
+// ConnectionPoolStats returns database pool statistics.
 func (db *DB) ConnectionPoolStats(sqlDB *sql.DB) *PoolStats {
 	s := sqlDB.Stats()
 	return &PoolStats{
@@ -1276,7 +1276,7 @@ func (db *DB) queryStmtWithConn(ctx context.Context, stmt *command.Statement, xT
 			Parameters: params,
 		})
 
-		// Check for slow query, blocked query, etc testing. This field
+		// Check for slow query, blocked query, etc. testing. This field
 		// should never be set by production code and is only for fault-injection
 		// testing purposes.
 		if forceStall {
@@ -2020,8 +2020,8 @@ func populateEmptyTypes(types []string, params []*command.Parameter) error {
 
 // normalizeRowParameters performs some normalization of values in the returned rows.
 // Text values come over (from sqlite-go) as []byte instead of strings
-// for some reason, so we have explicitly converted (but only when type
-// is "text" so we don't affect BLOB types)
+// for some reason, so we explicitly convert them (but only when the type
+// is "text", so we don't affect BLOB types).
 func normalizeRowParameters(row []any, types []string) ([]*command.Parameter, error) {
 	values := make([]*command.Parameter, len(types))
 	for i, v := range row {

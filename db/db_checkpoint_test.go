@@ -365,7 +365,7 @@ func Test_WALDatabaseCheckpoint_RestartTruncate(t *testing.T) {
 }
 
 // Test_WALDatabaseCheckpoint_RestartTimeout tests that a restart checkpoint
-// does time out as expected if there is a long running read.
+// does time out as expected if there is a long-running read.
 func Test_WALDatabaseCheckpoint_RestartTimeout(t *testing.T) {
 	path := mustTempFile()
 	defer fsutil.Remove(path)
@@ -439,7 +439,7 @@ func Test_WALDatabaseCheckpoint_RestartTimeout(t *testing.T) {
 }
 
 // Test_WALDatabaseCheckpoint_TruncateTimeout tests that a truncate checkpoint
-// does time out as expected if there is a long running read. It also confirms
+// does time out as expected if there is a long-running read. It also confirms
 // that the WAL file is not modified as a result of this failure.
 func Test_WALDatabaseCheckpoint_TruncateTimeout(t *testing.T) {
 	path := mustTempFile()
