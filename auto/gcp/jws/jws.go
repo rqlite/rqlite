@@ -38,7 +38,7 @@ type ClaimSet struct {
 	Sub string `json:"sub,omitempty"`
 
 	// The old name of Sub. Client keeps setting Prn to be
-	// complaint with legacy OAuth 2.0 providers. (Optional)
+	// compliant with legacy OAuth 2.0 providers. (Optional)
 	Prn string `json:"prn,omitempty"`
 
 	// See http://tools.ietf.org/html/draft-jones-json-web-token-10#section-4.3

@@ -181,7 +181,7 @@ func (s *S3Client) Download(ctx context.Context, writer io.WriterAt) error {
 	return nil
 }
 
-// Delete deletes object from S3.
+// Delete deletes the object from S3.
 func (s *S3Client) Delete(ctx context.Context) error {
 	_, err := s.s3.DeleteObject(ctx, &s3.DeleteObjectInput{
 		Bucket: aws.String(s.bucket),

@@ -32,7 +32,7 @@ func Test_S3Client_MinioUpload(t *testing.T) {
 		t.Fatalf("error while uploading data: %v", err)
 	}
 
-	// Check the upload by downloaind the data and comparing it.
+	// Check the upload by downloading the data and comparing it.
 	f, err := os.CreateTemp("", "minio-download")
 	if err != nil {
 		t.Fatalf("error while creating temp file: %v", err)
