@@ -2750,7 +2750,7 @@ type MockStore struct {
 	demoteFn    func(dn *command.DemoteNodeRequest) error
 	promoteFn   func(pn *command.PromoteNodeRequest) error
 	leaderAddr  string
-	notReady    bool // Default value is true, easier to test.
+	notReady    bool // Inverted so Ready() defaults to true, easier to test.
 }
 
 func (m *MockStore) Execute(ctx context.Context, er *command.ExecuteRequest) ([]*command.ExecuteQueryResponse, uint64, error) {

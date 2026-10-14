@@ -22,7 +22,7 @@ func AnyServingHTTP(addrs []string) (string, bool) {
 	return "", false
 }
 
-// IsServingHTTP returns true if there appears to be a HTTP or HTTPS server
+// IsServingHTTP returns true if there appears to be an HTTP or HTTPS server
 // running on the given address.
 func IsServingHTTP(addr string) bool {
 	urlStr := addr + isServingTestPath
