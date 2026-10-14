@@ -155,8 +155,8 @@ func GenerateSelfSignedCert(subject pkix.Name, validFor time.Duration, keySize i
 	return certPEM, keyPEM, nil
 }
 
-// GenerateSelfSignedCertIPSAN generates a new self-signed certificate and
-// returns the cert and key as PEM-encoded bytes.
+// GenerateSelfSignedCertIPSAN is like GenerateSelfSignedCert, but also adds the given
+// IP address to the certificate as a Subject Alternative Name.
 func GenerateSelfSignedCertIPSAN(subject pkix.Name, validFor time.Duration, keySize int, san net.IP) ([]byte, []byte, error) {
 	// generate a new private key
 	key, err := rsa.GenerateKey(rand.Reader, keySize)
