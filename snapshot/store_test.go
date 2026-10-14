@@ -850,7 +850,7 @@ func Test_Store_Reap(t *testing.T) {
 
 	//////////////////////////////////////////////////////////////////////////////////
 	// Write a full snapshot, and then Reap. Reaping when there are multiple snapshots
-	// but the latest is full should just remove all snapshots, but not doing any moving
+	// but the latest is full should just remove all snapshots, but not do any moving
 	// or checkpointing.
 	createSnapshotInStore(t, store, "2-2000-1704807720976", 2000, 2, 1, "testdata/db-and-wals/full2.db")
 	snaps = mustListSnapshots(t, store)
@@ -987,7 +987,7 @@ func Test_Store_Reap(t *testing.T) {
 
 // Test_Store_Reap_Full_FullWALs tests reaping when an existing full pairs with another
 // full that contains a WAL. This could happen if the latter snapshot was streamed by
-// the leader to this node (which would be follower.
+// the leader to this node (which would be a follower).
 func Test_Store_Reap_Full_FullWALs(t *testing.T) {
 	dir := t.TempDir()
 	store, err := NewStore(dir)
@@ -1364,7 +1364,7 @@ func Test_Store_Check_RemovesTmpDirs(t *testing.T) {
 		t.Fatalf("Failed to write file in tmp dir: %v", err)
 	}
 
-	// Re-open the store — Check() should clean up the .tmp directory.
+	// Re-open the store — check() should clean up the .tmp directory.
 	store2, err := NewStore(dir)
 	if err != nil {
 		t.Fatalf("Failed to re-open store: %v", err)

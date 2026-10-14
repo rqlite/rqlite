@@ -153,12 +153,12 @@ func (l *LockingStreamer) Read(p []byte) (int, error) {
 	return n, err
 }
 
-// Index returns the Raft Index of the streamed Snapshot
+// Index returns the Raft Index of the streamed Snapshot.
 func (l *LockingStreamer) Index() uint64 {
 	return l.meta.Index
 }
 
-// Term returns the Raft Term of the streamed Snapshot
+// Term returns the Raft Term of the streamed Snapshot.
 func (l *LockingStreamer) Term() uint64 {
 	return l.meta.Term
 }
@@ -492,7 +492,7 @@ func (s *Store) DeregisterObserver(o *Observer) {
 }
 
 // SetNoVerifyDB controls whether the database is verified after any
-// manipulation. Verification is not appropriate for production, this
+// manipulation. Verification is not appropriate for production; this
 // is primarily for controlling test coverage.
 func (s *Store) SetNoVerifyDB(v bool) {
 	s.noVerifyDB.SetBool(v)
@@ -849,10 +849,10 @@ func (s *Store) reapLoop() {
 // crash during snapshotting or reaping: it discards an incomplete reap plan,
 // resumes an interrupted reap, and removes leftover temporary directories.
 //
-// Check does NOT verify file checksums. That is done lazily, exactly once, the
+// check does NOT verify file checksums. That is done lazily, exactly once, the
 // first time snapshot data is about to be used -- see Verify, Open, and Reap.
 //
-// Check must be called on an idle Store or the results are undefined.
+// check must be called on an idle Store or the results are undefined.
 // If called on an empty Store, then it returns without an error.
 func (s *Store) check() error {
 	emp, err := fsutil.DirIsEmpty(s.dir)
@@ -970,7 +970,7 @@ func (s *Store) ensureVerified() error {
 }
 
 // EnsureVerify runs the CRC32 integrity check but sets up the caching of the state
-// so that future verification states will use cached value.
+// so that future verification states will use the cached value.
 func (s *Store) EnsureVerify() error {
 	s.mrsw.BeginReadBlocking()
 	defer s.mrsw.EndRead()

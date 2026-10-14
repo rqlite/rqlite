@@ -323,7 +323,7 @@ func (s *Sink) processHeader() error {
 	return nil
 }
 
-// writeMeta is used to write the meta data in a given snapshot directory.
+// writeMeta is used to write the metadata in a given snapshot directory.
 func writeMeta(dir string, meta *raft.SnapshotMeta) error {
 	fh, err := os.Create(metaPath(dir))
 	if err != nil {

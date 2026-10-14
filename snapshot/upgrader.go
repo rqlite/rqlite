@@ -87,7 +87,7 @@ func Upgrade7To8(old, new string, logger *log.Logger) (retErr error) {
 		return fmt.Errorf("failed to get newest snapshot from old snapshots directory %s: %s", old, err)
 	}
 	if oldMeta == nil {
-		// No snapshot to upgrade, this shouldn't happen since we checked for an empty old
+		// No snapshot to upgrade; this shouldn't happen since we checked for an empty old
 		// directory earlier.
 		return fmt.Errorf("no snapshot to upgrade in old snapshots directory %s", old)
 	}

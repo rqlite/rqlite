@@ -120,7 +120,7 @@ func (s *FullSink) Write(p []byte) (int, error) {
 			if err := s.openCurrent(); err != nil {
 				return total, err
 			}
-			// If openCurrent() advanced to done (e.g. 0-byte artifacts), loop will handle it.
+			// If openCurrent() advanced to done (e.g. 0-byte artifacts), the loop will handle it.
 			if s.phase == installPhaseDone {
 				continue
 			}
