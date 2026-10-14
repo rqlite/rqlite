@@ -1246,15 +1246,18 @@ func (s *Service) handleLeader(w http.ResponseWriter, r *http.Request, qp QueryP
 
 		// Parse optional JSON body for target node ID
 		var nodeID string
-		if r.Header.Get("Content-Type") == "application/json" && r.ContentLength > 0 {
-			var reqBody struct {
-				ID string `json:"id"`
+		var reqBody struct {
+			ID string `json:"id"`
+		}
+		if r.Body != nil {
+			if err := json.NewDecoder(r.Body).Decode(&reqBody); err == nil {
+				nodeID = reqBody.ID
+			} else {
+				if err != io.EOF {
+					http.Error(w, fmt.Sprintf("invalid JSON: %s", err.Error()), http.StatusBadRequest)
+					return
+				}
 			}
-			if err := json.NewDecoder(r.Body).Decode(&reqBody); err != nil {
-				http.Error(w, fmt.Sprintf("invalid JSON: %s", err.Error()), http.StatusBadRequest)
-				return
-			}
-			nodeID = reqBody.ID
 		}
 
 		addr, err := s.proxy.Stepdown(r.Context(), wait, nodeID, makeCredentials(r), qp.Timeout(defaultTimeout), qp.Redirect())
