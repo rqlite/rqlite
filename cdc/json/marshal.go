@@ -2,6 +2,7 @@ package json
 
 import (
 	"encoding/json"
+	"math"
 
 	"github.com/rqlite/rqlite/v10/command/proto"
 )
@@ -33,6 +34,9 @@ type CDCMessageEvent struct {
 
 // MarshalToEnvelopeJSON converts a slice of CDC events to a JSON envelope format.
 // Flush events are ignored and not included in the output.
+//
+// JSON has no representation for infinity or NaN, so floating-point values of
+// those kinds are encoded as the strings "Infinity", "-Infinity" and "NaN".
 func MarshalToEnvelopeJSON(serviceID, nodeID string, ts bool, evs []*proto.CDCIndexedEventGroup) ([]byte, error) {
 	if len(evs) == 0 {
 		return nil, nil
@@ -50,7 +54,7 @@ func MarshalToEnvelopeJSON(serviceID, nodeID string, ts bool, evs []*proto.CDCIn
 		}
 		switch v.GetValue().(type) {
 		case *proto.CDCValue_D:
-			return v.GetD()
+			return floatValue(v.GetD())
 		case *proto.CDCValue_I:
 			return v.GetI()
 		case *proto.CDCValue_S:
@@ -118,6 +122,21 @@ func MarshalToEnvelopeJSON(serviceID, nodeID string, ts bool, evs []*proto.CDCIn
 	}
 
 	return json.Marshal(envelope)
+}
+
+// floatValue returns f, unless f cannot be represented in JSON, in which case
+// it returns a string describing it.
+func floatValue(f float64) any {
+	switch {
+	case math.IsNaN(f):
+		return "NaN"
+	case math.IsInf(f, 1):
+		return "Infinity"
+	case math.IsInf(f, -1):
+		return "-Infinity"
+	default:
+		return f
+	}
 }
 
 // UnmarshalFromEnvelopeJSON converts a JSON envelope format into a CDCMessagesEnvelope structure.
