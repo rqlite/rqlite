@@ -112,12 +112,8 @@ func Test_HTTPSink_Write_RedirectDropsPayload(t *testing.T) {
 	} {
 		t.Run(http.StatusText(code), func(t *testing.T) {
 			var targetHits int
-			var targetMethod string
-			var targetBody []byte
 			target := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 				targetHits++
-				targetMethod = r.Method
-				targetBody, _ = io.ReadAll(r.Body)
 				w.WriteHeader(http.StatusOK)
 			}))
 			defer target.Close()
@@ -128,14 +124,11 @@ func Test_HTTPSink_Write_RedirectDropsPayload(t *testing.T) {
 			defer redirector.Close()
 
 			sink := NewHTTPSink(redirector.URL, nil, 5*time.Second)
-			_, err := sink.Write([]byte(`{"test": "data"}`))
-			if err == nil {
-				t.Fatalf("Write should fail on a %d redirect (target hits: %d, method: %s, body: %q)",
-					code, targetHits, targetMethod, targetBody)
+			if _, err := sink.Write([]byte(`{"test": "data"}`)); err == nil {
+				t.Fatalf("Write should fail on a %d redirect", code)
 			}
 			if targetHits != 0 {
-				t.Fatalf("redirect target should not have been contacted, got %d %s request(s)",
-					targetHits, targetMethod)
+				t.Fatalf("redirect target should not have been contacted, got %d request(s)", targetHits)
 			}
 		})
 	}
