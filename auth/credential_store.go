@@ -3,6 +3,7 @@
 package auth
 
 import (
+	"crypto/subtle"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -133,7 +134,10 @@ func (c *CredentialsStore) Load(r io.Reader) error {
 // Check returns true if the password is correct for the given username.
 func (c *CredentialsStore) Check(username, password string) bool {
 	pw, ok := c.store[username]
-	return ok && pw == password
+	if !ok {
+		return false
+	}
+	return subtle.ConstantTimeCompare([]byte(pw), []byte(password)) == 1
 }
 
 // Password returns the password for the given user.
