@@ -309,8 +309,8 @@ func (q *Queue) run(highestKey uint64) {
 						return err
 					}
 					highestKey = req.idx
+					stats.Add(fifoSize, 1)
 				}
-				stats.Add(fifoSize, 1)
 				return nil
 			})
 
