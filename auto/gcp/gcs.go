@@ -238,7 +238,7 @@ func (g *GCSClient) Download(ctx context.Context, w io.WriterAt) error {
 	return nil
 }
 
-// Delete deletes object from GCS.
+// Delete deletes the object from GCS.
 func (g *GCSClient) Delete(ctx context.Context) error {
 	req, _ := http.NewRequestWithContext(ctx, http.MethodDelete, g.objectURL, nil)
 	if err := g.addAuth(req); err != nil {

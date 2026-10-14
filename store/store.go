@@ -697,7 +697,7 @@ func (s *Store) Open() (retErr error) {
 					s.crcBadHandler(fp.CRC32, sum)
 					return
 				}
-				// Fallback to the older IEEE CRC32 format to check for upgrading from v9.
+				// Fall back to the older IEEE CRC32 format to check for upgrading from v9.
 				s.logger.Println("falling back to IEEE CRC32 calculation for clean snapshot check")
 				sum, err = rsum.CRC32IEEE(s.dbPath)
 				if err != nil {
@@ -1006,7 +1006,7 @@ func (s *Store) Close(wait bool) (retErr error) {
 		}
 	}()
 	if !s.open.Is() {
-		// Protect against closing already-closed resource, such as channels.
+		// Protect against closing already-closed resources, such as channels.
 		return nil
 	}
 
@@ -1050,7 +1050,7 @@ func (s *Store) Close(wait bool) (retErr error) {
 		return err
 	}
 
-	// Only shutdown Bolt and SQLite when Raft is done.
+	// Only shut down Bolt and SQLite when Raft is done.
 	if err := s.db.Close(); err != nil {
 		return err
 	}
@@ -1068,7 +1068,7 @@ func (s *Store) Barrier() error {
 }
 
 // WaitForCommitIndex blocks until the local Raft commit index is equal to
-// or greater the given index, or the timeout expires.
+// or greater than the given index, or the timeout expires.
 func (s *Store) WaitForCommitIndex(idx uint64, timeout time.Duration) error {
 	check := func() bool {
 		return s.raft.CommitIndex() >= idx
@@ -1079,7 +1079,7 @@ func (s *Store) WaitForCommitIndex(idx uint64, timeout time.Duration) error {
 // DBAppliedIndex returns the index of the last Raft log that changed the
 // underlying database. This is usually the index of a log entry that
 // actually changed the database, but in the event of a snapshot restore
-// will be last index associated with the snapshot. If the index is unknown
+// will be the last index associated with the snapshot. If the index is unknown
 // then 0 is returned.
 func (s *Store) DBAppliedIndex() uint64 {
 	return s.dbAppliedIdx.Load()
@@ -1092,7 +1092,7 @@ func (s *Store) AppliedIndex() uint64 {
 	return s.raft.AppliedIndex()
 }
 
-// IsLeader is used to determine if the current node is cluster leader
+// IsLeader is used to determine if the current node is the cluster leader
 func (s *Store) IsLeader() bool {
 	if !s.open.Is() {
 		return false
@@ -1602,7 +1602,7 @@ func (s *Store) Query(ctx context.Context, qr *proto.QueryRequest) (rows []*prot
 			return nil, 0, 0, af.Error()
 		}
 		// It's possible that the term has changed since we read it. But that's OK,
-		// worse case it will just mean another Strong read. It would be worse to
+		// worst case it will just mean another Strong read. It would be worse to
 		// store the current term, which could be later than when the strong read
 		// was performed.
 		s.strongReadTerm.Store(readTerm)
@@ -1762,7 +1762,7 @@ func (s *Store) Request(ctx context.Context, eqr *proto.ExecuteQueryRequest) ([]
 // form, without any intermediate temporary files.
 //
 // If vacuum is true, then a VACUUM is performed on the database before the backup
-// is made. If compression false, and dst is an os.File, then the vacuumed copy
+// is made. If compression is false, and dst is an os.File, then the vacuumed copy
 // will be written directly to that file. Otherwise a temporary file will be created,
 // and that temporary file copied to dst. The function returns the number of bytes
 // written to dst, including any bytes written before a streaming error.
@@ -2489,7 +2489,7 @@ func (s *Store) raftConfig() *raft.Config {
 }
 
 // waitForLinearizableRead performs the preprocessing needed for a
-// linearizable read, or timeouts. Once this function returns without
+// linearizable read, or times out. Once this function returns without
 // error subsequent reads on the Leader will be linearizable.
 func (s *Store) waitForLinearizableRead(currReadTerm uint64, linearizableTimeoutParam int64) error {
 	// If linearizable consistency is requested, we will need to check the
@@ -2497,7 +2497,7 @@ func (s *Store) waitForLinearizableRead(currReadTerm uint64, linearizableTimeout
 	// change during the processing of a Linearizable read. We also need to
 	// be sure that this node -- if Leader -- has actually committed a log
 	// in *this* term. Currently the Raft library doesn't help us do this,
-	// so we have to do it ourselves, by checking  if at least one Strong
+	// so we have to do it ourselves, by checking if at least one Strong
 	// Read has gone through the Raft log in this term. If it hasn't then
 	// we return an error indicating that a Strong Read is needed.
 	//
@@ -2760,7 +2760,7 @@ func (s *Store) fsmSnapshot() (fSnap raft.FSMSnapshot, retErr error) {
 			if errors.As(err, &re) && !re.Retryable() {
 				// A non-retryable error at this point means the underlying system is in a state
 				// that further incremental snapshots won't handle. We could revert to full but
-				// a nonretryable error shouldn't actually happen. Something bad has gone wrong.
+				// a non-retryable error shouldn't actually happen. Something bad has gone wrong.
 				walWriter.Cancel()
 				s.logger.Fatalf("failed to checkpoint and truncate database for incremental snapshot: %s (meta: %s)",
 					err.Error(), meta)
@@ -2774,10 +2774,10 @@ func (s *Store) fsmSnapshot() (fSnap raft.FSMSnapshot, retErr error) {
 		// should be marked valid. If we crash here, on restart we delete the Staging directory, but since
 		// the Snapshot didn't get to complete, the database fingerprint will not be updated, so on
 		// restart the database will be replaced by that in the Snapshot. But by marking the WAL file
-		// as valid, if the snapshotting processes errors later (Persist fails for example), we can
+		// as valid, if the snapshotting process errors later (Persist fails for example), we can
 		// continue to use the compacted WAL file in the Staging directory for the next snapshot attempt,
 		// which will be faster than performing a full snapshot. All this means that we avoid breaking the
-		// series of incremental snapshots. The next Snapshot will comprise of two WAL files in that case.
+		// series of incremental snapshots. The next Snapshot will comprise two WAL files in that case.
 		if err := walWriter.Close(); err != nil {
 			// Failing to close the staged WAL would break the chain of incrementals. Fall back to full.
 			if err := s.snapshotStore.SetDueNext(snapshot.Full); err != nil {
@@ -2875,7 +2875,7 @@ func (s *Store) fsmRestore(rc io.ReadCloser) (retErr error) {
 	// Take conservative approach and assume that everything has changed, so update
 	// the indexes. It is possible that dbAppliedIdx is now ahead of some other nodes'
 	// same value, since the last index is not necessarily a database-changing index,
-	// but that is OK. Worse that can happen is that anything paying attention to the
+	// but that is OK. Worst that can happen is that anything paying attention to the
 	// index might consider the database to be changed when it is not, *logically* speaking.
 	li, tm, err := snapshot.StreamerIndexTerm(rc)
 	if err != nil {
@@ -2888,7 +2888,7 @@ func (s *Store) fsmRestore(rc io.ReadCloser) (retErr error) {
 		return fmt.Errorf("failed to remove clean snapshot file: %w", err)
 	}
 
-	// We're about to enter a point of no-return. We're going to swap in the incoming
+	// We're about to enter a point of no return. We're going to swap in the incoming
 	// database with the one on disk. If an error is encountered after swapping, and we
 	// simply returned that error to the Raft subsystem, Raft would consider the
 	// Restore as FAILED, but the database on disk would be wrong. We could attempt

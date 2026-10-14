@@ -398,7 +398,7 @@ func Test_QueueWriteTimeout(t *testing.T) {
 	}
 }
 
-// Test_QueueWriteTimeoutMulti ensures that timer expiring
+// Test_QueueWriteTimeoutMulti ensures that the timer expiring
 // twice in a row works fine.
 func Test_QueueWriteTimeoutMulti(t *testing.T) {
 	q := New[*command.Statement](1024, 10, 1*time.Second)
@@ -441,8 +441,8 @@ func Test_QueueWriteTimeoutMulti(t *testing.T) {
 	}
 }
 
-// Test_QueueWriteTimeoutBatch ensures that timer expiring
-// followed by a batch, works fine.
+// Test_QueueWriteTimeoutBatch ensures that the timer expiring
+// followed by a batch works fine.
 func Test_QueueWriteTimeoutBatch(t *testing.T) {
 	q := New[*command.Statement](1024, 2, 1*time.Second)
 	defer q.Close()

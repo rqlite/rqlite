@@ -132,7 +132,7 @@ func (d *Downloader) Do(ctx context.Context, w io.Writer, timeout time.Duration)
 		return err
 	}
 
-	// Check if the download data is gzip compressed.
+	// Check if the downloaded data is gzip compressed.
 	compressed, err := isGzip(f)
 	if err != nil {
 		return err

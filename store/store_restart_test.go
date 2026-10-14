@@ -111,7 +111,7 @@ func Test_OpenStoreCloseStartupSingleNode(t *testing.T) {
 
 	// This next block tests that everything works when there is a combination
 	// of snapshot data and some entries in the log that need to be replayed
-	// af start-up.
+	// at start-up.
 	if err := s.Close(true); err != nil {
 		t.Fatalf("failed to close single-node store: %s", err.Error())
 	}
@@ -254,7 +254,7 @@ func test_SnapshotStress(t *testing.T, s *Store) {
 	}
 }
 
-// Test_StoreSnapshotStressSingleNode tests that a high-rate of snapshotting
+// Test_StoreSnapshotStressSingleNode tests that a high rate of snapshotting
 // works fine with an on-disk setup.
 func Test_StoreSnapshotStressSingleNode(t *testing.T) {
 	s, ln := mustNewStore(t)

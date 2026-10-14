@@ -12,7 +12,7 @@ import (
 	"github.com/rqlite/rqlite/v10/internal/random"
 )
 
-// Test_ClusterBasicDelivery tests that only the leader sends events to HTTP endpoint
+// Test_ClusterBasicDelivery tests that only the leader sends events to the HTTP endpoint
 func Test_ClusterBasicDelivery(t *testing.T) {
 	ResetStats()
 
@@ -181,7 +181,7 @@ func Test_ClusterSimpleHWM(t *testing.T) {
 	t.Logf("Service HWM after processing: %d", svc.HighWatermark())
 }
 
-// Test_ClusterHWMPropagation tests high watermark propagation across cluster
+// Test_ClusterHWMPropagation tests high watermark propagation across the cluster
 func Test_ClusterHWMPropagation(t *testing.T) {
 	ResetStats()
 
@@ -264,7 +264,7 @@ func Test_ClusterHWMPropagation(t *testing.T) {
 		return httpServer.GetRequestCount() == 2
 	}, time.Second)
 
-	// Confirm that HWM is set correctly across cluster.
+	// Confirm that HWM is set correctly across the cluster.
 	testPoll(t, func() bool {
 		return services[0].HighWatermark() == 20 && services[1].HighWatermark() == 20 && services[2].HighWatermark() == 20
 	}, time.Second)
@@ -355,7 +355,7 @@ func Test_ClusterLeadershipChange(t *testing.T) {
 		return httpServer.GetRequestCount() == 1
 	}, time.Second)
 
-	// Verify both services' high watermark are updated
+	// Verify both services' high watermarks are updated
 	testPoll(t, func() bool {
 		return services[0].HighWatermark() == 10 && services[1].HighWatermark() == 10 && services[2].HighWatermark() == 10
 	}, time.Second)
@@ -378,7 +378,7 @@ func Test_ClusterLeadershipChange(t *testing.T) {
 		return httpServer.GetRequestCount() == 2
 	}, time.Second)
 
-	// Verify all services' high watermark are updated
+	// Verify all services' high watermarks are updated
 	testPoll(t, func() bool {
 		return services[0].HighWatermark() == 20 && services[1].HighWatermark() == 20 && services[2].HighWatermark() == 20
 	}, time.Second)
@@ -658,7 +658,7 @@ func Test_Cluster_100Events(t *testing.T) {
 	rns := random.IntN(3, 100)
 	for idx, in := range ins {
 		go func(ch chan<- *proto.CDCIndexedEventGroup) {
-			// Simulate leadership changing on cluster during processing. While events
+			// Simulate leadership changing on the cluster during processing. While events
 			// may be repeated, none should be lost. These indexes were chosen at random.
 			for i := range numEvents {
 				if idx == 0 {
@@ -678,7 +678,7 @@ func Test_Cluster_100Events(t *testing.T) {
 		cluster.SetLeader(2)
 	}()
 
-	// Confirm that HWM is set correctly across cluster.
+	// Confirm that HWM is set correctly across the cluster.
 	testPoll(t, func() bool {
 		return services[0].HighWatermark() == uint64(numEvents) &&
 			services[1].HighWatermark() == uint64(numEvents) &&

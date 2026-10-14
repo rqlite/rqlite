@@ -447,7 +447,7 @@ func Test_Preupdate_Constraint(t *testing.T) {
 		t.Fatalf("expected count 1, got %d", count.Load())
 	}
 
-	// Ensure the hook is not triggered for a INSERT that violates a unique constraint.
+	// Ensure the hook is not triggered for an INSERT that violates a unique constraint.
 	r, err = db.ExecuteStringStmt("INSERT INTO foo(id, name) VALUES(6, 'fiona')")
 	if err == nil && r[0].GetE().GetError() == "" {
 		t.Fatalf("expected error, got nil")
@@ -709,7 +709,7 @@ func Test_Preupdate_Multi(t *testing.T) {
 	wg.Wait()
 }
 
-// Test_Preupdate_Tx demostrates that the preupdate hook is called for
+// Test_Preupdate_Tx demonstrates that the preupdate hook is called for
 // a transaction which is rolled back.
 func Test_Preupdate_Tx(t *testing.T) {
 	path := mustTempPath()

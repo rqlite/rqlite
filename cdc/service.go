@@ -159,7 +159,7 @@ type Cluster interface {
 }
 
 // Service is a CDC service that reads events from a channel and processes them.
-// It is used to stream changes to a HTTP endpoint.
+// It is used to stream changes to an HTTP endpoint.
 type Service struct {
 	serviceID   string
 	nodeID      string
@@ -179,10 +179,10 @@ type Service struct {
 	// transmitMaxRetries is the maximum number of retries for sending events to the endpoint.
 	transmitMaxRetries int
 
-	// TransmitMinBackoff is the delay between retries for sending events to the endpoint.
+	// transmitMinBackoff is the delay between retries for sending events to the endpoint.
 	transmitMinBackoff time.Duration
 
-	// TransmitMaxBackoff is the maximum backoff time for retries when using exponential backoff.
+	// transmitMaxBackoff is the maximum backoff time for retries when using exponential backoff.
 	transmitMaxBackoff time.Duration
 
 	// transmitRetryPolicy defines the retry policy to use when sending events to the endpoint.
@@ -202,7 +202,7 @@ type Service struct {
 	// at least once to the webhook endpoint.
 	fifo *Queue
 
-	// queue implements the batching of CDC events before transmission to the webhook. The
+	// batcher implements the batching of CDC events before transmission to the webhook. The
 	// contents of this queue do not persist across restarts or leader changes.
 	batcher *queue.Queue[*proto.CDCIndexedEventGroup]
 
@@ -211,7 +211,7 @@ type Service struct {
 	highWatermark atomic.Uint64
 
 	// highWatermarkInterval is the interval at which the high watermark is written to the store.
-	// This is used to ensure that the high watermark is written periodically,
+	// This is used to ensure that the high watermark is written periodically.
 	highWatermarkInterval time.Duration
 
 	// Channel to receive notifications of leader changes.
@@ -305,7 +305,7 @@ func NewService(nodeID, dir string, clstr Cluster, in <-chan *proto.CDCIndexedEv
 	srv.fifo = fifo
 
 	// Whatever is the first key in the FIFO we assume has not been sent. This ensures we meet the
-	// at least-once guarantee. So set the highwater mark to one before.
+	// at-least-once guarantee. So set the highwater mark to one before.
 	//
 	// In other words we assume that anything sitting in the queue has not been sent to the webhook.
 	// If that is not the case then an HWM update from other nodes in the cluster may update it
@@ -465,7 +465,7 @@ func (s *Service) mainLoop() {
 			stats.Add(numBatcherReads, 1)
 
 			if len(req.Objects) == 1 && req.Objects[0].Flush {
-				// Nothing but a flush request, short-ciruit out.
+				// Nothing but a flush request, short-circuit out.
 				s.flushRx.Add(1)
 				req.Close()
 				break
@@ -661,7 +661,7 @@ func (s *Service) leaderLoop() (chan struct{}, chan struct{}) {
 }
 
 // leaderHWMLoop handles periodic high watermark operations for leaders.
-// It broadcasts HWM to cluster, writes to disk, and prunes FIFO.
+// It broadcasts the HWM to the cluster, writes it to disk, and prunes the FIFO.
 func (s *Service) leaderHWMLoop() (chan struct{}, chan struct{}) {
 	stop := make(chan struct{})
 	done := make(chan struct{})
@@ -731,7 +731,7 @@ func (s *Service) followerLoop() (chan struct{}, chan struct{}) {
 				}
 				// This means all events up to this high watermark have been
 				// successfully sent to the webhook by the cluster. We can
-				// delete all events up and including that point from our FIFO.
+				// delete all events up to and including that point from our FIFO.
 				if err := s.fifo.DeleteRange(hwm); err != nil {
 					s.logger.Printf("error deleting events up to high watermark from FIFO: %v", err)
 				}

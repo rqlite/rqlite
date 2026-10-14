@@ -7,14 +7,14 @@ import (
 )
 
 var (
-	// ErrClosed is the error resulting if the pool is closed via pool.Close().
+	// ErrClosed is the error returned if the pool has been closed via pool.Close().
 	ErrClosed = errors.New("pool is closed")
 )
 
 // Pool interface describes a pool implementation. A pool should have maximum
 // capacity. An ideal pool is threadsafe and easy to use.
 type Pool interface {
-	// Get returns a new connection from the pool. Closing the connections puts
+	// Get returns a new connection from the pool. Closing the connection puts
 	// it back to the Pool. Closing it when the pool is destroyed or full will
 	// be counted as an error.
 	Get() (net.Conn, error)

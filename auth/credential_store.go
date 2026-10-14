@@ -16,7 +16,7 @@ const (
 
 	// PermAll means all actions permitted.
 	PermAll = "all"
-	// PermJoin means user is permitted to join cluster.
+	// PermJoin means user is permitted to join the cluster.
 	PermJoin = "join"
 	// PermJoinReadOnly means user is permitted to join the cluster only as a read replica node.
 	PermJoinReadOnly = "join-read-only"
@@ -36,7 +36,7 @@ const (
 	PermStatus = "status"
 	// PermReady means user can retrieve ready status.
 	PermReady = "ready"
-	// PermBackup means user can backup node.
+	// PermBackup means user can back up a node.
 	PermBackup = "backup"
 	// PermLoad means user can load a SQLite dump into a node.
 	PermLoad = "load"

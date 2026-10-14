@@ -43,7 +43,7 @@ type Event struct {
 //     enqueued. Since this queue is to be used to store changes associated with Raft
 //     log entries, once a given index has been written to the queue any further
 //     attempts to enqueue an item with that index will be ignored because those
-//     repeated enqueue attempts contain identical information as the original.
+//     repeated enqueue attempts contain the same information as the original.
 type Queue struct {
 	db *bbolt.DB
 

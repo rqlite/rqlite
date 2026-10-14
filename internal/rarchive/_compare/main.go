@@ -22,7 +22,7 @@ func main() {
 	println("Gzip size:    ", len(gziped))
 }
 
-// write a function which gzip compresses a byte slide
+// gzipCompress gzip-compresses a byte slice.
 func gzipCompress(data []byte) []byte {
 	var buf bytes.Buffer
 	gz := gzip.NewWriter(&buf)

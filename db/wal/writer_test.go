@@ -76,7 +76,7 @@ func Test_Writer_FullScanner_LargeWAL(t *testing.T) {
 	}
 }
 
-// Test_Writer_CompactingScanner tests The CompactingScanner by continuously
+// Test_Writer_CompactingScanner tests the CompactingScanner by continuously
 // using it to copy a WAL file, and using that WAL file to apply changes to a
 // second database. The second database should be identical to the first in
 // terms of SQL queries.

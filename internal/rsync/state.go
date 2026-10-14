@@ -9,7 +9,7 @@ import (
 // ErrTimeout is returned when a timeout occurs.
 var ErrTimeout = errors.New("timeout")
 
-// CloseOrTimeout waits for a channel to be closed or a timeout expires.
+// CloseOrTimeout waits for a channel to be closed or a timeout to expire.
 func CloseOrTimeout(ch <-chan struct{}, timeout time.Duration) error {
 	select {
 	case <-ch:

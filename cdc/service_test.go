@@ -67,7 +67,7 @@ func Test_ServiceSingleEvent(t *testing.T) {
 		Events: []*proto.CDCEvent{ev},
 	}
 
-	// Test function which waits for the service to forward events. If duration is zero
+	// Test function which waits for the service to forward events. If expCount is zero
 	// then the test will fail if any events are forwarded within the duration.
 	waitFn := func(dur time.Duration, expCount int) {
 		n := 0
@@ -1240,7 +1240,7 @@ func (tc *mockCluster) BroadcastHighWatermark(value uint64) error {
 	return nil
 }
 
-// SetLeader send a True to channel at leaderIndex and False to all others.
+// SetLeader sends true to the channel at leaderIndex and false to all others.
 // Indexes are zero-based. Send -1 to mark no leader.
 func (tc *mockCluster) SetLeader(leaderIndex int) {
 	tc.mu.Lock()

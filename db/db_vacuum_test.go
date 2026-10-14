@@ -111,7 +111,7 @@ func Test_DBVacuumInto(t *testing.T) {
 	defer vDB.Close()
 	testQ(vDB)
 
-	// VACUUM INTO an non-existing file, should still work.
+	// VACUUM INTO a non-existing file, should still work.
 	tmpPath2 := mustTempPath()
 	defer fsutil.Remove(tmpPath2)
 	if err := db.VacuumInto(tmpPath2); err != nil {
@@ -137,7 +137,7 @@ func Test_DBVacuumInto(t *testing.T) {
 	defer vDB3.Close()
 	testQ(vDB3)
 
-	// VACUUM into a file which is an existing SQLIte database. Should fail.
+	// VACUUM into a file which is an existing SQLite database. Should fail.
 	existDB, existPath := mustCreateOnDiskDatabaseWAL()
 	defer db.Close()
 	defer fsutil.Remove(existPath)

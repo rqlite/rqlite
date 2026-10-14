@@ -131,7 +131,7 @@ func (h *HTTPTestServer) GetHighestMessageIndex() uint64 {
 	return highest
 }
 
-// Reset delete all received data.
+// Reset deletes all received data.
 func (h *HTTPTestServer) Reset() {
 	h.mu.Lock()
 	defer h.mu.Unlock()

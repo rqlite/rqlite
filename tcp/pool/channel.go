@@ -22,7 +22,7 @@ type channelPool struct {
 type Factory func() (net.Conn, error)
 
 // NewChannelPool returns a new pool based on buffered channels with a maximum capacity.
-// During a Get(), If there is no new connection available in the pool, a new connection
+// During a Get(), if there is no new connection available in the pool, a new connection
 // will be created via the Factory() method.
 func NewChannelPool(maxCap int, factory Factory) (Pool, error) {
 	if factory == nil {

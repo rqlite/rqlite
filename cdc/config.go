@@ -79,7 +79,7 @@ type Config struct {
 	// If it is unspecified or is zero, the default DefaultMaxBatchSz is used.
 	MaxBatchSz int `json:"max_batch_size"`
 
-	// MaxBatchDelay is the maximum delay before sending a rquest to the endpoint, regardless
+	// MaxBatchDelay is the maximum delay before sending a request to the endpoint, regardless
 	// of the number of events ready for sending. This is used to ensure that we don't wait
 	// too long for a batch to fill up. If it is unspecified or is zero, the default of
 	// DefaultMaxBatchDelay is used.
@@ -90,7 +90,7 @@ type Config struct {
 	HighWatermarkInterval time.Duration `json:"high_watermark_interval"`
 
 	// TransmitTimeout is the timeout for transmitting events to the endpoint. If the transmission
-	// takes longer than this, it will be retried. If zero os not specified, the default of
+	// takes longer than this, it will be retried. If zero or not specified, the default of
 	// DefaultTransmitTimeout is used.
 	TransmitTimeout time.Duration `json:"transmit_timeout"`
 

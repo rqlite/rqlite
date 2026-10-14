@@ -95,7 +95,7 @@ func Test_WALNotRemovedOnClose(t *testing.T) {
 }
 
 // Test_WALNotChangedOnReopen tests that when a database with an existing
-// file is opened, that the files are not modified in anyway.
+// file is opened, that the files are not modified in any way.
 func Test_WALNotChangedOnReopen(t *testing.T) {
 	path := mustTempPath()
 	defer fsutil.Remove(path)
@@ -166,7 +166,7 @@ func Test_WALNotCheckpointedOnClose(t *testing.T) {
 		t.Fatalf("WAL file does not exist after creating a table")
 	}
 
-	// Checkpoint to table exists in main database file.
+	// Checkpoint so the table exists in the main database file.
 	if _, err := db.Checkpoint(CheckpointTruncate); err != nil {
 		t.Fatalf("failed to checkpoint database: %s", err.Error())
 	}
@@ -284,7 +284,7 @@ func Test_DBPaths(t *testing.T) {
 	}
 }
 
-// Test_TableCreation tests basic operation of an database
+// Test_TableCreation tests basic operation of a database
 func Test_TableCreation(t *testing.T) {
 	db, path := mustCreateOnDiskDatabaseWAL()
 	defer db.Close()
@@ -556,7 +556,7 @@ func Test_DBOptimize(t *testing.T) {
 		t.Fatalf("unexpected results for query, expected %s, got %s", exp, got)
 	}
 
-	// Confirm the database file is unchanged, but the WAL file is i.e. that
+	// Confirm the database file is unchanged, but the WAL file is, i.e. that
 	// stats are stored in the WAL like any other write operation.
 	if !bytes.Equal(preDBBytes, mustReadBytes(db.Path())) {
 		t.Fatalf("db file should be unchanged after optimize")
@@ -632,7 +632,7 @@ func Test_TableCreationFK(t *testing.T) {
 		t.Fatalf("unexpected results for query, expected %s, got %s", exp, got)
 	}
 
-	// Do same test, but this explicitly enable FK constraints after open.
+	// Do same test, but this time explicitly enable FK constraints after open.
 	dbFKPragma, path := mustCreateOnDiskDatabaseWAL()
 	defer dbFKPragma.Close()
 	defer fsutil.Remove(path)
@@ -996,7 +996,7 @@ func Test_PartialFailTransactionReturning(t *testing.T) {
 }
 
 // Test_WALDatabaseCreatedOK tests that a WAL file is created, and that
-// a checkpoint succeeds
+// a checkpoint succeeds.
 func Test_WALDatabaseCreatedOK(t *testing.T) {
 	path := mustTempFile()
 	defer fsutil.Remove(path)
@@ -1138,7 +1138,7 @@ func test_FileCreationOnDisk(t *testing.T, db *DB) {
 	}
 }
 
-// test_ConnectionIsolationOnDisk test that ISOLATION behavior of on-disk databases doesn't
+// test_ConnectionIsolationOnDisk tests that ISOLATION behavior of on-disk databases doesn't
 // change unexpectedly.
 func test_ConnectionIsolationOnDisk(t *testing.T, db *DB) {
 	r, err := db.ExecuteStringStmt("CREATE TABLE foo (id INTEGER NOT NULL PRIMARY KEY, name TEXT)")
@@ -1393,7 +1393,7 @@ func Test_ExecShouldTimeout(t *testing.T) {
 	// Top-level err is nil, and r[0].GetE().GetError() contains ErrExecuteTimeout.
 	// This is what the test expects.
 	// - Earlier — inside db.rwDB.Conn(ctx) at db.go:1021 → database/sql returns
-	// context.DeadlineExceeded directly. Top-level/ err != nil, no per-statement
+	// context.DeadlineExceeded directly. Top-level err != nil, no per-statement
 	// error wrapping.
 	//
 	// 100µs is well under typical Go scheduling jitter on a busy machine. If
@@ -1573,7 +1573,7 @@ func mustTempFile() string {
 	return tmpfile.Name()
 }
 
-// function which copies a src file to a dst file, panics if any error
+// mustCopyFile copies a src file to a dst file, and panics on any error.
 func mustCopyFile(dst, src string) {
 	srcFile, err := os.Open(src)
 	if err != nil {

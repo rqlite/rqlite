@@ -711,8 +711,8 @@ func Test_SingleNodeSnapshot_FSMFailures(t *testing.T) {
 	}
 }
 
-// Test_SingleNodeSnapshot_CheckpointFailures tests the Store responds correctly
-// when checkpoint of the underlying database returns an error. This can happen
+// Test_SingleNodeSnapshot_CheckpointFailures tests that the Store responds correctly
+// when a checkpoint of the underlying database returns an error. This can happen
 // depending on active readers of the database. The Store should handle active
 // readers fine, aborting the snapshot, and handling it next time. This tests
 // critical code paths which are very rare, but are perfectly possible in production.
@@ -812,7 +812,7 @@ func Test_SingleNodeSnapshot_CheckpointFailures(t *testing.T) {
 
 	//////////////////////////////////////////////////////////////////////////////////
 	// Stop store, remove clean_snapshot, restart it to ensure the restored snapshot
-	// was actually created correctly. Start by closing the database to Windows
+	// was actually created correctly. Start by closing the database so Windows
 	// won't have an issue deleting the SQLite file.
 	if err := srcDB.Close(); err != nil {
 		t.Fatalf("failed to close database: %v", err)

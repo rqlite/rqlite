@@ -306,7 +306,7 @@ func (p *Proxy) Promote(ctx context.Context, pn *proto.PromoteNodeRequest, creds
 // ErrNotLeader and noForward is false, the request is forwarded to
 // the current leader.
 //
-// If ID is non-empty, then an attempt will be made to transfer
+// If id is non-empty, then an attempt will be made to transfer
 // leadership to that node.
 func (p *Proxy) Stepdown(ctx context.Context, wait bool, id string, creds *clstrPB.Credentials,
 	timeout time.Duration, noForward bool) (string, error) {

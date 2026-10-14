@@ -61,8 +61,8 @@ func (r *ReadyTarget[T]) Unsubscribe(ch <-chan struct{}) {
 }
 
 // Signal informs the ReadyTarget that the given target has been reached.
-// If the target is less than or equal to the current target, then the
-// index is ignored.
+// If the given target is less than or equal to the current target, then the
+// signal is ignored.
 func (r *ReadyTarget[T]) Signal(index T) {
 	r.mu.Lock()
 	defer r.mu.Unlock()

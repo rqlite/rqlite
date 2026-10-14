@@ -38,7 +38,7 @@ func TestMux(t *testing.T) {
 		tcpListener := mustTCPListener("127.0.0.1:0")
 		defer tcpListener.Close()
 
-		// Setup muxer & listeners.
+		// Set up muxer & listeners.
 		mux, err := NewMux(tcpListener, nil)
 		if err != nil {
 			t.Fatalf("failed to create mux: %s", err.Error())
@@ -130,7 +130,7 @@ func TestMux(t *testing.T) {
 }
 
 func TestMux_Advertise(t *testing.T) {
-	// Setup muxer.
+	// Set up muxer.
 	tcpListener := mustTCPListener("127.0.0.1:0")
 	defer tcpListener.Close()
 

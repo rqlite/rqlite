@@ -798,7 +798,7 @@ func Test_DB_ReadOnlyStatements(t *testing.T) {
 		t.Fatalf("failed to create table: %s", err.Error())
 	}
 
-	// Test that statements are trapped as expected as attempts to change database on read-only
+	// Test that statements are trapped as expected as attempts to change the database on read-only
 	// connections.
 	expROResp := `[{"error":"attempt to change database via query operation","error_v2":{"message":"attempt to write a readonly database","sqlite":{"code":8,"extended_code":8}}}]`
 	tests := []struct {

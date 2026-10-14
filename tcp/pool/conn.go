@@ -29,7 +29,7 @@ func (p *Conn) Close() error {
 	return p.c.put(p.Conn)
 }
 
-// MarkUnusable marks the connection not usable anymore, to let the pool close it instead of returning it to pool.
+// MarkUnusable marks the connection as unusable, so the pool closes it instead of returning it to the pool.
 func (p *Conn) MarkUnusable() {
 	p.mu.Lock()
 	defer p.mu.Unlock()

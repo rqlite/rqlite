@@ -412,7 +412,7 @@ func Test_IsValidSQLiteCompressedOnDisk(t *testing.T) {
 		t.Fatalf("failed to close database: %s", err.Error())
 	}
 
-	// Compress the SQLite file to a second a path.
+	// Compress the SQLite file to a second path.
 	compressedPath := mustTempFile()
 	defer fsutil.Remove(compressedPath)
 	mustGzip(compressedPath, path)
@@ -431,7 +431,7 @@ func Test_IsValidSQLiteCompressedOnDisk(t *testing.T) {
 	}
 
 	// Compress the already compressed file, and check that it is marked
-	// as invalid. This is to check that an valid Gzip archive, but one
+	// as invalid. This is to check that a valid Gzip archive, but one
 	// that is not a valid SQLite file, is marked as invalid.
 	compressedCompressedPath := mustTempFile()
 	defer fsutil.Remove(compressedCompressedPath)
