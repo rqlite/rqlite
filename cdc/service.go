@@ -463,42 +463,45 @@ func (s *Service) mainLoop() {
 
 		case req := <-s.batcher.C:
 			stats.Add(numBatcherReads, 1)
+			func() {
+				// Whatever happens to this batch, any flush waiters attached
+				// to it must be released.
+				defer req.Close()
 
-			if len(req.Objects) == 1 && req.Objects[0].Flush {
-				// Nothing but a flush request, short-circuit out.
-				s.flushRx.Add(1)
-				req.Close()
-				break
-			}
-
-			// Get the highest index in this batch, for enqueueing to FIFO.
-			hiIdx := uint64(0)
-			for i := range req.Objects {
-				if req.Objects[i].Index > hiIdx {
-					hiIdx = req.Objects[i].Index
-				}
-				if req.Objects[i].Flush {
+				if len(req.Objects) == 1 && req.Objects[0].Flush {
+					// Nothing but a flush request, short-circuit out.
 					s.flushRx.Add(1)
+					return
 				}
-			}
 
-			b, err := cdcjson.MarshalToEnvelopeJSON(s.serviceID, s.nodeID, true, req.Objects)
-			if err != nil {
-				s.logger.Printf("error marshalling batch for FIFO: %v", err)
-				continue
-			}
+				// Get the highest index in this batch, for enqueueing to FIFO.
+				hiIdx := uint64(0)
+				for i := range req.Objects {
+					if req.Objects[i].Index > hiIdx {
+						hiIdx = req.Objects[i].Index
+					}
+					if req.Objects[i].Flush {
+						s.flushRx.Add(1)
+					}
+				}
 
-			// Compress the marshalled data before enqueuing to FIFO
-			compressedData, err := flate.Compress(b)
-			if err != nil {
-				s.logger.Printf("error compressing batch for FIFO: %v", err)
-				continue
-			}
+				b, err := cdcjson.MarshalToEnvelopeJSON(s.serviceID, s.nodeID, true, req.Objects)
+				if err != nil {
+					s.logger.Printf("error marshalling batch for FIFO: %v", err)
+					return
+				}
 
-			if err := s.fifo.Enqueue(&Event{Index: hiIdx, Data: compressedData}); err != nil {
-				s.logger.Printf("error writing batch to FIFO: %v", err)
-			}
-			req.Close()
+				// Compress the marshalled data before enqueuing to FIFO
+				compressedData, err := flate.Compress(b)
+				if err != nil {
+					s.logger.Printf("error compressing batch for FIFO: %v", err)
+					return
+				}
+
+				if err := s.fifo.Enqueue(&Event{Index: hiIdx, Data: compressedData}); err != nil {
+					s.logger.Printf("error writing batch to FIFO: %v", err)
+				}
+			}()
 
 		case <-s.done:
 			return

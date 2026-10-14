@@ -4,6 +4,7 @@ import (
 	"expvar"
 	"fmt"
 	"io"
+	"math"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -1308,5 +1309,71 @@ func testPoll(t *testing.T, condition func() bool, timeout time.Duration) {
 		case <-timer.C:
 			t.Fatalf("timed out waiting for condition")
 		}
+	}
+}
+
+// Test_ServiceSnapshotSync_NonFiniteFloat tests that an event carrying a
+// floating-point value with no JSON representation does not cause the whole
+// batch to be discarded, and that a flush waiter attached to that batch is
+// still released.
+func Test_ServiceSnapshotSync_NonFiniteFloat(t *testing.T) {
+	ResetStats()
+
+	cl := &mockCluster{}
+
+	cfg := DefaultConfig()
+	cfg.Endpoint = "stdout"
+	cfg.MaxBatchSz = 10
+	cfg.MaxBatchDelay = 30 * time.Second
+	in := make(chan *proto.CDCIndexedEventGroup, 100)
+	svc, err := NewService(
+		"node1",
+		t.TempDir(),
+		cl,
+		in,
+		cfg,
+	)
+	if err != nil {
+		t.Fatalf("failed to create service: %v", err)
+	}
+	if err := svc.Start(); err != nil {
+		t.Fatalf("failed to start service: %v", err)
+	}
+	defer svc.Stop()
+
+	cl.SetLeader(0)
+
+	ev := &proto.CDCEvent{
+		Op:          proto.CDCEvent_INSERT,
+		Table:       "foo",
+		ColumnNames: []string{"id", "ratio"},
+		NewRowId:    2,
+		NewRow: &proto.CDCRow{
+			Values: []*proto.CDCValue{
+				{Value: &proto.CDCValue_I{I: 2}},
+				{Value: &proto.CDCValue_D{D: math.Inf(1)}},
+			},
+		},
+	}
+	evs := &proto.CDCIndexedEventGroup{
+		Index:  66,
+		Events: []*proto.CDCEvent{ev},
+	}
+
+	in <- evs
+	testPoll(t, func() bool {
+		return svc.writesToBatcher.Load() == 1
+	}, 1*time.Second)
+
+	// The sync must complete, and the event must reach the FIFO.
+	if err := cl.RequestSnapshotSync(1 * time.Second); err != nil {
+		t.Fatalf("snapshot sync failed: %v", err)
+	}
+	idx, err := svc.fifo.HighestKey()
+	if err != nil {
+		t.Fatalf("failed to get FIFO highest key: %v", err)
+	}
+	if idx != evs.Index {
+		t.Fatalf("expected FIFO highest key to be %d, got %d", evs.Index, idx)
 	}
 }
