@@ -308,6 +308,7 @@ func (q *Queue) run(highestKey uint64) {
 					if err := setHighestKey(tx, req.idx); err != nil {
 						return err
 					}
+					highestKey = req.idx
 				}
 				stats.Add(fifoSize, 1)
 				return nil
