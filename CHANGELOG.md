@@ -5,7 +5,7 @@
 - [PR #2961](https://github.com/rqlite/rqlite/pull/2961): More robust node ID detection for Leader stepdown.
 
 ## v10.6.0 (October 12th 2026)
-This release features an addition to the API. In the event of an error there is a new field in the response, named `error_v2`, which may contain numeric SQLite error codes. Clients accessing the API can now identify errors in a much more robust manner. See the [documentation for more details](https://rqlite.io/docs/api/api/#handling-errors). This feature also [introduces configurable query logging](https://rqlite.io/docs/guides/config/#sqlite-database).
+This release features an enhancement to the API. In the event of an error there is a new field in the response, named `error_v2`, which may contain numeric SQLite error codes. Clients accessing the API can now identify errors in a much more robust manner. See the [documentation for more details](https://rqlite.io/docs/api/api/#handling-errors). This feature also [introduces configurable query logging](https://rqlite.io/docs/guides/config/#sqlite-database).
 
 This release also addresses a security issue related to Authentication files. A **user with no explicit permissions** could be granted elevated permissions. Correctly configured users do not suffer from this issue. If you use the authentication system you should upgrade.
 
