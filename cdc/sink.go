@@ -65,13 +65,30 @@ func NewHTTPSink(endpoint string, tlsConfig *tls.Config, timeout time.Duration) 
 		Transport: &http.Transport{
 			TLSClientConfig: tlsConfig,
 		},
-		Timeout: timeout,
+		CheckRedirect: checkRedirectKeepsPost,
+		Timeout:       timeout,
 	}
 
 	return &HTTPSink{
 		endpoint:   endpoint,
 		httpClient: httpClient,
 	}
+}
+
+// checkRedirectKeepsPost is an http.Client redirect policy which refuses any
+// redirect that would not re-send the batch as a POST. A 301, 302 or 303
+// converts a POST into a GET with no body, so a 2xx from the redirect target
+// would acknowledge a batch it never received. A 307 or 308 preserves the
+// method and body, so those are followed, up to the standard limit.
+func checkRedirectKeepsPost(req *http.Request, via []*http.Request) error {
+	if req.Method != http.MethodPost {
+		return fmt.Errorf("refusing redirect to %s: POST would become %s and the payload would be dropped",
+			httpurl.RemoveBasicAuth(req.URL.String()), req.Method)
+	}
+	if len(via) >= 10 {
+		return fmt.Errorf("stopped after %d redirects", len(via))
+	}
+	return nil
 }
 
 // Write writes the data to the HTTP endpoint.
