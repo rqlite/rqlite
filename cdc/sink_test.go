@@ -101,6 +101,77 @@ func Test_HTTPSink_Write_Accepted(t *testing.T) {
 	}
 }
 
+// Test_HTTPSink_Write_RedirectDropsPayload tests that a redirect which would
+// convert the POST into a GET is not followed, since the payload would never
+// reach the final endpoint and a 200 from it must not be taken as delivery.
+func Test_HTTPSink_Write_RedirectDropsPayload(t *testing.T) {
+	for _, code := range []int{
+		http.StatusMovedPermanently,
+		http.StatusFound,
+		http.StatusSeeOther,
+	} {
+		t.Run(http.StatusText(code), func(t *testing.T) {
+			var targetHits int
+			target := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				targetHits++
+				w.WriteHeader(http.StatusOK)
+			}))
+			defer target.Close()
+
+			redirector := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				http.Redirect(w, r, target.URL, code)
+			}))
+			defer redirector.Close()
+
+			sink := NewHTTPSink(redirector.URL, nil, 5*time.Second)
+			if _, err := sink.Write([]byte(`{"test": "data"}`)); err == nil {
+				t.Fatalf("Write should fail on a %d redirect", code)
+			}
+			if targetHits != 0 {
+				t.Fatalf("redirect target should not have been contacted, got %d request(s)", targetHits)
+			}
+		})
+	}
+}
+
+// Test_HTTPSink_Write_RedirectKeepsPayload tests that a redirect which
+// preserves the POST method and body is followed, and the payload is
+// delivered to the final endpoint.
+func Test_HTTPSink_Write_RedirectKeepsPayload(t *testing.T) {
+	for _, code := range []int{
+		http.StatusTemporaryRedirect,
+		http.StatusPermanentRedirect,
+	} {
+		t.Run(http.StatusText(code), func(t *testing.T) {
+			var targetMethod string
+			var targetBody []byte
+			target := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				targetMethod = r.Method
+				targetBody, _ = io.ReadAll(r.Body)
+				w.WriteHeader(http.StatusOK)
+			}))
+			defer target.Close()
+
+			redirector := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				http.Redirect(w, r, target.URL, code)
+			}))
+			defer redirector.Close()
+
+			sink := NewHTTPSink(redirector.URL, nil, 5*time.Second)
+			testData := []byte(`{"test": "data"}`)
+			if _, err := sink.Write(testData); err != nil {
+				t.Fatalf("Write failed on a %d redirect: %v", code, err)
+			}
+			if targetMethod != http.MethodPost {
+				t.Fatalf("expected POST at redirect target, got %s", targetMethod)
+			}
+			if !bytes.Equal(targetBody, testData) {
+				t.Fatalf("expected body %s at redirect target, got %s", testData, targetBody)
+			}
+		})
+	}
+}
+
 func Test_HTTPSink_Write_HTTPError(t *testing.T) {
 	// Test HTTP error response
 	testSrv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
