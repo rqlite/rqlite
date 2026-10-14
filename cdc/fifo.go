@@ -304,15 +304,15 @@ func (q *Queue) run(highestKey uint64) {
 				if err := tx.Bucket(bucketName).Put(key, req.item); err != nil {
 					return err
 				}
-				stats.Add(fifoSize, 1)
 				if req.idx > highestKey {
 					if err := setHighestKey(tx, req.idx); err != nil {
 						return err
 					}
-					highestKey = req.idx
 				}
+				stats.Add(fifoSize, 1)
 				return nil
 			})
+
 			req.respChan <- enqueueResp{err: err}
 			if err == nil && nextEv == nil {
 				if err := loadHead(); err != nil {
