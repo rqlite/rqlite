@@ -1753,6 +1753,62 @@ func Test_Leader_POST(t *testing.T) {
 	}
 }
 
+func Test_Leader_POST_WithID(t *testing.T) {
+	var gotID string
+	store := &MockStore{
+		leaderAddr: "127.0.0.1:8001",
+		stepdownFn: func(wait bool, id string) error {
+			gotID = id
+			return nil
+		},
+	}
+	cluster := &mockClusterService{apiAddr: "http://127.0.0.1:4001"}
+	cred := &mockCredentialStore{HasPermOK: true}
+
+	s := New("127.0.0.1:4001", store, cluster, proxy.New(store, cluster), cred)
+
+	// Test POST request without wait
+	req, err := http.NewRequest("POST", "/leader", strings.NewReader(`{"id": "foo"}`))
+	if err != nil {
+		t.Fatalf("failed to create POST request: %s", err.Error())
+	}
+	rr := httptest.NewRecorder()
+	s.ServeHTTP(rr, req)
+
+	if rr.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", rr.Code)
+	}
+
+	if got, exp := gotID, "foo"; got != exp {
+		t.Fatalf("wrong node ID received by handler, got %s, exp %s", got, exp)
+	}
+}
+
+func Test_Leader_POST_BadID(t *testing.T) {
+	store := &MockStore{
+		leaderAddr: "127.0.0.1:8001",
+		stepdownFn: func(wait bool, id string) error {
+			return nil
+		},
+	}
+	cluster := &mockClusterService{apiAddr: "http://127.0.0.1:4001"}
+	cred := &mockCredentialStore{HasPermOK: true}
+
+	s := New("127.0.0.1:4001", store, cluster, proxy.New(store, cluster), cred)
+
+	// Test POST request without wait
+	req, err := http.NewRequest("POST", "/leader", strings.NewReader(`{ junk}`))
+	if err != nil {
+		t.Fatalf("failed to create POST request: %s", err.Error())
+	}
+	rr := httptest.NewRecorder()
+	s.ServeHTTP(rr, req)
+
+	if rr.Code != http.StatusBadRequest {
+		t.Fatalf("expected 200, got %d", rr.Code)
+	}
+}
+
 func Test_LeaderPOST_ForwardToLeader(t *testing.T) {
 	stepdownCalled := false
 	store := &MockStore{
