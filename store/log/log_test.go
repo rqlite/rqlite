@@ -55,7 +55,7 @@ func Test_LogNewEmpty(t *testing.T) {
 func Test_LogNewExistNotEmpty(t *testing.T) {
 	path := mustTempFile(t)
 
-	// Write some entries directory to the BoltDB Raft store.
+	// Write some entries directly to the BoltDB Raft store.
 	bs, err := raftboltdb.NewBoltStore(path)
 	if err != nil {
 		t.Fatalf("failed to create bolt store: %s", err)
@@ -164,7 +164,7 @@ func Test_LogNewExistNotEmpty(t *testing.T) {
 func Test_LogNewExistNotEmptyNoFreelistSync(t *testing.T) {
 	path := mustTempFile(t)
 
-	// Write some entries directory to the BoltDB Raft store.
+	// Write some entries directly to the BoltDB Raft store.
 	bs, err := raftboltdb.NewBoltStore(path)
 	if err != nil {
 		t.Fatalf("failed to create bolt store: %s", err)
@@ -265,7 +265,7 @@ func Test_LogNewExistNotEmptyNoFreelistSync(t *testing.T) {
 func Test_LogDeleteAll(t *testing.T) {
 	path := mustTempFile(t)
 
-	// Write some entries directory to the BoltDB Raft store.
+	// Write some entries directly to the BoltDB Raft store.
 	bs, err := raftboltdb.NewBoltStore(path)
 	if err != nil {
 		t.Fatalf("failed to create bolt store: %s", err)
@@ -343,7 +343,7 @@ func Test_LogDeleteAll(t *testing.T) {
 func Test_LogLastCommandIndexNotExist(t *testing.T) {
 	path := mustTempFile(t)
 
-	// Write some entries directory to the BoltDB Raft store.
+	// Write some entries directly to the BoltDB Raft store.
 	bs, err := raftboltdb.NewBoltStore(path)
 	if err != nil {
 		t.Fatalf("failed to create bolt store: %s", err)
@@ -430,7 +430,7 @@ func Test_LogLastCommandIndexNotExist(t *testing.T) {
 func Test_LogStats(t *testing.T) {
 	path := mustTempFile(t)
 
-	// Write some entries directory to the BoltDB Raft store.
+	// Write some entries directly to the BoltDB Raft store.
 	bs, err := raftboltdb.NewBoltStore(path)
 	if err != nil {
 		t.Fatalf("failed to create bolt store: %s", err)

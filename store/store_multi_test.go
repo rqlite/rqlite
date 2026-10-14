@@ -142,7 +142,7 @@ func Test_MultiNode_Leader_VerifyLeader(t *testing.T) {
 		t.Fatalf("failed to close follower: %s", err.Error())
 	}
 
-	// Be sure the follower is shutdown. It seems that still-open network
+	// Be sure the follower is shut down. It seems that still-open network
 	// connections to the follower can cause VerifyLeader to return nil.
 	time.Sleep(time.Second)
 	if err := s0.VerifyLeader(); err == nil {
@@ -203,7 +203,7 @@ func Test_MultiNode_LeaderObservations(t *testing.T) {
 	wg.Wait()
 }
 
-// Test_MultiNodeSimple tests that a the core operation of a multi-node
+// Test_MultiNodeSimple tests that the core operation of a multi-node
 // cluster works as expected. That is, with a two node cluster, writes
 // actually replicate, and reads are consistent.
 func Test_MultiNodeSimple(t *testing.T) {
@@ -380,7 +380,7 @@ func Test_MultiNodeNode_CommitIndexes(t *testing.T) {
 		t.Fatalf("wrong command commit index, got: %d, exp %d", got, exp)
 	}
 
-	// Send an FSM command through the log, ensure the indexes are correctly updated.
+	// Send an FSM command through the log, ensure the indexes are correctly updated
 	// on the follower.
 	s0.Noop("don't care")
 	testPoll(t, func() bool {
@@ -575,7 +575,7 @@ func Test_MultiNodeSnapshot_ErrorMessage(t *testing.T) {
 // This is all an edge case, discovered by examining the Hashicorp Raft code, see:
 // https://github.com/hashicorp/raft/blob/9e3b7155dd6f45b128d0679f22df32229319e81f/snapshot.go#L165
 //
-// This is very unlikely to be an issue in practise unless a snapshot is attempted immediately after
+// This is very unlikely to be an issue in practice unless a snapshot is attempted immediately after
 // a node joins a cluster, but before any other write traffic was sent to the cluster. All other error
 // cases would be due to truly unexpected errors, but are handled similarly - keep the WAL until the
 // next snapshot, and include it in that snapshot.
@@ -619,7 +619,7 @@ func Test_MultiNodeSnapshot_BlockedSnapshot(t *testing.T) {
 	if err := s0.Snapshot(0); err != nil {
 		t.Fatalf("failed to snapshot single-node store: %s", err.Error())
 	}
-	insertRecord(s0, 1000) // Need a larger number to ensure multiple pages are modified and brings out issue.
+	insertRecord(s0, 1000) // Need a larger number to ensure multiple pages are modified and bring out the issue.
 
 	// Fire up second node.
 	s1, ln1 := mustNewStore(t)
@@ -867,7 +867,7 @@ func Test_MultiNodeJoinRemove(t *testing.T) {
 		t.Fatalf("cluster does not have correct nodes")
 	}
 
-	// Should timeout waiting for removal of other node
+	// Should time out waiting for removal of other node
 	err = s0.WaitForRemoval(s1.ID(), time.Second)
 	// if err is nil then fail the test
 	if err == nil {
@@ -943,7 +943,7 @@ func Test_MultiNodeStepdown(t *testing.T) {
 		t.Fatalf("Error waiting for leader: %s", err)
 	}
 
-	// Telling a follower to stepdown should fail.
+	// Telling a follower to step down should fail.
 	if err := s1.Stepdown(true, ""); err != ErrNotLeader {
 		t.Fatalf("expected ErrNotLeader when follower is told to step down")
 	}
@@ -1131,7 +1131,7 @@ func Test_MultiNodeStoreNotifyBootstrap(t *testing.T) {
 
 // Test_MultiNodeStoreAutoRestoreBootstrap tests that a cluster will
 // bootstrap correctly when each node is supplied with an auto-restore
-// file. Only one node should do able to restore from the file.
+// file. Only one node should be able to restore from the file.
 func Test_MultiNodeStoreAutoRestoreBootstrap(t *testing.T) {
 	ResetStats()
 	s0, ln0 := mustNewStore(t)
@@ -1895,7 +1895,7 @@ func Test_MultiNodeStoreLogTruncation(t *testing.T) {
 	}
 	testPoll(t, f, 100*time.Millisecond, 2*time.Second)
 
-	// Do one more execute, to ensure there is at least one log not snapshot.
+	// Do one more execute, to ensure there is at least one log not snapshotted.
 	// Without this, there is no guarantee fsmIndex will be set on s1.
 	_, _, err := s0.Execute(context.Background(), executeRequestFromString(`INSERT INTO foo(id, name) VALUES(6, "fiona")`, false, false))
 	if err != nil {

@@ -323,7 +323,7 @@ func Test_SingleNode_WaitForCommitIndex(t *testing.T) {
 	if err := s.WaitForCommitIndex(1, 100*time.Second); err != nil {
 		t.Fatalf("failed to wait for commit index: %s", err.Error())
 	}
-	// It should timeout waiting for the commit index to be way larger.
+	// It should time out waiting for the commit index to be way larger.
 	if err := s.WaitForCommitIndex(1000, 100*time.Millisecond); err == nil {
 		t.Fatalf("should have timed out waiting for commit index")
 	}
@@ -368,7 +368,7 @@ func Test_SingleNodeTempFileCleanup(t *testing.T) {
 	}
 }
 
-// Test_SingleNodeBackupBinary_NoLogs tests that a Store correctly responds to backup
+// Test_SingleNodeBackupBinary_NoLogs tests that a Store correctly responds to a backup
 // request even when no data has been written to the database.
 func Test_SingleNodeBackupBinary_NoLogs(t *testing.T) {
 	s, ln := mustNewStore(t)
@@ -843,7 +843,7 @@ func Test_SingleNodeExecuteQuery_EXPLAIN(t *testing.T) {
 		t.Fatalf("unexpected results for EXPLAIN QUERY PLAN\ngot: %s", asJSON(resp))
 	}
 
-	// Check that EXPLAIN sent directory to query endpoint also works OK.
+	// Check that EXPLAIN sent directly to the query endpoint also works OK.
 	qr := queryRequestFromString("EXPLAIN QUERY PLAN SELECT * FROM foo", false, false, false)
 	qr.Level = proto.ConsistencyLevel_WEAK
 	qr.Request.Statements[0].SqlExplain = true
@@ -1567,7 +1567,7 @@ func Test_SingleNodeFK(t *testing.T) {
 	}
 }
 
-// Test_SingleNodeOnDiskFileExecuteQuery test that various read-consistency
+// Test_SingleNodeOnDiskFileExecuteQuery tests that various read-consistency
 // levels work as expected.
 func Test_SingleNodeOnDiskFileExecuteQuery(t *testing.T) {
 	s, ln := mustNewStore(t)
@@ -2763,7 +2763,7 @@ func Test_SingleNodeWaitForRemove(t *testing.T) {
 		t.Fatalf("Error waiting for leader: %s", err)
 	}
 
-	// Should timeout waiting for removal of ourselves
+	// Should time out waiting for removal of ourselves
 	err := s.WaitForRemoval(s.ID(), time.Second)
 	// if err is nil then fail the test
 	if err == nil {

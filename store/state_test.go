@@ -535,7 +535,7 @@ func Test_SingleNodeRecoverForeignKeysDisabled(t *testing.T) {
 }
 
 // Test_SingleNodeRecoverNetworkChange tests a node recovery that
-// involves a changed-network address.
+// involves a changed network address.
 func Test_SingleNodeRecoverNetworkChange(t *testing.T) {
 	s0, ln0 := mustNewStore(t)
 	defer ln0.Close()
@@ -615,7 +615,7 @@ func Test_SingleNodeRecoverNetworkChange(t *testing.T) {
 }
 
 // Test_SingleNodeRecoverNetworkChangeSnapshot tests a node recovery that
-// involves a changed-network address, with snapshots underneath.
+// involves a changed network address, with snapshots underneath.
 func Test_SingleNodeRecoverNetworkChangeSnapshot(t *testing.T) {
 	s0, ln0 := mustNewStore(t)
 	defer ln0.Close()

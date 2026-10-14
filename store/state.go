@@ -116,7 +116,7 @@ func IsStaleRead(
 
 	if lastAppliedIndex >= leaderCommitIndex {
 		// We've applied the latest leader commit index we know about and that
-		// commit index arrived within the window, we can't be stale.
+		// commit index arrived within the window, so we can't be stale.
 		return false
 	}
 

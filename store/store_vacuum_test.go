@@ -62,7 +62,7 @@ COMMIT;
 	}
 
 	/////////////////////////////////////////////////////////////////////
-	// Vacuumed backup, database may be not be bit-for-bit identical, but
+	// Vacuumed backup, database may not be bit-for-bit identical, but
 	// records should be OK.
 	vf, err := os.CreateTemp("", "rqlite-baktest-")
 	if err != nil {
