@@ -197,7 +197,7 @@ func (q *Queue[T]) run() {
 	<-timer.C
 
 	writeFn := func() {
-		// mergeQueued returns a new object, ownership will pass
+		// mergeQueued returns a new object, and ownership will pass
 		// implicitly to the other side of sendCh.
 		req := mergeQueued(qObjs)
 		if req != nil {
@@ -221,7 +221,7 @@ func (q *Queue[T]) run() {
 			if len(qObjs) == 1 {
 				if q.timeout != 0 {
 					// First item in queue, start the timer so that if
-					// we don't get in a batch, we'll still write.
+					// we don't get a full batch, we'll still write.
 					timer.Reset(q.timeout)
 				}
 			}
