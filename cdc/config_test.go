@@ -87,7 +87,7 @@ func Test_NewConfig_InvalidURL_ValidFile(t *testing.T) {
 		TransmitMaxBackoff:    2 * time.Minute,
 	}
 
-	// Marshall to JSON
+	// Marshal to JSON
 	configData, err := json.Marshal(testConfig)
 	if err != nil {
 		t.Fatalf("Failed to marshal test config: %v", err)

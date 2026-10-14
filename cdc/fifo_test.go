@@ -191,7 +191,7 @@ func Test_DeleteRange(t *testing.T) {
 	q, _, cleanup := newTestQueue(t)
 	defer cleanup()
 
-	// Test that deleting on a empty queue is a no-op.
+	// Test that deleting on an empty queue is a no-op.
 	if err := q.DeleteRange(1); err != nil {
 		t.Fatalf("DeleteRange on empty queue should not error: %v", err)
 	}
@@ -230,7 +230,7 @@ func Test_DeleteRange(t *testing.T) {
 		return q.Len() == 3
 	}, time.Second)
 
-	// Consume all events in the FiFO
+	// Consume all events in the FIFO
 	for i := range items {
 		select {
 		case event := <-q.C:
@@ -247,7 +247,7 @@ func Test_DeleteRange(t *testing.T) {
 		}
 	}
 
-	// Should be no more items to dequee.
+	// Should be no more items to dequeue.
 	if q.HasNext() {
 		t.Fatalf("HasNext should be false after dequeue, but it returned true")
 	}
@@ -325,7 +325,7 @@ func Test_DeleteRange_NeverRead(t *testing.T) {
 	}, time.Second)
 }
 
-// Test_Queue_FirstKeyHighestKey tests that Key fetches returns the correct values after various operations.
+// Test_Queue_FirstKeyHighestKey tests that key fetches return the correct values after various operations.
 func Test_Queue_FirstKeyHighestKey(t *testing.T) {
 	q, path, _ := newTestQueue(t)
 
