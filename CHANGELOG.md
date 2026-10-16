@@ -1,4 +1,4 @@
-## v10.6.1 (unreleased)
+## v10.6.1 (October 16th 2026)
 ### Implementation changes and bug fixes
 - [PR #2959](https://github.com/rqlite/rqlite/pull/2959): Record SQL analyze start time at right point.
 - [PR #2960](https://github.com/rqlite/rqlite/pull/2960): Conditionally rewrite SQL during queued writes.
