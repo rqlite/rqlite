@@ -37,7 +37,9 @@ func ResetStats() {
 // Process processes the given SQL statements, rewriting them if necessary. If
 // random-rewriting is enabled, calls to the RANDOM() function are replaced with
 // an actual random value. If time-rewriting is enabled, 'now' arguments to the
-// time functions are replaced with the current Julian day. If a statement
+// time functions are replaced with the current Julian day, and the keywords
+// CURRENT_TIMESTAMP, CURRENT_DATE and CURRENT_TIME are replaced with the
+// equivalent datetime(), date() and time() calls on that Julian day. If a statement
 // contains a RETURNING clause, the statement is marked as a query, so that the
 // result set can be returned to the client. If a statement is an EXPLAIN, it is
 // marked as such.
@@ -78,13 +80,15 @@ func Process(stmts []*proto.Statement, rwrand, rwtime bool) (retErr error) {
 	return nil
 }
 
-// ContainsTime returns true if the statement contains a time-related function.
+// ContainsTime returns true if the statement contains a time-related function
+// or one of the CURRENT_TIMESTAMP, CURRENT_DATE and CURRENT_TIME keywords.
 // The function performs a lower-case comparison so it is up to the caller to
 // ensure the statement is lower-cased.
 func ContainsTime(stmt string) bool {
-	// Since this is a simple substring search, it also matches datetime(
-	// and strftime(.
-	targets := []string{"time(", "date(", "julianday(", "unixepoch(", "timediff("}
+	// Since this is a simple substring search, it also matches datetime(,
+	// strftime( and current_timestamp.
+	targets := []string{"time(", "date(", "julianday(", "unixepoch(", "timediff(",
+		"current_time", "current_date"}
 	for _, target := range targets {
 		if strings.Contains(stmt, target) {
 			return true
@@ -162,6 +166,17 @@ func (rw *Rewriter) Do(stmt sql.Statement) (sql.Statement, bool, bool, error) {
 func (rw *Rewriter) Visit(node sql.Node) (w sql.Visitor, n sql.Node, err error) {
 	retNode := node
 
+	switch retNode.(type) {
+	case *sql.DefaultConstraint, *sql.CheckConstraint, *sql.GeneratedConstraint,
+		*sql.CreateIndexStatement, *sql.CreateTriggerStatement, *sql.CreateViewStatement:
+		// These expressions are stored in the schema and evaluated by SQLite
+		// every time they are used, so they must be left exactly as written.
+		// Rewriting time('now') in a column default would freeze it to the
+		// moment the table was created. Returning a nil Visitor stops the
+		// walk descending into this subtree.
+		return nil, node, nil
+	}
+
 	switch n := retNode.(type) {
 	case *sql.ReturningClause:
 		rw.returning = true
@@ -169,6 +184,28 @@ func (rw *Rewriter) Visit(node sql.Node) (w sql.Visitor, n sql.Node, err error) 
 		// NO random() rewriting past this point.
 		rw.orderedBy = true
 		return rw, node, nil
+	case *sql.TimestampLit:
+		// CURRENT_TIMESTAMP, CURRENT_DATE and CURRENT_TIME are shorthand for
+		// datetime('now'), date('now') and time('now'), and are rewritten the
+		// same way: to the matching function applied to a fixed Julian day.
+		if rw.RewriteTime {
+			var fn string
+			switch strings.ToLower(n.Value) {
+			case "current_timestamp":
+				fn = "datetime"
+			case "current_date":
+				fn = "date"
+			case "current_time":
+				fn = "time"
+			}
+			if fn != "" {
+				retNode = &sql.Call{
+					Name: &sql.Ident{Name: fn},
+					Args: []sql.Expr{julianDayAsNumberLit(rw.nowFn())},
+				}
+				rw.modified = true
+			}
+		}
 	case *sql.Call:
 		// If used, ensure the value is same for the duration of the statement
 		jd := julianDayAsNumberLit(rw.nowFn())

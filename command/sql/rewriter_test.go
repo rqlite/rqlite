@@ -157,6 +157,52 @@ func Test_Rewriter_Time(t *testing.T) {
 			rewriteTime: true,
 			modified:    true,
 		},
+		// CURRENT_TIMESTAMP, CURRENT_DATE and CURRENT_TIME are equivalent to
+		// datetime('now'), date('now') and time('now').
+		{
+			in:          `INSERT INTO foo(col1) VALUES (CURRENT_TIMESTAMP)`,
+			exp:         `INSERT INTO "foo" ("col1") VALUES (CURRENT_TIMESTAMP)`,
+			rewriteTime: false,
+			modified:    false,
+		},
+		{
+			in:          `INSERT INTO foo(col1) VALUES (CURRENT_TIMESTAMP)`,
+			exp:         `INSERT INTO "foo" ("col1") VALUES (datetime(2440422.500000))`,
+			rewriteTime: true,
+			modified:    true,
+		},
+		{
+			in:          `INSERT INTO foo(col1) VALUES (current_date)`,
+			exp:         `INSERT INTO "foo" ("col1") VALUES (date(2440422.500000))`,
+			rewriteTime: true,
+			modified:    true,
+		},
+		{
+			in:          `INSERT INTO foo(col1) VALUES (Current_Time)`,
+			exp:         `INSERT INTO "foo" ("col1") VALUES (time(2440422.500000))`,
+			rewriteTime: true,
+			modified:    true,
+		},
+		{
+			// The statement from rqlite issue 2965.
+			in:          `INSERT INTO timestamp_probe VALUES (1, CURRENT_TIMESTAMP, strftime('%Y-%m-%d %H:%M:%f', 'now'))`,
+			exp:         `INSERT INTO "timestamp_probe" VALUES (1, datetime(2440422.500000), strftime('%Y-%m-%d %H:%M:%f', 2440422.500000))`,
+			rewriteTime: true,
+			modified:    true,
+		},
+		{
+			in:          `UPDATE foo SET ts = CURRENT_TIMESTAMP WHERE ts < CURRENT_DATE`,
+			exp:         `UPDATE "foo" SET "ts" = datetime(2440422.500000) WHERE "ts" < date(2440422.500000)`,
+			rewriteTime: true,
+			modified:    true,
+		},
+		{
+			// A column default is schema, evaluated by SQLite on each insert.
+			in:          `CREATE TABLE foo (ts DATETIME DEFAULT CURRENT_TIMESTAMP)`,
+			exp:         `CREATE TABLE "foo" ("ts" DATETIME DEFAULT CURRENT_TIMESTAMP)`,
+			rewriteTime: true,
+			modified:    false,
+		},
 	} {
 		rw := NewRewriter()
 		rw.RewriteTime = tt.rewriteTime
@@ -181,6 +227,80 @@ func Test_Rewriter_Time(t *testing.T) {
 
 		if tt.modified != f {
 			t.Fatalf("test %d modified wrong, exp %t, got %t", i, tt.modified, f)
+		}
+	}
+}
+
+// Test_Rewriter_SchemaUntouched checks that expressions stored in the schema
+// and evaluated later by SQLite -- column defaults, CHECK constraints,
+// generated columns, indexes, triggers and views -- are never rewritten.
+// Freezing time('now') or random() in a column default would make every
+// future row carry the same value.
+func Test_Rewriter_SchemaUntouched(t *testing.T) {
+	for i, tt := range []struct {
+		in  string
+		exp string
+	}{
+		{
+			in:  `CREATE TABLE foo (ts DEFAULT (datetime('now')))`,
+			exp: `CREATE TABLE "foo" ("ts" DEFAULT (datetime('now')))`,
+		},
+		{
+			in:  `CREATE TABLE foo (id DEFAULT (random()))`,
+			exp: `CREATE TABLE "foo" ("id" DEFAULT (random()))`,
+		},
+		{
+			in:  `CREATE TABLE foo (ts, CHECK (ts < datetime('now')))`,
+			exp: `CREATE TABLE "foo" ("ts", CHECK ("ts" < datetime('now')))`,
+		},
+		{
+			in:  `CREATE TABLE foo (ts, d GENERATED ALWAYS AS (datetime('now')) VIRTUAL)`,
+			exp: `CREATE TABLE "foo" ("ts", "d" GENERATED ALWAYS AS (datetime('now')) VIRTUAL)`,
+		},
+		{
+			in:  `ALTER TABLE foo ADD COLUMN ts DEFAULT (datetime('now'))`,
+			exp: `ALTER TABLE "foo" ADD COLUMN "ts" DEFAULT (datetime('now'))`,
+		},
+		{
+			in:  `CREATE INDEX idx ON foo (ts) WHERE ts > datetime('now')`,
+			exp: `CREATE INDEX "idx" ON "foo" ("ts") WHERE "ts" > datetime('now')`,
+		},
+		{
+			in:  `CREATE TRIGGER tr AFTER INSERT ON foo BEGIN UPDATE foo SET ts = datetime('now'); END`,
+			exp: `CREATE TRIGGER "tr" AFTER INSERT ON "foo" BEGIN UPDATE "foo" SET "ts" = datetime('now'); END`,
+		},
+		{
+			in:  `CREATE VIEW v AS SELECT datetime('now') AS ts FROM foo`,
+			exp: `CREATE VIEW "v" AS SELECT datetime('now') AS "ts" FROM "foo"`,
+		},
+		{
+			// CREATE TABLE ... AS SELECT evaluates once, so it is rewritten.
+			in:  `CREATE TABLE bar AS SELECT datetime('now') AS ts FROM foo`,
+			exp: `CREATE TABLE "bar" AS SELECT datetime(2440422.500000) AS "ts" FROM "foo"`,
+		},
+	} {
+		rw := NewRewriter()
+		rw.nowFn = func() time.Time {
+			return time.Date(1969, 7, 20, 0, 0, 0, 0, time.UTC)
+		}
+
+		s, err := sql.NewParser(strings.NewReader(tt.in)).ParseStatement()
+		if err != nil {
+			t.Fatalf("test %d: %s", i, err)
+		}
+
+		s, f, _, err := rw.Do(s)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		rendered := s.String()
+		if rendered != tt.exp {
+			t.Fatalf("test %d failed, exp: '%s', got: '%s'", i, tt.exp, rendered)
+		}
+		wantModified := strings.Contains(tt.exp, "2440422")
+		if f != wantModified {
+			t.Fatalf("test %d modified wrong, exp %t, got %t", i, wantModified, f)
 		}
 	}
 }
