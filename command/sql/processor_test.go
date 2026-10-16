@@ -78,6 +78,23 @@ func Test_ContainsTime(t *testing.T) {
 			stmt:     "select sometimedata from table", // Contains "time" as part of a word
 			expected: false,
 		},
+
+		// The time keywords are literals, not function calls.
+		{
+			name:     "Contains time keyword - current_timestamp",
+			stmt:     "insert into foo values (current_timestamp)",
+			expected: true,
+		},
+		{
+			name:     "Contains time keyword - current_time",
+			stmt:     "select current_time",
+			expected: true,
+		},
+		{
+			name:     "Contains time keyword - current_date",
+			stmt:     "select current_date",
+			expected: true,
+		},
 	}
 
 	for _, tt := range tests {
@@ -325,6 +342,9 @@ func Test_Time_Rewrites(t *testing.T) {
 		`INSERT INTO "values" VALUES (julianday("now"))`, `INSERT INTO "values" VALUES \(julianday\([0-9]+\.[0-9]+\)\)`,
 		`INSERT INTO "values" VALUES (unixepoch("now"))`, `INSERT INTO "values" VALUES \(unixepoch\([0-9]+\.[0-9]+\)\)`,
 		`INSERT INTO "values" VALUES (strftime("%F", "now"))`, `INSERT INTO "values" VALUES \(strftime\("%F", [0-9]+\.[0-9]+\)\)`,
+		`INSERT INTO "values" VALUES (CURRENT_TIMESTAMP)`, `INSERT INTO "values" VALUES \(datetime\([0-9]+\.[0-9]+\)\)`,
+		`INSERT INTO "values" VALUES (current_date, CURRENT_TIME)`, `INSERT INTO "values" VALUES \(date\([0-9]+\.[0-9]+\), time\([0-9]+\.[0-9]+\)\)`,
+		`CREATE TABLE tbl (col1 TEXT, ts DATETIME DEFAULT CURRENT_TIMESTAMP)`, `CREATE TABLE tbl \(col1 TEXT, ts DATETIME DEFAULT CURRENT_TIMESTAMP\)`,
 	}
 	for i := 0; i < len(testSQLs)-1; i += 2 {
 		stmts := []*proto.Statement{

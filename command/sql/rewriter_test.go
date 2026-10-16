@@ -157,6 +157,52 @@ func Test_Rewriter_Time(t *testing.T) {
 			rewriteTime: true,
 			modified:    true,
 		},
+		// CURRENT_TIMESTAMP, CURRENT_DATE and CURRENT_TIME are equivalent to
+		// datetime('now'), date('now') and time('now').
+		{
+			in:          `INSERT INTO foo(col1) VALUES (CURRENT_TIMESTAMP)`,
+			exp:         `INSERT INTO "foo" ("col1") VALUES (CURRENT_TIMESTAMP)`,
+			rewriteTime: false,
+			modified:    false,
+		},
+		{
+			in:          `INSERT INTO foo(col1) VALUES (CURRENT_TIMESTAMP)`,
+			exp:         `INSERT INTO "foo" ("col1") VALUES (datetime(2440422.500000))`,
+			rewriteTime: true,
+			modified:    true,
+		},
+		{
+			in:          `INSERT INTO foo(col1) VALUES (current_date)`,
+			exp:         `INSERT INTO "foo" ("col1") VALUES (date(2440422.500000))`,
+			rewriteTime: true,
+			modified:    true,
+		},
+		{
+			in:          `INSERT INTO foo(col1) VALUES (Current_Time)`,
+			exp:         `INSERT INTO "foo" ("col1") VALUES (time(2440422.500000))`,
+			rewriteTime: true,
+			modified:    true,
+		},
+		{
+			// The statement from rqlite issue 2965.
+			in:          `INSERT INTO timestamp_probe VALUES (1, CURRENT_TIMESTAMP, strftime('%Y-%m-%d %H:%M:%f', 'now'))`,
+			exp:         `INSERT INTO "timestamp_probe" VALUES (1, datetime(2440422.500000), strftime('%Y-%m-%d %H:%M:%f', 2440422.500000))`,
+			rewriteTime: true,
+			modified:    true,
+		},
+		{
+			in:          `UPDATE foo SET ts = CURRENT_TIMESTAMP WHERE ts < CURRENT_DATE`,
+			exp:         `UPDATE "foo" SET "ts" = datetime(2440422.500000) WHERE "ts" < date(2440422.500000)`,
+			rewriteTime: true,
+			modified:    true,
+		},
+		{
+			// A column default is schema, evaluated by SQLite on each insert.
+			in:          `CREATE TABLE foo (ts DATETIME DEFAULT CURRENT_TIMESTAMP)`,
+			exp:         `CREATE TABLE "foo" ("ts" DATETIME DEFAULT CURRENT_TIMESTAMP)`,
+			rewriteTime: true,
+			modified:    false,
+		},
 	} {
 		rw := NewRewriter()
 		rw.RewriteTime = tt.rewriteTime
