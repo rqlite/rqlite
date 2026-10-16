@@ -6,7 +6,7 @@
 - [PR #2957](https://github.com/rqlite/rqlite/pull/2957): Use constant time when comparing passwords.
 - [PR #2963](https://github.com/rqlite/rqlite/pull/2963): CDC: encode non-finite floats, always release flush waiters.
 - [PR #2964](https://github.com/rqlite/rqlite/pull/2964): CDC HTTP Sink follows redirects correctly.
-- [PR #2966](https://github.com/rqlite/rqlite/pull/2966): Fix handling of `CURRENT_TIMESTAMP` and friends. Fixes issue [#2965](https://github.com/rqlite/rqlite/issues/2965). Thanks @MRB60
+- [PR #2966](https://github.com/rqlite/rqlite/pull/2966): Fix rewriting of `CURRENT_TIMESTAMP` and friends. Fixes issue [#2965](https://github.com/rqlite/rqlite/issues/2965). Thanks @MRB60
 
 ## v10.6.0 (October 12th 2026)
 This release features an enhancement to the API. In the event of an error there is a new field in the response, named `error_v2`, which may contain numeric SQLite error codes. Clients accessing the API can now identify errors in a much more robust manner. See the [documentation for more details](https://rqlite.io/docs/api/api/#handling-errors). This feature also [introduces configurable query logging](https://rqlite.io/docs/guides/config/#sqlite-database).
