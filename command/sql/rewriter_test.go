@@ -184,3 +184,77 @@ func Test_Rewriter_Time(t *testing.T) {
 		}
 	}
 }
+
+// Test_Rewriter_SchemaUntouched checks that expressions stored in the schema
+// and evaluated later by SQLite -- column defaults, CHECK constraints,
+// generated columns, indexes, triggers and views -- are never rewritten.
+// Freezing time('now') or random() in a column default would make every
+// future row carry the same value.
+func Test_Rewriter_SchemaUntouched(t *testing.T) {
+	for i, tt := range []struct {
+		in  string
+		exp string
+	}{
+		{
+			in:  `CREATE TABLE foo (ts DEFAULT (datetime('now')))`,
+			exp: `CREATE TABLE "foo" ("ts" DEFAULT (datetime('now')))`,
+		},
+		{
+			in:  `CREATE TABLE foo (id DEFAULT (random()))`,
+			exp: `CREATE TABLE "foo" ("id" DEFAULT (random()))`,
+		},
+		{
+			in:  `CREATE TABLE foo (ts, CHECK (ts < datetime('now')))`,
+			exp: `CREATE TABLE "foo" ("ts", CHECK ("ts" < datetime('now')))`,
+		},
+		{
+			in:  `CREATE TABLE foo (ts, d GENERATED ALWAYS AS (datetime('now')) VIRTUAL)`,
+			exp: `CREATE TABLE "foo" ("ts", "d" GENERATED ALWAYS AS (datetime('now')) VIRTUAL)`,
+		},
+		{
+			in:  `ALTER TABLE foo ADD COLUMN ts DEFAULT (datetime('now'))`,
+			exp: `ALTER TABLE "foo" ADD COLUMN "ts" DEFAULT (datetime('now'))`,
+		},
+		{
+			in:  `CREATE INDEX idx ON foo (ts) WHERE ts > datetime('now')`,
+			exp: `CREATE INDEX "idx" ON "foo" ("ts") WHERE "ts" > datetime('now')`,
+		},
+		{
+			in:  `CREATE TRIGGER tr AFTER INSERT ON foo BEGIN UPDATE foo SET ts = datetime('now'); END`,
+			exp: `CREATE TRIGGER "tr" AFTER INSERT ON "foo" BEGIN UPDATE "foo" SET "ts" = datetime('now'); END`,
+		},
+		{
+			in:  `CREATE VIEW v AS SELECT datetime('now') AS ts FROM foo`,
+			exp: `CREATE VIEW "v" AS SELECT datetime('now') AS "ts" FROM "foo"`,
+		},
+		{
+			// CREATE TABLE ... AS SELECT evaluates once, so it is rewritten.
+			in:  `CREATE TABLE bar AS SELECT datetime('now') AS ts FROM foo`,
+			exp: `CREATE TABLE "bar" AS SELECT datetime(2440422.500000) AS "ts" FROM "foo"`,
+		},
+	} {
+		rw := NewRewriter()
+		rw.nowFn = func() time.Time {
+			return time.Date(1969, 7, 20, 0, 0, 0, 0, time.UTC)
+		}
+
+		s, err := sql.NewParser(strings.NewReader(tt.in)).ParseStatement()
+		if err != nil {
+			t.Fatalf("test %d: %s", i, err)
+		}
+
+		s, f, _, err := rw.Do(s)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		rendered := s.String()
+		if rendered != tt.exp {
+			t.Fatalf("test %d failed, exp: '%s', got: '%s'", i, tt.exp, rendered)
+		}
+		wantModified := strings.Contains(tt.exp, "2440422")
+		if f != wantModified {
+			t.Fatalf("test %d modified wrong, exp %t, got %t", i, wantModified, f)
+		}
+	}
+}

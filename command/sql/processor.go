@@ -162,6 +162,17 @@ func (rw *Rewriter) Do(stmt sql.Statement) (sql.Statement, bool, bool, error) {
 func (rw *Rewriter) Visit(node sql.Node) (w sql.Visitor, n sql.Node, err error) {
 	retNode := node
 
+	switch retNode.(type) {
+	case *sql.DefaultConstraint, *sql.CheckConstraint, *sql.GeneratedConstraint,
+		*sql.CreateIndexStatement, *sql.CreateTriggerStatement, *sql.CreateViewStatement:
+		// These expressions are stored in the schema and evaluated by SQLite
+		// every time they are used, so they must be left exactly as written.
+		// Rewriting time('now') in a column default would freeze it to the
+		// moment the table was created. Returning a nil Visitor stops the
+		// walk descending into this subtree.
+		return nil, node, nil
+	}
+
 	switch n := retNode.(type) {
 	case *sql.ReturningClause:
 		rw.returning = true
