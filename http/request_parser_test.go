@@ -488,6 +488,77 @@ func Test_SingleInvalidTypeRequests(t *testing.T) {
 	}
 }
 
+func Test_TrailingData(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		body string
+	}{
+		{"junk", `["SELECT 1"] garbage`},
+		{"junk no space", `["SELECT 1"]garbage`},
+		{"second array", `["SELECT 1"]["SELECT 2"]`},
+		{"second array after whitespace", `["SELECT 1"]  ["SELECT 2"]`},
+		{"second array parameterized", `[["SELECT ?", 1]][["SELECT ?", 2]]`},
+		{"extra closing bracket", `["SELECT 1"]]`},
+		{"trailing comma", `["SELECT 1"],`},
+		{"trailing object", `["SELECT 1"]{}`},
+		{"trailing scalar", `["SELECT 1"]1`},
+		{"trailing string", `["SELECT 1"]"SELECT 2"`},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			stmts, err := ParseRequest(bytes.NewReader([]byte(tc.body)))
+			if err != ErrInvalidRequest {
+				t.Fatalf("expected ErrInvalidRequest, got %v (stmts: %v)", err, stmts)
+			}
+		})
+	}
+}
+
+func Test_TrailingWhitespace(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		body string
+	}{
+		{"none", `["SELECT 1"]`},
+		{"spaces", `["SELECT 1"]   `},
+		{"newline", "[\"SELECT 1\"]\n"},
+		{"mixed", "  [ \"SELECT 1\" ] \t\r\n "},
+		{"parameterized", "[[\"SELECT ?\", 1]]\n"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			stmts, err := ParseRequest(bytes.NewReader([]byte(tc.body)))
+			if err != nil {
+				t.Fatalf("failed to parse request: %s", err)
+			}
+			if len(stmts) != 1 {
+				t.Fatalf("incorrect number of statements returned: %d", len(stmts))
+			}
+		})
+	}
+}
+
+func Test_IncompleteRequest(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		body string
+	}{
+		{"empty", ``},
+		{"whitespace only", `   `},
+		{"open bracket only", `[`},
+		{"unclosed array", `["SELECT 1"`},
+		{"unclosed array trailing comma", `["SELECT 1",`},
+		{"unclosed string", `["SELECT 1`},
+		{"unclosed parameterized", `[["SELECT ?", 1]`},
+		{"unclosed inner array", `[["SELECT ?", 1`},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			stmts, err := ParseRequest(bytes.NewReader([]byte(tc.body)))
+			if err != ErrInvalidJSON {
+				t.Fatalf("expected ErrInvalidJSON, got %v (stmts: %v)", err, stmts)
+			}
+		})
+	}
+}
+
 func byteSliceToStringArray(b []byte) string {
 	var buffer bytes.Buffer
 	buffer.WriteString("[")

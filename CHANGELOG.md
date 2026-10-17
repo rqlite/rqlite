@@ -1,3 +1,7 @@
+## v10.6.2 (unreleased)
+### Implementation changes and bug fixes
+- [PR #2967](https://github.com/rqlite/rqlite/pull/2967): Check for trailing junk in request bodies.
+
 ## v10.6.1 (October 16th 2026)
 ### Implementation changes and bug fixes
 - [PR #2959](https://github.com/rqlite/rqlite/pull/2959): Record SQL analyze start time at right point.
