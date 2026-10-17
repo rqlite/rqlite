@@ -117,9 +117,18 @@ func ParseRequest(r io.Reader) ([]*command.Statement, error) {
 	}
 
 	// Check that the array of statements is closed.
-	_, err = dec.Token()
+	t, err = dec.Token()
 	if err != nil {
 		return nil, ErrInvalidJSON
+	}
+	if t != json.Delim(']') {
+		return nil, ErrInvalidRequest
+	}
+
+	// The array must be the only value in the body. Anything other than
+	// trailing whitespace -- a second JSON value, or junk -- is an error.
+	if _, err := dec.Token(); err != io.EOF {
+		return nil, ErrInvalidRequest
 	}
 
 	if len(stmts) == 0 {
