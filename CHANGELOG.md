@@ -1,6 +1,7 @@
 ## v10.6.2 (unreleased)
 ### Implementation changes and bug fixes
 - [PR #2967](https://github.com/rqlite/rqlite/pull/2967): Check for trailing junk in request bodies.
+- [PR #2969](https://github.com/rqlite/rqlite/pull/2969): Console schema view handles table names that collide with JavaScript object properties.
 
 ## v10.6.1 (October 16th 2026)
 ### Implementation changes and bug fixes
