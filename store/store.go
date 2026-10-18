@@ -2587,18 +2587,16 @@ func (s *Store) fsmApply(l *raft.Log) (e any) {
 		// CDC enabled? Prime collection of events.
 		if s.cdcCollator != nil {
 			s.cdcCollator.Reset()
-		}
-		defer func() {
-			if s.cdcCollator == nil {
-				return
-			}
-			if events := s.cdcCollator.Events(); len(events) > 0 {
-				s.cdcOutCh <- &proto.CDCIndexedEventGroup{
-					Index:  l.Index,
-					Events: events,
+			defer func() {
+				if events := s.cdcCollator.Events(); len(events) > 0 {
+					s.cdcOutCh <- &proto.CDCIndexedEventGroup{
+						Index:           l.Index,
+						Events:          events,
+						CommitTimestamp: time.Now().UnixMilli(),
+					}
 				}
-			}
-		}()
+			}()
+		}
 		return s.cmdProc.Process(l.Data, s.db)
 	}()
 	if err != nil {
