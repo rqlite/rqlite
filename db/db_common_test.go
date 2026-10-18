@@ -1,9 +1,11 @@
 package db
 
 import (
+	"encoding/json"
 	"errors"
 	"math/rand/v2"
 	"os"
+	"reflect"
 	"slices"
 	"strings"
 	"testing"
@@ -783,7 +785,20 @@ func Test_Geopoly(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to query table: %s", err.Error())
 	}
-	if exp, got := `[{"columns":["_shape"],"types":["text"],"values":[["\u0001\u0000\u0000\u0003\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000@\u0000\u0000\u0000\u0000\u0000\u0000\ufffd?\u0000\u0000\u0000@"],["\u0001\u0000\u0000\u0004\u0000\u0000\ufffd?\u0000\u0000\ufffd?\u0000\u0000@@\u0000\u0000\ufffd?\u0000\u0000@@\u0000\u0000@@\u0000\u0000\ufffd?\u0000\u0000@@"]]}]`, asJSON(rows); exp != got {
+	// The shape is stored as a binary blob but reported as text, so the
+	// encoded JSON contains replacement characters for the invalid UTF-8
+	// bytes. How those are escaped differs across Go versions, so compare
+	// the decoded values rather than the raw JSON.
+	exp := `[{"columns":["_shape"],"types":["text"],"values":[["\u0001\u0000\u0000\u0003\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000@\u0000\u0000\u0000\u0000\u0000\u0000\ufffd?\u0000\u0000\u0000@"],["\u0001\u0000\u0000\u0004\u0000\u0000\ufffd?\u0000\u0000\ufffd?\u0000\u0000@@\u0000\u0000\ufffd?\u0000\u0000@@\u0000\u0000@@\u0000\u0000\ufffd?\u0000\u0000@@"]]}]`
+	got := asJSON(rows)
+	var expV, gotV any
+	if err := json.Unmarshal([]byte(exp), &expV); err != nil {
+		t.Fatalf("failed to decode expected JSON: %s", err.Error())
+	}
+	if err := json.Unmarshal([]byte(got), &gotV); err != nil {
+		t.Fatalf("failed to decode query results: %s", err.Error())
+	}
+	if !reflect.DeepEqual(expV, gotV) {
 		t.Fatalf("unexpected results for query\nexp: %s\ngot: %s", exp, got)
 	}
 }
