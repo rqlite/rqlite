@@ -293,9 +293,13 @@ func Test_NodeTest_Reuse(t *testing.T) {
 		t.Fatalf("first probe wrong: %s", asJSON(node))
 	}
 
+	// Only TimeS is checked on success. The mock returns instantly, and on
+	// Windows the monotonic clock is coarse enough that time.Since can
+	// report zero, leaving Time at 0 even though the probe succeeded.
+	// TimeS is always non-empty on success ("0s" at worst).
 	okGA := newMockGetAddresser("api-addr", "1.0.0", nil)
 	node.Test(context.Background(), okGA, "raft-addr", 0, time.Second)
-	if !node.Reachable || !node.Leader || node.Error != "" || node.Time == 0 || node.TimeS == "" {
+	if !node.Reachable || !node.Leader || node.Error != "" || node.TimeS == "" {
 		t.Fatalf("second probe did not clear stale error: %s", asJSON(node))
 	}
 
