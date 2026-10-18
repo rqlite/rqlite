@@ -23,13 +23,6 @@ RUN set -eux; \
       gcc-mips64el-linux-gnuabi64; \
     rm -rf /var/lib/apt/lists/*
 
-# MinIO client — consider pinning MC_VERSION to a known release
-# e.g. MC_VERSION=RELEASE.2025-05-22T13-38-07Z
-ARG MC_VERSION=latest
-RUN set -eux; \
-    curl -fSsL "https://dl.min.io/client/mc/release/linux-amd64/mc" -o /usr/local/bin/mc; \
-    chmod +x /usr/local/bin/mc
-
 # Python virtual environment (isolates from Debian’s externally-managed Python)
 ENV VIRTUAL_ENV=/opt/venv
 RUN python3 -m venv "$VIRTUAL_ENV" && "$VIRTUAL_ENV/bin/pip" install --upgrade pip
