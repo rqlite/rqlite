@@ -10,6 +10,7 @@ RUN set -eux; \
     apt-get install -y \
       ca-certificates curl \
       python3 python3-pip python3-venv \
+      nodejs npm \
       musl-tools musl-dev \
       gcc-mingw-w64-x86-64-posix \
       gcc-arm-linux-gnueabi \
