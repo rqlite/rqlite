@@ -115,6 +115,10 @@ func Test_StoreCDC_Events_Single(t *testing.T) {
 		if len(events.Events) != 1 {
 			t.Fatalf("expected 1 CDC event, got %d", len(events.Events))
 		}
+		if events.CommitTimestamp == 0 {
+			t.Fatal("Commit Timestamp is not set")
+		}
+
 		ev := events.Events[0]
 
 		if ev.Table != "foo" {
