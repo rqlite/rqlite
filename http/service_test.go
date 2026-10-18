@@ -1268,13 +1268,21 @@ func Test_UIStaticAssets(t *testing.T) {
 	client := &http.Client{}
 	host := fmt.Sprintf("http://%s", s.Addr().String())
 
-	resp, err := client.Get(host + "/console/static/css/style.css")
-	if err != nil {
-		t.Fatalf("failed to make CSS request")
-	}
-	defer resp.Body.Close()
-	if resp.StatusCode != http.StatusOK {
-		t.Fatalf("expected StatusOK for style.css, got %d", resp.StatusCode)
+	// Every script index.html loads must be served from the embedded assets.
+	for _, asset := range []string{
+		"/console/static/css/style.css",
+		"/console/static/js/schema.js",
+		"/console/static/js/app.js",
+		"/console/static/js/cluster.js",
+	} {
+		resp, err := client.Get(host + asset)
+		if err != nil {
+			t.Fatalf("failed to request %s: %s", asset, err)
+		}
+		resp.Body.Close()
+		if resp.StatusCode != http.StatusOK {
+			t.Fatalf("expected StatusOK for %s, got %d", asset, resp.StatusCode)
+		}
 	}
 }
 
