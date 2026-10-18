@@ -1101,9 +1101,9 @@
 
         apiRequest("POST", "/db/query?associative", [SCHEMA_TABLES_QUERY, SCHEMA_OBJECTS_QUERY])
             .then(function (resp) {
-                var tableNames = extractTableNames(resp.data);
+                var tableNames = ConsoleSchema.tableNames(resp.data);
                 if (tableNames.length === 0 || !shouldCountRows()) {
-                    renderSchema(resp.data, {}, openStates);
+                    renderSchema(resp.data, new Map(), openStates);
                     schemaLastUpdated.textContent = "Last updated: " + formatTimeOfDay();
                     return;
                 }
@@ -1112,17 +1112,11 @@
                 });
                 return apiRequest("POST", "/db/query?level=none", countQueries)
                     .then(function (cresp) {
-                        var counts = {};
                         var results = (cresp.data && cresp.data.results) || [];
-                        results.forEach(function (r, i) {
-                            if (r && !r.error && r.values && r.values[0]) {
-                                counts[tableNames[i]] = r.values[0][0];
-                            }
-                        });
-                        renderSchema(resp.data, counts, openStates);
+                        renderSchema(resp.data, ConsoleSchema.rowCounts(tableNames, results), openStates);
                         schemaLastUpdated.textContent = "Last updated: " + formatTimeOfDay();
                     }, function () {
-                        renderSchema(resp.data, {}, openStates);
+                        renderSchema(resp.data, new Map(), openStates);
                         schemaLastUpdated.textContent = "Last updated: " + formatTimeOfDay();
                     });
             })
@@ -1134,22 +1128,9 @@
             });
     }
 
-    function extractTableNames(data) {
-        var names = [];
-        var seen = {};
-        var rows = (data && data.results && data.results[0] && data.results[0].rows) || [];
-        rows.forEach(function (row) {
-            var n = row.table_name;
-            if (n && !seen[n]) {
-                seen[n] = true;
-                names.push(n);
-            }
-        });
-        return names;
-    }
-
+    // rowCounts is a Map from table name to row count.
     function renderSchema(data, rowCounts, openStates) {
-        rowCounts = rowCounts || {};
+        rowCounts = rowCounts || new Map();
         openStates = openStates || {};
         function openClass(anchor, defaultOpen) {
             var isOpen = Object.prototype.hasOwnProperty.call(openStates, anchor)
@@ -1168,17 +1149,7 @@
             return;
         }
 
-        // Group table columns by table name, preserving order.
-        var tables = {};
-        var tableOrder = [];
-        (tableResult.rows || []).forEach(function (row) {
-            var name = row.table_name;
-            if (!tables[name]) {
-                tables[name] = { sql: row.table_sql, columns: [] };
-                tableOrder.push(name);
-            }
-            tables[name].columns.push(row);
-        });
+        var tables = ConsoleSchema.tables(tableResult.rows);
 
         // Group indexes and triggers by type.
         var indexes = [];
@@ -1188,7 +1159,7 @@
             else if (row.type === "trigger") triggers.push(row);
         });
 
-        if (tableOrder.length === 0 && indexes.length === 0 && triggers.length === 0) {
+        if (tables.length === 0 && indexes.length === 0 && triggers.length === 0) {
             schemaContent.innerHTML = '<div class="schema-empty">No tables, indexes, or triggers found.</div>';
             return;
         }
@@ -1204,16 +1175,16 @@
         html += '</div>';
 
         // Tables.
-        tableOrder.forEach(function (tableName) {
-            var t = tables[tableName];
+        tables.forEach(function (t) {
+            var tableName = t.name;
             var anchor = "schema-table-" + slugify(tableName);
             html += '<div class="detail-section schema-section' + openClass(anchor, true) + '" id="' + escapeHTML(anchor) + '">';
             html += '<div class="detail-section-header">';
             html += '<span class="schema-table-heading"><span><span class="schema-kind">table</span> ' + escapeHTML(tableName);
             var columnsStr = t.columns.length + ' column' + (t.columns.length === 1 ? '' : 's');
             html += ' <span class="schema-count">(' + escapeHTML(columnsStr);
-            if (Object.prototype.hasOwnProperty.call(rowCounts, tableName)) {
-                var rc = Number(rowCounts[tableName]);
+            if (rowCounts.has(tableName)) {
+                var rc = Number(rowCounts.get(tableName));
                 var rowsStr = rc.toLocaleString() + ' row' + (rc === 1 ? '' : 's');
                 html += ', <span class="schema-rowcount-text" title="Row count read with &#39;none&#39; consistency &mdash; may be slightly stale">' + escapeHTML(rowsStr) + '</span>';
             }

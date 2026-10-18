@@ -1,7 +1,14 @@
-## v10.6.2 (unreleased)
+## v10.6.3 (unreleased)
+### Implementation changes and bug fixes
+- [PR #2968](https://github.com/rqlite/rqlite/pull/2968): Node probes honor request context and commit exactly one result.
+
+## v10.6.2 (October 18th 2026)
 ### Implementation changes and bug fixes
 - [PR #2967](https://github.com/rqlite/rqlite/pull/2967): Check for trailing junk in request bodies.
-- [PR #2968](https://github.com/rqlite/rqlite/pull/2968): Node probes honor request context and commit exactly one result.
+- [PR #2969](https://github.com/rqlite/rqlite/pull/2969): Console schema view handles table names that collide with JavaScript object properties.
+- [PR #2971](https://github.com/rqlite/rqlite/pull/2971): Standardize on Go 1.27 for the module, CI, and release builds.
+- [PR #2972](https://github.com/rqlite/rqlite/pull/2972): Set `CommitTimestamps` in CDC Events Group. Fixes issue [#2970](https://github.com/rqlite/rqlite/issues/2970). Thanks @gunavanthvarma-dev
+- [PR #2973](https://github.com/rqlite/rqlite/pull/2973): Upgrade dependencies via `go get`.
 
 ## v10.6.1 (October 16th 2026)
 ### Implementation changes and bug fixes

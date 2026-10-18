@@ -1,4 +1,4 @@
-FROM cimg/go:1.25.5
+FROM cimg/go:1.27
 
 # Become root for package installs
 USER root
@@ -10,6 +10,7 @@ RUN set -eux; \
     apt-get install -y \
       ca-certificates curl \
       python3 python3-pip python3-venv \
+      nodejs npm \
       musl-tools musl-dev \
       gcc-mingw-w64-x86-64-posix \
       gcc-arm-linux-gnueabi \
@@ -21,13 +22,6 @@ RUN set -eux; \
       gcc-mips64-linux-gnuabi64 \
       gcc-mips64el-linux-gnuabi64; \
     rm -rf /var/lib/apt/lists/*
-
-# MinIO client — consider pinning MC_VERSION to a known release
-# e.g. MC_VERSION=RELEASE.2025-05-22T13-38-07Z
-ARG MC_VERSION=latest
-RUN set -eux; \
-    curl -fSsL "https://dl.min.io/client/mc/release/linux-amd64/mc" -o /usr/local/bin/mc; \
-    chmod +x /usr/local/bin/mc
 
 # Python virtual environment (isolates from Debian’s externally-managed Python)
 ENV VIRTUAL_ENV=/opt/venv
