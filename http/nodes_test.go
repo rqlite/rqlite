@@ -56,7 +56,7 @@ func Test_NodeTestLeader(t *testing.T) {
 	node := &Node{ID: "1", Addr: "leader-raft-addr", APIAddr: "leader-api-addr"}
 	mockGA := newMockGetAddresser("leader-api-addr", "1.0.0", nil)
 
-	node.Test(mockGA, "leader-raft-addr", 0, 10*time.Second)
+	node.Test(context.Background(), mockGA, "leader-raft-addr", 0, 10*time.Second)
 	if !node.Reachable || !node.Leader {
 		t.Fatalf("Test method did not correctly update node status %s", asJSON(node))
 	}
@@ -69,7 +69,7 @@ func Test_NodeTestNotLeader(t *testing.T) {
 	node := &Node{ID: "1", Addr: "follower-raft-addr", APIAddr: "follower-api-addr"}
 	mockGA := newMockGetAddresser("follower-api-addr", "2.0.0", nil)
 
-	node.Test(mockGA, "leader-raft-addr", 0, 10*time.Second)
+	node.Test(context.Background(), mockGA, "leader-raft-addr", 0, 10*time.Second)
 	if !node.Reachable || node.Leader {
 		t.Fatalf("Test method did not correctly update node status %s", asJSON(node))
 	}
@@ -82,7 +82,7 @@ func Test_NodeTestDouble(t *testing.T) {
 	node1 := &Node{ID: "1", Addr: "leader-raft-addr", APIAddr: "leader-api-addr"}
 	node2 := &Node{ID: "2", Addr: "follower-raft-addr", APIAddr: "follower-api-addr"}
 	mockGA := &mockGetAddresser{}
-	mockGA.getMetaFn = func(addr string, retries int, timeout time.Duration) (*clstrpb.NodeMeta, error) {
+	mockGA.getMetaFn = func(ctx context.Context, addr string, retries int, timeout time.Duration) (*clstrpb.NodeMeta, error) {
 		if addr == "leader-raft-addr" {
 			return &clstrpb.NodeMeta{
 				Url:     "leader-api-addr",
@@ -93,7 +93,7 @@ func Test_NodeTestDouble(t *testing.T) {
 	}
 
 	nodes := Nodes{node1, node2}
-	nodes.Test(mockGA, "leader-raft-addr", 0, 10*time.Second)
+	nodes.Test(context.Background(), mockGA, "leader-raft-addr", 0, 10*time.Second)
 	if !node1.Reachable || !node1.Leader || node1.Version != "1.0.0" || node2.Reachable || node2.Leader || node2.Error != "not reachable" {
 		t.Fatalf("Test method did not correctly update node status %s", asJSON(nodes))
 	}
@@ -110,7 +110,7 @@ func Test_NodeTestDouble_Timeout(t *testing.T) {
 	node1 := &Node{ID: "1", Addr: "leader-raft-addr", APIAddr: "leader-api-addr"}
 	node2 := &Node{ID: "2", Addr: "follower-raft-addr", APIAddr: "follower-api-addr"}
 	mockGA := &mockGetAddresser{}
-	mockGA.getMetaFn = func(addr string, retries int, timeout time.Duration) (*clstrpb.NodeMeta, error) {
+	mockGA.getMetaFn = func(ctx context.Context, addr string, retries int, timeout time.Duration) (*clstrpb.NodeMeta, error) {
 		if addr == "leader-raft-addr" {
 			return &clstrpb.NodeMeta{Url: "leader-api-addr", Version: "3.0.0"}, nil
 		}
@@ -119,7 +119,7 @@ func Test_NodeTestDouble_Timeout(t *testing.T) {
 	}
 
 	nodes := Nodes{node1, node2}
-	nodes.Test(mockGA, "leader-raft-addr", 0, 1*time.Second)
+	nodes.Test(context.Background(), mockGA, "leader-raft-addr", 0, 1*time.Second)
 	if !node1.Reachable || !node1.Leader || node1.Version != "3.0.0" || node2.Reachable || node2.Leader || node2.Error != "timeout waiting for node to respond" {
 		t.Fatalf("Test method did not correctly update node status %s", asJSON(nodes))
 	}
@@ -129,6 +129,183 @@ func Test_NodeTestDouble_Timeout(t *testing.T) {
 	}
 	if nodes.HasAddr("not-found") {
 		t.Fatalf("HasAddr method incorrectly found node")
+	}
+}
+
+// Test_NodeTest_LateSuccessIgnored checks that a probe which succeeds after
+// the deadline does not alter a Node that has already recorded a timeout.
+func Test_NodeTest_LateSuccessIgnored(t *testing.T) {
+	node := &Node{ID: "1", Addr: "slow-raft-addr"}
+	release := make(chan struct{})
+	returned := make(chan struct{})
+	probeCtxCh := make(chan context.Context, 1)
+	mockGA := &mockGetAddresser{}
+	mockGA.getMetaFn = func(ctx context.Context, addr string, retries int, timeout time.Duration) (*clstrpb.NodeMeta, error) {
+		probeCtxCh <- ctx
+		defer close(returned)
+		<-release
+		return &clstrpb.NodeMeta{Url: "slow-api-addr", Version: "9.0.0"}, nil
+	}
+
+	node.Test(context.Background(), mockGA, "slow-raft-addr", 0, 50*time.Millisecond)
+	if node.Reachable || node.Leader || node.Error != "timeout waiting for node to respond" {
+		t.Fatalf("node did not record timeout: %s", asJSON(node))
+	}
+	if probeCtx := <-probeCtxCh; probeCtx.Err() == nil {
+		t.Fatalf("probe context was not cancelled after Test returned")
+	}
+
+	// Let the delayed probe complete, and confirm it changes nothing.
+	close(release)
+	<-returned
+	time.Sleep(20 * time.Millisecond)
+	if node.Reachable || node.Leader || node.APIAddr != "" || node.Version != "" ||
+		node.Error != "timeout waiting for node to respond" {
+		t.Fatalf("late success mutated node: %s", asJSON(node))
+	}
+}
+
+// Test_NodeTest_LateFailureIgnored checks that a probe which fails after the
+// deadline does not overwrite the recorded timeout error.
+func Test_NodeTest_LateFailureIgnored(t *testing.T) {
+	node := &Node{ID: "1", Addr: "slow-raft-addr"}
+	release := make(chan struct{})
+	returned := make(chan struct{})
+	mockGA := &mockGetAddresser{}
+	mockGA.getMetaFn = func(ctx context.Context, addr string, retries int, timeout time.Duration) (*clstrpb.NodeMeta, error) {
+		defer close(returned)
+		<-release
+		return nil, fmt.Errorf("connection refused")
+	}
+
+	node.Test(context.Background(), mockGA, "slow-raft-addr", 0, 50*time.Millisecond)
+	if node.Error != "timeout waiting for node to respond" {
+		t.Fatalf("node did not record timeout: %s", asJSON(node))
+	}
+
+	close(release)
+	<-returned
+	time.Sleep(20 * time.Millisecond)
+	if node.Reachable || node.Error != "timeout waiting for node to respond" {
+		t.Fatalf("late failure mutated node: %s", asJSON(node))
+	}
+}
+
+// Test_NodeTest_ContextCancelled checks that cancelling the caller's context
+// ends the probe before its timeout and is reported as an error.
+func Test_NodeTest_ContextCancelled(t *testing.T) {
+	node := &Node{ID: "1", Addr: "slow-raft-addr"}
+	started := make(chan struct{})
+	release := make(chan struct{})
+	var probeCtx context.Context
+	mockGA := &mockGetAddresser{}
+	mockGA.getMetaFn = func(ctx context.Context, addr string, retries int, timeout time.Duration) (*clstrpb.NodeMeta, error) {
+		probeCtx = ctx
+		close(started)
+		<-release
+		return &clstrpb.NodeMeta{Url: "slow-api-addr", Version: "9.0.0"}, nil
+	}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		node.Test(ctx, mockGA, "slow-raft-addr", 0, 10*time.Second)
+	}()
+
+	<-started
+	cancel()
+	select {
+	case <-done:
+	case <-time.After(2 * time.Second):
+		t.Fatalf("Test did not return after context cancellation")
+	}
+	if node.Reachable || node.Error != context.Canceled.Error() {
+		t.Fatalf("node did not record cancellation: %s", asJSON(node))
+	}
+	if probeCtx.Err() == nil {
+		t.Fatalf("probe context was not cancelled")
+	}
+
+	close(release)
+	time.Sleep(20 * time.Millisecond)
+	if node.Reachable || node.Error != context.Canceled.Error() {
+		t.Fatalf("late success mutated cancelled node: %s", asJSON(node))
+	}
+}
+
+// Test_NodesTest_MixedTiming probes several nodes with different response
+// times and checks each records exactly one correct terminal result, even
+// after the slow probe eventually completes.
+func Test_NodesTest_MixedTiming(t *testing.T) {
+	fast := &Node{ID: "1", Addr: "fast-raft-addr"}
+	slow := &Node{ID: "2", Addr: "slow-raft-addr"}
+	failing := &Node{ID: "3", Addr: "failing-raft-addr"}
+	release := make(chan struct{})
+	returned := make(chan struct{})
+	mockGA := &mockGetAddresser{}
+	mockGA.getMetaFn = func(ctx context.Context, addr string, retries int, timeout time.Duration) (*clstrpb.NodeMeta, error) {
+		switch addr {
+		case "fast-raft-addr":
+			return &clstrpb.NodeMeta{Url: "fast-api-addr", Version: "1.0.0"}, nil
+		case "slow-raft-addr":
+			defer close(returned)
+			<-release
+			return &clstrpb.NodeMeta{Url: "slow-api-addr", Version: "2.0.0"}, nil
+		default:
+			return nil, fmt.Errorf("not reachable")
+		}
+	}
+
+	nodes := Nodes{fast, slow, failing}
+	nodes.Test(context.Background(), mockGA, "fast-raft-addr", 0, 50*time.Millisecond)
+
+	check := func(stage string) {
+		if !fast.Reachable || !fast.Leader || fast.Version != "1.0.0" || fast.Error != "" {
+			t.Fatalf("%s: fast node wrong: %s", stage, asJSON(fast))
+		}
+		if slow.Reachable || slow.Leader || slow.Version != "" || slow.Error != "timeout waiting for node to respond" {
+			t.Fatalf("%s: slow node wrong: %s", stage, asJSON(slow))
+		}
+		if failing.Reachable || failing.Leader || failing.Error != "not reachable" {
+			t.Fatalf("%s: failing node wrong: %s", stage, asJSON(failing))
+		}
+	}
+	check("after Test")
+
+	close(release)
+	<-returned
+	time.Sleep(20 * time.Millisecond)
+	check("after late completion")
+}
+
+// Test_NodeTest_Reuse checks that re-probing a Node clears the result of the
+// previous probe, in both directions.
+func Test_NodeTest_Reuse(t *testing.T) {
+	node := &Node{ID: "1", Addr: "raft-addr"}
+
+	failGA := &mockGetAddresser{}
+	failGA.getMetaFn = func(ctx context.Context, addr string, retries int, timeout time.Duration) (*clstrpb.NodeMeta, error) {
+		return nil, fmt.Errorf("not reachable")
+	}
+	node.Test(context.Background(), failGA, "raft-addr", 0, time.Second)
+	if node.Reachable || node.Leader || node.Error != "not reachable" {
+		t.Fatalf("first probe wrong: %s", asJSON(node))
+	}
+
+	// Only TimeS is checked on success. The mock returns instantly, and on
+	// Windows the monotonic clock is coarse enough that time.Since can
+	// report zero, leaving Time at 0 even though the probe succeeded.
+	// TimeS is always non-empty on success ("0s" at worst).
+	okGA := newMockGetAddresser("api-addr", "1.0.0", nil)
+	node.Test(context.Background(), okGA, "raft-addr", 0, time.Second)
+	if !node.Reachable || !node.Leader || node.Error != "" || node.TimeS == "" {
+		t.Fatalf("second probe did not clear stale error: %s", asJSON(node))
+	}
+
+	node.Test(context.Background(), failGA, "raft-addr", 0, time.Second)
+	if node.Reachable || node.Leader || node.Error != "not reachable" || node.Time != 0 || node.TimeS != "" {
+		t.Fatalf("third probe did not clear stale success: %s", asJSON(node))
 	}
 }
 
@@ -242,7 +419,7 @@ type mockGetAddresser struct {
 	apiAddr   string
 	version   string
 	err       error
-	getMetaFn func(addr string, retries int, timeout time.Duration) (*clstrpb.NodeMeta, error)
+	getMetaFn func(ctx context.Context, addr string, retries int, timeout time.Duration) (*clstrpb.NodeMeta, error)
 }
 
 // newMockGetAddresser creates a new instance of mockGetAddresser.
@@ -259,7 +436,7 @@ func (m *mockGetAddresser) GetNodeMeta(ctx context.Context, addr string, retries
 	}
 	if m.getMetaFn != nil {
 		var err error
-		md, err = m.getMetaFn(addr, retries, timeout)
+		md, err = m.getMetaFn(ctx, addr, retries, timeout)
 		if err != nil {
 			return nil, err
 		}

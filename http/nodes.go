@@ -4,11 +4,13 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"io"
 	"sort"
 	"sync"
 	"time"
 
+	clstrPB "github.com/rqlite/rqlite/v10/cluster/proto"
 	"github.com/rqlite/rqlite/v10/command/proto"
 	"github.com/rqlite/rqlite/v10/store"
 )
@@ -43,43 +45,71 @@ func NewNodeFromServer(s *store.Server) *Node {
 
 // Test tests the node's reachability and leadership status. If an error
 // occurs, the Error field will be populated.
-func (n *Node) Test(gm GetNodeMetaer, leaderAddr string, retries int, timeout time.Duration) {
+//
+// The probe is bounded by both ctx and timeout. Exactly one result is
+// committed to the Node: whichever of the probe's completion or the
+// deadline happens first. A probe that completes after the deadline is
+// discarded, so a Node never reports both a timeout and reachability.
+func (n *Node) Test(ctx context.Context, gm GetNodeMetaer, leaderAddr string, retries int, timeout time.Duration) {
 	start := time.Now()
-	n.Reachable = false
-	n.Leader = false
+	n.reset()
 
-	timer := time.NewTimer(timeout)
-	defer timer.Stop()
-	done := make(chan struct{})
+	ctx, cancel := context.WithTimeout(ctx, timeout)
+	defer cancel()
+
+	type result struct {
+		meta *clstrPB.NodeMeta
+		err  error
+	}
+	// Buffered so a late probe can hand off its result and exit, rather
+	// than block forever once nobody is listening.
+	resultCh := make(chan result, 1)
 	go func() {
-		defer close(done)
-		meta, err := gm.GetNodeMeta(context.Background(), n.Addr, retries, timeout)
-		if err != nil {
-			n.SetError(err.Error())
-			return
-		}
-
-		// Set attributes in a race-safe manner.
-		func() {
-			n.mu.Lock()
-			defer n.mu.Unlock()
-			n.APIAddr = meta.Url
-			n.Version = meta.Version
-			if n.Version == "" {
-				n.Version = "unknown"
-			}
-			n.Reachable = true
-			n.Leader = n.Addr == leaderAddr
-			n.Time = time.Since(start).Seconds()
-			n.TimeS = time.Since(start).String()
-		}()
+		meta, err := gm.GetNodeMeta(ctx, n.Addr, retries, timeout)
+		resultCh <- result{meta: meta, err: err}
 	}()
 
 	select {
-	case <-timer.C:
-		n.SetError("timeout waiting for node to respond")
-	case <-done:
+	case <-ctx.Done():
+		if errors.Is(ctx.Err(), context.DeadlineExceeded) {
+			n.SetError("timeout waiting for node to respond")
+		} else {
+			n.SetError(ctx.Err().Error())
+		}
+	case res := <-resultCh:
+		if res.err != nil {
+			n.SetError(res.err.Error())
+			return
+		}
+		n.setReachable(res.meta, leaderAddr, time.Since(start))
 	}
+}
+
+// reset clears the fields a previous probe may have set, so a reused Node
+// reports only the outcome of the current probe.
+func (n *Node) reset() {
+	n.mu.Lock()
+	defer n.mu.Unlock()
+	n.Reachable = false
+	n.Leader = false
+	n.Error = ""
+	n.Time = 0
+	n.TimeS = ""
+}
+
+// setReachable records a successful probe.
+func (n *Node) setReachable(meta *clstrPB.NodeMeta, leaderAddr string, d time.Duration) {
+	n.mu.Lock()
+	defer n.mu.Unlock()
+	n.APIAddr = meta.Url
+	n.Version = meta.Version
+	if n.Version == "" {
+		n.Version = "unknown"
+	}
+	n.Reachable = true
+	n.Leader = n.Addr == leaderAddr
+	n.Time = d.Seconds()
+	n.TimeS = d.String()
 }
 
 // SetError sets the Error field of the Node in a synchronized manner.
@@ -152,13 +182,13 @@ func (n Nodes) GetNode(id string) *Node {
 
 // Test tests the reachability and leadership status of all nodes. It does this
 // in parallel, and blocks until all nodes have been tested.
-func (n Nodes) Test(gm GetNodeMetaer, leaderAddr string, retries int, timeout time.Duration) {
+func (n Nodes) Test(ctx context.Context, gm GetNodeMetaer, leaderAddr string, retries int, timeout time.Duration) {
 	var wg sync.WaitGroup
 	for _, nn := range n {
 		wg.Add(1)
 		go func(nnn *Node) {
 			defer wg.Done()
-			nnn.Test(gm, leaderAddr, retries, timeout)
+			nnn.Test(ctx, gm, leaderAddr, retries, timeout)
 		}(nn)
 	}
 	wg.Wait()

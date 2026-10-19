@@ -1,3 +1,7 @@
+## v10.6.3 (unreleased)
+### Implementation changes and bug fixes
+- [PR #2968](https://github.com/rqlite/rqlite/pull/2968): Node probes honor request context and commit exactly one result.
+
 ## v10.6.2 (October 18th 2026)
 ### Implementation changes and bug fixes
 - [PR #2967](https://github.com/rqlite/rqlite/pull/2967): Check for trailing junk in request bodies.

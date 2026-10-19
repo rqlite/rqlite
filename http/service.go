@@ -1178,7 +1178,7 @@ func (s *Service) handleNodes(w http.ResponseWriter, r *http.Request, qp QueryPa
 	} else if lNode != nil {
 		laddr = lNode.Addr
 	}
-	nodes.Test(s.cluster, laddr, qp.Retries(0), qp.Timeout(defaultTimeout))
+	nodes.Test(r.Context(), s.cluster, laddr, qp.Retries(0), qp.Timeout(defaultTimeout))
 
 	enc := NewNodesRespEncoder(w, qp.Version() != "2")
 	if qp.Pretty() {
@@ -1222,7 +1222,7 @@ func (s *Service) handleLeader(w http.ResponseWriter, r *http.Request, qp QueryP
 			http.Error(w, "leader node", http.StatusInternalServerError)
 			return
 		}
-		node.Test(s.cluster, laddr, qp.Retries(0), qp.Timeout(defaultTimeout))
+		node.Test(r.Context(), s.cluster, laddr, qp.Retries(0), qp.Timeout(defaultTimeout))
 
 		b, err := func() ([]byte, error) {
 			if qp.Pretty() {
