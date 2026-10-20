@@ -324,6 +324,18 @@ func (db *DB) SetMaxReadOnlyConns(n int) {
 	db.readers.setMaxConns(n)
 }
 
+// AcquireWriter borrows the read-write connection. There is only one, so
+// the call waits until it is free or ctx is done, and while it is held
+// nothing else can write to the database. The caller must close it.
+func (db *DB) AcquireWriter(ctx context.Context) (*Conn, error) {
+	return db.writer.acquire(ctx)
+}
+
+// AcquireReader borrows a read-only connection. The caller must close it.
+func (db *DB) AcquireReader(ctx context.Context) (*Conn, error) {
+	return db.readers.acquire(ctx)
+}
+
 // LastModified returns the last modified time of the database file, or the WAL file,
 // whichever is most recent.
 func (db *DB) LastModified() (time.Time, error) {
@@ -540,7 +552,7 @@ func (db *DB) CheckpointTruncateWithTimeout(dur time.Duration) (err error) {
 		}
 	}()
 
-	conn, err := db.writer.acquire(context.Background())
+	conn, err := db.AcquireWriter(context.Background())
 	if err != nil {
 		return err
 	}
@@ -601,7 +613,7 @@ func (db *DB) CheckpointWithTimeout(mode CheckpointMode, dur time.Duration) (met
 		}
 	}()
 
-	conn, err := db.writer.acquire(context.Background())
+	conn, err := db.AcquireWriter(context.Background())
 	if err != nil {
 		return nil, err
 	}
@@ -647,7 +659,7 @@ func (db *DB) CheckpointWithTimeout(mode CheckpointMode, dur time.Duration) (met
 
 // GetCheckpointing returns the current checkpointing setting.
 func (db *DB) GetCheckpointing() (int, error) {
-	conn, err := db.writer.acquire(context.Background())
+	conn, err := db.AcquireWriter(context.Background())
 	if err != nil {
 		return 0, err
 	}
@@ -685,7 +697,7 @@ func (db *DB) VacuumInto(path string) error {
 // execOnWriter runs a statement that returns no rows on the read-write
 // connection.
 func (db *DB) execOnWriter(query string) error {
-	conn, err := db.writer.acquire(context.Background())
+	conn, err := db.AcquireWriter(context.Background())
 	if err != nil {
 		return err
 	}
@@ -755,7 +767,7 @@ func (db *DB) VerifyIntegrity() (IntegrityResult, error) {
 
 // SetSynchronousMode sets the synchronous mode of the database.
 func (db *DB) SetSynchronousMode(mode SynchronousMode) error {
-	conn, err := db.writer.acquire(context.Background())
+	conn, err := db.AcquireWriter(context.Background())
 	if err != nil {
 		return err
 	}
@@ -765,7 +777,7 @@ func (db *DB) SetSynchronousMode(mode SynchronousMode) error {
 
 // GetSynchronousMode returns the current synchronous mode.
 func (db *DB) GetSynchronousMode() (SynchronousMode, error) {
-	conn, err := db.writer.acquire(context.Background())
+	conn, err := db.AcquireWriter(context.Background())
 	if err != nil {
 		return 0, err
 	}
@@ -823,7 +835,7 @@ func (db *DB) CompileOptions() ([]string, error) {
 
 // ColumnNames returns the names of all columns in the given table.
 func (db *DB) ColumnNames(table string) ([]string, error) {
-	conn, err := db.readers.acquire(context.Background())
+	conn, err := db.AcquireReader(context.Background())
 	if err != nil {
 		return nil, err
 	}
@@ -839,7 +851,7 @@ func (db *DB) ColumnNames(table string) ([]string, error) {
 
 // TableColumnTypes returns the declared types of all columns in the given table.
 func (db *DB) TableColumnTypes(table string) (map[string]string, error) {
-	conn, err := db.readers.acquire(context.Background())
+	conn, err := db.AcquireReader(context.Background())
 	if err != nil {
 		return nil, err
 	}
@@ -907,7 +919,7 @@ func (db *DB) ExecuteWithContext(ctx context.Context, req *command.Request, xTim
 		defer cancel()
 	}
 	stats.Add(numExecutions, int64(len(req.Statements)))
-	conn, err := db.writer.acquire(ctx)
+	conn, err := db.AcquireWriter(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -958,7 +970,7 @@ func (db *DB) QueryWithContext(ctx context.Context, req *command.Request, xTime 
 		defer cancel()
 	}
 	stats.Add(numQueries, int64(len(req.Statements)))
-	conn, err := db.readers.acquire(ctx)
+	conn, err := db.AcquireReader(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -1006,7 +1018,7 @@ func (db *DB) RequestWithContext(ctx context.Context, req *command.Request, xTim
 		defer cancel()
 	}
 	stats.Add(numRequests, int64(len(req.Statements)))
-	conn, err := db.writer.acquire(ctx)
+	conn, err := db.AcquireWriter(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -1071,12 +1083,12 @@ func (db *DB) Copy(dstDB *DB) error {
 // of src's read-only connections and writing through this database's
 // read-write connection.
 func (db *DB) copyFrom(src *DB) error {
-	dst, err := db.writer.acquire(context.Background())
+	dst, err := db.AcquireWriter(context.Background())
 	if err != nil {
 		return err
 	}
 	defer dst.Close()
-	srcConn, err := src.readers.acquire(context.Background())
+	srcConn, err := src.AcquireReader(context.Background())
 	if err != nil {
 		return err
 	}
@@ -1127,7 +1139,7 @@ func (db *DB) Serialize() ([]byte, error) {
 // SQLite resolves the tables a view reads from when the view is used, not when it
 // is created.
 func (db *DB) Dump(w io.Writer, tableNames ...string) (int, error) {
-	conn, err := db.readers.acquire(context.Background())
+	conn, err := db.AcquireReader(context.Background())
 	if err != nil {
 		return 0, err
 	}
@@ -1139,7 +1151,7 @@ func (db *DB) Dump(w io.Writer, tableNames ...string) (int, error) {
 // As per https://www.sqlite.org/c3ref/stmt_readonly.html, this function
 // may not return 100% correct results, but should cover most scenarios.
 func (db *DB) StmtReadOnly(sql string) (bool, error) {
-	conn, err := db.readers.acquire(context.Background())
+	conn, err := db.AcquireReader(context.Background())
 	if err != nil {
 		return false, err
 	}

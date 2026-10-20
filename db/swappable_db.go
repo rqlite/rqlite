@@ -14,6 +14,12 @@ import (
 
 // SwappableDB is a wrapper around DB that allows the underlying database to be swapped out
 // in a thread-safe manner.
+//
+// A SwappableDB does not hand out connections. A connection held across calls
+// would have to keep the swap lock for as long as it is held, so that a swap
+// cannot close the database underneath it. Deciding when that is safe belongs
+// to the caller that schedules writes, so for now every operation borrows a
+// connection and returns it before the call ends.
 type SwappableDB struct {
 	db            *DB
 	cfg           *Config
