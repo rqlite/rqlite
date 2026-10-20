@@ -914,6 +914,8 @@ func (db *DB) Execute(req *command.Request, xTime bool) ([]*command.ExecuteQuery
 func (db *DB) ExecuteWithContext(ctx context.Context, req *command.Request, xTime bool) (results []*command.ExecuteQueryResponse, retErr error) {
 	defer func() { retErr = classifyError(retErr) }()
 
+	// The connection applies the request timeout too, but only once it has
+	// been acquired. Applying it here also bounds the wait for the writer.
 	if req.DbTimeout > 0 {
 		var cancel context.CancelFunc
 		ctx, cancel = context.WithTimeout(ctx, time.Duration(req.DbTimeout))
@@ -965,6 +967,8 @@ func (db *DB) Query(req *command.Request, xTime bool) ([]*command.QueryRows, err
 // Any timeout set in the request is also applied, so the effective deadline is the
 // earlier of the context's deadline and the request's timeout.
 func (db *DB) QueryWithContext(ctx context.Context, req *command.Request, xTime bool) ([]*command.QueryRows, error) {
+	// The connection applies the request timeout too, but only once it has
+	// been acquired. Applying it here also bounds the wait for a reader.
 	if req.DbTimeout > 0 {
 		var cancel context.CancelFunc
 		ctx, cancel = context.WithTimeout(ctx, time.Duration(req.DbTimeout))
@@ -1013,6 +1017,8 @@ func (db *DB) Request(req *command.Request, xTime bool) ([]*command.ExecuteQuery
 // effective deadline is the earlier of the context's deadline and the request's timeout.
 func (db *DB) RequestWithContext(ctx context.Context, req *command.Request, xTime bool) (eqResponse []*command.ExecuteQueryResponse, retErr error) {
 	defer func() { retErr = classifyError(retErr) }()
+	// The connection applies the request timeout too, but only once it has
+	// been acquired. Applying it here also bounds the wait for the writer.
 	if req.DbTimeout > 0 {
 		var cancel context.CancelFunc
 		ctx, cancel = context.WithTimeout(ctx, time.Duration(req.DbTimeout))
