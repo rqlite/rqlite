@@ -337,7 +337,7 @@ type Store struct {
 	walPath string    // Path to WAL file.
 	dbDir   string    // Path to directory containing SQLite file.
 
-	dbDrv        *sql.Driver      // The SQLite database driver.
+	dbCfg        *sql.Config      // How the SQLite database is opened.
 	db           *sql.SwappableDB // The underlying SQLite store.
 	checkpointer Checkpointer
 
@@ -472,7 +472,6 @@ func New(c *Config, ly Layer) *Store {
 		dbPath:            dbPath,
 		walPath:           sql.WALPath(dbPath),
 		dbDir:             filepath.Dir(dbPath),
-		dbDrv:             sql.DefaultDriver(),
 		cdcConf:           c.CDC,
 		cdcOutCh:          make(chan *proto.CDCIndexedEventGroup, cdcChanLen),
 		readyChans:        rsync.NewReadyChannels(),
@@ -778,33 +777,29 @@ func (s *Store) Open() (retErr error) {
 		stats.Add(numRecoveries, 1)
 	}
 
-	// Build a composed driver if any non-default features are configured.
-	// This replaces the previous sequential override pattern and allows
-	// extensions, query logging, and CDC to coexist in the same driver.
-	if len(s.dbConf.Extensions) > 0 || s.dbConf.QueryLogger != nil || s.cdcConf != nil {
-		cfg := sql.DriverConfig{
-			Extensions:  s.dbConf.Extensions,
-			ChkOnClose:  sql.CnkOnCloseModeDisabled,
-			QueryLogger: s.dbConf.QueryLogger,
+	// Extensions, foreign keys and query logging apply to every connection.
+	// CDC hooks apply to the writer only, since only it changes the database.
+	// The configuration is kept by the database, so it is applied again to
+	// every connection opened after the database is swapped.
+	s.dbCfg = sql.NewConfig(sql.ConnConfig{
+		Extensions:  s.dbConf.Extensions,
+		ForeignKeys: s.dbConf.FKConstraints,
+		QueryLogger: s.dbConf.QueryLogger,
+	}, true)
+	s.dbCfg.MaxReaders = s.MaxReadOnlyConns
+	if s.cdcConf != nil {
+		s.cdcCollator, err = sql.NewCDCCollator(&ColumnNamesProvider{s})
+		if err != nil {
+			return fmt.Errorf("failed to create CDC collator: %s", err)
 		}
-		if s.cdcConf != nil {
-			// The CDC hooks are part of the driver configuration, so they are
-			// installed on every database connection, including any connection
-			// opened after the database is swapped.
-			s.cdcCollator, err = sql.NewCDCCollator(&ColumnNamesProvider{s})
-			if err != nil {
-				return fmt.Errorf("failed to create CDC collator: %s", err)
-			}
-			cfg.PreUpdateHook = s.cdcCollator.PreupdateHook
-			cfg.PreUpdateTableRe = s.cdcConf.TableRe
-			cfg.PreUpdateRowIDsOnly = s.cdcConf.RowIDsOnly
-			cfg.CommitHook = s.cdcCollator.CommitHook
-			cfg.RollbackHook = s.cdcCollator.RollbackHook
-		}
-		s.dbDrv = sql.NewDriverFromConfig(&cfg)
+		s.dbCfg.Writer.PreUpdateHook = s.cdcCollator.PreupdateHook
+		s.dbCfg.Writer.PreUpdateTableRe = s.cdcConf.TableRe
+		s.dbCfg.Writer.PreUpdateRowIDsOnly = s.cdcConf.RowIDsOnly
+		s.dbCfg.Writer.CommitHook = s.cdcCollator.CommitHook
+		s.dbCfg.Writer.RollbackHook = s.cdcCollator.RollbackHook
 	}
 
-	s.db, err = createDBOnDisk(s.dbPath, s.dbDrv, removeDBFiles, s.dbConf.FKConstraints, s.MaxReadOnlyConns)
+	s.db, err = createDBOnDisk(s.dbPath, s.dbCfg, removeDBFiles)
 	if err != nil {
 		return fmt.Errorf("failed to create on-disk database: %s", err)
 	}
@@ -2043,7 +2038,7 @@ func (s *Store) ReadFrom(r io.Reader) (int64, error) {
 	}
 
 	// Swap in new database file.
-	if err := s.db.Swap(f.Name(), s.dbConf.FKConstraints, true); err != nil {
+	if err := s.db.Swap(f.Name()); err != nil {
 		return n, fmt.Errorf("error swapping database file: %v", err)
 	}
 
@@ -2895,7 +2890,7 @@ func (s *Store) fsmRestore(rc io.ReadCloser) (retErr error) {
 	// error in the defer handler.
 	hardExitRequired = true
 
-	if err := s.db.Swap(tmpPath, s.dbConf.FKConstraints, true); err != nil {
+	if err := s.db.Swap(tmpPath); err != nil {
 		return fmt.Errorf("error swapping database file: %v", err)
 	}
 	s.logger.Printf("successfully opened database at %s due to restore", s.db.Path())
@@ -3324,7 +3319,7 @@ func raftLogInfoMessage(sz int64, fi, li uint64) string {
 // for the store. The WAL-specific files are always removed as there is
 // no guarantee they are consistent with the main database file. If remove
 // is true, all existing database files at that path are removed first.
-func createDBOnDisk(path string, drv *sql.Driver, remove, fkConstraints bool, maxROConns int) (*sql.SwappableDB, error) {
+func createDBOnDisk(path string, cfg *sql.Config, remove bool) (*sql.SwappableDB, error) {
 	if remove {
 		if err := sql.RemoveFiles(path); err != nil {
 			return nil, err
@@ -3334,7 +3329,7 @@ func createDBOnDisk(path string, drv *sql.Driver, remove, fkConstraints bool, ma
 			return nil, err
 		}
 	}
-	return sql.OpenSwappable(path, drv, fkConstraints, true, maxROConns)
+	return sql.OpenSwappable(path, cfg)
 }
 
 func createTemp(dir, pattern string) (*os.File, error) {

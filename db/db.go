@@ -12,7 +12,6 @@ import (
 	"io/fs"
 	"log"
 	"os"
-	"path/filepath"
 	"slices"
 	"strings"
 	"sync"
@@ -185,13 +184,39 @@ func ResetStats() {
 	stats.Add(cdcDroppedEvents, 0)
 }
 
+// Config describes how a database is opened: one connection policy for the
+// writer, one for the readers, and the settings they share.
+type Config struct {
+	// Writer is the policy for the read-write connection.
+	Writer ConnConfig
+
+	// Readers is the policy for the read-only connections.
+	Readers ConnConfig
+
+	// WAL, if true, opens the database in WAL journal mode, otherwise in
+	// DELETE mode.
+	WAL bool
+
+	// MaxReaders is the maximum number of read-only connections. Zero means
+	// no limit.
+	MaxReaders int
+}
+
+// NewConfig returns a configuration which opens the writer and the readers
+// with the same connection policy.
+func NewConfig(conn ConnConfig, wal bool) *Config {
+	return &Config{
+		Writer:  conn,
+		Readers: conn,
+		WAL:     wal,
+	}
+}
+
 // DB is the SQL database.
 type DB struct {
-	drv       *Driver
-	path      string // Path to database file.
-	walPath   string // Path to WAL file.
-	fkEnabled bool   // Foreign key constraints enabled
-	wal       bool
+	cfg     *Config
+	path    string // Path to database file.
+	walPath string // Path to WAL file.
 
 	writer  *writer     // The one read-write connection.
 	readers *readerPool // The read-only connections.
@@ -239,16 +264,24 @@ func (cm *CheckpointMeta) Success() bool {
 	return cm.Code == 0
 }
 
-// Open opens a file-based database using the default driver.
+// Open opens a file-based database using the default connection policy.
 func Open(dbPath string, fkEnabled, wal bool) (retDB *DB, retErr error) {
-	return OpenWithDriver(DefaultDriver(), dbPath, fkEnabled, wal)
+	return OpenWithConfig(dbPath, NewConfig(ConnConfig{ForeignKeys: fkEnabled}, wal))
 }
 
-// OpenWithDriver opens a file-based database, creating it if it does not exist.
+// OpenWithDriver opens a file-based database, applying the driver's
+// connection policy to the writer and the readers alike.
+func OpenWithDriver(drv *Driver, dbPath string, fkEnabled, wal bool) (retDB *DB, retErr error) {
+	conn := *drv.cfg
+	conn.ForeignKeys = conn.ForeignKeys || fkEnabled
+	return OpenWithConfig(dbPath, NewConfig(conn, wal))
+}
+
+// OpenWithConfig opens a file-based database, creating it if it does not exist.
 // After this function returns, an actual SQLite file will always exist. If the
 // database is opened in WAL mode, the WAL files will also be created if they
 // do not exist.
-func OpenWithDriver(drv *Driver, dbPath string, fkEnabled, wal bool) (retDB *DB, retErr error) {
+func OpenWithConfig(dbPath string, cfg *Config) (retDB *DB, retErr error) {
 	logger := log.New(log.Writer(), "[db] ", log.LstdFlags)
 	startTime := time.Now()
 	defer func() {
@@ -261,27 +294,26 @@ func OpenWithDriver(drv *Driver, dbPath string, fkEnabled, wal bool) (retDB *DB,
 		recordDuration(openDuration, startTime)
 	}()
 
-	writer, err := openWriter(drv, dbPath, fkEnabled, wal, logger)
+	writer, err := openWriter(&cfg.Writer, dbPath, cfg.WAL, logger)
 	if err != nil {
 		return nil, err
 	}
-	readers := openReaderPool(drv, dbPath, fkEnabled, wal, logger)
+	readers := openReaderPool(&cfg.Readers, dbPath, cfg.WAL, logger)
+	readers.setMaxConns(cfg.MaxReaders)
 
 	// Make it clear which extensions have been loaded, if any.
-	extensions := drv.ExtensionNames()
+	extensions := extensionNames(cfg.Writer.Extensions)
 	if len(extensions) > 0 {
 		logger.Printf("loaded extensions: %s", strings.Join(extensions, ", "))
 	}
 
 	return &DB{
-		drv:       drv,
-		path:      dbPath,
-		walPath:   dbPath + "-wal",
-		fkEnabled: fkEnabled,
-		wal:       wal,
-		writer:    writer,
-		readers:   readers,
-		logger:    logger,
+		cfg:     cfg,
+		path:    dbPath,
+		walPath: dbPath + "-wal",
+		writer:  writer,
+		readers: readers,
+		logger:  logger,
 	}, nil
 }
 
@@ -389,7 +421,7 @@ func (db *DB) Stats() (map[string]any, error) {
 	if stats["size"], err = db.FileSize(); err != nil {
 		return nil, err
 	}
-	if db.wal {
+	if db.cfg.WAL {
 		if stats["wal_size"], err = db.WALSize(); err != nil {
 			return nil, err
 		}
@@ -422,7 +454,7 @@ func (db *DB) FileSize() (int64, error) {
 // not enabled, this function returns 0. If the WAL file does
 // not exist, even if the database is in WAL mode, 0 is also returned.
 func (db *DB) WALSize() (int64, error) {
-	if !db.wal {
+	if !db.cfg.WAL {
 		return 0, nil
 	}
 	sz, err := fsutil.FileSize(db.walPath)
@@ -438,11 +470,7 @@ func (db *DB) WALSize() (int64, error) {
 
 // ExtensionNames returns the names of the SQLite extensions loaded into the database.
 func (db *DB) ExtensionNames() []string {
-	names := make([]string, 0, len(db.drv.extensions))
-	for _, ext := range db.drv.extensions {
-		names = append(names, filepath.Base(ext))
-	}
-	return names
+	return extensionNames(db.cfg.Writer.Extensions)
 }
 
 // SetBusyTimeout sets the busy timeout for the database. If a timeout is
@@ -747,12 +775,12 @@ func (db *DB) GetSynchronousMode() (SynchronousMode, error) {
 
 // FKEnabled returns whether Foreign Key constraints are enabled.
 func (db *DB) FKEnabled() bool {
-	return db.fkEnabled
+	return db.cfg.Writer.ForeignKeys
 }
 
 // WALEnabled returns whether WAL mode is enabled.
 func (db *DB) WALEnabled() bool {
-	return db.wal
+	return db.cfg.WAL
 }
 
 // Path returns the path of this database.
@@ -762,7 +790,7 @@ func (db *DB) Path() string {
 
 // WALPath returns the path to the WAL file for this database.
 func (db *DB) WALPath() string {
-	if !db.wal {
+	if !db.cfg.WAL {
 		return ""
 	}
 	return db.walPath
@@ -1062,7 +1090,7 @@ func (db *DB) copyFrom(src *DB) error {
 // copy is made, and it is this copy that is serialized. This function must not
 // be called while any writes are happening to the database.
 func (db *DB) Serialize() ([]byte, error) {
-	if db.wal {
+	if db.cfg.WAL {
 		tmpFile, err := os.CreateTemp("", "rqlite-serialize")
 		if err != nil {
 			return nil, err
@@ -1073,7 +1101,7 @@ func (db *DB) Serialize() ([]byte, error) {
 		if _, err := db.Backup(tmpFile.Name(), false); err != nil {
 			return nil, err
 		}
-		newDB, err := Open(tmpFile.Name(), db.fkEnabled, false)
+		newDB, err := Open(tmpFile.Name(), db.FKEnabled(), false)
 		if err != nil {
 			return nil, err
 		}

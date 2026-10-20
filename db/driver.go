@@ -25,8 +25,11 @@ const (
 	CnkOnCloseModeEnabled
 )
 
-// DriverConfig holds the configuration for a composable SQLite driver.
-type DriverConfig struct {
+// ConnConfig is the policy applied to every connection of one role when it
+// is opened: which extensions it loads, how it treats the WAL on close,
+// whether it enforces foreign keys, which hooks it carries, and whether its
+// statements are traced.
+type ConnConfig struct {
 	// Extensions is the list of paths to SQLite extension shared objects.
 	Extensions []string
 
@@ -34,7 +37,7 @@ type DriverConfig struct {
 	ChkOnClose CnkOnCloseMode
 
 	// ForeignKeys, if true, enables foreign key constraints on every new
-	// connection, regardless of any setting in the DSN.
+	// connection.
 	ForeignKeys bool
 
 	// Hooks, installed on every new connection. A nil hook is not installed.
@@ -57,6 +60,7 @@ type DriverConfig struct {
 // per-connection behavior. A Driver is not registered with database/sql, so
 // any number can exist and none needs a name.
 type Driver struct {
+	cfg        *ConnConfig
 	sqlDrv     *sqlite3.SQLiteDriver
 	extensions []string
 	chkOnClose CnkOnCloseMode
@@ -65,8 +69,9 @@ type Driver struct {
 // NewDriverFromConfig returns a new driver which uses cfg to compose the
 // ConnectHook. Every feature in cfg is applied to each new connection, so
 // extensions, checkpoint behavior, and query logging can all coexist.
-func NewDriverFromConfig(cfg *DriverConfig) *Driver {
+func NewDriverFromConfig(cfg *ConnConfig) *Driver {
 	return &Driver{
+		cfg: cfg,
 		sqlDrv: &sqlite3.SQLiteDriver{
 			Extensions:  cfg.Extensions,
 			ConnectHook: buildConnectHook(cfg),
@@ -79,7 +84,7 @@ func NewDriverFromConfig(cfg *DriverConfig) *Driver {
 // DefaultDriver returns the default driver. This driver disables checkpoint
 // on close for any database in WAL mode.
 func DefaultDriver() *Driver {
-	return NewDriverFromConfig(&DriverConfig{
+	return NewDriverFromConfig(&ConnConfig{
 		ChkOnClose: CnkOnCloseModeDisabled,
 	})
 }
@@ -87,7 +92,7 @@ func DefaultDriver() *Driver {
 // CheckpointDriver returns the checkpoint driver. This driver enables
 // checkpoint on close for any database in WAL mode.
 func CheckpointDriver() *Driver {
-	return NewDriverFromConfig(&DriverConfig{
+	return NewDriverFromConfig(&ConnConfig{
 		ChkOnClose: CnkOnCloseModeEnabled,
 	})
 }
@@ -96,7 +101,7 @@ func CheckpointDriver() *Driver {
 // on every connection. This driver disables checkpoint on close for any
 // database in WAL mode.
 func ForeignKeyDriver() *Driver {
-	return NewDriverFromConfig(&DriverConfig{
+	return NewDriverFromConfig(&ConnConfig{
 		ChkOnClose:  CnkOnCloseModeDisabled,
 		ForeignKeys: true,
 	})
@@ -106,7 +111,7 @@ func ForeignKeyDriver() *Driver {
 // list of paths to SQLite3 extension shared objects. chkpt is the
 // checkpoint-on-close mode the Driver will use.
 func NewDriver(extensions []string, chkpt CnkOnCloseMode) *Driver {
-	return NewDriverFromConfig(&DriverConfig{
+	return NewDriverFromConfig(&ConnConfig{
 		Extensions: extensions,
 		ChkOnClose: chkpt,
 	})
@@ -119,8 +124,13 @@ func (d *Driver) Extensions() []string {
 
 // ExtensionNames returns the names of the loaded driver extensions.
 func (d *Driver) ExtensionNames() []string {
-	names := make([]string, 0, len(d.extensions))
-	for _, ext := range d.extensions {
+	return extensionNames(d.extensions)
+}
+
+// extensionNames returns the sorted base names of the given extension paths.
+func extensionNames(paths []string) []string {
+	names := make([]string, 0, len(paths))
+	for _, ext := range paths {
 		names = append(names, filepath.Base(ext))
 	}
 	sort.Strings(names)
@@ -164,7 +174,7 @@ func (c *connector) Driver() driver.Driver {
 // tracing, then hooks.
 //
 // This driver unconditionally disables automatic checkpointing.
-func buildConnectHook(cfg *DriverConfig) func(conn *sqlite3.SQLiteConn) error {
+func buildConnectHook(cfg *ConnConfig) func(conn *sqlite3.SQLiteConn) error {
 	return func(conn *sqlite3.SQLiteConn) error {
 		// Checkpoint-on-close configuration.
 		if cfg.ChkOnClose == CnkOnCloseModeDisabled {

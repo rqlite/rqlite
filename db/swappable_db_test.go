@@ -15,7 +15,7 @@ func Test_OpenSwappable_Success(t *testing.T) {
 	defer fsutil.Remove(path)
 
 	// Attempt to open a swappable database
-	swappableDB, err := OpenSwappable(path, nil, false, false, 0)
+	swappableDB, err := OpenSwappable(path, NewConfig(ConnConfig{}, false))
 	if err != nil {
 		t.Fatalf("failed to open swappable database: %s", err)
 	}
@@ -43,7 +43,7 @@ func Test_OpenSwappable_InvalidPath(t *testing.T) {
 	invalidPath := "/invalid/path/to/database"
 
 	// Attempt to open a swappable database with an invalid path
-	swappableDB, err := OpenSwappable(invalidPath, nil, false, false, 0)
+	swappableDB, err := OpenSwappable(invalidPath, NewConfig(ConnConfig{}, false))
 	if err == nil {
 		swappableDB.Close()
 		t.Fatalf("expected an error when opening swappable database with invalid path, got nil")
@@ -71,7 +71,7 @@ func Test_SwapSuccess(t *testing.T) {
 	// Create a SwappableDB with an empty database
 	swappablePath := mustTempPath()
 	defer fsutil.Remove(swappablePath)
-	swappableDB, err := OpenSwappable(swappablePath, nil, false, false, 0)
+	swappableDB, err := OpenSwappable(swappablePath, NewConfig(ConnConfig{}, false))
 	if err != nil {
 		t.Fatalf("failed to open swappable database: %s", err)
 	}
@@ -81,7 +81,7 @@ func Test_SwapSuccess(t *testing.T) {
 	if err := srcDB.Close(); err != nil {
 		t.Fatalf("failed to close source database pre-swap: %s", err)
 	}
-	if err := swappableDB.Swap(srcPath, false, false); err != nil {
+	if err := swappableDB.Swap(srcPath); err != nil {
 		t.Fatalf("failed to swap database: %s", err)
 	}
 
@@ -95,7 +95,7 @@ func Test_SwapSuccess(t *testing.T) {
 	}
 }
 
-func Test_SwapSuccess_Driver(t *testing.T) {
+func Test_SwapSuccess_ForeignKeys(t *testing.T) {
 	// Create a new database and confirm foreign key support is enabled
 	srcPath := mustTempPath()
 	defer fsutil.Remove(srcPath)
@@ -113,7 +113,7 @@ func Test_SwapSuccess_Driver(t *testing.T) {
 	// Create a SwappableDB with an empty database
 	swappablePath := mustTempPath()
 	defer fsutil.Remove(swappablePath)
-	swappableDB, err := OpenSwappable(swappablePath, ForeignKeyDriver(), false, false, 0)
+	swappableDB, err := OpenSwappable(swappablePath, NewConfig(ConnConfig{ForeignKeys: true}, false))
 	if err != nil {
 		t.Fatalf("failed to open swappable database: %s", err)
 	}
@@ -123,11 +123,11 @@ func Test_SwapSuccess_Driver(t *testing.T) {
 	if err := srcDB.Close(); err != nil {
 		t.Fatalf("failed to close source database pre-swap: %s", err)
 	}
-	if err := swappableDB.Swap(srcPath, false, false); err != nil {
+	if err := swappableDB.Swap(srcPath); err != nil {
 		t.Fatalf("failed to swap database: %s", err)
 	}
 
-	// Confirm the SwappableDB still has the right FK setting, checking that it's using the right driver.
+	// Confirm the SwappableDB still has the right FK setting, checking that it's using the right configuration.
 	rows, err = swappableDB.QueryStringStmt("PRAGMA foreign_keys")
 	if err != nil {
 		t.Fatalf("failed to query swapped database: %s", err)
@@ -137,8 +137,8 @@ func Test_SwapSuccess_Driver(t *testing.T) {
 	}
 }
 
-// Test_SwapSuccess_Hooks tests that hooks configured on the driver are in place
-// after a swap, since the swapped-in database is opened with the same driver.
+// Test_SwapSuccess_Hooks tests that hooks configured on the writer are in place
+// after a swap, since the swapped-in database is opened with the same configuration.
 func Test_SwapSuccess_Hooks(t *testing.T) {
 	// Create the database to be swapped in.
 	srcPath := mustTempPath()
@@ -152,28 +152,26 @@ func Test_SwapSuccess_Hooks(t *testing.T) {
 		t.Fatalf("failed to close source database pre-swap: %s", err)
 	}
 
-	// Create a SwappableDB with an empty database, using a driver with hooks.
+	// Create a SwappableDB with an empty database, with hooks on the writer.
 	var preupdates, commits int
-	drv := NewDriverFromConfig(&DriverConfig{
-		ChkOnClose: CnkOnCloseModeDisabled,
-		PreUpdateHook: func(ev *proto.CDCEvent) error {
-			preupdates++
-			return nil
-		},
-		CommitHook: func() bool {
-			commits++
-			return true
-		},
-	})
+	cfg := NewConfig(ConnConfig{}, false)
+	cfg.Writer.PreUpdateHook = func(ev *proto.CDCEvent) error {
+		preupdates++
+		return nil
+	}
+	cfg.Writer.CommitHook = func() bool {
+		commits++
+		return true
+	}
 	swappablePath := mustTempPath()
 	defer fsutil.Remove(swappablePath)
-	swappableDB, err := OpenSwappable(swappablePath, drv, false, false, 0)
+	swappableDB, err := OpenSwappable(swappablePath, cfg)
 	if err != nil {
 		t.Fatalf("failed to open swappable database: %s", err)
 	}
 	defer swappableDB.Close()
 
-	if err := swappableDB.Swap(srcPath, false, false); err != nil {
+	if err := swappableDB.Swap(srcPath); err != nil {
 		t.Fatalf("failed to swap database: %s", err)
 	}
 
@@ -189,13 +187,70 @@ func Test_SwapSuccess_Hooks(t *testing.T) {
 	}
 }
 
+// Test_OpenSwappable_HooksPerRole tests that hooks configured on the writer
+// fire for a write, and that hooks configured only on the readers never fire,
+// because a query runs on a reader and a reader never changes the database.
+func Test_OpenSwappable_HooksPerRole(t *testing.T) {
+	var writerCommits, readerCommits, readerPreupdates int
+	cfg := NewConfig(ConnConfig{}, true)
+	cfg.Writer.CommitHook = func() bool {
+		writerCommits++
+		return true
+	}
+	cfg.Readers.CommitHook = func() bool {
+		readerCommits++
+		return true
+	}
+	cfg.Readers.PreUpdateHook = func(ev *proto.CDCEvent) error {
+		readerPreupdates++
+		return nil
+	}
+
+	path := mustTempPath()
+	defer fsutil.Remove(path)
+	db, err := OpenSwappable(path, cfg)
+	if err != nil {
+		t.Fatalf("failed to open swappable database: %s", err)
+	}
+	defer db.Close()
+
+	// A write goes through the writer.
+	writerCommits = 0
+	if _, err := db.Request(&proto.Request{Statements: []*proto.Statement{
+		{Sql: "CREATE TABLE foo (id INTEGER NOT NULL PRIMARY KEY, name TEXT)"},
+		{Sql: "INSERT INTO foo(name) VALUES('fiona')"},
+	}}, false); err != nil {
+		t.Fatalf("failed to write: %s", err)
+	}
+	if writerCommits != 2 {
+		t.Fatalf("writer commit hook fired %d times for 2 writes, want 2", writerCommits)
+	}
+
+	// A query goes through a reader, and nothing on a reader fires.
+	rows, err := db.Query(&proto.Request{Statements: []*proto.Statement{
+		{Sql: "SELECT name FROM foo"},
+	}}, false)
+	if err != nil {
+		t.Fatalf("failed to query: %s", err)
+	}
+	if exp, got := `[{"columns":["name"],"types":["text"],"values":[["fiona"]]}]`, asJSON(rows); exp != got {
+		t.Fatalf("unexpected results for query, expected %s, got %s", exp, got)
+	}
+	if readerCommits != 0 || readerPreupdates != 0 {
+		t.Fatalf("reader hooks fired: commits=%d, preupdates=%d, want 0 each", readerCommits, readerPreupdates)
+	}
+	if writerCommits != 2 {
+		t.Fatalf("writer commit hook fired on a query: %d, want 2", writerCommits)
+	}
+}
+
 // Test_SwapInvalidSQLiteFile tests that the Swap function returns an error when provided
 // with an invalid SQLite file.
 func Test_SwapInvalidSQLiteFile(t *testing.T) {
 	// Create a SwappableDB with an empty database
 	swappablePath := mustTempPath()
 	defer fsutil.Remove(swappablePath)
-	swappableDB, err := OpenSwappable(swappablePath, nil, false, false, 0)
+	swappableDB, err := OpenSwappable(swappablePath, NewConfig(ConnConfig{}, false))
 	if err != nil {
 		t.Fatalf("failed to open swappable database: %s", err)
 	}
@@ -214,7 +269,7 @@ func Test_SwapInvalidSQLiteFile(t *testing.T) {
 	file.Close()
 
 	// Attempt to swap with the invalid SQLite file
-	err = swappableDB.Swap(invalidSQLiteFilePath, false, false)
+	err = swappableDB.Swap(invalidSQLiteFilePath)
 	if err == nil {
 		t.Fatalf("expected an error when swapping with an invalid SQLite file, got nil")
 	}

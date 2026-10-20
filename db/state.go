@@ -468,8 +468,7 @@ func CheckpointRemove(path string) error {
 		return fmt.Errorf("cannot checkpoint database in DELETE mode")
 	}
 
-	drv := CheckpointDriver()
-	db, err := OpenWithDriver(drv, path, false, true)
+	db, err := OpenWithConfig(path, NewConfig(ConnConfig{ChkOnClose: CnkOnCloseModeEnabled}, true))
 	if err != nil {
 		return err
 	}

@@ -152,12 +152,12 @@ func Test_Drivers_AutoCheckpointDisabled(t *testing.T) {
 	}
 }
 
-// Verifies that a DriverConfig with a QueryLogger does not interfere with
+// Verifies that a ConnConfig with a QueryLogger does not interfere with
 // normal database operations. Log output capture is tested in db/querylog.
 func Test_NewDriverFromConfig_QueryLogOnly(t *testing.T) {
 	ql := querylog.New(querylog.DefaultConfig())
 
-	d := NewDriverFromConfig(&DriverConfig{
+	d := NewDriverFromConfig(&ConnConfig{
 		ChkOnClose:  CnkOnCloseModeDisabled,
 		QueryLogger: ql,
 	})
@@ -182,10 +182,10 @@ func Test_NewDriverFromConfig_QueryLogOnly(t *testing.T) {
 	}
 }
 
-// Verifies that a DriverConfig with nil
+// Verifies that a ConnConfig with nil
 // QueryLogger opens and operates normally without tracing.
 func Test_NewDriverFromConfig_NoQueryLog(t *testing.T) {
-	d := NewDriverFromConfig(&DriverConfig{
+	d := NewDriverFromConfig(&ConnConfig{
 		ChkOnClose:  CnkOnCloseModeDisabled,
 		QueryLogger: nil,
 	})
@@ -207,7 +207,7 @@ func Test_NewDriverFromConfig_NoQueryLog(t *testing.T) {
 // Test_NewDriverFromConfig_NoHooks verifies that a driver whose config has no
 // hooks installs none: writing to a database opened with it fires nothing.
 func Test_NewDriverFromConfig_NoHooks(t *testing.T) {
-	d := NewDriverFromConfig(&DriverConfig{
+	d := NewDriverFromConfig(&ConnConfig{
 		ChkOnClose: CnkOnCloseModeDisabled,
 	})
 
@@ -234,7 +234,7 @@ func Test_NewDriverFromConfig_Hooks(t *testing.T) {
 	var preupdates, updates, commits, rollbacks int
 	var lastPreupdate *proto.CDCEvent
 	var lastUpdate *proto.UpdateHookEvent
-	d := NewDriverFromConfig(&DriverConfig{
+	d := NewDriverFromConfig(&ConnConfig{
 		ChkOnClose: CnkOnCloseModeDisabled,
 		PreUpdateHook: func(ev *proto.CDCEvent) error {
 			preupdates++
@@ -302,7 +302,7 @@ func Test_NewDriverFromConfig_Hooks(t *testing.T) {
 // row-IDs-only options of the preupdate hook.
 func Test_NewDriverFromConfig_PreUpdateHookOptions(t *testing.T) {
 	var events []*proto.CDCEvent
-	d := NewDriverFromConfig(&DriverConfig{
+	d := NewDriverFromConfig(&ConnConfig{
 		ChkOnClose: CnkOnCloseModeDisabled,
 		PreUpdateHook: func(ev *proto.CDCEvent) error {
 			events = append(events, ev)
@@ -345,10 +345,10 @@ func hookStats() [3]int64 {
 }
 
 // Verifies that extension paths set in
-// DriverConfig are reflected on the returned Driver struct.
-func Test_DriverConfig_ExtensionsFields(t *testing.T) {
+// ConnConfig are reflected on the returned Driver struct.
+func Test_ConnConfig_ExtensionsFields(t *testing.T) {
 	exts := []string{"/tmp/ext1.so", "/tmp/ext2.so"}
-	d := NewDriverFromConfig(&DriverConfig{
+	d := NewDriverFromConfig(&ConnConfig{
 		Extensions: exts,
 		ChkOnClose: CnkOnCloseModeDisabled,
 	})

@@ -11,7 +11,7 @@ import (
 // query logging without interfering with normal database operations.
 func Test_QueryLog_Integration_Basic(t *testing.T) {
 	ql := querylog.New(querylog.DefaultConfig())
-	drv := NewDriverFromConfig(&DriverConfig{
+	drv := NewDriverFromConfig(&ConnConfig{
 		ChkOnClose:  CnkOnCloseModeDisabled,
 		QueryLogger: ql,
 	})
@@ -44,7 +44,7 @@ func Test_QueryLog_Integration_ZeroThreshold(t *testing.T) {
 	zero := time.Duration(0)
 	cfg := &querylog.Config{MinDuration: &zero}
 	ql := querylog.New(cfg)
-	drv := NewDriverFromConfig(&DriverConfig{
+	drv := NewDriverFromConfig(&ConnConfig{
 		ChkOnClose:  CnkOnCloseModeDisabled,
 		QueryLogger: ql,
 	})
@@ -75,7 +75,7 @@ func Test_QueryLog_Integration_ZeroThreshold(t *testing.T) {
 // interfere with bulk statement requests.
 func Test_QueryLog_Integration_BulkRequest(t *testing.T) {
 	ql := querylog.New(querylog.DefaultConfig())
-	drv := NewDriverFromConfig(&DriverConfig{
+	drv := NewDriverFromConfig(&ConnConfig{
 		ChkOnClose:  CnkOnCloseModeDisabled,
 		QueryLogger: ql,
 	})
@@ -111,7 +111,7 @@ func Test_QueryLog_Integration_BulkRequest(t *testing.T) {
 // does not interfere when a statement causes a constraint violation.
 func Test_QueryLog_Integration_ConstraintViolation(t *testing.T) {
 	ql := querylog.New(querylog.DefaultConfig())
-	drv := NewDriverFromConfig(&DriverConfig{
+	drv := NewDriverFromConfig(&ConnConfig{
 		ChkOnClose:  CnkOnCloseModeDisabled,
 		QueryLogger: ql,
 	})
@@ -137,9 +137,9 @@ func Test_QueryLog_Integration_ConstraintViolation(t *testing.T) {
 }
 
 // Test_QueryLog_Integration_NilQueryLogger verifies that a nil QueryLogger
-// in DriverConfig is handled gracefully (no trace hook installed).
+// in ConnConfig is handled gracefully (no trace hook installed).
 func Test_QueryLog_Integration_NilQueryLogger(t *testing.T) {
-	drv := NewDriverFromConfig(&DriverConfig{
+	drv := NewDriverFromConfig(&ConnConfig{
 		ChkOnClose:  CnkOnCloseModeDisabled,
 		QueryLogger: nil,
 	})

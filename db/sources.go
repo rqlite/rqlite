@@ -101,9 +101,9 @@ type writer struct {
 // openWriter opens the read-write side of the database at path. After it
 // returns the SQLite file exists and, if WAL mode was requested, so do the
 // WAL files.
-func openWriter(drv *Driver, path string, fkEnabled, wal bool, logger *log.Logger) (retW *writer, retErr error) {
-	dsn := MakeDSN(path, ModeReadWrite, fkEnabled, wal)
-	sqlDB := sql.OpenDB(drv.connector(dsn))
+func openWriter(cfg *ConnConfig, path string, wal bool, logger *log.Logger) (retW *writer, retErr error) {
+	dsn := MakeDSN(path, ModeReadWrite, cfg.ForeignKeys, wal)
+	sqlDB := sql.OpenDB(NewDriverFromConfig(cfg).connector(dsn))
 	sqlDB.SetConnMaxLifetime(0)
 	sqlDB.SetMaxOpenConns(1) // Serialize writes on a single connection.
 	defer func() {
@@ -158,9 +158,9 @@ type readerPool struct {
 
 // openReaderPool opens the read-only side of the database at path. No
 // connection is made until one is acquired.
-func openReaderPool(drv *Driver, path string, fkEnabled, wal bool, logger *log.Logger) *readerPool {
-	dsn := MakeDSN(path, ModeReadOnly, fkEnabled, wal)
-	sqlDB := sql.OpenDB(drv.connector(dsn))
+func openReaderPool(cfg *ConnConfig, path string, wal bool, logger *log.Logger) *readerPool {
+	dsn := MakeDSN(path, ModeReadOnly, cfg.ForeignKeys, wal)
+	sqlDB := sql.OpenDB(NewDriverFromConfig(cfg).connector(dsn))
 	sqlDB.SetConnMaxIdleTime(30 * time.Second)
 	sqlDB.SetConnMaxLifetime(0)
 	return &readerPool{pool{sqlDB: sqlDB, dsn: dsn, logger: logger}}
