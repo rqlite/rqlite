@@ -801,10 +801,7 @@ func (s *Store) Open() (retErr error) {
 			cfg.CommitHook = s.cdcCollator.CommitHook
 			cfg.RollbackHook = s.cdcCollator.RollbackHook
 		}
-		s.dbDrv = sql.NewDriverFromConfig(
-			random.StringPattern("rqlite-configured-xxxx-xxxx-xxxx"),
-			&cfg,
-		)
+		s.dbDrv = sql.NewDriverFromConfig(&cfg)
 	}
 
 	s.db, err = createDBOnDisk(s.dbPath, s.dbDrv, removeDBFiles, s.dbConf.FKConstraints, s.MaxReadOnlyConns)

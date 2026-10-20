@@ -358,14 +358,9 @@ func Test_IsValidSQLiteOnDisk(t *testing.T) {
 	path := mustTempFile()
 	defer fsutil.Remove(path)
 
-	drvName := random.String()
-	sql.Register(drvName, &sqlite3.SQLiteDriver{})
 	dsn := fmt.Sprintf("file:%s", path)
-	db, err := sql.Open(drvName, dsn)
-	if err != nil {
-		t.Fatalf("failed to create SQLite database: %s", err.Error())
-	}
-	_, err = db.Exec("CREATE TABLE foo (name TEXT)")
+	db := sql.OpenDB(newConnector(&sqlite3.SQLiteDriver{}, dsn))
+	_, err := db.Exec("CREATE TABLE foo (name TEXT)")
 	if err != nil {
 		t.Fatalf("failed to create table: %s", err.Error())
 	}
@@ -400,11 +395,8 @@ func Test_IsValidSQLiteCompressedOnDisk(t *testing.T) {
 	defer fsutil.Remove(path)
 
 	dsn := fmt.Sprintf("file:%s", path)
-	db, err := sql.Open(defaultDriverName, dsn)
-	if err != nil {
-		t.Fatalf("failed to create SQLite database: %s", err.Error())
-	}
-	_, err = db.Exec("CREATE TABLE foo (name TEXT)")
+	db := sql.OpenDB(DefaultDriver().connector(dsn))
+	_, err := db.Exec("CREATE TABLE foo (name TEXT)")
 	if err != nil {
 		t.Fatalf("failed to create table: %s", err.Error())
 	}
@@ -445,14 +437,9 @@ func Test_IsWALModeEnabledOnDiskDELETE(t *testing.T) {
 	path := mustTempFile()
 	defer fsutil.Remove(path)
 
-	drvName := random.String()
-	sql.Register(drvName, &sqlite3.SQLiteDriver{})
 	dsn := fmt.Sprintf("file:%s", path)
-	db, err := sql.Open(drvName, dsn)
-	if err != nil {
-		t.Fatalf("failed to create SQLite database: %s", err.Error())
-	}
-	_, err = db.Exec("CREATE TABLE foo (name TEXT)")
+	db := sql.OpenDB(newConnector(&sqlite3.SQLiteDriver{}, dsn))
+	_, err := db.Exec("CREATE TABLE foo (name TEXT)")
 	if err != nil {
 		t.Fatalf("failed to create table: %s", err.Error())
 	}
@@ -491,14 +478,9 @@ func Test_IsWALModeEnabledOnDiskWAL(t *testing.T) {
 	path := mustTempFile()
 	defer fsutil.Remove(path)
 
-	drvName := random.String()
-	sql.Register(drvName, &sqlite3.SQLiteDriver{})
 	dsn := fmt.Sprintf("file:%s", path)
-	db, err := sql.Open(drvName, dsn)
-	if err != nil {
-		t.Fatalf("failed to create SQLite database: %s", err.Error())
-	}
-	_, err = db.Exec("CREATE TABLE foo (name TEXT)")
+	db := sql.OpenDB(newConnector(&sqlite3.SQLiteDriver{}, dsn))
+	_, err := db.Exec("CREATE TABLE foo (name TEXT)")
 	if err != nil {
 		t.Fatalf("failed to create table: %s", err.Error())
 	}
@@ -611,14 +593,9 @@ func Test_IsValidSQLiteWALFile(t *testing.T) {
 	path := mustTempFile()
 	defer fsutil.Remove(path)
 
-	drvName := random.String()
-	sql.Register(drvName, &sqlite3.SQLiteDriver{})
 	dsn := fmt.Sprintf("file:%s", path)
-	db, err := sql.Open(drvName, dsn)
-	if err != nil {
-		t.Fatalf("failed to create SQLite database: %s", err.Error())
-	}
-	_, err = db.Exec("PRAGMA journal_mode=WAL")
+	db := sql.OpenDB(newConnector(&sqlite3.SQLiteDriver{}, dsn))
+	_, err := db.Exec("PRAGMA journal_mode=WAL")
 	if err != nil {
 		t.Fatalf("failed to enable WAL mode: %s", err.Error())
 	}

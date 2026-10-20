@@ -1708,7 +1708,7 @@ func Test_TransactionTimeout_AutoCheckpointDisabled(t *testing.T) {
 // repeatedly times out transactions.
 func Test_TransactionTimeout_HooksRetained(t *testing.T) {
 	var commits int
-	drv := NewDriverFromConfig("hooks-retained-test", &DriverConfig{
+	drv := NewDriverFromConfig(&DriverConfig{
 		ChkOnClose: CnkOnCloseModeDisabled,
 		CommitHook: func() bool {
 			commits++

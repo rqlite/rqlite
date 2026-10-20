@@ -1,7 +1,6 @@
 package db
 
 import (
-	"fmt"
 	"reflect"
 	"regexp"
 	"sync"
@@ -796,14 +795,12 @@ func mustRegex(s string) *regexp.Regexp {
 	return r
 }
 
-var hooksDriverSeq atomic.Int64
-
 // mustOpenWithHooks opens the database at path using a driver configured with
 // the given hooks, so the hooks are installed on every connection.
 func mustOpenWithHooks(t *testing.T, path string, fkEnabled, wal bool, cfg *DriverConfig) *DB {
 	t.Helper()
 	cfg.ChkOnClose = CnkOnCloseModeDisabled
-	drv := NewDriverFromConfig(fmt.Sprintf("hooks-test-%d", hooksDriverSeq.Add(1)), cfg)
+	drv := NewDriverFromConfig(cfg)
 	db, err := OpenWithDriver(drv, path, fkEnabled, wal)
 	if err != nil {
 		t.Fatalf("error opening database with hooks: %s", err)

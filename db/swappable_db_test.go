@@ -154,7 +154,7 @@ func Test_SwapSuccess_Hooks(t *testing.T) {
 
 	// Create a SwappableDB with an empty database, using a driver with hooks.
 	var preupdates, commits int
-	drv := NewDriverFromConfig(testDriverConfigName(), &DriverConfig{
+	drv := NewDriverFromConfig(&DriverConfig{
 		ChkOnClose: CnkOnCloseModeDisabled,
 		PreUpdateHook: func(ev *proto.CDCEvent) error {
 			preupdates++
