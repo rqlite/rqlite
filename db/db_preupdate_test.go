@@ -795,13 +795,13 @@ func mustRegex(s string) *regexp.Regexp {
 	return r
 }
 
-// mustOpenWithHooks opens the database at path using a driver configured with
-// the given hooks, so the hooks are installed on every connection.
+// mustOpenWithHooks opens the database at path with the given hooks on the
+// writer, so the hooks are installed on every writer connection.
 func mustOpenWithHooks(t *testing.T, path string, fkEnabled, wal bool, cfg *ConnConfig) *DB {
 	t.Helper()
-	cfg.ChkOnClose = CnkOnCloseModeDisabled
-	drv := NewDriverFromConfig(cfg)
-	db, err := OpenWithDriver(drv, path, fkEnabled, wal)
+	conn := *cfg
+	conn.ForeignKeys = fkEnabled
+	db, err := OpenWithConfig(path, NewConfig(conn, wal))
 	if err != nil {
 		t.Fatalf("error opening database with hooks: %s", err)
 	}
@@ -809,8 +809,8 @@ func mustOpenWithHooks(t *testing.T, path string, fkEnabled, wal bool, cfg *Conn
 	return db
 }
 
-// mustReopenWithHooks closes db, and reopens the same database using a driver
-// configured with the given hooks.
+// mustReopenWithHooks closes db, and reopens the same database with the given
+// hooks.
 func mustReopenWithHooks(t *testing.T, db *DB, cfg *ConnConfig) *DB {
 	t.Helper()
 	path, fkEnabled, wal := db.Path(), db.FKEnabled(), db.WALEnabled()

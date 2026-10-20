@@ -12,36 +12,42 @@ rqlite runs SQLite in WAL journal mode with `SYNCHRONOUS=OFF`. This is much fast
 
 This shifts a lot of responsibility into the `db` package. SQLite's normal "I'll checkpoint when the WAL grows too big" and "I'll checkpoint when you close the database" behaviors become actively *harmful*: the snapshot store needs to know exactly what is in the WAL at any given moment, and a process restart must leave the WAL intact so the rest of rqlite can decide whether to replay or discard it. The package disables both behaviors and exposes its own checkpoint primitives instead.
 
-## Two Connections, One Writer
+## Writer, Readers, and Connections
 
-`Open` creates two `*sql.DB` handles for the same file:
+A database is two sources of connections to the same file, each with its own policy:
 
-- `rwDB` — read/write, with `MaxOpenConns(1)`.
-- `roDB` — read-only DSN (`mode=ro`), with the standard idle pool.
+- The writer. One read-write connection, held in a pool of size one so that writes are serialized. It is the connection that creates the WAL files at open, checkpoints, vacuums, changes the synchronous mode, and runs every statement that changes the database. It is also the only place the CDC hooks are installed, since only it can commit a change.
+- The reader pool. Any number of read-only connections (`mode=ro`, `_query_only`), with an idle timeout and a configurable size limit. Queries, dumps, schema reads and the read-only check of a statement all run on a reader.
 
-The two-handle split exists because SQLite's WAL mode allows readers to run concurrently with a writer. Sending all reads through `roDB` lets `Query` and `RequestWithContext` execute alongside an in-flight write without serializing against the writer.
+The split exists because SQLite's WAL mode allows readers to run concurrently with a writer. Sending all reads through the reader pool lets `Query` execute alongside an in-flight write without serializing against the writer. A `Request`, which may mix reads and writes, runs every statement on the writer so that a read inside a transaction sees the writes before it.
 
-`MaxOpenConns(1)` on `rwDB` serializes writes on a single connection, but it does not guarantee that connection lives forever: `database/sql` can discard it — for example, after the context of a transaction is cancelled or times out — and open a replacement. `PRAGMA wal_autocheckpoint=0`, which disables SQLite's automatic checkpointer, is per-connection, so a replacement would otherwise arrive with `wal_autocheckpoint=1000` and SQLite would silently start checkpointing behind the snapshot subsystem's back. The PRAGMA is therefore executed by each driver's connect hook, so every connection — including any replacement — has autocheckpointing disabled.
+The unit of work is a connection, `Conn`. Executing, querying, dumping, checkpointing and reading or setting a pragma are all methods on a connection. The methods on `DB` are conveniences that borrow a connection from the right source, call the method, and return it. A caller that needs several statements on one connection can borrow one itself with `AcquireWriter` or `AcquireReader` and return it when done. Holding the writer blocks every other write on the database, because there is only one.
 
-`Open` also forces the WAL files into existence at open time when WAL mode is requested. SQLite normally creates `-wal` and `-shm` lazily on the first write; the package executes `BEGIN IMMEDIATE; ROLLBACK` on a single pinned connection to materialize them, then runs a `wal_checkpoint(TRUNCATE)`. This matters because external read-only connections (and startup checks elsewhere in rqlite) need to be able to see the WAL files even on a brand-new database.
+A pool of size one serializes writes on a single connection, but it does not guarantee that connection lives forever: `database/sql` can discard it — for example, after the context of a transaction is cancelled or times out — and open a replacement. `PRAGMA wal_autocheckpoint=0`, which disables SQLite's automatic checkpointer, is per-connection, so a replacement would otherwise arrive with `wal_autocheckpoint=1000` and SQLite would silently start checkpointing behind the snapshot subsystem's back. Everything in a connection's policy is therefore applied when the connection is opened, so every connection — including any replacement — has it.
 
-`Close` closes `roDB` first and `rwDB` second. The order matters in the rare case where a driver does want close-time cleanup (see `CheckpointDriver` below) — that cleanup must run on the writer connection, which has to outlive any reader.
+`Open` also forces the WAL files into existence at open time when WAL mode is requested. SQLite normally creates `-wal` and `-shm` lazily on the first write; the writer executes `BEGIN IMMEDIATE; ROLLBACK` on its single connection to materialize them, then runs a `wal_checkpoint(TRUNCATE)`. This matters because external read-only connections (and startup checks elsewhere in rqlite) need to be able to see the WAL files even on a brand-new database.
 
-## The Driver Factory
+`Close` closes the reader pool first and the writer second. The order matters in the rare case where the policy does want close-time cleanup (see below) — that cleanup must run on the writer connection, which has to outlive any reader.
 
-SQLite's Go binding requires a driver to be registered with `database/sql` by name; once registered, the same name cannot be reused. rqlite needs different driver instances for different scenarios — a steady-state driver that disables checkpoint-on-close, a cleanup driver that *enables* it (used by `CheckpointRemove`), one that turns on foreign keys, and dynamically-named drivers for each set of loaded extensions. The `Driver` type and the `DefaultDriver` / `CheckpointDriver` / `ForeignKeyDriver` / `NewDriver` factory functions wrap that registration, each guarded by a `sync.Once` so repeated calls are safe.
+## Connection Policy
 
-The drivers differ only in their `ConnectHook`. The default and checkpoint hooks set or skip `DBConfigNoCkptOnClose`, a method exposed by rqlite's go-sqlite3 fork (`github.com/rqlite/go-sqlite3`) that turns off SQLite's "checkpoint when the last connection closes" behavior for the lifetime of the connection. The default driver disables it because of v9's design rule:
+A `ConnConfig` is everything decided about a connection when it is opened: which extensions it loads, whether SQLite may checkpoint when it closes, whether it enforces foreign keys, which hooks it carries, and whether its statements are traced. A `Config` holds one `ConnConfig` for the writer and one for the readers, plus the journal mode and the reader limit they share. The two policies are usually the same apart from the hooks, which belong to the writer alone.
+
+The policy is applied inside a connect hook on a SQLite driver value which is never registered with `database/sql` by name: the database is opened through a `driver.Connector` built from the policy and the DSN. This is what allows a writer and a reader pool to be opened with different policies, any number of databases to be opened in one process, and tests to configure hooks freely, none of which the name registry allowed.
+
+The checkpoint-on-close setting controls `DBConfigNoCkptOnClose`, a method exposed by rqlite's go-sqlite3 fork (`github.com/rqlite/go-sqlite3`) that turns off SQLite's "checkpoint when the last connection closes" behavior for the lifetime of the connection. The default policy disables it because of v9's design rule:
 
 > When rqlite closes the database — including on hard process exit — the WAL must remain intact.
 
-If SQLite checkpointed and removed the WAL on close, a crash between "last write" and "next snapshot" would erase data that has not yet made it into the SQLite file. By keeping the WAL around, restart logic can replay or discard it deliberately rather than have the choice forced by SQLite. `CheckpointDriver` exists for the rare case (`CheckpointRemove`, used during WAL replay) where rqlite *does* want SQLite to do its normal close-time cleanup.
+If SQLite checkpointed and removed the WAL on close, a crash between "last write" and "next snapshot" would erase data that has not yet made it into the SQLite file. By keeping the WAL around, restart logic can replay or discard it deliberately rather than have the choice forced by SQLite. The policy with checkpoint-on-close enabled exists for the rare case (`CheckpointRemove`, used during WAL replay) where rqlite *does* want SQLite to do its normal close-time cleanup.
 
 The fork also adds the preupdate, update, and commit hook registration methods (`RegisterPreUpdateHook`, `RegisterUpdateHook`, `RegisterCommitHook`) that the CDC integration depends on. Without the fork, neither the close-time control nor the preupdate hook would be available.
 
 ## SwappableDB
 
-`SwappableDB` is a thin synchronization wrapper around `*DB`. Every method takes an `RWMutex` read lock, delegates to the inner `*DB`, and unlocks. The single method that takes the write lock is `Swap`, which closes the current database, removes the on-disk files, renames a replacement file into place, reopens the database, and recreates the `CheckpointManager` (which has to start over because the new database has fresh WAL salt values).
+`SwappableDB` is a thin synchronization wrapper around `*DB`. Every method takes an `RWMutex` read lock, delegates to the inner `*DB`, and unlocks. The single method that takes the write lock is `Swap`, which closes the current database, removes the on-disk files, renames a replacement file into place, reopens the writer and the reader pool from the `Config` the database was first opened with, and recreates the `CheckpointManager` (which has to start over because the new database has fresh WAL salt values).
+
+A `SwappableDB` does not hand out connections. A connection held across calls would have to keep the swap lock for as long as it is held, so that a swap cannot close the database underneath it, and deciding when that is safe belongs to the caller that schedules writes.
 
 The wrapper exists because callers — the FSM, the HTTP layer, the auto-backup uploader, the CDC collator — all hold a long-lived reference to "the database" and must not see a closed `*DB` while a swap is in flight. `Swap` happens during Restore (after a snapshot is loaded), Load (operator-initiated database replacement), and recovery flows. Without the wrapper, every caller would need its own coordination, or the Store would have to broadcast a "stop using the DB" signal across the codebase.
 
@@ -86,7 +92,7 @@ The compacting scanner has a `fullScan` mode that verifies every frame's checksu
 
 ## CDC Integration
 
-Change Data Capture is wired through SQLite's preupdate, commit, and rollback hooks. The hooks are registered on the single `rwDB` connection — the same one that does all writes — via `RegisterPreUpdateHook`, `RegisterCommitHook`, and `RegisterRollbackHook`. Hook installation goes through `conn.Raw` because the registration methods are on the SQLite-specific connection type, not on the abstract `database/sql` connection. `RegisterPreUpdateHook` is also where raw SQLite preupdate data is converted into a `CDCEvent` protobuf (including `normalizeCDCValues`, the row-data conversion), so hook targets only ever see normalized events.
+Change Data Capture is wired through SQLite's preupdate, commit, and rollback hooks. The hooks are part of the writer's connection policy, so they are installed on the write connection — the only one that can change the database — when it is opened, and on any replacement. The preupdate hook is also where raw SQLite preupdate data is converted into a `CDCEvent` protobuf (including `normalizeCDCValues`, the row-data conversion), so hook targets only ever see normalized events.
 
 `CDCCollator` (in `cdc_collator.go`) is the in-package hook target. It does no I/O and has no channel: it simply gathers the events produced by one database change entry — in practice, one Raft log entry — so the caller can retrieve them once the entry has been fully applied. It keeps two lists:
 
@@ -101,7 +107,7 @@ Column names are resolved in the commit hook, through the `ColumnsNameProvider` 
 
 The rollback hook fires when SQLite rolls back an autocommit statement or a transaction managed by the DB API. Events must not be discarded merely because a statement returns an error: SQLite's `FAIL` conflict resolution can retain and commit changes made before the error. SQLite does not notify this hook about statement rollback within an explicitly opened SQL transaction or `ROLLBACK TO` a savepoint; CDC does not yet account for those partial rollbacks.
 
-The Store owns the collator's lifecycle and everything downstream of it. It creates the collator when it opens, registers the three hooks lazily on the first log entry applied with CDC enabled, calls `Reset` before applying each entry, and after applying it wraps any collected events in a group stamped with the entry's Raft index and sends that group to the CDC service. Because the hooks live on the writer connection, a `Swap` silently removes them along with the old connection; the Store re-registers them on the next entry after a Load.
+The Store owns the collator's lifecycle and everything downstream of it. It creates the collator when it opens, puts the three hooks in the writer's connection policy, calls `Reset` before applying each entry, and after applying it wraps any collected events in a group stamped with the entry's Raft index and sends that group to the CDC service. Because the policy is kept by the database and applied again on every swap, the hooks are in place on the writer after a Load without the Store doing anything further.
 
 ## Boundary Checks
 
@@ -125,19 +131,21 @@ Several utilities expose SQLite's data in different shapes for callers that need
 
 ## Extensions
 
-Loaded extensions are baked into a per-set driver via `NewDriver(name, extensions, chkpt)`. Each unique combination of extensions registers its own driver name, and the registration is *not* `sync.Once`-guarded — `NewDriver` deliberately panics if the name is reused, since two drivers with the same name would conflict. The Store builds a unique driver name per process invocation. `ValidateExtension` is a sanity check: it registers a throwaway driver, opens an in-memory database, and tries to load the extension, returning an error if the extension is incompatible. The extensions themselves are managed by the `db/extensions` subpackage, which is just an on-disk store of extension `.so` files.
+Loaded extensions are part of the connection policy, so every connection of both roles loads the same set when it is opened. `ValidateExtension` is a sanity check: it opens an in-memory database with an empty policy and tries to load the extension, returning an error if the extension is incompatible. The extensions themselves are managed by the `db/extensions` subpackage, which is just an on-disk store of extension `.so` files.
 
 ## Key Design Decisions and Trade-offs
 
-- **rqlite owns the WAL lifecycle.** SQLite's autocheckpointer is disabled (`PRAGMA wal_autocheckpoint=0`), close-time checkpointing is disabled (`DBConfigNoCkptOnClose`), and both are applied by the driver's connect hook, so neither can be silently re-enabled by a fresh connection. This is what lets the snapshot subsystem reason about what is in the WAL at any moment.
+- **rqlite owns the WAL lifecycle.** SQLite's autocheckpointer is disabled (`PRAGMA wal_autocheckpoint=0`), close-time checkpointing is disabled (`DBConfigNoCkptOnClose`), and both are applied when each connection is opened, so neither can be silently re-enabled by a fresh connection. This is what lets the snapshot subsystem reason about what is in the WAL at any moment.
 
 - **Synchronous=OFF in steady state, FULL during checkpoint.** Performance comes from `SYNCHRONOUS=OFF` (Raft provides durability across the cluster), but the checkpoint is the moment when SQLite assumes "what is in the file is durable" — so the checkpoint path temporarily switches to FULL and switches back.
 
-- **No checkpoint on close, even on graceful shutdown.** Surviving the WAL is more important than a tidy on-disk file. On the next start, the rest of rqlite decides what to do with the leftover WAL. A tidy-shutdown variant (`CheckpointDriver`, used by `CheckpointRemove`) exists for the few code paths that actually want SQLite's old behavior.
+- **No checkpoint on close, even on graceful shutdown.** Surviving the WAL is more important than a tidy on-disk file. On the next start, the rest of rqlite decides what to do with the leftover WAL. A tidy-shutdown policy (used by `CheckpointRemove`) exists for the few code paths that actually want SQLite's old behavior.
 
 - **Bounded checkpointing replaces wait-forever (v10).** The v10 `CheckpointManager` ensures a slow reader cannot stall checkpointing — and therefore cannot stall Raft log truncation. The cost is the bookkeeping for the partial-checkpoint case, including the WAL-salt comparison that distinguishes "WAL was reset" from "WAL was appended" between attempts. The benefit is that write throughput no longer collapses when one node has a slow reader.
 
-- **Two connection pools, one writer.** Read concurrency comes from the read-only pool; write coordination comes from holding the writer pool to one connection. This mirrors SQLite's underlying single-writer model.
+- **A writer and a reader pool, each with its own policy.** Read concurrency comes from the read-only pool; write coordination comes from holding the writer to one connection. This mirrors SQLite's underlying single-writer model, and it gives per-role settings — hooks on the writer, a size limit on the readers — a place to live.
+
+- **The connection is the unit of work.** Every operation is a method on a connection, and the database's own methods only borrow and return one. A caller that needs several statements on one connection, as a client transaction would, borrows it the same way. What the database does not decide is when holding the writer is safe, since a held writer blocks every write applied through the Raft log; that is a scheduling question for the store.
 
 - **CDC events are collected per change entry, not delivered per commit.** The `CDCCollator` accumulates events across every commit in an entry and the Store retrieves them once the entry is applied. This keeps delivery, back-pressure, and Raft-index stamping in the Store, leaves the hook path free of I/O, and means a multi-statement entry yields one complete event group. The collator stays in `db/` because it is defined entirely by SQLite's hook semantics — what commits, what rolls back, and when column names are valid.
 

@@ -103,7 +103,7 @@ type writer struct {
 // WAL files.
 func openWriter(cfg *ConnConfig, path string, wal bool, logger *log.Logger) (retW *writer, retErr error) {
 	dsn := MakeDSN(path, ModeReadWrite, cfg.ForeignKeys, wal)
-	sqlDB := sql.OpenDB(NewDriverFromConfig(cfg).connector(dsn))
+	sqlDB := sql.OpenDB(cfg.connector(dsn))
 	sqlDB.SetConnMaxLifetime(0)
 	sqlDB.SetMaxOpenConns(1) // Serialize writes on a single connection.
 	defer func() {
@@ -160,7 +160,7 @@ type readerPool struct {
 // connection is made until one is acquired.
 func openReaderPool(cfg *ConnConfig, path string, wal bool, logger *log.Logger) *readerPool {
 	dsn := MakeDSN(path, ModeReadOnly, cfg.ForeignKeys, wal)
-	sqlDB := sql.OpenDB(NewDriverFromConfig(cfg).connector(dsn))
+	sqlDB := sql.OpenDB(cfg.connector(dsn))
 	sqlDB.SetConnMaxIdleTime(30 * time.Second)
 	sqlDB.SetConnMaxLifetime(0)
 	return &readerPool{pool{sqlDB: sqlDB, dsn: dsn, logger: logger}}

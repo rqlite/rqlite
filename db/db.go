@@ -269,14 +269,6 @@ func Open(dbPath string, fkEnabled, wal bool) (retDB *DB, retErr error) {
 	return OpenWithConfig(dbPath, NewConfig(ConnConfig{ForeignKeys: fkEnabled}, wal))
 }
 
-// OpenWithDriver opens a file-based database, applying the driver's
-// connection policy to the writer and the readers alike.
-func OpenWithDriver(drv *Driver, dbPath string, fkEnabled, wal bool) (retDB *DB, retErr error) {
-	conn := *drv.cfg
-	conn.ForeignKeys = conn.ForeignKeys || fkEnabled
-	return OpenWithConfig(dbPath, NewConfig(conn, wal))
-}
-
 // OpenWithConfig opens a file-based database, creating it if it does not exist.
 // After this function returns, an actual SQLite file will always exist. If the
 // database is opened in WAL mode, the WAL files will also be created if they

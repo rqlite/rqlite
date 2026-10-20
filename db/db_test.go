@@ -1701,23 +1701,22 @@ func Test_TransactionTimeout_AutoCheckpointDisabled(t *testing.T) {
 	}
 }
 
-// Test_TransactionTimeout_HooksRetained tests that hooks configured on the
-// driver remain in place if a transaction times out, since the hooks are
-// installed on every connection the driver opens, including any replacement.
+// Test_TransactionTimeout_HooksRetained tests that configured hooks remain in
+// place if a transaction times out, since the hooks are installed on every
+// connection opened, including any replacement.
 // See Test_TransactionTimeout_AutoCheckpointDisabled for why the test
 // repeatedly times out transactions.
 func Test_TransactionTimeout_HooksRetained(t *testing.T) {
 	var commits int
-	drv := NewDriverFromConfig(&ConnConfig{
-		ChkOnClose: CnkOnCloseModeDisabled,
+	cfg := NewConfig(ConnConfig{
 		CommitHook: func() bool {
 			commits++
 			return true
 		},
-	})
+	}, true)
 	path := mustTempPath()
 	defer fsutil.Remove(path)
-	db, err := OpenWithDriver(drv, path, false, true)
+	db, err := OpenWithConfig(path, cfg)
 	if err != nil {
 		t.Fatalf("failed to open database: %s", err)
 	}
