@@ -17,7 +17,7 @@ This shifts a lot of responsibility into the `db` package. SQLite's normal "I'll
 A database is two sources of connections to the same file, each with its own policy:
 
 - The writer. One read-write connection, held in a pool of size one so that writes are serialized. It is the connection that creates the WAL files at open, checkpoints, vacuums, changes the synchronous mode, and runs every statement that changes the database. It is also the only place the CDC hooks are installed, since only it can commit a change.
-- The reader pool. Any number of read-only connections (`mode=ro`, `_query_only`), with an idle timeout and a configurable size limit. Queries, dumps, schema reads and the read-only check of a statement all run on a reader.
+- The reader pool. Any number of read-only connections (`mode=ro`, `_query_only`), with an idle timeout and a configurable size limit. Queries, dumps, schema reads and the read-only check of a statement all run on a reader. The default configuration also stops a reader attaching other database files, since SQLite treats ATTACH as a read-only statement and the read-only mode alone would not stop it.
 
 The split exists because SQLite's WAL mode allows readers to run concurrently with a writer. Sending all reads through the reader pool lets `Query` execute alongside an in-flight write without serializing against the writer. A `Request`, which may mix reads and writes, runs every statement on the writer so that a read inside a transaction sees the writes before it.
 

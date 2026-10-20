@@ -1734,6 +1734,71 @@ func Test_TransactionTimeout_HooksRetained(t *testing.T) {
 	}
 }
 
+// Test_Readers_CannotAttach checks that a query cannot attach another
+// database file and read from it. SQLite considers ATTACH a read-only
+// statement, so it runs on a reader connection.
+func Test_Readers_CannotAttach(t *testing.T) {
+	other, otherPath := mustCreateOnDiskDatabaseWAL()
+	defer fsutil.Remove(otherPath)
+	mustExecute(other, "CREATE TABLE foo (id INTEGER PRIMARY KEY)")
+	mustExecute(other, "INSERT INTO foo VALUES (1)")
+	if err := other.Close(); err != nil {
+		t.Fatal(err)
+	}
+
+	db, path := mustCreateOnDiskDatabaseWAL()
+	defer db.Close()
+	defer fsutil.Remove(path)
+
+	// Attempt to ATTACH.
+	rows, err := db.Query(&command.Request{
+		Statements: []*command.Statement{
+			{Sql: fmt.Sprintf("ATTACH DATABASE '%s' AS other", otherPath)},
+		},
+	}, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(rows) != 1 {
+		t.Fatalf("expected 1 results, got %d", len(rows))
+	}
+	if exp, got := "too many attached databases - max 0", rows[0].Error; exp != got {
+		t.Fatalf("attach on a reader: expected error %q, got %q", exp, got)
+	}
+}
+
+// Test_Readers_CannotDetach checks that a query cannot detach the main
+// database, or anything else, from a reader connection. SQLite itself
+// refuses to detach main and temp, and nothing else is ever attached.
+func Test_Readers_CannotDetach(t *testing.T) {
+	db, path := mustCreateOnDiskDatabaseWAL()
+	defer db.Close()
+	defer fsutil.Remove(path)
+	mustExecute(db, "CREATE TABLE foo (id INTEGER PRIMARY KEY)")
+
+	for _, tt := range []struct {
+		sql string
+		exp string
+	}{
+		{"DETACH DATABASE main", "cannot detach database main"},
+		// The temp database is not opened until it is used, so SQLite
+		// does not even find it.
+		{"DETACH DATABASE temp", "no such database: temp"},
+		{"DETACH DATABASE other", "no such database: other"},
+	} {
+		rows := mustQuery(db, tt.sql)
+		if got := rows[0].Error; got != tt.exp {
+			t.Fatalf("%s: expected error %q, got %q", tt.sql, tt.exp, got)
+		}
+	}
+
+	// The main database is still there to be read.
+	rows := mustQuery(db, "SELECT COUNT(*) FROM foo")
+	if exp, got := `[{"columns":["COUNT(*)"],"types":["integer"],"values":[[0]]}]`, asJSON(rows); exp != got {
+		t.Fatalf("after detach attempts: expected %s, got %s", exp, got)
+	}
+}
+
 // timeoutTransactionRequest returns a transaction which will not complete
 // before its timeout expires.
 func timeoutTransactionRequest() *command.Request {

@@ -2,6 +2,7 @@
 ### Implementation changes and bug fixes
 - [PR #2968](https://github.com/rqlite/rqlite/pull/2968): Node probes honor request context and commit exactly one result.
 - [PR #2975](https://github.com/rqlite/rqlite/pull/2975): Make DB connections a first-class object.
+- [PR #2976](https://github.com/rqlite/rqlite/pull/2976): Prevent `ATTACH` on the query database connection.
 
 ## v10.6.2 (October 18th 2026)
 ### Implementation changes and bug fixes
