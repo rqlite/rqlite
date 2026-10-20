@@ -2140,6 +2140,36 @@ func Test_DB_SimpleRequestTx(t *testing.T) {
 	}
 }
 
+// Test_DB_RequestTxReadsOwnWrites tests that a query inside a transactional
+// request sees the writes that came before it in the same request, which is
+// only true because every statement in a request runs on the same connection.
+func Test_DB_RequestTxReadsOwnWrites(t *testing.T) {
+	db, path := mustCreateOnDiskDatabaseWAL()
+	defer fsutil.Remove(path)
+	defer db.Close()
+
+	mustExecute(db, `CREATE TABLE foo (id INTEGER NOT NULL PRIMARY KEY, name TEXT)`)
+
+	request := &command.Request{
+		Statements: []*command.Statement{
+			{
+				Sql: `INSERT INTO foo(id, name) VALUES(1, "fiona")`,
+			},
+			{
+				Sql: `SELECT * FROM foo`,
+			},
+		},
+		Transaction: true,
+	}
+	r, err := db.Request(request, false)
+	if err != nil {
+		t.Fatalf("failed to make request: %s", err.Error())
+	}
+	if exp, got := `[{"last_insert_id":1,"rows_affected":1},{"columns":["id","name"],"types":["integer","text"],"values":[[1,"fiona"]]}]`, asJSON(r); exp != got {
+		t.Fatalf("unexpected results for request\nexp: %s\ngot: %s", exp, got)
+	}
+}
+
 func Test_DB_RequestTxPrepareError(t *testing.T) {
 	db, path := mustCreateOnDiskDatabaseWAL()
 	defer fsutil.Remove(path)
