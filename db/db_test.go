@@ -253,7 +253,7 @@ func Test_SetMaxReadOnlyConns(t *testing.T) {
 	defer db.Close()
 
 	db.SetMaxReadOnlyConns(42)
-	stats := db.ConnectionPoolStats(db.roDB)
+	stats := db.readers.poolStats()
 	if got, exp := stats.MaxOpenConnections, 42; got != exp {
 		t.Fatalf("incorrect max readonly conns, exp %d, got %d", exp, got)
 	}
@@ -1392,7 +1392,7 @@ func Test_ExecShouldTimeout(t *testing.T) {
 	// interrupt callback catches it and turns it into a per-statement error.
 	// Top-level err is nil, and r[0].GetE().GetError() contains ErrExecuteTimeout.
 	// This is what the test expects.
-	// - Earlier — inside db.rwDB.Conn(ctx) at db.go:1021 → database/sql returns
+	// - Earlier — while borrowing the writer connection → database/sql returns
 	// context.DeadlineExceeded directly. Top-level err != nil, no per-statement
 	// error wrapping.
 	//
@@ -1631,7 +1631,7 @@ func Test_DBStats_NoPragmaConnectionLeak(t *testing.T) {
 	defer fsutil.Remove(path)
 
 	// Baseline: how many connections are in use before Stats() is called.
-	beforeRW := db.ConnectionPoolStats(db.rwDB).InUse
+	beforeRW := db.writer.poolStats().InUse
 
 	stats, err := db.Stats()
 	if err != nil {
@@ -1642,7 +1642,7 @@ func Test_DBStats_NoPragmaConnectionLeak(t *testing.T) {
 	}
 
 	// After Stats() returns every transient connection must have been released.
-	afterRW := db.ConnectionPoolStats(db.rwDB).InUse
+	afterRW := db.writer.poolStats().InUse
 	if afterRW != beforeRW {
 		t.Fatalf("expected %d rw connections in use after Stats(), got %d", beforeRW, afterRW)
 	}

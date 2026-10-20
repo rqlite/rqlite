@@ -193,11 +193,8 @@ type DB struct {
 	fkEnabled bool   // Foreign key constraints enabled
 	wal       bool
 
-	rwDB *sql.DB // Database connection for database reads and writes.
-	roDB *sql.DB // Database connection for database reads.
-
-	rwDSN string // DSN used for read-write connection
-	roDSN string // DSN used for read-only connections
+	writer  *writer     // The one read-write connection.
+	readers *readerPool // The read-only connections.
 
 	allOptimized   bool
 	allOptimizedMu sync.Mutex
@@ -264,65 +261,11 @@ func OpenWithDriver(drv *Driver, dbPath string, fkEnabled, wal bool) (retDB *DB,
 		recordDuration(openDuration, startTime)
 	}()
 
-	/////////////////////////////////////////////////////////////////////////
-	// Main RW connection
-	rwDSN := MakeDSN(dbPath, ModeReadWrite, fkEnabled, wal)
-	rwDB := sql.OpenDB(drv.connector(rwDSN))
-	defer func() {
-		if retErr != nil {
-			rwDB.Close()
-		}
-	}()
-
-	/////////////////////////////////////////////////////////////////////////
-	// Read-only connection
-	roDSN := MakeDSN(dbPath, ModeReadOnly, fkEnabled, wal)
-	roDB := sql.OpenDB(drv.connector(roDSN))
-	defer func() {
-		if retErr != nil {
-			roDB.Close()
-		}
-	}()
-
-	// Set connection pool behaviour.
-	rwDB.SetConnMaxLifetime(0)
-	rwDB.SetMaxOpenConns(1) // Serialize writes on a single connection.
-	roDB.SetConnMaxIdleTime(30 * time.Second)
-	roDB.SetConnMaxLifetime(0)
-
-	if err := rwDB.Ping(); err != nil {
-		return nil, fmt.Errorf("failed to ping on-disk database: %s", err.Error())
+	writer, err := openWriter(drv, dbPath, fkEnabled, wal, logger)
+	if err != nil {
+		return nil, err
 	}
-	if wal && !fsutil.FileExists(dbPath+"-wal") {
-		// Force creation of the WAL files so any external read-only connections
-		// can read the database. See https://www.sqlite.org/draft/wal.html, section 5.
-		// It all takes place on the same connection.
-		err := func() error {
-			sqlConn, err := rwDB.Conn(context.Background())
-			if err != nil {
-				return err
-			}
-			conn := newConn(sqlConn, logger)
-			defer conn.Close()
-			if err := conn.exec(context.Background(), "BEGIN IMMEDIATE"); err != nil {
-				return err
-			}
-			if err := conn.exec(context.Background(), "ROLLBACK"); err != nil {
-				return err
-			}
-			meta, err := conn.Checkpoint(CheckpointTruncate)
-			if err != nil {
-				return err
-			}
-			if !meta.Success() {
-				return fmt.Errorf("failed to completely checkpoint WAL at open (%s)", meta)
-			}
-			return nil
-		}()
-		if err != nil {
-			return nil, err
-		}
-	}
+	readers := openReaderPool(drv, dbPath, fkEnabled, wal, logger)
 
 	// Make it clear which extensions have been loaded, if any.
 	extensions := drv.ExtensionNames()
@@ -336,10 +279,8 @@ func OpenWithDriver(drv *Driver, dbPath string, fkEnabled, wal bool) (retDB *DB,
 		walPath:   dbPath + "-wal",
 		fkEnabled: fkEnabled,
 		wal:       wal,
-		rwDB:      rwDB,
-		roDB:      roDB,
-		rwDSN:     rwDSN,
-		roDSN:     roDSN,
+		writer:    writer,
+		readers:   readers,
 		logger:    logger,
 	}, nil
 }
@@ -348,25 +289,7 @@ func OpenWithDriver(drv *Driver, dbPath string, fkEnabled, wal bool) (retDB *DB,
 // database. See https://pkg.go.dev/database/sql#DB.SetMaxIdleConns for full
 // details.
 func (db *DB) SetMaxReadOnlyConns(n int) {
-	db.roDB.SetMaxOpenConns(n)
-}
-
-// writerConn borrows the read-write connection. The caller must close it.
-func (db *DB) writerConn(ctx context.Context) (*Conn, error) {
-	conn, err := db.rwDB.Conn(ctx)
-	if err != nil {
-		return nil, err
-	}
-	return newConn(conn, db.logger), nil
-}
-
-// readerConn borrows a read-only connection. The caller must close it.
-func (db *DB) readerConn(ctx context.Context) (*Conn, error) {
-	conn, err := db.roDB.Conn(ctx)
-	if err != nil {
-		return nil, err
-	}
-	return newConn(conn, db.logger), nil
+	db.readers.setMaxConns(n)
 }
 
 // LastModified returns the last modified time of the database file, or the WAL file,
@@ -407,14 +330,14 @@ func (db *DB) WALSum() (string, error) {
 	return rsum.MD5(db.walPath)
 }
 
-// Close closes the underlying database connection. Close the read-only
-// connection first so if there is any clean-up -- perhaps a checkpoint
+// Close closes the underlying database connections. Close the read-only
+// connections first so if there is any clean-up -- perhaps a checkpoint
 // on close -- it can be done by the read-write connection.
 func (db *DB) Close() error {
-	if err := db.roDB.Close(); err != nil {
+	if err := db.readers.close(); err != nil {
 		return err
 	}
-	return db.rwDB.Close()
+	return db.writer.close()
 }
 
 // Stats returns status and diagnostics for the database.
@@ -428,8 +351,8 @@ func (db *DB) Stats() (map[string]any, error) {
 		return nil, err
 	}
 	connPoolStats := map[string]any{
-		"ro": db.ConnectionPoolStats(db.roDB),
-		"rw": db.ConnectionPoolStats(db.rwDB),
+		"ro": db.readers.poolStats(),
+		"rw": db.writer.poolStats(),
 	}
 	dbSz, err := db.Size()
 	if err != nil {
@@ -450,8 +373,8 @@ func (db *DB) Stats() (map[string]any, error) {
 		"mem_stats":        memStats,
 		"db_size":          dbSz,
 		"db_size_friendly": humanize.Bytes(uint64(dbSz)),
-		"rw_dsn":           db.rwDSN,
-		"ro_dsn":           db.roDSN,
+		"rw_dsn":           db.writer.dsn,
+		"ro_dsn":           db.readers.dsn,
 		"conn_pool_stats":  connPoolStats,
 		"pragmas":          pragmas,
 		"transaction":      txStatus,
@@ -526,22 +449,12 @@ func (db *DB) ExtensionNames() []string {
 // less than zero it is not set.
 func (db *DB) SetBusyTimeout(rwMs, roMs int) (err error) {
 	if rwMs >= 0 {
-		conn, err := db.writerConn(context.Background())
-		if err != nil {
-			return err
-		}
-		defer conn.Close()
-		if err := conn.SetBusyTimeout(rwMs); err != nil {
+		if err := db.writer.setBusyTimeout(rwMs); err != nil {
 			return err
 		}
 	}
 	if roMs >= 0 {
-		conn, err := db.readerConn(context.Background())
-		if err != nil {
-			return err
-		}
-		defer conn.Close()
-		if err := conn.SetBusyTimeout(roMs); err != nil {
+		if err := db.readers.setBusyTimeout(roMs); err != nil {
 			return err
 		}
 	}
@@ -551,23 +464,13 @@ func (db *DB) SetBusyTimeout(rwMs, roMs int) (err error) {
 // RWBusyTimeout returns the current busy timeout value for the read-write
 // database connection.
 func (db *DB) RWBusyTimeout() (int, error) {
-	conn, err := db.writerConn(context.Background())
-	if err != nil {
-		return 0, err
-	}
-	defer conn.Close()
-	return conn.BusyTimeout()
+	return db.writer.busyTimeout()
 }
 
 // ROBusyTimeout returns the current busy timeout value for the read-only
 // database connection.
 func (db *DB) ROBusyTimeout() (int, error) {
-	conn, err := db.readerConn(context.Background())
-	if err != nil {
-		return 0, err
-	}
-	defer conn.Close()
-	return conn.BusyTimeout()
+	return db.readers.busyTimeout()
 }
 
 // BusyTimeout returns the current busy timeout values for the read-write and
@@ -609,7 +512,7 @@ func (db *DB) CheckpointTruncateWithTimeout(dur time.Duration) (err error) {
 		}
 	}()
 
-	conn, err := db.writerConn(context.Background())
+	conn, err := db.writer.acquire(context.Background())
 	if err != nil {
 		return err
 	}
@@ -670,7 +573,7 @@ func (db *DB) CheckpointWithTimeout(mode CheckpointMode, dur time.Duration) (met
 		}
 	}()
 
-	conn, err := db.writerConn(context.Background())
+	conn, err := db.writer.acquire(context.Background())
 	if err != nil {
 		return nil, err
 	}
@@ -716,7 +619,7 @@ func (db *DB) CheckpointWithTimeout(mode CheckpointMode, dur time.Duration) (met
 
 // GetCheckpointing returns the current checkpointing setting.
 func (db *DB) GetCheckpointing() (int, error) {
-	conn, err := db.writerConn(context.Background())
+	conn, err := db.writer.acquire(context.Background())
 	if err != nil {
 		return 0, err
 	}
@@ -754,7 +657,7 @@ func (db *DB) VacuumInto(path string) error {
 // execOnWriter runs a statement that returns no rows on the read-write
 // connection.
 func (db *DB) execOnWriter(query string) error {
-	conn, err := db.writerConn(context.Background())
+	conn, err := db.writer.acquire(context.Background())
 	if err != nil {
 		return err
 	}
@@ -824,7 +727,7 @@ func (db *DB) VerifyIntegrity() (IntegrityResult, error) {
 
 // SetSynchronousMode sets the synchronous mode of the database.
 func (db *DB) SetSynchronousMode(mode SynchronousMode) error {
-	conn, err := db.writerConn(context.Background())
+	conn, err := db.writer.acquire(context.Background())
 	if err != nil {
 		return err
 	}
@@ -834,7 +737,7 @@ func (db *DB) SetSynchronousMode(mode SynchronousMode) error {
 
 // GetSynchronousMode returns the current synchronous mode.
 func (db *DB) GetSynchronousMode() (SynchronousMode, error) {
-	conn, err := db.writerConn(context.Background())
+	conn, err := db.writer.acquire(context.Background())
 	if err != nil {
 		return 0, err
 	}
@@ -890,25 +793,9 @@ func (db *DB) CompileOptions() ([]string, error) {
 	return compileOptions, nil
 }
 
-// ConnectionPoolStats returns database pool statistics.
-func (db *DB) ConnectionPoolStats(sqlDB *sql.DB) *PoolStats {
-	s := sqlDB.Stats()
-	return &PoolStats{
-		MaxOpenConnections: s.MaxOpenConnections,
-		OpenConnections:    s.OpenConnections,
-		InUse:              s.InUse,
-		Idle:               s.Idle,
-		WaitCount:          s.WaitCount,
-		WaitDuration:       s.WaitDuration,
-		MaxIdleClosed:      s.MaxIdleClosed,
-		MaxIdleTimeClosed:  s.MaxIdleTimeClosed,
-		MaxLifetimeClosed:  s.MaxLifetimeClosed,
-	}
-}
-
 // ColumnNames returns the names of all columns in the given table.
 func (db *DB) ColumnNames(table string) ([]string, error) {
-	conn, err := db.readerConn(context.Background())
+	conn, err := db.readers.acquire(context.Background())
 	if err != nil {
 		return nil, err
 	}
@@ -924,7 +811,7 @@ func (db *DB) ColumnNames(table string) ([]string, error) {
 
 // TableColumnTypes returns the declared types of all columns in the given table.
 func (db *DB) TableColumnTypes(table string) (map[string]string, error) {
-	conn, err := db.readerConn(context.Background())
+	conn, err := db.readers.acquire(context.Background())
 	if err != nil {
 		return nil, err
 	}
@@ -992,7 +879,7 @@ func (db *DB) ExecuteWithContext(ctx context.Context, req *command.Request, xTim
 		defer cancel()
 	}
 	stats.Add(numExecutions, int64(len(req.Statements)))
-	conn, err := db.writerConn(ctx)
+	conn, err := db.writer.acquire(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -1043,7 +930,7 @@ func (db *DB) QueryWithContext(ctx context.Context, req *command.Request, xTime 
 		defer cancel()
 	}
 	stats.Add(numQueries, int64(len(req.Statements)))
-	conn, err := db.readerConn(ctx)
+	conn, err := db.readers.acquire(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -1091,7 +978,7 @@ func (db *DB) RequestWithContext(ctx context.Context, req *command.Request, xTim
 		defer cancel()
 	}
 	stats.Add(numRequests, int64(len(req.Statements)))
-	conn, err := db.writerConn(ctx)
+	conn, err := db.writer.acquire(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -1156,12 +1043,12 @@ func (db *DB) Copy(dstDB *DB) error {
 // of src's read-only connections and writing through this database's
 // read-write connection.
 func (db *DB) copyFrom(src *DB) error {
-	dst, err := db.writerConn(context.Background())
+	dst, err := db.writer.acquire(context.Background())
 	if err != nil {
 		return err
 	}
 	defer dst.Close()
-	srcConn, err := src.readerConn(context.Background())
+	srcConn, err := src.readers.acquire(context.Background())
 	if err != nil {
 		return err
 	}
@@ -1212,7 +1099,7 @@ func (db *DB) Serialize() ([]byte, error) {
 // SQLite resolves the tables a view reads from when the view is used, not when it
 // is created.
 func (db *DB) Dump(w io.Writer, tableNames ...string) (int, error) {
-	conn, err := db.readerConn(context.Background())
+	conn, err := db.readers.acquire(context.Background())
 	if err != nil {
 		return 0, err
 	}
@@ -1224,7 +1111,7 @@ func (db *DB) Dump(w io.Writer, tableNames ...string) (int, error) {
 // As per https://www.sqlite.org/c3ref/stmt_readonly.html, this function
 // may not return 100% correct results, but should cover most scenarios.
 func (db *DB) StmtReadOnly(sql string) (bool, error) {
-	conn, err := db.readerConn(context.Background())
+	conn, err := db.readers.acquire(context.Background())
 	if err != nil {
 		return false, err
 	}
@@ -1241,42 +1128,29 @@ func (db *DB) pragmas() (map[string]any, error) {
 		"busy_timeout",
 	}
 
-	// Each pool is read on a single borrowed connection, avoiding a separate
-	// connection acquisition per pragma.
-	connsMap := make(map[string]any)
-	for k, acquire := range map[string]func(context.Context) (*Conn, error){"rw": db.writerConn, "ro": db.readerConn} {
-		conn, err := acquire(context.Background())
-		if err != nil {
-			return nil, err
-		}
-		m, err := conn.pragmas(pragmaNames)
-		conn.Close()
-		if err != nil {
-			return nil, err
-		}
-		connsMap[k] = m
+	rw, err := db.writer.pragmas(pragmaNames)
+	if err != nil {
+		return nil, err
 	}
-	return connsMap, nil
+	ro, err := db.readers.pragmas(pragmaNames)
+	if err != nil {
+		return nil, err
+	}
+	return map[string]any{"rw": rw, "ro": ro}, nil
 }
 
 // txStatus returns whether there is an active transaction on each database
 // connection.
 func (db *DB) txStatus() (map[string]any, error) {
-	// A connection is borrowed from each pool, checked, and released at once.
-	txStatusMap := make(map[string]any)
-	for k, acquire := range map[string]func(context.Context) (*Conn, error){"rw": db.writerConn, "ro": db.readerConn} {
-		conn, err := acquire(context.Background())
-		if err != nil {
-			return nil, err
-		}
-		inTx, err := conn.InTransaction()
-		conn.Close()
-		if err != nil {
-			return nil, err
-		}
-		txStatusMap[k] = inTx
+	rw, err := db.writer.inTransaction()
+	if err != nil {
+		return nil, err
 	}
-	return txStatusMap, nil
+	ro, err := db.readers.inTransaction()
+	if err != nil {
+		return nil, err
+	}
+	return map[string]any{"rw": rw, "ro": ro}, nil
 }
 
 func (db *DB) memStats() (map[string]int64, error) {
