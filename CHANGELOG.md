@@ -1,4 +1,6 @@
 ## v10.6.3 (October 20th 2026)
+This release includes [an important security fix](https://github.com/rqlite/rqlite/security/advisories/GHSA-j62w-8865-2h7x). Users should upgrade.
+
 ### Implementation changes and bug fixes
 - [PR #2968](https://github.com/rqlite/rqlite/pull/2968): Node probes honor request context and commit exactly one result.
 - [PR #2975](https://github.com/rqlite/rqlite/pull/2975): Make DB connections a first-class object.
