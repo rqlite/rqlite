@@ -40,6 +40,11 @@ type ConnConfig struct {
 	// connection.
 	ForeignKeys bool
 
+	// DisableAttach, if true, stops the connection attaching other database
+	// files. SQLite treats ATTACH as a read-only statement, so a read-only
+	// connection is not stopped by its mode alone.
+	DisableAttach bool
+
 	// Hooks, installed on every new connection. A nil hook is not installed.
 	// PreUpdateTableRe, if non-nil, restricts PreUpdateHook to rows of tables
 	// whose names match it, and PreUpdateRowIDsOnly, if true, means the events
@@ -97,8 +102,8 @@ func (c *connector) Driver() driver.Driver {
 }
 
 // buildConnectHook composes a ConnectHook from cfg, chaining all requested
-// connection-level behaviors in order: checkpoint config, foreign keys, query
-// tracing, then hooks.
+// connection-level behaviors in order: checkpoint config, attach limit,
+// foreign keys, query tracing, then hooks.
 //
 // This driver unconditionally disables automatic checkpointing.
 func buildConnectHook(cfg *ConnConfig) func(conn *sqlite3.SQLiteConn) error {
@@ -115,6 +120,13 @@ func buildConnectHook(cfg *ConnConfig) func(conn *sqlite3.SQLiteConn) error {
 		// connection, so an error here really is an issue.
 		if _, err := conn.Exec("PRAGMA wal_autocheckpoint=0", nil); err != nil {
 			return fmt.Errorf("failed to disable automatic checkpointing: %s", err)
+		}
+
+		// With the limit on attached databases set to zero SQLite refuses
+		// every ATTACH before it opens anything, at no cost to other
+		// statements. DETACH then fails on its own, as nothing is attached.
+		if cfg.DisableAttach {
+			conn.SetLimit(sqlite3.SQLITE_LIMIT_ATTACHED, 0)
 		}
 
 		// Foreign key constraints.

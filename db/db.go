@@ -203,11 +203,14 @@ type Config struct {
 }
 
 // NewConfig returns a configuration which opens the writer and the readers
-// with the same connection policy.
-func NewConfig(conn ConnConfig, wal bool) *Config {
+// with the same connection policy, except that the readers cannot attach
+// other database files.
+func NewConfig(cfg ConnConfig, wal bool) *Config {
+	readerCfg := cfg
+	readerCfg.DisableAttach = true
 	return &Config{
-		Writer:  conn,
-		Readers: conn,
+		Writer:  cfg,
+		Readers: readerCfg,
 		WAL:     wal,
 	}
 }

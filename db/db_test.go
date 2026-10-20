@@ -1734,6 +1734,39 @@ func Test_TransactionTimeout_HooksRetained(t *testing.T) {
 	}
 }
 
+// Test_Readers_CannotAttach checks that a query cannot attach another
+// database file and read from it. SQLite considers ATTACH a read-only
+// statement, so it runs on a reader connection.
+func Test_Readers_CannotAttach(t *testing.T) {
+	other, otherPath := mustCreateOnDiskDatabaseWAL()
+	defer fsutil.Remove(otherPath)
+	mustExecute(other, "CREATE TABLE foo (id INTEGER PRIMARY KEY)")
+	mustExecute(other, "INSERT INTO foo VALUES (1)")
+	if err := other.Close(); err != nil {
+		t.Fatal(err)
+	}
+
+	db, path := mustCreateOnDiskDatabaseWAL()
+	defer db.Close()
+	defer fsutil.Remove(path)
+
+	// Attempt to ATTACH.
+	rows, err := db.Query(&command.Request{
+		Statements: []*command.Statement{
+			{Sql: fmt.Sprintf("ATTACH DATABASE '%s' AS other", otherPath)},
+		},
+	}, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(rows) != 1 {
+		t.Fatalf("expected 1 results, got %d", len(rows))
+	}
+	if exp, got := "too many attached databases - max 0", rows[0].Error; exp != got {
+		t.Fatalf("attach on a reader: expected error %q, got %q", exp, got)
+	}
+}
+
 // timeoutTransactionRequest returns a transaction which will not complete
 // before its timeout expires.
 func timeoutTransactionRequest() *command.Request {
