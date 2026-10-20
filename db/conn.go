@@ -38,8 +38,16 @@ type execerQueryer interface {
 }
 
 // Execute runs statements that modify the database.
+// The earlier of the context's deadline and the request's timeout bounds
+// the entire request.
 func (c *Conn) Execute(ctx context.Context, req *command.Request, xTime bool) (allResults []*command.ExecuteQueryResponse, retErr error) {
 	defer func() { retErr = classifyError(retErr) }()
+
+	if req.DbTimeout > 0 {
+		var cancel context.CancelFunc
+		ctx, cancel = context.WithTimeout(ctx, time.Duration(req.DbTimeout))
+		defer cancel()
+	}
 
 	eqer := execerQueryer(c.conn)
 	var tx *sql.Tx
@@ -141,6 +149,11 @@ func (c *Conn) executeStmt(ctx context.Context, stmt *command.Statement, xTime b
 		ctx, cancel = context.WithTimeout(ctx, timeout)
 		defer cancel()
 	}
+	// Reject an expired request before passing a later statement to SQLite,
+	// which may finish a fast write before observing context cancellation.
+	if err := ctx.Err(); err != nil {
+		return response, err
+	}
 
 	if stmt.ForceQuery {
 		stats.Add(numExecutionsForceQueries, 1)
@@ -205,7 +218,15 @@ type queryer interface {
 }
 
 // Query runs statements that return rows but do not modify the database.
+// The earlier of the context's deadline and the request's timeout bounds
+// the entire request.
 func (c *Conn) Query(ctx context.Context, req *command.Request, xTime bool) ([]*command.QueryRows, error) {
+	if req.DbTimeout > 0 {
+		var cancel context.CancelFunc
+		ctx, cancel = context.WithTimeout(ctx, time.Duration(req.DbTimeout))
+		defer cancel()
+	}
+
 	var err error
 
 	queryer := queryer(c.conn)
@@ -354,8 +375,16 @@ func (c *Conn) queryStmt(ctx context.Context, stmt *command.Statement, xTime boo
 // Request runs statements that may be a mix of executes and queries. Each
 // statement is classified on this connection before it runs, so queries in a
 // transaction see the writes that came before them.
+// The earlier of the context's deadline and the request's timeout bounds
+// the entire request.
 func (c *Conn) Request(ctx context.Context, req *command.Request, xTime bool) (eqResponse []*command.ExecuteQueryResponse, retErr error) {
 	defer func() { retErr = classifyError(retErr) }()
+
+	if req.DbTimeout > 0 {
+		var cancel context.CancelFunc
+		ctx, cancel = context.WithTimeout(ctx, time.Duration(req.DbTimeout))
+		defer cancel()
+	}
 
 	var err error
 	eq := execerQueryer(c.conn)
