@@ -212,6 +212,14 @@ func NewConfig(conn ConnConfig, wal bool) *Config {
 	}
 }
 
+// clone copies the configuration and its extension paths. Hook targets and
+// the query logger remain shared with the caller.
+func (cfg Config) clone() *Config {
+	cfg.Writer.Extensions = slices.Clone(cfg.Writer.Extensions)
+	cfg.Readers.Extensions = slices.Clone(cfg.Readers.Extensions)
+	return &cfg
+}
+
 // DB is the SQL database.
 type DB struct {
 	cfg     *Config
@@ -272,8 +280,9 @@ func Open(dbPath string, fkEnabled, wal bool) (retDB *DB, retErr error) {
 // OpenWithConfig opens a file-based database, creating it if it does not exist.
 // After this function returns, an actual SQLite file will always exist. If the
 // database is opened in WAL mode, the WAL files will also be created if they
-// do not exist.
+// do not exist. The configuration and its extension paths are copied on open.
 func OpenWithConfig(dbPath string, cfg *Config) (retDB *DB, retErr error) {
+	cfg = cfg.clone()
 	logger := log.New(log.Writer(), "[db] ", log.LstdFlags)
 	startTime := time.Now()
 	defer func() {

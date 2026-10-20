@@ -28,8 +28,8 @@ type SwappableDB struct {
 }
 
 // OpenSwappable returns a new SwappableDB instance, which opens the database
-// at the given path using the given configuration. The same configuration is
-// used again whenever the database is swapped.
+// at the given path using a copy of the given configuration. The same copy
+// is used again whenever the database is swapped.
 func OpenSwappable(dbPath string, cfg *Config) (*SwappableDB, error) {
 	db, err := OpenWithConfig(dbPath, cfg)
 	if err != nil {
@@ -42,7 +42,7 @@ func OpenSwappable(dbPath string, cfg *Config) (*SwappableDB, error) {
 	}
 	return &SwappableDB{
 		db:            db,
-		cfg:           cfg,
+		cfg:           db.cfg,
 		checkpointMgr: mgr,
 	}, nil
 }
