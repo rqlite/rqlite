@@ -14,25 +14,27 @@ import (
 
 // SwappableDB is a wrapper around DB that allows the underlying database to be swapped out
 // in a thread-safe manner.
+//
+// A SwappableDB does not hand out connections. A connection held across calls
+// would have to keep the swap lock for as long as it is held, so that a swap
+// cannot close the database underneath it. Deciding when that is safe belongs
+// to the caller that schedules writes, so for now every operation borrows a
+// connection and returns it before the call ends.
 type SwappableDB struct {
 	db            *DB
-	drv           *Driver
+	cfg           *Config
 	checkpointMgr *CheckpointManager
 	dbMu          sync.RWMutex
 }
 
-// OpenSwappable returns a new SwappableDB instance, which opens the database at the given path,
-// using the given driver. If drv is nil then the default driver is used. If fkEnabled is true,
-// foreign key constraints are enabled. If wal is true, the WAL journal mode is enabled.
-func OpenSwappable(dbPath string, drv *Driver, fkEnabled, wal bool, maxROConns int) (*SwappableDB, error) {
-	if drv == nil {
-		drv = DefaultDriver()
-	}
-	db, err := OpenWithDriver(drv, dbPath, fkEnabled, wal)
+// OpenSwappable returns a new SwappableDB instance, which opens the database
+// at the given path using a copy of the given configuration. The same copy
+// is used again whenever the database is swapped.
+func OpenSwappable(dbPath string, cfg *Config) (*SwappableDB, error) {
+	db, err := OpenWithConfig(dbPath, cfg)
 	if err != nil {
 		return nil, err
 	}
-	db.SetMaxReadOnlyConns(maxROConns)
 
 	mgr, err := NewCheckpointManager(db)
 	if err != nil {
@@ -40,15 +42,16 @@ func OpenSwappable(dbPath string, drv *Driver, fkEnabled, wal bool, maxROConns i
 	}
 	return &SwappableDB{
 		db:            db,
-		drv:           drv,
+		cfg:           db.cfg,
 		checkpointMgr: mgr,
 	}, nil
 }
 
-// Swap swaps the underlying database with that at the given path. The Swap operation
-// may fail on some platforms if the file at path is open by another process. It is
-// the caller's responsibility to ensure the file at path is not in use.
-func (s *SwappableDB) Swap(path string, fkConstraints, walEnabled bool) error {
+// Swap swaps the underlying database with that at the given path, opening it
+// with the configuration the SwappableDB was opened with. The Swap operation
+// may fail on some platforms if the file at path is open by another process.
+// It is the caller's responsibility to ensure the file at path is not in use.
+func (s *SwappableDB) Swap(path string) error {
 	if !IsValidSQLiteFile(path) {
 		return fmt.Errorf("invalid SQLite data")
 	}
@@ -65,7 +68,7 @@ func (s *SwappableDB) Swap(path string, fkConstraints, walEnabled bool) error {
 		return fmt.Errorf("failed to rename database: %s", err)
 	}
 
-	db, err := OpenWithDriver(s.drv, s.db.Path(), fkConstraints, walEnabled)
+	db, err := OpenWithConfig(s.db.Path(), s.cfg)
 	if err != nil {
 		return fmt.Errorf("open SQLite file failed: %s", err)
 	}

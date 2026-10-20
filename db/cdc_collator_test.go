@@ -607,7 +607,7 @@ func mustCreateCDCCollatorDatabase(t *testing.T) (*DB, *CDCCollator) {
 	// currently open, since the database is reopened to install the hooks.
 	p := &lazyColumnNamesProvider{}
 	c := mustNewCDCCollator(t, p)
-	db = mustReopenWithHooks(t, db, &DriverConfig{
+	db = mustReopenWithHooks(t, db, &ConnConfig{
 		PreUpdateHook: c.PreupdateHook,
 		CommitHook:    c.CommitHook,
 		RollbackHook:  c.RollbackHook,

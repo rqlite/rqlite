@@ -13,7 +13,6 @@ import (
 	"github.com/rqlite/rqlite/v10/command/proto"
 	sql "github.com/rqlite/rqlite/v10/db"
 	"github.com/rqlite/rqlite/v10/internal/fsutil"
-	"github.com/rqlite/rqlite/v10/internal/random"
 	"github.com/rqlite/rqlite/v10/snapshot"
 	rlog "github.com/rqlite/rqlite/v10/store/log"
 )
@@ -216,12 +215,10 @@ func RecoverNode(dataDir string, dbConf *DBConfig, logger *log.Logger, logs raft
 	}
 
 	// Now, open the database so we can replay any outstanding Raft log entries.
-	drv := sql.DefaultDriver()
-	if len(dbConf.Extensions) > 0 {
-		drv = sql.NewDriver(random.StringPattern("rqlite-extended-recover-xxxx-xxxx-xxxx"),
-			dbConf.Extensions, sql.CnkOnCloseModeDisabled)
-	}
-	db, err := sql.OpenSwappable(tmpDBPath, drv, dbConf.FKConstraints, true, 0)
+	db, err := sql.OpenSwappable(tmpDBPath, sql.NewConfig(sql.ConnConfig{
+		Extensions:  dbConf.Extensions,
+		ForeignKeys: dbConf.FKConstraints,
+	}, true))
 	if err != nil {
 		return fmt.Errorf("failed to open temporary database: %s", err)
 	}

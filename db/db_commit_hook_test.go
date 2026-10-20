@@ -22,7 +22,7 @@ func Test_CommitHook(t *testing.T) {
 		count.Add(1)
 		return true
 	}
-	db = mustReopenWithHooks(t, db, &DriverConfig{CommitHook: hook})
+	db = mustReopenWithHooks(t, db, &ConnConfig{CommitHook: hook})
 
 	// A select should not trigger the hook and a basic insert should trigger the hook.
 	mustQuery(db, "SELECT * FROM foo")
@@ -49,7 +49,7 @@ func Test_CommitHook_Rollback(t *testing.T) {
 		count.Add(1)
 		return false
 	}
-	db = mustReopenWithHooks(t, db, &DriverConfig{CommitHook: hook})
+	db = mustReopenWithHooks(t, db, &ConnConfig{CommitHook: hook})
 
 	r, err := db.ExecuteStringStmt(`INSERT INTO foo(name) VALUES("fiona")`)
 	if err != nil {
@@ -89,7 +89,7 @@ func Test_CommitHook_Tx(t *testing.T) {
 		count.Add(1)
 		return true
 	}
-	db = mustReopenWithHooks(t, db, &DriverConfig{CommitHook: hook})
+	db = mustReopenWithHooks(t, db, &ConnConfig{CommitHook: hook})
 	mustExecute(db, "BEGIN")
 	mustExecute(db, "INSERT INTO foo(id, name) VALUES(1, 'fiona')")
 	mustExecute(db, "ROLLBACK")

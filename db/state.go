@@ -18,7 +18,6 @@ import (
 	"github.com/mattn/go-sqlite3"
 	command "github.com/rqlite/rqlite/v10/command/proto"
 	"github.com/rqlite/rqlite/v10/internal/fsutil"
-	"github.com/rqlite/rqlite/v10/internal/random"
 )
 
 const (
@@ -272,12 +271,7 @@ func ParseHex(s string) ([]byte, error) {
 
 // ValidateExtension validates the given extension path can be loaded into a SQLite database.
 func ValidateExtension(path string) error {
-	name := path + "-" + random.String()
-	sql.Register(name, &sqlite3.SQLiteDriver{})
-	db, err := sql.Open(name, ":memory:")
-	if err != nil {
-		return err
-	}
+	db := sql.OpenDB(newConnector(&sqlite3.SQLiteDriver{}, ":memory:"))
 	defer db.Close()
 
 	f := func(driverConn any) error {
@@ -474,8 +468,7 @@ func CheckpointRemove(path string) error {
 		return fmt.Errorf("cannot checkpoint database in DELETE mode")
 	}
 
-	drv := CheckpointDriver()
-	db, err := OpenWithDriver(drv, path, false, true)
+	db, err := OpenWithConfig(path, NewConfig(ConnConfig{ChkOnClose: CnkOnCloseModeEnabled}, true))
 	if err != nil {
 		return err
 	}

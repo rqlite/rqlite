@@ -1,23 +1,17 @@
 package db
 
 import (
-	"database/sql"
+	"context"
+	"database/sql/driver"
 	"fmt"
 	"path/filepath"
 	"regexp"
 	"sort"
-	"sync"
 
 	"github.com/mattn/go-sqlite3"
 	command "github.com/rqlite/rqlite/v10/command/proto"
 	"github.com/rqlite/rqlite/v10/db/querylog"
 	"github.com/rqlite/rqlite/v10/internal/rsync"
-)
-
-const (
-	defaultDriverName    = "rqlite-sqlite3"
-	chkDriverName        = "rqlite-sqlite3-chk"
-	foreignKeyDriverName = "rqlite-sqlite3-foreignkey"
 )
 
 // CnkOnCloseMode represents the checkpoint on close mode.
@@ -31,8 +25,11 @@ const (
 	CnkOnCloseModeEnabled
 )
 
-// DriverConfig holds the configuration for a composable SQLite driver.
-type DriverConfig struct {
+// ConnConfig is the policy applied to every connection of one role when it
+// is opened: which extensions it loads, how it treats the WAL on close,
+// whether it enforces foreign keys, which hooks it carries, and whether its
+// statements are traced.
+type ConnConfig struct {
 	// Extensions is the list of paths to SQLite extension shared objects.
 	Extensions []string
 
@@ -40,7 +37,7 @@ type DriverConfig struct {
 	ChkOnClose CnkOnCloseMode
 
 	// ForeignKeys, if true, enables foreign key constraints on every new
-	// connection, regardless of any setting in the DSN.
+	// connection.
 	ForeignKeys bool
 
 	// Hooks, installed on every new connection. A nil hook is not installed.
@@ -58,122 +55,45 @@ type DriverConfig struct {
 	QueryLogger *querylog.QueryLogger
 }
 
-// Driver is a Database driver.
-type Driver struct {
-	name       string
-	extensions []string
-	chkOnClose CnkOnCloseMode
-}
-
-// NewDriverFromConfig registers a new SQLite driver under name using cfg to
-// compose the ConnectHook. Every feature in cfg is applied to each new
-// connection, so extensions, checkpoint behavior, and query logging can all
-// coexist.
-// If a driver with name is already registered, a panic will occur. Callers
-// that need a singleton driver (fixed names) should guard this with sync.Once.
-func NewDriverFromConfig(name string, cfg *DriverConfig) *Driver {
-	sql.Register(name, &sqlite3.SQLiteDriver{
+// connector returns a database/sql connector which opens connections to the
+// database at dsn with this policy. The policy is copied, so later changes
+// to cfg do not reach connections opened through the connector.
+func (cfg ConnConfig) connector(dsn string) driver.Connector {
+	return newConnector(&sqlite3.SQLiteDriver{
 		Extensions:  cfg.Extensions,
-		ConnectHook: buildConnectHook(cfg),
-	})
-	return &Driver{
-		name:       name,
-		extensions: cfg.Extensions,
-		chkOnClose: cfg.ChkOnClose,
-	}
+		ConnectHook: buildConnectHook(&cfg),
+	}, dsn)
 }
 
-var defRegisterOnce sync.Once
-
-// DefaultDriver returns the default driver. It registers the SQLite3 driver
-// with the default driver name. It can be called multiple times, but only
-// registers the SQLite3 driver once. This driver disables checkpoint on close
-// for any database in WAL mode.
-func DefaultDriver() *Driver {
-	defRegisterOnce.Do(func() {
-		NewDriverFromConfig(defaultDriverName, &DriverConfig{
-			ChkOnClose: CnkOnCloseModeDisabled,
-		})
-	})
-	return &Driver{
-		name:       defaultDriverName,
-		chkOnClose: CnkOnCloseModeDisabled,
-	}
-}
-
-var chkRegisterOnce sync.Once
-
-// CheckpointDriver returns the checkpoint driver. It registers the SQLite3
-// driver with the checkpoint driver name. It can be called multiple times,
-// but only registers the SQLite3 driver once. This driver enables checkpoint
-// on close for any database in WAL mode.
-func CheckpointDriver() *Driver {
-	chkRegisterOnce.Do(func() {
-		NewDriverFromConfig(chkDriverName, &DriverConfig{
-			ChkOnClose: CnkOnCloseModeEnabled,
-		})
-	})
-	return &Driver{
-		name:       chkDriverName,
-		chkOnClose: CnkOnCloseModeEnabled,
-	}
-}
-
-var fkRegisterOnce sync.Once
-
-// ForeignKeyDriver returns a driver that enables foreign key support
-// on every connection. It can be called multiple times, but only registers
-// the SQLite3 driver once. This driver disables checkpoint on close for any
-// database in WAL mode.
-func ForeignKeyDriver() *Driver {
-	fkRegisterOnce.Do(func() {
-		NewDriverFromConfig(foreignKeyDriverName, &DriverConfig{
-			ChkOnClose:  CnkOnCloseModeDisabled,
-			ForeignKeys: true,
-		})
-	})
-	return &Driver{
-		name:       foreignKeyDriverName,
-		chkOnClose: CnkOnCloseModeDisabled,
-	}
-}
-
-// NewDriver returns a new driver with the given name and extensions. It
-// registers the SQLite3 driver with the given name. extensions is a list of
-// paths to SQLite3 extension shared objects. chkpt is the checkpoint-on-close
-// mode the Driver will use.
-//
-// If a driver with the given name already exists, a panic will occur.
-func NewDriver(name string, extensions []string, chkpt CnkOnCloseMode) *Driver {
-	return NewDriverFromConfig(name, &DriverConfig{
-		Extensions: extensions,
-		ChkOnClose: chkpt,
-	})
-}
-
-// Name returns the driver name.
-func (d *Driver) Name() string {
-	return d.name
-}
-
-// Extensions returns the paths of the loaded driver extensions.
-func (d *Driver) Extensions() []string {
-	return d.extensions
-}
-
-// ExtensionNames returns the names of the loaded driver extensions.
-func (d *Driver) ExtensionNames() []string {
-	names := make([]string, 0, len(d.extensions))
-	for _, ext := range d.extensions {
+// extensionNames returns the sorted base names of the given extension paths.
+func extensionNames(paths []string) []string {
+	names := make([]string, 0, len(paths))
+	for _, ext := range paths {
 		names = append(names, filepath.Base(ext))
 	}
 	sort.Strings(names)
 	return names
 }
 
-// CheckpointOnCloseMode returns the checkpoint on close mode.
-func (d *Driver) CheckpointOnCloseMode() CnkOnCloseMode {
-	return d.chkOnClose
+// connector opens connections to one DSN through one SQLite driver. It is
+// what lets a database be opened without registering a driver name.
+type connector struct {
+	drv *sqlite3.SQLiteDriver
+	dsn string
+}
+
+func newConnector(drv *sqlite3.SQLiteDriver, dsn string) *connector {
+	return &connector{drv: drv, dsn: dsn}
+}
+
+// Connect opens a new connection to the DSN.
+func (c *connector) Connect(context.Context) (driver.Conn, error) {
+	return c.drv.Open(c.dsn)
+}
+
+// Driver returns the SQLite driver the connector opens connections with.
+func (c *connector) Driver() driver.Driver {
+	return c.drv
 }
 
 // buildConnectHook composes a ConnectHook from cfg, chaining all requested
@@ -181,7 +101,7 @@ func (d *Driver) CheckpointOnCloseMode() CnkOnCloseMode {
 // tracing, then hooks.
 //
 // This driver unconditionally disables automatic checkpointing.
-func buildConnectHook(cfg *DriverConfig) func(conn *sqlite3.SQLiteConn) error {
+func buildConnectHook(cfg *ConnConfig) func(conn *sqlite3.SQLiteConn) error {
 	return func(conn *sqlite3.SQLiteConn) error {
 		// Checkpoint-on-close configuration.
 		if cfg.ChkOnClose == CnkOnCloseModeDisabled {

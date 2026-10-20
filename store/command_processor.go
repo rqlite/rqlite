@@ -99,7 +99,7 @@ func (c *CommandProcessor) Process(data []byte, db *sql.SwappableDB) (*proto.Com
 		fd.Close()
 
 		// Swap the underlying database to the new one.
-		if err := db.Swap(fd.Name(), db.FKEnabled(), db.WALEnabled()); err != nil {
+		if err := db.Swap(fd.Name()); err != nil {
 			return cmd, false, &fsmGenericResponse{error: fmt.Errorf("error swapping databases: %s", err)}, nil
 		}
 		return cmd, true, &fsmGenericResponse{}, nil
@@ -141,7 +141,7 @@ func (c *CommandProcessor) Process(data []byte, db *sql.SwappableDB) (*proto.Com
 					c.logger.Printf("invalid chunked database file - ignoring")
 					return cmd, false, &fsmGenericResponse{error: fmt.Errorf("invalid chunked database file - ignoring")}, nil
 				}
-				if err := db.Swap(path, db.FKEnabled(), db.WALEnabled()); err != nil {
+				if err := db.Swap(path); err != nil {
 					return cmd, false, &fsmGenericResponse{error: fmt.Errorf("error swapping databases: %s", err)}, nil
 				}
 			}

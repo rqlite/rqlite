@@ -99,7 +99,7 @@ func Test_CommandProcessor_FatalError(t *testing.T) {
 		proto.Command_COMMAND_TYPE_EXECUTE, proto.Command_COMMAND_TYPE_EXECUTE_QUERY,
 	} {
 		t.Run(cmdType.String(), func(t *testing.T) {
-			db, err := sql.OpenSwappable(filepath.Join(t.TempDir(), "test.db"), nil, false, true, 0)
+			db, err := sql.OpenSwappable(filepath.Join(t.TempDir(), "test.db"), sql.NewConfig(sql.ConnConfig{}, true))
 			if err != nil {
 				t.Fatal(err)
 			}

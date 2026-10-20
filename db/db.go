@@ -12,7 +12,6 @@ import (
 	"io/fs"
 	"log"
 	"os"
-	"path/filepath"
 	"slices"
 	"strings"
 	"sync"
@@ -22,7 +21,6 @@ import (
 	command "github.com/rqlite/rqlite/v10/command/proto"
 	"github.com/rqlite/rqlite/v10/db/humanize"
 	"github.com/rqlite/rqlite/v10/internal/fsutil"
-	"github.com/rqlite/rqlite/v10/internal/progress"
 	"github.com/rqlite/rqlite/v10/internal/rsum"
 )
 
@@ -186,19 +184,50 @@ func ResetStats() {
 	stats.Add(cdcDroppedEvents, 0)
 }
 
+// Config describes how a database is opened: one connection policy for the
+// writer, one for the readers, and the settings they share.
+type Config struct {
+	// Writer is the policy for the read-write connection.
+	Writer ConnConfig
+
+	// Readers is the policy for the read-only connections.
+	Readers ConnConfig
+
+	// WAL, if true, opens the database in WAL journal mode, otherwise in
+	// DELETE mode.
+	WAL bool
+
+	// MaxReaders is the maximum number of read-only connections. Zero means
+	// no limit.
+	MaxReaders int
+}
+
+// NewConfig returns a configuration which opens the writer and the readers
+// with the same connection policy.
+func NewConfig(conn ConnConfig, wal bool) *Config {
+	return &Config{
+		Writer:  conn,
+		Readers: conn,
+		WAL:     wal,
+	}
+}
+
+// clone copies the configuration and its extension paths. Hook targets and
+// the query logger remain shared with the caller.
+func (cfg Config) clone() *Config {
+	cfg.Writer.Extensions = slices.Clone(cfg.Writer.Extensions)
+	cfg.Readers.Extensions = slices.Clone(cfg.Readers.Extensions)
+	return &cfg
+}
+
 // DB is the SQL database.
 type DB struct {
-	drv       *Driver
-	path      string // Path to database file.
-	walPath   string // Path to WAL file.
-	fkEnabled bool   // Foreign key constraints enabled
-	wal       bool
+	cfg     *Config
+	path    string // Path to database file.
+	walPath string // Path to WAL file.
 
-	rwDB *sql.DB // Database connection for database reads and writes.
-	roDB *sql.DB // Database connection for database reads.
-
-	rwDSN string // DSN used for read-write connection
-	roDSN string // DSN used for read-only connections
+	writer  *writer     // The one read-write connection.
+	readers *readerPool // The read-only connections.
 
 	allOptimized   bool
 	allOptimizedMu sync.Mutex
@@ -243,16 +272,17 @@ func (cm *CheckpointMeta) Success() bool {
 	return cm.Code == 0
 }
 
-// Open opens a file-based database using the default driver.
+// Open opens a file-based database using the default connection policy.
 func Open(dbPath string, fkEnabled, wal bool) (retDB *DB, retErr error) {
-	return OpenWithDriver(DefaultDriver(), dbPath, fkEnabled, wal)
+	return OpenWithConfig(dbPath, NewConfig(ConnConfig{ForeignKeys: fkEnabled}, wal))
 }
 
-// OpenWithDriver opens a file-based database, creating it if it does not exist.
+// OpenWithConfig opens a file-based database, creating it if it does not exist.
 // After this function returns, an actual SQLite file will always exist. If the
 // database is opened in WAL mode, the WAL files will also be created if they
-// do not exist.
-func OpenWithDriver(drv *Driver, dbPath string, fkEnabled, wal bool) (retDB *DB, retErr error) {
+// do not exist. The configuration and its extension paths are copied on open.
+func OpenWithConfig(dbPath string, cfg *Config) (retDB *DB, retErr error) {
+	cfg = cfg.clone()
 	logger := log.New(log.Writer(), "[db] ", log.LstdFlags)
 	startTime := time.Now()
 	defer func() {
@@ -265,90 +295,26 @@ func OpenWithDriver(drv *Driver, dbPath string, fkEnabled, wal bool) (retDB *DB,
 		recordDuration(openDuration, startTime)
 	}()
 
-	/////////////////////////////////////////////////////////////////////////
-	// Main RW connection
-	rwDSN := MakeDSN(dbPath, ModeReadWrite, fkEnabled, wal)
-	rwDB, err := sql.Open(drv.name, rwDSN)
-	if err != nil {
-		return nil, fmt.Errorf("open: %s", err.Error())
-	}
-	defer func() {
-		if retErr != nil {
-			rwDB.Close()
-		}
-	}()
-
-	/////////////////////////////////////////////////////////////////////////
-	// Read-only connection
-	roDSN := MakeDSN(dbPath, ModeReadOnly, fkEnabled, wal)
-	roDB, err := sql.Open(drv.name, roDSN)
+	writer, err := openWriter(&cfg.Writer, dbPath, cfg.WAL, logger)
 	if err != nil {
 		return nil, err
 	}
-	defer func() {
-		if retErr != nil {
-			roDB.Close()
-		}
-	}()
-
-	// Set connection pool behaviour.
-	rwDB.SetConnMaxLifetime(0)
-	rwDB.SetMaxOpenConns(1) // Serialize writes on a single connection.
-	roDB.SetConnMaxIdleTime(30 * time.Second)
-	roDB.SetConnMaxLifetime(0)
-
-	if err := rwDB.Ping(); err != nil {
-		return nil, fmt.Errorf("failed to ping on-disk database: %s", err.Error())
-	}
-	if wal && !fsutil.FileExists(dbPath+"-wal") {
-		// Force creation of the WAL files so any external read-only connections
-		// can read the database. See https://www.sqlite.org/draft/wal.html, section 5.
-		err := func() error {
-			// Ensure it takes place on the same connection.
-			conn, err := rwDB.Conn(context.Background())
-			if err != nil {
-				return err
-			}
-			defer conn.Close()
-			if _, err := conn.ExecContext(context.Background(), "BEGIN IMMEDIATE"); err != nil {
-				return err
-			}
-			if _, err := conn.ExecContext(context.Background(), "ROLLBACK"); err != nil {
-				return err
-			}
-			return nil
-		}()
-		if err != nil {
-			return nil, err
-		}
-
-		ok, pages, moved, err := checkpointDB(rwDB, CheckpointTruncate)
-		if err != nil {
-			return nil, err
-		}
-		if ok != 0 {
-			return nil, fmt.Errorf("failed to completely checkpoint WAL at open (%d ok, %d pages, %d moved)",
-				ok, pages, moved)
-		}
-	}
+	readers := openReaderPool(&cfg.Readers, dbPath, cfg.WAL, logger)
+	readers.setMaxConns(cfg.MaxReaders)
 
 	// Make it clear which extensions have been loaded, if any.
-	extensions := drv.ExtensionNames()
+	extensions := extensionNames(cfg.Writer.Extensions)
 	if len(extensions) > 0 {
 		logger.Printf("loaded extensions: %s", strings.Join(extensions, ", "))
 	}
 
 	return &DB{
-		drv:       drv,
-		path:      dbPath,
-		walPath:   dbPath + "-wal",
-		fkEnabled: fkEnabled,
-		wal:       wal,
-		rwDB:      rwDB,
-		roDB:      roDB,
-		rwDSN:     rwDSN,
-		roDSN:     roDSN,
-		logger:    logger,
+		cfg:     cfg,
+		path:    dbPath,
+		walPath: dbPath + "-wal",
+		writer:  writer,
+		readers: readers,
+		logger:  logger,
 	}, nil
 }
 
@@ -356,7 +322,19 @@ func OpenWithDriver(drv *Driver, dbPath string, fkEnabled, wal bool) (retDB *DB,
 // database. See https://pkg.go.dev/database/sql#DB.SetMaxIdleConns for full
 // details.
 func (db *DB) SetMaxReadOnlyConns(n int) {
-	db.roDB.SetMaxOpenConns(n)
+	db.readers.setMaxConns(n)
+}
+
+// AcquireWriter borrows the read-write connection. There is only one, so
+// the call waits until it is free or ctx is done, and while it is held
+// nothing else can write to the database. The caller must close it.
+func (db *DB) AcquireWriter(ctx context.Context) (*Conn, error) {
+	return db.writer.acquire(ctx)
+}
+
+// AcquireReader borrows a read-only connection. The caller must close it.
+func (db *DB) AcquireReader(ctx context.Context) (*Conn, error) {
+	return db.readers.acquire(ctx)
 }
 
 // LastModified returns the last modified time of the database file, or the WAL file,
@@ -397,14 +375,14 @@ func (db *DB) WALSum() (string, error) {
 	return rsum.MD5(db.walPath)
 }
 
-// Close closes the underlying database connection. Close the read-only
-// connection first so if there is any clean-up -- perhaps a checkpoint
+// Close closes the underlying database connections. Close the read-only
+// connections first so if there is any clean-up -- perhaps a checkpoint
 // on close -- it can be done by the read-write connection.
 func (db *DB) Close() error {
-	if err := db.roDB.Close(); err != nil {
+	if err := db.readers.close(); err != nil {
 		return err
 	}
-	return db.rwDB.Close()
+	return db.writer.close()
 }
 
 // Stats returns status and diagnostics for the database.
@@ -418,8 +396,8 @@ func (db *DB) Stats() (map[string]any, error) {
 		return nil, err
 	}
 	connPoolStats := map[string]any{
-		"ro": db.ConnectionPoolStats(db.roDB),
-		"rw": db.ConnectionPoolStats(db.rwDB),
+		"ro": db.readers.poolStats(),
+		"rw": db.writer.poolStats(),
 	}
 	dbSz, err := db.Size()
 	if err != nil {
@@ -440,8 +418,8 @@ func (db *DB) Stats() (map[string]any, error) {
 		"mem_stats":        memStats,
 		"db_size":          dbSz,
 		"db_size_friendly": humanize.Bytes(uint64(dbSz)),
-		"rw_dsn":           db.rwDSN,
-		"ro_dsn":           db.roDSN,
+		"rw_dsn":           db.writer.dsn,
+		"ro_dsn":           db.readers.dsn,
 		"conn_pool_stats":  connPoolStats,
 		"pragmas":          pragmas,
 		"transaction":      txStatus,
@@ -456,7 +434,7 @@ func (db *DB) Stats() (map[string]any, error) {
 	if stats["size"], err = db.FileSize(); err != nil {
 		return nil, err
 	}
-	if db.wal {
+	if db.cfg.WAL {
 		if stats["wal_size"], err = db.WALSize(); err != nil {
 			return nil, err
 		}
@@ -489,7 +467,7 @@ func (db *DB) FileSize() (int64, error) {
 // not enabled, this function returns 0. If the WAL file does
 // not exist, even if the database is in WAL mode, 0 is also returned.
 func (db *DB) WALSize() (int64, error) {
-	if !db.wal {
+	if !db.cfg.WAL {
 		return 0, nil
 	}
 	sz, err := fsutil.FileSize(db.walPath)
@@ -505,25 +483,19 @@ func (db *DB) WALSize() (int64, error) {
 
 // ExtensionNames returns the names of the SQLite extensions loaded into the database.
 func (db *DB) ExtensionNames() []string {
-	names := make([]string, 0, len(db.drv.extensions))
-	for _, ext := range db.drv.extensions {
-		names = append(names, filepath.Base(ext))
-	}
-	return names
+	return extensionNames(db.cfg.Writer.Extensions)
 }
 
 // SetBusyTimeout sets the busy timeout for the database. If a timeout is
 // less than zero it is not set.
 func (db *DB) SetBusyTimeout(rwMs, roMs int) (err error) {
 	if rwMs >= 0 {
-		_, err := db.rwDB.Exec(fmt.Sprintf("PRAGMA busy_timeout=%d", rwMs))
-		if err != nil {
+		if err := db.writer.setBusyTimeout(rwMs); err != nil {
 			return err
 		}
 	}
 	if roMs >= 0 {
-		_, err = db.roDB.Exec(fmt.Sprintf("PRAGMA busy_timeout=%d", roMs))
-		if err != nil {
+		if err := db.readers.setBusyTimeout(roMs); err != nil {
 			return err
 		}
 	}
@@ -533,17 +505,13 @@ func (db *DB) SetBusyTimeout(rwMs, roMs int) (err error) {
 // RWBusyTimeout returns the current busy timeout value for the read-write
 // database connection.
 func (db *DB) RWBusyTimeout() (int, error) {
-	var ms int
-	err := db.rwDB.QueryRow("PRAGMA busy_timeout").Scan(&ms)
-	return ms, err
+	return db.writer.busyTimeout()
 }
 
 // ROBusyTimeout returns the current busy timeout value for the read-only
 // database connection.
 func (db *DB) ROBusyTimeout() (int, error) {
-	var ms int
-	err := db.roDB.QueryRow("PRAGMA busy_timeout").Scan(&ms)
-	return ms, err
+	return db.readers.busyTimeout()
 }
 
 // BusyTimeout returns the current busy timeout values for the read-write and
@@ -585,40 +553,46 @@ func (db *DB) CheckpointTruncateWithTimeout(dur time.Duration) (err error) {
 		}
 	}()
 
-	rwBt, err := db.RWBusyTimeout()
+	conn, err := db.AcquireWriter(context.Background())
+	if err != nil {
+		return err
+	}
+	defer conn.Close()
+
+	rwBt, err := conn.BusyTimeout()
 	if err != nil {
 		return fmt.Errorf("failed to get busy_timeout: %s", err.Error())
 	}
-	if err := db.SetBusyTimeout(int(dur.Milliseconds()), -1); err != nil {
+	if err := conn.SetBusyTimeout(int(dur.Milliseconds())); err != nil {
 		return fmt.Errorf("failed to set busy_timeout: %s", err.Error())
 	}
 	defer func() {
-		if err := db.SetBusyTimeout(rwBt, -1); err != nil {
+		if err := conn.SetBusyTimeout(rwBt); err != nil {
 			db.logger.Printf("failed to reset busy_timeout: %s", err.Error())
 		}
 	}()
 
-	currMode, err := db.GetSynchronousMode()
+	currMode, err := conn.SynchronousMode()
 	if err != nil {
 		return fmt.Errorf("failed to get synchronous mode: %s", err.Error())
 	}
-	if err := db.SetSynchronousMode(SynchronousFull); err != nil {
+	if err := conn.SetSynchronousMode(SynchronousFull); err != nil {
 		return fmt.Errorf("failed to set synchronous mode to FULL: %s", err.Error())
 	}
 	defer func() {
-		if err := db.SetSynchronousMode(currMode); err != nil {
+		if err := conn.SetSynchronousMode(currMode); err != nil {
 			db.logger.Fatalf("failed to reset synchronous mode to %s: %s", currMode, err.Error())
 		}
 	}()
 
-	ok, _, nMoved, err := checkpointDB(db.rwDB, CheckpointTruncate)
+	meta, err := conn.Checkpoint(CheckpointTruncate)
 	if err != nil {
 		return fmt.Errorf("error checkpointing WAL: %s", err.Error())
 	}
-	if ok != 0 {
+	if !meta.Success() {
 		return fmt.Errorf("checkpoint did not complete within %s", dur)
 	}
-	stats.Add(numCheckpointedMoves, int64(nMoved))
+	stats.Add(numCheckpointedMoves, int64(meta.Moved))
 	return nil
 }
 
@@ -640,53 +614,58 @@ func (db *DB) CheckpointWithTimeout(mode CheckpointMode, dur time.Duration) (met
 		}
 	}()
 
+	conn, err := db.AcquireWriter(context.Background())
+	if err != nil {
+		return nil, err
+	}
+	defer conn.Close()
+
 	if dur > 0 {
-		rwBt, err := db.RWBusyTimeout()
+		rwBt, err := conn.BusyTimeout()
 		if err != nil {
 			return nil, fmt.Errorf("failed to get busy_timeout on checkpointing connection: %s", err.Error())
 		}
-		if err := db.SetBusyTimeout(int(dur.Milliseconds()), -1); err != nil {
+		if err := conn.SetBusyTimeout(int(dur.Milliseconds())); err != nil {
 			return nil, fmt.Errorf("failed to set busy_timeout on checkpointing connection: %s", err.Error())
 		}
 		defer func() {
 			// Reset back to default
-			if err := db.SetBusyTimeout(rwBt, -1); err != nil {
+			if err := conn.SetBusyTimeout(rwBt); err != nil {
 				db.logger.Printf("failed to reset busy_timeout on checkpointing connection: %s", err.Error())
 			}
 		}()
 	}
 
 	// Temporarily move to Synchronous=FULL for the duration of the checkpoint.
-	currMode, err := db.GetSynchronousMode()
+	currMode, err := conn.SynchronousMode()
 	if err != nil {
 		return nil, fmt.Errorf("failed to get current synchronous mode: %s", err.Error())
 	}
-	if err := db.SetSynchronousMode(SynchronousFull); err != nil {
+	if err := conn.SetSynchronousMode(SynchronousFull); err != nil {
 		return nil, fmt.Errorf("failed to set synchronous mode to FULL: %s", err.Error())
 	}
 	defer func() {
-		if err := db.SetSynchronousMode(currMode); err != nil {
+		if err := conn.SetSynchronousMode(currMode); err != nil {
 			db.logger.Fatalf("failed to reset synchronous mode to %s: %s", currMode, err.Error())
 		}
 	}()
 
-	ok, nPages, nMoved, err := checkpointDB(db.rwDB, mode)
+	meta, err = conn.Checkpoint(mode)
 	if err != nil {
 		return nil, fmt.Errorf("error checkpointing WAL: %s", err.Error())
 	}
-	stats.Add(numCheckpointedMoves, int64(nMoved))
-	return &CheckpointMeta{
-		Code:  ok,
-		Pages: nPages,
-		Moved: nMoved,
-	}, nil
+	stats.Add(numCheckpointedMoves, int64(meta.Moved))
+	return meta, nil
 }
 
 // GetCheckpointing returns the current checkpointing setting.
 func (db *DB) GetCheckpointing() (int, error) {
-	var rwN int
-	err := db.rwDB.QueryRow("PRAGMA wal_autocheckpoint").Scan(&rwN)
-	return rwN, err
+	conn, err := db.AcquireWriter(context.Background())
+	if err != nil {
+		return 0, err
+	}
+	defer conn.Close()
+	return conn.AutoCheckpoint()
 }
 
 // Optimize runs a default PRAGMA OPTIMIZE on the database. If it's the first
@@ -703,20 +682,28 @@ func (db *DB) Optimize() error {
 
 // OptimizeWithMask runs a PRAGMA OPTIMIZE on the database, using the given mask.
 func (db *DB) OptimizeWithMask(mask int) error {
-	_, err := db.rwDB.Exec(fmt.Sprintf("PRAGMA optimize=0x%x", mask))
-	return err
+	return db.execOnWriter(fmt.Sprintf("PRAGMA optimize=0x%x", mask))
 }
 
 // Vacuum runs a VACUUM on the database.
 func (db *DB) Vacuum() error {
-	_, err := db.rwDB.Exec("VACUUM")
-	return err
+	return db.execOnWriter("VACUUM")
 }
 
 // VacuumInto VACUUMs the database into the file at path.
 func (db *DB) VacuumInto(path string) error {
-	_, err := db.rwDB.Exec(fmt.Sprintf("VACUUM INTO '%s'", strings.ReplaceAll(path, "'", "''")))
-	return err
+	return db.execOnWriter(fmt.Sprintf("VACUUM INTO '%s'", strings.ReplaceAll(path, "'", "''")))
+}
+
+// execOnWriter runs a statement that returns no rows on the read-write
+// connection.
+func (db *DB) execOnWriter(query string) error {
+	conn, err := db.AcquireWriter(context.Background())
+	if err != nil {
+		return err
+	}
+	defer conn.Close()
+	return conn.exec(context.Background(), query)
 }
 
 // IntegrityCheck runs PRAGMA integrity_check (IntegrityCheckFull) or
@@ -781,30 +768,32 @@ func (db *DB) VerifyIntegrity() (IntegrityResult, error) {
 
 // SetSynchronousMode sets the synchronous mode of the database.
 func (db *DB) SetSynchronousMode(mode SynchronousMode) error {
-	if _, err := db.rwDB.Exec(fmt.Sprintf("PRAGMA synchronous=%s", mode)); err != nil {
-		return fmt.Errorf("failed to set synchronous mode to %s: %s", mode, err.Error())
+	conn, err := db.AcquireWriter(context.Background())
+	if err != nil {
+		return err
 	}
-	return nil
+	defer conn.Close()
+	return conn.SetSynchronousMode(mode)
 }
 
 // GetSynchronousMode returns the current synchronous mode.
 func (db *DB) GetSynchronousMode() (SynchronousMode, error) {
-	var rwN int
-	err := db.rwDB.QueryRow("PRAGMA synchronous").Scan(&rwN)
+	conn, err := db.AcquireWriter(context.Background())
 	if err != nil {
 		return 0, err
 	}
-	return SynchronousModeFromInt(rwN)
+	defer conn.Close()
+	return conn.SynchronousMode()
 }
 
 // FKEnabled returns whether Foreign Key constraints are enabled.
 func (db *DB) FKEnabled() bool {
-	return db.fkEnabled
+	return db.cfg.Writer.ForeignKeys
 }
 
 // WALEnabled returns whether WAL mode is enabled.
 func (db *DB) WALEnabled() bool {
-	return db.wal
+	return db.cfg.WAL
 }
 
 // Path returns the path of this database.
@@ -814,7 +803,7 @@ func (db *DB) Path() string {
 
 // WALPath returns the path to the WAL file for this database.
 func (db *DB) WALPath() string {
-	if !db.wal {
+	if !db.cfg.WAL {
 		return ""
 	}
 	return db.walPath
@@ -845,27 +834,16 @@ func (db *DB) CompileOptions() ([]string, error) {
 	return compileOptions, nil
 }
 
-// ConnectionPoolStats returns database pool statistics.
-func (db *DB) ConnectionPoolStats(sqlDB *sql.DB) *PoolStats {
-	s := sqlDB.Stats()
-	return &PoolStats{
-		MaxOpenConnections: s.MaxOpenConnections,
-		OpenConnections:    s.OpenConnections,
-		InUse:              s.InUse,
-		Idle:               s.Idle,
-		WaitCount:          s.WaitCount,
-		WaitDuration:       s.WaitDuration,
-		MaxIdleClosed:      s.MaxIdleClosed,
-		MaxIdleTimeClosed:  s.MaxIdleTimeClosed,
-		MaxLifetimeClosed:  s.MaxLifetimeClosed,
-	}
-}
-
 // ColumnNames returns the names of all columns in the given table.
 func (db *DB) ColumnNames(table string) ([]string, error) {
-	rows, err := db.queryStmtWithConn(context.Background(), &command.Statement{
+	conn, err := db.AcquireReader(context.Background())
+	if err != nil {
+		return nil, err
+	}
+	defer conn.Close()
+	rows, err := conn.queryStmt(context.Background(), &command.Statement{
 		Sql: fmt.Sprintf(`SELECT * FROM "%s" LIMIT 0`, strings.ReplaceAll(table, `"`, `""`)),
-	}, false, db.roDB)
+	}, false, conn.conn)
 	if err != nil {
 		return nil, err
 	}
@@ -874,9 +852,14 @@ func (db *DB) ColumnNames(table string) ([]string, error) {
 
 // TableColumnTypes returns the declared types of all columns in the given table.
 func (db *DB) TableColumnTypes(table string) (map[string]string, error) {
-	rows, err := db.queryStmtWithConn(context.Background(), &command.Statement{
+	conn, err := db.AcquireReader(context.Background())
+	if err != nil {
+		return nil, err
+	}
+	defer conn.Close()
+	rows, err := conn.queryStmt(context.Background(), &command.Statement{
 		Sql: fmt.Sprintf("PRAGMA table_info(\"%s\")", strings.ReplaceAll(table, `"`, `""`)),
-	}, false, db.roDB)
+	}, false, conn.conn)
 	if err != nil {
 		return nil, err
 	}
@@ -931,186 +914,21 @@ func (db *DB) Execute(req *command.Request, xTime bool) ([]*command.ExecuteQuery
 func (db *DB) ExecuteWithContext(ctx context.Context, req *command.Request, xTime bool) (results []*command.ExecuteQueryResponse, retErr error) {
 	defer func() { retErr = classifyError(retErr) }()
 
+	// The connection applies the request timeout too, but only once it has
+	// been acquired. Applying it here also bounds the wait for the writer.
 	if req.DbTimeout > 0 {
 		var cancel context.CancelFunc
 		ctx, cancel = context.WithTimeout(ctx, time.Duration(req.DbTimeout))
 		defer cancel()
 	}
 	stats.Add(numExecutions, int64(len(req.Statements)))
-	conn, err := db.rwDB.Conn(ctx)
+	conn, err := db.AcquireWriter(ctx)
 	if err != nil {
 		return nil, err
 	}
 	// Close the connection, preserving any fatal error.
 	defer func() { preserveFatalError(&retErr, conn.Close()) }()
-	return db.executeWithConn(ctx, req, xTime, conn)
-}
-
-type execerQueryer interface {
-	ExecContext(ctx context.Context, query string, args ...any) (sql.Result, error)
-	QueryContext(ctx context.Context, query string, args ...any) (*sql.Rows, error)
-}
-
-func (db *DB) executeWithConn(ctx context.Context, req *command.Request, xTime bool, conn *sql.Conn) (allResults []*command.ExecuteQueryResponse, retErr error) {
-	defer func() { retErr = classifyError(retErr) }()
-
-	eqer := execerQueryer(conn)
-	var tx *sql.Tx
-	if req.Transaction {
-		stats.Add(numETx, 1)
-		var err error
-		tx, err = conn.BeginTx(ctx, nil)
-		if err != nil {
-			return nil, err
-		}
-		defer func() {
-			if tx != nil {
-				preserveFatalError(&retErr, tx.Rollback())
-			}
-		}()
-		eqer = tx
-	}
-
-	// handleError sets the error field on the given result. It returns
-	// whether the caller should continue processing or break.
-	handleError := func(result *command.ExecuteQueryResponse, err error) bool {
-		err = classifyError(err)
-		if isFatalError(err) {
-			retErr = err
-		}
-		stats.Add(numExecutionErrors, 1)
-		if result == nil {
-			result = &command.ExecuteQueryResponse{}
-		}
-		result.Result = &command.ExecuteQueryResponse_E{
-			E: newExecuteResultError(err),
-		}
-		allResults = append(allResults, result)
-		if tx != nil {
-			preserveFatalError(&retErr, tx.Rollback())
-			tx = nil
-			return false
-		}
-		if req.RollbackOnError {
-			// Use a background context here since the original context may have been canceled or hit its deadline,
-			// and we want to ensure the rollback goes through.
-			_, rollbackErr := db.executeStmtWithConn(context.Background(), &command.Statement{Sql: "ROLLBACK"}, false, eqer,
-				time.Duration(req.DbTimeout))
-			preserveFatalError(&retErr, rollbackErr)
-			return false
-		}
-		return retErr == nil
-	}
-
-	// Execute each statement.
-	for _, stmt := range req.Statements {
-		ss := stmt.Sql
-		if ss == "" {
-			continue
-		}
-
-		result, err := db.executeStmtWithConn(ctx, stmt, xTime, eqer, time.Duration(req.DbTimeout))
-		if err != nil {
-			if handleError(result, err) {
-				continue
-			}
-			break
-		}
-		allResults = append(allResults, result)
-	}
-
-	if tx != nil {
-		retErr = tx.Commit()
-	}
-	return allResults, retErr
-}
-
-func (db *DB) executeStmtWithConn(ctx context.Context, stmt *command.Statement, xTime bool, eq execerQueryer, timeout time.Duration) (res *command.ExecuteQueryResponse, retErr error) {
-	defer func() {
-		if retErr != nil {
-			retErr = classifyError(rewriteContextTimeout(retErr, ErrExecuteTimeout))
-			if res != nil {
-				res.Result = &command.ExecuteQueryResponse_E{
-					E: newExecuteResultError(retErr),
-				}
-			}
-		} else if res != nil && res.GetE().GetError() == "" && res.GetQ().GetError() == "" {
-			res.Mutated = true
-		}
-	}()
-	response := &command.ExecuteQueryResponse{}
-	start := time.Now()
-
-	parameters, err := parametersToValues(stmt.Parameters)
-	if err != nil {
-		response.Result = &command.ExecuteQueryResponse_E{
-			E: newExecuteResultError(err),
-		}
-		return response, err
-	}
-
-	if timeout > 0 {
-		var cancel context.CancelFunc
-		ctx, cancel = context.WithTimeout(ctx, timeout)
-		defer cancel()
-	}
-
-	if stmt.ForceQuery {
-		stats.Add(numExecutionsForceQueries, 1)
-		rows, err := db.queryStmtWithConn(ctx, stmt, xTime, eq)
-		if err != nil {
-			response.Result = &command.ExecuteQueryResponse_Q{
-				Q: newQueryRowsError(err),
-			}
-			return response, err
-		}
-		response.Result = &command.ExecuteQueryResponse_Q{
-			Q: rows,
-		}
-	} else {
-		result, err := eq.ExecContext(ctx, stmt.Sql, parameters...)
-		if err != nil {
-			response.Result = &command.ExecuteQueryResponse_E{
-				E: newExecuteResultError(err),
-			}
-			return response, err
-		}
-		if ctx.Err() != nil {
-			return response, ctx.Err()
-		}
-		if result == nil {
-			return response, nil
-		}
-
-		lid, err := result.LastInsertId()
-		if err != nil {
-			response.Result = &command.ExecuteQueryResponse_E{
-				E: newExecuteResultError(err),
-			}
-			return response, err
-		}
-
-		ra, err := result.RowsAffected()
-		if err != nil {
-			response.Result = &command.ExecuteQueryResponse_E{
-				E: newExecuteResultError(err),
-			}
-			return response, err
-		}
-		tf := float64(0)
-		if xTime {
-			tf = time.Since(start).Seconds()
-		}
-
-		response.Result = &command.ExecuteQueryResponse_E{
-			E: &command.ExecuteResult{
-				LastInsertId: lid,
-				RowsAffected: ra,
-				Time:         tf,
-			},
-		}
-	}
-	return response, nil
+	return conn.Execute(ctx, req, xTime)
 }
 
 // QueryStringStmt executes a single query that returns rows, but doesn't modify the database.
@@ -1149,168 +967,20 @@ func (db *DB) Query(req *command.Request, xTime bool) ([]*command.QueryRows, err
 // Any timeout set in the request is also applied, so the effective deadline is the
 // earlier of the context's deadline and the request's timeout.
 func (db *DB) QueryWithContext(ctx context.Context, req *command.Request, xTime bool) ([]*command.QueryRows, error) {
+	// The connection applies the request timeout too, but only once it has
+	// been acquired. Applying it here also bounds the wait for a reader.
 	if req.DbTimeout > 0 {
 		var cancel context.CancelFunc
 		ctx, cancel = context.WithTimeout(ctx, time.Duration(req.DbTimeout))
 		defer cancel()
 	}
 	stats.Add(numQueries, int64(len(req.Statements)))
-	conn, err := db.roDB.Conn(ctx)
+	conn, err := db.AcquireReader(ctx)
 	if err != nil {
 		return nil, err
 	}
 	defer conn.Close()
-	return db.queryWithConn(ctx, req, xTime, conn)
-}
-
-type queryer interface {
-	QueryContext(ctx context.Context, query string, args ...any) (*sql.Rows, error)
-}
-
-func (db *DB) queryWithConn(ctx context.Context, req *command.Request, xTime bool, conn *sql.Conn) ([]*command.QueryRows, error) {
-	var err error
-
-	queryer := queryer(conn)
-	var tx *sql.Tx
-	if req.Transaction {
-		stats.Add(numQTx, 1)
-		tx, err = conn.BeginTx(ctx, nil)
-		if err != nil {
-			return nil, err
-		}
-		defer tx.Rollback() // Will be ignored if tx is committed
-		queryer = tx
-	}
-
-	var allRows []*command.QueryRows
-	for _, stmt := range req.Statements {
-		sql := stmt.Sql
-		if sql == "" {
-			continue
-		}
-
-		var rows *command.QueryRows
-		var err error
-
-		rows, err = db.queryStmtWithConn(ctx, stmt, xTime, queryer)
-		if err != nil {
-			rows = newQueryRowsError(err)
-			// Remap the message if necessary for backwards compatibility
-			// reasons. The structured error retains the SQLite codes.
-			se := NewSQLiteErrorFromError(err)
-			if se != nil && se.ReadOnlyError() {
-				rows.Error = ErrQueryWrite.Error()
-			}
-		}
-		if req.QualifyColumns && rows != nil && rows.Error == "" {
-			if qErr := qualifyRowColumns(conn, stmt.Sql, rows); qErr != nil {
-				db.logger.Printf("qualify columns: %s", qErr.Error())
-			}
-		}
-		allRows = append(allRows, rows)
-	}
-
-	if tx != nil {
-		err = tx.Commit()
-	}
-	return allRows, err
-}
-
-func (db *DB) queryStmtWithConn(ctx context.Context, stmt *command.Statement, xTime bool, q queryer) (retRows *command.QueryRows, retErr error) {
-	defer func() {
-		if retErr != nil {
-			retErr = classifyError(rewriteContextTimeout(retErr, ErrQueryTimeout))
-			if retRows != nil {
-				setQueryRowsError(retRows, retErr)
-			}
-		}
-	}()
-	rows := &command.QueryRows{}
-	start := time.Now()
-	forceStall := stmt.ForceStall
-
-	parameters, err := parametersToValues(stmt.Parameters)
-	if err != nil {
-		stats.Add(numQueryErrors, 1)
-		setQueryRowsError(rows, err)
-		return rows, nil
-	}
-
-	rs, err := q.QueryContext(ctx, stmt.Sql, parameters...)
-	if err != nil {
-		stats.Add(numQueryErrors, 1)
-		setQueryRowsError(rows, err)
-		return rows, err
-	}
-	defer func() { preserveFatalError(&retErr, rs.Close()) }()
-
-	columns, err := rs.Columns()
-	if err != nil {
-		return nil, err
-	}
-
-	types, err := rs.ColumnTypes()
-	if err != nil {
-		return nil, err
-	}
-	xTypes := make([]string, len(types))
-	for i := range types {
-		xTypes[i] = strings.ToLower(types[i].DatabaseTypeName())
-	}
-	needsQueryTypes := containsEmptyType(xTypes)
-
-	dest := make([]any, len(columns))
-	ptrs := make([]any, len(dest))
-	for rs.Next() && (len(columns) > 0 || forceStall) {
-		for i := range ptrs {
-			ptrs[i] = &dest[i]
-		}
-		if err := rs.Scan(ptrs...); err != nil {
-			return nil, err
-		}
-		params, err := normalizeRowParameters(dest, xTypes)
-		if err != nil {
-			return nil, err
-		}
-		rows.Values = append(rows.Values, &command.Values{
-			Parameters: params,
-		})
-
-		// Check for slow query, blocked query, etc. testing. This field
-		// should never be set by production code and is only for fault-injection
-		// testing purposes.
-		if forceStall {
-			select {
-			case <-make(chan struct{}):
-			case <-ctx.Done():
-				db.logger.Printf("forced stall on query cancelled: %s", ctx.Err().Error())
-				forceStall = false
-			}
-		}
-
-		// One-time population of any empty types, using the values in the
-		// first row.
-		if needsQueryTypes {
-			if err := populateEmptyTypes(xTypes, params); err != nil {
-				return nil, err
-			}
-			needsQueryTypes = false
-		}
-	}
-
-	// Check for errors from iterating over rows.
-	if err := rs.Err(); err != nil {
-		stats.Add(numQueryErrors, 1)
-		return rows, err
-	}
-
-	if xTime {
-		rows.Time = time.Since(start).Seconds()
-	}
-
-	rows.Columns = columns
-	rows.Types = xTypes
-	return rows, nil
+	return conn.Query(ctx, req, xTime)
 }
 
 // RequestStringStmts processes a request that can contain both executes and queries.
@@ -1347,95 +1017,20 @@ func (db *DB) Request(req *command.Request, xTime bool) ([]*command.ExecuteQuery
 // effective deadline is the earlier of the context's deadline and the request's timeout.
 func (db *DB) RequestWithContext(ctx context.Context, req *command.Request, xTime bool) (eqResponse []*command.ExecuteQueryResponse, retErr error) {
 	defer func() { retErr = classifyError(retErr) }()
+	// The connection applies the request timeout too, but only once it has
+	// been acquired. Applying it here also bounds the wait for the writer.
 	if req.DbTimeout > 0 {
 		var cancel context.CancelFunc
 		ctx, cancel = context.WithTimeout(ctx, time.Duration(req.DbTimeout))
 		defer cancel()
 	}
 	stats.Add(numRequests, int64(len(req.Statements)))
-	conn, err := db.rwDB.Conn(ctx)
+	conn, err := db.AcquireWriter(ctx)
 	if err != nil {
 		return nil, err
 	}
 	defer func() { preserveFatalError(&retErr, conn.Close()) }()
-
-	eq := execerQueryer(conn)
-	var tx *sql.Tx
-	if req.Transaction {
-		stats.Add(numRTx, 1)
-		tx, err = conn.BeginTx(ctx, nil)
-		if err != nil {
-			return nil, err
-		}
-		defer func() {
-			if tx != nil {
-				preserveFatalError(&retErr, tx.Rollback())
-			}
-		}()
-		eq = tx
-	}
-
-	// abortOnError indicates whether the caller should continue
-	// processing or break.
-	abortOnError := func(err error) bool {
-		err = classifyError(err)
-		if isFatalError(err) {
-			retErr = err
-		}
-		if err != nil && tx != nil {
-			preserveFatalError(&retErr, tx.Rollback())
-			tx = nil
-			return true
-		}
-		return retErr != nil
-	}
-
-	for _, stmt := range req.Statements {
-		ss := stmt.Sql
-		if ss == "" {
-			continue
-		}
-
-		ro, err := db.StmtReadOnlyWithConn(ss, conn)
-		if err != nil {
-			eqResponse = append(eqResponse, &command.ExecuteQueryResponse{
-				Result: &command.ExecuteQueryResponse_E{
-					E: newExecuteResultError(err),
-				},
-			})
-			if abortOnError(err) {
-				break
-			}
-			continue
-		}
-
-		if ro {
-			rows, opErr := db.queryStmtWithConn(ctx, stmt, xTime, eq)
-			if req.QualifyColumns && rows != nil && rows.Error == "" {
-				if qErr := qualifyRowColumns(conn, stmt.Sql, rows); qErr != nil {
-					if qErr = classifyError(qErr); isFatalError(qErr) {
-						return eqResponse, qErr
-					}
-					db.logger.Printf("qualify columns: %s", qErr.Error())
-				}
-			}
-			eqResponse = append(eqResponse, createEQQueryResponse(rows, opErr))
-			if abortOnError(opErr) {
-				break
-			}
-		} else {
-			result, opErr := db.executeStmtWithConn(ctx, stmt, xTime, eq, time.Duration(req.DbTimeout))
-			eqResponse = append(eqResponse, result)
-			if abortOnError(opErr) {
-				break
-			}
-		}
-	}
-
-	if tx != nil {
-		retErr = tx.Commit()
-	}
-	return eqResponse, retErr
+	return conn.Request(ctx, req, xTime)
 }
 
 // Backup writes a consistent snapshot of the database to the given file.
@@ -1460,7 +1055,7 @@ func (db *DB) Backup(path string, vacuum bool) (sz int64, retErr error) {
 	}
 	defer dstDB.Close()
 
-	if retErr = copyDatabase(dstDB, db); retErr != nil {
+	if retErr = dstDB.copyFrom(db); retErr != nil {
 		return
 	}
 
@@ -1484,11 +1079,28 @@ func (db *DB) Backup(path string, vacuum bool) (sz int64, retErr error) {
 // on-disk database, except the database will be placed in DELETE mode.
 // This function can be called when changes to the source database are in flight.
 func (db *DB) Copy(dstDB *DB) error {
-	if err := copyDatabase(dstDB, db); err != nil {
+	if err := dstDB.copyFrom(db); err != nil {
 		return fmt.Errorf("copy database: %s", err)
 	}
 	_, err := dstDB.ExecuteStringStmt("PRAGMA journal_mode=DELETE")
 	return err
+}
+
+// copyFrom copies the contents of src into this database, reading from one
+// of src's read-only connections and writing through this database's
+// read-write connection.
+func (db *DB) copyFrom(src *DB) error {
+	dst, err := db.AcquireWriter(context.Background())
+	if err != nil {
+		return err
+	}
+	defer dst.Close()
+	srcConn, err := src.AcquireReader(context.Background())
+	if err != nil {
+		return err
+	}
+	defer srcConn.Close()
+	return dst.CopyFrom(srcConn)
 }
 
 // Serialize returns a byte slice representation of the SQLite database. For
@@ -1497,7 +1109,7 @@ func (db *DB) Copy(dstDB *DB) error {
 // copy is made, and it is this copy that is serialized. This function must not
 // be called while any writes are happening to the database.
 func (db *DB) Serialize() ([]byte, error) {
-	if db.wal {
+	if db.cfg.WAL {
 		tmpFile, err := os.CreateTemp("", "rqlite-serialize")
 		if err != nil {
 			return nil, err
@@ -1508,7 +1120,7 @@ func (db *DB) Serialize() ([]byte, error) {
 		if _, err := db.Backup(tmpFile.Name(), false); err != nil {
 			return nil, err
 		}
-		newDB, err := Open(tmpFile.Name(), db.fkEnabled, false)
+		newDB, err := Open(tmpFile.Name(), db.FKEnabled(), false)
 		if err != nil {
 			return nil, err
 		}
@@ -1533,180 +1145,25 @@ func (db *DB) Serialize() ([]byte, error) {
 // carry is created but cannot be queried. The dump itself still loads, since
 // SQLite resolves the tables a view reads from when the view is used, not when it
 // is created.
-func (db *DB) Dump(w io.Writer, tableNames ...string) (n int, retErr error) {
-	cw := progress.NewCountingWriter(w)
-	defer func() { n = int(cw.Count()) }()
-
-	conn, err := db.roDB.Conn(context.Background())
+func (db *DB) Dump(w io.Writer, tableNames ...string) (int, error) {
+	conn, err := db.AcquireReader(context.Background())
 	if err != nil {
 		return 0, err
 	}
 	defer conn.Close()
-	ctx := context.Background()
-
-	// Keep schema and data reads on one snapshot, even if writes commit while
-	// the dump is being streamed. End the read transaction on every exit path.
-	// Because we need the transaction to span multiple queries we manually
-	// manage the transaction.
-	if _, err := conn.ExecContext(ctx, "BEGIN"); err != nil {
-		return 0, err
-	}
-	defer func() {
-		if _, err := conn.ExecContext(ctx, "ROLLBACK"); retErr == nil {
-			retErr = err
-		}
-	}()
-
-	// Convenience function to convert string query to protobuf.
-	commReq := func(query string) *command.Request {
-		return &command.Request{
-			Statements: []*command.Statement{
-				{
-					Sql: query,
-				},
-			},
-		}
-	}
-
-	if _, err := cw.Write([]byte("PRAGMA foreign_keys=OFF;\nBEGIN TRANSACTION;\n")); err != nil {
-		return 0, err
-	}
-
-	// Get the schema.
-	rows, err := db.queryWithConn(ctx, DumpTablesReq(tableNames...), false, conn)
-	if err != nil {
-		return 0, err
-	}
-	row := rows[0]
-	for _, v := range row.Values {
-		table := v.Parameters[0].GetS()
-
-		var stmt string
-
-		if table == "sqlite_sequence" {
-			stmt = `DELETE FROM "sqlite_sequence";`
-		} else if table == "sqlite_stat1" {
-			stmt = `ANALYZE "sqlite_master";`
-		} else if strings.HasPrefix(table, "sqlite_") {
-			continue
-		} else {
-			stmt = v.Parameters[2].GetS()
-		}
-
-		if _, err := cw.Write(fmt.Appendf(nil, "%s;\n", stmt)); err != nil {
-			return 0, err
-		}
-
-		tableIndent := strings.Replace(table, `"`, `""`, -1)
-		r, err := db.queryWithConn(ctx, commReq(fmt.Sprintf(`PRAGMA table_info("%s")`, tableIndent)),
-			false, conn)
-		if err != nil {
-			return 0, err
-		}
-		var columnNames []string
-		for _, vv := range r[0].Values {
-			columnNames = append(columnNames, fmt.Sprintf(`'||quote("%s")||'`, vv.Parameters[1].GetS()))
-		}
-
-		query := fmt.Sprintf(`SELECT 'INSERT INTO "%s" VALUES(%s)' FROM "%s";`,
-			tableIndent,
-			strings.Join(columnNames, ","),
-			tableIndent)
-		r, err = db.queryWithConn(ctx, commReq(query), false, conn)
-
-		if err != nil {
-			return 0, err
-		}
-		for _, x := range r[0].Values {
-			y := fmt.Sprintf("%s;\n", x.Parameters[0].GetS())
-			if _, err := cw.Write([]byte(y)); err != nil {
-				return 0, err
-			}
-		}
-	}
-
-	// Do indexes, triggers, and views.
-	objs, err := db.schemaObjectsWithConn(ctx, conn)
-	if err != nil {
-		return 0, err
-	}
-	for _, o := range objs.Filter(tableNames) {
-		if _, err := cw.Write(fmt.Appendf(nil, "%s;\n", o.sql)); err != nil {
-			return 0, err
-		}
-	}
-
-	_, err = cw.Write([]byte("COMMIT;\n"))
-	return 0, err
+	return conn.Dump(w, tableNames...)
 }
 
 // StmtReadOnly returns whether the given SQL statement is read-only.
 // As per https://www.sqlite.org/c3ref/stmt_readonly.html, this function
 // may not return 100% correct results, but should cover most scenarios.
 func (db *DB) StmtReadOnly(sql string) (bool, error) {
-	conn, err := db.roDB.Conn(context.Background())
+	conn, err := db.AcquireReader(context.Background())
 	if err != nil {
 		return false, err
 	}
 	defer conn.Close()
-	return db.StmtReadOnlyWithConn(sql, conn)
-}
-
-// StmtReadOnlyWithConn returns whether the given SQL statement is read-only, using
-// the given connection.
-func (db *DB) StmtReadOnlyWithConn(sql string, conn *sql.Conn) (bool, error) {
-	var readOnly bool
-	f := func(driverConn any) error {
-		c := driverConn.(*sqlite3.SQLiteConn)
-		drvStmt, err := c.Prepare(sql)
-		if err != nil {
-			return err
-		}
-		sqliteStmt := drvStmt.(*sqlite3.SQLiteStmt)
-		readOnly = sqliteStmt.Readonly()
-		return drvStmt.Close()
-	}
-
-	if err := conn.Raw(f); err != nil {
-		return false, err
-	}
-	return readOnly, nil
-}
-
-// schemaObjectsWithConn returns every index, trigger and view of the database, in
-// the order they were created.
-func (db *DB) schemaObjectsWithConn(ctx context.Context, conn *sql.Conn) (schemaObjects, error) {
-	req := &command.Request{
-		Statements: []*command.Statement{
-			{
-				Sql: `SELECT "name", "type", "tbl_name", "sql" FROM "sqlite_master"
-					  WHERE "sql" NOT NULL AND "type" IN ('index', 'trigger', 'view')
-					  ORDER BY "rowid"`,
-			},
-		},
-	}
-
-	rows, err := db.queryWithConn(ctx, req, false, conn)
-	if err != nil {
-		return nil, err
-	}
-	if len(rows) == 0 {
-		return nil, nil
-	}
-	if rows[0].Error != "" {
-		return nil, fmt.Errorf("failed to read schema objects: %s", rows[0].Error)
-	}
-
-	objs := make(schemaObjects, 0, len(rows[0].Values))
-	for _, v := range rows[0].Values {
-		objs = append(objs, schemaObject{
-			name:    v.Parameters[0].GetS(),
-			typ:     v.Parameters[1].GetS(),
-			tblName: v.Parameters[2].GetS(),
-			sql:     v.Parameters[3].GetS(),
-		})
-	}
-	return objs, nil
+	return conn.StmtReadOnly(sql)
 }
 
 func (db *DB) pragmas() (map[string]any, error) {
@@ -1718,78 +1175,29 @@ func (db *DB) pragmas() (map[string]any, error) {
 		"busy_timeout",
 	}
 
-	// readPragmas acquires a single connection from the given pool and reads
-	// all requested pragmas on that one connection, avoiding a separate
-	// connection acquisition per pragma.
-	readPragmas := func(sqlDB *sql.DB) (map[string]string, error) {
-		if sqlDB == nil {
-			return nil, errors.New("database connection is nil")
-		}
-		conn, err := sqlDB.Conn(context.Background())
-		if err != nil {
-			return nil, err
-		}
-		defer conn.Close()
-		m := make(map[string]string, len(pragmaNames))
-		for _, p := range pragmaNames {
-			var s string
-			if err := conn.QueryRowContext(context.Background(), fmt.Sprintf("PRAGMA %s", p)).Scan(&s); err != nil {
-				return nil, err
-			}
-			m[p] = s
-		}
-		return m, nil
+	rw, err := db.writer.pragmas(pragmaNames)
+	if err != nil {
+		return nil, err
 	}
-
-	connsMap := make(map[string]any)
-	for k, sqlDB := range map[string]*sql.DB{"rw": db.rwDB, "ro": db.roDB} {
-		m, err := readPragmas(sqlDB)
-		if err != nil {
-			return nil, err
-		}
-		connsMap[k] = m
+	ro, err := db.readers.pragmas(pragmaNames)
+	if err != nil {
+		return nil, err
 	}
-	return connsMap, nil
+	return map[string]any{"rw": rw, "ro": ro}, nil
 }
 
 // txStatus returns whether there is an active transaction on each database
 // connection.
 func (db *DB) txStatus() (map[string]any, error) {
-	// checkTx acquires a single connection from the given pool, checks whether
-	// it is in auto-commit mode (i.e. no active transaction), and immediately
-	// releases the connection before returning.
-	checkTx := func(sqlDB *sql.DB) (bool, error) {
-		if sqlDB == nil {
-			return false, errors.New("database connection is nil")
-		}
-		conn, err := sqlDB.Conn(context.Background())
-		if err != nil {
-			return false, err
-		}
-		defer conn.Close()
-		var autoCommit bool
-		if err := conn.Raw(func(driverConn any) error {
-			sqliteConn, ok := driverConn.(*sqlite3.SQLiteConn)
-			if !ok {
-				return fmt.Errorf("unexpected driver connection type: %T", driverConn)
-			}
-			autoCommit = sqliteConn.AutoCommit()
-			return nil
-		}); err != nil {
-			return false, err
-		}
-		return autoCommit, nil
+	rw, err := db.writer.inTransaction()
+	if err != nil {
+		return nil, err
 	}
-
-	txStatusMap := make(map[string]any)
-	for k, sqlDB := range map[string]*sql.DB{"rw": db.rwDB, "ro": db.roDB} {
-		autoCommit, err := checkTx(sqlDB)
-		if err != nil {
-			return nil, err
-		}
-		txStatusMap[k] = !autoCommit
+	ro, err := db.readers.inTransaction()
+	if err != nil {
+		return nil, err
 	}
-	return txStatusMap, nil
+	return map[string]any{"rw": rw, "ro": ro}, nil
 }
 
 func (db *DB) memStats() (map[string]int64, error) {
@@ -1863,42 +1271,6 @@ func (s schemaObjects) Filter(tables []string) schemaObjects {
 	return filtered
 }
 
-// qualifyRowColumns prefixes each column name in rows with its originating table name.
-func qualifyRowColumns(conn *sql.Conn, query string, rows *command.QueryRows) error {
-	if len(rows.Columns) == 0 {
-		return nil
-	}
-
-	var tableNames []string
-	err := conn.Raw(func(driverConn any) error {
-		sqliteConn := driverConn.(*sqlite3.SQLiteConn)
-		stmt, err := sqliteConn.Prepare(query)
-		if err != nil {
-			return err
-		}
-		sqliteStmt := stmt.(*sqlite3.SQLiteStmt)
-		tableNames = make([]string, len(rows.Columns))
-		for i := range rows.Columns {
-			tableNames[i] = sqliteStmt.ColumnTableName(i)
-		}
-		return stmt.Close()
-	})
-	if err != nil {
-		return err
-	}
-	for i, col := range rows.Columns {
-		if tableNames[i] != "" {
-			rows.Columns[i] = tableNames[i] + "." + col
-		}
-	}
-	return nil
-}
-
-func checkpointDB(rwDB *sql.DB, mode CheckpointMode) (ok, pages, moved int, err error) {
-	err = rwDB.QueryRow(checkpointPRAGMAs[mode]).Scan(&ok, &pages, &moved)
-	return
-}
-
 func createEQQueryResponse(rows *command.QueryRows, err error) *command.ExecuteQueryResponse {
 	if err != nil {
 		return &command.ExecuteQueryResponse{
@@ -1912,54 +1284,6 @@ func createEQQueryResponse(rows *command.QueryRows, err error) *command.ExecuteQ
 			Q: rows,
 		},
 	}
-}
-
-func copyDatabase(dst *DB, src *DB) error {
-	dstConn, err := dst.rwDB.Conn(context.Background())
-	if err != nil {
-		return err
-	}
-	defer dstConn.Close()
-	srcConn, err := src.roDB.Conn(context.Background())
-	if err != nil {
-		return err
-	}
-	defer srcConn.Close()
-
-	var dstSQLiteConn *sqlite3.SQLiteConn
-
-	bf := func(driverConn any) error {
-		srcSQLiteConn := driverConn.(*sqlite3.SQLiteConn)
-		return copyDatabaseConnection(dstSQLiteConn, srcSQLiteConn)
-	}
-	return dstConn.Raw(
-		func(driverConn any) error {
-			dstSQLiteConn = driverConn.(*sqlite3.SQLiteConn)
-			return srcConn.Raw(bf)
-		})
-}
-
-func copyDatabaseConnection(dst, src *sqlite3.SQLiteConn) error {
-	bk, err := dst.Backup("main", src, "main")
-	if err != nil {
-		return err
-	}
-
-	for {
-		done, err := bk.Step(-1)
-		if err != nil {
-			stats.Add(numBackupStepErrors, 1)
-			_ = bk.Finish() // Return the outer error
-			return err
-		}
-		if done {
-			stats.Add(numBackupStepDones, 1)
-			break
-		}
-		stats.Add(numBackupSleeps, 1)
-		time.Sleep(bkDelay)
-	}
-	return bk.Finish()
 }
 
 // parametersToValues maps values in the proto params to SQL driver values.

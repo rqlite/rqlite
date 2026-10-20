@@ -55,7 +55,7 @@ func Test_DBErrors_FullStopsBatch(t *testing.T) {
 						// Set the max page count to the current page count, which will prevent the database
 						// from growing, and trigger the SQLITE_FULL error.
 						var pages int
-						if err := db.rwDB.QueryRow("PRAGMA page_count").Scan(&pages); err != nil {
+						if err := db.writer.sqlDB.QueryRow("PRAGMA page_count").Scan(&pages); err != nil {
 							t.Fatal(err)
 						}
 						mustExecute(db, fmt.Sprintf("PRAGMA max_page_count=%d", pages))
@@ -86,7 +86,7 @@ func Test_DBErrors_FullStopsBatch(t *testing.T) {
 							want = 0
 						}
 						var got int
-						if err := db.roDB.QueryRow("SELECT value FROM marker").Scan(&got); err != nil || got != want {
+						if err := db.readers.sqlDB.QueryRow("SELECT value FROM marker").Scan(&got); err != nil || got != want {
 							t.Fatalf("marker=%d, want %d; error=%v", got, want, err)
 						}
 					})
@@ -143,7 +143,7 @@ func Test_DBErrors_Prepare(t *testing.T) {
 	// allocate for that program, not the number executed at runtime. Exceeding
 	// the limit returns SQLITE_NOMEM. Setting it to one makes even our simple
 	// statements fail preparation without exhausting actual memory.
-	for _, pool := range []*sql.DB{db.rwDB, db.roDB} {
+	for _, pool := range []*sql.DB{db.writer.sqlDB, db.readers.sqlDB} {
 		conn, err := pool.Conn(context.Background())
 		if err != nil {
 			t.Fatal(err)
@@ -216,7 +216,7 @@ func Test_DBErrors_DriverFailures(t *testing.T) {
 				}
 				sqldb := sql.OpenDB(conn)
 				defer sqldb.Close()
-				db := &DB{rwDB: sqldb, roDB: sqldb}
+				db := &DB{writer: &writer{pool{sqlDB: sqldb}}, readers: &readerPool{pool{sqlDB: sqldb}}}
 				req := &command.Request{Transaction: stage == "begin" || stage == "commit" || stage == "rollback"}
 				if api != "request" {
 					req.Statements = []*command.Statement{
@@ -256,7 +256,7 @@ func Test_DBErrors_ExplicitRollback(t *testing.T) {
 	}
 	sqldb := sql.OpenDB(conn)
 	defer sqldb.Close()
-	db := &DB{rwDB: sqldb}
+	db := &DB{writer: &writer{pool{sqlDB: sqldb}}}
 	_, err := db.Execute(&command.Request{RollbackOnError: true, Statements: []*command.Statement{
 		{Sql: "first"}, {Sql: "second"},
 	}}, false)
@@ -276,7 +276,7 @@ func Test_DBErrors_QueryErrors(t *testing.T) {
 			sqldb := sql.OpenDB(conn)
 			defer sqldb.Close()
 
-			db := &DB{rwDB: sqldb, roDB: sqldb}
+			db := &DB{writer: &writer{pool{sqlDB: sqldb}}, readers: &readerPool{pool{sqlDB: sqldb}}}
 
 			req := &command.Request{Statements: []*command.Statement{
 				{Sql: "PRAGMA journal_mode=DELETE"}, {Sql: "SELECT 1"},
@@ -320,7 +320,7 @@ func Test_DBErrors_QueryDriverFailures(t *testing.T) {
 			}
 			sqldb := sql.OpenDB(conn)
 			defer sqldb.Close()
-			db := &DB{roDB: sqldb}
+			db := &DB{readers: &readerPool{pool{sqlDB: sqldb}}}
 			rows, err := db.Query(&command.Request{
 				Transaction: stage == "begin" || stage == "commit",
 				Statements:  []*command.Statement{{Sql: "SELECT 1"}, {Sql: "SELECT 2"}},

@@ -1,6 +1,7 @@
 package db
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"math/rand/v2"
@@ -9,6 +10,7 @@ import (
 	"slices"
 	"strings"
 	"testing"
+	"time"
 
 	command "github.com/rqlite/rqlite/v10/command/proto"
 
@@ -2137,6 +2139,108 @@ func Test_DB_SimpleRequestTx(t *testing.T) {
 	}
 	if exp, got := `[{"last_insert_id":2,"rows_affected":1},{"error":"UNIQUE constraint failed: foo.id","error_v2":{"message":"UNIQUE constraint failed: foo.id","sqlite":{"code":19,"extended_code":1555}}}]`, asJSON(r); exp != got {
 		t.Fatalf("unexpected results for request\nexp: %s\ngot: %s", exp, got)
+	}
+}
+
+// Test_DB_RequestTxReadsOwnWrites tests that a query inside a transactional
+// request sees the writes that came before it in the same request, which is
+// only true because every statement in a request runs on the same connection.
+func Test_DB_RequestTxReadsOwnWrites(t *testing.T) {
+	db, path := mustCreateOnDiskDatabaseWAL()
+	defer fsutil.Remove(path)
+	defer db.Close()
+
+	mustExecute(db, `CREATE TABLE foo (id INTEGER NOT NULL PRIMARY KEY, name TEXT)`)
+
+	request := &command.Request{
+		Statements: []*command.Statement{
+			{
+				Sql: `INSERT INTO foo(id, name) VALUES(1, "fiona")`,
+			},
+			{
+				Sql: `SELECT * FROM foo`,
+			},
+		},
+		Transaction: true,
+	}
+	r, err := db.Request(request, false)
+	if err != nil {
+		t.Fatalf("failed to make request: %s", err.Error())
+	}
+	if exp, got := `[{"last_insert_id":1,"rows_affected":1},{"columns":["id","name"],"types":["integer","text"],"values":[[1,"fiona"]]}]`, asJSON(r); exp != got {
+		t.Fatalf("unexpected results for request\nexp: %s\ngot: %s", exp, got)
+	}
+}
+
+// Test_AcquireWriter_Exclusive tests that a held writer connection keeps
+// every other write waiting until it is released, while reads carry on,
+// since reads come from the reader pool.
+func Test_AcquireWriter_Exclusive(t *testing.T) {
+	db, path := mustCreateOnDiskDatabaseWAL()
+	defer fsutil.Remove(path)
+	defer db.Close()
+
+	mustExecute(db, `CREATE TABLE foo (id INTEGER NOT NULL PRIMARY KEY, name TEXT)`)
+
+	ctx := context.Background()
+	conn, err := db.AcquireWriter(ctx)
+	if err != nil {
+		t.Fatalf("failed to acquire writer: %s", err)
+	}
+
+	// Open a transaction on the held connection and write inside it.
+	if _, err := conn.Execute(ctx, &command.Request{Statements: []*command.Statement{
+		{Sql: "BEGIN"},
+		{Sql: `INSERT INTO foo(name) VALUES('fiona')`},
+	}}, false); err != nil {
+		t.Fatalf("failed to write on held writer: %s", err)
+	}
+
+	// A query does not need the writer, so it completes, and it does not
+	// see the uncommitted write.
+	rows, err := db.QueryStringStmt("SELECT COUNT(*) FROM foo")
+	if err != nil {
+		t.Fatalf("query failed while writer held: %s", err)
+	}
+	if exp, got := `[{"columns":["COUNT(*)"],"types":["integer"],"values":[[0]]}]`, asJSON(rows); exp != got {
+		t.Fatalf("unexpected results for query, expected %s, got %s", exp, got)
+	}
+
+	// A write needs the writer, so it waits until the connection is released.
+	done := make(chan error, 1)
+	go func() {
+		_, err := db.ExecuteStringStmt(`INSERT INTO foo(name) VALUES('declan')`)
+		done <- err
+	}()
+	select {
+	case <-done:
+		t.Fatalf("execute completed while writer held")
+	case <-time.After(250 * time.Millisecond):
+	}
+
+	if _, err := conn.Execute(ctx, &command.Request{Statements: []*command.Statement{
+		{Sql: "COMMIT"},
+	}}, false); err != nil {
+		t.Fatalf("failed to commit on held writer: %s", err)
+	}
+	if err := conn.Close(); err != nil {
+		t.Fatalf("failed to release writer: %s", err)
+	}
+	select {
+	case err := <-done:
+		if err != nil {
+			t.Fatalf("execute failed after writer released: %s", err)
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatalf("execute did not complete after writer released")
+	}
+
+	rows, err = db.QueryStringStmt("SELECT COUNT(*) FROM foo")
+	if err != nil {
+		t.Fatalf("query failed: %s", err)
+	}
+	if exp, got := `[{"columns":["COUNT(*)"],"types":["integer"],"values":[[2]]}]`, asJSON(rows); exp != got {
+		t.Fatalf("unexpected results for query, expected %s, got %s", exp, got)
 	}
 }
 

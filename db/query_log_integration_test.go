@@ -1,31 +1,19 @@
 package db
 
 import (
-	"fmt"
-	"sync/atomic"
 	"testing"
 	"time"
 
 	"github.com/rqlite/rqlite/v10/db/querylog"
 )
 
-var driverSeq atomic.Int64
-
-func testDriverName() string {
-	return fmt.Sprintf("sqlite3-qlog-test-%d", driverSeq.Add(1))
-}
-
 // Test_QueryLog_Integration_Basic verifies that the driver correctly wires
 // query logging without interfering with normal database operations.
 func Test_QueryLog_Integration_Basic(t *testing.T) {
 	ql := querylog.New(querylog.DefaultConfig())
-	drv := NewDriverFromConfig(testDriverName(), &DriverConfig{
-		ChkOnClose:  CnkOnCloseModeDisabled,
-		QueryLogger: ql,
-	})
 	dbPath := t.TempDir() + "/test.db"
 
-	db, err := OpenWithDriver(drv, dbPath, false, true)
+	db, err := OpenWithConfig(dbPath, NewConfig(ConnConfig{QueryLogger: ql}, true))
 	if err != nil {
 		t.Fatalf("failed to open database: %s", err)
 	}
@@ -52,13 +40,9 @@ func Test_QueryLog_Integration_ZeroThreshold(t *testing.T) {
 	zero := time.Duration(0)
 	cfg := &querylog.Config{MinDuration: &zero}
 	ql := querylog.New(cfg)
-	drv := NewDriverFromConfig(testDriverName(), &DriverConfig{
-		ChkOnClose:  CnkOnCloseModeDisabled,
-		QueryLogger: ql,
-	})
 	dbPath := t.TempDir() + "/test.db"
 
-	db, err := OpenWithDriver(drv, dbPath, false, true)
+	db, err := OpenWithConfig(dbPath, NewConfig(ConnConfig{QueryLogger: ql}, true))
 	if err != nil {
 		t.Fatalf("failed to open database: %s", err)
 	}
@@ -83,13 +67,9 @@ func Test_QueryLog_Integration_ZeroThreshold(t *testing.T) {
 // interfere with bulk statement requests.
 func Test_QueryLog_Integration_BulkRequest(t *testing.T) {
 	ql := querylog.New(querylog.DefaultConfig())
-	drv := NewDriverFromConfig(testDriverName(), &DriverConfig{
-		ChkOnClose:  CnkOnCloseModeDisabled,
-		QueryLogger: ql,
-	})
 	dbPath := t.TempDir() + "/test.db"
 
-	db, err := OpenWithDriver(drv, dbPath, false, true)
+	db, err := OpenWithConfig(dbPath, NewConfig(ConnConfig{QueryLogger: ql}, true))
 	if err != nil {
 		t.Fatalf("failed to open database: %s", err)
 	}
@@ -119,13 +99,9 @@ func Test_QueryLog_Integration_BulkRequest(t *testing.T) {
 // does not interfere when a statement causes a constraint violation.
 func Test_QueryLog_Integration_ConstraintViolation(t *testing.T) {
 	ql := querylog.New(querylog.DefaultConfig())
-	drv := NewDriverFromConfig(testDriverName(), &DriverConfig{
-		ChkOnClose:  CnkOnCloseModeDisabled,
-		QueryLogger: ql,
-	})
 	dbPath := t.TempDir() + "/test.db"
 
-	db, err := OpenWithDriver(drv, dbPath, false, true)
+	db, err := OpenWithConfig(dbPath, NewConfig(ConnConfig{QueryLogger: ql}, true))
 	if err != nil {
 		t.Fatalf("failed to open database: %s", err)
 	}
@@ -145,15 +121,11 @@ func Test_QueryLog_Integration_ConstraintViolation(t *testing.T) {
 }
 
 // Test_QueryLog_Integration_NilQueryLogger verifies that a nil QueryLogger
-// in DriverConfig is handled gracefully (no trace hook installed).
+// in ConnConfig is handled gracefully (no trace hook installed).
 func Test_QueryLog_Integration_NilQueryLogger(t *testing.T) {
-	drv := NewDriverFromConfig(testDriverName(), &DriverConfig{
-		ChkOnClose:  CnkOnCloseModeDisabled,
-		QueryLogger: nil,
-	})
 	dbPath := t.TempDir() + "/test.db"
 
-	db, err := OpenWithDriver(drv, dbPath, false, true)
+	db, err := OpenWithConfig(dbPath, NewConfig(ConnConfig{QueryLogger: nil}, true))
 	if err != nil {
 		t.Fatalf("failed to open database: %s", err)
 	}
