@@ -18,6 +18,7 @@ import (
 
 	"github.com/rqlite/rqlite/v10/auth"
 	command "github.com/rqlite/rqlite/v10/command/proto"
+	"github.com/rqlite/rqlite/v10/internal/fsutil"
 	"github.com/rqlite/rqlite/v10/internal/rtls"
 	"github.com/rqlite/rqlite/v10/proxy"
 	"github.com/rqlite/rqlite/v10/store"
@@ -367,7 +368,7 @@ func unixSocketPath(t *testing.T) string {
 	if err != nil {
 		t.Fatal(err)
 	}
-	t.Cleanup(func() { os.RemoveAll(dir) })
+	t.Cleanup(func() { fsutil.RemoveAll(dir) })
 	return filepath.Join(dir, "http.sock")
 }
 
