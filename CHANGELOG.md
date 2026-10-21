@@ -173,7 +173,7 @@ This release moves the build process for binaries to Go 1.27.
 - [PR #2787](https://github.com/rqlite/rqlite/pull/2787): Clean up cancelled snapshots.
 - [PR #2788](https://github.com/rqlite/rqlite/pull/2788): Reject incomplete snapshot headers.
 - [PR #2789](https://github.com/rqlite/rqlite/pull/2789): Validate restore database header.
-- [PR #2790](https://github.com/rqlite/rqlite/pull/2790): Only reap a sole fullsnapshot if it has zero WALs.
+- [PR #2790](https://github.com/rqlite/rqlite/pull/2790): Only reap a sole full snapshot if it has zero WALs.
 - [PR #2790](https://github.com/rqlite/rqlite/pull/2793): Keep database dumps consistent during writes to the database.
 - [PR #2792](https://github.com/rqlite/rqlite/pull/2792): Roll back DB Requests on statement-prepare errors.
 
