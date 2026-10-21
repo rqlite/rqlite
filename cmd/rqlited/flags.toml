@@ -43,6 +43,19 @@ This is the interface rqlite will listen on for API requests. 0.0.0.0 is an acce
 default = "localhost:4001"
 
 [[flags]]
+name = "HTTPUnixSocket"
+cli = "http-unix-socket"
+section = "HTTP API"
+type = "string"
+short_help = "Absolute path to an additional Unix socket serving the HTTP API. If not set, no socket is created"
+long_help = """
+Serves the same HTTP API over a local Unix domain socket, in addition to the TCP listener. The socket always uses plaintext HTTP, even when HTTPS is enabled on TCP. Authentication and authorization configured via -auth still apply. The -http-verify-client and -http-verify-common-name options apply only to HTTPS connections on TCP, not to the socket. Local clients with socket access do not need a client certificate; restrict filesystem access and configure -auth as needed.
+The parent directory must already exist. Socket permissions are determined by the process umask; use a directory with restricted access to control which local users can connect. The socket is removed on graceful shutdown. Existing paths, including stale sockets left by an unclean shutdown, are never overwritten. Verify that no process is using a stale socket before removing it manually.
+The socket path is not advertised to the cluster and does not change Raft, discovery, or request forwarding. Clients must be configured with the local path. For example: curl --unix-socket /run/rqlite/rqlite.sock 'http://localhost/db/query?level=none&amp;q=SELECT%201'. Avoid requesting redirect mode with socket-only clients; normal server-side forwarding is unchanged.
+"""
+default = ""
+
+[[flags]]
 name = "HTTPAdv"
 cli = "http-adv-addr"
 section = "HTTP API"
