@@ -1202,15 +1202,19 @@ func (s *Service) handleLeader(w http.ResponseWriter, r *http.Request, qp QueryP
 
 	switch r.Method {
 	case "GET":
-		// Return leader information
+		// Return leader information. Errors are returned as a JSON body
+		// so callers can always parse the response.
 		laddr := ""
 		ldr, err := s.store.Leader()
 		if err != nil {
 			if err == store.ErrLeaderNotFound || err == store.ErrNotOpen {
-				http.Error(w, store.ErrLeaderNotFound.Error(), http.StatusServiceUnavailable)
+				stats.Add(numLeaderNotFound, 1)
+				w.WriteHeader(http.StatusServiceUnavailable)
+				err = store.ErrLeaderNotFound
 			} else {
-				http.Error(w, fmt.Sprintf("leader: %s", err.Error()), http.StatusInternalServerError)
+				w.WriteHeader(http.StatusInternalServerError)
 			}
+			s.writeResponse(w, qp, &Response{Error: err.Error()})
 			return
 		}
 		if ldr != nil {

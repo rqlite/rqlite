@@ -1,3 +1,7 @@
+## v10.6.4 (unreleased)
+### Implementation changes and bug fixes
+- [PR #2977](https://github.com/rqlite/rqlite/pull/2977): `GET /leader` returns a JSON error body when there is no leader. Fixes issue [#2974](https://github.com/rqlite/rqlite/issues/2974).
+
 ## v10.6.3 (October 20th 2026)
 ### Implementation changes and bug fixes
 - [PR #2968](https://github.com/rqlite/rqlite/pull/2968): Node probes honor request context and commit exactly one result.
