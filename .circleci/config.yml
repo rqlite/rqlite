@@ -182,6 +182,10 @@ jobs:
           command: python3 system_test/e2e/single_node.py
           environment:
             RQLITED_PATH: /home/circleci/go/bin/rqlited
+      - run:
+          command: python3 system_test/e2e/unix_socket.py
+          environment:
+            RQLITED_PATH: /home/circleci/go/bin/rqlited
     resource_class: large
 
   end_to_end_upgrade:

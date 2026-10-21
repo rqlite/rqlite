@@ -88,6 +88,9 @@ func (c *Config) Validate() error {
 	if c.NodeVerifyCommonName != "" && !c.NodeVerifyClient {
 		return errors.New("-node-verify-common-name requires -node-verify-client")
 	}
+	if c.HTTPUnixSocket != "" && !filepath.IsAbs(c.HTTPUnixSocket) {
+		return errors.New("-http-unix-socket must be an absolute filesystem path")
+	}
 
 	if c.RaftAddr == c.HTTPAddr {
 		return errors.New("HTTP and Raft addresses must differ")

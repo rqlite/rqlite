@@ -515,6 +515,7 @@ func startHTTPService(cfg *Config, str *store.Store, cltr *cluster.Client, credS
 		cs = credStr
 	}
 	s := httpd.New(cfg.HTTPAddr, str, cltr, pxy, cs)
+	s.UnixSocket = cfg.HTTPUnixSocket
 
 	s.CACertFile = cfg.HTTPx509CACert
 	s.CertFile = cfg.HTTPx509Cert

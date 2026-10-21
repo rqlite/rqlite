@@ -102,7 +102,7 @@ class Node(object):
                node_verify_server_name=None, node_verify_common_name=None,
                node_no_verify=False, node_verify_client=False,
                auth=None, auto_backup=None, auto_restore=None,
-               cdc_config=None, dir=None):
+               cdc_config=None, dir=None, http_unix_socket=None):
     
     if api_addr is None:
       api_addr = random_addr()
@@ -134,6 +134,7 @@ class Node(object):
     self.http_no_verify = http_no_verify
     self.http_verify_client = http_verify_client
     self.http_verify_common_name = http_verify_common_name
+    self.http_unix_socket = http_unix_socket
     self.node_cert = node_cert
     self.node_key = node_key
     self.node_no_verify = node_no_verify
@@ -214,6 +215,8 @@ class Node(object):
       command += ['-http-verify-client']
     if self.http_verify_common_name is not None:
       command += ['-http-verify-common-name', self.http_verify_common_name]
+    if self.http_unix_socket is not None:
+      command += ['-http-unix-socket', self.http_unix_socket]
     if self.node_cert is not None:
       command += ['-node-cert', self.node_cert, '-node-key', self.node_key]
     if self.node_ca_cert is not None:

@@ -1,4 +1,7 @@
 ## v10.6.4 (unreleased)
+### New features
+- Support serving the HTTP API over an optional local Unix socket via `-http-unix-socket`. See issue [#1737](https://github.com/rqlite/rqlite/issues/1737).
+
 ### Implementation changes and bug fixes
 - [PR #2977](https://github.com/rqlite/rqlite/pull/2977): `GET /leader` returns a JSON error body when there is no leader. Fixes issue [#2974](https://github.com/rqlite/rqlite/issues/2974).
 

@@ -15,6 +15,7 @@ import (
 	"net/http"
 	"net/http/pprof"
 	"os"
+	"path/filepath"
 	"runtime"
 	"strings"
 	"sync"
@@ -276,6 +277,8 @@ type Service struct {
 	closeCh    chan struct{}
 	addr       string       // Bind address of the HTTP service.
 	ln         net.Listener // Service listener
+	unixLn     net.Listener // Optional Unix socket listener
+	UnixSocket string       // UnixSocket is an optional absolute filesystem path serving the same HTTP API.
 
 	uiHandler http.Handler
 
@@ -343,6 +346,10 @@ func New(addr string, store Store, cluster Cluster, pxy *proxy.Proxy, credential
 
 // Start starts the service.
 func (s *Service) Start() error {
+	if s.UnixSocket != "" && !filepath.IsAbs(s.UnixSocket) {
+		return errors.New("HTTP Unix socket must be an absolute filesystem path")
+	}
+
 	s.httpServer = http.Server{
 		Handler: s,
 	}
@@ -395,6 +402,15 @@ func (s *Service) Start() error {
 	}
 	s.ln = ln
 
+	if s.UnixSocket != "" {
+		// Do not unlink an existing path: it may belong to another live service.
+		s.unixLn, err = net.Listen("unix", s.UnixSocket)
+		if err != nil {
+			s.ln.Close()
+			return fmt.Errorf("failed to listen on HTTP Unix socket %q: %w", s.UnixSocket, err)
+		}
+	}
+
 	s.closeCh = make(chan struct{})
 	s.queueDone = make(chan struct{})
 
@@ -403,13 +419,17 @@ func (s *Service) Start() error {
 	s.logger.Printf("execute queue processing started with capacity %d, batch size %d, timeout %s",
 		s.DefaultQueueCap, s.DefaultQueueBatchSz, s.DefaultQueueTimeout.String())
 
-	go func() {
-		err := s.httpServer.Serve(s.ln)
-		if err != nil {
-			s.logger.Printf("HTTP service on %s stopped: %s", s.ln.Addr().String(), err.Error())
+	serve := func(ln net.Listener) {
+		if err := s.httpServer.Serve(ln); err != nil && !errors.Is(err, http.ErrServerClosed) {
+			s.logger.Printf("HTTP service on %s stopped: %s", ln.Addr().String(), err.Error())
 		}
-	}()
+	}
+	go serve(s.ln)
 	s.logger.Println("service listening on", s.Addr())
+	if s.unixLn != nil {
+		go serve(s.unixLn)
+		s.logger.Println("HTTP service listening on Unix socket", s.UnixSocket)
+	}
 
 	return nil
 }
@@ -419,6 +439,11 @@ func (s *Service) Close() {
 	s.logger.Println("closing HTTP service on", s.ln.Addr().String())
 	if err := s.httpServer.Close(); err != nil {
 		s.logger.Println("HTTP service close error:", err.Error())
+	}
+	// Close listeners explicitly too, in case Serve has not registered them yet.
+	s.ln.Close()
+	if s.unixLn != nil {
+		s.unixLn.Close()
 	}
 
 	s.stmtQueue.Close()
