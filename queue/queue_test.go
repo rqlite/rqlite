@@ -1,6 +1,7 @@
 package queue
 
 import (
+	"errors"
 	"reflect"
 	"testing"
 	"time"
@@ -119,6 +120,102 @@ func Test_QueueClosedWrite(t *testing.T) {
 	q.Close()
 	if _, err := q.Write(testStmtsFoo, nil); err == nil {
 		t.Fatalf("failed to detect closed queue")
+	}
+}
+
+// Test_QueueCloseUnreadConsumer ensures that Close returns even when the
+// consumer of C never reads, and the batching goroutine is blocked
+// handing off a batch.
+func Test_QueueCloseUnreadConsumer(t *testing.T) {
+	q := New[*command.Statement](1, 1, 0)
+
+	// First batch is buffered on C, second batch blocks the batcher
+	// handing it off, since nothing reads C.
+	for range 2 {
+		if _, err := q.Write(testStmtsFoo, nil); err != nil {
+			t.Fatalf("failed to write: %s", err.Error())
+		}
+	}
+	waitUntil(t, func() bool { return len(q.batchCh) == 0 })
+
+	closed := make(chan struct{})
+	go func() {
+		q.Close()
+		close(closed)
+	}()
+	select {
+	case <-closed:
+	case <-time.After(2 * time.Second):
+		t.Fatalf("timed out waiting for Close with unread consumer")
+	}
+}
+
+// Test_QueueCloseBlockedWrite ensures that a Write blocked on a full
+// queue returns ErrClosed when the queue is closed.
+func Test_QueueCloseBlockedWrite(t *testing.T) {
+	q := New[*command.Statement](1, 1, 0)
+
+	// Fill the batcher's output, the batcher's handoff, and the
+	// queue's own buffer. Nothing reads C so none of it drains.
+	for range 3 {
+		if _, err := q.Write(testStmtsFoo, nil); err != nil {
+			t.Fatalf("failed to write: %s", err.Error())
+		}
+	}
+	waitUntil(t, func() bool { return len(q.batchCh) == 1 })
+
+	writeErr := make(chan error)
+	go func() {
+		_, err := q.Write(testStmtsBar, nil)
+		writeErr <- err
+	}()
+	select {
+	case err := <-writeErr:
+		t.Fatalf("write on full queue returned before close: %v", err)
+	case <-time.After(100 * time.Millisecond):
+	}
+
+	q.Close()
+	select {
+	case err := <-writeErr:
+		if !errors.Is(err, ErrClosed) {
+			t.Fatalf("expected ErrClosed from blocked write, got %v", err)
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatalf("timed out waiting for blocked write to return after close")
+	}
+}
+
+// Test_QueueCloseBlockedFlush ensures that a Flush blocked on a full
+// queue returns ErrClosed when the queue is closed.
+func Test_QueueCloseBlockedFlush(t *testing.T) {
+	q := New[*command.Statement](1, 1, 0)
+
+	for range 3 {
+		if _, err := q.Write(testStmtsFoo, nil); err != nil {
+			t.Fatalf("failed to write: %s", err.Error())
+		}
+	}
+	waitUntil(t, func() bool { return len(q.batchCh) == 1 })
+
+	flushErr := make(chan error)
+	go func() {
+		flushErr <- q.Flush()
+	}()
+	select {
+	case err := <-flushErr:
+		t.Fatalf("flush on full queue returned before close: %v", err)
+	case <-time.After(100 * time.Millisecond):
+	}
+
+	q.Close()
+	select {
+	case err := <-flushErr:
+		if !errors.Is(err, ErrClosed) {
+			t.Fatalf("expected ErrClosed from blocked flush, got %v", err)
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatalf("timed out waiting for blocked flush to return after close")
 	}
 }
 
@@ -534,5 +631,18 @@ func Test_QueueOrdering(t *testing.T) {
 	case <-done:
 	case <-time.After(testTimeout):
 		t.Fatalf("timed out waiting for all indexes")
+	}
+}
+
+// waitUntil waits until fn returns true, failing the test if that
+// takes too long.
+func waitUntil(t *testing.T, fn func() bool) {
+	t.Helper()
+	deadline := time.Now().Add(2 * time.Second)
+	for !fn() {
+		if time.Now().After(deadline) {
+			t.Fatalf("timed out waiting for condition")
+		}
+		time.Sleep(5 * time.Millisecond)
 	}
 }
