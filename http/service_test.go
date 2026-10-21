@@ -1650,6 +1650,39 @@ func Test_Leader_GET(t *testing.T) {
 	}
 }
 
+func Test_Leader_GET_NoLeader(t *testing.T) {
+	store := &MockStore{}
+	cluster := &mockClusterService{}
+	cred := &mockCredentialStore{HasPermOK: true}
+
+	s := New("127.0.0.1:4001", store, cluster, proxy.New(store, cluster), cred)
+
+	for _, url := range []string{"/leader", "/leader?pretty"} {
+		req, err := http.NewRequest("GET", url, nil)
+		if err != nil {
+			t.Fatalf("failed to create GET request: %s", err.Error())
+		}
+		rr := httptest.NewRecorder()
+		s.ServeHTTP(rr, req)
+
+		if rr.Code != http.StatusServiceUnavailable {
+			t.Fatalf("%s: expected 503, got %d", url, rr.Code)
+		}
+		if ct := rr.Header().Get("Content-Type"); ct != "application/json; charset=utf-8" {
+			t.Fatalf("%s: unexpected Content-Type: %s", url, ct)
+		}
+
+		// The body must be JSON carrying the error, so clients can parse it.
+		var resp Response
+		if err := json.Unmarshal(rr.Body.Bytes(), &resp); err != nil {
+			t.Fatalf("%s: failed to unmarshal response body %q: %s", url, rr.Body.String(), err.Error())
+		}
+		if resp.Error != "leader not found" {
+			t.Fatalf("%s: unexpected error in response: %q", url, resp.Error)
+		}
+	}
+}
+
 func Test_DBTimeoutQueryParam(t *testing.T) {
 	tests := []struct {
 		name    string
