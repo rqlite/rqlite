@@ -1129,6 +1129,90 @@ func Test_QueuedExecuteNoLeader(t *testing.T) {
 	}
 }
 
+// Test_CloseBlockedQueue ensures that Close returns promptly even when the
+// queued-write processor is stuck retrying a failing write, the queue's
+// batcher is blocked handing off the next batch, and a client is blocked
+// waiting for admission to the full queue.
+func Test_CloseBlockedQueue(t *testing.T) {
+	// The executor fails the first attempt immediately, so the processor
+	// enters its retry loop, and then behaves like an unreachable leader:
+	// every later attempt hangs until the request is canceled.
+	var numExecutes atomic.Int64
+	m := &MockStore{leaderAddr: "127.0.0.1:4002"}
+	m.executeFn = func(ctx context.Context, er *command.ExecuteRequest) ([]*command.ExecuteQueryResponse, uint64, error) {
+		if numExecutes.Add(1) == 1 {
+			return nil, 0, errors.New("execute failed")
+		}
+		<-ctx.Done()
+		return nil, 0, ctx.Err()
+	}
+	c := &mockClusterService{}
+	s := New("127.0.0.1:0", m, c, proxy.New(m, c), nil)
+	s.DefaultQueueCap = 1
+	s.DefaultQueueBatchSz = 1
+	s.SetQueueMaxRetry(1 << 40) // Effectively retry forever.
+	if err := s.Start(); err != nil {
+		t.Fatalf("failed to start service")
+	}
+
+	client := &http.Client{}
+	host := fmt.Sprintf("http://%s", s.Addr().String())
+	post := func() error {
+		resp, err := client.Post(host+"/db/execute?queue", "application/json",
+			strings.NewReader(`["INSERT INTO foo(name) VALUES('fiona')"]`))
+		if err != nil {
+			return err
+		}
+		resp.Body.Close()
+		if resp.StatusCode != http.StatusOK {
+			return fmt.Errorf("expected StatusOK, got %d", resp.StatusCode)
+		}
+		return nil
+	}
+
+	// First batch is handed to the processor, which retries it forever.
+	if err := post(); err != nil {
+		t.Fatalf("failed to make queued execute request: %s", err)
+	}
+	waitUntil(t, func() bool { return numExecutes.Load() >= 2 })
+
+	// Second batch sits in the batcher's output, third blocks the batcher
+	// handing it off, fourth fills the queue's own buffer.
+	for range 3 {
+		if err := post(); err != nil {
+			t.Fatalf("failed to make queued execute request: %s", err)
+		}
+	}
+
+	// Fifth blocks in queue admission.
+	blocked := make(chan struct{})
+	go func() {
+		defer close(blocked)
+		post()
+	}()
+	select {
+	case <-blocked:
+		t.Fatalf("queued execute request on full queue returned before Close")
+	case <-time.After(200 * time.Millisecond):
+	}
+
+	closed := make(chan struct{})
+	go func() {
+		s.Close()
+		close(closed)
+	}()
+	select {
+	case <-closed:
+	case <-time.After(5 * time.Second):
+		t.Fatalf("Close blocked behind the execution queue")
+	}
+	select {
+	case <-blocked:
+	case <-time.After(5 * time.Second):
+		t.Fatalf("queued execute request blocked on full queue did not return after Close")
+	}
+}
+
 func Test_Licenses(t *testing.T) {
 	m := &MockStore{}
 	c := &mockClusterService{}
@@ -1424,7 +1508,7 @@ func Test_ForwardingRedirectExecute(t *testing.T) {
 	m := &MockStore{
 		leaderAddr: "foo:1234",
 	}
-	m.executeFn = func(er *command.ExecuteRequest) ([]*command.ExecuteQueryResponse, uint64, error) {
+	m.executeFn = func(_ context.Context, er *command.ExecuteRequest) ([]*command.ExecuteQueryResponse, uint64, error) {
 		return nil, 0, store.ErrNotLeader
 	}
 
@@ -2778,7 +2862,7 @@ func Test_SQLAnalyze_MultipleStatements(t *testing.T) {
 }
 
 type MockStore struct {
-	executeFn   func(er *command.ExecuteRequest) ([]*command.ExecuteQueryResponse, uint64, error)
+	executeFn   func(ctx context.Context, er *command.ExecuteRequest) ([]*command.ExecuteQueryResponse, uint64, error)
 	queryFn     func(qr *command.QueryRequest) ([]*command.QueryRows, uint64, error)
 	requestFn   func(eqr *command.ExecuteQueryRequest) ([]*command.ExecuteQueryResponse, uint64, uint64, error)
 	backupFn    func(br *command.BackupRequest, dst io.Writer) (int, error)
@@ -2796,7 +2880,7 @@ type MockStore struct {
 
 func (m *MockStore) Execute(ctx context.Context, er *command.ExecuteRequest) ([]*command.ExecuteQueryResponse, uint64, error) {
 	if m.executeFn != nil {
-		return m.executeFn(er)
+		return m.executeFn(ctx, er)
 	}
 	return nil, 0, nil
 }
@@ -3111,7 +3195,7 @@ func Test_ErrorsParam(t *testing.T) {
 	queryRows := []*command.QueryRows{{Error: "no such table: foo", ErrorV2: errV2}}
 
 	m := &MockStore{leaderAddr: "foo:1234"}
-	m.executeFn = func(er *command.ExecuteRequest) ([]*command.ExecuteQueryResponse, uint64, error) {
+	m.executeFn = func(_ context.Context, er *command.ExecuteRequest) ([]*command.ExecuteQueryResponse, uint64, error) {
 		return execResp, 0, nil
 	}
 	m.queryFn = func(qr *command.QueryRequest) ([]*command.QueryRows, uint64, error) {
@@ -3197,5 +3281,18 @@ func Test_ErrorsParam(t *testing.T) {
 	}
 	if got, exp := do("/db/query", q+"&errors=v1", false), `{"results":[{`+v1+`}]}`; got != exp {
 		t.Fatalf("GET /db/query errors=v1: exp %s, got %s", exp, got)
+	}
+}
+
+// waitUntil waits until fn returns true, failing the test if that
+// takes too long.
+func waitUntil(t *testing.T, fn func() bool) {
+	t.Helper()
+	deadline := time.Now().Add(5 * time.Second)
+	for !fn() {
+		if time.Now().After(deadline) {
+			t.Fatalf("timed out waiting for condition")
+		}
+		time.Sleep(5 * time.Millisecond)
 	}
 }

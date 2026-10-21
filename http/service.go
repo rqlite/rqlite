@@ -273,9 +273,14 @@ func ResetStats() {
 // Service provides HTTP service.
 type Service struct {
 	httpServer http.Server
-	closeCh    chan struct{}
 	addr       string       // Bind address of the HTTP service.
 	ln         net.Listener // Service listener
+
+	// closeCtx is canceled by Close. Every step of queued-write processing
+	// that can block observes it, so shutdown never waits on a leader that
+	// may never respond.
+	closeCtx    context.Context
+	closeCancel context.CancelFunc
 
 	uiHandler http.Handler
 
@@ -395,11 +400,11 @@ func (s *Service) Start() error {
 	}
 	s.ln = ln
 
-	s.closeCh = make(chan struct{})
+	s.closeCtx, s.closeCancel = context.WithCancel(context.Background())
 	s.queueDone = make(chan struct{})
 
 	s.stmtQueue = queue.New[*proto.Statement](s.DefaultQueueCap, s.DefaultQueueBatchSz, s.DefaultQueueTimeout)
-	go s.runQueue()
+	go s.runQueue(s.closeCtx)
 	s.logger.Printf("execute queue processing started with capacity %d, batch size %d, timeout %s",
 		s.DefaultQueueCap, s.DefaultQueueBatchSz, s.DefaultQueueTimeout.String())
 
@@ -421,12 +426,11 @@ func (s *Service) Close() {
 		s.logger.Println("HTTP service close error:", err.Error())
 	}
 
+	// Stop the queue processor first, interrupting any in-flight execute
+	// or retry wait, then stop the queue itself, which releases any
+	// handlers still blocked waiting to enqueue.
+	s.closeCancel()
 	s.stmtQueue.Close()
-	select {
-	case <-s.queueDone:
-	default:
-		close(s.closeCh)
-	}
 	<-s.queueDone
 }
 
@@ -1893,14 +1897,17 @@ func (s *Service) LeaderAPIAddr(ctx context.Context) string {
 	return meta.Url
 }
 
-func (s *Service) runQueue() {
+// runQueue processes batches from the statement queue until ctx is
+// canceled. Cancellation interrupts the wait for the next batch, any
+// in-flight execute, and any wait between retries.
+func (s *Service) runQueue(ctx context.Context) {
 	defer close(s.queueDone)
 	retryDelay := time.Second
 
 	for {
 		var req *queue.Request[*proto.Statement]
 		select {
-		case <-s.closeCh:
+		case <-ctx.Done():
 			return
 		case req = <-s.stmtQueue.C:
 		}
@@ -1918,16 +1925,14 @@ func (s *Service) runQueue() {
 		if er.Request.Statements != nil {
 			nRetries := int64(0)
 			for {
-				select {
-				case <-s.closeCh:
-					return
-				default:
-				}
-
-				_, _, _, err := s.proxy.Execute(context.Background(), er, nil, defaultTimeout, 0, false)
+				_, _, _, err := s.proxy.Execute(ctx, er, nil, defaultTimeout, 0, false)
 				if err == nil {
 					// Success!
 					break
+				}
+				if ctx.Err() != nil {
+					// Shutting down, so the failure is ours, not the cluster's.
+					return
 				}
 
 				if errors.Is(err, proxy.ErrLeaderNotFound) {
@@ -1954,7 +1959,13 @@ func (s *Service) runQueue() {
 				}
 
 				stats.Add(numQueuedExecutionsFailed, 1)
-				time.Sleep(retryDelay)
+				retry := time.NewTimer(retryDelay)
+				select {
+				case <-ctx.Done():
+					retry.Stop()
+					return
+				case <-retry.C:
+				}
 			}
 		}
 
