@@ -273,9 +273,14 @@ func ResetStats() {
 // Service provides HTTP service.
 type Service struct {
 	httpServer http.Server
-	closeCh    chan struct{}
 	addr       string       // Bind address of the HTTP service.
 	ln         net.Listener // Service listener
+
+	// closeCtx is canceled by Close. Every step of queued-write processing
+	// that can block observes it, so shutdown never waits on a leader that
+	// may never respond.
+	closeCtx    context.Context
+	closeCancel context.CancelFunc
 
 	uiHandler http.Handler
 
@@ -395,11 +400,11 @@ func (s *Service) Start() error {
 	}
 	s.ln = ln
 
-	s.closeCh = make(chan struct{})
+	s.closeCtx, s.closeCancel = context.WithCancel(context.Background())
 	s.queueDone = make(chan struct{})
 
 	s.stmtQueue = queue.New[*proto.Statement](s.DefaultQueueCap, s.DefaultQueueBatchSz, s.DefaultQueueTimeout)
-	go s.runQueue()
+	go s.runQueue(s.closeCtx)
 	s.logger.Printf("execute queue processing started with capacity %d, batch size %d, timeout %s",
 		s.DefaultQueueCap, s.DefaultQueueBatchSz, s.DefaultQueueTimeout.String())
 
@@ -421,12 +426,11 @@ func (s *Service) Close() {
 		s.logger.Println("HTTP service close error:", err.Error())
 	}
 
+	// Stop the queue processor first, interrupting any in-flight execute
+	// or retry wait, then stop the queue itself, which releases any
+	// handlers still blocked waiting to enqueue.
+	s.closeCancel()
 	s.stmtQueue.Close()
-	select {
-	case <-s.queueDone:
-	default:
-		close(s.closeCh)
-	}
 	<-s.queueDone
 }
 
@@ -1893,75 +1897,83 @@ func (s *Service) LeaderAPIAddr(ctx context.Context) string {
 	return meta.Url
 }
 
-func (s *Service) runQueue() {
+// runQueue processes batches from the statement queue until ctx is
+// canceled. Cancellation interrupts the wait for the next batch, any
+// in-flight execute, and any wait between retries.
+func (s *Service) runQueue(ctx context.Context) {
 	defer close(s.queueDone)
 	retryDelay := time.Second
 
-	var err error
 	for {
+		var req *queue.Request[*proto.Statement]
 		select {
-		case <-s.closeCh:
+		case <-ctx.Done():
 			return
-		case req := <-s.stmtQueue.C:
-			er := &proto.ExecuteRequest{
-				Request: &proto.Request{
-					Statements:  req.Objects,
-					Transaction: s.DefaultQueueTx,
-				},
-			}
-			stats.Add(numQueuedExecutionsStmtsRx, int64(len(req.Objects)))
+		case req = <-s.stmtQueue.C:
+		}
 
-			// Nil statements are valid, as clients may want to just send
-			// a "checkpoint" through the queue.
-			if er.Request.Statements != nil {
-				nRetries := int64(0)
-				for {
-					select {
-					case <-s.closeCh:
-						return
-					default:
-					}
+		er := &proto.ExecuteRequest{
+			Request: &proto.Request{
+				Statements:  req.Objects,
+				Transaction: s.DefaultQueueTx,
+			},
+		}
+		stats.Add(numQueuedExecutionsStmtsRx, int64(len(req.Objects)))
 
-					_, _, _, err = s.proxy.Execute(context.Background(), er, nil, defaultTimeout, 0, false)
-					if err == nil {
-						// Success!
-						break
-					}
+		// Nil statements are valid, as clients may want to just send
+		// a "checkpoint" through the queue.
+		if er.Request.Statements != nil {
+			nRetries := int64(0)
+			for {
+				_, _, _, err := s.proxy.Execute(ctx, er, nil, defaultTimeout, 0, false)
+				if err == nil {
+					// Success!
+					break
+				}
+				if ctx.Err() != nil {
+					// Shutting down, so the failure is ours, not the cluster's.
+					return
+				}
 
-					if errors.Is(err, proxy.ErrLeaderNotFound) {
-						s.logger.Printf("execute queue can't find leader for sequence number %d on node %s",
-							req.SequenceNumber, s.Addr().String())
-						stats.Add(numQueuedExecutionsNoLeader, 1)
+				if errors.Is(err, proxy.ErrLeaderNotFound) {
+					s.logger.Printf("execute queue can't find leader for sequence number %d on node %s",
+						req.SequenceNumber, s.Addr().String())
+					stats.Add(numQueuedExecutionsNoLeader, 1)
+				} else {
+					s.logger.Printf("execute queue write failed for sequence number %d on node %s: %s",
+						req.SequenceNumber, s.Addr().String(), err.Error())
+					if err.Error() == "leadership lost while committing log" {
+						stats.Add(numQueuedExecutionsLeadershipLost, 1)
+					} else if err.Error() == "not leader" {
+						stats.Add(numQueuedExecutionsNotLeader, 1)
 					} else {
-						s.logger.Printf("execute queue write failed for sequence number %d on node %s: %s",
-							req.SequenceNumber, s.Addr().String(), err.Error())
-						if err.Error() == "leadership lost while committing log" {
-							stats.Add(numQueuedExecutionsLeadershipLost, 1)
-						} else if err.Error() == "not leader" {
-							stats.Add(numQueuedExecutionsNotLeader, 1)
-						} else {
-							stats.Add(numQueuedExecutionsUnknownError, 1)
-						}
+						stats.Add(numQueuedExecutionsUnknownError, 1)
 					}
-					nRetries++
-					if nRetries > s.queueRetry.Load() {
-						s.logger.Printf("execute queue write retry limit (%d) limit reached for sequence number %d on node %s",
-							s.queueRetry.Load(), req.SequenceNumber, s.Addr().String())
-						stats.Add(numQueuedExecutionsRetryLimited, 1)
-						break
-					}
+				}
+				nRetries++
+				if nRetries > s.queueRetry.Load() {
+					s.logger.Printf("execute queue write retry limit (%d) limit reached for sequence number %d on node %s",
+						s.queueRetry.Load(), req.SequenceNumber, s.Addr().String())
+					stats.Add(numQueuedExecutionsRetryLimited, 1)
+					break
+				}
 
-					stats.Add(numQueuedExecutionsFailed, 1)
-					time.Sleep(retryDelay)
+				stats.Add(numQueuedExecutionsFailed, 1)
+				retry := time.NewTimer(retryDelay)
+				select {
+				case <-ctx.Done():
+					retry.Stop()
+					return
+				case <-retry.C:
 				}
 			}
-
-			// Perform post-write processing.
-			atomic.StoreInt64(&s.seqNum, req.SequenceNumber)
-			req.Close()
-			stats.Add(numQueuedExecutionsStmtsTx, int64(len(req.Objects)))
-			stats.Add(numQueuedExecutionsOK, 1)
 		}
+
+		// Perform post-write processing.
+		atomic.StoreInt64(&s.seqNum, req.SequenceNumber)
+		req.Close()
+		stats.Add(numQueuedExecutionsStmtsTx, int64(len(req.Objects)))
+		stats.Add(numQueuedExecutionsOK, 1)
 	}
 }
 

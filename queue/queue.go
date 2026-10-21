@@ -22,6 +22,10 @@ func init() {
 	ResetStats()
 }
 
+// ErrClosed is returned by operations on a closed Queue, including
+// operations that were blocked when the Queue was closed.
+var ErrClosed = errors.New("queue is closed")
+
 // ResetStats resets the expvar stats for this module. Mostly for test purposes.
 func ResetStats() {
 	stats.Init()
@@ -128,10 +132,13 @@ func New[T any](maxSize, batchSize int, t time.Duration) *Queue[T] {
 // be called by whatever is processing the objects read from the queue, to
 // indicate that the objects have been processed. The canonical use of this
 // is to allow the caller to block until the objects are processed.
+//
+// Write blocks while the queue is full. If the queue is closed before
+// the objects are accepted, Write returns ErrClosed.
 func (q *Queue[T]) Write(objects []T, c FlushChannel) (int64, error) {
 	select {
 	case <-q.done:
-		return 0, errors.New("queue is closed")
+		return 0, ErrClosed
 	default:
 	}
 
@@ -142,10 +149,14 @@ func (q *Queue[T]) Write(objects []T, c FlushChannel) (int64, error) {
 	defer q.seqMu.Unlock()
 	q.seqNum++
 
-	q.batchCh <- &queuedObjects[T]{
+	select {
+	case q.batchCh <- &queuedObjects[T]{
 		SequenceNumber: q.seqNum,
 		Objects:        objects,
 		flushChan:      c,
+	}:
+	case <-q.done:
+		return 0, ErrClosed
 	}
 	stats.Add(numObjectsRx, int64(len(objects)))
 	return q.seqNum, nil
@@ -157,13 +168,23 @@ func (q *Queue[T]) WriteOne(object T, c FlushChannel) (int64, error) {
 	return q.Write([]T{object}, c)
 }
 
-// Flush flushes the queue.
+// Flush flushes the queue. If the queue is closed before the flush
+// is accepted, Flush returns ErrClosed.
 func (q *Queue[T]) Flush() error {
-	q.batchCh <- nil
-	return nil
+	select {
+	case q.batchCh <- nil:
+		return nil
+	case <-q.done:
+		return ErrClosed
+	}
 }
 
 // Close closes the queue. A closed queue should not be used.
+//
+// Close never waits on the consumer of C: the batching goroutine stops
+// even if it is blocked handing off a batch, and any callers blocked in
+// Write or Flush return ErrClosed. Objects not yet handed off on C are
+// discarded.
 func (q *Queue[T]) Close() error {
 	select {
 	case <-q.done:
@@ -196,15 +217,23 @@ func (q *Queue[T]) run() {
 	timer := time.NewTimer(0)
 	<-timer.C
 
-	writeFn := func() {
+	// writeFn hands the pending objects to the consumer of C. It returns
+	// false if the queue was closed before the consumer accepted them.
+	writeFn := func() bool {
 		// mergeQueued returns a new object, and ownership will pass
 		// implicitly to the other side of sendCh.
 		req := mergeQueued(qObjs)
-		if req != nil {
-			q.sendCh <- req
-			stats.Add(numObjectsTx, int64(len(req.Objects)))
-			qObjs = qObjs[:0] // Better on the GC than setting to nil.
+		if req == nil {
+			return true
 		}
+		select {
+		case q.sendCh <- req:
+		case <-q.done:
+			return false
+		}
+		stats.Add(numObjectsTx, int64(len(req.Objects)))
+		qObjs = qObjs[:0] // Better on the GC than setting to nil.
+		return true
 	}
 
 	for {
@@ -213,7 +242,9 @@ func (q *Queue[T]) run() {
 			if s == nil { // flush marker
 				stats.Add(numFlush, 1)
 				stopTimer(timer)
-				writeFn()
+				if !writeFn() {
+					return
+				}
 				break
 			}
 
@@ -227,12 +258,16 @@ func (q *Queue[T]) run() {
 			}
 			if len(qObjs) == q.batchSize {
 				stopTimer(timer)
-				writeFn()
+				if !writeFn() {
+					return
+				}
 			}
 		case <-timer.C:
 			stats.Add(numTimeout, 1)
 			q.numTimeouts++
-			writeFn()
+			if !writeFn() {
+				return
+			}
 		case <-q.done:
 			stopTimer(timer)
 			return
