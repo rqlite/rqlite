@@ -388,8 +388,8 @@ const (
 )
 
 // notSupported lists the command types a node no longer acts on. Such a
-// command is still subject to authorization, is then answered with
-// "unsupported", and its connection is closed.
+// command is answered with "unsupported", whatever credentials it carries,
+// and its connection is closed.
 var notSupported = map[proto.Command_Type]bool{
 	proto.Command_COMMAND_TYPE_LOAD_CHUNK: true,
 }
@@ -411,8 +411,7 @@ func (s *Service) authorized(c *proto.Command) bool {
 	case proto.Command_COMMAND_TYPE_BACKUP,
 		proto.Command_COMMAND_TYPE_BACKUP_STREAM:
 		return s.checkCommandPerm(c, auth.PermBackup)
-	case proto.Command_COMMAND_TYPE_LOAD,
-		proto.Command_COMMAND_TYPE_LOAD_CHUNK:
+	case proto.Command_COMMAND_TYPE_LOAD:
 		return s.checkCommandPerm(c, auth.PermLoad)
 	case proto.Command_COMMAND_TYPE_REMOVE_NODE:
 		return s.checkCommandPerm(c, auth.PermRemove)
@@ -518,6 +517,15 @@ func (s *Service) handleConn(conn net.Conn) {
 			return
 		}
 
+		// A command this node no longer acts on is told so and, like any
+		// other rejected command, is the last one on its connection.
+		if notSupported[c.Type] {
+			if p, err := errorResponse(c.Type, unsupportedError); err == nil {
+				_ = writeBytesWithLength(conn, p)
+			}
+			return
+		}
+
 		// Authorization is decided once, here, before any command is acted
 		// on. A rejected command is told so and is then the last command on
 		// its connection: returning closes the connection, so no handler
@@ -525,15 +533,6 @@ func (s *Service) handleConn(conn net.Conn) {
 		if !s.authorized(c) {
 			stats.Add(numUnauthorizedRequest, 1)
 			if p, err := errorResponse(c.Type, unauthorizedError); err == nil {
-				_ = writeBytesWithLength(conn, p)
-			}
-			return
-		}
-
-		// A command this node no longer acts on is told so and, like any
-		// other rejected command, is the last one on its connection.
-		if notSupported[c.Type] {
-			if p, err := errorResponse(c.Type, unsupportedError); err == nil {
 				_ = writeBytesWithLength(conn, p)
 			}
 			return

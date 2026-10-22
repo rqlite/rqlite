@@ -446,15 +446,6 @@ func unauthorizedCommands() []unauthorizedCommand {
 			resp:  &proto.CommandLoadResponse{},
 		},
 		{
-			name: "LOAD_CHUNK",
-			cmd: &proto.Command{
-				Type:    proto.Command_COMMAND_TYPE_LOAD_CHUNK,
-				Request: &proto.Command_LoadChunkRequest{LoadChunkRequest: &command.LoadChunkRequest{}},
-			},
-			perms: []string{auth.PermLoad},
-			resp:  &proto.CommandLoadChunkResponse{},
-		},
-		{
 			name: "REMOVE_NODE",
 			cmd: &proto.Command{
 				Type:    proto.Command_COMMAND_TYPE_REMOVE_NODE,
@@ -727,26 +718,49 @@ func Test_ServiceOpenCommandsNeedNoPermission(t *testing.T) {
 	}
 }
 
+// unsupportedCommand describes one command the node no longer acts on.
+type unsupportedCommand struct {
+	cmd  *proto.Command
+	resp errResponse // Response type the client decodes for this command.
+}
+
+// unsupportedCommands lists every command type the node no longer acts on,
+// keyed by type. It must match the service's notSupported set.
+func unsupportedCommands() map[proto.Command_Type]unsupportedCommand {
+	return map[proto.Command_Type]unsupportedCommand{
+		proto.Command_COMMAND_TYPE_LOAD_CHUNK: {
+			cmd: &proto.Command{
+				Type:    proto.Command_COMMAND_TYPE_LOAD_CHUNK,
+				Request: &proto.Command_LoadChunkRequest{LoadChunkRequest: &command.LoadChunkRequest{}},
+			},
+			resp: &proto.CommandLoadChunkResponse{},
+		},
+	}
+}
+
 // Test_ServiceUnsupportedCommandClosesConnection checks that every command
 // type the node no longer acts on is answered with "unsupported" and then
-// has its connection closed, when nothing stands in the way of it being
-// authorized. Each such type must also appear in the unauthorized table,
-// since dropping a command does not drop the permission it needs.
+// has its connection closed, without the credential store being consulted.
 func Test_ServiceUnsupportedCommandClosesConnection(t *testing.T) {
-	byType := map[proto.Command_Type]unauthorizedCommand{}
-	for _, tc := range unauthorizedCommands() {
-		byType[tc.cmd.Type] = tc
-	}
+	cmds := unsupportedCommands()
 	for typ := range notSupported {
+		if _, ok := cmds[typ]; !ok {
+			t.Errorf("unsupported command %s is missing from unsupportedCommands", typ)
+		}
+	}
+	for typ, tc := range cmds {
 		t.Run(typ.String(), func(t *testing.T) {
-			tc, ok := byType[typ]
-			if !ok {
-				t.Fatalf("unsupported command %s is missing from unauthorizedCommands", typ)
+			if !notSupported[typ] {
+				t.Fatalf("command %s is not in the service's notSupported set", typ)
 			}
 
-			// No credential store, so nothing is denied for lack of permission.
+			var asked atomic.Int64
+			credStr := &mockCredentialStore{aaFunc: func(string, string, string) bool {
+				asked.Add(1)
+				return false
+			}}
 			ml := mustNewMockTransport()
-			s := New(ml, mustNewMockDatabase(), mustNewMockManager(), nil)
+			s := New(ml, mustNewMockDatabase(), mustNewMockManager(), credStr)
 			if err := s.Open(); err != nil {
 				t.Fatalf("failed to open cluster service: %s", err)
 			}
@@ -758,7 +772,9 @@ func Test_ServiceUnsupportedCommandClosesConnection(t *testing.T) {
 			}
 			defer conn.Close()
 
-			if err := writeCommand(conn, tc.cmd, 5*time.Second); err != nil {
+			cmd := pb.Clone(tc.cmd).(*proto.Command)
+			cmd.Credentials = makeCredentials("user", "wrong")
+			if err := writeCommand(conn, cmd, 5*time.Second); err != nil {
 				t.Fatalf("failed to write command: %s", err)
 			}
 			p, err := readResponse(conn, 5*time.Second)
@@ -773,6 +789,9 @@ func Test_ServiceUnsupportedCommandClosesConnection(t *testing.T) {
 				t.Fatalf("failed to get correct error, exp %s, got %q", "unsupported", resp.GetError())
 			}
 			mustReadClosed(t, conn)
+			if n := asked.Load(); n != 0 {
+				t.Fatalf("credential store was asked %d time(s) for an unsupported command", n)
+			}
 		})
 	}
 }
@@ -802,7 +821,7 @@ func Test_ServiceUnknownCommandClosesConnection(t *testing.T) {
 }
 
 // Test_ServiceEveryCommandTypeIsCovered fails when a command type exists
-// that neither the unauthorized tests nor the open-command list knows
+// that none of the unauthorized, unsupported or open-command tables knows
 // about. Adding a command type means deciding, here, whether it needs a
 // permission, and adding it to the matching table.
 func Test_ServiceEveryCommandTypeIsCovered(t *testing.T) {
@@ -812,12 +831,15 @@ func Test_ServiceEveryCommandTypeIsCovered(t *testing.T) {
 	for _, tc := range unauthorizedCommands() {
 		covered[tc.cmd.Type] = true
 	}
+	for typ := range unsupportedCommands() {
+		covered[typ] = true
+	}
 	for _, typ := range openCommands {
 		covered[typ] = true
 	}
 	for v, name := range proto.Command_Type_name {
 		if !covered[proto.Command_Type(v)] {
-			t.Errorf("command type %s has no authorization test; add it to unauthorizedCommands or openCommands", name)
+			t.Errorf("command type %s has no authorization test; add it to unauthorizedCommands, unsupportedCommands or openCommands", name)
 		}
 	}
 }
