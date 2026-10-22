@@ -446,6 +446,15 @@ func unauthorizedCommands() []unauthorizedCommand {
 			resp:  &proto.CommandLoadResponse{},
 		},
 		{
+			name: "LOAD_CHUNK",
+			cmd: &proto.Command{
+				Type:    proto.Command_COMMAND_TYPE_LOAD_CHUNK,
+				Request: &proto.Command_LoadChunkRequest{LoadChunkRequest: &command.LoadChunkRequest{}},
+			},
+			perms: []string{auth.PermLoad},
+			resp:  &proto.CommandLoadChunkResponse{},
+		},
+		{
 			name: "REMOVE_NODE",
 			cmd: &proto.Command{
 				Type:    proto.Command_COMMAND_TYPE_REMOVE_NODE,
@@ -528,10 +537,10 @@ func unauthorizedCommands() []unauthorizedCommand {
 	}
 }
 
-// openCommands lists the command types which need no permission.
+// openCommands lists the command types which need no permission. Node meta
+// is how a client finds nodes before it has anything to authenticate against.
 var openCommands = []proto.Command_Type{
 	proto.Command_COMMAND_TYPE_GET_NODE_META,
-	proto.Command_COMMAND_TYPE_LOAD_CHUNK,
 }
 
 // mustReadClosed checks that nothing further arrives on conn and that the
@@ -697,35 +706,20 @@ func Test_ServiceOpenCommandsNeedNoPermission(t *testing.T) {
 	// Send each open command twice on the same connection, to prove the
 	// connection is left open after each one.
 	for i := 0; i < 2; i++ {
-		cmd := &proto.Command{Type: proto.Command_COMMAND_TYPE_GET_NODE_META}
-		if err := writeCommand(conn, cmd, 5*time.Second); err != nil {
-			t.Fatalf("failed to write node meta command: %s", err)
-		}
-		p, err := readResponse(conn, 5*time.Second)
-		if err != nil {
-			t.Fatalf("failed to read node meta response: %s", err)
-		}
-		if err := pb.Unmarshal(p, &proto.NodeMeta{}); err != nil {
-			t.Fatalf("failed to unmarshal node meta response: %s", err)
-		}
-
-		cmd = &proto.Command{
-			Type:    proto.Command_COMMAND_TYPE_LOAD_CHUNK,
-			Request: &proto.Command_LoadChunkRequest{LoadChunkRequest: &command.LoadChunkRequest{}},
-		}
-		if err := writeCommand(conn, cmd, 5*time.Second); err != nil {
-			t.Fatalf("failed to write load chunk command: %s", err)
-		}
-		p, err = readResponse(conn, 5*time.Second)
-		if err != nil {
-			t.Fatalf("failed to read load chunk response: %s", err)
-		}
-		resp := &proto.CommandLoadChunkResponse{}
-		if err := pb.Unmarshal(p, resp); err != nil {
-			t.Fatalf("failed to unmarshal load chunk response: %s", err)
-		}
-		if resp.GetError() != "unsupported" {
-			t.Fatalf("failed to get correct error, exp %s, got %q", "unsupported", resp.GetError())
+		for _, typ := range openCommands {
+			cmd := &proto.Command{Type: typ}
+			if err := writeCommand(conn, cmd, 5*time.Second); err != nil {
+				t.Fatalf("failed to write %s command: %s", typ, err)
+			}
+			p, err := readResponse(conn, 5*time.Second)
+			if err != nil {
+				t.Fatalf("failed to read %s response: %s", typ, err)
+			}
+			if typ == proto.Command_COMMAND_TYPE_GET_NODE_META {
+				if err := pb.Unmarshal(p, &proto.NodeMeta{}); err != nil {
+					t.Fatalf("failed to unmarshal node meta response: %s", err)
+				}
+			}
 		}
 	}
 	if n := asked.Load(); n != 0 {

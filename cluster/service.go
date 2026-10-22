@@ -387,8 +387,7 @@ const unauthorizedError = "unauthorized"
 // on it.
 func (s *Service) authorized(c *proto.Command) bool {
 	switch c.Type {
-	case proto.Command_COMMAND_TYPE_GET_NODE_META,
-		proto.Command_COMMAND_TYPE_LOAD_CHUNK:
+	case proto.Command_COMMAND_TYPE_GET_NODE_META:
 		return true
 	case proto.Command_COMMAND_TYPE_EXECUTE:
 		return s.checkCommandPerm(c, auth.PermExecute)
@@ -399,7 +398,8 @@ func (s *Service) authorized(c *proto.Command) bool {
 	case proto.Command_COMMAND_TYPE_BACKUP,
 		proto.Command_COMMAND_TYPE_BACKUP_STREAM:
 		return s.checkCommandPerm(c, auth.PermBackup)
-	case proto.Command_COMMAND_TYPE_LOAD:
+	case proto.Command_COMMAND_TYPE_LOAD,
+		proto.Command_COMMAND_TYPE_LOAD_CHUNK:
 		return s.checkCommandPerm(c, auth.PermLoad)
 	case proto.Command_COMMAND_TYPE_REMOVE_NODE:
 		return s.checkCommandPerm(c, auth.PermRemove)
@@ -441,6 +441,8 @@ func unauthorizedResponse(t proto.Command_Type) ([]byte, error) {
 		m = &proto.CommandBackupResponse{Error: unauthorizedError}
 	case proto.Command_COMMAND_TYPE_LOAD:
 		m = &proto.CommandLoadResponse{Error: unauthorizedError}
+	case proto.Command_COMMAND_TYPE_LOAD_CHUNK:
+		m = &proto.CommandLoadChunkResponse{Error: unauthorizedError}
 	case proto.Command_COMMAND_TYPE_REMOVE_NODE:
 		m = &proto.CommandRemoveNodeResponse{Error: unauthorizedError}
 	case proto.Command_COMMAND_TYPE_DEMOTE_NODE:
