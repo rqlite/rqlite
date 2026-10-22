@@ -15,6 +15,7 @@ import (
 	command "github.com/rqlite/rqlite/v10/command/proto"
 	"github.com/rqlite/rqlite/v10/internal/fsutil"
 	"github.com/rqlite/rqlite/v10/testdata/x509"
+	pb "google.golang.org/protobuf/proto"
 )
 
 func Test_NewServiceOpenClose(t *testing.T) {
@@ -361,6 +362,73 @@ func Test_NewServiceNotify(t *testing.T) {
 
 	if err := s.Close(); err != nil {
 		t.Fatalf("failed to close cluster service")
+	}
+}
+
+// Test_NewServiceBackupStreamUnauthorized ensures that a backup stream
+// request carrying invalid credentials is answered with "unauthorized" and
+// that the node then closes the connection without sending a single byte
+// of the database. The test talks to the raw connection so that it can
+// observe exactly what follows the error response.
+func Test_NewServiceBackupStreamUnauthorized(t *testing.T) {
+	ml := mustNewMockTransport()
+	db := mustNewMockDatabase()
+	db.backupFn = func(br *command.BackupRequest, dst io.Writer) (int, error) {
+		return dst.Write([]byte("this is SQLite data"))
+	}
+
+	credStr := mustNewMockCredentialStore()
+	credStr.HasPermOK = false
+	s := New(ml, db, mustNewMockManager(), credStr)
+	if s == nil {
+		t.Fatalf("failed to create cluster service")
+	}
+	if err := s.Open(); err != nil {
+		t.Fatalf("failed to open cluster service")
+	}
+	defer s.Close()
+
+	conn, err := ml.Dial(s.Addr(), 5*time.Second)
+	if err != nil {
+		t.Fatalf("failed to dial service: %s", err)
+	}
+	defer conn.Close()
+
+	cmd := &proto.Command{
+		Type: proto.Command_COMMAND_TYPE_BACKUP_STREAM,
+		Request: &proto.Command_BackupRequest{
+			BackupRequest: backupRequestBinary(true),
+		},
+		Credentials: makeCredentials("user", "wrong"),
+	}
+	if err := writeCommand(conn, cmd, 5*time.Second); err != nil {
+		t.Fatalf("failed to write backup command: %s", err)
+	}
+
+	p, err := readResponse(conn, 5*time.Second)
+	if err != nil {
+		t.Fatalf("failed to read backup response: %s", err)
+	}
+	resp := &proto.CommandBackupResponse{}
+	if err := pb.Unmarshal(p, resp); err != nil {
+		t.Fatalf("failed to unmarshal backup response: %s", err)
+	}
+	if resp.Error != "unauthorized" {
+		t.Fatalf("failed to get correct error, exp %s, got %s", "unauthorized", resp.Error)
+	}
+
+	// Nothing else may arrive on this connection. The node must close it,
+	// so the next read returns EOF with no data.
+	if err := conn.SetReadDeadline(time.Now().Add(5 * time.Second)); err != nil {
+		t.Fatalf("failed to set read deadline: %s", err)
+	}
+	buf := make([]byte, 1)
+	n, err := conn.Read(buf)
+	if n != 0 {
+		t.Fatalf("node sent %d byte(s) of backup data despite invalid credentials", n)
+	}
+	if err != io.EOF {
+		t.Fatalf("expected EOF after unauthorized response, got %v", err)
 	}
 }
 
