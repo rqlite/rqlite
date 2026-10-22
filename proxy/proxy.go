@@ -26,6 +26,10 @@ var (
 	// It is an alias for store.ErrLeaderNotFound.
 	ErrLeaderNotFound = store.ErrLeaderNotFound
 
+	// ErrNodeNotFound is returned when a node referenced by ID is not
+	// found in the cluster.
+	ErrNodeNotFound = store.ErrNodeNotFound
+
 	// ErrUnauthorized is returned when the remote node rejects credentials.
 	ErrUnauthorized = errors.New("unauthorized")
 )
@@ -326,6 +330,11 @@ func (p *Proxy) Stepdown(ctx context.Context, wait bool, id string, creds *clstr
 		}
 		err = p.cluster.Stepdown(ctx, sr, addr, creds, timeout)
 		if err != nil {
+			// The remote node's error arrives as a bare string, so match
+			// it by message to restore the sentinel for callers.
+			if err.Error() == ErrNodeNotFound.Error() {
+				return "", ErrNodeNotFound
+			}
 			return "", wrapIfUnauthorized(err)
 		}
 		stats.Add(numRemoteStepdowns, 1)

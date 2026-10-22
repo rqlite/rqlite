@@ -1016,6 +1016,30 @@ func Test_Stepdown_Unauthorized(t *testing.T) {
 	}
 }
 
+func Test_Stepdown_NodeNotFound_Forward(t *testing.T) {
+	t.Parallel()
+	s := &mockStore{
+		stepdownFn: func(wait bool, id string) error {
+			return store.ErrNotLeader
+		},
+		leaderAddrFn: func() (string, error) {
+			return "leader:4002", nil
+		},
+	}
+	c := &mockCluster{
+		stepdownFn: func(ctx context.Context, sr *proto.StepdownRequest, nodeAddr string, creds *clstrPB.Credentials, timeout time.Duration) error {
+			// The cluster client rebuilds the remote error from its message.
+			return errors.New(store.ErrNodeNotFound.Error())
+		},
+	}
+	p := newTestProxy(s, c)
+
+	_, err := p.Stepdown(context.Background(), true, "nonexistent", nil, time.Second, false)
+	if !errors.Is(err, ErrNodeNotFound) {
+		t.Fatalf("expected ErrNodeNotFound, got %v", err)
+	}
+}
+
 func Test_LeaderAddrError(t *testing.T) {
 	t.Parallel()
 	leaderErr := errors.New("raft error")
