@@ -633,7 +633,7 @@ func Test_ServiceUnauthorizedClosesConnection(t *testing.T) {
 				if err := writeCommand(conn, cmd, 5*time.Second); err != nil {
 					t.Fatalf("failed to write command: %s", err)
 				}
-				p, err := readResponse(conn, 5*time.Second)
+				p, err := readResponse(conn, maxFrameSize, 5*time.Second)
 				if err != nil {
 					t.Fatalf("failed to read response: %s", err)
 				}
@@ -703,7 +703,7 @@ func Test_ServiceOpenCommandsNeedNoPermission(t *testing.T) {
 			if err := writeCommand(conn, cmd, 5*time.Second); err != nil {
 				t.Fatalf("failed to write %s command: %s", typ, err)
 			}
-			p, err := readResponse(conn, 5*time.Second)
+			p, err := readResponse(conn, maxFrameSize, 5*time.Second)
 			if err != nil {
 				t.Fatalf("failed to read %s response: %s", typ, err)
 			}
@@ -778,7 +778,7 @@ func Test_ServiceUnsupportedCommandClosesConnection(t *testing.T) {
 			if err := writeCommand(conn, cmd, 5*time.Second); err != nil {
 				t.Fatalf("failed to write command: %s", err)
 			}
-			p, err := readResponse(conn, 5*time.Second)
+			p, err := readResponse(conn, maxFrameSize, 5*time.Second)
 			if err != nil {
 				t.Fatalf("failed to read response: %s", err)
 			}
@@ -1539,7 +1539,7 @@ func Test_ServiceFrameLimit(t *testing.T) {
 		if err := writeCommand(conn, cmd, 5*time.Second); err != nil {
 			t.Fatalf("failed to write command: %s", err)
 		}
-		resp, err := readResponse(conn, 5*time.Second)
+		resp, err := readResponse(conn, maxFrameSize, 5*time.Second)
 		if err != nil {
 			t.Fatalf("failed to read response: %s", err)
 		}

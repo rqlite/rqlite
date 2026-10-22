@@ -84,6 +84,10 @@ type Client struct {
 	poolMu sync.RWMutex
 	pools  map[string]pool.Pool
 
+	// frameLimit is the largest response frame the client will read from a
+	// node.
+	frameLimit atomic.Uint64
+
 	// Whitebox testing
 	numForcedNewConns atomic.Int32
 }
@@ -95,11 +99,23 @@ type Client struct {
 // that the operation failed. In addition, higher-level code will
 // usually retry these operations.
 func NewClient(dl Dialer, t time.Duration) *Client {
-	return &Client{
+	c := &Client{
 		dialer:  dl,
 		timeout: t,
 		pools:   make(map[string]pool.Pool),
 	}
+	c.frameLimit.Store(maxFrameSize)
+	return c
+}
+
+// SetFrameLimit sets the largest response frame the client will read from a
+// node. A node sending a larger frame has its response refused before any
+// buffer is allocated for it. Zero uses the default limit.
+func (c *Client) SetFrameLimit(n uint64) {
+	if n == 0 {
+		n = maxFrameSize
+	}
+	c.frameLimit.Store(n)
 }
 
 // SetLocal informs the client instance of the node address for the node
@@ -312,7 +328,7 @@ func (c *Client) Backup(ctx context.Context, br *command.BackupRequest, nodeAddr
 		return 0, err
 	}
 
-	p, err := readResponse(conn, timeout)
+	p, err := readResponse(conn, c.frameLimit.Load(), timeout)
 	if err != nil {
 		handleConnError(conn)
 		return 0, err
@@ -401,7 +417,7 @@ func (c *Client) RemoveNode(ctx context.Context, rn *command.RemoveNodeRequest, 
 		return err
 	}
 
-	p, err := readResponse(conn, timeout)
+	p, err := readResponse(conn, c.frameLimit.Load(), timeout)
 	if err != nil {
 		handleConnError(conn)
 		return err
@@ -445,7 +461,7 @@ func (c *Client) DemoteNode(ctx context.Context, dn *command.DemoteNodeRequest, 
 		return err
 	}
 
-	p, err := readResponse(conn, timeout)
+	p, err := readResponse(conn, c.frameLimit.Load(), timeout)
 	if err != nil {
 		handleConnError(conn)
 		return err
@@ -489,7 +505,7 @@ func (c *Client) PromoteNode(ctx context.Context, pn *command.PromoteNodeRequest
 		return err
 	}
 
-	p, err := readResponse(conn, timeout)
+	p, err := readResponse(conn, c.frameLimit.Load(), timeout)
 	if err != nil {
 		handleConnError(conn)
 		return err
@@ -533,7 +549,7 @@ func (c *Client) Stepdown(ctx context.Context, sr *command.StepdownRequest, node
 		return err
 	}
 
-	p, err := readResponse(conn, timeout)
+	p, err := readResponse(conn, c.frameLimit.Load(), timeout)
 	if err != nil {
 		handleConnError(conn)
 		return err
@@ -577,7 +593,7 @@ func (c *Client) Notify(ctx context.Context, nr *command.NotifyRequest, nodeAddr
 		return err
 	}
 
-	p, err := readResponse(conn, timeout)
+	p, err := readResponse(conn, c.frameLimit.Load(), timeout)
 	if err != nil {
 		handleConnError(conn)
 		return err
@@ -626,7 +642,7 @@ func (c *Client) Join(ctx context.Context, jr *command.JoinRequest, nodeAddr str
 			return err
 		}
 
-		p, err := readResponse(conn, timeout)
+		p, err := readResponse(conn, c.frameLimit.Load(), timeout)
 		if err != nil {
 			handleConnError(conn)
 			return err
@@ -718,7 +734,7 @@ func (c *Client) BroadcastHWM(ctx context.Context, hwm uint64, creds *proto.Cred
 				}
 
 				// Read response
-				p, err := readResponse(conn, timeout)
+				p, err := readResponse(conn, c.frameLimit.Load(), timeout)
 				if err != nil {
 					handleConnError(conn)
 					conn.Close()
@@ -874,7 +890,7 @@ func (c *Client) retry(ctx context.Context, command *proto.Command, nodeAddr str
 			}
 			defer conn.Close()
 
-			b, errInner := writeCommandReadResponse(conn, command, timeout)
+			b, errInner := writeCommandReadResponse(conn, command, c.frameLimit.Load(), timeout)
 			if errInner != nil {
 				handleConnError(conn)
 				return nil, errInner
@@ -901,7 +917,7 @@ func (c *Client) retry(ctx context.Context, command *proto.Command, nodeAddr str
 			c.numForcedNewConns.Add(1)
 			stats.Add(numClientForceNewConn, 1)
 
-			if p, err = writeCommandReadResponse(conn, command, timeout); err != nil {
+			if p, err = writeCommandReadResponse(conn, command, c.frameLimit.Load(), timeout); err != nil {
 				handleConnError(conn)
 				return nil, nRetries, err
 			}
@@ -911,11 +927,11 @@ func (c *Client) retry(ctx context.Context, command *proto.Command, nodeAddr str
 	return p, nRetries, nil
 }
 
-func writeCommandReadResponse(conn net.Conn, c *proto.Command, timeout time.Duration) (buf []byte, retErr error) {
+func writeCommandReadResponse(conn net.Conn, c *proto.Command, limit uint64, timeout time.Duration) (buf []byte, retErr error) {
 	if err := writeCommand(conn, c, timeout); err != nil {
 		return nil, err
 	}
-	return readResponse(conn, timeout)
+	return readResponse(conn, limit, timeout)
 }
 
 func writeCommand(conn net.Conn, c *proto.Command, timeout time.Duration) error {
@@ -949,7 +965,9 @@ func writeCommand(conn net.Conn, c *proto.Command, timeout time.Duration) error 
 	return nil
 }
 
-func readResponse(conn net.Conn, timeout time.Duration) (buf []byte, retErr error) {
+// readResponse reads one response frame from conn, refusing any frame
+// declared larger than limit.
+func readResponse(conn net.Conn, limit uint64, timeout time.Duration) (buf []byte, retErr error) {
 	defer func() {
 		// Connecting to an open port, but not a rqlite Raft API, may cause a panic
 		// when the system tries to read the response. This is a workaround.
@@ -958,7 +976,7 @@ func readResponse(conn net.Conn, timeout time.Duration) (buf []byte, retErr erro
 		}
 	}()
 
-	p, err := readFrame(conn, maxFrameSize, func() error {
+	p, err := readFrame(conn, limit, func() error {
 		return conn.SetDeadline(time.Now().Add(timeout))
 	})
 	if err != nil {

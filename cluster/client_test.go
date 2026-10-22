@@ -3,10 +3,12 @@ package cluster
 import (
 	"context"
 	"encoding/binary"
+	"errors"
 	"io"
 	"net"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -1056,5 +1058,54 @@ func Test_ClientBroadcast_WithCreds(t *testing.T) {
 	}
 	if resp.Error != "test error" {
 		t.Fatalf("expected 'test error', got '%s'", resp.Error)
+	}
+}
+
+// Test_ClientFrameLimit shows that a response frame at the limit is read,
+// while a node declaring a larger frame has its response refused without
+// the client waiting for a body.
+func Test_ClientFrameLimit(t *testing.T) {
+	meta, err := pb.Marshal(&proto.NodeMeta{Url: "http://localhost:1234", Version: "1.0.0"})
+	if err != nil {
+		t.Fatalf("failed to marshal node meta: %s", err)
+	}
+	limit := uint64(len(meta))
+
+	// declared is the frame length the test node announces. It may differ
+	// from the frame it actually sends.
+	var declared atomic.Uint64
+	srv := servicetest.NewService()
+	srv.Handler = func(conn net.Conn) {
+		if readCommand(conn) == nil {
+			return
+		}
+		hdr := make([]byte, protoBufferLengthSize)
+		binary.LittleEndian.PutUint64(hdr, declared.Load())
+		if _, err := conn.Write(hdr); err != nil {
+			return
+		}
+		conn.Write(meta)
+	}
+	srv.Start()
+	defer srv.Close()
+
+	c := NewClient(&simpleDialer{}, 0)
+	c.SetFrameLimit(limit)
+
+	declared.Store(limit)
+	if _, err := c.GetNodeMeta(context.Background(), srv.Addr(), noRetries, time.Second); err != nil {
+		t.Fatalf("frame at the limit was refused: %s", err)
+	}
+
+	declared.Store(limit + 1)
+	_, err = c.GetNodeMeta(context.Background(), srv.Addr(), noRetries, time.Second)
+	if !errors.Is(err, ErrFrameTooLarge) {
+		t.Fatalf("expected ErrFrameTooLarge, got %v", err)
+	}
+
+	// Zero restores the default limit.
+	c.SetFrameLimit(0)
+	if c.frameLimit.Load() != maxFrameSize {
+		t.Fatalf("zero did not restore the default frame limit: %d", c.frameLimit.Load())
 	}
 }
