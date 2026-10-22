@@ -377,9 +377,22 @@ func (s *Service) checkCommandPermAll(c *proto.Command, perms ...string) bool {
 	return true
 }
 
-// unauthorizedError is the error returned to a client whose credentials do
-// not grant the permission its command requires.
-const unauthorizedError = "unauthorized"
+const (
+	// unauthorizedError is the error returned to a client whose credentials
+	// do not grant the permission its command requires.
+	unauthorizedError = "unauthorized"
+
+	// unsupportedError is the error returned to a client whose command is
+	// one this node no longer acts on.
+	unsupportedError = "unsupported"
+)
+
+// notSupported lists the command types a node no longer acts on. Such a
+// command is still subject to authorization, is then answered with
+// "unsupported", and its connection is closed.
+var notSupported = map[proto.Command_Type]bool{
+	proto.Command_COMMAND_TYPE_LOAD_CHUNK: true,
+}
 
 // authorized reports whether the credentials carried by the command grant
 // the permission its type requires. A command type not listed here is never
@@ -424,39 +437,39 @@ func (s *Service) authorized(c *proto.Command) bool {
 	}
 }
 
-// unauthorizedResponse returns the encoded response telling a client that
-// its command of the given type was rejected for lack of permission. The
-// encoding matches what the client expects for that command type.
-func unauthorizedResponse(t proto.Command_Type) ([]byte, error) {
+// errorResponse returns the encoded response telling a client that its
+// command of the given type was rejected, and why. The encoding matches
+// what the client expects for that command type.
+func errorResponse(t proto.Command_Type, errStr string) ([]byte, error) {
 	var m pb.Message
 	switch t {
 	case proto.Command_COMMAND_TYPE_EXECUTE:
-		m = &proto.CommandExecuteResponse{Error: unauthorizedError}
+		m = &proto.CommandExecuteResponse{Error: errStr}
 	case proto.Command_COMMAND_TYPE_QUERY:
-		m = &proto.CommandQueryResponse{Error: unauthorizedError}
+		m = &proto.CommandQueryResponse{Error: errStr}
 	case proto.Command_COMMAND_TYPE_REQUEST:
-		m = &proto.CommandRequestResponse{Error: unauthorizedError}
+		m = &proto.CommandRequestResponse{Error: errStr}
 	case proto.Command_COMMAND_TYPE_BACKUP,
 		proto.Command_COMMAND_TYPE_BACKUP_STREAM:
-		m = &proto.CommandBackupResponse{Error: unauthorizedError}
+		m = &proto.CommandBackupResponse{Error: errStr}
 	case proto.Command_COMMAND_TYPE_LOAD:
-		m = &proto.CommandLoadResponse{Error: unauthorizedError}
+		m = &proto.CommandLoadResponse{Error: errStr}
 	case proto.Command_COMMAND_TYPE_LOAD_CHUNK:
-		m = &proto.CommandLoadChunkResponse{Error: unauthorizedError}
+		m = &proto.CommandLoadChunkResponse{Error: errStr}
 	case proto.Command_COMMAND_TYPE_REMOVE_NODE:
-		m = &proto.CommandRemoveNodeResponse{Error: unauthorizedError}
+		m = &proto.CommandRemoveNodeResponse{Error: errStr}
 	case proto.Command_COMMAND_TYPE_DEMOTE_NODE:
-		m = &proto.CommandDemoteNodeResponse{Error: unauthorizedError}
+		m = &proto.CommandDemoteNodeResponse{Error: errStr}
 	case proto.Command_COMMAND_TYPE_PROMOTE_NODE:
-		m = &proto.CommandPromoteNodeResponse{Error: unauthorizedError}
+		m = &proto.CommandPromoteNodeResponse{Error: errStr}
 	case proto.Command_COMMAND_TYPE_NOTIFY:
-		m = &proto.CommandNotifyResponse{Error: unauthorizedError}
+		m = &proto.CommandNotifyResponse{Error: errStr}
 	case proto.Command_COMMAND_TYPE_JOIN:
-		m = &proto.CommandJoinResponse{Error: unauthorizedError}
+		m = &proto.CommandJoinResponse{Error: errStr}
 	case proto.Command_COMMAND_TYPE_STEPDOWN:
-		m = &proto.CommandStepdownResponse{Error: unauthorizedError}
+		m = &proto.CommandStepdownResponse{Error: errStr}
 	case proto.Command_COMMAND_TYPE_HIGHWATER_MARK_UPDATE:
-		m = &proto.HighwaterMarkUpdateResponse{Error: unauthorizedError}
+		m = &proto.HighwaterMarkUpdateResponse{Error: errStr}
 	default:
 		return nil, fmt.Errorf("no response type for command %s", t)
 	}
@@ -511,7 +524,16 @@ func (s *Service) handleConn(conn net.Conn) {
 		// below can act on the command by mistake.
 		if !s.authorized(c) {
 			stats.Add(numUnauthorizedRequest, 1)
-			if p, err := unauthorizedResponse(c.Type); err == nil {
+			if p, err := errorResponse(c.Type, unauthorizedError); err == nil {
+				_ = writeBytesWithLength(conn, p)
+			}
+			return
+		}
+
+		// A command this node no longer acts on is told so and, like any
+		// other rejected command, is the last one on its connection.
+		if notSupported[c.Type] {
+			if p, err := errorResponse(c.Type, unsupportedError); err == nil {
 				_ = writeBytesWithLength(conn, p)
 			}
 			return
@@ -677,14 +699,6 @@ func (s *Service) handleConn(conn net.Conn) {
 			}
 			if err := marshalAndWrite(conn, resp); err != nil {
 				conn.Close()
-				return
-			}
-
-		case proto.Command_COMMAND_TYPE_LOAD_CHUNK:
-			resp := &proto.CommandLoadChunkResponse{
-				Error: "unsupported",
-			}
-			if err := marshalAndWrite(conn, resp); err != nil {
 				return
 			}
 

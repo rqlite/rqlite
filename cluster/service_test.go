@@ -727,6 +727,56 @@ func Test_ServiceOpenCommandsNeedNoPermission(t *testing.T) {
 	}
 }
 
+// Test_ServiceUnsupportedCommandClosesConnection checks that every command
+// type the node no longer acts on is answered with "unsupported" and then
+// has its connection closed, when nothing stands in the way of it being
+// authorized. Each such type must also appear in the unauthorized table,
+// since dropping a command does not drop the permission it needs.
+func Test_ServiceUnsupportedCommandClosesConnection(t *testing.T) {
+	byType := map[proto.Command_Type]unauthorizedCommand{}
+	for _, tc := range unauthorizedCommands() {
+		byType[tc.cmd.Type] = tc
+	}
+	for typ := range notSupported {
+		t.Run(typ.String(), func(t *testing.T) {
+			tc, ok := byType[typ]
+			if !ok {
+				t.Fatalf("unsupported command %s is missing from unauthorizedCommands", typ)
+			}
+
+			// No credential store, so nothing is denied for lack of permission.
+			ml := mustNewMockTransport()
+			s := New(ml, mustNewMockDatabase(), mustNewMockManager(), nil)
+			if err := s.Open(); err != nil {
+				t.Fatalf("failed to open cluster service: %s", err)
+			}
+			defer s.Close()
+
+			conn, err := ml.Dial(s.Addr(), 5*time.Second)
+			if err != nil {
+				t.Fatalf("failed to dial service: %s", err)
+			}
+			defer conn.Close()
+
+			if err := writeCommand(conn, tc.cmd, 5*time.Second); err != nil {
+				t.Fatalf("failed to write command: %s", err)
+			}
+			p, err := readResponse(conn, 5*time.Second)
+			if err != nil {
+				t.Fatalf("failed to read response: %s", err)
+			}
+			resp := pb.Clone(tc.resp).(errResponse)
+			if err := pb.Unmarshal(p, resp); err != nil {
+				t.Fatalf("failed to unmarshal response: %s", err)
+			}
+			if resp.GetError() != "unsupported" {
+				t.Fatalf("failed to get correct error, exp %s, got %q", "unsupported", resp.GetError())
+			}
+			mustReadClosed(t, conn)
+		})
+	}
+}
+
 // Test_ServiceUnknownCommandClosesConnection checks that a command type the
 // node does not recognise gets no response and closes the connection, even
 // when no credential store is configured.
