@@ -49,6 +49,7 @@ const (
 	numBroadcastHWMRequest = "num_broadcast_hwm_req"
 	numHWMUpdateDropped    = "num_hwm_update_dropped"
 	numConnRejected        = "num_conn_rejected"
+	numUnauthorizedRequest = "num_unauthorized_req"
 
 	numClientRetries            = "num_client_retries"
 	numGetNodeAPIRequestRetries = "num_get_node_api_req_retries"
@@ -115,6 +116,7 @@ func ResetStats() {
 	stats.Add(numClientWriteTimeouts, 0)
 	stats.Add(numClientForceNewConn, 0)
 	stats.Add(numConnRejected, 0)
+	stats.Add(numUnauthorizedRequest, 0)
 }
 
 // Dialer is the interface dialers must implement.
@@ -375,6 +377,98 @@ func (s *Service) checkCommandPermAll(c *proto.Command, perms ...string) bool {
 	return true
 }
 
+// unauthorizedError is the error returned to a client whose credentials do
+// not grant the permission its command requires.
+const unauthorizedError = "unauthorized"
+
+// authorized reports whether the credentials carried by the command grant
+// the permission its type requires. A command type not listed here is never
+// authorized, so a new type must be added explicitly before a node will act
+// on it.
+func (s *Service) authorized(c *proto.Command) bool {
+	switch c.Type {
+	case proto.Command_COMMAND_TYPE_GET_NODE_META,
+		proto.Command_COMMAND_TYPE_LOAD_CHUNK:
+		return true
+	case proto.Command_COMMAND_TYPE_EXECUTE:
+		return s.checkCommandPerm(c, auth.PermExecute)
+	case proto.Command_COMMAND_TYPE_QUERY:
+		return s.checkCommandPerm(c, auth.PermQuery)
+	case proto.Command_COMMAND_TYPE_REQUEST:
+		return s.checkCommandPermAll(c, auth.PermQuery, auth.PermExecute)
+	case proto.Command_COMMAND_TYPE_BACKUP,
+		proto.Command_COMMAND_TYPE_BACKUP_STREAM:
+		return s.checkCommandPerm(c, auth.PermBackup)
+	case proto.Command_COMMAND_TYPE_LOAD:
+		return s.checkCommandPerm(c, auth.PermLoad)
+	case proto.Command_COMMAND_TYPE_REMOVE_NODE:
+		return s.checkCommandPerm(c, auth.PermRemove)
+	case proto.Command_COMMAND_TYPE_DEMOTE_NODE:
+		return s.checkCommandPerm(c, auth.PermDemote)
+	case proto.Command_COMMAND_TYPE_PROMOTE_NODE:
+		return s.checkCommandPerm(c, auth.PermPromote)
+	case proto.Command_COMMAND_TYPE_NOTIFY:
+		return s.checkCommandPerm(c, auth.PermJoin)
+	case proto.Command_COMMAND_TYPE_JOIN:
+		if jr := c.GetJoinRequest(); jr != nil && !jr.Voter {
+			return s.checkCommandPerm(c, auth.PermJoinReadOnly) ||
+				s.checkCommandPerm(c, auth.PermJoinReadReplica)
+		}
+		return s.checkCommandPerm(c, auth.PermJoin)
+	case proto.Command_COMMAND_TYPE_STEPDOWN:
+		return s.checkCommandPerm(c, auth.PermLeaderOps)
+	case proto.Command_COMMAND_TYPE_HIGHWATER_MARK_UPDATE:
+		return s.checkCommandPerm(c, auth.PermCDCHWMUpdate)
+	default:
+		return false
+	}
+}
+
+// unauthorizedResponse returns the encoded response telling a client that
+// its command of the given type was rejected for lack of permission. The
+// encoding matches what the client expects for that command type.
+func unauthorizedResponse(t proto.Command_Type) ([]byte, error) {
+	var m pb.Message
+	switch t {
+	case proto.Command_COMMAND_TYPE_EXECUTE:
+		m = &proto.CommandExecuteResponse{Error: unauthorizedError}
+	case proto.Command_COMMAND_TYPE_QUERY:
+		m = &proto.CommandQueryResponse{Error: unauthorizedError}
+	case proto.Command_COMMAND_TYPE_REQUEST:
+		m = &proto.CommandRequestResponse{Error: unauthorizedError}
+	case proto.Command_COMMAND_TYPE_BACKUP,
+		proto.Command_COMMAND_TYPE_BACKUP_STREAM:
+		m = &proto.CommandBackupResponse{Error: unauthorizedError}
+	case proto.Command_COMMAND_TYPE_LOAD:
+		m = &proto.CommandLoadResponse{Error: unauthorizedError}
+	case proto.Command_COMMAND_TYPE_REMOVE_NODE:
+		m = &proto.CommandRemoveNodeResponse{Error: unauthorizedError}
+	case proto.Command_COMMAND_TYPE_DEMOTE_NODE:
+		m = &proto.CommandDemoteNodeResponse{Error: unauthorizedError}
+	case proto.Command_COMMAND_TYPE_PROMOTE_NODE:
+		m = &proto.CommandPromoteNodeResponse{Error: unauthorizedError}
+	case proto.Command_COMMAND_TYPE_NOTIFY:
+		m = &proto.CommandNotifyResponse{Error: unauthorizedError}
+	case proto.Command_COMMAND_TYPE_JOIN:
+		m = &proto.CommandJoinResponse{Error: unauthorizedError}
+	case proto.Command_COMMAND_TYPE_STEPDOWN:
+		m = &proto.CommandStepdownResponse{Error: unauthorizedError}
+	case proto.Command_COMMAND_TYPE_HIGHWATER_MARK_UPDATE:
+		m = &proto.HighwaterMarkUpdateResponse{Error: unauthorizedError}
+	default:
+		return nil, fmt.Errorf("no response type for command %s", t)
+	}
+	p, err := pb.Marshal(m)
+	if err != nil {
+		return nil, err
+	}
+	if t == proto.Command_COMMAND_TYPE_BACKUP {
+		// Non-streaming backup responses are always compressed on the wire.
+		return gzCompress(p)
+	}
+	return p, nil
+}
+
 func (s *Service) handleConn(conn net.Conn) {
 	defer conn.Close()
 
@@ -409,6 +503,18 @@ func (s *Service) handleConn(conn net.Conn) {
 			return
 		}
 
+		// Authorization is decided once, here, before any command is acted
+		// on. A rejected command is told so and is then the last command on
+		// its connection: returning closes the connection, so no handler
+		// below can act on the command by mistake.
+		if !s.authorized(c) {
+			stats.Add(numUnauthorizedRequest, 1)
+			if p, err := unauthorizedResponse(c.Type); err == nil {
+				_ = writeBytesWithLength(conn, p)
+			}
+			return
+		}
+
 		switch c.Type {
 		case proto.Command_COMMAND_TYPE_GET_NODE_META:
 			stats.Add(numGetNodeAPIRequest, 1)
@@ -438,8 +544,6 @@ func (s *Service) handleConn(conn net.Conn) {
 			er := c.GetExecuteRequest()
 			if er == nil {
 				resp.Error = "ExecuteRequest is nil"
-			} else if !s.checkCommandPerm(c, auth.PermExecute) {
-				resp.Error = "unauthorized"
 			} else {
 				res, idx, err := s.db.Execute(context.Background(), er)
 				if err != nil {
@@ -460,8 +564,6 @@ func (s *Service) handleConn(conn net.Conn) {
 			qr := c.GetQueryRequest()
 			if qr == nil {
 				resp.Error = "QueryRequest is nil"
-			} else if !s.checkCommandPerm(c, auth.PermQuery) {
-				resp.Error = "unauthorized"
 			} else {
 				res, _, idx, err := s.db.Query(context.Background(), qr)
 				if err != nil {
@@ -482,8 +584,6 @@ func (s *Service) handleConn(conn net.Conn) {
 			rr := c.GetExecuteQueryRequest()
 			if rr == nil {
 				resp.Error = "RequestRequest is nil"
-			} else if !s.checkCommandPermAll(c, auth.PermQuery, auth.PermExecute) {
-				resp.Error = "unauthorized"
 			} else {
 				res, numRW, idx, err := s.db.Request(context.Background(), rr)
 				if err != nil {
@@ -505,8 +605,6 @@ func (s *Service) handleConn(conn net.Conn) {
 			br := c.GetBackupRequest()
 			if br == nil {
 				resp.Error = "BackupRequest is nil"
-			} else if !s.checkCommandPerm(c, auth.PermBackup) {
-				resp.Error = "unauthorized"
 			} else {
 				buf := new(bytes.Buffer)
 				if _, err := s.db.Backup(context.Background(), br, buf); err != nil {
@@ -538,8 +636,6 @@ func (s *Service) handleConn(conn net.Conn) {
 			br := c.GetBackupRequest()
 			if br == nil {
 				resp.Error = "BackupRequest is nil"
-			} else if !s.checkCommandPerm(c, auth.PermBackup) {
-				resp.Error = "unauthorized"
 			}
 			p, err = pb.Marshal(resp)
 			if err != nil {
@@ -550,9 +646,8 @@ func (s *Service) handleConn(conn net.Conn) {
 				return
 			}
 			if resp.Error != "" {
-				// The request was rejected, so nothing more may be sent.
-				// Close the connection so the client sees a clean end.
-				conn.Close()
+				// There is nothing to stream, so end the connection
+				// so the client sees a clean end instead of waiting.
 				return
 			}
 
@@ -573,8 +668,6 @@ func (s *Service) handleConn(conn net.Conn) {
 			lr := c.GetLoadRequest()
 			if lr == nil {
 				resp.Error = "LoadRequest is nil"
-			} else if !s.checkCommandPerm(c, auth.PermLoad) {
-				resp.Error = "unauthorized"
 			} else {
 				if err := s.db.Load(context.Background(), lr); err != nil {
 					resp.Error = fmt.Sprintf("remote node failed to load: %s", err.Error())
@@ -600,8 +693,6 @@ func (s *Service) handleConn(conn net.Conn) {
 			rn := c.GetRemoveNodeRequest()
 			if rn == nil {
 				resp.Error = "RemoveNodeRequest is nil"
-			} else if !s.checkCommandPerm(c, auth.PermRemove) {
-				resp.Error = "unauthorized"
 			} else {
 				if err := s.mgr.Remove(context.Background(), rn); err != nil {
 					resp.Error = err.Error()
@@ -618,8 +709,6 @@ func (s *Service) handleConn(conn net.Conn) {
 			dn := c.GetDemoteNodeRequest()
 			if dn == nil {
 				resp.Error = "DemoteNodeRequest is nil"
-			} else if !s.checkCommandPerm(c, auth.PermDemote) {
-				resp.Error = "unauthorized"
 			} else {
 				if err := s.mgr.Demote(context.Background(), dn); err != nil {
 					resp.Error = err.Error()
@@ -636,8 +725,6 @@ func (s *Service) handleConn(conn net.Conn) {
 			pn := c.GetPromoteNodeRequest()
 			if pn == nil {
 				resp.Error = "PromoteNodeRequest is nil"
-			} else if !s.checkCommandPerm(c, auth.PermPromote) {
-				resp.Error = "unauthorized"
 			} else {
 				if err := s.mgr.Promote(context.Background(), pn); err != nil {
 					resp.Error = err.Error()
@@ -654,8 +741,6 @@ func (s *Service) handleConn(conn net.Conn) {
 			nr := c.GetNotifyRequest()
 			if nr == nil {
 				resp.Error = "NotifyRequest is nil"
-			} else if !s.checkCommandPerm(c, auth.PermJoin) {
-				resp.Error = "unauthorized"
 			} else {
 				if err := s.mgr.Notify(nr); err != nil {
 					resp.Error = err.Error()
@@ -672,23 +757,15 @@ func (s *Service) handleConn(conn net.Conn) {
 			jr := c.GetJoinRequest()
 			if jr == nil {
 				resp.Error = "JoinRequest is nil"
-			} else {
-				if (jr.Voter && s.checkCommandPerm(c, auth.PermJoin)) ||
-					(!jr.Voter && s.checkCommandPerm(c, auth.PermJoinReadOnly)) ||
-					(!jr.Voter && s.checkCommandPerm(c, auth.PermJoinReadReplica)) {
-					if err := s.mgr.Join(jr); err != nil {
+			} else if err := s.mgr.Join(jr); err != nil {
+				resp.Error = err.Error()
+				if err.Error() == "not leader" {
+					laddr, err := s.mgr.LeaderAddr()
+					if err != nil {
 						resp.Error = err.Error()
-						if err.Error() == "not leader" {
-							laddr, err := s.mgr.LeaderAddr()
-							if err != nil {
-								resp.Error = err.Error()
-							} else {
-								resp.Leader = laddr
-							}
-						}
+					} else {
+						resp.Leader = laddr
 					}
-				} else {
-					resp.Error = "unauthorized"
 				}
 			}
 			if err := marshalAndWrite(conn, resp); err != nil {
@@ -702,8 +779,6 @@ func (s *Service) handleConn(conn net.Conn) {
 			sr := c.GetStepdownRequest()
 			if sr == nil {
 				resp.Error = "StepdownRequest is nil"
-			} else if !s.checkCommandPerm(c, auth.PermLeaderOps) {
-				resp.Error = "unauthorized"
 			} else {
 				if err := s.mgr.Stepdown(sr.Wait, sr.Id); err != nil {
 					resp.Error = err.Error()
@@ -720,8 +795,6 @@ func (s *Service) handleConn(conn net.Conn) {
 			br := c.GetHighwaterMarkUpdateRequest()
 			if br == nil {
 				resp.Error = "HighwaterMarkUpdateRequest is nil"
-			} else if !s.checkCommandPerm(c, auth.PermCDCHWMUpdate) {
-				resp.Error = "unauthorized"
 			} else {
 				// Send to registered channel if available
 				s.hwmMu.RLock()
