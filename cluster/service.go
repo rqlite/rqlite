@@ -549,6 +549,12 @@ func (s *Service) handleConn(conn net.Conn) {
 			if err := writeBytesWithLength(conn, p); err != nil {
 				return
 			}
+			if resp.Error != "" {
+				// The request was rejected, so nothing more may be sent.
+				// Close the connection so the client sees a clean end.
+				conn.Close()
+				return
+			}
 
 			// Now, start streaming the backup. Enable compressed mode
 			// regardless of whether the client requested it, so the client

@@ -1,6 +1,7 @@
 ## v10.6.4 (unreleased)
 ### Implementation changes and bug fixes
 - [PR #2977](https://github.com/rqlite/rqlite/pull/2977): `GET /leader` returns a JSON error body when there is no leader. Fixes issue [#2974](https://github.com/rqlite/rqlite/issues/2974).
+- [PR #2980](https://github.com/rqlite/rqlite/pull/2980): Close the connection after rejecting an unauthorized inter-node backup stream request, instead of streaming the database anyway.
 
 ## v10.6.3 (October 20th 2026)
 This release includes [an important security fix](https://github.com/rqlite/rqlite/security/advisories/GHSA-j62w-8865-2h7x). Users should upgrade.
