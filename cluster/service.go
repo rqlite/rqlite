@@ -486,26 +486,14 @@ func errorResponse(t proto.Command_Type, errStr string) ([]byte, error) {
 func (s *Service) handleConn(conn net.Conn) {
 	defer conn.Close()
 
-	b := make([]byte, protoBufferLengthSize)
+	refreshDeadline := func() error {
+		if s.connTimeout <= 0 {
+			return nil
+		}
+		return conn.SetReadDeadline(time.Now().Add(s.connTimeout))
+	}
 	for {
-		if s.connTimeout > 0 {
-			if err := conn.SetReadDeadline(time.Now().Add(s.connTimeout)); err != nil {
-				return
-			}
-		}
-		_, err := io.ReadFull(conn, b)
-		if err != nil {
-			return
-		}
-		sz := binary.LittleEndian.Uint64(b[0:])
-
-		p := make([]byte, sz)
-		if s.connTimeout > 0 {
-			if err := conn.SetReadDeadline(time.Now().Add(s.connTimeout)); err != nil {
-				return
-			}
-		}
-		_, err = io.ReadFull(conn, p)
+		p, err := readFrame(conn, refreshDeadline)
 		if err != nil {
 			return
 		}
@@ -820,6 +808,34 @@ func (s *Service) handleConn(conn net.Conn) {
 			}
 		}
 	}
+}
+
+// readFrame reads one length-prefixed frame from r and returns its body. A
+// frame is an 8-byte little-endian length followed by that many bytes. If
+// beforeRead is non-nil it is called before each of the two reads, which
+// lets the caller refresh a deadline on the underlying connection.
+func readFrame(r io.Reader, beforeRead func() error) ([]byte, error) {
+	if beforeRead != nil {
+		if err := beforeRead(); err != nil {
+			return nil, err
+		}
+	}
+	b := make([]byte, protoBufferLengthSize)
+	if _, err := io.ReadFull(r, b); err != nil {
+		return nil, fmt.Errorf("read frame length: %w", err)
+	}
+	sz := binary.LittleEndian.Uint64(b)
+
+	if beforeRead != nil {
+		if err := beforeRead(); err != nil {
+			return nil, err
+		}
+	}
+	p := make([]byte, sz)
+	if _, err := io.ReadFull(r, p); err != nil {
+		return nil, fmt.Errorf("read frame body: %w", err)
+	}
+	return p, nil
 }
 
 func marshalAndWrite(conn net.Conn, m pb.Message) error {

@@ -958,31 +958,14 @@ func readResponse(conn net.Conn, timeout time.Duration) (buf []byte, retErr erro
 		}
 	}()
 
-	// Read length of incoming response.
-	if err := conn.SetDeadline(time.Now().Add(timeout)); err != nil {
-		return nil, err
-	}
-	b := make([]byte, protoBufferLengthSize)
-	_, err := io.ReadFull(conn, b)
+	p, err := readFrame(conn, func() error {
+		return conn.SetDeadline(time.Now().Add(timeout))
+	})
 	if err != nil {
 		if errors.Is(err, os.ErrDeadlineExceeded) {
 			stats.Add(numClientReadTimeouts, 1)
 		}
-		return nil, fmt.Errorf("read protobuf length: %w", err)
-	}
-	sz := binary.LittleEndian.Uint64(b[0:])
-
-	// Read in the actual response.
-	p := make([]byte, sz)
-	if err := conn.SetDeadline(time.Now().Add(timeout)); err != nil {
 		return nil, err
-	}
-	_, err = io.ReadFull(conn, p)
-	if err != nil {
-		if errors.Is(err, os.ErrDeadlineExceeded) {
-			stats.Add(numClientReadTimeouts, 1)
-		}
-		return nil, fmt.Errorf("read protobuf bytes: %w", err)
 	}
 	return p, nil
 }
