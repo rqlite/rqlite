@@ -1272,11 +1272,13 @@ func (s *Service) handleLeader(w http.ResponseWriter, r *http.Request, qp QueryP
 			}
 			if errors.Is(err, proxy.ErrLeaderNotFound) {
 				stats.Add(numLeaderNotFound, 1)
-				http.Error(w, proxy.ErrLeaderNotFound.Error(), http.StatusServiceUnavailable)
+				w.WriteHeader(http.StatusServiceUnavailable)
+				s.writeResponse(w, qp, &Response{Error: proxy.ErrLeaderNotFound.Error()})
 				return
 			}
 			if errors.Is(err, proxy.ErrUnauthorized) {
-				http.Error(w, "remote stepdown not authorized", http.StatusUnauthorized)
+				w.WriteHeader(http.StatusUnauthorized)
+				s.writeResponse(w, qp, &Response{Error: err.Error()})
 				return
 			}
 
@@ -1284,7 +1286,8 @@ func (s *Service) handleLeader(w http.ResponseWriter, r *http.Request, qp QueryP
 			if err == store.ErrNotOpen {
 				statusCode = http.StatusServiceUnavailable
 			}
-			http.Error(w, fmt.Sprintf("stepdown: %s", err.Error()), statusCode)
+			w.WriteHeader(statusCode)
+			s.writeResponse(w, qp, &Response{Error: err.Error()})
 			return
 		}
 		w.Header().Set(ServedByHTTPHeader, addr)
