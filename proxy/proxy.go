@@ -26,6 +26,10 @@ var (
 	// It is an alias for store.ErrLeaderNotFound.
 	ErrLeaderNotFound = store.ErrLeaderNotFound
 
+	// ErrNodeNotFound is returned when a node referenced by ID is not
+	// found in the cluster.
+	ErrNodeNotFound = store.ErrNodeNotFound
+
 	// ErrUnauthorized is returned when the remote node rejects credentials.
 	ErrUnauthorized = errors.New("unauthorized")
 )

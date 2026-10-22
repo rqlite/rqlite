@@ -1283,8 +1283,10 @@ func (s *Service) handleLeader(w http.ResponseWriter, r *http.Request, qp QueryP
 			}
 
 			statusCode := http.StatusInternalServerError
-			if err == store.ErrNotOpen {
+			if errors.Is(err, store.ErrNotOpen) {
 				statusCode = http.StatusServiceUnavailable
+			} else if errors.Is(err, proxy.ErrNodeNotFound) {
+				statusCode = http.StatusNotFound
 			}
 			w.WriteHeader(statusCode)
 			s.writeResponse(w, qp, &Response{Error: err.Error()})

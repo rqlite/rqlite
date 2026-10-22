@@ -1924,6 +1924,40 @@ func Test_LeaderPOST_ForwardError(t *testing.T) {
 	}
 }
 
+func Test_Leader_POST_NodeNotFound(t *testing.T) {
+	st := &MockStore{
+		leaderAddr: "127.0.0.1:8001",
+		stepdownFn: func(wait bool, id string) error {
+			return store.ErrNodeNotFound
+		},
+	}
+	cluster := &mockClusterService{apiAddr: "http://127.0.0.1:4001"}
+	cred := &mockCredentialStore{HasPermOK: true}
+
+	s := New("127.0.0.1:4001", st, cluster, proxy.New(st, cluster), cred)
+
+	req, err := http.NewRequest("POST", "/leader", strings.NewReader(`{"id": "nonexistent"}`))
+	if err != nil {
+		t.Fatalf("failed to create POST request: %s", err.Error())
+	}
+	rr := httptest.NewRecorder()
+	s.ServeHTTP(rr, req)
+
+	if rr.Code != http.StatusNotFound {
+		t.Fatalf("expected 404, got %d", rr.Code)
+	}
+
+	var resp struct {
+		Error string `json:"error"`
+	}
+	if err := json.Unmarshal(rr.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("expected JSON error body, got %q: %s", rr.Body.String(), err)
+	}
+	if resp.Error != store.ErrNodeNotFound.Error() {
+		t.Fatalf("expected error %q, got %q", store.ErrNodeNotFound.Error(), resp.Error)
+	}
+}
+
 func Test_Demote_POST(t *testing.T) {
 	demotedID := ""
 	store := &MockStore{
