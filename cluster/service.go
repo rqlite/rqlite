@@ -654,30 +654,22 @@ func (s *Service) handleConn(conn net.Conn) {
 
 		case proto.Command_COMMAND_TYPE_BACKUP_STREAM:
 			stats.Add(numBackupRequest, 1)
-			resp := &proto.CommandBackupResponse{}
 
 			br := c.GetBackupRequest()
 			if br == nil {
-				resp.Error = "BackupRequest is nil"
-			}
-			p, err = pb.Marshal(resp)
-			if err != nil {
-				conn.Close()
-				return
-			}
-			if err := writeBytesWithLength(conn, p); err != nil {
-				return
-			}
-			if resp.Error != "" {
-				// There is nothing to stream, so end the connection
-				// so the client sees a clean end instead of waiting.
+				// Nothing to stream. Tell the client and end the connection.
+				resp := &proto.CommandBackupResponse{Error: "BackupRequest is nil"}
+				marshalAndWrite(conn, resp)
 				return
 			}
 
-			// Now, start streaming the backup. Enable compressed mode
-			// regardless of whether the client requested it, so the client
-			// can easily detect the end of the stream, as well as saving
-			// space on the wire.
+			// Tell the client the stream is coming, then stream it. Enable
+			// compressed mode regardless of what the client asked for, so the
+			// client can detect the end of the stream and to save space on
+			// the wire.
+			if err := marshalAndWrite(conn, &proto.CommandBackupResponse{}); err != nil {
+				return
+			}
 			br.Compress = true
 			if _, err := s.db.Backup(context.Background(), br, conn); err != nil {
 				s.logger.Printf("failed to stream backup: %s", err.Error())
