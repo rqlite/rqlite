@@ -3,7 +3,7 @@
 - [PR #2982](https://github.com/rqlite/rqlite/pull/2982): Guard the inter-node backup stream handler directly against a missing backup request.
 
 ## v10.6.4 (October 21st 2026)
-This release includes [a critical security fix](https://github.com/rqlite/rqlite/security/advisories/GHSA-f4f3-px5g-gm4x). Users should upgrade.
+This release includes [a critical security fix](https://github.com/rqlite/rqlite/security/advisories/GHSA-f4f3-px5g-gm4x) related to backups. Users should upgrade.
 
 ### Implementation changes and bug fixes
 - [PR #2977](https://github.com/rqlite/rqlite/pull/2977): `GET /leader` returns a JSON error body when there is no leader. Fixes issue [#2974](https://github.com/rqlite/rqlite/issues/2974).
