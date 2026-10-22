@@ -4,7 +4,7 @@
 - [PR #2984](https://github.com/rqlite/rqlite/pull/2984): `POST /leader` returns a JSON error body, and 404 when the target node is not in the cluster.
 
 ## v10.6.4 (October 21st 2026)
-This release includes [a critical security fix](https://github.com/rqlite/rqlite/security/advisories/GHSA-f4f3-px5g-gm4x) related to backups. Users should upgrade.
+This release includes [a critical security fix](https://github.com/rqlite/rqlite/security/advisories/GHSA-f4f3-px5g-gm4x) related to backups. An unauthorized user could download a backup if they had access to the Raft port. Users should upgrade.
 
 ### Implementation changes and bug fixes
 - [PR #2977](https://github.com/rqlite/rqlite/pull/2977): `GET /leader` returns a JSON error body when there is no leader. Fixes issue [#2974](https://github.com/rqlite/rqlite/issues/2974).
