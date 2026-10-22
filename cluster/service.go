@@ -30,6 +30,11 @@ var (
 
 	// ErrServiceOpen is returned when the service is already open.
 	ErrServiceOpen = errors.New("service already open")
+
+	// ErrFrameTooLarge is returned when a peer declares a frame larger than
+	// the limit in force. The frame body is never read, and no buffer is
+	// allocated for it.
+	ErrFrameTooLarge = errors.New("frame too large")
 )
 
 const (
@@ -49,6 +54,7 @@ const (
 	numBroadcastHWMRequest = "num_broadcast_hwm_req"
 	numHWMUpdateDropped    = "num_hwm_update_dropped"
 	numConnRejected        = "num_conn_rejected"
+	numFrameTooLarge       = "num_frame_too_large"
 	numUnauthorizedRequest = "num_unauthorized_req"
 
 	numClientRetries            = "num_client_retries"
@@ -81,6 +87,12 @@ const (
 	// maxConcurrentConns bounds the number of connections the service handles
 	// concurrently, preventing connection floods from spawning unbounded goroutines.
 	maxConcurrentConns = 512
+
+	// maxFrameSize is the default largest inter-node frame a node will read.
+	// It must clear a full database load, which travels in a single frame,
+	// while bounding what a peer can make this node allocate before that
+	// peer has been authorized.
+	maxFrameSize uint64 = 2 << 30
 )
 
 func init() {
@@ -116,6 +128,7 @@ func ResetStats() {
 	stats.Add(numClientWriteTimeouts, 0)
 	stats.Add(numClientForceNewConn, 0)
 	stats.Add(numConnRejected, 0)
+	stats.Add(numFrameTooLarge, 0)
 	stats.Add(numUnauthorizedRequest, 0)
 }
 
@@ -203,6 +216,10 @@ type Service struct {
 	// connLimit is the maximum number of concurrent service connections.
 	connLimit int
 
+	// frameLimit is the largest frame the service will read from a peer.
+	// Must be set before Open is called.
+	frameLimit uint64
+
 	// connLimiterCh limits the number of in-service connections.
 	connLimiterCh chan struct{}
 
@@ -223,6 +240,7 @@ func New(ln net.Listener, db Database, m Manager, credentialStore CredentialStor
 		credentialStore: credentialStore,
 		connTimeout:     connReadTimeout,
 		connLimit:       maxConcurrentConns,
+		frameLimit:      maxFrameSize,
 		open:            rsync.NewAtomicBool(),
 	}
 }
@@ -334,6 +352,23 @@ func (s *Service) SetConnectionLimit(n int) error {
 	}
 
 	s.connLimit = n
+	return nil
+}
+
+// SetFrameLimit sets the largest frame the service will read from a peer. A
+// peer declaring a larger frame has its connection closed before any buffer
+// is allocated for the frame. It must be called before Open. Zero uses the
+// default limit.
+func (s *Service) SetFrameLimit(n uint64) error {
+	if s.open.Is() {
+		return ErrServiceOpen
+	}
+
+	if n == 0 {
+		n = maxFrameSize
+	}
+
+	s.frameLimit = n
 	return nil
 }
 
@@ -486,27 +521,19 @@ func errorResponse(t proto.Command_Type, errStr string) ([]byte, error) {
 func (s *Service) handleConn(conn net.Conn) {
 	defer conn.Close()
 
-	b := make([]byte, protoBufferLengthSize)
+	refreshDeadline := func() error {
+		if s.connTimeout <= 0 {
+			return nil
+		}
+		return conn.SetReadDeadline(time.Now().Add(s.connTimeout))
+	}
 	for {
-		if s.connTimeout > 0 {
-			if err := conn.SetReadDeadline(time.Now().Add(s.connTimeout)); err != nil {
-				return
-			}
-		}
-		_, err := io.ReadFull(conn, b)
+		p, err := readFrame(conn, s.frameLimit, refreshDeadline)
 		if err != nil {
-			return
-		}
-		sz := binary.LittleEndian.Uint64(b[0:])
-
-		p := make([]byte, sz)
-		if s.connTimeout > 0 {
-			if err := conn.SetReadDeadline(time.Now().Add(s.connTimeout)); err != nil {
-				return
+			if errors.Is(err, ErrFrameTooLarge) {
+				stats.Add(numFrameTooLarge, 1)
+				s.logger.Printf("closing connection from %s: %s", conn.RemoteAddr(), err)
 			}
-		}
-		_, err = io.ReadFull(conn, p)
-		if err != nil {
 			return
 		}
 
@@ -820,6 +847,39 @@ func (s *Service) handleConn(conn net.Conn) {
 			}
 		}
 	}
+}
+
+// readFrame reads one length-prefixed frame from r and returns its body. A
+// frame is an 8-byte little-endian length followed by that many bytes. A
+// declared length above limit is refused with ErrFrameTooLarge before any
+// buffer is allocated for the body. If beforeRead is non-nil it is called
+// before each of the two reads, which lets the caller refresh a deadline on
+// the underlying connection.
+func readFrame(r io.Reader, limit uint64, beforeRead func() error) ([]byte, error) {
+	if beforeRead != nil {
+		if err := beforeRead(); err != nil {
+			return nil, err
+		}
+	}
+	b := make([]byte, protoBufferLengthSize)
+	if _, err := io.ReadFull(r, b); err != nil {
+		return nil, fmt.Errorf("read frame length: %w", err)
+	}
+	sz := binary.LittleEndian.Uint64(b)
+	if sz > limit {
+		return nil, fmt.Errorf("%w: %d bytes declared, limit is %d", ErrFrameTooLarge, sz, limit)
+	}
+
+	if beforeRead != nil {
+		if err := beforeRead(); err != nil {
+			return nil, err
+		}
+	}
+	p := make([]byte, sz)
+	if _, err := io.ReadFull(r, p); err != nil {
+		return nil, fmt.Errorf("read frame body: %w", err)
+	}
+	return p, nil
 }
 
 func marshalAndWrite(conn net.Conn, m pb.Message) error {
