@@ -958,7 +958,7 @@ func readResponse(conn net.Conn, timeout time.Duration) (buf []byte, retErr erro
 		}
 	}()
 
-	p, err := readFrame(conn, func() error {
+	p, err := readFrame(conn, maxFrameSize, func() error {
 		return conn.SetDeadline(time.Now().Add(timeout))
 	})
 	if err != nil {

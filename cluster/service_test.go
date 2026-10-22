@@ -5,6 +5,7 @@ import (
 	"compress/gzip"
 	"context"
 	"crypto/tls"
+	"encoding/binary"
 	"errors"
 	"fmt"
 	"io"
@@ -1475,4 +1476,104 @@ func Test_NewServiceErrorV2RoundTrip(t *testing.T) {
 	}
 	checkErr(t, "request execute", res[0].GetE().GetErrorV2())
 	checkErr(t, "request query", res[1].GetQ().GetErrorV2())
+}
+
+func Test_ServiceSetFrameLimit(t *testing.T) {
+	ml := mustNewMockTransport()
+	s := New(ml, mustNewMockDatabase(), mustNewMockManager(), nil)
+	if s.frameLimit != maxFrameSize {
+		t.Fatalf("unexpected default frame limit: %d", s.frameLimit)
+	}
+
+	if err := s.SetFrameLimit(1024); err != nil {
+		t.Fatalf("failed to set frame limit: %s", err)
+	}
+	if s.frameLimit != 1024 {
+		t.Fatalf("unexpected frame limit: %d", s.frameLimit)
+	}
+
+	if err := s.SetFrameLimit(0); err != nil {
+		t.Fatalf("failed to set frame limit: %s", err)
+	}
+	if s.frameLimit != maxFrameSize {
+		t.Fatalf("zero did not restore the default frame limit: %d", s.frameLimit)
+	}
+
+	if err := s.Open(); err != nil {
+		t.Fatalf("failed to open cluster service: %s", err)
+	}
+	defer s.Close()
+	if err := s.SetFrameLimit(2048); err != ErrServiceOpen {
+		t.Fatalf("expected ErrServiceOpen after open, got %v", err)
+	}
+}
+
+// Test_ServiceFrameLimit shows that a peer declaring a frame above the limit
+// has its connection closed as soon as the length is read, with no body ever
+// sent, and that the service goes on serving other connections.
+func Test_ServiceFrameLimit(t *testing.T) {
+	cmd := &proto.Command{Type: proto.Command_COMMAND_TYPE_GET_NODE_META}
+	p, err := pb.Marshal(cmd)
+	if err != nil {
+		t.Fatalf("failed to marshal command: %s", err)
+	}
+	limit := uint64(len(p))
+
+	ml := mustNewMockTransport()
+	s := New(ml, mustNewMockDatabase(), mustNewMockManager(), nil)
+	if err := s.SetFrameLimit(limit); err != nil {
+		t.Fatalf("failed to set frame limit: %s", err)
+	}
+	if err := s.Open(); err != nil {
+		t.Fatalf("failed to open cluster service: %s", err)
+	}
+	defer s.Close()
+
+	serves := func() {
+		t.Helper()
+		conn, err := ml.Dial(s.Addr(), 5*time.Second)
+		if err != nil {
+			t.Fatalf("failed to dial service: %s", err)
+		}
+		defer conn.Close()
+		if err := writeCommand(conn, cmd, 5*time.Second); err != nil {
+			t.Fatalf("failed to write command: %s", err)
+		}
+		resp, err := readResponse(conn, 5*time.Second)
+		if err != nil {
+			t.Fatalf("failed to read response: %s", err)
+		}
+		if err := pb.Unmarshal(resp, &proto.NodeMeta{}); err != nil {
+			t.Fatalf("failed to unmarshal response: %s", err)
+		}
+	}
+
+	// A frame exactly at the limit is served.
+	serves()
+
+	// A frame declared one byte over the limit is refused. Only the length
+	// is sent: the service must not wait for a body it will never read.
+	before := stats.Get(numFrameTooLarge).String()
+	conn, err := ml.Dial(s.Addr(), 5*time.Second)
+	if err != nil {
+		t.Fatalf("failed to dial service: %s", err)
+	}
+	defer conn.Close()
+	hdr := make([]byte, protoBufferLengthSize)
+	binary.LittleEndian.PutUint64(hdr, limit+1)
+	if _, err := conn.Write(hdr); err != nil {
+		t.Fatalf("failed to write frame length: %s", err)
+	}
+	if err := conn.SetReadDeadline(time.Now().Add(5 * time.Second)); err != nil {
+		t.Fatalf("failed to set read deadline: %s", err)
+	}
+	if _, err := conn.Read(make([]byte, 1)); err != io.EOF {
+		t.Fatalf("expected service to close the connection, got %v", err)
+	}
+	if after := stats.Get(numFrameTooLarge).String(); after == before {
+		t.Fatalf("frame-too-large stat not incremented")
+	}
+
+	// The service goes on serving.
+	serves()
 }
