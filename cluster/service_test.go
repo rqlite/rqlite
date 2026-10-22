@@ -1,16 +1,21 @@
 package cluster
 
 import (
+	"bytes"
+	"compress/gzip"
 	"context"
 	"crypto/tls"
 	"errors"
 	"fmt"
 	"io"
 	"net"
+	"slices"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
+	"github.com/rqlite/rqlite/v10/auth"
 	"github.com/rqlite/rqlite/v10/cluster/proto"
 	command "github.com/rqlite/rqlite/v10/command/proto"
 	"github.com/rqlite/rqlite/v10/internal/fsutil"
@@ -365,26 +370,321 @@ func Test_NewServiceNotify(t *testing.T) {
 	}
 }
 
-// Test_NewServiceBackupStreamUnauthorized ensures that a backup stream
-// request carrying invalid credentials is answered with "unauthorized" and
-// that the node then closes the connection without sending a single byte
-// of the database. The test talks to the raw connection so that it can
-// observe exactly what follows the error response.
-func Test_NewServiceBackupStreamUnauthorized(t *testing.T) {
-	ml := mustNewMockTransport()
-	db := mustNewMockDatabase()
-	db.backupFn = func(br *command.BackupRequest, dst io.Writer) (int, error) {
-		return dst.Write([]byte("this is SQLite data"))
-	}
+// errResponse is any cluster response message that carries an error string.
+type errResponse interface {
+	pb.Message
+	GetError() string
+}
 
-	credStr := mustNewMockCredentialStore()
-	credStr.HasPermOK = false
-	s := New(ml, db, mustNewMockManager(), credStr)
-	if s == nil {
-		t.Fatalf("failed to create cluster service")
+// unauthorizedCommand describes one command that must be rejected when the
+// credential store does not grant the permission it needs.
+type unauthorizedCommand struct {
+	name  string
+	cmd   *proto.Command
+	perms []string    // Permissions the store must be asked for, in order.
+	resp  errResponse // Response type the client decodes for this command.
+}
+
+// unauthorizedCommands lists every command type that requires a permission,
+// with the permissions the service must ask the credential store for. Join
+// appears three times because its permission depends on the request.
+func unauthorizedCommands() []unauthorizedCommand {
+	return []unauthorizedCommand{
+		{
+			name: "EXECUTE",
+			cmd: &proto.Command{
+				Type:    proto.Command_COMMAND_TYPE_EXECUTE,
+				Request: &proto.Command_ExecuteRequest{ExecuteRequest: executeRequestFromString("some SQL")},
+			},
+			perms: []string{auth.PermExecute},
+			resp:  &proto.CommandExecuteResponse{},
+		},
+		{
+			name: "QUERY",
+			cmd: &proto.Command{
+				Type:    proto.Command_COMMAND_TYPE_QUERY,
+				Request: &proto.Command_QueryRequest{QueryRequest: queryRequestFromString("some SQL")},
+			},
+			perms: []string{auth.PermQuery},
+			resp:  &proto.CommandQueryResponse{},
+		},
+		{
+			name: "REQUEST",
+			cmd: &proto.Command{
+				Type:    proto.Command_COMMAND_TYPE_REQUEST,
+				Request: &proto.Command_ExecuteQueryRequest{ExecuteQueryRequest: executeQueryRequestFromString("some SQL")},
+			},
+			// The check stops at the first permission the store refuses.
+			perms: []string{auth.PermQuery},
+			resp:  &proto.CommandRequestResponse{},
+		},
+		{
+			name: "BACKUP",
+			cmd: &proto.Command{
+				Type:    proto.Command_COMMAND_TYPE_BACKUP,
+				Request: &proto.Command_BackupRequest{BackupRequest: backupRequestBinary(true)},
+			},
+			perms: []string{auth.PermBackup},
+			resp:  &proto.CommandBackupResponse{},
+		},
+		{
+			name: "BACKUP_STREAM",
+			cmd: &proto.Command{
+				Type:    proto.Command_COMMAND_TYPE_BACKUP_STREAM,
+				Request: &proto.Command_BackupRequest{BackupRequest: backupRequestBinary(true)},
+			},
+			perms: []string{auth.PermBackup},
+			resp:  &proto.CommandBackupResponse{},
+		},
+		{
+			name: "LOAD",
+			cmd: &proto.Command{
+				Type:    proto.Command_COMMAND_TYPE_LOAD,
+				Request: &proto.Command_LoadRequest{LoadRequest: &command.LoadRequest{Data: []byte("sqlite")}},
+			},
+			perms: []string{auth.PermLoad},
+			resp:  &proto.CommandLoadResponse{},
+		},
+		{
+			name: "REMOVE_NODE",
+			cmd: &proto.Command{
+				Type:    proto.Command_COMMAND_TYPE_REMOVE_NODE,
+				Request: &proto.Command_RemoveNodeRequest{RemoveNodeRequest: &command.RemoveNodeRequest{Id: "node1"}},
+			},
+			perms: []string{auth.PermRemove},
+			resp:  &proto.CommandRemoveNodeResponse{},
+		},
+		{
+			name: "DEMOTE_NODE",
+			cmd: &proto.Command{
+				Type:    proto.Command_COMMAND_TYPE_DEMOTE_NODE,
+				Request: &proto.Command_DemoteNodeRequest{DemoteNodeRequest: &command.DemoteNodeRequest{Id: "node1"}},
+			},
+			perms: []string{auth.PermDemote},
+			resp:  &proto.CommandDemoteNodeResponse{},
+		},
+		{
+			name: "PROMOTE_NODE",
+			cmd: &proto.Command{
+				Type:    proto.Command_COMMAND_TYPE_PROMOTE_NODE,
+				Request: &proto.Command_PromoteNodeRequest{PromoteNodeRequest: &command.PromoteNodeRequest{Id: "node1"}},
+			},
+			perms: []string{auth.PermPromote},
+			resp:  &proto.CommandPromoteNodeResponse{},
+		},
+		{
+			name: "NOTIFY",
+			cmd: &proto.Command{
+				Type:    proto.Command_COMMAND_TYPE_NOTIFY,
+				Request: &proto.Command_NotifyRequest{NotifyRequest: &command.NotifyRequest{Id: "node1", Address: "localhost"}},
+			},
+			perms: []string{auth.PermJoin},
+			resp:  &proto.CommandNotifyResponse{},
+		},
+		{
+			name: "JOIN_voter",
+			cmd: &proto.Command{
+				Type:    proto.Command_COMMAND_TYPE_JOIN,
+				Request: &proto.Command_JoinRequest{JoinRequest: &command.JoinRequest{Id: "node1", Address: "localhost", Voter: true}},
+			},
+			perms: []string{auth.PermJoin},
+			resp:  &proto.CommandJoinResponse{},
+		},
+		{
+			name: "JOIN_non_voter",
+			cmd: &proto.Command{
+				Type:    proto.Command_COMMAND_TYPE_JOIN,
+				Request: &proto.Command_JoinRequest{JoinRequest: &command.JoinRequest{Id: "node1", Address: "localhost", Voter: false}},
+			},
+			perms: []string{auth.PermJoinReadOnly, auth.PermJoinReadReplica},
+			resp:  &proto.CommandJoinResponse{},
+		},
+		{
+			name: "JOIN_nil_request",
+			cmd: &proto.Command{
+				Type: proto.Command_COMMAND_TYPE_JOIN,
+			},
+			perms: []string{auth.PermJoin},
+			resp:  &proto.CommandJoinResponse{},
+		},
+		{
+			name: "STEPDOWN",
+			cmd: &proto.Command{
+				Type:    proto.Command_COMMAND_TYPE_STEPDOWN,
+				Request: &proto.Command_StepdownRequest{StepdownRequest: &command.StepdownRequest{Wait: true}},
+			},
+			perms: []string{auth.PermLeaderOps},
+			resp:  &proto.CommandStepdownResponse{},
+		},
+		{
+			name: "HIGHWATER_MARK_UPDATE",
+			cmd: &proto.Command{
+				Type:    proto.Command_COMMAND_TYPE_HIGHWATER_MARK_UPDATE,
+				Request: &proto.Command_HighwaterMarkUpdateRequest{HighwaterMarkUpdateRequest: &proto.HighwaterMarkUpdateRequest{HighwaterMark: 123}},
+			},
+			perms: []string{auth.PermCDCHWMUpdate},
+			resp:  &proto.HighwaterMarkUpdateResponse{},
+		},
 	}
+}
+
+// openCommands lists the command types which need no permission.
+var openCommands = []proto.Command_Type{
+	proto.Command_COMMAND_TYPE_GET_NODE_META,
+	proto.Command_COMMAND_TYPE_LOAD_CHUNK,
+}
+
+// mustReadClosed checks that nothing further arrives on conn and that the
+// remote end has closed it. Since the service closes a connection only by
+// returning from its handler, seeing EOF also proves the handler finished.
+func mustReadClosed(t *testing.T, conn net.Conn) {
+	t.Helper()
+	if err := conn.SetReadDeadline(time.Now().Add(5 * time.Second)); err != nil {
+		t.Fatalf("failed to set read deadline: %s", err)
+	}
+	buf := make([]byte, 1)
+	n, err := conn.Read(buf)
+	if n != 0 {
+		t.Fatalf("node sent %d byte(s) after rejecting the command", n)
+	}
+	if err != io.EOF {
+		t.Fatalf("expected EOF after rejected command, got %v", err)
+	}
+}
+
+// Test_ServiceUnauthorizedClosesConnection sends every command type that
+// requires a permission with credentials the store rejects, and checks that
+// the node answers "unauthorized", asks the store for the right permission,
+// touches neither the database nor the cluster manager, and then closes the
+// connection without sending another byte. Each command is also sent with
+// its request payload missing, which must not bypass the check.
+func Test_ServiceUnauthorizedClosesConnection(t *testing.T) {
+	for _, tc := range unauthorizedCommands() {
+		for _, variant := range []struct {
+			name string
+			cmd  *proto.Command
+		}{
+			{"request", tc.cmd},
+			{"no_request", &proto.Command{Type: tc.cmd.Type}},
+		} {
+			t.Run(tc.name+"/"+variant.name, func(t *testing.T) {
+				// Every path into the database or cluster manager bumps this
+				// counter, so any work done on a rejected command is caught.
+				var touched atomic.Int64
+				touch := func() { touched.Add(1) }
+				db := &mockDatabase{
+					executeFn: func(*command.ExecuteRequest) ([]*command.ExecuteQueryResponse, uint64, error) {
+						touch()
+						return nil, 0, nil
+					},
+					queryFn: func(*command.QueryRequest) ([]*command.QueryRows, uint64, error) {
+						touch()
+						return nil, 0, nil
+					},
+					requestFn: func(*command.ExecuteQueryRequest) ([]*command.ExecuteQueryResponse, uint64, uint64, error) {
+						touch()
+						return nil, 0, 0, nil
+					},
+					backupFn: func(_ *command.BackupRequest, dst io.Writer) (int, error) {
+						touch()
+						return dst.Write(mustGZIPCompress([]byte("this is SQLite data")))
+					},
+					loadFn: func(*command.LoadRequest) error {
+						touch()
+						return nil
+					},
+				}
+				mgr := &MockManager{
+					removeNodeFn:  func(*command.RemoveNodeRequest) error { touch(); return nil },
+					demoteNodeFn:  func(*command.DemoteNodeRequest) error { touch(); return nil },
+					promoteNodeFn: func(*command.PromoteNodeRequest) error { touch(); return nil },
+					notifyFn:      func(*command.NotifyRequest) error { touch(); return nil },
+					joinFn:        func(*command.JoinRequest) error { touch(); return nil },
+					stepdownFn:    func(bool, string) error { touch(); return nil },
+				}
+
+				var mu sync.Mutex
+				var asked []string
+				credStr := &mockCredentialStore{aaFunc: func(username, password, perm string) bool {
+					mu.Lock()
+					defer mu.Unlock()
+					asked = append(asked, perm)
+					return false
+				}}
+
+				ml := mustNewMockTransport()
+				s := New(ml, db, mgr, credStr)
+				if err := s.Open(); err != nil {
+					t.Fatalf("failed to open cluster service: %s", err)
+				}
+				defer s.Close()
+				hwmCh := make(chan uint64, 1)
+				s.RegisterHWMUpdate(hwmCh)
+
+				conn, err := ml.Dial(s.Addr(), 5*time.Second)
+				if err != nil {
+					t.Fatalf("failed to dial service: %s", err)
+				}
+				defer conn.Close()
+
+				cmd := pb.Clone(variant.cmd).(*proto.Command)
+				cmd.Credentials = makeCredentials("user", "wrong")
+				if err := writeCommand(conn, cmd, 5*time.Second); err != nil {
+					t.Fatalf("failed to write command: %s", err)
+				}
+				p, err := readResponse(conn, 5*time.Second)
+				if err != nil {
+					t.Fatalf("failed to read response: %s", err)
+				}
+				if cmd.Type == proto.Command_COMMAND_TYPE_BACKUP {
+					// Non-streaming backup responses are compressed on the wire.
+					if p, err = mustGZIPUncompress(p); err != nil {
+						t.Fatalf("failed to decompress response: %s", err)
+					}
+				}
+				resp := pb.Clone(tc.resp).(errResponse)
+				if err := pb.Unmarshal(p, resp); err != nil {
+					t.Fatalf("failed to unmarshal response: %s", err)
+				}
+				if resp.GetError() != "unauthorized" {
+					t.Fatalf("failed to get correct error, exp %s, got %q", "unauthorized", resp.GetError())
+				}
+
+				// The node must now close the connection. Once it has, the
+				// handler has returned, so any work it did is visible below.
+				mustReadClosed(t, conn)
+
+				if n := touched.Load(); n != 0 {
+					t.Fatalf("database or cluster manager was called %d time(s) on a rejected command", n)
+				}
+				if len(hwmCh) != 0 {
+					t.Fatalf("highwater mark was delivered on a rejected command")
+				}
+				if variant.name == "request" {
+					mu.Lock()
+					defer mu.Unlock()
+					if !slices.Equal(asked, tc.perms) {
+						t.Fatalf("credential store asked for %v, exp %v", asked, tc.perms)
+					}
+				}
+			})
+		}
+	}
+}
+
+// Test_ServiceOpenCommandsNeedNoPermission checks that the command types
+// which need no permission are still served, on a connection that stays
+// open, even when the credential store rejects everything.
+func Test_ServiceOpenCommandsNeedNoPermission(t *testing.T) {
+	var asked atomic.Int64
+	credStr := &mockCredentialStore{aaFunc: func(string, string, string) bool {
+		asked.Add(1)
+		return false
+	}}
+	ml := mustNewMockTransport()
+	s := New(ml, mustNewMockDatabase(), mustNewMockManager(), credStr)
 	if err := s.Open(); err != nil {
-		t.Fatalf("failed to open cluster service")
+		t.Fatalf("failed to open cluster service: %s", err)
 	}
 	defer s.Close()
 
@@ -394,41 +694,87 @@ func Test_NewServiceBackupStreamUnauthorized(t *testing.T) {
 	}
 	defer conn.Close()
 
-	cmd := &proto.Command{
-		Type: proto.Command_COMMAND_TYPE_BACKUP_STREAM,
-		Request: &proto.Command_BackupRequest{
-			BackupRequest: backupRequestBinary(true),
-		},
-		Credentials: makeCredentials("user", "wrong"),
-	}
-	if err := writeCommand(conn, cmd, 5*time.Second); err != nil {
-		t.Fatalf("failed to write backup command: %s", err)
-	}
+	// Send each open command twice on the same connection, to prove the
+	// connection is left open after each one.
+	for i := 0; i < 2; i++ {
+		cmd := &proto.Command{Type: proto.Command_COMMAND_TYPE_GET_NODE_META}
+		if err := writeCommand(conn, cmd, 5*time.Second); err != nil {
+			t.Fatalf("failed to write node meta command: %s", err)
+		}
+		p, err := readResponse(conn, 5*time.Second)
+		if err != nil {
+			t.Fatalf("failed to read node meta response: %s", err)
+		}
+		if err := pb.Unmarshal(p, &proto.NodeMeta{}); err != nil {
+			t.Fatalf("failed to unmarshal node meta response: %s", err)
+		}
 
-	p, err := readResponse(conn, 5*time.Second)
+		cmd = &proto.Command{
+			Type:    proto.Command_COMMAND_TYPE_LOAD_CHUNK,
+			Request: &proto.Command_LoadChunkRequest{LoadChunkRequest: &command.LoadChunkRequest{}},
+		}
+		if err := writeCommand(conn, cmd, 5*time.Second); err != nil {
+			t.Fatalf("failed to write load chunk command: %s", err)
+		}
+		p, err = readResponse(conn, 5*time.Second)
+		if err != nil {
+			t.Fatalf("failed to read load chunk response: %s", err)
+		}
+		resp := &proto.CommandLoadChunkResponse{}
+		if err := pb.Unmarshal(p, resp); err != nil {
+			t.Fatalf("failed to unmarshal load chunk response: %s", err)
+		}
+		if resp.GetError() != "unsupported" {
+			t.Fatalf("failed to get correct error, exp %s, got %q", "unsupported", resp.GetError())
+		}
+	}
+	if n := asked.Load(); n != 0 {
+		t.Fatalf("credential store was asked %d time(s) for commands that need no permission", n)
+	}
+}
+
+// Test_ServiceUnknownCommandClosesConnection checks that a command type the
+// node does not recognise gets no response and closes the connection, even
+// when no credential store is configured.
+func Test_ServiceUnknownCommandClosesConnection(t *testing.T) {
+	ml := mustNewMockTransport()
+	s := New(ml, mustNewMockDatabase(), mustNewMockManager(), nil)
+	if err := s.Open(); err != nil {
+		t.Fatalf("failed to open cluster service: %s", err)
+	}
+	defer s.Close()
+
+	conn, err := ml.Dial(s.Addr(), 5*time.Second)
 	if err != nil {
-		t.Fatalf("failed to read backup response: %s", err)
+		t.Fatalf("failed to dial service: %s", err)
 	}
-	resp := &proto.CommandBackupResponse{}
-	if err := pb.Unmarshal(p, resp); err != nil {
-		t.Fatalf("failed to unmarshal backup response: %s", err)
-	}
-	if resp.Error != "unauthorized" {
-		t.Fatalf("failed to get correct error, exp %s, got %s", "unauthorized", resp.Error)
-	}
+	defer conn.Close()
 
-	// Nothing else may arrive on this connection. The node must close it,
-	// so the next read returns EOF with no data.
-	if err := conn.SetReadDeadline(time.Now().Add(5 * time.Second)); err != nil {
-		t.Fatalf("failed to set read deadline: %s", err)
+	cmd := &proto.Command{Type: proto.Command_COMMAND_TYPE_UNKNOWN}
+	if err := writeCommand(conn, cmd, 5*time.Second); err != nil {
+		t.Fatalf("failed to write command: %s", err)
 	}
-	buf := make([]byte, 1)
-	n, err := conn.Read(buf)
-	if n != 0 {
-		t.Fatalf("node sent %d byte(s) of backup data despite invalid credentials", n)
+	mustReadClosed(t, conn)
+}
+
+// Test_ServiceEveryCommandTypeIsCovered fails when a command type exists
+// that neither the unauthorized tests nor the open-command list knows
+// about. Adding a command type means deciding, here, whether it needs a
+// permission, and adding it to the matching table.
+func Test_ServiceEveryCommandTypeIsCovered(t *testing.T) {
+	covered := map[proto.Command_Type]bool{
+		proto.Command_COMMAND_TYPE_UNKNOWN: true, // Test_ServiceUnknownCommandClosesConnection
 	}
-	if err != io.EOF {
-		t.Fatalf("expected EOF after unauthorized response, got %v", err)
+	for _, tc := range unauthorizedCommands() {
+		covered[tc.cmd.Type] = true
+	}
+	for _, typ := range openCommands {
+		covered[typ] = true
+	}
+	for v, name := range proto.Command_Type_name {
+		if !covered[proto.Command_Type(v)] {
+			t.Errorf("command type %s has no authorization test; add it to unauthorizedCommands or openCommands", name)
+		}
 	}
 }
 
@@ -966,6 +1312,16 @@ func (m *mockCredentialStore) AA(username, password, perm string) bool {
 
 func mustNewMockCredentialStore() *mockCredentialStore {
 	return &mockCredentialStore{HasPermOK: true}
+}
+
+// mustGZIPUncompress returns the decompressed form of gzip data.
+func mustGZIPUncompress(b []byte) ([]byte, error) {
+	gzr, err := gzip.NewReader(bytes.NewReader(b))
+	if err != nil {
+		return nil, err
+	}
+	defer gzr.Close()
+	return io.ReadAll(gzr)
 }
 
 func makeCredentials(username, password string) *proto.Credentials {
