@@ -1,4 +1,4 @@
-## v10.6.5 (unreleased)
+## v10.6.5 (October 24th 2026)
 ### Implementation changes and bug fixes
 - [PR #2982](https://github.com/rqlite/rqlite/pull/2982): Guard the inter-node backup stream handler directly against a missing backup request.
 - [PR #2984](https://github.com/rqlite/rqlite/pull/2984): `POST /leader` returns a JSON error body, and 404 when the target node is not in the cluster.
