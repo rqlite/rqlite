@@ -58,6 +58,15 @@ func NewClient(dir, name string, opt *Options) (*Client, error) {
 		return nil, fmt.Errorf("invalid file parameter: %s (must be a simple filename without path separators)", name)
 	}
 
+	// The data file must never alias the metadata file, its staging name,
+	// or the temporary write-access probe. Use a case-insensitive check
+	// because these names can alias on Windows and macOS filesystems.
+	if strings.EqualFold(name, "METADATA.json") ||
+		strings.EqualFold(name, "METADATA.json.tmp") ||
+		strings.EqualFold(name, ".touch") {
+		return nil, fmt.Errorf("invalid file parameter: %q is reserved for internal backup state", name)
+	}
+
 	// Ensure the destination directory exists and is writable
 	if err := os.MkdirAll(dir, 0755); err != nil {
 		return nil, fmt.Errorf("failed to create directory %s: %w", dir, err)
