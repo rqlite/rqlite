@@ -2,8 +2,8 @@ package file
 
 import (
 	"context"
-	"errors"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"os"
