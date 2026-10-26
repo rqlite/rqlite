@@ -26,7 +26,8 @@ type Client struct {
 	metaPath  string
 	timestamp bool
 
-	now func() time.Time
+	now        func() time.Time
+	renameFile func(string, string) error
 }
 
 // Options represents options for the file storage client.
@@ -71,9 +72,10 @@ func NewClient(dir, name string, opt *Options) (*Client, error) {
 	fsutil.Remove(touchPath)
 
 	c := &Client{
-		dir:      dir,
-		name:     name,
-		metaPath: filepath.Join(dir, "METADATA.json"),
+		dir:        dir,
+		name:       name,
+		metaPath:   filepath.Join(dir, "METADATA.json"),
+		renameFile: fsutil.Rename,
 	}
 
 	if opt != nil {
@@ -173,11 +175,11 @@ func (c *Client) Upload(ctx context.Context, reader io.Reader, id string) (retEr
 		return fmt.Errorf("failed to write temporary metadata file %s: %w", tmpMetaPath, err)
 	}
 
-	if err := fsutil.Rename(tmpPath, finalPath); err != nil {
+	if err := c.renameFile(tmpPath, finalPath); err != nil {
 		return fmt.Errorf("failed to rename temporary file %s to %s: %w", tmpPath, finalPath, err)
 	}
 
-	if err := fsutil.Rename(tmpMetaPath, c.metaPath); err != nil {
+	if err := c.renameFile(tmpMetaPath, c.metaPath); err != nil {
 		fsutil.Remove(finalPath)
 		return fmt.Errorf("failed to rename temporary metadata file %s to %s: %w", tmpMetaPath, c.metaPath, err)
 	}
