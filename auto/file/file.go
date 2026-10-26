@@ -2,6 +2,7 @@ package file
 
 import (
 	"context"
+	"errors"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -175,13 +176,55 @@ func (c *Client) Upload(ctx context.Context, reader io.Reader, id string) (retEr
 		return fmt.Errorf("failed to write temporary metadata file %s: %w", tmpMetaPath, err)
 	}
 
+	// Keep the last committed payload while publishing the new one. Both
+	// metadata and the stable-name payload require separate renames, so a
+	// failed metadata rename must never delete the only good backup.
+	rollbackPath := tmpPath + ".previous"
+	havePrevious := false
+	if info, err := os.Lstat(finalPath); err == nil {
+		if !info.Mode().IsRegular() {
+			return fmt.Errorf("cannot replace non-regular backup file %s", finalPath)
+		}
+		// The hard link is in the same directory, so it is cheap even for
+		// large SQLite backups. If unsupported, fail before replacing data.
+		if err := os.Link(finalPath, rollbackPath); err != nil {
+			return fmt.Errorf("failed to preserve previous backup %s: %w", finalPath, err)
+		}
+		havePrevious = true
+	} else if !os.IsNotExist(err) {
+		return fmt.Errorf("failed to inspect previous backup %s: %w", finalPath, err)
+	}
+
 	if err := c.renameFile(tmpPath, finalPath); err != nil {
-		return fmt.Errorf("failed to rename temporary file %s to %s: %w", tmpPath, finalPath, err)
+		renameErr := fmt.Errorf("failed to rename temporary file %s to %s: %w", tmpPath, finalPath, err)
+		if havePrevious {
+			if cleanupErr := fsutil.Remove(rollbackPath); cleanupErr != nil {
+				return errors.Join(renameErr, fmt.Errorf("failed to remove unused rollback link %s: %w", rollbackPath, cleanupErr))
+			}
+		}
+		return renameErr
 	}
 
 	if err := c.renameFile(tmpMetaPath, c.metaPath); err != nil {
-		fsutil.Remove(finalPath)
-		return fmt.Errorf("failed to rename temporary metadata file %s to %s: %w", tmpMetaPath, c.metaPath, err)
+		metaErr := fmt.Errorf("failed to rename temporary metadata file %s to %s: %w", tmpMetaPath, c.metaPath, err)
+		if havePrevious {
+			// Restore the exact previous inode. If that fails, do not remove
+			// rollbackPath: the previous good backup remains recoverable.
+			if rollbackErr := c.renameFile(rollbackPath, finalPath); rollbackErr != nil {
+				return errors.Join(metaErr, fmt.Errorf("failed to restore previous backup (preserved at %s): %w", rollbackPath, rollbackErr))
+			}
+		} else if cleanupErr := fsutil.Remove(finalPath); cleanupErr != nil {
+			return errors.Join(metaErr, fmt.Errorf("failed to remove uncommitted backup %s: %w", finalPath, cleanupErr))
+		}
+		return metaErr
+	}
+
+	if havePrevious {
+		if err := fsutil.Remove(rollbackPath); err != nil {
+			// The new backup and metadata are already committed. Report the
+			// stale previous version rather than silently leave extra data.
+			return fmt.Errorf("backup committed, but failed to remove previous copy %s: %w", rollbackPath, err)
+		}
 	}
 	return nil
 }
