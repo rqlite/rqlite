@@ -6,6 +6,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -127,5 +128,80 @@ func TestUploadPayloadRenameFailureKeepsPreviousBackup(t *testing.T) {
 	}
 	if !bytes.Equal(data, old) {
 		t.Fatalf("prior data changed: %q", data)
+	}
+}
+
+func TestUploadMetadataRollbackFailurePreservesRecoverablePriorCopy(t *testing.T) {
+	ctx := context.Background()
+	client, err := NewClient(t.TempDir(), "backup.sqlite", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	committed := []byte("last-good-backup")
+	if err := client.Upload(ctx, bytes.NewReader(committed), "old"); err != nil {
+		t.Fatal(err)
+	}
+
+	metadataErr := errors.New("injected metadata commit error")
+	rollbackErr := errors.New("injected rollback rename error")
+	client.renameFile = func(src, dest string) error {
+		if dest == client.metaPath {
+			return metadataErr
+		}
+		if strings.HasSuffix(src, ".previous") {
+			return rollbackErr
+		}
+		return fsutil.Rename(src, dest)
+	}
+
+	err = client.Upload(ctx, bytes.NewReader([]byte("uncommitted-data")), "new")
+	if !errors.Is(err, metadataErr) || !errors.Is(err, rollbackErr) {
+		t.Fatalf("Upload error %v must report both commit and rollback failures", err)
+	}
+	links, err := filepath.Glob(filepath.Join(client.dir, ".upload-*.previous"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(links) != 1 {
+		t.Fatalf("recoverable previous copies = %d, want 1", len(links))
+	}
+	previous, err := os.ReadFile(links[0])
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !bytes.Equal(previous, committed) {
+		t.Fatalf("preserved previous copy changed: %q", previous)
+	}
+	md, err := client.CurrentMetadata(ctx)
+	if err != nil || md == nil || md.ID != "old" {
+		t.Fatalf("committed metadata changed: %+v, %v", md, err)
+	}
+}
+
+func TestUploadSuccessfulReplacementRemovesRollbackCopy(t *testing.T) {
+	ctx := context.Background()
+	client, err := NewClient(t.TempDir(), "backup.sqlite", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, value := range []string{"old", "new"} {
+		if err := client.Upload(ctx, bytes.NewReader([]byte(value)), value); err != nil {
+			t.Fatal(err)
+		}
+	}
+	links, err := filepath.Glob(filepath.Join(client.dir, ".upload-*.previous"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(links) != 0 {
+		t.Fatalf("successful replacement leaked rollback links: %v", links)
+	}
+	contents, err := os.ReadFile(filepath.Join(client.dir, client.name))
+	if err != nil || string(contents) != "new" {
+		t.Fatalf("backup contents = %q err = %v", contents, err)
+	}
+	md, err := client.CurrentMetadata(ctx)
+	if err != nil || md == nil || md.ID != "new" {
+		t.Fatalf("wrong current metadata %+v err=%v", md, err)
 	}
 }
