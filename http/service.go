@@ -592,6 +592,8 @@ func (s *Service) handleRemove(w http.ResponseWriter, r *http.Request, qp QueryP
 
 // handleDemote handles requests to demote a voting node to a non-voter.
 func (s *Service) handleDemote(w http.ResponseWriter, r *http.Request, qp QueryParams) {
+	w.Header().Set("Content-Type", "application/json; charset=utf-8")
+
 	if !s.CheckRequestPerm(r, auth.PermDemote) {
 		w.WriteHeader(http.StatusUnauthorized)
 		return
@@ -618,14 +620,21 @@ func (s *Service) handleDemote(w http.ResponseWriter, r *http.Request, qp QueryP
 		}
 		if errors.Is(err, proxy.ErrLeaderNotFound) {
 			stats.Add(numLeaderNotFound, 1)
-			http.Error(w, proxy.ErrLeaderNotFound.Error(), http.StatusServiceUnavailable)
+			w.WriteHeader(http.StatusServiceUnavailable)
+			s.writeResponse(w, qp, &Response{Error: proxy.ErrLeaderNotFound.Error()})
 			return
 		}
 		if errors.Is(err, proxy.ErrUnauthorized) {
-			http.Error(w, "remote demote node not authorized", http.StatusUnauthorized)
+			w.WriteHeader(http.StatusUnauthorized)
+			s.writeResponse(w, qp, &Response{Error: err.Error()})
 			return
 		}
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		statusCode := http.StatusInternalServerError
+		if errors.Is(err, proxy.ErrNodeNotFound) {
+			statusCode = http.StatusNotFound
+		}
+		w.WriteHeader(statusCode)
+		s.writeResponse(w, qp, &Response{Error: err.Error()})
 		return
 	}
 	w.Header().Set(ServedByHTTPHeader, addr)
@@ -633,6 +642,8 @@ func (s *Service) handleDemote(w http.ResponseWriter, r *http.Request, qp QueryP
 
 // handlePromote handles requests to promote a non-voting node to a voter.
 func (s *Service) handlePromote(w http.ResponseWriter, r *http.Request, qp QueryParams) {
+	w.Header().Set("Content-Type", "application/json; charset=utf-8")
+
 	if !s.CheckRequestPerm(r, auth.PermPromote) {
 		w.WriteHeader(http.StatusUnauthorized)
 		return
@@ -659,14 +670,21 @@ func (s *Service) handlePromote(w http.ResponseWriter, r *http.Request, qp Query
 		}
 		if errors.Is(err, proxy.ErrLeaderNotFound) {
 			stats.Add(numLeaderNotFound, 1)
-			http.Error(w, proxy.ErrLeaderNotFound.Error(), http.StatusServiceUnavailable)
+			w.WriteHeader(http.StatusServiceUnavailable)
+			s.writeResponse(w, qp, &Response{Error: proxy.ErrLeaderNotFound.Error()})
 			return
 		}
 		if errors.Is(err, proxy.ErrUnauthorized) {
-			http.Error(w, "remote promote node not authorized", http.StatusUnauthorized)
+			w.WriteHeader(http.StatusUnauthorized)
+			s.writeResponse(w, qp, &Response{Error: err.Error()})
 			return
 		}
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		statusCode := http.StatusInternalServerError
+		if errors.Is(err, proxy.ErrNodeNotFound) {
+			statusCode = http.StatusNotFound
+		}
+		w.WriteHeader(statusCode)
+		s.writeResponse(w, qp, &Response{Error: err.Error()})
 		return
 	}
 	w.Header().Set(ServedByHTTPHeader, addr)

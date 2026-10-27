@@ -794,6 +794,30 @@ func Test_Demote_NotLeader_ForwardUnauthorized(t *testing.T) {
 	}
 }
 
+func Test_Demote_NotLeader_ForwardNodeNotFound(t *testing.T) {
+	t.Parallel()
+	s := &mockStore{
+		demoteFn: func(ctx context.Context, dn *proto.DemoteNodeRequest) error {
+			return store.ErrNotLeader
+		},
+		leaderAddrFn: func() (string, error) {
+			return "leader:4002", nil
+		},
+	}
+	c := &mockCluster{
+		demoteNodeFn: func(ctx context.Context, dn *proto.DemoteNodeRequest, nodeAddr string, creds *clstrPB.Credentials, timeout time.Duration) error {
+			// The cluster client rebuilds the remote error from its message.
+			return errors.New(store.ErrNodeNotFound.Error())
+		},
+	}
+	p := newTestProxy(s, c)
+
+	_, err := p.Demote(context.Background(), &proto.DemoteNodeRequest{Id: "nonexistent"}, nil, time.Second, false)
+	if !errors.Is(err, ErrNodeNotFound) {
+		t.Fatalf("expected ErrNodeNotFound, got %v", err)
+	}
+}
+
 func Test_Promote_LocalSuccess(t *testing.T) {
 	t.Parallel()
 	called := false
@@ -926,6 +950,30 @@ func Test_Promote_NotLeader_ForwardUnauthorized(t *testing.T) {
 	_, err := p.Promote(context.Background(), &proto.PromoteNodeRequest{Id: "node1"}, nil, time.Second, false)
 	if !errors.Is(err, ErrUnauthorized) {
 		t.Fatalf("expected ErrUnauthorized, got %v", err)
+	}
+}
+
+func Test_Promote_NotLeader_ForwardNodeNotFound(t *testing.T) {
+	t.Parallel()
+	s := &mockStore{
+		promoteFn: func(ctx context.Context, dn *proto.PromoteNodeRequest) error {
+			return store.ErrNotLeader
+		},
+		leaderAddrFn: func() (string, error) {
+			return "leader:4002", nil
+		},
+	}
+	c := &mockCluster{
+		promoteNodeFn: func(ctx context.Context, dn *proto.PromoteNodeRequest, nodeAddr string, creds *clstrPB.Credentials, timeout time.Duration) error {
+			// The cluster client rebuilds the remote error from its message.
+			return errors.New(store.ErrNodeNotFound.Error())
+		},
+	}
+	p := newTestProxy(s, c)
+
+	_, err := p.Promote(context.Background(), &proto.PromoteNodeRequest{Id: "nonexistent"}, nil, time.Second, false)
+	if !errors.Is(err, ErrNodeNotFound) {
+		t.Fatalf("expected ErrNodeNotFound, got %v", err)
 	}
 }
 
