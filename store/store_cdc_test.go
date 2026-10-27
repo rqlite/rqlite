@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/rqlite/rqlite/v10/command/proto"
+	"github.com/rqlite/rqlite/v10/internal/fsutil"
 	"github.com/rqlite/rqlite/v10/internal/random"
 )
 
@@ -341,4 +342,81 @@ func mustNewStoreCDC(t *testing.T) (*Store, net.Listener) {
 		panic("failed to create new store")
 	}
 	return s, ly
+}
+
+// Test_StoreCDC_Events_AfterSnapshotRestore tests that CDC events are still
+// emitted after the node restores its database from a Raft snapshot. The
+// restore swaps in a new SQLite file, so the CDC hooks must survive the reopen.
+func Test_StoreCDC_Events_AfterSnapshotRestore(t *testing.T) {
+	s, ln := mustNewStoreCDC(t)
+	defer ln.Close()
+
+	if err := s.Open(); err != nil {
+		t.Fatalf("failed to open single-node store: %s", err.Error())
+	}
+	if err := s.Bootstrap(NewServer(s.ID(), s.Addr(), true)); err != nil {
+		t.Fatalf("failed to bootstrap single-node store: %s", err.Error())
+	}
+	defer s.Close(true)
+	if _, err := s.WaitForLeader(10 * time.Second); err != nil {
+		t.Fatalf("Error waiting for leader: %s", err)
+	}
+
+	er := executeRequestFromString(`CREATE TABLE foo (id INTEGER NOT NULL PRIMARY KEY, name TEXT)`, false, false)
+	if _, _, err := s.Execute(context.Background(), er); err != nil {
+		t.Fatalf("failed to execute CREATE TABLE on single node: %s", err.Error())
+	}
+	er = executeRequestFromString(`INSERT INTO foo(id, name) VALUES(101, "fiona")`, false, false)
+	if _, _, err := s.Execute(context.Background(), er); err != nil {
+		t.Fatalf("failed to execute INSERT on single node: %s", err.Error())
+	}
+	mustReceiveCDCInsert(t, s, 101)
+
+	// Snapshot, then restart without the clean-snapshot marker so the node
+	// cannot fast-restart on the existing SQLite file and must restore from
+	// the Raft snapshot.
+	if err := s.Snapshot(0); err != nil {
+		t.Fatalf("failed to take snapshot: %s", err.Error())
+	}
+	if err := s.Close(true); err != nil {
+		t.Fatalf("failed to close single-node store: %s", err.Error())
+	}
+	if err := fsutil.Remove(s.cleanSnapshotPath); err != nil {
+		t.Fatalf("failed to remove clean snapshot marker: %s", err.Error())
+	}
+	if err := s.Open(); err != nil {
+		t.Fatalf("failed to reopen single-node store: %s", err.Error())
+	}
+	defer s.Close(true)
+	if _, err := s.WaitForLeader(10 * time.Second); err != nil {
+		t.Fatalf("Error waiting for leader: %s", err)
+	}
+	if s.numSnapshotsStart.Load() != 1 {
+		t.Fatalf("expected snapshot start count to be 1, got %d", s.numSnapshotsStart.Load())
+	}
+
+	er = executeRequestFromString(`INSERT INTO foo(id, name) VALUES(102, "declan")`, false, false)
+	if _, _, err := s.Execute(context.Background(), er); err != nil {
+		t.Fatalf("failed to execute INSERT after restore: %s", err.Error())
+	}
+	mustReceiveCDCInsert(t, s, 102)
+}
+
+// mustReceiveCDCInsert waits for a single CDC INSERT event on table foo with
+// the given row ID, failing the test if it does not arrive.
+func mustReceiveCDCInsert(t *testing.T, s *Store, rowID int64) {
+	t.Helper()
+	select {
+	case events := <-s.CDCEventsC():
+		if events == nil || len(events.Events) != 1 {
+			t.Fatalf("expected 1 CDC event, got %v", events)
+		}
+		ev := events.Events[0]
+		if ev.Table != "foo" || ev.Op != proto.CDCEvent_INSERT || ev.NewRowId != rowID {
+			t.Fatalf("expected INSERT on foo with row ID %d, got %s on %s with row ID %d",
+				rowID, ev.Op, ev.Table, ev.NewRowId)
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatalf("timeout waiting for CDC INSERT event with row ID %d", rowID)
+	}
 }
