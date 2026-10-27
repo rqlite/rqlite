@@ -2087,6 +2087,40 @@ func Test_Demote_POST_StoreError(t *testing.T) {
 	}
 }
 
+func Test_Demote_POST_NodeNotFound(t *testing.T) {
+	st := &MockStore{
+		leaderAddr: "127.0.0.1:8001",
+		demoteFn: func(dn *command.DemoteNodeRequest) error {
+			return store.ErrNodeNotFound
+		},
+	}
+	cluster := &mockClusterService{apiAddr: "http://127.0.0.1:4001"}
+	cred := &mockCredentialStore{HasPermOK: true}
+
+	s := New("127.0.0.1:4001", st, cluster, proxy.New(st, cluster), cred)
+
+	req, err := http.NewRequest("POST", "/demote", strings.NewReader(`{"id": "nonexistent"}`))
+	if err != nil {
+		t.Fatalf("failed to create POST request: %s", err.Error())
+	}
+	rr := httptest.NewRecorder()
+	s.ServeHTTP(rr, req)
+
+	if rr.Code != http.StatusNotFound {
+		t.Fatalf("expected 404, got %d", rr.Code)
+	}
+
+	var resp struct {
+		Error string `json:"error"`
+	}
+	if err := json.Unmarshal(rr.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("expected JSON error body, got %q: %s", rr.Body.String(), err)
+	}
+	if resp.Error != store.ErrNodeNotFound.Error() {
+		t.Fatalf("expected error %q, got %q", store.ErrNodeNotFound.Error(), resp.Error)
+	}
+}
+
 func Test_Demote_POST_ForwardToLeader(t *testing.T) {
 	forwardedID := ""
 	forwardedAddr := ""
@@ -2280,6 +2314,40 @@ func Test_Promote_POST_StoreError(t *testing.T) {
 	}
 	if resp.Error != "promote failed" {
 		t.Fatalf("expected error 'promote failed', got %q", resp.Error)
+	}
+}
+
+func Test_Promote_POST_NodeNotFound(t *testing.T) {
+	st := &MockStore{
+		leaderAddr: "127.0.0.1:8001",
+		promoteFn: func(dn *command.PromoteNodeRequest) error {
+			return store.ErrNodeNotFound
+		},
+	}
+	cluster := &mockClusterService{apiAddr: "http://127.0.0.1:4001"}
+	cred := &mockCredentialStore{HasPermOK: true}
+
+	s := New("127.0.0.1:4001", st, cluster, proxy.New(st, cluster), cred)
+
+	req, err := http.NewRequest("POST", "/promote", strings.NewReader(`{"id": "nonexistent"}`))
+	if err != nil {
+		t.Fatalf("failed to create POST request: %s", err.Error())
+	}
+	rr := httptest.NewRecorder()
+	s.ServeHTTP(rr, req)
+
+	if rr.Code != http.StatusNotFound {
+		t.Fatalf("expected 404, got %d", rr.Code)
+	}
+
+	var resp struct {
+		Error string `json:"error"`
+	}
+	if err := json.Unmarshal(rr.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("expected JSON error body, got %q: %s", rr.Body.String(), err)
+	}
+	if resp.Error != store.ErrNodeNotFound.Error() {
+		t.Fatalf("expected error %q, got %q", store.ErrNodeNotFound.Error(), resp.Error)
 	}
 }
 

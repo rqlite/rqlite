@@ -629,7 +629,11 @@ func (s *Service) handleDemote(w http.ResponseWriter, r *http.Request, qp QueryP
 			s.writeResponse(w, qp, &Response{Error: err.Error()})
 			return
 		}
-		w.WriteHeader(http.StatusInternalServerError)
+		statusCode := http.StatusInternalServerError
+		if errors.Is(err, proxy.ErrNodeNotFound) {
+			statusCode = http.StatusNotFound
+		}
+		w.WriteHeader(statusCode)
 		s.writeResponse(w, qp, &Response{Error: err.Error()})
 		return
 	}
@@ -675,7 +679,11 @@ func (s *Service) handlePromote(w http.ResponseWriter, r *http.Request, qp Query
 			s.writeResponse(w, qp, &Response{Error: err.Error()})
 			return
 		}
-		w.WriteHeader(http.StatusInternalServerError)
+		statusCode := http.StatusInternalServerError
+		if errors.Is(err, proxy.ErrNodeNotFound) {
+			statusCode = http.StatusNotFound
+		}
+		w.WriteHeader(statusCode)
 		s.writeResponse(w, qp, &Response{Error: err.Error()})
 		return
 	}
