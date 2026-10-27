@@ -550,6 +550,11 @@ func (s *Service) RegisterStatus(key string, stat StatusReporter) error {
 }
 
 // handleRemove handles cluster-remove requests.
+//
+// Unlike the other node-management endpoints, removing a node which is not
+// in the cluster is not reported as an error. Raft treats such a removal as
+// a no-op and this endpoint has always returned 200 for it, so clients and
+// the shutdown self-removal path depend on that behavior.
 func (s *Service) handleRemove(w http.ResponseWriter, r *http.Request, qp QueryParams) {
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")
 
