@@ -177,8 +177,11 @@ func (c *Client) Upload(ctx context.Context, reader io.Reader, id string) (retEr
 		return fmt.Errorf("failed to rename temporary file %s to %s: %w", tmpPath, finalPath, err)
 	}
 
+	// Do not remove finalPath if the metadata rename fails. In stable-name
+	// mode it has already replaced the previous backup, so removing it would
+	// leave the existing metadata pointing at a file that no longer exists.
+	// Leaving it in place means a complete backup is always present.
 	if err := fsutil.Rename(tmpMetaPath, c.metaPath); err != nil {
-		fsutil.Remove(finalPath)
 		return fmt.Errorf("failed to rename temporary metadata file %s to %s: %w", tmpMetaPath, c.metaPath, err)
 	}
 	return nil

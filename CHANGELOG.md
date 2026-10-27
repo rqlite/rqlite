@@ -1,3 +1,7 @@
+## v10.6.6 (unreleased)
+### Implementation changes and bug fixes
+- [PR #2987](https://github.com/rqlite/rqlite/pull/2987): Keep the local auto-backup file if the metadata rename fails. Thanks @lmtlssss
+
 ## v10.6.5 (October 24th 2026)
 ### Implementation changes and bug fixes
 - [PR #2982](https://github.com/rqlite/rqlite/pull/2982): Guard the inter-node backup stream handler directly against a missing backup request.
