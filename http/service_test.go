@@ -2076,8 +2076,14 @@ func Test_Demote_POST_StoreError(t *testing.T) {
 	if rr.Code != http.StatusInternalServerError {
 		t.Fatalf("expected 500, got %d", rr.Code)
 	}
-	if !strings.Contains(rr.Body.String(), "demote failed") {
-		t.Fatalf("expected error message to contain 'demote failed', got %s", rr.Body.String())
+	var resp struct {
+		Error string `json:"error"`
+	}
+	if err := json.Unmarshal(rr.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("expected JSON error body, got %q: %s", rr.Body.String(), err)
+	}
+	if resp.Error != "demote failed" {
+		t.Fatalf("expected error 'demote failed', got %q", resp.Error)
 	}
 }
 
@@ -2147,8 +2153,14 @@ func Test_Demote_POST_ForwardError(t *testing.T) {
 	if rr.Code != http.StatusInternalServerError {
 		t.Fatalf("expected 500, got %d", rr.Code)
 	}
-	if !strings.Contains(rr.Body.String(), "demote failed") {
-		t.Fatalf("expected error message to contain 'demote failed', got %s", rr.Body.String())
+	var resp struct {
+		Error string `json:"error"`
+	}
+	if err := json.Unmarshal(rr.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("expected JSON error body, got %q: %s", rr.Body.String(), err)
+	}
+	if resp.Error != "demote failed" {
+		t.Fatalf("expected error 'demote failed', got %q", resp.Error)
 	}
 }
 
@@ -2260,8 +2272,14 @@ func Test_Promote_POST_StoreError(t *testing.T) {
 	if rr.Code != http.StatusInternalServerError {
 		t.Fatalf("expected 500, got %d", rr.Code)
 	}
-	if !strings.Contains(rr.Body.String(), "promote failed") {
-		t.Fatalf("expected error message to contain 'promote failed', got %s", rr.Body.String())
+	var resp struct {
+		Error string `json:"error"`
+	}
+	if err := json.Unmarshal(rr.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("expected JSON error body, got %q: %s", rr.Body.String(), err)
+	}
+	if resp.Error != "promote failed" {
+		t.Fatalf("expected error 'promote failed', got %q", resp.Error)
 	}
 }
 
@@ -2331,8 +2349,14 @@ func Test_Promote_POST_ForwardError(t *testing.T) {
 	if rr.Code != http.StatusInternalServerError {
 		t.Fatalf("expected 500, got %d", rr.Code)
 	}
-	if !strings.Contains(rr.Body.String(), "promote failed") {
-		t.Fatalf("expected error message to contain 'promote failed', got %s", rr.Body.String())
+	var resp struct {
+		Error string `json:"error"`
+	}
+	if err := json.Unmarshal(rr.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("expected JSON error body, got %q: %s", rr.Body.String(), err)
+	}
+	if resp.Error != "promote failed" {
+		t.Fatalf("expected error 'promote failed', got %q", resp.Error)
 	}
 }
 
