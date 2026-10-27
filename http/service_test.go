@@ -1998,6 +1998,106 @@ func Test_Leader_POST_NodeNotFound_Forwarded(t *testing.T) {
 	}
 }
 
+func Test_Remove_DELETE(t *testing.T) {
+	removedID := ""
+	st := &MockStore{
+		leaderAddr: "127.0.0.1:8001",
+		removeFn: func(rn *command.RemoveNodeRequest) error {
+			removedID = rn.Id
+			return nil
+		},
+	}
+	cluster := &mockClusterService{apiAddr: "http://127.0.0.1:4001"}
+	cred := &mockCredentialStore{HasPermOK: true}
+
+	s := New("127.0.0.1:4001", st, cluster, proxy.New(st, cluster), cred)
+
+	req, err := http.NewRequest("DELETE", "/remove", strings.NewReader(`{"id": "node1"}`))
+	if err != nil {
+		t.Fatalf("failed to create DELETE request: %s", err.Error())
+	}
+	rr := httptest.NewRecorder()
+	s.ServeHTTP(rr, req)
+
+	if rr.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", rr.Code)
+	}
+	if removedID != "node1" {
+		t.Fatalf("expected node1 to be removed, got %q", removedID)
+	}
+}
+
+func Test_Remove_DELETE_StoreError(t *testing.T) {
+	st := &MockStore{
+		leaderAddr: "127.0.0.1:8001",
+		removeFn: func(rn *command.RemoveNodeRequest) error {
+			return errors.New("remove failed")
+		},
+	}
+	cluster := &mockClusterService{apiAddr: "http://127.0.0.1:4001"}
+	cred := &mockCredentialStore{HasPermOK: true}
+
+	s := New("127.0.0.1:4001", st, cluster, proxy.New(st, cluster), cred)
+
+	req, err := http.NewRequest("DELETE", "/remove", strings.NewReader(`{"id": "node1"}`))
+	if err != nil {
+		t.Fatalf("failed to create DELETE request: %s", err.Error())
+	}
+	rr := httptest.NewRecorder()
+	s.ServeHTTP(rr, req)
+
+	if rr.Code != http.StatusInternalServerError {
+		t.Fatalf("expected 500, got %d", rr.Code)
+	}
+	var resp struct {
+		Error string `json:"error"`
+	}
+	if err := json.Unmarshal(rr.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("expected JSON error body, got %q: %s", rr.Body.String(), err)
+	}
+	if resp.Error != "remove failed" {
+		t.Fatalf("expected error 'remove failed', got %q", resp.Error)
+	}
+}
+
+func Test_Remove_DELETE_ForwardError(t *testing.T) {
+	st := &MockStore{
+		leaderAddr: "127.0.0.1:8001",
+		removeFn: func(rn *command.RemoveNodeRequest) error {
+			return store.ErrNotLeader
+		},
+	}
+	cluster := &mockClusterService{
+		apiAddr: "http://127.0.0.1:4001",
+		removeNodeFn: func(rn *command.RemoveNodeRequest, nodeAddr string, t time.Duration) error {
+			return errors.New("remove failed")
+		},
+	}
+	cred := &mockCredentialStore{HasPermOK: true}
+
+	s := New("127.0.0.1:4001", st, cluster, proxy.New(st, cluster), cred)
+
+	req, err := http.NewRequest("DELETE", "/remove", strings.NewReader(`{"id": "node1"}`))
+	if err != nil {
+		t.Fatalf("failed to create DELETE request: %s", err.Error())
+	}
+	rr := httptest.NewRecorder()
+	s.ServeHTTP(rr, req)
+
+	if rr.Code != http.StatusInternalServerError {
+		t.Fatalf("expected 500, got %d", rr.Code)
+	}
+	var resp struct {
+		Error string `json:"error"`
+	}
+	if err := json.Unmarshal(rr.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("expected JSON error body, got %q: %s", rr.Body.String(), err)
+	}
+	if resp.Error != "remove failed" {
+		t.Fatalf("expected error 'remove failed', got %q", resp.Error)
+	}
+}
+
 func Test_Demote_POST(t *testing.T) {
 	demotedID := ""
 	store := &MockStore{
@@ -3040,6 +3140,7 @@ type MockStore struct {
 	readFromFn  func(r io.Reader) (int64, error)
 	committedFn func(timeout time.Duration) (uint64, error)
 	stepdownFn  func(wait bool, id string) error
+	removeFn    func(rn *command.RemoveNodeRequest) error
 	demoteFn    func(dn *command.DemoteNodeRequest) error
 	promoteFn   func(pn *command.PromoteNodeRequest) error
 	leaderAddr  string
@@ -3077,6 +3178,9 @@ func (m *MockStore) Notify(nr *command.NotifyRequest) error {
 }
 
 func (m *MockStore) Remove(ctx context.Context, rn *command.RemoveNodeRequest) error {
+	if m.removeFn != nil {
+		return m.removeFn(rn)
+	}
 	return nil
 }
 
