@@ -551,6 +551,8 @@ func (s *Service) RegisterStatus(key string, stat StatusReporter) error {
 
 // handleRemove handles cluster-remove requests.
 func (s *Service) handleRemove(w http.ResponseWriter, r *http.Request, qp QueryParams) {
+	w.Header().Set("Content-Type", "application/json; charset=utf-8")
+
 	if !s.CheckRequestPerm(r, auth.PermRemove) {
 		w.WriteHeader(http.StatusUnauthorized)
 		return
@@ -577,14 +579,17 @@ func (s *Service) handleRemove(w http.ResponseWriter, r *http.Request, qp QueryP
 		}
 		if errors.Is(err, proxy.ErrLeaderNotFound) {
 			stats.Add(numLeaderNotFound, 1)
-			http.Error(w, proxy.ErrLeaderNotFound.Error(), http.StatusServiceUnavailable)
+			w.WriteHeader(http.StatusServiceUnavailable)
+			s.writeResponse(w, qp, &Response{Error: proxy.ErrLeaderNotFound.Error()})
 			return
 		}
 		if errors.Is(err, proxy.ErrUnauthorized) {
-			http.Error(w, "remote remove node not authorized", http.StatusUnauthorized)
+			w.WriteHeader(http.StatusUnauthorized)
+			s.writeResponse(w, qp, &Response{Error: err.Error()})
 			return
 		}
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		w.WriteHeader(http.StatusInternalServerError)
+		s.writeResponse(w, qp, &Response{Error: err.Error()})
 		return
 	}
 	w.Header().Set(ServedByHTTPHeader, addr)
