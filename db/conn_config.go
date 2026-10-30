@@ -8,11 +8,16 @@ import (
 	"regexp"
 	"sort"
 
-	"github.com/mattn/go-sqlite3"
 	command "github.com/rqlite/rqlite/v10/command/proto"
 	"github.com/rqlite/rqlite/v10/db/querylog"
 	"github.com/rqlite/rqlite/v10/internal/rsync"
+	"modernc.org/sqlite"
+	sqlite3 "modernc.org/sqlite/lib"
 )
+
+// defaultBusyTimeoutMs is the busy timeout every new connection starts with,
+// matching the default of the cgo SQLite driver rqlite used before.
+const defaultBusyTimeoutMs = 5000
 
 // CnkOnCloseMode represents the checkpoint on close mode.
 type CnkOnCloseMode int
@@ -31,6 +36,8 @@ const (
 // statements are traced.
 type ConnConfig struct {
 	// Extensions is the list of paths to SQLite extension shared objects.
+	// The pure-Go driver cannot load extensions, so a non-empty list makes
+	// every connection attempt fail.
 	Extensions []string
 
 	// ChkOnClose controls whether SQLite checkpoints the WAL on connection close.
@@ -64,10 +71,9 @@ type ConnConfig struct {
 // database at dsn with this policy. The policy is copied, so later changes
 // to cfg do not reach connections opened through the connector.
 func (cfg ConnConfig) connector(dsn string) driver.Connector {
-	return newConnector(&sqlite3.SQLiteDriver{
-		Extensions:  cfg.Extensions,
-		ConnectHook: buildConnectHook(&cfg),
-	}, dsn)
+	drv := &sqlite.Driver{}
+	drv.RegisterConnectionHook(buildConnectHook(&cfg))
+	return newConnector(drv, dsn)
 }
 
 // extensionNames returns the sorted base names of the given extension paths.
@@ -83,11 +89,11 @@ func extensionNames(paths []string) []string {
 // connector opens connections to one DSN through one SQLite driver. It is
 // what lets a database be opened without registering a driver name.
 type connector struct {
-	drv *sqlite3.SQLiteDriver
+	drv *sqlite.Driver
 	dsn string
 }
 
-func newConnector(drv *sqlite3.SQLiteDriver, dsn string) *connector {
+func newConnector(drv *sqlite.Driver, dsn string) *connector {
 	return &connector{drv: drv, dsn: dsn}
 }
 
@@ -101,16 +107,25 @@ func (c *connector) Driver() driver.Driver {
 	return c.drv
 }
 
-// buildConnectHook composes a ConnectHook from cfg, chaining all requested
+// buildConnectHook composes a connection hook from cfg, chaining all requested
 // connection-level behaviors in order: checkpoint config, attach limit,
 // foreign keys, query tracing, then hooks.
 //
 // This driver unconditionally disables automatic checkpointing.
-func buildConnectHook(cfg *ConnConfig) func(conn *sqlite3.SQLiteConn) error {
-	return func(conn *sqlite3.SQLiteConn) error {
+func buildConnectHook(cfg *ConnConfig) sqlite.ConnectionHookFn {
+	return func(conn sqlite.ExecQuerierContext, _ string) error {
+		if len(cfg.Extensions) > 0 {
+			return fmt.Errorf("SQLite extensions are not supported by the modernc.org/sqlite driver")
+		}
+		raw, err := rawHandles(conn)
+		if err != nil {
+			return err
+		}
+		ctx := context.Background()
+
 		// Checkpoint-on-close configuration.
 		if cfg.ChkOnClose == CnkOnCloseModeDisabled {
-			if err := conn.DBConfigNoCkptOnClose(); err != nil {
+			if err := raw.dbConfigNoCkptOnClose(); err != nil {
 				return fmt.Errorf("cannot disable checkpoint on close: %w", err)
 			}
 		}
@@ -118,47 +133,56 @@ func buildConnectHook(cfg *ConnConfig) func(conn *sqlite3.SQLiteConn) error {
 		// It's critical that rqlite has full control over the checkpointing process
 		// so disable all auto-checkpointing. This doesn't return an error on a read-only
 		// connection, so an error here really is an issue.
-		if _, err := conn.Exec("PRAGMA wal_autocheckpoint=0", nil); err != nil {
+		if _, err := conn.ExecContext(ctx, "PRAGMA wal_autocheckpoint=0", nil); err != nil {
 			return fmt.Errorf("failed to disable automatic checkpointing: %s", err)
+		}
+
+		// The cgo driver gave every connection a busy timeout of 5 seconds
+		// unless told otherwise. The pure-Go driver leaves it at zero, so
+		// apply the same default here. SetBusyTimeout can still change it.
+		if _, err := conn.ExecContext(ctx, fmt.Sprintf("PRAGMA busy_timeout=%d", defaultBusyTimeoutMs), nil); err != nil {
+			return fmt.Errorf("cannot set busy timeout: %w", err)
 		}
 
 		// With the limit on attached databases set to zero SQLite refuses
 		// every ATTACH before it opens anything, at no cost to other
 		// statements. DETACH then fails on its own, as nothing is attached.
 		if cfg.DisableAttach {
-			conn.SetLimit(sqlite3.SQLITE_LIMIT_ATTACHED, 0)
+			raw.setLimit(sqlite3.SQLITE_LIMIT_ATTACHED, 0)
 		}
 
 		// Foreign key constraints.
 		if cfg.ForeignKeys {
-			if _, err := conn.Exec("PRAGMA foreign_keys = ON", nil); err != nil {
+			if _, err := conn.ExecContext(ctx, "PRAGMA foreign_keys = ON", nil); err != nil {
 				return fmt.Errorf("cannot enable foreign keys: %w", err)
 			}
 		}
 
 		// Query tracing.
 		if cfg.QueryLogger != nil {
-			if err := conn.SetTrace(&sqlite3.TraceConfig{
-				Callback:        cfg.QueryLogger.TraceHook,
-				EventMask:       sqlite3.TraceStmt | sqlite3.TraceProfile,
-				WantExpandedSQL: true,
-			}); err != nil {
+			if err := raw.setTrace(querylog.TraceStmt|querylog.TraceProfile, cfg.QueryLogger.TraceHook); err != nil {
 				return err
 			}
 		}
 
 		// Hooks.
-		if cfg.PreUpdateHook != nil {
-			conn.RegisterPreUpdateHook(cfg.PreUpdateHook.SQLite(cfg.PreUpdateTableRe, cfg.PreUpdateRowIDsOnly))
+		if cfg.PreUpdateHook != nil || cfg.CommitHook != nil || cfg.RollbackHook != nil {
+			hr, ok := conn.(sqlite.HookRegisterer)
+			if !ok {
+				return fmt.Errorf("driver connection %T cannot register hooks", conn)
+			}
+			if cfg.PreUpdateHook != nil {
+				hr.RegisterPreUpdateHook(cfg.PreUpdateHook.SQLite(cfg.PreUpdateTableRe, cfg.PreUpdateRowIDsOnly))
+			}
+			if cfg.CommitHook != nil {
+				hr.RegisterCommitHook(cfg.CommitHook.SQLite())
+			}
+			if cfg.RollbackHook != nil {
+				hr.RegisterRollbackHook(sqlite.RollbackHookFn(cfg.RollbackHook))
+			}
 		}
 		if cfg.UpdateHook != nil {
-			conn.RegisterUpdateHook(cfg.UpdateHook.SQLite())
-		}
-		if cfg.CommitHook != nil {
-			conn.RegisterCommitHook(cfg.CommitHook.SQLite())
-		}
-		if cfg.RollbackHook != nil {
-			conn.RegisterRollbackHook(cfg.RollbackHook)
+			raw.registerUpdateHook(cfg.UpdateHook.SQLite())
 		}
 
 		return nil
@@ -173,10 +197,10 @@ type PreUpdateHookCallback func(ev *command.CDCEvent) error
 // hook data, and passes it to hook. If tblRe is non-nil only rows of tables whose names match
 // it are passed to hook. If rowIDsOnly is true the events passed to hook contain row IDs but
 // no row data.
-func (hook *PreUpdateHookCallback) SQLite(tblRe *regexp.Regexp, rowIDsOnly bool) func(sqlite3.SQLitePreUpdateData) {
+func (hook *PreUpdateHookCallback) SQLite(tblRe *regexp.Regexp, rowIDsOnly bool) sqlite.PreUpdateHookFn {
 	// Convert from SQLite hook data to rqlite hook data.
 	tableMatch := rsync.NewAtomicMap[string, bool]()
-	convertFn := func(d sqlite3.SQLitePreUpdateData) (*command.CDCEvent, error) {
+	convertFn := func(d *sqlite.SQLitePreUpdateData) (*command.CDCEvent, error) {
 		if tblRe != nil {
 			m, ok := tableMatch.Get(d.TableName)
 			if !ok {
@@ -239,9 +263,9 @@ func (hook *PreUpdateHookCallback) SQLite(tblRe *regexp.Regexp, rowIDsOnly bool)
 		return ev, nil
 	}
 
-	return func(d sqlite3.SQLitePreUpdateData) {
+	return func(d sqlite.SQLitePreUpdateData) {
 		stats.Add(numPreupdates, 1)
-		ev, err := convertFn(d)
+		ev, err := convertFn(&d)
 		if err != nil {
 			stats.Add(numPreupdatesErrors, 1)
 			ev.Error = err.Error()
@@ -304,8 +328,8 @@ type RollbackHookCallback func()
 type CommitHookCallback func() bool
 
 // SQLite returns the SQLite commit hook which passes control to hook.
-func (hook *CommitHookCallback) SQLite() func() int {
-	return func() int {
+func (hook *CommitHookCallback) SQLite() sqlite.CommitHookFn {
+	return func() int32 {
 		stats.Add(numCommitHooks, 1)
 		if (*hook)() {
 			return 0

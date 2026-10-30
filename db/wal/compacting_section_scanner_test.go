@@ -9,8 +9,8 @@ import (
 	"path/filepath"
 	"testing"
 
-	_ "github.com/mattn/go-sqlite3"
 	"github.com/rqlite/rqlite/v10/internal/fsutil"
+	_ "modernc.org/sqlite"
 )
 
 func Test_CompactingFrameScanner_AllFrames(t *testing.T) {
@@ -351,7 +351,7 @@ func Test_CompactingFrameScanner_WriterRoundTrip_SQLite(t *testing.T) {
 	srcDB := srcDir + "/src.db"
 	srcWAL := srcDir + "/src.db-wal"
 
-	srcConn, err := sql.Open("sqlite3", srcDSN)
+	srcConn, err := sql.Open("sqlite", srcDSN)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -403,7 +403,7 @@ func Test_CompactingFrameScanner_WriterRoundTrip_SQLite(t *testing.T) {
 
 	// Open the dest database and verify data is present.
 	destDSN := fmt.Sprintf("file:%s", destDB)
-	destConn, err := sql.Open("sqlite3", destDSN)
+	destConn, err := sql.Open("sqlite", destDSN)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -589,7 +589,7 @@ func Test_CompactingFrameScanner_Bytes_FullCycle(t *testing.T) {
 
 	// Now, open the database and check the number of rows.
 	dbPath := filepath.Join(tmpDir, "fc.db")
-	db, err := sql.Open("sqlite3", dbPath)
+	db, err := sql.Open("sqlite", dbPath)
 	if err != nil {
 		t.Fatalf("failed to open db: %s", err)
 	}
@@ -677,7 +677,7 @@ func Test_CompactingFrameScanner_Writer_FullCycle(t *testing.T) {
 
 	// Now, open the database and check the number of rows.
 	dbPath := filepath.Join(tmpDir, "fc.db")
-	db, err := sql.Open("sqlite3", dbPath)
+	db, err := sql.Open("sqlite", dbPath)
 	if err != nil {
 		t.Fatalf("failed to open db: %s", err)
 	}

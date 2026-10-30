@@ -8,8 +8,8 @@ import (
 	"os"
 	"testing"
 
-	_ "github.com/mattn/go-sqlite3"
 	"github.com/rqlite/rqlite/v10/internal/random"
+	_ "modernc.org/sqlite"
 )
 
 func Test_Writer_FullScanner(t *testing.T) {
@@ -85,7 +85,7 @@ func Test_Writer_CompactingScanner(t *testing.T) {
 	srcDSN := fmt.Sprintf("file:%s", srcDir+"/src.db?_journal_mode=WAL&_synchronous=OFF")
 	srcDB := srcDir + "/src.db"
 	srcWAL := srcDir + "/src.db-wal"
-	srcConn, err := sql.Open("sqlite3", srcDSN)
+	srcConn, err := sql.Open("sqlite", srcDSN)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -137,7 +137,7 @@ func Test_Writer_CompactingScanner(t *testing.T) {
 	}
 
 	checkRowCount := func(dsn string, n int) {
-		db, err := sql.Open("sqlite3", dsn)
+		db, err := sql.Open("sqlite", dsn)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -186,7 +186,7 @@ func Test_Writer_CompactingScanner(t *testing.T) {
 	copyAndCompactWAL(srcWAL, destWAL)
 	checkRowCount(destDSN, 1000)
 
-	dstConn, err := sql.Open("sqlite3", destDSN)
+	dstConn, err := sql.Open("sqlite", destDSN)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -220,7 +220,7 @@ func mustQuery(db *sql.DB, query string) *sql.Row {
 func mustCreateWAL(t *testing.T, size int) (*sql.DB, string) {
 	dir := t.TempDir()
 	rwDSN := fmt.Sprintf("file:%s", dir+"/test.db")
-	rwDB, err := sql.Open("sqlite3", rwDSN)
+	rwDB, err := sql.Open("sqlite", rwDSN)
 	if err != nil {
 		panic(err)
 	}
