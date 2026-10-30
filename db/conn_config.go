@@ -15,6 +15,10 @@ import (
 	sqlite3 "modernc.org/sqlite/lib"
 )
 
+// defaultBusyTimeoutMs is the busy timeout every new connection starts with,
+// matching the default of the cgo SQLite driver rqlite used before.
+const defaultBusyTimeoutMs = 5000
+
 // CnkOnCloseMode represents the checkpoint on close mode.
 type CnkOnCloseMode int
 
@@ -131,6 +135,13 @@ func buildConnectHook(cfg *ConnConfig) sqlite.ConnectionHookFn {
 		// connection, so an error here really is an issue.
 		if _, err := conn.ExecContext(ctx, "PRAGMA wal_autocheckpoint=0", nil); err != nil {
 			return fmt.Errorf("failed to disable automatic checkpointing: %s", err)
+		}
+
+		// The cgo driver gave every connection a busy timeout of 5 seconds
+		// unless told otherwise. The pure-Go driver leaves it at zero, so
+		// apply the same default here. SetBusyTimeout can still change it.
+		if _, err := conn.ExecContext(ctx, fmt.Sprintf("PRAGMA busy_timeout=%d", defaultBusyTimeoutMs), nil); err != nil {
+			return fmt.Errorf("cannot set busy timeout: %w", err)
 		}
 
 		// With the limit on attached databases set to zero SQLite refuses
