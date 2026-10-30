@@ -1,5 +1,10 @@
 # DB Package Design
 
+> Experimental checkout: the driver is now modernc.org/sqlite through
+> `internal/sqlite`. See [the experiment notes](../internal/sqlite/README.md)
+> for implementation details and limitations. References below to the former
+> rqlite/go-sqlite3 fork describe the original architecture.
+
 ## Purpose
 
 The `db` package is rqlite's wrapper around SQLite. It owns the SQLite database file, the WAL, the connection pool, and the lifecycle of every PRAGMA that affects how rqlite coordinates with SQLite. Above this package the rest of rqlite is largely SQLite-agnostic — the Store talks to a `SwappableDB`, the snapshot subsystem talks to a `CheckpointManager`, CDC consumers receive normalized `CDCEvent` protobufs, and so on.

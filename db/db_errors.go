@@ -3,8 +3,8 @@ package db
 import (
 	"errors"
 
-	"github.com/mattn/go-sqlite3"
 	command "github.com/rqlite/rqlite/v10/command/proto"
+	"github.com/rqlite/rqlite/v10/internal/sqlite"
 )
 
 // SQLiteError is a representation of the SQLite-level detailed error.

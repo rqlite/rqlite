@@ -9,8 +9,8 @@ import (
 	"path/filepath"
 	"testing"
 
-	_ "github.com/mattn/go-sqlite3"
 	"github.com/rqlite/rqlite/v10/internal/fsutil"
+	_ "github.com/rqlite/rqlite/v10/internal/sqlite"
 )
 
 func Test_CompactingFrameScanner_AllFrames(t *testing.T) {
