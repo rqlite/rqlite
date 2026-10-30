@@ -6,7 +6,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/mattn/go-sqlite3"
+	"github.com/rqlite/rqlite/v10/internal/sqlite"
 )
 
 // QueryLogger logs SQL statements and their durations using SQLite trace_v2.
