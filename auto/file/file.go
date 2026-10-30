@@ -13,6 +13,11 @@ import (
 	"github.com/rqlite/rqlite/v10/internal/fsutil"
 )
 
+const (
+	metadataFile = "METADATA.json"
+	touchFile    = ".touch"
+)
+
 // Config represents configuration for the file storage client.
 type Config struct {
 	Dir  string `json:"dir"`
@@ -57,12 +62,15 @@ func NewClient(dir, name string, opt *Options) (*Client, error) {
 		cleanFile != name {
 		return nil, fmt.Errorf("invalid file parameter: %s (must be a simple filename without path separators)", name)
 	}
+	if equalFoldAny(name, metadataFile, metadataFile+".tmp", touchFile) {
+		return nil, fmt.Errorf("invalid file parameter: %s is reserved for internal use", name)
+	}
 
 	// Ensure the destination directory exists and is writable
 	if err := os.MkdirAll(dir, 0755); err != nil {
 		return nil, fmt.Errorf("failed to create directory %s: %w", dir, err)
 	}
-	touchPath := filepath.Join(dir, ".touch")
+	touchPath := filepath.Join(dir, touchFile)
 	f, err := os.OpenFile(touchPath, os.O_CREATE|os.O_WRONLY, 0644)
 	if err != nil {
 		return nil, fmt.Errorf("failed to test writing to directory %s: %w", dir, err)
@@ -73,7 +81,7 @@ func NewClient(dir, name string, opt *Options) (*Client, error) {
 	c := &Client{
 		dir:      dir,
 		name:     name,
-		metaPath: filepath.Join(dir, "METADATA.json"),
+		metaPath: filepath.Join(dir, metadataFile),
 	}
 
 	if opt != nil {
@@ -177,8 +185,11 @@ func (c *Client) Upload(ctx context.Context, reader io.Reader, id string) (retEr
 		return fmt.Errorf("failed to rename temporary file %s to %s: %w", tmpPath, finalPath, err)
 	}
 
+	// Do not remove finalPath if the metadata rename fails. In stable-name
+	// mode it has already replaced the previous backup, so removing it would
+	// leave the existing metadata pointing at a file that no longer exists.
+	// Leaving it in place means a complete backup is always present.
 	if err := fsutil.Rename(tmpMetaPath, c.metaPath); err != nil {
-		fsutil.Remove(finalPath)
 		return fmt.Errorf("failed to rename temporary metadata file %s to %s: %w", tmpMetaPath, c.metaPath, err)
 	}
 	return nil
@@ -194,6 +205,16 @@ func (c *Client) CurrentID(ctx context.Context) (string, error) {
 		return "", nil
 	}
 	return md.ID, nil
+}
+
+// equalFoldAny returns true if s matches any of names under Unicode case-folding.
+func equalFoldAny(s string, names ...string) bool {
+	for _, n := range names {
+		if strings.EqualFold(s, n) {
+			return true
+		}
+	}
+	return false
 }
 
 // timestampedPath returns a new path with the given timestamp prepended.

@@ -17,7 +17,8 @@
 Use rqlite to reliably store your most important data, ensuring it's always available to your applications -- think [etcd](https://etcd.io/), but with relational modeling available. Whether you're deploying **resilient services in the cloud** or **reliable applications at the edge**, rqlite provides a robust solution for critical data.
 
 <a href="https://rqlite.io"><strong>Website</strong></a> ·
-<a href="https://www.rqlite.io/join-slack"><strong>Slack</strong></a>
+<a href="https://www.rqlite.io/join-slack"><strong>Slack</strong></a> ·
+<a href="https://www.rqlite.io/support"><strong>Support</strong></a>
 
 ## Quick Start
 [_Check out the full Quick Start guide_](https://rqlite.io/docs/quick-start/)

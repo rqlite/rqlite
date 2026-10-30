@@ -273,7 +273,7 @@ func (p *Proxy) Demote(ctx context.Context, dn *proto.DemoteNodeRequest, creds *
 		}
 		err = p.cluster.DemoteNode(ctx, dn, addr, creds, timeout)
 		if err != nil {
-			return "", wrapIfUnauthorized(err)
+			return "", wrapRemoteNodeError(err)
 		}
 		stats.Add(numRemoteDemoteNode, 1)
 		return addr, nil
@@ -298,7 +298,7 @@ func (p *Proxy) Promote(ctx context.Context, pn *proto.PromoteNodeRequest, creds
 		}
 		err = p.cluster.PromoteNode(ctx, pn, addr, creds, timeout)
 		if err != nil {
-			return "", wrapIfUnauthorized(err)
+			return "", wrapRemoteNodeError(err)
 		}
 		stats.Add(numRemotePromoteNode, 1)
 		return addr, nil
@@ -330,12 +330,7 @@ func (p *Proxy) Stepdown(ctx context.Context, wait bool, id string, creds *clstr
 		}
 		err = p.cluster.Stepdown(ctx, sr, addr, creds, timeout)
 		if err != nil {
-			// The remote node's error arrives as a bare string, so match
-			// it by message to restore the sentinel for callers.
-			if err.Error() == ErrNodeNotFound.Error() {
-				return "", ErrNodeNotFound
-			}
-			return "", wrapIfUnauthorized(err)
+			return "", wrapRemoteNodeError(err)
 		}
 		stats.Add(numRemoteStepdowns, 1)
 		return addr, nil
@@ -354,6 +349,19 @@ func (p *Proxy) leaderAddr() (string, error) {
 		return "", ErrLeaderNotFound
 	}
 	return addr, nil
+}
+
+// wrapRemoteNodeError restores the sentinel for an error returned by a
+// remote node-management operation. The remote node's error arrives as a
+// bare string, so it is matched by message.
+func wrapRemoteNodeError(err error) error {
+	if err == nil {
+		return nil
+	}
+	if err.Error() == ErrNodeNotFound.Error() {
+		return ErrNodeNotFound
+	}
+	return wrapIfUnauthorized(err)
 }
 
 // wrapIfUnauthorized wraps an error as ErrUnauthorized if the error
