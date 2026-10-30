@@ -10,9 +10,9 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/mattn/go-sqlite3"
 	"github.com/rqlite/rqlite/v10/internal/fsutil"
 	"github.com/rqlite/rqlite/v10/internal/random"
+	"modernc.org/sqlite"
 )
 
 func Test_DumpTablesReq(t *testing.T) {
@@ -359,7 +359,7 @@ func Test_IsValidSQLiteOnDisk(t *testing.T) {
 	defer fsutil.Remove(path)
 
 	dsn := fmt.Sprintf("file:%s", path)
-	db := sql.OpenDB(newConnector(&sqlite3.SQLiteDriver{}, dsn))
+	db := sql.OpenDB(newConnector(&sqlite.Driver{}, dsn))
 	_, err := db.Exec("CREATE TABLE foo (name TEXT)")
 	if err != nil {
 		t.Fatalf("failed to create table: %s", err.Error())
@@ -438,7 +438,7 @@ func Test_IsWALModeEnabledOnDiskDELETE(t *testing.T) {
 	defer fsutil.Remove(path)
 
 	dsn := fmt.Sprintf("file:%s", path)
-	db := sql.OpenDB(newConnector(&sqlite3.SQLiteDriver{}, dsn))
+	db := sql.OpenDB(newConnector(&sqlite.Driver{}, dsn))
 	_, err := db.Exec("CREATE TABLE foo (name TEXT)")
 	if err != nil {
 		t.Fatalf("failed to create table: %s", err.Error())
@@ -479,7 +479,7 @@ func Test_IsWALModeEnabledOnDiskWAL(t *testing.T) {
 	defer fsutil.Remove(path)
 
 	dsn := fmt.Sprintf("file:%s", path)
-	db := sql.OpenDB(newConnector(&sqlite3.SQLiteDriver{}, dsn))
+	db := sql.OpenDB(newConnector(&sqlite.Driver{}, dsn))
 	_, err := db.Exec("CREATE TABLE foo (name TEXT)")
 	if err != nil {
 		t.Fatalf("failed to create table: %s", err.Error())
@@ -594,7 +594,7 @@ func Test_IsValidSQLiteWALFile(t *testing.T) {
 	defer fsutil.Remove(path)
 
 	dsn := fmt.Sprintf("file:%s", path)
-	db := sql.OpenDB(newConnector(&sqlite3.SQLiteDriver{}, dsn))
+	db := sql.OpenDB(newConnector(&sqlite.Driver{}, dsn))
 	_, err := db.Exec("PRAGMA journal_mode=WAL")
 	if err != nil {
 		t.Fatalf("failed to enable WAL mode: %s", err.Error())

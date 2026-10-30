@@ -2,8 +2,6 @@ package db
 
 import (
 	"compress/gzip"
-	"context"
-	"database/sql"
 	"encoding/binary"
 	"encoding/hex"
 	"errors"
@@ -15,7 +13,6 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/mattn/go-sqlite3"
 	command "github.com/rqlite/rqlite/v10/command/proto"
 	"github.com/rqlite/rqlite/v10/internal/fsutil"
 )
@@ -271,23 +268,7 @@ func ParseHex(s string) ([]byte, error) {
 
 // ValidateExtension validates the given extension path can be loaded into a SQLite database.
 func ValidateExtension(path string) error {
-	db := sql.OpenDB(newConnector(&sqlite3.SQLiteDriver{}, ":memory:"))
-	defer db.Close()
-
-	f := func(driverConn any) error {
-		c := driverConn.(*sqlite3.SQLiteConn)
-		return c.LoadExtension(path, "")
-	}
-
-	conn, err := db.Conn(context.Background())
-	if err != nil {
-		return err
-	}
-	defer conn.Close()
-	if err := conn.Raw(f); err != nil {
-		return err
-	}
-	return nil
+	return fmt.Errorf("cannot load extension %s: SQLite extensions are not supported by the modernc.org/sqlite driver", path)
 }
 
 // MakeDSN returns a SQLite DSN for the given path, with the given options.

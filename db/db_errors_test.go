@@ -11,24 +11,23 @@ import (
 	"syscall"
 	"testing"
 
-	"github.com/mattn/go-sqlite3"
 	command "github.com/rqlite/rqlite/v10/command/proto"
+	sqlite3 "modernc.org/sqlite/lib"
 )
 
 // Test_DBErrors_Wrapping verifies that classification finds a wrapped SQLite
 // error, preserves its message and driver details, and does not wrap it twice.
 func Test_DBErrors_Wrapping(t *testing.T) {
-	original := sqlite3.Error{
-		Code: sqlite3.ErrIoErr, ExtendedCode: sqlite3.ErrIoErrWrite, SystemErrno: syscall.ENOSPC,
+	original := &SQLiteError{
+		Code: sqlite3.SQLITE_IOERR, ExtendedCode: sqlite3.SQLITE_IOERR_WRITE, SystemErrno: int32(syscall.ENOSPC),
 	}
 	wrapped := fmt.Errorf("statement failed: %w", original)
 	got := classifyError(wrapped)
-	mustBeFatalSQLiteError(t, got, sqlite3.ErrIoErr)
+	mustBeFatalSQLiteError(t, got, sqlite3.SQLITE_IOERR)
 	if got.Error() != wrapped.Error() || errors.Unwrap(got) != wrapped {
 		t.Fatalf("original error lost: %v", got)
 	}
-	var sqliteErr sqlite3.Error
-	if !errors.As(got, &sqliteErr) || sqliteErr != original {
+	if sqliteErr := NewSQLiteErrorFromError(got); sqliteErr != original {
 		t.Fatalf("driver details lost: %+v", sqliteErr)
 	}
 	if classifyError(got) != got {
@@ -74,12 +73,12 @@ func Test_DBErrors_FullStopsBatch(t *testing.T) {
 							run = db.Request
 						}
 						results, err := run(req, false)
-						mustBeFatalSQLiteError(t, err, sqlite3.ErrFull)
+						mustBeFatalSQLiteError(t, err, sqlite3.SQLITE_FULL)
 						if len(results) != 2 || results[1].GetE().GetError() == "" || results[1].GetMutated() {
 							t.Fatalf("unexpected results: %v", results)
 						}
-						if got := results[1].GetE().GetErrorV2().GetSqlite().GetCode(); got != int32(sqlite3.ErrFull) {
-							t.Fatalf("expected structured error code %d, got %d", sqlite3.ErrFull, got)
+						if got := results[1].GetE().GetErrorV2().GetSqlite().GetCode(); got != int32(sqlite3.SQLITE_FULL) {
+							t.Fatalf("expected structured error code %d, got %d", sqlite3.SQLITE_FULL, got)
 						}
 						want := 1
 						if transaction {
@@ -149,7 +148,11 @@ func Test_DBErrors_Prepare(t *testing.T) {
 			t.Fatal(err)
 		}
 		err = conn.Raw(func(raw any) error {
-			raw.(*sqlite3.SQLiteConn).SetLimit(sqlite3.SQLITE_LIMIT_VDBE_OP, 1)
+			r, err := rawHandles(raw)
+			if err != nil {
+				return err
+			}
+			r.setLimit(sqlite3.SQLITE_LIMIT_VDBE_OP, 1)
 			return nil
 		})
 		conn.Close()
@@ -158,14 +161,14 @@ func Test_DBErrors_Prepare(t *testing.T) {
 		}
 	}
 	_, err := db.StmtReadOnly("SELECT * FROM data")
-	if sqliteErr, ok := err.(sqlite3.Error); !ok || sqliteErr.Code != sqlite3.ErrNomem {
+	if sqliteErr := NewSQLiteErrorFromError(err); sqliteErr == nil || sqliteErr.Code != sqlite3.SQLITE_NOMEM || isFatalError(err) {
 		t.Fatalf("expected ordinary SQLite allocation error, got %T: %v", err, err)
 	}
 	results, err := db.Request(&command.Request{Statements: []*command.Statement{
 		{Sql: "INSERT INTO data VALUES (1)"},
 		{Sql: "SELECT 1"},
 	}}, false)
-	mustBeFatalSQLiteError(t, err, sqlite3.ErrNomem)
+	mustBeFatalSQLiteError(t, err, sqlite3.SQLITE_NOMEM)
 	if len(results) != 1 {
 		t.Fatalf("request continued after prepare failure: %v", results)
 	}
@@ -178,8 +181,8 @@ func Test_DBErrors_Prepare(t *testing.T) {
 // promotion of a fatal rollback error after an ordinary statement error and
 // preservation of an earlier fatal error when rollback also fails.
 func Test_DBErrors_DriverFailures(t *testing.T) {
-	ioErr := sqlite3.Error{Code: sqlite3.ErrIoErr, ExtendedCode: sqlite3.ErrIoErrFsync}
-	constraint := sqlite3.Error{Code: sqlite3.ErrConstraint}
+	ioErr := &SQLiteError{Code: sqlite3.SQLITE_IOERR, ExtendedCode: sqlite3.SQLITE_IOERR_FSYNC}
+	constraint := &SQLiteError{Code: sqlite3.SQLITE_CONSTRAINT}
 
 	for _, api := range []string{"execute", "execute_returning", "request"} {
 		for _, stage := range []string{"connect", "begin", "commit", "statement", "next", "close", "rollback"} {
@@ -211,7 +214,7 @@ func Test_DBErrors_DriverFailures(t *testing.T) {
 					conn.statementErr = constraint
 					if api == "execute_returning" {
 						// A fatal query-path error must survive rollback failure.
-						conn.statementErr = sqlite3.Error{Code: sqlite3.ErrFull}
+						conn.statementErr = &SQLiteError{Code: sqlite3.SQLITE_FULL}
 					}
 				}
 				sqldb := sql.OpenDB(conn)
@@ -231,9 +234,9 @@ func Test_DBErrors_DriverFailures(t *testing.T) {
 				case "request":
 					_, err = db.Request(req, false)
 				}
-				want := sqlite3.ErrIoErr
+				want := int32(sqlite3.SQLITE_IOERR)
 				if api == "execute_returning" && stage == "rollback" {
-					want = sqlite3.ErrFull // Preserve the original fatal error.
+					want = sqlite3.SQLITE_FULL // Preserve the original fatal error.
 				}
 				mustBeFatalSQLiteError(t, err, want)
 				if stage == "statement" || stage == "next" || stage == "close" || stage == "rollback" {
@@ -251,8 +254,8 @@ func Test_DBErrors_DriverFailures(t *testing.T) {
 // statement error is nonfatal, and that no later batch statement executes.
 func Test_DBErrors_ExplicitRollback(t *testing.T) {
 	conn := &errorTestConn{
-		statementErr: sqlite3.Error{Code: sqlite3.ErrConstraint},
-		rollbackErr:  sqlite3.Error{Code: sqlite3.ErrIoErr},
+		statementErr: &SQLiteError{Code: sqlite3.SQLITE_CONSTRAINT},
+		rollbackErr:  &SQLiteError{Code: sqlite3.SQLITE_IOERR},
 	}
 	sqldb := sql.OpenDB(conn)
 	defer sqldb.Close()
@@ -260,7 +263,7 @@ func Test_DBErrors_ExplicitRollback(t *testing.T) {
 	_, err := db.Execute(&command.Request{RollbackOnError: true, Statements: []*command.Statement{
 		{Sql: "first"}, {Sql: "second"},
 	}}, false)
-	mustBeFatalSQLiteError(t, err, sqlite3.ErrIoErr)
+	mustBeFatalSQLiteError(t, err, sqlite3.SQLITE_IOERR)
 	if conn.statements != 1 {
 		t.Fatalf("executed %d statements after failure", conn.statements)
 	}
@@ -270,9 +273,9 @@ func Test_DBErrors_ExplicitRollback(t *testing.T) {
 // ordinary statement errors in read-only Query batches, including journal-mode
 // changes, but become fatal errors that stop Execute batches.
 func Test_DBErrors_QueryErrors(t *testing.T) {
-	for _, code := range []sqlite3.ErrNo{sqlite3.ErrBusy, sqlite3.ErrLocked, sqlite3.ErrIoErr} {
+	for _, code := range []int32{sqlite3.SQLITE_BUSY, sqlite3.SQLITE_LOCKED, sqlite3.SQLITE_IOERR} {
 		t.Run(fmt.Sprint(int(code)), func(t *testing.T) {
-			conn := &errorTestConn{statementErr: sqlite3.Error{Code: code}}
+			conn := &errorTestConn{statementErr: &SQLiteError{Code: code}}
 			sqldb := sql.OpenDB(conn)
 			defer sqldb.Close()
 
@@ -302,7 +305,7 @@ func Test_DBErrors_QueryErrors(t *testing.T) {
 // errors retain their original type in Query, while row iteration and closure
 // failures remain statement errors and allow later queries to run.
 func Test_DBErrors_QueryDriverFailures(t *testing.T) {
-	ioErr := sqlite3.Error{Code: sqlite3.ErrIoErr, ExtendedCode: sqlite3.ErrIoErrRead}
+	ioErr := &SQLiteError{Code: sqlite3.SQLITE_IOERR, ExtendedCode: sqlite3.SQLITE_IOERR_READ}
 	for _, stage := range []string{"connect", "begin", "commit", "next", "close"} {
 		t.Run(stage, func(t *testing.T) {
 			conn := &errorTestConn{}
@@ -346,14 +349,13 @@ func newErrorTestDB(t *testing.T, wal bool) *DB {
 	return db
 }
 
-func mustBeFatalSQLiteError(t *testing.T, err error, code sqlite3.ErrNo) {
+func mustBeFatalSQLiteError(t *testing.T, err error, code int32) {
 	t.Helper()
 	var fatal *FatalError
 	if !errors.As(err, &fatal) {
 		t.Fatalf("expected *FatalError, got %T: %v", err, err)
 	}
-	var sqliteErr sqlite3.Error
-	if !errors.As(err, &sqliteErr) || sqliteErr.Code != code {
+	if sqliteErr := NewSQLiteErrorFromError(err); sqliteErr == nil || sqliteErr.Code != code {
 		t.Fatalf("expected SQLite code %d, got %v", code, err)
 	}
 }
@@ -414,7 +416,7 @@ func Test_DBErrors_StructuredErrors(t *testing.T) {
 
 	// checkCodes verifies the structured error carries the given SQLite codes
 	// and the same message as the legacy error string.
-	checkCodes := func(t *testing.T, msg string, e *command.Error, code sqlite3.ErrNo, extended sqlite3.ErrNoExtended) {
+	checkCodes := func(t *testing.T, msg string, e *command.Error, code, extended int32) {
 		t.Helper()
 		if e == nil {
 			t.Fatal("expected structured error, got nil")
@@ -435,7 +437,7 @@ func Test_DBErrors_StructuredErrors(t *testing.T) {
 	if err != nil || len(results) != 1 || results[0].GetE().GetError() == "" {
 		t.Fatalf("unexpected execute results: %v, %v", results, err)
 	}
-	checkCodes(t, results[0].GetE().GetError(), results[0].GetE().GetErrorV2(), sqlite3.ErrConstraint, sqlite3.ErrConstraintPrimaryKey)
+	checkCodes(t, results[0].GetE().GetError(), results[0].GetE().GetErrorV2(), sqlite3.SQLITE_CONSTRAINT, sqlite3.SQLITE_CONSTRAINT_PRIMARYKEY)
 
 	// Query: missing table.
 	rows, err := db.Query(&command.Request{Statements: []*command.Statement{
@@ -444,7 +446,7 @@ func Test_DBErrors_StructuredErrors(t *testing.T) {
 	if err != nil || len(rows) != 1 || rows[0].GetError() == "" {
 		t.Fatalf("unexpected query results: %v, %v", rows, err)
 	}
-	checkCodes(t, rows[0].GetError(), rows[0].GetErrorV2(), sqlite3.ErrError, sqlite3.ErrNoExtended(sqlite3.ErrError))
+	checkCodes(t, rows[0].GetError(), rows[0].GetErrorV2(), sqlite3.SQLITE_ERROR, sqlite3.SQLITE_ERROR)
 
 	// Query: write attempted through the read-only connection keeps its
 	// remapped legacy message, while the structured error reports the
@@ -453,7 +455,7 @@ func Test_DBErrors_StructuredErrors(t *testing.T) {
 	if err != nil || len(rows) != 1 || rows[0].Error != ErrQueryWrite.Error() {
 		t.Fatalf("unexpected read-only query results: %v, %v", rows, err)
 	}
-	if e := rows[0].GetErrorV2(); e.GetSqlite().GetCode() != int32(sqlite3.ErrReadonly) || e.GetMessage() == "" || e.GetMessage() == ErrQueryWrite.Error() {
+	if e := rows[0].GetErrorV2(); e.GetSqlite().GetCode() != int32(sqlite3.SQLITE_READONLY) || e.GetMessage() == "" || e.GetMessage() == ErrQueryWrite.Error() {
 		t.Fatalf("unexpected structured error for read-only query: %v", e)
 	}
 
@@ -465,7 +467,7 @@ func Test_DBErrors_StructuredErrors(t *testing.T) {
 	if err != nil || len(results) != 1 || results[0].GetE().GetError() == "" {
 		t.Fatalf("unexpected forced query results: %v, %v", results, err)
 	}
-	checkCodes(t, results[0].GetE().GetError(), results[0].GetE().GetErrorV2(), sqlite3.ErrError, sqlite3.ErrNoExtended(sqlite3.ErrError))
+	checkCodes(t, results[0].GetE().GetError(), results[0].GetE().GetErrorV2(), sqlite3.SQLITE_ERROR, sqlite3.SQLITE_ERROR)
 
 	// Request: a constraint violation, and a statement which fails the
 	// read-only check before it runs, so it is reported as an execute error.
@@ -476,8 +478,8 @@ func Test_DBErrors_StructuredErrors(t *testing.T) {
 	if err != nil || len(results) != 2 {
 		t.Fatalf("unexpected request results: %v, %v", results, err)
 	}
-	checkCodes(t, results[0].GetE().GetError(), results[0].GetE().GetErrorV2(), sqlite3.ErrConstraint, sqlite3.ErrConstraintPrimaryKey)
-	checkCodes(t, results[1].GetE().GetError(), results[1].GetE().GetErrorV2(), sqlite3.ErrError, sqlite3.ErrNoExtended(sqlite3.ErrError))
+	checkCodes(t, results[0].GetE().GetError(), results[0].GetE().GetErrorV2(), sqlite3.SQLITE_CONSTRAINT, sqlite3.SQLITE_CONSTRAINT_PRIMARYKEY)
+	checkCodes(t, results[1].GetE().GetError(), results[1].GetE().GetErrorV2(), sqlite3.SQLITE_ERROR, sqlite3.SQLITE_ERROR)
 
 	// Successful statements carry no structured error.
 	results, err = db.Execute(&command.Request{Statements: []*command.Statement{

@@ -17,11 +17,11 @@ import (
 	"sync"
 	"time"
 
-	"github.com/mattn/go-sqlite3"
 	command "github.com/rqlite/rqlite/v10/command/proto"
 	"github.com/rqlite/rqlite/v10/db/humanize"
 	"github.com/rqlite/rqlite/v10/internal/fsutil"
 	"github.com/rqlite/rqlite/v10/internal/rsum"
+	sqlite3 "modernc.org/sqlite/lib"
 )
 
 const (
@@ -137,7 +137,7 @@ var DBVersion string
 var stats *expvar.Map
 
 func init() {
-	DBVersion, _, _ = sqlite3.Version()
+	DBVersion = sqlite3.SQLITE_VERSION
 	stats = expvar.NewMap("db")
 	ResetStats()
 }

@@ -5,11 +5,11 @@ import (
 	"fmt"
 	"io"
 	"log"
+	sqlite3 "modernc.org/sqlite/lib"
 	"path/filepath"
 	"testing"
 
 	"github.com/hashicorp/raft"
-	"github.com/mattn/go-sqlite3"
 	"github.com/rqlite/rqlite/v10/command"
 	"github.com/rqlite/rqlite/v10/command/proto"
 	sql "github.com/rqlite/rqlite/v10/db"
@@ -142,8 +142,8 @@ func Test_CommandProcessor_FatalError(t *testing.T) {
 			_, _, _, err = processor.Process(mustMarshalWriteCommand(t, cmdType,
 				"INSERT INTO data VALUES (2, zeroblob(1048576))"), db)
 			var fatal *sql.FatalError
-			var sqliteErr sqlite3.Error
-			if !errors.As(err, &fatal) || !errors.As(err, &sqliteErr) || sqliteErr.Code != sqlite3.ErrFull {
+			sqliteErr := sql.NewSQLiteErrorFromError(err)
+			if !errors.As(err, &fatal) || sqliteErr == nil || sqliteErr.Code != sqlite3.SQLITE_FULL {
 				t.Fatalf("expected fatal SQLITE_FULL application error, got %T: %v", err, err)
 			}
 		})

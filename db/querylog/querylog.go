@@ -5,9 +5,25 @@ import (
 	"os"
 	"sync"
 	"time"
-
-	"github.com/mattn/go-sqlite3"
 )
+
+// Trace event codes, matching SQLITE_TRACE_*.
+const (
+	TraceStmt    uint32 = 0x01
+	TraceProfile uint32 = 0x02
+	TraceRow     uint32 = 0x04
+	TraceClose   uint32 = 0x08
+)
+
+// TraceInfo carries one sqlite3_trace_v2 event.
+type TraceInfo struct {
+	EventCode      uint32
+	ConnHandle     uintptr
+	StmtHandle     uintptr
+	StmtOrTrigger  string
+	ExpandedSQL    string
+	RunTimeNanosec int64
+}
 
 // QueryLogger logs SQL statements and their durations using SQLite trace_v2.
 // Safe for concurrent use.
@@ -33,13 +49,13 @@ func (ql *QueryLogger) Close() error {
 
 // TraceHook is the SQLite trace callback. It handles STMT and PROFILE
 // events and ignores all others. It is safe for concurrent use.
-func (ql *QueryLogger) TraceHook(info sqlite3.TraceInfo) int {
+func (ql *QueryLogger) TraceHook(info TraceInfo) int {
 	if ql.logger == nil {
 		return 0
 	}
 
 	switch info.EventCode {
-	case sqlite3.TraceStmt:
+	case TraceStmt:
 		var sqlText string
 		if !ql.noExpandedSQL && info.ExpandedSQL != "" {
 			sqlText = info.ExpandedSQL
@@ -55,7 +71,7 @@ func (ql *QueryLogger) TraceHook(info sqlite3.TraceInfo) int {
 		ql.pending[key] = sqlText
 		ql.mu.Unlock()
 
-	case sqlite3.TraceProfile:
+	case TraceProfile:
 		key := traceKey{ConnHandle: info.ConnHandle, StmtHandle: info.StmtHandle}
 
 		ql.mu.Lock()
