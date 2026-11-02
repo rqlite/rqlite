@@ -570,6 +570,70 @@ func Test_MetadataSet(t *testing.T) {
 	}
 }
 
+func Test_ServerSideEncryptionApplied(t *testing.T) {
+	accesskey, ok := os.LookupEnv("RQLITE_S3_ACCESS_KEY")
+	if !ok {
+		t.Skip("RQLITE_S3_ACCESS_KEY is not set")
+	}
+	secretKey, ok := os.LookupEnv("RQLITE_S3_SECRET_ACCESS_KEY")
+	if !ok {
+		t.Skip("RQLITE_S3_SECRET_ACCESS_KEY is not set")
+	}
+
+	for _, tc := range []struct {
+		name         string
+		sse          string
+		expectKMSKey bool
+	}{
+		// With no key ID, S3 falls back to the AWS managed key and reports its ARN.
+		{"AES256", "AES256", false},
+		{"KMSDefaultKey", "aws:kms", true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			path := random.String()
+			opts := &S3ClientOpts{ServerSideEncryption: tc.sse}
+			client, err := NewS3Client("s3.amazonaws.com", "us-west-2", accesskey, secretKey, "rqlite-testing-circleci", path, opts)
+			if err != nil {
+				t.Fatalf("error creating S3 client: %v", err)
+			}
+			if err := client.Upload(context.Background(), strings.NewReader("test data"), "the-id"); err != nil {
+				t.Fatalf("error uploading to S3: %v", err)
+			}
+			defer func() {
+				client.Delete(context.Background())
+			}()
+
+			// S3 reports the encryption it applied to the stored object, not what was requested.
+			head, err := client.s3.HeadObject(context.Background(), &s3.HeadObjectInput{
+				Bucket: aws.String(client.bucket),
+				Key:    aws.String(client.key),
+			})
+			if err != nil {
+				t.Fatalf("error getting object head: %v", err)
+			}
+			if string(head.ServerSideEncryption) != tc.sse {
+				t.Fatalf("expected server-side encryption %q, got %q", tc.sse, head.ServerSideEncryption)
+			}
+			if tc.expectKMSKey {
+				if head.SSEKMSKeyId == nil || *head.SSEKMSKeyId == "" {
+					t.Fatalf("expected a KMS key ID to be reported")
+				}
+			} else if head.SSEKMSKeyId != nil {
+				t.Fatalf("expected no KMS key ID, got %q", *head.SSEKMSKeyId)
+			}
+
+			// The object must still be readable through the normal download path.
+			id, err := client.CurrentID(context.Background())
+			if err != nil {
+				t.Fatalf("error getting current ID: %v", err)
+			}
+			if id != "the-id" {
+				t.Fatalf("expected ID to be %q, got %q", "the-id", id)
+			}
+		})
+	}
+}
+
 func Test_TimestampedPath(t *testing.T) {
 	ts, err := time.Parse(time.RFC3339, "2021-07-01T15:04:05Z")
 	if err != nil {
