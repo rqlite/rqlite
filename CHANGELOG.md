@@ -1,3 +1,7 @@
+## v10.6.7 (unreleased)
+### New features
+- [PR #2996](https://github.com/rqlite/rqlite/pull/2996): Support server-side encryption for S3 auto-backups via `server_side_encryption` and `sse_kms_key_id`.
+
 ## v10.6.6 (October 28th 2026)
 ### Implementation changes and bug fixes
 - [PR #2987](https://github.com/rqlite/rqlite/pull/2987): Keep the local auto-backup file if the metadata rename fails. Thanks @lmtlssss
