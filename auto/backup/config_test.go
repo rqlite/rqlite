@@ -363,6 +363,10 @@ func Test_NewStorageClient_EncryptionKey(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	otherIdentity, err := age.GenerateX25519Identity()
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	for _, tc := range []struct {
 		name    string
@@ -371,6 +375,7 @@ func Test_NewStorageClient_EncryptionKey(t *testing.T) {
 	}{
 		{"ValidEncryptionKey", identity.Recipient().String(), false},
 		{"InvalidEncryptionKey", "not-an-age-key", true},
+		{"MultipleEncryptionKeys", identity.Recipient().String() + "\n" + otherIdentity.Recipient().String(), true},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			input := fmt.Appendf(nil, `{

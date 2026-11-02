@@ -7,9 +7,9 @@ import (
 	"os"
 	"strings"
 
+	"filippo.io/age"
 	"github.com/rqlite/rqlite/v10/auto"
 	"github.com/rqlite/rqlite/v10/auto/aws"
-	"github.com/rqlite/rqlite/v10/auto/crypto"
 	"github.com/rqlite/rqlite/v10/auto/file"
 	"github.com/rqlite/rqlite/v10/auto/gcp"
 )
@@ -39,8 +39,12 @@ func NewStorageClient(data []byte) (*Config, StorageClient, error) {
 	}
 
 	if cfg.EncryptionKey != "" {
-		if _, err := crypto.NewEncryptReader(strings.NewReader(""), cfg.EncryptionKey); err != nil {
-			return nil, nil, fmt.Errorf("invalid encryption_key: %w", err)
+		recipients, err := age.ParseRecipients(strings.NewReader(cfg.EncryptionKey))
+		if err != nil {
+			return nil, nil, fmt.Errorf("invalid encryption_key: failed to parse age recipients: %w", err)
+		}
+		if len(recipients) != 1 {
+			return nil, nil, fmt.Errorf("encryption_key must contain exactly one age recipient")
 		}
 	}
 
