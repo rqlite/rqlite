@@ -1,4 +1,4 @@
-## v10.6.7 (unreleased)
+## v10.7.0 (unreleased)
 ### New features
 - [PR #2996](https://github.com/rqlite/rqlite/pull/2996): Support server-side encryption for S3 auto-backups via `server_side_encryption` and `sse_kms_key_id`.
 
