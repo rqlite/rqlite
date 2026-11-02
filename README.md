@@ -12,7 +12,7 @@
 [![Slack](https://img.shields.io/badge/Slack--purple.svg)](https://www.rqlite.io/join-slack)
 [![Google Group](https://img.shields.io/badge/Google%20Group--blue.svg)](https://groups.google.com/group/rqlite)
 
-[**rqlite**](https://rqlite.io) is a [feature-rich](https://rqlite.io/docs/features/), [rock](https://www.sqlite.org/testing.html)-[solid](https://philipotoole.com/how-is-rqlite-tested/), fault-tolerant, distributed relational database built on [SQLite](https://www.sqlite.org/). It's **lightweight**, **developer-friendly**, and **exceptionally easy to operate**, offering effortless installation and deployment.
+[**rqlite™**](https://rqlite.io) is a [feature-rich](https://rqlite.io/docs/features/), [rock](https://www.sqlite.org/testing.html)-[solid](https://philipotoole.com/how-is-rqlite-tested/), fault-tolerant, distributed relational database built on [SQLite](https://www.sqlite.org/). It's **lightweight**, **developer-friendly**, and **exceptionally easy to operate**, offering effortless installation and deployment.
 
 Use rqlite to reliably store your most important data, ensuring it's always available to your applications -- think [etcd](https://etcd.io/), but with relational modeling available. Whether you're deploying **resilient services in the cloud** or **reliable applications at the edge**, rqlite provides a robust solution for critical data.
 
@@ -68,3 +68,6 @@ curl -G 'localhost:4001/db/query?pretty' --data-urlencode 'q=SELECT * FROM foo'
 
 ## Pronunciation
 Common pronunciations of rqlite include "R Q lite" and "ree-qwell-lite".
+
+## Trademark
+rqlite™ is a trademark of Philip O'Toole.
