@@ -10,6 +10,7 @@ import (
 	"strconv"
 	"time"
 
+	"github.com/rqlite/rqlite/v10/auto/crypto"
 	"github.com/rqlite/rqlite/v10/db/humanize"
 	"github.com/rqlite/rqlite/v10/internal/fsutil"
 	"github.com/rqlite/rqlite/v10/internal/progress"
@@ -77,6 +78,7 @@ type Uploader struct {
 	storageClient StorageClient
 	dataProvider  DataProvider
 	interval      time.Duration
+	encryptionKey string
 
 	logger             *log.Logger
 	lastUploadTime     time.Time
@@ -93,6 +95,12 @@ func NewUploader(storageClient StorageClient, dataProvider DataProvider, interva
 		interval:      interval,
 		logger:        log.New(os.Stderr, "[uploader] ", log.LstdFlags),
 	}
+}
+
+// SetEncryptionKey sets the age public recipients used to encrypt uploads.
+// An empty key disables encryption. Call this before Start.
+func (u *Uploader) SetEncryptionKey(key string) {
+	u.encryptionKey = key
 }
 
 // Start starts the Uploader service.
@@ -133,6 +141,7 @@ func (u *Uploader) Stats() (map[string]any, error) {
 		"last_upload_time":     u.lastUploadTime.Format(time.RFC3339),
 		"last_upload_duration": u.lastUploadDuration.String(),
 		"last_index":           strconv.FormatUint(u.lastIndex, 10),
+		"encrypted":            u.encryptionKey != "",
 	}
 	return status, nil
 }
@@ -175,7 +184,15 @@ func (u *Uploader) upload(ctx context.Context) error {
 	if _, err := fd.Seek(0, io.SeekStart); err != nil {
 		return err
 	}
-	cr := progress.NewCountingReader(fd)
+	var r io.Reader = fd
+	if u.encryptionKey != "" {
+		r, err = crypto.NewEncryptReader(fd, u.encryptionKey)
+		if err != nil {
+			stats.Add(numUploadsFail, 1)
+			return err
+		}
+	}
+	cr := progress.NewCountingReader(r)
 	startTime := time.Now()
 	err = u.storageClient.Upload(ctx, cr, strconv.FormatUint(li, 10))
 	if err != nil {
