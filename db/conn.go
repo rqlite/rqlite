@@ -9,9 +9,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/mattn/go-sqlite3"
 	command "github.com/rqlite/rqlite/v10/command/proto"
 	"github.com/rqlite/rqlite/v10/internal/progress"
+	"github.com/rqlite/rqlite/v10/internal/sqlite"
 )
 
 // Conn is one connection to the database, and the unit of work: every

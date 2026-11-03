@@ -9,7 +9,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/mattn/go-sqlite3"
+	"github.com/rqlite/rqlite/v10/internal/sqlite"
 )
 
 // --- Construction and lifecycle ---

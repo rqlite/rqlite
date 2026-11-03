@@ -8,10 +8,10 @@ import (
 	"regexp"
 	"sort"
 
-	"github.com/mattn/go-sqlite3"
 	command "github.com/rqlite/rqlite/v10/command/proto"
 	"github.com/rqlite/rqlite/v10/db/querylog"
 	"github.com/rqlite/rqlite/v10/internal/rsync"
+	"github.com/rqlite/rqlite/v10/internal/sqlite"
 )
 
 // CnkOnCloseMode represents the checkpoint on close mode.

@@ -11,8 +11,8 @@ import (
 	"syscall"
 	"testing"
 
-	"github.com/mattn/go-sqlite3"
 	command "github.com/rqlite/rqlite/v10/command/proto"
+	"github.com/rqlite/rqlite/v10/internal/sqlite"
 )
 
 // Test_DBErrors_Wrapping verifies that classification finds a wrapped SQLite

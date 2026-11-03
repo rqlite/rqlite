@@ -9,10 +9,10 @@ import (
 	"testing"
 
 	"github.com/hashicorp/raft"
-	"github.com/mattn/go-sqlite3"
 	"github.com/rqlite/rqlite/v10/command"
 	"github.com/rqlite/rqlite/v10/command/proto"
 	sql "github.com/rqlite/rqlite/v10/db"
+	"github.com/rqlite/rqlite/v10/internal/sqlite"
 )
 
 func Test_ExecuteQueryResponsesMutation(t *testing.T) {
