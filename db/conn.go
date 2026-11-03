@@ -9,9 +9,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/mattn/go-sqlite3"
 	command "github.com/rqlite/rqlite/v10/command/proto"
 	"github.com/rqlite/rqlite/v10/internal/progress"
+	"modernc.org/sqlite"
 )
 
 // Conn is one connection to the database, and the unit of work: every
@@ -182,15 +182,7 @@ func (c *Conn) executeStmt(ctx context.Context, stmt *command.Statement, xTime b
 			return response, nil
 		}
 
-		lid, err := result.LastInsertId()
-		if err != nil {
-			response.Result = &command.ExecuteQueryResponse_E{
-				E: newExecuteResultError(err),
-			}
-			return response, err
-		}
-
-		ra, err := result.RowsAffected()
+		lid, ra, err := resultCounts(result)
 		if err != nil {
 			response.Result = &command.ExecuteQueryResponse_E{
 				E: newExecuteResultError(err),
@@ -357,8 +349,14 @@ func (c *Conn) queryStmt(ctx context.Context, stmt *command.Statement, xTime boo
 		}
 	}
 
-	// Check for errors from iterating over rows.
+	// Check for errors from iterating over rows. The pure-Go driver does not
+	// check the context inside Next, so an expired context is checked here
+	// to report a timeout the way the cgo driver did.
 	if err := rs.Err(); err != nil {
+		stats.Add(numQueryErrors, 1)
+		return rows, err
+	}
+	if err := ctx.Err(); err != nil {
 		stats.Add(numQueryErrors, 1)
 		return rows, err
 	}
@@ -582,14 +580,12 @@ func (c *Conn) Dump(w io.Writer, tableNames ...string) (n int, retErr error) {
 func (c *Conn) StmtReadOnly(sql string) (bool, error) {
 	var readOnly bool
 	f := func(driverConn any) error {
-		c := driverConn.(*sqlite3.SQLiteConn)
-		drvStmt, err := c.Prepare(sql)
+		raw, err := rawHandles(driverConn)
 		if err != nil {
 			return err
 		}
-		sqliteStmt := drvStmt.(*sqlite3.SQLiteStmt)
-		readOnly = sqliteStmt.Readonly()
-		return drvStmt.Close()
+		readOnly, err = raw.stmtReadOnly(sql)
+		return err
 	}
 
 	if err := c.conn.Raw(f); err != nil {
@@ -642,17 +638,23 @@ func (c *Conn) qualifyColumns(query string, rows *command.QueryRows) error {
 
 	var tableNames []string
 	err := c.conn.Raw(func(driverConn any) error {
-		sqliteConn := driverConn.(*sqlite3.SQLiteConn)
-		stmt, err := sqliteConn.Prepare(query)
+		ci, ok := driverConn.(interface {
+			ColumnInfo(query string) ([]sqlite.ColumnInfo, error)
+		})
+		if !ok {
+			return fmt.Errorf("unexpected driver connection type: %T", driverConn)
+		}
+		infos, err := ci.ColumnInfo(query)
 		if err != nil {
 			return err
 		}
-		sqliteStmt := stmt.(*sqlite3.SQLiteStmt)
 		tableNames = make([]string, len(rows.Columns))
 		for i := range rows.Columns {
-			tableNames[i] = sqliteStmt.ColumnTableName(i)
+			if i < len(infos) {
+				tableNames[i] = infos[i].TableName
+			}
 		}
-		return stmt.Close()
+		return nil
 	})
 	if err != nil {
 		return err
@@ -669,40 +671,43 @@ func (c *Conn) qualifyColumns(query string, rows *command.QueryRows) error {
 // behind this connection, using the SQLite online backup API. It can be called
 // while changes to the source database are in flight.
 func (c *Conn) CopyFrom(src *Conn) error {
-	var dstSQLiteConn *sqlite3.SQLiteConn
+	var dstRaw rawConn
 
 	bf := func(driverConn any) error {
-		srcSQLiteConn := driverConn.(*sqlite3.SQLiteConn)
-		return copyDatabaseConnection(dstSQLiteConn, srcSQLiteConn)
+		srcRaw, err := rawHandles(driverConn)
+		if err != nil {
+			return err
+		}
+		return dstRaw.backupFrom(srcRaw)
 	}
 	return c.conn.Raw(
 		func(driverConn any) error {
-			dstSQLiteConn = driverConn.(*sqlite3.SQLiteConn)
+			var err error
+			dstRaw, err = rawHandles(driverConn)
+			if err != nil {
+				return err
+			}
 			return src.conn.Raw(bf)
 		})
 }
 
-func copyDatabaseConnection(dst, src *sqlite3.SQLiteConn) error {
-	bk, err := dst.Backup("main", src, "main")
-	if err != nil {
-		return err
-	}
-
-	for {
-		done, err := bk.Step(-1)
-		if err != nil {
-			stats.Add(numBackupStepErrors, 1)
-			_ = bk.Finish() // Return the outer error
-			return err
+// resultCounts returns the last insert ID and rows affected of a result.
+// For a statement with nothing to run (whitespace or a comment) the pure-Go
+// driver returns a nil driver result, which database/sql wraps without
+// checking, so reading it panics. That case reports zero counts.
+func resultCounts(result sql.Result) (lid, ra int64, err error) {
+	defer func() {
+		if r := recover(); r != nil {
+			lid, ra, err = 0, 0, nil
 		}
-		if done {
-			stats.Add(numBackupStepDones, 1)
-			break
-		}
-		stats.Add(numBackupSleeps, 1)
-		time.Sleep(bkDelay)
+	}()
+	if lid, err = result.LastInsertId(); err != nil {
+		return 0, 0, err
 	}
-	return bk.Finish()
+	if ra, err = result.RowsAffected(); err != nil {
+		return 0, 0, err
+	}
+	return lid, ra, nil
 }
 
 // exec runs a statement that returns no rows on the connection.
@@ -762,11 +767,11 @@ func (c *Conn) SetSynchronousMode(mode SynchronousMode) error {
 func (c *Conn) InTransaction() (bool, error) {
 	var autoCommit bool
 	if err := c.conn.Raw(func(driverConn any) error {
-		sqliteConn, ok := driverConn.(*sqlite3.SQLiteConn)
-		if !ok {
-			return fmt.Errorf("unexpected driver connection type: %T", driverConn)
+		raw, err := rawHandles(driverConn)
+		if err != nil {
+			return err
 		}
-		autoCommit = sqliteConn.AutoCommit()
+		autoCommit = raw.autocommit()
 		return nil
 	}); err != nil {
 		return false, err

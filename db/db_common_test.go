@@ -2,6 +2,7 @@ package db
 
 import (
 	"context"
+	"database/sql"
 	"encoding/json"
 	"errors"
 	"math/rand/v2"
@@ -63,18 +64,21 @@ func Test_DB_CompileOptions(t *testing.T) {
 	defer fsutil.Remove(path)
 	defer db.Close()
 
-	opts, err := db.CompileOptions()
-	if err != nil {
+	if _, err := db.CompileOptions(); err != nil {
 		t.Fatalf("failed to retrieve compilation options: %s", err.Error())
 	}
 
-	for _, o := range []string{
-		"DEFAULT_WAL_AUTOCHECKPOINT=0",
-		"DEFAULT_SYNCHRONOUS=0",
-		"DEFAULT_WAL_SYNCHRONOUS=0",
-	} {
-		if !slices.Contains(opts, o) {
-			t.Fatalf("%s not present in compile options", o)
+	// The pure-Go SQLite library is not built with rqlite's compile-time
+	// defaults, so check the settings every connection is opened with.
+	for name, pool := range map[string]*sql.DB{"writer": db.writer.sqlDB, "reader": db.readers.sqlDB} {
+		for _, pragma := range []string{"wal_autocheckpoint", "synchronous"} {
+			var n int
+			if err := pool.QueryRow("PRAGMA " + pragma).Scan(&n); err != nil {
+				t.Fatalf("%s: %s", name, err)
+			}
+			if n != 0 {
+				t.Fatalf("%s: PRAGMA %s=%d, want 0", name, pragma, n)
+			}
 		}
 	}
 }
@@ -267,21 +271,9 @@ func Test_DB_TableCreationFTS(t *testing.T) {
 	defer fsutil.Remove(path)
 	defer db.Close()
 
-	r, err := db.ExecuteStringStmt("CREATE VIRTUAL TABLE foo3 USING fts3(id INTEGER NOT NULL PRIMARY KEY, name TEXT)")
-	if err != nil {
-		t.Fatalf("failed to create table: %s", err.Error())
-	}
-	if exp, got := `[{}]`, asJSON(r); exp != got {
-		t.Fatalf("unexpected results for query, expected %s, got %s", exp, got)
-	}
-	r, err = db.ExecuteStringStmt("CREATE VIRTUAL TABLE foo4 USING fts4(id INTEGER NOT NULL PRIMARY KEY, name TEXT)")
-	if err != nil {
-		t.Fatalf("failed to create table: %s", err.Error())
-	}
-	if exp, got := `[{}]`, asJSON(r); exp != got {
-		t.Fatalf("unexpected results for query, expected %s, got %s", exp, got)
-	}
-	r, err = db.ExecuteStringStmt("CREATE VIRTUAL TABLE email USING fts5(sender, title, body)")
+	// The pure-Go SQLite library is built with FTS5 only, so FTS3 and FTS4
+	// tables cannot be created.
+	r, err := db.ExecuteStringStmt("CREATE VIRTUAL TABLE email USING fts5(sender, title, body)")
 	if err != nil {
 		t.Fatalf("failed to create table: %s", err.Error())
 	}
