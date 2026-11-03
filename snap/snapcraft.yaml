@@ -1,0 +1,54 @@
+name: rqlite
+version: git
+summary: A lightweight, fault-tolerant, distributed relational database
+website: https://rqlite.io
+source-code: https://github.com/rqlite/rqlite
+issues: https://github.com/rqlite/rqlite/issues
+description: |
+  rqlite is a lightweight, fault-tolerant, distributed relational database
+  built on SQLite. It uses Raft consensus to provide highly available,
+  replicated SQL storage.
+
+  The rqlited service stores its database in $SNAP_COMMON/data by default.
+  Use the rqlite and rqbench applications to connect to and benchmark a
+  running node.
+grade: stable
+confinement: strict
+base: core24
+license: MIT
+
+platforms:
+  amd64:
+  arm64:
+
+parts:
+  rqlite:
+    plugin: go
+    source: .
+    build-snaps:
+      - go/1.26/stable
+    build-packages:
+      - gcc
+    override-build: |
+      mkdir -p "$CRAFT_PART_INSTALL/bin"
+      go build -trimpath -ldflags="-s -w" -o "$CRAFT_PART_INSTALL/bin/rqlited" ./cmd/rqlited
+      go build -trimpath -ldflags="-s -w" -o "$CRAFT_PART_INSTALL/bin/rqlite" ./cmd/rqlite
+      go build -trimpath -ldflags="-s -w" -o "$CRAFT_PART_INSTALL/bin/rqbench" ./cmd/rqbench
+      install -m 0755 snap/command-rqlited "$CRAFT_PART_INSTALL/bin/command-rqlited"
+
+apps:
+  rqlited:
+    command: bin/command-rqlited
+    daemon: simple
+    restart-condition: always
+    plugs:
+      - network
+      - network-bind
+  rqlite:
+    command: bin/rqlite
+    plugs:
+      - network
+  rqbench:
+    command: bin/rqbench
+    plugs:
+      - network
