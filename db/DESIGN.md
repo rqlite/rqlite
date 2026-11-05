@@ -88,6 +88,10 @@ Two iterators sit on top of the reader:
 
 The compacting scanner has a `fullScan` mode that verifies every frame's checksum (required when starting from frame zero) and a fast mode that skips the page-data read entirely and trusts SQLite's salt for validity. The fast mode is what the `CheckpointManager` uses on the live WAL — SQLite has just produced it, so it is trusted. Frame-data buffers are reused across `Next()` calls (`pageBuf`), so scanning a multi-gigabyte WAL does not allocate per frame.
 
+Compaction also reuses checksums instead of recomputing them. A WAL of `32 + N*(pageSize+24)` bytes is reduced to `32 + U*(pageSize+24)` bytes, where `U` is the number of unique pages. The WAL checksum advances 8 bytes at a time by the linear map `A = [[1,1],[1,2]]` plus a data contribution, so a frame is an affine transform of the running checksum. Each frame therefore carries the two source checksums that bracket it, `Prev` and `Source`, and `Writer` applies that transform to whatever state it has reached: `O = Source + A^(1+pageSize/8) * (O - Prev)`. The extra `1` is the 8 checksummed bytes of the frame header; the page contributes `A^(pageSize/8)`.
+
+Because the transform is relative rather than absolute, the emitted chain is correct for any subset of frames. A caller that consumes some frames before handing the rest to a `Writer`, or a scan that resumes partway through the WAL, still gets a valid WAL. Neither path re-scans page data to produce checksums: the seed costs one 24-byte frame header read at most. Copying a page into the output still reads it, but nothing hashes it. `Frame.HasChecksums` marks that the pair is present; a frame without it is rejected rather than silently hashed.
+
 `wal.Writer` consumes any `WALIterator` and writes a freshly-checksummed WAL stream to an `io.Writer`. The compaction round-trip — `CompactingFrameScanner` into `Writer` into the snapshot's staging directory — is the entire incremental-snapshot WAL pipeline.
 
 ## CDC Integration

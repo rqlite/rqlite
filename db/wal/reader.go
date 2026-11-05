@@ -209,6 +209,17 @@ func (r *Reader) ReadFrame(data []byte) (pgno, commit uint32, err error) {
 	return pgno, commit, nil
 }
 
+// frameChecksum returns the cumulative checksum stored in the frame header
+// most recently read by ReadFrame. It is the value SQLite wrote, not one
+// computed here, so it is only meaningful when the WAL is known to be valid —
+// which is the case when ReadFrame was called with a nil data buffer.
+func (r *Reader) frameChecksum() [2]uint32 {
+	return [2]uint32{
+		binary.BigEndian.Uint32(r.frmHdr[16:]),
+		binary.BigEndian.Uint32(r.frmHdr[20:]),
+	}
+}
+
 // WALChecksum computes a running SQLite WAL checksum over a byte slice.
 func WALChecksum(bo binary.ByteOrder, s0, s1 uint32, b []byte) (uint32, uint32, error) {
 	if len(b)%8 != 0 {
