@@ -1,6 +1,7 @@
 package wal
 
 import (
+	"bytes"
 	"encoding/binary"
 	"errors"
 	"expvar"
@@ -23,6 +24,13 @@ var (
 // the latest version of each page (respecting transaction boundaries), and
 // returns them in file offset order. If fullScan is false, frame checksums are
 // not verified since the WAL file is trusted.
+//
+// A WAL of 32 + N*(pageSize+24) bytes is reduced to 32 + U*(pageSize+24)
+// bytes, where U is the number of unique pages. The checksums of the compacted
+// frames are derived from the checksums stored in the source frame headers
+// (see deriveOutputChecksums), so page data is never checksummed. That holds
+// for a resumed scan too: seeding the recurrence costs one 24-byte frame header
+// read, not a page-sized checksum pass.
 type CompactingFrameScanner struct {
 	readSeeker io.ReadSeeker
 	walReader  *Reader
@@ -34,6 +42,10 @@ type CompactingFrameScanner struct {
 	// page-sized allocation per frame. The Frame returned by Next aliases
 	// this buffer in its Data field; see Next's doc comment.
 	pageBuf []byte
+
+	// frameMatrix is A^(1+pageSize/8), the linear part of the checksum
+	// transition for a single frame: 8 checksummed header bytes plus the page.
+	frameMatrix checksumMatrix
 
 	frames cFrames
 	fIdx   int
@@ -86,9 +98,10 @@ func NewCompactingFrameScanner(r io.ReadSeeker, startFrame int64, fullScan bool)
 			Checksum1: walReader.chksum1,
 			Checksum2: walReader.chksum2,
 		},
-		fullScan: fullScan,
-		start:    WALHeaderSize + startFrame*frameSize,
-		pageBuf:  make([]byte, pageSize),
+		fullScan:    fullScan,
+		start:       WALHeaderSize + startFrame*frameSize,
+		pageBuf:     make([]byte, pageSize),
+		frameMatrix: checksumMatrixPow(1 + uint64(pageSize)/8),
 	}
 
 	startT := time.Now()
@@ -131,11 +144,14 @@ func (s *CompactingFrameScanner) Next() (*Frame, error) {
 	}
 	s.fIdx++
 
-	return &Frame{
-		Pgno:   cf.Pgno,
-		Commit: cf.Commit,
-		Data:   s.pageBuf,
-	}, nil
+	frame := &Frame{
+		Pgno:        cf.Pgno,
+		Commit:      cf.Commit,
+		Data:        s.pageBuf,
+		Checksum:    cf.out,
+		HasChecksum: true,
+	}
+	return frame, nil
 }
 
 // Empty reports whether the scanner has zero frames to deliver.
@@ -148,62 +164,35 @@ func (s *CompactingFrameScanner) Empty() bool {
 // may consume a lot of memory, so it should be used with care. It's mostly intended for
 // use in testing, where the WAL files are small.
 func (s *CompactingFrameScanner) Bytes() ([]byte, error) {
-	pageSz := int(s.header.PageSize)
-	buf := make([]byte, WALHeaderSize+(len(s.frames)*WALFrameHeaderSize)+len(s.frames)*pageSz)
-	s.header.Copy(buf)
-
-	var bo binary.ByteOrder
-	switch magic := s.header.Magic; magic {
-	case 0x377f0682:
-		bo = binary.LittleEndian
-	case 0x377f0683:
-		bo = binary.BigEndian
-	default:
-		return nil, fmt.Errorf("invalid wal header magic: %x", magic)
+	w, err := NewWriter(s)
+	if err != nil {
+		return nil, err
 	}
 
-	frmHdr := WALHeaderSize
-	chksum1, chksum2 := s.header.Checksum1, s.header.Checksum2
-	var err error
-	for _, frame := range s.frames {
-		frmData := frmHdr + WALFrameHeaderSize
-
-		binary.BigEndian.PutUint32(buf[frmHdr:], frame.Pgno)
-		binary.BigEndian.PutUint32(buf[frmHdr+4:], frame.Commit)
-		binary.BigEndian.PutUint32(buf[frmHdr+8:], s.header.Salt1)
-		binary.BigEndian.PutUint32(buf[frmHdr+12:], s.header.Salt2)
-
-		// Checksum of frame header: "...the first 8 bytes..."
-		chksum1, chksum2, err = WALChecksum(bo, chksum1, chksum2, buf[frmHdr:frmHdr+8])
-		if err != nil {
-			return nil, fmt.Errorf("error computing frame header checksum: %s", err)
-		}
-
-		// Read the frame data.
-		if _, err := s.readSeeker.Seek(frame.Offset+WALFrameHeaderSize, io.SeekStart); err != nil {
-			return nil, fmt.Errorf("error seeking to frame offset: %s", err)
-		}
-		if _, err := io.ReadFull(s.readSeeker, buf[frmData:frmData+pageSz]); err != nil {
-			return nil, fmt.Errorf("error reading frame data: %s", err)
-		}
-
-		// Update checksum using frame data.
-		chksum1, chksum2, err = WALChecksum(bo, chksum1, chksum2, buf[frmData:frmData+pageSz])
-		if err != nil {
-			return nil, fmt.Errorf("error computing frame data checksum: %s", err)
-		}
-		binary.BigEndian.PutUint32(buf[frmHdr+16:], chksum1)
-		binary.BigEndian.PutUint32(buf[frmHdr+20:], chksum2)
-
-		frmHdr += WALFrameHeaderSize + pageSz
+	// Serialise every frame, then leave the scanner positioned where it was.
+	fIdx := s.fIdx
+	s.fIdx = 0
+	var buf bytes.Buffer
+	_, err = w.WriteTo(&buf)
+	s.fIdx = fIdx
+	if err != nil {
+		return nil, err
 	}
-	return buf, nil
+	return buf.Bytes(), nil
 }
 
 // scan reads all valid frame headers from start to the end of the WAL and
 // builds a compacted frame list, keeping only the latest version of each page.
 // Only committed transactions are included.
 func (s *CompactingFrameScanner) scan() (int64, error) {
+	// Seed the output checksum chain with the checksum immediately before the
+	// first scanned frame. On a scan from frame zero the WAL header carries it.
+	// A resumed scan reads it from the preceding frame header: 24 bytes, versus
+	// checksumming that frame's page. A start position past the end of the WAL
+	// yields no frames and never uses the seed, so its error is deferred until
+	// the scan shows whether any frame was found.
+	prev, seedErr := s.checksumBeforeStart()
+
 	// Seek to the start position.
 	if _, err := s.readSeeker.Seek(s.start, io.SeekStart); err != nil {
 		return 0, fmt.Errorf("seek to start offset %d: %w", s.start, err)
@@ -228,12 +217,16 @@ func (s *CompactingFrameScanner) scan() (int64, error) {
 		framesInput++
 
 		offset := s.start + s.walReader.Offset() - WALHeaderSize
+		chksum1, chksum2 := s.walReader.FrameChecksum()
 
 		txFrames[pgno] = &cFrame{
 			Pgno:   pgno,
 			Commit: commit,
 			Offset: offset,
+			prev:   prev,
+			src:    [2]uint32{chksum1, chksum2},
 		}
+		prev = [2]uint32{chksum1, chksum2}
 
 		if commit == 0 {
 			waitingForCommit = true
@@ -249,19 +242,74 @@ func (s *CompactingFrameScanner) scan() (int64, error) {
 	if waitingForCommit {
 		return framesInput, ErrOpenTransaction
 	}
+	if framesInput > 0 && seedErr != nil {
+		return 0, seedErr
+	}
 
 	s.frames = make(cFrames, 0, len(frames))
 	for _, frame := range frames {
 		s.frames = append(s.frames, frame)
 	}
 	sort.Sort(s.frames)
+	s.deriveOutputChecksums()
 	return framesInput, nil
+}
+
+// checksumBeforeStart returns the cumulative checksum of the source WAL
+// immediately before the first scanned frame. For a scan from frame zero that
+// is the checksum in the WAL header; otherwise it is read from the preceding
+// frame header.
+func (s *CompactingFrameScanner) checksumBeforeStart() ([2]uint32, error) {
+	hdrChecksum := [2]uint32{s.header.Checksum1, s.header.Checksum2}
+	if s.start == WALHeaderSize {
+		return hdrChecksum, nil
+	}
+
+	var hdr [WALFrameHeaderSize]byte
+	if _, err := s.readSeeker.Seek(s.start-WALFrameHeaderSize-int64(s.header.PageSize), io.SeekStart); err != nil {
+		return [2]uint32{}, fmt.Errorf("seek to preceding frame: %w", err)
+	}
+	if _, err := io.ReadFull(s.readSeeker, hdr[:]); err != nil {
+		return [2]uint32{}, fmt.Errorf("read preceding frame header: %w", err)
+	}
+	if binary.BigEndian.Uint32(hdr[8:]) != s.header.Salt1 || binary.BigEndian.Uint32(hdr[12:]) != s.header.Salt2 {
+		return [2]uint32{}, fmt.Errorf("frame before offset %d belongs to a different WAL", s.start)
+	}
+	return [2]uint32{binary.BigEndian.Uint32(hdr[16:]), binary.BigEndian.Uint32(hdr[20:])}, nil
+}
+
+// deriveOutputChecksums computes, for every surviving frame, the running WAL
+// checksum that the compacted WAL will have after that frame. It uses the
+// checksums already stored in the source WAL frame headers, so no page data is
+// read or checksummed. The result is byte-for-byte identical to checksumming
+// the output frames directly.
+//
+// Applying a frame to running state s is affine, with linear part
+// A^(1+pageSize/8). So for a frame whose source checksums before and after it
+// are S_prev and S_new, applying it to the current output state O gives
+//
+//	O_new = S_new + A^(1+pageSize/8) * (O - S_prev)
+//
+// The extra 1 in the exponent is the 8 checksummed bytes of the frame header.
+func (s *CompactingFrameScanner) deriveOutputChecksums() {
+	out := [2]uint32{s.header.Checksum1, s.header.Checksum2}
+	for _, f := range s.frames {
+		d := s.frameMatrix.apply(out[0]-f.prev[0], out[1]-f.prev[1])
+		f.out = [2]uint32{f.src[0] + d[0], f.src[1] + d[1]}
+		out = f.out
+	}
 }
 
 type cFrame struct {
 	Pgno   uint32
 	Commit uint32
 	Offset int64
+
+	// prev and src are the cumulative source checksums immediately before and
+	// after this frame, as stored in the input frame header. out is the running
+	// checksum of the compacted WAL after this frame, derived without
+	// re-checksumming the page data.
+	prev, src, out [2]uint32
 }
 
 type cFrames []*cFrame

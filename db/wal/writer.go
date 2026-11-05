@@ -40,6 +40,13 @@ type Frame struct {
 	Pgno   uint32
 	Commit uint32
 	Data   []byte
+
+	// Checksum, when HasChecksum is set, is the cumulative WAL checksum to
+	// write into the output frame header. The Writer then skips checksumming
+	// the frame bytes. An iterator sets it when it can reuse a checksum the
+	// source WAL already carries.
+	Checksum    [2]uint32
+	HasChecksum bool
 }
 
 // WALIterator defines the interface for WAL frame iteration.
@@ -146,16 +153,24 @@ func (w *Writer) writeFrame(ww io.Writer, frame *Frame) (n int64, err error) {
 	binary.BigEndian.PutUint32(frmHdr[8:], w.rHeader.Salt1)
 	binary.BigEndian.PutUint32(frmHdr[12:], w.rHeader.Salt2)
 
-	// Checksum of frame header: "...the first 8 bytes..."
-	w.chksum1, w.chksum2, err = WALChecksum(w.bo, w.chksum1, w.chksum2, frmHdr[:8])
-	if err != nil {
-		return n, fmt.Errorf("error computing frame header checksum: %s", err)
-	}
+	if frame.HasChecksum {
+		// The iterator already derived the running checksums from the source
+		// WAL. The frame header and page data are unchanged, so these are
+		// exactly the checksums that hashing the frame would produce, but no
+		// page-sized checksum pass is needed here.
+		w.chksum1, w.chksum2 = frame.Checksum[0], frame.Checksum[1]
+	} else {
+		// Checksum of frame header: "...the first 8 bytes..."
+		w.chksum1, w.chksum2, err = WALChecksum(w.bo, w.chksum1, w.chksum2, frmHdr[:8])
+		if err != nil {
+			return n, fmt.Errorf("error computing frame header checksum: %s", err)
+		}
 
-	// Update checksum using frame data: "..the content of all frames up to and including the current frame."
-	w.chksum1, w.chksum2, err = WALChecksum(w.bo, w.chksum1, w.chksum2, frame.Data)
-	if err != nil {
-		return n, fmt.Errorf("error computing frame data checksum: %s", err)
+		// Update checksum using frame data: "..the content of all frames up to and including the current frame."
+		w.chksum1, w.chksum2, err = WALChecksum(w.bo, w.chksum1, w.chksum2, frame.Data)
+		if err != nil {
+			return n, fmt.Errorf("error computing frame data checksum: %s", err)
+		}
 	}
 	binary.BigEndian.PutUint32(frmHdr[16:], w.chksum1)
 	binary.BigEndian.PutUint32(frmHdr[20:], w.chksum2)

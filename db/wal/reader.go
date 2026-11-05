@@ -76,6 +76,12 @@ type Reader struct {
 	salt1, salt2     uint32
 	chksum1, chksum2 uint32
 
+	// lastChksum1 and lastChksum2 are the checksums stored in the most
+	// recently read frame header. They are the cumulative WAL checksum after
+	// that frame and are only verified when ReadFrame is called with a
+	// non-nil data buffer.
+	lastChksum1, lastChksum2 uint32
+
 	// scratch buffer for reading frame headers, reused across ReadFrame calls
 	frmHdr []byte
 }
@@ -169,6 +175,9 @@ func (r *Reader) ReadFrame(data []byte) (pgno, commit uint32, err error) {
 		return 0, 0, io.EOF
 	}
 
+	r.lastChksum1 = binary.BigEndian.Uint32(hdr[16:])
+	r.lastChksum2 = binary.BigEndian.Uint32(hdr[20:])
+
 	if data != nil {
 		// Read WAL page data.
 		if _, err := io.ReadFull(r.r, data); err == io.ErrUnexpectedEOF {
@@ -207,6 +216,15 @@ func (r *Reader) ReadFrame(data []byte) (pgno, commit uint32, err error) {
 	r.frameN++
 
 	return pgno, commit, nil
+}
+
+// FrameChecksum returns the cumulative WAL checksum stored in the most
+// recently read frame header, i.e. the checksum of the WAL up to and
+// including that frame. It is the value SQLite wrote, not a value computed by
+// this Reader, so it is only meaningful for a WAL that is known to be valid
+// (as is the case when ReadFrame was called with a nil data buffer).
+func (r *Reader) FrameChecksum() (uint32, uint32) {
+	return r.lastChksum1, r.lastChksum2
 }
 
 // WALChecksum computes a running SQLite WAL checksum over a byte slice.
