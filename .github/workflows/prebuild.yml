@@ -1,0 +1,59 @@
+name: Prebuild
+
+on:
+  workflow_dispatch:
+
+jobs:
+  prebuild:
+    strategy:
+      matrix:
+        include: [
+          { os: ubuntu-22.04, platform: linux,  arch: amd64,  compiler: gcc, ld: -static },
+          { os: ubuntu-22.04, platform: linux,  arch: arm64,  compiler: aarch64-linux-gnu-gcc, ld: -static },
+          { os: ubuntu-22.04, platform: linux,  arch: arm,    compiler: arm-linux-gnueabi-gcc, ld: -static },
+          { os: macos-12,     platform: darwin, arch: amd64 },
+          { os: macos-14,     platform: darwin, arch: arm64 },
+          { os: windows-2022, platform: win32,  arch: amd64 }
+        ]
+
+    runs-on: ${{ matrix.os }}
+    name: ${{ matrix.platform }}-${{ matrix.arch }}
+
+    steps:
+    - uses: actions/checkout@v4
+      with:
+        submodules: recursive
+
+    - uses: actions/setup-go@v5
+      with:
+        go-version: '1.22'
+
+    - name: Setup
+      if: matrix.platform == 'linux'
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y gcc gcc-aarch64-linux-gnu gcc-arm-linux-gnueabi
+
+    - name: Configure
+      run: |
+        echo "CGO_ENABLED=1" >> $GITHUB_ENV
+        echo "GOARCH=${{ matrix.arch }}" >> $GITHUB_ENV
+        echo "CC=${{ matrix.compiler }}" >> $GITHUB_ENV
+
+    - name: Download
+      run: go get ./...
+
+    - name: Build
+      run: go install -a -tags sqlite_omit_load_extension -ldflags="-w -s -extldflags=${{ matrix.ld }}" ./...
+
+    - uses: actions/upload-artifact@v4
+      with:
+        name: ${{ matrix.platform }}-${{ matrix.arch }}
+        path: |
+          ~/go/bin/rqlite*
+          ~/go/bin/rqlited*
+          ~/go/bin/linux_arm/rqlite
+          ~/go/bin/linux_arm/rqlited
+          ~/go/bin/linux_arm64/rqlite
+          ~/go/bin/linux_arm64/rqlited
+        if-no-files-found: error
