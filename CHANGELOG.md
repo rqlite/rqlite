@@ -1,3 +1,7 @@
+## v10.6.7 (unreleased)
+### Implementation changes and bug fixes
+- [PR #3001](https://github.com/rqlite/rqlite/pull/3001): Upgrade SQLite to 3.54.1.
+
 ## v10.6.6 (October 28th 2026)
 ### Implementation changes and bug fixes
 - [PR #2987](https://github.com/rqlite/rqlite/pull/2987): Keep the local auto-backup file if the metadata rename fails. Thanks @lmtlssss
