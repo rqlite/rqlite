@@ -303,12 +303,11 @@ func Test_NewServiceTestExecuteQueryAuth(t *testing.T) {
 	qr := &command.QueryRequest{}
 	_, _, err = cl.Query(context.Background(), qr, s.Addr(), makeCredentials("bob", "secret1"), 5*time.Second, noRetries)
 	if err != nil && err.Error() != "unauthorized" {
-		fmt.Println(err)
-		t.Fatal("bob improperly unauthorized to query")
+		t.Fatalf("bob improperly unauthorized to query: %s", err)
 	}
 	_, _, err = cl.Query(context.Background(), qr, s.Addr(), makeCredentials("alice", "secret1"), 5*time.Second, noRetries)
 	if err != nil && err.Error() != "unauthorized" {
-		t.Fatal("alice improperly authorized to query")
+		t.Fatalf("alice improperly authorized to query: %s", err)
 	}
 }
 
