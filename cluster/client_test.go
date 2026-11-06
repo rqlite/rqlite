@@ -7,6 +7,7 @@ import (
 	"net"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -711,7 +712,7 @@ func Test_ClientRetry_FailAllPoolThenFreshSucceeds(t *testing.T) {
 
 	c := NewClient(&simpleDialer{}, 0)
 	_, _, err := c.Query(context.Background(), queryRequestFromString("SELECT * FROM foo"),
-		srv.Addr(), nil, time.Second, 0)
+		srv.Addr(), nil, time.Second, 1)
 	if err != nil {
 		t.Fatalf("expected fresh connection to succeed, got: %s", err)
 	}
@@ -732,7 +733,7 @@ func Test_ClientRetry_AllAttemptsFail(t *testing.T) {
 
 	c := NewClient(&simpleDialer{}, 0)
 	_, _, err := c.Query(context.Background(), queryRequestFromString("SELECT * FROM foo"),
-		srv.Addr(), nil, time.Second, 0)
+		srv.Addr(), nil, time.Second, 1)
 	if err == nil {
 		t.Fatal("expected error when all attempts fail")
 	}
@@ -805,8 +806,54 @@ func Test_ClientRetry_ZeroMaxRetries_NoInfiniteLoop(t *testing.T) {
 	if ctx.Err() != nil {
 		t.Fatal("retry loop did not terminate before context timeout — possible infinite loop")
 	}
-	if exp, got := int32(1), c.numForcedNewConns.Load(); exp != got {
+
+	// With 0 maxRetries a new forced connection should not be retried.
+	if exp, got := int32(0), c.numForcedNewConns.Load(); exp != got {
 		t.Fatalf("expected %d forced new connection, got %d", exp, got)
+	}
+}
+
+func Test_ClientExecute_NoRetry_AfterReadTimeout(t *testing.T) {
+	var applied atomic.Int32
+	srv := servicetest.NewService()
+	srv.Handler = func(conn net.Conn) {
+		if applied.Add(1) == 1 {
+			time.Sleep(300 * time.Millisecond) // reply arrives after the client's timeout
+		}
+		p, _ := pb.Marshal(&proto.CommandRequestResponse{})
+		writeBytesWithLength(conn, p)
+	}
+	srv.Start()
+	defer srv.Close()
+
+	c := NewClient(&simpleDialer{}, 0)
+	req := &command.ExecuteQueryRequest{Request: &command.Request{
+		Statements: []*command.Statement{{Sql: "INSERT INTO foo VALUES(1)"}}}}
+	_, _, _, err := c.Request(context.Background(), req, srv.Addr(), nil, 100*time.Millisecond, 0)
+	if err == nil && applied.Load() > 1 {
+		t.Fatalf("write acknowledged once but applied %d times with retries=0", applied.Load())
+	}
+}
+
+func Test_ClientExecute_Retry_AfterReadTimeout(t *testing.T) {
+	var applied atomic.Int32
+	srv := servicetest.NewService()
+	srv.Handler = func(conn net.Conn) {
+		if applied.Add(1) == 1 {
+			time.Sleep(300 * time.Millisecond) // reply arrives after the client's timeout
+		}
+		p, _ := pb.Marshal(&proto.CommandRequestResponse{})
+		writeBytesWithLength(conn, p)
+	}
+	srv.Start()
+	defer srv.Close()
+
+	c := NewClient(&simpleDialer{}, 0)
+	req := &command.ExecuteQueryRequest{Request: &command.Request{
+		Statements: []*command.Statement{{Sql: "INSERT INTO foo VALUES(1)"}}}}
+	_, _, _, err := c.Request(context.Background(), req, srv.Addr(), nil, 100*time.Millisecond, 1)
+	if err == nil && applied.Load() != 2 {
+		t.Fatalf("write timed out first time and was not retried")
 	}
 }
 
