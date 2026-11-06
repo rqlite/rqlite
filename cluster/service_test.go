@@ -268,6 +268,7 @@ func Test_NewServiceTestExecuteQueryAuth(t *testing.T) {
 	db := mustNewMockDatabase()
 	clstr := mustNewMockManager()
 
+	// Alice can execute, Bob can query. But that's it.
 	f := func(username string, password string, perm string) bool {
 		if username == "alice" && password == "secret1" && perm == "execute" {
 			return true
@@ -291,23 +292,25 @@ func Test_NewServiceTestExecuteQueryAuth(t *testing.T) {
 	if err := cl.SetLocal(s.Addr(), s); err != nil {
 		t.Fatalf("failed to set cluster client local parameters: %s", err)
 	}
+
 	er := &command.ExecuteRequest{}
 	_, _, err := cl.Execute(context.Background(), er, s.Addr(), makeCredentials("alice", "secret1"), 5*time.Second, defaultMaxRetries)
 	if err != nil {
-		t.Fatal("alice improperly unauthorized to execute")
+		t.Fatalf("alice failed to execute even though she has permission: %s", err)
 	}
 	_, _, err = cl.Execute(context.Background(), er, s.Addr(), makeCredentials("bob", "secret1"), 5*time.Second, defaultMaxRetries)
 	if err == nil {
-		t.Fatal("bob improperly authorized to execute")
+		t.Fatal("bob successfully executed even though he is not authorized")
 	}
+
 	qr := &command.QueryRequest{}
 	_, _, err = cl.Query(context.Background(), qr, s.Addr(), makeCredentials("bob", "secret1"), 5*time.Second, noRetries)
-	if err != nil && err.Error() != "unauthorized" {
-		t.Fatalf("bob improperly unauthorized to query: %s", err)
+	if err != nil {
+		t.Fatalf("bob failed to execute even though has permission: %s", err)
 	}
 	_, _, err = cl.Query(context.Background(), qr, s.Addr(), makeCredentials("alice", "secret1"), 5*time.Second, noRetries)
-	if err != nil && err.Error() != "unauthorized" {
-		t.Fatalf("alice improperly authorized to query: %s", err)
+	if err == nil {
+		t.Fatalf("alice successfully queried even though she is not authorized")
 	}
 }
 
