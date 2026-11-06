@@ -48,19 +48,28 @@ func (c *channelPool) Get() (net.Conn, error) {
 
 	// Wrap our connections with our custom net.Conn implementation (wrapConn
 	// method) that puts the connection back to the pool if it's closed.
-	select {
-	case conn := <-conns:
-		if conn == nil {
-			return nil, ErrClosed
+	for {
+		select {
+		case conn := <-conns:
+			if conn == nil {
+				return nil, ErrClosed
+			}
+			if !alive(conn) {
+				// The remote end has gone away since this connection was
+				// last used. Discard it and try the next.
+				atomic.AddInt64(&c.nOpenConns, -1)
+				conn.Close()
+				continue
+			}
+			return c.wrapConn(conn), nil
+		default:
+			conn, err := factory()
+			if err != nil {
+				return nil, err
+			}
+			atomic.AddInt64(&c.nOpenConns, 1)
+			return c.wrapConn(conn), nil
 		}
-		return c.wrapConn(conn), nil
-	default:
-		conn, err := factory()
-		if err != nil {
-			return nil, err
-		}
-		atomic.AddInt64(&c.nOpenConns, 1)
-		return c.wrapConn(conn), nil
 	}
 }
 
