@@ -4,7 +4,7 @@
 - [PR #3005](https://github.com/rqlite/rqlite/pull/3005): Support CMEK for automatic backups to Google Cloud Storage.
 
 ### Implementation changes and bug fixes
-- [PR #XXXX](https://github.com/rqlite/rqlite/pull/XXXX): Truncate automatic backup files before each attempt to avoid stale trailing bytes when replacing a larger backup.
+- [PR #3020](https://github.com/rqlite/rqlite/pull/3020): Truncate automatic backup files before each attempt to avoid stale trailing bytes when replacing a larger backup.
 - [PR #3001](https://github.com/rqlite/rqlite/pull/3001): Upgrade SQLite to 3.54.1.
 - [PR #3007](https://github.com/rqlite/rqlite/pull/3007): Accept extension tarballs whose entries are prefixed with `./`.
 - [PR #3007](https://github.com/rqlite/rqlite/pull/3007): Create implicit parent directories with directory permissions when extracting zip and tar.gz archives, instead of the contained file's mode.
