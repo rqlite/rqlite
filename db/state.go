@@ -582,8 +582,10 @@ func ReplayWAL(path string, wals []string, deleteMode bool) error {
 }
 
 // DumpTablesReq returns a command.Request that will dump the schema of the
-// given tables, or all tables if none are specified. This form protects
-// against SQL injection by using parameterized queries.
+// given tables, or all tables if none are specified. Table names are matched
+// regardless of case, as SQLite matches them, and as the indexes and triggers
+// of the tables are matched. This form protects against SQL injection by using
+// parameterized queries.
 //
 // The returned object does not have the Transaction flag set.
 func DumpTablesReq(tables ...string) *command.Request {
@@ -597,8 +599,15 @@ func DumpTablesReq(tables ...string) *command.Request {
 		}
 	}
 
+	// SQLite treats table names in SQL statements as case-insensitive, so a
+	// table created as "foo" can be referred to as "FOO". The name column of
+	// sqlite_master holds the name exactly as the table was created, and the
+	// default comparison is an exact byte-for-byte match. COLLATE NOCASE makes
+	// the comparison of that stored name with the requested names
+	// case-insensitive, so the requested names are matched the same way SQLite
+	// matches them in a statement.
 	var sb strings.Builder
-	sb.WriteString(`SELECT "name", "type", "sql" FROM sqlite_master WHERE "sql" NOT NULL AND type='table' AND name IN (`)
+	sb.WriteString(`SELECT "name", "type", "sql" FROM sqlite_master WHERE "sql" NOT NULL AND type='table' AND name COLLATE NOCASE IN (`)
 	for i := range tables {
 		if i > 0 {
 			sb.WriteString(", ")

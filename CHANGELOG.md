@@ -2,6 +2,7 @@
 ### Implementation changes and bug fixes
 - [PR #3001](https://github.com/rqlite/rqlite/pull/3001): Upgrade SQLite to 3.54.1.
 - [PR #XXX](https://github.com/rqlite/rqlite/pull/XXX): Resolve the column names of CDC events for a table created by the same transaction that fills it.
+- [PR #XXX](https://github.com/rqlite/rqlite/pull/XXX): Match the table names given to a SQL dump regardless of case, so the dump carries the tables along with their indexes and triggers and can be loaded.
 
 ## v10.6.6 (October 28th 2026)
 ### Implementation changes and bug fixes
