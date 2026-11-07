@@ -37,6 +37,13 @@ func ParseRequest(r io.Reader) ([]*command.Statement, error) {
 	if err != nil {
 		return nil, ErrInvalidJSON
 	}
+	// A nil statement slice is encoded as null and represents an empty request.
+	if t == nil {
+		if _, err := dec.Token(); err != io.EOF {
+			return nil, ErrInvalidRequest
+		}
+		return nil, ErrNoStatements
+	}
 	if t != json.Delim('[') {
 		return nil, ErrInvalidRequest
 	}

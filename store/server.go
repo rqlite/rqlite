@@ -3,6 +3,8 @@ package store
 import (
 	"encoding/json"
 
+	"github.com/hashicorp/raft"
+
 	"github.com/rqlite/rqlite/v10/command"
 	"github.com/rqlite/rqlite/v10/command/proto"
 )
@@ -47,6 +49,30 @@ func NewServer(id, addr string, voter bool) *Server {
 
 // Servers is a set of Servers.
 type Servers []*Server
+
+// RaftServers returns the servers as a Raft configuration, preserving their order.
+// Nil entries are skipped. Servers without explicit non-voter suffrage are voters.
+func (s Servers) RaftServers() []raft.Server {
+	if s == nil {
+		return nil
+	}
+	servers := make([]raft.Server, 0, len(s))
+	for _, server := range s {
+		if server == nil {
+			continue
+		}
+		suffrage := raft.Voter
+		if server.Suffrage == proto.Suffrage_NON_VOTER {
+			suffrage = raft.Nonvoter
+		}
+		servers = append(servers, raft.Server{
+			ID:       raft.ServerID(server.ID),
+			Address:  raft.ServerAddress(server.Addr),
+			Suffrage: suffrage,
+		})
+	}
+	return servers
+}
 
 // IsReadReplica returns whether the given node, as specified by its Raft ID,
 // is a read replica (non-voting) node. If no node is found with the given ID
