@@ -854,13 +854,10 @@ func (c *Client) dialWithOption(nodeAddr string, forceNew bool) (net.Conn, error
 	return pl.Get()
 }
 
-// retry retries a command on a remote node. It does this so we churn through connections
-// in the pool if we hit an error, as the remote node may have restarted and the pool's
-// connections are now stale.
+// retry retries a command on a remote node.
 func (c *Client) retry(ctx context.Context, command *proto.Command, nodeAddr string, timeout time.Duration, maxRetries int) ([]byte, int, error) {
 	var p []byte
 	var errOuter error
-	effectiveRetries := max(1, maxRetries)
 	nRetries := 0
 
 	for {
@@ -885,14 +882,22 @@ func (c *Client) retry(ctx context.Context, command *proto.Command, nodeAddr str
 		if errOuter == nil {
 			break
 		}
+
+		// We're ABOUT to retry, so bump the counter.
 		nRetries++
 		stats.Add(numClientRetries, 1)
 
-		// If we're on the last retry, then try one more time with an explicitly new connection.
-		// We do this because it's possible that the remote node restarted and all the connections
-		// in the pool are stale, but we just don't know it. This is a last-ditch effort to get a
-		// successful response before giving up.
-		if nRetries == effectiveRetries {
+		// About to exceed max retries? Give up.
+		if nRetries > maxRetries {
+			return nil, nRetries, errOuter
+		}
+
+		// If we're on the last retry, then do it with an explicitly new connection. We do this
+		// because it's possible that the remote node restarted and all the connections in the
+		// pool are stale, but we just don't know it. This is a last-ditch effort to get a
+		// successful response before giving up. The alternative would be churning through
+		// a bunch of stale connections in the pool.
+		if nRetries == maxRetries {
 			conn, err := c.dialWithOption(nodeAddr, true)
 			if err != nil {
 				return nil, nRetries, err
