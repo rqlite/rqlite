@@ -149,16 +149,11 @@ func (c *Client) GetNodeMeta(ctx context.Context, nodeAddr string, retries int, 
 	command := &proto.Command{
 		Type: proto.Command_COMMAND_TYPE_GET_NODE_META,
 	}
-	p, nr, err := c.retry(ctx, command, nodeAddr, timeout, retries)
+	a := &proto.NodeMeta{}
+	nr, err := c.retry(ctx, command, a, nodeAddr, timeout, retries)
 	stats.Add(numGetNodeAPIRequestRetries, int64(nr))
 	if err != nil {
 		return nil, err
-	}
-
-	a := &proto.NodeMeta{}
-	err = pb.Unmarshal(p, a)
-	if err != nil {
-		return nil, fmt.Errorf("protobuf unmarshal: %w", err)
 	}
 	if a.Version == "" {
 		// Handle nodes running older code.
@@ -175,16 +170,11 @@ func (c *Client) GetCommitIndex(ctx context.Context, nodeAddr string, retries in
 	command := &proto.Command{
 		Type: proto.Command_COMMAND_TYPE_GET_NODE_META,
 	}
-	p, nr, err := c.retry(ctx, command, nodeAddr, timeout, retries)
+	a := &proto.NodeMeta{}
+	nr, err := c.retry(ctx, command, a, nodeAddr, timeout, retries)
 	stats.Add(numGetNodeAPIRequestRetries, int64(nr))
 	if err != nil {
 		return 0, err
-	}
-
-	a := &proto.NodeMeta{}
-	err = pb.Unmarshal(p, a)
-	if err != nil {
-		return 0, fmt.Errorf("protobuf unmarshal: %w", err)
 	}
 	return a.CommitIndex, nil
 }
@@ -203,14 +193,9 @@ func (c *Client) Execute(ctx context.Context, er *command.ExecuteRequest, nodeAd
 		},
 		Credentials: creds,
 	}
-	p, nr, err := c.retry(ctx, command, nodeAddr, timeout, retries)
-	stats.Add(numClientExecuteRetries, int64(nr))
-	if err != nil {
-		return nil, 0, err
-	}
-
 	a := &proto.CommandExecuteResponse{}
-	err = pb.Unmarshal(p, a)
+	nr, err := c.retry(ctx, command, a, nodeAddr, timeout, retries)
+	stats.Add(numClientExecuteRetries, int64(nr))
 	if err != nil {
 		return nil, 0, err
 	}
@@ -235,14 +220,9 @@ func (c *Client) Query(ctx context.Context, qr *command.QueryRequest, nodeAddr s
 		},
 		Credentials: creds,
 	}
-	p, nr, err := c.retry(ctx, command, nodeAddr, timeout, retries)
-	stats.Add(numClientQueryRetries, int64(nr))
-	if err != nil {
-		return nil, 0, err
-	}
-
 	a := &proto.CommandQueryResponse{}
-	err = pb.Unmarshal(p, a)
+	nr, err := c.retry(ctx, command, a, nodeAddr, timeout, retries)
+	stats.Add(numClientQueryRetries, int64(nr))
 	if err != nil {
 		return nil, 0, err
 	}
@@ -267,14 +247,9 @@ func (c *Client) Request(ctx context.Context, r *command.ExecuteQueryRequest, no
 		},
 		Credentials: creds,
 	}
-	p, nr, err := c.retry(ctx, command, nodeAddr, timeout, retries)
-	stats.Add(numClientRequestRetries, int64(nr))
-	if err != nil {
-		return nil, 0, 0, err
-	}
-
 	a := &proto.CommandRequestResponse{}
-	err = pb.Unmarshal(p, a)
+	nr, err := c.retry(ctx, command, a, nodeAddr, timeout, retries)
+	stats.Add(numClientRequestRetries, int64(nr))
 	if err != nil {
 		return nil, 0, 0, err
 	}
@@ -357,14 +332,9 @@ func (c *Client) Load(ctx context.Context, lr *command.LoadRequest, nodeAddr str
 		},
 		Credentials: creds,
 	}
-	p, nr, err := c.retry(ctx, command, nodeAddr, timeout, retries)
-	stats.Add(numClientLoadRetries, int64(nr))
-	if err != nil {
-		return err
-	}
-
 	a := &proto.CommandLoadResponse{}
-	err = pb.Unmarshal(p, a)
+	nr, err := c.retry(ctx, command, a, nodeAddr, timeout, retries)
+	stats.Add(numClientLoadRetries, int64(nr))
 	if err != nil {
 		return err
 	}
@@ -854,33 +824,26 @@ func (c *Client) dialWithOption(nodeAddr string, forceNew bool) (net.Conn, error
 	return pl.Get()
 }
 
-// retry retries a command on a remote node. It does this so we churn through connections
-// in the pool if we hit an error, as the remote node may have restarted and the pool's
-// connections are now stale.
-func (c *Client) retry(ctx context.Context, command *proto.Command, nodeAddr string, timeout time.Duration, maxRetries int) ([]byte, int, error) {
-	var p []byte
+// retry sends a command to a remote node and decodes the node's reply into
+// resp. It retries so we churn through connections in the pool if we hit an
+// error, as the remote node may have restarted and the pool's connections are
+// now stale.
+func (c *Client) retry(ctx context.Context, command *proto.Command, resp pb.Message, nodeAddr string, timeout time.Duration, maxRetries int) (int, error) {
 	var errOuter error
 	effectiveRetries := max(1, maxRetries)
 	nRetries := 0
 
 	for {
 		if err := ctx.Err(); err != nil {
-			return nil, nRetries, err
+			return nRetries, err
 		}
-		p, errOuter = func() ([]byte, error) {
+		errOuter = func() error {
 			conn, errInner := c.dial(nodeAddr)
 			if errInner != nil {
-				return nil, errInner
+				return errInner
 			}
 			defer conn.Close()
-
-			b, errInner := writeCommandReadResponse(conn, command, timeout)
-			if errInner != nil {
-				handleConnError(conn)
-				return nil, errInner
-			}
-
-			return b, nil
+			return exchange(conn, command, resp, timeout)
 		}()
 		if errOuter == nil {
 			break
@@ -895,27 +858,54 @@ func (c *Client) retry(ctx context.Context, command *proto.Command, nodeAddr str
 		if nRetries == effectiveRetries {
 			conn, err := c.dialWithOption(nodeAddr, true)
 			if err != nil {
-				return nil, nRetries, err
+				return nRetries, err
 			}
 			defer conn.Close()
 			c.numForcedNewConns.Add(1)
 			stats.Add(numClientForceNewConn, 1)
 
-			if p, err = writeCommandReadResponse(conn, command, timeout); err != nil {
-				handleConnError(conn)
-				return nil, nRetries, err
+			if err := exchange(conn, command, resp, timeout); err != nil {
+				return nRetries, err
 			}
 			break
 		}
 	}
-	return p, nRetries, nil
+	return nRetries, nil
 }
 
-func writeCommandReadResponse(conn net.Conn, c *proto.Command, timeout time.Duration) (buf []byte, retErr error) {
-	if err := writeCommand(conn, c, timeout); err != nil {
-		return nil, err
+// exchange sends a command over conn and decodes the reply into resp. It is
+// where a connection's fitness for another command is decided: a connection
+// the exchange failed on, or which the remote node is about to close, is
+// marked unusable so that it is closed rather than returned to the pool.
+func exchange(conn net.Conn, command *proto.Command, resp pb.Message, timeout time.Duration) error {
+	if err := writeCommand(conn, command, timeout); err != nil {
+		handleConnError(conn)
+		return err
 	}
-	return readResponse(conn, timeout)
+	b, err := readResponse(conn, timeout)
+	if err != nil {
+		handleConnError(conn)
+		return err
+	}
+	if err := pb.Unmarshal(b, resp); err != nil {
+		handleConnError(conn)
+		return fmt.Errorf("protobuf unmarshal: %w", err)
+	}
+	if endsConnection(resp) {
+		handleConnError(conn)
+	}
+	return nil
+}
+
+// endsConnection reports whether resp is a reply after which the remote node
+// closes the connection. A node does so after any command it rejects.
+func endsConnection(resp pb.Message) bool {
+	r, ok := resp.(interface{ GetError() string })
+	if !ok {
+		return false
+	}
+	e := r.GetError()
+	return e == unauthorizedError || e == unsupportedError
 }
 
 func writeCommand(conn net.Conn, c *proto.Command, timeout time.Duration) error {
