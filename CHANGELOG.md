@@ -1,9 +1,9 @@
 ## v10.6.7 (unreleased)
 ### Implementation changes and bug fixes
 - [PR #3001](https://github.com/rqlite/rqlite/pull/3001): Upgrade SQLite to 3.54.1.
-- [PR #XXX](https://github.com/rqlite/rqlite/pull/XXX): `/db/request` reads at `auto` consistency now use the level `auto` resolves to, so a voting follower refuses them and freshness is enforced on a read-only node.
-- [PR #XXX](https://github.com/rqlite/rqlite/pull/XXX): Report the Store's `open` status as a boolean, instead of an empty object, in `/status`.
-- [PR #XXX](https://github.com/rqlite/rqlite/pull/XXX): A user-requested snapshot no longer leaves Raft's trailing-logs setting at zero when no snapshot threshold is set.
+- [PR #3008](https://github.com/rqlite/rqlite/pull/3008): `/db/request` reads at `auto` consistency now use the level `auto` resolves to, so a voting follower refuses them and freshness is enforced on a read-only node.
+- [PR #3008](https://github.com/rqlite/rqlite/pull/3008): Report the Store's `open` status as a boolean, instead of an empty object, in `/status`.
+- [PR #3008](https://github.com/rqlite/rqlite/pull/3008): A user-requested snapshot no longer leaves Raft's trailing-logs setting at zero when no snapshot threshold is set at start-up time.
 
 ## v10.6.6 (October 28th 2026)
 ### Implementation changes and bug fixes
