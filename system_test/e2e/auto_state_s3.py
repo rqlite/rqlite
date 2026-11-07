@@ -7,7 +7,7 @@ import sqlite3
 import time
 
 from helpers import Node, deprovision_node, write_random_file, random_string, env_present, gunzip_file, gzip_compress, temp_file, d_, Cluster
-from s3 import download_s3_object, delete_s3_object, upload_s3_object
+from s3 import download_s3_object, delete_s3_object, upload_s3_object, get_s3_object_sse
 
 S3_BUCKET = 'rqlite-testing-circleci'
 S3_BUCKET_REGION = 'us-west-2'
@@ -50,6 +50,73 @@ class TestAutoBackupRestore_S3(unittest.TestCase):
     node.execute('INSERT INTO foo(name) VALUES("fiona")')
     node.wait_for_upload(1)
     node.wait_until_uploads_idle()
+
+    # Create a second node, with auto-restore enabled.
+    auto_restore_cfg = {
+      "version": 1,
+      "type": "s3",
+      "sub" : {
+         "access_key_id": access_key_id,
+         "secret_access_key": secret_access_key_id,
+         "region": S3_BUCKET_REGION,
+         "bucket": S3_BUCKET,
+         "path": path
+      }
+    }
+    auto_restore_cfg_file = write_random_file(json.dumps(auto_restore_cfg))
+    nodeR = Node(RQLITED_PATH, '0', auto_restore=auto_restore_cfg_file)
+    nodeR.start()
+    nodeR.wait_for_ready()
+    j = nodeR.query('SELECT * FROM foo')
+    self.assertEqual(j, d_("{'results': [{'values': [[1, 'fiona']], 'types': ['integer', 'text'], 'columns': ['id', 'name']}]}"))
+
+    deprovision_node(node)
+    deprovision_node(nodeR)
+    os.remove(auto_backup_cfg_file)
+    os.remove(auto_restore_cfg_file)
+    delete_s3_object(access_key_id, secret_access_key_id, S3_BUCKET, path)
+
+class TestAutoBackupRestore_S3_SSE(unittest.TestCase):
+  @unittest.skipUnless(env_present('RQLITE_S3_ACCESS_KEY'), "S3 credentials not available")
+  def test(self):
+    '''Test that an automatic backup and restore works back-to-back'''
+    node = None
+    path = None
+
+    access_key_id = os.environ['RQLITE_S3_ACCESS_KEY']
+    secret_access_key_id = os.environ['RQLITE_S3_SECRET_ACCESS_KEY']
+
+    # Create the auto-backup config file
+    path = random_string(32)
+    auto_backup_cfg = {
+      "version": 1,
+      "type": "s3",
+      "interval": "1s",
+      "no_compress": True,
+      "sub" : {
+         "access_key_id": access_key_id,
+         "secret_access_key": secret_access_key_id,
+         "region": S3_BUCKET_REGION,
+         "bucket": S3_BUCKET,
+         "path": path,
+         "server_side_encryption": "aws:kms"
+      }
+    }
+    auto_backup_cfg_file = write_random_file(json.dumps(auto_backup_cfg))
+
+    # Create a node, enable automatic backups, and start it. Then
+    # create a table and insert a row.
+    node = Node(RQLITED_PATH, '0', auto_backup=auto_backup_cfg_file)
+    node.start()
+    node.wait_for_leader()
+    node.execute('CREATE TABLE foo (id INTEGER NOT NULL PRIMARY KEY, name TEXT)')
+    node.execute('INSERT INTO foo(name) VALUES("fiona")')
+    node.wait_for_upload(1)
+    node.wait_until_uploads_idle()
+
+    # Confirm it's encrypted.
+    enc = get_s3_object_sse(access_key_id, secret_access_key_id, S3_BUCKET, path)
+    self.assertEqual(enc, "aws:kms")
 
     # Create a second node, with auto-restore enabled.
     auto_restore_cfg = {
