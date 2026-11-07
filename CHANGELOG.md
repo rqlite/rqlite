@@ -1,6 +1,7 @@
 ## v10.6.7 (unreleased)
 ### Implementation changes and bug fixes
 - [PR #3001](https://github.com/rqlite/rqlite/pull/3001): Upgrade SQLite to 3.54.1.
+- [PR #XXX](https://github.com/rqlite/rqlite/pull/XXX): Accept extension tarballs whose entries are prefixed with `./`, as produced by `tar -C dir .`.
 
 ## v10.6.6 (October 28th 2026)
 ### Implementation changes and bug fixes
