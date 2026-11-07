@@ -877,20 +877,8 @@ func (s *Store) Open() (retErr error) {
 // Bootstrap executes a cluster bootstrap on this node, using the given
 // Servers as the configuration.
 func (s *Store) Bootstrap(servers ...*Server) error {
-	raftServers := make([]raft.Server, len(servers))
-	for i := range servers {
-		suffrage := raft.Voter
-		if servers[i].Suffrage == proto.Suffrage_NON_VOTER {
-			suffrage = raft.Nonvoter
-		}
-		raftServers[i] = raft.Server{
-			ID:       raft.ServerID(servers[i].ID),
-			Address:  raft.ServerAddress(servers[i].Addr),
-			Suffrage: suffrage,
-		}
-	}
 	fut := s.raft.BootstrapCluster(raft.Configuration{
-		Servers: raftServers,
+		Servers: Servers(servers).RaftServers(),
 	})
 	return fut.Error()
 }
