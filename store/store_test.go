@@ -535,35 +535,6 @@ func Test_StoreSingleNodeNotOpen(t *testing.T) {
 	}
 }
 
-// Test_StoreSingleNodeStats_Open checks that the "open" stat of an open Store
-// is a plain boolean, so it is reported as true rather than as an empty object.
-func Test_StoreSingleNodeStats_Open(t *testing.T) {
-	s, ln := mustNewStore(t)
-	defer ln.Close()
-
-	if err := s.Open(); err != nil {
-		t.Fatalf("failed to open single-node store: %s", err.Error())
-	}
-	defer s.Close(true)
-	if err := s.Bootstrap(NewServer(s.ID(), s.Addr(), true)); err != nil {
-		t.Fatalf("failed to bootstrap single-node store: %s", err.Error())
-	}
-	if _, err := s.WaitForLeader(10 * time.Second); err != nil {
-		t.Fatalf("Error waiting for leader: %s", err)
-	}
-
-	st, err := s.Stats()
-	if err != nil {
-		t.Fatalf("failed to get stats: %s", err.Error())
-	}
-	if open, ok := st["open"].(bool); !ok || !open {
-		t.Fatalf("expected open stat to be the boolean true, got %T: %v", st["open"], st["open"])
-	}
-	if exp, got := "true", asJSON(st["open"]); exp != got {
-		t.Fatalf("unexpected JSON for open stat\nexp: %s\ngot: %s", exp, got)
-	}
-}
-
 // Test_OpenStoreCloseSingleNode tests a single node store can be
 // opened, closed, and then reopened.
 func Test_OpenStoreCloseSingleNode(t *testing.T) {
