@@ -1118,6 +1118,10 @@ func Test_QueuedExecuteWaitValidatesBody(t *testing.T) {
 		{`{}`, http.StatusBadRequest},
 		{`[42]`, http.StatusBadRequest},
 		{`[]`, http.StatusOK},
+		{`null`, http.StatusOK},
+		{"  null \n\t", http.StatusOK},
+		{`null junk`, http.StatusBadRequest},
+		{`null []`, http.StatusBadRequest},
 	} {
 		t.Run(tc.body, func(t *testing.T) {
 			s := New("", nil, nil, nil, nil)
@@ -1136,6 +1140,13 @@ func Test_QueuedExecuteWaitValidatesBody(t *testing.T) {
 			s.ServeHTTP(rr, httptest.NewRequest(http.MethodPost, "/db/execute?queue&wait&noleader&timeout=1s", strings.NewReader(tc.body)))
 			if rr.Code != tc.status {
 				t.Fatalf("status=%d, want %d; body: %s", rr.Code, tc.status, rr.Body)
+			}
+
+			// Empty requests are only accepted as a wait-only queue flush.
+			rr = httptest.NewRecorder()
+			s.ServeHTTP(rr, httptest.NewRequest(http.MethodPost, "/db/execute?queue&noleader", strings.NewReader(tc.body)))
+			if rr.Code != http.StatusBadRequest {
+				t.Fatalf("without wait: status=%d, want 400; body: %s", rr.Code, rr.Body)
 			}
 		})
 	}
