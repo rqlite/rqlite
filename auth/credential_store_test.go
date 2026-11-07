@@ -145,6 +145,24 @@ func Test_AuthLoadMissingFieldsNotInherited(t *testing.T) {
 	}
 }
 
+// Test_AuthLoadDuplicateUsername ensures that a username appearing more than
+// once is rejected, rather than the later entry silently replacing the earlier
+// one's password and permissions.
+func Test_AuthLoadDuplicateUsername(t *testing.T) {
+	const jsonStream = `
+		[
+			{"username": "username1", "password": "password1", "perms": ["query"]},
+			{"username": "username2", "password": "password2", "perms": ["query"]},
+			{"username": "username1", "password": "password3", "perms": ["all"]}
+		]
+	`
+
+	store := NewCredentialsStore()
+	if err := store.Load(strings.NewReader(jsonStream)); err == nil {
+		t.Fatalf("expected error for duplicate username")
+	}
+}
+
 func Test_AuthLoadSingle(t *testing.T) {
 	const jsonStream = `
 		[

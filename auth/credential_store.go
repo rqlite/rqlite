@@ -115,6 +115,9 @@ func (c *CredentialsStore) Load(r io.Reader) error {
 		if len(cred.Perms) == 0 {
 			return fmt.Errorf("no permissions specified for username %s", cred.Username)
 		}
+		if _, ok := c.store[cred.Username]; ok {
+			return fmt.Errorf("duplicate username %s", cred.Username)
+		}
 		c.store[cred.Username] = cred.Password
 		c.perms[cred.Username] = make(map[string]bool, len(cred.Perms))
 		for _, p := range cred.Perms {
