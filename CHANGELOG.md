@@ -2,6 +2,7 @@
 ### Implementation changes and bug fixes
 - [PR #3001](https://github.com/rqlite/rqlite/pull/3001): Upgrade SQLite to 3.54.1.
 - [PR #XXX](https://github.com/rqlite/rqlite/pull/XXX): `/db/request` reads at `auto` consistency now use the level `auto` resolves to, so a voting follower refuses them and freshness is enforced on a read-only node.
+- [PR #XXX](https://github.com/rqlite/rqlite/pull/XXX): Report the Store's `open` status as a boolean, instead of an empty object, in `/status`.
 
 ## v10.6.6 (October 28th 2026)
 ### Implementation changes and bug fixes

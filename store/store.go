@@ -1404,7 +1404,7 @@ func (s *Store) Stats() (map[string]any, error) {
 	}
 
 	status := map[string]any{
-		"open":             s.open,
+		"open":             s.open.Is(),
 		"node_id":          s.raftID,
 		"raft":             raftStats,
 		"fsm_index":        s.fsmIdx.Load(),
