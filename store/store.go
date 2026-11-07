@@ -2119,13 +2119,11 @@ func (s *Store) Notify(nr *proto.NotifyRequest) error {
 	s.logger.Printf("reached expected bootstrap count of %d, starting cluster bootstrap",
 		s.BootstrapExpect)
 
-	raftServers := make([]raft.Server, 0, len(s.notifyingNodes))
+	servers := make(Servers, 0, len(s.notifyingNodes))
 	for _, n := range s.notifyingNodes {
-		raftServers = append(raftServers, raft.Server{
-			ID:      raft.ServerID(n.ID),
-			Address: raft.ServerAddress(n.Addr),
-		})
+		servers = append(servers, n)
 	}
+	raftServers := servers.RaftServers()
 	bf := s.raft.BootstrapCluster(raft.Configuration{
 		Servers: raftServers,
 	})
