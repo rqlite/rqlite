@@ -72,7 +72,8 @@ func UnzipToDir(path, dir string) error {
 		fpath := filepath.Join(dir, f.Name)
 
 		// Check for directory traversal vulnerability
-		if !strings.HasPrefix(fpath, filepath.Clean(dir)+string(os.PathSeparator)) {
+		rel, err := filepath.Rel(dir, fpath)
+		if err != nil || rel == ".." || strings.HasPrefix(rel, ".."+string(os.PathSeparator)) {
 			return errors.New("invalid file path")
 		}
 
