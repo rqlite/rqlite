@@ -20,8 +20,19 @@ import (
 
 // Test_SingleNodeSnapshot_TrailingLogsRestored checks that a user-requested
 // snapshot which leaves a specific number of trailing logs puts the trailing
-// logs setting back to what Raft started with. With no snapshot threshold set
-// that is Raft's own default, not zero.
+// logs setting back to what Raft started with.
+//
+// When no snapshot threshold is set the Store does not configure Raft's
+// snapshotting at all, so Raft runs with its own defaults, including its
+// default number of trailing logs. The Store, however, recorded zero as the
+// number of trailing logs to restore. Raft does not treat zero as "use the
+// default": it keeps exactly that many entries after each snapshot, so once
+// the Store reloaded the config with zero, every later snapshot truncated the
+// whole log up to the snapshot index until the node was restarted. Any
+// follower lagging by even one entry at that point then needed a full
+// snapshot install instead of catching up from the log. The default rqlited
+// configuration sets a snapshot threshold and so was never affected; only a
+// node started with -raft-snap 0 hit this.
 func Test_SingleNodeSnapshot_TrailingLogsRestored(t *testing.T) {
 	s, ln := mustNewStore(t)
 	defer ln.Close()
