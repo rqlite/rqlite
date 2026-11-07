@@ -208,3 +208,40 @@ func createTestTarGzipFileOrdered(t *testing.T, tarGzipFile string, entries []ta
 		}
 	}
 }
+
+func Test_UntarGzipToDirCurrentDirectory(t *testing.T) {
+	archive := filepath.Join(t.TempDir(), "input.tar.gz")
+	files := map[string]string{"file.txt": "saved", "sub/nested.txt": "nested"}
+	createTestTarGzipFile(t, archive, files)
+	t.Chdir(t.TempDir())
+	if err := UntarGzipToDir(archive, "."); err != nil {
+		t.Fatal(err)
+	}
+	for name, want := range files {
+		got, err := os.ReadFile(name)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if string(got) != want {
+			t.Fatalf("%s = %q, want %q", name, got, want)
+		}
+	}
+}
+
+func Test_UntarGzipToDirCurrentDirectoryRejectsTraversal(t *testing.T) {
+	archive := filepath.Join(t.TempDir(), "input.tar.gz")
+	files := map[string]string{"../escape": "outside"}
+	createTestTarGzipFile(t, archive, files)
+	parent := t.TempDir()
+	output := filepath.Join(parent, "output")
+	if err := os.Mkdir(output, 0755); err != nil {
+		t.Fatal(err)
+	}
+	t.Chdir(output)
+	if err := UntarGzipToDir(archive, "."); err == nil {
+		t.Fatal("expected path traversal error")
+	}
+	if _, err := os.Stat(filepath.Join(parent, "escape")); !os.IsNotExist(err) {
+		t.Fatalf("archive escaped destination: %v", err)
+	}
+}
