@@ -60,6 +60,13 @@ func (p *Provider) Provide(w io.WriteSeeker) (retErr error) {
 		if _, err := w.Seek(0, io.SeekStart); err != nil {
 			return err
 		}
+		// A retry may produce a smaller backup, so discard any remaining bytes
+		// from the previous attempt when the destination supports truncation.
+		if truncater, ok := w.(interface{ Truncate(int64) error }); ok {
+			if err := truncater.Truncate(0); err != nil {
+				return err
+			}
+		}
 		_, err := p.str.Backup(context.Background(), br, w)
 		if err == nil {
 			break
