@@ -79,7 +79,7 @@ class TestAutoBackupRestore_S3(unittest.TestCase):
 class TestAutoBackupRestore_S3_SSE(unittest.TestCase):
   @unittest.skipUnless(env_present('RQLITE_S3_ACCESS_KEY'), "S3 credentials not available")
   def test(self):
-    '''Test that an automatic backup and restore works back-to-back'''
+    '''Test that an automatic backup and restore works back-to-back with SSE enabled'''
     node = None
     path = None
 
