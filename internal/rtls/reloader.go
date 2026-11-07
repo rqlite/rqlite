@@ -13,7 +13,7 @@ import (
 // modified since the last load.
 type CertReloader struct {
 	certPath, keyPath string
-	modTime           time.Time
+	modTimes          [2]time.Time
 	logger            *log.Logger
 
 	mu   sync.RWMutex
@@ -32,11 +32,11 @@ func NewCertReloader(cert, key string) (*CertReloader, error) {
 		return nil, err
 	}
 	cr.cert = &pair
-	latestTime, err := latestModTime(cr.certPath, cr.keyPath)
+	modTimes, err := fileModTimes(cr.certPath, cr.keyPath)
 	if err != nil {
 		return nil, err
 	}
-	cr.modTime = latestTime
+	cr.modTimes = modTimes
 	return cr, nil
 }
 
@@ -46,8 +46,8 @@ func NewCertReloader(cert, key string) (*CertReloader, error) {
 // other GetCertificate calls.
 func (cr *CertReloader) GetCertificate() (*tls.Certificate, error) {
 	cr.mu.RLock()
-	latestTime, err := latestModTime(cr.certPath, cr.keyPath)
-	if err != nil || !latestTime.After(cr.modTime) {
+	modTimes, err := fileModTimes(cr.certPath, cr.keyPath)
+	if err != nil || (modTimes[0].Equal(cr.modTimes[0]) && modTimes[1].Equal(cr.modTimes[1])) {
 		defer cr.mu.RUnlock()
 		if err != nil {
 			cr.logger.Printf("failed to get latest modification time (%s), returning prior cert", err)
@@ -63,8 +63,8 @@ func (cr *CertReloader) GetCertificate() (*tls.Certificate, error) {
 
 	// Now that we have the write lock, we check again if the certificate has actually
 	// been updated by another concurrent call to this function.
-	latestTime, err = latestModTime(cr.certPath, cr.keyPath)
-	if err != nil || !latestTime.After(cr.modTime) {
+	modTimes, err = fileModTimes(cr.certPath, cr.keyPath)
+	if err != nil || (modTimes[0].Equal(cr.modTimes[0]) && modTimes[1].Equal(cr.modTimes[1])) {
 		if err != nil {
 			cr.logger.Printf("failed to get latest modification time (%s), returning prior cert", err)
 		}
@@ -78,7 +78,7 @@ func (cr *CertReloader) GetCertificate() (*tls.Certificate, error) {
 	}
 	cr.logger.Printf("reloading certificate at %s and key at %s", cr.certPath, cr.keyPath)
 	cr.cert = &pair
-	cr.modTime = latestTime
+	cr.modTimes = modTimes
 	return cr.cert, nil
 }
 
@@ -89,21 +89,16 @@ func loadKeyPair(certFile, keyFile string) (tls.Certificate, error) {
 	return tls.LoadX509KeyPair(certFile, keyFile)
 }
 
-// latestModTime returns the latest modification time of the given files.
-// It returns os.ErrNotExist if no files are provided.
-func latestModTime(file ...string) (time.Time, error) {
-	if len(file) == 0 {
-		return time.Time{}, os.ErrNotExist
-	}
-	var latest time.Time
-	for _, f := range file {
-		info, err := os.Stat(f)
+// fileModTimes returns the modification time of each certificate file.
+// Tracking both times avoids masking changes to the older of the two files.
+func fileModTimes(certFile, keyFile string) ([2]time.Time, error) {
+	var times [2]time.Time
+	for i, path := range []string{certFile, keyFile} {
+		info, err := os.Stat(path)
 		if err != nil {
-			return time.Time{}, err
+			return times, err
 		}
-		if info.ModTime().After(latest) {
-			latest = info.ModTime()
-		}
+		times[i] = info.ModTime()
 	}
-	return latest, nil
+	return times, nil
 }
