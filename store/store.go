@@ -1667,7 +1667,7 @@ func (s *Store) Request(ctx context.Context, eqr *proto.ExecuteQueryRequest) ([]
 		err := s.waitForLinearizableRead(readTerm, eqr.LinearizableTimeout)
 		if err != nil {
 			if err == ErrStrongReadNeeded {
-				eqr.Level = proto.ConsistencyLevel_STRONG
+				level = proto.ConsistencyLevel_STRONG
 				s.numLRUpgraded.Add(1)
 			} else {
 				return nil, 0, 0, err
@@ -1675,7 +1675,7 @@ func (s *Store) Request(ctx context.Context, eqr *proto.ExecuteQueryRequest) ([]
 		}
 	}
 
-	if nRW == 0 && eqr.Level != proto.ConsistencyLevel_STRONG {
+	if nRW == 0 && level != proto.ConsistencyLevel_STRONG {
 		// It's a little faster just to do a Query of the DB if we know there is no need
 		// for consensus.
 		convertFn := func(qr []*proto.QueryRows) []*proto.ExecuteQueryResponse {
@@ -1688,9 +1688,9 @@ func (s *Store) Request(ctx context.Context, eqr *proto.ExecuteQueryRequest) ([]
 			return resp
 		}
 
-		if eqr.Level == proto.ConsistencyLevel_NONE && s.isStaleRead(eqr.Freshness, eqr.FreshnessStrict) {
+		if level == proto.ConsistencyLevel_NONE && s.isStaleRead(eqr.Freshness, eqr.FreshnessStrict) {
 			return nil, 0, 0, ErrStaleRead
-		} else if eqr.Level == proto.ConsistencyLevel_WEAK {
+		} else if level == proto.ConsistencyLevel_WEAK {
 			if !isLeader {
 				return nil, 0, 0, ErrNotLeader
 			}

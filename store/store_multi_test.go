@@ -2257,3 +2257,71 @@ func Test_MultiNodeExecuteQuery_Linearizable_Concurrent(t *testing.T) {
 		t.Fatalf("expected at least one linearizable query to be upgraded")
 	}
 }
+
+// Test_MultiNodeRequest_AutoLevel checks that a Request at AUTO read consistency
+// is handled using the level AUTO resolves to. On a voting follower AUTO means
+// WEAK, so the follower must refuse the read, just as Query does.
+func Test_MultiNodeRequest_AutoLevel(t *testing.T) {
+	s0, ln0 := mustNewStore(t)
+	defer ln0.Close()
+	if err := s0.Open(); err != nil {
+		t.Fatalf("failed to open single-node store: %s", err.Error())
+	}
+	defer s0.Close(true)
+	if err := s0.Bootstrap(NewServer(s0.ID(), s0.Addr(), true)); err != nil {
+		t.Fatalf("failed to bootstrap single-node store: %s", err.Error())
+	}
+	if _, err := s0.WaitForLeader(10 * time.Second); err != nil {
+		t.Fatalf("Error waiting for leader: %s", err)
+	}
+
+	s1, ln1 := mustNewStore(t)
+	defer ln1.Close()
+	if err := s1.Open(); err != nil {
+		t.Fatalf("failed to open node for multi-node test: %s", err.Error())
+	}
+	defer s1.Close(true)
+	if err := s0.Join(joinRequest(s1.ID(), s1.Addr(), true)); err != nil {
+		t.Fatalf("failed to join to node at %s: %s", s0.Addr(), err.Error())
+	}
+	if _, err := s1.WaitForLeader(10 * time.Second); err != nil {
+		t.Fatalf("Error waiting for leader: %s", err)
+	}
+
+	er := executeRequestFromStrings([]string{
+		`CREATE TABLE foo (id INTEGER NOT NULL PRIMARY KEY, name TEXT)`,
+		`INSERT INTO foo(id, name) VALUES(1, "fiona")`,
+	}, false, false)
+	_, idx, err := s0.Execute(context.Background(), er)
+	if err != nil {
+		t.Fatalf("failed to execute on leader: %s", err.Error())
+	}
+	// The follower must hold the table, so that the read is classified as read-only
+	// there rather than being refused as a write.
+	testPoll(t, func() bool {
+		return idx <= s1.DBAppliedIndex()
+	}, 100*time.Millisecond, 5*time.Second)
+
+	// The leader serves an AUTO read.
+	eqr := executeQueryRequestFromString("SELECT * FROM foo", proto.ConsistencyLevel_AUTO,
+		false, false, false)
+	eqresp, _, _, err := s0.Request(context.Background(), eqr)
+	if err != nil {
+		t.Fatalf("failed to make AUTO request on leader: %s", err.Error())
+	}
+	if exp, got := `[{"columns":["id","name"],"types":["integer","text"],"values":[[1,"fiona"]]}]`, asJSON(eqresp); exp != got {
+		t.Fatalf("unexpected results for request\nexp: %s\ngot: %s", exp, got)
+	}
+
+	// Query on the voting follower refuses the read, and Request must agree.
+	qr := queryRequestFromString("SELECT * FROM foo", false, false, false)
+	qr.Level = proto.ConsistencyLevel_AUTO
+	if _, _, _, err := s1.Query(context.Background(), qr); !errors.Is(err, ErrNotLeader) {
+		t.Fatalf("expected ErrNotLeader for AUTO query on follower, got: %v", err)
+	}
+	eqr = executeQueryRequestFromString("SELECT * FROM foo", proto.ConsistencyLevel_AUTO,
+		false, false, false)
+	if _, _, _, err := s1.Request(context.Background(), eqr); !errors.Is(err, ErrNotLeader) {
+		t.Fatalf("expected ErrNotLeader for AUTO request on follower, got: %v", err)
+	}
+}
